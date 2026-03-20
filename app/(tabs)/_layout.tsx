@@ -1,71 +1,99 @@
-import React from 'react';
-import { SymbolView } from 'expo-symbols';
-import { Link, Tabs } from 'expo-router';
-import { Platform, Pressable } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { Tabs } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme, Spacing, Radius } from '@/theme';
 
-import Colors from '@/constants/Colors';
-import { useColorScheme } from '@/components/useColorScheme';
-import { useClientOnlyValue } from '@/components/useClientOnlyValue';
+const TAB_CONFIG: {
+  name: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+}[] = [
+  { name: 'messages', icon: 'chatbubble-outline', label: '消息' },
+  { name: 'contacts', icon: 'people-outline', label: '联系人' },
+  { name: 'discover', icon: 'play-circle-outline', label: '动态' },
+  { name: 'profile', icon: 'person-outline', label: '我的' },
+];
+
+interface TabIconProps {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  focused: boolean;
+}
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const { colors } = useTheme();
+
+  const styles = useMemo(() => StyleSheet.create({
+    tabBar: {
+      backgroundColor: colors.surface,
+      borderTopWidth: 1,
+      borderTopColor: colors.surfaceBorder,
+      height: 56,
+      borderRadius: 28,
+      marginHorizontal: 40,
+      marginBottom: 28,
+      position: 'absolute' as const,
+      elevation: 0,
+      paddingHorizontal: Spacing.xs,
+      paddingBottom: 0,
+    },
+    tabBarItem: {
+      justifyContent: 'center' as const,
+      alignItems: 'center' as const,
+      paddingTop: 6,
+    },
+    tabIcon: {
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      borderRadius: Radius.xl,
+      width: 70,
+      height: 44,
+      gap: 2,
+    },
+    tabIconActive: {
+      backgroundColor: colors.primary,
+    },
+    tabLabel: {
+      fontSize: 9,
+      fontWeight: '500' as const,
+      letterSpacing: 0.3,
+    },
+  }), [colors]);
+
+  const TabIcon: React.FC<TabIconProps> = ({ icon, label, focused }) => {
+    const color = focused ? colors.white : colors.textSecondary;
+
+    return (
+      <View style={[styles.tabIcon, focused && styles.tabIconActive]}>
+        <Ionicons name={icon} size={16} color={color} />
+        <Text style={[styles.tabLabel, { color }]} numberOfLines={1}>
+          {label}
+        </Text>
+      </View>
+    );
+  };
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme].tint,
-        // Disable the static render of the header on web
-        // to prevent a hydration error in React Navigation v6.
-        headerShown: useClientOnlyValue(false, true),
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Tab One',
-          tabBarIcon: ({ color }) => (
-            <SymbolView
-              name={{
-                ios: 'chevron.left.forwardslash.chevron.right',
-                android: 'code',
-                web: 'code',
-              }}
-              tintColor={color}
-              size={28}
-            />
-          ),
-          headerRight: () => (
-            <Link href="/modal" asChild>
-              <Pressable style={{ marginRight: 15 }}>
-                {({ pressed }) => (
-                  <SymbolView
-                    name={{ ios: 'info.circle', android: 'info', web: 'info' }}
-                    size={25}
-                    tintColor={Colors[colorScheme].text}
-                    style={{ opacity: pressed ? 0.5 : 1 }}
-                  />
-                )}
-              </Pressable>
-            </Link>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="two"
-        options={{
-          title: 'Tab Two',
-          tabBarIcon: ({ color }) => (
-            <SymbolView
-              name={{
-                ios: 'chevron.left.forwardslash.chevron.right',
-                android: 'code',
-                web: 'code',
-              }}
-              tintColor={color}
-              size={28}
-            />
-          ),
-        }}
-      />
+        headerShown: false,
+        tabBarStyle: styles.tabBar,
+        tabBarShowLabel: false,
+        tabBarItemStyle: styles.tabBarItem,
+      }}
+    >
+      {TAB_CONFIG.map((tab) => (
+        <Tabs.Screen
+          key={tab.name}
+          name={tab.name}
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <TabIcon icon={tab.icon} label={tab.label} focused={focused} />
+            ),
+          }}
+        />
+      ))}
     </Tabs>
   );
 }

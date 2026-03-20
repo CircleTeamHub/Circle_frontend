@@ -39,3 +39,15 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+node_modules/
+dist/
+build/
+.expo/
+images/generated-*.png
+design.pen
+images/generated-*.png
+design.pen
+images/generated-*.png
+design.pen
+images/generated-*.png
+design.pen

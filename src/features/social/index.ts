@@ -1,0 +1,2 @@
+export { default as AddFriendScreen } from './screens/AddFriendScreen';
+export { default as CreatePostScreen } from './screens/CreatePostScreen';
