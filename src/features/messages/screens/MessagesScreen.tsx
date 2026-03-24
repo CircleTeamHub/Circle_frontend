@@ -17,6 +17,7 @@ import { FilterTabs } from '@/components/ui/filter-tabs';
 import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Divider } from '@/components/ui/divider';
+import { getTotalUnreadNotificationCount } from '@/features/messages/data/notifications';
 import type { Conversation } from '@/types';
 
 const FILTER_TABS = ['全部', '未读', '群聊', '私聊'];
@@ -55,6 +56,8 @@ export default function MessagesScreen() {
   const { colors } = useTheme();
   const [activeTab, setActiveTab] = useState(0);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [conversations, setConversations] = useState(MOCK_CONVERSATIONS);
+  const unreadNotificationCount = getTotalUnreadNotificationCount();
 
   const styles = useMemo(() => StyleSheet.create({
     container: {
@@ -74,6 +77,21 @@ export default function MessagesScreen() {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
+    },
+    actionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.md,
+    },
+    actionButton: {
+      position: 'relative',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    actionBadge: {
+      position: 'absolute',
+      top: -8,
+      right: -12,
     },
     title: {
       color: colors.text,
@@ -146,6 +164,21 @@ export default function MessagesScreen() {
     router.push('/chat-detail');
   }, [router]);
 
+  const handleOpenNotifications = useCallback(() => {
+    router.push('/(tabs)/messages/notifications');
+  }, [router]);
+
+  const handleOpenFind = useCallback(() => {
+    router.push('/(tabs)/messages/find');
+  }, [router]);
+
+  const handleClearUnread = useCallback(() => {
+    // Placeholder frontend interaction until unread state is connected to real message data.
+    setConversations((current) =>
+      current.map((conversation) => ({ ...conversation, unreadCount: 0 })),
+    );
+  }, []);
+
   const handleMenuAction = useCallback(
     (label: string) => {
       setMenuVisible(false);
@@ -184,9 +217,23 @@ export default function MessagesScreen() {
     <View style={styles.headerSection}>
       <View style={styles.titleRow}>
         <Text style={styles.title}>消息</Text>
-        <Pressable onPress={() => setMenuVisible(true)}>
-          <Ionicons name="add-circle-outline" size={24} color={colors.text} />
-        </Pressable>
+        <View style={styles.actionRow}>
+          <Pressable style={styles.actionButton} onPress={handleOpenNotifications}>
+            <Ionicons name="notifications-outline" size={24} color={colors.text} />
+            <View style={styles.actionBadge}>
+              <Badge count={unreadNotificationCount} />
+            </View>
+          </Pressable>
+          <Pressable style={styles.actionButton} onPress={handleClearUnread}>
+            <Ionicons name="checkmark-done-outline" size={24} color={colors.text} />
+          </Pressable>
+          <Pressable style={styles.actionButton} onPress={handleOpenFind}>
+            <Ionicons name="search-outline" size={24} color={colors.text} />
+          </Pressable>
+          <Pressable onPress={() => setMenuVisible(true)}>
+            <Ionicons name="add-circle-outline" size={24} color={colors.text} />
+          </Pressable>
+        </View>
       </View>
       <SearchBar placeholder="搜索对话..." />
       <FilterTabs
@@ -200,7 +247,7 @@ export default function MessagesScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <FlatList
-        data={MOCK_CONVERSATIONS}
+        data={conversations}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         ItemSeparatorComponent={renderSeparator}
