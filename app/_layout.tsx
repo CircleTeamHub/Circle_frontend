@@ -34,7 +34,16 @@ function RootStack() {
   return (
     <NavThemeProvider value={navTheme}>
       <StatusBar style={colors.statusBarStyle === 'light' ? 'light' : 'dark'} />
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: 'slide_from_right',
+          contentStyle: { backgroundColor: colors.background },
+          fullScreenGestureEnabled: false,
+          fullScreenGestureShadowEnabled: false,
+          gestureEnabled: false,
+        }}
+      >
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(chat)" />

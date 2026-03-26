@@ -1,14 +1,16 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Spacing, Radius, Typography } from '@/theme';
 
 interface SearchBarProps {
   placeholder?: string;
+  onPress?: () => void;
 }
 
 export const SearchBar: React.FC<SearchBarProps> = ({
   placeholder = '搜索...',
+  onPress,
 }) => {
   const { colors } = useTheme();
 
@@ -34,10 +36,16 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     [colors],
   );
 
-  return (
+  const content = (
     <View style={styles.container}>
       <Ionicons name="search" size={18} color={colors.textSecondary} />
       <Text style={styles.placeholder}>{placeholder}</Text>
     </View>
   );
+
+  if (onPress) {
+    return <Pressable onPress={onPress}>{content}</Pressable>;
+  }
+
+  return content;
 };

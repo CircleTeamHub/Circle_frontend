@@ -1,17 +1,19 @@
 import React, { useCallback, useMemo } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { useTheme, Spacing, Radius, Typography } from '@/theme';
 
 interface FilterTabsProps {
   tabs: string[];
   activeIndex: number;
   onTabPress: (index: number) => void;
+  scrollable?: boolean;
 }
 
 export const FilterTabs: React.FC<FilterTabsProps> = ({
   tabs,
   activeIndex,
   onTabPress,
+  scrollable = false,
 }) => {
   const { colors } = useTheme();
 
@@ -21,6 +23,9 @@ export const FilterTabs: React.FC<FilterTabsProps> = ({
         row: {
           flexDirection: 'row',
           gap: Spacing.sm,
+        },
+        scrollContent: {
+          paddingRight: Spacing.lg,
         },
         tab: {
           borderRadius: Radius.md,
@@ -60,6 +65,18 @@ export const FilterTabs: React.FC<FilterTabsProps> = ({
     },
     [activeIndex, onTabPress, styles],
   );
+
+  if (scrollable) {
+    return (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={[styles.row, styles.scrollContent]}
+      >
+        {tabs.map(renderTab)}
+      </ScrollView>
+    );
+  }
 
   return <View style={styles.row}>{tabs.map(renderTab)}</View>;
 };

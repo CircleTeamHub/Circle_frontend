@@ -2,6 +2,8 @@
 // UI Types (used by screens and components)
 // ---------------------------------------------------------------------------
 
+export type ConversationType = 'group' | 'private';
+
 export interface Conversation {
   id: string;
   name: string;
@@ -9,6 +11,13 @@ export interface Conversation {
   time: string;
   avatarUrl?: string;
   unreadCount: number;
+  conversationType: ConversationType;
+  customGroupIds?: string[];
+}
+
+export interface CustomConversationGroup {
+  id: string;
+  name: string;
 }
 
 export interface Contact {

@@ -1,197 +1,255 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import { Avatar } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Divider } from "@/components/ui/divider";
+import { FilterTabs } from "@/components/ui/filter-tabs";
+import { getUnreadDiscoverAlertCount } from "@/features/messages/data/discover-alerts";
+import { useMessageGroupsStore } from "@/features/messages/store/use-message-groups-store";
+import { getUserProfileIdByName } from "@/features/user/data/profiles";
+import { getUserProfileHref } from "@/features/user/utils/routes";
+import { Radius, Spacing, Typography, useTheme } from "@/theme";
+import type { Conversation } from "@/types";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React, { useCallback, useMemo, useState } from "react";
 import {
-  View,
-  Text,
   FlatList,
-  Pressable,
-  Modal,
-  StyleSheet,
   ListRenderItemInfo,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { useTheme, Spacing, Typography, Radius } from '@/theme';
-import { SearchBar } from '@/components/ui/search-bar';
-import { FilterTabs } from '@/components/ui/filter-tabs';
-import { Avatar } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import { Divider } from '@/components/ui/divider';
-import { getTotalUnreadNotificationCount } from '@/features/messages/data/notifications';
-import type { Conversation } from '@/types';
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const FILTER_TABS = ['全部', '未读', '群聊', '私聊'];
+const BASE_FILTERS = [
+  { id: "all", label: "全部" },
+  { id: "unread", label: "未读" },
+  { id: "group", label: "群聊" },
+  { id: "private", label: "私聊" },
+];
 
 const MENU_ACTIONS: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
 }[] = [
-  { icon: 'people-outline', label: '新建群聊' },
-  { icon: 'person-add-outline', label: '添加好友' },
-  { icon: 'scan-outline', label: '扫一扫' },
-  { icon: 'card-outline', label: '收付款' },
-];
-
-const MOCK_CONVERSATIONS: Conversation[] = [
-  { id: '1', name: '陈思琪', message: '嘿！今晚还是一起吃饭吗？', time: '下午 3:34', unreadCount: 3 },
-  { id: '2', name: '张明远', message: '昨日文件已经上传了 :)', time: '下午 1:15', unreadCount: 0 },
-  { id: '3', name: '李晓婷', message: '你觉得这个设计怎么样？', time: '中午 12:02', unreadCount: 1 },
-  { id: '4', name: '王浩然', message: '好的，健身房见！', time: '上午 11:20', unreadCount: 0 },
-  { id: '5', name: '刘雨欣', message: '会议改到下午3点了', time: '上午 10:45', unreadCount: 5 },
-  { id: '6', name: '赵天宇', message: '哈哈太搞笑了', time: '昨天', unreadCount: 0 },
-  { id: '7', name: '林美琪', message: '有空的时候帮我打个电话', time: '昨天', unreadCount: 0 },
-  { id: '8', name: '周子涵', message: '周末一起去爬山吗？', time: '昨天', unreadCount: 2 },
-  { id: '9', name: '吴佳怡', message: '收到，我马上处理', time: '周三', unreadCount: 0 },
-  { id: '10', name: '孙伟', message: '项目进展如何？', time: '周三', unreadCount: 0 },
-  { id: '11', name: '郑小雨', message: '生日快乐！', time: '周二', unreadCount: 0 },
-  { id: '12', name: '黄丽华', message: '明天的会议记得参加', time: '周二', unreadCount: 1 },
-  { id: '13', name: '何志强', message: '文档已经发到你邮箱了', time: '周一', unreadCount: 0 },
-  { id: '14', name: '罗敏', message: '好的没问题', time: '周一', unreadCount: 0 },
-  { id: '15', name: '谢欣然', message: '[图片]', time: '上周', unreadCount: 0 },
+  { icon: "people-outline", label: "新建群聊" },
+  { icon: "person-add-outline", label: "添加好友" },
+  { icon: "scan-outline", label: "扫一扫" },
+  { icon: "call-outline", label: "坐席管理" },
+  { icon: "people-circle-outline", label: "群组管理" },
 ];
 
 export default function MessagesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
-  const [activeTab, setActiveTab] = useState(0);
+  const conversations = useMessageGroupsStore((state) => state.conversations);
+  const customGroups = useMessageGroupsStore((state) => state.customGroups);
+  const clearUnreadByFilter = useMessageGroupsStore(
+    (state) => state.clearUnreadByFilter,
+  );
+  const [activeFilterId, setActiveFilterId] = useState("all");
   const [menuVisible, setMenuVisible] = useState(false);
-  const [conversations, setConversations] = useState(MOCK_CONVERSATIONS);
-  const unreadNotificationCount = getTotalUnreadNotificationCount();
+  const unreadNotificationCount = getUnreadDiscoverAlertCount();
 
-  const styles = useMemo(() => StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    listContent: {
-      paddingHorizontal: Spacing.lg,
-      paddingBottom: 100,
-    },
-    headerSection: {
-      gap: Spacing.lg,
-      paddingTop: Spacing.md,
-      paddingBottom: Spacing.sm,
-    },
-    titleRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    },
-    actionRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Spacing.md,
-    },
-    actionButton: {
-      position: 'relative',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    actionBadge: {
-      position: 'absolute',
-      top: -8,
-      right: -12,
-    },
-    title: {
-      color: colors.text,
-      ...Typography.title,
-    },
-    row: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Spacing.md,
-      paddingVertical: Spacing.md,
-    },
-    rowContent: {
-      flex: 1,
-      gap: Spacing.xs,
-    },
-    rowTop: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    },
-    rowBottom: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    },
-    name: {
-      color: colors.text,
-      fontSize: 15,
-      fontWeight: '600',
-      flex: 1,
-      marginRight: Spacing.sm,
-    },
-    preview: {
-      color: colors.textSecondary,
-      ...Typography.caption,
-      flex: 1,
-      marginRight: Spacing.sm,
-    },
-    time: {
-      color: colors.textSecondary,
-      ...Typography.small,
-    },
-    overlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    },
-    menu: {
-      position: 'absolute',
-      backgroundColor: colors.surface,
-      borderRadius: Radius.md,
-      paddingVertical: Spacing.sm,
-      minWidth: 160,
-      borderWidth: 1,
-      borderColor: colors.surfaceBorder,
-    },
-    menuItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Spacing.md,
-      paddingVertical: Spacing.md,
-      paddingHorizontal: Spacing.lg,
-    },
-    menuLabel: {
-      color: colors.text,
-      ...Typography.body,
-    },
-  }), [colors]);
+  const filterItems = useMemo(
+    () => [
+      ...BASE_FILTERS,
+      ...customGroups.map((group) => ({ id: group.id, label: group.name })),
+    ],
+    [customGroups],
+  );
+
+  const activeTab = useMemo(
+    () => Math.max(filterItems.findIndex((item) => item.id === activeFilterId), 0),
+    [activeFilterId, filterItems],
+  );
+
+  const visibleConversations = useMemo(() => {
+    if (activeFilterId === "all") {
+      return conversations;
+    }
+
+    if (activeFilterId === "unread") {
+      return conversations.filter((conversation) => conversation.unreadCount > 0);
+    }
+
+    if (activeFilterId === "group") {
+      return conversations.filter(
+        (conversation) => conversation.conversationType === "group",
+      );
+    }
+
+    if (activeFilterId === "private") {
+      return conversations.filter(
+        (conversation) => conversation.conversationType === "private",
+      );
+    }
+
+    return conversations.filter(
+      (conversation) =>
+        conversation.conversationType === "group" &&
+        (conversation.customGroupIds ?? []).includes(activeFilterId),
+    );
+  }, [activeFilterId, conversations]);
+
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        container: {
+          flex: 1,
+          backgroundColor: colors.background,
+        },
+        listContent: {
+          paddingHorizontal: Spacing.lg,
+          paddingBottom: 100,
+        },
+        headerSection: {
+          gap: Spacing.lg,
+          paddingTop: Spacing.md,
+          paddingBottom: Spacing.sm,
+        },
+        titleRow: {
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+        },
+        actionRow: {
+          flexDirection: "row",
+          alignItems: "center",
+          gap: Spacing.md,
+        },
+        actionButton: {
+          position: "relative",
+          justifyContent: "center",
+          alignItems: "center",
+        },
+        actionBadge: {
+          position: "absolute",
+          top: -8,
+          right: -12,
+        },
+        title: {
+          color: colors.text,
+          ...Typography.title,
+        },
+        row: {
+          flexDirection: "row",
+          alignItems: "center",
+          gap: Spacing.md,
+          paddingVertical: Spacing.md,
+        },
+        rowContent: {
+          flex: 1,
+          gap: Spacing.xs,
+        },
+        rowTop: {
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+        },
+        rowBottom: {
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+        },
+        name: {
+          color: colors.text,
+          fontSize: 15,
+          fontWeight: "600",
+          flex: 1,
+          marginRight: Spacing.sm,
+        },
+        preview: {
+          color: colors.textSecondary,
+          ...Typography.caption,
+          flex: 1,
+          marginRight: Spacing.sm,
+        },
+        time: {
+          color: colors.textSecondary,
+          ...Typography.small,
+        },
+        emptyText: {
+          color: colors.textSecondary,
+          ...Typography.bodyRegular,
+          textAlign: "center",
+          paddingTop: Spacing.xl,
+        },
+        overlay: {
+          flex: 1,
+          backgroundColor: "rgba(0, 0, 0, 0.4)",
+        },
+        menu: {
+          position: "absolute",
+          backgroundColor: colors.surface,
+          borderRadius: Radius.md,
+          paddingVertical: Spacing.sm,
+          minWidth: 160,
+          borderWidth: 1,
+          borderColor: colors.surfaceBorder,
+        },
+        menuItem: {
+          flexDirection: "row",
+          alignItems: "center",
+          gap: Spacing.md,
+          paddingVertical: Spacing.md,
+          paddingHorizontal: Spacing.lg,
+        },
+        menuLabel: {
+          color: colors.text,
+          ...Typography.body,
+        },
+      }),
+    [colors],
+  );
 
   const handleConversationPress = useCallback(() => {
-    router.push('/chat-detail');
+    router.push("/(tabs)/messages/chat-detail");
   }, [router]);
 
+  const handleOpenUserProfile = useCallback(
+    (name: string) => {
+      router.push(
+        getUserProfileHref("messages", getUserProfileIdByName(name), name),
+      );
+    },
+    [router],
+  );
+
   const handleOpenNotifications = useCallback(() => {
-    router.push('/(tabs)/messages/notifications');
+    router.push("/(tabs)/discover");
   }, [router]);
 
   const handleOpenFind = useCallback(() => {
-    router.push('/(tabs)/messages/find');
+    router.push("/(tabs)/messages/find");
   }, [router]);
 
   const handleClearUnread = useCallback(() => {
-    // Placeholder frontend interaction until unread state is connected to real message data.
-    setConversations((current) =>
-      current.map((conversation) => ({ ...conversation, unreadCount: 0 })),
-    );
-  }, []);
+    clearUnreadByFilter(activeFilterId);
+  }, [activeFilterId, clearUnreadByFilter]);
 
   const handleMenuAction = useCallback(
     (label: string) => {
       setMenuVisible(false);
-      if (label === '添加好友') router.push('/add-friend');
+      if (label === "添加好友") router.push("/(tabs)/messages/add-friend");
+      if (label === "群组管理") router.push("/(tabs)/messages/groups");
     },
     [router],
   );
 
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<Conversation>) => (
-      <Pressable style={styles.row} onPress={handleConversationPress}>
-        <Avatar size={40} name={item.name} uri={item.avatarUrl} />
-        <View style={styles.rowContent}>
+      <View style={styles.row}>
+        {item.conversationType === "private" ? (
+          <Pressable onPress={() => handleOpenUserProfile(item.name)}>
+            <Avatar size={40} name={item.name} uri={item.avatarUrl} />
+          </Pressable>
+        ) : (
+          <Avatar size={40} name={item.name} uri={item.avatarUrl} />
+        )}
+        <Pressable style={styles.rowContent} onPress={handleConversationPress}>
           <View style={styles.rowTop}>
             <Text style={styles.name} numberOfLines={1}>
               {item.name}
@@ -204,10 +262,10 @@ export default function MessagesScreen() {
             </Text>
             <Badge count={item.unreadCount} />
           </View>
-        </View>
-      </Pressable>
+        </Pressable>
+      </View>
     ),
-    [handleConversationPress, styles],
+    [handleConversationPress, handleOpenUserProfile, styles],
   );
 
   const renderSeparator = useCallback(() => <Divider />, []);
@@ -218,14 +276,25 @@ export default function MessagesScreen() {
       <View style={styles.titleRow}>
         <Text style={styles.title}>消息</Text>
         <View style={styles.actionRow}>
-          <Pressable style={styles.actionButton} onPress={handleOpenNotifications}>
-            <Ionicons name="notifications-outline" size={24} color={colors.text} />
+          <Pressable
+            style={styles.actionButton}
+            onPress={handleOpenNotifications}
+          >
+            <Ionicons
+              name="notifications-outline"
+              size={24}
+              color={colors.text}
+            />
             <View style={styles.actionBadge}>
               <Badge count={unreadNotificationCount} />
             </View>
           </Pressable>
           <Pressable style={styles.actionButton} onPress={handleClearUnread}>
-            <Ionicons name="checkmark-done-outline" size={24} color={colors.text} />
+            <Ionicons
+              name="checkmark-done-outline"
+              size={24}
+              color={colors.text}
+            />
           </Pressable>
           <Pressable style={styles.actionButton} onPress={handleOpenFind}>
             <Ionicons name="search-outline" size={24} color={colors.text} />
@@ -235,11 +304,11 @@ export default function MessagesScreen() {
           </Pressable>
         </View>
       </View>
-      <SearchBar placeholder="搜索对话..." />
       <FilterTabs
-        tabs={FILTER_TABS}
+        tabs={filterItems.map((item) => item.label)}
         activeIndex={activeTab}
-        onTabPress={setActiveTab}
+        onTabPress={(index) => setActiveFilterId(filterItems[index]?.id ?? "all")}
+        scrollable
       />
     </View>
   );
@@ -247,16 +316,16 @@ export default function MessagesScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <FlatList
-        data={conversations}
+        data={visibleConversations}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         ItemSeparatorComponent={renderSeparator}
         ListHeaderComponent={ListHeader}
+        ListEmptyComponent={<Text style={styles.emptyText}>暂无会话</Text>}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
       />
 
-      {/* Dropdown menu */}
       <Modal
         visible={menuVisible}
         transparent

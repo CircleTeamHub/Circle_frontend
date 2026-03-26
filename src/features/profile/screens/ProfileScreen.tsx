@@ -1,26 +1,48 @@
-import React, { useCallback, useMemo } from 'react';
-import { View, Text, Pressable, FlatList, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useTheme, Spacing, Typography, Radius } from '@/theme';
-import { Avatar } from '@/components/ui/avatar';
-import { Divider } from '@/components/ui/divider';
-import { MenuRow } from '@/components/ui/menu-row';
-import type { MenuItem } from '@/types';
+import { Avatar } from "@/components/ui/avatar";
+import { Divider } from "@/components/ui/divider";
+import { MenuRow } from "@/components/ui/menu-row";
+import { getUserProfileHref } from "@/features/user/utils/routes";
+import { Radius, Spacing, Typography, useTheme } from "@/theme";
+import type { MenuItem } from "@/types";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React, { useCallback, useMemo } from "react";
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const MENU_ITEMS: MenuItem[] = [
-  { id: '1', icon: 'shield-checkmark-outline', label: '信用值' },
-  { id: '2', icon: 'gift-outline', label: '赠送记录', rightText: '跳转记录' },
-  { id: '3', icon: 'wallet-outline', label: '我的钱包' },
-  { id: '4', icon: 'chatbubble-ellipses-outline', label: '管家助手', rightText: '用户满写' },
-  { id: '5', icon: 'hand-left-outline', label: '我的帮办', rightText: '查看圈子' },
-  { id: '6', icon: 'bookmark-outline', label: '我的收藏', rightText: '查看收藏' },
-  { id: '7', icon: 'document-text-outline', label: '我的笔记', rightText: '查看笔记' },
-  { id: '8', icon: 'sparkles-outline', label: '超级相册', rightText: '查看相册' },
+  { id: "1", icon: "shield-checkmark-outline", label: "信用值" },
+  { id: "2", icon: "gift-outline", label: "会员中心", rightText: "查看会员" },
+  { id: "3", icon: "wallet-outline", label: "我的钱包" },
+  {
+    id: "4",
+    icon: "chatbubble-ellipses-outline",
+    label: "管家助手",
+    rightText: "用户满写",
+  },
+  {
+    id: "5",
+    icon: "hand-left-outline",
+    label: "商城",
+    rightText: "查看商品",
+  },
+  {
+    id: "6",
+    icon: "bookmark-outline",
+    label: "我的收藏",
+    rightText: "查看收藏",
+  },
+  {
+    id: "7",
+    icon: "document-text-outline",
+    label: "我的笔记",
+    rightText: "查看笔记",
+  },
 ];
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { colors, resolvedMode, toggleTheme } = useTheme();
 
   const styles = useMemo(
@@ -30,17 +52,25 @@ export default function ProfileScreen() {
         listContent: { paddingHorizontal: Spacing.lg, paddingBottom: 100 },
         listHeader: { gap: Spacing.sm },
         profileRow: {
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'center',
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
           paddingVertical: Spacing.xs,
         },
-        profileLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md - 4 },
+        profileLeft: {
+          flexDirection: "row",
+          alignItems: "center",
+          gap: Spacing.md - 4,
+        },
         profileInfo: { gap: Spacing.xs },
         profileName: { color: colors.text, ...Typography.h2 },
         profileAccount: { color: colors.textSecondary, ...Typography.small },
-        profileRight: { flexDirection: 'row', gap: Spacing.md, alignItems: 'center' },
-        profileAction: { alignItems: 'center', gap: Spacing.xs },
+        profileRight: {
+          flexDirection: "row",
+          gap: Spacing.md,
+          alignItems: "center",
+        },
+        profileAction: { alignItems: "center", gap: Spacing.xs },
         profileActionLabel: { color: colors.textSecondary, ...Typography.tiny },
         memberCard: {
           backgroundColor: colors.memberCardBg,
@@ -48,7 +78,11 @@ export default function ProfileScreen() {
           padding: Spacing.md,
           gap: 6,
         },
-        memberTags: { flexDirection: 'row', gap: Spacing.sm, alignItems: 'center' },
+        memberTags: {
+          flexDirection: "row",
+          gap: Spacing.sm,
+          alignItems: "center",
+        },
         memberTag: {
           backgroundColor: colors.memberTagBg,
           borderRadius: Radius.md,
@@ -61,11 +95,15 @@ export default function ProfileScreen() {
           paddingVertical: Spacing.xs,
           paddingHorizontal: 10,
         },
-        memberTagText: { color: colors.memberCardText, ...Typography.small, fontWeight: '500' },
+        memberTagText: {
+          color: colors.memberCardText,
+          ...Typography.small,
+          fontWeight: "500",
+        },
         memberText: { color: colors.memberCardText, fontSize: 14 },
         badgeRow: {
-          flexDirection: 'row',
-          alignItems: 'center',
+          flexDirection: "row",
+          alignItems: "center",
           gap: 10,
           paddingVertical: Spacing.sm,
         },
@@ -79,7 +117,15 @@ export default function ProfileScreen() {
     [colors],
   );
 
-  const isDark = resolvedMode === 'dark';
+  const isDark = resolvedMode === "dark";
+
+  const handleOpenShare = useCallback(() => {
+    router.push("/(tabs)/profile/share");
+  }, [router]);
+
+  const handleOpenSettings = useCallback(() => {
+    router.push("/(tabs)/profile/settings");
+  }, [router]);
 
   const renderMenuItem = useCallback(
     ({ item, index }: { item: MenuItem; index: number }) => (
@@ -102,24 +148,36 @@ export default function ProfileScreen() {
       {/* Profile header */}
       <View style={styles.profileRow}>
         <View style={styles.profileLeft}>
-          <Avatar size={56} name="🐱" bgColor={colors.surface} />
+          <Pressable
+            onPress={() => router.push(getUserProfileHref("profile", "me", "ddddd"))}
+          >
+            <Avatar size={56} name="🐱" bgColor={colors.surface} />
+          </Pressable>
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>ddddd</Text>
             <Text style={styles.profileAccount}>账号：134273011l</Text>
           </View>
         </View>
         <View style={styles.profileRight}>
+          <Pressable style={styles.profileAction} onPress={handleOpenShare}>
+            <Ionicons
+              name="share-social-outline"
+              size={20}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.profileActionLabel}>分享</Text>
+          </Pressable>
           <Pressable style={styles.profileAction} onPress={toggleTheme}>
             <Ionicons
-              name={isDark ? 'sunny-outline' : 'moon-outline'}
+              name={isDark ? "sunny-outline" : "moon-outline"}
               size={20}
               color={colors.textSecondary}
             />
             <Text style={styles.profileActionLabel}>
-              {isDark ? '浅色' : '深色'}
+              {isDark ? "浅色" : "深色"}
             </Text>
           </Pressable>
-          <Pressable style={styles.profileAction}>
+          <Pressable style={styles.profileAction} onPress={handleOpenSettings}>
             <Ionicons
               name="settings-outline"
               size={20}

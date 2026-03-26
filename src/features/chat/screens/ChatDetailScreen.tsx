@@ -7,6 +7,7 @@ import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import { Avatar } from '@/components/ui/avatar';
 import { Divider } from '@/components/ui/divider';
 import { DatePill, ReceivedBubble, SentBubble, LocationCard } from '@/features/chat/components/chat-bubble';
+import { getUserProfileHref } from '@/features/user/utils/routes';
 import type { ChatMessage } from '@/types';
 
 const MESSAGES: ChatMessage[] = [
@@ -22,6 +23,9 @@ export default function ChatDetailScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const handleBack = useCallback(() => router.back(), []);
+  const handleOpenUserProfile = useCallback(() => {
+    router.push(getUserProfileHref('messages', 'chen-siqi', '陈思琪'));
+  }, []);
 
   const styles = useMemo(() => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
@@ -41,12 +45,26 @@ export default function ChatDetailScreen() {
   const renderItem = useCallback(({ item }: { item: ChatMessage }) => {
     switch (item.type) {
       case 'date': return <DatePill text={item.text ?? ''} />;
-      case 'received': return <ReceivedBubble message={item} />;
+      case 'received':
+        return (
+          <ReceivedBubble
+            message={item}
+            senderName="陈思琪"
+            onAvatarPress={handleOpenUserProfile}
+          />
+        );
       case 'sent': return <SentBubble message={item} />;
-      case 'location': return <LocationCard message={item} />;
+      case 'location':
+        return (
+          <LocationCard
+            message={item}
+            senderName="陈思琪"
+            onAvatarPress={handleOpenUserProfile}
+          />
+        );
       default: return null;
     }
-  }, []);
+  }, [handleOpenUserProfile]);
 
   const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
 
@@ -56,7 +74,11 @@ export default function ChatDetailScreen() {
         <Pressable onPress={handleBack} hitSlop={8}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
-        <Avatar size={40} name="陈" />
+        <Pressable
+          onPress={() => router.push(getUserProfileHref('messages', 'chen-siqi', '陈思琪'))}
+        >
+          <Avatar size={40} name="陈思琪" />
+        </Pressable>
         <View style={styles.headerInfo}>
           <Text style={styles.headerName}>陈思琪</Text>
           <View style={styles.onlineRow}>
@@ -64,7 +86,10 @@ export default function ChatDetailScreen() {
             <Text style={styles.onlineText}>在线</Text>
           </View>
         </View>
-        <Pressable hitSlop={8} onPress={() => router.push('/chat-info')}>
+        <Pressable
+          hitSlop={8}
+          onPress={() => router.push('/(tabs)/messages/chat-info')}
+        >
           <Ionicons name="ellipsis-vertical" size={20} color={colors.textSecondary} />
         </Pressable>
       </View>

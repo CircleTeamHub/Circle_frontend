@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Tabs } from 'expo-router';
+import { Tabs, useSegments } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Spacing, Radius } from '@/theme';
 
@@ -23,6 +23,8 @@ interface TabIconProps {
 
 export default function TabLayout() {
   const { colors } = useTheme();
+  const segments = useSegments();
+  const hideTabBar = segments.length > 2;
 
   const styles = useMemo(() => StyleSheet.create({
     tabBar: {
@@ -78,7 +80,9 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: hideTabBar
+          ? [styles.tabBar, { display: 'none' }]
+          : styles.tabBar,
         tabBarShowLabel: false,
         tabBarItemStyle: styles.tabBarItem,
       }}

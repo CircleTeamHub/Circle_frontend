@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import { Avatar } from '@/components/ui/avatar';
@@ -44,11 +44,13 @@ export const DatePill: React.FC<DatePillProps> = ({ text }) => {
 interface ReceivedBubbleProps {
   message: ChatMessage;
   senderName?: string;
+  onAvatarPress?: () => void;
 }
 
 export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
   message,
   senderName = '陈',
+  onAvatarPress,
 }) => {
   const { colors } = useTheme();
 
@@ -86,7 +88,13 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
 
   return (
     <View style={styles.receivedRow}>
-      <Avatar size={28} name={senderName} />
+      {onAvatarPress ? (
+        <Pressable onPress={onAvatarPress}>
+          <Avatar size={28} name={senderName} />
+        </Pressable>
+      ) : (
+        <Avatar size={28} name={senderName} />
+      )}
       <View>
         <View style={styles.receivedBubble}>
           <Text style={styles.bubbleText}>{message.text}</Text>
@@ -160,11 +168,13 @@ export const SentBubble: React.FC<SentBubbleProps> = ({ message }) => {
 interface LocationCardProps {
   message: ChatMessage;
   senderName?: string;
+  onAvatarPress?: () => void;
 }
 
 export const LocationCard: React.FC<LocationCardProps> = ({
   message,
   senderName = '陈',
+  onAvatarPress,
 }) => {
   const { colors } = useTheme();
 
@@ -218,7 +228,13 @@ export const LocationCard: React.FC<LocationCardProps> = ({
 
   return (
     <View style={styles.receivedRow}>
-      <Avatar size={28} name={senderName} />
+      {onAvatarPress ? (
+        <Pressable onPress={onAvatarPress}>
+          <Avatar size={28} name={senderName} />
+        </Pressable>
+      ) : (
+        <Avatar size={28} name={senderName} />
+      )}
       <View>
         <View style={styles.locationCard}>
           <View style={styles.locationMapPlaceholder}>
