@@ -1,5 +1,5 @@
 import { useRouter, useSegments } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -40,6 +40,57 @@ const MOCK_RESULTS: SearchResultItem[] = [
   { id: 'contact-2', title: '王浩然', subtitle: '联系人 · 共同好友 3 人', category: '联系人', meta: '深圳', profileId: 'wang-haoran' },
   { id: 'contact-3', title: '周子涵', subtitle: '联系人 · 同城推荐', category: '联系人', meta: '杭州', profileId: 'zhou-zihan' },
 ];
+
+const s = StyleSheet.create({
+  listContent: {
+    paddingHorizontal: Spacing.lg,
+  },
+  headerContent: {
+    gap: Spacing.lg,
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    height: 48,
+    paddingHorizontal: Spacing.md,
+    borderRadius: Radius.xxl,
+    borderWidth: 1,
+  },
+  sectionHeader: {
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.sm,
+  },
+  recentBlock: {
+    gap: Spacing.md,
+  },
+  recentRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  recentChip: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  resultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    paddingVertical: Spacing.md,
+  },
+  resultBody: {
+    flex: 1,
+    gap: Spacing.xs,
+  },
+  resultTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+});
 
 export default function SearchScreen() {
   const insets = useSafeAreaInsets();
@@ -95,123 +146,80 @@ export default function SearchScreen() {
     router.push(getUserProfileHref(currentScope, item.profileId, item.title));
   };
 
-  const styles = useMemo(
-    () =>
-      StyleSheet.create({
-        container: {
-          flex: 1,
-          backgroundColor: colors.background,
-        },
-        listContent: {
-          paddingHorizontal: Spacing.lg,
-          paddingBottom: insets.bottom + Spacing.xl,
-        },
-        headerContent: {
-          gap: Spacing.lg,
-        },
-        searchBox: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Spacing.sm,
-          height: 48,
-          paddingHorizontal: Spacing.md,
-          borderRadius: Radius.xxl,
-          backgroundColor: colors.surface,
-          borderWidth: 1,
-          borderColor: colors.surfaceBorder,
-        },
-        input: {
-          flex: 1,
-          color: colors.text,
-          ...Typography.bodyRegular,
-          padding: 0,
-        },
-        sectionHeader: {
-          paddingTop: Spacing.lg,
-          paddingBottom: Spacing.sm,
-        },
-        sectionTitle: {
-          color: colors.text,
-          ...Typography.h3,
-        },
-        recentBlock: {
-          gap: Spacing.md,
-        },
-        recentTitle: {
-          color: colors.text,
-          ...Typography.h3,
-        },
-        recentRow: {
-          flexDirection: 'row',
-          flexWrap: 'wrap',
-          gap: Spacing.sm,
-        },
-        recentChip: {
-          paddingHorizontal: Spacing.md,
-          paddingVertical: Spacing.sm,
-          borderRadius: Radius.full,
-          backgroundColor: colors.surface,
-          borderWidth: 1,
-          borderColor: colors.surfaceBorder,
-        },
-        recentChipText: {
-          color: colors.textSecondary,
-          ...Typography.caption,
-        },
-        resultRow: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Spacing.md,
-          paddingVertical: Spacing.md,
-        },
-        resultBody: {
-          flex: 1,
-          gap: Spacing.xs,
-        },
-        resultTopRow: {
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        },
-        resultTitle: {
-          color: colors.text,
-          fontSize: 15,
-          fontWeight: '600',
-          flex: 1,
-          marginRight: Spacing.sm,
-        },
-        resultSubtitle: {
-          color: colors.textSecondary,
-          ...Typography.caption,
-        },
-        resultMeta: {
-          color: colors.textSecondary,
-          ...Typography.small,
-        },
-        emptyText: {
-          color: colors.textSecondary,
-          ...Typography.bodyRegular,
-          textAlign: 'center',
-          paddingTop: Spacing.xl,
-        },
-      }),
+  const d = useMemo(
+    () => ({
+      container: {
+        flex: 1,
+        backgroundColor: colors.background,
+      },
+      listContent: {
+        paddingBottom: insets.bottom + Spacing.xl,
+      },
+      searchBox: {
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
+      },
+      input: {
+        flex: 1,
+        color: colors.text,
+        ...Typography.bodyRegular,
+        padding: 0,
+      },
+      sectionTitle: {
+        color: colors.text,
+        ...Typography.h3,
+      },
+      recentTitle: {
+        color: colors.text,
+        ...Typography.h3,
+      },
+      recentChip: {
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
+      },
+      recentChipText: {
+        color: colors.textSecondary,
+        ...Typography.caption,
+      },
+      resultTitle: {
+        color: colors.text,
+        fontSize: 15,
+        fontWeight: '600' as const,
+        flex: 1,
+        marginRight: Spacing.sm,
+      },
+      resultSubtitle: {
+        color: colors.textSecondary,
+        ...Typography.caption,
+      },
+      resultMeta: {
+        color: colors.textSecondary,
+        ...Typography.small,
+      },
+      emptyText: {
+        color: colors.textSecondary,
+        ...Typography.bodyRegular,
+        textAlign: 'center' as const,
+        paddingTop: Spacing.xl,
+      },
+    }),
     [colors, insets.bottom],
   );
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader title="搜索" />
       <SectionList
         sections={groupedResults}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[s.listContent, d.listContent]}
         stickySectionHeadersEnabled={false}
         ListHeaderComponent={
-          <View style={styles.headerContent}>
-            <View style={styles.searchBox}>
+          <View style={s.headerContent}>
+            <View style={[s.searchBox, d.searchBox]}>
               <Ionicons name="search" size={18} color={colors.textSecondary} />
               <TextInput
-                style={styles.input}
+                style={d.input}
                 value={query}
                 onChangeText={setQuery}
                 placeholder="搜索对话或联系人"
@@ -219,16 +227,16 @@ export default function SearchScreen() {
               />
             </View>
             {!query ? (
-              <View style={styles.recentBlock}>
-                <Text style={styles.recentTitle}>最近搜索</Text>
-                <View style={styles.recentRow}>
+              <View style={s.recentBlock}>
+                <Text style={d.recentTitle}>最近搜索</Text>
+                <View style={s.recentRow}>
                   {RECENT_SEARCHES.map((item) => (
                     <Pressable
                       key={item}
-                      style={styles.recentChip}
+                      style={[s.recentChip, d.recentChip]}
                       onPress={() => setQuery(item)}
                     >
-                      <Text style={styles.recentChipText}>{item}</Text>
+                      <Text style={d.recentChipText}>{item}</Text>
                     </Pressable>
                   ))}
                 </View>
@@ -237,14 +245,14 @@ export default function SearchScreen() {
           </View>
         }
         renderSectionHeader={({ section }) => (
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{section.title}</Text>
+          <View style={s.sectionHeader}>
+            <Text style={d.sectionTitle}>{section.title}</Text>
           </View>
         )}
         renderItem={({ item, index, section }) => (
           <View>
             <Pressable
-              style={styles.resultRow}
+              style={s.resultRow}
               onPress={() => handleOpenUserProfile(item)}
             >
               {item.profileId ? (
@@ -258,14 +266,14 @@ export default function SearchScreen() {
               ) : (
                 <Avatar size={40} name={item.title} />
               )}
-              <View style={styles.resultBody}>
-                <View style={styles.resultTopRow}>
-                  <Text style={styles.resultTitle} numberOfLines={1}>
+              <View style={s.resultBody}>
+                <View style={s.resultTopRow}>
+                  <Text style={d.resultTitle} numberOfLines={1}>
                     {item.title}
                   </Text>
-                  <Text style={styles.resultMeta}>{item.meta}</Text>
+                  <Text style={d.resultMeta}>{item.meta}</Text>
                 </View>
-                <Text style={styles.resultSubtitle} numberOfLines={1}>
+                <Text style={d.resultSubtitle} numberOfLines={1}>
                   {item.subtitle}
                 </Text>
               </View>
@@ -273,7 +281,7 @@ export default function SearchScreen() {
             {index < section.data.length - 1 ? <Divider /> : null}
           </View>
         )}
-        ListEmptyComponent={<Text style={styles.emptyText}>暂无匹配结果</Text>}
+        ListEmptyComponent={<Text style={d.emptyText}>暂无匹配结果</Text>}
         showsVerticalScrollIndicator={false}
       />
     </View>

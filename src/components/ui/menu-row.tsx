@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { View, Text, Pressable, Switch, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Spacing, Typography } from '@/theme';
@@ -18,6 +18,25 @@ interface MenuRowProps {
   onPress?: () => void;
 }
 
+const s = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 52,
+  },
+  left: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  right: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+});
+
 export const MenuRow: React.FC<MenuRowProps> = ({
   icon,
   iconBgColor,
@@ -33,64 +52,47 @@ export const MenuRow: React.FC<MenuRowProps> = ({
 }) => {
   const { colors } = useTheme();
 
-  const styles = useMemo(
-    () =>
-      StyleSheet.create({
-        row: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          height: 52,
-        },
-        left: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Spacing.md,
-        },
-        right: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Spacing.sm,
-        },
-        label: {
-          color: colors.text,
-          ...Typography.body,
-        },
-        destructive: {
-          color: colors.error,
-        },
-        subtitle: {
-          color: colors.textSecondary,
-          ...Typography.small,
-          marginTop: 2,
-        },
-        rightText: {
-          color: colors.textSecondary,
-          ...Typography.caption,
-        },
-      }),
+  const d = useMemo(
+    () => ({
+      label: {
+        color: colors.text,
+        ...Typography.body,
+      },
+      destructive: {
+        color: colors.error,
+      },
+      subtitle: {
+        color: colors.textSecondary,
+        ...Typography.small,
+        marginTop: 2,
+      },
+      rightText: {
+        color: colors.textSecondary,
+        ...Typography.caption,
+      },
+    }),
     [colors],
   );
 
   return (
-    <Pressable style={styles.row} onPress={onPress}>
-      <View style={styles.left}>
+    <Pressable style={s.row} onPress={onPress}>
+      <View style={s.left}>
         {iconBgColor ? (
           <IconCircle name={icon} size={32} bgColor={iconBgColor} />
         ) : (
           <Ionicons name={icon} size={20} color={colors.text} />
         )}
         <View>
-          <Text style={[styles.label, destructive && styles.destructive]}>
+          <Text style={[d.label, destructive && d.destructive]}>
             {label}
           </Text>
           {subtitle ? (
-            <Text style={styles.subtitle}>{subtitle}</Text>
+            <Text style={d.subtitle}>{subtitle}</Text>
           ) : null}
         </View>
       </View>
-      <View style={styles.right}>
-        {rightText ? <Text style={styles.rightText}>{rightText}</Text> : null}
+      <View style={s.right}>
+        {rightText ? <Text style={d.rightText}>{rightText}</Text> : null}
         {hasToggle ? (
           <Switch
             value={toggleValue}

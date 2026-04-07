@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { useTheme, Spacing, Radius, Typography } from '@/theme';
 
@@ -9,6 +9,23 @@ interface FilterTabsProps {
   scrollable?: boolean;
 }
 
+const s = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  scrollContent: {
+    paddingRight: Spacing.lg,
+  },
+  tab: {
+    borderRadius: Radius.md,
+    height: 32,
+    paddingHorizontal: Spacing.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});
+
 export const FilterTabs: React.FC<FilterTabsProps> = ({
   tabs,
   activeIndex,
@@ -17,34 +34,19 @@ export const FilterTabs: React.FC<FilterTabsProps> = ({
 }) => {
   const { colors } = useTheme();
 
-  const styles = useMemo(
-    () =>
-      StyleSheet.create({
-        row: {
-          flexDirection: 'row',
-          gap: Spacing.sm,
-        },
-        scrollContent: {
-          paddingRight: Spacing.lg,
-        },
-        tab: {
-          borderRadius: Radius.md,
-          height: 32,
-          paddingHorizontal: Spacing.md,
-          justifyContent: 'center',
-          alignItems: 'center',
-        },
-        tabActive: {
-          backgroundColor: colors.primary,
-        },
-        label: {
-          color: colors.textSecondary,
-          ...Typography.caption,
-        },
-        labelActive: {
-          color: colors.white,
-        },
-      }),
+  const d = useMemo(
+    () => ({
+      tabActive: {
+        backgroundColor: colors.primary,
+      },
+      label: {
+        color: colors.textSecondary,
+        ...Typography.caption,
+      },
+      labelActive: {
+        color: colors.white,
+      },
+    }),
     [colors],
   );
 
@@ -55,15 +57,15 @@ export const FilterTabs: React.FC<FilterTabsProps> = ({
         <Pressable
           key={tab}
           onPress={() => onTabPress(index)}
-          style={[styles.tab, active && styles.tabActive]}
+          style={[s.tab, active && d.tabActive]}
         >
-          <Text style={[styles.label, active && styles.labelActive]}>
+          <Text style={[d.label, active && d.labelActive]}>
             {tab}
           </Text>
         </Pressable>
       );
     },
-    [activeIndex, onTabPress, styles],
+    [activeIndex, onTabPress, d],
   );
 
   if (scrollable) {
@@ -71,12 +73,12 @@ export const FilterTabs: React.FC<FilterTabsProps> = ({
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={[styles.row, styles.scrollContent]}
+        contentContainerStyle={[s.row, s.scrollContent]}
       >
         {tabs.map(renderTab)}
       </ScrollView>
     );
   }
 
-  return <View style={styles.row}>{tabs.map(renderTab)}</View>;
+  return <View style={s.row}>{tabs.map(renderTab)}</View>;
 };

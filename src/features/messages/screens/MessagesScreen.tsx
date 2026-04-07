@@ -2,15 +2,16 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Divider } from "@/components/ui/divider";
 import { FilterTabs } from "@/components/ui/filter-tabs";
+import { loadConversationList, markConversationAsRead } from "@/im/client";
+import { mapConversationItemToUI } from "@/im/mappers";
 import { getUnreadDiscoverAlertCount } from "@/features/messages/data/discover-alerts";
-import { useMessageGroupsStore } from "@/features/messages/store/use-message-groups-store";
-import { getUserProfileIdByName } from "@/features/user/data/profiles";
 import { getUserProfileHref } from "@/features/user/utils/routes";
+import { useIMStore } from "@/stores/imStore";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { Conversation } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   ListRenderItemInfo,
@@ -22,6 +23,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+// 消息列表固定的筛选标签（全部 / 未读 / 群聊 / 私聊）
+// 用户自定义群组会在运行时追加到这四个之后
 const BASE_FILTERS = [
   { id: "all", label: "全部" },
   { id: "unread", label: "未读" },
@@ -29,6 +32,8 @@ const BASE_FILTERS = [
   { id: "private", label: "私聊" },
 ];
 
+// 右上角「+」按钮弹出菜单的操作列表
+// label 同时作为唯一 key 和 handleMenuAction 的路由判断依据
 const MENU_ACTIONS: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
@@ -40,32 +45,167 @@ const MENU_ACTIONS: {
   { icon: "people-circle-outline", label: "群组管理" },
 ];
 
+// 静态样式（不依赖主题色，提取到组件外避免每次渲染重建）
+const s = StyleSheet.create({
+  listContent: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: 100,
+  },
+  // 列表顶部 header 区域（标题行 + 筛选 Tab）
+  headerSection: {
+    gap: Spacing.lg,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
+  },
+  // 标题行：左侧"消息"文字 + 右侧操作按钮组
+  titleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  // 右侧操作按钮组（通知、已读、搜索、+）
+  actionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  actionButton: {
+    position: "relative",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  // 通知图标右上角的未读角标
+  actionBadge: {
+    position: "absolute",
+    top: -8,
+    right: -12,
+  },
+  // 单条会话行：头像 + 内容区
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    paddingVertical: Spacing.md,
+  },
+  rowContent: {
+    flex: 1,
+    gap: Spacing.xs,
+  },
+  // 会话行上半：名称（左）+ 时间（右）
+  rowTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  // 会话行下半：消息预览（左）+ 未读数角标（右）
+  rowBottom: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  // 弹出菜单的半透明蒙层（点击关闭菜单）
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+  },
+  // 弹出菜单容器（定位在右上角 + 按钮下方）
+  menu: {
+    position: "absolute",
+    borderRadius: Radius.md,
+    paddingVertical: Spacing.sm,
+    minWidth: 160,
+    borderWidth: 1,
+  },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+  },
+});
+
+// MessagesScreen：消息列表主页面
+// 功能：
+//   1. 展示所有会话，支持按标签筛选（全部/未读/群聊/私聊/自定义群组）
+//   2. 头部操作栏：通知跳转、一键已读、搜索、快捷功能菜单
+//   3. 点击头像可进入用户主页（仅私聊），点击会话行进入聊天详情
 export default function MessagesScreen() {
-  const insets = useSafeAreaInsets();
+  const insets = useSafeAreaInsets();     // 安全区域（刘海/状态栏高度）
   const router = useRouter();
   const { colors } = useTheme();
-  const conversations = useMessageGroupsStore((state) => state.conversations);
-  const customGroups = useMessageGroupsStore((state) => state.customGroups);
-  const clearUnreadByFilter = useMessageGroupsStore(
-    (state) => state.clearUnreadByFilter,
-  );
-  const [activeFilterId, setActiveFilterId] = useState("all");
-  const [menuVisible, setMenuVisible] = useState(false);
+
+  const rawConversations = useIMStore((state) => state.conversations);
+  const totalUnread = useIMStore((state) => state.totalUnread);
+  const connectionError = useIMStore((state) => state.error);
+
+  const [activeFilterId, setActiveFilterId] = useState("all"); // 当前激活的筛选标签 id
+  const [menuVisible, setMenuVisible] = useState(false);        // 右上角弹出菜单的显隐
+
+  // 发现页未读通知数，用于通知图标角标
   const unreadNotificationCount = getUnreadDiscoverAlertCount();
 
-  const filterItems = useMemo(
-    () => [
-      ...BASE_FILTERS,
-      ...customGroups.map((group) => ({ id: group.id, label: group.name })),
-    ],
-    [customGroups],
+  // 依赖主题色的动态样式，colors 变化时重新计算
+  const d = useMemo(
+    () => ({
+      container: {
+        flex: 1,
+        backgroundColor: colors.background,
+      },
+      title: {
+        color: colors.text,
+        ...Typography.title,
+      },
+      name: {
+        color: colors.text,
+        fontSize: 15,
+        fontWeight: "600" as const,
+        flex: 1,
+        marginRight: Spacing.sm,
+      },
+      preview: {
+        color: colors.textSecondary,
+        ...Typography.caption,
+        flex: 1,
+        marginRight: Spacing.sm,
+      },
+      time: {
+        color: colors.textSecondary,
+        ...Typography.small,
+      },
+      emptyText: {
+        color: colors.textSecondary,
+        ...Typography.bodyRegular,
+        textAlign: "center" as const,
+        paddingTop: Spacing.xl,
+      },
+      menuBg: {
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
+      },
+      menuLabel: {
+        color: colors.text,
+        ...Typography.body,
+      },
+    }),
+    [colors],
   );
 
+  // 筛选标签列表 = 固定标签 + 用户自定义群组（动态追加）
+  const conversations = useMemo(
+    () => rawConversations.map(mapConversationItemToUI),
+    [rawConversations],
+  );
+
+  const filterItems = BASE_FILTERS;
+
+  // 当前激活标签在 filterItems 中的下标，供 FilterTabs 高亮使用
   const activeTab = useMemo(
     () => Math.max(filterItems.findIndex((item) => item.id === activeFilterId), 0),
     [activeFilterId, filterItems],
   );
 
+  // 根据当前激活标签过滤会话列表
   const visibleConversations = useMemo(() => {
     if (activeFilterId === "all") {
       return conversations;
@@ -86,133 +226,49 @@ export default function MessagesScreen() {
         (conversation) => conversation.conversationType === "private",
       );
     }
-
-    return conversations.filter(
-      (conversation) =>
-        conversation.conversationType === "group" &&
-        (conversation.customGroupIds ?? []).includes(activeFilterId),
-    );
+    return conversations;
   }, [activeFilterId, conversations]);
 
-  const styles = useMemo(
-    () =>
-      StyleSheet.create({
-        container: {
-          flex: 1,
-          backgroundColor: colors.background,
+  const hasFetchedRef = useRef(false);
+
+  useEffect(() => {
+    if (hasFetchedRef.current) {
+      return;
+    }
+    hasFetchedRef.current = true;
+    loadConversationList().catch(() => {
+      // Surface connection issues through IM store error state.
+    });
+  }, []);
+
+  // 点击会话行 → 进入聊天详情页
+  const handleConversationPress = useCallback(
+    async (conversation: Conversation) => {
+      try {
+        await markConversationAsRead(conversation.id);
+        await loadConversationList();
+      } catch {
+        // Keep navigation responsive even when marking read fails.
+      }
+
+      router.push({
+        pathname: "/(tabs)/messages/chat-detail",
+        params: {
+          conversationID: conversation.id,
+          sourceID: conversation.sourceID,
+          title: conversation.name,
+          conversationType: conversation.conversationType,
+          avatarUrl: conversation.avatarUrl,
         },
-        listContent: {
-          paddingHorizontal: Spacing.lg,
-          paddingBottom: 100,
-        },
-        headerSection: {
-          gap: Spacing.lg,
-          paddingTop: Spacing.md,
-          paddingBottom: Spacing.sm,
-        },
-        titleRow: {
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-        },
-        actionRow: {
-          flexDirection: "row",
-          alignItems: "center",
-          gap: Spacing.md,
-        },
-        actionButton: {
-          position: "relative",
-          justifyContent: "center",
-          alignItems: "center",
-        },
-        actionBadge: {
-          position: "absolute",
-          top: -8,
-          right: -12,
-        },
-        title: {
-          color: colors.text,
-          ...Typography.title,
-        },
-        row: {
-          flexDirection: "row",
-          alignItems: "center",
-          gap: Spacing.md,
-          paddingVertical: Spacing.md,
-        },
-        rowContent: {
-          flex: 1,
-          gap: Spacing.xs,
-        },
-        rowTop: {
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-        },
-        rowBottom: {
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-        },
-        name: {
-          color: colors.text,
-          fontSize: 15,
-          fontWeight: "600",
-          flex: 1,
-          marginRight: Spacing.sm,
-        },
-        preview: {
-          color: colors.textSecondary,
-          ...Typography.caption,
-          flex: 1,
-          marginRight: Spacing.sm,
-        },
-        time: {
-          color: colors.textSecondary,
-          ...Typography.small,
-        },
-        emptyText: {
-          color: colors.textSecondary,
-          ...Typography.bodyRegular,
-          textAlign: "center",
-          paddingTop: Spacing.xl,
-        },
-        overlay: {
-          flex: 1,
-          backgroundColor: "rgba(0, 0, 0, 0.4)",
-        },
-        menu: {
-          position: "absolute",
-          backgroundColor: colors.surface,
-          borderRadius: Radius.md,
-          paddingVertical: Spacing.sm,
-          minWidth: 160,
-          borderWidth: 1,
-          borderColor: colors.surfaceBorder,
-        },
-        menuItem: {
-          flexDirection: "row",
-          alignItems: "center",
-          gap: Spacing.md,
-          paddingVertical: Spacing.md,
-          paddingHorizontal: Spacing.lg,
-        },
-        menuLabel: {
-          color: colors.text,
-          ...Typography.body,
-        },
-      }),
-    [colors],
+      });
+    },
+    [router],
   );
 
-  const handleConversationPress = useCallback(() => {
-    router.push("/(tabs)/messages/chat-detail");
-  }, [router]);
-
   const handleOpenUserProfile = useCallback(
-    (name: string) => {
+    (conversation: Conversation) => {
       router.push(
-        getUserProfileHref("messages", getUserProfileIdByName(name), name),
+        getUserProfileHref("messages", conversation.sourceID, conversation.name),
       );
     },
     [router],
@@ -222,14 +278,21 @@ export default function MessagesScreen() {
     router.push("/(tabs)/discover");
   }, [router]);
 
+  // 点击搜索图标 → 跳转搜索页
   const handleOpenFind = useCallback(() => {
     router.push("/(tabs)/messages/find");
   }, [router]);
 
+  // 点击已读图标 → 将当前筛选标签下所有会话标记为已读
   const handleClearUnread = useCallback(() => {
-    clearUnreadByFilter(activeFilterId);
-  }, [activeFilterId, clearUnreadByFilter]);
+    Promise.all(visibleConversations.map((conversation) => markConversationAsRead(conversation.id)))
+      .then(() => loadConversationList())
+      .catch(() => {
+        // Ignore partial failures and leave the current list intact.
+      });
+  }, [visibleConversations]);
 
+  // 菜单项点击处理：关闭菜单并按 label 路由跳转
   const handleMenuAction = useCallback(
     (label: string) => {
       setMenuVisible(false);
@@ -239,25 +302,26 @@ export default function MessagesScreen() {
     [router],
   );
 
+  // 单条会话行渲染：头像（私聊可点击进主页）+ 名称/预览/时间/未读数
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<Conversation>) => (
-      <View style={styles.row}>
+      <View style={s.row}>
         {item.conversationType === "private" ? (
-          <Pressable onPress={() => handleOpenUserProfile(item.name)}>
+          <Pressable onPress={() => handleOpenUserProfile(item)}>
             <Avatar size={40} name={item.name} uri={item.avatarUrl} />
           </Pressable>
         ) : (
           <Avatar size={40} name={item.name} uri={item.avatarUrl} />
         )}
-        <Pressable style={styles.rowContent} onPress={handleConversationPress}>
-          <View style={styles.rowTop}>
-            <Text style={styles.name} numberOfLines={1}>
+        <Pressable style={s.rowContent} onPress={() => handleConversationPress(item)}>
+          <View style={s.rowTop}>
+            <Text style={d.name} numberOfLines={1}>
               {item.name}
             </Text>
-            <Text style={styles.time}>{item.time}</Text>
+            <Text style={d.time}>{item.time}</Text>
           </View>
-          <View style={styles.rowBottom}>
-            <Text style={styles.preview} numberOfLines={1}>
+          <View style={s.rowBottom}>
+            <Text style={d.preview} numberOfLines={1}>
               {item.message}
             </Text>
             <Badge count={item.unreadCount} />
@@ -265,19 +329,21 @@ export default function MessagesScreen() {
         </Pressable>
       </View>
     ),
-    [handleConversationPress, handleOpenUserProfile, styles],
+    [handleConversationPress, handleOpenUserProfile, d],
   );
 
   const renderSeparator = useCallback(() => <Divider />, []);
   const keyExtractor = useCallback((item: Conversation) => item.id, []);
 
-  const ListHeader = (
-    <View style={styles.headerSection}>
-      <View style={styles.titleRow}>
-        <Text style={styles.title}>消息</Text>
-        <View style={styles.actionRow}>
+  // 列表 Header：标题行（含操作按钮）+ 筛选 Tab 栏
+  const ListHeader = useMemo(() => (
+    <View style={s.headerSection}>
+      <View style={s.titleRow}>
+        <Text style={d.title}>消息</Text>
+        <View style={s.actionRow}>
+          {/* 通知按钮：右上角显示未读角标 */}
           <Pressable
-            style={styles.actionButton}
+            style={s.actionButton}
             onPress={handleOpenNotifications}
           >
             <Ionicons
@@ -285,20 +351,23 @@ export default function MessagesScreen() {
               size={24}
               color={colors.text}
             />
-            <View style={styles.actionBadge}>
-              <Badge count={unreadNotificationCount} />
+            <View style={s.actionBadge}>
+              <Badge count={Math.max(unreadNotificationCount, totalUnread)} />
             </View>
           </Pressable>
-          <Pressable style={styles.actionButton} onPress={handleClearUnread}>
+          {/* 一键已读：将当前标签下所有会话标记为已读 */}
+          <Pressable style={s.actionButton} onPress={handleClearUnread}>
             <Ionicons
               name="checkmark-done-outline"
               size={24}
               color={colors.text}
             />
           </Pressable>
-          <Pressable style={styles.actionButton} onPress={handleOpenFind}>
+          {/* 搜索按钮 */}
+          <Pressable style={s.actionButton} onPress={handleOpenFind}>
             <Ionicons name="search-outline" size={24} color={colors.text} />
           </Pressable>
+          {/* 「+」按钮：展开快捷操作菜单 */}
           <Pressable onPress={() => setMenuVisible(true)}>
             <Ionicons name="add-circle-outline" size={24} color={colors.text} />
           </Pressable>
@@ -311,42 +380,48 @@ export default function MessagesScreen() {
         scrollable
       />
     </View>
-  );
+  ), [activeTab, colors, d, filterItems, handleClearUnread, handleOpenFind, handleOpenNotifications, totalUnread, unreadNotificationCount]);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[d.container, { paddingTop: insets.top }]}>
       <FlatList
         data={visibleConversations}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         ItemSeparatorComponent={renderSeparator}
         ListHeaderComponent={ListHeader}
-        ListEmptyComponent={<Text style={styles.emptyText}>暂无会话</Text>}
-        contentContainerStyle={styles.listContent}
+        ListEmptyComponent={
+          <Text style={d.emptyText}>
+            {connectionError ? `会话加载失败：${connectionError}` : "暂无会话"}
+          </Text>
+        }
+        contentContainerStyle={s.listContent}
         showsVerticalScrollIndicator={false}
       />
 
+      {/* 右上角「+」弹出菜单（Modal 实现，点击蒙层关闭） */}
       <Modal
         visible={menuVisible}
         transparent
         animationType="fade"
         onRequestClose={() => setMenuVisible(false)}
       >
-        <Pressable style={styles.overlay} onPress={() => setMenuVisible(false)}>
+        <Pressable style={s.overlay} onPress={() => setMenuVisible(false)}>
           <View
             style={[
-              styles.menu,
-              { top: insets.top + 56, right: Spacing.lg },
+              s.menu,
+              d.menuBg,
+              { top: insets.top + 56, right: Spacing.lg }, // 定位在状态栏高度 + header 高度下方
             ]}
           >
             {MENU_ACTIONS.map((action) => (
               <Pressable
                 key={action.label}
-                style={styles.menuItem}
+                style={s.menuItem}
                 onPress={() => handleMenuAction(action.label)}
               >
                 <Ionicons name={action.icon} size={20} color={colors.text} />
-                <Text style={styles.menuLabel}>{action.label}</Text>
+                <Text style={d.menuLabel}>{action.label}</Text>
               </Pressable>
             ))}
           </View>

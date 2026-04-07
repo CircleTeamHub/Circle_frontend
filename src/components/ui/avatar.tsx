@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { useTheme, Radius } from '@/theme';
@@ -10,6 +10,13 @@ interface AvatarProps {
   bgColor?: string;
 }
 
+const s = StyleSheet.create({
+  fallback: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});
+
 export const Avatar: React.FC<AvatarProps> = ({
   size = 40,
   name,
@@ -20,21 +27,16 @@ export const Avatar: React.FC<AvatarProps> = ({
   const resolvedBgColor = bgColor ?? colors.primary;
   const borderRadius = size / 2;
 
-  const styles = useMemo(
-    () =>
-      StyleSheet.create({
-        image: {
-          backgroundColor: colors.surface,
-        },
-        fallback: {
-          justifyContent: 'center',
-          alignItems: 'center',
-        },
-        initial: {
-          color: colors.white,
-          fontWeight: '600',
-        },
-      }),
+  const d = useMemo(
+    () => ({
+      image: {
+        backgroundColor: colors.surface,
+      },
+      initial: {
+        color: colors.white,
+        fontWeight: '600' as const,
+      },
+    }),
     [colors],
   );
 
@@ -42,7 +44,7 @@ export const Avatar: React.FC<AvatarProps> = ({
     return (
       <Image
         source={{ uri }}
-        style={[styles.image, { width: size, height: size, borderRadius }]}
+        style={[d.image, { width: size, height: size, borderRadius }]}
       />
     );
   }
@@ -50,11 +52,11 @@ export const Avatar: React.FC<AvatarProps> = ({
   return (
     <View
       style={[
-        styles.fallback,
+        s.fallback,
         { width: size, height: size, borderRadius, backgroundColor: resolvedBgColor },
       ]}
     >
-      <Text style={[styles.initial, { fontSize: size * 0.4 }]}>
+      <Text style={[d.initial, { fontSize: size * 0.4 }]}>
         {name?.charAt(0) ?? '?'}
       </Text>
     </View>

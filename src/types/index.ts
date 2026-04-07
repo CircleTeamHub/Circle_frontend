@@ -6,6 +6,7 @@ export type ConversationType = 'group' | 'private';
 
 export interface Conversation {
   id: string;
+  sourceID: string;
   name: string;
   message: string;
   time: string;
@@ -47,6 +48,7 @@ export interface ChatMessage {
   type: 'sent' | 'received' | 'date' | 'location';
   text?: string;
   time?: string;
+  senderName?: string;
   locationTitle?: string;
   locationAddress?: string;
 }

@@ -8,7 +8,7 @@ import { Spacing, Typography, useTheme } from "@/theme";
 import type { Contact, ContactSection } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useCallback, useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import {
   Pressable,
   SectionList,
@@ -122,71 +122,73 @@ const CONTACT_SECTIONS: ContactSection[] = [
 
 const ALPHABET = "ABCDEFGHIJKLM#".split("");
 
+const s = StyleSheet.create({
+  listContent: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: 100,
+  },
+  headerSection: {
+    gap: Spacing.lg,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
+  },
+  titleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  quickActions: {
+    marginBottom: Spacing.sm,
+  },
+  sectionHeader: {
+    paddingVertical: Spacing.sm,
+  },
+  contactRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    paddingVertical: 14,
+  },
+  alphabetIndex: {
+    position: "absolute",
+    right: 4,
+    width: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 1,
+  },
+});
+
 export default function ContactsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
 
-  const styles = useMemo(
-    () =>
-      StyleSheet.create({
-        container: {
-          flex: 1,
-          backgroundColor: colors.background,
-        },
-        listContent: {
-          paddingHorizontal: Spacing.lg,
-          paddingBottom: 100,
-        },
-        headerSection: {
-          gap: Spacing.lg,
-          paddingTop: Spacing.md,
-          paddingBottom: Spacing.sm,
-        },
-        titleRow: {
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-        },
-        title: {
-          color: colors.text,
-          ...Typography.title,
-        },
-        quickActions: {
-          marginBottom: Spacing.sm,
-        },
-        sectionHeader: {
-          paddingVertical: Spacing.sm,
-        },
-        sectionLetter: {
-          color: colors.textSecondary,
-          ...Typography.caption,
-          fontWeight: "600",
-        },
-        contactRow: {
-          flexDirection: "row",
-          alignItems: "center",
-          gap: Spacing.md,
-          paddingVertical: 14,
-        },
-        contactName: {
-          color: colors.text,
-          fontSize: 15,
-          fontWeight: "500",
-        },
-        alphabetIndex: {
-          position: "absolute",
-          right: 4,
-          width: 14,
-          justifyContent: "center",
-          alignItems: "center",
-          gap: 1,
-        },
-        alphabetLetter: {
-          color: colors.textSecondary,
-          ...Typography.tiny,
-        },
-      }),
+  const d = useMemo(
+    () => ({
+      container: {
+        flex: 1,
+        backgroundColor: colors.background,
+      },
+      title: {
+        color: colors.text,
+        ...Typography.title,
+      },
+      sectionLetter: {
+        color: colors.textSecondary,
+        ...Typography.caption,
+        fontWeight: "600" as const,
+      },
+      contactName: {
+        color: colors.text,
+        fontSize: 15,
+        fontWeight: "500" as const,
+      },
+      alphabetLetter: {
+        color: colors.textSecondary,
+        ...Typography.tiny,
+      },
+    }),
     [colors],
   );
 
@@ -215,7 +217,7 @@ export default function ContactsScreen() {
     }: SectionListRenderItemInfo<Contact, ContactSection>) => (
       <View>
         <Pressable
-          style={styles.contactRow}
+          style={s.contactRow}
           onPress={() =>
             router.push(
               getUserProfileHref(
@@ -239,35 +241,35 @@ export default function ContactsScreen() {
           >
             <Avatar size={40} name={item.name} uri={item.avatarUrl} />
           </Pressable>
-          <Text style={styles.contactName}>{item.name}</Text>
+          <Text style={d.contactName}>{item.name}</Text>
         </Pressable>
         {index < section.data.length - 1 && <Divider />}
       </View>
     ),
-    [router, styles],
+    [router, d],
   );
 
   const renderSectionHeader = useCallback(
     ({ section }: { section: SectionListData<Contact, ContactSection> }) => (
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionLetter}>{section.letter}</Text>
+      <View style={s.sectionHeader}>
+        <Text style={d.sectionLetter}>{section.letter}</Text>
       </View>
     ),
-    [styles],
+    [d],
   );
 
   const keyExtractor = useCallback((item: Contact) => item.id, []);
 
   const ListHeader = (
-    <View style={styles.headerSection}>
-      <View style={styles.titleRow}>
-        <Text style={styles.title}>联系人</Text>
+    <View style={s.headerSection}>
+      <View style={s.titleRow}>
+        <Text style={d.title}>联系人</Text>
         <Pressable onPress={handleAddFriend}>
           <Ionicons name="person-add-outline" size={24} color={colors.text} />
         </Pressable>
       </View>
       <SearchBar placeholder="搜索联系人..." onPress={handleOpenSearch} />
-      <View style={styles.quickActions}>
+      <View style={s.quickActions}>
         {QUICK_ACTIONS.map((action, i) => (
           <View key={action.label}>
             <MenuRow
@@ -284,22 +286,22 @@ export default function ContactsScreen() {
   );
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[d.container, { paddingTop: insets.top }]}>
       <SectionList
         sections={CONTACT_SECTIONS}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         renderSectionHeader={renderSectionHeader}
         ListHeaderComponent={ListHeader}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={s.listContent}
         showsVerticalScrollIndicator={false}
         stickySectionHeadersEnabled={false}
       />
       <View
-        style={[styles.alphabetIndex, { top: insets.top + 200, bottom: 100 }]}
+        style={[s.alphabetIndex, { top: insets.top + 200, bottom: 100 }]}
       >
         {ALPHABET.map((letter) => (
-          <Text key={letter} style={styles.alphabetLetter}>
+          <Text key={letter} style={d.alphabetLetter}>
             {letter}
           </Text>
         ))}

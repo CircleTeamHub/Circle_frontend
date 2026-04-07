@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,6 +6,18 @@ import { useTheme, Spacing, Typography } from '@/theme';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Divider } from '@/components/ui/divider';
 import { MenuRow } from '@/components/ui/menu-row';
+
+const s = StyleSheet.create({
+  scroll: { flex: 1 },
+  membersRow: { flexDirection: 'row', paddingVertical: Spacing.md, paddingLeft: Spacing.lg, gap: Spacing.md },
+  memberItem: { alignItems: 'center', width: 56 },
+  memberAvatar: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  memberEmoji: { fontSize: 18 },
+  memberName: { ...Typography.tinyRegular, textAlign: 'center', marginTop: Spacing.xs, width: 56 },
+  addBtn: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
+  section: { paddingHorizontal: Spacing.lg, borderTopWidth: 1, borderBottomWidth: 1 },
+  spacer: { height: Spacing.md },
+});
 
 export default function ChatInfoScreen() {
   const insets = useSafeAreaInsets();
@@ -17,40 +29,35 @@ export default function ChatInfoScreen() {
   const handleMute = useCallback((v: boolean) => setMuteNotifications(v), []);
   const handleBlacklist = useCallback((v: boolean) => setBlacklist(v), []);
 
-  const styles = useMemo(() => StyleSheet.create({
+  const d = useMemo(() => ({
     container: { flex: 1, backgroundColor: colors.background },
-    scroll: { flex: 1 },
-    membersRow: { flexDirection: 'row', paddingVertical: Spacing.md, paddingLeft: Spacing.lg, gap: Spacing.md },
-    memberItem: { alignItems: 'center', width: 56 },
-    memberAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
-    memberEmoji: { fontSize: 18 },
-    memberName: { ...Typography.tinyRegular, color: colors.textSecondary, textAlign: 'center', marginTop: Spacing.xs, width: 56 },
-    addBtn: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.surfaceBorder, alignItems: 'center', justifyContent: 'center' },
-    section: { backgroundColor: colors.surface, paddingHorizontal: Spacing.lg, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.divider },
-    spacer: { height: Spacing.md },
+    memberAvatar: { backgroundColor: colors.surface },
+    memberName: { color: colors.textSecondary },
+    addBtn: { borderColor: colors.surfaceBorder },
+    section: { backgroundColor: colors.surface, borderColor: colors.divider },
   }), [colors]);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader title="聊天信息" />
-      <ScrollView style={styles.scroll}>
+      <ScrollView style={s.scroll}>
         {/* Members */}
-        <View style={styles.membersRow}>
-          <View style={styles.memberItem}>
-            <View style={styles.memberAvatar}>
-              <Text style={styles.memberEmoji}>👤</Text>
+        <View style={s.membersRow}>
+          <View style={s.memberItem}>
+            <View style={[s.memberAvatar, d.memberAvatar]}>
+              <Text style={s.memberEmoji}>👤</Text>
             </View>
-            <Text numberOfLines={1} style={styles.memberName}>上海 深圳玄...</Text>
+            <Text numberOfLines={1} style={[s.memberName, d.memberName]}>上海 深圳玄...</Text>
           </View>
-          <View style={styles.memberItem}>
-            <Pressable style={styles.addBtn}>
+          <View style={s.memberItem}>
+            <Pressable style={[s.addBtn, d.addBtn]}>
               <Ionicons name="add" size={24} color={colors.textSecondary} />
             </Pressable>
-            <Text style={styles.memberName}>创建群聊</Text>
+            <Text style={[s.memberName, d.memberName]}>创建群聊</Text>
           </View>
         </View>
         {/* Settings Group 1 */}
-        <View style={styles.section}>
+        <View style={[s.section, d.section]}>
           <MenuRow icon="search" label="查找聊天记录" />
           <Divider />
           <MenuRow icon="create-outline" label="设置备注" />
@@ -65,9 +72,9 @@ export default function ChatInfoScreen() {
           <Divider />
           <MenuRow icon="flame-outline" label="好友消息自毁" rightText="关闭" showArrow={false} />
         </View>
-        <View style={styles.spacer} />
+        <View style={s.spacer} />
         {/* Actions Group 2 */}
-        <View style={styles.section}>
+        <View style={[s.section, d.section]}>
           <MenuRow icon="person-add-outline" label="把他推荐给朋友" />
           <Divider />
           <MenuRow icon="ban-outline" label="加入黑名单" hasToggle toggleValue={blacklist} onToggle={handleBlacklist} showArrow={false} />

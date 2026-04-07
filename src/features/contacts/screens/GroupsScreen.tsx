@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import {
   View,
   Text,
@@ -48,95 +48,97 @@ const GROUP_SECTIONS: GroupSection[] = [
   },
 ];
 
+const s = StyleSheet.create({
+  sectionHeader: {
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.sm,
+  },
+  groupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    paddingVertical: Spacing.md,
+  },
+  groupBody: {
+    flex: 1,
+    gap: Spacing.xs,
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.sm,
+  },
+});
+
 export default function GroupsScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
 
-  const styles = useMemo(
-    () =>
-      StyleSheet.create({
-        container: {
-          flex: 1,
-          backgroundColor: colors.background,
-        },
-        listContent: {
-          paddingHorizontal: Spacing.lg,
-          paddingBottom: insets.bottom + Spacing.xl,
-        },
-        sectionHeader: {
-          paddingTop: Spacing.lg,
-          paddingBottom: Spacing.sm,
-        },
-        sectionTitle: {
-          color: colors.text,
-          ...Typography.h3,
-        },
-        groupRow: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Spacing.md,
-          paddingVertical: Spacing.md,
-        },
-        groupBody: {
-          flex: 1,
-          gap: Spacing.xs,
-        },
-        topRow: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: Spacing.sm,
-        },
-        groupName: {
-          color: colors.text,
-          fontSize: 15,
-          fontWeight: '600',
-          flex: 1,
-          marginRight: Spacing.sm,
-        },
-        memberCount: {
-          color: colors.textSecondary,
-          ...Typography.small,
-        },
-        description: {
-          color: colors.textSecondary,
-          ...Typography.caption,
-        },
-        emptyText: {
-          color: colors.textSecondary,
-          ...Typography.bodyRegular,
-          textAlign: 'center',
-          paddingTop: Spacing.xl,
-        },
-      }),
+  const d = useMemo(
+    () => ({
+      container: {
+        flex: 1,
+        backgroundColor: colors.background,
+      },
+      listContent: {
+        paddingHorizontal: Spacing.lg,
+        paddingBottom: insets.bottom + Spacing.xl,
+      },
+      sectionTitle: {
+        color: colors.text,
+        ...Typography.h3,
+      },
+      groupName: {
+        color: colors.text,
+        fontSize: 15,
+        fontWeight: '600' as const,
+        flex: 1,
+        marginRight: Spacing.sm,
+      },
+      memberCount: {
+        color: colors.textSecondary,
+        ...Typography.small,
+      },
+      description: {
+        color: colors.textSecondary,
+        ...Typography.caption,
+      },
+      emptyText: {
+        color: colors.textSecondary,
+        ...Typography.bodyRegular,
+        textAlign: 'center' as const,
+        paddingTop: Spacing.xl,
+      },
+    }),
     [colors, insets.bottom],
   );
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader title="群聊" />
       <SectionList
         sections={GROUP_SECTIONS}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={d.listContent}
         stickySectionHeadersEnabled={false}
         renderSectionHeader={({ section }: { section: SectionListData<GroupItem, GroupSection> }) => (
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{section.title}</Text>
+          <View style={s.sectionHeader}>
+            <Text style={d.sectionTitle}>{section.title}</Text>
           </View>
         )}
         renderItem={({ item, index, section }) => (
           <View>
-            <Pressable style={styles.groupRow}>
+            <Pressable style={s.groupRow}>
               <Avatar size={40} name={item.name} />
-              <View style={styles.groupBody}>
-                <View style={styles.topRow}>
-                  <Text style={styles.groupName} numberOfLines={1}>
+              <View style={s.groupBody}>
+                <View style={s.topRow}>
+                  <Text style={d.groupName} numberOfLines={1}>
                     {item.name}
                   </Text>
-                  <Text style={styles.memberCount}>{item.memberCount}人</Text>
+                  <Text style={d.memberCount}>{item.memberCount}人</Text>
                 </View>
-                <Text style={styles.description} numberOfLines={1}>
+                <Text style={d.description} numberOfLines={1}>
                   {item.description}
                 </Text>
               </View>
@@ -144,7 +146,7 @@ export default function GroupsScreen() {
             {index < section.data.length - 1 ? <Divider /> : null}
           </View>
         )}
-        ListEmptyComponent={<Text style={styles.emptyText}>暂无群聊</Text>}
+        ListEmptyComponent={<Text style={d.emptyText}>暂无群聊</Text>}
         showsVerticalScrollIndicator={false}
       />
     </View>

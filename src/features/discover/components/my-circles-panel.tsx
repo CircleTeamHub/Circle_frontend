@@ -2,7 +2,7 @@ import { Divider } from "@/components/ui/divider";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import { Image } from "expo-image";
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
 interface CircleItem {
@@ -65,88 +65,94 @@ const TAG_COLORS = {
   审核中: "#3B82F6",
 } as const;
 
+const s = StyleSheet.create({
+  container: {
+    gap: Spacing.lg,
+  },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  createButton: {
+    paddingHorizontal: Spacing.md,
+    height: 32,
+    borderRadius: Radius.full,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+  },
+  listContent: {
+    marginTop: Spacing.sm,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    paddingVertical: Spacing.md,
+  },
+  cover: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.md,
+  },
+  body: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: Spacing.sm,
+  },
+  tag: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.full,
+  },
+});
+
 export const MyCirclesPanel: React.FC = () => {
   const { colors } = useTheme();
   const [activeTab, setActiveTab] = useState(0);
 
-  const styles = useMemo(
-    () =>
-      StyleSheet.create({
-        container: {
-          gap: Spacing.lg,
-        },
-        headerRow: {
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-        },
-        title: {
-          color: colors.text,
-          ...Typography.title,
-        },
-        createButton: {
-          paddingHorizontal: Spacing.md,
-          height: 32,
-          borderRadius: Radius.full,
-          backgroundColor: colors.surface,
-          justifyContent: "center",
-          alignItems: "center",
-          borderWidth: 1,
-          borderColor: colors.surfaceBorder,
-        },
-        createButtonText: {
-          color: colors.primary,
-          ...Typography.caption,
-          fontWeight: "600",
-        },
-        listContent: {
-          marginTop: Spacing.sm,
-        },
-        row: {
-          flexDirection: "row",
-          alignItems: "center",
-          gap: Spacing.md,
-          paddingVertical: Spacing.md,
-        },
-        cover: {
-          width: 56,
-          height: 56,
-          borderRadius: Radius.md,
-          backgroundColor: colors.surfaceBorder,
-        },
-        body: {
-          flex: 1,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: Spacing.sm,
-        },
-        name: {
-          color: colors.text,
-          fontSize: 16,
-          fontWeight: "600",
-          flex: 1,
-        },
-        tag: {
-          paddingHorizontal: Spacing.md,
-          paddingVertical: Spacing.xs,
-          borderRadius: Radius.full,
-        },
-        tagText: {
-          color: colors.white,
-          ...Typography.small,
-          fontWeight: "600",
-        },
-      }),
+  const d = useMemo(
+    () => ({
+      title: {
+        color: colors.text,
+        ...Typography.title,
+      },
+      createButton: {
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
+      },
+      createButtonText: {
+        color: colors.primary,
+        ...Typography.caption,
+        fontWeight: "600" as const,
+      },
+      cover: {
+        backgroundColor: colors.surfaceBorder,
+      },
+      name: {
+        color: colors.text,
+        fontSize: 16,
+        fontWeight: "600" as const,
+        flex: 1,
+      },
+      tagText: {
+        color: colors.white,
+        ...Typography.small,
+        fontWeight: "600" as const,
+      },
+    }),
     [colors],
   );
 
   return (
-    <View style={styles.container}>
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>圈子详情</Text>
-        <Pressable style={styles.createButton}>
-          <Text style={styles.createButtonText}>创建圈子</Text>
+    <View style={s.container}>
+      <View style={s.headerRow}>
+        <Text style={d.title}>圈子详情</Text>
+        <Pressable style={[s.createButton, d.createButton]}>
+          <Text style={d.createButtonText}>创建圈子</Text>
         </Pressable>
       </View>
 
@@ -160,25 +166,25 @@ export const MyCirclesPanel: React.FC = () => {
         data={CIRCLES_BY_TAB[activeTab]}
         keyExtractor={(item) => item.id}
         scrollEnabled={false}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={s.listContent}
         renderItem={({ item, index }) => (
           <View>
-            <Pressable style={styles.row}>
-              <Image source={{ uri: item.imageUrl }} style={styles.cover} />
-              <View style={styles.body}>
-                <Text style={styles.name} numberOfLines={1}>
+            <Pressable style={s.row}>
+              <Image source={{ uri: item.imageUrl }} style={[s.cover, d.cover]} />
+              <View style={s.body}>
+                <Text style={d.name} numberOfLines={1}>
                   {item.name}
                 </Text>
                 <View
                   style={[
-                    styles.tag,
+                    s.tag,
                     {
                       backgroundColor:
                         TAG_COLORS[item.tag as keyof typeof TAG_COLORS],
                     },
                   ]}
                 >
-                  <Text style={styles.tagText}>{item.tag}</Text>
+                  <Text style={d.tagText}>{item.tag}</Text>
                 </View>
               </View>
             </Pressable>

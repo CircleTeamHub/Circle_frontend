@@ -4,9 +4,10 @@ import { MenuRow } from "@/components/ui/menu-row";
 import { getUserProfileHref } from "@/features/user/utils/routes";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { MenuItem } from "@/types";
+import { useAuthStore } from "@/stores/authStore";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useCallback, useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -40,84 +41,100 @@ const MENU_ITEMS: MenuItem[] = [
   },
 ];
 
+const s = StyleSheet.create({
+  listContent: { paddingHorizontal: Spacing.lg, paddingBottom: 100 },
+  listHeader: { gap: Spacing.sm },
+  profileRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: Spacing.xs,
+  },
+  profileLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md - 4,
+  },
+  profileInfo: { gap: Spacing.xs },
+  profileRight: {
+    flexDirection: "row",
+    gap: Spacing.md,
+    alignItems: "center",
+  },
+  profileAction: { alignItems: "center", gap: Spacing.xs },
+  memberCard: {
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    gap: 6,
+  },
+  memberTags: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    alignItems: "center",
+  },
+  memberTag: {
+    borderRadius: Radius.md,
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: 10,
+  },
+  memberTagLight: {
+    borderRadius: Radius.md,
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: 10,
+  },
+  badgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: Spacing.sm,
+  },
+  greenBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: Spacing.md,
+  },
+});
+
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors, resolvedMode, toggleTheme } = useTheme();
+  const user = useAuthStore((state) => state.user);
 
-  const styles = useMemo(
-    () =>
-      StyleSheet.create({
-        container: { flex: 1, backgroundColor: colors.background },
-        listContent: { paddingHorizontal: Spacing.lg, paddingBottom: 100 },
-        listHeader: { gap: Spacing.sm },
-        profileRow: {
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-          paddingVertical: Spacing.xs,
-        },
-        profileLeft: {
-          flexDirection: "row",
-          alignItems: "center",
-          gap: Spacing.md - 4,
-        },
-        profileInfo: { gap: Spacing.xs },
-        profileName: { color: colors.text, ...Typography.h2 },
-        profileAccount: { color: colors.textSecondary, ...Typography.small },
-        profileRight: {
-          flexDirection: "row",
-          gap: Spacing.md,
-          alignItems: "center",
-        },
-        profileAction: { alignItems: "center", gap: Spacing.xs },
-        profileActionLabel: { color: colors.textSecondary, ...Typography.tiny },
-        memberCard: {
-          backgroundColor: colors.memberCardBg,
-          borderRadius: Radius.lg,
-          padding: Spacing.md,
-          gap: 6,
-        },
-        memberTags: {
-          flexDirection: "row",
-          gap: Spacing.sm,
-          alignItems: "center",
-        },
-        memberTag: {
-          backgroundColor: colors.memberTagBg,
-          borderRadius: Radius.md,
-          paddingVertical: Spacing.xs,
-          paddingHorizontal: 10,
-        },
-        memberTagLight: {
-          backgroundColor: colors.memberTagBgLight,
-          borderRadius: Radius.md,
-          paddingVertical: Spacing.xs,
-          paddingHorizontal: 10,
-        },
-        memberTagText: {
-          color: colors.memberCardText,
-          ...Typography.small,
-          fontWeight: "500",
-        },
-        memberText: { color: colors.memberCardText, fontSize: 14 },
-        badgeRow: {
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 10,
-          paddingVertical: Spacing.sm,
-        },
-        greenBadge: {
-          width: 32,
-          height: 32,
-          borderRadius: Spacing.md,
-          backgroundColor: colors.success,
-        },
-      }),
+  const d = useMemo(
+    () => ({
+      container: { flex: 1, backgroundColor: colors.background },
+      profileName: { color: colors.text, ...Typography.h2 },
+      profileAccount: { color: colors.textSecondary, ...Typography.small },
+      profileActionLabel: { color: colors.textSecondary, ...Typography.tiny },
+      memberCard: {
+        backgroundColor: colors.memberCardBg,
+      },
+      memberTag: {
+        backgroundColor: colors.memberTagBg,
+      },
+      memberTagLight: {
+        backgroundColor: colors.memberTagBgLight,
+      },
+      memberTagText: {
+        color: colors.memberCardText,
+        ...Typography.small,
+        fontWeight: "500" as const,
+      },
+      memberText: { color: colors.memberCardText, fontSize: 14 },
+      greenBadge: {
+        backgroundColor: colors.success,
+      },
+    }),
     [colors],
   );
 
   const isDark = resolvedMode === "dark";
+  const displayName = user?.nickname || user?.username || "未登录用户";
+  const displayAccount = user?.accountId || user?.username || "未绑定";
+  const membershipTag = user?.role === "ADMIN" ? "管理员" : "普通用户";
+  const profileSignature =
+    user?.helloWords || user?.persona || "完善资料后会在这里展示你的介绍。";
 
   const handleOpenShare = useCallback(() => {
     router.push("/(tabs)/profile/share");
@@ -144,67 +161,80 @@ export default function ProfileScreen() {
   const keyExtractor = useCallback((item: MenuItem) => item.id, []);
 
   const ListHeader = (
-    <View style={styles.listHeader}>
+    <View style={s.listHeader}>
       {/* Profile header */}
-      <View style={styles.profileRow}>
-        <View style={styles.profileLeft}>
+      <View style={s.profileRow}>
+        <View style={s.profileLeft}>
           <Pressable
-            onPress={() => router.push(getUserProfileHref("profile", "me", "ddddd"))}
+            onPress={() =>
+              router.push(
+                getUserProfileHref("profile", user?.id ?? "me", displayName),
+              )
+            }
           >
-            <Avatar size={56} name="🐱" bgColor={colors.surface} />
+            <Avatar
+              size={56}
+              name={displayName}
+              uri={user?.avatarUrl ?? undefined}
+              bgColor={colors.surface}
+            />
           </Pressable>
-          <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>ddddd</Text>
-            <Text style={styles.profileAccount}>账号：134273011l</Text>
+          <View style={s.profileInfo}>
+            <Text style={d.profileName}>{displayName}</Text>
+            <Text style={d.profileAccount}>账号：{displayAccount}</Text>
           </View>
         </View>
-        <View style={styles.profileRight}>
-          <Pressable style={styles.profileAction} onPress={handleOpenShare}>
+        <View style={s.profileRight}>
+          <Pressable style={s.profileAction} onPress={handleOpenShare}>
             <Ionicons
               name="share-social-outline"
               size={20}
               color={colors.textSecondary}
             />
-            <Text style={styles.profileActionLabel}>分享</Text>
+            <Text style={d.profileActionLabel}>分享</Text>
           </Pressable>
-          <Pressable style={styles.profileAction} onPress={toggleTheme}>
+          <Pressable style={s.profileAction} onPress={toggleTheme}>
             <Ionicons
               name={isDark ? "sunny-outline" : "moon-outline"}
               size={20}
               color={colors.textSecondary}
             />
-            <Text style={styles.profileActionLabel}>
+            <Text style={d.profileActionLabel}>
               {isDark ? "浅色" : "深色"}
             </Text>
           </Pressable>
-          <Pressable style={styles.profileAction} onPress={handleOpenSettings}>
+          <Pressable style={s.profileAction} onPress={handleOpenSettings}>
             <Ionicons
               name="settings-outline"
               size={20}
               color={colors.textSecondary}
             />
-            <Text style={styles.profileActionLabel}>设置</Text>
+            <Text style={d.profileActionLabel}>设置</Text>
           </Pressable>
         </View>
       </View>
 
       {/* Member card */}
-      <View style={styles.memberCard}>
-        <View style={styles.memberTags}>
-          <View style={styles.memberTag}>
-            <Text style={styles.memberTagText}>普通用户</Text>
+      <View style={[s.memberCard, d.memberCard]}>
+        <View style={s.memberTags}>
+          <View style={[s.memberTag, d.memberTag]}>
+            <Text style={d.memberTagText}>{membershipTag}</Text>
           </View>
-          <View style={styles.memberTagLight}>
-            <Text style={styles.memberTagText}>一年购 入门会员</Text>
+          <View style={[s.memberTagLight, d.memberTagLight]}>
+            <Text style={d.memberTagText}>
+              {user?.status === "ACTIVE" ? "账号正常" : user?.status ?? "状态未知"}
+            </Text>
           </View>
         </View>
-        <Text style={styles.memberText}>普通用户经验值不会增长</Text>
-        <Text style={styles.memberText}>开通会员，至尊对应等级权益</Text>
+        <Text style={d.memberText}>{profileSignature}</Text>
+        <Text style={d.memberText}>
+          {user?.email || user?.phoneNumber || "可在账号设置中完善联系方式"}
+        </Text>
       </View>
 
       {/* Badge row */}
-      <View style={styles.badgeRow}>
-        <View style={styles.greenBadge} />
+      <View style={s.badgeRow}>
+        <View style={[s.greenBadge, d.greenBadge]} />
       </View>
 
       <Divider />
@@ -212,14 +242,14 @@ export default function ProfileScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={d.container}>
       <FlatList
         data={MENU_ITEMS}
         renderItem={renderMenuItem}
         keyExtractor={keyExtractor}
         ListHeaderComponent={ListHeader}
         contentContainerStyle={[
-          styles.listContent,
+          s.listContent,
           { paddingTop: insets.top + Spacing.md - 4 },
         ]}
         showsVerticalScrollIndicator={false}

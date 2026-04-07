@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
@@ -9,33 +9,37 @@ interface DatePillProps {
   text: string;
 }
 
+const sDatePill = StyleSheet.create({
+  datePillWrapper: {
+    alignItems: 'center',
+  },
+  datePill: {
+    borderRadius: Radius.md,
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: 14,
+  },
+});
+
 export const DatePill: React.FC<DatePillProps> = ({ text }) => {
   const { colors } = useTheme();
 
-  const styles = useMemo(
-    () =>
-      StyleSheet.create({
-        datePillWrapper: {
-          alignItems: 'center',
-        },
-        datePill: {
-          backgroundColor: colors.surface,
-          borderRadius: Radius.md,
-          paddingVertical: Spacing.xs,
-          paddingHorizontal: 14,
-        },
-        datePillText: {
-          color: colors.textSecondary,
-          ...Typography.small,
-        },
-      }),
+  const d = useMemo(
+    () => ({
+      datePill: {
+        backgroundColor: colors.surface,
+      },
+      datePillText: {
+        color: colors.textSecondary,
+        ...Typography.small,
+      },
+    }),
     [colors],
   );
 
   return (
-    <View style={styles.datePillWrapper}>
-      <View style={styles.datePill}>
-        <Text style={styles.datePillText}>{text}</Text>
+    <View style={sDatePill.datePillWrapper}>
+      <View style={[sDatePill.datePill, d.datePill]}>
+        <Text style={d.datePillText}>{text}</Text>
       </View>
     </View>
   );
@@ -47,6 +51,23 @@ interface ReceivedBubbleProps {
   onAvatarPress?: () => void;
 }
 
+const sReceived = StyleSheet.create({
+  receivedRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: Spacing.sm,
+  },
+  receivedBubble: {
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 18,
+    borderBottomRightRadius: 18,
+    borderBottomLeftRadius: 18,
+    padding: 10,
+    paddingHorizontal: 14,
+    maxWidth: 260,
+  },
+});
+
 export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
   message,
   senderName = '陈',
@@ -54,40 +75,27 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
 }) => {
   const { colors } = useTheme();
 
-  const styles = useMemo(
-    () =>
-      StyleSheet.create({
-        receivedRow: {
-          flexDirection: 'row',
-          alignItems: 'flex-end',
-          gap: Spacing.sm,
-        },
-        receivedBubble: {
-          backgroundColor: colors.receivedBubble,
-          borderTopLeftRadius: 4,
-          borderTopRightRadius: 18,
-          borderBottomRightRadius: 18,
-          borderBottomLeftRadius: 18,
-          padding: 10,
-          paddingHorizontal: 14,
-          maxWidth: 260,
-        },
-        bubbleText: {
-          color: colors.text,
-          ...Typography.bodyRegular,
-          lineHeight: 20,
-        },
-        timeText: {
-          color: colors.textSecondary,
-          ...Typography.tinyRegular,
-          marginTop: Spacing.xs,
-        },
-      }),
+  const d = useMemo(
+    () => ({
+      receivedBubble: {
+        backgroundColor: colors.receivedBubble,
+      },
+      bubbleText: {
+        color: colors.text,
+        ...Typography.bodyRegular,
+        lineHeight: 20,
+      },
+      timeText: {
+        color: colors.textSecondary,
+        ...Typography.tinyRegular,
+        marginTop: Spacing.xs,
+      },
+    }),
     [colors],
   );
 
   return (
-    <View style={styles.receivedRow}>
+    <View style={sReceived.receivedRow}>
       {onAvatarPress ? (
         <Pressable onPress={onAvatarPress}>
           <Avatar size={28} name={senderName} />
@@ -96,11 +104,11 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
         <Avatar size={28} name={senderName} />
       )}
       <View>
-        <View style={styles.receivedBubble}>
-          <Text style={styles.bubbleText}>{message.text}</Text>
+        <View style={[sReceived.receivedBubble, d.receivedBubble]}>
+          <Text style={d.bubbleText}>{message.text}</Text>
         </View>
         {message.time ? (
-          <Text style={styles.timeText}>{message.time}</Text>
+          <Text style={d.timeText}>{message.time}</Text>
         ) : null}
       </View>
     </View>
@@ -111,53 +119,57 @@ interface SentBubbleProps {
   message: ChatMessage;
 }
 
+const sSent = StyleSheet.create({
+  sentWrapper: {
+    alignItems: 'flex-end',
+  },
+  sentBubble: {
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    borderBottomRightRadius: 4,
+    borderBottomLeftRadius: 18,
+    padding: 10,
+    paddingHorizontal: 14,
+    maxWidth: 260,
+  },
+  sentTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    marginTop: Spacing.xs,
+  },
+});
+
 export const SentBubble: React.FC<SentBubbleProps> = ({ message }) => {
   const { colors } = useTheme();
 
-  const styles = useMemo(
-    () =>
-      StyleSheet.create({
-        sentWrapper: {
-          alignItems: 'flex-end',
-        },
-        sentBubble: {
-          backgroundColor: colors.sentBubble,
-          borderTopLeftRadius: 18,
-          borderTopRightRadius: 18,
-          borderBottomRightRadius: 4,
-          borderBottomLeftRadius: 18,
-          padding: 10,
-          paddingHorizontal: 14,
-          maxWidth: 260,
-        },
-        sentBubbleText: {
-          color: colors.white,
-          ...Typography.bodyRegular,
-          lineHeight: 20,
-        },
-        sentTimeRow: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Spacing.xs,
-          marginTop: Spacing.xs,
-        },
-        timeText: {
-          color: colors.textSecondary,
-          ...Typography.tinyRegular,
-          marginTop: Spacing.xs,
-        },
-      }),
+  const d = useMemo(
+    () => ({
+      sentBubble: {
+        backgroundColor: colors.sentBubble,
+      },
+      sentBubbleText: {
+        color: colors.white,
+        ...Typography.bodyRegular,
+        lineHeight: 20,
+      },
+      timeText: {
+        color: colors.textSecondary,
+        ...Typography.tinyRegular,
+        marginTop: Spacing.xs,
+      },
+    }),
     [colors],
   );
 
   return (
-    <View style={styles.sentWrapper}>
-      <View style={styles.sentBubble}>
-        <Text style={styles.sentBubbleText}>{message.text}</Text>
+    <View style={sSent.sentWrapper}>
+      <View style={[sSent.sentBubble, d.sentBubble]}>
+        <Text style={d.sentBubbleText}>{message.text}</Text>
       </View>
       {message.time ? (
-        <View style={styles.sentTimeRow}>
-          <Text style={styles.timeText}>{message.time}</Text>
+        <View style={sSent.sentTimeRow}>
+          <Text style={d.timeText}>{message.time}</Text>
           <Ionicons name="checkmark-done" size={14} color={colors.sentTimeText} />
         </View>
       ) : null}
@@ -171,6 +183,33 @@ interface LocationCardProps {
   onAvatarPress?: () => void;
 }
 
+const sLocation = StyleSheet.create({
+  receivedRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: Spacing.sm,
+  },
+  locationCard: {
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 18,
+    borderBottomRightRadius: 18,
+    borderBottomLeftRadius: 18,
+    width: 240,
+    overflow: 'hidden',
+  },
+  locationMapPlaceholder: {
+    height: 180,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locationInfo: {
+    padding: 10,
+    paddingHorizontal: 14,
+  },
+});
+
 export const LocationCard: React.FC<LocationCardProps> = ({
   message,
   senderName = '陈',
@@ -178,56 +217,35 @@ export const LocationCard: React.FC<LocationCardProps> = ({
 }) => {
   const { colors } = useTheme();
 
-  const styles = useMemo(
-    () =>
-      StyleSheet.create({
-        receivedRow: {
-          flexDirection: 'row',
-          alignItems: 'flex-end',
-          gap: Spacing.sm,
-        },
-        locationCard: {
-          backgroundColor: colors.receivedBubble,
-          borderTopLeftRadius: 4,
-          borderTopRightRadius: 18,
-          borderBottomRightRadius: 18,
-          borderBottomLeftRadius: 18,
-          width: 240,
-          overflow: 'hidden',
-        },
-        locationMapPlaceholder: {
-          height: 180,
-          backgroundColor: colors.surface,
-          borderTopLeftRadius: 4,
-          borderTopRightRadius: 18,
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-        locationInfo: {
-          padding: 10,
-          paddingHorizontal: 14,
-        },
-        locationTitle: {
-          color: colors.text,
-          ...Typography.bodyRegular,
-          fontWeight: '600',
-        },
-        locationAddress: {
-          color: colors.textSecondary,
-          ...Typography.small,
-          marginTop: 2,
-        },
-        timeText: {
-          color: colors.textSecondary,
-          ...Typography.tinyRegular,
-          marginTop: Spacing.xs,
-        },
-      }),
+  const d = useMemo(
+    () => ({
+      locationCard: {
+        backgroundColor: colors.receivedBubble,
+      },
+      locationMapPlaceholder: {
+        backgroundColor: colors.surface,
+      },
+      locationTitle: {
+        color: colors.text,
+        ...Typography.bodyRegular,
+        fontWeight: '600' as const,
+      },
+      locationAddress: {
+        color: colors.textSecondary,
+        ...Typography.small,
+        marginTop: 2,
+      },
+      timeText: {
+        color: colors.textSecondary,
+        ...Typography.tinyRegular,
+        marginTop: Spacing.xs,
+      },
+    }),
     [colors],
   );
 
   return (
-    <View style={styles.receivedRow}>
+    <View style={sLocation.receivedRow}>
       {onAvatarPress ? (
         <Pressable onPress={onAvatarPress}>
           <Avatar size={28} name={senderName} />
@@ -236,17 +254,17 @@ export const LocationCard: React.FC<LocationCardProps> = ({
         <Avatar size={28} name={senderName} />
       )}
       <View>
-        <View style={styles.locationCard}>
-          <View style={styles.locationMapPlaceholder}>
+        <View style={[sLocation.locationCard, d.locationCard]}>
+          <View style={[sLocation.locationMapPlaceholder, d.locationMapPlaceholder]}>
             <Ionicons name="location" size={32} color={colors.textSecondary} />
           </View>
-          <View style={styles.locationInfo}>
-            <Text style={styles.locationTitle}>{message.locationTitle}</Text>
-            <Text style={styles.locationAddress}>{message.locationAddress}</Text>
+          <View style={sLocation.locationInfo}>
+            <Text style={d.locationTitle}>{message.locationTitle}</Text>
+            <Text style={d.locationAddress}>{message.locationAddress}</Text>
           </View>
         </View>
         {message.time ? (
-          <Text style={styles.timeText}>{message.time}</Text>
+          <Text style={d.timeText}>{message.time}</Text>
         ) : null}
       </View>
     </View>

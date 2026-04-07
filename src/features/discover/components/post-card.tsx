@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,108 +10,112 @@ interface PostCardProps {
   post: Post;
 }
 
+const s = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  headerText: {
+    flex: 1,
+  },
+  image: {
+    width: '100%',
+    height: 180,
+    borderRadius: Radius.md,
+  },
+  actions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  actionsLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+});
+
 export const PostCard: React.FC<PostCardProps> = ({ post }) => {
   const { colors } = useTheme();
 
-  const styles = useMemo(
-    () =>
-      StyleSheet.create({
-        card: {
-          backgroundColor: colors.surface,
-          borderRadius: Radius.lg,
-          padding: Spacing.md,
-          gap: Spacing.md - 4,
-        },
-        header: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 10,
-        },
-        headerText: {
-          flex: 1,
-        },
-        authorName: {
-          color: colors.text,
-          fontSize: 14,
-          fontWeight: '600',
-        },
-        badgeTime: {
-          color: colors.textSecondary,
-          ...Typography.small,
-        },
-        body: {
-          color: colors.text,
-          fontSize: 14,
-          lineHeight: 21,
-        },
-        image: {
-          width: '100%',
-          height: 180,
-          borderRadius: Radius.md,
-          backgroundColor: colors.surface,
-        },
-        actions: {
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        },
-        actionsLeft: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Spacing.md,
-        },
-        actionBtn: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Spacing.xs,
-        },
-        actionCount: {
-          color: colors.textSecondary,
-          ...Typography.caption,
-        },
-      }),
+  const d = useMemo(
+    () => ({
+      card: {
+        backgroundColor: colors.surface,
+        borderRadius: Radius.lg,
+        padding: Spacing.md,
+        gap: Spacing.md - 4,
+      },
+      authorName: {
+        color: colors.text,
+        fontSize: 14,
+        fontWeight: '600' as const,
+      },
+      badgeTime: {
+        color: colors.textSecondary,
+        ...Typography.small,
+      },
+      body: {
+        color: colors.text,
+        fontSize: 14,
+        lineHeight: 21,
+      },
+      imageBg: {
+        backgroundColor: colors.surface,
+      },
+      actionCount: {
+        color: colors.textSecondary,
+        ...Typography.caption,
+      },
+    }),
     [colors],
   );
 
   return (
-    <View style={styles.card}>
+    <View style={d.card}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={s.header}>
         <Avatar size={36} name={post.author} />
-        <View style={styles.headerText}>
-          <Text style={styles.authorName}>{post.author}</Text>
-          <Text style={styles.badgeTime}>
+        <View style={s.headerText}>
+          <Text style={d.authorName}>{post.author}</Text>
+          <Text style={d.badgeTime}>
             {post.badge} · {post.time}
           </Text>
         </View>
       </View>
 
       {/* Body */}
-      <Text style={styles.body}>{post.content}</Text>
+      <Text style={d.body}>{post.content}</Text>
 
       {/* Image */}
       {post.imageUrl ? (
         <Image
           source={{ uri: post.imageUrl }}
-          style={styles.image}
+          style={[s.image, d.imageBg]}
           contentFit="cover"
         />
       ) : null}
 
       {/* Actions */}
-      <View style={styles.actions}>
-        <View style={styles.actionsLeft}>
-          <Pressable style={styles.actionBtn}>
+      <View style={s.actions}>
+        <View style={s.actionsLeft}>
+          <Pressable style={s.actionBtn}>
             <Ionicons name="heart-outline" size={18} color={colors.textSecondary} />
-            <Text style={styles.actionCount}>{post.likes}</Text>
+            <Text style={d.actionCount}>{post.likes}</Text>
           </Pressable>
-          <Pressable style={styles.actionBtn}>
+          <Pressable style={s.actionBtn}>
             <Ionicons
               name="chatbubble-outline"
               size={18}
               color={colors.textSecondary}
             />
-            <Text style={styles.actionCount}>{post.comments}</Text>
+            <Text style={d.actionCount}>{post.comments}</Text>
           </Pressable>
         </View>
         <Pressable>

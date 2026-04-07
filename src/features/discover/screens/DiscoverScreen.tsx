@@ -5,7 +5,7 @@ import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { Post } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -37,56 +37,60 @@ const MOCK_POSTS: Post[] = [
   },
 ];
 
+const s = StyleSheet.create({
+  listContent: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: 100,
+  },
+  listHeader: {
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  headerIcons: {
+    flexDirection: "row",
+    gap: Spacing.md,
+    alignItems: "center",
+  },
+  separator: {
+    height: Spacing.md,
+  },
+  fab: {
+    position: "absolute",
+    right: Spacing.lg,
+    bottom: 110,
+    width: 52,
+    height: 52,
+    borderRadius: Radius.pill,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+});
+
 export default function DiscoverScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
   const [activeTab, setActiveTab] = useState(0);
 
-  const styles = useMemo(
-    () =>
-      StyleSheet.create({
-        container: {
-          flex: 1,
-          backgroundColor: colors.background,
-        },
-        listContent: {
-          paddingHorizontal: Spacing.lg,
-          paddingBottom: 100,
-        },
-        listHeader: {
-          gap: Spacing.md,
-          marginBottom: Spacing.md,
-        },
-        header: {
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-        },
-        title: {
-          color: colors.text,
-          ...Typography.title,
-        },
-        headerIcons: {
-          flexDirection: "row",
-          gap: Spacing.md,
-          alignItems: "center",
-        },
-        separator: {
-          height: Spacing.md,
-        },
-        fab: {
-          position: "absolute",
-          right: Spacing.lg,
-          bottom: 110,
-          width: 52,
-          height: 52,
-          borderRadius: Radius.pill,
-          backgroundColor: colors.primary,
-          justifyContent: "center",
-          alignItems: "center",
-        },
-      }),
+  const d = useMemo(
+    () => ({
+      container: {
+        flex: 1,
+        backgroundColor: colors.background,
+      },
+      title: {
+        color: colors.text,
+        ...Typography.title,
+      },
+      fab: {
+        backgroundColor: colors.primary,
+      },
+    }),
     [colors],
   );
 
@@ -98,11 +102,11 @@ export default function DiscoverScreen() {
   const keyExtractor = useCallback((item: Post) => item.id, []);
 
   const ListHeader = (
-    <View style={styles.listHeader}>
+    <View style={s.listHeader}>
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>动态</Text>
-        <View style={styles.headerIcons}>
+      <View style={s.header}>
+        <Text style={d.title}>动态</Text>
+        <View style={s.headerIcons}>
           <Pressable>
             <Ionicons name="options-outline" size={22} color={colors.text} />
           </Pressable>
@@ -128,24 +132,24 @@ export default function DiscoverScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={d.container}>
       <FlatList
         data={activeTab === 1 ? [] : MOCK_POSTS}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         ListHeaderComponent={ListHeader}
         contentContainerStyle={[
-          styles.listContent,
+          s.listContent,
           { paddingTop: insets.top + Spacing.md - 4 },
         ]}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        ItemSeparatorComponent={() => <View style={s.separator} />}
         ListEmptyComponent={activeTab === 1 ? null : undefined}
         showsVerticalScrollIndicator={false}
       />
 
       {/* FAB */}
       <Pressable
-        style={styles.fab}
+        style={[s.fab, d.fab]}
         onPress={() => router.push("/(tabs)/discover/create-post")}
       >
         <Ionicons name="add" size={24} color={colors.white} />

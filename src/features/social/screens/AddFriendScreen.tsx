@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,55 +21,67 @@ const METHODS: AddMethod[] = [
   { icon: 'share-outline', color: '#8B5CF6', title: '面对面建群', subtitle: '与身边的朋友建群' },
 ];
 
+const s = StyleSheet.create({
+  scroll: { flex: 1 },
+  content: { gap: Spacing.xl, paddingHorizontal: Spacing.lg, paddingBottom: Spacing.lg },
+  searchInput: { height: 48, borderWidth: 1, borderRadius: Radius.xxl, flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.md, gap: Spacing.sm },
+  searchText: { flex: 1, ...Typography.bodyRegular },
+  myId: { textAlign: 'center', ...Typography.caption },
+  methodRow: { height: 60, flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  methodInfo: { flex: 1 },
+  methodTitle: { ...Typography.body },
+  methodSub: { ...Typography.small, marginTop: 2 },
+  qrSection: { borderRadius: Radius.xl, padding: Spacing.lg, alignItems: 'center', gap: Spacing.md },
+  qrTitle: { ...Typography.body, fontWeight: '600' as const },
+  qrBox: { width: 160, height: 160, borderRadius: Radius.md },
+  qrHint: { ...Typography.small },
+});
+
 export default function AddFriendScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
 
-  const styles = useMemo(() => StyleSheet.create({
+  const d = useMemo(() => ({
     container: { flex: 1, backgroundColor: colors.background },
-    scroll: { flex: 1 },
-    content: { gap: Spacing.xl, paddingHorizontal: Spacing.lg, paddingBottom: Spacing.lg },
-    searchInput: { height: 48, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.surfaceBorder, borderRadius: Radius.xxl, flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.md, gap: Spacing.sm },
-    searchText: { flex: 1, ...Typography.bodyRegular, color: colors.text },
-    myId: { textAlign: 'center', color: colors.textSecondary, ...Typography.caption },
-    methodRow: { height: 60, flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
-    methodInfo: { flex: 1 },
-    methodTitle: { color: colors.text, ...Typography.body },
-    methodSub: { color: colors.textSecondary, ...Typography.small, marginTop: 2 },
-    qrSection: { backgroundColor: colors.surface, borderRadius: Radius.xl, padding: Spacing.lg, alignItems: 'center', gap: Spacing.md },
-    qrTitle: { color: colors.text, ...Typography.body, fontWeight: '600' },
-    qrBox: { width: 160, height: 160, backgroundColor: colors.white, borderRadius: Radius.md },
-    qrHint: { color: colors.textSecondary, ...Typography.small },
+    searchInput: { backgroundColor: colors.surface, borderColor: colors.surfaceBorder },
+    searchText: { color: colors.text },
+    myId: { color: colors.textSecondary },
+    methodTitle: { color: colors.text },
+    methodSub: { color: colors.textSecondary },
+    qrSection: { backgroundColor: colors.surface },
+    qrTitle: { color: colors.text },
+    qrBox: { backgroundColor: colors.white },
+    qrHint: { color: colors.textSecondary },
   }), [colors]);
 
   const renderMethod = useCallback((method: AddMethod, index: number) => (
     <View key={method.title}>
       {index > 0 && <Divider />}
-      <Pressable style={styles.methodRow}>
+      <Pressable style={s.methodRow}>
         <IconCircle name={method.icon} size={40} iconSize={20} bgColor={method.color} />
-        <View style={styles.methodInfo}>
-          <Text style={styles.methodTitle}>{method.title}</Text>
-          <Text style={styles.methodSub}>{method.subtitle}</Text>
+        <View style={s.methodInfo}>
+          <Text style={[s.methodTitle, d.methodTitle]}>{method.title}</Text>
+          <Text style={[s.methodSub, d.methodSub]}>{method.subtitle}</Text>
         </View>
         <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
       </Pressable>
     </View>
-  ), [styles, colors]);
+  ), [d, colors]);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader title="添加好友" />
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.searchInput}>
+      <ScrollView style={s.scroll} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+        <View style={[s.searchInput, d.searchInput]}>
           <Ionicons name="search" size={18} color={colors.textSecondary} />
-          <TextInput placeholder="输入手机号/ID" placeholderTextColor={colors.textSecondary} style={styles.searchText} />
+          <TextInput placeholder="输入手机号/ID" placeholderTextColor={colors.textSecondary} style={[s.searchText, d.searchText]} />
         </View>
-        <Text style={styles.myId}>我的ID: SocialChat_2024</Text>
+        <Text style={[s.myId, d.myId]}>我的ID: SocialChat_2024</Text>
         <View>{METHODS.map(renderMethod)}</View>
-        <View style={styles.qrSection}>
-          <Text style={styles.qrTitle}>我的二维码</Text>
-          <View style={styles.qrBox} />
-          <Text style={styles.qrHint}>扫一扫上面的二维码添加我</Text>
+        <View style={[s.qrSection, d.qrSection]}>
+          <Text style={[s.qrTitle, d.qrTitle]}>我的二维码</Text>
+          <View style={[s.qrBox, d.qrBox]} />
+          <Text style={[s.qrHint, d.qrHint]}>扫一扫上面的二维码添加我</Text>
         </View>
       </ScrollView>
     </View>

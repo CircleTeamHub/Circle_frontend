@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,29 @@ import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useMessageGroupsStore } from '@/features/messages/store/use-message-groups-store';
+
+const s = StyleSheet.create({
+  section: {
+    gap: Spacing.sm,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.md,
+    paddingVertical: Spacing.md,
+  },
+  rowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+});
 
 export default function GroupManagementScreen() {
   const insets = useSafeAreaInsets();
@@ -34,77 +57,56 @@ export default function GroupManagementScreen() {
     [conversations],
   );
 
-  const styles = useMemo(
-    () =>
-      StyleSheet.create({
-        container: {
-          flex: 1,
-          backgroundColor: colors.background,
-        },
-        content: {
-          paddingHorizontal: Spacing.lg,
-          paddingBottom: insets.bottom + Spacing.xl,
-          gap: Spacing.xl,
-        },
-        section: {
-          gap: Spacing.sm,
-        },
-        sectionTitle: {
-          color: colors.textSecondary,
-          ...Typography.caption,
-          fontWeight: '600',
-        },
-        inputRow: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Spacing.md,
-        },
-        input: {
-          flex: 1,
-          height: 44,
-          borderRadius: Radius.lg,
-          borderWidth: 1,
-          borderColor: colors.surfaceBorder,
-          backgroundColor: colors.surface,
-          paddingHorizontal: Spacing.md,
-          color: colors.text,
-          ...Typography.bodyRegular,
-        },
-        createButton: {
-          height: 44,
-          paddingHorizontal: Spacing.lg,
-          borderRadius: Radius.lg,
-          backgroundColor: colors.primary,
-          justifyContent: 'center',
-          alignItems: 'center',
-        },
-        createButtonText: {
-          color: colors.white,
-          ...Typography.body,
-          fontWeight: '600',
-        },
-        row: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: Spacing.md,
-          paddingVertical: Spacing.md,
-        },
-        rowLabel: {
-          color: colors.text,
-          ...Typography.body,
-          flex: 1,
-        },
-        rowRight: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Spacing.sm,
-        },
-        rowValue: {
-          color: colors.textSecondary,
-          ...Typography.caption,
-        },
-      }),
+  const d = useMemo(
+    () => ({
+      container: {
+        flex: 1,
+        backgroundColor: colors.background,
+      },
+      content: {
+        paddingHorizontal: Spacing.lg,
+        paddingBottom: insets.bottom + Spacing.xl,
+        gap: Spacing.xl,
+      },
+      sectionTitle: {
+        color: colors.textSecondary,
+        ...Typography.caption,
+        fontWeight: '600' as const,
+      },
+      input: {
+        flex: 1,
+        height: 44,
+        borderRadius: Radius.lg,
+        borderWidth: 1,
+        borderColor: colors.surfaceBorder,
+        backgroundColor: colors.surface,
+        paddingHorizontal: Spacing.md,
+        color: colors.text,
+        ...Typography.bodyRegular,
+      },
+      createButton: {
+        height: 44,
+        paddingHorizontal: Spacing.lg,
+        borderRadius: Radius.lg,
+        backgroundColor: colors.primary,
+        justifyContent: 'center' as const,
+        alignItems: 'center' as const,
+      },
+      createButtonText: {
+        color: colors.white,
+        ...Typography.body,
+        fontWeight: '600' as const,
+      },
+      rowLabel: {
+        color: colors.text,
+        ...Typography.body,
+        flex: 1,
+      },
+      rowValue: {
+        color: colors.textSecondary,
+        ...Typography.caption,
+      },
+    }),
     [colors, insets.bottom],
   );
 
@@ -118,30 +120,30 @@ export default function GroupManagementScreen() {
   }, [addCustomGroup, groupName]);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader title="群组管理" />
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={d.content}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>创建自定义群组</Text>
-          <View style={styles.inputRow}>
+        <View style={s.section}>
+          <Text style={d.sectionTitle}>创建自定义群组</Text>
+          <View style={s.inputRow}>
             <TextInput
-              style={styles.input}
+              style={d.input}
               value={groupName}
               onChangeText={setGroupName}
               placeholder="例如：北京群"
               placeholderTextColor={colors.textSecondary}
             />
-            <Pressable style={styles.createButton} onPress={handleCreateGroup}>
-              <Text style={styles.createButtonText}>创建</Text>
+            <Pressable style={d.createButton} onPress={handleCreateGroup}>
+              <Text style={d.createButtonText}>创建</Text>
             </Pressable>
           </View>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>我的自定义群组</Text>
+        <View style={s.section}>
+          <Text style={d.sectionTitle}>我的自定义群组</Text>
           {customGroups.map((group, index) => {
             const count = groupConversations.filter((conversation) =>
               (conversation.customGroupIds ?? []).includes(group.id),
@@ -150,12 +152,12 @@ export default function GroupManagementScreen() {
             return (
               <View key={group.id}>
                 <Pressable
-                  style={styles.row}
+                  style={s.row}
                   onPress={() => setActiveGroupId(group.id)}
                 >
-                  <Text style={styles.rowLabel}>{group.name}</Text>
-                  <View style={styles.rowRight}>
-                    <Text style={styles.rowValue}>{count} 个群聊</Text>
+                  <Text style={d.rowLabel}>{group.name}</Text>
+                  <View style={s.rowRight}>
+                    <Text style={d.rowValue}>{count} 个群聊</Text>
                     <Ionicons
                       name={
                         activeGroupId === group.id
@@ -178,8 +180,8 @@ export default function GroupManagementScreen() {
         </View>
 
         {activeGroupId ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>分配群聊到当前群组</Text>
+          <View style={s.section}>
+            <Text style={d.sectionTitle}>分配群聊到当前群组</Text>
             {groupConversations.map((conversation, index) => {
               const checked = (conversation.customGroupIds ?? []).includes(
                 activeGroupId,
@@ -188,7 +190,7 @@ export default function GroupManagementScreen() {
               return (
                 <View key={conversation.id}>
                   <Pressable
-                    style={styles.row}
+                    style={s.row}
                     onPress={() =>
                       toggleConversationInCustomGroup(
                         activeGroupId,
@@ -196,7 +198,7 @@ export default function GroupManagementScreen() {
                       )
                     }
                   >
-                    <Text style={styles.rowLabel}>{conversation.name}</Text>
+                    <Text style={d.rowLabel}>{conversation.name}</Text>
                     <Ionicons
                       name={checked ? 'checkbox' : 'square-outline'}
                       size={20}

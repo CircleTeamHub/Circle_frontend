@@ -1,85 +1,163 @@
-import { useCallback, useState } from 'react';
-import { useRouter } from 'expo-router';
+/**
+ * use-auth.ts — 认证业务 Hook
+ *
+ * 封装 login / register / logout 三个操作，每个操作会：
+ * 1. 调用后端 API
+ * 2. 同步更新 authStore（token + user）
+ * 3. 登录/登出 OpenIM
+ * 4. 成功后通过 expo-router 跳转目标页面
+ *
+ * 对外暴露 submitting（loading 状态）和 error（错误文本）供 UI 展示。
+ */
 import { useAuthStore } from '@/stores/authStore';
+import {
+  fetchCurrentUserWithToken,
+  login as loginRequest,
+  logout as logoutRequest,
+  register as registerRequest,
+} from '@/services/api/auth';
+import { loginToOpenIM, logoutFromOpenIM } from '@/im/client';
+import { ApiError } from '@/services/api/client';
+import { useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof ApiError) {
+    return error.message;
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+}
 
 export function useAuth() {
   const router = useRouter();
-  const { setAuth, logout: storeLogout, isAuthenticated, isLoading } = useAuthStore();
+  const {
+    setSession,
+    clearSession,
+    isAuthenticated,
+    isLoading,
+  } = useAuthStore();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const login = useCallback(
-    async (phone: string, password: string) => {
+    async (account: string, password: string) => {
       setError(null);
-      if (!phone.trim()) {
-        setError('请输入手机号');
+      const username = account.trim();
+
+      if (!username) {
+        setError("请输入账号");
         return;
       }
       if (!password.trim()) {
-        setError('请输入密码');
+        setError("请输入密码");
         return;
       }
       setSubmitting(true);
       try {
-        // Mock login — replace with real API call
-        await new Promise((resolve) => setTimeout(resolve, 800));
-        setAuth('mock-token-' + Date.now(), {
-          id: '1',
-          uid: phone,
-          nickname: '用户' + phone.slice(-4),
-          avatarUrl: null,
-          city: null,
+        const tokens = await loginRequest({
+          username,
+          password,
         });
+        const user = await fetchCurrentUserWithToken(tokens.accessToken);
+
+        setSession(tokens, user);
+
+        if (tokens.imToken) {
+          try {
+            await loginToOpenIM(user.accountId, tokens.imToken);
+          } catch (error) {
+            // IM 登录失败不阻断主流程，仅打印警告；用户仍可正常使用 app
+            console.warn(
+              '[openim] login failed',
+              error instanceof Error ? error.message : error
+            );
+          }
+        } else {
+          // 后端未返回 imToken，确保 IM 状态已清空
+          await logoutFromOpenIM();
+        }
         router.replace('/(tabs)/messages');
-      } catch {
-        setError('登录失败，请重试');
+      } catch (requestError) {
+        await logoutFromOpenIM();
+        clearSession();
+        setError(getErrorMessage(requestError, '登录失败，请重试'));
       } finally {
         setSubmitting(false);
       }
     },
-    [setAuth, router],
+    [clearSession, router, setSession],
   );
 
   const register = useCallback(
-    async (phone: string, code: string, password: string, nickname: string) => {
+    async (
+      account: string,
+      password: string,
+      nickname: string,
+      confirmPassword: string,
+    ) => {
       setError(null);
-      if (!phone.trim()) { setError('请输入手机号'); return; }
-      if (!code.trim()) { setError('请输入验证码'); return; }
-      if (password.length < 6) { setError('密码至少6位'); return; }
-      if (!nickname.trim()) { setError('请输入昵称'); return; }
+      if (!account.trim()) {
+        setError("请输入账号");
+        return;
+      }
+      if (password.length < 6) {
+        setError("密码至少6位");
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError("两次密码不一致");
+        return;
+      }
+      if (!nickname.trim()) {
+        setError("请输入昵称");
+        return;
+      }
 
       setSubmitting(true);
       try {
-        // Mock register — replace with real API call
-        await new Promise((resolve) => setTimeout(resolve, 800));
-        setAuth('mock-token-' + Date.now(), {
-          id: '1',
-          uid: phone,
-          nickname,
-          avatarUrl: null,
-          city: null,
+        await registerRequest({
+          username: account.trim(),
+          password,
+          nickname: nickname.trim(),
         });
-        router.replace('/(tabs)/messages');
-      } catch {
-        setError('注册失败，请重试');
+        router.replace('/(auth)/login');
+      } catch (requestError) {
+        setError(getErrorMessage(requestError, '注册失败，请重试'));
       } finally {
         setSubmitting(false);
       }
     },
-    [setAuth, router],
+    [router],
   );
 
-  const logout = useCallback(() => {
-    storeLogout();
-    router.replace('/(auth)/login');
-  }, [storeLogout, router]);
+  const logout = useCallback(async () => {
+    const { refreshToken } = useAuthStore.getState();
 
-  const sendCode = useCallback(async (phone: string) => {
-    if (!phone.trim()) { setError('请先输入手机号'); return false; }
-    // Mock send code
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    return true;
-  }, []);
+    try {
+      if (refreshToken) {
+        await logoutRequest(refreshToken);
+      }
+    } catch {
+      // Ignore logout API failures and always clear the local session.
+    } finally {
+      await logoutFromOpenIM();
+      clearSession();
+      router.replace('/(auth)/login');
+    }
+  }, [clearSession, router]);
 
-  return { login, register, logout, sendCode, submitting, error, isAuthenticated, isLoading };
+  return {
+    login,
+    register,
+    logout,
+    submitting,
+    error,
+    isAuthenticated,
+    isLoading,
+  };
 }
