@@ -16,6 +16,7 @@ import {
   logout as logoutRequest,
   register as registerRequest,
 } from '@/services/api/auth';
+import { clearLocalSession } from '@/services/auth/session';
 import { loginToOpenIM, logoutFromOpenIM } from '@/im/client';
 import { ApiError } from '@/services/api/client';
 import { useRouter } from 'expo-router';
@@ -35,12 +36,7 @@ function getErrorMessage(error: unknown, fallback: string) {
 
 export function useAuth() {
   const router = useRouter();
-  const {
-    setSession,
-    clearSession,
-    isAuthenticated,
-    isLoading,
-  } = useAuthStore();
+  const { setSession, isAuthenticated, isLoading } = useAuthStore();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -83,14 +79,13 @@ export function useAuth() {
         }
         router.replace('/(tabs)/messages');
       } catch (requestError) {
-        await logoutFromOpenIM();
-        clearSession();
+        await clearLocalSession();
         setError(getErrorMessage(requestError, '登录失败，请重试'));
       } finally {
         setSubmitting(false);
       }
     },
-    [clearSession, router, setSession],
+    [router, setSession],
   );
 
   const register = useCallback(
@@ -135,26 +130,38 @@ export function useAuth() {
     [router],
   );
 
-  const logout = useCallback(async () => {
+  const endSession = useCallback(async () => {
     const { refreshToken } = useAuthStore.getState();
+
+    setError(null);
+    setSubmitting(true);
 
     try {
       if (refreshToken) {
         await logoutRequest(refreshToken);
       }
     } catch {
-      // Ignore logout API failures and always clear the local session.
+      // 忽略服务端登出失败，始终清空本地会话
     } finally {
-      await logoutFromOpenIM();
-      clearSession();
+      await clearLocalSession();
+      setSubmitting(false);
       router.replace('/(auth)/login');
     }
-  }, [clearSession, router]);
+  }, [router]);
+
+  const logout = useCallback(async () => {
+    await endSession();
+  }, [endSession]);
+
+  const switchAccount = useCallback(async () => {
+    await endSession();
+  }, [endSession]);
 
   return {
     login,
     register,
     logout,
+    switchAccount,
     submitting,
     error,
     isAuthenticated,

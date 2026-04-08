@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
+import { getProfileSignature } from '@/features/profile/profile-display';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { ProfileActionRow } from '@/features/user/components/profile-action-row';
 import {
@@ -128,10 +129,10 @@ export default function UserProfileScreen() {
         avatarUrl: currentUser.avatarUrl ?? undefined,
         badges: [currentUser.role === 'ADMIN' ? '管理员' : '普通用户'],
         tagChips: [currentUser.status, currentUser.gender],
-        signature:
-          currentUser.helloWords ||
-          currentUser.persona ||
-          '这个人很低调，暂时没有留下签名。',
+        signature: getProfileSignature(
+          currentUser.persona,
+          currentUser.helloWords,
+        ),
         phone: currentUser.phoneNumber ?? '未公开',
         remarkHint: currentUser.nickname,
       });
@@ -151,10 +152,7 @@ export default function UserProfileScreen() {
           avatarUrl: profile.avatarUrl ?? undefined,
           badges: [profile.role === 'ADMIN' ? '管理员' : '普通用户'],
           tagChips: [profile.status, profile.gender],
-          signature:
-            profile.helloWords ||
-            profile.persona ||
-            '这个人很低调，暂时没有留下签名。',
+          signature: getProfileSignature(profile.persona, profile.helloWords),
           phone: profile.phoneNumber ?? '未公开',
           remarkHint: profile.nickname,
         });

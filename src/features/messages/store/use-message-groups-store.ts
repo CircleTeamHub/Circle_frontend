@@ -20,11 +20,16 @@ interface MessageGroupsState {
     conversationId: string,
   ) => void;
   clearUnreadByFilter: (filterId: string) => void;
+  reset: () => void;
 }
 
-export const useMessageGroupsStore = create<MessageGroupsState>((set) => ({
+const initialState = {
   conversations: [],
   customGroups: [],
+};
+
+export const useMessageGroupsStore = create<MessageGroupsState>((set) => ({
+  ...initialState,
   addCustomGroup: (name) => {
     const trimmedName = name.trim();
 
@@ -78,4 +83,5 @@ export const useMessageGroupsStore = create<MessageGroupsState>((set) => ({
       }),
     }));
   },
+  reset: () => set(initialState),
 }));

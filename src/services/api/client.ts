@@ -8,6 +8,7 @@
  * - 统一错误格式：ApiError（包含 status、code、data）
  */
 import { API_URL } from '@/constants/config';
+import { clearLocalSession } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
 
 type RequestOptions = {
@@ -198,10 +199,10 @@ async function refreshAccessToken() {
   }
 
   refreshPromise = (async () => {
-    const { refreshToken, setTokens, clearSession } = useAuthStore.getState();
+    const { refreshToken, setTokens } = useAuthStore.getState();
 
     if (!refreshToken) {
-      clearSession();
+      await clearLocalSession();
       throw new ApiError('登录已过期，请重新登录', 401);
     }
 
@@ -223,8 +224,8 @@ async function refreshAccessToken() {
 
     return tokens.accessToken;
   })()
-    .catch((error) => {
-      useAuthStore.getState().clearSession();
+    .catch(async (error) => {
+      await clearLocalSession();
       throw error;
     })
     .finally(() => {

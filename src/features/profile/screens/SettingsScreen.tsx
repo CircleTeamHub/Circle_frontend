@@ -1,5 +1,13 @@
 import { useMemo } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import {
+  Alert,
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+} from 'react-native';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
@@ -7,31 +15,34 @@ import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useAuth } from '@/hooks/use-auth';
-import { useAuthStore } from '@/stores/authStore';
+import { useAuthStore, type AuthUser } from '@/stores/authStore';
+import {
+  formatProfileFieldValue,
+  getProfileEditField,
+} from '@/features/profile/profile-edit-config';
 
 interface SettingsRowItem {
   id: string;
   label: string;
   value?: string;
   type?: 'avatar' | 'text';
+  editable: boolean;
+  unsupportedMessage?: string;
 }
 
-const PROFILE_ROWS: SettingsRowItem[] = [
-  { id: 'avatar', label: '头像', type: 'avatar' },
-  { id: 'frame', label: '头像框', value: '无' },
-  { id: 'nickname', label: '昵称', value: '上海 深圳 玫瑰刺' },
-  { id: 'gender', label: '性别', value: '未知' },
-  { id: 'birthday', label: '生日', value: '未设置' },
-  { id: 'bio', label: '个人简介', value: '未填写' },
-  { id: 'wechat', label: '绑定微信', value: '未绑定' },
-  { id: 'phone', label: '绑定手机号', value: '未绑定' },
-  { id: 'qq', label: '绑定QQ号', value: '未绑定' },
-];
+const PROFILE_ROW_IDS = [
+  'avatar',
+  'frame',
+  'nickname',
+  'gender',
+  'birthday',
+  'bio',
+  'wechat',
+  'phone',
+  'qq',
+] as const;
 
-const SECURITY_ROWS: SettingsRowItem[] = [
-  { id: 'password', label: '修改登录密码' },
-  { id: 'security-code', label: '登录安全码', value: '点击修改' },
-];
+const SECURITY_ROW_IDS = ['password', 'security-code'] as const;
 
 const s = StyleSheet.create({
   section: {
@@ -73,23 +84,59 @@ const s = StyleSheet.create({
   },
 });
 
+function getFieldValue(user: AuthUser | null, fieldId: string) {
+  const field = getProfileEditField(fieldId);
+
+  if (!user || !field || !('valueKey' in field) || !field.valueKey) {
+    return '';
+  }
+
+  const value = user[field.valueKey as keyof AuthUser];
+  return typeof value === 'string' ? value : '';
+}
+
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { colors } = useTheme();
-  const { logout } = useAuth();
+  const { logout, switchAccount, submitting } = useAuth();
   const user = useAuthStore((state) => state.user);
 
-  const profileRows: SettingsRowItem[] = [
-    { id: 'avatar', label: '头像', type: 'avatar' },
-    { id: 'frame', label: '头像框', value: user?.avatarFrame ?? '无' },
-    { id: 'nickname', label: '昵称', value: user?.nickname ?? '未设置' },
-    { id: 'gender', label: '性别', value: user?.gender ?? 'unset' },
-    { id: 'birthday', label: '生日', value: user?.birthday ?? '未设置' },
-    { id: 'bio', label: '个人简介', value: user?.persona ?? '未填写' },
-    { id: 'wechat', label: '绑定微信', value: user?.wechat ?? '未绑定' },
-    { id: 'phone', label: '绑定手机号', value: user?.phoneNumber ?? '未绑定' },
-    { id: 'qq', label: '绑定QQ号', value: user?.qq ?? '未绑定' },
-  ];
+  const profileRows = PROFILE_ROW_IDS.map((fieldId) => {
+    const field = getProfileEditField(fieldId);
+
+    if (!field) {
+      return null;
+    }
+
+    return {
+      id: field.id,
+      label: field.label,
+      type: field.rowType,
+      value: formatProfileFieldValue(fieldId, getFieldValue(user, fieldId)),
+      editable: field.editable,
+      unsupportedMessage:
+        'unsupportedMessage' in field ? field.unsupportedMessage : undefined,
+    } satisfies SettingsRowItem;
+  }).filter(Boolean) as SettingsRowItem[];
+
+  const securityRows = SECURITY_ROW_IDS.map((fieldId) => {
+    const field = getProfileEditField(fieldId);
+
+    if (!field) {
+      return null;
+    }
+
+    return {
+      id: field.id,
+      label: field.label,
+      type: field.rowType,
+      value: field.emptyValueLabel || undefined,
+      editable: field.editable,
+      unsupportedMessage:
+        'unsupportedMessage' in field ? field.unsupportedMessage : undefined,
+    } satisfies SettingsRowItem;
+  }).filter(Boolean) as SettingsRowItem[];
 
   const d = useMemo(
     () => ({
@@ -139,7 +186,7 @@ export default function SettingsScreen() {
 
   const renderRow = (item: SettingsRowItem, index: number, total: number) => (
     <View key={item.id}>
-      <Pressable style={s.row}>
+      <Pressable style={s.row} onPress={() => handleRowPress(item)}>
         <Text style={d.rowLabel}>{item.label}</Text>
         <View style={s.rowRight}>
           {item.type === 'avatar' ? (
@@ -164,6 +211,23 @@ export default function SettingsScreen() {
     </View>
   );
 
+  function handleRowPress(item: SettingsRowItem) {
+    if (item.id === 'password') {
+      router.push('/(tabs)/profile/change-password');
+      return;
+    }
+
+    if (item.editable) {
+      router.push({
+        pathname: '/(tabs)/profile/edit/[field]',
+        params: { field: item.id },
+      });
+      return;
+    }
+
+    Alert.alert(item.label, item.unsupportedMessage ?? '该功能暂未接入。');
+  }
+
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader title="账号设置" />
@@ -180,16 +244,32 @@ export default function SettingsScreen() {
 
         <View style={s.section}>
           <Text style={d.sectionTitle}>账号与安全</Text>
-          {SECURITY_ROWS.map((item, index) =>
-            renderRow(item, index, SECURITY_ROWS.length),
+          {securityRows.map((item, index) =>
+            renderRow(item, index, securityRows.length),
           )}
         </View>
 
         <View style={s.footer}>
-          <Pressable style={[s.secondaryButton, d.secondaryButton]}>
+          <Pressable
+            style={[
+              s.secondaryButton,
+              d.secondaryButton,
+              submitting ? { opacity: 0.6 } : null,
+            ]}
+            onPress={switchAccount}
+            disabled={submitting}
+          >
             <Text style={d.secondaryButtonText}>切换账号</Text>
           </Pressable>
-          <Pressable style={[s.dangerButton, d.dangerButton]} onPress={logout}>
+          <Pressable
+            style={[
+              s.dangerButton,
+              d.dangerButton,
+              submitting ? { opacity: 0.6 } : null,
+            ]}
+            onPress={logout}
+            disabled={submitting}
+          >
             <Ionicons name="log-out-outline" size={20} color={colors.white} />
             <Text style={d.dangerButtonText}>退出登录</Text>
           </Pressable>

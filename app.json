@@ -14,7 +14,10 @@
     },
     "ios": {
       "bundleIdentifier": "com.yiboding.circleim",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "允许 Circle IM 访问你的照片，用于选择并上传头像。"
+      }
     },
     "android": {
       "adaptiveIcon": {

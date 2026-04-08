@@ -18,6 +18,16 @@ function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, '');
 }
 
+function ensureVersionedApiUrl(value: string) {
+  const normalized = trimTrailingSlash(value);
+
+  if (normalized.endsWith('/api/v1')) {
+    return normalized;
+  }
+
+  return `${normalized}/api/v1`;
+}
+
 function getExpoDevHost() {
   return Constants.expoConfig?.hostUri?.split(':')[0] ?? null;
 }
@@ -48,7 +58,7 @@ function getDefaultOpenIMWsUrl() {
   return `ws://${getDefaultHost()}:${OPENIM_WS_PORT}`;
 }
 
-export const API_URL = trimTrailingSlash(
+export const API_URL = ensureVersionedApiUrl(
   process.env.EXPO_PUBLIC_API_URL ?? getDefaultApiUrl()
 );
 

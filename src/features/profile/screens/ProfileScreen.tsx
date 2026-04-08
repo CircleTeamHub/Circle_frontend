@@ -1,5 +1,6 @@
 import { Avatar } from "@/components/ui/avatar";
 import { Divider } from "@/components/ui/divider";
+import { getProfileSignature } from "@/features/profile/profile-display";
 import { MenuRow } from "@/components/ui/menu-row";
 import { getUserProfileHref } from "@/features/user/utils/routes";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
@@ -133,8 +134,7 @@ export default function ProfileScreen() {
   const displayName = user?.nickname || user?.username || "未登录用户";
   const displayAccount = user?.accountId || user?.username || "未绑定";
   const membershipTag = user?.role === "ADMIN" ? "管理员" : "普通用户";
-  const profileSignature =
-    user?.helloWords || user?.persona || "完善资料后会在这里展示你的介绍。";
+  const profileSignature = getProfileSignature(user?.persona, user?.helloWords);
 
   const handleOpenShare = useCallback(() => {
     router.push("/(tabs)/profile/share");

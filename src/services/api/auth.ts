@@ -99,3 +99,19 @@ export async function logout(refreshToken: string) {
     body: { refreshToken },
   });
 }
+
+export async function changePassword(payload: {
+  oldPassword: string;
+  newPassword: string;
+}) {
+  return apiClient<void>('/auth/change-password', {
+    method: 'POST',
+    body: payload,
+  });
+}
+
+export async function logoutAll() {
+  return apiClient<void>('/auth/logout-all', {
+    method: 'POST',
+  });
+}
