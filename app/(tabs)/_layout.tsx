@@ -1,7 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Tabs, useSegments } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { fetchUnreadFriendActivityCount } from '@/services/api/friends';
 import { useTheme, Spacing, Radius } from '@/theme';
 
 const TAB_CONFIG: {
@@ -19,12 +20,27 @@ interface TabIconProps {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   focused: boolean;
+  showUnreadFriendActivityDot: boolean;
 }
 
 export default function TabLayout() {
   const { colors } = useTheme();
   const segments = useSegments();
   const hideTabBar = segments.length > 2;
+  const [unreadFriendActivityCount, setUnreadFriendActivityCount] = useState(0);
+
+  const refreshUnreadFriendActivityCount = useCallback(async () => {
+    try {
+      const count = await fetchUnreadFriendActivityCount();
+      setUnreadFriendActivityCount(count);
+    } catch {
+      setUnreadFriendActivityCount(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshUnreadFriendActivityCount();
+  }, [refreshUnreadFriendActivityCount, segments]);
 
   const styles = useMemo(() => StyleSheet.create({
     tabBar: {
@@ -52,9 +68,21 @@ export default function TabLayout() {
       width: 70,
       height: 44,
       gap: 2,
+      position: 'relative' as const,
     },
     tabIconActive: {
       backgroundColor: colors.primary,
+    },
+    tabIconBadge: {
+      position: 'absolute' as const,
+      top: 6,
+      right: 12,
+      width: 8,
+      height: 8,
+      borderRadius: 999,
+      backgroundColor: colors.error,
+      borderWidth: 1.5,
+      borderColor: colors.surface,
     },
     tabLabel: {
       fontSize: 9,
@@ -63,11 +91,17 @@ export default function TabLayout() {
     },
   }), [colors]);
 
-  const TabIcon: React.FC<TabIconProps> = ({ icon, label, focused }) => {
+  const TabIcon: React.FC<TabIconProps> = ({
+    icon,
+    label,
+    focused,
+    showUnreadFriendActivityDot,
+  }) => {
     const color = focused ? colors.white : colors.textSecondary;
 
     return (
       <View style={[styles.tabIcon, focused && styles.tabIconActive]}>
+        {showUnreadFriendActivityDot ? <View style={styles.tabIconBadge} /> : null}
         <Ionicons name={icon} size={16} color={color} />
         <Text style={[styles.tabLabel, { color }]} numberOfLines={1}>
           {label}
@@ -93,7 +127,14 @@ export default function TabLayout() {
           name={tab.name}
           options={{
             tabBarIcon: ({ focused }) => (
-              <TabIcon icon={tab.icon} label={tab.label} focused={focused} />
+              <TabIcon
+                icon={tab.icon}
+                label={tab.label}
+                focused={focused}
+                showUnreadFriendActivityDot={
+                  tab.name === 'contacts' && unreadFriendActivityCount > 0
+                }
+              />
             ),
           }}
         />

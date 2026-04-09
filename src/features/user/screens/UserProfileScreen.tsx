@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -14,9 +14,22 @@ import {
   type UserProfileData,
 } from '@/features/user/data/profiles';
 import {
+  canOpenSendFriendRequest,
   getProfileMetaItems,
   isCurrentUserProfile,
 } from '@/features/user/profile-view';
+import {
+  getEditFriendRemarkHref,
+  getEditFriendTagsHref,
+  getSendFriendRequestHref,
+  getUserProfileScopeFromSegments,
+} from '@/features/user/utils/routes';
+import {
+  fetchFriendSettings,
+  fetchFriendStatus,
+  type FriendSettings,
+  type FriendStatus,
+} from '@/services/api/friends';
 import { fetchUserProfile } from '@/services/api/profile';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -27,6 +40,8 @@ const INFO_ROWS = [
   '给该用户赠送金币',
   '更多信息',
 ] as const;
+const NON_FRIEND_INFO_ROWS = ['朋友圈', '给该用户赠送金币', '更多信息'] as const;
+const SELF_INFO_ROWS = ['朋友圈'] as const;
 
 const s = StyleSheet.create({
   headerBlock: {
@@ -113,16 +128,21 @@ const s = StyleSheet.create({
 
 export default function UserProfileScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const segments = useSegments();
   const { colors } = useTheme();
   const params = useLocalSearchParams<{ id?: string; name?: string }>();
   const currentUser = useAuthStore((state) => state.user);
   const [remoteProfile, setRemoteProfile] = useState<UserProfileData | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [friendStatus, setFriendStatus] = useState<FriendStatus | null>(null);
+  const [friendStatusLoadError, setFriendStatusLoadError] = useState(false);
+  const [friendSettings, setFriendSettings] = useState<FriendSettings | null>(null);
 
   const profileId =
     typeof params.id === 'string' ? params.id : 'unknown';
+  const scope = getUserProfileScopeFromSegments(segments);
   const isCurrentUser = isCurrentUserProfile(profileId, currentUser);
-  const showAddFriendButton = !isCurrentUser;
   const fallbackProfile = getUserProfileById(
     profileId,
     typeof params.name === 'string' ? params.name : undefined,
@@ -139,6 +159,8 @@ export default function UserProfileScreen() {
     }
 
     if (isCurrentUser && currentUser) {
+      setFetchError(null);
+      setFriendStatus(null);
       setRemoteProfile({
         id: currentUser.id,
         name: currentUser.nickname || currentUser.accountId,
@@ -190,8 +212,142 @@ export default function UserProfileScreen() {
     };
   }, [currentUser, isCurrentUser, profileId]);
 
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+
+      if (profileId === 'unknown' || isCurrentUser) {
+        setFriendStatusLoadError(false);
+        setFriendStatus(null);
+        return () => {
+          cancelled = true;
+        };
+      }
+
+      setFriendStatusLoadError(false);
+
+      fetchFriendStatus(profileId)
+        .then((status) => {
+          if (!cancelled) {
+            setFriendStatusLoadError(false);
+            setFriendStatus(status.status);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setFriendStatusLoadError(true);
+            setFriendStatus(null);
+          }
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }, [isCurrentUser, profileId]),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+
+      if (
+        profileId === 'unknown' ||
+        isCurrentUser ||
+        friendStatus !== 'ACCEPTED'
+      ) {
+        setFriendSettings(null);
+        return () => {
+          cancelled = true;
+        };
+      }
+
+      fetchFriendSettings(profileId)
+        .then((settings) => {
+          if (!cancelled) {
+            setFriendSettings(settings);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setFriendSettings(null);
+          }
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }, [friendStatus, isCurrentUser, profileId]),
+  );
+
   const profile = remoteProfile ?? fallbackProfile;
   const profileMetaItems = getProfileMetaItems(profile);
+  const displayName = friendSettings?.remark?.trim() || profile.remarkHint || profile.name;
+  const tagValue = friendSettings?.assignedTags.length
+    ? friendSettings.assignedTags.map((tag) => tag.name).join('、')
+    : '未设置';
+  const remarkValue = friendSettings?.remark?.trim() || '未设置';
+  const infoRows = isCurrentUser
+    ? SELF_INFO_ROWS
+    : friendStatus === 'ACCEPTED'
+      ? INFO_ROWS
+      : NON_FRIEND_INFO_ROWS;
+  const showProfileActions = !isCurrentUser;
+  const canSendFriendRequest = canOpenSendFriendRequest({
+    isCurrentUser,
+    profileId,
+    friendStatus,
+    hasProfileLoadError: fetchError !== null,
+    hasFriendStatusLoadError: friendStatusLoadError,
+  });
+  const showAddFriendButton = canSendFriendRequest;
+
+  const handleAddFriend = useCallback(() => {
+    if (!canSendFriendRequest || profileId === 'unknown') {
+      return;
+    }
+
+    router.push(getSendFriendRequestHref(scope, profileId, profile.name));
+  }, [canSendFriendRequest, profile.name, profileId, router, scope]);
+
+  const handleEditRemark = useCallback(() => {
+    if (friendStatus !== 'ACCEPTED' || profileId === 'unknown') {
+      return;
+    }
+
+    router.push(getEditFriendRemarkHref(scope, profileId, profile.name));
+  }, [friendStatus, profile.name, profileId, router, scope]);
+
+  const handleEditTags = useCallback(() => {
+    if (friendStatus !== 'ACCEPTED' || profileId === 'unknown') {
+      return;
+    }
+
+    router.push(getEditFriendTagsHref(scope, profileId, profile.name));
+  }, [friendStatus, profile.name, profileId, router, scope]);
+
+  const infoRowItems = useMemo(
+    () =>
+      infoRows.map((label) => {
+        if (label === '设置备注') {
+          return {
+            label,
+            value: remarkValue,
+            onPress: handleEditRemark,
+          };
+        }
+
+        if (label === '标签') {
+          return {
+            label,
+            value: tagValue,
+            onPress: handleEditTags,
+          };
+        }
+
+        return { label };
+      }),
+    [handleEditRemark, handleEditTags, infoRows, remarkValue, tagValue],
+  );
 
   const d = useMemo(
     () => ({
@@ -272,6 +428,9 @@ export default function UserProfileScreen() {
         ...Typography.body,
         fontWeight: '600' as const,
       },
+      addButtonDisabled: {
+        backgroundColor: colors.surfaceBorder,
+      },
     }),
     [colors, insets.bottom, showAddFriendButton],
   );
@@ -300,7 +459,7 @@ export default function UserProfileScreen() {
           </View>
           <View style={s.info}>
             <View style={s.nameRow}>
-              <Text style={d.name}>{profile.remarkHint ?? profile.name}</Text>
+              <Text style={d.name}>{displayName}</Text>
               <View style={[s.badge, d.badge]}>
                 <Text style={d.badgeText}>{profile.memberLabel}</Text>
               </View>
@@ -339,29 +498,41 @@ export default function UserProfileScreen() {
 
         <View style={s.listSection}>
           <Divider />
-          {INFO_ROWS.map((label, index) => (
-            <View key={label}>
-              <ProfileActionRow label={label} />
-              {index < INFO_ROWS.length - 1 ? <Divider /> : null}
+          {infoRowItems.map((item, index) => (
+            <View key={item.label}>
+              <ProfileActionRow
+                label={item.label}
+                value={item.value}
+                onPress={item.onPress}
+              />
+              {index < infoRowItems.length - 1 ? <Divider /> : null}
             </View>
           ))}
           <Divider />
         </View>
 
-        <View style={[s.actionSection, d.actionSection]}>
-          <Pressable>
-            <Text style={d.actionText}>发起聊天</Text>
-          </Pressable>
-          <Pressable>
-            <Text style={d.actionText}>音视频通话</Text>
-          </Pressable>
-        </View>
+        {showProfileActions ? (
+          <View style={[s.actionSection, d.actionSection]}>
+            <Pressable>
+              <Text style={d.actionText}>发起聊天</Text>
+            </Pressable>
+            <Pressable>
+              <Text style={d.actionText}>音视频通话</Text>
+            </Pressable>
+          </View>
+        ) : null}
       </ScrollView>
 
       {showAddFriendButton ? (
         <View style={d.footer}>
-          <Pressable style={[s.addButton, d.addButton]}>
-            <Text style={d.addButtonText}>添加好友</Text>
+          <Pressable
+            style={[
+              s.addButton,
+              d.addButton,
+            ]}
+            onPress={handleAddFriend}
+          >
+            <Text style={d.addButtonText}>发好友申请</Text>
           </Pressable>
         </View>
       ) : null}

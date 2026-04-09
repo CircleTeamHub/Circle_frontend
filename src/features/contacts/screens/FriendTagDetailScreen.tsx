@@ -1,0 +1,235 @@
+import { Avatar } from '@/components/ui/avatar';
+import { Divider } from '@/components/ui/divider';
+import { NavHeader } from '@/components/ui/nav-header';
+import {
+  buildContactSections,
+  getFriendDisplayName,
+  type ContactFriendSection,
+} from '@/features/contacts/contact-friends';
+import { getUserProfileHref } from '@/features/user/utils/routes';
+import { fetchFriendsByTag, type FriendProfile } from '@/services/api/friends';
+import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Pressable,
+  SectionList,
+  SectionListData,
+  SectionListRenderItemInfo,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const s = StyleSheet.create({
+  content: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.xl,
+  },
+  summaryCard: {
+    borderRadius: Radius.xl,
+    padding: Spacing.lg,
+    marginBottom: Spacing.md,
+    gap: 6,
+  },
+  sectionHeader: {
+    paddingVertical: Spacing.sm,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    paddingVertical: 14,
+  },
+  rowMeta: {
+    flex: 1,
+    gap: 2,
+  },
+  stateBlock: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.md,
+    paddingVertical: 56,
+  },
+  retryButton: {
+    minWidth: 96,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.lg,
+  },
+});
+
+export default function FriendTagDetailScreen() {
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const params = useLocalSearchParams<{ id?: string; name?: string }>();
+  const { colors } = useTheme();
+  const [friends, setFriends] = useState<FriendProfile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const tagId = typeof params.id === 'string' ? params.id : '';
+  const tagName = typeof params.name === 'string' ? params.name : '标签好友';
+
+  const loadFriends = useCallback(async () => {
+    if (!tagId) {
+      setError('标签不存在');
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const nextFriends = await fetchFriendsByTag(tagId);
+      setFriends(nextFriends);
+      setError(null);
+    } catch {
+      setError('标签好友加载失败，请稍后重试');
+    } finally {
+      setLoading(false);
+    }
+  }, [tagId]);
+
+  useEffect(() => {
+    loadFriends();
+  }, [loadFriends]);
+
+  const sections = useMemo(() => buildContactSections(friends), [friends]);
+
+  const d = useMemo(
+    () => ({
+      container: {
+        flex: 1,
+        backgroundColor: colors.background,
+      },
+      summaryCard: {
+        backgroundColor: colors.surface,
+      },
+      summaryTitle: {
+        color: colors.text,
+        ...Typography.body,
+        fontWeight: '600' as const,
+      },
+      summaryCopy: {
+        color: colors.textSecondary,
+        ...Typography.small,
+      },
+      sectionTitle: {
+        color: colors.textSecondary,
+        ...Typography.caption,
+        fontWeight: '600' as const,
+      },
+      name: {
+        color: colors.text,
+        ...Typography.body,
+        fontWeight: '500' as const,
+      },
+      account: {
+        color: colors.textSecondary,
+        ...Typography.tiny,
+      },
+      stateText: {
+        color: colors.textSecondary,
+        ...Typography.bodyRegular,
+      },
+      retryButton: {
+        backgroundColor: colors.primary,
+      },
+      retryButtonText: {
+        color: colors.white,
+        ...Typography.bodyRegular,
+        fontWeight: '600' as const,
+      },
+    }),
+    [colors],
+  );
+
+  const renderItem = useCallback(
+    ({
+      item,
+      index,
+      section,
+    }: SectionListRenderItemInfo<FriendProfile, ContactFriendSection>) => (
+      <View>
+        <Pressable
+          style={s.row}
+          onPress={() =>
+            router.push(
+              getUserProfileHref(
+                'contacts',
+                item.id,
+                getFriendDisplayName(item),
+              ),
+            )
+          }
+        >
+          <Avatar
+            size={40}
+            name={getFriendDisplayName(item)}
+            uri={item.avatarUrl ?? undefined}
+          />
+          <View style={s.rowMeta}>
+            <Text style={d.name}>{getFriendDisplayName(item)}</Text>
+            <Text style={d.account}>账号：{item.accountId}</Text>
+          </View>
+        </Pressable>
+        {index < section.data.length - 1 ? <Divider /> : null}
+      </View>
+    ),
+    [d, router],
+  );
+
+  const renderSectionHeader = useCallback(
+    ({ section }: { section: SectionListData<FriendProfile, ContactFriendSection> }) => (
+      <View style={s.sectionHeader}>
+        <Text style={d.sectionTitle}>{section.title}</Text>
+      </View>
+    ),
+    [d],
+  );
+
+  const emptyState = loading ? (
+    <View style={s.stateBlock}>
+      <ActivityIndicator color={colors.primary} />
+      <Text style={d.stateText}>正在加载标签好友...</Text>
+    </View>
+  ) : error ? (
+    <View style={s.stateBlock}>
+      <Text style={d.stateText}>{error}</Text>
+      <Pressable style={[s.retryButton, d.retryButton]} onPress={loadFriends}>
+        <Text style={d.retryButtonText}>重试</Text>
+      </Pressable>
+    </View>
+  ) : (
+    <View style={s.stateBlock}>
+      <Text style={d.stateText}>这个标签下还没有好友</Text>
+    </View>
+  );
+
+  return (
+    <View style={[d.container, { paddingTop: insets.top }]}>
+      <NavHeader title={tagName} />
+      <SectionList
+        sections={sections}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        renderSectionHeader={renderSectionHeader}
+        ListHeaderComponent={
+          <View style={[s.summaryCard, d.summaryCard]}>
+            <Text style={d.summaryTitle}>{tagName}</Text>
+            <Text style={d.summaryCopy}>按联系人字母分组展示当前标签下的好友。</Text>
+          </View>
+        }
+        ListEmptyComponent={emptyState}
+        contentContainerStyle={s.content}
+        showsVerticalScrollIndicator={false}
+        stickySectionHeadersEnabled={false}
+      />
+    </View>
+  );
+}

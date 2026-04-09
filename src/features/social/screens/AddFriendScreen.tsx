@@ -1,89 +1,224 @@
-import { useCallback, useMemo } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useTheme, Spacing, Typography, Radius } from '@/theme';
+import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
-import { Divider } from '@/components/ui/divider';
-import { IconCircle } from '@/components/ui/icon-circle';
+import { getUserProfileHref } from '@/features/user/utils/routes';
+import {
+  searchUsersByAccountId,
+  type PublicUser,
+} from '@/services/api/users';
+import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Keyboard,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-interface AddMethod {
-  icon: keyof typeof Ionicons.glyphMap;
-  color: string;
-  title: string;
-  subtitle: string;
-}
-
-const METHODS: AddMethod[] = [
-  { icon: 'scan-outline', color: '#22C55E', title: '扫一扫', subtitle: '扫描二维码添加好友' },
-  { icon: 'call-outline', color: '#6366F1', title: '手机联系人', subtitle: '从通讯录导入好友' },
-  { icon: 'radio-outline', color: '#FF6B6B', title: '雷达加友', subtitle: '搜索附近的人' },
-  { icon: 'share-outline', color: '#8B5CF6', title: '面对面建群', subtitle: '与身边的朋友建群' },
-];
+type SearchState = 'idle' | 'loading' | 'result' | 'not-found' | 'error';
 
 const s = StyleSheet.create({
-  scroll: { flex: 1 },
-  content: { gap: Spacing.xl, paddingHorizontal: Spacing.lg, paddingBottom: Spacing.lg },
-  searchInput: { height: 48, borderWidth: 1, borderRadius: Radius.xxl, flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.md, gap: Spacing.sm },
-  searchText: { flex: 1, ...Typography.bodyRegular },
-  myId: { textAlign: 'center', ...Typography.caption },
-  methodRow: { height: 60, flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
-  methodInfo: { flex: 1 },
-  methodTitle: { ...Typography.body },
-  methodSub: { ...Typography.small, marginTop: 2 },
-  qrSection: { borderRadius: Radius.xl, padding: Spacing.lg, alignItems: 'center', gap: Spacing.md },
-  qrTitle: { ...Typography.body, fontWeight: '600' as const },
-  qrBox: { width: 160, height: 160, borderRadius: Radius.md },
-  qrHint: { ...Typography.small },
+  content: {
+    flex: 1,
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.xl,
+    gap: Spacing.lg,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    alignItems: 'center',
+  },
+  searchInput: {
+    flex: 1,
+    height: 48,
+    borderWidth: 1,
+    borderRadius: Radius.xxl,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    gap: Spacing.sm,
+  },
+  searchText: {
+    flex: 1,
+    ...Typography.bodyRegular,
+  },
+  searchButton: {
+    minWidth: 88,
+    height: 48,
+    borderRadius: Radius.xxl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.lg,
+  },
+  resultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  resultMeta: {
+    flex: 1,
+    gap: 4,
+  },
+  statusBlock: {
+    minHeight: 80,
+    justifyContent: 'center',
+  },
 });
+
+function getDisplayName(user: PublicUser) {
+  return user.nickname?.trim() || user.accountId;
+}
 
 export default function AddFriendScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { colors } = useTheme();
+  const [keyword, setKeyword] = useState('');
+  const [searchState, setSearchState] = useState<SearchState>('idle');
+  const [result, setResult] = useState<PublicUser | null>(null);
 
-  const d = useMemo(() => ({
-    container: { flex: 1, backgroundColor: colors.background },
-    searchInput: { backgroundColor: colors.surface, borderColor: colors.surfaceBorder },
-    searchText: { color: colors.text },
-    myId: { color: colors.textSecondary },
-    methodTitle: { color: colors.text },
-    methodSub: { color: colors.textSecondary },
-    qrSection: { backgroundColor: colors.surface },
-    qrTitle: { color: colors.text },
-    qrBox: { backgroundColor: colors.white },
-    qrHint: { color: colors.textSecondary },
-  }), [colors]);
+  const d = useMemo(
+    () => ({
+      container: {
+        flex: 1,
+        backgroundColor: colors.background,
+      },
+      searchInput: {
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
+      },
+      searchText: {
+        color: colors.text,
+      },
+      searchButton: {
+        backgroundColor: colors.primary,
+      },
+      searchButtonDisabled: {
+        opacity: 0.5,
+      },
+      searchButtonText: {
+        color: colors.white,
+        ...Typography.bodyRegular,
+        fontWeight: '600' as const,
+      },
+      stateText: {
+        color: colors.textSecondary,
+        ...Typography.bodyRegular,
+      },
+      resultName: {
+        color: colors.text,
+        ...Typography.body,
+        fontWeight: '600' as const,
+      },
+      resultAccount: {
+        color: colors.textSecondary,
+        ...Typography.small,
+      },
+    }),
+    [colors],
+  );
 
-  const renderMethod = useCallback((method: AddMethod, index: number) => (
-    <View key={method.title}>
-      {index > 0 && <Divider />}
-      <Pressable style={s.methodRow}>
-        <IconCircle name={method.icon} size={40} iconSize={20} bgColor={method.color} />
-        <View style={s.methodInfo}>
-          <Text style={[s.methodTitle, d.methodTitle]}>{method.title}</Text>
-          <Text style={[s.methodSub, d.methodSub]}>{method.subtitle}</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-      </Pressable>
-    </View>
-  ), [d, colors]);
+  const handleSearch = useCallback(async () => {
+    const trimmed = keyword.trim();
+
+    if (!trimmed || searchState === 'loading') {
+      return;
+    }
+
+    Keyboard.dismiss();
+    setSearchState('loading');
+
+    try {
+      const user = await searchUsersByAccountId(trimmed);
+      setResult(user);
+      setSearchState(user ? 'result' : 'not-found');
+    } catch {
+      setResult(null);
+      setSearchState('error');
+    }
+  }, [keyword, searchState]);
+
+  const openUserProfile = useCallback(() => {
+    if (!result) {
+      return;
+    }
+
+    router.push(
+      getUserProfileHref('contacts', result.id, getDisplayName(result)),
+    );
+  }, [result, router]);
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader title="添加好友" />
-      <ScrollView style={s.scroll} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
-        <View style={[s.searchInput, d.searchInput]}>
-          <Ionicons name="search" size={18} color={colors.textSecondary} />
-          <TextInput placeholder="输入手机号/ID" placeholderTextColor={colors.textSecondary} style={[s.searchText, d.searchText]} />
+      <View style={s.content}>
+        <View style={s.searchRow}>
+          <View style={[s.searchInput, d.searchInput]}>
+            <Ionicons name="search" size={18} color={colors.textSecondary} />
+            <TextInput
+              value={keyword}
+              onChangeText={setKeyword}
+              onSubmitEditing={handleSearch}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+              placeholder="输入对方账号"
+              placeholderTextColor={colors.textSecondary}
+              style={[s.searchText, d.searchText]}
+            />
+          </View>
+          <Pressable
+            style={[
+              s.searchButton,
+              d.searchButton,
+              keyword.trim() ? null : d.searchButtonDisabled,
+            ]}
+            disabled={!keyword.trim() || searchState === 'loading'}
+            onPress={handleSearch}
+          >
+            {searchState === 'loading' ? (
+              <ActivityIndicator color={colors.white} />
+            ) : (
+              <Text style={d.searchButtonText}>搜索</Text>
+            )}
+          </Pressable>
         </View>
-        <Text style={[s.myId, d.myId]}>我的ID: SocialChat_2024</Text>
-        <View>{METHODS.map(renderMethod)}</View>
-        <View style={[s.qrSection, d.qrSection]}>
-          <Text style={[s.qrTitle, d.qrTitle]}>我的二维码</Text>
-          <View style={[s.qrBox, d.qrBox]} />
-          <Text style={[s.qrHint, d.qrHint]}>扫一扫上面的二维码添加我</Text>
+
+        <View style={s.statusBlock}>
+          {searchState === 'not-found' ? (
+            <Text style={d.stateText}>未找到好友</Text>
+          ) : null}
+
+          {searchState === 'error' ? (
+            <Text style={d.stateText}>搜索失败，请稍后重试</Text>
+          ) : null}
+
+          {searchState === 'result' && result ? (
+            <Pressable style={s.resultRow} onPress={openUserProfile}>
+              <Avatar
+                size={52}
+                name={getDisplayName(result)}
+                uri={result.avatarUrl ?? undefined}
+              />
+              <View style={s.resultMeta}>
+                <Text style={d.resultName}>{getDisplayName(result)}</Text>
+                <Text style={d.resultAccount}>账号：{result.accountId}</Text>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={colors.textSecondary}
+              />
+            </Pressable>
+          ) : null}
         </View>
-      </ScrollView>
+      </View>
     </View>
   );
 }
