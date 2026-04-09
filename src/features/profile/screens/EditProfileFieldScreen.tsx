@@ -30,6 +30,10 @@ import {
   toProfileUpdatePayload,
   validateProfileFieldValue,
 } from '@/features/profile/profile-edit-config';
+import {
+  CITY_PROVINCES,
+  findProvinceByCity,
+} from '@/features/profile/city-options';
 import { loadImagePickerModule } from '@/features/profile/image-picker';
 
 const s = StyleSheet.create({
@@ -166,6 +170,7 @@ export default function EditProfileFieldScreen() {
   const setUser = useAuthStore((state) => state.setUser);
   const [isSaving, setIsSaving] = useState(false);
   const [isBirthdayPickerVisible, setIsBirthdayPickerVisible] = useState(false);
+  const [isCityPickerVisible, setIsCityPickerVisible] = useState(false);
   const [selectedAvatarUri, setSelectedAvatarUri] = useState<string | null>(null);
   const [selectedAvatarFileName, setSelectedAvatarFileName] = useState<string | null>(null);
   const [selectedAvatarMimeType, setSelectedAvatarMimeType] = useState<string | null>(null);
@@ -187,6 +192,10 @@ export default function EditProfileFieldScreen() {
   const [birthdayDraft, setBirthdayDraft] = useState(() =>
     parseBirthdayValue(initialValue),
   );
+  const [cityDraftRegion, setCityDraftRegion] = useState(() =>
+    findProvinceByCity(initialValue).name,
+  );
+  const [cityDraftValue, setCityDraftValue] = useState(() => initialValue.trim());
 
   const birthdayDays = useMemo(
     () =>
@@ -201,6 +210,13 @@ export default function EditProfileFieldScreen() {
     return Array.from({ length: currentYear - 1949 }, (_, index) => currentYear - index);
   }, []);
   const genderOptions = ['男', '女', '未设置'];
+  const cityRegion = useMemo(
+    () =>
+      CITY_PROVINCES.find((region) => region.name === cityDraftRegion) ??
+      CITY_PROVINCES[0],
+    [cityDraftRegion],
+  );
+  const cityOptions = cityRegion.cities;
   const avatarPreviewUri = selectedAvatarUri ?? initialValue ?? null;
 
   const d = useMemo(
@@ -336,6 +352,12 @@ export default function EditProfileFieldScreen() {
       return;
     }
 
+    const MAX_AVATAR_BYTES = 10 * 1024 * 1024; // 10 MB
+    if (asset.fileSize && asset.fileSize > MAX_AVATAR_BYTES) {
+      Alert.alert('图片太大', '头像图片大小不能超过 10 MB，请选择更小的图片。');
+      return;
+    }
+
     setSelectedAvatarUri(asset.uri);
     setSelectedAvatarFileName(asset.fileName ?? 'avatar.jpg');
     setSelectedAvatarMimeType(contentType);
@@ -375,7 +397,7 @@ export default function EditProfileFieldScreen() {
 
         const nextUser = await updateUserProfile(user.id, {
           avatarUrl: fileUrl,
-        });
+        }, user);
         setUser(nextUser);
         router.back();
       } catch (error) {
@@ -402,6 +424,7 @@ export default function EditProfileFieldScreen() {
       const nextUser = await updateUserProfile(
         user.id,
         toProfileUpdatePayload(field.id, value),
+        user,
       );
       setUser(nextUser);
       router.back();
@@ -420,6 +443,19 @@ export default function EditProfileFieldScreen() {
     )}`;
     setValue(nextValue);
     setIsBirthdayPickerVisible(false);
+  }
+
+  function openCityPicker() {
+    const nextRegion = findProvinceByCity(value);
+    setCityDraftRegion(nextRegion.name);
+    setCityDraftValue(value.trim());
+    setIsCityPickerVisible(true);
+  }
+
+  function handleConfirmCity() {
+    const nextValue = cityDraftValue.trim() || cityOptions[0] || '';
+    setValue(nextValue);
+    setIsCityPickerVisible(false);
   }
 
   if (!field || !field.editable) {
@@ -456,7 +492,7 @@ export default function EditProfileFieldScreen() {
             <View style={s.avatarEditor}>
               <Avatar
                 size={112}
-                name={user?.nickname ?? user?.username ?? '圈'}
+                name={user?.nickname ?? user?.accountId ?? '圈'}
                 uri={avatarPreviewUri ?? undefined}
                 bgColor={colors.surface}
               />
@@ -502,6 +538,15 @@ export default function EditProfileFieldScreen() {
                 {formatProfileFieldValue(field.id, value)}
               </Text>
             </Pressable>
+          ) : field.editorType === 'city' ? (
+            <Pressable
+              style={[s.dateField, d.dateField]}
+              onPress={openCityPicker}
+            >
+              <Text style={d.dateFieldText}>
+                {formatProfileFieldValue(field.id, value)}
+              </Text>
+            </Pressable>
           ) : (
             <TextInput
               value={value}
@@ -524,7 +569,11 @@ export default function EditProfileFieldScreen() {
         </View>
 
         <View style={s.footer}>
-          <Pressable style={[s.button, d.button]} onPress={handleSave}>
+          <Pressable
+            style={[s.button, d.button, isSaving ? { opacity: 0.6 } : null]}
+            onPress={handleSave}
+            disabled={isSaving}
+          >
             <Text style={d.buttonText}>{isSaving ? '保存中...' : '保存'}</Text>
           </Pressable>
         </View>
@@ -636,6 +685,81 @@ export default function EditProfileFieldScreen() {
                           ]}
                         >
                           {day}日
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      <Modal
+        visible={isCityPickerVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsCityPickerVisible(false)}
+      >
+        <View style={s.modalOverlay}>
+          <View style={[s.modalCard, d.modalCard]}>
+            <View style={s.modalHeader}>
+              <Pressable onPress={() => setIsCityPickerVisible(false)}>
+                <Text style={d.actionText}>取消</Text>
+              </Pressable>
+              <Text style={d.modalTitle}>选择省市</Text>
+              <Pressable onPress={handleConfirmCity}>
+                <Text style={d.actionText}>确定</Text>
+              </Pressable>
+            </View>
+
+            <View style={s.pickerColumns}>
+              <View style={s.pickerColumn}>
+                <ScrollView style={[s.pickerList, d.pickerList]}>
+                  {CITY_PROVINCES.map((region) => {
+                    const isActive = cityDraftRegion === region.name;
+                    return (
+                      <Pressable
+                        key={region.name}
+                        style={s.pickerItem}
+                        onPress={() => {
+                          setCityDraftRegion(region.name);
+                          if (!region.cities.includes(cityDraftValue)) {
+                            setCityDraftValue(region.cities[0] ?? '');
+                          }
+                        }}
+                      >
+                        <Text
+                          style={[
+                            d.pickerItemText,
+                            isActive ? d.pickerItemTextActive : null,
+                          ]}
+                        >
+                          {region.name}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+
+              <View style={s.pickerColumn}>
+                <ScrollView style={[s.pickerList, d.pickerList]}>
+                  {cityOptions.map((city) => {
+                    const isActive = cityDraftValue === city;
+                    return (
+                      <Pressable
+                        key={city}
+                        style={s.pickerItem}
+                        onPress={() => setCityDraftValue(city)}
+                      >
+                        <Text
+                          style={[
+                            d.pickerItemText,
+                            isActive ? d.pickerItemTextActive : null,
+                          ]}
+                        >
+                          {city}
                         </Text>
                       </Pressable>
                     );

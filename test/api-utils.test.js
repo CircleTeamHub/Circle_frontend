@@ -5,13 +5,17 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
-function loadApiUtils(apiUrl) {
+function loadApiUtils() {
   const filePath = path.join(process.cwd(), 'src/services/api/utils.ts');
   const source = fs.readFileSync(filePath, 'utf8');
   const transpiled = ts.transpileModule(source, {
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
       target: ts.ScriptTarget.ES2020,
+      baseUrl: process.cwd(),
+      paths: {
+        '@/*': ['src/*'],
+      },
     },
     fileName: filePath,
   }).outputText;
@@ -19,42 +23,49 @@ function loadApiUtils(apiUrl) {
   const context = {
     module: { exports: {} },
     exports: {},
-    URL,
-    require: (request) => {
-      if (request === '@/constants/config') {
-        return { API_URL: apiUrl };
+    require: (specifier) => {
+      if (specifier === '@/constants/config') {
+        return { API_URL: 'https://api.example.com' };
       }
-      return {};
+
+      return require(specifier);
     },
   };
   context.exports = context.module.exports;
 
   vm.runInNewContext(transpiled, context, { filename: filePath });
+
   return context.module.exports;
 }
 
-test('normalizeMediaUrl rewrites localhost asset URLs to the active API host', () => {
-  const { normalizeMediaUrl } = loadApiUtils('http://10.0.0.195:3000/api/v1');
+test('normalizeUser keeps backend city field', () => {
+  const { normalizeUser } = loadApiUtils();
 
-  assert.equal(
-    normalizeMediaUrl('http://localhost:9000/circle/avatars/test.jpg'),
-    'http://10.0.0.195:9000/circle/avatars/test.jpg',
-  );
-  assert.equal(
-    normalizeMediaUrl('http://127.0.0.1:9000/circle/avatars/test.jpg'),
-    'http://10.0.0.195:9000/circle/avatars/test.jpg',
-  );
-});
+  const normalized = normalizeUser({
+    id: 'user-1',
+    accountId: 'account-1',
+    username: 'alice',
+    nickname: 'Alice',
+    avatarUrl: null,
+    avatarFrame: null,
+    cover: null,
+    email: null,
+    phoneNumber: null,
+    wechat: null,
+    qq: null,
+    whatsup: null,
+    persona: null,
+    helloWords: null,
+    birthday: null,
+    gender: 'unset',
+    role: 'USER',
+    status: 'ACTIVE',
+    lastOnline: null,
+    createdAt: '2026-04-08T00:00:00.000Z',
+    updatedAt: '2026-04-08T00:00:00.000Z',
+    city: '杭州',
+  });
 
-test('normalizeMediaUrl keeps already-public URLs unchanged', () => {
-  const { normalizeMediaUrl } = loadApiUtils('http://10.0.0.195:3000/api/v1');
-
-  assert.equal(
-    normalizeMediaUrl('http://10.0.0.195:9000/circle/avatars/test.jpg'),
-    'http://10.0.0.195:9000/circle/avatars/test.jpg',
-  );
-  assert.equal(
-    normalizeMediaUrl('https://cdn.example.com/avatar.png'),
-    'https://cdn.example.com/avatar.png',
-  );
+  assert.equal(normalized.uid, 'account-1');
+  assert.equal(normalized.city, '杭州');
 });

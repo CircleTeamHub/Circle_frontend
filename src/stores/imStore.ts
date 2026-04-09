@@ -62,7 +62,11 @@ function mergeConversationList(
   );
 }
 
+// 内存中每个会话最多保留的消息条数
+const MAX_MESSAGES_PER_CONVERSATION = 200;
+
 // 将新消息合并到现有消息列表（以 clientMsgID 去重），并按发送时间升序排列（最旧在上）
+// 合并后截取最新的 MAX_MESSAGES_PER_CONVERSATION 条，防止长会话占用过多内存
 function mergeMessageList(current: MessageItem[], updates: MessageItem[]) {
   const next = new Map(current.map((item) => [item.clientMsgID, item]));
 
@@ -70,7 +74,10 @@ function mergeMessageList(current: MessageItem[], updates: MessageItem[]) {
     next.set(item.clientMsgID, item);
   }
 
-  return [...next.values()].sort((left, right) => left.sendTime - right.sendTime);
+  const sorted = [...next.values()].sort((left, right) => left.sendTime - right.sendTime);
+  return sorted.length > MAX_MESSAGES_PER_CONVERSATION
+    ? sorted.slice(-MAX_MESSAGES_PER_CONVERSATION)
+    : sorted;
 }
 
 const initialState = {
@@ -106,12 +113,18 @@ export const useIMStore = create<IMState>((set) => ({
   setTotalUnread: (totalUnread) => set({ totalUnread }),
   setActiveConversation: (activeConversation) => set({ activeConversation }),
   setMessages: (conversationID, messages) =>
-    set((state) => ({
-      messagesByConversation: {
-        ...state.messagesByConversation,
-        [conversationID]: [...messages].sort((left, right) => left.sendTime - right.sendTime),
-      },
-    })),
+    set((state) => {
+      const sorted = [...messages].sort((left, right) => left.sendTime - right.sendTime);
+      const capped = sorted.length > MAX_MESSAGES_PER_CONVERSATION
+        ? sorted.slice(-MAX_MESSAGES_PER_CONVERSATION)
+        : sorted;
+      return {
+        messagesByConversation: {
+          ...state.messagesByConversation,
+          [conversationID]: capped,
+        },
+      };
+    }),
   appendMessages: (conversationID, messages) =>
     set((state) => ({
       messagesByConversation: {

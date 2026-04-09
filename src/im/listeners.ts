@@ -12,7 +12,9 @@
  * 返回 unbindAll 函数，调用方在组件卸载时负责解绑。
  */
 import OpenIMSDK, { type ConversationItem, type MessageItem } from '@openim/rn-client-sdk';
+import { router } from 'expo-router';
 import { loadConversationList, isMessageForConversation } from '@/im/client';
+import { clearLocalSession } from '@/services/auth/session';
 import { useIMStore } from '@/stores/imStore';
 
 // 模块级单例，确保全局只注册一套监听器；解绑后置为 null 允许重新绑定
@@ -53,9 +55,11 @@ export function bindOpenIMListeners() {
   };
   OpenIMSDK.on('onConnectFailed', handleConnectFailed);
 
-  const handleTokenExpired = () => {
+  const handleTokenExpired = async () => {
     useIMStore.getState().setConnected(false);
-    useIMStore.getState().setError('OpenIM token 已过期');
+    useIMStore.getState().setError('登录已过期，请重新登录');
+    await clearLocalSession();
+    router.replace('/(auth)/login');
   };
   OpenIMSDK.on('onUserTokenExpired', handleTokenExpired);
 

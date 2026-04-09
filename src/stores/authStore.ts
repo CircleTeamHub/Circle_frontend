@@ -16,7 +16,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export interface AuthUser {
   id: string;
   accountId: string;
-  username: string;
   uid: string;
   nickname: string;
   avatarUrl: string | null;

@@ -131,8 +131,8 @@ export default function ProfileScreen() {
   );
 
   const isDark = resolvedMode === "dark";
-  const displayName = user?.nickname || user?.username || "未登录用户";
-  const displayAccount = user?.accountId || user?.username || "未绑定";
+  const displayName = user?.nickname || user?.accountId || "未登录用户";
+  const displayAccount = user?.accountId || "未绑定";
   const membershipTag = user?.role === "ADMIN" ? "管理员" : "普通用户";
   const profileSignature = getProfileSignature(user?.persona, user?.helloWords);
 

@@ -13,8 +13,8 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthInput } from '@/components/ui/auth-input';
 import { NavHeader } from '@/components/ui/nav-header';
-import { changePassword } from '@/services/api/auth';
-import { ApiError } from '@/services/api/client';
+import { changePassword, logoutAll } from '@/services/api/auth';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { clearLocalSession } from '@/services/auth/session';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
@@ -47,18 +47,6 @@ const s = StyleSheet.create({
     opacity: 0.6,
   },
 });
-
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof ApiError) {
-    return error.message;
-  }
-
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  return fallback;
-}
 
 export default function ChangePasswordScreen() {
   const insets = useSafeAreaInsets();
@@ -118,15 +106,18 @@ export default function ChangePasswordScreen() {
         oldPassword,
         newPassword,
       });
+      try {
+        await logoutAll();
+      } catch {
+        // 服务端登出全部设备失败不阻断本地退出流程
+      }
       await clearLocalSession();
-      setSubmitting(false);
       router.replace('/(auth)/login');
-      return;
     } catch (requestError) {
-      setError(getErrorMessage(requestError, '修改密码失败，请稍后重试'));
+      setError(getApiErrorMessage(requestError, '修改密码失败，请稍后重试'));
+    } finally {
+      setSubmitting(false);
     }
-
-    setSubmitting(false);
   }
 
   return (

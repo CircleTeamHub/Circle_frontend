@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, FlatList, StyleSheet } from 'react-native';
+import type { FlatList as FlatListType } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -49,6 +50,7 @@ export default function ChatDetailScreen() {
   const setActiveConversation = useIMStore((state) => state.setActiveConversation);
   const appendMessages = useIMStore((state) => state.appendMessages);
   const authUser = useAuthStore((state) => state.user);
+  const flatListRef = useRef<FlatListType<ChatMessage>>(null);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -110,6 +112,13 @@ export default function ChatDetailScreen() {
     [conversationID, currentUserID, messagesByConversation],
   );
 
+  // 每当消息列表更新（新消息到达或初始加载完成）时滚动到最底部
+  useEffect(() => {
+    if (messages.length > 0) {
+      flatListRef.current?.scrollToEnd({ animated: false });
+    }
+  }, [messages]);
+
   const renderItem = useCallback(({ item }: { item: ChatMessage }) => {
     switch (item.type) {
       case 'date': return <DatePill text={item.text ?? ''} />;
@@ -132,7 +141,7 @@ export default function ChatDetailScreen() {
         );
       default: return null;
     }
-  }, [handleOpenUserProfile]);
+  }, [conversationTitle, handleOpenUserProfile]);
 
   const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
 
@@ -190,6 +199,7 @@ export default function ChatDetailScreen() {
       </View>
       <Divider />
       <FlatList
+        ref={flatListRef}
         data={messages}
         renderItem={renderItem}
         keyExtractor={keyExtractor}

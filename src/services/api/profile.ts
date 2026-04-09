@@ -5,8 +5,9 @@
  * - updateUserProfile：更新当前用户资料（PATCH，仅传需要修改的字段）
  */
 import { apiClient } from '@/services/api/client';
-import type { BackendAuthUser } from '@/services/api/auth';
+import { fetchCurrentUser, type BackendAuthUser } from '@/services/api/auth';
 import { normalizeUser } from '@/services/api/utils';
+import type { AuthUser } from '@/stores/authStore';
 
 export type UpdateProfilePayload = Partial<
   Pick<
@@ -24,6 +25,7 @@ export type UpdateProfilePayload = Partial<
     | 'helloWords'
     | 'birthday'
     | 'gender'
+    | 'city'
   >
 >;
 
@@ -34,12 +36,37 @@ export async function fetchUserProfile(userId: string) {
 
 export async function updateUserProfile(
   userId: string,
-  payload: UpdateProfilePayload
+  payload: UpdateProfilePayload,
+  currentUser?: AuthUser | null,
 ) {
-  const user = await apiClient<BackendAuthUser>(`/user/${userId}`, {
+  const user = await apiClient<BackendAuthUser | null>(`/user/${userId}`, {
     method: 'PATCH',
     body: payload,
   });
 
-  return normalizeUser(user);
+  const patchedUser = user ? normalizeUser(user) : null;
+
+  try {
+    const refreshedUser = await fetchCurrentUser();
+    return {
+      ...refreshedUser,
+      ...payload,
+    };
+  } catch {
+    if (patchedUser) {
+      return {
+        ...patchedUser,
+        ...payload,
+      };
+    }
+
+    if (currentUser) {
+      return {
+        ...currentUser,
+        ...payload,
+      };
+    }
+
+    throw new Error('资料已提交，但刷新用户信息失败');
+  }
 }

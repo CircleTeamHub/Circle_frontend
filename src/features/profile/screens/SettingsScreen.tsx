@@ -36,6 +36,7 @@ const PROFILE_ROW_IDS = [
   'nickname',
   'gender',
   'birthday',
+  'city',
   'bio',
   'wechat',
   'phone',
@@ -192,7 +193,7 @@ export default function SettingsScreen() {
           {item.type === 'avatar' ? (
             <Avatar
               size={40}
-              name={user?.nickname ?? user?.username ?? '圈'}
+              name={user?.nickname ?? user?.accountId ?? '圈'}
               uri={user?.avatarUrl ?? undefined}
             />
           ) : item.value ? (

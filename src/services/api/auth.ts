@@ -20,7 +20,6 @@ export type AuthTokens = {
 export type BackendAuthUser = {
   id: string;
   accountId: string;
-  username: string;
   nickname: string;
   avatarUrl: string | null;
   avatarFrame: string | null;
@@ -34,6 +33,7 @@ export type BackendAuthUser = {
   helloWords: string | null;
   birthday: string | null;
   gender: 'male' | 'female' | 'other' | 'unset';
+  city: string | null;
   role: string;
   status: string;
   lastOnline: string | null;
@@ -42,7 +42,7 @@ export type BackendAuthUser = {
 };
 
 type RegisterPayload = {
-  username: string;
+  accountId: string;
   password: string;
   nickname?: string;
   email?: string;
@@ -55,7 +55,7 @@ function getDeviceName() {
 
 
 export async function login(payload: {
-  username: string;
+  accountId: string;
   password: string;
 }) {
   return apiClient<AuthTokens>('/auth/login', {

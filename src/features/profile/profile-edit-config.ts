@@ -1,6 +1,7 @@
 type EditableFieldId =
   | 'avatar'
   | 'nickname'
+  | 'city'
   | 'gender'
   | 'birthday'
   | 'bio'
@@ -21,6 +22,7 @@ type EditableField = {
   valueKey:
     | 'avatarUrl'
     | 'nickname'
+    | 'city'
     | 'gender'
     | 'birthday'
     | 'persona'
@@ -30,6 +32,7 @@ type EditableField = {
   payloadKey:
     | 'avatarUrl'
     | 'nickname'
+    | 'city'
     | 'gender'
     | 'birthday'
     | 'persona'
@@ -39,7 +42,7 @@ type EditableField = {
   title: string;
   placeholder: string;
   emptyValueLabel: string;
-  editorType?: 'text' | 'gender' | 'date' | 'avatar';
+  editorType?: 'text' | 'gender' | 'date' | 'avatar' | 'city';
   multiline?: boolean;
   keyboardType?: 'default' | 'phone-pad';
   autoCapitalize?: 'none' | 'sentences';
@@ -85,6 +88,19 @@ export const PROFILE_EDIT_FIELDS = [
     title: '修改昵称',
     placeholder: '请输入昵称',
     emptyValueLabel: '未设置',
+    autoCapitalize: 'none',
+  },
+  {
+    id: 'city',
+    label: '地区',
+    rowType: 'text',
+    editable: true,
+    valueKey: 'city',
+    payloadKey: 'city',
+    title: '选择地区',
+    placeholder: '请选择城市',
+    emptyValueLabel: '未设置',
+    editorType: 'city',
     autoCapitalize: 'none',
   },
   {
@@ -168,7 +184,7 @@ export const PROFILE_EDIT_FIELDS = [
     label: '修改登录密码',
     rowType: 'text',
     editable: false,
-    unsupportedMessage: '密码修改功能暂未接入。',
+    unsupportedMessage: '请通过账号设置页面修改密码。',
   },
   {
     id: 'security-code',
@@ -286,6 +302,13 @@ export function validateProfileFieldValue(fieldId: string, value: string) {
       return isValidBirthday(normalizeBirthdayValue(normalized))
         ? null
         : '生日格式不正确，请选择有效日期';
+    case 'city':
+      if (!normalized) {
+        return null;
+      }
+      return normalized.length >= 2 && normalized.length <= 30
+        ? null
+        : '地区格式不正确';
     case 'bio':
       return normalized.length <= 200 ? null : '个人简介最多 200 个字符';
     case 'wechat':

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { fetchCurrentUser } from '@/services/api/auth';
 import { loginToOpenIM, logoutFromOpenIM } from '@/im/client';
 import { bindOpenIMListeners } from '@/im/listeners';
+import { clearLocalSession } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
 
 /**
@@ -23,7 +24,6 @@ export function SessionBootstrap() {
     hasHydrated,
     isLoading,
     setUser,
-    clearSession,
     setLoading,
   } = useAuthStore();
 
@@ -82,10 +82,8 @@ export function SessionBootstrap() {
         }
       } catch {
         // /auth/me 请求失败（token 已过期/无效），清除 session 触发跳转登录页
-        await logoutFromOpenIM();
-
         if (!cancelled) {
-          clearSession();
+          await clearLocalSession();
         }
       } finally {
         // 无论成功还是失败，都要结束 loading 状态，防止 app 永久卡在加载中
@@ -102,7 +100,6 @@ export function SessionBootstrap() {
     };
   }, [
     accessToken,
-    clearSession,
     hasHydrated,
     imToken,
     isLoading,

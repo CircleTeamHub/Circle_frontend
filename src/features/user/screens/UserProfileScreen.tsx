@@ -124,7 +124,7 @@ export default function UserProfileScreen() {
     if (isCurrentUser && currentUser) {
       setRemoteProfile({
         id: currentUser.id,
-        name: currentUser.nickname || currentUser.username,
+        name: currentUser.nickname || currentUser.accountId,
         accountId: currentUser.accountId,
         avatarUrl: currentUser.avatarUrl ?? undefined,
         badges: [currentUser.role === 'ADMIN' ? '管理员' : '普通用户'],
@@ -147,7 +147,7 @@ export default function UserProfileScreen() {
 
         setRemoteProfile({
           id: profile.id,
-          name: profile.nickname || profile.username,
+          name: profile.nickname || profile.accountId,
           accountId: profile.accountId,
           avatarUrl: profile.avatarUrl ?? undefined,
           badges: [profile.role === 'ADMIN' ? '管理员' : '普通用户'],

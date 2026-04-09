@@ -142,6 +142,9 @@ async function executeRequest<T>(
     body: formatLogData(body),
   });
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15_000);
+
   let res: Response;
   try {
     res = await fetch(url, {
@@ -152,6 +155,7 @@ async function executeRequest<T>(
         ...headers,
       },
       ...(body ? { body: JSON.stringify(body) } : {}),
+      signal: controller.signal,
     });
   } catch (error) {
     logApiEvent('network-error', {
@@ -159,7 +163,12 @@ async function executeRequest<T>(
       method,
       error: error instanceof Error ? error.message : String(error),
     });
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new ApiError('请求超时，请检查网络连接后重试', 0);
+    }
     throw new ApiError('网络异常，请确认后端服务已启动', 0);
+  } finally {
+    clearTimeout(timer);
   }
 
   const payload = await readPayload<T>(res);

@@ -18,21 +18,9 @@ import {
 } from '@/services/api/auth';
 import { clearLocalSession } from '@/services/auth/session';
 import { loginToOpenIM, logoutFromOpenIM } from '@/im/client';
-import { ApiError } from '@/services/api/client';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof ApiError) {
-    return error.message;
-  }
-
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  return fallback;
-}
 
 export function useAuth() {
   const router = useRouter();
@@ -56,7 +44,7 @@ export function useAuth() {
       setSubmitting(true);
       try {
         const tokens = await loginRequest({
-          username,
+          accountId: username,
           password,
         });
         const user = await fetchCurrentUserWithToken(tokens.accessToken);
@@ -80,7 +68,7 @@ export function useAuth() {
         router.replace('/(tabs)/messages');
       } catch (requestError) {
         await clearLocalSession();
-        setError(getErrorMessage(requestError, '登录失败，请重试'));
+        setError(getApiErrorMessage(requestError, '登录失败，请重试'));
       } finally {
         setSubmitting(false);
       }
@@ -116,13 +104,13 @@ export function useAuth() {
       setSubmitting(true);
       try {
         await registerRequest({
-          username: account.trim(),
+          accountId: account.trim(),
           password,
           nickname: nickname.trim(),
         });
         router.replace('/(auth)/login');
       } catch (requestError) {
-        setError(getErrorMessage(requestError, '注册失败，请重试'));
+        setError(getApiErrorMessage(requestError, '注册失败，请重试'));
       } finally {
         setSubmitting(false);
       }

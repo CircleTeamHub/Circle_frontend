@@ -38,6 +38,8 @@ test('editable fields are exposed and unsupported rows stay non-editable', () =>
   assert.equal(getProfileEditField('avatar').editable, true);
   assert.equal(getProfileEditField('avatar').editorType, 'avatar');
   assert.equal(getProfileEditField('nickname').editable, true);
+  assert.equal(getProfileEditField('city').editable, true);
+  assert.equal(getProfileEditField('city').editorType, 'city');
   assert.equal(getProfileEditField('bio').editable, true);
   assert.equal(getProfileEditField('wechat').editable, true);
   assert.equal(getProfileEditField('password').editable, false);
@@ -59,8 +61,14 @@ test('payload mapping uses backend field names', () => {
     JSON.parse(JSON.stringify(toProfileUpdatePayload('phone', '13800138000'))),
     { phoneNumber: '13800138000' },
   );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(toProfileUpdatePayload('city', ' 杭州 '))),
+    { city: '杭州' },
+  );
   assert.equal(formatProfileFieldValue('gender', ''), '未设置');
   assert.equal(formatProfileFieldValue('birthday', ''), '未设置');
+  assert.equal(formatProfileFieldValue('city', ''), '未设置');
+  assert.equal(formatProfileFieldValue('city', '杭州'), '杭州');
   assert.equal(
     formatProfileFieldValue('birthday', '2000-01-01T00:00:00.000Z'),
     '2000-01-01',
@@ -72,6 +80,8 @@ test('payload mapping uses backend field names', () => {
     { gender: 'female' },
   );
   assert.equal(validateProfileFieldValue('gender', '男'), null);
+  assert.equal(validateProfileFieldValue('city', '杭州'), null);
+  assert.match(validateProfileFieldValue('city', 'A'), /地区/);
   assert.match(validateProfileFieldValue('birthday', '2026-02-31'), /生日/);
   assert.match(validateProfileFieldValue('phone', '123'), /手机号/);
   assert.match(validateProfileFieldValue('wechat', '1abc'), /微信/);

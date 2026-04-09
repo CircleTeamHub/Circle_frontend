@@ -64,18 +64,34 @@ export async function requestUploadPresign(payload: {
   });
 }
 
+const UPLOAD_TIMEOUT_MS = 60_000;
+
 export async function uploadFileToPresignedUrl(
   uploadUrl: string,
   contentType: string,
   body: Blob,
 ) {
-  const response = await fetch(uploadUrl, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': contentType,
-    },
-    body,
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': contentType,
+      },
+      body,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('上传超时，请检查网络后重试');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!response.ok) {
     throw new Error(`头像上传失败 (${response.status})`);
