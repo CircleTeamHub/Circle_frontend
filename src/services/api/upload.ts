@@ -1,4 +1,7 @@
 import { apiClient } from '@/services/api/client';
+import { Platform } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
+import RNFS from 'react-native-fs';
 
 const ALLOWED_CONTENT_TYPES = new Set([
   'image/jpeg',
@@ -29,6 +32,8 @@ export type UploadPresignResponse = {
   key: string;
 };
 
+const LOCALHOST_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1']);
+
 export function sanitizeUploadFilename(filename: string) {
   return filename
     .trim()
@@ -53,15 +58,44 @@ export function resolveUploadContentType({
   ] ?? null;
 }
 
+function assertUploadUrlReachableOnCurrentPlatform(payload: UploadPresignResponse) {
+  if (Platform.OS !== 'android') {
+    return payload;
+  }
+
+  let uploadUrl: URL;
+  let fileUrl: URL;
+
+  try {
+    uploadUrl = new URL(payload.uploadUrl);
+    fileUrl = new URL(payload.fileUrl);
+  } catch {
+    return payload;
+  }
+
+  if (
+    LOCALHOST_HOSTNAMES.has(uploadUrl.hostname) ||
+    LOCALHOST_HOSTNAMES.has(fileUrl.hostname)
+  ) {
+    throw new Error(
+      '后端返回了 localhost 的头像上传地址。Android 设备/模拟器无法使用该地址，且预签名 URL 不能在客户端改写 host。请把对象存储对外访问地址配置成宿主机 IP 或正式域名后再试。',
+    );
+  }
+
+  return payload;
+}
+
 export async function requestUploadPresign(payload: {
   filename: string;
   contentType: string;
   folder: UploadFolder;
 }) {
-  return apiClient<UploadPresignResponse>('/upload/presign', {
+  const response = await apiClient<UploadPresignResponse>('/upload/presign', {
     method: 'POST',
     body: payload,
   });
+
+  return assertUploadUrlReachableOnCurrentPlatform(response);
 }
 
 const UPLOAD_TIMEOUT_MS = 60_000;
@@ -96,4 +130,51 @@ export async function uploadFileToPresignedUrl(
   if (!response.ok) {
     throw new Error(`头像上传失败 (${response.status})`);
   }
+}
+
+export async function uploadLocalFileToPresignedUrl(
+  uploadUrl: string,
+  contentType: string,
+  fileUri: string,
+) {
+  if (Platform.OS === 'android') {
+    const { promise } = RNFS.uploadFiles({
+      toUrl: uploadUrl,
+      binaryStreamOnly: true,
+      files: [
+        {
+          name: 'file',
+          filename: fileUri.split('/').pop() || 'upload',
+          filepath: fileUri.replace(/^file:\/\//, ''),
+          filetype: contentType,
+        },
+      ],
+      headers: {
+        'Content-Type': contentType,
+      },
+      method: 'PUT',
+    });
+
+    const response = await promise;
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw new Error(`头像上传失败 (${response.statusCode})`);
+    }
+
+    return response;
+  }
+
+  const response = await FileSystem.uploadAsync(uploadUrl, fileUri, {
+    headers: {
+      'Content-Type': contentType,
+    },
+    httpMethod: 'PUT',
+    uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+  });
+
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error(`头像上传失败 (${response.status})`);
+  }
+
+  return response;
 }

@@ -20,7 +20,7 @@ import {
   requestUploadPresign,
   resolveUploadContentType,
   sanitizeUploadFilename,
-  uploadFileToPresignedUrl,
+  uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
 import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -35,6 +35,10 @@ import {
   findProvinceByCity,
 } from '@/features/profile/city-options';
 import { loadImagePickerModule } from '@/features/profile/image-picker';
+import {
+  AVATAR_PICKER_HELPER_TEXT,
+  getAvatarPickerPermissionDeniedMessage,
+} from '@/features/profile/avatar-picker-feedback';
 
 const s = StyleSheet.create({
   content: {
@@ -326,7 +330,10 @@ export default function EditProfileFieldScreen() {
       await imagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      Alert.alert('无法选择图片', '请先允许访问相册。');
+      const message =
+        getAvatarPickerPermissionDeniedMessage(permission) ??
+        '请先允许访问相册。';
+      Alert.alert('无法选择图片', message);
       return;
     }
 
@@ -386,13 +393,10 @@ export default function EditProfileFieldScreen() {
           folder: 'avatars',
         });
 
-        const fileResponse = await fetch(selectedAvatarUri);
-        const fileBlob = await fileResponse.blob();
-
-        await uploadFileToPresignedUrl(
+        await uploadLocalFileToPresignedUrl(
           uploadUrl,
           selectedAvatarMimeType,
-          fileBlob,
+          selectedAvatarUri,
         );
 
         const nextUser = await updateUserProfile(user.id, {
@@ -500,8 +504,9 @@ export default function EditProfileFieldScreen() {
                 style={[s.avatarButton, d.avatarButton]}
                 onPress={handlePickAvatar}
               >
-                <Text style={d.avatarButtonText}>选择头像</Text>
+                <Text style={d.avatarButtonText}>从本地相册选择</Text>
               </Pressable>
+              <Text style={[s.helper, d.helper]}>{AVATAR_PICKER_HELPER_TEXT}</Text>
             </View>
           ) : field.editorType === 'gender' ? (
             <View style={s.optionRow}>

@@ -13,6 +13,10 @@ import {
   getUserProfileById,
   type UserProfileData,
 } from '@/features/user/data/profiles';
+import {
+  getProfileMetaItems,
+  isCurrentUserProfile,
+} from '@/features/user/profile-view';
 import { fetchUserProfile } from '@/services/api/profile';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -60,16 +64,33 @@ const s = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
-  chipRow: {
+  metaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
   },
-  chip: {
+  metaChip: {
     borderRadius: Radius.full,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  badgeIconRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    minHeight: 36,
+    alignItems: 'center',
+  },
+  badgeIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   listSection: {
     marginTop: Spacing.md,
@@ -100,6 +121,8 @@ export default function UserProfileScreen() {
 
   const profileId =
     typeof params.id === 'string' ? params.id : 'unknown';
+  const isCurrentUser = isCurrentUserProfile(profileId, currentUser);
+  const showAddFriendButton = !isCurrentUser;
   const fallbackProfile = getUserProfileById(
     profileId,
     typeof params.name === 'string' ? params.name : undefined,
@@ -107,12 +130,6 @@ export default function UserProfileScreen() {
 
   useEffect(() => {
     let cancelled = false;
-
-    // profileId 是当前登录用户（'me' 或 id/accountId 匹配），直接用 store 数据，不发请求
-    const isCurrentUser =
-      profileId === 'me' ||
-      profileId === currentUser?.id ||
-      profileId === currentUser?.accountId;
 
     setFetchError(null);
 
@@ -127,8 +144,10 @@ export default function UserProfileScreen() {
         name: currentUser.nickname || currentUser.accountId,
         accountId: currentUser.accountId,
         avatarUrl: currentUser.avatarUrl ?? undefined,
+        memberLabel: currentUser.role === 'ADMIN' ? '管理员' : '普通用户',
         badges: [currentUser.role === 'ADMIN' ? '管理员' : '普通用户'],
-        tagChips: [currentUser.status, currentUser.gender],
+        gender: currentUser.gender,
+        city: currentUser.city,
         signature: getProfileSignature(
           currentUser.persona,
           currentUser.helloWords,
@@ -150,8 +169,10 @@ export default function UserProfileScreen() {
           name: profile.nickname || profile.accountId,
           accountId: profile.accountId,
           avatarUrl: profile.avatarUrl ?? undefined,
+          memberLabel: profile.role === 'ADMIN' ? '管理员' : '普通用户',
           badges: [profile.role === 'ADMIN' ? '管理员' : '普通用户'],
-          tagChips: [profile.status, profile.gender],
+          gender: profile.gender,
+          city: profile.city,
           signature: getProfileSignature(profile.persona, profile.helloWords),
           phone: profile.phoneNumber ?? '未公开',
           remarkHint: profile.nickname,
@@ -167,9 +188,10 @@ export default function UserProfileScreen() {
     return () => {
       cancelled = true;
     };
-  }, [currentUser, profileId]);
+  }, [currentUser, isCurrentUser, profileId]);
 
   const profile = remoteProfile ?? fallbackProfile;
+  const profileMetaItems = getProfileMetaItems(profile);
 
   const d = useMemo(
     () => ({
@@ -179,7 +201,7 @@ export default function UserProfileScreen() {
       },
       content: {
         paddingHorizontal: Spacing.lg,
-        paddingBottom: insets.bottom + 104,
+        paddingBottom: insets.bottom + (showAddFriendButton ? 104 : 32),
       },
       avatarFrame: {
         backgroundColor: colors.surface,
@@ -203,15 +225,23 @@ export default function UserProfileScreen() {
         ...Typography.tiny,
         fontWeight: '600' as const,
       },
+      badgeIcon: {
+        backgroundColor: colors.primaryLight,
+      },
+      badgeIconText: {
+        color: colors.primary,
+        ...Typography.tiny,
+        fontWeight: '700' as const,
+      },
       account: {
         color: colors.textSecondary,
         ...Typography.caption,
       },
-      chip: {
+      metaChip: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
       },
-      chipText: {
+      metaChipText: {
         color: colors.textSecondary,
         ...Typography.tiny,
         fontWeight: '600' as const,
@@ -243,7 +273,7 @@ export default function UserProfileScreen() {
         fontWeight: '600' as const,
       },
     }),
-    [colors, insets.bottom],
+    [colors, insets.bottom, showAddFriendButton],
   );
 
   return (
@@ -271,21 +301,39 @@ export default function UserProfileScreen() {
           <View style={s.info}>
             <View style={s.nameRow}>
               <Text style={d.name}>{profile.remarkHint ?? profile.name}</Text>
-              {profile.badges.map((badge) => (
-                <View key={badge} style={[s.badge, d.badge]}>
-                  <Text style={d.badgeText}>{badge}</Text>
-                </View>
-              ))}
+              <View style={[s.badge, d.badge]}>
+                <Text style={d.badgeText}>{profile.memberLabel}</Text>
+              </View>
             </View>
-            <Text style={d.account}>圈号：{profile.accountId}</Text>
-            <View style={s.chipRow}>
-              {profile.tagChips.map((chip) => (
-                <View key={chip} style={[s.chip, d.chip]}>
-                  <Text style={d.chipText}>{chip}</Text>
+            <Text style={d.account}>账号：{profile.accountId}</Text>
+            <View style={s.metaRow}>
+              {profileMetaItems.map((item, index) => (
+                <View key={`${item}-${index}`} style={[s.metaChip, d.metaChip]}>
+                  <Ionicons
+                    name={
+                      index === 0
+                        ? item === '女'
+                          ? 'female-outline'
+                          : item === '男'
+                            ? 'male-outline'
+                            : 'person-outline'
+                        : 'location-outline'
+                    }
+                    size={14}
+                    color={colors.textSecondary}
+                  />
+                  <Text style={d.metaChipText}>{item}</Text>
                 </View>
               ))}
             </View>
             <Text style={d.signature}>{profile.signature}</Text>
+            <View style={s.badgeIconRow}>
+              {profile.badges.map((badge, index) => (
+                <View key={`${badge}-${index}`} style={[s.badgeIcon, d.badgeIcon]}>
+                  <Text style={d.badgeIconText}>{badge.slice(0, 1)}</Text>
+                </View>
+              ))}
+            </View>
           </View>
         </View>
 
@@ -310,11 +358,13 @@ export default function UserProfileScreen() {
         </View>
       </ScrollView>
 
-      <View style={d.footer}>
-        <Pressable style={[s.addButton, d.addButton]}>
-          <Text style={d.addButtonText}>添加好友</Text>
-        </Pressable>
-      </View>
+      {showAddFriendButton ? (
+        <View style={d.footer}>
+          <Pressable style={[s.addButton, d.addButton]}>
+            <Text style={d.addButtonText}>添加好友</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
