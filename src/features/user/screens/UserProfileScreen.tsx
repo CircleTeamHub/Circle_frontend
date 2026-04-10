@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet, Alert } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
+import { getOrCreateSingleConversation } from '@/im/client';
 import { getProfileSignature } from '@/features/profile/profile-display';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { ProfileActionRow } from '@/features/user/components/profile-action-row';
@@ -19,6 +20,7 @@ import {
   isCurrentUserProfile,
 } from '@/features/user/profile-view';
 import {
+  getChatDetailHref,
   getEditFriendRemarkHref,
   getEditFriendTagsHref,
   getSendFriendRequestHref,
@@ -111,12 +113,26 @@ const s = StyleSheet.create({
     marginTop: Spacing.md,
   },
   actionSection: {
-    borderTopWidth: 1,
     marginTop: Spacing.md,
     paddingTop: Spacing.lg,
     paddingBottom: Spacing.lg,
     gap: Spacing.md,
     alignItems: 'center',
+  },
+  actionButton: {
+    width: '100%',
+    minHeight: 52,
+    borderRadius: Radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
   },
   addButton: {
     height: 48,
@@ -138,6 +154,7 @@ export default function UserProfileScreen() {
   const [friendStatus, setFriendStatus] = useState<FriendStatus | null>(null);
   const [friendStatusLoadError, setFriendStatusLoadError] = useState(false);
   const [friendSettings, setFriendSettings] = useState<FriendSettings | null>(null);
+  const [openingChat, setOpeningChat] = useState(false);
 
   const profileId =
     typeof params.id === 'string' ? params.id : 'unknown';
@@ -325,6 +342,32 @@ export default function UserProfileScreen() {
     router.push(getEditFriendTagsHref(scope, profileId, profile.name));
   }, [friendStatus, profile.name, profileId, router, scope]);
 
+  const handleOpenChat = useCallback(async () => {
+    if (profileId === 'unknown' || openingChat) {
+      return;
+    }
+
+    try {
+      setOpeningChat(true);
+      const conversation = await getOrCreateSingleConversation(profileId);
+      router.push(
+        getChatDetailHref(
+          profileId,
+          displayName,
+          profile.avatarUrl,
+          conversation.conversationID,
+        ),
+      );
+    } catch (error) {
+      Alert.alert(
+        '暂时无法打开聊天',
+        error instanceof Error ? error.message : '请稍后重试',
+      );
+    } finally {
+      setOpeningChat(false);
+    }
+  }, [displayName, openingChat, profile.avatarUrl, profileId, router]);
+
   const infoRowItems = useMemo(
     () =>
       infoRows.map((label) => {
@@ -406,13 +449,18 @@ export default function UserProfileScreen() {
         color: colors.textSecondary,
         ...Typography.caption,
       },
-      actionSection: {
-        borderTopColor: colors.divider,
-      },
       actionText: {
         color: colors.primary,
         ...Typography.body,
         fontWeight: '600' as const,
+      },
+      actionButton: {
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
+        shadowColor: colors.black,
+      },
+      actionButtonPressed: {
+        opacity: 0.9,
       },
       footer: {
         position: 'absolute' as const,
@@ -512,11 +560,29 @@ export default function UserProfileScreen() {
         </View>
 
         {showProfileActions ? (
-          <View style={[s.actionSection, d.actionSection]}>
-            <Pressable>
-              <Text style={d.actionText}>发起聊天</Text>
+          <View style={s.actionSection}>
+            <Pressable
+              style={({ pressed }) => [
+                s.actionButton,
+                d.actionButton,
+                pressed && d.actionButtonPressed,
+              ]}
+              onPress={() => {
+                void handleOpenChat();
+              }}
+              disabled={openingChat}
+            >
+              <Text style={d.actionText}>
+                {openingChat ? '正在打开聊天...' : '发起聊天'}
+              </Text>
             </Pressable>
-            <Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                s.actionButton,
+                d.actionButton,
+                pressed && d.actionButtonPressed,
+              ]}
+            >
               <Text style={d.actionText}>音视频通话</Text>
             </Pressable>
           </View>

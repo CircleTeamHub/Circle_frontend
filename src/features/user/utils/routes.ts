@@ -78,6 +78,24 @@ export function getFriendActivityDetailHref(id: string): Href {
   return { pathname: '/(tabs)/contacts/new-friends/[id]', params: { id } };
 }
 
+export function getChatDetailHref(
+  sourceID: string,
+  title?: string,
+  avatarUrl?: string,
+  conversationID?: string,
+): Href {
+  return {
+    pathname: '/(tabs)/messages/chat-detail',
+    params: {
+      sourceID,
+      conversationType: 'private',
+      ...(title ? { title } : {}),
+      ...(avatarUrl ? { avatarUrl } : {}),
+      ...(conversationID ? { conversationID } : {}),
+    },
+  };
+}
+
 export function getUserProfileScopeFromSegments(
   segments: readonly string[] | undefined,
 ): UserProfileScope {

@@ -52,9 +52,16 @@ export default function TabLayout() {
       marginHorizontal: 40,
       marginBottom: 28,
       position: 'absolute' as const,
-      elevation: 0,
       paddingHorizontal: Spacing.xs,
       paddingBottom: 0,
+      shadowColor: colors.black,
+      shadowOffset: {
+        width: 0,
+        height: 10,
+      },
+      shadowOpacity: 0.08,
+      shadowRadius: 24,
+      elevation: 10,
     },
     tabBarItem: {
       justifyContent: 'center' as const,

@@ -30,10 +30,14 @@ test('new friends screen exists as a friend-activity inbox with per-item read fl
   assert.match(screenSource, /markFriendActivityRead/);
   assert.match(screenSource, /getFriendActivityCopy/);
   assert.match(screenSource, /Promise\.all/);
-  assert.match(screenSource, /\/\(tabs\)\/contacts\/new-friends\/\$\{item\.activity\.id\}/);
+  assert.match(screenSource, /getFriendActivityDetailHref\(item\.activity\.id\)/);
   assert.match(tabsLayoutSource, /fetchUnreadFriendActivityCount/);
   assert.match(tabsLayoutSource, /showUnreadFriendActivityDot/);
   assert.match(tabsLayoutSource, /tabIconBadge/);
+  assert.match(tabsLayoutSource, /shadowOpacity/);
+  assert.match(tabsLayoutSource, /elevation/);
+  assert.doesNotMatch(tabsLayoutSource, /tabIconIdle:/);
+  assert.doesNotMatch(tabsLayoutSource, /focused \? styles\.tabIconActive : styles\.tabIconIdle/);
   assert.doesNotMatch(tabsLayoutSource, /tabBarBadge:/);
   assert.doesNotMatch(screenSource, /ListHeaderComponent/);
   assert.doesNotMatch(

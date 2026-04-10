@@ -141,6 +141,7 @@ test('profile view formats self check, gender, and city for the detail header', 
 
 test('user profile route helpers preserve scope for the request form', () => {
   const {
+    getChatDetailHref,
     getEditFriendRemarkHref,
     getEditFriendTagsHref,
     getSendFriendRequestHref,
@@ -166,6 +167,19 @@ test('user profile route helpers preserve scope for the request form', () => {
     {
       pathname: '/(tabs)/profile/user/[id]/request',
       params: { id: 'user-1', name: '阿梅' },
+    },
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(getChatDetailHref('user-1', '小李', 'https://img.example/avatar.png', 'conversation-1'))),
+    {
+      pathname: '/(tabs)/messages/chat-detail',
+      params: {
+        sourceID: 'user-1',
+        title: '小李',
+        conversationType: 'private',
+        avatarUrl: 'https://img.example/avatar.png',
+        conversationID: 'conversation-1',
+      },
     },
   );
   assert.deepEqual(
@@ -214,19 +228,28 @@ test('user profile screen uses account label, meta chips, badge row, and conditi
   assert.match(source, /useRouter/);
   assert.match(source, /fetchFriendStatus/);
   assert.match(source, /fetchFriendSettings/);
+  assert.match(source, /getOrCreateSingleConversation/);
   assert.match(source, /const \[friendStatus, setFriendStatus\]/);
   assert.match(source, /const \[friendSettings, setFriendSettings\]/);
   assert.match(source, /const showAddFriendButton = canSendFriendRequest/);
   assert.match(source, /const displayName = friendSettings\?\.remark\?\.trim\(\)/);
   assert.match(source, /const infoRowItems = useMemo/);
   assert.match(source, /ProfileActionRow/);
+  assert.doesNotMatch(source, /actionSection:\s*{\s*borderTopWidth:/);
+  assert.match(source, /actionButton:/);
+  assert.match(source, /shadowOpacity:/);
+  assert.match(source, /elevation:/);
   assert.match(source, /value: remarkValue/);
   assert.match(source, /value: tagValue/);
   assert.match(source, /location-outline/);
   assert.match(source, /badgeIconRow/);
   assert.match(source, /showProfileActions \? \(/);
   assert.match(source, /发好友申请/);
+  assert.match(source, /const handleOpenChat = useCallback/);
+  assert.match(source, /const conversation = await getOrCreateSingleConversation\(profileId\)/);
+  assert.match(source, /router\.push\(\s*getChatDetailHref\(/);
   assert.match(source, /useSegments/);
+  assert.match(source, /getChatDetailHref/);
   assert.match(source, /getSendFriendRequestHref/);
   assert.match(source, /getEditFriendRemarkHref/);
   assert.match(source, /getEditFriendTagsHref/);

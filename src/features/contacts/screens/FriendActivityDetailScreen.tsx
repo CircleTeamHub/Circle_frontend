@@ -229,7 +229,12 @@ export default function FriendActivityDetailScreen() {
   ) : error ? (
     <View style={s.stateBlock}>
       <Text style={d.stateText}>{error}</Text>
-      <Pressable style={[s.retryButton, d.retryButton]} onPress={loadActivity}>
+      <Pressable
+        style={[s.retryButton, d.retryButton]}
+        onPress={() => {
+          void loadActivity();
+        }}
+      >
         <Text style={d.retryButtonText}>重试</Text>
       </Pressable>
     </View>

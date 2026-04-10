@@ -207,7 +207,12 @@ export default function NewFriendsScreen() {
   ) : error ? (
     <View style={s.stateBlock}>
       <Text style={d.stateText}>{error}</Text>
-      <Pressable style={[s.retryButton, d.retryButton]} onPress={loadActivities}>
+      <Pressable
+        style={[s.retryButton, d.retryButton]}
+        onPress={() => {
+          void loadActivities();
+        }}
+      >
         <Text style={d.retryButtonText}>重试</Text>
       </Pressable>
     </View>

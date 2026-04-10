@@ -48,6 +48,20 @@ function getUnsupportedPlatformMessage() {
   return 'OpenIM 仅支持 iOS/Android development build';
 }
 
+async function waitForOpenIMConnectionReady(timeoutMs = 5000, intervalMs = 50) {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    if (useIMStore.getState().connected) {
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+
+  throw new Error('IM 连接尚未完成，请稍后重试');
+}
+
 /**
  * 确保 OpenIM SDK 已初始化，只初始化一次。
  * 非 iOS/Android 平台直接返回 false，不抛错。
@@ -161,6 +175,25 @@ export async function loadConversationList(count = 100) {
   useIMStore.getState().setConversations(conversations);
 
   return conversations;
+}
+
+export async function getOrCreateSingleConversation(sourceID: string) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await waitForOpenIMConnectionReady();
+
+  const conversation = await OpenIMSDK.getOneConversation({
+    sourceID,
+    sessionType: SessionType.Single,
+  });
+
+  useIMStore.getState().mergeConversations([conversation]);
+
+  return conversation;
 }
 
 export async function markConversationAsRead(conversationID: string) {

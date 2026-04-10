@@ -141,7 +141,12 @@ export default function FriendTagsScreen() {
   ) : error ? (
     <View style={s.stateBlock}>
       <Text style={d.stateText}>{error}</Text>
-      <Pressable style={[s.retryButton, d.retryButton]} onPress={loadTags}>
+      <Pressable
+        style={[s.retryButton, d.retryButton]}
+        onPress={() => {
+          void loadTags();
+        }}
+      >
         <Text style={d.retryButtonText}>重试</Text>
       </Pressable>
     </View>
