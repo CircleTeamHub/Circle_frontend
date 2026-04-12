@@ -5,6 +5,7 @@ type FriendActivityUnreadState = {
   count: number;
   refresh: () => Promise<number>;
   markRead: (activityIds: string[]) => void;
+  reset: () => void;
 };
 
 export const useFriendActivityUnreadStore = create<FriendActivityUnreadState>(
@@ -26,6 +27,9 @@ export const useFriendActivityUnreadStore = create<FriendActivityUnreadState>(
       set((state) => ({
         count: Math.max(0, state.count - uniqueCount),
       }));
+    },
+    reset: () => {
+      set({ count: 0 });
     },
   }),
 );

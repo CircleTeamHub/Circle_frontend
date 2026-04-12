@@ -32,7 +32,7 @@ function loadSessionModule(mocks) {
   return context.module.exports;
 }
 
-test('clearLocalSession clears IM state, auth persistence, and message cache', async () => {
+test('clearLocalSession clears IM state, auth persistence, message cache, and friend activity unread state', async () => {
   const calls = [];
   const authStore = {
     getState: () => ({
@@ -53,6 +53,13 @@ test('clearLocalSession clears IM state, auth persistence, and message cache', a
       },
     }),
   };
+  const friendActivityUnreadStore = {
+    getState: () => ({
+      reset: () => {
+        calls.push('resetFriendActivityUnread');
+      },
+    }),
+  };
 
   const { clearLocalSession } = loadSessionModule({
     '@/stores/authStore': { useAuthStore: authStore },
@@ -64,6 +71,9 @@ test('clearLocalSession clears IM state, auth persistence, and message cache', a
     '@/features/messages/store/use-message-groups-store': {
       useMessageGroupsStore: messageGroupsStore,
     },
+    '@/stores/friendActivityUnreadStore': {
+      useFriendActivityUnreadStore: friendActivityUnreadStore,
+    },
   });
 
   await clearLocalSession();
@@ -71,6 +81,7 @@ test('clearLocalSession clears IM state, auth persistence, and message cache', a
   assert.deepEqual(calls, [
     'logoutIM',
     'resetGroups',
+    'resetFriendActivityUnread',
     'clearSession',
     'clearStorage',
   ]);
@@ -97,6 +108,13 @@ test('clearLocalSession still clears local state when IM logout fails', async ()
       },
     }),
   };
+  const friendActivityUnreadStore = {
+    getState: () => ({
+      reset: () => {
+        calls.push('resetFriendActivityUnread');
+      },
+    }),
+  };
 
   const { clearLocalSession } = loadSessionModule({
     '@/stores/authStore': { useAuthStore: authStore },
@@ -109,6 +127,9 @@ test('clearLocalSession still clears local state when IM logout fails', async ()
     '@/features/messages/store/use-message-groups-store': {
       useMessageGroupsStore: messageGroupsStore,
     },
+    '@/stores/friendActivityUnreadStore': {
+      useFriendActivityUnreadStore: friendActivityUnreadStore,
+    },
   });
 
   await clearLocalSession();
@@ -116,6 +137,7 @@ test('clearLocalSession still clears local state when IM logout fails', async ()
   assert.deepEqual(calls, [
     'logoutIM',
     'resetGroups',
+    'resetFriendActivityUnread',
     'clearSession',
     'clearStorage',
   ]);

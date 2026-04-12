@@ -1,6 +1,7 @@
 import { logoutFromOpenIM } from '@/im/client';
 import { useMessageGroupsStore } from '@/features/messages/store/use-message-groups-store';
 import { useAuthStore } from '@/stores/authStore';
+import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore';
 
 type PersistCapableAuthStore = typeof useAuthStore & {
   persist?: {
@@ -16,6 +17,7 @@ export async function clearLocalSession() {
   }
 
   useMessageGroupsStore.getState().reset();
+  useFriendActivityUnreadStore.getState().reset();
   useAuthStore.getState().clearSession();
 
   try {
