@@ -46,6 +46,24 @@ test('new friends screen exists as a friend-activity inbox with per-item read fl
   );
 });
 
+test('contacts unread indicators use the shared unread store', () => {
+  const tabsLayoutSource = read('app/(tabs)/_layout.tsx');
+  const contactsSource = read('src/features/contacts/screens/ContactsScreen.tsx');
+  const menuRowSource = read('src/components/ui/menu-row.tsx');
+  const inboxSource = read('src/features/contacts/screens/NewFriendsScreen.tsx');
+
+  assert.match(tabsLayoutSource, /useFriendActivityUnreadStore/);
+  assert.match(contactsSource, /useFriendActivityUnreadStore/);
+  assert.match(contactsSource, /showIndicatorDot/);
+  assert.match(menuRowSource, /showIndicatorDot/);
+  assert.match(inboxSource, /markRead/);
+  assert.doesNotMatch(contactsSource, /fetchUnreadFriendActivityCount/);
+  assert.doesNotMatch(
+    tabsLayoutSource,
+    /const \[unreadFriendActivityCount, setUnreadFriendActivityCount\]/,
+  );
+});
+
 test('tags screens load tag data and tagged friends with dedicated routes', () => {
   const tagsRouteSource = read('app/(tabs)/contacts/tags.tsx');
   const tagDetailRouteSource = read('app/(tabs)/contacts/tags/[id].tsx');
