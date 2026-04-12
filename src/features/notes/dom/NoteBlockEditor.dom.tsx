@@ -4,7 +4,7 @@ import '@blocknote/react/style.css';
 
 import type { PartialBlock } from '@blocknote/core';
 import {
-  BlockNoteView,
+  BlockNoteViewRaw,
   useCreateBlockNote,
   useEditorChange,
   useEditorSelectionChange,
@@ -124,7 +124,7 @@ export default function NoteBlockEditor({
     >
       {/* Editor scroll area */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        <BlockNoteView
+        <BlockNoteViewRaw
           editor={editor}
           editable
           formattingToolbar={false}
