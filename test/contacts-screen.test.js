@@ -27,6 +27,9 @@ test('new friends screen exists as a friend-activity inbox with per-item read fl
   assert.match(screenSource, /fetchFriendActivities/);
   assert.match(screenSource, /buildFriendActivityInboxRows/);
   assert.match(screenSource, /markFriendActivityRead/);
+  assert.match(screenSource, /useFriendActivityUnreadStore/);
+  assert.match(screenSource, /markRead/);
+  assert.match(screenSource, /useFocusEffect/);
   assert.match(screenSource, /getFriendActivityCopy/);
   assert.match(screenSource, /Promise\.all/);
   assert.match(screenSource, /getFriendActivityDetailHref\(item\.activity\.id\)/);

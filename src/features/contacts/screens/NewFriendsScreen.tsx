@@ -12,8 +12,9 @@ import {
   markFriendActivityRead,
   type FriendActivity,
 } from '@/services/api/friends';
+import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore';
 import { Spacing, Typography, useTheme } from '@/theme';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -69,6 +70,10 @@ export default function NewFriendsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [navigating, setNavigating] = useState(false);
+  const markRead = useFriendActivityUnreadStore((state) => state.markRead);
+  const refreshUnreadFriendActivityCount = useFriendActivityUnreadStore(
+    (state) => state.refresh,
+  );
 
   const loadActivities = useCallback(async (signal?: { cancelled: boolean }) => {
     setLoading(true);
@@ -95,6 +100,12 @@ export default function NewFriendsScreen() {
       signal.cancelled = true;
     };
   }, [loadActivities]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshUnreadFriendActivityCount();
+    }, [refreshUnreadFriendActivityCount]),
+  );
 
   const d = useMemo(
     () => ({
@@ -161,6 +172,7 @@ export default function NewFriendsScreen() {
                     markFriendActivityRead(activityId).catch(() => {}),
                   ),
                 );
+                markRead(item.unreadActivityIds);
                 setActivities((current) =>
                   current.map((activity) =>
                     item.unreadActivityIds.includes(activity.id)
@@ -196,7 +208,7 @@ export default function NewFriendsScreen() {
         {index < inboxRows.length - 1 ? <Divider /> : null}
       </View>
     ),
-    [d, inboxRows.length, navigating, router],
+    [d, inboxRows.length, markRead, navigating, router],
   );
 
   const emptyState = loading ? (
