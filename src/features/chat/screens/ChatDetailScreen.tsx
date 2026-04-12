@@ -21,18 +21,44 @@ import { SessionType } from '@openim/rn-client-sdk';
 import type { ChatMessage } from '@/types';
 
 const s = StyleSheet.create({
-  header: { height: 56, flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.md, gap: Spacing.md },
-  headerInfo: { flex: 1 },
+  header: {
+    height: 60,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    gap: 12,
+  },
+  headerInfo: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerMeta: { flex: 1, gap: 2 },
   headerName: { fontSize: 16, fontWeight: '600' },
   onlineRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
   onlineDot: { width: 8, height: 8, borderRadius: 4 },
-  onlineText: { ...Typography.small },
+  headerStatusText: { ...Typography.small },
   messageList: { padding: Spacing.md, gap: 14 },
+  messageListContent: {
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.xl,
+  },
   sendError: { textAlign: 'center', paddingVertical: 4 },
-  inputBar: { paddingTop: 10, paddingHorizontal: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  inputBar: {
+    paddingTop: 10,
+    paddingHorizontal: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   circleBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  textInputWrap: { flex: 1, height: 40, borderWidth: 1, borderRadius: Radius.xl, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14 },
-  textInput: { flex: 1, ...Typography.bodyRegular, padding: 0 },
+  composerShell: {
+    flex: 1,
+    height: 42,
+    borderWidth: 1,
+    borderRadius: Radius.xl,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    gap: Spacing.xs,
+  },
+  composerInput: { flex: 1, ...Typography.bodyRegular, padding: 0 },
 });
 
 export default function ChatDetailScreen() {
@@ -74,11 +100,11 @@ export default function ChatDetailScreen() {
     container: { flex: 1, backgroundColor: colors.background },
     headerName: { color: colors.text },
     onlineDot: { backgroundColor: colors.online },
-    onlineText: { color: colors.textSecondary },
+    headerStatusText: { color: colors.online },
     inputBar: { backgroundColor: colors.background },
     circleBtn: { backgroundColor: colors.surface },
-    textInputWrap: { backgroundColor: colors.inputBg, borderColor: colors.surfaceBorder },
-    textInput: { color: colors.text },
+    composerShell: { backgroundColor: colors.inputBg, borderColor: colors.surfaceBorder },
+    composerInput: { color: colors.text },
   }), [colors]);
 
   useEffect(() => {
@@ -179,15 +205,17 @@ export default function ChatDetailScreen() {
         <Pressable
           onPress={() => router.push(getUserProfileHref('messages', sourceID, conversationTitle))}
         >
-          <Avatar size={40} name={conversationTitle} uri={avatarUrl} />
+          <Avatar size={36} name={conversationTitle} uri={avatarUrl} />
         </Pressable>
         <View style={s.headerInfo}>
-          <Text style={[s.headerName, d.headerName]}>{conversationTitle}</Text>
-          <View style={s.onlineRow}>
-            <View style={[s.onlineDot, d.onlineDot]} />
-            <Text style={[s.onlineText, d.onlineText]}>
-              {authUser?.accountId === sourceID ? '自己' : '在线'}
-            </Text>
+          <View style={s.headerMeta}>
+            <Text style={[s.headerName, d.headerName]}>{conversationTitle}</Text>
+            <View style={s.onlineRow}>
+              <View style={[s.onlineDot, d.onlineDot]} />
+              <Text style={[s.headerStatusText, d.headerStatusText]}>
+                {authUser?.accountId === sourceID ? '自己' : '在线'}
+              </Text>
+            </View>
           </View>
         </View>
         <Pressable
@@ -203,7 +231,7 @@ export default function ChatDetailScreen() {
         data={messages}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
-        contentContainerStyle={s.messageList}
+        contentContainerStyle={[s.messageList, s.messageListContent]}
         showsVerticalScrollIndicator={false}
       />
       <Divider />
@@ -216,9 +244,9 @@ export default function ChatDetailScreen() {
         <Pressable style={[s.circleBtn, d.circleBtn]}>
           <Ionicons name="mic" size={18} color={colors.textSecondary} />
         </Pressable>
-        <View style={[s.textInputWrap, d.textInputWrap]}>
+        <View style={[s.composerShell, d.composerShell]}>
           <TextInput
-            style={[s.textInput, d.textInput]}
+            style={[s.composerInput, d.composerInput]}
             placeholder="输入消息..."
             placeholderTextColor={colors.textSecondary}
             value={draft}
