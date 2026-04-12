@@ -62,9 +62,12 @@ const sReceived = StyleSheet.create({
     borderTopRightRadius: 18,
     borderBottomRightRadius: 18,
     borderBottomLeftRadius: 18,
-    padding: 10,
-    paddingHorizontal: 14,
-    maxWidth: 260,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    maxWidth: 280,
+  },
+  receivedContent: {
+    maxWidth: 280,
   },
 });
 
@@ -103,7 +106,7 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
       ) : (
         <Avatar size={28} name={senderName} />
       )}
-      <View>
+      <View style={sReceived.receivedContent}>
         <View style={[sReceived.receivedBubble, d.receivedBubble]}>
           <Text style={d.bubbleText}>{message.text}</Text>
         </View>
@@ -128,15 +131,18 @@ const sSent = StyleSheet.create({
     borderTopRightRadius: 18,
     borderBottomRightRadius: 4,
     borderBottomLeftRadius: 18,
-    padding: 10,
-    paddingHorizontal: 14,
-    maxWidth: 260,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    maxWidth: 280,
   },
   sentTimeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,
     marginTop: Spacing.xs,
+  },
+  sentStatusIcon: {
+    marginTop: 1,
   },
 });
 
@@ -170,7 +176,12 @@ export const SentBubble: React.FC<SentBubbleProps> = ({ message }) => {
       {message.time ? (
         <View style={sSent.sentTimeRow}>
           <Text style={d.timeText}>{message.time}</Text>
-          <Ionicons name="checkmark-done" size={14} color={colors.sentTimeText} />
+          <Ionicons
+            style={sSent.sentStatusIcon}
+            name="checkmark-done"
+            size={14}
+            color={colors.sentTimeText}
+          />
         </View>
       ) : null}
     </View>
@@ -194,18 +205,22 @@ const sLocation = StyleSheet.create({
     borderTopRightRadius: 18,
     borderBottomRightRadius: 18,
     borderBottomLeftRadius: 18,
-    width: 240,
+    width: 248,
     overflow: 'hidden',
   },
-  locationMapPlaceholder: {
-    height: 180,
+  locationImage: {
+    height: 156,
     borderTopLeftRadius: 4,
     borderTopRightRadius: 18,
+    overflow: 'hidden',
+  },
+  locationImageFallback: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   locationInfo: {
-    padding: 10,
+    paddingVertical: 12,
     paddingHorizontal: 14,
   },
 });
@@ -222,7 +237,7 @@ export const LocationCard: React.FC<LocationCardProps> = ({
       locationCard: {
         backgroundColor: colors.receivedBubble,
       },
-      locationMapPlaceholder: {
+      locationImageFallback: {
         backgroundColor: colors.surface,
       },
       locationTitle: {
@@ -255,8 +270,10 @@ export const LocationCard: React.FC<LocationCardProps> = ({
       )}
       <View>
         <View style={[sLocation.locationCard, d.locationCard]}>
-          <View style={[sLocation.locationMapPlaceholder, d.locationMapPlaceholder]}>
-            <Ionicons name="location" size={32} color={colors.textSecondary} />
+          <View style={sLocation.locationImage}>
+            <View style={[sLocation.locationImageFallback, d.locationImageFallback]}>
+              <Ionicons name="location" size={32} color={colors.textSecondary} />
+            </View>
           </View>
           <View style={sLocation.locationInfo}>
             <Text style={d.locationTitle}>{message.locationTitle}</Text>
