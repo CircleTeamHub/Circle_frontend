@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Tabs, useSegments } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { fetchUnreadFriendActivityCount } from '@/services/api/friends';
+import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore';
 import { useTheme, Spacing, Radius } from '@/theme';
 
 const TAB_CONFIG: {
@@ -27,19 +27,15 @@ export default function TabLayout() {
   const { colors } = useTheme();
   const segments = useSegments();
   const hideTabBar = segments.length > 2;
-  const [unreadFriendActivityCount, setUnreadFriendActivityCount] = useState(0);
-
-  const refreshUnreadFriendActivityCount = useCallback(async () => {
-    try {
-      const count = await fetchUnreadFriendActivityCount();
-      setUnreadFriendActivityCount(count);
-    } catch {
-      setUnreadFriendActivityCount(0);
-    }
-  }, []);
+  const unreadFriendActivityCount = useFriendActivityUnreadStore(
+    (state) => state.count,
+  );
+  const refreshUnreadFriendActivityCount = useFriendActivityUnreadStore(
+    (state) => state.refresh,
+  );
 
   useEffect(() => {
-    refreshUnreadFriendActivityCount();
+    void refreshUnreadFriendActivityCount();
   }, [refreshUnreadFriendActivityCount, segments]);
 
   const styles = useMemo(() => StyleSheet.create({

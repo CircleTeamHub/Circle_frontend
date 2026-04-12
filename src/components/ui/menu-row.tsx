@@ -10,6 +10,7 @@ interface MenuRowProps {
   label: string;
   subtitle?: string;
   rightText?: string;
+  showIndicatorDot?: boolean;
   showArrow?: boolean;
   hasToggle?: boolean;
   toggleValue?: boolean;
@@ -35,6 +36,11 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.sm,
   },
+  indicatorDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+  },
 });
 
 export const MenuRow: React.FC<MenuRowProps> = ({
@@ -43,6 +49,7 @@ export const MenuRow: React.FC<MenuRowProps> = ({
   label,
   subtitle,
   rightText,
+  showIndicatorDot,
   showArrow = true,
   hasToggle,
   toggleValue,
@@ -70,6 +77,9 @@ export const MenuRow: React.FC<MenuRowProps> = ({
         color: colors.textSecondary,
         ...Typography.caption,
       },
+      indicatorDot: {
+        backgroundColor: colors.error,
+      },
     }),
     [colors],
   );
@@ -92,6 +102,9 @@ export const MenuRow: React.FC<MenuRowProps> = ({
         </View>
       </View>
       <View style={s.right}>
+        {showIndicatorDot ? (
+          <View style={[s.indicatorDot, d.indicatorDot]} />
+        ) : null}
         {rightText ? <Text style={d.rightText}>{rightText}</Text> : null}
         {hasToggle ? (
           <Switch
