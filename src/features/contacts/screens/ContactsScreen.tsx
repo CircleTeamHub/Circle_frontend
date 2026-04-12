@@ -9,6 +9,7 @@ import {
 } from '@/features/contacts/contact-friends';
 import { getUserProfileHref } from '@/features/user/utils/routes';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
+import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -100,6 +101,12 @@ export default function ContactsScreen() {
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const unreadFriendActivityCount = useFriendActivityUnreadStore(
+    (state) => state.count,
+  );
+  const refreshUnreadFriendActivityCount = useFriendActivityUnreadStore(
+    (state) => state.refresh,
+  );
 
   const loadFriends = useCallback(async () => {
     setLoading(true);
@@ -117,8 +124,9 @@ export default function ContactsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadFriends();
-    }, [loadFriends]),
+      void loadFriends();
+      void refreshUnreadFriendActivityCount();
+    }, [loadFriends, refreshUnreadFriendActivityCount]),
   );
 
   const sections = useMemo(() => buildContactSections(friends), [friends]);
@@ -262,6 +270,9 @@ export default function ContactsScreen() {
               icon={action.icon}
               iconBgColor={action.iconBg}
               label={action.label}
+              showIndicatorDot={
+                action.label === '新的朋友' && unreadFriendActivityCount > 0
+              }
               onPress={() => handleQuickActionPress(action.label)}
             />
             {index < QUICK_ACTIONS.length - 1 ? <Divider /> : null}
