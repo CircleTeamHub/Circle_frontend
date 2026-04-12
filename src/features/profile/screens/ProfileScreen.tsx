@@ -144,6 +144,15 @@ export default function ProfileScreen() {
     router.push("/(tabs)/profile/settings");
   }, [router]);
 
+  const handleMenuPress = useCallback(
+    (item: MenuItem) => {
+      if (item.id === '7') {
+        router.push('/(tabs)/profile/notes' as never);
+      }
+    },
+    [router],
+  );
+
   const renderMenuItem = useCallback(
     ({ item, index }: { item: MenuItem; index: number }) => (
       <View>
@@ -151,11 +160,12 @@ export default function ProfileScreen() {
           icon={item.icon as keyof typeof Ionicons.glyphMap}
           label={item.label}
           rightText={item.rightText}
+          onPress={() => handleMenuPress(item)}
         />
         {index < MENU_ITEMS.length - 1 ? <Divider /> : null}
       </View>
     ),
-    [],
+    [handleMenuPress],
   );
 
   const keyExtractor = useCallback((item: MenuItem) => item.id, []);
