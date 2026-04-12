@@ -22,6 +22,7 @@ interface PendingInsert {
 }
 
 interface Props {
+  dom?: import('expo/dom').DOMProps;
   initialContent: Record<string, unknown>[] | null;
   pendingInsert: PendingInsert | null;
   onContentChange: (blocks: Record<string, unknown>[]) => void;

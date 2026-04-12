@@ -84,6 +84,7 @@ export function NoteBlockEditor({ initialContent, onContentChange, onMediaUpload
   return (
     <View style={s.container}>
       <NoteBlockEditorDOM
+        dom={{ useExpoDOMWebView: true }}
         initialContent={initialContent}
         pendingInsert={pendingInsert}
         onContentChange={onContentChange}
