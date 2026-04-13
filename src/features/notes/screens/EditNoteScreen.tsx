@@ -31,8 +31,9 @@ export default function EditNoteScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(isEdit);
   const [dateStr, setDateStr] = useState(formatNoteFullDate(new Date().toISOString()));
-  // Track uploaded media that hasn't yet appeared in blocks (e.g. during upload)
-  const [pendingMedia] = useState<CreateNoteMediaInput[]>([]);
+  // url → upload metadata: used to inject objectKey into image blocks before submit,
+  // because BlockNote's built-in image block doesn't persist custom props in editor.document.
+  const [mediaMap, setMediaMap] = useState<Record<string, CreateNoteMediaInput>>({});
 
   useEffect(() => {
     if (!isEdit || !id) return;
@@ -59,6 +60,11 @@ export default function EditNoteScreen() {
     setBlocks(newBlocks);
   }, []);
 
+  // Called by NoteBlockEditor after each successful image upload
+  const handleMediaUploaded = useCallback((media: CreateNoteMediaInput) => {
+    setMediaMap((prev) => ({ ...prev, [media.url]: media }));
+  }, []);
+
   const handleSubmit = useCallback(async () => {
     if (isSubmitting) return;
     const trimmedTitle = title.trim();
@@ -67,11 +73,14 @@ export default function EditNoteScreen() {
     try {
       const currentBlocks = blocks ?? [];
       const plainText = extractPlainText(currentBlocks);
-      const blockMedia = extractMediaFromBlocks(currentBlocks);
-      const media =
-        blockMedia.length > 0
-          ? blockMedia
-          : pendingMedia.map((m, i) => ({ ...m, sortOrder: i }));
+
+      // Build media from blocks, filling in objectKey from the mediaMap.
+      // The mediaMap is keyed by url and populated on every successful upload.
+      const media = extractMediaFromBlocks(currentBlocks).map((m) => {
+        const uploaded = mediaMap[m.url];
+        return uploaded ? { ...uploaded, sortOrder: m.sortOrder } : m;
+      });
+
       const input = {
         title: trimmedTitle,
         content: plainText,
@@ -89,7 +98,7 @@ export default function EditNoteScreen() {
     } catch {
       setIsSubmitting(false);
     }
-  }, [isSubmitting, title, blocks, groupId, isEdit, id, pendingMedia, router]);
+  }, [isSubmitting, title, blocks, mediaMap, groupId, isEdit, id, router]);
 
   const d = useMemo(
     () => ({
@@ -167,6 +176,7 @@ export default function EditNoteScreen() {
         <NoteBlockEditor
           initialContent={blocks}
           onContentChange={handleContentChange}
+          onMediaUploaded={handleMediaUploaded}
         />
       </View>
     </View>
