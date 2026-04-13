@@ -4,7 +4,7 @@
 
 Upgrade notes from a single optional group to persistent multi-group classification. The notes page keeps the two fixed filters `全部` and `未分组`, adds user-managed custom groups such as `北京` or `上海`, and allows one note to belong to multiple custom groups at the same time.
 
-This requires coordinated backend and frontend changes because the current model stores only one `groupID` on each note. The new design uses a many-to-many relation between notes and custom groups, preserves notes when a group is deleted, and updates the notes list, note editor, and group management UI to reflect the new behavior.
+This requires coordinated backend and frontend changes because the current model stores only one `groupID` on each note. The new design uses a many-to-many relation between notes and custom groups, preserves notes when a group is deleted, persists custom-group sort order, and updates the notes list, note editor, and group management UI to reflect the new behavior.
 
 ## Approach Options
 
@@ -66,7 +66,6 @@ Out of scope:
 
 - nested groups
 - group colors or icons
-- drag-and-drop group reordering on the frontend
 - server-defined system groups beyond `全部` and `未分组`
 - bulk assigning many notes to groups from the list page
 
@@ -92,6 +91,19 @@ Rules:
 - deleting a custom group removes only the note-group associations for that group
 - deleting a custom group never deletes notes
 
+### Custom group ordering
+
+Only custom groups participate in ordering.
+
+Rules:
+
+- `全部` and `未分组` always remain fixed in the first two positions
+- custom groups are displayed after the fixed filters in ascending `sortOrder`
+- users can drag custom groups to reorder them inside the group-management sheet
+- reordering must persist across app restarts
+- creating a custom group appends it to the end of the custom-group list
+- deleting a custom group should leave the remaining custom groups with a normalized order
+
 ### Multi-group note membership
 
 Each note can belong to zero, one, or many custom groups.
@@ -109,6 +121,7 @@ Behavior:
 `src/features/notes/screens/NotesScreen.tsx` should keep the current horizontal filter row but evolve it as follows:
 
 - order filters as `全部`, `未分组`, then all custom groups
+- render custom groups in persisted `sortOrder`
 - keep custom groups horizontally scrollable
 - add a `管理` entry or overflow action at the end of the group row
 - opening the management action shows a bottom sheet or modal dedicated to group management
@@ -128,12 +141,16 @@ Supported actions:
 - create a new group
 - rename an existing group
 - delete an existing group
+- drag to reorder custom groups
 
 Recommended interaction:
 
 - each group row shows name and note count
+- each group row shows a drag handle on the left
 - row action supports rename and delete
 - bottom area contains new-group input and confirm action
+- long press and drag reorders only within the custom-group list
+- the new order saves immediately after drop
 
 Validation:
 
@@ -173,6 +190,7 @@ Recommended schema change in `/Users/yiboding/projects/circle_be/prisma/schema.p
 - add a join model such as `NoteGroupMembership`
 - relate `Note` to many memberships
 - relate `NoteGroup` to many memberships
+- keep `NoteGroup.sortOrder` as the persisted display order for custom groups
 
 Recommended join model fields:
 
@@ -253,11 +271,13 @@ Keep the existing group endpoints:
 - `POST /note/group`
 - `PATCH /note/group/:id`
 - `DELETE /note/group/:id`
+- `PATCH /note/group/order`
 
 Behavior changes:
 
 - `GET /note/group` should compute `noteCount` from memberships
 - `DELETE /note/group/:id` removes memberships and the group record, but not notes
+- `PATCH /note/group/order` accepts the ordered list of custom group ids and rewrites `sortOrder`
 
 ## Frontend Changes
 
@@ -274,6 +294,7 @@ Key shifts:
 - note summaries and details expose `groups`
 - create/update inputs send `groupIds`
 - list filtering logic uses `note.groups.some(...)`
+- the notes API adds a reorder-groups helper for persisting drag-and-drop order
 
 ### NotesScreen
 
@@ -284,6 +305,7 @@ Update `src/features/notes/screens/NotesScreen.tsx` to:
 - render tab counts from the new group counts returned by backend
 - add the group management trigger in the horizontal tab area
 - refresh notes and groups after create, rename, or delete operations
+- refresh groups after a reorder and keep the new order locally optimistic if desired
 - if the active custom group is deleted, reset the active tab to `全部`
 
 ### Note card metadata
@@ -321,6 +343,7 @@ The save payload should become:
 - creating or renaming a group to an empty name should fail immediately in the UI
 - creating or renaming a group to a duplicate name should surface a clear error
 - deleting a group while viewing that group should return the user to `全部`
+- if group reorder save fails, the custom-group list should snap back to the previous order and show an error
 - if a note references groups that were deleted before save, the backend should reject invalid ids and the frontend should refresh groups before retry
 - if group fetch fails in the editor, note editing should still load, but group selection should show a recoverable error state instead of blocking the entire editor
 
@@ -339,6 +362,7 @@ Add or update tests in `/Users/yiboding/projects/circle_be/src/note` for:
 - computing `noteCount` from memberships
 - rejecting cross-user group ids in create/update
 - rejecting duplicate group names per user
+- rewriting `sortOrder` from a reordered custom-group id list
 
 ### Frontend
 
@@ -347,6 +371,7 @@ Add or update tests in `/Users/yiboding/projects/circle-im/test` for:
 - notes API input/output using `groupIds` and `groups`
 - notes screen filter logic for `全部`, `未分组`, and custom groups
 - presence of the group management trigger
+- presence of the group reorder persistence helper
 - editor payload submission with multiple selected groups
 - fallback behavior when the active group is deleted
 
@@ -356,7 +381,7 @@ Add or update tests in `/Users/yiboding/projects/circle-im/test` for:
 2. Update backend DTOs, service mapping, and API docs.
 3. Update frontend note types and API client payloads.
 4. Update notes list filtering and counts.
-5. Add group management UI.
+5. Add group management UI with drag-to-reorder persistence.
 6. Update note editor to support multi-select groups.
 7. Run backend and frontend verification for the changed contract.
 
@@ -369,6 +394,7 @@ Add or update tests in `/Users/yiboding/projects/circle-im/test` for:
 ## Success Criteria
 
 - users can create, rename, and delete custom note groups
+- users can drag custom note groups to reorder them and the order persists
 - users can assign a note to multiple custom groups and persist the result
 - `全部` always shows all notes
 - `未分组` shows only notes with zero custom groups
