@@ -23,9 +23,9 @@ interface PendingInsert {
 
 interface Props {
   dom?: import('expo/dom').DOMProps;
-  initialContent: Record<string, unknown>[] | null;
+  initialContent: string | null; // JSON string of Block[]
   pendingInsert: PendingInsert | null;
-  onContentChange: (blocks: Record<string, unknown>[]) => void;
+  onContentChange: (blocksJson: string) => void; // JSON string — avoids bridge serialization errors
   onInsertHandled: () => void;
   onImageRequest: () => void;
   theme?: 'light' | 'dark';
@@ -41,25 +41,29 @@ export default function NoteBlockEditor({
   onImageRequest,
   theme = 'dark',
 }: Props) {
-  const editor = useCreateBlockNote({
-    initialContent:
-      initialContent && initialContent.length > 0
-        ? (initialContent as PartialBlock[])
-        : undefined,
-  });
+  const parsedInitial: PartialBlock[] | undefined = (() => {
+    if (!initialContent) return undefined;
+    try {
+      const blocks = JSON.parse(initialContent) as PartialBlock[];
+      return blocks.length > 0 ? blocks : undefined;
+    } catch {
+      return undefined;
+    }
+  })();
+
+  const editor = useCreateBlockNote({ initialContent: parsedInitial });
 
   const [activeType, setActiveType] = useState<ActiveType>('paragraph');
   const unmounted = useRef(false);
 
-  // Serialize editor.document to plain JSON before bridging to native.
-  // BlockNote Block objects may contain non-serializable properties; JSON
-  // round-trip strips them so the Expo DOM bridge doesn't throw
-  // "Functions are not supported in arguments".
-  function serializeBlocks(): Record<string, unknown>[] {
+  // Pass a JSON string across the bridge — Expo DOM bridge cannot serialize
+  // BlockNote Block objects directly (they contain non-plain properties that
+  // cause "Functions are not supported in arguments").
+  function serializeBlocks(): string {
     try {
-      return JSON.parse(JSON.stringify(editor.document));
+      return JSON.stringify(editor.document);
     } catch {
-      return [];
+      return '[]';
     }
   }
 

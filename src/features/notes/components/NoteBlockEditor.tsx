@@ -81,13 +81,28 @@ export function NoteBlockEditor({ initialContent, onContentChange, onMediaUpload
     setPendingInsert(null);
   }, []);
 
+  // DOM bridge only supports primitives — pass content as JSON string and
+  // parse the response back to blocks on the native side.
+  const initialContentJson = initialContent && initialContent.length > 0
+    ? JSON.stringify(initialContent)
+    : null;
+
+  const handleContentChangeJson = useCallback((blocksJson: string) => {
+    try {
+      const blocks = JSON.parse(blocksJson) as Record<string, unknown>[];
+      onContentChange(blocks);
+    } catch {
+      // malformed JSON from bridge — ignore
+    }
+  }, [onContentChange]);
+
   return (
     <View style={s.container}>
       <NoteBlockEditorDOM
         dom={{ useExpoDOMWebView: true }}
-        initialContent={initialContent}
+        initialContent={initialContentJson}
         pendingInsert={pendingInsert}
-        onContentChange={onContentChange}
+        onContentChange={handleContentChangeJson}
         onInsertHandled={handleInsertHandled}
         onImageRequest={handleImageRequest}
         theme={resolvedMode}
