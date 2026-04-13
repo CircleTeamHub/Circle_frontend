@@ -49,11 +49,24 @@ export default function NoteBlockEditor({
   });
 
   const [activeType, setActiveType] = useState<ActiveType>('paragraph');
-  const mounted = useRef(false);
+  const unmounted = useRef(false);
+
+  // Serialize editor.document to plain JSON before bridging to native.
+  // BlockNote Block objects may contain non-serializable properties; JSON
+  // round-trip strips them so the Expo DOM bridge doesn't throw
+  // "Functions are not supported in arguments".
+  function serializeBlocks(): Record<string, unknown>[] {
+    try {
+      return JSON.parse(JSON.stringify(editor.document));
+    } catch {
+      return [];
+    }
+  }
 
   // Fire content changes up to native
   useEditorChange(() => {
-    onContentChange(editor.document as unknown as Record<string, unknown>[]);
+    if (unmounted.current) return;
+    onContentChange(serializeBlocks());
   }, editor);
 
   // Track cursor block type for toolbar highlight
@@ -65,12 +78,15 @@ export default function NoteBlockEditor({
   }, editor);
 
   useEffect(() => {
-    mounted.current = true;
+    unmounted.current = false;
+    return () => {
+      unmounted.current = true;
+    };
   }, []);
 
   // Insert a pending image from native
   useEffect(() => {
-    if (!pendingInsert || !mounted.current) return;
+    if (!pendingInsert || unmounted.current) return;
     const pos = editor.getTextCursorPosition();
     editor.insertBlocks(
       [
