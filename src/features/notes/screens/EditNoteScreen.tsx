@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -25,7 +25,12 @@ export default function EditNoteScreen() {
   const isEdit = Boolean(id);
 
   const [title, setTitle] = useState('');
-  const [blocks, setBlocks] = useState<Record<string, unknown>[] | null>(null);
+  // Use ref instead of state so content changes from the DOM editor don't
+  // trigger parent re-renders — re-rendering pushes updated props back to the
+  // WebView bridge, which causes "Unable to find the 'DomWebView' view" when
+  // the component is unmounting during navigation.
+  const blocksRef = useRef<Record<string, unknown>[]>([]);
+  const [initialBlocks, setInitialBlocks] = useState<Record<string, unknown>[] | null>(null);
   const [groupId, setGroupId] = useState<string | undefined>();
   const [groupName, setGroupName] = useState<string | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -33,7 +38,7 @@ export default function EditNoteScreen() {
   const [dateStr, setDateStr] = useState(formatNoteFullDate(new Date().toISOString()));
   // url → upload metadata: used to inject objectKey into image blocks before submit,
   // because BlockNote's built-in image block doesn't persist custom props in editor.document.
-  const [mediaMap, setMediaMap] = useState<Record<string, CreateNoteMediaInput>>({});
+  const mediaMapRef = useRef<Record<string, CreateNoteMediaInput>>({});
 
   useEffect(() => {
     if (!isEdit || !id) return;
@@ -42,7 +47,9 @@ export default function EditNoteScreen() {
       .then((note) => {
         if (cancelled) return;
         setTitle(note.title);
-        setBlocks(note.contentJson ?? null);
+        const loaded = note.contentJson ?? [];
+        blocksRef.current = loaded;
+        setInitialBlocks(loaded.length > 0 ? loaded : null);
         setGroupId(note.group?.id);
         setGroupName(note.group?.name);
         setDateStr(formatNoteFullDate(note.createdAt));
@@ -56,13 +63,14 @@ export default function EditNoteScreen() {
     };
   }, [id, isEdit]);
 
+  // Store content changes in a ref — no setState so no re-render, no bridge update.
   const handleContentChange = useCallback((newBlocks: Record<string, unknown>[]) => {
-    setBlocks(newBlocks);
+    blocksRef.current = newBlocks;
   }, []);
 
   // Called by NoteBlockEditor after each successful image upload
   const handleMediaUploaded = useCallback((media: CreateNoteMediaInput) => {
-    setMediaMap((prev) => ({ ...prev, [media.url]: media }));
+    mediaMapRef.current = { ...mediaMapRef.current, [media.url]: media };
   }, []);
 
   const handleSubmit = useCallback(async () => {
@@ -71,13 +79,12 @@ export default function EditNoteScreen() {
     if (!trimmedTitle) return;
     setIsSubmitting(true);
     try {
-      const currentBlocks = blocks ?? [];
+      const currentBlocks = blocksRef.current;
       const plainText = extractPlainText(currentBlocks);
 
-      // Build media from blocks, filling in objectKey from the mediaMap.
-      // The mediaMap is keyed by url and populated on every successful upload.
+      // Build media from blocks, filling in objectKey from the mediaMapRef.
       const media = extractMediaFromBlocks(currentBlocks).map((m) => {
-        const uploaded = mediaMap[m.url];
+        const uploaded = mediaMapRef.current[m.url];
         return uploaded ? { ...uploaded, sortOrder: m.sortOrder } : m;
       });
 
@@ -98,7 +105,7 @@ export default function EditNoteScreen() {
     } catch {
       setIsSubmitting(false);
     }
-  }, [isSubmitting, title, blocks, mediaMap, groupId, isEdit, id, router]);
+  }, [isSubmitting, title, groupId, isEdit, id, router]);
 
   const d = useMemo(
     () => ({
@@ -174,7 +181,7 @@ export default function EditNoteScreen() {
       {/* Block editor fills remaining space */}
       <View style={s.editorWrap}>
         <NoteBlockEditor
-          initialContent={blocks}
+          initialContent={initialBlocks}
           onContentChange={handleContentChange}
           onMediaUploaded={handleMediaUploaded}
         />
