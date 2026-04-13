@@ -25,10 +25,8 @@ export default function EditNoteScreen() {
   const isEdit = Boolean(id);
 
   const [title, setTitle] = useState('');
-  // Use ref instead of state so content changes from the DOM editor don't
-  // trigger parent re-renders — re-rendering pushes updated props back to the
-  // WebView bridge, which causes "Unable to find the 'DomWebView' view" when
-  // the component is unmounting during navigation.
+  // Store blocks in a ref — no setState means no re-render, which prevents
+  // Expo DOM bridge from calling injectJavaScript on a torn-down WebView.
   const blocksRef = useRef<Record<string, unknown>[]>([]);
   const [initialBlocks, setInitialBlocks] = useState<Record<string, unknown>[] | null>(null);
   const [groupId, setGroupId] = useState<string | undefined>();
@@ -36,9 +34,14 @@ export default function EditNoteScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(isEdit);
   const [dateStr, setDateStr] = useState(formatNoteFullDate(new Date().toISOString()));
-  // url → upload metadata: used to inject objectKey into image blocks before submit,
-  // because BlockNote's built-in image block doesn't persist custom props in editor.document.
+  // url → upload metadata — ref so it doesn't cause re-renders either.
   const mediaMapRef = useRef<Record<string, CreateNoteMediaInput>>({});
+
+  // Controls whether the WebView is mounted. We set this to false BEFORE
+  // calling router.back() so React has one render cycle to unmount the WebView
+  // natively before navigation begins — preventing the "Unable to find
+  // 'DomWebView' view" bridge crash.
+  const [editorMounted, setEditorMounted] = useState(false);
 
   useEffect(() => {
     if (!isEdit || !id) return;
@@ -54,24 +57,37 @@ export default function EditNoteScreen() {
         setGroupName(note.group?.name);
         setDateStr(formatNoteFullDate(note.createdAt));
         setLoading(false);
+        setEditorMounted(true);
       })
       .catch(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setEditorMounted(true);
+        }
       });
     return () => {
       cancelled = true;
     };
   }, [id, isEdit]);
 
-  // Store content changes in a ref — no setState so no re-render, no bridge update.
+  // For new notes (no id), mount editor immediately.
+  useEffect(() => {
+    if (!isEdit) setEditorMounted(true);
+  }, [isEdit]);
+
   const handleContentChange = useCallback((newBlocks: Record<string, unknown>[]) => {
     blocksRef.current = newBlocks;
   }, []);
 
-  // Called by NoteBlockEditor after each successful image upload
   const handleMediaUploaded = useCallback((media: CreateNoteMediaInput) => {
     mediaMapRef.current = { ...mediaMapRef.current, [media.url]: media };
   }, []);
+
+  // Unmount the WebView first, then navigate on the next frame.
+  const navigateBack = useCallback(() => {
+    setEditorMounted(false);
+    requestAnimationFrame(() => router.back());
+  }, [router]);
 
   const handleSubmit = useCallback(async () => {
     if (isSubmitting) return;
@@ -81,13 +97,10 @@ export default function EditNoteScreen() {
     try {
       const currentBlocks = blocksRef.current;
       const plainText = extractPlainText(currentBlocks);
-
-      // Build media from blocks, filling in objectKey from the mediaMapRef.
       const media = extractMediaFromBlocks(currentBlocks).map((m) => {
         const uploaded = mediaMapRef.current[m.url];
         return uploaded ? { ...uploaded, sortOrder: m.sortOrder } : m;
       });
-
       const input = {
         title: trimmedTitle,
         content: plainText,
@@ -101,11 +114,11 @@ export default function EditNoteScreen() {
       } else {
         await createNote(input);
       }
-      router.back();
+      navigateBack();
     } catch {
       setIsSubmitting(false);
     }
-  }, [isSubmitting, title, groupId, isEdit, id, router]);
+  }, [isSubmitting, title, groupId, isEdit, id, navigateBack]);
 
   const d = useMemo(
     () => ({
@@ -113,10 +126,7 @@ export default function EditNoteScreen() {
       headerTitle: { color: colors.text },
       doneBtn: { backgroundColor: colors.primary },
       doneBtnText: { color: colors.white },
-      doneBtnDisabled: {
-        backgroundColor: colors.primary,
-        opacity: 0.5,
-      },
+      doneBtnDisabled: { backgroundColor: colors.primary, opacity: 0.5 },
       titleInput: { color: colors.text },
       dateText: { color: colors.textSecondary },
       groupTag: { backgroundColor: colors.primary + '33' },
@@ -139,7 +149,7 @@ export default function EditNoteScreen() {
     <View style={[s.container, d.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={s.header}>
-        <Pressable onPress={() => router.back()} hitSlop={8}>
+        <Pressable onPress={navigateBack} hitSlop={8}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
         <Text style={[s.headerTitle, d.headerTitle]}>
@@ -178,13 +188,15 @@ export default function EditNoteScreen() {
         ) : null}
       </View>
 
-      {/* Block editor fills remaining space */}
+      {/* Editor — conditionally mounted so we can tear it down before navigating */}
       <View style={s.editorWrap}>
-        <NoteBlockEditor
-          initialContent={initialBlocks}
-          onContentChange={handleContentChange}
-          onMediaUploaded={handleMediaUploaded}
-        />
+        {editorMounted && (
+          <NoteBlockEditor
+            initialContent={initialBlocks}
+            onContentChange={handleContentChange}
+            onMediaUploaded={handleMediaUploaded}
+          />
+        )}
       </View>
     </View>
   );
