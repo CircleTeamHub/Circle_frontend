@@ -1,5 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
-import { useCallback, useState } from 'react';
+import { Component, useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { CreateNoteMediaInput } from '@/features/notes/types';
 import {
@@ -10,6 +10,26 @@ import {
 } from '@/services/api/upload';
 import { useTheme } from '@/theme';
 import NoteBlockEditorDOM from '@/features/notes/dom/NoteBlockEditor.dom';
+
+// Silently catches the Expo DOM bridge error that fires when injectJavaScript
+// is called on an already-unmounted WebView (e.g. during navigation teardown).
+class DOMBridgeErrorBoundary extends Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  render() {
+    // Once the WebView bridge errors out, render nothing — the screen is
+    // already unmounting so there is nothing visible to show.
+    if (this.state.hasError) return null;
+    return this.props.children;
+  }
+}
 
 interface PendingInsert {
   type: 'image';
@@ -30,6 +50,16 @@ interface Props {
 export function NoteBlockEditor({ initialContent, onContentChange, onMediaUploaded }: Props) {
   const { resolvedMode } = useTheme();
   const [pendingInsert, setPendingInsert] = useState<PendingInsert | null>(null);
+  // Prevent async setState calls after unmount — these are the root cause of
+  // the "Unable to find the 'DomWebView' view" bridge error: a state update
+  // after unmount causes React to try to push new props into the torn-down WebView.
+  const isMounted = useRef(true);
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   const handleImageRequest = useCallback(async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -55,6 +85,8 @@ export function NoteBlockEditor({ initialContent, onContentChange, onMediaUpload
 
     await uploadLocalFileToPresignedUrl(presign.uploadUrl, contentType, asset.uri);
 
+    if (!isMounted.current) return;
+
     const insert: PendingInsert = {
       type: 'image',
       url: presign.fileUrl,
@@ -78,36 +110,42 @@ export function NoteBlockEditor({ initialContent, onContentChange, onMediaUpload
   }, [onMediaUploaded]);
 
   const handleInsertHandled = useCallback(() => {
+    if (!isMounted.current) return;
     setPendingInsert(null);
   }, []);
 
   // DOM bridge only supports primitives — pass content as JSON string and
   // parse the response back to blocks on the native side.
-  const initialContentJson = initialContent && initialContent.length > 0
-    ? JSON.stringify(initialContent)
-    : null;
+  const initialContentJson =
+    initialContent && initialContent.length > 0 ? JSON.stringify(initialContent) : null;
 
-  const handleContentChangeJson = useCallback((blocksJson: string) => {
-    try {
-      const blocks = JSON.parse(blocksJson) as Record<string, unknown>[];
-      onContentChange(blocks);
-    } catch {
-      // malformed JSON from bridge — ignore
-    }
-  }, [onContentChange]);
+  const handleContentChangeJson = useCallback(
+    (blocksJson: string) => {
+      if (!isMounted.current) return;
+      try {
+        const blocks = JSON.parse(blocksJson) as Record<string, unknown>[];
+        onContentChange(blocks);
+      } catch {
+        // malformed JSON from bridge — ignore
+      }
+    },
+    [onContentChange],
+  );
 
   return (
-    <View style={s.container}>
-      <NoteBlockEditorDOM
-        dom={{ useExpoDOMWebView: true }}
-        initialContent={initialContentJson}
-        pendingInsert={pendingInsert}
-        onContentChange={handleContentChangeJson}
-        onInsertHandled={handleInsertHandled}
-        onImageRequest={handleImageRequest}
-        theme={resolvedMode}
-      />
-    </View>
+    <DOMBridgeErrorBoundary>
+      <View style={s.container}>
+        <NoteBlockEditorDOM
+          dom={{ useExpoDOMWebView: true }}
+          initialContent={initialContentJson}
+          pendingInsert={pendingInsert}
+          onContentChange={handleContentChangeJson}
+          onInsertHandled={handleInsertHandled}
+          onImageRequest={handleImageRequest}
+          theme={resolvedMode}
+        />
+      </View>
+    </DOMBridgeErrorBoundary>
   );
 }
 
