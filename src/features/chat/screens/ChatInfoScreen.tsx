@@ -102,6 +102,10 @@ export default function ChatInfoScreen() {
   const pinned = optimisticConversationState.pinned ?? baseState.pinned;
   const muted = optimisticConversationState.muted ?? baseState.muted;
   const burnDuration = optimisticConversationState.burnDuration ?? conversation?.burnDuration ?? 0;
+  const hasOptimisticConversationState =
+    optimisticConversationState.pinned !== undefined ||
+    optimisticConversationState.muted !== undefined ||
+    optimisticConversationState.burnDuration !== undefined;
   const burnLabel = useMemo(
     () =>
       buildChatInfoState({
@@ -117,6 +121,38 @@ export default function ChatInfoScreen() {
     setActionPending(initialActionPending);
     setOptimisticConversationState({});
   }, [resolvedConversationID]);
+
+  useEffect(() => {
+    if (!hasOptimisticConversationState) {
+      return;
+    }
+
+    setOptimisticConversationState((current) => {
+      const nextState = { ...current };
+
+      if (current.pinned !== undefined && current.pinned === baseState.pinned) {
+        delete nextState.pinned;
+      }
+
+      if (current.muted !== undefined && current.muted === baseState.muted) {
+        delete nextState.muted;
+      }
+
+      if (
+        current.burnDuration !== undefined &&
+        current.burnDuration === (conversation?.burnDuration ?? 0)
+      ) {
+        delete nextState.burnDuration;
+      }
+
+      return nextState;
+    });
+  }, [
+    baseState.muted,
+    baseState.pinned,
+    conversation?.burnDuration,
+    hasOptimisticConversationState,
+  ]);
 
   const openUnsupportedAction = useCallback((label: string) => {
     Alert.alert('暂未开放', `${label} 稍后提供。`);

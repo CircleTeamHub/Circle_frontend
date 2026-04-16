@@ -77,3 +77,23 @@ test('chat info screen constrains conversation actions with burn selection, clea
   assert.match(source, /rightText={actionPending\.burn \? PENDING_TEXT : burnLabel}/);
   assert.match(source, /rightText={actionPending\.clear \? PENDING_TEXT : undefined}/);
 });
+
+test('chat info screen reconciles optimistic conversation state after live updates catch up', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatInfoScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /const hasOptimisticConversationState =/);
+  assert.match(source, /useEffect\(\(\) => \{/);
+  assert.match(source, /if \(!hasOptimisticConversationState\) \{/);
+  assert.match(source, /const nextState = \{ \.\.\.current \};/);
+  assert.match(source, /if \(current\.pinned !== undefined && current\.pinned === baseState\.pinned\) \{/);
+  assert.match(source, /delete nextState\.pinned;/);
+  assert.match(source, /if \(current\.muted !== undefined && current\.muted === baseState\.muted\) \{/);
+  assert.match(source, /delete nextState\.muted;/);
+  assert.match(source, /if \([\s\S]{0,120}current\.burnDuration !== undefined &&[\s\S]{0,120}current\.burnDuration === \(conversation\?\.burnDuration \?\? 0\)/);
+  assert.match(source, /delete nextState\.burnDuration;/);
+  assert.match(source, /return nextState;/);
+});
