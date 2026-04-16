@@ -75,3 +75,15 @@ test('buildChatInfoState maps short burn durations to their UI labels', () => {
   assert.equal(state.burnLabel, '10秒');
   assert.equal(state.muted, false);
 });
+
+test('buildChatInfoState treats any non-zero recvMsgOpt as muted', () => {
+  const { buildChatInfoState } = loadTsModule('src/features/chat/chat-info.ts');
+
+  const state = buildChatInfoState({
+    recvMsgOpt: 1,
+    isPinned: false,
+    burnDuration: null,
+  });
+
+  assert.equal(state.muted, true);
+});

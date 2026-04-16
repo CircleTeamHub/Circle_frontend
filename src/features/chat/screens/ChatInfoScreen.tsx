@@ -57,14 +57,17 @@ export default function ChatInfoScreen() {
       : typeof params.title === 'string'
         ? params.title
         : '好友';
+  const routeSourceID = friendId;
   const conversationID =
     typeof params.conversationID === 'string' ? params.conversationID : '';
   const conversation = useMemo(
     () =>
       conversations.find((conversation) => conversation.conversationID === conversationID) ??
+      conversations.find((conversation) => conversation.sourceID === routeSourceID) ??
       null,
-    [conversationID, conversations],
+    [conversationID, conversations, routeSourceID],
   );
+  const resolvedConversationID = conversation?.conversationID ?? conversationID;
   const { pinned, muted, burnLabel } = useMemo(
     () => buildChatInfoState(conversation),
     [conversation],
@@ -134,7 +137,11 @@ export default function ChatInfoScreen() {
             icon="arrow-up-circle-outline"
             label="置顶聊天"
             hasToggle
-            onToggle={(nextPinned) => void toggleConversationPinned(conversationID, nextPinned)}
+            onToggle={(nextPinned) =>
+              resolvedConversationID
+                ? void toggleConversationPinned(resolvedConversationID, nextPinned)
+                : undefined
+            }
             toggleValue={pinned}
             showArrow={false}
           />
@@ -143,7 +150,11 @@ export default function ChatInfoScreen() {
             icon="notifications-off-outline"
             label="消息免打扰"
             hasToggle
-            onToggle={(nextMuted) => void setConversationMute(conversationID, nextMuted)}
+            onToggle={(nextMuted) =>
+              resolvedConversationID
+                ? void setConversationMute(resolvedConversationID, nextMuted)
+                : undefined
+            }
             toggleValue={muted}
             showArrow={false}
           />
@@ -151,7 +162,14 @@ export default function ChatInfoScreen() {
           <MenuRow
             icon="flame-outline"
             label="好友消息自毁"
-            onPress={() => void setConversationBurnDuration(conversationID, conversation?.burnDuration ?? 0)}
+            onPress={() =>
+              resolvedConversationID
+                ? void setConversationBurnDuration(
+                    resolvedConversationID,
+                    conversation?.burnDuration ?? 0,
+                  )
+                : undefined
+            }
             rightText={burnLabel}
           />
         </View>
@@ -175,7 +193,11 @@ export default function ChatInfoScreen() {
           <MenuRow
             icon="trash-outline"
             label="清空聊天记录"
-            onPress={() => void clearConversationMessages(conversationID)}
+            onPress={() =>
+              resolvedConversationID
+                ? void clearConversationMessages(resolvedConversationID)
+                : undefined
+            }
           />
           <Divider />
           <MenuRow

@@ -27,7 +27,7 @@ export function buildChatInfoState(
 ): ChatInfoState {
   return {
     pinned: conversation?.isPinned === true,
-    muted: conversation?.recvMsgOpt === 2,
+    muted: (conversation?.recvMsgOpt ?? 0) !== 0,
     burnLabel: formatBurnLabel(conversation?.burnDuration),
   };
 }
