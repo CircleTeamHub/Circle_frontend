@@ -130,3 +130,19 @@ test('chat info screen rollback drops optimistic overrides instead of restoring 
   assert.doesNotMatch(source, /muted: previousMuted/);
   assert.doesNotMatch(source, /burnDuration: previousBurnDuration/);
 });
+
+test('chat info screen ignores stale async completions after the conversation changes', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatInfoScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /const currentConversationIDRef = useRef\(''\);/);
+  assert.match(source, /currentConversationIDRef\.current = resolvedConversationID;/);
+  assert.match(source, /const isActionConversationCurrent = useCallback/);
+  assert.match(source, /currentConversationIDRef\.current === conversationID/);
+  assert.match(source, /const actionConversationID = resolvedConversationID;/);
+  assert.match(source, /if \(isActionConversationCurrent\(actionConversationID\)\) \{\s*rollback\?\.?\(\);/s);
+  assert.match(source, /if \(isActionConversationCurrent\(actionConversationID\)\) \{\s*setConversationActionPending\(action, false\);/s);
+});

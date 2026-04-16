@@ -68,6 +68,7 @@ export default function ChatInfoScreen() {
   const [blacklist, setBlacklist] = useState(false);
   const [actionPending, setActionPending] = useState(initialActionPending);
   const actionPendingRef = useRef(initialActionPending);
+  const currentConversationIDRef = useRef('');
   const [optimisticConversationState, setOptimisticConversationState] =
     useState<OptimisticConversationState>({});
   const conversations = useIMStore((state) => state.conversations);
@@ -120,6 +121,7 @@ export default function ChatInfoScreen() {
   );
 
   useEffect(() => {
+    currentConversationIDRef.current = resolvedConversationID;
     actionPendingRef.current = initialActionPending;
     setActionPending(initialActionPending);
     setOptimisticConversationState({});
@@ -183,6 +185,11 @@ export default function ChatInfoScreen() {
     [],
   );
 
+  const isActionConversationCurrent = useCallback(
+    (conversationID: string) => currentConversationIDRef.current === conversationID,
+    [],
+  );
+
   const dropOptimisticConversationStateKey = useCallback(
     (key: OptimisticConversationStateKey) => {
       setOptimisticConversationState((current) => {
@@ -209,19 +216,29 @@ export default function ChatInfoScreen() {
         return;
       }
 
+      const actionConversationID = resolvedConversationID;
       setConversationActionPending(action, true);
       onStart?.();
 
       try {
         await task();
       } catch (error) {
-        rollback?.();
-        openActionError(error);
+        if (isActionConversationCurrent(actionConversationID)) {
+          rollback?.();
+          openActionError(error);
+        }
       } finally {
-        setConversationActionPending(action, false);
+        if (isActionConversationCurrent(actionConversationID)) {
+          setConversationActionPending(action, false);
+        }
       }
     },
-    [openActionError, resolvedConversationID, setConversationActionPending],
+    [
+      isActionConversationCurrent,
+      openActionError,
+      resolvedConversationID,
+      setConversationActionPending,
+    ],
   );
 
   const handleOpenRemark = useCallback(() => {
