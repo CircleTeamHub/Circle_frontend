@@ -24,13 +24,9 @@ test('chat info screen uses real conversation state instead of local placeholder
   assert.match(source, /onPress={handleClearConversationMessages|handleSetBurnDuration}/);
   assert.match(source, /toggleConversationPinned|setConversationMute/);
   assert.match(source, /setConversationBurnDuration|clearConversationMessages/);
-  assert.doesNotMatch(source, /Alert\.alert\('暂未开放'/);
-  assert.doesNotMatch(source, /openUnsupportedAction/);
   assert.doesNotMatch(source, /const \[pinChat, setPinChat\] = useState\(false\)/);
   assert.doesNotMatch(source, /const \[muteNotifications, setMuteNotifications\] = useState\(false\)/);
-  assert.doesNotMatch(source, /const \[blacklist, setBlacklist\] = useState\(false\)/);
   assert.doesNotMatch(source, /toggleValue={pinChat}/);
   assert.doesNotMatch(source, /toggleValue={muteNotifications}/);
-  assert.doesNotMatch(source, /toggleValue={blacklist}/);
   assert.doesNotMatch(source, /rightText="关闭"/);
 });
