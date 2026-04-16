@@ -62,3 +62,16 @@ test('buildChatInfoState falls back safely when conversation data is missing', (
   assert.equal(state.muted, false);
   assert.equal(state.burnLabel, '关闭');
 });
+
+test('buildChatInfoState maps short burn durations to their UI labels', () => {
+  const { buildChatInfoState } = loadTsModule('src/features/chat/chat-info.ts');
+
+  const state = buildChatInfoState({
+    burnDuration: 10,
+    recvMsgOpt: 0,
+    isPinned: false,
+  });
+
+  assert.equal(state.burnLabel, '10秒');
+  assert.equal(state.muted, false);
+});
