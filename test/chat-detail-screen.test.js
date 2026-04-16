@@ -16,3 +16,28 @@ test('chat detail screen uses the aligned header and composer structure', () => 
   assert.match(source, /composerShell/);
   assert.match(source, /composerInput/);
 });
+
+test('chat detail screen exposes refined message insets and composer action hierarchy', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatDetailScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /messageListInset/);
+  assert.match(source, /composerActionBtn/);
+  assert.match(source, /contentContainerStyle=\{\[s\.messageList, s\.messageListContent, s\.messageListInset\]\}/);
+});
+
+test('chat detail screen supports preview mode without an IM conversation', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatDetailScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /const isPreviewMode = !conversationID/);
+  assert.match(source, /当前仅预览聊天界面/);
+  assert.match(source, /editable=\{!isPreviewMode\}/);
+  assert.match(source, /disabled=\{sending \|\| isPreviewMode\}/);
+});

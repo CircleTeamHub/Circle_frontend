@@ -11,6 +11,10 @@ import {
 import { useTheme } from '@/theme';
 import NoteBlockEditorDOM from '@/features/notes/dom/NoteBlockEditor.dom';
 
+// Stable reference so the Expo DOM bridge doesn't see a new `dom` object on
+// every render and queue an unnecessary injectJavaScript call.
+const DOM_WEBVIEW_PROPS = { useExpoDOMWebView: true } as const;
+
 // Silently catches the Expo DOM bridge error that fires when injectJavaScript
 // is called on an already-unmounted WebView (e.g. during navigation teardown).
 class DOMBridgeErrorBoundary extends Component<
@@ -136,7 +140,7 @@ export function NoteBlockEditor({ initialContent, onContentChange, onMediaUpload
     <DOMBridgeErrorBoundary>
       <View style={s.container}>
         <NoteBlockEditorDOM
-          dom={{ useExpoDOMWebView: true }}
+          dom={DOM_WEBVIEW_PROPS}
           initialContent={initialContentJson}
           pendingInsert={pendingInsert}
           onContentChange={handleContentChangeJson}

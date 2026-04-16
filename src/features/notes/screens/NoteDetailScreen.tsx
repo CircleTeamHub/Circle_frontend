@@ -96,14 +96,14 @@ export default function NoteDetailScreen() {
         {/* Title */}
         <Text style={[s.title, d.title]}>{note.title}</Text>
 
-        {/* Date + group */}
+        {/* Date + groups */}
         <View style={s.metaRow}>
           <Text style={[s.meta, d.meta]}>{formatNoteFullDate(note.createdAt)}</Text>
-          {note.group ? (
-            <View style={[s.groupTag, d.groupTag]}>
-              <Text style={[s.groupTagText, d.groupTagText]}>{note.group.name}</Text>
+          {note.groups.map((group) => (
+            <View key={group.id} style={[s.groupTag, d.groupTag]}>
+              <Text style={[s.groupTagText, d.groupTagText]}>{group.name}</Text>
             </View>
-          ) : null}
+          ))}
         </View>
 
         {/* Body — prefer contentJson, fall back to plain content */}

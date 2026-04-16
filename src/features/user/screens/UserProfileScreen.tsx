@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
+import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
 import { getOrCreateSingleConversation } from '@/im/client';
 import { getProfileSignature } from '@/features/profile/profile-display';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -359,6 +360,11 @@ export default function UserProfileScreen() {
         ),
       );
     } catch (error) {
+      if (shouldOpenChatPreview(error)) {
+        router.push(getChatDetailHref(profileId, displayName, profile.avatarUrl));
+        return;
+      }
+
       Alert.alert(
         '暂时无法打开聊天',
         error instanceof Error ? error.message : '请稍后重试',

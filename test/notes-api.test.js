@@ -53,6 +53,18 @@ test('createNoteGroup calls POST /note/group', () => {
   assert.match(src, /\/note\/group/);
 });
 
+test('note types and api client use groups arrays and groupIds payloads', () => {
+  const typesSource = read('src/features/notes/types.ts');
+  const apiSource = read('src/services/api/notes.ts');
+
+  assert.match(typesSource, /groups: \{ id: string; name: string \}\[]/);
+  assert.match(typesSource, /groupIds\?: string\[]/);
+  assert.doesNotMatch(typesSource, /group: \{ id: string; name: string \} \| null/);
+  assert.match(apiSource, /groupIds/);
+  assert.match(apiSource, /reorderNoteGroups/);
+  assert.match(apiSource, /\/note\/group\/order/);
+});
+
 test('upload.ts allows notes folder', () => {
   const src = read('src/services/api/upload.ts');
   assert.match(src, /notes/);

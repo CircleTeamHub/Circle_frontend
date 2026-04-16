@@ -36,12 +36,18 @@ export function formatNoteFullDate(iso: string): string {
  */
 export function buildNoteMeta(params: {
   updatedAt: string;
-  groupName?: string | null;
+  groupNames?: string[];
   imageCount: number;
   videoCount: number;
 }): string {
   const parts: string[] = [formatNoteDate(params.updatedAt)];
-  if (params.groupName) parts.push(params.groupName);
+  if ((params.groupNames?.length ?? 0) > 0) {
+    const groupLabel =
+      params.groupNames!.length <= 2
+        ? params.groupNames!.join('、')
+        : `${params.groupNames![0]}、${params.groupNames![1]} +${params.groupNames!.length - 2}`;
+    parts.push(groupLabel);
+  }
   if (params.imageCount > 0) parts.push(`${params.imageCount}图片`);
   if (params.videoCount > 0) parts.push(`${params.videoCount}视频`);
   return parts.join(' | ');

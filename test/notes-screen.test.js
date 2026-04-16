@@ -31,6 +31,26 @@ test('NotesScreen fetches notes and groups', () => {
   assert.match(src, /fetchNoteGroups/);
 });
 
+test('NotesScreen supports group management and multi-group filtering', () => {
+  const src = read('src/features/notes/screens/NotesScreen.tsx');
+  assert.match(src, /管理|ellipsis-horizontal/);
+  assert.match(src, /note\.groups|n\.groups/);
+  assert.match(src, /groups\.length === 0/);
+  assert.match(src, /createNoteGroup/);
+  assert.match(src, /updateNoteGroup/);
+  assert.match(src, /deleteNoteGroup/);
+  assert.match(src, /reorderNoteGroups/);
+  assert.match(src, /PanResponder/);
+  assert.match(src, /Animated\.Value|new Animated\.Value/);
+});
+
+test('EditNoteScreen loads and submits multiple group ids', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+  assert.match(src, /fetchNoteGroups/);
+  assert.match(src, /selectedGroupIds|groupIds/);
+  assert.match(src, /groupIds:/);
+});
+
 test('NoteCard renders title and meta', () => {
   const src = read('src/features/notes/components/NoteCard.tsx');
   assert.match(src, /note\.title/);

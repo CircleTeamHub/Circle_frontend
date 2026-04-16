@@ -35,7 +35,7 @@ export interface NoteSummary {
   status: NoteStatus;
   available: boolean;
   pinned: boolean;
-  group: { id: string; name: string } | null;
+  groups: { id: string; name: string }[];
   cover: NoteMediaSummary | null;
   imageCount: number;
   videoCount: number;
@@ -67,7 +67,7 @@ export interface CreateNoteInput {
   title: string;
   content?: string;
   contentJson?: Record<string, unknown>[];
-  groupId?: string;
+  groupIds?: string[];
   status?: 'ACTIVE' | 'UNLISTED';
   pinned?: boolean;
   media: CreateNoteMediaInput[];

@@ -54,3 +54,10 @@ export async function updateNoteGroup(id: string, name: string): Promise<NoteGro
 export async function deleteNoteGroup(id: string): Promise<void> {
   await apiClient<void>(`/note/group/${id}`, { method: 'DELETE' });
 }
+
+export async function reorderNoteGroups(groupIds: string[]): Promise<NoteGroup[]> {
+  return apiClient<NoteGroup[]>('/note/group/order', {
+    method: 'PATCH',
+    body: { groupIds },
+  });
+}

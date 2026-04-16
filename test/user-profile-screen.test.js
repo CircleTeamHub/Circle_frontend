@@ -247,6 +247,8 @@ test('user profile screen uses account label, meta chips, badge row, and conditi
   assert.match(source, /发好友申请/);
   assert.match(source, /const handleOpenChat = useCallback/);
   assert.match(source, /const conversation = await getOrCreateSingleConversation\(profileId\)/);
+  assert.match(source, /shouldOpenChatPreview/);
+  assert.match(source, /if \(shouldOpenChatPreview\(error\)\)/);
   assert.match(source, /router\.push\(\s*getChatDetailHref\(/);
   assert.match(source, /useSegments/);
   assert.match(source, /getChatDetailHref/);

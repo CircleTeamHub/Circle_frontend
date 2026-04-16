@@ -29,7 +29,7 @@ export function NoteCard({ note, onPress, onEditPress, onPinPress }: Props) {
 
   const meta = buildNoteMeta({
     updatedAt: note.updatedAt,
-    groupName: note.group?.name,
+    groupNames: note.groups.map((group) => group.name),
     imageCount: note.imageCount,
     videoCount: note.videoCount,
   });

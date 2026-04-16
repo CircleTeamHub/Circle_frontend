@@ -69,6 +69,9 @@ const sReceived = StyleSheet.create({
   receivedContent: {
     maxWidth: 280,
   },
+  receivedAvatarSlot: {
+    paddingBottom: 2,
+  },
 });
 
 export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
@@ -100,11 +103,13 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
   return (
     <View style={sReceived.receivedRow}>
       {onAvatarPress ? (
-        <Pressable onPress={onAvatarPress}>
+        <Pressable style={sReceived.receivedAvatarSlot} onPress={onAvatarPress}>
           <Avatar size={28} name={senderName} />
         </Pressable>
       ) : (
-        <Avatar size={28} name={senderName} />
+        <View style={sReceived.receivedAvatarSlot}>
+          <Avatar size={28} name={senderName} />
+        </View>
       )}
       <View style={sReceived.receivedContent}>
         <View style={[sReceived.receivedBubble, d.receivedBubble]}>
@@ -219,6 +224,13 @@ const sLocation = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  locationCardBody: {
+    maxWidth: 248,
+  },
+  locationCardContent: {
+    minHeight: 88,
+    justifyContent: 'center',
+  },
   locationInfo: {
     paddingVertical: 12,
     paddingHorizontal: 14,
@@ -266,16 +278,18 @@ export const LocationCard: React.FC<LocationCardProps> = ({
           <Avatar size={28} name={senderName} />
         </Pressable>
       ) : (
-        <Avatar size={28} name={senderName} />
+        <View style={sReceived.receivedAvatarSlot}>
+          <Avatar size={28} name={senderName} />
+        </View>
       )}
-      <View>
+      <View style={sLocation.locationCardBody}>
         <View style={[sLocation.locationCard, d.locationCard]}>
           <View style={sLocation.locationImage}>
             <View style={[sLocation.locationImageFallback, d.locationImageFallback]}>
               <Ionicons name="location" size={32} color={colors.textSecondary} />
             </View>
           </View>
-          <View style={sLocation.locationInfo}>
+          <View style={[sLocation.locationInfo, sLocation.locationCardContent]}>
             <Text style={d.locationTitle}>{message.locationTitle}</Text>
             <Text style={d.locationAddress}>{message.locationAddress}</Text>
           </View>

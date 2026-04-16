@@ -3,7 +3,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  LogBox,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -11,11 +13,22 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NoteBlockEditor } from '@/features/notes/components/NoteBlockEditor';
-import type { CreateNoteMediaInput } from '@/features/notes/types';
+import type { CreateNoteMediaInput, NoteGroup } from '@/features/notes/types';
 import { extractMediaFromBlocks, extractPlainText } from '@/features/notes/utils/note-blocks';
 import { formatNoteFullDate } from '@/features/notes/utils/note-format';
-import { createNote, fetchNoteDetail, updateNote } from '@/services/api/notes';
+import {
+  createNote,
+  fetchNoteDetail,
+  fetchNoteGroups,
+  updateNote,
+} from '@/services/api/notes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+
+LogBox.ignoreLogs([
+  "Calling the 'injectJavaScript' function has failed",
+  'Unable to find the',
+  'DomWebView',
+]);
 
 export default function EditNoteScreen() {
   const router = useRouter();
@@ -25,27 +38,42 @@ export default function EditNoteScreen() {
   const isEdit = Boolean(id);
 
   const [title, setTitle] = useState('');
-  // Store blocks in a ref — no setState means no re-render, which prevents
-  // Expo DOM bridge from calling injectJavaScript on a torn-down WebView.
   const blocksRef = useRef<Record<string, unknown>[]>([]);
   const [initialBlocks, setInitialBlocks] = useState<Record<string, unknown>[] | null>(null);
-  const [groupId, setGroupId] = useState<string | undefined>();
-  const [groupName, setGroupName] = useState<string | undefined>();
+  const [availableGroups, setAvailableGroups] = useState<NoteGroup[]>([]);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(isEdit);
   const [dateStr, setDateStr] = useState(formatNoteFullDate(new Date().toISOString()));
-  // url → upload metadata — ref so it doesn't cause re-renders either.
   const mediaMapRef = useRef<Record<string, CreateNoteMediaInput>>({});
-
-  // Controls whether the WebView is mounted. We set this to false BEFORE
-  // calling router.back() so React has one render cycle to unmount the WebView
-  // natively before navigation begins — preventing the "Unable to find
-  // 'DomWebView' view" bridge crash.
   const [editorMounted, setEditorMounted] = useState(false);
+  const [navigating, setNavigating] = useState(false);
 
   useEffect(() => {
-    if (!isEdit || !id) return;
+    if (!navigating) return;
+    const timer = setTimeout(() => router.back(), 200);
+    return () => clearTimeout(timer);
+  }, [navigating, router]);
+
+  useEffect(() => {
     let cancelled = false;
+
+    fetchNoteGroups()
+      .then((groups) => {
+        if (!cancelled) setAvailableGroups(groups);
+      })
+      .catch(() => {
+        if (!cancelled) setAvailableGroups([]);
+      });
+
+    if (!isEdit || !id) {
+      setEditorMounted(true);
+      setLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
     fetchNoteDetail(id)
       .then((note) => {
         if (cancelled) return;
@@ -53,8 +81,7 @@ export default function EditNoteScreen() {
         const loaded = note.contentJson ?? [];
         blocksRef.current = loaded;
         setInitialBlocks(loaded.length > 0 ? loaded : null);
-        setGroupId(note.group?.id);
-        setGroupName(note.group?.name);
+        setSelectedGroupIds(note.groups.map((group) => group.id));
         setDateStr(formatNoteFullDate(note.createdAt));
         setLoading(false);
         setEditorMounted(true);
@@ -65,15 +92,11 @@ export default function EditNoteScreen() {
           setEditorMounted(true);
         }
       });
+
     return () => {
       cancelled = true;
     };
   }, [id, isEdit]);
-
-  // For new notes (no id), mount editor immediately.
-  useEffect(() => {
-    if (!isEdit) setEditorMounted(true);
-  }, [isEdit]);
 
   const handleContentChange = useCallback((newBlocks: Record<string, unknown>[]) => {
     blocksRef.current = newBlocks;
@@ -83,11 +106,21 @@ export default function EditNoteScreen() {
     mediaMapRef.current = { ...mediaMapRef.current, [media.url]: media };
   }, []);
 
-  // Unmount the WebView first, then navigate on the next frame.
   const navigateBack = useCallback(() => {
     setEditorMounted(false);
-    requestAnimationFrame(() => router.back());
-  }, [router]);
+    setNavigating(true);
+  }, []);
+
+  const toggleGroup = useCallback((groupId: string) => {
+    setSelectedGroupIds((prev) =>
+      prev.includes(groupId) ? prev.filter((id) => id !== groupId) : [...prev, groupId],
+    );
+  }, []);
+
+  const selectedGroups = useMemo(
+    () => availableGroups.filter((group) => selectedGroupIds.includes(group.id)),
+    [availableGroups, selectedGroupIds],
+  );
 
   const handleSubmit = useCallback(async () => {
     if (isSubmitting) return;
@@ -97,15 +130,15 @@ export default function EditNoteScreen() {
     try {
       const currentBlocks = blocksRef.current;
       const plainText = extractPlainText(currentBlocks);
-      const media = extractMediaFromBlocks(currentBlocks).map((m) => {
-        const uploaded = mediaMapRef.current[m.url];
-        return uploaded ? { ...uploaded, sortOrder: m.sortOrder } : m;
+      const media = extractMediaFromBlocks(currentBlocks).map((item) => {
+        const uploaded = mediaMapRef.current[item.url];
+        return uploaded ? { ...uploaded, sortOrder: item.sortOrder } : item;
       });
       const input = {
         title: trimmedTitle,
         content: plainText,
         contentJson: currentBlocks,
-        groupId,
+        groupIds: selectedGroupIds,
         media,
         status: 'ACTIVE' as const,
       };
@@ -118,7 +151,7 @@ export default function EditNoteScreen() {
     } catch {
       setIsSubmitting(false);
     }
-  }, [isSubmitting, title, groupId, isEdit, id, navigateBack]);
+  }, [id, isEdit, isSubmitting, navigateBack, selectedGroupIds, title]);
 
   const d = useMemo(
     () => ({
@@ -129,8 +162,11 @@ export default function EditNoteScreen() {
       doneBtnDisabled: { backgroundColor: colors.primary, opacity: 0.5 },
       titleInput: { color: colors.text },
       dateText: { color: colors.textSecondary },
-      groupTag: { backgroundColor: colors.primary + '33' },
-      groupTagText: { color: colors.primary },
+      groupChip: { backgroundColor: colors.surface, borderColor: colors.surface },
+      groupChipActive: { backgroundColor: colors.primary + '22', borderColor: colors.primary },
+      groupChipText: { color: colors.textSecondary },
+      groupChipTextActive: { color: colors.primary },
+      sectionTitle: { color: colors.textSecondary },
     }),
     [colors],
   );
@@ -147,7 +183,6 @@ export default function EditNoteScreen() {
 
   return (
     <View style={[s.container, d.container, { paddingTop: insets.top }]}>
-      {/* Header */}
       <View style={s.header}>
         <Pressable onPress={navigateBack} hitSlop={8}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
@@ -166,7 +201,6 @@ export default function EditNoteScreen() {
         </Pressable>
       </View>
 
-      {/* Title */}
       <TextInput
         style={[s.titleInput, d.titleInput]}
         placeholder="标题"
@@ -177,26 +211,64 @@ export default function EditNoteScreen() {
         returnKeyType="next"
       />
 
-      {/* Date + optional group */}
       <View style={s.metaRow}>
         <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
         <Text style={[s.dateText, d.dateText]}>{dateStr}</Text>
-        {groupName ? (
-          <View style={[s.groupTag, d.groupTag]}>
-            <Text style={[s.groupTagText, d.groupTagText]}>{groupName}</Text>
-          </View>
-        ) : null}
       </View>
 
-      {/* Editor — conditionally mounted so we can tear it down before navigating */}
+      <View style={s.groupSection}>
+        <Text style={[s.sectionTitle, d.sectionTitle]}>分组</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.groupChips}
+        >
+          {availableGroups.map((group) => {
+            const selected = selectedGroupIds.includes(group.id);
+            return (
+              <Pressable
+                key={group.id}
+                style={[
+                  s.groupChip,
+                  d.groupChip,
+                  selected ? [s.groupChipActive, d.groupChipActive] : null,
+                ]}
+                onPress={() => toggleGroup(group.id)}
+              >
+                <Text
+                  style={[
+                    s.groupChipText,
+                    d.groupChipText,
+                    selected ? d.groupChipTextActive : null,
+                  ]}
+                >
+                  {group.name}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        {selectedGroups.length > 0 ? (
+          <View style={s.selectedGroups}>
+            {selectedGroups.map((group) => (
+              <View key={group.id} style={[s.selectedGroupTag, d.groupChipActive]}>
+                <Text style={[s.selectedGroupText, d.groupChipTextActive]}>{group.name}</Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <Text style={[s.sectionTitle, d.sectionTitle]}>未加入任何分组</Text>
+        )}
+      </View>
+
       <View style={s.editorWrap}>
-        {editorMounted && (
+        {editorMounted ? (
           <NoteBlockEditor
             initialContent={initialBlocks}
             onContentChange={handleContentChange}
             onMediaUploaded={handleMediaUploaded}
           />
-        )}
+        ) : null}
       </View>
     </View>
   );
@@ -239,12 +311,34 @@ const s = StyleSheet.create({
     gap: Spacing.xs,
   },
   dateText: { ...Typography.caption },
-  groupTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Radius.sm,
-    marginLeft: Spacing.xs,
+  groupSection: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.sm,
+    gap: Spacing.sm,
   },
-  groupTagText: { ...Typography.small, fontWeight: '600' },
+  sectionTitle: { ...Typography.small },
+  groupChips: { gap: Spacing.sm, paddingRight: Spacing.lg },
+  groupChip: {
+    borderWidth: 1,
+    borderRadius: Radius.pill,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 8,
+  },
+  groupChipActive: {
+    borderWidth: 1,
+  },
+  groupChipText: { ...Typography.small, fontWeight: '600' },
+  selectedGroups: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+  },
+  selectedGroupTag: {
+    borderWidth: 1,
+    borderRadius: Radius.pill,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+  },
+  selectedGroupText: { ...Typography.small, fontWeight: '600' },
   editorWrap: { flex: 1 },
 });

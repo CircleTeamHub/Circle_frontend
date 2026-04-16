@@ -39,6 +39,15 @@ const s = StyleSheet.create({
     paddingTop: Spacing.lg,
     paddingBottom: Spacing.xl,
   },
+  messageListInset: {
+    paddingHorizontal: 2,
+  },
+  previewNotice: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xs,
+    textAlign: 'center',
+  },
   sendError: { textAlign: 'center', paddingVertical: 4 },
   inputBar: {
     paddingTop: 10,
@@ -48,6 +57,11 @@ const s = StyleSheet.create({
     gap: 10,
   },
   circleBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  composerActionBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+  },
   composerShell: {
     flex: 1,
     height: 42,
@@ -90,6 +104,7 @@ export default function ChatDetailScreen() {
     params.conversationType === 'group' ? SessionType.Group : SessionType.Single;
   const avatarUrl =
     typeof params.avatarUrl === 'string' ? params.avatarUrl : undefined;
+  const isPreviewMode = !conversationID;
 
   const handleBack = useCallback(() => router.back(), []);
   const handleOpenUserProfile = useCallback(() => {
@@ -103,6 +118,7 @@ export default function ChatDetailScreen() {
     headerStatusText: { color: colors.online },
     inputBar: { backgroundColor: colors.background },
     circleBtn: { backgroundColor: colors.surface },
+    composerActionBtn: { backgroundColor: colors.surfaceBorder },
     composerShell: { backgroundColor: colors.inputBg, borderColor: colors.surfaceBorder },
     composerInput: { color: colors.text },
   }), [colors]);
@@ -174,7 +190,7 @@ export default function ChatDetailScreen() {
   const handleSend = useCallback(async () => {
     const nextText = draft.trim();
 
-    if (!nextText || sending || !sourceID) {
+    if (!nextText || sending || !sourceID || isPreviewMode) {
       return;
     }
 
@@ -194,7 +210,7 @@ export default function ChatDetailScreen() {
     } finally {
       setSending(false);
     }
-  }, [appendMessages, conversationID, conversationType, draft, sending, sourceID]);
+  }, [appendMessages, conversationID, conversationType, draft, isPreviewMode, sending, sourceID]);
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
@@ -231,10 +247,15 @@ export default function ChatDetailScreen() {
         data={messages}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
-        contentContainerStyle={[s.messageList, s.messageListContent]}
+        contentContainerStyle={[s.messageList, s.messageListContent, s.messageListInset]}
         showsVerticalScrollIndicator={false}
       />
       <Divider />
+      {isPreviewMode ? (
+        <Text style={[s.previewNotice, Typography.small, { color: colors.textSecondary }]}>
+          当前仅预览聊天界面，消息发送会在 IM 接通后开放。
+        </Text>
+      ) : null}
       {sendError ? (
         <Text style={[s.sendError, Typography.small, { color: colors.error }]}>
           {sendError}
@@ -247,15 +268,20 @@ export default function ChatDetailScreen() {
         <View style={[s.composerShell, d.composerShell]}>
           <TextInput
             style={[s.composerInput, d.composerInput]}
-            placeholder="输入消息..."
+            placeholder={isPreviewMode ? '当前仅预览聊天界面' : '输入消息...'}
             placeholderTextColor={colors.textSecondary}
             value={draft}
             onChangeText={setDraft}
             onSubmitEditing={handleSend}
+            editable={!isPreviewMode}
           />
           <Ionicons name="happy-outline" size={18} color={colors.textSecondary} />
         </View>
-        <Pressable style={[s.circleBtn, d.circleBtn]} onPress={handleSend} disabled={sending}>
+        <Pressable
+          style={[s.circleBtn, s.composerActionBtn, d.circleBtn, d.composerActionBtn]}
+          onPress={handleSend}
+          disabled={sending || isPreviewMode}
+        >
           <Ionicons
             name={draft.trim() ? 'send' : 'add'}
             size={18}
