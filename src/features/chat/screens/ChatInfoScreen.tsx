@@ -180,6 +180,7 @@ export default function ChatInfoScreen() {
     async (
       action: ConversationActionKey,
       task: () => Promise<void>,
+      onStart?: () => void,
       rollback?: () => void,
     ) => {
       if (!resolvedConversationID || actionPendingRef.current[action]) {
@@ -187,6 +188,7 @@ export default function ChatInfoScreen() {
       }
 
       setConversationActionPending(action, true);
+      onStart?.();
 
       try {
         await task();
@@ -227,14 +229,14 @@ export default function ChatInfoScreen() {
       }
 
       const previousPinned = pinned;
-      setOptimisticConversationState((current) => ({
-        ...current,
-        pinned: nextPinned,
-      }));
-
       void runConversationAction(
         'pin',
         () => toggleConversationPinned(resolvedConversationID, nextPinned),
+        () =>
+          setOptimisticConversationState((current) => ({
+            ...current,
+            pinned: nextPinned,
+          })),
         () =>
           setOptimisticConversationState((current) => ({
             ...current,
@@ -252,14 +254,14 @@ export default function ChatInfoScreen() {
       }
 
       const previousMuted = muted;
-      setOptimisticConversationState((current) => ({
-        ...current,
-        muted: nextMuted,
-      }));
-
       void runConversationAction(
         'mute',
         () => setConversationMute(resolvedConversationID, nextMuted),
+        () =>
+          setOptimisticConversationState((current) => ({
+            ...current,
+            muted: nextMuted,
+          })),
         () =>
           setOptimisticConversationState((current) => ({
             ...current,
@@ -281,14 +283,14 @@ export default function ChatInfoScreen() {
       }
 
       const previousBurnDuration = burnDuration;
-      setOptimisticConversationState((current) => ({
-        ...current,
-        burnDuration: nextBurnDuration,
-      }));
-
       void runConversationAction(
         'burn',
         () => setConversationBurnDuration(resolvedConversationID, nextBurnDuration),
+        () =>
+          setOptimisticConversationState((current) => ({
+            ...current,
+            burnDuration: nextBurnDuration,
+          })),
         () =>
           setOptimisticConversationState((current) => ({
             ...current,

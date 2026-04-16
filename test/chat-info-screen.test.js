@@ -97,3 +97,18 @@ test('chat info screen reconciles optimistic conversation state after live updat
   assert.match(source, /delete nextState\.burnDuration;/);
   assert.match(source, /return nextState;/);
 });
+
+test('chat info screen applies optimistic pin and mute updates only after the ref-based guard claims the action', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatInfoScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /const runConversationAction = useCallback/);
+  assert.match(source, /setConversationActionPending\(action, true\);[\s\S]{0,120}await task\(\);/);
+  assert.match(source, /void runConversationAction\(\s*'pin',[\s\S]{0,120}setOptimisticConversationState\(\(current\) => \(\{/);
+  assert.match(source, /void runConversationAction\(\s*'mute',[\s\S]{0,120}setOptimisticConversationState\(\(current\) => \(\{/);
+  assert.doesNotMatch(source, /const previousPinned = pinned;[\s\S]{0,120}setOptimisticConversationState\(\(current\) => \(\{[\s\S]{0,80}pinned: nextPinned/);
+  assert.doesNotMatch(source, /const previousMuted = muted;[\s\S]{0,120}setOptimisticConversationState\(\(current\) => \(\{[\s\S]{0,80}muted: nextMuted/);
+});
