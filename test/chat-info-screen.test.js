@@ -11,12 +11,17 @@ test('chat info screen uses real conversation state instead of local placeholder
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /useIMStore\(\(state\) => state\.conversations\)/);
-  assert.match(source, /conversations?\.find\([^)]*conversationID/);
+  assert.match(
+    source,
+    /conversations?\.find\(\s*\(\s*conversation\s*\)\s*=>\s*conversation\.conversationID\s*===\s*conversationID\s*\)/,
+  );
   assert.match(source, /conversationID/);
   assert.match(source, /buildChatInfoState\(\s*conversation\s*\)/);
   assert.match(source, /chatInfoState\.(pinned|muted|burnLabel)/);
   assert.match(source, /toggleValue={chatInfoState\.(pinned|muted)}/);
   assert.match(source, /rightText={chatInfoState\.burnLabel}/);
+  assert.match(source, /onToggle={handleTogglePinned|handleToggleMute}/);
+  assert.match(source, /onPress={handleClearConversationMessages|handleSetBurnDuration}/);
   assert.match(source, /toggleConversationPinned|setConversationMute/);
   assert.match(source, /setConversationBurnDuration|clearConversationMessages/);
   assert.doesNotMatch(source, /Alert\.alert\('暂未开放'/);
