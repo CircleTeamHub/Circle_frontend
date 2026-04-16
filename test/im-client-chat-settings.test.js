@@ -47,8 +47,8 @@ function loadChatSettingsClient(sdkCalls, storeCalls) {
         pinConversation: async (params) => {
           sdkCalls.push(['pinConversation', params]);
         },
-        setConversationRecvOpt: async (params) => {
-          sdkCalls.push(['setConversationRecvOpt', params]);
+        setConversationRecvMessageOpt: async (params) => {
+          sdkCalls.push(['setConversationRecvMessageOpt', params]);
         },
         setConversationBurnDuration: async (params) => {
           sdkCalls.push(['setConversationBurnDuration', params]);
@@ -111,7 +111,10 @@ test('im client chat setting wrappers call the expected OpenIM SDK methods', asy
 
   assert.deepEqual(sdkCalls, [
     ['pinConversation', { conversationID: 'conversation-1', isPinned: true }],
-    ['setConversationRecvOpt', { conversationID: 'conversation-1', opt: 2 }],
+    [
+      'setConversationRecvMessageOpt',
+      { conversationID: 'conversation-1', opt: 2 },
+    ],
     ['setConversationBurnDuration', { conversationID: 'conversation-1', burnDuration: 60 }],
   ]);
   assert.deepEqual(storeCalls, []);
