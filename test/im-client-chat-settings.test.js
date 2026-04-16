@@ -38,73 +38,96 @@ function loadTsModule(relativePath, stubs = {}) {
   return context.module.exports;
 }
 
-test('im client exports chat settings helpers for pinned, mute, burn, and clear actions', () => {
-  const { toggleConversationPinned, setConversationMute, setConversationBurnDuration, clearConversationMessages } =
-    loadTsModule('src/im/client.ts', {
-      '@openim/rn-client-sdk': {
-        __esModule: true,
-        default: {
-          initSDK: async () => undefined,
-          getOneConversation: async () => ({
-            conversationID: 'conversation-1',
-            conversationType: 1,
-            userID: 'user-2',
-            groupID: '',
-            showName: 'Jimmy',
-            faceURL: '',
-            recvMsgOpt: 0,
-            unreadCount: 0,
-            groupAtType: 0,
-            latestMsg: '',
-            latestMsgSendTime: 0,
-            draftText: '',
-            draftTextTime: 0,
-            burnDuration: 0,
-            msgDestructTime: 0,
-            isPinned: false,
-            isNotInGroup: false,
-            isPrivateChat: false,
-            isMsgDestruct: false,
-            attachedInfo: '',
-          }),
+function loadChatSettingsClient(sdkCalls, storeCalls) {
+  return loadTsModule('src/im/client.ts', {
+    '@openim/rn-client-sdk': {
+      __esModule: true,
+      default: {
+        initSDK: async () => undefined,
+        pinConversation: async (params) => {
+          sdkCalls.push(['pinConversation', params]);
         },
-        LogLevel: { Info: 0 },
-        SessionType: { Single: 1, Group: 2 },
-        ViewType: { History: 0 },
-      },
-      'react-native-fs': {
-        __esModule: true,
-        default: {
-          DocumentDirectoryPath: '/tmp',
-          mkdir: async () => undefined,
+        setConversationRecvOpt: async (params) => {
+          sdkCalls.push(['setConversationRecvOpt', params]);
+        },
+        setConversationBurnDuration: async (params) => {
+          sdkCalls.push(['setConversationBurnDuration', params]);
+        },
+        clearConversationAndDeleteAllMsg: async (conversationID) => {
+          sdkCalls.push(['clearConversationAndDeleteAllMsg', conversationID]);
         },
       },
-      'react-native': {
-        Platform: { OS: 'ios' },
+      LogLevel: { Info: 0 },
+      SessionType: { Single: 1, Group: 2 },
+      ViewType: { History: 0 },
+    },
+    'react-native-fs': {
+      __esModule: true,
+      default: {
+        DocumentDirectoryPath: '/tmp',
+        mkdir: async () => undefined,
       },
-      '@/constants/config': {
-        OPENIM_API_URL: 'https://im.example.com',
-        OPENIM_WS_URL: 'wss://im.example.com',
-        OPENIM_LOG_LEVEL: 0,
+    },
+    'react-native': {
+      Platform: { OS: 'ios' },
+    },
+    '@/constants/config': {
+      OPENIM_API_URL: 'https://im.example.com',
+      OPENIM_WS_URL: 'wss://im.example.com',
+      OPENIM_LOG_LEVEL: 0,
+    },
+    '@/stores/imStore': {
+      useIMStore: {
+        getState: () => ({
+          connected: true,
+          setError: () => undefined,
+          setInitialized: () => undefined,
+          setCurrentUserID: () => undefined,
+          setConnecting: () => undefined,
+          reset: () => undefined,
+          setConversations: () => undefined,
+          mergeConversations: () => undefined,
+          setMessages: (...args) => {
+            storeCalls.push(['setMessages', ...args]);
+          },
+        }),
       },
-      '@/stores/imStore': {
-        useIMStore: {
-          getState: () => ({
-            connected: true,
-            setError: () => undefined,
-            setInitialized: () => undefined,
-            setCurrentUserID: () => undefined,
-            setConnecting: () => undefined,
-            reset: () => undefined,
-            setConversations: () => undefined,
-            mergeConversations: () => undefined,
-          }),
-        },
-      },
-    });
+    },
+  });
+}
 
-  assert.equal(typeof toggleConversationPinned, 'function');
-  assert.equal(typeof setConversationMute, 'function');
-  assert.equal(typeof setConversationBurnDuration, 'function');
-  assert.equal(typeof clearConversationMessages, 'function');
+test('im client chat setting wrappers call the expected OpenIM SDK methods', async () => {
+  const sdkCalls = [];
+  const storeCalls = [];
+  const {
+    toggleConversationPinned,
+    setConversationMute,
+    setConversationBurnDuration,
+  } = loadChatSettingsClient(sdkCalls, storeCalls);
+
+  await toggleConversationPinned('conversation-1', true);
+  await setConversationMute('conversation-1', true);
+  await setConversationBurnDuration('conversation-1', 60);
+
+  assert.deepEqual(sdkCalls, [
+    ['pinConversation', { conversationID: 'conversation-1', isPinned: true }],
+    ['setConversationRecvOpt', { conversationID: 'conversation-1', opt: 2 }],
+    ['setConversationBurnDuration', { conversationID: 'conversation-1', burnDuration: 60 }],
+  ]);
+  assert.deepEqual(storeCalls, []);
+});
+
+test('clearConversationMessages clears OpenIM history and local message cache', async () => {
+  const sdkCalls = [];
+  const storeCalls = [];
+  const { clearConversationMessages } = loadChatSettingsClient(sdkCalls, storeCalls);
+
+  await clearConversationMessages('conversation-99');
+
+  assert.deepEqual(sdkCalls, [
+    ['clearConversationAndDeleteAllMsg', 'conversation-99'],
+  ]);
+  assert.deepEqual(storeCalls, [
+    ['setMessages', 'conversation-99', []],
+  ]);
 });

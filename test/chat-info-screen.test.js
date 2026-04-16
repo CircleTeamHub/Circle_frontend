@@ -10,8 +10,14 @@ test('chat info screen uses real conversation state instead of local placeholder
   );
   const source = fs.readFileSync(filePath, 'utf8');
 
-  assert.match(source, /useChatInfoState|loadChatInfoState/);
+  assert.match(source, /useChatInfoState|loadChatInfoState|buildChatInfoState/);
+  assert.match(source, /const conversation\s*=/);
+  assert.match(source, /buildChatInfoState\(\s*conversation\s*\)/);
   assert.match(source, /toggleConversationPinned|setConversationMute/);
   assert.match(source, /setConversationBurnDuration|clearConversationMessages/);
+  assert.doesNotMatch(source, /Alert\.alert\('暂未开放'/);
+  assert.doesNotMatch(source, /openUnsupportedAction/);
   assert.doesNotMatch(source, /const \[pinChat, setPinChat\] = useState\(false\)/);
+  assert.doesNotMatch(source, /const \[muteNotifications, setMuteNotifications\] = useState\(false\)/);
+  assert.doesNotMatch(source, /const \[blacklist, setBlacklist\] = useState\(false\)/);
 });
