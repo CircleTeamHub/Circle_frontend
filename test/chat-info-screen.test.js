@@ -22,6 +22,10 @@ test('chat info screen uses real conversation state instead of local placeholder
   );
   assert.match(
     source,
+    /const resolvedConversationID = conversation\?\.conversationID \?\? '';/,
+  );
+  assert.doesNotMatch(
+    source,
     /const resolvedConversationID = conversation\?\.conversationID \?\? conversationID;/,
   );
   assert.match(source, /conversationID/);

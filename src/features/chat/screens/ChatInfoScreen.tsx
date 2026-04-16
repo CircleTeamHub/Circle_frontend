@@ -67,7 +67,7 @@ export default function ChatInfoScreen() {
       null,
     [conversationID, conversations, routeSourceID],
   );
-  const resolvedConversationID = conversation?.conversationID ?? conversationID;
+  const resolvedConversationID = conversation?.conversationID ?? '';
   const { pinned, muted, burnLabel } = useMemo(
     () => buildChatInfoState(conversation),
     [conversation],
