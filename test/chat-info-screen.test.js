@@ -112,3 +112,21 @@ test('chat info screen applies optimistic pin and mute updates only after the re
   assert.doesNotMatch(source, /const previousPinned = pinned;[\s\S]{0,120}setOptimisticConversationState\(\(current\) => \(\{[\s\S]{0,80}pinned: nextPinned/);
   assert.doesNotMatch(source, /const previousMuted = muted;[\s\S]{0,120}setOptimisticConversationState\(\(current\) => \(\{[\s\S]{0,80}muted: nextMuted/);
 });
+
+test('chat info screen rollback drops optimistic overrides instead of restoring stale snapshots', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatInfoScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /const dropOptimisticConversationStateKey = useCallback/);
+  assert.match(source, /if \(current\[key\] === undefined\) \{/);
+  assert.match(source, /delete nextState\[key\];/);
+  assert.match(source, /void runConversationAction\(\s*'pin',[\s\S]{0,400}dropOptimisticConversationStateKey\('pinned'\)/);
+  assert.match(source, /void runConversationAction\(\s*'mute',[\s\S]{0,400}dropOptimisticConversationStateKey\('muted'\)/);
+  assert.match(source, /void runConversationAction\(\s*'burn',[\s\S]{0,400}dropOptimisticConversationStateKey\('burnDuration'\)/);
+  assert.doesNotMatch(source, /pinned: previousPinned/);
+  assert.doesNotMatch(source, /muted: previousMuted/);
+  assert.doesNotMatch(source, /burnDuration: previousBurnDuration/);
+});

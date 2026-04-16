@@ -48,6 +48,12 @@ const initialActionPending = {
 };
 
 type ConversationActionKey = keyof typeof initialActionPending;
+type OptimisticConversationState = {
+  pinned?: boolean;
+  muted?: boolean;
+  burnDuration?: number;
+};
+type OptimisticConversationStateKey = keyof OptimisticConversationState;
 
 export default function ChatInfoScreen() {
   const insets = useSafeAreaInsets();
@@ -62,11 +68,8 @@ export default function ChatInfoScreen() {
   const [blacklist, setBlacklist] = useState(false);
   const [actionPending, setActionPending] = useState(initialActionPending);
   const actionPendingRef = useRef(initialActionPending);
-  const [optimisticConversationState, setOptimisticConversationState] = useState<{
-    pinned?: boolean;
-    muted?: boolean;
-    burnDuration?: number;
-  }>({});
+  const [optimisticConversationState, setOptimisticConversationState] =
+    useState<OptimisticConversationState>({});
   const conversations = useIMStore((state) => state.conversations);
 
   const friendId =
@@ -129,13 +132,16 @@ export default function ChatInfoScreen() {
 
     setOptimisticConversationState((current) => {
       const nextState = { ...current };
+      let changed = false;
 
       if (current.pinned !== undefined && current.pinned === baseState.pinned) {
         delete nextState.pinned;
+        changed = true;
       }
 
       if (current.muted !== undefined && current.muted === baseState.muted) {
         delete nextState.muted;
+        changed = true;
       }
 
       if (
@@ -143,9 +149,10 @@ export default function ChatInfoScreen() {
         current.burnDuration === (conversation?.burnDuration ?? 0)
       ) {
         delete nextState.burnDuration;
+        changed = true;
       }
 
-      return nextState;
+      return changed ? nextState : current;
     });
   }, [
     baseState.muted,
@@ -172,6 +179,21 @@ export default function ChatInfoScreen() {
         [action]: nextPending,
       };
       setActionPending(actionPendingRef.current);
+    },
+    [],
+  );
+
+  const dropOptimisticConversationStateKey = useCallback(
+    (key: OptimisticConversationStateKey) => {
+      setOptimisticConversationState((current) => {
+        if (current[key] === undefined) {
+          return current;
+        }
+
+        const nextState = { ...current };
+        delete nextState[key];
+        return nextState;
+      });
     },
     [],
   );
@@ -228,7 +250,6 @@ export default function ChatInfoScreen() {
         return;
       }
 
-      const previousPinned = pinned;
       void runConversationAction(
         'pin',
         () => toggleConversationPinned(resolvedConversationID, nextPinned),
@@ -237,14 +258,15 @@ export default function ChatInfoScreen() {
             ...current,
             pinned: nextPinned,
           })),
-        () =>
-          setOptimisticConversationState((current) => ({
-            ...current,
-            pinned: previousPinned,
-          })),
+        () => dropOptimisticConversationStateKey('pinned'),
       );
     },
-    [actionPending.pin, pinned, resolvedConversationID, runConversationAction],
+    [
+      actionPending.pin,
+      dropOptimisticConversationStateKey,
+      resolvedConversationID,
+      runConversationAction,
+    ],
   );
 
   const handleToggleMuted = useCallback(
@@ -253,7 +275,6 @@ export default function ChatInfoScreen() {
         return;
       }
 
-      const previousMuted = muted;
       void runConversationAction(
         'mute',
         () => setConversationMute(resolvedConversationID, nextMuted),
@@ -262,14 +283,15 @@ export default function ChatInfoScreen() {
             ...current,
             muted: nextMuted,
           })),
-        () =>
-          setOptimisticConversationState((current) => ({
-            ...current,
-            muted: previousMuted,
-          })),
+        () => dropOptimisticConversationStateKey('muted'),
       );
     },
-    [actionPending.mute, muted, resolvedConversationID, runConversationAction],
+    [
+      actionPending.mute,
+      dropOptimisticConversationStateKey,
+      resolvedConversationID,
+      runConversationAction,
+    ],
   );
 
   const applyBurnDuration = useCallback(
@@ -282,7 +304,6 @@ export default function ChatInfoScreen() {
         return;
       }
 
-      const previousBurnDuration = burnDuration;
       void runConversationAction(
         'burn',
         () => setConversationBurnDuration(resolvedConversationID, nextBurnDuration),
@@ -291,14 +312,16 @@ export default function ChatInfoScreen() {
             ...current,
             burnDuration: nextBurnDuration,
           })),
-        () =>
-          setOptimisticConversationState((current) => ({
-            ...current,
-            burnDuration: previousBurnDuration,
-          })),
+        () => dropOptimisticConversationStateKey('burnDuration'),
       );
     },
-    [actionPending.burn, burnDuration, resolvedConversationID, runConversationAction],
+    [
+      actionPending.burn,
+      burnDuration,
+      dropOptimisticConversationStateKey,
+      resolvedConversationID,
+      runConversationAction,
+    ],
   );
 
   const handleOpenBurnDurationPicker = useCallback(() => {
