@@ -96,6 +96,21 @@ export function getChatDetailHref(
   };
 }
 
+export function getChatBackgroundHref(
+  conversationID: string,
+  sourceID?: string,
+  title?: string,
+): Href {
+  return {
+    pathname: '/(tabs)/messages/chat-background',
+    params: {
+      conversationID,
+      ...(sourceID ? { sourceID } : {}),
+      ...(title ? { title } : {}),
+    },
+  };
+}
+
 export function getUserProfileScopeFromSegments(
   segments: readonly string[] | undefined,
 ): UserProfileScope {

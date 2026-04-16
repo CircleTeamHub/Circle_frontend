@@ -7,12 +7,18 @@ import { MenuRow } from '@/components/ui/menu-row';
 import { NavHeader } from '@/components/ui/nav-header';
 import { buildChatInfoState } from '@/features/chat/chat-info';
 import {
+  DEFAULT_CHAT_BACKGROUND_PREFERENCE,
+  getChatBackgroundPreferenceLabel,
+  useChatPreferencesStore,
+} from '@/features/chat/store/use-chat-preferences-store';
+import {
   clearConversationMessages,
   setConversationBurnDuration,
   setConversationMute,
   toggleConversationPinned,
 } from '@/im/client';
 import {
+  getChatBackgroundHref,
   getEditFriendRemarkHref,
   getEditFriendTagsHref,
 } from '@/features/user/utils/routes';
@@ -109,6 +115,15 @@ export default function ChatInfoScreen() {
   const baseState = useMemo(
     () => buildChatInfoState(conversation),
     [conversation],
+  );
+  const backgroundPreference = useChatPreferencesStore(
+    (state) =>
+      state.backgroundsByConversationID[resolvedConversationID] ??
+      DEFAULT_CHAT_BACKGROUND_PREFERENCE,
+  );
+  const backgroundLabel = useMemo(
+    () => getChatBackgroundPreferenceLabel(backgroundPreference),
+    [backgroundPreference],
   );
   const pinned = optimisticConversationState.pinned ?? baseState.pinned;
   const muted = optimisticConversationState.muted ?? baseState.muted;
@@ -287,6 +302,16 @@ export default function ChatInfoScreen() {
     router.push(getEditFriendTagsHref('messages', friendId, friendName));
   }, [friendId, friendName]);
 
+  const handleOpenChatBackground = useCallback(() => {
+    if (!resolvedConversationID) {
+      return;
+    }
+
+    router.push(
+      getChatBackgroundHref(resolvedConversationID, routeSourceID, friendName),
+    );
+  }, [friendName, resolvedConversationID, routeSourceID]);
+
   const handleDeleteContact = useCallback(() => {
     openUnsupportedAction('删除联系人');
   }, [openUnsupportedAction]);
@@ -446,8 +471,8 @@ export default function ChatInfoScreen() {
           <MenuRow
             icon="image-outline"
             label="聊天背景"
-            rightText="跟随全局"
-            onPress={() => openUnsupportedAction('聊天背景')}
+            rightText={backgroundLabel}
+            onPress={handleOpenChatBackground}
           />
           <Divider />
           <MenuRow

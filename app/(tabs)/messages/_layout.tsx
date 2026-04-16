@@ -10,6 +10,14 @@ export default function MessagesLayout() {
         headerShown: false,
         contentStyle: { backgroundColor: colors.background },
       }}
-    />
+    >
+      <Stack.Screen name="chat-detail" />
+      <Stack.Screen name="chat-info" />
+      <Stack.Screen name="chat-background" options={{ title: '聊天背景' }} />
+      <Stack.Screen name="user/[id]" />
+      <Stack.Screen name="add-friend" />
+      <Stack.Screen name="find" />
+      <Stack.Screen name="groups" />
+    </Stack>
   );
 }

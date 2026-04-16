@@ -1,0 +1,138 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const ts = require('typescript');
+
+function loadTsModule(relativePath, stubs = {}) {
+  const filePath = path.join(process.cwd(), relativePath);
+  const source = fs.readFileSync(filePath, 'utf8');
+  const transpiled = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2020,
+      baseUrl: process.cwd(),
+      paths: {
+        '@/*': ['src/*'],
+      },
+    },
+    fileName: filePath,
+  }).outputText;
+
+  const context = {
+    module: { exports: {} },
+    exports: {},
+    require: (specifier) => {
+      if (specifier in stubs) {
+        return stubs[specifier];
+      }
+
+      return require(specifier);
+    },
+  };
+  context.exports = context.module.exports;
+
+  vm.runInNewContext(transpiled, context, { filename: filePath });
+  return context.module.exports;
+}
+
+function normalize(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+test('chat preferences store defaults each conversation to the global background', () => {
+  const { DEFAULT_CHAT_BACKGROUND_PREFERENCE, useChatPreferencesStore } = loadTsModule(
+    'src/features/chat/store/use-chat-preferences-store.ts',
+    {
+      '@react-native-async-storage/async-storage': {
+        __esModule: true,
+        default: {
+          getItem: async () => null,
+          setItem: async () => undefined,
+          removeItem: async () => undefined,
+        },
+      },
+    },
+  );
+
+  assert.deepEqual(normalize(DEFAULT_CHAT_BACKGROUND_PREFERENCE), { mode: 'global' });
+  assert.deepEqual(
+    normalize(
+      useChatPreferencesStore.getState().getChatBackgroundPreference('conversation-1'),
+    ),
+    { mode: 'global' },
+  );
+});
+
+test('chat preferences store keeps per-conversation preset selections and removes global overrides from storage', () => {
+  const { CHAT_BACKGROUND_PRESETS, useChatPreferencesStore } = loadTsModule(
+    'src/features/chat/store/use-chat-preferences-store.ts',
+    {
+      '@react-native-async-storage/async-storage': {
+        __esModule: true,
+        default: {
+          getItem: async () => null,
+          setItem: async () => undefined,
+          removeItem: async () => undefined,
+        },
+      },
+    },
+  );
+
+  const preset = CHAT_BACKGROUND_PRESETS[1];
+  useChatPreferencesStore
+    .getState()
+    .setChatBackgroundPreference('conversation-1', {
+      mode: 'preset',
+      presetId: preset.id,
+    });
+
+  assert.deepEqual(
+    normalize(
+      useChatPreferencesStore.getState().getChatBackgroundPreference('conversation-1'),
+    ),
+    { mode: 'preset', presetId: preset.id },
+  );
+
+  useChatPreferencesStore
+    .getState()
+    .setChatBackgroundPreference('conversation-1', { mode: 'global' });
+
+  assert.deepEqual(
+    normalize(useChatPreferencesStore.getState().backgroundsByConversationID),
+    {},
+  );
+});
+
+test('chat preferences store resolves labels for global, preset, and image backgrounds', () => {
+  const { CHAT_BACKGROUND_PRESETS, getChatBackgroundPreferenceLabel } = loadTsModule(
+    'src/features/chat/store/use-chat-preferences-store.ts',
+    {
+      '@react-native-async-storage/async-storage': {
+        __esModule: true,
+        default: {
+          getItem: async () => null,
+          setItem: async () => undefined,
+          removeItem: async () => undefined,
+        },
+      },
+    },
+  );
+
+  assert.equal(
+    getChatBackgroundPreferenceLabel({ mode: 'global' }),
+    '跟随全局',
+  );
+  assert.equal(
+    getChatBackgroundPreferenceLabel({
+      mode: 'preset',
+      presetId: CHAT_BACKGROUND_PRESETS[0].id,
+    }),
+    CHAT_BACKGROUND_PRESETS[0].label,
+  );
+  assert.equal(
+    getChatBackgroundPreferenceLabel({ mode: 'image', uri: 'file:///tmp/bg.png' }),
+    '自定义图片',
+  );
+});

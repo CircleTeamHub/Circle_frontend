@@ -167,3 +167,19 @@ test('chat info screen only lets the latest request for an action finish cleanup
   assert.match(source, /if \(\s*isActionConversationCurrent\(actionConversationID\) &&\s*isLatestActionRequest\(action, actionRequestToken\)\s*\) \{\s*rollback\?\.?\(\);/s);
   assert.match(source, /if \(\s*isActionConversationCurrent\(actionConversationID\) &&\s*isLatestActionRequest\(action, actionRequestToken\)\s*\) \{\s*setConversationActionPending\(action, false\);/s);
 });
+
+test('chat info screen wires chat background selection into the new route and label', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatInfoScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /getChatBackgroundHref/);
+  assert.match(source, /useChatPreferencesStore/);
+  assert.match(source, /backgroundLabel/);
+  assert.match(source, /handleOpenChatBackground/);
+  assert.match(source, /label="聊天背景"/);
+  assert.match(source, /rightText={backgroundLabel}/);
+  assert.match(source, /onPress={handleOpenChatBackground}/);
+});

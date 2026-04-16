@@ -41,3 +41,17 @@ test('chat detail screen supports preview mode without an IM conversation', () =
   assert.match(source, /editable=\{!isPreviewMode\}/);
   assert.match(source, /disabled=\{sending \|\| isPreviewMode\}/);
 });
+
+test('chat detail screen reads the local chat background preference for the active conversation', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatDetailScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /useChatPreferencesStore/);
+  assert.match(source, /resolveChatBackgroundStyle/);
+  assert.match(source, /ImageBackground/);
+  assert.match(source, /backgroundPreference/);
+  assert.match(source, /backgroundStyle/);
+});

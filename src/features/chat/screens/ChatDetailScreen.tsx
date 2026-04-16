@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, FlatList, StyleSheet } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  FlatList,
+  StyleSheet,
+  ImageBackground,
+} from 'react-native';
 import type { FlatList as FlatListType } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,6 +25,11 @@ import {
 import { mapMessageItemToChatMessage } from '@/im/mappers';
 import { useAuthStore } from '@/stores/authStore';
 import { useIMStore } from '@/stores/imStore';
+import {
+  DEFAULT_CHAT_BACKGROUND_PREFERENCE,
+  resolveChatBackgroundStyle,
+  useChatPreferencesStore,
+} from '@/features/chat/store/use-chat-preferences-store';
 import { SessionType } from '@openim/rn-client-sdk';
 import type { ChatMessage } from '@/types';
 
@@ -105,6 +118,15 @@ export default function ChatDetailScreen() {
   const avatarUrl =
     typeof params.avatarUrl === 'string' ? params.avatarUrl : undefined;
   const isPreviewMode = !conversationID;
+  const backgroundPreference = useChatPreferencesStore(
+    (state) =>
+      state.backgroundsByConversationID[conversationID] ??
+      DEFAULT_CHAT_BACKGROUND_PREFERENCE,
+  );
+  const backgroundStyle = useMemo(
+    () => resolveChatBackgroundStyle(backgroundPreference, colors.background),
+    [backgroundPreference, colors.background],
+  );
 
   const handleBack = useCallback(() => router.back(), []);
   const handleOpenUserProfile = useCallback(() => {
@@ -112,16 +134,16 @@ export default function ChatDetailScreen() {
   }, [conversationTitle, sourceID]);
 
   const d = useMemo(() => ({
-    container: { flex: 1, backgroundColor: colors.background },
+    container: { flex: 1, backgroundColor: backgroundStyle.backgroundColor },
     headerName: { color: colors.text },
     onlineDot: { backgroundColor: colors.online },
     headerStatusText: { color: colors.online },
-    inputBar: { backgroundColor: colors.background },
+    inputBar: { backgroundColor: backgroundStyle.backgroundColor },
     circleBtn: { backgroundColor: colors.surface },
     composerActionBtn: { backgroundColor: colors.surfaceBorder },
     composerShell: { backgroundColor: colors.inputBg, borderColor: colors.surfaceBorder },
     composerInput: { color: colors.text },
-  }), [colors]);
+  }), [backgroundStyle.backgroundColor, colors]);
 
   useEffect(() => {
     if (!conversationID || !sourceID) {
@@ -214,6 +236,15 @@ export default function ChatDetailScreen() {
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
+      {backgroundStyle.imageUri ? (
+        <ImageBackground
+          source={{ uri: backgroundStyle.imageUri }}
+          style={StyleSheet.absoluteFillObject}
+          resizeMode="cover"
+        >
+          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.overlay }]} />
+        </ImageBackground>
+      ) : null}
       <View style={s.header}>
         <Pressable onPress={handleBack} hitSlop={8}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
@@ -236,7 +267,16 @@ export default function ChatDetailScreen() {
         </View>
         <Pressable
           hitSlop={8}
-          onPress={() => router.push({ pathname: '/(tabs)/messages/chat-info', params: { conversationID } })}
+          onPress={() =>
+            router.push({
+              pathname: '/(tabs)/messages/chat-info',
+              params: {
+                conversationID,
+                sourceID,
+                title: conversationTitle,
+              },
+            })
+          }
         >
           <Ionicons name="ellipsis-vertical" size={20} color={colors.textSecondary} />
         </Pressable>
