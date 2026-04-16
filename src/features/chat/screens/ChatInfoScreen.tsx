@@ -68,6 +68,12 @@ export default function ChatInfoScreen() {
   const [blacklist, setBlacklist] = useState(false);
   const [actionPending, setActionPending] = useState(initialActionPending);
   const actionPendingRef = useRef(initialActionPending);
+  const actionRequestTokenRef = useRef({
+    pin: 0,
+    mute: 0,
+    burn: 0,
+    clear: 0,
+  });
   const currentConversationIDRef = useRef('');
   const [optimisticConversationState, setOptimisticConversationState] =
     useState<OptimisticConversationState>({});
@@ -185,8 +191,23 @@ export default function ChatInfoScreen() {
     [],
   );
 
+  const startActionRequest = useCallback((action: ConversationActionKey) => {
+    const nextToken = actionRequestTokenRef.current[action] + 1;
+    actionRequestTokenRef.current = {
+      ...actionRequestTokenRef.current,
+      [action]: nextToken,
+    };
+    return nextToken;
+  }, []);
+
   const isActionConversationCurrent = useCallback(
     (conversationID: string) => currentConversationIDRef.current === conversationID,
+    [],
+  );
+
+  const isLatestActionRequest = useCallback(
+    (action: ConversationActionKey, requestToken: number) =>
+      actionRequestTokenRef.current[action] === requestToken,
     [],
   );
 
@@ -217,26 +238,35 @@ export default function ChatInfoScreen() {
       }
 
       const actionConversationID = resolvedConversationID;
+      const actionRequestToken = startActionRequest(action);
       setConversationActionPending(action, true);
       onStart?.();
 
       try {
         await task();
       } catch (error) {
-        if (isActionConversationCurrent(actionConversationID)) {
+        if (
+          isActionConversationCurrent(actionConversationID) &&
+          isLatestActionRequest(action, actionRequestToken)
+        ) {
           rollback?.();
           openActionError(error);
         }
       } finally {
-        if (isActionConversationCurrent(actionConversationID)) {
+        if (
+          isActionConversationCurrent(actionConversationID) &&
+          isLatestActionRequest(action, actionRequestToken)
+        ) {
           setConversationActionPending(action, false);
         }
       }
     },
     [
       isActionConversationCurrent,
+      isLatestActionRequest,
       openActionError,
       resolvedConversationID,
+      startActionRequest,
       setConversationActionPending,
     ],
   );

@@ -144,7 +144,26 @@ test('chat info screen ignores stale async completions after the conversation ch
   assert.match(source, /const isActionConversationCurrent = useCallback/);
   assert.match(source, /currentConversationIDRef\.current === conversationID/);
   assert.match(source, /const actionConversationID = resolvedConversationID;/);
-  assert.match(source, /if \(isActionConversationCurrent\(actionConversationID\)\) \{\s*rollback\?\.?\(\);/s);
-  assert.match(source, /if \(isActionConversationCurrent\(actionConversationID\)\) \{\s*setConversationActionPending\(action, false\);/s);
+  assert.match(source, /if \(\s*isActionConversationCurrent\(actionConversationID\) &&[\s\S]{0,120}isLatestActionRequest\(action, actionRequestToken\)\s*\) \{\s*rollback\?\.?\(\);/s);
+  assert.match(source, /if \(\s*isActionConversationCurrent\(actionConversationID\) &&[\s\S]{0,120}isLatestActionRequest\(action, actionRequestToken\)\s*\) \{\s*setConversationActionPending\(action, false\);/s);
   assert.doesNotMatch(source, /useEffect\(\(\) => \{\s*currentConversationIDRef\.current = resolvedConversationID;/s);
+});
+
+test('chat info screen only lets the latest request for an action finish cleanup', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatInfoScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /const actionRequestTokenRef = useRef\(\{\s*pin: 0,\s*mute: 0,\s*burn: 0,\s*clear: 0,\s*\}\);/s);
+  assert.match(source, /const startActionRequest = useCallback/);
+  assert.match(source, /const nextToken = actionRequestTokenRef\.current\[action\] \+ 1;/);
+  assert.match(source, /actionRequestTokenRef\.current = \{\s*\.\.\.actionRequestTokenRef\.current,\s*\[action\]: nextToken,\s*\};/s);
+  assert.match(source, /return nextToken;/);
+  assert.match(source, /const isLatestActionRequest = useCallback/);
+  assert.match(source, /actionRequestTokenRef\.current\[action\] === requestToken/);
+  assert.match(source, /const actionRequestToken = startActionRequest\(action\);/);
+  assert.match(source, /if \(\s*isActionConversationCurrent\(actionConversationID\) &&\s*isLatestActionRequest\(action, actionRequestToken\)\s*\) \{\s*rollback\?\.?\(\);/s);
+  assert.match(source, /if \(\s*isActionConversationCurrent\(actionConversationID\) &&\s*isLatestActionRequest\(action, actionRequestToken\)\s*\) \{\s*setConversationActionPending\(action, false\);/s);
 });
