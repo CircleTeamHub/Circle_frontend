@@ -257,6 +257,59 @@ export async function sendTextMessage(params: {
   return sentMessage;
 }
 
+export async function toggleConversationPinned(
+  conversationID: string,
+  isPinned: boolean
+) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await OpenIMSDK.pinConversation({ conversationID, isPinned });
+}
+
+export async function setConversationMute(
+  conversationID: string,
+  muted: boolean
+) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await OpenIMSDK.setConversationRecvMessageOpt({
+    conversationID,
+    opt: muted ? 2 : 0,
+  });
+}
+
+export async function setConversationBurnDuration(
+  conversationID: string,
+  burnDuration: number
+) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await OpenIMSDK.setConversationBurnDuration({ conversationID, burnDuration });
+}
+
+export async function clearConversationMessages(conversationID: string) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await OpenIMSDK.clearConversationAndDeleteAllMsg(conversationID);
+  useIMStore.getState().setMessages(conversationID, []);
+}
+
 export function isMessageForConversation(
   message: MessageItem,
   conversation: { sourceID: string; sessionType: SessionType },

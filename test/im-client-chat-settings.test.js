@@ -96,6 +96,10 @@ function loadChatSettingsClient(sdkCalls, storeCalls) {
   });
 }
 
+function normalize(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
 test('im client chat setting wrappers call the expected OpenIM SDK methods', async () => {
   const sdkCalls = [];
   const storeCalls = [];
@@ -109,7 +113,7 @@ test('im client chat setting wrappers call the expected OpenIM SDK methods', asy
   await setConversationMute('conversation-1', true);
   await setConversationBurnDuration('conversation-1', 60);
 
-  assert.deepEqual(sdkCalls, [
+  assert.deepEqual(normalize(sdkCalls), [
     ['pinConversation', { conversationID: 'conversation-1', isPinned: true }],
     [
       'setConversationRecvMessageOpt',
@@ -127,10 +131,10 @@ test('clearConversationMessages clears OpenIM history and local message cache', 
 
   await clearConversationMessages('conversation-99');
 
-  assert.deepEqual(sdkCalls, [
+  assert.deepEqual(normalize(sdkCalls), [
     ['clearConversationAndDeleteAllMsg', 'conversation-99'],
   ]);
-  assert.deepEqual(storeCalls, [
+  assert.deepEqual(normalize(storeCalls), [
     ['setMessages', 'conversation-99', []],
   ]);
 });
