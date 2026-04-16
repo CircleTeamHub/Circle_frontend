@@ -139,10 +139,12 @@ test('chat info screen ignores stale async completions after the conversation ch
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /const currentConversationIDRef = useRef\(''\);/);
+  assert.match(source, /const resolvedConversationID = conversation\?\.conversationID \?\? '';\s*currentConversationIDRef\.current = resolvedConversationID;/s);
   assert.match(source, /currentConversationIDRef\.current = resolvedConversationID;/);
   assert.match(source, /const isActionConversationCurrent = useCallback/);
   assert.match(source, /currentConversationIDRef\.current === conversationID/);
   assert.match(source, /const actionConversationID = resolvedConversationID;/);
   assert.match(source, /if \(isActionConversationCurrent\(actionConversationID\)\) \{\s*rollback\?\.?\(\);/s);
   assert.match(source, /if \(isActionConversationCurrent\(actionConversationID\)\) \{\s*setConversationActionPending\(action, false\);/s);
+  assert.doesNotMatch(source, /useEffect\(\(\) => \{\s*currentConversationIDRef\.current = resolvedConversationID;/s);
 });

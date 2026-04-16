@@ -99,6 +99,7 @@ export default function ChatInfoScreen() {
     [conversationID, conversations, routeSourceID],
   );
   const resolvedConversationID = conversation?.conversationID ?? '';
+  currentConversationIDRef.current = resolvedConversationID;
   const baseState = useMemo(
     () => buildChatInfoState(conversation),
     [conversation],
@@ -121,7 +122,6 @@ export default function ChatInfoScreen() {
   );
 
   useEffect(() => {
-    currentConversationIDRef.current = resolvedConversationID;
     actionPendingRef.current = initialActionPending;
     setActionPending(initialActionPending);
     setOptimisticConversationState({});
