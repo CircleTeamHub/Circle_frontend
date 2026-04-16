@@ -33,11 +33,15 @@ test('chat info screen uses real conversation state instead of local placeholder
   assert.match(source, /buildChatInfoState\(\s*conversation\s*\)/);
   assert.match(source, /toggleValue={[^}]*pinned[^}]*}/);
   assert.match(source, /toggleValue={[^}]*muted[^}]*}/);
-  assert.match(source, /rightText={[^}]*burnLabel[^}]*}/);
-  assert.match(source, /label="置顶聊天"[\s\S]{0,260}toggleConversationPinned\(resolvedConversationID,/s);
-  assert.match(source, /label="消息免打扰"[\s\S]{0,260}setConversationMute\(resolvedConversationID,/s);
-  assert.match(source, /label="好友消息自毁"[\s\S]{0,360}setConversationBurnDuration\(\s*resolvedConversationID,/s);
-  assert.match(source, /label="清空聊天记录"[\s\S]{0,260}clearConversationMessages\(resolvedConversationID\)/s);
+  assert.match(source, /burnLabel/);
+  assert.match(source, /const handleTogglePinned = useCallback/);
+  assert.match(source, /toggleConversationPinned\(resolvedConversationID,\s*nextPinned\)/);
+  assert.match(source, /const handleToggleMuted = useCallback/);
+  assert.match(source, /setConversationMute\(resolvedConversationID,\s*nextMuted\)/);
+  assert.match(source, /const applyBurnDuration = useCallback/);
+  assert.match(source, /setConversationBurnDuration\(resolvedConversationID,\s*nextBurnDuration\)/);
+  assert.match(source, /const handleConfirmClearHistory = useCallback/);
+  assert.match(source, /clearConversationMessages\(resolvedConversationID\)/);
   assert.doesNotMatch(source, /toggleConversationPinned\(conversationID,/);
   assert.doesNotMatch(source, /setConversationMute\(conversationID,/);
   assert.doesNotMatch(source, /setConversationBurnDuration\(conversationID,/);
@@ -46,4 +50,30 @@ test('chat info screen uses real conversation state instead of local placeholder
   assert.doesNotMatch(source, /const \[muteNotifications, setMuteNotifications\] = useState\(false\)/);
   assert.doesNotMatch(source, /toggleValue={pinChat}/);
   assert.doesNotMatch(source, /toggleValue={muteNotifications}/);
+});
+
+test('chat info screen constrains conversation actions with burn selection, clear confirmation, and pending guards', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatInfoScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /const BURN_DURATION_OPTIONS = \[/);
+  assert.match(source, /label: '关闭', duration: 0/);
+  assert.match(source, /label: '10秒', duration: 10/);
+  assert.match(source, /label: '1分钟', duration: 60/);
+  assert.match(source, /label: '5分钟', duration: 300/);
+  assert.match(source, /const PENDING_TEXT = '处理中';/);
+  assert.match(source, /pin: false,\s*mute: false,\s*burn: false,\s*clear: false/s);
+  assert.match(source, /Alert\.alert\(\s*'好友消息自毁',\s*'选择消息自毁时间'/s);
+  assert.match(source, /Alert\.alert\(\s*'清空聊天记录',\s*'清空后将删除当前会话的聊天记录，且无法恢复。'/s);
+  assert.match(source, /actionPending\.pin \? undefined : handleTogglePinned/);
+  assert.match(source, /actionPending\.mute \? undefined : handleToggleMuted/);
+  assert.match(source, /actionPending\.burn \? undefined : handleOpenBurnDurationPicker/);
+  assert.match(source, /actionPending\.clear \? undefined : handleConfirmClearHistory/);
+  assert.match(source, /hasToggle={!actionPending\.pin}/);
+  assert.match(source, /hasToggle={!actionPending\.mute}/);
+  assert.match(source, /rightText={actionPending\.burn \? PENDING_TEXT : burnLabel}/);
+  assert.match(source, /rightText={actionPending\.clear \? PENDING_TEXT : undefined}/);
 });

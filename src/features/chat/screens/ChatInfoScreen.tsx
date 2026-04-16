@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -32,6 +32,23 @@ const s = StyleSheet.create({
   },
 });
 
+const BURN_DURATION_OPTIONS = [
+  { label: '关闭', duration: 0 },
+  { label: '10秒', duration: 10 },
+  { label: '1分钟', duration: 60 },
+  { label: '5分钟', duration: 300 },
+] as const;
+
+const PENDING_TEXT = '处理中';
+const initialActionPending = {
+  pin: false,
+  mute: false,
+  burn: false,
+  clear: false,
+};
+
+type ConversationActionKey = keyof typeof initialActionPending;
+
 export default function ChatInfoScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -43,6 +60,13 @@ export default function ChatInfoScreen() {
     conversationID?: string;
   }>();
   const [blacklist, setBlacklist] = useState(false);
+  const [actionPending, setActionPending] = useState(initialActionPending);
+  const actionPendingRef = useRef(initialActionPending);
+  const [optimisticConversationState, setOptimisticConversationState] = useState<{
+    pinned?: boolean;
+    muted?: boolean;
+    burnDuration?: number;
+  }>({});
   const conversations = useIMStore((state) => state.conversations);
 
   const friendId =
@@ -71,14 +95,74 @@ export default function ChatInfoScreen() {
     [conversationID, conversations, routeSourceID],
   );
   const resolvedConversationID = conversation?.conversationID ?? '';
-  const { pinned, muted, burnLabel } = useMemo(
+  const baseState = useMemo(
     () => buildChatInfoState(conversation),
     [conversation],
   );
+  const pinned = optimisticConversationState.pinned ?? baseState.pinned;
+  const muted = optimisticConversationState.muted ?? baseState.muted;
+  const burnDuration = optimisticConversationState.burnDuration ?? conversation?.burnDuration ?? 0;
+  const burnLabel = useMemo(
+    () =>
+      buildChatInfoState({
+        isPinned: pinned,
+        recvMsgOpt: muted ? 2 : 0,
+        burnDuration,
+      }).burnLabel,
+    [burnDuration, muted, pinned],
+  );
+
+  useEffect(() => {
+    actionPendingRef.current = initialActionPending;
+    setActionPending(initialActionPending);
+    setOptimisticConversationState({});
+  }, [resolvedConversationID]);
 
   const openUnsupportedAction = useCallback((label: string) => {
     Alert.alert('暂未开放', `${label} 稍后提供。`);
   }, []);
+
+  const openActionError = useCallback((error: unknown) => {
+    Alert.alert(
+      '操作失败',
+      error instanceof Error ? error.message : '请稍后重试',
+    );
+  }, []);
+
+  const setConversationActionPending = useCallback(
+    (action: ConversationActionKey, nextPending: boolean) => {
+      actionPendingRef.current = {
+        ...actionPendingRef.current,
+        [action]: nextPending,
+      };
+      setActionPending(actionPendingRef.current);
+    },
+    [],
+  );
+
+  const runConversationAction = useCallback(
+    async (
+      action: ConversationActionKey,
+      task: () => Promise<void>,
+      rollback?: () => void,
+    ) => {
+      if (!resolvedConversationID || actionPendingRef.current[action]) {
+        return;
+      }
+
+      setConversationActionPending(action, true);
+
+      try {
+        await task();
+      } catch (error) {
+        rollback?.();
+        openActionError(error);
+      } finally {
+        setConversationActionPending(action, false);
+      }
+    },
+    [openActionError, resolvedConversationID, setConversationActionPending],
+  );
 
   const handleOpenRemark = useCallback(() => {
     if (!friendId) {
@@ -99,6 +183,128 @@ export default function ChatInfoScreen() {
   const handleDeleteContact = useCallback(() => {
     openUnsupportedAction('删除联系人');
   }, [openUnsupportedAction]);
+
+  const handleTogglePinned = useCallback(
+    (nextPinned: boolean) => {
+      if (!resolvedConversationID || actionPending.pin) {
+        return;
+      }
+
+      const previousPinned = pinned;
+      setOptimisticConversationState((current) => ({
+        ...current,
+        pinned: nextPinned,
+      }));
+
+      void runConversationAction(
+        'pin',
+        () => toggleConversationPinned(resolvedConversationID, nextPinned),
+        () =>
+          setOptimisticConversationState((current) => ({
+            ...current,
+            pinned: previousPinned,
+          })),
+      );
+    },
+    [actionPending.pin, pinned, resolvedConversationID, runConversationAction],
+  );
+
+  const handleToggleMuted = useCallback(
+    (nextMuted: boolean) => {
+      if (!resolvedConversationID || actionPending.mute) {
+        return;
+      }
+
+      const previousMuted = muted;
+      setOptimisticConversationState((current) => ({
+        ...current,
+        muted: nextMuted,
+      }));
+
+      void runConversationAction(
+        'mute',
+        () => setConversationMute(resolvedConversationID, nextMuted),
+        () =>
+          setOptimisticConversationState((current) => ({
+            ...current,
+            muted: previousMuted,
+          })),
+      );
+    },
+    [actionPending.mute, muted, resolvedConversationID, runConversationAction],
+  );
+
+  const applyBurnDuration = useCallback(
+    (nextBurnDuration: number) => {
+      if (
+        !resolvedConversationID ||
+        actionPending.burn ||
+        nextBurnDuration === burnDuration
+      ) {
+        return;
+      }
+
+      const previousBurnDuration = burnDuration;
+      setOptimisticConversationState((current) => ({
+        ...current,
+        burnDuration: nextBurnDuration,
+      }));
+
+      void runConversationAction(
+        'burn',
+        () => setConversationBurnDuration(resolvedConversationID, nextBurnDuration),
+        () =>
+          setOptimisticConversationState((current) => ({
+            ...current,
+            burnDuration: previousBurnDuration,
+          })),
+      );
+    },
+    [actionPending.burn, burnDuration, resolvedConversationID, runConversationAction],
+  );
+
+  const handleOpenBurnDurationPicker = useCallback(() => {
+    if (!resolvedConversationID || actionPending.burn) {
+      return;
+    }
+
+    Alert.alert(
+      '好友消息自毁',
+      '选择消息自毁时间',
+      [
+        ...BURN_DURATION_OPTIONS.map(({ label, duration }) => ({
+          text: label,
+          onPress: () => applyBurnDuration(duration),
+        })),
+        { text: '取消', style: 'cancel' as const },
+      ],
+      { cancelable: true },
+    );
+  }, [actionPending.burn, applyBurnDuration, resolvedConversationID]);
+
+  const handleConfirmClearHistory = useCallback(() => {
+    if (!resolvedConversationID || actionPending.clear) {
+      return;
+    }
+
+    Alert.alert(
+      '清空聊天记录',
+      '清空后将删除当前会话的聊天记录，且无法恢复。',
+      [
+        { text: '取消', style: 'cancel' as const },
+        {
+          text: '清空',
+          style: 'destructive' as const,
+          onPress: () => {
+            void runConversationAction('clear', () =>
+              clearConversationMessages(resolvedConversationID),
+            );
+          },
+        },
+      ],
+      { cancelable: true },
+    );
+  }, [actionPending.clear, resolvedConversationID, runConversationAction]);
 
   const d = useMemo(
     () => ({
@@ -139,41 +345,28 @@ export default function ChatInfoScreen() {
           <MenuRow
             icon="arrow-up-circle-outline"
             label="置顶聊天"
-            hasToggle
-            onToggle={(nextPinned) =>
-              resolvedConversationID
-                ? void toggleConversationPinned(resolvedConversationID, nextPinned)
-                : undefined
-            }
+            hasToggle={!actionPending.pin}
+            onToggle={actionPending.pin ? undefined : handleTogglePinned}
             toggleValue={pinned}
+            rightText={actionPending.pin ? PENDING_TEXT : undefined}
             showArrow={false}
           />
           <Divider />
           <MenuRow
             icon="notifications-off-outline"
             label="消息免打扰"
-            hasToggle
-            onToggle={(nextMuted) =>
-              resolvedConversationID
-                ? void setConversationMute(resolvedConversationID, nextMuted)
-                : undefined
-            }
+            hasToggle={!actionPending.mute}
+            onToggle={actionPending.mute ? undefined : handleToggleMuted}
             toggleValue={muted}
+            rightText={actionPending.mute ? PENDING_TEXT : undefined}
             showArrow={false}
           />
           <Divider />
           <MenuRow
             icon="flame-outline"
             label="好友消息自毁"
-            onPress={() =>
-              resolvedConversationID
-                ? void setConversationBurnDuration(
-                    resolvedConversationID,
-                    conversation?.burnDuration ?? 0,
-                  )
-                : undefined
-            }
-            rightText={burnLabel}
+            onPress={actionPending.burn ? undefined : handleOpenBurnDurationPicker}
+            rightText={actionPending.burn ? PENDING_TEXT : burnLabel}
           />
         </View>
 
@@ -196,11 +389,8 @@ export default function ChatInfoScreen() {
           <MenuRow
             icon="trash-outline"
             label="清空聊天记录"
-            onPress={() =>
-              resolvedConversationID
-                ? void clearConversationMessages(resolvedConversationID)
-                : undefined
-            }
+            onPress={actionPending.clear ? undefined : handleConfirmClearHistory}
+            rightText={actionPending.clear ? PENDING_TEXT : undefined}
           />
           <Divider />
           <MenuRow
