@@ -63,7 +63,10 @@ export default function ChatInfoScreen() {
   const conversation = useMemo(
     () =>
       conversations.find((conversation) => conversation.conversationID === conversationID) ??
-      conversations.find((conversation) => conversation.sourceID === routeSourceID) ??
+      conversations.find(
+        (conversation) =>
+          conversation.userID === routeSourceID || conversation.groupID === routeSourceID,
+      ) ??
       null,
     [conversationID, conversations, routeSourceID],
   );

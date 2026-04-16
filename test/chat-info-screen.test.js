@@ -18,8 +18,9 @@ test('chat info screen uses real conversation state instead of local placeholder
   assert.match(source, /const routeSourceID = friendId;/);
   assert.match(
     source,
-    /conversations?\.find\(\s*\(\s*conversation\s*\)\s*=>\s*conversation\.sourceID\s*===\s*routeSourceID\s*\)/,
+    /conversations?\.find\(\s*\(\s*conversation\s*\)\s*=>[\s\S]{0,120}conversation\.userID\s*===\s*routeSourceID\s*\|\|\s*conversation\.groupID\s*===\s*routeSourceID[\s\S]{0,40}\)/,
   );
+  assert.doesNotMatch(source, /conversation\.sourceID\s*===\s*routeSourceID/);
   assert.match(
     source,
     /const resolvedConversationID = conversation\?\.conversationID \?\? '';/,
