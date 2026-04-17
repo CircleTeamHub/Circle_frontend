@@ -257,6 +257,52 @@ export async function sendTextMessage(params: {
   return sentMessage;
 }
 
+export async function sendFriendCardMessage(params: {
+  targetConversationID: string;
+  userID: string;
+  nickname: string;
+  faceURL: string;
+  ex?: string;
+}) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  const targetConversation = useIMStore
+    .getState()
+    .conversations.find(
+      (conversation) => conversation.conversationID === params.targetConversationID,
+    );
+
+  if (!targetConversation) {
+    throw new Error('目标会话不存在');
+  }
+
+  const message = await OpenIMSDK.createCardMessage({
+    userID: params.userID,
+    nickname: params.nickname,
+    faceURL: params.faceURL,
+    ex: params.ex ?? '',
+  });
+  const isGroupConversation =
+    targetConversation.conversationType === SessionType.Group;
+
+  return OpenIMSDK.sendMessage({
+    recvID: isGroupConversation ? '' : targetConversation.userID,
+    groupID: isGroupConversation ? targetConversation.groupID : '',
+    message,
+    offlinePushInfo: {
+      title: '好友推荐',
+      desc: params.nickname,
+      ex: '',
+      iOSPushSound: 'default',
+      iOSBadgeCount: true,
+    },
+  });
+}
+
 export async function toggleConversationPinned(
   conversationID: string,
   isPinned: boolean

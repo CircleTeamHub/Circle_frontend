@@ -14,6 +14,7 @@ export default function MessagesLayout() {
       <Stack.Screen name="chat-detail" />
       <Stack.Screen name="chat-info" />
       <Stack.Screen name="chat-background" options={{ title: '聊天背景' }} />
+      <Stack.Screen name="recommend-friend" options={{ title: '推荐给朋友' }} />
       <Stack.Screen name="user/[id]" />
       <Stack.Screen name="add-friend" />
       <Stack.Screen name="find" />

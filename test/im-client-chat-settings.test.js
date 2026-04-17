@@ -138,3 +138,92 @@ test('clearConversationMessages clears OpenIM history and local message cache', 
     ['setMessages', 'conversation-99', []],
   ]);
 });
+
+test('sendFriendCardMessage creates and sends a friend card message to the target conversation', async () => {
+  const sdkCalls = [];
+  const { sendFriendCardMessage } = loadTsModule('src/im/client.ts', {
+    '@openim/rn-client-sdk': {
+      __esModule: true,
+      default: {
+        initSDK: async () => undefined,
+        createCardMessage: async (params) => {
+          sdkCalls.push(['createCardMessage', params]);
+          return { clientMsgID: 'message-1' };
+        },
+        sendMessage: async (params) => {
+          sdkCalls.push(['sendMessage', params]);
+          return params.message;
+        },
+      },
+      LogLevel: { Info: 0 },
+      SessionType: { Single: 1, Group: 2 },
+      ViewType: { History: 0 },
+    },
+    'react-native-fs': {
+      __esModule: true,
+      default: {
+        DocumentDirectoryPath: '/tmp',
+        mkdir: async () => undefined,
+      },
+    },
+    'react-native': {
+      Platform: { OS: 'ios' },
+    },
+    '@/constants/config': {
+      OPENIM_API_URL: 'https://im.example.com',
+      OPENIM_WS_URL: 'wss://im.example.com',
+      OPENIM_LOG_LEVEL: 0,
+    },
+    '@/stores/imStore': {
+      useIMStore: {
+        getState: () => ({
+          connected: true,
+          conversations: [
+            {
+              conversationID: 'conversation-2',
+              userID: 'target-user',
+              groupID: '',
+            },
+          ],
+          setError: () => undefined,
+          setInitialized: () => undefined,
+          setCurrentUserID: () => undefined,
+          setConnecting: () => undefined,
+          reset: () => undefined,
+          setConversations: () => undefined,
+          mergeConversations: () => undefined,
+          setMessages: () => undefined,
+        }),
+      },
+    },
+  });
+
+  await sendFriendCardMessage({
+    targetConversationID: 'conversation-2',
+    userID: 'friend-1',
+    nickname: '小李',
+    faceURL: '',
+  });
+
+  assert.deepEqual(normalize(sdkCalls), [
+    [
+      'createCardMessage',
+      { userID: 'friend-1', nickname: '小李', faceURL: '', ex: '' },
+    ],
+    [
+      'sendMessage',
+      {
+        recvID: 'target-user',
+        groupID: '',
+        message: { clientMsgID: 'message-1' },
+        offlinePushInfo: {
+          title: '好友推荐',
+          desc: '小李',
+          ex: '',
+          iOSPushSound: 'default',
+          iOSBadgeCount: true,
+        },
+      },
+    ],
+  ]);
+});

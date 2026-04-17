@@ -111,6 +111,21 @@ export function getChatBackgroundHref(
   };
 }
 
+export function getRecommendFriendHref(
+  conversationID: string,
+  friendId: string,
+  friendName?: string,
+): Href {
+  return {
+    pathname: '/(tabs)/messages/recommend-friend',
+    params: {
+      conversationID,
+      friendId,
+      ...(friendName ? { friendName } : {}),
+    },
+  };
+}
+
 export function getUserProfileScopeFromSegments(
   segments: readonly string[] | undefined,
 ): UserProfileScope {

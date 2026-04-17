@@ -183,3 +183,18 @@ test('chat info screen wires chat background selection into the new route and la
   assert.match(source, /rightText={backgroundLabel}/);
   assert.match(source, /onPress={handleOpenChatBackground}/);
 });
+
+test('chat info screen wires recommend-friend navigation from the friend recommendation row', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatInfoScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /getRecommendFriendHref/);
+  assert.match(source, /const handleOpenRecommendFriend = useCallback/);
+  assert.match(source, /router\.push\(\s*getRecommendFriendHref\(/);
+  assert.match(source, /label="把他推荐给朋友"/);
+  assert.match(source, /onPress={handleOpenRecommendFriend}/);
+  assert.doesNotMatch(source, /openUnsupportedAction\('把他推荐给朋友'\)/);
+});

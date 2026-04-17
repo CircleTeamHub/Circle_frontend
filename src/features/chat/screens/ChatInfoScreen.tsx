@@ -21,6 +21,7 @@ import {
   getChatBackgroundHref,
   getEditFriendRemarkHref,
   getEditFriendTagsHref,
+  getRecommendFriendHref,
 } from '@/features/user/utils/routes';
 import { useIMStore } from '@/stores/imStore';
 import { Radius, Spacing, useTheme } from '@/theme';
@@ -312,6 +313,16 @@ export default function ChatInfoScreen() {
     );
   }, [friendName, resolvedConversationID, routeSourceID]);
 
+  const handleOpenRecommendFriend = useCallback(() => {
+    if (!resolvedConversationID || !friendId) {
+      return;
+    }
+
+    router.push(
+      getRecommendFriendHref(resolvedConversationID, friendId, friendName),
+    );
+  }, [friendId, friendName, resolvedConversationID]);
+
   const handleDeleteContact = useCallback(() => {
     openUnsupportedAction('删除联系人');
   }, [openUnsupportedAction]);
@@ -507,7 +518,7 @@ export default function ChatInfoScreen() {
           <MenuRow
             icon="share-social-outline"
             label="把他推荐给朋友"
-            onPress={() => openUnsupportedAction('把他推荐给朋友')}
+            onPress={handleOpenRecommendFriend}
           />
           <Divider />
           <MenuRow
