@@ -100,6 +100,60 @@ function normalize(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function loadSearchClient(sdkCalls, searchResult = { totalCount: 0, searchResultItems: [] }) {
+  return loadTsModule('src/im/client.ts', {
+    '@openim/rn-client-sdk': {
+      __esModule: true,
+      default: {
+        initSDK: async () => undefined,
+        searchLocalMessages: async (params) => {
+          sdkCalls.push(['searchLocalMessages', params]);
+          return searchResult;
+        },
+      },
+      LogLevel: { Info: 0 },
+      SessionType: { Single: 1, Group: 2 },
+      ViewType: { History: 0 },
+      MessageType: {
+        TextMessage: 101,
+        PictureMessage: 102,
+        VideoMessage: 104,
+        FileMessage: 105,
+      },
+    },
+    'react-native-fs': {
+      __esModule: true,
+      default: {
+        DocumentDirectoryPath: '/tmp',
+        mkdir: async () => undefined,
+      },
+    },
+    'react-native': {
+      Platform: { OS: 'ios' },
+    },
+    '@/constants/config': {
+      OPENIM_API_URL: 'https://im.example.com',
+      OPENIM_WS_URL: 'wss://im.example.com',
+      OPENIM_LOG_LEVEL: 0,
+    },
+    '@/stores/imStore': {
+      useIMStore: {
+        getState: () => ({
+          connected: true,
+          setError: () => undefined,
+          setInitialized: () => undefined,
+          setCurrentUserID: () => undefined,
+          setConnecting: () => undefined,
+          reset: () => undefined,
+          setConversations: () => undefined,
+          mergeConversations: () => undefined,
+          setMessages: () => undefined,
+        }),
+      },
+    },
+  });
+}
+
 test('im client chat setting wrappers call the expected OpenIM SDK methods', async () => {
   const sdkCalls = [];
   const storeCalls = [];
@@ -223,6 +277,100 @@ test('sendFriendCardMessage creates and sends a friend card message to the targe
           iOSPushSound: 'default',
           iOSBadgeCount: true,
         },
+      },
+    ],
+  ]);
+});
+
+test('searchConversationTextMessages searches the current conversation by keyword', async () => {
+  const sdkCalls = [];
+  const { searchConversationTextMessages } = loadSearchClient(sdkCalls);
+
+  await searchConversationTextMessages({
+    conversationID: 'conversation-1',
+    keyword: 'hello',
+  });
+
+  assert.deepEqual(normalize(sdkCalls), [
+    [
+      'searchLocalMessages',
+      {
+        conversationID: 'conversation-1',
+        keywordList: ['hello'],
+        keywordListMatchType: 0,
+        messageTypeList: [101],
+        pageIndex: 1,
+        count: 20,
+      },
+    ],
+  ]);
+});
+
+test('searchConversationMediaMessages filters image and video messages', async () => {
+  const sdkCalls = [];
+  const { searchConversationMediaMessages } = loadSearchClient(sdkCalls);
+
+  await searchConversationMediaMessages({
+    conversationID: 'conversation-1',
+    pageIndex: 2,
+    count: 10,
+  });
+
+  assert.deepEqual(normalize(sdkCalls), [
+    [
+      'searchLocalMessages',
+      {
+        conversationID: 'conversation-1',
+        keywordList: [''],
+        messageTypeList: [102, 104],
+        pageIndex: 2,
+        count: 10,
+      },
+    ],
+  ]);
+});
+
+test('searchConversationFileMessages filters file messages', async () => {
+  const sdkCalls = [];
+  const { searchConversationFileMessages } = loadSearchClient(sdkCalls);
+
+  await searchConversationFileMessages({
+    conversationID: 'conversation-1',
+  });
+
+  assert.deepEqual(normalize(sdkCalls), [
+    [
+      'searchLocalMessages',
+      {
+        conversationID: 'conversation-1',
+        keywordList: [''],
+        messageTypeList: [105],
+        pageIndex: 1,
+        count: 20,
+      },
+    ],
+  ]);
+});
+
+test('searchConversationMessagesByDate constrains the time window to the selected day', async () => {
+  const sdkCalls = [];
+  const { searchConversationMessagesByDate } = loadSearchClient(sdkCalls);
+
+  await searchConversationMessagesByDate({
+    conversationID: 'conversation-1',
+    date: '2026-04-16',
+  });
+
+  assert.deepEqual(normalize(sdkCalls), [
+    [
+      'searchLocalMessages',
+      {
+        conversationID: 'conversation-1',
+        keywordList: [''],
+        searchTimePosition: new Date('2026-04-16T00:00:00').getTime(),
+        searchTimePeriod: 24 * 60 * 60,
+        pageIndex: 1,
+        count: 50,
       },
     ],
   ]);

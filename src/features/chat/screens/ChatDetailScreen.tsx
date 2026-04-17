@@ -97,6 +97,7 @@ export default function ChatDetailScreen() {
     title?: string;
     conversationType?: 'private' | 'group';
     avatarUrl?: string;
+    searchedMsgID?: string;
   }>();
   const currentUserID = useIMStore((state) => state.currentUserID);
   const messagesByConversation = useIMStore((state) => state.messagesByConversation);
@@ -104,6 +105,7 @@ export default function ChatDetailScreen() {
   const appendMessages = useIMStore((state) => state.appendMessages);
   const authUser = useAuthStore((state) => state.user);
   const flatListRef = useRef<FlatListType<ChatMessage>>(null);
+  const scrolledToSearchRef = useRef(false);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -117,6 +119,8 @@ export default function ChatDetailScreen() {
     params.conversationType === 'group' ? SessionType.Group : SessionType.Single;
   const avatarUrl =
     typeof params.avatarUrl === 'string' ? params.avatarUrl : undefined;
+  const searchedMsgID =
+    typeof params.searchedMsgID === 'string' ? params.searchedMsgID : '';
   const isPreviewMode = !conversationID;
   const backgroundPreference = useChatPreferencesStore(
     (state) =>
@@ -176,12 +180,26 @@ export default function ChatDetailScreen() {
     [conversationID, currentUserID, messagesByConversation],
   );
 
-  // 每当消息列表更新（新消息到达或初始加载完成）时滚动到最底部
+  // 消息列表更新时滚动：如果有搜索目标消息则定位到它，否则滚动到底部
   useEffect(() => {
-    if (messages.length > 0) {
+    if (messages.length === 0) {
+      return;
+    }
+
+    if (searchedMsgID && !scrolledToSearchRef.current) {
+      const idx = messages.findIndex((m) => m.clientMsgID === searchedMsgID);
+
+      if (idx !== -1) {
+        scrolledToSearchRef.current = true;
+        flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.3 });
+        return;
+      }
+    }
+
+    if (!searchedMsgID || scrolledToSearchRef.current) {
       flatListRef.current?.scrollToEnd({ animated: false });
     }
-  }, [messages]);
+  }, [messages, searchedMsgID]);
 
   const renderItem = useCallback(({ item }: { item: ChatMessage }) => {
     switch (item.type) {
@@ -274,6 +292,7 @@ export default function ChatDetailScreen() {
                 conversationID,
                 sourceID,
                 title: conversationTitle,
+                originScope: 'messages',
               },
             })
           }

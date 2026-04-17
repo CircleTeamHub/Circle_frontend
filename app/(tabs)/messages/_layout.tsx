@@ -13,6 +13,11 @@ export default function MessagesLayout() {
     >
       <Stack.Screen name="chat-detail" />
       <Stack.Screen name="chat-info" />
+      <Stack.Screen name="chat-history-search" />
+      <Stack.Screen name="chat-history-text" />
+      <Stack.Screen name="chat-history-media" />
+      <Stack.Screen name="chat-history-files" />
+      <Stack.Screen name="chat-history-date" />
       <Stack.Screen name="chat-background" options={{ title: '聊天背景' }} />
       <Stack.Screen name="recommend-friend" options={{ title: '推荐给朋友' }} />
       <Stack.Screen name="user/[id]" />

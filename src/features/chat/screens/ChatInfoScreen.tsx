@@ -13,15 +13,19 @@ import {
 } from '@/features/chat/store/use-chat-preferences-store';
 import {
   clearConversationMessages,
+  getOrCreateSingleConversation,
   setConversationBurnDuration,
   setConversationMute,
   toggleConversationPinned,
 } from '@/im/client';
 import {
+  getChatDetailHref,
   getChatBackgroundHref,
+  getChatHistorySearchHubHref,
   getEditFriendRemarkHref,
   getEditFriendTagsHref,
   getRecommendFriendHref,
+  getUserProfileHref,
 } from '@/features/user/utils/routes';
 import {
   addFriendToBlacklist,
@@ -77,6 +81,7 @@ export default function ChatInfoScreen() {
     name?: string;
     title?: string;
     conversationID?: string;
+    originScope?: string;
   }>();
   const [blacklist, setBlacklist] = useState(false);
   const [blacklistPending, setBlacklistPending] = useState(false);
@@ -107,6 +112,10 @@ export default function ChatInfoScreen() {
         ? params.title
         : '好友';
   const routeSourceID = friendId;
+  const originScope =
+    params.originScope === 'contacts' || params.originScope === 'profile'
+      ? params.originScope
+      : 'messages';
   const conversationID =
     typeof params.conversationID === 'string' ? params.conversationID : '';
   const conversation = useMemo(
@@ -134,6 +143,25 @@ export default function ChatInfoScreen() {
     () => getChatBackgroundPreferenceLabel(backgroundPreference),
     [backgroundPreference],
   );
+  const backHref = useMemo(() => {
+    if (originScope === 'messages') {
+      return getChatDetailHref(
+        routeSourceID,
+        friendName,
+        undefined,
+        resolvedConversationID || conversationID,
+      );
+    }
+
+    return getUserProfileHref(originScope, friendId, friendName);
+  }, [
+    conversationID,
+    friendId,
+    friendName,
+    originScope,
+    resolvedConversationID,
+    routeSourceID,
+  ]);
   const pinned = optimisticConversationState.pinned ?? baseState.pinned;
   const muted = optimisticConversationState.muted ?? baseState.muted;
   const burnDuration = optimisticConversationState.burnDuration ?? conversation?.burnDuration ?? 0;
@@ -360,6 +388,44 @@ export default function ChatInfoScreen() {
     );
   }, [friendId, friendName, resolvedConversationID]);
 
+  const resolveConversationIDForNavigation = useCallback(async () => {
+    const existingConversationID = resolvedConversationID.trim();
+
+    if (existingConversationID) {
+      return existingConversationID;
+    }
+
+    if (!friendId) {
+      return '';
+    }
+
+    try {
+      const conversation = await getOrCreateSingleConversation(friendId);
+      return conversation.conversationID;
+    } catch (error) {
+      openActionError(error);
+      return '';
+    }
+  }, [friendId, openActionError, resolvedConversationID]);
+
+  const handleOpenSearchHistory = useCallback(() => {
+    void (async () => {
+      const nextConversationID = await resolveConversationIDForNavigation();
+
+      if (!nextConversationID) {
+        return;
+      }
+
+      router.push(
+        getChatHistorySearchHubHref(
+          nextConversationID,
+          routeSourceID,
+          friendName,
+        ),
+      );
+    })();
+  }, [friendName, resolveConversationIDForNavigation, routeSourceID]);
+
   const handleToggleBlacklist = useCallback(
     (nextValue: boolean) => {
       if (!friendId || blacklistPending) {
@@ -556,7 +622,7 @@ export default function ChatInfoScreen() {
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title="聊天信息" />
+      <NavHeader title="聊天信息" fallbackHref={backHref} />
       <ScrollView
         style={s.scroll}
         contentContainerStyle={[
@@ -569,6 +635,12 @@ export default function ChatInfoScreen() {
           <MenuRow icon="create-outline" label="设置备注" onPress={handleOpenRemark} />
           <Divider />
           <MenuRow icon="pricetag-outline" label="标签" onPress={handleOpenTags} />
+          <Divider />
+          <MenuRow
+            icon="search-outline"
+            label="查找聊天记录"
+            onPress={handleOpenSearchHistory}
+          />
           <Divider />
           <MenuRow
             icon="image-outline"

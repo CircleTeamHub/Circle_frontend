@@ -141,6 +141,12 @@ test('profile view formats self check, gender, and city for the detail header', 
 
 test('user profile route helpers preserve scope for the request form', () => {
   const {
+    getChatInfoHref,
+    getChatHistoryDateHref,
+    getChatHistoryFilesHref,
+    getChatHistoryMediaHref,
+    getChatHistorySearchHubHref,
+    getChatHistoryTextHref,
     getChatDetailHref,
     getEditFriendRemarkHref,
     getEditFriendTagsHref,
@@ -148,6 +154,32 @@ test('user profile route helpers preserve scope for the request form', () => {
     getUserProfileScopeFromSegments,
   } = loadTsModule('src/features/user/utils/routes.ts');
 
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(getChatInfoHref('contacts', 'user-1', '小李'))),
+    {
+      pathname: '/(tabs)/contacts/user/[id]/chat-info',
+      params: { id: 'user-1', name: '小李', originScope: 'contacts' },
+    },
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(getChatInfoHref('profile', 'user-1', '阿梅'))),
+    {
+      pathname: '/(tabs)/profile/user/[id]/chat-info',
+      params: { id: 'user-1', name: '阿梅', originScope: 'profile' },
+    },
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(getChatInfoHref('messages', 'user-1', '小李', 'conversation-1'))),
+    {
+      pathname: '/(tabs)/messages/chat-info',
+      params: {
+        id: 'user-1',
+        name: '小李',
+        conversationID: 'conversation-1',
+        originScope: 'messages',
+      },
+    },
+  );
   assert.deepEqual(
     JSON.parse(JSON.stringify(getSendFriendRequestHref('messages', 'user-1', '小李'))),
     {
@@ -179,6 +211,61 @@ test('user profile route helpers preserve scope for the request form', () => {
         conversationType: 'private',
         avatarUrl: 'https://img.example/avatar.png',
         conversationID: 'conversation-1',
+      },
+    },
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(getChatHistorySearchHubHref('conversation-1', 'user-1', '小李'))),
+    {
+      pathname: '/(tabs)/messages/chat-history-search',
+      params: {
+        conversationID: 'conversation-1',
+        sourceID: 'user-1',
+        title: '小李',
+      },
+    },
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(getChatHistoryTextHref('conversation-1', 'user-1', '小李'))),
+    {
+      pathname: '/(tabs)/messages/chat-history-text',
+      params: {
+        conversationID: 'conversation-1',
+        sourceID: 'user-1',
+        title: '小李',
+      },
+    },
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(getChatHistoryMediaHref('conversation-1', 'user-1', '小李'))),
+    {
+      pathname: '/(tabs)/messages/chat-history-media',
+      params: {
+        conversationID: 'conversation-1',
+        sourceID: 'user-1',
+        title: '小李',
+      },
+    },
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(getChatHistoryFilesHref('conversation-1', 'user-1', '小李'))),
+    {
+      pathname: '/(tabs)/messages/chat-history-files',
+      params: {
+        conversationID: 'conversation-1',
+        sourceID: 'user-1',
+        title: '小李',
+      },
+    },
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(getChatHistoryDateHref('conversation-1', 'user-1', '小李'))),
+    {
+      pathname: '/(tabs)/messages/chat-history-date',
+      params: {
+        conversationID: 'conversation-1',
+        sourceID: 'user-1',
+        title: '小李',
       },
     },
   );
@@ -258,4 +345,32 @@ test('user profile screen uses account label, meta chips, badge row, and conditi
   assert.match(source, /canOpenSendFriendRequest/);
   assert.doesNotMatch(source, /getFriendActionLabel/);
   assert.doesNotMatch(source, /setFriendStatus\('NONE'\)/);
+});
+
+test('user profile screen wires the top-right menu into chat info for accepted friends', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/user/screens/UserProfileScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /<NavHeader[\s\S]*title="个人信息"[\s\S]*rightIcon="information-circle-outline"[\s\S]*onRightPress=\{handleOpenChatInfo\}/);
+  assert.match(source, /const handleOpenChatInfo = useCallback/);
+  assert.match(source, /friendStatus !== 'ACCEPTED'/);
+  assert.match(source, /getChatInfoHref/);
+  assert.match(source, /router\.push\(getChatInfoHref\(scope, profileId, displayName\)\)/);
+});
+
+test('scope-specific chat info route files exist for contacts and profile stacks', () => {
+  const contactsRoute = fs.readFileSync(
+    path.join(process.cwd(), 'app/(tabs)/contacts/user/[id]/chat-info.tsx'),
+    'utf8',
+  );
+  const profileRoute = fs.readFileSync(
+    path.join(process.cwd(), 'app/(tabs)/profile/user/[id]/chat-info.tsx'),
+    'utf8',
+  );
+
+  assert.match(contactsRoute, /ChatInfoScreen/);
+  assert.match(profileRoute, /ChatInfoScreen/);
 });

@@ -21,6 +21,7 @@ import {
   isCurrentUserProfile,
 } from '@/features/user/profile-view';
 import {
+  getChatInfoHref,
   getChatDetailHref,
   getEditFriendRemarkHref,
   getEditFriendTagsHref,
@@ -374,6 +375,18 @@ export default function UserProfileScreen() {
     }
   }, [displayName, openingChat, profile.avatarUrl, profileId, router]);
 
+  const handleOpenChatInfo = useCallback(() => {
+    if (
+      isCurrentUser ||
+      profileId === 'unknown' ||
+      friendStatus !== 'ACCEPTED'
+    ) {
+      return;
+    }
+
+    router.push(getChatInfoHref(scope, profileId, displayName));
+  }, [displayName, friendStatus, isCurrentUser, profileId, router, scope]);
+
   const infoRowItems = useMemo(
     () =>
       infoRows.map((label) => {
@@ -491,7 +504,11 @@ export default function UserProfileScreen() {
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title="个人信息" rightIcon="ellipsis-horizontal" />
+      <NavHeader
+        title="个人信息"
+        rightIcon="information-circle-outline"
+        onRightPress={handleOpenChatInfo}
+      />
       {fetchError ? (
         <Text style={{ color: colors.error, textAlign: 'center', paddingVertical: 6, ...Typography.small }}>
           {fetchError}

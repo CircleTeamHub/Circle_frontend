@@ -198,3 +198,98 @@ test('chat info screen wires recommend-friend navigation from the friend recomme
   assert.match(source, /onPress={handleOpenRecommendFriend}/);
   assert.doesNotMatch(source, /openUnsupportedAction\('把他推荐给朋友'\)/);
 });
+
+test('chat info screen wires search-history navigation from the new row', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatInfoScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /getChatHistorySearchHubHref/);
+  assert.match(source, /getOrCreateSingleConversation/);
+  assert.match(source, /const resolveConversationIDForNavigation = useCallback/);
+  assert.match(source, /const existingConversationID = resolvedConversationID\.trim\(\);/);
+  assert.match(source, /const conversation = await getOrCreateSingleConversation\(friendId\);/);
+  assert.match(source, /return conversation\.conversationID;/);
+  assert.match(source, /const handleOpenSearchHistory = useCallback/);
+  assert.match(source, /const nextConversationID = await resolveConversationIDForNavigation\(\);/);
+  assert.match(source, /if \(!nextConversationID\) \{\s*return;\s*\}/s);
+  assert.match(source, /router\.push\(\s*getChatHistorySearchHubHref\(/);
+  assert.match(source, /label="查找聊天记录"/);
+  assert.match(source, /onPress={handleOpenSearchHistory}/);
+});
+
+test('chat info screen resolves back navigation from the explicit origin instead of the current stack state', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatInfoScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /originScope\?: string;/);
+  assert.match(source, /const originScope =/);
+  assert.match(source, /getUserProfileHref/);
+  assert.match(source, /const backHref = useMemo/);
+  assert.match(source, /originScope === 'messages'/);
+  assert.match(source, /getChatDetailHref\(/);
+  assert.match(source, /getUserProfileHref\(originScope, friendId, friendName\)/);
+  assert.match(source, /<NavHeader[\s\S]{0,200}fallbackHref=\{backHref\}/s);
+  assert.doesNotMatch(source, /<NavHeader[\s\S]{0,200}onBackPress=/s);
+});
+
+test('messages layout registers chat history search routes', () => {
+  const filePath = path.join(
+    process.cwd(),
+    "app/(tabs)/messages/_layout.tsx",
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /<Stack\.Screen name="chat-history-search" \/>/);
+  assert.match(source, /<Stack\.Screen name="chat-history-text" \/>/);
+  assert.match(source, /<Stack\.Screen name="chat-history-media" \/>/);
+  assert.match(source, /<Stack\.Screen name="chat-history-files" \/>/);
+  assert.match(source, /<Stack\.Screen name="chat-history-date" \/>/);
+});
+
+test('chat history search screens exist with dedicated titles and empty states', () => {
+  const hubSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatHistorySearchHubScreen.tsx'),
+    'utf8',
+  );
+  const textSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatHistoryTextScreen.tsx'),
+    'utf8',
+  );
+  const mediaSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatHistoryMediaScreen.tsx'),
+    'utf8',
+  );
+  const filesSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatHistoryFilesScreen.tsx'),
+    'utf8',
+  );
+  const dateSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatHistoryDateScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(hubSource, /NavHeader[\s\S]*title="查找聊天记录"/);
+  assert.match(hubSource, /fallbackHref={getChatDetailHref\(sourceID, title, undefined, conversationID\)}/);
+  assert.match(hubSource, /搜索文字消息/);
+  assert.match(hubSource, /图片/);
+  assert.match(hubSource, /文件/);
+  assert.match(hubSource, /按日期/);
+
+  assert.match(textSource, /searchConversationTextMessages/);
+  assert.match(textSource, /暂无匹配的聊天记录/);
+
+  assert.match(mediaSource, /searchConversationMediaMessages/);
+  assert.match(mediaSource, /暂无图片或视频记录/);
+
+  assert.match(filesSource, /searchConversationFileMessages/);
+  assert.match(filesSource, /暂无文件记录/);
+
+  assert.match(dateSource, /searchConversationMessagesByDate/);
+  assert.match(dateSource, /请选择日期/);
+});
