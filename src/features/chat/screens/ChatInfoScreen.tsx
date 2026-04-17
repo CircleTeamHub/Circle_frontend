@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Divider } from '@/components/ui/divider';
 import { MenuRow } from '@/components/ui/menu-row';
@@ -23,6 +23,12 @@ import {
   getEditFriendTagsHref,
   getRecommendFriendHref,
 } from '@/features/user/utils/routes';
+import {
+  addFriendToBlacklist,
+  deleteFriendRelationship,
+  fetchFriendStatus,
+  removeFriendFromBlacklist,
+} from '@/services/api/friends';
 import { useIMStore } from '@/stores/imStore';
 import { Radius, Spacing, useTheme } from '@/theme';
 
@@ -73,6 +79,8 @@ export default function ChatInfoScreen() {
     conversationID?: string;
   }>();
   const [blacklist, setBlacklist] = useState(false);
+  const [blacklistPending, setBlacklistPending] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
   const [actionPending, setActionPending] = useState(initialActionPending);
   const actionPendingRef = useRef(initialActionPending);
   const actionRequestTokenRef = useRef({
@@ -141,6 +149,35 @@ export default function ChatInfoScreen() {
         burnDuration,
       }).burnLabel,
     [burnDuration, muted, pinned],
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+
+      if (!friendId) {
+        setBlacklist(false);
+        return () => {
+          cancelled = true;
+        };
+      }
+
+      fetchFriendStatus(friendId)
+        .then((status) => {
+          if (!cancelled) {
+            setBlacklist(status.status === 'BLOCKED');
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setBlacklist(false);
+          }
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }, [friendId]),
   );
 
   useEffect(() => {
@@ -323,9 +360,63 @@ export default function ChatInfoScreen() {
     );
   }, [friendId, friendName, resolvedConversationID]);
 
-  const handleDeleteContact = useCallback(() => {
-    openUnsupportedAction('删除联系人');
-  }, [openUnsupportedAction]);
+  const handleToggleBlacklist = useCallback(
+    (nextValue: boolean) => {
+      if (!friendId || blacklistPending) {
+        return;
+      }
+
+      setBlacklistPending(true);
+      const previousValue = blacklist;
+      setBlacklist(nextValue);
+
+      const request = nextValue
+        ? addFriendToBlacklist(friendId)
+        : removeFriendFromBlacklist(friendId);
+
+      void request
+        .catch((error: unknown) => {
+          setBlacklist(previousValue);
+          openActionError(error);
+        })
+        .finally(() => {
+          setBlacklistPending(false);
+        });
+    },
+    [blacklist, blacklistPending, friendId, openActionError],
+  );
+
+  const handleConfirmDeleteContact = useCallback(() => {
+    if (!friendId || deletePending) {
+      return;
+    }
+
+    Alert.alert('删除联系人', '删除后将解除好友关系。', [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '删除',
+        style: 'destructive',
+        onPress: () => {
+          setDeletePending(true);
+          void deleteFriendRelationship(friendId)
+            .then(() => {
+              Alert.alert('已删除', '联系人已删除。', [
+                {
+                  text: '知道了',
+                  onPress: () => router.back(),
+                },
+              ]);
+            })
+            .catch((error: unknown) => {
+              openActionError(error);
+            })
+            .finally(() => {
+              setDeletePending(false);
+            });
+        },
+      },
+    ]);
+  }, [deletePending, friendId, openActionError]);
 
   const handleTogglePinned = useCallback(
     (nextPinned: boolean) => {
@@ -524,9 +615,10 @@ export default function ChatInfoScreen() {
           <MenuRow
             icon="ban-outline"
             label="加入黑名单"
-            hasToggle
+            hasToggle={!blacklistPending}
             toggleValue={blacklist}
-            onToggle={setBlacklist}
+            onToggle={handleToggleBlacklist}
+            rightText={blacklistPending ? PENDING_TEXT : undefined}
             showArrow={false}
           />
           <Divider />
@@ -549,7 +641,8 @@ export default function ChatInfoScreen() {
             icon="person-remove-outline"
             label="删除联系人"
             destructive
-            onPress={handleDeleteContact}
+            onPress={deletePending ? undefined : handleConfirmDeleteContact}
+            rightText={deletePending ? PENDING_TEXT : undefined}
           />
         </View>
       </ScrollView>
