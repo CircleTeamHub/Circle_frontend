@@ -28,6 +28,7 @@ import {
 } from '@/services/api/upload';
 import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
 import { usePostFormStore } from '@/features/discover/store/use-post-form-store';
+import { useTranslation } from 'react-i18next';
 
 const VIP_OPTIONS = [
   { label: '不限制', value: null },

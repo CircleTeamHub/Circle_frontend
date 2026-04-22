@@ -11,6 +11,7 @@ import { fetchFriendsByTag, type FriendProfile } from '@/services/api/friends';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   Pressable,
@@ -68,16 +69,17 @@ export default function FriendTagDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string; name?: string }>();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const tagId = typeof params.id === 'string' ? params.id : '';
-  const tagName = typeof params.name === 'string' ? params.name : '标签好友';
+  const tagName = typeof params.name === 'string' ? params.name : t('contacts.tagDetail.fallbackTitle');
 
   const loadFriends = useCallback(async () => {
     if (!tagId) {
-      setError('标签不存在');
+      setError(t('contacts.tagDetail.notExist'));
       setLoading(false);
       return;
     }
@@ -89,11 +91,11 @@ export default function FriendTagDetailScreen() {
       setFriends(nextFriends);
       setError(null);
     } catch {
-      setError('标签好友加载失败，请稍后重试');
+      setError(t('contacts.tagDetail.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [tagId]);
+  }, [t, tagId]);
 
   useEffect(() => {
     loadFriends();
@@ -175,7 +177,7 @@ export default function FriendTagDetailScreen() {
           />
           <View style={s.rowMeta}>
             <Text style={d.name}>{getFriendDisplayName(item)}</Text>
-            <Text style={d.account}>账号：{item.accountId}</Text>
+            <Text style={d.account}>{t('contacts.accountId', { id: item.accountId })}</Text>
           </View>
         </Pressable>
         {index < section.data.length - 1 ? <Divider /> : null}
@@ -196,18 +198,18 @@ export default function FriendTagDetailScreen() {
   const emptyState = loading ? (
     <View style={s.stateBlock}>
       <ActivityIndicator color={colors.primary} />
-      <Text style={d.stateText}>正在加载标签好友...</Text>
+      <Text style={d.stateText}>{t('contacts.tagDetail.loading')}</Text>
     </View>
   ) : error ? (
     <View style={s.stateBlock}>
       <Text style={d.stateText}>{error}</Text>
       <Pressable style={[s.retryButton, d.retryButton]} onPress={loadFriends}>
-        <Text style={d.retryButtonText}>重试</Text>
+        <Text style={d.retryButtonText}>{t('common.retry')}</Text>
       </Pressable>
     </View>
   ) : (
     <View style={s.stateBlock}>
-      <Text style={d.stateText}>这个标签下还没有好友</Text>
+      <Text style={d.stateText}>{t('contacts.tagDetail.empty')}</Text>
     </View>
   );
 
@@ -222,7 +224,7 @@ export default function FriendTagDetailScreen() {
         ListHeaderComponent={
           <View style={[s.summaryCard, d.summaryCard]}>
             <Text style={d.summaryTitle}>{tagName}</Text>
-            <Text style={d.summaryCopy}>按联系人字母分组展示当前标签下的好友。</Text>
+            <Text style={d.summaryCopy}>{t('contacts.tagDetail.summary')}</Text>
           </View>
         }
         ListEmptyComponent={emptyState}

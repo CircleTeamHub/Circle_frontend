@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { Divider } from '@/components/ui/divider';
 import { MenuRow } from '@/components/ui/menu-row';
 import { NavHeader } from '@/components/ui/nav-header';
@@ -49,14 +50,6 @@ const s = StyleSheet.create({
   },
 });
 
-const BURN_DURATION_OPTIONS = [
-  { label: '关闭', duration: 0 },
-  { label: '10秒', duration: 10 },
-  { label: '1分钟', duration: 60 },
-  { label: '5分钟', duration: 300 },
-] as const;
-
-const PENDING_TEXT = '处理中';
 const initialActionPending = {
   pin: false,
   mute: false,
@@ -75,6 +68,7 @@ type OptimisticConversationStateKey = keyof OptimisticConversationState;
 export default function ChatInfoScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{
     id?: string;
     sourceID?: string;
@@ -110,7 +104,7 @@ export default function ChatInfoScreen() {
       ? params.name
       : typeof params.title === 'string'
         ? params.title
-        : '好友';
+        : t('chat.friend');
   const routeSourceID = friendId;
   const originScope =
     params.originScope === 'contacts' || params.originScope === 'profile'
@@ -177,6 +171,15 @@ export default function ChatInfoScreen() {
         burnDuration,
       }).burnLabel,
     [burnDuration, muted, pinned],
+  );
+  const burnDurationOptions = useMemo(
+    () => [
+      { label: t('chat.burnOff'), duration: 0 },
+      { label: t('chat.burn10s'), duration: 10 },
+      { label: t('chat.burn1m'), duration: 60 },
+      { label: t('chat.burn5m'), duration: 300 },
+    ],
+    [t],
   );
 
   useFocusEffect(
@@ -251,15 +254,15 @@ export default function ChatInfoScreen() {
   ]);
 
   const openUnsupportedAction = useCallback((label: string) => {
-    Alert.alert('暂未开放', `${label} 稍后提供。`);
-  }, []);
+    Alert.alert(t('chat.notSupported'), `${label} ${t('chat.notSupportedMessage')}`);
+  }, [t]);
 
   const openActionError = useCallback((error: unknown) => {
     Alert.alert(
-      '操作失败',
-      error instanceof Error ? error.message : '请稍后重试',
+      t('common.errorOccurred'),
+      error instanceof Error ? error.message : t('common.networkError'),
     );
-  }, []);
+  }, [t]);
 
   const setConversationActionPending = useCallback(
     (action: ConversationActionKey, nextPending: boolean) => {
@@ -457,18 +460,18 @@ export default function ChatInfoScreen() {
       return;
     }
 
-    Alert.alert('删除联系人', '删除后将解除好友关系。', [
-      { text: '取消', style: 'cancel' },
+    Alert.alert(t('chat.deleteFriend'), t('chat.deleteFriendWarning'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: '删除',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: () => {
           setDeletePending(true);
           void deleteFriendRelationship(friendId)
             .then(() => {
-              Alert.alert('已删除', '联系人已删除。', [
+              Alert.alert(t('chat.deleted'), t('chat.friendDeleted'), [
                 {
-                  text: '知道了',
+                  text: t('common.ok'),
                   onPress: () => router.back(),
                 },
               ]);
@@ -482,7 +485,7 @@ export default function ChatInfoScreen() {
         },
       },
     ]);
-  }, [deletePending, friendId, openActionError]);
+  }, [deletePending, friendId, openActionError, t]);
 
   const handleTogglePinned = useCallback(
     (nextPinned: boolean) => {
@@ -570,18 +573,18 @@ export default function ChatInfoScreen() {
     }
 
     Alert.alert(
-      '好友消息自毁',
-      '选择消息自毁时间',
+      t('chat.burnMessage'),
+      t('chat.selectBurnTime'),
       [
-        ...BURN_DURATION_OPTIONS.map(({ label, duration }) => ({
+        ...burnDurationOptions.map(({ label, duration }) => ({
           text: label,
           onPress: () => applyBurnDuration(duration),
         })),
-        { text: '取消', style: 'cancel' as const },
+        { text: t('common.cancel'), style: 'cancel' as const },
       ],
       { cancelable: true },
     );
-  }, [actionPending.burn, applyBurnDuration, resolvedConversationID]);
+  }, [actionPending.burn, applyBurnDuration, burnDurationOptions, resolvedConversationID, t]);
 
   const handleConfirmClearHistory = useCallback(() => {
     if (!resolvedConversationID || actionPending.clear) {
@@ -589,12 +592,12 @@ export default function ChatInfoScreen() {
     }
 
     Alert.alert(
-      '清空聊天记录',
-      '清空后将删除当前会话的聊天记录，且无法恢复。',
+      t('chat.clearHistory'),
+      t('chat.clearHistoryWarning'),
       [
-        { text: '取消', style: 'cancel' as const },
+        { text: t('common.cancel'), style: 'cancel' as const },
         {
-          text: '清空',
+          text: t('chat.clear'),
           style: 'destructive' as const,
           onPress: () => {
             void runConversationAction('clear', () =>
@@ -605,7 +608,7 @@ export default function ChatInfoScreen() {
       ],
       { cancelable: true },
     );
-  }, [actionPending.clear, resolvedConversationID, runConversationAction]);
+  }, [actionPending.clear, resolvedConversationID, runConversationAction, t]);
 
   const d = useMemo(
     () => ({
@@ -622,7 +625,7 @@ export default function ChatInfoScreen() {
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title="聊天信息" fallbackHref={backHref} />
+      <NavHeader title={t('chat.chatInfo')} fallbackHref={backHref} />
       <ScrollView
         style={s.scroll}
         contentContainerStyle={[
@@ -632,89 +635,89 @@ export default function ChatInfoScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={[s.section, d.section]}>
-          <MenuRow icon="create-outline" label="设置备注" onPress={handleOpenRemark} />
+          <MenuRow icon="create-outline" label={t('chat.setRemark')} onPress={handleOpenRemark} />
           <Divider />
-          <MenuRow icon="pricetag-outline" label="标签" onPress={handleOpenTags} />
+          <MenuRow icon="pricetag-outline" label={t('chat.tags')} onPress={handleOpenTags} />
           <Divider />
           <MenuRow
             icon="search-outline"
-            label="查找聊天记录"
+            label={t('chat.searchHistory')}
             onPress={handleOpenSearchHistory}
           />
           <Divider />
           <MenuRow
             icon="image-outline"
-            label="聊天背景"
+            label={t('chat.chatBackground')}
             rightText={backgroundLabel}
             onPress={handleOpenChatBackground}
           />
           <Divider />
           <MenuRow
             icon="arrow-up-circle-outline"
-            label="置顶聊天"
+            label={t('chat.pinChat')}
             hasToggle={!actionPending.pin}
             onToggle={actionPending.pin ? undefined : handleTogglePinned}
             toggleValue={pinned}
-            rightText={actionPending.pin ? PENDING_TEXT : undefined}
+            rightText={actionPending.pin ? t('chat.pending') : undefined}
             showArrow={false}
           />
           <Divider />
           <MenuRow
             icon="notifications-off-outline"
-            label="消息免打扰"
+            label={t('chat.muteNotification')}
             hasToggle={!actionPending.mute}
             onToggle={actionPending.mute ? undefined : handleToggleMuted}
             toggleValue={muted}
-            rightText={actionPending.mute ? PENDING_TEXT : undefined}
+            rightText={actionPending.mute ? t('chat.pending') : undefined}
             showArrow={false}
           />
           <Divider />
           <MenuRow
             icon="flame-outline"
-            label="好友消息自毁"
+            label={t('chat.burnMessage')}
             onPress={actionPending.burn ? undefined : handleOpenBurnDurationPicker}
-            rightText={actionPending.burn ? PENDING_TEXT : burnLabel}
+            rightText={actionPending.burn ? t('chat.pending') : burnLabel}
           />
         </View>
 
         <View style={[s.section, d.section]}>
           <MenuRow
             icon="share-social-outline"
-            label="把他推荐给朋友"
+            label={t('chat.recommendFriend')}
             onPress={handleOpenRecommendFriend}
           />
           <Divider />
           <MenuRow
             icon="ban-outline"
-            label="加入黑名单"
+            label={t('chat.addBlacklist')}
             hasToggle={!blacklistPending}
             toggleValue={blacklist}
             onToggle={handleToggleBlacklist}
-            rightText={blacklistPending ? PENDING_TEXT : undefined}
+            rightText={blacklistPending ? t('chat.pending') : undefined}
             showArrow={false}
           />
           <Divider />
           <MenuRow
             icon="trash-outline"
-            label="清空聊天记录"
+            label={t('chat.clearHistory')}
             onPress={actionPending.clear ? undefined : handleConfirmClearHistory}
-            rightText={actionPending.clear ? PENDING_TEXT : undefined}
+            rightText={actionPending.clear ? t('chat.pending') : undefined}
           />
           <Divider />
           <MenuRow
             icon="warning-outline"
-            label="投诉举报"
-            onPress={() => openUnsupportedAction('投诉举报')}
+            label={t('chat.report')}
+            onPress={() => openUnsupportedAction(t('chat.report'))}
           />
         </View>
 
         <View style={[s.section, d.section]}>
           <MenuRow
             icon="person-remove-outline"
-            label="删除联系人"
+            label={t('chat.deleteFriend')}
             destructive
             onPress={deletePending ? undefined : handleConfirmDeleteContact}
-            rightText={deletePending ? PENDING_TEXT : undefined}
+            rightText={deletePending ? t('chat.pending') : undefined}
           />
         </View>
       </ScrollView>

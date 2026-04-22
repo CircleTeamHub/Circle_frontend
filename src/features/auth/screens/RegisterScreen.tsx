@@ -11,6 +11,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Spacing, Typography } from '@/theme';
+import { useTranslation } from 'react-i18next';
 import { AuthInput } from '@/components/ui/auth-input';
 import { NavHeader } from '@/components/ui/nav-header';
 import { useAuth } from '@/hooks/use-auth';
@@ -105,6 +106,7 @@ export default function RegisterScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { register, submitting, error } = useAuth();
+  const { t } = useTranslation();
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -164,7 +166,7 @@ export default function RegisterScreen() {
 
   return (
     <View style={d.outer}>
-      <NavHeader title="创建账号" />
+      <NavHeader title={t('auth.createAccount')} />
       <ScrollView
         contentContainerStyle={[
           s.container,
@@ -174,37 +176,37 @@ export default function RegisterScreen() {
       >
       {/* Title */}
       <View style={s.titleWrap}>
-        <Text style={d.heading}>创建账号</Text>
-        <Text style={d.subtitle}>填写账号信息完成注册</Text>
+        <Text style={d.heading}>{t('auth.createAccount')}</Text>
+        <Text style={d.subtitle}>{t('auth.registerSubtitle')}</Text>
       </View>
 
       {/* Form */}
       <AuthInput
-        label="账号"
-        placeholder="请输入账号"
+        label={t('auth.account')}
+        placeholder={t('auth.accountPlaceholder')}
         value={account}
         onChangeText={setAccount}
       />
 
       <AuthInput
-        label="密码"
-        placeholder="请输入密码（6-20位）"
+        label={t('auth.password')}
+        placeholder={t('auth.passwordHint')}
         value={password}
         onChangeText={setPassword}
         secureTextEntry
       />
 
       <AuthInput
-        label="确认密码"
-        placeholder="请再次输入密码"
+        label={t('auth.confirmPassword')}
+        placeholder={t('auth.confirmPasswordHint')}
         value={confirmPassword}
         onChangeText={setConfirmPassword}
         secureTextEntry
       />
 
       <AuthInput
-        label="昵称"
-        placeholder="给自己取个名字吧"
+        label={t('auth.nickname')}
+        placeholder={t('auth.nicknameHint')}
         value={nickname}
         onChangeText={setNickname}
       />
@@ -217,7 +219,7 @@ export default function RegisterScreen() {
           ) : null}
         </View>
         <Text style={[s.agreementText, d.agreementText]}>
-          我已阅读并同意《用户协议》和《隐私政策》
+          {t('auth.agreement')}
         </Text>
       </Pressable>
 
@@ -233,14 +235,14 @@ export default function RegisterScreen() {
         {submitting ? (
           <ActivityIndicator color={colors.white} />
         ) : (
-          <Text style={[s.registerBtnText, d.registerBtnText]}>注册</Text>
+          <Text style={[s.registerBtnText, d.registerBtnText]}>{t('auth.register')}</Text>
         )}
       </Pressable>
 
       {/* Divider */}
       <View style={s.dividerRow}>
         <View style={[s.dividerLine, d.dividerLine]} />
-        <Text style={[s.dividerText, d.dividerText]}>或</Text>
+        <Text style={[s.dividerText, d.dividerText]}>{t('common.or')}</Text>
         <View style={[s.dividerLine, d.dividerLine]} />
       </View>
 
@@ -255,9 +257,9 @@ export default function RegisterScreen() {
 
       {/* Login link */}
       <View style={s.loginRow}>
-        <Text style={d.loginHint}>已有账号？</Text>
+        <Text style={d.loginHint}>{t('auth.hasAccount')}</Text>
         <Pressable onPress={() => router.back()}>
-          <Text style={[s.loginLink, d.loginLink]}>立即登录</Text>
+          <Text style={[s.loginLink, d.loginLink]}>{t('auth.loginNow')}</Text>
         </Pressable>
       </View>
       </ScrollView>

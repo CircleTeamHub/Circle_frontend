@@ -1,3 +1,4 @@
+import i18n from '@/i18n';
 import type { AuthUser } from '@/stores/authStore';
 import type { FriendStatus } from '@/services/api/friends';
 
@@ -27,38 +28,38 @@ export function formatGenderLabel(gender?: string | null) {
   const normalized = gender?.trim().toLowerCase();
 
   if (normalized === 'male' || normalized === '男') {
-    return '男';
+    return i18n.t('profileFields.male');
   }
 
   if (normalized === 'female' || normalized === '女') {
-    return '女';
+    return i18n.t('profileFields.female');
   }
 
   if (normalized === 'other' || normalized === '其他') {
-    return '其他';
+    return i18n.t('profileFields.other');
   }
 
-  return '未设置';
+  return i18n.t('profileFields.genderNotSet');
 }
 
 export function getProfileMetaItems(profile: ProfileMetaSource) {
-  const city = profile.city?.trim() || '未设置';
+  const city = profile.city?.trim() || i18n.t('profileFields.notSet');
   return [formatGenderLabel(profile.gender), city];
 }
 
 export function getFriendActionLabel(status: FriendStatus | null | undefined) {
   switch (status) {
     case 'PENDING_SENT':
-      return '已发送申请';
+      return i18n.t('userProfile.friendAction.pendingSent');
     case 'PENDING_RECEIVED':
-      return '等待对方处理';
+      return i18n.t('userProfile.friendAction.pendingReceived');
     case 'ACCEPTED':
-      return '已添加';
+      return i18n.t('userProfile.friendAction.accepted');
     case 'BLOCKED':
-      return '无法添加';
+      return i18n.t('userProfile.friendAction.blocked');
     case 'NONE':
     default:
-      return '添加好友';
+      return i18n.t('userProfile.friendAction.add');
   }
 }
 

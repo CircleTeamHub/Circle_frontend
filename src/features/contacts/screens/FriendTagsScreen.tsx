@@ -10,6 +10,7 @@ import {
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   Pressable,
@@ -59,6 +60,7 @@ export default function FriendTagsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const [tags, setTags] = useState<FriendTagSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -80,13 +82,13 @@ export default function FriendTagsScreen() {
       setError(null);
     } catch {
       if (signal?.cancelled) return;
-      setError('标签加载失败，请稍后重试');
+      setError(t('contacts.tagsScreen.loadFailed'));
     } finally {
       if (!signal?.cancelled) {
         setLoading(false);
       }
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const signal = { cancelled: false };
@@ -136,7 +138,7 @@ export default function FriendTagsScreen() {
   const stateBlock = loading ? (
     <View style={s.stateBlock}>
       <ActivityIndicator color={colors.primary} />
-      <Text style={d.stateText}>正在加载标签...</Text>
+      <Text style={d.stateText}>{t('contacts.tagsScreen.loading')}</Text>
     </View>
   ) : error ? (
     <View style={s.stateBlock}>
@@ -147,12 +149,12 @@ export default function FriendTagsScreen() {
           void loadTags();
         }}
       >
-        <Text style={d.retryButtonText}>重试</Text>
+        <Text style={d.retryButtonText}>{t('common.retry')}</Text>
       </Pressable>
     </View>
   ) : tags.length === 0 ? (
     <View style={s.stateBlock}>
-      <Text style={d.stateText}>还没有设置好友标签</Text>
+      <Text style={d.stateText}>{t('contacts.tagsScreen.empty')}</Text>
     </View>
   ) : (
     <View style={[s.listCard, d.listCard]}>
@@ -162,8 +164,8 @@ export default function FriendTagsScreen() {
             icon="pricetag"
             iconBgColor={tag.color ?? '#A855F7'}
             label={tag.name}
-            subtitle="按标签查看好友"
-            rightText={`${tag.friendCount} 位好友`}
+            subtitle={t('contacts.tagsScreen.viewByTag')}
+            rightText={t('contacts.tagsScreen.friendCount', { count: tag.friendCount })}
             onPress={() =>
               router.push({
                 pathname: '/(tabs)/contacts/tags/[id]',
@@ -179,14 +181,14 @@ export default function FriendTagsScreen() {
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title="标签" />
+      <NavHeader title={t('contacts.tagsScreen.title')} />
       <ScrollView
         contentContainerStyle={s.content}
         showsVerticalScrollIndicator={false}
       >
         <View style={[s.introCard, d.introCard]}>
-          <Text style={d.introTitle}>好友分类</Text>
-          <Text style={d.introCopy}>按标签分类查看好友，便于快速找到特定分组。</Text>
+          <Text style={d.introTitle}>{t('contacts.tagsScreen.categoryTitle')}</Text>
+          <Text style={d.introCopy}>{t('contacts.tagsScreen.categoryDesc')}</Text>
         </View>
         {stateBlock}
       </ScrollView>

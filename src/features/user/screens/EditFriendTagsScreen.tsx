@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { NavHeader } from '@/components/ui/nav-header';
 import {
   assignFriendTag,
@@ -98,6 +99,7 @@ function sortTags(tags: FriendTag[]) {
 export default function EditFriendTagsScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{ id?: string; name?: string }>();
   const profileId = typeof params.id === 'string' ? params.id : '';
 
@@ -114,7 +116,7 @@ export default function EditFriendTagsScreen() {
     let cancelled = false;
 
     if (!profileId) {
-      setError('好友不存在');
+      setError(t('userProfile.editTags.missingFriend'));
       setIsLoading(false);
       return;
     }
@@ -137,7 +139,7 @@ export default function EditFriendTagsScreen() {
       })
       .catch(() => {
         if (!cancelled) {
-          setError('标签加载失败，请稍后重试');
+          setError(t('userProfile.editTags.loadFailed'));
         }
       })
       .finally(() => {
@@ -149,7 +151,7 @@ export default function EditFriendTagsScreen() {
     return () => {
       cancelled = true;
     };
-  }, [profileId]);
+  }, [profileId, t]);
 
   const d = useMemo(
     () => ({
@@ -246,8 +248,8 @@ export default function EditFriendTagsScreen() {
       setNewTagName('');
     } catch (nextError) {
       Alert.alert(
-        '创建失败',
-        nextError instanceof Error ? nextError.message : '标签创建失败，请稍后重试',
+        t('userProfile.editTags.createFailedTitle'),
+        nextError instanceof Error ? nextError.message : t('userProfile.editTags.createFailed'),
       );
     } finally {
       setIsCreatingTag(false);
@@ -273,8 +275,8 @@ export default function EditFriendTagsScreen() {
       router.back();
     } catch (nextError) {
       Alert.alert(
-        '保存失败',
-        nextError instanceof Error ? nextError.message : '标签保存失败，请稍后重试',
+        t('validation.saveFailed'),
+        nextError instanceof Error ? nextError.message : t('userProfile.editTags.saveFailed'),
       );
     } finally {
       setIsSaving(false);
@@ -284,7 +286,7 @@ export default function EditFriendTagsScreen() {
   const stateBlock = isLoading ? (
     <View style={s.stateBlock}>
       <ActivityIndicator color={colors.primary} />
-      <Text style={d.stateText}>正在加载标签...</Text>
+      <Text style={d.stateText}>{t('contacts.tagsScreen.loading')}</Text>
     </View>
   ) : error ? (
     <View style={s.stateBlock}>
@@ -292,16 +294,16 @@ export default function EditFriendTagsScreen() {
     </View>
   ) : (
     <View style={[s.card, d.card]}>
-      <Text style={[s.fieldLabel, d.fieldLabel]}>选择好友标签</Text>
+      <Text style={[s.fieldLabel, d.fieldLabel]}>{t('userProfile.editTags.label')}</Text>
       <Text style={[s.helper, d.helper]}>
-        已选中的标签会应用到这位好友上，也可以在这里直接新建标签。
+        {t('userProfile.editTags.helper')}
       </Text>
       <View style={s.createRow}>
         <TextInput
           value={newTagName}
           onChangeText={setNewTagName}
           maxLength={30}
-          placeholder="新建标签"
+          placeholder={t('userProfile.editTags.newTagPlaceholder')}
           placeholderTextColor={colors.textSecondary}
           style={[s.input, d.input]}
         />
@@ -314,7 +316,9 @@ export default function EditFriendTagsScreen() {
           disabled={!newTagName.trim() || isCreatingTag}
           onPress={handleCreateTag}
         >
-          <Text style={d.addButtonText}>{isCreatingTag ? '创建中' : '新建'}</Text>
+          <Text style={d.addButtonText}>
+            {isCreatingTag ? t('userProfile.editTags.creating') : t('userProfile.editTags.create')}
+          </Text>
         </Pressable>
       </View>
       {availableTags.length > 0 ? (
@@ -338,14 +342,14 @@ export default function EditFriendTagsScreen() {
           })}
         </View>
       ) : (
-        <Text style={d.stateText}>还没有标签，先创建一个再保存。</Text>
+        <Text style={d.stateText}>{t('userProfile.editTags.empty')}</Text>
       )}
     </View>
   );
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title="标签" />
+      <NavHeader title={t('chat.tags')} />
       <ScrollView
         contentContainerStyle={s.content}
         showsVerticalScrollIndicator={false}
@@ -362,7 +366,7 @@ export default function EditFriendTagsScreen() {
           disabled={isLoading || Boolean(error) || isSaving}
           onPress={handleSave}
         >
-          <Text style={d.saveButtonText}>{isSaving ? '保存中...' : '保存'}</Text>
+          <Text style={d.saveButtonText}>{isSaving ? t('common.saving') : t('common.save')}</Text>
         </Pressable>
       </View>
     </View>

@@ -5,7 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
-function loadProfileEditConfig() {
+function loadProfileEditConfig(stubs = {}) {
   const filePath = path.join(
     process.cwd(),
     'src/features/profile/profile-edit-config.ts',
@@ -22,7 +22,13 @@ function loadProfileEditConfig() {
   const context = {
     module: { exports: {} },
     exports: {},
-    require,
+    require: (specifier) => {
+      if (specifier in stubs) {
+        return stubs[specifier];
+      }
+
+      return require(specifier);
+    },
   };
   context.exports = context.module.exports;
 
@@ -32,7 +38,13 @@ function loadProfileEditConfig() {
 }
 
 test('editable fields are exposed and unsupported rows stay non-editable', () => {
-  const { PROFILE_EDIT_FIELDS, getProfileEditField } = loadProfileEditConfig();
+  const { PROFILE_EDIT_FIELDS, getProfileEditField } = loadProfileEditConfig({
+    '@/i18n': {
+      default: {
+        t: (key) => key,
+      },
+    },
+  });
 
   assert.equal(Array.isArray(PROFILE_EDIT_FIELDS), true);
   assert.equal(getProfileEditField('avatar').editable, true);
@@ -51,7 +63,29 @@ test('payload mapping uses backend field names', () => {
     formatProfileFieldValue,
     validateProfileFieldValue,
   } =
-    loadProfileEditConfig();
+    loadProfileEditConfig({
+      '@/i18n': {
+        default: {
+          t: (key) =>
+            ({
+              'profileFields.notSet': '未设置',
+              'profileFields.genderNotSet': '未设置',
+              'profileFields.male': '男',
+              'profileFields.female': '女',
+              'profileFields.other': '其他',
+              'validation.nicknameEmpty': '昵称不能为空',
+              'validation.nicknameTooLong': '昵称最多 24 个字符',
+              'validation.invalidGender': '性别只能选择男、女或未设置',
+              'validation.invalidBirthday': '生日格式不正确，请选择有效日期',
+              'validation.invalidCity': '地区格式不正确',
+              'validation.bioTooLong': '个人简介最多 200 个字符',
+              'validation.invalidWechat': '微信号格式不正确',
+              'validation.invalidPhone': '手机号格式不正确',
+              'validation.invalidQQ': 'QQ 号格式不正确',
+            }[key] ?? key),
+        },
+      },
+    });
 
   assert.deepEqual(
     JSON.parse(JSON.stringify(toProfileUpdatePayload('bio', 'hello world'))),
@@ -86,4 +120,16 @@ test('payload mapping uses backend field names', () => {
   assert.match(validateProfileFieldValue('phone', '123'), /手机号/);
   assert.match(validateProfileFieldValue('wechat', '1abc'), /微信/);
   assert.match(validateProfileFieldValue('qq', '12'), /QQ/);
+});
+
+test('profile edit config resolves labels through i18n helpers instead of hardcoded copy', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/profile/profile-edit-config.ts',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /@\/i18n/);
+  assert.match(source, /i18n\.t\(/);
+  assert.doesNotMatch(source, /label: '头像'|title: '修改头像'|placeholder: '请输入昵称'/);
 });

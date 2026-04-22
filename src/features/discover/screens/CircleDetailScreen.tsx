@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -148,6 +149,7 @@ const s = StyleSheet.create({
 });
 
 export default function CircleDetailScreen() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const router = useRouter();
@@ -164,7 +166,7 @@ export default function CircleDetailScreen() {
       const data = await fetchCircleDetail(id);
       setCircle(data);
     } catch {
-      Alert.alert('错误', '无法加载圈子信息');
+      Alert.alert(t('circle.error'), t('circle.loadError'));
     } finally {
       setLoading(false);
     }
@@ -206,7 +208,7 @@ export default function CircleDetailScreen() {
   if (loading) {
     return (
       <View style={[d.container, { paddingTop: insets.top }]}>
-        <NavHeader title="圈子详情" />
+        <NavHeader title={t('circle.detail')} />
         <View style={s.centerLoader}>
           <ActivityIndicator color={colors.primary} />
         </View>
@@ -217,9 +219,9 @@ export default function CircleDetailScreen() {
   if (!circle) {
     return (
       <View style={[d.container, { paddingTop: insets.top }]}>
-        <NavHeader title="圈子详情" />
+        <NavHeader title={t('circle.detail')} />
         <View style={s.centerLoader}>
-          <Text style={{ color: colors.textSecondary }}>圈子不存在</Text>
+          <Text style={{ color: colors.textSecondary }}>{t('circle.notExist')}</Text>
         </View>
       </View>
     );
@@ -228,11 +230,11 @@ export default function CircleDetailScreen() {
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader
-        title="圈子详情"
+        title={t('circle.detail')}
         rightIcon={isOwnerOrAdmin ? 'create-outline' : undefined}
         onRightPress={
           isOwnerOrAdmin
-            ? () => Alert.alert('编辑', '圈子编辑功能开发中')
+            ? () => Alert.alert(t('circle.edit'), t('circle.editInProgress'))
             : undefined
         }
       />
@@ -281,11 +283,11 @@ export default function CircleDetailScreen() {
           <View style={s.statsRow}>
             <View style={s.statItem}>
               <Text style={[s.statValue, d.statValue]}>{circle.memberCount}</Text>
-              <Text style={[s.statLabel, d.statLabel]}>成员</Text>
+              <Text style={[s.statLabel, d.statLabel]}>{t('circle.members')}</Text>
             </View>
             <View style={s.statItem}>
               <Text style={[s.statValue, d.statValue]}>{circle.postCount}</Text>
-              <Text style={[s.statLabel, d.statLabel]}>帖子</Text>
+              <Text style={[s.statLabel, d.statLabel]}>{t('circle.posts')}</Text>
             </View>
           </View>
         </View>
@@ -294,20 +296,20 @@ export default function CircleDetailScreen() {
 
         {/* ── 圈子描述 ── */}
         <View style={s.section}>
-          <Text style={[s.sectionTitle, d.sectionTitle]}>圈子描述</Text>
+          <Text style={[s.sectionTitle, d.sectionTitle]}>{t('circle.description')}</Text>
           <View style={[s.textBlock, d.sectionCard]}>
             <Text style={[s.textContent, circle.description ? d.textContent : d.textPlaceholder]}>
-              {circle.description || '暂无描述'}
+              {circle.description || t('circle.noDescription')}
             </Text>
           </View>
         </View>
 
         {/* ── 圈子公告与规则 ── */}
         <View style={s.section}>
-          <Text style={[s.sectionTitle, d.sectionTitle]}>公告与规则</Text>
+          <Text style={[s.sectionTitle, d.sectionTitle]}>{t('circle.rules')}</Text>
           <View style={[s.textBlock, d.sectionCard]}>
             <Text style={[s.textContent, circle.rules ? d.textContent : d.textPlaceholder]}>
-              {circle.rules || '暂无公告'}
+              {circle.rules || t('circle.noRules')}
             </Text>
           </View>
         </View>
@@ -315,7 +317,7 @@ export default function CircleDetailScreen() {
         {/* ── 标签 ── */}
         {circle.tags.length > 0 ? (
           <View style={s.section}>
-            <Text style={[s.sectionTitle, d.sectionTitle]}>标签</Text>
+            <Text style={[s.sectionTitle, d.sectionTitle]}>{t('circle.tagsLabel')}</Text>
             <View style={s.tagsRow}>
               {circle.tags.map((tag) => (
                 <View key={tag} style={[s.tagChip, d.tagChip]}>
@@ -328,36 +330,36 @@ export default function CircleDetailScreen() {
 
         {/* ── 圈子设置 ── */}
         <View style={s.section}>
-          <Text style={[s.sectionTitle, d.sectionTitle]}>圈子设置</Text>
+          <Text style={[s.sectionTitle, d.sectionTitle]}>{t('circle.settings')}</Text>
           <View style={[s.sectionCard, d.sectionCard]}>
             <MenuRow
               icon="location-outline"
-              label="关联城市"
-              rightText={circle.cities.length > 0 ? circle.cities.join('、') : '全国'}
+              label={t('circle.relatedCities')}
+              rightText={circle.cities.length > 0 ? circle.cities.join('、') : t('common.nationwide')}
             />
             <Divider />
             <MenuRow
               icon="diamond-outline"
-              label="加入VIP限制"
-              rightText={circle.joinVipRestriction != null ? `VIP${circle.joinVipRestriction}+` : '不限制'}
+              label={t('circle.joinVipRestriction')}
+              rightText={circle.joinVipRestriction != null ? `VIP${circle.joinVipRestriction}+` : t('common.noRestriction')}
             />
             <Divider />
             <MenuRow
               icon="shield-checkmark-outline"
-              label="加入信用值限制"
-              rightText={circle.joinCreditRestriction != null ? `${circle.joinCreditRestriction}分以上` : '不限制'}
+              label={t('circle.joinCreditRestriction')}
+              rightText={circle.joinCreditRestriction != null ? t('circle.creditSuffix', { score: circle.joinCreditRestriction }) : t('common.noRestriction')}
             />
             <Divider />
             <MenuRow
               icon="sparkles-outline"
-              label="需要靓号"
-              rightText={circle.joinFancyRestriction ? '是' : '否'}
+              label={t('circle.fancyRequired')}
+              rightText={circle.joinFancyRestriction ? t('common.yes') : t('common.no')}
             />
             <Divider />
             <MenuRow
               icon="create-outline"
-              label="成员可发帖"
-              rightText={circle.memberCanPost ? '允许' : '仅管理员'}
+              label={t('circle.memberCanPost')}
+              rightText={circle.memberCanPost ? t('circle.allowed') : t('circle.adminOnly')}
             />
           </View>
         </View>
@@ -379,7 +381,7 @@ export default function CircleDetailScreen() {
                 });
               }}
             >
-              <Text style={[s.actionBtnText, d.chatBtnText]}>进入群聊</Text>
+              <Text style={[s.actionBtnText, d.chatBtnText]}>{t('circle.enterGroupChat')}</Text>
             </Pressable>
           ) : null}
 
@@ -394,7 +396,7 @@ export default function CircleDetailScreen() {
                 })
               }
             >
-              <Text style={[s.actionBtnText, d.adminBtnText]}>入圈审核</Text>
+              <Text style={[s.actionBtnText, d.adminBtnText]}>{t('circle.adminReview')}</Text>
             </Pressable>
           ) : null}
         </View>

@@ -1,6 +1,7 @@
 import { Divider } from "@/components/ui/divider";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { useCirclesStore } from "@/features/discover/store/use-circles-store";
+import { useTranslation } from "react-i18next";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { Circle } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,12 +16,10 @@ import {
   View,
 } from "react-native";
 
-const CIRCLE_FILTER_TABS = ["已加入", "我创建的", "我申请的"];
-
-const TAG_MAP: Record<string, { label: string; color: string }> = {
-  joined: { label: "已加入", color: "#22C55E" },
-  created: { label: "我创建的", color: "#F5B318" },
-  applied: { label: "审核中", color: "#3B82F6" },
+const TAG_KEYS: Record<string, { labelKey: string; color: string }> = {
+  joined: { labelKey: "discover.joined", color: "#22C55E" },
+  created: { labelKey: "discover.myCreated", color: "#F5B318" },
+  applied: { labelKey: "discover.myApplied", color: "#3B82F6" },
 };
 
 const s = StyleSheet.create({
@@ -73,6 +72,7 @@ const s = StyleSheet.create({
 });
 
 export const MyCirclesPanel: React.FC = () => {
+  const { t } = useTranslation();
   const { colors } = useTheme();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState(0);
@@ -97,7 +97,12 @@ export const MyCirclesPanel: React.FC = () => {
         ? createdCircles
         : appliedCircles;
 
-  const tagInfo = TAG_MAP[tabKey];
+  const circleFilterTabs = useMemo(
+    () => [t('discover.joined'), t('discover.myCreated'), t('discover.myApplied')],
+    [t],
+  );
+
+  const tagInfo = TAG_KEYS[tabKey];
 
   const d = useMemo(
     () => ({
@@ -151,17 +156,17 @@ export const MyCirclesPanel: React.FC = () => {
   return (
     <View style={s.container}>
       <View style={s.headerRow}>
-        <Text style={d.title}>圈子详情</Text>
+        <Text style={d.title}>{t('discover.circleDetail')}</Text>
         <Pressable
           style={[s.createButton, d.createButton]}
           onPress={() => router.push('/(tabs)/discover/create-circle')}
         >
-          <Text style={d.createButtonText}>创建圈子</Text>
+          <Text style={d.createButtonText}>{t('discover.createCircle')}</Text>
         </Pressable>
       </View>
 
       <FilterTabs
-        tabs={CIRCLE_FILTER_TABS}
+        tabs={circleFilterTabs}
         activeIndex={activeTab}
         onTabPress={setActiveTab}
       />
@@ -174,12 +179,12 @@ export const MyCirclesPanel: React.FC = () => {
         <View style={s.emptyContainer}>
           <Text style={d.emptyText}>{myCirclesError}</Text>
           <Pressable style={d.retryButton} onPress={fetchMyCircles}>
-            <Text style={d.retryText}>重试</Text>
+            <Text style={d.retryText}>{t('common.retry')}</Text>
           </Pressable>
         </View>
       ) : circles.length === 0 ? (
         <View style={s.emptyContainer}>
-          <Text style={d.emptyText}>暂无圈子</Text>
+          <Text style={d.emptyText}>{t('discover.noCircles')}</Text>
         </View>
       ) : (
         <View style={s.listContent}>
@@ -187,7 +192,7 @@ export const MyCirclesPanel: React.FC = () => {
             <View style={s.emptyContainer}>
               <Text style={d.emptyText}>{myCirclesError}</Text>
               <Pressable style={d.retryButton} onPress={fetchMyCircles}>
-                <Text style={d.retryText}>重试</Text>
+                <Text style={d.retryText}>{t('common.retry')}</Text>
               </Pressable>
             </View>
           ) : null}

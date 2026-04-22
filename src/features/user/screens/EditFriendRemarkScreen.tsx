@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { NavHeader } from '@/components/ui/nav-header';
 import {
   fetchFriendSettings,
@@ -65,9 +66,10 @@ const s = StyleSheet.create({
 export default function EditFriendRemarkScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{ id?: string; name?: string }>();
   const profileId = typeof params.id === 'string' ? params.id : '';
-  const targetName = typeof params.name === 'string' ? params.name : '好友';
+  const targetName = typeof params.name === 'string' ? params.name : t('chat.friend');
 
   const [value, setValue] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -78,7 +80,7 @@ export default function EditFriendRemarkScreen() {
     let cancelled = false;
 
     if (!profileId) {
-      setError('好友不存在');
+      setError(t('userProfile.editRemark.missingFriend'));
       setIsLoading(false);
       return;
     }
@@ -97,7 +99,7 @@ export default function EditFriendRemarkScreen() {
       })
       .catch(() => {
         if (!cancelled) {
-          setError('备注加载失败，请稍后重试');
+          setError(t('userProfile.editRemark.loadFailed'));
         }
       })
       .finally(() => {
@@ -109,7 +111,7 @@ export default function EditFriendRemarkScreen() {
     return () => {
       cancelled = true;
     };
-  }, [profileId]);
+  }, [profileId, t]);
 
   const d = useMemo(
     () => ({
@@ -150,7 +152,7 @@ export default function EditFriendRemarkScreen() {
     [colors],
   );
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (!profileId || isSaving) {
       return;
     }
@@ -161,18 +163,18 @@ export default function EditFriendRemarkScreen() {
       router.back();
     } catch (nextError) {
       Alert.alert(
-        '保存失败',
-        nextError instanceof Error ? nextError.message : '备注保存失败，请稍后重试',
+        t('validation.saveFailed'),
+        nextError instanceof Error ? nextError.message : t('userProfile.editRemark.saveFailed'),
       );
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [isSaving, profileId, t, value]);
 
   const stateBlock = isLoading ? (
     <View style={s.stateBlock}>
       <ActivityIndicator color={colors.primary} />
-      <Text style={d.stateText}>正在加载备注...</Text>
+      <Text style={d.stateText}>{t('userProfile.editRemark.loading')}</Text>
     </View>
   ) : error ? (
     <View style={s.stateBlock}>
@@ -180,24 +182,26 @@ export default function EditFriendRemarkScreen() {
     </View>
   ) : (
     <View style={[s.card, d.card]}>
-      <Text style={[s.fieldLabel, d.fieldLabel]}>给 {targetName} 的备注</Text>
+      <Text style={[s.fieldLabel, d.fieldLabel]}>
+        {t('userProfile.editRemark.label', { name: targetName })}
+      </Text>
       <TextInput
         value={value}
         onChangeText={setValue}
         maxLength={50}
-        placeholder="输入备注名"
+        placeholder={t('userProfile.editRemark.placeholder')}
         placeholderTextColor={colors.textSecondary}
         style={[s.input, d.input]}
       />
       <Text style={[s.helper, d.helper]}>
-        备注会显示在联系人列表和好友详情页，可留空清除。
+        {t('userProfile.editRemark.helper')}
       </Text>
     </View>
   );
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title="设置备注" />
+      <NavHeader title={t('profile.setRemark')} />
       <ScrollView
         contentContainerStyle={s.content}
         showsVerticalScrollIndicator={false}
@@ -214,7 +218,7 @@ export default function EditFriendRemarkScreen() {
           disabled={isLoading || Boolean(error) || isSaving}
           onPress={handleSave}
         >
-          <Text style={d.buttonText}>{isSaving ? '保存中...' : '保存'}</Text>
+          <Text style={d.buttonText}>{isSaving ? t('common.saving') : t('common.save')}</Text>
         </Pressable>
       </View>
     </View>

@@ -8,6 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { Avatar } from '@/components/ui/avatar';
@@ -52,6 +53,7 @@ const s = StyleSheet.create({
 });
 
 export default function AdminReviewScreen() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { id: circleId } = useLocalSearchParams<{ id: string }>();
@@ -89,12 +91,12 @@ export default function AdminReviewScreen() {
   const handleOverride = useCallback(
     (inv: CircleInvitation) => {
       Alert.alert(
-        '确认开后门？',
-        `确定让 ${inv.applicant.nickname} 跳过验证直接加入圈子吗？`,
+        t('invitation.confirmOverride'),
+        t('invitation.overrideMessage', { name: inv.applicant.nickname }),
         [
-          { text: '取消', style: 'cancel' },
+          { text: t('common.cancel'), style: 'cancel' },
           {
-            text: '确认',
+            text: t('common.confirm'),
             style: 'destructive',
             onPress: async () => {
               setApprovingId(inv.id);
@@ -103,11 +105,11 @@ export default function AdminReviewScreen() {
                 setInvitations((prev) =>
                   prev.filter((i) => i.id !== inv.id),
                 );
-                Alert.alert('已通过', `${inv.applicant.nickname} 已加入圈子`);
+                Alert.alert(t('invitation.overrideApproved'), t('invitation.joinedCircle', { name: inv.applicant.nickname }));
               } catch (error: unknown) {
                 const message =
-                  error instanceof Error ? error.message : '操作失败';
-                Alert.alert('操作失败', message);
+                  error instanceof Error ? error.message : t('common.errorOccurred');
+                Alert.alert(t('common.errorOccurred'), message);
               } finally {
                 setApprovingId(null);
               }
@@ -144,7 +146,7 @@ export default function AdminReviewScreen() {
             {approvingId === item.id ? (
               <ActivityIndicator size="small" color={colors.white} />
             ) : (
-              <Text style={d.overrideText}>开后门</Text>
+              <Text style={d.overrideText}>{t('invitation.override')}</Text>
             )}
           </Pressable>
         </View>
@@ -156,7 +158,7 @@ export default function AdminReviewScreen() {
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title="入圈审核" />
+      <NavHeader title={t('invitation.adminReview')} />
       {loading ? (
         <View style={s.centerLoader}>
           <ActivityIndicator color={colors.primary} />
@@ -169,7 +171,7 @@ export default function AdminReviewScreen() {
           contentContainerStyle={s.listContent}
           ListEmptyComponent={
             <View style={s.centerLoader}>
-              <Text style={d.emptyText}>暂无待审核的申请</Text>
+              <Text style={d.emptyText}>{t('invitation.noPendingReviews')}</Text>
             </View>
           }
         />

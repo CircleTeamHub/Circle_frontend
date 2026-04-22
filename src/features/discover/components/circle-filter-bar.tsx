@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { FlatList, Pressable, StyleSheet, Text } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { Circle } from '@/types';
 
@@ -38,14 +39,15 @@ export const CircleFilterBar: React.FC<CircleFilterBarProps> = ({
   selectedId,
   onSelect,
 }) => {
+  const { t } = useTranslation();
   const { colors } = useTheme();
 
   const items: FilterItem[] = useMemo(
     () => [
-      { id: null, name: '全部' },
+      { id: null, name: t('common.all') },
       ...circles.map((c) => ({ id: c.id, name: c.name })),
     ],
-    [circles],
+    [circles, t],
   );
 
   const renderItem = useCallback(

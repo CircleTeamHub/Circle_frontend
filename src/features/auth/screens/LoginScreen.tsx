@@ -4,6 +4,7 @@ import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { Link } from "expo-router";
 import { useState, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Pressable,
@@ -83,6 +84,7 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { login, submitting, error } = useAuth();
+  const { t } = useTranslation();
   const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
 
@@ -124,25 +126,25 @@ export default function LoginScreen() {
 
       {/* Heading */}
       <View style={s.headingGroup}>
-        <Text style={[s.heading, d.heading]}>欢迎回来</Text>
-        <Text style={[s.subtitle, d.subtitle]}>登录你的账号</Text>
+        <Text style={[s.heading, d.heading]}>{t('auth.welcomeBack')}</Text>
+        <Text style={[s.subtitle, d.subtitle]}>{t('auth.loginSubtitle')}</Text>
       </View>
 
       {/* Form */}
       <View style={s.form}>
         <AuthInput
-          placeholder="请输入账号"
+          placeholder={t('auth.accountPlaceholder')}
           value={account}
           onChangeText={setAccount}
         />
         <AuthInput
-          placeholder="请输入密码"
+          placeholder={t('auth.passwordPlaceholder')}
           value={password}
           onChangeText={setPassword}
           secureTextEntry
         />
         <View style={s.forgotRow}>
-          <Text style={[s.forgotLink, d.forgotLink]}>忘记密码?</Text>
+          <Text style={[s.forgotLink, d.forgotLink]}>{t('auth.forgotPassword')}</Text>
         </View>
       </View>
 
@@ -158,14 +160,14 @@ export default function LoginScreen() {
         {submitting ? (
           <ActivityIndicator color={colors.white} />
         ) : (
-          <Text style={[s.loginBtnText, d.loginBtnText]}>登录</Text>
+          <Text style={[s.loginBtnText, d.loginBtnText]}>{t('auth.login')}</Text>
         )}
       </Pressable>
 
       {/* Divider */}
       <View style={s.dividerRow}>
         <View style={[s.dividerLine, d.dividerLine]} />
-        <Text style={[s.dividerText, d.dividerText]}>或</Text>
+        <Text style={[s.dividerText, d.dividerText]}>{t('common.or')}</Text>
         <View style={[s.dividerLine, d.dividerLine]} />
       </View>
 
@@ -178,10 +180,10 @@ export default function LoginScreen() {
 
       {/* Register link */}
       <View style={s.registerRow}>
-        <Text style={[s.registerHint, d.registerHint]}>没有账号？</Text>
+        <Text style={[s.registerHint, d.registerHint]}>{t('auth.noAccount')}</Text>
         <Link href="/(auth)/register" asChild>
           <Pressable>
-            <Text style={[s.registerLink, d.registerLink]}>立即注册</Text>
+            <Text style={[s.registerLink, d.registerLink]}>{t('auth.registerNow')}</Text>
           </Pressable>
         </Link>
       </View>

@@ -12,6 +12,7 @@ import type { Conversation } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   FlatList,
   ListRenderItemInfo,
@@ -23,26 +24,22 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-// 消息列表固定的筛选标签（全部 / 未读 / 群聊 / 私聊）
-// 用户自定义群组会在运行时追加到这四个之后
-const BASE_FILTERS = [
-  { id: "all", label: "全部" },
-  { id: "unread", label: "未读" },
-  { id: "group", label: "群聊" },
-  { id: "private", label: "私聊" },
-];
+const BASE_FILTER_KEYS = [
+  { id: "all", key: "messages.all" },
+  { id: "unread", key: "messages.unread" },
+  { id: "group", key: "messages.group" },
+  { id: "private", key: "messages.private" },
+] as const;
 
-// 右上角「+」按钮弹出菜单的操作列表
-// label 同时作为唯一 key 和 handleMenuAction 的路由判断依据
-const MENU_ACTIONS: {
+const MENU_ACTION_KEYS: {
   icon: keyof typeof Ionicons.glyphMap;
-  label: string;
+  key: string;
 }[] = [
-  { icon: "people-outline", label: "新建群聊" },
-  { icon: "person-add-outline", label: "添加好友" },
-  { icon: "scan-outline", label: "扫一扫" },
-  { icon: "call-outline", label: "坐席管理" },
-  { icon: "people-circle-outline", label: "群组管理" },
+  { icon: "people-outline", key: "messages.newGroup" },
+  { icon: "person-add-outline", key: "messages.addFriend" },
+  { icon: "scan-outline", key: "messages.scan" },
+  { icon: "call-outline", key: "messages.seatManagement" },
+  { icon: "people-circle-outline", key: "messages.groupManagement" },
 ];
 
 // 静态样式（不依赖主题色，提取到组件外避免每次渲染重建）
@@ -131,9 +128,13 @@ const s = StyleSheet.create({
 //   2. 头部操作栏：通知跳转、一键已读、搜索、快捷功能菜单
 //   3. 点击头像可进入用户主页（仅私聊），点击会话行进入聊天详情
 export default function MessagesScreen() {
-  const insets = useSafeAreaInsets();     // 安全区域（刘海/状态栏高度）
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
+  const { t } = useTranslation();
+
+  const BASE_FILTERS = BASE_FILTER_KEYS.map((f) => ({ id: f.id, label: t(f.key) }));
+  const MENU_ACTIONS = MENU_ACTION_KEYS.map((a) => ({ icon: a.icon, label: t(a.key) }));
 
   const rawConversations = useIMStore((state) => state.conversations);
   const totalUnread = useIMStore((state) => state.totalUnread);
@@ -339,7 +340,7 @@ export default function MessagesScreen() {
   const ListHeader = useMemo(() => (
     <View style={s.headerSection}>
       <View style={s.titleRow}>
-        <Text style={d.title}>消息</Text>
+        <Text style={d.title}>{t('messages.title')}</Text>
         <View style={s.actionRow}>
           {/* 通知按钮：右上角显示未读角标 */}
           <Pressable
@@ -392,7 +393,7 @@ export default function MessagesScreen() {
         ListHeaderComponent={ListHeader}
         ListEmptyComponent={
           <Text style={d.emptyText}>
-            {connectionError ? `会话加载失败：${connectionError}` : "暂无会话"}
+            {connectionError ? t('messages.loadFailed', { error: connectionError }) : t('messages.noConversations')}
           </Text>
         }
         contentContainerStyle={s.listContent}

@@ -14,6 +14,7 @@ import { Spacing, Typography, useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   Pressable,
@@ -26,15 +27,16 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const QUICK_ACTIONS: {
+const QUICK_ACTION_KEYS: {
+  id: string;
   icon: keyof typeof Ionicons.glyphMap;
-  label: string;
+  key: string;
   iconBg: string;
 }[] = [
-  { icon: 'person-add', label: '新的朋友', iconBg: '#F97316' },
-  { icon: 'chatbubble', label: '坐席', iconBg: '#3B82F6' },
-  { icon: 'chatbubbles', label: '群聊', iconBg: '#22C55E' },
-  { icon: 'pricetag', label: '标签', iconBg: '#A855F7' },
+  { id: 'new-friends', icon: 'person-add', key: 'contacts.newFriends', iconBg: '#F97316' },
+  { id: 'seats', icon: 'chatbubble', key: 'contacts.seats', iconBg: '#3B82F6' },
+  { id: 'groups', icon: 'chatbubbles', key: 'contacts.groups', iconBg: '#22C55E' },
+  { id: 'tags', icon: 'pricetag', key: 'contacts.tags', iconBg: '#A855F7' },
 ];
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ#'.split('');
@@ -98,6 +100,9 @@ export default function ContactsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
+  const { t } = useTranslation();
+
+  const QUICK_ACTIONS = QUICK_ACTION_KEYS.map((a) => ({ id: a.id, icon: a.icon, label: t(a.key), iconBg: a.iconBg }));
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +121,7 @@ export default function ContactsScreen() {
       setFriends(nextFriends);
       setError(null);
     } catch {
-      setError('联系人加载失败，请稍后重试');
+      setError(t('contacts.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -201,18 +206,12 @@ export default function ContactsScreen() {
   );
 
   const handleQuickActionPress = useCallback(
-    (label: string) => {
-      if (label === '新的朋友') {
+    (id: string) => {
+      if (id === 'new-friends') {
         router.push('/(tabs)/contacts/new-friends');
-        return;
-      }
-
-      if (label === '群聊') {
+      } else if (id === 'groups') {
         router.push('/(tabs)/contacts/groups');
-        return;
-      }
-
-      if (label === '标签') {
+      } else if (id === 'tags') {
         router.push('/(tabs)/contacts/tags');
       }
     },
@@ -234,7 +233,7 @@ export default function ContactsScreen() {
           />
           <View style={s.contactMeta}>
             <Text style={d.contactName}>{getFriendDisplayName(item)}</Text>
-            <Text style={d.contactAccountId}>账号：{item.accountId}</Text>
+            <Text style={d.contactAccountId}>{t('contacts.accountId', { id: item.accountId })}</Text>
           </View>
         </Pressable>
         {index < section.data.length - 1 && <Divider />}
@@ -257,12 +256,12 @@ export default function ContactsScreen() {
   const ListHeader = (
     <View style={s.headerSection}>
       <View style={s.titleRow}>
-        <Text style={d.title}>联系人</Text>
+        <Text style={d.title}>{t('contacts.title')}</Text>
         <Pressable onPress={handleAddFriend}>
           <Ionicons name="person-add-outline" size={24} color={colors.text} />
         </Pressable>
       </View>
-      <SearchBar placeholder="搜索账号或好友..." onPress={handleOpenSearch} />
+      <SearchBar placeholder={t('contacts.searchPlaceholder')} onPress={handleOpenSearch} />
       <View style={s.quickActions}>
         {QUICK_ACTIONS.map((action, index) => (
           <View key={action.label}>
@@ -271,9 +270,9 @@ export default function ContactsScreen() {
               iconBgColor={action.iconBg}
               label={action.label}
               showIndicatorDot={
-                action.label === '新的朋友' && unreadFriendActivityCount > 0
+                action.id === 'new-friends' && unreadFriendActivityCount > 0
               }
-              onPress={() => handleQuickActionPress(action.label)}
+              onPress={() => handleQuickActionPress(action.id)}
             />
             {index < QUICK_ACTIONS.length - 1 ? <Divider /> : null}
           </View>
@@ -285,18 +284,18 @@ export default function ContactsScreen() {
   const stateBlock = loading ? (
     <View style={s.stateBlock}>
       <ActivityIndicator color={colors.primary} />
-      <Text style={d.stateText}>正在加载联系人...</Text>
+      <Text style={d.stateText}>{t('contacts.loadingContacts')}</Text>
     </View>
   ) : error ? (
     <View style={s.stateBlock}>
       <Text style={d.stateText}>{error}</Text>
       <Pressable style={[s.retryButton, d.retryButton]} onPress={loadFriends}>
-        <Text style={d.retryButtonText}>重试</Text>
+        <Text style={d.retryButtonText}>{t('common.retry')}</Text>
       </Pressable>
     </View>
   ) : friends.length === 0 ? (
     <View style={s.stateBlock}>
-      <Text style={d.stateText}>还没有添加好友</Text>
+      <Text style={d.stateText}>{t('contacts.noFriends')}</Text>
     </View>
   ) : null;
 

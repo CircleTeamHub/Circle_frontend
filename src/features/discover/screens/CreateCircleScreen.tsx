@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -30,32 +31,12 @@ import {
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import { useAuthStore } from '@/stores/authStore';
 
-const PRESET_CATEGORIES: { label: string; value: string }[] = [
-  { label: '生活', value: '生活' },
-  { label: '美食', value: '美食' },
-  { label: '运动', value: '运动' },
-  { label: '交友', value: '交友' },
-  { label: '游戏', value: '游戏' },
-  { label: '摄影', value: '摄影' },
-  { label: '职场', value: '职场' },
-  { label: '二手交易', value: '二手交易' },
-];
+const PRESET_CATEGORY_KEYS = [
+  'life', 'food', 'sports', 'social', 'gaming', 'photography', 'work', 'trade',
+] as const;
 
-const VIP_OPTIONS = [
-  { label: '不限制', value: null },
-  { label: 'VIP 1', value: 1 },
-  { label: 'VIP 2', value: 2 },
-  { label: 'VIP 3', value: 3 },
-  { label: 'VIP 5', value: 5 },
-];
-
-const CREDIT_OPTIONS = [
-  { label: '不限制', value: null },
-  { label: '60分以上', value: 60 },
-  { label: '70分以上', value: 70 },
-  { label: '80分以上', value: 80 },
-  { label: '90分以上', value: 90 },
-];
+const VIP_OPTIONS_VALUES = [null, 1, 2, 3, 5] as const;
+const CREDIT_OPTIONS_VALUES = [null, 60, 70, 80, 90] as const;
 
 
 const s = StyleSheet.create({
@@ -193,6 +174,7 @@ const s = StyleSheet.create({
 });
 
 export default function CreateCircleScreen() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const router = useRouter();
@@ -237,14 +219,29 @@ export default function CreateCircleScreen() {
     [colors],
   );
 
+  const PRESET_CATEGORIES = PRESET_CATEGORY_KEYS.map((key) => ({
+    label: t(`circle.categories.${key}`),
+    value: key,
+  }));
+
+  const VIP_OPTIONS = VIP_OPTIONS_VALUES.map((v) => ({
+    label: v === null ? t('common.noRestriction') : t(`vipOptions.vip${v}`),
+    value: v,
+  }));
+
+  const CREDIT_OPTIONS = CREDIT_OPTIONS_VALUES.map((v) => ({
+    label: v === null ? t('common.noRestriction') : t(`creditOptions.above${v}`),
+    value: v,
+  }));
+
   // VIP gate
   if (!user || user.vipLevel < 1) {
     return (
       <View style={[d.container, { paddingTop: insets.top }]}>
-        <NavHeader title="创建圈子" />
+        <NavHeader title={t('circle.create.title')} />
         <View style={s.vipGate}>
           <Ionicons name="diamond" size={48} color={colors.warning} />
-          <Text style={d.vipText}>需要成为VIP用户才能创建圈子</Text>
+          <Text style={d.vipText}>{t('circle.create.vipRequired')}</Text>
         </View>
       </View>
     );
@@ -305,20 +302,20 @@ export default function CreateCircleScreen() {
 
   const cycleVip = useCallback(() => {
     setJoinVipRestriction((prev) => {
-      const idx = VIP_OPTIONS.findIndex((o) => o.value === prev);
-      return VIP_OPTIONS[(idx + 1) % VIP_OPTIONS.length].value;
+      const idx = VIP_OPTIONS_VALUES.indexOf(prev as any);
+      return VIP_OPTIONS_VALUES[(idx + 1) % VIP_OPTIONS_VALUES.length] ?? null;
     });
   }, []);
 
   const cycleCredit = useCallback(() => {
     setJoinCreditRestriction((prev) => {
-      const idx = CREDIT_OPTIONS.findIndex((o) => o.value === prev);
-      return CREDIT_OPTIONS[(idx + 1) % CREDIT_OPTIONS.length].value;
+      const idx = CREDIT_OPTIONS_VALUES.indexOf(prev as any);
+      return CREDIT_OPTIONS_VALUES[(idx + 1) % CREDIT_OPTIONS_VALUES.length] ?? null;
     });
   }, []);
 
-  const vipLabel = VIP_OPTIONS.find((o) => o.value === joinVipRestriction)?.label ?? '不限制';
-  const creditLabel = CREDIT_OPTIONS.find((o) => o.value === joinCreditRestriction)?.label ?? '不限制';
+  const vipLabel = VIP_OPTIONS.find((o) => o.value === joinVipRestriction)?.label ?? t('common.noRestriction');
+  const creditLabel = CREDIT_OPTIONS.find((o) => o.value === joinCreditRestriction)?.label ?? t('common.noRestriction');
 
   const handleSubmit = async () => {
     if (!canSubmit || submitting) return;
@@ -359,8 +356,8 @@ export default function CreateCircleScreen() {
       resetCreateCircleForm();
       router.back();
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : '创建失败，请重试';
-      Alert.alert('创建失败', message);
+      const message = error instanceof Error ? error.message : t('circle.create.failed');
+      Alert.alert(t('circle.create.failed'), message);
     } finally {
       setSubmitting(false);
     }
@@ -370,17 +367,17 @@ export default function CreateCircleScreen() {
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title="创建圈子" />
+      <NavHeader title={t('circle.create.title')} />
       <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
         {/* ── 基本信息 ── */}
         <View style={s.section}>
-          <Text style={[s.sectionTitle, d.sectionTitle]}>基本信息</Text>
+          <Text style={[s.sectionTitle, d.sectionTitle]}>{t('circle.create.basicInfo')}</Text>
 
           {/* 圈子名称 */}
           <View style={[s.inputBox, d.inputBox]}>
             <TextInput
-              placeholder="圈子名称（2-20字）"
+              placeholder={t('circle.create.namePlaceholder')}
               placeholderTextColor={colors.textSecondary}
               value={name}
               onChangeText={setName}
@@ -390,7 +387,7 @@ export default function CreateCircleScreen() {
           </View>
 
           {/* 主题分类（多选 + 自定义） */}
-          <Text style={[s.rowLabel, d.rowLabel, { marginBottom: Spacing.sm }]}>主题分类（可多选）</Text>
+          <Text style={[s.rowLabel, d.rowLabel, { marginBottom: Spacing.sm }]}>{t('circle.create.categoryLabel')}</Text>
           <View style={s.categoryRow}>
             {/* Preset categories */}
             {PRESET_CATEGORIES.map((opt) => {
@@ -443,7 +440,7 @@ export default function CreateCircleScreen() {
           {/* 自定义分类输入 */}
           <View style={s.tagInputRow}>
             <TextInput
-              placeholder="输入自定义分类"
+              placeholder={t('circle.create.customCategoryPlaceholder')}
               placeholderTextColor={colors.textSecondary}
               value={customCategoryInput}
               onChangeText={setCustomCategoryInput}
@@ -455,14 +452,14 @@ export default function CreateCircleScreen() {
               onPress={handleAddCustomCategory}
               style={[s.addTagBtn, { backgroundColor: colors.primary }]}
             >
-              <Text style={{ color: colors.white, ...Typography.caption }}>添加</Text>
+              <Text style={{ color: colors.white, ...Typography.caption }}>{t('common.add')}</Text>
             </Pressable>
           </View>
 
           {/* 圈子描述 */}
           <View style={[s.inputBox, d.inputBox]}>
             <TextInput
-              placeholder="圈子描述（10-500字）"
+              placeholder={t('circle.create.descriptionPlaceholder')}
               placeholderTextColor={colors.textSecondary}
               multiline
               value={description}
@@ -475,10 +472,10 @@ export default function CreateCircleScreen() {
 
         {/* ── 设定 ── */}
         <View style={s.section}>
-          <Text style={[s.sectionTitle, d.sectionTitle]}>设定</Text>
+          <Text style={[s.sectionTitle, d.sectionTitle]}>{t('circle.create.settingsSection')}</Text>
 
           {/* 圈子头像 */}
-          <Text style={[s.rowLabel, d.rowLabel, { marginBottom: Spacing.sm }]}>圈子头像</Text>
+          <Text style={[s.rowLabel, d.rowLabel, { marginBottom: Spacing.sm }]}>{t('circle.create.avatarLabel')}</Text>
           <View style={s.avatarRow}>
             <Pressable onPress={handlePickAvatar}>
               {avatarUri ? (
@@ -490,15 +487,15 @@ export default function CreateCircleScreen() {
               )}
             </Pressable>
             <Text style={[s.avatarHint, d.avatarHint]}>
-              点击上传圈子头像（选填）
+              {t('circle.create.avatarHint')}
             </Text>
           </View>
 
           {/* 关联城市 */}
           <MenuRow
             icon="location-outline"
-            label="关联城市"
-            rightText={selectedCities.length > 0 ? `已选${selectedCities.length}个` : '全国（不限）'}
+            label={t('circle.create.cityLabel')}
+            rightText={selectedCities.length > 0 ? t('circle.create.selectedCities', { count: selectedCities.length }) : t('circle.create.allCities')}
             onPress={handleSelectCities}
           />
           {selectedCities.length > 0 ? (
@@ -519,11 +516,11 @@ export default function CreateCircleScreen() {
 
           {/* 圈子公告/规则 */}
           <Text style={[s.rowLabel, d.rowLabel, { marginTop: Spacing.md, marginBottom: Spacing.sm }]}>
-            圈子公告与规则
+            {t('circle.create.rulesLabel')}
           </Text>
           <View style={[s.inputBox, d.inputBox]}>
             <TextInput
-              placeholder="在此输入圈子公告或规则（选填）"
+              placeholder={t('circle.create.rulesPlaceholder')}
               placeholderTextColor={colors.textSecondary}
               multiline
               value={rules}
@@ -535,7 +532,7 @@ export default function CreateCircleScreen() {
 
           {/* 标签 */}
           <Text style={[s.rowLabel, d.rowLabel, { marginBottom: Spacing.sm }]}>
-            标签（最多3个，方便搜索发现）
+            {t('circle.create.tagsLabel')}
           </Text>
           <View style={s.tagRow}>
             {tags.map((tag, i) => (
@@ -552,7 +549,7 @@ export default function CreateCircleScreen() {
           {tags.length < 3 ? (
             <View style={s.tagInputRow}>
               <TextInput
-                placeholder="输入标签"
+                placeholder={t('circle.create.tagPlaceholder')}
                 placeholderTextColor={colors.textSecondary}
                 value={tagInput}
                 onChangeText={setTagInput}
@@ -564,7 +561,7 @@ export default function CreateCircleScreen() {
                 onPress={handleAddTag}
                 style={[s.addTagBtn, { backgroundColor: colors.primary }]}
               >
-                <Text style={{ color: colors.white, ...Typography.caption }}>添加</Text>
+                <Text style={{ color: colors.white, ...Typography.caption }}>{t('common.add')}</Text>
               </Pressable>
             </View>
           ) : null}
@@ -572,14 +569,14 @@ export default function CreateCircleScreen() {
 
         {/* ── 权限与限制 ── */}
         <View style={s.section}>
-          <Text style={[s.sectionTitle, d.sectionTitle]}>权限与限制</Text>
+          <Text style={[s.sectionTitle, d.sectionTitle]}>{t('circle.create.restrictionsSection')}</Text>
 
-          <MenuRow icon="diamond-outline" label="加入VIP限制" rightText={vipLabel} onPress={cycleVip} />
+          <MenuRow icon="diamond-outline" label={t('circle.joinVipRestriction')} rightText={vipLabel} onPress={cycleVip} />
           <Divider />
-          <MenuRow icon="shield-checkmark-outline" label="加入信用值限制" rightText={creditLabel} onPress={cycleCredit} />
+          <MenuRow icon="shield-checkmark-outline" label={t('circle.joinCreditRestriction')} rightText={creditLabel} onPress={cycleCredit} />
           <Divider />
           <View style={s.toggleRow}>
-            <Text style={[s.rowLabel, d.rowLabel]}>需要靓号</Text>
+            <Text style={[s.rowLabel, d.rowLabel]}>{t('circle.create.fancyLabel')}</Text>
             <Switch
               value={joinFancyRestriction}
               onValueChange={setJoinFancyRestriction}
@@ -589,7 +586,7 @@ export default function CreateCircleScreen() {
           </View>
           <Divider />
           <View style={s.toggleRow}>
-            <Text style={[s.rowLabel, d.rowLabel]}>成员可发帖</Text>
+            <Text style={[s.rowLabel, d.rowLabel]}>{t('circle.create.memberPostLabel')}</Text>
             <Switch
               value={memberCanPost}
               onValueChange={setMemberCanPost}
@@ -605,7 +602,7 @@ export default function CreateCircleScreen() {
       <View style={[s.submitWrap, { paddingBottom: insets.bottom || 34 }]}>
         {!canSubmit ? (
           <Text style={{ color: colors.textSecondary, ...Typography.caption, textAlign: 'center', marginBottom: Spacing.sm }}>
-            {name.trim().length < 2 ? '请填写圈子名称（至少2字）' : '请填写圈子描述（至少10字）'}
+            {name.trim().length < 2 ? t('circle.create.nameRequired') : t('circle.create.descRequired')}
           </Text>
         ) : null}
         <Pressable
@@ -616,7 +613,7 @@ export default function CreateCircleScreen() {
           {submitting ? (
             <ActivityIndicator color={colors.white} />
           ) : (
-            <Text style={[s.submitText, d.submitText]}>创建圈子</Text>
+            <Text style={[s.submitText, d.submitText]}>{t('circle.create.submitButton')}</Text>
           )}
         </Pressable>
       </View>

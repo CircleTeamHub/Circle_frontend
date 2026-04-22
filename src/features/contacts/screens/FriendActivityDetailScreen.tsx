@@ -15,6 +15,7 @@ import {
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   Alert,
@@ -76,6 +77,7 @@ const s = StyleSheet.create({
 export default function FriendActivityDetailScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { t, i18n } = useTranslation();
   const params = useLocalSearchParams<{ id?: string }>();
   const [activity, setActivity] = useState<FriendActivity | null>(null);
   const [loading, setLoading] = useState(true);
@@ -87,7 +89,7 @@ export default function FriendActivityDetailScreen() {
   const loadActivity = useCallback(
     (signal?: { cancelled: boolean }) => {
       if (!activityId) {
-        setError('好友动态不存在');
+        setError(t('contacts.friendActivity.notExist'));
         setLoading(false);
         return Promise.resolve();
       }
@@ -106,14 +108,14 @@ export default function FriendActivityDetailScreen() {
         })
         .catch(() => {
           if (signal?.cancelled) return;
-          setError('好友动态详情加载失败，请稍后重试');
+          setError(t('contacts.friendActivity.detailLoadFailed'));
         })
         .finally(() => {
           if (signal?.cancelled) return;
           setLoading(false);
         });
     },
-    [activityId],
+    [activityId, t],
   );
 
   useEffect(() => {
@@ -201,30 +203,36 @@ export default function FriendActivityDetailScreen() {
           setActivity((current) =>
             current ? { ...current, requestState: 'ACCEPTED' } : current,
           );
-          Alert.alert('已接受', '你已通过这条好友申请。');
+          Alert.alert(
+            t('contacts.friendActivity.accepted'),
+            t('contacts.friendActivity.acceptedMessage'),
+          );
         } else {
           await rejectFriendRequest(activity.requestId);
           setActivity((current) =>
             current ? { ...current, requestState: 'REJECTED' } : current,
           );
-          Alert.alert('已拒绝', '你已拒绝这条好友申请。');
+          Alert.alert(
+            t('contacts.friendActivity.rejected'),
+            t('contacts.friendActivity.rejectedMessage'),
+          );
         }
       } catch (nextError) {
         Alert.alert(
-          '处理失败',
-          nextError instanceof Error ? nextError.message : '操作失败，请稍后重试',
+          t('contacts.friendActivity.handleFailed'),
+          nextError instanceof Error ? nextError.message : t('contacts.friendActivity.handleError'),
         );
       } finally {
         setHandling(false);
       }
     },
-    [activity, handling],
+    [activity, handling, t],
   );
 
   const stateBlock = loading ? (
     <View style={s.stateBlock}>
       <ActivityIndicator color={colors.primary} />
-      <Text style={d.stateText}>正在加载好友动态详情...</Text>
+      <Text style={d.stateText}>{t('contacts.friendActivity.loadingDetail')}</Text>
     </View>
   ) : error ? (
     <View style={s.stateBlock}>
@@ -235,7 +243,7 @@ export default function FriendActivityDetailScreen() {
           void loadActivity();
         }}
       >
-        <Text style={d.retryButtonText}>重试</Text>
+        <Text style={d.retryButtonText}>{t('common.retry')}</Text>
       </Pressable>
     </View>
   ) : null;
@@ -245,7 +253,7 @@ export default function FriendActivityDetailScreen() {
 
   return (
     <View style={d.container}>
-      <NavHeader title="好友动态" />
+      <NavHeader title={t('contacts.friendActivity.detail')} />
       {stateBlock ? (
         stateBlock
       ) : activity ? (
@@ -261,15 +269,17 @@ export default function FriendActivityDetailScreen() {
                 <Text style={d.title}>{getFriendActivityDisplayName(activity)}</Text>
                 <Text style={d.subtitle}>{getFriendActivityCopy(activity)}</Text>
                 <Text style={d.time}>
-                  {new Date(activity.createdAt).toLocaleString('zh-CN')}
+                  {new Date(activity.createdAt).toLocaleString(
+                    i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US',
+                  )}
                 </Text>
               </View>
             </View>
 
             <View>
-              <Text style={d.messageLabel}>附言</Text>
+              <Text style={d.messageLabel}>{t('contacts.friendActivity.message')}</Text>
               <Text style={d.messageText}>
-                {activity.messageSnapshot?.trim() || '对方没有填写附言'}
+                {activity.messageSnapshot?.trim() || t('contacts.friendActivity.noMessage')}
               </Text>
             </View>
 
@@ -281,7 +291,7 @@ export default function FriendActivityDetailScreen() {
                   onPress={() => handleDecision('reject')}
                 >
                   <Text style={d.rejectButtonText}>
-                    {handling ? '处理中...' : '拒绝'}
+                    {handling ? t('common.processing') : t('contacts.friendActivity.reject')}
                   </Text>
                 </Pressable>
                 <Pressable
@@ -290,13 +300,13 @@ export default function FriendActivityDetailScreen() {
                   onPress={() => handleDecision('accept')}
                 >
                   <Text style={d.acceptButtonText}>
-                    {handling ? '处理中...' : '接受'}
+                    {handling ? t('common.processing') : t('contacts.friendActivity.accept')}
                   </Text>
                 </Pressable>
               </View>
             ) : (
               <Text style={d.stateText}>
-                当前状态：{activity.requestState}
+                {t('contacts.friendActivity.currentStatus', { status: activity.requestState })}
               </Text>
             )}
           </View>

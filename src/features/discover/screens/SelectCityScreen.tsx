@@ -8,6 +8,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -119,6 +120,7 @@ const s = StyleSheet.create({
 });
 
 export default function SelectCityScreen() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const router = useRouter();
@@ -174,7 +176,7 @@ export default function SelectCityScreen() {
         });
 
         if (result.reachedLimit) {
-          Alert.alert('提示', `最多选择${MAX_CITY_SELECTION}个城市`);
+          Alert.alert(t('city.hint'), t('city.maxCities', { max: MAX_CITY_SELECTION }));
         }
 
         return result.nextSelected;
@@ -185,7 +187,7 @@ export default function SelectCityScreen() {
 
   const toggleNationwide = useCallback(() => {
     if (!isVip) {
-      Alert.alert('VIP专属', '全国范围仅VIP用户可选');
+      Alert.alert(t('city.vipOnly'), t('city.vipOnlyMessage'));
       return;
     }
     setIsNationwide((prev) => {
@@ -212,14 +214,14 @@ export default function SelectCityScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
-      <NavHeader title="选择城市" />
+      <NavHeader title={t('city.title')} />
 
       {/* Search */}
       <View style={s.searchWrap}>
         <TextInput
           value={search}
           onChangeText={setSearch}
-          placeholder="搜索城市"
+          placeholder={t('city.searchPlaceholder')}
           placeholderTextColor={colors.textSecondary}
           style={[
             s.searchInput,
@@ -236,10 +238,10 @@ export default function SelectCityScreen() {
       <View style={s.topBar}>
         <Text style={[s.countText, { color: colors.textSecondary }]}>
           {isNationwide
-            ? '已选：全国'
+            ? t('city.selectedNationwide')
             : isMultiSelect
-              ? `已选 ${selected.length}/${MAX_CITY_SELECTION} 个城市`
-              : `已选：${selected[0] ?? '未选择城市'}`}
+              ? t('city.selectedCount', { count: selected.length, max: MAX_CITY_SELECTION })
+              : selected[0] ? t('city.selectedSingle', { city: selected[0] }) : t('city.notSelected')}
         </Text>
       </View>
 
@@ -264,7 +266,7 @@ export default function SelectCityScreen() {
         <View style={s.nationwideLeft}>
           <Ionicons name="globe-outline" size={20} color={colors.text} />
           <Text style={{ color: colors.text, ...Typography.body, fontWeight: '600' }}>
-            全国
+            {t('city.nationwide')}
           </Text>
           {!isVip ? (
             <View style={{ backgroundColor: '#F59E0B20', paddingHorizontal: 6, paddingVertical: 1, borderRadius: Radius.full }}>
@@ -333,7 +335,7 @@ export default function SelectCityScreen() {
           onPress={handleConfirm}
         >
           <Text style={[s.confirmText, { color: colors.white }]}>
-            确认选择
+            {t('city.confirmSelection')}
           </Text>
         </Pressable>
       </View>

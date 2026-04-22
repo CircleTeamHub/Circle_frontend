@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { useMomentsStore } from '@/features/discover/store/use-moments-store';
 import { toggleMomentLike, fetchNewMomentsCount } from '@/services/api/moments';
@@ -42,6 +43,7 @@ const s = StyleSheet.create({
 });
 
 export const MomentsFeed: React.FC = () => {
+  const { t } = useTranslation();
   const { colors } = useTheme();
   const router = useRouter();
   const {
@@ -140,7 +142,7 @@ export const MomentsFeed: React.FC = () => {
         onPress={handleRefresh}
       >
         <Text style={[s.bannerText, { color: colors.primary }]}>
-          有{newCount}条新动态，点击查看
+          {t('discover.newPosts', { count: newCount })}
         </Text>
       </Pressable>
     ) : null;
@@ -148,10 +150,10 @@ export const MomentsFeed: React.FC = () => {
   const ListEmpty = !loading ? (
     <View style={s.emptyContainer}>
       <Text style={{ color: colors.textSecondary, ...Typography.body }}>
-        暂无朋友圈动态
+        {t('discover.noMoments')}
       </Text>
       <Text style={{ color: colors.textSecondary, ...Typography.caption }}>
-        添加好友后即可看到朋友的动态
+        {t('discover.addFriendHint')}
       </Text>
     </View>
   ) : null;

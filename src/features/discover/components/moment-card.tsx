@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -67,6 +68,7 @@ export const MomentCard: React.FC<MomentCardProps> = ({
   onLike,
   onPress,
 }) => {
+  const { t } = useTranslation();
   const { colors } = useTheme();
   const router = useRouter();
 
@@ -89,13 +91,13 @@ export const MomentCard: React.FC<MomentCardProps> = ({
   const timeLabel = useMemo(() => {
     const diff = Date.now() - new Date(post.createdAt).getTime();
     const mins = Math.floor(diff / 60000);
-    if (mins < 1) return '刚刚';
-    if (mins < 60) return `${mins}分钟前`;
+    if (mins < 1) return t('common.justNow');
+    if (mins < 60) return t('common.minutesAgo', { count: mins });
     const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}小时前`;
+    if (hours < 24) return t('common.hoursAgo', { count: hours });
     const days = Math.floor(hours / 24);
-    return `${days}天前`;
-  }, [post.createdAt]);
+    return t('common.daysAgo', { count: days });
+  }, [post.createdAt, t]);
 
   const handleAvatarPress = useCallback(() => {
     router.push(getUserProfileHref('discover', post.author.id));

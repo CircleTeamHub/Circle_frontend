@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -71,6 +72,7 @@ const s = StyleSheet.create({
 });
 
 export default function VerificationRequestScreen() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const router = useRouter();
@@ -114,13 +116,13 @@ export default function VerificationRequestScreen() {
       try {
         await respondToVerification(id, approve);
         setResponded(true);
-        Alert.alert(approve ? '已同意' : '已拒绝', undefined, [
-          { text: '确定', onPress: () => router.back() },
+        Alert.alert(approve ? t('invitation.approved') : t('invitation.rejected'), undefined, [
+          { text: t('common.confirm'), onPress: () => router.back() },
         ]);
       } catch (error: unknown) {
         const message =
-          error instanceof Error ? error.message : '操作失败';
-        Alert.alert('操作失败', message);
+          error instanceof Error ? error.message : t('common.errorOccurred');
+        Alert.alert(t('common.errorOccurred'), message);
       } finally {
         setResponding(false);
       }
@@ -131,7 +133,7 @@ export default function VerificationRequestScreen() {
   if (loading) {
     return (
       <View style={[d.container, { paddingTop: insets.top }]}>
-        <NavHeader title="圈子验证请求" />
+        <NavHeader title={t('invitation.verificationRequest')} />
         <View style={s.centerLoader}>
           <ActivityIndicator color={colors.primary} />
         </View>
@@ -142,9 +144,9 @@ export default function VerificationRequestScreen() {
   if (!invitation) {
     return (
       <View style={[d.container, { paddingTop: insets.top }]}>
-        <NavHeader title="圈子验证请求" />
+        <NavHeader title={t('invitation.verificationRequest')} />
         <View style={s.centerLoader}>
-          <Text style={d.descText}>验证请求不存在</Text>
+          <Text style={d.descText}>{t('invitation.requestNotExist')}</Text>
         </View>
       </View>
     );
@@ -152,7 +154,7 @@ export default function VerificationRequestScreen() {
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title="圈子验证请求" />
+      <NavHeader title={t('invitation.verificationRequest')} />
       <View style={s.content}>
         <View style={[s.card, d.card]}>
           <Avatar
@@ -164,13 +166,13 @@ export default function VerificationRequestScreen() {
             {invitation.applicant.nickname}
           </Text>
           <Text style={[s.descText, d.descText]}>
-            想要加入【{invitation.circleName}】
+            {t('invitation.wantsToJoin', { circle: invitation.circleName })}
           </Text>
           <Text style={[s.descText, d.descText]}>
-            由 {invitation.inviter.nickname} 邀请
+            {t('invitation.invitedBy', { name: invitation.inviter.nickname })}
           </Text>
           <Text style={[s.progressText, d.progressText]}>
-            验证进度: {invitation.approvedCount}/{invitation.requiredCount}
+            {t('invitation.verifyProgress', { approved: invitation.approvedCount, total: invitation.requiredCount })}
           </Text>
         </View>
 
@@ -181,7 +183,7 @@ export default function VerificationRequestScreen() {
               onPress={() => handleRespond(false)}
               disabled={responding}
             >
-              <Text style={[s.btnText, d.rejectBtnText]}>拒绝</Text>
+              <Text style={[s.btnText, d.rejectBtnText]}>{t('invitation.reject')}</Text>
             </Pressable>
             <Pressable
               style={[s.btn, d.approveBtn]}
@@ -191,14 +193,14 @@ export default function VerificationRequestScreen() {
               {responding ? (
                 <ActivityIndicator color={colors.white} />
               ) : (
-                <Text style={[s.btnText, d.approveBtnText]}>同意</Text>
+                <Text style={[s.btnText, d.approveBtnText]}>{t('invitation.approve')}</Text>
               )}
             </Pressable>
           </View>
         ) : (
           <View style={s.doneRow}>
             <Ionicons name="checkmark-circle" size={20} color="#22C55E" />
-            <Text style={{ color: '#22C55E', ...Typography.body }}>已完成</Text>
+            <Text style={{ color: '#22C55E', ...Typography.body }}>{t('common.done')}</Text>
           </View>
         )}
       </View>

@@ -10,6 +10,7 @@ import * as SplashScreen from 'expo-splash-screen'; // 控制启动屏（闪屏�
 import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar'; // 控制顶部状态栏样式（文字颜色等）
 import 'react-native-reanimated';             // 必须在入口文件最早引入，启用动画引擎
+import '@/i18n';                              // 初始化 i18n（必须在组件渲染前）
 
 // 项目自定义主题系统：ThemeProvider 提供主题上下文，useTheme 读取当前主题
 import { SessionBootstrap } from '@/components/app/session-bootstrap';

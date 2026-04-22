@@ -8,6 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
@@ -43,6 +44,7 @@ const s = StyleSheet.create({
 });
 
 export const PlazaFeed: React.FC = () => {
+  const { t } = useTranslation();
   const { colors } = useTheme();
   const {
     plazaPosts,
@@ -111,7 +113,7 @@ export const PlazaFeed: React.FC = () => {
             </Text>
             <Pressable onPress={fetchAllCircles}>
               <Text style={{ color: colors.primary, ...Typography.caption }}>
-                重试
+                {t('common.retry')}
               </Text>
             </Pressable>
           </View>
@@ -122,10 +124,10 @@ export const PlazaFeed: React.FC = () => {
   const ListEmpty = !plazaLoading ? (
     <View style={s.emptyContainer}>
       <Text style={{ color: colors.textSecondary, ...Typography.body }}>
-        暂无动态
+        {t('discover.noActivity')}
       </Text>
       <Text style={{ color: colors.textSecondary, ...Typography.caption }}>
-        加入圈子后即可看到广场动态
+        {t('discover.joinCircleHint')}
       </Text>
     </View>
   ) : null;

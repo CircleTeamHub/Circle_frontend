@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, Alert } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Divider } from '@/components/ui/divider';
@@ -37,15 +38,9 @@ import {
 import { fetchUserProfile } from '@/services/api/profile';
 import { useAuthStore } from '@/stores/authStore';
 
-const INFO_ROWS = [
-  '朋友圈',
-  '设置备注',
-  '标签',
-  '给该用户赠送金币',
-  '更多信息',
-] as const;
-const NON_FRIEND_INFO_ROWS = ['朋友圈', '给该用户赠送金币', '更多信息'] as const;
-const SELF_INFO_ROWS = ['朋友圈'] as const;
+const INFO_ROW_IDS = ['moments', 'setRemark', 'tags', 'giftCoins', 'moreInfo'] as const;
+const NON_FRIEND_INFO_ROW_IDS = ['moments', 'giftCoins', 'moreInfo'] as const;
+const SELF_INFO_ROW_IDS = ['moments'] as const;
 
 const s = StyleSheet.create({
   headerBlock: {
@@ -149,6 +144,7 @@ export default function UserProfileScreen() {
   const router = useRouter();
   const segments = useSegments();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{ id?: string; name?: string }>();
   const currentUser = useAuthStore((state) => state.user);
   const [remoteProfile, setRemoteProfile] = useState<UserProfileData | null>(null);
@@ -185,15 +181,15 @@ export default function UserProfileScreen() {
         name: currentUser.nickname || currentUser.accountId,
         accountId: currentUser.accountId,
         avatarUrl: currentUser.avatarUrl ?? undefined,
-        memberLabel: currentUser.role === 'ADMIN' ? '管理员' : '普通用户',
-        badges: [currentUser.role === 'ADMIN' ? '管理员' : '普通用户'],
+        memberLabel: currentUser.role === 'ADMIN' ? t('profile.admin') : t('profile.normalUser'),
+        badges: [currentUser.role === 'ADMIN' ? t('profile.admin') : t('profile.normalUser')],
         gender: currentUser.gender,
         city: currentUser.city,
         signature: getProfileSignature(
           currentUser.persona,
           currentUser.helloWords,
         ),
-        phone: currentUser.phoneNumber ?? '未公开',
+        phone: currentUser.phoneNumber ?? t('userProfile.phoneHidden'),
         remarkHint: currentUser.nickname,
       });
       return;
@@ -210,26 +206,26 @@ export default function UserProfileScreen() {
           name: profile.nickname || profile.accountId,
           accountId: profile.accountId,
           avatarUrl: profile.avatarUrl ?? undefined,
-          memberLabel: profile.role === 'ADMIN' ? '管理员' : '普通用户',
-          badges: [profile.role === 'ADMIN' ? '管理员' : '普通用户'],
+          memberLabel: profile.role === 'ADMIN' ? t('profile.admin') : t('profile.normalUser'),
+          badges: [profile.role === 'ADMIN' ? t('profile.admin') : t('profile.normalUser')],
           gender: profile.gender,
           city: profile.city,
           signature: getProfileSignature(profile.persona, profile.helloWords),
-          phone: profile.phoneNumber ?? '未公开',
+          phone: profile.phoneNumber ?? t('userProfile.phoneHidden'),
           remarkHint: profile.nickname,
         });
       })
       .catch(() => {
         if (!cancelled) {
           setRemoteProfile(null);
-          setFetchError('加载用户资料失败，显示缓存数据');
+          setFetchError(t('userProfile.loadFailed'));
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [currentUser, isCurrentUser, profileId]);
+  }, [currentUser, isCurrentUser, profileId, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -303,13 +299,13 @@ export default function UserProfileScreen() {
   const displayName = friendSettings?.remark?.trim() || profile.remarkHint || profile.name;
   const tagValue = friendSettings?.assignedTags.length
     ? friendSettings.assignedTags.map((tag) => tag.name).join('、')
-    : '未设置';
-  const remarkValue = friendSettings?.remark?.trim() || '未设置';
+    : t('profileFields.notSet');
+  const remarkValue = friendSettings?.remark?.trim() || t('profileFields.notSet');
   const infoRows = isCurrentUser
-    ? SELF_INFO_ROWS
+    ? SELF_INFO_ROW_IDS
     : friendStatus === 'ACCEPTED'
-      ? INFO_ROWS
-      : NON_FRIEND_INFO_ROWS;
+      ? INFO_ROW_IDS
+      : NON_FRIEND_INFO_ROW_IDS;
   const showProfileActions = !isCurrentUser;
   const canSendFriendRequest = canOpenSendFriendRequest({
     isCurrentUser,
@@ -367,13 +363,13 @@ export default function UserProfileScreen() {
       }
 
       Alert.alert(
-        '暂时无法打开聊天',
-        error instanceof Error ? error.message : '请稍后重试',
+        t('userProfile.openChatFailedTitle'),
+        error instanceof Error ? error.message : t('common.networkError'),
       );
     } finally {
       setOpeningChat(false);
     }
-  }, [displayName, openingChat, profile.avatarUrl, profileId, router]);
+  }, [displayName, openingChat, profile.avatarUrl, profileId, router, t]);
 
   const handleOpenChatInfo = useCallback(() => {
     if (
@@ -389,26 +385,30 @@ export default function UserProfileScreen() {
 
   const infoRowItems = useMemo(
     () =>
-      infoRows.map((label) => {
-        if (label === '设置备注') {
+      infoRows.map((id) => {
+        const label = t(`profile.${id}`);
+
+        if (id === 'setRemark') {
           return {
+            id,
             label,
             value: remarkValue,
             onPress: handleEditRemark,
           };
         }
 
-        if (label === '标签') {
+        if (id === 'tags') {
           return {
+            id,
             label,
             value: tagValue,
             onPress: handleEditTags,
           };
         }
 
-        return { label };
+        return { id, label };
       }),
-    [handleEditRemark, handleEditTags, infoRows, remarkValue, tagValue],
+    [handleEditRemark, handleEditTags, infoRows, remarkValue, t, tagValue],
   );
 
   const d = useMemo(
@@ -505,7 +505,7 @@ export default function UserProfileScreen() {
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader
-        title="个人信息"
+        title={t('userProfile.title')}
         rightIcon="information-circle-outline"
         onRightPress={handleOpenChatInfo}
       />
@@ -535,16 +535,16 @@ export default function UserProfileScreen() {
                 <Text style={d.badgeText}>{profile.memberLabel}</Text>
               </View>
             </View>
-            <Text style={d.account}>账号：{profile.accountId}</Text>
+            <Text style={d.account}>{t('contacts.accountId', { id: profile.accountId })}</Text>
             <View style={s.metaRow}>
               {profileMetaItems.map((item, index) => (
                 <View key={`${item}-${index}`} style={[s.metaChip, d.metaChip]}>
                   <Ionicons
                     name={
                       index === 0
-                        ? item === '女'
+                        ? item === t('profileFields.female')
                           ? 'female-outline'
-                          : item === '男'
+                          : item === t('profileFields.male')
                             ? 'male-outline'
                             : 'person-outline'
                         : 'location-outline'
@@ -570,7 +570,7 @@ export default function UserProfileScreen() {
         <View style={s.listSection}>
           <Divider />
           {infoRowItems.map((item, index) => (
-            <View key={item.label}>
+            <View key={item.id}>
               <ProfileActionRow
                 label={item.label}
                 value={item.value}
@@ -596,7 +596,7 @@ export default function UserProfileScreen() {
               disabled={openingChat}
             >
               <Text style={d.actionText}>
-                {openingChat ? '正在打开聊天...' : '发起聊天'}
+                {openingChat ? t('userProfile.openingChat') : t('userProfile.startChat')}
               </Text>
             </Pressable>
             <Pressable
@@ -606,7 +606,7 @@ export default function UserProfileScreen() {
                 pressed && d.actionButtonPressed,
               ]}
             >
-              <Text style={d.actionText}>音视频通话</Text>
+              <Text style={d.actionText}>{t('userProfile.avCall')}</Text>
             </Pressable>
           </View>
         ) : null}
@@ -621,7 +621,7 @@ export default function UserProfileScreen() {
             ]}
             onPress={handleAddFriend}
           >
-            <Text style={d.addButtonText}>发好友申请</Text>
+            <Text style={d.addButtonText}>{t('userProfile.addFriendRequest')}</Text>
           </Pressable>
         </View>
       ) : null}

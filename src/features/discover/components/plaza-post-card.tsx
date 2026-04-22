@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -45,6 +46,7 @@ const s = StyleSheet.create({
 });
 
 export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
+  const { t } = useTranslation();
   const { colors } = useTheme();
   const router = useRouter();
 
@@ -100,22 +102,25 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
       if (post.restrictions.fancyNumber) {
         reasons.push('靓号用户');
       }
-      Alert.alert('无法查看', `需要${reasons.join('、')}才能查看对方主页`);
+      Alert.alert(
+        t('plaza.cannotView'),
+        t('plaza.restrictionMessage', { requirements: reasons.join('、') }),
+      );
       return;
     }
     router.push(getUserProfileHref('discover', post.author.id));
-  }, [post.canInteract, post.restrictions, post.author.id, router]);
+  }, [post.canInteract, post.restrictions, post.author.id, router, t]);
 
   const timeLabel = useMemo(() => {
     const diff = Date.now() - new Date(post.createdAt).getTime();
     const mins = Math.floor(diff / 60000);
-    if (mins < 1) return '刚刚';
-    if (mins < 60) return `${mins}分钟前`;
+    if (mins < 1) return t('common.justNow');
+    if (mins < 60) return t('common.minutesAgo', { count: mins });
     const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}小时前`;
+    if (hours < 24) return t('common.hoursAgo', { count: hours });
     const days = Math.floor(hours / 24);
-    return `${days}天前`;
-  }, [post.createdAt]);
+    return t('common.daysAgo', { count: days });
+  }, [post.createdAt, t]);
 
   return (
     <View style={d.card}>

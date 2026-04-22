@@ -16,6 +16,7 @@ import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore
 import { Spacing, Typography, useTheme } from '@/theme';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   FlatList,
@@ -66,6 +67,7 @@ export default function NewFriendsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
+  const { t, i18n } = useTranslation();
   const [activities, setActivities] = useState<FriendActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -85,13 +87,13 @@ export default function NewFriendsScreen() {
       setError(null);
     } catch {
       if (signal?.cancelled) return;
-      setError('好友动态加载失败，请稍后重试');
+      setError(t('contacts.friendActivity.loadFailed'));
     } finally {
       if (!signal?.cancelled) {
         setLoading(false);
       }
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const signal = { cancelled: false };
@@ -198,7 +200,9 @@ export default function NewFriendsScreen() {
             </Text>
             <Text style={d.subtitle}>{getFriendActivityCopy(item.activity)}</Text>
             <Text style={d.time}>
-              {new Date(item.activity.createdAt).toLocaleString('zh-CN')}
+              {new Date(item.activity.createdAt).toLocaleString(
+                i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US',
+              )}
             </Text>
           </View>
           {item.unreadActivityIds.length > 0 ? (
@@ -214,7 +218,7 @@ export default function NewFriendsScreen() {
   const emptyState = loading ? (
     <View style={s.stateBlock}>
       <ActivityIndicator color={colors.primary} />
-      <Text style={d.stateText}>正在加载好友动态...</Text>
+      <Text style={d.stateText}>{t('contacts.friendActivity.loading')}</Text>
     </View>
   ) : error ? (
     <View style={s.stateBlock}>
@@ -225,18 +229,18 @@ export default function NewFriendsScreen() {
           void loadActivities();
         }}
       >
-        <Text style={d.retryButtonText}>重试</Text>
+        <Text style={d.retryButtonText}>{t('common.retry')}</Text>
       </Pressable>
     </View>
   ) : (
     <View style={s.stateBlock}>
-      <Text style={d.stateText}>还没有好友动态</Text>
+      <Text style={d.stateText}>{t('contacts.friendActivity.empty')}</Text>
     </View>
   );
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title="新的朋友" />
+      <NavHeader title={t('contacts.friendActivity.title')} />
       <FlatList
         data={inboxRows}
         keyExtractor={(item) => item.activity.counterparty.id}

@@ -8,6 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -44,6 +45,7 @@ const s = StyleSheet.create({
 });
 
 export default function SelectVerifierScreen() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const router = useRouter();
@@ -84,12 +86,12 @@ export default function SelectVerifierScreen() {
       setSubmittingId(friend.id);
       try {
         await addVerifierToInvitation(invitationId, friend.id);
-        Alert.alert('已邀请', `已邀请 ${friend.nickname} 进行验证`);
+        Alert.alert(t('invitation.invited'), t('invitation.invitedMessage', { name: friend.nickname }));
         router.back();
       } catch (error: unknown) {
         const message =
-          error instanceof Error ? error.message : '添加验证人失败';
-        Alert.alert('添加失败', message);
+          error instanceof Error ? error.message : t('invitation.addFailed');
+        Alert.alert(t('invitation.addFailed'), message);
       } finally {
         setSubmittingId(null);
       }
@@ -118,7 +120,7 @@ export default function SelectVerifierScreen() {
             {submittingId === item.id ? (
               <ActivityIndicator size="small" color={colors.white} />
             ) : (
-              <Text style={d.selectText}>选择</Text>
+              <Text style={d.selectText}>{t('invitation.select')}</Text>
             )}
           </Pressable>
         </View>
@@ -130,7 +132,7 @@ export default function SelectVerifierScreen() {
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title="选择验证人" />
+      <NavHeader title={t('invitation.selectVerifier')} />
       {loading ? (
         <View style={s.centerLoader}>
           <ActivityIndicator color={colors.primary} />
@@ -144,7 +146,7 @@ export default function SelectVerifierScreen() {
           ListEmptyComponent={
             <View style={s.centerLoader}>
               <Text style={{ color: colors.textSecondary, ...Typography.body }}>
-                暂无好友
+                {t('invitation.noFriends')}
               </Text>
             </View>
           }

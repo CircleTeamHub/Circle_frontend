@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   Alert,
   View,
@@ -8,8 +8,10 @@ import {
   StyleSheet,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { getCurrentLanguage, setLanguage } from '@/i18n';
 import { Avatar } from '@/components/ui/avatar';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
@@ -100,8 +102,15 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const { logout, switchAccount, submitting } = useAuth();
   const user = useAuthStore((state) => state.user);
+
+  const handleToggleLanguage = useCallback(() => {
+    const current = getCurrentLanguage();
+    const next = current === 'zh' ? 'en' : 'zh';
+    setLanguage(next);
+  }, []);
 
   const profileRows = PROFILE_ROW_IDS.map((fieldId) => {
     const field = getProfileEditField(fieldId);
@@ -193,7 +202,7 @@ export default function SettingsScreen() {
           {item.type === 'avatar' ? (
             <Avatar
               size={40}
-              name={user?.nickname ?? user?.accountId ?? '圈'}
+              name={user?.nickname ?? user?.accountId ?? 'C'}
               uri={user?.avatarUrl ?? undefined}
             />
           ) : item.value ? (
@@ -226,28 +235,49 @@ export default function SettingsScreen() {
       return;
     }
 
-    Alert.alert(item.label, item.unsupportedMessage ?? '该功能暂未接入。');
+    Alert.alert(item.label, item.unsupportedMessage ?? t('settingsPage.unsupported'));
   }
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title="账号设置" />
+      <NavHeader title={t('profile.accountSettings')} />
       <ScrollView
         contentContainerStyle={d.content}
         showsVerticalScrollIndicator={false}
       >
         <View style={s.section}>
-          <Text style={d.sectionTitle}>个人信息</Text>
+          <Text style={d.sectionTitle}>{t('settingsPage.profileSection')}</Text>
           {profileRows.map((item, index) =>
             renderRow(item, index, profileRows.length),
           )}
         </View>
 
         <View style={s.section}>
-          <Text style={d.sectionTitle}>账号与安全</Text>
+          <Text style={d.sectionTitle}>{t('settingsPage.securitySection')}</Text>
           {securityRows.map((item, index) =>
             renderRow(item, index, securityRows.length),
           )}
+        </View>
+
+        <View style={s.section}>
+          <Text style={d.sectionTitle}>{t('settingsPage.generalSection')}</Text>
+          <Pressable style={s.row} onPress={handleToggleLanguage}>
+            <Text style={d.rowLabel}>
+              {t('settingsPage.language')}
+            </Text>
+            <View style={s.rowRight}>
+              <Text style={d.rowValue}>
+                {getCurrentLanguage() === 'zh'
+                  ? t('settingsPage.languageValueZh')
+                  : t('settingsPage.languageValueEn')}
+              </Text>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={colors.textSecondary}
+              />
+            </View>
+          </Pressable>
         </View>
 
         <View style={s.footer}>
@@ -260,7 +290,7 @@ export default function SettingsScreen() {
             onPress={switchAccount}
             disabled={submitting}
           >
-            <Text style={d.secondaryButtonText}>切换账号</Text>
+            <Text style={d.secondaryButtonText}>{t('settingsPage.switchAccount')}</Text>
           </Pressable>
           <Pressable
             style={[
@@ -272,7 +302,7 @@ export default function SettingsScreen() {
             disabled={submitting}
           >
             <Ionicons name="log-out-outline" size={20} color={colors.white} />
-            <Text style={d.dangerButtonText}>退出登录</Text>
+            <Text style={d.dangerButtonText}>{t('settingsPage.logout')}</Text>
           </Pressable>
         </View>
       </ScrollView>

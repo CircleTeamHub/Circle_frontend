@@ -9,37 +9,23 @@ import { useAuthStore } from "@/stores/authStore";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const MENU_ITEMS: MenuItem[] = [
-  { id: "1", icon: "shield-checkmark-outline", label: "信用值" },
-  { id: "2", icon: "gift-outline", label: "会员中心", rightText: "查看会员" },
-  { id: "3", icon: "wallet-outline", label: "我的钱包" },
-  {
-    id: "4",
-    icon: "chatbubble-ellipses-outline",
-    label: "管家助手",
-    rightText: "用户满写",
-  },
-  {
-    id: "5",
-    icon: "hand-left-outline",
-    label: "商城",
-    rightText: "查看商品",
-  },
-  {
-    id: "6",
-    icon: "bookmark-outline",
-    label: "我的收藏",
-    rightText: "查看收藏",
-  },
-  {
-    id: "7",
-    icon: "document-text-outline",
-    label: "我的笔记",
-    rightText: "查看笔记",
-  },
+const MENU_ITEM_KEYS: {
+  id: string;
+  icon: string;
+  labelKey: string;
+  rightTextKey?: string;
+}[] = [
+  { id: "1", icon: "shield-checkmark-outline", labelKey: "profile.creditScore" },
+  { id: "2", icon: "gift-outline", labelKey: "profile.memberCenter", rightTextKey: "profile.viewMember" },
+  { id: "3", icon: "wallet-outline", labelKey: "profile.wallet" },
+  { id: "4", icon: "chatbubble-ellipses-outline", labelKey: "profile.assistant", rightTextKey: "profile.userSatisfaction" },
+  { id: "5", icon: "hand-left-outline", labelKey: "profile.mall", rightTextKey: "profile.viewProducts" },
+  { id: "6", icon: "bookmark-outline", labelKey: "profile.collections", rightTextKey: "profile.viewCollections" },
+  { id: "7", icon: "document-text-outline", labelKey: "profile.notes", rightTextKey: "profile.viewNotes" },
 ];
 
 const s = StyleSheet.create({
@@ -100,7 +86,15 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors, resolvedMode, toggleTheme } = useTheme();
+  const { t } = useTranslation();
   const user = useAuthStore((state) => state.user);
+
+  const MENU_ITEMS: MenuItem[] = MENU_ITEM_KEYS.map((m) => ({
+    id: m.id,
+    icon: m.icon,
+    label: t(m.labelKey),
+    rightText: m.rightTextKey ? t(m.rightTextKey) : undefined,
+  }));
 
   const d = useMemo(
     () => ({
@@ -131,9 +125,9 @@ export default function ProfileScreen() {
   );
 
   const isDark = resolvedMode === "dark";
-  const displayName = user?.nickname || user?.accountId || "未登录用户";
-  const displayAccount = user?.accountId || "未绑定";
-  const membershipTag = user?.role === "ADMIN" ? "管理员" : "普通用户";
+  const displayName = user?.nickname || user?.accountId || t('profile.notLoggedIn');
+  const displayAccount = user?.accountId || t('profile.notBound');
+  const membershipTag = user?.role === "ADMIN" ? t('profile.admin') : t('profile.normalUser');
   const profileSignature = getProfileSignature(user?.persona, user?.helloWords);
 
   const handleOpenShare = useCallback(() => {
@@ -191,7 +185,7 @@ export default function ProfileScreen() {
           </Pressable>
           <View style={s.profileInfo}>
             <Text style={d.profileName}>{displayName}</Text>
-            <Text style={d.profileAccount}>账号：{displayAccount}</Text>
+            <Text style={d.profileAccount}>{t('contacts.accountId', { id: displayAccount })}</Text>
           </View>
         </View>
         <View style={s.profileRight}>
@@ -201,7 +195,7 @@ export default function ProfileScreen() {
               size={20}
               color={colors.textSecondary}
             />
-            <Text style={d.profileActionLabel}>分享</Text>
+            <Text style={d.profileActionLabel}>{t('profile.share')}</Text>
           </Pressable>
           <Pressable style={s.profileAction} onPress={toggleTheme}>
             <Ionicons
@@ -210,7 +204,7 @@ export default function ProfileScreen() {
               color={colors.textSecondary}
             />
             <Text style={d.profileActionLabel}>
-              {isDark ? "浅色" : "深色"}
+              {isDark ? t('profile.lightMode') : t('profile.darkMode')}
             </Text>
           </Pressable>
           <Pressable style={s.profileAction} onPress={handleOpenSettings}>
@@ -219,7 +213,7 @@ export default function ProfileScreen() {
               size={20}
               color={colors.textSecondary}
             />
-            <Text style={d.profileActionLabel}>设置</Text>
+            <Text style={d.profileActionLabel}>{t('profile.settings')}</Text>
           </Pressable>
         </View>
       </View>
@@ -232,13 +226,13 @@ export default function ProfileScreen() {
           </View>
           <View style={[s.memberTagLight, d.memberTagLight]}>
             <Text style={d.memberTagText}>
-              {user?.status === "ACTIVE" ? "账号正常" : user?.status ?? "状态未知"}
+              {user?.status === "ACTIVE" ? t('profile.accountNormal') : user?.status ?? t('profile.statusUnknown')}
             </Text>
           </View>
         </View>
         <Text style={d.memberText}>{profileSignature}</Text>
         <Text style={d.memberText}>
-          {user?.email || user?.phoneNumber || "可在账号设置中完善联系方式"}
+          {user?.email || user?.phoneNumber || t('profile.completeContact')}
         </Text>
       </View>
 

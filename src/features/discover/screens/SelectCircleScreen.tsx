@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
@@ -43,6 +44,7 @@ const s = StyleSheet.create({
 });
 
 export default function SelectCircleScreen() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const router = useRouter();
@@ -124,7 +126,7 @@ export default function SelectCircleScreen() {
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title="选择圈子" />
+      <NavHeader title={t('plaza.selectCircle')} />
       {myCirclesLoading ? (
         <View style={s.emptyContainer}>
           <ActivityIndicator color={colors.primary} />
@@ -133,7 +135,7 @@ export default function SelectCircleScreen() {
         <View style={s.emptyContainer}>
           <Text style={d.emptyText}>{myCirclesError}</Text>
           <Pressable style={d.retryButton} onPress={fetchMyCircles}>
-            <Text style={d.retryText}>重试</Text>
+            <Text style={d.retryText}>{t('common.retry')}</Text>
           </Pressable>
         </View>
       ) : (
@@ -147,14 +149,14 @@ export default function SelectCircleScreen() {
               <View style={s.emptyContainer}>
                 <Text style={d.emptyText}>{myCirclesError}</Text>
                 <Pressable style={d.retryButton} onPress={fetchMyCircles}>
-                  <Text style={d.retryText}>重试</Text>
+                  <Text style={d.retryText}>{t('common.retry')}</Text>
                 </Pressable>
               </View>
             ) : null
           }
           ListEmptyComponent={
             <View style={s.emptyContainer}>
-              <Text style={d.emptyText}>还没有加入任何圈子</Text>
+              <Text style={d.emptyText}>{t('plaza.noCirclesJoined')}</Text>
             </View>
           }
         />

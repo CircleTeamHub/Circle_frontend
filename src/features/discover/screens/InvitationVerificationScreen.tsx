@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -92,6 +93,7 @@ const s = StyleSheet.create({
 });
 
 export default function InvitationVerificationScreen() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const router = useRouter();
@@ -105,7 +107,7 @@ export default function InvitationVerificationScreen() {
       const data = await fetchInvitation(id);
       setInvitation(data);
     } catch {
-      Alert.alert('错误', '无法加载验证信息');
+      Alert.alert(t('circle.error'), t('invitation.notExist'));
     } finally {
       setLoading(false);
     }
@@ -131,7 +133,7 @@ export default function InvitationVerificationScreen() {
   if (loading) {
     return (
       <View style={[d.container, { paddingTop: insets.top }]}>
-        <NavHeader title="入圈验证" />
+        <NavHeader title={t('invitation.title')} />
         <View style={s.centerLoader}>
           <ActivityIndicator color={colors.primary} />
         </View>
@@ -142,9 +144,9 @@ export default function InvitationVerificationScreen() {
   if (!invitation) {
     return (
       <View style={[d.container, { paddingTop: insets.top }]}>
-        <NavHeader title="入圈验证" />
+        <NavHeader title={t('invitation.title')} />
         <View style={s.centerLoader}>
-          <Text style={d.subtitle}>验证信息不存在</Text>
+          <Text style={d.subtitle}>{t('invitation.notExist')}</Text>
         </View>
       </View>
     );
@@ -169,15 +171,15 @@ export default function InvitationVerificationScreen() {
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title={`加入【${invitation.circleName}】`} />
+      <NavHeader title={t('invitation.joinTitle', { name: invitation.circleName })} />
       <View style={s.content}>
         <Text style={[s.subtitle, d.subtitle]}>
-          需要{TOTAL_SLOTS}位圈内成员验证
+          {t('invitation.requireVerifiers', { count: TOTAL_SLOTS })}
         </Text>
 
         <View style={s.progressRow}>
           <Text style={[s.progressText, d.progressText]}>
-            已通过 {invitation.approvedCount}/{TOTAL_SLOTS}
+            {t('invitation.progress', { approved: invitation.approvedCount, total: TOTAL_SLOTS })}
           </Text>
         </View>
 
@@ -198,7 +200,7 @@ export default function InvitationVerificationScreen() {
                     ) : null}
                   </View>
                   <Text style={[s.slotLabel, d.slotLabel]}>
-                    {canAddMore ? '添加' : '空位'}
+                    {canAddMore ? t('invitation.addSlot') : t('invitation.emptySlot')}
                   </Text>
                 </Pressable>
               );
@@ -251,7 +253,7 @@ export default function InvitationVerificationScreen() {
             onPress={handleAddVerifier}
           >
             <Text style={[s.addButtonText, d.addButtonText]}>
-              邀请好友验证
+              {t('invitation.inviteFriends')}
             </Text>
           </Pressable>
         ) : null}
@@ -260,7 +262,7 @@ export default function InvitationVerificationScreen() {
           <View style={[s.progressRow, { marginTop: Spacing.xl }]}>
             <Ionicons name="checkmark-circle" size={24} color="#22C55E" />
             <Text style={{ color: '#22C55E', ...Typography.body, fontWeight: '600' }}>
-              验证通过，已加入圈子
+              {t('invitation.verified')}
             </Text>
           </View>
         ) : null}

@@ -6,10 +6,9 @@ import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-const FILTER_TABS = ["圈子广场", "圈子管理", "朋友圈"];
 
 const s = StyleSheet.create({
   header: {
@@ -59,7 +58,10 @@ export default function DiscoverScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState(0);
+
+  const FILTER_TABS = [t('discover.plaza'), t('discover.management'), t('discover.moments')];
 
   const d = useMemo(
     () => ({
@@ -95,7 +97,7 @@ export default function DiscoverScreen() {
       {/* Fixed header */}
       <View style={[s.header, { paddingTop: insets.top + Spacing.md - 4, borderBottomColor: colors.divider }]}>
         <View style={s.headerRow}>
-          <Text style={d.title}>动态</Text>
+          <Text style={d.title}>{t('discover.title')}</Text>
           <View style={s.headerIcons}>
             <Pressable>
               <Ionicons name="options-outline" size={22} color={colors.text} />

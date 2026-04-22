@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -72,6 +73,7 @@ const s = StyleSheet.create({
 });
 
 export default function MomentDetailScreen() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const router = useRouter();
@@ -118,11 +120,11 @@ export default function MomentDetailScreen() {
 
         if (error instanceof ApiError && error.status === 404) {
           setPost(null);
-          setLoadError('动态不存在或已被删除');
+          setLoadError(t('moment.notExist'));
           return;
         }
 
-        setLoadError(getApiErrorMessage(error, '动态加载失败，请稍后重试'));
+        setLoadError(getApiErrorMessage(error, t('moment.loadFailed')));
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -194,17 +196,17 @@ export default function MomentDetailScreen() {
     if (!post) return '';
     const diff = Date.now() - new Date(post.createdAt).getTime();
     const mins = Math.floor(diff / 60000);
-    if (mins < 1) return '刚刚';
-    if (mins < 60) return `${mins}分钟前`;
+    if (mins < 1) return t('common.justNow');
+    if (mins < 60) return t('common.minutesAgo', { count: mins });
     const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}小时前`;
-    return `${Math.floor(hours / 24)}天前`;
+    if (hours < 24) return t('common.hoursAgo', { count: hours });
+    return t('common.daysAgo', { count: Math.floor(hours / 24) });
   }, [post]);
 
   if (loading) {
     return (
       <View style={[d.container, { paddingTop: insets.top }]}>
-        <NavHeader title="动态详情" />
+        <NavHeader title={t('moment.detail')} />
         <View style={s.centerLoader}>
           <ActivityIndicator color={colors.primary} />
         </View>
@@ -215,12 +217,12 @@ export default function MomentDetailScreen() {
   if (!post) {
     return (
       <View style={[d.container, { paddingTop: insets.top }]}>
-        <NavHeader title="动态详情" />
+        <NavHeader title={t('moment.detail')} />
         <View style={s.centerLoader}>
           <Text style={d.emptyText}>
-            {loadError ?? '动态不存在或已被删除'}
+            {loadError ?? t('moment.notExist')}
           </Text>
-          {loadError && loadError !== '动态不存在或已被删除' ? (
+          {loadError && loadError !== t('moment.notExist') ? (
             <Pressable
               onPress={loadMoment}
               style={{
@@ -232,7 +234,7 @@ export default function MomentDetailScreen() {
               }}
             >
               <Text style={{ color: colors.white, ...Typography.caption }}>
-                重试
+                {t('common.retry')}
               </Text>
             </Pressable>
           ) : null}
@@ -250,7 +252,7 @@ export default function MomentDetailScreen() {
             {item.user.nickname}
             {item.replyTo ? (
               <Text style={[s.replyLabel, d.replyLabel]}>
-                {' '}回复 {item.replyTo.nickname}
+                {' '}{t('moment.reply')} {item.replyTo.nickname}
               </Text>
             ) : null}
           </Text>
@@ -332,7 +334,7 @@ export default function MomentDetailScreen() {
       {/* Comments header */}
       <View style={s.commentsHeader}>
         <Text style={[s.commentsTitle, d.commentsTitle]}>
-          评论 {post.comments.length > 0 ? `(${post.comments.length})` : ''}
+          {post.comments.length > 0 ? t('moment.commentsCount', { count: post.comments.length }) : t('moment.comments')}
         </Text>
       </View>
     </View>
@@ -340,7 +342,7 @@ export default function MomentDetailScreen() {
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title="动态详情" />
+      <NavHeader title={t('moment.detail')} />
       <FlatList
         data={post.comments}
         keyExtractor={(item) => item.id}
@@ -349,7 +351,7 @@ export default function MomentDetailScreen() {
         contentContainerStyle={{ paddingHorizontal: Spacing.lg, paddingBottom: 100 }}
         ListEmptyComponent={
           <View style={s.emptyComments}>
-            <Text style={d.emptyText}>暂无评论</Text>
+            <Text style={d.emptyText}>{t('moment.noComments')}</Text>
           </View>
         }
       />

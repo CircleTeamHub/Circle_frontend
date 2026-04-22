@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -96,6 +97,7 @@ const s = StyleSheet.create({
 });
 
 export default function CreateMomentScreen() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const router = useRouter();
@@ -167,8 +169,8 @@ export default function CreateMomentScreen() {
       if (failedUploads > 0) {
         const reason =
           failedUploads === images.length
-            ? '图片上传失败，请检查网络后重试'
-            : `有${failedUploads}张图片上传失败，请重试`;
+            ? t('moment.uploadFailed')
+            : t('moment.partialUploadFailed', { count: failedUploads });
         throw new Error(reason);
       }
 
@@ -181,8 +183,8 @@ export default function CreateMomentScreen() {
       prependMoment(moment);
       router.back();
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : '发布失败，请重试';
-      Alert.alert('发布失败', message);
+      const message = error instanceof Error ? error.message : t('moment.publishFailed');
+      Alert.alert(t('moment.publishFailed'), message);
     } finally {
       setSubmitting(false);
     }
@@ -190,7 +192,7 @@ export default function CreateMomentScreen() {
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title="发朋友圈" />
+      <NavHeader title={t('moment.createTitle')} />
       <ScrollView
         style={s.scroll}
         showsVerticalScrollIndicator={false}
@@ -198,7 +200,7 @@ export default function CreateMomentScreen() {
       >
         <View style={[s.inputBox, d.inputBox]}>
           <TextInput
-            placeholder="这一刻的想法..."
+            placeholder={t('moment.contentPlaceholder')}
             placeholderTextColor={colors.textSecondary}
             multiline
             value={content}
@@ -230,11 +232,11 @@ export default function CreateMomentScreen() {
 
         {/* Visibility */}
         <View style={s.visibilityRow}>
-          <Text style={d.rowLabel}>谁可以看</Text>
+          <Text style={d.rowLabel}>{t('moment.visibility')}</Text>
           <View style={s.visibilityOptions}>
             {(['FRIENDS_ONLY', 'PRIVATE'] as const).map((v) => {
               const isActive = visibility === v;
-              const label = v === 'FRIENDS_ONLY' ? '好友可见' : '仅自己';
+              const label = v === 'FRIENDS_ONLY' ? t('moment.friendsOnly') : t('moment.private');
               return (
                 <Pressable
                   key={v}
@@ -272,7 +274,7 @@ export default function CreateMomentScreen() {
           {submitting ? (
             <ActivityIndicator color={colors.white} />
           ) : (
-            <Text style={[s.submitText, d.submitText]}>发布</Text>
+            <Text style={[s.submitText, d.submitText]}>{t('moment.publish')}</Text>
           )}
         </Pressable>
       </View>
