@@ -22,7 +22,6 @@ const MENU_ITEM_KEYS: {
   { id: "1", icon: "shield-checkmark-outline", labelKey: "profile.creditScore" },
   { id: "2", icon: "gift-outline", labelKey: "profile.memberCenter", rightTextKey: "profile.viewMember" },
   { id: "3", icon: "wallet-outline", labelKey: "profile.wallet" },
-  { id: "4", icon: "chatbubble-ellipses-outline", labelKey: "profile.assistant", rightTextKey: "profile.userSatisfaction" },
   { id: "5", icon: "hand-left-outline", labelKey: "profile.mall", rightTextKey: "profile.viewProducts" },
   { id: "6", icon: "bookmark-outline", labelKey: "profile.collections", rightTextKey: "profile.viewCollections" },
   { id: "7", icon: "document-text-outline", labelKey: "profile.notes", rightTextKey: "profile.viewNotes" },
