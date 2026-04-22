@@ -1,6 +1,6 @@
 import type { Href } from 'expo-router';
 
-export type UserProfileScope = 'messages' | 'contacts' | 'profile';
+export type UserProfileScope = 'messages' | 'contacts' | 'profile' | 'discover';
 
 export function getUserProfileHref(
   scope: UserProfileScope,
@@ -14,6 +14,8 @@ export function getUserProfileHref(
       return { pathname: '/(tabs)/contacts/user/[id]', params };
     case 'profile':
       return { pathname: '/(tabs)/profile/user/[id]', params };
+    case 'discover':
+      return { pathname: '/(tabs)/discover/user/[id]', params };
     case 'messages':
     default:
       return { pathname: '/(tabs)/messages/user/[id]', params };
@@ -32,6 +34,8 @@ export function getSendFriendRequestHref(
       return { pathname: '/(tabs)/contacts/user/[id]/request', params };
     case 'profile':
       return { pathname: '/(tabs)/profile/user/[id]/request', params };
+    case 'discover':
+      return { pathname: '/(tabs)/discover/user/[id]/request', params };
     case 'messages':
     default:
       return { pathname: '/(tabs)/messages/user/[id]/request', params };
@@ -50,6 +54,8 @@ export function getEditFriendRemarkHref(
       return { pathname: '/(tabs)/contacts/user/[id]/remark', params };
     case 'profile':
       return { pathname: '/(tabs)/profile/user/[id]/remark', params };
+    case 'discover':
+      return { pathname: '/(tabs)/discover/user/[id]/remark', params };
     case 'messages':
     default:
       return { pathname: '/(tabs)/messages/user/[id]/remark', params };
@@ -68,6 +74,8 @@ export function getEditFriendTagsHref(
       return { pathname: '/(tabs)/contacts/user/[id]/tags', params };
     case 'profile':
       return { pathname: '/(tabs)/profile/user/[id]/tags', params };
+    case 'discover':
+      return { pathname: '/(tabs)/discover/user/[id]/tags', params };
     case 'messages':
     default:
       return { pathname: '/(tabs)/messages/user/[id]/tags', params };
@@ -116,6 +124,8 @@ export function getChatInfoHref(
       return { pathname: '/(tabs)/contacts/user/[id]/chat-info', params };
     case 'profile':
       return { pathname: '/(tabs)/profile/user/[id]/chat-info', params };
+    case 'discover':
+      return { pathname: '/(tabs)/discover/user/[id]/chat-info', params };
     case 'messages':
     default:
       return { pathname: '/(tabs)/messages/chat-info', params };
@@ -226,10 +236,15 @@ export function getUserProfileScopeFromSegments(
     (segment) =>
       segment === 'contacts' ||
       segment === 'profile' ||
-      segment === 'messages',
+      segment === 'messages' ||
+      segment === 'discover',
   );
 
-  if (scope === 'contacts' || scope === 'profile') {
+  if (
+    scope === 'contacts' ||
+    scope === 'profile' ||
+    scope === 'discover'
+  ) {
     return scope;
   }
 

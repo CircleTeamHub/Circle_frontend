@@ -11,6 +11,7 @@ export default function MessagesLayout() {
         contentStyle: { backgroundColor: colors.background },
       }}
     >
+      <Stack.Screen name="index" />
       <Stack.Screen name="chat-detail" />
       <Stack.Screen name="chat-info" />
       <Stack.Screen name="chat-history-search" />

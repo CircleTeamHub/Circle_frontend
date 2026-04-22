@@ -9,7 +9,7 @@ import {
   ImageBackground,
 } from 'react-native';
 import type { FlatList as FlatListType } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
@@ -99,6 +99,7 @@ export default function ChatDetailScreen() {
     avatarUrl?: string;
     searchedMsgID?: string;
   }>();
+  const navigation = useNavigation();
   const currentUserID = useIMStore((state) => state.currentUserID);
   const messagesByConversation = useIMStore((state) => state.messagesByConversation);
   const setActiveConversation = useIMStore((state) => state.setActiveConversation);
@@ -132,7 +133,13 @@ export default function ChatDetailScreen() {
     [backgroundPreference, colors.background],
   );
 
-  const handleBack = useCallback(() => router.back(), []);
+  const handleBack = useCallback(() => {
+    if (navigation.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/messages');
+    }
+  }, [navigation]);
   const handleOpenUserProfile = useCallback(() => {
     router.push(getUserProfileHref('messages', sourceID, conversationTitle));
   }, [conversationTitle, sourceID]);
@@ -187,7 +194,7 @@ export default function ChatDetailScreen() {
     }
 
     if (searchedMsgID && !scrolledToSearchRef.current) {
-      const idx = messages.findIndex((m) => m.clientMsgID === searchedMsgID);
+      const idx = messages.findIndex((m) => m.id === searchedMsgID);
 
       if (idx !== -1) {
         scrolledToSearchRef.current = true;

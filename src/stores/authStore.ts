@@ -36,6 +36,9 @@ export interface AuthUser {
   createdAt: string;
   updatedAt: string;
   city: string | null;
+  vipLevel: number;
+  creditScore: number;
+  fancyNumber: boolean;
 }
 
 interface AuthState {

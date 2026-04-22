@@ -1,69 +1,27 @@
 import { Divider } from "@/components/ui/divider";
 import { FilterTabs } from "@/components/ui/filter-tabs";
+import { useCirclesStore } from "@/features/discover/store/use-circles-store";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
+import type { Circle } from "@/types";
+import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import { useMemo, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-
-interface CircleItem {
-  id: string;
-  name: string;
-  tag: string;
-  imageUrl: string;
-}
+import { useRouter } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 const CIRCLE_FILTER_TABS = ["已加入", "我创建的", "我申请的"];
 
-const CIRCLES_BY_TAB: CircleItem[][] = [
-  [
-    {
-      id: "joined-1",
-      name: "奢品优选",
-      tag: "自定义",
-      imageUrl:
-        "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=200",
-    },
-    {
-      id: "joined-2",
-      name: "奢饰品信息交互中心",
-      tag: "私有",
-      imageUrl:
-        "https://images.unsplash.com/photo-1512436991641-6745cdb1723f?w=200",
-    },
-  ],
-  [
-    {
-      id: "created-1",
-      name: "设计协作站",
-      tag: "公开",
-      imageUrl:
-        "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=200",
-    },
-    {
-      id: "created-2",
-      name: "周末探店圈",
-      tag: "自定义",
-      imageUrl:
-        "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=200",
-    },
-  ],
-  [
-    {
-      id: "applied-1",
-      name: "同城摄影社",
-      tag: "审核中",
-      imageUrl:
-        "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=200",
-    },
-  ],
-];
-
-const TAG_COLORS = {
-  自定义: "#F5B318",
-  私有: "#F5B318",
-  公开: "#22C55E",
-  审核中: "#3B82F6",
-} as const;
+const TAG_MAP: Record<string, { label: string; color: string }> = {
+  joined: { label: "已加入", color: "#22C55E" },
+  created: { label: "我创建的", color: "#F5B318" },
+  applied: { label: "审核中", color: "#3B82F6" },
+};
 
 const s = StyleSheet.create({
   container: {
@@ -108,11 +66,38 @@ const s = StyleSheet.create({
     paddingVertical: Spacing.xs,
     borderRadius: Radius.full,
   },
+  emptyContainer: {
+    alignItems: "center",
+    paddingVertical: Spacing.xl,
+  },
 });
 
 export const MyCirclesPanel: React.FC = () => {
   const { colors } = useTheme();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState(0);
+  const {
+    joinedCircles,
+    createdCircles,
+    appliedCircles,
+    myCirclesLoading,
+    myCirclesError,
+    fetchMyCircles,
+  } = useCirclesStore();
+
+  useEffect(() => {
+    fetchMyCircles();
+  }, [fetchMyCircles]);
+
+  const tabKey = activeTab === 0 ? "joined" : activeTab === 1 ? "created" : "applied";
+  const circles =
+    activeTab === 0
+      ? joinedCircles
+      : activeTab === 1
+        ? createdCircles
+        : appliedCircles;
+
+  const tagInfo = TAG_MAP[tabKey];
 
   const d = useMemo(
     () => ({
@@ -143,6 +128,22 @@ export const MyCirclesPanel: React.FC = () => {
         ...Typography.small,
         fontWeight: "600" as const,
       },
+      emptyText: {
+        color: colors.textSecondary,
+        ...Typography.body,
+      },
+      retryButton: {
+        marginTop: Spacing.sm,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.sm,
+        borderRadius: Radius.full,
+        backgroundColor: colors.primary,
+      },
+      retryText: {
+        color: colors.white,
+        ...Typography.caption,
+        fontWeight: "600" as const,
+      },
     }),
     [colors],
   );
@@ -151,7 +152,10 @@ export const MyCirclesPanel: React.FC = () => {
     <View style={s.container}>
       <View style={s.headerRow}>
         <Text style={d.title}>圈子详情</Text>
-        <Pressable style={[s.createButton, d.createButton]}>
+        <Pressable
+          style={[s.createButton, d.createButton]}
+          onPress={() => router.push('/(tabs)/discover/create-circle')}
+        >
           <Text style={d.createButtonText}>创建圈子</Text>
         </Pressable>
       </View>
@@ -162,36 +166,53 @@ export const MyCirclesPanel: React.FC = () => {
         onTabPress={setActiveTab}
       />
 
-      <FlatList
-        data={CIRCLES_BY_TAB[activeTab]}
-        keyExtractor={(item) => item.id}
-        scrollEnabled={false}
-        contentContainerStyle={s.listContent}
-        renderItem={({ item, index }) => (
-          <View>
-            <Pressable style={s.row}>
-              <Image source={{ uri: item.imageUrl }} style={[s.cover, d.cover]} />
-              <View style={s.body}>
-                <Text style={d.name} numberOfLines={1}>
-                  {item.name}
-                </Text>
-                <View
-                  style={[
-                    s.tag,
-                    {
-                      backgroundColor:
-                        TAG_COLORS[item.tag as keyof typeof TAG_COLORS],
-                    },
-                  ]}
-                >
-                  <Text style={d.tagText}>{item.tag}</Text>
+      {myCirclesLoading ? (
+        <View style={s.emptyContainer}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      ) : myCirclesError && circles.length === 0 ? (
+        <View style={s.emptyContainer}>
+          <Text style={d.emptyText}>{myCirclesError}</Text>
+          <Pressable style={d.retryButton} onPress={fetchMyCircles}>
+            <Text style={d.retryText}>重试</Text>
+          </Pressable>
+        </View>
+      ) : circles.length === 0 ? (
+        <View style={s.emptyContainer}>
+          <Text style={d.emptyText}>暂无圈子</Text>
+        </View>
+      ) : (
+        <View style={s.listContent}>
+          {myCirclesError ? (
+            <View style={s.emptyContainer}>
+              <Text style={d.emptyText}>{myCirclesError}</Text>
+              <Pressable style={d.retryButton} onPress={fetchMyCircles}>
+                <Text style={d.retryText}>重试</Text>
+              </Pressable>
+            </View>
+          ) : null}
+          {circles.map((item, index) => (
+            <View key={item.id}>
+              <Pressable
+                style={s.row}
+                onPress={() => router.push({ pathname: '/(tabs)/discover/circle/[id]', params: { id: item.id } })}
+              >
+                <Image
+                  source={{ uri: item.avatarUrl ?? undefined }}
+                  style={[s.cover, d.cover]}
+                />
+                <View style={s.body}>
+                  <Text style={d.name} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
                 </View>
-              </View>
-            </Pressable>
-            {index < CIRCLES_BY_TAB[activeTab].length - 1 ? <Divider /> : null}
-          </View>
-        )}
-      />
+              </Pressable>
+              {index < circles.length - 1 ? <Divider /> : null}
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 };
