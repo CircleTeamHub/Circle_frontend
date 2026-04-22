@@ -16,11 +16,7 @@ import {
   View,
 } from "react-native";
 
-const TAG_KEYS: Record<string, { labelKey: string; color: string }> = {
-  joined: { labelKey: "discover.joined", color: "#22C55E" },
-  created: { labelKey: "discover.myCreated", color: "#F5B318" },
-  applied: { labelKey: "discover.myApplied", color: "#3B82F6" },
-};
+const CIRCLE_TAB_KEYS = ["joined", "created", "managed", "applied"] as const;
 
 const s = StyleSheet.create({
   container: {
@@ -60,11 +56,6 @@ const s = StyleSheet.create({
     justifyContent: "space-between",
     gap: Spacing.sm,
   },
-  tag: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    borderRadius: Radius.full,
-  },
   emptyContainer: {
     alignItems: "center",
     paddingVertical: Spacing.xl,
@@ -79,6 +70,7 @@ export const MyCirclesPanel: React.FC = () => {
   const {
     joinedCircles,
     createdCircles,
+    managedCircles,
     appliedCircles,
     myCirclesLoading,
     myCirclesError,
@@ -89,20 +81,24 @@ export const MyCirclesPanel: React.FC = () => {
     fetchMyCircles();
   }, [fetchMyCircles]);
 
-  const tabKey = activeTab === 0 ? "joined" : activeTab === 1 ? "created" : "applied";
-  const circles =
-    activeTab === 0
-      ? joinedCircles
-      : activeTab === 1
-        ? createdCircles
-        : appliedCircles;
+  const tabKey = CIRCLE_TAB_KEYS[activeTab] ?? CIRCLE_TAB_KEYS[0];
+  const circlesByTab: Record<(typeof CIRCLE_TAB_KEYS)[number], Circle[]> = {
+    joined: joinedCircles,
+    created: createdCircles,
+    managed: managedCircles,
+    applied: appliedCircles,
+  };
+  const circles = circlesByTab[tabKey];
 
   const circleFilterTabs = useMemo(
-    () => [t('discover.joined'), t('discover.myCreated'), t('discover.myApplied')],
+    () => [
+      t('discover.joined'),
+      t('discover.myCreated'),
+      t('discover.myManaged'),
+      t('discover.myApplied'),
+    ],
     [t],
   );
-
-  const tagInfo = TAG_KEYS[tabKey];
 
   const d = useMemo(
     () => ({
@@ -127,11 +123,6 @@ export const MyCirclesPanel: React.FC = () => {
         fontSize: 16,
         fontWeight: "600" as const,
         flex: 1,
-      },
-      tagText: {
-        color: colors.white,
-        ...Typography.small,
-        fontWeight: "600" as const,
       },
       emptyText: {
         color: colors.textSecondary,

@@ -1,11 +1,17 @@
 import { create } from 'zustand';
-import { fetchCircles, fetchMyCircles } from '@/services/api/circles';
+import {
+  fetchCircleDetail,
+  fetchCircles,
+  fetchMyCircles,
+} from '@/services/api/circles';
 import { getApiErrorMessage } from '@/services/api/errors';
 import type { Circle } from '@/types';
+import { deriveManagedCircles } from './managed-circles';
 
 interface CirclesState {
   joinedCircles: Circle[];
   createdCircles: Circle[];
+  managedCircles: Circle[];
   appliedCircles: Circle[];
   allCircles: Circle[];
   myCirclesLoading: boolean;
@@ -21,6 +27,7 @@ interface CirclesState {
 export const useCirclesStore = create<CirclesState>((set) => ({
   joinedCircles: [],
   createdCircles: [],
+  managedCircles: [],
   appliedCircles: [],
   allCircles: [],
   myCirclesLoading: false,
@@ -36,9 +43,25 @@ export const useCirclesStore = create<CirclesState>((set) => ({
         fetchMyCircles('created'),
         fetchMyCircles('applied'),
       ]);
+      const createdCircleIds = new Set(created.map((circle) => circle.id));
+      const joinedCandidates = joined.filter(
+        (circle) => !createdCircleIds.has(circle.id),
+      );
+      const joinedCircleDetails = await Promise.allSettled(
+        joinedCandidates.map((circle) => fetchCircleDetail(circle.id)),
+      );
+      const managedCircles = deriveManagedCircles({
+        createdCircles: created,
+        joinedCircles: joinedCandidates,
+        joinedCircleDetails: joinedCircleDetails.flatMap((result) =>
+          result.status === 'fulfilled' ? [result.value] : [],
+        ),
+      });
+
       set({
         joinedCircles: joined,
         createdCircles: created,
+        managedCircles,
         appliedCircles: applied,
         myCirclesError: null,
       });
@@ -75,6 +98,7 @@ export const useCirclesStore = create<CirclesState>((set) => ({
     set({
       joinedCircles: [],
       createdCircles: [],
+      managedCircles: [],
       appliedCircles: [],
       allCircles: [],
       myCirclesLoading: false,

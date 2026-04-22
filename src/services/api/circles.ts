@@ -66,6 +66,22 @@ export async function createCircle(
   });
 }
 
+export async function updateCircle(
+  id: string,
+  input: Partial<CreateCircleInput>,
+): Promise<CircleDetail> {
+  const detail = await apiClient<CircleDetail>(`/circle/${id}`, {
+    method: 'PATCH',
+    body: input,
+  });
+
+  return {
+    ...normalizeCircle(detail),
+    myRole: detail.myRole,
+    myStatus: detail.myStatus,
+  };
+}
+
 export async function joinCircle(id: string): Promise<void> {
   await apiClient<void>(`/circle/${id}/join`, { method: 'POST' });
 }

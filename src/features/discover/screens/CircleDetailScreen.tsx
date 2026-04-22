@@ -1,29 +1,22 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
   Pressable,
   ScrollView,
-  Switch,
   StyleSheet,
   Alert,
   ActivityIndicator,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Divider } from '@/components/ui/divider';
-import { MenuRow } from '@/components/ui/menu-row';
-import { Avatar } from '@/components/ui/avatar';
 import { fetchCircleDetail } from '@/services/api/circles';
-import { useCirclesStore } from '@/features/discover/store/use-circles-store';
-import { useAuthStore } from '@/stores/authStore';
 import type { CircleDetail } from '@/types';
 
 const s = StyleSheet.create({
@@ -114,6 +107,27 @@ const s = StyleSheet.create({
     ...Typography.bodyRegular,
     lineHeight: 21,
   },
+  summaryCard: {
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+    paddingHorizontal: Spacing.md,
+  },
+  summaryRow: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.md,
+  },
+  summaryLabel: {
+    ...Typography.body,
+    flex: 1,
+  },
+  summaryValue: {
+    ...Typography.caption,
+    flexShrink: 1,
+    textAlign: 'right',
+  },
   // Tags
   tagsRow: {
     flexDirection: 'row',
@@ -154,27 +168,33 @@ export default function CircleDetailScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const user = useAuthStore((s) => s.user);
-  const fetchMyCircles = useCirclesStore((s) => s.fetchMyCircles);
 
   const [circle, setCircle] = useState<CircleDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadCircle = useCallback(async () => {
-    if (!id) return;
+    if (!id) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
     try {
       const data = await fetchCircleDetail(id);
       setCircle(data);
     } catch {
       Alert.alert(t('circle.error'), t('circle.loadError'));
+      setCircle(null);
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, t]);
 
-  useEffect(() => {
-    loadCircle();
-  }, [loadCircle]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadCircle();
+    }, [loadCircle]),
+  );
 
   const isOwnerOrAdmin =
     circle?.myRole === 'OWNER' || circle?.myRole === 'ADMIN';
@@ -189,6 +209,8 @@ export default function CircleDetailScreen() {
       sectionCard: { backgroundColor: colors.surface },
       textContent: { color: colors.text },
       textPlaceholder: { color: colors.textSecondary },
+      summaryLabel: { color: colors.text },
+      summaryValue: { color: colors.textSecondary },
       categoryChip: { backgroundColor: colors.primaryLight },
       categoryText: { color: colors.primary, ...Typography.caption },
       tagChip: { backgroundColor: colors.primaryLight },
@@ -234,7 +256,11 @@ export default function CircleDetailScreen() {
         rightIcon={isOwnerOrAdmin ? 'create-outline' : undefined}
         onRightPress={
           isOwnerOrAdmin
-            ? () => Alert.alert(t('circle.edit'), t('circle.editInProgress'))
+            ? () =>
+                router.push({
+                  pathname: '/(tabs)/discover/circle/[id]/edit',
+                  params: { id: circle.id },
+                })
             : undefined
         }
       />
@@ -328,39 +354,62 @@ export default function CircleDetailScreen() {
           </View>
         ) : null}
 
-        {/* ── 圈子设置 ── */}
+        {/* ── 入圈规则摘要 ── */}
         <View style={s.section}>
-          <Text style={[s.sectionTitle, d.sectionTitle]}>{t('circle.settings')}</Text>
-          <View style={[s.sectionCard, d.sectionCard]}>
-            <MenuRow
-              icon="location-outline"
-              label={t('circle.relatedCities')}
-              rightText={circle.cities.length > 0 ? circle.cities.join('、') : t('common.nationwide')}
-            />
+          <Text style={[s.sectionTitle, d.sectionTitle]}>{t('circle.rulesSummary')}</Text>
+          <View style={[s.summaryCard, d.sectionCard]}>
+            <View style={s.summaryRow}>
+              <Text style={[s.summaryLabel, d.summaryLabel]}>
+                {t('circle.relatedCities')}
+              </Text>
+              <Text style={[s.summaryValue, d.summaryValue]}>
+                {circle.cities.length > 0
+                  ? circle.cities.join('、')
+                  : t('common.nationwide')}
+              </Text>
+            </View>
             <Divider />
-            <MenuRow
-              icon="diamond-outline"
-              label={t('circle.joinVipRestriction')}
-              rightText={circle.joinVipRestriction != null ? `VIP${circle.joinVipRestriction}+` : t('common.noRestriction')}
-            />
+            <View style={s.summaryRow}>
+              <Text style={[s.summaryLabel, d.summaryLabel]}>
+                {t('circle.joinVipRestriction')}
+              </Text>
+              <Text style={[s.summaryValue, d.summaryValue]}>
+                {circle.joinVipRestriction != null
+                  ? `VIP${circle.joinVipRestriction}+`
+                  : t('common.noRestriction')}
+              </Text>
+            </View>
             <Divider />
-            <MenuRow
-              icon="shield-checkmark-outline"
-              label={t('circle.joinCreditRestriction')}
-              rightText={circle.joinCreditRestriction != null ? t('circle.creditSuffix', { score: circle.joinCreditRestriction }) : t('common.noRestriction')}
-            />
+            <View style={s.summaryRow}>
+              <Text style={[s.summaryLabel, d.summaryLabel]}>
+                {t('circle.joinCreditRestriction')}
+              </Text>
+              <Text style={[s.summaryValue, d.summaryValue]}>
+                {circle.joinCreditRestriction != null
+                  ? t('circle.creditSuffix', {
+                      score: circle.joinCreditRestriction,
+                    })
+                  : t('common.noRestriction')}
+              </Text>
+            </View>
             <Divider />
-            <MenuRow
-              icon="sparkles-outline"
-              label={t('circle.fancyRequired')}
-              rightText={circle.joinFancyRestriction ? t('common.yes') : t('common.no')}
-            />
+            <View style={s.summaryRow}>
+              <Text style={[s.summaryLabel, d.summaryLabel]}>
+                {t('circle.fancyRequired')}
+              </Text>
+              <Text style={[s.summaryValue, d.summaryValue]}>
+                {circle.joinFancyRestriction ? t('common.yes') : t('common.no')}
+              </Text>
+            </View>
             <Divider />
-            <MenuRow
-              icon="create-outline"
-              label={t('circle.memberCanPost')}
-              rightText={circle.memberCanPost ? t('circle.allowed') : t('circle.adminOnly')}
-            />
+            <View style={s.summaryRow}>
+              <Text style={[s.summaryLabel, d.summaryLabel]}>
+                {t('circle.memberCanPost')}
+              </Text>
+              <Text style={[s.summaryValue, d.summaryValue]}>
+                {circle.memberCanPost ? t('circle.allowed') : t('circle.adminOnly')}
+              </Text>
+            </View>
           </View>
         </View>
 
