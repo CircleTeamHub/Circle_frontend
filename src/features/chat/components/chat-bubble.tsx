@@ -62,9 +62,15 @@ const sReceived = StyleSheet.create({
     borderTopRightRadius: 18,
     borderBottomRightRadius: 18,
     borderBottomLeftRadius: 18,
-    padding: 10,
-    paddingHorizontal: 14,
-    maxWidth: 260,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    maxWidth: 280,
+  },
+  receivedContent: {
+    maxWidth: 280,
+  },
+  receivedAvatarSlot: {
+    paddingBottom: 2,
   },
 });
 
@@ -97,13 +103,15 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
   return (
     <View style={sReceived.receivedRow}>
       {onAvatarPress ? (
-        <Pressable onPress={onAvatarPress}>
+        <Pressable style={sReceived.receivedAvatarSlot} onPress={onAvatarPress}>
           <Avatar size={28} name={senderName} />
         </Pressable>
       ) : (
-        <Avatar size={28} name={senderName} />
+        <View style={sReceived.receivedAvatarSlot}>
+          <Avatar size={28} name={senderName} />
+        </View>
       )}
-      <View>
+      <View style={sReceived.receivedContent}>
         <View style={[sReceived.receivedBubble, d.receivedBubble]}>
           <Text style={d.bubbleText}>{message.text}</Text>
         </View>
@@ -128,15 +136,18 @@ const sSent = StyleSheet.create({
     borderTopRightRadius: 18,
     borderBottomRightRadius: 4,
     borderBottomLeftRadius: 18,
-    padding: 10,
-    paddingHorizontal: 14,
-    maxWidth: 260,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    maxWidth: 280,
   },
   sentTimeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,
     marginTop: Spacing.xs,
+  },
+  sentStatusIcon: {
+    marginTop: 1,
   },
 });
 
@@ -170,7 +181,12 @@ export const SentBubble: React.FC<SentBubbleProps> = ({ message }) => {
       {message.time ? (
         <View style={sSent.sentTimeRow}>
           <Text style={d.timeText}>{message.time}</Text>
-          <Ionicons name="checkmark-done" size={14} color={colors.sentTimeText} />
+          <Ionicons
+            style={sSent.sentStatusIcon}
+            name="checkmark-done"
+            size={14}
+            color={colors.sentTimeText}
+          />
         </View>
       ) : null}
     </View>
@@ -194,18 +210,29 @@ const sLocation = StyleSheet.create({
     borderTopRightRadius: 18,
     borderBottomRightRadius: 18,
     borderBottomLeftRadius: 18,
-    width: 240,
+    width: 248,
     overflow: 'hidden',
   },
-  locationMapPlaceholder: {
-    height: 180,
+  locationImage: {
+    height: 156,
     borderTopLeftRadius: 4,
     borderTopRightRadius: 18,
+    overflow: 'hidden',
+  },
+  locationImageFallback: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  locationCardBody: {
+    maxWidth: 248,
+  },
+  locationCardContent: {
+    minHeight: 88,
+    justifyContent: 'center',
+  },
   locationInfo: {
-    padding: 10,
+    paddingVertical: 12,
     paddingHorizontal: 14,
   },
 });
@@ -222,7 +249,7 @@ export const LocationCard: React.FC<LocationCardProps> = ({
       locationCard: {
         backgroundColor: colors.receivedBubble,
       },
-      locationMapPlaceholder: {
+      locationImageFallback: {
         backgroundColor: colors.surface,
       },
       locationTitle: {
@@ -251,14 +278,18 @@ export const LocationCard: React.FC<LocationCardProps> = ({
           <Avatar size={28} name={senderName} />
         </Pressable>
       ) : (
-        <Avatar size={28} name={senderName} />
+        <View style={sReceived.receivedAvatarSlot}>
+          <Avatar size={28} name={senderName} />
+        </View>
       )}
-      <View>
+      <View style={sLocation.locationCardBody}>
         <View style={[sLocation.locationCard, d.locationCard]}>
-          <View style={[sLocation.locationMapPlaceholder, d.locationMapPlaceholder]}>
-            <Ionicons name="location" size={32} color={colors.textSecondary} />
+          <View style={sLocation.locationImage}>
+            <View style={[sLocation.locationImageFallback, d.locationImageFallback]}>
+              <Ionicons name="location" size={32} color={colors.textSecondary} />
+            </View>
           </View>
-          <View style={sLocation.locationInfo}>
+          <View style={[sLocation.locationInfo, sLocation.locationCardContent]}>
             <Text style={d.locationTitle}>{message.locationTitle}</Text>
             <Text style={d.locationAddress}>{message.locationAddress}</Text>
           </View>

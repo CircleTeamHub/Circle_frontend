@@ -87,11 +87,21 @@ export interface Circle {
   name: string;
   description: string;
   avatarUrl: string | null;
-  ownerId: string;
+  ownerID: string;
   cities: string[];
   isPublic: boolean;
+  categories: string[];
+  rules: string;
+  tags: string[];
+  joinVipRestriction: number | null;
+  joinCreditRestriction: number | null;
+  joinFancyRestriction: boolean;
+  maxMembers: number;
+  memberCanPost: boolean;
+  groupID: string | null;
   memberCount: number;
   postCount: number;
+  createdAt: string;
 }
 
 export interface ApiPost {
@@ -112,4 +122,153 @@ export interface MediaItem {
   url: string;
   thumbUrl: string | null;
   size: number;
+}
+
+// ---------------------------------------------------------------------------
+// Circle Plaza Types
+// ---------------------------------------------------------------------------
+
+export interface CirclePlazaPost {
+  id: string;
+  content: string;
+  images: string[];
+  tags: string[];
+  city: string | null;
+  isHorn: boolean;
+  noteId: string | null;
+  restrictions: {
+    vipLevel: number | null;
+    creditScore: number | null;
+    fancyNumber: boolean;
+  };
+  viewCount: number;
+  author: {
+    id: string;
+    nickname: string;
+    avatarUrl: string | null;
+    avatarFrame: string | null;
+    accountId: string;
+  };
+  circle: {
+    id: string;
+    name: string;
+  };
+  canInteract: boolean;
+  createdAt: string;
+}
+
+export interface CreatePlazaPostInput {
+  content: string;
+  images: string[];
+  tags: string[];
+  circleId: string;
+  city: string | null;
+  noteId: string | null;
+  isHorn: boolean;
+  vipRestriction: number | null;
+  creditRestriction: number | null;
+  fancyRestriction: boolean;
+}
+
+export interface CircleDetail extends Circle {
+  myRole: 'OWNER' | 'ADMIN' | 'MEMBER' | null;
+  myStatus: 'ACTIVE' | 'PENDING' | 'REJECTED' | null;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+}
+
+export interface CreateCircleInput {
+  name: string;
+  categories: string[];
+  description: string;
+  avatarUrl?: string;
+  cities?: string[];
+  rules?: string;
+  tags?: string[];
+  joinVipRestriction?: number | null;
+  joinCreditRestriction?: number | null;
+  joinFancyRestriction?: boolean;
+  maxMembers?: number;
+  memberCanPost?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Circle Invitation / Verification Types
+// ---------------------------------------------------------------------------
+
+export interface CircleInvitation {
+  id: string;
+  circleId: string;
+  circleName: string;
+  applicant: { id: string; nickname: string; avatarUrl: string | null; accountId: string };
+  inviter: { id: string; nickname: string; avatarUrl: string | null; accountId: string };
+  requiredCount: number;
+  approvedCount: number;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'ADMIN_APPROVED';
+  verifiers: CircleInvitationVerifier[];
+  createdAt: string;
+}
+
+export interface CircleInvitationVerifier {
+  id: string;
+  verifier: { id: string; nickname: string; avatarUrl: string | null; accountId: string };
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  respondedAt: string | null;
+}
+
+export type CircleActivityType =
+  | 'VERIFICATION_REQUESTED'
+  | 'VERIFICATION_APPROVED'
+  | 'VERIFICATION_REJECTED'
+  | 'INVITATION_ALL_APPROVED'
+  | 'INVITATION_SLOT_REJECTED'
+  | 'ADMIN_OVERRIDE_APPROVED';
+
+export interface CircleActivityItem {
+  id: string;
+  circleId: string;
+  circleName: string;
+  invitationId: string | null;
+  type: CircleActivityType;
+  actor: { id: string; nickname: string; avatarUrl: string | null; accountId: string };
+  readAt: string | null;
+  createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Friend Moments (朋友圈) Types
+// ---------------------------------------------------------------------------
+
+export interface MomentPost {
+  id: string;
+  content: string;
+  images: string[];
+  visibility: 'PUBLIC' | 'FRIENDS_ONLY' | 'PRIVATE';
+  author: { id: string; nickname: string; avatarUrl: string | null };
+  likeCount: number;
+  commentCount: number;
+  isLikedByMe: boolean;
+  likedFriends: { id: string; nickname: string }[];
+  comments: MomentComment[];
+  createdAt: string;
+}
+
+export interface MomentComment {
+  id: string;
+  content: string;
+  user: { id: string; nickname: string };
+  replyTo: { id: string; nickname: string } | null;
+  createdAt: string;
+}
+
+export interface CreateMomentInput {
+  content: string;
+  images: string[];
+  visibility: 'FRIENDS_ONLY' | 'PRIVATE';
 }

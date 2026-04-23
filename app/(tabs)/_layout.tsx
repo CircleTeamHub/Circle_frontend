@@ -1,19 +1,20 @@
 import React, { useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Tabs, useSegments } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore';
 import { useTheme, Spacing, Radius } from '@/theme';
 
-const TAB_CONFIG: {
+const TAB_KEYS: {
   name: string;
   icon: keyof typeof Ionicons.glyphMap;
-  label: string;
+  key: string;
 }[] = [
-  { name: 'messages', icon: 'chatbubble-outline', label: '消息' },
-  { name: 'contacts', icon: 'people-outline', label: '联系人' },
-  { name: 'discover', icon: 'play-circle-outline', label: '动态' },
-  { name: 'profile', icon: 'person-outline', label: '我的' },
+  { name: 'messages', icon: 'chatbubble-outline', key: 'tabs.messages' },
+  { name: 'contacts', icon: 'people-outline', key: 'tabs.contacts' },
+  { name: 'discover', icon: 'play-circle-outline', key: 'tabs.discover' },
+  { name: 'profile', icon: 'person-outline', key: 'tabs.profile' },
 ];
 
 interface TabIconProps {
@@ -25,6 +26,7 @@ interface TabIconProps {
 
 export default function TabLayout() {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const segments = useSegments();
   const hideTabBar = segments.length > 2;
   const unreadFriendActivityCount = useFriendActivityUnreadStore(
@@ -124,7 +126,7 @@ export default function TabLayout() {
         tabBarItemStyle: styles.tabBarItem,
       }}
     >
-      {TAB_CONFIG.map((tab) => (
+      {TAB_KEYS.map((tab) => (
         <Tabs.Screen
           key={tab.name}
           name={tab.name}
@@ -132,7 +134,7 @@ export default function TabLayout() {
             tabBarIcon: ({ focused }) => (
               <TabIcon
                 icon={tab.icon}
-                label={tab.label}
+                label={t(tab.key)}
                 focused={focused}
                 showUnreadFriendActivityDot={
                   tab.name === 'contacts' && unreadFriendActivityCount > 0

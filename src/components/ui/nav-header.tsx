@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
+import { type Href, useNavigation, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Spacing, Typography } from '@/theme';
 
@@ -8,6 +8,8 @@ interface NavHeaderProps {
   title: string;
   rightIcon?: keyof typeof Ionicons.glyphMap;
   onRightPress?: () => void;
+  onBackPress?: () => void;
+  fallbackHref?: Href;
 }
 
 const s = StyleSheet.create({
@@ -27,9 +29,22 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   title,
   rightIcon,
   onRightPress,
+  onBackPress,
+  fallbackHref,
 }) => {
   const router = useRouter();
+  const navigation = useNavigation();
   const { colors } = useTheme();
+
+  const handleBackPress = useCallback(() => {
+    if (onBackPress) {
+      onBackPress();
+    } else if (navigation.canGoBack()) {
+      router.back();
+    } else if (fallbackHref) {
+      router.replace(fallbackHref);
+    }
+  }, [fallbackHref, navigation, onBackPress, router]);
 
   const d = useMemo(
     () => ({
@@ -43,7 +58,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
 
   return (
     <View style={s.container}>
-      <Pressable onPress={() => router.back()} hitSlop={8}>
+      <Pressable onPress={handleBackPress} hitSlop={8}>
         <Ionicons name="chevron-back" size={24} color={colors.text} />
       </Pressable>
       <Text style={d.title}>{title}</Text>

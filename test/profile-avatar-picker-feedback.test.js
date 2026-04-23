@@ -5,7 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
-function loadAvatarPickerFeedback() {
+function loadAvatarPickerFeedback(stubs = {}) {
   const filePath = path.join(
     process.cwd(),
     'src/features/profile/avatar-picker-feedback.ts',
@@ -22,7 +22,13 @@ function loadAvatarPickerFeedback() {
   const context = {
     module: { exports: {} },
     exports: {},
-    require,
+    require: (specifier) => {
+      if (specifier in stubs) {
+        return stubs[specifier];
+      }
+
+      return require(specifier);
+    },
   };
   context.exports = context.module.exports;
 
@@ -31,7 +37,17 @@ function loadAvatarPickerFeedback() {
 }
 
 test('avatar picker helper text explains local album access and simulator caveat', () => {
-  const { AVATAR_PICKER_HELPER_TEXT } = loadAvatarPickerFeedback();
+  const { AVATAR_PICKER_HELPER_TEXT } = loadAvatarPickerFeedback({
+    '@/i18n': {
+      default: {
+        t: (key) =>
+          ({
+            'profileFields.avatarPickerHelper':
+              '从本地相册选择头像。首次会请求相册权限；如果模拟器相册为空，请先导入照片或改用真机。',
+          }[key] ?? key),
+      },
+    },
+  });
 
   assert.match(AVATAR_PICKER_HELPER_TEXT, /本地相册/);
   assert.match(AVATAR_PICKER_HELPER_TEXT, /模拟器/);
@@ -39,7 +55,18 @@ test('avatar picker helper text explains local album access and simulator caveat
 
 test('permission denied message distinguishes retryable vs settings cases', () => {
   const { getAvatarPickerPermissionDeniedMessage } =
-    loadAvatarPickerFeedback();
+    loadAvatarPickerFeedback({
+      '@/i18n': {
+        default: {
+          t: (key) =>
+            ({
+              'profileFields.albumPermissionBlocked':
+                '相册权限已被关闭，请到系统设置中允许 Circle IM 访问相册后再试。',
+              'validation.albumPermission': '请先允许访问相册。',
+            }[key] ?? key),
+        },
+      },
+    });
 
   assert.equal(
     getAvatarPickerPermissionDeniedMessage({
@@ -71,6 +98,19 @@ test('avatar edit screen renders the local album CTA and helper text', () => {
   );
   const source = fs.readFileSync(filePath, 'utf8');
 
-  assert.match(source, /从本地相册选择/);
+  assert.match(source, /useTranslation\(/);
   assert.match(source, /AVATAR_PICKER_HELPER_TEXT/);
+  assert.doesNotMatch(source, /从本地相册选择/);
+});
+
+test('avatar picker feedback copy is routed through i18n', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/profile/avatar-picker-feedback.ts',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /@\/i18n/);
+  assert.match(source, /i18n\.t\(/);
+  assert.doesNotMatch(source, /本地相册|模拟器|系统设置/);
 });

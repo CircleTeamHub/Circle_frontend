@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { NavHeader } from '@/components/ui/nav-header';
 import { buildSendFriendRequestInitialMessage } from '@/features/social/send-friend-request';
@@ -22,7 +23,7 @@ import {
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useAuthStore } from '@/stores/authStore';
 
-const PLACEHOLDER_ROWS = ['备注', '照片备注', '朋友权限'] as const;
+const PLACEHOLDER_ROW_KEYS = ['remark', 'photoRemark', 'friendPermissions'] as const;
 
 const s = StyleSheet.create({
   content: {
@@ -101,18 +102,20 @@ export default function SendFriendRequestScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{ id?: string; name?: string }>();
   const currentUser = useAuthStore((state) => state.user);
   const profileId = typeof params.id === 'string' ? params.id : '';
-  const targetName = typeof params.name === 'string' ? params.name : '对方';
+  const targetName =
+    typeof params.name === 'string' ? params.name : t('contacts.request.targetFallback');
 
   const initialMessage = useMemo(
     () =>
       buildSendFriendRequestInitialMessage({
         nickname: currentUser?.nickname,
-        accountId: currentUser?.accountId || '我',
+        accountId: currentUser?.accountId || t('contacts.request.selfFallback'),
       }),
-    [currentUser?.accountId, currentUser?.nickname],
+    [currentUser?.accountId, currentUser?.nickname, t],
   );
   const [message, setMessage] = useState(initialMessage);
   const [remark, setRemark] = useState('');
@@ -140,7 +143,7 @@ export default function SendFriendRequestScreen() {
       .catch(() => {
         if (!cancelled) {
           setTags([]);
-          setTagLoadError('标签加载失败，发送申请时将不会附带标签。');
+          setTagLoadError(t('contacts.request.tagLoadError'));
         }
       })
       .finally(() => {
@@ -152,7 +155,7 @@ export default function SendFriendRequestScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
 
   const d = useMemo(
     () => ({
@@ -243,13 +246,13 @@ export default function SendFriendRequestScreen() {
         remark,
         tagIds: selectedTagIds,
       });
-      Alert.alert('申请已发送', `已向 ${targetName} 发送好友申请。`, [
-        { text: '知道了', onPress: () => router.back() },
+      Alert.alert(t('contacts.request.sentTitle'), t('contacts.request.sentMessage', { name: targetName }), [
+        { text: t('common.ok'), onPress: () => router.back() },
       ]);
     } catch (error) {
       Alert.alert(
-        '发送失败',
-        error instanceof Error ? error.message : '好友申请发送失败，请稍后重试',
+        t('contacts.request.sendFailedTitle'),
+        error instanceof Error ? error.message : t('contacts.request.sendFailed'),
       );
     } finally {
       setIsSubmitting(false);
@@ -258,47 +261,47 @@ export default function SendFriendRequestScreen() {
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title="发送好友申请" />
+      <NavHeader title={t('contacts.request.title')} />
       <ScrollView
         contentContainerStyle={s.content}
         showsVerticalScrollIndicator={false}
       >
         <View style={[s.card, d.card]}>
           <Text style={[s.cardTitle, d.cardTitle]}>{targetName}</Text>
-          <Text style={d.helperText}>填写申请信息后发送给对方。</Text>
+          <Text style={d.helperText}>{t('contacts.request.intro')}</Text>
         </View>
 
         <View style={[s.card, d.card]}>
           <View style={s.fieldBlock}>
-            <Text style={[s.fieldLabel, d.fieldLabel]}>验证消息</Text>
+            <Text style={[s.fieldLabel, d.fieldLabel]}>{t('contacts.request.messageLabel')}</Text>
             <TextInput
               value={message}
               onChangeText={setMessage}
               multiline
-              placeholder="输入验证消息"
+              placeholder={t('contacts.request.messagePlaceholder')}
               placeholderTextColor={colors.textSecondary}
               style={[s.input, s.messageInput, d.input]}
             />
           </View>
 
           <View style={s.fieldBlock}>
-            <Text style={[s.fieldLabel, d.fieldLabel]}>备注名</Text>
+            <Text style={[s.fieldLabel, d.fieldLabel]}>{t('contacts.request.remarkLabel')}</Text>
             <TextInput
               value={remark}
               onChangeText={setRemark}
-              placeholder="给对方备注一个名字"
+              placeholder={t('contacts.request.remarkPlaceholder')}
               placeholderTextColor={colors.textSecondary}
               style={[s.input, d.input]}
             />
           </View>
 
           <View style={s.fieldBlock}>
-            <Text style={[s.fieldLabel, d.fieldLabel]}>标签</Text>
+            <Text style={[s.fieldLabel, d.fieldLabel]}>{t('contacts.request.tagsLabel')}</Text>
             {isLoadingTags ? (
               <View style={[s.placeholderRow, d.placeholderRow]}>
                 <View style={s.placeholderMeta}>
-                  <Text style={d.placeholderTitle}>正在加载标签</Text>
-                  <Text style={d.placeholderHint}>稍后可选择要自动应用到好友上的标签</Text>
+                  <Text style={d.placeholderTitle}>{t('contacts.request.tagsLoadingTitle')}</Text>
+                  <Text style={d.placeholderHint}>{t('contacts.request.tagsLoadingHint')}</Text>
                 </View>
                 <ActivityIndicator color={colors.primary} />
               </View>
@@ -332,9 +335,9 @@ export default function SendFriendRequestScreen() {
             ) : (
               <View style={[s.placeholderRow, d.placeholderRow]}>
                 <View style={s.placeholderMeta}>
-                  <Text style={d.placeholderTitle}>暂无标签</Text>
+                  <Text style={d.placeholderTitle}>{t('contacts.request.noTagsTitle')}</Text>
                   <Text style={d.placeholderHint}>
-                    {tagLoadError ?? '可稍后在联系人标签中创建'}
+                    {tagLoadError ?? t('contacts.request.noTagsHint')}
                   </Text>
                 </View>
                 <Ionicons
@@ -349,15 +352,15 @@ export default function SendFriendRequestScreen() {
 
         <View style={[s.card, d.card]}>
           {/* placeholder only rows for Task 4 UI */}
-          {PLACEHOLDER_ROWS.map((label) => (
+          {PLACEHOLDER_ROW_KEYS.map((rowKey) => (
             <Pressable
-              key={label}
+              key={rowKey}
               disabled
               style={[s.placeholderRow, d.placeholderRow]}
             >
               <View style={s.placeholderMeta}>
-                <Text style={d.placeholderTitle}>{label}</Text>
-                <Text style={d.placeholderHint}>占位功能，暂未开放</Text>
+                <Text style={d.placeholderTitle}>{t(`contacts.request.placeholderRows.${rowKey}`)}</Text>
+                <Text style={d.placeholderHint}>{t('contacts.request.placeholderDisabled')}</Text>
               </View>
               <Ionicons
                 name="chevron-forward"
@@ -379,7 +382,7 @@ export default function SendFriendRequestScreen() {
           disabled={!profileId || isSubmitting}
           onPress={handleSubmit}
         >
-          <Text style={d.submitText}>{isSubmitting ? '发送中...' : '发送'}</Text>
+          <Text style={d.submitText}>{isSubmitting ? t('common.sending') : t('common.send')}</Text>
         </Pressable>
       </View>
     </View>

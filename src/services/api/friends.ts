@@ -156,6 +156,25 @@ export async function fetchFriendSettings(friendUserId: string) {
   return apiClient<FriendSettings>(`/friend/${friendUserId}/settings`);
 }
 
+export async function addFriendToBlacklist(friendUserId: string) {
+  return apiClient<void>('/friend/block', {
+    method: 'POST',
+    body: { targetId: friendUserId },
+  });
+}
+
+export async function removeFriendFromBlacklist(friendUserId: string) {
+  return apiClient<void>(`/friend/block/${friendUserId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function deleteFriendRelationship(friendUserId: string) {
+  return apiClient<void>(`/friend/${friendUserId}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function setFriendRemark(
   friendUserId: string,
   remark: string | null,

@@ -133,6 +133,16 @@ test('createFriendRequest still supports the positional message overload', async
 test('buildSendFriendRequestInitialMessage falls back to accountId when nickname is absent', () => {
   const { buildSendFriendRequestInitialMessage } = loadTsModule(
     'src/features/social/send-friend-request.ts',
+    {
+      '@/i18n': {
+        default: {
+          t: (key, params) =>
+            key === 'contacts.request.defaultMessage'
+              ? `你好，我是 ${params.name}`
+              : key,
+        },
+      },
+    },
   );
 
   assert.equal(
@@ -141,30 +151,24 @@ test('buildSendFriendRequestInitialMessage falls back to accountId when nickname
   );
 });
 
-test('send friend request screen renders the dedicated Chinese form sections and placeholder rows', () => {
+test('send friend request screen is wired to i18n-driven form copy', () => {
   const filePath = path.join(
     process.cwd(),
     'src/features/social/screens/SendFriendRequestScreen.tsx',
   );
   const source = fs.readFileSync(filePath, 'utf8');
 
-  assert.match(source, /NavHeader title="发送好友申请"/);
-  assert.match(source, /验证消息/);
-  assert.match(source, /备注名/);
-  assert.match(source, /标签/);
-  assert.match(source, /备注/);
-  assert.match(source, /照片备注/);
-  assert.match(source, /朋友权限/);
-  assert.match(source, /发送/);
+  assert.match(source, /useTranslation\(/);
+  assert.match(source, /contacts\.request\./);
   assert.match(source, /placeholder only/i);
   assert.match(source, /buildSendFriendRequestInitialMessage/);
   assert.match(source, /useAuthStore/);
   assert.match(source, /fetchFriendTags/);
   assert.match(source, /selectedTagIds/);
-  assert.match(source, /暂无标签/);
   assert.match(source, /isSubmitting/);
-  assert.match(source, /发送中\.\.\./);
   assert.match(source, /disabled=\{!profileId \|\| isSubmitting\}/);
+  assert.doesNotMatch(source, /NavHeader title="发送好友申请"/);
+  assert.doesNotMatch(source, /验证消息|备注名|照片备注|朋友权限|发送中\.\.\.|暂无标签/);
 });
 
 test('contacts request route exports the dedicated send friend request screen', () => {

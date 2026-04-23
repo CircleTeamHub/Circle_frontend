@@ -81,3 +81,59 @@ test('friend activity detail screen supports request handling and single-item re
   assert.match(screenSource, /canHandleFriendActivity/);
   assert.match(screenSource, /REQUEST_RECEIVED/);
 });
+
+test('contacts and profile flow screens use i18n instead of hardcoded Chinese UI copy', () => {
+  const componentFiles = [
+    'src/features/contacts/screens/NewFriendsScreen.tsx',
+    'src/features/contacts/screens/GroupsScreen.tsx',
+    'src/features/contacts/screens/FriendTagsScreen.tsx',
+    'src/features/contacts/screens/FriendTagDetailScreen.tsx',
+    'src/features/contacts/screens/FriendActivityDetailScreen.tsx',
+    'src/features/user/screens/UserProfileScreen.tsx',
+    'src/features/user/screens/EditFriendRemarkScreen.tsx',
+    'src/features/user/screens/EditFriendTagsScreen.tsx',
+    'src/features/chat/screens/ChatInfoScreen.tsx',
+  ];
+
+  for (const relativePath of componentFiles) {
+    const source = read(relativePath);
+    assert.match(source, /useTranslation\(/, `${relativePath} should use react-i18next`);
+  }
+
+  assert.doesNotMatch(
+    read('src/features/contacts/screens/NewFriendsScreen.tsx'),
+    /NavHeader title="新的朋友"|正在加载好友动态|还没有好友动态/,
+  );
+  assert.doesNotMatch(
+    read('src/features/contacts/screens/GroupsScreen.tsx'),
+    /NavHeader title="群聊"|我创建的群聊|暂无群聊/,
+  );
+  assert.doesNotMatch(
+    read('src/features/contacts/screens/FriendTagsScreen.tsx'),
+    /NavHeader title="标签"|好友分类|按标签查看好友/,
+  );
+  assert.doesNotMatch(
+    read('src/features/contacts/screens/FriendTagDetailScreen.tsx'),
+    /标签好友|账号：|这个标签下还没有好友/,
+  );
+  assert.doesNotMatch(
+    read('src/features/contacts/screens/FriendActivityDetailScreen.tsx'),
+    /NavHeader title="好友动态"|附言|对方没有填写附言|当前状态：/,
+  );
+  assert.doesNotMatch(
+    read('src/features/user/screens/UserProfileScreen.tsx'),
+    /title="个人信息"|账号：|发起聊天|发好友申请/,
+  );
+  assert.doesNotMatch(
+    read('src/features/user/screens/EditFriendRemarkScreen.tsx'),
+    /title="设置备注"|输入备注名|备注会显示在联系人列表和好友详情页，可留空清除。/,
+  );
+  assert.doesNotMatch(
+    read('src/features/user/screens/EditFriendTagsScreen.tsx'),
+    /title="标签"|选择好友标签|新建标签|还没有标签，先创建一个再保存。/,
+  );
+  assert.doesNotMatch(
+    read('src/features/chat/screens/ChatInfoScreen.tsx'),
+    /title="聊天信息"|设置备注|查找聊天记录|删除联系人/,
+  );
+});

@@ -1,3 +1,4 @@
+import i18n from '@/i18n';
 import type { FriendActivity } from '@/services/api/friends';
 
 export type FriendActivityInboxRow = {
@@ -18,21 +19,21 @@ export function getFriendActivityCopy(
 
   switch (activity.type) {
     case 'REQUEST_RECEIVED':
-      return `${name} 请求添加你为好友`;
+      return i18n.t('contacts.friendActivity.copy.requestReceived', { name });
     case 'REQUEST_SENT':
-      return `你已向 ${name} 发送好友申请`;
+      return i18n.t('contacts.friendActivity.copy.requestSent', { name });
     case 'REQUEST_ACCEPTED_BY_OTHER':
-      return `${name} 通过了你的好友申请`;
+      return i18n.t('contacts.friendActivity.copy.requestAcceptedByOther', { name });
     case 'REQUEST_REJECTED_BY_OTHER':
-      return `${name} 拒绝了你的好友申请`;
+      return i18n.t('contacts.friendActivity.copy.requestRejectedByOther', { name });
     case 'REQUEST_ACCEPTED_BY_ME':
-      return `你已通过 ${name} 的好友申请`;
+      return i18n.t('contacts.friendActivity.copy.requestAcceptedByMe', { name });
     case 'REQUEST_REJECTED_BY_ME':
-      return `你已拒绝 ${name} 的好友申请`;
+      return i18n.t('contacts.friendActivity.copy.requestRejectedByMe', { name });
     case 'REQUEST_WITHDRAWN_BY_OTHER':
-      return `${name} 撤回了好友申请`;
+      return i18n.t('contacts.friendActivity.copy.requestWithdrawnByOther', { name });
     default:
-      return `${name} 有新的好友动态`;
+      return i18n.t('contacts.friendActivity.copy.default', { name });
   }
 }
 

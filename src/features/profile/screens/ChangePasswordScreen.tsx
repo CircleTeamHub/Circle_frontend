@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { AuthInput } from '@/components/ui/auth-input';
 import { NavHeader } from '@/components/ui/nav-header';
 import { changePassword, logoutAll } from '@/services/api/auth';
@@ -51,6 +52,7 @@ const s = StyleSheet.create({
 export default function ChangePasswordScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -85,17 +87,17 @@ export default function ChangePasswordScreen() {
     setError(null);
 
     if (!oldPassword) {
-      setError('请输入当前密码');
+      setError(t('profile.currentPasswordPlaceholder'));
       return;
     }
 
     if (newPassword.length < 6 || newPassword.length > 64) {
-      setError('新密码需为 6-64 位');
+      setError(t('profile.passwordLengthError'));
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setError('两次输入的新密码不一致');
+      setError(t('profile.passwordMismatch'));
       return;
     }
 
@@ -114,7 +116,7 @@ export default function ChangePasswordScreen() {
       await clearLocalSession();
       router.replace('/(auth)/login');
     } catch (requestError) {
-      setError(getApiErrorMessage(requestError, '修改密码失败，请稍后重试'));
+      setError(getApiErrorMessage(requestError, t('profile.passwordChangeFailed')));
     } finally {
       setSubmitting(false);
     }
@@ -125,7 +127,7 @@ export default function ChangePasswordScreen() {
       style={[d.container, { paddingTop: insets.top }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <NavHeader title="修改登录密码" />
+      <NavHeader title={t('profile.changePassword')} />
       <ScrollView
         contentContainerStyle={[
           s.container,
@@ -135,28 +137,28 @@ export default function ChangePasswordScreen() {
       >
         <View style={s.form}>
           <AuthInput
-            label="当前密码"
-            placeholder="请输入当前密码"
+            label={t('profile.currentPassword')}
+            placeholder={t('profile.currentPasswordPlaceholder')}
             value={oldPassword}
             onChangeText={setOldPassword}
             secureTextEntry
           />
           <AuthInput
-            label="新密码"
-            placeholder="请输入 6-64 位新密码"
+            label={t('profile.newPassword')}
+            placeholder={t('profile.newPasswordPlaceholder')}
             value={newPassword}
             onChangeText={setNewPassword}
             secureTextEntry
           />
           <AuthInput
-            label="确认新密码"
-            placeholder="请再次输入新密码"
+            label={t('profile.confirmNewPassword')}
+            placeholder={t('profile.confirmNewPasswordPlaceholder')}
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             secureTextEntry
           />
           <Text style={[s.helper, d.helper]}>
-            密码修改成功后，当前设备和其他设备都需要重新登录。
+            {t('profile.passwordChangeNotice')}
           </Text>
           {error ? <Text style={[s.error, d.error]}>{error}</Text> : null}
         </View>
@@ -174,7 +176,7 @@ export default function ChangePasswordScreen() {
             {submitting ? (
               <ActivityIndicator color={colors.white} />
             ) : (
-              <Text style={d.buttonText}>保存</Text>
+              <Text style={d.buttonText}>{t('common.save')}</Text>
             )}
           </Pressable>
         </View>

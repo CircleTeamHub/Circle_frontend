@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
 import { updateUserProfile } from '@/services/api/profile';
@@ -169,6 +170,7 @@ function getDaysInMonth(year: number, month: number) {
 export default function EditProfileFieldScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{ field?: string }>();
   const user = useAuthStore((state) => state.user);
   const setUser = useAuthStore((state) => state.setUser);
@@ -213,7 +215,11 @@ export default function EditProfileFieldScreen() {
     const currentYear = new Date().getFullYear();
     return Array.from({ length: currentYear - 1949 }, (_, index) => currentYear - index);
   }, []);
-  const genderOptions = ['男', '女', '未设置'];
+  const genderOptions = [
+    t('profileFields.male'),
+    t('profileFields.female'),
+    t('profileFields.genderNotSet'),
+  ];
   const cityRegion = useMemo(
     () =>
       CITY_PROVINCES.find((region) => region.name === cityDraftRegion) ??
@@ -320,8 +326,8 @@ export default function EditProfileFieldScreen() {
 
     if (!imagePicker) {
       Alert.alert(
-        '无法选择图片',
-        '当前客户端尚未包含图片选择功能，请重新安装最新的开发构建后重试。',
+        t('validation.cannotSelectImage'),
+        t('validation.imagePickerNotAvailable'),
       );
       return;
     }
@@ -332,8 +338,8 @@ export default function EditProfileFieldScreen() {
     if (!permission.granted) {
       const message =
         getAvatarPickerPermissionDeniedMessage(permission) ??
-        '请先允许访问相册。';
-      Alert.alert('无法选择图片', message);
+        t('validation.albumPermission');
+      Alert.alert(t('validation.cannotSelectImage'), message);
       return;
     }
 
@@ -355,13 +361,13 @@ export default function EditProfileFieldScreen() {
     });
 
     if (!contentType) {
-      Alert.alert('无法选择图片', '当前图片格式不支持，请选择 JPG、PNG、WEBP 或 GIF。');
+      Alert.alert(t('validation.cannotSelectImage'), t('validation.unsupportedImageFormat'));
       return;
     }
 
     const MAX_AVATAR_BYTES = 10 * 1024 * 1024; // 10 MB
     if (asset.fileSize && asset.fileSize > MAX_AVATAR_BYTES) {
-      Alert.alert('图片太大', '头像图片大小不能超过 10 MB，请选择更小的图片。');
+      Alert.alert(t('validation.imageTooLarge'), t('validation.imageSizeLimit'));
       return;
     }
 
@@ -377,7 +383,7 @@ export default function EditProfileFieldScreen() {
 
     if (field.id === 'avatar') {
       if (!selectedAvatarUri || !selectedAvatarMimeType) {
-        Alert.alert('无法保存', '请先选择一张头像图片。');
+        Alert.alert(t('validation.cannotSave'), t('validation.avatarRequired'));
         return;
       }
 
@@ -406,8 +412,8 @@ export default function EditProfileFieldScreen() {
         router.back();
       } catch (error) {
         const message =
-          error instanceof Error ? error.message : '头像保存失败，请稍后重试';
-        Alert.alert('保存失败', message);
+          error instanceof Error ? error.message : t('validation.avatarSaveFailed');
+        Alert.alert(t('validation.saveFailed'), message);
       } finally {
         setIsSaving(false);
       }
@@ -418,7 +424,7 @@ export default function EditProfileFieldScreen() {
     const validationError = validateProfileFieldValue(field.id, value);
 
     if (validationError) {
-      Alert.alert('无法保存', validationError);
+      Alert.alert(t('validation.cannotSave'), validationError);
       return;
     }
 
@@ -434,8 +440,8 @@ export default function EditProfileFieldScreen() {
       router.back();
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : '保存失败，请稍后重试';
-      Alert.alert('保存失败', message);
+        error instanceof Error ? error.message : t('validation.saveFailed');
+      Alert.alert(t('validation.saveFailed'), message);
     } finally {
       setIsSaving(false);
     }
@@ -465,13 +471,13 @@ export default function EditProfileFieldScreen() {
   if (!field || !field.editable) {
     return (
       <View style={[d.container, { paddingTop: insets.top, paddingHorizontal: Spacing.lg }]}>
-        <NavHeader title="编辑资料" />
+        <NavHeader title={t('profile.editProfile')} />
         <View style={s.fieldBlock}>
-          <Text style={d.fallbackTitle}>该字段暂不支持编辑</Text>
+          <Text style={d.fallbackTitle}>{t('profile.fieldNotEditable')}</Text>
           <Text style={d.fallbackText}>
             {field && 'unsupportedMessage' in field
               ? field.unsupportedMessage
-              : '请返回账号设置页。'}
+              : t('profile.returnToSettings')}
           </Text>
         </View>
       </View>
@@ -496,7 +502,7 @@ export default function EditProfileFieldScreen() {
             <View style={s.avatarEditor}>
               <Avatar
                 size={112}
-                name={user?.nickname ?? user?.accountId ?? '圈'}
+                name={user?.nickname ?? user?.accountId ?? 'C'}
                 uri={avatarPreviewUri ?? undefined}
                 bgColor={colors.surface}
               />
@@ -504,7 +510,7 @@ export default function EditProfileFieldScreen() {
                 style={[s.avatarButton, d.avatarButton]}
                 onPress={handlePickAvatar}
               >
-                <Text style={d.avatarButtonText}>从本地相册选择</Text>
+                <Text style={d.avatarButtonText}>{t('profileFields.selectFromAlbum')}</Text>
               </Pressable>
               <Text style={[s.helper, d.helper]}>{AVATAR_PICKER_HELPER_TEXT}</Text>
             </View>
@@ -569,7 +575,9 @@ export default function EditProfileFieldScreen() {
             />
           )}
           <Text style={[s.helper, d.helper]}>
-            当前显示：{formatProfileFieldValue(field.id, value)}
+            {t('profileFields.currentDisplay', {
+              value: formatProfileFieldValue(field.id, value),
+            })}
           </Text>
         </View>
 
@@ -579,7 +587,7 @@ export default function EditProfileFieldScreen() {
             onPress={handleSave}
             disabled={isSaving}
           >
-            <Text style={d.buttonText}>{isSaving ? '保存中...' : '保存'}</Text>
+            <Text style={d.buttonText}>{isSaving ? t('common.saving') : t('common.save')}</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -593,11 +601,11 @@ export default function EditProfileFieldScreen() {
           <View style={[s.modalCard, d.modalCard]}>
             <View style={s.modalHeader}>
               <Pressable onPress={() => setIsBirthdayPickerVisible(false)}>
-                <Text style={d.actionText}>取消</Text>
+                <Text style={d.actionText}>{t('common.cancel')}</Text>
               </Pressable>
-              <Text style={d.modalTitle}>选择生日</Text>
+              <Text style={d.modalTitle}>{t('profileFields.selectBirthday')}</Text>
               <Pressable onPress={handleConfirmBirthday}>
-                <Text style={d.actionText}>确定</Text>
+                <Text style={d.actionText}>{t('common.confirm')}</Text>
               </Pressable>
             </View>
 
@@ -627,7 +635,7 @@ export default function EditProfileFieldScreen() {
                             isActive ? d.pickerItemTextActive : null,
                           ]}
                         >
-                          {year}年
+                          {t('profileFields.year', { year })}
                         </Text>
                       </Pressable>
                     );
@@ -660,7 +668,7 @@ export default function EditProfileFieldScreen() {
                             isActive ? d.pickerItemTextActive : null,
                           ]}
                         >
-                          {month}月
+                          {t('profileFields.month', { month })}
                         </Text>
                       </Pressable>
                     );
@@ -689,7 +697,7 @@ export default function EditProfileFieldScreen() {
                             isActive ? d.pickerItemTextActive : null,
                           ]}
                         >
-                          {day}日
+                          {t('profileFields.day', { day })}
                         </Text>
                       </Pressable>
                     );
@@ -710,11 +718,11 @@ export default function EditProfileFieldScreen() {
           <View style={[s.modalCard, d.modalCard]}>
             <View style={s.modalHeader}>
               <Pressable onPress={() => setIsCityPickerVisible(false)}>
-                <Text style={d.actionText}>取消</Text>
+                <Text style={d.actionText}>{t('common.cancel')}</Text>
               </Pressable>
-              <Text style={d.modalTitle}>选择省市</Text>
+              <Text style={d.modalTitle}>{t('profileFields.selectProvince')}</Text>
               <Pressable onPress={handleConfirmCity}>
-                <Text style={d.actionText}>确定</Text>
+                <Text style={d.actionText}>{t('common.confirm')}</Text>
               </Pressable>
             </View>
 

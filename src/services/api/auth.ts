@@ -34,6 +34,9 @@ export type BackendAuthUser = {
   birthday: string | null;
   gender: 'male' | 'female' | 'other' | 'unset';
   city: string | null;
+  vipLevel: number;
+  creditScore: number;
+  fancyNumber: boolean;
   role: string;
   status: string;
   lastOnline: string | null;

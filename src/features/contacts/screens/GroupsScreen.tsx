@@ -7,6 +7,7 @@ import {
   StyleSheet,
   SectionListData,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
 import { Divider } from '@/components/ui/divider';
@@ -25,25 +26,65 @@ interface GroupSection {
   data: GroupItem[];
 }
 
-const GROUP_SECTIONS: GroupSection[] = [
+interface GroupSectionSeed {
+  titleKey: string;
+  data: Array<GroupItem & { nameKey: string; descriptionKey: string }>;
+}
+
+const GROUP_SECTIONS: GroupSectionSeed[] = [
   {
-    title: '我创建的群聊',
+    titleKey: 'contacts.groupsScreen.myCreated',
     data: [
-      { id: 'created-1', name: 'Circle 产品讨论群', memberCount: 28, description: '产品迭代、版本计划和需求同步' },
-      { id: 'created-2', name: '周末羽毛球局', memberCount: 16, description: '每周活动报名和场地协调' },
+      {
+        id: 'created-1',
+        name: '',
+        nameKey: 'contacts.groupsScreen.samples.createdProduct.name',
+        memberCount: 28,
+        description: '',
+        descriptionKey: 'contacts.groupsScreen.samples.createdProduct.description',
+      },
+      {
+        id: 'created-2',
+        name: '',
+        nameKey: 'contacts.groupsScreen.samples.createdSports.name',
+        memberCount: 16,
+        description: '',
+        descriptionKey: 'contacts.groupsScreen.samples.createdSports.description',
+      },
     ],
   },
   {
-    title: '我加入的群聊',
+    titleKey: 'contacts.groupsScreen.myJoined',
     data: [
-      { id: 'joined-1', name: '前端开发交流群', memberCount: 84, description: 'RN / Expo / Web 技术交流' },
-      { id: 'joined-2', name: '深圳同城饭搭子', memberCount: 43, description: '工作日约饭和周末探店' },
+      {
+        id: 'joined-1',
+        name: '',
+        nameKey: 'contacts.groupsScreen.samples.joinedFrontend.name',
+        memberCount: 84,
+        description: '',
+        descriptionKey: 'contacts.groupsScreen.samples.joinedFrontend.description',
+      },
+      {
+        id: 'joined-2',
+        name: '',
+        nameKey: 'contacts.groupsScreen.samples.joinedDining.name',
+        memberCount: 43,
+        description: '',
+        descriptionKey: 'contacts.groupsScreen.samples.joinedDining.description',
+      },
     ],
   },
   {
-    title: '我管理的群聊',
+    titleKey: 'contacts.groupsScreen.myManaged',
     data: [
-      { id: 'managed-1', name: '运营值班群', memberCount: 12, description: '日常排班和异常处理' },
+      {
+        id: 'managed-1',
+        name: '',
+        nameKey: 'contacts.groupsScreen.samples.managedOps.name',
+        memberCount: 12,
+        description: '',
+        descriptionKey: 'contacts.groupsScreen.samples.managedOps.description',
+      },
     ],
   },
 ];
@@ -74,6 +115,21 @@ const s = StyleSheet.create({
 export default function GroupsScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { t } = useTranslation();
+
+  const sections = useMemo(
+    () =>
+      GROUP_SECTIONS.map((section) => ({
+        title: t(section.titleKey),
+        data: section.data.map((item) => ({
+          id: item.id,
+          name: t(item.nameKey),
+          memberCount: item.memberCount,
+          description: t(item.descriptionKey),
+        })),
+      })),
+    [t],
+  );
 
   const d = useMemo(
     () => ({
@@ -116,9 +172,9 @@ export default function GroupsScreen() {
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title="群聊" />
+      <NavHeader title={t('contacts.groupsScreen.title')} />
       <SectionList
-        sections={GROUP_SECTIONS}
+        sections={sections}
         keyExtractor={(item) => item.id}
         contentContainerStyle={d.listContent}
         stickySectionHeadersEnabled={false}
@@ -136,7 +192,9 @@ export default function GroupsScreen() {
                   <Text style={d.groupName} numberOfLines={1}>
                     {item.name}
                   </Text>
-                  <Text style={d.memberCount}>{item.memberCount}人</Text>
+                  <Text style={d.memberCount}>
+                    {t('contacts.groupsScreen.memberCount', { count: item.memberCount })}
+                  </Text>
                 </View>
                 <Text style={d.description} numberOfLines={1}>
                   {item.description}
@@ -146,7 +204,7 @@ export default function GroupsScreen() {
             {index < section.data.length - 1 ? <Divider /> : null}
           </View>
         )}
-        ListEmptyComponent={<Text style={d.emptyText}>暂无群聊</Text>}
+        ListEmptyComponent={<Text style={d.emptyText}>{t('contacts.groupsScreen.empty')}</Text>}
         showsVerticalScrollIndicator={false}
       />
     </View>

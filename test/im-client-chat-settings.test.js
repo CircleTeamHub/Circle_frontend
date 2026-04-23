@@ -1,0 +1,377 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const ts = require('typescript');
+
+function loadTsModule(relativePath, stubs = {}) {
+  const filePath = path.join(process.cwd(), relativePath);
+  const source = fs.readFileSync(filePath, 'utf8');
+  const transpiled = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2020,
+      baseUrl: process.cwd(),
+      paths: {
+        '@/*': ['src/*'],
+      },
+    },
+    fileName: filePath,
+  }).outputText;
+
+  const context = {
+    module: { exports: {} },
+    exports: {},
+    require: (specifier) => {
+      if (specifier in stubs) {
+        return stubs[specifier];
+      }
+
+      return require(specifier);
+    },
+  };
+  context.exports = context.module.exports;
+
+  vm.runInNewContext(transpiled, context, { filename: filePath });
+
+  return context.module.exports;
+}
+
+function loadChatSettingsClient(sdkCalls, storeCalls) {
+  return loadTsModule('src/im/client.ts', {
+    '@openim/rn-client-sdk': {
+      __esModule: true,
+      default: {
+        initSDK: async () => undefined,
+        pinConversation: async (params) => {
+          sdkCalls.push(['pinConversation', params]);
+        },
+        setConversationRecvMessageOpt: async (params) => {
+          sdkCalls.push(['setConversationRecvMessageOpt', params]);
+        },
+        setConversationBurnDuration: async (params) => {
+          sdkCalls.push(['setConversationBurnDuration', params]);
+        },
+        clearConversationAndDeleteAllMsg: async (conversationID) => {
+          sdkCalls.push(['clearConversationAndDeleteAllMsg', conversationID]);
+        },
+      },
+      LogLevel: { Info: 0 },
+      SessionType: { Single: 1, Group: 2 },
+      ViewType: { History: 0 },
+    },
+    'react-native-fs': {
+      __esModule: true,
+      default: {
+        DocumentDirectoryPath: '/tmp',
+        mkdir: async () => undefined,
+      },
+    },
+    'react-native': {
+      Platform: { OS: 'ios' },
+    },
+    '@/constants/config': {
+      OPENIM_API_URL: 'https://im.example.com',
+      OPENIM_WS_URL: 'wss://im.example.com',
+      OPENIM_LOG_LEVEL: 0,
+    },
+    '@/stores/imStore': {
+      useIMStore: {
+        getState: () => ({
+          connected: true,
+          setError: () => undefined,
+          setInitialized: () => undefined,
+          setCurrentUserID: () => undefined,
+          setConnecting: () => undefined,
+          reset: () => undefined,
+          setConversations: () => undefined,
+          mergeConversations: () => undefined,
+          setMessages: (...args) => {
+            storeCalls.push(['setMessages', ...args]);
+          },
+        }),
+      },
+    },
+  });
+}
+
+function normalize(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function loadSearchClient(sdkCalls, searchResult = { totalCount: 0, searchResultItems: [] }) {
+  return loadTsModule('src/im/client.ts', {
+    '@openim/rn-client-sdk': {
+      __esModule: true,
+      default: {
+        initSDK: async () => undefined,
+        searchLocalMessages: async (params) => {
+          sdkCalls.push(['searchLocalMessages', params]);
+          return searchResult;
+        },
+      },
+      LogLevel: { Info: 0 },
+      SessionType: { Single: 1, Group: 2 },
+      ViewType: { History: 0 },
+      MessageType: {
+        TextMessage: 101,
+        PictureMessage: 102,
+        VideoMessage: 104,
+        FileMessage: 105,
+      },
+    },
+    'react-native-fs': {
+      __esModule: true,
+      default: {
+        DocumentDirectoryPath: '/tmp',
+        mkdir: async () => undefined,
+      },
+    },
+    'react-native': {
+      Platform: { OS: 'ios' },
+    },
+    '@/constants/config': {
+      OPENIM_API_URL: 'https://im.example.com',
+      OPENIM_WS_URL: 'wss://im.example.com',
+      OPENIM_LOG_LEVEL: 0,
+    },
+    '@/stores/imStore': {
+      useIMStore: {
+        getState: () => ({
+          connected: true,
+          setError: () => undefined,
+          setInitialized: () => undefined,
+          setCurrentUserID: () => undefined,
+          setConnecting: () => undefined,
+          reset: () => undefined,
+          setConversations: () => undefined,
+          mergeConversations: () => undefined,
+          setMessages: () => undefined,
+        }),
+      },
+    },
+  });
+}
+
+test('im client chat setting wrappers call the expected OpenIM SDK methods', async () => {
+  const sdkCalls = [];
+  const storeCalls = [];
+  const {
+    toggleConversationPinned,
+    setConversationMute,
+    setConversationBurnDuration,
+  } = loadChatSettingsClient(sdkCalls, storeCalls);
+
+  await toggleConversationPinned('conversation-1', true);
+  await setConversationMute('conversation-1', true);
+  await setConversationBurnDuration('conversation-1', 60);
+
+  assert.deepEqual(normalize(sdkCalls), [
+    ['pinConversation', { conversationID: 'conversation-1', isPinned: true }],
+    [
+      'setConversationRecvMessageOpt',
+      { conversationID: 'conversation-1', opt: 2 },
+    ],
+    ['setConversationBurnDuration', { conversationID: 'conversation-1', burnDuration: 60 }],
+  ]);
+  assert.deepEqual(storeCalls, []);
+});
+
+test('clearConversationMessages clears OpenIM history and local message cache', async () => {
+  const sdkCalls = [];
+  const storeCalls = [];
+  const { clearConversationMessages } = loadChatSettingsClient(sdkCalls, storeCalls);
+
+  await clearConversationMessages('conversation-99');
+
+  assert.deepEqual(normalize(sdkCalls), [
+    ['clearConversationAndDeleteAllMsg', 'conversation-99'],
+  ]);
+  assert.deepEqual(normalize(storeCalls), [
+    ['setMessages', 'conversation-99', []],
+  ]);
+});
+
+test('sendFriendCardMessage creates and sends a friend card message to the target conversation', async () => {
+  const sdkCalls = [];
+  const { sendFriendCardMessage } = loadTsModule('src/im/client.ts', {
+    '@openim/rn-client-sdk': {
+      __esModule: true,
+      default: {
+        initSDK: async () => undefined,
+        createCardMessage: async (params) => {
+          sdkCalls.push(['createCardMessage', params]);
+          return { clientMsgID: 'message-1' };
+        },
+        sendMessage: async (params) => {
+          sdkCalls.push(['sendMessage', params]);
+          return params.message;
+        },
+      },
+      LogLevel: { Info: 0 },
+      SessionType: { Single: 1, Group: 2 },
+      ViewType: { History: 0 },
+    },
+    'react-native-fs': {
+      __esModule: true,
+      default: {
+        DocumentDirectoryPath: '/tmp',
+        mkdir: async () => undefined,
+      },
+    },
+    'react-native': {
+      Platform: { OS: 'ios' },
+    },
+    '@/constants/config': {
+      OPENIM_API_URL: 'https://im.example.com',
+      OPENIM_WS_URL: 'wss://im.example.com',
+      OPENIM_LOG_LEVEL: 0,
+    },
+    '@/stores/imStore': {
+      useIMStore: {
+        getState: () => ({
+          connected: true,
+          conversations: [
+            {
+              conversationID: 'conversation-2',
+              userID: 'target-user',
+              groupID: '',
+            },
+          ],
+          setError: () => undefined,
+          setInitialized: () => undefined,
+          setCurrentUserID: () => undefined,
+          setConnecting: () => undefined,
+          reset: () => undefined,
+          setConversations: () => undefined,
+          mergeConversations: () => undefined,
+          setMessages: () => undefined,
+        }),
+      },
+    },
+  });
+
+  await sendFriendCardMessage({
+    targetConversationID: 'conversation-2',
+    userID: 'friend-1',
+    nickname: '小李',
+    faceURL: '',
+  });
+
+  assert.deepEqual(normalize(sdkCalls), [
+    [
+      'createCardMessage',
+      { userID: 'friend-1', nickname: '小李', faceURL: '', ex: '' },
+    ],
+    [
+      'sendMessage',
+      {
+        recvID: 'target-user',
+        groupID: '',
+        message: { clientMsgID: 'message-1' },
+        offlinePushInfo: {
+          title: '好友推荐',
+          desc: '小李',
+          ex: '',
+          iOSPushSound: 'default',
+          iOSBadgeCount: true,
+        },
+      },
+    ],
+  ]);
+});
+
+test('searchConversationTextMessages searches the current conversation by keyword', async () => {
+  const sdkCalls = [];
+  const { searchConversationTextMessages } = loadSearchClient(sdkCalls);
+
+  await searchConversationTextMessages({
+    conversationID: 'conversation-1',
+    keyword: 'hello',
+  });
+
+  assert.deepEqual(normalize(sdkCalls), [
+    [
+      'searchLocalMessages',
+      {
+        conversationID: 'conversation-1',
+        keywordList: ['hello'],
+        keywordListMatchType: 0,
+        messageTypeList: [101],
+        pageIndex: 1,
+        count: 20,
+      },
+    ],
+  ]);
+});
+
+test('searchConversationMediaMessages filters image and video messages', async () => {
+  const sdkCalls = [];
+  const { searchConversationMediaMessages } = loadSearchClient(sdkCalls);
+
+  await searchConversationMediaMessages({
+    conversationID: 'conversation-1',
+    pageIndex: 2,
+    count: 10,
+  });
+
+  assert.deepEqual(normalize(sdkCalls), [
+    [
+      'searchLocalMessages',
+      {
+        conversationID: 'conversation-1',
+        keywordList: [''],
+        messageTypeList: [102, 104],
+        pageIndex: 2,
+        count: 10,
+      },
+    ],
+  ]);
+});
+
+test('searchConversationFileMessages filters file messages', async () => {
+  const sdkCalls = [];
+  const { searchConversationFileMessages } = loadSearchClient(sdkCalls);
+
+  await searchConversationFileMessages({
+    conversationID: 'conversation-1',
+  });
+
+  assert.deepEqual(normalize(sdkCalls), [
+    [
+      'searchLocalMessages',
+      {
+        conversationID: 'conversation-1',
+        keywordList: [''],
+        messageTypeList: [105],
+        pageIndex: 1,
+        count: 20,
+      },
+    ],
+  ]);
+});
+
+test('searchConversationMessagesByDate constrains the time window to the selected day', async () => {
+  const sdkCalls = [];
+  const { searchConversationMessagesByDate } = loadSearchClient(sdkCalls);
+
+  await searchConversationMessagesByDate({
+    conversationID: 'conversation-1',
+    date: '2026-04-16',
+  });
+
+  assert.deepEqual(normalize(sdkCalls), [
+    [
+      'searchLocalMessages',
+      {
+        conversationID: 'conversation-1',
+        keywordList: [''],
+        searchTimePosition: new Date('2026-04-16T00:00:00').getTime(),
+        searchTimePeriod: 24 * 60 * 60,
+        pageIndex: 1,
+        count: 50,
+      },
+    ],
+  ]);
+});

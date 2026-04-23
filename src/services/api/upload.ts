@@ -24,7 +24,7 @@ const CONTENT_TYPE_BY_EXTENSION = {
   m4v: 'video/x-m4v',
 } as const;
 
-export type UploadFolder = 'avatars' | 'covers' | 'posts';
+export type UploadFolder = 'avatars' | 'covers' | 'posts' | 'notes';
 
 export type UploadPresignResponse = {
   uploadUrl: string;

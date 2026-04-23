@@ -15,8 +15,10 @@
  */
 import OpenIMSDK, {
   LogLevel,
+  MessageType,
   SessionType,
   ViewType,
+  type SearchMessageResult,
   type ConversationItem,
   type MessageItem,
 } from '@openim/rn-client-sdk';
@@ -255,6 +257,202 @@ export async function sendTextMessage(params: {
   });
 
   return sentMessage;
+}
+
+export async function sendFriendCardMessage(params: {
+  targetConversationID: string;
+  userID: string;
+  nickname: string;
+  faceURL: string;
+  ex?: string;
+}) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  const targetConversation = useIMStore
+    .getState()
+    .conversations.find(
+      (conversation) => conversation.conversationID === params.targetConversationID,
+    );
+
+  if (!targetConversation) {
+    throw new Error('目标会话不存在');
+  }
+
+  const message = await OpenIMSDK.createCardMessage({
+    userID: params.userID,
+    nickname: params.nickname,
+    faceURL: params.faceURL,
+    ex: params.ex ?? '',
+  });
+  const isGroupConversation =
+    targetConversation.conversationType === SessionType.Group;
+
+  return OpenIMSDK.sendMessage({
+    recvID: isGroupConversation ? '' : targetConversation.userID,
+    groupID: isGroupConversation ? targetConversation.groupID : '',
+    message,
+    offlinePushInfo: {
+      title: '好友推荐',
+      desc: params.nickname,
+      ex: '',
+      iOSPushSound: 'default',
+      iOSBadgeCount: true,
+    },
+  });
+}
+
+export async function toggleConversationPinned(
+  conversationID: string,
+  isPinned: boolean
+) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await OpenIMSDK.pinConversation({ conversationID, isPinned });
+}
+
+export async function setConversationMute(
+  conversationID: string,
+  muted: boolean
+) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await OpenIMSDK.setConversationRecvMessageOpt({
+    conversationID,
+    opt: muted ? 2 : 0,
+  });
+}
+
+export async function setConversationBurnDuration(
+  conversationID: string,
+  burnDuration: number
+) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await OpenIMSDK.setConversationBurnDuration({ conversationID, burnDuration });
+}
+
+export async function clearConversationMessages(conversationID: string) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await OpenIMSDK.clearConversationAndDeleteAllMsg(conversationID);
+  useIMStore.getState().setMessages(conversationID, []);
+}
+
+function flattenSearchResult(result: SearchMessageResult) {
+  const items = result.searchResultItems ?? result.findResultItems ?? [];
+  return items.flatMap((item) => item.messageList);
+}
+
+async function searchConversationMessages(params: {
+  conversationID: string;
+  keywordList: string[];
+  keywordListMatchType?: number;
+  messageTypeList?: MessageType[];
+  searchTimePosition?: number;
+  searchTimePeriod?: number;
+  pageIndex?: number;
+  count?: number;
+}) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    return [];
+  }
+
+  const result = await OpenIMSDK.searchLocalMessages(params);
+  return flattenSearchResult(result);
+}
+
+export async function searchConversationTextMessages(params: {
+  conversationID: string;
+  keyword: string;
+  pageIndex?: number;
+  count?: number;
+}) {
+  const keyword = params.keyword.trim();
+
+  if (!keyword) {
+    return [];
+  }
+
+  return searchConversationMessages({
+    conversationID: params.conversationID,
+    keywordList: [keyword],
+    keywordListMatchType: 0,
+    messageTypeList: [MessageType.TextMessage],
+    pageIndex: params.pageIndex ?? 1,
+    count: params.count ?? 20,
+  });
+}
+
+export async function searchConversationMediaMessages(params: {
+  conversationID: string;
+  pageIndex?: number;
+  count?: number;
+}) {
+  return searchConversationMessages({
+    conversationID: params.conversationID,
+    keywordList: [''],
+    messageTypeList: [MessageType.PictureMessage, MessageType.VideoMessage],
+    pageIndex: params.pageIndex ?? 1,
+    count: params.count ?? 20,
+  });
+}
+
+export async function searchConversationFileMessages(params: {
+  conversationID: string;
+  pageIndex?: number;
+  count?: number;
+}) {
+  return searchConversationMessages({
+    conversationID: params.conversationID,
+    keywordList: [''],
+    messageTypeList: [MessageType.FileMessage],
+    pageIndex: params.pageIndex ?? 1,
+    count: params.count ?? 20,
+  });
+}
+
+export async function searchConversationMessagesByDate(params: {
+  conversationID: string;
+  date: string;
+  pageIndex?: number;
+  count?: number;
+}) {
+  const startOfDay = new Date(`${params.date}T00:00:00`).getTime();
+
+  if (!Number.isFinite(startOfDay)) {
+    return [];
+  }
+
+  return searchConversationMessages({
+    conversationID: params.conversationID,
+    keywordList: [''],
+    searchTimePosition: startOfDay,
+    searchTimePeriod: 24 * 60 * 60,
+    pageIndex: params.pageIndex ?? 1,
+    count: params.count ?? 50,
+  });
 }
 
 export function isMessageForConversation(
