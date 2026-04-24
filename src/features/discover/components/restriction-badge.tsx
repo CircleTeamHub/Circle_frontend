@@ -1,7 +1,13 @@
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { Radius, Spacing, Typography } from '@/theme';
+
+type IdentityBadge = {
+  icon: string;
+  label: string;
+  color: string;
+};
 
 interface RestrictionBadgeProps {
   restrictions: {
@@ -34,10 +40,8 @@ const s = StyleSheet.create({
 export const RestrictionBadge: React.FC<RestrictionBadgeProps> = ({
   restrictions,
 }) => {
-  const { colors } = useTheme();
-
   const badges = useMemo(() => {
-    const items: { icon: string; label: string; color: string }[] = [];
+    const items: IdentityBadge[] = [];
     if (restrictions.vipLevel != null) {
       items.push({
         icon: 'diamond-outline',
@@ -66,10 +70,13 @@ export const RestrictionBadge: React.FC<RestrictionBadgeProps> = ({
 
   return (
     <View style={s.row}>
-      {badges.map((b) => (
+      {badges.map((b, index) => (
         <View
-          key={b.label}
-          style={[s.badge, { backgroundColor: `${b.color}20` }]}
+          key={`${b.icon}-${b.label}-${index}`}
+          style={[
+            s.badge,
+            { backgroundColor: `${b.color}20` },
+          ]}
         >
           <Ionicons name={b.icon as any} size={10} color={b.color} />
           <Text style={[s.text, { color: b.color }]}>{b.label}</Text>

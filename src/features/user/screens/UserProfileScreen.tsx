@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
+import { UserIconRow } from '@/components/ui/user-icon-row';
 import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
 import { getOrCreateSingleConversation } from '@/im/client';
 import { getProfileSignature } from '@/features/profile/profile-display';
@@ -189,6 +190,7 @@ export default function UserProfileScreen() {
           currentUser.persona,
           currentUser.helloWords,
         ),
+        displayIcons: currentUser.displayIcons ?? [],
         phone: currentUser.phoneNumber ?? t('userProfile.phoneHidden'),
         remarkHint: currentUser.nickname,
       });
@@ -208,6 +210,7 @@ export default function UserProfileScreen() {
           avatarUrl: profile.avatarUrl ?? undefined,
           memberLabel: profile.role === 'ADMIN' ? t('profile.admin') : t('profile.normalUser'),
           badges: [profile.role === 'ADMIN' ? t('profile.admin') : t('profile.normalUser')],
+          displayIcons: profile.displayIcons ?? [],
           gender: profile.gender,
           city: profile.city,
           signature: getProfileSignature(profile.persona, profile.helloWords),
@@ -558,11 +561,7 @@ export default function UserProfileScreen() {
             </View>
             <Text style={d.signature}>{profile.signature}</Text>
             <View style={s.badgeIconRow}>
-              {profile.badges.map((badge, index) => (
-                <View key={`${badge}-${index}`} style={[s.badgeIcon, d.badgeIcon]}>
-                  <Text style={d.badgeIconText}>{badge.slice(0, 1)}</Text>
-                </View>
-              ))}
+              <UserIconRow icons={profile.displayIcons ?? []} />
             </View>
           </View>
         </View>

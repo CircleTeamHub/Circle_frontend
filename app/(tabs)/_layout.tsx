@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Tabs, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
-import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore';
+import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useTheme, Spacing, Radius } from '@/theme';
 
 const TAB_KEYS: {
@@ -21,7 +21,7 @@ interface TabIconProps {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   focused: boolean;
-  showUnreadFriendActivityDot: boolean;
+  showBadgeDot: boolean;
 }
 
 export default function TabLayout() {
@@ -29,16 +29,10 @@ export default function TabLayout() {
   const { t } = useTranslation();
   const segments = useSegments();
   const hideTabBar = segments.length > 2;
-  const unreadFriendActivityCount = useFriendActivityUnreadStore(
-    (state) => state.count,
-  );
-  const refreshUnreadFriendActivityCount = useFriendActivityUnreadStore(
-    (state) => state.refresh,
-  );
-
-  useEffect(() => {
-    void refreshUnreadFriendActivityCount();
-  }, [refreshUnreadFriendActivityCount, segments]);
+  const messagesUnread = useTabBadgeStore((state) => state.messagesUnread);
+  const contactsUnread = useTabBadgeStore((state) => state.contactsUnread);
+  const discoverUnread = useTabBadgeStore((state) => state.discoverUnread);
+  const profileUnread = useTabBadgeStore((state) => state.profileUnread);
 
   const styles = useMemo(() => StyleSheet.create({
     tabBar: {
@@ -100,13 +94,13 @@ export default function TabLayout() {
     icon,
     label,
     focused,
-    showUnreadFriendActivityDot,
+    showBadgeDot,
   }) => {
     const color = focused ? colors.white : colors.textSecondary;
 
     return (
       <View style={[styles.tabIcon, focused && styles.tabIconActive]}>
-        {showUnreadFriendActivityDot ? <View style={styles.tabIconBadge} /> : null}
+        {showBadgeDot ? <View style={styles.tabIconBadge} /> : null}
         <Ionicons name={icon} size={16} color={color} />
         <Text style={[styles.tabLabel, { color }]} numberOfLines={1}>
           {label}
@@ -132,13 +126,16 @@ export default function TabLayout() {
           name={tab.name}
           options={{
             tabBarIcon: ({ focused }) => (
-              <TabIcon
-                icon={tab.icon}
-                label={t(tab.key)}
-                focused={focused}
-                showUnreadFriendActivityDot={
-                  tab.name === 'contacts' && unreadFriendActivityCount > 0
-                }
+                <TabIcon
+                  icon={tab.icon}
+                  label={t(tab.key)}
+                  focused={focused}
+                  showBadgeDot={
+                    (tab.name === 'messages' && messagesUnread > 0) ||
+                    (tab.name === 'contacts' && contactsUnread > 0) ||
+                    (tab.name === 'discover' && discoverUnread > 0) ||
+                    (tab.name === 'profile' && profileUnread > 0)
+                  }
               />
             ),
           }}

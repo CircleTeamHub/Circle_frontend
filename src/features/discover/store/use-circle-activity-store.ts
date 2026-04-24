@@ -3,6 +3,7 @@ import {
   fetchCircleActivityUnreadCount,
   markCircleActivityRead,
 } from '@/services/api/circles';
+import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 
 interface CircleActivityState {
   count: number;
@@ -19,19 +20,24 @@ export const useCircleActivityStore = create<CircleActivityState>(
       try {
         const count = await fetchCircleActivityUnreadCount();
         set({ count });
+        useTabBadgeStore.getState().setDiscoverUnread(count);
       } catch {
         // silently fail
       }
     },
 
     markRead: (activityIds) => {
-      const current = get().count;
-      set({ count: Math.max(0, current - activityIds.length) });
+      const nextCount = Math.max(0, get().count - activityIds.length);
+      set({ count: nextCount });
+      useTabBadgeStore.getState().setDiscoverUnread(nextCount);
       for (const id of activityIds) {
         markCircleActivityRead(id).catch(() => {});
       }
     },
 
-    reset: () => set({ count: 0 }),
+    reset: () => {
+      set({ count: 0 });
+      useTabBadgeStore.getState().setDiscoverUnread(0);
+    },
   }),
 );

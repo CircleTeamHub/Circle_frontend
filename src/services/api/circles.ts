@@ -12,6 +12,9 @@ function normalizeCircle(circle: Circle): Circle {
   return {
     ...circle,
     avatarUrl: circle.avatarUrl ? normalizeMediaUrl(circle.avatarUrl) : null,
+    currentIconUrl: circle.currentIconUrl
+      ? normalizeMediaUrl(circle.currentIconUrl)
+      : null,
   };
 }
 
@@ -54,6 +57,11 @@ export async function fetchCircleDetail(id: string): Promise<CircleDetail> {
     ...normalizeCircle(detail),
     myRole: detail.myRole,
     myStatus: detail.myStatus,
+    availableIconAssets:
+      detail.availableIconAssets?.map((asset) => ({
+        ...asset,
+        imageUrl: asset.imageUrl ? normalizeMediaUrl(asset.imageUrl) : null,
+      })) ?? [],
   };
 }
 
@@ -72,6 +80,29 @@ export async function joinCircle(id: string): Promise<void> {
 
 export async function leaveCircle(id: string): Promise<void> {
   await apiClient<void>(`/circle/${id}/leave`, { method: 'DELETE' });
+}
+
+export async function uploadCircleIcon(
+  id: string,
+  input: { imageUrl: string; name?: string },
+) {
+  return apiClient<{ id: string; name: string; imageUrl: string | null }>(
+    `/circle/${id}/icon/upload`,
+    {
+      method: 'POST',
+      body: input,
+    },
+  );
+}
+
+export async function selectCircleIcon(
+  id: string,
+  iconAssetId: string,
+): Promise<void> {
+  await apiClient<void>(`/circle/${id}/icon/select`, {
+    method: 'POST',
+    body: { iconAssetId },
+  });
 }
 
 // ── Invitation / Verification ────────────────────────────────────────────────

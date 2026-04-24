@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Divider } from '@/components/ui/divider';
 import { MenuRow } from '@/components/ui/menu-row';
 import { NavHeader } from '@/components/ui/nav-header';
+import { UserIconRow } from '@/components/ui/user-icon-row';
 import { buildChatInfoState } from '@/features/chat/chat-info';
 import {
   DEFAULT_CHAT_BACKGROUND_PREFERENCE,
@@ -34,8 +35,10 @@ import {
   fetchFriendStatus,
   removeFriendFromBlacklist,
 } from '@/services/api/friends';
+import { fetchUserProfile } from '@/services/api/profile';
 import { useIMStore } from '@/stores/imStore';
 import { Radius, Spacing, useTheme } from '@/theme';
+import type { DisplayIcon } from '@/types';
 
 const s = StyleSheet.create({
   scroll: { flex: 1 },
@@ -80,6 +83,7 @@ export default function ChatInfoScreen() {
   const [blacklist, setBlacklist] = useState(false);
   const [blacklistPending, setBlacklistPending] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
+  const [displayIcons, setDisplayIcons] = useState<DisplayIcon[]>([]);
   const [actionPending, setActionPending] = useState(initialActionPending);
   const actionPendingRef = useRef(initialActionPending);
   const actionRequestTokenRef = useRef({
@@ -210,6 +214,33 @@ export default function ChatInfoScreen() {
       };
     }, [friendId]),
   );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!friendId) {
+      setDisplayIcons([]);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    fetchUserProfile(friendId)
+      .then((profile) => {
+        if (!cancelled) {
+          setDisplayIcons(profile.displayIcons ?? []);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDisplayIcons([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [friendId]);
 
   useEffect(() => {
     actionPendingRef.current = initialActionPending;
@@ -634,6 +665,10 @@ export default function ChatInfoScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
+        <View style={[s.section, d.section]}>
+          <UserIconRow icons={displayIcons} compact />
+        </View>
+
         <View style={[s.section, d.section]}>
           <MenuRow icon="create-outline" label={t('chat.setRemark')} onPress={handleOpenRemark} />
           <Divider />

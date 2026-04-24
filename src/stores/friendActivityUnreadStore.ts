@@ -1,5 +1,6 @@
 import { fetchUnreadFriendActivityCount } from '@/services/api/friends';
 import { create } from 'zustand';
+import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 
 type FriendActivityUnreadState = {
   count: number;
@@ -15,6 +16,7 @@ export const useFriendActivityUnreadStore = create<FriendActivityUnreadState>(
       try {
         const count = await fetchUnreadFriendActivityCount();
         set({ count });
+        useTabBadgeStore.getState().setContactsUnread(count);
       } catch {
         return get().count;
       }
@@ -23,13 +25,14 @@ export const useFriendActivityUnreadStore = create<FriendActivityUnreadState>(
     },
     markRead: (activityIds) => {
       const uniqueCount = new Set(activityIds).size;
+      const nextCount = Math.max(0, get().count - uniqueCount);
 
-      set((state) => ({
-        count: Math.max(0, state.count - uniqueCount),
-      }));
+      set({ count: nextCount });
+      useTabBadgeStore.getState().setContactsUnread(nextCount);
     },
     reset: () => {
       set({ count: 0 });
+      useTabBadgeStore.getState().setContactsUnread(0);
     },
   }),
 );

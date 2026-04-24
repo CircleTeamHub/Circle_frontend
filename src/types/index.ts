@@ -65,6 +65,32 @@ export interface MenuItem {
   destructive?: boolean;
 }
 
+export type DisplayIconType = 'SYSTEM' | 'CIRCLE';
+export type SystemIconKey = 'VIP' | 'NEW_USER';
+
+export interface DisplayIcon {
+  id: string;
+  type: DisplayIconType;
+  title: string;
+  imageUrl: string | null;
+  fallbackIconName: string | null;
+  circleId?: string;
+  circleName?: string;
+  systemKey?: SystemIconKey;
+  sortOrder: number;
+}
+
+export interface IconOption {
+  type: DisplayIconType;
+  title: string;
+  imageUrl: string | null;
+  fallbackIconName: string | null;
+  selected: boolean;
+  circleId?: string;
+  circleName?: string;
+  systemKey?: SystemIconKey;
+}
+
 // ---------------------------------------------------------------------------
 // API / Data Model Types
 // ---------------------------------------------------------------------------
@@ -88,6 +114,8 @@ export interface Circle {
   description: string;
   avatarUrl: string | null;
   ownerID: string;
+  currentIconAssetID: string | null;
+  currentIconUrl: string | null;
   cities: string[];
   isPublic: boolean;
   categories: string[];
@@ -173,6 +201,11 @@ export interface CreatePlazaPostInput {
 export interface CircleDetail extends Circle {
   myRole: 'OWNER' | 'ADMIN' | 'MEMBER' | null;
   myStatus: 'ACTIVE' | 'PENDING' | 'REJECTED' | null;
+  availableIconAssets?: Array<{
+    id: string;
+    name: string;
+    imageUrl: string | null;
+  }>;
 }
 
 export interface PaginatedResponse<T> {

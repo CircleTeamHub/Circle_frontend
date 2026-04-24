@@ -139,6 +139,17 @@ test('profile view formats self check, gender, and city for the detail header', 
   );
 });
 
+test('user profile screen renders unified display icons from backend data', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/user/screens/UserProfileScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /displayIcons/);
+  assert.match(source, /UserIconRow/);
+});
+
 test('user profile route helpers preserve scope for the request form', () => {
   const {
     getChatInfoHref,

@@ -453,6 +453,8 @@
     "notBound": "Not set",
     "admin": "Admin",
     "normalUser": "Regular User",
+    "vipLevel": "VIP Level",
+    "reputationValue": "Reputation",
     "share": "Share",
     "settings": "Settings",
     "lightMode": "Light",

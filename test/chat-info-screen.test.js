@@ -52,6 +52,18 @@ test('chat info screen uses real conversation state instead of local placeholder
   assert.doesNotMatch(source, /toggleValue={muteNotifications}/);
 });
 
+test('chat info screen renders compact unified display icons', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatInfoScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /UserIconRow/);
+  assert.match(source, /compact/);
+  assert.match(source, /displayIcons/);
+});
+
 test('chat info screen constrains conversation actions with burn selection, clear confirmation, and pending guards', () => {
   const filePath = path.join(
     process.cwd(),

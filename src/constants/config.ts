@@ -70,6 +70,10 @@ export const OPENIM_WS_URL = trimTrailingSlash(
   process.env.EXPO_PUBLIC_OPENIM_WS_URL ?? getDefaultOpenIMWsUrl()
 );
 
+export const REALTIME_WS_URL = trimTrailingSlash(
+  process.env.EXPO_PUBLIC_REALTIME_WS_URL ?? `ws://${getDefaultHost()}:${API_PORT}/realtime`,
+);
+
 // OpenIM SDK 日志级别：0=关闭 1=fatal 2=error 3=warn 4=info 5=debug
 // 默认 3（warn），开发时可在 .env.local 中设置 EXPO_PUBLIC_OPENIM_LOG_LEVEL=5 开启详细日志
 export const OPENIM_LOG_LEVEL = Number(

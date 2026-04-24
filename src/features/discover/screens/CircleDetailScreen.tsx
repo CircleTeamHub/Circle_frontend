@@ -21,7 +21,17 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { Divider } from '@/components/ui/divider';
 import { MenuRow } from '@/components/ui/menu-row';
 import { Avatar } from '@/components/ui/avatar';
-import { fetchCircleDetail } from '@/services/api/circles';
+import {
+  fetchCircleDetail,
+  selectCircleIcon,
+  uploadCircleIcon,
+} from '@/services/api/circles';
+import {
+  requestUploadPresign,
+  resolveUploadContentType,
+  sanitizeUploadFilename,
+  uploadLocalFileToPresignedUrl,
+} from '@/services/api/upload';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import { useAuthStore } from '@/stores/authStore';
 import type { CircleDetail } from '@/types';
@@ -131,6 +141,34 @@ const s = StyleSheet.create({
     marginTop: Spacing.xl,
     gap: Spacing.md,
   },
+  iconSection: {
+    gap: Spacing.sm,
+  },
+  iconGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  iconAssetCard: {
+    width: 88,
+    borderRadius: Radius.lg,
+    padding: Spacing.sm,
+    gap: Spacing.xs,
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  iconAssetPreview: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconAssetImage: {
+    width: '100%',
+    height: '100%',
+  },
   actionBtn: {
     height: 48,
     borderRadius: 24,
@@ -159,6 +197,7 @@ export default function CircleDetailScreen() {
 
   const [circle, setCircle] = useState<CircleDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [iconSaving, setIconSaving] = useState(false);
 
   const loadCircle = useCallback(async () => {
     if (!id) return;
@@ -178,6 +217,77 @@ export default function CircleDetailScreen() {
 
   const isOwnerOrAdmin =
     circle?.myRole === 'OWNER' || circle?.myRole === 'ADMIN';
+
+  const handleSelectCircleIcon = useCallback(
+    async (iconAssetId: string) => {
+      if (!id || !isOwnerOrAdmin || iconSaving) {
+        return;
+      }
+
+      try {
+        setIconSaving(true);
+        await selectCircleIcon(id, iconAssetId);
+        await loadCircle();
+      } catch (error) {
+        Alert.alert(
+          t('circle.error'),
+          error instanceof Error ? error.message : t('circle.loadError'),
+        );
+      } finally {
+        setIconSaving(false);
+      }
+    },
+    [iconSaving, id, isOwnerOrAdmin, loadCircle, t],
+  );
+
+  const handleUploadCircleIcon = useCallback(async () => {
+    if (!id || !isOwnerOrAdmin || iconSaving) {
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.8,
+    });
+
+    if (result.canceled || !result.assets.length) {
+      return;
+    }
+
+    const asset = result.assets[0];
+    const contentType = resolveUploadContentType({
+      mimeType: asset.mimeType,
+      fileName: asset.fileName,
+    });
+
+    if (!contentType || !asset.uri) {
+      Alert.alert(t('circle.error'), '无法识别图片格式');
+      return;
+    }
+
+    try {
+      setIconSaving(true);
+      const presign = await requestUploadPresign({
+        filename: sanitizeUploadFilename(asset.fileName ?? 'circle-icon.jpg'),
+        contentType,
+        folder: 'avatars',
+      });
+      await uploadLocalFileToPresignedUrl(presign.uploadUrl, contentType, asset.uri);
+      const created = await uploadCircleIcon(id, {
+        imageUrl: presign.fileUrl,
+        name: circle?.name ? `${circle.name}-icon` : 'circle-icon',
+      });
+      await selectCircleIcon(id, created.id);
+      await loadCircle();
+    } catch (error) {
+      Alert.alert(
+        t('circle.error'),
+        error instanceof Error ? error.message : t('circle.loadError'),
+      );
+    } finally {
+      setIconSaving(false);
+    }
+  }, [circle?.name, iconSaving, id, isOwnerOrAdmin, loadCircle, t]);
 
   const d = useMemo(
     () => ({
@@ -201,6 +311,14 @@ export default function CircleDetailScreen() {
       adminBtnText: { color: colors.text },
       dangerBtn: { backgroundColor: colors.error },
       dangerBtnText: { color: colors.white },
+      iconAssetCard: {
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
+      },
+      iconAssetCardSelected: {
+        backgroundColor: colors.primaryLight,
+        borderColor: colors.primary,
+      },
     }),
     [colors],
   );
@@ -289,6 +407,66 @@ export default function CircleDetailScreen() {
               <Text style={[s.statValue, d.statValue]}>{circle.postCount}</Text>
               <Text style={[s.statLabel, d.statLabel]}>{t('circle.posts')}</Text>
             </View>
+          </View>
+        </View>
+
+        <View style={s.section}>
+          <Text style={[s.sectionTitle, d.sectionTitle]}>圈子图标</Text>
+          <View style={[s.sectionCard, d.sectionCard, s.iconSection]}>
+            <View style={s.iconGrid}>
+              {circle.currentIconUrl ? (
+                <View style={[s.iconAssetCard, d.iconAssetCard]}>
+                  <View style={s.iconAssetPreview}>
+                    <Image source={{ uri: circle.currentIconUrl }} style={s.iconAssetImage} contentFit="cover" />
+                  </View>
+                  <Text style={{ color: colors.text }}>当前图标</Text>
+                </View>
+              ) : null}
+              {isOwnerOrAdmin
+                ? circle.availableIconAssets?.map((asset) => {
+                    const selected = asset.id === circle.currentIconAssetID;
+                    return (
+                      <Pressable
+                        key={asset.id}
+                        style={[
+                          s.iconAssetCard,
+                          d.iconAssetCard,
+                          selected ? d.iconAssetCardSelected : null,
+                        ]}
+                        onPress={() => handleSelectCircleIcon(asset.id)}
+                      >
+                        <View style={s.iconAssetPreview}>
+                          {asset.imageUrl ? (
+                            <Image
+                              source={{ uri: asset.imageUrl }}
+                              style={s.iconAssetImage}
+                              contentFit="cover"
+                            />
+                          ) : (
+                            <Ionicons
+                              name="sparkles-outline"
+                              size={22}
+                              color={colors.textSecondary}
+                            />
+                          )}
+                        </View>
+                        <Text style={{ color: colors.text }} numberOfLines={1}>
+                          {asset.name}
+                        </Text>
+                      </Pressable>
+                    );
+                  })
+                : null}
+            </View>
+            {isOwnerOrAdmin ? (
+              <Pressable
+                style={[s.actionBtn, d.adminBtn]}
+                onPress={handleUploadCircleIcon}
+                disabled={iconSaving}
+              >
+                <Text style={d.adminBtnText}>{iconSaving ? '上传中...' : '上传圈子图标'}</Text>
+              </Pressable>
+            ) : null}
           </View>
         </View>
 
