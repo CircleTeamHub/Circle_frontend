@@ -51,6 +51,19 @@ test('NotesScreen supports group management and multi-group filtering', () => {
   assert.match(src, /Animated\.Value|new Animated\.Value/);
 });
 
+test('NotesScreen lets a group directly choose which notes belong to it', () => {
+  const src = read('src/features/notes/screens/NotesScreen.tsx');
+  assert.match(src, /editingMembershipGroup/);
+  assert.match(src, /openGroupMembershipEditor/);
+  assert.match(src, /toggleMembershipNote/);
+  assert.match(src, /handleSaveGroupMemberships/);
+  assert.match(src, /选择笔记/);
+  assert.match(src, /保存选择/);
+  assert.match(src, /fetchNoteDetail/);
+  assert.match(src, /updateNote/);
+  assert.match(src, /groupIds:\s*nextGroupIds/);
+});
+
 test('NotesScreen keeps group management action fixed beside the scrollable tabs', () => {
   const src = read('src/features/notes/screens/NotesScreen.tsx');
   assert.match(src, /<View style=\{s\.tabsRow\}>/);

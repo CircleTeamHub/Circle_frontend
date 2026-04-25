@@ -20,10 +20,12 @@ import type { NoteGroup, NoteSummary } from '@/features/notes/types';
 import {
   createNoteGroup,
   deleteNoteGroup,
+  fetchNoteDetail,
   fetchNoteGroups,
   fetchNotes,
   reorderNoteGroups,
   togglePinNote,
+  updateNote,
   updateNoteGroup,
 } from '@/services/api/notes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -46,6 +48,10 @@ export default function NotesScreen() {
   const [draftGroupName, setDraftGroupName] = useState('');
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [savingGroup, setSavingGroup] = useState(false);
+  const [editingMembershipGroup, setEditingMembershipGroup] =
+    useState<NoteGroup | null>(null);
+  const [membershipNoteIds, setMembershipNoteIds] = useState<string[]>([]);
+  const [savingMemberships, setSavingMemberships] = useState(false);
   const [draggingGroupId, setDraggingGroupId] = useState<string | null>(null);
   const [dragPreviewGroups, setDragPreviewGroups] = useState<NoteGroup[] | null>(null);
   const dragY = useRef(new Animated.Value(0)).current;
@@ -138,10 +144,17 @@ export default function NotesScreen() {
     setSavingGroup(false);
   }, []);
 
+  const resetGroupMembershipEditor = useCallback(() => {
+    setEditingMembershipGroup(null);
+    setMembershipNoteIds([]);
+    setSavingMemberships(false);
+  }, []);
+
   const closeManager = useCallback(() => {
     resetGroupDraft();
+    resetGroupMembershipEditor();
     setManagerVisible(false);
-  }, [resetGroupDraft]);
+  }, [resetGroupDraft, resetGroupMembershipEditor]);
 
   const handlePin = useCallback(async (note: NoteSummary) => {
     await togglePinNote(note.id, !note.pinned);
@@ -179,6 +192,88 @@ export default function NotesScreen() {
     }
     void handleSaveGroup();
   }, [draftGroupName, handleSaveGroup]);
+
+  const openGroupMembershipEditor = useCallback(
+    (group: NoteGroup) => {
+      setEditingMembershipGroup(group);
+      setMembershipNoteIds(
+        notes
+          .filter((note) => note.groups.some((item) => item.id === group.id))
+          .map((note) => note.id),
+      );
+    },
+    [notes],
+  );
+
+  const selectedMembershipNoteIds = useMemo(
+    () => new Set(membershipNoteIds),
+    [membershipNoteIds],
+  );
+
+  const toggleMembershipNote = useCallback((noteId: string) => {
+    setMembershipNoteIds((prev) =>
+      prev.includes(noteId)
+        ? prev.filter((id) => id !== noteId)
+        : [...prev, noteId],
+    );
+  }, []);
+
+  const handleSaveGroupMemberships = useCallback(async () => {
+    const group = editingMembershipGroup;
+    if (!group || savingMemberships) return;
+
+    setSavingMemberships(true);
+    const selectedNoteIds = new Set(membershipNoteIds);
+    const changedNotes = notes.filter((note) => {
+      const currentlySelected = note.groups.some((item) => item.id === group.id);
+      return currentlySelected !== selectedNoteIds.has(note.id);
+    });
+
+    try {
+      await Promise.all(
+        changedNotes.map(async (note) => {
+          const detail = await fetchNoteDetail(note.id);
+          const currentGroupIds = detail.groups.map((item) => item.id);
+          const nextGroupIds = selectedNoteIds.has(note.id)
+            ? [...new Set([...currentGroupIds, group.id])]
+            : currentGroupIds.filter((id) => id !== group.id);
+
+          await updateNote(note.id, {
+            title: detail.title,
+            content: detail.content ?? undefined,
+            contentJson: detail.contentJson ?? undefined,
+            groupIds: nextGroupIds,
+            status: detail.status === 'UNLISTED' ? 'UNLISTED' : 'ACTIVE',
+            pinned: detail.pinned,
+            media: detail.media.map((item) => ({
+              type: item.type,
+              objectKey: item.objectKey,
+              url: item.url,
+              mimeType: item.mimeType ?? undefined,
+              size: item.size ?? undefined,
+              width: item.width ?? undefined,
+              height: item.height ?? undefined,
+              durationMs: item.durationMs ?? undefined,
+              posterUrl: item.posterUrl ?? undefined,
+              sortOrder: item.sortOrder,
+            })),
+          });
+        }),
+      );
+      resetGroupMembershipEditor();
+      await load();
+    } catch {
+      setSavingMemberships(false);
+      Alert.alert('保存失败', '笔记分组保存失败，请稍后再试。');
+    }
+  }, [
+    editingMembershipGroup,
+    load,
+    membershipNoteIds,
+    notes,
+    resetGroupMembershipEditor,
+    savingMemberships,
+  ]);
 
   const handleDeleteGroup = useCallback(
     (group: NoteGroup) => {
@@ -337,6 +432,7 @@ export default function NotesScreen() {
       modalActionText: { color: colors.textSecondary },
       saveBtn: { backgroundColor: colors.primary },
       saveBtnText: { color: colors.white },
+      membershipRowSelected: { borderColor: colors.primary },
     }),
     [colors, showUnlisted],
   );
@@ -465,101 +561,173 @@ export default function NotesScreen() {
         <View style={[s.modalOverlay, d.modalOverlay]} pointerEvents="box-none">
           <Pressable style={s.modalBackdrop} onPress={closeManager} />
           <View style={[s.modalCard, d.modalCard]}>
-            <Text style={[s.modalTitle, d.modalTitle]}>管理分组</Text>
-            <Text style={[s.modalCopy, d.modalCopy]}>
-              “全部”和“未分组”固定在前面，常用自定义分组可以排在前面。
-            </Text>
-            <ScrollView
-              style={s.modalList}
-              contentContainerStyle={s.modalListContent}
-              scrollEnabled={!draggingGroupId}
-            >
-              {displayGroups.map((group, index) => {
-                const isDragging = draggingGroupId === group.id;
-                return (
-                <Animated.View
-                  key={group.id}
-                  style={[
-                    s.groupRow,
-                    d.groupRow,
-                    isDragging
-                      ? {
-                          transform: [{ translateY: dragY }],
-                          zIndex: 2,
-                          opacity: 0.98,
-                        }
-                      : draggingGroupId
-                        ? s.groupRowDimmed
-                        : null,
-                  ]}
-                >
-                  <View style={s.groupRowLeft}>
-                    <View
-                      {...getDragResponder(group.id).panHandlers}
-                      style={s.dragHandleWrap}
-                    >
-                      <View style={s.dragHandle}>
-                        <Ionicons
-                          name="reorder-three-outline"
-                          size={18}
-                          color={colors.textSecondary}
-                        />
-                      </View>
-                    </View>
-                    <View style={s.groupRowText}>
-                      <Text style={[s.groupName, d.groupName]}>{group.name}</Text>
-                      <Text style={[s.groupCount, d.groupCount]}>
-                        {group.noteCount} 条笔记
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={s.groupRowActions}>
-                    <Pressable
-                      hitSlop={8}
-                      onPress={() => {
-                        setEditingGroupId(group.id);
-                        setDraftGroupName(group.name);
-                      }}
-                    >
-                      <Ionicons name="create-outline" size={18} color={colors.textSecondary} />
-                    </Pressable>
-                    <Pressable hitSlop={8} onPress={() => handleDeleteGroup(group)}>
-                      <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
-                    </Pressable>
-                  </View>
-                </Animated.View>
-              )})}
-            </ScrollView>
-            <View style={s.modalEditor}>
-              <TextInput
-                ref={groupNameInputRef}
-                style={[s.modalInput, d.modalInput]}
-                placeholder="输入分组名，如上海"
-                placeholderTextColor={colors.textSecondary}
-                value={draftGroupName}
-                onChangeText={setDraftGroupName}
-                returnKeyType="done"
-                onSubmitEditing={handleSubmitGroupPress}
-              />
-              <View style={s.modalButtons}>
-                {editingGroupId ? (
-                  <Pressable onPress={resetGroupDraft}>
-                    <Text style={[s.modalActionText, d.modalActionText]}>取消编辑</Text>
+            {editingMembershipGroup ? (
+              <>
+                <View style={s.membershipHeader}>
+                  <Pressable onPress={resetGroupMembershipEditor} hitSlop={8}>
+                    <Ionicons name="chevron-back" size={22} color={colors.text} />
                   </Pressable>
-                ) : (
-                  <View />
-                )}
-                <Pressable
-                  style={[s.saveBtn, d.saveBtn, savingGroup ? s.saveBtnDisabled : null]}
-                  onPress={handleSubmitGroupPress}
-                  disabled={savingGroup}
+                  <Text style={[s.modalTitle, d.modalTitle]}>选择笔记</Text>
+                </View>
+                <Text style={[s.modalCopy, d.modalCopy]}>
+                  为“{editingMembershipGroup.name}”选择要加入的笔记。
+                </Text>
+                <ScrollView style={s.modalList} contentContainerStyle={s.modalListContent}>
+                  {notes.map((note) => {
+                    const selected = selectedMembershipNoteIds.has(note.id);
+                    return (
+                      <Pressable
+                        key={note.id}
+                        style={[
+                          s.membershipRow,
+                          d.groupRow,
+                          selected ? [s.membershipRowSelected, d.membershipRowSelected] : null,
+                        ]}
+                        onPress={() => toggleMembershipNote(note.id)}
+                      >
+                        <View style={s.membershipText}>
+                          <Text style={[s.groupName, d.groupName]} numberOfLines={1}>
+                            {note.title}
+                          </Text>
+                          {note.contentPreview ? (
+                            <Text style={[s.groupCount, d.groupCount]} numberOfLines={1}>
+                              {note.contentPreview}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <Ionicons
+                          name={selected ? 'checkmark-circle' : 'ellipse-outline'}
+                          size={22}
+                          color={selected ? colors.primary : colors.textSecondary}
+                        />
+                      </Pressable>
+                    );
+                  })}
+                  {notes.length === 0 ? (
+                    <Text style={[s.emptyText, d.statsText]}>暂无可选择的笔记</Text>
+                  ) : null}
+                </ScrollView>
+                <View style={s.modalButtons}>
+                  <Pressable onPress={resetGroupMembershipEditor}>
+                    <Text style={[s.modalActionText, d.modalActionText]}>返回</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[
+                      s.saveBtn,
+                      d.saveBtn,
+                      savingMemberships ? s.saveBtnDisabled : null,
+                    ]}
+                    onPress={() => void handleSaveGroupMemberships()}
+                    disabled={savingMemberships}
+                  >
+                    <Text style={[s.saveBtnText, d.saveBtnText]}>
+                      {savingMemberships ? '保存中...' : '保存选择'}
+                    </Text>
+                  </Pressable>
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={[s.modalTitle, d.modalTitle]}>管理分组</Text>
+                <Text style={[s.modalCopy, d.modalCopy]}>
+                  “全部”和“未分组”固定在前面，常用自定义分组可以排在前面。
+                </Text>
+                <ScrollView
+                  style={s.modalList}
+                  contentContainerStyle={s.modalListContent}
+                  scrollEnabled={!draggingGroupId}
                 >
-                  <Text style={[s.saveBtnText, d.saveBtnText]}>
-                    {savingGroup ? '保存中...' : editingGroupId ? '保存修改' : '新增分组'}
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
+                  {displayGroups.map((group, index) => {
+                    const isDragging = draggingGroupId === group.id;
+                    return (
+                    <Animated.View
+                      key={group.id}
+                      style={[
+                        s.groupRow,
+                        d.groupRow,
+                        isDragging
+                          ? {
+                              transform: [{ translateY: dragY }],
+                              zIndex: 2,
+                              opacity: 0.98,
+                            }
+                          : draggingGroupId
+                            ? s.groupRowDimmed
+                            : null,
+                      ]}
+                    >
+                      <View style={s.groupRowLeft}>
+                        <View
+                          {...getDragResponder(group.id).panHandlers}
+                          style={s.dragHandleWrap}
+                        >
+                          <View style={s.dragHandle}>
+                            <Ionicons
+                              name="reorder-three-outline"
+                              size={18}
+                              color={colors.textSecondary}
+                            />
+                          </View>
+                        </View>
+                        <View style={s.groupRowText}>
+                          <Text style={[s.groupName, d.groupName]}>{group.name}</Text>
+                          <Text style={[s.groupCount, d.groupCount]}>
+                            {group.noteCount} 条笔记
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={s.groupRowActions}>
+                        <Pressable hitSlop={8} onPress={() => openGroupMembershipEditor(group)}>
+                          <Ionicons name="list-outline" size={18} color={colors.textSecondary} />
+                        </Pressable>
+                        <Pressable
+                          hitSlop={8}
+                          onPress={() => {
+                            setEditingGroupId(group.id);
+                            setDraftGroupName(group.name);
+                          }}
+                        >
+                          <Ionicons name="create-outline" size={18} color={colors.textSecondary} />
+                        </Pressable>
+                        <Pressable hitSlop={8} onPress={() => handleDeleteGroup(group)}>
+                          <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
+                        </Pressable>
+                      </View>
+                    </Animated.View>
+                  )})}
+                </ScrollView>
+                <View style={s.modalEditor}>
+                  <TextInput
+                    ref={groupNameInputRef}
+                    style={[s.modalInput, d.modalInput]}
+                    placeholder="输入分组名，如上海"
+                    placeholderTextColor={colors.textSecondary}
+                    value={draftGroupName}
+                    onChangeText={setDraftGroupName}
+                    returnKeyType="done"
+                    onSubmitEditing={handleSubmitGroupPress}
+                  />
+                  <View style={s.modalButtons}>
+                    {editingGroupId ? (
+                      <Pressable onPress={resetGroupDraft}>
+                        <Text style={[s.modalActionText, d.modalActionText]}>取消编辑</Text>
+                      </Pressable>
+                    ) : (
+                      <View />
+                    )}
+                    <Pressable
+                      style={[s.saveBtn, d.saveBtn, savingGroup ? s.saveBtnDisabled : null]}
+                      onPress={handleSubmitGroupPress}
+                      disabled={savingGroup}
+                    >
+                      <Text style={[s.saveBtnText, d.saveBtnText]}>
+                        {savingGroup ? '保存中...' : editingGroupId ? '保存修改' : '新增分组'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -666,6 +834,25 @@ const s = StyleSheet.create({
   modalCopy: { ...Typography.small },
   modalList: { maxHeight: 320 },
   modalListContent: { gap: Spacing.sm },
+  membershipHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  membershipRow: {
+    minHeight: 56,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.sm,
+  },
+  membershipRowSelected: {
+    borderWidth: 1,
+  },
+  membershipText: { flex: 1 },
   groupRow: {
     height: GROUP_ROW_HEIGHT,
     borderRadius: Radius.md,
