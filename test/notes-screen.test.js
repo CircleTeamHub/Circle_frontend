@@ -50,6 +50,14 @@ test('NotesScreen keeps group management sheet interactions inside a non-pressab
   assert.doesNotMatch(src, /<Pressable style=\{\[s\.modalCard, d\.modalCard\]\}/);
 });
 
+test('NotesScreen keeps the group manager backdrop behind the editor controls', () => {
+  const src = read('src/features/notes/screens/NotesScreen.tsx');
+  assert.match(src, /<View style=\{\[s\.modalOverlay, d\.modalOverlay\]\} pointerEvents="box-none">/);
+  assert.match(src, /modalBackdrop:\s*{[\s\S]*zIndex:\s*0/);
+  assert.match(src, /modalCard:\s*{[\s\S]*zIndex:\s*1/);
+  assert.match(src, /modalCard:\s*{[\s\S]*elevation:\s*1/);
+});
+
 test('NotesScreen binds drag responder directly to each custom group handle', () => {
   const src = read('src/features/notes/screens/NotesScreen.tsx');
   assert.match(src, /createDragResponder/);

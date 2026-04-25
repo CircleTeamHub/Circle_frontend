@@ -431,7 +431,7 @@ export default function NotesScreen() {
         animationType="fade"
         onRequestClose={closeManager}
       >
-        <View style={[s.modalOverlay, d.modalOverlay]}>
+        <View style={[s.modalOverlay, d.modalOverlay]} pointerEvents="box-none">
           <Pressable style={s.modalBackdrop} onPress={closeManager} />
           <View style={[s.modalCard, d.modalCard]}>
             <Text style={[s.modalTitle, d.modalTitle]}>管理分组</Text>
@@ -607,11 +607,14 @@ const s = StyleSheet.create({
   },
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
   },
   modalCard: {
     borderRadius: Radius.lg,
     padding: Spacing.lg,
     gap: Spacing.md,
+    zIndex: 1,
+    elevation: 1,
   },
   modalTitle: { ...Typography.h3, fontWeight: '700' },
   modalCopy: { ...Typography.small },
