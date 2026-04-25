@@ -38,14 +38,34 @@ function loadTsModule(relativePath, stubs = {}) {
   return context.module.exports;
 }
 
+const i18nStub = {
+  default: {
+    t: (key, params) => {
+      const name = params?.name ?? '';
+      const translations = {
+        'contacts.friendActivity.copy.requestReceived': `${name} 请求添加你为好友`,
+        'contacts.friendActivity.copy.requestSent': `你已向 ${name} 发送好友申请`,
+        'contacts.friendActivity.copy.requestAcceptedByOther': `${name} 通过了你的好友申请`,
+        'contacts.friendActivity.copy.requestRejectedByOther': `${name} 拒绝了你的好友申请`,
+        'contacts.friendActivity.copy.requestAcceptedByMe': `你已通过 ${name} 的好友申请`,
+        'contacts.friendActivity.copy.requestRejectedByMe': `你已拒绝 ${name} 的好友申请`,
+        'contacts.friendActivity.copy.requestWithdrawnByOther': `${name} 撤回了好友申请`,
+        'contacts.friendActivity.copy.default': `${name} 的好友动态`,
+      };
+
+      return translations[key] ?? key;
+    },
+  },
+};
+
 test('friend activity copy maps event types to inbox text and groups inbox rows by counterparty', () => {
   const {
     getFriendActivityCopy,
     hasUnreadFriendActivities,
     buildFriendActivityInboxRows,
-  } = loadTsModule(
-    'src/features/contacts/friend-activities.ts',
-  );
+  } = loadTsModule('src/features/contacts/friend-activities.ts', {
+    '@/i18n': i18nStub,
+  });
 
   assert.match(
     getFriendActivityCopy({

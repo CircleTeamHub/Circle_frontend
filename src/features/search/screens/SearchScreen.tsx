@@ -100,7 +100,9 @@ export default function SearchScreen() {
   const [query, setQuery] = useState('');
 
   const currentScope: UserProfileScope = useMemo(() => {
-    const scope = segments[1];
+    const scope = segments.find(
+      (segment) => segment === 'contacts' || segment === 'profile',
+    );
 
     if (scope === 'contacts') {
       return 'contacts';

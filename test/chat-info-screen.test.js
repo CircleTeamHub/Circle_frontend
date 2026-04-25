@@ -59,23 +59,22 @@ test('chat info screen constrains conversation actions with burn selection, clea
   );
   const source = fs.readFileSync(filePath, 'utf8');
 
-  assert.match(source, /const BURN_DURATION_OPTIONS = \[/);
-  assert.match(source, /label: '关闭', duration: 0/);
-  assert.match(source, /label: '10秒', duration: 10/);
-  assert.match(source, /label: '1分钟', duration: 60/);
-  assert.match(source, /label: '5分钟', duration: 300/);
-  assert.match(source, /const PENDING_TEXT = '处理中';/);
+  assert.match(source, /const burnDurationOptions = useMemo/);
+  assert.match(source, /label: t\('chat\.burnOff'\), duration: 0/);
+  assert.match(source, /label: t\('chat\.burn10s'\), duration: 10/);
+  assert.match(source, /label: t\('chat\.burn1m'\), duration: 60/);
+  assert.match(source, /label: t\('chat\.burn5m'\), duration: 300/);
   assert.match(source, /pin: false,\s*mute: false,\s*burn: false,\s*clear: false/s);
-  assert.match(source, /Alert\.alert\(\s*'好友消息自毁',\s*'选择消息自毁时间'/s);
-  assert.match(source, /Alert\.alert\(\s*'清空聊天记录',\s*'清空后将删除当前会话的聊天记录，且无法恢复。'/s);
-  assert.match(source, /actionPending\.pin \? undefined : handleTogglePinned/);
-  assert.match(source, /actionPending\.mute \? undefined : handleToggleMuted/);
+  assert.match(source, /Alert\.alert\(\s*t\('chat\.burnMessage'\),\s*t\('chat\.selectBurnTime'\)/s);
+  assert.match(source, /Alert\.alert\(\s*t\('chat\.clearHistory'\),\s*t\('chat\.clearHistoryWarning'\)/s);
+  assert.match(source, /onToggle={actionPending\.pin \? undefined : handleTogglePinned}/);
+  assert.match(source, /onToggle={actionPending\.mute \? undefined : handleToggleMuted}/);
   assert.match(source, /actionPending\.burn \? undefined : handleOpenBurnDurationPicker/);
   assert.match(source, /actionPending\.clear \? undefined : handleConfirmClearHistory/);
   assert.match(source, /hasToggle={!actionPending\.pin}/);
   assert.match(source, /hasToggle={!actionPending\.mute}/);
-  assert.match(source, /rightText={actionPending\.burn \? PENDING_TEXT : burnLabel}/);
-  assert.match(source, /rightText={actionPending\.clear \? PENDING_TEXT : undefined}/);
+  assert.match(source, /rightText={actionPending\.burn \? t\('chat\.pending'\) : burnLabel}/);
+  assert.match(source, /rightText={actionPending\.clear \? t\('chat\.pending'\) : undefined}/);
 });
 
 test('chat info screen reconciles optimistic conversation state after live updates catch up', () => {
@@ -179,7 +178,7 @@ test('chat info screen wires chat background selection into the new route and la
   assert.match(source, /useChatPreferencesStore/);
   assert.match(source, /backgroundLabel/);
   assert.match(source, /handleOpenChatBackground/);
-  assert.match(source, /label="聊天背景"/);
+  assert.match(source, /label={t\('chat\.chatBackground'\)}/);
   assert.match(source, /rightText={backgroundLabel}/);
   assert.match(source, /onPress={handleOpenChatBackground}/);
 });
@@ -194,7 +193,7 @@ test('chat info screen wires recommend-friend navigation from the friend recomme
   assert.match(source, /getRecommendFriendHref/);
   assert.match(source, /const handleOpenRecommendFriend = useCallback/);
   assert.match(source, /router\.push\(\s*getRecommendFriendHref\(/);
-  assert.match(source, /label="把他推荐给朋友"/);
+  assert.match(source, /label={t\('chat\.recommendFriend'\)}/);
   assert.match(source, /onPress={handleOpenRecommendFriend}/);
   assert.doesNotMatch(source, /openUnsupportedAction\('把他推荐给朋友'\)/);
 });
@@ -216,7 +215,7 @@ test('chat info screen wires search-history navigation from the new row', () => 
   assert.match(source, /const nextConversationID = await resolveConversationIDForNavigation\(\);/);
   assert.match(source, /if \(!nextConversationID\) \{\s*return;\s*\}/s);
   assert.match(source, /router\.push\(\s*getChatHistorySearchHubHref\(/);
-  assert.match(source, /label="查找聊天记录"/);
+  assert.match(source, /label={t\('chat\.searchHistory'\)}/);
   assert.match(source, /onPress={handleOpenSearchHistory}/);
 });
 

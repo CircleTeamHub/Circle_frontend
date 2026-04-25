@@ -93,7 +93,7 @@ test('friend remark and tag editor screens load settings and save through real A
   assert.match(tagSource, /assignFriendTag/);
   assert.match(tagSource, /removeFriendTag/);
   assert.match(tagSource, /router\.back\(\)/);
-  assert.match(tagSource, /新建标签/);
+  assert.match(tagSource, /t\('userProfile\.editTags\.newTagPlaceholder'\)/);
 
   assert.match(contactsRemarkRoute, /EditFriendRemarkScreen/);
   assert.match(contactsTagsRoute, /EditFriendTagsScreen/);
