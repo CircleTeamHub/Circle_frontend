@@ -31,6 +31,13 @@ test('NotesScreen fetches notes and groups', () => {
   assert.match(src, /fetchNoteGroups/);
 });
 
+test('NotesScreen refreshes notes and groups when returning from note edits', () => {
+  const src = read('src/features/notes/screens/NotesScreen.tsx');
+  assert.match(src, /useFocusEffect/);
+  assert.match(src, /void load\(\)/);
+  assert.doesNotMatch(src, /useEffect\(\(\) => \{\s*let cancelled = false;[\s\S]*load\(\)\.catch/);
+});
+
 test('NotesScreen supports group management and multi-group filtering', () => {
   const src = read('src/features/notes/screens/NotesScreen.tsx');
   assert.match(src, /管理|ellipsis-horizontal/);

@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -71,16 +71,14 @@ export default function NotesScreen() {
     setLoading(false);
   }, [showUnlisted]);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    load().catch(() => {
-      if (!cancelled) setLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      void load().catch(() => {
+        setLoading(false);
+      });
+    }, [load]),
+  );
 
   useEffect(() => {
     groupsRef.current = groups;
