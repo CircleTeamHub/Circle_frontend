@@ -58,6 +58,15 @@ test('NotesScreen keeps the group manager backdrop behind the editor controls', 
   assert.match(src, /modalCard:\s*{[\s\S]*elevation:\s*1/);
 });
 
+test('NotesScreen keeps the add group button pressable and focuses the input for empty names', () => {
+  const src = read('src/features/notes/screens/NotesScreen.tsx');
+  assert.match(src, /groupNameInputRef/);
+  assert.match(src, /handleSubmitGroupPress/);
+  assert.match(src, /onPress=\{handleSubmitGroupPress\}/);
+  assert.match(src, /disabled=\{savingGroup\}/);
+  assert.doesNotMatch(src, /disabled=\{savingGroup \|\| !draftGroupName\.trim\(\)\}/);
+});
+
 test('NotesScreen binds drag responder directly to each custom group handle', () => {
   const src = read('src/features/notes/screens/NotesScreen.tsx');
   assert.match(src, /createDragResponder/);

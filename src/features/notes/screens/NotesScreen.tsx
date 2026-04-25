@@ -51,6 +51,7 @@ export default function NotesScreen() {
   const dragY = useRef(new Animated.Value(0)).current;
   const groupsRef = useRef<NoteGroup[]>([]);
   const dragPreviewGroupsRef = useRef<NoteGroup[] | null>(null);
+  const groupNameInputRef = useRef<TextInput>(null);
   const dragMetaRef = useRef<{
     groupId: string;
     startIndex: number;
@@ -163,6 +164,15 @@ export default function NotesScreen() {
       Alert.alert('保存失败', '分组保存失败，请稍后再试。');
     }
   }, [draftGroupName, editingGroupId, resetGroupDraft, savingGroup]);
+
+  const handleSubmitGroupPress = useCallback(() => {
+    if (!draftGroupName.trim()) {
+      groupNameInputRef.current?.focus();
+      Alert.alert('请输入分组名', '填写分组名称后再新增分组。');
+      return;
+    }
+    void handleSaveGroup();
+  }, [draftGroupName, handleSaveGroup]);
 
   const handleDeleteGroup = useCallback(
     (group: NoteGroup) => {
@@ -497,13 +507,14 @@ export default function NotesScreen() {
             </ScrollView>
             <View style={s.modalEditor}>
               <TextInput
+                ref={groupNameInputRef}
                 style={[s.modalInput, d.modalInput]}
                 placeholder="输入分组名，如上海"
                 placeholderTextColor={colors.textSecondary}
                 value={draftGroupName}
                 onChangeText={setDraftGroupName}
                 returnKeyType="done"
-                onSubmitEditing={() => void handleSaveGroup()}
+                onSubmitEditing={handleSubmitGroupPress}
               />
               <View style={s.modalButtons}>
                 {editingGroupId ? (
@@ -514,12 +525,12 @@ export default function NotesScreen() {
                   <View />
                 )}
                 <Pressable
-                  style={[s.saveBtn, d.saveBtn]}
-                  onPress={() => void handleSaveGroup()}
-                  disabled={savingGroup || !draftGroupName.trim()}
+                  style={[s.saveBtn, d.saveBtn, savingGroup ? s.saveBtnDisabled : null]}
+                  onPress={handleSubmitGroupPress}
+                  disabled={savingGroup}
                 >
                   <Text style={[s.saveBtnText, d.saveBtnText]}>
-                    {editingGroupId ? '保存修改' : '新增分组'}
+                    {savingGroup ? '保存中...' : editingGroupId ? '保存修改' : '新增分组'}
                   </Text>
                 </Pressable>
               </View>
@@ -673,6 +684,9 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     borderRadius: Radius.pill,
+  },
+  saveBtnDisabled: {
+    opacity: 0.6,
   },
   saveBtnText: { ...Typography.bodyRegular, fontWeight: '600' },
 });
