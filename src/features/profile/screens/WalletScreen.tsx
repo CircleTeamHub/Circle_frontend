@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
+import { useNetworkStatus } from '@/hooks/use-network-status';
 import { fetchWallet, rechargePoints } from '@/services/api/coin';
 import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -73,6 +74,7 @@ const s = StyleSheet.create({
 export default function WalletScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { isOffline } = useNetworkStatus();
   const [balance, setBalance] = useState(0);
   const [loadingWallet, setLoadingWallet] = useState(true);
   const [walletError, setWalletError] = useState<string | null>(null);
@@ -118,10 +120,7 @@ export default function WalletScreen() {
     }
   }, [realtimeBalance, walletVersion]);
 
-  async function handleRecharge() {
-    if (recharging) {
-      return;
-    }
+  const performRecharge = useCallback(async () => {
     setRecharging(true);
     setWalletError(null);
     setWalletStatus(null);
@@ -134,7 +133,22 @@ export default function WalletScreen() {
     } finally {
       setRecharging(false);
     }
-  }
+  }, [selectedPoints]);
+
+  const handleRecharge = useCallback(() => {
+    if (recharging) {
+      return;
+    }
+    const pkg = RECHARGE_PACKAGES.find((p) => p.points === selectedPoints);
+    Alert.alert(
+      '确认充值',
+      `确定要充值 ${selectedPoints} 积分（${pkg?.price ?? ''}）吗？`,
+      [
+        { text: '取消', style: 'cancel' },
+        { text: '确认充值', onPress: performRecharge },
+      ],
+    );
+  }, [performRecharge, recharging, selectedPoints]);
 
   const d = useMemo(
     () => ({
@@ -232,6 +246,7 @@ export default function WalletScreen() {
     <View style={d.container}>
       <NavHeader title="我的钱包" rightIcon="card-outline" />
       <ScrollView contentContainerStyle={[s.content, d.content]}>
+        {isOffline ? <Text style={d.error}>当前无网络连接，部分功能可能不可用</Text> : null}
         <View style={[s.balanceCard, d.balanceCard]}>
           <View style={[s.balanceOrb, d.balanceOrb]} />
           <Text style={d.balanceLabel}>积分余额</Text>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -198,6 +198,13 @@ export default function CircleDetailScreen() {
   const [circle, setCircle] = useState<CircleDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [iconSaving, setIconSaving] = useState(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const loadCircle = useCallback(async () => {
     if (!id) return;
@@ -227,14 +234,20 @@ export default function CircleDetailScreen() {
       try {
         setIconSaving(true);
         await selectCircleIcon(id, iconAssetId);
-        await loadCircle();
+        if (mountedRef.current) {
+          await loadCircle();
+        }
       } catch (error) {
-        Alert.alert(
-          t('circle.error'),
-          error instanceof Error ? error.message : t('circle.loadError'),
-        );
+        if (mountedRef.current) {
+          Alert.alert(
+            t('circle.error'),
+            error instanceof Error ? error.message : t('circle.loadError'),
+          );
+        }
       } finally {
-        setIconSaving(false);
+        if (mountedRef.current) {
+          setIconSaving(false);
+        }
       }
     },
     [iconSaving, id, isOwnerOrAdmin, loadCircle, t],
@@ -278,14 +291,20 @@ export default function CircleDetailScreen() {
         name: circle?.name ? `${circle.name}-icon` : 'circle-icon',
       });
       await selectCircleIcon(id, created.id);
-      await loadCircle();
+      if (mountedRef.current) {
+        await loadCircle();
+      }
     } catch (error) {
-      Alert.alert(
-        t('circle.error'),
-        error instanceof Error ? error.message : t('circle.loadError'),
-      );
+      if (mountedRef.current) {
+        Alert.alert(
+          t('circle.error'),
+          error instanceof Error ? error.message : t('circle.loadError'),
+        );
+      }
     } finally {
-      setIconSaving(false);
+      if (mountedRef.current) {
+        setIconSaving(false);
+      }
     }
   }, [circle?.name, iconSaving, id, isOwnerOrAdmin, loadCircle, t]);
 

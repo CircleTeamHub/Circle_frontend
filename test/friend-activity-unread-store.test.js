@@ -45,6 +45,13 @@ test('friend activity unread store refreshes count from API and decrements after
       '@/services/api/friends': {
         fetchUnreadFriendActivityCount: async () => 3,
       },
+      '@/stores/tabBadgeStore': {
+        useTabBadgeStore: {
+          getState: () => ({
+            setContactsUnread: () => {},
+          }),
+        },
+      },
     },
   );
 
@@ -62,6 +69,13 @@ test('friend activity unread store keeps the last known count when refresh fails
       '@/services/api/friends': {
         fetchUnreadFriendActivityCount: async () => {
           throw new Error('network');
+        },
+      },
+      '@/stores/tabBadgeStore': {
+        useTabBadgeStore: {
+          getState: () => ({
+            setContactsUnread: () => {},
+          }),
         },
       },
     },

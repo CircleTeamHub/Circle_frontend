@@ -12,22 +12,40 @@ import { useAuthStore } from "@/stores/authStore";
 import { useTabBadgeStore } from "@/stores/tabBadgeStore";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FlatList, Pressable, StyleSheet, Text, type TextStyle, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+const MENU_ID = {
+  MEMBER_CENTER: "member-center",
+  WALLET: "wallet",
+  MALL: "mall",
+  COLLECTIONS: "collections",
+  NOTES: "notes",
+} as const;
+
+type MenuId = (typeof MENU_ID)[keyof typeof MENU_ID];
+
+const MENU_ROUTE: Record<MenuId, string> = {
+  [MENU_ID.MEMBER_CENTER]: "/(tabs)/profile/member-center",
+  [MENU_ID.WALLET]: "/(tabs)/profile/wallet",
+  [MENU_ID.MALL]: "/(tabs)/profile/mall",
+  [MENU_ID.COLLECTIONS]: "/(tabs)/profile/collections",
+  [MENU_ID.NOTES]: "/(tabs)/profile/notes",
+};
+
 const MENU_ITEM_KEYS: {
-  id: string;
+  id: MenuId;
   icon: string;
   labelKey: string;
   rightTextKey?: string;
 }[] = [
-  { id: "2", icon: "gift-outline", labelKey: "profile.memberCenter", rightTextKey: "profile.viewMember" },
-  { id: "3", icon: "wallet-outline", labelKey: "profile.wallet" },
-  { id: "5", icon: "hand-left-outline", labelKey: "profile.mall", rightTextKey: "profile.viewProducts" },
-  { id: "6", icon: "bookmark-outline", labelKey: "profile.collections", rightTextKey: "profile.viewCollections" },
-  { id: "7", icon: "document-text-outline", labelKey: "profile.notes", rightTextKey: "profile.viewNotes" },
+  { id: MENU_ID.MEMBER_CENTER, icon: "gift-outline", labelKey: "profile.memberCenter", rightTextKey: "profile.viewMember" },
+  { id: MENU_ID.WALLET, icon: "wallet-outline", labelKey: "profile.wallet" },
+  { id: MENU_ID.MALL, icon: "hand-left-outline", labelKey: "profile.mall", rightTextKey: "profile.viewProducts" },
+  { id: MENU_ID.COLLECTIONS, icon: "bookmark-outline", labelKey: "profile.collections", rightTextKey: "profile.viewCollections" },
+  { id: MENU_ID.NOTES, icon: "document-text-outline", labelKey: "profile.notes", rightTextKey: "profile.viewNotes" },
 ];
 
 const s = StyleSheet.create({
@@ -108,6 +126,7 @@ export default function ProfileScreen() {
   const [profileDisplayIcons, setProfileDisplayIcons] = useState<DisplayIcon[]>(
     user?.displayIcons ?? [],
   );
+  const lastRefreshRef = useRef(0);
 
   const MENU_ITEMS: MenuItem[] = MENU_ITEM_KEYS.map((m) => ({
     id: m.id,
@@ -179,6 +198,12 @@ export default function ProfileScreen() {
         return undefined;
       }
 
+      const now = Date.now();
+      if (now - lastRefreshRef.current < 10_000) {
+        return undefined;
+      }
+      lastRefreshRef.current = now;
+
       let isActive = true;
 
       const refreshCurrentUser = async () => {
@@ -195,11 +220,8 @@ export default function ProfileScreen() {
           if (isActive) {
             setProfileUnread(0);
           }
-        } catch (error) {
-          console.warn(
-            '[profile] failed to refresh current user',
-            error instanceof Error ? error.message : error,
-          );
+        } catch {
+          // Best-effort refresh; keep existing state on failure.
         }
       };
 
@@ -225,28 +247,9 @@ export default function ProfileScreen() {
 
   const handleMenuPress = useCallback(
     (item: MenuItem) => {
-      if (item.id === '2') {
-        router.push('/(tabs)/profile/member-center' as never);
-        return;
-      }
-
-      if (item.id === '3') {
-        router.push('/(tabs)/profile/wallet' as never);
-        return;
-      }
-
-      if (item.id === '5') {
-        router.push('/(tabs)/profile/mall' as never);
-        return;
-      }
-
-      if (item.id === '6') {
-        router.push('/(tabs)/profile/collections' as never);
-        return;
-      }
-
-      if (item.id === '7') {
-        router.push('/(tabs)/profile/notes' as never);
+      const route = MENU_ROUTE[item.id as MenuId];
+      if (route) {
+        router.push(route as never);
       }
     },
     [router],

@@ -192,6 +192,7 @@ export default function ChatInfoScreen() {
 
       if (!friendId) {
         setBlacklist(false);
+        setDisplayIcons([]);
         return () => {
           cancelled = true;
         };
@@ -209,38 +210,23 @@ export default function ChatInfoScreen() {
           }
         });
 
+      fetchUserProfile(friendId)
+        .then((profile) => {
+          if (!cancelled) {
+            setDisplayIcons(profile.displayIcons ?? []);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setDisplayIcons([]);
+          }
+        });
+
       return () => {
         cancelled = true;
       };
     }, [friendId]),
   );
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!friendId) {
-      setDisplayIcons([]);
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    fetchUserProfile(friendId)
-      .then((profile) => {
-        if (!cancelled) {
-          setDisplayIcons(profile.displayIcons ?? []);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setDisplayIcons([]);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [friendId]);
 
   useEffect(() => {
     actionPendingRef.current = initialActionPending;

@@ -61,12 +61,15 @@ type RealtimeEvent =
       payload?: { content?: string };
     };
 
-const RECONNECT_DELAY_MS = 3_000;
+const RECONNECT_BASE_MS = 1_000;
+const RECONNECT_MAX_MS = 30_000;
+const MAX_RECONNECT_ATTEMPTS = 10;
 
 let socket: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let currentToken: string | null = null;
 let manualDisconnect = false;
+let reconnectAttempt = 0;
 
 function clearReconnectTimer() {
   if (!reconnectTimer) {
@@ -87,6 +90,19 @@ function scheduleReconnect() {
     return;
   }
 
+  if (reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
+    return;
+  }
+
+  const baseDelay = Math.min(
+    RECONNECT_BASE_MS * Math.pow(2, reconnectAttempt),
+    RECONNECT_MAX_MS,
+  );
+  const jitter = baseDelay * 0.2 * Math.random();
+  const delay = baseDelay + jitter;
+
+  reconnectAttempt += 1;
+
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
     const token = currentToken;
@@ -95,7 +111,7 @@ function scheduleReconnect() {
     }
 
     connectRealtime(token);
-  }, RECONNECT_DELAY_MS);
+  }, delay);
 }
 
 function closeSocket() {
@@ -187,7 +203,16 @@ function handleSocketMessage(rawData: string) {
   }
 }
 
+const RECOVERY_THROTTLE_MS = 30_000;
+let lastRecoveryAt = 0;
+
 export async function recoverTabBadgeSnapshot() {
+  const now = Date.now();
+  if (now - lastRecoveryAt < RECOVERY_THROTTLE_MS) {
+    return;
+  }
+  lastRecoveryAt = now;
+
   try {
     const [contactsUnread, circleUnread, notificationSummary] = await Promise.all([
       fetchUnreadFriendActivityCount(),
@@ -199,7 +224,7 @@ export async function recoverTabBadgeSnapshot() {
       contactsUnread,
       discoverUnread: circleUnread + notificationSummary.discoverUnread,
       profileUnread: notificationSummary.profileUnread,
-      systemUnread: notificationSummary.profileUnread,
+      systemUnread: notificationSummary.totalUnread,
     });
   } catch {
     // Recovery is best-effort; keep the latest known badge state on failure.
@@ -215,6 +240,7 @@ export function connectRealtime(token: string) {
   }
 
   manualDisconnect = false;
+  reconnectAttempt = 0;
   clearReconnectTimer();
 
   if (
@@ -233,6 +259,7 @@ export function connectRealtime(token: string) {
   socket = nextSocket;
 
   nextSocket.onopen = () => {
+    reconnectAttempt = 0;
     useTabBadgeStore.getState().setRealtimeConnected(true);
   };
 

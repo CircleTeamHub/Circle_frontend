@@ -1,8 +1,9 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
+import { useNetworkStatus } from '@/hooks/use-network-status';
 import { fetchCurrentUser } from '@/services/api/auth';
 import {
   fetchMembershipPlans,
@@ -82,6 +83,7 @@ export default function MemberCenterScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { isOffline } = useNetworkStatus();
   const vipLevel = useAuthStore((state) => state.user?.vipLevel ?? 0);
   const setUser = useAuthStore((state) => state.setUser);
   const [plans, setPlans] = useState<MembershipPlan[]>(VIP_LEVELS);
@@ -90,7 +92,7 @@ export default function MemberCenterScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [statusText, setStatusText] = useState<string | null>(null);
   const selectedPlan = plans.find((item) => item.level === selectedLevel) ?? plans[0];
-  const canUpgrade = selectedLevel > vipLevel && !submitting;
+  const canUpgrade = selectedLevel > vipLevel && !submitting && !isOffline;
 
   useEffect(() => {
     let cancelled = false;
@@ -122,10 +124,7 @@ export default function MemberCenterScreen() {
     };
   }, [vipLevel]);
 
-  async function handleUpgrade() {
-    if (!canUpgrade) {
-      return;
-    }
+  const performUpgrade = useCallback(async () => {
     setSubmitting(true);
     setStatusText(null);
     try {
@@ -138,7 +137,21 @@ export default function MemberCenterScreen() {
     } finally {
       setSubmitting(false);
     }
-  }
+  }, [selectedLevel, setUser]);
+
+  const handleUpgrade = useCallback(() => {
+    if (!canUpgrade) {
+      return;
+    }
+    Alert.alert(
+      '确认兑换',
+      `确定要消耗 ${selectedPlan.price} 积分兑换 ${selectedPlan.name} 吗？`,
+      [
+        { text: '取消', style: 'cancel' },
+        { text: '确认兑换', onPress: performUpgrade },
+      ],
+    );
+  }, [canUpgrade, performUpgrade, selectedPlan.name, selectedPlan.price]);
 
   const d = useMemo(
     () => ({
@@ -242,6 +255,7 @@ export default function MemberCenterScreen() {
         contentContainerStyle={[s.content, d.content]}
         showsVerticalScrollIndicator={false}
       >
+        {isOffline ? <Text style={d.status}>当前无网络连接，部分功能可能不可用</Text> : null}
         <View style={[s.hero, d.hero]}>
           <View style={[s.heroOrb, d.heroOrb]} />
           <Text style={d.heroTitle}>开通VIP会员</Text>

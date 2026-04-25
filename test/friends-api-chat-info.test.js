@@ -79,11 +79,11 @@ test('chat info screen routes blacklist and delete through real friend APIs whil
   assert.match(source, /deleteFriendRelationship/);
   assert.match(source, /const handleToggleBlacklist = useCallback/);
   assert.match(source, /const handleConfirmDeleteContact = useCallback/);
-  assert.match(source, /Alert\.alert\(\s*'删除联系人'/);
-  assert.match(source, /label="加入黑名单"/);
+  assert.match(source, /Alert\.alert\(\s*t\('chat\.deleteFriend'\)/);
+  assert.match(source, /label=\{t\('chat\.addBlacklist'\)\}/);
   assert.match(source, /onToggle={handleToggleBlacklist}/);
-  assert.match(source, /label="删除联系人"/);
+  assert.match(source, /label=\{t\('chat\.deleteFriend'\)\}/);
   assert.match(source, /onPress={deletePending \? undefined : handleConfirmDeleteContact}/);
-  assert.match(source, /openUnsupportedAction\('投诉举报'\)/);
-  assert.doesNotMatch(source, /openUnsupportedAction\('删除联系人'\)/);
+  assert.match(source, /openUnsupportedAction\(t\('chat\.report'\)\)/);
+  assert.doesNotMatch(source, /openUnsupportedAction\(t\('chat\.deleteFriend'\)\)/);
 });

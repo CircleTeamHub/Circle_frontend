@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
+import { useNetworkStatus } from '@/hooks/use-network-status';
 import {
   createCollection,
   deleteCollection,
@@ -80,6 +81,7 @@ const s = StyleSheet.create({
 export default function CollectionsScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { isOffline } = useNetworkStatus();
   const [activeType, setActiveType] = useState<CollectionType>('CHAT');
   const [items, setItems] = useState<UserCollection[]>([]);
   const [loading, setLoading] = useState(true);
@@ -138,13 +140,22 @@ export default function CollectionsScreen() {
     }
   }
 
-  async function handleDelete(id: string) {
-    try {
-      await deleteCollection(id);
-      setItems((current) => current.filter((item) => item.id !== id));
-    } catch {
-      setStatusText('删除收藏失败，请稍后重试');
-    }
+  function handleDelete(id: string) {
+    Alert.alert('确认删除', '确定要删除这条收藏吗？', [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '删除',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteCollection(id);
+            setItems((current) => current.filter((item) => item.id !== id));
+          } catch {
+            setStatusText('删除收藏失败，请稍后重试');
+          }
+        },
+      },
+    ]);
   }
 
   const d = useMemo(
@@ -233,6 +244,7 @@ export default function CollectionsScreen() {
     <View style={d.container}>
       <NavHeader title="我的收藏" />
       <ScrollView contentContainerStyle={[s.content, d.content]}>
+        {isOffline ? <Text style={d.exampleDesc}>当前无网络连接，部分功能可能不可用</Text> : null}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}

@@ -45,6 +45,26 @@ test('friend activity copy maps event types to inbox text and groups inbox rows 
     buildFriendActivityInboxRows,
   } = loadTsModule(
     'src/features/contacts/friend-activities.ts',
+    {
+      '@/i18n': {
+        default: {
+          t: (key, params) => {
+            const name = params?.name ?? '';
+            const map = {
+              'contacts.friendActivity.copy.requestReceived': `${name}请求添加你为好友`,
+              'contacts.friendActivity.copy.requestSent': `已向${name}发送好友申请`,
+              'contacts.friendActivity.copy.requestAcceptedByOther': `${name}通过了你的好友申请`,
+              'contacts.friendActivity.copy.requestRejectedByOther': `${name}拒绝了你的好友申请`,
+              'contacts.friendActivity.copy.requestAcceptedByMe': `你通过了${name}的好友申请`,
+              'contacts.friendActivity.copy.requestRejectedByMe': `你拒绝了${name}的好友申请`,
+              'contacts.friendActivity.copy.requestWithdrawnByOther': `${name}撤回了好友申请`,
+              'contacts.friendActivity.copy.default': `与${name}的好友状态有更新`,
+            };
+            return map[key] ?? key;
+          },
+        },
+      },
+    },
   );
 
   assert.match(

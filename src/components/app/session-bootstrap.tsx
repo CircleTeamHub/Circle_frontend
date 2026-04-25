@@ -53,6 +53,10 @@ export function SessionBootstrap() {
     }
 
     connectRealtime(accessToken);
+
+    return () => {
+      disconnectRealtime();
+    };
   }, [accessToken, hasHydrated]);
 
   useEffect(() => {

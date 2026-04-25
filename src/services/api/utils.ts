@@ -40,7 +40,7 @@ export function normalizeUser(user: BackendAuthUser): AuthUser {
     avatarUrl: normalizeMediaUrl(user.avatarUrl),
     avatarFrame: normalizeMediaUrl(user.avatarFrame),
     cover: normalizeMediaUrl(user.cover),
-    displayIcons: user.displayIcons.map((icon) => ({
+    displayIcons: (user.displayIcons ?? []).map((icon) => ({
       ...icon,
       imageUrl: normalizeMediaUrl(icon.imageUrl),
     })),

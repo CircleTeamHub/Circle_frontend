@@ -45,7 +45,7 @@ test('contacts unread indicators use the shared unread store', () => {
   const contactsSource = read('src/features/contacts/screens/ContactsScreen.tsx');
   const menuRowSource = read('src/components/ui/menu-row.tsx');
 
-  assert.match(tabsLayoutSource, /useFriendActivityUnreadStore/);
+  assert.match(tabsLayoutSource, /useTabBadgeStore/);
   assert.match(contactsSource, /useFriendActivityUnreadStore/);
   assert.match(contactsSource, /showIndicatorDot/);
   assert.match(menuRowSource, /showIndicatorDot/);

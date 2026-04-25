@@ -60,6 +60,20 @@ test('clearLocalSession clears IM state, auth persistence, message cache, and fr
       },
     }),
   };
+  const tabBadgeStore = {
+    getState: () => ({
+      reset: () => {
+        calls.push('resetTabBadge');
+      },
+    }),
+  };
+  const walletRealtimeStore = {
+    getState: () => ({
+      reset: () => {
+        calls.push('resetWalletRealtime');
+      },
+    }),
+  };
 
   const { clearLocalSession } = loadSessionModule({
     '@/stores/authStore': { useAuthStore: authStore },
@@ -68,20 +82,34 @@ test('clearLocalSession clears IM state, auth persistence, message cache, and fr
         calls.push('logoutIM');
       },
     },
+    '@/realtime/client': {
+      disconnectRealtime: () => {
+        calls.push('disconnectRealtime');
+      },
+    },
     '@/features/messages/store/use-message-groups-store': {
       useMessageGroupsStore: messageGroupsStore,
     },
     '@/stores/friendActivityUnreadStore': {
       useFriendActivityUnreadStore: friendActivityUnreadStore,
     },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: tabBadgeStore,
+    },
+    '@/stores/walletRealtimeStore': {
+      useWalletRealtimeStore: walletRealtimeStore,
+    },
   });
 
   await clearLocalSession();
 
   assert.deepEqual(calls, [
+    'disconnectRealtime',
     'logoutIM',
     'resetGroups',
     'resetFriendActivityUnread',
+    'resetTabBadge',
+    'resetWalletRealtime',
     'clearSession',
     'clearStorage',
   ]);
@@ -115,6 +143,20 @@ test('clearLocalSession still clears local state when IM logout fails', async ()
       },
     }),
   };
+  const tabBadgeStore = {
+    getState: () => ({
+      reset: () => {
+        calls.push('resetTabBadge');
+      },
+    }),
+  };
+  const walletRealtimeStore = {
+    getState: () => ({
+      reset: () => {
+        calls.push('resetWalletRealtime');
+      },
+    }),
+  };
 
   const { clearLocalSession } = loadSessionModule({
     '@/stores/authStore': { useAuthStore: authStore },
@@ -124,20 +166,34 @@ test('clearLocalSession still clears local state when IM logout fails', async ()
         throw new Error('sdk logout failed');
       },
     },
+    '@/realtime/client': {
+      disconnectRealtime: () => {
+        calls.push('disconnectRealtime');
+      },
+    },
     '@/features/messages/store/use-message-groups-store': {
       useMessageGroupsStore: messageGroupsStore,
     },
     '@/stores/friendActivityUnreadStore': {
       useFriendActivityUnreadStore: friendActivityUnreadStore,
     },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: tabBadgeStore,
+    },
+    '@/stores/walletRealtimeStore': {
+      useWalletRealtimeStore: walletRealtimeStore,
+    },
   });
 
   await clearLocalSession();
 
   assert.deepEqual(calls, [
+    'disconnectRealtime',
     'logoutIM',
     'resetGroups',
     'resetFriendActivityUnread',
+    'resetTabBadge',
+    'resetWalletRealtime',
     'clearSession',
     'clearStorage',
   ]);

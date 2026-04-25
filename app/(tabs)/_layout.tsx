@@ -1,9 +1,10 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { memo, useMemo } from 'react';
+import { View, Text, StyleSheet, type ViewStyle, type TextStyle } from 'react-native';
 import { Tabs, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useTheme, Spacing, Radius } from '@/theme';
 
 const TAB_KEYS: {
@@ -22,17 +23,51 @@ interface TabIconProps {
   label: string;
   focused: boolean;
   showBadgeDot: boolean;
+  activeColor: string;
+  inactiveColor: string;
+  tabIconStyle: ViewStyle;
+  tabIconActiveStyle: ViewStyle;
+  tabIconBadgeStyle: ViewStyle;
+  tabLabelStyle: TextStyle;
 }
+
+const TabIcon = memo(function TabIcon({
+  icon,
+  label,
+  focused,
+  showBadgeDot,
+  activeColor,
+  inactiveColor,
+  tabIconStyle,
+  tabIconActiveStyle,
+  tabIconBadgeStyle,
+  tabLabelStyle,
+}: TabIconProps) {
+  const color = focused ? activeColor : inactiveColor;
+
+  return (
+    <View style={[tabIconStyle, focused && tabIconActiveStyle]}>
+      {showBadgeDot ? <View style={tabIconBadgeStyle} /> : null}
+      <Ionicons name={icon} size={16} color={color} />
+      <Text style={[tabLabelStyle, { color }]} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
+  );
+});
 
 export default function TabLayout() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const segments = useSegments();
   const hideTabBar = segments.length > 2;
-  const messagesUnread = useTabBadgeStore((state) => state.messagesUnread);
-  const contactsUnread = useTabBadgeStore((state) => state.contactsUnread);
-  const discoverUnread = useTabBadgeStore((state) => state.discoverUnread);
-  const profileUnread = useTabBadgeStore((state) => state.profileUnread);
+  const { messagesUnread, contactsUnread, discoverUnread, profileUnread } =
+    useTabBadgeStore(useShallow((state) => ({
+      messagesUnread: state.messagesUnread,
+      contactsUnread: state.contactsUnread,
+      discoverUnread: state.discoverUnread,
+      profileUnread: state.profileUnread,
+    })));
 
   const styles = useMemo(() => StyleSheet.create({
     tabBar: {
@@ -90,24 +125,12 @@ export default function TabLayout() {
     },
   }), [colors]);
 
-  const TabIcon: React.FC<TabIconProps> = ({
-    icon,
-    label,
-    focused,
-    showBadgeDot,
-  }) => {
-    const color = focused ? colors.white : colors.textSecondary;
-
-    return (
-      <View style={[styles.tabIcon, focused && styles.tabIconActive]}>
-        {showBadgeDot ? <View style={styles.tabIconBadge} /> : null}
-        <Ionicons name={icon} size={16} color={color} />
-        <Text style={[styles.tabLabel, { color }]} numberOfLines={1}>
-          {label}
-        </Text>
-      </View>
-    );
-  };
+  const badgeMap: Record<string, boolean> = useMemo(() => ({
+    messages: messagesUnread > 0,
+    contacts: contactsUnread > 0,
+    discover: discoverUnread > 0,
+    profile: profileUnread > 0,
+  }), [messagesUnread, contactsUnread, discoverUnread, profileUnread]);
 
   return (
     <Tabs
@@ -126,16 +149,17 @@ export default function TabLayout() {
           name={tab.name}
           options={{
             tabBarIcon: ({ focused }) => (
-                <TabIcon
-                  icon={tab.icon}
-                  label={t(tab.key)}
-                  focused={focused}
-                  showBadgeDot={
-                    (tab.name === 'messages' && messagesUnread > 0) ||
-                    (tab.name === 'contacts' && contactsUnread > 0) ||
-                    (tab.name === 'discover' && discoverUnread > 0) ||
-                    (tab.name === 'profile' && profileUnread > 0)
-                  }
+              <TabIcon
+                icon={tab.icon}
+                label={t(tab.key)}
+                focused={focused}
+                showBadgeDot={badgeMap[tab.name] ?? false}
+                activeColor={colors.white}
+                inactiveColor={colors.textSecondary}
+                tabIconStyle={styles.tabIcon}
+                tabIconActiveStyle={styles.tabIconActive}
+                tabIconBadgeStyle={styles.tabIconBadge}
+                tabLabelStyle={styles.tabLabel}
               />
             ),
           }}

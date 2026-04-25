@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
+import { useNetworkStatus } from '@/hooks/use-network-status';
 import { fetchMallSections, type MallProduct, type MallSection } from '@/services/api/mall';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
@@ -96,6 +97,7 @@ export default function MallScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { isOffline } = useNetworkStatus();
   const [sections, setSections] = useState<MallSection[]>(FALLBACK_SECTIONS);
   const [statusText, setStatusText] = useState<string | null>(null);
 
@@ -171,6 +173,7 @@ export default function MallScreen() {
     <View style={d.container}>
       <NavHeader title="管家商城" />
       <ScrollView contentContainerStyle={[s.content, d.content]}>
+        {isOffline ? <Text style={d.status}>当前无网络连接，部分功能可能不可用</Text> : null}
         {statusText ? <Text style={d.status}>{statusText}</Text> : null}
         {sections.map((section) => (
           <View key={section.title} style={[s.section, d.section]}>

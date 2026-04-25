@@ -39,7 +39,28 @@ function loadTsModule(relativePath, stubs = {}) {
 }
 
 function loadProfileView() {
-  return loadTsModule('src/features/user/profile-view.ts');
+  const i18nStub = {
+    default: {
+      t: (key) => {
+        const translations = {
+          'profileFields.male': '男',
+          'profileFields.female': '女',
+          'profileFields.other': '其他',
+          'profileFields.genderNotSet': '未设置',
+          'profileFields.notSet': '未设置',
+          'userProfile.friendAction.pendingSent': '已发送申请',
+          'userProfile.friendAction.pendingReceived': '等待对方处理',
+          'userProfile.friendAction.accepted': '已添加',
+          'userProfile.friendAction.blocked': '无法添加',
+          'userProfile.friendAction.add': '添加好友',
+        };
+        return translations[key] ?? key;
+      },
+    },
+  };
+  return loadTsModule('src/features/user/profile-view.ts', {
+    '@/i18n': i18nStub,
+  });
 }
 
 test('profile view formats self check, gender, and city for the detail header', () => {
@@ -316,11 +337,11 @@ test('user profile screen uses account label, meta chips, badge row, and conditi
   );
   const source = fs.readFileSync(filePath, 'utf8');
 
-  assert.match(source, /const SELF_INFO_ROWS = \['朋友圈'\] as const;/);
-  assert.match(source, /const NON_FRIEND_INFO_ROWS = \['朋友圈', '给该用户赠送金币', '更多信息'\] as const;/);
+  assert.match(source, /const SELF_INFO_ROW_IDS = \['moments'\] as const;/);
+  assert.match(source, /const NON_FRIEND_INFO_ROW_IDS = \['moments', 'giftCoins', 'moreInfo'\] as const;/);
   assert.match(source, /friendStatus === 'ACCEPTED'/);
   assert.match(source, /const showProfileActions = !isCurrentUser;/);
-  assert.match(source, /账号：\{profile\.accountId\}/);
+  assert.match(source, /t\('contacts\.accountId'.*profile\.accountId/);
   assert.doesNotMatch(source, /圈号：/);
   assert.match(source, /const isCurrentUser = isCurrentUserProfile\(/);
   assert.match(source, /useRouter/);
@@ -342,7 +363,7 @@ test('user profile screen uses account label, meta chips, badge row, and conditi
   assert.match(source, /location-outline/);
   assert.match(source, /badgeIconRow/);
   assert.match(source, /showProfileActions \? \(/);
-  assert.match(source, /发好友申请/);
+  assert.match(source, /userProfile\.addFriendRequest/);
   assert.match(source, /const handleOpenChat = useCallback/);
   assert.match(source, /const conversation = await getOrCreateSingleConversation\(profileId\)/);
   assert.match(source, /shouldOpenChatPreview/);
@@ -365,7 +386,7 @@ test('user profile screen wires the top-right menu into chat info for accepted f
   );
   const source = fs.readFileSync(filePath, 'utf8');
 
-  assert.match(source, /<NavHeader[\s\S]*title="个人信息"[\s\S]*rightIcon="information-circle-outline"[\s\S]*onRightPress=\{handleOpenChatInfo\}/);
+  assert.match(source, /<NavHeader[\s\S]*title=\{t\('userProfile\.title'\)\}[\s\S]*rightIcon="information-circle-outline"[\s\S]*onRightPress=\{handleOpenChatInfo\}/);
   assert.match(source, /const handleOpenChatInfo = useCallback/);
   assert.match(source, /friendStatus !== 'ACCEPTED'/);
   assert.match(source, /getChatInfoHref/);
