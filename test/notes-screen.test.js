@@ -44,6 +44,19 @@ test('NotesScreen supports group management and multi-group filtering', () => {
   assert.match(src, /Animated\.Value|new Animated\.Value/);
 });
 
+test('NotesScreen keeps group management sheet interactions inside a non-pressable card', () => {
+  const src = read('src/features/notes/screens/NotesScreen.tsx');
+  assert.match(src, /<View style=\{\[s\.modalCard, d\.modalCard\]\}>/);
+  assert.doesNotMatch(src, /<Pressable style=\{\[s\.modalCard, d\.modalCard\]\}/);
+});
+
+test('NotesScreen binds drag responder directly to each custom group handle', () => {
+  const src = read('src/features/notes/screens/NotesScreen.tsx');
+  assert.match(src, /createDragResponder/);
+  assert.match(src, /createDragResponder\(group\.id, index\)\.panHandlers/);
+  assert.doesNotMatch(src, /pendingDragRef/);
+});
+
 test('EditNoteScreen loads and submits multiple group ids', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
   assert.match(src, /fetchNoteGroups/);
