@@ -64,6 +64,18 @@ test('NotesScreen lets a group directly choose which notes belong to it', () => 
   assert.match(src, /groupIds:\s*nextGroupIds/);
 });
 
+test('NotesScreen optimizes group note assignment for larger note lists', () => {
+  const src = read('src/features/notes/screens/NotesScreen.tsx');
+  assert.match(src, /membershipSearch/);
+  assert.match(src, /filteredMembershipNotes/);
+  assert.match(src, /renderMembershipNote/);
+  assert.match(src, /membershipList/);
+  assert.match(src, /搜索笔记/);
+  assert.match(src, /runWithConcurrencyLimit/);
+  assert.match(src, /MEMBERSHIP_SAVE_CONCURRENCY/);
+  assert.match(src, /keyExtractor=\{\(item\) => item\.id\}/);
+});
+
 test('NotesScreen keeps group management action fixed beside the scrollable tabs', () => {
   const src = read('src/features/notes/screens/NotesScreen.tsx');
   assert.match(src, /<View style=\{s\.tabsRow\}>/);

@@ -32,6 +32,18 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 type TabId = 'all' | 'ungrouped' | string;
 const GROUP_ROW_HEIGHT = 64;
+const MEMBERSHIP_SAVE_CONCURRENCY = 5;
+
+async function runWithConcurrencyLimit<T>(
+  items: T[],
+  limit: number,
+  task: (item: T) => Promise<void>,
+) {
+  for (let index = 0; index < items.length; index += limit) {
+    const chunk = items.slice(index, index + limit);
+    await Promise.all(chunk.map(task));
+  }
+}
 
 export default function NotesScreen() {
   const router = useRouter();
@@ -51,6 +63,7 @@ export default function NotesScreen() {
   const [editingMembershipGroup, setEditingMembershipGroup] =
     useState<NoteGroup | null>(null);
   const [membershipNoteIds, setMembershipNoteIds] = useState<string[]>([]);
+  const [membershipSearch, setMembershipSearch] = useState('');
   const [savingMemberships, setSavingMemberships] = useState(false);
   const [draggingGroupId, setDraggingGroupId] = useState<string | null>(null);
   const [dragPreviewGroups, setDragPreviewGroups] = useState<NoteGroup[] | null>(null);
@@ -147,6 +160,7 @@ export default function NotesScreen() {
   const resetGroupMembershipEditor = useCallback(() => {
     setEditingMembershipGroup(null);
     setMembershipNoteIds([]);
+    setMembershipSearch('');
     setSavingMemberships(false);
   }, []);
 
@@ -210,6 +224,16 @@ export default function NotesScreen() {
     [membershipNoteIds],
   );
 
+  const filteredMembershipNotes = useMemo(() => {
+    const query = membershipSearch.trim().toLowerCase();
+    if (!query) return notes;
+    return notes.filter(
+      (note) =>
+        note.title.toLowerCase().includes(query) ||
+        (note.contentPreview ?? '').toLowerCase().includes(query),
+    );
+  }, [membershipSearch, notes]);
+
   const toggleMembershipNote = useCallback((noteId: string) => {
     setMembershipNoteIds((prev) =>
       prev.includes(noteId)
@@ -230,8 +254,10 @@ export default function NotesScreen() {
     });
 
     try {
-      await Promise.all(
-        changedNotes.map(async (note) => {
+      await runWithConcurrencyLimit(
+        changedNotes,
+        MEMBERSHIP_SAVE_CONCURRENCY,
+        async (note) => {
           const detail = await fetchNoteDetail(note.id);
           const currentGroupIds = detail.groups.map((item) => item.id);
           const nextGroupIds = selectedNoteIds.has(note.id)
@@ -258,7 +284,7 @@ export default function NotesScreen() {
               sortOrder: item.sortOrder,
             })),
           });
-        }),
+        },
       );
       resetGroupMembershipEditor();
       await load();
@@ -451,6 +477,48 @@ export default function NotesScreen() {
     [handlePin, router],
   );
 
+  const renderMembershipNote = useCallback(
+    ({ item }: { item: NoteSummary }) => {
+      const selected = selectedMembershipNoteIds.has(item.id);
+      return (
+        <Pressable
+          style={[
+            s.membershipRow,
+            d.groupRow,
+            selected ? [s.membershipRowSelected, d.membershipRowSelected] : null,
+          ]}
+          onPress={() => toggleMembershipNote(item.id)}
+        >
+          <View style={s.membershipText}>
+            <Text style={[s.groupName, d.groupName]} numberOfLines={1}>
+              {item.title}
+            </Text>
+            {item.contentPreview ? (
+              <Text style={[s.groupCount, d.groupCount]} numberOfLines={1}>
+                {item.contentPreview}
+              </Text>
+            ) : null}
+          </View>
+          <Ionicons
+            name={selected ? 'checkmark-circle' : 'ellipse-outline'}
+            size={22}
+            color={selected ? colors.primary : colors.textSecondary}
+          />
+        </Pressable>
+      );
+    },
+    [
+      colors.primary,
+      colors.textSecondary,
+      d.groupCount,
+      d.groupName,
+      d.groupRow,
+      d.membershipRowSelected,
+      selectedMembershipNoteIds,
+      toggleMembershipNote,
+    ],
+  );
+
   const statsText = `共 ${groups.length} 个分组，合计 ${notes.length} 条笔记`;
 
   return (
@@ -572,41 +640,30 @@ export default function NotesScreen() {
                 <Text style={[s.modalCopy, d.modalCopy]}>
                   为“{editingMembershipGroup.name}”选择要加入的笔记。
                 </Text>
-                <ScrollView style={s.modalList} contentContainerStyle={s.modalListContent}>
-                  {notes.map((note) => {
-                    const selected = selectedMembershipNoteIds.has(note.id);
-                    return (
-                      <Pressable
-                        key={note.id}
-                        style={[
-                          s.membershipRow,
-                          d.groupRow,
-                          selected ? [s.membershipRowSelected, d.membershipRowSelected] : null,
-                        ]}
-                        onPress={() => toggleMembershipNote(note.id)}
-                      >
-                        <View style={s.membershipText}>
-                          <Text style={[s.groupName, d.groupName]} numberOfLines={1}>
-                            {note.title}
-                          </Text>
-                          {note.contentPreview ? (
-                            <Text style={[s.groupCount, d.groupCount]} numberOfLines={1}>
-                              {note.contentPreview}
-                            </Text>
-                          ) : null}
-                        </View>
-                        <Ionicons
-                          name={selected ? 'checkmark-circle' : 'ellipse-outline'}
-                          size={22}
-                          color={selected ? colors.primary : colors.textSecondary}
-                        />
-                      </Pressable>
-                    );
-                  })}
-                  {notes.length === 0 ? (
-                    <Text style={[s.emptyText, d.statsText]}>暂无可选择的笔记</Text>
-                  ) : null}
-                </ScrollView>
+                <View style={[s.membershipSearchWrap, d.searchWrap]}>
+                  <Ionicons name="search-outline" size={16} color={d.searchPlaceholder} />
+                  <TextInput
+                    style={[s.searchInput, d.searchInput]}
+                    placeholder="搜索笔记"
+                    placeholderTextColor={d.searchPlaceholder}
+                    value={membershipSearch}
+                    onChangeText={setMembershipSearch}
+                  />
+                </View>
+                <FlatList
+                  style={s.membershipList}
+                  data={filteredMembershipNotes}
+                  keyExtractor={(item) => item.id}
+                  renderItem={renderMembershipNote}
+                  ItemSeparatorComponent={() => <View style={s.membershipSeparator} />}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                  ListEmptyComponent={
+                    <Text style={[s.emptyText, d.statsText]}>
+                      {notes.length === 0 ? '暂无可选择的笔记' : '没有匹配的笔记'}
+                    </Text>
+                  }
+                />
                 <View style={s.modalButtons}>
                   <Pressable onPress={resetGroupMembershipEditor}>
                     <Text style={[s.modalActionText, d.modalActionText]}>返回</Text>
@@ -834,10 +891,19 @@ const s = StyleSheet.create({
   modalCopy: { ...Typography.small },
   modalList: { maxHeight: 320 },
   modalListContent: { gap: Spacing.sm },
+  membershipList: { maxHeight: 320 },
   membershipHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
+  },
+  membershipSearchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.sm,
+    height: 40,
+    gap: Spacing.xs,
   },
   membershipRow: {
     minHeight: 56,
@@ -852,6 +918,7 @@ const s = StyleSheet.create({
   membershipRowSelected: {
     borderWidth: 1,
   },
+  membershipSeparator: { height: Spacing.sm },
   membershipText: { flex: 1 },
   groupRow: {
     height: GROUP_ROW_HEIGHT,
