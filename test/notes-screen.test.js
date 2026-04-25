@@ -67,11 +67,21 @@ test('NotesScreen keeps the add group button pressable and focuses the input for
   assert.doesNotMatch(src, /disabled=\{savingGroup \|\| !draftGroupName\.trim\(\)\}/);
 });
 
-test('NotesScreen binds drag responder directly to each custom group handle', () => {
+test('NotesScreen uses stable drag responders directly on each custom group handle', () => {
   const src = read('src/features/notes/screens/NotesScreen.tsx');
-  assert.match(src, /createDragResponder/);
-  assert.match(src, /createDragResponder\(group\.id, index\)\.panHandlers/);
+  assert.match(src, /dragRespondersRef/);
+  assert.match(src, /getDragResponder/);
+  assert.match(src, /groupsRef\.current\.findIndex/);
+  assert.match(src, /getDragResponder\(group\.id\)\.panHandlers/);
   assert.doesNotMatch(src, /pendingDragRef/);
+  assert.doesNotMatch(src, /createDragResponder\(group\.id, index\)\.panHandlers/);
+});
+
+test('NotesScreen prevents ScrollView from stealing group drag gestures', () => {
+  const src = read('src/features/notes/screens/NotesScreen.tsx');
+  assert.match(src, /scrollEnabled=\{!draggingGroupId\}/);
+  assert.match(src, /onMoveShouldSetPanResponderCapture:\s*\(\) => true/);
+  assert.match(src, /onShouldBlockNativeResponder:\s*\(\) => true/);
 });
 
 test('EditNoteScreen loads and submits multiple group ids', () => {

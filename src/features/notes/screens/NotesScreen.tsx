@@ -52,6 +52,9 @@ export default function NotesScreen() {
   const groupsRef = useRef<NoteGroup[]>([]);
   const dragPreviewGroupsRef = useRef<NoteGroup[] | null>(null);
   const groupNameInputRef = useRef<TextInput>(null);
+  const dragRespondersRef = useRef(
+    new Map<string, ReturnType<typeof PanResponder.create>>(),
+  );
   const dragMetaRef = useRef<{
     groupId: string;
     startIndex: number;
@@ -81,6 +84,11 @@ export default function NotesScreen() {
 
   useEffect(() => {
     groupsRef.current = groups;
+    dragRespondersRef.current.forEach((_, groupId) => {
+      if (!groups.some((group) => group.id === groupId)) {
+        dragRespondersRef.current.delete(groupId);
+      }
+    });
   }, [groups]);
 
   useEffect(() => {
@@ -198,7 +206,7 @@ export default function NotesScreen() {
 
   const handleReorderGroups = useCallback(
     async (nextGroups: NoteGroup[]) => {
-      const previousGroups = groups;
+      const previousGroups = groupsRef.current;
       setGroups(nextGroups);
       try {
         const orderedGroups = await reorderNoteGroups(
@@ -210,7 +218,7 @@ export default function NotesScreen() {
         Alert.alert('排序失败', '分组顺序保存失败，请稍后再试。');
       }
     },
-    [groups],
+    [],
   );
 
   const finishDrag = useCallback(() => {
@@ -236,20 +244,28 @@ export default function NotesScreen() {
     }
   }, [dragY, handleReorderGroups]);
 
-  const createDragResponder = useCallback(
-    (groupId: string, startIndex: number) =>
-      PanResponder.create({
+  const getDragResponder = useCallback(
+    (groupId: string) => {
+      const cached = dragRespondersRef.current.get(groupId);
+      if (cached) return cached;
+
+      const responder = PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponderCapture: () => true,
         onPanResponderGrant: () => {
+          const currentGroups = groupsRef.current;
+          const startIndex = groupsRef.current.findIndex((group) => group.id === groupId);
+          if (startIndex < 0) return;
           dragMetaRef.current = {
             groupId,
             startIndex,
             activeIndex: startIndex,
           };
           setDraggingGroupId(groupId);
-          setDragPreviewGroups(groupsRef.current);
-          dragPreviewGroupsRef.current = groupsRef.current;
+          const nextPreviewGroups = [...currentGroups];
+          setDragPreviewGroups(nextPreviewGroups);
+          dragPreviewGroupsRef.current = nextPreviewGroups;
           dragY.setValue(0);
         },
         onPanResponderMove: (_, gestureState) => {
@@ -280,7 +296,12 @@ export default function NotesScreen() {
         onPanResponderRelease: finishDrag,
         onPanResponderTerminate: finishDrag,
         onPanResponderTerminationRequest: () => false,
-      }),
+        onShouldBlockNativeResponder: () => true,
+      });
+
+      dragRespondersRef.current.set(groupId, responder);
+      return responder;
+    },
     [dragY, finishDrag],
   );
 
@@ -448,7 +469,11 @@ export default function NotesScreen() {
             <Text style={[s.modalCopy, d.modalCopy]}>
               “全部”和“未分组”固定在前面，常用自定义分组可以排在前面。
             </Text>
-            <ScrollView style={s.modalList} contentContainerStyle={s.modalListContent}>
+            <ScrollView
+              style={s.modalList}
+              contentContainerStyle={s.modalListContent}
+              scrollEnabled={!draggingGroupId}
+            >
               {displayGroups.map((group, index) => {
                 const isDragging = draggingGroupId === group.id;
                 return (
@@ -470,7 +495,7 @@ export default function NotesScreen() {
                 >
                   <View style={s.groupRowLeft}>
                     <View
-                      {...createDragResponder(group.id, index).panHandlers}
+                      {...getDragResponder(group.id).panHandlers}
                       style={s.dragHandleWrap}
                     >
                       <View style={s.dragHandle}>
