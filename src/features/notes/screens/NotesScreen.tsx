@@ -384,27 +384,29 @@ export default function NotesScreen() {
           </View>
         </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={s.tabsScroll}
-          contentContainerStyle={s.tabsContent}
-        >
-          {tabs.map((tab) => {
-            const isActive = activeTab === tab.id;
-            return (
-              <Pressable key={tab.id} style={s.tab} onPress={() => setActiveTab(tab.id)}>
-                <Text style={[s.tabText, isActive ? d.tabActive : d.tabInactive]}>
-                  {tab.label}
-                </Text>
-                {isActive ? <View style={[s.tabLine, d.tabActiveLine]} /> : null}
-              </Pressable>
-            );
-          })}
+        <View style={s.tabsRow}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={s.tabsScroll}
+            contentContainerStyle={s.tabsContent}
+          >
+            {tabs.map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <Pressable key={tab.id} style={s.tab} onPress={() => setActiveTab(tab.id)}>
+                  <Text style={[s.tabText, isActive ? d.tabActive : d.tabInactive]}>
+                    {tab.label}
+                  </Text>
+                  {isActive ? <View style={[s.tabLine, d.tabActiveLine]} /> : null}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
           <Pressable style={s.manageTab} onPress={() => setManagerVisible(true)}>
             <Ionicons name="ellipsis-horizontal" size={20} color={colors.textSecondary} />
           </Pressable>
-        </ScrollView>
+        </View>
 
         <Text style={[s.statsText, d.statsText]}>{statsText}</Text>
 
@@ -586,10 +588,20 @@ const s = StyleSheet.create({
     borderRadius: Radius.pill,
   },
   unlistedBtnText: { ...Typography.small, fontWeight: '500' },
-  tabsScroll: { marginTop: Spacing.sm },
+  tabsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    marginTop: Spacing.sm,
+  },
+  tabsScroll: { flex: 1 },
   tabsContent: { gap: Spacing.lg, paddingHorizontal: 2, alignItems: 'flex-end' },
   tab: { paddingBottom: 6, alignItems: 'center' },
-  manageTab: { paddingBottom: 6, justifyContent: 'center' },
+  manageTab: {
+    width: 40,
+    paddingBottom: 6,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
   tabText: { ...Typography.bodyRegular, fontWeight: '500' },
   tabLine: { height: 2, borderRadius: 1, width: '100%', marginTop: 4 },
   statsText: {

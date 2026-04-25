@@ -51,6 +51,21 @@ test('NotesScreen supports group management and multi-group filtering', () => {
   assert.match(src, /Animated\.Value|new Animated\.Value/);
 });
 
+test('NotesScreen keeps group management action fixed beside the scrollable tabs', () => {
+  const src = read('src/features/notes/screens/NotesScreen.tsx');
+  assert.match(src, /<View style=\{s\.tabsRow\}>/);
+  assert.match(src, /style=\{s\.tabsScroll\}/);
+  assert.match(src, /<Pressable style=\{s\.manageTab\} onPress=\{\(\) => setManagerVisible\(true\)\}>/);
+  assert.match(src, /tabsScroll:\s*{[^}]*flex:\s*1/);
+  assert.match(src, /manageTab:\s*{[^}]*width:\s*40/);
+
+  const scrollStart = src.indexOf('<ScrollView');
+  const scrollEnd = src.indexOf('</ScrollView>', scrollStart);
+  const manageButton = src.indexOf('<Pressable style={s.manageTab}', scrollStart);
+  assert.ok(scrollStart >= 0 && scrollEnd > scrollStart);
+  assert.ok(manageButton > scrollEnd);
+});
+
 test('NotesScreen keeps group management sheet interactions inside a non-pressable card', () => {
   const src = read('src/features/notes/screens/NotesScreen.tsx');
   assert.match(src, /<View style=\{\[s\.modalCard, d\.modalCard\]\}>/);
