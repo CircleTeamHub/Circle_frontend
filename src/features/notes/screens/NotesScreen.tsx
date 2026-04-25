@@ -51,7 +51,6 @@ export default function NotesScreen() {
   const dragY = useRef(new Animated.Value(0)).current;
   const groupsRef = useRef<NoteGroup[]>([]);
   const dragPreviewGroupsRef = useRef<NoteGroup[] | null>(null);
-  const pendingDragRef = useRef<{ groupId: string; startIndex: number } | null>(null);
   const dragMetaRef = useRef<{
     groupId: string;
     startIndex: number;
@@ -211,7 +210,6 @@ export default function NotesScreen() {
       (group, index) => group.id !== groupsRef.current[index]?.id,
     );
 
-    pendingDragRef.current = null;
     dragMetaRef.current = null;
     setDraggingGroupId(null);
     setDragPreviewGroups(null);
@@ -228,21 +226,18 @@ export default function NotesScreen() {
     }
   }, [dragY, handleReorderGroups]);
 
-  const dragResponder = useMemo(
-    () =>
+  const createDragResponder = useCallback(
+    (groupId: string, startIndex: number) =>
       PanResponder.create({
-        onStartShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponder: (_, gestureState) =>
-          pendingDragRef.current !== null && Math.abs(gestureState.dy) > 2,
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
         onPanResponderGrant: () => {
-          const pending = pendingDragRef.current;
-          if (!pending) return;
           dragMetaRef.current = {
-            groupId: pending.groupId,
-            startIndex: pending.startIndex,
-            activeIndex: pending.startIndex,
+            groupId,
+            startIndex,
+            activeIndex: startIndex,
           };
-          setDraggingGroupId(pending.groupId);
+          setDraggingGroupId(groupId);
           setDragPreviewGroups(groupsRef.current);
           dragPreviewGroupsRef.current = groupsRef.current;
           dragY.setValue(0);
@@ -436,8 +431,9 @@ export default function NotesScreen() {
         animationType="fade"
         onRequestClose={closeManager}
       >
-        <Pressable style={[s.modalOverlay, d.modalOverlay]} onPress={closeManager}>
-          <Pressable style={[s.modalCard, d.modalCard]} onPress={() => {}}>
+        <View style={[s.modalOverlay, d.modalOverlay]}>
+          <Pressable style={s.modalBackdrop} onPress={closeManager} />
+          <View style={[s.modalCard, d.modalCard]}>
             <Text style={[s.modalTitle, d.modalTitle]}>管理分组</Text>
             <Text style={[s.modalCopy, d.modalCopy]}>
               “全部”和“未分组”固定在前面，常用自定义分组可以排在前面。
@@ -464,27 +460,16 @@ export default function NotesScreen() {
                 >
                   <View style={s.groupRowLeft}>
                     <View
-                      {...dragResponder.panHandlers}
+                      {...createDragResponder(group.id, index).panHandlers}
                       style={s.dragHandleWrap}
                     >
-                      <Pressable
-                        onPressIn={() => {
-                          pendingDragRef.current = {
-                            groupId: group.id,
-                            startIndex: index,
-                          };
-                        }}
-                        onPressOut={() => {
-                          if (!dragMetaRef.current) pendingDragRef.current = null;
-                        }}
-                        style={s.dragHandle}
-                      >
+                      <View style={s.dragHandle}>
                         <Ionicons
                           name="reorder-three-outline"
                           size={18}
                           color={colors.textSecondary}
                         />
-                      </Pressable>
+                      </View>
                     </View>
                     <View style={s.groupRowText}>
                       <Text style={[s.groupName, d.groupName]}>{group.name}</Text>
@@ -517,6 +502,8 @@ export default function NotesScreen() {
                 placeholderTextColor={colors.textSecondary}
                 value={draftGroupName}
                 onChangeText={setDraftGroupName}
+                returnKeyType="done"
+                onSubmitEditing={() => void handleSaveGroup()}
               />
               <View style={s.modalButtons}>
                 {editingGroupId ? (
@@ -537,8 +524,8 @@ export default function NotesScreen() {
                 </Pressable>
               </View>
             </View>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -617,6 +604,9 @@ const s = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
     padding: Spacing.lg,
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
   },
   modalCard: {
     borderRadius: Radius.lg,
