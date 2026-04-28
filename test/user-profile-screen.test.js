@@ -39,27 +39,27 @@ function loadTsModule(relativePath, stubs = {}) {
 }
 
 function loadProfileView() {
-  return loadTsModule('src/features/user/profile-view.ts', {
-    '@/i18n': {
-      default: {
-        t: (key) => {
-          const translations = {
-            'profileFields.male': '男',
-            'profileFields.female': '女',
-            'profileFields.other': '其他',
-            'profileFields.genderNotSet': '未设置',
-            'profileFields.notSet': '未设置',
-            'userProfile.friendAction.add': '添加好友',
-            'userProfile.friendAction.pendingSent': '已发送申请',
-            'userProfile.friendAction.pendingReceived': '等待对方处理',
-            'userProfile.friendAction.accepted': '已添加',
-            'userProfile.friendAction.blocked': '无法添加',
-          };
-
-          return translations[key] ?? key;
-        },
+  const i18nStub = {
+    default: {
+      t: (key) => {
+        const translations = {
+          'profileFields.male': '男',
+          'profileFields.female': '女',
+          'profileFields.other': '其他',
+          'profileFields.genderNotSet': '未设置',
+          'profileFields.notSet': '未设置',
+          'userProfile.friendAction.pendingSent': '已发送申请',
+          'userProfile.friendAction.pendingReceived': '等待对方处理',
+          'userProfile.friendAction.accepted': '已添加',
+          'userProfile.friendAction.blocked': '无法添加',
+          'userProfile.friendAction.add': '添加好友',
+        };
+        return translations[key] ?? key;
       },
     },
+  };
+  return loadTsModule('src/features/user/profile-view.ts', {
+    '@/i18n': i18nStub,
   });
 }
 
@@ -158,6 +158,17 @@ test('profile view formats self check, gender, and city for the detail header', 
     }),
     false,
   );
+});
+
+test('user profile screen renders unified display icons from backend data', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/user/screens/UserProfileScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /displayIcons/);
+  assert.match(source, /UserIconRow/);
 });
 
 test('user profile route helpers preserve scope for the request form', () => {

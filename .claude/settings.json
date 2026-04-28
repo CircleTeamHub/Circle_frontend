@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --test test/tab-layout-badge.test.js)",
+      "Bash(node --test test/realtime-client.test.js test/tab-badge-store.test.js test/tab-layout-badge.test.js test/profile-screen-card.test.js test/profile-commerce-pages.test.js test/realtime-profile-events.test.js test/chat-info-screen.test.js test/circle-detail-screen.test.js test/icons-api.test.js test/my-icons-screen.test.js test/user-icon-row.test.js test/user-profile-screen.test.js)",
+      "Bash(node --test test/*.test.js)",
+      "Read(//Users/yiboding/projects/**)",
+      "Bash(git -C /Users/yiboding/projects/circle-im log --oneline -20)",
+      "Bash(git -C /Users/yiboding/projects/circle-im show 2b22102 --stat)"
+    ]
+  }
+}

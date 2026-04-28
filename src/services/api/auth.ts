@@ -10,6 +10,7 @@
 import * as Device from 'expo-device';
 import { apiClient } from '@/services/api/client';
 import { normalizeUser } from '@/services/api/utils';
+import type { DisplayIcon } from '@/types';
 
 export type AuthTokens = {
   accessToken: string;
@@ -37,6 +38,7 @@ export type BackendAuthUser = {
   vipLevel: number;
   creditScore: number;
   fancyNumber: boolean;
+  displayIcons: DisplayIcon[];
   role: string;
   status: string;
   lastOnline: string | null;

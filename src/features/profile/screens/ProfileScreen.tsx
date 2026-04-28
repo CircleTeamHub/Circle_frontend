@@ -1,31 +1,51 @@
 import { Avatar } from "@/components/ui/avatar";
 import { Divider } from "@/components/ui/divider";
-import { getProfileSignature } from "@/features/profile/profile-display";
 import { MenuRow } from "@/components/ui/menu-row";
+import { UserIconRow } from "@/components/ui/user-icon-row";
 import { getUserProfileHref } from "@/features/user/utils/routes";
+import { fetchCurrentUser } from "@/services/api/auth";
+import { fetchIconOptions } from "@/services/api/icons";
+import { markProfileNotificationsRead } from "@/services/api/notifications";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
-import type { MenuItem } from "@/types";
+import type { DisplayIcon, MenuItem } from "@/types";
 import { useAuthStore } from "@/stores/authStore";
+import { useTabBadgeStore } from "@/stores/tabBadgeStore";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import { useCallback, useMemo } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, StyleSheet, Text, type TextStyle, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+const MENU_ID = {
+  MEMBER_CENTER: "member-center",
+  WALLET: "wallet",
+  MALL: "mall",
+  COLLECTIONS: "collections",
+  NOTES: "notes",
+} as const;
+
+type MenuId = (typeof MENU_ID)[keyof typeof MENU_ID];
+
+const MENU_ROUTE: Record<MenuId, string> = {
+  [MENU_ID.MEMBER_CENTER]: "/(tabs)/profile/member-center",
+  [MENU_ID.WALLET]: "/(tabs)/profile/wallet",
+  [MENU_ID.MALL]: "/(tabs)/profile/mall",
+  [MENU_ID.COLLECTIONS]: "/(tabs)/profile/collections",
+  [MENU_ID.NOTES]: "/(tabs)/profile/notes",
+};
+
 const MENU_ITEM_KEYS: {
-  id: string;
+  id: MenuId;
   icon: string;
   labelKey: string;
   rightTextKey?: string;
 }[] = [
-  { id: "1", icon: "shield-checkmark-outline", labelKey: "profile.creditScore" },
-  { id: "2", icon: "gift-outline", labelKey: "profile.memberCenter", rightTextKey: "profile.viewMember" },
-  { id: "3", icon: "wallet-outline", labelKey: "profile.wallet" },
-  { id: "4", icon: "chatbubble-ellipses-outline", labelKey: "profile.assistant", rightTextKey: "profile.userSatisfaction" },
-  { id: "5", icon: "hand-left-outline", labelKey: "profile.mall", rightTextKey: "profile.viewProducts" },
-  { id: "6", icon: "bookmark-outline", labelKey: "profile.collections", rightTextKey: "profile.viewCollections" },
-  { id: "7", icon: "document-text-outline", labelKey: "profile.notes", rightTextKey: "profile.viewNotes" },
+  { id: MENU_ID.MEMBER_CENTER, icon: "gift-outline", labelKey: "profile.memberCenter", rightTextKey: "profile.viewMember" },
+  { id: MENU_ID.WALLET, icon: "wallet-outline", labelKey: "profile.wallet" },
+  { id: MENU_ID.MALL, icon: "hand-left-outline", labelKey: "profile.mall", rightTextKey: "profile.viewProducts" },
+  { id: MENU_ID.COLLECTIONS, icon: "bookmark-outline", labelKey: "profile.collections", rightTextKey: "profile.viewCollections" },
+  { id: MENU_ID.NOTES, icon: "document-text-outline", labelKey: "profile.notes", rightTextKey: "profile.viewNotes" },
 ];
 
 const s = StyleSheet.create({
@@ -52,33 +72,46 @@ const s = StyleSheet.create({
   memberCard: {
     borderRadius: Radius.lg,
     padding: Spacing.md,
-    gap: 6,
+    gap: Spacing.sm,
   },
-  memberTags: {
+  memberStats: {
     flexDirection: "row",
     gap: Spacing.sm,
-    alignItems: "center",
   },
-  memberTag: {
-    borderRadius: Radius.md,
-    paddingVertical: Spacing.xs,
-    paddingHorizontal: 10,
-  },
-  memberTagLight: {
-    borderRadius: Radius.md,
-    paddingVertical: Spacing.xs,
-    paddingHorizontal: 10,
-  },
-  badgeRow: {
+  memberCardHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingVertical: Spacing.sm,
+    justifyContent: "space-between",
   },
-  greenBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: Spacing.md,
+  memberStat: {
+    flex: 1,
+    borderRadius: Radius.md,
+    paddingVertical: 10,
+    paddingHorizontal: Spacing.sm,
+    gap: 4,
+  },
+  memberIdentityRow: {
+    flexDirection: "row",
+    gap: Spacing.md,
+    paddingTop: Spacing.xs,
+    alignItems: "center",
+  },
+  memberIdentityItem: {
+    alignItems: "center",
+    gap: 6,
+  },
+  memberIdentityEmpty: {
+    minHeight: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  memberIdentityCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
 
@@ -88,6 +121,12 @@ export default function ProfileScreen() {
   const { colors, resolvedMode, toggleTheme } = useTheme();
   const { t } = useTranslation();
   const user = useAuthStore((state) => state.user);
+  const setUser = useAuthStore((state) => state.setUser);
+  const setProfileUnread = useTabBadgeStore((state) => state.setProfileUnread);
+  const [profileDisplayIcons, setProfileDisplayIcons] = useState<DisplayIcon[]>(
+    user?.displayIcons ?? [],
+  );
+  const lastRefreshRef = useRef(0);
 
   const MENU_ITEMS: MenuItem[] = MENU_ITEM_KEYS.map((m) => ({
     id: m.id,
@@ -105,20 +144,38 @@ export default function ProfileScreen() {
       memberCard: {
         backgroundColor: colors.memberCardBg,
       },
-      memberTag: {
-        backgroundColor: colors.memberTagBg,
-      },
-      memberTagLight: {
+      memberStat: {
         backgroundColor: colors.memberTagBgLight,
       },
-      memberTagText: {
+      memberStatLabel: {
+        color: colors.memberCardText,
+        ...Typography.tiny,
+        opacity: 0.72,
+      },
+      memberStatValue: {
+        color: colors.memberCardText,
+        fontSize: 20,
+        fontWeight: "700" as const,
+        fontVariant: ["tabular-nums"] as TextStyle["fontVariant"],
+      },
+      memberIdentityCircle: {
+        backgroundColor: colors.memberTagBgLight,
+      },
+      memberIdentityLabel: {
+        color: colors.memberCardText,
+        ...Typography.tiny,
+        fontWeight: "700" as const,
+      },
+      memberIdentityHint: {
         color: colors.memberCardText,
         ...Typography.small,
-        fontWeight: "500" as const,
+        fontWeight: "600" as const,
       },
-      memberText: { color: colors.memberCardText, fontSize: 14 },
-      greenBadge: {
-        backgroundColor: colors.success,
+      memberCardAction: {
+        color: colors.memberCardText,
+        ...Typography.tiny,
+        fontWeight: "700" as const,
+        opacity: 0.8,
       },
     }),
     [colors],
@@ -127,8 +184,54 @@ export default function ProfileScreen() {
   const isDark = resolvedMode === "dark";
   const displayName = user?.nickname || user?.accountId || t('profile.notLoggedIn');
   const displayAccount = user?.accountId || t('profile.notBound');
-  const membershipTag = user?.role === "ADMIN" ? t('profile.admin') : t('profile.normalUser');
-  const profileSignature = getProfileSignature(user?.persona, user?.helloWords);
+  const vipLevel = user?.vipLevel ?? 0;
+  const creditScore = user?.creditScore ?? 0;
+  const displayIcons = profileDisplayIcons.length > 0 ? profileDisplayIcons : user?.displayIcons ?? [];
+
+  useEffect(() => {
+    setProfileDisplayIcons(user?.displayIcons ?? []);
+  }, [user?.displayIcons]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) {
+        return undefined;
+      }
+
+      const now = Date.now();
+      if (now - lastRefreshRef.current < 10_000) {
+        return undefined;
+      }
+      lastRefreshRef.current = now;
+
+      let isActive = true;
+
+      const refreshCurrentUser = async () => {
+        try {
+          const [nextUser, nextIcons] = await Promise.all([
+            fetchCurrentUser(),
+            fetchIconOptions(),
+          ]);
+          if (isActive) {
+            setUser(nextUser);
+            setProfileDisplayIcons(nextIcons.displayIcons);
+          }
+          await markProfileNotificationsRead();
+          if (isActive) {
+            setProfileUnread(0);
+          }
+        } catch {
+          // Best-effort refresh; keep existing state on failure.
+        }
+      };
+
+      refreshCurrentUser();
+
+      return () => {
+        isActive = false;
+      };
+    }, [setProfileUnread, setUser, user?.id]),
+  );
 
   const handleOpenShare = useCallback(() => {
     router.push("/(tabs)/profile/share");
@@ -138,10 +241,15 @@ export default function ProfileScreen() {
     router.push("/(tabs)/profile/settings");
   }, [router]);
 
+  const handleOpenIcons = useCallback(() => {
+    router.push('/(tabs)/profile/icons' as never);
+  }, [router]);
+
   const handleMenuPress = useCallback(
     (item: MenuItem) => {
-      if (item.id === '7') {
-        router.push('/(tabs)/profile/notes' as never);
+      const route = MENU_ROUTE[item.id as MenuId];
+      if (route) {
+        router.push(route as never);
       }
     },
     [router],
@@ -219,27 +327,36 @@ export default function ProfileScreen() {
       </View>
 
       {/* Member card */}
-      <View style={[s.memberCard, d.memberCard]}>
-        <View style={s.memberTags}>
-          <View style={[s.memberTag, d.memberTag]}>
-            <Text style={d.memberTagText}>{membershipTag}</Text>
+      <Pressable style={[s.memberCard, d.memberCard]} onPress={handleOpenIcons}>
+        <View style={s.memberCardHeader}>
+          <Text style={d.memberCardAction}>我的图标</Text>
+          <Ionicons name="chevron-forward-outline" size={18} color={colors.memberCardText} />
+        </View>
+        <View style={s.memberStats}>
+          <View style={[s.memberStat, d.memberStat]}>
+            <Text style={d.memberStatLabel}>{t('profile.vipLevel')}</Text>
+            <Text style={d.memberStatValue}>VIP {vipLevel}</Text>
           </View>
-          <View style={[s.memberTagLight, d.memberTagLight]}>
-            <Text style={d.memberTagText}>
-              {user?.status === "ACTIVE" ? t('profile.accountNormal') : user?.status ?? t('profile.statusUnknown')}
-            </Text>
+          <View style={[s.memberStat, d.memberStat]}>
+            <Text style={d.memberStatLabel}>{t('profile.reputationValue')}</Text>
+            <Text style={d.memberStatValue}>{creditScore}</Text>
           </View>
         </View>
-        <Text style={d.memberText}>{profileSignature}</Text>
-        <Text style={d.memberText}>
-          {user?.email || user?.phoneNumber || t('profile.completeContact')}
-        </Text>
-      </View>
-
-      {/* Badge row */}
-      <View style={s.badgeRow}>
-        <View style={[s.greenBadge, d.greenBadge]} />
-      </View>
+        <View style={s.memberIdentityRow}>
+          {displayIcons.length > 0 ? (
+            <View style={s.memberIdentityItem}>
+              <UserIconRow icons={displayIcons} />
+            </View>
+          ) : (
+            <View style={s.memberIdentityEmpty}>
+              <View style={[s.memberIdentityCircle, d.memberIdentityCircle]}>
+                <Ionicons name="add-outline" size={20} color={colors.memberCardText} />
+              </View>
+              <Text style={d.memberIdentityHint}>添加图标</Text>
+            </View>
+          )}
+        </View>
+      </Pressable>
 
       <Divider />
     </View>

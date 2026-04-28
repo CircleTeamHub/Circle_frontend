@@ -12,6 +12,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { DisplayIcon } from '@/types';
 
 export interface AuthUser {
   id: string;
@@ -39,6 +40,7 @@ export interface AuthUser {
   vipLevel: number;
   creditScore: number;
   fancyNumber: boolean;
+  displayIcons: DisplayIcon[];
 }
 
 interface AuthState {

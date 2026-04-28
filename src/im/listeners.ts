@@ -16,6 +16,7 @@ import { router } from 'expo-router';
 import { loadConversationList, isMessageForConversation } from '@/im/client';
 import { clearLocalSession } from '@/services/auth/session';
 import { useIMStore } from '@/stores/imStore';
+import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 
 // 模块级单例，确保全局只注册一套监听器；解绑后置为 null 允许重新绑定
 let unbindAll: (() => void) | null = null;
@@ -75,6 +76,7 @@ export function bindOpenIMListeners() {
 
   const handleUnreadChanged = (totalUnread: number) => {
     useIMStore.getState().setTotalUnread(totalUnread);
+    useTabBadgeStore.getState().setMessagesUnread(totalUnread);
   };
   OpenIMSDK.on('onTotalUnreadMessageCountChanged', handleUnreadChanged);
 

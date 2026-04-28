@@ -1,7 +1,10 @@
 import { logoutFromOpenIM } from '@/im/client';
+import { disconnectRealtime } from '@/realtime/client';
 import { useMessageGroupsStore } from '@/features/messages/store/use-message-groups-store';
 import { useAuthStore } from '@/stores/authStore';
 import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore';
+import { useTabBadgeStore } from '@/stores/tabBadgeStore';
+import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
 
 type PersistCapableAuthStore = typeof useAuthStore & {
   persist?: {
@@ -10,6 +13,8 @@ type PersistCapableAuthStore = typeof useAuthStore & {
 };
 
 export async function clearLocalSession() {
+  disconnectRealtime();
+
   try {
     await logoutFromOpenIM();
   } catch {
@@ -18,6 +23,8 @@ export async function clearLocalSession() {
 
   useMessageGroupsStore.getState().reset();
   useFriendActivityUnreadStore.getState().reset();
+  useTabBadgeStore.getState().reset();
+  useWalletRealtimeStore.getState().reset();
   useAuthStore.getState().clearSession();
 
   try {

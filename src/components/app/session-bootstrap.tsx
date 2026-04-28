@@ -1,7 +1,13 @@
 import { useEffect } from 'react';
+import { AppState } from 'react-native';
 import { fetchCurrentUser } from '@/services/api/auth';
 import { loginToOpenIM, logoutFromOpenIM } from '@/im/client';
 import { bindOpenIMListeners } from '@/im/listeners';
+import {
+  connectRealtime,
+  disconnectRealtime,
+  recoverTabBadgeSnapshot,
+} from '@/realtime/client';
 import { clearLocalSession } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -35,6 +41,48 @@ export function SessionBootstrap() {
       unbind?.();
     };
   }, []);
+
+  useEffect(() => {
+    if (!hasHydrated) {
+      return;
+    }
+
+    if (!accessToken) {
+      disconnectRealtime();
+      return;
+    }
+
+    connectRealtime(accessToken);
+
+    return () => {
+      disconnectRealtime();
+    };
+  }, [accessToken, hasHydrated]);
+
+  useEffect(() => {
+    if (!hasHydrated) {
+      return;
+    }
+
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') {
+        return;
+      }
+
+      const nextAccessToken = useAuthStore.getState().accessToken;
+      if (!nextAccessToken) {
+        disconnectRealtime();
+        return;
+      }
+
+      connectRealtime(nextAccessToken);
+      void recoverTabBadgeSnapshot();
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [hasHydrated]);
 
   // 在 store hydration 完成、且仍处于 loading 状态时执行一次会话恢复
   // isLoading 初始值为 true，bootstrap 完成后（无论成功/失败）通过 finally 置为 false

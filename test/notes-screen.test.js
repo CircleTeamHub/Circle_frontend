@@ -155,3 +155,8 @@ test('ProfileScreen navigates to notes on menu item press', () => {
   assert.match(src, /profile\/notes/);
   assert.match(src, /handleMenuPress/);
 });
+
+test('ProfileScreen does not include the assistant menu item', () => {
+  const src = read('src/features/profile/screens/ProfileScreen.tsx');
+  assert.doesNotMatch(src, /profile\.assistant/);
+});

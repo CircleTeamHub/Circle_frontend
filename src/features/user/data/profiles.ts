@@ -5,6 +5,7 @@ export interface UserProfileData {
   avatarUrl?: string;
   memberLabel: string;
   badges: string[];
+  displayIcons?: import('@/types').DisplayIcon[];
   gender?: string | null;
   city?: string | null;
   signature: string;
@@ -19,6 +20,7 @@ const USER_PROFILES: Record<string, UserProfileData> = {
     accountId: '134273011l',
     memberLabel: '普通用户',
     badges: ['普通用户', '年度会员'],
+    displayIcons: [],
     gender: 'male',
     city: '杭州',
     signature: '你好呀，欢迎来找我聊天。',
@@ -32,6 +34,7 @@ const USER_PROFILES: Record<string, UserProfileData> = {
     avatarUrl:
       'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
     badges: ['VIP6', '魅力值', '深圳活跃'],
+    displayIcons: [],
     gender: 'female',
     city: '深圳',
     signature: '个人签名：🌹 137 6021 0281',
@@ -46,6 +49,7 @@ const USER_PROFILES: Record<string, UserProfileData> = {
     avatarUrl:
       'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
     badges: ['产品经理', '同城活跃'],
+    displayIcons: [],
     gender: 'male',
     city: '上海',
     signature: '个人签名：昨日文件已经上传了 :)',
@@ -59,6 +63,7 @@ const USER_PROFILES: Record<string, UserProfileData> = {
     avatarUrl:
       'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200',
     badges: ['设计师', '本周在线'],
+    displayIcons: [],
     gender: 'female',
     city: '成都',
     signature: '个人签名：你觉得这个设计怎么样？',
@@ -70,6 +75,7 @@ const USER_PROFILES: Record<string, UserProfileData> = {
     accountId: '290182',
     memberLabel: '普通用户',
     badges: ['摄影爱好者'],
+    displayIcons: [],
     gender: 'male',
     city: '北京',
     signature: '个人签名：哈哈太搞笑了',
@@ -81,6 +87,7 @@ const USER_PROFILES: Record<string, UserProfileData> = {
     accountId: '447801',
     memberLabel: '普通用户',
     badges: ['已认证'],
+    displayIcons: [],
     gender: 'female',
     city: '苏州',
     signature: '个人签名：有空的时候帮我打个电话',
@@ -92,6 +99,7 @@ const USER_PROFILES: Record<string, UserProfileData> = {
     accountId: '220918',
     memberLabel: '普通用户',
     badges: ['联系人'],
+    displayIcons: [],
     gender: 'male',
     city: '深圳',
     signature: '个人签名：好的，健身房见！',
@@ -103,6 +111,7 @@ const USER_PROFILES: Record<string, UserProfileData> = {
     accountId: '150620',
     memberLabel: '普通用户',
     badges: ['同城推荐'],
+    displayIcons: [],
     gender: 'female',
     city: '杭州',
     signature: '个人签名：周末羽毛球局随时约。',
@@ -143,6 +152,7 @@ export function getUserProfileById(
     accountId: '000000',
     memberLabel: '普通用户',
     badges: ['普通用户'],
+    displayIcons: [],
     gender: null,
     city: null,
     signature: `个人签名：${name} 的详细信息暂未完善`,
