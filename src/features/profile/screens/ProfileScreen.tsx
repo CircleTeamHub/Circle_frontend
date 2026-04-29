@@ -18,21 +18,25 @@ import { FlatList, Pressable, StyleSheet, Text, type TextStyle, View } from "rea
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const MENU_ID = {
+  SYSTEM_ANNOUNCEMENTS: "system-announcements",
   MEMBER_CENTER: "member-center",
   WALLET: "wallet",
   MALL: "mall",
   COLLECTIONS: "collections",
   NOTES: "notes",
+  APP_SETTINGS: "app-settings",
 } as const;
 
 type MenuId = (typeof MENU_ID)[keyof typeof MENU_ID];
 
 const MENU_ROUTE: Record<MenuId, string> = {
+  [MENU_ID.SYSTEM_ANNOUNCEMENTS]: "/(tabs)/profile/system-announcements",
   [MENU_ID.MEMBER_CENTER]: "/(tabs)/profile/member-center",
   [MENU_ID.WALLET]: "/(tabs)/profile/wallet",
   [MENU_ID.MALL]: "/(tabs)/profile/mall",
   [MENU_ID.COLLECTIONS]: "/(tabs)/profile/collections",
   [MENU_ID.NOTES]: "/(tabs)/profile/notes",
+  [MENU_ID.APP_SETTINGS]: "/(tabs)/profile/app-settings",
 };
 
 const MENU_ITEM_KEYS: {
@@ -41,11 +45,13 @@ const MENU_ITEM_KEYS: {
   labelKey: string;
   rightTextKey?: string;
 }[] = [
+  { id: MENU_ID.SYSTEM_ANNOUNCEMENTS, icon: "megaphone-outline", labelKey: "profile.systemAnnouncements", rightTextKey: "profile.viewAnnouncements" },
   { id: MENU_ID.MEMBER_CENTER, icon: "gift-outline", labelKey: "profile.memberCenter", rightTextKey: "profile.viewMember" },
   { id: MENU_ID.WALLET, icon: "wallet-outline", labelKey: "profile.wallet" },
   { id: MENU_ID.MALL, icon: "hand-left-outline", labelKey: "profile.mall", rightTextKey: "profile.viewProducts" },
   { id: MENU_ID.COLLECTIONS, icon: "bookmark-outline", labelKey: "profile.collections", rightTextKey: "profile.viewCollections" },
   { id: MENU_ID.NOTES, icon: "document-text-outline", labelKey: "profile.notes", rightTextKey: "profile.viewNotes" },
+  { id: MENU_ID.APP_SETTINGS, icon: "settings-outline", labelKey: "profile.settings" },
 ];
 
 const s = StyleSheet.create({
@@ -238,7 +244,7 @@ export default function ProfileScreen() {
   }, [router]);
 
   const handleOpenSettings = useCallback(() => {
-    router.push("/(tabs)/profile/settings");
+    router.push("/(tabs)/profile/app-settings");
   }, [router]);
 
   const handleOpenIcons = useCallback(() => {

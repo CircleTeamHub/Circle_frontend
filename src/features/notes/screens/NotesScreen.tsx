@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NoteCard } from '@/features/notes/components/NoteCard';
+import { useNotesSettingsStore } from '@/features/notes/store/use-notes-settings-store';
 import type { NoteGroup, NoteSummary } from '@/features/notes/types';
 import {
   createNoteGroup,
@@ -49,6 +50,10 @@ export default function NotesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+
+  const showGroups = useNotesSettingsStore((st) => st.showGroups);
+  const showUngrouped = useNotesSettingsStore((st) => st.showUngrouped);
+  const showSortToolbar = useNotesSettingsStore((st) => st.showSortToolbar);
 
   const [notes, setNotes] = useState<NoteSummary[]>([]);
   const [groups, setGroups] = useState<NoteGroup[]>([]);
@@ -137,17 +142,35 @@ export default function NotesScreen() {
     [notes],
   );
 
-  const tabs = useMemo(
-    () => [
-      { id: 'all' as TabId, label: `全部 ${notes.length}` },
-      { id: 'ungrouped' as TabId, label: `未分组 ${ungroupedCount}` },
-      ...groups.map((group) => ({
-        id: group.id,
-        label: `${group.name} ${group.noteCount}`,
-      })),
-    ],
-    [groups, notes.length, ungroupedCount],
-  );
+  const tabs = useMemo(() => {
+    const list: { id: TabId; label: string }[] = [
+      { id: 'all', label: `全部 ${notes.length}` },
+    ];
+    if (showUngrouped) {
+      list.push({ id: 'ungrouped', label: `未分组 ${ungroupedCount}` });
+    }
+    if (showGroups) {
+      groups.forEach((group) => {
+        list.push({ id: group.id, label: `${group.name} ${group.noteCount}` });
+      });
+    }
+    return list;
+  }, [groups, notes.length, showGroups, showUngrouped, ungroupedCount]);
+
+  useEffect(() => {
+    if (activeTab === 'ungrouped' && !showUngrouped) {
+      setActiveTab('all');
+      return;
+    }
+    if (
+      !showGroups &&
+      activeTab !== 'all' &&
+      activeTab !== 'ungrouped' &&
+      groups.some((group) => group.id === activeTab)
+    ) {
+      setActiveTab('all');
+    }
+  }, [activeTab, groups, showGroups, showUngrouped]);
 
   const displayGroups = dragPreviewGroups ?? groups;
 
@@ -541,9 +564,11 @@ export default function NotesScreen() {
             </Pressable>
             <Pressable
               hitSlop={8}
-              onPress={() => router.push('/(tabs)/profile/notes/edit' as never)}
+              onPress={() =>
+                router.push('/(tabs)/profile/notes/settings' as never)
+              }
             >
-              <Ionicons name="add" size={24} color={colors.text} />
+              <Ionicons name="settings-outline" size={22} color={colors.text} />
             </Pressable>
           </View>
         </View>
@@ -567,9 +592,11 @@ export default function NotesScreen() {
               );
             })}
           </ScrollView>
-          <Pressable style={s.manageTab} onPress={() => setManagerVisible(true)}>
-            <Ionicons name="ellipsis-horizontal" size={20} color={colors.textSecondary} />
-          </Pressable>
+          {showSortToolbar ? (
+            <Pressable style={s.manageTab} onPress={() => setManagerVisible(true)}>
+              <Ionicons name="ellipsis-horizontal" size={20} color={colors.textSecondary} />
+            </Pressable>
+          ) : null}
         </View>
 
         <Text style={[s.statsText, d.statsText]}>{statsText}</Text>

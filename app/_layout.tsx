@@ -12,6 +12,7 @@ import { StatusBar } from 'expo-status-bar'; // 控制顶部状态栏样式（�
 import 'react-native-reanimated';             // 必须在入口文件最早引入，启用动画引擎
 import { rehydrateLanguageFromStorage } from '@/i18n';
 import { migrateFromAsyncStorage } from '@/storage';
+import { silenceDomBridgeRejection } from '@/utils/silence-dom-bridge-rejection';
 import { useAuthStore } from '@/stores/authStore';
 import { useChatPreferencesStore } from '@/features/chat/store/use-chat-preferences-store';
 import { useCircleNotificationStore } from '@/features/discover/store/use-circle-notification-store';
@@ -26,6 +27,9 @@ export { ErrorBoundary } from 'expo-router';
 
 // 阻止启动屏自动隐藏，等待字体加载完成后再手动隐藏
 SplashScreen.preventAutoHideAsync();
+
+// 过滤 Expo DOM 组件在导航卸载竞态时抛出的 injectJavaScript 拒绝（属于已知良性错误）
+silenceDomBridgeRejection();
 
 // RootStack：负责将项目主题与 React Navigation 主题桥接，并声明顶层路由结构
 function RootStack() {

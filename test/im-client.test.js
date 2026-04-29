@@ -112,6 +112,13 @@ test('getOrCreateSingleConversation fetches a private conversation and merges it
         }),
       },
     },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: {
+        getState: () => ({
+          setMessagesUnread: () => undefined,
+        }),
+      },
+    },
   });
 
   const result = await getOrCreateSingleConversation('user-2');
@@ -195,6 +202,13 @@ test('getOrCreateSingleConversation waits until IM connection is ready before re
           reset: () => undefined,
           setConversations: () => undefined,
           mergeConversations: () => undefined,
+        }),
+      },
+    },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: {
+        getState: () => ({
+          setMessagesUnread: () => undefined,
         }),
       },
     },

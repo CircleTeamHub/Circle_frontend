@@ -65,3 +65,13 @@ test('ProfileScreen refreshes current user from backend for live VIP and reputat
   assert.match(src, /setUser\(nextUser\)/);
   assert.match(src, /setProfileDisplayIcons/);
 });
+
+test('ProfileScreen top-right settings action opens the main settings page', () => {
+  const src = read('src/features/profile/screens/ProfileScreen.tsx');
+  const settingsHandler = src.match(
+    /const handleOpenSettings = useCallback\(\(\) => \{[\s\S]*?\}, \[router\]\);/,
+  )?.[0] ?? '';
+
+  assert.match(settingsHandler, /profile\/app-settings/);
+  assert.doesNotMatch(settingsHandler, /profile\/settings/);
+});

@@ -115,6 +115,13 @@ export async function changePassword(payload: {
   });
 }
 
+export async function changeAccountId(accountId: string) {
+  return apiClient<void>('/auth/account-id', {
+    method: 'PATCH',
+    body: { accountId },
+  });
+}
+
 export async function logoutAll() {
   return apiClient<void>('/auth/logout-all', {
     method: 'POST',

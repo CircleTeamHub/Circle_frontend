@@ -494,6 +494,14 @@
     "statusUnknown": "Unknown",
     "completeContact": "Add contact info in settings",
     "accountSettings": "Account Settings",
+    "changeAccountId": "Change Account ID",
+    "currentAccountId": "Current Account ID",
+    "newAccountId": "New Account ID",
+    "newAccountIdPlaceholder": "Enter new account ID",
+    "accountIdInvalid": "Account ID must be 4-32 letters, numbers, underscores, or hyphens",
+    "accountIdUnchanged": "New account ID must be different from the current one",
+    "accountChangeFailed": "Failed to change account ID",
+    "accountIdChangeNotice": "Your account ID is used for login and friend search. Use the new ID after changing it.",
     "changePassword": "Change Password",
     "currentPassword": "Current Password",
     "currentPasswordPlaceholder": "Enter current password",
@@ -511,7 +519,9 @@
     "moreInfo": "More Info",
     "editProfile": "Edit Profile",
     "fieldNotEditable": "This field cannot be edited",
-    "returnToSettings": "Please return to settings."
+    "returnToSettings": "Please return to settings.",
+    "systemAnnouncements": "System Announcements",
+    "viewAnnouncements": "Latest"
   },
 
   "userProfile": {
@@ -588,6 +598,9 @@
     "qq": "QQ",
     "qqPlaceholder": "Enter QQ number",
     "notBound": "Not set",
+    "accountId": "Change Account ID",
+    "tapToChange": "Tap to change",
+    "accountIdNotSupported": "Change account ID in account settings.",
     "password": "Change Password",
     "passwordNotSupported": "Change password in account settings.",
     "securityCode": "Security Code",
@@ -636,6 +649,208 @@
     "switchAccount": "Switch Account",
     "logout": "Log Out",
     "unsupported": "This feature is not available yet."
+  },
+
+  "appSettings": {
+    "title": "Settings",
+    "searchPlaceholder": "Search settings",
+    "accountSection": "Account",
+    "generalSection": "General",
+    "helpSection": "Help & About",
+    "cacheCalculating": "Calculating...",
+    "cacheSize": "Calculating...",
+    "rows": {
+      "profile": {
+        "label": "Profile"
+      },
+      "accountSecurity": {
+        "label": "Account & Security"
+      },
+      "notifications": {
+        "label": "Notifications"
+      },
+      "appearance": {
+        "label": "Display"
+      },
+      "privacy": {
+        "label": "Privacy"
+      },
+      "permissions": {
+        "label": "System Permissions"
+      },
+      "clearCache": {
+        "label": "Clear Cache"
+      },
+      "about": {
+        "label": "About Us"
+      }
+    }
+  },
+
+  "systemAnnouncements": {
+    "title": "System Announcements",
+    "subtitle": "Latest Circle IM app information, release updates, and patch notes will appear here.",
+    "latestAppInfo": {
+      "title": "Latest App Info",
+      "meta": "Circle IM 1.0.0",
+      "body": "This version focuses on chat, circles, notes, and profile experiences. Future announcements will summarize new capabilities here."
+    },
+    "updates": {
+      "title": "Updates",
+      "meta": "Recent updates",
+      "body": "Discover, circle management, profile commerce, and notes experiences have been updated for faster content management."
+    },
+    "patches": {
+      "title": "Patches",
+      "meta": "Maintenance notes",
+      "body": "Patch notes will cover stability fixes, compatibility improvements, and required security updates."
+    }
+  },
+
+  "settingsDetails": {
+    "accountSecurity": {
+      "title": "Account & Security",
+      "loginSecuritySection": "Login Security",
+      "singleDeviceLogin": "Single-device Login",
+      "loginDeviceManagement": "Login Device Management",
+      "appLockSection": "App Lock",
+      "deviceLock": "Enable Lock Code",
+      "thirdPartySection": "Third-party Account",
+      "wechatBinding": "WeChat Binding",
+      "accountActionsSection": "Account Actions",
+      "switchAccount": "Switch Account",
+      "logout": "Log Out",
+      "cancelAccount": "Cancel Account"
+    },
+    "notifications": {
+      "title": "Notifications",
+      "baseSection": "Notifications",
+      "push": "Allow Push Notifications",
+      "vibration": "Vibration",
+      "sound": "Sound",
+      "messageRingtone": "Message Ringtone",
+      "messageDefault": "Message Default",
+      "friendSection": "Friends & Group Requests",
+      "friendRequest": "Friend Request Notifications",
+      "friendRequestHint": "When off, friend request banners will no longer appear",
+      "groupRequest": "Group Request Notifications",
+      "groupRequestHint": "When off, group request banners will no longer appear",
+      "groupSection": "Group Chat Push",
+      "groupGlobal": "Global Group Chat Push",
+      "groupGlobalHint": "Controls both group online and group offline push",
+      "groupOnline": "Group Online Push",
+      "groupOnlineHint": "When off, group online banners will no longer appear",
+      "groupOffline": "Group Offline Push",
+      "groupOfflineHint": "When off, offline group push reminders will not be received",
+      "circleSection": "Circle Notifications",
+      "circleGlobal": "Receive Circle Notifications",
+      "circleGlobalHint": "On: offline notifications, local sound, and red dots are enabled\nOff: all notifications are disabled",
+      "circleSound": "Sound Reminder",
+      "circleSoundHint": "On: play notification sound\nOff: silent with unread red dots retained",
+      "circleRingtone": "Circle Notification Ringtone",
+      "circleDefault": "Circle Default",
+      "offlineReminder": "Offline Reminder",
+      "offlineReminderHint": "On: receive Circle banners when the app is offline\nOff: no offline reminders"
+    },
+    "appearance": {
+      "title": "Display",
+      "themeMode": "Theme Mode",
+      "followSystem": "Follow System",
+      "displayMode": "Display Mode",
+      "autoRecommended": "Auto (Recommended)",
+      "fontSize": "Font Size",
+      "standard": "Standard",
+      "globalChatBackground": "Global Chat Background",
+      "configured": "Configured",
+      "hideChatAvatar": "Hide Chat Avatars",
+      "hideChatAvatarHint": "Do not show sender and receiver avatars in private chats",
+      "mergeAvatar": "Merge Consecutive Avatars",
+      "mergeAvatarHint": "Only the first message from the same sender shows an avatar",
+      "showGroupTags": "Show Group Tags",
+      "showGroupTagsHint": "[Group][Seat][Dedicated]",
+      "showOriginalGroupName": "Show Original Group Name",
+      "showOriginalGroupNameHint": "When enabled: remark name (original group nickname)",
+      "pinnedFoldCount": "Pinned Fold Count",
+      "pinnedFoldCountHint": "Show the first N pinned conversations and fold the rest",
+      "unlimited": "Unlimited",
+      "batteryOptimization": "Battery Optimization Reminder",
+      "batteryOptimizationHint": "Android only. When off, background permission guidance will no longer pop up"
+    },
+    "privacy": {
+      "title": "Privacy",
+      "selfDestruct": "Global Message Self-destruct",
+      "twoDays": "2 days",
+      "selfDestructTip": "Show Self-destruct Tips",
+      "selfDestructTipHint": "Controls self-destruct banners at the top and bottom of conversations",
+      "blacklist": "Blacklist Management",
+      "onlineTime": "Show Online Time",
+      "momentsVisibility": "Moments Visibility",
+      "all": "All",
+      "strangerMessage": "Allow Stranger Messages",
+      "singleTyping": "Private Chat Typing Status",
+      "groupTyping": "Group Chat Typing Status",
+      "showPhone": "Show Phone on Profile",
+      "showWechat": "Show WeChat on Profile",
+      "showQQ": "Show QQ on Profile",
+      "personalizedRecommendation": "Personalized Recommendations",
+      "youthMode": "Youth Mode",
+      "addMeMethods": "Ways to Add Me",
+      "callPermission": "Voice / Video Call Permission",
+      "groupInvitePermission": "Group and Circle Invite Permission"
+    },
+    "permissions": {
+      "title": "System Permissions",
+      "location": "Location",
+      "storage": "Storage",
+      "microphone": "Microphone",
+      "camera": "Camera",
+      "photoLibrary": "Photo Library",
+      "notifications": "Notifications",
+      "bluetooth": "Bluetooth",
+      "authorized": "Authorized",
+      "unauthorized": "Unauthorized",
+      "onlyVisibleAuthorized": "Only permissions that can be queried are shown",
+      "openSystemSettings": "Open System Settings"
+    },
+    "storage": {
+      "title": "Settings",
+      "storageSpace": "Storage Space",
+      "clearCache": "Clear Cache",
+      "cacheSize": "Calculating...",
+      "clearCacheAction": "Clear",
+      "clearCacheWarning": "This clears temporary files, image cache, and upload cache. It will not log you out or delete chat history.",
+      "cacheCleared": "Cache Cleared",
+      "cacheClearedMessage": "Temporary cache has been cleared.",
+      "cachePartiallyCleared": "Some cache files could not be cleared. Please try again later.",
+      "clearCacheFailed": "Clear Failed",
+      "clearCacheFailedMessage": "Unable to clear cache right now. Please try again later.",
+      "clearAllChats": "Clear All Chat Records",
+      "clearAllChatsAction": "Clear",
+      "clearAllChatsWarning": "This clears local chat records on this device only. Server history is not deleted, and some history may return after sync.",
+      "clearAllChatsDone": "Chat Records Cleared",
+      "clearAllChatsDoneMessage": "Local chat records on this device have been cleared.",
+      "clearAllChatsFailed": "Clear Failed",
+      "clearAllChatsFailedMessage": "Unable to clear local chat records right now. Please try again later.",
+      "switchAccount": "Switch Account",
+      "logout": "Log Out"
+    },
+    "storageUsage": {
+      "title": "Storage Space",
+      "chatRecords": "Chat Records",
+      "cacheFiles": "Cache Files",
+      "temporaryFiles": "Temporary Files",
+      "total": "Total",
+      "loadFailed": "Failed to calculate storage usage"
+    },
+    "about": {
+      "title": "About Us",
+      "version": "Current Version",
+      "versionValue": "Circle IM 1.0.0",
+      "userAgreement": "User Agreement",
+      "privacyPolicy": "Privacy Policy",
+      "checkUpdates": "Check for Updates",
+      "latest": "Latest"
+    }
   },
 
   "shareScreen": {

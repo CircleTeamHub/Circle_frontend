@@ -494,6 +494,14 @@
     "statusUnknown": "状态未知",
     "completeContact": "可在账号设置中完善联系方式",
     "accountSettings": "账号设置",
+    "changeAccountId": "修改账号",
+    "currentAccountId": "当前账号",
+    "newAccountId": "新账号",
+    "newAccountIdPlaceholder": "请输入新账号",
+    "accountIdInvalid": "账号需为 4-32 位字母、数字、下划线或短横线",
+    "accountIdUnchanged": "新账号不能和当前账号相同",
+    "accountChangeFailed": "修改账号失败，请稍后重试",
+    "accountIdChangeNotice": "账号用于登录和好友搜索，修改后请使用新账号登录。",
     "changePassword": "修改登录密码",
     "currentPassword": "当前密码",
     "currentPasswordPlaceholder": "请输入当前密码",
@@ -511,7 +519,9 @@
     "moreInfo": "更多信息",
     "editProfile": "编辑资料",
     "fieldNotEditable": "该字段暂不支持编辑",
-    "returnToSettings": "请返回账号设置页。"
+    "returnToSettings": "请返回账号设置页。",
+    "systemAnnouncements": "系统公告",
+    "viewAnnouncements": "查看最新"
   },
 
   "userProfile": {
@@ -588,6 +598,9 @@
     "qq": "绑定QQ号",
     "qqPlaceholder": "请输入QQ号",
     "notBound": "未绑定",
+    "accountId": "修改账号",
+    "tapToChange": "点击修改",
+    "accountIdNotSupported": "请通过账号设置页面修改账号。",
     "password": "修改登录密码",
     "passwordNotSupported": "请通过账号设置页面修改密码。",
     "securityCode": "登录安全码",
@@ -636,6 +649,208 @@
     "switchAccount": "切换账号",
     "logout": "退出登录",
     "unsupported": "该功能暂未接入。"
+  },
+
+  "appSettings": {
+    "title": "设置",
+    "searchPlaceholder": "搜索设置",
+    "accountSection": "账号",
+    "generalSection": "通用",
+    "helpSection": "帮助与关于",
+    "cacheCalculating": "计算中...",
+    "cacheSize": "计算中...",
+    "rows": {
+      "profile": {
+        "label": "个人资料"
+      },
+      "accountSecurity": {
+        "label": "账号与安全"
+      },
+      "notifications": {
+        "label": "消息通知"
+      },
+      "appearance": {
+        "label": "界面与显示"
+      },
+      "privacy": {
+        "label": "隐私设置"
+      },
+      "permissions": {
+        "label": "系统权限管理"
+      },
+      "clearCache": {
+        "label": "清除缓存"
+      },
+      "about": {
+        "label": "关于我们"
+      }
+    }
+  },
+
+  "systemAnnouncements": {
+    "title": "系统公告",
+    "subtitle": "这里会集中展示 Circle IM 的最新 App 信息、版本更新和补丁说明。",
+    "latestAppInfo": {
+      "title": "最新 App 信息",
+      "meta": "Circle IM 1.0.0",
+      "body": "当前版本聚焦聊天、圈子、笔记和个人中心体验，后续公告会同步展示最新能力。"
+    },
+    "updates": {
+      "title": "更新",
+      "meta": "近期更新",
+      "body": "发现页、圈子管理、个人中心商城和笔记体验已更新，方便更快管理内容。"
+    },
+    "patches": {
+      "title": "补丁",
+      "meta": "维护说明",
+      "body": "补丁信息会用于说明稳定性修复、兼容性优化和必要的安全更新。"
+    }
+  },
+
+  "settingsDetails": {
+    "accountSecurity": {
+      "title": "账号与安全",
+      "loginSecuritySection": "登录安全",
+      "singleDeviceLogin": "开启单设备登录",
+      "loginDeviceManagement": "登录设备管理",
+      "appLockSection": "应用锁定",
+      "deviceLock": "开启锁定码",
+      "thirdPartySection": "第三方账号",
+      "wechatBinding": "微信绑定",
+      "accountActionsSection": "账户操作",
+      "switchAccount": "切换账号",
+      "logout": "退出登录",
+      "cancelAccount": "注销账号"
+    },
+    "notifications": {
+      "title": "消息通知",
+      "baseSection": "消息通知",
+      "push": "允许推送通知",
+      "vibration": "开启震动",
+      "sound": "开启提示音",
+      "messageRingtone": "消息通知铃声",
+      "messageDefault": "消息默认",
+      "friendSection": "好友与入群通知",
+      "friendRequest": "好友申请通知",
+      "friendRequestHint": "关闭后不再显示好友申请横幅提醒",
+      "groupRequest": "入群申请通知",
+      "groupRequestHint": "关闭后不再显示入群申请横幅提醒",
+      "groupSection": "群聊推送",
+      "groupGlobal": "群聊全局推送",
+      "groupGlobalHint": "开启/关闭会联动群聊在线推送与群聊离线推送",
+      "groupOnline": "群聊在线推送",
+      "groupOnlineHint": "关闭后不再显示群聊在线横幅提醒",
+      "groupOffline": "群聊离线推送",
+      "groupOfflineHint": "关闭后不再接收群聊离线推送提醒",
+      "circleSection": "圈子通知",
+      "circleGlobal": "全局接收圈子通知",
+      "circleGlobalHint": "开启：默认打开离线通知+本地声音+红点\n关闭：禁用所有通知",
+      "circleSound": "声音提醒",
+      "circleSoundHint": "开启：播放通知声音\n关闭：静音（保留未读红点）",
+      "circleRingtone": "圈子通知铃声",
+      "circleDefault": "圈子默认",
+      "offlineReminder": "离线提醒",
+      "offlineReminderHint": "开启：APP离线时将收到圈子横幅通知\n关闭：不再接收离线提醒"
+    },
+    "appearance": {
+      "title": "界面与显示",
+      "themeMode": "主题模式",
+      "followSystem": "跟随系统",
+      "displayMode": "显示模式",
+      "autoRecommended": "自动识别（推荐）",
+      "fontSize": "字体大小",
+      "standard": "标准",
+      "globalChatBackground": "全局聊天背景",
+      "configured": "已设置",
+      "hideChatAvatar": "隐藏聊天头像",
+      "hideChatAvatarHint": "私聊中不显示发送方和接收方头像",
+      "mergeAvatar": "连续消息合并头像",
+      "mergeAvatarHint": "同一发送者连续发送时，仅首条消息显示头像",
+      "showGroupTags": "显示群聊标签",
+      "showGroupTagsHint": "[群聊][坐席][专席]",
+      "showOriginalGroupName": "群备注显示原始名称",
+      "showOriginalGroupNameHint": "开启后显示：备注名(原始群昵称)",
+      "pinnedFoldCount": "置顶折叠数量",
+      "pinnedFoldCountHint": "显示前N个置顶会话，超出部分自动折叠",
+      "unlimited": "无限制",
+      "batteryOptimization": "电池优化提醒",
+      "batteryOptimizationHint": "仅安卓生效，关闭后不再弹出后台运行权限引导"
+    },
+    "privacy": {
+      "title": "隐私设置",
+      "selfDestruct": "全局消息自毁",
+      "twoDays": "2天",
+      "selfDestructTip": "显示会话自毁提示",
+      "selfDestructTipHint": "控制会话顶部自毁条目与底部自毁提示条显示",
+      "blacklist": "黑名单管理",
+      "onlineTime": "显示在线时间",
+      "momentsVisibility": "朋友圈可见范围",
+      "all": "全部",
+      "strangerMessage": "允许陌生人发消息",
+      "singleTyping": "单聊输入状态",
+      "groupTyping": "群聊输入状态",
+      "showPhone": "在资料页展示手机号",
+      "showWechat": "在资料页展示微信号",
+      "showQQ": "在资料页展示QQ号",
+      "personalizedRecommendation": "个性化推荐",
+      "youthMode": "青少年模式",
+      "addMeMethods": "加我为好友的方式",
+      "callPermission": "语音视频通话权限",
+      "groupInvitePermission": "群聊圈子邀请权限"
+    },
+    "permissions": {
+      "title": "系统权限管理",
+      "location": "位置信息",
+      "storage": "存储",
+      "microphone": "麦克风",
+      "camera": "相机",
+      "photoLibrary": "相册",
+      "notifications": "通知",
+      "bluetooth": "蓝牙",
+      "authorized": "已授权",
+      "unauthorized": "未授权",
+      "onlyVisibleAuthorized": "仅展示能查询到的已授权系统权限",
+      "openSystemSettings": "前往系统设置"
+    },
+    "storage": {
+      "title": "设置",
+      "storageSpace": "存储空间",
+      "clearCache": "清除缓存",
+      "cacheSize": "计算中...",
+      "clearCacheAction": "清除",
+      "clearCacheWarning": "将清理临时文件、图片缓存和上传缓存，不会退出登录，也不会删除聊天记录。",
+      "cacheCleared": "缓存已清理",
+      "cacheClearedMessage": "临时缓存已清理完成。",
+      "cachePartiallyCleared": "部分缓存未能清理，请稍后重试。",
+      "clearCacheFailed": "清理失败",
+      "clearCacheFailedMessage": "暂时无法清理缓存，请稍后重试。",
+      "clearAllChats": "清空所有聊天记录",
+      "clearAllChatsAction": "清空",
+      "clearAllChatsWarning": "将清空本机聊天记录，不会删除服务器历史记录，重新同步后可能恢复部分历史。",
+      "clearAllChatsDone": "聊天记录已清空",
+      "clearAllChatsDoneMessage": "本机聊天记录已清空。",
+      "clearAllChatsFailed": "清空失败",
+      "clearAllChatsFailedMessage": "暂时无法清空本机聊天记录，请稍后重试。",
+      "switchAccount": "切换账号",
+      "logout": "退出登录"
+    },
+    "storageUsage": {
+      "title": "存储空间",
+      "chatRecords": "聊天记录",
+      "cacheFiles": "缓存文件",
+      "temporaryFiles": "临时文件",
+      "total": "总占用",
+      "loadFailed": "无法计算存储占用"
+    },
+    "about": {
+      "title": "关于我们",
+      "version": "当前版本",
+      "versionValue": "Circle IM 1.0.0",
+      "userAgreement": "用户协议",
+      "privacyPolicy": "隐私政策",
+      "checkUpdates": "检查更新",
+      "latest": "已是最新"
+    }
   },
 
   "shareScreen": {

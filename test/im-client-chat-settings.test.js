@@ -56,6 +56,13 @@ function loadChatSettingsClient(sdkCalls, storeCalls) {
         clearConversationAndDeleteAllMsg: async (conversationID) => {
           sdkCalls.push(['clearConversationAndDeleteAllMsg', conversationID]);
         },
+        deleteAllMsgFromLocal: async () => {
+          sdkCalls.push(['deleteAllMsgFromLocal']);
+        },
+        getConversationListSplit: async (params) => {
+          sdkCalls.push(['getConversationListSplit', params]);
+          return [];
+        },
       },
       LogLevel: { Info: 0 },
       SessionType: { Single: 1, Group: 2 },
@@ -87,8 +94,20 @@ function loadChatSettingsClient(sdkCalls, storeCalls) {
           reset: () => undefined,
           setConversations: () => undefined,
           mergeConversations: () => undefined,
+          clearAllMessages: () => {
+            storeCalls.push(['clearAllMessages']);
+          },
           setMessages: (...args) => {
             storeCalls.push(['setMessages', ...args]);
+          },
+        }),
+      },
+    },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: {
+        getState: () => ({
+          setMessagesUnread: (count) => {
+            storeCalls.push(['setMessagesUnread', count]);
           },
         }),
       },
@@ -151,6 +170,13 @@ function loadSearchClient(sdkCalls, searchResult = { totalCount: 0, searchResult
         }),
       },
     },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: {
+        getState: () => ({
+          setMessagesUnread: () => undefined,
+        }),
+      },
+    },
   });
 }
 
@@ -190,6 +216,23 @@ test('clearConversationMessages clears OpenIM history and local message cache', 
   ]);
   assert.deepEqual(normalize(storeCalls), [
     ['setMessages', 'conversation-99', []],
+  ]);
+});
+
+test('clearAllLocalMessages clears only local OpenIM messages and refreshes local state', async () => {
+  const sdkCalls = [];
+  const storeCalls = [];
+  const { clearAllLocalMessages } = loadChatSettingsClient(sdkCalls, storeCalls);
+
+  await clearAllLocalMessages();
+
+  assert.deepEqual(normalize(sdkCalls), [
+    ['deleteAllMsgFromLocal'],
+    ['getConversationListSplit', { offset: 0, count: 100 }],
+  ]);
+  assert.deepEqual(normalize(storeCalls), [
+    ['clearAllMessages'],
+    ['setMessagesUnread', 0],
   ]);
 });
 
@@ -247,6 +290,13 @@ test('sendFriendCardMessage creates and sends a friend card message to the targe
           setConversations: () => undefined,
           mergeConversations: () => undefined,
           setMessages: () => undefined,
+        }),
+      },
+    },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: {
+        getState: () => ({
+          setMessagesUnread: () => undefined,
         }),
       },
     },
