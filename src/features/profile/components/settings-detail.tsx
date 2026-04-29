@@ -28,6 +28,7 @@ export interface SettingsDetailRow {
   iconMuted?: boolean;
   statusKey?: string;
   onPress?: () => void;
+  disabled?: boolean;
 }
 
 export interface SettingsDetailSection {
@@ -56,6 +57,9 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Spacing.md,
+  },
+  rowDisabled: {
+    opacity: 0.55,
   },
   rowLeft: {
     flex: 1,
@@ -171,10 +175,10 @@ export function SettingsDetailScreen({
     return (
       <View key={row.id}>
         <Pressable
-          style={s.row}
-          disabled={row.type === 'info'}
+          style={[s.row, row.disabled ? s.rowDisabled : null]}
+          disabled={row.type === 'info' || row.disabled}
           onPress={() =>
-            row.type === 'toggle' || row.type === 'info'
+            row.type === 'toggle' || row.type === 'info' || row.disabled
               ? undefined
               : handleLinkPress(row)
           }

@@ -19,6 +19,38 @@ type CacheEntry = {
   isDirectory?: () => boolean;
 };
 
+// Maximum recursion depth for directory size calculation. Defends against
+// symlink loops and pathological cache layouts blowing the stack.
+const MAX_DIRECTORY_DEPTH = 16;
+
+// Names within the cache root that the app must NOT touch when "Clear Cache"
+// runs. These belong to the OS, system frameworks, or other native modules
+// that own their own lifecycle. Matching is done on the entry's basename.
+const CACHE_CLEAR_DENYLIST = new Set([
+  // OpenIM SDK state (defensive — currently lives under DocumentDirectory)
+  'openim',
+  // Persistent stores accidentally placed under cache by some libs
+  'mmkv',
+  'RCTAsyncLocalStorage_V1',
+  // iOS WebKit / cookie state — clearing logs the user out of webviews
+  'WebKit',
+  'Cookies.binarycookies',
+  'com.apple.WebKit.Networking',
+  // System-managed snapshots — iOS regenerates these; deleting can crash
+  'Snapshots',
+  'com.apple.nsurlsessiond',
+]);
+
+function basename(filePath: string) {
+  const trimmed = filePath.replace(/\/+$/, '');
+  const slash = trimmed.lastIndexOf('/');
+  return slash >= 0 ? trimmed.slice(slash + 1) : trimmed;
+}
+
+function isDenylisted(entryPath: string) {
+  return CACHE_CLEAR_DENYLIST.has(basename(entryPath));
+}
+
 function normalizePath(path: string) {
   return path.replace(/^file:\/\//, '').replace(/\/+$/, '');
 }
@@ -49,10 +81,13 @@ function getOpenIMDirectory() {
   return `${RNFS.DocumentDirectoryPath}/openim`;
 }
 
-async function getDirectorySize(directoryPath: string): Promise<number> {
+async function getDirectorySize(
+  directoryPath: string,
+  depth = 0,
+): Promise<number> {
   const normalizedPath = normalizePath(directoryPath);
 
-  if (!normalizedPath) {
+  if (!normalizedPath || depth > MAX_DIRECTORY_DEPTH) {
     return 0;
   }
 
@@ -65,7 +100,7 @@ async function getDirectorySize(directoryPath: string): Promise<number> {
   const sizes = await Promise.all(
     entries.map(async (entry) => {
       if (entry.isDirectory?.()) {
-        return getDirectorySize(entry.path);
+        return getDirectorySize(entry.path, depth + 1);
       }
 
       return entry.size ?? 0;
@@ -99,8 +134,10 @@ async function clearDirectoryContents(directoryPath: string) {
   }
 
   const entries = await RNFS.readDir(normalizedPath);
+  const safeEntries = entries.filter((entry) => !isDenylisted(entry.path));
+
   const results = await Promise.allSettled(
-    entries.map((entry) => RNFS.unlink(entry.path)),
+    safeEntries.map((entry) => RNFS.unlink(entry.path)),
   );
 
   return results.reduce(

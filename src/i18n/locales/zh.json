@@ -839,7 +839,8 @@
       "chatRecords": "聊天记录",
       "cacheFiles": "缓存文件",
       "temporaryFiles": "临时文件",
-      "total": "总占用"
+      "total": "总占用",
+      "loadFailed": "无法计算存储占用"
     },
     "about": {
       "title": "关于我们",

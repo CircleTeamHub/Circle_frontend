@@ -839,7 +839,8 @@
       "chatRecords": "Chat Records",
       "cacheFiles": "Cache Files",
       "temporaryFiles": "Temporary Files",
-      "total": "Total"
+      "total": "Total",
+      "loadFailed": "Failed to calculate storage usage"
     },
     "about": {
       "title": "About Us",

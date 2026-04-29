@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -65,6 +65,15 @@ export default function ChangeAccountScreen() {
   const [accountId, setAccountId] = useState(user?.accountId ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+  const submittingRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const currentAccountId = user?.accountId ?? '';
 
@@ -104,6 +113,8 @@ export default function ChangeAccountScreen() {
   );
 
   async function handleSave() {
+    if (submittingRef.current) return;
+
     const nextAccountId = accountId.trim();
     setError(null);
 
@@ -122,16 +133,20 @@ export default function ChangeAccountScreen() {
       return;
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
 
     try {
       await changeAccountId(nextAccountId);
+      if (!mountedRef.current) return;
       setUser({ ...user, accountId: nextAccountId });
       router.back();
     } catch (requestError) {
+      if (!mountedRef.current) return;
       setError(getApiErrorMessage(requestError, t('profile.accountChangeFailed')));
     } finally {
-      setSubmitting(false);
+      submittingRef.current = false;
+      if (mountedRef.current) setSubmitting(false);
     }
   }
 

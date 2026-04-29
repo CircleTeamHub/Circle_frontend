@@ -30,6 +30,7 @@ import {
   OPENIM_WS_URL,
 } from '@/constants/config';
 import { useIMStore } from '@/stores/imStore';
+import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 
 // SDK 初始化 Promise 单例：避免并发重复 initSDK，登出后置为 null 允许重新初始化
 let initPromise: Promise<void> | null = null;
@@ -367,6 +368,7 @@ export async function clearAllLocalMessages() {
 
   await OpenIMSDK.deleteAllMsgFromLocal();
   useIMStore.getState().clearAllMessages();
+  useTabBadgeStore.getState().setMessagesUnread(0);
   await loadConversationList();
 }
 

@@ -1,77 +1,69 @@
-import { useCallback, useState } from 'react';
-import { useFocusEffect } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { SettingsDetailScreen } from '@/features/profile/components/settings-detail';
-import {
-  formatCacheSize,
-  getAppStorageUsage,
-  type AppStorageUsage,
-} from '@/services/cache/clear-app-cache';
-
-const EMPTY_USAGE: AppStorageUsage = {
-  chatBytes: 0,
-  cacheBytes: 0,
-  temporaryBytes: 0,
-  totalBytes: 0,
-};
+import { useStorageUsage } from '@/features/profile/hooks/use-storage-usage';
+import { formatCacheSize } from '@/services/cache/clear-app-cache';
 
 export default function StorageUsageScreen() {
-  const [usage, setUsage] = useState(EMPTY_USAGE);
+  const { t } = useTranslation();
+  const { usage, loading, loadFailed, retry } = useStorageUsage();
 
-  useFocusEffect(
-    useCallback(() => {
-      let isActive = true;
+  const formatRowValue = (bytes: number) => {
+    if (loadFailed) return '—';
+    if (loading) return t('common.loading');
+    return formatCacheSize(bytes);
+  };
 
-      getAppStorageUsage()
-        .then((nextUsage) => {
-          if (isActive) {
-            setUsage(nextUsage);
-          }
-        })
-        .catch(() => {
-          if (isActive) {
-            setUsage(EMPTY_USAGE);
-          }
-        });
+  const rows = [
+    {
+      id: 'chat-records',
+      labelKey: 'settingsDetails.storageUsage.chatRecords',
+      valueText: formatRowValue(usage.chatBytes),
+      type: 'info' as const,
+    },
+    {
+      id: 'cache-files',
+      labelKey: 'settingsDetails.storageUsage.cacheFiles',
+      valueText: formatRowValue(usage.cacheBytes),
+      type: 'info' as const,
+    },
+    {
+      id: 'temporary-files',
+      labelKey: 'settingsDetails.storageUsage.temporaryFiles',
+      valueText: formatRowValue(usage.temporaryBytes),
+      type: 'info' as const,
+    },
+    {
+      id: 'total',
+      labelKey: 'settingsDetails.storageUsage.total',
+      valueText: formatRowValue(usage.totalBytes),
+      type: 'info' as const,
+    },
+  ];
 
-      return () => {
-        isActive = false;
-      };
-    }, []),
-  );
+  const sections = loadFailed
+    ? [
+        { rows },
+        {
+          rows: [
+            {
+              id: 'load-failed',
+              labelKey: 'settingsDetails.storageUsage.loadFailed',
+              type: 'info' as const,
+            },
+            {
+              id: 'retry',
+              labelKey: 'common.retry',
+              onPress: retry,
+            },
+          ],
+        },
+      ]
+    : [{ rows }];
 
   return (
     <SettingsDetailScreen
       titleKey="settingsDetails.storageUsage.title"
-      sections={[
-        {
-          rows: [
-            {
-              id: 'chat-records',
-              labelKey: 'settingsDetails.storageUsage.chatRecords',
-              valueText: formatCacheSize(usage.chatBytes),
-              type: 'info',
-            },
-            {
-              id: 'cache-files',
-              labelKey: 'settingsDetails.storageUsage.cacheFiles',
-              valueText: formatCacheSize(usage.cacheBytes),
-              type: 'info',
-            },
-            {
-              id: 'temporary-files',
-              labelKey: 'settingsDetails.storageUsage.temporaryFiles',
-              valueText: formatCacheSize(usage.temporaryBytes),
-              type: 'info',
-            },
-            {
-              id: 'total',
-              labelKey: 'settingsDetails.storageUsage.total',
-              valueText: formatCacheSize(usage.totalBytes),
-              type: 'info',
-            },
-          ],
-        },
-      ]}
+      sections={sections}
     />
   );
 }

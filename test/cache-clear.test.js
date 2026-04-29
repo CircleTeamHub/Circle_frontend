@@ -119,6 +119,64 @@ test('getAppCacheSize recursively sums cache and temporary directories', async (
   assert.equal(formatCacheSize(0), '0 B');
 });
 
+test('clearAppCache skips denylisted entries that belong to system or other modules', async () => {
+  const unlinked = [];
+  const rnfsMock = {
+    CachesDirectoryPath: '/app/cache',
+    TemporaryDirectoryPath: '/app/tmp',
+    exists: async () => true,
+    readDir: async (target) => {
+      if (target === '/app/cache') {
+        return [
+          { path: '/app/cache/image.tmp' },
+          { path: '/app/cache/WebKit' },
+          { path: '/app/cache/mmkv' },
+          { path: '/app/cache/Cookies.binarycookies' },
+        ];
+      }
+      if (target === '/app/tmp') {
+        return [{ path: '/app/tmp/upload.tmp' }];
+      }
+      return [];
+    },
+    unlink: async (target) => {
+      unlinked.push(target);
+    },
+  };
+
+  const { clearAppCache } = loadCacheModule(rnfsMock);
+  const result = await clearAppCache();
+
+  assert.deepEqual(unlinked.sort(), ['/app/cache/image.tmp', '/app/tmp/upload.tmp']);
+  assert.equal(result.clearedEntries, 2);
+  assert.equal(result.failedEntries, 0);
+});
+
+test('getDirectorySize bounds recursion to defend against symlink loops', async () => {
+  let readDirCalls = 0;
+  const rnfsMock = {
+    CachesDirectoryPath: '/app/cache',
+    TemporaryDirectoryPath: '/app/tmp',
+    exists: async () => true,
+    readDir: async (target) => {
+      readDirCalls += 1;
+      // Each level recurses one more level deep, simulating a symlink loop.
+      if (target === '/app/tmp') return [];
+      return [
+        { path: `${target}/loop`, size: 0, isDirectory: () => true },
+        { path: `${target}/file`, size: 100, isDirectory: () => false },
+      ];
+    },
+    unlink: async () => undefined,
+  };
+
+  const { getAppCacheSize } = loadCacheModule(rnfsMock);
+  await getAppCacheSize();
+
+  // 17 readDir calls for /app/cache (depth 0..16) + 1 for /app/tmp.
+  assert.ok(readDirCalls <= 20, `expected bounded recursion, got ${readDirCalls}`);
+});
+
 test('getAppStorageUsage separates chat storage from cache storage', async () => {
   const rnfsMock = {
     DocumentDirectoryPath: '/app/documents',

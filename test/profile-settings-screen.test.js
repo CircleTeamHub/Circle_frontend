@@ -237,42 +237,80 @@ test('app settings detail screens include the requested rows', () => {
 });
 
 test('storage settings screen confirms and clears app cache', () => {
-  const source = fs.readFileSync(
+  const screenSource = fs.readFileSync(
     path.join(process.cwd(), 'src/features/profile/screens/StorageSettingsScreen.tsx'),
     'utf8',
   );
+  const hookSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/profile/hooks/use-storage-actions.ts'),
+    'utf8',
+  );
 
-  assert.match(source, /clearAppCache/);
-  assert.match(source, /Alert\.alert\(/);
-  assert.match(source, /settingsDetails\.storage\.clearCacheWarning/);
-  assert.match(source, /settingsDetails\.storage\.cacheCleared/);
-  assert.match(source, /onPress:\s*handleConfirmClearCache/);
+  assert.match(screenSource, /onPress:\s*confirmClearCache/);
+
+  assert.match(hookSource, /clearAppCache/);
+  assert.match(hookSource, /Alert\.alert\(/);
+  assert.match(hookSource, /settingsDetails\.storage\.clearCacheWarning/);
+  assert.match(hookSource, /settingsDetails\.storage\.cacheCleared/);
 });
 
 test('storage settings screen opens storage usage and clears local chat history', () => {
-  const source = fs.readFileSync(
+  const screenSource = fs.readFileSync(
     path.join(process.cwd(), 'src/features/profile/screens/StorageSettingsScreen.tsx'),
     'utf8',
   );
-
-  assert.match(source, /settings-storage-usage/);
-  assert.match(source, /clearAllLocalMessages/);
-  assert.match(source, /settingsDetails\.storage\.clearAllChatsWarning/);
-  assert.match(source, /onPress:\s*handleConfirmClearAllChats/);
-});
-
-test('storage usage screen displays calculated storage categories', () => {
-  const source = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/profile/screens/StorageUsageScreen.tsx'),
+  const hookSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/profile/hooks/use-storage-actions.ts'),
     'utf8',
   );
 
-  assert.match(source, /getAppStorageUsage/);
-  assert.match(source, /formatCacheSize/);
-  assert.match(source, /settingsDetails\.storageUsage\.chatRecords/);
-  assert.match(source, /settingsDetails\.storageUsage\.cacheFiles/);
-  assert.match(source, /settingsDetails\.storageUsage\.temporaryFiles/);
-  assert.match(source, /settingsDetails\.storageUsage\.total/);
+  assert.match(screenSource, /settings-storage-usage/);
+  assert.match(screenSource, /useStorageActions/);
+  assert.match(screenSource, /confirmClearCache/);
+  assert.match(screenSource, /confirmClearChats/);
+
+  assert.match(hookSource, /clearAllLocalMessages/);
+  assert.match(hookSource, /settingsDetails\.storage\.clearAllChatsWarning/);
+  assert.match(hookSource, /mountedRef/);
+  assert.match(hookSource, /clearingCacheRef/);
+  assert.match(hookSource, /clearingChatsRef/);
+  assert.match(hookSource, /clearingCache/);
+  assert.match(hookSource, /clearingChats/);
+});
+
+test('storage usage screen displays calculated storage categories', () => {
+  const screenSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/profile/screens/StorageUsageScreen.tsx'),
+    'utf8',
+  );
+  const hookSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/profile/hooks/use-storage-usage.ts'),
+    'utf8',
+  );
+
+  assert.match(screenSource, /useStorageUsage/);
+  assert.match(screenSource, /formatCacheSize/);
+  assert.match(screenSource, /settingsDetails\.storageUsage\.chatRecords/);
+  assert.match(screenSource, /settingsDetails\.storageUsage\.cacheFiles/);
+  assert.match(screenSource, /settingsDetails\.storageUsage\.temporaryFiles/);
+  assert.match(screenSource, /settingsDetails\.storageUsage\.total/);
+  assert.match(screenSource, /loading/);
+  assert.match(screenSource, /loadFailed/);
+  assert.match(screenSource, /retry/);
+
+  assert.match(hookSource, /getAppStorageUsage/);
+  assert.match(hookSource, /mountedRef/);
+});
+
+test('change account screen guards duplicate submit and unmounted state updates', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/profile/screens/ChangeAccountScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(source, /submittingRef/);
+  assert.match(source, /mountedRef/);
+  assert.match(source, /if \(submittingRef\.current\)/);
 });
 
 test('settings screens display calculated cache size instead of fixed i18n value', () => {
@@ -289,7 +327,14 @@ test('settings screens display calculated cache size instead of fixed i18n value
   assert.match(appSettingsSource, /formatCacheSize/);
   assert.match(appSettingsSource, /valueText:\s*cacheSizeLabel/);
   assert.doesNotMatch(appSettingsSource, /valueKey:\s*'appSettings\.cacheSize'/);
-  assert.match(storageSource, /getAppCacheSize/);
+  // StorageSettingsScreen now sources cache size via the useStorageActions
+  // hook; assert the screen wires the destructured label and the hook owns
+  // the underlying `getAppCacheSize` call.
+  const storageActionsSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/profile/hooks/use-storage-actions.ts'),
+    'utf8',
+  );
+  assert.match(storageActionsSource, /getAppCacheSize/);
   assert.match(storageSource, /valueText:\s*cacheSizeLabel/);
   assert.doesNotMatch(storageSource, /valueKey:\s*'settingsDetails\.storage\.cacheSize'/);
 });

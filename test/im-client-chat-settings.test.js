@@ -103,6 +103,15 @@ function loadChatSettingsClient(sdkCalls, storeCalls) {
         }),
       },
     },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: {
+        getState: () => ({
+          setMessagesUnread: (count) => {
+            storeCalls.push(['setMessagesUnread', count]);
+          },
+        }),
+      },
+    },
   });
 }
 
@@ -161,6 +170,13 @@ function loadSearchClient(sdkCalls, searchResult = { totalCount: 0, searchResult
         }),
       },
     },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: {
+        getState: () => ({
+          setMessagesUnread: () => undefined,
+        }),
+      },
+    },
   });
 }
 
@@ -216,6 +232,7 @@ test('clearAllLocalMessages clears only local OpenIM messages and refreshes loca
   ]);
   assert.deepEqual(normalize(storeCalls), [
     ['clearAllMessages'],
+    ['setMessagesUnread', 0],
   ]);
 });
 
@@ -273,6 +290,13 @@ test('sendFriendCardMessage creates and sends a friend card message to the targe
           setConversations: () => undefined,
           mergeConversations: () => undefined,
           setMessages: () => undefined,
+        }),
+      },
+    },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: {
+        getState: () => ({
+          setMessagesUnread: () => undefined,
         }),
       },
     },
