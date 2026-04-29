@@ -45,7 +45,7 @@ const PROFILE_ROW_IDS = [
   'qq',
 ] as const;
 
-const SECURITY_ROW_IDS = ['password', 'security-code'] as const;
+const SECURITY_ROW_IDS = ['account-id', 'password', 'security-code'] as const;
 
 const s = StyleSheet.create({
   section: {
@@ -222,6 +222,11 @@ export default function SettingsScreen() {
   );
 
   function handleRowPress(item: SettingsRowItem) {
+    if (item.id === 'account-id') {
+      router.push('/(tabs)/profile/change-account');
+      return;
+    }
+
     if (item.id === 'password') {
       router.push('/(tabs)/profile/change-password');
       return;

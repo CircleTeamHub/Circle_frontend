@@ -358,6 +358,18 @@ export async function clearConversationMessages(conversationID: string) {
   useIMStore.getState().setMessages(conversationID, []);
 }
 
+export async function clearAllLocalMessages() {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await OpenIMSDK.deleteAllMsgFromLocal();
+  useIMStore.getState().clearAllMessages();
+  await loadConversationList();
+}
+
 function flattenSearchResult(result: SearchMessageResult) {
   const items = result.searchResultItems ?? result.findResultItems ?? [];
   return items.flatMap((item) => item.messageList);

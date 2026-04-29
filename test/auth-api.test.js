@@ -73,6 +73,29 @@ test('changePassword posts old and new password to the auth endpoint', async () 
   ]);
 });
 
+test('changeAccountId patches the account id endpoint', async () => {
+  const calls = [];
+  const apiClientMock = async (endpoint, options) => {
+    calls.push({ endpoint, options });
+    return {};
+  };
+  const { changeAccountId } = loadAuthApi(apiClientMock);
+
+  await changeAccountId('circle_1001');
+
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
+    {
+      endpoint: '/auth/account-id',
+      options: {
+        method: 'PATCH',
+        body: {
+          accountId: 'circle_1001',
+        },
+      },
+    },
+  ]);
+});
+
 test('logoutAll posts to the auth logout-all endpoint', async () => {
   const calls = [];
   const apiClientMock = async (endpoint, options) => {

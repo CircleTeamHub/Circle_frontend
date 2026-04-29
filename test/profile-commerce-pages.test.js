@@ -9,22 +9,48 @@ test('ProfileScreen removes the credit score row and links profile commerce page
   const src = read('src/features/profile/screens/ProfileScreen.tsx');
 
   assert.doesNotMatch(src, /profile\.creditScore/);
+  assert.match(src, /profile\.systemAnnouncements/);
   assert.match(src, /profile\.memberCenter/);
   assert.match(src, /profile\.wallet/);
   assert.match(src, /profile\.mall/);
   assert.match(src, /profile\.collections/);
   assert.match(src, /profile\/member-center/);
+  assert.match(src, /profile\/system-announcements/);
   assert.match(src, /profile\/wallet/);
   assert.match(src, /profile\/mall/);
   assert.match(src, /profile\/collections/);
 });
 
+test('ProfileScreen places system announcements before membership and settings after notes', () => {
+  const src = read('src/features/profile/screens/ProfileScreen.tsx');
+  const match = src.match(/const MENU_ITEM_KEYS:[\s\S]*?\[] = \[([\s\S]*?)\];/);
+
+  assert.ok(match, 'MENU_ITEM_KEYS should exist');
+
+  const ids = Array.from(
+    match[1].matchAll(/id: MENU_ID\.([A-Z_]+)/g),
+    ([, value]) => value,
+  );
+
+  assert.deepEqual(ids, [
+    'SYSTEM_ANNOUNCEMENTS',
+    'MEMBER_CENTER',
+    'WALLET',
+    'MALL',
+    'COLLECTIONS',
+    'NOTES',
+    'APP_SETTINGS',
+  ]);
+});
+
 test('profile commerce routes export their screens', () => {
+  assert.match(read('app/(tabs)/profile/system-announcements.tsx'), /SystemAnnouncementsScreen/);
   assert.match(read('app/(tabs)/profile/member-center.tsx'), /MemberCenterScreen/);
   assert.match(read('app/(tabs)/profile/member-rules.tsx'), /MemberRulesScreen/);
   assert.match(read('app/(tabs)/profile/wallet.tsx'), /WalletScreen/);
   assert.match(read('app/(tabs)/profile/mall.tsx'), /MallScreen/);
   assert.match(read('app/(tabs)/profile/collections.tsx'), /CollectionsScreen/);
+  assert.match(read('app/(tabs)/profile/app-settings.tsx'), /AppSettingsScreen/);
 });
 
 test('MemberCenterScreen shows VIP1 to VIP5 and links rules', () => {

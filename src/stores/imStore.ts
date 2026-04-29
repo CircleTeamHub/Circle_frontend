@@ -43,6 +43,7 @@ interface IMState {
   setActiveConversation: (conversation: ActiveConversation | null) => void;
   setMessages: (conversationID: string, messages: MessageItem[]) => void;
   appendMessages: (conversationID: string, messages: MessageItem[]) => void;
+  clearAllMessages: () => void;
   reset: () => void;
 }
 
@@ -135,5 +136,6 @@ export const useIMStore = create<IMState>((set) => ({
         ),
       },
     })),
+  clearAllMessages: () => set({ messagesByConversation: {}, totalUnread: 0 }),
   reset: () => set(initialState),
 }));

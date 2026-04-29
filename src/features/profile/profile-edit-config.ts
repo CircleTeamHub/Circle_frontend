@@ -12,6 +12,7 @@ type EditableFieldId =
   | 'qq';
 
 type UnsupportedFieldId =
+  | 'account-id'
   | 'frame'
   | 'password'
   | 'security-code';
@@ -181,6 +182,14 @@ function buildProfileEditFields() {
       placeholder: i18n.t('profileFields.qqPlaceholder'),
       emptyValueLabel: i18n.t('profileFields.notBound'),
       autoCapitalize: 'none',
+    },
+    {
+      id: 'account-id',
+      label: i18n.t('profileFields.accountId'),
+      rowType: 'text',
+      editable: false,
+      emptyValueLabel: i18n.t('profileFields.tapToChange'),
+      unsupportedMessage: i18n.t('profileFields.accountIdNotSupported'),
     },
     {
       id: 'password',
