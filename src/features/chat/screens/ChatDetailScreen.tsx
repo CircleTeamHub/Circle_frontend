@@ -21,6 +21,7 @@ import {
   loadConversationMessages,
   markConversationAsRead,
   sendTextMessage,
+  toImUserId,
 } from '@/im/client';
 import { mapMessageItemToChatMessage } from '@/im/mappers';
 import { useAuthStore } from '@/stores/authStore';
@@ -163,7 +164,10 @@ export default function ChatDetailScreen() {
 
     setActiveConversation({
       conversationID,
-      sourceID,
+      // SDK 推过来的 sendID/recvID 都是去连字符的 IM 形式，
+      // activeConversation.sourceID 用同样形式才能匹配
+      sourceID:
+        conversationType === SessionType.Single ? toImUserId(sourceID) : sourceID,
       sessionType: conversationType,
     });
 

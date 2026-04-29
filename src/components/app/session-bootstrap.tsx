@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { AppState } from 'react-native';
 import { fetchCurrentUser } from '@/services/api/auth';
 import { loginToOpenIM, logoutFromOpenIM } from '@/im/client';
-import { bindOpenIMListeners } from '@/im/listeners';
 import {
   connectRealtime,
   disconnectRealtime,
@@ -33,14 +32,8 @@ export function SessionBootstrap() {
     setLoading,
   } = useAuthStore();
 
-  // 绑定 OpenIM 全局事件（连接、断线、新消息、未读数等）
-  // 组件卸载时调用 unbind 解除所有监听，防止监听器泄漏
-  useEffect(() => {
-    const unbind = bindOpenIMListeners();
-    return () => {
-      unbind?.();
-    };
-  }, []);
+  // OpenIM 全局事件由 ensureOpenIMInitialized() 在 initSDK 之前主动绑定，
+  // 这里不再额外绑定 —— 否则 SessionBootstrap 卸载时会意外解绑全部 listener。
 
   useEffect(() => {
     if (!hasHydrated) {
@@ -117,7 +110,7 @@ export function SessionBootstrap() {
         if (imToken) {
           try {
             // 登录 OpenIM，失败时仅打印警告，不影响主 app 流程
-            await loginToOpenIM(user.accountId, imToken);
+            await loginToOpenIM(user.id, imToken);
           } catch (error) {
             console.warn(
               '[openim] bootstrap login failed',

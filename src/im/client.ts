@@ -29,11 +29,21 @@ import {
   OPENIM_LOG_LEVEL,
   OPENIM_WS_URL,
 } from '@/constants/config';
+import { bindOpenIMListeners } from '@/im/listeners';
 import { useIMStore } from '@/stores/imStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 
 // SDK 初始化 Promise 单例：避免并发重复 initSDK，登出后置为 null 允许重新初始化
 let initPromise: Promise<void> | null = null;
+
+/**
+ * OpenIM v3.8 拒绝带连字符的 userID（PostgreSQL UUID 直接传会被判定非法）。
+ * 把所有 user-id 形入参在跨过 SDK 边界前去掉连字符；后端发来的 imToken
+ * 也是基于同一规则签发的，前后端必须一致。
+ */
+export function toImUserId(userId: string): string {
+  return userId.replace(/-/g, '');
+}
 
 function isNativeIMSupported() {
   return Platform.OS === 'ios' || Platform.OS === 'android';
@@ -82,6 +92,11 @@ export async function ensureOpenIMInitialized() {
 
       await RNFS.mkdir(dataDir);
 
+      // 在 initSDK 之前先绑定 listeners —— 否则 onConnecting / onConnectSuccess
+      // 在 initSDK 内部即将触发时 JS 层还没挂回调，会被 native 直接丢成
+      // "Sending xxx with no listeners registered" 警告，导致 connected 永远是 false。
+      bindOpenIMListeners();
+
       await OpenIMSDK.initSDK({
         apiAddr: OPENIM_API_URL,
         wsAddr: OPENIM_WS_URL,
@@ -123,12 +138,13 @@ export async function loginToOpenIM(userID: string, imToken: string) {
 
   try {
     await ensureOpenIMInitialized();
-    useIMStore.getState().setCurrentUserID(userID);
+    const imUserID = toImUserId(userID);
+    useIMStore.getState().setCurrentUserID(imUserID);
     useIMStore.getState().setConnecting(true);
     useIMStore.getState().setError(null);
 
     await OpenIMSDK.login({
-      userID,
+      userID: imUserID,
       token: imToken,
     });
 
@@ -190,7 +206,7 @@ export async function getOrCreateSingleConversation(sourceID: string) {
   await waitForOpenIMConnectionReady();
 
   const conversation = await OpenIMSDK.getOneConversation({
-    sourceID,
+    sourceID: toImUserId(sourceID),
     sessionType: SessionType.Single,
   });
 
@@ -244,9 +260,10 @@ export async function sendTextMessage(params: {
   }
 
   const message = await OpenIMSDK.createTextMessage(params.text);
+  const isSingle = params.sessionType === SessionType.Single;
   const sentMessage = await OpenIMSDK.sendMessage({
-    recvID: params.sessionType === SessionType.Single ? params.sourceID : '',
-    groupID: params.sessionType === SessionType.Group ? params.sourceID : '',
+    recvID: isSingle ? toImUserId(params.sourceID) : '',
+    groupID: !isSingle ? params.sourceID : '',
     message,
     offlinePushInfo: {
       title: '新消息',
@@ -284,7 +301,7 @@ export async function sendFriendCardMessage(params: {
   }
 
   const message = await OpenIMSDK.createCardMessage({
-    userID: params.userID,
+    userID: toImUserId(params.userID),
     nickname: params.nickname,
     faceURL: params.faceURL,
     ex: params.ex ?? '',

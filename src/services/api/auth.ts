@@ -8,9 +8,18 @@
  * - logout：使 refreshToken 失效
  */
 import * as Device from 'expo-device';
+import { Platform } from 'react-native';
 import { apiClient } from '@/services/api/client';
 import { normalizeUser } from '@/services/api/utils';
 import type { DisplayIcon } from '@/types';
+
+// OpenIM platformID: 1=iOS, 2=Android, 5=Web. Backend signs imToken bound to
+// this platform; mismatched platform → onUserTokenInvalid on SDK login.
+function getOpenIMPlatformID(): 1 | 2 | 5 {
+  if (Platform.OS === 'ios') return 1;
+  if (Platform.OS === 'android') return 2;
+  return 5;
+}
 
 export type AuthTokens = {
   accessToken: string;
@@ -69,7 +78,7 @@ export async function login(payload: {
     headers: {
       'x-device-name': getDeviceName(),
     },
-    body: payload,
+    body: { ...payload, platform: getOpenIMPlatformID() },
   });
 }
 
@@ -80,7 +89,7 @@ export async function register(payload: RegisterPayload) {
     headers: {
       'x-device-name': getDeviceName(),
     },
-    body: payload,
+    body: { ...payload, platform: getOpenIMPlatformID() },
   });
 }
 
