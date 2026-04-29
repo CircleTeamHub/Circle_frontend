@@ -284,7 +284,36 @@
     "noCircles": "No circles",
     "newPosts": "{{count}} new posts, tap to view",
     "noMoments": "No moments yet",
-    "addFriendHint": "Add friends to see their moments"
+    "addFriendHint": "Add friends to see their moments",
+    "notifications": {
+      "title": "Circle Notification Settings",
+      "global": "Receive Circle Notifications",
+      "globalOnHint": "On: enables offline alerts + sound + red dot",
+      "globalOffHint": "Off: disables all notifications (local switches disabled)",
+      "sound": "Sound Alert",
+      "soundOnHint": "On: play notification sound",
+      "soundOffHint": "Off: muted (unread red dot kept)",
+      "offline": "Offline Alert",
+      "offlineOnHint": "On: receive circle banner notifications when app is offline",
+      "offlineOffHint": "Off: no offline banner notifications"
+    },
+    "filter": {
+      "title": "Filter",
+      "selectCircles": "Select Circles",
+      "selectRegions": "Select Regions",
+      "clear": "Clear",
+      "save": "Save",
+      "saved": "Filters saved",
+      "savedCirclesCount": "{{count}} circles",
+      "savedCitiesCount": "{{count}} regions",
+      "noCirclesSelected": "No circles selected",
+      "noCitiesSelected": "No regions selected",
+      "selectCirclesTitle": "Select Circles",
+      "selectAll": "Select all",
+      "unselectAll": "Clear all",
+      "selectedCount": "{{count}}/{{max}} selected",
+      "noCircles": "No circles available"
+    }
   },
 
   "circle": {

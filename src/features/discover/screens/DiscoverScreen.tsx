@@ -2,6 +2,7 @@ import { FilterTabs } from "@/components/ui/filter-tabs";
 import { MyCirclesPanel } from "@/features/discover/components/my-circles-panel";
 import { MomentsFeed } from "@/features/discover/components/moments-feed";
 import { PlazaFeed } from "@/features/discover/components/plaza-feed";
+import { useDiscoverFilterStore } from "@/features/discover/store/use-discover-filter-store";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -52,6 +53,17 @@ const s = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  filterButton: {
+    position: "relative",
+  },
+  filterDot: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
 });
 
 export default function DiscoverScreen() {
@@ -60,6 +72,13 @@ export default function DiscoverScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState(0);
+  const filterCircleCount = useDiscoverFilterStore(
+    (st) => st.appliedCircleIds.length,
+  );
+  const filterCityCount = useDiscoverFilterStore(
+    (st) => st.appliedCities.length,
+  );
+  const hasActiveFilter = filterCircleCount > 0 || filterCityCount > 0;
 
   const FILTER_TABS = [t('discover.plaza'), t('discover.management'), t('discover.moments')];
 
@@ -92,6 +111,14 @@ export default function DiscoverScreen() {
     }
   }, [activeTab, router]);
 
+  const handleFilterPress = useCallback(() => {
+    router.push("/(tabs)/discover/filter");
+  }, [router]);
+
+  const handleSettingsPress = useCallback(() => {
+    router.push("/(tabs)/discover/notifications");
+  }, [router]);
+
   return (
     <View style={d.container}>
       {/* Fixed header */}
@@ -99,10 +126,23 @@ export default function DiscoverScreen() {
         <View style={s.headerRow}>
           <Text style={d.title}>{t('discover.title')}</Text>
           <View style={s.headerIcons}>
-            <Pressable>
-              <Ionicons name="options-outline" size={22} color={colors.text} />
+            <Pressable
+              onPress={handleFilterPress}
+              hitSlop={8}
+              style={s.filterButton}
+            >
+              <Ionicons
+                name="options-outline"
+                size={22}
+                color={hasActiveFilter ? colors.primary : colors.text}
+              />
+              {hasActiveFilter ? (
+                <View
+                  style={[s.filterDot, { backgroundColor: colors.primary }]}
+                />
+              ) : null}
             </Pressable>
-            <Pressable>
+            <Pressable onPress={handleSettingsPress} hitSlop={8}>
               <Ionicons
                 name="settings-outline"
                 size={22}

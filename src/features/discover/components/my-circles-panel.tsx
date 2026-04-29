@@ -1,6 +1,8 @@
 import { Divider } from "@/components/ui/divider";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { useCirclesStore } from "@/features/discover/store/use-circles-store";
+import { useDiscoverFilterStore } from "@/features/discover/store/use-discover-filter-store";
+import { applyCircleFilter } from "@/features/discover/utils/circle-filter";
 import { useTranslation } from "react-i18next";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { Circle } from "@/types";
@@ -82,13 +84,29 @@ export const MyCirclesPanel: React.FC = () => {
   }, [fetchMyCircles]);
 
   const tabKey = CIRCLE_TAB_KEYS[activeTab] ?? CIRCLE_TAB_KEYS[0];
-  const circlesByTab: Record<(typeof CIRCLE_TAB_KEYS)[number], Circle[]> = {
-    joined: joinedCircles,
-    created: createdCircles,
-    managed: managedCircles,
-    applied: appliedCircles,
-  };
-  const circles = circlesByTab[tabKey];
+  const filterCircleIds = useDiscoverFilterStore((st) => st.appliedCircleIds);
+  const filterCities = useDiscoverFilterStore((st) => st.appliedCities);
+
+  const circles = useMemo(() => {
+    const circlesByTab: Record<(typeof CIRCLE_TAB_KEYS)[number], Circle[]> = {
+      joined: joinedCircles,
+      created: createdCircles,
+      managed: managedCircles,
+      applied: appliedCircles,
+    };
+    return applyCircleFilter(circlesByTab[tabKey], {
+      circleIds: filterCircleIds,
+      cities: filterCities,
+    });
+  }, [
+    appliedCircles,
+    createdCircles,
+    filterCircleIds,
+    filterCities,
+    joinedCircles,
+    managedCircles,
+    tabKey,
+  ]);
 
   const circleFilterTabs = useMemo(
     () => [

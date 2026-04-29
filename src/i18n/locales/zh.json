@@ -284,7 +284,36 @@
     "noCircles": "暂无圈子",
     "newPosts": "有{{count}}条新动态，点击查看",
     "noMoments": "暂无朋友圈动态",
-    "addFriendHint": "添加好友后即可看到朋友的动态"
+    "addFriendHint": "添加好友后即可看到朋友的动态",
+    "notifications": {
+      "title": "圈子通知设置",
+      "global": "全局接收圈子通知",
+      "globalOnHint": "开启：默认打开离线通知+本地声音+红点",
+      "globalOffHint": "关闭：禁用所有通知（本地开关同步禁用）",
+      "sound": "声音提醒",
+      "soundOnHint": "开启：播放通知声音",
+      "soundOffHint": "关闭：静音（保留未读红点）",
+      "offline": "离线提醒",
+      "offlineOnHint": "开启：APP离线时将收到圈子横幅通知",
+      "offlineOffHint": "关闭：不再接收离线横幅通知"
+    },
+    "filter": {
+      "title": "筛选",
+      "selectCircles": "选择圈子",
+      "selectRegions": "选择地区",
+      "clear": "清空条件",
+      "save": "保存条件",
+      "saved": "已保存筛选条件",
+      "savedCirclesCount": "已选{{count}}个圈子",
+      "savedCitiesCount": "已选{{count}}个地区",
+      "noCirclesSelected": "未选择圈子",
+      "noCitiesSelected": "未选择地区",
+      "selectCirclesTitle": "选择圈子",
+      "selectAll": "全选",
+      "unselectAll": "取消全选",
+      "selectedCount": "已选{{count}}/{{max}}",
+      "noCircles": "暂无可选圈子"
+    }
   },
 
   "circle": {

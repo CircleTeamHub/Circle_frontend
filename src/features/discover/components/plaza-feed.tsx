@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -12,6 +12,8 @@ import { useTranslation } from 'react-i18next';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
+import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-filter-store';
+import { applyCircleFilter } from '@/features/discover/utils/circle-filter';
 import { PlazaPostCard } from './plaza-post-card';
 import { CircleFilterBar } from './circle-filter-bar';
 import type { CirclePlazaPost } from '@/types';
@@ -58,6 +60,17 @@ export const PlazaFeed: React.FC = () => {
   } = useDiscoverStore();
 
   const { allCircles, allCirclesError, fetchAllCircles } = useCirclesStore();
+  const filterCircleIds = useDiscoverFilterStore((st) => st.appliedCircleIds);
+  const filterCities = useDiscoverFilterStore((st) => st.appliedCities);
+
+  const visibleCircles = useMemo(
+    () =>
+      applyCircleFilter(allCircles, {
+        circleIds: filterCircleIds,
+        cities: filterCities,
+      }),
+    [allCircles, filterCircleIds, filterCities],
+  );
 
   useEffect(() => {
     fetchAllCircles();
@@ -92,11 +105,11 @@ export const PlazaFeed: React.FC = () => {
   const keyExtractor = useCallback((item: CirclePlazaPost) => item.id, []);
 
   const ListHeader =
-    allCircles.length > 0 || allCirclesError ? (
+    visibleCircles.length > 0 || allCirclesError ? (
       <View style={s.headerSection}>
-        {allCircles.length > 0 ? (
+        {visibleCircles.length > 0 ? (
           <CircleFilterBar
-            circles={allCircles}
+            circles={visibleCircles}
             selectedId={selectedCircleId}
             onSelect={handleCircleSelect}
           />

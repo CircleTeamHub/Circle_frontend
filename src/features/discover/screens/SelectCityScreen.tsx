@@ -18,6 +18,7 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { CITY_PROVINCES } from '@/features/profile/city-options';
 import { useAuthStore } from '@/stores/authStore';
 import { useCreateCircleFormStore } from '@/features/discover/store/use-create-circle-form-store';
+import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-filter-store';
 import { usePostFormStore } from '@/features/discover/store/use-post-form-store';
 import {
   MAX_CITY_SELECTION,
@@ -125,12 +126,16 @@ export default function SelectCityScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const user = useAuthStore((st) => st.user);
-  const params = useLocalSearchParams<{ multiSelect?: string }>();
+  const params = useLocalSearchParams<{ multiSelect?: string; target?: string }>();
   const isMultiSelect = params.multiSelect === 'true';
+  const target: 'post' | 'circle' | 'filter' =
+    params.target === 'filter' ? 'filter' : isMultiSelect ? 'circle' : 'post';
   const formCity = usePostFormStore((st) => st.selectedCity);
   const setFormCity = usePostFormStore((st) => st.setSelectedCity);
   const circleCities = useCreateCircleFormStore((st) => st.selectedCities);
   const setCircleCities = useCreateCircleFormStore((st) => st.setSelectedCities);
+  const filterCities = useDiscoverFilterStore((st) => st.draftCities);
+  const setFilterCities = useDiscoverFilterStore((st) => st.setDraftCities);
 
   const isVip = (user?.vipLevel ?? 0) >= 1;
 
@@ -139,15 +144,16 @@ export default function SelectCityScreen() {
   const [isNationwide, setIsNationwide] = useState(false);
 
   useEffect(() => {
+    const multiCities = target === 'filter' ? filterCities : circleCities;
     const nextState = buildInitialCityPickerState({
       isMultiSelect,
       singleCity: formCity,
-      multiCities: circleCities,
+      multiCities,
     });
 
     setSelected(nextState.selected);
     setIsNationwide(nextState.isNationwide);
-  }, [circleCities, formCity, isMultiSelect]);
+  }, [circleCities, filterCities, formCity, isMultiSelect, target]);
 
   const sections: CitySection[] = useMemo(() => {
     if (!search.trim()) {
@@ -197,7 +203,9 @@ export default function SelectCityScreen() {
   }, [isVip]);
 
   const handleConfirm = useCallback(() => {
-    if (isMultiSelect) {
+    if (target === 'filter') {
+      setFilterCities(resolveMultiCitySelection(selected, isNationwide));
+    } else if (isMultiSelect) {
       setCircleCities(resolveMultiCitySelection(selected, isNationwide));
     } else {
       setFormCity(resolveSingleCitySelection(selected, isNationwide));
@@ -209,7 +217,9 @@ export default function SelectCityScreen() {
     router,
     selected,
     setCircleCities,
+    setFilterCities,
     setFormCity,
+    target,
   ]);
 
   return (
