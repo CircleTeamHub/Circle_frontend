@@ -1,17 +1,17 @@
 /**
- * authStore.ts — 用户认证状态（持久化到 AsyncStorage）
+ * authStore.ts — 用户认证状态（持久化到 MMKV）
  *
  * 持久化字段：accessToken、refreshToken、imToken、user、isAuthenticated
  * 不持久化字段：isLoading、hasHydrated（运行时状态）
  *
- * hasHydrated：AsyncStorage 读取完成后由 onRehydrateStorage 置为 true，
+ * hasHydrated：MMKV 同步读取完成后由 onRehydrateStorage 置为 true，
  *   SessionBootstrap 监听此字段决定何时执行会话恢复。
  * isLoading：初始为 true，SessionBootstrap 完成后（成功或失败）置为 false，
  *   app/index.tsx 在 isLoading=false 后才根据 isAuthenticated 决定跳转目标。
  */
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { mmkvJsonStorage } from '@/storage';
 import type { DisplayIcon } from '@/types';
 
 export interface AuthUser {
@@ -126,7 +126,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'circle-im-auth',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => mmkvJsonStorage),
       partialize: (state) => ({
         accessToken: state.accessToken,
         refreshToken: state.refreshToken,
@@ -135,7 +135,7 @@ export const useAuthStore = create<AuthState>()(
         isAuthenticated: state.isAuthenticated,
       }),
       onRehydrateStorage: () => (state) => {
-        // AsyncStorage 读取完成，通知 SessionBootstrap 可以开始执行
+        // MMKV 同步读取完成，通知 SessionBootstrap 可以开始执行
         state?.setHydrated(true);
 
         // token 不完整时提前清空，避免后续带着残缺数据执行 /auth/me

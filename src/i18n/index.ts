@@ -1,7 +1,7 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { getLocales } from 'expo-localization';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { storage } from '@/storage';
 
 import zh from './locales/zh.json';
 import en from './locales/en.json';
@@ -13,35 +13,46 @@ const resources = {
   en: { translation: en },
 };
 
-function getDeviceLanguage(): string {
+function getDeviceLanguage(): 'zh' | 'en' {
   const locales = getLocales();
   const lang = locales[0]?.languageCode ?? 'zh';
   return lang.startsWith('zh') ? 'zh' : 'en';
 }
 
+function getInitialLanguage(): 'zh' | 'en' {
+  const saved = storage.getString(LANGUAGE_KEY);
+  if (saved === 'zh' || saved === 'en') return saved;
+  return getDeviceLanguage();
+}
+
 i18n.use(initReactI18next).init({
   resources,
-  lng: getDeviceLanguage(),
+  lng: getInitialLanguage(),
   fallbackLng: 'zh',
   interpolation: {
     escapeValue: false,
   },
 });
 
-// Restore saved language preference
-AsyncStorage.getItem(LANGUAGE_KEY).then((saved) => {
-  if (saved && (saved === 'zh' || saved === 'en')) {
-    i18n.changeLanguage(saved);
-  }
-});
-
 export function setLanguage(lang: 'zh' | 'en') {
   i18n.changeLanguage(lang);
-  AsyncStorage.setItem(LANGUAGE_KEY, lang);
+  storage.set(LANGUAGE_KEY, lang);
 }
 
 export function getCurrentLanguage(): 'zh' | 'en' {
   return (i18n.language?.startsWith('zh') ? 'zh' : 'en') as 'zh' | 'en';
+}
+
+/**
+ * Re-read the persisted language and apply it. Called after the
+ * AsyncStorage→MMKV migration completes so users upgrading from an older
+ * build don't lose their language preference for the first session.
+ */
+export function rehydrateLanguageFromStorage() {
+  const saved = storage.getString(LANGUAGE_KEY);
+  if (saved === 'zh' || saved === 'en') {
+    void i18n.changeLanguage(saved);
+  }
 }
 
 export default i18n;

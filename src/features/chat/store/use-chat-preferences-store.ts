@@ -1,6 +1,6 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { mmkvJsonStorage } from '@/storage';
 
 export type ChatBackgroundPreference =
   | { mode: 'global' }
@@ -123,7 +123,7 @@ export const useChatPreferencesStore = create<ChatPreferencesState>()(
     }),
     {
       name: 'circle-im-chat-preferences',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => mmkvJsonStorage),
       partialize: (state) => ({
         backgroundsByConversationID: state.backgroundsByConversationID,
       }),

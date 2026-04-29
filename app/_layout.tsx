@@ -7,10 +7,15 @@ import {
 import { useFonts } from 'expo-font';        // 加载自定义字体
 import { Stack } from 'expo-router';          // Expo Router 的 Stack 导航（页面栈）
 import * as SplashScreen from 'expo-splash-screen'; // 控制启动屏（闪屏）的显示与隐藏
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar'; // 控制顶部状态栏样式（文字颜色等）
 import 'react-native-reanimated';             // 必须在入口文件最早引入，启用动画引擎
-import '@/i18n';                              // 初始化 i18n（必须在组件渲染前）
+import { rehydrateLanguageFromStorage } from '@/i18n';
+import { migrateFromAsyncStorage } from '@/storage';
+import { useAuthStore } from '@/stores/authStore';
+import { useChatPreferencesStore } from '@/features/chat/store/use-chat-preferences-store';
+import { useCircleNotificationStore } from '@/features/discover/store/use-circle-notification-store';
+import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-filter-store';
 
 // 项目自定义主题系统：ThemeProvider 提供主题上下文，useTheme 读取当前主题
 import { SessionBootstrap } from '@/components/app/session-bootstrap';
@@ -67,27 +72,46 @@ function RootStack() {
 }
 
 // RootLayout：应用真正的根组件
-// 职责：加载字体 → 隐藏启动屏 → 挂载主题 Provider → 渲染路由结构
+// 职责：迁移旧版 AsyncStorage 数据到 MMKV → 加载字体 → 隐藏启动屏 → 挂载主题 Provider → 渲染路由结构
 export default function RootLayout() {
   // 加载自定义字体，loaded 为 true 时字体就绪，error 表示加载失败
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
 
+  /**
+   * 旧版 AsyncStorage → MMKV 一次性数据迁移闸门。
+   *
+   * 迁移结束前 zustand store 已经用空 MMKV 同步完成了一次 hydration，
+   * 因此迁移完成后需要让所有持久化 store 重新读取 MMKV，并刷新 i18n。
+   * 主题在迁移完成后才挂载 ThemeProvider，初始 useState 即可读到迁移过的值。
+   */
+  const [migrated, setMigrated] = useState(false);
+  useEffect(() => {
+    migrateFromAsyncStorage().then(() => {
+      void useAuthStore.persist.rehydrate();
+      void useChatPreferencesStore.persist.rehydrate();
+      void useDiscoverFilterStore.persist.rehydrate();
+      void useCircleNotificationStore.persist.rehydrate();
+      rehydrateLanguageFromStorage();
+      setMigrated(true);
+    });
+  }, []);
+
   // 字体加载出错时直接抛出，触发 ErrorBoundary 展示错误页
   useEffect(() => {
     if (error) throw error;
   }, [error]);
 
-  // 字体加载完成后隐藏启动屏，正式展示 App 内容
+  // 字体和迁移都就绪后隐藏启动屏
   useEffect(() => {
-    if (loaded) {
+    if (loaded && migrated) {
       SplashScreen.hideAsync();
     }
-  }, [loaded]);
+  }, [loaded, migrated]);
 
-  // 字体未就绪前不渲染任何内容（启动屏仍显示）
-  if (!loaded) return null;
+  // 字体或迁移未就绪前不渲染任何内容（启动屏仍显示）
+  if (!loaded || !migrated) return null;
 
   return (
     // ThemeProvider：提供全局主题上下文（颜色、深浅色模式等）
