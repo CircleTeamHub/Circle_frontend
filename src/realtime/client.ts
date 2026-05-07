@@ -3,6 +3,7 @@ import { fetchCircleActivityUnreadCount } from '@/services/api/circles';
 import { fetchUnreadFriendActivityCount } from '@/services/api/friends';
 import { fetchCurrentUser } from '@/services/api/auth';
 import { fetchNotificationUnreadSummary } from '@/services/api/notifications';
+import { registerLogoutHandler } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
@@ -295,3 +296,6 @@ export function disconnectRealtime() {
   useTabBadgeStore.getState().setRealtimeConnected(false);
   closeSocket();
 }
+
+// 注册到 session 的登出 teardown，避免 session.ts 反向 import 实时通道。
+registerLogoutHandler(disconnectRealtime);

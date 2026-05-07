@@ -189,7 +189,7 @@ export default function ContactsScreen() {
   }, [router]);
 
   const handleOpenSearch = useCallback(() => {
-    router.push('/(tabs)/contacts/add-friend');
+    router.push('/(tabs)/contacts/search');
   }, [router]);
 
   const handleOpenFriend = useCallback(

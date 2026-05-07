@@ -1,6 +1,12 @@
-import { fetchUnreadFriendActivityCount } from '@/services/api/friends';
 import { create } from 'zustand';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
+
+// 用 dynamic import 避免 friends API 与 api/client → session → 本 store 的模块循环。
+// refresh 仅在用户操作时调用，dynamic import 的延迟可忽略。
+async function fetchUnreadFriendActivityCount() {
+  const mod = await import('@/services/api/friends');
+  return mod.fetchUnreadFriendActivityCount();
+}
 
 type FriendActivityUnreadState = {
   count: number;

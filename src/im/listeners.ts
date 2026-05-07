@@ -13,6 +13,7 @@ import OpenIMSDK, {
   SessionType,
   type ConversationItem,
   type MessageItem,
+  type UserOnlineState,
 } from '@openim/rn-client-sdk';
 import { router } from 'expo-router';
 import { clearLocalSession } from '@/services/auth/session';
@@ -101,6 +102,45 @@ export function bindOpenIMListeners() {
   };
   OpenIMSDK.on('onTotalUnreadMessageCountChanged', handleUnreadChanged);
 
+  // C2C 已读回执：对方阅读消息后，SDK 把读到的 clientMsgID 列表回推给发送方。
+  // payload 形如 [{ userID, conversationID, msgIDList }, ...]，不同 SDK 版本字段
+  // 命名略不同（msgIDList / clientMsgIDList / readMsgIDList），都兼容下。
+  const handleC2CReadReceipt = (
+    receipts: ReadonlyArray<{
+      userID?: string;
+      conversationID?: string;
+      msgIDList?: string[];
+      clientMsgIDList?: string[];
+      readMsgIDList?: string[];
+    }>,
+  ) => {
+    if (!Array.isArray(receipts)) return;
+    const { activeConversation, conversations } = useIMStore.getState();
+    for (const receipt of receipts) {
+      const ids =
+        receipt.msgIDList ??
+        receipt.clientMsgIDList ??
+        receipt.readMsgIDList ??
+        [];
+      if (ids.length === 0) continue;
+      // 优先用 receipt 自带的 conversationID；否则按 userID 在已加载的会话里查
+      let conversationID = receipt.conversationID;
+      if (!conversationID && receipt.userID) {
+        const conv = conversations.find(
+          (c) => c.userID === receipt.userID,
+        );
+        conversationID = conv?.conversationID;
+      }
+      if (!conversationID && activeConversation) {
+        conversationID = activeConversation.conversationID;
+      }
+      if (conversationID) {
+        useIMStore.getState().markMessagesRead(conversationID, ids);
+      }
+    }
+  };
+  OpenIMSDK.on('onRecvC2CReadReceipt', handleC2CReadReceipt);
+
   const handleNewMessages = (messages: MessageItem[]) => {
     const { activeConversation, currentUserID, appendMessages } =
       useIMStore.getState();
@@ -117,6 +157,15 @@ export function bindOpenIMListeners() {
   };
   OpenIMSDK.on('onRecvNewMessages', handleNewMessages);
 
+  // 订阅过的用户状态变化时 SDK 会回推一条记录，转写到 store。
+  const handleUserStatusChanged = (status: UserOnlineState) => {
+    if (!status?.userID) return;
+    useIMStore
+      .getState()
+      .setUserOnlineStatuses([{ userID: status.userID, status: status.status }]);
+  };
+  OpenIMSDK.on('onUserStatusChanged', handleUserStatusChanged);
+
   unbindAll = () => {
     OpenIMSDK.off('onConnecting', handleConnecting);
     OpenIMSDK.off('onConnectSuccess', handleConnected);
@@ -127,6 +176,8 @@ export function bindOpenIMListeners() {
     OpenIMSDK.off('onNewConversation', handleNewConversation);
     OpenIMSDK.off('onTotalUnreadMessageCountChanged', handleUnreadChanged);
     OpenIMSDK.off('onRecvNewMessages', handleNewMessages);
+    OpenIMSDK.off('onRecvC2CReadReceipt', handleC2CReadReceipt);
+    OpenIMSDK.off('onUserStatusChanged', handleUserStatusChanged);
     unbindAll = null;
   };
 

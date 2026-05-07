@@ -13,6 +13,7 @@ export interface Conversation {
   avatarUrl?: string;
   unreadCount: number;
   conversationType: ConversationType;
+  pinned: boolean;
   customGroupIds?: string[];
 }
 
@@ -43,14 +44,61 @@ export interface Post {
   comments: number;
 }
 
+export interface NoteCardData {
+  noteId: string;
+  title: string;
+  contentPreview: string | null;
+  coverUrl: string | null;
+  imageCount: number;
+  videoCount: number;
+  groupNames: string[];
+}
+
+export interface FriendCardData {
+  userID: string;
+  nickname: string;
+  faceURL: string;
+  persona?: string | null;
+  displayIcons?: DisplayIcon[];
+}
+
+export interface TransferCardData {
+  amount: number;
+  message: string | null;
+}
+
 export interface ChatMessage {
   id: string;
-  type: 'sent' | 'received' | 'date' | 'location';
+  type:
+    | 'sent'
+    | 'received'
+    | 'date'
+    | 'location'
+    | 'image'
+    | 'note-card'
+    | 'friend-card'
+    | 'transfer-card';
   text?: string;
   time?: string;
   senderName?: string;
   locationTitle?: string;
   locationAddress?: string;
+  // For image messages: source URL + optional intrinsic dimensions for layout
+  imageUrl?: string;
+  imageWidth?: number;
+  imageHeight?: number;
+  // For image / note-card / location messages: indicates direction (sent vs received)
+  outgoing?: boolean;
+  // For note-card messages: parsed payload
+  noteCard?: NoteCardData;
+  // For friend-card messages: parsed card payload
+  friendCard?: FriendCardData;
+  // For transfer-card messages: parsed payload
+  transferCard?: TransferCardData;
+  // OpenIM 发送状态：1=发送中, 2=已送达, 3=失败。仅自己发出的消息有意义。
+  sendStatus?: 1 | 2 | 3;
+  // 对方是否已读，由 onRecvC2CReadReceipt 维护。仅自己发出的消息有意义。
+  isRead?: boolean;
 }
 
 export interface MenuItem {

@@ -262,3 +262,26 @@ export async function cancelFriendRequest(requestId: string) {
     method: 'DELETE',
   });
 }
+
+export const FRIEND_REPORT_CATEGORIES = [
+  'harassment',
+  'spam',
+  'impersonation',
+  'fraud',
+  'other',
+] as const;
+export type FriendReportCategory = (typeof FRIEND_REPORT_CATEGORIES)[number];
+
+export async function reportFriend(
+  friendUserId: string,
+  payload: {
+    category: FriendReportCategory;
+    description: string;
+    evidence?: string[];
+  },
+) {
+  return apiClient<void>(`/friend/${friendUserId}/report`, {
+    method: 'POST',
+    body: payload,
+  });
+}

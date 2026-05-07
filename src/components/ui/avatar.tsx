@@ -8,6 +8,7 @@ interface AvatarProps {
   name?: string;
   uri?: string;
   bgColor?: string;
+  shape?: 'circle' | 'square';
 }
 
 const s = StyleSheet.create({
@@ -22,10 +23,11 @@ export const Avatar: React.FC<AvatarProps> = ({
   name,
   uri,
   bgColor,
+  shape = 'circle',
 }) => {
   const { colors } = useTheme();
   const resolvedBgColor = bgColor ?? colors.primary;
-  const borderRadius = size / 2;
+  const borderRadius = shape === 'square' ? Radius.sm : size / 2;
 
   const d = useMemo(
     () => ({

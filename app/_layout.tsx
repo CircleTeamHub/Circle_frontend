@@ -66,10 +66,10 @@ function RootStack() {
         }}
       >
         {/* 四个顶层路由组，对应 app/(tabs)、(auth)、(chat)、(social) 目录 */}
-        <Stack.Screen name="(tabs)" />    {/* 主 Tab 界面（消息、发现、联系人、我的） */}
-        <Stack.Screen name="(auth)" />    {/* 登录 / 注册 */}
-        <Stack.Screen name="(chat)" />    {/* 聊天详情等聊天相关页面 */}
-        <Stack.Screen name="(social)" />  {/* 社交相关页面（发帖、用户主页等） */}
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(chat)" />
+        <Stack.Screen name="(social)" />
       </Stack>
     </NavThemeProvider>
   );

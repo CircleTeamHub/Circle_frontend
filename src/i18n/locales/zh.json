@@ -75,7 +75,18 @@
     "seatManagement": "坐席管理",
     "groupManagement": "群组管理",
     "loadFailed": "会话加载失败：{{error}}",
-    "noConversations": "暂无会话"
+    "noConversations": "暂无会话",
+    "newGroupTitle": "发起群聊",
+    "newGroupNamePlaceholder": "群聊名称（可选）",
+    "newGroupSelectMembers": "选择联系人",
+    "newGroupSearchPlaceholder": "搜索好友",
+    "newGroupNoFriends": "还没有好友，先去添加吧",
+    "newGroupNoMatches": "没有匹配的好友",
+    "newGroupSelectedCount": "已选 {{count}}",
+    "newGroupSubmit": "完成",
+    "newGroupMinMembers": "请至少选择 1 位好友",
+    "newGroupCreateFailed": "创建群聊失败：{{error}}",
+    "newGroupDefaultName": "群聊"
   },
 
   "chat": {
