@@ -8,6 +8,8 @@ const ALLOWED_CONTENT_TYPES = new Set([
   'image/png',
   'image/webp',
   'image/gif',
+  'image/heic',
+  'image/heif',
   'video/mp4',
   'video/quicktime',
   'video/x-m4v',
@@ -19,12 +21,14 @@ const CONTENT_TYPE_BY_EXTENSION = {
   png: 'image/png',
   webp: 'image/webp',
   gif: 'image/gif',
+  heic: 'image/heic',
+  heif: 'image/heif',
   mp4: 'video/mp4',
   mov: 'video/quicktime',
   m4v: 'video/x-m4v',
 } as const;
 
-export type UploadFolder = 'avatars' | 'covers' | 'posts' | 'notes';
+export type UploadFolder = 'avatars' | 'covers' | 'posts' | 'notes' | 'chat';
 
 export type UploadPresignResponse = {
   uploadUrl: string;

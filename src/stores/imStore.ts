@@ -12,6 +12,7 @@
  * 该 store 不使用 persist，所有状态在 app 重启后从 SDK 重新拉取。
  */
 import { create } from 'zustand';
+import { OnlineState } from '@openim/rn-client-sdk';
 import type { ConversationItem, MessageItem, SessionType } from '@openim/rn-client-sdk';
 
 // 当前打开的会话标识，供 listeners 判断新消息是否属于当前页面
@@ -31,6 +32,8 @@ interface IMState {
   totalUnread: number;
   activeConversation: ActiveConversation | null;
   messagesByConversation: Record<string, MessageItem[]>;
+  // 在线状态按 IM 用户 ID 索引（去连字符的形式，与 OpenIM 推送一致）
+  onlineStatusByUser: Record<string, OnlineState>;
 
   setCurrentUserID: (userID: string | null) => void;
   setInitialized: (initialized: boolean) => void;
@@ -43,11 +46,27 @@ interface IMState {
   setActiveConversation: (conversation: ActiveConversation | null) => void;
   setMessages: (conversationID: string, messages: MessageItem[]) => void;
   appendMessages: (conversationID: string, messages: MessageItem[]) => void;
+  /** 收到对方读回执时把对应 clientMsgID 列表标记为 isRead=true。 */
+  markMessagesRead: (conversationID: string, clientMsgIDs: string[]) => void;
+  /** 批量更新某些用户的在线状态（订阅返回值或 onUserStatusChanged 都走这里）。 */
+  setUserOnlineStatuses: (
+    statuses: ReadonlyArray<{ userID: string; status: OnlineState }>,
+  ) => void;
   clearAllMessages: () => void;
   reset: () => void;
 }
 
-// 将 SDK 推送的会话变更合并到现有列表（以 conversationID 去重），并按最新消息时间降序排列
+// 会话列表排序：置顶在上（按最新消息时间降序），未置顶在下（按最新消息时间降序）。
+function compareConversations(left: ConversationItem, right: ConversationItem) {
+  const leftPinned = left.isPinned === true;
+  const rightPinned = right.isPinned === true;
+  if (leftPinned !== rightPinned) {
+    return leftPinned ? -1 : 1;
+  }
+  return right.latestMsgSendTime - left.latestMsgSendTime;
+}
+
+// 将 SDK 推送的会话变更合并到现有列表（以 conversationID 去重）并排序
 function mergeConversationList(
   current: ConversationItem[],
   updates: ConversationItem[]
@@ -58,9 +77,7 @@ function mergeConversationList(
     next.set(item.conversationID, item);
   }
 
-  return [...next.values()].sort(
-    (left, right) => right.latestMsgSendTime - left.latestMsgSendTime
-  );
+  return [...next.values()].sort(compareConversations);
 }
 
 // 内存中每个会话最多保留的消息条数
@@ -91,6 +108,7 @@ const initialState = {
   totalUnread: 0,
   activeConversation: null,
   messagesByConversation: {},
+  onlineStatusByUser: {},
 };
 
 export const useIMStore = create<IMState>((set) => ({
@@ -103,9 +121,7 @@ export const useIMStore = create<IMState>((set) => ({
   setError: (error) => set({ error }),
   setConversations: (conversations) =>
     set({
-      conversations: [...conversations].sort(
-        (left, right) => right.latestMsgSendTime - left.latestMsgSendTime
-      ),
+      conversations: [...conversations].sort(compareConversations),
     }),
   mergeConversations: (conversations) =>
     set((state) => ({
@@ -136,6 +152,39 @@ export const useIMStore = create<IMState>((set) => ({
         ),
       },
     })),
+  markMessagesRead: (conversationID, clientMsgIDs) =>
+    set((state) => {
+      const list = state.messagesByConversation[conversationID];
+      if (!list || list.length === 0 || clientMsgIDs.length === 0) {
+        return state;
+      }
+      const idSet = new Set(clientMsgIDs);
+      let changed = false;
+      const next = list.map((msg) => {
+        if (idSet.has(msg.clientMsgID) && !msg.isRead) {
+          changed = true;
+          return { ...msg, isRead: true };
+        }
+        return msg;
+      });
+      if (!changed) return state;
+      return {
+        messagesByConversation: {
+          ...state.messagesByConversation,
+          [conversationID]: next,
+        },
+      };
+    }),
+  setUserOnlineStatuses: (statuses) =>
+    set((state) => {
+      if (statuses.length === 0) return state;
+      const next = { ...state.onlineStatusByUser };
+      for (const item of statuses) {
+        if (!item.userID) continue;
+        next[item.userID] = item.status;
+      }
+      return { onlineStatusByUser: next };
+    }),
   clearAllMessages: () => set({ messagesByConversation: {}, totalUnread: 0 }),
   reset: () => set(initialState),
 }));

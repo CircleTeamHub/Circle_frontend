@@ -1,45 +1,42 @@
 import { useRouter, useSegments } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  SectionList,
+  ActivityIndicator,
   Pressable,
+  SectionList,
   StyleSheet,
+  Text,
   TextInput,
+  View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
 import { Divider } from '@/components/ui/divider';
-import { getUserProfileHref, type UserProfileScope } from '@/features/user/utils/routes';
 import { NavHeader } from '@/components/ui/nav-header';
+import { mapConversationItemToUI } from '@/im/mappers';
+import { fetchFriends, type FriendProfile } from '@/services/api/friends';
+import { useIMStore } from '@/stores/imStore';
+import { getUserProfileHref, type UserProfileScope } from '@/features/user/utils/routes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import type { Conversation } from '@/types';
 
-interface SearchResultItem {
-  id: string;
-  title: string;
-  subtitle: string;
-  category: '联系人' | '对话';
-  meta: string;
-  profileId?: string;
-}
+type ChatResult = {
+  kind: 'chat';
+  data: Conversation;
+};
 
-interface SearchSection {
-  title: '对话' | '联系人';
+type ContactResult = {
+  kind: 'contact';
+  data: FriendProfile;
+};
+
+type SearchResultItem = ChatResult | ContactResult;
+
+type SearchSection = {
+  title: '聊天记录' | '好友';
   data: SearchResultItem[];
-}
-
-const RECENT_SEARCHES = ['陈思琪', '工作群', '王浩然'];
-
-const MOCK_RESULTS: SearchResultItem[] = [
-  { id: 'chat-1', title: 'Circle 产品群', subtitle: '6 条相关消息', category: '对话', meta: '下午 4:20' },
-  { id: 'chat-2', title: '周末羽毛球局', subtitle: '3 条相关消息', category: '对话', meta: '昨天' },
-  { id: 'chat-3', title: '陈思琪', subtitle: '嘿！今晚还是一起吃饭吗？', category: '对话', meta: '下午 3:34', profileId: 'chen-siqi' },
-  { id: 'contact-1', title: '陈思琪', subtitle: '联系人 · 最近活跃', category: '联系人', meta: '在线', profileId: 'chen-siqi' },
-  { id: 'contact-2', title: '王浩然', subtitle: '联系人 · 共同好友 3 人', category: '联系人', meta: '深圳', profileId: 'wang-haoran' },
-  { id: 'contact-3', title: '周子涵', subtitle: '联系人 · 同城推荐', category: '联系人', meta: '杭州', profileId: 'zhou-zihan' },
-];
+};
 
 const s = StyleSheet.create({
   listContent: {
@@ -61,20 +58,6 @@ const s = StyleSheet.create({
     paddingTop: Spacing.lg,
     paddingBottom: Spacing.sm,
   },
-  recentBlock: {
-    gap: Spacing.md,
-  },
-  recentRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-  },
-  recentChip: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-  },
   resultRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -90,6 +73,10 @@ const s = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  loadingWrap: {
+    paddingTop: Spacing.xl,
+    alignItems: 'center',
+  },
 });
 
 export default function SearchScreen() {
@@ -98,54 +85,86 @@ export default function SearchScreen() {
   const segments = useSegments();
   const { colors } = useTheme();
   const [query, setQuery] = useState('');
+  const [friends, setFriends] = useState<FriendProfile[]>([]);
+  const [friendsLoading, setFriendsLoading] = useState(true);
+
+  const rawConversations = useIMStore((state) => state.conversations);
+  const conversations = useMemo(
+    () => rawConversations.map(mapConversationItemToUI),
+    [rawConversations],
+  );
 
   const currentScope: UserProfileScope = useMemo(() => {
     const scope = segments.find(
       (segment) => segment === 'contacts' || segment === 'profile',
     );
 
-    if (scope === 'contacts') {
-      return 'contacts';
-    }
-
-    if (scope === 'profile') {
-      return 'profile';
-    }
-
+    if (scope === 'contacts') return 'contacts';
+    if (scope === 'profile') return 'profile';
     return 'messages';
   }, [segments]);
 
-  const filteredResults = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
+  useEffect(() => {
+    let cancelled = false;
+    setFriendsLoading(true);
+    fetchFriends()
+      .then((list) => {
+        if (!cancelled) setFriends(list);
+      })
+      .catch(() => {
+        if (!cancelled) setFriends([]);
+      })
+      .finally(() => {
+        if (!cancelled) setFriendsLoading(false);
+      });
 
-    if (!normalizedQuery) {
-      return MOCK_RESULTS;
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const trimmedQuery = query.trim().toLowerCase();
+
+  const sections = useMemo<SearchSection[]>(() => {
+    if (!trimmedQuery) {
+      return [];
     }
 
-    return MOCK_RESULTS.filter((item) => {
-      const haystack = `${item.title}${item.subtitle}${item.category}`.toLowerCase();
-      return haystack.includes(normalizedQuery);
+    const matchedChats: ChatResult[] = conversations
+      .filter((conversation) => {
+        const haystack = `${conversation.name}${conversation.message ?? ''}`.toLowerCase();
+        return haystack.includes(trimmedQuery);
+      })
+      .map((conversation) => ({ kind: 'chat' as const, data: conversation }));
+
+    const matchedFriends: ContactResult[] = friends
+      .filter((friend) => {
+        const haystack = `${friend.nickname}${friend.accountId}`.toLowerCase();
+        return haystack.includes(trimmedQuery);
+      })
+      .map((friend) => ({ kind: 'contact' as const, data: friend }));
+
+    const out: SearchSection[] = [];
+    if (matchedChats.length > 0) out.push({ title: '聊天记录', data: matchedChats });
+    if (matchedFriends.length > 0) out.push({ title: '好友', data: matchedFriends });
+    return out;
+  }, [conversations, friends, trimmedQuery]);
+
+  const handlePressChat = (conversation: Conversation) => {
+    router.push({
+      pathname: '/(tabs)/messages/chat-detail',
+      params: {
+        conversationID: conversation.id,
+        sourceID: conversation.sourceID,
+        title: conversation.name,
+        conversationType: conversation.conversationType,
+        avatarUrl: conversation.avatarUrl,
+      },
     });
-  }, [query]);
+  };
 
-  const groupedResults = useMemo<SearchSection[]>(() => {
-    const chats = filteredResults.filter((item) => item.category === '对话');
-    const contacts = filteredResults.filter((item) => item.category === '联系人');
-
-    const sections: SearchSection[] = [
-      { title: '对话', data: chats },
-      { title: '联系人', data: contacts },
-    ];
-
-    return sections.filter((section) => section.data.length > 0);
-  }, [filteredResults]);
-
-  const handleOpenUserProfile = (item: SearchResultItem) => {
-    if (!item.profileId) {
-      return;
-    }
-
-    router.push(getUserProfileHref(currentScope, item.profileId, item.title));
+  const handlePressFriend = (friend: FriendProfile) => {
+    router.push(getUserProfileHref(currentScope, friend.id, friend.nickname));
   };
 
   const d = useMemo(
@@ -170,18 +189,6 @@ export default function SearchScreen() {
       sectionTitle: {
         color: colors.text,
         ...Typography.h3,
-      },
-      recentTitle: {
-        color: colors.text,
-        ...Typography.h3,
-      },
-      recentChip: {
-        backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
-      },
-      recentChipText: {
-        color: colors.textSecondary,
-        ...Typography.caption,
       },
       resultTitle: {
         color: colors.text,
@@ -208,14 +215,58 @@ export default function SearchScreen() {
     [colors, insets.bottom],
   );
 
+  const renderItem = ({ item }: { item: SearchResultItem }) => {
+    if (item.kind === 'chat') {
+      const conversation = item.data;
+      return (
+        <Pressable style={s.resultRow} onPress={() => handlePressChat(conversation)}>
+          <Avatar size={40} name={conversation.name} uri={conversation.avatarUrl} />
+          <View style={s.resultBody}>
+            <View style={s.resultTopRow}>
+              <Text style={d.resultTitle} numberOfLines={1}>
+                {conversation.name}
+              </Text>
+              {conversation.time ? (
+                <Text style={d.resultMeta}>{conversation.time}</Text>
+              ) : null}
+            </View>
+            <Text style={d.resultSubtitle} numberOfLines={1}>
+              {conversation.message || ' '}
+            </Text>
+          </View>
+        </Pressable>
+      );
+    }
+
+    const friend = item.data;
+    return (
+      <Pressable style={s.resultRow} onPress={() => handlePressFriend(friend)}>
+        <Avatar size={40} name={friend.nickname} uri={friend.avatarUrl ?? undefined} />
+        <View style={s.resultBody}>
+          <Text style={d.resultTitle} numberOfLines={1}>
+            {friend.nickname}
+          </Text>
+          <Text style={d.resultSubtitle} numberOfLines={1}>
+            {friend.accountId}
+          </Text>
+        </View>
+      </Pressable>
+    );
+  };
+
+  const showLoading = trimmedQuery.length === 0 && friendsLoading;
+
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader title="搜索" />
       <SectionList
-        sections={groupedResults}
-        keyExtractor={(item) => item.id}
+        sections={sections}
+        keyExtractor={(item) =>
+          item.kind === 'chat' ? `chat-${item.data.id}` : `friend-${item.data.id}`
+        }
         contentContainerStyle={[s.listContent, d.listContent]}
         stickySectionHeadersEnabled={false}
+        keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <View style={s.headerContent}>
             <View style={[s.searchBox, d.searchBox]}>
@@ -224,26 +275,21 @@ export default function SearchScreen() {
                 style={d.input}
                 value={query}
                 onChangeText={setQuery}
-                placeholder="搜索对话或联系人"
+                placeholder="搜索聊天记录、好友"
                 placeholderTextColor={colors.textSecondary}
+                autoCapitalize="none"
+                autoCorrect={false}
               />
+              {query ? (
+                <Pressable hitSlop={8} onPress={() => setQuery('')}>
+                  <Ionicons
+                    name="close-circle"
+                    size={16}
+                    color={colors.textSecondary}
+                  />
+                </Pressable>
+              ) : null}
             </View>
-            {!query ? (
-              <View style={s.recentBlock}>
-                <Text style={d.recentTitle}>最近搜索</Text>
-                <View style={s.recentRow}>
-                  {RECENT_SEARCHES.map((item) => (
-                    <Pressable
-                      key={item}
-                      style={[s.recentChip, d.recentChip]}
-                      onPress={() => setQuery(item)}
-                    >
-                      <Text style={d.recentChipText}>{item}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-            ) : null}
           </View>
         }
         renderSectionHeader={({ section }) => (
@@ -253,37 +299,21 @@ export default function SearchScreen() {
         )}
         renderItem={({ item, index, section }) => (
           <View>
-            <Pressable
-              style={s.resultRow}
-              onPress={() => handleOpenUserProfile(item)}
-            >
-              {item.profileId ? (
-                <Pressable
-                  onPress={() =>
-                    handleOpenUserProfile(item)
-                  }
-                >
-                  <Avatar size={40} name={item.title} />
-                </Pressable>
-              ) : (
-                <Avatar size={40} name={item.title} />
-              )}
-              <View style={s.resultBody}>
-                <View style={s.resultTopRow}>
-                  <Text style={d.resultTitle} numberOfLines={1}>
-                    {item.title}
-                  </Text>
-                  <Text style={d.resultMeta}>{item.meta}</Text>
-                </View>
-                <Text style={d.resultSubtitle} numberOfLines={1}>
-                  {item.subtitle}
-                </Text>
-              </View>
-            </Pressable>
+            {renderItem({ item })}
             {index < section.data.length - 1 ? <Divider /> : null}
           </View>
         )}
-        ListEmptyComponent={<Text style={d.emptyText}>暂无匹配结果</Text>}
+        ListEmptyComponent={
+          showLoading ? (
+            <View style={s.loadingWrap}>
+              <ActivityIndicator color={colors.primary} />
+            </View>
+          ) : (
+            <Text style={d.emptyText}>
+              {trimmedQuery ? '暂无匹配结果' : '输入关键字搜索聊天记录、好友'}
+            </Text>
+          )
+        }
         showsVerticalScrollIndicator={false}
       />
     </View>

@@ -31,3 +31,14 @@ export async function rechargePoints(amount: number) {
     body: { amount },
   });
 }
+
+export async function sendCoinGift(payload: {
+  recipientId: string;
+  amount: number;
+  message?: string;
+}) {
+  return apiClient<void>('/coin/gift', {
+    method: 'POST',
+    body: payload,
+  });
+}

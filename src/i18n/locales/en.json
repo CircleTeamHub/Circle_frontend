@@ -75,7 +75,18 @@
     "seatManagement": "Seat Management",
     "groupManagement": "Group Management",
     "loadFailed": "Failed to load conversations: {{error}}",
-    "noConversations": "No conversations"
+    "noConversations": "No conversations",
+    "newGroupTitle": "Start Group Chat",
+    "newGroupNamePlaceholder": "Group name (optional)",
+    "newGroupSelectMembers": "Select contacts",
+    "newGroupSearchPlaceholder": "Search friends",
+    "newGroupNoFriends": "No friends yet — add some first",
+    "newGroupNoMatches": "No matching friends",
+    "newGroupSelectedCount": "{{count}} selected",
+    "newGroupSubmit": "Done",
+    "newGroupMinMembers": "Please select at least one friend",
+    "newGroupCreateFailed": "Failed to create group: {{error}}",
+    "newGroupDefaultName": "Group Chat"
   },
 
   "chat": {

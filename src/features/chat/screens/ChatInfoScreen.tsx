@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next';
 import { Divider } from '@/components/ui/divider';
 import { MenuRow } from '@/components/ui/menu-row';
 import { NavHeader } from '@/components/ui/nav-header';
-import { UserIconRow } from '@/components/ui/user-icon-row';
 import { buildChatInfoState } from '@/features/chat/chat-info';
 import {
   DEFAULT_CHAT_BACKGROUND_PREFERENCE,
@@ -15,6 +14,7 @@ import {
 } from '@/features/chat/store/use-chat-preferences-store';
 import {
   clearConversationMessages,
+  fromImUserId,
   getOrCreateSingleConversation,
   setConversationBurnDuration,
   setConversationMute,
@@ -35,10 +35,8 @@ import {
   fetchFriendStatus,
   removeFriendFromBlacklist,
 } from '@/services/api/friends';
-import { fetchUserProfile } from '@/services/api/profile';
 import { useIMStore } from '@/stores/imStore';
 import { Radius, Spacing, useTheme } from '@/theme';
-import type { DisplayIcon } from '@/types';
 
 const s = StyleSheet.create({
   scroll: { flex: 1 },
@@ -83,7 +81,6 @@ export default function ChatInfoScreen() {
   const [blacklist, setBlacklist] = useState(false);
   const [blacklistPending, setBlacklistPending] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
-  const [displayIcons, setDisplayIcons] = useState<DisplayIcon[]>([]);
   const [actionPending, setActionPending] = useState(initialActionPending);
   const actionPendingRef = useRef(initialActionPending);
   const actionRequestTokenRef = useRef({
@@ -97,19 +94,24 @@ export default function ChatInfoScreen() {
     useState<OptimisticConversationState>({});
   const conversations = useIMStore((state) => state.conversations);
 
-  const friendId =
+  // 来源可能是 OpenIM 去连字符的 32 位 hex（从会话列表跳进来）或后端的 UUID
+  // （从联系人/资料页跳进来）。两种用途要区分：
+  //   - friendId：所有业务后端 /friend/* 接口都被 ParseUUIDPipe 校验，必须 UUID。
+  //   - routeSourceID：保留原始形式，用来按 conversation.userID 在 IM 会话列表里查找。
+  const rawFriendId =
     typeof params.id === 'string'
       ? params.id
       : typeof params.sourceID === 'string'
         ? params.sourceID
         : '';
+  const friendId = rawFriendId ? fromImUserId(rawFriendId) : '';
   const friendName =
     typeof params.name === 'string'
       ? params.name
       : typeof params.title === 'string'
         ? params.title
         : t('chat.friend');
-  const routeSourceID = friendId;
+  const routeSourceID = rawFriendId;
   const originScope =
     params.originScope === 'contacts' || params.originScope === 'profile'
       ? params.originScope
@@ -192,7 +194,6 @@ export default function ChatInfoScreen() {
 
       if (!friendId) {
         setBlacklist(false);
-        setDisplayIcons([]);
         return () => {
           cancelled = true;
         };
@@ -207,18 +208,6 @@ export default function ChatInfoScreen() {
         .catch(() => {
           if (!cancelled) {
             setBlacklist(false);
-          }
-        });
-
-      fetchUserProfile(friendId)
-        .then((profile) => {
-          if (!cancelled) {
-            setDisplayIcons(profile.displayIcons ?? []);
-          }
-        })
-        .catch(() => {
-          if (!cancelled) {
-            setDisplayIcons([]);
           }
         });
 
@@ -269,10 +258,6 @@ export default function ChatInfoScreen() {
     conversation?.burnDuration,
     hasOptimisticConversationState,
   ]);
-
-  const openUnsupportedAction = useCallback((label: string) => {
-    Alert.alert(t('chat.notSupported'), `${label} ${t('chat.notSupportedMessage')}`);
-  }, [t]);
 
   const openActionError = useCallback((error: unknown) => {
     Alert.alert(
@@ -652,10 +637,6 @@ export default function ChatInfoScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={[s.section, d.section]}>
-          <UserIconRow icons={displayIcons} compact />
-        </View>
-
-        <View style={[s.section, d.section]}>
           <MenuRow icon="create-outline" label={t('chat.setRemark')} onPress={handleOpenRemark} />
           <Divider />
           <MenuRow icon="pricetag-outline" label={t('chat.tags')} onPress={handleOpenTags} />
@@ -728,7 +709,12 @@ export default function ChatInfoScreen() {
           <MenuRow
             icon="warning-outline"
             label={t('chat.report')}
-            onPress={() => openUnsupportedAction(t('chat.report'))}
+            onPress={() =>
+              router.push({
+                pathname: '/(tabs)/messages/report-friend',
+                params: { friendUserId: friendId, friendName },
+              })
+            }
           />
         </View>
 

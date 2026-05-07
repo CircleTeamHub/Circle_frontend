@@ -53,7 +53,7 @@ export function useAuth() {
 
         if (tokens.imToken) {
           try {
-            await loginToOpenIM(user.accountId, tokens.imToken);
+            await loginToOpenIM(user.id, tokens.imToken);
           } catch (error) {
             // IM 登录失败不阻断主流程，仅打印警告；用户仍可正常使用 app
             console.warn(

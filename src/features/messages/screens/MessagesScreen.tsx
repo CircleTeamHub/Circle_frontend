@@ -31,15 +31,23 @@ const BASE_FILTER_KEYS = [
   { id: "private", key: "messages.private" },
 ] as const;
 
+type MenuActionId =
+  | "newGroup"
+  | "addFriend"
+  | "scan"
+  | "seatManagement"
+  | "groupManagement";
+
 const MENU_ACTION_KEYS: {
+  id: MenuActionId;
   icon: keyof typeof Ionicons.glyphMap;
   key: string;
 }[] = [
-  { icon: "people-outline", key: "messages.newGroup" },
-  { icon: "person-add-outline", key: "messages.addFriend" },
-  { icon: "scan-outline", key: "messages.scan" },
-  { icon: "call-outline", key: "messages.seatManagement" },
-  { icon: "people-circle-outline", key: "messages.groupManagement" },
+  { id: "newGroup", icon: "people-outline", key: "messages.newGroup" },
+  { id: "addFriend", icon: "person-add-outline", key: "messages.addFriend" },
+  { id: "scan", icon: "scan-outline", key: "messages.scan" },
+  { id: "seatManagement", icon: "call-outline", key: "messages.seatManagement" },
+  { id: "groupManagement", icon: "people-circle-outline", key: "messages.groupManagement" },
 ];
 
 // 静态样式（不依赖主题色，提取到组件外避免每次渲染重建）
@@ -83,6 +91,21 @@ const s = StyleSheet.create({
     alignItems: "center",
     gap: Spacing.md,
     paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.sm,
+    marginHorizontal: -Spacing.sm,
+    borderRadius: Radius.md,
+  },
+  // 置顶会话行：顶端微弱背景色提示
+  rowPinned: {
+    // backgroundColor 由主题动态注入
+  },
+  // 置顶图标 + 名称组合
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    flex: 1,
+    marginRight: Spacing.sm,
   },
   rowContent: {
     flex: 1,
@@ -125,7 +148,7 @@ const s = StyleSheet.create({
 // MessagesScreen：消息列表主页面
 // 功能：
 //   1. 展示所有会话，支持按标签筛选（全部/未读/群聊/私聊/自定义群组）
-//   2. 头部操作栏：通知跳转、一键已读、搜索、快捷功能菜单
+//   2. 头部操作栏：通知跳转、搜索、一键已读
 //   3. 点击头像可进入用户主页（仅私聊），点击会话行进入聊天详情
 export default function MessagesScreen() {
   const insets = useSafeAreaInsets();
@@ -134,7 +157,7 @@ export default function MessagesScreen() {
   const { t } = useTranslation();
 
   const BASE_FILTERS = BASE_FILTER_KEYS.map((f) => ({ id: f.id, label: t(f.key) }));
-  const MENU_ACTIONS = MENU_ACTION_KEYS.map((a) => ({ icon: a.icon, label: t(a.key) }));
+  const MENU_ACTIONS = MENU_ACTION_KEYS.map((a) => ({ id: a.id, icon: a.icon, label: t(a.key) }));
 
   const rawConversations = useIMStore((state) => state.conversations);
   const totalUnread = useIMStore((state) => state.totalUnread);
@@ -187,6 +210,10 @@ export default function MessagesScreen() {
       menuLabel: {
         color: colors.text,
         ...Typography.body,
+      },
+      // 置顶行：用 surface 色做轻微背景区分
+      pinnedRow: {
+        backgroundColor: colors.surface,
       },
     }),
     [colors],
@@ -293,12 +320,13 @@ export default function MessagesScreen() {
       });
   }, [visibleConversations]);
 
-  // 菜单项点击处理：关闭菜单并按 label 路由跳转
+  // 菜单项点击处理：关闭菜单并按 id 路由跳转
   const handleMenuAction = useCallback(
-    (label: string) => {
+    (id: MenuActionId) => {
       setMenuVisible(false);
-      if (label === "添加好友") router.push("/(tabs)/messages/add-friend");
-      if (label === "群组管理") router.push("/(tabs)/messages/groups");
+      if (id === "newGroup") router.push("/(tabs)/messages/new-group");
+      else if (id === "addFriend") router.push("/(tabs)/messages/add-friend");
+      else if (id === "groupManagement") router.push("/(tabs)/messages/groups");
     },
     [router],
   );
@@ -306,7 +334,7 @@ export default function MessagesScreen() {
   // 单条会话行渲染：头像（私聊可点击进主页）+ 名称/预览/时间/未读数
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<Conversation>) => (
-      <View style={s.row}>
+      <View style={[s.row, item.pinned ? d.pinnedRow : null]}>
         {item.conversationType === "private" ? (
           <Pressable onPress={() => handleOpenUserProfile(item)}>
             <Avatar size={40} name={item.name} uri={item.avatarUrl} />
@@ -316,9 +344,18 @@ export default function MessagesScreen() {
         )}
         <Pressable style={s.rowContent} onPress={() => handleConversationPress(item)}>
           <View style={s.rowTop}>
-            <Text style={d.name} numberOfLines={1}>
-              {item.name}
-            </Text>
+            <View style={s.nameRow}>
+              {item.pinned ? (
+                <Ionicons
+                  name="pin"
+                  size={12}
+                  color={colors.textSecondary}
+                />
+              ) : null}
+              <Text style={d.name} numberOfLines={1}>
+                {item.name}
+              </Text>
+            </View>
             <Text style={d.time}>{item.time}</Text>
           </View>
           <View style={s.rowBottom}>
@@ -330,7 +367,7 @@ export default function MessagesScreen() {
         </Pressable>
       </View>
     ),
-    [handleConversationPress, handleOpenUserProfile, d],
+    [colors.textSecondary, d, handleConversationPress, handleOpenUserProfile],
   );
 
   const renderSeparator = useCallback(() => <Divider />, []);
@@ -356,7 +393,7 @@ export default function MessagesScreen() {
               <Badge count={Math.max(unreadNotificationCount, totalUnread)} />
             </View>
           </Pressable>
-          {/* 一键已读：将当前标签下所有会话标记为已读 */}
+          {/* ✓✓：一键已读（按当前筛选范围） */}
           <Pressable style={s.actionButton} onPress={handleClearUnread}>
             <Ionicons
               name="checkmark-done-outline"
@@ -364,7 +401,7 @@ export default function MessagesScreen() {
               color={colors.text}
             />
           </Pressable>
-          {/* 搜索按钮 */}
+          {/* 搜索按钮：跳转到统一搜索页（会话 + 联系人） */}
           <Pressable style={s.actionButton} onPress={handleOpenFind}>
             <Ionicons name="search-outline" size={24} color={colors.text} />
           </Pressable>
@@ -412,14 +449,14 @@ export default function MessagesScreen() {
             style={[
               s.menu,
               d.menuBg,
-              { top: insets.top + 56, right: Spacing.lg }, // 定位在状态栏高度 + header 高度下方
+              { top: insets.top + 56, right: Spacing.lg }, // 状态栏高度 + header 高度下方
             ]}
           >
             {MENU_ACTIONS.map((action) => (
               <Pressable
-                key={action.label}
+                key={action.id}
                 style={s.menuItem}
-                onPress={() => handleMenuAction(action.label)}
+                onPress={() => handleMenuAction(action.id)}
               >
                 <Ionicons name={action.icon} size={20} color={colors.text} />
                 <Text style={d.menuLabel}>{action.label}</Text>
