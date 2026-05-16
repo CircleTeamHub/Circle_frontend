@@ -28,6 +28,13 @@ function loadApiUtils() {
         return { API_URL: 'https://api.example.com' };
       }
 
+      if (specifier === '@/services/api/client') {
+        return {
+          apiClient: {},
+          ApiError: class ApiError extends Error {},
+        };
+      }
+
       return require(specifier);
     },
   };
