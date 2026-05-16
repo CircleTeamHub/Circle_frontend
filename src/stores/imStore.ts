@@ -57,13 +57,17 @@ interface IMState {
 }
 
 // 会话列表排序：置顶在上（按最新消息时间降序），未置顶在下（按最新消息时间降序）。
+// 同时间戳（群创建瞬间多条事件、初次拉取时无 latestMsgSendTime 等）下用
+// conversationID 做 tiebreaker，避免依赖 Array.sort 输入顺序产生抖动。
 function compareConversations(left: ConversationItem, right: ConversationItem) {
   const leftPinned = left.isPinned === true;
   const rightPinned = right.isPinned === true;
   if (leftPinned !== rightPinned) {
     return leftPinned ? -1 : 1;
   }
-  return right.latestMsgSendTime - left.latestMsgSendTime;
+  const timeDelta = right.latestMsgSendTime - left.latestMsgSendTime;
+  if (timeDelta !== 0) return timeDelta;
+  return left.conversationID < right.conversationID ? -1 : left.conversationID > right.conversationID ? 1 : 0;
 }
 
 // 将 SDK 推送的会话变更合并到现有列表（以 conversationID 去重）并排序

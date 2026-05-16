@@ -188,7 +188,7 @@ export default function SelectCityScreen() {
         return result.nextSelected;
       });
     },
-    [isMultiSelect, isNationwide],
+    [isMultiSelect, isNationwide, t],
   );
 
   const toggleNationwide = useCallback(() => {
@@ -200,7 +200,7 @@ export default function SelectCityScreen() {
       if (!prev) setSelected([]);
       return !prev;
     });
-  }, [isVip]);
+  }, [isVip, t]);
 
   const handleConfirm = useCallback(() => {
     if (target === 'filter') {

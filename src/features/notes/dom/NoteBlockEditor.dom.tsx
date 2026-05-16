@@ -21,6 +21,17 @@ interface PendingInsert {
   size?: number;
 }
 
+// Toolbar 文案不能在 WebView 里走 i18n —— DOM bridge 跑在隔离的 JS realm，
+// react-i18next 的 instance 拿不到。统一在 native 侧 translate 后通过 props 传进来。
+export interface NoteEditorToolbarLabels {
+  headingType: string;
+  paragraphType: string;
+  bulletListType: string;
+  imageTitle: string;
+  imageLabel: string;
+  codeTitle: string;
+}
+
 interface Props {
   dom?: import('expo/dom').DOMProps;
   initialContent: string | null; // JSON string of Block[]
@@ -29,6 +40,7 @@ interface Props {
   onInsertHandled: () => void;
   onImageRequest: () => void;
   theme?: 'light' | 'dark';
+  toolbarLabels: NoteEditorToolbarLabels;
 }
 
 type ActiveType = 'paragraph' | 'heading' | 'bulletListItem';
@@ -40,13 +52,21 @@ export default function NoteBlockEditor({
   onInsertHandled,
   onImageRequest,
   theme = 'dark',
+  toolbarLabels,
 }: Props) {
   const parsedInitial: PartialBlock[] | undefined = (() => {
     if (!initialContent) return undefined;
     try {
       const blocks = JSON.parse(initialContent) as PartialBlock[];
       return blocks.length > 0 ? blocks : undefined;
-    } catch {
+    } catch (error) {
+      // 一旦保存的笔记 content JSON 变畸形（比如后端 schema 改动 / 旧版本残留），
+      // 这里静默返回 undefined 等于用户看到一篇空文档。dev 时把原因暴露出来便于排查。
+      // 注意：DOM bridge 跑在 WebView 里没有 `__DEV__`，但 console.warn 总是可用。
+      console.warn(
+        '[NoteBlockEditor.dom] failed to parse initialContent JSON',
+        error,
+      );
       return undefined;
     }
   })();
@@ -128,9 +148,9 @@ export default function NoteBlockEditor({
   const activeColor = '#6366F1';
 
   const TYPES: { label: string; type: ActiveType; title: string }[] = [
-    { label: 'H', type: 'heading', title: '标题' },
-    { label: 'T', type: 'paragraph', title: '正文' },
-    { label: '≡', type: 'bulletListItem', title: '列表' },
+    { label: 'H', type: 'heading', title: toolbarLabels.headingType },
+    { label: 'T', type: 'paragraph', title: toolbarLabels.paragraphType },
+    { label: '≡', type: 'bulletListItem', title: toolbarLabels.bulletListType },
   ];
 
   return (
@@ -195,7 +215,7 @@ export default function NoteBlockEditor({
         {/* Image — triggers native picker */}
         <button
           onClick={onImageRequest}
-          title="图片"
+          title={toolbarLabels.imageTitle}
           style={{
             padding: '6px 12px',
             borderRadius: 8,
@@ -208,7 +228,7 @@ export default function NoteBlockEditor({
             color: iconColor,
           }}
         >
-          图
+          {toolbarLabels.imageLabel}
         </button>
 
         {/* Code */}
@@ -219,7 +239,7 @@ export default function NoteBlockEditor({
               editor.updateBlock(pos.block, { type: 'codeBlock' } as PartialBlock);
             }
           }}
-          title="代码"
+          title={toolbarLabels.codeTitle}
           style={{
             padding: '6px 12px',
             borderRadius: 8,

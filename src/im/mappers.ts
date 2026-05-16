@@ -19,6 +19,20 @@ import {
   type MessageItem,
 } from '@openim/rn-client-sdk';
 import { NOTE_CARD_EXTENSION, TRANSFER_CARD_EXTENSION } from '@/im/client';
+import { normalizeMediaUrl } from '@/services/api/utils';
+import i18n from '@/i18n';
+
+// 所有 mapper 产出的字符串走 i18n.t；当前 locale 尚未提供对应 key 时回落到 defaultValue
+// （现有中文文案），这样不动 locale JSON 也能让英文用户在补 key 后立即生效。
+function tImNotification(key: string, fallback: string) {
+  return i18n.t(`im.notification.${key}`, { defaultValue: fallback });
+}
+function tImPreview(key: string, fallback: string, vars?: Record<string, unknown>) {
+  return i18n.t(`im.preview.${key}`, { defaultValue: fallback, ...vars });
+}
+function tImTime(key: string, fallback: string) {
+  return i18n.t(`im.time.${key}`, { defaultValue: fallback });
+}
 
 // OpenIM 自动产生的系统/群通知类消息（GroupCreated / MemberInvited / RevokeMessage 等），
 // 不应作为普通气泡渲染——SDK 没有公开按 base 数值区分通知的常量，这里按 enum 显式列出。
@@ -89,10 +103,13 @@ function formatTimestamp(timestamp: number) {
   yesterday.setDate(now.getDate() - 1);
 
   if (date.toDateString() === yesterday.toDateString()) {
-    return '昨天';
+    return tImTime('yesterday', '昨天');
   }
 
-  return date.toLocaleDateString('zh-CN', {
+  // 月/日 格式按当前 i18n 语言走原生 toLocaleDateString；
+  // 旧实现写死 'zh-CN' —— 切英文时数字格式也得跟着切。
+  const locale = i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US';
+  return date.toLocaleDateString(locale, {
     month: 'numeric',
     day: 'numeric',
   });
@@ -118,13 +135,13 @@ export function getMessagePreview(message: MessageItem | null, fallback = '') {
   }
 
   if (isSystemNotification(message.contentType)) {
-    if (message.contentType === MessageType.GroupCreated) return '群聊已创建';
-    if (message.contentType === MessageType.MemberInvited) return '新成员加入群聊';
-    if (message.contentType === MessageType.MemberQuit) return '有成员退出群聊';
-    if (message.contentType === MessageType.MemberKicked) return '有成员被移出群聊';
-    if (message.contentType === MessageType.GroupNameUpdated) return '群名称已更新';
-    if (message.contentType === MessageType.GroupDismissed) return '群已解散';
-    if (message.contentType === MessageType.RevokeMessage) return '一条消息被撤回';
+    if (message.contentType === MessageType.GroupCreated) return tImNotification('groupCreated', '群聊已创建');
+    if (message.contentType === MessageType.MemberInvited) return tImNotification('memberInvited', '新成员加入群聊');
+    if (message.contentType === MessageType.MemberQuit) return tImNotification('memberQuit', '有成员退出群聊');
+    if (message.contentType === MessageType.MemberKicked) return tImNotification('memberKicked', '有成员被移出群聊');
+    if (message.contentType === MessageType.GroupNameUpdated) return tImNotification('groupNameUpdated', '群名称已更新');
+    if (message.contentType === MessageType.GroupDismissed) return tImNotification('groupDismissed', '群已解散');
+    if (message.contentType === MessageType.RevokeMessage) return tImNotification('messageRevoked', '一条消息被撤回');
     return '';
   }
 
@@ -132,19 +149,19 @@ export function getMessagePreview(message: MessageItem | null, fallback = '') {
     case MessageType.TextMessage:
       return message.textElem?.content ?? fallback;
     case MessageType.PictureMessage:
-      return '[图片]';
+      return tImPreview('image', '[图片]');
     case MessageType.VideoMessage:
-      return '[视频]';
+      return tImPreview('video', '[视频]');
     case MessageType.VoiceMessage:
-      return '[语音]';
+      return tImPreview('voice', '[语音]');
     case MessageType.FileMessage:
-      return '[文件]';
+      return tImPreview('file', '[文件]');
     case MessageType.LocationMessage:
-      return message.locationElem?.description ?? '[位置]';
+      return message.locationElem?.description ?? tImPreview('location', '[位置]');
     case MessageType.TypingMessage:
-      return '[正在输入]';
+      return tImPreview('typing', '[正在输入]');
     case MessageType.CardMessage:
-      return `[名片] ${message.cardElem?.nickname ?? ''}`.trim();
+      return tImPreview('card', '[名片] {{name}}', { name: message.cardElem?.nickname ?? '' }).trim();
     case MessageType.CustomMessage: {
       // 卡片消息优先用结构化 data 还原预览：description 字段是发送时拼好的字符串，
       // 历史脏数据（例如 amount 缺失时拼出 "[转账] undefined 积分"）会一直跟着会话走。
@@ -153,28 +170,30 @@ export function getMessagePreview(message: MessageItem | null, fallback = '') {
         try {
           const raw = JSON.parse(message.customElem?.data ?? '') as Partial<TransferCardData>;
           if (typeof raw.amount === 'number' && raw.amount > 0) {
-            return `[转账] ${raw.amount} 积分`;
+            return tImPreview('transferWithAmount', '[转账] {{amount}} 积分', { amount: raw.amount });
           }
         } catch {
           // 落到通用兜底
         }
-        return '[转账]';
+        return tImPreview('transfer', '[转账]');
       }
       if (ext === NOTE_CARD_EXTENSION) {
         const payload = parseNoteCardPayload(message.customElem?.data ?? '');
-        if (payload) return `[笔记] ${payload.title}`;
+        if (payload) return tImPreview('note', '[笔记] {{title}}', { title: payload.title });
       }
       const desc = message.customElem?.description;
       if (desc && desc.trim()) return desc;
-      return '[消息]';
+      return tImPreview('default', '[消息]');
     }
     default:
-      return '[消息]';
+      return tImPreview('default', '[消息]');
   }
 }
 
 export function mapConversationItemToUI(item: ConversationItem): Conversation {
   const latestMessage = parseLatestMessage(item.latestMsg);
+  // OpenIM 媒体 URL 同样可能指向 localhost（dev 物理机场景），走和后端 API 一样的归一化路径
+  const normalizedAvatar = normalizeMediaUrl(item.faceURL || null);
 
   return {
     id: item.conversationID,
@@ -183,7 +202,7 @@ export function mapConversationItemToUI(item: ConversationItem): Conversation {
     name: item.showName,
     message: getMessagePreview(latestMessage, item.latestMsg),
     time: formatTimestamp(item.latestMsgSendTime),
-    avatarUrl: item.faceURL || undefined,
+    avatarUrl: normalizedAvatar ?? undefined,
     unreadCount: item.unreadCount,
     conversationType:
       item.conversationType === SessionType.Group ? 'group' : 'private',
@@ -206,11 +225,15 @@ export function mapMessageItemToChatMessage(
   }
 
   const isSent = item.sendID === currentUserID;
+  // 显式校验 status 在已知集合内再附给气泡，避免 SDK 版本漂移引入新值后
+  // 用 `as 1 | 2 | 3` 骗过类型系统、UI 渲染出错的图标。
+  const isKnownSendStatus =
+    item.status === 1 || item.status === 2 || item.status === 3;
   const base = {
     id: item.clientMsgID,
     time: formatTimestamp(item.sendTime),
     // 发送状态/已读 状态对所有自己发出的消息都有意义；接收消息这两字段会被忽略。
-    sendStatus: isSent ? (item.status as 1 | 2 | 3) : undefined,
+    sendStatus: isSent && isKnownSendStatus ? (item.status as 1 | 2 | 3) : undefined,
     isRead: isSent ? Boolean(item.isRead) : undefined,
   };
 
@@ -296,15 +319,20 @@ export function mapMessageItemToChatMessage(
       item.pictureElem?.bigPicture ??
       item.pictureElem?.sourcePicture ??
       item.pictureElem?.snapshotPicture;
-    return {
-      ...base,
-      type: 'image',
-      outgoing: isSent,
-      imageUrl: pic?.url ?? '',
-      imageWidth: pic?.width ?? undefined,
-      imageHeight: pic?.height ?? undefined,
-      senderName: isSent ? undefined : (item.senderNickname || item.sendID),
-    };
+    const rawUrl = pic?.url;
+    if (rawUrl && rawUrl.length > 0) {
+      return {
+        ...base,
+        type: 'image',
+        outgoing: isSent,
+        imageUrl: normalizeMediaUrl(rawUrl) ?? rawUrl,
+        imageWidth: pic?.width ?? undefined,
+        imageHeight: pic?.height ?? undefined,
+        senderName: isSent ? undefined : (item.senderNickname || item.sendID),
+      };
+    }
+    // 图片元数据存在但 url 空 —— 退化成文字气泡，避免渲染破图占位框。
+    // 落进下方的通用 text 分支。
   }
 
   return {

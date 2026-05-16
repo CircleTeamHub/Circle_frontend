@@ -5,6 +5,17 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+// 默认兜底：client.ts 顶层会 import @/im/listeners + @/services/auth/session，
+// 测试不关心其副作用，no-op stub 即可。call site 可通过 stubs 覆盖。
+const DEFAULT_TS_MODULE_STUBS = {
+  '@/im/listeners': {
+    bindOpenIMListeners: () => () => {},
+  },
+  '@/services/auth/session': {
+    registerLogoutHandler: () => () => {},
+  },
+};
+
 function loadTsModule(relativePath, stubs = {}) {
   const filePath = path.join(process.cwd(), relativePath);
   const source = fs.readFileSync(filePath, 'utf8');
@@ -20,12 +31,13 @@ function loadTsModule(relativePath, stubs = {}) {
     fileName: filePath,
   }).outputText;
 
+  const mergedStubs = { ...DEFAULT_TS_MODULE_STUBS, ...stubs };
   const context = {
     module: { exports: {} },
     exports: {},
     require: (specifier) => {
-      if (specifier in stubs) {
-        return stubs[specifier];
+      if (specifier in mergedStubs) {
+        return mergedStubs[specifier];
       }
 
       return require(specifier);
@@ -309,10 +321,21 @@ test('sendFriendCardMessage creates and sends a friend card message to the targe
     faceURL: '',
   });
 
+  // client.ts 把业务扩展塞进 cardElem.ex（persona + displayIcons），即便调用方
+  // 没传，也会序列化成默认 `friend-card-v1` 信封 —— 见 FriendCardExt。
   assert.deepEqual(normalize(sdkCalls), [
     [
       'createCardMessage',
-      { userID: 'friend-1', nickname: '小李', faceURL: '', ex: '' },
+      {
+        userID: 'friend-1',
+        nickname: '小李',
+        faceURL: '',
+        ex: JSON.stringify({
+          v: 'friend-card-v1',
+          persona: null,
+          displayIcons: [],
+        }),
+      },
     ],
     [
       'sendMessage',

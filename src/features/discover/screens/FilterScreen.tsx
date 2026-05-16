@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import {
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -158,7 +159,9 @@ export default function FilterScreen() {
 
   const handleSave = useCallback(() => {
     saveFilter();
-    if (ToastAndroid?.show) {
+    // Android 用 Toast 给即时反馈；iOS 没有 Toast API，依赖 router.back() 的导航动画
+    // 作为「保存成功」的隐式反馈。Toast 视觉跨平台对齐留作后续 UI 决策（#50）。
+    if (Platform.OS === 'android') {
       ToastAndroid.show(t('discover.filter.saved'), ToastAndroid.SHORT);
     }
     router.back();

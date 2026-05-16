@@ -28,6 +28,18 @@ export async function updateNote(id: string, input: CreateNoteInput): Promise<No
   return apiClient<NoteDetail>(`/note/${id}`, { method: 'PATCH', body: input });
 }
 
+// 仅替换 note 的 group 归属。批量调整分组成员时使用 —— 避免对每条 note 先 fetch 详情再
+// 用 updateNote 整体替换（参考 review #59，N+1 解决方案）。
+export async function updateNoteGroupIds(
+  id: string,
+  groupIds: string[],
+): Promise<{ id: string; groupIds: string[] }> {
+  return apiClient<{ id: string; groupIds: string[] }>(`/note/${id}/groups`, {
+    method: 'PATCH',
+    body: { groupIds },
+  });
+}
+
 export async function togglePinNote(id: string, pinned: boolean): Promise<void> {
   await apiClient<{ id: string; pinned: boolean }>(`/note/${id}/pin`, {
     method: 'PATCH',

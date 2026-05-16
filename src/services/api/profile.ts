@@ -46,6 +46,14 @@ export async function updateUserProfile(
 
   const patchedUser = user ? normalizeUser(user) : null;
 
+  // 合并顺序的设计权衡（保留原行为 — 见 test/profile-api.test.js:keeps the submitted city ...）：
+  //
+  // `{ ...refreshedUser, ...payload }` 让 payload 覆盖刷新结果，主要为了**写后读 stale**
+  // 场景：副本延迟 / 缓存让 /auth/me 拿到的还是更新前的值，把刚提交的字段也压回旧值，
+  // UI 上会"立刻看到更新没生效"。让客户端 payload 视觉上保留住，等下一次 refresh 同步。
+  //
+  // 代价：如果服务端对字段做了归一化（电话加国码、邮箱小写化），UI 会短暂显示未归一化值，
+  // 直到下一次 fetchCurrentUser。比起 stale 数据闪回，这个代价小得多。
   try {
     const refreshedUser = await fetchCurrentUser();
     return {

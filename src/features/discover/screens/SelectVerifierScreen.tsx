@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Divider } from '@/components/ui/divider';
-import { Spacing, Typography, useTheme } from '@/theme';
+import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { addVerifierToInvitation } from '@/services/api/circles';
 
@@ -56,18 +56,32 @@ export default function SelectVerifierScreen() {
 
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const data = await fetchFriends();
-        setFriends(data);
-      } finally {
-        setLoading(false);
+  const loadFriends = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const data = await fetchFriends();
+      setFriends(data);
+    } catch (error) {
+      setLoadError(
+        t('invitation.loadFriendsFailed', {
+          defaultValue: '加载好友列表失败，请稍后重试',
+        }),
+      );
+      if (__DEV__) {
+        console.warn('[SelectVerifierScreen] fetchFriends failed', error);
       }
-    })();
-  }, []);
+    } finally {
+      setLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    loadFriends();
+  }, [loadFriends]);
 
   const d = useMemo(
     () => ({
@@ -76,6 +90,19 @@ export default function SelectVerifierScreen() {
       accountId: { color: colors.textSecondary, ...Typography.caption },
       selectBtn: { backgroundColor: colors.primary },
       selectText: { color: colors.white, ...Typography.caption, fontWeight: '600' as const },
+      emptyText: { color: colors.textSecondary, ...Typography.body },
+      retryButton: {
+        marginTop: Spacing.md,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.sm,
+        borderRadius: Radius.full,
+        backgroundColor: colors.primary,
+      },
+      retryText: {
+        color: colors.white,
+        ...Typography.caption,
+        fontWeight: '600' as const,
+      },
     }),
     [colors],
   );
@@ -96,7 +123,7 @@ export default function SelectVerifierScreen() {
         setSubmittingId(null);
       }
     },
-    [invitationId, submittingId, router],
+    [invitationId, submittingId, router, t],
   );
 
   const renderItem = useCallback(
@@ -127,7 +154,7 @@ export default function SelectVerifierScreen() {
         <Divider />
       </View>
     ),
-    [handleSelect, d, submittingId, colors],
+    [handleSelect, d, submittingId, colors, t],
   );
 
   return (
@@ -136,6 +163,13 @@ export default function SelectVerifierScreen() {
       {loading ? (
         <View style={s.centerLoader}>
           <ActivityIndicator color={colors.primary} />
+        </View>
+      ) : loadError && friends.length === 0 ? (
+        <View style={s.centerLoader}>
+          <Text style={d.emptyText}>{loadError}</Text>
+          <Pressable style={d.retryButton} onPress={loadFriends}>
+            <Text style={d.retryText}>{t('common.retry')}</Text>
+          </Pressable>
         </View>
       ) : (
         <FlatList

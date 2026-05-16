@@ -28,16 +28,30 @@ type ApiResponse<T> = {
 
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 
-// 日志脱敏字段列表：这些字段在 dev 日志中会替换为 [REDACTED]，防止密码/token 泄漏到控制台
-const SENSITIVE_KEYS = new Set(['password', 'token', 'accessToken', 'refreshToken', 'imToken']);
+// 日志脱敏字段列表：dev 日志中匹配到（不区分大小写）任意层级的这些 key 会被替换为 [REDACTED]。
+// 防止 password/token/Authorization/cookie 等通过控制台、Metro 日志、屏幕录制泄漏。
+const SENSITIVE_KEYS = new Set([
+  'password',
+  'token',
+  'accesstoken',
+  'refreshtoken',
+  'imtoken',
+  'idtoken',
+  'authorization',
+  'cookie',
+  'apikey',
+  'secret',
+]);
 
 function redactSensitiveFields(value: unknown): unknown {
-  if (value == null || typeof value !== 'object') {
-    return value;
-  }
+  if (value == null) return value;
+  if (Array.isArray(value)) return value.map(redactSensitiveFields);
+  if (typeof value !== 'object') return value;
   const redacted: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-    redacted[k] = SENSITIVE_KEYS.has(k) ? '[REDACTED]' : v;
+    redacted[k] = SENSITIVE_KEYS.has(k.toLowerCase())
+      ? '[REDACTED]'
+      : redactSensitiveFields(v);
   }
   return redacted;
 }
@@ -56,6 +70,53 @@ function formatLogData(value: unknown) {
   } catch {
     return '[unserializable]';
   }
+}
+
+// 把响应文本解析为对象再脱敏；解析失败时不直接打印原文（可能是 HTML 错误页或带 token 的字符串）。
+function safeBodyTextForLog(text: string): unknown {
+  if (!text) return text;
+  try {
+    return redactSensitiveFields(JSON.parse(text));
+  } catch {
+    return '[non-json body]';
+  }
+}
+
+function safeHeadersForLog(headers: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(headers)) {
+    out[k] = SENSITIVE_KEYS.has(k.toLowerCase()) ? '[REDACTED]' : v;
+  }
+  return out;
+}
+
+// 把请求体序列化为 fetch 可接受的形式。
+// FormData / URLSearchParams / Blob / ArrayBuffer 不走 JSON.stringify；
+// 之前的实现会把 FormData 序列化成 '{}'，让 multipart 上传静默失败。
+function serializeRequestBody(
+  body: unknown
+): { body: BodyInit; contentType?: string } {
+  if (body instanceof FormData) return { body }; // boundary 由 fetch 自动设置
+  if (body instanceof URLSearchParams) {
+    return { body, contentType: 'application/x-www-form-urlencoded' };
+  }
+  if (body instanceof Blob || body instanceof ArrayBuffer) {
+    return { body: body as BodyInit };
+  }
+  return { body: JSON.stringify(body), contentType: 'application/json' };
+}
+
+function isTokenPair(
+  value: unknown
+): value is { accessToken: string; refreshToken: string } {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.accessToken === 'string' &&
+    v.accessToken.length > 0 &&
+    typeof v.refreshToken === 'string' &&
+    v.refreshToken.length > 0
+  );
 }
 
 function logApiEvent(label: string, data: Record<string, unknown>) {
@@ -89,7 +150,7 @@ async function readPayload<T>(res: Response): Promise<ApiResponse<T> | null> {
   logApiEvent('response', {
     status: res.status,
     ok: res.ok,
-    body: text,
+    body: safeBodyTextForLog(text),
   });
 
   if (!text) {
@@ -138,23 +199,29 @@ async function executeRequest<T>(
     method,
     auth,
     hasAccessToken: Boolean(accessToken),
-    headers,
+    headers: safeHeadersForLog(headers),
     body: formatLogData(body),
   });
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 15_000);
 
+  const serializedBody = body == null ? undefined : serializeRequestBody(body);
+
   let res: Response;
   try {
     res = await fetch(url, {
       method,
       headers: {
-        'Content-Type': 'application/json',
+        // 只有 JSON / urlencoded 才由我们设置 Content-Type；
+        // FormData 必须让 fetch 自动加上含 multipart boundary 的头。
+        ...(serializedBody?.contentType
+          ? { 'Content-Type': serializedBody.contentType }
+          : {}),
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         ...headers,
       },
-      ...(body ? { body: JSON.stringify(body) } : {}),
+      ...(serializedBody ? { body: serializedBody.body } : {}),
       signal: controller.signal,
     });
   } catch (error) {
@@ -224,10 +291,14 @@ async function refreshAccessToken() {
         method: 'POST',
         body: { refreshToken },
         auth: false,
-        retryOnAuthError: false,
       }
     );
     const tokens = unwrapResponse(res, payload);
+
+    if (!isTokenPair(tokens)) {
+      // 后端字段缺失 / 重命名 / 类型异常 — 视为刷新失败，避免后续带着 Bearer undefined 死循环。
+      throw new ApiError('刷新返回数据格式异常，请重新登录', 401);
+    }
 
     setTokens(tokens);
 

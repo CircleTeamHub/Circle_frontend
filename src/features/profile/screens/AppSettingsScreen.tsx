@@ -167,9 +167,12 @@ export default function AppSettingsScreen() {
             setCacheSizeLabel(formatCacheSize(size));
           }
         })
-        .catch(() => {
+        .catch((error) => {
           if (isActive) {
             setCacheSizeLabel(formatCacheSize(0));
+          }
+          if (__DEV__) {
+            console.warn('[AppSettingsScreen] getAppCacheSize failed', error);
           }
         });
 

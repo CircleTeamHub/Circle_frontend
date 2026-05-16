@@ -9,6 +9,8 @@ import {
 } from '@/realtime/client';
 import { clearLocalSession } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
+import { useMessageGroupsStore } from '@/features/messages/store/use-message-groups-store';
+import { retry } from '@/utils/retry';
 
 /**
  * SessionBootstrap — 无 UI 的启动引导组件，挂载在 app 根节点。
@@ -22,15 +24,15 @@ import { useAuthStore } from '@/stores/authStore';
  * 该组件始终返回 null，不渲染任何 UI。
  */
 export function SessionBootstrap() {
-  const {
-    accessToken,
-    refreshToken,
-    imToken,
-    hasHydrated,
-    isLoading,
-    setUser,
-    setLoading,
-  } = useAuthStore();
+  // selector 化：避免订阅整个 authStore —— SessionBootstrap 返回 null，但任意 auth
+  // 字段变化都会让组件重新执行（重跑 useEffect 依赖比较），尤其是 token 刷新场景。
+  const accessToken = useAuthStore((state) => state.accessToken);
+  const refreshToken = useAuthStore((state) => state.refreshToken);
+  const imToken = useAuthStore((state) => state.imToken);
+  const hasHydrated = useAuthStore((state) => state.hasHydrated);
+  const isLoading = useAuthStore((state) => state.isLoading);
+  const setUser = useAuthStore((state) => state.setUser);
+  const setLoading = useAuthStore((state) => state.setLoading);
 
   // OpenIM 全局事件由 ensureOpenIMInitialized() 在 initSDK 之前主动绑定，
   // 这里不再额外绑定 —— 否则 SessionBootstrap 卸载时会意外解绑全部 listener。
@@ -98,8 +100,10 @@ export function SessionBootstrap() {
       }
 
       try {
-        // 用当前 accessToken 请求后端获取用户信息
-        const user = await fetchCurrentUser();
+        // 用当前 accessToken 请求后端获取用户信息。
+        // 这条路径在每次冷启动都跑：一次瞬时网络失败就把本地 session 全清是过激的，
+        // 包一层 retry —— 网络 / 5xx 静默重试一次；401 / 403 才走 clearLocalSession。
+        const user = await retry(() => fetchCurrentUser());
 
         if (cancelled) {
           return;
@@ -121,6 +125,10 @@ export function SessionBootstrap() {
           // 没有 imToken，确保 IM 状态已清空
           await logoutFromOpenIM();
         }
+
+        // 用户面板已就绪后再拉自定义会话分组；失败不阻断主流程（store 内部已 dev-warn）。
+        // MessagesScreen 的顶部 filter tab 依赖这份数据。
+        void useMessageGroupsStore.getState().load();
       } catch {
         // /auth/me 请求失败（token 已过期/无效），清除 session 触发跳转登录页
         if (!cancelled) {

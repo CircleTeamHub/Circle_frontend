@@ -79,20 +79,35 @@ export default function VerificationRequestScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [invitation, setInvitation] = useState<CircleInvitation | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [responding, setResponding] = useState(false);
   const [responded, setResponded] = useState(false);
 
-  useEffect(() => {
-    if (!id) return;
-    (async () => {
-      try {
-        const data = await fetchInvitation(id);
-        setInvitation(data);
-      } finally {
-        setLoading(false);
+  const loadInvitation = useCallback(async () => {
+    if (!id) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const data = await fetchInvitation(id);
+      setInvitation(data);
+    } catch (error) {
+      setLoadError(
+        t('invitation.loadFailed', { defaultValue: '加载失败，请稍后重试' }),
+      );
+      if (__DEV__) {
+        console.warn('[VerificationRequestScreen] fetchInvitation failed', error);
       }
-    })();
-  }, [id]);
+    } finally {
+      setLoading(false);
+    }
+  }, [id, t]);
+
+  useEffect(() => {
+    loadInvitation();
+  }, [loadInvitation]);
 
   const d = useMemo(
     () => ({
@@ -127,7 +142,7 @@ export default function VerificationRequestScreen() {
         setResponding(false);
       }
     },
-    [id, responding, router],
+    [id, responding, router, t],
   );
 
   if (loading) {
@@ -146,7 +161,25 @@ export default function VerificationRequestScreen() {
       <View style={[d.container, { paddingTop: insets.top }]}>
         <NavHeader title={t('invitation.verificationRequest')} />
         <View style={s.centerLoader}>
-          <Text style={d.descText}>{t('invitation.requestNotExist')}</Text>
+          <Text style={d.descText}>
+            {loadError ?? t('invitation.requestNotExist')}
+          </Text>
+          {loadError ? (
+            <Pressable
+              onPress={loadInvitation}
+              style={{
+                marginTop: Spacing.md,
+                paddingHorizontal: Spacing.md,
+                paddingVertical: Spacing.sm,
+                borderRadius: Radius.full,
+                backgroundColor: colors.primary,
+              }}
+            >
+              <Text style={{ color: colors.white, ...Typography.caption }}>
+                {t('common.retry')}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       </View>
     );

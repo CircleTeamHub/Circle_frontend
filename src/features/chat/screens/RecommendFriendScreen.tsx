@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -62,6 +62,9 @@ export default function RecommendFriendScreen() {
   }>();
   const rawConversations = useIMStore((state) => state.conversations);
   const [sendingConversationID, setSendingConversationID] = useState('');
+  // Pattern D 第二道：sendingConversationID 是 state，fast double-tap 下可能晚一帧；
+  // 用 ref 在入口处兜底，避免给同一个会话连发两张名片。
+  const inFlightRef = useRef(false);
 
   const currentConversationID =
     typeof params.conversationID === 'string' ? params.conversationID : '';
@@ -74,8 +77,11 @@ export default function RecommendFriendScreen() {
       return;
     }
 
-    loadConversationList().catch(() => {
-      // Keep the selection list usable with any already-loaded conversations.
+    loadConversationList().catch((err) => {
+      // 失败时保留已有的会话（即便为空），dev 下让我们知道这里失败过。
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn('[recommend-friend] loadConversationList failed', err);
+      }
     });
   }, [rawConversations.length]);
 
@@ -89,7 +95,7 @@ export default function RecommendFriendScreen() {
 
   const confirmSend = useCallback(
     (conversation: Conversation) => {
-      if (!friendId || sendingConversationID) {
+      if (!friendId || sendingConversationID || inFlightRef.current) {
         return;
       }
 
@@ -101,6 +107,8 @@ export default function RecommendFriendScreen() {
           {
             text: '发送',
             onPress: () => {
+              if (inFlightRef.current) return;
+              inFlightRef.current = true;
               setSendingConversationID(conversation.id);
               void sendFriendCardMessage({
                 targetConversationID: conversation.id,
@@ -123,6 +131,7 @@ export default function RecommendFriendScreen() {
                   );
                 })
                 .finally(() => {
+                  inFlightRef.current = false;
                   setSendingConversationID('');
                 });
             },

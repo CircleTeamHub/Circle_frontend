@@ -1,5 +1,5 @@
 import { apiClient } from '@/services/api/client';
-import { normalizeMediaUrl } from '@/services/api/utils';
+import { buildQuery, normalizeMediaUrl } from '@/services/api/utils';
 import type {
   CirclePlazaPost,
   CreatePlazaPostInput,
@@ -9,7 +9,8 @@ import type {
 function normalizePlazaPost(post: CirclePlazaPost): CirclePlazaPost {
   return {
     ...post,
-    images: post.images.map((url) => (normalizeMediaUrl(url) as string) ?? url),
+    // 同 moments.ts 注释：normalizeMediaUrl 是 nullable，?? 接住 fallback；as string 是骗 TS。
+    images: post.images.map((url) => normalizeMediaUrl(url) ?? url),
     author: {
       ...post.author,
       avatarUrl: post.author.avatarUrl
@@ -28,15 +29,8 @@ export async function fetchPlazaFeed(params?: {
   page?: number;
   limit?: number;
 }): Promise<PaginatedResponse<CirclePlazaPost>> {
-  const query = new URLSearchParams();
-  if (params?.circleId) query.set('circleId', params.circleId);
-  if (params?.city) query.set('city', params.city);
-  if (params?.page) query.set('page', String(params.page));
-  if (params?.limit) query.set('limit', String(params.limit));
-
-  const qs = query.toString();
   const result = await apiClient<PaginatedResponse<CirclePlazaPost>>(
-    `/circle-plaza/feed${qs ? `?${qs}` : ''}`,
+    `/circle-plaza/feed${buildQuery(params ?? {})}`,
   );
 
   return {

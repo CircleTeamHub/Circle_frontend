@@ -84,7 +84,7 @@
     "newGroupNoMatches": "No matching friends",
     "newGroupSelectedCount": "{{count}} selected",
     "newGroupSubmit": "Done",
-    "newGroupMinMembers": "Please select at least one friend",
+    "newGroupMinMembers": "Please select at least 2 friends",
     "newGroupCreateFailed": "Failed to create group: {{error}}",
     "newGroupDefaultName": "Group Chat"
   },
@@ -224,31 +224,10 @@
       "title": "Groups",
       "myCreated": "Groups I Created",
       "myJoined": "Groups I Joined",
-      "myManaged": "Groups I Manage",
       "memberCount": "{{count}} members",
       "empty": "No groups",
-      "samples": {
-        "createdProduct": {
-          "name": "Circle Product Group",
-          "description": "Product iterations, release planning, and requirement sync"
-        },
-        "createdSports": {
-          "name": "Weekend Badminton",
-          "description": "Weekly event signup and court coordination"
-        },
-        "joinedFrontend": {
-          "name": "Frontend Dev Exchange",
-          "description": "RN / Expo / Web technical discussions"
-        },
-        "joinedDining": {
-          "name": "Shenzhen Food Crew",
-          "description": "Weekday lunches and weekend dining plans"
-        },
-        "managedOps": {
-          "name": "Operations Duty Group",
-          "description": "Daily shift arrangements and incident handling"
-        }
-      }
+      "loading": "Loading groups",
+      "loadFailed": "Failed to load groups, please try again later"
     },
     "request": {
       "title": "Send Friend Request",

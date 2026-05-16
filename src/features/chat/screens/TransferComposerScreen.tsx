@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -44,16 +44,27 @@ export default function TransferComposerScreen() {
   const [message, setMessage] = useState('');
   const [balance, setBalance] = useState<number | null>(null);
   const [loadingBalance, setLoadingBalance] = useState(true);
+  const [balanceError, setBalanceError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // Pattern D 第二道：state 在 fast double-tap 下可能晚一帧，用 ref 在 handler 入口兜底。
+  const inFlightRef = useRef(false);
 
-  useEffect(() => {
+  // 余额加载逻辑抽出函数 —— 失败后用户能从 UI 重试，不必退出页面重进。
+  const loadBalance = useCallback(() => {
     let cancelled = false;
+    setLoadingBalance(true);
+    setBalanceError(false);
     fetchWallet()
       .then((wallet) => {
-        if (!cancelled) setBalance(wallet.balance);
+        if (!cancelled) {
+          setBalance(wallet.balance);
+        }
       })
       .catch(() => {
-        if (!cancelled) setBalance(null);
+        if (!cancelled) {
+          setBalance(null);
+          setBalanceError(true);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoadingBalance(false);
@@ -63,18 +74,29 @@ export default function TransferComposerScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    return loadBalance();
+  }, [loadBalance]);
+
   const handleSubmit = useCallback(async () => {
-    if (submitting) return;
+    if (submitting || inFlightRef.current) return;
     const value = Number(amount.trim());
     if (!Number.isInteger(value) || value <= 0) {
       Alert.alert('请输入正整数积分');
       return;
     }
-    if (balance != null && value > balance) {
+    // 余额还在加载或加载失败时不允许提交：之前 balance===null 走 fall-through
+    // 把客户端检查直接跳过，用户可以发起 > 实际余额的转账，全靠服务端拒回兜底。
+    if (balance == null) {
+      Alert.alert('余额未就绪', '请等待余额加载完成后再试');
+      return;
+    }
+    if (value > balance) {
       Alert.alert('余额不足', `当前积分余额：${balance}`);
       return;
     }
 
+    inFlightRef.current = true;
     setSubmitting(true);
     try {
       await sendCoinGift({
@@ -94,6 +116,7 @@ export default function TransferComposerScreen() {
     } catch (error) {
       Alert.alert('转账失败', getApiErrorMessage(error, '请稍后重试'));
     } finally {
+      inFlightRef.current = false;
       setSubmitting(false);
     }
   }, [amount, balance, message, recipientId, router, setPending, submitting]);
@@ -103,7 +126,8 @@ export default function TransferComposerScreen() {
     submitting ||
     !Number.isInteger(value) ||
     value <= 0 ||
-    (balance != null && value > balance);
+    balance == null ||
+    value > balance;
 
   return (
     <KeyboardAvoidingView
@@ -162,6 +186,23 @@ export default function TransferComposerScreen() {
           </View>
           {loadingBalance ? (
             <ActivityIndicator color={colors.primary} style={{ marginTop: 8 }} />
+          ) : balanceError ? (
+            <View style={s.balanceErrorRow}>
+              <Text style={[s.balanceText, { color: colors.error }]}>
+                余额加载失败
+              </Text>
+              <Pressable
+                hitSlop={6}
+                onPress={loadBalance}
+                style={[s.balanceRetry, { borderColor: colors.primary }]}
+              >
+                <Text
+                  style={[Typography.small, { color: colors.primary, fontWeight: '600' }]}
+                >
+                  重试
+                </Text>
+              </Pressable>
+            </View>
           ) : (
             <Text style={[s.balanceText, { color: colors.textSecondary }]}>
               当前余额：{balance ?? '-'} 积分
@@ -240,6 +281,18 @@ const s = StyleSheet.create({
   },
   amountUnit: { ...Typography.body, fontWeight: '600' },
   balanceText: { ...Typography.small, marginTop: Spacing.xs },
+  balanceErrorRow: {
+    marginTop: Spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  balanceRetry: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+  },
   messageField: {
     marginTop: Spacing.lg,
     borderRadius: Radius.md,

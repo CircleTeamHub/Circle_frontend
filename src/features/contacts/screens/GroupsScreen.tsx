@@ -1,93 +1,28 @@
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  SectionList,
+  ActivityIndicator,
   Pressable,
-  StyleSheet,
+  SectionList,
   SectionListData,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { GroupItem } from '@openim/rn-client-sdk';
 import { Avatar } from '@/components/ui/avatar';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
-import { Spacing, Typography, useTheme } from '@/theme';
-
-interface GroupItem {
-  id: string;
-  name: string;
-  memberCount: number;
-  description: string;
-}
+import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { getJoinedGroups, toImUserId } from '@/im/client';
+import { useAuthStore } from '@/stores/authStore';
 
 interface GroupSection {
   title: string;
   data: GroupItem[];
 }
-
-interface GroupSectionSeed {
-  titleKey: string;
-  data: Array<GroupItem & { nameKey: string; descriptionKey: string }>;
-}
-
-const GROUP_SECTIONS: GroupSectionSeed[] = [
-  {
-    titleKey: 'contacts.groupsScreen.myCreated',
-    data: [
-      {
-        id: 'created-1',
-        name: '',
-        nameKey: 'contacts.groupsScreen.samples.createdProduct.name',
-        memberCount: 28,
-        description: '',
-        descriptionKey: 'contacts.groupsScreen.samples.createdProduct.description',
-      },
-      {
-        id: 'created-2',
-        name: '',
-        nameKey: 'contacts.groupsScreen.samples.createdSports.name',
-        memberCount: 16,
-        description: '',
-        descriptionKey: 'contacts.groupsScreen.samples.createdSports.description',
-      },
-    ],
-  },
-  {
-    titleKey: 'contacts.groupsScreen.myJoined',
-    data: [
-      {
-        id: 'joined-1',
-        name: '',
-        nameKey: 'contacts.groupsScreen.samples.joinedFrontend.name',
-        memberCount: 84,
-        description: '',
-        descriptionKey: 'contacts.groupsScreen.samples.joinedFrontend.description',
-      },
-      {
-        id: 'joined-2',
-        name: '',
-        nameKey: 'contacts.groupsScreen.samples.joinedDining.name',
-        memberCount: 43,
-        description: '',
-        descriptionKey: 'contacts.groupsScreen.samples.joinedDining.description',
-      },
-    ],
-  },
-  {
-    titleKey: 'contacts.groupsScreen.myManaged',
-    data: [
-      {
-        id: 'managed-1',
-        name: '',
-        nameKey: 'contacts.groupsScreen.samples.managedOps.name',
-        memberCount: 12,
-        description: '',
-        descriptionKey: 'contacts.groupsScreen.samples.managedOps.description',
-      },
-    ],
-  },
-];
 
 const s = StyleSheet.create({
   sectionHeader: {
@@ -110,26 +45,103 @@ const s = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Spacing.sm,
   },
+  stateBlock: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.md,
+    paddingVertical: 56,
+  },
+  retryButton: {
+    minWidth: 96,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.lg,
+  },
 });
 
 export default function GroupsScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { colors } = useTheme();
   const { t } = useTranslation();
 
-  const sections = useMemo(
-    () =>
-      GROUP_SECTIONS.map((section) => ({
-        title: t(section.titleKey),
-        data: section.data.map((item) => ({
-          id: item.id,
-          name: t(item.nameKey),
-          memberCount: item.memberCount,
-          description: t(item.descriptionKey),
-        })),
-      })),
+  // 当前账号 ID 决定哪些群是"我创建的"（ownerUserID === 我）。authStore.user.id 是后端
+  // userID（带连字符）；OpenIM 的 ownerUserID 是去连字符版本，所以比较前要走 toImUserId。
+  const currentUserID = useAuthStore((state) =>
+    state.user?.id ? toImUserId(state.user.id) : null,
+  );
+
+  const [groups, setGroups] = useState<GroupItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadGroups = useCallback(
+    async (signal?: { cancelled: boolean }) => {
+      setLoading(true);
+      try {
+        const result = await getJoinedGroups();
+        if (signal?.cancelled) return;
+        setGroups(result);
+        setError(null);
+      } catch (caughtError) {
+        if (signal?.cancelled) return;
+        setError(t('contacts.groupsScreen.loadFailed'));
+        if (__DEV__) {
+          console.warn('[GroupsScreen] getJoinedGroups failed', caughtError);
+        }
+      } finally {
+        if (!signal?.cancelled) {
+          setLoading(false);
+        }
+      }
+    },
     [t],
   );
+
+  useEffect(() => {
+    const signal = { cancelled: false };
+    void loadGroups(signal);
+    return () => {
+      signal.cancelled = true;
+    };
+  }, [loadGroups]);
+
+  // Focus refresh: 用户创建/退出群后回到这屏需要立刻看到变化。
+  useFocusEffect(
+    useCallback(() => {
+      void loadGroups();
+    }, [loadGroups]),
+  );
+
+  const sections = useMemo<GroupSection[]>(() => {
+    if (!currentUserID) {
+      return [{ title: t('contacts.groupsScreen.myJoined'), data: groups }];
+    }
+
+    // 拆"我创建"与"我加入"两段。原设计里有"我管理"段（admin 但非 owner），
+    // 但 OpenIM `GroupItem` 不带当前用户的群内角色，要拿到必须对每个群单独 fetch 成员信息
+    // —— 典型 N+1。暂时省略这一段，等后端或 SDK 暴露 `myRoleLevel` 再补（与 #41 同源）。
+    const created: GroupItem[] = [];
+    const joined: GroupItem[] = [];
+    for (const group of groups) {
+      if (group.ownerUserID === currentUserID) {
+        created.push(group);
+      } else {
+        joined.push(group);
+      }
+    }
+
+    const result: GroupSection[] = [];
+    if (created.length > 0) {
+      result.push({ title: t('contacts.groupsScreen.myCreated'), data: created });
+    }
+    if (joined.length > 0) {
+      result.push({ title: t('contacts.groupsScreen.myJoined'), data: joined });
+    }
+    return result;
+  }, [groups, currentUserID, t]);
 
   const d = useMemo(
     () => ({
@@ -160,6 +172,19 @@ export default function GroupsScreen() {
         color: colors.textSecondary,
         ...Typography.caption,
       },
+      stateText: {
+        color: colors.textSecondary,
+        ...Typography.bodyRegular,
+      },
+      retryButton: {
+        backgroundColor: colors.primary,
+        borderRadius: Radius.full,
+      },
+      retryButtonText: {
+        color: colors.white,
+        ...Typography.bodyRegular,
+        fontWeight: '600' as const,
+      },
       emptyText: {
         color: colors.textSecondary,
         ...Typography.bodyRegular,
@@ -170,41 +195,89 @@ export default function GroupsScreen() {
     [colors, insets.bottom],
   );
 
+  const handleOpenGroup = useCallback(
+    (group: GroupItem) => {
+      router.push({
+        pathname: '/(tabs)/messages/chat-detail',
+        params: {
+          sourceID: group.groupID,
+          conversationType: 'group',
+          title: group.groupName,
+        },
+      });
+    },
+    [router],
+  );
+
+  const emptyState =
+    loading ? (
+      <View style={s.stateBlock}>
+        <ActivityIndicator color={colors.primary} />
+        <Text style={d.stateText}>
+          {t('contacts.groupsScreen.loading', { defaultValue: '正在加载群聊' })}
+        </Text>
+      </View>
+    ) : error ? (
+      <View style={s.stateBlock}>
+        <Text style={d.stateText}>{error}</Text>
+        <Pressable
+          style={[s.retryButton, d.retryButton]}
+          onPress={() => void loadGroups()}
+        >
+          <Text style={d.retryButtonText}>{t('common.retry')}</Text>
+        </Pressable>
+      </View>
+    ) : (
+      <Text style={d.emptyText}>{t('contacts.groupsScreen.empty')}</Text>
+    );
+
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader title={t('contacts.groupsScreen.title')} />
       <SectionList
         sections={sections}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.groupID}
         contentContainerStyle={d.listContent}
         stickySectionHeadersEnabled={false}
-        renderSectionHeader={({ section }: { section: SectionListData<GroupItem, GroupSection> }) => (
+        renderSectionHeader={({
+          section,
+        }: {
+          section: SectionListData<GroupItem, GroupSection>;
+        }) => (
           <View style={s.sectionHeader}>
             <Text style={d.sectionTitle}>{section.title}</Text>
           </View>
         )}
         renderItem={({ item, index, section }) => (
           <View>
-            <Pressable style={s.groupRow}>
-              <Avatar size={40} name={item.name} />
+            <Pressable style={s.groupRow} onPress={() => handleOpenGroup(item)}>
+              <Avatar
+                size={40}
+                name={item.groupName}
+                uri={item.faceURL || undefined}
+              />
               <View style={s.groupBody}>
                 <View style={s.topRow}>
                   <Text style={d.groupName} numberOfLines={1}>
-                    {item.name}
+                    {item.groupName}
                   </Text>
                   <Text style={d.memberCount}>
-                    {t('contacts.groupsScreen.memberCount', { count: item.memberCount })}
+                    {t('contacts.groupsScreen.memberCount', {
+                      count: item.memberCount,
+                    })}
                   </Text>
                 </View>
-                <Text style={d.description} numberOfLines={1}>
-                  {item.description}
-                </Text>
+                {item.introduction ? (
+                  <Text style={d.description} numberOfLines={1}>
+                    {item.introduction}
+                  </Text>
+                ) : null}
               </View>
             </Pressable>
             {index < section.data.length - 1 ? <Divider /> : null}
           </View>
         )}
-        ListEmptyComponent={<Text style={d.emptyText}>{t('contacts.groupsScreen.empty')}</Text>}
+        ListEmptyComponent={emptyState}
         showsVerticalScrollIndicator={false}
       />
     </View>

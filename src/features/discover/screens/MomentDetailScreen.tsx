@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   StyleSheet,
@@ -17,6 +18,7 @@ import { Divider } from '@/components/ui/divider';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { ImageGrid } from '@/features/discover/components/image-grid';
 import { MomentCommentInput } from '@/features/discover/components/moment-comment-input';
+import { formatRelativeTime } from '@/features/discover/utils/relative-time';
 import { getUserProfileHref } from '@/features/user/utils/routes';
 import {
   toggleMomentLike,
@@ -73,7 +75,7 @@ const s = StyleSheet.create({
 });
 
 export default function MomentDetailScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const router = useRouter();
@@ -168,9 +170,12 @@ export default function MomentDetailScreen() {
       const result = await toggleMomentLike(post.id);
       setPost((p) => p ? { ...p, isLikedByMe: result.liked, likeCount: result.likeCount } : p);
       storeToggleLike(post.id, result.liked, result.likeCount);
-    } catch {
+    } catch (error) {
       setPost((p) => p ? { ...p, isLikedByMe: post.isLikedByMe, likeCount: post.likeCount } : p);
       storeToggleLike(post.id, post.isLikedByMe, post.likeCount);
+      if (__DEV__) {
+        console.warn('[MomentDetailScreen] toggleMomentLike failed, rolled back', error);
+      }
     }
   }, [post, storeToggleLike]);
 
@@ -185,23 +190,32 @@ export default function MomentDetailScreen() {
             : p,
         );
         storeAddComment(post.id, comment);
-      } catch {
-        // silently fail
+        setCommentTarget(null);
+      } catch (error) {
+        // 之前是 silent fail —— 输入框被 dismiss、评论没出现、用户没反馈。
+        // 现在保留 commentTarget 让用户重试（含已输入文本），并弹错误提示。
+        Alert.alert(
+          t('moment.commentFailedTitle', { defaultValue: '评论失败' }),
+          getApiErrorMessage(
+            error,
+            t('moment.commentFailedMessage', {
+              defaultValue: '网络异常，请稍后重试',
+            }),
+          ),
+        );
+        if (__DEV__) {
+          console.warn('[MomentDetailScreen] addMomentComment failed', error);
+        }
+        throw error;
       }
     },
-    [post, storeAddComment],
+    [post, storeAddComment, t],
   );
 
-  const timeLabel = useMemo(() => {
-    if (!post) return '';
-    const diff = Date.now() - new Date(post.createdAt).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return t('common.justNow');
-    if (mins < 60) return t('common.minutesAgo', { count: mins });
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return t('common.hoursAgo', { count: hours });
-    return t('common.daysAgo', { count: Math.floor(hours / 24) });
-  }, [post]);
+  const timeLabel = useMemo(
+    () => (post ? formatRelativeTime(post.createdAt, t) : ''),
+    [post, t],
+  );
 
   if (loading) {
     return (
@@ -258,12 +272,15 @@ export default function MomentDetailScreen() {
           </Text>
           <Text style={[s.commentText, d.commentText]}>{item.content}</Text>
           <Text style={[s.commentTime, d.commentTime]}>
-            {new Date(item.createdAt).toLocaleString('zh-CN', {
-              month: 'numeric',
-              day: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
+            {new Date(item.createdAt).toLocaleString(
+              i18n.language || 'zh-CN',
+              {
+                month: 'numeric',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+              },
+            )}
           </Text>
         </View>
         <Pressable

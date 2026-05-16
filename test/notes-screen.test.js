@@ -39,33 +39,38 @@ test('NotesScreen refreshes notes and groups when returning from note edits', ()
 });
 
 test('NotesScreen supports group management and multi-group filtering', () => {
-  const src = read('src/features/notes/screens/NotesScreen.tsx');
-  assert.match(src, /管理|ellipsis-horizontal/);
-  assert.match(src, /note\.groups|n\.groups/);
-  assert.match(src, /groups\.length === 0/);
-  assert.match(src, /createNoteGroup/);
-  assert.match(src, /updateNoteGroup/);
-  assert.match(src, /deleteNoteGroup/);
-  assert.match(src, /reorderNoteGroups/);
-  assert.match(src, /PanResponder/);
-  assert.match(src, /Animated\.Value|new Animated\.Value/);
+  // 拆分后 NotesScreen 只保留列表 + tab 视图；group CRUD + drag/reorder + Animated.Value
+  // 全部下沉到 GroupManagerSheet.tsx（review #60）。
+  const screenSrc = read('src/features/notes/screens/NotesScreen.tsx');
+  assert.match(screenSrc, /管理|ellipsis-horizontal/);
+  assert.match(screenSrc, /note\.groups|n\.groups/);
+  assert.match(screenSrc, /groups\.length === 0/);
+  assert.match(screenSrc, /GroupManagerSheet/);
+
+  const sheetSrc = read('src/features/notes/components/GroupManagerSheet.tsx');
+  assert.match(sheetSrc, /createNoteGroup/);
+  assert.match(sheetSrc, /updateNoteGroup/);
+  assert.match(sheetSrc, /deleteNoteGroup/);
+  assert.match(sheetSrc, /reorderNoteGroups/);
+  assert.match(sheetSrc, /PanResponder/);
+  assert.match(sheetSrc, /Animated\.Value|new Animated\.Value/);
 });
 
-test('NotesScreen lets a group directly choose which notes belong to it', () => {
-  const src = read('src/features/notes/screens/NotesScreen.tsx');
+test('GroupManagerSheet lets a group directly choose which notes belong to it', () => {
+  const src = read('src/features/notes/components/GroupManagerSheet.tsx');
   assert.match(src, /editingMembershipGroup/);
   assert.match(src, /openGroupMembershipEditor/);
   assert.match(src, /toggleMembershipNote/);
   assert.match(src, /handleSaveGroupMemberships/);
   assert.match(src, /选择笔记/);
   assert.match(src, /保存选择/);
-  assert.match(src, /fetchNoteDetail/);
-  assert.match(src, /updateNote/);
-  assert.match(src, /groupIds:\s*nextGroupIds/);
+  // review #59: 不再 fetchNoteDetail，直接调 PATCH /note/:id/groups（updateNoteGroupIds）。
+  assert.match(src, /updateNoteGroupIds/);
+  assert.doesNotMatch(src, /fetchNoteDetail/);
 });
 
-test('NotesScreen optimizes group note assignment for larger note lists', () => {
-  const src = read('src/features/notes/screens/NotesScreen.tsx');
+test('GroupManagerSheet optimizes group note assignment for larger note lists', () => {
+  const src = read('src/features/notes/components/GroupManagerSheet.tsx');
   assert.match(src, /membershipSearch/);
   assert.match(src, /filteredMembershipNotes/);
   assert.match(src, /renderMembershipNote/);
@@ -91,22 +96,22 @@ test('NotesScreen keeps group management action fixed beside the scrollable tabs
   assert.ok(manageButton > scrollEnd);
 });
 
-test('NotesScreen keeps group management sheet interactions inside a non-pressable card', () => {
-  const src = read('src/features/notes/screens/NotesScreen.tsx');
+test('GroupManagerSheet keeps group management sheet interactions inside a non-pressable card', () => {
+  const src = read('src/features/notes/components/GroupManagerSheet.tsx');
   assert.match(src, /<View style=\{\[s\.modalCard, d\.modalCard\]\}>/);
   assert.doesNotMatch(src, /<Pressable style=\{\[s\.modalCard, d\.modalCard\]\}/);
 });
 
-test('NotesScreen keeps the group manager backdrop behind the editor controls', () => {
-  const src = read('src/features/notes/screens/NotesScreen.tsx');
+test('GroupManagerSheet keeps the group manager backdrop behind the editor controls', () => {
+  const src = read('src/features/notes/components/GroupManagerSheet.tsx');
   assert.match(src, /<View style=\{\[s\.modalOverlay, d\.modalOverlay\]\} pointerEvents="box-none">/);
   assert.match(src, /modalBackdrop:\s*{[\s\S]*zIndex:\s*0/);
   assert.match(src, /modalCard:\s*{[\s\S]*zIndex:\s*1/);
   assert.match(src, /modalCard:\s*{[\s\S]*elevation:\s*1/);
 });
 
-test('NotesScreen keeps the add group button pressable and focuses the input for empty names', () => {
-  const src = read('src/features/notes/screens/NotesScreen.tsx');
+test('GroupManagerSheet keeps the add group button pressable and focuses the input for empty names', () => {
+  const src = read('src/features/notes/components/GroupManagerSheet.tsx');
   assert.match(src, /groupNameInputRef/);
   assert.match(src, /handleSubmitGroupPress/);
   assert.match(src, /onPress=\{handleSubmitGroupPress\}/);
@@ -114,8 +119,8 @@ test('NotesScreen keeps the add group button pressable and focuses the input for
   assert.doesNotMatch(src, /disabled=\{savingGroup \|\| !draftGroupName\.trim\(\)\}/);
 });
 
-test('NotesScreen uses stable drag responders directly on each custom group handle', () => {
-  const src = read('src/features/notes/screens/NotesScreen.tsx');
+test('GroupManagerSheet uses stable drag responders directly on each custom group handle', () => {
+  const src = read('src/features/notes/components/GroupManagerSheet.tsx');
   assert.match(src, /dragRespondersRef/);
   assert.match(src, /getDragResponder/);
   assert.match(src, /groupsRef\.current\.findIndex/);
@@ -124,8 +129,8 @@ test('NotesScreen uses stable drag responders directly on each custom group hand
   assert.doesNotMatch(src, /createDragResponder\(group\.id, index\)\.panHandlers/);
 });
 
-test('NotesScreen prevents ScrollView from stealing group drag gestures', () => {
-  const src = read('src/features/notes/screens/NotesScreen.tsx');
+test('GroupManagerSheet prevents ScrollView from stealing group drag gestures', () => {
+  const src = read('src/features/notes/components/GroupManagerSheet.tsx');
   assert.match(src, /scrollEnabled=\{!draggingGroupId\}/);
   assert.match(src, /onMoveShouldSetPanResponderCapture:\s*\(\) => true/);
   assert.match(src, /onShouldBlockNativeResponder:\s*\(\) => true/);

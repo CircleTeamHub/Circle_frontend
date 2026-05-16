@@ -1,11 +1,13 @@
 import { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme, Spacing, Radius, Typography } from '@/theme';
 
 interface SearchBarProps {
   placeholder?: string;
   onPress?: () => void;
+  accessibilityLabel?: string;
 }
 
 const s = StyleSheet.create({
@@ -21,10 +23,16 @@ const s = StyleSheet.create({
 });
 
 export const SearchBar: React.FC<SearchBarProps> = ({
-  placeholder = '搜索...',
+  placeholder,
   onPress,
+  accessibilityLabel,
 }) => {
   const { colors } = useTheme();
+  const { t } = useTranslation();
+  // i18n the default placeholder — caller can still pass their own. Keep the zh
+  // 字面量作为 defaultValue 兜底，保持现状直到 locale JSON 添加 search.placeholder。
+  const resolvedPlaceholder =
+    placeholder ?? t('search.placeholder', { defaultValue: '搜索...' });
 
   const d = useMemo(
     () => ({
@@ -43,12 +51,20 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   const content = (
     <View style={[s.container, d.container]}>
       <Ionicons name="search" size={18} color={colors.textSecondary} />
-      <Text style={d.placeholder}>{placeholder}</Text>
+      <Text style={d.placeholder}>{resolvedPlaceholder}</Text>
     </View>
   );
 
   if (onPress) {
-    return <Pressable onPress={onPress}>{content}</Pressable>;
+    return (
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="search"
+        accessibilityLabel={accessibilityLabel ?? resolvedPlaceholder}
+      >
+        {content}
+      </Pressable>
+    );
   }
 
   return content;

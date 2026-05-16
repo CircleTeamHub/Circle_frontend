@@ -1,6 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
-import { Component, useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Component, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, StyleSheet, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import type { CreateNoteMediaInput } from '@/features/notes/types';
 import {
   requestUploadPresign,
@@ -53,11 +54,29 @@ interface Props {
 
 export function NoteBlockEditor({ initialContent, onContentChange, onMediaUploaded }: Props) {
   const { resolvedMode } = useTheme();
+  const { t } = useTranslation();
+  const toolbarLabels = useMemo(
+    () => ({
+      headingType: t('notes.editor.toolbar.heading', { defaultValue: '标题' }),
+      paragraphType: t('notes.editor.toolbar.paragraph', {
+        defaultValue: '正文',
+      }),
+      bulletListType: t('notes.editor.toolbar.bulletList', {
+        defaultValue: '列表',
+      }),
+      imageTitle: t('notes.editor.toolbar.imageTitle', { defaultValue: '图片' }),
+      imageLabel: t('notes.editor.toolbar.imageLabel', { defaultValue: '图' }),
+      codeTitle: t('notes.editor.toolbar.code', { defaultValue: '代码' }),
+    }),
+    [t],
+  );
   const [pendingInsert, setPendingInsert] = useState<PendingInsert | null>(null);
   // Prevent async setState calls after unmount — these are the root cause of
   // the "Unable to find the 'DomWebView' view" bridge error: a state update
   // after unmount causes React to try to push new props into the torn-down WebView.
   const isMounted = useRef(true);
+  // 防止用户连点"图"两下触发并发上传（每次都会跑 presign + S3 PUT 一整条链路）。
+  const inFlightRef = useRef(false);
   useEffect(() => {
     isMounted.current = true;
     return () => {
@@ -66,52 +85,72 @@ export function NoteBlockEditor({ initialContent, onContentChange, onMediaUpload
   }, []);
 
   const handleImageRequest = useCallback(async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) return;
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) return;
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.85,
-      allowsMultipleSelection: false,
-    });
-    if (result.canceled || !result.assets.length) return;
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.85,
+        allowsMultipleSelection: false,
+      });
+      if (result.canceled || !result.assets.length) return;
 
-    const asset = result.assets[0];
-    const filename = asset.uri.split('/').pop() ?? 'image.jpg';
-    const contentType =
-      resolveUploadContentType({ mimeType: asset.mimeType, fileName: filename }) ?? 'image/jpeg';
+      const asset = result.assets[0];
+      const filename = asset.uri.split('/').pop() ?? 'image.jpg';
+      const contentType =
+        resolveUploadContentType({ mimeType: asset.mimeType, fileName: filename }) ?? 'image/jpeg';
 
-    const presign = await requestUploadPresign({
-      filename: sanitizeUploadFilename(filename),
-      contentType,
-      folder: 'notes',
-    });
+      const presign = await requestUploadPresign({
+        filename: sanitizeUploadFilename(filename),
+        contentType,
+        folder: 'notes',
+      });
 
-    await uploadLocalFileToPresignedUrl(presign.uploadUrl, contentType, asset.uri);
+      await uploadLocalFileToPresignedUrl(presign.uploadUrl, contentType, asset.uri);
 
-    if (!isMounted.current) return;
+      if (!isMounted.current) return;
 
-    const insert: PendingInsert = {
-      type: 'image',
-      url: presign.fileUrl,
-      objectKey: presign.key,
-      width: asset.width ?? undefined,
-      height: asset.height ?? undefined,
-      mimeType: contentType,
-      size: asset.fileSize ?? undefined,
-    };
-    setPendingInsert(insert);
-    onMediaUploaded?.({
-      type: 'IMAGE',
-      objectKey: presign.key,
-      url: presign.fileUrl,
-      width: asset.width ?? undefined,
-      height: asset.height ?? undefined,
-      mimeType: contentType,
-      size: asset.fileSize ?? undefined,
-      sortOrder: 0,
-    });
-  }, [onMediaUploaded]);
+      const insert: PendingInsert = {
+        type: 'image',
+        url: presign.fileUrl,
+        objectKey: presign.key,
+        width: asset.width ?? undefined,
+        height: asset.height ?? undefined,
+        mimeType: contentType,
+        size: asset.fileSize ?? undefined,
+      };
+      setPendingInsert(insert);
+      onMediaUploaded?.({
+        type: 'IMAGE',
+        objectKey: presign.key,
+        url: presign.fileUrl,
+        width: asset.width ?? undefined,
+        height: asset.height ?? undefined,
+        mimeType: contentType,
+        size: asset.fileSize ?? undefined,
+        sortOrder: 0,
+      });
+    } catch (error) {
+      if (isMounted.current) {
+        Alert.alert(
+          t('notes.editor.imageUploadFailedTitle', {
+            defaultValue: '图片上传失败',
+          }),
+          t('notes.editor.imageUploadFailedMessage', {
+            defaultValue: '请稍后重试',
+          }),
+        );
+      }
+      if (__DEV__) {
+        console.warn('[NoteBlockEditor] image upload failed', error);
+      }
+    } finally {
+      inFlightRef.current = false;
+    }
+  }, [onMediaUploaded, t]);
 
   const handleInsertHandled = useCallback(() => {
     if (!isMounted.current) return;
@@ -129,8 +168,12 @@ export function NoteBlockEditor({ initialContent, onContentChange, onMediaUpload
       try {
         const blocks = JSON.parse(blocksJson) as Record<string, unknown>[];
         onContentChange(blocks);
-      } catch {
-        // malformed JSON from bridge — ignore
+      } catch (error) {
+        // malformed JSON from bridge — drop the update, but surface in dev so
+        // bridge serialization regressions don't go unnoticed.
+        if (__DEV__) {
+          console.warn('[NoteBlockEditor] malformed JSON from DOM bridge', error);
+        }
       }
     },
     [onContentChange],
@@ -147,6 +190,7 @@ export function NoteBlockEditor({ initialContent, onContentChange, onMediaUpload
           onInsertHandled={handleInsertHandled}
           onImageRequest={handleImageRequest}
           theme={resolvedMode}
+          toolbarLabels={toolbarLabels}
         />
       </View>
     </DOMBridgeErrorBoundary>

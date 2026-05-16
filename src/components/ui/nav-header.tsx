@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { type Href, useNavigation, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme, Spacing, Typography } from '@/theme';
 
 interface NavHeaderProps {
@@ -10,6 +11,9 @@ interface NavHeaderProps {
   onRightPress?: () => void;
   onBackPress?: () => void;
   fallbackHref?: Href;
+  // 当 rightIcon 是非自描述图标时（比如 settings-outline / help-circle-outline），
+  // 调用方应该传入 accessibilityLabel 让屏幕阅读器知道做什么。
+  rightAccessibilityLabel?: string;
 }
 
 const s = StyleSheet.create({
@@ -31,10 +35,12 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   onRightPress,
   onBackPress,
   fallbackHref,
+  rightAccessibilityLabel,
 }) => {
   const router = useRouter();
   const navigation = useNavigation();
   const { colors } = useTheme();
+  const { t } = useTranslation();
 
   const handleBackPress = useCallback(() => {
     if (onBackPress) {
@@ -58,12 +64,24 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
 
   return (
     <View style={s.container}>
-      <Pressable onPress={handleBackPress} hitSlop={8}>
+      <Pressable
+        onPress={handleBackPress}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={t('common.back', { defaultValue: '返回' })}
+      >
         <Ionicons name="chevron-back" size={24} color={colors.text} />
       </Pressable>
-      <Text style={d.title}>{title}</Text>
+      <Text style={d.title} accessibilityRole="header">
+        {title}
+      </Text>
       {rightIcon ? (
-        <Pressable onPress={onRightPress} hitSlop={8}>
+        <Pressable
+          onPress={onRightPress}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={rightAccessibilityLabel ?? rightIcon}
+        >
           <Ionicons name={rightIcon} size={22} color={colors.textSecondary} />
         </Pressable>
       ) : (

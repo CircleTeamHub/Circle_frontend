@@ -28,6 +28,7 @@ import OpenIMSDK, {
 import RNFS from 'react-native-fs';
 import { Platform } from 'react-native';
 import {
+  LIMITS,
   OPENIM_API_URL,
   OPENIM_LOG_LEVEL,
   OPENIM_WS_URL,
@@ -40,9 +41,13 @@ import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 // SDK 初始化 Promise 单例：避免并发重复 initSDK，登出后置为 null 允许重新初始化
 let initPromise: Promise<void> | null = null;
 
+const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+
 // 注册到 session 的登出 teardown，由 clearLocalSession 统一调度。
 // 函数声明会被 hoisting，所以这里在模块顶层引用 logoutFromOpenIM 是安全的。
-registerLogoutHandler(() => logoutFromOpenIM());
+// 直接传函数引用而不是包一层箭头：session.ts 按引用去重，箭头每次模块求值都是新引用，
+// HMR 时会让同一个 teardown 累积多次（已经被 Batch 01 的 dedup 暴露过）。
+registerLogoutHandler(logoutFromOpenIM);
 
 /**
  * OpenIM v3.8 拒绝带连字符的 userID（PostgreSQL UUID 直接传会被判定非法）。
@@ -76,10 +81,6 @@ function isNativeIMSupported() {
 
 function getOpenIMDataDir() {
   return `${RNFS.DocumentDirectoryPath}/openim`;
-}
-
-function getPlatformID() {
-  return Platform.OS === 'ios' ? 1 : 2;
 }
 
 function getUnsupportedPlatformMessage() {
@@ -195,8 +196,10 @@ export async function loginToOpenIM(userID: string, imToken: string) {
       useIMStore.getState().setConnected(true);
       return true;
     }
-    // 登录失败时重置 connecting，防止 store 永久卡在"连接中"状态
+    // 登录失败时重置 connecting，并把 currentUserID 也清掉 —— 它在 L167 已经被乐观写入
+    // 之后任何登录前的失败都会让 store 残留一个错误身份，影响 read-receipt 路由 / 气泡对齐。
     useIMStore.getState().setConnecting(false);
+    useIMStore.getState().setCurrentUserID(null);
     throw error;
   }
 }
@@ -214,8 +217,11 @@ export async function logoutFromOpenIM() {
 
   try {
     await OpenIMSDK.logout();
-  } catch {
-    // 忽略 SDK 登出失败，始终清空本地状态
+  } catch (err) {
+    // SDK 登出失败不阻断本地清理；dev 下打印出来，避免 native 端长期处于异常状态而没人发现。
+    if (isDev) {
+      console.warn('[openim] SDK logout failed (local state still reset)', err);
+    }
   } finally {
     // 清空 initPromise，确保下次登录能重新执行 initSDK
     initPromise = null;
@@ -227,8 +233,10 @@ export async function loadConversationList(count = 100) {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    useIMStore.getState().setConversations([]);
-    return [];
+    // 初始化失败（瞬时 native I/O 失败 / 平台不支持等）时保留 store 已缓存的会话，
+    // 避免一次短暂错误把"曾经成功加载过的会话列表"清成空，让用户误以为没有任何对话。
+    // 真正需要清空时由 logoutFromOpenIM → useIMStore.reset() 显式负责。
+    return useIMStore.getState().conversations;
   }
 
   const conversations = await OpenIMSDK.getConversationListSplit({
@@ -306,11 +314,29 @@ export async function createGroupChat(params: {
     },
   });
 
-  await loadConversationList().catch(() => {
-    // 创建成功但拉会话列表失败时静默忽略，UI 自己再触发重试
+  await loadConversationList().catch((err) => {
+    // 创建成功但拉会话列表失败时不阻断 —— UI 自己会再触发重试。
+    // 但要在 dev 把错误暴露出来，否则群创建后立刻看不到新会话时无从查起。
+    if (isDev) {
+      console.warn('[openim] createGroupChat: loadConversationList failed', err);
+    }
   });
 
   return group;
+}
+
+/**
+ * 拉当前用户加入的所有群聊。OpenIM SDK 已缓存群信息，调用一次成本不高，
+ * GroupItem 已包含 groupName / faceURL / memberCount / ownerUserID 等所有渲染所需字段，
+ * 不需要再 N+1 fetch 每个群的详情。
+ */
+export async function getJoinedGroups(): Promise<GroupItem[]> {
+  const initialized = await ensureOpenIMInitialized();
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+  await waitForOpenIMConnectionReady();
+  return OpenIMSDK.getJoinedGroupList();
 }
 
 /**
@@ -510,7 +536,12 @@ export async function sendTransferCardMessage(params: {
   }
 
   const { amount } = params.payload;
-  if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) {
+  // 积分必须为正整数；上限拦截 off-by-orders / overflow 攻击。真实业务上限以后端为准。
+  if (
+    !Number.isInteger(amount) ||
+    amount <= 0 ||
+    amount > LIMITS.TRANSFER_MAX_AMOUNT
+  ) {
     throw new Error('转账金额无效');
   }
 

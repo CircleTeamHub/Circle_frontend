@@ -69,7 +69,6 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
           hasMore: result.hasMore,
           requestQueryVersion,
           requestId,
-          snapshotPosts: state.plazaPosts,
         }),
       );
     } catch {

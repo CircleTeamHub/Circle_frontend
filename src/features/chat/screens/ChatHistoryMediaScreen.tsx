@@ -118,6 +118,12 @@ export default function ChatHistoryMediaScreen() {
       pageRef.current = nextPage;
       setResults((prev) => [...prev, ...page.filter(isChatHistoryMediaMessage)]);
       setHasMore(page.length === PAGE_SIZE);
+    } catch (err) {
+      // 翻页失败时停止继续翻。初始加载已有 error state 处理失败，这里不重置已加载结果。
+      setHasMore(false);
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn('[chat-history-media] load-more failed', err);
+      }
     } finally {
       setLoadingMore(false);
     }

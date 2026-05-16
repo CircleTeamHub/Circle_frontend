@@ -58,6 +58,9 @@ export const FilterTabs: React.FC<FilterTabsProps> = ({
           key={tab}
           onPress={() => onTabPress(index)}
           style={[s.tab, active && d.tabActive]}
+          accessibilityRole="tab"
+          accessibilityLabel={tab}
+          accessibilityState={{ selected: active }}
         >
           <Text style={[d.label, active && d.labelActive]}>
             {tab}
@@ -74,11 +77,16 @@ export const FilterTabs: React.FC<FilterTabsProps> = ({
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={[s.row, s.scrollContent]}
+        accessibilityRole="tablist"
       >
         {tabs.map(renderTab)}
       </ScrollView>
     );
   }
 
-  return <View style={s.row}>{tabs.map(renderTab)}</View>;
+  return (
+    <View style={s.row} accessibilityRole="tablist">
+      {tabs.map(renderTab)}
+    </View>
+  );
 };

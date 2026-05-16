@@ -1,5 +1,5 @@
 import { apiClient } from '@/services/api/client';
-import { normalizeMediaUrl } from '@/services/api/utils';
+import { fetchCountEndpoint, normalizeMediaUrl } from '@/services/api/utils';
 
 export type FriendProfile = {
   id: string;
@@ -179,10 +179,12 @@ export async function setFriendRemark(
   friendUserId: string,
   remark: string | null,
 ) {
+  // 之前 remark?.trim() 调用两次。存本地常量更清晰，空 trim 结果也归一为 null 一致。
+  const trimmed = remark?.trim() ?? '';
   return apiClient<void>(`/friend/${friendUserId}/remark`, {
     method: 'PATCH',
     body: {
-      remark: remark?.trim() ? remark.trim() : null,
+      remark: trimmed.length > 0 ? trimmed : null,
     },
   });
 }
@@ -226,10 +228,7 @@ export async function fetchFriendActivities() {
 }
 
 export async function fetchUnreadFriendActivityCount() {
-  const response = await apiClient<{ count: number }>(
-    '/friend/activities/unread-count',
-  );
-  return response.count;
+  return fetchCountEndpoint('/friend/activities/unread-count');
 }
 
 export async function fetchFriendActivityDetail(activityId: string) {

@@ -62,8 +62,18 @@ export function migrateFromAsyncStorage(): Promise<void> {
         }
       }
       await AsyncStorage.multiRemove([...LEGACY_KEYS]);
-    } finally {
+      // 仅在拷贝 + 清理全部成功后才记完成标记。失败不设置 flag —— 让下次启动重试，
+      // 避免半迁移状态被 "已完成" 标记永久封死。
       storage.set(MIGRATION_FLAG, true);
+    } catch (err) {
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn(
+          '[storage] AsyncStorage → MMKV migration failed; will retry next launch',
+          err,
+        );
+      }
+      // 故意不 rethrow：调用方（app/_layout.tsx）必须始终前进，
+      // 否则启动屏会无限挂住。
     }
   })();
 

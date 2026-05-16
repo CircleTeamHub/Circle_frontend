@@ -37,7 +37,7 @@ function loadAvatarPickerFeedback(stubs = {}) {
 }
 
 test('avatar picker helper text explains local album access and simulator caveat', () => {
-  const { AVATAR_PICKER_HELPER_TEXT } = loadAvatarPickerFeedback({
+  const { getAvatarPickerHelperText } = loadAvatarPickerFeedback({
     '@/i18n': {
       default: {
         t: (key) =>
@@ -49,8 +49,9 @@ test('avatar picker helper text explains local album access and simulator caveat
     },
   });
 
-  assert.match(AVATAR_PICKER_HELPER_TEXT, /本地相册/);
-  assert.match(AVATAR_PICKER_HELPER_TEXT, /模拟器/);
+  const text = getAvatarPickerHelperText();
+  assert.match(text, /本地相册/);
+  assert.match(text, /模拟器/);
 });
 
 test('permission denied message distinguishes retryable vs settings cases', () => {
@@ -99,7 +100,8 @@ test('avatar edit screen renders the local album CTA and helper text', () => {
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /useTranslation\(/);
-  assert.match(source, /AVATAR_PICKER_HELPER_TEXT/);
+  // 改造后用函数调用避免模块加载时锁定字符串 —— 之前 const 在用户切换语言后会留旧值。
+  assert.match(source, /getAvatarPickerHelperText\(\)/);
   assert.doesNotMatch(source, /从本地相册选择/);
 });
 

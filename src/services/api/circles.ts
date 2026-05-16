@@ -1,5 +1,9 @@
 import { apiClient } from '@/services/api/client';
-import { normalizeMediaUrl } from '@/services/api/utils';
+import {
+  buildQuery,
+  fetchCountEndpoint,
+  normalizeMediaUrl,
+} from '@/services/api/utils';
 import type {
   Circle,
   CircleActivityItem,
@@ -25,18 +29,12 @@ export async function fetchCircles(params?: {
   page?: number;
   limit?: number;
 }) {
-  const query = new URLSearchParams();
-  if (params?.city) query.set('city', params.city);
-  if (params?.page) query.set('page', String(params.page));
-  if (params?.limit) query.set('limit', String(params.limit));
-
-  const qs = query.toString();
   const result = await apiClient<{
     items: Circle[];
     total: number;
     page: number;
     limit: number;
-  }>(`/circle${qs ? `?${qs}` : ''}`);
+  }>(`/circle${buildQuery(params ?? {})}`);
 
   return {
     ...result,
@@ -192,10 +190,7 @@ export async function fetchCircleActivities(): Promise<CircleActivityItem[]> {
 }
 
 export async function fetchCircleActivityUnreadCount(): Promise<number> {
-  const result = await apiClient<{ count: number }>(
-    '/circle/activities/unread-count',
-  );
-  return result.count;
+  return fetchCountEndpoint('/circle/activities/unread-count');
 }
 
 export async function markCircleActivityRead(

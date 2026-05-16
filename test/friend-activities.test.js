@@ -144,46 +144,54 @@ test('friend activity copy maps event types to inbox text and groups inbox rows 
 
 test('friend activity API helpers use activity endpoints', async () => {
   const calls = [];
+  const apiClientStub = async (endpoint, options) => {
+    calls.push({ endpoint, options });
+
+    if (endpoint === '/friend/activities/unread-count') {
+      return { count: 2 };
+    }
+
+    if (endpoint === '/friend/activities') {
+      return [];
+    }
+
+    if (endpoint === '/friend/activities/activity-1') {
+      return {
+        id: 'activity-1',
+        type: 'REQUEST_RECEIVED',
+        requestId: 'request-1',
+        requestState: 'PENDING',
+        messageSnapshot: 'hello',
+        readAt: null,
+        createdAt: '2026-04-08T00:00:00.000Z',
+        counterparty: {
+          id: 'user-2',
+          accountId: 'jimmy',
+          nickname: 'Jimmy',
+          avatarUrl: null,
+        },
+      };
+    }
+
+    return undefined;
+  };
+
   const {
     fetchFriendActivities,
     fetchUnreadFriendActivityCount,
     markFriendActivityRead,
     fetchFriendActivityDetail,
   } = loadTsModule('src/services/api/friends.ts', {
-    '@/services/api/client': {
-      apiClient: async (endpoint, options) => {
-        calls.push({ endpoint, options });
-
-        if (endpoint === '/friend/activities/unread-count') {
-          return { count: 2 };
-        }
-
-        if (endpoint === '/friend/activities') {
-          return [];
-        }
-
-        if (endpoint === '/friend/activities/activity-1') {
-          return {
-            id: 'activity-1',
-            type: 'REQUEST_RECEIVED',
-            requestId: 'request-1',
-            requestState: 'PENDING',
-            messageSnapshot: 'hello',
-            readAt: null,
-            createdAt: '2026-04-08T00:00:00.000Z',
-            counterparty: {
-              id: 'user-2',
-              accountId: 'jimmy',
-              nickname: 'Jimmy',
-              avatarUrl: null,
-            },
-          };
-        }
-
-        return undefined;
+    '@/services/api/client': { apiClient: apiClientStub },
+    '@/services/api/utils': {
+      normalizeMediaUrl: (value) => value,
+      // `fetchCountEndpoint` 是 batch 6 extract 的小辅助函数 —— 这里复用同一个
+      // apiClientStub 让测试断言依然能 push 到 calls。
+      fetchCountEndpoint: async (endpoint) => {
+        const result = await apiClientStub(endpoint);
+        return result.count;
       },
     },
-    '@/services/api/utils': { normalizeMediaUrl: (value) => value },
   });
 
   await fetchFriendActivities();

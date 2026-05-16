@@ -70,15 +70,44 @@ export const OPENIM_WS_URL = trimTrailingSlash(
   process.env.EXPO_PUBLIC_OPENIM_WS_URL ?? getDefaultOpenIMWsUrl()
 );
 
+/**
+ * 从 API_URL 推导 realtime WebSocket URL：复用相同 host:port，把 protocol
+ * http → ws、https → wss，丢掉 `/api/v1` 路径，挂上 `/realtime`。
+ *
+ * 之前的默认值硬编码 `ws://${host}:${API_PORT}/realtime`，在 prod（API_URL 已经是
+ * `https://api.example.com/api/v1`）且 EXPO_PUBLIC_REALTIME_WS_URL 未设置时，
+ * 会算出 `ws://api.example.com:3000/realtime` —— 协议错、端口错。
+ *
+ * 解析失败时退回到 dev 风格的默认值，保证一定能产出可执行字符串。
+ */
+function deriveRealtimeUrlFromApi(apiUrl: string): string {
+  try {
+    const url = new URL(apiUrl);
+    const wsProtocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    const portPart = url.port ? `:${url.port}` : '';
+    return `${wsProtocol}//${url.hostname}${portPart}/realtime`;
+  } catch {
+    return `ws://${getDefaultHost()}:${API_PORT}/realtime`;
+  }
+}
+
 export const REALTIME_WS_URL = trimTrailingSlash(
-  process.env.EXPO_PUBLIC_REALTIME_WS_URL ?? `ws://${getDefaultHost()}:${API_PORT}/realtime`,
+  process.env.EXPO_PUBLIC_REALTIME_WS_URL ?? deriveRealtimeUrlFromApi(API_URL),
 );
 
 // OpenIM SDK 日志级别：0=关闭 1=fatal 2=error 3=warn 4=info 5=debug
-// 默认 3（warn），开发时可在 .env.local 中设置 EXPO_PUBLIC_OPENIM_LOG_LEVEL=5 开启详细日志
-export const OPENIM_LOG_LEVEL = Number(
-  process.env.EXPO_PUBLIC_OPENIM_LOG_LEVEL ?? 3
+// 默认 3（warn），开发时可在 .env.local 中设置 EXPO_PUBLIC_OPENIM_LOG_LEVEL=5 开启详细日志。
+// 校验 finite + 范围：若环境变量被设置成非数字（"verbose" 等），Number(...) 会得到 NaN，
+// 直接传给 initSDK 是 undefined behavior。fallback 到 3 比让 SDK 静默异常更安全。
+const RAW_OPENIM_LOG_LEVEL = Number(
+  process.env.EXPO_PUBLIC_OPENIM_LOG_LEVEL ?? 3,
 );
+export const OPENIM_LOG_LEVEL =
+  Number.isFinite(RAW_OPENIM_LOG_LEVEL) &&
+  RAW_OPENIM_LOG_LEVEL >= 0 &&
+  RAW_OPENIM_LOG_LEVEL <= 5
+    ? RAW_OPENIM_LOG_LEVEL
+    : 3;
 
 export const APP_NAME = 'Circle IM';
 
@@ -91,4 +120,7 @@ export const LIMITS = {
   FILE_MAX_SIZE_MB: 2048,
   GROUP_MAX_MEMBERS: 500,
   MESSAGE_RECALL_SECONDS: 120,
+  // 转账积分上限：客户端兜底防止 off-by-orders、Number.MAX_SAFE_INTEGER 溢出等异常输入。
+  // 真实业务上限以后端为准；这里仅做 sanity check。
+  TRANSFER_MAX_AMOUNT: 1_000_000,
 } as const;

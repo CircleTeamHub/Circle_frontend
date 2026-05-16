@@ -115,7 +115,9 @@ const sReceived = StyleSheet.create({
 
 export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
   message,
-  senderName = '陈',
+  // 缺省值之前写死成 '陈' —— 一旦后端漏传 senderNickname，每个聊天都会显示 "陈"。
+  // 空字符串让 Avatar 自身回退到首字母 / 图标占位。
+  senderName = '',
   senderAvatarUri,
   onAvatarPress,
 }) => {
@@ -317,7 +319,8 @@ const sLocation = StyleSheet.create({
 export const LocationCard: React.FC<LocationCardProps> = ({
   message,
   outgoing = false,
-  senderName = '陈',
+  // 同 ReceivedBubble：删除 '陈' 默认值。
+  senderName = '',
   senderAvatarUri,
   selfName,
   selfAvatarUri,
@@ -1077,7 +1080,9 @@ export const TransferCardBubble: React.FC<TransferCardBubbleProps> = ({
             <Ionicons name="cash-outline" size={20} color="#FFFFFF" />
           </View>
           <View style={sTransfer.amountRow}>
-            <Text style={sTransfer.amount}>{data.amount}</Text>
+            {/* toLocaleString 自动加千分位（1000000 → 1,000,000）；
+                后端上限是 1_000_000（LIMITS.TRANSFER_MAX_AMOUNT），不会出现 NaN/Infinity */}
+            <Text style={sTransfer.amount}>{data.amount.toLocaleString()}</Text>
             <Text style={sTransfer.unit}>积分</Text>
           </View>
         </View>

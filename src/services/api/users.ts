@@ -16,7 +16,9 @@ export type PublicUser = {
   persona?: string | null;
   helloWords?: string | null;
   birthday?: string | null;
-  gender?: 'male' | 'female' | 'other' | 'unset' | string;
+  // 后端 Gender enum 固定 4 值；之前 union 里加 `| string` 等于退化成 any string，
+  // 消费端 switch / equality 形同虚设。删 string 兜底，后端真要新增就让 TS 报错。
+  gender?: 'male' | 'female' | 'other' | 'unset';
   city?: string | null;
   role?: string;
   status?: string;

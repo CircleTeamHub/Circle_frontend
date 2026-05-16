@@ -37,7 +37,7 @@ import {
 } from '@/features/profile/city-options';
 import { loadImagePickerModule } from '@/features/profile/image-picker';
 import {
-  AVATAR_PICKER_HELPER_TEXT,
+  getAvatarPickerHelperText,
   getAvatarPickerPermissionDeniedMessage,
 } from '@/features/profile/avatar-picker-feedback';
 
@@ -512,7 +512,7 @@ export default function EditProfileFieldScreen() {
               >
                 <Text style={d.avatarButtonText}>{t('profileFields.selectFromAlbum')}</Text>
               </Pressable>
-              <Text style={[s.helper, d.helper]}>{AVATAR_PICKER_HELPER_TEXT}</Text>
+              <Text style={[s.helper, d.helper]}>{getAvatarPickerHelperText()}</Text>
             </View>
           ) : field.editorType === 'gender' ? (
             <View style={s.optionRow}>

@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   LogBox,
   Pressable,
   ScrollView,
@@ -11,6 +12,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NoteBlockEditor } from '@/features/notes/components/NoteBlockEditor';
 import type { CreateNoteMediaInput, NoteGroup } from '@/features/notes/types';
@@ -34,6 +36,7 @@ export default function EditNoteScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const isEdit = Boolean(id);
 
@@ -44,7 +47,9 @@ export default function EditNoteScreen() {
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(isEdit);
-  const [dateStr, setDateStr] = useState(formatNoteFullDate(new Date().toISOString()));
+  const [dateStr, setDateStr] = useState(() =>
+    formatNoteFullDate(new Date().toISOString(), t),
+  );
   const mediaMapRef = useRef<Record<string, CreateNoteMediaInput>>({});
   const [editorMounted, setEditorMounted] = useState(false);
   const [navigating, setNavigating] = useState(false);
@@ -82,7 +87,7 @@ export default function EditNoteScreen() {
         blocksRef.current = loaded;
         setInitialBlocks(loaded.length > 0 ? loaded : null);
         setSelectedGroupIds(note.groups.map((group) => group.id));
-        setDateStr(formatNoteFullDate(note.createdAt));
+        setDateStr(formatNoteFullDate(note.createdAt, t));
         setLoading(false);
         setEditorMounted(true);
       })
@@ -96,7 +101,7 @@ export default function EditNoteScreen() {
     return () => {
       cancelled = true;
     };
-  }, [id, isEdit]);
+  }, [id, isEdit, t]);
 
   const handleContentChange = useCallback((newBlocks: Record<string, unknown>[]) => {
     blocksRef.current = newBlocks;
@@ -148,10 +153,21 @@ export default function EditNoteScreen() {
         await createNote(input);
       }
       navigateBack();
-    } catch {
+    } catch (error) {
       setIsSubmitting(false);
+      const fallback = t('notes.edit.saveFailedMessage', {
+        defaultValue: '保存失败，请稍后重试',
+      });
+      const message = error instanceof Error ? error.message : fallback;
+      Alert.alert(
+        t('notes.edit.saveFailedTitle', { defaultValue: '保存失败' }),
+        message,
+      );
+      if (__DEV__) {
+        console.warn('[EditNoteScreen] save failed', error);
+      }
     }
-  }, [id, isEdit, isSubmitting, navigateBack, selectedGroupIds, title]);
+  }, [id, isEdit, isSubmitting, navigateBack, selectedGroupIds, t, title]);
 
   const d = useMemo(
     () => ({
@@ -188,7 +204,9 @@ export default function EditNoteScreen() {
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
         <Text style={[s.headerTitle, d.headerTitle]}>
-          {isEdit ? '编辑笔记' : '新建笔记'}
+          {isEdit
+            ? t('notes.edit.editTitle', { defaultValue: '编辑笔记' })
+            : t('notes.edit.newTitle', { defaultValue: '新建笔记' })}
         </Text>
         <Pressable
           style={[s.doneBtn, d.doneBtn, isDoneDisabled && d.doneBtnDisabled]}
@@ -196,14 +214,16 @@ export default function EditNoteScreen() {
           disabled={isDoneDisabled}
         >
           <Text style={[s.doneBtnText, d.doneBtnText]}>
-            {isSubmitting ? '保存中...' : '完成'}
+            {isSubmitting
+              ? t('notes.edit.saving', { defaultValue: '保存中...' })
+              : t('notes.edit.done', { defaultValue: '完成' })}
           </Text>
         </Pressable>
       </View>
 
       <TextInput
         style={[s.titleInput, d.titleInput]}
-        placeholder="标题"
+        placeholder={t('notes.edit.titlePlaceholder', { defaultValue: '标题' })}
         placeholderTextColor={colors.textSecondary}
         value={title}
         onChangeText={setTitle}
@@ -217,7 +237,9 @@ export default function EditNoteScreen() {
       </View>
 
       <View style={s.groupSection}>
-        <Text style={[s.sectionTitle, d.sectionTitle]}>分组</Text>
+        <Text style={[s.sectionTitle, d.sectionTitle]}>
+          {t('notes.edit.groupsLabel', { defaultValue: '分组' })}
+        </Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -257,7 +279,9 @@ export default function EditNoteScreen() {
             ))}
           </View>
         ) : (
-          <Text style={[s.sectionTitle, d.sectionTitle]}>未加入任何分组</Text>
+          <Text style={[s.sectionTitle, d.sectionTitle]}>
+            {t('notes.edit.noGroups', { defaultValue: '未加入任何分组' })}
+          </Text>
         )}
       </View>
 

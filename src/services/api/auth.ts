@@ -24,8 +24,37 @@ function getOpenIMPlatformID(): 1 | 2 | 5 {
 export type AuthTokens = {
   accessToken: string;
   refreshToken: string;
-  imToken: string;
+  // 某些账号类型（如管理员、未绑定 IM 的账号）后端可能不签发 imToken。
+  // 类型保持与实际响应一致，避免下游做无效的 string 假设。
+  imToken: string | null;
 };
+
+function isAuthTokens(value: unknown): value is AuthTokens {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  if (typeof v.accessToken !== 'string' || v.accessToken.length === 0) return false;
+  if (typeof v.refreshToken !== 'string' || v.refreshToken.length === 0) return false;
+  if (v.imToken !== null && typeof v.imToken !== 'undefined' && typeof v.imToken !== 'string') {
+    return false;
+  }
+  return true;
+}
+
+function ensureAuthTokens(value: unknown): AuthTokens {
+  if (!isAuthTokens(value)) {
+    // 字段缺失 / 类型异常 — 视作认证响应损坏，直接抛错而不是带着残缺数据写入 store。
+    throw new Error('认证返回数据格式异常，请重试');
+  }
+  return {
+    accessToken: value.accessToken,
+    refreshToken: value.refreshToken,
+    // 把 undefined / 空字符串归一为 null，方便下游用 `if (tokens.imToken)` 判断。
+    imToken:
+      typeof value.imToken === 'string' && value.imToken.length > 0
+        ? value.imToken
+        : null,
+  };
+}
 
 export type BackendAuthUser = {
   id: string;
@@ -72,25 +101,30 @@ export async function login(payload: {
   accountId: string;
   password: string;
 }) {
-  return apiClient<AuthTokens>('/auth/login', {
+  // accountId 在 API 层兜底 trim：调用方忘记 trim 时也不会因为前导空格被后端拒识
+  const accountId = payload.accountId.trim();
+  const raw = await apiClient<AuthTokens>('/auth/login', {
     method: 'POST',
     auth: false,
     headers: {
       'x-device-name': getDeviceName(),
     },
-    body: { ...payload, platform: getOpenIMPlatformID() },
+    body: { accountId, password: payload.password, platform: getOpenIMPlatformID() },
   });
+  return ensureAuthTokens(raw);
 }
 
 export async function register(payload: RegisterPayload) {
-  return apiClient<AuthTokens>('/auth/register', {
+  const accountId = payload.accountId.trim();
+  const raw = await apiClient<AuthTokens>('/auth/register', {
     method: 'POST',
     auth: false,
     headers: {
       'x-device-name': getDeviceName(),
     },
-    body: { ...payload, platform: getOpenIMPlatformID() },
+    body: { ...payload, accountId, platform: getOpenIMPlatformID() },
   });
+  return ensureAuthTokens(raw);
 }
 
 export async function fetchCurrentUser() {

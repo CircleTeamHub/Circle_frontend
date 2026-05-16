@@ -1,5 +1,9 @@
 export const MAX_CITY_SELECTION = 10;
 
+// 单选模式下的「全国」标记 —— 后端约定值。前端不通过 i18n 翻译这个常量，因为它是 wire format
+// 的一部分；UI 展示的「全国」label 由 i18n 单独提供。
+export const NATIONWIDE_CITY_VALUE = '全国';
+
 type BuildInitialCityPickerStateArgs = {
   isMultiSelect: boolean;
   singleCity: string | null;
@@ -25,7 +29,7 @@ export function buildInitialCityPickerState({
     };
   }
 
-  if (singleCity === '全国') {
+  if (singleCity === NATIONWIDE_CITY_VALUE) {
     return {
       selected: [],
       isNationwide: true,
@@ -76,7 +80,7 @@ export function resolveSingleCitySelection(
   isNationwide: boolean,
 ) {
   if (isNationwide) {
-    return '全国';
+    return NATIONWIDE_CITY_VALUE;
   }
 
   return selected[0] ?? null;

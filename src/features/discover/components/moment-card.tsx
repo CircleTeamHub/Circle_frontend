@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { getUserProfileHref } from '@/features/user/utils/routes';
+import { formatRelativeTime } from '@/features/discover/utils/relative-time';
 import { ImageGrid } from './image-grid';
 import type { MomentPost } from '@/types';
 
@@ -88,16 +89,10 @@ export const MomentCard: React.FC<MomentCardProps> = ({
     [colors],
   );
 
-  const timeLabel = useMemo(() => {
-    const diff = Date.now() - new Date(post.createdAt).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return t('common.justNow');
-    if (mins < 60) return t('common.minutesAgo', { count: mins });
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return t('common.hoursAgo', { count: hours });
-    const days = Math.floor(hours / 24);
-    return t('common.daysAgo', { count: days });
-  }, [post.createdAt, t]);
+  const timeLabel = useMemo(
+    () => formatRelativeTime(post.createdAt, t),
+    [post.createdAt, t],
+  );
 
   const handleAvatarPress = useCallback(() => {
     router.push(getUserProfileHref('discover', post.author.id));

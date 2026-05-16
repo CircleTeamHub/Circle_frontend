@@ -13,7 +13,10 @@ test('add friend screen is a minimal account-id search flow', () => {
   assert.match(source, /searchUsersByAccountId/);
   assert.match(source, /未找到好友/);
   assert.match(source, /输入对方账号/);
-  assert.match(source, /账号：\{result\.accountId\}/);
+  // After S13 i18n migration: account label is rendered via
+  // t('contacts.accountId', { id: result.accountId }) — locale JSON owns the "账号：{{id}}" format.
+  assert.match(source, /contacts\.accountId/);
+  assert.match(source, /id: result\.accountId/);
   assert.match(source, /handleSearch/);
   assert.match(source, /getUserProfileHref/);
   assert.doesNotMatch(source, /查看详情并添加好友/);

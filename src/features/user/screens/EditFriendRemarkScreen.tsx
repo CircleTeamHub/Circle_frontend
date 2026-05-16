@@ -97,9 +97,15 @@ export default function EditFriendRemarkScreen() {
         setValue(settings.remark ?? '');
         setError(null);
       })
-      .catch(() => {
+      .catch((nextError) => {
         if (!cancelled) {
           setError(t('userProfile.editRemark.loadFailed'));
+        }
+        if (__DEV__) {
+          console.warn(
+            '[EditFriendRemarkScreen] fetchFriendSettings failed',
+            nextError,
+          );
         }
       })
       .finally(() => {

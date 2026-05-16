@@ -4,9 +4,10 @@ import { Divider } from "@/components/ui/divider";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { loadConversationList, markConversationAsRead } from "@/im/client";
 import { mapConversationItemToUI } from "@/im/mappers";
-import { getUnreadDiscoverAlertCount } from "@/features/messages/data/discover-alerts";
+import { useMessageGroupsStore } from "@/features/messages/store/use-message-groups-store";
 import { getUserProfileHref } from "@/features/user/utils/routes";
 import { useIMStore } from "@/stores/imStore";
+import { useTabBadgeStore } from "@/stores/tabBadgeStore";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { Conversation } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
@@ -14,6 +15,7 @@ import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  Alert,
   FlatList,
   ListRenderItemInfo,
   Modal,
@@ -23,6 +25,8 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+const isDev = typeof __DEV__ !== "undefined" && __DEV__;
 
 const BASE_FILTER_KEYS = [
   { id: "all", key: "messages.all" },
@@ -156,18 +160,29 @@ export default function MessagesScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
 
-  const BASE_FILTERS = BASE_FILTER_KEYS.map((f) => ({ id: f.id, label: t(f.key) }));
-  const MENU_ACTIONS = MENU_ACTION_KEYS.map((a) => ({ id: a.id, icon: a.icon, label: t(a.key) }));
+  // useMemo 让 BASE_FILTERS / MENU_ACTIONS 在 `t` 不变时保持同一引用 ——
+  // 否则它们每次 render 都是新数组，会让下游 useMemo (activeTab / ListHeader) 形同虚设。
+  const BASE_FILTERS = useMemo(
+    () => BASE_FILTER_KEYS.map((f) => ({ id: f.id, label: t(f.key) })),
+    [t],
+  );
+  const MENU_ACTIONS = useMemo(
+    () => MENU_ACTION_KEYS.map((a) => ({ id: a.id, icon: a.icon, label: t(a.key) })),
+    [t],
+  );
 
   const rawConversations = useIMStore((state) => state.conversations);
-  const totalUnread = useIMStore((state) => state.totalUnread);
   const connectionError = useIMStore((state) => state.error);
+  const conversationGroups = useMessageGroupsStore((state) => state.groups);
+  // 通知图标的角标走 tabBadgeStore.systemUnread —— 这是 realtime 通道
+  // `system.notification.unread.changed` 维护的真实未读数。之前那份本地假数据
+  // (discover-alerts.ts) 让 badge 永远 ≥ 5，且没人能清。
 
   const [activeFilterId, setActiveFilterId] = useState("all"); // 当前激活的筛选标签 id
   const [menuVisible, setMenuVisible] = useState(false);        // 右上角弹出菜单的显隐
 
-  // 发现页未读通知数，用于通知图标角标
-  const unreadNotificationCount = getUnreadDiscoverAlertCount();
+  // 发现 / 系统通知未读数（realtime 通道维护，跟 discover tab 入口绑定）
+  const discoverUnread = useTabBadgeStore((state) => state.systemUnread);
 
   // 依赖主题色的动态样式，colors 变化时重新计算
   const d = useMemo(
@@ -225,7 +240,14 @@ export default function MessagesScreen() {
     [rawConversations],
   );
 
-  const filterItems = BASE_FILTERS;
+  // Filter 列表 = 基础 4 项 + 用户设置了 pinnedToTabs 的自定义分组。
+  // 自定义分组的 id 形如 "custom:<uuid>"，避免和 base id 冲突；filter 逻辑里特判前缀。
+  const filterItems = useMemo(() => {
+    const customTabs = conversationGroups
+      .filter((g) => g.pinnedToTabs)
+      .map((g) => ({ id: `custom:${g.id}`, label: g.name }));
+    return [...BASE_FILTERS, ...customTabs];
+  }, [BASE_FILTERS, conversationGroups]);
 
   // 当前激活标签在 filterItems 中的下标，供 FilterTabs 高亮使用
   const activeTab = useMemo(
@@ -254,8 +276,17 @@ export default function MessagesScreen() {
         (conversation) => conversation.conversationType === "private",
       );
     }
+
+    // 自定义分组：activeFilterId 形如 "custom:<groupId>"
+    if (activeFilterId.startsWith("custom:")) {
+      const groupId = activeFilterId.slice("custom:".length);
+      const group = conversationGroups.find((g) => g.id === groupId);
+      if (!group) return conversations; // group 被删但 filter 还指着 —— 回退到全部
+      const memberSet = new Set(group.conversationIDs);
+      return conversations.filter((c) => memberSet.has(c.id));
+    }
     return conversations;
-  }, [activeFilterId, conversations]);
+  }, [activeFilterId, conversationGroups, conversations]);
 
   const hasFetchedRef = useRef(false);
 
@@ -264,20 +295,27 @@ export default function MessagesScreen() {
       return;
     }
     hasFetchedRef.current = true;
-    loadConversationList().catch(() => {
-      // Surface connection issues through IM store error state.
+    loadConversationList().catch((err) => {
+      // 列表加载失败时 imStore.error 会被 IM listener 更新，UI 的 empty state 会显示。
+      // dev 下额外打印，便于排查"为啥列表是空的"。
+      if (isDev) {
+        console.warn("[messages] initial loadConversationList failed", err);
+      }
     });
   }, []);
 
-  // 点击会话行 → 进入聊天详情页
+  // 点击会话行 → 进入聊天详情页（立即跳转，不等服务端 mark-read / refresh）
   const handleConversationPress = useCallback(
-    async (conversation: Conversation) => {
-      try {
-        await markConversationAsRead(conversation.id);
-        await loadConversationList();
-      } catch {
-        // Keep navigation responsive even when marking read fails.
-      }
+    (conversation: Conversation) => {
+      // Fire-and-forget：之前 await 两个服务端调用，慢网下用户会感觉点了无反应。
+      // 详情页有自己的拉取逻辑，这里只是优化列表 unread 与排序，不需要阻塞导航。
+      void markConversationAsRead(conversation.id)
+        .then(() => loadConversationList())
+        .catch((err) => {
+          if (isDev) {
+            console.warn("[messages] mark-read / refresh failed", err);
+          }
+        });
 
       router.push({
         pathname: "/(tabs)/messages/chat-detail",
@@ -313,11 +351,27 @@ export default function MessagesScreen() {
 
   // 点击已读图标 → 将当前筛选标签下所有会话标记为已读
   const handleClearUnread = useCallback(() => {
-    Promise.all(visibleConversations.map((conversation) => markConversationAsRead(conversation.id)))
-      .then(() => loadConversationList())
-      .catch(() => {
-        // Ignore partial failures and leave the current list intact.
-      });
+    // Promise.all 一旦有一个 reject 就短路，其余 mark-read 的 resolve 被忽略，
+    // 列表里还会留着"读不到的未读"。allSettled 改成尽力执行 + 末尾汇总警告。
+    void (async () => {
+      const results = await Promise.allSettled(
+        visibleConversations.map((c) => markConversationAsRead(c.id)),
+      );
+      const failed = results.filter((r) => r.status === "rejected");
+      if (isDev && failed.length > 0) {
+        console.warn(
+          `[messages] handleClearUnread: ${failed.length}/${results.length} mark-read failed`,
+          failed,
+        );
+      }
+      try {
+        await loadConversationList();
+      } catch (err) {
+        if (isDev) {
+          console.warn("[messages] loadConversationList after clear-unread failed", err);
+        }
+      }
+    })();
   }, [visibleConversations]);
 
   // 菜单项点击处理：关闭菜单并按 id 路由跳转
@@ -327,6 +381,14 @@ export default function MessagesScreen() {
       if (id === "newGroup") router.push("/(tabs)/messages/new-group");
       else if (id === "addFriend") router.push("/(tabs)/messages/add-friend");
       else if (id === "groupManagement") router.push("/(tabs)/messages/groups");
+      else if (id === "scan" || id === "seatManagement") {
+        // 这两个入口暂未对接：扫一扫需要相机权限 + QR 解码模块；
+        // 客服坐席管理需要后端权限体系。先用 Alert 兜底，不让按钮装死。
+        Alert.alert(
+          id === "scan" ? "扫一扫" : "客服坐席",
+          "该功能即将上线，敬请期待。",
+        );
+      }
     },
     [router],
   );
@@ -390,7 +452,9 @@ export default function MessagesScreen() {
               color={colors.text}
             />
             <View style={s.actionBadge}>
-              <Badge count={Math.max(unreadNotificationCount, totalUnread)} />
+              {/* 这个图标导航到 /(tabs)/discover —— 角标只反映"发现/系统通知"未读，
+                  不再 max(IM totalUnread, ...) 以免 IM 消息和发现页通知混在一起。 */}
+              <Badge count={discoverUnread} />
             </View>
           </Pressable>
           {/* ✓✓：一键已读（按当前筛选范围） */}
@@ -418,7 +482,7 @@ export default function MessagesScreen() {
         scrollable
       />
     </View>
-  ), [activeTab, colors, d, filterItems, handleClearUnread, handleOpenFind, handleOpenNotifications, totalUnread, unreadNotificationCount]);
+  ), [activeTab, colors, d, filterItems, handleClearUnread, handleOpenFind, handleOpenNotifications, discoverUnread, t]);
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>

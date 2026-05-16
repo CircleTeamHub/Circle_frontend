@@ -66,7 +66,6 @@ test('ignores stale plaza responses from an older filter version', () => {
     hasMore: false,
     requestQueryVersion: 6,
     requestId: 9,
-    snapshotPosts: [],
   });
 
   assert.deepEqual(nextState, currentState);
@@ -86,7 +85,6 @@ test('appends plaza results onto the latest state, preserving locally prepended 
     hasMore: true,
     requestQueryVersion: 3,
     requestId: 5,
-    snapshotPosts: [makePost('existing')],
   });
 
   assert.deepEqual(

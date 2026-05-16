@@ -5,6 +5,17 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+// client.ts 顶层会 import @/im/listeners 和 @/services/auth/session 用于事件绑定 / teardown
+// 注册；测试里我们不关心它们的副作用，全部 no-op 兜底即可。call-site 仍可通过 stubs 覆盖。
+const DEFAULT_TS_MODULE_STUBS = {
+  '@/im/listeners': {
+    bindOpenIMListeners: () => () => {},
+  },
+  '@/services/auth/session': {
+    registerLogoutHandler: () => () => {},
+  },
+};
+
 function loadTsModule(relativePath, stubs = {}) {
   const filePath = path.join(process.cwd(), relativePath);
   const source = fs.readFileSync(filePath, 'utf8');
@@ -20,14 +31,15 @@ function loadTsModule(relativePath, stubs = {}) {
     fileName: filePath,
   }).outputText;
 
+  const mergedStubs = { ...DEFAULT_TS_MODULE_STUBS, ...stubs };
   const context = {
     module: { exports: {} },
     exports: {},
     setTimeout,
     clearTimeout,
     require: (specifier) => {
-      if (specifier in stubs) {
-        return stubs[specifier];
+      if (specifier in mergedStubs) {
+        return mergedStubs[specifier];
       }
 
       return require(specifier);
@@ -124,9 +136,11 @@ test('getOrCreateSingleConversation fetches a private conversation and merges it
   const result = await getOrCreateSingleConversation('user-2');
 
   assert.equal(result.conversationID, 'conversation-1');
+  // client.ts 在 SDK 边界跨过去之前会调 toImUserId 去掉 dash（OpenIM v3.8 拒绝
+  // 带连字符的 userID）。测试断言要反映这个真实行为。
   assert.deepEqual(
     JSON.parse(JSON.stringify(getOneConversationCalls[0])),
-    { sourceID: 'user-2', sessionType: 1 },
+    { sourceID: 'user2', sessionType: 1 },
   );
   assert.equal(mergeCalls.length, 1);
   assert.equal(mergeCalls[0][0].conversationID, 'conversation-1');

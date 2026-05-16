@@ -1,5 +1,5 @@
 import { useRouter, useSegments } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -9,6 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
@@ -34,7 +35,7 @@ type ContactResult = {
 type SearchResultItem = ChatResult | ContactResult;
 
 type SearchSection = {
-  title: '聊天记录' | '好友';
+  title: string;
   data: SearchResultItem[];
 };
 
@@ -84,9 +85,11 @@ export default function SearchScreen() {
   const router = useRouter();
   const segments = useSegments();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [friendsLoading, setFriendsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const rawConversations = useIMStore((state) => state.conversations);
   const conversations = useMemo(
@@ -104,24 +107,40 @@ export default function SearchScreen() {
     return 'messages';
   }, [segments]);
 
-  useEffect(() => {
-    let cancelled = false;
-    setFriendsLoading(true);
-    fetchFriends()
-      .then((list) => {
-        if (!cancelled) setFriends(list);
-      })
-      .catch(() => {
-        if (!cancelled) setFriends([]);
-      })
-      .finally(() => {
-        if (!cancelled) setFriendsLoading(false);
-      });
+  const loadFriends = useCallback(
+    (signal?: { cancelled: boolean }) => {
+      setFriendsLoading(true);
+      setLoadError(null);
+      fetchFriends()
+        .then((list) => {
+          if (!signal?.cancelled) setFriends(list);
+        })
+        .catch((error) => {
+          if (signal?.cancelled) return;
+          setFriends([]);
+          setLoadError(
+            t('search.loadFriendsFailed', {
+              defaultValue: '好友列表加载失败，请稍后重试',
+            }),
+          );
+          if (__DEV__) {
+            console.warn('[SearchScreen] fetchFriends failed', error);
+          }
+        })
+        .finally(() => {
+          if (!signal?.cancelled) setFriendsLoading(false);
+        });
+    },
+    [t],
+  );
 
+  useEffect(() => {
+    const signal = { cancelled: false };
+    loadFriends(signal);
     return () => {
-      cancelled = true;
+      signal.cancelled = true;
     };
-  }, []);
+  }, [loadFriends]);
 
   const trimmedQuery = query.trim().toLowerCase();
 
@@ -145,21 +164,36 @@ export default function SearchScreen() {
       .map((friend) => ({ kind: 'contact' as const, data: friend }));
 
     const out: SearchSection[] = [];
-    if (matchedChats.length > 0) out.push({ title: '聊天记录', data: matchedChats });
-    if (matchedFriends.length > 0) out.push({ title: '好友', data: matchedFriends });
+    if (matchedChats.length > 0) {
+      out.push({
+        title: t('search.sections.chats', { defaultValue: '聊天记录' }),
+        data: matchedChats,
+      });
+    }
+    if (matchedFriends.length > 0) {
+      out.push({
+        title: t('search.sections.friends', { defaultValue: '好友' }),
+        data: matchedFriends,
+      });
+    }
     return out;
-  }, [conversations, friends, trimmedQuery]);
+  }, [conversations, friends, t, trimmedQuery]);
 
   const handlePressChat = (conversation: Conversation) => {
+    // router.push 会把 params 通过 URL 序列化；avatarUrl 为 falsy（null/undefined/空串）时会变
+    // 成字符串 "null" / "undefined"，下游误以为有值。只传存在的值。
+    const params: Record<string, string> = {
+      conversationID: conversation.id,
+      sourceID: conversation.sourceID,
+      title: conversation.name,
+      conversationType: conversation.conversationType,
+    };
+    if (conversation.avatarUrl) {
+      params.avatarUrl = conversation.avatarUrl;
+    }
     router.push({
       pathname: '/(tabs)/messages/chat-detail',
-      params: {
-        conversationID: conversation.id,
-        sourceID: conversation.sourceID,
-        title: conversation.name,
-        conversationType: conversation.conversationType,
-        avatarUrl: conversation.avatarUrl,
-      },
+      params,
     });
   };
 
@@ -258,7 +292,7 @@ export default function SearchScreen() {
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title="搜索" />
+      <NavHeader title={t('search.title', { defaultValue: '搜索' })} />
       <SectionList
         sections={sections}
         keyExtractor={(item) =>
@@ -275,7 +309,9 @@ export default function SearchScreen() {
                 style={d.input}
                 value={query}
                 onChangeText={setQuery}
-                placeholder="搜索聊天记录、好友"
+                placeholder={t('search.placeholder', {
+                  defaultValue: '搜索聊天记录、好友',
+                })}
                 placeholderTextColor={colors.textSecondary}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -308,9 +344,31 @@ export default function SearchScreen() {
             <View style={s.loadingWrap}>
               <ActivityIndicator color={colors.primary} />
             </View>
+          ) : loadError && friends.length === 0 ? (
+            <View style={s.loadingWrap}>
+              <Text style={d.emptyText}>{loadError}</Text>
+              <Pressable
+                onPress={() => loadFriends()}
+                style={{
+                  marginTop: Spacing.md,
+                  paddingHorizontal: Spacing.md,
+                  paddingVertical: Spacing.sm,
+                  borderRadius: Radius.xxl,
+                  backgroundColor: colors.primary,
+                }}
+              >
+                <Text style={{ color: colors.white, ...Typography.caption }}>
+                  {t('common.retry', { defaultValue: '重试' })}
+                </Text>
+              </Pressable>
+            </View>
           ) : (
             <Text style={d.emptyText}>
-              {trimmedQuery ? '暂无匹配结果' : '输入关键字搜索聊天记录、好友'}
+              {trimmedQuery
+                ? t('search.noResults', { defaultValue: '暂无匹配结果' })
+                : t('search.placeholderHint', {
+                    defaultValue: '输入关键字搜索聊天记录、好友',
+                  })}
             </Text>
           )
         }

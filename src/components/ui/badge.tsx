@@ -38,9 +38,12 @@ export const Badge: React.FC<BadgeProps> = ({ count }) => {
 
   if (count <= 0) return null;
 
+  // iMessage / WeChat 风格：超过 99 用 "99+" 防止 badge 撑破布局。
+  const display = count > 99 ? '99+' : String(count);
+
   return (
     <View style={[s.badge, d.badge]}>
-      <Text style={[s.text, d.text]}>{count}</Text>
+      <Text style={[s.text, d.text]}>{display}</Text>
     </View>
   );
 };

@@ -12,6 +12,7 @@ import {
   rejectFriendRequest,
   type FriendActivity,
 } from '@/services/api/friends';
+import { getLocalizedDateTimeLocale } from '@/features/contacts/locale';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -97,8 +98,15 @@ export default function FriendActivityDetailScreen() {
       setLoading(true);
 
       return markFriendActivityRead(activityId)
-        .catch(() => {
+        .catch((markError) => {
           // mark-read failures are non-critical — continue loading detail
+          if (__DEV__) {
+            console.warn(
+              '[FriendActivityDetailScreen] markFriendActivityRead failed',
+              { activityId },
+              markError,
+            );
+          }
         })
         .then(() => fetchFriendActivityDetail(activityId))
         .then((nextActivity) => {
@@ -270,7 +278,7 @@ export default function FriendActivityDetailScreen() {
                 <Text style={d.subtitle}>{getFriendActivityCopy(activity)}</Text>
                 <Text style={d.time}>
                   {new Date(activity.createdAt).toLocaleString(
-                    i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US',
+                    getLocalizedDateTimeLocale(i18n.language),
                   )}
                 </Text>
               </View>

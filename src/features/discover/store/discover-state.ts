@@ -17,7 +17,6 @@ type ApplyPlazaFetchSuccessArgs = {
   hasMore: boolean;
   requestQueryVersion: number;
   requestId: number;
-  snapshotPosts: CirclePlazaPost[];
 };
 
 export function applyPlazaFetchSuccess(

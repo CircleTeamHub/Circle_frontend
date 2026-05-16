@@ -23,7 +23,11 @@ export const useFriendActivityUnreadStore = create<FriendActivityUnreadState>(
         const count = await fetchUnreadFriendActivityCount();
         set({ count });
         useTabBadgeStore.getState().setContactsUnread(count);
-      } catch {
+      } catch (err) {
+        // 拉取失败时保留上一次的本地计数。dev 下打印出来，避免长期 silent 回归。
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          console.warn('[friend-activity] refresh failed', err);
+        }
         return get().count;
       }
 

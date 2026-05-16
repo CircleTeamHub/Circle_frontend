@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -157,6 +157,9 @@ export default function CreatePostScreen() {
     null,
   );
   const [submitting, setSubmitting] = useState(false);
+  // Pattern D: 防止双击在 setSubmitting flush 之前重复触发 createPlazaPost。
+  const inFlightRef = useRef(false);
+  const { t } = useTranslation();
 
   const d = useMemo(
     () => ({
@@ -228,9 +231,10 @@ export default function CreatePostScreen() {
   const canSubmit = content.trim().length > 0 && selectedCircle != null;
 
   const handleSubmit = useCallback(async () => {
-    if (!canSubmit || submitting) return;
+    if (inFlightRef.current || !canSubmit || submitting) return;
     if (!selectedCircle) return;
 
+    inFlightRef.current = true;
     setSubmitting(true);
     try {
       const uploadedUrls: string[] = [];
@@ -252,16 +256,28 @@ export default function CreatePostScreen() {
             uri,
           );
           uploadedUrls.push(presign.fileUrl);
-        } catch {
+        } catch (uploadError) {
           failedUploads += 1;
+          if (__DEV__) {
+            console.warn(
+              '[CreatePostScreen] image upload failed',
+              { uri },
+              uploadError,
+            );
+          }
         }
       }
 
       if (failedUploads > 0) {
         const reason =
           failedUploads === images.length
-            ? '图片上传失败，请检查网络后重试'
-            : `有${failedUploads}张图片上传失败，请重试`;
+            ? t('plaza.create.allUploadsFailed', {
+                defaultValue: '图片上传失败，请检查网络后重试',
+              })
+            : t('plaza.create.partialUploadsFailed', {
+                count: failedUploads,
+                defaultValue: `有${failedUploads}张图片上传失败，请重试`,
+              });
         throw new Error(reason);
       }
 
@@ -283,9 +299,15 @@ export default function CreatePostScreen() {
       router.back();
     } catch (error: unknown) {
       const message =
-        error instanceof Error ? error.message : '发布失败，请重试';
-      Alert.alert('发布失败', message);
+        error instanceof Error
+          ? error.message
+          : t('plaza.create.failedMessage', { defaultValue: '发布失败，请重试' });
+      Alert.alert(
+        t('plaza.create.failedTitle', { defaultValue: '发布失败' }),
+        message,
+      );
     } finally {
+      inFlightRef.current = false;
       setSubmitting(false);
     }
   }, [
@@ -294,6 +316,8 @@ export default function CreatePostScreen() {
     selectedCircle,
     images,
     content,
+    postTags,
+    resetForm,
     selectedCity,
     hornEnabled,
     vipRestriction,
@@ -301,11 +325,13 @@ export default function CreatePostScreen() {
     fancyNumberEnabled,
     prependPlazaPost,
     router,
+    t,
   ]);
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title="发布动态" rightIcon="information-circle-outline" />
+      {/* rightIcon 之前没 onRightPress —— 是哑按钮。先去掉，等"发布须知"页面 wire 上时再加。 */}
+      <NavHeader title={t('plaza.create.title', { defaultValue: '发布动态' })} />
       <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View style={[s.inputBox, d.inputBox]}>
           <TextInput
@@ -377,7 +403,23 @@ export default function CreatePostScreen() {
         <Divider />
 
         {/* Note picker (placeholder) */}
-        <MenuRow icon="document-text-outline" label="选择笔记" rightText="不添加" />
+        {/* "选择笔记" 之前是哑按钮 —— 没 onPress，rightText 锁定"不添加"。等关联笔记功能 wire 上时
+           再恢复 onPress；现在加 Alert stopgap 让用户至少知道这是占位。 */}
+        <MenuRow
+          icon="document-text-outline"
+          label={t('plaza.create.noteLabel', { defaultValue: '选择笔记' })}
+          rightText={t('plaza.create.notNoteSet', { defaultValue: '不添加' })}
+          onPress={() =>
+            Alert.alert(
+              t('plaza.create.notePickerComingSoonTitle', {
+                defaultValue: '即将上线',
+              }),
+              t('plaza.create.notePickerComingSoon', {
+                defaultValue: '关联笔记功能即将上线，敬请期待。',
+              }),
+            )
+          }
+        />
         <Divider />
 
         {/* Post tags */}

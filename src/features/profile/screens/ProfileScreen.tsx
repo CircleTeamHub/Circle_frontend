@@ -226,8 +226,12 @@ export default function ProfileScreen() {
           if (isActive) {
             setProfileUnread(0);
           }
-        } catch {
-          // Best-effort refresh; keep existing state on failure.
+        } catch (error) {
+          // Best-effort refresh; keep existing state on failure. Surface in dev so
+          // a broken /auth/me + notifications round-trip doesn't pass silently.
+          if (__DEV__) {
+            console.warn('[ProfileScreen] refreshCurrentUser failed', error);
+          }
         }
       };
 
@@ -335,7 +339,9 @@ export default function ProfileScreen() {
       {/* Member card */}
       <Pressable style={[s.memberCard, d.memberCard]} onPress={handleOpenIcons}>
         <View style={s.memberCardHeader}>
-          <Text style={d.memberCardAction}>我的图标</Text>
+          <Text style={d.memberCardAction}>
+            {t('profile.myIcons', { defaultValue: '我的图标' })}
+          </Text>
           <Ionicons name="chevron-forward-outline" size={18} color={colors.memberCardText} />
         </View>
         <View style={s.memberStats}>
@@ -358,7 +364,9 @@ export default function ProfileScreen() {
               <View style={[s.memberIdentityCircle, d.memberIdentityCircle]}>
                 <Ionicons name="add-outline" size={20} color={colors.memberCardText} />
               </View>
-              <Text style={d.memberIdentityHint}>添加图标</Text>
+              <Text style={d.memberIdentityHint}>
+                {t('profile.addIcon', { defaultValue: '添加图标' })}
+              </Text>
             </View>
           )}
         </View>
