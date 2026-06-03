@@ -19,7 +19,15 @@ function getDeviceLanguage(): 'zh' | 'en' {
   return lang.startsWith('zh') ? 'zh' : 'en';
 }
 
+function canUseSynchronousStorage() {
+  return typeof window !== 'undefined';
+}
+
 function getInitialLanguage(): 'zh' | 'en' {
+  if (!canUseSynchronousStorage()) {
+    return getDeviceLanguage();
+  }
+
   const saved = storage.getString(LANGUAGE_KEY);
   if (saved === 'zh' || saved === 'en') return saved;
   return getDeviceLanguage();
@@ -36,7 +44,9 @@ i18n.use(initReactI18next).init({
 
 export function setLanguage(lang: 'zh' | 'en') {
   i18n.changeLanguage(lang);
-  storage.set(LANGUAGE_KEY, lang);
+  if (canUseSynchronousStorage()) {
+    storage.set(LANGUAGE_KEY, lang);
+  }
 }
 
 export function getCurrentLanguage(): 'zh' | 'en' {
@@ -49,6 +59,10 @@ export function getCurrentLanguage(): 'zh' | 'en' {
  * build don't lose their language preference for the first session.
  */
 export function rehydrateLanguageFromStorage() {
+  if (!canUseSynchronousStorage()) {
+    return;
+  }
+
   const saved = storage.getString(LANGUAGE_KEY);
   if (saved === 'zh' || saved === 'en') {
     void i18n.changeLanguage(saved);

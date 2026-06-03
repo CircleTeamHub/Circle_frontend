@@ -1,5 +1,5 @@
 import * as FileSystem from 'expo-file-system/legacy';
-import RNFS from 'react-native-fs';
+import { Platform } from 'react-native';
 
 export interface ClearAppCacheResult {
   clearedEntries: number;
@@ -41,6 +41,22 @@ const CACHE_CLEAR_DENYLIST = new Set([
   'com.apple.nsurlsessiond',
 ]);
 
+type NativeFS = typeof import('react-native-fs');
+type NativeFSModule = NativeFS & { default?: NativeFS };
+let rnfsPromise: Promise<NativeFS> | null = null;
+
+function canUseNativeFS() {
+  return Platform.OS === 'ios' || Platform.OS === 'android';
+}
+
+async function loadNativeFS() {
+  rnfsPromise ??= import('react-native-fs').then((module) => {
+    const loaded = module as NativeFSModule;
+    return loaded.default ?? loaded;
+  });
+  return rnfsPromise;
+}
+
 function basename(filePath: string) {
   const trimmed = filePath.replace(/\/+$/, '');
   const slash = trimmed.lastIndexOf('/');
@@ -61,7 +77,12 @@ function getUniquePaths(candidatePaths: Array<string | null | undefined>) {
   return Array.from(new Set(paths.map(normalizePath))).filter(Boolean);
 }
 
-function getCacheDirectories() {
+async function getCacheDirectories() {
+  if (!canUseNativeFS()) {
+    return getUniquePaths([FileSystem.cacheDirectory]);
+  }
+
+  const RNFS = await loadNativeFS();
   return getUniquePaths([
     FileSystem.cacheDirectory,
     RNFS.CachesDirectoryPath,
@@ -69,15 +90,30 @@ function getCacheDirectories() {
   ]);
 }
 
-function getPrimaryCacheDirectories() {
+async function getPrimaryCacheDirectories() {
+  if (!canUseNativeFS()) {
+    return getUniquePaths([FileSystem.cacheDirectory]);
+  }
+
+  const RNFS = await loadNativeFS();
   return getUniquePaths([FileSystem.cacheDirectory, RNFS.CachesDirectoryPath]);
 }
 
-function getTemporaryDirectories() {
+async function getTemporaryDirectories() {
+  if (!canUseNativeFS()) {
+    return [];
+  }
+
+  const RNFS = await loadNativeFS();
   return getUniquePaths([RNFS.TemporaryDirectoryPath]);
 }
 
-function getOpenIMDirectory() {
+async function getOpenIMDirectory() {
+  if (!canUseNativeFS()) {
+    return '';
+  }
+
+  const RNFS = await loadNativeFS();
   return `${RNFS.DocumentDirectoryPath}/openim`;
 }
 
@@ -91,6 +127,11 @@ async function getDirectorySize(
     return 0;
   }
 
+  if (!canUseNativeFS()) {
+    return 0;
+  }
+
+  const RNFS = await loadNativeFS();
   const exists = await RNFS.exists(normalizedPath);
   if (!exists) {
     return 0;
@@ -128,6 +169,11 @@ async function clearDirectoryContents(directoryPath: string) {
     return { clearedEntries: 0, failedEntries: 0 };
   }
 
+  if (!canUseNativeFS()) {
+    return { clearedEntries: 0, failedEntries: 0 };
+  }
+
+  const RNFS = await loadNativeFS();
   const exists = await RNFS.exists(normalizedPath);
   if (!exists) {
     return { clearedEntries: 0, failedEntries: 0 };
@@ -152,14 +198,21 @@ async function clearDirectoryContents(directoryPath: string) {
 }
 
 export async function getAppCacheSize(): Promise<number> {
-  return getDirectoriesSize(getCacheDirectories());
+  return getDirectoriesSize(await getCacheDirectories());
 }
 
 export async function getAppStorageUsage(): Promise<AppStorageUsage> {
+  const [openIMDirectory, primaryCacheDirectories, temporaryDirectories] =
+    await Promise.all([
+      getOpenIMDirectory(),
+      getPrimaryCacheDirectories(),
+      getTemporaryDirectories(),
+    ]);
+
   const [chatBytes, cacheBytes, temporaryBytes] = await Promise.all([
-    getDirectoriesSize([getOpenIMDirectory()]),
-    getDirectoriesSize(getPrimaryCacheDirectories()),
-    getDirectoriesSize(getTemporaryDirectories()),
+    getDirectoriesSize(openIMDirectory ? [openIMDirectory] : []),
+    getDirectoriesSize(primaryCacheDirectories),
+    getDirectoriesSize(temporaryDirectories),
   ]);
 
   return {
@@ -191,7 +244,7 @@ export function formatCacheSize(bytes: number) {
 
 export async function clearAppCache(): Promise<ClearAppCacheResult> {
   const results = await Promise.allSettled(
-    getCacheDirectories().map((path) => clearDirectoryContents(path)),
+    (await getCacheDirectories()).map((path) => clearDirectoryContents(path)),
   );
 
   return results.reduce(

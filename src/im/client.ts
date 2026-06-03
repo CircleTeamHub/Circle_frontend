@@ -15,17 +15,18 @@
  */
 import OpenIMSDK, {
   GroupType,
+  GroupMemberFilter,
   LogLevel,
   LoginStatus,
   MessageType,
   SessionType,
   ViewType,
   type GroupItem,
+  type GroupMemberItem,
   type SearchMessageResult,
   type ConversationItem,
   type MessageItem,
 } from '@openim/rn-client-sdk';
-import RNFS from 'react-native-fs';
 import { Platform } from 'react-native';
 import {
   OPENIM_API_URL,
@@ -39,6 +40,9 @@ import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 
 // SDK 初始化 Promise 单例：避免并发重复 initSDK，登出后置为 null 允许重新初始化
 let initPromise: Promise<void> | null = null;
+type NativeFS = typeof import('react-native-fs');
+type NativeFSModule = NativeFS & { default?: NativeFS };
+let rnfsPromise: Promise<NativeFS> | null = null;
 
 // 注册到 session 的登出 teardown，由 clearLocalSession 统一调度。
 // 函数声明会被 hoisting，所以这里在模块顶层引用 logoutFromOpenIM 是安全的。
@@ -74,7 +78,16 @@ function isNativeIMSupported() {
   return Platform.OS === 'ios' || Platform.OS === 'android';
 }
 
-function getOpenIMDataDir() {
+async function loadNativeFS() {
+  rnfsPromise ??= import('react-native-fs').then((module) => {
+    const loaded = module as NativeFSModule;
+    return loaded.default ?? loaded;
+  });
+  return rnfsPromise;
+}
+
+async function getOpenIMDataDir() {
+  const RNFS = await loadNativeFS();
   return `${RNFS.DocumentDirectoryPath}/openim`;
 }
 
@@ -113,7 +126,8 @@ export async function ensureOpenIMInitialized() {
 
   if (!initPromise) {
     initPromise = (async () => {
-      const dataDir = getOpenIMDataDir();
+      const RNFS = await loadNativeFS();
+      const dataDir = await getOpenIMDataDir();
 
       await RNFS.mkdir(dataDir);
 
@@ -311,6 +325,178 @@ export async function createGroupChat(params: {
   });
 
   return group;
+}
+
+export async function getGroupInfo(groupID: string): Promise<GroupItem | null> {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    return null;
+  }
+
+  const groups = await OpenIMSDK.getSpecifiedGroupsInfo([groupID]);
+  return groups[0] ?? null;
+}
+
+export async function loadGroupMemberList(
+  groupID: string,
+  count = 20
+): Promise<GroupMemberItem[]> {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    return [];
+  }
+
+  return OpenIMSDK.getGroupMemberList({
+    groupID,
+    filter: GroupMemberFilter.All,
+    offset: 0,
+    count,
+  });
+}
+
+export async function inviteUsersToGroup(groupID: string, userIDList: string[]) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await OpenIMSDK.inviteUserToGroup({
+    groupID,
+    userIDList,
+    reason: '',
+  });
+}
+
+export async function leaveGroupChat(groupID: string) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await OpenIMSDK.quitGroup(groupID);
+  await loadConversationList().catch(() => {
+    // 群退出成功后刷新会话列表；失败时让调用方继续回到上一页。
+  });
+}
+
+export async function updateGroupName(groupID: string, groupName: string) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await OpenIMSDK.setGroupInfo({ groupID, groupName });
+  await loadConversationList().catch(() => {
+    // 群资料已更新，列表刷新失败时等待 SDK 推送同步。
+  });
+}
+
+export async function updateGroupNotice(groupID: string, notification: string) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await OpenIMSDK.setGroupInfo({ groupID, notification });
+}
+
+export async function updateGroupMemberAlias(
+  groupID: string,
+  userID: string,
+  nickname: string
+) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await OpenIMSDK.setGroupMemberInfo({ groupID, userID, nickname });
+}
+
+export async function kickGroupMembers(
+  groupID: string,
+  userIDList: string[],
+  reason = ''
+) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await OpenIMSDK.kickGroupMember({ groupID, userIDList, reason });
+}
+
+export async function hideConversation(conversationID: string) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await OpenIMSDK.hideConversation(conversationID);
+  await loadConversationList().catch(() => {
+    // 会话已折叠，列表刷新失败时等待 SDK 推送同步。
+  });
+}
+
+export async function resetConversationGroupAtType(conversationID: string) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await OpenIMSDK.resetConversationGroupAtType(conversationID);
+  await loadConversationList().catch(() => {
+    // 通知状态已重置，列表刷新失败时等待 SDK 推送同步。
+  });
+}
+
+export async function setConversationExtension(
+  conversationID: string,
+  patch: Record<string, unknown>,
+  currentExtension?: string
+) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  let current: Record<string, unknown> = {};
+  const resolvedExtension =
+    currentExtension ??
+    useIMStore
+      .getState()
+      .conversations.find((conversation) => conversation.conversationID === conversationID)
+      ?.ex;
+
+  if (resolvedExtension) {
+    try {
+      const parsed = JSON.parse(resolvedExtension) as unknown;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        current = parsed as Record<string, unknown>;
+      }
+    } catch {
+      current = {};
+    }
+  }
+
+  await OpenIMSDK.setConversation({
+    conversationID,
+    ex: JSON.stringify({ ...current, ...patch }),
+  });
+  await loadConversationList().catch(() => {
+    // 会话扩展已更新，列表刷新失败时等待 SDK 推送同步。
+  });
 }
 
 /**

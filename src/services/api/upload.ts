@@ -1,7 +1,6 @@
 import { apiClient } from '@/services/api/client';
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
-import RNFS from 'react-native-fs';
 
 const ALLOWED_CONTENT_TYPES = new Set([
   'image/jpeg',
@@ -103,6 +102,17 @@ export async function requestUploadPresign(payload: {
 }
 
 const UPLOAD_TIMEOUT_MS = 60_000;
+type NativeFS = typeof import('react-native-fs');
+type NativeFSModule = NativeFS & { default?: NativeFS };
+let rnfsPromise: Promise<NativeFS> | null = null;
+
+async function loadNativeFS() {
+  rnfsPromise ??= import('react-native-fs').then((module) => {
+    const loaded = module as NativeFSModule;
+    return loaded.default ?? loaded;
+  });
+  return rnfsPromise;
+}
 
 export async function uploadFileToPresignedUrl(
   uploadUrl: string,
@@ -142,6 +152,7 @@ export async function uploadLocalFileToPresignedUrl(
   fileUri: string,
 ) {
   if (Platform.OS === 'android') {
+    const RNFS = await loadNativeFS();
     const { promise } = RNFS.uploadFiles({
       toUrl: uploadUrl,
       binaryStreamOnly: true,

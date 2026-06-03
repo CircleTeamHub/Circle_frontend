@@ -1,6 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import { Component, useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import type { CreateNoteMediaInput } from '@/features/notes/types';
 import {
   requestUploadPresign,
@@ -9,7 +9,21 @@ import {
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
 import { useTheme } from '@/theme';
-import NoteBlockEditorDOM from '@/features/notes/dom/NoteBlockEditor.dom';
+
+type NoteBlockEditorDOMComponent =
+  typeof import('@/features/notes/dom/NoteBlockEditor.dom').default;
+
+let NoteBlockEditorDOM: NoteBlockEditorDOMComponent | null = null;
+
+function canLoadDOMEditor() {
+  return Platform.OS !== 'web' || typeof window !== 'undefined';
+}
+
+function getNoteBlockEditorDOM() {
+  NoteBlockEditorDOM ??= require('@/features/notes/dom/NoteBlockEditor.dom')
+    .default as NoteBlockEditorDOMComponent;
+  return NoteBlockEditorDOM;
+}
 
 // Stable reference so the Expo DOM bridge doesn't see a new `dom` object on
 // every render and queue an unnecessary injectJavaScript call.
@@ -136,10 +150,16 @@ export function NoteBlockEditor({ initialContent, onContentChange, onMediaUpload
     [onContentChange],
   );
 
+  if (!canLoadDOMEditor()) {
+    return <View style={s.container} />;
+  }
+
+  const DOMEditor = getNoteBlockEditorDOM();
+
   return (
     <DOMBridgeErrorBoundary>
       <View style={s.container}>
-        <NoteBlockEditorDOM
+        <DOMEditor
           dom={DOM_WEBVIEW_PROPS}
           initialContent={initialContentJson}
           pendingInsert={pendingInsert}

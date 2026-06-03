@@ -1,11 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import { Ionicons } from '@expo/vector-icons';
+import {
+  GroupMemberRole,
+  SessionType,
+  type GroupItem,
+  type GroupMemberItem,
+} from '@openim/rn-client-sdk';
 import { Divider } from '@/components/ui/divider';
 import { MenuRow } from '@/components/ui/menu-row';
 import { NavHeader } from '@/components/ui/nav-header';
+import { Avatar } from '@/components/ui/avatar';
+import { UserIconRow } from '@/components/ui/user-icon-row';
 import { buildChatInfoState } from '@/features/chat/chat-info';
 import {
   DEFAULT_CHAT_BACKGROUND_PREFERENCE,
@@ -15,10 +24,20 @@ import {
 import {
   clearConversationMessages,
   fromImUserId,
+  getGroupInfo,
   getOrCreateSingleConversation,
+  hideConversation,
+  kickGroupMembers,
+  leaveGroupChat,
+  loadGroupMemberList,
+  resetConversationGroupAtType,
   setConversationBurnDuration,
+  setConversationExtension,
   setConversationMute,
   toggleConversationPinned,
+  updateGroupMemberAlias,
+  updateGroupName,
+  updateGroupNotice,
 } from '@/im/client';
 import {
   getChatDetailHref,
@@ -36,7 +55,8 @@ import {
   removeFriendFromBlacklist,
 } from '@/services/api/friends';
 import { useIMStore } from '@/stores/imStore';
-import { Radius, Spacing, useTheme } from '@/theme';
+import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import type { DisplayIcon } from '@/types';
 
 const s = StyleSheet.create({
   scroll: { flex: 1 },
@@ -48,6 +68,98 @@ const s = StyleSheet.create({
   section: {
     borderRadius: Radius.xl,
     paddingHorizontal: Spacing.md,
+  },
+  groupContent: {
+    paddingBottom: Spacing.xl,
+  },
+  groupHeader: {
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.md,
+    gap: Spacing.sm,
+  },
+  groupHeaderText: {
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  groupHeaderName: {
+    textAlign: 'center',
+  },
+  groupHeaderMeta: {
+    textAlign: 'center',
+  },
+  groupMemberSection: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.lg,
+  },
+  groupMemberGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    rowGap: Spacing.lg,
+  },
+  groupMemberCell: {
+    width: '20%',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  groupMemberName: {
+    maxWidth: 64,
+    textAlign: 'center',
+  },
+  addMemberBox: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderRadius: Radius.sm,
+  },
+  moreMembersButton: {
+    marginTop: Spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+  },
+  groupSection: {
+    paddingLeft: Spacing.lg,
+  },
+  groupRow: {
+    minHeight: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.md,
+    paddingRight: Spacing.lg,
+  },
+  groupRowLarge: {
+    minHeight: 92,
+    alignItems: 'flex-start',
+    paddingVertical: Spacing.md,
+  },
+  groupRowLeft: {
+    flex: 1,
+    gap: Spacing.xs,
+  },
+  groupRowRight: {
+    flexShrink: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: Spacing.sm,
+  },
+  groupNameText: {
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+  groupNoticeText: {
+    lineHeight: 20,
+  },
+  leaveButton: {
+    minHeight: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 
@@ -66,6 +178,101 @@ type OptimisticConversationState = {
 };
 type OptimisticConversationStateKey = keyof OptimisticConversationState;
 
+function parseConversationExtension(extension?: string | null) {
+  if (!extension) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(extension) as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    return {};
+  }
+
+  return {};
+}
+
+type GroupInfoRowProps = {
+  label: string;
+  value?: string;
+  subtitle?: string;
+  showArrow?: boolean;
+  hasToggle?: boolean;
+  toggleValue?: boolean;
+  onToggle?: (nextValue: boolean) => void;
+  onPress?: () => void;
+  destructive?: boolean;
+};
+
+function GroupInfoRow({
+  label,
+  value,
+  subtitle,
+  showArrow = true,
+  hasToggle,
+  toggleValue,
+  onToggle,
+  onPress,
+  destructive,
+}: GroupInfoRowProps) {
+  const { colors } = useTheme();
+  const rowLarge = Boolean(subtitle);
+  const d = useMemo(
+    () => ({
+      label: {
+        color: destructive ? colors.error : colors.text,
+        ...Typography.body,
+      },
+      value: {
+        color: colors.textSecondary,
+        ...Typography.bodyRegular,
+      },
+      subtitle: {
+        color: colors.textSecondary,
+        ...Typography.bodyRegular,
+      },
+    }),
+    [colors, destructive],
+  );
+
+  return (
+    <Pressable
+      style={[s.groupRow, rowLarge && s.groupRowLarge]}
+      onPress={onPress}
+      disabled={!onPress && !hasToggle}
+    >
+      <View style={s.groupRowLeft}>
+        <Text style={d.label}>{label}</Text>
+        {subtitle ? (
+          <Text style={[s.groupNoticeText, d.subtitle]} numberOfLines={3}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+      <View style={s.groupRowRight}>
+        {value ? (
+          <Text style={[s.groupNameText, d.value]} numberOfLines={1}>
+            {value}
+          </Text>
+        ) : null}
+        {hasToggle ? (
+          <Switch
+            value={toggleValue}
+            onValueChange={onToggle}
+            trackColor={{ false: colors.surfaceBorder, true: colors.success }}
+            thumbColor={colors.white}
+          />
+        ) : showArrow ? (
+          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+        ) : null}
+      </View>
+    </Pressable>
+  );
+}
+
 export default function ChatInfoScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -76,11 +283,19 @@ export default function ChatInfoScreen() {
     name?: string;
     title?: string;
     conversationID?: string;
+    conversationType?: 'private' | 'group';
     originScope?: string;
   }>();
   const [blacklist, setBlacklist] = useState(false);
   const [blacklistPending, setBlacklistPending] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
+  const [groupInfo, setGroupInfo] = useState<GroupItem | null>(null);
+  const [groupMembers, setGroupMembers] = useState<GroupMemberItem[]>([]);
+  const [groupMembersExpanded, setGroupMembersExpanded] = useState(false);
+  const [kickPendingUserID, setKickPendingUserID] = useState<string | null>(null);
+  const [minimizeChat, setMinimizeChat] = useState(false);
+  const [saveGroupToContacts, setSaveGroupToContacts] = useState(false);
+  const [showOnScreenNames, setShowOnScreenNames] = useState(true);
   const [actionPending, setActionPending] = useState(initialActionPending);
   const actionPendingRef = useRef(initialActionPending);
   const actionRequestTokenRef = useRef({
@@ -111,7 +326,8 @@ export default function ChatInfoScreen() {
       : typeof params.title === 'string'
         ? params.title
         : t('chat.friend');
-  const routeSourceID = rawFriendId;
+  const routeSourceID = friendId;
+  const rawRouteSourceID = rawFriendId;
   const originScope =
     params.originScope === 'contacts' || params.originScope === 'profile'
       ? params.originScope
@@ -125,8 +341,33 @@ export default function ChatInfoScreen() {
         (conversation) =>
           conversation.userID === routeSourceID || conversation.groupID === routeSourceID,
       ) ??
+      conversations.find(
+        (conversation) =>
+          conversation.userID === rawRouteSourceID ||
+          conversation.groupID === rawRouteSourceID,
+      ) ??
       null,
-    [conversationID, conversations, routeSourceID],
+    [conversationID, conversations, rawRouteSourceID, routeSourceID],
+  );
+  const isGroupConversation =
+    params.conversationType === 'group' ||
+    conversation?.conversationType === SessionType.Group ||
+    Boolean(conversation?.groupID && !conversation?.userID);
+  const groupID = isGroupConversation ? conversation?.groupID || rawRouteSourceID : '';
+  const groupTitle =
+    groupInfo?.groupName || conversation?.showName || friendName || t('chat.groupChat');
+  const groupNotice = groupInfo?.notification?.trim() ?? '';
+  const memberCount = groupInfo?.memberCount ?? groupMembers.length;
+  const currentUserID = useIMStore((state) => state.currentUserID);
+  const conversationExtension = useMemo(
+    () => parseConversationExtension(conversation?.ex),
+    [conversation?.ex],
+  );
+  const myGroupAlias =
+    groupMembers.find((member) => member.userID === currentUserID)?.nickname ?? '';
+  const visibleGroupMembers = useMemo(
+    () => (groupMembersExpanded ? groupMembers : groupMembers.slice(0, 19)),
+    [groupMembers, groupMembersExpanded],
   );
   const resolvedConversationID = conversation?.conversationID ?? '';
   currentConversationIDRef.current = resolvedConversationID;
@@ -143,8 +384,36 @@ export default function ChatInfoScreen() {
     () => getChatBackgroundPreferenceLabel(backgroundPreference),
     [backgroundPreference],
   );
+  const displayIcons = useMemo(() => [] as DisplayIcon[], []);
+  const savedGroupToContacts =
+    conversationExtension.saveGroupToContacts === true;
+  const savedShowOnScreenNames =
+    conversationExtension.showOnScreenNames !== false;
+  const currentMember = useMemo(
+    () => groupMembers.find((member) => member.userID === currentUserID) ?? null,
+    [currentUserID, groupMembers],
+  );
+  const currentRole = currentMember?.roleLevel ?? GroupMemberRole.Normal;
+  const isOwner = currentRole === GroupMemberRole.Owner;
+  const isAdmin = currentRole === GroupMemberRole.Admin;
+  const canManageGroup = isOwner || isAdmin;
   const backHref = useMemo(() => {
     if (originScope === 'messages') {
+      if (isGroupConversation) {
+        return {
+          pathname: '/(tabs)/messages/chat-detail',
+          params: {
+            sourceID: groupID || routeSourceID,
+            title: groupTitle,
+            conversationType: 'group',
+            ...(resolvedConversationID || conversationID
+              ? { conversationID: resolvedConversationID || conversationID }
+              : {}),
+            ...(conversation?.faceURL ? { avatarUrl: conversation.faceURL } : {}),
+          },
+        } as const;
+      }
+
       return getChatDetailHref(
         routeSourceID,
         friendName,
@@ -156,8 +425,12 @@ export default function ChatInfoScreen() {
     return getUserProfileHref(originScope, friendId, friendName);
   }, [
     conversationID,
+    conversation?.faceURL,
     friendId,
     friendName,
+    groupID,
+    groupTitle,
+    isGroupConversation,
     originScope,
     resolvedConversationID,
     routeSourceID,
@@ -192,7 +465,7 @@ export default function ChatInfoScreen() {
     useCallback(() => {
       let cancelled = false;
 
-      if (!friendId) {
+      if (!friendId || isGroupConversation) {
         setBlacklist(false);
         return () => {
           cancelled = true;
@@ -214,14 +487,62 @@ export default function ChatInfoScreen() {
       return () => {
         cancelled = true;
       };
-    }, [friendId]),
+    }, [friendId, isGroupConversation]),
   );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!isGroupConversation || !groupID) {
+      setGroupInfo(null);
+      setGroupMembers([]);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    getGroupInfo(groupID)
+      .then((nextGroupInfo) => {
+        if (!cancelled) {
+          setGroupInfo(nextGroupInfo);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setGroupInfo(null);
+        }
+      });
+
+    loadGroupMemberList(groupID, 10_000)
+      .then((members) => {
+        if (!cancelled) {
+          setGroupMembers(members);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setGroupMembers([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [groupID, isGroupConversation]);
 
   useEffect(() => {
     actionPendingRef.current = initialActionPending;
     setActionPending(initialActionPending);
     setOptimisticConversationState({});
   }, [resolvedConversationID]);
+
+  useEffect(() => {
+    setSaveGroupToContacts(savedGroupToContacts);
+  }, [savedGroupToContacts]);
+
+  useEffect(() => {
+    setShowOnScreenNames(savedShowOnScreenNames);
+  }, [savedShowOnScreenNames]);
 
   useEffect(() => {
     if (!hasOptimisticConversationState) {
@@ -431,6 +752,284 @@ export default function ChatInfoScreen() {
     })();
   }, [friendName, resolveConversationIDForNavigation, routeSourceID]);
 
+  const promptForText = useCallback(
+    (
+      title: string,
+      defaultValue: string,
+      onSubmit: (value: string) => void,
+      options?: { multiline?: boolean },
+    ) => {
+      if (typeof Alert.prompt !== 'function') {
+        Alert.alert(title, t('chat.promptUnsupported'));
+        return;
+      }
+
+      Alert.prompt(
+        title,
+        undefined,
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('common.save'),
+            onPress: (value: string | undefined) => onSubmit(value ?? ''),
+          },
+        ],
+        options?.multiline ? 'plain-text' : 'plain-text',
+        defaultValue,
+      );
+    },
+    [t],
+  );
+
+  const handleEditGroupName = useCallback(() => {
+    if (!groupID) {
+      return;
+    }
+
+    promptForText(t('chat.groupName'), groupTitle, (value) => {
+      const trimmed = value.trim();
+      if (!trimmed || trimmed === groupTitle) {
+        return;
+      }
+
+      updateGroupName(groupID, trimmed)
+        .then(() => {
+          setGroupInfo((current) =>
+            current ? { ...current, groupName: trimmed } : current,
+          );
+        })
+        .catch(openActionError);
+    });
+  }, [groupID, groupTitle, openActionError, promptForText, t]);
+
+  const handleEditGroupNotice = useCallback(() => {
+    if (!groupID) {
+      return;
+    }
+
+    promptForText(
+      t('chat.groupNotice'),
+      groupNotice,
+      (value) => {
+        const trimmed = value.trim();
+        if (trimmed === groupNotice) {
+          return;
+        }
+
+        updateGroupNotice(groupID, trimmed)
+          .then(() => {
+            setGroupInfo((current) =>
+              current ? { ...current, notification: trimmed } : current,
+            );
+          })
+          .catch(openActionError);
+      },
+      { multiline: true },
+    );
+  }, [groupID, groupNotice, openActionError, promptForText, t]);
+
+  const handleEditMyGroupAlias = useCallback(() => {
+    if (!groupID || !currentUserID) {
+      return;
+    }
+
+    promptForText(t('chat.myAliasInGroup'), myGroupAlias, (value) => {
+      const trimmed = value.trim();
+      if (!trimmed || trimmed === myGroupAlias) {
+        return;
+      }
+
+      updateGroupMemberAlias(groupID, currentUserID, trimmed)
+        .then(() => {
+          setGroupMembers((members) =>
+            members.map((member) =>
+              member.userID === currentUserID
+                ? { ...member, nickname: trimmed }
+                : member,
+            ),
+          );
+        })
+        .catch(openActionError);
+    });
+  }, [currentUserID, groupID, myGroupAlias, openActionError, promptForText, t]);
+
+  const handleOpenInviteGroupMembers = useCallback(() => {
+    if (!groupID) {
+      return;
+    }
+
+    router.push({
+      pathname: '/(tabs)/messages/invite-group-members',
+      params: {
+        groupID,
+        groupName: groupTitle,
+      },
+    });
+  }, [groupID, groupTitle]);
+
+  const handleMinimizeGroupChat = useCallback(
+    (nextValue: boolean) => {
+      if (!nextValue || !resolvedConversationID) {
+        setMinimizeChat(false);
+        return;
+      }
+
+      setMinimizeChat(true);
+      hideConversation(resolvedConversationID)
+        .then(() => router.replace('/(tabs)/messages'))
+        .catch((error) => {
+          setMinimizeChat(false);
+          openActionError(error);
+        });
+    },
+    [openActionError, resolvedConversationID],
+  );
+
+  const handleSaveGroupToContacts = useCallback(
+    (nextValue: boolean) => {
+      if (!resolvedConversationID) {
+        return;
+      }
+
+      const previousValue = saveGroupToContacts;
+      setSaveGroupToContacts(nextValue);
+      setConversationExtension(resolvedConversationID, { saveGroupToContacts: nextValue }).catch((error) => {
+        setSaveGroupToContacts(previousValue);
+        openActionError(error);
+      });
+    },
+    [openActionError, resolvedConversationID, saveGroupToContacts],
+  );
+
+  const handleToggleOnScreenNames = useCallback(
+    (nextValue: boolean) => {
+      if (!resolvedConversationID) {
+        return;
+      }
+
+      const previousValue = showOnScreenNames;
+      setShowOnScreenNames(nextValue);
+      setConversationExtension(resolvedConversationID, { showOnScreenNames: nextValue }).catch(
+        (error) => {
+          setShowOnScreenNames(previousValue);
+          openActionError(error);
+        },
+      );
+    },
+    [openActionError, resolvedConversationID, showOnScreenNames],
+  );
+
+  const handleOpenMemberProfile = useCallback(
+    (member: GroupMemberItem) => {
+      if (!member.userID || member.userID === currentUserID) {
+        return;
+      }
+
+      router.push(
+        getUserProfileHref(
+          'messages',
+          fromImUserId(member.userID),
+          member.nickname || undefined,
+        ),
+      );
+    },
+    [currentUserID],
+  );
+
+  const handleKickMember = useCallback(
+    (member: GroupMemberItem) => {
+      if (!groupID || !canManageGroup || member.userID === currentUserID) {
+        return;
+      }
+
+      // 群主可以踢任何人；管理员只能踢普通成员。
+      if (!isOwner && member.roleLevel !== GroupMemberRole.Normal) {
+        return;
+      }
+
+      const memberName = member.nickname || member.userID;
+
+      Alert.alert(
+        t('chat.removeMember'),
+        t('chat.removeMemberConfirm', { name: memberName }),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('chat.remove'),
+            style: 'destructive',
+            onPress: () => {
+              setKickPendingUserID(member.userID);
+              kickGroupMembers(groupID, [member.userID])
+                .then(() => {
+                  setGroupMembers((members) =>
+                    members.filter((m) => m.userID !== member.userID),
+                  );
+                  setGroupInfo((current) =>
+                    current && current.memberCount > 0
+                      ? { ...current, memberCount: current.memberCount - 1 }
+                      : current,
+                  );
+                  Alert.alert(
+                    t('chat.deleted'),
+                    t('chat.memberRemoved', { name: memberName }),
+                  );
+                })
+                .catch(openActionError)
+                .finally(() => setKickPendingUserID(null));
+            },
+          },
+        ],
+      );
+    },
+    [canManageGroup, currentUserID, groupID, isOwner, openActionError, t],
+  );
+
+  const handleResetGroupNotifyMessages = useCallback(() => {
+    if (!resolvedConversationID) {
+      return;
+    }
+
+    resetConversationGroupAtType(resolvedConversationID)
+      .then(() => {
+        Alert.alert(t('chat.messagesThatNotify'), t('chat.messagesThatNotifyReset'));
+      })
+      .catch(openActionError);
+  }, [openActionError, resolvedConversationID, t]);
+
+  const handleOpenGroupReport = useCallback(() => {
+    if (!groupID) {
+      return;
+    }
+
+    router.push({
+      pathname: '/(tabs)/messages/report-friend',
+      params: {
+        targetType: 'group',
+        groupID,
+        groupName: groupTitle,
+      },
+    });
+  }, [groupID, groupTitle]);
+
+  const handleLeaveGroup = useCallback(() => {
+    if (!groupID) {
+      return;
+    }
+
+    Alert.alert(t('chat.leaveGroup'), t('chat.leaveGroupWarning'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('chat.leave'),
+        style: 'destructive',
+        onPress: () => {
+          leaveGroupChat(groupID)
+            .then(() => router.replace('/(tabs)/messages'))
+            .catch(openActionError);
+        },
+      },
+    ]);
+  }, [groupID, openActionError, t]);
+
   const handleToggleBlacklist = useCallback(
     (nextValue: boolean) => {
       if (!friendId || blacklistPending) {
@@ -621,9 +1220,257 @@ export default function ChatInfoScreen() {
       section: {
         backgroundColor: colors.surface,
       },
+      groupDivider: {
+        backgroundColor: colors.background,
+      },
+      groupMemberName: {
+        color: colors.textSecondary,
+        ...Typography.caption,
+      },
+      groupHeaderName: {
+        color: colors.text,
+        ...Typography.h2,
+      },
+      groupHeaderMeta: {
+        color: colors.textSecondary,
+        ...Typography.bodyRegular,
+      },
+      memberRoleBadge: {
+        color: colors.primary,
+        ...Typography.caption,
+      },
+      addMemberBox: {
+        borderColor: colors.surfaceBorder,
+      },
+      moreMembersText: {
+        color: colors.textSecondary,
+        ...Typography.bodyRegular,
+      },
+      groupSection: {
+        backgroundColor: colors.surface,
+      },
+      leaveText: {
+        color: colors.error,
+        ...Typography.body,
+      },
     }),
     [colors],
   );
+
+  if (isGroupConversation) {
+    return (
+      <View style={[d.container, { paddingTop: insets.top }]}>
+        <NavHeader
+          title={t('chat.groupInfo')}
+          fallbackHref={backHref}
+          rightIcon="search-outline"
+          onRightPress={handleOpenSearchHistory}
+        />
+        <ScrollView
+          style={s.scroll}
+          contentContainerStyle={[
+            s.groupContent,
+            { paddingBottom: insets.bottom + Spacing.xl },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={s.groupHeader}>
+            <Avatar
+              size={72}
+              shape="square"
+              name={groupTitle}
+              uri={groupInfo?.faceURL ?? conversation?.faceURL}
+            />
+            <View style={s.groupHeaderText}>
+              <Text style={[s.groupHeaderName, d.groupHeaderName]} numberOfLines={2}>
+                {groupTitle}
+              </Text>
+              <Text style={[s.groupHeaderMeta, d.groupHeaderMeta]}>
+                {t('chat.groupMembersCount', { count: memberCount })}
+              </Text>
+            </View>
+          </View>
+
+          <View style={s.groupMemberSection}>
+            <View style={s.groupMemberGrid}>
+              {visibleGroupMembers.map((member) => {
+                const memberName = member.nickname || member.userID;
+                const roleBadge =
+                  member.roleLevel === GroupMemberRole.Owner
+                    ? t('chat.groupOwner')
+                    : member.roleLevel === GroupMemberRole.Admin
+                      ? t('chat.groupAdmin')
+                      : null;
+                const canKickMember =
+                  canManageGroup &&
+                  member.userID !== currentUserID &&
+                  (isOwner || member.roleLevel === GroupMemberRole.Normal);
+
+                return (
+                  <Pressable
+                    key={member.userID}
+                    style={s.groupMemberCell}
+                    onPress={() => handleOpenMemberProfile(member)}
+                    onLongPress={canKickMember ? () => handleKickMember(member) : undefined}
+                    disabled={kickPendingUserID === member.userID}
+                  >
+                    <Avatar
+                      size={56}
+                      shape="square"
+                      name={memberName}
+                      uri={member.faceURL}
+                    />
+                    <Text
+                      style={[s.groupMemberName, d.groupMemberName]}
+                      numberOfLines={1}
+                    >
+                      {memberName}
+                    </Text>
+                    {roleBadge ? (
+                      <Text style={d.memberRoleBadge} numberOfLines={1}>
+                        {roleBadge}
+                      </Text>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+              {canManageGroup ? (
+                <Pressable
+                  style={s.groupMemberCell}
+                  onPress={handleOpenInviteGroupMembers}
+                >
+                  <View style={[s.addMemberBox, d.addMemberBox, { width: 56, height: 56 }]}>
+                    <Ionicons name="add" size={30} color={colors.textSecondary} />
+                  </View>
+                </Pressable>
+              ) : null}
+            </View>
+            {groupMembers.length > 19 ? (
+              <Pressable
+                style={s.moreMembersButton}
+                onPress={() => setGroupMembersExpanded((current) => !current)}
+              >
+                <Text style={d.moreMembersText}>
+                  {t('chat.moreGroupMembers')}
+                </Text>
+                <Ionicons
+                  name={groupMembersExpanded ? 'chevron-up' : 'chevron-down'}
+                  size={16}
+                  color={colors.textSecondary}
+                />
+              </Pressable>
+            ) : null}
+          </View>
+
+          <View style={[s.groupSection, d.groupSection]}>
+            <GroupInfoRow
+              label={t('chat.groupName')}
+              value={groupTitle}
+              onPress={canManageGroup ? handleEditGroupName : undefined}
+              showArrow={canManageGroup}
+            />
+            <Divider />
+            <GroupInfoRow
+              label={t('chat.groupNotice')}
+              subtitle={groupNotice || t('chat.noGroupNotice')}
+              onPress={canManageGroup ? handleEditGroupNotice : undefined}
+              showArrow={canManageGroup}
+            />
+            <Divider />
+            <GroupInfoRow
+              label={t('chat.searchHistory')}
+              onPress={handleOpenSearchHistory}
+            />
+          </View>
+
+          <View style={[s.groupSection, d.groupSection]}>
+            <GroupInfoRow
+              label={t('chat.muteNotification')}
+              hasToggle={!actionPending.mute}
+              toggleValue={muted}
+              onToggle={actionPending.mute ? undefined : handleToggleMuted}
+              showArrow={false}
+            />
+            <Divider />
+            <GroupInfoRow
+              label={t('chat.minimizeChat')}
+              hasToggle
+              toggleValue={minimizeChat}
+              onToggle={handleMinimizeGroupChat}
+              showArrow={false}
+            />
+            <Divider />
+            <GroupInfoRow
+              label={t('chat.messagesThatNotify')}
+              subtitle={t('chat.messagesThatNotifyHint')}
+              onPress={handleResetGroupNotifyMessages}
+            />
+            <Divider />
+            <GroupInfoRow
+              label={t('chat.pinChat')}
+              hasToggle={!actionPending.pin}
+              toggleValue={pinned}
+              onToggle={actionPending.pin ? undefined : handleTogglePinned}
+              showArrow={false}
+            />
+            <Divider />
+            <GroupInfoRow
+              label={t('chat.saveToContacts')}
+              hasToggle
+              toggleValue={saveGroupToContacts}
+              onToggle={handleSaveGroupToContacts}
+              showArrow={false}
+            />
+          </View>
+
+          <View style={[s.groupSection, d.groupSection]}>
+            <GroupInfoRow
+              label={t('chat.myAliasInGroup')}
+              value={myGroupAlias || t('chat.notSet')}
+              onPress={handleEditMyGroupAlias}
+            />
+            <Divider />
+            <GroupInfoRow
+              label={t('chat.onScreenNames')}
+              hasToggle
+              toggleValue={showOnScreenNames}
+              onToggle={handleToggleOnScreenNames}
+              showArrow={false}
+            />
+          </View>
+
+          <View style={[s.groupSection, d.groupSection]}>
+            <GroupInfoRow
+              label={t('chat.chatBackground')}
+              value={backgroundLabel}
+              onPress={handleOpenChatBackground}
+            />
+          </View>
+
+          <View style={[s.groupSection, d.groupSection]}>
+            <GroupInfoRow
+              label={t('chat.clearHistory')}
+              onPress={actionPending.clear ? undefined : handleConfirmClearHistory}
+              showArrow={false}
+            />
+          </View>
+
+          <View style={[s.groupSection, d.groupSection]}>
+            <GroupInfoRow
+              label={t('chat.report')}
+              onPress={handleOpenGroupReport}
+            />
+          </View>
+
+          <View style={[d.groupSection]}>
+            <Pressable style={s.leaveButton} onPress={handleLeaveGroup}>
+              <Text style={d.leaveText}>{t('chat.leave')}</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
@@ -637,6 +1484,7 @@ export default function ChatInfoScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={[s.section, d.section]}>
+          <UserIconRow icons={displayIcons} compact />
           <MenuRow icon="create-outline" label={t('chat.setRemark')} onPress={handleOpenRemark} />
           <Divider />
           <MenuRow icon="pricetag-outline" label={t('chat.tags')} onPress={handleOpenTags} />

@@ -844,6 +844,7 @@ export default function ChatDetailScreen() {
                 conversationID,
                 sourceID,
                 title: conversationTitle,
+                conversationType: isGroupChat ? 'group' : 'private',
                 originScope: 'messages',
               },
             })

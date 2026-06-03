@@ -17,6 +17,7 @@ import {
   reportFriend,
   type FriendReportCategory,
 } from '@/services/api/friends';
+import { reportGroup } from '@/services/api/groups';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
@@ -39,11 +40,22 @@ export default function ReportFriendScreen() {
   const params = useLocalSearchParams<{
     friendUserId?: string;
     friendName?: string;
+    groupID?: string;
+    groupName?: string;
+    targetType?: 'friend' | 'group';
   }>();
+  const targetType = params.targetType === 'group' ? 'group' : 'friend';
   const friendUserId =
     typeof params.friendUserId === 'string' ? params.friendUserId : '';
+  const groupID = typeof params.groupID === 'string' ? params.groupID : '';
   const friendName =
-    typeof params.friendName === 'string' ? params.friendName : '对方';
+    targetType === 'group'
+      ? typeof params.groupName === 'string'
+        ? params.groupName
+        : '该群聊'
+      : typeof params.friendName === 'string'
+        ? params.friendName
+        : '对方';
 
   const [category, setCategory] = useState<FriendReportCategory | null>(null);
   const [description, setDescription] = useState('');
@@ -51,7 +63,11 @@ export default function ReportFriendScreen() {
 
   const handleSubmit = useCallback(async () => {
     if (submitting) return;
-    if (!friendUserId) {
+    if (targetType === 'friend' && !friendUserId) {
+      Alert.alert('参数错误', '缺少举报对象');
+      return;
+    }
+    if (targetType === 'group' && !groupID) {
       Alert.alert('参数错误', '缺少举报对象');
       return;
     }
@@ -67,7 +83,11 @@ export default function ReportFriendScreen() {
 
     setSubmitting(true);
     try {
-      await reportFriend(friendUserId, { category, description: trimmed });
+      if (targetType === 'group') {
+        await reportGroup(groupID, { category, description: trimmed });
+      } else {
+        await reportFriend(friendUserId, { category, description: trimmed });
+      }
       Alert.alert('举报已提交', '我们会尽快处理，谢谢你的反馈。', [
         { text: '好的', onPress: () => router.back() },
       ]);
@@ -76,7 +96,7 @@ export default function ReportFriendScreen() {
     } finally {
       setSubmitting(false);
     }
-  }, [category, description, friendUserId, router, submitting]);
+  }, [category, description, friendUserId, groupID, router, submitting, targetType]);
 
   const submitDisabled =
     submitting || !category || !description.trim();

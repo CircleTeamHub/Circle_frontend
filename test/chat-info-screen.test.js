@@ -64,6 +64,139 @@ test('chat info screen renders compact unified display icons', () => {
   assert.match(source, /displayIcons/);
 });
 
+test('chat info screen renders a dedicated group info layout for group conversations', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatInfoScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /isGroupConversation/);
+  assert.match(source, /loadGroupMemberList/);
+  assert.match(source, /getGroupInfo/);
+  assert.match(source, /groupMembers\.slice\(0,\s*19\)/);
+  assert.match(source, /groupMemberGrid/);
+  assert.match(source, /groupNameText/);
+  assert.match(source, /t\('chat\.groupName'\)/);
+  assert.match(source, /t\('chat\.groupNotice'\)/);
+  assert.match(source, /t\('chat\.searchHistory'\)/);
+  assert.match(source, /t\('chat\.moreGroupMembers'/);
+  assert.match(source, /rightIcon="search-outline"/);
+});
+
+test('chat info screen gives group rows real actions instead of unsupported placeholders', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatInfoScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /title=\{t\('chat\.groupInfo'\)\}/);
+  assert.match(source, /handleEditGroupName/);
+  assert.match(source, /updateGroupName\(groupID,\s*trimmed\)/);
+  assert.match(source, /handleEditGroupNotice/);
+  assert.match(source, /updateGroupNotice\(groupID,\s*trimmed\)/);
+  assert.match(source, /handleEditMyGroupAlias/);
+  assert.match(source, /updateGroupMemberAlias\(groupID,\s*currentUserID,\s*trimmed\)/);
+  assert.match(source, /handleMinimizeGroupChat/);
+  assert.match(source, /hideConversation\(resolvedConversationID\)/);
+  assert.match(source, /handleSaveGroupToContacts/);
+  assert.match(source, /setConversationExtension\(resolvedConversationID,\s*\{\s*saveGroupToContacts: nextValue\s*\}/);
+  assert.match(source, /handleResetGroupNotifyMessages/);
+  assert.match(source, /resetConversationGroupAtType\(resolvedConversationID\)/);
+  assert.match(source, /handleOpenGroupReport/);
+  assert.match(source, /groupID/);
+  assert.doesNotMatch(source, /handleOpenUnsupportedGroupAction/);
+});
+
+test('chat info screen opens a contact picker when adding group members', () => {
+  const infoPath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatInfoScreen.tsx',
+  );
+  const routePath = path.join(
+    process.cwd(),
+    'app/(tabs)/messages/invite-group-members.tsx',
+  );
+  const layoutPath = path.join(
+    process.cwd(),
+    'app/(tabs)/messages/_layout.tsx',
+  );
+  const screenPath = path.join(
+    process.cwd(),
+    'src/features/messages/screens/InviteGroupMembersScreen.tsx',
+  );
+  const infoSource = fs.readFileSync(infoPath, 'utf8');
+  const layoutSource = fs.readFileSync(layoutPath, 'utf8');
+
+  assert.match(infoSource, /handleOpenInviteGroupMembers/);
+  assert.match(infoSource, /pathname: '\/\(tabs\)\/messages\/invite-group-members'/);
+  assert.match(infoSource, /groupID/);
+  assert.match(infoSource, /groupTitle/);
+  assert.doesNotMatch(infoSource, /promptForText\(t\('chat\.addGroupMember'\)/);
+  assert.match(layoutSource, /<Stack\.Screen name="invite-group-members" \/>/);
+  assert.equal(fs.existsSync(routePath), true);
+  assert.equal(fs.existsSync(screenPath), true);
+});
+
+test('invite group members screen filters users who are already in the group', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/messages/screens/InviteGroupMembersScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /loadGroupMemberList\(groupID,\s*10_000\)/);
+  assert.match(source, /const \[existingMemberIDs, setExistingMemberIDs\]/);
+  assert.match(source, /members\.map\(\(member\) => toImUserId\(member\.userID\)\)/);
+  assert.match(source, /friends\.filter\([\s\S]{0,120}!existingMemberIDs\.has\(toImUserId\(friend\.id\)\)/);
+  assert.match(source, /filter\(\(userID\) => !existingMemberIDs\.has\(userID\)\)/);
+  assert.match(source, /inviteGroupMembersAlreadyMembers/);
+  assert.match(source, /inviteGroupMembersNoInvitableFriends/);
+  assert.doesNotMatch(source, /inviteUsersToGroup\(groupID,\s*selectedIds\.map\(toImUserId\)\)/);
+});
+
+test('OpenIM client does not import native filesystem at module load on web', () => {
+  const checkedFiles = [
+    'src/im/client.ts',
+    'src/services/api/upload.ts',
+    'src/services/cache/clear-app-cache.ts',
+  ];
+
+  for (const relativePath of checkedFiles) {
+    const source = fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
+
+    assert.doesNotMatch(source, /import\s+RNFS\s+from\s+['"]react-native-fs['"]/);
+    assert.match(source, /import\('react-native-fs'\)/);
+    assert.match(source, /loadNativeFS/);
+  }
+});
+
+test('i18n avoids synchronous storage reads during web server rendering', () => {
+  const filePath = path.join(process.cwd(), 'src/i18n/index.ts');
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /function canUseSynchronousStorage\(\)/);
+  assert.match(source, /typeof window !== 'undefined'/);
+  assert.match(source, /if \(!canUseSynchronousStorage\(\)\) \{\s*return getDeviceLanguage\(\);\s*\}/s);
+  assert.match(source, /if \(canUseSynchronousStorage\(\)\) \{\s*storage\.set\(LANGUAGE_KEY, lang\);/s);
+  assert.match(source, /if \(!canUseSynchronousStorage\(\)\) \{\s*return;\s*\}/s);
+});
+
+test('note block editor defers DOM editor imports during web server rendering', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/notes/components/NoteBlockEditor.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.doesNotMatch(source, /import\s+NoteBlockEditorDOM\s+from/);
+  assert.match(source, /function canLoadDOMEditor\(\)/);
+  assert.match(source, /Platform\.OS !== 'web' \|\| typeof window !== 'undefined'/);
+  assert.match(source, /require\('@\/features\/notes\/dom\/NoteBlockEditor\.dom'\)/);
+  assert.match(source, /if \(!canLoadDOMEditor\(\)\) \{\s*return <View style=\{s\.container\} \/>;\s*\}/s);
+});
+
 test('chat info screen constrains conversation actions with burn selection, clear confirmation, and pending guards', () => {
   const filePath = path.join(
     process.cwd(),

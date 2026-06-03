@@ -6,7 +6,9 @@
       "Bash(node --test test/*.test.js)",
       "Read(//Users/yiboding/projects/**)",
       "Bash(git -C /Users/yiboding/projects/circle-im log --oneline -20)",
-      "Bash(git -C /Users/yiboding/projects/circle-im show 2b22102 --stat)"
+      "Bash(git -C /Users/yiboding/projects/circle-im show 2b22102 --stat)",
+      "Bash(git checkout *)",
+      "Bash(git merge *)"
     ]
   }
 }
