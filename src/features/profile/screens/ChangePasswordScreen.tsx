@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -58,6 +58,8 @@ export default function ChangePasswordScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Pattern D: setSubmitting 跨 setState 边界更新有窗口，inFlightRef 立刻就位防止双触发。
+  const inFlightRef = useRef(false);
 
   const d = useMemo(
     () => ({
@@ -84,6 +86,7 @@ export default function ChangePasswordScreen() {
   );
 
   async function handleSave() {
+    if (inFlightRef.current) return;
     setError(null);
 
     if (!oldPassword) {
@@ -101,6 +104,7 @@ export default function ChangePasswordScreen() {
       return;
     }
 
+    inFlightRef.current = true;
     setSubmitting(true);
 
     try {
@@ -110,14 +114,18 @@ export default function ChangePasswordScreen() {
       });
       try {
         await logoutAll();
-      } catch {
-        // 服务端登出全部设备失败不阻断本地退出流程
+      } catch (logoutError) {
+        // 服务端登出全部设备失败不阻断本地退出流程，但 dev 还是想看到原因。
+        if (__DEV__) {
+          console.warn('[ChangePasswordScreen] logoutAll failed', logoutError);
+        }
       }
       await clearLocalSession();
       router.replace('/(auth)/login');
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, t('profile.passwordChangeFailed')));
     } finally {
+      inFlightRef.current = false;
       setSubmitting(false);
     }
   }

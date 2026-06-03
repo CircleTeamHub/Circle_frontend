@@ -100,18 +100,27 @@ export default function InvitationVerificationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [invitation, setInvitation] = useState<CircleInvitation | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadInvitation = useCallback(async () => {
     if (!id) return;
+    setLoadError(null);
     try {
       const data = await fetchInvitation(id);
       setInvitation(data);
-    } catch {
-      Alert.alert(t('circle.error'), t('invitation.notExist'));
+    } catch (error) {
+      // 之前是 Alert + setInvitation(null) 渲染 "不存在" —— 把临时网络错误误判成 404。
+      // 改成 loadError + 重试按钮，跟 MomentDetailScreen 对齐。
+      setLoadError(
+        t('invitation.loadFailed', { defaultValue: '加载失败，请稍后重试' }),
+      );
+      if (__DEV__) {
+        console.warn('[InvitationVerificationScreen] fetchInvitation failed', error);
+      }
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, t]);
 
   useEffect(() => {
     loadInvitation();
@@ -146,7 +155,25 @@ export default function InvitationVerificationScreen() {
       <View style={[d.container, { paddingTop: insets.top }]}>
         <NavHeader title={t('invitation.title')} />
         <View style={s.centerLoader}>
-          <Text style={d.subtitle}>{t('invitation.notExist')}</Text>
+          <Text style={d.subtitle}>
+            {loadError ?? t('invitation.notExist')}
+          </Text>
+          {loadError ? (
+            <Pressable
+              onPress={loadInvitation}
+              style={{
+                marginTop: Spacing.md,
+                paddingHorizontal: Spacing.md,
+                paddingVertical: Spacing.sm,
+                borderRadius: Radius.full,
+                backgroundColor: colors.primary,
+              }}
+            >
+              <Text style={{ color: colors.white, ...Typography.caption }}>
+                {t('common.retry')}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       </View>
     );
@@ -162,12 +189,12 @@ export default function InvitationVerificationScreen() {
     invitation.status === 'PENDING' &&
     invitation.verifiers.filter((v) => v.status !== 'REJECTED').length < TOTAL_SLOTS;
 
-  const handleAddVerifier = () => {
+  const handleAddVerifier = useCallback(() => {
     router.push({
       pathname: '/(tabs)/discover/invitation/[id]/select-verifier',
       params: { id: invitation.id, circleId: invitation.circleId },
     });
-  };
+  }, [router, invitation.id, invitation.circleId]);
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
@@ -207,7 +234,10 @@ export default function InvitationVerificationScreen() {
             }
 
             // Filled slot
-            const statusIcon =
+            const statusIcon: {
+              name: keyof typeof Ionicons.glyphMap;
+              color: string;
+            } =
               slot.status === 'APPROVED'
                 ? { name: 'checkmark-circle', color: '#22C55E' }
                 : slot.status === 'REJECTED'
@@ -229,7 +259,7 @@ export default function InvitationVerificationScreen() {
                     ]}
                   >
                     <Ionicons
-                      name={statusIcon.name as any}
+                      name={statusIcon.name}
                       size={16}
                       color={statusIcon.color}
                     />

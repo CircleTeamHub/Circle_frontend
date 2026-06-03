@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useCallback, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import type { NoteSummary } from '@/features/notes/types';
 import { buildNoteMeta } from '@/features/notes/utils/note-format';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -15,6 +16,7 @@ interface Props {
 
 export function NoteCard({ note, onPress, onEditPress, onPinPress }: Props) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
 
   const d = useMemo(
     () => ({
@@ -27,12 +29,15 @@ export function NoteCard({ note, onPress, onEditPress, onPinPress }: Props) {
     [colors, note.pinned],
   );
 
-  const meta = buildNoteMeta({
-    updatedAt: note.updatedAt,
-    groupNames: note.groups.map((group) => group.name),
-    imageCount: note.imageCount,
-    videoCount: note.videoCount,
-  });
+  const meta = buildNoteMeta(
+    {
+      updatedAt: note.updatedAt,
+      groupNames: note.groups.map((group) => group.name),
+      imageCount: note.imageCount,
+      videoCount: note.videoCount,
+    },
+    t,
+  );
 
   const handlePin = useCallback(
     (e: { stopPropagation: () => void }) => {

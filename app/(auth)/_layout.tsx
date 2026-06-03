@@ -7,7 +7,7 @@ export default function AuthLayout() {
   return (
     <Stack
       screenOptions={{
-        //个项目用的是自定义 NavHeader 组件，不用系统自带的导航栏。
+        // 这个项目用的是自定义 NavHeader 组件，不用系统自带的导航栏。
         // Expo Router 的 Stack 默认会渲染一个系统原生的顶部 header（有返回按钮、标题等）。
         // 设置 headerShown: false 把它隐藏掉，然后在每个 Screen 里自己用 NavHeader 
         // 组件控制样式，这样：

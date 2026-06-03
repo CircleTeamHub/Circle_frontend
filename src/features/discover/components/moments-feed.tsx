@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   FlatList,
   Pressable,
   RefreshControl,
@@ -65,18 +66,49 @@ export const MomentsFeed: React.FC = () => {
     }, [fetchMoments]),
   );
 
-  // Poll for new posts every 30s
+  // Poll for new posts every 30s, but only while app is foregrounded.
+  // 后台时清掉定时器避免 JS bridge 被叫醒；回到前台立即补一次拉取再继续 polling。
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
     if (!lastRefreshTime) return;
-    const timer = setInterval(async () => {
+
+    const pollOnce = async () => {
       try {
         const count = await fetchNewMomentsCount(lastRefreshTime);
         setNewCount(count);
-      } catch {
-        // ignore
+      } catch (error) {
+        if (__DEV__) {
+          console.warn('[MomentsFeed] fetchNewMomentsCount failed', error);
+        }
       }
-    }, 30000);
-    return () => clearInterval(timer);
+    };
+
+    const startInterval = () => {
+      if (intervalRef.current != null) return;
+      intervalRef.current = setInterval(pollOnce, 30_000);
+    };
+
+    const stopInterval = () => {
+      if (intervalRef.current != null) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+
+    if (AppState.currentState === 'active') startInterval();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        pollOnce();
+        startInterval();
+      } else {
+        stopInterval();
+      }
+    });
+
+    return () => {
+      sub.remove();
+      stopInterval();
+    };
   }, [lastRefreshTime]);
 
   // Manual pull-to-refresh
@@ -105,8 +137,11 @@ export const MomentsFeed: React.FC = () => {
       try {
         const result = await toggleMomentLike(postId);
         storeToggleLike(postId, result.liked, result.likeCount);
-      } catch {
+      } catch (error) {
         storeToggleLike(postId, post.isLikedByMe, post.likeCount);
+        if (__DEV__) {
+          console.warn('[MomentsFeed] toggleMomentLike failed, rolled back', error);
+        }
       }
     },
     [moments, storeToggleLike],

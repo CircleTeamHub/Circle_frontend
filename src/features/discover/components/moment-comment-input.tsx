@@ -9,11 +9,14 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 interface MomentCommentInputProps {
   replyTo: { id: string; nickname: string } | null;
-  onSubmit: (content: string, replyToId?: string) => void;
+  // onSubmit 可以返回 Promise；reject 时输入框保持打开（含已输入文本）让用户重试。
+  // 仅在 resolve 时由父组件决定是否调用 onDismiss。
+  onSubmit: (content: string, replyToId?: string) => void | Promise<void>;
   onDismiss: () => void;
 }
 
@@ -58,17 +61,26 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
   onDismiss,
 }) => {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [text, setText] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback(async () => {
     const trimmed = text.trim();
-    if (!trimmed) return;
-    onSubmit(trimmed, replyTo?.id);
-    setText('');
-    onDismiss();
-  }, [text, replyTo, onSubmit, onDismiss]);
+    if (!trimmed || submitting) return;
+    setSubmitting(true);
+    try {
+      await onSubmit(trimmed, replyTo?.id);
+      // onSubmit 成功后由父组件决定是否调用 onDismiss（一般会清掉 commentTarget）。
+      setText('');
+    } catch {
+      // 父组件已经处理过错误展示。这里只负责把 submitting 复位 + 输入文本保留。
+    } finally {
+      setSubmitting(false);
+    }
+  }, [text, submitting, replyTo, onSubmit]);
 
   return (
     <KeyboardAvoidingView
@@ -93,7 +105,16 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
           ref={inputRef}
           value={text}
           onChangeText={setText}
-          placeholder={replyTo ? `回复 ${replyTo.nickname}` : '写评论...'}
+          placeholder={
+            replyTo
+              ? t('discover.commentInput.replyTo', {
+                  nickname: replyTo.nickname,
+                  defaultValue: `回复 ${replyTo.nickname}`,
+                })
+              : t('discover.commentInput.placeholder', {
+                  defaultValue: '写评论...',
+                })
+          }
           placeholderTextColor={colors.textSecondary}
           autoFocus
           onSubmitEditing={handleSend}
@@ -105,12 +126,14 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
         />
         <Pressable
           onPress={handleSend}
+          disabled={submitting || !text.trim()}
           style={[
             s.sendBtn,
             {
-              backgroundColor: text.trim()
-                ? colors.primary
-                : colors.surfaceBorder,
+              backgroundColor:
+                text.trim() && !submitting
+                  ? colors.primary
+                  : colors.surfaceBorder,
             },
           ]}
         >

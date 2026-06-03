@@ -102,7 +102,16 @@ export default function ContactsScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
 
-  const QUICK_ACTIONS = QUICK_ACTION_KEYS.map((a) => ({ id: a.id, icon: a.icon, label: t(a.key), iconBg: a.iconBg }));
+  const QUICK_ACTIONS = useMemo(
+    () =>
+      QUICK_ACTION_KEYS.map((a) => ({
+        id: a.id,
+        icon: a.icon,
+        label: t(a.key),
+        iconBg: a.iconBg,
+      })),
+    [t],
+  );
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -120,12 +129,15 @@ export default function ContactsScreen() {
       const nextFriends = await fetchFriends();
       setFriends(nextFriends);
       setError(null);
-    } catch {
+    } catch (error) {
       setError(t('contacts.loadFailed'));
+      if (__DEV__) {
+        console.warn('[ContactsScreen] fetchFriends failed', error);
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useFocusEffect(
     useCallback(() => {

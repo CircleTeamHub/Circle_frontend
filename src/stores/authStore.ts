@@ -103,12 +103,7 @@ export const useAuthStore = create<AuthState>()(
           isAuthenticated: true,
         })),
 
-      setUser: (user) =>
-        set({
-          user,
-          isAuthenticated: true,
-          isLoading: false,
-        }),
+      setUser: (user) => set({ user }),
 
       clearSession: () =>
         set({
@@ -126,6 +121,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'circle-im-auth',
+      version: 1,
       storage: createJSONStorage(() => mmkvJsonStorage),
       partialize: (state) => ({
         accessToken: state.accessToken,
@@ -138,8 +134,13 @@ export const useAuthStore = create<AuthState>()(
         // MMKV 同步读取完成，通知 SessionBootstrap 可以开始执行
         state?.setHydrated(true);
 
-        // token 不完整时提前清空，避免后续带着残缺数据执行 /auth/me
-        if (!state?.accessToken || !state?.refreshToken) {
+        // token 必须是非空字符串；MMKV 写入损坏 / 类型异常时不能带着残缺数据执行 /auth/me
+        const hasValidTokens =
+          typeof state?.accessToken === 'string' &&
+          state.accessToken.length > 0 &&
+          typeof state?.refreshToken === 'string' &&
+          state.refreshToken.length > 0;
+        if (!hasValidTokens) {
           state?.clearSession();
         }
       },

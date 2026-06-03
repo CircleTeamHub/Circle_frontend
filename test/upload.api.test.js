@@ -20,6 +20,8 @@ function loadUploadApi() {
     module: { exports: {} },
     exports: {},
     URL,
+    setTimeout,
+    clearTimeout,
     require: (request) => {
       if (request === '@/services/api/client') {
         return {
@@ -36,6 +38,19 @@ function loadUploadApi() {
       if (request === '@/constants/config') {
         return {
           API_URL: 'http://10.0.0.195:3000/api/v1',
+        };
+      }
+      if (request === '@/utils/validate') {
+        return {
+          isPlainObject: (v) =>
+            typeof v === 'object' && v !== null && !Array.isArray(v),
+          isNonEmptyString: (v) => typeof v === 'string' && v.length > 0,
+          expectShape: (value, predicate, message) => {
+            if (!predicate(value)) {
+              throw new Error(message);
+            }
+            return value;
+          },
         };
       }
       if (request === 'react-native') {

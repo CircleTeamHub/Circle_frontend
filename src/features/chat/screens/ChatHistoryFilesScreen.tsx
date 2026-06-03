@@ -112,6 +112,12 @@ export default function ChatHistoryFilesScreen() {
       pageRef.current = nextPage;
       setResults((prev) => [...prev, ...page]);
       setHasMore(page.length === PAGE_SIZE);
+    } catch (err) {
+      // 翻页失败时停止继续翻；初始加载已有 error state 路径，这里不重置以保留已加载部分。
+      setHasMore(false);
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn('[chat-history-files] load-more failed', err);
+      }
     } finally {
       setLoadingMore(false);
     }

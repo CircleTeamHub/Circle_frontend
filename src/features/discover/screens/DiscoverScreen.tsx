@@ -80,7 +80,14 @@ export default function DiscoverScreen() {
   );
   const hasActiveFilter = filterCircleCount > 0 || filterCityCount > 0;
 
-  const FILTER_TABS = [t('discover.plaza'), t('discover.management'), t('discover.moments')];
+  const FILTER_TABS = useMemo(
+    () => [
+      t('discover.plaza'),
+      t('discover.management'),
+      t('discover.moments'),
+    ],
+    [t],
+  );
 
   const d = useMemo(
     () => ({

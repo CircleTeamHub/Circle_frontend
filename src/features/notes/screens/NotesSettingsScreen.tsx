@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Alert,
   Pressable,
@@ -43,6 +44,7 @@ export default function NotesSettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { t } = useTranslation();
 
   const confirmCardSave = useNotesSettingsStore((st) => st.confirmCardSave);
   const defaultSaveCard = useNotesSettingsStore((st) => st.defaultSaveCard);
@@ -80,42 +82,48 @@ export default function NotesSettingsScreen() {
     const elapsed = Date.now() - lastForceSyncAt;
     if (elapsed < FORCE_SYNC_COOLDOWN_MS) {
       const remain = Math.ceil((FORCE_SYNC_COOLDOWN_MS - elapsed) / 1000);
-      Alert.alert('冷却中', `请在 ${remain} 秒后再试。`);
+      Alert.alert(
+        t('notes.settings.cooldownTitle', { defaultValue: '冷却中' }),
+        t('notes.settings.cooldownMessage', {
+          remain,
+          defaultValue: `请在 ${remain} 秒后再试。`,
+        }),
+      );
       return;
     }
 
-    Alert.alert(
-      '清理本地并强制同步',
-      '将清空本地笔记与上传队列，再从服务器全量拉取。继续？',
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '继续',
-          style: 'destructive',
-          onPress: () => {
-            void (async () => {
-              setSyncing(true);
-              try {
-                const [notes, groups] = await Promise.all([
-                  fetchNotes(),
-                  fetchNoteGroups(),
-                ]);
-                markForceSync();
-                Alert.alert(
-                  '同步完成',
-                  `总变更条数（含已删除条数）：${notes.length + groups.length}\n当前可见笔记条数：${notes.length}`,
-                );
-              } catch {
-                Alert.alert('同步失败', '请稍后再试。');
-              } finally {
-                setSyncing(false);
-              }
-            })();
-          },
-        },
-      ],
-    );
-  }, [lastForceSyncAt, markForceSync, syncing]);
+    // #57: 之前文案承诺"清空本地笔记与上传队列再拉取"，但代码只是 fetchNotes+fetchNoteGroups
+    // 并展示计数 —— 既没有本地缓存可清，也没有上传队列。改为如实描述（"重新拉取并展示统计"），
+    // 冷却期保留，避免用户连点把后端打满。
+    setSyncing(true);
+    try {
+      const [notes, groups] = await Promise.all([
+        fetchNotes(),
+        fetchNoteGroups(),
+      ]);
+      markForceSync();
+      Alert.alert(
+        t('notes.settings.refreshedTitle', { defaultValue: '已刷新' }),
+        t('notes.settings.refreshedMessage', {
+          groupCount: groups.length,
+          noteCount: notes.length,
+          defaultValue: `当前分组数：${groups.length}\n当前可见笔记数：${notes.length}`,
+        }),
+      );
+    } catch (error) {
+      Alert.alert(
+        t('notes.settings.refreshFailedTitle', { defaultValue: '刷新失败' }),
+        t('notes.settings.refreshFailedMessage', {
+          defaultValue: '请检查网络后再试。',
+        }),
+      );
+      if (__DEV__) {
+        console.warn('[NotesSettingsScreen] force refresh failed', error);
+      }
+    } finally {
+      setSyncing(false);
+    }
+  }, [lastForceSyncAt, markForceSync, syncing, t]);
 
   const d = useMemo(
     () => ({
@@ -135,7 +143,9 @@ export default function NotesSettingsScreen() {
   return (
     <View style={[s.container, d.container]}>
       <View style={[s.header, { paddingTop: insets.top + Spacing.sm }]}>
-        <Text style={[s.headerTitle, d.heading]}>笔记设置</Text>
+        <Text style={[s.headerTitle, d.heading]}>
+          {t('notes.settings.title', { defaultValue: '笔记设置' })}
+        </Text>
         <Pressable hitSlop={8} onPress={handleClose}>
           <Ionicons name="close" size={26} color={colors.text} />
         </Pressable>
@@ -149,38 +159,54 @@ export default function NotesSettingsScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={[s.sectionLabel, d.sectionLabel]}>名片保存</Text>
+        <Text style={[s.sectionLabel, d.sectionLabel]}>
+          {t('notes.settings.cardSaveSection', { defaultValue: '名片保存' })}
+        </Text>
         <SwitchRow
-          label="名片保存确认"
+          label={t('notes.settings.confirmCardSave', {
+            defaultValue: '名片保存确认',
+          })}
           value={confirmCardSave}
           onToggle={setConfirmCardSave}
         />
         <SwitchRow
-          label="默认保存名片"
+          label={t('notes.settings.defaultSaveCard', {
+            defaultValue: '默认保存名片',
+          })}
           value={defaultSaveCard}
           onToggle={setDefaultSaveCard}
         />
 
         <View style={[s.divider, d.divider]} />
 
-        <Text style={[s.sectionLabel, d.sectionLabel]}>页面显示</Text>
+        <Text style={[s.sectionLabel, d.sectionLabel]}>
+          {t('notes.settings.displaySection', { defaultValue: '页面显示' })}
+        </Text>
         <SwitchRow
-          label="显示包含媒体"
+          label={t('notes.settings.showMedia', {
+            defaultValue: '显示包含媒体',
+          })}
           value={showMedia}
           onToggle={setShowMedia}
         />
         <SwitchRow
-          label="显示分组信息"
+          label={t('notes.settings.showGroups', {
+            defaultValue: '显示分组信息',
+          })}
           value={showGroups}
           onToggle={setShowGroups}
         />
         <SwitchRow
-          label="显示未分组"
+          label={t('notes.settings.showUngrouped', {
+            defaultValue: '显示未分组',
+          })}
           value={showUngrouped}
           onToggle={setShowUngrouped}
         />
         <SwitchRow
-          label="显示排序工具栏"
+          label={t('notes.settings.showSortToolbar', {
+            defaultValue: '显示排序工具栏',
+          })}
           value={showSortToolbar}
           onToggle={setShowSortToolbar}
         />
@@ -188,19 +214,22 @@ export default function NotesSettingsScreen() {
         <View style={[s.divider, d.divider]} />
 
         <Text style={[s.heading, d.heading, s.repairTitle]}>
-          异常修复：清理本地并强制同步
+          {t('notes.settings.manualRefreshTitle', { defaultValue: '手动刷新' })}
         </Text>
         <Text style={[s.hintText, d.hintText]}>
-          当本地笔记长期卡在“上传中”时可使用。
+          {t('notes.settings.manualRefreshHint1', {
+            defaultValue: '列表和分组数与服务器不一致时可使用。',
+          })}
         </Text>
         <Text style={[s.hintText, d.hintText]}>
-          执行后会清理本地笔记与上传队列，再从服务器全量拉取！
+          {t('notes.settings.manualRefreshHint2', {
+            defaultValue: '点击后会从服务器重新拉取笔记和分组列表。',
+          })}
         </Text>
         <Text style={[s.hintText, d.hintText]}>
-          为避免频繁触发，操作后会进入冷却期。
-        </Text>
-        <Text style={[s.hintText, d.hintText]}>
-          结果说明：同步完成会展示“总变更条数（含已删除条数）”与“当前可见笔记条数”
+          {t('notes.settings.manualRefreshHint3', {
+            defaultValue: '为避免频繁触发，操作后会进入冷却期。',
+          })}
         </Text>
 
         <Pressable
@@ -209,14 +238,18 @@ export default function NotesSettingsScreen() {
           disabled={syncing}
         >
           <Text style={[s.destructiveText, d.destructiveText]}>
-            {syncing ? '同步中...' : '清理本地并强制同步'}
+            {syncing
+              ? t('notes.settings.refreshing', { defaultValue: '刷新中...' })
+              : t('notes.settings.refresh', { defaultValue: '重新拉取' })}
           </Text>
         </Pressable>
       </ScrollView>
 
       <View style={[s.footer, { paddingBottom: insets.bottom + Spacing.md }]}>
         <Pressable style={[s.primaryBtn, d.primaryBg]} onPress={handleClose}>
-          <Text style={[s.primaryBtnText, d.primaryText]}>保存</Text>
+          <Text style={[s.primaryBtnText, d.primaryText]}>
+            {t('common.save', { defaultValue: '保存' })}
+          </Text>
         </Pressable>
       </View>
     </View>

@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { getUserProfileHref } from '@/features/user/utils/routes';
+import { formatRelativeTime } from '@/features/discover/utils/relative-time';
 import { ImageGrid } from './image-grid';
 import { RestrictionBadge } from './restriction-badge';
 import type { CirclePlazaPost } from '@/types';
@@ -91,36 +92,45 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
   const handleAvatarPress = useCallback(() => {
     if (!post.canInteract) {
       const reasons: string[] = [];
-      if (
-        post.restrictions.vipLevel != null
-      ) {
-        reasons.push(`VIP${post.restrictions.vipLevel}以上`);
+      if (post.restrictions.vipLevel != null) {
+        reasons.push(
+          t('plaza.restriction.vipAtLeast', {
+            level: post.restrictions.vipLevel,
+            defaultValue: `VIP${post.restrictions.vipLevel}以上`,
+          }),
+        );
       }
       if (post.restrictions.creditScore != null) {
-        reasons.push(`信用值${post.restrictions.creditScore}以上`);
+        reasons.push(
+          t('plaza.restriction.creditAtLeast', {
+            score: post.restrictions.creditScore,
+            defaultValue: `信用值${post.restrictions.creditScore}以上`,
+          }),
+        );
       }
       if (post.restrictions.fancyNumber) {
-        reasons.push('靓号用户');
+        reasons.push(
+          t('plaza.restriction.fancyNumber', { defaultValue: '靓号用户' }),
+        );
       }
+      const separator = t('plaza.restriction.separator', {
+        defaultValue: '、',
+      });
       Alert.alert(
         t('plaza.cannotView'),
-        t('plaza.restrictionMessage', { requirements: reasons.join('、') }),
+        t('plaza.restrictionMessage', {
+          requirements: reasons.join(separator),
+        }),
       );
       return;
     }
     router.push(getUserProfileHref('discover', post.author.id));
   }, [post.canInteract, post.restrictions, post.author.id, router, t]);
 
-  const timeLabel = useMemo(() => {
-    const diff = Date.now() - new Date(post.createdAt).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return t('common.justNow');
-    if (mins < 60) return t('common.minutesAgo', { count: mins });
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return t('common.hoursAgo', { count: hours });
-    const days = Math.floor(hours / 24);
-    return t('common.daysAgo', { count: days });
-  }, [post.createdAt, t]);
+  const timeLabel = useMemo(
+    () => formatRelativeTime(post.createdAt, t),
+    [post.createdAt, t],
+  );
 
   return (
     <View style={d.card}>

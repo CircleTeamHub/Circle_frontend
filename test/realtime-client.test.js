@@ -26,6 +26,7 @@ test('realtime client routes websocket badge events into the unified tab badge s
 test('session bootstrap and logout wire realtime connection lifecycle to auth state', () => {
   const bootstrap = read('src/components/app/session-bootstrap.tsx');
   const session = read('src/services/auth/session.ts');
+  const realtime = read('src/realtime/client.ts');
   const friendUnreadStore = read('src/stores/friendActivityUnreadStore.ts');
 
   assert.match(bootstrap, /connectRealtime/);
@@ -33,7 +34,11 @@ test('session bootstrap and logout wire realtime connection lifecycle to auth st
   assert.match(bootstrap, /hasHydrated/);
   assert.match(bootstrap, /accessToken/);
 
-  assert.match(session, /disconnectRealtime/);
+  // session.ts no longer imports disconnectRealtime directly; realtime
+  // client registers itself via registerLogoutHandler so session.ts can
+  // invoke handlers without a circular import.
+  assert.match(session, /registerLogoutHandler/);
+  assert.match(realtime, /registerLogoutHandler\(disconnectRealtime\)/);
   assert.match(session, /useTabBadgeStore/);
   assert.match(session, /reset\(\)/);
 

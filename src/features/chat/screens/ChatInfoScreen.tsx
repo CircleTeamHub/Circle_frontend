@@ -296,6 +296,10 @@ export default function ChatInfoScreen() {
   const [minimizeChat, setMinimizeChat] = useState(false);
   const [saveGroupToContacts, setSaveGroupToContacts] = useState(false);
   const [showOnScreenNames, setShowOnScreenNames] = useState(true);
+  // friend-scoped 动作（拉黑 / 删除）不走 runConversationAction（那个绑会话）；
+  // 用 ref 做 fast double-tap 单飞行守，跟其他屏的 Pattern D 二道闸保持一致。
+  const blacklistInFlightRef = useRef(false);
+  const deleteInFlightRef = useRef(false);
   const [actionPending, setActionPending] = useState(initialActionPending);
   const actionPendingRef = useRef(initialActionPending);
   const actionRequestTokenRef = useRef({
@@ -1032,10 +1036,11 @@ export default function ChatInfoScreen() {
 
   const handleToggleBlacklist = useCallback(
     (nextValue: boolean) => {
-      if (!friendId || blacklistPending) {
+      if (!friendId || blacklistPending || blacklistInFlightRef.current) {
         return;
       }
 
+      blacklistInFlightRef.current = true;
       setBlacklistPending(true);
       const previousValue = blacklist;
       setBlacklist(nextValue);
@@ -1050,6 +1055,7 @@ export default function ChatInfoScreen() {
           openActionError(error);
         })
         .finally(() => {
+          blacklistInFlightRef.current = false;
           setBlacklistPending(false);
         });
     },
@@ -1057,7 +1063,7 @@ export default function ChatInfoScreen() {
   );
 
   const handleConfirmDeleteContact = useCallback(() => {
-    if (!friendId || deletePending) {
+    if (!friendId || deletePending || deleteInFlightRef.current) {
       return;
     }
 
@@ -1067,6 +1073,9 @@ export default function ChatInfoScreen() {
         text: t('common.delete'),
         style: 'destructive',
         onPress: () => {
+          // 二次守：Alert 弹出期间 state 可能被外部刷新，进 onPress 再检一次。
+          if (deleteInFlightRef.current) return;
+          deleteInFlightRef.current = true;
           setDeletePending(true);
           void deleteFriendRelationship(friendId)
             .then(() => {
@@ -1081,6 +1090,7 @@ export default function ChatInfoScreen() {
               openActionError(error);
             })
             .finally(() => {
+              deleteInFlightRef.current = false;
               setDeletePending(false);
             });
         },

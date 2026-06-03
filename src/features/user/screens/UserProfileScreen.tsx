@@ -13,10 +13,7 @@ import { getOrCreateSingleConversation } from '@/im/client';
 import { getProfileSignature } from '@/features/profile/profile-display';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { ProfileActionRow } from '@/features/user/components/profile-action-row';
-import {
-  getUserProfileById,
-  type UserProfileData,
-} from '@/features/user/data/profiles';
+import type { UserProfileData } from '@/features/user/data/profiles';
 import {
   canOpenSendFriendRequest,
   getProfileMetaItems,
@@ -159,9 +156,25 @@ export default function UserProfileScreen() {
     typeof params.id === 'string' ? params.id : 'unknown';
   const scope = getUserProfileScopeFromSegments(segments);
   const isCurrentUser = isCurrentUserProfile(profileId, currentUser);
-  const fallbackProfile = getUserProfileById(
-    profileId,
-    typeof params.name === 'string' ? params.name : undefined,
+  // 之前的 fallback 经过 USER_PROFILES 字典（生产 bundle 里塞了 8 个写死的模拟用户：
+  // "陈思琪" / "张明远" 等 + 假手机号 + Unsplash 头像）。删掉了字典；改用一个最小化的
+  // synthesized fallback 直到 fetchUserProfile 完成。
+  const fallbackName =
+    (typeof params.name === 'string' && params.name.trim()) || t('userProfile.unknownUser', { defaultValue: '未命名用户' });
+  const fallbackProfile: UserProfileData = useMemo(
+    () => ({
+      id: profileId,
+      name: fallbackName,
+      accountId: '',
+      memberLabel: t('profile.normalUser'),
+      badges: [],
+      displayIcons: [],
+      gender: null,
+      city: null,
+      signature: '',
+      phone: '',
+    }),
+    [fallbackName, profileId, t],
   );
 
   useEffect(() => {
@@ -189,6 +202,7 @@ export default function UserProfileScreen() {
         signature: getProfileSignature(
           currentUser.persona,
           currentUser.helloWords,
+          t,
         ),
         displayIcons: currentUser.displayIcons ?? [],
         phone: currentUser.phoneNumber ?? t('userProfile.phoneHidden'),
@@ -213,15 +227,18 @@ export default function UserProfileScreen() {
           displayIcons: profile.displayIcons ?? [],
           gender: profile.gender,
           city: profile.city,
-          signature: getProfileSignature(profile.persona, profile.helloWords),
+          signature: getProfileSignature(profile.persona, profile.helloWords, t),
           phone: profile.phoneNumber ?? t('userProfile.phoneHidden'),
           remarkHint: profile.nickname,
         });
       })
-      .catch(() => {
+      .catch((error) => {
         if (!cancelled) {
           setRemoteProfile(null);
           setFetchError(t('userProfile.loadFailed'));
+        }
+        if (__DEV__) {
+          console.warn('[UserProfileScreen] fetchUserProfile failed', error);
         }
       });
 
@@ -251,10 +268,13 @@ export default function UserProfileScreen() {
             setFriendStatus(status.status);
           }
         })
-        .catch(() => {
+        .catch((error) => {
           if (!cancelled) {
             setFriendStatusLoadError(true);
             setFriendStatus(null);
+          }
+          if (__DEV__) {
+            console.warn('[UserProfileScreen] fetchFriendStatus failed', error);
           }
         });
 
@@ -285,9 +305,12 @@ export default function UserProfileScreen() {
             setFriendSettings(settings);
           }
         })
-        .catch(() => {
+        .catch((error) => {
           if (!cancelled) {
             setFriendSettings(null);
+          }
+          if (__DEV__) {
+            console.warn('[UserProfileScreen] fetchFriendSettings failed', error);
           }
         });
 
@@ -604,6 +627,16 @@ export default function UserProfileScreen() {
                 d.actionButton,
                 pressed && d.actionButtonPressed,
               ]}
+              // 之前没 onPress，纯哑按钮。RTC SDK 还没接入（同 chat-detail 视频按钮 → #28），
+              // 至少弹个 stopgap 别让用户以为没响应。
+              onPress={() =>
+                Alert.alert(
+                  t('userProfile.avCall'),
+                  t('userProfile.avCallComingSoon', {
+                    defaultValue: '音视频通话功能即将上线，敬请期待。',
+                  }),
+                )
+              }
             >
               <Text style={d.actionText}>{t('userProfile.avCall')}</Text>
             </Pressable>

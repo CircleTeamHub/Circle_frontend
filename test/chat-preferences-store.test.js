@@ -53,6 +53,18 @@ test('chat preferences store defaults each conversation to the global background
           removeItem: async () => undefined,
         },
       },
+      // store import 链需要 @/storage 提供的 MMKV-JSON 适配器；测试里给一个
+      // 内存版 stub，避免 native MMKV 在 node 环境下抛错。
+      '@/storage': {
+        mmkvJsonStorage: (() => {
+          const store = new Map();
+          return {
+            getItem: (k) => store.get(k) ?? null,
+            setItem: (k, v) => { store.set(k, v); },
+            removeItem: (k) => { store.delete(k); },
+          };
+        })(),
+      },
     },
   );
 
@@ -76,6 +88,18 @@ test('chat preferences store keeps per-conversation preset selections and remove
           setItem: async () => undefined,
           removeItem: async () => undefined,
         },
+      },
+      // store import 链需要 @/storage 提供的 MMKV-JSON 适配器；测试里给一个
+      // 内存版 stub，避免 native MMKV 在 node 环境下抛错。
+      '@/storage': {
+        mmkvJsonStorage: (() => {
+          const store = new Map();
+          return {
+            getItem: (k) => store.get(k) ?? null,
+            setItem: (k, v) => { store.set(k, v); },
+            removeItem: (k) => { store.delete(k); },
+          };
+        })(),
       },
     },
   );
@@ -116,6 +140,18 @@ test('chat preferences store resolves labels for global, preset, and image backg
           setItem: async () => undefined,
           removeItem: async () => undefined,
         },
+      },
+      // store import 链需要 @/storage 提供的 MMKV-JSON 适配器；测试里给一个
+      // 内存版 stub，避免 native MMKV 在 node 环境下抛错。
+      '@/storage': {
+        mmkvJsonStorage: (() => {
+          const store = new Map();
+          return {
+            getItem: (k) => store.get(k) ?? null,
+            setItem: (k, v) => { store.set(k, v); },
+            removeItem: (k) => { store.delete(k); },
+          };
+        })(),
       },
     },
   );

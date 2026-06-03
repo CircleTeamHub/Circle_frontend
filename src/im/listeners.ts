@@ -86,15 +86,13 @@ export function bindOpenIMListeners() {
   // SDK 也可能发 onUserTokenInvalid（token 不被服务器接受），统一按 expired 处理
   OpenIMSDK.on('onUserTokenInvalid', handleTokenExpired);
 
-  const handleConversationChanged = (conversations: ConversationItem[]) => {
+  // onConversationChanged 与 onNewConversation 共享同一个 handler 引用：
+  // 行为相同 + 共享 ref 便于 off 时一一对应、也少一份闭包。
+  const handleConversationsBatched = (conversations: ConversationItem[]) => {
     useIMStore.getState().mergeConversations(conversations);
   };
-  OpenIMSDK.on('onConversationChanged', handleConversationChanged);
-
-  const handleNewConversation = (conversations: ConversationItem[]) => {
-    useIMStore.getState().mergeConversations(conversations);
-  };
-  OpenIMSDK.on('onNewConversation', handleNewConversation);
+  OpenIMSDK.on('onConversationChanged', handleConversationsBatched);
+  OpenIMSDK.on('onNewConversation', handleConversationsBatched);
 
   const handleUnreadChanged = (totalUnread: number) => {
     useIMStore.getState().setTotalUnread(totalUnread);
@@ -115,7 +113,7 @@ export function bindOpenIMListeners() {
     }>,
   ) => {
     if (!Array.isArray(receipts)) return;
-    const { activeConversation, conversations } = useIMStore.getState();
+    const { conversations } = useIMStore.getState();
     for (const receipt of receipts) {
       const ids =
         receipt.msgIDList ??
@@ -123,7 +121,9 @@ export function bindOpenIMListeners() {
         receipt.readMsgIDList ??
         [];
       if (ids.length === 0) continue;
-      // 优先用 receipt 自带的 conversationID；否则按 userID 在已加载的会话里查
+      // 优先用 receipt 自带的 conversationID；否则按 userID 在已加载的会话里查。
+      // 移除 activeConversation 兜底 —— 如果 receipt 既无 conversationID 又
+      // 找不到匹配的 userID，盲目套到当前会话会把消息标到错的人头上。
       let conversationID = receipt.conversationID;
       if (!conversationID && receipt.userID) {
         const conv = conversations.find(
@@ -131,12 +131,13 @@ export function bindOpenIMListeners() {
         );
         conversationID = conv?.conversationID;
       }
-      if (!conversationID && activeConversation) {
-        conversationID = activeConversation.conversationID;
+      if (!conversationID) {
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          console.warn('[openim] unrouted C2C read receipt — dropped', receipt);
+        }
+        continue;
       }
-      if (conversationID) {
-        useIMStore.getState().markMessagesRead(conversationID, ids);
-      }
+      useIMStore.getState().markMessagesRead(conversationID, ids);
     }
   };
   OpenIMSDK.on('onRecvC2CReadReceipt', handleC2CReadReceipt);
@@ -172,8 +173,8 @@ export function bindOpenIMListeners() {
     OpenIMSDK.off('onConnectFailed', handleConnectFailed);
     OpenIMSDK.off('onUserTokenExpired', handleTokenExpired);
     OpenIMSDK.off('onUserTokenInvalid', handleTokenExpired);
-    OpenIMSDK.off('onConversationChanged', handleConversationChanged);
-    OpenIMSDK.off('onNewConversation', handleNewConversation);
+    OpenIMSDK.off('onConversationChanged', handleConversationsBatched);
+    OpenIMSDK.off('onNewConversation', handleConversationsBatched);
     OpenIMSDK.off('onTotalUnreadMessageCountChanged', handleUnreadChanged);
     OpenIMSDK.off('onRecvNewMessages', handleNewMessages);
     OpenIMSDK.off('onRecvC2CReadReceipt', handleC2CReadReceipt);

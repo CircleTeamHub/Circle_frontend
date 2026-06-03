@@ -92,14 +92,26 @@ export default function RootLayout() {
    */
   const [migrated, setMigrated] = useState(false);
   useEffect(() => {
-    migrateFromAsyncStorage().then(() => {
-      void useAuthStore.persist.rehydrate();
-      void useChatPreferencesStore.persist.rehydrate();
-      void useDiscoverFilterStore.persist.rehydrate();
-      void useCircleNotificationStore.persist.rehydrate();
-      rehydrateLanguageFromStorage();
-      setMigrated(true);
-    });
+    // 关键：rehydrate 必须无论迁移是否成功都执行 —— 不然单次 MMKV 写入失败会让
+    // 启动屏永远不消失。storage.migrateFromAsyncStorage() 现在已经自己吞错，
+    // 这里再额外 .catch() 兜一次保险，并通过 .finally 保证 setMigrated 始终触发。
+    migrateFromAsyncStorage()
+      .catch((err) => {
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          console.warn(
+            '[startup] migration failed, continuing without migrated data',
+            err,
+          );
+        }
+      })
+      .finally(() => {
+        void useAuthStore.persist.rehydrate();
+        void useChatPreferencesStore.persist.rehydrate();
+        void useDiscoverFilterStore.persist.rehydrate();
+        void useCircleNotificationStore.persist.rehydrate();
+        rehydrateLanguageFromStorage();
+        setMigrated(true);
+      });
   }, []);
 
   // 字体加载出错时直接抛出，触发 ErrorBoundary 展示错误页
@@ -107,10 +119,13 @@ export default function RootLayout() {
     if (error) throw error;
   }, [error]);
 
-  // 字体和迁移都就绪后隐藏启动屏
+  // 字体和迁移都就绪后隐藏启动屏。dev 下 React 18 strict mode 会让 effect 跑两次，
+  // 第二次 hideAsync 会被 expo-splash-screen 抛 "called multiple times" —— catch 掉。
   useEffect(() => {
     if (loaded && migrated) {
-      SplashScreen.hideAsync();
+      SplashScreen.hideAsync().catch(() => {
+        // 已经被隐藏；忽略即可。
+      });
     }
   }, [loaded, migrated]);
 

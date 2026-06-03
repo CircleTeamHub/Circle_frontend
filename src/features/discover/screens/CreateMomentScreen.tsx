@@ -161,8 +161,15 @@ export default function CreateMomentScreen() {
           });
           await uploadLocalFileToPresignedUrl(presign.uploadUrl, contentType, uri);
           uploadedUrls.push(presign.fileUrl);
-        } catch {
+        } catch (error) {
           failedUploads += 1;
+          if (__DEV__) {
+            console.warn(
+              '[CreateMomentScreen] image upload failed',
+              { uri },
+              error,
+            );
+          }
         }
       }
 
@@ -188,7 +195,7 @@ export default function CreateMomentScreen() {
     } finally {
       setSubmitting(false);
     }
-  }, [canSubmit, submitting, content, images, visibility, prependMoment, router]);
+  }, [canSubmit, submitting, content, images, visibility, prependMoment, router, t]);
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>

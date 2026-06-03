@@ -17,18 +17,26 @@ import type { NoteSummary } from '@/features/notes/types';
 import { fetchCollections, type UserCollection } from '@/services/api/collections';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { fetchNotes } from '@/services/api/notes';
+import i18n from '@/i18n';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 type ShareType = 'note' | 'friend' | 'favorite' | 'quick-reply';
 
-const TITLES: Record<ShareType, string> = {
-  note: '选择笔记',
-  friend: '选择好友名片',
-  favorite: '选择收藏',
-  'quick-reply': '快捷语',
-};
+// i18n.t(..., { defaultValue }) — 现有中文用作 fallback，加 key 后会自动切英文。
+function shareTitle(type: ShareType): string {
+  switch (type) {
+    case 'note':
+      return i18n.t('share.title.note', { defaultValue: '选择笔记' });
+    case 'friend':
+      return i18n.t('share.title.friend', { defaultValue: '选择好友名片' });
+    case 'favorite':
+      return i18n.t('share.title.favorite', { defaultValue: '选择收藏' });
+    case 'quick-reply':
+      return i18n.t('share.title.quickReply', { defaultValue: '快捷语' });
+  }
+}
 
-const QUICK_REPLY_PHRASES: ReadonlyArray<string> = [
+const QUICK_REPLY_DEFAULTS: ReadonlyArray<string> = [
   '在的，你说',
   '好的，没问题',
   '收到，稍等一下',
@@ -36,6 +44,12 @@ const QUICK_REPLY_PHRASES: ReadonlyArray<string> = [
   '今天有点忙，晚点回复',
   '哈哈，太有意思了',
 ];
+
+function getQuickReplyPhrases(): ReadonlyArray<string> {
+  return QUICK_REPLY_DEFAULTS.map((phrase, index) =>
+    i18n.t(`share.quickReply.${index}`, { defaultValue: phrase }),
+  );
+}
 
 export default function SharePickerScreen() {
   const router = useRouter();
@@ -47,9 +61,14 @@ export default function SharePickerScreen() {
 
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState<NoteSummary[]>([]);
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [favorites, setFavorites] = useState<UserCollection[]>([]);
+  const [reloadVersion, setReloadVersion] = useState(0);
+  const headerTitle = shareTitle(shareType);
+  // Memoized：i18n.t 已可缓存，但本地包一层让消费方在 useMemo deps 里能稳定引用。
+  const quickReplyPhrases = useMemo(() => getQuickReplyPhrases(), []);
 
   useEffect(() => {
     if (shareType === 'quick-reply') {
@@ -59,6 +78,7 @@ export default function SharePickerScreen() {
 
     let cancelled = false;
     setLoading(true);
+    setError(null);
     (async () => {
       try {
         if (shareType === 'note') {
@@ -71,6 +91,14 @@ export default function SharePickerScreen() {
           const res = await fetchCollections();
           if (!cancelled) setFavorites(res);
         }
+      } catch (err) {
+        if (!cancelled) {
+          // 不再只 dev-warn —— 暴露给用户 + 提供重试，"加载失败"和"真的空"区分开。
+          setError(err instanceof Error ? err.message : '加载失败');
+        }
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          console.warn(`[share-picker] fetch ${shareType} failed`, err);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -79,7 +107,7 @@ export default function SharePickerScreen() {
     return () => {
       cancelled = true;
     };
-  }, [shareType]);
+  }, [shareType, reloadVersion]);
 
   const trimmed = query.trim().toLowerCase();
 
@@ -111,8 +139,8 @@ export default function SharePickerScreen() {
   }, [favorites, trimmed]);
 
   const filteredQuickReply = useMemo(() => {
-    if (!trimmed) return QUICK_REPLY_PHRASES;
-    return QUICK_REPLY_PHRASES.filter((p) =>
+    if (!trimmed) return quickReplyPhrases;
+    return quickReplyPhrases.filter((p) =>
       p.toLowerCase().includes(trimmed),
     );
   }, [trimmed]);
@@ -231,7 +259,7 @@ export default function SharePickerScreen() {
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
         <Text style={[s.headerTitle, { color: colors.text }]}>
-          {TITLES[shareType]}
+          {headerTitle}
         </Text>
         <View style={s.headerSpacer} />
       </View>
@@ -257,6 +285,24 @@ export default function SharePickerScreen() {
       {loading ? (
         <View style={s.center}>
           <ActivityIndicator color={colors.primary} />
+        </View>
+      ) : error ? (
+        <View style={s.center}>
+          <Text style={{ color: colors.error, ...Typography.bodyRegular }}>
+            {error}
+          </Text>
+          <Pressable
+            onPress={() => setReloadVersion((v) => v + 1)}
+            style={{
+              marginTop: Spacing.md,
+              paddingHorizontal: Spacing.lg,
+              paddingVertical: Spacing.sm,
+              borderRadius: Radius.md,
+              backgroundColor: colors.primary,
+            }}
+          >
+            <Text style={{ color: colors.white, ...Typography.body }}>重试</Text>
+          </Pressable>
         </View>
       ) : empty ? (
         <View style={s.center}>

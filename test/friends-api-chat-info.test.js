@@ -71,7 +71,7 @@ test('friends api exposes blacklist and delete-friend actions through the backen
   ]);
 });
 
-test('chat info screen routes blacklist and delete through real friend APIs while report stays unsupported', () => {
+test('chat info screen routes blacklist, delete, and report through real friend APIs', () => {
   const source = read('src/features/chat/screens/ChatInfoScreen.tsx');
 
   assert.match(source, /addFriendToBlacklist/);
@@ -84,6 +84,8 @@ test('chat info screen routes blacklist and delete through real friend APIs whil
   assert.match(source, /onToggle={handleToggleBlacklist}/);
   assert.match(source, /label=\{t\('chat\.deleteFriend'\)\}/);
   assert.match(source, /onPress={deletePending \? undefined : handleConfirmDeleteContact}/);
-  assert.match(source, /openUnsupportedAction\(t\('chat\.report'\)\)/);
+  assert.match(source, /label=\{t\('chat\.report'\)\}/);
+  assert.match(source, /messages\/report-friend/);
+  assert.doesNotMatch(source, /openUnsupportedAction\(t\('chat\.report'\)\)/);
   assert.doesNotMatch(source, /openUnsupportedAction\(t\('chat\.deleteFriend'\)\)/);
 });

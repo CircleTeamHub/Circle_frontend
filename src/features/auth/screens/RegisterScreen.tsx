@@ -62,29 +62,6 @@ const s = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-  },
-  dividerText: {
-    ...Typography.caption,
-  },
-  socialRow: {
-    alignItems: 'center',
-  },
-  socialBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   spacer: {
     flex: 1,
     minHeight: Spacing.lg,
@@ -146,15 +123,6 @@ export default function RegisterScreen() {
     registerBtnText: {
       color: colors.white,
     },
-    dividerLine: {
-      backgroundColor: colors.surfaceBorder,
-    },
-    dividerText: {
-      color: colors.textSecondary,
-    },
-    socialBtn: {
-      borderColor: colors.surfaceBorder,
-    },
     loginHint: {
       color: colors.textSecondary,
       ...Typography.bodyRegular,
@@ -162,7 +130,9 @@ export default function RegisterScreen() {
     loginLink: {
       color: colors.primary,
     },
-  }), [colors, insets.top, insets.bottom]);
+    // 注意：memo body 不读 insets.bottom，不放进依赖避免键盘弹出 / 隐藏时
+    // 引发不必要的样式对象重建。
+  }), [colors, insets.top]);
 
   return (
     <View style={d.outer}>
@@ -186,6 +156,8 @@ export default function RegisterScreen() {
         placeholder={t('auth.accountPlaceholder')}
         value={account}
         onChangeText={setAccount}
+        textContentType="username"
+        autoComplete="username-new"
       />
 
       <AuthInput
@@ -194,6 +166,8 @@ export default function RegisterScreen() {
         value={password}
         onChangeText={setPassword}
         secureTextEntry
+        textContentType="newPassword"
+        autoComplete="new-password"
       />
 
       <AuthInput
@@ -202,6 +176,8 @@ export default function RegisterScreen() {
         value={confirmPassword}
         onChangeText={setConfirmPassword}
         secureTextEntry
+        textContentType="newPassword"
+        autoComplete="new-password"
       />
 
       <AuthInput
@@ -209,6 +185,8 @@ export default function RegisterScreen() {
         placeholder={t('auth.nicknameHint')}
         value={nickname}
         onChangeText={setNickname}
+        textContentType="nickname"
+        autoComplete="name"
       />
 
       {/* Agreement */}
@@ -226,11 +204,15 @@ export default function RegisterScreen() {
       {/* Error */}
       {error ? <Text style={[s.error, d.error]}>{error}</Text> : null}
 
-      {/* Register button */}
+      {/* Register button — 必须同时勾选协议且未在提交中才允许触发；
+          视觉禁用 + 提前 return 双重防 onPress 触发。 */}
       <Pressable
-        style={[s.registerBtn, d.registerBtn, submitting && s.btnDisabled]}
-        onPress={() => register(account, password, nickname, confirmPassword)}
-        disabled={submitting}
+        style={[s.registerBtn, d.registerBtn, (submitting || !agreed) && s.btnDisabled]}
+        onPress={() => {
+          if (submitting || !agreed) return;
+          register(account, password, nickname, confirmPassword);
+        }}
+        disabled={submitting || !agreed}
       >
         {submitting ? (
           <ActivityIndicator color={colors.white} />
@@ -239,26 +221,13 @@ export default function RegisterScreen() {
         )}
       </Pressable>
 
-      {/* Divider */}
-      <View style={s.dividerRow}>
-        <View style={[s.dividerLine, d.dividerLine]} />
-        <Text style={[s.dividerText, d.dividerText]}>{t('common.or')}</Text>
-        <View style={[s.dividerLine, d.dividerLine]} />
-      </View>
-
-      {/* Social */}
-      <View style={s.socialRow}>
-        <Pressable style={[s.socialBtn, d.socialBtn]}>
-          <Ionicons name="chatbubble-ellipses" size={24} color="#07C160" />
-        </Pressable>
-      </View>
-
       <View style={s.spacer} />
 
-      {/* Login link */}
+      {/* Login link — 用 replace 而不是 back，避免深链 / 推送场景下
+          back 到非 (auth) 栈或栈底空。 */}
       <View style={s.loginRow}>
         <Text style={d.loginHint}>{t('auth.hasAccount')}</Text>
-        <Pressable onPress={() => router.back()}>
+        <Pressable onPress={() => router.replace('/(auth)/login')}>
           <Text style={[s.loginLink, d.loginLink]}>{t('auth.loginNow')}</Text>
         </Pressable>
       </View>

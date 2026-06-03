@@ -1,12 +1,12 @@
 import { AuthInput } from "@/components/ui/auth-input";
 import { useAuth } from "@/hooks/use-auth";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
-import { Ionicons } from "@expo/vector-icons";
 import { Link } from "expo-router";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -58,23 +58,6 @@ const s = StyleSheet.create({
   },
   btnDisabled: { opacity: 0.6 },
   loginBtnText: { fontSize: 16, fontWeight: "600" },
-  dividerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-    width: "100%",
-  },
-  dividerLine: { flex: 1, height: 1 },
-  dividerText: { ...Typography.caption },
-  socialRow: { flexDirection: "row", gap: Spacing.lg },
-  socialBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    borderWidth: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
   registerRow: { flexDirection: "row", alignItems: "center", gap: Spacing.xs },
   registerHint: { ...Typography.bodyRegular },
   registerLink: { fontSize: 14, fontWeight: "600" },
@@ -99,14 +82,22 @@ export default function LoginScreen() {
       error: { color: colors.error },
       loginBtn: { backgroundColor: colors.primary },
       loginBtnText: { color: colors.white },
-      dividerLine: { backgroundColor: colors.surfaceBorder },
-      dividerText: { color: colors.textSecondary },
-      socialBtn: { borderColor: colors.surfaceBorder },
       registerHint: { color: colors.textSecondary },
       registerLink: { color: colors.primary },
     }),
     [colors],
   );
+
+  // 忘记密码入口暂未对接后端，先用 Alert 告知用户而不是装死。
+  // 接入正式的找回流程时把这里换成 router.push('/(auth)/forgot-password') 即可。
+  const onForgotPassword = useCallback(() => {
+    Alert.alert(
+      t('auth.forgotPassword'),
+      t('auth.forgotPasswordHint', {
+        defaultValue: '该功能即将上线。如需要找回账号，请联系客服。',
+      }),
+    );
+  }, [t]);
 
   return (
     <ScrollView
@@ -136,15 +127,21 @@ export default function LoginScreen() {
           placeholder={t('auth.accountPlaceholder')}
           value={account}
           onChangeText={setAccount}
+          textContentType="username"
+          autoComplete="username"
         />
         <AuthInput
           placeholder={t('auth.passwordPlaceholder')}
           value={password}
           onChangeText={setPassword}
           secureTextEntry
+          textContentType="password"
+          autoComplete="current-password"
         />
         <View style={s.forgotRow}>
-          <Text style={[s.forgotLink, d.forgotLink]}>{t('auth.forgotPassword')}</Text>
+          <Pressable onPress={onForgotPassword} hitSlop={8}>
+            <Text style={[s.forgotLink, d.forgotLink]}>{t('auth.forgotPassword')}</Text>
+          </Pressable>
         </View>
       </View>
 
@@ -163,20 +160,6 @@ export default function LoginScreen() {
           <Text style={[s.loginBtnText, d.loginBtnText]}>{t('auth.login')}</Text>
         )}
       </Pressable>
-
-      {/* Divider */}
-      <View style={s.dividerRow}>
-        <View style={[s.dividerLine, d.dividerLine]} />
-        <Text style={[s.dividerText, d.dividerText]}>{t('common.or')}</Text>
-        <View style={[s.dividerLine, d.dividerLine]} />
-      </View>
-
-      {/* Social login */}
-      <View style={s.socialRow}>
-        <Pressable style={[s.socialBtn, d.socialBtn]}>
-          <Ionicons name="chatbubble-ellipses" size={24} color="#07C160" />
-        </Pressable>
-      </View>
 
       {/* Register link */}
       <View style={s.registerRow}>

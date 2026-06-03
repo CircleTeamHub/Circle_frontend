@@ -299,7 +299,12 @@ export default function CircleDetailScreen() {
     });
 
     if (!contentType || !asset.uri) {
-      Alert.alert(t('circle.error'), '无法识别图片格式');
+      Alert.alert(
+        t('circle.error'),
+        t('circle.icon.unknownImageFormat', {
+          defaultValue: '无法识别图片格式',
+        }),
+      );
       return;
     }
 
@@ -461,7 +466,9 @@ export default function CircleDetailScreen() {
         </View>
 
         <View style={s.section}>
-          <Text style={[s.sectionTitle, d.sectionTitle]}>圈子图标</Text>
+          <Text style={[s.sectionTitle, d.sectionTitle]}>
+            {t('circle.icon.sectionTitle', { defaultValue: '圈子图标' })}
+          </Text>
           <View style={[s.sectionCard, d.sectionCard, s.iconSection]}>
             <View style={s.iconGrid}>
               {circle.currentIconUrl ? (
@@ -469,7 +476,9 @@ export default function CircleDetailScreen() {
                   <View style={s.iconAssetPreview}>
                     <Image source={{ uri: circle.currentIconUrl }} style={s.iconAssetImage} contentFit="cover" />
                   </View>
-                  <Text style={{ color: colors.text }}>当前图标</Text>
+                  <Text style={{ color: colors.text }}>
+                    {t('circle.icon.current', { defaultValue: '当前图标' })}
+                  </Text>
                 </View>
               ) : null}
               {isOwnerOrAdmin
@@ -514,7 +523,11 @@ export default function CircleDetailScreen() {
                 onPress={handleUploadCircleIcon}
                 disabled={iconSaving}
               >
-                <Text style={d.adminBtnText}>{iconSaving ? '上传中...' : '上传圈子图标'}</Text>
+                <Text style={d.adminBtnText}>
+                  {iconSaving
+                    ? t('circle.icon.uploading', { defaultValue: '上传中...' })
+                    : t('circle.icon.upload', { defaultValue: '上传圈子图标' })}
+                </Text>
               </Pressable>
             ) : null}
           </View>
@@ -560,58 +573,60 @@ export default function CircleDetailScreen() {
         <View style={s.section}>
           <Text style={[s.sectionTitle, d.sectionTitle]}>{t('circle.rulesSummary')}</Text>
           <View style={[s.summaryCard, d.sectionCard]}>
-            <View style={s.summaryRow}>
-              <Text style={[s.summaryLabel, d.summaryLabel]}>
-                {t('circle.relatedCities')}
-              </Text>
-              <Text style={[s.summaryValue, d.summaryValue]}>
-                {circle.cities.length > 0
-                  ? circle.cities.join('、')
-                  : t('common.nationwide')}
-              </Text>
-            </View>
-            <Divider />
-            <View style={s.summaryRow}>
-              <Text style={[s.summaryLabel, d.summaryLabel]}>
-                {t('circle.joinVipRestriction')}
-              </Text>
-              <Text style={[s.summaryValue, d.summaryValue]}>
-                {circle.joinVipRestriction != null
-                  ? `VIP${circle.joinVipRestriction}+`
-                  : t('common.noRestriction')}
-              </Text>
-            </View>
-            <Divider />
-            <View style={s.summaryRow}>
-              <Text style={[s.summaryLabel, d.summaryLabel]}>
-                {t('circle.joinCreditRestriction')}
-              </Text>
-              <Text style={[s.summaryValue, d.summaryValue]}>
-                {circle.joinCreditRestriction != null
-                  ? t('circle.creditSuffix', {
-                      score: circle.joinCreditRestriction,
-                    })
-                  : t('common.noRestriction')}
-              </Text>
-            </View>
-            <Divider />
-            <View style={s.summaryRow}>
-              <Text style={[s.summaryLabel, d.summaryLabel]}>
-                {t('circle.fancyRequired')}
-              </Text>
-              <Text style={[s.summaryValue, d.summaryValue]}>
-                {circle.joinFancyRestriction ? t('common.yes') : t('common.no')}
-              </Text>
-            </View>
-            <Divider />
-            <View style={s.summaryRow}>
-              <Text style={[s.summaryLabel, d.summaryLabel]}>
-                {t('circle.memberCanPost')}
-              </Text>
-              <Text style={[s.summaryValue, d.summaryValue]}>
-                {circle.memberCanPost ? t('circle.allowed') : t('circle.adminOnly')}
-              </Text>
-            </View>
+            {[
+              {
+                key: 'cities',
+                label: t('circle.relatedCities'),
+                value:
+                  circle.cities.length > 0
+                    ? circle.cities.join('、')
+                    : t('common.nationwide'),
+              },
+              {
+                key: 'vip',
+                label: t('circle.joinVipRestriction'),
+                value:
+                  circle.joinVipRestriction != null
+                    ? `VIP${circle.joinVipRestriction}+`
+                    : t('common.noRestriction'),
+              },
+              {
+                key: 'credit',
+                label: t('circle.joinCreditRestriction'),
+                value:
+                  circle.joinCreditRestriction != null
+                    ? t('circle.creditSuffix', {
+                        score: circle.joinCreditRestriction,
+                      })
+                    : t('common.noRestriction'),
+              },
+              {
+                key: 'fancy',
+                label: t('circle.fancyRequired'),
+                value: circle.joinFancyRestriction
+                  ? t('common.yes')
+                  : t('common.no'),
+              },
+              {
+                key: 'memberCanPost',
+                label: t('circle.memberCanPost'),
+                value: circle.memberCanPost
+                  ? t('circle.allowed')
+                  : t('circle.adminOnly'),
+              },
+            ].map((row, index, rows) => (
+              <View key={row.key}>
+                <View style={s.summaryRow}>
+                  <Text style={[s.summaryLabel, d.summaryLabel]}>
+                    {row.label}
+                  </Text>
+                  <Text style={[s.summaryValue, d.summaryValue]}>
+                    {row.value}
+                  </Text>
+                </View>
+                {index < rows.length - 1 ? <Divider /> : null}
+              </View>
+            ))}
           </View>
         </View>
 

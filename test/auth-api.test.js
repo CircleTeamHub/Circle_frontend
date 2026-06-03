@@ -37,6 +37,11 @@ function loadAuthApi(apiClientMock) {
         };
       }
 
+      // react-native 只是为了拿 Platform.OS；测试里给个固定 iOS 即可。
+      if (request === 'react-native') {
+        return { Platform: { OS: 'ios' } };
+      }
+
       throw new Error(`Unexpected import: ${request}`);
     },
   };
@@ -114,4 +119,98 @@ test('logoutAll posts to the auth logout-all endpoint', async () => {
       },
     },
   ]);
+});
+
+test('login trims accountId before sending to backend', async () => {
+  const calls = [];
+  const apiClientMock = async (endpoint, options) => {
+    calls.push({ endpoint, options });
+    return {
+      accessToken: 'a-token',
+      refreshToken: 'r-token',
+      imToken: 'i-token',
+    };
+  };
+  const { login } = loadAuthApi(apiClientMock);
+
+  await login({ accountId: '  circle_1001  ', password: 'pw' });
+
+  assert.equal(calls[0].options.body.accountId, 'circle_1001');
+  assert.equal(calls[0].options.body.password, 'pw');
+});
+
+test('login normalizes missing/empty imToken to null', async () => {
+  const apiClientMock = async () => ({
+    accessToken: 'a-token',
+    refreshToken: 'r-token',
+    // backend can legitimately omit imToken for some account types
+  });
+  const { login } = loadAuthApi(apiClientMock);
+
+  const tokens = await login({ accountId: 'a', password: 'p' });
+  assert.equal(tokens.imToken, null, 'missing imToken should become null');
+
+  const apiClientMock2 = async () => ({
+    accessToken: 'a-token',
+    refreshToken: 'r-token',
+    imToken: '',
+  });
+  const { login: login2 } = loadAuthApi(apiClientMock2);
+  const tokens2 = await login2({ accountId: 'a', password: 'p' });
+  assert.equal(tokens2.imToken, null, 'empty imToken should become null');
+});
+
+test('login throws when accessToken or refreshToken missing (response shape drift guard)', async () => {
+  // missing accessToken
+  const { login: loginA } = loadAuthApi(async () => ({
+    refreshToken: 'r-token',
+    imToken: 'i-token',
+  }));
+  await assert.rejects(
+    () => loginA({ accountId: 'a', password: 'p' }),
+    /认证返回数据格式异常/
+  );
+
+  // backend sends snake_case (silent breakage in the old impl)
+  const { login: loginB } = loadAuthApi(async () => ({
+    access_token: 'a',
+    refresh_token: 'r',
+    im_token: 'i',
+  }));
+  await assert.rejects(
+    () => loginB({ accountId: 'a', password: 'p' }),
+    /认证返回数据格式异常/
+  );
+
+  // accessToken present but empty string
+  const { login: loginC } = loadAuthApi(async () => ({
+    accessToken: '',
+    refreshToken: 'r-token',
+  }));
+  await assert.rejects(
+    () => loginC({ accountId: 'a', password: 'p' }),
+    /认证返回数据格式异常/
+  );
+});
+
+test('register trims accountId and validates response shape', async () => {
+  const calls = [];
+  const apiClientMock = async (endpoint, options) => {
+    calls.push(options.body);
+    return {
+      accessToken: 'a',
+      refreshToken: 'r',
+      imToken: null,
+    };
+  };
+  const { register } = loadAuthApi(apiClientMock);
+
+  const tokens = await register({
+    accountId: '  newuser  ',
+    password: 'pw',
+    nickname: 'Hi',
+  });
+
+  assert.equal(calls[0].accountId, 'newuser');
+  assert.equal(tokens.imToken, null);
 });

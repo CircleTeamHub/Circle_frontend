@@ -143,28 +143,38 @@ export default function TabLayout() {
         tabBarItemStyle: styles.tabBarItem,
       }}
     >
-      {TAB_KEYS.map((tab) => (
-        <Tabs.Screen
-          key={tab.name}
-          name={tab.name}
-          options={{
-            tabBarIcon: ({ focused }) => (
-              <TabIcon
-                icon={tab.icon}
-                label={t(tab.key)}
-                focused={focused}
-                showBadgeDot={badgeMap[tab.name] ?? false}
-                activeColor={colors.white}
-                inactiveColor={colors.textSecondary}
-                tabIconStyle={styles.tabIcon}
-                tabIconActiveStyle={styles.tabIconActive}
-                tabIconBadgeStyle={styles.tabIconBadge}
-                tabLabelStyle={styles.tabLabel}
-              />
-            ),
-          }}
-        />
-      ))}
+      {TAB_KEYS.map((tab) => {
+        const label = t(tab.key);
+        const hasBadge = badgeMap[tab.name] ?? false;
+        return (
+          <Tabs.Screen
+            key={tab.name}
+            name={tab.name}
+            options={{
+              // tabBarShowLabel:false 隐藏视觉文字 —— 但屏幕阅读器仍然需要标签。
+              // 视觉 badge dot 由 TabIcon 内部用 showBadgeDot 渲染（不走 expo-router 的
+              // tabBarBadge —— 那会额外画一个数字 badge）。a11y 这边把"有未读"也读出来。
+              tabBarAccessibilityLabel: hasBadge
+                ? `${label} ${t('tabs.unreadHint', { defaultValue: '有未读' })}`
+                : label,
+              tabBarIcon: ({ focused }) => (
+                <TabIcon
+                  icon={tab.icon}
+                  label={label}
+                  focused={focused}
+                  showBadgeDot={hasBadge}
+                  activeColor={colors.white}
+                  inactiveColor={colors.textSecondary}
+                  tabIconStyle={styles.tabIcon}
+                  tabIconActiveStyle={styles.tabIconActive}
+                  tabIconBadgeStyle={styles.tabIconBadge}
+                  tabLabelStyle={styles.tabLabel}
+                />
+              ),
+            }}
+          />
+        );
+      })}
     </Tabs>
   );
 }

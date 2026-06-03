@@ -84,8 +84,18 @@ export const MenuRow: React.FC<MenuRowProps> = ({
     [colors],
   );
 
+  // 屏幕阅读器 hint：把 rightText（如 "v1.2.3"）拼进去让用户听得到状态。
+  const a11yHint = rightText ? rightText : undefined;
+
   return (
-    <Pressable style={s.row} onPress={onPress}>
+    <Pressable
+      style={s.row}
+      onPress={onPress}
+      accessibilityRole={hasToggle ? 'switch' : 'button'}
+      accessibilityLabel={label}
+      accessibilityHint={a11yHint}
+      accessibilityState={hasToggle ? { checked: !!toggleValue } : undefined}
+    >
       <View style={s.left}>
         {iconBgColor ? (
           <IconCircle name={icon} size={32} bgColor={iconBgColor} />
@@ -110,6 +120,9 @@ export const MenuRow: React.FC<MenuRowProps> = ({
           <Switch
             value={toggleValue}
             onValueChange={onToggle}
+            // a11y label/role 在父 Pressable 上已声明；Switch 自身屏蔽 a11y 避免双读。
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
             trackColor={{ false: colors.surfaceBorder, true: colors.primary }}
             thumbColor={colors.white}
           />

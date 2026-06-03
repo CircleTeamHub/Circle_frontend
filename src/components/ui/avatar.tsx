@@ -42,7 +42,8 @@ export const Avatar: React.FC<AvatarProps> = ({
     [colors],
   );
 
-  if (uri) {
+  // 空字符串的 uri 也走 fallback —— `<Image source={{ uri: '' }} />` 直接渲染空白。
+  if (uri && uri.length > 0) {
     return (
       <Image
         source={{ uri }}
@@ -51,6 +52,10 @@ export const Avatar: React.FC<AvatarProps> = ({
     );
   }
 
+  // `name?.charAt(0) ?? '?'` 在 name 为空字符串时返回 ''（charAt 不返回 undefined），
+  // 渲染出一个空 initial。改用 `||` 兜底。
+  const initial = (name && name[0]) || '?';
+
   return (
     <View
       style={[
@@ -58,9 +63,7 @@ export const Avatar: React.FC<AvatarProps> = ({
         { width: size, height: size, borderRadius, backgroundColor: resolvedBgColor },
       ]}
     >
-      <Text style={[d.initial, { fontSize: size * 0.4 }]}>
-        {name?.charAt(0) ?? '?'}
-      </Text>
+      <Text style={[d.initial, { fontSize: size * 0.4 }]}>{initial}</Text>
     </View>
   );
 };

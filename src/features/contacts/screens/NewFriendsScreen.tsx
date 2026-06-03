@@ -7,6 +7,7 @@ import {
   getFriendActivityDisplayName,
 } from '@/features/contacts/friend-activities';
 import { getFriendActivityDetailHref } from '@/features/user/utils/routes';
+import { getLocalizedDateTimeLocale } from '@/features/contacts/locale';
 import {
   fetchFriendActivities,
   markFriendActivityRead,
@@ -171,7 +172,15 @@ export default function NewFriendsScreen() {
               if (item.unreadActivityIds.length > 0) {
                 await Promise.all(
                   item.unreadActivityIds.map((activityId) =>
-                    markFriendActivityRead(activityId).catch(() => {}),
+                    markFriendActivityRead(activityId).catch((error) => {
+                      if (__DEV__) {
+                        console.warn(
+                          '[NewFriendsScreen] markFriendActivityRead failed',
+                          { activityId },
+                          error,
+                        );
+                      }
+                    }),
                   ),
                 );
                 markRead(item.unreadActivityIds);
@@ -201,7 +210,7 @@ export default function NewFriendsScreen() {
             <Text style={d.subtitle}>{getFriendActivityCopy(item.activity)}</Text>
             <Text style={d.time}>
               {new Date(item.activity.createdAt).toLocaleString(
-                i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US',
+                getLocalizedDateTimeLocale(i18n.language),
               )}
             </Text>
           </View>

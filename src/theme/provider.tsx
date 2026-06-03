@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useState } from 'react';
+import React, { createContext, useCallback, useMemo, useState } from 'react';
 import { useColorScheme as useSystemScheme } from 'react-native';
 import { storage } from '@/storage';
 import { darkColors, lightColors } from './colors';
@@ -109,14 +109,22 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   /** 根据最终解析的模式选择对应的颜色方案对象 */
   const colors = resolvedMode === 'dark' ? darkColors : lightColors;
 
-  /** 组装传递给 Context 消费者的完整主题值 */
-  const value: ThemeContextValue = {
-    colors,        // 当前生效的颜色方案（ThemeColors）
-    themeMode,     // 用户选择的原始模式（可能是 'system'）
-    resolvedMode,  // 最终解析后的模式（仅 'light' | 'dark'）
-    setThemeMode,  // 设置主题模式的方法
-    toggleTheme,   // 深色/浅色快速切换的方法
-  };
+  /**
+   * 组装传递给 Context 消费者的完整主题值。
+   *
+   * 必须 useMemo —— 否则 RootLayout 每次重渲染都会创建新对象，所有
+   * `useTheme()` 消费者都会跟着重渲染（Context 按引用判等推送）。
+   */
+  const value: ThemeContextValue = useMemo(
+    () => ({
+      colors,
+      themeMode,
+      resolvedMode,
+      setThemeMode,
+      toggleTheme,
+    }),
+    [colors, themeMode, resolvedMode, setThemeMode, toggleTheme],
+  );
 
   return React.createElement(ThemeContext.Provider, { value }, children);
 }

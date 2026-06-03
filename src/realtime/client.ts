@@ -168,6 +168,7 @@ function handleRealtimeEvent(message: RealtimeEvent) {
       void refreshCurrentUserSummary();
       return;
     case 'wallet.balance.changed':
+      // store 内部还会再校验 NaN / Infinity / 负数；这里只过一次类型门槛。
       if (typeof message.payload?.balance === 'number') {
         useWalletRealtimeStore.getState().setRealtimeBalance(message.payload.balance);
       }
@@ -199,8 +200,12 @@ function handleSocketMessage(rawData: string) {
   try {
     const message = JSON.parse(rawData) as RealtimeEvent;
     handleRealtimeEvent(message);
-  } catch {
-    // Ignore malformed realtime messages to keep the connection alive.
+  } catch (err) {
+    // Ignore malformed realtime messages to keep the connection alive — but dev-log
+    // 出来，避免后端推一坨脏数据时本地长期静默丢消息。
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.warn('[realtime] dropped malformed message', err);
+    }
   }
 }
 
@@ -227,8 +232,11 @@ export async function recoverTabBadgeSnapshot() {
       profileUnread: notificationSummary.profileUnread,
       systemUnread: notificationSummary.totalUnread,
     });
-  } catch {
+  } catch (err) {
     // Recovery is best-effort; keep the latest known badge state on failure.
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.warn('[realtime] badge snapshot recovery failed', err);
+    }
   }
 }
 

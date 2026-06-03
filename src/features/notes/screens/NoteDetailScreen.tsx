@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   Pressable,
@@ -14,34 +15,58 @@ import { NoteBlockRenderer } from '@/features/notes/components/NoteBlockRenderer
 import type { NoteDetail } from '@/features/notes/types';
 import { formatNoteFullDate } from '@/features/notes/utils/note-format';
 import { fetchNoteDetail } from '@/services/api/notes';
-import { Spacing, Typography, useTheme } from '@/theme';
+import { ApiError } from '@/services/api/client';
+import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 export default function NoteDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const [note, setNote] = useState<NoteDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!id) return;
+  const loadNote = useCallback(() => {
+    if (!id) {
+      setLoading(false);
+      return () => undefined;
+    }
     let cancelled = false;
+    setLoading(true);
+    setLoadError(null);
     fetchNoteDetail(id)
       .then((data) => {
-        if (!cancelled) {
-          setNote(data);
-          setLoading(false);
-        }
+        if (cancelled) return;
+        setNote(data);
+        setLoading(false);
       })
-      .catch(() => {
-        if (!cancelled) setLoading(false);
+      .catch((error) => {
+        if (cancelled) return;
+        // 404 真的不存在；其它失败都是网络/服务异常，应当让用户重试。
+        if (error instanceof ApiError && error.status === 404) {
+          setNote(null);
+          setLoadError(null);
+        } else {
+          setLoadError(
+            t('notes.detail.loadFailed', {
+              defaultValue: '笔记加载失败，请稍后重试',
+            }),
+          );
+          if (__DEV__) {
+            console.warn('[NoteDetailScreen] fetchNoteDetail failed', error);
+          }
+        }
+        setLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, t]);
+
+  useEffect(() => loadNote(), [loadNote]);
 
   const handleEdit = useCallback(() => {
     if (!note) return;
@@ -71,7 +96,26 @@ export default function NoteDetailScreen() {
   if (!note) {
     return (
       <View style={[s.container, d.container, s.center, { paddingTop: insets.top }]}>
-        <Text style={d.meta}>笔记不存在</Text>
+        <Text style={d.meta}>
+          {loadError ??
+            t('notes.detail.notFound', { defaultValue: '笔记不存在' })}
+        </Text>
+        {loadError ? (
+          <Pressable
+            onPress={loadNote}
+            style={{
+              marginTop: Spacing.md,
+              paddingHorizontal: Spacing.md,
+              paddingVertical: Spacing.sm,
+              borderRadius: Radius.full,
+              backgroundColor: colors.primary,
+            }}
+          >
+            <Text style={{ color: colors.white, ...Typography.caption }}>
+              {t('common.retry', { defaultValue: '重试' })}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
     );
   }
@@ -98,7 +142,7 @@ export default function NoteDetailScreen() {
 
         {/* Date + groups */}
         <View style={s.metaRow}>
-          <Text style={[s.meta, d.meta]}>{formatNoteFullDate(note.createdAt)}</Text>
+          <Text style={[s.meta, d.meta]}>{formatNoteFullDate(note.createdAt, t)}</Text>
           {note.groups.map((group) => (
             <View key={group.id} style={[s.groupTag, d.groupTag]}>
               <Text style={[s.groupTagText, d.groupTagText]}>{group.name}</Text>

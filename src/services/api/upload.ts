@@ -1,6 +1,11 @@
 import { apiClient } from '@/services/api/client';
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
+import {
+  expectShape,
+  isNonEmptyString,
+  isPlainObject,
+} from '@/utils/validate';
 
 const ALLOWED_CONTENT_TYPES = new Set([
   'image/jpeg',
@@ -35,6 +40,17 @@ export type UploadPresignResponse = {
   key: string;
 };
 
+// presign 返回的两个 URL 即将被当作信任凭证使用（PUT 上传时直接拼到 fetch）。
+// 字段缺失或类型漂移会让 `new URL(...)` 抛 / fetch 直接挂；运行时守一道。
+function isUploadPresignShape(value: unknown): value is UploadPresignResponse {
+  if (!isPlainObject(value)) return false;
+  return (
+    isNonEmptyString(value.uploadUrl) &&
+    isNonEmptyString(value.fileUrl) &&
+    isNonEmptyString(value.key)
+  );
+}
+
 const LOCALHOST_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1']);
 
 export function sanitizeUploadFilename(filename: string) {
@@ -62,7 +78,10 @@ export function resolveUploadContentType({
 }
 
 function assertUploadUrlReachableOnCurrentPlatform(payload: UploadPresignResponse) {
-  if (Platform.OS !== 'android') {
+  // iOS 模拟器和 Android 模拟器对 localhost 的处理不同 —— iOS 模拟器可以访问宿主
+  // localhost；Android emulator 用 10.0.2.2；**物理设备两边都不行**。模拟器命中 localhost
+  // 我们多报一次错也无害（其实模拟器 dev 也很少自己发上传），所以两个平台都检查。
+  if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
     return payload;
   }
 
@@ -81,7 +100,7 @@ function assertUploadUrlReachableOnCurrentPlatform(payload: UploadPresignRespons
     LOCALHOST_HOSTNAMES.has(fileUrl.hostname)
   ) {
     throw new Error(
-      '后端返回了 localhost 的头像上传地址。Android 设备/模拟器无法使用该地址，且预签名 URL 不能在客户端改写 host。请把对象存储对外访问地址配置成宿主机 IP 或正式域名后再试。',
+      '后端返回了 localhost 的上传地址。手机端无法访问宿主 localhost；预签名 URL 又不能在客户端改写 host。请把对象存储对外访问地址配置成宿主机 IP 或正式域名后再试。',
     );
   }
 
@@ -93,10 +112,15 @@ export async function requestUploadPresign(payload: {
   contentType: string;
   folder: UploadFolder;
 }) {
-  const response = await apiClient<UploadPresignResponse>('/upload/presign', {
+  const raw = await apiClient<UploadPresignResponse>('/upload/presign', {
     method: 'POST',
     body: payload,
   });
+  const response = expectShape(
+    raw,
+    isUploadPresignShape,
+    '预签名上传数据格式异常',
+  );
 
   return assertUploadUrlReachableOnCurrentPlatform(response);
 }
@@ -142,7 +166,48 @@ export async function uploadFileToPresignedUrl(
   }
 
   if (!response.ok) {
-    throw new Error(`头像上传失败 (${response.status})`);
+    // 这个函数也被聊天图片 / 笔记附件 / 动态图等用，"头像上传失败" 误导用户。
+    throw new Error(`上传失败 (${response.status})`);
+  }
+}
+
+/**
+ * Race a long-running upload against a manual timeout. Both platform paths
+ * (`RNFS.uploadFiles` on Android, `FileSystem.uploadAsync` on iOS) lack a
+ * native cancel-on-timeout signal in this version, so we wrap with Promise.race.
+ * The underlying request keeps running after timeout — the timeout only prevents
+ * the UI from waiting forever. Android exposes `RNFS.stopUpload(jobId)` for hard
+ * cancel; we use it when available.
+ */
+async function withUploadTimeout<T>(
+  task: () => { promise: Promise<T>; jobId?: number },
+): Promise<T> {
+  const { promise, jobId } = task();
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          if (typeof jobId === 'number') {
+            // RNFS 是惰性加载的；此时已在 android 上传路径中，缓存的 promise
+            // 已解析，stopUpload 取消底层任务。失败就算了 —— 我们已经 reject 了。
+            void loadNativeFS().then((fs) => {
+              if (typeof fs.stopUpload === 'function') {
+                try {
+                  fs.stopUpload(jobId);
+                } catch {
+                  // stopUpload 抛错就算了 —— 我们已经 reject 了。
+                }
+              }
+            });
+          }
+          reject(new Error('上传超时，请检查网络后重试'));
+        }, UPLOAD_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
   }
 }
 
@@ -153,42 +218,45 @@ export async function uploadLocalFileToPresignedUrl(
 ) {
   if (Platform.OS === 'android') {
     const RNFS = await loadNativeFS();
-    const { promise } = RNFS.uploadFiles({
-      toUrl: uploadUrl,
-      binaryStreamOnly: true,
-      files: [
-        {
-          name: 'file',
-          filename: fileUri.split('/').pop() || 'upload',
-          filepath: fileUri.replace(/^file:\/\//, ''),
-          filetype: contentType,
+    const response = await withUploadTimeout(() => {
+      const handle = RNFS.uploadFiles({
+        toUrl: uploadUrl,
+        binaryStreamOnly: true,
+        files: [
+          {
+            name: 'file',
+            filename: fileUri.split('/').pop() || 'upload',
+            filepath: fileUri.replace(/^file:\/\//, ''),
+            filetype: contentType,
+          },
+        ],
+        headers: {
+          'Content-Type': contentType,
         },
-      ],
-      headers: {
-        'Content-Type': contentType,
-      },
-      method: 'PUT',
+        method: 'PUT',
+      });
+      return { promise: handle.promise, jobId: handle.jobId };
     });
 
-    const response = await promise;
-
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw new Error(`头像上传失败 (${response.statusCode})`);
+      throw new Error(`上传失败 (${response.statusCode})`);
     }
 
     return response;
   }
 
-  const response = await FileSystem.uploadAsync(uploadUrl, fileUri, {
-    headers: {
-      'Content-Type': contentType,
-    },
-    httpMethod: 'PUT',
-    uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-  });
+  const response = await withUploadTimeout(() => ({
+    promise: FileSystem.uploadAsync(uploadUrl, fileUri, {
+      headers: {
+        'Content-Type': contentType,
+      },
+      httpMethod: 'PUT',
+      uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+    }),
+  }));
 
   if (response.status < 200 || response.status >= 300) {
-    throw new Error(`头像上传失败 (${response.status})`);
+    throw new Error(`上传失败 (${response.status})`);
   }
 
   return response;

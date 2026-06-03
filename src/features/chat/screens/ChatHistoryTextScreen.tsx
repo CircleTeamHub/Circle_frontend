@@ -79,6 +79,7 @@ export default function ChatHistoryTextScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [results, setResults] = useState<MessageItem[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const pageRef = useRef(1);
   const activeKeywordRef = useRef('');
 
@@ -101,6 +102,16 @@ export default function ChatHistoryTextScreen() {
       title: { color: colors.text, ...Typography.body },
       meta: { color: colors.textSecondary, ...Typography.small },
       centeredText: { color: colors.textSecondary, ...Typography.bodyRegular },
+      errorText: { color: colors.error, ...Typography.bodyRegular },
+      retryButton: {
+        marginTop: Spacing.md,
+        alignSelf: 'center' as const,
+        paddingHorizontal: Spacing.lg,
+        paddingVertical: Spacing.sm,
+        borderRadius: Radius.lg,
+        backgroundColor: colors.primary,
+      },
+      retryText: { color: colors.white, ...Typography.body },
     }),
     [colors],
   );
@@ -122,6 +133,7 @@ export default function ChatHistoryTextScreen() {
     activeKeywordRef.current = nextKeyword;
     pageRef.current = 1;
     setLoading(true);
+    setError(null);
 
     try {
       const page = await searchConversationTextMessages({
@@ -132,6 +144,13 @@ export default function ChatHistoryTextScreen() {
       });
       setResults(page);
       setHasMore(page.length === PAGE_SIZE);
+    } catch (err) {
+      setResults([]);
+      setHasMore(false);
+      setError(err instanceof Error ? err.message : '加载失败');
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn('[chat-history-text] search failed', err);
+      }
     } finally {
       setLoading(false);
     }
@@ -155,6 +174,12 @@ export default function ChatHistoryTextScreen() {
       pageRef.current = nextPage;
       setResults((prev) => [...prev, ...page]);
       setHasMore(page.length === PAGE_SIZE);
+    } catch (err) {
+      // 翻页失败：停止继续翻，留住已加载部分。
+      setHasMore(false);
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn('[chat-history-text] load-more failed', err);
+      }
     } finally {
       setLoadingMore(false);
     }
@@ -211,7 +236,14 @@ export default function ChatHistoryTextScreen() {
             </Pressable>
           )}
           ListEmptyComponent={
-            searched ? (
+            error ? (
+              <View>
+                <Text style={[s.centeredText, d.errorText]}>{error}</Text>
+                <Pressable style={d.retryButton} onPress={() => void handleSearch()}>
+                  <Text style={d.retryText}>重试</Text>
+                </Pressable>
+              </View>
+            ) : searched ? (
               <Text style={[s.centeredText, d.centeredText]}>
                 暂无匹配的聊天记录
               </Text>

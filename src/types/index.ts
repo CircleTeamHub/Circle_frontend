@@ -14,12 +14,23 @@ export interface Conversation {
   unreadCount: number;
   conversationType: ConversationType;
   pinned: boolean;
-  customGroupIds?: string[];
 }
 
+/**
+ * 用户自定义会话分组（label / bucket）。
+ * 现在由 `/api/v1/conversation-groups` 后端持久化；conversationIDs 是 OpenIM 的
+ * conversationID 列表（含私聊 + 群聊都行）。
+ *
+ * pinnedToTabs=true 时会出现在 MessagesScreen 顶部的筛选 tab 里。
+ */
 export interface CustomConversationGroup {
   id: string;
   name: string;
+  sortOrder: number;
+  pinnedToTabs: boolean;
+  conversationIDs: string[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Contact {
@@ -31,17 +42,6 @@ export interface Contact {
 export interface ContactSection {
   letter: string;
   data: Contact[];
-}
-
-export interface Post {
-  id: string;
-  author: string;
-  badge: string;
-  time: string;
-  content: string;
-  imageUrl?: string;
-  likes: number;
-  comments: number;
 }
 
 export interface NoteCardData {

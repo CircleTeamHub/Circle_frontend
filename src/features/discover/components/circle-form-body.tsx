@@ -1,0 +1,515 @@
+import { useCallback, useMemo } from 'react';
+import {
+  Pressable,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { Divider } from '@/components/ui/divider';
+import { MenuRow } from '@/components/ui/menu-row';
+import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { useCreateCircleFormStore } from '@/features/discover/store/use-create-circle-form-store';
+import {
+  CIRCLE_CREDIT_OPTIONS_VALUES,
+  CIRCLE_MAX_TAGS,
+  CIRCLE_PRESET_CATEGORY_KEYS,
+  CIRCLE_VIP_OPTIONS_VALUES,
+} from '@/features/discover/constants/circle-form';
+import type { CircleFormApi } from '@/features/discover/hooks/use-circle-form';
+
+interface CircleFormBodyProps {
+  form: CircleFormApi;
+}
+
+const s = StyleSheet.create({
+  section: { marginTop: Spacing.lg },
+  sectionTitle: { ...Typography.h3, marginBottom: Spacing.sm },
+  inputBox: {
+    borderWidth: 1,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  textInput: { ...Typography.bodyRegular, lineHeight: 21 },
+  multilineInput: {
+    ...Typography.bodyRegular,
+    lineHeight: 21,
+    textAlignVertical: 'top' as const,
+    minHeight: 80,
+  },
+  categoryRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  categoryPill: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  categoryText: { ...Typography.caption, fontWeight: '600' as const },
+  avatarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  avatarPlaceholder: {
+    width: 72,
+    height: 72,
+    borderRadius: Radius.lg,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarImage: {
+    width: 72,
+    height: 72,
+    borderRadius: Radius.lg,
+  },
+  avatarHint: {
+    ...Typography.caption,
+    flex: 1,
+  },
+  tagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  tagChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.full,
+  },
+  tagInputRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  tagInput: {
+    ...Typography.bodyRegular,
+    flex: 1,
+    height: 36,
+    borderWidth: 1,
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.md,
+  },
+  addTagBtn: {
+    height: 36,
+    paddingHorizontal: Spacing.md,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectedCitiesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  cityChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.full,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Spacing.md,
+  },
+  rowLabel: { ...Typography.bodyRegular },
+});
+
+export const CircleFormBody: React.FC<CircleFormBodyProps> = ({ form }) => {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  const router = useRouter();
+
+  const selectedCities = useCreateCircleFormStore((st) => st.selectedCities);
+  const setSelectedCities = useCreateCircleFormStore(
+    (st) => st.setSelectedCities,
+  );
+
+  const d = useMemo(
+    () => ({
+      sectionTitle: { color: colors.text },
+      inputBox: {
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
+      },
+      textInput: { color: colors.text },
+      rowLabel: { color: colors.text },
+      avatarHint: { color: colors.textSecondary },
+    }),
+    [colors],
+  );
+
+  const PRESET_CATEGORIES = useMemo(
+    () =>
+      CIRCLE_PRESET_CATEGORY_KEYS.map((key) => ({
+        label: t(`circle.categories.${key}`),
+        value: key as string,
+      })),
+    [t],
+  );
+
+  const VIP_OPTIONS = useMemo(
+    () =>
+      CIRCLE_VIP_OPTIONS_VALUES.map((value) => ({
+        label:
+          value === null
+            ? t('common.noRestriction')
+            : t(`vipOptions.vip${value}`),
+        value,
+      })),
+    [t],
+  );
+
+  const CREDIT_OPTIONS = useMemo(
+    () =>
+      CIRCLE_CREDIT_OPTIONS_VALUES.map((value) => ({
+        label:
+          value === null
+            ? t('common.noRestriction')
+            : t(`creditOptions.above${value}`),
+        value,
+      })),
+    [t],
+  );
+
+  const vipLabel =
+    VIP_OPTIONS.find((option) => option.value === form.joinVipRestriction)
+      ?.label ?? t('common.noRestriction');
+  const creditLabel =
+    CREDIT_OPTIONS.find((option) => option.value === form.joinCreditRestriction)
+      ?.label ?? t('common.noRestriction');
+
+  const handleSelectCities = useCallback(() => {
+    router.push({
+      pathname: '/(tabs)/discover/select-city',
+      params: { multiSelect: 'true' },
+    });
+  }, [router]);
+
+  const handleRemoveCity = useCallback(
+    (city: string) => {
+      setSelectedCities(selectedCities.filter((value) => value !== city));
+    },
+    [selectedCities, setSelectedCities],
+  );
+
+  return (
+    <>
+      {/* ── 基本信息 ── */}
+      <View style={s.section}>
+        <Text style={[s.sectionTitle, d.sectionTitle]}>
+          {t('circle.create.basicInfo')}
+        </Text>
+
+        <View style={[s.inputBox, d.inputBox]}>
+          <TextInput
+            placeholder={t('circle.create.namePlaceholder')}
+            placeholderTextColor={colors.textSecondary}
+            value={form.name}
+            onChangeText={form.setName}
+            maxLength={20}
+            style={[s.textInput, d.textInput]}
+          />
+        </View>
+
+        <Text style={[s.rowLabel, d.rowLabel, { marginBottom: Spacing.sm }]}>
+          {t('circle.create.categoryLabel')}
+        </Text>
+        <View style={s.categoryRow}>
+          {PRESET_CATEGORIES.map((option) => {
+            const isActive = form.selectedCategories.includes(option.value);
+            return (
+              <Pressable
+                key={option.value}
+                onPress={() => form.toggleCategory(option.value)}
+                style={[
+                  s.categoryPill,
+                  {
+                    backgroundColor: isActive
+                      ? colors.primary
+                      : colors.surface,
+                    borderColor: isActive
+                      ? colors.primary
+                      : colors.surfaceBorder,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    s.categoryText,
+                    { color: isActive ? colors.white : colors.textSecondary },
+                  ]}
+                >
+                  {option.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+          {form.selectedCategories
+            .filter(
+              (category) =>
+                !PRESET_CATEGORIES.some(
+                  (option) => option.value === category,
+                ),
+            )
+            .map((category) => (
+              <Pressable
+                key={category}
+                onPress={() => form.toggleCategory(category)}
+                style={[
+                  s.categoryPill,
+                  {
+                    backgroundColor: colors.primary,
+                    borderColor: colors.primary,
+                  },
+                ]}
+              >
+                <Text style={[s.categoryText, { color: colors.white }]}>
+                  {category}
+                </Text>
+              </Pressable>
+            ))}
+        </View>
+
+        <View style={s.tagInputRow}>
+          <TextInput
+            placeholder={t('circle.create.customCategoryPlaceholder')}
+            placeholderTextColor={colors.textSecondary}
+            value={form.customCategoryInput}
+            onChangeText={form.setCustomCategoryInput}
+            onSubmitEditing={form.handleAddCustomCategory}
+            maxLength={10}
+            style={[
+              s.tagInput,
+              {
+                borderColor: colors.surfaceBorder,
+                color: colors.text,
+                backgroundColor: colors.surface,
+              },
+            ]}
+          />
+          <Pressable
+            onPress={form.handleAddCustomCategory}
+            style={[s.addTagBtn, { backgroundColor: colors.primary }]}
+          >
+            <Text style={{ color: colors.white, ...Typography.caption }}>
+              {t('common.add')}
+            </Text>
+          </Pressable>
+        </View>
+
+        <View style={[s.inputBox, d.inputBox]}>
+          <TextInput
+            placeholder={t('circle.create.descriptionPlaceholder')}
+            placeholderTextColor={colors.textSecondary}
+            multiline
+            value={form.description}
+            onChangeText={form.setDescription}
+            maxLength={500}
+            style={[s.multilineInput, d.textInput]}
+          />
+        </View>
+      </View>
+
+      {/* ── 设定 ── */}
+      <View style={s.section}>
+        <Text style={[s.sectionTitle, d.sectionTitle]}>
+          {t('circle.create.settingsSection')}
+        </Text>
+
+        <Text style={[s.rowLabel, d.rowLabel, { marginBottom: Spacing.sm }]}>
+          {t('circle.create.avatarLabel')}
+        </Text>
+        <View style={s.avatarRow}>
+          <Pressable onPress={form.handlePickAvatar}>
+            {form.avatarUri ? (
+              <Image
+                source={{ uri: form.avatarUri }}
+                style={s.avatarImage}
+                contentFit="cover"
+              />
+            ) : (
+              <View
+                style={[
+                  s.avatarPlaceholder,
+                  { borderColor: colors.surfaceBorder },
+                ]}
+              >
+                <Ionicons
+                  name="camera-outline"
+                  size={28}
+                  color={colors.textSecondary}
+                />
+              </View>
+            )}
+          </Pressable>
+          <Text style={[s.avatarHint, d.avatarHint]}>
+            {t('circle.create.avatarHint')}
+          </Text>
+        </View>
+
+        <MenuRow
+          icon="location-outline"
+          label={t('circle.create.cityLabel')}
+          rightText={
+            selectedCities.length > 0
+              ? t('circle.create.selectedCities', { count: selectedCities.length })
+              : t('circle.create.allCities')
+          }
+          onPress={handleSelectCities}
+        />
+        {selectedCities.length > 0 ? (
+          <View style={s.selectedCitiesRow}>
+            {selectedCities.map((city) => (
+              <Pressable
+                key={city}
+                onPress={() => handleRemoveCity(city)}
+                style={[s.cityChip, { backgroundColor: colors.primaryLight }]}
+              >
+                <Text style={{ color: colors.primary, ...Typography.caption }}>
+                  {city}
+                </Text>
+                <Ionicons name="close" size={12} color={colors.primary} />
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+        <Divider />
+
+        <Text
+          style={[
+            s.rowLabel,
+            d.rowLabel,
+            { marginTop: Spacing.md, marginBottom: Spacing.sm },
+          ]}
+        >
+          {t('circle.create.rulesLabel')}
+        </Text>
+        <View style={[s.inputBox, d.inputBox]}>
+          <TextInput
+            placeholder={t('circle.create.rulesPlaceholder')}
+            placeholderTextColor={colors.textSecondary}
+            multiline
+            value={form.rules}
+            onChangeText={form.setRules}
+            maxLength={1000}
+            style={[s.multilineInput, d.textInput]}
+          />
+        </View>
+
+        <Text style={[s.rowLabel, d.rowLabel, { marginBottom: Spacing.sm }]}>
+          {t('circle.create.tagsLabel')}
+        </Text>
+        <View style={s.tagRow}>
+          {form.tags.map((tag, index) => (
+            <Pressable
+              key={tag}
+              onPress={() => form.handleRemoveTag(index)}
+              style={[s.tagChip, { backgroundColor: colors.primaryLight }]}
+            >
+              <Text style={{ color: colors.primary, ...Typography.caption }}>
+                #{tag}
+              </Text>
+              <Ionicons name="close" size={12} color={colors.primary} />
+            </Pressable>
+          ))}
+        </View>
+        {form.tags.length < CIRCLE_MAX_TAGS ? (
+          <View style={s.tagInputRow}>
+            <TextInput
+              placeholder={t('circle.create.tagPlaceholder')}
+              placeholderTextColor={colors.textSecondary}
+              value={form.tagInput}
+              onChangeText={form.setTagInput}
+              onSubmitEditing={form.handleAddTag}
+              maxLength={10}
+              style={[
+                s.tagInput,
+                {
+                  borderColor: colors.surfaceBorder,
+                  color: colors.text,
+                  backgroundColor: colors.surface,
+                },
+              ]}
+            />
+            <Pressable
+              onPress={form.handleAddTag}
+              style={[s.addTagBtn, { backgroundColor: colors.primary }]}
+            >
+              <Text style={{ color: colors.white, ...Typography.caption }}>
+                {t('common.add')}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+      </View>
+
+      {/* ── 权限与限制 ── */}
+      <View style={s.section}>
+        <Text style={[s.sectionTitle, d.sectionTitle]}>
+          {t('circle.create.restrictionsSection')}
+        </Text>
+
+        <MenuRow
+          icon="diamond-outline"
+          label={t('circle.joinVipRestriction')}
+          rightText={vipLabel}
+          onPress={form.cycleVip}
+        />
+        <Divider />
+        <MenuRow
+          icon="shield-checkmark-outline"
+          label={t('circle.joinCreditRestriction')}
+          rightText={creditLabel}
+          onPress={form.cycleCredit}
+        />
+        <Divider />
+        <View style={s.toggleRow}>
+          <Text style={[s.rowLabel, d.rowLabel]}>
+            {t('circle.create.fancyLabel')}
+          </Text>
+          <Switch
+            value={form.joinFancyRestriction}
+            onValueChange={form.setJoinFancyRestriction}
+            trackColor={{ false: colors.surfaceBorder, true: colors.primary }}
+            thumbColor={colors.white}
+          />
+        </View>
+        <Divider />
+        <View style={s.toggleRow}>
+          <Text style={[s.rowLabel, d.rowLabel]}>
+            {t('circle.create.memberPostLabel')}
+          </Text>
+          <Switch
+            value={form.memberCanPost}
+            onValueChange={form.setMemberCanPost}
+            trackColor={{ false: colors.surfaceBorder, true: colors.primary }}
+            thumbColor={colors.white}
+          />
+        </View>
+      </View>
+    </>
+  );
+};

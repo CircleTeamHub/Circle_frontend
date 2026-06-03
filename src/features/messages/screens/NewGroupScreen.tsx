@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -99,6 +99,8 @@ export default function NewGroupScreen() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Record<string, true>>({});
   const [submitting, setSubmitting] = useState(false);
+  // Pattern D 第二道：createGroupChat 是后端写操作，fast double-tap 可能创出两个群。
+  const inFlightRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -107,8 +109,11 @@ export default function NewGroupScreen() {
       .then((list) => {
         if (!cancelled) setFriends(list);
       })
-      .catch(() => {
+      .catch((err) => {
         if (!cancelled) setFriends([]);
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          console.warn('[new-group] fetchFriends failed', err);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -143,8 +148,10 @@ export default function NewGroupScreen() {
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    if (submitting) return;
-    if (selectedCount < 1) {
+    if (submitting || inFlightRef.current) return;
+    // 新建群至少选 2 位好友（创建者 + 2 = 3 人群）—— 跟 iMessage 一致，避免
+    // "1 个好友 = 2 人群"在 UX 上与私聊难区分；想要 1 对 1 直接走单聊。
+    if (selectedCount < 2) {
       Alert.alert(t('messages.newGroupMinMembers'));
       return;
     }
@@ -159,6 +166,7 @@ export default function NewGroupScreen() {
         .join('、') || t('messages.newGroupDefaultName');
     const finalName = trimmedName || fallbackName;
 
+    inFlightRef.current = true;
     setSubmitting(true);
     try {
       const group = await createGroupChat({
@@ -184,6 +192,7 @@ export default function NewGroupScreen() {
         }),
       );
     } finally {
+      inFlightRef.current = false;
       setSubmitting(false);
     }
   }, [

@@ -96,9 +96,12 @@ export default function WalletScreen() {
         if (!cancelled) {
           setBalance(wallet.balance);
         }
-      } catch {
+      } catch (error) {
         if (!cancelled) {
           setWalletError('积分余额加载失败，请稍后重试');
+        }
+        if (__DEV__) {
+          console.warn('[WalletScreen] fetchWallet failed', error);
         }
       } finally {
         if (!cancelled) {
@@ -128,8 +131,11 @@ export default function WalletScreen() {
       const wallet = await rechargePoints(selectedPoints);
       setBalance(wallet.balance);
       setWalletStatus(`已充值 ${selectedPoints} 积分`);
-    } catch {
+    } catch (error) {
       setWalletError('充值失败，请稍后重试');
+      if (__DEV__) {
+        console.warn('[WalletScreen] rechargePoints failed', error);
+      }
     } finally {
       setRecharging(false);
     }

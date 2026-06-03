@@ -191,6 +191,10 @@ export default function ChatDetailScreen() {
   const authUser = useAuthStore((state) => state.user);
   const flatListRef = useRef<FlatListType<ChatMessage>>(null);
   const scrolledToSearchRef = useRef(false);
+  // Pattern D 双层防抖：disabled={sending} 在 fast double-tap 下可能晚一帧才生效；
+  // inFlightRef 在 hook 入口处再判断一次，保证同一时刻只有一条消息在飞。文本 / 图片 /
+  // 位置 / 笔记 / 名片 / 转账 6 条发送路径共享同一道闸。
+  const inFlightRef = useRef(false);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -277,11 +281,16 @@ export default function ChatDetailScreen() {
       sessionType: conversationType,
     });
 
-    markConversationAsRead(conversationID).catch(() => {
-      // Ignore mark-read failures in the chat detail screen.
+    markConversationAsRead(conversationID).catch((err) => {
+      // 已读上报失败不阻断 UI；dev 下打印，避免长期静默把未读 badge 卡住没人发现。
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn('[chat] markConversationAsRead failed', err);
+      }
     });
-    loadConversationMessages(conversationID).catch(() => {
-      // Message loading errors are surfaced by an empty state below.
+    loadConversationMessages(conversationID).catch((err) => {
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn('[chat] loadConversationMessages failed', err);
+      }
     });
 
     return () => {
@@ -291,11 +300,18 @@ export default function ChatDetailScreen() {
 
   useEffect(() => {
     if (!peerImId) return;
-    void subscribeUserOnlineStatus([peerImId]).catch(() => {
-      // 忽略：拿不到状态时回落显示离线
+    void subscribeUserOnlineStatus([peerImId]).catch((err) => {
+      // 拿不到状态时 UI 回落显示离线；dev 下记录，避免长期静默掉订阅。
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn('[chat] subscribeUserOnlineStatus failed', err);
+      }
     });
     return () => {
-      void unsubscribeUserOnlineStatus([peerImId]).catch(() => {});
+      void unsubscribeUserOnlineStatus([peerImId]).catch((err) => {
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          console.warn('[chat] unsubscribeUserOnlineStatus failed', err);
+        }
+      });
     };
   }, [peerImId]);
 
@@ -432,33 +448,23 @@ export default function ChatDetailScreen() {
 
   const sendDraftAsText = useCallback(
     async (text: string) => {
-      console.log('[chat] text:request', JSON.stringify(text), {
-        sourceID,
-        isPreviewMode,
-      });
+      // 不日志 message 文本 —— 消息正文是 app 处理的最敏感数据。
       if (!text.trim() || !sourceID || isPreviewMode) {
-        console.log('[chat] text:skipped (empty or preview)');
         return;
       }
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
       try {
         const sentMessage = await sendTextMessage({
           sourceID,
           sessionType: conversationType,
           text,
         });
-        console.log(
-          '[chat] text:sent',
-          sentMessage.clientMsgID,
-          'content=',
-          sentMessage.textElem?.content ?? '<no textElem>',
-        );
         appendMessages(conversationID, [sentMessage]);
-      } catch (error) {
-        console.log(
-          '[chat] text:fail',
-          error instanceof Error ? error.message : error,
-        );
+      } catch {
         setSendError('消息发送失败，请重试');
+      } finally {
+        inFlightRef.current = false;
       }
     },
     [appendMessages, conversationID, conversationType, isPreviewMode, sourceID],
@@ -466,11 +472,13 @@ export default function ChatDetailScreen() {
 
   const handleSendCurrentLocation = useCallback(async () => {
     if (!sourceID || isPreviewMode) return;
+    if (inFlightRef.current) return;
     const permission = await Location.requestForegroundPermissionsAsync();
     if (!permission.granted) {
       Alert.alert('权限不足', '请在系统设置开启定位权限');
       return;
     }
+    inFlightRef.current = true;
     try {
       const position = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
@@ -505,6 +513,8 @@ export default function ChatDetailScreen() {
       appendMessages(conversationID, [sent]);
     } catch {
       setSendError('位置发送失败，请重试');
+    } finally {
+      inFlightRef.current = false;
     }
   }, [
     appendMessages,
@@ -516,6 +526,7 @@ export default function ChatDetailScreen() {
 
   const handlePickMedia = useCallback(async () => {
     if (!sourceID || isPreviewMode) return;
+    if (inFlightRef.current) return;
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       Alert.alert('权限不足', '请在系统设置开启相册权限');
@@ -529,24 +540,26 @@ export default function ChatDetailScreen() {
     if (result.canceled || result.assets.length === 0) return;
 
     const asset = result.assets[0];
-    const filename = asset.uri.split('/').pop() ?? 'image.jpg';
+    // 用 || 而非 ??：URI 以 '/' 结尾时 pop() 返回空字符串，?? 不会触发 fallback。
+    const filename = asset.uri.split('/').pop() || 'image.jpg';
     const contentType =
       resolveUploadContentType({
         mimeType: asset.mimeType,
         fileName: filename,
       }) ?? 'image/jpeg';
 
+    inFlightRef.current = true;
+
     try {
-      console.log('[chat] image:presign request');
+      // 不日志 presign 返回的 fileUrl / uploadUrl —— 这是带签名的临时写凭证，
+      // 任何能捕获 console 输出的渠道（adb logcat、屏幕录制、第三方 SDK 的
+      // breadcrumb）拿到 uploadUrl 就能在过期前向同一对象写入任意内容。
       const presign = await requestUploadPresign({
         filename: sanitizeUploadFilename(filename),
         contentType,
         folder: 'chat',
       });
-      console.log('[chat] image:presign ok →', presign.fileUrl);
-      console.log('[chat] image:put start →', presign.uploadUrl);
       await uploadLocalFileToPresignedUrl(presign.uploadUrl, contentType, asset.uri);
-      console.log('[chat] image:put done');
       const sentMessage = await sendImageMessage({
         sourceID,
         sessionType: conversationType,
@@ -557,14 +570,11 @@ export default function ChatDetailScreen() {
         size: asset.fileSize ?? undefined,
         mimeType: contentType,
       });
-      console.log('[chat] image:sent', sentMessage.clientMsgID);
       appendMessages(conversationID, [sentMessage]);
-    } catch (error) {
-      console.log(
-        '[chat] image:fail',
-        error instanceof Error ? error.message : error,
-      );
+    } catch {
       setSendError('图片发送失败，请重试');
+    } finally {
+      inFlightRef.current = false;
     }
   }, [
     appendMessages,
@@ -640,6 +650,8 @@ export default function ChatDetailScreen() {
   const handlePickNote = useCallback(
     async (note: NoteSummary) => {
       if (!sourceID || isPreviewMode) return;
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
       try {
         const sent = await sendNoteCardMessage({
           sourceID,
@@ -657,6 +669,8 @@ export default function ChatDetailScreen() {
         appendMessages(conversationID, [sent]);
       } catch {
         setSendError('笔记发送失败，请重试');
+      } finally {
+        inFlightRef.current = false;
       }
     },
     [
@@ -671,6 +685,8 @@ export default function ChatDetailScreen() {
   const handlePickFriend = useCallback(
     async (friend: FriendProfile) => {
       if (!conversationID) return;
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
       try {
         // 拉一遍完整资料，把 persona + displayIcons 塞进 ext
         // 失败也无所谓，只是 receiver 看不到 persona/icons，基础名片照样能发。
@@ -695,6 +711,8 @@ export default function ChatDetailScreen() {
         appendMessages(conversationID, [sent]);
       } catch {
         setSendError('名片发送失败，请重试');
+      } finally {
+        inFlightRef.current = false;
       }
     },
     [appendMessages, conversationID],
@@ -718,6 +736,8 @@ export default function ChatDetailScreen() {
   const handleSendTransferCard = useCallback(
     async (payload: { amount: number; message: string | null }) => {
       if (!sourceID || isPreviewMode) return;
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
       try {
         const sent = await sendTransferCardMessage({
           sourceID,
@@ -727,6 +747,8 @@ export default function ChatDetailScreen() {
         appendMessages(conversationID, [sent]);
       } catch {
         setSendError('转账卡片发送失败，但积分已扣减');
+      } finally {
+        inFlightRef.current = false;
       }
     },
     [
@@ -779,7 +801,8 @@ export default function ChatDetailScreen() {
     if (!nextText || sending || !sourceID || isPreviewMode) {
       return;
     }
-
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     setSending(true);
 
     try {
@@ -794,6 +817,7 @@ export default function ChatDetailScreen() {
     } catch {
       setSendError('消息发送失败，请重试');
     } finally {
+      inFlightRef.current = false;
       setSending(false);
     }
   }, [appendMessages, conversationID, conversationType, draft, isPreviewMode, sending, sourceID]);
@@ -862,6 +886,26 @@ export default function ChatDetailScreen() {
         keyExtractor={keyExtractor}
         contentContainerStyle={[s.messageList, s.messageListContent, s.messageListInset]}
         showsVerticalScrollIndicator={false}
+        // scrollToIndex 在 inverted + 没设 getItemLayout 时，目标 index 超出已渲染窗口
+        // 就会抛 "scrollToIndex out of range"。fallback：先滚到能测到的最远 index，
+        // 等下一帧布局完再精确跳到目标位置，避免搜索定位时整页崩。
+        onScrollToIndexFailed={(info) => {
+          const fallbackIndex = Math.min(
+            info.highestMeasuredFrameIndex ?? info.index,
+            info.index,
+          );
+          flatListRef.current?.scrollToIndex({
+            index: fallbackIndex,
+            animated: false,
+          });
+          setTimeout(() => {
+            flatListRef.current?.scrollToIndex({
+              index: info.index,
+              animated: true,
+              viewPosition: 0.3,
+            });
+          }, 250);
+        }}
       />
       <Divider />
       {isPreviewMode ? (
@@ -881,7 +925,16 @@ export default function ChatDetailScreen() {
           { paddingBottom: attachmentOpen ? Spacing.sm : insets.bottom || 28 },
         ]}
       >
-        <Pressable style={[s.circleBtn, d.circleBtn]}>
+        <Pressable
+          style={[s.circleBtn, d.circleBtn]}
+          onPress={() =>
+            Alert.alert(
+              '语音消息',
+              '该功能即将上线，敬请期待。',
+            )
+          }
+          hitSlop={8}
+        >
           <Ionicons name="mic" size={18} color={colors.textSecondary} />
         </Pressable>
         <View style={[s.composerShell, d.composerShell]}>

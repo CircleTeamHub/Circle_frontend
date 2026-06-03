@@ -80,6 +80,7 @@ export default function ChatHistoryDateScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [results, setResults] = useState<MessageItem[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
   const pageRef = useRef(1);
   const activeDateRef = useRef('');
@@ -109,6 +110,16 @@ export default function ChatHistoryDateScreen() {
       title: { color: colors.text, ...Typography.body },
       meta: { color: colors.textSecondary, ...Typography.small },
       centeredText: { color: colors.textSecondary, ...Typography.bodyRegular },
+      errorText: { color: colors.error, ...Typography.bodyRegular },
+      retryButton: {
+        marginTop: Spacing.md,
+        alignSelf: 'center' as const,
+        paddingHorizontal: Spacing.lg,
+        paddingVertical: Spacing.sm,
+        borderRadius: Radius.lg,
+        backgroundColor: colors.primary,
+      },
+      retryText: { color: colors.white, ...Typography.body },
     }),
     [colors],
   );
@@ -130,6 +141,7 @@ export default function ChatHistoryDateScreen() {
     activeDateRef.current = nextDate;
     pageRef.current = 1;
     setLoading(true);
+    setError(null);
 
     try {
       const page = await searchConversationMessagesByDate({
@@ -142,6 +154,15 @@ export default function ChatHistoryDateScreen() {
       if (mountedRef.current) {
         setResults(page);
         setHasMore(page.length === PAGE_SIZE);
+      }
+    } catch (err) {
+      if (mountedRef.current) {
+        setResults([]);
+        setHasMore(false);
+        setError(err instanceof Error ? err.message : '加载失败');
+      }
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn('[chat-history-date] search failed', err);
       }
     } finally {
       if (mountedRef.current) {
@@ -170,6 +191,14 @@ export default function ChatHistoryDateScreen() {
         pageRef.current = nextPage;
         setResults((prev) => [...prev, ...page]);
         setHasMore(page.length === PAGE_SIZE);
+      }
+    } catch (err) {
+      // 翻页失败：停止继续翻，留住已加载的部分。
+      if (mountedRef.current) {
+        setHasMore(false);
+      }
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn('[chat-history-date] load-more failed', err);
       }
     } finally {
       if (mountedRef.current) {
@@ -230,9 +259,18 @@ export default function ChatHistoryDateScreen() {
             </Pressable>
           )}
           ListEmptyComponent={
-            <Text style={[s.centeredText, d.centeredText]}>
-              {searched ? '暂无该日期的聊天记录' : '请选择日期'}
-            </Text>
+            error ? (
+              <View>
+                <Text style={[s.centeredText, d.errorText]}>{error}</Text>
+                <Pressable style={d.retryButton} onPress={() => void handleSearch()}>
+                  <Text style={d.retryText}>重试</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Text style={[s.centeredText, d.centeredText]}>
+                {searched ? '暂无该日期的聊天记录' : '请选择日期'}
+              </Text>
+            )
           }
           ListFooterComponent={
             loadingMore ? (

@@ -33,7 +33,9 @@ function getInitialLanguage(): 'zh' | 'en' {
   return getDeviceLanguage();
 }
 
-i18n.use(initReactI18next).init({
+// init 返回 Promise；同步部分（设置默认 lng）已经在 init 调用时完成，异步部分
+// 用 void 标注以避免 unhandled-rejection 警告。
+void i18n.use(initReactI18next).init({
   resources,
   lng: getInitialLanguage(),
   fallbackLng: 'zh',
@@ -43,7 +45,9 @@ i18n.use(initReactI18next).init({
 });
 
 export function setLanguage(lang: 'zh' | 'en') {
-  i18n.changeLanguage(lang);
+  // changeLanguage 是 async（可能加载懒包），但调用方都是 fire-and-forget 风格；
+  // 用 void 显式表示我们不等待 —— 否则 lint 会标 unhandled-promise。
+  void i18n.changeLanguage(lang);
   if (canUseSynchronousStorage()) {
     storage.set(LANGUAGE_KEY, lang);
   }

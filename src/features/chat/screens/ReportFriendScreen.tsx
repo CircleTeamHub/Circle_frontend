@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -60,9 +60,11 @@ export default function ReportFriendScreen() {
   const [category, setCategory] = useState<FriendReportCategory | null>(null);
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // Pattern D 第二道：state 在 fast double-tap 下可能晚一帧，用 ref 兜底单飞行。
+  const inFlightRef = useRef(false);
 
   const handleSubmit = useCallback(async () => {
-    if (submitting) return;
+    if (submitting || inFlightRef.current) return;
     if (targetType === 'friend' && !friendUserId) {
       Alert.alert('参数错误', '缺少举报对象');
       return;
@@ -81,6 +83,7 @@ export default function ReportFriendScreen() {
       return;
     }
 
+    inFlightRef.current = true;
     setSubmitting(true);
     try {
       if (targetType === 'group') {
@@ -94,6 +97,7 @@ export default function ReportFriendScreen() {
     } catch (error) {
       Alert.alert('提交失败', getApiErrorMessage(error, '请稍后重试'));
     } finally {
+      inFlightRef.current = false;
       setSubmitting(false);
     }
   }, [category, description, friendUserId, groupID, router, submitting, targetType]);

@@ -19,35 +19,69 @@ import {
 import { clearLocalSession } from '@/services/auth/session';
 import { loginToOpenIM, logoutFromOpenIM } from '@/im/client';
 import { getApiErrorMessage } from '@/services/api/errors';
+import { useMessageGroupsStore } from '@/features/messages/store/use-message-groups-store';
+import { retry } from '@/utils/retry';
 import { useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 
 export function useAuth() {
   const router = useRouter();
-  const { setSession, isAuthenticated, isLoading } = useAuthStore();
+  // selector 化：避免订阅整个 authStore —— token 后台刷新或别处更新 user
+  // 不会重渲染挂载了这个 hook 的所有屏幕。
+  const setSession = useAuthStore((state) => state.setSession);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isLoading = useAuthStore((state) => state.isLoading);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // 在 await 长链路中守护 setState：用户在登录/登出中途离开屏幕时
+  // 不再触发 "setState on unmounted component" 警告。
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+  const safeSetError = useCallback((value: string | null) => {
+    if (mountedRef.current) setError(value);
+  }, []);
+  const safeSetSubmitting = useCallback((value: boolean) => {
+    if (mountedRef.current) setSubmitting(value);
+  }, []);
+
+  // Pattern D / 双重防抖：disabled={submitting} 在 fast double-tap 下可能晚一帧
+  // 才生效；用 ref 在 hook 入口处再判断一次，确保同一时刻只有一次登录/注册/登出。
+  const inFlightRef = useRef(false);
+
   const login = useCallback(
     async (account: string, password: string) => {
-      setError(null);
+      if (inFlightRef.current) return;
+      safeSetError(null);
       const username = account.trim();
 
       if (!username) {
-        setError("请输入账号");
+        safeSetError("请输入账号");
         return;
       }
       if (!password.trim()) {
-        setError("请输入密码");
+        safeSetError("请输入密码");
         return;
       }
-      setSubmitting(true);
+      inFlightRef.current = true;
+      safeSetSubmitting(true);
       try {
         const tokens = await loginRequest({
           accountId: username,
           password,
         });
-        const user = await fetchCurrentUserWithToken(tokens.accessToken);
+        // 拿到 token 后立刻拉 /auth/me；这是登录链路最容易被瞬时网络抖动击穿的一步。
+        // retry 仅在网络 / 5xx 时重试；4xx（401/403）直接抛出走 clearLocalSession。
+        const user = await retry(() =>
+          fetchCurrentUserWithToken(tokens.accessToken),
+        );
 
         setSession(tokens, user);
 
@@ -65,15 +99,21 @@ export function useAuth() {
           // 后端未返回 imToken，确保 IM 状态已清空
           await logoutFromOpenIM();
         }
+
+        // 拉用户自定义会话分组（MessagesScreen 顶部 filter tab 需要）。
+        // 失败不阻断登录跳转；store 内部已 dev-warn。
+        void useMessageGroupsStore.getState().load();
+
         router.replace('/(tabs)/messages');
       } catch (requestError) {
         await clearLocalSession();
-        setError(getApiErrorMessage(requestError, '登录失败，请重试'));
+        safeSetError(getApiErrorMessage(requestError, '登录失败，请重试'));
       } finally {
-        setSubmitting(false);
+        inFlightRef.current = false;
+        safeSetSubmitting(false);
       }
     },
-    [router, setSession],
+    [router, setSession, safeSetError, safeSetSubmitting],
   );
 
   const register = useCallback(
@@ -83,25 +123,27 @@ export function useAuth() {
       nickname: string,
       confirmPassword: string,
     ) => {
-      setError(null);
+      if (inFlightRef.current) return;
+      safeSetError(null);
       if (!account.trim()) {
-        setError("请输入账号");
+        safeSetError("请输入账号");
         return;
       }
       if (password.length < 6) {
-        setError("密码至少6位");
+        safeSetError("密码至少6位");
         return;
       }
       if (password !== confirmPassword) {
-        setError("两次密码不一致");
+        safeSetError("两次密码不一致");
         return;
       }
       if (!nickname.trim()) {
-        setError("请输入昵称");
+        safeSetError("请输入昵称");
         return;
       }
 
-      setSubmitting(true);
+      inFlightRef.current = true;
+      safeSetSubmitting(true);
       try {
         await registerRequest({
           accountId: account.trim(),
@@ -110,32 +152,41 @@ export function useAuth() {
         });
         router.replace('/(auth)/login');
       } catch (requestError) {
-        setError(getApiErrorMessage(requestError, '注册失败，请重试'));
+        safeSetError(getApiErrorMessage(requestError, '注册失败，请重试'));
       } finally {
-        setSubmitting(false);
+        inFlightRef.current = false;
+        safeSetSubmitting(false);
       }
     },
-    [router],
+    [router, safeSetError, safeSetSubmitting],
   );
 
   const endSession = useCallback(async () => {
+    if (inFlightRef.current) return;
     const { refreshToken } = useAuthStore.getState();
 
-    setError(null);
-    setSubmitting(true);
+    safeSetError(null);
+    inFlightRef.current = true;
+    safeSetSubmitting(true);
+
+    // 服务端登出与本地清理并行：网络慢时不让 UI 干等到 apiClient 15s 超时；
+    // 失败也不阻塞本地登出 —— 但要在 dev 把错误打出来，避免长期静默回归。
+    if (refreshToken) {
+      void logoutRequest(refreshToken).catch((err) => {
+        if (isDev) {
+          console.warn('[auth] server logout failed (local session still cleared)', err);
+        }
+      });
+    }
 
     try {
-      if (refreshToken) {
-        await logoutRequest(refreshToken);
-      }
-    } catch {
-      // 忽略服务端登出失败，始终清空本地会话
-    } finally {
       await clearLocalSession();
-      setSubmitting(false);
+    } finally {
+      inFlightRef.current = false;
+      safeSetSubmitting(false);
       router.replace('/(auth)/login');
     }
-  }, [router]);
+  }, [router, safeSetError, safeSetSubmitting]);
 
   const logout = useCallback(async () => {
     await endSession();

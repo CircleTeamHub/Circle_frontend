@@ -9,6 +9,7 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   Keyboard,
@@ -79,6 +80,7 @@ export default function AddFriendScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const [keyword, setKeyword] = useState('');
   const [searchState, setSearchState] = useState<SearchState>('idle');
   const [result, setResult] = useState<PublicUser | null>(null);
@@ -138,9 +140,12 @@ export default function AddFriendScreen() {
       const user = await searchUsersByAccountId(trimmed);
       setResult(user);
       setSearchState(user ? 'result' : 'not-found');
-    } catch {
+    } catch (error) {
       setResult(null);
       setSearchState('error');
+      if (__DEV__) {
+        console.warn('[AddFriendScreen] searchUsersByAccountId failed', error);
+      }
     }
   }, [keyword, searchState]);
 
@@ -156,7 +161,9 @@ export default function AddFriendScreen() {
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title="添加好友" />
+      <NavHeader
+        title={t('addFriend.title', { defaultValue: '添加好友' })}
+      />
       <View style={s.content}>
         <View style={s.searchRow}>
           <View style={[s.searchInput, d.searchInput]}>
@@ -168,7 +175,9 @@ export default function AddFriendScreen() {
               autoCapitalize="none"
               autoCorrect={false}
               returnKeyType="search"
-              placeholder="输入对方账号"
+              placeholder={t('addFriend.placeholder', {
+                defaultValue: '输入对方账号',
+              })}
               placeholderTextColor={colors.textSecondary}
               style={[s.searchText, d.searchText]}
             />
@@ -185,18 +194,26 @@ export default function AddFriendScreen() {
             {searchState === 'loading' ? (
               <ActivityIndicator color={colors.white} />
             ) : (
-              <Text style={d.searchButtonText}>搜索</Text>
+              <Text style={d.searchButtonText}>
+                {t('common.search', { defaultValue: '搜索' })}
+              </Text>
             )}
           </Pressable>
         </View>
 
         <View style={s.statusBlock}>
           {searchState === 'not-found' ? (
-            <Text style={d.stateText}>未找到好友</Text>
+            <Text style={d.stateText}>
+              {t('addFriend.notFound', { defaultValue: '未找到好友' })}
+            </Text>
           ) : null}
 
           {searchState === 'error' ? (
-            <Text style={d.stateText}>搜索失败，请稍后重试</Text>
+            <Text style={d.stateText}>
+              {t('addFriend.searchFailed', {
+                defaultValue: '搜索失败，请稍后重试',
+              })}
+            </Text>
           ) : null}
 
           {searchState === 'result' && result ? (
@@ -208,7 +225,9 @@ export default function AddFriendScreen() {
               />
               <View style={s.resultMeta}>
                 <Text style={d.resultName}>{getDisplayName(result)}</Text>
-                <Text style={d.resultAccount}>账号：{result.accountId}</Text>
+                <Text style={d.resultAccount}>
+                  {t('contacts.accountId', { id: result.accountId })}
+                </Text>
               </View>
               <Ionicons
                 name="chevron-forward"

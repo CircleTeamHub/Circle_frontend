@@ -84,7 +84,7 @@
     "newGroupNoMatches": "没有匹配的好友",
     "newGroupSelectedCount": "已选 {{count}}",
     "newGroupSubmit": "完成",
-    "newGroupMinMembers": "请至少选择 1 位好友",
+    "newGroupMinMembers": "请至少选择 2 位好友",
     "newGroupCreateFailed": "创建群聊失败：{{error}}",
     "newGroupDefaultName": "群聊",
     "inviteGroupMembersTitle": "邀请好友",
@@ -261,31 +261,10 @@
       "title": "群聊",
       "myCreated": "我创建的群聊",
       "myJoined": "我加入的群聊",
-      "myManaged": "我管理的群聊",
       "memberCount": "{{count}}人",
       "empty": "暂无群聊",
-      "samples": {
-        "createdProduct": {
-          "name": "Circle 产品讨论群",
-          "description": "产品迭代、版本计划和需求同步"
-        },
-        "createdSports": {
-          "name": "周末羽毛球局",
-          "description": "每周活动报名和场地协调"
-        },
-        "joinedFrontend": {
-          "name": "前端开发交流群",
-          "description": "RN / Expo / Web 技术交流"
-        },
-        "joinedDining": {
-          "name": "深圳同城饭搭子",
-          "description": "工作日约饭和周末探店"
-        },
-        "managedOps": {
-          "name": "运营值班群",
-          "description": "日常排班和异常处理"
-        }
-      }
+      "loading": "正在加载群聊",
+      "loadFailed": "群聊加载失败，请稍后重试"
     },
     "request": {
       "title": "发送好友申请",
