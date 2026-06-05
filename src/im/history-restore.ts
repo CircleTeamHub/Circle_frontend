@@ -12,18 +12,50 @@ import { useIMStore } from '@/stores/imStore';
 const DEFAULT_RESTORE_LIMIT = 100;
 const DEFAULT_MAX_MESSAGES = 500;
 
+export type RestoreConversationMessagesResult = {
+  fetched: number;
+  inserted: number;
+};
+
+const inFlightRestores = new Map<
+  string,
+  Promise<RestoreConversationMessagesResult>
+>();
+
 export async function restoreConversationMessages(params: {
   conversationID: string;
   sourceID: string;
   sessionType: SessionType;
   maxMessages?: number;
-}) {
+}): Promise<RestoreConversationMessagesResult> {
+  const existing = inFlightRestores.get(params.conversationID);
+  if (existing) return existing;
+
+  const restorePromise = runRestoreConversationMessages(params).finally(() => {
+    if (inFlightRestores.get(params.conversationID) === restorePromise) {
+      inFlightRestores.delete(params.conversationID);
+    }
+  });
+  inFlightRestores.set(params.conversationID, restorePromise);
+  return restorePromise;
+}
+
+async function runRestoreConversationMessages(params: {
+  conversationID: string;
+  sourceID: string;
+  sessionType: SessionType;
+  maxMessages?: number;
+}): Promise<RestoreConversationMessagesResult> {
   const {
     conversationID,
     sourceID,
     sessionType,
     maxMessages = DEFAULT_MAX_MESSAGES,
   } = params;
+  if (maxMessages <= 0) {
+    return { fetched: 0, inserted: 0 };
+  }
+
   const localMessages = await readLocalConversationMessages(
     conversationID,
     DEFAULT_RESTORE_LIMIT,
@@ -46,19 +78,27 @@ export async function restoreConversationMessages(params: {
       break;
     }
 
-    for (const dto of page.messages) {
-      if (localIDs.has(dto.clientMsgID)) {
-        continue;
-      }
+    const missingDtos = page.messages.filter(
+      (dto) => dto.clientMsgID && !localIDs.has(dto.clientMsgID),
+    );
+    const missingIDs = missingDtos.map((dto) => dto.clientMsgID);
+    const existingMessages =
+      missingIDs.length > 0
+        ? await OpenIMSDK.findMessageList([
+            { conversationID, clientMsgIDList: missingIDs },
+          ])
+        : [];
+    const existingIDs = new Set(
+      Array.isArray(existingMessages)
+        ? existingMessages.map((message) => message.clientMsgID).filter(Boolean)
+        : [],
+    );
 
-      const existing = await OpenIMSDK.findMessageList([
-        { conversationID, clientMsgIDList: [dto.clientMsgID] },
-      ]);
-      if (Array.isArray(existing) && existing.length > 0) {
+    for (const dto of missingDtos) {
+      if (existingIDs.has(dto.clientMsgID)) {
         localIDs.add(dto.clientMsgID);
         continue;
       }
-
       const message = toOpenIMMessageItem(dto);
       await insertLocalMessage({ message, sourceID, sessionType });
       localIDs.add(dto.clientMsgID);

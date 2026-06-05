@@ -173,6 +173,10 @@ test('restoreConversationMessages skips messages already present locally', async
       .map(([, params]) => params.message.clientMsgID),
     ['client-2'],
   );
+  assert.deepEqual(
+    normalize(sdkCalls.find(([name]) => name === 'findMessageList')[1]),
+    [{ conversationID: 'si_me_peer', clientMsgIDList: ['client-1', 'client-2'] }],
+  );
 });
 
 test('restoreConversationMessages inserts group messages through group local storage api', async () => {
@@ -202,6 +206,47 @@ test('restoreConversationMessages inserts group messages through group local sto
   assert.deepEqual(normalize(result), { fetched: 1, inserted: 1 });
   assert.equal(
     sdkCalls.filter(([name]) => name === 'insertGroupMessageToLocalStorage')
+      .length,
+    1,
+  );
+});
+
+test('restoreConversationMessages deduplicates concurrent restores for the same conversation', async () => {
+  const { restoreConversationMessages, apiCalls, sdkCalls } = loadRestoreHarness({
+    localMessages: [],
+    pages: [
+      {
+        conversationID: 'si_me_peer',
+        messages: [message('client-1', 1)],
+        hasMore: false,
+        nextBeforeSeq: null,
+      },
+    ],
+  });
+
+  const first = restoreConversationMessages({
+    conversationID: 'si_me_peer',
+    sourceID: 'peer-1',
+    sessionType: 1,
+  });
+  const second = restoreConversationMessages({
+    conversationID: 'si_me_peer',
+    sourceID: 'peer-1',
+    sessionType: 1,
+  });
+  const results = await Promise.all([first, second]);
+
+  assert.deepEqual(results.map(normalize), [
+    { fetched: 1, inserted: 1 },
+    { fetched: 1, inserted: 1 },
+  ]);
+  assert.equal(
+    apiCalls.filter(([name]) => name === 'fetchRestorableConversationMessages')
+      .length,
+    1,
+  );
+  assert.equal(
+    sdkCalls.filter(([name]) => name === 'insertSingleMessageToLocalStorage')
       .length,
     1,
   );
