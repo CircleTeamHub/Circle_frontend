@@ -84,8 +84,8 @@ function isNativeIMSupported() {
 }
 
 async function loadNativeFS() {
-  rnfsPromise ??= import('react-native-fs').then((module) => {
-    const loaded = module as NativeFSModule;
+  rnfsPromise ??= Promise.resolve().then(() => {
+    const loaded = require('react-native-fs') as NativeFSModule;
     return loaded.default ?? loaded;
   });
   return rnfsPromise;
@@ -562,10 +562,20 @@ export async function loadConversationMessages(
   conversationID: string,
   count = 50
 ) {
+  const messages = await readLocalConversationMessages(conversationID, count);
+
+  useIMStore.getState().setMessages(conversationID, messages);
+
+  return messages;
+}
+
+export async function readLocalConversationMessages(
+  conversationID: string,
+  count = 50
+) {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    useIMStore.getState().setMessages(conversationID, []);
     return [];
   }
 
@@ -575,8 +585,6 @@ export async function loadConversationMessages(
     startClientMsgID: '',
     viewType: ViewType.History,
   });
-
-  useIMStore.getState().setMessages(conversationID, result.messageList);
 
   return result.messageList;
 }
