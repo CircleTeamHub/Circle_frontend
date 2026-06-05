@@ -71,3 +71,20 @@ test('chat detail screen reads the local chat background preference for the acti
   assert.match(source, /backgroundPreference/);
   assert.match(source, /backgroundStyle/);
 });
+
+test('chat detail attempts non-blocking history restore after initial message load', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatDetailScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /restoreConversationMessages/);
+  assert.match(
+    source,
+    /loadConversationMessages\(conversationID\)[\s\S]*restoreConversationMessages/,
+  );
+  assert.match(source, /conversationID/);
+  assert.match(source, /sourceID/);
+  assert.match(source, /sessionType:\s*conversationType/);
+});

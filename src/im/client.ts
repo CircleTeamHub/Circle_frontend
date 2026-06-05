@@ -563,10 +563,20 @@ export async function loadConversationMessages(
   conversationID: string,
   count = 50
 ) {
+  const messages = await readLocalConversationMessages(conversationID, count);
+
+  useIMStore.getState().setMessages(conversationID, messages);
+
+  return messages;
+}
+
+export async function readLocalConversationMessages(
+  conversationID: string,
+  count = 50
+) {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    useIMStore.getState().setMessages(conversationID, []);
     return [];
   }
 
@@ -577,10 +587,12 @@ export async function loadConversationMessages(
     viewType: ViewType.History,
   });
 
+  // setMessages 由上层 loadConversationMessages 包一层负责；这里保持纯读，
+  // 历史恢复直接调本函数读本地、而不污染 store。
   if (isDev) {
     const first = result.messageList[0];
     const last = result.messageList[result.messageList.length - 1];
-    console.info('[openim] loadConversationMessages result', {
+    console.info('[openim] readLocalConversationMessages result', {
       conversationID,
       count,
       returned: result.messageList.length,
@@ -590,8 +602,6 @@ export async function loadConversationMessages(
       lastContentType: last?.contentType,
     });
   }
-
-  useIMStore.getState().setMessages(conversationID, result.messageList);
 
   return result.messageList;
 }

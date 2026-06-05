@@ -44,6 +44,7 @@ import {
   toImUserId,
   unsubscribeUserOnlineStatus,
 } from '@/im/client';
+import { restoreConversationMessages } from '@/im/history-restore';
 import { mapMessageItemToChatMessage } from '@/im/mappers';
 import { useAuthStore } from '@/stores/authStore';
 import { useIMStore } from '@/stores/imStore';
@@ -295,11 +296,23 @@ export default function ChatDetailScreen() {
         console.warn('[chat] markConversationAsRead failed', err);
       }
     });
-    loadConversationMessages(conversationID).catch((err) => {
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[chat] loadConversationMessages failed', err);
-      }
-    });
+    loadConversationMessages(conversationID)
+      .then(() =>
+        restoreConversationMessages({
+          conversationID,
+          sourceID:
+            conversationType === SessionType.Single
+              ? toImUserId(sourceID)
+              : sourceID,
+          sessionType: conversationType,
+          maxMessages: 500,
+        }),
+      )
+      .catch((err) => {
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          console.warn('[chat] load/restore conversation messages failed', err);
+        }
+      });
 
     return () => {
       setActiveConversation(null);
