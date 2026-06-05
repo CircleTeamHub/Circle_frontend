@@ -99,10 +99,22 @@ async function runRestoreConversationMessages(params: {
         localIDs.add(dto.clientMsgID);
         continue;
       }
-      const message = toOpenIMMessageItem(dto);
-      await insertLocalMessage({ message, sourceID, sessionType });
-      localIDs.add(dto.clientMsgID);
-      inserted += 1;
+      try {
+        const message = toOpenIMMessageItem(dto);
+        await insertLocalMessage({ message, sourceID, sessionType });
+        localIDs.add(dto.clientMsgID);
+        inserted += 1;
+      } catch (err) {
+        // 单条消息插入失败（SDK 拒绝 / 数据异常）不应中断整批恢复，
+        // 否则一条坏消息会挡住它之后的所有历史。跳过它，下次打开会重试。
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          console.warn(
+            '[chat] restore: insert message failed, skipping',
+            dto.clientMsgID,
+            err,
+          );
+        }
+      }
     }
 
     if (!page.hasMore || page.nextBeforeSeq == null) {

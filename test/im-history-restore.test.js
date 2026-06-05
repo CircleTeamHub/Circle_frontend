@@ -65,6 +65,7 @@ function loadRestoreHarness(options) {
   const apiCalls = [];
   const pages = [...options.pages];
   const existingIDs = new Set(options.existingIDs ?? []);
+  const failInsertIDs = new Set(options.failInsertIDs ?? []);
 
   const module = loadTsModule('src/im/history-restore.ts', {
     '@openim/rn-client-sdk': {
@@ -77,9 +78,15 @@ function loadRestoreHarness(options) {
         },
         insertSingleMessageToLocalStorage: async (params) => {
           sdkCalls.push(['insertSingleMessageToLocalStorage', params]);
+          if (failInsertIDs.has(params.message.clientMsgID)) {
+            throw new Error(`insert failed for ${params.message.clientMsgID}`);
+          }
         },
         insertGroupMessageToLocalStorage: async (params) => {
           sdkCalls.push(['insertGroupMessageToLocalStorage', params]);
+          if (failInsertIDs.has(params.message.clientMsgID)) {
+            throw new Error(`insert failed for ${params.message.clientMsgID}`);
+          }
         },
       },
       SessionType: { Single: 1, Group: 3 },
@@ -249,5 +256,39 @@ test('restoreConversationMessages deduplicates concurrent restores for the same 
     sdkCalls.filter(([name]) => name === 'insertSingleMessageToLocalStorage')
       .length,
     1,
+  );
+});
+
+test('restoreConversationMessages skips a failing insert and continues the batch', async () => {
+  const { restoreConversationMessages, sdkCalls } = loadRestoreHarness({
+    localMessages: [],
+    failInsertIDs: ['client-2'],
+    pages: [
+      {
+        conversationID: 'si_me_peer',
+        messages: [
+          message('client-1', 1),
+          message('client-2', 2),
+          message('client-3', 3),
+        ],
+        hasMore: false,
+        nextBeforeSeq: null,
+      },
+    ],
+  });
+
+  const result = await restoreConversationMessages({
+    conversationID: 'si_me_peer',
+    sourceID: 'peer-1',
+    sessionType: 1,
+  });
+
+  // 一条坏消息被跳过，其余两条照常插入；fetched 仍为 3。
+  assert.deepEqual(normalize(result), { fetched: 3, inserted: 2 });
+  assert.deepEqual(
+    sdkCalls
+      .filter(([name]) => name === 'insertSingleMessageToLocalStorage')
+      .map(([, params]) => params.message.clientMsgID),
+    ['client-1', 'client-2', 'client-3'],
   );
 });
