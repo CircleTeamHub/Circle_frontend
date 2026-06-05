@@ -156,9 +156,17 @@ test('invite group members screen filters users who are already in the group', (
   assert.doesNotMatch(source, /inviteUsersToGroup\(groupID,\s*selectedIds\.map\(toImUserId\)\)/);
 });
 
-test('OpenIM client does not import native filesystem at module load on web', () => {
+test('OpenIM client bundles native filesystem with the main native bundle', () => {
+  const source = fs.readFileSync(path.join(process.cwd(), 'src/im/client.ts'), 'utf8');
+
+  assert.doesNotMatch(source, /import\s+RNFS\s+from\s+['"]react-native-fs['"]/);
+  assert.doesNotMatch(source, /import\('react-native-fs'\)/);
+  assert.match(source, /require\('react-native-fs'\)/);
+  assert.match(source, /loadNativeFS/);
+});
+
+test('non-chat filesystem features keep deferring native filesystem loading', () => {
   const checkedFiles = [
-    'src/im/client.ts',
     'src/services/api/upload.ts',
     'src/services/cache/clear-app-cache.ts',
   ];
@@ -167,7 +175,9 @@ test('OpenIM client does not import native filesystem at module load on web', ()
     const source = fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
 
     assert.doesNotMatch(source, /import\s+RNFS\s+from\s+['"]react-native-fs['"]/);
-    assert.match(source, /import\('react-native-fs'\)/);
+    // 延迟加载即可，机制不限：动态 import() 或函数内 require() 都满足
+    // “不要在模块顶层 eager 加载原生 fs”这一目标（Web/SSR 渲染时不触达原生模块）。
+    assert.match(source, /(?:import|require)\('react-native-fs'\)/);
     assert.match(source, /loadNativeFS/);
   }
 });

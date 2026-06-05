@@ -221,6 +221,8 @@ export default function ContactsScreen() {
     (id: string) => {
       if (id === 'new-friends') {
         router.push('/(tabs)/contacts/new-friends');
+      } else if (id === 'seats') {
+        router.push('/(tabs)/contacts/seats');
       } else if (id === 'groups') {
         router.push('/(tabs)/contacts/groups');
       } else if (id === 'tags') {

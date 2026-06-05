@@ -114,6 +114,7 @@
     "noGroupNotice": "暂无群公告",
     "moreGroupMembers": "更多群成员",
     "addGroupMember": "添加群成员",
+    "groupMembersCount": "{{count}}名成员",
     "setRemark": "设置备注",
     "tags": "标签",
     "searchHistory": "查找聊天记录",
@@ -919,5 +920,50 @@
     "above70": "70分以上",
     "above80": "80分以上",
     "above90": "90分以上"
+  },
+  "tempChats": {
+    "title": "坐席管理",
+    "create": "创建临时聊天",
+    "refresh": "刷新坐席列表",
+    "loading": "正在加载临时聊天",
+    "createFailed": "创建临时聊天失败",
+    "loadFailed": "加载临时聊天失败",
+    "openFailed": "进入临时聊天失败，请重试",
+    "expiredNow": "该临时聊天已过期。",
+    "empty": "暂无临时聊天",
+    "guests": "访客 {{count}}/{{max}}",
+    "expiresAt": "{{time}} 过期",
+    "createTitle": "新建临时聊天",
+    "titleLabel": "标题",
+    "titlePlaceholder": "临时聊天",
+    "durationLabel": "有效期",
+    "membersLabel": "人数上限",
+    "membersUnit": "{{count}} 人",
+    "submit": "创建",
+    "duration": {
+      "1h": "1 小时",
+      "6h": "6 小时",
+      "1d": "1 天",
+      "3d": "3 天",
+      "7d": "7 天"
+    },
+    "more": "更多操作",
+    "actionShare": "分享链接",
+    "actionEnd": "结束聊天",
+    "shareMessage": "{{title}} — 点击链接加入临时聊天：{{url}}",
+    "shareFailed": "分享失败，请重试",
+    "linkCopied": "链接已复制",
+    "scanHint": "扫描二维码加入",
+    "copyLink": "复制链接",
+    "shareSystem": "分享",
+    "endConfirmTitle": "结束该临时聊天？",
+    "endConfirmMessage": "结束后访客将被移出且无法再加入。",
+    "endConfirm": "结束",
+    "endFailed": "结束失败，请重试",
+    "status": {
+      "active": "进行中",
+      "ended": "已结束",
+      "expired": "已过期"
+    }
   }
 }

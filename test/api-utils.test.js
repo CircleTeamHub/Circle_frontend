@@ -23,9 +23,13 @@ function loadApiUtils() {
   const context = {
     module: { exports: {} },
     exports: {},
+    URL,
     require: (specifier) => {
       if (specifier === '@/constants/config') {
-        return { API_URL: 'https://api.example.com' };
+        return {
+          API_URL: 'http://192.168.1.65:3000/api/v1',
+          OPENIM_API_URL: 'http://192.168.1.65:10002',
+        };
       }
 
       if (specifier === '@/services/api/client') {
@@ -75,4 +79,17 @@ test('normalizeUser keeps backend city field', () => {
 
   assert.equal(normalized.uid, 'account-1');
   assert.equal(normalized.city, '杭州');
+});
+
+test('normalizeMediaUrl rewrites localhost media host without clobbering service port', () => {
+  const { normalizeMediaUrl } = loadApiUtils();
+
+  assert.equal(
+    normalizeMediaUrl('http://127.0.0.1:10002/object/user/msg.jpg'),
+    'http://192.168.1.65:10002/object/user/msg.jpg',
+  );
+  assert.equal(
+    normalizeMediaUrl('http://localhost:9000/circle/chat/file.jpg'),
+    'http://192.168.1.65:9000/circle/chat/file.jpg',
+  );
 });

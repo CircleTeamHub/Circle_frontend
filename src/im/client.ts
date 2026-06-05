@@ -27,6 +27,7 @@ import OpenIMSDK, {
   type ConversationItem,
   type MessageItem,
 } from '@openim/rn-client-sdk';
+import type * as NativeFS from 'react-native-fs';
 import { Platform } from 'react-native';
 import {
   LIMITS,
@@ -41,9 +42,8 @@ import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 
 // SDK 初始化 Promise 单例：避免并发重复 initSDK，登出后置为 null 允许重新初始化
 let initPromise: Promise<void> | null = null;
-type NativeFS = typeof import('react-native-fs');
-type NativeFSModule = NativeFS & { default?: NativeFS };
-let rnfsPromise: Promise<NativeFS> | null = null;
+type NativeFSModule = typeof NativeFS & { default?: typeof NativeFS };
+let rnfsModule: typeof NativeFS | null = null;
 
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 
@@ -83,16 +83,17 @@ function isNativeIMSupported() {
   return Platform.OS === 'ios' || Platform.OS === 'android';
 }
 
-async function loadNativeFS() {
-  rnfsPromise ??= import('react-native-fs').then((module) => {
-    const loaded = module as NativeFSModule;
-    return loaded.default ?? loaded;
-  });
-  return rnfsPromise;
+function loadNativeFS() {
+  if (!rnfsModule) {
+    const loaded = require('react-native-fs') as NativeFSModule;
+    rnfsModule = loaded.default ?? loaded;
+  }
+
+  return rnfsModule;
 }
 
 async function getOpenIMDataDir() {
-  const RNFS = await loadNativeFS();
+  const RNFS = loadNativeFS();
   return `${RNFS.DocumentDirectoryPath}/openim`;
 }
 
@@ -127,7 +128,7 @@ export async function ensureOpenIMInitialized() {
 
   if (!initPromise) {
     initPromise = (async () => {
-      const RNFS = await loadNativeFS();
+      const RNFS = loadNativeFS();
       const dataDir = await getOpenIMDataDir();
 
       await RNFS.mkdir(dataDir);
@@ -575,6 +576,20 @@ export async function loadConversationMessages(
     startClientMsgID: '',
     viewType: ViewType.History,
   });
+
+  if (isDev) {
+    const first = result.messageList[0];
+    const last = result.messageList[result.messageList.length - 1];
+    console.info('[openim] loadConversationMessages result', {
+      conversationID,
+      count,
+      returned: result.messageList.length,
+      firstClientMsgID: first?.clientMsgID,
+      lastClientMsgID: last?.clientMsgID,
+      firstContentType: first?.contentType,
+      lastContentType: last?.contentType,
+    });
+  }
 
   useIMStore.getState().setMessages(conversationID, result.messageList);
 

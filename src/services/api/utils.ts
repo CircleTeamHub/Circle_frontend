@@ -56,11 +56,13 @@ export function normalizeMediaUrl(value: string | null | undefined) {
       LOCALHOST_HOSTS.has(mediaUrl.hostname) &&
       !LOCALHOST_HOSTS.has(apiUrl.hostname)
     ) {
-      // 同步 protocol / hostname / port，避免出现
-      // `http://api.example.com:3000/img` 这种端口和协议错位的脏 URL。
+      // 媒体地址常来自独立服务：OpenIM object 是 10002，MinIO 是 9000。
+      // 只能把 localhost host 替换成手机可访问的 dev host，不能把端口改成后端 API 端口。
       mediaUrl.protocol = apiUrl.protocol;
       mediaUrl.hostname = apiUrl.hostname;
-      mediaUrl.port = apiUrl.port;
+      if (!mediaUrl.port) {
+        mediaUrl.port = apiUrl.port;
+      }
       return mediaUrl.toString();
     }
   } catch {

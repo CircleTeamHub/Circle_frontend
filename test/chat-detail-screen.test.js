@@ -42,6 +42,22 @@ test('chat detail screen supports preview mode without an IM conversation', () =
   assert.match(source, /disabled=\{sending \|\| isPreviewMode\}/);
 });
 
+test('chat detail screen wires a tappable emoji picker into the composer', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatDetailScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /EmojiPicker/);
+  assert.match(source, /emojiOpen/);
+  assert.match(source, /handleEmojiToggle/);
+  // 选中的 emoji 按光标位置插入草稿（而不是一律拼到末尾）
+  assert.match(source, /onSelect=\{handleInsertEmoji\}/);
+  assert.match(source, /selectionRef/);
+  assert.match(source, /onSelectionChange=\{handleSelectionChange\}/);
+});
+
 test('chat detail screen reads the local chat background preference for the active conversation', () => {
   const filePath = path.join(
     process.cwd(),

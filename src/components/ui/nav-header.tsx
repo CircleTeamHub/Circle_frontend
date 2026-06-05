@@ -5,10 +5,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme, Spacing, Typography } from '@/theme';
 
+type NavHeaderAction = {
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress?: () => void;
+  accessibilityLabel?: string;
+  disabled?: boolean;
+};
+
 interface NavHeaderProps {
   title: string;
   rightIcon?: keyof typeof Ionicons.glyphMap;
   onRightPress?: () => void;
+  rightActions?: NavHeaderAction[];
   onBackPress?: () => void;
   fallbackHref?: Href;
   // 当 rightIcon 是非自描述图标时（比如 settings-outline / help-circle-outline），
@@ -27,12 +35,18 @@ const s = StyleSheet.create({
   spacer: {
     width: 24,
   },
+  rightActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
 });
 
 export const NavHeader: React.FC<NavHeaderProps> = ({
   title,
   rightIcon,
   onRightPress,
+  rightActions,
   onBackPress,
   fallbackHref,
   rightAccessibilityLabel,
@@ -61,6 +75,17 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
     }),
     [colors],
   );
+  const actions = rightActions ?? (
+    rightIcon
+      ? [
+          {
+            icon: rightIcon,
+            onPress: onRightPress,
+            accessibilityLabel: rightAccessibilityLabel ?? rightIcon,
+          },
+        ]
+      : []
+  );
 
   return (
     <View style={s.container}>
@@ -75,15 +100,27 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
       <Text style={d.title} accessibilityRole="header">
         {title}
       </Text>
-      {rightIcon ? (
-        <Pressable
-          onPress={onRightPress}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={rightAccessibilityLabel ?? rightIcon}
-        >
-          <Ionicons name={rightIcon} size={22} color={colors.textSecondary} />
-        </Pressable>
+      {actions.length > 0 ? (
+        <View style={s.rightActionRow}>
+          {actions.map((action) => (
+            <Pressable
+              key={action.icon}
+              onPress={action.onPress}
+              disabled={action.disabled}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={action.accessibilityLabel ?? action.icon}
+            >
+              <Ionicons
+                name={action.icon}
+                size={22}
+                color={
+                  action.disabled ? colors.textSecondary : colors.textSecondary
+                }
+              />
+            </Pressable>
+          ))}
+        </View>
       ) : (
         <View style={s.spacer} />
       )}

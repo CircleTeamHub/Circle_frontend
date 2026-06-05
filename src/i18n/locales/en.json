@@ -114,6 +114,7 @@
     "noGroupNotice": "No group notice",
     "moreGroupMembers": "More Group Members",
     "addGroupMember": "Add Group Member",
+    "groupMembersCount": "{{count}} members",
     "setRemark": "Set Remark",
     "tags": "Tags",
     "searchHistory": "Search History",
@@ -920,5 +921,50 @@
     "above70": "Credit 70+",
     "above80": "Credit 80+",
     "above90": "Credit 90+"
+  },
+  "tempChats": {
+    "title": "Seat Management",
+    "create": "Create Temporary Chat",
+    "refresh": "Refresh seat list",
+    "loading": "Loading temporary chats",
+    "createFailed": "Failed to create temporary chat",
+    "loadFailed": "Failed to load temporary chats",
+    "openFailed": "Failed to enter temporary chat, please retry",
+    "expiredNow": "This temporary chat has expired.",
+    "empty": "No temporary chats",
+    "guests": "Guests {{count}}/{{max}}",
+    "expiresAt": "Expires {{time}}",
+    "createTitle": "New temporary chat",
+    "titleLabel": "Title",
+    "titlePlaceholder": "Temporary chat",
+    "durationLabel": "Duration",
+    "membersLabel": "Member limit",
+    "membersUnit": "{{count}} people",
+    "submit": "Create",
+    "duration": {
+      "1h": "1 hour",
+      "6h": "6 hours",
+      "1d": "1 day",
+      "3d": "3 days",
+      "7d": "7 days"
+    },
+    "more": "More actions",
+    "actionShare": "Share link",
+    "actionEnd": "End chat",
+    "shareMessage": "{{title}} — tap the link to join the temporary chat: {{url}}",
+    "shareFailed": "Failed to share, please retry",
+    "linkCopied": "Link copied",
+    "scanHint": "Scan the QR code to join",
+    "copyLink": "Copy link",
+    "shareSystem": "Share",
+    "endConfirmTitle": "End this temporary chat?",
+    "endConfirmMessage": "Guests will be removed and can no longer join once it ends.",
+    "endConfirm": "End",
+    "endFailed": "Failed to end, please retry",
+    "status": {
+      "active": "Active",
+      "ended": "Ended",
+      "expired": "Expired"
+    }
   }
 }

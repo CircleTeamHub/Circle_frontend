@@ -1,6 +1,7 @@
 import { apiClient } from '@/services/api/client';
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
+import type * as NativeFS from 'react-native-fs';
 import {
   expectShape,
   isNonEmptyString,
@@ -126,16 +127,15 @@ export async function requestUploadPresign(payload: {
 }
 
 const UPLOAD_TIMEOUT_MS = 60_000;
-type NativeFS = typeof import('react-native-fs');
-type NativeFSModule = NativeFS & { default?: NativeFS };
-let rnfsPromise: Promise<NativeFS> | null = null;
+type NativeFSModule = typeof NativeFS & { default?: typeof NativeFS };
+let rnfsModule: typeof NativeFS | null = null;
 
-async function loadNativeFS() {
-  rnfsPromise ??= import('react-native-fs').then((module) => {
-    const loaded = module as NativeFSModule;
-    return loaded.default ?? loaded;
-  });
-  return rnfsPromise;
+function loadNativeFS() {
+  if (!rnfsModule) {
+    const loaded = require('react-native-fs') as NativeFSModule;
+    rnfsModule = loaded.default ?? loaded;
+  }
+  return rnfsModule;
 }
 
 export async function uploadFileToPresignedUrl(
@@ -190,17 +190,16 @@ async function withUploadTimeout<T>(
       new Promise<T>((_, reject) => {
         timeoutId = setTimeout(() => {
           if (typeof jobId === 'number') {
-            // RNFS 是惰性加载的；此时已在 android 上传路径中，缓存的 promise
-            // 已解析，stopUpload 取消底层任务。失败就算了 —— 我们已经 reject 了。
-            void loadNativeFS().then((fs) => {
-              if (typeof fs.stopUpload === 'function') {
-                try {
-                  fs.stopUpload(jobId);
-                } catch {
-                  // stopUpload 抛错就算了 —— 我们已经 reject 了。
-                }
+            // 此时已在 android 上传路径中，RNFS 已经加载；stopUpload
+            // 失败就算了 —— 我们已经 reject 了。
+            const fs = loadNativeFS();
+            if (typeof fs.stopUpload === 'function') {
+              try {
+                fs.stopUpload(jobId);
+              } catch {
+                // stopUpload 抛错就算了 —— 我们已经 reject 了。
               }
-            });
+            }
           }
           reject(new Error('上传超时，请检查网络后重试'));
         }, UPLOAD_TIMEOUT_MS);
@@ -217,7 +216,7 @@ export async function uploadLocalFileToPresignedUrl(
   fileUri: string,
 ) {
   if (Platform.OS === 'android') {
-    const RNFS = await loadNativeFS();
+    const RNFS = loadNativeFS();
     const response = await withUploadTimeout(() => {
       const handle = RNFS.uploadFiles({
         toUrl: uploadUrl,

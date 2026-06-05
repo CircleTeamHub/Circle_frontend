@@ -116,6 +116,16 @@ test('upload helpers sanitize filenames and infer supported content types', () =
   );
 });
 
+test('upload.ts does not dynamically import react-native-fs on send path', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/services/api/upload.ts'),
+    'utf8',
+  );
+
+  assert.doesNotMatch(source, /import\(['"]react-native-fs['"]\)/);
+  assert.match(source, /require\(['"]react-native-fs['"]\)/);
+});
+
 test('android rejects localhost presigned upload urls', async () => {
   const { requestUploadPresign } = loadUploadApi();
 

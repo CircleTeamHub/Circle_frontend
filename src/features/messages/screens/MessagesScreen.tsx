@@ -381,11 +381,11 @@ export default function MessagesScreen() {
       if (id === "newGroup") router.push("/(tabs)/messages/new-group");
       else if (id === "addFriend") router.push("/(tabs)/messages/add-friend");
       else if (id === "groupManagement") router.push("/(tabs)/messages/groups");
-      else if (id === "scan" || id === "seatManagement") {
-        // 这两个入口暂未对接：扫一扫需要相机权限 + QR 解码模块；
-        // 客服坐席管理需要后端权限体系。先用 Alert 兜底，不让按钮装死。
+      else if (id === "seatManagement") router.push("/(tabs)/messages/temp-chats");
+      else if (id === "scan") {
+        // 扫一扫需要相机权限 + QR 解码模块。先用 Alert 兜底，不让按钮装死。
         Alert.alert(
-          id === "scan" ? "扫一扫" : "客服坐席",
+          "扫一扫",
           "该功能即将上线，敬请期待。",
         );
       }

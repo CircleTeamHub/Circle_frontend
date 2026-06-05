@@ -487,6 +487,14 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
             source={{ uri: message.imageUrl }}
             style={[sImage.image, dimensions]}
             contentFit="cover"
+            onError={(event) => {
+              if (__DEV__) {
+                console.warn('[chat] image load failed', {
+                  uri: message.imageUrl,
+                  error: event.error,
+                });
+              }
+            }}
           />
         ) : null}
       </View>

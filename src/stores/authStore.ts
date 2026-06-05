@@ -13,6 +13,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvJsonStorage } from '@/storage';
 import type { DisplayIcon } from '@/types';
+import { migrateAuthPersist, AUTH_PERSIST_VERSION } from './authPersist';
 
 export interface AuthUser {
   id: string;
@@ -121,8 +122,12 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'circle-im-auth',
-      version: 1,
+      version: AUTH_PERSIST_VERSION,
       storage: createJSONStorage(() => mmkvJsonStorage),
+      // v0（升级前无显式 version）→ v1 字段形状未变，原样向前迁移，
+      // 否则 zustand 会因 version 不匹配且无 migrate 而丢弃整份持久化数据，
+      // 导致已登录用户升级后被静默登出（即此前报错的根因）。
+      migrate: migrateAuthPersist,
       partialize: (state) => ({
         accessToken: state.accessToken,
         refreshToken: state.refreshToken,

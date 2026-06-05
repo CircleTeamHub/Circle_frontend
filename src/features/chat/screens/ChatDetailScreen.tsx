@@ -27,6 +27,7 @@ import {
   FriendCardBubble,
   TransferCardBubble,
 } from '@/features/chat/components/chat-bubble';
+import { EmojiPicker } from '@/features/chat/components/emoji-picker';
 import { getUserProfileHref } from '@/features/user/utils/routes';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
@@ -199,6 +200,13 @@ export default function ChatDetailScreen() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  // 记录输入框光标位置：表情面板按光标处插入，而不是一律拼到末尾。
+  // 用 ref 持续跟踪、用 state 只在插入后短暂受控，避免长期受控干扰中文输入法。
+  const selectionRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
+  const [selection, setSelection] = useState<
+    { start: number; end: number } | undefined
+  >(undefined);
   const consumePendingShare = useSharePickerStore((s) => s.consume);
   const consumePendingTransfer = useTransferComposerStore((s) => s.consume);
 
@@ -443,8 +451,37 @@ export default function ChatDetailScreen() {
 
   const handleAttachmentToggle = useCallback(() => {
     Keyboard.dismiss();
+    setEmojiOpen(false);
     setAttachmentOpen((prev) => !prev);
   }, []);
+
+  const handleEmojiToggle = useCallback(() => {
+    Keyboard.dismiss();
+    setAttachmentOpen(false);
+    setEmojiOpen((prev) => !prev);
+  }, []);
+
+  const handleInsertEmoji = useCallback((emoji: string) => {
+    setDraft((prev) => {
+      // 光标位置可能落在旧文本之外（异步态），夹紧到当前长度避免越界。
+      const start = Math.min(selectionRef.current.start, prev.length);
+      const end = Math.min(selectionRef.current.end, prev.length);
+      const next = prev.slice(0, start) + emoji + prev.slice(end);
+      const cursor = start + emoji.length;
+      selectionRef.current = { start: cursor, end: cursor };
+      setSelection({ start: cursor, end: cursor });
+      return next;
+    });
+  }, []);
+
+  const handleSelectionChange = useCallback(
+    (event: { nativeEvent: { selection: { start: number; end: number } } }) => {
+      selectionRef.current = event.nativeEvent.selection;
+      // 插入后短暂受控把光标移到表情之后；用户再次移动光标时释放受控，交还输入法。
+      setSelection((current) => (current ? undefined : current));
+    },
+    [],
+  );
 
   const sendDraftAsText = useCallback(
     async (text: string) => {
@@ -534,6 +571,8 @@ export default function ChatDetailScreen() {
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
+      preferredAssetRepresentationMode:
+        ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
       quality: 0.85,
       allowsMultipleSelection: false,
     });
@@ -571,7 +610,15 @@ export default function ChatDetailScreen() {
         mimeType: contentType,
       });
       appendMessages(conversationID, [sentMessage]);
-    } catch {
+    } catch (error) {
+      if (__DEV__) {
+        console.warn(
+          '[chat] image send failed',
+          error instanceof Error
+            ? { name: error.name, message: error.message }
+            : String(error),
+        );
+      }
       setSendError('图片发送失败，请重试');
     } finally {
       inFlightRef.current = false;
@@ -922,7 +969,10 @@ export default function ChatDetailScreen() {
         style={[
           s.inputBar,
           d.inputBar,
-          { paddingBottom: attachmentOpen ? Spacing.sm : insets.bottom || 28 },
+          {
+            paddingBottom:
+              attachmentOpen || emojiOpen ? Spacing.sm : insets.bottom || 28,
+          },
         ]}
       >
         <Pressable
@@ -944,11 +994,22 @@ export default function ChatDetailScreen() {
             placeholderTextColor={colors.textSecondary}
             value={draft}
             onChangeText={setDraft}
+            selection={selection}
+            onSelectionChange={handleSelectionChange}
             onSubmitEditing={handleSend}
-            onFocus={() => setAttachmentOpen(false)}
+            onFocus={() => {
+              setAttachmentOpen(false);
+              setEmojiOpen(false);
+            }}
             editable={!isPreviewMode}
           />
-          <Ionicons name="happy-outline" size={18} color={colors.textSecondary} />
+          <Pressable onPress={handleEmojiToggle} hitSlop={8} disabled={isPreviewMode}>
+            <Ionicons
+              name="happy-outline"
+              size={18}
+              color={emojiOpen ? colors.primary : colors.textSecondary}
+            />
+          </Pressable>
         </View>
         <Pressable
           style={[s.circleBtn, s.composerActionBtn, d.circleBtn, d.composerActionBtn]}
@@ -962,6 +1023,16 @@ export default function ChatDetailScreen() {
           />
         </Pressable>
       </View>
+      {emojiOpen ? (
+        <View
+          style={[
+            d.attachmentPanel,
+            { paddingBottom: insets.bottom || Spacing.md },
+          ]}
+        >
+          <EmojiPicker onSelect={handleInsertEmoji} />
+        </View>
+      ) : null}
       {attachmentOpen ? (
         <View
           style={[

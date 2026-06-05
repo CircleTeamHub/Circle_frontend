@@ -42,14 +42,40 @@ const SENSITIVE_KEYS = new Set([
   'apikey',
   'secret',
 ]);
+const SENSITIVE_URL_KEYS = new Set(['uploadurl', 'fileurl']);
+const PRESIGNED_URL_MARKERS = [
+  'X-Amz-Algorithm=',
+  'X-Amz-Credential=',
+  'X-Amz-Signature=',
+  'x-id=PutObject',
+];
+
+function redactSensitiveString(value: string): string {
+  return PRESIGNED_URL_MARKERS.some((marker) => value.includes(marker))
+    ? '[REDACTED_URL]'
+    : value;
+}
+
+function shouldRedactObjectKey(key: string, value: unknown): boolean {
+  return (
+    key.toLowerCase() === 'key' &&
+    typeof value === 'string' &&
+    value.includes('/')
+  );
+}
 
 function redactSensitiveFields(value: unknown): unknown {
   if (value == null) return value;
   if (Array.isArray(value)) return value.map(redactSensitiveFields);
+  if (typeof value === 'string') return redactSensitiveString(value);
   if (typeof value !== 'object') return value;
   const redacted: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-    redacted[k] = SENSITIVE_KEYS.has(k.toLowerCase())
+    const key = k.toLowerCase();
+    redacted[k] =
+      SENSITIVE_KEYS.has(key) ||
+      SENSITIVE_URL_KEYS.has(key) ||
+      shouldRedactObjectKey(k, v)
       ? '[REDACTED]'
       : redactSensitiveFields(v);
   }
