@@ -98,6 +98,40 @@
     "inviteGroupMembersNoInvitableFriends": "没有可邀请的好友"
   },
 
+  "notifications": {
+    "title": "消息通知",
+    "tabInteractive": "互动消息",
+    "tabCircle": "圈子动态",
+    "filterAll": "全部",
+    "filterUnread": "未读",
+    "markAllRead": "全部已读",
+    "system": "系统通知",
+    "emptyTitle": "暂无通知",
+    "emptySubtitle": "新的互动和圈子动态会出现在这里",
+    "summary": {
+      "default": "给你发来一条新通知",
+      "TRACE_LIKE": "点赞了你的动态",
+      "TRACE_COMMENT": "评论了你的动态",
+      "COMMENT_REPLY": "回复了你",
+      "FRIEND_REQUEST_RECEIVED": "申请添加你为好友",
+      "FRIEND_REQUEST_ACCEPTED": "通过了你的好友申请",
+      "FRIEND_REQUEST_REJECTED": "拒绝了你的好友申请",
+      "SQUAD_REQUEST_RECEIVED": "申请加入",
+      "SQUAD_REQUEST_ACCEPTED": "通过了你的入队申请",
+      "SQUAD_REQUEST_REJECTED": "拒绝了你的入队申请"
+    },
+    "activity": {
+      "POST_SIGNUP_RECEIVED": "报名了你的帖子：{{post}}",
+      "POST_SIGNUP_CONFIRMED": "你已报名：{{post}}",
+      "VERIFICATION_REQUESTED": "在「{{circle}}」发起了验证申请",
+      "VERIFICATION_APPROVED": "通过了你在「{{circle}}」的验证",
+      "VERIFICATION_REJECTED": "拒绝了你在「{{circle}}」的验证",
+      "INVITATION_ALL_APPROVED": "你在「{{circle}}」的邀请已全部通过",
+      "INVITATION_SLOT_REJECTED": "你在「{{circle}}」的一个邀请名额被拒",
+      "ADMIN_OVERRIDE_APPROVED": "管理员通过了你在「{{circle}}」的申请"
+    }
+  },
+
   "chat": {
     "detail": "聊天详情",
     "sendFailed": "消息发送失败，请重试",

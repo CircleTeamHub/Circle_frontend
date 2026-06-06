@@ -341,7 +341,7 @@ export default function MessagesScreen() {
   );
 
   const handleOpenNotifications = useCallback(() => {
-    router.push("/(tabs)/discover");
+    router.push("/(tabs)/messages/notifications");
   }, [router]);
 
   // 点击搜索图标 → 跳转搜索页

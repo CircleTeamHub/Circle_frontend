@@ -98,6 +98,40 @@
     "inviteGroupMembersNoInvitableFriends": "No friends available to invite"
   },
 
+  "notifications": {
+    "title": "Notifications",
+    "tabInteractive": "Interactions",
+    "tabCircle": "Circle Activity",
+    "filterAll": "All",
+    "filterUnread": "Unread",
+    "markAllRead": "Mark all read",
+    "system": "System",
+    "emptyTitle": "No notifications",
+    "emptySubtitle": "New interactions and circle activity show up here",
+    "summary": {
+      "default": "sent you a notification",
+      "TRACE_LIKE": "liked your moment",
+      "TRACE_COMMENT": "commented on your moment",
+      "COMMENT_REPLY": "replied to you",
+      "FRIEND_REQUEST_RECEIVED": "wants to add you as a friend",
+      "FRIEND_REQUEST_ACCEPTED": "accepted your friend request",
+      "FRIEND_REQUEST_REJECTED": "declined your friend request",
+      "SQUAD_REQUEST_RECEIVED": "requested to join",
+      "SQUAD_REQUEST_ACCEPTED": "accepted your join request",
+      "SQUAD_REQUEST_REJECTED": "declined your join request"
+    },
+    "activity": {
+      "POST_SIGNUP_RECEIVED": "signed up for your post: {{post}}",
+      "POST_SIGNUP_CONFIRMED": "You signed up: {{post}}",
+      "VERIFICATION_REQUESTED": "requested verification in {{circle}}",
+      "VERIFICATION_APPROVED": "approved your verification in {{circle}}",
+      "VERIFICATION_REJECTED": "rejected your verification in {{circle}}",
+      "INVITATION_ALL_APPROVED": "your invitation to {{circle}} is fully approved",
+      "INVITATION_SLOT_REJECTED": "an invitation slot in {{circle}} was rejected",
+      "ADMIN_OVERRIDE_APPROVED": "an admin approved your request in {{circle}}"
+    }
+  },
+
   "chat": {
     "detail": "Chat",
     "sendFailed": "Failed to send, please retry",
