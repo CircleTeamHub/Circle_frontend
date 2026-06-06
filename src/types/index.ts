@@ -218,6 +218,14 @@ export interface CirclePlazaPost {
     fancyNumber: boolean;
   };
   viewCount: number;
+  signupCount: number;
+  signedByMe: boolean;
+  signupRestrictions: {
+    vipLevel: number | null;
+    creditScore: number | null;
+    fancyNumber: boolean;
+  };
+  canSignup: boolean;
   author: {
     id: string;
     nickname: string;
@@ -244,6 +252,9 @@ export interface CreatePlazaPostInput {
   vipRestriction: number | null;
   creditRestriction: number | null;
   fancyRestriction: boolean;
+  signupVipRestriction: number | null;
+  signupCreditRestriction: number | null;
+  signupFancyRestriction: boolean;
 }
 
 export interface CircleDetail extends Circle {

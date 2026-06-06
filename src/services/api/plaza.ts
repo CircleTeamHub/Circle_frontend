@@ -52,3 +52,21 @@ export async function createPlazaPost(
 export async function deletePlazaPost(id: string): Promise<void> {
   await apiClient<void>(`/circle-plaza/posts/${id}`, { method: 'DELETE' });
 }
+
+export async function signupForPost(
+  id: string,
+): Promise<{ signed: boolean; signupCount: number }> {
+  return apiClient<{ signed: boolean; signupCount: number }>(
+    `/circle-plaza/posts/${id}/signup`,
+    { method: 'POST' },
+  );
+}
+
+export async function cancelSignup(
+  id: string,
+): Promise<{ signed: boolean; signupCount: number }> {
+  return apiClient<{ signed: boolean; signupCount: number }>(
+    `/circle-plaza/posts/${id}/signup`,
+    { method: 'DELETE' },
+  );
+}
