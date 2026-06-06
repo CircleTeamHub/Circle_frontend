@@ -94,8 +94,46 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
   const [signupCount, setSignupCount] = useState(post.signupCount);
   const [busy, setBusy] = useState(false);
 
+  const buildSignupReasonText = useCallback((): string => {
+    const reasons: string[] = [];
+    if (post.signupRestrictions.vipLevel != null) {
+      reasons.push(
+        t('plaza.restriction.vipAtLeast', {
+          level: post.signupRestrictions.vipLevel,
+          defaultValue: `VIP${post.signupRestrictions.vipLevel}以上`,
+        }),
+      );
+    }
+    if (post.signupRestrictions.creditScore != null) {
+      reasons.push(
+        t('plaza.restriction.creditAtLeast', {
+          score: post.signupRestrictions.creditScore,
+          defaultValue: `信用值${post.signupRestrictions.creditScore}以上`,
+        }),
+      );
+    }
+    if (post.signupRestrictions.fancyNumber) {
+      reasons.push(
+        t('plaza.restriction.fancyNumber', { defaultValue: '靓号用户' }),
+      );
+    }
+    const separator = t('plaza.restriction.separator', { defaultValue: '、' });
+    return reasons.join(separator);
+  }, [post.signupRestrictions, t]);
+
   const handleToggleSignup = useCallback(async () => {
     if (busy) return;
+    // 取消报名不校验门槛；仅当未报名且不满足资格时拦截并提示。
+    if (!signed && !post.canSignup) {
+      Alert.alert(
+        t('plaza.signupBlockedTitle', { defaultValue: '暂不可报名' }),
+        t('plaza.signupRestrictionMessage', {
+          requirements: buildSignupReasonText(),
+          defaultValue: `报名需满足：${buildSignupReasonText()}`,
+        }),
+      );
+      return;
+    }
     setBusy(true);
     const next = !signed;
     // 乐观更新
@@ -114,7 +152,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
     } finally {
       setBusy(false);
     }
-  }, [busy, signed, post.id]);
+  }, [busy, signed, post.id, post.canSignup, buildSignupReasonText, t]);
 
   const handleAvatarPress = useCallback(() => {
     if (!post.canInteract) {
@@ -220,6 +258,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
             {
               borderColor: signed ? colors.primary : colors.surfaceBorder,
               backgroundColor: signed ? colors.primaryLight : 'transparent',
+              opacity: !signed && !post.canSignup ? 0.5 : 1,
             },
           ]}
         >
