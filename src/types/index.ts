@@ -309,7 +309,9 @@ export type CircleActivityType =
   | 'VERIFICATION_REJECTED'
   | 'INVITATION_ALL_APPROVED'
   | 'INVITATION_SLOT_REJECTED'
-  | 'ADMIN_OVERRIDE_APPROVED';
+  | 'ADMIN_OVERRIDE_APPROVED'
+  | 'POST_SIGNUP_RECEIVED'
+  | 'POST_SIGNUP_CONFIRMED';
 
 export interface CircleActivityItem {
   id: string;
@@ -320,6 +322,7 @@ export interface CircleActivityItem {
   actor: { id: string; nickname: string; avatarUrl: string | null; accountId: string };
   readAt: string | null;
   createdAt: string;
+  post: { id: string; excerpt: string } | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -352,4 +355,31 @@ export interface CreateMomentInput {
   content: string;
   images: string[];
   visibility: 'FRIENDS_ONLY' | 'PRIVATE';
+}
+
+// ---------------------------------------------------------------------------
+// Notification Center (互动消息) Types
+// ---------------------------------------------------------------------------
+
+export type NotificationType =
+  | 'SYSTEM'
+  | 'TRACE_LIKE'
+  | 'TRACE_COMMENT'
+  | 'COMMENT_REPLY'
+  | 'FRIEND_REQUEST_RECEIVED'
+  | 'FRIEND_REQUEST_ACCEPTED'
+  | 'FRIEND_REQUEST_REJECTED'
+  | 'SQUAD_REQUEST_RECEIVED'
+  | 'SQUAD_REQUEST_ACCEPTED'
+  | 'SQUAD_REQUEST_REJECTED';
+
+export interface NotificationItem {
+  id: string;
+  type: NotificationType;
+  content: string;
+  read: boolean;
+  createdAt: string;
+  fromUser: { id: string; nickname: string; avatarUrl: string | null } | null;
+  fromTrace: { id: string; excerpt: string; firstImage: string | null } | null;
+  fromReply: { id: string; content: string } | null;
 }

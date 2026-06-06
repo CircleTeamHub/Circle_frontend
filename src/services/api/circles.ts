@@ -200,3 +200,9 @@ export async function markCircleActivityRead(
     method: 'POST',
   });
 }
+
+export async function markAllCircleActivitiesRead(): Promise<{ count: number }> {
+  return apiClient<{ count: number }>('/circle/activities/read-all', {
+    method: 'POST',
+  });
+}
