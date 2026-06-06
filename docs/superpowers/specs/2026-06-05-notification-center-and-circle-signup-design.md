@@ -191,3 +191,16 @@ src/features/notifications/
 - **报名文案中的帖子标识**：`CirclePost` 无 title，统一用 `content` 摘要；若摘要为空（纯图帖）回退为「图片帖子」类占位文案。
 - **未读通道命名**：复用现有互动/圈子未读广播，确认不与 IM 会话未读混淆（沿用 `tabBadgeStore` 既有字段，新增圈子动态字段如已存在则复用）。
 - **分页一致性**：互动消息服务端按 type 全量分页；圈子动态沿用现有 `take:100`（暂不分页，量级足够）。
+
+---
+
+## 10. 增补需求（2026-06-05）：报名资格限制
+
+贴主发帖时可单独设置「谁能报名」的门槛，**独立于**帖子现有的查看/互动限制（`vipRestriction` 等只管 `canInteract`）。门槛为三维：**最低 VIP 等级 + 最低信用分 + 是否仅靓号**。
+
+- **数据模型**：`CirclePost` 增 `signupVipRestriction Int?`、`signupCreditRestriction Int?`、`signupFancyRestriction Boolean @default(false)`。
+- **发帖**：`CreatePlazaPostDto` 增对应三个可选字段（校验器照搬现有 `vipRestriction/creditRestriction/fancyRestriction`）；`createPost` 持久化。
+- **报名拦截**：`signupForPost` 在「新报名」分支（幂等命中之后、建记录之前）加载报名者 `vipLevel/creditScore/fancyNumber`，用新私有方法 `checkCanSignup(post, viewer)` 校验；不达标抛 `ForbiddenException`。已报名者幂等返回不受影响。注意：报名仍**不**复用帖子的查看限制（`vipRestriction` 等），只看自己的 `signup*Restriction`。
+- **DTO**：`PlazaPostDto` 增 `signupRestrictions: { vipLevel, creditScore, fancyNumber }` 与计算字段 `canSignup: boolean`（`getFeed`/`getPost` 用 viewer 计算；`createPost` 同 `canInteract` 一样对作者传 `true`）。
+- **前端发帖**（`CreatePostScreen.tsx`）：照搬现有三档限制 UI，新增「报名 VIP / 信用 / 靓号」三项设置，提交进 `createPlazaPost`。`CreatePlazaPostInput` 增三字段。
+- **前端帖子卡片**（`plaza-post-card.tsx`）：报名按钮按 `canSignup` 置灰/拦截，不达标时用类似 `RestrictionBadge` 的文案提示报名门槛；`CirclePlazaPost` 类型增 `signupRestrictions` + `canSignup`。

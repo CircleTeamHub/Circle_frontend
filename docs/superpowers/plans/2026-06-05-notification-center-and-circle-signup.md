@@ -2547,3 +2547,229 @@ Expected: 全绿。
 - **类型一致**：`NotificationRowData` 在两个适配器中字段一致；`signupForPost/cancelSignup` 返回 `{signed,signupCount}` 前后端一致；`CircleActivityItem.post` 后端 `{id,excerpt}` 与前端类型一致。
 - **路由顺序**：notification controller `@Put('read-all')` 在 `@Put(':id/read')` 之前（已注明）。
 - **已知需实现时确认**：`tabTabBadgeStore` 是否已有圈子未读字段（3.6 Step2 给了两种分支）；`colors.primaryLight/surfaceBorder` token 名以 `src/theme/colors.ts` 为准。
+
+---
+
+# Phase 1.5 — 报名资格限制后端（circle_be）增补（2026-06-05）
+
+> 贴主可设置「谁能报名」的三维门槛（VIP/信用/靓号），独立于帖子查看限制。在 Phase 1 之后、与 circle-plaza 同文件。工作目录 `/Users/yiboding/projects/circle_be`，分支 `feat/notification-center`。
+
+## Task 1.7: schema 加三字段 + migration
+
+**Files:** `prisma/schema.prisma`
+
+- [ ] **Step 1:** `CirclePost` 在 `signupCount Int @default(0)` 下加：
+
+```prisma
+  signupCount             Int              @default(0)
+  signupVipRestriction    Int?
+  signupCreditRestriction Int?
+  signupFancyRestriction  Boolean          @default(false)
+```
+
+- [ ] **Step 2:** 生成迁移：`npx prisma migrate dev --name circle_post_signup_restriction`（无 DB 时同 Task 1.1 的 `migrate diff` 兜底；Phase 1 的 migration 已存在，本次只 diff 出三列）。然后 `npx prisma generate`。
+- [ ] **Step 3:** `npx tsc --noEmit` 通过。
+- [ ] **Step 4:** Commit：`feat: add per-post signup eligibility restrictions`
+
+## Task 1.8: DTO + createPost 持久化
+
+**Files:** `src/circle-plaza/dto/circle-plaza.dto.ts`、`src/circle-plaza/circle-plaza.service.ts`
+
+- [ ] **Step 1:** `CreatePlazaPostDto` 末尾（`fancyRestriction?` 之后）加，照搬现有校验器：
+
+```ts
+  @ApiPropertyOptional({ description: 'Min VIP level to sign up, null = no restriction' })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(10)
+  @IsOptional()
+  signupVipRestriction?: number;
+
+  @ApiPropertyOptional({ description: 'Min credit score to sign up, null = no restriction' })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  @IsOptional()
+  signupCreditRestriction?: number;
+
+  @ApiPropertyOptional({ default: false })
+  @IsBoolean()
+  @IsOptional()
+  signupFancyRestriction?: boolean;
+```
+
+- [ ] **Step 2:** `PlazaPostDto` 在 `signedByMe: boolean;` 下加：
+
+```ts
+  signupRestrictions: {
+    vipLevel: number | null;
+    creditScore: number | null;
+    fancyNumber: boolean;
+  };
+  canSignup: boolean;
+```
+
+- [ ] **Step 3:** `createPost` 的 `tx.circlePost.create({ data: { ... } })` 里加三字段：
+
+```ts
+          fancyRestriction: dto.fancyRestriction ?? false,
+          signupVipRestriction: dto.signupVipRestriction ?? null,
+          signupCreditRestriction: dto.signupCreditRestriction ?? null,
+          signupFancyRestriction: dto.signupFancyRestriction ?? false,
+```
+
+## Task 1.9: 报名拦截 + DTO 计算字段（TDD）
+
+**Files:** `src/circle-plaza/circle-plaza.service.ts`、`src/circle-plaza/circle-plaza.service.spec.ts`
+
+- [ ] **Step 1: 写失败测试**
+
+```ts
+  describe('signup eligibility', () => {
+    const restrictedPost = {
+      id: 'post-1', authorID: 'author-1', circleID: 'circle-1',
+      signupVipRestriction: 3, signupCreditRestriction: null, signupFancyRestriction: false,
+    };
+
+    it('rejects signup when viewer VIP below signup restriction', async () => {
+      prisma.circlePost.findFirst.mockResolvedValue(restrictedPost);
+      prisma.circlePostSignup.findUnique.mockResolvedValue(null);
+      prisma.user.findUnique.mockResolvedValue({ vipLevel: 1, creditScore: 100, fancyNumber: false });
+
+      await expect(service.signupForPost('user-2', 'post-1')).rejects.toThrow(ForbiddenException);
+      expect(prisma.circlePostSignup.create).not.toHaveBeenCalled();
+    });
+
+    it('allows signup when viewer meets restriction', async () => {
+      prisma.circlePost.findFirst.mockResolvedValue(restrictedPost);
+      prisma.circlePostSignup.findUnique.mockResolvedValue(null);
+      prisma.user.findUnique.mockResolvedValue({ vipLevel: 5, creditScore: 100, fancyNumber: false });
+      prisma.circlePostSignup.create.mockResolvedValue({ id: 's-1' });
+      prisma.circlePost.update.mockResolvedValue({ signupCount: 1 });
+      prisma.circleActivity.create.mockResolvedValue({});
+
+      const result = await service.signupForPost('user-2', 'post-1');
+      expect(result).toEqual({ signed: true, signupCount: 1 });
+    });
+  });
+```
+
+（`ForbiddenException` 已在文件顶部 import。`restrictedPost` mock 不再含 `content`，因 Task 1.4 的 cleanup 已删 `content` select。）
+
+- [ ] **Step 2:** 跑确认失败：`npx jest src/circle-plaza/circle-plaza.service.spec.ts -t 'signup eligibility'` → FAIL。
+
+- [ ] **Step 3: 实现**
+
+(a) `signupForPost` 的 `findFirst` select 加三个限制字段：
+
+```ts
+      select: {
+        id: true, authorID: true, circleID: true,
+        signupVipRestriction: true,
+        signupCreditRestriction: true,
+        signupFancyRestriction: true,
+      },
+```
+
+(b) 在「幂等 existing 返回」之后、`$transaction` 之前插入资格校验：
+
+```ts
+    // 报名资格校验（独立于帖子查看限制 vipRestriction，仅看 signup* 门槛）
+    const viewer = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { vipLevel: true, creditScore: true, fancyNumber: true },
+    });
+    if (!this.checkCanSignup(post, viewer)) {
+      throw new ForbiddenException('您的等级不满足该帖子的报名要求');
+    }
+```
+
+(c) 加私有方法（紧挨 `checkCanInteract`）：
+
+```ts
+  private checkCanSignup(
+    post: any,
+    viewer: { vipLevel: number; creditScore: number; fancyNumber: boolean } | null,
+  ): boolean {
+    if (!viewer) return false;
+    if (post.signupVipRestriction != null && viewer.vipLevel < post.signupVipRestriction) return false;
+    if (post.signupCreditRestriction != null && viewer.creditScore < post.signupCreditRestriction) return false;
+    if (post.signupFancyRestriction && !viewer.fancyNumber) return false;
+    return true;
+  }
+```
+
+(d) `toPlazaPostDto` 改签名 `(post, canInteract, signedByMe, canSignup)`，return 加：
+
+```ts
+      signedByMe,
+      signupRestrictions: {
+        vipLevel: post.signupVipRestriction ?? null,
+        creditScore: post.signupCreditRestriction ?? null,
+        fancyNumber: post.signupFancyRestriction ?? false,
+      },
+      canSignup,
+```
+
+(e) 三个调用点：
+- `createPost` 末尾：`return this.toPlazaPostDto(post, true, false, true);`
+- `getPost`：`return this.toPlazaPostDto(post, this.checkCanInteract(post, viewer), Boolean(signed), this.checkCanSignup(post, viewer));`
+- `getFeed` 的 map：`this.toPlazaPostDto(post, this.checkCanInteract(post, viewer), signedSet.has(post.id), this.checkCanSignup(post, viewer))`
+
+- [ ] **Step 4:** 跑确认通过：`npx jest src/circle-plaza/circle-plaza.service.spec.ts` → 全过（更新可能受影响的旧 signupForPost 测试：给它们的 `restrictedPost`/`activePost` mock 补三个 `signup*Restriction` 字段 = null/null/false，并给 `prisma.user.findUnique` 一个达标的 mock，否则新加的资格校验会拦截）。
+- [ ] **Step 5:** `npx tsc --noEmit` 通过。
+- [ ] **Step 6:** Commit：`feat: enforce per-post signup eligibility and expose canSignup`
+
+---
+
+# Phase 4.5 — 报名资格限制前端（circle-im）增补
+
+> 与 Phase 4 同批做。工作目录 `/Users/yiboding/projects/circle-im`。
+
+## Task 4.3: 类型 + 发帖设置
+
+**Files:** `src/types/index.ts`、`src/features/social/screens/CreatePostScreen.tsx`、`src/services/api/plaza.ts`（无需改，`createPlazaPost` 直接透传 input）
+
+- [ ] **Step 1:** `CreatePlazaPostInput` 加：
+
+```ts
+  fancyRestriction: boolean;
+  signupVipRestriction: number | null;
+  signupCreditRestriction: number | null;
+  signupFancyRestriction: boolean;
+```
+
+`CirclePlazaPost` 加（在 `signedByMe` 下）：
+
+```ts
+  signedByMe: boolean;
+  signupRestrictions: {
+    vipLevel: number | null;
+    creditScore: number | null;
+    fancyNumber: boolean;
+  };
+  canSignup: boolean;
+```
+
+- [ ] **Step 2:** `CreatePostScreen.tsx`：照搬现有 VIP/信用/靓号三档限制的 state + cycle 回调 + 渲染行（约 line 155-228、476-490），新增 `signupVipRestriction`/`signupCreditRestriction`/`signupFancyEnabled` 三个 state 与对应「报名 VIP / 报名信用 / 报名仅靓号」设置行（复用 `VIP_OPTIONS`/`CREDIT_OPTIONS`），并在提交对象（约 line 292-294）加：
+
+```ts
+        signupVipRestriction,
+        signupCreditRestriction,
+        signupFancyRestriction: signupFancyEnabled,
+```
+
+- [ ] **Step 3:** 手动验证：发帖页能分别设置「查看限制」与「报名限制」两组；`npx tsc --noEmit` 通过。
+- [ ] **Step 4:** Commit：`feat: signup eligibility settings in post composer`
+
+## Task 4.4: 帖子卡片报名按钮按 canSignup 置灰
+
+**Files:** `src/features/discover/components/plaza-post-card.tsx`
+
+- [ ] **Step 1:** Task 4.2 的报名按钮基础上：当 `!post.canSignup` 时按钮 `disabled` 且置灰，点击弹 `Alert` 提示报名门槛（仿 `handleAvatarPress` 里拼 `reasons` 的写法，但用 `post.signupRestrictions` 的 `vipLevel/creditScore/fancyNumber`）。已报名者（`signedByMe`）即使现在不达标也允许取消（取消不校验门槛）。
+- [ ] **Step 2:** `npx tsc --noEmit` 通过；手动验证：不达标用户看到置灰报名按钮 + 点击提示门槛。
+- [ ] **Step 3:** Commit：`feat: gate signup button by canSignup with restriction hint`
+
+> 注：Phase 1.5 / 4.5 与 Phase 1 的 `signupForPost` 改动同文件，执行顺序须在 Phase 1 之后；与 Phase 2/3 互不冲突。
