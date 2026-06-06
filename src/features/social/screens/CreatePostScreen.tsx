@@ -156,6 +156,13 @@ export default function CreatePostScreen() {
   const [creditRestriction, setCreditRestriction] = useState<number | null>(
     null,
   );
+  const [signupVipRestriction, setSignupVipRestriction] = useState<
+    number | null
+  >(null);
+  const [signupCreditRestriction, setSignupCreditRestriction] = useState<
+    number | null
+  >(null);
+  const [signupFancyEnabled, setSignupFancyEnabled] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   // Pattern D: 防止双击在 setSubmitting flush 之前重复触发 createPlazaPost。
   const inFlightRef = useRef(false);
@@ -222,10 +229,30 @@ export default function CreatePostScreen() {
     });
   }, []);
 
+  const cycleSignupVipRestriction = useCallback(() => {
+    setSignupVipRestriction((prev) => {
+      const idx = VIP_OPTIONS.findIndex((o) => o.value === prev);
+      return VIP_OPTIONS[(idx + 1) % VIP_OPTIONS.length].value;
+    });
+  }, []);
+
+  const cycleSignupCreditRestriction = useCallback(() => {
+    setSignupCreditRestriction((prev) => {
+      const idx = CREDIT_OPTIONS.findIndex((o) => o.value === prev);
+      return CREDIT_OPTIONS[(idx + 1) % CREDIT_OPTIONS.length].value;
+    });
+  }, []);
+
   const vipLabel =
     VIP_OPTIONS.find((o) => o.value === vipRestriction)?.label ?? '不限制';
   const creditLabel =
     CREDIT_OPTIONS.find((o) => o.value === creditRestriction)?.label ??
+    '不限制';
+  const signupVipLabel =
+    VIP_OPTIONS.find((o) => o.value === signupVipRestriction)?.label ??
+    '不限制';
+  const signupCreditLabel =
+    CREDIT_OPTIONS.find((o) => o.value === signupCreditRestriction)?.label ??
     '不限制';
 
   const canSubmit = content.trim().length > 0 && selectedCircle != null;
@@ -292,6 +319,9 @@ export default function CreatePostScreen() {
         vipRestriction,
         creditRestriction,
         fancyRestriction: fancyNumberEnabled,
+        signupVipRestriction,
+        signupCreditRestriction,
+        signupFancyRestriction: signupFancyEnabled,
       });
 
       prependPlazaPost(post);
@@ -323,6 +353,9 @@ export default function CreatePostScreen() {
     vipRestriction,
     creditRestriction,
     fancyNumberEnabled,
+    signupVipRestriction,
+    signupCreditRestriction,
+    signupFancyEnabled,
     prependPlazaPost,
     router,
     t,
@@ -497,6 +530,36 @@ export default function CreatePostScreen() {
           <Switch
             value={fancyNumberEnabled}
             onValueChange={setFancyNumberEnabled}
+            trackColor={{ false: colors.surfaceBorder, true: colors.primary }}
+            thumbColor={colors.white}
+          />
+        </View>
+        <Divider />
+
+        {/* Signup VIP restriction */}
+        <MenuRow
+          icon="diamond-outline"
+          label="报名 VIP"
+          rightText={signupVipLabel}
+          onPress={cycleSignupVipRestriction}
+        />
+        <Divider />
+
+        {/* Signup credit restriction */}
+        <MenuRow
+          icon="shield-checkmark-outline"
+          label="报名信用"
+          rightText={signupCreditLabel}
+          onPress={cycleSignupCreditRestriction}
+        />
+        <Divider />
+
+        {/* Signup fancy number toggle */}
+        <View style={s.toggleRow}>
+          <Text style={[s.rowLabel, d.rowLabel]}>报名仅靓号</Text>
+          <Switch
+            value={signupFancyEnabled}
+            onValueChange={setSignupFancyEnabled}
             trackColor={{ false: colors.surfaceBorder, true: colors.primary }}
             thumbColor={colors.white}
           />
