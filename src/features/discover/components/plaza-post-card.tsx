@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +7,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { getUserProfileHref } from '@/features/user/utils/routes';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
+import { cancelSignup, signupForPost } from '@/services/api/plaza';
 import { ImageGrid } from './image-grid';
 import { RestrictionBadge } from './restriction-badge';
 import type { CirclePlazaPost } from '@/types';
@@ -39,10 +40,14 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  viewCount: {
+  signupBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,
+    paddingHorizontal: Spacing.sm + 2,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+    borderWidth: 1,
   },
 });
 
@@ -81,13 +86,35 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
         fontSize: 14,
         lineHeight: 21,
       },
-      viewText: {
-        color: colors.textSecondary,
-        ...Typography.caption,
-      },
     }),
     [colors],
   );
+
+  const [signed, setSigned] = useState(post.signedByMe);
+  const [signupCount, setSignupCount] = useState(post.signupCount);
+  const [busy, setBusy] = useState(false);
+
+  const handleToggleSignup = useCallback(async () => {
+    if (busy) return;
+    setBusy(true);
+    const next = !signed;
+    // 乐观更新
+    setSigned(next);
+    setSignupCount((c) => Math.max(0, c + (next ? 1 : -1)));
+    try {
+      const res = next
+        ? await signupForPost(post.id)
+        : await cancelSignup(post.id);
+      setSigned(res.signed);
+      setSignupCount(res.signupCount);
+    } catch {
+      // 回滚
+      setSigned(!next);
+      setSignupCount((c) => Math.max(0, c + (next ? -1 : 1)));
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, signed, post.id]);
 
   const handleAvatarPress = useCallback(() => {
     if (!post.canInteract) {
@@ -182,12 +209,38 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
       {/* Restrictions */}
       <RestrictionBadge restrictions={post.restrictions} />
 
-      {/* Footer */}
+      {/* Footer：报名按钮 + 报名数 */}
       <View style={s.footer}>
-        <View style={s.viewCount}>
-          <Ionicons name="eye-outline" size={14} color={colors.textSecondary} />
-          <Text style={d.viewText}>{post.viewCount}</Text>
-        </View>
+        <Pressable
+          onPress={handleToggleSignup}
+          disabled={busy}
+          hitSlop={6}
+          style={[
+            s.signupBtn,
+            {
+              borderColor: signed ? colors.primary : colors.surfaceBorder,
+              backgroundColor: signed ? colors.primaryLight : 'transparent',
+            },
+          ]}
+        >
+          <Ionicons
+            name={signed ? 'checkmark-circle' : 'hand-right-outline'}
+            size={16}
+            color={signed ? colors.primary : colors.textSecondary}
+          />
+          <Text
+            style={{
+              fontSize: 13,
+              fontWeight: '600',
+              color: signed ? colors.primary : colors.textSecondary,
+            }}
+          >
+            {signed
+              ? t('plaza.signedUp', { defaultValue: '已报名' })
+              : t('plaza.signUp', { defaultValue: '报名' })}
+            {signupCount > 0 ? ` ${signupCount}` : ''}
+          </Text>
+        </Pressable>
       </View>
     </View>
   );
