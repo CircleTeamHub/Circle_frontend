@@ -44,6 +44,7 @@ export default function MessagesLayout() {
       <Stack.Screen name="temp-chats" />
       <Stack.Screen name="new-group" />
       <Stack.Screen name="invite-group-members" />
+      <Stack.Screen name="notifications" />
     </Stack>
   );
 }
