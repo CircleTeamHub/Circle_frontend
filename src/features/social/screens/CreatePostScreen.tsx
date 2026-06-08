@@ -19,6 +19,7 @@ import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Divider } from '@/components/ui/divider';
 import { MenuRow } from '@/components/ui/menu-row';
+import { OptionPickerSheet } from '@/components/ui/option-picker-sheet';
 import { createPlazaPost } from '@/services/api/plaza';
 import {
   requestUploadPresign,
@@ -30,13 +31,14 @@ import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
 import { usePostFormStore } from '@/features/discover/store/use-post-form-store';
 import { useTranslation } from 'react-i18next';
 
+// VIP 档位对齐 app 实际会员体系（VIP1–VIP5，见 MemberCenterScreen）。
 const VIP_OPTIONS = [
   { label: '不限制', value: null },
   { label: 'VIP 1', value: 1 },
   { label: 'VIP 2', value: 2 },
   { label: 'VIP 3', value: 3 },
+  { label: 'VIP 4', value: 4 },
   { label: 'VIP 5', value: 5 },
-  { label: 'VIP 8', value: 8 },
 ];
 
 const CREDIT_OPTIONS = [
@@ -94,6 +96,11 @@ const s = StyleSheet.create({
   photoCount: { ...Typography.small },
   tagSection: { marginTop: Spacing.md },
   tagLabel: { ...Typography.caption, marginBottom: Spacing.sm },
+  sectionHeading: {
+    ...Typography.caption,
+    marginTop: Spacing.lg,
+    marginBottom: Spacing.xs,
+  },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.sm },
   tagChip: {
     flexDirection: 'row',
@@ -149,13 +156,8 @@ export default function CreatePostScreen() {
   const [content, setContent] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const [hornEnabled, setHornEnabled] = useState(false);
-  const [fancyNumberEnabled, setFancyNumberEnabled] = useState(false);
   const [postTags, setPostTags] = useState<string[]>([]);
   const [postTagInput, setPostTagInput] = useState('');
-  const [vipRestriction, setVipRestriction] = useState<number | null>(null);
-  const [creditRestriction, setCreditRestriction] = useState<number | null>(
-    null,
-  );
   const [signupVipRestriction, setSignupVipRestriction] = useState<
     number | null
   >(null);
@@ -163,6 +165,9 @@ export default function CreatePostScreen() {
     number | null
   >(null);
   const [signupFancyEnabled, setSignupFancyEnabled] = useState(false);
+  const [activePicker, setActivePicker] = useState<
+    'signupVip' | 'signupCredit' | null
+  >(null);
   const [submitting, setSubmitting] = useState(false);
   // Pattern D: 防止双击在 setSubmitting flush 之前重复触发 createPlazaPost。
   const inFlightRef = useRef(false);
@@ -215,39 +220,8 @@ export default function CreatePostScreen() {
     router.push('/(tabs)/discover/select-city');
   }, [router]);
 
-  const cycleVipRestriction = useCallback(() => {
-    setVipRestriction((prev) => {
-      const idx = VIP_OPTIONS.findIndex((o) => o.value === prev);
-      return VIP_OPTIONS[(idx + 1) % VIP_OPTIONS.length].value;
-    });
-  }, []);
+  const closePicker = useCallback(() => setActivePicker(null), []);
 
-  const cycleCreditRestriction = useCallback(() => {
-    setCreditRestriction((prev) => {
-      const idx = CREDIT_OPTIONS.findIndex((o) => o.value === prev);
-      return CREDIT_OPTIONS[(idx + 1) % CREDIT_OPTIONS.length].value;
-    });
-  }, []);
-
-  const cycleSignupVipRestriction = useCallback(() => {
-    setSignupVipRestriction((prev) => {
-      const idx = VIP_OPTIONS.findIndex((o) => o.value === prev);
-      return VIP_OPTIONS[(idx + 1) % VIP_OPTIONS.length].value;
-    });
-  }, []);
-
-  const cycleSignupCreditRestriction = useCallback(() => {
-    setSignupCreditRestriction((prev) => {
-      const idx = CREDIT_OPTIONS.findIndex((o) => o.value === prev);
-      return CREDIT_OPTIONS[(idx + 1) % CREDIT_OPTIONS.length].value;
-    });
-  }, []);
-
-  const vipLabel =
-    VIP_OPTIONS.find((o) => o.value === vipRestriction)?.label ?? '不限制';
-  const creditLabel =
-    CREDIT_OPTIONS.find((o) => o.value === creditRestriction)?.label ??
-    '不限制';
   const signupVipLabel =
     VIP_OPTIONS.find((o) => o.value === signupVipRestriction)?.label ??
     '不限制';
@@ -316,9 +290,10 @@ export default function CreatePostScreen() {
         city: selectedCity,
         noteId: null,
         isHorn: hornEnabled,
-        vipRestriction,
-        creditRestriction,
-        fancyRestriction: fancyNumberEnabled,
+        // 查看/互动限制已合并到报名限制；这三项保留字段但一律传默认值（不限制）。
+        vipRestriction: null,
+        creditRestriction: null,
+        fancyRestriction: false,
         signupVipRestriction,
         signupCreditRestriction,
         signupFancyRestriction: signupFancyEnabled,
@@ -350,9 +325,6 @@ export default function CreatePostScreen() {
     resetForm,
     selectedCity,
     hornEnabled,
-    vipRestriction,
-    creditRestriction,
-    fancyNumberEnabled,
     signupVipRestriction,
     signupCreditRestriction,
     signupFancyEnabled,
@@ -506,65 +478,55 @@ export default function CreatePostScreen() {
         </View>
         <Divider />
 
-        {/* VIP restriction */}
-        <MenuRow
-          icon="diamond-outline"
-          label="VIP限制"
-          rightText={vipLabel}
-          onPress={cycleVipRestriction}
-        />
-        <Divider />
-
-        {/* Credit restriction */}
-        <MenuRow
-          icon="shield-checkmark-outline"
-          label="信用值限制"
-          rightText={creditLabel}
-          onPress={cycleCreditRestriction}
-        />
-        <Divider />
-
-        {/* Fancy number toggle */}
-        <View style={s.toggleRow}>
-          <Text style={[s.rowLabel, d.rowLabel]}>需要靓号</Text>
-          <Switch
-            value={fancyNumberEnabled}
-            onValueChange={setFancyNumberEnabled}
-            trackColor={{ false: colors.surfaceBorder, true: colors.primary }}
-            thumbColor={colors.white}
-          />
-        </View>
-        <Divider />
+        {/* 报名限制 —— 以下三项都绑定 signup* 字段，控制谁能报名 */}
+        <Text style={[s.sectionHeading, { color: colors.textSecondary }]}>
+          报名限制
+        </Text>
 
         {/* Signup VIP restriction */}
         <MenuRow
           icon="diamond-outline"
-          label="报名 VIP"
+          label="VIP限制"
           rightText={signupVipLabel}
-          onPress={cycleSignupVipRestriction}
+          onPress={() => setActivePicker('signupVip')}
         />
         <Divider />
 
         {/* Signup credit restriction */}
         <MenuRow
           icon="shield-checkmark-outline"
-          label="报名信用"
+          label="信用值限制"
           rightText={signupCreditLabel}
-          onPress={cycleSignupCreditRestriction}
+          onPress={() => setActivePicker('signupCredit')}
         />
         <Divider />
 
         {/* Signup fancy number toggle */}
-        <View style={s.toggleRow}>
-          <Text style={[s.rowLabel, d.rowLabel]}>报名仅靓号</Text>
-          <Switch
-            value={signupFancyEnabled}
-            onValueChange={setSignupFancyEnabled}
-            trackColor={{ false: colors.surfaceBorder, true: colors.primary }}
-            thumbColor={colors.white}
-          />
-        </View>
+        <MenuRow
+          icon="sparkles-outline"
+          label="靓号限制"
+          hasToggle
+          toggleValue={signupFancyEnabled}
+          onToggle={setSignupFancyEnabled}
+        />
       </ScrollView>
+
+      <OptionPickerSheet
+        visible={activePicker === 'signupVip'}
+        title="选择 VIP 限制"
+        options={VIP_OPTIONS}
+        selectedValue={signupVipRestriction}
+        onSelect={setSignupVipRestriction}
+        onClose={closePicker}
+      />
+      <OptionPickerSheet
+        visible={activePicker === 'signupCredit'}
+        title="选择信用值限制"
+        options={CREDIT_OPTIONS}
+        selectedValue={signupCreditRestriction}
+        onSelect={setSignupCreditRestriction}
+        onClose={closePicker}
+      />
 
       <View style={[s.submitWrap, { paddingBottom: insets.bottom || 34 }]}>
         <Pressable
