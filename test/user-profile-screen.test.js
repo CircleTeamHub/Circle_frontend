@@ -234,7 +234,7 @@ test('user profile route helpers preserve scope for the request form', () => {
     },
   );
   assert.deepEqual(
-    JSON.parse(JSON.stringify(getChatDetailHref('user-1', '小李', 'https://img.example/avatar.png', 'conversation-1'))),
+    JSON.parse(JSON.stringify(getChatDetailHref('messages', 'user-1', '小李', 'https://img.example/avatar.png', 'conversation-1'))),
     {
       pathname: '/(tabs)/messages/chat-detail',
       params: {
@@ -386,7 +386,8 @@ test('user profile screen wires the top-right menu into chat info for accepted f
   );
   const source = fs.readFileSync(filePath, 'utf8');
 
-  assert.match(source, /<NavHeader[\s\S]*title=\{t\('userProfile\.title'\)\}[\s\S]*rightIcon="information-circle-outline"[\s\S]*onRightPress=\{handleOpenChatInfo\}/);
+  assert.match(source, /const canOpenChatInfo =[\s\S]*friendStatus === 'ACCEPTED'/);
+  assert.match(source, /<NavHeader[\s\S]*title=\{t\('userProfile\.title'\)\}[\s\S]*rightIcon=\{canOpenChatInfo \? 'information-circle-outline' : undefined\}[\s\S]*onRightPress=\{canOpenChatInfo \? handleOpenChatInfo : undefined\}/);
   assert.match(source, /const handleOpenChatInfo = useCallback/);
   assert.match(source, /friendStatus !== 'ACCEPTED'/);
   assert.match(source, /getChatInfoHref/);

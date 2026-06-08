@@ -52,111 +52,50 @@ test("interactive: TRACE_LIKE → heart icon + liked summary", () => {
   assert.equal(row.title, "B");
 });
 
-test("circle: POST_SIGNUP_RECEIVED → uses post excerpt", () => {
-  const { mapActivityToRow } = load(
-    "src/features/notifications/utils/circle-activity-summary.ts",
+test("signup management: post row uses post excerpt and unread count", () => {
+  const { mapMyPostToRow } = load(
+    "src/features/notifications/utils/my-post-summary.ts",
   );
-  const row = mapActivityToRow(
+  const row = mapMyPostToRow(
     {
-      id: "a1",
-      circleId: "c1",
+      id: "p1",
+      circleId: "c",
       circleName: "C",
-      invitationId: null,
-      type: "POST_SIGNUP_RECEIVED",
-      actor: { id: "u2", nickname: "B", avatarUrl: null, accountId: "2" },
-      readAt: null,
+      excerpt: "Hiking",
+      firstImage: "img1",
+      signupCount: 3,
+      unreadSignupCount: 2,
       createdAt: "2026-06-05T00:00:00Z",
-      post: { id: "p1", excerpt: "Hiking" },
     },
     t,
   );
   assert.equal(row.unread, true);
-  assert.ok(row.summary.includes("Hiking"));
-  assert.equal(row.title, "B");
+  assert.equal(row.title, "Hiking");
+  assert.equal(row.avatarUrl, "img1");
+  assert.equal(row.icon, "megaphone-outline");
+  assert.equal(row.summary, "notifications.signupMgmt.rowWithUnread");
 });
 
-// Interpolating stub mimicking react-i18next: when the activity template owns a
-// {{post}} slot, the excerpt is already woven into the label by i18next itself.
-const tInterp = (key, opts) =>
-  key.endsWith("RECEIVED") && opts && opts.post != null
-    ? `报名了你的帖子：${opts.post}`
-    : key;
-
-test("circle: POST_SIGNUP_RECEIVED dedupe guard → excerpt appears exactly once under interpolation", () => {
-  const { mapActivityToRow } = load(
-    "src/features/notifications/utils/circle-activity-summary.ts",
+test("signup management: post row falls back for untitled posts", () => {
+  const { mapMyPostToRow } = load(
+    "src/features/notifications/utils/my-post-summary.ts",
   );
-  const row = mapActivityToRow(
+  const row = mapMyPostToRow(
     {
-      id: "a1",
-      circleId: "c1",
+      id: "p1",
+      circleId: "c",
       circleName: "C",
-      invitationId: null,
-      type: "POST_SIGNUP_RECEIVED",
-      actor: { id: "u2", nickname: "B", avatarUrl: null, accountId: "2" },
-      readAt: null,
+      excerpt: "",
+      firstImage: null,
+      signupCount: 0,
+      unreadSignupCount: 0,
       createdAt: "2026-06-05T00:00:00Z",
-      post: { id: "p1", excerpt: "Hiking" },
     },
-    tInterp,
-  );
-  // The real i18n path: label already contains the excerpt, so the append branch
-  // must be suppressed — no ` · Hiking` duplication.
-  assert.equal(row.summary, "报名了你的帖子：Hiking");
-  assert.equal(row.summary.split("Hiking").length - 1, 1);
-  assert.ok(!row.summary.includes(" · "));
-});
-
-test("circle: VERIFICATION_APPROVED with null post → no trailing separator (falsy-excerpt guard)", () => {
-  const { mapActivityToRow } = load(
-    "src/features/notifications/utils/circle-activity-summary.ts",
-  );
-  const row = mapActivityToRow(
-    {
-      id: "a2",
-      circleId: "c1",
-      circleName: "C",
-      invitationId: null,
-      type: "VERIFICATION_APPROVED",
-      actor: { id: "u2", nickname: "B", avatarUrl: null, accountId: "2" },
-      readAt: null,
-      createdAt: "2026-06-05T00:00:00Z",
-      post: null,
-    },
-    tInterp,
-  );
-  // excerpt resolves to '' → append branch suppressed, label is surfaced as-is.
-  assert.equal(row.summary, "notifications.activity.VERIFICATION_APPROVED");
-  assert.ok(!row.summary.includes(" · "));
-  assert.ok(!row.summary.endsWith("· "));
-  assert.ok(!row.summary.endsWith(" · "));
-});
-
-test("circle: iconFor branches → VERIFICATION shield, other people-circle", () => {
-  const { mapActivityToRow } = load(
-    "src/features/notifications/utils/circle-activity-summary.ts",
-  );
-  const base = {
-    id: "a3",
-    circleId: "c1",
-    circleName: "C",
-    invitationId: null,
-    actor: { id: "u2", nickname: "B", avatarUrl: null, accountId: "2" },
-    readAt: null,
-    createdAt: "2026-06-05T00:00:00Z",
-    post: null,
-  };
-  const verification = mapActivityToRow(
-    { ...base, type: "VERIFICATION_APPROVED" },
     t,
   );
-  assert.equal(verification.icon, "shield-checkmark-outline");
-
-  const other = mapActivityToRow(
-    { ...base, type: "MEMBER_JOINED" },
-    t,
-  );
-  assert.equal(other.icon, "people-circle-outline");
+  assert.equal(row.title, "notifications.signupMgmt.untitledPost");
+  assert.equal(row.summary, "notifications.signupMgmt.row");
+  assert.equal(row.unread, false);
 });
 
 test("interactive: iconFor branches → FRIEND_REQUEST person-add, SQUAD_REQUEST people", () => {

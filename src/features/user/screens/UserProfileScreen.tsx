@@ -411,6 +411,8 @@ export default function UserProfileScreen() {
 
     router.push(getChatInfoHref(scope, profileId, displayName));
   }, [displayName, friendStatus, isCurrentUser, profileId, router, scope]);
+  const canOpenChatInfo =
+    !isCurrentUser && profileId !== 'unknown' && friendStatus === 'ACCEPTED';
 
   const infoRowItems = useMemo(
     () =>
@@ -535,8 +537,8 @@ export default function UserProfileScreen() {
     <View style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader
         title={t('userProfile.title')}
-        rightIcon="settings-outline"
-        onRightPress={handleOpenChatInfo}
+        rightIcon={canOpenChatInfo ? 'information-circle-outline' : undefined}
+        onRightPress={canOpenChatInfo ? handleOpenChatInfo : undefined}
       />
       {fetchError ? (
         <Text style={{ color: colors.error, textAlign: 'center', paddingVertical: 6, ...Typography.small }}>

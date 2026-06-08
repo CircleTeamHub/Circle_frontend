@@ -16,10 +16,11 @@ test('realtime client routes websocket badge events into the unified tab badge s
   assert.match(client, /new WebSocket/);
   assert.match(client, /badge\.snapshot/);
   assert.match(client, /friend\.activity\.unread\.changed/);
-  assert.match(client, /circle\.activity\.unread\.changed/);
+  assert.match(client, /circle\.signup\.unread\.changed/);
   assert.match(client, /applySnapshot/);
   assert.match(client, /setContactsUnread/);
   assert.match(client, /setDiscoverUnread/);
+  assert.match(client, /setSignupUnread/);
   assert.match(client, /setRealtimeConnected/);
 });
 

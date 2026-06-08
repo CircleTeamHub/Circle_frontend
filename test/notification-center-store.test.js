@@ -51,14 +51,14 @@ test("removeInteractiveLocal drops the row", () => {
   assert.equal(useNotificationCenterStore.getState().interactive.length, 0);
 });
 
-test("markCircleReadLocal sets readAt", () => {
+test("markPostSignupsSeenLocal clears unread signup count", () => {
   const { useNotificationCenterStore } = load(
     "src/features/notifications/store/use-notification-center-store.ts",
   );
   const store = useNotificationCenterStore.getState();
-  store.setCircle([
-    { id: "a1", circleId: "c", circleName: "C", invitationId: null, type: "POST_SIGNUP_RECEIVED", actor: { id: "u", nickname: "B", avatarUrl: null, accountId: "1" }, readAt: null, createdAt: "", post: null },
+  store.setSignupPosts([
+    { id: "p1", circleId: "c", circleName: "C", excerpt: "Post", firstImage: null, signupCount: 2, unreadSignupCount: 2, createdAt: "" },
   ]);
-  store.markCircleReadLocal("a1");
-  assert.notEqual(useNotificationCenterStore.getState().circle[0].readAt, null);
+  store.markPostSignupsSeenLocal("p1");
+  assert.equal(useNotificationCenterStore.getState().signupPosts[0].unreadSignupCount, 0);
 });
