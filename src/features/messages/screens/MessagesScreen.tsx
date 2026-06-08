@@ -11,7 +11,7 @@ import { useTabBadgeStore } from "@/stores/tabBadgeStore";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { Conversation } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -180,6 +180,13 @@ export default function MessagesScreen() {
 
   const [activeFilterId, setActiveFilterId] = useState("all"); // 当前激活的筛选标签 id
   const [menuVisible, setMenuVisible] = useState(false);        // 右上角弹出菜单的显隐
+
+  // 每次回到消息页都重置到"全部"，而不是停留在上次的筛选标签。
+  useFocusEffect(
+    useCallback(() => {
+      setActiveFilterId("all");
+    }, []),
+  );
 
   // 发现 / 系统通知未读数（realtime 通道维护，跟 discover tab 入口绑定）
   const discoverUnread = useTabBadgeStore((state) => state.systemUnread);
