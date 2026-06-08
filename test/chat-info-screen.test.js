@@ -430,7 +430,7 @@ test('chat history search screens exist with dedicated titles and empty states',
   );
 
   assert.match(hubSource, /NavHeader[\s\S]*title="查找聊天记录"/);
-  assert.match(hubSource, /fallbackHref={getChatDetailHref\(sourceID, title, undefined, conversationID\)}/);
+  assert.match(hubSource, /fallbackHref={getChatDetailHref\('messages', sourceID, title, undefined, conversationID\)}/);
   assert.match(hubSource, /搜索文字消息/);
   assert.match(hubSource, /图片/);
   assert.match(hubSource, /文件/);

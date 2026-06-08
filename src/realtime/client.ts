@@ -1,5 +1,5 @@
 import { REALTIME_WS_URL } from '@/constants/config';
-import { fetchCircleActivityUnreadCount } from '@/services/api/circles';
+import { fetchMySignupsUnreadCount } from '@/services/api/plaza';
 import { fetchUnreadFriendActivityCount } from '@/services/api/friends';
 import { fetchCurrentUser } from '@/services/api/auth';
 import { fetchNotificationUnreadSummary } from '@/services/api/notifications';
@@ -12,6 +12,7 @@ type BadgeSnapshotPayload = {
   messagesUnread?: number;
   contactsUnread?: number;
   discoverUnread?: number;
+  signupUnread?: number;
   profileUnread?: number;
   systemUnread?: number;
 };
@@ -26,7 +27,11 @@ type RealtimeEvent =
       payload?: { count?: number };
     }
   | {
-      type: 'circle.activity.unread.changed';
+      type: 'interaction.unread.changed';
+      payload?: { count?: number };
+    }
+  | {
+      type: 'circle.signup.unread.changed';
       payload?: { count?: number };
     }
   | {
@@ -141,6 +146,7 @@ function applyBadgeSnapshot(snapshot: BadgeSnapshotPayload) {
     messagesUnread: badgeStore.messagesUnread,
     contactsUnread: snapshot.contactsUnread,
     discoverUnread: snapshot.discoverUnread,
+    signupUnread: snapshot.signupUnread,
     profileUnread: snapshot.profileUnread,
     systemUnread: snapshot.systemUnread,
   });
@@ -161,8 +167,11 @@ function handleRealtimeEvent(message: RealtimeEvent) {
     case 'friend.activity.unread.changed':
       badgeStore.setContactsUnread(message.payload?.count ?? 0);
       return;
-    case 'circle.activity.unread.changed':
+    case 'interaction.unread.changed':
       badgeStore.setDiscoverUnread(message.payload?.count ?? 0);
+      return;
+    case 'circle.signup.unread.changed':
+      badgeStore.setSignupUnread(message.payload?.count ?? 0);
       return;
     case 'membership.status.changed':
       void refreshCurrentUserSummary();
@@ -220,15 +229,17 @@ export async function recoverTabBadgeSnapshot() {
   lastRecoveryAt = now;
 
   try {
-    const [contactsUnread, circleUnread, notificationSummary] = await Promise.all([
-      fetchUnreadFriendActivityCount(),
-      fetchCircleActivityUnreadCount(),
-      fetchNotificationUnreadSummary(),
-    ]);
+    const [contactsUnread, signupUnread, notificationSummary] =
+      await Promise.all([
+        fetchUnreadFriendActivityCount(),
+        fetchMySignupsUnreadCount(),
+        fetchNotificationUnreadSummary(),
+      ]);
 
     applyBadgeSnapshot({
       contactsUnread,
-      discoverUnread: circleUnread + notificationSummary.discoverUnread,
+      discoverUnread: notificationSummary.discoverUnread,
+      signupUnread,
       profileUnread: notificationSummary.profileUnread,
       systemUnread: notificationSummary.totalUnread,
     });

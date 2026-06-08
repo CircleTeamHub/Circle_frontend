@@ -186,14 +186,14 @@ export default function ChatHistoryMediaScreen() {
       return;
     }
 
-    router.push(getChatDetailHref(sourceID, title, undefined, conversationID, clientMsgID));
+    router.push(getChatDetailHref('messages', sourceID, title, undefined, conversationID, clientMsgID));
   }, [conversationID, sourceID, title]);
 
   return (
     <View style={[s.container, d.container, { paddingTop: insets.top }]}>
       <NavHeader
         title="图片/视频"
-        fallbackHref={getChatDetailHref(sourceID, title, undefined, conversationID)}
+        fallbackHref={getChatDetailHref('messages', sourceID, title, undefined, conversationID)}
       />
       <View style={s.content}>
         <FlatList

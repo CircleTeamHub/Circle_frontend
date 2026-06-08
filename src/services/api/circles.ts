@@ -1,12 +1,7 @@
 import { apiClient } from '@/services/api/client';
-import {
-  buildQuery,
-  fetchCountEndpoint,
-  normalizeMediaUrl,
-} from '@/services/api/utils';
+import { buildQuery, normalizeMediaUrl } from '@/services/api/utils';
 import type {
   Circle,
-  CircleActivityItem,
   CircleDetail,
   CircleInvitation,
   CreateCircleInput,
@@ -183,20 +178,3 @@ export async function fetchPendingInvitationsForCircle(
   );
 }
 
-// ── Circle Activities ────────────────────────────────────────────────────────
-
-export async function fetchCircleActivities(): Promise<CircleActivityItem[]> {
-  return apiClient<CircleActivityItem[]>('/circle/activities/list');
-}
-
-export async function fetchCircleActivityUnreadCount(): Promise<number> {
-  return fetchCountEndpoint('/circle/activities/unread-count');
-}
-
-export async function markCircleActivityRead(
-  activityId: string,
-): Promise<void> {
-  await apiClient<void>(`/circle/activities/${activityId}/read`, {
-    method: 'POST',
-  });
-}

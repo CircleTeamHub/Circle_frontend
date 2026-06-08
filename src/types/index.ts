@@ -81,6 +81,8 @@ export interface ChatMessage {
   text?: string;
   time?: string;
   senderName?: string;
+  // 发送者用户 id（UUID 形式），仅接收消息携带；群聊点头像跳对方资料用。
+  senderID?: string;
   locationTitle?: string;
   locationAddress?: string;
   // For image messages: source URL + optional intrinsic dimensions for layout
@@ -218,6 +220,14 @@ export interface CirclePlazaPost {
     fancyNumber: boolean;
   };
   viewCount: number;
+  signupCount: number;
+  signedByMe: boolean;
+  signupRestrictions: {
+    vipLevel: number | null;
+    creditScore: number | null;
+    fancyNumber: boolean;
+  };
+  canSignup: boolean;
   author: {
     id: string;
     nickname: string;
@@ -244,6 +254,9 @@ export interface CreatePlazaPostInput {
   vipRestriction: number | null;
   creditRestriction: number | null;
   fancyRestriction: boolean;
+  signupVipRestriction: number | null;
+  signupCreditRestriction: number | null;
+  signupFancyRestriction: boolean;
 }
 
 export interface CircleDetail extends Circle {
@@ -303,25 +316,6 @@ export interface CircleInvitationVerifier {
   respondedAt: string | null;
 }
 
-export type CircleActivityType =
-  | 'VERIFICATION_REQUESTED'
-  | 'VERIFICATION_APPROVED'
-  | 'VERIFICATION_REJECTED'
-  | 'INVITATION_ALL_APPROVED'
-  | 'INVITATION_SLOT_REJECTED'
-  | 'ADMIN_OVERRIDE_APPROVED';
-
-export interface CircleActivityItem {
-  id: string;
-  circleId: string;
-  circleName: string;
-  invitationId: string | null;
-  type: CircleActivityType;
-  actor: { id: string; nickname: string; avatarUrl: string | null; accountId: string };
-  readAt: string | null;
-  createdAt: string;
-}
-
 // ---------------------------------------------------------------------------
 // Friend Moments (朋友圈) Types
 // ---------------------------------------------------------------------------
@@ -352,4 +346,60 @@ export interface CreateMomentInput {
   content: string;
   images: string[];
   visibility: 'FRIENDS_ONLY' | 'PRIVATE';
+}
+
+// ---------------------------------------------------------------------------
+// Notification Center (互动消息) Types
+// ---------------------------------------------------------------------------
+
+export type NotificationType =
+  | 'SYSTEM'
+  | 'TRACE_LIKE'
+  | 'TRACE_COMMENT'
+  | 'COMMENT_REPLY'
+  | 'FRIEND_REQUEST_RECEIVED'
+  | 'FRIEND_REQUEST_ACCEPTED'
+  | 'FRIEND_REQUEST_REJECTED'
+  | 'SQUAD_REQUEST_RECEIVED'
+  | 'SQUAD_REQUEST_ACCEPTED'
+  | 'SQUAD_REQUEST_REJECTED'
+  | 'CIRCLE_VERIFICATION_REQUESTED'
+  | 'CIRCLE_INVITATION_APPROVED'
+  | 'CIRCLE_INVITATION_REJECTED'
+  | 'CIRCLE_ADMIN_OVERRIDE_APPROVED';
+
+export interface NotificationItem {
+  id: string;
+  type: NotificationType;
+  content: string;
+  read: boolean;
+  createdAt: string;
+  fromUser: { id: string; nickname: string; avatarUrl: string | null } | null;
+  fromTrace: { id: string; excerpt: string; firstImage: string | null } | null;
+  fromReply: { id: string; content: string } | null;
+  fromCircle: { id: string; name: string } | null;
+  fromInvitation: { id: string; status: string } | null;
+}
+
+/** A circle post authored by the current user, for the signup-management list. */
+export interface MyCirclePost {
+  id: string;
+  circleId: string;
+  excerpt: string;
+  firstImage: string | null;
+  signupCount: number;
+  unreadSignupCount: number;
+  status: string;
+  createdAt: string;
+}
+
+/** A person who signed up for one of my posts, with identity to open a chat. */
+export interface PostSignupItem {
+  userId: string;
+  imUserId: string;
+  nickname: string;
+  avatarUrl: string | null;
+  accountId: string;
+  signedAt: string;
+  seen: boolean;
 }

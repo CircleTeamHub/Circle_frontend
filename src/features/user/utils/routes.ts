@@ -87,23 +87,72 @@ export function getFriendActivityDetailHref(id: string): Href {
 }
 
 export function getChatDetailHref(
+  scope: UserProfileScope,
   sourceID: string,
   title?: string,
   avatarUrl?: string,
   conversationID?: string,
   searchedMsgID?: string,
 ): Href {
-  return {
-    pathname: '/(tabs)/messages/chat-detail',
-    params: {
-      sourceID,
-      conversationType: 'private',
-      ...(title ? { title } : {}),
-      ...(avatarUrl ? { avatarUrl } : {}),
-      ...(conversationID ? { conversationID } : {}),
-      ...(searchedMsgID ? { searchedMsgID } : {}),
-    },
+  // 私聊页在每个 tab 栈下都有 re-export 路由，按来源 scope 入对应栈，
+  // 这样返回时回到进入前的上一级，而不是跳到消息首页。
+  const params = {
+    sourceID,
+    conversationType: 'private',
+    ...(title ? { title } : {}),
+    ...(avatarUrl ? { avatarUrl } : {}),
+    ...(conversationID ? { conversationID } : {}),
+    ...(searchedMsgID ? { searchedMsgID } : {}),
   };
+
+  switch (scope) {
+    case 'contacts':
+      return { pathname: '/(tabs)/contacts/chat-detail', params };
+    case 'profile':
+      return { pathname: '/(tabs)/profile/chat-detail', params };
+    case 'discover':
+      return { pathname: '/(tabs)/discover/chat-detail', params };
+    case 'messages':
+    default:
+      return { pathname: '/(tabs)/messages/chat-detail', params };
+  }
+}
+
+/** Tab home route for a scope — used as a back fallback when there's no stack. */
+export function getTabHomeHref(scope: UserProfileScope): Href {
+  switch (scope) {
+    case 'contacts':
+      return '/(tabs)/contacts';
+    case 'profile':
+      return '/(tabs)/profile';
+    case 'discover':
+      return '/(tabs)/discover';
+    case 'messages':
+    default:
+      return '/(tabs)/messages';
+  }
+}
+
+/**
+ * Top-level (conversation-based) chat-info route per scope. Distinct from
+ * getChatInfoHref, which is the friend [id]-based variant. Used by the chat
+ * screen so 群信息 stays in the originating tab's stack.
+ */
+export function getChatInfoTopHref(
+  scope: UserProfileScope,
+  params: Record<string, string>,
+): Href {
+  switch (scope) {
+    case 'contacts':
+      return { pathname: '/(tabs)/contacts/chat-info', params };
+    case 'profile':
+      return { pathname: '/(tabs)/profile/chat-info', params };
+    case 'discover':
+      return { pathname: '/(tabs)/discover/chat-info', params };
+    case 'messages':
+    default:
+      return { pathname: '/(tabs)/messages/chat-info', params };
+  }
 }
 
 export function getChatInfoHref(

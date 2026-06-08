@@ -333,7 +333,9 @@ export default function ChatInfoScreen() {
   const routeSourceID = friendId;
   const rawRouteSourceID = rawFriendId;
   const originScope =
-    params.originScope === 'contacts' || params.originScope === 'profile'
+    params.originScope === 'contacts' ||
+    params.originScope === 'profile' ||
+    params.originScope === 'discover'
       ? params.originScope
       : 'messages';
   const conversationID =
@@ -419,6 +421,7 @@ export default function ChatInfoScreen() {
       }
 
       return getChatDetailHref(
+        originScope,
         routeSourceID,
         friendName,
         undefined,

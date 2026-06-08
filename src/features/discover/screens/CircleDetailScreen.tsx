@@ -32,6 +32,8 @@ import {
 } from '@/services/api/upload';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import { useAuthStore } from '@/stores/authStore';
+import { getOrCreateGroupConversation } from '@/im/client';
+import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
 import type { CircleDetail } from '@/types';
 
 const s = StyleSheet.create({
@@ -215,7 +217,44 @@ export default function CircleDetailScreen() {
   const [circle, setCircle] = useState<CircleDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [iconSaving, setIconSaving] = useState(false);
+  const [enteringGroupChat, setEnteringGroupChat] = useState(false);
   const mountedRef = useRef(true);
+
+  // 进入圈子群聊：先解析出会话 ID（否则聊天页拿不到 conversationID 会停在预览模式），
+  // 再入 discover 栈，返回时回到圈子详情。
+  const handleEnterGroupChat = useCallback(async () => {
+    const groupID = circle?.groupID;
+    if (!groupID || enteringGroupChat) return;
+    try {
+      setEnteringGroupChat(true);
+      const conversation = await getOrCreateGroupConversation(groupID);
+      router.push({
+        pathname: '/(tabs)/discover/chat-detail',
+        params: {
+          conversationID: conversation.conversationID,
+          sourceID: groupID,
+          conversationType: 'group',
+          title: circle?.name ?? '',
+        },
+      });
+    } catch (error) {
+      if (shouldOpenChatPreview(error)) {
+        // IM 未接通：退化成预览模式（无 conversationID）。
+        router.push({
+          pathname: '/(tabs)/discover/chat-detail',
+          params: {
+            sourceID: groupID,
+            conversationType: 'group',
+            title: circle?.name ?? '',
+          },
+        });
+        return;
+      }
+      Alert.alert(t('circle.error'), t('common.networkError'));
+    } finally {
+      if (mountedRef.current) setEnteringGroupChat(false);
+    }
+  }, [circle?.groupID, circle?.name, enteringGroupChat, router, t]);
 
   useEffect(() => {
     return () => {
@@ -636,16 +675,8 @@ export default function CircleDetailScreen() {
           {circle.groupID ? (
             <Pressable
               style={[s.actionBtn, d.chatBtn]}
-              onPress={() => {
-                router.push({
-                  pathname: '/(tabs)/messages/chat-detail',
-                  params: {
-                    sourceID: circle.groupID!,
-                    conversationType: 'group',
-                    title: circle.name,
-                  },
-                });
-              }}
+              onPress={handleEnterGroupChat}
+              disabled={enteringGroupChat}
             >
               <Text style={[s.actionBtnText, d.chatBtnText]}>{t('circle.enterGroupChat')}</Text>
             </Pressable>

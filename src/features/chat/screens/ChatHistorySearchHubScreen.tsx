@@ -70,7 +70,7 @@ export default function ChatHistorySearchHubScreen() {
     <View style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader
         title="查找聊天记录"
-        fallbackHref={getChatDetailHref(sourceID, title, undefined, conversationID)}
+        fallbackHref={getChatDetailHref('messages', sourceID, title, undefined, conversationID)}
       />
       <ScrollView
         style={s.scroll}

@@ -18,7 +18,7 @@ import {
   type ConversationItem,
   type MessageItem,
 } from '@openim/rn-client-sdk';
-import { NOTE_CARD_EXTENSION, TRANSFER_CARD_EXTENSION } from '@/im/client';
+import { NOTE_CARD_EXTENSION, TRANSFER_CARD_EXTENSION, fromImUserId } from '@/im/client';
 import { normalizeMediaUrl } from '@/services/api/utils';
 import i18n from '@/i18n';
 
@@ -197,8 +197,13 @@ export function mapConversationItemToUI(item: ConversationItem): Conversation {
 
   return {
     id: item.conversationID,
+    // 单聊 sourceID 用 UUID 形式（item.userID 是去连字符的 IM id），
+    // 这样跳个人资料 /user/:id 才匹配（与联系人页一致）；发消息侧再 toImUserId 转回。
+    // 群聊保持 groupID 原样。
     sourceID:
-      item.conversationType === SessionType.Group ? item.groupID : item.userID,
+      item.conversationType === SessionType.Group
+        ? item.groupID
+        : fromImUserId(item.userID),
     name: item.showName,
     message: getMessagePreview(latestMessage, item.latestMsg),
     time: formatTimestamp(item.latestMsgSendTime),
@@ -235,6 +240,8 @@ export function mapMessageItemToChatMessage(
     // 发送状态/已读 状态对所有自己发出的消息都有意义；接收消息这两字段会被忽略。
     sendStatus: isSent && isKnownSendStatus ? (item.status as 1 | 2 | 3) : undefined,
     isRead: isSent ? Boolean(item.isRead) : undefined,
+    // 接收消息带上发送者的用户 id（还原成 UUID 形式），群聊点头像可跳对方资料。
+    senderID: isSent ? undefined : fromImUserId(item.sendID),
   };
 
   if (item.contentType === MessageType.LocationMessage) {
