@@ -11,7 +11,7 @@ import {
   ImageBackground,
 } from 'react-native';
 import type { FlatList as FlatListType } from 'react-native';
-import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams, useNavigation, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
@@ -28,10 +28,17 @@ import {
   TransferCardBubble,
 } from '@/features/chat/components/chat-bubble';
 import { EmojiPicker } from '@/features/chat/components/emoji-picker';
-import { getUserProfileHref } from '@/features/user/utils/routes';
+import {
+  getUserProfileHref,
+  getUserProfileScopeFromSegments,
+  getTabHomeHref,
+  getChatInfoTopHref,
+} from '@/features/user/utils/routes';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import {
+  getOrCreateSingleConversation,
+  getOrCreateGroupConversation,
   loadConversationMessages,
   markConversationAsRead,
   sendFriendCardMessage,
@@ -185,6 +192,9 @@ export default function ChatDetailScreen() {
     searchedMsgID?: string;
   }>();
   const navigation = useNavigation();
+  // 聊天页在哪个 tab 栈打开（messages/discover/...），决定返回兜底与子页面跳转的 scope。
+  const segments = useSegments();
+  const scope = getUserProfileScopeFromSegments(segments);
   const currentUserID = useIMStore((state) => state.currentUserID);
   const messagesByConversation = useIMStore((state) => state.messagesByConversation);
   const setActiveConversation = useIMStore((state) => state.setActiveConversation);
@@ -211,9 +221,14 @@ export default function ChatDetailScreen() {
   const consumePendingShare = useSharePickerStore((s) => s.consume);
   const consumePendingTransfer = useTransferComposerStore((s) => s.consume);
 
-  const conversationID =
+  const paramConversationID =
     typeof params.conversationID === 'string' ? params.conversationID : '';
   const sourceID = typeof params.sourceID === 'string' ? params.sourceID : '';
+  // 有些入口（联系人/群聊列表/报名管理等）只传了 sourceID 没传 conversationID，
+  // 这里就地解析会话，避免聊天页停在预览占位。IM 未接通时解析失败 → 保持预览。
+  const [resolvedConversationID, setResolvedConversationID] =
+    useState(paramConversationID);
+  const conversationID = paramConversationID || resolvedConversationID;
   const conversationTitle =
     typeof params.title === 'string' ? params.title : '聊天详情';
   const conversationType =
@@ -224,6 +239,29 @@ export default function ChatDetailScreen() {
   const searchedMsgID =
     typeof params.searchedMsgID === 'string' ? params.searchedMsgID : '';
   const isPreviewMode = !conversationID;
+
+  // 入口只给了 sourceID 时，就地把会话解析出来（单聊/群聊各走对应方法）。
+  useEffect(() => {
+    if (paramConversationID || !sourceID) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const conv = isGroupChat
+          ? await getOrCreateGroupConversation(sourceID)
+          : await getOrCreateSingleConversation(sourceID);
+        if (!cancelled) setResolvedConversationID(conv.conversationID);
+      } catch (error) {
+        // IM 未接通等：保持预览模式，不阻断页面。
+        if (__DEV__) {
+          console.warn('[ChatDetailScreen] resolve conversation failed', error);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [paramConversationID, sourceID, isGroupChat]);
+
   const backgroundPreference = useChatPreferencesStore(
     (state) =>
       state.backgroundsByConversationID[conversationID] ??
@@ -238,12 +276,45 @@ export default function ChatDetailScreen() {
     if (navigation.canGoBack()) {
       router.back();
     } else {
-      router.replace('/(tabs)/messages');
+      // 没有可回退栈时回到来源 tab 首页，而不是固定回消息首页。
+      router.replace(getTabHomeHref(scope));
     }
-  }, [navigation]);
-  const handleOpenUserProfile = useCallback(() => {
-    router.push(getUserProfileHref('messages', sourceID, conversationTitle));
-  }, [conversationTitle, sourceID]);
+  }, [navigation, scope]);
+
+  const openGroupInfo = useCallback(() => {
+    router.push(
+      getChatInfoTopHref(scope, {
+        conversationID,
+        sourceID,
+        title: conversationTitle,
+        conversationType: 'group',
+        originScope: scope,
+      }),
+    );
+  }, [scope, conversationID, sourceID, conversationTitle]);
+
+  const handleOpenMessageSender = useCallback(
+    (msg: ChatMessage) => {
+      if (isGroupChat) {
+        // 群聊：跳该消息发送者本人的资料（senderID 已还原成 UUID 形式）。
+        if (!msg.senderID) return;
+        router.push(getUserProfileHref(scope, msg.senderID, msg.senderName));
+        return;
+      }
+      // 单聊：对方即会话 sourceID。
+      router.push(getUserProfileHref(scope, sourceID, conversationTitle));
+    },
+    [conversationTitle, sourceID, isGroupChat, scope],
+  );
+
+  const handleOpenHeaderTarget = useCallback(() => {
+    // 群聊点头部头像 → 进群信息（与右上角 ⋮ 一致）；单聊 → 进个人资料。
+    if (isGroupChat) {
+      openGroupInfo();
+      return;
+    }
+    router.push(getUserProfileHref(scope, sourceID, conversationTitle));
+  }, [isGroupChat, openGroupInfo, scope, sourceID, conversationTitle]);
 
   // 单聊场景下订阅对方在线状态。订阅 Promise 立刻返回当前快照，
   // 之后由全局 onUserStatusChanged 维护增量。
@@ -377,7 +448,7 @@ export default function ChatDetailScreen() {
             message={item}
             senderName={item.senderName ?? conversationTitle}
             senderAvatarUri={avatarUrl}
-            onAvatarPress={handleOpenUserProfile}
+            onAvatarPress={() => handleOpenMessageSender(item)}
           />
         );
       case 'sent':
@@ -398,7 +469,7 @@ export default function ChatDetailScreen() {
             senderAvatarUri={avatarUrl}
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
-            onAvatarPress={item.outgoing ? undefined : handleOpenUserProfile}
+            onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
           />
         );
       case 'image':
@@ -410,7 +481,7 @@ export default function ChatDetailScreen() {
             senderAvatarUri={avatarUrl}
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
-            onAvatarPress={item.outgoing ? undefined : handleOpenUserProfile}
+            onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
             hideStatus={isGroupChat}
           />
         );
@@ -423,7 +494,7 @@ export default function ChatDetailScreen() {
             senderAvatarUri={avatarUrl}
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
-            onAvatarPress={item.outgoing ? undefined : handleOpenUserProfile}
+            onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
             hideStatus={isGroupChat}
           />
         );
@@ -436,9 +507,9 @@ export default function ChatDetailScreen() {
             senderAvatarUri={avatarUrl}
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
-            onAvatarPress={item.outgoing ? undefined : handleOpenUserProfile}
+            onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
             onPress={(card) =>
-              router.push(getUserProfileHref('messages', card.userID, card.nickname))
+              router.push(getUserProfileHref(scope, card.userID, card.nickname))
             }
             hideStatus={isGroupChat}
           />
@@ -452,13 +523,13 @@ export default function ChatDetailScreen() {
             senderAvatarUri={avatarUrl}
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
-            onAvatarPress={item.outgoing ? undefined : handleOpenUserProfile}
+            onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
             hideStatus={isGroupChat}
           />
         );
       default: return null;
     }
-  }, [avatarUrl, conversationTitle, handleOpenUserProfile, isGroupChat, selfAvatarUri, selfName]);
+  }, [avatarUrl, conversationTitle, handleOpenMessageSender, isGroupChat, selfAvatarUri, selfName, router, scope]);
 
   const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
 
@@ -897,9 +968,7 @@ export default function ChatDetailScreen() {
         <Pressable onPress={handleBack} hitSlop={8}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
-        <Pressable
-          onPress={() => router.push(getUserProfileHref('messages', sourceID, conversationTitle))}
-        >
+        <Pressable onPress={handleOpenHeaderTarget}>
           <Avatar size={36} name={conversationTitle} uri={avatarUrl} />
         </Pressable>
         <View style={s.headerInfo}>
@@ -922,16 +991,15 @@ export default function ChatDetailScreen() {
         <Pressable
           hitSlop={8}
           onPress={() =>
-            router.push({
-              pathname: '/(tabs)/messages/chat-info',
-              params: {
+            router.push(
+              getChatInfoTopHref(scope, {
                 conversationID,
                 sourceID,
                 title: conversationTitle,
                 conversationType: isGroupChat ? 'group' : 'private',
-                originScope: 'messages',
-              },
-            })
+                originScope: scope,
+              }),
+            )
           }
         >
           <Ionicons name="ellipsis-vertical" size={20} color={colors.textSecondary} />

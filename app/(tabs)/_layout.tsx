@@ -1,6 +1,7 @@
 import React, { memo, useMemo } from 'react';
 import { View, Text, StyleSheet, type ViewStyle, type TextStyle } from 'react-native';
 import { Tabs, useSegments } from 'expo-router';
+import { StackActions } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
@@ -47,7 +48,16 @@ const TabIcon = memo(function TabIcon({
 
   return (
     <View style={[tabIconStyle, focused && tabIconActiveStyle]}>
-      {showBadgeDot ? <View style={tabIconBadgeStyle} /> : null}
+      {showBadgeDot ? (
+        // 红点的描边用于和背景"挖空"分隔：未选中时背景是 tab 栏(surface)，
+        // 选中时背景是紫色 pill(primary)，否则会露出一圈深色描边。
+        <View
+          style={[
+            tabIconBadgeStyle,
+            focused && { borderColor: tabIconActiveStyle.backgroundColor },
+          ]}
+        />
+      ) : null}
       <Ionicons name={icon} size={16} color={color} />
       <Text style={[tabLabelStyle, { color }]} numberOfLines={1}>
         {label}
@@ -150,6 +160,25 @@ export default function TabLayout() {
           <Tabs.Screen
             key={tab.name}
             name={tab.name}
+            listeners={({ navigation, route }) => ({
+              // 点击 tab 始终回到该 tab 的首页（而非上次停留的子页面）：
+              // 把该 tab 的内嵌栈 popToTop。无论当前是否在该 tab 都生效。
+              tabPress: () => {
+                const state = navigation.getState();
+                const tabRoute = state.routes.find(
+                  (r: { name: string }) => r.name === route.name,
+                );
+                const nested = tabRoute?.state as
+                  | { key?: string; index?: number }
+                  | undefined;
+                if (nested?.key && (nested.index ?? 0) > 0) {
+                  navigation.dispatch({
+                    ...StackActions.popToTop(),
+                    target: nested.key,
+                  });
+                }
+              },
+            })}
             options={{
               // tabBarShowLabel:false 隐藏视觉文字 —— 但屏幕阅读器仍然需要标签。
               // 视觉 badge dot 由 TabIcon 内部用 showBadgeDot 渲染（不走 expo-router 的

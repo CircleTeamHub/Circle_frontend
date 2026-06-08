@@ -376,6 +376,7 @@ export default function UserProfileScreen() {
       const conversation = await getOrCreateSingleConversation(profileId);
       router.push(
         getChatDetailHref(
+          scope,
           profileId,
           displayName,
           profile.avatarUrl,
@@ -384,7 +385,9 @@ export default function UserProfileScreen() {
       );
     } catch (error) {
       if (shouldOpenChatPreview(error)) {
-        router.push(getChatDetailHref(profileId, displayName, profile.avatarUrl));
+        router.push(
+          getChatDetailHref(scope, profileId, displayName, profile.avatarUrl),
+        );
         return;
       }
 
@@ -532,7 +535,7 @@ export default function UserProfileScreen() {
     <View style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader
         title={t('userProfile.title')}
-        rightIcon="information-circle-outline"
+        rightIcon="settings-outline"
         onRightPress={handleOpenChatInfo}
       />
       {fetchError ? (
