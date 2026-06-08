@@ -21,6 +21,9 @@ function iconFor(type: NotificationType): keyof typeof Ionicons.glyphMap {
   if (type === 'TRACE_LIKE') return 'heart-outline';
   if (type.startsWith('FRIEND_REQUEST')) return 'person-add-outline';
   if (type.startsWith('SQUAD_REQUEST')) return 'people-outline';
+  if (type === 'CIRCLE_VERIFICATION_REQUESTED')
+    return 'shield-checkmark-outline';
+  if (type.startsWith('CIRCLE_')) return 'people-circle-outline';
   return 'notifications-outline';
 }
 
@@ -34,6 +37,7 @@ export function mapNotificationToRow(
       ? n.content
       : t(`notifications.summary.${n.type}`, {
           defaultValue: n.content || t('notifications.summary.default'),
+          circle: n.fromCircle?.name ?? '',
         });
   return {
     id: n.id,

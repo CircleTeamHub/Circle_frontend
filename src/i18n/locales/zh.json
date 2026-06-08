@@ -101,13 +101,15 @@
   "notifications": {
     "title": "消息通知",
     "tabInteractive": "互动消息",
-    "tabCircle": "圈子动态",
+    "tabCircle": "报名管理",
     "filterAll": "全部",
     "filterUnread": "未读",
     "markAllRead": "全部已读",
     "system": "系统通知",
     "emptyTitle": "暂无通知",
-    "emptySubtitle": "新的互动和圈子动态会出现在这里",
+    "emptySubtitle": "新的互动和报名会出现在这里",
+    "loadFailedTitle": "加载失败",
+    "loadFailed": "部分消息加载失败，请下拉重试",
     "summary": {
       "default": "给你发来一条新通知",
       "TRACE_LIKE": "点赞了你的动态",
@@ -118,17 +120,20 @@
       "FRIEND_REQUEST_REJECTED": "拒绝了你的好友申请",
       "SQUAD_REQUEST_RECEIVED": "申请加入",
       "SQUAD_REQUEST_ACCEPTED": "通过了你的入队申请",
-      "SQUAD_REQUEST_REJECTED": "拒绝了你的入队申请"
+      "SQUAD_REQUEST_REJECTED": "拒绝了你的入队申请",
+      "CIRCLE_VERIFICATION_REQUESTED": "在「{{circle}}」发起了验证申请",
+      "CIRCLE_INVITATION_APPROVED": "你在「{{circle}}」的邀请已全部通过",
+      "CIRCLE_INVITATION_REJECTED": "你在「{{circle}}」的一个邀请名额被拒",
+      "CIRCLE_ADMIN_OVERRIDE_APPROVED": "管理员通过了你在「{{circle}}」的申请"
     },
-    "activity": {
-      "POST_SIGNUP_RECEIVED": "报名了你的帖子：{{post}}",
-      "POST_SIGNUP_CONFIRMED": "你已报名：{{post}}",
-      "VERIFICATION_REQUESTED": "在「{{circle}}」发起了验证申请",
-      "VERIFICATION_APPROVED": "通过了你在「{{circle}}」的验证",
-      "VERIFICATION_REJECTED": "拒绝了你在「{{circle}}」的验证",
-      "INVITATION_ALL_APPROVED": "你在「{{circle}}」的邀请已全部通过",
-      "INVITATION_SLOT_REJECTED": "你在「{{circle}}」的一个邀请名额被拒",
-      "ADMIN_OVERRIDE_APPROVED": "管理员通过了你在「{{circle}}」的申请"
+    "signupMgmt": {
+      "untitledPost": "（无内容帖子）",
+      "row": "{{count}} 人报名",
+      "rowWithUnread": "{{count}} 人报名 · {{unread}} 个新",
+      "signersTitle": "报名的人",
+      "signedAt": "报名于 {{time}}",
+      "noSigners": "还没有人报名",
+      "loadFailed": "报名列表加载失败，请重试"
     }
   },
 
@@ -443,6 +448,10 @@
   },
 
   "plaza": {
+    "manageSignups": "{{count}} 人报名",
+    "manageSignupsEmpty": "查看报名",
+    "viewCondition": "查看条件：",
+    "signupCondition": "报名条件：",
     "selectCircle": "选择圈子",
     "noCirclesJoined": "还没有加入任何圈子",
     "createPost": "发布动态",
@@ -577,6 +586,7 @@
     "passwordChangeNotice": "密码修改成功后，当前设备和其他设备都需要重新登录。",
     "moments": "朋友圈",
     "setRemark": "设置备注",
+    "tags": "标签",
     "giftCoins": "给该用户赠送金币",
     "moreInfo": "更多信息",
     "editProfile": "编辑资料",

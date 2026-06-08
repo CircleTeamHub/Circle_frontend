@@ -101,13 +101,15 @@
   "notifications": {
     "title": "Notifications",
     "tabInteractive": "Interactions",
-    "tabCircle": "Circle Activity",
+    "tabCircle": "Signups",
     "filterAll": "All",
     "filterUnread": "Unread",
     "markAllRead": "Mark all read",
     "system": "System",
     "emptyTitle": "No notifications",
-    "emptySubtitle": "New interactions and circle activity show up here",
+    "emptySubtitle": "New interactions and signups show up here",
+    "loadFailedTitle": "Could not load",
+    "loadFailed": "Some notifications could not load. Pull to retry",
     "summary": {
       "default": "sent you a notification",
       "TRACE_LIKE": "liked your moment",
@@ -118,17 +120,20 @@
       "FRIEND_REQUEST_REJECTED": "declined your friend request",
       "SQUAD_REQUEST_RECEIVED": "requested to join",
       "SQUAD_REQUEST_ACCEPTED": "accepted your join request",
-      "SQUAD_REQUEST_REJECTED": "declined your join request"
+      "SQUAD_REQUEST_REJECTED": "declined your join request",
+      "CIRCLE_VERIFICATION_REQUESTED": "requested verification in {{circle}}",
+      "CIRCLE_INVITATION_APPROVED": "your invitation to {{circle}} is fully approved",
+      "CIRCLE_INVITATION_REJECTED": "an invitation slot in {{circle}} was rejected",
+      "CIRCLE_ADMIN_OVERRIDE_APPROVED": "an admin approved your request in {{circle}}"
     },
-    "activity": {
-      "POST_SIGNUP_RECEIVED": "signed up for your post: {{post}}",
-      "POST_SIGNUP_CONFIRMED": "You signed up: {{post}}",
-      "VERIFICATION_REQUESTED": "requested verification in {{circle}}",
-      "VERIFICATION_APPROVED": "approved your verification in {{circle}}",
-      "VERIFICATION_REJECTED": "rejected your verification in {{circle}}",
-      "INVITATION_ALL_APPROVED": "your invitation to {{circle}} is fully approved",
-      "INVITATION_SLOT_REJECTED": "an invitation slot in {{circle}} was rejected",
-      "ADMIN_OVERRIDE_APPROVED": "an admin approved your request in {{circle}}"
+    "signupMgmt": {
+      "untitledPost": "(untitled post)",
+      "row": "{{count}} signed up",
+      "rowWithUnread": "{{count}} signed up · {{unread}} new",
+      "signersTitle": "Signups",
+      "signedAt": "Signed up {{time}}",
+      "noSigners": "No one has signed up yet",
+      "loadFailed": "Could not load signups. Please try again"
     }
   },
 
@@ -444,6 +449,10 @@
   },
 
   "plaza": {
+    "manageSignups": "{{count}} signed up",
+    "manageSignupsEmpty": "View signups",
+    "viewCondition": "View: ",
+    "signupCondition": "Signup: ",
     "selectCircle": "Select Circle",
     "noCirclesJoined": "No circles joined",
     "createPost": "Create Post",
@@ -578,6 +587,7 @@
     "passwordChangeNotice": "After changing password, you'll need to re-login on all devices.",
     "moments": "Moments",
     "setRemark": "Set Remark",
+    "tags": "Tags",
     "giftCoins": "Gift Coins",
     "moreInfo": "More Info",
     "editProfile": "Edit Profile",

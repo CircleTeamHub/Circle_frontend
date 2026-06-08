@@ -1,24 +1,26 @@
 import { create } from 'zustand';
-import type { CircleActivityItem, NotificationItem } from '@/types';
+import type { MyCirclePost, NotificationItem } from '@/types';
 
 interface NotificationCenterState {
   interactive: NotificationItem[];
-  circle: CircleActivityItem[];
+  /** 报名管理 tab: posts the current user authored. */
+  signupPosts: MyCirclePost[];
   setInteractive: (items: NotificationItem[]) => void;
-  setCircle: (items: CircleActivityItem[]) => void;
+  setSignupPosts: (items: MyCirclePost[]) => void;
   markInteractiveReadLocal: (id: string) => void;
   removeInteractiveLocal: (id: string) => void;
   markAllInteractiveReadLocal: () => void;
-  markCircleReadLocal: (id: string) => void;
-  markAllCircleReadLocal: () => void;
+  /** Zero one post's unread signup count (author opened its signer list). */
+  markPostSignupsSeenLocal: (postId: string) => void;
+  markAllSignupsSeenLocal: () => void;
 }
 
 export const useNotificationCenterStore = create<NotificationCenterState>(
   (set) => ({
     interactive: [],
-    circle: [],
+    signupPosts: [],
     setInteractive: (items) => set({ interactive: items }),
-    setCircle: (items) => set({ circle: items }),
+    setSignupPosts: (items) => set({ signupPosts: items }),
     markInteractiveReadLocal: (id) =>
       set((s) => ({
         interactive: s.interactive.map((n) =>
@@ -31,16 +33,16 @@ export const useNotificationCenterStore = create<NotificationCenterState>(
       set((s) => ({
         interactive: s.interactive.map((n) => ({ ...n, read: true })),
       })),
-    markCircleReadLocal: (id) =>
+    markPostSignupsSeenLocal: (postId) =>
       set((s) => ({
-        circle: s.circle.map((a) =>
-          a.id === id ? { ...a, readAt: new Date().toISOString() } : a,
+        signupPosts: s.signupPosts.map((p) =>
+          p.id === postId ? { ...p, unreadSignupCount: 0 } : p,
         ),
       })),
-    markAllCircleReadLocal: () =>
+    markAllSignupsSeenLocal: () =>
       set((s) => ({
-        circle: s.circle.map((a) =>
-          a.readAt ? a : { ...a, readAt: new Date().toISOString() },
+        signupPosts: s.signupPosts.map((p) =>
+          p.unreadSignupCount > 0 ? { ...p, unreadSignupCount: 0 } : p,
         ),
       })),
   }),

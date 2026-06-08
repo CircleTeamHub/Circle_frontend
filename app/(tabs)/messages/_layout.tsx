@@ -45,6 +45,7 @@ export default function MessagesLayout() {
       <Stack.Screen name="new-group" />
       <Stack.Screen name="invite-group-members" />
       <Stack.Screen name="notifications" />
+      <Stack.Screen name="post-signups" />
     </Stack>
   );
 }
