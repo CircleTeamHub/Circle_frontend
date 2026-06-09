@@ -31,8 +31,8 @@ test('select note screen loads active notes and stores the chosen note for the p
   assert.match(src, /fetchNotes\(\{ status: 'ACTIVE'/);
   assert.match(src, /setSelectedNote/);
   assert.match(src, /router\.back\(\)/);
-  assert.match(src, /输入笔记标题/);
-  assert.match(src, /不关联笔记/);
+  assert.match(src, /t\('plaza\.notePicker\.searchPlaceholder'\)/);
+  assert.match(src, /t\('plaza\.notePicker\.none'\)/);
 });
 
 test('discover post flow exports a select-note route', () => {

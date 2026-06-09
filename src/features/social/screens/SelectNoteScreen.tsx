@@ -11,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
 import { usePostFormStore } from '@/features/discover/store/use-post-form-store';
@@ -79,6 +80,7 @@ const s = StyleSheet.create({
 export default function SelectNoteScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const selectedNote = usePostFormStore((state) => state.selectedNote);
   const setSelectedNote = usePostFormStore((state) => state.setSelectedNote);
   const [notes, setNotes] = useState<NoteSummary[]>([]);
@@ -95,9 +97,9 @@ export default function SelectNoteScreen() {
       .then((data) => {
         if (!cancelled) setNotes(data);
       })
-      .catch((err: unknown) => {
+      .catch(() => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : '笔记加载失败');
+          setError(t('plaza.notePicker.loadFailed'));
         }
       })
       .finally(() => {
@@ -140,7 +142,9 @@ export default function SelectNoteScreen() {
           style={s.noteRow}
           onPress={() => handleSelectNote(item)}
           accessibilityRole="button"
-          accessibilityLabel={`选择笔记 ${item.title}`}
+          accessibilityLabel={t('plaza.notePicker.selectA11y', {
+            title: item.title,
+          })}
         >
           <View style={s.noteBody}>
             <Text style={[s.noteTitle, { color: colors.text }]} numberOfLines={1}>
@@ -161,7 +165,7 @@ export default function SelectNoteScreen() {
         </Pressable>
       );
     },
-    [colors, handleSelectNote, selectedNote],
+    [colors, handleSelectNote, selectedNote, t],
   );
 
   return (
@@ -171,7 +175,7 @@ export default function SelectNoteScreen() {
         { paddingTop: insets.top, backgroundColor: colors.background },
       ]}
     >
-      <NavHeader title="选择笔记" />
+      <NavHeader title={t('plaza.notePicker.title')} />
       <View style={s.content}>
         <View
           style={[
@@ -186,7 +190,7 @@ export default function SelectNoteScreen() {
           <TextInput
             value={search}
             onChangeText={setSearch}
-            placeholder="输入笔记标题"
+            placeholder={t('plaza.notePicker.searchPlaceholder')}
             placeholderTextColor={colors.textSecondary}
             style={[s.searchInput, { color: colors.text }]}
             returnKeyType="search"
@@ -197,10 +201,10 @@ export default function SelectNoteScreen() {
           style={s.clearRow}
           onPress={handleClearNote}
           accessibilityRole="button"
-          accessibilityLabel="不关联笔记"
+          accessibilityLabel={t('plaza.notePicker.noneA11y')}
         >
           <Text style={[Typography.body, { color: colors.text }]}>
-            不关联笔记
+            {t('plaza.notePicker.none')}
           </Text>
           {!selectedNote ? (
             <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
@@ -227,7 +231,7 @@ export default function SelectNoteScreen() {
             ListEmptyComponent={
               <View style={s.empty}>
                 <Text style={[s.emptyText, { color: colors.textSecondary }]}>
-                  没有可关联的笔记
+                  {t('plaza.notePicker.empty')}
                 </Text>
               </View>
             }
