@@ -75,6 +75,20 @@ import {
 import { OnlineState, SessionType } from '@openim/rn-client-sdk';
 import type { ChatMessage, FriendCardData } from '@/types';
 
+// Dev-only structured log for a failed send. Never logs the message body —
+// only the error and conversation kind — to avoid leaking content into logs.
+function logChatSendFailure(
+  error: unknown,
+  context: { sessionType: SessionType; isGroupChat: boolean },
+) {
+  if (!__DEV__) return;
+  const base =
+    error instanceof Error
+      ? { name: error.name, message: error.message }
+      : { message: String(error) };
+  console.warn('[chat] text send failed', { ...base, ...context });
+}
+
 type AttachmentId =
   | 'media'
   | 'video-call'
@@ -597,23 +611,10 @@ export default function ChatDetailScreen() {
         });
         appendMessages(conversationID, [sentMessage]);
       } catch (error) {
-        if (__DEV__) {
-          console.warn(
-            '[chat] text send failed',
-            error instanceof Error
-              ? {
-                  name: error.name,
-                  message: error.message,
-                  sessionType: conversationType,
-                  isGroupChat,
-                }
-              : {
-                  message: String(error),
-                  sessionType: conversationType,
-                  isGroupChat,
-                },
-          );
-        }
+        logChatSendFailure(error, {
+          sessionType: conversationType,
+          isGroupChat,
+        });
         setSendError('消息发送失败，请重试');
       } finally {
         inFlightRef.current = false;
@@ -984,23 +985,10 @@ export default function ChatDetailScreen() {
       appendMessages(conversationID, [sentMessage]);
       setDraft('');
     } catch (error) {
-      if (__DEV__) {
-        console.warn(
-          '[chat] text send failed',
-          error instanceof Error
-            ? {
-                name: error.name,
-                message: error.message,
-                sessionType: conversationType,
-                isGroupChat,
-              }
-            : {
-                message: String(error),
-                sessionType: conversationType,
-                isGroupChat,
-              },
-        );
-      }
+      logChatSendFailure(error, {
+        sessionType: conversationType,
+        isGroupChat,
+      });
       setSendError('消息发送失败，请重试');
     } finally {
       inFlightRef.current = false;

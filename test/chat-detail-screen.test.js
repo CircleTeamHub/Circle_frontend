@@ -103,12 +103,17 @@ test('chat detail screen logs text send failures without logging message bodies'
 
   assert.match(source, /\[chat\] text send failed/);
   assert.match(source, /error instanceof Error/);
+  // Both send paths route failures through one shared, dev-only helper.
+  assert.match(source, /function logChatSendFailure/);
+  const helperCalls = [...source.matchAll(/logChatSendFailure\(error, \{/g)];
+  assert.equal(helperCalls.length, 2);
+  // The single warn site never logs the message body.
   const warnBlocks = [
     ...source.matchAll(
       /console\.warn\(\s*'\[chat\] text send failed'[\s\S]*?\n\s*\);/g,
     ),
   ].map((match) => match[0]);
-  assert.equal(warnBlocks.length, 2);
+  assert.equal(warnBlocks.length, 1);
   for (const block of warnBlocks) {
     assert.doesNotMatch(block, /\btext:/);
     assert.doesNotMatch(block, /\bnextText\b/);

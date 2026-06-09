@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   ScrollView,
@@ -8,6 +8,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { MenuRow } from '@/components/ui/menu-row';
 import { NavHeader } from '@/components/ui/nav-header';
 import {
@@ -37,10 +38,20 @@ const s = StyleSheet.create({
 export default function ChatBackgroundScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{
     conversationID?: string;
     title?: string;
   }>();
+
+  // Guard against setState after the screen unmounts mid-upload.
+  const mountedRef = useRef(true);
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
 
   const conversationID =
     typeof params.conversationID === 'string' ? params.conversationID : '';
@@ -55,16 +66,19 @@ export default function ChatBackgroundScreen() {
   const customImageStatusText = useMemo(
     () =>
       uploadingImage
-        ? '上传中...'
+        ? t('chat.background.statusUploading')
         : backgroundPreference?.mode === 'image'
-          ? '已设置'
-          : '请选择',
-    [backgroundPreference?.mode, uploadingImage],
+          ? t('chat.background.statusSet')
+          : t('chat.background.statusChoose'),
+    [backgroundPreference?.mode, uploadingImage, t],
   );
 
   const handlePickCustomImage = useCallback(async () => {
     if (!conversationID) {
-      Alert.alert('参数缺失', '无法修改当前会话的聊天背景。');
+      Alert.alert(
+        t('chat.background.paramMissing'),
+        t('chat.background.cannotModify'),
+      );
       return;
     }
     if (uploadingImage) return;
@@ -99,23 +113,26 @@ export default function ChatBackgroundScreen() {
         contentType,
         asset.uri,
       );
+      if (!mountedRef.current) return;
       setUploadingImage(false);
       setChatBackgroundPreference(conversationID, {
         mode: 'image',
         uri: presign.fileUrl,
       });
       router.back();
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : '图片背景设置失败，请重试。';
+    } catch {
+      if (!mountedRef.current) return;
       setUploadingImage(false);
-      Alert.alert('设置失败', message);
+      Alert.alert(
+        t('chat.background.failedTitle'),
+        t('chat.background.failedBody'),
+      );
     }
-  }, [conversationID, setChatBackgroundPreference, uploadingImage]);
+  }, [conversationID, setChatBackgroundPreference, uploadingImage, t]);
 
   return (
     <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: colors.background }}>
-      <NavHeader title="聊天背景" />
+      <NavHeader title={t('chat.background.title')} />
       <ScrollView
         style={s.scroll}
         contentContainerStyle={[s.content, { paddingBottom: insets.bottom + Spacing.xl }]}
@@ -124,7 +141,7 @@ export default function ChatBackgroundScreen() {
         <View style={[s.section, { backgroundColor: colors.surface }]}>
           <MenuRow
             icon="image-outline"
-            label="自定义图片"
+            label={t('chat.background.customImage')}
             rightText={customImageStatusText}
             onPress={handlePickCustomImage}
           />

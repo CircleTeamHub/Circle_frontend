@@ -21,7 +21,7 @@ test('chat background screen lets users choose and upload a custom image backgro
 test('chat background screen only exposes the custom image background option', () => {
   const src = read('src/features/chat/screens/ChatBackgroundScreen.tsx');
 
-  assert.match(src, /label="自定义图片"/);
+  assert.match(src, /label=\{t\('chat\.background\.customImage'\)\}/);
   assert.match(src, /rightText=\{customImageStatusText\}/);
   assert.doesNotMatch(src, /CHAT_BACKGROUND_PRESETS/);
   assert.doesNotMatch(src, /DEFAULT_CHAT_BACKGROUND_PREFERENCE/);
