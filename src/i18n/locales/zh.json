@@ -144,6 +144,30 @@
 
   "chat": {
     "detail": "聊天详情",
+    "history": {
+      "title": "聊天记录",
+      "loadFailed": "加载失败",
+      "loading": "加载中...",
+      "retry": "重试",
+      "searching": "查询中...",
+      "search": "搜索",
+      "noRecordsForDate": "暂无该日期的聊天记录",
+      "noMatches": "暂无匹配的聊天记录",
+      "pickDate": "请选择日期",
+      "video": "视频",
+      "image": "图片",
+      "unknownMonth": "未知月份",
+      "findTitle": "查找聊天记录",
+      "searchPlaceholder": "搜索聊天记录",
+      "textTitle": "搜索文字消息",
+      "keywordPlaceholder": "输入关键词",
+      "mediaTitle": "图片/视频",
+      "noMedia": "暂无图片或视频记录",
+      "files": "文件",
+      "dateTitle": "按日期",
+      "prevMonth": "上个月",
+      "nextMonth": "下个月"
+    },
     "sendFailed": "消息发送失败，请重试",
     "self": "自己",
     "previewNotice": "当前仅预览聊天界面，消息发送会在 IM 接通后开放。",
@@ -233,14 +257,14 @@
     "noRecommendTarget": "暂无可推荐的聊天对象",
     "background": {
       "title": "聊天背景",
-      "current": "当前：{{label}}",
-      "preview": "这是一条预览消息",
-      "followGlobal": "跟随全局",
-      "currentLabel": "当前",
       "customImage": "自定义图片",
-      "comingSoon": "稍后开放",
       "paramMissing": "参数缺失",
-      "cannotModify": "无法修改当前会话的聊天背景。"
+      "cannotModify": "无法修改当前会话的聊天背景。",
+      "statusUploading": "上传中...",
+      "statusSet": "已设置",
+      "statusChoose": "请选择",
+      "failedTitle": "设置失败",
+      "failedBody": "图片背景设置失败，请重试。"
     }
   },
 
@@ -467,6 +491,15 @@
     "selectCity": "选择城市",
     "selectNote": "选择笔记",
     "noNote": "不添加",
+    "notePicker": {
+      "title": "选择笔记",
+      "searchPlaceholder": "输入笔记标题",
+      "none": "不关联笔记",
+      "empty": "没有可关联的笔记",
+      "loadFailed": "笔记加载失败",
+      "selectA11y": "选择笔记 {{title}}",
+      "noneA11y": "不关联笔记"
+    },
     "vipRestriction": "VIP限制",
     "creditRestriction": "信用值限制",
     "fancyRequired": "需要靓号",
