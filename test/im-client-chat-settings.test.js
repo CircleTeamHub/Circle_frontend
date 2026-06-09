@@ -153,8 +153,12 @@ function loadSearchClient(sdkCalls, searchResult = { totalCount: 0, searchResult
       MessageType: {
         TextMessage: 101,
         PictureMessage: 102,
+        VoiceMessage: 103,
         VideoMessage: 104,
         FileMessage: 105,
+        CardMessage: 108,
+        LocationMessage: 109,
+        CustomMessage: 110,
       },
     },
     'react-native-fs': {
@@ -463,6 +467,7 @@ test('searchConversationMessagesByDate constrains the time window to the selecte
       {
         conversationID: 'conversation-1',
         keywordList: [''],
+        messageTypeList: [101, 102, 103, 104, 105, 109, 108, 110],
         searchTimePosition: new Date('2026-04-16T00:00:00').getTime(),
         searchTimePeriod: 24 * 60 * 60,
         pageIndex: 1,

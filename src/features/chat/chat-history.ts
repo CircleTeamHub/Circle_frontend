@@ -2,7 +2,13 @@ import {
   MessageType,
   type MessageItem,
 } from '@openim/rn-client-sdk';
+import i18n from '@/i18n';
+import { getLocalizedDateTimeLocale } from '@/features/contacts/locale';
 import { getMessagePreview } from '@/im/mappers';
+
+function chatHistoryDateLocale() {
+  return getLocalizedDateTimeLocale(i18n.language);
+}
 
 export type ChatHistoryRouteParams = {
   conversationID: string;
@@ -19,7 +25,8 @@ export function resolveChatHistoryRouteParams(params: {
     conversationID:
       typeof params.conversationID === 'string' ? params.conversationID : '',
     sourceID: typeof params.sourceID === 'string' ? params.sourceID : '',
-    title: typeof params.title === 'string' ? params.title : '聊天记录',
+    title:
+      typeof params.title === 'string' ? params.title : i18n.t('chat.history.title'),
   } satisfies ChatHistoryRouteParams;
 }
 
@@ -28,11 +35,22 @@ export function formatChatHistoryTime(sendTime: number) {
     return '';
   }
 
-  return new Date(sendTime).toLocaleString('zh-CN', {
+  return new Date(sendTime).toLocaleString(chatHistoryDateLocale(), {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
+  });
+}
+
+export function formatChatHistoryMonth(sendTime: number) {
+  if (!sendTime) {
+    return '';
+  }
+
+  return new Date(sendTime).toLocaleString(chatHistoryDateLocale(), {
+    year: 'numeric',
+    month: 'long',
   });
 }
 

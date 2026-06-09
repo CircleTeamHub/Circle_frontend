@@ -984,6 +984,20 @@ function flattenSearchResult(result: SearchMessageResult) {
   return items.flatMap((item) => item.messageList);
 }
 
+function getChatHistoryDateMessageTypes() {
+  return [
+    MessageType.TextMessage,
+    MessageType.PictureMessage,
+    MessageType.VoiceMessage,
+    MessageType.VideoMessage,
+    MessageType.FileMessage,
+    MessageType.LocationMessage,
+    MessageType.CardMessage,
+    MessageType.CustomMessage,
+  ].filter((type): type is MessageType => typeof type === 'number');
+}
+
+
 async function searchConversationMessages(params: {
   conversationID: string;
   keywordList: string[];
@@ -1069,6 +1083,7 @@ export async function searchConversationMessagesByDate(params: {
   return searchConversationMessages({
     conversationID: params.conversationID,
     keywordList: [''],
+    messageTypeList: getChatHistoryDateMessageTypes(),
     searchTimePosition: startOfDay,
     searchTimePeriod: 24 * 60 * 60,
     pageIndex: params.pageIndex ?? 1,

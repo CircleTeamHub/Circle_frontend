@@ -290,10 +290,14 @@ export function getChatHistoryTextHref(
   conversationID: string,
   sourceID?: string,
   title?: string,
+  keyword?: string,
 ): Href {
   return {
     pathname: '/(tabs)/messages/chat-history-text',
-    params: buildChatHistoryParams(conversationID, sourceID, title),
+    params: {
+      ...buildChatHistoryParams(conversationID, sourceID, title),
+      ...(keyword ? { keyword } : {}),
+    },
   };
 }
 
