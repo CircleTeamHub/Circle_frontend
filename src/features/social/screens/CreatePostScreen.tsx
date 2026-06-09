@@ -151,6 +151,7 @@ export default function CreatePostScreen() {
   const prependPlazaPost = useDiscoverStore((s) => s.prependPlazaPost);
   const selectedCircle = usePostFormStore((s) => s.selectedCircle);
   const selectedCity = usePostFormStore((s) => s.selectedCity);
+  const selectedNote = usePostFormStore((s) => s.selectedNote);
   const resetForm = usePostFormStore((s) => s.reset);
 
   const [content, setContent] = useState('');
@@ -218,6 +219,10 @@ export default function CreatePostScreen() {
 
   const handleSelectCity = useCallback(() => {
     router.push('/(tabs)/discover/select-city');
+  }, [router]);
+
+  const handleSelectNote = useCallback(() => {
+    router.push('/(tabs)/discover/select-note');
   }, [router]);
 
   const closePicker = useCallback(() => setActivePicker(null), []);
@@ -288,7 +293,7 @@ export default function CreatePostScreen() {
         tags: postTags,
         circleId: selectedCircle.id,
         city: selectedCity,
-        noteId: null,
+        noteId: selectedNote?.id ?? null,
         isHorn: hornEnabled,
         // 查看/互动限制已合并到报名限制；这三项保留字段但一律传默认值（不限制）。
         vipRestriction: null,
@@ -324,6 +329,7 @@ export default function CreatePostScreen() {
     postTags,
     resetForm,
     selectedCity,
+    selectedNote,
     hornEnabled,
     signupVipRestriction,
     signupCreditRestriction,
@@ -407,23 +413,14 @@ export default function CreatePostScreen() {
         />
         <Divider />
 
-        {/* Note picker (placeholder) */}
-        {/* "选择笔记" 之前是哑按钮 —— 没 onPress，rightText 锁定"不添加"。等关联笔记功能 wire 上时
-           再恢复 onPress；现在加 Alert stopgap 让用户至少知道这是占位。 */}
         <MenuRow
           icon="document-text-outline"
           label={t('plaza.create.noteLabel', { defaultValue: '选择笔记' })}
-          rightText={t('plaza.create.notNoteSet', { defaultValue: '不添加' })}
-          onPress={() =>
-            Alert.alert(
-              t('plaza.create.notePickerComingSoonTitle', {
-                defaultValue: '即将上线',
-              }),
-              t('plaza.create.notePickerComingSoon', {
-                defaultValue: '关联笔记功能即将上线，敬请期待。',
-              }),
-            )
+          rightText={
+            selectedNote?.title ??
+            t('plaza.create.notNoteSet', { defaultValue: '不添加' })
           }
+          onPress={handleSelectNote}
         />
         <Divider />
 
