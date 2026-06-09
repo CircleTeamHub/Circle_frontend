@@ -75,6 +75,20 @@ import {
 import { OnlineState, SessionType } from '@openim/rn-client-sdk';
 import type { ChatMessage, FriendCardData } from '@/types';
 
+// Dev-only structured log for a failed send. Never logs the message body —
+// only the error and conversation kind — to avoid leaking content into logs.
+function logChatSendFailure(
+  error: unknown,
+  context: { sessionType: SessionType; isGroupChat: boolean },
+) {
+  if (!__DEV__) return;
+  const base =
+    error instanceof Error
+      ? { name: error.name, message: error.message }
+      : { message: String(error) };
+  console.warn('[chat] text send failed', { ...base, ...context });
+}
+
 type AttachmentId =
   | 'media'
   | 'video-call'
@@ -115,6 +129,19 @@ const s = StyleSheet.create({
   onlineRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
   onlineDot: { width: 8, height: 8, borderRadius: 4 },
   headerStatusText: { ...Typography.small },
+  messageArea: {
+    flex: 1,
+    overflow: 'hidden',
+  },
+  messageAreaBackground: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  messageAreaOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  messageListSurface: {
+    flex: 1,
+  },
   messageList: { padding: Spacing.md, gap: 14 },
   messageListContent: {
     paddingTop: Spacing.lg,
@@ -334,16 +361,17 @@ export default function ChatDetailScreen() {
         ? colors.online
         : colors.textSecondary;
   const d = useMemo(() => ({
-    container: { flex: 1, backgroundColor: backgroundStyle.backgroundColor },
+    container: { flex: 1, backgroundColor: colors.background },
+    messageArea: { backgroundColor: backgroundStyle.backgroundColor },
     headerName: { color: colors.text },
     onlineDot: { backgroundColor: statusColor },
     headerStatusText: { color: statusColor },
-    inputBar: { backgroundColor: backgroundStyle.backgroundColor },
+    inputBar: { backgroundColor: colors.background },
     circleBtn: { backgroundColor: colors.surface },
     composerActionBtn: { backgroundColor: colors.surfaceBorder },
     composerShell: { backgroundColor: colors.inputBg, borderColor: colors.surfaceBorder },
     composerInput: { color: colors.text },
-    attachmentPanel: { backgroundColor: backgroundStyle.backgroundColor },
+    attachmentPanel: { backgroundColor: colors.background },
     attachmentIcon: { backgroundColor: colors.surface },
   }), [backgroundStyle.backgroundColor, colors, statusColor]);
 
@@ -582,13 +610,24 @@ export default function ChatDetailScreen() {
           text,
         });
         appendMessages(conversationID, [sentMessage]);
-      } catch {
+      } catch (error) {
+        logChatSendFailure(error, {
+          sessionType: conversationType,
+          isGroupChat,
+        });
         setSendError('消息发送失败，请重试');
       } finally {
         inFlightRef.current = false;
       }
     },
-    [appendMessages, conversationID, conversationType, isPreviewMode, sourceID],
+    [
+      appendMessages,
+      conversationID,
+      conversationType,
+      isGroupChat,
+      isPreviewMode,
+      sourceID,
+    ],
   );
 
   const handleSendCurrentLocation = useCallback(async () => {
@@ -945,25 +984,29 @@ export default function ChatDetailScreen() {
       });
       appendMessages(conversationID, [sentMessage]);
       setDraft('');
-    } catch {
+    } catch (error) {
+      logChatSendFailure(error, {
+        sessionType: conversationType,
+        isGroupChat,
+      });
       setSendError('消息发送失败，请重试');
     } finally {
       inFlightRef.current = false;
       setSending(false);
     }
-  }, [appendMessages, conversationID, conversationType, draft, isPreviewMode, sending, sourceID]);
+  }, [
+    appendMessages,
+    conversationID,
+    conversationType,
+    draft,
+    isGroupChat,
+    isPreviewMode,
+    sending,
+    sourceID,
+  ]);
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      {backgroundStyle.imageUri ? (
-        <ImageBackground
-          source={{ uri: backgroundStyle.imageUri }}
-          style={StyleSheet.absoluteFillObject}
-          resizeMode="cover"
-        >
-          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.overlay }]} />
-        </ImageBackground>
-      ) : null}
       <View style={s.header}>
         <Pressable onPress={handleBack} hitSlop={8}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
@@ -1006,46 +1049,60 @@ export default function ChatDetailScreen() {
         </Pressable>
       </View>
       <Divider />
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        inverted
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
-        contentContainerStyle={[s.messageList, s.messageListContent, s.messageListInset]}
-        showsVerticalScrollIndicator={false}
-        // scrollToIndex 在 inverted + 没设 getItemLayout 时，目标 index 超出已渲染窗口
-        // 就会抛 "scrollToIndex out of range"。fallback：先滚到能测到的最远 index，
-        // 等下一帧布局完再精确跳到目标位置，避免搜索定位时整页崩。
-        onScrollToIndexFailed={(info) => {
-          const fallbackIndex = Math.min(
-            info.highestMeasuredFrameIndex ?? info.index,
-            info.index,
-          );
-          flatListRef.current?.scrollToIndex({
-            index: fallbackIndex,
-            animated: false,
-          });
-          setTimeout(() => {
+      <View style={[s.messageArea, d.messageArea]}>
+        {backgroundStyle.imageUri ? (
+          <View pointerEvents="none" style={s.messageAreaBackground}>
+            <ImageBackground
+              source={{ uri: backgroundStyle.imageUri }}
+              style={s.messageAreaBackground}
+              resizeMode="cover"
+            >
+              <View style={[s.messageAreaOverlay, { backgroundColor: colors.overlay }]} />
+            </ImageBackground>
+          </View>
+        ) : null}
+        <FlatList
+          ref={flatListRef}
+          style={s.messageListSurface}
+          data={messages}
+          inverted
+          renderItem={renderItem}
+          keyExtractor={keyExtractor}
+          contentContainerStyle={[s.messageList, s.messageListContent, s.messageListInset]}
+          showsVerticalScrollIndicator={false}
+          // scrollToIndex 在 inverted + 没设 getItemLayout 时，目标 index 超出已渲染窗口
+          // 就会抛 "scrollToIndex out of range"。fallback：先滚到能测到的最远 index，
+          // 等下一帧布局完再精确跳到目标位置，避免搜索定位时整页崩。
+          onScrollToIndexFailed={(info) => {
+            const fallbackIndex = Math.min(
+              info.highestMeasuredFrameIndex ?? info.index,
+              info.index,
+            );
             flatListRef.current?.scrollToIndex({
-              index: info.index,
-              animated: true,
-              viewPosition: 0.3,
+              index: fallbackIndex,
+              animated: false,
             });
-          }, 250);
-        }}
-      />
+            setTimeout(() => {
+              flatListRef.current?.scrollToIndex({
+                index: info.index,
+                animated: true,
+                viewPosition: 0.3,
+              });
+            }, 250);
+          }}
+        />
+        {isPreviewMode ? (
+          <Text style={[s.previewNotice, Typography.small, { color: colors.textSecondary }]}>
+            当前仅预览聊天界面，消息发送会在 IM 接通后开放。
+          </Text>
+        ) : null}
+        {sendError ? (
+          <Text style={[s.sendError, Typography.small, { color: colors.error }]}>
+            {sendError}
+          </Text>
+        ) : null}
+      </View>
       <Divider />
-      {isPreviewMode ? (
-        <Text style={[s.previewNotice, Typography.small, { color: colors.textSecondary }]}>
-          当前仅预览聊天界面，消息发送会在 IM 接通后开放。
-        </Text>
-      ) : null}
-      {sendError ? (
-        <Text style={[s.sendError, Typography.small, { color: colors.error }]}>
-          {sendError}
-        </Text>
-      ) : null}
       <View
         style={[
           s.inputBar,

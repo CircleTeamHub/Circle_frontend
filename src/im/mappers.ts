@@ -212,6 +212,7 @@ export function mapConversationItemToUI(item: ConversationItem): Conversation {
     conversationType:
       item.conversationType === SessionType.Group ? 'group' : 'private',
     pinned: item.isPinned === true,
+    muted: item.recvMsgOpt !== 0,
   };
 }
 

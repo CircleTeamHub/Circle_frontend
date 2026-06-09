@@ -237,3 +237,85 @@ test('getOrCreateSingleConversation waits until IM connection is ready before re
   assert.equal(result.conversationID, 'conversation-2');
   assert.equal(getOneConversationCalls.length, 1);
 });
+
+test('sendTextMessage waits until IM connection is ready before sending', async () => {
+  const sdkCalls = [];
+  const storeState = {
+    connected: false,
+  };
+
+  const { sendTextMessage } = loadTsModule('src/im/client.ts', {
+    '@openim/rn-client-sdk': {
+      __esModule: true,
+      default: {
+        initSDK: async () => undefined,
+        createTextMessage: async (text) => {
+          sdkCalls.push(['createTextMessage', text]);
+          return { clientMsgID: 'client-1', textElem: { content: text } };
+        },
+        sendMessage: async (params) => {
+          if (!storeState.connected) {
+            throw new Error('IM connection is not ready');
+          }
+          sdkCalls.push(['sendMessage', params]);
+          return { clientMsgID: 'client-1' };
+        },
+      },
+      LogLevel: { Info: 0 },
+      SessionType: { Single: 1, Group: 2 },
+      ViewType: { History: 0 },
+    },
+    'react-native-fs': {
+      __esModule: true,
+      default: {
+        DocumentDirectoryPath: '/tmp',
+        mkdir: async () => undefined,
+      },
+    },
+    'react-native': {
+      Platform: { OS: 'ios' },
+    },
+    '@/constants/config': {
+      OPENIM_API_URL: 'https://im.example.com',
+      OPENIM_WS_URL: 'wss://im.example.com',
+      OPENIM_LOG_LEVEL: 0,
+    },
+    '@/stores/imStore': {
+      useIMStore: {
+        getState: () => ({
+          connected: storeState.connected,
+          setError: () => undefined,
+          setInitialized: () => undefined,
+          setCurrentUserID: () => undefined,
+          setConnecting: () => undefined,
+          reset: () => undefined,
+          setConversations: () => undefined,
+          mergeConversations: () => undefined,
+        }),
+      },
+    },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: {
+        getState: () => ({
+          setMessagesUnread: () => undefined,
+        }),
+      },
+    },
+  });
+
+  setTimeout(() => {
+    storeState.connected = true;
+  }, 10);
+
+  const result = await sendTextMessage({
+    sourceID: 'group-1',
+    sessionType: 2,
+    text: 'hello',
+  });
+
+  assert.equal(result.clientMsgID, 'client-1');
+  assert.deepEqual(sdkCalls[0], ['createTextMessage', 'hello']);
+  assert.equal(sdkCalls[1][0], 'sendMessage');
+  assert.equal(sdkCalls[1][1].groupID, 'group-1');
+  assert.equal(sdkCalls[1][1].recvID, '');
+});

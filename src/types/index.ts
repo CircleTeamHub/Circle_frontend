@@ -14,6 +14,7 @@ export interface Conversation {
   unreadCount: number;
   conversationType: ConversationType;
   pinned: boolean;
+  muted: boolean;
 }
 
 /**

@@ -617,6 +617,8 @@ export async function sendTextMessage(params: {
     throw new Error(getUnsupportedPlatformMessage());
   }
 
+  await waitForOpenIMConnectionReady();
+
   const message = await OpenIMSDK.createTextMessage(params.text);
   const isSingle = params.sessionType === SessionType.Single;
   const sentMessage = await OpenIMSDK.sendMessage({
@@ -654,6 +656,8 @@ export async function sendImageMessage(params: {
   if (!initialized) {
     throw new Error(getUnsupportedPlatformMessage());
   }
+
+  await waitForOpenIMConnectionReady();
 
   const picBase = {
     uuid: '',
@@ -700,6 +704,8 @@ export async function sendLocationMessage(params: {
     throw new Error(getUnsupportedPlatformMessage());
   }
 
+  await waitForOpenIMConnectionReady();
+
   const message = await OpenIMSDK.createLocationMessage({
     description: params.description,
     longitude: params.longitude,
@@ -745,6 +751,8 @@ export async function sendTransferCardMessage(params: {
   if (!initialized) {
     throw new Error(getUnsupportedPlatformMessage());
   }
+
+  await waitForOpenIMConnectionReady();
 
   const { amount } = params.payload;
   // 积分必须为正整数；上限拦截 off-by-orders / overflow 攻击。真实业务上限以后端为准。
@@ -799,6 +807,8 @@ export async function sendNoteCardMessage(params: {
     throw new Error(getUnsupportedPlatformMessage());
   }
 
+  await waitForOpenIMConnectionReady();
+
   const message = await OpenIMSDK.createCustomMessage({
     data: JSON.stringify(params.payload),
     extension: NOTE_CARD_EXTENSION,
@@ -846,6 +856,8 @@ export async function sendFriendCardMessage(params: {
   if (!initialized) {
     throw new Error(getUnsupportedPlatformMessage());
   }
+
+  await waitForOpenIMConnectionReady();
 
   const targetConversation = useIMStore
     .getState()
@@ -940,6 +952,20 @@ export async function clearConversationMessages(conversationID: string) {
   useIMStore.getState().setMessages(conversationID, []);
 }
 
+export async function deleteConversation(conversationID: string) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await OpenIMSDK.deleteConversationAndDeleteAllMsg(conversationID);
+  useIMStore.getState().setMessages(conversationID, []);
+  await loadConversationList().catch(() => {
+    // 会话已删除，列表刷新失败时等待 SDK 推送同步。
+  });
+}
+
 export async function clearAllLocalMessages() {
   const initialized = await ensureOpenIMInitialized();
 
@@ -957,6 +983,20 @@ function flattenSearchResult(result: SearchMessageResult) {
   const items = result.searchResultItems ?? result.findResultItems ?? [];
   return items.flatMap((item) => item.messageList);
 }
+
+function getChatHistoryDateMessageTypes() {
+  return [
+    MessageType.TextMessage,
+    MessageType.PictureMessage,
+    MessageType.VoiceMessage,
+    MessageType.VideoMessage,
+    MessageType.FileMessage,
+    MessageType.LocationMessage,
+    MessageType.CardMessage,
+    MessageType.CustomMessage,
+  ].filter((type): type is MessageType => typeof type === 'number');
+}
+
 
 async function searchConversationMessages(params: {
   conversationID: string;
@@ -1043,6 +1083,7 @@ export async function searchConversationMessagesByDate(params: {
   return searchConversationMessages({
     conversationID: params.conversationID,
     keywordList: [''],
+    messageTypeList: getChatHistoryDateMessageTypes(),
     searchTimePosition: startOfDay,
     searchTimePeriod: 24 * 60 * 60,
     pageIndex: params.pageIndex ?? 1,

@@ -68,6 +68,9 @@ function loadChatSettingsClient(sdkCalls, storeCalls) {
         clearConversationAndDeleteAllMsg: async (conversationID) => {
           sdkCalls.push(['clearConversationAndDeleteAllMsg', conversationID]);
         },
+        deleteConversationAndDeleteAllMsg: async (conversationID) => {
+          sdkCalls.push(['deleteConversationAndDeleteAllMsg', conversationID]);
+        },
         deleteAllMsgFromLocal: async () => {
           sdkCalls.push(['deleteAllMsgFromLocal']);
         },
@@ -104,7 +107,9 @@ function loadChatSettingsClient(sdkCalls, storeCalls) {
           setCurrentUserID: () => undefined,
           setConnecting: () => undefined,
           reset: () => undefined,
-          setConversations: () => undefined,
+          setConversations: (...args) => {
+            storeCalls.push(['setConversations', ...args]);
+          },
           mergeConversations: () => undefined,
           clearAllMessages: () => {
             storeCalls.push(['clearAllMessages']);
@@ -148,8 +153,12 @@ function loadSearchClient(sdkCalls, searchResult = { totalCount: 0, searchResult
       MessageType: {
         TextMessage: 101,
         PictureMessage: 102,
+        VoiceMessage: 103,
         VideoMessage: 104,
         FileMessage: 105,
+        CardMessage: 108,
+        LocationMessage: 109,
+        CustomMessage: 110,
       },
     },
     'react-native-fs': {
@@ -231,6 +240,23 @@ test('clearConversationMessages clears OpenIM history and local message cache', 
   ]);
 });
 
+test('deleteConversation deletes the OpenIM conversation and refreshes the list', async () => {
+  const sdkCalls = [];
+  const storeCalls = [];
+  const { deleteConversation } = loadChatSettingsClient(sdkCalls, storeCalls);
+
+  await deleteConversation('conversation-99');
+
+  assert.deepEqual(normalize(sdkCalls), [
+    ['deleteConversationAndDeleteAllMsg', 'conversation-99'],
+    ['getConversationListSplit', { offset: 0, count: 100 }],
+  ]);
+  assert.deepEqual(normalize(storeCalls), [
+    ['setMessages', 'conversation-99', []],
+    ['setConversations', []],
+  ]);
+});
+
 test('clearAllLocalMessages clears only local OpenIM messages and refreshes local state', async () => {
   const sdkCalls = [];
   const storeCalls = [];
@@ -245,6 +271,7 @@ test('clearAllLocalMessages clears only local OpenIM messages and refreshes loca
   assert.deepEqual(normalize(storeCalls), [
     ['clearAllMessages'],
     ['setMessagesUnread', 0],
+    ['setConversations', []],
   ]);
 });
 
@@ -440,6 +467,7 @@ test('searchConversationMessagesByDate constrains the time window to the selecte
       {
         conversationID: 'conversation-1',
         keywordList: [''],
+        messageTypeList: [101, 102, 103, 104, 105, 109, 108, 110],
         searchTimePosition: new Date('2026-04-16T00:00:00').getTime(),
         searchTimePeriod: 24 * 60 * 60,
         pageIndex: 1,

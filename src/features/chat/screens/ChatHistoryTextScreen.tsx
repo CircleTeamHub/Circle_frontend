@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   Pressable,
@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import type { MessageItem } from '@openim/rn-client-sdk';
 import { NavHeader } from '@/components/ui/nav-header';
 import {
@@ -67,13 +68,16 @@ const s = StyleSheet.create({
 export default function ChatHistoryTextScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{
     conversationID?: string;
     sourceID?: string;
     title?: string;
+    keyword?: string;
   }>();
   const { conversationID, sourceID, title } = resolveChatHistoryRouteParams(params);
-  const [keyword, setKeyword] = useState('');
+  const initialKeyword = typeof params.keyword === 'string' ? params.keyword : '';
+  const [keyword, setKeyword] = useState(initialKeyword);
   const [searched, setSearched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -116,12 +120,12 @@ export default function ChatHistoryTextScreen() {
     [colors],
   );
 
-  const handleSearch = useCallback(async () => {
+  const handleSearch = useCallback(async (overrideKeyword?: string) => {
     if (loading) {
       return;
     }
 
-    const nextKeyword = keyword.trim();
+    const nextKeyword = (overrideKeyword ?? keyword).trim();
     setSearched(true);
 
     if (!conversationID || !nextKeyword) {
@@ -147,14 +151,22 @@ export default function ChatHistoryTextScreen() {
     } catch (err) {
       setResults([]);
       setHasMore(false);
-      setError(err instanceof Error ? err.message : '加载失败');
+      setError(t('chat.history.loadFailed'));
       if (typeof __DEV__ !== 'undefined' && __DEV__) {
         console.warn('[chat-history-text] search failed', err);
       }
     } finally {
       setLoading(false);
     }
-  }, [conversationID, keyword, loading]);
+  }, [conversationID, keyword, loading, t]);
+
+  useEffect(() => {
+    if (initialKeyword) {
+      void handleSearch(initialKeyword);
+    }
+    // 初始关键词只用于首屏自动搜索，后续输入由用户触发。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleLoadMore = useCallback(async () => {
     if (loadingMore || !hasMore || !conversationID) {
@@ -197,7 +209,7 @@ export default function ChatHistoryTextScreen() {
   return (
     <View style={[s.container, d.container, { paddingTop: insets.top }]}>
       <NavHeader
-        title="搜索文字消息"
+        title={t('chat.history.textTitle')}
         fallbackHref={getChatDetailHref('messages', sourceID, title, undefined, conversationID)}
       />
       <View style={s.content}>
@@ -205,7 +217,7 @@ export default function ChatHistoryTextScreen() {
           <TextInput
             value={keyword}
             onChangeText={setKeyword}
-            placeholder="输入关键词"
+            placeholder={t('chat.history.keywordPlaceholder')}
             placeholderTextColor={colors.textSecondary}
             style={[s.input, d.input]}
             returnKeyType="search"
@@ -216,7 +228,9 @@ export default function ChatHistoryTextScreen() {
             onPress={() => void handleSearch()}
             disabled={loading}
           >
-            <Text style={d.actionText}>{loading ? '搜索中' : '搜索'}</Text>
+            <Text style={d.actionText}>
+              {loading ? t('chat.history.searching') : t('chat.history.search')}
+            </Text>
           </Pressable>
         </View>
 
@@ -240,18 +254,20 @@ export default function ChatHistoryTextScreen() {
               <View>
                 <Text style={[s.centeredText, d.errorText]}>{error}</Text>
                 <Pressable style={d.retryButton} onPress={() => void handleSearch()}>
-                  <Text style={d.retryText}>重试</Text>
+                  <Text style={d.retryText}>{t('chat.history.retry')}</Text>
                 </Pressable>
               </View>
             ) : searched ? (
               <Text style={[s.centeredText, d.centeredText]}>
-                暂无匹配的聊天记录
+                {t('chat.history.noMatches')}
               </Text>
             ) : null
           }
           ListFooterComponent={
             loadingMore ? (
-              <Text style={[s.centeredText, d.centeredText]}>加载中…</Text>
+              <Text style={[s.centeredText, d.centeredText]}>
+                {t('chat.history.loading')}
+              </Text>
             ) : null
           }
         />

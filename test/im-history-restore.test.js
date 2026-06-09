@@ -104,6 +104,7 @@ function loadRestoreHarness(options) {
     '@/services/api/chat-history': {
       fetchRestorableConversationMessages: async (params) => {
         apiCalls.push(['fetchRestorableConversationMessages', params]);
+        if (options.fetchError) throw options.fetchError;
         return pages.shift() ?? {
           conversationID: params.conversationID,
           messages: [],
@@ -290,5 +291,38 @@ test('restoreConversationMessages skips a failing insert and continues the batch
       .filter(([name]) => name === 'insertSingleMessageToLocalStorage')
       .map(([, params]) => params.message.clientMsgID),
     ['client-1', 'client-2', 'client-3'],
+  );
+});
+
+test('restoreConversationMessages treats an unconfigured history store as an optional no-op', async () => {
+  const { restoreConversationMessages, apiCalls, sdkCalls, clientCalls } = loadRestoreHarness({
+    localMessages: [],
+    pages: [],
+    fetchError: {
+      name: 'ApiError',
+      status: 503,
+      message: 'OpenIM history store is not configured',
+    },
+  });
+
+  const result = await restoreConversationMessages({
+    conversationID: 'si_me_peer',
+    sourceID: 'peer-1',
+    sessionType: 1,
+  });
+
+  assert.deepEqual(normalize(result), { fetched: 0, inserted: 0 });
+  assert.equal(
+    apiCalls.filter(([name]) => name === 'fetchRestorableConversationMessages')
+      .length,
+    1,
+  );
+  assert.deepEqual(
+    sdkCalls.filter(([name]) => name === 'insertSingleMessageToLocalStorage'),
+    [],
+  );
+  assert.deepEqual(
+    clientCalls.filter(([name]) => name === 'loadConversationMessages'),
+    [],
   );
 });

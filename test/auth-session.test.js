@@ -114,6 +114,22 @@ test('clearLocalSession runs registered teardown handlers, then resets stores au
   ]);
 });
 
+test('session module avoids a static message-groups import that cycles back into apiClient', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/services/auth/session.ts'),
+    'utf8',
+  );
+
+  assert.doesNotMatch(
+    source,
+    /import\s+\{\s*useMessageGroupsStore\s*\}\s+from\s+['"]@\/features\/messages\/store\/use-message-groups-store['"]/,
+  );
+  assert.match(
+    source,
+    /import\(\s*['"]@\/features\/messages\/store\/use-message-groups-store['"]\s*\)/,
+  );
+});
+
 test('clearLocalSession still clears local state when a teardown handler throws', async () => {
   const { mocks, calls } = makeBaseMocks();
   const { clearLocalSession, registerLogoutHandler } = loadSessionModule(mocks);

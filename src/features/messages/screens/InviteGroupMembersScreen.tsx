@@ -18,6 +18,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
 import { inviteUsersToGroup, loadGroupMemberList, toImUserId } from '@/im/client';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
+import { inviteGroupMembers } from '@/services/api/groups';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 const s = StyleSheet.create({
@@ -82,14 +83,11 @@ export default function InviteGroupMembersScreen() {
     groupName?: string;
   }>();
   const groupID = typeof params.groupID === 'string' ? params.groupID : '';
-  const groupName =
-    typeof params.groupName === 'string' ? params.groupName : t('chat.groupChat');
+  const groupName = typeof params.groupName === 'string' ? params.groupName : t('chat.groupChat');
 
   const [query, setQuery] = useState('');
   const [friends, setFriends] = useState<FriendProfile[]>([]);
-  const [existingMemberIDs, setExistingMemberIDs] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const [existingMemberIDs, setExistingMemberIDs] = useState<Set<string>>(() => new Set());
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Record<string, true>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -97,14 +95,9 @@ export default function InviteGroupMembersScreen() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    Promise.all([
-      fetchFriends(),
-      groupID ? loadGroupMemberList(groupID, 10_000) : Promise.resolve([]),
-    ])
+    Promise.all([fetchFriends(), groupID ? loadGroupMemberList(groupID, 10_000) : Promise.resolve([])])
       .then(([list, members]) => {
-        const nextExistingMemberIDs = new Set(
-          members.map((member) => toImUserId(member.userID)),
-        );
+        const nextExistingMemberIDs = new Set(members.map((member) => toImUserId(member.userID)));
         if (!cancelled) setFriends(list);
         if (!cancelled) setExistingMemberIDs(nextExistingMemberIDs);
       })
@@ -143,18 +136,14 @@ export default function InviteGroupMembersScreen() {
 
   const trimmedQuery = query.trim().toLowerCase();
   const invitableFriends = useMemo(
-    () =>
-      friends.filter(
-        (friend) => !existingMemberIDs.has(toImUserId(friend.id)),
-      ),
+    () => friends.filter((friend) => !existingMemberIDs.has(toImUserId(friend.id))),
     [existingMemberIDs, friends],
   );
   const filteredFriends = useMemo(() => {
     if (!trimmedQuery) return invitableFriends;
     return invitableFriends.filter(
       (friend) =>
-        friend.nickname.toLowerCase().includes(trimmedQuery) ||
-        friend.accountId.toLowerCase().includes(trimmedQuery),
+        friend.nickname.toLowerCase().includes(trimmedQuery) || friend.accountId.toLowerCase().includes(trimmedQuery),
     );
   }, [invitableFriends, trimmedQuery]);
 
@@ -182,9 +171,7 @@ export default function InviteGroupMembersScreen() {
       return;
     }
 
-    const inviteUserIDs = selectedIds
-      .map(toImUserId)
-      .filter((userID) => !existingMemberIDs.has(userID));
+    const inviteUserIDs = selectedIds.map(toImUserId).filter((userID) => !existingMemberIDs.has(userID));
 
     if (inviteUserIDs.length < 1) {
       Alert.alert(t('messages.inviteGroupMembersAlreadyMembers'));
@@ -194,7 +181,10 @@ export default function InviteGroupMembersScreen() {
 
     setSubmitting(true);
     try {
-      await inviteUsersToGroup(groupID, inviteUserIDs);
+      const result = await inviteGroupMembers(groupID, inviteUserIDs);
+      if (!result.handled) {
+        await inviteUsersToGroup(groupID, inviteUserIDs);
+      }
       Alert.alert(t('messages.inviteGroupMembersSent'), undefined, [
         { text: t('common.ok'), onPress: () => router.back() },
       ]);
@@ -254,16 +244,8 @@ export default function InviteGroupMembersScreen() {
     ({ item }: ListRenderItemInfo<FriendProfile>) => {
       const checked = Boolean(selected[item.id]);
       return (
-        <Pressable
-          style={[s.row, d.surface]}
-          onPress={() => toggleFriend(item.id)}
-        >
-          <Avatar
-            size={40}
-            shape="square"
-            name={item.nickname}
-            uri={item.avatarUrl ?? undefined}
-          />
+        <Pressable style={[s.row, d.surface]} onPress={() => toggleFriend(item.id)}>
+          <Avatar size={40} shape="square" name={item.nickname} uri={item.avatarUrl ?? undefined} />
           <View style={s.rowText}>
             <Text style={d.rowName} numberOfLines={1}>
               {item.nickname}
@@ -280,15 +262,7 @@ export default function InviteGroupMembersScreen() {
         </Pressable>
       );
     },
-    [
-      colors.primary,
-      colors.textSecondary,
-      d.rowName,
-      d.rowSubtitle,
-      d.surface,
-      selected,
-      toggleFriend,
-    ],
+    [colors.primary, colors.textSecondary, d.rowName, d.rowSubtitle, d.surface, selected, toggleFriend],
   );
 
   const submitDisabled = submitting || selectedCount < 1;
@@ -317,9 +291,7 @@ export default function InviteGroupMembersScreen() {
 
       <Text style={[s.sectionLabel, d.label]}>
         {t('messages.inviteGroupMembersSubtitle', { groupName })}
-        {selectedCount > 0
-          ? ` · ${t('messages.newGroupSelectedCount', { count: selectedCount })}`
-          : ''}
+        {selectedCount > 0 ? ` · ${t('messages.newGroupSelectedCount', { count: selectedCount })}` : ''}
       </Text>
 
       {loading ? (
@@ -329,9 +301,7 @@ export default function InviteGroupMembersScreen() {
       ) : filteredFriends.length === 0 ? (
         <View style={s.empty}>
           <Text style={d.emptyText}>
-            {trimmedQuery
-              ? t('messages.newGroupNoMatches')
-              : t('messages.inviteGroupMembersNoInvitableFriends')}
+            {trimmedQuery ? t('messages.newGroupNoMatches') : t('messages.inviteGroupMembersNoInvitableFriends')}
           </Text>
         </View>
       ) : (
@@ -346,13 +316,7 @@ export default function InviteGroupMembersScreen() {
         />
       )}
 
-      <View
-        style={[
-          s.footer,
-          d.surfaceBorder,
-          { paddingBottom: Math.max(insets.bottom, Spacing.md) },
-        ]}
-      >
+      <View style={[s.footer, d.surfaceBorder, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]}>
         <Pressable
           style={[
             s.submitButton,
