@@ -23,6 +23,7 @@ import {
   SentBubble,
   LocationCard,
   ImageBubble,
+  VoiceBubble,
   NoteCardBubble,
   FriendCardBubble,
   TransferCardBubble,
@@ -37,6 +38,13 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import {
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+  useAudioRecorder,
+  useAudioRecorderState,
+} from 'expo-audio';
+import {
   getOrCreateSingleConversation,
   getOrCreateGroupConversation,
   loadConversationMessages,
@@ -47,6 +55,7 @@ import {
   sendNoteCardMessage,
   sendTextMessage,
   sendTransferCardMessage,
+  sendVoiceMessage,
   subscribeUserOnlineStatus,
   toImUserId,
   unsubscribeUserOnlineStatus,
@@ -165,6 +174,9 @@ const s = StyleSheet.create({
     gap: 10,
   },
   circleBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  voiceRecordingBtn: {
+    borderWidth: 1,
+  },
   composerActionBtn: {
     width: 38,
     height: 38,
@@ -204,6 +216,11 @@ const s = StyleSheet.create({
   },
   attachmentLabel: {
     ...Typography.small,
+  },
+  voiceStatus: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.xs,
+    textAlign: 'center',
   },
 });
 
@@ -247,6 +264,23 @@ export default function ChatDetailScreen() {
   >(undefined);
   const consumePendingShare = useSharePickerStore((s) => s.consume);
   const consumePendingTransfer = useTransferComposerStore((s) => s.consume);
+  const voiceRecorder = useAudioRecorder(RecordingPresets.LOW_QUALITY);
+  const voiceRecorderState = useAudioRecorderState(voiceRecorder, 250);
+  const [voiceRecordingStartedAt, setVoiceRecordingStartedAt] = useState<number | null>(null);
+  const [voiceActionBusy, setVoiceActionBusy] = useState(false);
+  // 录音状态的纯 JS 快照：卸载 cleanup 里不能调 recorder 的 native getStatus()，
+  // 此时 expo-audio 可能已释放其 native shared object（会抛 NativeSharedObjectNotFoundException）。
+  const isRecordingRef = useRef(false);
+  const recordingAudioModeEnabledRef = useRef(false);
+  useEffect(() => {
+    isRecordingRef.current = voiceRecorderState.isRecording;
+  }, [voiceRecorderState.isRecording]);
+  const restoreRecordingAudioMode = useCallback(() => {
+    if (recordingAudioModeEnabledRef.current) {
+      recordingAudioModeEnabledRef.current = false;
+      setAudioModeAsync({ allowsRecording: false }).catch(() => undefined);
+    }
+  }, []);
 
   const paramConversationID =
     typeof params.conversationID === 'string' ? params.conversationID : '';
@@ -373,7 +407,21 @@ export default function ChatDetailScreen() {
     composerInput: { color: colors.text },
     attachmentPanel: { backgroundColor: colors.background },
     attachmentIcon: { backgroundColor: colors.surface },
+    voiceRecordingBtn: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
   }), [backgroundStyle.backgroundColor, colors, statusColor]);
+  const isVoiceRecording =
+    voiceRecorderState.isRecording || voiceRecordingStartedAt != null;
+  const voiceElapsedSeconds = Math.max(
+    1,
+    Math.round(
+      (voiceRecorderState.durationMillis ||
+        (voiceRecordingStartedAt ? Date.now() - voiceRecordingStartedAt : 0)) /
+        1000,
+    ),
+  );
 
   useEffect(() => {
     if (!conversationID || !sourceID) {
@@ -513,6 +561,19 @@ export default function ChatDetailScreen() {
             hideStatus={isGroupChat}
           />
         );
+      case 'voice':
+        return (
+          <VoiceBubble
+            message={item}
+            outgoing={Boolean(item.outgoing)}
+            senderName={item.senderName ?? conversationTitle}
+            senderAvatarUri={avatarUrl}
+            selfName={selfName}
+            selfAvatarUri={selfAvatarUri}
+            onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            hideStatus={isGroupChat}
+          />
+        );
       case 'note-card':
         return (
           <NoteCardBubble
@@ -628,6 +689,123 @@ export default function ChatDetailScreen() {
       isPreviewMode,
       sourceID,
     ],
+  );
+
+  const handleVoicePress = useCallback(async () => {
+    if (!sourceID || isPreviewMode || voiceActionBusy) return;
+
+    setSendError(null);
+
+    if (isVoiceRecording) {
+      setVoiceActionBusy(true);
+      try {
+        const statusBeforeStop = voiceRecorder.getStatus();
+        await voiceRecorder.stop();
+        const statusAfterStop = voiceRecorder.getStatus();
+        const soundPath =
+          voiceRecorder.uri ?? statusAfterStop.url ?? statusBeforeStop.url;
+        const elapsedMs =
+          statusBeforeStop.durationMillis ||
+          statusAfterStop.durationMillis ||
+          (voiceRecordingStartedAt ? Date.now() - voiceRecordingStartedAt : 0);
+        const duration = Math.max(1, Math.round(elapsedMs / 1000));
+
+        setVoiceRecordingStartedAt(null);
+
+        if (!soundPath) {
+          throw new Error('录音文件生成失败');
+        }
+
+        const sent = await sendVoiceMessage({
+          sourceID,
+          sessionType: conversationType,
+          soundPath,
+          duration,
+        });
+        appendMessages(conversationID, [sent]);
+      } catch (error) {
+        if (__DEV__) {
+          console.warn(
+            '[chat] voice send failed',
+            error instanceof Error
+              ? { name: error.name, message: error.message }
+              : String(error),
+          );
+        }
+        setVoiceRecordingStartedAt(null);
+        setSendError('语音发送失败，请重试');
+      } finally {
+        inFlightRef.current = false;
+        setVoiceActionBusy(false);
+        restoreRecordingAudioMode();
+      }
+      return;
+    }
+
+    if (inFlightRef.current) return;
+    setVoiceActionBusy(true);
+    try {
+      const permission = await requestRecordingPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('权限不足', '请在系统设置开启麦克风权限');
+        return;
+      }
+
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      recordingAudioModeEnabledRef.current = true;
+      const status = voiceRecorder.getStatus();
+      if (!status.canRecord) {
+        await voiceRecorder.prepareToRecordAsync();
+      }
+      Keyboard.dismiss();
+      setAttachmentOpen(false);
+      setEmojiOpen(false);
+      voiceRecorder.record();
+      setVoiceRecordingStartedAt(Date.now());
+      inFlightRef.current = true;
+    } catch (error) {
+      if (__DEV__) {
+        console.warn(
+          '[chat] voice record failed',
+          error instanceof Error
+            ? { name: error.name, message: error.message }
+            : String(error),
+        );
+      }
+      inFlightRef.current = false;
+      setVoiceRecordingStartedAt(null);
+      setSendError('录音启动失败，请重试');
+      restoreRecordingAudioMode();
+    } finally {
+      setVoiceActionBusy(false);
+    }
+  }, [
+    appendMessages,
+    conversationID,
+    conversationType,
+    isPreviewMode,
+    isVoiceRecording,
+    sourceID,
+    restoreRecordingAudioMode,
+    voiceActionBusy,
+    voiceRecorder,
+    voiceRecordingStartedAt,
+  ]);
+
+  useEffect(
+    () => () => {
+      // 用 JS 快照判断是否在录音，避免在已释放的 native 对象上调 getStatus()；
+      // stop() 再用 try/catch + .catch 兜底（卸载时对象可能已被 hook 释放）。
+      if (isRecordingRef.current) {
+        try {
+          void voiceRecorder.stop().catch(() => undefined);
+        } catch {
+          // native shared object 已释放，录音已随之结束，无需再 stop
+        }
+      }
+      restoreRecordingAudioMode();
+    },
+    [restoreRecordingAudioMode, voiceRecorder],
   );
 
   const handleSendCurrentLocation = useCallback(async () => {
@@ -1101,6 +1279,11 @@ export default function ChatDetailScreen() {
             {sendError}
           </Text>
         ) : null}
+        {isVoiceRecording ? (
+          <Text style={[s.voiceStatus, { color: colors.primary }]}>
+            正在录音 {voiceElapsedSeconds} 秒
+          </Text>
+        ) : null}
       </View>
       <Divider />
       <View
@@ -1114,16 +1297,20 @@ export default function ChatDetailScreen() {
         ]}
       >
         <Pressable
-          style={[s.circleBtn, d.circleBtn]}
-          onPress={() =>
-            Alert.alert(
-              '语音消息',
-              '该功能即将上线，敬请期待。',
-            )
-          }
+          style={[
+            s.circleBtn,
+            d.circleBtn,
+            isVoiceRecording ? [s.voiceRecordingBtn, d.voiceRecordingBtn] : null,
+          ]}
+          onPress={handleVoicePress}
+          disabled={isPreviewMode || voiceActionBusy}
           hitSlop={8}
         >
-          <Ionicons name="mic" size={18} color={colors.textSecondary} />
+          <Ionicons
+            name={isVoiceRecording ? 'stop' : 'mic'}
+            size={18}
+            color={isVoiceRecording ? colors.white : colors.textSecondary}
+          />
         </Pressable>
         <View style={[s.composerShell, d.composerShell]}>
           <TextInput

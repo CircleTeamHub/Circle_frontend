@@ -132,6 +132,7 @@ test('app settings screen follows the requested settings detail structure', () =
     'accountSecurity',
     'notifications',
     'appearance',
+    'language',
     'privacy',
     'permissions',
     'clearCache',
@@ -139,6 +140,42 @@ test('app settings screen follows the requested settings detail structure', () =
   ]) {
     assert.match(source, new RegExp(`appSettings\\.rows\\.${key}`));
   }
+});
+
+test('app settings screen opens a language picker sheet from the general section', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/profile/screens/AppSettingsScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(source, /OptionPickerSheet/);
+  assert.match(source, /setLanguage/);
+  assert.match(source, /id:\s*'language'/);
+  assert.match(source, /languageSheetVisible/);
+  assert.match(source, /handleOpenLanguageSheet/);
+  assert.match(source, /handleSelectLanguage/);
+  assert.match(source, /getCurrentLanguagePreference/);
+  assert.match(source, /type AppLanguagePreference/);
+  assert.match(source, /appSettings\.languageSheet\.title/);
+  assert.match(source, /appSettings\.languageSheet\.system/);
+  assert.match(source, /appSettings\.languageSheet\.zh/);
+  assert.match(source, /appSettings\.languageSheet\.en/);
+  assert.doesNotMatch(source, /handleToggleLanguage/);
+});
+
+test('profile settings screen uses the same system language picker sheet', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/profile/screens/SettingsScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(source, /OptionPickerSheet/);
+  assert.match(source, /getCurrentLanguagePreference/);
+  assert.match(source, /type AppLanguagePreference/);
+  assert.match(source, /appSettings\.languageSheet\.system/);
+  assert.match(source, /appSettings\.languageSheet\.zh/);
+  assert.match(source, /appSettings\.languageSheet\.en/);
+  assert.doesNotMatch(source, /handleToggleLanguage/);
 });
 
 test('app settings rows route to their dedicated detail pages', () => {

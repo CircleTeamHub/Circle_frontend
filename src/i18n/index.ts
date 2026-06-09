@@ -8,12 +8,15 @@ import en from './locales/en.json';
 
 const LANGUAGE_KEY = '@circle_im_language';
 
+export type AppLanguage = 'zh' | 'en';
+export type AppLanguagePreference = 'system' | 'zh' | 'en';
+
 const resources = {
   zh: { translation: zh },
   en: { translation: en },
 };
 
-function getDeviceLanguage(): 'zh' | 'en' {
+function getDeviceLanguage(): AppLanguage {
   const locales = getLocales();
   const lang = locales[0]?.languageCode ?? 'zh';
   return lang.startsWith('zh') ? 'zh' : 'en';
@@ -23,14 +26,23 @@ function canUseSynchronousStorage() {
   return typeof window !== 'undefined';
 }
 
-function getInitialLanguage(): 'zh' | 'en' {
+function getSavedLanguagePreference(): AppLanguagePreference {
   if (!canUseSynchronousStorage()) {
-    return getDeviceLanguage();
+    return 'system';
   }
 
   const saved = storage.getString(LANGUAGE_KEY);
   if (saved === 'zh' || saved === 'en') return saved;
-  return getDeviceLanguage();
+  return 'system';
+}
+
+function getInitialLanguage(): AppLanguage {
+  if (!canUseSynchronousStorage()) {
+    return getDeviceLanguage();
+  }
+
+  const saved = getSavedLanguagePreference();
+  return saved === 'system' ? getDeviceLanguage() : saved;
 }
 
 // init 返回 Promise；同步部分（设置默认 lng）已经在 init 调用时完成，异步部分
@@ -44,17 +56,29 @@ void i18n.use(initReactI18next).init({
   },
 });
 
-export function setLanguage(lang: 'zh' | 'en') {
+export function setLanguage(lang: AppLanguagePreference) {
   // changeLanguage 是 async（可能加载懒包），但调用方都是 fire-and-forget 风格；
   // 用 void 显式表示我们不等待 —— 否则 lint 会标 unhandled-promise。
+  if (lang === 'system') {
+    if (canUseSynchronousStorage()) {
+      storage.remove(LANGUAGE_KEY);
+    }
+    void i18n.changeLanguage(getDeviceLanguage());
+    return;
+  }
+
   void i18n.changeLanguage(lang);
   if (canUseSynchronousStorage()) {
     storage.set(LANGUAGE_KEY, lang);
   }
 }
 
-export function getCurrentLanguage(): 'zh' | 'en' {
-  return (i18n.language?.startsWith('zh') ? 'zh' : 'en') as 'zh' | 'en';
+export function getCurrentLanguage(): AppLanguage {
+  return (i18n.language?.startsWith('zh') ? 'zh' : 'en') as AppLanguage;
+}
+
+export function getCurrentLanguagePreference(): AppLanguagePreference {
+  return getSavedLanguagePreference();
 }
 
 /**
@@ -67,10 +91,8 @@ export function rehydrateLanguageFromStorage() {
     return;
   }
 
-  const saved = storage.getString(LANGUAGE_KEY);
-  if (saved === 'zh' || saved === 'en') {
-    void i18n.changeLanguage(saved);
-  }
+  const saved = getSavedLanguagePreference();
+  void i18n.changeLanguage(saved === 'system' ? getDeviceLanguage() : saved);
 }
 
 export default i18n;

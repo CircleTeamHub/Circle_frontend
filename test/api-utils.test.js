@@ -93,3 +93,16 @@ test('normalizeMediaUrl rewrites localhost media host without clobbering service
     'http://192.168.1.65:9000/circle/chat/file.jpg',
   );
 });
+
+test('normalizeMediaUrl rewrites stale private media host to the current dev host', () => {
+  const { normalizeMediaUrl } = loadApiUtils();
+
+  assert.equal(
+    normalizeMediaUrl('http://10.0.0.195:9000/circle/avatars/user.jpg'),
+    'http://192.168.1.65:9000/circle/avatars/user.jpg',
+  );
+  assert.equal(
+    normalizeMediaUrl('http://172.16.4.20:10002/object/user/msg.jpg'),
+    'http://192.168.1.65:10002/object/user/msg.jpg',
+  );
+});

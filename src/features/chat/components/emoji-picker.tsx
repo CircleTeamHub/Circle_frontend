@@ -1,10 +1,16 @@
-import { ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
+import { ScrollView, View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { useTheme, Spacing, Typography } from '@/theme';
 import { EMOJI_GROUPS } from '@/constants/emojis';
 
 interface EmojiPickerProps {
   onSelect: (emoji: string) => void;
 }
+
+const emojiFontFamily = Platform.select({
+  ios: 'Apple Color Emoji',
+  android: 'Noto Color Emoji',
+  default: undefined,
+});
 
 const s = StyleSheet.create({
   container: {
@@ -31,6 +37,7 @@ const s = StyleSheet.create({
   },
   emoji: {
     fontSize: 26,
+    fontFamily: emojiFontFamily,
   },
 });
 

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import * as Haptics from 'expo-haptics';
-import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
+import type { AudioPlayer } from 'expo-audio';
 import { useNotificationFeedbackStore } from '@/features/notifications/store/use-notification-feedback-store';
 
 // Generated placeholder chime — replace assets/sounds/notification.wav to
@@ -18,22 +17,70 @@ const MIN_GAP_MS = 1500;
  */
 export function useNotificationFeedback(): () => void {
   const playerRef = useRef<AudioPlayer | null>(null);
+  const audioModuleRef = useRef<typeof import('expo-audio') | null>(null);
+  const audioModulePromiseRef = useRef<Promise<typeof import('expo-audio') | null> | null>(null);
+  const hapticsModuleRef = useRef<typeof import('expo-haptics') | null>(null);
+  const hapticsModulePromiseRef = useRef<Promise<typeof import('expo-haptics') | null> | null>(null);
   const lastFiredRef = useRef(0);
 
-  useEffect(() => {
-    let player: AudioPlayer | null = null;
-    try {
-      player = createAudioPlayer(CHIME);
-      playerRef.current = player;
-      // Respect the iOS silent switch — never force audio in silent mode.
-      void setAudioModeAsync({ playsInSilentMode: false }).catch(() => {});
-    } catch {
-      playerRef.current = null;
+  const ensureNotificationPlayer = useCallback(async function ensureNotificationPlayer() {
+    if (playerRef.current) {
+      return playerRef.current;
     }
 
+    if (!audioModulePromiseRef.current) {
+      audioModulePromiseRef.current = import('expo-audio')
+        .then((mod) => {
+          audioModuleRef.current = mod;
+          return mod;
+        })
+        .catch(() => null);
+    }
+
+    const audioModule = audioModuleRef.current ?? await audioModulePromiseRef.current;
+    if (!audioModule) {
+      return null;
+    }
+
+    try {
+      const player = audioModule.createAudioPlayer(CHIME);
+      playerRef.current = player;
+      // Respect the iOS silent switch — never force audio in silent mode.
+      void audioModule.setAudioModeAsync({ playsInSilentMode: false }).catch(() => {});
+      return player;
+    } catch {
+      playerRef.current = null;
+      return null;
+    }
+  }, []);
+
+  const fireNotificationHaptic = useCallback(async function fireNotificationHaptic() {
+    if (!hapticsModulePromiseRef.current) {
+      hapticsModulePromiseRef.current = import('expo-haptics')
+        .then((mod) => {
+          hapticsModuleRef.current = mod;
+          return mod;
+        })
+        .catch(() => null);
+    }
+
+    const hapticsModule = hapticsModuleRef.current ?? await hapticsModulePromiseRef.current;
+    if (!hapticsModule) {
+      return;
+    }
+
+    // A single light tap — neutral for an incoming message/notification.
+    // notificationAsync(Success) is a celebratory two-pulse pattern that
+    // feels wrong for routine pings.
+    await hapticsModule
+      .impactAsync(hapticsModule.ImpactFeedbackStyle.Light)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     return () => {
       try {
-        player?.remove();
+        playerRef.current?.remove();
       } catch {
         // ignore teardown errors
       }
@@ -50,21 +97,20 @@ export function useNotificationFeedback(): () => void {
       useNotificationFeedbackStore.getState();
 
     if (hapticsEnabled) {
-      // A single light tap — neutral for an incoming message/notification.
-      // notificationAsync(Success) is a celebratory two-pulse pattern that
-      // feels wrong for routine pings.
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
-        () => {},
-      );
+      void fireNotificationHaptic();
     }
 
-    if (soundEnabled && playerRef.current) {
-      try {
-        playerRef.current.seekTo(0);
-        playerRef.current.play();
-      } catch {
-        // player not ready / native module unavailable — skip silently
-      }
+    if (soundEnabled) {
+      void ensureNotificationPlayer().then((player) => {
+        if (!player) return;
+
+        try {
+          player.seekTo(0);
+          player.play();
+        } catch {
+          // player not ready / native module unavailable — skip silently
+        }
+      });
     }
-  }, []);
+  }, [ensureNotificationPlayer, fireNotificationHaptic]);
 }

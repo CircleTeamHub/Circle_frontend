@@ -5,8 +5,8 @@ const path = require("node:path");
 const vm = require("node:vm");
 const ts = require("typescript");
 
-// Canonical id conversion mirrored from src/im/client.ts so the builder can run
-// in isolation (client.ts itself pulls in the native OpenIM SDK).
+// Canonical id conversion mirrored from src/im/user-id.ts so the builder can run
+// in isolation.
 function fromImUserId(userId) {
   if (userId.includes("-")) return userId;
   if (userId.length !== 32) return userId;
@@ -33,7 +33,7 @@ function load(rel) {
     module: { exports: {} },
     exports: {},
     require: (s) => {
-      if (s === "@/im/client") return { fromImUserId };
+      if (s === "@/im/user-id") return { fromImUserId };
       if (s.startsWith("@/")) return {};
       return require(s);
     },

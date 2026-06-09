@@ -293,6 +293,19 @@ test('i18n avoids synchronous storage reads during web server rendering', () => 
   assert.match(source, /if \(!canUseSynchronousStorage\(\)\) \{\s*return;\s*\}/s);
 });
 
+test('i18n defaults to following the system language when no preference is saved', () => {
+  const filePath = path.join(process.cwd(), 'src/i18n/index.ts');
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /export type AppLanguagePreference = 'system' \| 'zh' \| 'en'/);
+  assert.match(source, /function getSavedLanguagePreference\(\): AppLanguagePreference/);
+  assert.match(source, /if \(saved === 'zh' \|\| saved === 'en'\) return saved;/);
+  assert.match(source, /return 'system';/);
+  assert.match(source, /export function getCurrentLanguagePreference\(\): AppLanguagePreference/);
+  assert.match(source, /export function setLanguage\(lang: AppLanguagePreference\)/);
+  assert.match(source, /if \(lang === 'system'\) \{[\s\S]*storage\.remove\(LANGUAGE_KEY\);[\s\S]*i18n\.changeLanguage\(getDeviceLanguage\(\)\);[\s\S]*return;/);
+});
+
 test('note block editor defers DOM editor imports during web server rendering', () => {
   const filePath = path.join(process.cwd(), 'src/features/notes/components/NoteBlockEditor.tsx');
   const source = fs.readFileSync(filePath, 'utf8');

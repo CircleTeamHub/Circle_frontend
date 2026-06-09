@@ -4,7 +4,7 @@
  * unit-tested directly.
  */
 import type { ConversationItem, MessageItem } from '@openim/rn-client-sdk';
-import { fromImUserId } from '@/im/client';
+import { fromImUserId } from '@/im/user-id';
 import type { ChatSnackbarItem } from '@/features/notifications/store/use-notification-snackbar-store';
 
 export type ChatSnackbarFallbacks = {

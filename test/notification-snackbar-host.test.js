@@ -71,8 +71,40 @@ test("notification snackbar host uses a light, neutral haptic", () => {
   const hook = read(
     "src/features/notifications/hooks/use-notification-feedback.ts",
   );
-  assert.match(hook, /impactAsync\(Haptics\.ImpactFeedbackStyle\.Light\)/);
+  assert.match(hook, /impactAsync\(hapticsModule\.ImpactFeedbackStyle\.Light\)/);
   assert.doesNotMatch(hook, /NotificationFeedbackType\.Success/);
+});
+
+test("notification feedback lazily creates the native audio player", () => {
+  const hook = read(
+    "src/features/notifications/hooks/use-notification-feedback.ts",
+  );
+
+  const mountEffect = hook.match(/useEffect\(\(\) => \{[\s\S]*?\n\s*\}, \[\]\);/);
+  assert.ok(mountEffect);
+  assert.doesNotMatch(mountEffect[0], /createAudioPlayer/);
+  assert.match(hook, /function ensureNotificationPlayer/);
+  assert.match(hook, /ensureNotificationPlayer\(\)/);
+});
+
+test("notification feedback does not load expo-audio at module startup", () => {
+  const hook = read(
+    "src/features/notifications/hooks/use-notification-feedback.ts",
+  );
+
+  assert.doesNotMatch(hook, /import \{[^}]*createAudioPlayer/);
+  assert.doesNotMatch(hook, /import \{[^}]*setAudioModeAsync/);
+  assert.match(hook, /import type \{ AudioPlayer \} from 'expo-audio'/);
+  assert.match(hook, /import\('expo-audio'\)/);
+});
+
+test("notification feedback does not load expo-haptics at module startup", () => {
+  const hook = read(
+    "src/features/notifications/hooks/use-notification-feedback.ts",
+  );
+
+  assert.doesNotMatch(hook, /import \* as Haptics from 'expo-haptics'/);
+  assert.match(hook, /import\('expo-haptics'\)/);
 });
 
 test("notification snackbar host labels banner with title and summary", () => {

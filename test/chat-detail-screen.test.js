@@ -136,3 +136,39 @@ test('chat detail attempts non-blocking history restore after initial message lo
   assert.match(source, /sourceID/);
   assert.match(source, /sessionType:\s*conversationType/);
 });
+
+test('chat detail voice cleanup reads a JS snapshot, never the native recorder on unmount', () => {
+  // 卸载时 recorder 的 native shared object 可能已释放，调 getStatus() 会抛
+  // NativeSharedObjectNotFoundException。cleanup 必须用 ref 快照，且 stop() 兜底。
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatDetailScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  // 崩溃根因表达式必须消失：cleanup 不能在 native 对象上链式取 isRecording。
+  assert.doesNotMatch(source, /voiceRecorder\.getStatus\(\)\.isRecording/);
+  // 改用纯 JS 快照 ref。
+  assert.match(source, /isRecordingRef\.current\s*=\s*voiceRecorderState\.isRecording/);
+  assert.match(source, /if \(isRecordingRef\.current\)/);
+});
+
+test('chat detail only restores recording audio mode after enabling it', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatDetailScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /recordingAudioModeEnabledRef/);
+  assert.match(
+    source,
+    /await setAudioModeAsync\(\{ allowsRecording: true, playsInSilentMode: true \}\);\s*\n\s*recordingAudioModeEnabledRef\.current = true;/,
+  );
+  assert.match(source, /if \(recordingAudioModeEnabledRef\.current\) \{/);
+  assert.match(source, /recordingAudioModeEnabledRef\.current = false;/);
+  assert.doesNotMatch(
+    source,
+    /void setAudioModeAsync\(\{ allowsRecording: false \}\)\.catch\(\(\) => undefined\);/,
+  );
+});

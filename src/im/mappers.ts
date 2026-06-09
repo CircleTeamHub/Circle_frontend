@@ -343,6 +343,19 @@ export function mapMessageItemToChatMessage(
     // 落进下方的通用 text 分支。
   }
 
+  if (item.contentType === MessageType.VoiceMessage) {
+    const voiceUrl = normalizeMediaUrl(item.soundElem?.sourceUrl ?? '') ?? item.soundElem?.sourceUrl;
+    return {
+      ...base,
+      type: 'voice',
+      outgoing: isSent,
+      voiceUrl: voiceUrl || undefined,
+      voicePath: item.soundElem?.soundPath ?? undefined,
+      voiceDuration: item.soundElem?.duration ?? undefined,
+      senderName: isSent ? undefined : (item.senderNickname || item.sendID),
+    };
+  }
+
   return {
     ...base,
     type: isSent ? 'sent' : 'received',

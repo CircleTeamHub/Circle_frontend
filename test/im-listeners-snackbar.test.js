@@ -9,11 +9,16 @@ function read(rel) {
 
 test("OpenIM new-message listener delegates to the pure snackbar builder", () => {
   const source = read("src/im/listeners.ts");
+  const snackbar = read("src/im/snackbar.ts");
 
   assert.match(source, /buildChatSnackbar/);
   assert.match(source, /enqueueChatMessage/);
-  // No duplicated id-conversion: the canonical fromImUserId lives in im/client.
+  // No duplicated id-conversion in the listener.
   assert.doesNotMatch(source, /function fromImUserId/);
+  // snackbar.ts must stay pure and avoid importing client.ts; client.ts imports
+  // listeners.ts, so importing it from snackbar.ts creates a startup require cycle.
+  assert.doesNotMatch(snackbar, /from ['"]@\/im\/client['"]/);
+  assert.match(snackbar, /from ['"]@\/im\/user-id['"]/);
 });
 
 test("chat snackbar copy is internationalized (no hardcoded CJK fallbacks)", () => {

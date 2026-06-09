@@ -76,6 +76,7 @@ export interface ChatMessage {
     | 'date'
     | 'location'
     | 'image'
+    | 'voice'
     | 'note-card'
     | 'friend-card'
     | 'transfer-card';
@@ -90,6 +91,10 @@ export interface ChatMessage {
   imageUrl?: string;
   imageWidth?: number;
   imageHeight?: number;
+  // For voice messages: local cache path or remote source URL plus duration in seconds.
+  voiceUrl?: string;
+  voicePath?: string;
+  voiceDuration?: number;
   // For image / note-card / location messages: indicates direction (sent vs received)
   outgoing?: boolean;
   // For note-card messages: parsed payload

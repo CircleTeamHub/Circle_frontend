@@ -19,3 +19,11 @@ test('emoji picker renders groups and forwards the tapped emoji', () => {
   assert.match(src, /onSelect\(emoji\)/);
   assert.match(src, /accessibilityLabel=\{emoji\}/);
 });
+
+test('emoji picker explicitly uses the platform emoji font', () => {
+  const src = read('src/features/chat/components/emoji-picker.tsx');
+  assert.match(src, /Platform/);
+  assert.match(src, /Apple Color Emoji/);
+  assert.match(src, /Noto Color Emoji/);
+  assert.match(src, /fontFamily:\s*emojiFontFamily/);
+});

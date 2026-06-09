@@ -17,7 +17,8 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "允许 Circle IM 访问你的照片，用于选择并上传头像。",
-        "NSLocationWhenInUseUsageDescription": "允许 Circle IM 在使用期间获取位置，用于在聊天中分享当前位置。"
+        "NSLocationWhenInUseUsageDescription": "允许 Circle IM 在使用期间获取位置，用于在聊天中分享当前位置。",
+        "NSMicrophoneUsageDescription": "允许 Circle IM 使用麦克风录制并发送语音消息。"
       }
     },
     "android": {
@@ -41,8 +42,8 @@
       [
         "expo-audio",
         {
-          "microphonePermission": false,
-          "recordAudioAndroid": false,
+          "microphonePermission": "允许 Circle IM 使用麦克风录制并发送语音消息。",
+          "recordAudioAndroid": true,
           "enableBackgroundPlayback": false,
           "enableBackgroundRecording": false
         }

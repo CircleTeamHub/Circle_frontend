@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
   View,
@@ -11,10 +11,18 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { getCurrentLanguage, setLanguage } from '@/i18n';
+import {
+  getCurrentLanguagePreference,
+  setLanguage,
+  type AppLanguagePreference,
+} from '@/i18n';
 import { Avatar } from '@/components/ui/avatar';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
+import {
+  OptionPickerSheet,
+  type PickerOption,
+} from '@/components/ui/option-picker-sheet';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useAuthStore, type AuthUser } from '@/stores/authStore';
@@ -105,11 +113,31 @@ export default function SettingsScreen() {
   const { t } = useTranslation();
   const { logout, switchAccount, submitting } = useAuth();
   const user = useAuthStore((state) => state.user);
+  const [languagePreference, setLanguagePreferenceState] = useState(
+    getCurrentLanguagePreference(),
+  );
+  const [languageSheetVisible, setLanguageSheetVisible] = useState(false);
 
-  const handleToggleLanguage = useCallback(() => {
-    const current = getCurrentLanguage();
-    const next = current === 'zh' ? 'en' : 'zh';
+  const languageOptions = useMemo<PickerOption<AppLanguagePreference>[]>(
+    () => [
+      { label: t('appSettings.languageSheet.system'), value: 'system' },
+      { label: t('appSettings.languageSheet.zh'), value: 'zh' },
+      { label: t('appSettings.languageSheet.en'), value: 'en' },
+    ],
+    [t],
+  );
+
+  const handleOpenLanguageSheet = useCallback(() => {
+    setLanguageSheetVisible(true);
+  }, []);
+
+  const handleCloseLanguageSheet = useCallback(() => {
+    setLanguageSheetVisible(false);
+  }, []);
+
+  const handleSelectLanguage = useCallback((next: AppLanguagePreference) => {
     setLanguage(next);
+    setLanguagePreferenceState(next);
   }, []);
 
   const profileRows = PROFILE_ROW_IDS.map((fieldId) => {
@@ -266,15 +294,13 @@ export default function SettingsScreen() {
 
         <View style={s.section}>
           <Text style={d.sectionTitle}>{t('settingsPage.generalSection')}</Text>
-          <Pressable style={s.row} onPress={handleToggleLanguage}>
+          <Pressable style={s.row} onPress={handleOpenLanguageSheet}>
             <Text style={d.rowLabel}>
               {t('settingsPage.language')}
             </Text>
             <View style={s.rowRight}>
               <Text style={d.rowValue}>
-                {getCurrentLanguage() === 'zh'
-                  ? t('settingsPage.languageValueZh')
-                  : t('settingsPage.languageValueEn')}
+                {t(`appSettings.languageSheet.${languagePreference}`)}
               </Text>
               <Ionicons
                 name="chevron-forward"
@@ -311,6 +337,14 @@ export default function SettingsScreen() {
           </Pressable>
         </View>
       </ScrollView>
+      <OptionPickerSheet
+        visible={languageSheetVisible}
+        title={t('appSettings.languageSheet.title')}
+        options={languageOptions}
+        selectedValue={languagePreference}
+        onSelect={handleSelectLanguage}
+        onClose={handleCloseLanguageSheet}
+      />
     </View>
   );
 }

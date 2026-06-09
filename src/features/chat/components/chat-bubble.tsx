@@ -1,9 +1,11 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { useAudioPlayer, type AudioStatus } from 'expo-audio';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import { Avatar } from '@/components/ui/avatar';
+import { toPlayableUri } from '@/im/media-uri';
 import type {
   ChatMessage,
   FriendCardData,
@@ -533,6 +535,195 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
         <View style={sImage.avatarSlot}>{avatarNode}</View>
       )}
       {imageNode}
+    </View>
+  );
+};
+
+interface VoiceBubbleProps {
+  message: ChatMessage;
+  outgoing: boolean;
+  senderName?: string;
+  senderAvatarUri?: string;
+  selfName?: string;
+  selfAvatarUri?: string;
+  onAvatarPress?: () => void;
+  hideStatus?: boolean;
+}
+
+const sVoice = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: Spacing.sm,
+  },
+  rowOutgoing: {
+    justifyContent: 'flex-end',
+  },
+  body: {
+    maxWidth: 240,
+  },
+  bodyOutgoing: {
+    alignItems: 'flex-end',
+  },
+  bubble: {
+    minWidth: 96,
+    maxWidth: 220,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    borderBottomRightRadius: 18,
+    borderBottomLeftRadius: 18,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  bubbleOutgoing: {
+    borderBottomRightRadius: 4,
+  },
+  bubbleIncoming: {
+    borderTopLeftRadius: 4,
+  },
+  wave: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  bar: {
+    width: 3,
+    borderRadius: 2,
+  },
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    marginTop: Spacing.xs,
+  },
+  avatarSlot: { paddingBottom: 2 },
+});
+
+function formatVoiceDuration(duration?: number) {
+  const seconds = Math.max(1, Math.round(duration ?? 1));
+  return `${seconds}"`;
+}
+
+export const VoiceBubble: React.FC<VoiceBubbleProps> = ({
+  message,
+  outgoing,
+  senderName,
+  senderAvatarUri,
+  selfName,
+  selfAvatarUri,
+  onAvatarPress,
+  hideStatus,
+}) => {
+  const { colors } = useTheme();
+  const voiceSource = message.voiceUrl || message.voicePath || null;
+  // 裸本地路径要补回 file:// scheme，否则 AVFoundation 打不开（FigFilePlayer err=-12864）。
+  const player = useAudioPlayer(voiceSource ? { uri: toPlayableUri(voiceSource) } : null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const bubbleColor = outgoing ? colors.sentBubble : colors.receivedBubble;
+  const contentColor = outgoing ? colors.white : colors.text;
+
+  useEffect(() => {
+    setIsPlaying(false);
+    const subscription = player.addListener('playbackStatusUpdate', (status: AudioStatus) => {
+      setIsPlaying(Boolean(status.playing));
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, [player, voiceSource]);
+
+  const avatarNode = (
+    <Avatar
+      size={AVATAR_SIZE}
+      shape="square"
+      name={outgoing ? selfName : senderName}
+      uri={outgoing ? selfAvatarUri : senderAvatarUri}
+    />
+  );
+
+  const voiceNode = (
+    <View style={[sVoice.body, outgoing ? sVoice.bodyOutgoing : null]}>
+      <Pressable
+        style={[
+          sVoice.bubble,
+          { backgroundColor: bubbleColor },
+          outgoing ? sVoice.bubbleOutgoing : sVoice.bubbleIncoming,
+          !voiceSource ? { opacity: 0.64 } : null,
+        ]}
+        onPress={() => {
+          if (!voiceSource) return;
+          if (isPlaying) {
+            player.pause();
+            return;
+          }
+          void player.seekTo(0).then(() => player.play());
+        }}
+        accessibilityRole="button"
+        accessibilityLabel="播放语音消息"
+        disabled={!voiceSource}
+      >
+        <Ionicons
+          name={isPlaying ? 'pause' : 'chatbubble-ellipses'}
+          size={18}
+          color={contentColor}
+        />
+        <View style={sVoice.wave}>
+          {[10, 16, 22, 14].map((height, index) => (
+            <View
+              key={index}
+              style={[
+                sVoice.bar,
+                {
+                  height,
+                  backgroundColor: contentColor,
+                  opacity: index === 0 || index === 3 ? 0.55 : 0.85,
+                },
+              ]}
+            />
+          ))}
+        </View>
+        <Text style={{ ...Typography.small, color: contentColor }}>
+          {formatVoiceDuration(message.voiceDuration)}
+        </Text>
+      </Pressable>
+      {message.time ? (
+        <View style={sVoice.timeRow}>
+          <Text
+            style={{
+              ...Typography.tinyRegular,
+              color: colors.textSecondary,
+            }}
+          >
+            {message.time}
+          </Text>
+          {outgoing && !hideStatus ? <BubbleStatusText message={message} /> : null}
+        </View>
+      ) : null}
+    </View>
+  );
+
+  if (outgoing) {
+    return (
+      <View style={[sVoice.row, sVoice.rowOutgoing]}>
+        {voiceNode}
+        <View style={sVoice.avatarSlot}>{avatarNode}</View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={sVoice.row}>
+      {onAvatarPress ? (
+        <Pressable style={sVoice.avatarSlot} onPress={onAvatarPress}>
+          {avatarNode}
+        </Pressable>
+      ) : (
+        <View style={sVoice.avatarSlot}>{avatarNode}</View>
+      )}
+      {voiceNode}
     </View>
   );
 };

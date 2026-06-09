@@ -8,6 +8,24 @@ import type { BackendAuthUser } from '@/services/api/auth';
 
 const LOCALHOST_HOSTS = new Set(['localhost', '127.0.0.1']);
 
+function isPrivateIpv4(hostname: string) {
+  const parts = hostname.split('.').map((part) => Number(part));
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+    return false;
+  }
+
+  const [first, second] = parts;
+  return (
+    first === 10 ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168)
+  );
+}
+
+function isDevReachabilityHost(hostname: string) {
+  return LOCALHOST_HOSTS.has(hostname) || isPrivateIpv4(hostname);
+}
+
 /**
  * 把可选参数追加到 URLSearchParams：只在 value 非空（非 undefined / 非空字符串）时写入。
  * 之前 circles.ts / moments.ts / plaza.ts 各写一份 if(params?.x) query.set(...)。
@@ -52,12 +70,9 @@ export function normalizeMediaUrl(value: string | null | undefined) {
     const mediaUrl = new URL(value);
     const apiUrl = new URL(API_URL);
 
-    if (
-      LOCALHOST_HOSTS.has(mediaUrl.hostname) &&
-      !LOCALHOST_HOSTS.has(apiUrl.hostname)
-    ) {
+    if (isDevReachabilityHost(mediaUrl.hostname) && mediaUrl.hostname !== apiUrl.hostname) {
       // 媒体地址常来自独立服务：OpenIM object 是 10002，MinIO 是 9000。
-      // 只能把 localhost host 替换成手机可访问的 dev host，不能把端口改成后端 API 端口。
+      // 只能把 dev host 替换成手机可访问的当前 host，不能把端口改成后端 API 端口。
       mediaUrl.protocol = apiUrl.protocol;
       mediaUrl.hostname = apiUrl.hostname;
       if (!mediaUrl.port) {

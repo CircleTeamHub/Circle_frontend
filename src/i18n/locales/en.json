@@ -72,6 +72,18 @@
     "newGroup": "New Group",
     "addFriend": "Add Friend",
     "scan": "Scan",
+    "scanQrHint": "Scan a Circle IM QR code",
+    "scanPermissionChecking": "Checking camera permission...",
+    "scanPermissionTitle": "Camera access needed",
+    "scanPermissionMessage": "Allow camera access to scan QR codes.",
+    "scanPermissionSettingsMessage": "Camera access is disabled. Open system settings to enable it.",
+    "scanGrantPermission": "Allow Camera",
+    "scanOpenSettings": "Open Settings",
+    "scanCopiedTitle": "QR result copied",
+    "scanCopiedMessage": "This QR code is not a supported Circle IM route, so the content was copied to your clipboard.",
+    "scanCopyFailedTitle": "Could not copy",
+    "scanCopyFailedMessage": "The QR code was scanned, but copying the content failed.",
+    "scanAgain": "Scan Again",
     "seatManagement": "Seat Management",
     "groupManagement": "Group Management",
     "loadFailed": "Failed to load conversations: {{error}}",
@@ -775,6 +787,12 @@
     "helpSection": "Help & About",
     "cacheCalculating": "Calculating...",
     "cacheSize": "Calculating...",
+    "languageSheet": {
+      "title": "Choose Language",
+      "system": "Follow System",
+      "zh": "中文",
+      "en": "English"
+    },
     "rows": {
       "profile": {
         "label": "Profile"
@@ -787,6 +805,9 @@
       },
       "appearance": {
         "label": "Display"
+      },
+      "language": {
+        "label": "Language"
       },
       "privacy": {
         "label": "Privacy"

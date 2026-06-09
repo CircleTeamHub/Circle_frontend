@@ -6,6 +6,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
+import {
+  OptionPickerSheet,
+  type PickerOption,
+} from '@/components/ui/option-picker-sheet';
+import {
+  getCurrentLanguagePreference,
+  setLanguage,
+  type AppLanguagePreference,
+} from '@/i18n';
 import { formatCacheSize, getAppCacheSize } from '@/services/cache/clear-app-cache';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
@@ -14,6 +23,7 @@ type AppSettingsRowId =
   | 'accountSecurity'
   | 'notifications'
   | 'appearance'
+  | 'language'
   | 'privacy'
   | 'permissions'
   | 'clearCache'
@@ -50,6 +60,10 @@ const GENERAL_ROWS: AppSettingsRow[] = [
     id: 'appearance',
     labelKey: 'appSettings.rows.appearance.label',
     route: '/(tabs)/profile/settings-appearance',
+  },
+  {
+    id: 'language',
+    labelKey: 'appSettings.rows.language.label',
   },
   {
     id: 'privacy',
@@ -116,6 +130,32 @@ export default function AppSettingsScreen() {
   const [cacheSizeLabel, setCacheSizeLabel] = useState(
     t('appSettings.cacheCalculating'),
   );
+  const [languagePreference, setLanguagePreferenceState] = useState(
+    getCurrentLanguagePreference(),
+  );
+  const [languageSheetVisible, setLanguageSheetVisible] = useState(false);
+
+  const languageOptions = useMemo<PickerOption<AppLanguagePreference>[]>(
+    () => [
+      { label: t('appSettings.languageSheet.system'), value: 'system' },
+      { label: t('appSettings.languageSheet.zh'), value: 'zh' },
+      { label: t('appSettings.languageSheet.en'), value: 'en' },
+    ],
+    [t],
+  );
+
+  const handleOpenLanguageSheet = useCallback(() => {
+    setLanguageSheetVisible(true);
+  }, []);
+
+  const handleCloseLanguageSheet = useCallback(() => {
+    setLanguageSheetVisible(false);
+  }, []);
+
+  const handleSelectLanguage = useCallback((next: AppLanguagePreference) => {
+    setLanguage(next);
+    setLanguagePreferenceState(next);
+  }, []);
 
   const d = useMemo(
     () => ({
@@ -184,13 +224,27 @@ export default function AppSettingsScreen() {
 
   const generalRows = useMemo(
     () =>
-      GENERAL_ROWS.map((row) =>
-        row.id === 'clearCache' ? { ...row, valueText: cacheSizeLabel } : row,
-      ),
-    [cacheSizeLabel],
+      GENERAL_ROWS.map((row) => {
+        if (row.id === 'clearCache') {
+          return { ...row, valueText: cacheSizeLabel };
+        }
+        if (row.id === 'language') {
+          return {
+            ...row,
+            valueText: t(`appSettings.languageSheet.${languagePreference}`),
+          };
+        }
+        return row;
+      }),
+    [cacheSizeLabel, languagePreference, t],
   );
 
   const handleRowPress = (row: AppSettingsRow) => {
+    if (row.id === 'language') {
+      handleOpenLanguageSheet();
+      return;
+    }
+
     if (row.route) {
       router.push(row.route as never);
       return;
@@ -248,6 +302,14 @@ export default function AppSettingsScreen() {
           <View style={[s.card, d.card]}>{renderRows(HELP_ROWS)}</View>
         </View>
       </ScrollView>
+      <OptionPickerSheet
+        visible={languageSheetVisible}
+        title={t('appSettings.languageSheet.title')}
+        options={languageOptions}
+        selectedValue={languagePreference}
+        onSelect={handleSelectLanguage}
+        onClose={handleCloseLanguageSheet}
+      />
     </View>
   );
 }

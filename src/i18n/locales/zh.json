@@ -72,6 +72,18 @@
     "newGroup": "新建群聊",
     "addFriend": "添加好友",
     "scan": "扫一扫",
+    "scanQrHint": "扫描 Circle IM 二维码",
+    "scanPermissionChecking": "正在检查相机权限...",
+    "scanPermissionTitle": "需要相机权限",
+    "scanPermissionMessage": "允许使用相机后即可扫描二维码。",
+    "scanPermissionSettingsMessage": "相机权限已关闭，请前往系统设置开启。",
+    "scanGrantPermission": "允许相机",
+    "scanOpenSettings": "打开设置",
+    "scanCopiedTitle": "已复制二维码内容",
+    "scanCopiedMessage": "这个二维码不是支持的 Circle IM 路由，内容已复制到剪贴板。",
+    "scanCopyFailedTitle": "复制失败",
+    "scanCopyFailedMessage": "已识别二维码，但复制内容失败。",
+    "scanAgain": "继续扫描",
     "seatManagement": "坐席管理",
     "groupManagement": "群组管理",
     "loadFailed": "会话加载失败：{{error}}",
@@ -774,6 +786,12 @@
     "helpSection": "帮助与关于",
     "cacheCalculating": "计算中...",
     "cacheSize": "计算中...",
+    "languageSheet": {
+      "title": "选择语言",
+      "system": "跟随系统",
+      "zh": "中文",
+      "en": "English"
+    },
     "rows": {
       "profile": {
         "label": "个人资料"
@@ -786,6 +804,9 @@
       },
       "appearance": {
         "label": "界面与显示"
+      },
+      "language": {
+        "label": "切换语言"
       },
       "privacy": {
         "label": "隐私设置"

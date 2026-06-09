@@ -1,0 +1,273 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const ts = require('typescript');
+
+const DEFAULT_CLIENT_STUBS = {
+  '@/im/listeners': {
+    bindOpenIMListeners: () => () => {},
+  },
+  '@/services/auth/session': {
+    registerLogoutHandler: () => () => {},
+  },
+};
+
+function loadTsModule(relativePath, stubs = {}) {
+  const filePath = path.join(process.cwd(), relativePath);
+  const source = fs.readFileSync(filePath, 'utf8');
+  const transpiled = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2020,
+      baseUrl: process.cwd(),
+      paths: {
+        '@/*': ['src/*'],
+      },
+    },
+    fileName: filePath,
+  }).outputText;
+
+  const mergedStubs = { ...DEFAULT_CLIENT_STUBS, ...stubs };
+  const context = {
+    module: { exports: {} },
+    exports: {},
+    require: (specifier) => {
+      if (specifier in mergedStubs) {
+        return mergedStubs[specifier];
+      }
+
+      return require(specifier);
+    },
+  };
+  context.exports = context.module.exports;
+
+  vm.runInNewContext(transpiled, context, { filename: filePath });
+
+  return context.module.exports;
+}
+
+function normalize(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+DEFAULT_CLIENT_STUBS['@/im/user-id'] = loadTsModule('src/im/user-id.ts');
+
+test('app config enables native microphone recording permissions for expo-audio', () => {
+  const appJson = JSON.parse(
+    fs.readFileSync(path.join(process.cwd(), 'app.json'), 'utf8'),
+  );
+  const audioPlugin = appJson.expo.plugins.find((plugin) => {
+    return Array.isArray(plugin) && plugin[0] === 'expo-audio';
+  });
+
+  assert.ok(audioPlugin);
+  assert.equal(audioPlugin[1].microphonePermission, '允许 Circle IM 使用麦克风录制并发送语音消息。');
+  assert.equal(audioPlugin[1].recordAudioAndroid, true);
+});
+
+test('app config declares NSMicrophoneUsageDescription so iOS does not hard-crash on mic access', () => {
+  // ios/ 被 gitignore，app.json 是 native 配置的唯一真相源。其它隐私串（相机/相册/定位）都走
+  // 显式 ios.infoPlist，唯独麦克风只靠 expo-audio 插件选项，没进到二进制 Info.plist —— 于是录音
+  // 按钮一触发 requestRecordingPermissions / setAudioMode，iOS TCC 直接杀进程（绕过 JS try/catch）。
+  const appJson = JSON.parse(
+    fs.readFileSync(path.join(process.cwd(), 'app.json'), 'utf8'),
+  );
+  const micUsage = appJson.expo?.ios?.infoPlist?.NSMicrophoneUsageDescription;
+  assert.equal(typeof micUsage, 'string');
+  assert.ok(micUsage.length > 0);
+});
+
+test('sendVoiceMessage creates an OpenIM sound message from a local recording path', async () => {
+  const sdkCalls = [];
+  const { sendVoiceMessage } = loadTsModule('src/im/client.ts', {
+    '@/im/media-uri': loadTsModule('src/im/media-uri.ts'),
+    '@openim/rn-client-sdk': {
+      __esModule: true,
+      default: {
+        initSDK: async () => undefined,
+        createSoundMessageFromFullPath: async (params) => {
+          sdkCalls.push(['createSoundMessageFromFullPath', params]);
+          return { clientMsgID: 'voice-1' };
+        },
+        sendMessage: async (params) => {
+          sdkCalls.push(['sendMessage', params]);
+          return params.message;
+        },
+      },
+      LogLevel: { Info: 0 },
+      SessionType: { Single: 1, Group: 2 },
+      ViewType: { History: 0 },
+    },
+    'react-native-fs': {
+      __esModule: true,
+      default: {
+        DocumentDirectoryPath: '/tmp',
+        mkdir: async () => undefined,
+      },
+    },
+    'react-native': {
+      Platform: { OS: 'ios' },
+    },
+    '@/constants/config': {
+      OPENIM_API_URL: 'https://im.example.com',
+      OPENIM_WS_URL: 'wss://im.example.com',
+      OPENIM_LOG_LEVEL: 0,
+      LIMITS: { TRANSFER_MAX_AMOUNT: 99999 },
+    },
+    '@/stores/imStore': {
+      useIMStore: {
+        getState: () => ({
+          connected: true,
+          setError: () => undefined,
+          setInitialized: () => undefined,
+          setCurrentUserID: () => undefined,
+          setConnecting: () => undefined,
+          reset: () => undefined,
+          setConversations: () => undefined,
+          mergeConversations: () => undefined,
+          setMessages: () => undefined,
+        }),
+      },
+    },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: {
+        getState: () => ({
+          setMessagesUnread: () => undefined,
+        }),
+      },
+    },
+  });
+
+  await sendVoiceMessage({
+    sourceID: 'user-2',
+    sessionType: 1,
+    soundPath: 'file:///tmp/recording.m4a',
+    duration: 3,
+  });
+
+  assert.deepEqual(normalize(sdkCalls), [
+    [
+      'createSoundMessageFromFullPath',
+      {
+        soundPath: '/tmp/recording.m4a',
+        duration: 3,
+      },
+    ],
+    [
+      'sendMessage',
+      {
+        recvID: 'user2',
+        groupID: '',
+        message: { clientMsgID: 'voice-1' },
+        offlinePushInfo: {
+          title: '新消息',
+          desc: '[语音]',
+          ex: '',
+          iOSPushSound: 'default',
+          iOSBadgeCount: true,
+        },
+      },
+    ],
+  ]);
+});
+
+test('OpenIM voice messages map to a dedicated ChatMessage voice bubble model', () => {
+  const { mapMessageItemToChatMessage } = loadTsModule('src/im/mappers.ts', {
+    '@openim/rn-client-sdk': {
+      MessageType: {
+        TextMessage: 101,
+        PictureMessage: 102,
+        VoiceMessage: 103,
+        VideoMessage: 104,
+        FileMessage: 105,
+        CardMessage: 108,
+        LocationMessage: 109,
+        CustomMessage: 110,
+        TypingMessage: 113,
+      },
+      SessionType: { Single: 1, Group: 2 },
+    },
+    '@/im/client': {
+      NOTE_CARD_EXTENSION: 'note-card-v1',
+      TRANSFER_CARD_EXTENSION: 'transfer-card-v1',
+      fromImUserId: (userID) => userID,
+    },
+    '@/services/api/utils': {
+      normalizeMediaUrl: (url) => url,
+    },
+    '@/i18n': {
+      __esModule: true,
+      default: {
+        language: 'zh',
+        t: (_key, options) => options.defaultValue,
+      },
+    },
+  });
+
+  const mapped = mapMessageItemToChatMessage(
+    {
+      clientMsgID: 'voice-1',
+      sendID: 'peer-1',
+      senderNickname: 'Peer',
+      contentType: 103,
+      sendTime: 1000,
+      status: 2,
+      isRead: false,
+      content: '',
+      soundElem: {
+        uuid: 'sound-1',
+        soundPath: '',
+        sourceUrl: 'https://cdn.example.com/voice.m4a',
+        dataSize: 1024,
+        duration: 4,
+      },
+    },
+    'me',
+  );
+
+  assert.deepEqual(normalize(mapped), {
+    id: 'voice-1',
+    type: 'voice',
+    time: '12/31',
+    senderID: 'peer-1',
+    outgoing: false,
+    senderName: 'Peer',
+    voiceUrl: 'https://cdn.example.com/voice.m4a',
+    voicePath: '',
+    voiceDuration: 4,
+  });
+});
+
+test('chat voice bubble and screen wiring replace the mic placeholder alert', () => {
+  const typeSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/types/index.ts'),
+    'utf8',
+  );
+  const bubbleSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/components/chat-bubble.tsx'),
+    'utf8',
+  );
+  const screenSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(typeSource, /'voice'/);
+  assert.match(typeSource, /voiceDuration\?: number/);
+  assert.match(typeSource, /voiceUrl\?: string/);
+  assert.match(bubbleSource, /export const VoiceBubble/);
+  assert.match(bubbleSource, /useAudioPlayer/);
+  assert.match(bubbleSource, /player\.addListener\('playbackStatusUpdate'/);
+  assert.doesNotMatch(bubbleSource, /useAudioPlayerStatus/);
+  assert.match(bubbleSource, /player\.seekTo\(0\)\.then\(\(\) => player\.play\(\)\)/);
+  assert.match(bubbleSource, /chatbubble-ellipses/);
+  assert.match(screenSource, /useAudioRecorder\(RecordingPresets\.LOW_QUALITY/);
+  assert.match(screenSource, /requestRecordingPermissionsAsync/);
+  assert.match(screenSource, /setAudioModeAsync\(\{ allowsRecording: true, playsInSilentMode: true \}\)/);
+  assert.match(screenSource, /sendVoiceMessage/);
+  assert.match(screenSource, /handleVoicePress/);
+  assert.match(screenSource, /case 'voice'/);
+  assert.doesNotMatch(screenSource, /该功能即将上线/);
+});

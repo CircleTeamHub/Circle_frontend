@@ -36,9 +36,13 @@ import {
   OPENIM_WS_URL,
 } from '@/constants/config';
 import { bindOpenIMListeners } from '@/im/listeners';
+import { stripFileScheme } from '@/im/media-uri';
+import { toImUserId } from '@/im/user-id';
 import { registerLogoutHandler } from '@/services/auth/session';
 import { useIMStore } from '@/stores/imStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
+
+export { fromImUserId, toImUserId } from '@/im/user-id';
 
 // SDK 初始化 Promise 单例：避免并发重复 initSDK，登出后置为 null 允许重新初始化
 let initPromise: Promise<void> | null = null;
@@ -52,32 +56,6 @@ const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 // 直接传函数引用而不是包一层箭头：session.ts 按引用去重，箭头每次模块求值都是新引用，
 // HMR 时会让同一个 teardown 累积多次（已经被 Batch 01 的 dedup 暴露过）。
 registerLogoutHandler(logoutFromOpenIM);
-
-/**
- * OpenIM v3.8 拒绝带连字符的 userID（PostgreSQL UUID 直接传会被判定非法）。
- * 把所有 user-id 形入参在跨过 SDK 边界前去掉连字符；后端发来的 imToken
- * 也是基于同一规则签发的，前后端必须一致。
- */
-export function toImUserId(userId: string): string {
-  return userId.replace(/-/g, '');
-}
-
-/**
- * 反向：把去连字符的 IM userID 还原成 PostgreSQL UUID 形式。
- * 已经是 UUID 格式的字符串原样返回，避免重复加连字符。
- */
-export function fromImUserId(userId: string): string {
-  // UUID 8-4-4-4-12，总长 36，含 4 个连字符
-  if (userId.includes('-')) return userId;
-  if (userId.length !== 32) return userId; // 不是 hex32 也不知道怎么改，原样返回
-  return [
-    userId.slice(0, 8),
-    userId.slice(8, 12),
-    userId.slice(12, 16),
-    userId.slice(16, 20),
-    userId.slice(20),
-  ].join('-');
-}
 
 function isNativeIMSupported() {
   return Platform.OS === 'ios' || Platform.OS === 'android';
@@ -667,8 +645,8 @@ export async function sendImageMessage(params: {
     height: params.height ?? 0,
     url: params.url,
   };
-  // SDK 需要本地路径不带 file:// 前缀
-  const localPath = params.sourcePath.replace(/^file:\/\//, '');
+  // SDK 需要本地路径不带 file:// 前缀（播放端用 toPlayableUri 还原 scheme）
+  const localPath = stripFileScheme(params.sourcePath);
   const message = await OpenIMSDK.createImageMessageByURL({
     sourcePicture: picBase,
     bigPicture: picBase,
@@ -720,6 +698,43 @@ export async function sendLocationMessage(params: {
     offlinePushInfo: {
       title: '新消息',
       desc: '[位置]',
+      ex: '',
+      iOSPushSound: 'default',
+      iOSBadgeCount: true,
+    },
+  });
+}
+
+export async function sendVoiceMessage(params: {
+  sourceID: string;
+  sessionType: SessionType;
+  soundPath: string;
+  duration: number;
+}) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await waitForOpenIMConnectionReady();
+
+  // SDK 需要本地路径不带 file:// 前缀（播放端用 toPlayableUri 还原 scheme）
+  const localPath = stripFileScheme(params.soundPath);
+  const duration = Math.max(1, Math.round(params.duration));
+  const message = await OpenIMSDK.createSoundMessageFromFullPath({
+    soundPath: localPath,
+    duration,
+  });
+
+  const isSingle = params.sessionType === SessionType.Single;
+  return OpenIMSDK.sendMessage({
+    recvID: isSingle ? toImUserId(params.sourceID) : '',
+    groupID: !isSingle ? params.sourceID : '',
+    message,
+    offlinePushInfo: {
+      title: '新消息',
+      desc: '[语音]',
       ex: '',
       iOSPushSound: 'default',
       iOSBadgeCount: true,
