@@ -38,6 +38,7 @@ test('chat info screen uses real conversation state instead of local placeholder
   assert.match(source, /toggleConversationPinned\(resolvedConversationID,\s*nextPinned\)/);
   assert.match(source, /const handleToggleMuted = useCallback/);
   assert.match(source, /setConversationMute\(resolvedConversationID,\s*nextMuted\)/);
+  assert.match(source, /if \(nextMuted\) \{\s*Alert\.alert\(t\('chat\.messagesThatNotify'\),\s*t\('chat\.messagesThatNotifyHint'\)\);/s);
   assert.match(source, /const applyBurnDuration = useCallback/);
   assert.match(source, /setConversationBurnDuration\(resolvedConversationID,\s*nextBurnDuration\)/);
   assert.match(source, /const handleConfirmClearHistory = useCallback/);
@@ -74,14 +75,25 @@ test('chat info screen renders a dedicated group info layout for group conversat
   assert.match(source, /isGroupConversation/);
   assert.match(source, /loadGroupMemberList/);
   assert.match(source, /getGroupInfo/);
-  assert.match(source, /groupMembers\.slice\(0,\s*19\)/);
+  assert.match(source, /const GROUP_MEMBER_COLUMNS = 5/);
+  assert.match(source, /const COLLAPSED_GROUP_MEMBER_ROWS = 4/);
+  assert.match(source, /const collapsedGroupMemberLimit =\s*GROUP_MEMBER_COLUMNS \* COLLAPSED_GROUP_MEMBER_ROWS - \(canManageGroup \? 1 : 0\)/);
+  assert.match(source, /groupMembers\.slice\(0,\s*collapsedGroupMemberLimit\)/);
+  assert.match(source, /groupMembers\.length > collapsedGroupMemberLimit/);
   assert.match(source, /groupMemberGrid/);
+  assert.match(source, /title=\{t\('chat\.groupInfoWithCount',\s*\{\s*count: memberCount\s*\}\)\}/);
+  assert.doesNotMatch(source, /style=\{s\.groupHeader\}/);
+  assert.doesNotMatch(source, /s\.groupHeaderName/);
+  assert.doesNotMatch(source, /s\.groupHeaderMeta/);
+  assert.doesNotMatch(source, /t\('chat\.groupMembersCount',\s*\{\s*count: memberCount\s*\}\)/);
   assert.match(source, /groupNameText/);
   assert.match(source, /t\('chat\.groupName'\)/);
   assert.match(source, /t\('chat\.groupNotice'\)/);
   assert.match(source, /t\('chat\.searchHistory'\)/);
   assert.match(source, /t\('chat\.moreGroupMembers'/);
   assert.match(source, /rightIcon="search-outline"/);
+  assert.match(source, /onRightPress=\{handleOpenSearchGroupMembers\}/);
+  assert.match(source, /getGroupMemberSearchHref/);
 });
 
 test('chat info screen gives group rows real actions instead of unsupported placeholders', () => {
@@ -91,22 +103,99 @@ test('chat info screen gives group rows real actions instead of unsupported plac
   );
   const source = fs.readFileSync(filePath, 'utf8');
 
-  assert.match(source, /title=\{t\('chat\.groupInfo'\)\}/);
+  assert.match(source, /title=\{t\('chat\.groupInfoWithCount',\s*\{\s*count: memberCount\s*\}\)\}/);
   assert.match(source, /handleEditGroupName/);
   assert.match(source, /updateGroupName\(groupID,\s*trimmed\)/);
   assert.match(source, /handleEditGroupNotice/);
-  assert.match(source, /updateGroupNotice\(groupID,\s*trimmed\)/);
+  assert.match(source, /getEditGroupNoticeHref/);
+  assert.doesNotMatch(source, /updateGroupNotice\(groupID,\s*trimmed\)/);
   assert.match(source, /handleEditMyGroupAlias/);
   assert.match(source, /updateGroupMemberAlias\(groupID,\s*currentUserID,\s*trimmed\)/);
-  assert.match(source, /handleMinimizeGroupChat/);
-  assert.match(source, /hideConversation\(resolvedConversationID\)/);
-  assert.match(source, /handleSaveGroupToContacts/);
-  assert.match(source, /setConversationExtension\(resolvedConversationID,\s*\{\s*saveGroupToContacts: nextValue\s*\}/);
-  assert.match(source, /handleResetGroupNotifyMessages/);
-  assert.match(source, /resetConversationGroupAtType\(resolvedConversationID\)/);
+  assert.doesNotMatch(source, /handleMinimizeGroupChat/);
+  assert.doesNotMatch(source, /hideConversation\(resolvedConversationID\)/);
+  assert.doesNotMatch(source, /label=\{t\('chat\.minimizeChat'\)\}/);
+  assert.doesNotMatch(source, /handleSaveGroupToContacts/);
+  assert.doesNotMatch(source, /saveGroupToContacts/);
+  assert.doesNotMatch(source, /chat\.saveToContacts/);
+  assert.doesNotMatch(source, /handleResetGroupNotifyMessages/);
+  assert.doesNotMatch(source, /resetConversationGroupAtType/);
+  assert.doesNotMatch(source, /label=\{t\('chat\.messagesThatNotify'\)\}/);
+  assert.doesNotMatch(source, /subtitle=\{t\('chat\.messagesThatNotifyHint'\)\}/);
   assert.match(source, /handleOpenGroupReport/);
   assert.match(source, /groupID/);
   assert.doesNotMatch(source, /handleOpenUnsupportedGroupAction/);
+});
+
+test('chat info screen always shows group member nicknames without a toggle', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatInfoScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.doesNotMatch(source, /showOnScreenNames/);
+  assert.doesNotMatch(source, /setShowOnScreenNames/);
+  assert.doesNotMatch(source, /savedShowOnScreenNames/);
+  assert.doesNotMatch(source, /chat\.onScreenNames/);
+});
+
+test('chat info screen opens a dedicated group notice editor route', () => {
+  const infoPath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatInfoScreen.tsx',
+  );
+  const routeHelperPath = path.join(
+    process.cwd(),
+    'src/features/user/utils/routes.ts',
+  );
+  const routeFiles = [
+    'app/(tabs)/messages/edit-group-notice.tsx',
+    'app/(tabs)/contacts/edit-group-notice.tsx',
+    'app/(tabs)/discover/edit-group-notice.tsx',
+    'app/(tabs)/profile/edit-group-notice.tsx',
+  ];
+  const infoSource = fs.readFileSync(infoPath, 'utf8');
+  const routeSource = fs.readFileSync(routeHelperPath, 'utf8');
+
+  assert.match(infoSource, /router\.push\(\s*getEditGroupNoticeHref\(scope,/);
+  assert.match(infoSource, /groupID/);
+  assert.match(infoSource, /groupTitle/);
+  assert.match(infoSource, /groupNotice/);
+  assert.doesNotMatch(
+    infoSource,
+    /promptForText\(\s*t\('chat\.groupNotice'\)/,
+  );
+  assert.match(routeSource, /function getEditGroupNoticeHref/);
+  assert.match(routeSource, /edit-group-notice/);
+  for (const relativePath of routeFiles) {
+    assert.equal(fs.existsSync(path.join(process.cwd(), relativePath)), true);
+  }
+});
+
+test('chat info screen uses the shared primary switch color for group toggles', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatInfoScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /trackColor=\{\{ false: colors\.surfaceBorder, true: colors\.primary \}\}/);
+  assert.doesNotMatch(source, /trackColor=\{\{ false: colors\.surfaceBorder, true: colors\.success \}\}/);
+});
+
+test('group notice editor screen updates the OpenIM group notice and returns', () => {
+  const screenPath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/EditGroupNoticeScreen.tsx',
+  );
+  const source = fs.readFileSync(screenPath, 'utf8');
+
+  assert.match(source, /useLocalSearchParams/);
+  assert.match(source, /TextInput/);
+  assert.match(source, /multiline/);
+  assert.match(source, /updateGroupNotice\(groupID,\s*nextNotice\)/);
+  assert.match(source, /router\.back\(\)/);
+  assert.match(source, /NavHeader/);
 });
 
 test('chat info screen opens a contact picker when adding group members', () => {
@@ -137,6 +226,52 @@ test('chat info screen opens a contact picker when adding group members', () => 
   assert.match(layoutSource, /<Stack\.Screen name="invite-group-members" \/>/);
   assert.equal(fs.existsSync(routePath), true);
   assert.equal(fs.existsSync(screenPath), true);
+});
+
+test('chat info screen right search opens group member search instead of chat history', () => {
+  const infoPath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatInfoScreen.tsx',
+  );
+  const routeHelperPath = path.join(
+    process.cwd(),
+    'src/features/user/utils/routes.ts',
+  );
+  const routeFiles = [
+    'app/(tabs)/messages/search-group-members.tsx',
+    'app/(tabs)/contacts/search-group-members.tsx',
+    'app/(tabs)/discover/search-group-members.tsx',
+    'app/(tabs)/profile/search-group-members.tsx',
+  ];
+  const infoSource = fs.readFileSync(infoPath, 'utf8');
+  const routeSource = fs.readFileSync(routeHelperPath, 'utf8');
+
+  assert.match(infoSource, /const handleOpenSearchGroupMembers = useCallback/);
+  assert.match(infoSource, /router\.push\(\s*getGroupMemberSearchHref\(scope,/);
+  assert.match(infoSource, /onRightPress=\{handleOpenSearchGroupMembers\}/);
+  assert.doesNotMatch(infoSource, /onRightPress=\{handleOpenSearchHistory\}/);
+  assert.match(routeSource, /function getGroupMemberSearchHref/);
+  assert.match(routeSource, /search-group-members/);
+  for (const relativePath of routeFiles) {
+    assert.equal(fs.existsSync(path.join(process.cwd(), relativePath)), true);
+  }
+});
+
+test('group member search screen loads and filters group members', () => {
+  const screenPath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/SearchGroupMembersScreen.tsx',
+  );
+  const source = fs.readFileSync(screenPath, 'utf8');
+
+  assert.match(source, /loadGroupMemberList\(groupID,\s*10_000\)/);
+  assert.match(source, /member\.nickname\.toLowerCase\(\)\.includes\(trimmedQuery\)/);
+  assert.match(source, /member\.userID\.toLowerCase\(\)\.includes\(trimmedQuery\)/);
+  assert.match(source, /getUserProfileHref\(scope,/);
+  assert.match(source, /fromImUserId\(member\.userID\)/);
+  assert.doesNotMatch(source, /fromImUserId\(item\.userID\)/);
+  assert.doesNotMatch(source, /rowSubtitle/);
+  assert.match(source, /t\('chat\.searchGroupMembers'\)/);
 });
 
 test('invite group members screen filters users who are already in the group', () => {
@@ -263,7 +398,7 @@ test('chat info screen applies optimistic pin and mute updates only after the re
   assert.match(source, /const runConversationAction = useCallback/);
   assert.match(source, /setConversationActionPending\(action, true\);[\s\S]{0,120}await task\(\);/);
   assert.match(source, /void runConversationAction\(\s*'pin',[\s\S]{0,120}setOptimisticConversationState\(\(current\) => \(\{/);
-  assert.match(source, /void runConversationAction\(\s*'mute',[\s\S]{0,120}setOptimisticConversationState\(\(current\) => \(\{/);
+  assert.match(source, /void runConversationAction\(\s*'mute',[\s\S]{0,320}setOptimisticConversationState\(\(current\) => \(\{/);
   assert.doesNotMatch(source, /const previousPinned = pinned;[\s\S]{0,120}setOptimisticConversationState\(\(current\) => \(\{[\s\S]{0,80}pinned: nextPinned/);
   assert.doesNotMatch(source, /const previousMuted = muted;[\s\S]{0,120}setOptimisticConversationState\(\(current\) => \(\{[\s\S]{0,80}muted: nextMuted/);
 });
@@ -323,7 +458,7 @@ test('chat info screen only lets the latest request for an action finish cleanup
   assert.match(source, /if \(\s*isActionConversationCurrent\(actionConversationID\) &&\s*isLatestActionRequest\(action, actionRequestToken\)\s*\) \{\s*setConversationActionPending\(action, false\);/s);
 });
 
-test('chat info screen wires chat background selection into the new route and label', () => {
+test('chat info screen opens chat background selection without a status label', () => {
   const filePath = path.join(
     process.cwd(),
     'src/features/chat/screens/ChatInfoScreen.tsx',
@@ -331,11 +466,10 @@ test('chat info screen wires chat background selection into the new route and la
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /getChatBackgroundHref/);
-  assert.match(source, /useChatPreferencesStore/);
-  assert.match(source, /backgroundLabel/);
   assert.match(source, /handleOpenChatBackground/);
   assert.match(source, /label=\{t\('chat\.chatBackground'\)\}/);
-  assert.match(source, /rightText={backgroundLabel}/);
+  assert.doesNotMatch(source, /backgroundLabel/);
+  assert.doesNotMatch(source, /rightText={backgroundLabel}/);
   assert.match(source, /onPress={handleOpenChatBackground}/);
 });
 

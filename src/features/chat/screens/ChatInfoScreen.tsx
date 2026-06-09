@@ -17,34 +17,27 @@ import { Avatar } from '@/components/ui/avatar';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { buildChatInfoState } from '@/features/chat/chat-info';
 import {
-  DEFAULT_CHAT_BACKGROUND_PREFERENCE,
-  getChatBackgroundPreferenceLabel,
-  useChatPreferencesStore,
-} from '@/features/chat/store/use-chat-preferences-store';
-import {
   clearConversationMessages,
   fromImUserId,
   getGroupInfo,
   getOrCreateSingleConversation,
-  hideConversation,
   kickGroupMembers,
   leaveGroupChat,
   loadGroupMemberList,
-  resetConversationGroupAtType,
   setConversationBurnDuration,
-  setConversationExtension,
   setConversationMute,
   toggleConversationPinned,
   updateGroupMemberAlias,
   updateGroupName,
-  updateGroupNotice,
 } from '@/im/client';
 import {
   getChatDetailHref,
   getChatBackgroundHref,
   getChatHistorySearchHubHref,
+  getEditGroupNoticeHref,
   getEditFriendRemarkHref,
   getEditFriendTagsHref,
+  getGroupMemberSearchHref,
   getRecommendFriendHref,
   getUserProfileHref,
 } from '@/features/user/utils/routes';
@@ -72,26 +65,9 @@ const s = StyleSheet.create({
   groupContent: {
     paddingBottom: Spacing.xl,
   },
-  groupHeader: {
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.md,
-    gap: Spacing.sm,
-  },
-  groupHeaderText: {
-    alignItems: 'center',
-    gap: Spacing.xs,
-  },
-  groupHeaderName: {
-    textAlign: 'center',
-  },
-  groupHeaderMeta: {
-    textAlign: 'center',
-  },
   groupMemberSection: {
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
+    paddingTop: Spacing.lg,
     paddingBottom: Spacing.lg,
   },
   groupMemberGrid: {
@@ -169,6 +145,8 @@ const initialActionPending = {
   burn: false,
   clear: false,
 };
+const GROUP_MEMBER_COLUMNS = 5;
+const COLLAPSED_GROUP_MEMBER_ROWS = 4;
 
 type ConversationActionKey = keyof typeof initialActionPending;
 type OptimisticConversationState = {
@@ -262,7 +240,7 @@ function GroupInfoRow({
           <Switch
             value={toggleValue}
             onValueChange={onToggle}
-            trackColor={{ false: colors.surfaceBorder, true: colors.success }}
+            trackColor={{ false: colors.surfaceBorder, true: colors.primary }}
             thumbColor={colors.white}
           />
         ) : showArrow ? (
@@ -293,9 +271,6 @@ export default function ChatInfoScreen() {
   const [groupMembers, setGroupMembers] = useState<GroupMemberItem[]>([]);
   const [groupMembersExpanded, setGroupMembersExpanded] = useState(false);
   const [kickPendingUserID, setKickPendingUserID] = useState<string | null>(null);
-  const [minimizeChat, setMinimizeChat] = useState(false);
-  const [saveGroupToContacts, setSaveGroupToContacts] = useState(false);
-  const [showOnScreenNames, setShowOnScreenNames] = useState(true);
   // friend-scoped 动作（拉黑 / 删除）不走 runConversationAction（那个绑会话）；
   // 用 ref 做 fast double-tap 单飞行守，跟其他屏的 Pattern D 二道闸保持一致。
   const blacklistInFlightRef = useRef(false);
@@ -338,6 +313,7 @@ export default function ChatInfoScreen() {
     params.originScope === 'discover'
       ? params.originScope
       : 'messages';
+  const scope = originScope;
   const conversationID =
     typeof params.conversationID === 'string' ? params.conversationID : '';
   const conversation = useMemo(
@@ -371,30 +347,6 @@ export default function ChatInfoScreen() {
   );
   const myGroupAlias =
     groupMembers.find((member) => member.userID === currentUserID)?.nickname ?? '';
-  const visibleGroupMembers = useMemo(
-    () => (groupMembersExpanded ? groupMembers : groupMembers.slice(0, 19)),
-    [groupMembers, groupMembersExpanded],
-  );
-  const resolvedConversationID = conversation?.conversationID ?? '';
-  currentConversationIDRef.current = resolvedConversationID;
-  const baseState = useMemo(
-    () => buildChatInfoState(conversation),
-    [conversation],
-  );
-  const backgroundPreference = useChatPreferencesStore(
-    (state) =>
-      state.backgroundsByConversationID[resolvedConversationID] ??
-      DEFAULT_CHAT_BACKGROUND_PREFERENCE,
-  );
-  const backgroundLabel = useMemo(
-    () => getChatBackgroundPreferenceLabel(backgroundPreference),
-    [backgroundPreference],
-  );
-  const displayIcons = useMemo(() => [] as DisplayIcon[], []);
-  const savedGroupToContacts =
-    conversationExtension.saveGroupToContacts === true;
-  const savedShowOnScreenNames =
-    conversationExtension.showOnScreenNames !== false;
   const currentMember = useMemo(
     () => groupMembers.find((member) => member.userID === currentUserID) ?? null,
     [currentUserID, groupMembers],
@@ -403,6 +355,22 @@ export default function ChatInfoScreen() {
   const isOwner = currentRole === GroupMemberRole.Owner;
   const isAdmin = currentRole === GroupMemberRole.Admin;
   const canManageGroup = isOwner || isAdmin;
+  const collapsedGroupMemberLimit =
+    GROUP_MEMBER_COLUMNS * COLLAPSED_GROUP_MEMBER_ROWS - (canManageGroup ? 1 : 0);
+  const visibleGroupMembers = useMemo(
+    () =>
+      groupMembersExpanded
+        ? groupMembers
+        : groupMembers.slice(0, collapsedGroupMemberLimit),
+    [collapsedGroupMemberLimit, groupMembers, groupMembersExpanded],
+  );
+  const resolvedConversationID = conversation?.conversationID ?? '';
+  currentConversationIDRef.current = resolvedConversationID;
+  const baseState = useMemo(
+    () => buildChatInfoState(conversation),
+    [conversation],
+  );
+  const displayIcons = useMemo(() => [] as DisplayIcon[], []);
   const backHref = useMemo(() => {
     if (originScope === 'messages') {
       if (isGroupConversation) {
@@ -497,59 +465,53 @@ export default function ChatInfoScreen() {
     }, [friendId, isGroupConversation]),
   );
 
-  useEffect(() => {
-    let cancelled = false;
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
 
-    if (!isGroupConversation || !groupID) {
-      setGroupInfo(null);
-      setGroupMembers([]);
+      if (!isGroupConversation || !groupID) {
+        setGroupInfo(null);
+        setGroupMembers([]);
+        return () => {
+          cancelled = true;
+        };
+      }
+
+      getGroupInfo(groupID)
+        .then((nextGroupInfo) => {
+          if (!cancelled) {
+            setGroupInfo(nextGroupInfo);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setGroupInfo(null);
+          }
+        });
+
+      loadGroupMemberList(groupID, 10_000)
+        .then((members) => {
+          if (!cancelled) {
+            setGroupMembers(members);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setGroupMembers([]);
+          }
+        });
+
       return () => {
         cancelled = true;
       };
-    }
-
-    getGroupInfo(groupID)
-      .then((nextGroupInfo) => {
-        if (!cancelled) {
-          setGroupInfo(nextGroupInfo);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setGroupInfo(null);
-        }
-      });
-
-    loadGroupMemberList(groupID, 10_000)
-      .then((members) => {
-        if (!cancelled) {
-          setGroupMembers(members);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setGroupMembers([]);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [groupID, isGroupConversation]);
+    }, [groupID, isGroupConversation]),
+  );
 
   useEffect(() => {
     actionPendingRef.current = initialActionPending;
     setActionPending(initialActionPending);
     setOptimisticConversationState({});
   }, [resolvedConversationID]);
-
-  useEffect(() => {
-    setSaveGroupToContacts(savedGroupToContacts);
-  }, [savedGroupToContacts]);
-
-  useEffect(() => {
-    setShowOnScreenNames(savedShowOnScreenNames);
-  }, [savedShowOnScreenNames]);
 
   useEffect(() => {
     if (!hasOptimisticConversationState) {
@@ -759,6 +721,19 @@ export default function ChatInfoScreen() {
     })();
   }, [friendName, resolveConversationIDForNavigation, routeSourceID]);
 
+  const handleOpenSearchGroupMembers = useCallback(() => {
+    if (!groupID) {
+      return;
+    }
+
+    router.push(
+      getGroupMemberSearchHref(scope, {
+        groupID,
+        groupTitle,
+      }),
+    );
+  }, [groupID, groupTitle, scope]);
+
   const promptForText = useCallback(
     (
       title: string,
@@ -814,26 +789,14 @@ export default function ChatInfoScreen() {
       return;
     }
 
-    promptForText(
-      t('chat.groupNotice'),
-      groupNotice,
-      (value) => {
-        const trimmed = value.trim();
-        if (trimmed === groupNotice) {
-          return;
-        }
-
-        updateGroupNotice(groupID, trimmed)
-          .then(() => {
-            setGroupInfo((current) =>
-              current ? { ...current, notification: trimmed } : current,
-            );
-          })
-          .catch(openActionError);
-      },
-      { multiline: true },
+    router.push(
+      getEditGroupNoticeHref(scope, {
+        groupID,
+        groupTitle,
+        notice: groupNotice,
+      }),
     );
-  }, [groupID, groupNotice, openActionError, promptForText, t]);
+  }, [groupID, groupNotice, groupTitle, scope]);
 
   const handleEditMyGroupAlias = useCallback(() => {
     if (!groupID || !currentUserID) {
@@ -873,58 +836,6 @@ export default function ChatInfoScreen() {
       },
     });
   }, [groupID, groupTitle]);
-
-  const handleMinimizeGroupChat = useCallback(
-    (nextValue: boolean) => {
-      if (!nextValue || !resolvedConversationID) {
-        setMinimizeChat(false);
-        return;
-      }
-
-      setMinimizeChat(true);
-      hideConversation(resolvedConversationID)
-        .then(() => router.replace('/(tabs)/messages'))
-        .catch((error) => {
-          setMinimizeChat(false);
-          openActionError(error);
-        });
-    },
-    [openActionError, resolvedConversationID],
-  );
-
-  const handleSaveGroupToContacts = useCallback(
-    (nextValue: boolean) => {
-      if (!resolvedConversationID) {
-        return;
-      }
-
-      const previousValue = saveGroupToContacts;
-      setSaveGroupToContacts(nextValue);
-      setConversationExtension(resolvedConversationID, { saveGroupToContacts: nextValue }).catch((error) => {
-        setSaveGroupToContacts(previousValue);
-        openActionError(error);
-      });
-    },
-    [openActionError, resolvedConversationID, saveGroupToContacts],
-  );
-
-  const handleToggleOnScreenNames = useCallback(
-    (nextValue: boolean) => {
-      if (!resolvedConversationID) {
-        return;
-      }
-
-      const previousValue = showOnScreenNames;
-      setShowOnScreenNames(nextValue);
-      setConversationExtension(resolvedConversationID, { showOnScreenNames: nextValue }).catch(
-        (error) => {
-          setShowOnScreenNames(previousValue);
-          openActionError(error);
-        },
-      );
-    },
-    [openActionError, resolvedConversationID, showOnScreenNames],
-  );
 
   const handleOpenMemberProfile = useCallback(
     (member: GroupMemberItem) => {
@@ -990,18 +901,6 @@ export default function ChatInfoScreen() {
     },
     [canManageGroup, currentUserID, groupID, isOwner, openActionError, t],
   );
-
-  const handleResetGroupNotifyMessages = useCallback(() => {
-    if (!resolvedConversationID) {
-      return;
-    }
-
-    resetConversationGroupAtType(resolvedConversationID)
-      .then(() => {
-        Alert.alert(t('chat.messagesThatNotify'), t('chat.messagesThatNotifyReset'));
-      })
-      .catch(openActionError);
-  }, [openActionError, resolvedConversationID, t]);
 
   const handleOpenGroupReport = useCallback(() => {
     if (!groupID) {
@@ -1134,7 +1033,12 @@ export default function ChatInfoScreen() {
 
       void runConversationAction(
         'mute',
-        () => setConversationMute(resolvedConversationID, nextMuted),
+        async () => {
+          await setConversationMute(resolvedConversationID, nextMuted);
+          if (nextMuted) {
+            Alert.alert(t('chat.messagesThatNotify'), t('chat.messagesThatNotifyHint'));
+          }
+        },
         () =>
           setOptimisticConversationState((current) => ({
             ...current,
@@ -1148,6 +1052,7 @@ export default function ChatInfoScreen() {
       dropOptimisticConversationStateKey,
       resolvedConversationID,
       runConversationAction,
+      t,
     ],
   );
 
@@ -1240,14 +1145,6 @@ export default function ChatInfoScreen() {
         color: colors.textSecondary,
         ...Typography.caption,
       },
-      groupHeaderName: {
-        color: colors.text,
-        ...Typography.h2,
-      },
-      groupHeaderMeta: {
-        color: colors.textSecondary,
-        ...Typography.bodyRegular,
-      },
       memberRoleBadge: {
         color: colors.primary,
         ...Typography.caption,
@@ -1274,10 +1171,10 @@ export default function ChatInfoScreen() {
     return (
       <View style={[d.container, { paddingTop: insets.top }]}>
         <NavHeader
-          title={t('chat.groupInfo')}
+          title={t('chat.groupInfoWithCount', { count: memberCount })}
           fallbackHref={backHref}
           rightIcon="search-outline"
-          onRightPress={handleOpenSearchHistory}
+          onRightPress={handleOpenSearchGroupMembers}
         />
         <ScrollView
           style={s.scroll}
@@ -1287,23 +1184,6 @@ export default function ChatInfoScreen() {
           ]}
           showsVerticalScrollIndicator={false}
         >
-          <View style={s.groupHeader}>
-            <Avatar
-              size={72}
-              shape="square"
-              name={groupTitle}
-              uri={groupInfo?.faceURL ?? conversation?.faceURL}
-            />
-            <View style={s.groupHeaderText}>
-              <Text style={[s.groupHeaderName, d.groupHeaderName]} numberOfLines={2}>
-                {groupTitle}
-              </Text>
-              <Text style={[s.groupHeaderMeta, d.groupHeaderMeta]}>
-                {t('chat.groupMembersCount', { count: memberCount })}
-              </Text>
-            </View>
-          </View>
-
           <View style={s.groupMemberSection}>
             <View style={s.groupMemberGrid}>
               {visibleGroupMembers.map((member) => {
@@ -1358,7 +1238,7 @@ export default function ChatInfoScreen() {
                 </Pressable>
               ) : null}
             </View>
-            {groupMembers.length > 19 ? (
+            {groupMembers.length > collapsedGroupMemberLimit ? (
               <Pressable
                 style={s.moreMembersButton}
                 onPress={() => setGroupMembersExpanded((current) => !current)}
@@ -1406,32 +1286,10 @@ export default function ChatInfoScreen() {
             />
             <Divider />
             <GroupInfoRow
-              label={t('chat.minimizeChat')}
-              hasToggle
-              toggleValue={minimizeChat}
-              onToggle={handleMinimizeGroupChat}
-              showArrow={false}
-            />
-            <Divider />
-            <GroupInfoRow
-              label={t('chat.messagesThatNotify')}
-              subtitle={t('chat.messagesThatNotifyHint')}
-              onPress={handleResetGroupNotifyMessages}
-            />
-            <Divider />
-            <GroupInfoRow
               label={t('chat.pinChat')}
               hasToggle={!actionPending.pin}
               toggleValue={pinned}
               onToggle={actionPending.pin ? undefined : handleTogglePinned}
-              showArrow={false}
-            />
-            <Divider />
-            <GroupInfoRow
-              label={t('chat.saveToContacts')}
-              hasToggle
-              toggleValue={saveGroupToContacts}
-              onToggle={handleSaveGroupToContacts}
               showArrow={false}
             />
           </View>
@@ -1442,20 +1300,11 @@ export default function ChatInfoScreen() {
               value={myGroupAlias || t('chat.notSet')}
               onPress={handleEditMyGroupAlias}
             />
-            <Divider />
-            <GroupInfoRow
-              label={t('chat.onScreenNames')}
-              hasToggle
-              toggleValue={showOnScreenNames}
-              onToggle={handleToggleOnScreenNames}
-              showArrow={false}
-            />
           </View>
 
           <View style={[s.groupSection, d.groupSection]}>
             <GroupInfoRow
               label={t('chat.chatBackground')}
-              value={backgroundLabel}
               onPress={handleOpenChatBackground}
             />
           </View>
@@ -1511,7 +1360,6 @@ export default function ChatInfoScreen() {
           <MenuRow
             icon="image-outline"
             label={t('chat.chatBackground')}
-            rightText={backgroundLabel}
             onPress={handleOpenChatBackground}
           />
           <Divider />

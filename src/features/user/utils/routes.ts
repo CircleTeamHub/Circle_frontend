@@ -196,6 +196,58 @@ export function getChatBackgroundHref(
   };
 }
 
+export function getEditGroupNoticeHref(
+  scope: UserProfileScope,
+  params: {
+    groupID: string;
+    groupTitle?: string;
+    notice?: string;
+  },
+): Href {
+  const routeParams = {
+    groupID: params.groupID,
+    ...(params.groupTitle ? { groupTitle: params.groupTitle } : {}),
+    ...(params.notice ? { notice: params.notice } : {}),
+  };
+
+  switch (scope) {
+    case 'contacts':
+      return { pathname: '/(tabs)/contacts/edit-group-notice', params: routeParams };
+    case 'profile':
+      return { pathname: '/(tabs)/profile/edit-group-notice', params: routeParams };
+    case 'discover':
+      return { pathname: '/(tabs)/discover/edit-group-notice', params: routeParams };
+    case 'messages':
+    default:
+      return { pathname: '/(tabs)/messages/edit-group-notice', params: routeParams };
+  }
+}
+
+export function getGroupMemberSearchHref(
+  scope: UserProfileScope,
+  params: {
+    groupID: string;
+    groupTitle?: string;
+  },
+): Href {
+  const routeParams = {
+    groupID: params.groupID,
+    ...(params.groupTitle ? { groupTitle: params.groupTitle } : {}),
+  };
+
+  switch (scope) {
+    case 'contacts':
+      return { pathname: '/(tabs)/contacts/search-group-members', params: routeParams };
+    case 'profile':
+      return { pathname: '/(tabs)/profile/search-group-members', params: routeParams };
+    case 'discover':
+      return { pathname: '/(tabs)/discover/search-group-members', params: routeParams };
+    case 'messages':
+    default:
+      return { pathname: '/(tabs)/messages/search-group-members', params: routeParams };
+  }
+}
+
 export function getRecommendFriendHref(
   conversationID: string,
   friendId: string,
