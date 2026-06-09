@@ -1,4 +1,3 @@
-import { useMessageGroupsStore } from '@/features/messages/store/use-message-groups-store';
 import { mmkvJsonStorage } from '@/storage';
 import { useAuthStore } from '@/stores/authStore';
 import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore';
@@ -23,6 +22,13 @@ type LogoutHandler = () => void | Promise<void>;
 const logoutHandlers: LogoutHandler[] = [];
 
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+
+async function resetMessageGroupsStore() {
+  const { useMessageGroupsStore } = await import(
+    '@/features/messages/store/use-message-groups-store'
+  );
+  useMessageGroupsStore.getState().reset();
+}
 
 /**
  * 注册登出 teardown 钩子，返回反注册函数。HMR / 测试场景下可避免 handler 累积。
@@ -52,7 +58,7 @@ export async function clearLocalSession() {
   // 先清 auth，让订阅 useAuthStore 的组件立刻看到"未登录"，
   // 避免 dependent store 被清空后触发"重新拉取"再被丢弃的请求。
   useAuthStore.getState().clearSession();
-  useMessageGroupsStore.getState().reset();
+  await resetMessageGroupsStore();
   useFriendActivityUnreadStore.getState().reset();
   useTabBadgeStore.getState().reset();
   useWalletRealtimeStore.getState().reset();

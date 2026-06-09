@@ -617,6 +617,8 @@ export async function sendTextMessage(params: {
     throw new Error(getUnsupportedPlatformMessage());
   }
 
+  await waitForOpenIMConnectionReady();
+
   const message = await OpenIMSDK.createTextMessage(params.text);
   const isSingle = params.sessionType === SessionType.Single;
   const sentMessage = await OpenIMSDK.sendMessage({
@@ -654,6 +656,8 @@ export async function sendImageMessage(params: {
   if (!initialized) {
     throw new Error(getUnsupportedPlatformMessage());
   }
+
+  await waitForOpenIMConnectionReady();
 
   const picBase = {
     uuid: '',
@@ -700,6 +704,8 @@ export async function sendLocationMessage(params: {
     throw new Error(getUnsupportedPlatformMessage());
   }
 
+  await waitForOpenIMConnectionReady();
+
   const message = await OpenIMSDK.createLocationMessage({
     description: params.description,
     longitude: params.longitude,
@@ -745,6 +751,8 @@ export async function sendTransferCardMessage(params: {
   if (!initialized) {
     throw new Error(getUnsupportedPlatformMessage());
   }
+
+  await waitForOpenIMConnectionReady();
 
   const { amount } = params.payload;
   // 积分必须为正整数；上限拦截 off-by-orders / overflow 攻击。真实业务上限以后端为准。
@@ -799,6 +807,8 @@ export async function sendNoteCardMessage(params: {
     throw new Error(getUnsupportedPlatformMessage());
   }
 
+  await waitForOpenIMConnectionReady();
+
   const message = await OpenIMSDK.createCustomMessage({
     data: JSON.stringify(params.payload),
     extension: NOTE_CARD_EXTENSION,
@@ -846,6 +856,8 @@ export async function sendFriendCardMessage(params: {
   if (!initialized) {
     throw new Error(getUnsupportedPlatformMessage());
   }
+
+  await waitForOpenIMConnectionReady();
 
   const targetConversation = useIMStore
     .getState()

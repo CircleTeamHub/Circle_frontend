@@ -68,11 +68,19 @@ async function runRestoreConversationMessages(params: {
   let inserted = 0;
 
   while (fetched < maxMessages) {
-    const page = await fetchRestorableConversationMessages({
-      conversationID,
-      limit: Math.min(DEFAULT_RESTORE_LIMIT, maxMessages - fetched),
-      beforeSeq,
-    });
+    let page;
+    try {
+      page = await fetchRestorableConversationMessages({
+        conversationID,
+        limit: Math.min(DEFAULT_RESTORE_LIMIT, maxMessages - fetched),
+        beforeSeq,
+      });
+    } catch (err) {
+      if (isHistoryStoreUnconfiguredError(err)) {
+        break;
+      }
+      throw err;
+    }
     fetched += page.messages.length;
     if (page.messages.length === 0) {
       break;
@@ -128,6 +136,16 @@ async function runRestoreConversationMessages(params: {
   }
 
   return { fetched, inserted };
+}
+
+function isHistoryStoreUnconfiguredError(error: unknown) {
+  if (!error || typeof error !== 'object') return false;
+  const err = error as { status?: unknown; message?: unknown };
+  return (
+    err.status === 503 &&
+    typeof err.message === 'string' &&
+    err.message.includes('OpenIM history store is not configured')
+  );
 }
 
 async function insertLocalMessage(params: {

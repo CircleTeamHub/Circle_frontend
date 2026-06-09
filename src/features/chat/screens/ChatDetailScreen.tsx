@@ -582,13 +582,37 @@ export default function ChatDetailScreen() {
           text,
         });
         appendMessages(conversationID, [sentMessage]);
-      } catch {
+      } catch (error) {
+        if (__DEV__) {
+          console.warn(
+            '[chat] text send failed',
+            error instanceof Error
+              ? {
+                  name: error.name,
+                  message: error.message,
+                  sessionType: conversationType,
+                  isGroupChat,
+                }
+              : {
+                  message: String(error),
+                  sessionType: conversationType,
+                  isGroupChat,
+                },
+          );
+        }
         setSendError('消息发送失败，请重试');
       } finally {
         inFlightRef.current = false;
       }
     },
-    [appendMessages, conversationID, conversationType, isPreviewMode, sourceID],
+    [
+      appendMessages,
+      conversationID,
+      conversationType,
+      isGroupChat,
+      isPreviewMode,
+      sourceID,
+    ],
   );
 
   const handleSendCurrentLocation = useCallback(async () => {
@@ -945,13 +969,39 @@ export default function ChatDetailScreen() {
       });
       appendMessages(conversationID, [sentMessage]);
       setDraft('');
-    } catch {
+    } catch (error) {
+      if (__DEV__) {
+        console.warn(
+          '[chat] text send failed',
+          error instanceof Error
+            ? {
+                name: error.name,
+                message: error.message,
+                sessionType: conversationType,
+                isGroupChat,
+              }
+            : {
+                message: String(error),
+                sessionType: conversationType,
+                isGroupChat,
+              },
+        );
+      }
       setSendError('消息发送失败，请重试');
     } finally {
       inFlightRef.current = false;
       setSending(false);
     }
-  }, [appendMessages, conversationID, conversationType, draft, isPreviewMode, sending, sourceID]);
+  }, [
+    appendMessages,
+    conversationID,
+    conversationType,
+    draft,
+    isGroupChat,
+    isPreviewMode,
+    sending,
+    sourceID,
+  ]);
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
