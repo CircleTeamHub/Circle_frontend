@@ -68,6 +68,9 @@ function loadChatSettingsClient(sdkCalls, storeCalls) {
         clearConversationAndDeleteAllMsg: async (conversationID) => {
           sdkCalls.push(['clearConversationAndDeleteAllMsg', conversationID]);
         },
+        deleteConversationAndDeleteAllMsg: async (conversationID) => {
+          sdkCalls.push(['deleteConversationAndDeleteAllMsg', conversationID]);
+        },
         deleteAllMsgFromLocal: async () => {
           sdkCalls.push(['deleteAllMsgFromLocal']);
         },
@@ -104,7 +107,9 @@ function loadChatSettingsClient(sdkCalls, storeCalls) {
           setCurrentUserID: () => undefined,
           setConnecting: () => undefined,
           reset: () => undefined,
-          setConversations: () => undefined,
+          setConversations: (...args) => {
+            storeCalls.push(['setConversations', ...args]);
+          },
           mergeConversations: () => undefined,
           clearAllMessages: () => {
             storeCalls.push(['clearAllMessages']);
@@ -231,6 +236,23 @@ test('clearConversationMessages clears OpenIM history and local message cache', 
   ]);
 });
 
+test('deleteConversation deletes the OpenIM conversation and refreshes the list', async () => {
+  const sdkCalls = [];
+  const storeCalls = [];
+  const { deleteConversation } = loadChatSettingsClient(sdkCalls, storeCalls);
+
+  await deleteConversation('conversation-99');
+
+  assert.deepEqual(normalize(sdkCalls), [
+    ['deleteConversationAndDeleteAllMsg', 'conversation-99'],
+    ['getConversationListSplit', { offset: 0, count: 100 }],
+  ]);
+  assert.deepEqual(normalize(storeCalls), [
+    ['setMessages', 'conversation-99', []],
+    ['setConversations', []],
+  ]);
+});
+
 test('clearAllLocalMessages clears only local OpenIM messages and refreshes local state', async () => {
   const sdkCalls = [];
   const storeCalls = [];
@@ -245,6 +267,7 @@ test('clearAllLocalMessages clears only local OpenIM messages and refreshes loca
   assert.deepEqual(normalize(storeCalls), [
     ['clearAllMessages'],
     ['setMessagesUnread', 0],
+    ['setConversations', []],
   ]);
 });
 

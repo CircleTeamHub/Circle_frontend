@@ -952,6 +952,20 @@ export async function clearConversationMessages(conversationID: string) {
   useIMStore.getState().setMessages(conversationID, []);
 }
 
+export async function deleteConversation(conversationID: string) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await OpenIMSDK.deleteConversationAndDeleteAllMsg(conversationID);
+  useIMStore.getState().setMessages(conversationID, []);
+  await loadConversationList().catch(() => {
+    // 会话已删除，列表刷新失败时等待 SDK 推送同步。
+  });
+}
+
 export async function clearAllLocalMessages() {
   const initialized = await ensureOpenIMInitialized();
 

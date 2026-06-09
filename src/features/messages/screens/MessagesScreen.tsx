@@ -2,7 +2,12 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Divider } from "@/components/ui/divider";
 import { FilterTabs } from "@/components/ui/filter-tabs";
-import { loadConversationList, markConversationAsRead } from "@/im/client";
+import {
+  deleteConversation,
+  hideConversation,
+  loadConversationList,
+  markConversationAsRead,
+} from "@/im/client";
 import { mapConversationItemToUI } from "@/im/mappers";
 import { useMessageGroupsStore } from "@/features/messages/store/use-message-groups-store";
 import { getUserProfileHref } from "@/features/user/utils/routes";
@@ -12,13 +17,15 @@ import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { Conversation } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
+  Animated,
   FlatList,
   ListRenderItemInfo,
   Modal,
+  PanResponder,
   Pressable,
   StyleSheet,
   Text,
@@ -27,6 +34,9 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const isDev = typeof __DEV__ !== "undefined" && __DEV__;
+const SWIPE_ACTION_WIDTH = 76;
+const SWIPE_ACTIONS_WIDTH = SWIPE_ACTION_WIDTH * 3;
+const SWIPE_OPEN_THRESHOLD = SWIPE_ACTION_WIDTH;
 
 const BASE_FILTER_KEYS = [
   { id: "all", key: "messages.all" },
@@ -89,21 +99,52 @@ const s = StyleSheet.create({
     top: -8,
     right: -12,
   },
-  // 单条会话行：头像 + 内容区
+  // 单条会话行外层：保留列表分隔线和行间距
   row: {
+    marginHorizontal: -Spacing.sm,
+    paddingVertical: Spacing.xs,
+    overflow: "hidden",
+  },
+  swipeForeground: {
+    zIndex: 1,
+  },
+  swipeActions: {
+    position: "absolute",
+    top: Spacing.xs,
+    right: 0,
+    bottom: Spacing.xs,
+    width: SWIPE_ACTIONS_WIDTH,
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    borderRadius: Radius.lg,
+    overflow: "hidden",
+  },
+  swipeAction: {
+    width: SWIPE_ACTION_WIDTH,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  swipeActionLabel: {
+    ...Typography.small,
+    fontWeight: "600",
+  },
+  // 单条会话内容：头像 + 内容区
+  rowSurface: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.md,
     paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.sm,
-    marginHorizontal: -Spacing.sm,
     borderRadius: Radius.md,
   },
-  // 置顶会话行：顶端微弱背景色提示
-  rowPinned: {
+  // 置顶会话内层背景：比普通行略收窄，避免连续置顶时灰底贴到分割线
+  pinnedSurface: {
+    marginHorizontal: Spacing.xs,
+    borderRadius: Radius.lg,
     // backgroundColor 由主题动态注入
   },
-  // 置顶图标 + 名称组合
+  // 名称组合
   nameRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -120,6 +161,20 @@ const s = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+  },
+  rowMeta: {
+    alignItems: "flex-end",
+    gap: 3,
+    position: "relative",
+  },
+  mutedIndicator: {
+    position: "absolute",
+    top: 20,
+    right: 0,
+    minWidth: 18,
+    minHeight: 18,
+    alignItems: "center",
+    justifyContent: "center",
   },
   // 会话行下半：消息预览（左）+ 未读数角标（右）
   rowBottom: {
@@ -149,6 +204,182 @@ const s = StyleSheet.create({
   },
 });
 
+type ConversationRowLabels = {
+  markRead: string;
+  hide: string;
+  delete: string;
+};
+
+type ConversationRowProps = {
+  item: Conversation;
+  labels: ConversationRowLabels;
+  rowBackgroundColor: string;
+  nameStyle: object;
+  timeStyle: object;
+  previewStyle: object;
+  pinnedSurfaceStyle: object;
+  onOpenConversation: (conversation: Conversation) => void;
+  onOpenUserProfile: (conversation: Conversation) => void;
+  onMarkRead: (conversation: Conversation) => void;
+  onHide: (conversation: Conversation) => void;
+  onDelete: (conversation: Conversation) => void;
+};
+
+function ConversationRow({
+  item,
+  labels,
+  rowBackgroundColor,
+  nameStyle,
+  timeStyle,
+  previewStyle,
+  pinnedSurfaceStyle,
+  onOpenConversation,
+  onOpenUserProfile,
+  onMarkRead,
+  onHide,
+  onDelete,
+}: ConversationRowProps) {
+  const { colors } = useTheme();
+  const translateX = useRef(new Animated.Value(0)).current;
+  const currentXRef = useRef(0);
+
+  const animateTo = useCallback(
+    (toValue: number) => {
+      currentXRef.current = toValue;
+      Animated.spring(translateX, {
+        toValue,
+        useNativeDriver: true,
+        bounciness: 0,
+        speed: 22,
+      }).start();
+    },
+    [translateX],
+  );
+
+  const closeSwipe = useCallback(() => animateTo(0), [animateTo]);
+  const openSwipe = useCallback(
+    () => animateTo(-SWIPE_ACTIONS_WIDTH),
+    [animateTo],
+  );
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          Math.abs(gesture.dx) > 8 &&
+          Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.2,
+        onPanResponderMove: (_, gesture) => {
+          const nextX = Math.max(
+            -SWIPE_ACTIONS_WIDTH,
+            Math.min(0, currentXRef.current + gesture.dx),
+          );
+          translateX.setValue(nextX);
+        },
+        onPanResponderRelease: (_, gesture) => {
+          const nextX = currentXRef.current + gesture.dx;
+          if (nextX < -SWIPE_OPEN_THRESHOLD || gesture.vx < -0.5) {
+            openSwipe();
+          } else {
+            closeSwipe();
+          }
+        },
+        onPanResponderTerminate: closeSwipe,
+      }),
+    [closeSwipe, openSwipe, translateX],
+  );
+
+  const handleSwipeAction = useCallback(
+    (action: (conversation: Conversation) => void) => {
+      closeSwipe();
+      action(item);
+    },
+    [closeSwipe, item],
+  );
+
+  const renderSwipeActions = () => (
+    <View style={s.swipeActions}>
+      <Pressable
+        style={[s.swipeAction, { backgroundColor: colors.primary }]}
+        onPress={() => handleSwipeAction(onMarkRead)}
+      >
+        <Ionicons name="checkmark-done-outline" size={20} color={colors.white} />
+        <Text style={[s.swipeActionLabel, { color: colors.white }]}>
+          {labels.markRead}
+        </Text>
+      </Pressable>
+      <Pressable
+        style={[s.swipeAction, { backgroundColor: colors.warning }]}
+        onPress={() => handleSwipeAction(onHide)}
+      >
+        <Ionicons name="archive-outline" size={20} color={colors.white} />
+        <Text style={[s.swipeActionLabel, { color: colors.white }]}>
+          {labels.hide}
+        </Text>
+      </Pressable>
+      <Pressable
+        style={[s.swipeAction, { backgroundColor: colors.error }]}
+        onPress={() => handleSwipeAction(onDelete)}
+      >
+        <Ionicons name="trash-outline" size={20} color={colors.white} />
+        <Text style={[s.swipeActionLabel, { color: colors.white }]}>
+          {labels.delete}
+        </Text>
+      </Pressable>
+    </View>
+  );
+
+  return (
+    <View style={s.row}>
+      {renderSwipeActions()}
+      <Animated.View
+        {...panResponder.panHandlers}
+        style={[
+          s.swipeForeground,
+          { backgroundColor: rowBackgroundColor, transform: [{ translateX }] },
+        ]}
+      >
+        <View style={[s.rowSurface, item.pinned ? [s.pinnedSurface, pinnedSurfaceStyle] : null]}>
+          {item.conversationType === "private" ? (
+            <Pressable onPress={() => onOpenUserProfile(item)}>
+              <Avatar size={40} name={item.name} uri={item.avatarUrl} />
+            </Pressable>
+          ) : (
+            <Avatar size={40} name={item.name} uri={item.avatarUrl} />
+          )}
+          <Pressable style={s.rowContent} onPress={() => onOpenConversation(item)}>
+            <View style={s.rowTop}>
+              <View style={s.nameRow}>
+                <Text style={nameStyle} numberOfLines={1}>
+                  {item.name}
+                </Text>
+              </View>
+              <View style={s.rowMeta}>
+                <Text style={timeStyle}>{item.time}</Text>
+                {item.muted ? (
+                  <View style={s.mutedIndicator}>
+                    <Ionicons
+                      name="notifications-off-outline"
+                      size={15}
+                      color={colors.textSecondary}
+                      accessibilityLabel="消息免打扰"
+                    />
+                  </View>
+                ) : null}
+              </View>
+            </View>
+            <View style={s.rowBottom}>
+              <Text style={previewStyle} numberOfLines={1}>
+                {item.message}
+              </Text>
+              <Badge count={item.unreadCount} />
+            </View>
+          </Pressable>
+        </View>
+      </Animated.View>
+    </View>
+  );
+}
+
 // MessagesScreen：消息列表主页面
 // 功能：
 //   1. 展示所有会话，支持按标签筛选（全部/未读/群聊/私聊/自定义群组）
@@ -157,7 +388,7 @@ const s = StyleSheet.create({
 export default function MessagesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, resolvedMode } = useTheme();
   const { t } = useTranslation();
 
   // useMemo 让 BASE_FILTERS / MENU_ACTIONS 在 `t` 不变时保持同一引用 ——
@@ -168,6 +399,14 @@ export default function MessagesScreen() {
   );
   const MENU_ACTIONS = useMemo(
     () => MENU_ACTION_KEYS.map((a) => ({ id: a.id, icon: a.icon, label: t(a.key) })),
+    [t],
+  );
+  const swipeLabels = useMemo(
+    () => ({
+      markRead: t("messages.swipeMarkRead"),
+      hide: t("messages.swipeHide"),
+      delete: t("messages.swipeDelete"),
+    }),
     [t],
   );
 
@@ -181,10 +420,18 @@ export default function MessagesScreen() {
   const [activeFilterId, setActiveFilterId] = useState("all"); // 当前激活的筛选标签 id
   const [menuVisible, setMenuVisible] = useState(false);        // 右上角弹出菜单的显隐
 
-  // 每次回到消息页都重置到"全部"，而不是停留在上次的筛选标签。
+  // 每次回到消息页都重置到"全部"，并重新拉 OpenIM 会话列表。
+  // 群聊可能从群列表、圈子、临时群等入口创建/恢复；只在首次 mount 拉取会漏掉这些更新。
   useFocusEffect(
     useCallback(() => {
       setActiveFilterId("all");
+      loadConversationList().catch((err) => {
+        // 列表加载失败时 imStore.error 会被 IM listener 更新，UI 的 empty state 会显示。
+        // dev 下额外打印，便于排查"为啥列表是空的"。
+        if (isDev) {
+          console.warn("[messages] focus loadConversationList failed", err);
+        }
+      });
     }, []),
   );
 
@@ -233,12 +480,12 @@ export default function MessagesScreen() {
         color: colors.text,
         ...Typography.body,
       },
-      // 置顶行：用 surface 色做轻微背景区分
-      pinnedRow: {
-        backgroundColor: colors.surface,
+      // 置顶内容面：用 surface 色做轻微背景区分
+      pinnedSurface: {
+        backgroundColor: resolvedMode === "light" ? colors.surfaceBorder : colors.surface,
       },
     }),
-    [colors],
+    [colors, resolvedMode],
   );
 
   // 筛选标签列表 = 固定标签 + 用户自定义群组（动态追加）
@@ -295,22 +542,6 @@ export default function MessagesScreen() {
     return conversations;
   }, [activeFilterId, conversationGroups, conversations]);
 
-  const hasFetchedRef = useRef(false);
-
-  useEffect(() => {
-    if (hasFetchedRef.current) {
-      return;
-    }
-    hasFetchedRef.current = true;
-    loadConversationList().catch((err) => {
-      // 列表加载失败时 imStore.error 会被 IM listener 更新，UI 的 empty state 会显示。
-      // dev 下额外打印，便于排查"为啥列表是空的"。
-      if (isDev) {
-        console.warn("[messages] initial loadConversationList failed", err);
-      }
-    });
-  }, []);
-
   // 点击会话行 → 进入聊天详情页（立即跳转，不等服务端 mark-read / refresh）
   const handleConversationPress = useCallback(
     (conversation: Conversation) => {
@@ -345,6 +576,48 @@ export default function MessagesScreen() {
       );
     },
     [router],
+  );
+
+  const handleMarkConversationRead = useCallback((conversation: Conversation) => {
+    void markConversationAsRead(conversation.id)
+      .then(() => loadConversationList())
+      .catch((err) => {
+        if (isDev) {
+          console.warn("[messages] swipe mark-read failed", err);
+        }
+      });
+  }, []);
+
+  const handleHideConversation = useCallback((conversation: Conversation) => {
+    void hideConversation(conversation.id).catch((err) => {
+      if (isDev) {
+        console.warn("[messages] swipe hide conversation failed", err);
+      }
+    });
+  }, []);
+
+  const handleConfirmDeleteConversation = useCallback(
+    (conversation: Conversation) => {
+      Alert.alert(
+        t("messages.deleteChat"),
+        t("messages.deleteChatConfirm", { name: conversation.name }),
+        [
+          { text: t("common.cancel"), style: "cancel" },
+          {
+            text: t("common.delete"),
+            style: "destructive",
+            onPress: () => {
+              void deleteConversation(conversation.id).catch((err) => {
+                if (isDev) {
+                  console.warn("[messages] swipe delete conversation failed", err);
+                }
+              });
+            },
+          },
+        ],
+      );
+    },
+    [t],
   );
 
   const handleOpenNotifications = useCallback(() => {
@@ -403,40 +676,31 @@ export default function MessagesScreen() {
   // 单条会话行渲染：头像（私聊可点击进主页）+ 名称/预览/时间/未读数
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<Conversation>) => (
-      <View style={[s.row, item.pinned ? d.pinnedRow : null]}>
-        {item.conversationType === "private" ? (
-          <Pressable onPress={() => handleOpenUserProfile(item)}>
-            <Avatar size={40} name={item.name} uri={item.avatarUrl} />
-          </Pressable>
-        ) : (
-          <Avatar size={40} name={item.name} uri={item.avatarUrl} />
-        )}
-        <Pressable style={s.rowContent} onPress={() => handleConversationPress(item)}>
-          <View style={s.rowTop}>
-            <View style={s.nameRow}>
-              {item.pinned ? (
-                <Ionicons
-                  name="pin"
-                  size={12}
-                  color={colors.textSecondary}
-                />
-              ) : null}
-              <Text style={d.name} numberOfLines={1}>
-                {item.name}
-              </Text>
-            </View>
-            <Text style={d.time}>{item.time}</Text>
-          </View>
-          <View style={s.rowBottom}>
-            <Text style={d.preview} numberOfLines={1}>
-              {item.message}
-            </Text>
-            <Badge count={item.unreadCount} />
-          </View>
-        </Pressable>
-      </View>
+      <ConversationRow
+        item={item}
+        labels={swipeLabels}
+        rowBackgroundColor={colors.background}
+        nameStyle={d.name}
+        timeStyle={d.time}
+        previewStyle={d.preview}
+        pinnedSurfaceStyle={d.pinnedSurface}
+        onOpenConversation={handleConversationPress}
+        onOpenUserProfile={handleOpenUserProfile}
+        onMarkRead={handleMarkConversationRead}
+        onHide={handleHideConversation}
+        onDelete={handleConfirmDeleteConversation}
+      />
     ),
-    [colors.textSecondary, d, handleConversationPress, handleOpenUserProfile],
+    [
+      colors.background,
+      d,
+      handleConfirmDeleteConversation,
+      handleConversationPress,
+      handleHideConversation,
+      handleMarkConversationRead,
+      handleOpenUserProfile,
+      swipeLabels,
+    ],
   );
 
   const renderSeparator = useCallback(() => <Divider />, []);
