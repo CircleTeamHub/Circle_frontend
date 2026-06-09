@@ -72,6 +72,49 @@ test('chat detail screen reads the local chat background preference for the acti
   assert.match(source, /backgroundStyle/);
 });
 
+test('chat detail screen scopes custom background images to the message area', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatDetailScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /messageArea/);
+  assert.match(source, /messageAreaBackground/);
+  assert.match(source, /messageAreaOverlay/);
+  assert.match(
+    source,
+    /<View style=\{\[s\.messageArea, d\.messageArea\]\}>[\s\S]*<FlatList/,
+  );
+  assert.doesNotMatch(
+    source,
+    /<View style=\{\[d\.container,[\s\S]*?\]\}>[\s\S]*<ImageBackground[\s\S]*?style=\{StyleSheet\.absoluteFillObject\}/,
+  );
+  assert.match(source, /container:\s*\{\s*flex:\s*1,\s*backgroundColor:\s*colors\.background\s*\}/);
+  assert.match(source, /inputBar:\s*\{\s*backgroundColor:\s*colors\.background\s*\}/);
+});
+
+test('chat detail screen logs text send failures without logging message bodies', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatDetailScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /\[chat\] text send failed/);
+  assert.match(source, /error instanceof Error/);
+  const warnBlocks = [
+    ...source.matchAll(
+      /console\.warn\(\s*'\[chat\] text send failed'[\s\S]*?\n\s*\);/g,
+    ),
+  ].map((match) => match[0]);
+  assert.equal(warnBlocks.length, 2);
+  for (const block of warnBlocks) {
+    assert.doesNotMatch(block, /\btext:/);
+    assert.doesNotMatch(block, /\bnextText\b/);
+  }
+});
+
 test('chat detail attempts non-blocking history restore after initial message load', () => {
   const filePath = path.join(
     process.cwd(),
