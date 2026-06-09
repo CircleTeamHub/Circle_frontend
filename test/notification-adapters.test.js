@@ -122,3 +122,27 @@ test("interactive: iconFor branches → FRIEND_REQUEST person-add, SQUAD_REQUEST
   );
   assert.equal(squad.icon, "people-outline");
 });
+
+test("interactive: circle signup notification uses megaphone icon and summary", () => {
+  const { mapNotificationToRow } = load(
+    "src/features/notifications/utils/notification-summary.ts",
+  );
+  const row = mapNotificationToRow(
+    {
+      id: "n4",
+      type: "CIRCLE_POST_SIGNUP_CREATED",
+      content: "",
+      read: false,
+      createdAt: "2026-06-05T00:00:00Z",
+      fromUser: { id: "u2", nickname: "B", avatarUrl: null },
+      fromTrace: null,
+      fromReply: null,
+      fromCircle: null,
+      fromInvitation: null,
+      fromCirclePost: { id: "p1", excerpt: "Hiking", firstImage: "img1" },
+    },
+    t,
+  );
+  assert.equal(row.icon, "megaphone-outline");
+  assert.equal(row.summary, "notifications.summary.CIRCLE_POST_SIGNUP_CREATED");
+});

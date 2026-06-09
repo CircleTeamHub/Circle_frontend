@@ -23,6 +23,9 @@ export interface SettingsDetailRow {
   valueText?: string;
   type?: 'link' | 'toggle' | 'info';
   initialValue?: boolean;
+  /** When provided, the toggle is controlled (persisted) instead of local-only. */
+  value?: boolean;
+  onValueChange?: (value: boolean) => void;
   destructive?: boolean;
   icon?: keyof typeof Ionicons.glyphMap;
   iconMuted?: boolean;
@@ -85,14 +88,23 @@ const s = StyleSheet.create({
   },
 });
 
-function SettingsSwitch({ initialValue }: { initialValue?: boolean }) {
+function SettingsSwitch({
+  initialValue,
+  value,
+  onValueChange,
+}: {
+  initialValue?: boolean;
+  value?: boolean;
+  onValueChange?: (value: boolean) => void;
+}) {
   const { colors } = useTheme();
-  const [value, setValue] = useState(initialValue ?? false);
+  const [localValue, setLocalValue] = useState(initialValue ?? false);
+  const isControlled = onValueChange !== undefined;
 
   return (
     <Switch
-      value={value}
-      onValueChange={setValue}
+      value={isControlled ? value ?? false : localValue}
+      onValueChange={isControlled ? onValueChange : setLocalValue}
       trackColor={{ false: colors.surfaceBorder, true: colors.blue }}
       thumbColor={colors.white}
     />
@@ -215,7 +227,11 @@ export function SettingsDetailScreen({
               </Text>
             ) : null}
             {row.type === 'toggle' ? (
-              <SettingsSwitch initialValue={row.initialValue} />
+              <SettingsSwitch
+                initialValue={row.initialValue}
+                value={row.value}
+                onValueChange={row.onValueChange}
+              />
             ) : row.type === 'info' ? null : (
               <Ionicons name="chevron-forward" size={22} color={colors.textSecondary} />
             )}

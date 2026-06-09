@@ -124,7 +124,8 @@
       "CIRCLE_VERIFICATION_REQUESTED": "requested verification in {{circle}}",
       "CIRCLE_INVITATION_APPROVED": "your invitation to {{circle}} is fully approved",
       "CIRCLE_INVITATION_REJECTED": "an invitation slot in {{circle}} was rejected",
-      "CIRCLE_ADMIN_OVERRIDE_APPROVED": "an admin approved your request in {{circle}}"
+      "CIRCLE_ADMIN_OVERRIDE_APPROVED": "an admin approved your request in {{circle}}",
+      "CIRCLE_POST_SIGNUP_CREATED": "signed up for your circle post"
     },
     "signupMgmt": {
       "untitledPost": "(untitled post)",
@@ -139,6 +140,8 @@
 
   "chat": {
     "detail": "Chat",
+    "snackbarNewMessage": "New message",
+    "snackbarPreviewFallback": "[Message]",
     "sendFailed": "Failed to send, please retry",
     "self": "Me",
     "previewNotice": "Preview mode only. Messaging will be available after IM connection.",

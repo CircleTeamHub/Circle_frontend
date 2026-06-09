@@ -366,7 +366,8 @@ export type NotificationType =
   | 'CIRCLE_VERIFICATION_REQUESTED'
   | 'CIRCLE_INVITATION_APPROVED'
   | 'CIRCLE_INVITATION_REJECTED'
-  | 'CIRCLE_ADMIN_OVERRIDE_APPROVED';
+  | 'CIRCLE_ADMIN_OVERRIDE_APPROVED'
+  | 'CIRCLE_POST_SIGNUP_CREATED';
 
 export interface NotificationItem {
   id: string;
@@ -378,7 +379,17 @@ export interface NotificationItem {
   fromTrace: { id: string; excerpt: string; firstImage: string | null } | null;
   fromReply: { id: string; content: string } | null;
   fromCircle: { id: string; name: string } | null;
+  fromCirclePost: {
+    id: string;
+    excerpt: string;
+    firstImage: string | null;
+  } | null;
   fromInvitation: { id: string; status: string } | null;
+  squadRequest: {
+    id: string;
+    status: string;
+    squad: { id: string; name: string } | null;
+  } | null;
 }
 
 /** A circle post authored by the current user, for the signup-management list. */

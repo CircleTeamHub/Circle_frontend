@@ -20,6 +20,7 @@ import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-f
 
 // 项目自定义主题系统：ThemeProvider 提供主题上下文，useTheme 读取当前主题
 import { SessionBootstrap } from '@/components/app/session-bootstrap';
+import { NotificationSnackbarHost } from '@/features/notifications/components/NotificationSnackbarHost';
 import { ThemeProvider, useTheme } from '@/theme';
 
 // 将 expo-router 内置的 ErrorBoundary 重新导出，使其在根路由层生效（捕获页面级报错）
@@ -137,6 +138,7 @@ export default function RootLayout() {
     <ThemeProvider>
       <SessionBootstrap />
       <RootStack />
+      <NotificationSnackbarHost />
     </ThemeProvider>
   );
 }

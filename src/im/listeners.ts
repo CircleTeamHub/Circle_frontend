@@ -16,7 +16,10 @@ import OpenIMSDK, {
   type UserOnlineState,
 } from '@openim/rn-client-sdk';
 import { router } from 'expo-router';
+import i18n from '@/i18n';
 import { clearLocalSession } from '@/services/auth/session';
+import { buildChatSnackbar } from '@/im/snackbar';
+import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
 import { useIMStore } from '@/stores/imStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 
@@ -36,6 +39,27 @@ function isMessageForActiveConversation(
   return (
     message.sessionType === SessionType.Single && peerID === active.sourceID
   );
+}
+
+function enqueueChatSnackbar(
+  message: MessageItem,
+  conversations: ConversationItem[],
+  currentUserID: string | null,
+) {
+  const payload = buildChatSnackbar(
+    message,
+    conversations,
+    currentUserID,
+    message.sessionType === SessionType.Group,
+    {
+      title: i18n.t('chat.snackbarNewMessage'),
+      preview: i18n.t('chat.snackbarPreviewFallback'),
+    },
+  );
+
+  if (payload) {
+    useNotificationSnackbarStore.getState().enqueueChatMessage(payload);
+  }
 }
 
 export function bindOpenIMListeners() {
@@ -143,14 +167,32 @@ export function bindOpenIMListeners() {
   OpenIMSDK.on('onRecvC2CReadReceipt', handleC2CReadReceipt);
 
   const handleNewMessages = (messages: MessageItem[]) => {
-    const { activeConversation, currentUserID, appendMessages } =
+    const { activeConversation, currentUserID, appendMessages, conversations } =
       useIMStore.getState();
 
-    if (!activeConversation) return;
+    if (!activeConversation) {
+      messages.forEach((message) =>
+        enqueueChatSnackbar(message, conversations, currentUserID),
+      );
+      return;
+    }
 
     const matched = messages.filter((message) =>
       isMessageForActiveConversation(message, activeConversation, currentUserID),
     );
+
+    messages
+      .filter(
+        (message) =>
+          !isMessageForActiveConversation(
+            message,
+            activeConversation,
+            currentUserID,
+          ),
+      )
+      .forEach((message) =>
+        enqueueChatSnackbar(message, conversations, currentUserID),
+      );
 
     if (matched.length > 0) {
       appendMessages(activeConversation.conversationID, matched);

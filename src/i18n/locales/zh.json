@@ -124,7 +124,8 @@
       "CIRCLE_VERIFICATION_REQUESTED": "在「{{circle}}」发起了验证申请",
       "CIRCLE_INVITATION_APPROVED": "你在「{{circle}}」的邀请已全部通过",
       "CIRCLE_INVITATION_REJECTED": "你在「{{circle}}」的一个邀请名额被拒",
-      "CIRCLE_ADMIN_OVERRIDE_APPROVED": "管理员通过了你在「{{circle}}」的申请"
+      "CIRCLE_ADMIN_OVERRIDE_APPROVED": "管理员通过了你在「{{circle}}」的申请",
+      "CIRCLE_POST_SIGNUP_CREATED": "报名了你的圈子帖子"
     },
     "signupMgmt": {
       "untitledPost": "（无内容帖子）",
@@ -139,6 +140,8 @@
 
   "chat": {
     "detail": "聊天详情",
+    "snackbarNewMessage": "新消息",
+    "snackbarPreviewFallback": "[消息]",
     "sendFailed": "消息发送失败，请重试",
     "self": "自己",
     "previewNotice": "当前仅预览聊天界面，消息发送会在 IM 接通后开放。",

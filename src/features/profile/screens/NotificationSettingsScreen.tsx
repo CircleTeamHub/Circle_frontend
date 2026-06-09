@@ -1,6 +1,14 @@
 import { SettingsDetailScreen } from '@/features/profile/components/settings-detail';
+import { useNotificationFeedbackStore } from '@/features/notifications/store/use-notification-feedback-store';
 
 export default function NotificationSettingsScreen() {
+  const soundEnabled = useNotificationFeedbackStore((s) => s.soundEnabled);
+  const hapticsEnabled = useNotificationFeedbackStore((s) => s.hapticsEnabled);
+  const setSoundEnabled = useNotificationFeedbackStore((s) => s.setSoundEnabled);
+  const setHapticsEnabled = useNotificationFeedbackStore(
+    (s) => s.setHapticsEnabled,
+  );
+
   return (
     <SettingsDetailScreen
       titleKey="settingsDetails.notifications.title"
@@ -18,13 +26,15 @@ export default function NotificationSettingsScreen() {
               id: 'vibration',
               labelKey: 'settingsDetails.notifications.vibration',
               type: 'toggle',
-              initialValue: true,
+              value: hapticsEnabled,
+              onValueChange: setHapticsEnabled,
             },
             {
               id: 'sound',
               labelKey: 'settingsDetails.notifications.sound',
               type: 'toggle',
-              initialValue: true,
+              value: soundEnabled,
+              onValueChange: setSoundEnabled,
             },
             {
               id: 'message-ringtone',

@@ -3,10 +3,13 @@ import { fetchMySignupsUnreadCount } from '@/services/api/plaza';
 import { fetchUnreadFriendActivityCount } from '@/services/api/friends';
 import { fetchCurrentUser } from '@/services/api/auth';
 import { fetchNotificationUnreadSummary } from '@/services/api/notifications';
+import { useNotificationCenterStore } from '@/features/notifications/store/use-notification-center-store';
+import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
 import { registerLogoutHandler } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
+import type { NotificationItem } from '@/types';
 
 type BadgeSnapshotPayload = {
   messagesUnread?: number;
@@ -21,6 +24,10 @@ type RealtimeEvent =
   | {
       type: 'badge.snapshot';
       payload?: BadgeSnapshotPayload;
+    }
+  | {
+      type: 'notification.created';
+      payload?: NotificationItem;
     }
   | {
       type: 'friend.activity.unread.changed';
@@ -157,12 +164,46 @@ async function refreshCurrentUserSummary() {
   useAuthStore.getState().setUser(user);
 }
 
+function isNotificationItem(value: unknown): value is NotificationItem {
+  if (!value || typeof value !== 'object') return false;
+  const item = value as Partial<NotificationItem>;
+  return (
+    typeof item.id === 'string' &&
+    typeof item.type === 'string' &&
+    typeof item.content === 'string' &&
+    typeof item.read === 'boolean' &&
+    typeof item.createdAt === 'string'
+  );
+}
+
+function handleNotificationCreated(payload: unknown) {
+  if (!isNotificationItem(payload)) {
+    return;
+  }
+
+  // SYSTEM notifications are not part of the interactive list and have no
+  // in-app landing screen, so toasting one would route nowhere. Skip them.
+  if (payload.type === 'SYSTEM') {
+    return;
+  }
+
+  const store = useNotificationCenterStore.getState();
+  store.setInteractive([
+    payload,
+    ...store.interactive.filter((item) => item.id !== payload.id),
+  ]);
+  useNotificationSnackbarStore.getState().enqueueNotification(payload);
+}
+
 function handleRealtimeEvent(message: RealtimeEvent) {
   const badgeStore = useTabBadgeStore.getState();
 
   switch (message.type) {
     case 'badge.snapshot':
       applyBadgeSnapshot(message.payload ?? {});
+      return;
+    case 'notification.created':
+      handleNotificationCreated(message.payload);
       return;
     case 'friend.activity.unread.changed':
       badgeStore.setContactsUnread(message.payload?.count ?? 0);
