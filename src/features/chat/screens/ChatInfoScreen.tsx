@@ -4,12 +4,7 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
-import {
-  GroupMemberRole,
-  SessionType,
-  type GroupItem,
-  type GroupMemberItem,
-} from '@openim/rn-client-sdk';
+import { GroupMemberRole, SessionType, type GroupItem, type GroupMemberItem } from '@openim/rn-client-sdk';
 import { Divider } from '@/components/ui/divider';
 import { MenuRow } from '@/components/ui/menu-row';
 import { NavHeader } from '@/components/ui/nav-header';
@@ -47,6 +42,7 @@ import {
   fetchFriendStatus,
   removeFriendFromBlacklist,
 } from '@/services/api/friends';
+import { leaveGroup, removeGroupMember } from '@/services/api/groups';
 import { useIMStore } from '@/stores/imStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { DisplayIcon } from '@/types';
@@ -217,11 +213,7 @@ function GroupInfoRow({
   );
 
   return (
-    <Pressable
-      style={[s.groupRow, rowLarge && s.groupRowLarge]}
-      onPress={onPress}
-      disabled={!onPress && !hasToggle}
-    >
+    <Pressable style={[s.groupRow, rowLarge && s.groupRowLarge]} onPress={onPress} disabled={!onPress && !hasToggle}>
       <View style={s.groupRowLeft}>
         <Text style={d.label}>{label}</Text>
         {subtitle ? (
@@ -284,8 +276,7 @@ export default function ChatInfoScreen() {
     clear: 0,
   });
   const currentConversationIDRef = useRef('');
-  const [optimisticConversationState, setOptimisticConversationState] =
-    useState<OptimisticConversationState>({});
+  const [optimisticConversationState, setOptimisticConversationState] = useState<OptimisticConversationState>({});
   const conversations = useIMStore((state) => state.conversations);
 
   // 来源可能是 OpenIM 去连字符的 32 位 hex（从会话列表跳进来）或后端的 UUID
@@ -293,40 +284,26 @@ export default function ChatInfoScreen() {
   //   - friendId：所有业务后端 /friend/* 接口都被 ParseUUIDPipe 校验，必须 UUID。
   //   - routeSourceID：保留原始形式，用来按 conversation.userID 在 IM 会话列表里查找。
   const rawFriendId =
-    typeof params.id === 'string'
-      ? params.id
-      : typeof params.sourceID === 'string'
-        ? params.sourceID
-        : '';
+    typeof params.id === 'string' ? params.id : typeof params.sourceID === 'string' ? params.sourceID : '';
   const friendId = rawFriendId ? fromImUserId(rawFriendId) : '';
   const friendName =
-    typeof params.name === 'string'
-      ? params.name
-      : typeof params.title === 'string'
-        ? params.title
-        : t('chat.friend');
+    typeof params.name === 'string' ? params.name : typeof params.title === 'string' ? params.title : t('chat.friend');
   const routeSourceID = friendId;
   const rawRouteSourceID = rawFriendId;
   const originScope =
-    params.originScope === 'contacts' ||
-    params.originScope === 'profile' ||
-    params.originScope === 'discover'
+    params.originScope === 'contacts' || params.originScope === 'profile' || params.originScope === 'discover'
       ? params.originScope
       : 'messages';
   const scope = originScope;
-  const conversationID =
-    typeof params.conversationID === 'string' ? params.conversationID : '';
+  const conversationID = typeof params.conversationID === 'string' ? params.conversationID : '';
   const conversation = useMemo(
     () =>
       conversations.find((conversation) => conversation.conversationID === conversationID) ??
       conversations.find(
-        (conversation) =>
-          conversation.userID === routeSourceID || conversation.groupID === routeSourceID,
+        (conversation) => conversation.userID === routeSourceID || conversation.groupID === routeSourceID,
       ) ??
       conversations.find(
-        (conversation) =>
-          conversation.userID === rawRouteSourceID ||
-          conversation.groupID === rawRouteSourceID,
+        (conversation) => conversation.userID === rawRouteSourceID || conversation.groupID === rawRouteSourceID,
       ) ??
       null,
     [conversationID, conversations, rawRouteSourceID, routeSourceID],
@@ -336,17 +313,12 @@ export default function ChatInfoScreen() {
     conversation?.conversationType === SessionType.Group ||
     Boolean(conversation?.groupID && !conversation?.userID);
   const groupID = isGroupConversation ? conversation?.groupID || rawRouteSourceID : '';
-  const groupTitle =
-    groupInfo?.groupName || conversation?.showName || friendName || t('chat.groupChat');
+  const groupTitle = groupInfo?.groupName || conversation?.showName || friendName || t('chat.groupChat');
   const groupNotice = groupInfo?.notification?.trim() ?? '';
   const memberCount = groupInfo?.memberCount ?? groupMembers.length;
   const currentUserID = useIMStore((state) => state.currentUserID);
-  const conversationExtension = useMemo(
-    () => parseConversationExtension(conversation?.ex),
-    [conversation?.ex],
-  );
-  const myGroupAlias =
-    groupMembers.find((member) => member.userID === currentUserID)?.nickname ?? '';
+  const conversationExtension = useMemo(() => parseConversationExtension(conversation?.ex), [conversation?.ex]);
+  const myGroupAlias = groupMembers.find((member) => member.userID === currentUserID)?.nickname ?? '';
   const currentMember = useMemo(
     () => groupMembers.find((member) => member.userID === currentUserID) ?? null,
     [currentUserID, groupMembers],
@@ -355,21 +327,14 @@ export default function ChatInfoScreen() {
   const isOwner = currentRole === GroupMemberRole.Owner;
   const isAdmin = currentRole === GroupMemberRole.Admin;
   const canManageGroup = isOwner || isAdmin;
-  const collapsedGroupMemberLimit =
-    GROUP_MEMBER_COLUMNS * COLLAPSED_GROUP_MEMBER_ROWS - (canManageGroup ? 1 : 0);
+  const collapsedGroupMemberLimit = GROUP_MEMBER_COLUMNS * COLLAPSED_GROUP_MEMBER_ROWS - (canManageGroup ? 1 : 0);
   const visibleGroupMembers = useMemo(
-    () =>
-      groupMembersExpanded
-        ? groupMembers
-        : groupMembers.slice(0, collapsedGroupMemberLimit),
+    () => (groupMembersExpanded ? groupMembers : groupMembers.slice(0, collapsedGroupMemberLimit)),
     [collapsedGroupMemberLimit, groupMembers, groupMembersExpanded],
   );
   const resolvedConversationID = conversation?.conversationID ?? '';
   currentConversationIDRef.current = resolvedConversationID;
-  const baseState = useMemo(
-    () => buildChatInfoState(conversation),
-    [conversation],
-  );
+  const baseState = useMemo(() => buildChatInfoState(conversation), [conversation]);
   const displayIcons = useMemo(() => [] as DisplayIcon[], []);
   const backHref = useMemo(() => {
     if (originScope === 'messages') {
@@ -532,40 +497,33 @@ export default function ChatInfoScreen() {
         changed = true;
       }
 
-      if (
-        current.burnDuration !== undefined &&
-        current.burnDuration === (conversation?.burnDuration ?? 0)
-      ) {
+      if (current.burnDuration !== undefined && current.burnDuration === (conversation?.burnDuration ?? 0)) {
         delete nextState.burnDuration;
         changed = true;
       }
 
       return changed ? nextState : current;
     });
-  }, [
-    baseState.muted,
-    baseState.pinned,
-    conversation?.burnDuration,
-    hasOptimisticConversationState,
-  ]);
+  }, [baseState.muted, baseState.pinned, conversation?.burnDuration, hasOptimisticConversationState]);
 
-  const openActionError = useCallback((error: unknown) => {
-    Alert.alert(
-      t('common.errorOccurred'),
-      error instanceof Error ? error.message : t('common.networkError'),
-    );
-  }, [t]);
-
-  const setConversationActionPending = useCallback(
-    (action: ConversationActionKey, nextPending: boolean) => {
-      actionPendingRef.current = {
-        ...actionPendingRef.current,
-        [action]: nextPending,
-      };
-      setActionPending(actionPendingRef.current);
+  const openActionError = useCallback(
+    (error: unknown) => {
+      // Never surface the raw error to the user; log it for devs instead.
+      if (__DEV__) {
+        console.warn('[chat-info] action failed', error);
+      }
+      Alert.alert(t('common.errorOccurred'), t('common.networkError'));
     },
-    [],
+    [t],
   );
+
+  const setConversationActionPending = useCallback((action: ConversationActionKey, nextPending: boolean) => {
+    actionPendingRef.current = {
+      ...actionPendingRef.current,
+      [action]: nextPending,
+    };
+    setActionPending(actionPendingRef.current);
+  }, []);
 
   const startActionRequest = useCallback((action: ConversationActionKey) => {
     const nextToken = actionRequestTokenRef.current[action] + 1;
@@ -582,33 +540,24 @@ export default function ChatInfoScreen() {
   );
 
   const isLatestActionRequest = useCallback(
-    (action: ConversationActionKey, requestToken: number) =>
-      actionRequestTokenRef.current[action] === requestToken,
+    (action: ConversationActionKey, requestToken: number) => actionRequestTokenRef.current[action] === requestToken,
     [],
   );
 
-  const dropOptimisticConversationStateKey = useCallback(
-    (key: OptimisticConversationStateKey) => {
-      setOptimisticConversationState((current) => {
-        if (current[key] === undefined) {
-          return current;
-        }
+  const dropOptimisticConversationStateKey = useCallback((key: OptimisticConversationStateKey) => {
+    setOptimisticConversationState((current) => {
+      if (current[key] === undefined) {
+        return current;
+      }
 
-        const nextState = { ...current };
-        delete nextState[key];
-        return nextState;
-      });
-    },
-    [],
-  );
+      const nextState = { ...current };
+      delete nextState[key];
+      return nextState;
+    });
+  }, []);
 
   const runConversationAction = useCallback(
-    async (
-      action: ConversationActionKey,
-      task: () => Promise<void>,
-      onStart?: () => void,
-      rollback?: () => void,
-    ) => {
+    async (action: ConversationActionKey, task: () => Promise<void>, onStart?: () => void, rollback?: () => void) => {
       if (!resolvedConversationID || actionPendingRef.current[action]) {
         return;
       }
@@ -621,18 +570,12 @@ export default function ChatInfoScreen() {
       try {
         await task();
       } catch (error) {
-        if (
-          isActionConversationCurrent(actionConversationID) &&
-          isLatestActionRequest(action, actionRequestToken)
-        ) {
+        if (isActionConversationCurrent(actionConversationID) && isLatestActionRequest(action, actionRequestToken)) {
           rollback?.();
           openActionError(error);
         }
       } finally {
-        if (
-          isActionConversationCurrent(actionConversationID) &&
-          isLatestActionRequest(action, actionRequestToken)
-        ) {
+        if (isActionConversationCurrent(actionConversationID) && isLatestActionRequest(action, actionRequestToken)) {
           setConversationActionPending(action, false);
         }
       }
@@ -668,9 +611,7 @@ export default function ChatInfoScreen() {
       return;
     }
 
-    router.push(
-      getChatBackgroundHref(resolvedConversationID, routeSourceID, friendName),
-    );
+    router.push(getChatBackgroundHref(resolvedConversationID, routeSourceID, friendName));
   }, [friendName, resolvedConversationID, routeSourceID]);
 
   const handleOpenRecommendFriend = useCallback(() => {
@@ -678,9 +619,7 @@ export default function ChatInfoScreen() {
       return;
     }
 
-    router.push(
-      getRecommendFriendHref(resolvedConversationID, friendId, friendName),
-    );
+    router.push(getRecommendFriendHref(resolvedConversationID, friendId, friendName));
   }, [friendId, friendName, resolvedConversationID]);
 
   const resolveConversationIDForNavigation = useCallback(async () => {
@@ -711,13 +650,7 @@ export default function ChatInfoScreen() {
         return;
       }
 
-      router.push(
-        getChatHistorySearchHubHref(
-          nextConversationID,
-          routeSourceID,
-          friendName,
-        ),
-      );
+      router.push(getChatHistorySearchHubHref(nextConversationID, routeSourceID, friendName));
     })();
   }, [friendName, resolveConversationIDForNavigation, routeSourceID]);
 
@@ -735,12 +668,7 @@ export default function ChatInfoScreen() {
   }, [groupID, groupTitle, scope]);
 
   const promptForText = useCallback(
-    (
-      title: string,
-      defaultValue: string,
-      onSubmit: (value: string) => void,
-      options?: { multiline?: boolean },
-    ) => {
+    (title: string, defaultValue: string, onSubmit: (value: string) => void, options?: { multiline?: boolean }) => {
       if (typeof Alert.prompt !== 'function') {
         Alert.alert(title, t('chat.promptUnsupported'));
         return;
@@ -776,9 +704,7 @@ export default function ChatInfoScreen() {
 
       updateGroupName(groupID, trimmed)
         .then(() => {
-          setGroupInfo((current) =>
-            current ? { ...current, groupName: trimmed } : current,
-          );
+          setGroupInfo((current) => (current ? { ...current, groupName: trimmed } : current));
         })
         .catch(openActionError);
     });
@@ -812,11 +738,7 @@ export default function ChatInfoScreen() {
       updateGroupMemberAlias(groupID, currentUserID, trimmed)
         .then(() => {
           setGroupMembers((members) =>
-            members.map((member) =>
-              member.userID === currentUserID
-                ? { ...member, nickname: trimmed }
-                : member,
-            ),
+            members.map((member) => (member.userID === currentUserID ? { ...member, nickname: trimmed } : member)),
           );
         })
         .catch(openActionError);
@@ -843,13 +765,7 @@ export default function ChatInfoScreen() {
         return;
       }
 
-      router.push(
-        getUserProfileHref(
-          'messages',
-          fromImUserId(member.userID),
-          member.nickname || undefined,
-        ),
-      );
+      router.push(getUserProfileHref('messages', fromImUserId(member.userID), member.nickname || undefined));
     },
     [currentUserID],
   );
@@ -867,37 +783,32 @@ export default function ChatInfoScreen() {
 
       const memberName = member.nickname || member.userID;
 
-      Alert.alert(
-        t('chat.removeMember'),
-        t('chat.removeMemberConfirm', { name: memberName }),
-        [
-          { text: t('common.cancel'), style: 'cancel' },
-          {
-            text: t('chat.remove'),
-            style: 'destructive',
-            onPress: () => {
-              setKickPendingUserID(member.userID);
-              kickGroupMembers(groupID, [member.userID])
-                .then(() => {
-                  setGroupMembers((members) =>
-                    members.filter((m) => m.userID !== member.userID),
-                  );
-                  setGroupInfo((current) =>
-                    current && current.memberCount > 0
-                      ? { ...current, memberCount: current.memberCount - 1 }
-                      : current,
-                  );
-                  Alert.alert(
-                    t('chat.deleted'),
-                    t('chat.memberRemoved', { name: memberName }),
-                  );
-                })
-                .catch(openActionError)
-                .finally(() => setKickPendingUserID(null));
-            },
+      Alert.alert(t('chat.removeMember'), t('chat.removeMemberConfirm', { name: memberName }), [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('chat.remove'),
+          style: 'destructive',
+          onPress: () => {
+            setKickPendingUserID(member.userID);
+            removeGroupMember(groupID, member.userID)
+              .then((result) => {
+                if (!result.handled) {
+                  return kickGroupMembers(groupID, [member.userID]);
+                }
+                return undefined;
+              })
+              .then(() => {
+                setGroupMembers((members) => members.filter((m) => m.userID !== member.userID));
+                setGroupInfo((current) =>
+                  current && current.memberCount > 0 ? { ...current, memberCount: current.memberCount - 1 } : current,
+                );
+                Alert.alert(t('chat.deleted'), t('chat.memberRemoved', { name: memberName }));
+              })
+              .catch(openActionError)
+              .finally(() => setKickPendingUserID(null));
           },
-        ],
-      );
+        },
+      ]);
     },
     [canManageGroup, currentUserID, groupID, isOwner, openActionError, t],
   );
@@ -929,6 +840,13 @@ export default function ChatInfoScreen() {
         style: 'destructive',
         onPress: () => {
           leaveGroupChat(groupID)
+            .then(() =>
+              leaveGroup(groupID).catch((error) => {
+                if (__DEV__) {
+                  console.warn('[chat] group leave backend cleanup failed', error);
+                }
+              }),
+            )
             .then(() => router.replace('/(tabs)/messages'))
             .catch(openActionError);
         },
@@ -947,9 +865,7 @@ export default function ChatInfoScreen() {
       const previousValue = blacklist;
       setBlacklist(nextValue);
 
-      const request = nextValue
-        ? addFriendToBlacklist(friendId)
-        : removeFriendFromBlacklist(friendId);
+      const request = nextValue ? addFriendToBlacklist(friendId) : removeFriendFromBlacklist(friendId);
 
       void request
         .catch((error: unknown) => {
@@ -1017,12 +933,7 @@ export default function ChatInfoScreen() {
         () => dropOptimisticConversationStateKey('pinned'),
       );
     },
-    [
-      actionPending.pin,
-      dropOptimisticConversationStateKey,
-      resolvedConversationID,
-      runConversationAction,
-    ],
+    [actionPending.pin, dropOptimisticConversationStateKey, resolvedConversationID, runConversationAction],
   );
 
   const handleToggleMuted = useCallback(
@@ -1047,22 +958,12 @@ export default function ChatInfoScreen() {
         () => dropOptimisticConversationStateKey('muted'),
       );
     },
-    [
-      actionPending.mute,
-      dropOptimisticConversationStateKey,
-      resolvedConversationID,
-      runConversationAction,
-      t,
-    ],
+    [actionPending.mute, dropOptimisticConversationStateKey, resolvedConversationID, runConversationAction, t],
   );
 
   const applyBurnDuration = useCallback(
     (nextBurnDuration: number) => {
-      if (
-        !resolvedConversationID ||
-        actionPending.burn ||
-        nextBurnDuration === burnDuration
-      ) {
+      if (!resolvedConversationID || actionPending.burn || nextBurnDuration === burnDuration) {
         return;
       }
 
@@ -1119,9 +1020,7 @@ export default function ChatInfoScreen() {
           text: t('chat.clear'),
           style: 'destructive' as const,
           onPress: () => {
-            void runConversationAction('clear', () =>
-              clearConversationMessages(resolvedConversationID),
-            );
+            void runConversationAction('clear', () => clearConversationMessages(resolvedConversationID));
           },
         },
       ],
@@ -1178,10 +1077,7 @@ export default function ChatInfoScreen() {
         />
         <ScrollView
           style={s.scroll}
-          contentContainerStyle={[
-            s.groupContent,
-            { paddingBottom: insets.bottom + Spacing.xl },
-          ]}
+          contentContainerStyle={[s.groupContent, { paddingBottom: insets.bottom + Spacing.xl }]}
           showsVerticalScrollIndicator={false}
         >
           <View style={s.groupMemberSection}>
@@ -1207,16 +1103,8 @@ export default function ChatInfoScreen() {
                     onLongPress={canKickMember ? () => handleKickMember(member) : undefined}
                     disabled={kickPendingUserID === member.userID}
                   >
-                    <Avatar
-                      size={56}
-                      shape="square"
-                      name={memberName}
-                      uri={member.faceURL}
-                    />
-                    <Text
-                      style={[s.groupMemberName, d.groupMemberName]}
-                      numberOfLines={1}
-                    >
+                    <Avatar size={56} shape="square" name={memberName} uri={member.faceURL} />
+                    <Text style={[s.groupMemberName, d.groupMemberName]} numberOfLines={1}>
                       {memberName}
                     </Text>
                     {roleBadge ? (
@@ -1228,10 +1116,7 @@ export default function ChatInfoScreen() {
                 );
               })}
               {canManageGroup ? (
-                <Pressable
-                  style={s.groupMemberCell}
-                  onPress={handleOpenInviteGroupMembers}
-                >
+                <Pressable style={s.groupMemberCell} onPress={handleOpenInviteGroupMembers}>
                   <View style={[s.addMemberBox, d.addMemberBox, { width: 56, height: 56 }]}>
                     <Ionicons name="add" size={30} color={colors.textSecondary} />
                   </View>
@@ -1239,13 +1124,8 @@ export default function ChatInfoScreen() {
               ) : null}
             </View>
             {groupMembers.length > collapsedGroupMemberLimit ? (
-              <Pressable
-                style={s.moreMembersButton}
-                onPress={() => setGroupMembersExpanded((current) => !current)}
-              >
-                <Text style={d.moreMembersText}>
-                  {t('chat.moreGroupMembers')}
-                </Text>
+              <Pressable style={s.moreMembersButton} onPress={() => setGroupMembersExpanded((current) => !current)}>
+                <Text style={d.moreMembersText}>{t('chat.moreGroupMembers')}</Text>
                 <Ionicons
                   name={groupMembersExpanded ? 'chevron-up' : 'chevron-down'}
                   size={16}
@@ -1270,10 +1150,7 @@ export default function ChatInfoScreen() {
               showArrow={canManageGroup}
             />
             <Divider />
-            <GroupInfoRow
-              label={t('chat.searchHistory')}
-              onPress={handleOpenSearchHistory}
-            />
+            <GroupInfoRow label={t('chat.searchHistory')} onPress={handleOpenSearchHistory} />
           </View>
 
           <View style={[s.groupSection, d.groupSection]}>
@@ -1303,10 +1180,7 @@ export default function ChatInfoScreen() {
           </View>
 
           <View style={[s.groupSection, d.groupSection]}>
-            <GroupInfoRow
-              label={t('chat.chatBackground')}
-              onPress={handleOpenChatBackground}
-            />
+            <GroupInfoRow label={t('chat.chatBackground')} onPress={handleOpenChatBackground} />
           </View>
 
           <View style={[s.groupSection, d.groupSection]}>
@@ -1318,10 +1192,7 @@ export default function ChatInfoScreen() {
           </View>
 
           <View style={[s.groupSection, d.groupSection]}>
-            <GroupInfoRow
-              label={t('chat.report')}
-              onPress={handleOpenGroupReport}
-            />
+            <GroupInfoRow label={t('chat.report')} onPress={handleOpenGroupReport} />
           </View>
 
           <View style={[d.groupSection]}>
@@ -1339,10 +1210,7 @@ export default function ChatInfoScreen() {
       <NavHeader title={t('chat.chatInfo')} fallbackHref={backHref} />
       <ScrollView
         style={s.scroll}
-        contentContainerStyle={[
-          s.content,
-          { paddingBottom: insets.bottom + Spacing.xl },
-        ]}
+        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + Spacing.xl }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={[s.section, d.section]}>
@@ -1351,17 +1219,9 @@ export default function ChatInfoScreen() {
           <Divider />
           <MenuRow icon="pricetag-outline" label={t('chat.tags')} onPress={handleOpenTags} />
           <Divider />
-          <MenuRow
-            icon="search-outline"
-            label={t('chat.searchHistory')}
-            onPress={handleOpenSearchHistory}
-          />
+          <MenuRow icon="search-outline" label={t('chat.searchHistory')} onPress={handleOpenSearchHistory} />
           <Divider />
-          <MenuRow
-            icon="image-outline"
-            label={t('chat.chatBackground')}
-            onPress={handleOpenChatBackground}
-          />
+          <MenuRow icon="image-outline" label={t('chat.chatBackground')} onPress={handleOpenChatBackground} />
           <Divider />
           <MenuRow
             icon="arrow-up-circle-outline"
@@ -1392,11 +1252,7 @@ export default function ChatInfoScreen() {
         </View>
 
         <View style={[s.section, d.section]}>
-          <MenuRow
-            icon="share-social-outline"
-            label={t('chat.recommendFriend')}
-            onPress={handleOpenRecommendFriend}
-          />
+          <MenuRow icon="share-social-outline" label={t('chat.recommendFriend')} onPress={handleOpenRecommendFriend} />
           <Divider />
           <MenuRow
             icon="ban-outline"

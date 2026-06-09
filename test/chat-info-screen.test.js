@@ -4,10 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 test('chat info screen uses real conversation state instead of local placeholder toggles', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatInfoScreen.tsx',
-  );
+  const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /useIMStore\(\(state\) => state\.conversations\)/);
@@ -21,14 +18,8 @@ test('chat info screen uses real conversation state instead of local placeholder
     /conversations?\.find\(\s*\(\s*conversation\s*\)\s*=>[\s\S]{0,120}conversation\.userID\s*===\s*routeSourceID\s*\|\|\s*conversation\.groupID\s*===\s*routeSourceID[\s\S]{0,40}\)/,
   );
   assert.doesNotMatch(source, /conversation\.sourceID\s*===\s*routeSourceID/);
-  assert.match(
-    source,
-    /const resolvedConversationID = conversation\?\.conversationID \?\? '';/,
-  );
-  assert.doesNotMatch(
-    source,
-    /const resolvedConversationID = conversation\?\.conversationID \?\? conversationID;/,
-  );
+  assert.match(source, /const resolvedConversationID = conversation\?\.conversationID \?\? '';/);
+  assert.doesNotMatch(source, /const resolvedConversationID = conversation\?\.conversationID \?\? conversationID;/);
   assert.match(source, /conversationID/);
   assert.match(source, /buildChatInfoState\(\s*conversation\s*\)/);
   assert.match(source, /toggleValue={[^}]*pinned[^}]*}/);
@@ -38,7 +29,10 @@ test('chat info screen uses real conversation state instead of local placeholder
   assert.match(source, /toggleConversationPinned\(resolvedConversationID,\s*nextPinned\)/);
   assert.match(source, /const handleToggleMuted = useCallback/);
   assert.match(source, /setConversationMute\(resolvedConversationID,\s*nextMuted\)/);
-  assert.match(source, /if \(nextMuted\) \{\s*Alert\.alert\(t\('chat\.messagesThatNotify'\),\s*t\('chat\.messagesThatNotifyHint'\)\);/s);
+  assert.match(
+    source,
+    /if \(nextMuted\) \{\s*Alert\.alert\(t\('chat\.messagesThatNotify'\),\s*t\('chat\.messagesThatNotifyHint'\)\);/s,
+  );
   assert.match(source, /const applyBurnDuration = useCallback/);
   assert.match(source, /setConversationBurnDuration\(resolvedConversationID,\s*nextBurnDuration\)/);
   assert.match(source, /const handleConfirmClearHistory = useCallback/);
@@ -54,10 +48,7 @@ test('chat info screen uses real conversation state instead of local placeholder
 });
 
 test('chat info screen renders compact unified display icons', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatInfoScreen.tsx',
-  );
+  const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /UserIconRow/);
@@ -66,10 +57,7 @@ test('chat info screen renders compact unified display icons', () => {
 });
 
 test('chat info screen renders a dedicated group info layout for group conversations', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatInfoScreen.tsx',
-  );
+  const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /isGroupConversation/);
@@ -77,7 +65,10 @@ test('chat info screen renders a dedicated group info layout for group conversat
   assert.match(source, /getGroupInfo/);
   assert.match(source, /const GROUP_MEMBER_COLUMNS = 5/);
   assert.match(source, /const COLLAPSED_GROUP_MEMBER_ROWS = 4/);
-  assert.match(source, /const collapsedGroupMemberLimit =\s*GROUP_MEMBER_COLUMNS \* COLLAPSED_GROUP_MEMBER_ROWS - \(canManageGroup \? 1 : 0\)/);
+  assert.match(
+    source,
+    /const collapsedGroupMemberLimit =\s*GROUP_MEMBER_COLUMNS \* COLLAPSED_GROUP_MEMBER_ROWS - \(canManageGroup \? 1 : 0\)/,
+  );
   assert.match(source, /groupMembers\.slice\(0,\s*collapsedGroupMemberLimit\)/);
   assert.match(source, /groupMembers\.length > collapsedGroupMemberLimit/);
   assert.match(source, /groupMemberGrid/);
@@ -97,10 +88,7 @@ test('chat info screen renders a dedicated group info layout for group conversat
 });
 
 test('chat info screen gives group rows real actions instead of unsupported placeholders', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatInfoScreen.tsx',
-  );
+  const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /title=\{t\('chat\.groupInfoWithCount',\s*\{\s*count: memberCount\s*\}\)\}/);
@@ -127,10 +115,7 @@ test('chat info screen gives group rows real actions instead of unsupported plac
 });
 
 test('chat info screen always shows group member nicknames without a toggle', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatInfoScreen.tsx',
-  );
+  const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.doesNotMatch(source, /showOnScreenNames/);
@@ -140,14 +125,8 @@ test('chat info screen always shows group member nicknames without a toggle', ()
 });
 
 test('chat info screen opens a dedicated group notice editor route', () => {
-  const infoPath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatInfoScreen.tsx',
-  );
-  const routeHelperPath = path.join(
-    process.cwd(),
-    'src/features/user/utils/routes.ts',
-  );
+  const infoPath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
+  const routeHelperPath = path.join(process.cwd(), 'src/features/user/utils/routes.ts');
   const routeFiles = [
     'app/(tabs)/messages/edit-group-notice.tsx',
     'app/(tabs)/contacts/edit-group-notice.tsx',
@@ -161,10 +140,7 @@ test('chat info screen opens a dedicated group notice editor route', () => {
   assert.match(infoSource, /groupID/);
   assert.match(infoSource, /groupTitle/);
   assert.match(infoSource, /groupNotice/);
-  assert.doesNotMatch(
-    infoSource,
-    /promptForText\(\s*t\('chat\.groupNotice'\)/,
-  );
+  assert.doesNotMatch(infoSource, /promptForText\(\s*t\('chat\.groupNotice'\)/);
   assert.match(routeSource, /function getEditGroupNoticeHref/);
   assert.match(routeSource, /edit-group-notice/);
   for (const relativePath of routeFiles) {
@@ -173,10 +149,7 @@ test('chat info screen opens a dedicated group notice editor route', () => {
 });
 
 test('chat info screen uses the shared primary switch color for group toggles', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatInfoScreen.tsx',
-  );
+  const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /trackColor=\{\{ false: colors\.surfaceBorder, true: colors\.primary \}\}/);
@@ -184,10 +157,7 @@ test('chat info screen uses the shared primary switch color for group toggles', 
 });
 
 test('group notice editor screen updates the OpenIM group notice and returns', () => {
-  const screenPath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/EditGroupNoticeScreen.tsx',
-  );
+  const screenPath = path.join(process.cwd(), 'src/features/chat/screens/EditGroupNoticeScreen.tsx');
   const source = fs.readFileSync(screenPath, 'utf8');
 
   assert.match(source, /useLocalSearchParams/);
@@ -199,22 +169,10 @@ test('group notice editor screen updates the OpenIM group notice and returns', (
 });
 
 test('chat info screen opens a contact picker when adding group members', () => {
-  const infoPath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatInfoScreen.tsx',
-  );
-  const routePath = path.join(
-    process.cwd(),
-    'app/(tabs)/messages/invite-group-members.tsx',
-  );
-  const layoutPath = path.join(
-    process.cwd(),
-    'app/(tabs)/messages/_layout.tsx',
-  );
-  const screenPath = path.join(
-    process.cwd(),
-    'src/features/messages/screens/InviteGroupMembersScreen.tsx',
-  );
+  const infoPath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
+  const routePath = path.join(process.cwd(), 'app/(tabs)/messages/invite-group-members.tsx');
+  const layoutPath = path.join(process.cwd(), 'app/(tabs)/messages/_layout.tsx');
+  const screenPath = path.join(process.cwd(), 'src/features/messages/screens/InviteGroupMembersScreen.tsx');
   const infoSource = fs.readFileSync(infoPath, 'utf8');
   const layoutSource = fs.readFileSync(layoutPath, 'utf8');
 
@@ -229,14 +187,8 @@ test('chat info screen opens a contact picker when adding group members', () => 
 });
 
 test('chat info screen right search opens group member search instead of chat history', () => {
-  const infoPath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatInfoScreen.tsx',
-  );
-  const routeHelperPath = path.join(
-    process.cwd(),
-    'src/features/user/utils/routes.ts',
-  );
+  const infoPath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
+  const routeHelperPath = path.join(process.cwd(), 'src/features/user/utils/routes.ts');
   const routeFiles = [
     'app/(tabs)/messages/search-group-members.tsx',
     'app/(tabs)/contacts/search-group-members.tsx',
@@ -258,10 +210,7 @@ test('chat info screen right search opens group member search instead of chat hi
 });
 
 test('group member search screen loads and filters group members', () => {
-  const screenPath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/SearchGroupMembersScreen.tsx',
-  );
+  const screenPath = path.join(process.cwd(), 'src/features/chat/screens/SearchGroupMembersScreen.tsx');
   const source = fs.readFileSync(screenPath, 'utf8');
 
   assert.match(source, /loadGroupMemberList\(groupID,\s*10_000\)/);
@@ -275,10 +224,7 @@ test('group member search screen loads and filters group members', () => {
 });
 
 test('invite group members screen filters users who are already in the group', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/messages/screens/InviteGroupMembersScreen.tsx',
-  );
+  const filePath = path.join(process.cwd(), 'src/features/messages/screens/InviteGroupMembersScreen.tsx');
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /loadGroupMemberList\(groupID,\s*10_000\)/);
@@ -291,6 +237,28 @@ test('invite group members screen filters users who are already in the group', (
   assert.doesNotMatch(source, /inviteUsersToGroup\(groupID,\s*selectedIds\.map\(toImUserId\)\)/);
 });
 
+test('group member mutations sync backend state before falling back to OpenIM', () => {
+  const infoPath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
+  const invitePath = path.join(process.cwd(), 'src/features/messages/screens/InviteGroupMembersScreen.tsx');
+  const apiPath = path.join(process.cwd(), 'src/services/api/groups.ts');
+  const infoSource = fs.readFileSync(infoPath, 'utf8');
+  const inviteSource = fs.readFileSync(invitePath, 'utf8');
+  const apiSource = fs.readFileSync(apiPath, 'utf8');
+
+  assert.match(apiSource, /function leaveGroup/);
+  assert.match(apiSource, /`\/group\/\$\{groupID\}\/leave`/);
+  assert.match(apiSource, /function inviteGroupMembers/);
+  assert.match(apiSource, /`\/group\/\$\{groupID\}\/members\/invite`/);
+  assert.match(apiSource, /function removeGroupMember/);
+  assert.match(apiSource, /`\/group\/\$\{groupID\}\/members\/\$\{userID\}`/);
+
+  assert.match(infoSource, /leaveGroupChat\(groupID\)[\s\S]{0,160}leaveGroup\(groupID\)/);
+  assert.match(infoSource, /removeGroupMember\(groupID,\s*member\.userID\)/);
+  assert.match(infoSource, /if \(!result\.handled\) \{[\s\S]{0,80}kickGroupMembers\(groupID,\s*\[member\.userID\]\)/);
+  assert.match(inviteSource, /inviteGroupMembers\(groupID,\s*inviteUserIDs\)/);
+  assert.match(inviteSource, /if \(!result\.handled\) \{[\s\S]{0,80}inviteUsersToGroup\(groupID,\s*inviteUserIDs\)/);
+});
+
 test('OpenIM client bundles native filesystem with the main native bundle', () => {
   const source = fs.readFileSync(path.join(process.cwd(), 'src/im/client.ts'), 'utf8');
 
@@ -301,10 +269,7 @@ test('OpenIM client bundles native filesystem with the main native bundle', () =
 });
 
 test('non-chat filesystem features keep deferring native filesystem loading', () => {
-  const checkedFiles = [
-    'src/services/api/upload.ts',
-    'src/services/cache/clear-app-cache.ts',
-  ];
+  const checkedFiles = ['src/services/api/upload.ts', 'src/services/cache/clear-app-cache.ts'];
 
   for (const relativePath of checkedFiles) {
     const source = fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
@@ -329,10 +294,7 @@ test('i18n avoids synchronous storage reads during web server rendering', () => 
 });
 
 test('note block editor defers DOM editor imports during web server rendering', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/notes/components/NoteBlockEditor.tsx',
-  );
+  const filePath = path.join(process.cwd(), 'src/features/notes/components/NoteBlockEditor.tsx');
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.doesNotMatch(source, /import\s+NoteBlockEditorDOM\s+from/);
@@ -343,10 +305,7 @@ test('note block editor defers DOM editor imports during web server rendering', 
 });
 
 test('chat info screen constrains conversation actions with burn selection, clear confirmation, and pending guards', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatInfoScreen.tsx',
-  );
+  const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /const burnDurationOptions = useMemo\(/);
@@ -369,10 +328,7 @@ test('chat info screen constrains conversation actions with burn selection, clea
 });
 
 test('chat info screen reconciles optimistic conversation state after live updates catch up', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatInfoScreen.tsx',
-  );
+  const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /const hasOptimisticConversationState =/);
@@ -383,86 +339,113 @@ test('chat info screen reconciles optimistic conversation state after live updat
   assert.match(source, /delete nextState\.pinned;/);
   assert.match(source, /if \(current\.muted !== undefined && current\.muted === baseState\.muted\) \{/);
   assert.match(source, /delete nextState\.muted;/);
-  assert.match(source, /if \([\s\S]{0,120}current\.burnDuration !== undefined &&[\s\S]{0,120}current\.burnDuration === \(conversation\?\.burnDuration \?\? 0\)/);
+  assert.match(
+    source,
+    /if \([\s\S]{0,120}current\.burnDuration !== undefined &&[\s\S]{0,120}current\.burnDuration === \(conversation\?\.burnDuration \?\? 0\)/,
+  );
   assert.match(source, /delete nextState\.burnDuration;/);
   assert.match(source, /return nextState;/);
 });
 
 test('chat info screen applies optimistic pin and mute updates only after the ref-based guard claims the action', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatInfoScreen.tsx',
-  );
+  const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /const runConversationAction = useCallback/);
   assert.match(source, /setConversationActionPending\(action, true\);[\s\S]{0,120}await task\(\);/);
-  assert.match(source, /void runConversationAction\(\s*'pin',[\s\S]{0,120}setOptimisticConversationState\(\(current\) => \(\{/);
-  assert.match(source, /void runConversationAction\(\s*'mute',[\s\S]{0,320}setOptimisticConversationState\(\(current\) => \(\{/);
-  assert.doesNotMatch(source, /const previousPinned = pinned;[\s\S]{0,120}setOptimisticConversationState\(\(current\) => \(\{[\s\S]{0,80}pinned: nextPinned/);
-  assert.doesNotMatch(source, /const previousMuted = muted;[\s\S]{0,120}setOptimisticConversationState\(\(current\) => \(\{[\s\S]{0,80}muted: nextMuted/);
+  assert.match(
+    source,
+    /void runConversationAction\(\s*'pin',[\s\S]{0,120}setOptimisticConversationState\(\(current\) => \(\{/,
+  );
+  assert.match(
+    source,
+    /void runConversationAction\(\s*'mute',[\s\S]{0,320}setOptimisticConversationState\(\(current\) => \(\{/,
+  );
+  assert.doesNotMatch(
+    source,
+    /const previousPinned = pinned;[\s\S]{0,120}setOptimisticConversationState\(\(current\) => \(\{[\s\S]{0,80}pinned: nextPinned/,
+  );
+  assert.doesNotMatch(
+    source,
+    /const previousMuted = muted;[\s\S]{0,120}setOptimisticConversationState\(\(current\) => \(\{[\s\S]{0,80}muted: nextMuted/,
+  );
 });
 
 test('chat info screen rollback drops optimistic overrides instead of restoring stale snapshots', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatInfoScreen.tsx',
-  );
+  const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /const dropOptimisticConversationStateKey = useCallback/);
   assert.match(source, /if \(current\[key\] === undefined\) \{/);
   assert.match(source, /delete nextState\[key\];/);
-  assert.match(source, /void runConversationAction\(\s*'pin',[\s\S]{0,400}dropOptimisticConversationStateKey\('pinned'\)/);
-  assert.match(source, /void runConversationAction\(\s*'mute',[\s\S]{0,400}dropOptimisticConversationStateKey\('muted'\)/);
-  assert.match(source, /void runConversationAction\(\s*'burn',[\s\S]{0,400}dropOptimisticConversationStateKey\('burnDuration'\)/);
+  assert.match(
+    source,
+    /void runConversationAction\(\s*'pin',[\s\S]{0,400}dropOptimisticConversationStateKey\('pinned'\)/,
+  );
+  assert.match(
+    source,
+    /void runConversationAction\(\s*'mute',[\s\S]{0,400}dropOptimisticConversationStateKey\('muted'\)/,
+  );
+  assert.match(
+    source,
+    /void runConversationAction\(\s*'burn',[\s\S]{0,400}dropOptimisticConversationStateKey\('burnDuration'\)/,
+  );
   assert.doesNotMatch(source, /pinned: previousPinned/);
   assert.doesNotMatch(source, /muted: previousMuted/);
   assert.doesNotMatch(source, /burnDuration: previousBurnDuration/);
 });
 
 test('chat info screen ignores stale async completions after the conversation changes', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatInfoScreen.tsx',
-  );
+  const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /const currentConversationIDRef = useRef\(''\);/);
-  assert.match(source, /const resolvedConversationID = conversation\?\.conversationID \?\? '';\s*currentConversationIDRef\.current = resolvedConversationID;/s);
+  assert.match(
+    source,
+    /const resolvedConversationID = conversation\?\.conversationID \?\? '';\s*currentConversationIDRef\.current = resolvedConversationID;/s,
+  );
   assert.match(source, /currentConversationIDRef\.current = resolvedConversationID;/);
   assert.match(source, /const isActionConversationCurrent = useCallback/);
   assert.match(source, /currentConversationIDRef\.current === conversationID/);
   assert.match(source, /const actionConversationID = resolvedConversationID;/);
-  assert.match(source, /if \(\s*isActionConversationCurrent\(actionConversationID\) &&[\s\S]{0,120}isLatestActionRequest\(action, actionRequestToken\)\s*\) \{\s*rollback\?\.?\(\);/s);
-  assert.match(source, /if \(\s*isActionConversationCurrent\(actionConversationID\) &&[\s\S]{0,120}isLatestActionRequest\(action, actionRequestToken\)\s*\) \{\s*setConversationActionPending\(action, false\);/s);
+  assert.match(
+    source,
+    /if \(\s*isActionConversationCurrent\(actionConversationID\) &&[\s\S]{0,120}isLatestActionRequest\(action, actionRequestToken\)\s*\) \{\s*rollback\?\.?\(\);/s,
+  );
+  assert.match(
+    source,
+    /if \(\s*isActionConversationCurrent\(actionConversationID\) &&[\s\S]{0,120}isLatestActionRequest\(action, actionRequestToken\)\s*\) \{\s*setConversationActionPending\(action, false\);/s,
+  );
   assert.doesNotMatch(source, /useEffect\(\(\) => \{\s*currentConversationIDRef\.current = resolvedConversationID;/s);
 });
 
 test('chat info screen only lets the latest request for an action finish cleanup', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatInfoScreen.tsx',
-  );
+  const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /const actionRequestTokenRef = useRef\(\{\s*pin: 0,\s*mute: 0,\s*burn: 0,\s*clear: 0,\s*\}\);/s);
   assert.match(source, /const startActionRequest = useCallback/);
   assert.match(source, /const nextToken = actionRequestTokenRef\.current\[action\] \+ 1;/);
-  assert.match(source, /actionRequestTokenRef\.current = \{\s*\.\.\.actionRequestTokenRef\.current,\s*\[action\]: nextToken,\s*\};/s);
+  assert.match(
+    source,
+    /actionRequestTokenRef\.current = \{\s*\.\.\.actionRequestTokenRef\.current,\s*\[action\]: nextToken,\s*\};/s,
+  );
   assert.match(source, /return nextToken;/);
   assert.match(source, /const isLatestActionRequest = useCallback/);
   assert.match(source, /actionRequestTokenRef\.current\[action\] === requestToken/);
   assert.match(source, /const actionRequestToken = startActionRequest\(action\);/);
-  assert.match(source, /if \(\s*isActionConversationCurrent\(actionConversationID\) &&\s*isLatestActionRequest\(action, actionRequestToken\)\s*\) \{\s*rollback\?\.?\(\);/s);
-  assert.match(source, /if \(\s*isActionConversationCurrent\(actionConversationID\) &&\s*isLatestActionRequest\(action, actionRequestToken\)\s*\) \{\s*setConversationActionPending\(action, false\);/s);
+  assert.match(
+    source,
+    /if \(\s*isActionConversationCurrent\(actionConversationID\) &&\s*isLatestActionRequest\(action, actionRequestToken\)\s*\) \{\s*rollback\?\.?\(\);/s,
+  );
+  assert.match(
+    source,
+    /if \(\s*isActionConversationCurrent\(actionConversationID\) &&\s*isLatestActionRequest\(action, actionRequestToken\)\s*\) \{\s*setConversationActionPending\(action, false\);/s,
+  );
 });
 
 test('chat info screen opens chat background selection without a status label', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatInfoScreen.tsx',
-  );
+  const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /getChatBackgroundHref/);
@@ -474,10 +457,7 @@ test('chat info screen opens chat background selection without a status label', 
 });
 
 test('chat info screen wires recommend-friend navigation from the friend recommendation row', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatInfoScreen.tsx',
-  );
+  const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /getRecommendFriendHref/);
@@ -489,10 +469,7 @@ test('chat info screen wires recommend-friend navigation from the friend recomme
 });
 
 test('chat info screen wires search-history navigation from the new row', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatInfoScreen.tsx',
-  );
+  const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /getChatHistorySearchHubHref/);
@@ -510,10 +487,7 @@ test('chat info screen wires search-history navigation from the new row', () => 
 });
 
 test('chat info screen resolves back navigation from the explicit origin instead of the current stack state', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatInfoScreen.tsx',
-  );
+  const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /originScope\?: string;/);
@@ -528,10 +502,7 @@ test('chat info screen resolves back navigation from the explicit origin instead
 });
 
 test('messages layout registers chat history search routes', () => {
-  const filePath = path.join(
-    process.cwd(),
-    "app/(tabs)/messages/_layout.tsx",
-  );
+  const filePath = path.join(process.cwd(), 'app/(tabs)/messages/_layout.tsx');
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /<Stack\.Screen name="chat-history-search" \/>/);
@@ -563,22 +534,83 @@ test('chat history search screens exist with dedicated titles and empty states',
     'utf8',
   );
 
-  assert.match(hubSource, /NavHeader[\s\S]*title="查找聊天记录"/);
+  assert.match(hubSource, /NavHeader[\s\S]*title=\{t\('chat\.history\.findTitle'\)\}/);
   assert.match(hubSource, /fallbackHref={getChatDetailHref\('messages', sourceID, title, undefined, conversationID\)}/);
-  assert.match(hubSource, /搜索文字消息/);
-  assert.match(hubSource, /图片/);
-  assert.match(hubSource, /文件/);
-  assert.match(hubSource, /按日期/);
+  assert.match(hubSource, /t\('chat\.history\.textTitle'\)/);
+  assert.match(hubSource, /t\('chat\.history\.mediaTitle'\)/);
+  assert.match(hubSource, /t\('chat\.history\.files'\)/);
+  assert.match(hubSource, /t\('chat\.history\.dateTitle'\)/);
 
   assert.match(textSource, /searchConversationTextMessages/);
-  assert.match(textSource, /暂无匹配的聊天记录/);
+  assert.match(textSource, /t\('chat\.history\.noMatches'\)/);
 
   assert.match(mediaSource, /searchConversationMediaMessages/);
-  assert.match(mediaSource, /暂无图片或视频记录/);
+  assert.match(mediaSource, /t\('chat\.history\.noMedia'\)/);
 
   assert.match(filesSource, /searchConversationFileMessages/);
   assert.match(filesSource, /暂无文件记录/);
 
   assert.match(dateSource, /searchConversationMessagesByDate/);
-  assert.match(dateSource, /请选择日期/);
+  assert.match(dateSource, /t\('chat\.history\.pickDate'\)/);
+});
+
+test('chat history hub has a top keyword search box', () => {
+  const hubSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatHistorySearchHubScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(hubSource, /const \[keyword, setKeyword\] = useState\(''\)/);
+  assert.match(hubSource, /TextInput/);
+  assert.match(hubSource, /placeholder=\{t\('chat\.history\.searchPlaceholder'\)\}/);
+  assert.match(hubSource, /handleSubmitKeywordSearch/);
+  assert.match(hubSource, /getChatHistoryTextHref\(conversationID, sourceID, title, nextKeyword\)/);
+});
+
+test('chat history date screen uses an inline calendar grid instead of typed date search', () => {
+  const dateSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatHistoryDateScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(dateSource, /CALENDAR_COLUMNS/);
+  assert.match(dateSource, /buildCalendarDays/);
+  assert.match(dateSource, /calendarGrid/);
+  assert.match(dateSource, /handleMonthOffset/);
+  assert.match(dateSource, /handleSelectDate/);
+  assert.match(dateSource, /selectedDate/);
+  assert.match(dateSource, /formatCalendarMonthTitle/);
+  assert.doesNotMatch(dateSource, /placeholder="YYYY-MM-DD"/);
+  assert.doesNotMatch(dateSource, /keyboardType="numbers-and-punctuation"/);
+});
+
+test('chat history media screen groups media by month in a three-column grid', () => {
+  const mediaSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatHistoryMediaScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(mediaSource, /MEDIA_GRID_COLUMNS = 3/);
+  assert.match(mediaSource, /groupMediaMessagesByMonth/);
+  assert.match(mediaSource, /SectionList/);
+  assert.match(mediaSource, /renderSectionHeader/);
+  assert.match(mediaSource, /mediaGrid/);
+  assert.match(mediaSource, /aspectRatio:\s*1/);
+  assert.match(mediaSource, /play-circle/);
+  assert.match(mediaSource, /formatChatHistoryMonth/);
+});
+
+test('chat history media grid normalizes urls and falls back across image candidates', () => {
+  const mediaSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatHistoryMediaScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(mediaSource, /normalizeMediaUrl/);
+  assert.match(mediaSource, /getMediaThumbnailUris/);
+  assert.match(mediaSource, /snapshotPicture\?\.url/);
+  assert.match(mediaSource, /sourcePicture\?\.url/);
+  assert.match(mediaSource, /bigPicture\?\.url/);
+  assert.match(mediaSource, /handleImageError/);
+  assert.match(mediaSource, /onError=\{handleImageError\}/);
 });
