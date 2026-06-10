@@ -803,6 +803,7 @@ export async function sendTransferCardMessage(params: {
 
 export interface NoteCardPayload {
   noteId: string;
+  ownerId?: string | null;
   title: string;
   contentPreview: string | null;
   coverUrl: string | null;

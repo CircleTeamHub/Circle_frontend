@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
 import { usePostFormStore } from '@/features/discover/store/use-post-form-store';
+import { NoteCard } from '@/features/notes/components/NoteCard';
 import type { NoteSummary } from '@/features/notes/types';
 import { fetchNotes } from '@/services/api/notes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -23,11 +24,11 @@ const s = StyleSheet.create({
   container: { flex: 1 },
   content: {
     flex: 1,
-    paddingHorizontal: Spacing.lg,
     gap: Spacing.md,
   },
   searchBox: {
-    height: 42,
+    minHeight: 52,
+    marginHorizontal: Spacing.lg,
     borderRadius: Radius.xl,
     borderWidth: 1,
     flexDirection: 'row',
@@ -38,32 +39,17 @@ const s = StyleSheet.create({
   searchInput: {
     flex: 1,
     ...Typography.bodyRegular,
-    padding: 0,
+    lineHeight: 20,
+    minHeight: 24,
+    paddingVertical: 0,
   },
   clearRow: {
     minHeight: 48,
+    paddingHorizontal: Spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Spacing.md,
-  },
-  noteRow: {
-    minHeight: 64,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.md,
-    paddingVertical: Spacing.sm,
-  },
-  noteBody: {
-    flex: 1,
-    gap: 4,
-  },
-  noteTitle: {
-    ...Typography.body,
-  },
-  notePreview: {
-    ...Typography.small,
   },
   empty: {
     flex: 1,
@@ -136,36 +122,19 @@ export default function SelectNoteScreen() {
 
   const renderNote = useCallback(
     ({ item }: { item: NoteSummary }) => {
-      const checked = selectedNote?.id === item.id;
       return (
-        <Pressable
-          style={s.noteRow}
+        <NoteCard
+          note={item}
           onPress={() => handleSelectNote(item)}
+          showActions={false}
           accessibilityRole="button"
           accessibilityLabel={t('plaza.notePicker.selectA11y', {
             title: item.title,
           })}
-        >
-          <View style={s.noteBody}>
-            <Text style={[s.noteTitle, { color: colors.text }]} numberOfLines={1}>
-              {item.title}
-            </Text>
-            {item.contentPreview ? (
-              <Text
-                style={[s.notePreview, { color: colors.textSecondary }]}
-                numberOfLines={1}
-              >
-                {item.contentPreview}
-              </Text>
-            ) : null}
-          </View>
-          {checked ? (
-            <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
-          ) : null}
-        </Pressable>
+        />
       );
     },
-    [colors, handleSelectNote, selectedNote, t],
+    [handleSelectNote, t],
   );
 
   return (

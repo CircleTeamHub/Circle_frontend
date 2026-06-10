@@ -34,6 +34,7 @@ import {
   getUserProfileScopeFromSegments,
   getTabHomeHref,
   getChatInfoTopHref,
+  getNoteDetailHref,
 } from '@/features/user/utils/routes';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
@@ -584,6 +585,9 @@ export default function ChatDetailScreen() {
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onPress={(note) =>
+              router.push(getNoteDetailHref(scope, note.noteId, note.ownerId ?? ''))
+            }
             hideStatus={isGroupChat}
           />
         );
@@ -1006,6 +1010,7 @@ export default function ChatDetailScreen() {
           sessionType: conversationType,
           payload: {
             noteId: note.id,
+            ownerId: authUser?.id ?? null,
             title: note.title,
             contentPreview: note.contentPreview ?? null,
             coverUrl: note.cover?.url ?? null,
@@ -1023,6 +1028,7 @@ export default function ChatDetailScreen() {
     },
     [
       appendMessages,
+      authUser?.id,
       conversationID,
       conversationType,
       isPreviewMode,

@@ -1,3 +1,4 @@
+/* global __dirname */
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -25,10 +26,54 @@ test('NotesScreen has 已下架 filter button', () => {
   assert.match(src, /已下架/);
 });
 
+test('NotesScreen creates a managed share link before invoking native Share', () => {
+  const src = read('src/features/notes/screens/NotesScreen.tsx');
+
+  assert.match(src, /Share/);
+  assert.match(src, /createNoteShareLink/);
+  assert.match(src, /buildShareInput/);
+  assert.match(src, /nextShareLink\.url/);
+  assert.match(src, /handleShareNotes/);
+  assert.match(src, /Share\.share/);
+  assert.doesNotMatch(src, /Linking\.createURL/);
+  assert.doesNotMatch(src, /notes\.stopgap\.share/);
+});
+
+test('NotesScreen opens a QR sheet for the managed share link', () => {
+  const screenSrc = read('src/features/notes/screens/NotesScreen.tsx');
+  const sheetSrc = read('src/features/notes/components/NoteShareQrSheet.tsx');
+
+  assert.match(screenSrc, /NoteShareQrSheet/);
+  assert.match(screenSrc, /qrVisible/);
+  assert.match(screenSrc, /openQrSheet/);
+  assert.match(screenSrc, /createNoteShareLink/);
+  assert.match(screenSrc, /shareUrl=\{shareLink\?\.url \?\? ''\}/);
+  assert.match(screenSrc, /loading=\{shareLinkLoading\}/);
+  assert.match(screenSrc, /errorMessage=\{shareLinkError\}/);
+  assert.doesNotMatch(screenSrc, /notes\.stopgap\.qrCode/);
+
+  assert.match(sheetSrc, /react-native-qrcode-svg/);
+  assert.match(sheetSrc, /QRCode/);
+  assert.match(sheetSrc, /shareUrl/);
+  assert.match(sheetSrc, /loading/);
+  assert.match(sheetSrc, /errorMessage/);
+  assert.match(sheetSrc, /expo-clipboard/);
+  assert.match(sheetSrc, /Share\.share/);
+});
+
 test('NotesScreen fetches notes and groups', () => {
   const src = read('src/features/notes/screens/NotesScreen.tsx');
   assert.match(src, /fetchNotes/);
   assert.match(src, /fetchNoteGroups/);
+});
+
+test('NotesScreen passes the current user as owner when opening note details', () => {
+  const src = read('src/features/notes/screens/NotesScreen.tsx');
+
+  assert.match(src, /useAuthStore/);
+  assert.match(src, /currentUserId/);
+  assert.match(src, /pathname: '\/\(tabs\)\/profile\/notes\/\[id\]'/);
+  assert.match(src, /params: \{ id: item\.id, ownerId: currentUserId \?\? '' \}/);
 });
 
 test('NotesScreen refreshes notes and groups when returning from note edits', () => {

@@ -1,3 +1,4 @@
+/* global __dirname */
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -39,6 +40,18 @@ test('deleteNote calls DELETE /note/:id', () => {
   const src = read('src/services/api/notes.ts');
   assert.match(src, /deleteNote/);
   assert.match(src, /DELETE/);
+});
+
+test('createNoteShareLink posts the current notes view to /note/share-links', () => {
+  const src = read('src/services/api/notes.ts');
+  const typesSource = read('src/features/notes/types.ts');
+
+  assert.match(typesSource, /CreateNoteShareLinkInput/);
+  assert.match(typesSource, /NoteShareLink/);
+  assert.match(src, /createNoteShareLink/);
+  assert.match(src, /\/note\/share-links/);
+  assert.match(src, /method:\s*'POST'/);
+  assert.match(src, /body:\s*input/);
 });
 
 test('fetchNoteGroups calls GET /note/group', () => {

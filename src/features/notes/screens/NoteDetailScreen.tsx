@@ -16,6 +16,7 @@ import type { NoteDetail } from '@/features/notes/types';
 import { formatNoteFullDate } from '@/features/notes/utils/note-format';
 import { fetchNoteDetail } from '@/services/api/notes';
 import { ApiError } from '@/services/api/client';
+import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 export default function NoteDetailScreen() {
@@ -23,7 +24,8 @@ export default function NoteDetailScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, ownerId } = useLocalSearchParams<{ id: string; ownerId?: string }>();
+  const currentUserId = useAuthStore((state) => state.user?.id);
 
   const [note, setNote] = useState<NoteDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -72,6 +74,13 @@ export default function NoteDetailScreen() {
     if (!note) return;
     router.push(`/(tabs)/profile/notes/edit?id=${note.id}` as never);
   }, [router, note]);
+
+  const canEditNote = useMemo(() => {
+    if (!note) return false;
+    if (typeof note.canEdit === 'boolean') return note.canEdit;
+    const resolvedOwnerId = note.ownerId ?? ownerId;
+    return Boolean(resolvedOwnerId && currentUserId === resolvedOwnerId);
+  }, [currentUserId, note, ownerId]);
 
   const d = useMemo(
     () => ({
@@ -127,9 +136,13 @@ export default function NoteDetailScreen() {
         <Pressable onPress={() => router.back()} hitSlop={8}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
-        <Pressable onPress={handleEdit} hitSlop={8}>
-          <Ionicons name="create-outline" size={22} color={colors.text} />
-        </Pressable>
+        {canEditNote ? (
+          <Pressable onPress={handleEdit} hitSlop={8}>
+            <Ionicons name="create-outline" size={22} color={colors.text} />
+          </Pressable>
+        ) : (
+          <View />
+        )}
       </View>
 
       <ScrollView

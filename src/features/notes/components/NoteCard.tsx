@@ -10,11 +10,22 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 interface Props {
   note: NoteSummary;
   onPress: () => void;
-  onEditPress: () => void;
-  onPinPress: () => void;
+  onEditPress?: () => void;
+  onPinPress?: () => void;
+  showActions?: boolean;
+  accessibilityLabel?: string;
+  accessibilityRole?: 'button';
 }
 
-export function NoteCard({ note, onPress, onEditPress, onPinPress }: Props) {
+export function NoteCard({
+  note,
+  onPress,
+  onEditPress,
+  onPinPress,
+  showActions = true,
+  accessibilityLabel,
+  accessibilityRole = 'button',
+}: Props) {
   const { colors } = useTheme();
   const { t } = useTranslation();
 
@@ -42,7 +53,7 @@ export function NoteCard({ note, onPress, onEditPress, onPinPress }: Props) {
   const handlePin = useCallback(
     (e: { stopPropagation: () => void }) => {
       e.stopPropagation();
-      onPinPress();
+      onPinPress?.();
     },
     [onPinPress],
   );
@@ -50,13 +61,20 @@ export function NoteCard({ note, onPress, onEditPress, onPinPress }: Props) {
   const handleEdit = useCallback(
     (e: { stopPropagation: () => void }) => {
       e.stopPropagation();
-      onEditPress();
+      onEditPress?.();
     },
     [onEditPress],
   );
 
+  const canShowActions = showActions && onPinPress && onEditPress;
+
   return (
-    <Pressable style={s.container} onPress={onPress}>
+    <Pressable
+      style={s.container}
+      onPress={onPress}
+      accessibilityRole={accessibilityRole}
+      accessibilityLabel={accessibilityLabel}
+    >
       {note.cover ? (
         <Image source={{ uri: note.cover.url }} style={s.thumbnail} contentFit="cover" />
       ) : (
@@ -77,18 +95,20 @@ export function NoteCard({ note, onPress, onEditPress, onPinPress }: Props) {
         </Text>
       </View>
 
-      <View style={s.actions}>
-        <Pressable onPress={handlePin} hitSlop={8}>
-          <Ionicons
-            name={note.pinned ? 'bookmark' : 'bookmark-outline'}
-            size={20}
-            color={d.pinIcon}
-          />
-        </Pressable>
-        <Pressable onPress={handleEdit} hitSlop={8}>
-          <Ionicons name="create-outline" size={20} color={colors.textSecondary} />
-        </Pressable>
-      </View>
+      {canShowActions ? (
+        <View style={s.actions}>
+          <Pressable onPress={handlePin} hitSlop={8}>
+            <Ionicons
+              name={note.pinned ? 'bookmark' : 'bookmark-outline'}
+              size={20}
+              color={d.pinIcon}
+            />
+          </Pressable>
+          <Pressable onPress={handleEdit} hitSlop={8}>
+            <Ionicons name="create-outline" size={20} color={colors.textSecondary} />
+          </Pressable>
+        </View>
+      ) : null}
     </Pressable>
   );
 }

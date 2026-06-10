@@ -222,7 +222,7 @@ export default function CreatePostScreen() {
   }, [router]);
 
   const handleSelectNote = useCallback(() => {
-    router.push('/(tabs)/discover/select-note');
+    router.push('/(tabs)/discover/select-note' as never);
   }, [router]);
 
   const closePicker = useCallback(() => setActivePicker(null), []);

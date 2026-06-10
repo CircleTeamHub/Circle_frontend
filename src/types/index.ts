@@ -47,6 +47,7 @@ export interface ContactSection {
 
 export interface NoteCardData {
   noteId: string;
+  ownerId?: string | null;
   title: string;
   contentPreview: string | null;
   coverUrl: string | null;

@@ -118,6 +118,26 @@ export function getChatDetailHref(
   }
 }
 
+export function getNoteDetailHref(
+  scope: UserProfileScope,
+  id: string,
+  ownerId = '',
+): Href {
+  const params = { id, ownerId };
+
+  switch (scope) {
+    case 'contacts':
+      return { pathname: '/(tabs)/contacts/notes/[id]', params };
+    case 'profile':
+      return { pathname: '/(tabs)/profile/notes/[id]', params };
+    case 'discover':
+      return { pathname: '/(tabs)/discover/notes/[id]', params };
+    case 'messages':
+    default:
+      return { pathname: '/(tabs)/messages/notes/[id]', params };
+  }
+}
+
 /** Tab home route for a scope — used as a back fallback when there's no stack. */
 export function getTabHomeHref(scope: UserProfileScope): Href {
   switch (scope) {

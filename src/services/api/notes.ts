@@ -1,9 +1,11 @@
 import { apiClient } from './client';
 import type {
   CreateNoteInput,
+  CreateNoteShareLinkInput,
   ListNotesParams,
   NoteDetail,
   NoteGroup,
+  NoteShareLink,
   NoteSummary,
 } from '@/features/notes/types';
 
@@ -49,6 +51,15 @@ export async function togglePinNote(id: string, pinned: boolean): Promise<void> 
 
 export async function deleteNote(id: string): Promise<void> {
   await apiClient<void>(`/note/${id}`, { method: 'DELETE' });
+}
+
+export async function createNoteShareLink(
+  input: CreateNoteShareLinkInput,
+): Promise<NoteShareLink> {
+  return apiClient<NoteShareLink>('/note/share-links', {
+    method: 'POST',
+    body: input,
+  });
 }
 
 export async function fetchNoteGroups(): Promise<NoteGroup[]> {

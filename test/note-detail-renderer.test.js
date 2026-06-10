@@ -42,6 +42,35 @@ test('NoteDetailScreen has edit navigation', () => {
   assert.match(src, /notes\/edit/);
 });
 
+test('NoteDetailScreen only shows edit when the current user can edit', () => {
+  const screenSrc = read('src/features/notes/screens/NoteDetailScreen.tsx');
+  const typesSrc = read('src/features/notes/types.ts');
+
+  assert.match(typesSrc, /canEdit\?: boolean/);
+  assert.match(typesSrc, /ownerId\?: string \| null/);
+  assert.match(screenSrc, /useAuthStore/);
+  assert.match(screenSrc, /ownerId/);
+  assert.match(screenSrc, /note\.canEdit/);
+  assert.match(screenSrc, /const canEditNote =/);
+  assert.match(
+    screenSrc,
+    /\{canEditNote \? \([\s\S]*<Pressable onPress=\{handleEdit\} hitSlop=\{8\}>[\s\S]*create-outline/,
+  );
+});
+
+test('note card messages carry owner identity for read-only shared notes', () => {
+  const chatSrc = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const typeSrc = read('src/types/index.ts');
+  const clientSrc = read('src/im/client.ts');
+  const mapperSrc = read('src/im/mappers.ts');
+
+  assert.match(typeSrc, /ownerId\?: string \| null/);
+  assert.match(clientSrc, /ownerId\?: string \| null/);
+  assert.match(mapperSrc, /ownerId: raw\.ownerId/);
+  assert.match(chatSrc, /ownerId: authUser\?\.id \?\? null/);
+  assert.match(chatSrc, /getNoteDetailHref\(scope, note\.noteId, note\.ownerId \?\? ''\)/);
+});
+
 test('EditNoteScreen saves with createNote or updateNote', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
   assert.match(src, /createNote/);

@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
 import { useSharePickerStore } from '@/features/chat/store/use-share-picker-store';
+import { NoteCard } from '@/features/notes/components/NoteCard';
 import type { NoteSummary } from '@/features/notes/types';
 import { fetchCollections, type UserCollection } from '@/services/api/collections';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
@@ -162,25 +163,11 @@ export default function SharePickerScreen() {
   );
 
   const renderNote = ({ item }: { item: NoteSummary }) => (
-    <Pressable
-      style={[s.row, { backgroundColor: colors.surface }]}
+    <NoteCard
+      note={item}
       onPress={() => handleSelect(item)}
-    >
-      <View style={s.rowText}>
-        <Text style={[s.rowTitle, { color: colors.text }]} numberOfLines={1}>
-          {item.title}
-        </Text>
-        {item.contentPreview ? (
-          <Text
-            style={[s.rowSubtitle, { color: colors.textSecondary }]}
-            numberOfLines={2}
-          >
-            {item.contentPreview}
-          </Text>
-        ) : null}
-      </View>
-      <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-    </Pressable>
+      showActions={false}
+    />
   );
 
   const renderFriend = ({ item }: { item: FriendProfile }) => (
@@ -315,9 +302,12 @@ export default function SharePickerScreen() {
           data={filteredNotes}
           keyExtractor={(it) => it.id}
           renderItem={renderNote}
-          ItemSeparatorComponent={Sep}
-          contentContainerStyle={s.listContent}
+          ItemSeparatorComponent={() => (
+            <View style={[s.divider, { backgroundColor: colors.surface }]} />
+          )}
+          contentContainerStyle={s.noteListContent}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         />
       ) : shareType === 'friend' ? (
         <FlatList
@@ -373,10 +363,19 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.xs,
     paddingHorizontal: Spacing.md,
-    height: 40,
+    minHeight: 52,
     borderRadius: Radius.md,
   },
-  searchInput: { flex: 1, ...Typography.bodyRegular, padding: 0 },
+  searchInput: {
+    flex: 1,
+    ...Typography.bodyRegular,
+    lineHeight: 20,
+    minHeight: 24,
+    paddingVertical: 0,
+  },
+  noteListContent: {
+    paddingBottom: Spacing.xl,
+  },
   listContent: {
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.xl,
@@ -398,4 +397,8 @@ const s = StyleSheet.create({
   rowText: { flex: 1, gap: 2 },
   rowTitle: { ...Typography.body, fontWeight: '600' },
   rowSubtitle: { ...Typography.small, lineHeight: 18 },
+  divider: {
+    height: 1,
+    marginLeft: Spacing.lg,
+  },
 });

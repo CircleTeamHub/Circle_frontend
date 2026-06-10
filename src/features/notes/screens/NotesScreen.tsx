@@ -7,6 +7,7 @@ import {
   FlatList,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -15,13 +16,21 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NoteCard } from '@/features/notes/components/NoteCard';
 import { GroupManagerSheet } from '@/features/notes/components/GroupManagerSheet';
+import { NoteShareQrSheet } from '@/features/notes/components/NoteShareQrSheet';
 import { useNotesSettingsStore } from '@/features/notes/store/use-notes-settings-store';
-import type { NoteGroup, NoteSummary } from '@/features/notes/types';
+import type {
+  CreateNoteShareLinkInput,
+  NoteGroup,
+  NoteShareLink,
+  NoteSummary,
+} from '@/features/notes/types';
 import {
+  createNoteShareLink,
   fetchNoteGroups,
   fetchNotes,
   togglePinNote,
 } from '@/services/api/notes';
+import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 type TabId = 'all' | 'ungrouped' | string;
@@ -31,6 +40,7 @@ export default function NotesScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const currentUserId = useAuthStore((state) => state.user?.id);
 
   const showGroups = useNotesSettingsStore((st) => st.showGroups);
   const showUngrouped = useNotesSettingsStore((st) => st.showUngrouped);
@@ -43,6 +53,10 @@ export default function NotesScreen() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [managerVisible, setManagerVisible] = useState(false);
+  const [qrVisible, setQrVisible] = useState(false);
+  const [shareLink, setShareLink] = useState<NoteShareLink | null>(null);
+  const [shareLinkLoading, setShareLinkLoading] = useState(false);
+  const [shareLinkError, setShareLinkError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const [notesData, groupsData] = await Promise.all([
@@ -131,6 +145,11 @@ export default function NotesScreen() {
   }, [activeTab, groups, showGroups, showUngrouped]);
 
   const closeManager = useCallback(() => setManagerVisible(false), []);
+  const closeQrSheet = useCallback(() => setQrVisible(false), []);
+  useEffect(() => {
+    setShareLink(null);
+    setShareLinkError(null);
+  }, [activeTab, search, showUnlisted, filteredNotes]);
 
   const handleActiveGroupDeleted = useCallback(
     (groupId: string) => {
@@ -145,6 +164,93 @@ export default function NotesScreen() {
       prev.map((item) => (item.id === note.id ? { ...item, pinned: !item.pinned } : item)),
     );
   }, []);
+
+  const notesShareTitle = t('notes.share.title', { defaultValue: '我的笔记' });
+
+  const buildShareInput = useCallback((): CreateNoteShareLinkInput => {
+    const input: CreateNoteShareLinkInput = {
+      title: notesShareTitle,
+      status: showUnlisted ? 'UNLISTED' : 'ACTIVE',
+      noteIds: filteredNotes.map((note) => note.id),
+    };
+    if (activeTab === 'ungrouped') {
+      input.group = 'ungrouped';
+    } else if (activeTab !== 'all') {
+      input.groupId = activeTab;
+    }
+    const trimmedSearch = search.trim();
+    if (trimmedSearch) input.search = trimmedSearch;
+    return input;
+  }, [activeTab, filteredNotes, notesShareTitle, search, showUnlisted]);
+
+  const ensureShareLink = useCallback(async () => {
+    if (shareLink) return shareLink;
+    setShareLinkLoading(true);
+    setShareLinkError(null);
+    try {
+      const nextShareLink = await createNoteShareLink(buildShareInput());
+      setShareLink(nextShareLink);
+      return nextShareLink;
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : t('notes.share.createFailedMessage', {
+              defaultValue: '无法生成分享链接，请稍后重试。',
+            });
+      setShareLinkError(message);
+      throw error;
+    } finally {
+      setShareLinkLoading(false);
+    }
+  }, [buildShareInput, shareLink, t]);
+
+  const handleShareNotes = useCallback(async () => {
+    let nextShareLink: NoteShareLink;
+    try {
+      nextShareLink = await ensureShareLink();
+    } catch {
+      Alert.alert(
+        t('notes.share.createFailedTitle', { defaultValue: '分享链接生成失败' }),
+        t('notes.share.createFailedMessage', {
+          defaultValue: '无法生成分享链接，请稍后重试。',
+        }),
+      );
+      return;
+    }
+    try {
+      await Share.share({
+        message: t('notes.share.message', {
+          title: notesShareTitle,
+          url: nextShareLink.url,
+          defaultValue: `${notesShareTitle}\n${nextShareLink.url}`,
+        }),
+      });
+    } catch {
+      try {
+        const Clipboard = await import('expo-clipboard');
+        await Clipboard.setStringAsync(nextShareLink.url);
+        Alert.alert(
+          t('notes.share.copiedTitle', { defaultValue: '已复制' }),
+          t('notes.share.copiedMessage', {
+            defaultValue: '笔记链接已复制到剪贴板。',
+          }),
+        );
+      } catch {
+        Alert.alert(
+          t('notes.share.failedTitle', { defaultValue: '分享失败' }),
+          t('notes.share.failedMessage', {
+            defaultValue: '无法打开系统分享面板，请稍后重试。',
+          }),
+        );
+      }
+    }
+  }, [ensureShareLink, notesShareTitle, t]);
+
+  const openQrSheet = useCallback(() => {
+    setQrVisible(true);
+    void ensureShareLink().catch(() => undefined);
+  }, [ensureShareLink]);
 
   const d = useMemo(
     () => ({
@@ -177,14 +283,19 @@ export default function NotesScreen() {
     ({ item }: { item: NoteSummary }) => (
       <NoteCard
         note={item}
-        onPress={() => router.push(`/(tabs)/profile/notes/${item.id}`)}
+        onPress={() =>
+          router.push({
+            pathname: '/(tabs)/profile/notes/[id]',
+            params: { id: item.id, ownerId: currentUserId ?? '' },
+          } as never)
+        }
         onEditPress={() =>
           router.push(`/(tabs)/profile/notes/edit?id=${item.id}` as never)
         }
         onPinPress={() => handlePin(item)}
       />
     ),
-    [handlePin, router],
+    [currentUserId, handlePin, router],
   );
 
   const statsText = t('notes.stats', {
@@ -299,34 +410,18 @@ export default function NotesScreen() {
       />
 
       <View style={[s.bottomBar, d.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
-        {/* TODO: 接入分享 sheet（IM + 平台原生 Share）。stopgap：弹 Alert。 */}
         <Pressable
           style={s.bottomBtn}
-          onPress={() =>
-            Alert.alert(
-              t('notes.stopgap.title', { defaultValue: '即将上线' }),
-              t('notes.stopgap.share', {
-                defaultValue: '分享功能即将上线，敬请期待。',
-              }),
-            )
-          }
+          onPress={() => void handleShareNotes()}
         >
           <Ionicons name="share-outline" size={18} color={colors.text} />
           <Text style={[s.bottomBtnText, d.otherBtnText]}>
             {t('notes.actions.share', { defaultValue: '分享' })}
           </Text>
         </Pressable>
-        {/* TODO: 接入"生成笔记二维码"页面。stopgap：弹 Alert。 */}
         <Pressable
           style={s.bottomBtn}
-          onPress={() =>
-            Alert.alert(
-              t('notes.stopgap.title', { defaultValue: '即将上线' }),
-              t('notes.stopgap.qrCode', {
-                defaultValue: '二维码功能即将上线，敬请期待。',
-              }),
-            )
-          }
+          onPress={openQrSheet}
         >
           <Ionicons name="qr-code-outline" size={18} color={colors.text} />
           <Text style={[s.bottomBtnText, d.otherBtnText]}>
@@ -352,6 +447,15 @@ export default function NotesScreen() {
         notes={notes}
         onMembershipsChanged={load}
         onActiveGroupDeleted={handleActiveGroupDeleted}
+      />
+      <NoteShareQrSheet
+        visible={qrVisible}
+        title={notesShareTitle}
+        shareUrl={shareLink?.url ?? ''}
+        noteCount={filteredNotes.length}
+        loading={shareLinkLoading}
+        errorMessage={shareLinkError}
+        onClose={closeQrSheet}
       />
     </View>
   );

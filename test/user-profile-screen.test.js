@@ -180,6 +180,7 @@ test('user profile route helpers preserve scope for the request form', () => {
     getChatHistorySearchHubHref,
     getChatHistoryTextHref,
     getChatDetailHref,
+    getNoteDetailHref,
     getEditFriendRemarkHref,
     getEditFriendTagsHref,
     getSendFriendRequestHref,
@@ -244,6 +245,34 @@ test('user profile route helpers preserve scope for the request form', () => {
         avatarUrl: 'https://img.example/avatar.png',
         conversationID: 'conversation-1',
       },
+    },
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(getNoteDetailHref('messages', 'note-1', 'owner-1'))),
+    {
+      pathname: '/(tabs)/messages/notes/[id]',
+      params: { id: 'note-1', ownerId: 'owner-1' },
+    },
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(getNoteDetailHref('contacts', 'note-1'))),
+    {
+      pathname: '/(tabs)/contacts/notes/[id]',
+      params: { id: 'note-1', ownerId: '' },
+    },
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(getNoteDetailHref('discover', 'note-1', 'owner-1'))),
+    {
+      pathname: '/(tabs)/discover/notes/[id]',
+      params: { id: 'note-1', ownerId: 'owner-1' },
+    },
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(getNoteDetailHref('profile', 'note-1', 'owner-1'))),
+    {
+      pathname: '/(tabs)/profile/notes/[id]',
+      params: { id: 'note-1', ownerId: 'owner-1' },
     },
   );
   assert.deepEqual(

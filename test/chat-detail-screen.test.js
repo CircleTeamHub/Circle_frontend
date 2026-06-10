@@ -172,3 +172,29 @@ test('chat detail only restores recording audio mode after enabling it', () => {
     /void setAudioModeAsync\(\{ allowsRecording: false \}\)\.catch\(\(\) => undefined\);/,
   );
 });
+
+test('chat detail opens sent note cards from group chats', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatDetailScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /case 'note-card':/);
+  assert.match(source, /<NoteCardBubble[\s\S]*onPress=\{\(note\) =>/);
+  assert.match(source, /getNoteDetailHref\(scope, note\.noteId, note\.ownerId \?\? ''\)/);
+  assert.doesNotMatch(source, /pathname: '\/\(tabs\)\/profile\/notes\/\[id\]'/);
+});
+
+test('note detail routes exist in every tab stack so back returns to the source tab', () => {
+  for (const relativePath of [
+    'app/(tabs)/messages/notes/[id].tsx',
+    'app/(tabs)/contacts/notes/[id].tsx',
+    'app/(tabs)/discover/notes/[id].tsx',
+    'app/(tabs)/profile/notes/[id].tsx',
+  ]) {
+    const filePath = path.join(process.cwd(), relativePath);
+    assert.equal(fs.existsSync(filePath), true, `${relativePath} missing`);
+    assert.match(fs.readFileSync(filePath, 'utf8'), /NoteDetailScreen/);
+  }
+});

@@ -69,6 +69,7 @@ function parseNoteCardPayload(data: string): NoteCardData | null {
     }
     return {
       noteId: raw.noteId,
+      ownerId: raw.ownerId ?? null,
       title: raw.title,
       contentPreview: raw.contentPreview ?? null,
       coverUrl: raw.coverUrl ?? null,

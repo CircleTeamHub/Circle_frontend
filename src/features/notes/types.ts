@@ -42,6 +42,8 @@ export interface NoteSummary {
   mediaCount: number;
   createdAt: string;
   updatedAt: string;
+  ownerId?: string | null;
+  canEdit?: boolean;
 }
 
 export interface NoteDetail extends NoteSummary {
@@ -77,4 +79,22 @@ export interface ListNotesParams {
   status?: NoteStatus;
   groupId?: string;
   search?: string;
+}
+
+export interface CreateNoteShareLinkInput {
+  title: string;
+  status?: Exclude<NoteStatus, 'DELETED'>;
+  group?: 'ungrouped';
+  groupId?: string;
+  search?: string;
+  noteIds?: string[];
+}
+
+export interface NoteShareLink {
+  id: string;
+  token: string;
+  url: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
 }

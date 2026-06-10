@@ -35,6 +35,29 @@ test('select note screen loads active notes and stores the chosen note for the p
   assert.match(src, /t\('plaza\.notePicker\.none'\)/);
 });
 
+test('select note screen renders full note cards with stable search input', () => {
+  const src = read('src/features/social/screens/SelectNoteScreen.tsx');
+
+  assert.match(src, /NoteCard/);
+  assert.match(src, /showActions=\{false\}/);
+  assert.match(src, /renderItem=\{renderNote\}/);
+  assert.match(src, /searchInput:\s*{[\s\S]*lineHeight:\s*20/);
+  assert.match(src, /searchInput:\s*{[\s\S]*minHeight:\s*24/);
+  assert.doesNotMatch(src, /noteRow:/);
+  assert.doesNotMatch(src, /noteTitle:/);
+});
+
+test('share note picker renders full note cards with stable search input', () => {
+  const src = read('src/features/chat/screens/SharePickerScreen.tsx');
+
+  assert.match(src, /NoteCard/);
+  assert.match(src, /showActions=\{false\}/);
+  assert.match(src, /filteredNotes/);
+  assert.match(src, /const renderNote = \(\{ item \}: \{ item: NoteSummary \}\) => \(\s*<NoteCard/);
+  assert.match(src, /searchInput:\s*{[\s\S]*lineHeight:\s*20/);
+  assert.match(src, /searchInput:\s*{[\s\S]*minHeight:\s*24/);
+});
+
 test('discover post flow exports a select-note route', () => {
   assert.equal(exists('app/(tabs)/discover/select-note.tsx'), true);
   const route = read('app/(tabs)/discover/select-note.tsx');
