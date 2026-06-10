@@ -157,6 +157,25 @@
 
   "chat": {
     "detail": "聊天详情",
+    "messageActions": {
+      "title": "消息操作",
+      "collect": "收藏",
+      "forward": "转发",
+      "collected": "已收藏",
+      "collectedHint": "可在我的收藏中查看",
+      "collectFailed": "收藏失败",
+      "collectFailedHint": "请稍后重试"
+    },
+    "forward": {
+      "title": "选择转发对象",
+      "searchPlaceholder": "搜索会话",
+      "empty": "没有待转发消息",
+      "group": "群聊",
+      "single": "私聊",
+      "done": "已转发",
+      "failed": "转发失败",
+      "failedRetry": "请稍后重试"
+    },
     "snackbarNewMessage": "新消息",
     "snackbarPreviewFallback": "[消息]",
     "history": {

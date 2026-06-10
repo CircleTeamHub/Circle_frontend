@@ -96,6 +96,9 @@ export interface ChatMessage {
   voiceUrl?: string;
   voicePath?: string;
   voiceDuration?: number;
+  // Byte size of the voice clip; forwarded/re-sent remote voice needs it so the
+  // OpenIM SDK renders size/progress instead of showing 0KB.
+  voiceSize?: number;
   // For image / note-card / location messages: indicates direction (sent vs received)
   outgoing?: boolean;
   // For note-card messages: parsed payload

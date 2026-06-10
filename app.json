@@ -18,6 +18,7 @@
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "允许 Circle IM 访问你的照片，用于选择并上传头像。",
         "NSLocationWhenInUseUsageDescription": "允许 Circle IM 在使用期间获取位置，用于在聊天中分享当前位置。",
+        "NSCameraUsageDescription": "允许 Circle IM 使用相机扫描二维码。",
         "NSMicrophoneUsageDescription": "允许 Circle IM 使用麦克风录制并发送语音消息。"
       }
     },
@@ -39,6 +40,14 @@
       "expo-image",
       "expo-web-browser",
       "expo-localization",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "允许 Circle IM 使用相机扫描二维码。",
+          "microphonePermission": "允许 Circle IM 使用麦克风录制并发送语音消息。",
+          "recordAudioAndroid": false
+        }
+      ],
       [
         "expo-audio",
         {

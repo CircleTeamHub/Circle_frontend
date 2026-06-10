@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import {
   Alert,
   Keyboard,
@@ -57,6 +57,7 @@ import {
   sendTextMessage,
   sendTransferCardMessage,
   sendVoiceMessage,
+  sendVoiceMessageFromSource,
   subscribeUserOnlineStatus,
   toImUserId,
   unsubscribeUserOnlineStatus,
@@ -68,7 +69,11 @@ import { useIMStore } from '@/stores/imStore';
 import { type FriendProfile } from '@/services/api/friends';
 import { fetchUserProfile } from '@/services/api/profile';
 import type { NoteSummary } from '@/features/notes/types';
-import { type UserCollection } from '@/services/api/collections';
+import { createCollection, type UserCollection } from '@/services/api/collections';
+import {
+  buildCollectionInputFromMessage,
+  getCollectedOpenIMMessagePayload,
+} from '@/features/chat/utils/message-collection';
 import {
   requestUploadPresign,
   resolveUploadContentType,
@@ -76,6 +81,7 @@ import {
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
 import { useSharePickerStore } from '@/features/chat/store/use-share-picker-store';
+import { useMessageForwardStore } from '@/features/chat/store/use-message-forward-store';
 import { useTransferComposerStore } from '@/features/chat/store/use-transfer-composer-store';
 import {
   DEFAULT_CHAT_BACKGROUND_PREFERENCE,
@@ -83,6 +89,7 @@ import {
   useChatPreferencesStore,
 } from '@/features/chat/store/use-chat-preferences-store';
 import { OnlineState, SessionType } from '@openim/rn-client-sdk';
+import { useTranslation } from 'react-i18next';
 import type { ChatMessage, FriendCardData } from '@/types';
 
 // Dev-only structured log for a failed send. Never logs the message body —
@@ -228,6 +235,7 @@ const s = StyleSheet.create({
 export default function ChatDetailScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{
     conversationID?: string;
     sourceID?: string;
@@ -264,6 +272,7 @@ export default function ChatDetailScreen() {
     { start: number; end: number } | undefined
   >(undefined);
   const consumePendingShare = useSharePickerStore((s) => s.consume);
+  const setPendingForward = useMessageForwardStore((s) => s.setPending);
   const consumePendingTransfer = useTransferComposerStore((s) => s.consume);
   const voiceRecorder = useAudioRecorder(RecordingPresets.LOW_QUALITY);
   const voiceRecorderState = useAudioRecorderState(voiceRecorder, 250);
@@ -516,29 +525,99 @@ export default function ChatDetailScreen() {
   const selfAvatarUri = authUser?.avatarUrl ?? undefined;
   const selfName = authUser?.nickname ?? authUser?.accountId;
 
+  const handleCollectMessage = useCallback(
+    async (message: ChatMessage) => {
+      if (!conversationID) return;
+      const input = buildCollectionInputFromMessage(message, {
+        conversationID,
+        conversationTitle,
+      });
+      if (!input) return;
+
+      try {
+        await createCollection(input);
+        Alert.alert(
+          t('chat.messageActions.collected'),
+          t('chat.messageActions.collectedHint'),
+        );
+      } catch (error) {
+        if (__DEV__) {
+          console.warn('[ChatDetail] collect message failed', error);
+        }
+        Alert.alert(
+          t('chat.messageActions.collectFailed'),
+          t('chat.messageActions.collectFailedHint'),
+        );
+      }
+    },
+    [conversationID, conversationTitle, t],
+  );
+
+  const handleMessageLongPress = useCallback(
+    (message: ChatMessage) => {
+      if (message.type === 'date') return;
+      Alert.alert(t('chat.messageActions.title'), undefined, [
+        {
+          text: t('chat.messageActions.collect'),
+          onPress: () => {
+            void handleCollectMessage(message);
+          },
+        },
+        {
+          text: t('chat.messageActions.forward'),
+          onPress: () => {
+            // Read the raw OpenIM item lazily (at tap time) so the message list
+            // doesn't re-render on every incoming message. Lets the picker use
+            // native forwarding, which preserves images/media.
+            const raw = conversationID
+              ? useIMStore
+                  .getState()
+                  .messagesByConversation[conversationID]?.find(
+                    (m) => m.clientMsgID === message.id,
+                  )
+              : undefined;
+            setPendingForward({ message, raw });
+            router.push({ pathname: '/(tabs)/messages/forward-picker' });
+          },
+        },
+        { text: t('common.cancel'), style: 'cancel' },
+      ]);
+    },
+    [conversationID, handleCollectMessage, setPendingForward, t],
+  );
+
+  const withMessageActions = useCallback(
+    (message: ChatMessage, node: ReactElement) => (
+      <Pressable onLongPress={() => handleMessageLongPress(message)} delayLongPress={350}>
+        {node}
+      </Pressable>
+    ),
+    [handleMessageLongPress],
+  );
+
   const renderItem = useCallback(({ item }: { item: ChatMessage }) => {
     switch (item.type) {
       case 'date': return <DatePill text={item.text ?? ''} />;
       case 'received':
-        return (
+        return withMessageActions(item, (
           <ReceivedBubble
             message={item}
             senderName={item.senderName ?? conversationTitle}
             senderAvatarUri={avatarUrl}
             onAvatarPress={() => handleOpenMessageSender(item)}
           />
-        );
+        ));
       case 'sent':
-        return (
+        return withMessageActions(item, (
           <SentBubble
             message={item}
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             hideStatus={isGroupChat}
           />
-        );
+        ));
       case 'location':
-        return (
+        return withMessageActions(item, (
           <LocationCard
             message={item}
             outgoing={Boolean(item.outgoing)}
@@ -548,9 +627,9 @@ export default function ChatDetailScreen() {
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
           />
-        );
+        ));
       case 'image':
-        return (
+        return withMessageActions(item, (
           <ImageBubble
             message={item}
             outgoing={Boolean(item.outgoing)}
@@ -561,9 +640,9 @@ export default function ChatDetailScreen() {
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
             hideStatus={isGroupChat}
           />
-        );
+        ));
       case 'voice':
-        return (
+        return withMessageActions(item, (
           <VoiceBubble
             message={item}
             outgoing={Boolean(item.outgoing)}
@@ -574,9 +653,9 @@ export default function ChatDetailScreen() {
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
             hideStatus={isGroupChat}
           />
-        );
+        ));
       case 'note-card':
-        return (
+        return withMessageActions(item, (
           <NoteCardBubble
             message={item}
             outgoing={Boolean(item.outgoing)}
@@ -590,9 +669,9 @@ export default function ChatDetailScreen() {
             }
             hideStatus={isGroupChat}
           />
-        );
+        ));
       case 'friend-card':
-        return (
+        return withMessageActions(item, (
           <FriendCardBubble
             message={item}
             outgoing={Boolean(item.outgoing)}
@@ -606,9 +685,9 @@ export default function ChatDetailScreen() {
             }
             hideStatus={isGroupChat}
           />
-        );
+        ));
       case 'transfer-card':
-        return (
+        return withMessageActions(item, (
           <TransferCardBubble
             message={item}
             outgoing={Boolean(item.outgoing)}
@@ -619,10 +698,20 @@ export default function ChatDetailScreen() {
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
             hideStatus={isGroupChat}
           />
-        );
+        ));
       default: return null;
     }
-  }, [avatarUrl, conversationTitle, handleOpenMessageSender, isGroupChat, selfAvatarUri, selfName, router, scope]);
+  }, [
+    avatarUrl,
+    conversationTitle,
+    handleOpenMessageSender,
+    isGroupChat,
+    selfAvatarUri,
+    selfName,
+    router,
+    scope,
+    withMessageActions,
+  ]);
 
   const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
 
@@ -1074,10 +1163,43 @@ export default function ChatDetailScreen() {
 
   const handlePickFavorite = useCallback(
     async (item: UserCollection) => {
+      const payload = getCollectedOpenIMMessagePayload(item.payload);
+      if (payload?.messageType === 'voice' && payload.voice) {
+        if (!sourceID || isPreviewMode) return;
+        if (inFlightRef.current) return;
+        inFlightRef.current = true;
+        try {
+          const sent = await sendVoiceMessageFromSource({
+            sourceID,
+            sessionType: conversationType,
+            sourceUrl: payload.voice.sourceUrl,
+            soundPath: payload.voice.soundPath,
+            duration: payload.voice.duration ?? 1,
+            dataSize: payload.voice.dataSize,
+          });
+          appendMessages(conversationID, [sent]);
+        } catch (error) {
+          if (__DEV__) {
+            console.warn('[ChatDetail] send collected voice failed', error);
+          }
+          setSendError('收藏语音发送失败，请重试');
+        } finally {
+          inFlightRef.current = false;
+        }
+        return;
+      }
+
       const text = `⭐ ${item.title}${item.summary ? `\n${item.summary}` : ''}`;
       await sendDraftAsText(text);
     },
-    [sendDraftAsText],
+    [
+      appendMessages,
+      conversationID,
+      conversationType,
+      isPreviewMode,
+      sendDraftAsText,
+      sourceID,
+    ],
   );
 
   const handlePickQuickReply = useCallback(

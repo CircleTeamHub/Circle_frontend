@@ -232,14 +232,14 @@ export function getEditGroupNoticeHref(
 
   switch (scope) {
     case 'contacts':
-      return { pathname: '/(tabs)/contacts/edit-group-notice', params: routeParams };
+      return { pathname: '/(tabs)/contacts/edit-group-notice', params: routeParams } as unknown as Href;
     case 'profile':
-      return { pathname: '/(tabs)/profile/edit-group-notice', params: routeParams };
+      return { pathname: '/(tabs)/profile/edit-group-notice', params: routeParams } as unknown as Href;
     case 'discover':
-      return { pathname: '/(tabs)/discover/edit-group-notice', params: routeParams };
+      return { pathname: '/(tabs)/discover/edit-group-notice', params: routeParams } as unknown as Href;
     case 'messages':
     default:
-      return { pathname: '/(tabs)/messages/edit-group-notice', params: routeParams };
+      return { pathname: '/(tabs)/messages/edit-group-notice', params: routeParams } as unknown as Href;
   }
 }
 
@@ -257,14 +257,14 @@ export function getGroupMemberSearchHref(
 
   switch (scope) {
     case 'contacts':
-      return { pathname: '/(tabs)/contacts/search-group-members', params: routeParams };
+      return { pathname: '/(tabs)/contacts/search-group-members', params: routeParams } as unknown as Href;
     case 'profile':
-      return { pathname: '/(tabs)/profile/search-group-members', params: routeParams };
+      return { pathname: '/(tabs)/profile/search-group-members', params: routeParams } as unknown as Href;
     case 'discover':
-      return { pathname: '/(tabs)/discover/search-group-members', params: routeParams };
+      return { pathname: '/(tabs)/discover/search-group-members', params: routeParams } as unknown as Href;
     case 'messages':
     default:
-      return { pathname: '/(tabs)/messages/search-group-members', params: routeParams };
+      return { pathname: '/(tabs)/messages/search-group-members', params: routeParams } as unknown as Href;
   }
 }
 

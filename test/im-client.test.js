@@ -55,6 +55,9 @@ function loadTsModule(relativePath, stubs = {}) {
 // client.ts 顶层现在还会 import @/im/media-uri（本地路径 scheme 处理）；注入真实实现以便 require 解析。
 DEFAULT_TS_MODULE_STUBS['@/im/media-uri'] = loadTsModule('src/im/media-uri.ts');
 DEFAULT_TS_MODULE_STUBS['@/im/user-id'] = loadTsModule('src/im/user-id.ts');
+DEFAULT_TS_MODULE_STUBS['@/features/chat/utils/voice-forward'] = loadTsModule(
+  'src/features/chat/utils/voice-forward.ts',
+);
 
 test('getOrCreateSingleConversation fetches a private conversation and merges it into store', async () => {
   const mergeCalls = [];
@@ -322,4 +325,74 @@ test('sendTextMessage waits until IM connection is ready before sending', async 
   assert.equal(sdkCalls[1][0], 'sendMessage');
   assert.equal(sdkCalls[1][1].groupID, 'group-1');
   assert.equal(sdkCalls[1][1].recvID, '');
+});
+
+test('forwardMessage uses the native createForwardMessage primitive (preserves media)', async () => {
+  const sdkCalls = [];
+  const originalImage = {
+    clientMsgID: 'img-1',
+    contentType: 102,
+    pictureElem: { bigPicture: { url: 'https://cdn.example.com/p.jpg' } },
+  };
+
+  const { forwardMessage } = loadTsModule('src/im/client.ts', {
+    '@openim/rn-client-sdk': {
+      __esModule: true,
+      default: {
+        initSDK: async () => undefined,
+        createForwardMessage: async (message) => {
+          sdkCalls.push(['createForwardMessage', message]);
+          return { ...message, clientMsgID: 'forward-1' };
+        },
+        sendMessage: async (params) => {
+          sdkCalls.push(['sendMessage', params]);
+          return params.message;
+        },
+      },
+      LogLevel: { Info: 0 },
+      SessionType: { Single: 1, Group: 2 },
+      ViewType: { History: 0 },
+    },
+    'react-native-fs': {
+      __esModule: true,
+      default: { DocumentDirectoryPath: '/tmp', mkdir: async () => undefined },
+    },
+    'react-native': { Platform: { OS: 'ios' } },
+    '@/constants/config': {
+      OPENIM_API_URL: 'https://im.example.com',
+      OPENIM_WS_URL: 'wss://im.example.com',
+      OPENIM_LOG_LEVEL: 0,
+    },
+    '@/stores/imStore': {
+      useIMStore: {
+        getState: () => ({
+          connected: true,
+          setError: () => undefined,
+          setInitialized: () => undefined,
+          setCurrentUserID: () => undefined,
+          setConnecting: () => undefined,
+          reset: () => undefined,
+          setConversations: () => undefined,
+          mergeConversations: () => undefined,
+        }),
+      },
+    },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: { getState: () => ({ setMessagesUnread: () => undefined }) },
+    },
+  });
+
+  const sent = await forwardMessage({
+    sourceID: 'user-9',
+    sessionType: 1,
+    message: originalImage,
+  });
+
+  // The original image item is handed to the SDK forward primitive untouched,
+  // so the picture is preserved without re-upload.
+  assert.deepEqual(sdkCalls[0], ['createForwardMessage', originalImage]);
+  assert.equal(sdkCalls[1][0], 'sendMessage');
+  assert.equal(sdkCalls[1][1].recvID, 'user9');
+  assert.equal(sdkCalls[1][1].groupID, '');
+  assert.equal(sent.clientMsgID, 'forward-1');
 });

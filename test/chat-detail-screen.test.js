@@ -186,6 +186,44 @@ test('chat detail opens sent note cards from group chats', () => {
   assert.doesNotMatch(source, /pathname: '\/\(tabs\)\/profile\/notes\/\[id\]'/);
 });
 
+test('chat detail forwards long-pressed messages through a conversation picker', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(source, /useMessageForwardStore/);
+  assert.match(source, /setPendingForward/);
+  assert.match(source, /pathname:\s*'\/\(tabs\)\/messages\/forward-picker'/);
+  assert.match(source, /handleMessageLongPress/);
+  // Forward action is now localized via i18n instead of a hardcoded label.
+  assert.match(source, /t\('chat\.messageActions\.forward'\)/);
+});
+
+test('message forward picker route sends pending text and voice messages via OpenIM', () => {
+  const route = fs.readFileSync(
+    path.join(process.cwd(), 'app/(tabs)/messages/forward-picker.tsx'),
+    'utf8',
+  );
+  const screen = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ForwardPickerScreen.tsx'),
+    'utf8',
+  );
+  const store = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/store/use-message-forward-store.ts'),
+    'utf8',
+  );
+
+  assert.match(route, /ForwardPickerScreen/);
+  assert.match(store, /pending/);
+  assert.match(screen, /sendTextMessage/);
+  // Voice forwarding now delegates to one shared helper instead of branching
+  // over sendVoiceMessageByUrl / sendVoiceMessage inline.
+  assert.match(screen, /sendVoiceMessageFromSource/);
+  assert.match(screen, /sendNoteCardMessage/);
+  assert.match(screen, /sendFriendCardMessage/);
+});
+
 test('note detail routes exist in every tab stack so back returns to the source tab', () => {
   for (const relativePath of [
     'app/(tabs)/messages/notes/[id].tsx',

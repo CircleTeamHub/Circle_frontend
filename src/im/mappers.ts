@@ -353,6 +353,7 @@ export function mapMessageItemToChatMessage(
       voiceUrl: voiceUrl || undefined,
       voicePath: item.soundElem?.soundPath ?? undefined,
       voiceDuration: item.soundElem?.duration ?? undefined,
+      voiceSize: item.soundElem?.dataSize ?? undefined,
       senderName: isSent ? undefined : (item.senderNickname || item.sendID),
     };
   }

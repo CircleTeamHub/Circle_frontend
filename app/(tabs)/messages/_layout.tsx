@@ -42,6 +42,12 @@ export default function MessagesLayout() {
       <Stack.Screen name="find" />
       <Stack.Screen name="groups" />
       <Stack.Screen name="temp-chats" />
+      <Stack.Screen
+        name="scan"
+        options={{
+          title: t('messages.scan', { defaultValue: '扫一扫' }),
+        }}
+      />
       <Stack.Screen name="new-group" />
       <Stack.Screen name="invite-group-members" />
       <Stack.Screen name="search-group-members" />

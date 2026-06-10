@@ -16,7 +16,7 @@ import { useTabBadgeStore } from "@/stores/tabBadgeStore";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { Conversation } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useRouter } from "expo-router";
+import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -662,13 +662,7 @@ export default function MessagesScreen() {
       else if (id === "addFriend") router.push("/(tabs)/messages/add-friend");
       else if (id === "groupManagement") router.push("/(tabs)/messages/groups");
       else if (id === "seatManagement") router.push("/(tabs)/messages/temp-chats");
-      else if (id === "scan") {
-        // 扫一扫需要相机权限 + QR 解码模块。先用 Alert 兜底，不让按钮装死。
-        Alert.alert(
-          "扫一扫",
-          "该功能即将上线，敬请期待。",
-        );
-      }
+      else if (id === "scan") router.push("/(tabs)/messages/scan" as Href);
     },
     [router],
   );

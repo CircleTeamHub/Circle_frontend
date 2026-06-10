@@ -53,6 +53,9 @@ function normalize(value) {
 }
 
 DEFAULT_CLIENT_STUBS['@/im/user-id'] = loadTsModule('src/im/user-id.ts');
+DEFAULT_CLIENT_STUBS['@/features/chat/utils/voice-forward'] = loadTsModule(
+  'src/features/chat/utils/voice-forward.ts',
+);
 
 test('app config enables native microphone recording permissions for expo-audio', () => {
   const appJson = JSON.parse(
@@ -173,6 +176,190 @@ test('sendVoiceMessage creates an OpenIM sound message from a local recording pa
   ]);
 });
 
+test('sendVoiceMessageByUrl creates an OpenIM sound message from a remote URL', async () => {
+  const sdkCalls = [];
+  const { sendVoiceMessageByUrl } = loadTsModule('src/im/client.ts', {
+    '@/im/media-uri': loadTsModule('src/im/media-uri.ts'),
+    '@openim/rn-client-sdk': {
+      __esModule: true,
+      default: {
+        initSDK: async () => undefined,
+        createSoundMessageByURL: async (params) => {
+          sdkCalls.push(['createSoundMessageByURL', params]);
+          return { clientMsgID: 'voice-url-1' };
+        },
+        sendMessage: async (params) => {
+          sdkCalls.push(['sendMessage', params]);
+          return params.message;
+        },
+      },
+      LogLevel: { Info: 0 },
+      SessionType: { Single: 1, Group: 2 },
+      ViewType: { History: 0 },
+    },
+    'react-native-fs': {
+      __esModule: true,
+      default: {
+        DocumentDirectoryPath: '/tmp',
+        mkdir: async () => undefined,
+      },
+    },
+    'react-native': {
+      Platform: { OS: 'ios' },
+    },
+    '@/constants/config': {
+      OPENIM_API_URL: 'https://im.example.com',
+      OPENIM_WS_URL: 'wss://im.example.com',
+      OPENIM_LOG_LEVEL: 0,
+      LIMITS: { TRANSFER_MAX_AMOUNT: 99999 },
+    },
+    '@/stores/imStore': {
+      useIMStore: {
+        getState: () => ({
+          connected: true,
+          setError: () => undefined,
+          setInitialized: () => undefined,
+          setCurrentUserID: () => undefined,
+          setConnecting: () => undefined,
+          reset: () => undefined,
+          setConversations: () => undefined,
+          mergeConversations: () => undefined,
+          setMessages: () => undefined,
+        }),
+      },
+    },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: {
+        getState: () => ({
+          setMessagesUnread: () => undefined,
+        }),
+      },
+    },
+  });
+
+  await sendVoiceMessageByUrl({
+    sourceID: 'user-2',
+    sessionType: 1,
+    sourceUrl: 'https://cdn.example.com/voice.m4a',
+    soundPath: '',
+    duration: 4,
+    dataSize: 1024,
+    soundType: 'm4a',
+  });
+
+  assert.deepEqual(normalize(sdkCalls), [
+    [
+      'createSoundMessageByURL',
+      {
+        uuid: '',
+        soundPath: '',
+        sourceUrl: 'https://cdn.example.com/voice.m4a',
+        dataSize: 1024,
+        duration: 4,
+        soundType: 'm4a',
+      },
+    ],
+    [
+      'sendMessage',
+      {
+        recvID: 'user2',
+        groupID: '',
+        message: { clientMsgID: 'voice-url-1' },
+        offlinePushInfo: {
+          title: '新消息',
+          desc: '[语音]',
+          ex: '',
+          iOSPushSound: 'default',
+          iOSBadgeCount: true,
+        },
+      },
+    ],
+  ]);
+});
+
+function loadClientWithSoundStubs(sdkCalls) {
+  return loadTsModule('src/im/client.ts', {
+    '@/im/media-uri': loadTsModule('src/im/media-uri.ts'),
+    '@openim/rn-client-sdk': {
+      __esModule: true,
+      default: {
+        initSDK: async () => undefined,
+        createSoundMessageByURL: async (params) => {
+          sdkCalls.push(['createSoundMessageByURL', params]);
+          return { clientMsgID: 'voice-url' };
+        },
+        createSoundMessageFromFullPath: async (params) => {
+          sdkCalls.push(['createSoundMessageFromFullPath', params]);
+          return { clientMsgID: 'voice-path' };
+        },
+        sendMessage: async (params) => {
+          sdkCalls.push(['sendMessage', params.message]);
+          return params.message;
+        },
+      },
+      LogLevel: { Info: 0 },
+      SessionType: { Single: 1, Group: 2 },
+      ViewType: { History: 0 },
+    },
+    'react-native-fs': {
+      __esModule: true,
+      default: { DocumentDirectoryPath: '/tmp', mkdir: async () => undefined },
+    },
+    'react-native': { Platform: { OS: 'ios' } },
+    '@/constants/config': {
+      OPENIM_API_URL: 'https://im.example.com',
+      OPENIM_WS_URL: 'wss://im.example.com',
+      OPENIM_LOG_LEVEL: 0,
+      LIMITS: { TRANSFER_MAX_AMOUNT: 99999 },
+    },
+    '@/stores/imStore': {
+      useIMStore: {
+        getState: () => ({
+          connected: true,
+          setError: () => undefined,
+          setInitialized: () => undefined,
+          setCurrentUserID: () => undefined,
+          setConnecting: () => undefined,
+          reset: () => undefined,
+          setConversations: () => undefined,
+          mergeConversations: () => undefined,
+          setMessages: () => undefined,
+        }),
+      },
+    },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: { getState: () => ({ setMessagesUnread: () => undefined }) },
+    },
+  });
+}
+
+test('sendVoiceMessageFromSource prefers the remote url so it never re-uploads', async () => {
+  const sdkCalls = [];
+  const { sendVoiceMessageFromSource } = loadClientWithSoundStubs(sdkCalls);
+
+  await sendVoiceMessageFromSource({
+    sourceID: 'user-2',
+    sessionType: 1,
+    sourceUrl: 'https://cdn.example.com/voice.m4a',
+    soundPath: '/tmp/voice.m4a',
+    duration: 4,
+  });
+
+  assert.equal(sdkCalls[0][0], 'createSoundMessageByURL');
+  assert.equal(sdkCalls[0][1].sourceUrl, 'https://cdn.example.com/voice.m4a');
+});
+
+test('sendVoiceMessageFromSource throws (no silent no-op) when nothing is playable', async () => {
+  const sdkCalls = [];
+  const { sendVoiceMessageFromSource } = loadClientWithSoundStubs(sdkCalls);
+
+  await assert.rejects(
+    sendVoiceMessageFromSource({ sourceID: 'user-2', sessionType: 1, duration: 4 }),
+    /可播放地址/,
+  );
+  assert.equal(sdkCalls.length, 0);
+});
+
 test('OpenIM voice messages map to a dedicated ChatMessage voice bubble model', () => {
   const { mapMessageItemToChatMessage } = loadTsModule('src/im/mappers.ts', {
     '@openim/rn-client-sdk': {
@@ -237,6 +424,7 @@ test('OpenIM voice messages map to a dedicated ChatMessage voice bubble model', 
     voiceUrl: 'https://cdn.example.com/voice.m4a',
     voicePath: '',
     voiceDuration: 4,
+    voiceSize: 1024,
   });
 });
 

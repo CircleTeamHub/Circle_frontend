@@ -37,6 +37,7 @@ import {
 } from '@/constants/config';
 import { bindOpenIMListeners } from '@/im/listeners';
 import { stripFileScheme } from '@/im/media-uri';
+import { resolveVoiceSendStrategy } from '@/features/chat/utils/voice-forward';
 import { toImUserId } from '@/im/user-id';
 import { registerLogoutHandler } from '@/services/auth/session';
 import { useIMStore } from '@/stores/imStore';
@@ -735,6 +736,125 @@ export async function sendVoiceMessage(params: {
     offlinePushInfo: {
       title: '新消息',
       desc: '[语音]',
+      ex: '',
+      iOSPushSound: 'default',
+      iOSBadgeCount: true,
+    },
+  });
+}
+
+export async function sendVoiceMessageByUrl(params: {
+  sourceID: string;
+  sessionType: SessionType;
+  sourceUrl: string;
+  soundPath?: string;
+  duration: number;
+  dataSize?: number;
+  soundType?: string;
+}) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await waitForOpenIMConnectionReady();
+
+  const duration = Math.max(1, Math.round(params.duration));
+  const message = await OpenIMSDK.createSoundMessageByURL({
+    uuid: '',
+    soundPath: params.soundPath ? stripFileScheme(params.soundPath) : '',
+    sourceUrl: params.sourceUrl,
+    dataSize: params.dataSize ?? 0,
+    duration,
+    soundType: params.soundType,
+  });
+
+  const isSingle = params.sessionType === SessionType.Single;
+  return OpenIMSDK.sendMessage({
+    recvID: isSingle ? toImUserId(params.sourceID) : '',
+    groupID: !isSingle ? params.sourceID : '',
+    message,
+    offlinePushInfo: {
+      title: '新消息',
+      desc: '[语音]',
+      ex: '',
+      iOSPushSound: 'default',
+      iOSBadgeCount: true,
+    },
+  });
+}
+
+/**
+ * Re-send a voice message from whatever source we still have (remote url
+ * preferred, local path as fallback). Single source of truth for the
+ * "forward voice" and "send collected voice" flows.
+ */
+export async function sendVoiceMessageFromSource(params: {
+  sourceID: string;
+  sessionType: SessionType;
+  sourceUrl?: string | null;
+  soundPath?: string | null;
+  duration: number;
+  dataSize?: number;
+}) {
+  const strategy = resolveVoiceSendStrategy({
+    sourceUrl: params.sourceUrl,
+    soundPath: params.soundPath,
+  });
+
+  if (!strategy) {
+    throw new Error('语音缺少可播放地址');
+  }
+
+  if (strategy.kind === 'url') {
+    return sendVoiceMessageByUrl({
+      sourceID: params.sourceID,
+      sessionType: params.sessionType,
+      sourceUrl: strategy.sourceUrl,
+      soundPath: strategy.soundPath,
+      duration: params.duration,
+      dataSize: params.dataSize,
+    });
+  }
+
+  return sendVoiceMessage({
+    sourceID: params.sourceID,
+    sessionType: params.sessionType,
+    soundPath: strategy.soundPath,
+    duration: params.duration,
+  });
+}
+
+/**
+ * Forward an existing OpenIM message to another conversation using the SDK's
+ * native forward primitive. This preserves media (image / voice / video /
+ * file) and custom payloads (note / friend / transfer cards) without
+ * re-uploading or re-encoding — the correct path for "转发" of any type.
+ */
+export async function forwardMessage(params: {
+  sourceID: string;
+  sessionType: SessionType;
+  message: MessageItem;
+}) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await waitForOpenIMConnectionReady();
+
+  const forwarded = await OpenIMSDK.createForwardMessage(params.message);
+
+  const isSingle = params.sessionType === SessionType.Single;
+  return OpenIMSDK.sendMessage({
+    recvID: isSingle ? toImUserId(params.sourceID) : '',
+    groupID: !isSingle ? params.sourceID : '',
+    message: forwarded,
+    offlinePushInfo: {
+      title: '新消息',
+      desc: '[消息]',
       ex: '',
       iOSPushSound: 'default',
       iOSBadgeCount: true,

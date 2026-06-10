@@ -157,6 +157,25 @@
 
   "chat": {
     "detail": "Chat",
+    "messageActions": {
+      "title": "Message actions",
+      "collect": "Save",
+      "forward": "Forward",
+      "collected": "Saved",
+      "collectedHint": "View it in My Collections",
+      "collectFailed": "Save failed",
+      "collectFailedHint": "Please try again later"
+    },
+    "forward": {
+      "title": "Choose a chat",
+      "searchPlaceholder": "Search chats",
+      "empty": "No message to forward",
+      "group": "Group",
+      "single": "Direct",
+      "done": "Forwarded",
+      "failed": "Forward failed",
+      "failedRetry": "Please try again later"
+    },
     "snackbarNewMessage": "New message",
     "snackbarPreviewFallback": "[Message]",
     "history": {
