@@ -1,10 +1,11 @@
-# LiveKit 音视频通话 · 后端接口设计
+# LiveKit 群通话 · Cloud 优先设计
 
 - **状态**：设计草案，待评审
 - **日期**：2026-06-11
-- **范围**：`circle_be` 后端接口 + `circle-im` 客户端接入边界
-- **不包含**：本轮不改运行时代码，不实现前端 UI，不部署 LiveKit
-- **参考**：Squady WebRTC 服务、LiveKit 官方 Expo/React Native 文档、LiveKit Server SDK 文档
+- **范围**：`circle_be` 后端通话状态 + `circle-im` Expo 客户端接入边界
+- **不包含**：本轮不改运行时代码，不部署 LiveKit，不实现语聊房治理能力
+- **当前决策**：先用 LiveKit Cloud 做类似腾讯 group call 的多人通话；后续如大陆网络体验不稳，再迁移到自部署 LiveKit
+- **参考**：LiveKit 官方 Cloud / Expo / Token / Region / Self-host 文档，Squady WebRTC 服务实现
 
 ---
 
@@ -16,190 +17,299 @@
 - `src/features/chat/screens/ChatDetailScreen.tsx` 的 `video-call` 附件项只提示需要 RTC SDK；
 - C2 语音消息已完成，但它是 OpenIM 文件消息链路，不等同实时通话。
 
-Squady 的可复用经验是：服务端负责建房、鉴权和签发 LiveKit 连接凭证，客户端只拿 `url + token` 直连 LiveKit 媒体服务器。Circle IM 是 Expo / React Native 项目，不需要照搬 Squady 的 Flutter MethodChannel 和 Android 原生桥；第一版建议使用 LiveKit React Native SDK + Expo config plugin。
+新的产品约束已经收敛：
+
+1. 需要类似腾讯 TUICallKit 的 **group call**，不是语聊房。
+2. 不使用腾讯 RTC。
+3. 第一阶段不需要上麦、踢人、主持人、座位、房间公告、麦位管理。
+4. 需要先降低复杂度，能尽快验证真实多人语音体验。
+5. 未来如果 LiveKit Cloud 在中国大陆体验不稳定，需要能迁移到自部署。
+
+因此本文档替换旧方案：**不再优先复制 Squady 的完整 WebRTC 服务**。Squady 只作为 LiveKit token、room、webhook 的参考实现；Circle 第一阶段直接在 `circle_be` 内实现轻量 CallModule，并连接 LiveKit Cloud。
 
 ---
 
-## 2. 目标
+## 2. 术语
 
-1. 明确定义 Circle IM 使用 LiveKit 实现音视频通话时的后端边界。
-2. 让通话状态由业务后端掌控：发起、响铃、接听、拒绝、取消、挂断、超时。
-3. 服务端短时签发 LiveKit token，客户端不接触 LiveKit API secret。
-4. 通话进行中的事件走现有 `/realtime` WebSocket，通话结束后的历史记录可落 OpenIM 自定义消息。
-5. 第一阶段优先支持 1v1 通话，为后续群通话留扩展点。
+### Group call
 
-## 3. 非目标
+类似微信群语音/视频通话：
 
-- 不在本轮实现群通话、主持人、踢人、房间管理 UI。
-- 不在本轮实现 iOS CallKit、PushKit、系统级来电页或后台保活。
-- 不在本轮实现通话录制、转写、计费、通话质量统计面板。
-- 不用 OpenIM SDK 承载实时媒体；OpenIM 只用于聊天上下文和后续通话记录。
-- 不把 LiveKit API key / secret 暴露给客户端。
+- 从群聊发起；
+- 发起人选择一个或多个群成员；
+- 被邀请人收到来电；
+- 接听的人进入同一个实时通话房间；
+- 默认所有接听者都可以说话；
+- 用户离开即退出通话。
+
+### Voice room
+
+语聊房/聊天室模型：
+
+- 房间可以长期存在；
+- 有 host、speaker、listener、mic seat；
+- 需要上麦、下麦、踢人、禁麦、房间管理。
+
+本阶段只做 **group call**，不做 voice room。
 
 ---
 
-## 4. 方案选择
+## 3. 目标
 
-### 推荐：复用 Squady WebRTC 服务，构建 Circle 专用镜像
+1. 支持群聊内发起多人语音通话，后续可扩展到多人视频。
+2. 通话业务状态由 `circle_be` 掌控：发起、邀请、接听、拒绝、离开、结束、超时。
+3. App 只调用 `circle_be`，不直接调用 LiveKit 管理 API。
+4. `circle_be` 短时签发 LiveKit token，客户端不接触 `LIVEKIT_API_SECRET`。
+5. 媒体传输先使用 LiveKit Cloud，降低 RTC 运维成本。
+6. 设计上保持 Cloud 到自部署的可迁移性：App 和业务 API 不感知底层是 Cloud 还是自部署。
+7. 通话中的实时通知走现有 `/realtime` WebSocket；通话结束记录后续可写入 OpenIM 自定义消息。
 
-把 `/Users/yiboding/Downloads/squady-be-notification/apps/webrtc` 作为种子代码，派生出 Circle 的独立 WebRTC 服务镜像。保留它已有的 LiveKit 集成、房间管理、join token、webhook、Prisma schema、Docker Compose 和审计日志；`circle_be` 继续负责 Circle 业务状态、好友/拉黑权限、来电 realtime 事件和 OpenIM 通话记录。
+---
 
-推荐的边界：
+## 4. 非目标
 
-- `circle-webrtc`：只管媒体房间和 LiveKit token，不直接信任 App。
-- `circle_be`：对 App 暴露 `/api/v1/calls`，校验好友关系和通话状态，然后用内部凭证调用 `circle-webrtc`。
-- `circle-im`：只调用 `circle_be`，永远不直接调用 `circle-webrtc`。
+- 不做腾讯、Agora、Zego 等闭源厂商 SDK。
+- 不第一阶段自部署 LiveKit。
+- 不直接复制 Squady 完整 WebRTC 服务作为运行依赖。
+- 不做语聊房治理：上麦、踢人、禁麦、管理员、房间列表、房间公告。
+- 不做系统级来电页：iOS CallKit、PushKit、Android ConnectionService 暂不纳入第一版。
+- 不做录制、转写、AI 降噪、质量统计后台、计费后台。
+- 不用 OpenIM 承载实时媒体；OpenIM 只用于聊天上下文和通话记录。
+
+---
+
+## 5. 方案选择
+
+### 推荐：LiveKit Cloud + `circle_be` 轻量 CallModule
+
+架构：
+
+```text
+circle-im App
+  -> circle_be /api/v1/calls/*
+  -> circle_be 签发 LiveKit token
+  -> App 使用 { livekitUrl, token } 连接 LiveKit Cloud
+
+circle_be
+  -> 管通话业务状态、群成员权限、邀请、超时、结束
+  -> 持有 LIVEKIT_API_KEY / LIVEKIT_API_SECRET
+  -> 接收 LiveKit webhook 更新房间和参与者状态
+
+LiveKit Cloud
+  -> 只管实时音视频媒体传输
+```
 
 优点：
 
-- 现成代码最多：Squady webrtc 已包含 `RoomsService`、`LiveKitService`、webhook、ACL/ban、tenant credential、Docker Compose 和测试。
-- 部署边界正确：RTC 可独立镜像、独立数据库、独立扩缩容。
-- 后续群语聊更顺：Squady 的 room/role/participants 模型天然比 1v1 CallSession 更接近多人房间。
+- 不用腾讯。
+- 不需要第一天就处理 UDP/TURN/TLS/多节点/Redis/跨境线路等 RTC 运维问题。
+- LiveKit 核心是开源的，未来可以迁到自部署。
+- App 只依赖 LiveKit React Native SDK，业务 API 不绑定 Cloud。
+- 对“多人 group call，无上麦治理”的范围足够简单。
 
-必须改造的点：
+缺点：
 
-- 服务命名、镜像名、环境变量默认值从 Squady 改为 Circle。
-- 默认 tenant 从 `Squady` 改成 `CircleIM` 或 `circle-im`。
-- `circle_be` 增加内部 WebRTC client，负责换取 webrtc JWT 和调用 `/rooms`、`/rooms/:id/join`、`/rooms/:id/close`。
-- App 不直接拿 webrtc tenant JWT；所有 App 请求仍走 `circle_be` JWT。
-- 如果第一阶段只做 1v1，`circle_be` 仍需要自己的 `CallSession` 表来表达响铃、拒接、取消、未接听等 IM 通话语义；webrtc 服务只表达房间是否 active/ended。
+- 中国大陆用户连 LiveKit Cloud 的体验需要实测。
+- 付费后有 WebRTC minutes 和下行流量成本。
+- 后续自部署仍需要专业网络和运维配置。
 
-### 备选：`circle_be` 内置 CallModule + LiveKitService
+当前费用边界（截至 2026-06-11，正式上线前必须重新确认官方 pricing 页）：
 
-在现有 NestJS 后端新增 `CallModule`，直接依赖 `livekit-server-sdk`。这个方案文件少、链路短，但会把 RTC 房间管理和业务后端绑在一起。既然 Squady 已有独立 webrtc 服务代码，当前不再作为主方案。
+| 套餐 | 月费 | WebRTC minutes | 并发连接 | 下行流量 |
+| --- | ---: | ---: | ---: | ---: |
+| Build | $0/月 | 5,000 included | 100 | 50GB included |
+| Ship | $50/月 | 150,000 included, then $0.0005/min | 1,000 | 250GB included, then $0.12/GB |
+| Scale | $500/月 | 1,500,000 included, then $0.0004/min | 5,000 | 3TB included, then $0.10/GB |
 
-### 不建议：客户端直接连 LiveKit token endpoint
+普通 group call 只需要关注 WebRTC minutes 和下行流量，不涉及 LiveKit Agent、STT、TTS、LLM 的计费。
 
-只做一个简单 token endpoint，让客户端自己决定通话状态。
+### 备选：完整复用 Squady WebRTC 服务
 
-这个方案看似快，但拒接、超时、重复来电、历史记录、权限校验都会散落到客户端。通话是强状态业务，不适合由客户端主导。
+把 Squady 的 `/apps/webrtc` 派生为 `circle-webrtc`，作为独立服务运行。
+
+优点：
+
+- 已有 tenant、room、participant、role、webhook、审计日志和 Docker 结构。
+- 如果未来做语聊房，这套模型更接近长期房间系统。
+
+缺点：
+
+- 对当前 group call 过重。
+- 需要额外服务、额外数据库 schema、额外内部鉴权。
+- 仍要接 LiveKit Cloud 或自部署 LiveKit，并不能消除 RTC 运维问题。
+
+结论：当前不采用。保留为后续语聊房或复杂房间治理的参考。
+
+### 不建议：客户端直接拿 LiveKit token endpoint
+
+只做一个 token endpoint，让客户端自己决定谁在通话、谁被邀请、何时结束。
+
+不建议原因：
+
+- 群成员权限、被拉黑、重复来电、忙线、超时、通话记录都会散落在客户端。
+- 后续做 push、OpenIM 通话记录、自部署迁移时会返工。
+- LiveKit room 不是业务通话状态机，不能替代 `CallSession`。
 
 ---
 
-## 5. 第一阶段产品范围
+## 6. 第一阶段产品范围
 
-第一阶段只做 1v1 音视频通话：
+第一阶段主线是 **群语音通话**：
 
-- 从用户资料页发起：目标用户明确，`sessionType=Single`。
-- 从单聊聊天页发起：使用当前 `sourceID` 作为目标用户。
-- 群聊聊天页点击视频通话时，后端返回 `GROUP_CALL_UNSUPPORTED`，客户端继续显示“群通话暂未开放”。
-- 来电只保证 App 在线或前台有 realtime 连接时可实时响铃。
-- 离线/后台系统级来电、APNs/FCM/CallKit 作为后续阶段。
+- 入口：群聊详情或群聊聊天页的通话按钮。
+- 发起：发起人从群成员中选择被邀请人；后端自动把发起人加入参与者列表。
+- 接听：被邀请人收到 realtime 来电，点击接听后获得 LiveKit token 并进入通话页。
+- 拒绝：被邀请人可拒绝自己的邀请，不影响其他人。
+- 离开：任一参与者可离开；其他人继续通话。
+- 结束：当所有已接听参与者离开，或发起人在无人接听前取消，通话进入终态。
+- 超时：被邀请人在 45 秒内未接听则标记为 missed。
+- 人数：默认最多 10 人，可用 `CALL_MAX_PARTICIPANTS` 配置。
 
-推荐默认行为：
+视频通话作为同一模型的后续开关：
 
-- 视频通话：LiveKit token 允许发布 `camera` + `microphone`。
-- 语音通话：LiveKit token 只允许发布 `microphone`。
-- 发起后 45 秒无人接听则变更为 `MISSED`。
-- 同一用户同一时间只能有一个非终态 1v1 通话。
+- `callType=AUDIO`：token 只允许发布 `microphone`。
+- `callType=VIDEO`：token 允许发布 `microphone` + `camera`。
+- 第一版 UI 可以只开放 AUDIO，视频按钮继续提示后续开放。
+
+单聊通话可以复用相同模型：
+
+- 单聊就是参与者数量为 2 的 call。
+- 如果需要先从单聊入口上线，后端 API 和数据模型不需要重写。
 
 ---
 
-## 6. 后端服务拆分
+## 7. 国内网络策略
 
-建议拆成两个后端边界。
+LiveKit Cloud 官方是全球分布式服务，默认让用户连最近 edge。按当前官方区域说明，可 pin 的 Asia 区域包括 Japan 和 Singapore，没有中国大陆节点。Region pinning 需要 Scale 或更高套餐。
 
-### 6.1 `circle-webrtc` 服务
+工程判断：
 
-从 Squady 复制/派生：
+- 开发、小范围内测：可以直接使用 LiveKit Cloud。
+- 中国大陆用户占多数的正式上线：必须做真实设备和真实运营商测试。
+- 如果大陆移动/联通/电信表现不稳定，再迁到自部署。
+
+建议的实测矩阵：
+
+| 场景 | 设备/网络 | 目标 |
+| --- | --- | --- |
+| 2 人语音 | WiFi + 5G | 基础连通和音频稳定 |
+| 5 人语音 | 电信/联通/移动混合 | 普通群通话 |
+| 10 人语音 | 弱网 + 移动网络 | MVP 上限 |
+| 切后台再回来 | iOS / Android | 恢复和重连 |
+| 跨地区 | 华东/华南/华北 | 延迟和抖动 |
+
+建议观测指标：
+
+- join 成功率；
+- 首次出声耗时；
+- RTT / jitter / packet loss；
+- 断线重连次数；
+- 用户主观评分；
+- LiveKit dashboard 中每场 session 的质量指标。
+
+迁移触发条件建议：
+
+- 多运营商环境下频繁出现明显断续；
+- 5 人语音平均体验不可接受；
+- LiveKit dashboard 显示跨境链路 packet loss 或 jitter 长期偏高；
+- 业务增长后 Cloud 成本或数据地域要求不合适。
+
+---
+
+## 8. Cloud 到自部署迁移边界
+
+从 Cloud 迁到自部署时，App 不应改业务代码。
+
+必须保持：
 
 ```text
-apps/webrtc/
-├── src/rooms/*
-├── src/livekit/livekit.service.ts
-├── src/webhook/*
-├── src/auth/*
-├── src/bans/*
-├── src/acls/*
-├── prisma/schema.prisma
-├── docker-compose.yml
-├── docker-compose.prod.yml
-└── docker/webrtc.dockerfile 或等价 Dockerfile
+App -> circle_be 创建/加入通话
+circle_be -> 返回 { livekitUrl, token, expiresAt }
+App -> LiveKit SDK connect(livekitUrl, token)
 ```
 
-保留：
+只允许后端和部署层变化：
 
-- `POST /api/v1/rooms`
-- `GET /api/v1/rooms/:roomId`
-- `POST /api/v1/rooms/:roomId/join`
-- `POST /api/v1/rooms/:roomId/close`
-- participants / mute / role 管理接口
-- LiveKit webhook 验签和事件处理
-- tenant credentials / scopes 机制
-- WebrtcRoom / WebrtcParticipantRole / WebrtcRoomLog / ACL / Ban schema
+```bash
+LIVEKIT_URL=wss://livekit.example.com
+LIVEKIT_API_KEY=...
+LIVEKIT_API_SECRET=...
+LIVEKIT_WEBHOOK_SECRET=...
+```
 
-Circle 定制：
+迁移到自部署时需要处理：
 
-- 默认 tenant 改为 `circle-im`。
-- 镜像名建议 `circle-webrtc`。
-- 容器名、volume、network 从 `webrtc-*` 改成 `circle-webrtc-*`。
-- 移除或关闭对公网暴露的 admin tenant API，至少生产环境只允许内网访问。
-- 增加健康检查和 migration entrypoint：启动前执行 `prisma migrate deploy`。
+- 域名、TLS、WSS；
+- UDP 端口开放；
+- TURN/STUN；
+- 防火墙和安全组；
+- LiveKit webhook 对外可达；
+- 监控和日志；
+- 单节点容量；
+- 多节点时的 Redis、负载均衡、区域路由；
+- 中国大陆部署时的备案、云厂商线路和合规。
 
-### 6.2 `circle_be` CallModule
+迁移复杂度结论：
 
-`circle_be` 仍新增轻量 `CallModule`，但不直接依赖 LiveKit SDK。它负责业务通话状态，并通过内部 HTTP client 调用 `circle-webrtc`。
+- App 侧：低，理想情况下只跟随后端返回新的 `livekitUrl`。
+- 后端侧：中，主要是配置和 webhook 验证。
+- 运维侧：高，RTC 对网络质量、端口和带宽更敏感。
+
+---
+
+## 9. 后端模块设计
+
+在 `circle_be` 新增 `CallModule`，不新增独立 `circle-webrtc` 服务。
 
 ```text
 circle_be/src/call/
 ├── call.module.ts
 ├── call.controller.ts
 ├── call.service.ts
-├── webrtc-client.service.ts
+├── call-participant.service.ts
+├── livekit.service.ts
 ├── call-timeout.service.ts
+├── call-webhook.controller.ts
 └── dto/
     └── call.dto.ts
 ```
 
+职责：
+
+- `CallController`：App HTTP API。
+- `CallService`：业务状态机、权限、幂等处理。
+- `CallParticipantService`：群通话参与者邀请、接听、离开、missed。
+- `LiveKitService`：创建 room、删除 room、签发 token、验证 webhook。
+- `CallTimeoutService`：处理来电超时和无人接听结束。
+- `CallWebhookController`：接收 LiveKit room/participant 事件。
+
 依赖：
 
-- `PrismaModule`
-- `RealtimeModule`
-- `OpenimModule`（第二阶段：写通话记录自定义消息）
-- `FriendModule` 或直接查 `Friend` 表做 1v1 权限校验
-- 内部 HTTP client 调用 `circle-webrtc`
+- `PrismaModule`；
+- `RealtimeModule`；
+- OpenIM group/member 查询能力；
+- 后续 OpenIM 自定义消息发送能力。
 
-`circle_be` 环境变量：
-
-```bash
-WEBRTC_SERVICE_URL=http://circle-webrtc:3005
-WEBRTC_TENANT_ID=circle-im
-WEBRTC_CLIENT_ID=...
-WEBRTC_CLIENT_SECRET=...
-CALL_RING_TIMEOUT_SECONDS=45
-CALL_ALLOW_OFFLINE_INVITE=false
-```
-
-`circle-webrtc` 环境变量：
+环境变量：
 
 ```bash
-LIVEKIT_URL=wss://livekit.example.com
+LIVEKIT_URL=wss://xxx.livekit.cloud
 LIVEKIT_API_KEY=...
 LIVEKIT_API_SECRET=...
-LIVEKIT_TOKEN_MAX_TTL=3600
-WEBRTC_DATABASE_URL=postgresql://...
-JWT_SECRET=...
-WEBRTC_TENANT_ID=circle-im
-```
+LIVEKIT_WEBHOOK_SECRET=...
+LIVEKIT_TOKEN_TTL_SECONDS=3600
 
-本地开发可使用 LiveKit dev server；生产必须使用 LiveKit Cloud 或正确配置公网 TLS / TURN / UDP 的自托管 LiveKit。
+CALL_RING_TIMEOUT_SECONDS=45
+CALL_MAX_PARTICIPANTS=10
+CALL_ALLOW_OFFLINE_INVITE=false
+CALL_ENABLE_VIDEO=false
+```
 
 ---
 
-## 7. 数据模型
+## 10. 数据模型
 
-数据分两层。
-
-`circle-webrtc` 复用 Squady schema：
-
-- `WebrtcTenantCredential`
-- `WebrtcRoom`
-- `WebrtcParticipantRole`
-- `WebrtcRoomLog`
-- `WebrtcRoomAcl`
-- `WebrtcBannedUser`
-
-`circle_be` 新增业务通话表，用来表达 IM 产品语义：
+`circle_be` 持有业务通话状态。LiveKit room 只保存媒体房间状态。
 
 ```prisma
 enum CallType {
@@ -209,123 +319,190 @@ enum CallType {
 
 enum CallStatus {
   RINGING
-  ACCEPTED
   ACTIVE
   ENDED
-  REJECTED
   CANCELED
   MISSED
-  EXPIRED
   FAILED
+}
+
+enum CallParticipantStatus {
+  INVITED
+  JOINED
+  LEFT
+  REJECTED
+  MISSED
 }
 
 enum CallEndReason {
   NORMAL
-  REJECTED
   CANCELED
-  MISSED
+  ALL_LEFT
+  NO_ANSWER
   TIMEOUT
   NETWORK
   ERROR
 }
 
 model CallSession {
-  id              String        @id @default(uuid())
+  id              String      @id @default(uuid())
   conversationID  String
   sessionType     Int
   callType        CallType
-  status          CallStatus    @default(RINGING)
-  webrtcRoomId    String        @unique
-  livekitRoomName String?
-  callerID        String
-  calleeID        String
+  status          CallStatus  @default(RINGING)
+  livekitRoomName String      @unique
+  initiatorID     String
   startedAt       DateTime?
-  acceptedAt      DateTime?
   endedAt         DateTime?
   expiresAt       DateTime
   endedByID       String?
   endReason       CallEndReason?
   metadata        Json?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
-  caller User @relation("callCaller", fields: [callerID], references: [id], onDelete: Cascade)
-  callee User @relation("callCallee", fields: [calleeID], references: [id], onDelete: Cascade)
+  initiator User @relation("callInitiator", fields: [initiatorID], references: [id], onDelete: Cascade)
+  participants CallParticipant[]
 
-  @@index([callerID, status])
-  @@index([calleeID, status])
   @@index([conversationID, createdAt])
+  @@index([initiatorID, status])
   @@index([expiresAt, status])
 }
-```
 
-第一阶段不需要在 `circle_be` 新增 `CallParticipant` 表。群通话立项时可以直接复用 `circle-webrtc` 的 `WebrtcParticipantRole`，必要时再在 `circle_be` 增加业务参与者表：
-
-```prisma
 model CallParticipant {
-  id        String @id @default(uuid())
-  callID    String
-  userID    String
-  role      String
-  joinedAt  DateTime?
-  leftAt    DateTime?
-  muted     Boolean @default(false)
+  id            String                  @id @default(uuid())
+  callID        String
+  userID        String
+  status        CallParticipantStatus   @default(INVITED)
+  invitedAt     DateTime                @default(now())
+  joinedAt      DateTime?
+  leftAt        DateTime?
+  rejectedAt    DateTime?
+  missedAt      DateTime?
+  lastTokenAt   DateTime?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  call CallSession @relation(fields: [callID], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userID], references: [id], onDelete: Cascade)
+
+  @@unique([callID, userID])
+  @@index([userID, status])
+  @@index([callID, status])
 }
 ```
 
----
+说明：
 
-## 8. 权限规则
-
-后端必须用 JWT 中的 `req.user.userId` 做鉴权，不能信任客户端传入的 caller。
-
-发起 1v1 通话：
-
-1. `calleeID` 必须存在且状态可用。
-2. `callerID !== calleeID`。
-3. 双方必须是已通过好友，或者当前业务明确允许陌生人临时通话。
-4. 用户不能被对方拉黑。
-5. caller 和 callee 均不能已有非终态通话。
-6. `conversationID` 必须与 caller/callee 对应的 OpenIM 单聊会话一致；否则后端重算并覆盖。
-
-接听：
-
-1. 只有 `calleeID` 可以调用 accept。
-2. 只有 `RINGING` 状态可以接听。
-3. `expiresAt` 已过则返回 `CALL_EXPIRED` 并把状态改为 `MISSED`。
-
-取消 / 拒绝 / 挂断：
-
-- caller 在 `RINGING` 时调用 cancel；
-- callee 在 `RINGING` 时调用 reject；
-- 任一参与者在 `ACCEPTED` / `ACTIVE` 时调用 hangup；
-- 终态接口幂等，重复调用返回当前状态。
+- 不引入 host/speaker/listener/seat，避免把 group call 做成语聊房。
+- 发起人也是 `CallParticipant`，创建后可直接进入 `JOINED`。
+- `livekitRoomName` 由后端生成，不能由客户端传入。
+- 后续如果做语聊房，再增加 role、mute、seat，而不是污染第一版模型。
 
 ---
 
-## 9. HTTP API
+## 11. 权限规则
 
-所有接口都挂在 `/api/v1/calls`，使用现有 Bearer access token。
+通用规则：
 
-### 9.1 发起通话
+1. 所有接口使用现有 Bearer access token。
+2. 后端只信任 JWT 中的 `req.user.userId`，不信任客户端传 caller。
+3. LiveKit token identity 使用 Circle user id。
+4. LiveKit token metadata 可包含 nickname/avatar，方便客户端渲染。
+5. LiveKit API key / secret 只存在服务端。
+
+群通话发起规则：
+
+1. `conversationID` 必须对应 OpenIM 群聊。
+2. 发起人必须是群成员。
+3. `inviteeIDs` 必须是群成员，并且不能包含发起人。
+4. 参与者总数不能超过 `CALL_MAX_PARTICIPANTS`。
+5. 被拉黑、禁用、注销用户不能被邀请。
+6. 同一用户同一时间默认只能存在一个非终态通话。
+7. `CALL_ENABLE_VIDEO=false` 时拒绝 `callType=VIDEO`。
+
+接听规则：
+
+1. 只有 `INVITED` 的被邀请人可以 accept。
+2. 超过 `expiresAt` 后 accept 返回 `CALL_EXPIRED`，并把参与者标记为 `MISSED`。
+3. 第一个被邀请人接听后，`CallSession` 从 `RINGING` 进入 `ACTIVE`。
+
+离开规则：
+
+1. `JOINED` 的参与者可以 leave。
+2. 离开接口幂等，重复调用返回当前状态。
+3. 当所有 `JOINED` 参与者都离开时，通话进入 `ENDED`，`endReason=ALL_LEFT`。
+
+取消规则：
+
+1. 发起人在无人接听前可以 cancel。
+2. cancel 后所有 `INVITED` 参与者标记为 `MISSED` 或 `LEFT` 以外的终态。
+3. 如果已经有人接听，发起人只能 leave，不能强制结束别人的通话。
+
+---
+
+## 12. LiveKit Token 权限
+
+后端为每个参与者单独签发 token。
+
+语音通话：
+
+```ts
+{
+  roomJoin: true,
+  room: livekitRoomName,
+  canSubscribe: true,
+  canPublish: true,
+  canPublishSources: ['microphone']
+}
+```
+
+视频通话：
+
+```ts
+{
+  roomJoin: true,
+  room: livekitRoomName,
+  canSubscribe: true,
+  canPublish: true,
+  canPublishSources: ['microphone', 'camera']
+}
+```
+
+安全要求：
+
+- token TTL 默认 1 小时；
+- `join-token` 只允许参与者本人获取；
+- token 不落库，只记录 `lastTokenAt`；
+- 客户端断线重连时重新向 `circle_be` 换 token；
+- 结束后的 call 不再签发 token。
+
+---
+
+## 13. HTTP API
+
+所有接口挂在 `/api/v1/calls`。
+
+### 13.1 发起群通话
 
 ```http
-POST /api/v1/calls
+POST /api/v1/calls/group
 Authorization: Bearer <accessToken>
 Content-Type: application/json
 
 {
-  "calleeID": "uuid",
-  "conversationID": "si_xxx_yyy",
-  "callType": "VIDEO"
+  "conversationID": "group_xxx",
+  "callType": "AUDIO",
+  "inviteeIDs": ["user-b", "user-c", "user-d"]
 }
 ```
 
 返回：
 
 ```ts
-type CreateCallResponse = {
+type CreateGroupCallResponse = {
   call: CallSessionDto;
+  selfParticipant: CallParticipantDto;
   livekit: {
     url: string;
     token: string;
@@ -334,25 +511,27 @@ type CreateCallResponse = {
 };
 ```
 
-说明：
+副作用：
 
-- 创建 LiveKit room，状态为 `RINGING`。
-- 给 caller 返回 token，caller 可进入等待页。
-- 通过 realtime 给 callee 推送 `call.invite`。
-- 如果 `CALL_ALLOW_OFFLINE_INVITE=false` 且 callee 无 realtime 连接，可返回 `409 CALLEE_OFFLINE`。
+- 创建 `CallSession`；
+- 创建所有 `CallParticipant`；
+- 创建或预留 LiveKit room name；
+- 给发起人返回 token；
+- 向被邀请人发送 `call.invite` realtime 事件。
 
-### 9.2 接听
+### 13.2 接听
 
 ```http
 POST /api/v1/calls/:callId/accept
 Authorization: Bearer <accessToken>
 ```
 
-返回 callee 的 LiveKit 凭证：
+返回：
 
 ```ts
 type AcceptCallResponse = {
   call: CallSessionDto;
+  selfParticipant: CallParticipantDto;
   livekit: {
     url: string;
     token: string;
@@ -361,42 +540,19 @@ type AcceptCallResponse = {
 };
 ```
 
-副作用：
-
-- 状态 `RINGING -> ACCEPTED`；
-- 广播 `call.accepted` 给 caller；
-- 客户端拿 token 后进入通话页。
-
-### 9.3 拒绝
+### 13.3 拒绝
 
 ```http
 POST /api/v1/calls/:callId/reject
 Authorization: Bearer <accessToken>
 ```
 
-副作用：
+只影响当前用户的 participant 状态。其他参与者继续响铃或通话。
 
-- 状态 `RINGING -> REJECTED`；
-- 删除或关闭 LiveKit room；
-- 广播 `call.rejected` 给 caller；
-- 第二阶段写 OpenIM 通话记录。
-
-### 9.4 取消
+### 13.4 离开
 
 ```http
-POST /api/v1/calls/:callId/cancel
-Authorization: Bearer <accessToken>
-```
-
-副作用：
-
-- 状态 `RINGING -> CANCELED`；
-- 广播 `call.canceled` 给 callee。
-
-### 9.5 挂断
-
-```http
-POST /api/v1/calls/:callId/hangup
+POST /api/v1/calls/:callId/leave
 Authorization: Bearer <accessToken>
 
 {
@@ -404,101 +560,104 @@ Authorization: Bearer <accessToken>
 }
 ```
 
-副作用：
+用于已接听用户退出通话。
 
-- 状态 `ACCEPTED|ACTIVE -> ENDED`；
-- 记录 `endedAt`、`endedByID`、`endReason`；
-- 调用 LiveKit DeleteRoom，强制断开仍在房间内的参与者；
-- 广播 `call.ended` 给双方；
-- 第二阶段写 OpenIM 通话记录。
+### 13.5 取消
 
-### 9.6 查询通话
+```http
+POST /api/v1/calls/:callId/cancel
+Authorization: Bearer <accessToken>
+```
+
+只允许发起人在无人接听前调用。
+
+### 13.6 查询通话
 
 ```http
 GET /api/v1/calls/:callId
 Authorization: Bearer <accessToken>
 ```
 
-仅参与者可读。用于客户端重连、刷新通话状态、从通知点击后确认通话是否仍有效。
+仅参与者可读。用于通知点击、重连、刷新通话状态。
 
-### 9.7 重新获取 LiveKit token
+### 13.7 重新获取 LiveKit token
 
 ```http
 POST /api/v1/calls/:callId/join-token
 Authorization: Bearer <accessToken>
 ```
 
-用于 token 过期、App 切前台后恢复。仅 `ACCEPTED` / `ACTIVE` 且参与者本人可调用。
+仅 `INVITED` 或 `JOINED` 的参与者本人可调用。若通话已结束，返回 `CALL_ENDED`。
 
 ---
 
-## 10. DTO
+## 14. DTO
 
 ```ts
 type CallSessionDto = {
   id: string;
   conversationID: string;
-  sessionType: 'single';
+  sessionType: 'group' | 'single';
   callType: 'AUDIO' | 'VIDEO';
-  status:
-    | 'RINGING'
-    | 'ACCEPTED'
-    | 'ACTIVE'
-    | 'ENDED'
-    | 'REJECTED'
-    | 'CANCELED'
-    | 'MISSED'
-    | 'EXPIRED'
-    | 'FAILED';
-  caller: {
-    id: string;
-    nickname: string;
-    avatarUrl: string | null;
-  };
-  callee: {
-    id: string;
-    nickname: string;
-    avatarUrl: string | null;
-  };
+  status: 'RINGING' | 'ACTIVE' | 'ENDED' | 'CANCELED' | 'MISSED' | 'FAILED';
+  livekitRoomName: string;
+  initiator: UserLiteDto;
   startedAt: string | null;
-  acceptedAt: string | null;
   endedAt: string | null;
   expiresAt: string;
   durationSeconds: number | null;
   endReason: string | null;
+  participants: CallParticipantDto[];
+};
+
+type CallParticipantDto = {
+  user: UserLiteDto;
+  status: 'INVITED' | 'JOINED' | 'LEFT' | 'REJECTED' | 'MISSED';
+  invitedAt: string;
+  joinedAt: string | null;
+  leftAt: string | null;
+};
+
+type UserLiteDto = {
+  id: string;
+  nickname: string;
+  avatarUrl: string | null;
 };
 ```
 
-错误码建议：
+错误码：
 
 | code | HTTP | 含义 |
 | --- | --- | --- |
-| `CALL_TARGET_NOT_FOUND` | 404 | 目标用户不存在 |
-| `CALL_NOT_ALLOWED` | 403 | 非好友、被拉黑或无权限 |
-| `CALL_BUSY` | 409 | 任一方已有非终态通话 |
-| `CALLEE_OFFLINE` | 409 | 第一阶段在线通话模式下，对方不在线 |
-| `GROUP_CALL_UNSUPPORTED` | 400 | 第一阶段不支持群通话 |
-| `CALL_NOT_FOUND` | 404 | 通话不存在或当前用户无权访问 |
+| `CALL_GROUP_NOT_FOUND` | 404 | 群聊不存在 |
+| `CALL_NOT_GROUP_MEMBER` | 403 | 当前用户不是群成员 |
+| `CALL_INVITEE_INVALID` | 400 | 被邀请人不是群成员或不可邀请 |
+| `CALL_INVITEES_REQUIRED` | 400 | 没有选择被邀请人 |
+| `CALL_PARTICIPANT_LIMIT` | 400 | 超过人数上限 |
+| `CALL_VIDEO_DISABLED` | 400 | 视频通话开关未启用 |
+| `CALL_BUSY` | 409 | 用户已有非终态通话 |
+| `CALL_NOT_FOUND` | 404 | 通话不存在或无权访问 |
 | `CALL_EXPIRED` | 409 | 来电已过期 |
+| `CALL_ENDED` | 409 | 通话已结束 |
 | `LIVEKIT_UNAVAILABLE` | 503 | LiveKit 未配置或不可用 |
 
 ---
 
-## 11. Realtime 事件
+## 15. Realtime 事件
 
-复用现有 `/realtime` WebSocket。客户端已经使用 message-based auth，避免 JWT 进入 URL，这一点适合继续沿用。
+复用现有 `/realtime` WebSocket。客户端已经使用 message-based auth，适合继续沿用。
 
 新增事件类型：
 
 ```ts
 type CallRealtimeEvent =
   | { type: 'call.invite'; payload: CallInvitePayload }
-  | { type: 'call.accepted'; payload: CallStatePayload }
-  | { type: 'call.rejected'; payload: CallStatePayload }
+  | { type: 'call.participant.joined'; payload: CallParticipantPayload }
+  | { type: 'call.participant.left'; payload: CallParticipantPayload }
+  | { type: 'call.participant.rejected'; payload: CallParticipantPayload }
+  | { type: 'call.participant.missed'; payload: CallParticipantPayload }
   | { type: 'call.canceled'; payload: CallStatePayload }
-  | { type: 'call.missed'; payload: CallStatePayload }
-  | { type: 'call.ended'; payload: CallStatePayload }
-  | { type: 'call.participant.changed'; payload: CallParticipantPayload };
+  | { type: 'call.ended'; payload: CallStatePayload };
 ```
 
 `call.invite` payload：
@@ -507,287 +666,250 @@ type CallRealtimeEvent =
 type CallInvitePayload = {
   callId: string;
   conversationID: string;
+  sessionType: 'group';
   callType: 'AUDIO' | 'VIDEO';
-  caller: {
-    id: string;
-    nickname: string;
-    avatarUrl: string | null;
-  };
+  initiator: UserLiteDto;
+  invitees: UserLiteDto[];
   expiresAt: string;
   createdAt: string;
 };
 ```
 
-规则：
+广播规则：
 
-- Realtime payload 不携带 LiveKit token。
-- callee 接听后必须通过 HTTP `/accept` 获取 token。
-- 如果 realtime 断线，客户端用 `GET /calls/:callId` 或后续 pending-call 查询接口恢复状态。
-- 后端发送事件要 best-effort，数据库状态是最终事实。
+- `call.invite`：发给被邀请人；
+- `call.participant.joined`：发给所有 call participants；
+- `call.participant.left`：发给仍在通话内或被邀请的 participants；
+- `call.canceled`：发给所有未接听被邀请人；
+- `call.ended`：发给所有 participants。
 
----
+离线策略：
 
-## 12. LiveKit token 生成
-
-LiveKit token 由 `circle-webrtc` 使用 `livekit-server-sdk` 生成，`circle_be` 只是转发给已授权的 App 调用方。
-
-- `RoomServiceClient` 创建/删除 room；
-- `AccessToken` 签发参与者 token；
-- token TTL 建议 10 分钟；
-- participant identity 使用 Circle 用户 UUID，不使用 OpenIM 去横线 ID；
-- participant name 使用昵称；
-- room name 使用可控前缀：`circle_call_<callId>`。
-
-权限：
-
-```ts
-import { TrackSource } from 'livekit-server-sdk';
-
-const canPublishSources =
-  callType === 'VIDEO'
-    ? [TrackSource.MICROPHONE, TrackSource.CAMERA]
-    : [TrackSource.MICROPHONE];
-
-token.addGrant({
-  roomJoin: true,
-  room: livekitRoomName,
-  canPublish: true,
-  canSubscribe: true,
-  canPublishData: true,
-  canPublishSources,
-});
-```
-
-客户端永远只拿签好的 token，不拿 API key / secret。
+- 第一阶段只保证 App 在线或前台 websocket 已连接时实时响铃。
+- 离线 push 和系统来电页后续单独立项。
+- OpenIM 自定义通话记录可以在第二阶段补齐离线可见性。
 
 ---
 
-## 13. LiveKit Webhook
+## 16. 客户端接入
 
-新增：
+依赖方向：
 
-```http
-POST /api/v1/calls/livekit/webhook
-Content-Type: application/webhook+json
-Authorization: Bearer <LiveKit signed webhook JWT>
+- `@livekit/react-native`
+- `@livekit/react-native-expo-plugin`
+- `@livekit/react-native-webrtc`
+- `@config-plugins/react-native-webrtc`
+- `livekit-client`
+
+Expo 限制：
+
+- LiveKit React Native 需要原生 WebRTC，不兼容 Expo Go。
+- 本项目已有 `expo-dev-client`，应通过 dev build / EAS build 验证。
+- 需要在入口调用 `registerGlobals()`。
+- `app.json` 需要增加 LiveKit / WebRTC config plugins。
+
+客户端模块建议：
+
+```text
+src/features/call/
+├── api/callApi.ts
+├── hooks/useCallRealtime.ts
+├── screens/IncomingCallScreen.tsx
+├── screens/GroupCallScreen.tsx
+├── components/CallControls.tsx
+├── components/ParticipantAudioGrid.tsx
+└── state/callStore.ts
 ```
+
+第一版 UI：
+
+- 群聊通话按钮；
+- 群成员选择器；
+- 来电弹层；
+- 群语音通话页；
+- 麦克风开关；
+- 扬声器切换；
+- 离开按钮；
+- 参与者状态列表。
+
+不做：
+
+- 麦位；
+- 踢人；
+- 主持人控制；
+- 录制；
+- 复杂动效；
+- 系统级来电页。
+
+---
+
+## 17. LiveKit Webhook
+
+后端应接收 LiveKit webhook，但第一版不能完全依赖 webhook 驱动业务状态。
 
 用途：
 
-- `participant_joined`：当第二个参与者加入后，把通话状态推进到 `ACTIVE`，设置 `startedAt`。
-- `participant_left`：记录参与者离开；如果房间无人或双方都离开，推进到 `ENDED`。
-- `room_finished`：确保业务状态进入终态，兜底清理。
-- `track_published` / `track_unpublished`：第一阶段只记录日志，不驱动核心状态。
+- 记录 participant joined / left；
+- 对账 App 调用 leave 失败的异常状态；
+- 房间异常关闭时补偿 `CallSession`；
+- 后续接入质量数据或记录。
 
-验签要求：
+原则：
 
-- 使用 LiveKit `WebhookReceiver`，必须拿到 raw body；
-- 不能用已解析 JSON 代替 raw body 做验签；
-- 验签失败返回 401。
-
----
-
-## 14. OpenIM 通话记录
-
-实时来电不建议依赖 OpenIM 消息驱动。原因：
-
-- OpenIM 消息适合持久聊天记录，不适合驱动强实时状态机；
-- 来电 token 不能放进 OpenIM 消息；
-- 通话状态需要严格鉴权和幂等。
-
-第二阶段建议在通话进入终态时，由后端发送 OpenIM 自定义消息：
-
-```ts
-type CallSummaryMessage = {
-  customType: 'CALL_SUMMARY';
-  callId: string;
-  callType: 'AUDIO' | 'VIDEO';
-  status: 'ENDED' | 'REJECTED' | 'CANCELED' | 'MISSED';
-  durationSeconds: number | null;
-  callerID: string;
-  calleeID: string;
-  endedAt: string;
-};
-```
-
-客户端把该自定义消息映射成聊天气泡：
-
-- 已取消：`已取消视频通话`
-- 已拒绝：`对方已拒绝`
-- 未接听：`未接听`
-- 已结束：`视频通话 03:21`
-
-这需要后端 `OpenimService` 增加发送自定义消息能力，或通过 OpenIM server API 封装 `sendCustomMessage`。
+- App 主动调用 `/leave` 是业务主路径；
+- webhook 是补偿路径；
+- webhook 事件必须校验签名；
+- webhook 幂等处理。
 
 ---
 
-## 15. 客户端接入边界
+## 18. OpenIM 关系
 
-本设计文档不实现客户端，但后续计划应包含：
+OpenIM 不参与实时媒体。
 
-1. 安装 LiveKit React Native 依赖：
-   - `@livekit/react-native`
-   - `@livekit/react-native-expo-plugin`
-   - `@livekit/react-native-webrtc`
-   - `@config-plugins/react-native-webrtc`
-   - `livekit-client`
-2. `app.json` 添加 LiveKit / WebRTC config plugins。
-3. 应用入口调用 `registerGlobals()`。
-4. 使用 Expo dev client 或原生 build；不能用 Expo Go。
-5. 更新权限文案：
-   - iOS `NSCameraUsageDescription` 从“扫描二维码”扩展到“扫描二维码和视频通话”；
-   - iOS `NSMicrophoneUsageDescription` 从“语音消息”扩展到“语音消息和通话”；
-   - Expo camera/audio plugin 文案同步更新。
-6. 新增通话状态 store 和通话页：
-   - 呼出等待页；
-   - 来电弹层；
-   - 通话页；
-   - 异常/重连/挂断状态。
+后续可写入自定义消息：
 
-LiveKit UI 层建议后续从低成本开始：
+- 群通话已取消；
+- 群通话未接听；
+- 群通话已结束，持续 `xx:xx`；
+- 某人发起群语音通话。
 
-- 语音通话：只渲染头像、计时、麦克风、扬声器、挂断。
-- 视频通话：本地小窗 + 远端大窗，使用 LiveKit track hooks 渲染。
+第一阶段可以先只做 realtime，不写历史消息。正式上线前建议补齐通话记录，否则用户离线后无法在聊天里看到错过的通话。
 
 ---
 
-## 16. 状态机
+## 19. Squady 复用边界
 
-```text
-RINGING
-  ├─ callee accept ───────▶ ACCEPTED
-  │                         └─ LiveKit second participant joined ─▶ ACTIVE
-  │                                                              └─ hangup/webhook empty ─▶ ENDED
-  ├─ caller cancel ───────▶ CANCELED
-  ├─ callee reject ───────▶ REJECTED
-  └─ timeout ─────────────▶ MISSED
-```
+Squady 的价值是参考，不是第一阶段运行依赖。
 
-约束：
+可以借鉴：
 
-- 终态不可逆。
-- 任意终态都要尝试删除 LiveKit room。
-- webhook 只能把非终态推进到更靠后的状态，不能覆盖已存在的终态。
-- `DeleteRoom` 导致客户端断开属于预期行为。
+- LiveKit token grant 的封装方式；
+- room name 生成和 room lifecycle；
+- webhook 验签和幂等处理；
+- Docker / env 的组织方式；
+- 后续自部署时的服务拆分经验。
 
----
+暂不复制：
 
-## 17. 超时与清理
+- tenant credential 体系；
+- room ACL / ban；
+- host/speaker/listener role；
+- 独立 `circle-webrtc` 数据库；
+- participants role 管理 API；
+- WebRTC admin API。
 
-后端需要一个定时任务或延迟队列：
-
-1. 每 5-10 秒扫描 `RINGING` 且 `expiresAt < now()` 的通话。
-2. 状态更新为 `MISSED`。
-3. 删除 LiveKit room。
-4. 广播 `call.missed` 给 caller/callee。
-5. 第二阶段写 OpenIM 通话记录。
-
-通话已 `ACTIVE` 但 webhook 未收到 `room_finished` 时，可用兜底任务检查 LiveKit participants；无人则结束。
+如果未来从 group call 升级到 voice room，再重新评估是否派生 Squady WebRTC 服务。
 
 ---
 
-## 18. 安全与隐私
-
-- LiveKit API secret 只存在后端环境变量。
-- LiveKit token 只能通过 HTTPS HTTP API 返回，不通过 realtime 或 OpenIM 发送。
-- token TTL 短，过期后重新走 `/join-token`。
-- 后端日志要脱敏 token、Authorization header、LiveKit credentials。
-- `call.invite` payload 只包含必要展示信息。
-- 通话 room name 不包含手机号、accountId、昵称等 PII。
-- 对外 webhook 必须验签。
-- 发起接口要加速率限制，避免骚扰和资源滥用。
-
----
-
-## 19. 测试计划
+## 20. 测试计划
 
 后端单元测试：
 
-- 非好友/被拉黑无法发起；
-- caller/callee 已忙返回 `CALL_BUSY`；
-- caller 创建通话后 callee 收到 `call.invite`；
-- callee accept 后返回 token，状态变为 `ACCEPTED`；
-- caller cancel、callee reject、任一方 hangup 幂等；
-- 超时任务把 `RINGING` 推进到 `MISSED`；
-- webhook 验签失败返回 401；
-- `participant_joined` 把第二人加入后的通话推进到 `ACTIVE`。
+- 群成员权限；
+- invitee 校验；
+- 人数上限；
+- busy 状态；
+- accept/reject/leave/cancel 幂等；
+- token 权限；
+- timeout 状态迁移；
+- webhook 幂等。
 
-`circle_be` 集成测试：
+后端集成测试：
 
-- 使用 mocked `WebrtcClientService` 验证 create/join/close 调用参数；
-- 验证 webrtc 服务异常时，`circle_be` 返回稳定业务错误码而不是泄露内部错误。
+- 创建群通话后创建 participants；
+- accept 后签发 token；
+- 所有人 leave 后 call ended；
+- LiveKit unavailable 时返回 `LIVEKIT_UNAVAILABLE`；
+- `CALL_ENABLE_VIDEO=false` 时拒绝 video call。
 
-`circle-webrtc` 集成测试：
+客户端验证：
 
-- 复用 Squady webrtc 现有 rooms / livekit / webhook 测试；
-- 可选本地 LiveKit dev server 做端到端 token join smoke test。
+- iOS dev build 可启动；
+- Android dev build 可启动；
+- 麦克风权限弹窗正确；
+- 两台真机可互通语音；
+- 5 人和 10 人场景可进入同一 room；
+- 断网/切后台/重连路径不会卡死。
 
-客户端后续验收：
+网络实测：
 
-- iOS/Android dev build 能请求麦克风/相机权限；
-- 两台设备 1v1 视频通话可接通、挂断；
-- 拒接/取消/超时双方 UI 一致；
-- App 断网后通话页能退出或重连；
-- Expo Go 明确不可作为验收环境。
-
----
-
-## 20. 分阶段实施建议
-
-### 阶段 1：派生 Squady WebRTC 镜像
-
-- 复制 Squady `apps/webrtc` 到 Circle 服务目录或单独 repo；
-- 改服务名、镜像名、默认 tenant、env example、docker compose；
-- 补 Dockerfile 或复用 Squady `docker/webrtc.dockerfile`；
-- 跑 `prisma migrate deploy`、`yarn test`、`yarn build`；
-- 本地用 LiveKit dev server 验证 `/rooms`、`/join`、webhook。
-
-### 阶段 2：`circle_be` 通话状态机 + WebRTC client
-
-- 新增 `CallSession` Prisma model 和 migration；
-- 新增 `CallModule` / `WebrtcClientService`；
-- 实现 create/accept/reject/cancel/hangup/get/join-token；
-- 内部调用 `circle-webrtc` 创建房间、获取 join token、关闭房间；
-- 实现 realtime call events；
-- mock `WebrtcClientService` 完成后端测试。
-
-### 阶段 3：客户端最小通话
-
-- 安装 LiveKit RN 依赖和 config plugins；
-- 新增通话 API client；
-- 接入聊天页/资料页发起按钮；
-- 实现呼出、来电、通话页、挂断；
-- 仅支持 App 在线时响铃。
-
-### 阶段 4：历史记录与离线提醒
-
-- 后端 OpenIM 自定义通话记录消息；
-- 聊天气泡渲染通话记录；
-- 如需后台来电，再单独接入原生推送、CallKit/ConnectionService。
-
-### 阶段 5：群通话
-
-- 复用 `circle-webrtc` participants / role / mute 接口；
-- 支持群聊房间、成员列表、角色、主持人、静音；
-- `circle_be` 只补群通话业务权限和 OpenIM 群聊入口。
+- 中国大陆三大运营商；
+- WiFi / 4G / 5G；
+- 跨地区；
+- 晚高峰；
+- LiveKit Cloud dashboard 质量指标记录。
 
 ---
 
-## 21. 风险
+## 21. 分阶段实施
 
-1. **移动端 RTC 不能用 Expo Go**：必须用 dev client 或原生构建。
-2. **离线来电不是纯 LiveKit 问题**：后台响铃需要 APNs/FCM/CallKit 等单独立项。
-3. **自托管 LiveKit 生产网络复杂**：需要 TLS、UDP、TURN/NAT 配置；本地 `--dev` 不能代表生产。
-4. **OpenIM 和 realtime 是两条链路**：通话状态以 `CallSession` 为准，OpenIM 只做历史记录。
-5. **权限文案要更新**：现有相机文案只提扫码，麦克风只提语音消息，发布前必须覆盖通话用途。
+### Phase 1：LiveKit Cloud MVP
+
+- 创建 LiveKit Cloud project；
+- 配置 `LIVEKIT_URL`、`LIVEKIT_API_KEY`、`LIVEKIT_API_SECRET`；
+- `circle_be` 新增 `CallSession` / `CallParticipant`；
+- `circle_be` 新增 group call API；
+- 接入 realtime call events；
+- 客户端接 LiveKit SDK 和群语音 UI；
+- 只做在线来电。
+
+### Phase 2：通话记录和离线可见性
+
+- 写 OpenIM 自定义通话记录；
+- 离线用户在聊天中看到未接来电；
+- 可选接入普通 push；
+- 增加通话失败原因展示。
+
+### Phase 3：大陆网络评估
+
+- 用真实国内设备跑 2/5/10 人群语音；
+- 汇总 join 成功率、packet loss、jitter、主观体验；
+- 决定继续 Cloud、升 Ship/Scale，或准备自部署。
+
+### Phase 4：自部署 LiveKit
+
+- 部署单节点 LiveKit；
+- 配置域名、TLS、UDP、TURN；
+- `circle_be` 切换 `LIVEKIT_URL` 和 key；
+- 对比 Cloud 和自部署质量；
+- 如果需要多节点，再引入 Redis 和区域路由。
+
+### Phase 5：扩展能力
+
+- 视频通话；
+- 系统级来电页；
+- 更完整 push；
+- 质量监控后台；
+- 如果产品转向语聊房，再单独设计 room/role/seat 模型。
 
 ---
 
-## 22. 参考资料
+## 22. 官方参考
 
-- LiveKit Expo getting started: https://docs.livekit.io/transport/sdk-platforms/expo/
-- LiveKit rooms, participants, tracks overview: https://docs.livekit.io/intro/basics/rooms-participants-tracks/
-- LiveKit webhooks and events: https://docs.livekit.io/intro/basics/rooms-participants-tracks/webhooks-events/
-- LiveKit frontend authentication: https://docs.livekit.io/frontends/build/authentication/
-- LiveKit tokens and grants: https://docs.livekit.io/frontends/reference/tokens-grants/
-- Squady reference: `/Users/yiboding/Downloads/squady-be-notification/apps/webrtc`
+- LiveKit Cloud: https://docs.livekit.io/intro/cloud/
+- LiveKit Expo SDK: https://docs.livekit.io/transport/sdk-platforms/expo/
+- LiveKit Tokens & Grants: https://docs.livekit.io/frontends/reference/tokens-grants/
+- LiveKit Authentication: https://docs.livekit.io/frontends/build/authentication/
+- LiveKit Pricing: https://livekit.com/pricing
+- LiveKit Region pinning: https://docs.livekit.io/deploy/admin/regions/region-pinning/
+- LiveKit Self-hosting: https://docs.livekit.io/transport/self-hosting/
+- LiveKit Distributed multi-region: https://docs.livekit.io/transport/self-hosting/distributed/
+
+---
+
+## 23. 当前结论
+
+当前最合适的路线是：
+
+```text
+先用 LiveKit Cloud 做 group call MVP
+不要第一版复制 Squady 完整 WebRTC 服务
+不要把 App 绑定到 Cloud
+所有通话业务状态放在 circle_be
+国内网络用真实设备验证
+体验或成本不合适时，再迁到自部署 LiveKit
+```
+
+这个设计比旧方案更贴近当前需求：不做语聊房，不用腾讯，不提前承担自部署 RTC 的复杂度，同时保留后续迁移空间。
