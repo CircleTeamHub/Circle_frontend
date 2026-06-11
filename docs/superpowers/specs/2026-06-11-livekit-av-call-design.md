@@ -40,26 +40,33 @@ Squady 的可复用经验是：服务端负责建房、鉴权和签发 LiveKit �
 
 ## 4. 方案选择
 
-### 推荐：`circle_be` 内置 CallModule + LiveKitService
+### 推荐：复用 Squady WebRTC 服务，构建 Circle 专用镜像
 
-在现有 NestJS 后端新增 `CallModule`，直接依赖 `livekit-server-sdk`。后端使用 PostgreSQL/Prisma 保存通话会话状态，使用现有 `RealtimeService` 给双方推送来电和状态变化。客户端通过 HTTP API 获取 LiveKit `url + token` 后直连媒体服务器。
+把 `/Users/yiboding/Downloads/squady-be-notification/apps/webrtc` 作为种子代码，派生出 Circle 的独立 WebRTC 服务镜像。保留它已有的 LiveKit 集成、房间管理、join token、webhook、Prisma schema、Docker Compose 和审计日志；`circle_be` 继续负责 Circle 业务状态、好友/拉黑权限、来电 realtime 事件和 OpenIM 通话记录。
+
+推荐的边界：
+
+- `circle-webrtc`：只管媒体房间和 LiveKit token，不直接信任 App。
+- `circle_be`：对 App 暴露 `/api/v1/calls`，校验好友关系和通话状态，然后用内部凭证调用 `circle-webrtc`。
+- `circle-im`：只调用 `circle_be`，永远不直接调用 `circle-webrtc`。
 
 优点：
 
-- 复用现有 JWT、Prisma、好友关系、RealtimeGateway 和部署链路。
-- 适合 1v1 MVP，边界清晰，开发成本最低。
-- 后续可把 `LiveKitService` 抽成独立服务，不影响客户端 API。
+- 现成代码最多：Squady webrtc 已包含 `RoomsService`、`LiveKitService`、webhook、ACL/ban、tenant credential、Docker Compose 和测试。
+- 部署边界正确：RTC 可独立镜像、独立数据库、独立扩缩容。
+- 后续群语聊更顺：Squady 的 room/role/participants 模型天然比 1v1 CallSession 更接近多人房间。
 
-代价：
+必须改造的点：
 
-- LiveKit 相关逻辑暂时和业务后端同进程部署。
-- 大规模群语聊或多租户 RTC 权限以后可能需要拆分。
+- 服务命名、镜像名、环境变量默认值从 Squady 改为 Circle。
+- 默认 tenant 从 `Squady` 改成 `CircleIM` 或 `circle-im`。
+- `circle_be` 增加内部 WebRTC client，负责换取 webrtc JWT 和调用 `/rooms`、`/rooms/:id/join`、`/rooms/:id/close`。
+- App 不直接拿 webrtc tenant JWT；所有 App 请求仍走 `circle_be` JWT。
+- 如果第一阶段只做 1v1，`circle_be` 仍需要自己的 `CallSession` 表来表达响铃、拒接、取消、未接听等 IM 通话语义；webrtc 服务只表达房间是否 active/ended。
 
-### 备选：Squady 风格独立 WebRTC 服务
+### 备选：`circle_be` 内置 CallModule + LiveKitService
 
-独立 `webrtc` 服务持有房间数据库和 LiveKit 管理能力，`circle_be` 作为业务后端去调用它。
-
-优点是边界最干净，适合多人语聊、主持人权限、审计日志和独立扩缩容。缺点是第一版需要额外服务、数据库、租户凭证和内部鉴权，当前 C1 范围偏大。
+在现有 NestJS 后端新增 `CallModule`，直接依赖 `livekit-server-sdk`。这个方案文件少、链路短，但会把 RTC 房间管理和业务后端绑在一起。既然 Squady 已有独立 webrtc 服务代码，当前不再作为主方案。
 
 ### 不建议：客户端直接连 LiveKit token endpoint
 
@@ -88,21 +95,60 @@ Squady 的可复用经验是：服务端负责建房、鉴权和签发 LiveKit �
 
 ---
 
-## 6. 后端模块
+## 6. 后端服务拆分
 
-建议新增：
+建议拆成两个后端边界。
+
+### 6.1 `circle-webrtc` 服务
+
+从 Squady 复制/派生：
+
+```text
+apps/webrtc/
+├── src/rooms/*
+├── src/livekit/livekit.service.ts
+├── src/webhook/*
+├── src/auth/*
+├── src/bans/*
+├── src/acls/*
+├── prisma/schema.prisma
+├── docker-compose.yml
+├── docker-compose.prod.yml
+└── docker/webrtc.dockerfile 或等价 Dockerfile
+```
+
+保留：
+
+- `POST /api/v1/rooms`
+- `GET /api/v1/rooms/:roomId`
+- `POST /api/v1/rooms/:roomId/join`
+- `POST /api/v1/rooms/:roomId/close`
+- participants / mute / role 管理接口
+- LiveKit webhook 验签和事件处理
+- tenant credentials / scopes 机制
+- WebrtcRoom / WebrtcParticipantRole / WebrtcRoomLog / ACL / Ban schema
+
+Circle 定制：
+
+- 默认 tenant 改为 `circle-im`。
+- 镜像名建议 `circle-webrtc`。
+- 容器名、volume、network 从 `webrtc-*` 改成 `circle-webrtc-*`。
+- 移除或关闭对公网暴露的 admin tenant API，至少生产环境只允许内网访问。
+- 增加健康检查和 migration entrypoint：启动前执行 `prisma migrate deploy`。
+
+### 6.2 `circle_be` CallModule
+
+`circle_be` 仍新增轻量 `CallModule`，但不直接依赖 LiveKit SDK。它负责业务通话状态，并通过内部 HTTP client 调用 `circle-webrtc`。
 
 ```text
 circle_be/src/call/
 ├── call.module.ts
 ├── call.controller.ts
 ├── call.service.ts
-├── livekit.service.ts
-├── livekit-webhook.controller.ts
+├── webrtc-client.service.ts
 ├── call-timeout.service.ts
 └── dto/
-    ├── call.dto.ts
-    └── livekit-webhook.dto.ts
+    └── call.dto.ts
 ```
 
 依赖：
@@ -111,17 +157,29 @@ circle_be/src/call/
 - `RealtimeModule`
 - `OpenimModule`（第二阶段：写通话记录自定义消息）
 - `FriendModule` 或直接查 `Friend` 表做 1v1 权限校验
-- `livekit-server-sdk`
+- 内部 HTTP client 调用 `circle-webrtc`
 
-环境变量：
+`circle_be` 环境变量：
+
+```bash
+WEBRTC_SERVICE_URL=http://circle-webrtc:3005
+WEBRTC_TENANT_ID=circle-im
+WEBRTC_CLIENT_ID=...
+WEBRTC_CLIENT_SECRET=...
+CALL_RING_TIMEOUT_SECONDS=45
+CALL_ALLOW_OFFLINE_INVITE=false
+```
+
+`circle-webrtc` 环境变量：
 
 ```bash
 LIVEKIT_URL=wss://livekit.example.com
 LIVEKIT_API_KEY=...
 LIVEKIT_API_SECRET=...
-CALL_RING_TIMEOUT_SECONDS=45
-CALL_TOKEN_TTL_SECONDS=600
-CALL_ALLOW_OFFLINE_INVITE=false
+LIVEKIT_TOKEN_MAX_TTL=3600
+WEBRTC_DATABASE_URL=postgresql://...
+JWT_SECRET=...
+WEBRTC_TENANT_ID=circle-im
 ```
 
 本地开发可使用 LiveKit dev server；生产必须使用 LiveKit Cloud 或正确配置公网 TLS / TURN / UDP 的自托管 LiveKit。
@@ -130,7 +188,18 @@ CALL_ALLOW_OFFLINE_INVITE=false
 
 ## 7. 数据模型
 
-建议新增 Prisma 模型：
+数据分两层。
+
+`circle-webrtc` 复用 Squady schema：
+
+- `WebrtcTenantCredential`
+- `WebrtcRoom`
+- `WebrtcParticipantRole`
+- `WebrtcRoomLog`
+- `WebrtcRoomAcl`
+- `WebrtcBannedUser`
+
+`circle_be` 新增业务通话表，用来表达 IM 产品语义：
 
 ```prisma
 enum CallType {
@@ -166,7 +235,8 @@ model CallSession {
   sessionType     Int
   callType        CallType
   status          CallStatus    @default(RINGING)
-  livekitRoomName String        @unique
+  webrtcRoomId    String        @unique
+  livekitRoomName String?
   callerID        String
   calleeID        String
   startedAt       DateTime?
@@ -189,7 +259,7 @@ model CallSession {
 }
 ```
 
-第一阶段不需要 `CallParticipant` 表。群通话立项时再拆出参与者表和角色表：
+第一阶段不需要在 `circle_be` 新增 `CallParticipant` 表。群通话立项时可以直接复用 `circle-webrtc` 的 `WebrtcParticipantRole`，必要时再在 `circle_be` 增加业务参与者表：
 
 ```prisma
 model CallParticipant {
@@ -459,7 +529,7 @@ type CallInvitePayload = {
 
 ## 12. LiveKit token 生成
 
-服务端使用 `livekit-server-sdk`：
+LiveKit token 由 `circle-webrtc` 使用 `livekit-server-sdk` 生成，`circle_be` 只是转发给已授权的 App 调用方。
 
 - `RoomServiceClient` 创建/删除 room；
 - `AccessToken` 签发参与者 token；
@@ -642,9 +712,14 @@ RINGING
 - webhook 验签失败返回 401；
 - `participant_joined` 把第二人加入后的通话推进到 `ACTIVE`。
 
-后端集成测试：
+`circle_be` 集成测试：
 
-- 使用 mocked `LiveKitService` 验证 create/delete/token 参数；
+- 使用 mocked `WebrtcClientService` 验证 create/join/close 调用参数；
+- 验证 webrtc 服务异常时，`circle_be` 返回稳定业务错误码而不是泄露内部错误。
+
+`circle-webrtc` 集成测试：
+
+- 复用 Squady webrtc 现有 rooms / livekit / webhook 测试；
 - 可选本地 LiveKit dev server 做端到端 token join smoke test。
 
 客户端后续验收：
@@ -659,15 +734,24 @@ RINGING
 
 ## 20. 分阶段实施建议
 
-### 阶段 1：后端状态机 + Token
+### 阶段 1：派生 Squady WebRTC 镜像
 
-- 新增 Prisma model 和 migration；
-- 新增 `CallModule` / `LiveKitService`；
+- 复制 Squady `apps/webrtc` 到 Circle 服务目录或单独 repo；
+- 改服务名、镜像名、默认 tenant、env example、docker compose；
+- 补 Dockerfile 或复用 Squady `docker/webrtc.dockerfile`；
+- 跑 `prisma migrate deploy`、`yarn test`、`yarn build`；
+- 本地用 LiveKit dev server 验证 `/rooms`、`/join`、webhook。
+
+### 阶段 2：`circle_be` 通话状态机 + WebRTC client
+
+- 新增 `CallSession` Prisma model 和 migration；
+- 新增 `CallModule` / `WebrtcClientService`；
 - 实现 create/accept/reject/cancel/hangup/get/join-token；
+- 内部调用 `circle-webrtc` 创建房间、获取 join token、关闭房间；
 - 实现 realtime call events；
-- mock LiveKit 完成后端测试。
+- mock `WebrtcClientService` 完成后端测试。
 
-### 阶段 2：客户端最小通话
+### 阶段 3：客户端最小通话
 
 - 安装 LiveKit RN 依赖和 config plugins；
 - 新增通话 API client；
@@ -675,17 +759,17 @@ RINGING
 - 实现呼出、来电、通话页、挂断；
 - 仅支持 App 在线时响铃。
 
-### 阶段 3：历史记录与离线提醒
+### 阶段 4：历史记录与离线提醒
 
 - 后端 OpenIM 自定义通话记录消息；
 - 聊天气泡渲染通话记录；
 - 如需后台来电，再单独接入原生推送、CallKit/ConnectionService。
 
-### 阶段 4：群通话
+### 阶段 5：群通话
 
-- 引入 `CallParticipant`；
+- 复用 `circle-webrtc` participants / role / mute 接口；
 - 支持群聊房间、成员列表、角色、主持人、静音；
-- 此阶段可重新评估是否拆出 Squady 风格独立 WebRTC 服务。
+- `circle_be` 只补群通话业务权限和 OpenIM 群聊入口。
 
 ---
 
