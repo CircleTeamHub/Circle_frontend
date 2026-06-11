@@ -10,6 +10,7 @@ import * as SplashScreen from 'expo-splash-screen'; // 控制启动屏（闪屏�
 import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar'; // 控制顶部状态栏样式（文字颜色等）
 import 'react-native-reanimated';             // 必须在入口文件最早引入，启用动画引擎
+import { registerGlobals } from '@livekit/react-native';
 import { rehydrateLanguageFromStorage } from '@/i18n';
 import { migrateFromAsyncStorage } from '@/storage';
 import { silenceDomBridgeRejection } from '@/utils/silence-dom-bridge-rejection';
@@ -21,6 +22,7 @@ import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-f
 // 项目自定义主题系统：ThemeProvider 提供主题上下文，useTheme 读取当前主题
 import { SessionBootstrap } from '@/components/app/session-bootstrap';
 import { NotificationSnackbarHost } from '@/features/notifications/components/NotificationSnackbarHost';
+import { CallInviteHost } from '@/features/call/components/CallInviteHost';
 import { ThemeProvider, useTheme } from '@/theme';
 
 // 将 expo-router 内置的 ErrorBoundary 重新导出，使其在根路由层生效（捕获页面级报错）
@@ -31,6 +33,8 @@ SplashScreen.preventAutoHideAsync();
 
 // 过滤 Expo DOM 组件在导航卸载竞态时抛出的 injectJavaScript 拒绝（属于已知良性错误）
 silenceDomBridgeRejection();
+
+registerGlobals();
 
 // RootStack：负责将项目主题与 React Navigation 主题桥接，并声明顶层路由结构
 function RootStack() {
@@ -139,6 +143,7 @@ export default function RootLayout() {
       <SessionBootstrap />
       <RootStack />
       <NotificationSnackbarHost />
+      <CallInviteHost />
     </ThemeProvider>
   );
 }

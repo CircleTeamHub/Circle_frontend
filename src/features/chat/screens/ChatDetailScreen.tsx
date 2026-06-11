@@ -48,6 +48,8 @@ import {
 import {
   getOrCreateSingleConversation,
   getOrCreateGroupConversation,
+  fromImUserId,
+  loadGroupMemberList,
   loadConversationMessages,
   markConversationAsRead,
   sendFriendCardMessage,
@@ -83,11 +85,13 @@ import {
 import { useSharePickerStore } from '@/features/chat/store/use-share-picker-store';
 import { useMessageForwardStore } from '@/features/chat/store/use-message-forward-store';
 import { useTransferComposerStore } from '@/features/chat/store/use-transfer-composer-store';
+import { useCallStore } from '@/features/call/store/use-call-store';
 import {
   DEFAULT_CHAT_BACKGROUND_PREFERENCE,
   resolveChatBackgroundStyle,
   useChatPreferencesStore,
 } from '@/features/chat/store/use-chat-preferences-store';
+import { createGroupCall } from '@/services/api/calls';
 import { OnlineState, SessionType } from '@openim/rn-client-sdk';
 import { useTranslation } from 'react-i18next';
 import type { ChatMessage, FriendCardData } from '@/types';
@@ -108,7 +112,7 @@ function logChatSendFailure(
 
 type AttachmentId =
   | 'media'
-  | 'video-call'
+  | 'voice-call'
   | 'location'
   | 'notes'
   | 'friend-card'
@@ -116,13 +120,13 @@ type AttachmentId =
   | 'quick-reply'
   | 'transfer';
 
-const ATTACHMENT_ITEMS: ReadonlyArray<{
+const ATTACHMENT_ITEMS: readonly {
   id: AttachmentId;
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
-}> = [
+}[] = [
   { id: 'media', icon: 'image-outline', label: '媒体' },
-  { id: 'video-call', icon: 'videocam-outline', label: '视频通话' },
+  { id: 'voice-call', icon: 'call-outline', label: '语音通话' },
   { id: 'location', icon: 'location-outline', label: '位置' },
   { id: 'notes', icon: 'create-outline', label: '笔记' },
   { id: 'friend-card', icon: 'person-outline', label: '好友名片' },
@@ -274,10 +278,12 @@ export default function ChatDetailScreen() {
   const consumePendingShare = useSharePickerStore((s) => s.consume);
   const setPendingForward = useMessageForwardStore((s) => s.setPending);
   const consumePendingTransfer = useTransferComposerStore((s) => s.consume);
+  const setActiveCall = useCallStore((state) => state.setActiveCall);
   const voiceRecorder = useAudioRecorder(RecordingPresets.LOW_QUALITY);
   const voiceRecorderState = useAudioRecorderState(voiceRecorder, 250);
   const [voiceRecordingStartedAt, setVoiceRecordingStartedAt] = useState<number | null>(null);
   const [voiceActionBusy, setVoiceActionBusy] = useState(false);
+  const [callStarting, setCallStarting] = useState(false);
   // 录音状态的纯 JS 快照：卸载 cleanup 里不能调 recorder 的 native getStatus()，
   // 此时 expo-audio 可能已释放其 native shared object（会抛 NativeSharedObjectNotFoundException）。
   const isRecordingRef = useRef(false);
@@ -708,7 +714,6 @@ export default function ChatDetailScreen() {
     isGroupChat,
     selfAvatarUri,
     selfName,
-    router,
     scope,
     withMessageActions,
   ]);
@@ -1035,6 +1040,65 @@ export default function ChatDetailScreen() {
     [],
   );
 
+  const handleStartGroupAudioCall = useCallback(async () => {
+    if (callStarting) return;
+
+    if (!isGroupChat) {
+      Alert.alert('语音通话', '当前只开放群聊语音通话');
+      return;
+    }
+
+    if (isPreviewMode || !conversationID || !sourceID) {
+      Alert.alert('语音通话', '群聊会话尚未准备好');
+      return;
+    }
+
+    if (!authUser?.id) {
+      Alert.alert('语音通话', '请先登录后再发起通话');
+      return;
+    }
+
+    setCallStarting(true);
+    try {
+      const members = await loadGroupMemberList(sourceID, 10_000);
+      const inviteeIDs = Array.from(
+        new Set(
+          members
+            .map((member) => fromImUserId(member.userID))
+            .filter((userID) => userID && userID !== authUser.id),
+        ),
+      );
+
+      if (inviteeIDs.length === 0) {
+        Alert.alert('语音通话', '群内没有可邀请的其他成员');
+        return;
+      }
+
+      const response = await createGroupCall({
+        conversationID,
+        callType: 'AUDIO',
+        inviteeIDs,
+      });
+      setActiveCall(response.call, response.livekit);
+      router.push('/(chat)/group-call');
+    } catch (error) {
+      Alert.alert('语音通话', '发起失败，请稍后重试');
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn('[chat] start group audio call failed', error);
+      }
+    } finally {
+      setCallStarting(false);
+    }
+  }, [
+    authUser?.id,
+    callStarting,
+    conversationID,
+    isGroupChat,
+    isPreviewMode,
+    setActiveCall,
+    sourceID,
+  ]);
+
   const handleAttachmentAction = useCallback(
     (id: AttachmentId) => {
       setAttachmentOpen(false);
@@ -1057,8 +1121,8 @@ export default function ChatDetailScreen() {
         case 'location':
           void handleSendCurrentLocation();
           return;
-        case 'video-call':
-          Alert.alert('视频通话', '需要接入 RTC SDK（Agora/WebRTC）后开放');
+        case 'voice-call':
+          void handleStartGroupAudioCall();
           return;
         case 'transfer':
           if (conversationType !== SessionType.Single) {
@@ -1083,6 +1147,7 @@ export default function ChatDetailScreen() {
       conversationType,
       handlePickMedia,
       handleSendCurrentLocation,
+      handleStartGroupAudioCall,
       openSharePicker,
       sourceID,
     ],
@@ -1502,10 +1567,18 @@ export default function ChatDetailScreen() {
                 onPress={() => handleAttachmentAction(item.id)}
               >
                 <View style={[s.attachmentIcon, d.attachmentIcon]}>
-                  <Ionicons name={item.icon} size={26} color={colors.text} />
+                  <Ionicons
+                    name={item.icon}
+                    size={26}
+                    color={
+                      item.id === 'voice-call' && callStarting
+                        ? colors.primary
+                        : colors.text
+                    }
+                  />
                 </View>
                 <Text style={[s.attachmentLabel, { color: colors.textSecondary }]}>
-                  {item.label}
+                  {item.id === 'voice-call' && callStarting ? '呼叫中' : item.label}
                 </Text>
               </Pressable>
             ))}

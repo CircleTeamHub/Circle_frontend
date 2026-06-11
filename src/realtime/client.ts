@@ -5,11 +5,17 @@ import { fetchCurrentUser } from '@/services/api/auth';
 import { fetchNotificationUnreadSummary } from '@/services/api/notifications';
 import { useNotificationCenterStore } from '@/features/notifications/store/use-notification-center-store';
 import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
+import { useCallStore } from '@/features/call/store/use-call-store';
 import { registerLogoutHandler } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
 import type { NotificationItem } from '@/types';
+import type {
+  CallInvitePayload,
+  CallParticipantPayload,
+  CallStatePayload,
+} from '@/features/call/types';
 
 type BadgeSnapshotPayload = {
   messagesUnread?: number;
@@ -72,6 +78,26 @@ type RealtimeEvent =
   | {
       type: 'system.notification.created';
       payload?: { content?: string };
+    }
+  | {
+      type: 'call.invite';
+      payload?: CallInvitePayload;
+    }
+  | {
+      type: 'call.participant.joined';
+      payload?: CallParticipantPayload;
+    }
+  | {
+      type: 'call.participant.left';
+      payload?: CallParticipantPayload;
+    }
+  | {
+      type: 'call.participant.rejected' | 'call.participant.missed';
+      payload?: CallParticipantPayload;
+    }
+  | {
+      type: 'call.ended' | 'call.canceled';
+      payload?: CallStatePayload;
     };
 
 const RECONNECT_BASE_MS = 1_000;
@@ -195,8 +221,46 @@ function handleNotificationCreated(payload: unknown) {
   useNotificationSnackbarStore.getState().enqueueNotification(payload);
 }
 
+function isCallInvitePayload(value: unknown): value is CallInvitePayload {
+  if (!value || typeof value !== 'object') return false;
+  const payload = value as Partial<CallInvitePayload>;
+  return (
+    typeof payload.callId === 'string' &&
+    typeof payload.conversationID === 'string' &&
+    payload.sessionType === 'group' &&
+    (payload.callType === 'AUDIO' || payload.callType === 'VIDEO') &&
+    typeof payload.initiator === 'object' &&
+    Array.isArray(payload.invitees) &&
+    typeof payload.expiresAt === 'string' &&
+    typeof payload.createdAt === 'string'
+  );
+}
+
+function isCallParticipantPayload(value: unknown): value is CallParticipantPayload {
+  if (!value || typeof value !== 'object') return false;
+  const payload = value as Partial<CallParticipantPayload>;
+  return (
+    typeof payload.callId === 'string' &&
+    typeof payload.changedAt === 'string' &&
+    typeof payload.user === 'object' &&
+    payload.user !== null &&
+    typeof payload.user.id === 'string'
+  );
+}
+
+function isCallStatePayload(value: unknown): value is CallStatePayload {
+  if (!value || typeof value !== 'object') return false;
+  const payload = value as Partial<CallStatePayload>;
+  return (
+    typeof payload.callId === 'string' &&
+    typeof payload.changedAt === 'string' &&
+    ['ENDED', 'CANCELED', 'MISSED', 'FAILED'].includes(String(payload.status))
+  );
+}
+
 function handleRealtimeEvent(message: RealtimeEvent) {
   const badgeStore = useTabBadgeStore.getState();
+  const callStore = useCallStore.getState();
 
   switch (message.type) {
     case 'badge.snapshot':
@@ -240,6 +304,33 @@ function handleRealtimeEvent(message: RealtimeEvent) {
     case 'circle.invitation.reviewed':
       return;
     case 'system.notification.created':
+      return;
+    case 'call.invite':
+      if (isCallInvitePayload(message.payload)) {
+        callStore.handleCallInvite(message.payload);
+      }
+      return;
+    case 'call.participant.joined':
+      if (isCallParticipantPayload(message.payload)) {
+        callStore.handleCallParticipantJoined(message.payload);
+      }
+      return;
+    case 'call.participant.left':
+      if (isCallParticipantPayload(message.payload)) {
+        callStore.handleCallParticipantLeft(message.payload);
+      }
+      return;
+    case 'call.participant.rejected':
+    case 'call.participant.missed':
+      if (isCallParticipantPayload(message.payload)) {
+        callStore.handleCallParticipantRejected(message.payload);
+      }
+      return;
+    case 'call.ended':
+    case 'call.canceled':
+      if (isCallStatePayload(message.payload)) {
+        callStore.handleCallEnded(message.payload);
+      }
       return;
     default:
       return;
