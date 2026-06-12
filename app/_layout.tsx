@@ -14,12 +14,15 @@ import { rehydrateLanguageFromStorage } from '@/i18n';
 import { migrateFromAsyncStorage } from '@/storage';
 import { silenceDomBridgeRejection } from '@/utils/silence-dom-bridge-rejection';
 import { useAuthStore } from '@/stores/authStore';
+import { useKnownAccountsStore } from '@/stores/knownAccountsStore';
 import { useChatPreferencesStore } from '@/features/chat/store/use-chat-preferences-store';
 import { useCircleNotificationStore } from '@/features/discover/store/use-circle-notification-store';
 import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-filter-store';
 
 // 项目自定义主题系统：ThemeProvider 提供主题上下文，useTheme 读取当前主题
+import { LoginSecurityCodeGate } from '@/components/app/login-security-code-gate';
 import { SessionBootstrap } from '@/components/app/session-bootstrap';
+import { AccountSwitcherSheet } from '@/features/profile/components/account-switcher-sheet';
 import { NotificationSnackbarHost } from '@/features/notifications/components/NotificationSnackbarHost';
 import { ThemeProvider, useTheme } from '@/theme';
 
@@ -107,6 +110,7 @@ export default function RootLayout() {
       })
       .finally(() => {
         void useAuthStore.persist.rehydrate();
+        void useKnownAccountsStore.persist.rehydrate();
         void useChatPreferencesStore.persist.rehydrate();
         void useDiscoverFilterStore.persist.rehydrate();
         void useCircleNotificationStore.persist.rehydrate();
@@ -139,6 +143,8 @@ export default function RootLayout() {
       <SessionBootstrap />
       <RootStack />
       <NotificationSnackbarHost />
+      <AccountSwitcherSheet />
+      <LoginSecurityCodeGate />
     </ThemeProvider>
   );
 }

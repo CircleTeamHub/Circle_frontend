@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   Alert,
-  Modal,
   Pressable,
   Share,
   StyleSheet,
@@ -13,6 +12,7 @@ import {
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 interface NoteShareQrSheetProps {
@@ -120,84 +120,76 @@ export function NoteShareQrSheet({
   };
 
   return (
-    <Modal
+    <BottomSheetModal
       visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
+      onClose={onClose}
+      backdropStyle={d.backdrop}
+      sheetStyle={[s.card, d.card]}
     >
-      <Pressable style={[s.backdrop, d.backdrop]} onPress={onClose}>
-        <Pressable style={[s.card, d.card]} onPress={() => {}}>
-          <View style={[s.handle, d.handle]} />
-          <Text style={d.heading}>
-            {t('notes.share.qrTitle', { defaultValue: '笔记二维码' })}
+      <View style={[s.handle, d.handle]} />
+      <Text style={d.heading}>
+        {t('notes.share.qrTitle', { defaultValue: '笔记二维码' })}
+      </Text>
+      <Text style={d.hint}>
+        {t('notes.share.qrHint', {
+          count: noteCount,
+          defaultValue: `扫码打开当前笔记列表（${noteCount} 条）。`,
+        })}
+      </Text>
+
+      <View style={[s.qrCard, d.qrCard]}>
+        {loading ? (
+          <ActivityIndicator color={colors.primary} />
+        ) : shareUrl ? (
+          <QRCode
+            value={shareUrl}
+            size={QR_SIZE}
+            color="#111111"
+            backgroundColor="#FFFFFF"
+          />
+        ) : (
+          <Text style={d.qrPlaceholder}>
+            {t('notes.share.waitingForLink', { defaultValue: '正在生成链接' })}
           </Text>
-          <Text style={d.hint}>
-            {t('notes.share.qrHint', {
-              count: noteCount,
-              defaultValue: `扫码打开当前笔记列表（${noteCount} 条）。`,
-            })}
+        )}
+      </View>
+
+      {errorMessage ? <Text style={d.errorText}>{errorMessage}</Text> : null}
+
+      <View style={[s.linkBox, d.linkBox]}>
+        <Text style={d.linkText} numberOfLines={1} ellipsizeMode="middle">
+          {shareUrl ||
+            t('notes.share.linkPending', { defaultValue: '分享链接生成中...' })}
+        </Text>
+      </View>
+
+      <View style={s.actions}>
+        <Pressable
+          style={[s.actionButton, d.primaryButton]}
+          onPress={() => void handleCopy()}
+          disabled={!shareUrl}
+        >
+          <Ionicons name="copy-outline" size={18} color={colors.white} />
+          <Text style={d.primaryText}>
+            {t('notes.share.copyLink', { defaultValue: '复制链接' })}
           </Text>
-
-          <View style={[s.qrCard, d.qrCard]}>
-            {loading ? (
-              <ActivityIndicator color={colors.primary} />
-            ) : shareUrl ? (
-              <QRCode
-                value={shareUrl}
-                size={QR_SIZE}
-                color="#111111"
-                backgroundColor="#FFFFFF"
-              />
-            ) : (
-              <Text style={d.qrPlaceholder}>
-                {t('notes.share.waitingForLink', { defaultValue: '正在生成链接' })}
-              </Text>
-            )}
-          </View>
-
-          {errorMessage ? <Text style={d.errorText}>{errorMessage}</Text> : null}
-
-          <View style={[s.linkBox, d.linkBox]}>
-            <Text style={d.linkText} numberOfLines={1} ellipsizeMode="middle">
-              {shareUrl ||
-                t('notes.share.linkPending', { defaultValue: '分享链接生成中...' })}
-            </Text>
-          </View>
-
-          <View style={s.actions}>
-            <Pressable
-              style={[s.actionButton, d.primaryButton]}
-              onPress={() => void handleCopy()}
-              disabled={!shareUrl}
-            >
-              <Ionicons name="copy-outline" size={18} color={colors.white} />
-              <Text style={d.primaryText}>
-                {t('notes.share.copyLink', { defaultValue: '复制链接' })}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[s.actionButton, d.secondaryButton]}
-              onPress={() => void handleShare()}
-              disabled={!shareUrl}
-            >
-              <Ionicons name="share-outline" size={18} color={colors.text} />
-              <Text style={d.secondaryText}>
-                {t('notes.share.systemShare', { defaultValue: '系统分享' })}
-              </Text>
-            </Pressable>
-          </View>
         </Pressable>
-      </Pressable>
-    </Modal>
+        <Pressable
+          style={[s.actionButton, d.secondaryButton]}
+          onPress={() => void handleShare()}
+          disabled={!shareUrl}
+        >
+          <Ionicons name="share-outline" size={18} color={colors.text} />
+          <Text style={d.secondaryText}>
+            {t('notes.share.systemShare', { defaultValue: '系统分享' })}
+          </Text>
+        </Pressable>
+      </View>
+    </BottomSheetModal>
   );
 }
 
 const s = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
   card: {
     borderTopLeftRadius: Radius.lg,
     borderTopRightRadius: Radius.lg,

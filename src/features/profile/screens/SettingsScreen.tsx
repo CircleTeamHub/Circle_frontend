@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import {
   Alert,
   View,
@@ -11,18 +11,9 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import {
-  getCurrentLanguagePreference,
-  setLanguage,
-  type AppLanguagePreference,
-} from '@/i18n';
 import { Avatar } from '@/components/ui/avatar';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
-import {
-  OptionPickerSheet,
-  type PickerOption,
-} from '@/components/ui/option-picker-sheet';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useAuthStore, type AuthUser } from '@/stores/authStore';
@@ -42,7 +33,6 @@ interface SettingsRowItem {
 
 const PROFILE_ROW_IDS = [
   'avatar',
-  'frame',
   'nickname',
   'gender',
   'birthday',
@@ -52,8 +42,6 @@ const PROFILE_ROW_IDS = [
   'phone',
   'qq',
 ] as const;
-
-const SECURITY_ROW_IDS = ['account-id', 'password', 'security-code'] as const;
 
 const s = StyleSheet.create({
   section: {
@@ -113,32 +101,6 @@ export default function SettingsScreen() {
   const { t } = useTranslation();
   const { logout, switchAccount, submitting } = useAuth();
   const user = useAuthStore((state) => state.user);
-  const [languagePreference, setLanguagePreferenceState] = useState(
-    getCurrentLanguagePreference(),
-  );
-  const [languageSheetVisible, setLanguageSheetVisible] = useState(false);
-
-  const languageOptions = useMemo<PickerOption<AppLanguagePreference>[]>(
-    () => [
-      { label: t('appSettings.languageSheet.system'), value: 'system' },
-      { label: t('appSettings.languageSheet.zh'), value: 'zh' },
-      { label: t('appSettings.languageSheet.en'), value: 'en' },
-    ],
-    [t],
-  );
-
-  const handleOpenLanguageSheet = useCallback(() => {
-    setLanguageSheetVisible(true);
-  }, []);
-
-  const handleCloseLanguageSheet = useCallback(() => {
-    setLanguageSheetVisible(false);
-  }, []);
-
-  const handleSelectLanguage = useCallback((next: AppLanguagePreference) => {
-    setLanguage(next);
-    setLanguagePreferenceState(next);
-  }, []);
 
   const profileRows = PROFILE_ROW_IDS.map((fieldId) => {
     const field = getProfileEditField(fieldId);
@@ -152,24 +114,6 @@ export default function SettingsScreen() {
       label: field.label,
       type: field.rowType,
       value: formatProfileFieldValue(fieldId, getFieldValue(user, fieldId)),
-      editable: field.editable,
-      unsupportedMessage:
-        'unsupportedMessage' in field ? field.unsupportedMessage : undefined,
-    } satisfies SettingsRowItem;
-  }).filter(Boolean) as SettingsRowItem[];
-
-  const securityRows = SECURITY_ROW_IDS.map((fieldId) => {
-    const field = getProfileEditField(fieldId);
-
-    if (!field) {
-      return null;
-    }
-
-    return {
-      id: field.id,
-      label: field.label,
-      type: field.rowType,
-      value: field.emptyValueLabel || undefined,
       editable: field.editable,
       unsupportedMessage:
         'unsupportedMessage' in field ? field.unsupportedMessage : undefined,
@@ -250,16 +194,6 @@ export default function SettingsScreen() {
   );
 
   function handleRowPress(item: SettingsRowItem) {
-    if (item.id === 'account-id') {
-      router.push('/(tabs)/profile/change-account');
-      return;
-    }
-
-    if (item.id === 'password') {
-      router.push('/(tabs)/profile/change-password');
-      return;
-    }
-
     if (item.editable) {
       router.push({
         pathname: '/(tabs)/profile/edit/[field]',
@@ -283,32 +217,6 @@ export default function SettingsScreen() {
           {profileRows.map((item, index) =>
             renderRow(item, index, profileRows.length),
           )}
-        </View>
-
-        <View style={s.section}>
-          <Text style={d.sectionTitle}>{t('settingsPage.securitySection')}</Text>
-          {securityRows.map((item, index) =>
-            renderRow(item, index, securityRows.length),
-          )}
-        </View>
-
-        <View style={s.section}>
-          <Text style={d.sectionTitle}>{t('settingsPage.generalSection')}</Text>
-          <Pressable style={s.row} onPress={handleOpenLanguageSheet}>
-            <Text style={d.rowLabel}>
-              {t('settingsPage.language')}
-            </Text>
-            <View style={s.rowRight}>
-              <Text style={d.rowValue}>
-                {t(`appSettings.languageSheet.${languagePreference}`)}
-              </Text>
-              <Ionicons
-                name="chevron-forward"
-                size={18}
-                color={colors.textSecondary}
-              />
-            </View>
-          </Pressable>
         </View>
 
         <View style={s.footer}>
@@ -337,14 +245,6 @@ export default function SettingsScreen() {
           </Pressable>
         </View>
       </ScrollView>
-      <OptionPickerSheet
-        visible={languageSheetVisible}
-        title={t('appSettings.languageSheet.title')}
-        options={languageOptions}
-        selectedValue={languagePreference}
-        onSelect={handleSelectLanguage}
-        onClose={handleCloseLanguageSheet}
-      />
     </View>
   );
 }

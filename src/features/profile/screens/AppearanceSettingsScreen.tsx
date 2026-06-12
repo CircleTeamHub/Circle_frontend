@@ -1,76 +1,98 @@
+import { useMemo, useState } from 'react';
+import { View } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import {
+  OptionPickerSheet,
+  type PickerOption,
+} from '@/components/ui/option-picker-sheet';
 import { SettingsDetailScreen } from '@/features/profile/components/settings-detail';
+import {
+  getCurrentLanguagePreference,
+  setLanguage,
+  type AppLanguagePreference,
+} from '@/i18n';
+import { useTheme, type ThemeMode } from '@/theme';
 
 export default function AppearanceSettingsScreen() {
+  const { t } = useTranslation();
+  const { themeMode, setThemeMode } = useTheme();
+  const [themeSheetVisible, setThemeSheetVisible] = useState(false);
+  const [languagePreference, setLanguagePreferenceState] = useState(
+    getCurrentLanguagePreference(),
+  );
+  const [languageSheetVisible, setLanguageSheetVisible] = useState(false);
+
+  const themeOptions = useMemo<PickerOption<ThemeMode>[]>(
+    () => [
+      {
+        label: t('settingsDetails.appearance.themeSheet.system'),
+        value: 'system',
+      },
+      {
+        label: t('settingsDetails.appearance.themeSheet.light'),
+        value: 'light',
+      },
+      {
+        label: t('settingsDetails.appearance.themeSheet.dark'),
+        value: 'dark',
+      },
+    ],
+    [t],
+  );
+
+  const languageOptions = useMemo<PickerOption<AppLanguagePreference>[]>(
+    () => [
+      { label: t('appSettings.languageSheet.system'), value: 'system' },
+      { label: t('appSettings.languageSheet.zh'), value: 'zh' },
+      { label: t('appSettings.languageSheet.en'), value: 'en' },
+    ],
+    [t],
+  );
+
+  function handleSelectLanguage(next: AppLanguagePreference) {
+    setLanguage(next);
+    setLanguagePreferenceState(next);
+  }
+
   return (
-    <SettingsDetailScreen
-      titleKey="settingsDetails.appearance.title"
-      sections={[
-        {
-          rows: [
-            {
-              id: 'theme-mode',
-              labelKey: 'settingsDetails.appearance.themeMode',
-              valueKey: 'settingsDetails.appearance.followSystem',
-            },
-            {
-              id: 'display-mode',
-              labelKey: 'settingsDetails.appearance.displayMode',
-              valueKey: 'settingsDetails.appearance.autoRecommended',
-            },
-            {
-              id: 'font-size',
-              labelKey: 'settingsDetails.appearance.fontSize',
-              valueKey: 'settingsDetails.appearance.standard',
-            },
-            {
-              id: 'global-chat-background',
-              labelKey: 'settingsDetails.appearance.globalChatBackground',
-              valueKey: 'settingsDetails.appearance.configured',
-            },
-            {
-              id: 'hide-chat-avatar',
-              labelKey: 'settingsDetails.appearance.hideChatAvatar',
-              subtitleKey: 'settingsDetails.appearance.hideChatAvatarHint',
-              type: 'toggle',
-              initialValue: false,
-            },
-            {
-              id: 'merge-avatar',
-              labelKey: 'settingsDetails.appearance.mergeAvatar',
-              subtitleKey: 'settingsDetails.appearance.mergeAvatarHint',
-              type: 'toggle',
-              initialValue: false,
-            },
-            {
-              id: 'show-group-tags',
-              labelKey: 'settingsDetails.appearance.showGroupTags',
-              subtitleKey: 'settingsDetails.appearance.showGroupTagsHint',
-              type: 'toggle',
-              initialValue: true,
-            },
-            {
-              id: 'show-original-group-name',
-              labelKey: 'settingsDetails.appearance.showOriginalGroupName',
-              subtitleKey: 'settingsDetails.appearance.showOriginalGroupNameHint',
-              type: 'toggle',
-              initialValue: false,
-            },
-            {
-              id: 'pinned-fold-count',
-              labelKey: 'settingsDetails.appearance.pinnedFoldCount',
-              subtitleKey: 'settingsDetails.appearance.pinnedFoldCountHint',
-              valueKey: 'settingsDetails.appearance.unlimited',
-            },
-            {
-              id: 'battery-optimization',
-              labelKey: 'settingsDetails.appearance.batteryOptimization',
-              subtitleKey: 'settingsDetails.appearance.batteryOptimizationHint',
-              type: 'toggle',
-              initialValue: true,
-            },
-          ],
-        },
-      ]}
-    />
+    <View style={{ flex: 1 }}>
+      <SettingsDetailScreen
+        titleKey="settingsDetails.appearance.title"
+        sections={[
+          {
+            rows: [
+              {
+                id: 'theme-mode',
+                labelKey: 'settingsDetails.appearance.themeMode',
+                valueText: t(`settingsDetails.appearance.themeSheet.${themeMode}`),
+                onPress: () => setThemeSheetVisible(true),
+              },
+              {
+                id: 'language',
+                labelKey: 'settingsDetails.appearance.language',
+                valueText: t(`appSettings.languageSheet.${languagePreference}`),
+                onPress: () => setLanguageSheetVisible(true),
+              },
+            ],
+          },
+        ]}
+      />
+      <OptionPickerSheet
+        visible={themeSheetVisible}
+        title={t('settingsDetails.appearance.themeSheet.title')}
+        options={themeOptions}
+        selectedValue={themeMode}
+        onSelect={setThemeMode}
+        onClose={() => setThemeSheetVisible(false)}
+      />
+      <OptionPickerSheet
+        visible={languageSheetVisible}
+        title={t('appSettings.languageSheet.title')}
+        options={languageOptions}
+        selectedValue={languagePreference}
+        onSelect={handleSelectLanguage}
+        onClose={() => setLanguageSheetVisible(false)}
+      />
+    </View>
   );
 }

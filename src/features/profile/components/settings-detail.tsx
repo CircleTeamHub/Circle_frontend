@@ -92,10 +92,12 @@ function SettingsSwitch({
   initialValue,
   value,
   onValueChange,
+  disabled,
 }: {
   initialValue?: boolean;
   value?: boolean;
   onValueChange?: (value: boolean) => void;
+  disabled?: boolean;
 }) {
   const { colors } = useTheme();
   const [localValue, setLocalValue] = useState(initialValue ?? false);
@@ -105,6 +107,7 @@ function SettingsSwitch({
     <Switch
       value={isControlled ? value ?? false : localValue}
       onValueChange={isControlled ? onValueChange : setLocalValue}
+      disabled={disabled}
       trackColor={{ false: colors.surfaceBorder, true: colors.blue }}
       thumbColor={colors.white}
     />
@@ -231,6 +234,7 @@ export function SettingsDetailScreen({
                 initialValue={row.initialValue}
                 value={row.value}
                 onValueChange={row.onValueChange}
+                disabled={row.disabled}
               />
             ) : row.type === 'info' ? null : (
               <Ionicons name="chevron-forward" size={22} color={colors.textSecondary} />

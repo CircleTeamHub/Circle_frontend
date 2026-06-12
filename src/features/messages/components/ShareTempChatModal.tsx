@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import {
   Alert,
-  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -11,6 +10,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 interface ShareTempChatModalProps {
@@ -24,10 +24,6 @@ interface ShareTempChatModalProps {
 const QR_SIZE = 200;
 
 const s = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
   card: {
     borderTopLeftRadius: Radius.lg,
     borderTopRightRadius: Radius.lg,
@@ -131,65 +127,61 @@ export default function ShareTempChatModal({
   };
 
   return (
-    <Modal
+    <BottomSheetModal
       visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
+      onClose={onClose}
+      backdropStyle={d.backdrop}
+      sheetStyle={[s.card, d.card]}
     >
-      <Pressable style={[s.backdrop, d.backdrop]} onPress={onClose}>
-        <Pressable style={[s.card, d.card]} onPress={() => {}}>
-          <View style={[s.handle, d.handle]} />
-          <Text style={d.heading} numberOfLines={1}>
-            {title}
-          </Text>
+      <View style={[s.handle, d.handle]} />
+      <Text style={d.heading} numberOfLines={1}>
+        {title}
+      </Text>
 
-          {shareUrl ? (
-            <>
-              <View style={[s.qrCard, d.qrCard]}>
-                <QRCode
-                  value={shareUrl}
-                  size={QR_SIZE}
-                  color="#111111"
-                  backgroundColor="#FFFFFF"
-                />
-              </View>
-              <Text style={d.hint}>{t('tempChats.scanHint')}</Text>
+      {shareUrl ? (
+        <>
+          <View style={[s.qrCard, d.qrCard]}>
+            <QRCode
+              value={shareUrl}
+              size={QR_SIZE}
+              color="#111111"
+              backgroundColor="#FFFFFF"
+            />
+          </View>
+          <Text style={d.hint}>{t('tempChats.scanHint')}</Text>
 
-              <View style={[s.linkBox, d.linkBox]}>
-                <Text
-                  style={d.linkText}
-                  numberOfLines={1}
-                  ellipsizeMode="middle"
-                >
-                  {shareUrl}
-                </Text>
-              </View>
+          <View style={[s.linkBox, d.linkBox]}>
+            <Text
+              style={d.linkText}
+              numberOfLines={1}
+              ellipsizeMode="middle"
+            >
+              {shareUrl}
+            </Text>
+          </View>
 
-              <View style={s.actions}>
-                <Pressable
-                  style={[s.actionButton, d.copyButton]}
-                  onPress={() => void handleCopy()}
-                >
-                  <Ionicons name="copy-outline" size={18} color={colors.white} />
-                  <Text style={d.copyText}>{t('tempChats.copyLink')}</Text>
-                </Pressable>
-                <Pressable
-                  style={[s.actionButton, d.shareButton]}
-                  onPress={() => onShareSystem(title, shareUrl)}
-                >
-                  <Ionicons
-                    name="share-outline"
-                    size={18}
-                    color={colors.text}
-                  />
-                  <Text style={d.shareText}>{t('tempChats.shareSystem')}</Text>
-                </Pressable>
-              </View>
-            </>
-          ) : null}
-        </Pressable>
-      </Pressable>
-    </Modal>
+          <View style={s.actions}>
+            <Pressable
+              style={[s.actionButton, d.copyButton]}
+              onPress={() => void handleCopy()}
+            >
+              <Ionicons name="copy-outline" size={18} color={colors.white} />
+              <Text style={d.copyText}>{t('tempChats.copyLink')}</Text>
+            </Pressable>
+            <Pressable
+              style={[s.actionButton, d.shareButton]}
+              onPress={() => onShareSystem(title, shareUrl)}
+            >
+              <Ionicons
+                name="share-outline"
+                size={18}
+                color={colors.text}
+              />
+              <Text style={d.shareText}>{t('tempChats.shareSystem')}</Text>
+            </Pressable>
+          </View>
+        </>
+      ) : null}
+    </BottomSheetModal>
   );
 }

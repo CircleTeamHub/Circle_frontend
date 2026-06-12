@@ -46,6 +46,9 @@ test('friends api exposes blacklist and delete-friend actions through the backen
   const api = loadFriendsApi({
     apiClient: async (endpoint, options) => {
       calls.push({ endpoint, options });
+      if (endpoint === '/friend/blocked') {
+        return [];
+      }
       return undefined;
     },
     normalizeMediaUrl: (value) => value,
@@ -53,6 +56,7 @@ test('friends api exposes blacklist and delete-friend actions through the backen
 
   await api.addFriendToBlacklist('friend-1');
   await api.removeFriendFromBlacklist('friend-1');
+  await api.fetchBlockedUsers();
   await api.deleteFriendRelationship('friend-1');
 
   assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
@@ -63,6 +67,9 @@ test('friends api exposes blacklist and delete-friend actions through the backen
     {
       endpoint: '/friend/block/friend-1',
       options: { method: 'DELETE' },
+    },
+    {
+      endpoint: '/friend/blocked',
     },
     {
       endpoint: '/friend/friend-1',

@@ -3,12 +3,12 @@ import {
   View,
   Text,
   Pressable,
-  Modal,
   ScrollView,
   StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 
 export interface PickerOption<T> {
@@ -19,17 +19,13 @@ export interface PickerOption<T> {
 interface OptionPickerSheetProps<T> {
   visible: boolean;
   title: string;
-  options: ReadonlyArray<PickerOption<T>>;
+  options: readonly PickerOption<T>[];
   selectedValue: T;
   onSelect: (value: T) => void;
   onClose: () => void;
 }
 
 const s = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
   sheet: {
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
@@ -86,72 +82,63 @@ export function OptionPickerSheet<T extends string | number | null>({
   );
 
   return (
-    <Modal
+    <BottomSheetModal
       visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-      statusBarTranslucent
+      onClose={onClose}
+      backdropStyle={d.backdrop}
+      sheetStyle={[s.sheet, d.sheet, { paddingBottom: insets.bottom || Spacing.lg }]}
     >
-      <Pressable style={[s.backdrop, d.backdrop]} onPress={onClose}>
-        {/* 内层 Pressable 拦截点击，避免点 sheet 内部误触 backdrop 关闭 */}
+      <View style={[s.handle, d.handle]} />
+      <View style={s.header}>
+        <Text style={[s.title, d.title]}>{title}</Text>
         <Pressable
-          style={[s.sheet, d.sheet, { paddingBottom: insets.bottom || Spacing.lg }]}
-          onPress={() => {}}
+          style={s.closeBtn}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="关闭"
         >
-          <View style={[s.handle, d.handle]} />
-          <View style={s.header}>
-            <Text style={[s.title, d.title]}>{title}</Text>
-            <Pressable
-              style={s.closeBtn}
-              onPress={onClose}
-              accessibilityRole="button"
-              accessibilityLabel="关闭"
-            >
-              <Ionicons name="close" size={22} color={colors.textSecondary} />
-            </Pressable>
-          </View>
-          <ScrollView
-            bounces={false}
-            showsVerticalScrollIndicator={false}
-            style={{ maxHeight: 360 }}
-          >
-            {options.map((option, index) => {
-              const isSelected = option.value === selectedValue;
-              return (
-                <View key={`${String(option.value)}-${index}`}>
-                  <Pressable
-                    style={s.optionRow}
-                    onPress={() => {
-                      onSelect(option.value);
-                      onClose();
-                    }}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isSelected }}
-                    accessibilityLabel={option.label}
-                  >
-                    <Text
-                      style={[
-                        s.optionLabel,
-                        isSelected ? d.optionLabelSelected : d.optionLabel,
-                      ]}
-                    >
-                      {option.label}
-                    </Text>
-                    {isSelected ? (
-                      <Ionicons
-                        name="checkmark"
-                        size={20}
-                        color={colors.primary}
-                      />
-                    ) : null}
-                  </Pressable>
-                </View>
-              );
-            })}
-          </ScrollView>
+          <Ionicons name="close" size={22} color={colors.textSecondary} />
         </Pressable>
-      </Pressable>
-    </Modal>
+      </View>
+      <ScrollView
+        bounces={false}
+        showsVerticalScrollIndicator={false}
+        style={{ maxHeight: 360 }}
+      >
+        {options.map((option, index) => {
+          const isSelected = option.value === selectedValue;
+          return (
+            <View key={`${String(option.value)}-${index}`}>
+              <Pressable
+                style={s.optionRow}
+                onPress={() => {
+                  onSelect(option.value);
+                  onClose();
+                }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isSelected }}
+                accessibilityLabel={option.label}
+              >
+                <Text
+                  style={[
+                    s.optionLabel,
+                    isSelected ? d.optionLabelSelected : d.optionLabel,
+                  ]}
+                >
+                  {option.label}
+                </Text>
+                {isSelected ? (
+                  <Ionicons
+                    name="checkmark"
+                    size={20}
+                    color={colors.primary}
+                  />
+                ) : null}
+              </Pressable>
+            </View>
+          );
+        })}
+      </ScrollView>
+    </BottomSheetModal>
   );
 }
