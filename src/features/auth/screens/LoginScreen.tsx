@@ -1,8 +1,7 @@
 import { AuthInput } from "@/components/ui/auth-input";
 import { useAuth } from "@/hooks/use-auth";
-import { useCountdown } from "@/hooks/use-countdown";
-import { requestEmailCode } from "@/services/api/auth";
-import { getApiErrorMessage } from "@/services/api/errors";
+import { useSendEmailCode } from "@/hooks/use-send-email-code";
+import { useNetworkStatus } from "@/hooks/use-network-status";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import { Link, useLocalSearchParams } from "expo-router";
 import { useState, useMemo, useCallback } from "react";
@@ -96,8 +95,8 @@ export default function LoginScreen() {
   const [email, setEmail] = useState(emailParam ?? "");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
-  const [sendError, setSendError] = useState<string | null>(null);
-  const countdown = useCountdown();
+  const sendCode = useSendEmailCode("login");
+  const { isOffline } = useNetworkStatus();
 
   const d = useMemo(
     () => ({
@@ -120,20 +119,9 @@ export default function LoginScreen() {
     [colors],
   );
 
-  const onSendCode = useCallback(async () => {
-    setSendError(null);
-    const normalizedEmail = email.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-      setSendError(t("auth.invalidEmail", { defaultValue: "邮箱格式不正确" }));
-      return;
-    }
-    try {
-      await requestEmailCode({ email: normalizedEmail, purpose: "login" });
-      countdown.start(60);
-    } catch (e) {
-      setSendError(getApiErrorMessage(e, "发送失败，请重试"));
-    }
-  }, [email, countdown, t]);
+  const onSendCode = useCallback(() => {
+    sendCode.send(email);
+  }, [sendCode, email]);
 
   const onForgotPassword = useCallback(() => {
     Alert.alert(
@@ -235,22 +223,25 @@ export default function LoginScreen() {
               <Pressable
                 style={s.sendBtn}
                 onPress={onSendCode}
-                disabled={countdown.running}
+                disabled={sendCode.running || sendCode.sending}
                 hitSlop={8}
               >
                 <Text
                   style={[
                     s.sendBtnText,
                     {
-                      color: countdown.running
-                        ? colors.textSecondary
-                        : colors.primary,
+                      color:
+                        sendCode.running || sendCode.sending
+                          ? colors.textSecondary
+                          : colors.primary,
                     },
                   ]}
                 >
-                  {countdown.running
-                    ? t("auth.resendCodeIn", { seconds: countdown.seconds })
-                    : t("auth.sendCode")}
+                  {sendCode.running
+                    ? t("auth.resendCodeIn", { seconds: sendCode.seconds })
+                    : sendCode.sending
+                      ? t("auth.sendingCode", { defaultValue: "发送中…" })
+                      : t("auth.sendCode")}
                 </Text>
               </Pressable>
             }
@@ -258,8 +249,13 @@ export default function LoginScreen() {
         )}
       </View>
 
-      {/* Error */}
-      {sendError ? <Text style={[s.error, d.error]}>{sendError}</Text> : null}
+      {/* Offline / Error */}
+      {isOffline ? (
+        <Text style={[s.error, d.error]}>{t("auth.offlineHint")}</Text>
+      ) : null}
+      {sendCode.error ? (
+        <Text style={[s.error, d.error]}>{sendCode.error}</Text>
+      ) : null}
       {error ? <Text style={[s.error, d.error]}>{error}</Text> : null}
 
       {/* Login button */}

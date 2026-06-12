@@ -29,6 +29,12 @@ import { loginToOpenIM, logoutFromOpenIM } from '@/im/client';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useMessageGroupsStore } from '@/features/messages/store/use-message-groups-store';
 import { retry } from '@/utils/retry';
+import {
+  validateLoginForm,
+  validateLoginCodeForm,
+  validateRegisterForm,
+} from '@/features/auth/validation';
+import i18n from '@/i18n';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -63,11 +69,6 @@ export function useAuth() {
   // Pattern D / 双重防抖：disabled={submitting} 在 fast double-tap 下可能晚一帧
   // 才生效；用 ref 在 hook 入口处再判断一次，确保同一时刻只有一次登录/注册/登出。
   const inFlightRef = useRef(false);
-
-  const isValidEmail = useCallback(
-    (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
-    [],
-  );
 
   // 密码登录与验证码登录的共同收尾：拉用户、落 session、记账号、登 IM、跳转。
   const onAuthSuccess = useCallback(
@@ -119,20 +120,9 @@ export function useAuth() {
       safeSetError(null);
       const normalizedEmail = email.trim();
 
-      if (!normalizedEmail) {
-        safeSetError("请输入邮箱");
-        return;
-      }
-      if (!isValidEmail(normalizedEmail)) {
-        safeSetError("邮箱格式不正确");
-        return;
-      }
-      if (!password.trim()) {
-        safeSetError("请输入密码");
-        return;
-      }
-      if (password.length < 6) {
-        safeSetError("密码至少6位");
+      const invalid = validateLoginForm(normalizedEmail, password);
+      if (invalid) {
+        safeSetError(i18n.t(invalid));
         return;
       }
       inFlightRef.current = true;
@@ -142,13 +132,13 @@ export function useAuth() {
         await onAuthSuccess(tokens);
       } catch (requestError) {
         await clearLocalSession();
-        safeSetError(getApiErrorMessage(requestError, '登录失败，请重试'));
+        safeSetError(getApiErrorMessage(requestError, i18n.t('auth.errors.loginFailed')));
       } finally {
         inFlightRef.current = false;
         safeSetSubmitting(false);
       }
     },
-    [onAuthSuccess, isValidEmail, safeSetError, safeSetSubmitting],
+    [onAuthSuccess, safeSetError, safeSetSubmitting],
   );
 
   const loginWithCode = useCallback(
@@ -156,12 +146,9 @@ export function useAuth() {
       if (inFlightRef.current) return;
       safeSetError(null);
       const normalizedEmail = email.trim();
-      if (!isValidEmail(normalizedEmail)) {
-        safeSetError("邮箱格式不正确");
-        return;
-      }
-      if (!/^\d{6}$/.test(code.trim())) {
-        safeSetError("请输入6位验证码");
+      const invalid = validateLoginCodeForm(normalizedEmail, code);
+      if (invalid) {
+        safeSetError(i18n.t(invalid));
         return;
       }
       inFlightRef.current = true;
@@ -174,13 +161,13 @@ export function useAuth() {
         await onAuthSuccess(tokens);
       } catch (requestError) {
         await clearLocalSession();
-        safeSetError(getApiErrorMessage(requestError, '登录失败，请重试'));
+        safeSetError(getApiErrorMessage(requestError, i18n.t('auth.errors.loginFailed')));
       } finally {
         inFlightRef.current = false;
         safeSetSubmitting(false);
       }
     },
-    [onAuthSuccess, isValidEmail, safeSetError, safeSetSubmitting],
+    [onAuthSuccess, safeSetError, safeSetSubmitting],
   );
 
   const register = useCallback(
@@ -193,20 +180,14 @@ export function useAuth() {
       if (inFlightRef.current) return;
       safeSetError(null);
       const normalizedEmail = email.trim();
-      if (!isValidEmail(normalizedEmail)) {
-        safeSetError("邮箱格式不正确");
-        return;
-      }
-      if (!/^\d{6}$/.test(code.trim())) {
-        safeSetError("请输入6位验证码");
-        return;
-      }
-      if (password.length < 6) {
-        safeSetError("密码至少6位");
-        return;
-      }
-      if (!nickname.trim()) {
-        safeSetError("请输入昵称");
+      const invalid = validateRegisterForm(
+        normalizedEmail,
+        code,
+        password,
+        nickname,
+      );
+      if (invalid) {
+        safeSetError(i18n.t(invalid));
         return;
       }
 
@@ -224,13 +205,13 @@ export function useAuth() {
           params: { email: normalizedEmail },
         });
       } catch (requestError) {
-        safeSetError(getApiErrorMessage(requestError, '注册失败，请重试'));
+        safeSetError(getApiErrorMessage(requestError, i18n.t('auth.errors.registerFailed')));
       } finally {
         inFlightRef.current = false;
         safeSetSubmitting(false);
       }
     },
-    [router, isValidEmail, safeSetError, safeSetSubmitting],
+    [router, safeSetError, safeSetSubmitting],
   );
 
   const endSession = useCallback(async () => {

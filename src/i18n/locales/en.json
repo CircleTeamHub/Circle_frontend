@@ -52,7 +52,7 @@
     "registerSubtitle": "Fill in your info to register",
     "account": "Account",
     "password": "Password",
-    "passwordHint": "Enter password (6-20 chars)",
+    "passwordHint": "Enter password (at least 6 chars)",
     "confirmPassword": "Confirm Password",
     "confirmPasswordHint": "Re-enter your password",
     "nickname": "Nickname",
@@ -66,10 +66,25 @@
     "passwordLogin": "Password",
     "codeLogin": "Code",
     "sendCode": "Send code",
+    "sendingCode": "Sending…",
     "resendCodeIn": "Resend in {{seconds}}s",
     "codePlaceholder": "Verification code",
     "codeSent": "Code sent",
-    "invalidEmail": "Invalid email"
+    "invalidEmail": "Invalid email",
+    "offlineHint": "No network connection; some features may be unavailable",
+    "errors": {
+      "emailRequired": "Please enter your email",
+      "invalidEmail": "Invalid email format",
+      "passwordRequired": "Please enter your password",
+      "passwordTooShort": "Password must be at least 6 characters",
+      "passwordTooLong": "Password must be at most 64 characters",
+      "invalidCode": "Enter the 6-digit code",
+      "nicknameRequired": "Please enter a nickname",
+      "nicknameTooLong": "Nickname must be at most 50 characters",
+      "loginFailed": "Login failed, please try again",
+      "registerFailed": "Registration failed, please try again",
+      "sendCodeFailed": "Failed to send, please try again"
+    }
   },
 
   "tabs": {

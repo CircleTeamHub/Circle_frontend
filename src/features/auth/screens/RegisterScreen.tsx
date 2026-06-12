@@ -15,9 +15,8 @@ import { useTranslation } from 'react-i18next';
 import { AuthInput } from '@/components/ui/auth-input';
 import { NavHeader } from '@/components/ui/nav-header';
 import { useAuth } from '@/hooks/use-auth';
-import { useCountdown } from '@/hooks/use-countdown';
-import { requestEmailCode } from '@/services/api/auth';
-import { getApiErrorMessage } from '@/services/api/errors';
+import { useSendEmailCode } from '@/hooks/use-send-email-code';
+import { useNetworkStatus } from '@/hooks/use-network-status';
 
 const s = StyleSheet.create({
   container: {
@@ -92,8 +91,8 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState('');
   const [nickname, setNickname] = useState('');
   const [agreed, setAgreed] = useState(false);
-  const [sendError, setSendError] = useState<string | null>(null);
-  const countdown = useCountdown();
+  const sendCode = useSendEmailCode('register');
+  const { isOffline } = useNetworkStatus();
 
   const d = useMemo(
     () => ({
@@ -140,20 +139,9 @@ export default function RegisterScreen() {
     [colors, insets.top],
   );
 
-  const onSendCode = useCallback(async () => {
-    setSendError(null);
-    const normalizedEmail = email.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-      setSendError(t('auth.invalidEmail', { defaultValue: '邮箱格式不正确' }));
-      return;
-    }
-    try {
-      await requestEmailCode({ email: normalizedEmail, purpose: 'register' });
-      countdown.start(60);
-    } catch (e) {
-      setSendError(getApiErrorMessage(e, '发送失败，请重试'));
-    }
-  }, [email, countdown, t]);
+  const onSendCode = useCallback(() => {
+    sendCode.send(email);
+  }, [sendCode, email]);
 
   return (
     <View style={d.outer}>
@@ -193,22 +181,25 @@ export default function RegisterScreen() {
           rightElement={
             <Pressable
               onPress={onSendCode}
-              disabled={countdown.running}
+              disabled={sendCode.running || sendCode.sending}
               hitSlop={8}
             >
               <Text
                 style={[
                   s.sendBtnText,
                   {
-                    color: countdown.running
-                      ? colors.textSecondary
-                      : colors.primary,
+                    color:
+                      sendCode.running || sendCode.sending
+                        ? colors.textSecondary
+                        : colors.primary,
                   },
                 ]}
               >
-                {countdown.running
-                  ? t('auth.resendCodeIn', { seconds: countdown.seconds })
-                  : t('auth.sendCode')}
+                {sendCode.running
+                  ? t('auth.resendCodeIn', { seconds: sendCode.seconds })
+                  : sendCode.sending
+                    ? t('auth.sendingCode', { defaultValue: '发送中…' })
+                    : t('auth.sendCode')}
               </Text>
             </Pressable>
           }
@@ -245,8 +236,13 @@ export default function RegisterScreen() {
           </Text>
         </Pressable>
 
-        {/* Error */}
-        {sendError ? <Text style={[s.error, d.error]}>{sendError}</Text> : null}
+        {/* Offline / Error */}
+        {isOffline ? (
+          <Text style={[s.error, d.error]}>{t('auth.offlineHint')}</Text>
+        ) : null}
+        {sendCode.error ? (
+          <Text style={[s.error, d.error]}>{sendCode.error}</Text>
+        ) : null}
         {error ? <Text style={[s.error, d.error]}>{error}</Text> : null}
 
         {/* Register button — 必须同时勾选协议且未在提交中才允许触发；
