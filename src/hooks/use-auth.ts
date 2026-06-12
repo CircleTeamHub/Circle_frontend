@@ -131,6 +131,10 @@ export function useAuth() {
         safeSetError("请输入密码");
         return;
       }
+      if (password.length < 6) {
+        safeSetError("密码至少6位");
+        return;
+      }
       inFlightRef.current = true;
       safeSetSubmitting(true);
       try {
