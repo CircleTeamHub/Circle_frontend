@@ -81,7 +81,7 @@ export function CallInviteHost() {
     try {
       const response = await acceptCall(incomingCall.callId);
       setActiveCall(response.call, response.livekit);
-      router.push('/(chat)/group-call');
+      router.push('/(chat)/group-call' as never);
     } catch (error) {
       resetCallState();
       if (typeof __DEV__ !== 'undefined' && __DEV__) {

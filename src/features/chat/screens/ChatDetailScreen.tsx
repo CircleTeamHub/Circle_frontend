@@ -1089,7 +1089,7 @@ export default function ChatDetailScreen() {
       });
       if (!mountedRef.current) return;
       setActiveCall(response.call, response.livekit);
-      router.push('/(chat)/group-call');
+      router.push('/(chat)/group-call' as never);
     } catch (error) {
       if (mountedRef.current) {
         Alert.alert('语音通话', '发起失败，请稍后重试');
