@@ -36,24 +36,6 @@ function loadAvatarPickerFeedback(stubs = {}) {
   return context.module.exports;
 }
 
-test('avatar picker helper text explains local album access and simulator caveat', () => {
-  const { getAvatarPickerHelperText } = loadAvatarPickerFeedback({
-    '@/i18n': {
-      default: {
-        t: (key) =>
-          ({
-            'profileFields.avatarPickerHelper':
-              '从本地相册选择头像。首次会请求相册权限；如果模拟器相册为空，请先导入照片或改用真机。',
-          }[key] ?? key),
-      },
-    },
-  });
-
-  const text = getAvatarPickerHelperText();
-  assert.match(text, /本地相册/);
-  assert.match(text, /模拟器/);
-});
-
 test('permission denied message distinguishes retryable vs settings cases', () => {
   const { getAvatarPickerPermissionDeniedMessage } =
     loadAvatarPickerFeedback({
@@ -92,7 +74,7 @@ test('permission denied message distinguishes retryable vs settings cases', () =
   );
 });
 
-test('avatar edit screen renders the local album CTA and helper text', () => {
+test('avatar edit screen renders only the local album CTA for avatar selection', () => {
   const filePath = path.join(
     process.cwd(),
     'src/features/profile/screens/EditProfileFieldScreen.tsx',
@@ -100,8 +82,9 @@ test('avatar edit screen renders the local album CTA and helper text', () => {
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /useTranslation\(/);
-  // 改造后用函数调用避免模块加载时锁定字符串 —— 之前 const 在用户切换语言后会留旧值。
-  assert.match(source, /getAvatarPickerHelperText\(\)/);
+  assert.match(source, /profileFields\.selectFromAlbum/);
+  assert.doesNotMatch(source, /getAvatarPickerHelperText\(\)/);
+  assert.doesNotMatch(source, /profileFields\.currentDisplay/);
   assert.doesNotMatch(source, /从本地相册选择/);
 });
 

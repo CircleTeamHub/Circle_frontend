@@ -190,6 +190,14 @@ async function refreshCurrentUserSummary() {
   useAuthStore.getState().setUser(user);
 }
 
+function refreshCurrentUserSummaryBestEffort() {
+  void refreshCurrentUserSummary().catch((err) => {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.warn('[realtime] profile summary refresh failed', err);
+    }
+  });
+}
+
 function isNotificationItem(value: unknown): value is NotificationItem {
   if (!value || typeof value !== 'object') return false;
   const item = value as Partial<NotificationItem>;
@@ -279,7 +287,7 @@ function handleRealtimeEvent(message: RealtimeEvent) {
       badgeStore.setSignupUnread(message.payload?.count ?? 0);
       return;
     case 'membership.status.changed':
-      void refreshCurrentUserSummary();
+      refreshCurrentUserSummaryBestEffort();
       return;
     case 'wallet.balance.changed':
       // store 内部还会再校验 NaN / Infinity / 负数；这里只过一次类型门槛。
@@ -297,7 +305,7 @@ function handleRealtimeEvent(message: RealtimeEvent) {
       badgeStore.setSystemUnread(message.payload?.count ?? 0);
       return;
     case 'user.profile.summary.changed':
-      void refreshCurrentUserSummary();
+      refreshCurrentUserSummaryBestEffort();
       return;
     case 'circle.post.interaction.created':
       return;

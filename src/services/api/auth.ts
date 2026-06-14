@@ -7,17 +7,17 @@
  * - fetchCurrentUserWithToken：用指定 token 获取用户信息（登录后立即获取时使用）
  * - logout：使 refreshToken 失效
  */
-import * as Device from 'expo-device';
-import { Platform } from 'react-native';
-import { apiClient } from '@/services/api/client';
-import { normalizeUser } from '@/services/api/utils';
-import type { DisplayIcon } from '@/types';
+import * as Device from "expo-device";
+import { Platform } from "react-native";
+import { apiClient } from "@/services/api/client";
+import { normalizeUser } from "@/services/api/utils";
+import type { DisplayIcon } from "@/types";
 
 // OpenIM platformID: 1=iOS, 2=Android, 5=Web. Backend signs imToken bound to
 // this platform; mismatched platform → onUserTokenInvalid on SDK login.
 function getOpenIMPlatformID(): 1 | 2 | 5 {
-  if (Platform.OS === 'ios') return 1;
-  if (Platform.OS === 'android') return 2;
+  if (Platform.OS === "ios") return 1;
+  if (Platform.OS === "android") return 2;
   return 5;
 }
 
@@ -30,11 +30,17 @@ export type AuthTokens = {
 };
 
 function isAuthTokens(value: unknown): value is AuthTokens {
-  if (!value || typeof value !== 'object') return false;
+  if (!value || typeof value !== "object") return false;
   const v = value as Record<string, unknown>;
-  if (typeof v.accessToken !== 'string' || v.accessToken.length === 0) return false;
-  if (typeof v.refreshToken !== 'string' || v.refreshToken.length === 0) return false;
-  if (v.imToken !== null && typeof v.imToken !== 'undefined' && typeof v.imToken !== 'string') {
+  if (typeof v.accessToken !== "string" || v.accessToken.length === 0)
+    return false;
+  if (typeof v.refreshToken !== "string" || v.refreshToken.length === 0)
+    return false;
+  if (
+    v.imToken !== null &&
+    typeof v.imToken !== "undefined" &&
+    typeof v.imToken !== "string"
+  ) {
     return false;
   }
   return true;
@@ -43,14 +49,14 @@ function isAuthTokens(value: unknown): value is AuthTokens {
 function ensureAuthTokens(value: unknown): AuthTokens {
   if (!isAuthTokens(value)) {
     // 字段缺失 / 类型异常 — 视作认证响应损坏，直接抛错而不是带着残缺数据写入 store。
-    throw new Error('认证返回数据格式异常，请重试');
+    throw new Error("认证返回数据格式异常，请重试");
   }
   return {
     accessToken: value.accessToken,
     refreshToken: value.refreshToken,
     // 把 undefined / 空字符串归一为 null，方便下游用 `if (tokens.imToken)` 判断。
     imToken:
-      typeof value.imToken === 'string' && value.imToken.length > 0
+      typeof value.imToken === "string" && value.imToken.length > 0
         ? value.imToken
         : null,
   };
@@ -71,7 +77,7 @@ export type BackendAuthUser = {
   persona: string | null;
   helloWords: string | null;
   birthday: string | null;
-  gender: 'male' | 'female' | 'other' | 'unset';
+  gender: "male" | "female" | "other" | "unset";
   city: string | null;
   vipLevel: number;
   creditScore: number;
@@ -84,56 +90,85 @@ export type BackendAuthUser = {
   updatedAt: string;
 };
 
-type RegisterPayload = {
-  accountId: string;
-  password: string;
-  nickname?: string;
-  email?: string;
-  phoneNumber?: string;
-};
-
 function getDeviceName() {
-  return Device.deviceName ?? `circle-im-${Device.osName ?? 'device'}`;
+  return Device.deviceName ?? `circle-im-${Device.osName ?? "device"}`;
 }
 
-
-export async function login(payload: {
-  accountId: string;
-  password: string;
+export async function requestEmailCode(payload: {
+  email: string;
+  purpose: "register" | "login";
 }) {
-  // accountId 在 API 层兜底 trim：调用方忘记 trim 时也不会因为前导空格被后端拒识
-  const accountId = payload.accountId.trim();
-  const raw = await apiClient<AuthTokens>('/auth/login', {
-    method: 'POST',
+  return apiClient<void>("/auth/email/request-code", {
+    method: "POST",
+    auth: false,
+    body: {
+      email: payload.email.trim().toLowerCase(),
+      purpose: payload.purpose,
+    },
+  });
+}
+
+export async function login(payload: { email: string; password: string }) {
+  const email = payload.email.trim().toLowerCase();
+  const raw = await apiClient<AuthTokens>("/auth/login", {
+    method: "POST",
     auth: false,
     headers: {
-      'x-device-name': getDeviceName(),
+      "x-device-name": getDeviceName(),
     },
-    body: { accountId, password: payload.password, platform: getOpenIMPlatformID() },
+    body: { email, password: payload.password, platform: getOpenIMPlatformID() },
   });
   return ensureAuthTokens(raw);
 }
 
-export async function register(payload: RegisterPayload) {
-  const accountId = payload.accountId.trim();
-  const raw = await apiClient<AuthTokens>('/auth/register', {
-    method: 'POST',
+export async function loginWithCode(payload: { email: string; code: string }) {
+  const email = payload.email.trim().toLowerCase();
+  const raw = await apiClient<AuthTokens>("/auth/login/code", {
+    method: "POST",
     auth: false,
     headers: {
-      'x-device-name': getDeviceName(),
+      "x-device-name": getDeviceName(),
     },
-    body: { ...payload, accountId, platform: getOpenIMPlatformID() },
+    body: {
+      email,
+      code: payload.code.trim(),
+      platform: getOpenIMPlatformID(),
+    },
+  });
+  return ensureAuthTokens(raw);
+}
+
+export async function register(payload: {
+  email: string;
+  code: string;
+  password: string;
+  nickname: string;
+}) {
+  const email = payload.email.trim().toLowerCase();
+  const raw = await apiClient<AuthTokens>("/auth/register", {
+    method: "POST",
+    auth: false,
+    headers: {
+      "x-device-name": getDeviceName(),
+    },
+    body: {
+      email,
+      code: payload.code.trim(),
+      password: payload.password,
+      nickname: payload.nickname.trim(),
+      platform: getOpenIMPlatformID(),
+    },
   });
   return ensureAuthTokens(raw);
 }
 
 export async function fetchCurrentUser() {
-  const user = await apiClient<BackendAuthUser>('/auth/me');
+  const user = await apiClient<BackendAuthUser>("/auth/me");
   return normalizeUser(user);
 }
 
 export async function fetchCurrentUserWithToken(accessToken: string) {
-  const user = await apiClient<BackendAuthUser>('/auth/me', {
+  const user = await apiClient<BackendAuthUser>("/auth/me", {
     auth: false,
     accessToken,
   });
@@ -141,8 +176,8 @@ export async function fetchCurrentUserWithToken(accessToken: string) {
 }
 
 export async function logout(refreshToken: string) {
-  return apiClient<void>('/auth/logout', {
-    method: 'POST',
+  return apiClient<void>("/auth/logout", {
+    method: "POST",
     auth: false,
     body: { refreshToken },
   });
@@ -152,21 +187,94 @@ export async function changePassword(payload: {
   oldPassword: string;
   newPassword: string;
 }) {
-  return apiClient<void>('/auth/change-password', {
-    method: 'POST',
+  return apiClient<void>("/auth/change-password", {
+    method: "POST",
     body: payload,
   });
 }
 
-export async function changeAccountId(accountId: string) {
-  return apiClient<void>('/auth/account-id', {
-    method: 'PATCH',
-    body: { accountId },
+export type LoginSecurityCodeStatus = {
+  enabled: boolean;
+};
+
+export async function fetchLoginSecurityCodeStatus() {
+  return apiClient<LoginSecurityCodeStatus>("/auth/security-code", {
+    method: "GET",
+  });
+}
+
+export async function setLoginSecurityCode(payload: {
+  securityCode: string;
+  oldSecurityCode?: string;
+}) {
+  return apiClient<void>("/auth/security-code", {
+    method: "PUT",
+    body: payload,
+  });
+}
+
+export async function disableLoginSecurityCode(securityCode: string) {
+  return apiClient<void>("/auth/security-code", {
+    method: "DELETE",
+    body: { securityCode },
+  });
+}
+
+export async function verifyLoginSecurityCode(securityCode: string) {
+  return apiClient<{ ok: boolean }>("/auth/security-code/verify", {
+    method: "POST",
+    body: { securityCode },
   });
 }
 
 export async function logoutAll() {
-  return apiClient<void>('/auth/logout-all', {
-    method: 'POST',
+  return apiClient<void>("/auth/logout-all", {
+    method: "POST",
+  });
+}
+
+export type AuthSession = {
+  id: string;
+  isCurrent: boolean;
+  deviceName: string | null;
+  ip: string | null;
+  userAgent: string | null;
+  createdAt: string;
+  lastUsedAt: string;
+  expiredAt: string;
+};
+
+export async function fetchAuthSessions() {
+  return apiClient<AuthSession[]>("/auth/sessions", {
+    method: "GET",
+  });
+}
+
+export async function revokeAuthSession(sessionId: string) {
+  return apiClient<void>(`/auth/sessions/${sessionId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function logoutOtherSessions() {
+  return apiClient<void>("/auth/logout-others", {
+    method: "POST",
+  });
+}
+
+export type SingleDeviceLoginStatus = {
+  enabled: boolean;
+};
+
+export async function fetchSingleDeviceLoginStatus() {
+  return apiClient<SingleDeviceLoginStatus>("/auth/single-device-login", {
+    method: "GET",
+  });
+}
+
+export async function setSingleDeviceLogin(enabled: boolean) {
+  return apiClient<void>("/auth/single-device-login", {
+    method: "PUT",
+    body: { enabled },
   });
 }

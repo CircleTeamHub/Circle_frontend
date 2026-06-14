@@ -41,19 +41,6 @@ export default function StorageSettingsScreen() {
             },
           ],
         },
-        {
-          rows: [
-            {
-              id: 'switch-account',
-              labelKey: 'settingsDetails.storage.switchAccount',
-            },
-            {
-              id: 'logout',
-              labelKey: 'settingsDetails.storage.logout',
-              destructive: true,
-            },
-          ],
-        },
       ]}
     />
   );

@@ -67,6 +67,10 @@ export type FriendActivity = {
   counterparty: FriendActivityCounterparty;
 };
 
+export type BlockedUser = FriendActivityCounterparty & {
+  blockedAt: string;
+};
+
 type FriendStatusResponse = {
   status: FriendStatus;
   requestId: string | null;
@@ -167,6 +171,14 @@ export async function removeFriendFromBlacklist(friendUserId: string) {
   return apiClient<void>(`/friend/block/${friendUserId}`, {
     method: 'DELETE',
   });
+}
+
+export async function fetchBlockedUsers() {
+  const users = await apiClient<BlockedUser[]>('/friend/blocked');
+  return users.map((user) => ({
+    ...user,
+    avatarUrl: normalizeMediaUrl(user.avatarUrl),
+  }));
 }
 
 export async function deleteFriendRelationship(friendUserId: string) {

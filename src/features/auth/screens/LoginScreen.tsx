@@ -1,7 +1,9 @@
 import { AuthInput } from "@/components/ui/auth-input";
 import { useAuth } from "@/hooks/use-auth";
+import { useSendEmailCode } from "@/hooks/use-send-email-code";
+import { useNetworkStatus } from "@/hooks/use-network-status";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
-import { Link } from "expo-router";
+import { Link, useLocalSearchParams } from "expo-router";
 import { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -14,6 +16,8 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+type Mode = "password" | "code";
 
 const s = StyleSheet.create({
   scroll: { flex: 1 },
@@ -45,7 +49,24 @@ const s = StyleSheet.create({
   headingGroup: { alignItems: "center", gap: Spacing.sm, width: "100%" },
   heading: { fontSize: 28, fontWeight: "700" },
   subtitle: { ...Typography.body },
+  segment: {
+    flexDirection: "row",
+    width: "100%",
+    borderRadius: Radius.md,
+    padding: 4,
+    gap: 4,
+  },
+  segmentItem: {
+    flex: 1,
+    height: 40,
+    borderRadius: Radius.sm,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  segmentText: { fontSize: 14, fontWeight: "600" },
   form: { width: "100%", gap: Spacing.md },
+  sendBtn: { paddingHorizontal: Spacing.sm, paddingVertical: 6 },
+  sendBtnText: { fontSize: 13, fontWeight: "600" },
   forgotRow: { alignItems: "flex-end" },
   forgotLink: { ...Typography.caption },
   error: { ...Typography.caption },
@@ -66,10 +87,16 @@ const s = StyleSheet.create({
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
-  const { login, submitting, error } = useAuth();
+  const { login, loginWithCode, submitting, error } = useAuth();
   const { t } = useTranslation();
-  const [account, setAccount] = useState("");
+  // 从「切换账号」过期分支或注册成功跳来时预填邮箱。
+  const { email: emailParam } = useLocalSearchParams<{ email?: string }>();
+  const [mode, setMode] = useState<Mode>("password");
+  const [email, setEmail] = useState(emailParam ?? "");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const sendCode = useSendEmailCode("login");
+  const { isOffline } = useNetworkStatus();
 
   const d = useMemo(
     () => ({
@@ -78,6 +105,10 @@ export default function LoginScreen() {
       logoDot: { backgroundColor: colors.white },
       heading: { color: colors.text },
       subtitle: { color: colors.textSecondary },
+      segment: { backgroundColor: colors.surface },
+      segmentActive: { backgroundColor: colors.primary },
+      segmentText: { color: colors.textSecondary },
+      segmentTextActive: { color: colors.white },
       forgotLink: { color: colors.primary },
       error: { color: colors.error },
       loginBtn: { backgroundColor: colors.primary },
@@ -88,16 +119,26 @@ export default function LoginScreen() {
     [colors],
   );
 
-  // 忘记密码入口暂未对接后端，先用 Alert 告知用户而不是装死。
-  // 接入正式的找回流程时把这里换成 router.push('/(auth)/forgot-password') 即可。
+  const onSendCode = useCallback(() => {
+    sendCode.send(email);
+  }, [sendCode, email]);
+
   const onForgotPassword = useCallback(() => {
     Alert.alert(
-      t('auth.forgotPassword'),
-      t('auth.forgotPasswordHint', {
-        defaultValue: '该功能即将上线。如需要找回账号，请联系客服。',
+      t("auth.forgotPassword"),
+      t("auth.forgotPasswordHint", {
+        defaultValue: "可改用验证码登录；如需找回账号请联系客服。",
       }),
     );
   }, [t]);
+
+  const onSubmit = useCallback(() => {
+    if (mode === "password") {
+      login(email, password);
+    } else {
+      loginWithCode(email, code);
+    }
+  }, [mode, login, loginWithCode, email, password, code]);
 
   return (
     <ScrollView
@@ -117,56 +158,129 @@ export default function LoginScreen() {
 
       {/* Heading */}
       <View style={s.headingGroup}>
-        <Text style={[s.heading, d.heading]}>{t('auth.welcomeBack')}</Text>
-        <Text style={[s.subtitle, d.subtitle]}>{t('auth.loginSubtitle')}</Text>
+        <Text style={[s.heading, d.heading]}>{t("auth.welcomeBack")}</Text>
+        <Text style={[s.subtitle, d.subtitle]}>{t("auth.loginSubtitle")}</Text>
+      </View>
+
+      {/* 登录方式切换 */}
+      <View style={[s.segment, d.segment]}>
+        {(["password", "code"] as Mode[]).map((m) => (
+          <Pressable
+            key={m}
+            style={[s.segmentItem, mode === m && d.segmentActive]}
+            onPress={() => setMode(m)}
+          >
+            <Text
+              style={[
+                s.segmentText,
+                mode === m ? d.segmentTextActive : d.segmentText,
+              ]}
+            >
+              {t(m === "password" ? "auth.passwordLogin" : "auth.codeLogin")}
+            </Text>
+          </Pressable>
+        ))}
       </View>
 
       {/* Form */}
       <View style={s.form}>
         <AuthInput
-          placeholder={t('auth.accountPlaceholder')}
-          value={account}
-          onChangeText={setAccount}
-          textContentType="username"
-          autoComplete="username"
+          placeholder={t("auth.emailPlaceholder")}
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          textContentType="emailAddress"
+          autoComplete="email"
         />
-        <AuthInput
-          placeholder={t('auth.passwordPlaceholder')}
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          textContentType="password"
-          autoComplete="current-password"
-        />
-        <View style={s.forgotRow}>
-          <Pressable onPress={onForgotPassword} hitSlop={8}>
-            <Text style={[s.forgotLink, d.forgotLink]}>{t('auth.forgotPassword')}</Text>
-          </Pressable>
-        </View>
+
+        {mode === "password" ? (
+          <>
+            <AuthInput
+              placeholder={t("auth.passwordPlaceholder")}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              textContentType="password"
+              autoComplete="current-password"
+            />
+            <View style={s.forgotRow}>
+              <Pressable onPress={onForgotPassword} hitSlop={8}>
+                <Text style={[s.forgotLink, d.forgotLink]}>
+                  {t("auth.forgotPassword")}
+                </Text>
+              </Pressable>
+            </View>
+          </>
+        ) : (
+          <AuthInput
+            placeholder={t("auth.codePlaceholder")}
+            value={code}
+            onChangeText={setCode}
+            keyboardType="number-pad"
+            textContentType="oneTimeCode"
+            autoComplete="one-time-code"
+            rightElement={
+              <Pressable
+                style={s.sendBtn}
+                onPress={onSendCode}
+                disabled={sendCode.running || sendCode.sending}
+                hitSlop={8}
+              >
+                <Text
+                  style={[
+                    s.sendBtnText,
+                    {
+                      color:
+                        sendCode.running || sendCode.sending
+                          ? colors.textSecondary
+                          : colors.primary,
+                    },
+                  ]}
+                >
+                  {sendCode.running
+                    ? t("auth.resendCodeIn", { seconds: sendCode.seconds })
+                    : sendCode.sending
+                      ? t("auth.sendingCode", { defaultValue: "发送中…" })
+                      : t("auth.sendCode")}
+                </Text>
+              </Pressable>
+            }
+          />
+        )}
       </View>
 
-      {/* Error */}
+      {/* Offline / Error */}
+      {isOffline ? (
+        <Text style={[s.error, d.error]}>{t("auth.offlineHint")}</Text>
+      ) : null}
+      {sendCode.error ? (
+        <Text style={[s.error, d.error]}>{sendCode.error}</Text>
+      ) : null}
       {error ? <Text style={[s.error, d.error]}>{error}</Text> : null}
 
       {/* Login button */}
       <Pressable
         style={[s.loginBtn, d.loginBtn, submitting && s.btnDisabled]}
-        onPress={() => login(account, password)}
+        onPress={onSubmit}
         disabled={submitting}
       >
         {submitting ? (
           <ActivityIndicator color={colors.white} />
         ) : (
-          <Text style={[s.loginBtnText, d.loginBtnText]}>{t('auth.login')}</Text>
+          <Text style={[s.loginBtnText, d.loginBtnText]}>{t("auth.login")}</Text>
         )}
       </Pressable>
 
       {/* Register link */}
       <View style={s.registerRow}>
-        <Text style={[s.registerHint, d.registerHint]}>{t('auth.noAccount')}</Text>
+        <Text style={[s.registerHint, d.registerHint]}>
+          {t("auth.noAccount")}
+        </Text>
         <Link href="/(auth)/register" asChild>
           <Pressable>
-            <Text style={[s.registerLink, d.registerLink]}>{t('auth.registerNow')}</Text>
+            <Text style={[s.registerLink, d.registerLink]}>
+              {t("auth.registerNow")}
+            </Text>
           </Pressable>
         </Link>
       </View>

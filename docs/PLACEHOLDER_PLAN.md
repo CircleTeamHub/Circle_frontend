@@ -79,6 +79,7 @@
 - **现状**：已开启麦克风权限配置，聊天页 mic 按钮可开始/停止录音，停止后用 OpenIM `createSoundMessageFromFullPath` 发送；历史/新消息可映射为语音气泡，气泡支持播放/暂停。
 - **补充**：当前实现走 OpenIM SDK 的本地录音路径发送能力；如需服务端自定义存储策略，再补 presign 上传 + `createSoundMessageByURL`。
 
+
 ### C3. 扫一扫 (QR Scan) — ✅ 已完成
 - **位置**：`MessagesScreen.tsx:393`
 - **依赖**：相机权限 + 二维码解码（已接 `expo-camera`）+ 扫码结果路由规范。

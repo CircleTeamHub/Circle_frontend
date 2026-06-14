@@ -13,7 +13,6 @@ type EditableFieldId =
 
 type UnsupportedFieldId =
   | 'account-id'
-  | 'frame'
   | 'password'
   | 'security-code';
 
@@ -73,14 +72,6 @@ function buildProfileEditFields() {
       placeholder: i18n.t('profileFields.selectAvatar'),
       emptyValueLabel: i18n.t('profileFields.notSet'),
       editorType: 'avatar',
-    },
-    {
-      id: 'frame',
-      label: i18n.t('profileFields.avatarFrame'),
-      rowType: 'text',
-      editable: false,
-      emptyValueLabel: i18n.t('common.none'),
-      unsupportedMessage: i18n.t('profileFields.avatarFrameNotSupported'),
     },
     {
       id: 'nickname',
@@ -204,9 +195,9 @@ function buildProfileEditFields() {
       rowType: 'text',
       editable: false,
       emptyValueLabel: i18n.t('profileFields.securityCodeHint'),
-      unsupportedMessage: i18n.t('profileFields.securityCodeNotSupported'),
+      unsupportedMessage: '',
     },
-  ] satisfies Array<EditableField | UnsupportedField>;
+  ] satisfies (EditableField | UnsupportedField)[];
 }
 
 export const PROFILE_EDIT_FIELDS = buildProfileEditFields();

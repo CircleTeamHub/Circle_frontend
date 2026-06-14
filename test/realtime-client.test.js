@@ -48,3 +48,10 @@ test('session bootstrap and logout wire realtime connection lifecycle to auth st
   assert.match(friendUnreadStore, /useTabBadgeStore/);
   assert.match(friendUnreadStore, /setContactsUnread/);
 });
+
+test('realtime profile refresh events handle rejected auth refreshes', () => {
+  const client = read('src/realtime/client.ts');
+
+  assert.match(client, /refreshCurrentUserSummary\(\)\.catch/);
+  assert.doesNotMatch(client, /void refreshCurrentUserSummary\(\);/);
+});

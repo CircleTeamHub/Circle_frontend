@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -15,6 +14,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Avatar } from '@/components/ui/avatar';
+import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { NavHeader } from '@/components/ui/nav-header';
 import { updateUserProfile } from '@/services/api/profile';
 import {
@@ -37,7 +37,6 @@ import {
 } from '@/features/profile/city-options';
 import { loadImagePickerModule } from '@/features/profile/image-picker';
 import {
-  getAvatarPickerHelperText,
   getAvatarPickerPermissionDeniedMessage,
 } from '@/features/profile/avatar-picker-feedback';
 
@@ -57,9 +56,6 @@ const s = StyleSheet.create({
     paddingVertical: Spacing.md,
     minHeight: 52,
     textAlignVertical: 'top',
-  },
-  helper: {
-    ...Typography.small,
   },
   footer: {
     marginTop: 'auto',
@@ -101,11 +97,6 @@ const s = StyleSheet.create({
     borderRadius: Radius.lg,
     paddingHorizontal: Spacing.md,
     justifyContent: 'center',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    justifyContent: 'flex-end',
   },
   modalCard: {
     borderTopLeftRadius: Radius.xl,
@@ -241,9 +232,6 @@ export default function EditProfileFieldScreen() {
         color: colors.text,
         ...Typography.bodyRegular,
       },
-      helper: {
-        color: colors.textSecondary,
-      },
       button: {
         backgroundColor: colors.primary,
       },
@@ -283,6 +271,9 @@ export default function EditProfileFieldScreen() {
       dateFieldText: {
         color: colors.text,
         ...Typography.bodyRegular,
+      },
+      modalBackdrop: {
+        backgroundColor: colors.overlay,
       },
       modalCard: {
         backgroundColor: colors.background,
@@ -512,7 +503,6 @@ export default function EditProfileFieldScreen() {
               >
                 <Text style={d.avatarButtonText}>{t('profileFields.selectFromAlbum')}</Text>
               </Pressable>
-              <Text style={[s.helper, d.helper]}>{getAvatarPickerHelperText()}</Text>
             </View>
           ) : field.editorType === 'gender' ? (
             <View style={s.optionRow}>
@@ -574,11 +564,6 @@ export default function EditProfileFieldScreen() {
               autoCapitalize={field.autoCapitalize ?? 'none'}
             />
           )}
-          <Text style={[s.helper, d.helper]}>
-            {t('profileFields.currentDisplay', {
-              value: formatProfileFieldValue(field.id, value),
-            })}
-          </Text>
         </View>
 
         <View style={s.footer}>
@@ -591,198 +576,198 @@ export default function EditProfileFieldScreen() {
           </Pressable>
         </View>
       </ScrollView>
-      <Modal
+      <BottomSheetModal
         visible={isBirthdayPickerVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setIsBirthdayPickerVisible(false)}
+        onClose={() => setIsBirthdayPickerVisible(false)}
+        backdropStyle={d.modalBackdrop}
+        sheetStyle={[
+          s.modalCard,
+          d.modalCard,
+          { paddingBottom: insets.bottom + Spacing.lg },
+        ]}
       >
-        <View style={s.modalOverlay}>
-          <View style={[s.modalCard, d.modalCard]}>
-            <View style={s.modalHeader}>
-              <Pressable onPress={() => setIsBirthdayPickerVisible(false)}>
-                <Text style={d.actionText}>{t('common.cancel')}</Text>
-              </Pressable>
-              <Text style={d.modalTitle}>{t('profileFields.selectBirthday')}</Text>
-              <Pressable onPress={handleConfirmBirthday}>
-                <Text style={d.actionText}>{t('common.confirm')}</Text>
-              </Pressable>
-            </View>
+        <View style={s.modalHeader}>
+          <Pressable onPress={() => setIsBirthdayPickerVisible(false)}>
+            <Text style={d.actionText}>{t('common.cancel')}</Text>
+          </Pressable>
+          <Text style={d.modalTitle}>{t('profileFields.selectBirthday')}</Text>
+          <Pressable onPress={handleConfirmBirthday}>
+            <Text style={d.actionText}>{t('common.confirm')}</Text>
+          </Pressable>
+        </View>
 
-            <View style={s.pickerColumns}>
-              <View style={s.pickerColumn}>
-                <ScrollView style={[s.pickerList, d.pickerList]}>
-                  {birthdayYears.map((year) => {
-                    const isActive = birthdayDraft.year === year;
-                    return (
-                      <Pressable
-                        key={year}
-                        style={s.pickerItem}
-                        onPress={() =>
-                          setBirthdayDraft((current) => ({
-                            ...current,
-                            year,
-                            day: Math.min(
-                              current.day,
-                              getDaysInMonth(year, current.month),
-                            ),
-                          }))
-                        }
-                      >
-                        <Text
-                          style={[
-                            d.pickerItemText,
-                            isActive ? d.pickerItemTextActive : null,
-                          ]}
-                        >
-                          {t('profileFields.year', { year })}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-              </View>
+        <View style={s.pickerColumns}>
+          <View style={s.pickerColumn}>
+            <ScrollView style={[s.pickerList, d.pickerList]}>
+              {birthdayYears.map((year) => {
+                const isActive = birthdayDraft.year === year;
+                return (
+                  <Pressable
+                    key={year}
+                    style={s.pickerItem}
+                    onPress={() =>
+                      setBirthdayDraft((current) => ({
+                        ...current,
+                        year,
+                        day: Math.min(
+                          current.day,
+                          getDaysInMonth(year, current.month),
+                        ),
+                      }))
+                    }
+                  >
+                    <Text
+                      style={[
+                        d.pickerItemText,
+                        isActive ? d.pickerItemTextActive : null,
+                      ]}
+                    >
+                      {t('profileFields.year', { year })}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
 
-              <View style={s.pickerColumn}>
-                <ScrollView style={[s.pickerList, d.pickerList]}>
-                  {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => {
-                    const isActive = birthdayDraft.month === month;
-                    return (
-                      <Pressable
-                        key={month}
-                        style={s.pickerItem}
-                        onPress={() =>
-                          setBirthdayDraft((current) => ({
-                            ...current,
-                            month,
-                            day: Math.min(
-                              current.day,
-                              getDaysInMonth(current.year, month),
-                            ),
-                          }))
-                        }
-                      >
-                        <Text
-                          style={[
-                            d.pickerItemText,
-                            isActive ? d.pickerItemTextActive : null,
-                          ]}
-                        >
-                          {t('profileFields.month', { month })}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-              </View>
+          <View style={s.pickerColumn}>
+            <ScrollView style={[s.pickerList, d.pickerList]}>
+              {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => {
+                const isActive = birthdayDraft.month === month;
+                return (
+                  <Pressable
+                    key={month}
+                    style={s.pickerItem}
+                    onPress={() =>
+                      setBirthdayDraft((current) => ({
+                        ...current,
+                        month,
+                        day: Math.min(
+                          current.day,
+                          getDaysInMonth(current.year, month),
+                        ),
+                      }))
+                    }
+                  >
+                    <Text
+                      style={[
+                        d.pickerItemText,
+                        isActive ? d.pickerItemTextActive : null,
+                      ]}
+                    >
+                      {t('profileFields.month', { month })}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
 
-              <View style={s.pickerColumn}>
-                <ScrollView style={[s.pickerList, d.pickerList]}>
-                  {birthdayDays.map((day) => {
-                    const isActive = birthdayDraft.day === day;
-                    return (
-                      <Pressable
-                        key={day}
-                        style={s.pickerItem}
-                        onPress={() =>
-                          setBirthdayDraft((current) => ({
-                            ...current,
-                            day,
-                          }))
-                        }
-                      >
-                        <Text
-                          style={[
-                            d.pickerItemText,
-                            isActive ? d.pickerItemTextActive : null,
-                          ]}
-                        >
-                          {t('profileFields.day', { day })}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            </View>
+          <View style={s.pickerColumn}>
+            <ScrollView style={[s.pickerList, d.pickerList]}>
+              {birthdayDays.map((day) => {
+                const isActive = birthdayDraft.day === day;
+                return (
+                  <Pressable
+                    key={day}
+                    style={s.pickerItem}
+                    onPress={() =>
+                      setBirthdayDraft((current) => ({
+                        ...current,
+                        day,
+                      }))
+                    }
+                  >
+                    <Text
+                      style={[
+                        d.pickerItemText,
+                        isActive ? d.pickerItemTextActive : null,
+                      ]}
+                    >
+                      {t('profileFields.day', { day })}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
           </View>
         </View>
-      </Modal>
-      <Modal
+      </BottomSheetModal>
+      <BottomSheetModal
         visible={isCityPickerVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setIsCityPickerVisible(false)}
+        onClose={() => setIsCityPickerVisible(false)}
+        backdropStyle={d.modalBackdrop}
+        sheetStyle={[
+          s.modalCard,
+          d.modalCard,
+          { paddingBottom: insets.bottom + Spacing.lg },
+        ]}
       >
-        <View style={s.modalOverlay}>
-          <View style={[s.modalCard, d.modalCard]}>
-            <View style={s.modalHeader}>
-              <Pressable onPress={() => setIsCityPickerVisible(false)}>
-                <Text style={d.actionText}>{t('common.cancel')}</Text>
-              </Pressable>
-              <Text style={d.modalTitle}>{t('profileFields.selectProvince')}</Text>
-              <Pressable onPress={handleConfirmCity}>
-                <Text style={d.actionText}>{t('common.confirm')}</Text>
-              </Pressable>
-            </View>
+        <View style={s.modalHeader}>
+          <Pressable onPress={() => setIsCityPickerVisible(false)}>
+            <Text style={d.actionText}>{t('common.cancel')}</Text>
+          </Pressable>
+          <Text style={d.modalTitle}>{t('profileFields.selectProvince')}</Text>
+          <Pressable onPress={handleConfirmCity}>
+            <Text style={d.actionText}>{t('common.confirm')}</Text>
+          </Pressable>
+        </View>
 
-            <View style={s.pickerColumns}>
-              <View style={s.pickerColumn}>
-                <ScrollView style={[s.pickerList, d.pickerList]}>
-                  {CITY_PROVINCES.map((region) => {
-                    const isActive = cityDraftRegion === region.name;
-                    return (
-                      <Pressable
-                        key={region.name}
-                        style={s.pickerItem}
-                        onPress={() => {
-                          setCityDraftRegion(region.name);
-                          if (!region.cities.includes(cityDraftValue)) {
-                            setCityDraftValue(region.cities[0] ?? '');
-                          }
-                        }}
-                      >
-                        <Text
-                          style={[
-                            d.pickerItemText,
-                            isActive ? d.pickerItemTextActive : null,
-                          ]}
-                        >
-                          {region.name}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-              </View>
+        <View style={s.pickerColumns}>
+          <View style={s.pickerColumn}>
+            <ScrollView style={[s.pickerList, d.pickerList]}>
+              {CITY_PROVINCES.map((region) => {
+                const isActive = cityDraftRegion === region.name;
+                return (
+                  <Pressable
+                    key={region.name}
+                    style={s.pickerItem}
+                    onPress={() => {
+                      setCityDraftRegion(region.name);
+                      if (!region.cities.includes(cityDraftValue)) {
+                        setCityDraftValue(region.cities[0] ?? '');
+                      }
+                    }}
+                  >
+                    <Text
+                      style={[
+                        d.pickerItemText,
+                        isActive ? d.pickerItemTextActive : null,
+                      ]}
+                    >
+                      {region.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
 
-              <View style={s.pickerColumn}>
-                <ScrollView style={[s.pickerList, d.pickerList]}>
-                  {cityOptions.map((city) => {
-                    const isActive = cityDraftValue === city;
-                    return (
-                      <Pressable
-                        key={city}
-                        style={s.pickerItem}
-                        onPress={() => setCityDraftValue(city)}
-                      >
-                        <Text
-                          style={[
-                            d.pickerItemText,
-                            isActive ? d.pickerItemTextActive : null,
-                          ]}
-                        >
-                          {city}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            </View>
+          <View style={s.pickerColumn}>
+            <ScrollView style={[s.pickerList, d.pickerList]}>
+              {cityOptions.map((city) => {
+                const isActive = cityDraftValue === city;
+                return (
+                  <Pressable
+                    key={city}
+                    style={s.pickerItem}
+                    onPress={() => setCityDraftValue(city)}
+                  >
+                    <Text
+                      style={[
+                        d.pickerItemText,
+                        isActive ? d.pickerItemTextActive : null,
+                      ]}
+                    >
+                      {city}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
           </View>
         </View>
-      </Modal>
+      </BottomSheetModal>
     </KeyboardAvoidingView>
   );
 }

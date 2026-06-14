@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -10,6 +9,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 export interface CreateTempChatPayload {
@@ -40,10 +40,6 @@ const MEMBER_OPTIONS = [10, 20, 50];
 const DEFAULT_MAX_MEMBERS = 50;
 
 const s = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
   card: {
     borderTopLeftRadius: Radius.lg,
     borderTopRightRadius: Radius.lg,
@@ -184,76 +180,72 @@ export default function CreateTempChatModal({
   );
 
   return (
-    <Modal
+    <BottomSheetModal
       visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
+      onClose={onClose}
+      backdropStyle={d.backdrop}
+      sheetStyle={[s.card, d.card]}
     >
-      <Pressable style={[s.backdrop, d.backdrop]} onPress={onClose}>
-        <Pressable style={[s.card, d.card]} onPress={() => {}}>
-          <View style={[s.handle, d.handle]} />
-          <Text style={d.heading}>{t('tempChats.createTitle')}</Text>
+      <View style={[s.handle, d.handle]} />
+      <Text style={d.heading}>{t('tempChats.createTitle')}</Text>
 
-          <View style={s.field}>
-            <Text style={d.label}>{t('tempChats.titleLabel')}</Text>
-            <TextInput
-              style={[s.titleInput, d.titleInput]}
-              placeholder={t('tempChats.titlePlaceholder')}
-              placeholderTextColor={colors.textSecondary}
-              value={title}
-              onChangeText={setTitle}
-              maxLength={30}
-            />
-          </View>
+      <View style={s.field}>
+        <Text style={d.label}>{t('tempChats.titleLabel')}</Text>
+        <TextInput
+          style={[s.titleInput, d.titleInput]}
+          placeholder={t('tempChats.titlePlaceholder')}
+          placeholderTextColor={colors.textSecondary}
+          value={title}
+          onChangeText={setTitle}
+          maxLength={30}
+        />
+      </View>
 
-          <View style={s.field}>
-            <Text style={d.label}>{t('tempChats.durationLabel')}</Text>
-            <View style={s.chipRow}>
-              {DURATION_OPTIONS.map((option) =>
-                renderChip(
-                  t(option.labelKey),
-                  ttlMinutes === option.minutes,
-                  () => setTtlMinutes(option.minutes),
-                  option.minutes,
-                ),
-              )}
-            </View>
-          </View>
+      <View style={s.field}>
+        <Text style={d.label}>{t('tempChats.durationLabel')}</Text>
+        <View style={s.chipRow}>
+          {DURATION_OPTIONS.map((option) =>
+            renderChip(
+              t(option.labelKey),
+              ttlMinutes === option.minutes,
+              () => setTtlMinutes(option.minutes),
+              option.minutes,
+            ),
+          )}
+        </View>
+      </View>
 
-          <View style={s.field}>
-            <Text style={d.label}>{t('tempChats.membersLabel')}</Text>
-            <View style={s.chipRow}>
-              {MEMBER_OPTIONS.map((count) =>
-                renderChip(
-                  t('tempChats.membersUnit', { count }),
-                  maxMembers === count,
-                  () => setMaxMembers(count),
-                  count,
-                ),
-              )}
-            </View>
-          </View>
+      <View style={s.field}>
+        <Text style={d.label}>{t('tempChats.membersLabel')}</Text>
+        <View style={s.chipRow}>
+          {MEMBER_OPTIONS.map((count) =>
+            renderChip(
+              t('tempChats.membersUnit', { count }),
+              maxMembers === count,
+              () => setMaxMembers(count),
+              count,
+            ),
+          )}
+        </View>
+      </View>
 
-          <Pressable
-            style={[
-              s.submitButton,
-              {
-                backgroundColor: colors.primary,
-                opacity: creating ? 0.6 : 1,
-              },
-            ]}
-            onPress={handleSubmit}
-            disabled={creating}
-          >
-            {creating ? (
-              <ActivityIndicator color={colors.white} />
-            ) : (
-              <Text style={d.submitText}>{t('tempChats.submit')}</Text>
-            )}
-          </Pressable>
-        </Pressable>
+      <Pressable
+        style={[
+          s.submitButton,
+          {
+            backgroundColor: colors.primary,
+            opacity: creating ? 0.6 : 1,
+          },
+        ]}
+        onPress={handleSubmit}
+        disabled={creating}
+      >
+        {creating ? (
+          <ActivityIndicator color={colors.white} />
+        ) : (
+          <Text style={d.submitText}>{t('tempChats.submit')}</Text>
+        )}
       </Pressable>
-    </Modal>
+    </BottomSheetModal>
   );
 }

@@ -8,7 +8,19 @@
       "Bash(git -C /Users/yiboding/projects/circle-im log --oneline -20)",
       "Bash(git -C /Users/yiboding/projects/circle-im show 2b22102 --stat)",
       "Bash(git checkout *)",
-      "Bash(git merge *)"
+      "Bash(git merge *)",
+      "Bash(node -e ' *)",
+      "Bash(sed -n '1,80p' src/i18n/index.ts)",
+      "Bash(sed -n '1,80p' src/i18n/index.tsx)",
+      "Bash(node --test test/*.test.js test/*.test.mjs)",
+      "Bash(grep -iE \"tests [0-9]+$|pass [0-9]+$|fail [0-9]+$\")",
+      "Bash(node --test --test-name-pattern=\"voice cleanup reads a JS snapshot\" test/chat-detail-screen.test.js)",
+      "Bash(grep -nA12 \"function searchConversationMediaMessages\" src/im/client.ts)",
+      "Bash(exit 0)",
+      "Bash(node -e \"console.log\\(require\\('./package.json'\\).scripts.build\\)\")"
+    ],
+    "additionalDirectories": [
+      "/Users/yiboding/projects/openim/open-im-server/openim-docker"
     ]
   }
 }
