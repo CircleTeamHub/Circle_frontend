@@ -78,19 +78,6 @@ export default function CreateCircleScreen() {
     [colors],
   );
 
-  // VIP gate
-  if (!user || user.vipLevel < 1) {
-    return (
-      <View style={[d.container, { paddingTop: insets.top }]}>
-        <NavHeader title={t('circle.create.title')} />
-        <View style={s.vipGate}>
-          <Ionicons name="diamond" size={48} color={colors.warning} />
-          <Text style={d.vipText}>{t('circle.create.vipRequired')}</Text>
-        </View>
-      </View>
-    );
-  }
-
   const canSubmit =
     form.name.trim().length >= 2 && form.description.trim().length >= 10;
 
@@ -160,6 +147,19 @@ export default function CreateCircleScreen() {
     router,
     t,
   ]);
+
+  // VIP gate
+  if (!user || user.vipLevel < 1) {
+    return (
+      <View style={[d.container, { paddingTop: insets.top }]}>
+        <NavHeader title={t('circle.create.title')} />
+        <View style={s.vipGate}>
+          <Ionicons name="diamond" size={48} color={colors.warning} />
+          <Text style={d.vipText}>{t('circle.create.vipRequired')}</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>

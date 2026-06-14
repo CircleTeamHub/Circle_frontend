@@ -21,6 +21,7 @@ type CallStoreState = {
   handleCallParticipantJoined: (payload: CallParticipantPayload) => void;
   handleCallParticipantLeft: (payload: CallParticipantPayload) => void;
   handleCallParticipantRejected: (payload: CallParticipantPayload) => void;
+  handleCallParticipantMissed: (payload: CallParticipantPayload) => void;
   handleCallEnded: (payload: CallStatePayload) => void;
   resetCallState: () => void;
 };
@@ -97,12 +98,19 @@ function updateParticipantStatus(
   payload: CallParticipantPayload,
   status: Extract<CallParticipant['status'], 'LEFT' | 'REJECTED' | 'MISSED'>,
 ): CallParticipant[] {
+  const leftAt =
+    status === 'REJECTED'
+      ? payload.rejectedAt ?? payload.changedAt
+      : status === 'MISSED'
+        ? payload.missedAt ?? payload.changedAt
+        : payload.leftAt ?? payload.changedAt;
+
   return participants.map((participant) =>
     participant.user.id === payload.user.id
       ? {
           ...participant,
           status,
-          leftAt: payload.leftAt ?? participant.leftAt,
+          leftAt,
         }
       : participant,
   );
@@ -169,6 +177,22 @@ export const useCallStore = create<CallStoreState>((set) => ({
             state.activeCall.participants,
             payload,
             'REJECTED',
+          ),
+        },
+      };
+    }),
+  handleCallParticipantMissed: (payload) =>
+    set((state) => {
+      if (!state.activeCall || state.activeCall.id !== payload.callId) {
+        return state;
+      }
+      return {
+        activeCall: {
+          ...state.activeCall,
+          participants: updateParticipantStatus(
+            state.activeCall.participants,
+            payload,
+            'MISSED',
           ),
         },
       };

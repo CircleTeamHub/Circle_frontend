@@ -200,6 +200,31 @@ test('chat detail forwards long-pressed messages through a conversation picker',
   assert.match(source, /t\('chat\.messageActions\.forward'\)/);
 });
 
+test('chat detail protects group call creation from fast repeated taps', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(source, /callStartingRef/);
+  assert.match(source, /if \(callStartingRef\.current\) return/);
+  assert.match(source, /callStartingRef\.current = true/);
+  assert.match(source, /callStartingRef\.current = false/);
+  assert.match(source, /disabled=\{item\.id === 'voice-call' && callStarting\}/);
+});
+
+test('group call screen offers retry after a LiveKit connection error', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/call/screens/GroupCallScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(source, /requestJoinToken/);
+  assert.match(source, /handleRetryConnection/);
+  assert.match(source, /setLiveKitCredentials/);
+  assert.match(source, /重新连接/);
+});
+
 test('message forward picker route sends pending text and voice messages via OpenIM', () => {
   const route = fs.readFileSync(
     path.join(process.cwd(), 'app/(tabs)/messages/forward-picker.tsx'),

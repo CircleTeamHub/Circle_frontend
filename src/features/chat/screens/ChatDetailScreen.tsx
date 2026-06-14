@@ -284,6 +284,8 @@ export default function ChatDetailScreen() {
   const [voiceRecordingStartedAt, setVoiceRecordingStartedAt] = useState<number | null>(null);
   const [voiceActionBusy, setVoiceActionBusy] = useState(false);
   const [callStarting, setCallStarting] = useState(false);
+  const callStartingRef = useRef(false);
+  const mountedRef = useRef(true);
   // 录音状态的纯 JS 快照：卸载 cleanup 里不能调 recorder 的 native getStatus()，
   // 此时 expo-audio 可能已释放其 native shared object（会抛 NativeSharedObjectNotFoundException）。
   const isRecordingRef = useRef(false);
@@ -291,6 +293,11 @@ export default function ChatDetailScreen() {
   useEffect(() => {
     isRecordingRef.current = voiceRecorderState.isRecording;
   }, [voiceRecorderState.isRecording]);
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   const restoreRecordingAudioMode = useCallback(() => {
     if (recordingAudioModeEnabledRef.current) {
       recordingAudioModeEnabledRef.current = false;
@@ -1041,7 +1048,7 @@ export default function ChatDetailScreen() {
   );
 
   const handleStartGroupAudioCall = useCallback(async () => {
-    if (callStarting) return;
+    if (callStartingRef.current) return;
 
     if (!isGroupChat) {
       Alert.alert('语音通话', '当前只开放群聊语音通话');
@@ -1058,6 +1065,7 @@ export default function ChatDetailScreen() {
       return;
     }
 
+    callStartingRef.current = true;
     setCallStarting(true);
     try {
       const members = await loadGroupMemberList(sourceID, 10_000);
@@ -1079,19 +1087,24 @@ export default function ChatDetailScreen() {
         callType: 'AUDIO',
         inviteeIDs,
       });
+      if (!mountedRef.current) return;
       setActiveCall(response.call, response.livekit);
       router.push('/(chat)/group-call');
     } catch (error) {
-      Alert.alert('语音通话', '发起失败，请稍后重试');
+      if (mountedRef.current) {
+        Alert.alert('语音通话', '发起失败，请稍后重试');
+      }
       if (typeof __DEV__ !== 'undefined' && __DEV__) {
         console.warn('[chat] start group audio call failed', error);
       }
     } finally {
-      setCallStarting(false);
+      callStartingRef.current = false;
+      if (mountedRef.current) {
+        setCallStarting(false);
+      }
     }
   }, [
     authUser?.id,
-    callStarting,
     conversationID,
     isGroupChat,
     isPreviewMode,
@@ -1565,6 +1578,7 @@ export default function ChatDetailScreen() {
                 key={item.id}
                 style={s.attachmentItem}
                 onPress={() => handleAttachmentAction(item.id)}
+                disabled={item.id === 'voice-call' && callStarting}
               >
                 <View style={[s.attachmentIcon, d.attachmentIcon]}>
                   <Ionicons

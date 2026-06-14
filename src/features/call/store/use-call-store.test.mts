@@ -87,6 +87,24 @@ test('marks participants as rejected from realtime updates', () => {
   assert.equal(bob?.status, 'REJECTED');
 });
 
+test('marks participants as missed from realtime updates', () => {
+  useCallStore.getState().resetCallState();
+  useCallStore.getState().handleCallInvite(invite);
+
+  useCallStore.getState().handleCallParticipantMissed({
+    callId: 'call-1',
+    user: { id: 'user-2', nickname: 'Bob', avatarUrl: null },
+    missedAt: '2026-06-11T03:00:45.000Z',
+    changedAt: '2026-06-11T03:00:45.000Z',
+  });
+
+  const bob = useCallStore
+    .getState()
+    .activeCall?.participants.find((participant) => participant.user.id === 'user-2');
+  assert.equal(bob?.status, 'MISSED');
+  assert.equal(bob?.leftAt, '2026-06-11T03:00:45.000Z');
+});
+
 test('clears active call state when a call ends', () => {
   useCallStore.getState().resetCallState();
   useCallStore.getState().handleCallInvite(invite);

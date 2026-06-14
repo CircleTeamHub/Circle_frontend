@@ -1,5 +1,8 @@
 import { apiClient } from './client';
-import type { CallActionResponse, CallType } from '@/features/call/types';
+import type { CallType } from '@/features/call/types';
+import { normalizeCallActionResponse } from './call-mappers';
+
+export { normalizeCallActionResponse } from './call-mappers';
 
 export type CreateGroupCallInput = {
   conversationID: string;
@@ -8,16 +11,18 @@ export type CreateGroupCallInput = {
 };
 
 export async function createGroupCall(input: CreateGroupCallInput) {
-  return apiClient<CallActionResponse>('/calls/group', {
+  const response = await apiClient<unknown>('/calls/group', {
     method: 'POST',
     body: input,
   });
+  return normalizeCallActionResponse(response);
 }
 
 export async function acceptCall(callId: string) {
-  return apiClient<CallActionResponse>(`/calls/${callId}/accept`, {
+  const response = await apiClient<unknown>(`/calls/${callId}/accept`, {
     method: 'POST',
   });
+  return normalizeCallActionResponse(response);
 }
 
 export async function rejectCall(callId: string) {
@@ -40,7 +45,8 @@ export async function cancelCall(callId: string) {
 }
 
 export async function requestJoinToken(callId: string) {
-  return apiClient<CallActionResponse>(`/calls/${callId}/join-token`, {
+  const response = await apiClient<unknown>(`/calls/${callId}/join-token`, {
     method: 'POST',
   });
+  return normalizeCallActionResponse(response);
 }

@@ -16,6 +16,11 @@ import type {
   CallParticipantPayload,
   CallStatePayload,
 } from '@/features/call/types';
+import {
+  isCallInvitePayload,
+  isCallParticipantPayload,
+  isCallStatePayload,
+} from '@/features/call/realtime-guards';
 
 type BadgeSnapshotPayload = {
   messagesUnread?: number;
@@ -229,43 +234,6 @@ function handleNotificationCreated(payload: unknown) {
   useNotificationSnackbarStore.getState().enqueueNotification(payload);
 }
 
-function isCallInvitePayload(value: unknown): value is CallInvitePayload {
-  if (!value || typeof value !== 'object') return false;
-  const payload = value as Partial<CallInvitePayload>;
-  return (
-    typeof payload.callId === 'string' &&
-    typeof payload.conversationID === 'string' &&
-    payload.sessionType === 'group' &&
-    (payload.callType === 'AUDIO' || payload.callType === 'VIDEO') &&
-    typeof payload.initiator === 'object' &&
-    Array.isArray(payload.invitees) &&
-    typeof payload.expiresAt === 'string' &&
-    typeof payload.createdAt === 'string'
-  );
-}
-
-function isCallParticipantPayload(value: unknown): value is CallParticipantPayload {
-  if (!value || typeof value !== 'object') return false;
-  const payload = value as Partial<CallParticipantPayload>;
-  return (
-    typeof payload.callId === 'string' &&
-    typeof payload.changedAt === 'string' &&
-    typeof payload.user === 'object' &&
-    payload.user !== null &&
-    typeof payload.user.id === 'string'
-  );
-}
-
-function isCallStatePayload(value: unknown): value is CallStatePayload {
-  if (!value || typeof value !== 'object') return false;
-  const payload = value as Partial<CallStatePayload>;
-  return (
-    typeof payload.callId === 'string' &&
-    typeof payload.changedAt === 'string' &&
-    ['ENDED', 'CANCELED', 'MISSED', 'FAILED'].includes(String(payload.status))
-  );
-}
-
 function handleRealtimeEvent(message: RealtimeEvent) {
   const badgeStore = useTabBadgeStore.getState();
   const callStore = useCallStore.getState();
@@ -329,9 +297,13 @@ function handleRealtimeEvent(message: RealtimeEvent) {
       }
       return;
     case 'call.participant.rejected':
-    case 'call.participant.missed':
       if (isCallParticipantPayload(message.payload)) {
         callStore.handleCallParticipantRejected(message.payload);
+      }
+      return;
+    case 'call.participant.missed':
+      if (isCallParticipantPayload(message.payload)) {
+        callStore.handleCallParticipantMissed(message.payload);
       }
       return;
     case 'call.ended':

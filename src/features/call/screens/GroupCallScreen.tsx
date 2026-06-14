@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -15,7 +15,7 @@ import {
   useParticipants,
   useRoomContext,
 } from '@livekit/react-native';
-import { cancelCall, leaveCall } from '@/services/api/calls';
+import { cancelCall, leaveCall, requestJoinToken } from '@/services/api/calls';
 import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useCallStore } from '@/features/call/store/use-call-store';
@@ -105,6 +105,17 @@ const s = StyleSheet.create({
   backText: {
     ...Typography.body,
     fontWeight: '700',
+  },
+  errorBar: {
+    gap: Spacing.sm,
+  },
+  retryButton: {
+    alignSelf: 'flex-start',
+    minHeight: 40,
+    paddingHorizontal: Spacing.md,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 
@@ -255,8 +266,38 @@ export default function GroupCallScreen() {
   const { colors } = useTheme();
   const activeCall = useCallStore((state) => state.activeCall);
   const livekit = useCallStore((state) => state.livekit);
+  const setLiveKitCredentials = useCallStore((state) => state.setLiveKitCredentials);
   const resetCallState = useCallStore((state) => state.resetCallState);
   const [connectError, setConnectError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
+  const [roomVersion, setRoomVersion] = useState(0);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const handleRetryConnection = useCallback(async () => {
+    if (!activeCall || retrying) return;
+    setRetrying(true);
+    try {
+      const response = await requestJoinToken(activeCall.id);
+      if (!mountedRef.current) return;
+      setLiveKitCredentials(response.livekit);
+      setConnectError(null);
+      setRoomVersion((current) => current + 1);
+    } catch (error) {
+      if (mountedRef.current && typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn('[call] retry connection failed', error);
+      }
+    } finally {
+      if (mountedRef.current) {
+        setRetrying(false);
+      }
+    }
+  }, [activeCall, retrying, setLiveKitCredentials]);
 
   if (!activeCall || !livekit) {
     return (
@@ -280,19 +321,33 @@ export default function GroupCallScreen() {
   return (
     <View style={[s.container, { backgroundColor: colors.background }]}>
       <LiveKitRoom
+        key={roomVersion}
         serverUrl={livekit.url}
         token={livekit.token}
         connect
         audio
         video={false}
-        onError={(error) => setConnectError(error.message)}
+        onError={(error) => setConnectError(error.message || '连接失败')}
       >
         <CallRoomContent />
       </LiveKitRoom>
       {connectError ? (
-        <Text style={[Typography.small, { color: colors.error }]}>
-          {connectError}
-        </Text>
+        <View style={s.errorBar}>
+          <Text style={[Typography.small, { color: colors.error }]}>
+            {connectError}
+          </Text>
+          <Pressable
+            style={[s.retryButton, { backgroundColor: colors.primary }]}
+            onPress={handleRetryConnection}
+            disabled={retrying}
+          >
+            {retrying ? (
+              <ActivityIndicator color={colors.white} />
+            ) : (
+              <Text style={[s.backText, { color: colors.white }]}>重新连接</Text>
+            )}
+          </Pressable>
+        </View>
       ) : null}
     </View>
   );

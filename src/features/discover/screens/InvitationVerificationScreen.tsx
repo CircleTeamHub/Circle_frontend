@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -139,6 +138,30 @@ export default function InvitationVerificationScreen() {
     [colors],
   );
 
+  const filledSlots: (CircleInvitationVerifier | null)[] = invitation
+    ? [
+        ...invitation.verifiers,
+        ...Array(Math.max(0, TOTAL_SLOTS - invitation.verifiers.length)).fill(
+          null,
+        ),
+      ].slice(0, TOTAL_SLOTS)
+    : [];
+
+  const canAddMore = Boolean(
+    invitation &&
+      invitation.status === 'PENDING' &&
+      invitation.verifiers.filter((v) => v.status !== 'REJECTED').length <
+        TOTAL_SLOTS,
+  );
+
+  const handleAddVerifier = useCallback(() => {
+    if (!invitation) return;
+    router.push({
+      pathname: '/(tabs)/discover/invitation/[id]/select-verifier',
+      params: { id: invitation.id, circleId: invitation.circleId },
+    });
+  }, [router, invitation]);
+
   if (loading) {
     return (
       <View style={[d.container, { paddingTop: insets.top }]}>
@@ -178,23 +201,6 @@ export default function InvitationVerificationScreen() {
       </View>
     );
   }
-
-  // Build 10 slots from verifiers
-  const filledSlots: (CircleInvitationVerifier | null)[] = [
-    ...invitation.verifiers,
-    ...Array(Math.max(0, TOTAL_SLOTS - invitation.verifiers.length)).fill(null),
-  ].slice(0, TOTAL_SLOTS);
-
-  const canAddMore =
-    invitation.status === 'PENDING' &&
-    invitation.verifiers.filter((v) => v.status !== 'REJECTED').length < TOTAL_SLOTS;
-
-  const handleAddVerifier = useCallback(() => {
-    router.push({
-      pathname: '/(tabs)/discover/invitation/[id]/select-verifier',
-      params: { id: invitation.id, circleId: invitation.circleId },
-    });
-  }, [router, invitation.id, invitation.circleId]);
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
