@@ -357,7 +357,7 @@ export default function ProfileScreen() {
         <View style={s.memberIdentityRow}>
           {displayIcons.length > 0 ? (
             <View style={s.memberIdentityItem}>
-              <UserIconRow icons={displayIcons} />
+              <UserIconRow icons={displayIcons} tone="member" />
             </View>
           ) : (
             <View style={s.memberIdentityEmpty}>

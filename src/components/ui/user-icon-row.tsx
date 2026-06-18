@@ -2,13 +2,19 @@ import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { Radius, Spacing, useTheme } from '@/theme';
 import type { DisplayIcon } from '@/types';
-import { SystemIconArt } from '@/components/ui/system-icon-art';
 
 type Props = {
   icons: DisplayIcon[];
   compact?: boolean;
+  tone?: 'default' | 'member';
+};
+
+type BadgeProps = {
+  icon: DisplayIcon;
+  compact?: boolean;
+  tone?: 'default' | 'member';
 };
 
 const s = StyleSheet.create({
@@ -26,24 +32,66 @@ const s = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.full,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+  },
+  compactCircle: {
+    width: 34,
+    height: 34,
+  },
+  innerRing: {
+    position: 'absolute',
+    top: 3,
+    right: 3,
+    bottom: 3,
+    left: 3,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  imageWrap: {
+    width: '100%',
+    height: '100%',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   image: {
     width: '100%',
     height: '100%',
   },
+  systemPrefix: {
+    fontSize: 8,
+    lineHeight: 10,
+    fontWeight: '800',
+    letterSpacing: 0,
+  },
+  systemMain: {
+    fontSize: 15,
+    lineHeight: 17,
+    fontWeight: '900',
+    letterSpacing: 0,
+  },
+  compactSystemMain: {
+    fontSize: 13,
+    lineHeight: 15,
+  },
   label: {
-    ...Typography.tiny,
+    maxWidth: 62,
+    fontSize: 10,
+    lineHeight: 13,
     fontWeight: '700',
+    letterSpacing: 0,
+    textAlign: 'center',
   },
   compactCount: {
-    width: 44,
-    height: 44,
+    width: 34,
+    height: 34,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
   },
 });
 
@@ -79,7 +127,104 @@ function buildIconKey(icon: Partial<DisplayIcon>, index: number) {
   ].join('-');
 }
 
-function UserIconRowComponent({ icons, compact = false }: Props) {
+function getVipLevel(icon: DisplayIcon) {
+  return icon.title.match(/\d+/)?.[0] ?? null;
+}
+
+function formatIconLabel(icon: DisplayIcon) {
+  if (icon.systemKey === 'VIP') {
+    const level = getVipLevel(icon);
+    return level ? `VIP${level}` : icon.title || 'VIP';
+  }
+
+  if (icon.systemKey === 'NEW_USER') {
+    return icon.title || '新用户';
+  }
+
+  return icon.title;
+}
+
+export function UserIconBadge({ icon, compact = false, tone = 'default' }: BadgeProps) {
+  const { colors } = useTheme();
+  const isVip = icon.type === 'SYSTEM' && icon.systemKey === 'VIP';
+  const isNewUser = icon.type === 'SYSTEM' && icon.systemKey === 'NEW_USER';
+  const label = icon.type === 'SYSTEM' ? formatIconLabel(icon) : icon.circleName ?? icon.title;
+  const level = getVipLevel(icon);
+  const circleStyle = isVip
+    ? {
+        backgroundColor: colors.memberTagBg,
+        borderColor: colors.vipBadgeBorder,
+      }
+    : isNewUser
+      ? {
+          backgroundColor: colors.newUserBadgeBg,
+          borderColor: colors.newUserBadgeBorder,
+        }
+      : {
+          backgroundColor: colors.surface,
+          borderColor: colors.surfaceBorder,
+        };
+  const accentColor = isVip
+    ? colors.vipBadgeAccent
+    : isNewUser
+      ? colors.newUserBadgeAccent
+      : colors.textSecondary;
+  const labelColor = tone === 'member' ? colors.memberCardText : colors.text;
+
+  return (
+    <View style={s.item}>
+      <View style={[s.circle, compact ? s.compactCircle : null, circleStyle]}>
+        {isVip ? (
+          <>
+            <View style={[s.innerRing, { borderColor: colors.vipBadgeRing }]} />
+            <Text style={[s.systemPrefix, { color: accentColor }]}>VIP</Text>
+            <Text
+              style={[
+                s.systemMain,
+                compact ? s.compactSystemMain : null,
+                { color: accentColor },
+              ]}
+            >
+              {level ?? ''}
+            </Text>
+          </>
+        ) : isNewUser ? (
+          <>
+            <View style={[s.innerRing, { borderColor: colors.newUserBadgeRing }]} />
+            <Text
+              style={[
+                s.systemMain,
+                compact ? s.compactSystemMain : null,
+                { color: accentColor },
+              ]}
+            >
+              新
+            </Text>
+          </>
+        ) : (
+          <View style={s.imageWrap}>
+            {icon.imageUrl ? (
+              <Image source={{ uri: icon.imageUrl }} style={s.image} contentFit="cover" />
+            ) : (
+              <Ionicons
+                name={resolveFallbackIcon(icon.fallbackIconName)}
+                size={compact ? 12 : 14}
+                color={colors.textSecondary}
+              />
+            )}
+          </View>
+        )}
+      </View>
+      {!compact ? (
+        <Text style={[s.label, { color: labelColor }]} numberOfLines={1}>
+          {label}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+function UserIconRowComponent({ icons, compact = false, tone = 'default' }: Props) {
   const { colors } = useTheme();
   const safeIcons = icons.filter((icon) => isRenderableIcon(icon));
   const visibleIcons = compact ? safeIcons.slice(0, 3) : safeIcons;
@@ -92,37 +237,12 @@ function UserIconRowComponent({ icons, compact = false }: Props) {
   return (
     <View style={s.row}>
       {visibleIcons.map((icon, index) => (
-        <View key={buildIconKey(icon, index)} style={s.item}>
-          <View
-            style={[
-              s.circle,
-              {
-                backgroundColor: colors.memberTagBgLight,
-                borderWidth: 1,
-                borderColor: colors.surfaceBorder,
-              },
-            ]}
-          >
-            {icon.type === 'SYSTEM' && icon.systemKey === 'VIP' ? (
-              <SystemIconArt systemKey="VIP" size={44} />
-            ) : icon.type === 'SYSTEM' && icon.systemKey === 'NEW_USER' ? (
-              <SystemIconArt systemKey="NEW_USER" size={44} />
-            ) : icon.imageUrl ? (
-              <Image source={{ uri: icon.imageUrl }} style={s.image} contentFit="cover" />
-            ) : (
-              <Ionicons
-                name={resolveFallbackIcon(icon.fallbackIconName)}
-                size={20}
-                color={colors.memberCardText}
-              />
-            )}
-          </View>
-          {!compact ? (
-            <Text style={[s.label, { color: colors.memberCardText }]} numberOfLines={1}>
-              {icon.title}
-            </Text>
-          ) : null}
-        </View>
+        <UserIconBadge
+          key={buildIconKey(icon, index)}
+          icon={icon}
+          compact={compact}
+          tone={tone}
+        />
       ))}
       {hiddenCount > 0 ? (
         <View
@@ -130,7 +250,6 @@ function UserIconRowComponent({ icons, compact = false }: Props) {
             s.compactCount,
             {
               backgroundColor: colors.surface,
-              borderWidth: 1,
               borderColor: colors.surfaceBorder,
             },
           ]}

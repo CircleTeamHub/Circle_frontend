@@ -25,7 +25,7 @@ test('ProfileScreen removes the old green badge icon', () => {
   assert.doesNotMatch(src, /colors\.success/);
 });
 
-test('ProfileScreen shows circular newbie and VIP icons inside the gold member card', () => {
+test('ProfileScreen shows selected identity badges inside the gold member card', () => {
   const src = read('src/features/profile/screens/ProfileScreen.tsx');
   const memberCardBlock = src.match(/\{\/\* Member card \*\/\}[\s\S]*?<Divider \/>/)?.[0] ?? '';
 
@@ -34,7 +34,8 @@ test('ProfileScreen shows circular newbie and VIP icons inside the gold member c
   assert.match(memberCardBlock, /memberIdentityRow/);
   assert.match(memberCardBlock, /memberIdentityItem/);
   assert.match(src, /profile\/icons/);
-  assert.match(src, /borderRadius:\s*999/);
+  assert.match(memberCardBlock, /tone="member"/);
+  assert.match(read('src/components/ui/user-icon-row.tsx'), /UserIconBadge/);
   assert.doesNotMatch(src, /Date\.now\(\) - accountCreatedAt/);
 });
 

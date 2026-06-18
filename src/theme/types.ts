@@ -27,6 +27,13 @@ export interface ThemeColors {
   memberCardText: string;
   memberTagBg: string;
   memberTagBgLight: string;
+  vipBadgeBorder: string;
+  vipBadgeAccent: string;
+  vipBadgeRing: string;
+  newUserBadgeBg: string;
+  newUserBadgeBorder: string;
+  newUserBadgeAccent: string;
+  newUserBadgeRing: string;
   sentTimeText: string;
   overlay: string;
   statusBarStyle: 'light' | 'dark';

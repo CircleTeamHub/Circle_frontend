@@ -8,12 +8,10 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { NavHeader } from '@/components/ui/nav-header';
-import { UserIconRow } from '@/components/ui/user-icon-row';
-import { SystemIconArt } from '@/components/ui/system-icon-art';
+import { UserIconBadge, UserIconRow } from '@/components/ui/user-icon-row';
 import { fetchCurrentUser } from '@/services/api/auth';
 import {
   fetchIconOptions,
@@ -61,13 +59,14 @@ const s = StyleSheet.create({
     ...Typography.small,
   },
   optionChip: {
-    borderRadius: Radius.full,
-    paddingHorizontal: Spacing.md,
+    width: 76,
+    minHeight: 78,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Spacing.xs,
     paddingVertical: Spacing.sm,
     borderWidth: 1,
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    justifyContent: 'center',
   },
   selectedRow: {
     flexDirection: 'row',
@@ -94,18 +93,6 @@ const s = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Spacing.sm,
   },
-  optionPreview: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  optionPreviewImage: {
-    width: '100%',
-    height: '100%',
-  },
 });
 
 function optionToDraft(option: IconOption, sortOrder: number): DraftDisplayIcon {
@@ -119,6 +106,14 @@ function optionToDraft(option: IconOption, sortOrder: number): DraftDisplayIcon 
     systemKey: option.systemKey,
     circleId: option.circleId,
     circleName: option.circleName,
+  };
+}
+
+function optionToPreviewIcon(option: IconOption): DisplayIcon {
+  return {
+    ...option,
+    id: option.systemKey ?? option.circleId ?? `${option.type}-${option.title}`,
+    sortOrder: 0,
   };
 }
 
@@ -289,27 +284,7 @@ export default function MyIconsScreen() {
               ]}
               onPress={() => toggleOption(option)}
             >
-              <View
-                style={[
-                  s.optionPreview,
-                  {
-                    backgroundColor: colors.memberTagBgLight,
-                    borderWidth: 1,
-                    borderColor: colors.surfaceBorder,
-                  },
-                ]}
-              >
-                {option.type === 'SYSTEM' && option.systemKey === 'VIP' ? (
-                  <SystemIconArt systemKey="VIP" size={28} />
-                ) : option.type === 'SYSTEM' && option.systemKey === 'NEW_USER' ? (
-                  <SystemIconArt systemKey="NEW_USER" size={28} />
-                ) : option.imageUrl ? (
-                  <Image source={{ uri: option.imageUrl }} style={s.optionPreviewImage} contentFit="cover" />
-                ) : (
-                  <Ionicons name="sparkles-outline" size={14} color={colors.textSecondary} />
-                )}
-              </View>
-              <Text style={[s.subtitle, d.title]}>{option.title}</Text>
+              <UserIconBadge icon={optionToPreviewIcon(option)} />
             </Pressable>
           );
         })}
