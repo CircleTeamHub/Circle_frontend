@@ -10,10 +10,11 @@ import * as SplashScreen from 'expo-splash-screen'; // 控制启动屏（闪屏�
 import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar'; // 控制顶部状态栏样式（文字颜色等）
 import 'react-native-reanimated';             // 必须在入口文件最早引入，启用动画引擎
-import { registerGlobals } from '@livekit/react-native';
+import { NativeModules } from 'react-native';
 import { rehydrateLanguageFromStorage } from '@/i18n';
 import { migrateFromAsyncStorage } from '@/storage';
 import { silenceDomBridgeRejection } from '@/utils/silence-dom-bridge-rejection';
+import { ensureLiveKitGlobals } from '@/utils/livekit-globals';
 import { useAuthStore } from '@/stores/authStore';
 import { useKnownAccountsStore } from '@/stores/knownAccountsStore';
 import { useChatPreferencesStore } from '@/features/chat/store/use-chat-preferences-store';
@@ -37,7 +38,22 @@ SplashScreen.preventAutoHideAsync();
 // 过滤 Expo DOM 组件在导航卸载竞态时抛出的 injectJavaScript 拒绝（属于已知良性错误）
 silenceDomBridgeRejection();
 
-registerGlobals();
+async function registerLiveKitGlobals() {
+  if (!NativeModules.WebRTCModule) {
+    return;
+  }
+
+  try {
+    const { registerGlobals } = await import('@livekit/react-native');
+    ensureLiveKitGlobals(registerGlobals);
+  } catch (error) {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.warn('[startup] LiveKit globals unavailable', error);
+    }
+  }
+}
+
+void registerLiveKitGlobals();
 
 // RootStack：负责将项目主题与 React Navigation 主题桥接，并声明顶层路由结构
 function RootStack() {

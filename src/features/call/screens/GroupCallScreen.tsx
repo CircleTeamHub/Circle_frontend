@@ -1,6 +1,8 @@
+import type { ComponentType, PropsWithChildren } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  NativeModules,
   Pressable,
   StyleSheet,
   Text,
@@ -8,17 +10,73 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import {
-  LiveKitRoom,
-  useConnectionState,
-  useLocalParticipant,
-  useParticipants,
-  useRoomContext,
-} from '@livekit/react-native';
 import { cancelCall, leaveCall, requestJoinToken } from '@/services/api/calls';
 import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useCallStore } from '@/features/call/store/use-call-store';
+import { ensureLiveKitGlobals } from '@/utils/livekit-globals';
+
+type LiveKitModule = {
+  LiveKitRoom: ComponentType<
+    PropsWithChildren<{
+      serverUrl: string;
+      token: string;
+      connect?: boolean;
+      audio?: boolean;
+      video?: boolean;
+      onError?: (error: Error) => void;
+    }>
+  >;
+  useConnectionState: () => string;
+  useLocalParticipant: () => {
+    localParticipant: {
+      identity: string;
+      setMicrophoneEnabled: (enabled: boolean) => Promise<void>;
+    };
+    isMicrophoneEnabled: boolean;
+  };
+  useParticipants: () => {
+    identity: string;
+    name?: string;
+  }[];
+  useRoomContext: () => {
+    disconnect: () => Promise<void>;
+  };
+  registerGlobals?: () => void;
+};
+
+let cachedLiveKitModule: LiveKitModule | null | undefined;
+let liveKitModulePromise: Promise<LiveKitModule | null> | null = null;
+
+function loadLiveKitModule() {
+  if (!NativeModules.WebRTCModule) {
+    return Promise.resolve(null);
+  }
+  if (cachedLiveKitModule !== undefined) {
+    return Promise.resolve(cachedLiveKitModule);
+  }
+  if (liveKitModulePromise) {
+    return liveKitModulePromise;
+  }
+
+  liveKitModulePromise = import('@livekit/react-native')
+    .then((module) => {
+      cachedLiveKitModule = module as LiveKitModule;
+      if (cachedLiveKitModule.registerGlobals) {
+        ensureLiveKitGlobals(cachedLiveKitModule.registerGlobals);
+      }
+      return cachedLiveKitModule;
+    })
+    .catch((error) => {
+      cachedLiveKitModule = null;
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn('[call] LiveKit native module unavailable', error);
+      }
+      return cachedLiveKitModule;
+    });
+
+  return liveKitModulePromise;
+}
 
 const s = StyleSheet.create({
   container: {
@@ -117,6 +175,10 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  unavailableText: {
+    ...Typography.small,
+    textAlign: 'center',
+  },
 });
 
 function initials(name: string) {
@@ -124,7 +186,13 @@ function initials(name: string) {
   return trimmed.slice(0, 2).toUpperCase() || '?';
 }
 
-function CallRoomContent() {
+function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
+  const {
+    useConnectionState,
+    useLocalParticipant,
+    useParticipants,
+    useRoomContext,
+  } = liveKitModule;
   const { colors } = useTheme();
   const room = useRoomContext();
   const connectionState = useConnectionState();
@@ -164,6 +232,10 @@ function CallRoomContent() {
     setMuting(true);
     try {
       await localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled);
+    } catch (error) {
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn('[call] toggle mic failed', error);
+      }
     } finally {
       setMuting(false);
     }
@@ -272,12 +344,30 @@ export default function GroupCallScreen() {
   const [retrying, setRetrying] = useState(false);
   const [roomVersion, setRoomVersion] = useState(0);
   const mountedRef = useRef(true);
+  const [liveKitModule, setLiveKitModule] = useState<
+    LiveKitModule | null | undefined
+  >(() => (NativeModules.WebRTCModule ? cachedLiveKitModule : null));
 
   useEffect(() => {
     return () => {
       mountedRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (liveKitModule !== undefined) return;
+
+    let cancelled = false;
+    loadLiveKitModule().then((module) => {
+      if (!cancelled) {
+        setLiveKitModule(module);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [liveKitModule]);
 
   const handleRetryConnection = useCallback(async () => {
     if (!activeCall || retrying) return;
@@ -318,6 +408,41 @@ export default function GroupCallScreen() {
     );
   }
 
+  if (liveKitModule === undefined) {
+    return (
+      <View style={[s.missing, { backgroundColor: colors.background }]}>
+        <ActivityIndicator color={colors.primary} />
+        <Text style={[s.missingTitle, { color: colors.text }]}>
+          正在准备通话组件...
+        </Text>
+      </View>
+    );
+  }
+
+  if (!liveKitModule) {
+    return (
+      <View style={[s.missing, { backgroundColor: colors.background }]}>
+        <Text style={[s.missingTitle, { color: colors.text }]}>
+          LiveKit 通话组件不可用
+        </Text>
+        <Text style={[s.unavailableText, { color: colors.textSecondary }]}>
+          请使用包含 LiveKit native module 的开发客户端或重新构建应用。
+        </Text>
+        <Pressable
+          style={[s.backButton, { backgroundColor: colors.primary }]}
+          onPress={() => {
+            resetCallState();
+            router.back();
+          }}
+        >
+          <Text style={[s.backText, { color: colors.white }]}>返回</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  const LiveKitRoom = liveKitModule.LiveKitRoom;
+
   return (
     <View style={[s.container, { backgroundColor: colors.background }]}>
       <LiveKitRoom
@@ -327,9 +452,14 @@ export default function GroupCallScreen() {
         connect
         audio
         video={false}
-        onError={(error) => setConnectError(error.message || '连接失败')}
+        onError={(error) => {
+          if (typeof __DEV__ !== 'undefined' && __DEV__) {
+            console.warn('[call] LiveKit room error', error);
+          }
+          setConnectError('通话连接失败，请重试');
+        }}
       >
-        <CallRoomContent />
+        <CallRoomContent liveKitModule={liveKitModule} />
       </LiveKitRoom>
       {connectError ? (
         <View style={s.errorBar}>

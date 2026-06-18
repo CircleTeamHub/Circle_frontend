@@ -225,6 +225,29 @@ test('group call screen offers retry after a LiveKit connection error', () => {
   assert.match(source, /重新连接/);
 });
 
+test('group call screen defers LiveKit imports until native modules are available', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/call/screens/GroupCallScreen.tsx'),
+    'utf8',
+  );
+
+  assert.doesNotMatch(source, /from ['"]@livekit\/react-native['"]/);
+  assert.match(source, /loadLiveKitModule/);
+  assert.match(source, /NativeModules\.WebRTCModule/);
+  assert.match(source, /LiveKit 通话组件不可用/);
+});
+
+test('root layout registers LiveKit only after the native WebRTC module exists', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'app/_layout.tsx'),
+    'utf8',
+  );
+
+  assert.doesNotMatch(source, /from ['"]@livekit\/react-native['"]/);
+  assert.match(source, /registerLiveKitGlobals/);
+  assert.match(source, /NativeModules\.WebRTCModule/);
+});
+
 test('message forward picker route sends pending text and voice messages via OpenIM', () => {
   const route = fs.readFileSync(
     path.join(process.cwd(), 'app/(tabs)/messages/forward-picker.tsx'),
