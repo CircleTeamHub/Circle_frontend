@@ -90,3 +90,15 @@ test('messages screen exposes left-swipe conversation actions for read, hide, an
   assert.equal(zh.messages.swipeHide, '隐藏聊天');
   assert.equal(zh.messages.swipeDelete, '删除');
 });
+
+test('messages screen plus menu no longer exposes group management', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/messages/screens/MessagesScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.doesNotMatch(source, /"groupManagement"/);
+  assert.doesNotMatch(source, /messages\.groupManagement/);
+  assert.doesNotMatch(source, /router\.push\("\/\(tabs\)\/messages\/groups"\)/);
+});

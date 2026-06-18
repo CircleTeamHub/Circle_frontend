@@ -49,8 +49,7 @@ type MenuActionId =
   | "newGroup"
   | "addFriend"
   | "scan"
-  | "seatManagement"
-  | "groupManagement";
+  | "seatManagement";
 
 const MENU_ACTION_KEYS: {
   id: MenuActionId;
@@ -61,7 +60,6 @@ const MENU_ACTION_KEYS: {
   { id: "addFriend", icon: "person-add-outline", key: "messages.addFriend" },
   { id: "scan", icon: "scan-outline", key: "messages.scan" },
   { id: "seatManagement", icon: "call-outline", key: "messages.seatManagement" },
-  { id: "groupManagement", icon: "people-circle-outline", key: "messages.groupManagement" },
 ];
 
 // 静态样式（不依赖主题色，提取到组件外避免每次渲染重建）
@@ -660,7 +658,6 @@ export default function MessagesScreen() {
       setMenuVisible(false);
       if (id === "newGroup") router.push("/(tabs)/messages/new-group");
       else if (id === "addFriend") router.push("/(tabs)/messages/add-friend");
-      else if (id === "groupManagement") router.push("/(tabs)/messages/groups");
       else if (id === "seatManagement") router.push("/(tabs)/messages/temp-chats");
       else if (id === "scan") router.push("/(tabs)/messages/scan" as Href);
     },
