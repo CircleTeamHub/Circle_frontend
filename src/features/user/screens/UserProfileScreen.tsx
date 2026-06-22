@@ -25,6 +25,7 @@ import {
   getEditFriendRemarkHref,
   getEditFriendTagsHref,
   getSendFriendRequestHref,
+  getUserMomentsHref,
   getUserProfileScopeFromSegments,
 } from '@/features/user/utils/routes';
 import {
@@ -366,6 +367,14 @@ export default function UserProfileScreen() {
     router.push(getEditFriendTagsHref(scope, profileId, profile.name));
   }, [friendStatus, profile.name, profileId, router, scope]);
 
+  const handleOpenMoments = useCallback(() => {
+    if (profileId === 'unknown') {
+      return;
+    }
+
+    router.push(getUserMomentsHref(scope, profileId, profile.name));
+  }, [profile.name, profileId, router, scope]);
+
   const handleOpenChat = useCallback(async () => {
     if (profileId === 'unknown' || openingChat) {
       return;
@@ -437,9 +446,25 @@ export default function UserProfileScreen() {
           };
         }
 
+        if (id === 'moments') {
+          return {
+            id,
+            label,
+            onPress: handleOpenMoments,
+          };
+        }
+
         return { id, label };
       }),
-    [handleEditRemark, handleEditTags, infoRows, remarkValue, t, tagValue],
+    [
+      handleEditRemark,
+      handleEditTags,
+      handleOpenMoments,
+      infoRows,
+      remarkValue,
+      t,
+      tagValue,
+    ],
   );
 
   const d = useMemo(
