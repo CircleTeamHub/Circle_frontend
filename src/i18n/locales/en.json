@@ -87,6 +87,12 @@
     }
   },
 
+  "onboarding": {
+    "profileTitle": "Complete your profile",
+    "profileSubtitle": "Set your avatar, signature, and basic profile before entering Circle IM.",
+    "finish": "Finish and enter"
+  },
+
   "tabs": {
     "messages": "Messages",
     "contacts": "Contacts",
@@ -594,7 +600,9 @@
     "noComments": "No comments",
     "writeComment": "Write a comment...",
     "replyTo": "Reply to {{nickname}}",
-    "reply": "Reply"
+    "reply": "Reply",
+    "albumTitle": "{{name}}'s Moments",
+    "albumTitleFallback": "Moments"
   },
 
   "invitation": {
@@ -671,14 +679,6 @@
     "statusUnknown": "Unknown",
     "completeContact": "Add contact info in settings",
     "accountSettings": "Account Settings",
-    "changeAccountId": "Change Account ID",
-    "currentAccountId": "Current Account ID",
-    "newAccountId": "New Account ID",
-    "newAccountIdPlaceholder": "Enter new account ID",
-    "accountIdInvalid": "Account ID must be 4-32 letters, numbers, underscores, or hyphens",
-    "accountIdUnchanged": "New account ID must be different from the current one",
-    "accountChangeFailed": "Failed to change account ID",
-    "accountIdChangeNotice": "Your account ID is used for login and friend search. Use the new ID after changing it.",
     "changePassword": "Change Password",
     "currentPassword": "Current Password",
     "currentPasswordPlaceholder": "Enter current password",
@@ -804,9 +804,9 @@
     "qq": "QQ",
     "qqPlaceholder": "Enter QQ number",
     "notBound": "Not set",
-    "accountId": "Change Account ID",
-    "tapToChange": "Tap to change",
-    "accountIdNotSupported": "Change account ID in account settings.",
+    "accountId": "Account ID",
+    "tapToChange": "Tap to view",
+    "accountIdNotSupported": "Account IDs are assigned by the system and cannot be changed.",
     "password": "Change Password",
     "passwordNotSupported": "Change password in account settings.",
     "securityCode": "Security Code",
@@ -858,6 +858,7 @@
   "appSettings": {
     "title": "Settings",
     "searchPlaceholder": "Search settings",
+    "searchNoResults": "No matching settings",
     "accountSection": "Account",
     "generalSection": "General",
     "helpSection": "Help & About",
@@ -924,8 +925,6 @@
     "accountSecurity": {
       "title": "Account & Security",
       "credentialSection": "Account & Security",
-      "changeAccount": "Change Account ID",
-      "changeAccountHint": "Tap to change",
       "changePassword": "Change Login Password",
       "securityCode": "Login Security Code",
       "securityCodeHint": "Tap to change",
@@ -1149,18 +1148,13 @@
   },
 
   "shareScreen": {
-    "qrTitle": "Share My QR Code",
-    "qrSubtitle": "Scan the code to view my invite info and join Circle directly.",
     "inviteCode": "Invite Code",
-    "shareQrTitle": "Share QR Code",
-    "shareQrSubtitle": "Send the QR code link to friends via the system share sheet",
     "copyInviteTitle": "Copy Invite Code",
     "copyInviteSubtitle": "Copy it and paste it into chat or another app",
     "copiedTitle": "Copied",
     "copiedMessage": "Invite code copied to clipboard",
     "copyFallbackTitle": "Direct copy is not supported here",
     "copyFallbackMessage": "The system share sheet has been opened, and you can copy the invite code manually",
-    "shareMessage": "Join my Circle: {{url}}, invite code: {{code}}",
     "copyMessage": "Invite code: {{code}}"
   },
 

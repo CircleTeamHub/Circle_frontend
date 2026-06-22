@@ -87,6 +87,12 @@
     }
   },
 
+  "onboarding": {
+    "profileTitle": "完善个人资料",
+    "profileSubtitle": "设置头像、签名和基础资料后即可进入 Circle IM。",
+    "finish": "完成并进入主页"
+  },
+
   "tabs": {
     "messages": "消息",
     "contacts": "联系人",
@@ -593,7 +599,9 @@
     "noComments": "暂无评论",
     "writeComment": "写评论...",
     "replyTo": "回复 {{nickname}}",
-    "reply": "回复"
+    "reply": "回复",
+    "albumTitle": "{{name}}的朋友圈",
+    "albumTitleFallback": "朋友圈"
   },
 
   "invitation": {
@@ -670,14 +678,6 @@
     "statusUnknown": "状态未知",
     "completeContact": "可在账号设置中完善联系方式",
     "accountSettings": "账号设置",
-    "changeAccountId": "修改账号",
-    "currentAccountId": "当前账号",
-    "newAccountId": "新账号",
-    "newAccountIdPlaceholder": "请输入新账号",
-    "accountIdInvalid": "账号需为 4-32 位字母、数字、下划线或短横线",
-    "accountIdUnchanged": "新账号不能和当前账号相同",
-    "accountChangeFailed": "修改账号失败，请稍后重试",
-    "accountIdChangeNotice": "账号用于登录和好友搜索，修改后请使用新账号登录。",
     "changePassword": "修改登录密码",
     "currentPassword": "当前密码",
     "currentPasswordPlaceholder": "请输入当前密码",
@@ -803,9 +803,9 @@
     "qq": "绑定QQ号",
     "qqPlaceholder": "请输入QQ号",
     "notBound": "未绑定",
-    "accountId": "修改账号",
-    "tapToChange": "点击修改",
-    "accountIdNotSupported": "请通过账号设置页面修改账号。",
+    "accountId": "账号",
+    "tapToChange": "点击查看",
+    "accountIdNotSupported": "账号由系统自动分配，暂不支持修改。",
     "password": "修改登录密码",
     "passwordNotSupported": "请通过账号设置页面修改密码。",
     "securityCode": "登录安全码",
@@ -857,6 +857,7 @@
   "appSettings": {
     "title": "设置",
     "searchPlaceholder": "搜索设置",
+    "searchNoResults": "没有匹配的设置",
     "accountSection": "账号",
     "generalSection": "通用",
     "helpSection": "帮助与关于",
@@ -923,8 +924,6 @@
     "accountSecurity": {
       "title": "账号与安全",
       "credentialSection": "账号与安全",
-      "changeAccount": "修改账号",
-      "changeAccountHint": "点击修改",
       "changePassword": "修改登录密码",
       "securityCode": "登录安全码",
       "securityCodeHint": "点击修改",
@@ -1148,18 +1147,13 @@
   },
 
   "shareScreen": {
-    "qrTitle": "分享我的二维码",
-    "qrSubtitle": "扫码即可查看我的邀请信息，加入后可直接进入 Circle",
     "inviteCode": "邀请码",
-    "shareQrTitle": "分享二维码",
-    "shareQrSubtitle": "通过系统分享把二维码链接发送给好友",
     "copyInviteTitle": "复制邀请码",
     "copyInviteSubtitle": "复制后可粘贴到聊天或其他应用",
     "copiedTitle": "已复制",
     "copiedMessage": "邀请码已复制到剪贴板",
     "copyFallbackTitle": "当前环境不支持直接复制",
     "copyFallbackMessage": "已打开系统分享，你也可以手动复制邀请码",
-    "shareMessage": "加入我的 Circle：{{url}}，邀请码：{{code}}",
     "copyMessage": "邀请码：{{code}}"
   },
 
