@@ -36,6 +36,20 @@ export async function fetchMomentsFeed(params?: {
   };
 }
 
+export async function fetchUserMoments(
+  userId: string,
+  params?: { page?: number; limit?: number },
+): Promise<PaginatedResponse<MomentPost>> {
+  const result = await apiClient<PaginatedResponse<MomentPost>>(
+    `/trace/feed${buildQuery({ ...(params ?? {}), authorId: userId })}`,
+  );
+
+  return {
+    ...result,
+    items: result.items.map(normalizeMoment),
+  };
+}
+
 export async function fetchNewMomentsCount(since: string): Promise<number> {
   const result = await apiClient<number>(
     `/trace/feed/new-count?since=${encodeURIComponent(since)}`,
