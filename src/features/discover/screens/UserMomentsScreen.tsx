@@ -7,16 +7,10 @@ import {
   Text,
   View,
 } from 'react-native';
-import {
-  Stack,
-  useLocalSearchParams,
-  useRouter,
-  useSegments,
-} from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { fetchUserProfile } from '@/services/api/profile';
-import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 import { useUserMoments } from '@/features/discover/hooks/use-user-moments';
 import { isSameCalendarDay } from '@/features/discover/utils/album-date';
 import { MomentAlbumHeader } from '@/features/discover/components/moment-album-header';
@@ -34,8 +28,6 @@ export default function UserMomentsScreen() {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const router = useRouter();
-  const segments = useSegments();
-  const scope = getUserProfileScopeFromSegments(segments);
   const params = useLocalSearchParams<{ id: string; name?: string }>();
   const userId = params.id;
 
