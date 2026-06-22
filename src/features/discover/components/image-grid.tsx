@@ -6,13 +6,20 @@ import { Radius, Spacing } from '@/theme';
 interface ImageGridProps {
   images: string[];
   onPress?: (index: number) => void;
+  /** 外部容器可用宽度（相册行的内容列宽度）。缺省时按 discover 卡片布局计算。 */
+  containerWidth?: number;
 }
 
 const GAP = Spacing.xs;
 
-export const ImageGrid: React.FC<ImageGridProps> = ({ images, onPress }) => {
+export const ImageGrid: React.FC<ImageGridProps> = ({
+  images,
+  onPress,
+  containerWidth: containerWidthProp,
+}) => {
   const { width: screenWidth } = useWindowDimensions();
-  const containerWidth = screenWidth - Spacing.lg * 2 - Spacing.md * 2;
+  const containerWidth =
+    containerWidthProp ?? screenWidth - Spacing.lg * 2 - Spacing.md * 2;
 
   const layout = useMemo(() => {
     const count = images.length;
