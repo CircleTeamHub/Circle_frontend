@@ -209,6 +209,15 @@ export async function logoutFromOpenIM() {
     return;
   }
 
+  // SDK 已初始化但未连接（登录还在进行 / 登录失败 / 已断开）时，没有可登出的会话，
+  // 直接 OpenIMSDK.logout() 会报 10004「Resource initialization incomplete」。
+  // 此时跳过 SDK logout、只清本地状态并重置 initPromise（下次登录会重新 initSDK）。
+  if (!useIMStore.getState().connected) {
+    initPromise = null;
+    useIMStore.getState().reset();
+    return;
+  }
+
   try {
     await OpenIMSDK.logout();
   } catch (err) {
@@ -230,6 +239,16 @@ export async function loadConversationList(count = 100) {
     // 初始化失败（瞬时 native I/O 失败 / 平台不支持等）时保留 store 已缓存的会话，
     // 避免一次短暂错误把"曾经成功加载过的会话列表"清成空，让用户误以为没有任何对话。
     // 真正需要清空时由 logoutFromOpenIM → useIMStore.reset() 显式负责。
+    return useIMStore.getState().conversations;
+  }
+
+  // SDK 初始化完成 ≠ 已登录就绪。新注册 / 刚登录时 loginToOpenIM 仍在进行中，
+  // 此刻直接 getConversationListSplit 会报 10004「Resource initialization incomplete」。
+  // 先等连接就绪再拉；等不到（超时）就返回已缓存会话，避免抛错刷屏并清空列表 ——
+  // 连接成功后 onConnectSuccess 监听器也会自动重新拉一次，最终一致。
+  try {
+    await waitForOpenIMConnectionReady();
+  } catch {
     return useIMStore.getState().conversations;
   }
 
