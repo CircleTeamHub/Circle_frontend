@@ -1,14 +1,11 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
-import { useTranslation } from 'react-i18next';
-import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 const COVER_HEIGHT = 260;
 const AVATAR_SIZE = 64;
-const HINT_BOTTOM_INSET = 36;
 
 interface MomentAlbumHeaderProps {
   coverUrl?: string | null;
@@ -25,20 +22,6 @@ const s = StyleSheet.create({
   cover: {
     width: '100%',
     height: COVER_HEIGHT,
-  },
-  coverHint: {
-    position: 'absolute',
-    left: Spacing.lg,
-    top: COVER_HEIGHT - HINT_BOTTOM_INSET,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
-    borderRadius: Radius.pill,
-  },
-  coverHintText: {
-    ...Typography.small,
   },
   identityRow: {
     position: 'absolute',
@@ -66,14 +49,11 @@ export const MomentAlbumHeader: React.FC<MomentAlbumHeaderProps> = ({
   nickname,
   onPressCover,
 }) => {
-  const { t } = useTranslation();
   const { colors } = useTheme();
 
   const d = useMemo(
     () => ({
       coverPlaceholder: { backgroundColor: colors.surface },
-      coverHint: { backgroundColor: colors.overlay },
-      coverHintText: { color: colors.white },
       nickname: {
         color: colors.white,
         textShadowColor: colors.overlay,
@@ -92,15 +72,7 @@ export const MomentAlbumHeader: React.FC<MomentAlbumHeaderProps> = ({
   return (
     <View style={s.container}>
       {onPressCover ? (
-        <Pressable onPress={onPressCover}>
-          {coverContent}
-          <View style={[s.coverHint, d.coverHint]}>
-            <Ionicons name="camera-outline" size={14} color={colors.white} />
-            <Text style={[s.coverHintText, d.coverHintText]}>
-              {t('moment.changeCover')}
-            </Text>
-          </View>
-        </Pressable>
+        <Pressable onPress={onPressCover}>{coverContent}</Pressable>
       ) : (
         coverContent
       )}
