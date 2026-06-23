@@ -5,12 +5,12 @@ import {
   ThemeProvider as NavThemeProvider,
 } from '@react-navigation/native';
 import { useFonts } from 'expo-font';        // 加载自定义字体
-import { Stack } from 'expo-router';          // Expo Router 的 Stack 导航（页面栈）
+import { Redirect, Stack, useSegments } from 'expo-router';          // Expo Router 的 Stack 导航（页面栈）
 import * as SplashScreen from 'expo-splash-screen'; // 控制启动屏（闪屏）的显示与隐藏
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { StatusBar } from 'expo-status-bar'; // 控制顶部状态栏样式（文字颜色等）
 import 'react-native-reanimated';             // 必须在入口文件最早引入，启用动画引擎
-import { NativeModules } from 'react-native';
+import { ActivityIndicator, NativeModules, View } from 'react-native';
 import { rehydrateLanguageFromStorage } from '@/i18n';
 import { migrateFromAsyncStorage } from '@/storage';
 import { silenceDomBridgeRejection } from '@/utils/silence-dom-bridge-rejection';
@@ -22,6 +22,7 @@ import { useCircleNotificationStore } from '@/features/discover/store/use-circle
 import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-filter-store';
 
 // 项目自定义主题系统：ThemeProvider 提供主题上下文，useTheme 读取当前主题
+import { getAuthRouteDecision } from '@/components/app/auth-route-policy';
 import { LoginSecurityCodeGate } from '@/components/app/login-security-code-gate';
 import { SessionBootstrap } from '@/components/app/session-bootstrap';
 import { AccountSwitcherSheet } from '@/features/profile/components/account-switcher-sheet';
@@ -31,6 +32,12 @@ import { ThemeProvider, useTheme } from '@/theme';
 
 // 将 expo-router 内置的 ErrorBoundary 重新导出，使其在根路由层生效（捕获页面级报错）
 export { ErrorBoundary } from 'expo-router';
+
+type PersistedStore = {
+  persist?: {
+    rehydrate?: () => unknown;
+  };
+};
 
 // 阻止启动屏自动隐藏，等待字体加载完成后再手动隐藏
 SplashScreen.preventAutoHideAsync();
@@ -54,6 +61,56 @@ async function registerLiveKitGlobals() {
 }
 
 void registerLiveKitGlobals();
+
+async function rehydratePersistedStore(name: string, store: PersistedStore) {
+  const rehydrate = store.persist?.rehydrate;
+  if (typeof rehydrate !== 'function') {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.warn(`[startup] ${name} store persist API unavailable; skipping rehydrate`);
+    }
+    return;
+  }
+
+  try {
+    await Promise.resolve(rehydrate());
+  } catch (error) {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.warn(`[startup] ${name} store rehydrate failed`, error);
+    }
+  }
+}
+
+/**
+ * 启动引导（AsyncStorage→MMKV 迁移 + 各持久化 store 一次性水合 + i18n）用模块级
+ * promise 记忆化，确保**只执行一次**：dev StrictMode 会重复挂载根布局、effect 也可能
+ * 因重挂再次触发，若每次都 rehydrate，迟到的水合会和登录/注册写入抢跑、用旧持久化覆盖
+ * 内存里的新会话（此前 onboarding 被弹回的放大器）。复用同一个 promise 后，无论触发几次
+ * 都只真正水合一次。
+ */
+let startupBootstrapPromise: Promise<void> | null = null;
+function ensureStartupBootstrap(): Promise<void> {
+  startupBootstrapPromise ??= (async () => {
+    try {
+      await migrateFromAsyncStorage();
+    } catch (err) {
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn(
+          '[startup] migration failed, continuing without migrated data',
+          err,
+        );
+      }
+    }
+    await Promise.all([
+      rehydratePersistedStore('auth', useAuthStore),
+      rehydratePersistedStore('known accounts', useKnownAccountsStore),
+      rehydratePersistedStore('chat preferences', useChatPreferencesStore),
+      rehydratePersistedStore('discover filter', useDiscoverFilterStore),
+      rehydratePersistedStore('circle notification', useCircleNotificationStore),
+    ]);
+    rehydrateLanguageFromStorage();
+  })();
+  return startupBootstrapPromise;
+}
 
 // RootStack：负责将项目主题与 React Navigation 主题桥接，并声明顶层路由结构
 function RootStack() {
@@ -92,11 +149,48 @@ function RootStack() {
         {/* 四个顶层路由组，对应 app/(tabs)、(auth)、(chat)、(social) 目录 */}
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(onboarding)" />
         <Stack.Screen name="(chat)" />
         <Stack.Screen name="(social)" />
       </Stack>
     </NavThemeProvider>
   );
+}
+
+function AuthRouteGuard({ children }: { children: ReactNode }) {
+  const segments = useSegments();
+  const firstSegment = segments[0];
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isLoading = useAuthStore((state) => state.isLoading);
+  const onboardingRequired = useAuthStore((state) => state.onboardingRequired);
+  const { colors } = useTheme();
+  const decision = getAuthRouteDecision({
+    firstSegment,
+    isAuthenticated,
+    isLoading,
+    onboardingRequired,
+  });
+
+  if (decision.type === 'redirect') {
+    return <Redirect href={decision.href} />;
+  }
+
+  if (decision.type === 'loading') {
+    return (
+      <View
+        style={{
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: colors.background,
+        }}
+      >
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  return children;
 }
 
 // RootLayout：应用真正的根组件
@@ -116,27 +210,20 @@ export default function RootLayout() {
    */
   const [migrated, setMigrated] = useState(false);
   useEffect(() => {
-    // 关键：rehydrate 必须无论迁移是否成功都执行 —— 不然单次 MMKV 写入失败会让
-    // 启动屏永远不消失。storage.migrateFromAsyncStorage() 现在已经自己吞错，
-    // 这里再额外 .catch() 兜一次保险，并通过 .finally 保证 setMigrated 始终触发。
-    migrateFromAsyncStorage()
-      .catch((err) => {
-        if (typeof __DEV__ !== 'undefined' && __DEV__) {
-          console.warn(
-            '[startup] migration failed, continuing without migrated data',
-            err,
-          );
-        }
-      })
-      .finally(() => {
-        void useAuthStore.persist.rehydrate();
-        void useKnownAccountsStore.persist.rehydrate();
-        void useChatPreferencesStore.persist.rehydrate();
-        void useDiscoverFilterStore.persist.rehydrate();
-        void useCircleNotificationStore.persist.rehydrate();
-        rehydrateLanguageFromStorage();
+    let cancelled = false;
+
+    // 引导逻辑搬到模块级 ensureStartupBootstrap()（记忆化 → 只跑一次）；
+    // 这里只负责在它完成后解除启动闸门。无论迁移成功与否，bootstrap 内部都会
+    // 继续 rehydrate，保证启动屏不会永远卡住。
+    ensureStartupBootstrap().finally(() => {
+      if (!cancelled) {
         setMigrated(true);
-      });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // 字体加载出错时直接抛出，触发 ErrorBoundary 展示错误页
@@ -161,11 +248,13 @@ export default function RootLayout() {
     // ThemeProvider：提供全局主题上下文（颜色、深浅色模式等）
     <ThemeProvider>
       <SessionBootstrap />
-      <RootStack />
-      <NotificationSnackbarHost />
-      <CallInviteHost />
-      <AccountSwitcherSheet />
-      <LoginSecurityCodeGate />
+      <AuthRouteGuard>
+        <RootStack />
+        <NotificationSnackbarHost />
+        <CallInviteHost />
+        <AccountSwitcherSheet />
+        <LoginSecurityCodeGate />
+      </AuthRouteGuard>
     </ThemeProvider>
   );
 }

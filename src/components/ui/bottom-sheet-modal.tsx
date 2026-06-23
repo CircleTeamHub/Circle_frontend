@@ -27,6 +27,9 @@ const s = StyleSheet.create({
   content: {
     width: '100%',
   },
+  innerContent: {
+    flex: 1,
+  },
 });
 
 export function BottomSheetModal({
@@ -77,7 +80,9 @@ export function BottomSheetModal({
             },
           ]}
         >
-          <Pressable onPress={() => {}}>{children}</Pressable>
+          <Pressable style={s.innerContent} onPress={() => {}}>
+            {children}
+          </Pressable>
         </Animated.View>
       </Pressable>
     </Modal>

@@ -77,6 +77,7 @@ export function LoginSecurityCodeGate() {
   const { t } = useTranslation();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isLoading = useAuthStore((state) => state.isLoading);
+  const onboardingRequired = useAuthStore((state) => state.onboardingRequired);
   const userId = useAuthStore((state) => state.user?.id ?? null);
   const [gateState, setGateState] = useState<GateState>('unlocked');
   const [securityCode, setSecurityCode] = useState('');
@@ -118,7 +119,7 @@ export function LoginSecurityCodeGate() {
   );
 
   const refreshSecurityCodeStatus = useCallback(async () => {
-    if (!isAuthenticated || isLoading) {
+    if (!isAuthenticated || isLoading || onboardingRequired) {
       securityCodeEnabledRef.current = false;
       setSecurityCode('');
       setError(null);
@@ -147,7 +148,7 @@ export function LoginSecurityCodeGate() {
         console.warn('[security-code] status check failed', requestError);
       }
     }
-  }, [isAuthenticated, isLoading]);
+  }, [isAuthenticated, isLoading, onboardingRequired]);
 
   useEffect(() => {
     void refreshSecurityCodeStatus();
@@ -158,6 +159,7 @@ export function LoginSecurityCodeGate() {
       if (nextState !== 'active') {
         if (
           useAuthStore.getState().isAuthenticated &&
+          !useAuthStore.getState().onboardingRequired &&
           securityCodeEnabledRef.current
         ) {
           setGateState('locked');
@@ -213,6 +215,7 @@ export function LoginSecurityCodeGate() {
   const visible =
     isAuthenticated &&
     !isLoading &&
+    !onboardingRequired &&
     (gateState === 'locked' || gateState === 'verifying');
 
   return (
