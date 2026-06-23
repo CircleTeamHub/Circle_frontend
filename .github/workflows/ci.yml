@@ -1,0 +1,53 @@
+name: Frontend CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+      - feat/**
+      - fix/**
+
+concurrency:
+  group: frontend-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Typecheck, Lint & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Start Timer
+        run: echo "JOB_START=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Job Duration
+        if: always()
+        run: |
+          END=$(date +%s)
+          DURATION=$((END - JOB_START))
+          echo "Job completed in ${DURATION} seconds ($((DURATION / 60))m $((DURATION % 60))s)"
