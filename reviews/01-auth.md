@@ -3,7 +3,7 @@
 > Files: `src/stores/authStore.ts` · `src/services/api/client.ts` · `src/services/auth/session.ts`
 > Date: 2026-05-14
 > Surface: Auth & token lifecycle (highest risk)
-> **Status: Patched (1 HIGH + 8 MEDIUM resolved). 1 HIGH + 2 MEDIUM deferred → see [Patches applied](#patches-applied) section below.**
+> **Status: Patched (2 HIGH + 8 MEDIUM resolved). 2 MEDIUM deferred → see [Patches applied](#patches-applied) section below.**
 
 ---
 
@@ -24,6 +24,7 @@
 - **`authStore.ts`** — `setUser` no longer escalates `isAuthenticated`/`isLoading` (was a latent bug for the 6 profile-update call sites).
 - **`authStore.ts`** — `persist` now has `version: 1` (locks shape; future migrations have a baseline).
 - **`authStore.ts`** — Rehydrate validation requires non-empty string tokens, not just truthy. Survives corrupted MMKV writes.
+- **`authStore.ts` + `knownAccountsStore.ts`** — auth tokens moved from MMKV-backed persistence to `expo-secure-store`; non-secret metadata remains in MMKV with token fields stripped. Legacy MMKV token values migrate once and are removed from MMKV metadata. **Closes HIGH #3 (tokens in MMKV).**
 - **`client.ts`** — `redactSensitiveFields` is now recursive + array-aware + case-insensitive. Closed the leak path through the `{ data: { accessToken } }` envelope used by every login/refresh response.
 - **`client.ts`** — `SENSITIVE_KEYS` expanded: `authorization`, `cookie`, `idToken`, `apiKey`, `secret`.
 - **`client.ts`** — New `safeBodyTextForLog` used in `readPayload`: response bodies are parsed-then-redacted before logging instead of dumped raw. **Closes HIGH #1 (login response leak in dev console).**
@@ -32,20 +33,16 @@
 - **`client.ts`** — `refreshAccessToken` runs `isTokenPair` runtime guard before calling `setTokens`. Backend rename / snake_case drift now throws a clear "刷新返回数据格式异常" instead of writing `Bearer undefined`.
 - **`session.ts`** — Per-handler errors are collected and `console.warn`ed (dev only) at end of `clearLocalSession` instead of silently swallowed.
 - **`session.ts`** — Store reset is **auth-first** now: `clearSession` runs before dependent-store resets. Prevents the race where a subscriber to "data went empty" fires a refetch while `isAuthenticated` is still true.
-- **`session.ts`** — Belt-and-suspenders: if `persist.clearStorage` throws, falls back to `mmkvJsonStorage.removeItem('circle-im-auth')`. Tokens cannot remain on disk after a "successful" logout, which was the worst failure mode in this file.
+- **`session.ts`** — Belt-and-suspenders: if `persist.clearStorage` throws, falls back to `secureAuthStorage.removeItem('circle-im-auth')`, clearing SecureStore and the legacy MMKV key. Tokens cannot remain on disk after a "successful" logout, which was the worst failure mode in this file.
 - **`session.ts`** — `registerLogoutHandler` returns an `unregister` function and dedupes by reference — HMR / test code can no longer accumulate handlers.
 - **`test/auth-session.test.js`** — Rewritten to match the post-refactor handler-pattern. New coverage:
   - Auth-first reset ordering (regression test)
-  - MMKV fallback path when `persist.clearStorage` fails (new safeguard coverage)
+  - SecureStore fallback path when `persist.clearStorage` fails (new safeguard coverage)
   - `unregister` removes handler
   - Idempotent re-registration (HMR safety)
 
 ### ⏸ Deferred — needs your decision before patching
 
-- **HIGH #3 — Tokens in MMKV not SecureStore.** Patch path is one of:
-  - **A. Switch to `expo-secure-store`** for `accessToken`/`refreshToken`/`imToken` only. Cleanest. Requires `expo-secure-store` install + a small adapter or hand-rolled token getter.
-  - **B. Encrypt MMKV** with a key stored in `expo-secure-store`. Smaller diff, keeps current store API.
-  - **C. Accept current risk** (e.g. tokens are short-lived enough that on-disk extraction is acceptable). Document the decision in `MODULE_OVERVIEW.md`.
 - **MEDIUM (client.ts) — Retry-after-refresh sentinel error.** When refresh succeeds but the retried request still 401s, we currently throw `ApiError(status=401)` to the caller. Best fix is a sentinel (`code: 'AUTH_RETRY_FAILED'`) that an auth boundary listens for and forces re-login. Architectural — defer to a dedicated auth-error-boundary pass.
 - **MEDIUM (session.ts) — Other persisted stores not coordinated.** `clearLocalSession` clears `circle-im-auth` only. `circle-im-chat-preferences`, `circle-im-discover-filter`, `circle-im-circle-notification` likely persist user-scoped data that should be cleared on logout. Theme + language are device-scoped, should NOT be cleared. **Needs product decision per store; do not patch blindly.**
 
@@ -59,7 +56,7 @@ These three files together form the **complete auth/session lifecycle** for the 
 - **`api/client.ts`** — fetch wrapper with auto Bearer injection + 401 → refresh → retry.
 - **`auth/session.ts`** — logout orchestrator that runs registered teardown hooks then clears state + persistence.
 
-The architecture is reasonable: refresh is a singleton promise (good concurrency), teardown uses a registration pattern to break import cycles (good), and dev logs attempt redaction. **But:** tokens live in unencrypted MMKV, dev logs leak the full login response, redaction is shallow only, and several silent error swallows hide logout failures that could leave tokens on disk.
+The architecture is reasonable: refresh is a singleton promise (good concurrency), teardown uses a registration pattern to break import cycles (good), and auth tokens now use SecureStore with legacy MMKV migration. Non-secret auth metadata stays in MMKV after token stripping so SecureStore size limits do not break profile or multi-account persistence. The remaining deferred auth-core risks are architectural: auth-retry sentinel handling and which non-auth persisted stores should be wiped on logout.
 
 **Severity totals: 3 HIGH · 12 MEDIUM · 6 LOW**
 
@@ -68,16 +65,16 @@ The architecture is reasonable: refresh is a singleton promise (good concurrency
 # File 1 — `src/stores/authStore.ts` (148 lines)
 
 ## Summary
-Persisted Zustand store. Exports `useAuthStore` with `accessToken`, `refreshToken`, `imToken`, `user`, `isAuthenticated`, plus actions. Persists 5 fields to MMKV under key `'circle-im-auth'`. On rehydrate, sets `hasHydrated=true` and clears session if tokens are incomplete.
+Persisted Zustand store. Exports `useAuthStore` with `accessToken`, `refreshToken`, `imToken`, `user`, `isAuthenticated`, plus actions. `secureAuthStorage` splits persistence: token fields go to SecureStore, while `user` / `isAuthenticated` stay in MMKV metadata with tokens stripped. Old MMKV token values migrate once and are removed from MMKV metadata. On rehydrate, sets `hasHydrated=true` and clears session if tokens are incomplete.
 
 ## Findings
 
 ### `L74-148` [HIGH · SAFEGUARD] — Tokens persisted to MMKV, not SecureStore
-`partialize` writes `accessToken`, `refreshToken`, `imToken` to MMKV via `mmkvJsonStorage`. MMKV is **unencrypted by default on Android** (iOS uses Keychain-backed storage internally, less risky). A rooted device or a malicious backup tool can extract these tokens.
+**Resolved 2026-06-21:** `authStore` and `knownAccountsStore` now use `secureAuthStorage`; tokens are split into small SecureStore entries with one-shot legacy MMKV migration and stale-token removal from MMKV metadata. iOS uses `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY` so tokens remain readable after the first device unlock for IM background wakeups.
 
-**Fix options (pick one):**
-- **A. Switch tokens to `expo-secure-store`** — strongest, but a separate adapter from MMKV. Acceptable since tokens are written infrequently.
-- **B. Encrypt MMKV with key from SecureStore** — pass `encryptionKey` to `MMKV` constructor, store the key itself in `expo-secure-store`. Keeps current API surface.
+Original finding: `partialize` wrote `accessToken`, `refreshToken`, `imToken` to MMKV via `mmkvJsonStorage`. MMKV is **unencrypted by default on Android** (iOS uses Keychain-backed storage internally, less risky). A rooted device or a malicious backup tool can extract these tokens.
+
+**Chosen fix:** switched auth token fields to `expo-secure-store` while keeping non-secret metadata in MMKV. This is stronger than storing raw tokens in MMKV and avoids SecureStore large-value failures from full profile / multi-account JSON payloads.
 
 **Why:** Token theft is the single highest-impact mobile vuln. Even if the app doesn't process payments today, the chat history these tokens unlock is sensitive.
 
@@ -331,7 +328,7 @@ Plus L202: `return (payload as T | null) ?? (undefined as T);` — callers typed
 # File 3 — `src/services/auth/session.ts` (49 lines)
 
 ## Summary
-Logout orchestrator. Other modules register teardown handlers via `registerLogoutHandler`. `clearLocalSession` runs all handlers (errors swallowed), resets four stores, clears auth, then clears MMKV persistence.
+Logout orchestrator. Other modules register teardown handlers via `registerLogoutHandler`. `clearLocalSession` runs all handlers, resets four stores, clears auth, then clears SecureStore-backed auth persistence.
 
 ## Findings
 
@@ -343,7 +340,7 @@ try {
   // 持久化层清理失败时，内存态也已清空，不阻断登出流程
 }
 ```
-The intent (don't block logout) is right. The problem is the **silence**: if MMKV write fails (disk full, permission, native crash), the in-memory state is cleared **but** the persisted tokens remain. On next app start, `onRehydrateStorage` (authStore L137-145) reads them back and re-authenticates the "logged out" user.
+Original finding: the intent (don't block logout) is right, but the failure was silent. If persistence clearing failed (disk full, permission, native crash), the in-memory state was cleared **but** the persisted tokens could remain. On next app start, `onRehydrateStorage` (authStore L137-145) would read them back and re-authenticate the "logged out" user.
 
 **Fix:** at minimum log the error in dev and emit a telemetry event. Ideally, also overwrite tokens explicitly as a fallback:
 ```ts
@@ -351,9 +348,9 @@ try {
   await (useAuthStore as PersistCapableAuthStore).persist?.clearStorage?.();
 } catch (err) {
   if (__DEV__) console.warn('[session] persist.clearStorage failed', err);
-  // belt-and-suspenders: overwrite the keys directly via mmkvJsonStorage
+  // belt-and-suspenders: clear SecureStore and legacy MMKV copies directly
   try {
-    await mmkvJsonStorage.removeItem('circle-im-auth');
+    await secureAuthStorage.removeItem('circle-im-auth');
   } catch {/* truly unrecoverable, but at least we tried twice */}
 }
 ```
@@ -473,8 +470,8 @@ I have NOT applied any patches yet — awaiting your approval. If approved, I wo
 1. **`authStore.ts`** — fix `setUser`, add `version: 1`, tighten rehydrate validation, narrow `role`/`status` types (skip until product confirms enum)
 2. **`api/client.ts`** — recursive redaction (covers L34, L86, L136), runtime guard for refresh response, FormData detection, expand SENSITIVE_KEYS
 3. **`session.ts`** — dev-log error in catches, return unregister fn, reorder to auth-first, fallback removeItem after persist.clearStorage failure
-4. **The token-storage fix** (HIGH #1, MMKV → SecureStore or encrypted MMKV) — **product decision needed** on which approach; flag for separate change
+4. **Token-storage fix** — resolved 2026-06-21 with `expo-secure-store` token splitting + legacy MMKV token migration/removal.
 
-**Risk if not patched:** HIGH #1 (token storage) is a security posture issue, not an active bug. HIGH #2 and #3 (dev log leaks) only affect dev, not production builds — but a developer demoing the app on a recorded call would expose their session. MEDIUM bugs (setUser, refresh shape, persist clearStorage failure) are latent but can each cause "stuck-in-login-loop" symptoms that look unrelated when they fire.
+**Risk if not patched:** Remaining HIGH dev-log leaks have been patched. The remaining deferred MEDIUM issues are latent architecture gaps that can cause "stuck-in-login-loop" or cross-account local-data symptoms when they fire.
 
 Tell me whether to apply (1)-(3) now, or wait until you've reviewed all auth-related batches.
