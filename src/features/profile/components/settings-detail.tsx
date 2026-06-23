@@ -29,7 +29,10 @@ export interface SettingsDetailRow {
   destructive?: boolean;
   icon?: keyof typeof Ionicons.glyphMap;
   iconMuted?: boolean;
+  iconColor?: string;
+  iconBackgroundColor?: string;
   statusKey?: string;
+  statusColor?: string;
   onPress?: () => void;
   disabled?: boolean;
 }
@@ -200,11 +203,22 @@ export function SettingsDetailScreen({
         >
           <View style={s.rowLeft}>
             {row.icon ? (
-              <View style={[s.iconBox, row.iconMuted ? d.iconBoxMuted : d.iconBox]}>
+              <View
+                style={[
+                  s.iconBox,
+                  row.iconMuted ? d.iconBoxMuted : d.iconBox,
+                  row.iconBackgroundColor
+                    ? { backgroundColor: row.iconBackgroundColor }
+                    : null,
+                ]}
+              >
                 <Ionicons
                   name={row.icon}
                   size={24}
-                  color={row.iconMuted ? colors.textSecondary : colors.success}
+                  color={
+                    row.iconColor ??
+                    (row.iconMuted ? colors.textSecondary : colors.success)
+                  }
                 />
               </View>
             ) : null}
@@ -224,6 +238,7 @@ export function SettingsDetailScreen({
                 style={[
                   d.value,
                   row.iconMuted ? d.mutedValue : d.successValue,
+                  row.statusColor ? { color: row.statusColor } : null,
                 ]}
               >
                 {t(row.statusKey)}
