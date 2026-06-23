@@ -183,7 +183,7 @@ export default function FriendTagDetailScreen() {
         {index < section.data.length - 1 ? <Divider /> : null}
       </View>
     ),
-    [d, router],
+    [d, router, t],
   );
 
   const renderSectionHeader = useCallback(

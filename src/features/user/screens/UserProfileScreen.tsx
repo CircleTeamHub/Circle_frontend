@@ -407,7 +407,7 @@ export default function UserProfileScreen() {
     } finally {
       setOpeningChat(false);
     }
-  }, [displayName, openingChat, profile.avatarUrl, profileId, router, t]);
+  }, [displayName, openingChat, profile.avatarUrl, profileId, router, scope, t]);
 
   const handleOpenChatInfo = useCallback(() => {
     if (

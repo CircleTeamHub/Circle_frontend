@@ -152,23 +152,6 @@ type OptimisticConversationState = {
 };
 type OptimisticConversationStateKey = keyof OptimisticConversationState;
 
-function parseConversationExtension(extension?: string | null) {
-  if (!extension) {
-    return {};
-  }
-
-  try {
-    const parsed = JSON.parse(extension) as unknown;
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>;
-    }
-  } catch {
-    return {};
-  }
-
-  return {};
-}
-
 type GroupInfoRowProps = {
   label: string;
   value?: string;
@@ -317,7 +300,6 @@ export default function ChatInfoScreen() {
   const groupNotice = groupInfo?.notification?.trim() ?? '';
   const memberCount = groupInfo?.memberCount ?? groupMembers.length;
   const currentUserID = useIMStore((state) => state.currentUserID);
-  const conversationExtension = useMemo(() => parseConversationExtension(conversation?.ex), [conversation?.ex]);
   const myGroupAlias = groupMembers.find((member) => member.userID === currentUserID)?.nickname ?? '';
   const currentMember = useMemo(
     () => groupMembers.find((member) => member.userID === currentUserID) ?? null,

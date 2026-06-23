@@ -128,13 +128,13 @@ export function bindOpenIMListeners() {
   // payload 形如 [{ userID, conversationID, msgIDList }, ...]，不同 SDK 版本字段
   // 命名略不同（msgIDList / clientMsgIDList / readMsgIDList），都兼容下。
   const handleC2CReadReceipt = (
-    receipts: ReadonlyArray<{
+    receipts: readonly {
       userID?: string;
       conversationID?: string;
       msgIDList?: string[];
       clientMsgIDList?: string[];
       readMsgIDList?: string[];
-    }>,
+    }[],
   ) => {
     if (!Array.isArray(receipts)) return;
     const { conversations } = useIMStore.getState();

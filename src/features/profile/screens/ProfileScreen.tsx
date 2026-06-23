@@ -240,7 +240,7 @@ export default function ProfileScreen() {
       return () => {
         isActive = false;
       };
-    }, [setProfileUnread, setUser, user?.id]),
+    }, [setProfileUnread, setUser, user]),
   );
 
   const handleOpenShare = useCallback(() => {
@@ -277,7 +277,7 @@ export default function ProfileScreen() {
         {index < MENU_ITEMS.length - 1 ? <Divider /> : null}
       </View>
     ),
-    [handleMenuPress],
+    [handleMenuPress, MENU_ITEMS.length],
   );
 
   const keyExtractor = useCallback((item: MenuItem) => item.id, []);

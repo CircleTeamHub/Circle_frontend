@@ -137,7 +137,7 @@ export default function MomentDetailScreen() {
     return () => {
       cancelled = true;
     };
-  }, [id, post]);
+  }, [id, post, t]);
 
   // Fallback: fetch from API if not in store
   useEffect(() => loadMoment(), [loadMoment]);

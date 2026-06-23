@@ -221,7 +221,7 @@ export default function NewFriendsScreen() {
         {index < inboxRows.length - 1 ? <Divider /> : null}
       </View>
     ),
-    [d, inboxRows.length, markRead, navigating, router],
+    [d, i18n.language, inboxRows.length, markRead, navigating, router],
   );
 
   const emptyState = loading ? (

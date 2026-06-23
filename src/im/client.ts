@@ -64,6 +64,8 @@ function isNativeIMSupported() {
 
 function loadNativeFS() {
   if (!rnfsModule) {
+    // Keep react-native-fs out of non-native startup paths.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const loaded = require('react-native-fs') as NativeFSModule;
     rnfsModule = loaded.default ?? loaded;
   }

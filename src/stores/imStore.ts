@@ -50,7 +50,7 @@ interface IMState {
   markMessagesRead: (conversationID: string, clientMsgIDs: string[]) => void;
   /** 批量更新某些用户的在线状态（订阅返回值或 onUserStatusChanged 都走这里）。 */
   setUserOnlineStatuses: (
-    statuses: ReadonlyArray<{ userID: string; status: OnlineState }>,
+    statuses: readonly { userID: string; status: OnlineState }[],
   ) => void;
   clearAllMessages: () => void;
   reset: () => void;
