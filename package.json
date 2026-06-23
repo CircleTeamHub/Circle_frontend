@@ -9,8 +9,9 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
+    "expo:config": "expo config --type public",
     "test": "node --test \"test/*.js\" \"src/**/*.test.mts\"",
-    "ci": "npm run typecheck && npm run lint && npm test"
+    "ci": "npm run typecheck && npm run expo:config && npm run lint && npm test"
   },
   "dependencies": {
     "@blocknote/core": "^0.47.3",

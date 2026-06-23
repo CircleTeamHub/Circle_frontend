@@ -14,6 +14,9 @@ concurrency:
   group: frontend-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   checks:
     name: Typecheck, Lint & Test
@@ -39,6 +42,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Expo Config Smoke
+        run: npm run expo:config
+
       - name: Lint
         run: npm run lint
 
@@ -51,3 +57,19 @@ jobs:
           END=$(date +%s)
           DURATION=$((END - JOB_START))
           echo "Job completed in ${DURATION} seconds ($((DURATION / 60))m $((DURATION % 60))s)"
+
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Review Dependency Changes
+        uses: actions/dependency-review-action@v4
