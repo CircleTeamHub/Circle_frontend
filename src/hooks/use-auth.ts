@@ -40,6 +40,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 
+type AuthSuccessOptions = {
+  onboardingRequired?: boolean;
+  redirectHref?: '/(tabs)/messages' | '/(onboarding)/profile';
+  startAppServices?: boolean;
+};
+
 export function useAuth() {
   const router = useRouter();
   // selector 化：避免订阅整个 authStore —— token 后台刷新或别处更新 user
@@ -72,14 +78,16 @@ export function useAuth() {
 
   // 密码登录与验证码登录的共同收尾：拉用户、落 session、记账号、登 IM、跳转。
   const onAuthSuccess = useCallback(
-    async (tokens: AuthTokens) => {
+    async (tokens: AuthTokens, options: AuthSuccessOptions = {}) => {
       // 拿到 token 后立刻拉 /auth/me；这是登录链路最容易被瞬时网络抖动击穿的一步。
       // retry 仅在网络 / 5xx 时重试；4xx（401/403）直接抛出走 clearLocalSession。
       const user = await retry(() =>
         fetchCurrentUserWithToken(tokens.accessToken),
       );
 
-      setSession(tokens, user);
+      setSession(tokens, user, {
+        onboardingRequired: options.onboardingRequired ?? false,
+      });
 
       // 记入「本设备登录过的账号」，供切换账号免密快速进入。
       useKnownAccountsStore.getState().upsertAccount({
@@ -90,26 +98,28 @@ export function useAuth() {
         updatedAt: Date.now(),
       });
 
-      if (tokens.imToken) {
-        try {
-          await loginToOpenIM(user.id, tokens.imToken);
-        } catch (imError) {
-          // IM 登录失败不阻断主流程，仅打印警告；用户仍可正常使用 app
-          console.warn(
-            '[openim] login failed',
-            imError instanceof Error ? imError.message : imError,
-          );
+      if (options.startAppServices !== false) {
+        if (tokens.imToken) {
+          try {
+            await loginToOpenIM(user.id, tokens.imToken);
+          } catch (imError) {
+            // IM 登录失败不阻断主流程，仅打印警告；用户仍可正常使用 app
+            console.warn(
+              '[openim] login failed',
+              imError instanceof Error ? imError.message : imError,
+            );
+          }
+        } else {
+          // 后端未返回 imToken，确保 IM 状态已清空
+          await logoutFromOpenIM();
         }
-      } else {
-        // 后端未返回 imToken，确保 IM 状态已清空
-        await logoutFromOpenIM();
+
+        // 拉用户自定义会话分组（MessagesScreen 顶部 filter tab 需要）。
+        // 失败不阻断登录跳转；store 内部已 dev-warn。
+        void useMessageGroupsStore.getState().load();
       }
 
-      // 拉用户自定义会话分组（MessagesScreen 顶部 filter tab 需要）。
-      // 失败不阻断登录跳转；store 内部已 dev-warn。
-      void useMessageGroupsStore.getState().load();
-
-      router.replace('/(tabs)/messages');
+      router.replace(options.redirectHref ?? '/(tabs)/messages');
     },
     [router, setSession],
   );
@@ -194,15 +204,16 @@ export function useAuth() {
       inFlightRef.current = true;
       safeSetSubmitting(true);
       try {
-        await registerRequest({
+        const tokens = await registerRequest({
           email: normalizedEmail,
           code: code.trim(),
           password,
           nickname: nickname.trim(),
         });
-        router.replace({
-          pathname: '/(auth)/login',
-          params: { email: normalizedEmail },
+        await onAuthSuccess(tokens, {
+          onboardingRequired: true,
+          redirectHref: '/(onboarding)/profile',
+          startAppServices: false,
         });
       } catch (requestError) {
         safeSetError(getApiErrorMessage(requestError, i18n.t('auth.errors.registerFailed')));
@@ -211,7 +222,7 @@ export function useAuth() {
         safeSetSubmitting(false);
       }
     },
-    [router, safeSetError, safeSetSubmitting],
+    [onAuthSuccess, safeSetError, safeSetSubmitting],
   );
 
   const endSession = useCallback(async () => {
@@ -237,9 +248,8 @@ export function useAuth() {
     } finally {
       inFlightRef.current = false;
       safeSetSubmitting(false);
-      router.replace('/(auth)/login');
     }
-  }, [router, safeSetError, safeSetSubmitting]);
+  }, [safeSetError, safeSetSubmitting]);
 
   const logout = useCallback(async () => {
     // 退出 = 从本设备账号列表移除当前账号（下次需重新登录才能回来）。

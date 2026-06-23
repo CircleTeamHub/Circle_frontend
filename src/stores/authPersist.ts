@@ -2,8 +2,8 @@
  * authPersist.ts — authStore 的 zustand persist 版本 / 迁移逻辑
  *
  * 单独成文件的原因：迁移逻辑不依赖任何原生模块（MMKV / RN），可被
- * node:test 直接单测，而 authStore 因为 import 了 @/storage（MMKV）无法在
- * node 环境加载。
+ * node:test 直接单测，而 authStore 因为 import 了 SecureStore / MMKV 相关
+ * 原生模块，无法在 node 环境加载。
  *
  * 背景（为什么需要 migrate）：
  *   v0 时代持久化配置没有显式 version，zustand 默认按 version 0 落盘

@@ -37,7 +37,7 @@ function loadSessionModule(mocks) {
 
 function makeBaseMocks() {
   const calls = [];
-  const mmkvRemovals = [];
+  const secureAuthRemovals = [];
 
   const authStore = {
     getState: () => ({
@@ -54,16 +54,21 @@ function makeBaseMocks() {
 
   const mocks = {
     '@/stores/authStore': { useAuthStore: authStore },
-    '@/storage': {
-      mmkvJsonStorage: {
+    '@/storage/secure-auth-storage': {
+      secureAuthStorage: {
         removeItem: (key) => {
-          mmkvRemovals.push(key);
+          secureAuthRemovals.push(key);
         },
       },
     },
     '@/features/messages/store/use-message-groups-store': {
       useMessageGroupsStore: {
         getState: () => ({ reset: () => calls.push('resetGroups') }),
+      },
+    },
+    '@/features/discover/store/use-circles-store': {
+      useCirclesStore: {
+        getState: () => ({ reset: () => calls.push('resetCircles') }),
       },
     },
     '@/stores/friendActivityUnreadStore': {
@@ -83,7 +88,7 @@ function makeBaseMocks() {
     },
   };
 
-  return { mocks, calls, mmkvRemovals, authStore };
+  return { mocks, calls, secureAuthRemovals, authStore };
 }
 
 test('clearLocalSession runs registered teardown handlers, then resets stores auth-first, then clears persistence', async () => {
@@ -107,6 +112,7 @@ test('clearLocalSession runs registered teardown handlers, then resets stores au
     'logoutIM',
     'clearSession',
     'resetGroups',
+    'resetCircles',
     'resetFriendActivityUnread',
     'resetTabBadge',
     'resetWalletRealtime',
@@ -149,6 +155,7 @@ test('clearLocalSession still clears local state when a teardown handler throws'
     'logoutIM',
     'clearSession',
     'resetGroups',
+    'resetCircles',
     'resetFriendActivityUnread',
     'resetTabBadge',
     'resetWalletRealtime',
@@ -156,11 +163,11 @@ test('clearLocalSession still clears local state when a teardown handler throws'
   ]);
 });
 
-test('clearLocalSession falls back to mmkv removeItem when persist.clearStorage rejects (defense in depth: tokens must not remain on disk)', async () => {
-  const { mocks, calls, mmkvRemovals, authStore } = makeBaseMocks();
+test('clearLocalSession falls back to secure auth removeItem when persist.clearStorage rejects (defense in depth: tokens must not remain on disk)', async () => {
+  const { mocks, calls, secureAuthRemovals, authStore } = makeBaseMocks();
   authStore.persist.clearStorage = async () => {
     calls.push('clearStorage:attempted');
-    throw new Error('mmkv write failed');
+    throw new Error('secure storage delete failed');
   };
 
   const { clearLocalSession } = loadSessionModule(mocks);
@@ -172,9 +179,9 @@ test('clearLocalSession falls back to mmkv removeItem when persist.clearStorage 
     'persist.clearStorage should have been attempted'
   );
   assert.deepEqual(
-    mmkvRemovals,
+    secureAuthRemovals,
     ['circle-im-auth'],
-    'fallback mmkv removeItem must be invoked with the auth persist key when persist.clearStorage fails'
+    'fallback secure auth removeItem must be invoked with the auth persist key when persist.clearStorage fails'
   );
 });
 
