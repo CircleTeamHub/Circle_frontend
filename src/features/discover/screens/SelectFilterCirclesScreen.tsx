@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   StyleSheet,
@@ -18,6 +19,12 @@ import { Divider } from '@/components/ui/divider';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-filter-store';
+import {
+  MAX_CIRCLE_FILTER_SELECTION,
+  clampCircleFilterIds,
+  mergeCircleFilterSelection,
+  toggleCircleFilterSelection,
+} from '@/features/discover/utils/circle-filter-selection';
 import type { Circle } from '@/types';
 
 const s = StyleSheet.create({
@@ -109,7 +116,7 @@ export default function SelectFilterCirclesScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      setSelected([...draftCircleIds]);
+      setSelected(clampCircleFilterIds(draftCircleIds));
     }, [draftCircleIds]),
   );
 
@@ -138,11 +145,28 @@ export default function SelectFilterCirclesScreen() {
     [filteredCircles, selected],
   );
 
-  const toggleCircle = useCallback((id: string) => {
-    setSelected((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+  const showLimitAlert = useCallback(() => {
+    Alert.alert(
+      t('city.hint'),
+      t('discover.filter.maxCircles', {
+        max: MAX_CIRCLE_FILTER_SELECTION,
+      }),
     );
-  }, []);
+  }, [t]);
+
+  const toggleCircle = useCallback(
+    (id: string) => {
+      setSelected((prev) => {
+        const result = toggleCircleFilterSelection({
+          current: prev,
+          circleId: id,
+        });
+        if (result.reachedLimit) showLimitAlert();
+        return result.nextSelected;
+      });
+    },
+    [showLimitAlert],
+  );
 
   const toggleSelectAll = useCallback(() => {
     if (allFilteredSelected) {
@@ -150,12 +174,15 @@ export default function SelectFilterCirclesScreen() {
       setSelected((prev) => prev.filter((id) => !filteredIds.has(id)));
     } else {
       setSelected((prev) => {
-        const merged = new Set(prev);
-        for (const c of filteredCircles) merged.add(c.id);
-        return Array.from(merged);
+        const result = mergeCircleFilterSelection({
+          current: prev,
+          candidates: filteredCircles.map((circle) => circle.id),
+        });
+        if (result.reachedLimit) showLimitAlert();
+        return result.nextSelected;
       });
     }
-  }, [allFilteredSelected, filteredCircles]);
+  }, [allFilteredSelected, filteredCircles, showLimitAlert]);
 
   const handleConfirm = useCallback(() => {
     setDraftCircleIds(selected);
@@ -253,7 +280,10 @@ export default function SelectFilterCirclesScreen() {
 
       <View style={s.topBar}>
         <Text style={[s.countText, d.countText]}>
-          {t('discover.filter.savedCirclesCount', { count: selected.length })}
+          {t('discover.filter.selectedCount', {
+            count: selected.length,
+            max: MAX_CIRCLE_FILTER_SELECTION,
+          })}
         </Text>
         {filteredCircles.length > 0 ? (
           <Pressable onPress={toggleSelectAll} hitSlop={8}>

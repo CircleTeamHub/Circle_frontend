@@ -482,7 +482,8 @@
       "selectAll": "Select all",
       "unselectAll": "Clear all",
       "selectedCount": "{{count}}/{{max}} selected",
-      "noCircles": "No circles available"
+      "noCircles": "No circles available",
+      "maxCircles": "Maximum {{max}} circles"
     }
   },
 

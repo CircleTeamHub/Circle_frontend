@@ -481,7 +481,8 @@
       "selectAll": "全选",
       "unselectAll": "取消全选",
       "selectedCount": "已选{{count}}/{{max}}",
-      "noCircles": "暂无可选圈子"
+      "noCircles": "暂无可选圈子",
+      "maxCircles": "最多选择{{max}}个圈子"
     }
   },
 

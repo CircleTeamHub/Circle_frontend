@@ -27,6 +27,13 @@ test('plaza feed request applies saved multi-circle and city filters', () => {
   assert.match(source, /cities[,:\s]/);
 });
 
+test('plaza feed request caps saved multi-circle filters before sending', () => {
+  const source = read('src/features/discover/store/use-discover-store.ts');
+
+  assert.match(source, /clampCircleFilterIds/);
+  assert.match(source, /clampCircleFilterIds\(appliedCircleIds\)/);
+});
+
 test('discover filter picker only lists my joined or created circles', () => {
   const filterScreen = read('src/features/discover/screens/FilterScreen.tsx');
   const pickerScreen = read('src/features/discover/screens/SelectFilterCirclesScreen.tsx');
