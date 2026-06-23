@@ -602,7 +602,9 @@
     "replyTo": "Reply to {{nickname}}",
     "reply": "Reply",
     "albumTitle": "{{name}}'s Moments",
-    "albumTitleFallback": "Moments"
+    "albumTitleFallback": "Moments",
+    "changeCover": "Change Cover",
+    "coverUpdateFailed": "Failed to update cover"
   },
 
   "invitation": {

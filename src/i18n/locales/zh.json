@@ -601,7 +601,9 @@
     "replyTo": "回复 {{nickname}}",
     "reply": "回复",
     "albumTitle": "{{name}}的朋友圈",
-    "albumTitleFallback": "朋友圈"
+    "albumTitleFallback": "朋友圈",
+    "changeCover": "换封面",
+    "coverUpdateFailed": "封面更新失败"
   },
 
   "invitation": {
