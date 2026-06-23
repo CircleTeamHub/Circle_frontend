@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ComponentType } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -6,7 +6,13 @@ import {
   StyleSheet,
   Text,
   View,
+  type FlatListProps,
 } from 'react-native';
+import Animated, {
+  useAnimatedScrollHandler,
+  useSharedValue,
+  type AnimatedProps,
+} from 'react-native-reanimated';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Spacing, Typography, useTheme } from '@/theme';
@@ -26,6 +32,10 @@ const s = StyleSheet.create({
   footerLoader: { paddingVertical: Spacing.lg, alignItems: 'center' },
 });
 
+const AnimatedFlatList = Animated.createAnimatedComponent(
+  FlatList,
+) as unknown as ComponentType<AnimatedProps<FlatListProps<MomentPost>>>;
+
 export default function UserMomentsScreen() {
   const { t } = useTranslation();
   const { colors } = useTheme();
@@ -34,6 +44,11 @@ export default function UserMomentsScreen() {
   const userId = params.id;
   const currentUserId = useAuthStore((state) => state.user?.id);
   const isOwn = !!currentUserId && currentUserId === userId;
+
+  const scrollY = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler((event) => {
+    scrollY.value = event.contentOffset.y;
+  });
 
   const { moments, loading, refreshing, hasMore, error, refresh, loadMore } =
     useUserMoments(userId);
@@ -98,6 +113,7 @@ export default function UserMomentsScreen() {
       avatarUrl={avatarUrl}
       nickname={nickname || title}
       onPressCover={isOwn ? changeCover : undefined}
+      scrollY={scrollY}
     />
   );
 
@@ -127,7 +143,7 @@ export default function UserMomentsScreen() {
       <Stack.Screen
         options={{ title, headerTransparent: true, headerTitle: '' }}
       />
-      <FlatList
+      <AnimatedFlatList
         data={moments}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
@@ -135,6 +151,8 @@ export default function UserMomentsScreen() {
         ListEmptyComponent={ListEmpty}
         ListFooterComponent={ListFooter}
         contentContainerStyle={s.listContent}
+        onScroll={scrollHandler}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
