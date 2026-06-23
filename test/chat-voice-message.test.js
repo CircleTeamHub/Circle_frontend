@@ -66,7 +66,9 @@ test('app config enables native microphone recording permissions for expo-audio'
   });
 
   assert.ok(audioPlugin);
-  assert.equal(audioPlugin[1].microphonePermission, '允许 Circle IM 使用麦克风录制并发送语音消息。');
+  // 麦克风权限串与 ios.infoPlist.NSMicrophoneUsageDescription 及 expo-camera 插件保持一致：
+  // app 现在既录语音消息也做语音通话，故文案需覆盖两者。
+  assert.equal(audioPlugin[1].microphonePermission, '允许 Circle IM 使用麦克风录制语音消息并进行语音通话。');
   assert.equal(audioPlugin[1].recordAudioAndroid, true);
 });
 
