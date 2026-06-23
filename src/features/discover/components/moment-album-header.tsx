@@ -38,16 +38,18 @@ const s = StyleSheet.create({
     top: COVER_HEIGHT - AVATAR_SIZE / 2,
     right: Spacing.lg,
     flexDirection: 'row',
-    alignItems: 'center',
+    // 顶对齐让昵称落在封面图之上，而不是下沿的白色区域
+    alignItems: 'flex-start',
     gap: Spacing.md,
   },
   nickname: {
     ...Typography.h3,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    textShadowRadius: 5,
   },
   avatarWrap: {
-    borderRadius: Radius.md,
+    // 圆角与方形头像一致（Avatar shape="square" 用 Radius.sm），避免方框套圆形露角
+    borderRadius: Radius.sm,
     borderWidth: 2,
     overflow: 'hidden',
   },
@@ -64,10 +66,10 @@ export const MomentAlbumHeader: React.FC<MomentAlbumHeaderProps> = ({
 
   const d = useMemo(
     () => ({
-      coverPlaceholder: { backgroundColor: colors.surface },
+      coverPlaceholder: { backgroundColor: colors.textSecondary },
       nickname: {
         color: colors.white,
-        textShadowColor: colors.overlay,
+        textShadowColor: colors.black,
       },
       avatarWrap: { borderColor: colors.white },
     }),
@@ -108,6 +110,7 @@ export const MomentAlbumHeader: React.FC<MomentAlbumHeaderProps> = ({
             size={AVATAR_SIZE}
             name={nickname}
             uri={avatarUrl ?? undefined}
+            shape="square"
           />
         </View>
       </View>
