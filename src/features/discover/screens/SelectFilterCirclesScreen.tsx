@@ -91,10 +91,11 @@ export default function SelectFilterCirclesScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
 
-  const allCircles = useCirclesStore((st) => st.allCircles);
-  const allCirclesLoading = useCirclesStore((st) => st.allCirclesLoading);
-  const allCirclesError = useCirclesStore((st) => st.allCirclesError);
-  const fetchAllCircles = useCirclesStore((st) => st.fetchAllCircles);
+  const joinedCircles = useCirclesStore((st) => st.joinedCircles);
+  const createdCircles = useCirclesStore((st) => st.createdCircles);
+  const myCirclesLoading = useCirclesStore((st) => st.myCirclesLoading);
+  const myCirclesError = useCirclesStore((st) => st.myCirclesError);
+  const fetchMyCircles = useCirclesStore((st) => st.fetchMyCircles);
 
   const draftCircleIds = useDiscoverFilterStore((st) => st.draftCircleIds);
   const setDraftCircleIds = useDiscoverFilterStore((st) => st.setDraftCircleIds);
@@ -103,10 +104,8 @@ export default function SelectFilterCirclesScreen() {
   const [selected, setSelected] = useState<string[]>([]);
 
   useEffect(() => {
-    if (allCircles.length === 0) {
-      fetchAllCircles();
-    }
-  }, [allCircles.length, fetchAllCircles]);
+    fetchMyCircles();
+  }, [fetchMyCircles]);
 
   useFocusEffect(
     useCallback(() => {
@@ -114,15 +113,23 @@ export default function SelectFilterCirclesScreen() {
     }, [draftCircleIds]),
   );
 
+  const myFilterCircles = useMemo(() => {
+    const byId = new Map(joinedCircles.map((circle) => [circle.id, circle]));
+    for (const circle of createdCircles) {
+      byId.set(circle.id, circle);
+    }
+    return [...byId.values()];
+  }, [createdCircles, joinedCircles]);
+
   const filteredCircles = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return allCircles;
-    return allCircles.filter(
+    if (!q) return myFilterCircles;
+    return myFilterCircles.filter(
       (circle) =>
         circle.name.toLowerCase().includes(q) ||
         circle.description.toLowerCase().includes(q),
     );
-  }, [allCircles, search]);
+  }, [myFilterCircles, search]);
 
   const allFilteredSelected = useMemo(
     () =>
@@ -259,14 +266,14 @@ export default function SelectFilterCirclesScreen() {
         ) : null}
       </View>
 
-      {allCirclesLoading && allCircles.length === 0 ? (
+      {myCirclesLoading && myFilterCircles.length === 0 ? (
         <View style={s.emptyContainer}>
           <ActivityIndicator color={colors.primary} />
         </View>
-      ) : allCirclesError && allCircles.length === 0 ? (
+      ) : myCirclesError && myFilterCircles.length === 0 ? (
         <View style={s.emptyContainer}>
-          <Text style={d.emptyText}>{allCirclesError}</Text>
-          <Pressable style={d.retryButton} onPress={fetchAllCircles}>
+          <Text style={d.emptyText}>{myCirclesError}</Text>
+          <Pressable style={d.retryButton} onPress={fetchMyCircles}>
             <Text style={d.retryText}>{t('common.retry')}</Text>
           </Pressable>
         </View>

@@ -5,6 +5,7 @@ import {
   applyPlazaFetchFailure,
   applyPlazaFetchSuccess,
 } from '@/features/discover/store/discover-state';
+import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-filter-store';
 
 interface DiscoverState {
   plazaPosts: CirclePlazaPost[];
@@ -54,9 +55,22 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
     });
 
     try {
+      const { appliedCircleIds, appliedCities } =
+        useDiscoverFilterStore.getState();
+      const circleIds =
+        state.selectedCircleId || appliedCircleIds.length === 0
+          ? undefined
+          : appliedCircleIds.join(',');
+      const cities =
+        state.selectedCity || appliedCities.length === 0
+          ? undefined
+          : appliedCities.join(',');
+
       const result = await fetchPlazaFeed({
         circleId: state.selectedCircleId ?? undefined,
+        circleIds,
         city: state.selectedCity ?? undefined,
+        cities,
         page,
         limit: 20,
       });

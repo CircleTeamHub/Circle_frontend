@@ -36,7 +36,14 @@ export const useCirclesStore = create<CirclesState>((set) => ({
   allCirclesError: null,
 
   fetchMyCircles: async () => {
-    set({ myCirclesLoading: true, myCirclesError: null });
+    set({
+      joinedCircles: [],
+      createdCircles: [],
+      managedCircles: [],
+      appliedCircles: [],
+      myCirclesLoading: true,
+      myCirclesError: null,
+    });
     try {
       const [joined, created, applied] = await Promise.all([
         fetchMyCircles('joined'),
