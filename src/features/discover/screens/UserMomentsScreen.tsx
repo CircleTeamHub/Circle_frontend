@@ -11,7 +11,9 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { fetchUserProfile } from '@/services/api/profile';
+import { useAuthStore } from '@/stores/authStore';
 import { useUserMoments } from '@/features/discover/hooks/use-user-moments';
+import { useChangeCover } from '@/features/discover/hooks/use-change-cover';
 import { isSameCalendarDay } from '@/features/discover/utils/album-date';
 import { MomentAlbumHeader } from '@/features/discover/components/moment-album-header';
 import { MomentAlbumRow } from '@/features/discover/components/moment-album-row';
@@ -30,6 +32,8 @@ export default function UserMomentsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id: string; name?: string }>();
   const userId = params.id;
+  const currentUserId = useAuthStore((state) => state.user?.id);
+  const isOwn = !!currentUserId && currentUserId === userId;
 
   const { moments, loading, refreshing, hasMore, error, refresh, loadMore } =
     useUserMoments(userId);
@@ -37,6 +41,8 @@ export default function UserMomentsScreen() {
   const [cover, setCover] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [nickname, setNickname] = useState<string>(params.name ?? '');
+
+  const { changeCover } = useChangeCover(userId, setCover);
 
   useEffect(() => {
     let active = true;
@@ -91,6 +97,7 @@ export default function UserMomentsScreen() {
       coverUrl={cover}
       avatarUrl={avatarUrl}
       nickname={nickname || title}
+      onPressCover={isOwn ? changeCover : undefined}
     />
   );
 
