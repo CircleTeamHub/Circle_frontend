@@ -18,6 +18,51 @@ permissions:
   contents: read
 
 jobs:
+  workflow-lint:
+    name: Workflow Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install actionlint
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+        run: |
+          curl -fsSL \
+            -o actionlint.tar.gz \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          tar -xzf actionlint.tar.gz actionlint
+          sudo mv actionlint /usr/local/bin/actionlint
+          actionlint -version
+
+      - name: Lint Workflows
+        run: actionlint
+
+  security-audit:
+    name: Security Audit (report)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Audit Production Dependencies
+        continue-on-error: true
+        run: npm audit --omit=dev --audit-level=high
+
   typecheck:
     name: Typecheck
     runs-on: ubuntu-latest
