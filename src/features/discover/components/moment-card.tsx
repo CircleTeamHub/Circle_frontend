@@ -7,6 +7,11 @@ import { Avatar } from '@/components/ui/avatar';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { getUserProfileHref } from '@/features/user/utils/routes';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
+import {
+  buildLikedFriendsPreview,
+  buildMomentCommentThreads,
+  getMomentCommentPreviewState,
+} from '@/features/discover/utils/moment-comments';
 import { ImageGrid } from './image-grid';
 import type { MomentPost } from '@/types';
 
@@ -49,6 +54,16 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
+  commentThread: {
+    gap: 2,
+  },
+  replyRow: {
+    paddingLeft: Spacing.md,
+  },
+  showMoreComments: {
+    alignSelf: 'flex-start',
+    paddingTop: 2,
+  },
   actionsRow: {
     flexDirection: 'row',
     gap: Spacing.lg,
@@ -69,7 +84,7 @@ export const MomentCard: React.FC<MomentCardProps> = ({
   onLike,
   onPress,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const router = useRouter();
 
@@ -83,6 +98,7 @@ export const MomentCard: React.FC<MomentCardProps> = ({
       likeText: { color: colors.primary, ...Typography.caption },
       commentUser: { color: colors.primary, ...Typography.caption, fontWeight: '600' as const },
       commentText: { color: colors.text, ...Typography.caption },
+      showMoreCommentsText: { color: colors.primary, ...Typography.caption },
       actionIcon: { color: colors.textSecondary },
       actionIconActive: { color: colors.error },
     }),
@@ -93,6 +109,23 @@ export const MomentCard: React.FC<MomentCardProps> = ({
     () => formatRelativeTime(post.createdAt, t),
     [post.createdAt, t],
   );
+  const likedFriends = post.likedFriends;
+  const likedFriendsPreview = useMemo(
+    () => buildLikedFriendsPreview(likedFriends, i18n.language),
+    [likedFriends, i18n.language],
+  );
+  const commentThreads = useMemo(
+    () => buildMomentCommentThreads(post.comments ?? []),
+    [post.comments],
+  );
+  const commentPreview = useMemo(
+    () => getMomentCommentPreviewState(commentThreads, post.commentCount),
+    [commentThreads, post.commentCount],
+  );
+  const visibleCommentThreads = commentPreview.visibleThreads;
+  const hiddenCommentCount = commentPreview.hiddenCount;
+  const moreLikedFriendsPrefix =
+    likedFriendsPreview.separator === '、' ? '' : likedFriendsPreview.separator;
 
   const handleAvatarPress = useCallback(() => {
     router.push(getUserProfileHref('discover', post.author.id));
@@ -159,6 +192,79 @@ export const MomentCard: React.FC<MomentCardProps> = ({
           </View>
         </View>
 
+        {likedFriends.length > 0 || visibleCommentThreads.length > 0 ? (
+          <View style={[s.socialBlock, d.socialBlock]}>
+            {likedFriends.length > 0 ? (
+              <View style={s.likesRow}>
+                <Ionicons name="heart" size={13} color={colors.warning} />
+                <Text style={[d.likeText, { flex: 1 }]} numberOfLines={2}>
+                  {likedFriendsPreview.namesText}
+                  {likedFriendsPreview.hiddenCount > 0
+                    ? `${moreLikedFriendsPrefix}${t('moment.moreLikedFriends', {
+                        count: likedFriendsPreview.hiddenCount,
+                      })}`
+                    : ''}
+                </Text>
+              </View>
+            ) : null}
+
+            {visibleCommentThreads.map((thread) => (
+              <View key={thread.comment.id} style={s.commentThread}>
+                <Pressable
+                  style={s.commentRow}
+                  onPress={() => onPress(post.id)}
+                >
+                  <Text style={d.commentUser}>
+                    {thread.comment.user.nickname}
+                  </Text>
+                  {thread.comment.replyTo ? (
+                    <>
+                      <Text style={d.commentText}>
+                        {' '}{t('moment.reply')}{' '}
+                      </Text>
+                      <Text style={d.commentUser}>
+                        {thread.comment.replyTo.nickname}
+                      </Text>
+                    </>
+                  ) : null}
+                  <Text style={d.commentText}>: {thread.comment.content}</Text>
+                </Pressable>
+
+                {thread.replies.map((reply) => (
+                  <Pressable
+                    key={reply.id}
+                    style={[s.commentRow, s.replyRow]}
+                    onPress={() => onPress(post.id)}
+                  >
+                    <Text style={d.commentUser}>{reply.user.nickname}</Text>
+                    {reply.replyTo ? (
+                      <>
+                        <Text style={d.commentText}>
+                          {' '}{t('moment.reply')}{' '}
+                        </Text>
+                        <Text style={d.commentUser}>
+                          {reply.replyTo.nickname}
+                        </Text>
+                      </>
+                    ) : null}
+                    <Text style={d.commentText}>: {reply.content}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ))}
+
+            {hiddenCommentCount > 0 ? (
+              <Pressable
+                style={s.showMoreComments}
+                onPress={() => onPress(post.id)}
+              >
+                <Text style={d.showMoreCommentsText}>
+                  {t('moment.showMoreComments', { count: hiddenCommentCount })}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
       </View>
     </View>
   );
