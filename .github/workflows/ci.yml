@@ -111,6 +111,22 @@ jobs:
 
           exit "$audit_status"
 
+  secret-scan:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: TruffleHog
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified
+
   typecheck:
     name: Typecheck
     runs-on: ubuntu-latest
@@ -275,6 +291,7 @@ jobs:
     needs:
       - workflow-lint
       - security-audit
+      - secret-scan
       - typecheck
       - expo-config
       - expo-doctor
