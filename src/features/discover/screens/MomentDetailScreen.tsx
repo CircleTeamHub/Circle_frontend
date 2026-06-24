@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -19,6 +19,11 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { ImageGrid } from '@/features/discover/components/image-grid';
 import { MomentCommentInput } from '@/features/discover/components/moment-comment-input';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
+import {
+  buildMomentCommentThreads,
+  flattenMomentCommentThreads,
+  type MomentCommentRow,
+} from '@/features/discover/utils/moment-comments';
 import { getUserProfileHref } from '@/features/user/utils/routes';
 import {
   toggleMomentLike,
@@ -28,7 +33,7 @@ import {
 import { useMomentsStore } from '@/features/discover/store/use-moments-store';
 import { ApiError } from '@/services/api/client';
 import { getApiErrorMessage } from '@/services/api/errors';
-import type { MomentComment, MomentPost } from '@/types';
+import type { MomentPost } from '@/types';
 
 const s = StyleSheet.create({
   content: { paddingHorizontal: Spacing.lg },
@@ -53,10 +58,31 @@ const s = StyleSheet.create({
     paddingVertical: Spacing.md,
   },
   commentsTitle: { ...Typography.h3 },
+  detailRefreshError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.sm,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  detailRefreshErrorText: {
+    ...Typography.caption,
+    flex: 1,
+  },
+  detailRefreshRetry: {
+    ...Typography.caption,
+    fontWeight: '600',
+  },
   commentItem: {
     flexDirection: 'row',
     gap: Spacing.sm,
     paddingVertical: Spacing.sm + 2,
+  },
+  replyItem: {
+    marginLeft: 40,
   },
   commentBody: { flex: 1, gap: 2 },
   commentUser: { ...Typography.caption, fontWeight: '600' },
@@ -90,24 +116,35 @@ export default function MomentDetailScreen() {
   const [post, setPost] = useState<MomentPost | null>(storeMoment ?? null);
   const [loading, setLoading] = useState(!storeMoment);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const postRef = useRef<MomentPost | null>(storeMoment ?? null);
   const [commentTarget, setCommentTarget] = useState<{
     replyTo: { id: string; nickname: string } | null;
   } | null>(null);
 
-  // Sync from store when it updates
   useEffect(() => {
-    if (storeMoment) setPost(storeMoment);
+    postRef.current = post;
+  }, [post]);
+
+  // Use the store as an initial preview, but do not let feed preview comments
+  // overwrite the full detail payload after the detail fetch completes.
+  useEffect(() => {
+    if (storeMoment) {
+      setPost((current) => current ?? storeMoment);
+    }
   }, [storeMoment]);
 
   const loadMoment = useCallback(() => {
-    if (post || !id) {
+    if (!id) {
       return () => undefined;
     }
 
     let cancelled = false;
 
     (async () => {
-      setLoading(true);
+      const hasPreviewPost = Boolean(postRef.current);
+      if (!hasPreviewPost) {
+        setLoading(true);
+      }
       setLoadError(null);
 
       try {
@@ -128,7 +165,7 @@ export default function MomentDetailScreen() {
 
         setLoadError(getApiErrorMessage(error, t('moment.loadFailed')));
       } finally {
-        if (!cancelled) {
+        if (!cancelled && !hasPreviewPost) {
           setLoading(false);
         }
       }
@@ -137,7 +174,7 @@ export default function MomentDetailScreen() {
     return () => {
       cancelled = true;
     };
-  }, [id, post, t]);
+  }, [id, t]);
 
   // Fallback: fetch from API if not in store
   useEffect(() => loadMoment(), [loadMoment]);
@@ -153,6 +190,9 @@ export default function MomentDetailScreen() {
       commentText: { color: colors.text },
       commentTime: { color: colors.textSecondary },
       replyLabel: { color: colors.textSecondary },
+      detailRefreshError: { backgroundColor: colors.surface },
+      detailRefreshErrorText: { color: colors.textSecondary },
+      detailRefreshRetry: { color: colors.primary },
       emptyText: { color: colors.textSecondary, ...Typography.body },
     }),
     [colors],
@@ -216,6 +256,14 @@ export default function MomentDetailScreen() {
     () => (post ? formatRelativeTime(post.createdAt, t) : ''),
     [post, t],
   );
+  const commentThreads = useMemo(
+    () => buildMomentCommentThreads(post?.comments ?? []),
+    [post?.comments],
+  );
+  const commentRows = useMemo(
+    () => flattenMomentCommentThreads(commentThreads),
+    [commentThreads],
+  );
 
   if (loading) {
     return (
@@ -257,22 +305,22 @@ export default function MomentDetailScreen() {
     );
   }
 
-  const renderComment = ({ item }: { item: MomentComment }) => (
+  const renderCommentRow = ({ item }: { item: MomentCommentRow }) => (
     <View>
-      <View style={s.commentItem}>
-        <Avatar size={32} name={item.user.nickname} />
+      <View style={[s.commentItem, item.isReply ? s.replyItem : null]}>
+        <Avatar size={item.isReply ? 28 : 32} name={item.comment.user.nickname} />
         <View style={s.commentBody}>
           <Text style={[s.commentUser, d.commentUser]}>
-            {item.user.nickname}
-            {item.replyTo ? (
+            {item.comment.user.nickname}
+            {item.comment.replyTo ? (
               <Text style={[s.replyLabel, d.replyLabel]}>
-                {' '}{t('moment.reply')} {item.replyTo.nickname}
+                {' '}{t('moment.reply')} {item.comment.replyTo.nickname}
               </Text>
             ) : null}
           </Text>
-          <Text style={[s.commentText, d.commentText]}>{item.content}</Text>
+          <Text style={[s.commentText, d.commentText]}>{item.comment.content}</Text>
           <Text style={[s.commentTime, d.commentTime]}>
-            {new Date(item.createdAt).toLocaleString(
+            {new Date(item.comment.createdAt).toLocaleString(
               i18n.language || 'zh-CN',
               {
                 month: 'numeric',
@@ -286,7 +334,10 @@ export default function MomentDetailScreen() {
         <Pressable
           onPress={() =>
             setCommentTarget({
-              replyTo: { id: item.id, nickname: item.user.nickname },
+              replyTo: {
+                id: item.comment.id,
+                nickname: item.comment.user.nickname,
+              },
             })
           }
         >
@@ -296,6 +347,10 @@ export default function MomentDetailScreen() {
       <Divider />
     </View>
   );
+
+  const commentCountLabel = post.commentCount > 0
+    ? t('moment.commentsCount', { count: post.commentCount })
+    : t('moment.comments');
 
   const ListHeader = (
     <View style={s.content}>
@@ -350,8 +405,20 @@ export default function MomentDetailScreen() {
 
       {/* Comments header */}
       <View style={s.commentsHeader}>
+        {loadError && post ? (
+          <View style={[s.detailRefreshError, d.detailRefreshError]}>
+            <Text style={[s.detailRefreshErrorText, d.detailRefreshErrorText]}>
+              {t('moment.detailRefreshFailed')}
+            </Text>
+            <Pressable onPress={loadMoment}>
+              <Text style={[s.detailRefreshRetry, d.detailRefreshRetry]}>
+                {t('common.retry')}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
         <Text style={[s.commentsTitle, d.commentsTitle]}>
-          {post.comments.length > 0 ? t('moment.commentsCount', { count: post.comments.length }) : t('moment.comments')}
+          {commentCountLabel}
         </Text>
       </View>
     </View>
@@ -361,9 +428,9 @@ export default function MomentDetailScreen() {
     <View style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader title={t('moment.detail')} />
       <FlatList
-        data={post.comments}
+        data={commentRows}
         keyExtractor={(item) => item.id}
-        renderItem={renderComment}
+        renderItem={renderCommentRow}
         ListHeaderComponent={ListHeader}
         contentContainerStyle={{ paddingHorizontal: Spacing.lg, paddingBottom: 100 }}
         ListEmptyComponent={
