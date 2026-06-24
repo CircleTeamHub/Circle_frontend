@@ -8,7 +8,7 @@ import {
   ToastAndroid,
   View,
 } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +16,7 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-filter-store';
+import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
 
 const s = StyleSheet.create({
   container: {
@@ -100,8 +101,10 @@ export default function FilterScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
 
-  const allCircles = useCirclesStore((st) => st.allCircles);
-  const fetchAllCircles = useCirclesStore((st) => st.fetchAllCircles);
+  const joinedCircles = useCirclesStore((st) => st.joinedCircles);
+  const createdCircles = useCirclesStore((st) => st.createdCircles);
+  const fetchMyCircles = useCirclesStore((st) => st.fetchMyCircles);
+  const setPlazaFilter = useDiscoverStore((st) => st.setPlazaFilter);
 
   const draftCircleIds = useDiscoverFilterStore((st) => st.draftCircleIds);
   const draftCities = useDiscoverFilterStore((st) => st.draftCities);
@@ -114,24 +117,28 @@ export default function FilterScreen() {
   const saveFilter = useDiscoverFilterStore((st) => st.saveFilter);
 
   useEffect(() => {
-    if (allCircles.length === 0) {
-      fetchAllCircles();
-    }
-  }, [allCircles.length, fetchAllCircles]);
+    fetchMyCircles();
+  }, [fetchMyCircles]);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadDraftFromApplied();
-    }, [loadDraftFromApplied]),
-  );
+  useEffect(() => {
+    loadDraftFromApplied();
+  }, [loadDraftFromApplied]);
+
+  const myFilterCircles = useMemo(() => {
+    const byId = new Map(joinedCircles.map((circle) => [circle.id, circle]));
+    for (const circle of createdCircles) {
+      byId.set(circle.id, circle);
+    }
+    return [...byId.values()];
+  }, [createdCircles, joinedCircles]);
 
   const circleNameById = useMemo(() => {
     const map = new Map<string, string>();
-    for (const circle of allCircles) {
+    for (const circle of myFilterCircles) {
       map.set(circle.id, circle.name);
     }
     return map;
-  }, [allCircles]);
+  }, [myFilterCircles]);
 
   const selectedCircles = useMemo(
     () =>
@@ -159,13 +166,14 @@ export default function FilterScreen() {
 
   const handleSave = useCallback(() => {
     saveFilter();
+    setPlazaFilter(null, null);
     // Android 用 Toast 给即时反馈；iOS 没有 Toast API，依赖 router.back() 的导航动画
     // 作为「保存成功」的隐式反馈。Toast 视觉跨平台对齐留作后续 UI 决策（#50）。
     if (Platform.OS === 'android') {
       ToastAndroid.show(t('discover.filter.saved'), ToastAndroid.SHORT);
     }
     router.back();
-  }, [router, saveFilter, t]);
+  }, [router, saveFilter, setPlazaFilter, t]);
 
   const d = useMemo(
     () => ({
@@ -182,7 +190,7 @@ export default function FilterScreen() {
         ...Typography.caption,
         fontWeight: '600' as const,
       },
-      chipRemove: { backgroundColor: colors.error },
+      chipRemove: { backgroundColor: colors.primaryLight },
       emptyHint: {
         color: colors.textSecondary,
         ...Typography.caption,
@@ -247,7 +255,7 @@ export default function FilterScreen() {
                     onPress={() => removeDraftCircle(circle.id)}
                     hitSlop={6}
                   >
-                    <Ionicons name="remove" size={14} color={colors.white} />
+                    <Ionicons name="close" size={13} color={colors.primary} />
                   </Pressable>
                 </View>
               ))}
@@ -291,7 +299,7 @@ export default function FilterScreen() {
                     onPress={() => removeDraftCity(city)}
                     hitSlop={6}
                   >
-                    <Ionicons name="remove" size={14} color={colors.white} />
+                    <Ionicons name="close" size={13} color={colors.primary} />
                   </Pressable>
                 </View>
               ))}

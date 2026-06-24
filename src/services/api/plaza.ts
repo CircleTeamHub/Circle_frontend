@@ -27,7 +27,9 @@ function normalizePlazaPost(post: CirclePlazaPost): CirclePlazaPost {
 
 export async function fetchPlazaFeed(params?: {
   circleId?: string;
+  circleIds?: string;
   city?: string;
+  cities?: string;
   page?: number;
   limit?: number;
 }): Promise<PaginatedResponse<CirclePlazaPost>> {

@@ -36,6 +36,7 @@ module.exports = { API_URL };
     Platform: {
       OS: options.platform ?? 'ios',
     },
+    APP_DISPLAY_NAME: '风信',
   };
   context.exports = context.module.exports;
 

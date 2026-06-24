@@ -36,3 +36,10 @@ test("bottom sheets avoid native slide modal animation that lifts the dark backd
   assert.match(sharedSheet, /Animated\.View/);
   assert.match(sharedSheet, /translateY/);
 });
+
+test("bottom sheet inner content fills fixed-height sheets", () => {
+  const sharedSheet = read("src/components/ui/bottom-sheet-modal.tsx");
+
+  assert.match(sharedSheet, /innerContent:\s*\{[\s\S]*flex:\s*1,?[\s\S]*\}/);
+  assert.match(sharedSheet, /<Pressable\s+style=\{s\.innerContent\}\s+onPress=\{\(\) => \{\}\}/);
+});

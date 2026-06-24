@@ -71,7 +71,7 @@ function normalizePath(path: string) {
   return path.replace(/^file:\/\//, '').replace(/\/+$/, '');
 }
 
-function getUniquePaths(candidatePaths: Array<string | null | undefined>) {
+function getUniquePaths(candidatePaths: (string | null | undefined)[]) {
   const paths = candidatePaths.filter((path): path is string => Boolean(path));
 
   return Array.from(new Set(paths.map(normalizePath))).filter(Boolean);

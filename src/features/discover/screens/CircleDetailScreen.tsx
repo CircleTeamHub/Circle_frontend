@@ -17,8 +17,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Divider } from '@/components/ui/divider';
-import { MenuRow } from '@/components/ui/menu-row';
-import { Avatar } from '@/components/ui/avatar';
 import {
   fetchCircleDetail,
   selectCircleIcon,
@@ -30,8 +28,6 @@ import {
   sanitizeUploadFilename,
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
-import { useCirclesStore } from '@/features/discover/store/use-circles-store';
-import { useAuthStore } from '@/stores/authStore';
 import { getOrCreateGroupConversation } from '@/im/client';
 import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
 import type { CircleDetail } from '@/types';

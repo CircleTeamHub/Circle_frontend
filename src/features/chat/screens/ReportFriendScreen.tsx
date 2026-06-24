@@ -21,11 +21,11 @@ import { reportGroup } from '@/services/api/groups';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
-const CATEGORY_OPTIONS: ReadonlyArray<{
+const CATEGORY_OPTIONS: readonly {
   id: FriendReportCategory;
   label: string;
   description: string;
-}> = [
+}[] = [
   { id: 'harassment', label: '骚扰', description: '言语攻击、性骚扰、人身威胁' },
   { id: 'spam', label: '垃圾信息', description: '广告、刷屏、诱导引流' },
   { id: 'impersonation', label: '冒充他人', description: '盗用身份、虚假身份' },

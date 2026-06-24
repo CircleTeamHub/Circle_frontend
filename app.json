@@ -1,31 +1,33 @@
 {
   "expo": {
-    "name": "Circle IM",
-    "slug": "circle-im",
+    "name": "风信",
+    "slug": "windnote-ai",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "circleim",
+    "scheme": ["windnoteai", "circleim"],
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1A1B23"
+      "backgroundColor": "#FFFFFF"
     },
     "ios": {
       "bundleIdentifier": "com.yiboding.circleim",
       "supportsTablet": true,
       "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "允许 Circle IM 访问你的照片，用于选择并上传头像。",
-        "NSLocationWhenInUseUsageDescription": "允许 Circle IM 在使用期间获取位置，用于在聊天中分享当前位置。",
-        "NSCameraUsageDescription": "允许 Circle IM 使用相机扫描二维码。",
-        "NSMicrophoneUsageDescription": "允许 Circle IM 使用麦克风录制语音消息并进行语音通话。"
+        "NSPhotoLibraryUsageDescription": "允许风信访问你的照片，用于选择并上传头像。",
+        "NSLocationWhenInUseUsageDescription": "允许风信在使用期间获取位置，用于在聊天中分享当前位置。",
+        "NSCameraUsageDescription": "允许风信使用相机扫描二维码。",
+        "NSMicrophoneUsageDescription": "允许风信使用麦克风录制语音消息并进行语音通话。"
       }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#1A1B23",
-        "foregroundImage": "./assets/images/icon.png"
+        "backgroundColor": "#FFFFFF",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.yiboding.circleim"
@@ -55,20 +57,21 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "允许 Circle IM 使用相机扫描二维码。",
-          "microphonePermission": "允许 Circle IM 使用麦克风录制语音消息并进行语音通话。",
+          "cameraPermission": "允许风信使用相机扫描二维码。",
+          "microphonePermission": "允许风信使用麦克风录制语音消息并进行语音通话。",
           "recordAudioAndroid": false
         }
       ],
       [
         "expo-audio",
         {
-          "microphonePermission": "允许 Circle IM 使用麦克风录制语音消息并进行语音通话。",
+          "microphonePermission": "允许风信使用麦克风录制语音消息并进行语音通话。",
           "recordAudioAndroid": true,
           "enableBackgroundPlayback": false,
           "enableBackgroundRecording": false
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true

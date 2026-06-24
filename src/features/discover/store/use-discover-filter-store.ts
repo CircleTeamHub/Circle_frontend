@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { mmkvJsonStorage } from '@/storage';
+import { clampCircleFilterIds } from '@/features/discover/utils/circle-filter-selection';
 
 interface DiscoverFilterState {
   appliedCircleIds: string[];
@@ -28,12 +29,13 @@ export const useDiscoverFilterStore = create<DiscoverFilterState>()(
       loadDraftFromApplied: () => {
         const { appliedCircleIds, appliedCities } = get();
         set({
-          draftCircleIds: [...appliedCircleIds],
+          draftCircleIds: clampCircleFilterIds(appliedCircleIds),
           draftCities: [...appliedCities],
         });
       },
 
-      setDraftCircleIds: (ids) => set({ draftCircleIds: ids }),
+      setDraftCircleIds: (ids) =>
+        set({ draftCircleIds: clampCircleFilterIds(ids) }),
       setDraftCities: (cities) => set({ draftCities: cities }),
 
       removeDraftCircle: (id) =>
@@ -51,7 +53,7 @@ export const useDiscoverFilterStore = create<DiscoverFilterState>()(
       saveFilter: () => {
         const { draftCircleIds, draftCities } = get();
         set({
-          appliedCircleIds: [...draftCircleIds],
+          appliedCircleIds: clampCircleFilterIds(draftCircleIds),
           appliedCities: [...draftCities],
         });
       },

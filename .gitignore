@@ -57,3 +57,6 @@ images/generated-*.png
 design.pen
 images/generated-*.png
 design.pen
+
+# 本地测试账号（含明文凭证，仅本机 dev 用，勿入库）
+docs/LOCAL_TEST_ACCOUNTS.md

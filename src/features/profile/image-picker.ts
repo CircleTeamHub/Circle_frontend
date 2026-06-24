@@ -4,6 +4,8 @@ type ImagePickerModule = typeof ExpoImagePicker;
 
 export function loadImagePickerModule(): ImagePickerModule | null {
   try {
+    // Lazy sync load lets callers handle missing native modules in Expo Go/tests.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require('expo-image-picker') as ImagePickerModule;
   } catch (error) {
     const message =

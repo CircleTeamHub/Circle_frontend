@@ -1,4 +1,4 @@
-import { mmkvJsonStorage } from '@/storage';
+import { secureAuthStorage } from '@/storage/secure-auth-storage';
 import { useAuthStore } from '@/stores/authStore';
 import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
@@ -30,6 +30,13 @@ async function resetMessageGroupsStore() {
   useMessageGroupsStore.getState().reset();
 }
 
+async function resetCirclesStore() {
+  const { useCirclesStore } = await import(
+    '@/features/discover/store/use-circles-store'
+  );
+  useCirclesStore.getState().reset();
+}
+
 /**
  * 注册登出 teardown 钩子，返回反注册函数。HMR / 测试场景下可避免 handler 累积。
  * 同一个 handler 重复注册时只会保留一份。
@@ -59,6 +66,7 @@ export async function clearLocalSession() {
   // 避免 dependent store 被清空后触发"重新拉取"再被丢弃的请求。
   useAuthStore.getState().clearSession();
   await resetMessageGroupsStore();
+  await resetCirclesStore();
   useFriendActivityUnreadStore.getState().reset();
   useTabBadgeStore.getState().reset();
   useWalletRealtimeStore.getState().reset();
@@ -70,13 +78,13 @@ export async function clearLocalSession() {
   } catch (err) {
     if (isDev) console.warn('[session] persist.clearStorage failed', err);
   }
-  // 兜底：persist 未挂或 clearStorage 抛错时，直接对 MMKV key 显式清理。
+  // 兜底：persist 未挂或 clearStorage 抛错时，直接对 SecureStore + legacy MMKV key 显式清理。
   // tokens 留在磁盘比"登出失败"提示风险更高 —— 下次启动会自动重新认证回这个用户。
   if (!persistCleared) {
     try {
-      await mmkvJsonStorage.removeItem('circle-im-auth');
+      await secureAuthStorage.removeItem('circle-im-auth');
     } catch (err) {
-      if (isDev) console.warn('[session] mmkv removeItem fallback failed', err);
+      if (isDev) console.warn('[session] secure auth removeItem fallback failed', err);
     }
   }
 

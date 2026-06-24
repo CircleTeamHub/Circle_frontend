@@ -93,6 +93,8 @@ export const MomentCard: React.FC<MomentCardProps> = ({
     () => formatRelativeTime(post.createdAt, t),
     [post.createdAt, t],
   );
+  const comments = post.comments ?? [];
+  const likedFriends = post.likedFriends ?? [];
 
   const handleAvatarPress = useCallback(() => {
     router.push(getUserProfileHref('discover', post.author.id));
@@ -159,6 +161,39 @@ export const MomentCard: React.FC<MomentCardProps> = ({
           </View>
         </View>
 
+        {likedFriends.length > 0 || comments.length > 0 ? (
+          <View style={[s.socialBlock, d.socialBlock]}>
+            {likedFriends.length > 0 ? (
+              <View style={s.likesRow}>
+                <Ionicons name="heart" size={13} color={colors.warning} />
+                <Text style={d.likeText}>
+                  {likedFriends.map((friend) => friend.nickname).join('、')}
+                </Text>
+              </View>
+            ) : null}
+
+            {comments.map((comment) => (
+              <Pressable
+                key={comment.id}
+                style={s.commentRow}
+                onPress={() => onPress(post.id)}
+              >
+                <Text style={d.commentUser}>{comment.user.nickname}</Text>
+                {comment.replyTo ? (
+                  <>
+                    <Text style={d.commentText}>
+                      {' '}{t('moment.reply')}{' '}
+                    </Text>
+                    <Text style={d.commentUser}>
+                      {comment.replyTo.nickname}
+                    </Text>
+                  </>
+                ) : null}
+                <Text style={d.commentText}>: {comment.content}</Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
       </View>
     </View>
   );

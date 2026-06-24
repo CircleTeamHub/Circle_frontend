@@ -8,6 +8,7 @@ type BuildInitialCityPickerStateArgs = {
   isMultiSelect: boolean;
   singleCity: string | null;
   multiCities: string[];
+  emptyMultiSelectIsNationwide?: boolean;
 };
 
 type ToggleCitySelectionArgs = {
@@ -21,11 +22,12 @@ export function buildInitialCityPickerState({
   isMultiSelect,
   singleCity,
   multiCities,
+  emptyMultiSelectIsNationwide = true,
 }: BuildInitialCityPickerStateArgs) {
   if (isMultiSelect) {
     return {
       selected: multiCities,
-      isNationwide: multiCities.length === 0,
+      isNationwide: emptyMultiSelectIsNationwide && multiCities.length === 0,
     };
   }
 

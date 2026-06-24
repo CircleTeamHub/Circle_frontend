@@ -253,7 +253,7 @@ export default function ContactsScreen() {
         {index < section.data.length - 1 && <Divider />}
       </View>
     ),
-    [d, handleOpenFriend],
+    [d, handleOpenFriend, t],
   );
 
   const renderSectionHeader = useCallback(

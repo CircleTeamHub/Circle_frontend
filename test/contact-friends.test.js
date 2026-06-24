@@ -114,9 +114,9 @@ test('pickExactAccountMatch prefers case-insensitive exact account matches over 
     '@/services/api/utils': { normalizeUser: (value) => value },
   });
 
-  const match = pickExactAccountMatch('ACC_100', [
-    { id: 'user-1', accountId: 'ACC_1000' },
-    { id: 'user-2', accountId: 'acc_100' },
+  const match = pickExactAccountMatch('AB100C', [
+    { id: 'user-1', accountId: 'AB1000' },
+    { id: 'user-2', accountId: 'ab100c' },
     { id: 'user-3', accountId: 'something-else' },
   ]);
 

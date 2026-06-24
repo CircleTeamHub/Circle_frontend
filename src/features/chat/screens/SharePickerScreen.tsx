@@ -37,7 +37,7 @@ function shareTitle(type: ShareType): string {
   }
 }
 
-const QUICK_REPLY_DEFAULTS: ReadonlyArray<string> = [
+const QUICK_REPLY_DEFAULTS: readonly string[] = [
   '在的，你说',
   '好的，没问题',
   '收到，稍等一下',
@@ -46,7 +46,7 @@ const QUICK_REPLY_DEFAULTS: ReadonlyArray<string> = [
   '哈哈，太有意思了',
 ];
 
-function getQuickReplyPhrases(): ReadonlyArray<string> {
+function getQuickReplyPhrases(): readonly string[] {
   return QUICK_REPLY_DEFAULTS.map((phrase, index) =>
     i18n.t(`share.quickReply.${index}`, { defaultValue: phrase }),
   );
@@ -144,7 +144,7 @@ export default function SharePickerScreen() {
     return quickReplyPhrases.filter((p) =>
       p.toLowerCase().includes(trimmed),
     );
-  }, [trimmed]);
+  }, [quickReplyPhrases, trimmed]);
 
   const handleSelect = useCallback(
     (item: NoteSummary | FriendProfile | UserCollection | string) => {

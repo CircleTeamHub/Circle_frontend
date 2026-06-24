@@ -82,6 +82,27 @@ export function getEditFriendTagsHref(
   }
 }
 
+export function getUserMomentsHref(
+  scope: UserProfileScope,
+  id: string,
+  name?: string,
+): Href {
+  const params = name ? { id, name } : { id };
+  const href = (pathname: string): Href => ({ pathname, params }) as Href;
+
+  switch (scope) {
+    case 'contacts':
+      return href('/(tabs)/contacts/user/[id]/moments');
+    case 'profile':
+      return href('/(tabs)/profile/user/[id]/moments');
+    case 'discover':
+      return href('/(tabs)/discover/user/[id]/moments');
+    case 'messages':
+    default:
+      return href('/(tabs)/messages/user/[id]/moments');
+  }
+}
+
 export function getFriendActivityDetailHref(id: string): Href {
   return { pathname: '/(tabs)/contacts/new-friends/[id]', params: { id } };
 }

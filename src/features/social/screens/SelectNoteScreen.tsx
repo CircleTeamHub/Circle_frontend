@@ -95,7 +95,7 @@ export default function SelectNoteScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
 
   const filteredNotes = useMemo(() => {
     const q = search.trim().toLowerCase();

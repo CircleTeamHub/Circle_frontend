@@ -47,6 +47,20 @@ test('multi-select mode treats empty selection as nationwide', () => {
   });
 });
 
+test('filter multi-select mode treats empty selection as no city filter', () => {
+  const state = buildInitialCityPickerState({
+    isMultiSelect: true,
+    singleCity: null,
+    multiCities: [],
+    emptyMultiSelectIsNationwide: false,
+  });
+
+  assert.deepEqual(state, {
+    selected: [],
+    isNationwide: false,
+  });
+});
+
 test('single-select mode replaces the previous city instead of appending', () => {
   const result = toggleCitySelection({
     current: ['上海'],

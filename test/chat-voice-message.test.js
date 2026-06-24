@@ -66,7 +66,9 @@ test('app config enables native microphone recording permissions for expo-audio'
   });
 
   assert.ok(audioPlugin);
-  assert.equal(audioPlugin[1].microphonePermission, '允许 Circle IM 使用麦克风录制并发送语音消息。');
+  // 麦克风权限串与 ios.infoPlist.NSMicrophoneUsageDescription 及 expo-camera 插件保持一致：
+  // app 现在既录语音消息也做语音通话，故文案需覆盖两者。
+  assert.equal(audioPlugin[1].microphonePermission, '允许风信使用麦克风录制语音消息并进行语音通话。');
   assert.equal(audioPlugin[1].recordAudioAndroid, true);
 });
 
@@ -361,6 +363,7 @@ test('sendVoiceMessageFromSource throws (no silent no-op) when nothing is playab
 });
 
 test('OpenIM voice messages map to a dedicated ChatMessage voice bubble model', () => {
+  const voiceSendTime = new Date(2024, 0, 2, 12, 0, 0).getTime();
   const { mapMessageItemToChatMessage } = loadTsModule('src/im/mappers.ts', {
     '@openim/rn-client-sdk': {
       MessageType: {
@@ -399,7 +402,7 @@ test('OpenIM voice messages map to a dedicated ChatMessage voice bubble model', 
       sendID: 'peer-1',
       senderNickname: 'Peer',
       contentType: 103,
-      sendTime: 1000,
+      sendTime: voiceSendTime,
       status: 2,
       isRead: false,
       content: '',
@@ -417,7 +420,7 @@ test('OpenIM voice messages map to a dedicated ChatMessage voice bubble model', 
   assert.deepEqual(normalize(mapped), {
     id: 'voice-1',
     type: 'voice',
-    time: '12/31',
+    time: '1/2',
     senderID: 'peer-1',
     outgoing: false,
     senderName: 'Peer',
