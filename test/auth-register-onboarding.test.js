@@ -77,24 +77,29 @@ test('onboarding route and screen save profile then enter the app', () => {
 test('onboarding profile city is selected from the city picker instead of typed', () => {
   const screen = read('src/features/auth/screens/OnboardingProfileScreen.tsx');
 
-  assert.match(screen, /BottomSheetModal/);
-  assert.match(screen, /CITY_PROVINCES/);
-  assert.match(screen, /findProvinceByCity/);
-  assert.match(screen, /openCityPicker/);
+  // The screen delegates the province/city picker to the CityPickerSheet
+  // component rather than embedding the modal inline.
+  assert.match(screen, /CityPickerSheet/);
   assert.match(screen, /handleConfirmCity/);
   assert.doesNotMatch(screen, /onChangeText=\{setCity\}/);
   assert.doesNotMatch(screen, /maxLength=\{30\}/);
+
+  // The picker logic itself lives in the extracted component.
+  const sheet = read('src/features/auth/components/CityPickerSheet.tsx');
+  assert.match(sheet, /BottomSheetModal/);
+  assert.match(sheet, /CITY_PROVINCES/);
+  assert.match(sheet, /findProvinceByCity/);
 });
 
 test('onboarding city picker sheet uses a taller flexible layout', () => {
-  const screen = read('src/features/auth/screens/OnboardingProfileScreen.tsx');
+  const sheet = read('src/features/auth/components/CityPickerSheet.tsx');
 
-  assert.match(screen, /modalCard:\s*\{[\s\S]*height:\s*'82%'/);
-  assert.match(screen, /modalHeader:\s*\{[\s\S]*marginBottom:\s*Spacing\.sm/);
-  assert.match(screen, /pickerColumns:\s*\{[\s\S]*flex:\s*1/);
-  assert.match(screen, /pickerList:\s*\{[\s\S]*flex:\s*1/);
-  assert.doesNotMatch(screen, /maxHeight:\s*'70%'/);
-  assert.doesNotMatch(screen, /maxHeight:\s*260/);
+  assert.match(sheet, /modalCard:\s*\{[\s\S]*height:\s*'82%'/);
+  assert.match(sheet, /modalHeader:\s*\{[\s\S]*marginBottom:\s*Spacing\.sm/);
+  assert.match(sheet, /pickerColumns:\s*\{[\s\S]*flex:\s*1/);
+  assert.match(sheet, /pickerList:\s*\{[\s\S]*flex:\s*1/);
+  assert.doesNotMatch(sheet, /maxHeight:\s*'70%'/);
+  assert.doesNotMatch(sheet, /maxHeight:\s*260/);
 });
 
 test('root index respects onboarding-required sessions', () => {

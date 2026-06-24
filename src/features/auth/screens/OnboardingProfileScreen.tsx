@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -16,11 +16,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Avatar } from '@/components/ui/avatar';
-import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
-import {
-  CITY_PROVINCES,
-  findProvinceByCity,
-} from '@/features/profile/city-options';
+import { CityPickerSheet } from '@/features/auth/components/CityPickerSheet';
+import { useOnboardingStyles } from '@/features/auth/hooks/use-onboarding-styles';
 import {
   toProfileUpdatePayload,
   validateProfileFieldValue,
@@ -123,41 +120,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  modalCard: {
-    height: '82%',
-    borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    gap: Spacing.md,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  pickerColumns: {
-    flex: 1,
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  pickerColumn: {
-    flex: 1,
-  },
-  pickerList: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: Radius.lg,
-  },
-  pickerListContent: {
-    paddingVertical: Spacing.xs,
-  },
-  pickerItem: {
-    minHeight: 46,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
 });
 
 type GenderOption = {
@@ -201,12 +163,6 @@ export default function OnboardingProfileScreen() {
   const [bio, setBio] = useState(user?.persona ?? '');
   const [city, setCity] = useState(user?.city ?? '');
   const [isCityPickerVisible, setIsCityPickerVisible] = useState(false);
-  const [cityDraftRegion, setCityDraftRegion] = useState(() =>
-    findProvinceByCity(user?.city ?? '').name,
-  );
-  const [cityDraftValue, setCityDraftValue] = useState(() =>
-    user?.city?.trim() ?? '',
-  );
   const [gender, setGender] = useState(user?.gender ?? 'unset');
   const [selectedAvatarUri, setSelectedAvatarUri] = useState<string | null>(null);
   const [selectedAvatarFileName, setSelectedAvatarFileName] = useState<string | null>(null);
@@ -214,110 +170,7 @@ export default function OnboardingProfileScreen() {
   const [isSaving, setIsSaving] = useState(false);
 
   const avatarPreviewUri = selectedAvatarUri ?? user?.avatarUrl ?? null;
-  const cityRegion = useMemo(
-    () =>
-      CITY_PROVINCES.find((region) => region.name === cityDraftRegion) ??
-      CITY_PROVINCES[0],
-    [cityDraftRegion],
-  );
-  const cityOptions = cityRegion.cities;
-
-  const d = useMemo(
-    () => ({
-      page: {
-        backgroundColor: colors.background,
-      },
-      title: {
-        color: colors.text,
-        ...Typography.h1,
-      },
-      subtitle: {
-        color: colors.textSecondary,
-        ...Typography.bodyRegular,
-      },
-      label: {
-        color: colors.text,
-      },
-      input: {
-        backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
-        color: colors.text,
-        ...Typography.bodyRegular,
-      },
-      selectInput: {
-        backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
-      },
-      selectText: {
-        color: colors.text,
-        ...Typography.bodyRegular,
-      },
-      selectPlaceholder: {
-        color: colors.textSecondary,
-      },
-      avatarButton: {
-        backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
-      },
-      avatarButtonText: {
-        color: colors.text,
-        ...Typography.body,
-        fontWeight: '600' as const,
-      },
-      optionChip: {
-        backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
-      },
-      optionChipActive: {
-        backgroundColor: colors.primary,
-        borderColor: colors.primary,
-      },
-      optionText: {
-        color: colors.text,
-        ...Typography.small,
-        fontWeight: '600' as const,
-      },
-      optionTextActive: {
-        color: colors.white,
-      },
-      button: {
-        backgroundColor: colors.primary,
-      },
-      buttonText: {
-        color: colors.white,
-        ...Typography.body,
-        fontWeight: '700' as const,
-      },
-      modalBackdrop: {
-        backgroundColor: colors.overlay,
-      },
-      modalCard: {
-        backgroundColor: colors.background,
-      },
-      modalTitle: {
-        color: colors.text,
-        ...Typography.h3,
-      },
-      pickerList: {
-        backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
-      },
-      pickerItemText: {
-        color: colors.textSecondary,
-        ...Typography.bodyRegular,
-      },
-      pickerItemTextActive: {
-        color: colors.primary,
-        fontWeight: '700' as const,
-      },
-      actionText: {
-        color: colors.primary,
-        ...Typography.body,
-        fontWeight: '600' as const,
-      },
-    }),
-    [colors],
-  );
+  const d = useOnboardingStyles();
 
   async function handlePickAvatar() {
     const imagePicker = loadImagePickerModule();
@@ -393,16 +246,8 @@ export default function OnboardingProfileScreen() {
     return null;
   }
 
-  function openCityPicker() {
-    const nextRegion = findProvinceByCity(city);
-    setCityDraftRegion(nextRegion.name);
-    setCityDraftValue(city.trim() || nextRegion.cities[0] || '');
-    setIsCityPickerVisible(true);
-  }
-
-  function handleConfirmCity() {
-    const nextValue = cityDraftValue.trim() || cityOptions[0] || '';
-    setCity(nextValue);
+  function handleConfirmCity(nextCity: string) {
+    setCity(nextCity);
     setIsCityPickerVisible(false);
   }
 
@@ -574,7 +419,7 @@ export default function OnboardingProfileScreen() {
           <Text style={[s.label, d.label]}>{t('profileFields.city')}</Text>
           <Pressable
             style={[s.selectInput, s.selectField, d.selectInput]}
-            onPress={openCityPicker}
+            onPress={() => setIsCityPickerVisible(true)}
             disabled={isSaving}
           >
             <Text
@@ -607,89 +452,12 @@ export default function OnboardingProfileScreen() {
           )}
         </Pressable>
       </ScrollView>
-      <BottomSheetModal
+      <CityPickerSheet
         visible={isCityPickerVisible}
+        initialCity={city}
         onClose={() => setIsCityPickerVisible(false)}
-        backdropStyle={d.modalBackdrop}
-        sheetStyle={[
-          s.modalCard,
-          d.modalCard,
-          { paddingBottom: insets.bottom + Spacing.lg },
-        ]}
-      >
-        <View style={s.modalHeader}>
-          <Pressable onPress={() => setIsCityPickerVisible(false)}>
-            <Text style={d.actionText}>{t('common.cancel')}</Text>
-          </Pressable>
-          <Text style={d.modalTitle}>{t('profileFields.selectProvince')}</Text>
-          <Pressable onPress={handleConfirmCity}>
-            <Text style={d.actionText}>{t('common.confirm')}</Text>
-          </Pressable>
-        </View>
-
-        <View style={s.pickerColumns}>
-          <View style={s.pickerColumn}>
-            <ScrollView
-              style={[s.pickerList, d.pickerList]}
-              contentContainerStyle={s.pickerListContent}
-              showsVerticalScrollIndicator={false}
-            >
-              {CITY_PROVINCES.map((region) => {
-                const isActive = cityDraftRegion === region.name;
-                return (
-                  <Pressable
-                    key={region.name}
-                    style={s.pickerItem}
-                    onPress={() => {
-                      setCityDraftRegion(region.name);
-                      if (!region.cities.includes(cityDraftValue)) {
-                        setCityDraftValue(region.cities[0] ?? '');
-                      }
-                    }}
-                  >
-                    <Text
-                      style={[
-                        d.pickerItemText,
-                        isActive ? d.pickerItemTextActive : null,
-                      ]}
-                    >
-                      {region.name}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-
-          <View style={s.pickerColumn}>
-            <ScrollView
-              style={[s.pickerList, d.pickerList]}
-              contentContainerStyle={s.pickerListContent}
-              showsVerticalScrollIndicator={false}
-            >
-              {cityOptions.map((option) => {
-                const isActive = cityDraftValue === option;
-                return (
-                  <Pressable
-                    key={option}
-                    style={s.pickerItem}
-                    onPress={() => setCityDraftValue(option)}
-                  >
-                    <Text
-                      style={[
-                        d.pickerItemText,
-                        isActive ? d.pickerItemTextActive : null,
-                      ]}
-                    >
-                      {option}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </View>
-      </BottomSheetModal>
+        onConfirm={handleConfirmCity}
+      />
     </KeyboardAvoidingView>
   );
 }
