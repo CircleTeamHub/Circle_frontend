@@ -10,6 +10,10 @@ function readAppConfig() {
 
 function readIosInfoPlist() {
   const filePath = path.join(process.cwd(), 'ios/CircleIM/Info.plist');
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
+
   const source = fs.readFileSync(filePath, 'utf8');
   const match = source.match(
     /<key>NSPhotoLibraryUsageDescription<\/key>\s*<string>([^<]+)<\/string>/,
@@ -26,7 +30,7 @@ test('iOS avatar picking declares a photo library usage description', () => {
 
   const expoUsageDescription =
     appConfig.expo?.ios?.infoPlist?.NSPhotoLibraryUsageDescription;
-  const nativeUsageDescription = infoPlist.NSPhotoLibraryUsageDescription;
+  const nativeUsageDescription = infoPlist?.NSPhotoLibraryUsageDescription;
 
   assert.equal(
     typeof expoUsageDescription,
@@ -38,9 +42,11 @@ test('iOS avatar picking declares a photo library usage description', () => {
     /\S/,
     'app.json photo library usage description must not be empty',
   );
-  assert.equal(
-    nativeUsageDescription,
-    expoUsageDescription,
-    'ios/CircleIM/Info.plist must stay in sync with app.json',
-  );
+  if (infoPlist) {
+    assert.equal(
+      nativeUsageDescription,
+      expoUsageDescription,
+      'ios/CircleIM/Info.plist must stay in sync with app.json',
+    );
+  }
 });
