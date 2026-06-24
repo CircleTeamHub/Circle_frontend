@@ -1,336 +1,473 @@
-# 🟣 Circle IM
+# 风信 windnote.ai 项目 PRD
 
-A polished, production-grade instant messaging UI built with **React Native**, **Expo Router**, and **TypeScript**. Circle IM delivers a WeChat-inspired chat experience with a custom design system, dark/light theming, and smooth native navigation — all as a standalone frontend application.
+更新时间：2026-06-24  
+文档状态：草案  
+覆盖范围：`circle-im` 前端应用仓库，包含当前已实现能力、生产化缺口和后续路线图。  
 
-> **Note:** This is a **frontend-only** implementation. All data is currently mocked. No real-time messaging or backend services are connected.
+## 1. 项目概述
 
----
+风信（windnote.ai）是一款面向熟人关系、即时沟通和轻量内容分享的移动端社交应用。当前产品形态以 Expo / React Native 客户端为核心，围绕账号登录、OpenIM 即时通讯、联系人关系、发现页内容流、朋友圈/动态、笔记、个人中心和基础商业化入口构建。
 
-## 📐 Design Goals
+项目早期命名为 Circle / Circle IM，当前正在向“风信 / windnote.ai”品牌迁移。应用仍保留部分兼容能力，例如历史 deep link scheme、旧域名和旧模块命名，以降低迁移风险。
 
-- **Pixel-perfect UI** — Every screen follows an 8pt grid system with consistent spacing, typography, and color tokens
-- **Dark & Light Themes** — Full dual-theme support with system preference detection and manual toggle
-- **Native Feel** — Built on React Native with native navigation transitions, safe area handling, and platform-adaptive components
-- **Performance First** — FlatList/SectionList for all lists, memoized styles, and lazy screen loading
-- **Responsive Layout** — SafeAreaView + edge insets ensure proper rendering across all device sizes and notch configurations
-- **Accessibility** — Typed props, semantic component structure, and clear visual hierarchy
+## 2. 产品目标
 
----
+### 2.1 核心目标
 
-## ✨ Features (Frontend Only)
+- 提供稳定、可信的移动端即时通讯体验。
+- 支持用户通过手机号、邮箱或第三方身份完成登录、注册和账号恢复。
+- 支持熟人社交关系，包括好友、联系人、好友申请、备注、标签和黑名单。
+- 支持用户发布、浏览和互动动态内容，形成轻量社交内容层。
+- 支持笔记、收藏、个人资料和设置等长期留存能力。
+- 在正式上线前达到可发布的工程质量，包括稳定性、安全性、测试覆盖、依赖治理和上线配置。
 
-### 💬 Messaging
-- Conversation list with unread count badges
-- Filter tabs (All / Unread / Group / Private)
-- Search bar for conversations
-- Quick action menu (New Group, Add Friend, Scan, Pay)
+### 2.2 非目标
 
-### 🗨️ Chat
-- Message bubbles with distinct sent/received styling
-- Date separator pills
-- Location card messages
-- Online status indicators
-- Read receipt checkmarks and timestamps
+- 本文档不定义后端完整实现细节，只记录前端依赖的后端能力和接口风险。
+- 本文档不覆盖完整商业化闭环，例如支付、会员、商城履约和财务结算。
+- 本文档不定义运营后台、内容审核后台或客服后台的完整需求。
+- 本文档不把当前占位页视为已完成业务闭环。
 
-### 👥 Contacts
-- Alphabetically sorted contact sections (A–Z)
-- Quick action buttons (New Friends, Chat-only, Groups, Tags, Official Accounts)
-- Avatar with initials fallback
-- Search functionality
+## 3. 目标用户与核心场景
 
-### 📰 Discover / Feed
-- Post cards with author info, badges, and timestamps
-- Image posts
-- Like and comment counts
-- Share button
-- Filter tabs (Circles, My Circles, Notes)
+### 3.1 目标用户
 
-### 👤 Profile
-- User avatar, display name, and account ID
-- Credit score, gift records, wallet, assistant shortcuts
-- Member card with tags
-- Settings menu with theme toggle
-- Destructive logout action
+- 普通社交用户：希望与好友私聊、查看动态、维护个人资料。
+- 内容发布用户：希望发布生活动态、管理相册/封面、维护笔记或收藏。
+- 关系管理用户：希望处理好友申请、好友备注、分组、标签、黑名单。
+- 早期内测用户：用于验证核心 IM、社交内容流和账号体系的稳定性。
 
-### 🔐 Authentication
-- Login screen with phone/email tab switching
-- Registration flow (phone → verification code → password → nickname)
-- Persistent auth state via Zustand + AsyncStorage
+### 3.2 核心用户旅程
 
-### 🎨 Theming
-- Light, Dark, and System modes
-- Persisted theme preference
-- All components consume theme via `useTheme()` hook
+1. 用户打开应用，完成登录或注册。
+2. 应用初始化 API 会话和 OpenIM 会话。
+3. 用户进入消息页，查看会话、发送消息、恢复历史记录。
+4. 用户添加好友，处理好友申请，维护联系人关系。
+5. 用户进入发现页，浏览广场、圈子、动态或用户相册。
+6. 用户发布动态、更新朋友圈封面或查看个人主页内容。
+7. 用户进入个人中心，维护资料、设置、安全偏好和其他扩展入口。
 
----
+## 4. 当前已完成能力
 
-## 🛠 Tech Stack
+### 4.1 基础技术栈
 
-| Category | Technology |
-|----------|-----------|
-| **Framework** | [Expo](https://expo.dev/) 55 + [React Native](https://reactnative.dev/) 0.83 |
-| **Language** | TypeScript 5.9 |
-| **Routing** | [Expo Router](https://docs.expo.dev/router/introduction/) (file-based) |
-| **State Management** | [Zustand](https://zustand-demo.pmnd.rs/) 5.0 + React Context |
-| **Persistence** | AsyncStorage |
-| **Icons** | @expo/vector-icons (Ionicons) + lucide-react-native |
-| **Images** | expo-image |
-| **Animations** | react-native-reanimated |
-| **Safe Areas** | react-native-safe-area-context |
+- Expo / React Native 移动端应用架构。
+- TypeScript 类型系统。
+- Expo Router 路由结构。
+- Zustand 状态管理。
+- MMKV 本地持久化。
+- API 客户端封装。
+- OpenIM SDK 集成。
+- Native 配置、品牌资源、scheme 和 splash / adaptive icon 配置。
+- Node 行为测试、Jest 行为测试、TypeScript typecheck、lint 和 CI 脚本。
 
----
+### 4.2 账号与认证
 
-## 📁 Project Structure
+已实现：
 
+- 登录、注册、邮箱认证相关页面和状态流。
+- Token 存储与 API 会话初始化。
+- 多账号相关本地状态处理。
+- 认证态路由保护。
+- 部分错误态、加载态和网络异常处理。
+
+仍需注意：
+
+- 认证体验和安全策略需要继续与后端契约对齐。
+- 账号找回、注销、删除账号、设备管理等合规能力需要作为上线前重点确认项。
+
+### 4.3 即时通讯
+
+已实现：
+
+- OpenIM 初始化、登录和核心监听器接入。
+- 消息列表、会话入口和聊天页基础能力。
+- 历史消息恢复相关实现。
+- 临时聊天相关实现。
+- Tab badge / 未读状态的实时更新能力。
+- 聊天 UI 对齐、头像、昵称、菜单和部分会话操作。
+
+仍需注意：
+
+- 弱网、离线、重复发送、消息顺序、撤回、重试队列和幂等策略仍需要更完整的生产验证。
+- 推送通知链路需要端到端验证。
+- OpenIM SDK 失败态、重连态和用户可感知错误需要更统一的处理。
+
+### 4.4 联系人与社交关系
+
+已实现：
+
+- 联系人页面和好友列表。
+- 新朋友 / 好友申请流程。
+- 好友活动未读点。
+- 用户资料入口。
+- 标签、备注、黑名单等关系管理能力的基础实现。
+- 统一用户头像和图标策略。
+
+仍需注意：
+
+- 好友关系的权限边界、黑名单行为、备注同步和异常态需要继续补齐测试。
+- 大联系人列表下的性能、分页、搜索和缓存策略需要压测或实际数据验证。
+
+### 4.5 发现页、动态和圈子
+
+已实现：
+
+- 发现页基础结构。
+- 广场、圈子、动态入口。
+- 过滤器、发布入口和动态详情相关页面。
+- 圈子认证和报名相关页面。
+- 通知中心相关页面。
+- 用户朋友圈相册和封面更新能力。
+- 封面上传失败时的错误脱敏和通用用户提示。
+
+仍需注意：
+
+- 内容流分页、缓存、刷新、空态、失败重试和并发请求取消需要持续验证。
+- 图片上传、压缩、失败重试、内容审核和 CDN 访问策略需要明确。
+- 动态权限、可见范围、删除、举报和屏蔽能力需要作为正式发布前范围确认。
+
+### 4.6 笔记
+
+已实现：
+
+- 笔记列表和详情相关能力。
+- Block editor 相关设计与实现。
+- 多分组能力。
+- 笔记后端对接计划和部分前端实现。
+
+仍需注意：
+
+- 富文本内容的兼容性、迁移、版本化和异常恢复需要加强。
+- 笔记同步冲突、离线编辑、附件上传和内容丢失保护需要明确是否进入 MVP。
+
+### 4.7 个人中心与设置
+
+已实现：
+
+- 个人资料展示与编辑流程。
+- 城市选择。
+- 设置页占位能力补齐。
+- 钱包、商城、会员等入口类页面或占位页面。
+- 应用品牌名称、scheme、图标、启动图等配置迁移。
+
+仍需注意：
+
+- 占位入口不能视为业务完成，正式发布前需要决定隐藏、降级还是接入真实业务。
+- 隐私、账号安全、通知设置、缓存清理、关于页和用户协议入口需要产品和法务确认。
+
+### 4.8 扫码与 Deep Link
+
+已实现：
+
+- 扫码结果解析。
+- 自定义 scheme 路由。
+- Universal link 域名白名单。
+- 拒绝 `http` universal link，避免不安全跳转。
+- 新旧品牌 scheme 兼容。
+
+仍需注意：
+
+- 二维码内容类型、过期策略、签名校验和错误提示需要与后端明确。
+- 外部链接跳转需要统一安全策略和用户确认规则。
+
+### 4.9 工程质量与测试
+
+已完成：
+
+- `npm run ci` 覆盖 typecheck、Expo 配置校验、lint、Node 行为测试和 Jest 行为测试。
+- 修复了 TypeScript 测试类型问题。
+- 补充了品牌配置、native splash asset、扫码解析、封面上传失败等测试。
+- 生产依赖 audit 已清除 high / critical 风险。
+- PR 已更新，当前分支已提交并推送。
+
+仍需注意：
+
+- 仍存在 low / moderate 级别依赖风险，需要后续框架级升级评估。
+- 现有测试主要覆盖关键行为，端到端测试、真实设备测试、性能测试和崩溃监控尚未形成完整发布门禁。
+
+## 5. 当前主要缺口
+
+### 5.1 发布准备
+
+- App Store / Google Play 元数据尚未完整定义。
+- 应用隐私政策、用户协议、数据删除说明和权限说明需要最终版本。
+- EAS build / submit / release channel / OTA 策略需要固化。
+- 正式 bundle id、package name、scheme、universal link、associated domains 和 Android app links 需要生产环境校验。
+- README 与当前项目状态不完全一致，需要更新。
+
+### 5.2 稳定性与可靠性
+
+- OpenIM 初始化、断线重连、登录失效和 SDK 异常需要统一恢复策略。
+- 网络请求需要明确 timeout、retry、abort、幂等和错误分层策略。
+- 图片上传和内容发布需要支持部分失败、重试和用户可恢复路径。
+- 离线状态下的消息发送、草稿、缓存和同步冲突需要定义。
+
+### 5.3 安全与合规
+
+- Token 生命周期、刷新、失效、退出登录和多设备策略需要与后端完整对齐。
+- 扫码、deep link、外部 URL 和分享入口需要统一输入校验。
+- 用户生成内容需要举报、拉黑、删除、审核和敏感内容处理策略。
+- 日志和错误上报必须避免泄露 token、URL query、用户隐私和上传凭证。
+- 账号注销、数据导出、数据删除和隐私合规需要上线前完成。
+
+### 5.4 可观测性
+
+- 需要接入崩溃监控，例如 Sentry、Firebase Crashlytics 或等价方案。
+- 需要记录关键业务漏斗：启动、登录、OpenIM 初始化、消息发送、好友申请、动态发布、上传成功率。
+- 需要区分用户可见错误、业务错误、网络错误和 SDK 错误。
+- 需要为线上问题准备 request id、user id 脱敏标识、device info、app version 和 build channel。
+
+### 5.5 产品闭环
+
+- 钱包、商城、会员等入口需要决定是否进入 MVP；不进入时应隐藏或明确标记为未开放。
+- 圈子认证、报名、通知中心等功能需要验收真实后端流程。
+- 动态权限、评论、点赞、删除、举报、屏蔽等社交基础能力需要明确完整范围。
+- 笔记是否作为核心功能进入首发，需要产品侧确认。
+
+## 6. MVP 范围建议
+
+### 6.1 Beta 必须包含
+
+- 稳定登录、退出登录和认证态恢复。
+- 稳定 OpenIM 初始化和基础单聊能力。
+- 会话列表、聊天页、历史消息恢复和未读状态。
+- 联系人列表、好友申请、好友资料和基础关系管理。
+- 发现页基础内容浏览和用户动态相册。
+- 个人资料编辑和关键设置入口。
+- 统一品牌配置、启动图、图标和 deep link。
+- CI 全部通过。
+- high / critical 生产依赖风险为 0。
+- 崩溃监控和基础错误上报接入。
+
+### 6.2 Beta 可延后
+
+- 钱包、商城、会员完整闭环。
+- 复杂圈子运营和认证流程。
+- 完整笔记协作或离线编辑。
+- 高级搜索和复杂推荐排序。
+- 完整内容审核后台。
+
+### 6.3 正式发布前必须补齐
+
+- 推送通知端到端链路。
+- App Store / Google Play 发布配置。
+- 隐私政策、用户协议、数据删除和权限文案。
+- 真实设备回归测试矩阵。
+- 弱网、离线、重连和上传失败的回归测试。
+- 崩溃率、登录成功率、消息发送成功率和接口错误率监控。
+
+## 7. 验收标准
+
+### 7.1 功能验收
+
+- 新用户可以完成注册、登录并进入主界面。
+- 老用户可以恢复登录态并自动初始化 IM 会话。
+- 用户可以发送和接收基础文本消息。
+- 用户可以查看会话列表和历史消息。
+- 用户可以添加好友、处理好友申请并查看联系人。
+- 用户可以浏览发现页内容并进入用户动态相册。
+- 用户可以更新个人资料和朋友圈封面。
+- 用户可以通过合法 deep link 进入预期页面。
+- 不合法或不安全链接不会触发危险跳转。
+
+### 7.2 质量验收
+
+- `npm run ci` 必须通过。
+- TypeScript typecheck 必须通过。
+- lint 必须通过。
+- 核心行为测试必须通过。
+- 生产依赖 audit 不允许存在 high / critical 风险。
+- 新增高风险业务逻辑必须有回归测试。
+
+### 7.3 稳定性验收
+
+- 冷启动、热启动和登录态恢复无阻塞级错误。
+- OpenIM 初始化失败时有可恢复路径。
+- 网络失败时展示用户可理解的错误提示。
+- 上传失败不会泄露敏感 URL、token 或服务端内部信息。
+- 弱网和断网恢复后，关键页面状态不应永久卡死。
+
+### 7.4 安全验收
+
+- 本地敏感数据使用安全存储策略。
+- 日志、错误提示和上报不包含 token、cookie、签名 URL 或隐私字段。
+- Deep link 和扫码输入有协议、域名和路径约束。
+- 用户退出登录后，敏感会话状态被清理。
+- 用户协议、隐私政策、数据删除入口可访问。
+
+## 8. 里程碑建议
+
+### M0：项目卫生与品牌迁移
+
+状态：基本完成。
+
+已完成项：
+
+- 品牌名、scheme、native 资源和配置迁移。
+- 扫码和 deep link 安全收敛。
+- 封面上传错误脱敏。
+- CI 和关键测试补齐。
+- high / critical 生产依赖风险清零。
+
+剩余项：
+
+- 更新 README 和开发者 onboarding 文档。
+- 确认旧品牌兼容策略的保留周期。
+
+### M1：核心 IM Beta
+
+目标：
+
+- 登录、OpenIM 初始化、单聊、会话、历史消息和联系人流程达到内测可用。
+
+关键任务：
+
+- 推送通知端到端验证。
+- 弱网和重连测试。
+- 消息发送失败重试策略。
+- 会话状态和未读状态一致性测试。
+- 真实设备回归。
+
+### M2：社交内容 Beta
+
+目标：
+
+- 发现页、动态、用户相册和基础互动达到内测可用。
+
+关键任务：
+
+- 动态权限和删除策略。
+- 图片上传、压缩、失败恢复。
+- 内容举报、屏蔽和审核策略。
+- 用户主页和相册体验打磨。
+
+### M3：发布硬化
+
+目标：
+
+- 达到 TestFlight / Internal Testing 发布标准。
+
+关键任务：
+
+- 崩溃监控和业务指标接入。
+- 隐私政策、用户协议和权限文案完成。
+- EAS release pipeline 固化。
+- App Store / Google Play 素材准备。
+- 生产环境配置和域名校验。
+
+### M4：公开发布
+
+目标：
+
+- 达到公开发布和线上问题响应标准。
+
+关键任务：
+
+- 灰度发布策略。
+- 线上告警和值班流程。
+- 用户反馈和客服入口。
+- 版本回滚和热更新策略。
+- 关键业务指标 dashboard。
+
+## 9. 风险与依赖
+
+### 9.1 后端依赖
+
+- 认证、用户、好友、动态、上传、通知和 OpenIM 相关接口需要稳定契约。
+- 错误码、分页、权限、幂等和数据一致性需要统一定义。
+- 上传签名、CDN URL、资源过期和删除策略需要明确。
+
+### 9.2 第三方依赖
+
+- OpenIM SDK 的初始化、重连、消息同步和错误行为需要持续验证。
+- Expo / React Native / Metro / Jest 等基础依赖仍有中低风险 audit 项，需要按版本升级节奏治理。
+- 推送、崩溃监控和 analytics 选型会影响隐私声明和发布配置。
+
+### 9.3 产品风险
+
+- 当前功能面较广，首发范围如果不收敛，会增加测试和发布风险。
+- 钱包、商城、会员等入口如未形成闭环，可能降低用户信任。
+- 社交内容相关能力如果缺少举报、拉黑、删除和审核策略，会带来上线合规风险。
+
+### 9.4 工程风险
+
+- README 与实际架构存在偏差，可能影响新成员理解和交接。
+- 部分历史模块仍保留旧品牌和旧命名，需要分阶段清理。
+- 当前测试覆盖正在提升，但尚未覆盖完整端到端真实设备路径。
+
+## 10. 后续工作清单
+
+### Must Fix Before Production
+
+- 接入崩溃监控和基础业务错误上报。
+- 完成推送通知端到端验证。
+- 完成隐私政策、用户协议、数据删除和权限说明。
+- 明确并测试 OpenIM 断线重连、登录失效和消息失败恢复策略。
+- 完成真实设备回归测试矩阵。
+- 更新 README，使其反映当前真实架构和开发流程。
+- 隐藏或完成钱包、商城、会员等未闭环入口。
+- 完成 deep link / universal link / Android app links 的生产域名校验。
+
+### Should Improve Soon
+
+- 建立 API 错误码和用户提示规范。
+- 为动态发布、图片上传、好友申请和消息发送补充更多行为测试。
+- 建立性能基线，包括启动时间、会话列表渲染、联系人列表和图片加载。
+- 梳理旧品牌命名和兼容策略。
+- 评估并治理剩余 low / moderate 依赖风险。
+- 增加端到端测试或真实设备自动化冒烟测试。
+
+### Nice To Have
+
+- 建立产品指标 dashboard。
+- 增加应用内反馈入口。
+- 增加发布检查清单和回滚手册。
+- 增加设计系统文档和组件使用规范。
+- 增加多语言文案治理和本地化测试。
+
+## 11. 当前推荐决策
+
+建议将首发范围收敛为：
+
+- 账号认证。
+- 基础 IM。
+- 联系人和好友申请。
+- 个人资料。
+- 发现页基础浏览。
+- 用户动态相册和封面。
+- 必要设置与合规入口。
+
+建议暂缓或隐藏：
+
+- 钱包。
+- 商城。
+- 会员。
+- 复杂圈子运营。
+- 高级笔记协作。
+
+原因：
+
+- 当前核心风险集中在稳定性、安全合规和真实设备上线验证。
+- 首发功能越多，测试矩阵和线上风险越大。
+- 先确保 IM 和关系链可靠，再扩展商业化和复杂内容运营，更符合生产发布节奏。
+
+## 12. 附录：当前工程验证命令
+
+发布前至少运行：
+
+```sh
+npm run ci
 ```
-circle-im/
-├── app/                          # Expo Router pages (file-based routing)
-│   ├── index.tsx                 # Root — auth redirect logic
-│   ├── _layout.tsx               # App shell with ThemeProvider
-│   ├── (tabs)/                   # Bottom tab navigation
-│   │   ├── messages/             # Conversation list
-│   │   ├── contacts/             # Contact directory
-│   │   ├── discover/             # Social feed
-│   │   └── profile/              # User profile & settings
-│   ├── (auth)/                   # Auth stack
-│   │   ├── login.tsx
-│   │   └── register.tsx
-│   ├── (chat)/                   # Chat stack (modal presentation)
-│   │   ├── chat-detail.tsx       # Conversation view
-│   │   └── chat-info.tsx         # Chat settings
-│   └── (social)/                 # Social features stack
-│       ├── add-friend.tsx
-│       └── create-post.tsx
-│
-├── src/
-│   ├── components/ui/            # Reusable base components
-│   │   ├── avatar.tsx            # Avatar with initials fallback
-│   │   ├── auth-input.tsx        # Auth form input
-│   │   ├── badge.tsx             # Notification badge
-│   │   ├── search-bar.tsx        # Search input
-│   │   ├── filter-tabs.tsx       # Horizontal tab selector
-│   │   ├── menu-row.tsx          # Settings menu item
-│   │   ├── nav-header.tsx        # Navigation header
-│   │   ├── icon-circle.tsx       # Icon in colored circle
-│   │   └── divider.tsx           # Line separator
-│   │
-│   ├── features/                 # Feature modules
-│   │   ├── auth/screens/         # Login, Register
-│   │   ├── messages/screens/     # Conversation list
-│   │   ├── chat/screens/         # Chat detail, Chat info
-│   │   ├── chat/components/      # Chat bubbles, date pills
-│   │   ├── contacts/screens/     # Contact directory
-│   │   ├── discover/screens/     # Social feed
-│   │   ├── discover/components/  # Post card
-│   │   ├── profile/screens/      # Profile & settings
-│   │   └── social/screens/       # Add friend, Create post
-│   │
-│   ├── theme/                    # Design system
-│   │   ├── colors.ts             # Dark & light color palettes
-│   │   ├── tokens.ts             # Spacing, typography, radii
-│   │   ├── types.ts              # Theme type definitions
-│   │   └── provider.tsx          # ThemeProvider + useTheme hook
-│   │
-│   ├── stores/                   # Zustand state stores
-│   │   └── authStore.ts          # Auth state + persistence
-│   │
-│   ├── hooks/                    # Custom React hooks
-│   │   └── use-auth.ts           # Auth operations
-│   │
-│   ├── services/api/             # API client setup
-│   │   └── client.ts             # Generic fetch wrapper
-│   │
-│   ├── types/                    # TypeScript interfaces
-│   │   └── index.ts
-│   │
-│   └── constants/                # App configuration
-│       └── config.ts             # API URL, app name, limits
-│
-├── assets/images/                # App icons, splash screen
-├── app.json                      # Expo configuration
-├── tsconfig.json                 # TypeScript config (@ → ./src)
-└── package.json
+
+建议补充运行：
+
+```sh
+npm audit --omit=dev
 ```
 
----
+验收要求：
 
-## 🏗 UI Architecture
-
-### Component Hierarchy
-
-```
-ThemeProvider
-└── RootLayout (_layout.tsx)
-    ├── (auth) Stack
-    │   ├── LoginScreen
-    │   └── RegisterScreen
-    ├── (tabs) TabNavigator
-    │   ├── MessagesScreen
-    │   ├── ContactsScreen
-    │   ├── DiscoverScreen
-    │   └── ProfileScreen
-    ├── (chat) Stack
-    │   ├── ChatDetailScreen
-    │   └── ChatInfoScreen
-    └── (social) Stack
-        ├── AddFriendScreen
-        └── CreatePostScreen
-```
-
-### State Flow
-
-```
-┌─────────────┐     ┌──────────────┐     ┌──────────────┐
-│  Zustand     │────▶│  useAuth()   │────▶│  Screens     │
-│  authStore   │     │  hook        │     │  & Components│
-└─────────────┘     └──────────────┘     └──────────────┘
-
-┌─────────────┐     ┌──────────────┐     ┌──────────────┐
-│  ThemeCtx    │────▶│  useTheme()  │────▶│  All UI      │
-│  (Context)   │     │  hook        │     │  Components  │
-└─────────────┘     └──────────────┘     └──────────────┘
-```
-
-### Separation of Concerns
-
-| Layer | Location | Responsibility |
-|-------|----------|----------------|
-| **Pages** | `app/` | Route definitions, minimal wrapper logic |
-| **Screens** | `src/features/*/screens/` | Screen layout, data wiring, FlatList rendering |
-| **Components** | `src/components/ui/` | Reusable, stateless UI primitives |
-| **Feature Components** | `src/features/*/components/` | Domain-specific UI (chat bubbles, post cards) |
-| **Hooks** | `src/hooks/` | Business logic, side effects |
-| **Stores** | `src/stores/` | Global state with Zustand |
-| **Theme** | `src/theme/` | Design tokens, color palettes, theme provider |
-
----
-
-## 📱 Screens / UI Sections
-
-### Sidebar — Conversation List
-The Messages tab displays a scrollable list of conversations with avatars, last message preview, timestamps, and unread badges. Filter tabs allow switching between All, Unread, Group, and Private views. A floating "+" button opens a quick actions dropdown.
-
-### Chat Window
-The Chat Detail screen renders messages in a FlatList with sent messages (indigo bubbles, right-aligned) and received messages (surface-colored bubbles, left-aligned). Date separator pills divide conversations by day. A location card component supports rich message types.
-
-### Message Input
-The chat input bar sits at the bottom with a text input, voice button, emoji button, and send/more action button. The input area respects safe area insets for devices with home indicators.
-
-### Header / Navigation
-Each screen uses a custom `NavHeader` component with a back button, centered title, and optional right action icon. The tab bar is a floating, rounded bar positioned at the bottom with icon + label for each of the 4 main sections.
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- [Expo CLI](https://docs.expo.dev/get-started/installation/)
-- iOS Simulator (macOS) or Android Emulator
-
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/yiboding/circle-im.git
-cd circle-im
-
-# Install dependencies
-npx expo install
-
-# Start the development server
-npx expo start
-```
-
-### Running on Device/Simulator
-
-```bash
-# iOS
-npx expo run:ios
-
-# Android
-npx expo run:android
-
-# Web
-npx expo start --web
-```
-
----
-
-## 📝 Development Notes
-
-### Coding Conventions
-
-- **Functional components only** — no class components
-- **All props are typed** — TypeScript interfaces, no `any`
-- **StyleSheet.create()** for all styles — zero inline styles
-- **useMemo** for style objects that depend on theme colors
-- **FlatList / SectionList** for all scrollable lists — never `ScrollView` + `.map()`
-
-### Component Patterns
-
-- Base UI components live in `src/components/ui/` and are exported via barrel `index.ts`
-- Feature screens live in `src/features/<feature>/screens/`
-- Feature-specific components live in `src/features/<feature>/components/`
-- Each feature module has its own `index.ts` barrel export
-
-### Styling Approach
-
-- **8pt grid system** — all spacing uses multiples of 4 or 8 (`xs: 4, sm: 8, md: 16, lg: 24, xl: 32, xxl: 48`)
-- **Design tokens** centralized in `src/theme/` — colors, spacing, typography, border radius
-- **Theme-aware styles** — components call `useTheme()` and create styles with `useMemo`
-- **Dark & Light palettes** — primary color (indigo `#6366F1`) remains consistent across themes
-
-### Language
-
-All UI labels are in **Chinese (Simplified)**. Localization infrastructure is not yet in place.
-
----
-
-## 🚧 Planned (Not Implemented Yet)
-
-These features are part of the project roadmap but have **not been built**:
-
-- **OpenIM Integration** — Connect to [OpenIM](https://www.openim.io/) server for real-time messaging
-- **Real-time Messaging** — WebSocket-based message delivery and presence
-- **Backend API Connection** — Replace mock data with live API endpoints
-- **Push Notifications** — Message and activity notifications via Expo Notifications
-- **Media Sharing** — Send and receive images, videos, and files in chat
-- **Voice & Video Calls** — Real-time audio/video communication
-- **Group Chat Management** — Create, invite, manage group conversations
-- **i18n / Localization** — Multi-language support beyond Chinese
-- **End-to-End Encryption** — Message encryption for private conversations
-- **Search** — Full-text search across messages and contacts
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Here's how to get started:
-
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feat/amazing-feature`)
-3. **Commit** your changes (`git commit -m 'feat: add amazing feature'`)
-4. **Push** to your branch (`git push origin feat/amazing-feature`)
-5. **Open** a Pull Request
-
-### Guidelines
-
-- Follow the existing code style and conventions
-- Use TypeScript — no `any` types
-- Add components to the appropriate feature module
-- Use design tokens from `src/theme/` — don't hardcode colors or spacing
-- Write meaningful commit messages using [Conventional Commits](https://www.conventionalcommits.org/)
-
----
-
-## 📄 License
-
-This project is licensed under the [MIT License](LICENSE).
-
----
-
-<p align="center">
-  Built with Expo + React Native + TypeScript
-</p>
+- CI 全部通过。
+- 生产依赖 high / critical 风险为 0。
+- 新增生产逻辑必须有对应测试或明确人工验证记录。
