@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchUserMoments } from '@/services/api/moments';
 import type { MomentPost } from '@/types';
@@ -24,16 +24,29 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 卸载后禁止再 setState：慢网下打开相册又快速返回会触发
+  // update-on-unmounted 警告，并可能污染复用的组件状态。
+  const mountedRef = useRef(true);
+  // Guards loadMore against overlapping calls (FlatList can fire onEndReached
+  // twice before `loading` state commits).
+  const inFlightRef = useRef(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const load = useCallback(
     async (nextPage: number, replace: boolean) => {
       if (!userId) return;
       try {
-        setError(null);
+        if (mountedRef.current) setError(null);
         const result = await fetchUserMoments(userId, {
           page: nextPage,
           limit: PAGE_SIZE,
         });
+        if (!mountedRef.current) return;
         setMoments((prev) => {
           const base = replace ? [] : prev;
           const seen = new Set(base.map((m) => m.id));
@@ -49,6 +62,7 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
         setHasMore(result.hasMore);
         setPage(nextPage);
       } catch (err) {
+        if (!mountedRef.current) return;
         setError(err instanceof Error ? err.message : t('common.networkError'));
       }
     },
@@ -57,20 +71,27 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
 
   useEffect(() => {
     setLoading(true);
-    void load(1, true).finally(() => setLoading(false));
+    void load(1, true).finally(() => {
+      if (mountedRef.current) setLoading(false);
+    });
   }, [load]);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
     await load(1, true);
-    setRefreshing(false);
+    if (mountedRef.current) setRefreshing(false);
   }, [load]);
 
   const loadMore = useCallback(async () => {
-    if (loading || refreshing || !hasMore) return;
+    // `loading` is set inside this async tick, so a fast double `onEndReached`
+    // can slip past the state check before it commits. An in-flight ref closes
+    // that window synchronously, preventing a duplicate same-page request.
+    if (inFlightRef.current || loading || refreshing || !hasMore) return;
+    inFlightRef.current = true;
     setLoading(true);
     await load(page + 1, false);
-    setLoading(false);
+    inFlightRef.current = false;
+    if (mountedRef.current) setLoading(false);
   }, [loading, refreshing, hasMore, page, load]);
 
   return { moments, loading, refreshing, hasMore, error, refresh, loadMore };
