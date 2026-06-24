@@ -9,6 +9,7 @@
  */
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
+import { APP_DISPLAY_NAME } from './branding';
 
 const API_PORT = '3000';
 const OPENIM_API_PORT = '10002';
@@ -109,7 +110,7 @@ export const OPENIM_LOG_LEVEL =
     ? RAW_OPENIM_LOG_LEVEL
     : 3;
 
-export const APP_NAME = 'Circle IM';
+export const APP_NAME = APP_DISPLAY_NAME;
 
 export const LIMITS = {
   POST_MAX_LENGTH: 5000,

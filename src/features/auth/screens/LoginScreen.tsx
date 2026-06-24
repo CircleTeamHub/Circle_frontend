@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,6 +20,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type Mode = "password" | "code";
 
+const APP_ICON_SOURCE = require("../../../../assets/images/icon.png");
+
 const s = StyleSheet.create({
   scroll: { flex: 1 },
   container: { paddingHorizontal: Spacing.lg, alignItems: "center", gap: 28 },
@@ -26,26 +29,8 @@ const s = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: Radius.lg,
-    justifyContent: "center",
-    alignItems: "center",
+    overflow: "hidden",
   },
-  logoOuter: {
-    position: "absolute",
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    borderWidth: 4,
-    borderColor: "rgba(255,255,255,0.19)",
-  },
-  logoMiddle: {
-    position: "absolute",
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 3,
-    borderColor: "rgba(255,255,255,0.31)",
-  },
-  logoDot: { width: 12, height: 12, borderRadius: 6 },
   headingGroup: { alignItems: "center", gap: Spacing.sm, width: "100%" },
   heading: { fontSize: 28, fontWeight: "700" },
   subtitle: { ...Typography.body },
@@ -101,8 +86,6 @@ export default function LoginScreen() {
   const d = useMemo(
     () => ({
       scroll: { backgroundColor: colors.background },
-      logo: { backgroundColor: colors.primary },
-      logoDot: { backgroundColor: colors.white },
       heading: { color: colors.text },
       subtitle: { color: colors.textSecondary },
       segment: { backgroundColor: colors.surface },
@@ -150,11 +133,12 @@ export default function LoginScreen() {
       keyboardShouldPersistTaps="handled"
     >
       {/* Logo */}
-      <View style={[s.logo, d.logo]}>
-        <View style={s.logoOuter} />
-        <View style={s.logoMiddle} />
-        <View style={[s.logoDot, d.logoDot]} />
-      </View>
+      <Image
+        source={APP_ICON_SOURCE}
+        style={s.logo}
+        resizeMode="contain"
+        accessibilityLabel="风信"
+      />
 
       {/* Heading */}
       <View style={s.headingGroup}>

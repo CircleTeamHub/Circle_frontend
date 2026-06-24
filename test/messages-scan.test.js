@@ -38,13 +38,16 @@ test('messages scan screen uses expo-camera with QR-only scanning and permission
 test('messages scan screen routes recognized app results and copies unknown results', () => {
   const source = read('src/features/messages/screens/ScanScreen.tsx');
   const resolver = read('src/features/messages/utils/scan-result.ts');
+  const branding = read('src/constants/branding.ts');
 
   assert.match(source, /resolveMessageScanResult/);
   assert.match(source, /router\.replace\(action\.href\)/);
   assert.match(source, /Clipboard\.setStringAsync\(value\)/);
   assert.match(source, /handleCopyFallback\(action\.value\)/);
   assert.match(resolver, /type MessageScanAction/);
-  assert.match(resolver, /circleim:/);
+  assert.match(resolver, /APP_LINK_PROTOCOLS/);
+  assert.match(branding, /windnoteai/);
+  assert.match(branding, /circleim/);
   assert.match(resolver, /\/\(tabs\)\/messages\/temp-chats/);
   assert.match(resolver, /type: 'copy'/);
 });
