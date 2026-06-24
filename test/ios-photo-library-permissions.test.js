@@ -2,7 +2,6 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { execFileSync } = require('node:child_process');
 
 function readAppConfig() {
   const filePath = path.join(process.cwd(), 'app.json');
@@ -11,11 +10,14 @@ function readAppConfig() {
 
 function readIosInfoPlist() {
   const filePath = path.join(process.cwd(), 'ios/CircleIM/Info.plist');
-  const output = execFileSync('plutil', ['-convert', 'json', '-o', '-', filePath], {
-    encoding: 'utf8',
-  });
+  const source = fs.readFileSync(filePath, 'utf8');
+  const match = source.match(
+    /<key>NSPhotoLibraryUsageDescription<\/key>\s*<string>([^<]+)<\/string>/,
+  );
 
-  return JSON.parse(output);
+  return {
+    NSPhotoLibraryUsageDescription: match?.[1],
+  };
 }
 
 test('iOS avatar picking declares a photo library usage description', () => {

@@ -363,6 +363,7 @@ test('sendVoiceMessageFromSource throws (no silent no-op) when nothing is playab
 });
 
 test('OpenIM voice messages map to a dedicated ChatMessage voice bubble model', () => {
+  const voiceSendTime = new Date(2024, 0, 2, 12, 0, 0).getTime();
   const { mapMessageItemToChatMessage } = loadTsModule('src/im/mappers.ts', {
     '@openim/rn-client-sdk': {
       MessageType: {
@@ -401,7 +402,7 @@ test('OpenIM voice messages map to a dedicated ChatMessage voice bubble model', 
       sendID: 'peer-1',
       senderNickname: 'Peer',
       contentType: 103,
-      sendTime: 1000,
+      sendTime: voiceSendTime,
       status: 2,
       isRead: false,
       content: '',
@@ -419,7 +420,7 @@ test('OpenIM voice messages map to a dedicated ChatMessage voice bubble model', 
   assert.deepEqual(normalize(mapped), {
     id: 'voice-1',
     type: 'voice',
-    time: '12/31',
+    time: '1/2',
     senderID: 'peer-1',
     outgoing: false,
     senderName: 'Peer',
