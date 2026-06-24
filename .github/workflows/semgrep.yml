@@ -1,0 +1,38 @@
+# Semgrep SAST — pattern scan for security/bug patterns in the app code
+# (src/ + app/). Blocking: the code is currently clean, so any new finding fails
+# the build. Uses public registry rulesets — no account/token.
+
+name: Semgrep
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: semgrep-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semgrep:
+    runs-on: ubuntu-latest
+    name: "Semgrep SAST"
+    container:
+      image: semgrep/semgrep
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Semgrep scan (blocking)
+        # --error => non-zero exit on any finding.
+        run: >-
+          semgrep scan
+          --config p/react
+          --config p/typescript
+          --config p/javascript
+          --error
+          --metrics off
+          src app
