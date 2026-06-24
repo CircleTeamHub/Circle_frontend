@@ -21,6 +21,8 @@ function canLoadDOMEditor() {
 }
 
 function getNoteBlockEditorDOM() {
+  // Lazy sync load keeps Expo DOM out of the native startup path.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   NoteBlockEditorDOM ??= require('@/features/notes/dom/NoteBlockEditor.dom')
     .default as NoteBlockEditorDOMComponent;
   return NoteBlockEditorDOM;

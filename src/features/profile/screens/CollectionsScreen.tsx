@@ -13,7 +13,7 @@ import {
 } from '@/services/api/collections';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
-const COLLECTION_TYPES: Array<{ id: CollectionType; label: string; icon: string }> = [
+const COLLECTION_TYPES: { id: CollectionType; label: string; icon: string }[] = [
   { id: 'CHAT', label: '聊天记录', icon: 'chatbubble-ellipses-outline' },
   { id: 'VIDEO', label: '视频', icon: 'videocam-outline' },
   { id: 'VOICE', label: '语音', icon: 'mic-outline' },

@@ -1,5 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,23 +16,22 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { formatCacheSize, getAppCacheSize } from '@/services/cache/clear-app-cache';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
-type AppSettingsRowId =
-  | 'profile'
-  | 'accountSecurity'
-  | 'notifications'
-  | 'appearance'
-  | 'privacy'
-  | 'permissions'
-  | 'clearCache'
-  | 'about';
+type AppSettingsRoute =
+  | string
+  | {
+      pathname: string;
+      params?: Record<string, string>;
+    };
 
 interface AppSettingsRow {
-  id: AppSettingsRowId;
+  id: string;
   labelKey: string;
-  route?: string;
+  route?: AppSettingsRoute;
   valueKey?: string;
   valueText?: string;
 }
+
+type Translate = ReturnType<typeof useTranslation>['t'];
 
 const ACCOUNT_ROWS: AppSettingsRow[] = [
   {
@@ -38,6 +44,68 @@ const ACCOUNT_ROWS: AppSettingsRow[] = [
     labelKey: 'appSettings.rows.accountSecurity.label',
     route: '/(tabs)/profile/settings-account-security',
   },
+];
+
+const PROFILE_SEARCH_ROWS: AppSettingsRow[] = [
+  'avatar',
+  'nickname',
+  'gender',
+  'birthday',
+  'city',
+  'bio',
+  'wechat',
+  'phone',
+  'qq',
+].map((field) => ({
+  id: `profile-${field}`,
+  labelKey: `profileFields.${field}`,
+  route: {
+    pathname: '/(tabs)/profile/edit/[field]',
+    params: { field },
+  },
+}));
+
+const ACCOUNT_SECURITY_SEARCH_ROWS: AppSettingsRow[] = [
+  {
+    id: 'account-security-change-password',
+    labelKey: 'settingsDetails.accountSecurity.changePassword',
+    route: '/(tabs)/profile/change-password',
+  },
+  {
+    id: 'account-security-enable-login-security-code',
+    labelKey: 'settingsDetails.accountSecurity.enableLoginSecurityCode',
+    route: '/(tabs)/profile/settings-account-security',
+  },
+  {
+    id: 'account-security-change-login-security-code',
+    labelKey: 'settingsDetails.accountSecurity.changeLoginSecurityCode',
+    valueKey: 'settingsDetails.accountSecurity.securityCodeHint',
+    route: {
+      pathname: '/(tabs)/profile/change-security-code',
+      params: { mode: 'change' },
+    },
+  },
+  {
+    id: 'account-security-single-device-login',
+    labelKey: 'settingsDetails.accountSecurity.singleDeviceLogin',
+    route: '/(tabs)/profile/settings-account-security',
+  },
+  {
+    id: 'account-security-login-device-management',
+    labelKey: 'settingsDetails.accountSecurity.loginDeviceManagement',
+    route: '/(tabs)/profile/login-devices',
+  },
+  {
+    id: 'account-security-cancel-account',
+    labelKey: 'settingsDetails.accountSecurity.cancelAccount',
+    route: '/(tabs)/profile/settings-account-security',
+  },
+];
+
+const ACCOUNT_SEARCH_ROWS = [
+  ...ACCOUNT_ROWS,
+  ...PROFILE_SEARCH_ROWS,
+  ...ACCOUNT_SECURITY_SEARCH_ROWS,
 ];
 
 const GENERAL_ROWS: AppSettingsRow[] = [
@@ -68,6 +136,131 @@ const GENERAL_ROWS: AppSettingsRow[] = [
   },
 ];
 
+const NOTIFICATION_SEARCH_ROWS: AppSettingsRow[] = [
+  'push',
+  'vibration',
+  'sound',
+  'messageRingtone',
+  'friendRequest',
+  'groupRequest',
+  'groupGlobal',
+  'groupOnline',
+  'groupOffline',
+  'circleGlobal',
+  'circleSound',
+  'circleRingtone',
+  'offlineReminder',
+].map((key) => ({
+  id: `notifications-${key}`,
+  labelKey: `settingsDetails.notifications.${key}`,
+  route: '/(tabs)/profile/settings-notifications',
+}));
+
+const APPEARANCE_SEARCH_ROWS: AppSettingsRow[] = [
+  {
+    id: 'appearance-theme-mode',
+    labelKey: 'settingsDetails.appearance.themeMode',
+    route: '/(tabs)/profile/settings-appearance',
+  },
+  {
+    id: 'appearance-language',
+    labelKey: 'settingsDetails.appearance.language',
+    route: '/(tabs)/profile/settings-appearance',
+  },
+];
+
+const PRIVACY_SEARCH_ROWS: AppSettingsRow[] = [
+  {
+    id: 'privacy-self-destruct',
+    labelKey: 'settingsDetails.privacy.selfDestruct',
+    route: '/(tabs)/profile/settings-privacy',
+  },
+  {
+    id: 'privacy-blacklist',
+    labelKey: 'settingsDetails.privacy.blacklist',
+    route: '/(tabs)/profile/settings-blacklist',
+  },
+  {
+    id: 'privacy-moments-visibility',
+    labelKey: 'settingsDetails.privacy.momentsVisibility',
+    route: '/(tabs)/profile/settings-privacy',
+  },
+  {
+    id: 'privacy-stranger-message',
+    labelKey: 'settingsDetails.privacy.strangerMessage',
+    route: '/(tabs)/profile/settings-privacy',
+  },
+  {
+    id: 'privacy-show-phone',
+    labelKey: 'settingsDetails.privacy.showPhone',
+    route: '/(tabs)/profile/settings-privacy',
+  },
+  {
+    id: 'privacy-show-wechat',
+    labelKey: 'settingsDetails.privacy.showWechat',
+    route: '/(tabs)/profile/settings-privacy',
+  },
+  {
+    id: 'privacy-show-qq',
+    labelKey: 'settingsDetails.privacy.showQQ',
+    route: '/(tabs)/profile/settings-privacy',
+  },
+  {
+    id: 'privacy-add-me-methods',
+    labelKey: 'settingsDetails.privacy.addMeMethods',
+    route: '/(tabs)/profile/settings-privacy',
+  },
+  {
+    id: 'privacy-call-permission',
+    labelKey: 'settingsDetails.privacy.callPermission',
+    route: '/(tabs)/profile/settings-privacy',
+  },
+  {
+    id: 'privacy-group-invite-permission',
+    labelKey: 'settingsDetails.privacy.groupInvitePermission',
+    route: '/(tabs)/profile/settings-privacy',
+  },
+];
+
+const PERMISSIONS_SEARCH_ROWS: AppSettingsRow[] = [
+  'location',
+  'microphone',
+  'camera',
+  'photoLibrary',
+  'notifications',
+].map((key) => ({
+  id: `permissions-${key}`,
+  labelKey: `settingsDetails.permissions.${key}`,
+  route: '/(tabs)/profile/settings-permissions',
+}));
+
+const STORAGE_SEARCH_ROWS: AppSettingsRow[] = [
+  {
+    id: 'storage-settings',
+    labelKey: 'settingsDetails.storage.title',
+    route: '/(tabs)/profile/settings-storage',
+  },
+  {
+    id: 'storage-space',
+    labelKey: 'settingsDetails.storage.storageSpace',
+    route: '/(tabs)/profile/settings-storage-usage',
+  },
+  {
+    id: 'storage-clear-all-chats',
+    labelKey: 'settingsDetails.storage.clearAllChats',
+    route: '/(tabs)/profile/settings-storage',
+  },
+];
+
+const GENERAL_SEARCH_ROWS = [
+  ...GENERAL_ROWS,
+  ...NOTIFICATION_SEARCH_ROWS,
+  ...APPEARANCE_SEARCH_ROWS,
+  ...PRIVACY_SEARCH_ROWS,
+  ...PERMISSIONS_SEARCH_ROWS,
+  ...STORAGE_SEARCH_ROWS,
+];
+
 const HELP_ROWS: AppSettingsRow[] = [
   {
     id: 'about',
@@ -75,6 +268,36 @@ const HELP_ROWS: AppSettingsRow[] = [
     route: '/(tabs)/profile/settings-about',
   },
 ];
+
+const ABOUT_SEARCH_ROWS: AppSettingsRow[] = [
+  {
+    id: 'about-product-intro',
+    labelKey: 'settingsDetails.about.productIntro',
+    route: '/(tabs)/profile/settings-about-product',
+  },
+  {
+    id: 'about-version',
+    labelKey: 'settingsDetails.about.version',
+    route: '/(tabs)/profile/settings-about-version',
+  },
+  {
+    id: 'about-user-agreement',
+    labelKey: 'settingsDetails.about.userAgreement',
+    route: '/(tabs)/profile/settings-about-user-agreement',
+  },
+  {
+    id: 'about-privacy-policy',
+    labelKey: 'settingsDetails.about.privacyPolicy',
+    route: '/(tabs)/profile/settings-about-privacy-policy',
+  },
+  {
+    id: 'about-check-updates',
+    labelKey: 'settingsDetails.about.checkUpdates',
+    route: '/(tabs)/profile/settings-about-version',
+  },
+];
+
+const HELP_SEARCH_ROWS = [...HELP_ROWS, ...ABOUT_SEARCH_ROWS];
 
 const s = StyleSheet.create({
   section: {
@@ -88,6 +311,11 @@ const s = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.md,
     gap: Spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    padding: 0,
+    minHeight: 24,
   },
   card: {
     borderRadius: Radius.xl,
@@ -106,6 +334,10 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.sm,
   },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: Spacing.xl,
+  },
 });
 
 export default function AppSettingsScreen() {
@@ -113,6 +345,7 @@ export default function AppSettingsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const [searchQuery, setSearchQuery] = useState('');
   const [cacheSizeLabel, setCacheSizeLabel] = useState(
     t('appSettings.cacheCalculating'),
   );
@@ -133,9 +366,10 @@ export default function AppSettingsScreen() {
         borderColor: colors.surfaceBorder,
       },
       searchText: {
-        color: colors.textSecondary,
+        color: colors.text,
         ...Typography.body,
       },
+      searchPlaceholder: colors.textSecondary,
       sectionTitle: {
         color: colors.textSecondary,
         ...Typography.caption,
@@ -192,6 +426,44 @@ export default function AppSettingsScreen() {
       }),
     [cacheSizeLabel],
   );
+  const generalSearchRows = useMemo(
+    () =>
+      GENERAL_SEARCH_ROWS.map((row) => {
+        if (row.id === 'clearCache') {
+          return { ...row, valueText: cacheSizeLabel };
+        }
+        return row;
+      }),
+    [cacheSizeLabel],
+  );
+
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const isSearching = normalizedSearchQuery.length > 0;
+  const filteredAccountRows = useMemo(
+    () =>
+      (isSearching ? ACCOUNT_SEARCH_ROWS : ACCOUNT_ROWS).filter((row) =>
+        rowMatchesSearch(row, normalizedSearchQuery, t),
+      ),
+    [isSearching, normalizedSearchQuery, t],
+  );
+  const filteredGeneralRows = useMemo(
+    () =>
+      (isSearching ? generalSearchRows : generalRows).filter((row) =>
+        rowMatchesSearch(row, normalizedSearchQuery, t),
+      ),
+    [generalRows, generalSearchRows, isSearching, normalizedSearchQuery, t],
+  );
+  const filteredHelpRows = useMemo(
+    () =>
+      (isSearching ? HELP_SEARCH_ROWS : HELP_ROWS).filter((row) =>
+        rowMatchesSearch(row, normalizedSearchQuery, t),
+      ),
+    [isSearching, normalizedSearchQuery, t],
+  );
+  const hasSearchResults =
+    filteredAccountRows.length > 0 ||
+    filteredGeneralRows.length > 0 ||
+    filteredHelpRows.length > 0;
 
   const handleRowPress = (row: AppSettingsRow) => {
     if (row.route) {
@@ -224,6 +496,20 @@ export default function AppSettingsScreen() {
       );
     });
 
+  const renderSection = (
+    titleKey: string,
+    rows: AppSettingsRow[],
+  ) => {
+    if (rows.length === 0) return null;
+
+    return (
+      <View style={s.section}>
+        <Text style={d.sectionTitle}>{t(titleKey)}</Text>
+        <View style={[s.card, d.card]}>{renderRows(rows)}</View>
+      </View>
+    );
+  };
+
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader title={t('appSettings.title')} />
@@ -233,24 +519,44 @@ export default function AppSettingsScreen() {
       >
         <View style={[s.searchBox, d.searchBox]}>
           <Ionicons name="search-outline" size={26} color={colors.textSecondary} />
-          <Text style={d.searchText}>{t('appSettings.searchPlaceholder')}</Text>
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder={t('appSettings.searchPlaceholder')}
+            placeholderTextColor={d.searchPlaceholder}
+            style={[s.searchInput, d.searchText]}
+            returnKeyType="search"
+            autoCapitalize="none"
+            autoCorrect={false}
+            clearButtonMode="while-editing"
+          />
         </View>
 
-        <View style={s.section}>
-          <Text style={d.sectionTitle}>{t('appSettings.accountSection')}</Text>
-          <View style={[s.card, d.card]}>{renderRows(ACCOUNT_ROWS)}</View>
-        </View>
-
-        <View style={s.section}>
-          <Text style={d.sectionTitle}>{t('appSettings.generalSection')}</Text>
-          <View style={[s.card, d.card]}>{renderRows(generalRows)}</View>
-        </View>
-
-        <View style={s.section}>
-          <Text style={d.sectionTitle}>{t('appSettings.helpSection')}</Text>
-          <View style={[s.card, d.card]}>{renderRows(HELP_ROWS)}</View>
-        </View>
+        {hasSearchResults ? (
+          <>
+            {renderSection('appSettings.accountSection', filteredAccountRows)}
+            {renderSection('appSettings.generalSection', filteredGeneralRows)}
+            {renderSection('appSettings.helpSection', filteredHelpRows)}
+          </>
+        ) : (
+          <View style={s.emptyState}>
+            <Text style={d.rowValue}>{t('appSettings.searchNoResults')}</Text>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
+}
+
+function rowMatchesSearch(
+  row: AppSettingsRow,
+  normalizedSearchQuery: string,
+  t: Translate,
+) {
+  if (!normalizedSearchQuery) return true;
+
+  const label = t(row.labelKey).toLowerCase();
+  const value = (row.valueText ?? (row.valueKey ? t(row.valueKey) : '')).toLowerCase();
+
+  return label.includes(normalizedSearchQuery) || value.includes(normalizedSearchQuery);
 }

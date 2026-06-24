@@ -149,6 +149,7 @@ export default function SelectCityScreen() {
       isMultiSelect,
       singleCity: formCity,
       multiCities,
+      emptyMultiSelectIsNationwide: target !== 'filter',
     });
 
     setSelected(nextState.selected);

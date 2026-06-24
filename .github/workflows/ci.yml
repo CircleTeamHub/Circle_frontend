@@ -1,0 +1,341 @@
+name: Frontend CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+      - feat/**
+      - fix/**
+
+concurrency:
+  group: frontend-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  workflow-lint:
+    name: Workflow Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install actionlint
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+        run: |
+          curl -fsSL \
+            -o actionlint.tar.gz \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          tar -xzf actionlint.tar.gz actionlint
+          sudo mv actionlint /usr/local/bin/actionlint
+          actionlint -version
+
+      - name: Lint Workflows
+        run: actionlint
+
+  security-audit:
+    name: Security Audit (report)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Audit Production Dependencies
+        continue-on-error: true
+        run: |
+          set +e
+          npm audit --omit=dev --audit-level=high --json > audit.json
+          audit_status=$?
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const audit = JSON.parse(fs.readFileSync('audit.json', 'utf8'));
+          const metadata = audit.metadata?.vulnerabilities ?? {};
+          const rows = Object.values(audit.vulnerabilities ?? {})
+            .sort((a, b) => {
+              const rank = { critical: 4, high: 3, moderate: 2, low: 1, info: 0 };
+              return (rank[b.severity] ?? 0) - (rank[a.severity] ?? 0);
+            })
+            .slice(0, 10);
+
+          const lines = [
+            '## Production Dependency Audit',
+            '',
+            '| Severity | Count |',
+            '| --- | ---: |',
+            `| Critical | ${metadata.critical ?? 0} |`,
+            `| High | ${metadata.high ?? 0} |`,
+            `| Moderate | ${metadata.moderate ?? 0} |`,
+            `| Low | ${metadata.low ?? 0} |`,
+            '',
+          ];
+
+          if (rows.length > 0) {
+            lines.push('| Package | Severity | Direct | Via |');
+            lines.push('| --- | --- | --- | --- |');
+            for (const row of rows) {
+              const via = (row.via ?? [])
+                .map((entry) => (typeof entry === 'string' ? entry : entry.name))
+                .filter(Boolean)
+                .slice(0, 3)
+                .join(', ');
+              lines.push(
+                `| ${row.name} | ${row.severity} | ${row.isDirect ? 'yes' : 'no'} | ${via || 'n/a'} |`,
+              );
+            }
+          } else {
+            lines.push('No production dependency vulnerabilities reported.');
+          }
+
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join('\n')}\n`);
+          NODE
+
+          exit "$audit_status"
+
+  secret-scan:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: TruffleHog
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified
+
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+  expo-config:
+    name: Expo Config
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Expo Config Smoke
+        run: npm run expo:config
+
+  expo-doctor:
+    name: Expo Doctor (report)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Expo Health Report
+        run: |
+          set +e
+
+          npx --yes expo-doctor 2>&1 | tee expo-doctor.log
+          doctor_status=${PIPESTATUS[0]}
+
+          npx expo install --check 2>&1 | tee expo-install-check.log
+          install_check_status=${PIPESTATUS[0]}
+
+          {
+            echo "## Expo Health Report"
+            echo
+            echo "| Check | Status |"
+            echo "| --- | ---: |"
+            echo "| expo-doctor | ${doctor_status} |"
+            echo "| expo install --check | ${install_check_status} |"
+            echo
+            echo "<details><summary>expo-doctor output</summary>"
+            echo
+            echo '```text'
+            cat expo-doctor.log
+            echo '```'
+            echo
+            echo "</details>"
+            echo
+            echo "<details><summary>expo install --check output</summary>"
+            echo
+            echo '```text'
+            cat expo-install-check.log
+            echo '```'
+            echo
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  web-export:
+    name: Web Export
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Export Web Bundle
+        run: npx expo export --platform web
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+  notify:
+    name: Notify Discord
+    runs-on: ubuntu-latest
+    needs:
+      - workflow-lint
+      - security-audit
+      - secret-scan
+      - typecheck
+      - expo-config
+      - expo-doctor
+      - web-export
+      - lint
+      - test
+    if: ${{ always() && (contains(join(needs.*.result, ','), 'failure') || contains(join(needs.*.result, ','), 'cancelled')) }}
+    timeout-minutes: 5
+    env:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+    steps:
+      - name: Send Discord Notification
+        if: ${{ env.DISCORD_WEBHOOK_URL != '' }}
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          node <<'NODE' > payload.json
+          const needs = JSON.parse(process.env.NEEDS_JSON);
+          const failedJobs = Object.entries(needs)
+            .filter(([, job]) => ['failure', 'cancelled'].includes(job.result))
+            .map(([name, job]) => `${name}: ${job.result}`);
+
+          const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+          const refName = process.env.GITHUB_HEAD_REF || process.env.GITHUB_REF_NAME;
+          const shortSha = process.env.GITHUB_SHA.slice(0, 7);
+
+          const payload = {
+            username: 'GitHub Actions',
+            content: [
+              `:rotating_light: **Frontend CI ${failedJobs.some((job) => job.endsWith('cancelled')) ? 'cancelled' : 'failed'}**`,
+              `**Repository:** ${process.env.GITHUB_REPOSITORY}`,
+              `**Ref:** ${refName}`,
+              `**Commit:** ${shortSha}`,
+              `**Actor:** ${process.env.GITHUB_ACTOR}`,
+              `**Jobs:** ${failedJobs.join(', ')}`,
+              `**Run:** ${runUrl}`,
+            ].join('\n'),
+          };
+
+          process.stdout.write(JSON.stringify(payload));
+          NODE
+
+          curl --fail-with-body \
+            -H 'Content-Type: application/json' \
+            -d @payload.json \
+            "$DISCORD_WEBHOOK_URL"

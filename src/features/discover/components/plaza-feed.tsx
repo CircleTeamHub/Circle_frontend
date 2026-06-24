@@ -59,26 +59,45 @@ export const PlazaFeed: React.FC = () => {
     setPlazaFilter,
   } = useDiscoverStore();
 
-  const { allCircles, allCirclesError, fetchAllCircles } = useCirclesStore();
+  const {
+    joinedCircles,
+    createdCircles,
+    myCirclesError,
+    fetchMyCircles,
+  } = useCirclesStore();
   const filterCircleIds = useDiscoverFilterStore((st) => st.appliedCircleIds);
   const filterCities = useDiscoverFilterStore((st) => st.appliedCities);
 
+  const myPlazaCircles = useMemo(() => {
+    const byId = new Map(joinedCircles.map((circle) => [circle.id, circle]));
+    for (const circle of createdCircles) {
+      byId.set(circle.id, circle);
+    }
+    return [...byId.values()];
+  }, [createdCircles, joinedCircles]);
+
   const visibleCircles = useMemo(
     () =>
-      applyCircleFilter(allCircles, {
+      applyCircleFilter(myPlazaCircles, {
         circleIds: filterCircleIds,
         cities: filterCities,
       }),
-    [allCircles, filterCircleIds, filterCities],
+    [myPlazaCircles, filterCircleIds, filterCities],
   );
 
   useEffect(() => {
-    fetchAllCircles();
-  }, [fetchAllCircles]);
+    fetchMyCircles();
+  }, [fetchMyCircles]);
 
   useEffect(() => {
     fetchPlazaPosts(true);
-  }, [fetchPlazaPosts, selectedCircleId, selectedCity]);
+  }, [
+    fetchPlazaPosts,
+    filterCircleIds,
+    filterCities,
+    selectedCircleId,
+    selectedCity,
+  ]);
 
   const handleRefresh = useCallback(() => {
     fetchPlazaPosts(true);
@@ -105,7 +124,7 @@ export const PlazaFeed: React.FC = () => {
   const keyExtractor = useCallback((item: CirclePlazaPost) => item.id, []);
 
   const ListHeader =
-    visibleCircles.length > 0 || allCirclesError ? (
+    visibleCircles.length > 0 || myCirclesError ? (
       <View style={s.headerSection}>
         {visibleCircles.length > 0 ? (
           <CircleFilterBar
@@ -114,7 +133,7 @@ export const PlazaFeed: React.FC = () => {
             onSelect={handleCircleSelect}
           />
         ) : null}
-        {allCirclesError ? (
+        {myCirclesError ? (
           <View
             style={[
               s.filterErrorBanner,
@@ -122,9 +141,9 @@ export const PlazaFeed: React.FC = () => {
             ]}
           >
             <Text style={{ color: colors.textSecondary, ...Typography.caption }}>
-              {allCirclesError}
+              {myCirclesError}
             </Text>
-            <Pressable onPress={fetchAllCircles}>
+            <Pressable onPress={fetchMyCircles}>
               <Text style={{ color: colors.primary, ...Typography.caption }}>
                 {t('common.retry')}
               </Text>

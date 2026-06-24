@@ -44,7 +44,7 @@ test('permission denied message distinguishes retryable vs settings cases', () =
           t: (key) =>
             ({
               'profileFields.albumPermissionBlocked':
-                '相册权限已被关闭，请到系统设置中允许 Circle IM 访问相册后再试。',
+                '相册权限已被关闭，请到系统设置中允许风信访问相册后再试。',
               'validation.albumPermission': '请先允许访问相册。',
             }[key] ?? key),
         },

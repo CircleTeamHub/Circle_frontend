@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   StyleSheet,
@@ -18,6 +19,12 @@ import { Divider } from '@/components/ui/divider';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-filter-store';
+import {
+  MAX_CIRCLE_FILTER_SELECTION,
+  clampCircleFilterIds,
+  mergeCircleFilterSelection,
+  toggleCircleFilterSelection,
+} from '@/features/discover/utils/circle-filter-selection';
 import type { Circle } from '@/types';
 
 const s = StyleSheet.create({
@@ -91,10 +98,11 @@ export default function SelectFilterCirclesScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
 
-  const allCircles = useCirclesStore((st) => st.allCircles);
-  const allCirclesLoading = useCirclesStore((st) => st.allCirclesLoading);
-  const allCirclesError = useCirclesStore((st) => st.allCirclesError);
-  const fetchAllCircles = useCirclesStore((st) => st.fetchAllCircles);
+  const joinedCircles = useCirclesStore((st) => st.joinedCircles);
+  const createdCircles = useCirclesStore((st) => st.createdCircles);
+  const myCirclesLoading = useCirclesStore((st) => st.myCirclesLoading);
+  const myCirclesError = useCirclesStore((st) => st.myCirclesError);
+  const fetchMyCircles = useCirclesStore((st) => st.fetchMyCircles);
 
   const draftCircleIds = useDiscoverFilterStore((st) => st.draftCircleIds);
   const setDraftCircleIds = useDiscoverFilterStore((st) => st.setDraftCircleIds);
@@ -103,26 +111,32 @@ export default function SelectFilterCirclesScreen() {
   const [selected, setSelected] = useState<string[]>([]);
 
   useEffect(() => {
-    if (allCircles.length === 0) {
-      fetchAllCircles();
-    }
-  }, [allCircles.length, fetchAllCircles]);
+    fetchMyCircles();
+  }, [fetchMyCircles]);
 
   useFocusEffect(
     useCallback(() => {
-      setSelected([...draftCircleIds]);
+      setSelected(clampCircleFilterIds(draftCircleIds));
     }, [draftCircleIds]),
   );
 
+  const myFilterCircles = useMemo(() => {
+    const byId = new Map(joinedCircles.map((circle) => [circle.id, circle]));
+    for (const circle of createdCircles) {
+      byId.set(circle.id, circle);
+    }
+    return [...byId.values()];
+  }, [createdCircles, joinedCircles]);
+
   const filteredCircles = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return allCircles;
-    return allCircles.filter(
+    if (!q) return myFilterCircles;
+    return myFilterCircles.filter(
       (circle) =>
         circle.name.toLowerCase().includes(q) ||
         circle.description.toLowerCase().includes(q),
     );
-  }, [allCircles, search]);
+  }, [myFilterCircles, search]);
 
   const allFilteredSelected = useMemo(
     () =>
@@ -131,11 +145,28 @@ export default function SelectFilterCirclesScreen() {
     [filteredCircles, selected],
   );
 
-  const toggleCircle = useCallback((id: string) => {
-    setSelected((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+  const showLimitAlert = useCallback(() => {
+    Alert.alert(
+      t('city.hint'),
+      t('discover.filter.maxCircles', {
+        max: MAX_CIRCLE_FILTER_SELECTION,
+      }),
     );
-  }, []);
+  }, [t]);
+
+  const toggleCircle = useCallback(
+    (id: string) => {
+      setSelected((prev) => {
+        const result = toggleCircleFilterSelection({
+          current: prev,
+          circleId: id,
+        });
+        if (result.reachedLimit) showLimitAlert();
+        return result.nextSelected;
+      });
+    },
+    [showLimitAlert],
+  );
 
   const toggleSelectAll = useCallback(() => {
     if (allFilteredSelected) {
@@ -143,12 +174,15 @@ export default function SelectFilterCirclesScreen() {
       setSelected((prev) => prev.filter((id) => !filteredIds.has(id)));
     } else {
       setSelected((prev) => {
-        const merged = new Set(prev);
-        for (const c of filteredCircles) merged.add(c.id);
-        return Array.from(merged);
+        const result = mergeCircleFilterSelection({
+          current: prev,
+          candidates: filteredCircles.map((circle) => circle.id),
+        });
+        if (result.reachedLimit) showLimitAlert();
+        return result.nextSelected;
       });
     }
-  }, [allFilteredSelected, filteredCircles]);
+  }, [allFilteredSelected, filteredCircles, showLimitAlert]);
 
   const handleConfirm = useCallback(() => {
     setDraftCircleIds(selected);
@@ -246,7 +280,10 @@ export default function SelectFilterCirclesScreen() {
 
       <View style={s.topBar}>
         <Text style={[s.countText, d.countText]}>
-          {t('discover.filter.savedCirclesCount', { count: selected.length })}
+          {t('discover.filter.selectedCount', {
+            count: selected.length,
+            max: MAX_CIRCLE_FILTER_SELECTION,
+          })}
         </Text>
         {filteredCircles.length > 0 ? (
           <Pressable onPress={toggleSelectAll} hitSlop={8}>
@@ -259,14 +296,14 @@ export default function SelectFilterCirclesScreen() {
         ) : null}
       </View>
 
-      {allCirclesLoading && allCircles.length === 0 ? (
+      {myCirclesLoading && myFilterCircles.length === 0 ? (
         <View style={s.emptyContainer}>
           <ActivityIndicator color={colors.primary} />
         </View>
-      ) : allCirclesError && allCircles.length === 0 ? (
+      ) : myCirclesError && myFilterCircles.length === 0 ? (
         <View style={s.emptyContainer}>
-          <Text style={d.emptyText}>{allCirclesError}</Text>
-          <Pressable style={d.retryButton} onPress={fetchAllCircles}>
+          <Text style={d.emptyText}>{myCirclesError}</Text>
+          <Pressable style={d.retryButton} onPress={fetchMyCircles}>
             <Text style={d.retryText}>{t('common.retry')}</Text>
           </Pressable>
         </View>

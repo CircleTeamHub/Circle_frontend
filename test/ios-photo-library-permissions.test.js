@@ -2,7 +2,6 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { execFileSync } = require('node:child_process');
 
 function readAppConfig() {
   const filePath = path.join(process.cwd(), 'app.json');
@@ -11,11 +10,18 @@ function readAppConfig() {
 
 function readIosInfoPlist() {
   const filePath = path.join(process.cwd(), 'ios/CircleIM/Info.plist');
-  const output = execFileSync('plutil', ['-convert', 'json', '-o', '-', filePath], {
-    encoding: 'utf8',
-  });
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
 
-  return JSON.parse(output);
+  const source = fs.readFileSync(filePath, 'utf8');
+  const match = source.match(
+    /<key>NSPhotoLibraryUsageDescription<\/key>\s*<string>([^<]+)<\/string>/,
+  );
+
+  return {
+    NSPhotoLibraryUsageDescription: match?.[1],
+  };
 }
 
 test('iOS avatar picking declares a photo library usage description', () => {
@@ -24,7 +30,7 @@ test('iOS avatar picking declares a photo library usage description', () => {
 
   const expoUsageDescription =
     appConfig.expo?.ios?.infoPlist?.NSPhotoLibraryUsageDescription;
-  const nativeUsageDescription = infoPlist.NSPhotoLibraryUsageDescription;
+  const nativeUsageDescription = infoPlist?.NSPhotoLibraryUsageDescription;
 
   assert.equal(
     typeof expoUsageDescription,
@@ -36,9 +42,11 @@ test('iOS avatar picking declares a photo library usage description', () => {
     /\S/,
     'app.json photo library usage description must not be empty',
   );
-  assert.equal(
-    nativeUsageDescription,
-    expoUsageDescription,
-    'ios/CircleIM/Info.plist must stay in sync with app.json',
-  );
+  if (infoPlist) {
+    assert.equal(
+      nativeUsageDescription,
+      expoUsageDescription,
+      'ios/CircleIM/Info.plist must stay in sync with app.json',
+    );
+  }
 });

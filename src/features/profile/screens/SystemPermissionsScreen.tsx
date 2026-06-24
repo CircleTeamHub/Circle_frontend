@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import * as Location from 'expo-location';
@@ -10,7 +10,7 @@ import {
   requestRecordingPermissionsAsync,
 } from 'expo-audio';
 import { SettingsDetailScreen } from '@/features/profile/components/settings-detail';
-import { Spacing, Typography, useTheme } from '@/theme';
+import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 type PermissionId =
   | 'location'
@@ -47,6 +47,11 @@ const s = StyleSheet.create({
   footer: {
     alignItems: 'center',
     gap: Spacing.sm,
+  },
+  settingsButton: {
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.sm,
   },
 });
 
@@ -184,14 +189,16 @@ export default function SystemPermissionsScreen() {
             ? 'settingsDetails.permissions.authorized'
             : 'settingsDetails.permissions.unauthorized',
           icon: permissionIcon(id),
-          iconMuted: !granted,
+          iconColor: colors.primary,
+          iconBackgroundColor: colors.primaryLight,
+          statusColor: colors.primary,
           onPress: async () => {
             await requestPermission(id);
             await refreshPermissions();
           },
         };
       }),
-    [permissions, refreshPermissions],
+    [colors.primary, colors.primaryLight, permissions, refreshPermissions],
   );
 
   return (
@@ -199,14 +206,20 @@ export default function SystemPermissionsScreen() {
       titleKey="settingsDetails.permissions.title"
       sections={[{ rows }]}
       footer={
-        <Pressable style={s.footer} onPress={() => Linking.openSettings()}>
-          <Text style={{ color: colors.textSecondary, ...Typography.body }}>
+        <View style={s.footer}>
+          <Text style={{ color: colors.primary, ...Typography.body }}>
             {t('settingsDetails.permissions.onlyVisibleAuthorized')}
           </Text>
-          <Text style={{ color: colors.success, ...Typography.h3 }}>
-            {t('settingsDetails.permissions.openSystemSettings')}
-          </Text>
-        </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            style={[s.settingsButton, { backgroundColor: colors.primary }]}
+            onPress={() => Linking.openSettings()}
+          >
+            <Text style={{ color: colors.white, ...Typography.h3 }}>
+              {t('settingsDetails.permissions.openSystemSettings')}
+            </Text>
+          </Pressable>
+        </View>
       }
     />
   );

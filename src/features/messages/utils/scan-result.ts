@@ -1,4 +1,8 @@
 import type { Href } from 'expo-router';
+import {
+  APP_LINK_PROTOCOLS,
+  APP_UNIVERSAL_LINK_HOSTS,
+} from '../../../constants/branding';
 
 type MessageScanAction =
   | { type: 'route'; href: Href }
@@ -11,6 +15,9 @@ const MESSAGE_ROUTE_MAP: Record<string, Href> = {
   'new-group': '/(tabs)/messages/new-group',
   'temp-chats': '/(tabs)/messages/temp-chats',
 };
+
+const APP_LINK_PROTOCOL_SET = new Set<string>(APP_LINK_PROTOCOLS);
+const APP_LINK_HOST_SET = new Set<string>(APP_UNIVERSAL_LINK_HOSTS);
 
 function normalizeMessagePath(rawValue: string): string | null {
   const value = rawValue.trim();
@@ -26,14 +33,14 @@ function normalizeMessagePath(rawValue: string): string | null {
   try {
     const url = new URL(value);
 
-    if (url.protocol === 'circleim:') {
+    if (APP_LINK_PROTOCOL_SET.has(url.protocol)) {
       const segments = [url.hostname, ...url.pathname.split('/').filter(Boolean)];
       return segments[0] === 'messages' ? segments[1] ?? null : null;
     }
 
     if (
-      (url.protocol === 'https:' || url.protocol === 'http:') &&
-      (url.hostname === 'circle.im' || url.hostname === 'www.circle.im')
+      url.protocol === 'https:' &&
+      APP_LINK_HOST_SET.has(url.hostname)
     ) {
       const segments = url.pathname.split('/').filter(Boolean);
       return segments[0] === 'messages' ? segments[1] ?? null : null;

@@ -46,7 +46,6 @@ test("account settings page no longer owns credential security rows", () => {
 test("settings flow screens use i18n instead of hardcoded Chinese settings copy", () => {
   const screenFiles = [
     "src/features/profile/screens/SettingsScreen.tsx",
-    "src/features/profile/screens/ChangeAccountScreen.tsx",
     "src/features/profile/screens/ChangePasswordScreen.tsx",
     "src/features/profile/screens/EditProfileFieldScreen.tsx",
     "src/features/profile/screens/ShareScreen.tsx",
@@ -88,16 +87,6 @@ test("settings flow screens use i18n instead of hardcoded Chinese settings copy"
     fs.readFileSync(
       path.join(
         process.cwd(),
-        "src/features/profile/screens/ChangeAccountScreen.tsx",
-      ),
-      "utf8",
-    ),
-    /title="修改账号"|当前账号|新账号|请输入新账号|保存/,
-  );
-  assert.doesNotMatch(
-    fs.readFileSync(
-      path.join(
-        process.cwd(),
         "src/features/profile/screens/EditProfileFieldScreen.tsx",
       ),
       "utf8",
@@ -113,24 +102,56 @@ test("settings flow screens use i18n instead of hardcoded Chinese settings copy"
   );
 });
 
-test("change account route exports its screen and wires account update flow", () => {
-  const route = fs.readFileSync(
-    path.join(process.cwd(), "app/(tabs)/profile/change-account.tsx"),
+test("share screen only exposes invite code sharing without QR content", () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), "src/features/profile/screens/ShareScreen.tsx"),
     "utf8",
   );
-  const screen = fs.readFileSync(
-    path.join(
-      process.cwd(),
-      "src/features/profile/screens/ChangeAccountScreen.tsx",
-    ),
+  const zh = JSON.parse(fs.readFileSync(
+    path.join(process.cwd(), "src/i18n/locales/zh.json"),
     "utf8",
+  ));
+  const en = JSON.parse(fs.readFileSync(
+    path.join(process.cwd(), "src/i18n/locales/en.json"),
+    "utf8",
+  ));
+
+  assert.doesNotMatch(source, /react-native-qrcode-svg|QRCode|INVITE_URL/);
+  assert.doesNotMatch(source, /handleShareQr|shareQrTitle|shareQrSubtitle|qrTitle|qrSubtitle/);
+  assert.match(source, /copyInviteTitle/);
+  assert.match(source, /handleCopyInviteCode/);
+  for (const removedKey of [
+    "qrTitle",
+    "qrSubtitle",
+    "shareQrTitle",
+    "shareQrSubtitle",
+    "shareMessage",
+  ]) {
+    assert.equal(zh.shareScreen[removedKey], undefined);
+    assert.equal(en.shareScreen[removedKey], undefined);
+  }
+});
+
+test("account id is system-assigned and has no mutation route or API", () => {
+  assert.equal(
+    fs.existsSync(path.join(process.cwd(), "app/(tabs)/profile/change-account.tsx")),
+    false,
+  );
+  assert.equal(
+    fs.existsSync(
+      path.join(
+        process.cwd(),
+        "src/features/profile/screens/ChangeAccountScreen.tsx",
+      ),
+    ),
+    false,
   );
 
-  assert.match(route, /ChangeAccountScreen/);
-  assert.match(screen, /changeAccountId/);
-  assert.match(screen, /setUser/);
-  assert.match(screen, /profile\.accountIdInvalid/);
-  assert.match(screen, /profile\.accountChangeFailed/);
+  const apiSource = fs.readFileSync(
+    path.join(process.cwd(), "src/services/api/auth.ts"),
+    "utf8",
+  );
+  assert.doesNotMatch(apiSource, /changeAccountId|change-account-id/);
 });
 
 test("change security code route exports its screen and wires account-level app lock settings", () => {
@@ -267,10 +288,11 @@ test("login security code gate blocks only authenticated users and verifies thro
   assert.match(gate, /useAuthStore/);
   assert.match(gate, /isAuthenticated/);
   assert.match(gate, /isLoading/);
+  assert.match(gate, /onboardingRequired/);
   assert.match(gate, /AppState\.addEventListener\('change'/);
   assert.match(gate, /fetchLoginSecurityCodeStatus/);
   assert.match(gate, /verifyLoginSecurityCode/);
-  assert.match(gate, /if \(!isAuthenticated \|\| isLoading\)/);
+  assert.match(gate, /if \(!isAuthenticated \|\| isLoading \|\| onboardingRequired\)/);
   assert.match(gate, /setGateState\('locked'\)/);
   assert.match(gate, /setGateState\('unlocked'\)/);
   assert.match(gate, /profile\.unlockSecurityCode/);
@@ -292,7 +314,7 @@ test("login security code gate only appears after backend confirms the account h
   assert.match(gate, /securityCodeEnabledRef\.current/);
   assert.match(
     gate,
-    /const visible =\s*isAuthenticated &&\s*!isLoading &&\s*\(gateState === 'locked' \|\| gateState === 'verifying'\)/,
+    /const visible =\s*isAuthenticated &&\s*!isLoading &&\s*!onboardingRequired &&\s*\(gateState === 'locked' \|\| gateState === 'verifying'\)/,
   );
 });
 
@@ -324,6 +346,48 @@ test("app settings screen follows the requested settings detail structure", () =
     assert.match(source, new RegExp(`appSettings\\.rows\\.${key}`));
   }
   assert.doesNotMatch(source, /appSettings\.rows\.language/);
+});
+
+test("app settings search filters settings rows instead of rendering a placeholder", () => {
+  const source = fs.readFileSync(
+    path.join(
+      process.cwd(),
+      "src/features/profile/screens/AppSettingsScreen.tsx",
+    ),
+    "utf8",
+  );
+  const zh = fs.readFileSync(
+    path.join(process.cwd(), "src/i18n/locales/zh.json"),
+    "utf8",
+  );
+  const en = fs.readFileSync(
+    path.join(process.cwd(), "src/i18n/locales/en.json"),
+    "utf8",
+  );
+
+  assert.match(source, /TextInput/);
+  assert.match(source, /const \[searchQuery, setSearchQuery\] = useState\(''\)/);
+  assert.match(source, /filteredAccountRows/);
+  assert.match(source, /filteredGeneralRows/);
+  assert.match(source, /filteredHelpRows/);
+  assert.match(source, /ACCOUNT_SEARCH_ROWS/);
+  assert.match(source, /GENERAL_SEARCH_ROWS/);
+  assert.match(source, /HELP_SEARCH_ROWS/);
+  assert.match(source, /settingsDetails\.accountSecurity\.changePassword/);
+  assert.doesNotMatch(source, /settingsDetails\.accountSecurity\.changeAccount/);
+  assert.doesNotMatch(source, /profile\/change-account/);
+  assert.match(source, /'friendRequest'/);
+  assert.match(source, /settingsDetails\.notifications\.\$\{key\}/);
+  assert.match(source, /settingsDetails\.privacy\.blacklist/);
+  assert.match(source, /'camera'/);
+  assert.match(source, /settingsDetails\.permissions\.\$\{key\}/);
+  assert.match(source, /settingsDetails\.about\.privacyPolicy/);
+  assert.match(source, /pathname:\s*'\/\(tabs\)\/profile\/edit\/\[field\]'/);
+  assert.match(source, /rowMatchesSearch/);
+  assert.match(source, /appSettings\.searchNoResults/);
+  assert.doesNotMatch(source, /<Text style=\{d\.searchText\}>\{t\('appSettings\.searchPlaceholder'\)\}<\/Text>/);
+  assert.match(zh, /"searchNoResults": "没有匹配的设置"/);
+  assert.match(en, /"searchNoResults": "No matching settings"/);
 });
 
 test("app settings screen leaves language selection to the appearance detail page", () => {
@@ -418,7 +482,6 @@ test("app settings detail routes export their screens", () => {
 test("app settings detail screens include the requested rows", () => {
   const expectations = {
     "src/features/profile/screens/AccountSecuritySettingsScreen.tsx": [
-      "settingsDetails.accountSecurity.changeAccount",
       "settingsDetails.accountSecurity.changePassword",
       "settingsDetails.accountSecurity.securityCode",
       "settingsDetails.accountSecurity.singleDeviceLogin",
@@ -599,12 +662,12 @@ test("account security detail owns credential change routes", () => {
     "utf8",
   );
 
-  assert.match(source, /id:\s*["']change-account["']/);
   assert.match(source, /id:\s*["']change-password["']/);
   // 登录安全码已拆分为「开启（开关）」与「修改（链接）」两行
   assert.match(source, /id:\s*["']enable-security-code["']/);
   assert.match(source, /id:\s*["']change-security-code["']/);
-  assert.match(source, /profile\/change-account/);
+  assert.doesNotMatch(source, /id:\s*["']change-account["']/);
+  assert.doesNotMatch(source, /profile\/change-account/);
   assert.match(source, /profile\/change-password/);
   assert.match(source, /profile\/change-security-code/);
 });
@@ -759,6 +822,32 @@ test("system permissions screen omits unsupported bluetooth permission", () => {
   assert.doesNotMatch(source, /BLUETOOTH_CONNECT|BLUETOOTH_SCAN/);
 });
 
+test("system permissions screen uses primary purple accents and a real settings button", () => {
+  const screenSource = fs.readFileSync(
+    path.join(
+      process.cwd(),
+      "src/features/profile/screens/SystemPermissionsScreen.tsx",
+    ),
+    "utf8",
+  );
+  const detailSource = fs.readFileSync(
+    path.join(
+      process.cwd(),
+      "src/features/profile/components/settings-detail.tsx",
+    ),
+    "utf8",
+  );
+
+  assert.match(screenSource, /iconColor:\s*colors\.primary/);
+  assert.match(screenSource, /iconBackgroundColor:\s*colors\.primaryLight/);
+  assert.match(screenSource, /statusColor:\s*colors\.primary/);
+  assert.match(screenSource, /settingsButton/);
+  assert.match(screenSource, /backgroundColor:\s*colors\.primary/);
+  assert.match(screenSource, /color:\s*colors\.white/);
+  assert.match(detailSource, /iconColor\?:\s*string/);
+  assert.match(detailSource, /statusColor\?:\s*string/);
+});
+
 test("notification permission implementation depends on expo notifications", () => {
   const pkg = JSON.parse(
     fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
@@ -871,20 +960,6 @@ test("storage usage screen displays calculated storage categories", () => {
 
   assert.match(hookSource, /getAppStorageUsage/);
   assert.match(hookSource, /mountedRef/);
-});
-
-test("change account screen guards duplicate submit and unmounted state updates", () => {
-  const source = fs.readFileSync(
-    path.join(
-      process.cwd(),
-      "src/features/profile/screens/ChangeAccountScreen.tsx",
-    ),
-    "utf8",
-  );
-
-  assert.match(source, /submittingRef/);
-  assert.match(source, /mountedRef/);
-  assert.match(source, /if \(submittingRef\.current\)/);
 });
 
 test("settings screens display calculated cache size instead of fixed i18n value", () => {

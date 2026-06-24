@@ -7,19 +7,22 @@ function read(relativePath) {
   return fs.readFileSync(path.join(process.cwd(), relativePath), "utf8");
 }
 
-test("known accounts store persists tokens under its own MMKV key via pure helpers", () => {
+test("known accounts store persists saved account tokens in SecureStore via pure helpers", () => {
   const store = read("src/stores/knownAccountsStore.ts");
 
   assert.match(store, /name:\s*['"]circle-im-known-accounts['"]/);
+  assert.match(store, /secureAuthStorage/);
+  assert.doesNotMatch(store, /mmkvJsonStorage/);
   assert.match(store, /upsertKnownAccount/);
   assert.match(store, /removeKnownAccount/);
   // 持久化字段包含 token，支持免密快速切号
   assert.match(store, /partialize:\s*\(state\)\s*=>\s*\(\{\s*accounts:\s*state\.accounts\s*\}\)/);
 
   const logic = read("src/stores/knownAccountsLogic.ts");
-  // 纯逻辑文件只能 import type，运行时不得拉入 MMKV/authStore
+  // 纯逻辑文件只能 import type，运行时不得拉入 SecureStore/MMKV/authStore
   assert.match(logic, /import type \{ AuthUser \}/);
   assert.doesNotMatch(logic, /from '@\/storage'/);
+  assert.doesNotMatch(logic, /secure-auth-storage/);
 });
 
 test("account switcher store is a runtime-only open/close toggle (not persisted)", () => {
@@ -44,6 +47,17 @@ test("switch account opens the sheet instead of logging out", () => {
   assert.match(useAuth, /removeAccount\(currentId\)/);
 });
 
+test("logout clears session once and lets the auth route guard navigate to login", () => {
+  const useAuth = read("src/hooks/use-auth.ts");
+  const endSession = useAuth.slice(
+    useAuth.indexOf("const endSession = useCallback"),
+    useAuth.indexOf("const logout = useCallback"),
+  );
+
+  assert.match(endSession, /await clearLocalSession\(\)/);
+  assert.doesNotMatch(endSession, /router\.replace\(['"]\/\(auth\)\/login['"]\)/);
+});
+
 test("switch-to-account validates the session and falls back to login on expiry", () => {
   const useAuth = read("src/hooks/use-auth.ts");
 
@@ -51,11 +65,12 @@ test("switch-to-account validates the session and falls back to login on expiry"
   // 拆旧会话 -> 激活存储 token -> 校验 /auth/me（401 自动续期）
   assert.match(useAuth, /await clearLocalSession\(\)/);
   assert.match(useAuth, /retry\(\(\) => fetchCurrentUser\(\)\)/);
-  // 过期分支：移除死账号 + 跳登录页并预填账号
+  // 过期分支：移除死账号 + 跳登录页并预填邮箱。登录已改为邮箱制，
+  // 登录表单只有 email 输入框，故预填 email 而非 accountId。
   assert.match(useAuth, /removeAccount\(account\.user\.id\)/);
   assert.match(
     useAuth,
-    /pathname:\s*['"]\/\(auth\)\/login['"][\s\S]*accountId:\s*account\.user\.accountId/,
+    /pathname:\s*['"]\/\(auth\)\/login['"][\s\S]*email:\s*account\.user\.email/,
   );
 });
 
@@ -77,13 +92,13 @@ test("account switcher sheet lists accounts and offers an add-account entry", ()
 test("the account switcher sheet is mounted once at the app root", () => {
   const layout = read("app/_layout.tsx");
   assert.match(layout, /<AccountSwitcherSheet \/>/);
-  assert.match(layout, /useKnownAccountsStore\.persist\.rehydrate\(\)/);
+  assert.match(layout, /rehydratePersistedStore\(['"]known accounts['"],\s*useKnownAccountsStore\)/);
 });
 
-test("login screen prefills the account id passed from an expired switch", () => {
+test("login screen prefills the email passed from an expired switch", () => {
   const login = read("src/features/auth/screens/LoginScreen.tsx");
-  assert.match(login, /useLocalSearchParams<\{ accountId\?: string \}>\(\)/);
-  assert.match(login, /useState\(accountId \?\? ['"]['"]\)/);
+  assert.match(login, /useLocalSearchParams<\{ email\?: string \}>\(\)/);
+  assert.match(login, /useState\(emailParam \?\? ['"]['"]\)/);
 });
 
 test("account switcher copy exists in both locales", () => {

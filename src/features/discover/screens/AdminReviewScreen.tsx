@@ -174,7 +174,7 @@ export default function AdminReviewScreen() {
         <Divider />
       </View>
     ),
-    [handleOverride, d, approvingId, colors],
+    [handleOverride, d, approvingId, colors, t],
   );
 
   return (

@@ -109,14 +109,18 @@ export const MomentCard: React.FC<MomentCardProps> = ({
     () => formatRelativeTime(post.createdAt, t),
     [post.createdAt, t],
   );
-  const likedFriends = post.likedFriends;
+  const comments = useMemo(() => post.comments ?? [], [post.comments]);
+  const likedFriends = useMemo(
+    () => post.likedFriends ?? [],
+    [post.likedFriends],
+  );
   const likedFriendsPreview = useMemo(
     () => buildLikedFriendsPreview(likedFriends, i18n.language),
     [likedFriends, i18n.language],
   );
   const commentThreads = useMemo(
-    () => buildMomentCommentThreads(post.comments ?? []),
-    [post.comments],
+    () => buildMomentCommentThreads(comments),
+    [comments],
   );
   const commentPreview = useMemo(
     () => getMomentCommentPreviewState(commentThreads, post.commentCount),

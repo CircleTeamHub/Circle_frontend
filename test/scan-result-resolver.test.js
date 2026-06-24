@@ -5,8 +5,24 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
-function loadTsModule(relativePath) {
-  const filePath = path.join(process.cwd(), relativePath);
+const moduleCache = new Map();
+
+function resolveTsModule(request, parentFilePath) {
+  const basePath = request.startsWith('.')
+    ? path.resolve(path.dirname(parentFilePath), request)
+    : path.join(process.cwd(), request);
+  for (const candidate of [basePath, `${basePath}.ts`, `${basePath}.tsx`]) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+function loadTsModule(relativeOrAbsolutePath) {
+  const filePath = path.isAbsolute(relativeOrAbsolutePath)
+    ? relativeOrAbsolutePath
+    : path.join(process.cwd(), relativeOrAbsolutePath);
+  if (moduleCache.has(filePath)) return moduleCache.get(filePath);
+
   const source = fs.readFileSync(filePath, 'utf8');
   const transpiled = ts.transpileModule(source, {
     compilerOptions: {
@@ -18,9 +34,16 @@ function loadTsModule(relativePath) {
 
   // expo-router resolves URL via the runtime; expose it so the parsing path is
   // actually exercised (a bare VM realm has no URL global).
-  const context = { module: { exports: {} }, exports: {}, require, URL };
+  const module = { exports: {} };
+  moduleCache.set(filePath, module.exports);
+  const localRequire = (request) => {
+    const resolvedTsModule = resolveTsModule(request, filePath);
+    return resolvedTsModule ? loadTsModule(resolvedTsModule) : require(request);
+  };
+  const context = { module, exports: module.exports, require: localRequire, URL };
   context.exports = context.module.exports;
   vm.runInNewContext(transpiled, context, { filename: filePath });
+  moduleCache.set(filePath, context.module.exports);
   return context.module.exports;
 }
 
@@ -32,6 +55,14 @@ const plain = (value) => JSON.parse(JSON.stringify(value));
 
 test('routes a whitelisted custom-scheme deep link', () => {
   assert.deepEqual(
+    plain(resolveMessageScanResult('windnoteai://messages/temp-chats')), {
+    type: 'route',
+    href: '/(tabs)/messages/temp-chats',
+  });
+});
+
+test('keeps routing legacy custom-scheme deep links', () => {
+  assert.deepEqual(
     plain(resolveMessageScanResult('circleim://messages/temp-chats')), {
     type: 'route',
     href: '/(tabs)/messages/temp-chats',
@@ -40,9 +71,22 @@ test('routes a whitelisted custom-scheme deep link', () => {
 
 test('routes a whitelisted https universal link', () => {
   assert.deepEqual(
+    plain(resolveMessageScanResult('https://windnote.ai/messages/add-friend')),
+    { type: 'route', href: '/(tabs)/messages/add-friend' },
+  );
+});
+
+test('keeps routing legacy https universal links', () => {
+  assert.deepEqual(
     plain(resolveMessageScanResult('https://circle.im/messages/add-friend')),
     { type: 'route', href: '/(tabs)/messages/add-friend' },
   );
+});
+
+test('does NOT route http universal links', () => {
+  const value = 'http://windnote.ai/messages/add-friend';
+  assert.deepEqual(
+    plain(resolveMessageScanResult(value)), { type: 'copy', value });
 });
 
 test('routes a bare in-app path', () => {

@@ -272,11 +272,11 @@ export interface CreatePlazaPostInput {
 export interface CircleDetail extends Circle {
   myRole: 'OWNER' | 'ADMIN' | 'MEMBER' | null;
   myStatus: 'ACTIVE' | 'PENDING' | 'REJECTED' | null;
-  availableIconAssets?: Array<{
+  availableIconAssets?: {
     id: string;
     name: string;
     imageUrl: string | null;
-  }>;
+  }[];
 }
 
 export interface PaginatedResponse<T> {

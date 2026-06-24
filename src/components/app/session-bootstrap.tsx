@@ -10,6 +10,7 @@ import {
 import { clearLocalSession } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
 import { useMessageGroupsStore } from '@/features/messages/store/use-message-groups-store';
+import { hasCompletedOnboardingProfile } from '@/features/auth/onboarding-completion';
 import { retry } from '@/utils/retry';
 
 /**
@@ -31,14 +32,19 @@ export function SessionBootstrap() {
   const imToken = useAuthStore((state) => state.imToken);
   const hasHydrated = useAuthStore((state) => state.hasHydrated);
   const isLoading = useAuthStore((state) => state.isLoading);
+  const onboardingRequired = useAuthStore((state) => state.onboardingRequired);
   const setUser = useAuthStore((state) => state.setUser);
   const setLoading = useAuthStore((state) => state.setLoading);
+  const setOnboardingRequired = useAuthStore(
+    (state) => state.setOnboardingRequired,
+  );
 
   // OpenIM 全局事件由 ensureOpenIMInitialized() 在 initSDK 之前主动绑定，
   // 这里不再额外绑定 —— 否则 SessionBootstrap 卸载时会意外解绑全部 listener。
 
   useEffect(() => {
-    if (!hasHydrated) {
+    if (!hasHydrated || onboardingRequired) {
+      disconnectRealtime();
       return;
     }
 
@@ -52,10 +58,10 @@ export function SessionBootstrap() {
     return () => {
       disconnectRealtime();
     };
-  }, [accessToken, hasHydrated]);
+  }, [accessToken, hasHydrated, onboardingRequired]);
 
   useEffect(() => {
-    if (!hasHydrated) {
+    if (!hasHydrated || onboardingRequired) {
       return;
     }
 
@@ -64,7 +70,11 @@ export function SessionBootstrap() {
         return;
       }
 
-      const nextAccessToken = useAuthStore.getState().accessToken;
+      const { accessToken: nextAccessToken, onboardingRequired: nextOnboardingRequired } =
+        useAuthStore.getState();
+      if (nextOnboardingRequired) {
+        return;
+      }
       if (!nextAccessToken) {
         disconnectRealtime();
         return;
@@ -77,7 +87,7 @@ export function SessionBootstrap() {
     return () => {
       subscription.remove();
     };
-  }, [hasHydrated]);
+  }, [hasHydrated, onboardingRequired]);
 
   // 在 store hydration 完成、且仍处于 loading 状态时执行一次会话恢复
   // isLoading 初始值为 true，bootstrap 完成后（无论成功/失败）通过 finally 置为 false
@@ -110,6 +120,14 @@ export function SessionBootstrap() {
         }
 
         setUser(user);
+
+        if (onboardingRequired && !hasCompletedOnboardingProfile(user)) {
+          return;
+        }
+
+        if (onboardingRequired) {
+          setOnboardingRequired(false);
+        }
 
         if (imToken) {
           try {
@@ -152,8 +170,10 @@ export function SessionBootstrap() {
     hasHydrated,
     imToken,
     isLoading,
+    onboardingRequired,
     refreshToken,
     setLoading,
+    setOnboardingRequired,
     setUser,
   ]);
 

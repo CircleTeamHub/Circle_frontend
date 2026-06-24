@@ -1,4 +1,4 @@
-import i18n from 'i18next';
+import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { getLocales } from 'expo-localization';
 import { storage } from '@/storage';
@@ -15,6 +15,8 @@ const resources = {
   zh: { translation: zh },
   en: { translation: en },
 };
+
+const i18n = i18next;
 
 function getDeviceLanguage(): AppLanguage {
   const locales = getLocales();
