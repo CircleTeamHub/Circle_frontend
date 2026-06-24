@@ -206,6 +206,27 @@ jobs:
             echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
 
+  web-export:
+    name: Web Export
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Export Web Bundle
+        run: npx expo export --platform web
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -257,6 +278,7 @@ jobs:
       - typecheck
       - expo-config
       - expo-doctor
+      - web-export
       - lint
       - test
     if: ${{ always() && (contains(join(needs.*.result, ','), 'failure') || contains(join(needs.*.result, ','), 'cancelled')) }}
