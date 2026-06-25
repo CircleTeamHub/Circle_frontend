@@ -25,6 +25,7 @@ import {
   joinCircle,
 } from '@/services/api/circles';
 import { getApiErrorMessage } from '@/services/api/errors';
+import { useChangeCircleCover } from '@/features/discover/hooks/use-change-circle-cover';
 import {
   requestUploadPresign,
   resolveUploadContentType,
@@ -43,6 +44,30 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.md,
     paddingVertical: Spacing.xl,
+    // Pull up so the avatar overlaps the cover banner above (WeChat-style).
+    marginTop: -48,
+  },
+  coverWrap: {
+    marginHorizontal: -Spacing.lg,
+    height: 150,
+  },
+  cover: { width: '100%', height: '100%' },
+  coverPlaceholder: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coverEditBadge: {
+    position: 'absolute',
+    right: Spacing.md,
+    bottom: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
   },
   avatarWrap: {
     position: 'relative',
@@ -289,6 +314,10 @@ export default function CircleDetailScreen() {
   const isOwnerOrAdmin =
     circle?.myRole === 'OWNER' || circle?.myRole === 'ADMIN';
 
+  const { changeCover: changeCircleCover } = useChangeCircleCover(id, (url) =>
+    setCircle((current) => (current ? { ...current, cover: url } : current)),
+  );
+
   // Active members who are not the owner can leave. Owners must transfer or
   // dissolve the circle instead, so they never see the leave action.
   const canLeaveCircle =
@@ -448,6 +477,8 @@ export default function CircleDetailScreen() {
       tagText: { color: colors.primary, ...Typography.caption },
       avatarPlaceholder: { backgroundColor: colors.surfaceBorder },
       avatarEditBadge: { backgroundColor: colors.primary },
+      coverPlaceholder: { backgroundColor: colors.surfaceBorder },
+      coverEditBadge: { backgroundColor: 'rgba(0,0,0,0.45)' },
       chatBtn: { backgroundColor: colors.primary },
       chatBtnText: { color: colors.white },
       adminBtn: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.surfaceBorder },
@@ -508,6 +539,37 @@ export default function CircleDetailScreen() {
         contentContainerStyle={s.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* ── Cover banner ── */}
+        <Pressable
+          style={s.coverWrap}
+          onPress={isOwnerOrAdmin ? changeCircleCover : undefined}
+          disabled={!isOwnerOrAdmin}
+        >
+          {circle.cover ? (
+            <Image
+              source={{ uri: circle.cover }}
+              style={s.cover}
+              contentFit="cover"
+            />
+          ) : (
+            <View style={[s.coverPlaceholder, d.coverPlaceholder]}>
+              <Ionicons
+                name="image-outline"
+                size={28}
+                color={colors.textSecondary}
+              />
+            </View>
+          )}
+          {isOwnerOrAdmin ? (
+            <View style={[s.coverEditBadge, d.coverEditBadge]}>
+              <Ionicons name="camera" size={12} color={colors.white} />
+              <Text style={{ color: colors.white, ...Typography.tiny }}>
+                {t('circle.changeCover', { defaultValue: '换封面' })}
+              </Text>
+            </View>
+          ) : null}
+        </Pressable>
+
         {/* ── Profile Card ── */}
         <View style={s.profileCard}>
           {/* Avatar */}

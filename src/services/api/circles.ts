@@ -11,6 +11,7 @@ function normalizeCircle(circle: Circle): Circle {
   return {
     ...circle,
     avatarUrl: circle.avatarUrl ? normalizeMediaUrl(circle.avatarUrl) : null,
+    cover: circle.cover ? normalizeMediaUrl(circle.cover) : null,
     currentIconUrl: circle.currentIconUrl
       ? normalizeMediaUrl(circle.currentIconUrl)
       : null,
@@ -111,6 +112,13 @@ export async function selectCircleIcon(
   await apiClient<void>(`/circle/${id}/icon/select`, {
     method: 'POST',
     body: { iconAssetId },
+  });
+}
+
+export async function setCircleCover(id: string, cover: string): Promise<void> {
+  await apiClient<void>(`/circle/${id}/cover`, {
+    method: 'POST',
+    body: { cover },
   });
 }
 

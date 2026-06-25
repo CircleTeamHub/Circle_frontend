@@ -182,6 +182,7 @@ export interface Circle {
   name: string;
   description: string;
   avatarUrl: string | null;
+  cover: string | null;
   ownerID: string;
   currentIconAssetID: string | null;
   currentIconUrl: string | null;
