@@ -17,6 +17,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Divider } from '@/components/ui/divider';
+import { GradientCover } from '@/components/ui/gradient-cover';
+import { CircleAvatar } from '@/components/ui/circle-avatar';
 import {
   fetchCircleDetail,
   selectCircleIcon,
@@ -57,12 +59,6 @@ const s = StyleSheet.create({
     height: 240,
   },
   cover: { width: '100%', height: '100%' },
-  coverPlaceholder: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   coverEditBadge: {
     position: 'absolute',
     right: Spacing.md,
@@ -76,18 +72,6 @@ const s = StyleSheet.create({
   },
   avatarWrap: {
     position: 'relative',
-  },
-  avatarImage: {
-    width: 80,
-    height: 80,
-    borderRadius: Radius.xl,
-  },
-  avatarPlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: Radius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   avatarEditBadge: {
     position: 'absolute',
@@ -492,9 +476,7 @@ export default function CircleDetailScreen() {
       categoryText: { color: colors.primary, ...Typography.caption },
       tagChip: { backgroundColor: colors.primaryLight },
       tagText: { color: colors.primary, ...Typography.caption },
-      avatarPlaceholder: { backgroundColor: colors.surfaceBorder },
       avatarEditBadge: { backgroundColor: colors.primary },
-      coverPlaceholder: { backgroundColor: colors.surfaceBorder },
       coverEditBadge: { backgroundColor: 'rgba(0,0,0,0.45)' },
       chatBtn: { backgroundColor: colors.primary },
       chatBtnText: { color: colors.white },
@@ -569,12 +551,8 @@ export default function CircleDetailScreen() {
               contentFit="cover"
             />
           ) : (
-            <View style={[s.coverPlaceholder, d.coverPlaceholder]}>
-              <Ionicons
-                name="image-outline"
-                size={28}
-                color={colors.textSecondary}
-              />
+            <View style={s.cover}>
+              <GradientCover />
             </View>
           )}
           {isOwnerOrAdmin ? (
@@ -595,17 +573,11 @@ export default function CircleDetailScreen() {
             onPress={isOwnerOrAdmin ? changeCircleAvatar : undefined}
             disabled={!isOwnerOrAdmin}
           >
-            {circle.avatarUrl ? (
-              <Image
-                source={{ uri: circle.avatarUrl }}
-                style={s.avatarImage}
-                contentFit="cover"
-              />
-            ) : (
-              <View style={[s.avatarPlaceholder, d.avatarPlaceholder]}>
-                <Ionicons name="people" size={36} color={colors.textSecondary} />
-              </View>
-            )}
+            <CircleAvatar
+              uri={circle.avatarUrl}
+              size={80}
+              borderRadius={Radius.xl}
+            />
             {isOwnerOrAdmin ? (
               <View style={[s.avatarEditBadge, d.avatarEditBadge]}>
                 <Ionicons name="camera" size={12} color={colors.white} />

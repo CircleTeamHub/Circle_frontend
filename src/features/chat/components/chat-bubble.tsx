@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAudioPlayer, type AudioStatus } from 'expo-audio';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import { Avatar } from '@/components/ui/avatar';
+import { CircleAvatar } from '@/components/ui/circle-avatar';
 import { toPlayableUri } from '@/im/media-uri';
 import type {
   ChatMessage,
@@ -1247,11 +1248,10 @@ export const CircleCardBubble: React.FC<CircleCardBubbleProps> = ({
         onPress={onPress ? () => onPress(card) : undefined}
       >
         <View style={sFriendCard.topRow}>
-          <Avatar
+          <CircleAvatar
+            uri={displayAvatar}
             size={48}
-            shape="square"
-            name={displayName}
-            uri={displayAvatar || undefined}
+            borderRadius={Radius.sm}
           />
           <View style={sFriendCard.textCol}>
             <Text

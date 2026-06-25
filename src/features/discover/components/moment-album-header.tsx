@@ -6,6 +6,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { Avatar } from '@/components/ui/avatar';
+import { GradientCover } from '@/components/ui/gradient-cover';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 const COVER_HEIGHT = 260;
@@ -66,7 +67,6 @@ export const MomentAlbumHeader: React.FC<MomentAlbumHeaderProps> = ({
 
   const d = useMemo(
     () => ({
-      coverPlaceholder: { backgroundColor: colors.textSecondary },
       nickname: {
         color: colors.white,
         textShadowColor: colors.black,
@@ -88,7 +88,9 @@ export const MomentAlbumHeader: React.FC<MomentAlbumHeaderProps> = ({
   const coverContent = coverUrl ? (
     <Image source={{ uri: coverUrl }} style={s.cover} contentFit="cover" />
   ) : (
-    <View style={[s.cover, d.coverPlaceholder]} />
+    <View style={s.cover}>
+      <GradientCover />
+    </View>
   );
 
   return (
