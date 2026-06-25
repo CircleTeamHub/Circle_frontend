@@ -122,6 +122,16 @@ export async function setCircleCover(id: string, cover: string): Promise<void> {
   });
 }
 
+export async function setCircleAvatar(
+  id: string,
+  avatarUrl: string,
+): Promise<void> {
+  await apiClient<void>(`/circle/${id}/avatar`, {
+    method: 'POST',
+    body: { avatarUrl },
+  });
+}
+
 // ── Invitation / Verification ────────────────────────────────────────────────
 
 export async function inviteToCircle(

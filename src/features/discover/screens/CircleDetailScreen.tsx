@@ -26,6 +26,7 @@ import {
 } from '@/services/api/circles';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useChangeCircleCover } from '@/features/discover/hooks/use-change-circle-cover';
+import { useChangeCircleAvatar } from '@/features/discover/hooks/use-change-circle-avatar';
 import {
   requestUploadPresign,
   resolveUploadContentType,
@@ -320,6 +321,12 @@ export default function CircleDetailScreen() {
     setCircle((current) => (current ? { ...current, cover: url } : current)),
   );
 
+  const { changeAvatar: changeCircleAvatar } = useChangeCircleAvatar(id, (url) =>
+    setCircle((current) =>
+      current ? { ...current, avatarUrl: url } : current,
+    ),
+  );
+
   // Active members who are not the owner can leave. Owners must transfer or
   // dissolve the circle instead, so they never see the leave action.
   const canLeaveCircle =
@@ -575,7 +582,11 @@ export default function CircleDetailScreen() {
         {/* ── Profile Card ── */}
         <View style={s.profileCard}>
           {/* Avatar */}
-          <View style={s.avatarWrap}>
+          <Pressable
+            style={s.avatarWrap}
+            onPress={isOwnerOrAdmin ? changeCircleAvatar : undefined}
+            disabled={!isOwnerOrAdmin}
+          >
             {circle.avatarUrl ? (
               <Image
                 source={{ uri: circle.avatarUrl }}
@@ -592,7 +603,7 @@ export default function CircleDetailScreen() {
                 <Ionicons name="camera" size={12} color={colors.white} />
               </View>
             ) : null}
-          </View>
+          </Pressable>
 
           {/* Name */}
           <Text style={[s.circleName, d.circleName]}>{circle.name}</Text>
