@@ -370,9 +370,6 @@ export type NotificationType =
   | 'FRIEND_REQUEST_RECEIVED'
   | 'FRIEND_REQUEST_ACCEPTED'
   | 'FRIEND_REQUEST_REJECTED'
-  | 'SQUAD_REQUEST_RECEIVED'
-  | 'SQUAD_REQUEST_ACCEPTED'
-  | 'SQUAD_REQUEST_REJECTED'
   | 'CIRCLE_VERIFICATION_REQUESTED'
   | 'CIRCLE_INVITATION_APPROVED'
   | 'CIRCLE_INVITATION_REJECTED'
@@ -395,11 +392,6 @@ export interface NotificationItem {
     firstImage: string | null;
   } | null;
   fromInvitation: { id: string; status: string } | null;
-  squadRequest: {
-    id: string;
-    status: string;
-    squad: { id: string; name: string } | null;
-  } | null;
 }
 
 /** A circle post authored by the current user, for the signup-management list. */

@@ -21,7 +21,6 @@ function iconFor(type: NotificationType): keyof typeof Ionicons.glyphMap {
   if (type === 'TRACE_LIKE') return 'heart-outline';
   if (type === 'CIRCLE_POST_SIGNUP_CREATED') return 'megaphone-outline';
   if (type.startsWith('FRIEND_REQUEST')) return 'person-add-outline';
-  if (type.startsWith('SQUAD_REQUEST')) return 'people-outline';
   if (type === 'CIRCLE_VERIFICATION_REQUESTED')
     return 'shield-checkmark-outline';
   if (type.startsWith('CIRCLE_')) return 'people-circle-outline';

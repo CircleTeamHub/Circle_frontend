@@ -98,7 +98,7 @@ test("signup management: post row falls back for untitled posts", () => {
   assert.equal(row.unread, false);
 });
 
-test("interactive: iconFor branches → FRIEND_REQUEST person-add, SQUAD_REQUEST people", () => {
+test("interactive: iconFor branches → FRIEND_REQUEST person-add", () => {
   const { mapNotificationToRow } = load(
     "src/features/notifications/utils/notification-summary.ts",
   );
@@ -115,12 +115,6 @@ test("interactive: iconFor branches → FRIEND_REQUEST person-add, SQUAD_REQUEST
     t,
   );
   assert.equal(friend.icon, "person-add-outline");
-
-  const squad = mapNotificationToRow(
-    { ...base, id: "n3", type: "SQUAD_REQUEST_RECEIVED" },
-    t,
-  );
-  assert.equal(squad.icon, "people-outline");
 });
 
 test("interactive: circle signup notification uses megaphone icon and summary", () => {
