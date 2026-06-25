@@ -21,7 +21,9 @@ import {
   fetchCircleDetail,
   selectCircleIcon,
   uploadCircleIcon,
+  leaveCircle,
 } from '@/services/api/circles';
+import { getApiErrorMessage } from '@/services/api/errors';
 import {
   requestUploadPresign,
   resolveUploadContentType,
@@ -284,6 +286,40 @@ export default function CircleDetailScreen() {
 
   const isOwnerOrAdmin =
     circle?.myRole === 'OWNER' || circle?.myRole === 'ADMIN';
+
+  // Active members who are not the owner can leave. Owners must transfer or
+  // dissolve the circle instead, so they never see the leave action.
+  const canLeaveCircle =
+    circle?.myStatus === 'ACTIVE' && circle?.myRole !== 'OWNER';
+
+  const handleLeaveCircle = useCallback(() => {
+    if (!id) return;
+    Alert.alert(
+      t('circle.leaveTitle', { defaultValue: '退出圈子' }),
+      t('circle.leaveMessage', { defaultValue: '确定退出该圈子吗？' }),
+      [
+        { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+        {
+          text: t('circle.leaveConfirm', { defaultValue: '退出' }),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await leaveCircle(id);
+              router.back();
+            } catch (error) {
+              Alert.alert(
+                t('circle.leaveFailedTitle', { defaultValue: '退出失败' }),
+                getApiErrorMessage(
+                  error,
+                  t('common.retryLater', { defaultValue: '请稍后重试' }),
+                ),
+              );
+            }
+          },
+        },
+      ],
+    );
+  }, [id, router, t]);
 
   const handleSelectCircleIcon = useCallback(
     async (iconAssetId: string) => {
@@ -690,6 +726,18 @@ export default function CircleDetailScreen() {
               }
             >
               <Text style={[s.actionBtnText, d.adminBtnText]}>{t('circle.adminReview')}</Text>
+            </Pressable>
+          ) : null}
+
+          {/* 退出圈子 (active non-owner members) */}
+          {canLeaveCircle ? (
+            <Pressable
+              style={[s.actionBtn, d.dangerBtn]}
+              onPress={handleLeaveCircle}
+            >
+              <Text style={[s.actionBtnText, d.dangerBtnText]}>
+                {t('circle.leave', { defaultValue: '退出圈子' })}
+              </Text>
             </Pressable>
           ) : null}
         </View>
