@@ -313,26 +313,6 @@ export default function CircleDetailScreen() {
     }
   }, [id, joining, loadCircle, t]);
 
-  const handleCopyCircleInfo = useCallback(async () => {
-    if (!circle) return;
-    const text = t('circle.shareText', {
-      name: circle.name,
-      id: circle.id,
-      defaultValue: `邀请你加入圈子「${circle.name}」\n圈子ID：${circle.id}\n在风信「联系人 → 圈子 → 加入圈子」粘贴此 ID 即可加入`,
-    });
-    try {
-      const Clipboard = await import('expo-clipboard');
-      await Clipboard.setStringAsync(text);
-      Alert.alert(
-        t('circle.copied', {
-          defaultValue: '圈子信息已复制，发给好友即可邀请加入',
-        }),
-      );
-    } catch {
-      Alert.alert(t('circle.copyFailed', { defaultValue: '复制失败' }));
-    }
-  }, [circle, t]);
-
   const handleLeaveCircle = useCallback(() => {
     if (!id) return;
     Alert.alert(
@@ -474,8 +454,6 @@ export default function CircleDetailScreen() {
       adminBtnText: { color: colors.text },
       dangerBtn: { backgroundColor: colors.error },
       dangerBtnText: { color: colors.white },
-      inviteBtn: { backgroundColor: colors.purple },
-      inviteBtnText: { color: colors.white },
       iconAssetCard: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
@@ -780,10 +758,10 @@ export default function CircleDetailScreen() {
             </Pressable>
           ) : null}
 
-          {/* 邀请好友 (active members) */}
+          {/* 邀请好友 (active members) — same primary style as 进入群聊 */}
           {circle.myStatus === 'ACTIVE' ? (
             <Pressable
-              style={[s.actionBtn, d.inviteBtn]}
+              style={[s.actionBtn, d.chatBtn]}
               onPress={() =>
                 router.push({
                   pathname: '/(tabs)/discover/circle/[id]/invite',
@@ -791,20 +769,8 @@ export default function CircleDetailScreen() {
                 })
               }
             >
-              <Text style={[s.actionBtnText, d.inviteBtnText]}>
+              <Text style={[s.actionBtnText, d.chatBtnText]}>
                 {t('circle.invite.entry', { defaultValue: '邀请好友' })}
-              </Text>
-            </Pressable>
-          ) : null}
-
-          {/* 复制圈子信息分享 (active members) */}
-          {circle.myStatus === 'ACTIVE' ? (
-            <Pressable
-              style={[s.actionBtn, d.adminBtn]}
-              onPress={handleCopyCircleInfo}
-            >
-              <Text style={[s.actionBtnText, d.adminBtnText]}>
-                {t('circle.copyInfo', { defaultValue: '复制圈子信息' })}
               </Text>
             </Pressable>
           ) : null}

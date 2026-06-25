@@ -7,18 +7,18 @@ const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 const DETAIL = 'src/features/discover/screens/CircleDetailScreen.tsx';
 const MINE = 'src/features/discover/screens/MyCirclesScreen.tsx';
 
-test('CircleDetailScreen: the invite button is purple', () => {
+test('CircleDetailScreen: invite button shares the primary style of 进入群聊', () => {
   const src = read(DETAIL);
-  assert.match(src, /inviteBtn: \{ backgroundColor: colors\.purple \}/);
-  assert.match(src, /circle\/\[id\]\/invite[\s\S]*?d\.inviteBtnText/);
+  // invite routes to the invite screen using the chat (primary) button style
+  assert.match(src, /circle\/\[id\]\/invite[\s\S]*?d\.chatBtnText/);
+  // the old purple invite style is gone
+  assert.doesNotMatch(src, /inviteBtn/);
 });
 
-test('CircleDetailScreen: copy circle info to the clipboard', () => {
+test('CircleDetailScreen: copy-circle-info button is removed', () => {
   const src = read(DETAIL);
-  assert.match(src, /handleCopyCircleInfo/);
-  assert.match(src, /expo-clipboard/);
-  assert.match(src, /setStringAsync/);
-  assert.match(src, /圈子ID：/);
+  assert.doesNotMatch(src, /handleCopyCircleInfo/);
+  assert.doesNotMatch(src, /复制圈子信息/);
 });
 
 test('CircleDetailScreen: non-members get a join button', () => {
