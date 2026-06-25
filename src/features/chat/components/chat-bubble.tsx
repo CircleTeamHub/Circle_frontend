@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { fetchCircleDetail } from '@/services/api/circles';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -1192,7 +1193,36 @@ export const CircleCardBubble: React.FC<CircleCardBubbleProps> = ({
 }) => {
   const { colors } = useTheme();
   const card = message.circleCard;
+  const circleId = card?.circleId;
+
+  // The card is a snapshot taken at send time; fetch the circle live so the
+  // bubble reflects the circle's current name/avatar (e.g. after the owner
+  // changes them). Falls back to the snapshot while loading or on failure.
+  const [live, setLive] = useState<{
+    name: string;
+    avatarUrl: string | null;
+  } | null>(null);
+  useEffect(() => {
+    if (!circleId) return;
+    let cancelled = false;
+    fetchCircleDetail(circleId)
+      .then((circle) => {
+        if (!cancelled) {
+          setLive({ name: circle.name, avatarUrl: circle.avatarUrl });
+        }
+      })
+      .catch(() => {
+        // keep the snapshot fallback on failure (e.g. no access)
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [circleId]);
+
   if (!card) return null;
+
+  const displayName = live?.name ?? card.name;
+  const displayAvatar = live?.avatarUrl ?? card.avatarUrl;
 
   const avatarNode = (
     <Avatar
@@ -1220,15 +1250,15 @@ export const CircleCardBubble: React.FC<CircleCardBubbleProps> = ({
           <Avatar
             size={48}
             shape="square"
-            name={card.name}
-            uri={card.avatarUrl || undefined}
+            name={displayName}
+            uri={displayAvatar || undefined}
           />
           <View style={sFriendCard.textCol}>
             <Text
               style={[sFriendCard.nickname, { color: onCardColor }]}
               numberOfLines={1}
             >
-              {card.name}
+              {displayName}
             </Text>
             <Text
               style={[sFriendCard.persona, { color: onCardSecondary }]}

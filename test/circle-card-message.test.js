@@ -27,6 +27,11 @@ test('circle card: bubble renders and taps through to the circle detail', () => 
   const bubble = read('src/features/chat/components/chat-bubble.tsx');
   assert.match(bubble, /export const CircleCardBubble/);
   assert.match(bubble, /message\.circleCard/);
+  // bubble fetches the circle live so it reflects the current name/avatar,
+  // not the snapshot baked into the card at send time.
+  assert.match(bubble, /fetchCircleDetail\(circleId\)/);
+  assert.match(bubble, /displayName/);
+  assert.match(bubble, /displayAvatar/);
 
   const chat = read('src/features/chat/screens/ChatDetailScreen.tsx');
   assert.match(chat, /case 'circle-card':/);
