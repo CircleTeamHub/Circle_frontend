@@ -106,6 +106,10 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderRadius: Radius.full,
     paddingHorizontal: Spacing.md,
+    // Fixed-height single-line input: zero vertical padding + center alignment
+    // so the text/placeholder sits in the middle (Android defaults to top).
+    paddingVertical: 0,
+    textAlignVertical: 'center' as const,
   },
   addTagBtn: {
     height: 36,
