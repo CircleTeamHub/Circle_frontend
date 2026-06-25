@@ -43,9 +43,11 @@ const s = StyleSheet.create({
   profileCard: {
     alignItems: 'center',
     gap: Spacing.md,
-    paddingVertical: Spacing.xl,
-    // Pull up so the avatar overlaps the cover banner above (WeChat-style).
-    marginTop: -48,
+    paddingTop: Spacing.xl,
+    // Smaller bottom padding pulls the sections below (圈子图标…) up closer.
+    paddingBottom: Spacing.md,
+    // Pull up so the cover reaches the avatar's mid-line (~half overlaps it).
+    marginTop: -72,
   },
   coverWrap: {
     marginHorizontal: -Spacing.lg,
