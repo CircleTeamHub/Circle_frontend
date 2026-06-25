@@ -45,6 +45,7 @@ test("getSnackbarRoute routes chat items to the conversation, with optional avat
   const route = getSnackbarRoute(
     {
       kind: "chat",
+      id: "client-msg-1",
       conversationID: "conv-1",
       sourceID: "user-1",
       title: "Alice",
@@ -59,6 +60,24 @@ test("getSnackbarRoute routes chat items to the conversation, with optional avat
   assert.equal(route.params.sourceID, "user-1");
   assert.equal(route.params.conversationType, "private");
   assert.equal(route.params.avatarUrl, "https://cdn/a.png");
+  // The triggering message id is forwarded so chat detail scrolls to it.
+  assert.equal(route.params.searchedMsgID, "client-msg-1");
+});
+
+test("getSnackbarRoute omits searchedMsgID when the chat item has no id", () => {
+  const route = getSnackbarRoute(
+    {
+      kind: "chat",
+      id: "",
+      conversationID: "c",
+      sourceID: "s",
+      title: "t",
+      conversationType: "group",
+      avatarUrl: null,
+    },
+    OPTS,
+  );
+  assert.equal("searchedMsgID" in route.params, false);
 });
 
 test("getSnackbarRoute omits avatarUrl when absent", () => {
