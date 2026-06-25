@@ -48,12 +48,13 @@ const s = StyleSheet.create({
     paddingTop: Spacing.xl,
     // Smaller bottom padding pulls the sections below (圈子图标…) up closer.
     paddingBottom: Spacing.md,
-    // Pull up so the cover reaches the avatar's mid-line (~half overlaps it).
-    marginTop: -72,
+    // Pull the avatar up over the cover, but lower than before so more of the
+    // (now taller) cover shows and the avatar sits further down.
+    marginTop: -60,
   },
   coverWrap: {
     marginHorizontal: -Spacing.lg,
-    height: 200,
+    height: 240,
   },
   cover: { width: '100%', height: '100%' },
   coverPlaceholder: {
