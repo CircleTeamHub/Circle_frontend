@@ -714,6 +714,23 @@ export default function CircleDetailScreen() {
             </Pressable>
           ) : null}
 
+          {/* 邀请好友 (active members) */}
+          {circle.myStatus === 'ACTIVE' ? (
+            <Pressable
+              style={[s.actionBtn, d.adminBtn]}
+              onPress={() =>
+                router.push({
+                  pathname: '/(tabs)/discover/circle/[id]/invite',
+                  params: { id: circle.id, title: circle.name },
+                })
+              }
+            >
+              <Text style={[s.actionBtnText, d.adminBtnText]}>
+                {t('circle.invite.entry', { defaultValue: '邀请好友' })}
+              </Text>
+            </Pressable>
+          ) : null}
+
           {/* 入圈审核 (admin only) */}
           {isOwnerOrAdmin ? (
             <Pressable
