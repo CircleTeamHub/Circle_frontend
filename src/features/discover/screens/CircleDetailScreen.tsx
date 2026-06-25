@@ -657,8 +657,10 @@ export default function CircleDetailScreen() {
                 </View>
               ) : null}
               {isOwnerOrAdmin
-                ? circle.availableIconAssets?.map((asset) => {
-                    const selected = asset.id === circle.currentIconAssetID;
+                ? circle.availableIconAssets
+                    ?.filter((asset) => asset.imageUrl)
+                    .map((asset) => {
+                      const selected = asset.id === circle.currentIconAssetID;
                     return (
                       <Pressable
                         key={asset.id}
