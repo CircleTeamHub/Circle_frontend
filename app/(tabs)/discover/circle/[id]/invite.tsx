@@ -1,1 +1,1 @@
-export { default } from '@/features/discover/screens/InviteToCircleScreen';
+export { default } from '@/features/discover/screens/InviteCircleMenuScreen';
