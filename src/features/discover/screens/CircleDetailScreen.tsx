@@ -49,7 +49,7 @@ const s = StyleSheet.create({
   },
   coverWrap: {
     marginHorizontal: -Spacing.lg,
-    height: 150,
+    height: 200,
   },
   cover: { width: '100%', height: '100%' },
   coverPlaceholder: {
