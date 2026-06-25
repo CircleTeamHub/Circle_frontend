@@ -28,3 +28,14 @@ test('CircleDetailScreen: avatar is tappable for the owner to change it', () => 
     /onPress=\{isOwnerOrAdmin \? changeCircleAvatar : undefined\}/,
   );
 });
+
+test('changing avatar/cover syncs the cached circle lists', () => {
+  const store = read('src/features/discover/store/use-circles-store.ts');
+  assert.match(store, /patchCircle: \(id, patch\)/);
+
+  const screen = read(
+    'src/features/discover/screens/CircleDetailScreen.tsx',
+  );
+  assert.match(screen, /patchCircle\(id, \{ avatarUrl: url \}\)/);
+  assert.match(screen, /patchCircle\(id, \{ cover: url \}\)/);
+});

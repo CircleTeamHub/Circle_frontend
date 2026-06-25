@@ -21,6 +21,9 @@ interface CirclesState {
 
   fetchMyCircles: () => Promise<void>;
   fetchAllCircles: () => Promise<void>;
+  // Patch one circle across every cached list (avatar/cover changes from the
+  // detail screen, etc.) so lists don't show stale data until the next refetch.
+  patchCircle: (id: string, patch: Partial<Circle>) => void;
   reset: () => void;
 }
 
@@ -100,6 +103,21 @@ export const useCirclesStore = create<CirclesState>((set) => ({
       set({ allCirclesLoading: false });
     }
   },
+
+  patchCircle: (id, patch) =>
+    set((state) => {
+      const apply = (list: Circle[]) =>
+        list.map((circle) =>
+          circle.id === id ? { ...circle, ...patch } : circle,
+        );
+      return {
+        joinedCircles: apply(state.joinedCircles),
+        createdCircles: apply(state.createdCircles),
+        managedCircles: apply(state.managedCircles),
+        appliedCircles: apply(state.appliedCircles),
+        allCircles: apply(state.allCircles),
+      };
+    }),
 
   reset: () =>
     set({

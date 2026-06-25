@@ -27,6 +27,7 @@ import {
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useChangeCircleCover } from '@/features/discover/hooks/use-change-circle-cover';
 import { useChangeCircleAvatar } from '@/features/discover/hooks/use-change-circle-avatar';
+import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import {
   requestUploadPresign,
   resolveUploadContentType,
@@ -317,14 +318,20 @@ export default function CircleDetailScreen() {
   const isOwnerOrAdmin =
     circle?.myRole === 'OWNER' || circle?.myRole === 'ADMIN';
 
-  const { changeCover: changeCircleCover } = useChangeCircleCover(id, (url) =>
-    setCircle((current) => (current ? { ...current, cover: url } : current)),
-  );
+  const { changeCover: changeCircleCover } = useChangeCircleCover(id, (url) => {
+    setCircle((current) => (current ? { ...current, cover: url } : current));
+    // Keep the cached circle lists in sync so they don't show a stale image.
+    useCirclesStore.getState().patchCircle(id, { cover: url });
+  });
 
-  const { changeAvatar: changeCircleAvatar } = useChangeCircleAvatar(id, (url) =>
-    setCircle((current) =>
-      current ? { ...current, avatarUrl: url } : current,
-    ),
+  const { changeAvatar: changeCircleAvatar } = useChangeCircleAvatar(
+    id,
+    (url) => {
+      setCircle((current) =>
+        current ? { ...current, avatarUrl: url } : current,
+      );
+      useCirclesStore.getState().patchCircle(id, { avatarUrl: url });
+    },
   );
 
   // Active members who are not the owner can leave. Owners must transfer or
