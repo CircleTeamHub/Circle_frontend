@@ -7,8 +7,6 @@ on:
   push:
     branches:
       - main
-      - feat/**
-      - fix/**
 
 concurrency:
   group: frontend-ci-${{ github.workflow }}-${{ github.ref }}
