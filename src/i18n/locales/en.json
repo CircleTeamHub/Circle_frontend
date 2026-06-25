@@ -343,6 +343,7 @@
     "newFriends": "New Friends",
     "seats": "Seats",
     "groups": "Groups",
+    "circles": "Circles",
     "tags": "Tags",
     "accountId": "ID: {{id}}",
     "loadFailed": "Failed to load contacts, please try again",

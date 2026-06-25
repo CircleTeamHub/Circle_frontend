@@ -342,6 +342,7 @@
     "newFriends": "新的朋友",
     "seats": "坐席",
     "groups": "群聊",
+    "circles": "圈子",
     "tags": "标签",
     "accountId": "账号：{{id}}",
     "loadFailed": "联系人加载失败，请稍后重试",
