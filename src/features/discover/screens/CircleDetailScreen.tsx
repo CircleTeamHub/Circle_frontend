@@ -765,7 +765,11 @@ export default function CircleDetailScreen() {
               onPress={() =>
                 router.push({
                   pathname: '/(tabs)/discover/circle/[id]/invite',
-                  params: { id: circle.id, title: circle.name },
+                  params: {
+                    id: circle.id,
+                    title: circle.name,
+                    avatar: circle.avatarUrl ?? '',
+                  },
                 })
               }
             >

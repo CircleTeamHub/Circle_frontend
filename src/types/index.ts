@@ -64,6 +64,12 @@ export interface FriendCardData {
   displayIcons?: DisplayIcon[];
 }
 
+export interface CircleCardData {
+  circleId: string;
+  name: string;
+  avatarUrl: string | null;
+}
+
 export interface TransferCardData {
   amount: number;
   message: string | null;
@@ -80,6 +86,7 @@ export interface ChatMessage {
     | 'voice'
     | 'note-card'
     | 'friend-card'
+    | 'circle-card'
     | 'transfer-card';
   text?: string;
   time?: string;
@@ -105,6 +112,8 @@ export interface ChatMessage {
   noteCard?: NoteCardData;
   // For friend-card messages: parsed card payload
   friendCard?: FriendCardData;
+  // For circle-card messages: parsed circle share payload
+  circleCard?: CircleCardData;
   // For transfer-card messages: parsed payload
   transferCard?: TransferCardData;
   // OpenIM 发送状态：1=发送中, 2=已送达, 3=失败。仅自己发出的消息有意义。

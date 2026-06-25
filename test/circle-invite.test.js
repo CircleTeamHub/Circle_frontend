@@ -26,16 +26,16 @@ test('CircleDetailScreen exposes the invite entry to active members', () => {
   assert.match(src, /circle\/\[id\]\/invite/);
 });
 
-test('invite entry is a menu: copy circle info + invite contacts', () => {
+test('invite entry is a menu: send circle card + invite contacts', () => {
   const route = read('app/(tabs)/discover/circle/[id]/invite.tsx');
   assert.match(route, /InviteCircleMenuScreen/);
 
   const menu = read(
     'src/features/discover/screens/InviteCircleMenuScreen.tsx',
   );
-  // option 1: copy circle info to clipboard
-  assert.match(menu, /handleCopyInfo/);
-  assert.match(menu, /setStringAsync/);
+  // option 1: send the circle as a chat card (opens the share picker)
+  assert.match(menu, /handleSendCard/);
+  assert.match(menu, /circle\/\[id\]\/share/);
   // option 2: navigates to the friend picker
   assert.match(menu, /invite-friends/);
 });

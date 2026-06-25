@@ -295,24 +295,42 @@ export function mapMessageItemToChatMessage(
   if (item.contentType === MessageType.CardMessage) {
     const card = item.cardElem;
     if (card) {
-      const payload: FriendCardData = {
-        userID: card.userID,
-        nickname: card.nickname,
-        faceURL: card.faceURL,
-      };
-      // 业务扩展塞在 cardElem.ex 里：persona + displayIcons。
+      // 业务扩展塞在 cardElem.ex 里。kind === 'circle' 时是圈子名片，
+      // 否则按好友名片解析（persona + displayIcons）。
+      let ext: {
+        kind?: string;
+        persona?: string | null;
+        displayIcons?: FriendCardData['displayIcons'];
+      } = {};
       if (card.ex) {
         try {
-          const ext = JSON.parse(card.ex) as {
-            persona?: string | null;
-            displayIcons?: FriendCardData['displayIcons'];
-          };
-          payload.persona = ext.persona ?? null;
-          payload.displayIcons = ext.displayIcons ?? [];
+          ext = JSON.parse(card.ex);
         } catch {
           // 旧版本或非法 JSON，忽略，只保留基础字段
         }
       }
+
+      if (ext.kind === 'circle') {
+        return {
+          ...base,
+          type: 'circle-card',
+          outgoing: isSent,
+          circleCard: {
+            circleId: card.userID,
+            name: card.nickname,
+            avatarUrl: card.faceURL || null,
+          },
+          senderName: isSent ? undefined : (item.senderNickname || item.sendID),
+        };
+      }
+
+      const payload: FriendCardData = {
+        userID: card.userID,
+        nickname: card.nickname,
+        faceURL: card.faceURL,
+        persona: ext.persona ?? null,
+        displayIcons: ext.displayIcons ?? [],
+      };
       return {
         ...base,
         type: 'friend-card',

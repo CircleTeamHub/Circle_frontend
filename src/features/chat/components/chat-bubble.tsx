@@ -9,6 +9,7 @@ import { toPlayableUri } from '@/im/media-uri';
 import type {
   ChatMessage,
   FriendCardData,
+  CircleCardData,
   NoteCardData,
   TransferCardData,
 } from '@/types';
@@ -1125,6 +1126,121 @@ export const FriendCardBubble: React.FC<FriendCardBubbleProps> = ({
         <View style={[sFriendCard.divider, { backgroundColor: dividerColor }]} />
         <Text style={[sFriendCard.footer, { color: onCardSecondary }]}>
           个人名片
+        </Text>
+      </Pressable>
+
+      {message.time ? (
+        <View style={sFriendCard.timeRow}>
+          <Text
+            style={{ ...Typography.tinyRegular, color: colors.textSecondary }}
+          >
+            {message.time}
+          </Text>
+          {outgoing && !hideStatus ? <BubbleStatusText message={message} /> : null}
+        </View>
+      ) : null}
+    </View>
+  );
+
+  if (outgoing) {
+    return (
+      <View style={[sFriendCard.row, sFriendCard.rowOutgoing]}>
+        {cardNode}
+        <View style={sFriendCard.avatarSlot}>{avatarNode}</View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={sFriendCard.row}>
+      {onAvatarPress ? (
+        <Pressable style={sFriendCard.avatarSlot} onPress={onAvatarPress}>
+          {avatarNode}
+        </Pressable>
+      ) : (
+        <View style={sFriendCard.avatarSlot}>{avatarNode}</View>
+      )}
+      {cardNode}
+    </View>
+  );
+};
+
+interface CircleCardBubbleProps {
+  message: ChatMessage;
+  outgoing: boolean;
+  senderName?: string;
+  senderAvatarUri?: string;
+  selfName?: string;
+  selfAvatarUri?: string;
+  onPress?: (card: CircleCardData) => void;
+  onAvatarPress?: () => void;
+  hideStatus?: boolean;
+}
+
+// Circle share card — reuses the friend-card layout (sFriendCard) with a circle
+// avatar/name and a "圈子名片 · 点击加入" footer. Tapping opens the circle detail.
+export const CircleCardBubble: React.FC<CircleCardBubbleProps> = ({
+  message,
+  outgoing,
+  senderName,
+  senderAvatarUri,
+  selfName,
+  selfAvatarUri,
+  onPress,
+  onAvatarPress,
+  hideStatus,
+}) => {
+  const { colors } = useTheme();
+  const card = message.circleCard;
+  if (!card) return null;
+
+  const avatarNode = (
+    <Avatar
+      size={AVATAR_SIZE}
+      shape="square"
+      name={outgoing ? selfName : senderName}
+      uri={outgoing ? selfAvatarUri : senderAvatarUri}
+    />
+  );
+
+  const cardBg = outgoing ? colors.sentBubble : colors.receivedBubble;
+  const onCardColor = outgoing ? colors.white : colors.text;
+  const onCardSecondary = outgoing
+    ? 'rgba(255,255,255,0.78)'
+    : colors.textSecondary;
+  const dividerColor = outgoing ? 'rgba(255,255,255,0.25)' : colors.divider;
+
+  const cardNode = (
+    <View style={[sFriendCard.body, outgoing ? sFriendCard.bodyOutgoing : null]}>
+      <Pressable
+        style={[sFriendCard.card, { backgroundColor: cardBg }]}
+        onPress={onPress ? () => onPress(card) : undefined}
+      >
+        <View style={sFriendCard.topRow}>
+          <Avatar
+            size={48}
+            shape="square"
+            name={card.name}
+            uri={card.avatarUrl || undefined}
+          />
+          <View style={sFriendCard.textCol}>
+            <Text
+              style={[sFriendCard.nickname, { color: onCardColor }]}
+              numberOfLines={1}
+            >
+              {card.name}
+            </Text>
+            <Text
+              style={[sFriendCard.persona, { color: onCardSecondary }]}
+              numberOfLines={1}
+            >
+              圈子
+            </Text>
+          </View>
+        </View>
+        <View style={[sFriendCard.divider, { backgroundColor: dividerColor }]} />
+        <Text style={[sFriendCard.footer, { color: onCardSecondary }]}>
+          圈子名片 · 点击加入
         </Text>
       </Pressable>
 

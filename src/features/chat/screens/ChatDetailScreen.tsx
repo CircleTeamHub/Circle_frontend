@@ -27,6 +27,7 @@ import {
   VoiceBubble,
   NoteCardBubble,
   FriendCardBubble,
+  CircleCardBubble,
   TransferCardBubble,
 } from '@/features/chat/components/chat-bubble';
 import { EmojiPicker } from '@/features/chat/components/emoji-picker';
@@ -742,6 +743,25 @@ export default function ChatDetailScreen() {
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
             onPress={(card) =>
               router.push(getUserProfileHref(scope, card.userID, card.nickname))
+            }
+            hideStatus={isGroupChat}
+          />
+        ));
+      case 'circle-card':
+        return withMessageActions(item, (
+          <CircleCardBubble
+            message={item}
+            outgoing={Boolean(item.outgoing)}
+            senderName={item.senderName ?? conversationTitle}
+            senderAvatarUri={avatarUrl}
+            selfName={selfName}
+            selfAvatarUri={selfAvatarUri}
+            onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onPress={(card) =>
+              router.push({
+                pathname: '/(tabs)/discover/circle/[id]',
+                params: { id: card.circleId },
+              })
             }
             hideStatus={isGroupChat}
           />
