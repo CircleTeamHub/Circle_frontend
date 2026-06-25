@@ -44,10 +44,10 @@ const s = StyleSheet.create({
   // Header card
   profileCard: {
     alignItems: 'center',
-    gap: Spacing.md,
+    gap: Spacing.sm,
     paddingTop: Spacing.xl,
-    // Smaller bottom padding pulls the sections below (圈子图标…) up closer.
-    paddingBottom: Spacing.md,
+    // Tight bottom padding pulls the sections below (圈子图标…) right up.
+    paddingBottom: Spacing.xs,
     // Pull the avatar up over the cover, but lower than before so more of the
     // (now taller) cover shows and the avatar sits further down.
     marginTop: -60,
@@ -130,7 +130,7 @@ const s = StyleSheet.create({
   },
   // Sections
   section: {
-    marginTop: Spacing.lg,
+    marginTop: Spacing.md,
   },
   sectionTitle: {
     ...Typography.caption,
