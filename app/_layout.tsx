@@ -29,9 +29,24 @@ import { AccountSwitcherSheet } from '@/features/profile/components/account-swit
 import { NotificationSnackbarHost } from '@/features/notifications/components/NotificationSnackbarHost';
 import { CallInviteHost } from '@/features/call/components/CallInviteHost';
 import { ThemeProvider, useTheme } from '@/theme';
+import {
+  initSentry,
+  wrapWithSentry,
+  captureSentryTestError,
+} from '@/observability/sentry';
 
 // 将 expo-router 内置的 ErrorBoundary 重新导出，使其在根路由层生效（捕获页面级报错）
 export { ErrorBoundary } from 'expo-router';
+
+// 崩溃/错误上报：仅当配置了 DSN（EXPO_PUBLIC_SENTRY_DSN 或 app.json extra.sentryDsn）
+// 时才真正初始化，否则为完全 no-op。尽早调用以捕获启动期错误。
+initSentry();
+
+// 临时验证钩子：在 .env.local 设 EXPO_PUBLIC_SENTRY_TEST=1 并重建 App，启动时会发一
+// 条测试错误到 Sentry，用来确认前端崩溃捕获生效。验证后删掉该 flag（或这几行）即可。
+if (__DEV__ && process.env.EXPO_PUBLIC_SENTRY_TEST === '1') {
+  captureSentryTestError();
+}
 
 type PersistedStore = {
   persist?: {
@@ -195,7 +210,7 @@ function AuthRouteGuard({ children }: { children: ReactNode }) {
 
 // RootLayout：应用真正的根组件
 // 职责：迁移旧版 AsyncStorage 数据到 MMKV → 加载字体 → 隐藏启动屏 → 挂载主题 Provider → 渲染路由结构
-export default function RootLayout() {
+function RootLayout() {
   // 加载自定义字体，loaded 为 true 时字体就绪，error 表示加载失败
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
@@ -258,3 +273,6 @@ export default function RootLayout() {
     </ThemeProvider>
   );
 }
+
+// 用 Sentry 包裹根组件（启用触摸/导航埋点）；未配置 DSN 时返回原组件、行为不变。
+export default wrapWithSentry(RootLayout);

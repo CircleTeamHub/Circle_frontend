@@ -25,6 +25,7 @@
     "@openim/rn-client-sdk": "^3.8.3-patch.12.3",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-navigation/native": "^7.1.28",
+    "@sentry/react-native": "~7.11.0",
     "expo": "~55.0.6",
     "expo-audio": "~55.0.14",
     "expo-camera": "~55.0.19",
