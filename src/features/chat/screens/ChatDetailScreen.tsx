@@ -785,10 +785,7 @@ export default function ChatDetailScreen() {
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
             onPress={(card) =>
-              router.push({
-                pathname: '/(tabs)/discover/circle/[id]',
-                params: { id: card.circleId },
-              })
+              router.push(`/(tabs)/discover/circle/${encodeURIComponent(card.circleId)}`)
             }
             hideStatus={isGroupChat}
           />

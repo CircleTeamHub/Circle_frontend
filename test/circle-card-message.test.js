@@ -37,7 +37,10 @@ test('circle card: bubble renders and taps through to the circle detail', () => 
   assert.match(chat, /case 'circle-card':/);
   assert.match(chat, /<CircleCardBubble/);
   // tapping opens the circle detail (where the join button lives)
-  assert.match(chat, /params: \{ id: card\.circleId \}/);
+  assert.match(
+    chat,
+    /router\.push\(`\/\(tabs\)\/discover\/circle\/\$\{encodeURIComponent\(card\.circleId\)\}`\)/,
+  );
 });
 
 test('ShareCircleCardScreen sends the card to a chosen conversation', () => {

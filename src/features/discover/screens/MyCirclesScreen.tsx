@@ -62,7 +62,7 @@ export default function MyCirclesScreen() {
     const id = joinId.trim();
     if (!id) return;
     setJoinId('');
-    router.push({ pathname: '/(tabs)/discover/circle/[id]', params: { id } });
+    router.push(`/(tabs)/discover/circle/${encodeURIComponent(id)}`);
   }, [joinId, router]);
 
   const canSubmit = joinId.trim().length > 0;

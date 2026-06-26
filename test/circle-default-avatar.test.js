@@ -29,6 +29,14 @@ test('圈子默认头像：所有圈子头像渲染点都走 CircleAvatar', () =
     const src = read(rel);
     assert.match(src, /CircleAvatar/, `${rel} 应使用 CircleAvatar`);
   }
+
+  const myCirclesPanel = read(
+    'src/features/discover/components/my-circles-panel.tsx',
+  );
+  assert.match(
+    myCirclesPanel,
+    /import \{ CircleAvatar \} from ['"]@\/components\/ui\/circle-avatar['"]/,
+  );
 });
 
 test('圈子详情页：旧的 people 占位 / avatarPlaceholder 已移除', () => {

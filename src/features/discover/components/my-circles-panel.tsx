@@ -204,7 +204,7 @@ export const MyCirclesPanel: React.FC = () => {
             <View key={item.id}>
               <Pressable
                 style={s.row}
-                onPress={() => router.push({ pathname: '/(tabs)/discover/circle/[id]', params: { id: item.id } })}
+                onPress={() => router.push(`/(tabs)/discover/circle/${encodeURIComponent(item.id)}`)}
               >
                 <CircleAvatar
                   uri={item.avatarUrl}

@@ -33,5 +33,8 @@ test('MyCirclesScreen: open a circle by a pasted id', () => {
   const src = read(MINE);
   assert.match(src, /handleOpenById/);
   assert.match(src, /joinId\.trim\(\)/);
-  assert.match(src, /pathname: '\/\(tabs\)\/discover\/circle\/\[id\]'/);
+  assert.match(
+    src,
+    /router\.push\(`\/\(tabs\)\/discover\/circle\/\$\{encodeURIComponent\(id\)\}`\)/,
+  );
 });
