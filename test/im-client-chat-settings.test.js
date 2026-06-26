@@ -390,6 +390,112 @@ test('sendFriendCardMessage creates and sends a friend card message to the targe
   ]);
 });
 
+test('sendCircleCardMessage stores the circle avatar in card extension as a fallback snapshot', async () => {
+  const sdkCalls = [];
+  const { sendCircleCardMessage } = loadTsModule('src/im/client.ts', {
+    '@openim/rn-client-sdk': {
+      __esModule: true,
+      default: {
+        initSDK: async () => undefined,
+        createCardMessage: async (params) => {
+          sdkCalls.push(['createCardMessage', params]);
+          return { clientMsgID: 'message-1' };
+        },
+        sendMessage: async (params) => {
+          sdkCalls.push(['sendMessage', params]);
+          return params.message;
+        },
+      },
+      LogLevel: { Info: 0 },
+      SessionType: { Single: 1, Group: 2 },
+      ViewType: { History: 0 },
+    },
+    'react-native-fs': {
+      __esModule: true,
+      default: {
+        DocumentDirectoryPath: '/tmp',
+        mkdir: async () => undefined,
+      },
+    },
+    'react-native': {
+      Platform: { OS: 'ios' },
+    },
+    '@/constants/config': {
+      OPENIM_API_URL: 'https://im.example.com',
+      OPENIM_WS_URL: 'wss://im.example.com',
+      OPENIM_LOG_LEVEL: 0,
+    },
+    '@/stores/imStore': {
+      useIMStore: {
+        getState: () => ({
+          connected: true,
+          conversations: [
+            {
+              conversationID: 'conversation-2',
+              userID: 'target-user',
+              groupID: '',
+              conversationType: 1,
+            },
+          ],
+          setError: () => undefined,
+          setInitialized: () => undefined,
+          setCurrentUserID: () => undefined,
+          setConnecting: () => undefined,
+          reset: () => undefined,
+          setConversations: () => undefined,
+          mergeConversations: () => undefined,
+          setMessages: () => undefined,
+        }),
+      },
+    },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: {
+        getState: () => ({
+          setMessagesUnread: () => undefined,
+        }),
+      },
+    },
+  });
+
+  await sendCircleCardMessage({
+    targetConversationID: 'conversation-2',
+    circleId: 'circle-1',
+    name: '上海同城交友',
+    avatarUrl: 'https://cdn.example.com/circle.png',
+  });
+
+  assert.deepEqual(normalize(sdkCalls), [
+    [
+      'createCardMessage',
+      {
+        userID: 'circle-1',
+        nickname: '上海同城交友',
+        faceURL: 'https://cdn.example.com/circle.png',
+        ex: JSON.stringify({
+          v: 'circle-card-v1',
+          kind: 'circle',
+          avatarUrl: 'https://cdn.example.com/circle.png',
+        }),
+      },
+    ],
+    [
+      'sendMessage',
+      {
+        recvID: 'target-user',
+        groupID: '',
+        message: { clientMsgID: 'message-1' },
+        offlinePushInfo: {
+          title: '圈子邀请',
+          desc: '上海同城交友',
+          ex: '',
+          iOSPushSound: 'default',
+          iOSBadgeCount: true,
+        },
+      },
+    ],
+  ]);
+});
+
 test('searchConversationTextMessages searches the current conversation by keyword', async () => {
   const sdkCalls = [];
   const { searchConversationTextMessages } = loadSearchClient(sdkCalls);

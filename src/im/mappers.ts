@@ -11,6 +11,7 @@ import type {
   NoteCardData,
   FriendCardData,
   TransferCardData,
+  VerificationCardData,
 } from '@/types';
 import {
   MessageType,
@@ -18,7 +19,12 @@ import {
   type ConversationItem,
   type MessageItem,
 } from '@openim/rn-client-sdk';
-import { NOTE_CARD_EXTENSION, TRANSFER_CARD_EXTENSION, fromImUserId } from '@/im/client';
+import {
+  NOTE_CARD_EXTENSION,
+  TRANSFER_CARD_EXTENSION,
+  VERIFICATION_CARD_EXTENSION,
+  fromImUserId,
+} from '@/im/client';
 import { normalizeMediaUrl } from '@/services/api/utils';
 import i18n from '@/i18n';
 
@@ -76,6 +82,25 @@ function parseNoteCardPayload(data: string): NoteCardData | null {
       imageCount: raw.imageCount ?? 0,
       videoCount: raw.videoCount ?? 0,
       groupNames: Array.isArray(raw.groupNames) ? raw.groupNames : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+function parseVerificationCardPayload(
+  data: string,
+): VerificationCardData | null {
+  try {
+    const raw = JSON.parse(data) as Partial<VerificationCardData>;
+    if (!raw || typeof raw.invitationId !== 'string') {
+      return null;
+    }
+    return {
+      invitationId: raw.invitationId,
+      circleName: typeof raw.circleName === 'string' ? raw.circleName : '',
+      applicantName:
+        typeof raw.applicantName === 'string' ? raw.applicantName : '',
     };
   } catch {
     return null;
@@ -182,6 +207,15 @@ export function getMessagePreview(message: MessageItem | null, fallback = '') {
         const payload = parseNoteCardPayload(message.customElem?.data ?? '');
         if (payload) return tImPreview('note', '[笔记] {{title}}', { title: payload.title });
       }
+      if (ext === VERIFICATION_CARD_EXTENSION) {
+        const payload = parseVerificationCardPayload(
+          message.customElem?.data ?? '',
+        );
+        if (payload)
+          return tImPreview('verification', '[验证] {{name}} 邀请你担保', {
+            name: payload.applicantName,
+          });
+      }
       const desc = message.customElem?.description;
       if (desc && desc.trim()) return desc;
       return tImPreview('default', '[消息]');
@@ -271,6 +305,18 @@ export function mapMessageItemToChatMessage(
         };
       }
     }
+    if (ext === VERIFICATION_CARD_EXTENSION) {
+      const payload = parseVerificationCardPayload(item.customElem?.data ?? '');
+      if (payload) {
+        return {
+          ...base,
+          type: 'verification-card',
+          outgoing: isSent,
+          verificationCard: payload,
+          senderName: isSent ? undefined : (item.senderNickname || item.sendID),
+        };
+      }
+    }
     if (ext === TRANSFER_CARD_EXTENSION) {
       try {
         const raw = JSON.parse(item.customElem?.data ?? '') as Partial<TransferCardData>;
@@ -299,6 +345,7 @@ export function mapMessageItemToChatMessage(
       // 否则按好友名片解析（persona + displayIcons）。
       let ext: {
         kind?: string;
+        avatarUrl?: string | null;
         persona?: string | null;
         displayIcons?: FriendCardData['displayIcons'];
       } = {};
@@ -311,6 +358,11 @@ export function mapMessageItemToChatMessage(
       }
 
       if (ext.kind === 'circle') {
+        const avatarUrl =
+          card.faceURL ||
+          (typeof ext.avatarUrl === 'string' && ext.avatarUrl.length > 0
+            ? ext.avatarUrl
+            : null);
         return {
           ...base,
           type: 'circle-card',
@@ -318,7 +370,7 @@ export function mapMessageItemToChatMessage(
           circleCard: {
             circleId: card.userID,
             name: card.nickname,
-            avatarUrl: card.faceURL || null,
+            avatarUrl,
           },
           senderName: isSent ? undefined : (item.senderNickname || item.sendID),
         };

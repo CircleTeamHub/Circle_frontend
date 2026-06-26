@@ -1005,6 +1005,53 @@ export async function sendNoteCardMessage(params: {
 }
 
 /**
+ * Circle-verification invite card. Sent to a friend when the applicant adds
+ * them as a verifier; tapping it opens the verify screen to approve/reject.
+ */
+export const VERIFICATION_CARD_EXTENSION = 'circle-verify-v1';
+
+export interface VerificationCardPayload {
+  invitationId: string;
+  circleName: string;
+  applicantName: string;
+}
+
+export async function sendVerificationCardMessage(params: {
+  sourceID: string;
+  sessionType: SessionType;
+  payload: VerificationCardPayload;
+}) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await waitForOpenIMConnectionReady();
+
+  const preview = `[验证] ${params.payload.applicantName} 邀请你为入圈申请担保`;
+  const message = await OpenIMSDK.createCustomMessage({
+    data: JSON.stringify(params.payload),
+    extension: VERIFICATION_CARD_EXTENSION,
+    description: preview,
+  });
+
+  const isSingle = params.sessionType === SessionType.Single;
+  return reportSend({
+    recvID: isSingle ? toImUserId(params.sourceID) : '',
+    groupID: !isSingle ? params.sourceID : '',
+    message,
+    offlinePushInfo: {
+      title: '新消息',
+      desc: preview,
+      ex: '',
+      iOSPushSound: 'default',
+      iOSBadgeCount: true,
+    },
+  });
+}
+
+/**
  * Friend-card extension format stuffed into `cardElem.ex`. Lets the receiver
  * render persona / displayIcons even though OpenIM's card schema only carries
  * userID / nickname / faceURL natively.
@@ -1080,6 +1127,7 @@ interface CircleCardExt {
   // Discriminator so mappers can tell a circle card apart from a friend card —
   // both ride OpenIM's native card message.
   kind: 'circle';
+  avatarUrl: string | null;
 }
 
 export async function sendCircleCardMessage(params: {
@@ -1107,7 +1155,11 @@ export async function sendCircleCardMessage(params: {
     throw new Error('目标会话不存在');
   }
 
-  const ext: CircleCardExt = { v: CIRCLE_CARD_EXT_VERSION, kind: 'circle' };
+  const ext: CircleCardExt = {
+    v: CIRCLE_CARD_EXT_VERSION,
+    kind: 'circle',
+    avatarUrl: params.avatarUrl ?? null,
+  };
   const message = await OpenIMSDK.createCardMessage({
     // 圈子 id 存在 card 的 userID 槽里 —— 收件人点名片靠它打开圈子详情。
     userID: params.circleId,

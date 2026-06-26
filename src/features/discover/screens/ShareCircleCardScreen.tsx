@@ -22,6 +22,8 @@ import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import type { Conversation } from '@/types';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
+const SENDING_STATE_FALLBACK_MS = 8000;
+
 const s = StyleSheet.create({
   container: { flex: 1 },
   content: {
@@ -90,6 +92,22 @@ export default function ShareCircleCardScreen() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const inFlightRef = useRef(false);
+  const sendingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearSendingTimeout = useCallback(() => {
+    if (sendingTimeoutRef.current) {
+      clearTimeout(sendingTimeoutRef.current);
+      sendingTimeoutRef.current = null;
+    }
+  }, []);
+
+  const clearSendingState = useCallback(() => {
+    clearSendingTimeout();
+    inFlightRef.current = false;
+    setSendingConversationID('');
+  }, [clearSendingTimeout]);
+
+  useEffect(() => clearSendingTimeout, [clearSendingTimeout]);
 
   useEffect(() => {
     if (rawConversations.length > 0) {
@@ -154,6 +172,16 @@ export default function ShareCircleCardScreen() {
               if (inFlightRef.current) return;
               inFlightRef.current = true;
               setSendingConversationID(conversation.id);
+              clearSendingTimeout();
+              sendingTimeoutRef.current = setTimeout(() => {
+                logClientDiagnostic('share_circle_send_state_timeout', {
+                  circleId,
+                  conversationID: conversation.id,
+                });
+                inFlightRef.current = false;
+                setSendingConversationID('');
+                sendingTimeoutRef.current = null;
+              }, SENDING_STATE_FALLBACK_MS);
               void sendCircleCardMessage({
                 targetConversationID: conversation.id,
                 circleId,
@@ -192,17 +220,22 @@ export default function ShareCircleCardScreen() {
                       : t('common.retryLater', { defaultValue: '请稍后重试' }),
                   );
                 })
-                .finally(() => {
-                  inFlightRef.current = false;
-                  setSendingConversationID('');
-                });
+                .finally(clearSendingState);
             },
           },
         ],
         { cancelable: true },
       );
     },
-    [circleId, circleName, circleAvatar, sendingConversationID, t],
+    [
+      circleId,
+      circleName,
+      circleAvatar,
+      clearSendingState,
+      clearSendingTimeout,
+      sendingConversationID,
+      t,
+    ],
   );
 
   const renderItem = useCallback(
