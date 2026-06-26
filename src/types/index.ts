@@ -70,6 +70,12 @@ export interface CircleCardData {
   avatarUrl: string | null;
 }
 
+export interface VerificationCardData {
+  invitationId: string;
+  circleName: string;
+  applicantName: string;
+}
+
 export interface TransferCardData {
   amount: number;
   message: string | null;
@@ -87,7 +93,8 @@ export interface ChatMessage {
     | 'note-card'
     | 'friend-card'
     | 'circle-card'
-    | 'transfer-card';
+    | 'transfer-card'
+    | 'verification-card';
   text?: string;
   time?: string;
   senderName?: string;
@@ -116,6 +123,8 @@ export interface ChatMessage {
   circleCard?: CircleCardData;
   // For transfer-card messages: parsed payload
   transferCard?: TransferCardData;
+  // For verification-card messages: parsed circle-verification invite payload
+  verificationCard?: VerificationCardData;
   // OpenIM 发送状态：1=发送中, 2=已送达, 3=失败。仅自己发出的消息有意义。
   sendStatus?: 1 | 2 | 3;
   // 对方是否已读，由 onRecvC2CReadReceipt 维护。仅自己发出的消息有意义。

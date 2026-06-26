@@ -14,6 +14,7 @@ import type {
   CircleCardData,
   NoteCardData,
   TransferCardData,
+  VerificationCardData,
 } from '@/types';
 
 interface DatePillProps {
@@ -64,6 +65,10 @@ interface ReceivedBubbleProps {
 }
 
 const AVATAR_SIZE = 36;
+const CHAT_CARD_STANDARD_WIDTH = 260;
+const LOCATION_CARD_WIDTH = 248;
+const CHAT_CARD_PADDING_VERTICAL = 10;
+const CHAT_CARD_GAP = 8;
 
 interface BubbleStatusTextProps {
   message: ChatMessage;
@@ -294,11 +299,11 @@ const sLocation = StyleSheet.create({
     borderTopRightRadius: 18,
     borderBottomRightRadius: 18,
     borderBottomLeftRadius: 18,
-    width: 248,
+    width: LOCATION_CARD_WIDTH,
     overflow: 'hidden',
   },
   locationImage: {
-    height: 156,
+    height: 124,
     borderTopLeftRadius: 4,
     borderTopRightRadius: 18,
     overflow: 'hidden',
@@ -309,14 +314,14 @@ const sLocation = StyleSheet.create({
     justifyContent: 'center',
   },
   locationCardBody: {
-    maxWidth: 248,
+    maxWidth: LOCATION_CARD_WIDTH,
   },
   locationCardContent: {
-    minHeight: 88,
+    minHeight: 68,
     justifyContent: 'center',
   },
   locationInfo: {
-    paddingVertical: 12,
+    paddingVertical: CHAT_CARD_PADDING_VERTICAL,
     paddingHorizontal: 14,
   },
 });
@@ -753,21 +758,21 @@ const sNote = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   body: {
-    maxWidth: 260,
+    maxWidth: CHAT_CARD_STANDARD_WIDTH,
   },
   bodyOutgoing: {
     alignItems: 'flex-end',
   },
   card: {
-    width: 260,
+    width: CHAT_CARD_STANDARD_WIDTH,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    paddingVertical: Spacing.md,
+    paddingVertical: CHAT_CARD_PADDING_VERTICAL,
     paddingHorizontal: Spacing.md,
   },
   topRow: {
     flexDirection: 'row',
-    gap: Spacing.sm,
+    gap: CHAT_CARD_GAP,
     alignItems: 'flex-start',
   },
   cover: {
@@ -781,24 +786,24 @@ const sNote = StyleSheet.create({
     gap: 2,
   },
   title: { ...Typography.body, fontWeight: '600' },
-  preview: { ...Typography.small, lineHeight: 18 },
+  preview: { ...Typography.small, lineHeight: 17 },
   meta: {
     ...Typography.tinyRegular,
-    marginTop: Spacing.sm,
+    marginTop: 6,
   },
   chips: {
     flexDirection: 'row',
-    gap: Spacing.xs,
-    marginTop: Spacing.sm,
+    gap: 4,
+    marginTop: 6,
     flexWrap: 'wrap',
   },
   chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
     borderRadius: Radius.full,
     borderWidth: 1,
   },
-  chipText: { ...Typography.small, fontWeight: '600' },
+  chipText: { ...Typography.tiny, fontWeight: '600' },
   avatarSlot: { paddingBottom: 2 },
   timeRow: {
     flexDirection: 'row',
@@ -886,7 +891,7 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
             {note.contentPreview ? (
               <Text
                 style={[sNote.preview, { color: onCardSecondary }]}
-                numberOfLines={3}
+                numberOfLines={2}
               >
                 {note.contentPreview}
               </Text>
@@ -983,33 +988,33 @@ const sFriendCard = StyleSheet.create({
     gap: Spacing.sm,
   },
   rowOutgoing: { justifyContent: 'flex-end' },
-  body: { maxWidth: 260 },
+  body: { maxWidth: CHAT_CARD_STANDARD_WIDTH },
   bodyOutgoing: { alignItems: 'flex-end' },
   card: {
-    width: 260,
+    width: CHAT_CARD_STANDARD_WIDTH,
     borderRadius: Radius.md,
-    paddingVertical: Spacing.md,
+    paddingVertical: CHAT_CARD_PADDING_VERTICAL,
     paddingHorizontal: Spacing.md,
-    gap: Spacing.sm,
+    gap: CHAT_CARD_GAP,
   },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: CHAT_CARD_GAP,
   },
-  textCol: { flex: 1, gap: 2 },
+  textCol: { flex: 1, gap: 1 },
   nickname: { ...Typography.body, fontWeight: '600' },
-  persona: { ...Typography.small, lineHeight: 18 },
+  persona: { ...Typography.small, lineHeight: 17 },
   iconsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 4,
   },
   iconChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
     borderRadius: Radius.full,
     gap: 4,
   },
@@ -1019,8 +1024,8 @@ const sFriendCard = StyleSheet.create({
     borderRadius: 7,
   },
   iconLabel: { ...Typography.tiny, fontWeight: '600' },
-  divider: { height: StyleSheet.hairlineWidth, marginTop: Spacing.xs },
-  footer: { ...Typography.tinyRegular, paddingTop: 4 },
+  divider: { height: StyleSheet.hairlineWidth, marginTop: 2 },
+  footer: { ...Typography.tinyRegular, paddingTop: 1 },
   avatarSlot: { paddingBottom: 2 },
   timeRow: {
     flexDirection: 'row',
@@ -1083,7 +1088,7 @@ export const FriendCardBubble: React.FC<FriendCardBubbleProps> = ({
             </Text>
             <Text
               style={[sFriendCard.persona, { color: onCardSecondary }]}
-              numberOfLines={2}
+              numberOfLines={1}
             >
               {card.persona?.trim() || '这个人很懒，什么都没留下'}
             </Text>
@@ -1179,8 +1184,34 @@ interface CircleCardBubbleProps {
   hideStatus?: boolean;
 }
 
-// Circle share card — reuses the friend-card layout (sFriendCard). Tapping
-// opens the circle detail, which owns live circle fetching and join checks.
+const sCircleCard = StyleSheet.create({
+  row: sFriendCard.row,
+  rowOutgoing: sFriendCard.rowOutgoing,
+  body: { maxWidth: CHAT_CARD_STANDARD_WIDTH },
+  bodyOutgoing: sFriendCard.bodyOutgoing,
+  card: {
+    width: CHAT_CARD_STANDARD_WIDTH,
+    borderRadius: Radius.md,
+    paddingVertical: CHAT_CARD_PADDING_VERTICAL,
+    paddingHorizontal: Spacing.md,
+    gap: CHAT_CARD_GAP,
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: CHAT_CARD_GAP,
+  },
+  textCol: { flex: 1, gap: 1 },
+  nickname: { ...Typography.body, fontWeight: '600' },
+  persona: { ...Typography.small, lineHeight: 17 },
+  divider: { height: StyleSheet.hairlineWidth, marginTop: 2 },
+  footer: { ...Typography.tinyRegular, paddingTop: 1 },
+  avatarSlot: sFriendCard.avatarSlot,
+  timeRow: sFriendCard.timeRow,
+});
+
+// Circle share card — compact card layout. Tapping opens the circle detail,
+// which owns live circle fetching and join checks.
 export const CircleCardBubble: React.FC<CircleCardBubbleProps> = ({
   message,
   outgoing,
@@ -1218,40 +1249,40 @@ export const CircleCardBubble: React.FC<CircleCardBubbleProps> = ({
   const dividerColor = outgoing ? 'rgba(255,255,255,0.25)' : colors.divider;
 
   const cardNode = (
-    <View style={[sFriendCard.body, outgoing ? sFriendCard.bodyOutgoing : null]}>
+    <View style={[sCircleCard.body, outgoing ? sCircleCard.bodyOutgoing : null]}>
       <Pressable
-        style={[sFriendCard.card, { backgroundColor: cardBg }]}
+        style={[sCircleCard.card, { backgroundColor: cardBg }]}
         onPress={onPress ? () => onPress(card) : undefined}
       >
-        <View style={sFriendCard.topRow}>
+        <View style={sCircleCard.topRow}>
           <CircleAvatar
             uri={displayAvatar}
             size={48}
             borderRadius={Radius.sm}
           />
-          <View style={sFriendCard.textCol}>
+          <View style={sCircleCard.textCol}>
             <Text
-              style={[sFriendCard.nickname, { color: onCardColor }]}
+              style={[sCircleCard.nickname, { color: onCardColor }]}
               numberOfLines={1}
             >
               {displayName}
             </Text>
             <Text
-              style={[sFriendCard.persona, { color: onCardSecondary }]}
+              style={[sCircleCard.persona, { color: onCardSecondary }]}
               numberOfLines={1}
             >
               {t('circle.card.type')}
             </Text>
           </View>
         </View>
-        <View style={[sFriendCard.divider, { backgroundColor: dividerColor }]} />
-        <Text style={[sFriendCard.footer, { color: onCardSecondary }]}>
+        <View style={[sCircleCard.divider, { backgroundColor: dividerColor }]} />
+        <Text style={[sCircleCard.footer, { color: onCardSecondary }]}>
           {t('circle.card.footer')}
         </Text>
       </Pressable>
 
       {message.time ? (
-        <View style={sFriendCard.timeRow}>
+        <View style={sCircleCard.timeRow}>
           <Text
             style={{ ...Typography.tinyRegular, color: colors.textSecondary }}
           >
@@ -1265,21 +1296,158 @@ export const CircleCardBubble: React.FC<CircleCardBubbleProps> = ({
 
   if (outgoing) {
     return (
-      <View style={[sFriendCard.row, sFriendCard.rowOutgoing]}>
+      <View style={[sCircleCard.row, sCircleCard.rowOutgoing]}>
         {cardNode}
-        <View style={sFriendCard.avatarSlot}>{avatarNode}</View>
+        <View style={sCircleCard.avatarSlot}>{avatarNode}</View>
       </View>
     );
   }
 
   return (
-    <View style={sFriendCard.row}>
+    <View style={sCircleCard.row}>
       {onAvatarPress ? (
-        <Pressable style={sFriendCard.avatarSlot} onPress={onAvatarPress}>
+        <Pressable style={sCircleCard.avatarSlot} onPress={onAvatarPress}>
           {avatarNode}
         </Pressable>
       ) : (
-        <View style={sFriendCard.avatarSlot}>{avatarNode}</View>
+        <View style={sCircleCard.avatarSlot}>{avatarNode}</View>
+      )}
+      {cardNode}
+    </View>
+  );
+};
+
+interface VerificationCardBubbleProps {
+  message: ChatMessage;
+  outgoing: boolean;
+  senderName?: string;
+  senderAvatarUri?: string;
+  selfName?: string;
+  selfAvatarUri?: string;
+  onPress?: (card: VerificationCardData) => void;
+  onAvatarPress?: () => void;
+  hideStatus?: boolean;
+}
+
+// Circle-verification invite card — sent when an applicant adds you as a
+// verifier. Tapping opens the verify screen to approve/reject. Reuses the
+// compact circle-card layout.
+export const VerificationCardBubble: React.FC<VerificationCardBubbleProps> = ({
+  message,
+  outgoing,
+  senderName,
+  senderAvatarUri,
+  selfName,
+  selfAvatarUri,
+  onPress,
+  onAvatarPress,
+  hideStatus,
+}) => {
+  const { colors } = useTheme();
+  const { t } = useTranslation();
+  const card = message.verificationCard;
+
+  if (!card) return null;
+
+  const avatarNode = (
+    <Avatar
+      size={AVATAR_SIZE}
+      shape="square"
+      name={outgoing ? selfName : senderName}
+      uri={outgoing ? selfAvatarUri : senderAvatarUri}
+    />
+  );
+
+  const cardBg = outgoing ? colors.sentBubble : colors.receivedBubble;
+  const onCardColor = outgoing ? colors.white : colors.text;
+  const onCardSecondary = outgoing
+    ? 'rgba(255,255,255,0.78)'
+    : colors.textSecondary;
+  const dividerColor = outgoing ? 'rgba(255,255,255,0.25)' : colors.divider;
+  const iconBg = outgoing ? 'rgba(255,255,255,0.2)' : colors.primaryLight;
+
+  const cardNode = (
+    <View style={[sCircleCard.body, outgoing ? sCircleCard.bodyOutgoing : null]}>
+      <Pressable
+        style={[sCircleCard.card, { backgroundColor: cardBg }]}
+        onPress={onPress ? () => onPress(card) : undefined}
+      >
+        <View style={sCircleCard.topRow}>
+          <View
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: Radius.sm,
+              backgroundColor: iconBg,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons
+              name="shield-checkmark"
+              size={26}
+              color={outgoing ? colors.white : colors.primary}
+            />
+          </View>
+          <View style={sCircleCard.textCol}>
+            <Text
+              style={[sCircleCard.nickname, { color: onCardColor }]}
+              numberOfLines={1}
+            >
+              {t('invitation.cardTitle', {
+                name: card.applicantName,
+                defaultValue: '{{name}} 邀请你帮忙验证',
+              })}
+            </Text>
+            <Text
+              style={[sCircleCard.persona, { color: onCardSecondary }]}
+              numberOfLines={1}
+            >
+              {t('invitation.cardCircle', {
+                circle: card.circleName,
+                defaultValue: '加入「{{circle}}」的入圈担保',
+              })}
+            </Text>
+          </View>
+        </View>
+        <View style={[sCircleCard.divider, { backgroundColor: dividerColor }]} />
+        <Text style={[sCircleCard.footer, { color: onCardSecondary }]}>
+          {t('invitation.cardFooter', { defaultValue: '点击为 TA 验证' })}
+        </Text>
+      </Pressable>
+
+      {message.time ? (
+        <View style={sCircleCard.timeRow}>
+          <Text
+            style={{ ...Typography.tinyRegular, color: colors.textSecondary }}
+          >
+            {message.time}
+          </Text>
+          {outgoing && !hideStatus ? (
+            <BubbleStatusText message={message} />
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  );
+
+  if (outgoing) {
+    return (
+      <View style={[sCircleCard.row, sCircleCard.rowOutgoing]}>
+        {cardNode}
+        <View style={sCircleCard.avatarSlot}>{avatarNode}</View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={sCircleCard.row}>
+      {onAvatarPress ? (
+        <Pressable style={sCircleCard.avatarSlot} onPress={onAvatarPress}>
+          {avatarNode}
+        </Pressable>
+      ) : (
+        <View style={sCircleCard.avatarSlot}>{avatarNode}</View>
       )}
       {cardNode}
     </View>
@@ -1307,20 +1475,20 @@ const sTransfer = StyleSheet.create({
     gap: Spacing.sm,
   },
   rowOutgoing: { justifyContent: 'flex-end' },
-  body: { maxWidth: 260 },
+  body: { maxWidth: CHAT_CARD_STANDARD_WIDTH },
   bodyOutgoing: { alignItems: 'flex-end' },
   card: {
-    width: 260,
+    width: CHAT_CARD_STANDARD_WIDTH,
     borderRadius: Radius.md,
-    paddingVertical: Spacing.md,
+    paddingVertical: CHAT_CARD_PADDING_VERTICAL,
     paddingHorizontal: Spacing.md,
-    gap: Spacing.sm,
+    gap: CHAT_CARD_GAP,
     backgroundColor: TRANSFER_GOLD,
   },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: CHAT_CARD_GAP,
   },
   iconWrap: {
     width: 36,
@@ -1408,7 +1576,7 @@ export const TransferCardBubble: React.FC<TransferCardBubbleProps> = ({
           </View>
         </View>
         {data.message ? (
-          <Text style={sTransfer.noteText} numberOfLines={2}>
+          <Text style={sTransfer.noteText} numberOfLines={1}>
             {data.message}
           </Text>
         ) : null}

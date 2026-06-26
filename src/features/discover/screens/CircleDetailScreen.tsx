@@ -25,6 +25,7 @@ import {
   uploadCircleIcon,
   leaveCircle,
   joinCircle,
+  fetchMyApplications,
 } from '@/services/api/circles';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useChangeCircleCover } from '@/features/discover/hooks/use-change-circle-cover';
@@ -38,7 +39,7 @@ import {
 } from '@/services/api/upload';
 import { getOrCreateGroupConversation } from '@/im/client';
 import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
-import type { CircleDetail } from '@/types';
+import type { CircleDetail, CircleInvitation } from '@/types';
 
 const s = StyleSheet.create({
   scroll: { flex: 1 },
@@ -232,7 +233,11 @@ export default function CircleDetailScreen() {
   const [iconSaving, setIconSaving] = useState(false);
   const [enteringGroupChat, setEnteringGroupChat] = useState(false);
   const [joining, setJoining] = useState(false);
+  const [myInvitation, setMyInvitation] = useState<CircleInvitation | null>(
+    null,
+  );
   const mountedRef = useRef(true);
+  const invitationRequestRef = useRef(0);
 
   // 进入圈子群聊：先解析出会话 ID（否则聊天页拿不到 conversationID 会停在预览模式），
   // 再入 discover 栈，返回时回到圈子详情。
@@ -294,10 +299,34 @@ export default function CircleDetailScreen() {
     }
   }, [id, t]);
 
+  // 当前用户在该圈是否有进行中的入圈申请（10 人担保验证）。有则在底部给出
+  // 「邀请好友为我验证」入口——invitation 流程的接收侧本来没有前端入口。
+  const loadMyInvitation = useCallback(async () => {
+    const requestId = ++invitationRequestRef.current;
+    setMyInvitation(null);
+    if (!id) return;
+    try {
+      const apps = await fetchMyApplications();
+      if (!mountedRef.current || requestId !== invitationRequestRef.current) {
+        return;
+      }
+      setMyInvitation(
+        apps.find((inv) => inv.circleId === id && inv.status === 'PENDING') ??
+          null,
+      );
+    } catch {
+      // 非关键路径，失败不阻塞详情页展示
+      if (mountedRef.current && requestId === invitationRequestRef.current) {
+        setMyInvitation(null);
+      }
+    }
+  }, [id]);
+
   useFocusEffect(
     useCallback(() => {
       void loadCircle();
-    }, [loadCircle]),
+      void loadMyInvitation();
+    }, [loadCircle, loadMyInvitation]),
   );
 
   const isOwner = circle?.myRole === 'OWNER';
@@ -786,11 +815,32 @@ export default function CircleDetailScreen() {
           {/* 加入圈子 (non-members) */}
           {!isActiveMember ? (
             circle.myStatus === 'PENDING' ? (
-              <Pressable style={[s.actionBtn, d.adminBtn]} disabled>
-                <Text style={[s.actionBtnText, d.adminBtnText]}>
-                  {t('circle.joinPending', { defaultValue: '审核中' })}
-                </Text>
-              </Pressable>
+              myInvitation ? (
+                <Pressable
+                  style={[s.actionBtn, d.chatBtn]}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/(tabs)/discover/invitation/[id]',
+                      params: { id: myInvitation.id },
+                    })
+                  }
+                >
+                  <Text style={[s.actionBtnText, d.chatBtnText]}>
+                    {t('circle.inviteVerifiers', {
+                      approved: myInvitation.approvedCount,
+                      required: myInvitation.requiredCount,
+                      defaultValue:
+                        '邀请好友为我验证 ({{approved}}/{{required}})',
+                    })}
+                  </Text>
+                </Pressable>
+              ) : (
+                <Pressable style={[s.actionBtn, d.adminBtn]} disabled>
+                  <Text style={[s.actionBtnText, d.adminBtnText]}>
+                    {t('circle.joinPending', { defaultValue: '审核中' })}
+                  </Text>
+                </Pressable>
+              )
             ) : (
               <Pressable
                 style={[s.actionBtn, d.chatBtn]}

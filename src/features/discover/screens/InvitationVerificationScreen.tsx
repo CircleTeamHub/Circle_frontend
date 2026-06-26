@@ -158,7 +158,11 @@ export default function InvitationVerificationScreen() {
     if (!invitation) return;
     router.push({
       pathname: '/(tabs)/discover/invitation/[id]/select-verifier',
-      params: { id: invitation.id, circleId: invitation.circleId },
+      params: {
+        id: invitation.id,
+        circleId: invitation.circleId,
+        circleName: invitation.circleName,
+      },
     });
   }, [router, invitation]);
 

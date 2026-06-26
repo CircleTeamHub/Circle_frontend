@@ -52,6 +52,50 @@ test("interactive: TRACE_LIKE → heart icon + liked summary", () => {
   assert.equal(row.title, "B");
 });
 
+test("interactive: CIRCLE_VERIFICATION_REQUESTED carries invitation id for tap-through", () => {
+  const { mapNotificationToRow } = load(
+    "src/features/notifications/utils/notification-summary.ts",
+  );
+  const row = mapNotificationToRow(
+    {
+      id: "n2",
+      type: "CIRCLE_VERIFICATION_REQUESTED",
+      content: "",
+      read: false,
+      createdAt: "2026-06-05T00:00:00Z",
+      fromUser: { id: "u3", nickname: "C", avatarUrl: null },
+      fromTrace: null,
+      fromReply: null,
+      fromCircle: { id: "c1", name: "Circle" },
+      fromInvitation: { id: "inv9", status: "PENDING" },
+    },
+    t,
+  );
+  assert.equal(row.icon, "shield-checkmark-outline");
+  assert.equal(row.verificationInvitationId, "inv9");
+});
+
+test("interactive: non-verification rows have a null verificationInvitationId", () => {
+  const { mapNotificationToRow } = load(
+    "src/features/notifications/utils/notification-summary.ts",
+  );
+  const row = mapNotificationToRow(
+    {
+      id: "n3",
+      type: "TRACE_LIKE",
+      content: "",
+      read: true,
+      createdAt: "2026-06-05T00:00:00Z",
+      fromUser: { id: "u4", nickname: "D", avatarUrl: null },
+      fromTrace: null,
+      fromReply: null,
+      fromInvitation: null,
+    },
+    t,
+  );
+  assert.equal(row.verificationInvitationId, null);
+});
+
 test("signup management: post row uses post excerpt and unread count", () => {
   const { mapMyPostToRow } = load(
     "src/features/notifications/utils/my-post-summary.ts",

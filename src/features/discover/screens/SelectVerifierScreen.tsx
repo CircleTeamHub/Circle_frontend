@@ -15,8 +15,11 @@ import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Divider } from '@/components/ui/divider';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { SessionType } from '@openim/rn-client-sdk';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { addVerifierToInvitation } from '@/services/api/circles';
+import { sendVerificationCardMessage } from '@/im/client';
+import { useAuthStore } from '@/stores/authStore';
 
 const s = StyleSheet.create({
   listContent: {
@@ -48,15 +51,17 @@ export default function SelectVerifierScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const router = useRouter();
-  const { id: invitationId } = useLocalSearchParams<{
+  const { id: invitationId, circleName } = useLocalSearchParams<{
     id: string;
     circleId: string;
+    circleName: string;
   }>();
 
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
+  const myNickname = useAuthStore((state) => state.user?.nickname);
 
   const loadFriends = useCallback(async () => {
     setLoading(true);
@@ -112,6 +117,26 @@ export default function SelectVerifierScreen() {
       setSubmittingId(friend.id);
       try {
         await addVerifierToInvitation(invitationId, friend.id);
+        // 同时给对方发一条验证邀请名片消息，点击可直达验证页。
+        // best-effort：发消息失败不影响「已添加验证人」这件事本身。
+        try {
+          await sendVerificationCardMessage({
+            sourceID: friend.id,
+            sessionType: SessionType.Single,
+            payload: {
+              invitationId,
+              circleName: circleName ?? '',
+              applicantName: myNickname ?? '',
+            },
+          });
+        } catch (sendErr) {
+          if (__DEV__) {
+            console.warn(
+              '[SelectVerifierScreen] sendVerificationCardMessage failed',
+              sendErr,
+            );
+          }
+        }
         Alert.alert(t('invitation.invited'), t('invitation.invitedMessage', { name: friend.nickname }));
         router.back();
       } catch (error: unknown) {
@@ -122,7 +147,7 @@ export default function SelectVerifierScreen() {
         setSubmittingId(null);
       }
     },
-    [invitationId, submittingId, router, t],
+    [invitationId, submittingId, router, t, circleName, myNickname],
   );
 
   const renderItem = useCallback(

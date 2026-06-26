@@ -164,10 +164,17 @@ export default function NotificationCenterScreen() {
   }, [load, tab, store]);
 
   const handleRowPress = useCallback(
-    (id: string, title: string) => {
+    (id: string, title: string, verificationInvitationId: string | null) => {
       if (tab === 'interactive') {
         store().markInteractiveReadLocal(id);
         void markNotificationRead(id).catch((e) => isDev && console.warn(e));
+        // 「邀请你验证」通知直达验证页；其余互动通知仅标记已读。
+        if (verificationInvitationId) {
+          router.push({
+            pathname: '/(tabs)/discover/verification/[id]',
+            params: { id: verificationInvitationId },
+          });
+        }
         return;
       }
       // 报名管理: open the post's signer list. Opening it marks signups read
@@ -225,7 +232,13 @@ export default function NotificationCenterScreen() {
         renderItem={({ item }) => (
           <NotificationRow
             data={item.view}
-            onPress={() => handleRowPress(item.view.id, item.view.title)}
+            onPress={() =>
+              handleRowPress(
+                item.view.id,
+                item.view.title,
+                item.view.verificationInvitationId,
+              )
+            }
           />
         )}
         ItemSeparatorComponent={Divider}
