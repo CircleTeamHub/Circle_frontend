@@ -119,6 +119,26 @@ test("getSnackbarRoute falls back to untitledPost for empty excerpts", () => {
   assert.equal(route.params.title, "(untitled post)");
 });
 
+test("getSnackbarRoute routes verification requests to the verify screen", () => {
+  const route = getSnackbarRoute(
+    notification({
+      type: "CIRCLE_VERIFICATION_REQUESTED",
+      fromInvitation: { id: "inv1", status: "PENDING" },
+    }),
+    OPTS,
+  );
+  assert.equal(route.pathname, "/(tabs)/discover/verification/[id]");
+  assert.equal(route.params.id, "inv1");
+});
+
+test("getSnackbarRoute falls back when a verification request lacks an invitation id", () => {
+  const route = getSnackbarRoute(
+    notification({ type: "CIRCLE_VERIFICATION_REQUESTED", fromInvitation: null }),
+    OPTS,
+  );
+  assert.equal(route, "/(tabs)/messages/notifications");
+});
+
 test("getSnackbarRoute routes friend requests to new-friends", () => {
   const route = getSnackbarRoute(
     notification({ type: "FRIEND_REQUEST_RECEIVED" }),

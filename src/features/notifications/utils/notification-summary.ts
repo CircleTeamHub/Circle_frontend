@@ -13,6 +13,8 @@ export interface NotificationRowData {
   previewImage: string | null;
   unread: boolean;
   createdAt: string;
+  // 非空时，点击该通知直达对应的入圈担保验证页。
+  verificationInvitationId: string | null;
 }
 
 function iconFor(type: NotificationType): keyof typeof Ionicons.glyphMap {
@@ -49,5 +51,9 @@ export function mapNotificationToRow(
     previewImage: n.fromTrace?.firstImage ?? null,
     unread: !n.read,
     createdAt: n.createdAt,
+    verificationInvitationId:
+      n.type === 'CIRCLE_VERIFICATION_REQUESTED'
+        ? (n.fromInvitation?.id ?? null)
+        : null,
   };
 }

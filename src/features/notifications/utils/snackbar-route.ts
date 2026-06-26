@@ -42,6 +42,14 @@ export function getSnackbarRoute(
     };
   }
 
+  // 「邀请你为入圈申请验证」→ 直达担保验证页，可直接同意/拒绝。
+  if (item.type === 'CIRCLE_VERIFICATION_REQUESTED' && item.fromInvitation?.id) {
+    return {
+      pathname: '/(tabs)/discover/verification/[id]',
+      params: { id: item.fromInvitation.id },
+    };
+  }
+
   if (item.type.startsWith('FRIEND_REQUEST')) {
     return '/(tabs)/contacts/new-friends';
   }

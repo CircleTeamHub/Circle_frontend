@@ -23,5 +23,6 @@ export function mapMyPostToRow(p: MyCirclePost, t: TFunc): NotificationRowData {
     previewImage: null,
     unread: p.unreadSignupCount > 0,
     createdAt: p.createdAt,
+    verificationInvitationId: null,
   };
 }
