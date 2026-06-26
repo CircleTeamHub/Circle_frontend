@@ -20,6 +20,17 @@ test('UserMomentsScreen wires header + album list + pagination', () => {
   assert.match(src, /discover\.noMoments/); // 空态复用现有文案
 });
 
+test('UserMomentsScreen resolves non-UUID route ids before fetching author moments', () => {
+  const src = read('src/features/discover/screens/UserMomentsScreen.tsx');
+
+  assert.match(src, /function isUuid/);
+  assert.match(src, /canonicalUserId/);
+  assert.match(src, /useUserMoments\(canonicalUserId\)/);
+  assert.match(src, /setCanonicalUserId\(profile\.id\)/);
+  assert.match(src, /!loading && canonicalUserId/);
+  assert.doesNotMatch(src, /useUserMoments\(userId\)/);
+});
+
 test('moment album i18n keys exist in both locales', () => {
   const zh = JSON.parse(read('src/i18n/locales/zh.json'));
   const en = JSON.parse(read('src/i18n/locales/en.json'));
