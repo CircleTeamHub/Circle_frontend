@@ -94,3 +94,32 @@ export function captureSentryTestError(
 ): void {
   Sentry.captureException(new Error(message));
 }
+
+export interface ReportErrorContext {
+  [key: string]: unknown;
+}
+
+/**
+ * Reports a handled ("soft failure") error to Sentry — errors that are caught
+ * and recovered, so Sentry's automatic handlers never see them. No-op when
+ * Sentry is not initialized. `client` is injectable for tests.
+ */
+export function reportError(
+  error: unknown,
+  context?: ReportErrorContext,
+  client: Pick<typeof Sentry, 'captureException'> = Sentry,
+): void {
+  client.captureException(error, context ? { extra: context } : undefined);
+}
+
+/**
+ * Whether an HTTP/network failure is worth reporting: network errors (status 0)
+ * and server errors (5xx) are; expected 4xx client/auth/validation errors are
+ * not. An unknown status (non-HTTP error) is reported.
+ */
+export function shouldReportHttpFailure(status: number | undefined): boolean {
+  if (status === undefined) {
+    return true;
+  }
+  return status === 0 || status >= 500;
+}

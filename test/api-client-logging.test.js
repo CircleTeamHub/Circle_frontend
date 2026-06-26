@@ -5,7 +5,13 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
-function loadApiClient({ responseText, logs }) {
+function loadApiClient({
+  responseText,
+  logs = [],
+  status = 201,
+  ok = true,
+  onReport = () => {},
+}) {
   const filePath = path.join(process.cwd(), 'src/services/api/client.ts');
   const source = fs.readFileSync(filePath, 'utf8');
   const transpiled = ts.transpileModule(source, {
@@ -28,8 +34,8 @@ function loadApiClient({ responseText, logs }) {
     setTimeout,
     clearTimeout,
     fetch: async () => ({
-      ok: true,
-      status: 201,
+      ok,
+      status,
       text: async () => responseText,
     }),
     console: {
@@ -51,6 +57,12 @@ function loadApiClient({ responseText, logs }) {
               setTokens: () => {},
             }),
           },
+        };
+      }
+      if (request === '@/observability/sentry') {
+        return {
+          reportError: onReport,
+          shouldReportHttpFailure: (s) => s === undefined || s === 0 || s >= 500,
         };
       }
       return require(request);
@@ -91,4 +103,35 @@ test('api dev logs redact presigned upload URLs and object keys', async () => {
   assert.doesNotMatch(serializedLogs, /X-Amz-Signature/);
   assert.doesNotMatch(serializedLogs, /circle\/chat\/user\/file\.heic/);
   assert.match(serializedLogs, /\[REDACTED/);
+});
+
+test('apiClient reports unexpected 5xx failures to Sentry', async () => {
+  const reports = [];
+  const { apiClient } = loadApiClient({
+    status: 500,
+    ok: false,
+    responseText: JSON.stringify({ code: 1, message: 'boom', data: null }),
+    onReport: (_err, ctx) => reports.push(ctx),
+  });
+
+  await assert.rejects(() => apiClient('/circle', { method: 'POST' }));
+
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0].status, 500);
+  assert.equal(reports[0].endpoint, '/circle');
+  assert.equal(reports[0].method, 'POST');
+});
+
+test('apiClient does not report expected 4xx errors', async () => {
+  const reports = [];
+  const { apiClient } = loadApiClient({
+    status: 404,
+    ok: false,
+    responseText: JSON.stringify({ code: 1, message: 'not found', data: null }),
+    onReport: (_err, ctx) => reports.push(ctx),
+  });
+
+  await assert.rejects(() => apiClient('/circle/missing'));
+
+  assert.equal(reports.length, 0);
 });

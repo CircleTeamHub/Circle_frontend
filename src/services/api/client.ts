@@ -10,6 +10,7 @@
 import { API_URL } from '@/constants/config';
 import { clearLocalSession } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
+import { reportError, shouldReportHttpFailure } from '@/observability/sentry';
 
 type RequestOptions = {
   method?: string;
@@ -346,18 +347,33 @@ export async function apiClient<T>(
   options: RequestOptions = {}
 ): Promise<T> {
   const { auth = true, retryOnAuthError = true } = options;
-  const initialRequest = await executeRequest<T>(endpoint, options);
+  try {
+    const initialRequest = await executeRequest<T>(endpoint, options);
 
-  if (initialRequest.res.status === 401 && auth && retryOnAuthError) {
-    const nextAccessToken = await refreshAccessToken();
-    const retryRequest = await executeRequest<T>(
-      endpoint,
-      { ...options, retryOnAuthError: false },
-      nextAccessToken
-    );
+    if (initialRequest.res.status === 401 && auth && retryOnAuthError) {
+      const nextAccessToken = await refreshAccessToken();
+      const retryRequest = await executeRequest<T>(
+        endpoint,
+        { ...options, retryOnAuthError: false },
+        nextAccessToken
+      );
 
-    return unwrapResponse(retryRequest.res, retryRequest.payload);
+      return unwrapResponse(retryRequest.res, retryRequest.payload);
+    }
+
+    return unwrapResponse(initialRequest.res, initialRequest.payload);
+  } catch (error) {
+    // Report unexpected backend failures (network + 5xx) to Sentry; expected
+    // 4xx (validation/auth/not-found) are left to normal handling. Behavior is
+    // otherwise unchanged — the error is still re-thrown exactly as before.
+    const status = error instanceof ApiError ? error.status : undefined;
+    if (shouldReportHttpFailure(status)) {
+      reportError(error, {
+        endpoint,
+        method: options.method ?? 'GET',
+        status,
+      });
+    }
+    throw error;
   }
-
-  return unwrapResponse(initialRequest.res, initialRequest.payload);
 }

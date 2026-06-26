@@ -7,6 +7,29 @@ import {
   isNonEmptyString,
   isPlainObject,
 } from '@/utils/validate';
+import { reportError } from '@/observability/sentry';
+
+/**
+ * Runs a storage upload (raw PUT, not via apiClient so the API chokepoint never
+ * sees it) and reports any failure to Sentry before re-throwing it unchanged.
+ * The presigned URL is deliberately NOT included in the context — it carries a
+ * signature.
+ */
+async function runStorageUpload<T>(
+  context: { kind: string; contentType: string },
+  task: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await task();
+  } catch (error) {
+    reportError(error, {
+      operation: 'upload',
+      platform: Platform.OS,
+      ...context,
+    });
+    throw error;
+  }
+}
 
 const ALLOWED_CONTENT_TYPES = new Set([
   'image/jpeg',
@@ -145,32 +168,34 @@ export async function uploadFileToPresignedUrl(
   contentType: string,
   body: Blob,
 ) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+  return runStorageUpload({ kind: 'presigned-put', contentType }, async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
 
-  let response: Response;
-  try {
-    response = await fetch(uploadUrl, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': contentType,
-      },
-      body,
-      signal: controller.signal,
-    });
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('上传超时，请检查网络后重试');
+    let response: Response;
+    try {
+      response = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': contentType,
+        },
+        body,
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('上传超时，请检查网络后重试');
+      }
+      throw error;
+    } finally {
+      clearTimeout(timer);
     }
-    throw error;
-  } finally {
-    clearTimeout(timer);
-  }
 
-  if (!response.ok) {
-    // 这个函数也被聊天图片 / 笔记附件 / 动态图等用，"头像上传失败" 误导用户。
-    throw new Error(`上传失败 (${response.status})`);
-  }
+    if (!response.ok) {
+      // 这个函数也被聊天图片 / 笔记附件 / 动态图等用，"头像上传失败" 误导用户。
+      throw new Error(`上传失败 (${response.status})`);
+    }
+  });
 }
 
 /**
@@ -219,48 +244,50 @@ export async function uploadLocalFileToPresignedUrl(
   fileUri: string,
   timeoutMs: number = UPLOAD_TIMEOUT_MS,
 ) {
-  if (Platform.OS === 'android') {
-    const RNFS = loadNativeFS();
-    const response = await withUploadTimeout(() => {
-      const handle = RNFS.uploadFiles({
-        toUrl: uploadUrl,
-        binaryStreamOnly: true,
-        files: [
-          {
-            name: 'file',
-            filename: fileUri.split('/').pop() || 'upload',
-            filepath: fileUri.replace(/^file:\/\//, ''),
-            filetype: contentType,
+  return runStorageUpload({ kind: 'local-file', contentType }, async () => {
+    if (Platform.OS === 'android') {
+      const RNFS = loadNativeFS();
+      const response = await withUploadTimeout(() => {
+        const handle = RNFS.uploadFiles({
+          toUrl: uploadUrl,
+          binaryStreamOnly: true,
+          files: [
+            {
+              name: 'file',
+              filename: fileUri.split('/').pop() || 'upload',
+              filepath: fileUri.replace(/^file:\/\//, ''),
+              filetype: contentType,
+            },
+          ],
+          headers: {
+            'Content-Type': contentType,
           },
-        ],
+          method: 'PUT',
+        });
+        return { promise: handle.promise, jobId: handle.jobId };
+      }, timeoutMs);
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw new Error(`上传失败 (${response.statusCode})`);
+      }
+
+      return response;
+    }
+
+    const response = await withUploadTimeout(() => ({
+      promise: FileSystem.uploadAsync(uploadUrl, fileUri, {
         headers: {
           'Content-Type': contentType,
         },
-        method: 'PUT',
-      });
-      return { promise: handle.promise, jobId: handle.jobId };
-    }, timeoutMs);
+        httpMethod: 'PUT',
+        uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+      }),
+    }), timeoutMs);
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw new Error(`上传失败 (${response.statusCode})`);
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(`上传失败 (${response.status})`);
     }
 
     return response;
-  }
-
-  const response = await withUploadTimeout(() => ({
-    promise: FileSystem.uploadAsync(uploadUrl, fileUri, {
-      headers: {
-        'Content-Type': contentType,
-      },
-      httpMethod: 'PUT',
-      uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-    }),
-  }), timeoutMs);
-
-  if (response.status < 200 || response.status >= 300) {
-    throw new Error(`上传失败 (${response.status})`);
-  }
-
-  return response;
+  });
 }

@@ -108,3 +108,41 @@ test("root layout initializes and wraps with Sentry", () => {
   assert.match(layout, /\binitSentry\(\)/);
   assert.match(layout, /export default wrapWithSentry\(\s*RootLayout\s*\)/);
 });
+
+test("reportError forwards to captureException with extra context", () => {
+  const { reportError } = loadSentry();
+  const calls = [];
+  const client = { captureException: (e, ctx) => calls.push([e, ctx]) };
+  const err = new Error("boom");
+
+  reportError(err, { endpoint: "/api/v1/x", status: 500 }, client);
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][0], err);
+  // Property-level checks: the captureContext object is built inside the
+  // vm-loaded module (a different realm), so deepStrictEqual would fail on the
+  // mismatched prototype even though the structure is identical.
+  assert.equal(calls[0][1].extra.endpoint, "/api/v1/x");
+  assert.equal(calls[0][1].extra.status, 500);
+});
+
+test("reportError omits extra when no context is given", () => {
+  const { reportError } = loadSentry();
+  const calls = [];
+  const client = { captureException: (e, ctx) => calls.push([e, ctx]) };
+
+  reportError(new Error("x"), undefined, client);
+
+  assert.equal(calls[0][1], undefined);
+});
+
+test("shouldReportHttpFailure reports network(0)/5xx, skips 4xx", () => {
+  const { shouldReportHttpFailure } = loadSentry();
+  for (const s of [0, 500, 502, 503]) {
+    assert.equal(shouldReportHttpFailure(s), true, `status ${s} should report`);
+  }
+  for (const s of [400, 401, 403, 404, 409, 429]) {
+    assert.equal(shouldReportHttpFailure(s), false, `status ${s} should skip`);
+  }
+  assert.equal(shouldReportHttpFailure(undefined), true);
+});
