@@ -36,7 +36,7 @@ function load(rel, stubs = {}) {
 
 function loadSentry(extra = {}) {
   return load("src/observability/sentry.ts", {
-    "@sentry/react-native": { init() {}, wrap: (c) => c },
+    "@sentry/react-native": { init() {}, wrap: (c) => c, captureException() {} },
     "expo-constants": { expoConfig: { extra } },
   });
 }
@@ -118,7 +118,8 @@ test("reportError forwards to captureException with extra context", () => {
   reportError(err, { endpoint: "/api/v1/x", status: 500 }, client);
 
   assert.equal(calls.length, 1);
-  assert.equal(calls[0][0], err);
+  assert.notEqual(calls[0][0], err);
+  assert.equal(calls[0][0].message, "boom");
   // Property-level checks: the captureContext object is built inside the
   // vm-loaded module (a different realm), so deepStrictEqual would fail on the
   // mismatched prototype even though the structure is identical.
@@ -126,8 +127,57 @@ test("reportError forwards to captureException with extra context", () => {
   assert.equal(calls[0][1].extra.status, 500);
 });
 
+test("reportError is a no-op by default when Sentry was not initialized", () => {
+  const calls = [];
+  const { reportError } = load("src/observability/sentry.ts", {
+    "@sentry/react-native": {
+      init() {},
+      wrap: (c) => c,
+      captureException: (...args) => calls.push(args),
+    },
+    "expo-constants": { expoConfig: { extra: {} } },
+  });
+
+  reportError(new Error("boom"), { status: 500 });
+
+  assert.equal(calls.length, 0);
+});
+
+test("reportError never throws if the Sentry client fails", () => {
+  const { initSentry, reportError } = loadSentry();
+  initSentry({ dsn: "https://a@o/1", client: { init() {}, wrap: (c) => c } });
+
+  assert.doesNotThrow(() =>
+    reportError(new Error("boom"), { status: 500 }, {
+      captureException: () => {
+        throw new Error("sentry unavailable");
+      },
+    }),
+  );
+});
+
+test("reportError captures a sanitized error copy without custom data or signed URLs", () => {
+  const { initSentry, reportError } = loadSentry();
+  initSentry({ dsn: "https://a@o/1", client: { init() {}, wrap: (c) => c } });
+
+  const calls = [];
+  const err = new Error("upload failed https://store/obj?X-Amz-Signature=secret");
+  err.data = { token: "secret-token" };
+
+  reportError(err, { operation: "upload" }, {
+    captureException: (e, ctx) => calls.push([e, ctx]),
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][0].name, "Error");
+  assert.match(calls[0][0].message, /\[REDACTED_URL\]/);
+  assert.equal(calls[0][0].data, undefined);
+  assert.doesNotMatch(JSON.stringify(calls), /secret-token|X-Amz-Signature|store\/obj/);
+});
+
 test("reportError omits extra when no context is given", () => {
-  const { reportError } = loadSentry();
+  const { initSentry, reportError } = loadSentry();
+  initSentry({ dsn: "https://a@o/1", client: { init() {}, wrap: (c) => c } });
   const calls = [];
   const client = { captureException: (e, ctx) => calls.push([e, ctx]) };
 

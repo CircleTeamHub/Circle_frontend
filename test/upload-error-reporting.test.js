@@ -5,7 +5,12 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
-function loadUpload({ ok = false, status = 500, onReport = () => {} } = {}) {
+function loadUpload({
+  ok = false,
+  status = 500,
+  onReport = () => {},
+  fetchError,
+} = {}) {
   const filePath = path.join(process.cwd(), 'src/services/api/upload.ts');
   const source = fs.readFileSync(filePath, 'utf8');
   const transpiled = ts.transpileModule(source, {
@@ -22,7 +27,10 @@ function loadUpload({ ok = false, status = 500, onReport = () => {} } = {}) {
     AbortController,
     setTimeout,
     clearTimeout,
-    fetch: async () => ({ ok, status }),
+    fetch: async () => {
+      if (fetchError) throw fetchError;
+      return { ok, status };
+    },
     console: { log: () => {} },
     require: (request) => {
       switch (request) {
@@ -103,4 +111,24 @@ test('uploadFileToPresignedUrl does not report a successful upload', async () =>
   await uploadFileToPresignedUrl('https://store/x', 'image/png', {});
 
   assert.equal(reports.length, 0);
+});
+
+test('uploadFileToPresignedUrl reports a sanitized error when native errors include signed URLs', async () => {
+  const reports = [];
+  const { uploadFileToPresignedUrl } = loadUpload({
+    fetchError: new Error('PUT failed https://store/obj?X-Amz-Signature=secret'),
+    onReport: (err, ctx) => reports.push([err, ctx]),
+  });
+
+  await assert.rejects(() =>
+    uploadFileToPresignedUrl(
+      'https://store/obj?X-Amz-Signature=secret',
+      'image/png',
+      {},
+    ),
+  );
+
+  assert.equal(reports.length, 1);
+  assert.match(reports[0][0].message, /\[REDACTED_URL\]/);
+  assert.doesNotMatch(JSON.stringify(reports), /X-Amz-Signature|store\/obj/);
 });

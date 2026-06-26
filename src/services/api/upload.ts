@@ -9,6 +9,20 @@ import {
 } from '@/utils/validate';
 import { reportError } from '@/observability/sentry';
 
+const SIGNED_URL_PATTERN = /https?:\/\/[^\s"'<>)]*\?[^\s"'<>)]*/gi;
+
+function sanitizeUploadErrorForReport(error: unknown): Error {
+  const original = error instanceof Error ? error : new Error(String(error));
+  const safe = new Error(
+    original.message.replace(SIGNED_URL_PATTERN, '[REDACTED_URL]'),
+  );
+  safe.name = original.name || 'UploadError';
+  if (original.stack) {
+    safe.stack = original.stack.replace(SIGNED_URL_PATTERN, '[REDACTED_URL]');
+  }
+  return safe;
+}
+
 /**
  * Runs a storage upload (raw PUT, not via apiClient so the API chokepoint never
  * sees it) and reports any failure to Sentry before re-throwing it unchanged.
@@ -22,7 +36,7 @@ async function runStorageUpload<T>(
   try {
     return await task();
   } catch (error) {
-    reportError(error, {
+    reportError(sanitizeUploadErrorForReport(error), {
       operation: 'upload',
       platform: Platform.OS,
       ...context,

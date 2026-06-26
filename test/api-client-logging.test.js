@@ -7,6 +7,7 @@ const ts = require('typescript');
 
 function loadApiClient({
   responseText,
+  responses,
   logs = [],
   status = 201,
   ok = true,
@@ -22,6 +23,8 @@ function loadApiClient({
     fileName: filePath,
   }).outputText;
 
+  const responseQueue = responses ? [...responses] : null;
+  const fetchCalls = [];
   const context = {
     module: { exports: {} },
     exports: {},
@@ -30,14 +33,19 @@ function loadApiClient({
     ArrayBuffer,
     Blob,
     FormData,
+    URL,
     URLSearchParams,
     setTimeout,
     clearTimeout,
-    fetch: async () => ({
-      ok,
-      status,
-      text: async () => responseText,
-    }),
+    fetch: async (url, options) => {
+      fetchCalls.push([url, options]);
+      const next = responseQueue?.shift() ?? { ok, status, responseText };
+      return {
+        ok: next.ok,
+        status: next.status,
+        text: async () => next.responseText,
+      };
+    },
     console: {
       log: (...args) => logs.push(args),
     },
@@ -71,7 +79,7 @@ function loadApiClient({
   context.exports = context.module.exports;
 
   vm.runInNewContext(transpiled, context, { filename: filePath });
-  return context.module.exports;
+  return { ...context.module.exports, fetchCalls };
 }
 
 test('api dev logs redact presigned upload URLs and object keys', async () => {
@@ -118,8 +126,28 @@ test('apiClient reports unexpected 5xx failures to Sentry', async () => {
 
   assert.equal(reports.length, 1);
   assert.equal(reports[0].status, 500);
-  assert.equal(reports[0].endpoint, '/circle');
+  assert.equal(reports[0].endpointPath, '/circle');
   assert.equal(reports[0].method, 'POST');
+});
+
+test('apiClient reports sanitized endpoint context to Sentry', async () => {
+  const reports = [];
+  const { apiClient } = loadApiClient({
+    status: 500,
+    ok: false,
+    responseText: JSON.stringify({ code: 1, message: 'boom', data: null }),
+    onReport: (_err, ctx) => reports.push(ctx),
+  });
+
+  await assert.rejects(() =>
+    apiClient('/user/search/account?accountId=private@example.com'),
+  );
+
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0].endpointPath, '/user/search/account');
+  assert.equal(JSON.stringify(reports[0].queryKeys), JSON.stringify(['accountId']));
+  assert.equal(reports[0].endpoint, undefined);
+  assert.doesNotMatch(JSON.stringify(reports[0]), /private@example\.com/);
 });
 
 test('apiClient does not report expected 4xx errors', async () => {
@@ -134,4 +162,47 @@ test('apiClient does not report expected 4xx errors', async () => {
   await assert.rejects(() => apiClient('/circle/missing'));
 
   assert.equal(reports.length, 0);
+});
+
+test('apiClient reports refresh token failures against the refresh endpoint', async () => {
+  const reports = [];
+  const { apiClient } = loadApiClient({
+    responses: [
+      {
+        ok: false,
+        status: 401,
+        responseText: JSON.stringify({ code: 1, message: 'expired', data: null }),
+      },
+      {
+        ok: false,
+        status: 500,
+        responseText: JSON.stringify({ code: 1, message: 'refresh down', data: null }),
+      },
+    ],
+    onReport: (_err, ctx) => reports.push(ctx),
+  });
+
+  await assert.rejects(() => apiClient('/circle/123'));
+
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0].endpointPath, '/auth/refresh');
+  assert.equal(reports[0].method, 'POST');
+  assert.equal(reports[0].status, 500);
+});
+
+test('apiClient reports malformed successful backend responses as contract failures', async () => {
+  const reports = [];
+  const { apiClient } = loadApiClient({
+    status: 200,
+    ok: true,
+    responseText: '<html>not json</html>',
+    onReport: (_err, ctx) => reports.push(ctx),
+  });
+
+  await assert.rejects(() => apiClient('/circle'));
+
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0].endpointPath, '/circle');
+  assert.equal(reports[0].failureKind, 'invalid-json');
+  assert.equal(reports[0].status, 200);
 });

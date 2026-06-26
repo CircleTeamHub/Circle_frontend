@@ -15,6 +15,7 @@ export interface SentryLike {
 
 // Adapt the SDK's wider types to our minimal interface at this single boundary.
 const defaultClient = Sentry as unknown as SentryLike;
+let sentryInitialized = false;
 
 export interface SentryConfigSources {
   env?: Record<string, string | undefined>;
@@ -44,6 +45,7 @@ export interface InitSentryOptions {
   client?: SentryLike;
   dsn?: string;
   environment?: string;
+  tracesSampleRate?: number;
 }
 
 /**
@@ -56,16 +58,22 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
   if (!dsn) return false;
 
   const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
-  client.init({
-    dsn,
-    environment: options.environment ?? (isDev ? 'development' : 'production'),
-    // Native crashes + unhandled JS errors are captured by default. Sample a
-    // slice of transactions for light performance visibility; full in dev.
-    tracesSampleRate: isDev ? 1.0 : 0.2,
-    // Never attach PII (IP, cookies, request bodies) by default.
-    sendDefaultPii: false,
-  });
-  return true;
+  try {
+    client.init({
+      dsn,
+      environment: options.environment ?? (isDev ? 'development' : 'production'),
+      // Native crashes + unhandled JS errors are captured by default. Keep
+      // production tracing conservative; callers can override for targeted QA.
+      tracesSampleRate: options.tracesSampleRate ?? (isDev ? 1.0 : 0.05),
+      // Never attach PII (IP, cookies, request bodies) by default.
+      sendDefaultPii: false,
+    });
+    sentryInitialized = true;
+    return true;
+  } catch {
+    sentryInitialized = false;
+    return false;
+  }
 }
 
 export interface WrapWithSentryOptions {
@@ -99,6 +107,73 @@ export interface ReportErrorContext {
   [key: string]: unknown;
 }
 
+const SENSITIVE_URL_PATTERN = /https?:\/\/[^\s"'<>)]*\?[^\s"'<>)]*/gi;
+const PRESIGNED_URL_MARKERS = [
+  'X-Amz-Algorithm=',
+  'X-Amz-Credential=',
+  'X-Amz-Signature=',
+  'x-id=PutObject',
+];
+const SENSITIVE_CONTEXT_KEYS = new Set([
+  'authorization',
+  'cookie',
+  'password',
+  'token',
+  'accesstoken',
+  'refreshtoken',
+  'imtoken',
+  'idtoken',
+  'apikey',
+  'secret',
+  'uploadurl',
+  'fileurl',
+]);
+
+function sanitizeStringForSentry(value: string): string {
+  const withoutUrls = value.replace(SENSITIVE_URL_PATTERN, '[REDACTED_URL]');
+  return PRESIGNED_URL_MARKERS.some((marker) => withoutUrls.includes(marker))
+    ? '[REDACTED]'
+    : withoutUrls;
+}
+
+function sanitizeContextForSentry(value: unknown, depth = 0): unknown {
+  if (depth > 4) return '[MAX_DEPTH]';
+  if (value == null) return value;
+  if (typeof value === 'string') return sanitizeStringForSentry(value);
+  if (typeof value !== 'object') return value;
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeContextForSentry(item, depth + 1));
+  }
+
+  const out: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    out[key] = SENSITIVE_CONTEXT_KEYS.has(key.toLowerCase())
+      ? '[REDACTED]'
+      : sanitizeContextForSentry(child, depth + 1);
+  }
+  return out;
+}
+
+function toSafeError(error: unknown): Error {
+  if (error && typeof error === 'object' && 'message' in error) {
+    const errorLike = error as { message?: unknown; name?: unknown; stack?: unknown };
+    const safeError = new Error(
+      sanitizeStringForSentry(
+        typeof errorLike.message === 'string' ? errorLike.message : String(error),
+      ),
+    );
+    safeError.name = sanitizeStringForSentry(
+      typeof errorLike.name === 'string' ? errorLike.name : 'Error',
+    );
+    if (typeof errorLike.stack === 'string') {
+      safeError.stack = sanitizeStringForSentry(errorLike.stack);
+    }
+    return safeError;
+  }
+
+  return new Error(sanitizeStringForSentry(String(error)));
+}
+
 /**
  * Reports a handled ("soft failure") error to Sentry — errors that are caught
  * and recovered, so Sentry's automatic handlers never see them. No-op when
@@ -109,7 +184,21 @@ export function reportError(
   context?: ReportErrorContext,
   client: Pick<typeof Sentry, 'captureException'> = Sentry,
 ): void {
-  client.captureException(error, context ? { extra: context } : undefined);
+  if (!sentryInitialized && client === Sentry) {
+    return;
+  }
+
+  try {
+    const safeContext = context
+      ? (sanitizeContextForSentry(context) as Record<string, unknown>)
+      : undefined;
+    client.captureException(
+      toSafeError(error),
+      safeContext ? { extra: safeContext } : undefined,
+    );
+  } catch {
+    // Observability must never change app behavior.
+  }
 }
 
 /**
