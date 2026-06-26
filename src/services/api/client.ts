@@ -10,6 +10,7 @@
 import { API_URL } from '@/constants/config';
 import { clearLocalSession } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
+import { reportError, shouldReportHttpFailure } from '@/observability/sentry';
 
 type RequestOptions = {
   method?: string;
@@ -116,6 +117,29 @@ function safeHeadersForLog(headers: Record<string, string>): Record<string, stri
   return out;
 }
 
+function sanitizeEndpointSegment(segment: string): string {
+  if (/^\d+$/.test(segment)) return ':id';
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(segment)) {
+    return ':id';
+  }
+  if (segment.length >= 16 && /[0-9]/.test(segment)) return ':id';
+  return segment;
+}
+
+function sanitizeEndpointForReport(endpoint: string) {
+  try {
+    const url = new URL(endpoint, 'https://circle.local');
+    const endpointPath = url.pathname
+      .split('/')
+      .map((segment) => sanitizeEndpointSegment(segment))
+      .join('/');
+    const queryKeys = Array.from(new Set(url.searchParams.keys())).sort();
+    return queryKeys.length > 0 ? { endpointPath, queryKeys } : { endpointPath };
+  } catch {
+    return { endpointPath: '[invalid-endpoint]' };
+  }
+}
+
 // 把请求体序列化为 fetch 可接受的形式。
 // FormData / URLSearchParams / Blob / ArrayBuffer 不走 JSON.stringify；
 // 之前的实现会把 FormData 序列化成 '{}'，让 multipart 上传静默失败。
@@ -157,20 +181,37 @@ export class ApiError extends Error {
   status: number;
   code?: number;
   data?: unknown;
+  failureKind?: string;
+  reportEndpoint?: string;
+  reportMethod?: string;
 
-  constructor(message: string, status: number, code?: number, data?: unknown) {
+  constructor(
+    message: string,
+    status: number,
+    code?: number,
+    data?: unknown,
+    failureKind?: string,
+    reportEndpoint?: string,
+    reportMethod?: string
+  ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
     this.data = data;
+    this.failureKind = failureKind;
+    this.reportEndpoint = reportEndpoint;
+    this.reportMethod = reportMethod;
   }
 }
 
 // token 刷新 Promise 单例：多个并发请求同时 401 时，只发一次 /auth/refresh
 let refreshPromise: Promise<string> | null = null;
 
-async function readPayload<T>(res: Response): Promise<ApiResponse<T> | null> {
+async function readPayload<T>(
+  res: Response,
+  reportContext: { endpoint: string; method: string }
+): Promise<ApiResponse<T> | null> {
   const text = await res.text();
 
   logApiEvent('response', {
@@ -186,7 +227,15 @@ async function readPayload<T>(res: Response): Promise<ApiResponse<T> | null> {
   try {
     return JSON.parse(text) as ApiResponse<T>;
   } catch {
-    throw new ApiError('服务返回了无效数据', res.status);
+    throw new ApiError(
+      '服务返回了无效数据',
+      res.status,
+      undefined,
+      undefined,
+      'invalid-json',
+      reportContext.endpoint,
+      reportContext.method
+    );
   }
 }
 
@@ -257,25 +306,48 @@ async function executeRequest<T>(
       error: error instanceof Error ? error.message : String(error),
     });
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new ApiError('请求超时，请检查网络连接后重试', 0);
+      throw new ApiError(
+        '请求超时，请检查网络连接后重试',
+        0,
+        undefined,
+        undefined,
+        'timeout',
+        endpoint,
+        method
+      );
     }
-    throw new ApiError('网络异常，请确认后端服务已启动', 0);
+    throw new ApiError(
+      '网络异常，请确认后端服务已启动',
+      0,
+      undefined,
+      undefined,
+      'network',
+      endpoint,
+      method
+    );
   } finally {
     clearTimeout(timer);
   }
 
-  const payload = await readPayload<T>(res);
+  const payload = await readPayload<T>(res, { endpoint, method });
 
   return { res, payload };
 }
 
-function unwrapResponse<T>(res: Response, payload: ApiResponse<T> | null): T {
+function unwrapResponse<T>(
+  res: Response,
+  payload: ApiResponse<T> | null,
+  reportContext?: { endpoint: string; method: string }
+): T {
   if (!res.ok) {
     throw new ApiError(
       (payload as { message?: string } | null)?.message ?? `请求失败 (${res.status})`,
       res.status,
       isWrappedResponse(payload) ? payload.code : undefined,
-      isWrappedResponse(payload) ? payload.data : payload
+      isWrappedResponse(payload) ? payload.data : payload,
+      undefined,
+      reportContext?.endpoint,
+      reportContext?.method
     );
   }
 
@@ -285,7 +357,10 @@ function unwrapResponse<T>(res: Response, payload: ApiResponse<T> | null): T {
         payload.message || '请求失败',
         res.status,
         payload.code,
-        payload.data
+        payload.data,
+        'api-code',
+        reportContext?.endpoint,
+        reportContext?.method
       );
     }
 
@@ -319,7 +394,10 @@ async function refreshAccessToken() {
         auth: false,
       }
     );
-    const tokens = unwrapResponse(res, payload);
+    const tokens = unwrapResponse(res, payload, {
+      endpoint: '/auth/refresh',
+      method: 'POST',
+    });
 
     if (!isTokenPair(tokens)) {
       // 后端字段缺失 / 重命名 / 类型异常 — 视为刷新失败，避免后续带着 Bearer undefined 死循环。
@@ -341,23 +419,64 @@ async function refreshAccessToken() {
   return refreshPromise;
 }
 
+function shouldReportApiFailure(error: unknown, status: number | undefined): boolean {
+  if (error instanceof ApiError && error.failureKind === 'invalid-json') {
+    return true;
+  }
+
+  return shouldReportHttpFailure(status);
+}
+
 export async function apiClient<T>(
   endpoint: string,
   options: RequestOptions = {}
 ): Promise<T> {
   const { auth = true, retryOnAuthError = true } = options;
-  const initialRequest = await executeRequest<T>(endpoint, options);
+  try {
+    const initialRequest = await executeRequest<T>(endpoint, options);
 
-  if (initialRequest.res.status === 401 && auth && retryOnAuthError) {
-    const nextAccessToken = await refreshAccessToken();
-    const retryRequest = await executeRequest<T>(
+    if (initialRequest.res.status === 401 && auth && retryOnAuthError) {
+      const nextAccessToken = await refreshAccessToken();
+      const retryRequest = await executeRequest<T>(
+        endpoint,
+        { ...options, retryOnAuthError: false },
+        nextAccessToken
+      );
+
+      return unwrapResponse(retryRequest.res, retryRequest.payload, {
+        endpoint,
+        method: options.method ?? 'GET',
+      });
+    }
+
+    return unwrapResponse(initialRequest.res, initialRequest.payload, {
       endpoint,
-      { ...options, retryOnAuthError: false },
-      nextAccessToken
-    );
-
-    return unwrapResponse(retryRequest.res, retryRequest.payload);
+      method: options.method ?? 'GET',
+    });
+  } catch (error) {
+    // Report unexpected backend failures (network + 5xx) to Sentry; expected
+    // 4xx (validation/auth/not-found) are left to normal handling. Behavior is
+    // otherwise unchanged — the error is still re-thrown exactly as before.
+    const status = error instanceof ApiError ? error.status : undefined;
+    if (shouldReportApiFailure(error, status)) {
+      const reportEndpoint =
+        error instanceof ApiError ? error.reportEndpoint ?? endpoint : endpoint;
+      const reportMethod =
+        error instanceof ApiError
+          ? error.reportMethod ?? options.method ?? 'GET'
+          : options.method ?? 'GET';
+      reportError(error, {
+        ...sanitizeEndpointForReport(reportEndpoint),
+        method: reportMethod,
+        status,
+        ...(error instanceof ApiError && error.code !== undefined
+          ? { apiCode: error.code }
+          : {}),
+        ...(error instanceof ApiError && error.failureKind
+          ? { failureKind: error.failureKind }
+          : {}),
+      });
+    }
+    throw error;
   }
-
-  return unwrapResponse(initialRequest.res, initialRequest.payload);
 }

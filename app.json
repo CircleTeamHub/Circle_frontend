@@ -5,7 +5,10 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": ["windnoteai", "circleim"],
+    "scheme": [
+      "windnoteai",
+      "circleim"
+    ],
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/images/splash-icon.png",
@@ -71,7 +74,9 @@
           "enableBackgroundRecording": false
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "@sentry/react-native",
+      "./plugins/with-local-sentry-auto-upload-disabled"
     ],
     "experiments": {
       "typedRoutes": true

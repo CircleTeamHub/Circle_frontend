@@ -25,6 +25,7 @@
     "@openim/rn-client-sdk": "^3.8.3-patch.12.3",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-navigation/native": "^7.1.28",
+    "@sentry/react-native": "~7.11.0",
     "expo": "~55.0.6",
     "expo-audio": "~55.0.14",
     "expo-camera": "~55.0.19",
@@ -89,7 +90,6 @@
     "minimatch@10.2.4": {
       "brace-expansion": "5.0.6"
     },
-    "@xmldom/xmldom": "0.9.10",
     "markdown-it": "14.2.0",
     "picomatch": "2.3.2",
     "postcss": "8.5.15",

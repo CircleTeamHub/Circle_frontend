@@ -53,6 +53,9 @@ function loadUploadApi() {
           },
         };
       }
+      if (request === '@/observability/sentry') {
+        return { reportError: () => {} };
+      }
       if (request === 'react-native') {
         return {
           Platform: {
