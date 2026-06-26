@@ -53,6 +53,7 @@ function normalize(value) {
 }
 
 DEFAULT_CLIENT_STUBS['@/im/user-id'] = loadTsModule('src/im/user-id.ts');
+DEFAULT_CLIENT_STUBS['@/observability/sentry'] = { reportError: () => {} };
 DEFAULT_CLIENT_STUBS['@/features/chat/utils/voice-forward'] = loadTsModule(
   'src/features/chat/utils/voice-forward.ts',
 );

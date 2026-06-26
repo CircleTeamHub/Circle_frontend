@@ -42,6 +42,7 @@ import { toImUserId } from '@/im/user-id';
 import { registerLogoutHandler } from '@/services/auth/session';
 import { useIMStore } from '@/stores/imStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
+import { reportError } from '@/observability/sentry';
 
 export { fromImUserId, toImUserId } from '@/im/user-id';
 
@@ -51,6 +52,18 @@ type NativeFSModule = typeof NativeFS & { default?: typeof NativeFS };
 let rnfsModule: typeof NativeFS | null = null;
 
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+
+// 所有发送变体最终都走 OpenIMSDK.sendMessage —— 在此统一上报发送失败（用户可见的
+// 关键失败，类似上传），并原样抛出，不改各发送函数的行为。用 bracket 访问避免被批量
+// 替换误伤。
+function reportSend(
+  options: Parameters<typeof OpenIMSDK.sendMessage>[0],
+): ReturnType<typeof OpenIMSDK.sendMessage> {
+  return OpenIMSDK['sendMessage'](options).catch((error: unknown) => {
+    reportError(error, { operation: 'openim', op: 'sendMessage' });
+    throw error;
+  });
+}
 
 // 注册到 session 的登出 teardown，由 clearLocalSession 统一调度。
 // 函数声明会被 hoisting，所以这里在模块顶层引用 logoutFromOpenIM 是安全的。
@@ -137,6 +150,7 @@ export async function ensureOpenIMInitialized() {
       useIMStore
         .getState()
         .setError(error instanceof Error ? error.message : 'OpenIM 初始化失败');
+      reportError(error, { operation: 'openim', op: 'init' });
       throw error;
     });
   }
@@ -196,6 +210,7 @@ export async function loginToOpenIM(userID: string, imToken: string) {
     // 之后任何登录前的失败都会让 store 残留一个错误身份，影响 read-receipt 路由 / 气泡对齐。
     useIMStore.getState().setConnecting(false);
     useIMStore.getState().setCurrentUserID(null);
+    reportError(error, { operation: 'openim', op: 'login' });
     throw error;
   }
 }
@@ -224,9 +239,11 @@ export async function logoutFromOpenIM() {
     await OpenIMSDK.logout();
   } catch (err) {
     // SDK 登出失败不阻断本地清理；dev 下打印出来，避免 native 端长期处于异常状态而没人发现。
+    // 同时上报，让生产环境也有可见性（之前只有 dev console）。
     if (isDev) {
       console.warn('[openim] SDK logout failed (local state still reset)', err);
     }
+    reportError(err, { operation: 'openim', op: 'logout' });
   } finally {
     // 清空 initPromise，确保下次登录能重新执行 initSDK
     initPromise = null;
@@ -621,7 +638,7 @@ export async function sendTextMessage(params: {
 
   const message = await OpenIMSDK.createTextMessage(params.text);
   const isSingle = params.sessionType === SessionType.Single;
-  const sentMessage = await OpenIMSDK.sendMessage({
+  const sentMessage = await reportSend({
     recvID: isSingle ? toImUserId(params.sourceID) : '',
     groupID: !isSingle ? params.sourceID : '',
     message,
@@ -677,7 +694,7 @@ export async function sendImageMessage(params: {
   });
 
   const isSingle = params.sessionType === SessionType.Single;
-  return OpenIMSDK.sendMessage({
+  return reportSend({
     recvID: isSingle ? toImUserId(params.sourceID) : '',
     groupID: !isSingle ? params.sourceID : '',
     message,
@@ -713,7 +730,7 @@ export async function sendLocationMessage(params: {
   });
 
   const isSingle = params.sessionType === SessionType.Single;
-  return OpenIMSDK.sendMessage({
+  return reportSend({
     recvID: isSingle ? toImUserId(params.sourceID) : '',
     groupID: !isSingle ? params.sourceID : '',
     message,
@@ -750,7 +767,7 @@ export async function sendVoiceMessage(params: {
   });
 
   const isSingle = params.sessionType === SessionType.Single;
-  return OpenIMSDK.sendMessage({
+  return reportSend({
     recvID: isSingle ? toImUserId(params.sourceID) : '',
     groupID: !isSingle ? params.sourceID : '',
     message,
@@ -792,7 +809,7 @@ export async function sendVoiceMessageByUrl(params: {
   });
 
   const isSingle = params.sessionType === SessionType.Single;
-  return OpenIMSDK.sendMessage({
+  return reportSend({
     recvID: isSingle ? toImUserId(params.sourceID) : '',
     groupID: !isSingle ? params.sourceID : '',
     message,
@@ -869,7 +886,7 @@ export async function forwardMessage(params: {
   const forwarded = await OpenIMSDK.createForwardMessage(params.message);
 
   const isSingle = params.sessionType === SessionType.Single;
-  return OpenIMSDK.sendMessage({
+  return reportSend({
     recvID: isSingle ? toImUserId(params.sourceID) : '',
     groupID: !isSingle ? params.sourceID : '',
     message: forwarded,
@@ -928,7 +945,7 @@ export async function sendTransferCardMessage(params: {
   });
 
   const isSingle = params.sessionType === SessionType.Single;
-  return OpenIMSDK.sendMessage({
+  return reportSend({
     recvID: isSingle ? toImUserId(params.sourceID) : '',
     groupID: !isSingle ? params.sourceID : '',
     message,
@@ -973,7 +990,7 @@ export async function sendNoteCardMessage(params: {
   });
 
   const isSingle = params.sessionType === SessionType.Single;
-  return OpenIMSDK.sendMessage({
+  return reportSend({
     recvID: isSingle ? toImUserId(params.sourceID) : '',
     groupID: !isSingle ? params.sourceID : '',
     message,
@@ -1042,7 +1059,7 @@ export async function sendFriendCardMessage(params: {
   const isGroupConversation =
     targetConversation.conversationType === SessionType.Group;
 
-  return OpenIMSDK.sendMessage({
+  return reportSend({
     recvID: isGroupConversation ? '' : targetConversation.userID,
     groupID: isGroupConversation ? targetConversation.groupID : '',
     message,
@@ -1101,7 +1118,7 @@ export async function sendCircleCardMessage(params: {
   const isGroupConversation =
     targetConversation.conversationType === SessionType.Group;
 
-  return OpenIMSDK.sendMessage({
+  return reportSend({
     recvID: isGroupConversation ? '' : targetConversation.userID,
     groupID: isGroupConversation ? targetConversation.groupID : '',
     message,
