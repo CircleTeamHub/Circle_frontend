@@ -5,7 +5,7 @@
  * 1. 调用后端 API
  * 2. 同步更新 authStore（token + user）
  * 3. 登录/登出 OpenIM
- * 4. 成功后通过 expo-router 跳转目标页面
+ * 4. 成功后由全局 AuthRouteGuard 根据 session 状态跳转目标页面
  *
  * 对外暴露 submitting（loading 状态）和 error（错误文本）供 UI 展示。
  */
@@ -42,7 +42,6 @@ const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 
 type AuthSuccessOptions = {
   onboardingRequired?: boolean;
-  redirectHref?: '/(tabs)/messages' | '/(onboarding)/profile';
   startAppServices?: boolean;
 };
 
@@ -119,9 +118,10 @@ export function useAuth() {
         void useMessageGroupsStore.getState().load();
       }
 
-      router.replace(options.redirectHref ?? '/(tabs)/messages');
+      // 登录页本身由根布局的 AuthRouteGuard 监听 session 状态并跳转。
+      // 这里不再命令式 replace，避免和 <Redirect> 同帧竞争导致主页入栈两次。
     },
-    [router, setSession],
+    [setSession],
   );
 
   const login = useCallback(
@@ -212,7 +212,6 @@ export function useAuth() {
         });
         await onAuthSuccess(tokens, {
           onboardingRequired: true,
-          redirectHref: '/(onboarding)/profile',
           startAppServices: false,
         });
       } catch (requestError) {
