@@ -106,6 +106,10 @@ export default function DiscoverScreen() {
     router.push("/(tabs)/discover/circles");
   }, [router]);
 
+  const handlePendingVerificationsPress = useCallback(() => {
+    router.push("/(tabs)/discover/verifications");
+  }, [router]);
+
   const handleFilterPress = useCallback(() => {
     router.push("/(tabs)/discover/filter");
   }, [router]);
@@ -130,6 +134,20 @@ export default function DiscoverScreen() {
               })}
             >
               <Ionicons name="search-outline" size={22} color={colors.text} />
+            </Pressable>
+            <Pressable
+              onPress={handlePendingVerificationsPress}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={t('invitation.pendingTitle', {
+                defaultValue: '待我验证',
+              })}
+            >
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={22}
+                color={colors.text}
+              />
             </Pressable>
             <Pressable
               onPress={handleFilterPress}
