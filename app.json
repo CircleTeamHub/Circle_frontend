@@ -75,7 +75,8 @@
         }
       ],
       "expo-secure-store",
-      "@sentry/react-native"
+      "@sentry/react-native",
+      "./plugins/with-local-sentry-auto-upload-disabled"
     ],
     "experiments": {
       "typedRoutes": true
