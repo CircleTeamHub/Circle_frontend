@@ -21,6 +21,10 @@ interface CirclesState {
 
   fetchMyCircles: () => Promise<void>;
   fetchAllCircles: () => Promise<void>;
+  // Patch one circle across every cached list (avatar/cover changes from the
+  // detail screen, etc.) so lists don't show stale data until the next refetch.
+  patchCircle: (id: string, patch: Partial<Circle>) => void;
+  removeCircle: (id: string) => void;
   reset: () => void;
 }
 
@@ -100,6 +104,34 @@ export const useCirclesStore = create<CirclesState>((set) => ({
       set({ allCirclesLoading: false });
     }
   },
+
+  patchCircle: (id, patch) =>
+    set((state) => {
+      const apply = (list: Circle[]) =>
+        list.map((circle) =>
+          circle.id === id ? { ...circle, ...patch } : circle,
+        );
+      return {
+        joinedCircles: apply(state.joinedCircles),
+        createdCircles: apply(state.createdCircles),
+        managedCircles: apply(state.managedCircles),
+        appliedCircles: apply(state.appliedCircles),
+        allCircles: apply(state.allCircles),
+      };
+    }),
+
+  removeCircle: (id) =>
+    set((state) => {
+      const remove = (list: Circle[]) =>
+        list.filter((circle) => circle.id !== id);
+      return {
+        joinedCircles: remove(state.joinedCircles),
+        createdCircles: remove(state.createdCircles),
+        managedCircles: remove(state.managedCircles),
+        appliedCircles: remove(state.appliedCircles),
+        allCircles: remove(state.allCircles),
+      };
+    }),
 
   reset: () =>
     set({

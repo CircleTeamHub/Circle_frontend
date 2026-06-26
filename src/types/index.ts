@@ -64,6 +64,12 @@ export interface FriendCardData {
   displayIcons?: DisplayIcon[];
 }
 
+export interface CircleCardData {
+  circleId: string;
+  name: string;
+  avatarUrl: string | null;
+}
+
 export interface TransferCardData {
   amount: number;
   message: string | null;
@@ -80,6 +86,7 @@ export interface ChatMessage {
     | 'voice'
     | 'note-card'
     | 'friend-card'
+    | 'circle-card'
     | 'transfer-card';
   text?: string;
   time?: string;
@@ -105,6 +112,8 @@ export interface ChatMessage {
   noteCard?: NoteCardData;
   // For friend-card messages: parsed card payload
   friendCard?: FriendCardData;
+  // For circle-card messages: parsed circle share payload
+  circleCard?: CircleCardData;
   // For transfer-card messages: parsed payload
   transferCard?: TransferCardData;
   // OpenIM 发送状态：1=发送中, 2=已送达, 3=失败。仅自己发出的消息有意义。
@@ -173,6 +182,7 @@ export interface Circle {
   name: string;
   description: string;
   avatarUrl: string | null;
+  cover: string | null;
   ownerID: string;
   currentIconAssetID: string | null;
   currentIconUrl: string | null;
@@ -370,9 +380,6 @@ export type NotificationType =
   | 'FRIEND_REQUEST_RECEIVED'
   | 'FRIEND_REQUEST_ACCEPTED'
   | 'FRIEND_REQUEST_REJECTED'
-  | 'SQUAD_REQUEST_RECEIVED'
-  | 'SQUAD_REQUEST_ACCEPTED'
-  | 'SQUAD_REQUEST_REJECTED'
   | 'CIRCLE_VERIFICATION_REQUESTED'
   | 'CIRCLE_INVITATION_APPROVED'
   | 'CIRCLE_INVITATION_REJECTED'
@@ -395,11 +402,6 @@ export interface NotificationItem {
     firstImage: string | null;
   } | null;
   fromInvitation: { id: string; status: string } | null;
-  squadRequest: {
-    id: string;
-    status: string;
-    squad: { id: string; name: string } | null;
-  } | null;
 }
 
 /** A circle post authored by the current user, for the signup-management list. */

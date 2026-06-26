@@ -5,7 +5,7 @@ export type { ThemeMode, ResolvedMode, ThemeColors, ThemeContextValue } from './
 export { darkColors, lightColors } from './colors';
 
 // Design tokens (theme-independent)
-export { Spacing, Typography, Radius } from './tokens';
+export { Spacing, Typography, Radius, Gradients } from './tokens';
 
 // Provider + Hook
 export { ThemeProvider, useTheme } from './provider';

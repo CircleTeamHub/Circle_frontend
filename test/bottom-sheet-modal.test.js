@@ -37,9 +37,12 @@ test("bottom sheets avoid native slide modal animation that lifts the dark backd
   assert.match(sharedSheet, /translateY/);
 });
 
-test("bottom sheet inner content fills fixed-height sheets", () => {
+test("bottom sheet keeps children as direct sheet content for auto-height layout", () => {
   const sharedSheet = read("src/components/ui/bottom-sheet-modal.tsx");
+  const createTempChatSheet = read("src/features/messages/components/CreateTempChatModal.tsx");
 
-  assert.match(sharedSheet, /innerContent:\s*\{[\s\S]*flex:\s*1,?[\s\S]*\}/);
-  assert.match(sharedSheet, /<Pressable\s+style=\{s\.innerContent\}\s+onPress=\{\(\) => \{\}\}/);
+  assert.doesNotMatch(sharedSheet, /innerContent:\s*\{[\s\S]*flex:\s*1,?[\s\S]*\}/);
+  assert.doesNotMatch(sharedSheet, /<Pressable\s+style=\{s\.innerContent\}/);
+  assert.match(sharedSheet, /onStartShouldSetResponder=\{\(\) => true\}/);
+  assert.match(createTempChatSheet, /gap:\s*Spacing\.lg/);
 });

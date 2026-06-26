@@ -7,6 +7,7 @@ import {
 } from '@/features/contacts/friend-activities';
 import {
   acceptFriendRequest,
+  cancelFriendRequest,
   fetchFriendActivityDetail,
   markFriendActivityRead,
   rejectFriendRequest,
@@ -237,6 +238,45 @@ export default function FriendActivityDetailScreen() {
     [activity, handling, t],
   );
 
+  const handleCancel = useCallback(() => {
+    if (!activity || handling) {
+      return;
+    }
+    Alert.alert(
+      t('contacts.friendActivity.cancelTitle', { defaultValue: '撤回申请' }),
+      t('contacts.friendActivity.cancelMessage', {
+        defaultValue: '确定撤回这条好友申请吗？',
+      }),
+      [
+        { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+        {
+          text: t('contacts.friendActivity.cancelConfirm', {
+            defaultValue: '撤回',
+          }),
+          style: 'destructive',
+          onPress: async () => {
+            setHandling(true);
+            try {
+              await cancelFriendRequest(activity.requestId);
+              setActivity((current) =>
+                current ? { ...current, requestState: 'WITHDRAWN' } : current,
+              );
+            } catch (nextError) {
+              Alert.alert(
+                t('contacts.friendActivity.handleFailed'),
+                nextError instanceof Error
+                  ? nextError.message
+                  : t('contacts.friendActivity.handleError'),
+              );
+            } finally {
+              setHandling(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [activity, handling, t]);
+
   const stateBlock = loading ? (
     <View style={s.stateBlock}>
       <ActivityIndicator color={colors.primary} />
@@ -258,6 +298,8 @@ export default function FriendActivityDetailScreen() {
 
   const isPendingIncoming =
     activity?.type === 'REQUEST_RECEIVED' && canHandleFriendActivity(activity);
+  const canCancelOutgoing =
+    activity?.type === 'REQUEST_SENT' && activity?.requestState === 'PENDING';
 
   return (
     <View style={d.container}>
@@ -312,6 +354,20 @@ export default function FriendActivityDetailScreen() {
                   </Text>
                 </Pressable>
               </View>
+            ) : canCancelOutgoing ? (
+              <Pressable
+                style={[s.actionButton, d.rejectButton]}
+                disabled={handling}
+                onPress={handleCancel}
+              >
+                <Text style={d.rejectButtonText}>
+                  {handling
+                    ? t('common.processing')
+                    : t('contacts.friendActivity.cancel', {
+                        defaultValue: '撤回申请',
+                      })}
+                </Text>
+              </Pressable>
             ) : (
               <Text style={d.stateText}>
                 {t('contacts.friendActivity.currentStatus', { status: activity.requestState })}

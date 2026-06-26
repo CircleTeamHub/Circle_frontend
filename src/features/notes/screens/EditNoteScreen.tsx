@@ -16,7 +16,12 @@ import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NoteBlockEditor } from '@/features/notes/components/NoteBlockEditor';
 import type { CreateNoteMediaInput, NoteGroup } from '@/features/notes/types';
-import { extractMediaFromBlocks, extractPlainText } from '@/features/notes/utils/note-blocks';
+import {
+  buildNoteMediaMap,
+  extractMediaFromBlocks,
+  extractPlainText,
+  mergeExtractedMediaWithMediaMap,
+} from '@/features/notes/utils/note-blocks';
 import { formatNoteFullDate } from '@/features/notes/utils/note-format';
 import {
   createNote,
@@ -72,6 +77,7 @@ export default function EditNoteScreen() {
       });
 
     if (!isEdit || !id) {
+      mediaMapRef.current = {};
       setEditorMounted(true);
       setLoading(false);
       return () => {
@@ -86,6 +92,7 @@ export default function EditNoteScreen() {
         const loaded = note.contentJson ?? [];
         blocksRef.current = loaded;
         setInitialBlocks(loaded.length > 0 ? loaded : null);
+        mediaMapRef.current = buildNoteMediaMap(note.media);
         setSelectedGroupIds(note.groups.map((group) => group.id));
         setDateStr(formatNoteFullDate(note.createdAt, t));
         setLoading(false);
@@ -93,6 +100,7 @@ export default function EditNoteScreen() {
       })
       .catch(() => {
         if (!cancelled) {
+          mediaMapRef.current = {};
           setLoading(false);
           setEditorMounted(true);
         }
@@ -135,10 +143,10 @@ export default function EditNoteScreen() {
     try {
       const currentBlocks = blocksRef.current;
       const plainText = extractPlainText(currentBlocks);
-      const media = extractMediaFromBlocks(currentBlocks).map((item) => {
-        const uploaded = mediaMapRef.current[item.url];
-        return uploaded ? { ...uploaded, sortOrder: item.sortOrder } : item;
-      });
+      const media = mergeExtractedMediaWithMediaMap(
+        extractMediaFromBlocks(currentBlocks),
+        mediaMapRef.current,
+      );
       const input = {
         title: trimmedTitle,
         content: plainText,

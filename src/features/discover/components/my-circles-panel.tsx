@@ -1,3 +1,4 @@
+import { CircleAvatar } from "@/components/ui/circle-avatar";
 import { Divider } from "@/components/ui/divider";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { useCirclesStore } from "@/features/discover/store/use-circles-store";
@@ -7,7 +8,6 @@ import { useTranslation } from "react-i18next";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { Circle } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
-import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -45,11 +45,6 @@ const s = StyleSheet.create({
     alignItems: "center",
     gap: Spacing.md,
     paddingVertical: Spacing.md,
-  },
-  cover: {
-    width: 56,
-    height: 56,
-    borderRadius: Radius.md,
   },
   body: {
     flex: 1,
@@ -209,11 +204,13 @@ export const MyCirclesPanel: React.FC = () => {
             <View key={item.id}>
               <Pressable
                 style={s.row}
-                onPress={() => router.push({ pathname: '/(tabs)/discover/circle/[id]', params: { id: item.id } })}
+                onPress={() => router.push(`/(tabs)/discover/circle/${encodeURIComponent(item.id)}`)}
               >
-                <Image
-                  source={{ uri: item.avatarUrl ?? undefined }}
-                  style={[s.cover, d.cover]}
+                <CircleAvatar
+                  uri={item.avatarUrl}
+                  size={56}
+                  borderRadius={Radius.md}
+                  style={d.cover}
                 />
                 <View style={s.body}>
                   <Text style={d.name} numberOfLines={1}>

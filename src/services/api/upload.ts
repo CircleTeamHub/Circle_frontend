@@ -183,6 +183,7 @@ export async function uploadFileToPresignedUrl(
  */
 async function withUploadTimeout<T>(
   task: () => { promise: Promise<T>; jobId?: number },
+  timeoutMs: number = UPLOAD_TIMEOUT_MS,
 ): Promise<T> {
   const { promise, jobId } = task();
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -204,7 +205,7 @@ async function withUploadTimeout<T>(
             }
           }
           reject(new Error('上传超时，请检查网络后重试'));
-        }, UPLOAD_TIMEOUT_MS);
+        }, timeoutMs);
       }),
     ]);
   } finally {
@@ -216,6 +217,7 @@ export async function uploadLocalFileToPresignedUrl(
   uploadUrl: string,
   contentType: string,
   fileUri: string,
+  timeoutMs: number = UPLOAD_TIMEOUT_MS,
 ) {
   if (Platform.OS === 'android') {
     const RNFS = loadNativeFS();
@@ -237,7 +239,7 @@ export async function uploadLocalFileToPresignedUrl(
         method: 'PUT',
       });
       return { promise: handle.promise, jobId: handle.jobId };
-    });
+    }, timeoutMs);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw new Error(`上传失败 (${response.statusCode})`);
@@ -254,7 +256,7 @@ export async function uploadLocalFileToPresignedUrl(
       httpMethod: 'PUT',
       uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
     }),
-  }));
+  }), timeoutMs);
 
   if (response.status < 200 || response.status >= 300) {
     throw new Error(`上传失败 (${response.status})`);

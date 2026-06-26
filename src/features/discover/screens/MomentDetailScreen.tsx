@@ -29,8 +29,11 @@ import {
   toggleMomentLike,
   addMomentComment,
   fetchMomentById,
+  deleteMoment,
+  deleteMomentComment,
 } from '@/services/api/moments';
 import { useMomentsStore } from '@/features/discover/store/use-moments-store';
+import { useAuthStore } from '@/stores/authStore';
 import { ApiError } from '@/services/api/client';
 import { getApiErrorMessage } from '@/services/api/errors';
 import type { MomentPost } from '@/types';
@@ -112,6 +115,9 @@ export default function MomentDetailScreen() {
   );
   const storeToggleLike = useMomentsStore((s) => s.toggleLike);
   const storeAddComment = useMomentsStore((s) => s.addComment);
+  const storeRemoveMoment = useMomentsStore((s) => s.removeMoment);
+  const storeRemoveComment = useMomentsStore((s) => s.removeComment);
+  const currentUserId = useAuthStore((state) => state.user?.id);
 
   const [post, setPost] = useState<MomentPost | null>(storeMoment ?? null);
   const [loading, setLoading] = useState(!storeMoment);
@@ -265,6 +271,87 @@ export default function MomentDetailScreen() {
     [commentThreads],
   );
 
+  const isOwner =
+    !!currentUserId && !!post && currentUserId === post.author.id;
+
+  const handleDeleteMoment = useCallback(() => {
+    Alert.alert(
+      t('moment.deleteTitle', { defaultValue: '删除动态' }),
+      t('moment.deleteMessage', {
+        defaultValue: '删除后无法恢复，确定删除吗？',
+      }),
+      [
+        { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+        {
+          text: t('common.delete', { defaultValue: '删除' }),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteMoment(id);
+              storeRemoveMoment(id);
+              router.back();
+            } catch (error) {
+              Alert.alert(
+                t('moment.deleteFailedTitle', { defaultValue: '删除失败' }),
+                getApiErrorMessage(
+                  error,
+                  t('moment.deleteFailedMessage', { defaultValue: '请稍后重试' }),
+                ),
+              );
+            }
+          },
+        },
+      ],
+    );
+  }, [id, router, storeRemoveMoment, t]);
+
+  const handleDeleteComment = useCallback(
+    (commentId: string) => {
+      Alert.alert(
+        t('moment.deleteCommentTitle', { defaultValue: '删除评论' }),
+        t('moment.deleteCommentMessage', {
+          defaultValue: '确定删除这条评论吗？',
+        }),
+        [
+          {
+            text: t('common.cancel', { defaultValue: '取消' }),
+            style: 'cancel',
+          },
+          {
+            text: t('common.delete', { defaultValue: '删除' }),
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await deleteMomentComment(commentId);
+                setPost((p) =>
+                  p
+                    ? {
+                        ...p,
+                        comments: p.comments.filter((c) => c.id !== commentId),
+                        commentCount: Math.max(0, p.commentCount - 1),
+                      }
+                    : p,
+                );
+                storeRemoveComment(id, commentId);
+              } catch (error) {
+                Alert.alert(
+                  t('moment.deleteFailedTitle', { defaultValue: '删除失败' }),
+                  getApiErrorMessage(
+                    error,
+                    t('moment.deleteFailedMessage', {
+                      defaultValue: '请稍后重试',
+                    }),
+                  ),
+                );
+              }
+            },
+          },
+        ],
+      );
+    },
+    [id, storeRemoveComment, t],
+  );
+
   if (loading) {
     return (
       <View style={[d.container, { paddingTop: insets.top }]}>
@@ -307,7 +394,15 @@ export default function MomentDetailScreen() {
 
   const renderCommentRow = ({ item }: { item: MomentCommentRow }) => (
     <View>
-      <View style={[s.commentItem, item.isReply ? s.replyItem : null]}>
+      <Pressable
+        style={[s.commentItem, item.isReply ? s.replyItem : null]}
+        onLongPress={
+          !!currentUserId && item.comment.user.id === currentUserId
+            ? () => handleDeleteComment(item.comment.id)
+            : undefined
+        }
+        delayLongPress={350}
+      >
         <Avatar size={item.isReply ? 28 : 32} name={item.comment.user.nickname} />
         <View style={s.commentBody}>
           <Text style={[s.commentUser, d.commentUser]}>
@@ -343,7 +438,7 @@ export default function MomentDetailScreen() {
         >
           <Ionicons name="chatbubble-outline" size={14} color={colors.textSecondary} />
         </Pressable>
-      </View>
+      </Pressable>
       <Divider />
     </View>
   );
@@ -426,7 +521,22 @@ export default function MomentDetailScreen() {
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title={t('moment.detail')} />
+      <NavHeader
+        title={t('moment.detail')}
+        rightActions={
+          isOwner
+            ? [
+                {
+                  icon: 'trash-outline',
+                  onPress: handleDeleteMoment,
+                  accessibilityLabel: t('common.delete', {
+                    defaultValue: '删除',
+                  }),
+                },
+              ]
+            : undefined
+        }
+      />
       <FlatList
         data={commentRows}
         keyExtractor={(item) => item.id}

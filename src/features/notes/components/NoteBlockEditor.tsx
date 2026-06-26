@@ -3,6 +3,7 @@ import { Component, useCallback, useEffect, useMemo, useRef, useState } from 're
 import { Alert, Platform, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { CreateNoteMediaInput } from '@/features/notes/types';
+import { getNoteVideoUploadPolicyViolation } from '@/features/notes/utils/note-media-policy';
 import {
   requestUploadPresign,
   resolveUploadContentType,
@@ -32,6 +33,10 @@ function getNoteBlockEditorDOM() {
 // every render and queue an unnecessary injectJavaScript call.
 const DOM_WEBVIEW_PROPS = { useExpoDOMWebView: true } as const;
 
+// Videos aren't duration-capped, so they need a far longer upload window than
+// the 60s image default before the timeout fires.
+const VIDEO_UPLOAD_TIMEOUT_MS = 5 * 60_000;
+
 // Silently catches the Expo DOM bridge error that fires when injectJavaScript
 // is called on an already-unmounted WebView (e.g. during navigation teardown).
 class DOMBridgeErrorBoundary extends Component<
@@ -53,13 +58,14 @@ class DOMBridgeErrorBoundary extends Component<
 }
 
 interface PendingInsert {
-  type: 'image';
+  type: 'image' | 'video';
   url: string;
   objectKey: string;
   width?: number;
   height?: number;
   mimeType?: string;
   size?: number;
+  durationMs?: number;
 }
 
 interface Props {
@@ -70,7 +76,10 @@ interface Props {
 
 export function NoteBlockEditor({ initialContent, onContentChange, onMediaUploaded }: Props) {
   const { resolvedMode } = useTheme();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  // BlockNote runs in the DOM bridge realm where i18n can't reach, so resolve
+  // the language here and pass it through to localize the editor.
+  const language: 'zh' | 'en' = i18n.language?.startsWith('zh') ? 'zh' : 'en';
   const toolbarLabels = useMemo(
     () => ({
       headingType: t('notes.editor.toolbar.heading', { defaultValue: '标题' }),
@@ -81,7 +90,7 @@ export function NoteBlockEditor({ initialContent, onContentChange, onMediaUpload
         defaultValue: '列表',
       }),
       imageTitle: t('notes.editor.toolbar.imageTitle', { defaultValue: '图片' }),
-      imageLabel: t('notes.editor.toolbar.imageLabel', { defaultValue: '图' }),
+      videoTitle: t('notes.editor.toolbar.videoTitle', { defaultValue: '视频' }),
       codeTitle: t('notes.editor.toolbar.code', { defaultValue: '代码' }),
     }),
     [t],
@@ -100,73 +109,123 @@ export function NoteBlockEditor({ initialContent, onContentChange, onMediaUpload
     };
   }, []);
 
-  const handleImageRequest = useCallback(async () => {
-    if (inFlightRef.current) return;
-    inFlightRef.current = true;
-    try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) return;
+  // Image and video share one pick → presign → upload → insert pipeline; only
+  // the picker filter, fallbacks, upload timeout and media type differ by kind.
+  const pickUploadAndInsert = useCallback(
+    async (kind: 'image' | 'video') => {
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
+      try {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) return;
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        quality: 0.85,
-        allowsMultipleSelection: false,
-      });
-      if (result.canceled || !result.assets.length) return;
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: kind === 'video' ? ['videos'] : ['images'],
+          quality: 0.85,
+          allowsMultipleSelection: false,
+        });
+        if (result.canceled || !result.assets.length) return;
 
-      const asset = result.assets[0];
-      const filename = asset.uri.split('/').pop() ?? 'image.jpg';
-      const contentType =
-        resolveUploadContentType({ mimeType: asset.mimeType, fileName: filename }) ?? 'image/jpeg';
+        const asset = result.assets[0];
+        if (kind === 'video') {
+          const violation = getNoteVideoUploadPolicyViolation({
+            fileSize: asset.fileSize,
+            duration: asset.duration,
+          });
+          if (violation) {
+            Alert.alert(
+              t('notes.editor.videoRejectedTitle', {
+                defaultValue: '视频无法上传',
+              }),
+              violation === 'size'
+                ? t('notes.editor.videoTooLargeMessage', {
+                    defaultValue: '请选择 200MB 以内的视频',
+                  })
+                : t('notes.editor.videoTooLongMessage', {
+                    defaultValue: '请选择 10 分钟以内的视频',
+                  }),
+            );
+            return;
+          }
+        }
 
-      const presign = await requestUploadPresign({
-        filename: sanitizeUploadFilename(filename),
-        contentType,
-        folder: 'notes',
-      });
+        const fallbackName = kind === 'video' ? 'video.mp4' : 'image.jpg';
+        const fallbackType = kind === 'video' ? 'video/mp4' : 'image/jpeg';
+        const filename = asset.uri.split('/').pop() ?? fallbackName;
+        const contentType =
+          resolveUploadContentType({ mimeType: asset.mimeType, fileName: filename }) ??
+          fallbackType;
 
-      await uploadLocalFileToPresignedUrl(presign.uploadUrl, contentType, asset.uri);
+        const presign = await requestUploadPresign({
+          filename: sanitizeUploadFilename(filename),
+          contentType,
+          folder: 'notes',
+        });
 
-      if (!isMounted.current) return;
-
-      const insert: PendingInsert = {
-        type: 'image',
-        url: presign.fileUrl,
-        objectKey: presign.key,
-        width: asset.width ?? undefined,
-        height: asset.height ?? undefined,
-        mimeType: contentType,
-        size: asset.fileSize ?? undefined,
-      };
-      setPendingInsert(insert);
-      onMediaUploaded?.({
-        type: 'IMAGE',
-        objectKey: presign.key,
-        url: presign.fileUrl,
-        width: asset.width ?? undefined,
-        height: asset.height ?? undefined,
-        mimeType: contentType,
-        size: asset.fileSize ?? undefined,
-        sortOrder: 0,
-      });
-    } catch (error) {
-      if (isMounted.current) {
-        Alert.alert(
-          t('notes.editor.imageUploadFailedTitle', {
-            defaultValue: '图片上传失败',
-          }),
-          t('notes.editor.imageUploadFailedMessage', {
-            defaultValue: '请稍后重试',
-          }),
+        await uploadLocalFileToPresignedUrl(
+          presign.uploadUrl,
+          contentType,
+          asset.uri,
+          kind === 'video' ? VIDEO_UPLOAD_TIMEOUT_MS : undefined,
         );
+
+        if (!isMounted.current) return;
+
+        const durationMs =
+          kind === 'video' && typeof asset.duration === 'number'
+            ? Math.round(asset.duration)
+            : undefined;
+
+        setPendingInsert({
+          type: kind,
+          url: presign.fileUrl,
+          objectKey: presign.key,
+          width: asset.width ?? undefined,
+          height: asset.height ?? undefined,
+          mimeType: contentType,
+          size: asset.fileSize ?? undefined,
+          durationMs,
+        });
+        onMediaUploaded?.({
+          type: kind === 'video' ? 'VIDEO' : 'IMAGE',
+          objectKey: presign.key,
+          url: presign.fileUrl,
+          width: asset.width ?? undefined,
+          height: asset.height ?? undefined,
+          mimeType: contentType,
+          size: asset.fileSize ?? undefined,
+          durationMs,
+          sortOrder: 0,
+        });
+      } catch (error) {
+        if (isMounted.current) {
+          Alert.alert(
+            t('notes.editor.mediaUploadFailedTitle', {
+              defaultValue: '上传失败',
+            }),
+            t('notes.editor.mediaUploadFailedMessage', {
+              defaultValue: '请稍后重试',
+            }),
+          );
+        }
+        if (__DEV__) {
+          console.warn(`[NoteBlockEditor] ${kind} upload failed`, error);
+        }
+      } finally {
+        inFlightRef.current = false;
       }
-      if (__DEV__) {
-        console.warn('[NoteBlockEditor] image upload failed', error);
-      }
-    } finally {
-      inFlightRef.current = false;
-    }
-  }, [onMediaUploaded, t]);
+    },
+    [onMediaUploaded, t],
+  );
+
+  const handleImageRequest = useCallback(
+    () => pickUploadAndInsert('image'),
+    [pickUploadAndInsert],
+  );
+  const handleVideoRequest = useCallback(
+    () => pickUploadAndInsert('video'),
+    [pickUploadAndInsert],
+  );
 
   const handleInsertHandled = useCallback(() => {
     if (!isMounted.current) return;
@@ -211,7 +270,9 @@ export function NoteBlockEditor({ initialContent, onContentChange, onMediaUpload
           onContentChange={handleContentChangeJson}
           onInsertHandled={handleInsertHandled}
           onImageRequest={handleImageRequest}
+          onVideoRequest={handleVideoRequest}
           theme={resolvedMode}
+          language={language}
           toolbarLabels={toolbarLabels}
         />
       </View>

@@ -17,11 +17,19 @@ import * as ImagePicker from 'expo-image-picker';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Divider } from '@/components/ui/divider';
+import { GradientCover } from '@/components/ui/gradient-cover';
+import { CircleAvatar } from '@/components/ui/circle-avatar';
 import {
   fetchCircleDetail,
   selectCircleIcon,
   uploadCircleIcon,
+  leaveCircle,
+  joinCircle,
 } from '@/services/api/circles';
+import { getApiErrorMessage } from '@/services/api/errors';
+import { useChangeCircleCover } from '@/features/discover/hooks/use-change-circle-cover';
+import { useChangeCircleAvatar } from '@/features/discover/hooks/use-change-circle-avatar';
+import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import {
   requestUploadPresign,
   resolveUploadContentType,
@@ -38,23 +46,32 @@ const s = StyleSheet.create({
   // Header card
   profileCard: {
     alignItems: 'center',
-    gap: Spacing.md,
-    paddingVertical: Spacing.xl,
+    gap: Spacing.sm,
+    paddingTop: Spacing.xl,
+    // Tight bottom padding pulls the sections below (圈子图标…) right up.
+    paddingBottom: Spacing.xs,
+    // Pull the avatar up over the cover, but lower than before so more of the
+    // (now taller) cover shows and the avatar sits further down.
+    marginTop: -60,
+  },
+  coverWrap: {
+    marginHorizontal: -Spacing.lg,
+    height: 240,
+  },
+  cover: { width: '100%', height: '100%' },
+  coverEditBadge: {
+    position: 'absolute',
+    right: Spacing.md,
+    bottom: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
   },
   avatarWrap: {
     position: 'relative',
-  },
-  avatarImage: {
-    width: 80,
-    height: 80,
-    borderRadius: Radius.xl,
-  },
-  avatarPlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: Radius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   avatarEditBadge: {
     position: 'absolute',
@@ -97,7 +114,7 @@ const s = StyleSheet.create({
   },
   // Sections
   section: {
-    marginTop: Spacing.lg,
+    marginTop: Spacing.md,
   },
   sectionTitle: {
     ...Typography.caption,
@@ -214,6 +231,7 @@ export default function CircleDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [iconSaving, setIconSaving] = useState(false);
   const [enteringGroupChat, setEnteringGroupChat] = useState(false);
+  const [joining, setJoining] = useState(false);
   const mountedRef = useRef(true);
 
   // 进入圈子群聊：先解析出会话 ID（否则聊天页拿不到 conversationID 会停在预览模式），
@@ -282,8 +300,79 @@ export default function CircleDetailScreen() {
     }, [loadCircle]),
   );
 
-  const isOwnerOrAdmin =
-    circle?.myRole === 'OWNER' || circle?.myRole === 'ADMIN';
+  const isOwner = circle?.myRole === 'OWNER';
+  const isOwnerOrAdmin = isOwner || circle?.myRole === 'ADMIN';
+  const isActiveMember = circle?.myStatus === 'ACTIVE';
+
+  const { changeCover: changeCircleCover } = useChangeCircleCover(id, (url) => {
+    setCircle((current) => (current ? { ...current, cover: url } : current));
+    // Keep the cached circle lists in sync so they don't show a stale image.
+    useCirclesStore.getState().patchCircle(id, { cover: url });
+  });
+
+  const { changeAvatar: changeCircleAvatar } = useChangeCircleAvatar(
+    id,
+    (url) => {
+      setCircle((current) =>
+        current ? { ...current, avatarUrl: url } : current,
+      );
+      useCirclesStore.getState().patchCircle(id, { avatarUrl: url });
+    },
+  );
+
+  // Active members who are not the owner can leave. Owners must transfer or
+  // dissolve the circle instead, so they never see the leave action.
+  const canLeaveCircle =
+    circle?.myStatus === 'ACTIVE' && circle?.myRole !== 'OWNER';
+
+  const handleJoinCircle = useCallback(async () => {
+    if (!id || joining) return;
+    setJoining(true);
+    try {
+      await joinCircle(id);
+      await loadCircle();
+    } catch (error) {
+      Alert.alert(
+        t('circle.joinFailedTitle', { defaultValue: '加入失败' }),
+        getApiErrorMessage(
+          error,
+          t('common.retryLater', { defaultValue: '请稍后重试' }),
+        ),
+      );
+    } finally {
+      setJoining(false);
+    }
+  }, [id, joining, loadCircle, t]);
+
+  const handleLeaveCircle = useCallback(() => {
+    if (!id) return;
+    Alert.alert(
+      t('circle.leaveTitle', { defaultValue: '退出圈子' }),
+      t('circle.leaveMessage', { defaultValue: '确定退出该圈子吗？' }),
+      [
+        { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+        {
+          text: t('circle.leaveConfirm', { defaultValue: '退出' }),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await leaveCircle(id);
+              useCirclesStore.getState().removeCircle(id);
+              router.back();
+            } catch (error) {
+              Alert.alert(
+                t('circle.leaveFailedTitle', { defaultValue: '退出失败' }),
+                getApiErrorMessage(
+                  error,
+                  t('common.retryLater', { defaultValue: '请稍后重试' }),
+                ),
+              );
+            }
+          },
+        },
+      ],
+    );
+  }, [id, router, t]);
 
   const handleSelectCircleIcon = useCallback(
     async (iconAssetId: string) => {
@@ -389,8 +478,8 @@ export default function CircleDetailScreen() {
       categoryText: { color: colors.primary, ...Typography.caption },
       tagChip: { backgroundColor: colors.primaryLight },
       tagText: { color: colors.primary, ...Typography.caption },
-      avatarPlaceholder: { backgroundColor: colors.surfaceBorder },
       avatarEditBadge: { backgroundColor: colors.primary },
+      coverEditBadge: { backgroundColor: 'rgba(0,0,0,0.45)' },
       chatBtn: { backgroundColor: colors.primary },
       chatBtnText: { color: colors.white },
       adminBtn: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.surfaceBorder },
@@ -451,27 +540,52 @@ export default function CircleDetailScreen() {
         contentContainerStyle={s.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* ── Cover banner ── */}
+        <Pressable
+          style={s.coverWrap}
+          onPress={isOwner ? changeCircleCover : undefined}
+          disabled={!isOwner}
+        >
+          {circle.cover ? (
+            <Image
+              source={{ uri: circle.cover }}
+              style={s.cover}
+              contentFit="cover"
+            />
+          ) : (
+            <View style={s.cover}>
+              <GradientCover />
+            </View>
+          )}
+          {isOwner ? (
+            <View style={[s.coverEditBadge, d.coverEditBadge]}>
+              <Ionicons name="camera" size={12} color={colors.white} />
+              <Text style={{ color: colors.white, ...Typography.tiny }}>
+                {t('circle.changeCover', { defaultValue: '换封面' })}
+              </Text>
+            </View>
+          ) : null}
+        </Pressable>
+
         {/* ── Profile Card ── */}
         <View style={s.profileCard}>
           {/* Avatar */}
-          <View style={s.avatarWrap}>
-            {circle.avatarUrl ? (
-              <Image
-                source={{ uri: circle.avatarUrl }}
-                style={s.avatarImage}
-                contentFit="cover"
-              />
-            ) : (
-              <View style={[s.avatarPlaceholder, d.avatarPlaceholder]}>
-                <Ionicons name="people" size={36} color={colors.textSecondary} />
-              </View>
-            )}
-            {isOwnerOrAdmin ? (
+          <Pressable
+            style={s.avatarWrap}
+            onPress={isOwner ? changeCircleAvatar : undefined}
+            disabled={!isOwner}
+          >
+            <CircleAvatar
+              uri={circle.avatarUrl}
+              size={80}
+              borderRadius={Radius.xl}
+            />
+            {isOwner ? (
               <View style={[s.avatarEditBadge, d.avatarEditBadge]}>
                 <Ionicons name="camera" size={12} color={colors.white} />
               </View>
             ) : null}
-          </View>
+          </Pressable>
 
           {/* Name */}
           <Text style={[s.circleName, d.circleName]}>{circle.name}</Text>
@@ -517,8 +631,10 @@ export default function CircleDetailScreen() {
                 </View>
               ) : null}
               {isOwnerOrAdmin
-                ? circle.availableIconAssets?.map((asset) => {
-                    const selected = asset.id === circle.currentIconAssetID;
+                ? circle.availableIconAssets
+                    ?.filter((asset) => asset.imageUrl)
+                    .map((asset) => {
+                      const selected = asset.id === circle.currentIconAssetID;
                     return (
                       <Pressable
                         key={asset.id}
@@ -667,14 +783,58 @@ export default function CircleDetailScreen() {
 
         {/* ── Actions ── */}
         <View style={s.actionRow}>
+          {/* 加入圈子 (non-members) */}
+          {!isActiveMember ? (
+            circle.myStatus === 'PENDING' ? (
+              <Pressable style={[s.actionBtn, d.adminBtn]} disabled>
+                <Text style={[s.actionBtnText, d.adminBtnText]}>
+                  {t('circle.joinPending', { defaultValue: '审核中' })}
+                </Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                style={[s.actionBtn, d.chatBtn]}
+                onPress={handleJoinCircle}
+                disabled={joining}
+              >
+                <Text style={[s.actionBtnText, d.chatBtnText]}>
+                  {joining
+                    ? t('common.processing', { defaultValue: '处理中' })
+                    : t('circle.join', { defaultValue: '加入圈子' })}
+                </Text>
+              </Pressable>
+            )
+          ) : null}
+
           {/* 进入群聊 */}
-          {circle.groupID ? (
+          {isActiveMember && circle.groupID ? (
             <Pressable
               style={[s.actionBtn, d.chatBtn]}
               onPress={handleEnterGroupChat}
               disabled={enteringGroupChat}
             >
               <Text style={[s.actionBtnText, d.chatBtnText]}>{t('circle.enterGroupChat')}</Text>
+            </Pressable>
+          ) : null}
+
+          {/* 邀请好友 (active members) — same primary style as 进入群聊 */}
+          {isActiveMember ? (
+            <Pressable
+              style={[s.actionBtn, d.chatBtn]}
+              onPress={() =>
+                router.push({
+                  pathname: '/(tabs)/discover/circle/[id]/invite',
+                  params: {
+                    id: circle.id,
+                    title: circle.name,
+                    avatar: circle.avatarUrl ?? '',
+                  },
+                })
+              }
+            >
+              <Text style={[s.actionBtnText, d.chatBtnText]}>
+                {t('circle.invite.entry', { defaultValue: '邀请好友' })}
+              </Text>
             </Pressable>
           ) : null}
 
@@ -690,6 +850,18 @@ export default function CircleDetailScreen() {
               }
             >
               <Text style={[s.actionBtnText, d.adminBtnText]}>{t('circle.adminReview')}</Text>
+            </Pressable>
+          ) : null}
+
+          {/* 退出圈子 (active non-owner members) */}
+          {canLeaveCircle ? (
+            <Pressable
+              style={[s.actionBtn, d.dangerBtn]}
+              onPress={handleLeaveCircle}
+            >
+              <Text style={[s.actionBtnText, d.dangerBtnText]}>
+                {t('circle.leave', { defaultValue: '退出圈子' })}
+              </Text>
             </Pressable>
           ) : null}
         </View>

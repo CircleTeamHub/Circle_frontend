@@ -9,8 +9,9 @@ import {
   FlatList,
   StyleSheet,
   ImageBackground,
+  type FlatList as FlatListType,
+  type GestureResponderEvent,
 } from 'react-native';
-import type { FlatList as FlatListType } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams, useNavigation, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,9 +27,14 @@ import {
   VoiceBubble,
   NoteCardBubble,
   FriendCardBubble,
+  CircleCardBubble,
   TransferCardBubble,
 } from '@/features/chat/components/chat-bubble';
 import { EmojiPicker } from '@/features/chat/components/emoji-picker';
+import {
+  MessageActionMenu,
+  type MessageAction,
+} from '@/features/chat/components/MessageActionMenu';
 import {
   getUserProfileHref,
   getUserProfileScopeFromSegments,
@@ -77,6 +83,10 @@ import {
   getCollectedOpenIMMessagePayload,
 } from '@/features/chat/utils/message-collection';
 import {
+  getNotificationRestoreMaxMessages,
+  hasMessageWithClientID,
+} from '@/features/chat/utils/notification-scroll';
+import {
   requestUploadPresign,
   resolveUploadContentType,
   sanitizeUploadFilename,
@@ -92,6 +102,7 @@ import {
   useChatPreferencesStore,
 } from '@/features/chat/store/use-chat-preferences-store';
 import { createGroupCall } from '@/services/api/calls';
+import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { OnlineState, SessionType } from '@openim/rn-client-sdk';
 import { useTranslation } from 'react-i18next';
 import type { ChatMessage, FriendCardData } from '@/types';
@@ -475,9 +486,25 @@ export default function ChatDetailScreen() {
               ? toImUserId(sourceID)
               : sourceID,
           sessionType: conversationType,
-          maxMessages: 500,
+          maxMessages: getNotificationRestoreMaxMessages(searchedMsgID),
         }),
       )
+      .then((restoreResult) => {
+        if (!searchedMsgID) {
+          return;
+        }
+        const localMessages =
+          useIMStore.getState().messagesByConversation[conversationID] ?? [];
+        if (hasMessageWithClientID(localMessages, searchedMsgID)) {
+          return;
+        }
+        logClientDiagnostic('chat_notification_target_not_found', {
+          conversationID,
+          targetMsgID: searchedMsgID,
+          fetched: restoreResult.fetched,
+          inserted: restoreResult.inserted,
+        });
+      })
       .catch((err) => {
         if (typeof __DEV__ !== 'undefined' && __DEV__) {
           console.warn('[chat] load/restore conversation messages failed', err);
@@ -487,7 +514,13 @@ export default function ChatDetailScreen() {
     return () => {
       setActiveConversation(null);
     };
-  }, [conversationID, conversationType, setActiveConversation, sourceID]);
+  }, [
+    conversationID,
+    conversationType,
+    searchedMsgID,
+    setActiveConversation,
+    sourceID,
+  ]);
 
   useEffect(() => {
     if (!peerImId) return;
@@ -566,42 +599,84 @@ export default function ChatDetailScreen() {
     [conversationID, conversationTitle, t],
   );
 
-  const handleMessageLongPress = useCallback(
+  const [actionMenu, setActionMenu] = useState<{
+    message: ChatMessage;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const handleCopyMessage = useCallback(async (message: ChatMessage) => {
+    const text = message.text?.trim();
+    if (!text) return;
+    try {
+      const Clipboard = await import('expo-clipboard');
+      await Clipboard.setStringAsync(text);
+    } catch {
+      // copy is best-effort; ignore clipboard failures.
+    }
+  }, []);
+
+  const handleForwardMessage = useCallback(
     (message: ChatMessage) => {
-      if (message.type === 'date') return;
-      Alert.alert(t('chat.messageActions.title'), undefined, [
-        {
-          text: t('chat.messageActions.collect'),
-          onPress: () => {
-            void handleCollectMessage(message);
-          },
-        },
-        {
-          text: t('chat.messageActions.forward'),
-          onPress: () => {
-            // Read the raw OpenIM item lazily (at tap time) so the message list
-            // doesn't re-render on every incoming message. Lets the picker use
-            // native forwarding, which preserves images/media.
-            const raw = conversationID
-              ? useIMStore
-                  .getState()
-                  .messagesByConversation[conversationID]?.find(
-                    (m) => m.clientMsgID === message.id,
-                  )
-              : undefined;
-            setPendingForward({ message, raw });
-            router.push({ pathname: '/(tabs)/messages/forward-picker' });
-          },
-        },
-        { text: t('common.cancel'), style: 'cancel' },
-      ]);
+      // Read the raw OpenIM item lazily (at tap time) so the message list
+      // doesn't re-render on every incoming message. Lets the picker use
+      // native forwarding, which preserves images/media.
+      const raw = conversationID
+        ? useIMStore
+            .getState()
+            .messagesByConversation[conversationID]?.find(
+              (m) => m.clientMsgID === message.id,
+            )
+        : undefined;
+      setPendingForward({ message, raw });
+      router.push({ pathname: '/(tabs)/messages/forward-picker' });
     },
-    [conversationID, handleCollectMessage, setPendingForward, t],
+    [conversationID, setPendingForward],
   );
+
+  const handleMessageLongPress = useCallback(
+    (message: ChatMessage, event: GestureResponderEvent) => {
+      if (message.type === 'date') return;
+      const { pageX, pageY } = event.nativeEvent;
+      setActionMenu({ message, x: pageX, y: pageY });
+    },
+    [],
+  );
+
+  // Build the floating menu's items for the currently long-pressed message.
+  const messageActions = useMemo<MessageAction[]>(() => {
+    const message = actionMenu?.message;
+    if (!message) return [];
+    const actions: MessageAction[] = [];
+    if (message.text?.trim()) {
+      actions.push({
+        key: 'copy',
+        icon: 'copy-outline',
+        label: t('chat.messageActions.copy', { defaultValue: '复制' }),
+        onPress: () => void handleCopyMessage(message),
+      });
+    }
+    actions.push({
+      key: 'forward',
+      icon: 'arrow-redo-outline',
+      label: t('chat.messageActions.forward'),
+      onPress: () => handleForwardMessage(message),
+    });
+    actions.push({
+      key: 'collect',
+      icon: 'star-outline',
+      label: t('chat.messageActions.collect'),
+      onPress: () => void handleCollectMessage(message),
+    });
+    return actions;
+  }, [actionMenu, handleCollectMessage, handleCopyMessage, handleForwardMessage, t]);
 
   const withMessageActions = useCallback(
     (message: ChatMessage, node: ReactElement) => (
-      <Pressable onLongPress={() => handleMessageLongPress(message)} delayLongPress={350}>
+      <Pressable
+        onLongPress={(event) => handleMessageLongPress(message, event)}
+        delayLongPress={350}
+      >
         {node}
       </Pressable>
     ),
@@ -695,6 +770,22 @@ export default function ChatDetailScreen() {
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
             onPress={(card) =>
               router.push(getUserProfileHref(scope, card.userID, card.nickname))
+            }
+            hideStatus={isGroupChat}
+          />
+        ));
+      case 'circle-card':
+        return withMessageActions(item, (
+          <CircleCardBubble
+            message={item}
+            outgoing={Boolean(item.outgoing)}
+            senderName={item.senderName ?? conversationTitle}
+            senderAvatarUri={avatarUrl}
+            selfName={selfName}
+            selfAvatarUri={selfAvatarUri}
+            onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onPress={(card) =>
+              router.push(`/(tabs)/discover/circle/${encodeURIComponent(card.circleId)}`)
             }
             hideStatus={isGroupChat}
           />
@@ -1600,6 +1691,11 @@ export default function ChatDetailScreen() {
         </View>
       ) : null}
 
+      <MessageActionMenu
+        anchor={actionMenu ? { x: actionMenu.x, y: actionMenu.y } : null}
+        actions={messageActions}
+        onDismiss={() => setActionMenu(null)}
+      />
     </View>
   );
 }

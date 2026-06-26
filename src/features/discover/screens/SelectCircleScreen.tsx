@@ -10,9 +10,9 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { NavHeader } from '@/components/ui/nav-header';
+import { CircleAvatar } from '@/components/ui/circle-avatar';
 import { Divider } from '@/components/ui/divider';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
@@ -28,11 +28,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.md,
     paddingVertical: Spacing.md,
-  },
-  cover: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.sm,
   },
   info: {
     flex: 1,
@@ -100,9 +95,11 @@ export default function SelectCircleScreen() {
     ({ item }: { item: Circle }) => (
       <View>
         <Pressable style={s.row} onPress={() => handleSelect(item)}>
-          <Image
-            source={{ uri: item.avatarUrl ?? undefined }}
-            style={[s.cover, d.cover]}
+          <CircleAvatar
+            uri={item.avatarUrl}
+            size={44}
+            borderRadius={Radius.sm}
+            style={d.cover}
           />
           <View style={s.info}>
             <Text style={d.name}>{item.name}</Text>

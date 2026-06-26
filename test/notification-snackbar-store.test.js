@@ -39,7 +39,6 @@ const notification = {
   fromCircle: null,
   fromCirclePost: null,
   fromInvitation: null,
-  squadRequest: null,
 };
 
 test("notification snackbar store queues and deduplicates notifications", () => {

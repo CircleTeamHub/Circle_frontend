@@ -24,6 +24,10 @@ export function getSnackbarRoute(
         title: item.title,
         conversationType: item.conversationType,
         ...(item.avatarUrl ? { avatarUrl: item.avatarUrl } : {}),
+        // `item.id` is the triggering message's clientMsgID. Chat detail already
+        // scrolls to `searchedMsgID` (shared with in-chat search), so forwarding
+        // it lands the user on the exact message instead of the conversation tail.
+        ...(item.id ? { searchedMsgID: item.id } : {}),
       },
     };
   }

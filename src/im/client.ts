@@ -1056,6 +1056,65 @@ export async function sendFriendCardMessage(params: {
   });
 }
 
+export const CIRCLE_CARD_EXT_VERSION = 'circle-card-v1';
+
+interface CircleCardExt {
+  v: typeof CIRCLE_CARD_EXT_VERSION;
+  // Discriminator so mappers can tell a circle card apart from a friend card —
+  // both ride OpenIM's native card message.
+  kind: 'circle';
+}
+
+export async function sendCircleCardMessage(params: {
+  targetConversationID: string;
+  circleId: string;
+  name: string;
+  avatarUrl: string | null;
+}) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await waitForOpenIMConnectionReady();
+
+  const targetConversation = useIMStore
+    .getState()
+    .conversations.find(
+      (conversation) =>
+        conversation.conversationID === params.targetConversationID,
+    );
+
+  if (!targetConversation) {
+    throw new Error('目标会话不存在');
+  }
+
+  const ext: CircleCardExt = { v: CIRCLE_CARD_EXT_VERSION, kind: 'circle' };
+  const message = await OpenIMSDK.createCardMessage({
+    // 圈子 id 存在 card 的 userID 槽里 —— 收件人点名片靠它打开圈子详情。
+    userID: params.circleId,
+    nickname: params.name,
+    faceURL: params.avatarUrl ?? '',
+    ex: JSON.stringify(ext),
+  });
+  const isGroupConversation =
+    targetConversation.conversationType === SessionType.Group;
+
+  return OpenIMSDK.sendMessage({
+    recvID: isGroupConversation ? '' : targetConversation.userID,
+    groupID: isGroupConversation ? targetConversation.groupID : '',
+    message,
+    offlinePushInfo: {
+      title: '圈子邀请',
+      desc: params.name,
+      ex: '',
+      iOSPushSound: 'default',
+      iOSBadgeCount: true,
+    },
+  });
+}
+
 export async function toggleConversationPinned(
   conversationID: string,
   isPinned: boolean

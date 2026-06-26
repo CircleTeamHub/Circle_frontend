@@ -3,6 +3,7 @@
 import '@blocknote/react/style.css';
 
 import type { PartialBlock } from '@blocknote/core';
+import { en, zh } from '@blocknote/core/locales';
 import {
   BlockNoteViewRaw,
   useCreateBlockNote,
@@ -12,13 +13,14 @@ import {
 import { useEffect, useRef, useState } from 'react';
 
 interface PendingInsert {
-  type: 'image';
+  type: 'image' | 'video';
   url: string;
   objectKey: string;
   width?: number;
   height?: number;
   mimeType?: string;
   size?: number;
+  durationMs?: number;
 }
 
 // Toolbar 文案不能在 WebView 里走 i18n —— DOM bridge 跑在隔离的 JS realm，
@@ -28,7 +30,7 @@ export interface NoteEditorToolbarLabels {
   paragraphType: string;
   bulletListType: string;
   imageTitle: string;
-  imageLabel: string;
+  videoTitle: string;
   codeTitle: string;
 }
 
@@ -39,7 +41,9 @@ interface Props {
   onContentChange: (blocksJson: string) => void; // JSON string — avoids bridge serialization errors
   onInsertHandled: () => void;
   onImageRequest: () => void;
+  onVideoRequest: () => void;
   theme?: 'light' | 'dark';
+  language?: 'zh' | 'en';
   toolbarLabels: NoteEditorToolbarLabels;
 }
 
@@ -51,7 +55,9 @@ export default function NoteBlockEditor({
   onContentChange,
   onInsertHandled,
   onImageRequest,
+  onVideoRequest,
   theme = 'dark',
+  language = 'zh',
   toolbarLabels,
 }: Props) {
   const parsedInitial: PartialBlock[] | undefined = (() => {
@@ -71,7 +77,13 @@ export default function NoteBlockEditor({
     }
   })();
 
-  const editor = useCreateBlockNote({ initialContent: parsedInitial });
+  // Localize the editor (placeholders + slash menu) via BlockNote's built-in
+  // dictionaries. i18n can't run inside the DOM bridge realm, so the language
+  // is resolved on the native side and passed in as a prop.
+  const editor = useCreateBlockNote({
+    initialContent: parsedInitial,
+    dictionary: language === 'zh' ? zh : en,
+  });
 
   const [activeType, setActiveType] = useState<ActiveType>('paragraph');
   const unmounted = useRef(false);
@@ -108,14 +120,16 @@ export default function NoteBlockEditor({
     };
   }, []);
 
-  // Insert a pending image from native
+  // Insert a pending image/video block from native
   useEffect(() => {
     if (!pendingInsert || unmounted.current) return;
     const pos = editor.getTextCursorPosition();
     editor.insertBlocks(
       [
         {
-          type: 'image',
+          // BlockNote's default schema ships both `image` and `video` blocks;
+          // they share the url/previewWidth/caption props.
+          type: pendingInsert.type,
           props: {
             url: pendingInsert.url,
             previewWidth: 300,
@@ -156,9 +170,14 @@ export default function NoteBlockEditor({
   return (
     <div
       style={{
+        // Expo DOM mounts this content with no html/body/#root height, so a
+        // `height: 100%` here can't resolve and the flex column collapses to
+        // content size (the editor shrinks into a small box). Pin to the
+        // WebView viewport instead so it always fills the available area.
+        position: 'fixed',
+        inset: 0,
         display: 'flex',
         flexDirection: 'column',
-        height: '100%',
         overflow: 'hidden',
         backgroundColor: bg,
       }}
@@ -212,23 +231,73 @@ export default function NoteBlockEditor({
           );
         })}
 
-        {/* Image — triggers native picker */}
+        {/* Image — triggers native picker. Uses an SVG icon rather than a CJK
+            glyph so it renders consistently regardless of the WebView's font
+            fallback (a '图' label showed as tofu on some devices). */}
         <button
           onClick={onImageRequest}
           title={toolbarLabels.imageTitle}
+          aria-label={toolbarLabels.imageTitle}
           style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             padding: '6px 12px',
             borderRadius: 8,
             border: 'none',
             cursor: 'pointer',
-            fontSize: 14,
-            fontWeight: 700,
-            fontFamily: 'system-ui, sans-serif',
             background: 'transparent',
             color: iconColor,
           }}
         >
-          {toolbarLabels.imageLabel}
+          <svg
+            width={18}
+            height={18}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <path d="M21 15l-5-5L5 21" />
+          </svg>
+        </button>
+
+        {/* Video — triggers native picker, mirrors the image flow. */}
+        <button
+          onClick={onVideoRequest}
+          title={toolbarLabels.videoTitle}
+          aria-label={toolbarLabels.videoTitle}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '6px 12px',
+            borderRadius: 8,
+            border: 'none',
+            cursor: 'pointer',
+            background: 'transparent',
+            color: iconColor,
+          }}
+        >
+          <svg
+            width={18}
+            height={18}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M23 7l-7 5 7 5V7z" />
+            <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+          </svg>
         </button>
 
         {/* Code */}

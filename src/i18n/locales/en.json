@@ -172,9 +172,6 @@
       "FRIEND_REQUEST_RECEIVED": "wants to add you as a friend",
       "FRIEND_REQUEST_ACCEPTED": "accepted your friend request",
       "FRIEND_REQUEST_REJECTED": "declined your friend request",
-      "SQUAD_REQUEST_RECEIVED": "requested to join",
-      "SQUAD_REQUEST_ACCEPTED": "accepted your join request",
-      "SQUAD_REQUEST_REJECTED": "declined your join request",
       "CIRCLE_VERIFICATION_REQUESTED": "requested verification in {{circle}}",
       "CIRCLE_INVITATION_APPROVED": "your invitation to {{circle}} is fully approved",
       "CIRCLE_INVITATION_REJECTED": "an invitation slot in {{circle}} was rejected",
@@ -346,6 +343,7 @@
     "newFriends": "New Friends",
     "seats": "Seats",
     "groups": "Groups",
+    "circles": "Circles",
     "tags": "Tags",
     "accountId": "ID: {{id}}",
     "loadFailed": "Failed to load contacts, please try again",
@@ -513,6 +511,33 @@
     "adminOnly": "Admins Only",
     "enterGroupChat": "Enter Group Chat",
     "adminReview": "Review Applications",
+    "invite": {
+      "entry": "Invite Friends",
+      "title": "Invite Friends",
+      "failed": "Invite Failed",
+      "alreadyMembers": "The selected friends are already in this circle.",
+      "noneSent": "None of the selected friends could be invited. Please check the requirements and try again.",
+      "sentAll": "Invited {{count}} friends. Waiting for verification.",
+      "sentPartial": "Invited {{succeeded}}; {{failed}} failed because they may already be members or may not meet the requirements."
+    },
+    "card": {
+      "type": "Circle",
+      "footer": "Circle Card · Tap to Join"
+    },
+    "shareCard": {
+      "title": "Send Circle Card",
+      "confirmTitle": "Send Circle Card",
+      "confirmMessage": "Send \"{{circleName}}\" to {{conversationName}}?",
+      "sentTitle": "Sent",
+      "sentMessage": "Circle card sent.",
+      "failedTitle": "Send Failed",
+      "loadFailed": "Could not load conversations. Please try again later.",
+      "sending": "Sending...",
+      "rowFallback": "Send circle card",
+      "pickConversation": "Choose a Conversation",
+      "description": "Send the \"{{circleName}}\" circle card to a chat. The recipient can tap it to apply to join.",
+      "empty": "No available conversations"
+    },
     "create": {
       "title": "Create Circle",
       "vipRequired": "VIP membership required to create circles",

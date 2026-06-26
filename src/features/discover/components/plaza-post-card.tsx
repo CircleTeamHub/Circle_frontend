@@ -7,8 +7,14 @@ import { Avatar } from '@/components/ui/avatar';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { getUserProfileHref } from '@/features/user/utils/routes';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
-import { cancelSignup, signupForPost } from '@/services/api/plaza';
+import {
+  cancelSignup,
+  signupForPost,
+  deletePlazaPost,
+} from '@/services/api/plaza';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { useAuthStore } from '@/stores/authStore';
+import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
 import { ImageGrid } from './image-grid';
 import { RestrictionBadge } from './restriction-badge';
 import type { CirclePlazaPost } from '@/types';
@@ -136,6 +142,38 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
       params: { postId: post.id, title: post.content.slice(0, 24) },
     });
   }, [router, post.id, post.content]);
+
+  const storeRemovePlazaPost = useDiscoverStore((state) => state.removePlazaPost);
+
+  const handleDeletePost = useCallback(() => {
+    Alert.alert(
+      t('plaza.deleteTitle', { defaultValue: '删除帖子' }),
+      t('plaza.deleteMessage', {
+        defaultValue: '删除后无法恢复，确定删除吗？',
+      }),
+      [
+        { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+        {
+          text: t('common.delete', { defaultValue: '删除' }),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deletePlazaPost(post.id);
+              storeRemovePlazaPost(post.id);
+            } catch (error) {
+              Alert.alert(
+                t('plaza.deleteFailedTitle', { defaultValue: '删除失败' }),
+                getApiErrorMessage(
+                  error,
+                  t('plaza.deleteFailedMessage', { defaultValue: '请稍后重试' }),
+                ),
+              );
+            }
+          },
+        },
+      ],
+    );
+  }, [post.id, storeRemovePlazaPost, t]);
 
   const buildSignupReasonText = useCallback((): string => {
     const reasons: string[] = [];
@@ -267,6 +305,20 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
         </View>
         {post.isHorn ? (
           <Ionicons name="megaphone" size={18} color={colors.warning} />
+        ) : null}
+        {isOwnPost ? (
+          <Pressable
+            onPress={handleDeletePost}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.delete', { defaultValue: '删除' })}
+          >
+            <Ionicons
+              name="trash-outline"
+              size={18}
+              color={colors.textSecondary}
+            />
+          </Pressable>
         ) : null}
       </View>
 
