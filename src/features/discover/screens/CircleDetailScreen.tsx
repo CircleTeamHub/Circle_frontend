@@ -237,6 +237,7 @@ export default function CircleDetailScreen() {
     null,
   );
   const mountedRef = useRef(true);
+  const invitationRequestRef = useRef(0);
 
   // 进入圈子群聊：先解析出会话 ID（否则聊天页拿不到 conversationID 会停在预览模式），
   // 再入 discover 栈，返回时回到圈子详情。
@@ -301,15 +302,23 @@ export default function CircleDetailScreen() {
   // 当前用户在该圈是否有进行中的入圈申请（10 人担保验证）。有则在底部给出
   // 「邀请好友为我验证」入口——invitation 流程的接收侧本来没有前端入口。
   const loadMyInvitation = useCallback(async () => {
+    const requestId = ++invitationRequestRef.current;
+    setMyInvitation(null);
     if (!id) return;
     try {
       const apps = await fetchMyApplications();
+      if (!mountedRef.current || requestId !== invitationRequestRef.current) {
+        return;
+      }
       setMyInvitation(
         apps.find((inv) => inv.circleId === id && inv.status === 'PENDING') ??
           null,
       );
     } catch {
       // 非关键路径，失败不阻塞详情页展示
+      if (mountedRef.current && requestId === invitationRequestRef.current) {
+        setMyInvitation(null);
+      }
     }
   }, [id]);
 

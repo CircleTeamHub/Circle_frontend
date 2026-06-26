@@ -14,6 +14,15 @@ test('CircleDetailScreen loads the current user pending invitation for this circ
   assert.match(src, /inv\.status === 'PENDING'/);
 });
 
+test('CircleDetailScreen clears stale invitation state before reloading', () => {
+  const src = read(SRC);
+  assert.match(src, /invitationRequestRef = useRef\(0\)/);
+  assert.match(src, /const requestId = \+\+invitationRequestRef\.current/);
+  assert.match(src, /setMyInvitation\(null\);\s*if \(!id\) return;/);
+  assert.match(src, /requestId !== invitationRequestRef\.current/);
+  assert.match(src, /catch \{[\s\S]*setMyInvitation\(null\);[\s\S]*\}/);
+});
+
 test('a PENDING applicant with an invitation gets a verify-entry into the invitation detail', () => {
   const src = read(SRC);
   // The entry is gated on having an invitation, not just PENDING membership.
