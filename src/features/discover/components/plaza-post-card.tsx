@@ -35,10 +35,20 @@ const s = StyleSheet.create({
   headerText: {
     flex: 1,
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  // 用户名过长时收缩并省略，圈子 badge 不收缩（RN flexShrink 默认 0），二者始终同行。
+  nameShrink: {
+    flexShrink: 1,
+  },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,
+    marginTop: 3,
   },
   tag: {
     paddingHorizontal: Spacing.sm,
@@ -290,16 +300,20 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
           />
         </Pressable>
         <View style={s.headerText}>
-          <Pressable onPress={handleAvatarPress}>
-            <Text style={d.authorName}>{post.author.nickname}</Text>
-          </Pressable>
-          <View style={s.metaRow}>
+          <View style={s.nameRow}>
+            <Pressable onPress={handleAvatarPress} style={s.nameShrink}>
+              <Text style={d.authorName} numberOfLines={1}>
+                {post.author.nickname}
+              </Text>
+            </Pressable>
             <View style={[s.tag, d.tag]}>
-              <Text style={d.tagText}>{post.circle.name}</Text>
+              <Text style={d.tagText} numberOfLines={1}>
+                {post.circle.name}
+              </Text>
             </View>
-            {post.city ? (
-              <Text style={d.metaText}>{post.city}</Text>
-            ) : null}
+          </View>
+          <View style={s.metaRow}>
+            {post.city ? <Text style={d.metaText}>{post.city}</Text> : null}
             <Text style={d.metaText}>· {timeLabel}</Text>
           </View>
         </View>
