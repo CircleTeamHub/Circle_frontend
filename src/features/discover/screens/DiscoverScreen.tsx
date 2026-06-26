@@ -102,6 +102,10 @@ export default function DiscoverScreen() {
     }
   }, [activeTab, router]);
 
+  const handleDiscoverCirclesPress = useCallback(() => {
+    router.push("/(tabs)/discover/circles");
+  }, [router]);
+
   const handleFilterPress = useCallback(() => {
     router.push("/(tabs)/discover/filter");
   }, [router]);
@@ -117,6 +121,16 @@ export default function DiscoverScreen() {
         <View style={s.headerRow}>
           <Text style={d.title}>{t('discover.title')}</Text>
           <View style={s.headerIcons}>
+            <Pressable
+              onPress={handleDiscoverCirclesPress}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={t('discover.discoverCircles', {
+                defaultValue: '发现圈子',
+              })}
+            >
+              <Ionicons name="search-outline" size={22} color={colors.text} />
+            </Pressable>
             <Pressable
               onPress={handleFilterPress}
               hitSlop={8}
