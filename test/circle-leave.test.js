@@ -8,9 +8,12 @@ const SRC = 'src/features/discover/screens/CircleDetailScreen.tsx';
 
 test('CircleDetailScreen wires leave-circle to the API', () => {
   const src = read(SRC);
+  const store = read('src/features/discover/store/use-circles-store.ts');
 
   assert.match(src, /leaveCircle,?\s*\n?\s*\}?\s*from '@\/services\/api\/circles'|leaveCircle/);
   assert.match(src, /await leaveCircle\(id\)/);
+  assert.match(store, /removeCircle: \(id: string\) => void/);
+  assert.match(src, /useCirclesStore\.getState\(\)\.removeCircle\(id\)/);
   assert.match(src, /router\.back\(\)/);
 });
 

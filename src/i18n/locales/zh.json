@@ -510,6 +510,33 @@
     "adminOnly": "仅管理员",
     "enterGroupChat": "进入群聊",
     "adminReview": "入圈审核",
+    "invite": {
+      "entry": "邀请好友",
+      "title": "邀请好友入圈",
+      "failed": "邀请失败",
+      "alreadyMembers": "所选好友已在圈子中",
+      "noneSent": "所选好友均未邀请成功，请检查条件后重试",
+      "sentAll": "已邀请 {{count}} 位好友，等待验证通过",
+      "sentPartial": "已邀请 {{succeeded}} 位；{{failed}} 位未成功（可能已是成员或不满足入圈条件）"
+    },
+    "card": {
+      "type": "圈子",
+      "footer": "圈子名片 · 点击加入"
+    },
+    "shareCard": {
+      "title": "发送圈子名片",
+      "confirmTitle": "发送圈子名片",
+      "confirmMessage": "把「{{circleName}}」发送给 {{conversationName}}？",
+      "sentTitle": "已发送",
+      "sentMessage": "圈子名片已发送。",
+      "failedTitle": "发送失败",
+      "loadFailed": "无法加载聊天对象，请稍后重试",
+      "sending": "发送中...",
+      "rowFallback": "发送圈子名片",
+      "pickConversation": "选择一个会话",
+      "description": "把「{{circleName}}」的圈子名片发到聊天里，对方点击即可申请加入。",
+      "empty": "暂无可发送的聊天对象"
+    },
     "create": {
       "title": "创建圈子",
       "vipRequired": "需要成为VIP用户才能创建圈子",

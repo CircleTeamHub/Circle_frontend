@@ -27,9 +27,9 @@ test('circle card: bubble renders and taps through to the circle detail', () => 
   const bubble = read('src/features/chat/components/chat-bubble.tsx');
   assert.match(bubble, /export const CircleCardBubble/);
   assert.match(bubble, /message\.circleCard/);
-  // bubble fetches the circle live so it reflects the current name/avatar,
-  // not the snapshot baked into the card at send time.
-  assert.match(bubble, /fetchCircleDetail\(circleId\)/);
+  // The bubble uses the sent snapshot. The detail screen owns live fetching,
+  // which avoids an N+1 request pattern while scrolling chat history.
+  assert.doesNotMatch(bubble, /fetchCircleDetail\(circleId\)/);
   assert.match(bubble, /displayName/);
   assert.match(bubble, /displayAvatar/);
 
@@ -44,6 +44,8 @@ test('ShareCircleCardScreen sends the card to a chosen conversation', () => {
   const share = read(
     'src/features/discover/screens/ShareCircleCardScreen.tsx',
   );
+  assert.match(share, /useTranslation/);
+  assert.doesNotMatch(share, /Alert\.alert\(\s*'发送圈子名片'/);
   assert.match(share, /sendCircleCardMessage/);
   assert.match(share, /targetConversationID: conversation\.id/);
 });

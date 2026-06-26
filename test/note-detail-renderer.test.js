@@ -26,6 +26,14 @@ test('NoteBlockRenderer handles image blocks with expo-image', () => {
   assert.match(src, /expo-image/);
 });
 
+test('NoteBlockRenderer handles video blocks with expo-video', () => {
+  const src = read('src/features/notes/components/NoteBlockRenderer.tsx');
+  assert.match(src, /case 'video'/);
+  assert.match(src, /expo-video/);
+  assert.match(src, /useVideoPlayer/);
+  assert.match(src, /VideoView/);
+});
+
 test('NoteDetailScreen prefers contentJson over plain content', () => {
   const src = read('src/features/notes/screens/NoteDetailScreen.tsx');
   assert.match(src, /contentJson/);

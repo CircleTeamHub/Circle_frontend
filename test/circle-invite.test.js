@@ -11,10 +11,23 @@ test('InviteToCircleScreen invites selected friends via inviteToCircle', () => {
   );
 
   assert.match(src, /fetchFriends/);
+  assert.match(src, /fetchCircleDetail\(circleId\)/);
+  assert.match(src, /loadGroupMemberList\(detail\.groupID, 10_000\)/);
+  assert.match(src, /filterInvitableCircleFriends/);
   assert.match(src, /inviteToCircle\(circleId, friendId\)/);
   // Fan-out tolerates per-friend rejection (already member / restriction / privacy).
   assert.match(src, /Promise\.allSettled/);
-  assert.match(src, /selectedIds\.map/);
+  assert.match(src, /inviteeIds\.map/);
+});
+
+test('InviteToCircleScreen stays open when every invite fails', () => {
+  const src = read(
+    'src/features/discover/screens/InviteToCircleScreen.tsx',
+  );
+
+  assert.match(src, /if \(succeeded === 0\) \{/);
+  assert.match(src, /circle\.invite\.noneSent/);
+  assert.match(src, /return;\s*\n\s*\}/);
 });
 
 test('CircleDetailScreen exposes the invite entry to active members', () => {
@@ -22,8 +35,18 @@ test('CircleDetailScreen exposes the invite entry to active members', () => {
     'src/features/discover/screens/CircleDetailScreen.tsx',
   );
 
-  assert.match(src, /circle\.myStatus === 'ACTIVE' \?/);
+  assert.match(src, /const isActiveMember = circle\?\.myStatus === 'ACTIVE'/);
+  assert.match(src, /\{isActiveMember \? \(/);
   assert.match(src, /circle\/\[id\]\/invite/);
+});
+
+test('CircleDetailScreen only exposes group chat to active members', () => {
+  const src = read(
+    'src/features/discover/screens/CircleDetailScreen.tsx',
+  );
+
+  assert.match(src, /const isActiveMember = circle\?\.myStatus === 'ACTIVE'/);
+  assert.match(src, /isActiveMember && circle\.groupID \? \(/);
 });
 
 test('invite entry is a menu: send circle card + invite contacts', () => {

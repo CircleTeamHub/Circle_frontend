@@ -9,9 +9,9 @@ import {
   FlatList,
   StyleSheet,
   ImageBackground,
+  type FlatList as FlatListType,
   type GestureResponderEvent,
 } from 'react-native';
-import type { FlatList as FlatListType } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams, useNavigation, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -83,6 +83,10 @@ import {
   getCollectedOpenIMMessagePayload,
 } from '@/features/chat/utils/message-collection';
 import {
+  getNotificationRestoreMaxMessages,
+  hasMessageWithClientID,
+} from '@/features/chat/utils/notification-scroll';
+import {
   requestUploadPresign,
   resolveUploadContentType,
   sanitizeUploadFilename,
@@ -98,6 +102,7 @@ import {
   useChatPreferencesStore,
 } from '@/features/chat/store/use-chat-preferences-store';
 import { createGroupCall } from '@/services/api/calls';
+import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { OnlineState, SessionType } from '@openim/rn-client-sdk';
 import { useTranslation } from 'react-i18next';
 import type { ChatMessage, FriendCardData } from '@/types';
@@ -481,9 +486,25 @@ export default function ChatDetailScreen() {
               ? toImUserId(sourceID)
               : sourceID,
           sessionType: conversationType,
-          maxMessages: 500,
+          maxMessages: getNotificationRestoreMaxMessages(searchedMsgID),
         }),
       )
+      .then((restoreResult) => {
+        if (!searchedMsgID) {
+          return;
+        }
+        const localMessages =
+          useIMStore.getState().messagesByConversation[conversationID] ?? [];
+        if (hasMessageWithClientID(localMessages, searchedMsgID)) {
+          return;
+        }
+        logClientDiagnostic('chat_notification_target_not_found', {
+          conversationID,
+          targetMsgID: searchedMsgID,
+          fetched: restoreResult.fetched,
+          inserted: restoreResult.inserted,
+        });
+      })
       .catch((err) => {
         if (typeof __DEV__ !== 'undefined' && __DEV__) {
           console.warn('[chat] load/restore conversation messages failed', err);
@@ -493,7 +514,13 @@ export default function ChatDetailScreen() {
     return () => {
       setActiveConversation(null);
     };
-  }, [conversationID, conversationType, setActiveConversation, sourceID]);
+  }, [
+    conversationID,
+    conversationType,
+    searchedMsgID,
+    setActiveConversation,
+    sourceID,
+  ]);
 
   useEffect(() => {
     if (!peerImId) return;

@@ -16,8 +16,15 @@ import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
+import { loadGroupMemberList } from '@/im/client';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
-import { inviteToCircle } from '@/services/api/circles';
+import { fetchCircleDetail, inviteToCircle } from '@/services/api/circles';
+import {
+  buildExistingCircleMemberIds,
+  filterInvitableCircleFriends,
+  pruneSelectedCircleInvitees,
+} from '@/features/discover/utils/circle-invite';
+import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 const s = StyleSheet.create({
@@ -82,6 +89,9 @@ export default function InviteToCircleScreen() {
 
   const [query, setQuery] = useState('');
   const [friends, setFriends] = useState<FriendProfile[]>([]);
+  const [existingMemberIDs, setExistingMemberIDs] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Record<string, true>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -89,12 +99,42 @@ export default function InviteToCircleScreen() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetchFriends()
-      .then((list) => {
-        if (!cancelled) setFriends(list);
-      })
-      .catch(() => {
-        if (!cancelled) setFriends([]);
+    Promise.allSettled([
+      fetchFriends(),
+      circleId
+        ? fetchCircleDetail(circleId).then((detail) =>
+            detail.groupID ? loadGroupMemberList(detail.groupID, 10_000) : [],
+          )
+        : Promise.resolve([]),
+    ])
+      .then(([friendsResult, membersResult]) => {
+        if (cancelled) return;
+
+        if (friendsResult.status === 'fulfilled') {
+          setFriends(friendsResult.value);
+        } else {
+          setFriends([]);
+          logClientDiagnostic('circle_invite_friends_load_failed', {
+            circleId,
+            message:
+              friendsResult.reason instanceof Error
+                ? friendsResult.reason.message
+                : String(friendsResult.reason),
+          });
+        }
+
+        if (membersResult.status === 'fulfilled') {
+          setExistingMemberIDs(buildExistingCircleMemberIds(membersResult.value));
+        } else {
+          setExistingMemberIDs(new Set());
+          logClientDiagnostic('circle_invite_members_load_failed', {
+            circleId,
+            message:
+              membersResult.reason instanceof Error
+                ? membersResult.reason.message
+                : String(membersResult.reason),
+          });
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -102,17 +142,27 @@ export default function InviteToCircleScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [circleId]);
+
+  useEffect(() => {
+    setSelected((current) =>
+      pruneSelectedCircleInvitees(current, existingMemberIDs),
+    );
+  }, [existingMemberIDs]);
 
   const trimmedQuery = query.trim().toLowerCase();
+  const invitableFriends = useMemo(
+    () => filterInvitableCircleFriends(friends, existingMemberIDs),
+    [existingMemberIDs, friends],
+  );
   const filteredFriends = useMemo(() => {
-    if (!trimmedQuery) return friends;
-    return friends.filter(
+    if (!trimmedQuery) return invitableFriends;
+    return invitableFriends.filter(
       (friend) =>
         friend.nickname.toLowerCase().includes(trimmedQuery) ||
         friend.accountId.toLowerCase().includes(trimmedQuery),
     );
-  }, [friends, trimmedQuery]);
+  }, [invitableFriends, trimmedQuery]);
 
   const selectedIds = useMemo(() => Object.keys(selected), [selected]);
   const selectedCount = selectedIds.length;
@@ -129,15 +179,42 @@ export default function InviteToCircleScreen() {
 
   const handleSubmit = useCallback(async () => {
     if (submitting || !circleId || selectedCount < 1) return;
+    const inviteeIds = Object.keys(
+      pruneSelectedCircleInvitees(selected, existingMemberIDs),
+    );
+
+    if (inviteeIds.length < 1) {
+      Alert.alert(
+        t('circle.invite.alreadyMembers', {
+          defaultValue: '所选好友已在圈子中',
+        }),
+      );
+      setSelected({});
+      return;
+    }
+
     setSubmitting(true);
     try {
       // The invite endpoint takes one applicant; fan out and tolerate per-friend
       // rejections (already a member, fails join restrictions, privacy block).
       const results = await Promise.allSettled(
-        selectedIds.map((friendId) => inviteToCircle(circleId, friendId)),
+        inviteeIds.map((friendId) => inviteToCircle(circleId, friendId)),
       );
       const succeeded = results.filter((r) => r.status === 'fulfilled').length;
       const failed = results.length - succeeded;
+      if (succeeded === 0) {
+        logClientDiagnostic('circle_invite_all_failed', {
+          circleId,
+          selectedCount: inviteeIds.length,
+        });
+        Alert.alert(
+          t('circle.invite.failed', { defaultValue: '邀请失败' }),
+          t('circle.invite.noneSent', {
+            defaultValue: '所选好友均未邀请成功，请检查条件后重试',
+          }),
+        );
+        return;
+      }
       const message =
         failed === 0
           ? t('circle.invite.sentAll', {
@@ -149,6 +226,13 @@ export default function InviteToCircleScreen() {
               failed,
               defaultValue: `已邀请 ${succeeded} 位；${failed} 位未成功（可能已是成员或不满足入圈条件）`,
             });
+      if (failed > 0) {
+        logClientDiagnostic('circle_invite_partial_failed', {
+          circleId,
+          succeeded,
+          failed,
+        });
+      }
       Alert.alert(message, undefined, [
         {
           text: t('common.ok', { defaultValue: '好' }),
@@ -160,10 +244,22 @@ export default function InviteToCircleScreen() {
         t('circle.invite.failed', { defaultValue: '邀请失败' }),
         error instanceof Error ? error.message : String(error),
       );
+      logClientDiagnostic('circle_invite_submit_failed', {
+        circleId,
+        message: error instanceof Error ? error.message : String(error),
+      });
     } finally {
       setSubmitting(false);
     }
-  }, [circleId, router, selectedCount, selectedIds, submitting, t]);
+  }, [
+    circleId,
+    existingMemberIDs,
+    router,
+    selected,
+    selectedCount,
+    submitting,
+    t,
+  ]);
 
   const d = useMemo(
     () => ({

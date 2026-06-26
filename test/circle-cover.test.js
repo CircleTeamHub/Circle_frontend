@@ -29,5 +29,6 @@ test('CircleDetailScreen renders a cover banner editable by the owner', () => {
   assert.match(src, /useChangeCircleCover/);
   assert.match(src, /s\.coverWrap/);
   assert.match(src, /circle\.cover \?/);
-  assert.match(src, /isOwnerOrAdmin \? changeCircleCover : undefined/);
+  assert.match(src, /const isOwner = circle\?\.myRole === 'OWNER'/);
+  assert.match(src, /isOwner \? changeCircleCover : undefined/);
 });

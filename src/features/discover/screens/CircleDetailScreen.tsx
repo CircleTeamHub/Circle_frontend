@@ -300,8 +300,9 @@ export default function CircleDetailScreen() {
     }, [loadCircle]),
   );
 
-  const isOwnerOrAdmin =
-    circle?.myRole === 'OWNER' || circle?.myRole === 'ADMIN';
+  const isOwner = circle?.myRole === 'OWNER';
+  const isOwnerOrAdmin = isOwner || circle?.myRole === 'ADMIN';
+  const isActiveMember = circle?.myStatus === 'ACTIVE';
 
   const { changeCover: changeCircleCover } = useChangeCircleCover(id, (url) => {
     setCircle((current) => (current ? { ...current, cover: url } : current));
@@ -356,6 +357,7 @@ export default function CircleDetailScreen() {
           onPress: async () => {
             try {
               await leaveCircle(id);
+              useCirclesStore.getState().removeCircle(id);
               router.back();
             } catch (error) {
               Alert.alert(
@@ -541,8 +543,8 @@ export default function CircleDetailScreen() {
         {/* ── Cover banner ── */}
         <Pressable
           style={s.coverWrap}
-          onPress={isOwnerOrAdmin ? changeCircleCover : undefined}
-          disabled={!isOwnerOrAdmin}
+          onPress={isOwner ? changeCircleCover : undefined}
+          disabled={!isOwner}
         >
           {circle.cover ? (
             <Image
@@ -555,7 +557,7 @@ export default function CircleDetailScreen() {
               <GradientCover />
             </View>
           )}
-          {isOwnerOrAdmin ? (
+          {isOwner ? (
             <View style={[s.coverEditBadge, d.coverEditBadge]}>
               <Ionicons name="camera" size={12} color={colors.white} />
               <Text style={{ color: colors.white, ...Typography.tiny }}>
@@ -570,15 +572,15 @@ export default function CircleDetailScreen() {
           {/* Avatar */}
           <Pressable
             style={s.avatarWrap}
-            onPress={isOwnerOrAdmin ? changeCircleAvatar : undefined}
-            disabled={!isOwnerOrAdmin}
+            onPress={isOwner ? changeCircleAvatar : undefined}
+            disabled={!isOwner}
           >
             <CircleAvatar
               uri={circle.avatarUrl}
               size={80}
               borderRadius={Radius.xl}
             />
-            {isOwnerOrAdmin ? (
+            {isOwner ? (
               <View style={[s.avatarEditBadge, d.avatarEditBadge]}>
                 <Ionicons name="camera" size={12} color={colors.white} />
               </View>
@@ -782,7 +784,7 @@ export default function CircleDetailScreen() {
         {/* ── Actions ── */}
         <View style={s.actionRow}>
           {/* 加入圈子 (non-members) */}
-          {circle.myStatus !== 'ACTIVE' ? (
+          {!isActiveMember ? (
             circle.myStatus === 'PENDING' ? (
               <Pressable style={[s.actionBtn, d.adminBtn]} disabled>
                 <Text style={[s.actionBtnText, d.adminBtnText]}>
@@ -805,7 +807,7 @@ export default function CircleDetailScreen() {
           ) : null}
 
           {/* 进入群聊 */}
-          {circle.groupID ? (
+          {isActiveMember && circle.groupID ? (
             <Pressable
               style={[s.actionBtn, d.chatBtn]}
               onPress={handleEnterGroupChat}
@@ -816,7 +818,7 @@ export default function CircleDetailScreen() {
           ) : null}
 
           {/* 邀请好友 (active members) — same primary style as 进入群聊 */}
-          {circle.myStatus === 'ACTIVE' ? (
+          {isActiveMember ? (
             <Pressable
               style={[s.actionBtn, d.chatBtn]}
               onPress={() =>

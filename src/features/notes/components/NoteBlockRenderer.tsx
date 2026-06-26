@@ -1,10 +1,40 @@
 import { Image } from 'expo-image';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 type Block = Record<string, unknown>;
 type InlineNode = Record<string, unknown>;
+
+function VideoBlock({
+  url,
+  caption,
+  captionColor,
+}: {
+  url: string;
+  caption: string;
+  captionColor: string;
+}) {
+  // useVideoPlayer is called unconditionally — the empty-url guard lives in the
+  // caller (BlockView), so this component always receives a valid source.
+  const player = useVideoPlayer(url, (p) => {
+    p.loop = false;
+  });
+  return (
+    <View style={s.imageWrap}>
+      <VideoView
+        style={s.image}
+        player={player}
+        nativeControls
+        contentFit="contain"
+      />
+      {caption ? (
+        <Text style={[s.caption, { color: captionColor }]}>{caption}</Text>
+      ) : null}
+    </View>
+  );
+}
 
 function InlineContent({ nodes, textColor }: { nodes: unknown[]; textColor: string }) {
   return (
@@ -104,6 +134,13 @@ function BlockView({ block }: { block: Block }) {
           ) : null}
         </View>
       );
+    }
+
+    case 'video': {
+      const url = typeof props.url === 'string' ? props.url : '';
+      const caption = typeof props.caption === 'string' ? props.caption : '';
+      if (!url) return null;
+      return <VideoBlock url={url} caption={caption} captionColor={d.secondary} />;
     }
 
     default:

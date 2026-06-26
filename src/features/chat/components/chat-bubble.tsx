@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { fetchCircleDetail } from '@/services/api/circles';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useAudioPlayer, type AudioStatus } from 'expo-audio';
+import { useTranslation } from 'react-i18next';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import { Avatar } from '@/components/ui/avatar';
 import { CircleAvatar } from '@/components/ui/circle-avatar';
@@ -1179,8 +1179,8 @@ interface CircleCardBubbleProps {
   hideStatus?: boolean;
 }
 
-// Circle share card — reuses the friend-card layout (sFriendCard) with a circle
-// avatar/name and a "圈子名片 · 点击加入" footer. Tapping opens the circle detail.
+// Circle share card — reuses the friend-card layout (sFriendCard). Tapping
+// opens the circle detail, which owns live circle fetching and join checks.
 export const CircleCardBubble: React.FC<CircleCardBubbleProps> = ({
   message,
   outgoing,
@@ -1193,37 +1193,13 @@ export const CircleCardBubble: React.FC<CircleCardBubbleProps> = ({
   hideStatus,
 }) => {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const card = message.circleCard;
-  const circleId = card?.circleId;
-
-  // The card is a snapshot taken at send time; fetch the circle live so the
-  // bubble reflects the circle's current name/avatar (e.g. after the owner
-  // changes them). Falls back to the snapshot while loading or on failure.
-  const [live, setLive] = useState<{
-    name: string;
-    avatarUrl: string | null;
-  } | null>(null);
-  useEffect(() => {
-    if (!circleId) return;
-    let cancelled = false;
-    fetchCircleDetail(circleId)
-      .then((circle) => {
-        if (!cancelled) {
-          setLive({ name: circle.name, avatarUrl: circle.avatarUrl });
-        }
-      })
-      .catch(() => {
-        // keep the snapshot fallback on failure (e.g. no access)
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [circleId]);
 
   if (!card) return null;
 
-  const displayName = live?.name ?? card.name;
-  const displayAvatar = live?.avatarUrl ?? card.avatarUrl;
+  const displayName = card.name;
+  const displayAvatar = card.avatarUrl;
 
   const avatarNode = (
     <Avatar
@@ -1264,13 +1240,13 @@ export const CircleCardBubble: React.FC<CircleCardBubbleProps> = ({
               style={[sFriendCard.persona, { color: onCardSecondary }]}
               numberOfLines={1}
             >
-              圈子
+              {t('circle.card.type')}
             </Text>
           </View>
         </View>
         <View style={[sFriendCard.divider, { backgroundColor: dividerColor }]} />
         <Text style={[sFriendCard.footer, { color: onCardSecondary }]}>
-          圈子名片 · 点击加入
+          {t('circle.card.footer')}
         </Text>
       </Pressable>
 

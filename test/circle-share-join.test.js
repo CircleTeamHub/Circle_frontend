@@ -25,7 +25,8 @@ test('CircleDetailScreen: non-members get a join button', () => {
   const src = read(DETAIL);
   assert.match(src, /handleJoinCircle/);
   assert.match(src, /await joinCircle\(id\)/);
-  assert.match(src, /circle\.myStatus !== 'ACTIVE' \?/);
+  assert.match(src, /const isActiveMember = circle\?\.myStatus === 'ACTIVE'/);
+  assert.match(src, /\{!isActiveMember \? \(/);
 });
 
 test('MyCirclesScreen: open a circle by a pasted id', () => {
