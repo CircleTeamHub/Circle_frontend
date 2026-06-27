@@ -169,7 +169,8 @@ export function UserIconBadge({ icon, compact = false, tone = 'default' }: Badge
     : isNewUser
       ? colors.newUserBadgeAccent
       : colors.textSecondary;
-  const labelColor = tone === 'member' ? colors.memberCardText : colors.text;
+  // member tone 仅用于个人页紫色渐变会员卡，标签用白色保证对比度
+  const labelColor = tone === 'member' ? colors.white : colors.text;
 
   return (
     <View style={s.item}>

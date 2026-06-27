@@ -45,7 +45,7 @@ test('ProfileScreen keeps a visible icon-settings entry when no icons are select
 
   assert.match(memberCardBlock, /displayIcons\.length > 0 \?/);
   assert.match(memberCardBlock, /handleOpenIcons/);
-  assert.match(memberCardBlock, /添加图标/);
+  assert.match(memberCardBlock, /profile\.addIcon/);
   assert.match(memberCardBlock, /<Pressable[\s\S]*style=\{\[s\.memberCard, d\.memberCard\]\}[\s\S]*onPress=\{handleOpenIcons\}/);
 });
 
@@ -65,6 +65,23 @@ test('ProfileScreen refreshes current user from backend for live VIP and reputat
   assert.match(src, /useFocusEffect/);
   assert.match(src, /setUser\(nextUser\)/);
   assert.match(src, /setProfileDisplayIcons/);
+});
+
+test('ProfileScreen supports pull-to-refresh for profile data', () => {
+  const src = read('src/features/profile/screens/ProfileScreen.tsx');
+
+  assert.match(src, /const \[refreshing, setRefreshing\] = useState\(false\)/);
+  assert.match(src, /refreshCurrentUser/);
+  assert.match(src, /handleRefreshProfile/);
+  assert.match(src, /const mountedRef = useRef\(true\)/);
+  assert.match(src, /mountedRef\.current = false/);
+  assert.match(src, /refreshInFlightRef/);
+  assert.match(src, /if \(refreshInFlightRef\.current\) return;/);
+  assert.match(src, /setRefreshing\(true\)/);
+  assert.match(src, /await refreshCurrentUser\(\{ force: true, isActive: \(\) => mountedRef\.current \}\)/);
+  assert.match(src, /if \(mountedRef\.current\) setRefreshing\(false\)/);
+  assert.match(src, /refreshing=\{refreshing\}/);
+  assert.match(src, /onRefresh=\{handleRefreshProfile\}/);
 });
 
 test('ProfileScreen top-right settings action opens the main settings page', () => {

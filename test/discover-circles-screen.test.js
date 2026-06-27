@@ -19,6 +19,21 @@ test('DiscoverCirclesScreen lists all circles from the store and filters locally
   assert.match(src, /\.name\.toLowerCase\(\)\.includes/);
 });
 
+test('DiscoverCirclesScreen supports pull-to-refresh', () => {
+  const src = read(SCREEN);
+
+  assert.match(src, /const \[refreshing, setRefreshing\] = useState\(false\)/);
+  assert.match(src, /handleRefreshCircles/);
+  assert.match(src, /mountedRef/);
+  assert.match(src, /refreshInFlightRef/);
+  assert.match(src, /if \(refreshInFlightRef\.current\) return;/);
+  assert.match(src, /setRefreshing\(true\)/);
+  assert.match(src, /await fetchAllCircles\(\)/);
+  assert.match(src, /finally\s*\{[\s\S]{0,120}mountedRef\.current[\s\S]{0,80}setRefreshing\(false\)/);
+  assert.match(src, /refreshing=\{refreshing\}/);
+  assert.match(src, /onRefresh=\{handleRefreshCircles\}/);
+});
+
 test('DiscoverCirclesScreen opens circle detail where join/apply lives', () => {
   const src = read(SCREEN);
   assert.match(src, /\/\(tabs\)\/discover\/circle\/\$\{encodeURIComponent/);

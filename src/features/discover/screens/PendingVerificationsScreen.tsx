@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -51,16 +51,35 @@ export default function PendingVerificationsScreen() {
   const [items, setItems] = useState<CircleInvitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const mountedRef = useRef(true);
+  const requestRef = useRef(0);
+  const refreshInFlightRef = useRef(false);
 
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
+
+  // mountedRef + requestRef 双重护栏：屏失焦/卸载或被新一轮 load 抢占时，
+  // 不再对已过期的请求 setState（避免卸载后告警与旧数据覆盖新数据）。
   const load = useCallback(async () => {
+    const requestId = ++requestRef.current;
     setLoading(true);
     setError(null);
     try {
-      setItems(await fetchMyPendingVerifications());
+      const data = await fetchMyPendingVerifications();
+      if (!mountedRef.current || requestId !== requestRef.current) return;
+      setItems(data);
     } catch (e) {
+      if (!mountedRef.current || requestId !== requestRef.current) return;
       setError(getApiErrorMessage(e, '加载失败，请稍后重试'));
     } finally {
-      setLoading(false);
+      if (mountedRef.current && requestId === requestRef.current) {
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -69,6 +88,18 @@ export default function PendingVerificationsScreen() {
       void load();
     }, [load]),
   );
+
+  const handleRefreshVerifications = useCallback(async () => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      refreshInFlightRef.current = false;
+      if (mountedRef.current) setRefreshing(false);
+    }
+  }, [load]);
 
   const d = useMemo(
     () => ({
@@ -161,6 +192,8 @@ export default function PendingVerificationsScreen() {
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={s.listContent}
+          refreshing={refreshing}
+          onRefresh={handleRefreshVerifications}
           ListEmptyComponent={
             <View style={s.emptyContainer}>
               <Text style={d.emptyText}>

@@ -46,8 +46,13 @@ export function getEditFriendRemarkHref(
   scope: UserProfileScope,
   id: string,
   name?: string,
+  fallbackName?: string,
 ): Href {
-  const params = name ? { id, name } : { id };
+  const params = {
+    id,
+    ...(name ? { name } : {}),
+    ...(fallbackName ? { fallbackName } : {}),
+  };
 
   switch (scope) {
     case 'contacts':
@@ -201,11 +206,13 @@ export function getChatInfoHref(
   id: string,
   name?: string,
   conversationID?: string,
+  fallbackName?: string,
 ): Href {
   const params = {
     id,
     ...(name ? { name } : {}),
     ...(conversationID ? { conversationID } : {}),
+    ...(fallbackName ? { fallbackName } : {}),
     originScope: scope,
   };
 

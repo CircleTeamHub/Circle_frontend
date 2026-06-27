@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
@@ -52,17 +52,28 @@ export default function NotesScreen() {
   const [showUnlisted, setShowUnlisted] = useState(false);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const mountedRef = useRef(true);
+  const refreshInFlightRef = useRef(false);
   const [managerVisible, setManagerVisible] = useState(false);
   const [qrVisible, setQrVisible] = useState(false);
   const [shareLink, setShareLink] = useState<NoteShareLink | null>(null);
   const [shareLinkLoading, setShareLinkLoading] = useState(false);
   const [shareLinkError, setShareLinkError] = useState<string | null>(null);
 
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
+
   const load = useCallback(async () => {
     const [notesData, groupsData] = await Promise.all([
       fetchNotes({ status: showUnlisted ? 'UNLISTED' : 'ACTIVE' }),
       fetchNoteGroups(),
     ]);
+    if (!mountedRef.current) return;
     setNotes(notesData);
     setGroups(groupsData);
     setLoading(false);
@@ -72,10 +83,22 @@ export default function NotesScreen() {
     useCallback(() => {
       setLoading(true);
       void load().catch(() => {
-        setLoading(false);
+        if (mountedRef.current) setLoading(false);
       });
     }, [load]),
   );
+
+  const handleRefreshNotes = useCallback(async () => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      refreshInFlightRef.current = false;
+      if (mountedRef.current) setRefreshing(false);
+    }
+  }, [load]);
 
   const filteredNotes = useMemo(() => {
     let result = notes;
@@ -189,7 +212,7 @@ export default function NotesScreen() {
     setShareLinkError(null);
     try {
       const nextShareLink = await createNoteShareLink(buildShareInput());
-      setShareLink(nextShareLink);
+      if (mountedRef.current) setShareLink(nextShareLink);
       return nextShareLink;
     } catch (error) {
       const message =
@@ -198,10 +221,10 @@ export default function NotesScreen() {
           : t('notes.share.createFailedMessage', {
               defaultValue: '无法生成分享链接，请稍后重试。',
             });
-      setShareLinkError(message);
+      if (mountedRef.current) setShareLinkError(message);
       throw error;
     } finally {
-      setShareLinkLoading(false);
+      if (mountedRef.current) setShareLinkLoading(false);
     }
   }, [buildShareInput, shareLink, t]);
 
@@ -210,6 +233,7 @@ export default function NotesScreen() {
     try {
       nextShareLink = await ensureShareLink();
     } catch {
+      if (!mountedRef.current) return;
       Alert.alert(
         t('notes.share.createFailedTitle', { defaultValue: '分享链接生成失败' }),
         t('notes.share.createFailedMessage', {
@@ -218,6 +242,7 @@ export default function NotesScreen() {
       );
       return;
     }
+    if (!mountedRef.current) return;
     try {
       await Share.share({
         message: t('notes.share.message', {
@@ -398,6 +423,8 @@ export default function NotesScreen() {
         ItemSeparatorComponent={() => <View style={[s.divider, d.divider]} />}
         contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
         showsVerticalScrollIndicator={false}
+        refreshing={refreshing}
+        onRefresh={handleRefreshNotes}
         ListEmptyComponent={
           loading ? null : (
             <Text style={[s.emptyText, d.statsText]}>

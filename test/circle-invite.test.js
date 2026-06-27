@@ -20,6 +20,25 @@ test('InviteToCircleScreen invites selected friends via inviteToCircle', () => {
   assert.match(src, /inviteeIds\.map/);
 });
 
+test('InviteToCircleScreen supports pull-to-refresh', () => {
+  const src = read(
+    'src/features/discover/screens/InviteToCircleScreen.tsx',
+  );
+
+  assert.match(src, /const \[refreshing, setRefreshing\] = useState\(false\)/);
+  assert.match(src, /handleRefreshInvitees/);
+  assert.match(src, /mountedRef/);
+  assert.match(src, /refreshInFlightRef/);
+  assert.match(src, /if \(refreshInFlightRef\.current\) return;/);
+  assert.match(src, /signal\?\.cancelled \|\| !mountedRef\.current/);
+  assert.match(src, /setRefreshing\(true\)/);
+  assert.match(src, /showInitialLoading/);
+  assert.match(src, /await loadInvitees\(undefined, \{ showInitialLoading: false \}\)/);
+  assert.match(src, /finally\s*\{[\s\S]{0,120}mountedRef\.current[\s\S]{0,80}setRefreshing\(false\)/);
+  assert.match(src, /refreshing=\{refreshing\}/);
+  assert.match(src, /onRefresh=\{handleRefreshInvitees\}/);
+});
+
 test('InviteToCircleScreen stays open when every invite fails', () => {
   const src = read(
     'src/features/discover/screens/InviteToCircleScreen.tsx',

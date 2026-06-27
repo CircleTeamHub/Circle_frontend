@@ -76,6 +76,11 @@ function makeBaseMocks() {
         getState: () => ({ reset: () => calls.push('resetFriendActivityUnread') }),
       },
     },
+    '@/stores/friendRemarkStore': {
+      useFriendRemarkStore: {
+        getState: () => ({ reset: () => calls.push('resetFriendRemark') }),
+      },
+    },
     '@/stores/tabBadgeStore': {
       useTabBadgeStore: {
         getState: () => ({ reset: () => calls.push('resetTabBadge') }),
@@ -114,6 +119,7 @@ test('clearLocalSession runs registered teardown handlers, then resets stores au
     'resetGroups',
     'resetCircles',
     'resetFriendActivityUnread',
+    'resetFriendRemark',
     'resetTabBadge',
     'resetWalletRealtime',
     'clearStorage',
@@ -157,6 +163,7 @@ test('clearLocalSession still clears local state when a teardown handler throws'
     'resetGroups',
     'resetCircles',
     'resetFriendActivityUnread',
+    'resetFriendRemark',
     'resetTabBadge',
     'resetWalletRealtime',
     'clearStorage',

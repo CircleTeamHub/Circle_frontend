@@ -208,6 +208,27 @@ test('Moment detail refreshes full detail data and renders dividers outside row 
   assert.match(detailSrc, /<View>\s*<(?:View|Pressable)\s*[\s\S]*style=\{\[s\.commentItem, item\.isReply \? s\.replyItem : null\]\}[\s\S]*<\/(?:View|Pressable)>\s*<Divider \/>\s*<\/View>/);
 });
 
+test('Moment detail supports pull-to-refresh', () => {
+  const detailSrc = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/discover/screens/MomentDetailScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(detailSrc, /const \[refreshing, setRefreshing\] = useState\(false\)/);
+  assert.match(detailSrc, /handleRefreshMoment/);
+  assert.match(detailSrc, /const mountedRef = useRef\(true\)/);
+  assert.match(detailSrc, /const requestRef = useRef\(0\)/);
+  assert.match(detailSrc, /mountedRef\.current = false/);
+  assert.match(detailSrc, /requestId !== requestRef\.current/);
+  assert.match(detailSrc, /refreshInFlightRef/);
+  assert.match(detailSrc, /if \(refreshInFlightRef\.current\) return;/);
+  assert.match(detailSrc, /setRefreshing\(true\)/);
+  assert.match(detailSrc, /await loadMoment\(\)/);
+  assert.match(detailSrc, /if \(mountedRef\.current\) setRefreshing\(false\)/);
+  assert.match(detailSrc, /refreshing=\{refreshing\}/);
+  assert.match(detailSrc, /onRefresh=\{handleRefreshMoment\}/);
+});
+
 test('Moment detail surfaces background refresh failures when preview data is visible', () => {
   const detailSrc = fs.readFileSync(
     path.join(process.cwd(), 'src/features/discover/screens/MomentDetailScreen.tsx'),

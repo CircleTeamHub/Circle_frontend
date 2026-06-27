@@ -8,6 +8,9 @@
   "common": {
     "save": "保存",
     "saving": "保存中...",
+    "clear": "清除",
+    "tip": "提示",
+    "retryLater": "请稍后重试",
     "cancel": "取消",
     "close": "关闭",
     "confirm": "确认",
@@ -36,9 +39,9 @@
     "hoursAgo": "{{count}}小时前",
     "daysAgo": "{{count}}天前",
     "errorOccurred": "操作失败",
-    "networkError": "网络异常，请稍后重试"
+    "networkError": "网络异常，请稍后重试",
+    "back": "返回"
   },
-
   "auth": {
     "welcomeBack": "欢迎回来",
     "loginSubtitle": "登录你的账号",
@@ -84,22 +87,21 @@
       "loginFailed": "登录失败，请重试",
       "registerFailed": "注册失败，请重试",
       "sendCodeFailed": "发送失败，请重试"
-    }
+    },
+    "hidePassword": "隐藏密码",
+    "showPassword": "显示密码"
   },
-
   "onboarding": {
     "profileTitle": "完善个人资料",
     "profileSubtitle": "设置头像、签名和基础资料后即可进入风信。",
     "finish": "完成并进入主页"
   },
-
   "tabs": {
     "messages": "消息",
     "contacts": "联系人",
     "discover": "动态",
     "profile": "我的"
   },
-
   "messages": {
     "title": "消息",
     "all": "全部",
@@ -151,7 +153,6 @@
     "inviteGroupMembersAlreadyMembers": "所选好友已经在群聊中",
     "inviteGroupMembersNoInvitableFriends": "没有可邀请的好友"
   },
-
   "notifications": {
     "title": "消息通知",
     "tabInteractive": "互动消息",
@@ -188,7 +189,6 @@
       "loadFailed": "报名列表加载失败，请重试"
     }
   },
-
   "chat": {
     "detail": "聊天详情",
     "messageActions": {
@@ -198,7 +198,8 @@
       "collected": "已收藏",
       "collectedHint": "可在我的收藏中查看",
       "collectFailed": "收藏失败",
-      "collectFailedHint": "请稍后重试"
+      "collectFailedHint": "请稍后重试",
+      "copy": "复制"
     },
     "forward": {
       "title": "选择转发对象",
@@ -335,7 +336,6 @@
       "failedBody": "图片背景设置失败，请重试。"
     }
   },
-
   "contacts": {
     "title": "联系人",
     "searchPlaceholder": "搜索账号或好友...",
@@ -377,7 +377,11 @@
         "requestRejectedByMe": "你已拒绝 {{name}} 的好友申请",
         "requestWithdrawnByOther": "{{name}} 撤回了好友申请",
         "default": "{{name}} 有新的好友动态"
-      }
+      },
+      "cancel": "撤回申请",
+      "cancelConfirm": "撤回",
+      "cancelMessage": "确定撤回这条好友申请吗？",
+      "cancelTitle": "撤回申请"
     },
     "tagsScreen": {
       "title": "标签",
@@ -434,7 +438,6 @@
       "sendFailed": "好友申请发送失败，请稍后重试"
     }
   },
-
   "discover": {
     "title": "动态",
     "plaza": "圈子广场",
@@ -449,6 +452,7 @@
     "noCirclesFound": "没有找到相关圈子",
     "memberCount": "{{count}} 成员",
     "needsApproval": "需申请",
+    "searchCappedNotice": "仅展示前 {{count}} 个圈子，搜索请用更精确的关键词",
     "joined": "已加入",
     "myCreated": "我创建的",
     "myManaged": "我管理的",
@@ -486,10 +490,19 @@
       "selectedCount": "已选{{count}}/{{max}}",
       "noCircles": "暂无可选圈子",
       "maxCircles": "最多选择{{max}}个圈子"
+    },
+    "commentInput": {
+      "placeholder": "写评论...",
+      "replyTo": "回复 {{nickname}}"
+    },
+    "restrictionBadge": {
+      "fancyNumber": "靓号",
+      "vip": "VIP{{level}}+",
+      "credit": "信用{{score}}+"
     }
   },
-
   "circle": {
+    "inviteVerifiers": "邀请好友为我验证 ({{approved}}/{{required}})",
     "detail": "圈子详情",
     "notExist": "圈子不存在",
     "loadError": "无法加载圈子信息",
@@ -522,7 +535,14 @@
       "alreadyMembers": "所选好友已在圈子中",
       "noneSent": "所选好友均未邀请成功，请检查条件后重试",
       "sentAll": "已邀请 {{count}} 位好友，等待验证通过",
-      "sentPartial": "已邀请 {{succeeded}} 位；{{failed}} 位未成功（可能已是成员或不满足入圈条件）"
+      "sentPartial": "已邀请 {{succeeded}} 位；{{failed}} 位未成功（可能已是成员或不满足入圈条件）",
+      "fromContacts": "邀请通讯录好友",
+      "noFriends": "暂无可邀请的好友",
+      "noMatches": "没有匹配的好友",
+      "searchPlaceholder": "搜索好友",
+      "sendCard": "发送圈子名片",
+      "submit": "发送邀请",
+      "subtitle": "从好友中选择"
     },
     "card": {
       "type": "圈子",
@@ -577,9 +597,28 @@
       "photography": "摄影",
       "work": "职场",
       "trade": "二手交易"
-    }
+    },
+    "avatarUpdateFailed": "头像更新失败",
+    "changeCover": "换封面",
+    "coverUpdateFailed": "封面更新失败",
+    "icon": {
+      "current": "当前图标",
+      "sectionTitle": "圈子图标",
+      "unknownImageFormat": "无法识别图片格式",
+      "upload": "上传圈子图标",
+      "uploading": "上传中..."
+    },
+    "join": "加入圈子",
+    "joinByIdButton": "加入",
+    "joinByIdPlaceholder": "粘贴圈子 ID 加入",
+    "joinFailedTitle": "加入失败",
+    "joinPending": "审核中",
+    "leave": "退出圈子",
+    "leaveConfirm": "退出",
+    "leaveFailedTitle": "退出失败",
+    "leaveMessage": "确定退出该圈子吗？",
+    "leaveTitle": "退出圈子"
   },
-
   "plaza": {
     "manageSignups": "{{count}} 人报名",
     "manageSignupsEmpty": "查看报名",
@@ -609,9 +648,31 @@
     "tagPlaceholder": "输入标签关键词",
     "publishFailed": "发布失败",
     "cannotView": "无法查看",
-    "restrictionMessage": "需要{{requirements}}才能查看对方主页"
+    "restrictionMessage": "需要{{requirements}}才能查看对方主页",
+    "create": {
+      "allUploadsFailed": "图片上传失败，请检查网络后重试",
+      "failedMessage": "发布失败，请重试",
+      "failedTitle": "发布失败",
+      "notNoteSet": "不添加",
+      "noteLabel": "选择笔记",
+      "title": "发布动态",
+      "partialUploadsFailed": "有{{count}}张图片上传失败，请重试"
+    },
+    "deleteFailedMessage": "请稍后重试",
+    "deleteFailedTitle": "删除失败",
+    "deleteMessage": "删除后无法恢复，确定删除吗？",
+    "deleteTitle": "删除帖子",
+    "restriction": {
+      "fancyNumber": "靓号用户",
+      "separator": "、",
+      "creditAtLeast": "信用值{{score}}以上",
+      "vipAtLeast": "VIP{{level}}以上"
+    },
+    "signUp": "报名",
+    "signedUp": "已报名",
+    "signupBlockedTitle": "暂不可报名",
+    "signupRestrictionMessage": "报名需满足：{{requirements}}"
   },
-
   "moment": {
     "createTitle": "发朋友圈",
     "contentPlaceholder": "这一刻的想法...",
@@ -639,9 +700,16 @@
     "albumTitle": "{{name}}的朋友圈",
     "albumTitleFallback": "朋友圈",
     "changeCover": "换封面",
-    "coverUpdateFailed": "封面更新失败"
+    "coverUpdateFailed": "封面更新失败",
+    "commentFailedMessage": "网络异常，请稍后重试",
+    "commentFailedTitle": "评论失败",
+    "deleteCommentMessage": "确定删除这条评论吗？",
+    "deleteCommentTitle": "删除评论",
+    "deleteFailedMessage": "请稍后重试",
+    "deleteFailedTitle": "删除失败",
+    "deleteMessage": "删除后无法恢复，确定删除吗？",
+    "deleteTitle": "删除动态"
   },
-
   "invitation": {
     "title": "入圈验证",
     "notExist": "验证信息不存在",
@@ -673,9 +741,21 @@
     "overrideApproved": "已通过",
     "joinedCircle": "{{name}} 已加入圈子",
     "override": "开后门",
-    "noPendingReviews": "暂无待审核的申请"
+    "noPendingReviews": "暂无待审核的申请",
+    "loadFailed": "加载失败，请稍后重试",
+    "pendingTitle": "待我验证",
+    "noPending": "暂无待你验证的入圈申请",
+    "cardTitle": "{{name}} 邀请你帮忙验证",
+    "cardCircle": "加入「{{circle}}」的入圈担保",
+    "cardFooter": "点击为 TA 验证",
+    "waitingDesc": "正在等待好友验证（{{approved}}/{{total}}），满 {{total}} 人即可加入",
+    "viewerOnly": "你不是该申请的验证人",
+    "settledRejected": "该申请已被拒绝",
+    "settledApproved": "该申请已通过，已加入圈子",
+    "youApproved": "你已帮 TA 验证",
+    "youRejected": "你已拒绝该申请",
+    "loadFriendsFailed": "加载好友列表失败，请稍后重试"
   },
-
   "city": {
     "title": "选择城市",
     "searchPlaceholder": "搜索城市",
@@ -690,7 +770,6 @@
     "confirmSelection": "确认选择",
     "hint": "提示"
   },
-
   "profile": {
     "creditScore": "信用值",
     "memberCenter": "会员中心",
@@ -764,9 +843,10 @@
     "fieldNotEditable": "该字段暂不支持编辑",
     "returnToSettings": "请返回账号设置页。",
     "systemAnnouncements": "系统公告",
-    "viewAnnouncements": "查看最新"
+    "viewAnnouncements": "查看最新",
+    "addIcon": "添加徽章",
+    "myIcons": "我的徽章"
   },
-
   "userProfile": {
     "title": "个人信息",
     "loadFailed": "加载用户资料失败，显示缓存数据",
@@ -804,9 +884,10 @@
       "create": "新建",
       "creating": "创建中",
       "empty": "还没有标签，先创建一个再保存。"
-    }
+    },
+    "avCallComingSoon": "音视频通话功能即将上线，敬请期待。",
+    "unknownUser": "未命名用户"
   },
-
   "profileFields": {
     "avatar": "头像",
     "editAvatar": "修改头像",
@@ -857,7 +938,6 @@
     "month": "{{month}}月",
     "day": "{{day}}日"
   },
-
   "validation": {
     "nicknameEmpty": "昵称不能为空",
     "nicknameTooLong": "昵称最多 24 个字符",
@@ -879,7 +959,6 @@
     "avatarSaveFailed": "头像保存失败，请稍后重试",
     "saveFailed": "保存失败"
   },
-
   "settingsPage": {
     "profileSection": "个人信息",
     "securitySection": "账号与安全",
@@ -891,7 +970,6 @@
     "logout": "退出登录",
     "unsupported": "该功能暂未接入。"
   },
-
   "appSettings": {
     "title": "设置",
     "searchPlaceholder": "搜索设置",
@@ -937,7 +1015,6 @@
       }
     }
   },
-
   "systemAnnouncements": {
     "title": "系统公告",
     "subtitle": "这里会集中展示风信的最新 App 信息、版本更新和补丁说明。",
@@ -957,7 +1034,6 @@
       "body": "补丁信息会用于说明稳定性修复、兼容性优化和必要的安全更新。"
     }
   },
-
   "settingsDetails": {
     "accountSecurity": {
       "title": "账号与安全",
@@ -1183,7 +1259,6 @@
       "updateBody": "当前版本会持续迭代。新的安全、聊天和圈子能力会优先在系统通知和更新说明里同步。"
     }
   },
-
   "shareScreen": {
     "inviteCode": "邀请码",
     "copyInviteTitle": "复制邀请码",
@@ -1194,7 +1269,6 @@
     "copyFallbackMessage": "已打开系统分享，你也可以手动复制邀请码",
     "copyMessage": "邀请码：{{code}}"
   },
-
   "groupManagement": {
     "title": "群组管理",
     "createCustomGroup": "创建自定义群组",
@@ -1204,7 +1278,6 @@
     "groupCount": "{{count}} 个群聊",
     "assignChats": "分配群聊到当前群组"
   },
-
   "vipOptions": {
     "vip1": "VIP 1",
     "vip2": "VIP 2",
@@ -1212,7 +1285,6 @@
     "vip5": "VIP 5",
     "vip8": "VIP 8"
   },
-
   "creditOptions": {
     "above60": "60分以上",
     "above70": "70分以上",
@@ -1263,5 +1335,165 @@
       "ended": "已结束",
       "expired": "已过期"
     }
+  },
+  "addFriend": {
+    "notFound": "未找到好友",
+    "placeholder": "输入对方账号",
+    "searchFailed": "搜索失败，请稍后重试",
+    "title": "添加好友"
+  },
+  "notes": {
+    "actions": {
+      "new": "新建",
+      "qrCode": "二维码",
+      "share": "分享"
+    },
+    "alerts": {
+      "deleteFailedTitle": "删除失败",
+      "deleteGroupFailed": "分组删除失败，请稍后再试。",
+      "deleteGroupTitle": "删除分组",
+      "groupLimitMessage": "最多只能创建 {{max}} 个分组。",
+      "groupLimitTitle": "分组已达上限",
+      "groupNameRequiredMessage": "填写分组名称后再新增分组。",
+      "groupNameRequiredTitle": "请输入分组名",
+      "reorderFailedMessage": "分组顺序保存失败，请稍后再试。",
+      "reorderFailedTitle": "排序失败",
+      "saveFailedTitle": "保存失败",
+      "saveGroupFailed": "分组保存失败，请稍后再试。",
+      "saveMembershipsFailed": "笔记分组保存失败，请稍后再试。",
+      "deleteGroupMessage": "删除\"{{name}}\"后不会删除笔记，只会移出该分组。"
+    },
+    "detail": {
+      "loadFailed": "笔记加载失败，请稍后重试",
+      "notFound": "笔记不存在"
+    },
+    "edit": {
+      "done": "完成",
+      "editTitle": "编辑笔记",
+      "groupsLabel": "分组",
+      "newTitle": "新建笔记",
+      "noGroups": "未加入任何分组",
+      "saveFailedMessage": "保存失败，请稍后重试",
+      "saveFailedTitle": "保存失败",
+      "saving": "保存中...",
+      "titlePlaceholder": "标题"
+    },
+    "editor": {
+      "mediaUploadFailedMessage": "请稍后重试",
+      "mediaUploadFailedTitle": "上传失败",
+      "toolbar": {
+        "bulletList": "列表",
+        "code": "代码",
+        "heading": "标题",
+        "imageTitle": "图片",
+        "paragraph": "正文",
+        "videoTitle": "视频"
+      },
+      "videoRejectedTitle": "视频无法上传",
+      "videoTooLargeMessage": "请选择 200MB 以内的视频",
+      "videoTooLongMessage": "请选择 10 分钟以内的视频"
+    },
+    "empty": {
+      "noMatch": "没有匹配的笔记",
+      "noNotes": "暂无笔记"
+    },
+    "manageGroups": {
+      "cancelEdit": "取消编辑",
+      "copy": "\"全部\"和\"未分组\"固定在前面，常用自定义分组可以排在前面。",
+      "createNew": "新增分组",
+      "limitHint": "已创建 {{count}}/{{max}} 个分组",
+      "namePlaceholder": "输入分组名，如上海",
+      "saveEdit": "保存修改",
+      "saving": "保存中...",
+      "title": "管理分组",
+      "noteCount": "{{count}} 条笔记"
+    },
+    "membership": {
+      "empty": "暂无可选择的笔记",
+      "saveSelection": "保存选择",
+      "saving": "保存中...",
+      "searchPlaceholder": "搜索笔记",
+      "selectTitle": "选择笔记",
+      "copy": "为\"{{name}}\"选择要加入的笔记。"
+    },
+    "searchPlaceholder": "输入你想搜索的内容",
+    "settings": {
+      "cardSaveSection": "名片保存",
+      "confirmCardSave": "名片保存确认",
+      "cooldownTitle": "冷却中",
+      "defaultSaveCard": "默认保存名片",
+      "displaySection": "页面显示",
+      "manualRefreshHint1": "列表和分组数与服务器不一致时可使用。",
+      "manualRefreshHint2": "点击后会从服务器重新拉取笔记和分组列表。",
+      "manualRefreshHint3": "为避免频繁触发，操作后会进入冷却期。",
+      "manualRefreshTitle": "手动刷新",
+      "refresh": "重新拉取",
+      "refreshFailedMessage": "请检查网络后再试。",
+      "refreshFailedTitle": "刷新失败",
+      "refreshedTitle": "已刷新",
+      "refreshing": "刷新中...",
+      "showGroups": "显示分组信息",
+      "showMedia": "显示包含媒体",
+      "showSortToolbar": "显示排序工具栏",
+      "showUngrouped": "显示未分组",
+      "title": "笔记设置",
+      "cooldownMessage": "请在 {{remain}} 秒后再试。",
+      "refreshedMessage": "当前分组数：{{groupCount}}\n当前可见笔记数：{{noteCount}}"
+    },
+    "share": {
+      "copiedMessage": "笔记链接已复制到剪贴板。",
+      "copiedTitle": "已复制",
+      "copyLink": "复制链接",
+      "createFailedMessage": "无法生成分享链接，请稍后重试。",
+      "createFailedTitle": "分享链接生成失败",
+      "failedMessage": "无法打开系统分享面板，请稍后重试。",
+      "failedTitle": "分享失败",
+      "linkPending": "分享链接生成中...",
+      "qrTitle": "笔记二维码",
+      "systemShare": "系统分享",
+      "title": "我的笔记",
+      "waitingForLink": "正在生成链接",
+      "message": "{{title}}\n{{url}}",
+      "qrHint": "扫码打开当前笔记列表（{{count}} 条）。"
+    },
+    "stopgap": {
+      "deletedNotes": "已删除笔记列表即将上线，敬请期待。",
+      "title": "即将上线"
+    },
+    "title": "我的笔记",
+    "unlisted": "已下架",
+    "format": {
+      "fullDate": "{{year}}年{{month}}月{{day}}日 · {{weekday}}",
+      "groupOverflow": "{{first}}、{{second}} +{{extra}}",
+      "imageCount": "{{count}}图片",
+      "videoCount": "{{count}}视频"
+    },
+    "stats": "共 {{groupCount}} 个分组，合计 {{noteCount}} 条笔记",
+    "tabs": {
+      "all": "全部 {{count}}",
+      "ungrouped": "未分组 {{count}}"
+    }
+  },
+  "search": {
+    "loadFriendsFailed": "好友列表加载失败，请稍后重试",
+    "noResults": "暂无匹配结果",
+    "placeholder": "搜索...",
+    "placeholderHint": "输入关键字搜索聊天记录、好友",
+    "sections": {
+      "chats": "聊天记录",
+      "friends": "好友"
+    },
+    "title": "搜索"
+  },
+  "share": {
+    "title": {
+      "favorite": "选择收藏",
+      "friend": "选择好友名片",
+      "note": "选择笔记",
+      "quickReply": "快捷语"
+    }
+  },
+  "profileDisplay": {
+    "emptySignature": "完善资料后会在这里展示你的介绍。"
   }
 }

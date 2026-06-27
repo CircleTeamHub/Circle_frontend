@@ -438,7 +438,10 @@ test('chat voice bubble and screen wiring replace the mic placeholder alert', ()
     'utf8',
   );
   const bubbleSource = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/components/chat-bubble.tsx'),
+    path.join(
+      process.cwd(),
+      'src/features/chat/components/bubbles/voice-bubble.tsx',
+    ),
     'utf8',
   );
   const screenSource = fs.readFileSync(
@@ -451,15 +454,43 @@ test('chat voice bubble and screen wiring replace the mic placeholder alert', ()
   assert.match(typeSource, /voiceUrl\?: string/);
   assert.match(bubbleSource, /export const VoiceBubble/);
   assert.match(bubbleSource, /useAudioPlayer/);
+  assert.match(bubbleSource, /setAudioModeAsync/);
   assert.match(bubbleSource, /player\.addListener\('playbackStatusUpdate'/);
   assert.doesNotMatch(bubbleSource, /useAudioPlayerStatus/);
-  assert.match(bubbleSource, /player\.seekTo\(0\)\.then\(\(\) => player\.play\(\)\)/);
-  assert.match(bubbleSource, /chatbubble-ellipses/);
+  // 播放前切回 Playback 外放（否则录音留下的 PlayAndRecord 走听筒像没声音），
+  // 且 play() 不被 seekTo 的失败挡住（首播未加载完时 seekTo 可能抛错）。
+  assert.match(
+    bubbleSource,
+    /await setAudioModeAsync\(\{\s*allowsRecording:\s*false,\s*playsInSilentMode:\s*true,\s*\}\);[\s\S]*player\.play\(\);/,
+  );
+  assert.match(bubbleSource, /play-circle/);
+  assert.match(bubbleSource, /pause-circle/);
+  // 微信式播放进度条：填充宽度随 currentTime / 时长变化。
+  assert.match(bubbleSource, /progressFill/);
+  assert.match(bubbleSource, /width: `\$\{progress \* 100\}%`/);
+  // 播完复位，避免停在结尾再点无反应。
+  assert.match(bubbleSource, /status\.didJustFinish/);
   assert.match(screenSource, /useAudioRecorder\(RecordingPresets\.LOW_QUALITY/);
   assert.match(screenSource, /requestRecordingPermissionsAsync/);
   assert.match(screenSource, /setAudioModeAsync\(\{ allowsRecording: true, playsInSilentMode: true \}\)/);
   assert.match(screenSource, /sendVoiceMessage/);
-  assert.match(screenSource, /handleVoicePress/);
+  // 微信式按住说话：按住开始录音、松手发送、滑到左侧取消（PanResponder 驱动）。
+  assert.match(screenSource, /startHoldRecording/);
+  assert.match(screenSource, /finishHoldRecording/);
+  assert.match(screenSource, /voicePanResponder/);
+  // 微信式全屏录音浮层：录音时渲染，cancelArmed/elapsedSeconds 驱动取消态与波形。
+  assert.match(screenSource, /VoiceRecordingOverlay/);
   assert.match(screenSource, /case 'voice'/);
   assert.doesNotMatch(screenSource, /该功能即将上线/);
+
+  const overlaySource = fs.readFileSync(
+    path.join(
+      process.cwd(),
+      'src/features/chat/components/voice-recording-overlay.tsx',
+    ),
+    'utf8',
+  );
+  assert.match(overlaySource, /export const VoiceRecordingOverlay/);
+  assert.match(overlaySource, /pointerEvents="none"/);
+  assert.match(overlaySource, /cancelArmed/);
 });

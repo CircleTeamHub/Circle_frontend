@@ -1,11 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
 import { useNetworkStatus } from '@/hooks/use-network-status';
 import {
-  createCollection,
   deleteCollection,
   fetchCollections,
   type CollectionType,
@@ -13,7 +12,11 @@ import {
 } from '@/services/api/collections';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
-const COLLECTION_TYPES: { id: CollectionType; label: string; icon: string }[] = [
+// 'ALL' 是「全部」伪类型：不按类型过滤，拉取所有收藏。其余对应后端 CollectionType。
+type CollectionTab = 'ALL' | CollectionType;
+
+const COLLECTION_TYPES: { id: CollectionTab; label: string; icon: string }[] = [
+  { id: 'ALL', label: '全部', icon: 'albums-outline' },
   { id: 'CHAT', label: '聊天记录', icon: 'chatbubble-ellipses-outline' },
   { id: 'VIDEO', label: '视频', icon: 'videocam-outline' },
   { id: 'VOICE', label: '语音', icon: 'mic-outline' },
@@ -26,9 +29,24 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     gap: Spacing.lg,
   },
+  tabsRow: {
+    position: 'relative',
+  },
   tabs: {
     flexDirection: 'row',
     gap: Spacing.sm,
+    paddingRight: Spacing.lg,
+  },
+  tabsHint: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingRight: 2,
   },
   tab: {
     borderRadius: Radius.full,
@@ -44,14 +62,6 @@ const s = StyleSheet.create({
     padding: Spacing.xl,
     alignItems: 'center',
     gap: Spacing.md,
-  },
-  examples: {
-    gap: Spacing.sm,
-  },
-  exampleCard: {
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
-    gap: Spacing.xs,
   },
   list: {
     gap: Spacing.sm,
@@ -70,24 +80,27 @@ const s = StyleSheet.create({
     flex: 1,
     gap: Spacing.xs,
   },
-  addButton: {
-    height: 48,
-    borderRadius: Radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 });
 
 export default function CollectionsScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { isOffline } = useNetworkStatus();
-  const [activeType, setActiveType] = useState<CollectionType>('CHAT');
+  const [activeType, setActiveType] = useState<CollectionTab>('ALL');
   const [items, setItems] = useState<UserCollection[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [statusText, setStatusText] = useState<string | null>(null);
+  // 标签横向可滚动时，在右侧显示「更多」箭头提示；滚到末尾自动隐藏。
+  const [showTabsHint, setShowTabsHint] = useState(false);
+  const tabsViewportWidth = useRef(0);
+  const tabsContentWidth = useRef(0);
   const active = COLLECTION_TYPES.find((item) => item.id === activeType) ?? COLLECTION_TYPES[0];
+
+  // 内容比视口宽 → 有可滚动空间 → 显示提示。onLayout 与 onContentSizeChange 触发顺序
+  // 不定，都走这里用 ref 重算，避免某次事件时另一个尺寸还是 0 导致误判。
+  const recomputeTabsHint = useCallback(() => {
+    setShowTabsHint(tabsContentWidth.current > tabsViewportWidth.current + 8);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,7 +109,9 @@ export default function CollectionsScreen() {
       setLoading(true);
       setStatusText(null);
       try {
-        const nextItems = await fetchCollections(activeType);
+        const nextItems = await fetchCollections(
+          activeType === 'ALL' ? undefined : activeType,
+        );
         if (!cancelled) {
           setItems(nextItems);
         }
@@ -117,28 +132,6 @@ export default function CollectionsScreen() {
       cancelled = true;
     };
   }, [activeType]);
-
-  async function handleCreateSample() {
-    if (saving) {
-      return;
-    }
-    setSaving(true);
-    setStatusText(null);
-    try {
-      const item = await createCollection({
-        type: activeType,
-        title: `${active.label}收藏`,
-        summary: `来自${active.label}的示例收藏，可替换为真实聊天、媒体或笔记内容。`,
-        sourceID: `sample-${activeType.toLowerCase()}`,
-        payload: { source: 'profile-collections' },
-      });
-      setItems((current) => [item, ...current]);
-    } catch {
-      setStatusText('添加收藏失败，请稍后重试');
-    } finally {
-      setSaving(false);
-    }
-  }
 
   function handleDelete(id: string) {
     Alert.alert('确认删除', '确定要删除这条收藏吗？', [
@@ -172,16 +165,20 @@ export default function CollectionsScreen() {
         borderColor: colors.surfaceBorder,
         backgroundColor: colors.surface,
       },
+      tabsHint: {
+        // 用页面背景色遮住最右侧标签的边缘，形成「淡出 + 箭头」的可滚动提示。
+        backgroundColor: colors.background,
+      },
       tabActive: {
         borderColor: colors.primary,
-        backgroundColor: colors.primaryLight,
+        backgroundColor: colors.primary,
       },
       tabText: {
         color: colors.textSecondary,
         ...Typography.caption,
       },
       tabTextActive: {
-        color: colors.primary,
+        color: colors.white,
         fontWeight: '700' as const,
       },
       empty: {
@@ -193,20 +190,10 @@ export default function CollectionsScreen() {
         color: colors.text,
         ...Typography.h2,
       },
-      emptyDesc: {
-        color: colors.textSecondary,
-        ...Typography.bodyRegular,
-        textAlign: 'center' as const,
-        lineHeight: 22,
-      },
       exampleCard: {
         backgroundColor: colors.surface,
         borderWidth: 1,
         borderColor: colors.surfaceBorder,
-      },
-      exampleTitle: {
-        color: colors.text,
-        ...Typography.body,
       },
       exampleDesc: {
         color: colors.textSecondary,
@@ -225,61 +212,71 @@ export default function CollectionsScreen() {
         ...Typography.caption,
         fontWeight: '700' as const,
       },
-      addButton: {
-        backgroundColor: colors.primary,
-      },
-      addButtonDisabled: {
-        backgroundColor: colors.surfaceBorder,
-      },
-      addButtonText: {
-        color: colors.white,
-        ...Typography.body,
-        fontWeight: '700' as const,
-      },
     }),
     [colors, insets.bottom, insets.top],
   );
 
   return (
     <View style={d.container}>
-      <NavHeader title="我的收藏" />
+      <NavHeader title="" />
       <ScrollView contentContainerStyle={[s.content, d.content]}>
         {isOffline ? <Text style={d.exampleDesc}>当前无网络连接，部分功能可能不可用</Text> : null}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.tabs}
-        >
-          {COLLECTION_TYPES.map((item) => {
-            const selected = activeType === item.id;
-            return (
-              <Pressable
-                key={item.id}
-                style={[s.tab, d.tab, selected && d.tabActive]}
-                onPress={() => setActiveType(item.id)}
-              >
-                <Ionicons
-                  name={item.icon as any}
-                  size={16}
-                  color={selected ? colors.primary : colors.textSecondary}
-                />
-                <Text style={[d.tabText, selected && d.tabTextActive]}>{item.label}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-
-        <View style={[s.empty, d.empty]}>
-          <Ionicons name={active.icon as any} size={44} color={colors.textSecondary} />
-          <Text style={d.emptyTitle}>{active.label}收藏</Text>
-          <Text style={d.emptyDesc}>
-            {loading
-              ? '正在加载收藏内容...'
-              : `这里会展示你收藏的${active.label}内容。收藏可覆盖聊天记录、视频、语音、信息、笔记。`}
-          </Text>
+        <View style={s.tabsRow}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.tabs}
+            scrollEventThrottle={16}
+            onLayout={(e) => {
+              tabsViewportWidth.current = e.nativeEvent.layout.width;
+              recomputeTabsHint();
+            }}
+            onContentSizeChange={(contentWidth) => {
+              tabsContentWidth.current = contentWidth;
+              recomputeTabsHint();
+            }}
+            onScroll={(e) => {
+              const { contentOffset, contentSize, layoutMeasurement } =
+                e.nativeEvent;
+              // 还有内容在右侧未露出 → 显示提示；滚到末尾（留 8px 容差）隐藏。
+              setShowTabsHint(
+                contentOffset.x + layoutMeasurement.width < contentSize.width - 8,
+              );
+            }}
+          >
+            {COLLECTION_TYPES.map((item) => {
+              const selected = activeType === item.id;
+              return (
+                <Pressable
+                  key={item.id}
+                  style={[s.tab, d.tab, selected && d.tabActive]}
+                  onPress={() => setActiveType(item.id)}
+                >
+                  <Ionicons
+                    name={item.icon as any}
+                    size={16}
+                    color={selected ? colors.white : colors.textSecondary}
+                  />
+                  <Text style={[d.tabText, selected && d.tabTextActive]}>{item.label}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+          {showTabsHint ? (
+            <View style={[s.tabsHint, d.tabsHint]} pointerEvents="none">
+              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+            </View>
+          ) : null}
         </View>
 
         {statusText ? <Text style={d.exampleDesc}>{statusText}</Text> : null}
+
+        {!loading && items.length === 0 ? (
+          <View style={[s.empty, d.empty]}>
+            <Ionicons name={active.icon as any} size={44} color={colors.textSecondary} />
+            <Text style={d.emptyTitle}>还没有收藏</Text>
+          </View>
+        ) : null}
 
         <View style={s.list}>
           {items.map((item) => (
@@ -295,25 +292,6 @@ export default function CollectionsScreen() {
               </View>
             </View>
           ))}
-        </View>
-
-        <Pressable
-          style={[s.addButton, saving ? d.addButtonDisabled : d.addButton]}
-          disabled={saving}
-          onPress={handleCreateSample}
-        >
-          <Text style={d.addButtonText}>{saving ? '添加中...' : `添加${active.label}收藏`}</Text>
-        </Pressable>
-
-        <View style={s.examples}>
-          <View style={[s.exampleCard, d.exampleCard]}>
-            <Text style={d.exampleTitle}>收藏聊天记录</Text>
-            <Text style={d.exampleDesc}>从聊天长按消息后加入收藏，稍后可在这里统一查看。</Text>
-          </View>
-          <View style={[s.exampleCard, d.exampleCard]}>
-            <Text style={d.exampleTitle}>收藏笔记和媒体</Text>
-            <Text style={d.exampleDesc}>笔记、视频、语音、信息会按类型归档，方便回看。</Text>
-          </View>
         </View>
       </ScrollView>
     </View>

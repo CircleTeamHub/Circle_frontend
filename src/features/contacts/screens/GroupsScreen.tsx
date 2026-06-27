@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -76,23 +76,27 @@ export default function GroupsScreen() {
   const [groups, setGroups] = useState<GroupItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const mountedRef = useRef(true);
+  const refreshInFlightRef = useRef(false);
 
   const loadGroups = useCallback(
     async (signal?: { cancelled: boolean }) => {
+      const isCancelled = () => Boolean(signal?.cancelled) || !mountedRef.current;
       setLoading(true);
       try {
         const result = await getJoinedGroups();
-        if (signal?.cancelled) return;
+        if (isCancelled()) return;
         setGroups(result);
         setError(null);
       } catch (caughtError) {
-        if (signal?.cancelled) return;
+        if (isCancelled()) return;
         setError(t('contacts.groupsScreen.loadFailed'));
         if (__DEV__) {
           console.warn('[GroupsScreen] getJoinedGroups failed', caughtError);
         }
       } finally {
-        if (!signal?.cancelled) {
+        if (!isCancelled()) {
           setLoading(false);
         }
       }
@@ -114,6 +118,25 @@ export default function GroupsScreen() {
       void loadGroups();
     }, [loadGroups]),
   );
+
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
+
+  const handleRefreshGroups = useCallback(async () => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    setRefreshing(true);
+    try {
+      await loadGroups();
+    } finally {
+      refreshInFlightRef.current = false;
+      if (mountedRef.current) setRefreshing(false);
+    }
+  }, [loadGroups]);
 
   const sections = useMemo<GroupSection[]>(() => {
     if (!currentUserID) {
@@ -279,6 +302,8 @@ export default function GroupsScreen() {
         )}
         ListEmptyComponent={emptyState}
         showsVerticalScrollIndicator={false}
+        refreshing={refreshing}
+        onRefresh={handleRefreshGroups}
       />
     </View>
   );

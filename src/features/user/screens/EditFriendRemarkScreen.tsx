@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,6 +17,7 @@ import {
   fetchFriendSettings,
   setFriendRemark,
 } from '@/services/api/friends';
+import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 const s = StyleSheet.create({
@@ -67,14 +68,26 @@ export default function EditFriendRemarkScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const params = useLocalSearchParams<{ id?: string; name?: string }>();
+  const params = useLocalSearchParams<{ id?: string; name?: string; fallbackName?: string }>();
   const profileId = typeof params.id === 'string' ? params.id : '';
-  const targetName = typeof params.name === 'string' ? params.name : t('chat.friend');
+  const routeFallbackName =
+    typeof params.fallbackName === 'string' ? params.fallbackName.trim() : '';
+  const targetName =
+    typeof params.name === 'string' ? params.name : routeFallbackName || t('chat.friend');
+  const remarkFallbackName = routeFallbackName || targetName;
 
   const [value, setValue] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -166,16 +179,20 @@ export default function EditFriendRemarkScreen() {
     try {
       setIsSaving(true);
       await setFriendRemark(profileId, value);
+      if (!mountedRef.current) return;
+      // 广播备注变更，让已挂载的聊天页 / 资料页即时刷新显示名。
+      useFriendRemarkStore.getState().setRemark(profileId, value, remarkFallbackName);
       router.back();
     } catch (nextError) {
+      if (!mountedRef.current) return;
       Alert.alert(
         t('validation.saveFailed'),
         nextError instanceof Error ? nextError.message : t('userProfile.editRemark.saveFailed'),
       );
     } finally {
-      setIsSaving(false);
+      if (mountedRef.current) setIsSaving(false);
     }
-  }, [isSaving, profileId, t, value]);
+  }, [isSaving, profileId, remarkFallbackName, t, value]);
 
   const stateBlock = isLoading ? (
     <View style={s.stateBlock}>

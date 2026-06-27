@@ -9,11 +9,12 @@ import {
 } from '@/services/api/friends';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -64,8 +65,12 @@ export default function FriendTagsScreen() {
   const [tags, setTags] = useState<FriendTagSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const mountedRef = useRef(true);
+  const refreshInFlightRef = useRef(false);
 
   const loadTags = useCallback(async (signal?: { cancelled: boolean }) => {
+    const isCancelled = () => Boolean(signal?.cancelled) || !mountedRef.current;
     setLoading(true);
 
     try {
@@ -77,14 +82,14 @@ export default function FriendTagsScreen() {
         })),
       );
 
-      if (signal?.cancelled) return;
+      if (isCancelled()) return;
       setTags(counts);
       setError(null);
     } catch {
-      if (signal?.cancelled) return;
+      if (isCancelled()) return;
       setError(t('contacts.tagsScreen.loadFailed'));
     } finally {
-      if (!signal?.cancelled) {
+      if (!isCancelled()) {
         setLoading(false);
       }
     }
@@ -96,6 +101,25 @@ export default function FriendTagsScreen() {
     return () => {
       signal.cancelled = true;
     };
+  }, [loadTags]);
+
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
+
+  const handleRefreshTags = useCallback(async () => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    setRefreshing(true);
+    try {
+      await loadTags();
+    } finally {
+      refreshInFlightRef.current = false;
+      if (mountedRef.current) setRefreshing(false);
+    }
   }, [loadTags]);
 
   const d = useMemo(
@@ -135,7 +159,7 @@ export default function FriendTagsScreen() {
     [colors],
   );
 
-  const stateBlock = loading ? (
+  const stateBlock = loading && tags.length === 0 ? (
     <View style={s.stateBlock}>
       <ActivityIndicator color={colors.primary} />
       <Text style={d.stateText}>{t('contacts.tagsScreen.loading')}</Text>
@@ -185,6 +209,13 @@ export default function FriendTagsScreen() {
       <ScrollView
         contentContainerStyle={s.content}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefreshTags}
+            tintColor={colors.primary}
+          />
+        }
       >
         <View style={[s.introCard, d.introCard]}>
           <Text style={d.introTitle}>{t('contacts.tagsScreen.categoryTitle')}</Text>

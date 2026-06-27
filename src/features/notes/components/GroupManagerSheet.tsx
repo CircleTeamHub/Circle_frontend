@@ -39,6 +39,7 @@ interface Props {
 }
 
 const GROUP_ROW_HEIGHT = 64;
+const MAX_NOTE_GROUPS = 10;
 const MEMBERSHIP_SAVE_CONCURRENCY = 5;
 
 async function runWithConcurrencyLimit<T>(
@@ -101,6 +102,8 @@ export function GroupManagerSheet({
   }, [dragPreviewGroups]);
 
   const displayGroups = dragPreviewGroups ?? groups;
+  const isCreatingGroupAtLimit =
+    !editingGroupId && groups.length >= MAX_NOTE_GROUPS;
 
   const resetGroupDraft = useCallback(() => {
     setDraftGroupName('');
@@ -123,7 +126,7 @@ export function GroupManagerSheet({
 
   const handleSaveGroup = useCallback(async () => {
     const trimmedName = draftGroupName.trim();
-    if (!trimmedName || savingGroup) return;
+    if (!trimmedName || savingGroup || isCreatingGroupAtLimit) return;
     setSavingGroup(true);
     try {
       if (editingGroupId) {
@@ -148,7 +151,15 @@ export function GroupManagerSheet({
         console.warn('[GroupManagerSheet] saveGroup failed', error);
       }
     }
-  }, [draftGroupName, editingGroupId, resetGroupDraft, savingGroup, setGroups, t]);
+  }, [
+    draftGroupName,
+    editingGroupId,
+    isCreatingGroupAtLimit,
+    resetGroupDraft,
+    savingGroup,
+    setGroups,
+    t,
+  ]);
 
   const handleSubmitGroupPress = useCallback(() => {
     if (!draftGroupName.trim()) {
@@ -163,8 +174,20 @@ export function GroupManagerSheet({
       );
       return;
     }
+    if (isCreatingGroupAtLimit) {
+      Alert.alert(
+        t('notes.alerts.groupLimitTitle', {
+          defaultValue: '分组已达上限',
+        }),
+        t('notes.alerts.groupLimitMessage', {
+          max: MAX_NOTE_GROUPS,
+          defaultValue: `最多只能创建 ${MAX_NOTE_GROUPS} 个分组。`,
+        }),
+      );
+      return;
+    }
     void handleSaveGroup();
-  }, [draftGroupName, handleSaveGroup, t]);
+  }, [draftGroupName, handleSaveGroup, isCreatingGroupAtLimit, t]);
 
   const openGroupMembershipEditor = useCallback(
     (group: NoteGroup) => {
@@ -414,6 +437,7 @@ export function GroupManagerSheet({
       modalCard: { backgroundColor: colors.surface },
       modalTitle: { color: colors.text },
       modalCopy: { color: colors.textSecondary },
+      limitText: { color: colors.textSecondary },
       groupRow: { backgroundColor: colors.background },
       groupName: { color: colors.text },
       groupCount: { color: colors.textSecondary },
@@ -574,6 +598,13 @@ export function GroupManagerSheet({
                 {t('notes.manageGroups.copy', {
                   defaultValue:
                     '"全部"和"未分组"固定在前面，常用自定义分组可以排在前面。',
+                })}
+              </Text>
+              <Text style={[s.limitText, d.limitText]}>
+                {t('notes.manageGroups.limitHint', {
+                  count: groups.length,
+                  max: MAX_NOTE_GROUPS,
+                  defaultValue: `已创建 ${groups.length}/${MAX_NOTE_GROUPS} 个分组`,
                 })}
               </Text>
               <ScrollView
@@ -741,6 +772,7 @@ const s = StyleSheet.create({
   },
   modalTitle: { ...Typography.h3, fontWeight: '700' },
   modalCopy: { ...Typography.small },
+  limitText: { ...Typography.small, marginTop: -Spacing.xs },
   modalList: { maxHeight: 320 },
   modalListContent: { gap: Spacing.sm },
   membershipList: { maxHeight: 320 },

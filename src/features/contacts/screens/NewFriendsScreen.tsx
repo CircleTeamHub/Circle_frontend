@@ -16,7 +16,7 @@ import {
 import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -73,24 +73,28 @@ export default function NewFriendsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [navigating, setNavigating] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const mountedRef = useRef(true);
+  const refreshInFlightRef = useRef(false);
   const markRead = useFriendActivityUnreadStore((state) => state.markRead);
   const refreshUnreadFriendActivityCount = useFriendActivityUnreadStore(
     (state) => state.refresh,
   );
 
   const loadActivities = useCallback(async (signal?: { cancelled: boolean }) => {
+    const isCancelled = () => Boolean(signal?.cancelled) || !mountedRef.current;
     setLoading(true);
 
     try {
       const nextActivities = await fetchFriendActivities();
-      if (signal?.cancelled) return;
+      if (isCancelled()) return;
       setActivities(nextActivities);
       setError(null);
     } catch {
-      if (signal?.cancelled) return;
+      if (isCancelled()) return;
       setError(t('contacts.friendActivity.loadFailed'));
     } finally {
-      if (!signal?.cancelled) {
+      if (!isCancelled()) {
         setLoading(false);
       }
     }
@@ -104,11 +108,30 @@ export default function NewFriendsScreen() {
     };
   }, [loadActivities]);
 
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
+
   useFocusEffect(
     useCallback(() => {
       void refreshUnreadFriendActivityCount();
     }, [refreshUnreadFriendActivityCount]),
   );
+
+  const handleRefreshActivities = useCallback(async () => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    setRefreshing(true);
+    try {
+      await Promise.all([loadActivities(), refreshUnreadFriendActivityCount()]);
+    } finally {
+      refreshInFlightRef.current = false;
+      if (mountedRef.current) setRefreshing(false);
+    }
+  }, [loadActivities, refreshUnreadFriendActivityCount]);
 
   const d = useMemo(
     () => ({
@@ -257,6 +280,8 @@ export default function NewFriendsScreen() {
         ListEmptyComponent={emptyState}
         contentContainerStyle={s.content}
         showsVerticalScrollIndicator={false}
+        refreshing={refreshing}
+        onRefresh={handleRefreshActivities}
       />
     </View>
   );

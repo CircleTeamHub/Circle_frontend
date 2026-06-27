@@ -200,7 +200,7 @@ export default function SendFriendRequestScreen() {
       },
       tagChipActive: {
         borderColor: colors.primary,
-        backgroundColor: colors.primaryLight,
+        backgroundColor: colors.primary,
       },
       tagChipText: {
         color: colors.text,
@@ -208,7 +208,7 @@ export default function SendFriendRequestScreen() {
         fontWeight: '600' as const,
       },
       tagChipTextActive: {
-        color: colors.primary,
+        color: colors.white,
       },
       submitButton: {
         backgroundColor: colors.primary,

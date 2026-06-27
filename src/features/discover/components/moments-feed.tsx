@@ -173,10 +173,10 @@ export const MomentsFeed: React.FC = () => {
   const ListHeader =
     newCount > 0 ? (
       <Pressable
-        style={[s.newPostsBanner, { backgroundColor: colors.primaryLight }]}
+        style={[s.newPostsBanner, { backgroundColor: colors.primary }]}
         onPress={handleRefresh}
       >
-        <Text style={[s.bannerText, { color: colors.primary }]}>
+        <Text style={[s.bannerText, { color: colors.white }]}>
           {t('discover.newPosts', { count: newCount })}
         </Text>
       </Pressable>

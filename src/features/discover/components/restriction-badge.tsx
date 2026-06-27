@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { Radius, Spacing, Typography } from '@/theme';
+import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
@@ -51,6 +51,7 @@ export const RestrictionBadge: React.FC<RestrictionBadgeProps> = ({
   restrictions,
 }) => {
   const { t } = useTranslation();
+  const { colors } = useTheme();
 
   const badges = useMemo(() => {
     const items: IdentityBadge[] = [];
@@ -95,11 +96,11 @@ export const RestrictionBadge: React.FC<RestrictionBadgeProps> = ({
           key={`${b.icon}-${b.label}-${index}`}
           style={[
             s.badge,
-            { backgroundColor: `${b.color}20` },
+            { backgroundColor: b.color },
           ]}
         >
-          <Ionicons name={b.icon} size={10} color={b.color} />
-          <Text style={[s.text, { color: b.color }]}>{b.label}</Text>
+          <Ionicons name={b.icon} size={10} color={colors.white} />
+          <Text style={[s.text, { color: colors.white }]}>{b.label}</Text>
         </View>
       ))}
     </View>

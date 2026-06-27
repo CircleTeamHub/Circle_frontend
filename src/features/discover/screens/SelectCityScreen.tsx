@@ -263,10 +263,10 @@ export default function SelectCityScreen() {
             <Pressable
               key={city}
               onPress={() => toggleCity(city)}
-              style={[s.selectedChip, { backgroundColor: colors.primaryLight }]}
+              style={[s.selectedChip, { backgroundColor: colors.primary }]}
             >
-              <Text style={{ color: colors.primary, ...Typography.caption }}>{city}</Text>
-              <Ionicons name="close" size={12} color={colors.primary} />
+              <Text style={{ color: colors.white, ...Typography.caption }}>{city}</Text>
+              <Ionicons name="close" size={12} color={colors.white} />
             </Pressable>
           ))}
         </View>
@@ -280,8 +280,8 @@ export default function SelectCityScreen() {
             {t('city.nationwide')}
           </Text>
           {!isVip ? (
-            <View style={{ backgroundColor: '#F59E0B20', paddingHorizontal: 6, paddingVertical: 1, borderRadius: Radius.full }}>
-              <Text style={{ color: '#F59E0B', ...Typography.tinyRegular, fontWeight: '600' }}>VIP</Text>
+            <View style={{ backgroundColor: '#F59E0B', paddingHorizontal: 6, paddingVertical: 1, borderRadius: Radius.full }}>
+              <Text style={{ color: colors.white, ...Typography.tinyRegular, fontWeight: '600' }}>VIP</Text>
             </View>
           ) : null}
         </View>

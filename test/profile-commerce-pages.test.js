@@ -104,7 +104,7 @@ test('CollectionsScreen shows collectible content types', () => {
 
   assert.match(src, /horizontal/);
   assert.match(src, /fetchCollections/);
-  assert.match(src, /createCollection/);
+  assert.doesNotMatch(src, /createCollection/);
   assert.match(src, /deleteCollection/);
   assert.match(api, /\/collections/);
   assert.doesNotMatch(src, /flexWrap:\s*'wrap'/);

@@ -24,10 +24,10 @@ export const ReadFilterBar = memo(function ReadFilterBar(p: Props) {
     const on = p.filter === key;
     return (
       <Pressable
-        style={[s.chip, { backgroundColor: on ? colors.primaryLight : colors.surface, borderColor: on ? colors.primary : colors.surfaceBorder }]}
+        style={[s.chip, { backgroundColor: on ? colors.primary : colors.surface, borderColor: on ? colors.primary : colors.surfaceBorder }]}
         onPress={() => p.onSelect(key)}
       >
-        <Text style={{ fontSize: 13, fontWeight: '700', color: on ? colors.primary : colors.textSecondary }}>{label}</Text>
+        <Text style={{ fontSize: 13, fontWeight: '700', color: on ? colors.white : colors.textSecondary }}>{label}</Text>
       </Pressable>
     );
   };

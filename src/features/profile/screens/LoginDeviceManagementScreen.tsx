@@ -119,10 +119,10 @@ export default function LoginDeviceManagementScreen() {
         ...Typography.caption,
       },
       badge: {
-        backgroundColor: colors.primaryLight,
+        backgroundColor: colors.primary,
       },
       badgeText: {
-        color: colors.primary,
+        color: colors.white,
         ...Typography.caption,
         fontWeight: "700" as const,
       },

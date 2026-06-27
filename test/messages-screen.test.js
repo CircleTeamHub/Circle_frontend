@@ -64,6 +64,26 @@ test('messages screen refreshes OpenIM conversations whenever it receives focus'
   assert.doesNotMatch(source, /hasFetchedRef/);
 });
 
+test('messages screen supports pull-to-refresh for the conversation list', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/messages/screens/MessagesScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /const \[refreshing, setRefreshing\] = useState\(false\)/);
+  assert.match(source, /handleRefreshConversations/);
+  assert.match(source, /const mountedRef = useRef\(true\)/);
+  assert.match(source, /mountedRef\.current = false/);
+  assert.match(source, /refreshInFlightRef/);
+  assert.match(source, /if \(refreshInFlightRef\.current\) return;/);
+  assert.match(source, /setRefreshing\(true\)/);
+  assert.match(source, /await loadConversationList\(\)/);
+  assert.match(source, /if \(mountedRef\.current\) setRefreshing\(false\)/);
+  assert.match(source, /refreshing=\{refreshing\}/);
+  assert.match(source, /onRefresh=\{handleRefreshConversations\}/);
+});
+
 test('messages screen exposes left-swipe conversation actions for read, hide, and delete', () => {
   const filePath = path.join(
     process.cwd(),

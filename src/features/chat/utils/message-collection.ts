@@ -1,5 +1,5 @@
 import type { CreateCollectionInput, UserCollection } from '@/services/api/collections';
-import type { ChatMessage } from '@/types';
+import type { ChatMessage, FriendCardData, NoteCardData } from '@/types';
 
 export type CollectedOpenIMMessagePayload = {
   kind: 'openim-message';
@@ -121,6 +121,64 @@ export function buildCollectionInputFromMessage(
     sourceID: message.id,
     payload: payload as Record<string, unknown>,
   };
+}
+
+/**
+ * 重发一条收藏时「该发什么」的计划（纯数据，不依赖组件作用域）。
+ *
+ * 原则：收藏的是啥就原样发啥 —— 不加 title / ⭐ 等装饰。能按原类型还原的
+ * （文本 / 语音 / 笔记 / 名片）就忠实重建；其余（图片等暂无法脱离原始消息
+ * 还原的类型）回退成一段干净文本，绝不重复正文。
+ */
+export type CollectionSendPlan =
+  | { kind: 'text'; text: string }
+  | {
+      kind: 'voice';
+      sourceUrl?: string | null;
+      soundPath?: string | null;
+      duration: number;
+      dataSize?: number;
+    }
+  | { kind: 'note'; noteCard: NoteCardData }
+  | { kind: 'friend'; friendCard: FriendCardData };
+
+export function resolveCollectionSendPlan(
+  item: Pick<UserCollection, 'title' | 'summary' | 'payload'>,
+): CollectionSendPlan {
+  const payload = getCollectedOpenIMMessagePayload(item.payload);
+
+  if (payload) {
+    if (
+      (payload.messageType === 'sent' || payload.messageType === 'received') &&
+      typeof payload.text === 'string' &&
+      payload.text.trim().length > 0
+    ) {
+      return { kind: 'text', text: payload.text };
+    }
+
+    if (payload.messageType === 'voice' && payload.voice) {
+      return {
+        kind: 'voice',
+        sourceUrl: payload.voice.sourceUrl,
+        soundPath: payload.voice.soundPath,
+        duration: payload.voice.duration ?? 1,
+        dataSize: payload.voice.dataSize,
+      };
+    }
+
+    if (payload.messageType === 'note-card' && payload.noteCard) {
+      return { kind: 'note', noteCard: payload.noteCard };
+    }
+
+    if (payload.messageType === 'friend-card' && payload.friendCard) {
+      return { kind: 'friend', friendCard: payload.friendCard };
+    }
+  }
+
+  // 兜底：原文优先，其次摘要，再次标题；都没有 ⭐ / title 装饰，也不重复。
+  const text =
+    payload?.text?.trim() || item.summary?.trim() || item.title?.trim() || '';
+  return { kind: 'text', text };
 }
 
 export function getCollectedOpenIMMessagePayload(

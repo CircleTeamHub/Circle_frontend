@@ -16,7 +16,7 @@ test('contacts screen loads real friends and routes quick actions to dedicated s
   assert.match(source, /router\.push\('\/\(tabs\)\/contacts\/new-friends'\)/);
   assert.match(source, /router\.push\('\/\(tabs\)\/contacts\/tags'\)/);
   assert.doesNotMatch(source, /const CONTACT_SECTIONS/);
-  assert.doesNotMatch(source, /useEffect\(/);
+  assert.match(source, /mountedRef/);
 });
 
 test('new friends screen exists as a friend-activity inbox with per-item read flow', () => {
@@ -69,6 +69,90 @@ test('tags screens load tag data and tagged friends with dedicated routes', () =
   assert.match(tagDetailScreenSource, /fetchFriendsByTag/);
   assert.match(tagDetailScreenSource, /buildContactSections/);
 });
+
+test('contacts list screens support pull-to-refresh', () => {
+  const screens = [
+    {
+      name: 'ContactsScreen',
+      source: read('src/features/contacts/screens/ContactsScreen.tsx'),
+      refreshHandler: 'handleRefreshFriends',
+    },
+    {
+      name: 'NewFriendsScreen',
+      source: read('src/features/contacts/screens/NewFriendsScreen.tsx'),
+      refreshHandler: 'handleRefreshActivities',
+    },
+    {
+      name: 'GroupsScreen',
+      source: read('src/features/contacts/screens/GroupsScreen.tsx'),
+      refreshHandler: 'handleRefreshGroups',
+    },
+    {
+      name: 'FriendTagsScreen',
+      source: read('src/features/contacts/screens/FriendTagsScreen.tsx'),
+      refreshHandler: 'handleRefreshTags',
+    },
+    {
+      name: 'FriendTagDetailScreen',
+      source: read('src/features/contacts/screens/FriendTagDetailScreen.tsx'),
+      refreshHandler: 'handleRefreshFriends',
+    },
+  ];
+
+  for (const screen of screens) {
+    assert.match(
+      screen.source,
+      /const \[refreshing, setRefreshing\] = useState\(false\)/,
+      `${screen.name} should keep refresh state`,
+    );
+    assert.match(
+      screen.source,
+      new RegExp(`const ${screen.refreshHandler} = useCallback`),
+      `${screen.name} should define a refresh handler`,
+    );
+    assert.match(
+      screen.source,
+      /refreshInFlightRef/,
+      `${screen.name} should guard repeated refresh requests`,
+    );
+    assert.match(
+      screen.source,
+      /if \(refreshInFlightRef\.current\) return;/,
+      `${screen.name} should ignore refresh while one is already running`,
+    );
+    assert.match(
+      screen.source,
+      /mountedRef/,
+      `${screen.name} should avoid setState after unmount`,
+    );
+    assert.match(
+      screen.source,
+      /if \(!mountedRef\.current\) return;|const isCancelled = \(\) => Boolean\(signal\?\.cancelled\) \|\| !mountedRef\.current/,
+      `${screen.name} should guard load completion by mount state`,
+    );
+    assert.match(
+      screen.source,
+      /if \(mountedRef\.current\) setLoading\(false\)|if \(!isCancelled\(\)\) \{\s*setLoading\(false\);?\s*\}/,
+      `${screen.name} should guard load cleanup by mount state`,
+    );
+    assert.match(
+      screen.source,
+      /mountedRef\.current[\s\S]{0,80}setRefreshing\(false\)/,
+      `${screen.name} should guard refresh cleanup by mount state`,
+    );
+    assert.match(
+      screen.source,
+      new RegExp(`onRefresh=\\{${screen.refreshHandler}\\}`),
+      `${screen.name} should wire onRefresh`,
+    );
+    assert.match(
+      screen.source,
+      /refreshing=\{refreshing\}|RefreshControl/,
+      `${screen.name} should expose native refresh UI`,
+    );
+  }
+}
+);
 
 test('friend activity detail screen supports request handling and single-item read state', () => {
   const routeSource = read('app/(tabs)/contacts/new-friends/[id].tsx');
@@ -136,4 +220,15 @@ test('contacts and profile flow screens use i18n instead of hardcoded Chinese UI
     read('src/features/chat/screens/ChatInfoScreen.tsx'),
     /title="聊天信息"|设置备注|查找聊天记录|删除联系人/,
   );
+});
+
+test('EditFriendTagsScreen guards async create and save state after unmount', () => {
+  const source = read('src/features/user/screens/EditFriendTagsScreen.tsx');
+
+  assert.match(source, /const mountedRef = useRef\(true\)/);
+  assert.match(source, /mountedRef\.current = false/);
+  assert.match(source, /const created = await createFriendTag\(trimmed\);[\s\S]*if \(!mountedRef\.current\) return;/);
+  assert.match(source, /if \(mountedRef\.current\) setIsCreatingTag\(false\)/);
+  assert.match(source, /await Promise\.all\(\[[\s\S]*removeFriendTag\(profileId, tagId\)[\s\S]*\]\);[\s\S]*if \(!mountedRef\.current\) return;[\s\S]*router\.back\(\);/);
+  assert.match(source, /if \(mountedRef\.current\) setIsSaving\(false\)/);
 });

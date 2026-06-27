@@ -6,7 +6,6 @@ import {
   Alert,
   LogBox,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -130,11 +129,6 @@ export default function EditNoteScreen() {
     );
   }, []);
 
-  const selectedGroups = useMemo(
-    () => availableGroups.filter((group) => selectedGroupIds.includes(group.id)),
-    [availableGroups, selectedGroupIds],
-  );
-
   const handleSubmit = useCallback(async () => {
     if (isSubmitting) return;
     const trimmedTitle = title.trim();
@@ -186,10 +180,16 @@ export default function EditNoteScreen() {
       doneBtnDisabled: { backgroundColor: colors.primary, opacity: 0.5 },
       titleInput: { color: colors.text },
       dateText: { color: colors.textSecondary },
-      groupChip: { backgroundColor: colors.surface, borderColor: colors.surface },
-      groupChipActive: { backgroundColor: colors.primary + '22', borderColor: colors.primary },
+      groupChip: {
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
+      },
+      groupChipActive: {
+        backgroundColor: colors.primary,
+        borderColor: colors.primary,
+      },
       groupChipText: { color: colors.textSecondary },
-      groupChipTextActive: { color: colors.primary },
+      groupChipTextActive: { color: colors.white },
       sectionTitle: { color: colors.textSecondary },
     }),
     [colors],
@@ -245,14 +245,17 @@ export default function EditNoteScreen() {
       </View>
 
       <View style={s.groupSection}>
-        <Text style={[s.sectionTitle, d.sectionTitle]}>
-          {t('notes.edit.groupsLabel', { defaultValue: '分组' })}
-        </Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.groupChips}
-        >
+        <View style={s.groupLabelRow}>
+          <Ionicons
+            name="folder-open-outline"
+            size={14}
+            color={colors.textSecondary}
+          />
+          <Text style={[s.sectionTitle, d.sectionTitle]}>
+            {t('notes.edit.groupsLabel', { defaultValue: '分组' })}
+          </Text>
+        </View>
+        <View style={s.groupChipsWrap}>
           {availableGroups.map((group) => {
             const selected = selectedGroupIds.includes(group.id);
             return (
@@ -277,20 +280,7 @@ export default function EditNoteScreen() {
               </Pressable>
             );
           })}
-        </ScrollView>
-        {selectedGroups.length > 0 ? (
-          <View style={s.selectedGroups}>
-            {selectedGroups.map((group) => (
-              <View key={group.id} style={[s.selectedGroupTag, d.groupChipActive]}>
-                <Text style={[s.selectedGroupText, d.groupChipTextActive]}>{group.name}</Text>
-              </View>
-            ))}
-          </View>
-        ) : (
-          <Text style={[s.sectionTitle, d.sectionTitle]}>
-            {t('notes.edit.noGroups', { defaultValue: '未加入任何分组' })}
-          </Text>
-        )}
+        </View>
       </View>
 
       <View style={s.editorWrap}>
@@ -330,7 +320,8 @@ const s = StyleSheet.create({
   doneBtnText: { ...Typography.body, fontWeight: '600' },
   titleInput: {
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
     fontSize: 28,
     fontWeight: '700',
     lineHeight: 36,
@@ -339,38 +330,38 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
+    paddingTop: 2,
     paddingBottom: Spacing.sm,
     gap: Spacing.xs,
   },
   dateText: { ...Typography.caption },
   groupSection: {
     paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.sm,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.md,
     gap: Spacing.sm,
   },
+  groupLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
   sectionTitle: { ...Typography.small },
-  groupChips: { gap: Spacing.sm, paddingRight: Spacing.lg },
+  groupChipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+    rowGap: Spacing.xs,
+  },
   groupChip: {
     borderWidth: 1,
-    borderRadius: Radius.pill,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 8,
+    borderRadius: 6,
+    paddingHorizontal: Spacing.sm + 2,
+    paddingVertical: 5,
   },
   groupChipActive: {
     borderWidth: 1,
   },
   groupChipText: { ...Typography.small, fontWeight: '600' },
-  selectedGroups: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.xs,
-  },
-  selectedGroupTag: {
-    borderWidth: 1,
-    borderRadius: Radius.pill,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 6,
-  },
-  selectedGroupText: { ...Typography.small, fontWeight: '600' },
   editorWrap: { flex: 1 },
 });

@@ -8,6 +8,9 @@
   "common": {
     "save": "Save",
     "saving": "Saving...",
+    "clear": "Clear",
+    "tip": "Notice",
+    "retryLater": "Please try again later",
     "cancel": "Cancel",
     "close": "Close",
     "confirm": "Confirm",
@@ -36,9 +39,9 @@
     "hoursAgo": "{{count}}h ago",
     "daysAgo": "{{count}}d ago",
     "errorOccurred": "Operation failed",
-    "networkError": "Network error, please try again"
+    "networkError": "Network error, please try again",
+    "back": "Back"
   },
-
   "auth": {
     "welcomeBack": "Welcome Back",
     "loginSubtitle": "Sign in to your account",
@@ -84,22 +87,21 @@
       "loginFailed": "Login failed, please try again",
       "registerFailed": "Registration failed, please try again",
       "sendCodeFailed": "Failed to send, please try again"
-    }
+    },
+    "hidePassword": "Hide password",
+    "showPassword": "Show password"
   },
-
   "onboarding": {
     "profileTitle": "Complete your profile",
     "profileSubtitle": "Set your avatar, signature, and basic profile before entering windnote.ai.",
     "finish": "Finish and enter"
   },
-
   "tabs": {
     "messages": "Messages",
     "contacts": "Contacts",
     "discover": "Discover",
     "profile": "Me"
   },
-
   "messages": {
     "title": "Messages",
     "all": "All",
@@ -151,7 +153,6 @@
     "inviteGroupMembersAlreadyMembers": "Selected friends are already in this group",
     "inviteGroupMembersNoInvitableFriends": "No friends available to invite"
   },
-
   "notifications": {
     "title": "Notifications",
     "tabInteractive": "Interactions",
@@ -188,7 +189,6 @@
       "loadFailed": "Could not load signups. Please try again"
     }
   },
-
   "chat": {
     "detail": "Chat",
     "messageActions": {
@@ -198,7 +198,8 @@
       "collected": "Saved",
       "collectedHint": "View it in My Collections",
       "collectFailed": "Save failed",
-      "collectFailedHint": "Please try again later"
+      "collectFailedHint": "Please try again later",
+      "copy": "Copy"
     },
     "forward": {
       "title": "Choose a chat",
@@ -336,7 +337,6 @@
       "failedBody": "Failed to set image background. Please try again."
     }
   },
-
   "contacts": {
     "title": "Contacts",
     "searchPlaceholder": "Search contacts...",
@@ -378,7 +378,11 @@
         "requestRejectedByMe": "You rejected {{name}}'s friend request",
         "requestWithdrawnByOther": "{{name}} withdrew the friend request",
         "default": "{{name}} has a new friend activity"
-      }
+      },
+      "cancel": "Withdraw request",
+      "cancelConfirm": "Withdraw",
+      "cancelMessage": "Withdraw this friend request?",
+      "cancelTitle": "Withdraw request"
     },
     "tagsScreen": {
       "title": "Tags",
@@ -435,7 +439,6 @@
       "sendFailed": "Failed to send friend request, please try again"
     }
   },
-
   "discover": {
     "title": "Discover",
     "plaza": "Plaza",
@@ -450,6 +453,7 @@
     "noCirclesFound": "No circles found",
     "memberCount": "{{count}} members",
     "needsApproval": "Approval required",
+    "searchCappedNotice": "Showing the first {{count}} circles — refine your search keywords",
     "joined": "Joined",
     "myCreated": "Created",
     "myManaged": "Managed",
@@ -487,10 +491,19 @@
       "selectedCount": "{{count}}/{{max}} selected",
       "noCircles": "No circles available",
       "maxCircles": "Maximum {{max}} circles"
+    },
+    "commentInput": {
+      "placeholder": "Write a comment...",
+      "replyTo": "Reply to {{nickname}}"
+    },
+    "restrictionBadge": {
+      "fancyNumber": "Fancy ID",
+      "vip": "VIP{{level}}+",
+      "credit": "Credit {{score}}+"
     }
   },
-
   "circle": {
+    "inviteVerifiers": "Invite friends to verify ({{approved}}/{{required}})",
     "detail": "Circle Details",
     "notExist": "Circle not found",
     "loadError": "Failed to load circle info",
@@ -523,7 +536,14 @@
       "alreadyMembers": "The selected friends are already in this circle.",
       "noneSent": "None of the selected friends could be invited. Please check the requirements and try again.",
       "sentAll": "Invited {{count}} friends. Waiting for verification.",
-      "sentPartial": "Invited {{succeeded}}; {{failed}} failed because they may already be members or may not meet the requirements."
+      "sentPartial": "Invited {{succeeded}}; {{failed}} failed because they may already be members or may not meet the requirements.",
+      "fromContacts": "Invite from contacts",
+      "noFriends": "No friends to invite",
+      "noMatches": "No matching friends",
+      "searchPlaceholder": "Search friends",
+      "sendCard": "Send circle card",
+      "submit": "Send invite",
+      "subtitle": "Choose from friends"
     },
     "card": {
       "type": "Circle",
@@ -578,9 +598,28 @@
       "photography": "Photography",
       "work": "Work",
       "trade": "Trade"
-    }
+    },
+    "avatarUpdateFailed": "Failed to update avatar",
+    "changeCover": "Change cover",
+    "coverUpdateFailed": "Failed to update cover",
+    "icon": {
+      "current": "Current icon",
+      "sectionTitle": "Circle icon",
+      "unknownImageFormat": "Unrecognized image format",
+      "upload": "Upload circle icon",
+      "uploading": "Uploading..."
+    },
+    "join": "Join circle",
+    "joinByIdButton": "Join",
+    "joinByIdPlaceholder": "Paste a circle ID to join",
+    "joinFailedTitle": "Failed to join",
+    "joinPending": "Under review",
+    "leave": "Leave circle",
+    "leaveConfirm": "Leave",
+    "leaveFailedTitle": "Failed to leave",
+    "leaveMessage": "Leave this circle?",
+    "leaveTitle": "Leave circle"
   },
-
   "plaza": {
     "manageSignups": "{{count}} signed up",
     "manageSignupsEmpty": "View signups",
@@ -610,9 +649,31 @@
     "tagPlaceholder": "Enter tag keyword",
     "publishFailed": "Publish Failed",
     "cannotView": "Cannot View",
-    "restrictionMessage": "Requires {{requirements}} to view this profile"
+    "restrictionMessage": "Requires {{requirements}} to view this profile",
+    "create": {
+      "allUploadsFailed": "Image upload failed, check your connection and retry",
+      "failedMessage": "Failed to post, please retry",
+      "failedTitle": "Failed to post",
+      "notNoteSet": "None",
+      "noteLabel": "Select note",
+      "title": "New post",
+      "partialUploadsFailed": "{{count}} images failed to upload, please retry"
+    },
+    "deleteFailedMessage": "Please try again",
+    "deleteFailedTitle": "Failed to delete",
+    "deleteMessage": "This can't be undone. Delete anyway?",
+    "deleteTitle": "Delete post",
+    "restriction": {
+      "fancyNumber": "Fancy-ID users",
+      "separator": ", ",
+      "creditAtLeast": "Credit {{score}}+",
+      "vipAtLeast": "VIP{{level}}+"
+    },
+    "signUp": "Sign up",
+    "signedUp": "Signed up",
+    "signupBlockedTitle": "Sign-up unavailable",
+    "signupRestrictionMessage": "To sign up: {{requirements}}"
   },
-
   "moment": {
     "createTitle": "New Moment",
     "contentPlaceholder": "What's on your mind...",
@@ -642,9 +703,16 @@
     "albumTitle": "{{name}}'s Moments",
     "albumTitleFallback": "Moments",
     "changeCover": "Change Cover",
-    "coverUpdateFailed": "Failed to update cover"
+    "coverUpdateFailed": "Failed to update cover",
+    "commentFailedMessage": "Network error, please try again",
+    "commentFailedTitle": "Failed to comment",
+    "deleteCommentMessage": "Delete this comment?",
+    "deleteCommentTitle": "Delete comment",
+    "deleteFailedMessage": "Please try again",
+    "deleteFailedTitle": "Failed to delete",
+    "deleteMessage": "This can't be undone. Delete anyway?",
+    "deleteTitle": "Delete moment"
   },
-
   "invitation": {
     "title": "Verification",
     "notExist": "Verification not found",
@@ -676,9 +744,21 @@
     "overrideApproved": "Approved",
     "joinedCircle": "{{name}} has joined the circle",
     "override": "Override",
-    "noPendingReviews": "No pending applications"
+    "noPendingReviews": "No pending applications",
+    "loadFailed": "Failed to load, please try again",
+    "pendingTitle": "To verify",
+    "noPending": "No pending verification requests",
+    "cardTitle": "{{name}} invited you to verify",
+    "cardCircle": "Vouch to join 「{{circle}}」",
+    "cardFooter": "Tap to verify for them",
+    "waitingDesc": "Waiting for friends to verify ({{approved}}/{{total}}); {{total}} approvals to join",
+    "viewerOnly": "You are not a verifier for this request",
+    "settledRejected": "This request was rejected",
+    "settledApproved": "Approved — joined the circle",
+    "youApproved": "You verified for them",
+    "youRejected": "You rejected this request",
+    "loadFriendsFailed": "Failed to load friends, please try again"
   },
-
   "city": {
     "title": "Select City",
     "searchPlaceholder": "Search cities",
@@ -693,7 +773,6 @@
     "confirmSelection": "Confirm",
     "hint": "Notice"
   },
-
   "profile": {
     "creditScore": "Credit Score",
     "memberCenter": "Membership",
@@ -767,9 +846,10 @@
     "fieldNotEditable": "This field cannot be edited",
     "returnToSettings": "Please return to settings.",
     "systemAnnouncements": "System Announcements",
-    "viewAnnouncements": "Latest"
+    "viewAnnouncements": "Latest",
+    "addIcon": "Add badge",
+    "myIcons": "Badge Collection"
   },
-
   "userProfile": {
     "title": "Profile",
     "loadFailed": "Failed to load profile, showing cached data",
@@ -807,9 +887,10 @@
       "create": "Create",
       "creating": "Creating",
       "empty": "No tags yet. Create one before saving."
-    }
+    },
+    "avCallComingSoon": "Voice and video calls are coming soon. Stay tuned.",
+    "unknownUser": "Unnamed user"
   },
-
   "profileFields": {
     "avatar": "Avatar",
     "editAvatar": "Change Avatar",
@@ -860,7 +941,6 @@
     "month": "{{month}}",
     "day": "{{day}}"
   },
-
   "validation": {
     "nicknameEmpty": "Nickname cannot be empty",
     "nicknameTooLong": "Nickname max 24 characters",
@@ -882,7 +962,6 @@
     "avatarSaveFailed": "Failed to save avatar",
     "saveFailed": "Save failed"
   },
-
   "settingsPage": {
     "profileSection": "Profile",
     "securitySection": "Account & Security",
@@ -894,7 +973,6 @@
     "logout": "Log Out",
     "unsupported": "This feature is not available yet."
   },
-
   "appSettings": {
     "title": "Settings",
     "searchPlaceholder": "Search settings",
@@ -940,7 +1018,6 @@
       }
     }
   },
-
   "systemAnnouncements": {
     "title": "System Announcements",
     "subtitle": "Latest windnote.ai app information, release updates, and patch notes will appear here.",
@@ -960,7 +1037,6 @@
       "body": "Patch notes will cover stability fixes, compatibility improvements, and required security updates."
     }
   },
-
   "settingsDetails": {
     "accountSecurity": {
       "title": "Account & Security",
@@ -1186,7 +1262,6 @@
       "updateBody": "This version will continue to evolve. New security, chat, and circle features will be shared through system notices and release updates."
     }
   },
-
   "shareScreen": {
     "inviteCode": "Invite Code",
     "copyInviteTitle": "Copy Invite Code",
@@ -1197,7 +1272,6 @@
     "copyFallbackMessage": "The system share sheet has been opened, and you can copy the invite code manually",
     "copyMessage": "Invite code: {{code}}"
   },
-
   "groupManagement": {
     "title": "Group Management",
     "createCustomGroup": "Create Custom Group",
@@ -1207,7 +1281,6 @@
     "groupCount": "{{count}} chats",
     "assignChats": "Assign chats to this group"
   },
-
   "vipOptions": {
     "vip1": "VIP 1",
     "vip2": "VIP 2",
@@ -1215,7 +1288,6 @@
     "vip5": "VIP 5",
     "vip8": "VIP 8"
   },
-
   "creditOptions": {
     "above60": "Credit 60+",
     "above70": "Credit 70+",
@@ -1266,5 +1338,165 @@
       "ended": "Ended",
       "expired": "Expired"
     }
+  },
+  "addFriend": {
+    "notFound": "No user found",
+    "placeholder": "Enter their account ID",
+    "searchFailed": "Search failed, please try again",
+    "title": "Add friend"
+  },
+  "notes": {
+    "actions": {
+      "new": "New",
+      "qrCode": "QR code",
+      "share": "Share"
+    },
+    "alerts": {
+      "deleteFailedTitle": "Failed to delete",
+      "deleteGroupFailed": "Failed to delete group, please try again.",
+      "deleteGroupTitle": "Delete group",
+      "groupLimitMessage": "You can create up to {{max}} groups.",
+      "groupLimitTitle": "Group limit reached",
+      "groupNameRequiredMessage": "Enter a group name before adding a group.",
+      "groupNameRequiredTitle": "Enter a group name",
+      "reorderFailedMessage": "Failed to save group order, please try again.",
+      "reorderFailedTitle": "Failed to reorder",
+      "saveFailedTitle": "Failed to save",
+      "saveGroupFailed": "Failed to save group, please try again.",
+      "saveMembershipsFailed": "Failed to save note groups, please try again.",
+      "deleteGroupMessage": "Deleting \"{{name}}\" won't delete its notes — they're just removed from the group."
+    },
+    "detail": {
+      "loadFailed": "Failed to load note, please try again",
+      "notFound": "Note not found"
+    },
+    "edit": {
+      "done": "Done",
+      "editTitle": "Edit note",
+      "groupsLabel": "Groups",
+      "newTitle": "New note",
+      "noGroups": "Not in any group",
+      "saveFailedMessage": "Failed to save, please try again",
+      "saveFailedTitle": "Failed to save",
+      "saving": "Saving...",
+      "titlePlaceholder": "Title"
+    },
+    "editor": {
+      "mediaUploadFailedMessage": "Please try again",
+      "mediaUploadFailedTitle": "Upload failed",
+      "toolbar": {
+        "bulletList": "List",
+        "code": "Code",
+        "heading": "Heading",
+        "imageTitle": "Image",
+        "paragraph": "Body",
+        "videoTitle": "Video"
+      },
+      "videoRejectedTitle": "Video can't be uploaded",
+      "videoTooLargeMessage": "Choose a video under 200MB",
+      "videoTooLongMessage": "Choose a video under 10 minutes"
+    },
+    "empty": {
+      "noMatch": "No matching notes",
+      "noNotes": "No notes yet"
+    },
+    "manageGroups": {
+      "cancelEdit": "Cancel editing",
+      "copy": "\"All\" and \"Ungrouped\" stay first; move frequently used custom groups up front.",
+      "createNew": "Add group",
+      "limitHint": "{{count}}/{{max}} groups created",
+      "namePlaceholder": "Enter a group name, e.g. Shanghai",
+      "saveEdit": "Save changes",
+      "saving": "Saving...",
+      "title": "Manage groups",
+      "noteCount": "{{count}} notes"
+    },
+    "membership": {
+      "empty": "No notes to select",
+      "saveSelection": "Save selection",
+      "saving": "Saving...",
+      "searchPlaceholder": "Search notes",
+      "selectTitle": "Select notes",
+      "copy": "Choose notes to add to \"{{name}}\"."
+    },
+    "searchPlaceholder": "Type what you want to search",
+    "settings": {
+      "cardSaveSection": "Card saving",
+      "confirmCardSave": "Confirm card saving",
+      "cooldownTitle": "Cooling down",
+      "defaultSaveCard": "Save cards by default",
+      "displaySection": "Display",
+      "manualRefreshHint1": "Use this when the list or group count differs from the server.",
+      "manualRefreshHint2": "Tapping re-fetches the note and group lists from the server.",
+      "manualRefreshHint3": "To avoid frequent triggers, a cooldown applies after each refresh.",
+      "manualRefreshTitle": "Manual refresh",
+      "refresh": "Re-fetch",
+      "refreshFailedMessage": "Check your connection and try again.",
+      "refreshFailedTitle": "Refresh failed",
+      "refreshedTitle": "Refreshed",
+      "refreshing": "Refreshing...",
+      "showGroups": "Show group info",
+      "showMedia": "Show media",
+      "showSortToolbar": "Show sort toolbar",
+      "showUngrouped": "Show ungrouped",
+      "title": "Note settings",
+      "cooldownMessage": "Try again in {{remain}}s.",
+      "refreshedMessage": "Groups: {{groupCount}}\nVisible notes: {{noteCount}}"
+    },
+    "share": {
+      "copiedMessage": "Note link copied to clipboard.",
+      "copiedTitle": "Copied",
+      "copyLink": "Copy link",
+      "createFailedMessage": "Couldn't create a share link, please try again.",
+      "createFailedTitle": "Failed to create share link",
+      "failedMessage": "Couldn't open the system share sheet, please try again.",
+      "failedTitle": "Share failed",
+      "linkPending": "Creating share link...",
+      "qrTitle": "Note QR code",
+      "systemShare": "System share",
+      "title": "My notes",
+      "waitingForLink": "Generating link",
+      "message": "{{title}}\n{{url}}",
+      "qrHint": "Scan to open this note list ({{count}})."
+    },
+    "stopgap": {
+      "deletedNotes": "The deleted-notes list is coming soon. Stay tuned.",
+      "title": "Coming soon"
+    },
+    "title": "My notes",
+    "unlisted": "Unlisted",
+    "format": {
+      "fullDate": "{{year}}-{{month}}-{{day}} · {{weekday}}",
+      "groupOverflow": "{{first}}, {{second}} +{{extra}}",
+      "imageCount": "{{count}} images",
+      "videoCount": "{{count}} videos"
+    },
+    "stats": "{{groupCount}} groups · {{noteCount}} notes",
+    "tabs": {
+      "all": "All {{count}}",
+      "ungrouped": "Ungrouped {{count}}"
+    }
+  },
+  "search": {
+    "loadFriendsFailed": "Failed to load friends, please try again",
+    "noResults": "No results",
+    "placeholder": "Search...",
+    "placeholderHint": "Type a keyword to search chats and friends",
+    "sections": {
+      "chats": "Chats",
+      "friends": "Friends"
+    },
+    "title": "Search"
+  },
+  "share": {
+    "title": {
+      "favorite": "Choose a favorite",
+      "friend": "Choose a friend card",
+      "note": "Choose a note",
+      "quickReply": "Quick replies"
+    }
+  },
+  "profileDisplay": {
+    "emptySignature": "Your bio will appear here once you complete your profile."
   }
 }

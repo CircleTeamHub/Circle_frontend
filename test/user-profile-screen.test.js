@@ -331,10 +331,10 @@ test('user profile route helpers preserve scope for the request form', () => {
     },
   );
   assert.deepEqual(
-    JSON.parse(JSON.stringify(getEditFriendRemarkHref('contacts', 'user-1', '小李'))),
+    JSON.parse(JSON.stringify(getEditFriendRemarkHref('contacts', 'user-1', 'old-remark', 'profile-name'))),
     {
       pathname: '/(tabs)/contacts/user/[id]/remark',
-      params: { id: 'user-1', name: '小李' },
+      params: { id: 'user-1', name: 'old-remark', fallbackName: 'profile-name' },
     },
   );
   assert.deepEqual(
@@ -380,13 +380,18 @@ test('user profile screen uses account label, meta chips, badge row, and conditi
   assert.match(source, /const \[friendStatus, setFriendStatus\]/);
   assert.match(source, /const \[friendSettings, setFriendSettings\]/);
   assert.match(source, /const showAddFriendButton = canSendFriendRequest/);
-  assert.match(source, /const displayName = friendSettings\?\.remark\?\.trim\(\)/);
+  assert.match(source, /const remarkOverride = useFriendRemarkStore/);
+  assert.match(source, /remarkOverride === undefined/);
+  assert.match(source, /friendSettings\?\.remark\?\.trim\(\) \|\| profile\.remarkHint \|\| profile\.name/);
+  assert.match(source, /remarkOverride\.remark \?\? remarkOverride\.fallbackName \?\? profile\.name/);
   assert.match(source, /const infoRowItems = useMemo/);
   assert.match(source, /ProfileActionRow/);
   assert.doesNotMatch(source, /actionSection:\s*{\s*borderTopWidth:/);
   assert.match(source, /actionButton:/);
-  assert.match(source, /shadowOpacity:/);
-  assert.match(source, /elevation:/);
+  // 音视频通话按钮与发起聊天同款 primary 填充：去掉了原先的次级描边样式。
+  assert.doesNotMatch(source, /secondaryButton:/);
+  assert.doesNotMatch(source, /secondaryActionButton:/);
+  assert.doesNotMatch(source, /secondaryActionText:/);
   assert.match(source, /value: remarkValue/);
   assert.match(source, /value: tagValue/);
   assert.match(source, /location-outline/);
@@ -395,6 +400,10 @@ test('user profile screen uses account label, meta chips, badge row, and conditi
   assert.match(source, /t\('userProfile\.addFriendRequest'\)/);
   assert.match(source, /const handleOpenChat = useCallback/);
   assert.match(source, /const conversation = await getOrCreateSingleConversation\(profileId\)/);
+  assert.match(source, /const mountedRef = useRef\(true\)/);
+  assert.match(source, /mountedRef\.current = false/);
+  assert.match(source, /const conversation = await getOrCreateSingleConversation\(profileId\);[\s\S]*if \(!mountedRef\.current\) return;[\s\S]*router\.push/);
+  assert.match(source, /if \(mountedRef\.current\) setOpeningChat\(false\)/);
   assert.match(source, /shouldOpenChatPreview/);
   assert.match(source, /if \(shouldOpenChatPreview\(error\)\)/);
   assert.match(source, /router\.push\(\s*getChatDetailHref\(/);
@@ -408,7 +417,7 @@ test('user profile screen uses account label, meta chips, badge row, and conditi
   assert.doesNotMatch(source, /setFriendStatus\('NONE'\)/);
 });
 
-test('user profile screen wires the top-right menu into chat info for accepted friends', () => {
+test('user profile screen wires the more-info row into chat info for accepted friends', () => {
   const filePath = path.join(
     process.cwd(),
     'src/features/user/screens/UserProfileScreen.tsx',
@@ -416,11 +425,13 @@ test('user profile screen wires the top-right menu into chat info for accepted f
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /const canOpenChatInfo =[\s\S]*friendStatus === 'ACCEPTED'/);
-  assert.match(source, /<NavHeader[\s\S]*title=\{t\('userProfile\.title'\)\}[\s\S]*rightIcon=\{canOpenChatInfo \? 'information-circle-outline' : undefined\}[\s\S]*onRightPress=\{canOpenChatInfo \? handleOpenChatInfo : undefined\}/);
+  // chat-info 入口收敛到「更多信息」行（仅对已添加好友可点），不再是导航栏右上角菜单。
+  assert.match(source, /id === 'moreInfo' && canOpenChatInfo/);
+  assert.match(source, /onPress: handleOpenChatInfo/);
   assert.match(source, /const handleOpenChatInfo = useCallback/);
   assert.match(source, /friendStatus !== 'ACCEPTED'/);
   assert.match(source, /getChatInfoHref/);
-  assert.match(source, /router\.push\(getChatInfoHref\(scope, profileId, displayName\)\)/);
+  assert.match(source, /router\.push\(getChatInfoHref\(scope, profileId, displayName, undefined, profile\.name\)\)/);
 });
 
 test('scope-specific chat info route files exist for contacts and profile stacks', () => {

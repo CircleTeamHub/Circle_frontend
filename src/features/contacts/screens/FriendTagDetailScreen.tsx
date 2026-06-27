@@ -10,7 +10,7 @@ import { getUserProfileHref } from '@/features/user/utils/routes';
 import { fetchFriendsByTag, type FriendProfile } from '@/services/api/friends';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -73,12 +73,16 @@ export default function FriendTagDetailScreen() {
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const mountedRef = useRef(true);
+  const refreshInFlightRef = useRef(false);
 
   const tagId = typeof params.id === 'string' ? params.id : '';
   const tagName = typeof params.name === 'string' ? params.name : t('contacts.tagDetail.fallbackTitle');
 
   const loadFriends = useCallback(async () => {
     if (!tagId) {
+      if (!mountedRef.current) return;
       setError(t('contacts.tagDetail.notExist'));
       setLoading(false);
       return;
@@ -88,17 +92,38 @@ export default function FriendTagDetailScreen() {
 
     try {
       const nextFriends = await fetchFriendsByTag(tagId);
+      if (!mountedRef.current) return;
       setFriends(nextFriends);
       setError(null);
     } catch {
+      if (!mountedRef.current) return;
       setError(t('contacts.tagDetail.loadFailed'));
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [t, tagId]);
 
   useEffect(() => {
     loadFriends();
+  }, [loadFriends]);
+
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
+
+  const handleRefreshFriends = useCallback(async () => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    setRefreshing(true);
+    try {
+      await loadFriends();
+    } finally {
+      refreshInFlightRef.current = false;
+      if (mountedRef.current) setRefreshing(false);
+    }
   }, [loadFriends]);
 
   const sections = useMemo(() => buildContactSections(friends), [friends]);
@@ -195,7 +220,7 @@ export default function FriendTagDetailScreen() {
     [d],
   );
 
-  const emptyState = loading ? (
+  const emptyState = loading && friends.length === 0 ? (
     <View style={s.stateBlock}>
       <ActivityIndicator color={colors.primary} />
       <Text style={d.stateText}>{t('contacts.tagDetail.loading')}</Text>
@@ -231,6 +256,8 @@ export default function FriendTagDetailScreen() {
         contentContainerStyle={s.content}
         showsVerticalScrollIndicator={false}
         stickySectionHeadersEnabled={false}
+        refreshing={refreshing}
+        onRefresh={handleRefreshFriends}
       />
     </View>
   );

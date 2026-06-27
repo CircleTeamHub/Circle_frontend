@@ -3,6 +3,7 @@ import {
   View,
   Text,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Alert,
@@ -233,10 +234,13 @@ export default function CircleDetailScreen() {
   const [iconSaving, setIconSaving] = useState(false);
   const [enteringGroupChat, setEnteringGroupChat] = useState(false);
   const [joining, setJoining] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshInFlightRef = useRef(false);
   const [myInvitation, setMyInvitation] = useState<CircleInvitation | null>(
     null,
   );
   const mountedRef = useRef(true);
+  const circleRequestRef = useRef(0);
   const invitationRequestRef = useRef(0);
 
   // 进入圈子群聊：先解析出会话 ID（否则聊天页拿不到 conversationID 会停在预览模式），
@@ -281,21 +285,31 @@ export default function CircleDetailScreen() {
     };
   }, []);
 
-  const loadCircle = useCallback(async () => {
+  const loadCircle = useCallback(async (options?: { showInitialLoading?: boolean }) => {
     if (!id) {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
       return;
     }
 
-    setLoading(true);
+    const requestId = ++circleRequestRef.current;
+    const showInitialLoading = options?.showInitialLoading ?? true;
+    if (showInitialLoading) setLoading(true);
     try {
       const data = await fetchCircleDetail(id);
+      if (!mountedRef.current || requestId !== circleRequestRef.current) return;
       setCircle(data);
     } catch {
+      if (!mountedRef.current || requestId !== circleRequestRef.current) return;
       Alert.alert(t('circle.error'), t('circle.loadError'));
       setCircle(null);
     } finally {
-      setLoading(false);
+      if (
+        mountedRef.current &&
+        requestId === circleRequestRef.current &&
+        showInitialLoading
+      ) {
+        setLoading(false);
+      }
     }
   }, [id, t]);
 
@@ -328,6 +342,21 @@ export default function CircleDetailScreen() {
       void loadMyInvitation();
     }, [loadCircle, loadMyInvitation]),
   );
+
+  const handleRefreshCircle = useCallback(async () => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        loadCircle({ showInitialLoading: false }),
+        loadMyInvitation(),
+      ]);
+    } finally {
+      refreshInFlightRef.current = false;
+      if (mountedRef.current) setRefreshing(false);
+    }
+  }, [loadCircle, loadMyInvitation]);
 
   const isOwner = circle?.myRole === 'OWNER';
   const isOwnerOrAdmin = isOwner || circle?.myRole === 'ADMIN';
@@ -503,10 +532,10 @@ export default function CircleDetailScreen() {
       textPlaceholder: { color: colors.textSecondary },
       summaryLabel: { color: colors.text },
       summaryValue: { color: colors.textSecondary },
-      categoryChip: { backgroundColor: colors.primaryLight },
-      categoryText: { color: colors.primary, ...Typography.caption },
-      tagChip: { backgroundColor: colors.primaryLight },
-      tagText: { color: colors.primary, ...Typography.caption },
+      categoryChip: { backgroundColor: colors.primary },
+      categoryText: { color: colors.white, ...Typography.caption },
+      tagChip: { backgroundColor: colors.primary },
+      tagText: { color: colors.white, ...Typography.caption },
       avatarEditBadge: { backgroundColor: colors.primary },
       coverEditBadge: { backgroundColor: 'rgba(0,0,0,0.45)' },
       chatBtn: { backgroundColor: colors.primary },
@@ -520,7 +549,7 @@ export default function CircleDetailScreen() {
         borderColor: colors.surfaceBorder,
       },
       iconAssetCardSelected: {
-        backgroundColor: colors.primaryLight,
+        backgroundColor: colors.primary,
         borderColor: colors.primary,
       },
     }),
@@ -568,6 +597,13 @@ export default function CircleDetailScreen() {
         style={s.scroll}
         contentContainerStyle={s.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefreshCircle}
+            tintColor={colors.primary}
+          />
+        }
       >
         {/* ── Cover banner ── */}
         <Pressable

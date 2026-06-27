@@ -236,6 +236,7 @@ export default function ChatInfoScreen() {
     name?: string;
     title?: string;
     conversationID?: string;
+    fallbackName?: string;
     conversationType?: 'private' | 'group';
     originScope?: string;
   }>();
@@ -271,6 +272,10 @@ export default function ChatInfoScreen() {
   const friendId = rawFriendId ? fromImUserId(rawFriendId) : '';
   const friendName =
     typeof params.name === 'string' ? params.name : typeof params.title === 'string' ? params.title : t('chat.friend');
+  const friendFallbackName =
+    typeof params.fallbackName === 'string' && params.fallbackName.trim()
+      ? params.fallbackName.trim()
+      : friendName;
   const routeSourceID = friendId;
   const rawRouteSourceID = rawFriendId;
   const originScope =
@@ -577,8 +582,8 @@ export default function ChatInfoScreen() {
       return;
     }
 
-    router.push(getEditFriendRemarkHref('messages', friendId, friendName));
-  }, [friendId, friendName]);
+    router.push(getEditFriendRemarkHref('messages', friendId, friendName, friendFallbackName));
+  }, [friendFallbackName, friendId, friendName]);
 
   const handleOpenTags = useCallback(() => {
     if (!friendId) {
