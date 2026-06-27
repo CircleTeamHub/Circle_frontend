@@ -85,9 +85,13 @@ const TabIcon = memo(function TabIcon({
 // 隐藏时把整条 bar 向下滑出屏幕的距离（pill 高度 + 底部间距 + 余量）。
 const TAB_BAR_HIDDEN_OFFSET = 140;
 // bar 几何：常量与下面 tabBar 样式共用，pill 宽度按屏宽算出来「塞满」每一格。
+const TAB_BAR_HEIGHT = 56;
+const TAB_BAR_RADIUS = TAB_BAR_HEIGHT / 2;
+const TAB_ACTIVE_PILL_HEIGHT = TAB_BAR_HEIGHT;
+const TAB_ACTIVE_PILL_RADIUS = TAB_BAR_RADIUS;
 const TAB_BAR_MARGIN_H = 40; // 左右外边距（保持原始 bar 尺寸，勿改）
 const TAB_BAR_PADDING_H = 0; // 内边距设 0：首尾药丸贴到 bar 内沿
-const TAB_PILL_GAP = 4; // 相邻药丸间距
+const TAB_PILL_GAP = 0; // 选中药丸必须贴合每个 tab slot，避免首尾溢出
 // 滑入/滑出时长：偏短让返回主页时 bar 弹得更干脆。
 const TAB_BAR_ANIM_DURATION = 200;
 // ease-out：一开始就快速移动，避免默认 ease-in-out 慢启动造成的「延迟才弹」错觉。
@@ -138,9 +142,12 @@ export default function TabLayout() {
   // 按屏宽算出每个高亮药丸的宽度，让它们填满整条 bar（首尾也顶到端头附近）。
   const { width: windowWidth } = useWindowDimensions();
   const tabSlotWidth =
-    (windowWidth - TAB_BAR_MARGIN_H * 2 - 2 - TAB_BAR_PADDING_H * 2) /
+    (windowWidth - TAB_BAR_MARGIN_H * 2 - TAB_BAR_PADDING_H * 2) /
     TAB_KEYS.length;
-  const pillWidth = Math.max(56, Math.round(tabSlotWidth - TAB_PILL_GAP));
+  const pillWidth = Math.max(
+    TAB_ACTIVE_PILL_HEIGHT,
+    Math.round(tabSlotWidth - TAB_PILL_GAP),
+  );
   const { messagesUnread, contactsUnread, discoverUnread, profileUnread } =
     useTabBadgeStore(useShallow((state) => ({
       messagesUnread: state.messagesUnread,
@@ -163,10 +170,11 @@ export default function TabLayout() {
       // 整圈描边：让浮动药丸在与背景同色调（尤其暗色模式）时也能看清边界。
       borderWidth: 1,
       borderColor: colors.surfaceBorder,
-      height: 56,
-      borderRadius: 28,
+      height: TAB_BAR_HEIGHT,
+      borderRadius: TAB_BAR_RADIUS,
       marginHorizontal: TAB_BAR_MARGIN_H,
       marginBottom: 28,
+      overflow: 'hidden' as const,
       // 定位改由 tabBarWrapper 负责，这里保持在文档流内以便容器获得高度、
       // translateY 能正确带动整条 bar。
       position: 'relative' as const,
@@ -184,15 +192,17 @@ export default function TabLayout() {
     tabBarItem: {
       justifyContent: 'center' as const,
       alignItems: 'center' as const,
-      paddingTop: 6,
+      height: TAB_BAR_HEIGHT,
+      paddingTop: 0,
+      overflow: 'hidden' as const,
     },
     tabIcon: {
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
       // 圆角=半高 → 选中高亮是完整胶囊（pill），左右全圆，和 tab 栏端头同款形状。
-      borderRadius: 23,
+      borderRadius: TAB_ACTIVE_PILL_RADIUS,
       // 宽度按屏宽动态算（填满每格），见 pillWidth；高度保持在 bar 内不溢出。
-      height: 46,
+      height: TAB_ACTIVE_PILL_HEIGHT,
       gap: 2,
       position: 'relative' as const,
     },

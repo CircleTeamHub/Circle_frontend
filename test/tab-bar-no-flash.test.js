@@ -34,3 +34,16 @@ test('tab bar 通过 Reanimated 动画滑入/滑出，而非瞬间 display 切�
   // 隐藏时禁用触摸，避免 off-screen 的 bar 仍捕获点击
   assert.match(layout, /pointerEvents/);
 });
+
+test('active tab pill uses the same outer geometry as the floating tab bar', () => {
+  const layout = read('app/(tabs)/_layout.tsx');
+
+  assert.match(layout, /const TAB_BAR_HEIGHT = 56/);
+  assert.match(layout, /const TAB_BAR_RADIUS = TAB_BAR_HEIGHT \/ 2/);
+  assert.match(layout, /const TAB_ACTIVE_PILL_HEIGHT = TAB_BAR_HEIGHT/);
+  assert.match(layout, /const TAB_ACTIVE_PILL_RADIUS = TAB_BAR_RADIUS/);
+  assert.match(layout, /const TAB_PILL_GAP = 0/);
+  assert.match(layout, /overflow: 'hidden' as const/);
+  assert.match(layout, /height: TAB_ACTIVE_PILL_HEIGHT/);
+  assert.match(layout, /borderRadius: TAB_ACTIVE_PILL_RADIUS/);
+});
