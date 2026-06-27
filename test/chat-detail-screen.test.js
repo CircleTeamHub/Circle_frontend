@@ -39,7 +39,7 @@ test('chat detail screen supports preview mode without an IM conversation', () =
   assert.match(source, /const isPreviewMode = !conversationID/);
   assert.match(source, /当前仅预览聊天界面/);
   assert.match(source, /editable=\{!isPreviewMode\}/);
-  assert.match(source, /disabled=\{sending \|\| isPreviewMode\}/);
+  assert.match(source, /disabled=\{sending \|\| isPreviewMode \|\| isVoiceRecording\}/);
 });
 
 test('chat detail screen wires a tappable emoji picker into the composer', () => {
@@ -138,6 +138,36 @@ test('chat detail screen logs text send failures without logging message bodies'
   }
 });
 
+test('chat detail guards async send UI state after unmount', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(source, /const mountedRef = useRef\(true\)/);
+  assert.match(source, /mountedRef\.current = false/);
+  for (const message of [
+    '消息发送失败，请重试',
+    '录音启动失败，请重试',
+    '语音发送失败，请重试',
+    '位置发送失败，请重试',
+    '图片发送失败，请重试',
+    '笔记发送失败，请重试',
+    '名片发送失败，请重试',
+    '收藏内容发送失败，请重试',
+    '转账卡片发送失败，但积分已扣减',
+  ]) {
+    const index = source.indexOf(`setSendError('${message}')`);
+    assert.notEqual(index, -1, `${message} missing`);
+    const guardWindow = source.slice(Math.max(0, index - 180), index);
+    assert.match(guardWindow, /mountedRef\.current/, `${message} should be mounted-guarded`);
+  }
+  assert.match(source, /if \(mountedRef\.current\) setVoiceActionBusy\(false\)/);
+  assert.match(source, /if \(mountedRef\.current\) setCancelArmed\(false\)/);
+  assert.match(source, /if \(mountedRef\.current\) setDraft\(''\)/);
+  assert.match(source, /if \(mountedRef\.current\) setSending\(false\)/);
+});
+
 test('chat detail attempts non-blocking history restore after initial message load', () => {
   const filePath = path.join(
     process.cwd(),
@@ -201,8 +231,46 @@ test('chat detail snapshots voice file uri before stopping the native recorder',
   assert.doesNotMatch(source, /statusAfterStop/);
   assert.match(
     source,
-    /const statusBeforeStop = voiceRecorder\.getStatus\(\);\s*\n\s*const soundPath =\s*\n\s*voiceRecorder\.uri \?\? statusBeforeStop\.url;\s*\n\s*await voiceRecorder\.stop\(\);/,
+    /const statusBeforeStop = voiceRecorder\.getStatus\(\);\s*\n\s*const soundPath = voiceRecorder\.uri \?\? statusBeforeStop\.url;\s*\n\s*await voiceRecorder\.stop\(\);/,
   );
+});
+
+test('chat detail cancels a pending async voice start when the user releases early', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatDetailScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /voicePressActiveRef/);
+  assert.match(source, /voiceRecordSessionRef/);
+  assert.match(source, /const recordSession = \+\+voiceRecordSessionRef\.current/);
+  assert.match(source, /recordSession !== voiceRecordSessionRef\.current/);
+  assert.match(source, /restoreRecordingAudioMode\(\);[\s\S]*return;/);
+});
+
+test('chat detail serializes async voice starts so stale sessions cannot tear down a newer recording', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(source, /voiceStartInProgressRef/);
+  assert.match(source, /voiceStartInProgressRef\.current = true/);
+  assert.match(source, /voiceStartInProgressRef\.current = false/);
+  assert.match(
+    source,
+    /if \(!voicePressActiveRef\.current \|\| recordSession !== voiceRecordSessionRef\.current\) \{\s*return;\s*\}\s*await setAudioModeAsync/,
+  );
+  assert.match(
+    source,
+    /recordingAudioModeSessionRef\.current = recordSession;\s*if \(!voicePressActiveRef\.current \|\| recordSession !== voiceRecordSessionRef\.current\) \{\s*restoreRecordingAudioMode\(\);/,
+  );
+  assert.match(source, /recordingAudioModeSessionRef\.current === recordSession/);
+  const finishBeforeEarlyReturn = source.match(
+    /const finishHoldRecording = useCallback[\s\S]*?if \(!isRecordingRef\.current && voiceRecordingStartedAt == null\)/,
+  )?.[0] ?? '';
+  assert.doesNotMatch(finishBeforeEarlyReturn, /voiceStartInProgressRef\.current = false/);
 });
 
 test('chat detail opens sent note cards from group chats', () => {

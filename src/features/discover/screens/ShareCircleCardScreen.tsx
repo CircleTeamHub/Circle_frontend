@@ -91,6 +91,7 @@ export default function ShareCircleCardScreen() {
   );
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
+  const mountedRef = useRef(true);
   const inFlightRef = useRef(false);
   const sendingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -104,10 +105,16 @@ export default function ShareCircleCardScreen() {
   const clearSendingState = useCallback(() => {
     clearSendingTimeout();
     inFlightRef.current = false;
-    setSendingConversationID('');
+    if (mountedRef.current) setSendingConversationID('');
   }, [clearSendingTimeout]);
 
-  useEffect(() => clearSendingTimeout, [clearSendingTimeout]);
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+      clearSendingTimeout();
+    },
+    [clearSendingTimeout],
+  );
 
   useEffect(() => {
     if (rawConversations.length > 0) {
@@ -178,6 +185,7 @@ export default function ShareCircleCardScreen() {
                   circleId,
                   conversationID: conversation.id,
                 });
+                if (!mountedRef.current) return;
                 // 只清掉「发送中」的 UI 态并提示用户；保留 inFlightRef 锁，
                 // 避免真实发送仍在飞行时被再次点击造成重复发送。锁的释放交给
                 // 下方 .finally(clearSendingState)，等真正的发送 settle 再放开。
@@ -195,6 +203,7 @@ export default function ShareCircleCardScreen() {
                 avatarUrl: circleAvatar,
               })
                 .then(() => {
+                  if (!mountedRef.current) return;
                   Alert.alert(
                     t('circle.shareCard.sentTitle', {
                       defaultValue: '已发送',
@@ -217,6 +226,7 @@ export default function ShareCircleCardScreen() {
                     message:
                       error instanceof Error ? error.message : String(error),
                   });
+                  if (!mountedRef.current) return;
                   Alert.alert(
                     t('circle.shareCard.failedTitle', {
                       defaultValue: '发送失败',

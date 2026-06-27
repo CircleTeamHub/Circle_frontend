@@ -240,6 +240,7 @@ export default function CircleDetailScreen() {
     null,
   );
   const mountedRef = useRef(true);
+  const circleRequestRef = useRef(0);
   const invitationRequestRef = useRef(0);
 
   // 进入圈子群聊：先解析出会话 ID（否则聊天页拿不到 conversationID 会停在预览模式），
@@ -284,21 +285,31 @@ export default function CircleDetailScreen() {
     };
   }, []);
 
-  const loadCircle = useCallback(async () => {
+  const loadCircle = useCallback(async (options?: { showInitialLoading?: boolean }) => {
     if (!id) {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
       return;
     }
 
-    setLoading(true);
+    const requestId = ++circleRequestRef.current;
+    const showInitialLoading = options?.showInitialLoading ?? true;
+    if (showInitialLoading) setLoading(true);
     try {
       const data = await fetchCircleDetail(id);
+      if (!mountedRef.current || requestId !== circleRequestRef.current) return;
       setCircle(data);
     } catch {
+      if (!mountedRef.current || requestId !== circleRequestRef.current) return;
       Alert.alert(t('circle.error'), t('circle.loadError'));
       setCircle(null);
     } finally {
-      setLoading(false);
+      if (
+        mountedRef.current &&
+        requestId === circleRequestRef.current &&
+        showInitialLoading
+      ) {
+        setLoading(false);
+      }
     }
   }, [id, t]);
 
@@ -337,10 +348,13 @@ export default function CircleDetailScreen() {
     refreshInFlightRef.current = true;
     setRefreshing(true);
     try {
-      await Promise.all([loadCircle(), loadMyInvitation()]);
+      await Promise.all([
+        loadCircle({ showInitialLoading: false }),
+        loadMyInvitation(),
+      ]);
     } finally {
       refreshInFlightRef.current = false;
-      setRefreshing(false);
+      if (mountedRef.current) setRefreshing(false);
     }
   }, [loadCircle, loadMyInvitation]);
 

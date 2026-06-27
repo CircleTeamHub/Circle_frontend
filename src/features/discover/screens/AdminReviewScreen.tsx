@@ -62,15 +62,29 @@ export default function AdminReviewScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const mountedRef = useRef(true);
+  const requestRef = useRef(0);
   const refreshInFlightRef = useRef(false);
+
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
 
   const loadData = useCallback(async () => {
     if (!circleId) return;
+    const requestId = requestRef.current + 1;
+    requestRef.current = requestId;
+    const isActive = () => mountedRef.current && requestId === requestRef.current;
     setLoadError(null);
     try {
       const data = await fetchPendingInvitationsForCircle(circleId);
+      if (!isActive()) return;
       setInvitations(data);
     } catch (error) {
+      if (!isActive()) return;
       setLoadError(
         t('invitation.loadFailed', { defaultValue: '加载失败，请稍后重试' }),
       );
@@ -78,7 +92,7 @@ export default function AdminReviewScreen() {
         console.warn('[AdminReviewScreen] fetchPendingInvitationsForCircle failed', error);
       }
     } finally {
-      setLoading(false);
+      if (isActive()) setLoading(false);
     }
   }, [circleId, t]);
 
@@ -94,7 +108,7 @@ export default function AdminReviewScreen() {
       await loadData();
     } finally {
       refreshInFlightRef.current = false;
-      setRefreshing(false);
+      if (mountedRef.current) setRefreshing(false);
     }
   }, [loadData]);
 

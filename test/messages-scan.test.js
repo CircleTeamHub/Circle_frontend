@@ -26,6 +26,13 @@ test('messages scan screen uses expo-camera with QR-only scanning and permission
     app.expo.ios.infoPlist.NSCameraUsageDescription,
     /QR|二维码|scan|扫码|相机/i,
   );
+  const cameraPlugin = app.expo.plugins.find(
+    (plugin) => Array.isArray(plugin) && plugin[0] === 'expo-camera',
+  );
+  assert.equal(
+    cameraPlugin[1].cameraPermission,
+    app.expo.ios.infoPlist.NSCameraUsageDescription,
+  );
   assert.match(source, /from 'expo-camera'/);
   assert.match(source, /CameraView/);
   assert.match(source, /useCameraPermissions/);

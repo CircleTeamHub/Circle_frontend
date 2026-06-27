@@ -50,6 +50,10 @@ test('NotesScreen opens a QR sheet for the managed share link', () => {
   assert.match(screenSrc, /shareUrl=\{shareLink\?\.url \?\? ''\}/);
   assert.match(screenSrc, /loading=\{shareLinkLoading\}/);
   assert.match(screenSrc, /errorMessage=\{shareLinkError\}/);
+  assert.match(screenSrc, /if \(mountedRef\.current\) setShareLink\(nextShareLink\)/);
+  assert.match(screenSrc, /if \(mountedRef\.current\) setShareLinkError\(message\)/);
+  assert.match(screenSrc, /if \(mountedRef\.current\) setShareLinkLoading\(false\)/);
+  assert.match(screenSrc, /nextShareLink = await ensureShareLink\(\);[\s\S]*if \(!mountedRef\.current\) return;[\s\S]*Share\.share/);
   assert.doesNotMatch(screenSrc, /notes\.stopgap\.qrCode/);
 
   assert.match(sheetSrc, /react-native-qrcode-svg/);
@@ -80,6 +84,7 @@ test('NotesScreen refreshes notes and groups when returning from note edits', ()
   const src = read('src/features/notes/screens/NotesScreen.tsx');
   assert.match(src, /useFocusEffect/);
   assert.match(src, /void load\(\)/);
+  assert.match(src, /if \(mountedRef\.current\) setLoading\(false\)/);
   assert.doesNotMatch(src, /useEffect\(\(\) => \{\s*let cancelled = false;[\s\S]*load\(\)\.catch/);
 });
 
@@ -88,11 +93,14 @@ test('NotesScreen supports pull-to-refresh for notes and groups', () => {
 
   assert.match(src, /const \[refreshing, setRefreshing\] = useState\(false\)/);
   assert.match(src, /handleRefreshNotes/);
+  assert.match(src, /const mountedRef = useRef\(true\)/);
+  assert.match(src, /mountedRef\.current = false/);
   assert.match(src, /refreshInFlightRef/);
   assert.match(src, /if \(refreshInFlightRef\.current\) return;/);
   assert.match(src, /setRefreshing\(true\)/);
   assert.match(src, /await load\(\)/);
-  assert.match(src, /finally\s*\{[\s\S]{0,80}setRefreshing\(false\)/);
+  assert.match(src, /if \(!mountedRef\.current\) return;/);
+  assert.match(src, /if \(mountedRef\.current\) setRefreshing\(false\)/);
   assert.match(src, /refreshing=\{refreshing\}/);
   assert.match(src, /onRefresh=\{handleRefreshNotes\}/);
 });

@@ -60,7 +60,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "允许风信使用相机扫描二维码。",
+          "cameraPermission": "允许风信使用相机拍照发送和扫描二维码。",
           "microphonePermission": "允许风信使用麦克风录制语音消息并进行语音通话。",
           "recordAudioAndroid": false
         }

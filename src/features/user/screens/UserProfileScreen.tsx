@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, Alert } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -40,6 +40,7 @@ import {
 } from '@/services/api/friends';
 import { fetchUserProfile } from '@/services/api/profile';
 import { useAuthStore } from '@/stores/authStore';
+import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 
 const INFO_ROW_IDS = ['moments', 'setRemark', 'tags', 'giftCoins', 'moreInfo'] as const;
 const NON_FRIEND_INFO_ROW_IDS = ['moments', 'giftCoins', 'moreInfo'] as const;
@@ -188,11 +189,22 @@ export default function UserProfileScreen() {
   const [friendStatusLoadError, setFriendStatusLoadError] = useState(false);
   const [friendSettings, setFriendSettings] = useState<FriendSettings | null>(null);
   const [openingChat, setOpeningChat] = useState(false);
+  const mountedRef = useRef(true);
+
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
 
   const profileId =
     typeof params.id === 'string' ? params.id : 'unknown';
   const scope = getUserProfileScopeFromSegments(segments);
   const isCurrentUser = isCurrentUserProfile(profileId, currentUser);
+  const remarkOverride = useFriendRemarkStore((state) =>
+    isCurrentUser ? undefined : state.remarks[profileId],
+  );
   // 之前的 fallback 经过 USER_PROFILES 字典（生产 bundle 里塞了 8 个写死的模拟用户：
   // "陈思琪" / "张明远" 等 + 假手机号 + Unsplash 头像）。删掉了字典；改用一个最小化的
   // synthesized fallback 直到 fetchUserProfile 完成。
@@ -359,11 +371,17 @@ export default function UserProfileScreen() {
 
   const profile = remoteProfile ?? fallbackProfile;
   const profileMetaItems = getProfileMetaItems(profile);
-  const displayName = friendSettings?.remark?.trim() || profile.remarkHint || profile.name;
+  const displayName =
+    remarkOverride === undefined
+      ? friendSettings?.remark?.trim() || profile.remarkHint || profile.name
+      : remarkOverride.remark ?? remarkOverride.fallbackName ?? profile.name;
   const tagValue = friendSettings?.assignedTags.length
     ? friendSettings.assignedTags.map((tag) => tag.name).join('、')
     : t('profileFields.notSet');
-  const remarkValue = friendSettings?.remark?.trim() || t('profileFields.notSet');
+  const remarkValue =
+    remarkOverride === undefined
+      ? friendSettings?.remark?.trim() || t('profileFields.notSet')
+      : remarkOverride.remark ?? t('profileFields.notSet');
   const infoRows = isCurrentUser
     ? SELF_INFO_ROW_IDS
     : friendStatus === 'ACCEPTED'
@@ -392,8 +410,8 @@ export default function UserProfileScreen() {
       return;
     }
 
-    router.push(getEditFriendRemarkHref(scope, profileId, profile.name));
-  }, [friendStatus, profile.name, profileId, router, scope]);
+    router.push(getEditFriendRemarkHref(scope, profileId, displayName, profile.name));
+  }, [displayName, friendStatus, profile.name, profileId, router, scope]);
 
   const handleEditTags = useCallback(() => {
     if (friendStatus !== 'ACCEPTED' || profileId === 'unknown') {
@@ -419,6 +437,7 @@ export default function UserProfileScreen() {
     try {
       setOpeningChat(true);
       const conversation = await getOrCreateSingleConversation(profileId);
+      if (!mountedRef.current) return;
       router.push(
         getChatDetailHref(
           scope,
@@ -429,6 +448,7 @@ export default function UserProfileScreen() {
         ),
       );
     } catch (error) {
+      if (!mountedRef.current) return;
       if (shouldOpenChatPreview(error)) {
         router.push(
           getChatDetailHref(scope, profileId, displayName, profile.avatarUrl),
@@ -441,7 +461,7 @@ export default function UserProfileScreen() {
         error instanceof Error ? error.message : t('common.networkError'),
       );
     } finally {
-      setOpeningChat(false);
+      if (mountedRef.current) setOpeningChat(false);
     }
   }, [displayName, openingChat, profile.avatarUrl, profileId, router, scope, t]);
 
@@ -454,8 +474,8 @@ export default function UserProfileScreen() {
       return;
     }
 
-    router.push(getChatInfoHref(scope, profileId, displayName));
-  }, [displayName, friendStatus, isCurrentUser, profileId, router, scope]);
+    router.push(getChatInfoHref(scope, profileId, displayName, undefined, profile.name));
+  }, [displayName, friendStatus, isCurrentUser, profile.name, profileId, router, scope]);
   const canOpenChatInfo =
     !isCurrentUser && profileId !== 'unknown' && friendStatus === 'ACCEPTED';
 
@@ -528,10 +548,10 @@ export default function UserProfileScreen() {
         ...Typography.h1,
       },
       badge: {
-        backgroundColor: colors.primaryLight,
+        backgroundColor: colors.primary,
       },
       badgeText: {
-        color: colors.primary,
+        color: colors.white,
         ...Typography.tiny,
         fontWeight: '700' as const,
       },

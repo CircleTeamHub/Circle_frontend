@@ -146,6 +146,7 @@ export default function ProfileScreen() {
     user?.displayIcons ?? [],
   );
   const [refreshing, setRefreshing] = useState(false);
+  const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
   const lastRefreshRef = useRef(0);
 
@@ -166,9 +167,9 @@ export default function ProfileScreen() {
         // 渐变由 GradientCover 铺底，这里只作 SVG 挂载前的兜底色
         backgroundColor: "#6E5CF0",
       },
-      memberStatsPanel: {
-        backgroundColor: "rgba(255, 255, 255, 0.14)",
-        borderColor: "rgba(255, 255, 255, 0.20)",
+      memberStat: {
+        backgroundColor: colors.memberTagBg,
+        borderColor: colors.memberTagBg,
       },
       memberStatDivider: {
         backgroundColor: "rgba(255, 255, 255, 0.22)",
@@ -185,7 +186,7 @@ export default function ProfileScreen() {
         fontVariant: ["tabular-nums"] as TextStyle["fontVariant"],
       },
       memberIdentityCircle: {
-        backgroundColor: "rgba(255, 255, 255, 0.18)",
+        backgroundColor: colors.memberTagBg,
       },
       memberIdentityLabel: {
         color: colors.white,
@@ -216,6 +217,13 @@ export default function ProfileScreen() {
   useEffect(() => {
     setProfileDisplayIcons(user?.displayIcons ?? []);
   }, [user?.displayIcons]);
+
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
 
   const refreshCurrentUser = useCallback(
     async (options?: { force?: boolean; isActive?: () => boolean }) => {
@@ -270,10 +278,10 @@ export default function ProfileScreen() {
     refreshInFlightRef.current = true;
     setRefreshing(true);
     try {
-      await refreshCurrentUser({ force: true });
+      await refreshCurrentUser({ force: true, isActive: () => mountedRef.current });
     } finally {
       refreshInFlightRef.current = false;
-      setRefreshing(false);
+      if (mountedRef.current) setRefreshing(false);
     }
   }, [refreshCurrentUser]);
 
@@ -373,7 +381,7 @@ export default function ProfileScreen() {
       {/* Member card */}
       <Pressable style={[s.memberCard, d.memberCard]} onPress={handleOpenIcons}>
         <GradientCover colors={Gradients.memberCard} />
-        <View style={[s.memberStatsPanel, d.memberStatsPanel]}>
+        <View style={[s.memberStatsPanel, d.memberStat]}>
           <View style={s.memberStatCell}>
             <Text style={d.memberStatLabel}>{t('profile.vipLevel')}</Text>
             <Text style={d.memberStatValue}>VIP {vipLevel}</Text>

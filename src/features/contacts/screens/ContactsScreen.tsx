@@ -13,7 +13,7 @@ import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore
 import { Spacing, Typography, useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -117,6 +117,7 @@ export default function ContactsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
   const unreadFriendActivityCount = useFriendActivityUnreadStore(
     (state) => state.count,
@@ -130,15 +131,17 @@ export default function ContactsScreen() {
 
     try {
       const nextFriends = await fetchFriends();
+      if (!mountedRef.current) return;
       setFriends(nextFriends);
       setError(null);
     } catch (error) {
+      if (!mountedRef.current) return;
       setError(t('contacts.loadFailed'));
       if (__DEV__) {
         console.warn('[ContactsScreen] fetchFriends failed', error);
       }
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [t]);
 
@@ -149,6 +152,13 @@ export default function ContactsScreen() {
     }, [loadFriends, refreshUnreadFriendActivityCount]),
   );
 
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
+
   const handleRefreshFriends = useCallback(async () => {
     if (refreshInFlightRef.current) return;
     refreshInFlightRef.current = true;
@@ -157,7 +167,7 @@ export default function ContactsScreen() {
       await Promise.all([loadFriends(), refreshUnreadFriendActivityCount()]);
     } finally {
       refreshInFlightRef.current = false;
-      setRefreshing(false);
+      if (mountedRef.current) setRefreshing(false);
     }
   }, [loadFriends, refreshUnreadFriendActivityCount]);
 

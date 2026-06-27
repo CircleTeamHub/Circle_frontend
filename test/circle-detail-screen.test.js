@@ -20,10 +20,13 @@ test('CircleDetailScreen supports pull-to-refresh', () => {
   assert.match(src, /const \[refreshing, setRefreshing\] = useState\(false\)/);
   assert.match(src, /handleRefreshCircle/);
   assert.match(src, /refreshInFlightRef/);
+  assert.match(src, /circleRequestRef/);
+  assert.match(src, /showInitialLoading/);
   assert.match(src, /if \(refreshInFlightRef\.current\) return;/);
   assert.match(src, /setRefreshing\(true\)/);
-  assert.match(src, /await Promise\.all\(\[loadCircle\(\), loadMyInvitation\(\)\]\)/);
-  assert.match(src, /finally\s*\{[\s\S]{0,80}setRefreshing\(false\)/);
+  assert.match(src, /loadCircle\(\{ showInitialLoading: false \}\)/);
+  assert.match(src, /requestId !== circleRequestRef\.current/);
+  assert.match(src, /finally\s*\{[\s\S]{0,120}mountedRef\.current[\s\S]{0,80}setRefreshing\(false\)/);
   assert.match(src, /refreshing=\{refreshing\}/);
   assert.match(src, /onRefresh=\{handleRefreshCircle\}/);
 });

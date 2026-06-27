@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -111,6 +111,14 @@ export default function EditFriendTagsScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [isCreatingTag, setIsCreatingTag] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -237,6 +245,7 @@ export default function EditFriendTagsScreen() {
     try {
       setIsCreatingTag(true);
       const created = await createFriendTag(trimmed);
+      if (!mountedRef.current) return;
 
       setAvailableTags((current) => {
         const deduped = current.filter((tag) => tag.id !== created.id);
@@ -247,12 +256,13 @@ export default function EditFriendTagsScreen() {
       );
       setNewTagName('');
     } catch (nextError) {
+      if (!mountedRef.current) return;
       Alert.alert(
         t('userProfile.editTags.createFailedTitle'),
         nextError instanceof Error ? nextError.message : t('userProfile.editTags.createFailed'),
       );
     } finally {
-      setIsCreatingTag(false);
+      if (mountedRef.current) setIsCreatingTag(false);
     }
   };
 
@@ -272,14 +282,16 @@ export default function EditFriendTagsScreen() {
         ...addedIds.map((tagId) => assignFriendTag(profileId, tagId)),
         ...removedIds.map((tagId) => removeFriendTag(profileId, tagId)),
       ]);
+      if (!mountedRef.current) return;
       router.back();
     } catch (nextError) {
+      if (!mountedRef.current) return;
       Alert.alert(
         t('validation.saveFailed'),
         nextError instanceof Error ? nextError.message : t('userProfile.editTags.saveFailed'),
       );
     } finally {
-      setIsSaving(false);
+      if (mountedRef.current) setIsSaving(false);
     }
   };
 

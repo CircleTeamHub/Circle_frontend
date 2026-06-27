@@ -73,11 +73,13 @@ test('messages screen supports pull-to-refresh for the conversation list', () =>
 
   assert.match(source, /const \[refreshing, setRefreshing\] = useState\(false\)/);
   assert.match(source, /handleRefreshConversations/);
+  assert.match(source, /const mountedRef = useRef\(true\)/);
+  assert.match(source, /mountedRef\.current = false/);
   assert.match(source, /refreshInFlightRef/);
   assert.match(source, /if \(refreshInFlightRef\.current\) return;/);
   assert.match(source, /setRefreshing\(true\)/);
   assert.match(source, /await loadConversationList\(\)/);
-  assert.match(source, /finally\s*\{[\s\S]{0,80}setRefreshing\(false\)/);
+  assert.match(source, /if \(mountedRef\.current\) setRefreshing\(false\)/);
   assert.match(source, /refreshing=\{refreshing\}/);
   assert.match(source, /onRefresh=\{handleRefreshConversations\}/);
 });

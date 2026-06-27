@@ -9,20 +9,41 @@ import { create } from 'zustand';
 // 这里维护一份 userID → 备注 的覆盖表，改备注成功后写入，订阅方即时刷新。
 // 值约定：
 //   - 非空字符串：用该备注覆盖显示名
-//   - 空字符串：备注被清除，显示名回退到原昵称（由订阅方的 fallback 决定）
+//   - null：备注被清除，显示名回退到 fallbackName / 订阅方 fallback
 //   - 不存在该 key：本次会话未改过，订阅方沿用自身快照
+export type FriendRemarkOverride = {
+  remark: string | null;
+  fallbackName?: string;
+};
+
 type FriendRemarkState = {
-  remarks: Record<string, string>;
-  setRemark: (userID: string, remark: string | null) => void;
+  remarks: Record<string, FriendRemarkOverride | undefined>;
+  setRemark: (
+    userID: string,
+    remark: string | null,
+    fallbackName?: string | null,
+  ) => void;
   /** 登出 / 切号时清空，避免跨账号串名。 */
   reset: () => void;
 };
 
 export const useFriendRemarkStore = create<FriendRemarkState>((set) => ({
   remarks: {},
-  setRemark: (userID, remark) =>
-    set((state) => ({
-      remarks: { ...state.remarks, [userID]: remark?.trim() ?? '' },
-    })),
+  setRemark: (userID, remark, fallbackName) =>
+    set((state) => {
+      const trimmed = remark?.trim() ?? '';
+      const nextFallback =
+        fallbackName?.trim() || state.remarks[userID]?.fallbackName;
+
+      return {
+        remarks: {
+          ...state.remarks,
+          [userID]: {
+            remark: trimmed.length > 0 ? trimmed : null,
+            ...(nextFallback ? { fallbackName: nextFallback } : {}),
+          },
+        },
+      };
+    }),
   reset: () => set({ remarks: {} }),
 }));

@@ -376,6 +376,10 @@ export default function ChatDetailScreen() {
   const [voiceInputMode, setVoiceInputMode] = useState(false);
   const [cancelArmed, setCancelArmed] = useState(false);
   // PanResponder 闭包只在创建时捕获一次，用 ref 把最新状态/回调透进去，避免读到旧值。
+  const voicePressActiveRef = useRef(false);
+  const voiceStartInProgressRef = useRef(false);
+  const voiceRecordSessionRef = useRef(0);
+  const recordingAudioModeSessionRef = useRef(0);
   const cancelArmedRef = useRef(false);
   const { width: windowWidth } = useWindowDimensions();
   const [callStarting, setCallStarting] = useState(false);
@@ -396,6 +400,7 @@ export default function ChatDetailScreen() {
   const restoreRecordingAudioMode = useCallback(() => {
     if (recordingAudioModeEnabledRef.current) {
       recordingAudioModeEnabledRef.current = false;
+      recordingAudioModeSessionRef.current = 0;
       setAudioModeAsync({ allowsRecording: false }).catch(() => undefined);
     }
   }, []);
@@ -419,8 +424,9 @@ export default function ChatDetailScreen() {
   const remarkOverride = useFriendRemarkStore((state) =>
     isGroupChat ? undefined : state.remarks[sourceID],
   );
-  const conversationTitle =
-    remarkOverride && remarkOverride.length > 0 ? remarkOverride : paramTitle;
+  const conversationTitle = remarkOverride
+    ? remarkOverride.remark ?? remarkOverride.fallbackName ?? paramTitle
+    : paramTitle;
   const avatarUrl =
     typeof params.avatarUrl === 'string' ? params.avatarUrl : undefined;
   const searchedMsgID =
@@ -1041,7 +1047,7 @@ export default function ChatDetailScreen() {
           sessionType: conversationType,
           isGroupChat,
         });
-        setSendError('消息发送失败，请重试');
+        if (mountedRef.current) setSendError('消息发送失败，请重试');
       } finally {
         inFlightRef.current = false;
       }
@@ -1069,7 +1075,10 @@ export default function ChatDetailScreen() {
   // 按住开始录音。权限/音频模式准备好后 record()，失败时复位状态。
   const startHoldRecording = useCallback(async () => {
     if (!sourceID || isPreviewMode || voiceActionBusy) return;
-    if (inFlightRef.current) return;
+    if (inFlightRef.current || voiceStartInProgressRef.current) return;
+    voicePressActiveRef.current = true;
+    voiceStartInProgressRef.current = true;
+    const recordSession = ++voiceRecordSessionRef.current;
     setSendError(null);
     cancelArmedRef.current = false;
     setCancelArmed(false);
@@ -1078,13 +1087,29 @@ export default function ChatDetailScreen() {
       const permission = await requestRecordingPermissionsAsync();
       if (!permission.granted) {
         Alert.alert('权限不足', '请在系统设置开启麦克风权限');
+        voicePressActiveRef.current = false;
+        voiceRecordSessionRef.current += 1;
+        return;
+      }
+      if (!voicePressActiveRef.current || recordSession !== voiceRecordSessionRef.current) {
         return;
       }
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       recordingAudioModeEnabledRef.current = true;
+      recordingAudioModeSessionRef.current = recordSession;
+      if (!voicePressActiveRef.current || recordSession !== voiceRecordSessionRef.current) {
+        restoreRecordingAudioMode();
+        return;
+      }
       const status = voiceRecorder.getStatus();
       if (!status.canRecord) {
         await voiceRecorder.prepareToRecordAsync();
+      }
+      if (!voicePressActiveRef.current || recordSession !== voiceRecordSessionRef.current) {
+        if (recordingAudioModeSessionRef.current === recordSession) {
+          restoreRecordingAudioMode();
+        }
+        return;
       }
       voiceRecorder.record();
       setVoiceRecordingStartedAt(Date.now());
@@ -1099,11 +1124,18 @@ export default function ChatDetailScreen() {
         );
       }
       inFlightRef.current = false;
-      setVoiceRecordingStartedAt(null);
-      setSendError('录音启动失败，请重试');
-      restoreRecordingAudioMode();
+      if (mountedRef.current) {
+        setVoiceRecordingStartedAt(null);
+        setSendError('录音启动失败，请重试');
+      }
+      if (recordingAudioModeSessionRef.current === recordSession) {
+        restoreRecordingAudioMode();
+      }
     } finally {
-      setVoiceActionBusy(false);
+      if (voiceRecordSessionRef.current === recordSession || !voicePressActiveRef.current) {
+        voiceStartInProgressRef.current = false;
+      }
+      if (mountedRef.current) setVoiceActionBusy(false);
     }
   }, [
     isPreviewMode,
@@ -1117,8 +1149,10 @@ export default function ChatDetailScreen() {
   const finishHoldRecording = useCallback(
     async (cancel: boolean) => {
       // 还没真正开始录音（极快松手 / 权限未过）→ 直接复位，避免空 stop。
+      voicePressActiveRef.current = false;
+      voiceRecordSessionRef.current += 1;
       if (!isRecordingRef.current && voiceRecordingStartedAt == null) {
-        setVoiceActionBusy(false);
+          if (mountedRef.current) setVoiceActionBusy(false);
         return;
       }
       setVoiceActionBusy(true);
@@ -1151,14 +1185,16 @@ export default function ChatDetailScreen() {
               : String(error),
           );
         }
-        setVoiceRecordingStartedAt(null);
-        if (!cancel) setSendError('语音发送失败，请重试');
+        if (mountedRef.current) {
+          setVoiceRecordingStartedAt(null);
+          if (!cancel) setSendError('语音发送失败，请重试');
+        }
       } finally {
         inFlightRef.current = false;
-        setVoiceActionBusy(false);
+        if (mountedRef.current) setVoiceActionBusy(false);
         restoreRecordingAudioMode();
         cancelArmedRef.current = false;
-        setCancelArmed(false);
+        if (mountedRef.current) setCancelArmed(false);
       }
     },
     [
@@ -1267,7 +1303,7 @@ export default function ChatDetailScreen() {
       });
       appendMessages(conversationID, [sent]);
     } catch {
-      setSendError('位置发送失败，请重试');
+      if (mountedRef.current) setSendError('位置发送失败，请重试');
     } finally {
       inFlightRef.current = false;
     }
@@ -1322,7 +1358,7 @@ export default function ChatDetailScreen() {
               : String(error),
           );
         }
-        setSendError('图片发送失败，请重试');
+        if (mountedRef.current) setSendError('图片发送失败，请重试');
       } finally {
         inFlightRef.current = false;
       }
@@ -1521,7 +1557,7 @@ export default function ChatDetailScreen() {
         });
         appendMessages(conversationID, [sent]);
       } catch {
-        setSendError('笔记发送失败，请重试');
+        if (mountedRef.current) setSendError('笔记发送失败，请重试');
       } finally {
         inFlightRef.current = false;
       }
@@ -1564,7 +1600,7 @@ export default function ChatDetailScreen() {
         });
         appendMessages(conversationID, [sent]);
       } catch {
-        setSendError('名片发送失败，请重试');
+        if (mountedRef.current) setSendError('名片发送失败，请重试');
       } finally {
         inFlightRef.current = false;
       }
@@ -1626,7 +1662,7 @@ export default function ChatDetailScreen() {
         if (__DEV__) {
           console.warn('[ChatDetail] send collected item failed', error);
         }
-        setSendError('收藏内容发送失败，请重试');
+        if (mountedRef.current) setSendError('收藏内容发送失败，请重试');
       } finally {
         inFlightRef.current = false;
       }
@@ -1661,7 +1697,7 @@ export default function ChatDetailScreen() {
         });
         appendMessages(conversationID, [sent]);
       } catch {
-        setSendError('转账卡片发送失败，但积分已扣减');
+        if (mountedRef.current) setSendError('转账卡片发送失败，但积分已扣减');
       } finally {
         inFlightRef.current = false;
       }
@@ -1728,16 +1764,16 @@ export default function ChatDetailScreen() {
         text: nextText,
       });
       appendMessages(conversationID, [sentMessage]);
-      setDraft('');
+      if (mountedRef.current) setDraft('');
     } catch (error) {
       logChatSendFailure(error, {
         sessionType: conversationType,
         isGroupChat,
       });
-      setSendError('消息发送失败，请重试');
+      if (mountedRef.current) setSendError('消息发送失败，请重试');
     } finally {
       inFlightRef.current = false;
-      setSending(false);
+      if (mountedRef.current) setSending(false);
     }
   }, [
     appendMessages,

@@ -97,7 +97,7 @@ export default function PendingVerificationsScreen() {
       await load();
     } finally {
       refreshInFlightRef.current = false;
-      setRefreshing(false);
+      if (mountedRef.current) setRefreshing(false);
     }
   }, [load]);
 

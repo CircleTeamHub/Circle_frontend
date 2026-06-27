@@ -129,6 +129,8 @@ export default function MomentDetailScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const postRef = useRef<MomentPost | null>(storeMoment ?? null);
+  const mountedRef = useRef(true);
+  const requestRef = useRef(0);
   const refreshInFlightRef = useRef(false);
   const [commentTarget, setCommentTarget] = useState<{
     replyTo: { id: string; nickname: string } | null;
@@ -137,6 +139,13 @@ export default function MomentDetailScreen() {
   useEffect(() => {
     postRef.current = post;
   }, [post]);
+
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
 
   // Use the store as an initial preview, but do not let feed preview comments
   // overwrite the full detail payload after the detail fetch completes.
@@ -151,6 +160,7 @@ export default function MomentDetailScreen() {
       return;
     }
 
+    const requestId = ++requestRef.current;
     const hasPreviewPost = Boolean(postRef.current);
     if (!hasPreviewPost) {
       setLoading(true);
@@ -159,8 +169,10 @@ export default function MomentDetailScreen() {
 
     try {
       const found = await fetchMomentById(id);
+      if (!mountedRef.current || requestId !== requestRef.current) return;
       setPost(found);
     } catch (error) {
+      if (!mountedRef.current || requestId !== requestRef.current) return;
       if (error instanceof ApiError && error.status === 404) {
         setPost(null);
         setLoadError(t('moment.notExist'));
@@ -169,7 +181,11 @@ export default function MomentDetailScreen() {
 
       setLoadError(getApiErrorMessage(error, t('moment.loadFailed')));
     } finally {
-      if (!hasPreviewPost) {
+      if (
+        mountedRef.current &&
+        requestId === requestRef.current &&
+        !hasPreviewPost
+      ) {
         setLoading(false);
       }
     }
@@ -188,7 +204,7 @@ export default function MomentDetailScreen() {
       await loadMoment();
     } finally {
       refreshInFlightRef.current = false;
-      setRefreshing(false);
+      if (mountedRef.current) setRefreshing(false);
     }
   }, [loadMoment]);
 

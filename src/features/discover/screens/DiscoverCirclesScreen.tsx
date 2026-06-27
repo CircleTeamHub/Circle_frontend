@@ -73,6 +73,7 @@ export default function DiscoverCirclesScreen() {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
 
   const {
@@ -87,6 +88,13 @@ export default function DiscoverCirclesScreen() {
     fetchAllCircles();
   }, [fetchAllCircles]);
 
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
+
   const handleRefreshCircles = useCallback(async () => {
     if (refreshInFlightRef.current) return;
     refreshInFlightRef.current = true;
@@ -95,7 +103,7 @@ export default function DiscoverCirclesScreen() {
       await fetchAllCircles();
     } finally {
       refreshInFlightRef.current = false;
-      setRefreshing(false);
+      if (mountedRef.current) setRefreshing(false);
     }
   }, [fetchAllCircles]);
 

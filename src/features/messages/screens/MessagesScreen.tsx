@@ -17,7 +17,7 @@ import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { Conversation } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
 import { type Href, useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
@@ -418,7 +418,15 @@ export default function MessagesScreen() {
   const [activeFilterId, setActiveFilterId] = useState("all"); // 当前激活的筛选标签 id
   const [menuVisible, setMenuVisible] = useState(false);        // 右上角弹出菜单的显隐
   const [refreshing, setRefreshing] = useState(false);
+  const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
+
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
 
   // 每次回到消息页都重置到"全部"，并重新拉 OpenIM 会话列表。
   // 群聊可能从群列表、圈子、临时群等入口创建/恢复；只在首次 mount 拉取会漏掉这些更新。
@@ -447,7 +455,7 @@ export default function MessagesScreen() {
       }
     } finally {
       refreshInFlightRef.current = false;
-      setRefreshing(false);
+      if (mountedRef.current) setRefreshing(false);
     }
   }, []);
 

@@ -116,7 +116,12 @@ test('ShareCircleCardScreen does not leave a row stuck in sending state when SDK
   assert.match(share, /SENDING_STATE_FALLBACK_MS/);
   assert.match(share, /sendingTimeoutRef/);
   assert.match(share, /setTimeout\(\(\) => \{/);
-  assert.match(share, /setSendingConversationID\(''\)/);
+  assert.match(share, /const mountedRef = useRef\(true\)/);
+  assert.match(share, /mountedRef\.current = false/);
+  assert.match(share, /if \(mountedRef\.current\) setSendingConversationID\(''\)/);
+  assert.match(share, /if \(!mountedRef\.current\) return;[\s\S]*setSendingConversationID\(''\)/);
+  assert.match(share, /\.then\(\(\) => \{[\s\S]*if \(!mountedRef\.current\) return;[\s\S]*Alert\.alert/);
+  assert.match(share, /\.catch\(\(error: unknown\) => \{[\s\S]*if \(!mountedRef\.current\) return;[\s\S]*Alert\.alert/);
   assert.match(share, /clearTimeout/);
 });
 

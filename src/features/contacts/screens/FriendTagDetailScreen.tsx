@@ -74,6 +74,7 @@ export default function FriendTagDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
 
   const tagId = typeof params.id === 'string' ? params.id : '';
@@ -81,6 +82,7 @@ export default function FriendTagDetailScreen() {
 
   const loadFriends = useCallback(async () => {
     if (!tagId) {
+      if (!mountedRef.current) return;
       setError(t('contacts.tagDetail.notExist'));
       setLoading(false);
       return;
@@ -90,18 +92,27 @@ export default function FriendTagDetailScreen() {
 
     try {
       const nextFriends = await fetchFriendsByTag(tagId);
+      if (!mountedRef.current) return;
       setFriends(nextFriends);
       setError(null);
     } catch {
+      if (!mountedRef.current) return;
       setError(t('contacts.tagDetail.loadFailed'));
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [t, tagId]);
 
   useEffect(() => {
     loadFriends();
   }, [loadFriends]);
+
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
 
   const handleRefreshFriends = useCallback(async () => {
     if (refreshInFlightRef.current) return;
@@ -111,7 +122,7 @@ export default function FriendTagDetailScreen() {
       await loadFriends();
     } finally {
       refreshInFlightRef.current = false;
-      setRefreshing(false);
+      if (mountedRef.current) setRefreshing(false);
     }
   }, [loadFriends]);
 

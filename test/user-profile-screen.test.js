@@ -331,10 +331,10 @@ test('user profile route helpers preserve scope for the request form', () => {
     },
   );
   assert.deepEqual(
-    JSON.parse(JSON.stringify(getEditFriendRemarkHref('contacts', 'user-1', '小李'))),
+    JSON.parse(JSON.stringify(getEditFriendRemarkHref('contacts', 'user-1', 'old-remark', 'profile-name'))),
     {
       pathname: '/(tabs)/contacts/user/[id]/remark',
-      params: { id: 'user-1', name: '小李' },
+      params: { id: 'user-1', name: 'old-remark', fallbackName: 'profile-name' },
     },
   );
   assert.deepEqual(
@@ -380,7 +380,10 @@ test('user profile screen uses account label, meta chips, badge row, and conditi
   assert.match(source, /const \[friendStatus, setFriendStatus\]/);
   assert.match(source, /const \[friendSettings, setFriendSettings\]/);
   assert.match(source, /const showAddFriendButton = canSendFriendRequest/);
-  assert.match(source, /const displayName = friendSettings\?\.remark\?\.trim\(\)/);
+  assert.match(source, /const remarkOverride = useFriendRemarkStore/);
+  assert.match(source, /remarkOverride === undefined/);
+  assert.match(source, /friendSettings\?\.remark\?\.trim\(\) \|\| profile\.remarkHint \|\| profile\.name/);
+  assert.match(source, /remarkOverride\.remark \?\? remarkOverride\.fallbackName \?\? profile\.name/);
   assert.match(source, /const infoRowItems = useMemo/);
   assert.match(source, /ProfileActionRow/);
   assert.doesNotMatch(source, /actionSection:\s*{\s*borderTopWidth:/);
@@ -397,6 +400,10 @@ test('user profile screen uses account label, meta chips, badge row, and conditi
   assert.match(source, /t\('userProfile\.addFriendRequest'\)/);
   assert.match(source, /const handleOpenChat = useCallback/);
   assert.match(source, /const conversation = await getOrCreateSingleConversation\(profileId\)/);
+  assert.match(source, /const mountedRef = useRef\(true\)/);
+  assert.match(source, /mountedRef\.current = false/);
+  assert.match(source, /const conversation = await getOrCreateSingleConversation\(profileId\);[\s\S]*if \(!mountedRef\.current\) return;[\s\S]*router\.push/);
+  assert.match(source, /if \(mountedRef\.current\) setOpeningChat\(false\)/);
   assert.match(source, /shouldOpenChatPreview/);
   assert.match(source, /if \(shouldOpenChatPreview\(error\)\)/);
   assert.match(source, /router\.push\(\s*getChatDetailHref\(/);
@@ -424,7 +431,7 @@ test('user profile screen wires the more-info row into chat info for accepted fr
   assert.match(source, /const handleOpenChatInfo = useCallback/);
   assert.match(source, /friendStatus !== 'ACCEPTED'/);
   assert.match(source, /getChatInfoHref/);
-  assert.match(source, /router\.push\(getChatInfoHref\(scope, profileId, displayName\)\)/);
+  assert.match(source, /router\.push\(getChatInfoHref\(scope, profileId, displayName, undefined, profile\.name\)\)/);
 });
 
 test('scope-specific chat info route files exist for contacts and profile stacks', () => {

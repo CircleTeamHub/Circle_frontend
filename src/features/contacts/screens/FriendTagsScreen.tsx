@@ -66,9 +66,11 @@ export default function FriendTagsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
 
   const loadTags = useCallback(async (signal?: { cancelled: boolean }) => {
+    const isCancelled = () => Boolean(signal?.cancelled) || !mountedRef.current;
     setLoading(true);
 
     try {
@@ -80,14 +82,14 @@ export default function FriendTagsScreen() {
         })),
       );
 
-      if (signal?.cancelled) return;
+      if (isCancelled()) return;
       setTags(counts);
       setError(null);
     } catch {
-      if (signal?.cancelled) return;
+      if (isCancelled()) return;
       setError(t('contacts.tagsScreen.loadFailed'));
     } finally {
-      if (!signal?.cancelled) {
+      if (!isCancelled()) {
         setLoading(false);
       }
     }
@@ -101,6 +103,13 @@ export default function FriendTagsScreen() {
     };
   }, [loadTags]);
 
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
+
   const handleRefreshTags = useCallback(async () => {
     if (refreshInFlightRef.current) return;
     refreshInFlightRef.current = true;
@@ -109,7 +118,7 @@ export default function FriendTagsScreen() {
       await loadTags();
     } finally {
       refreshInFlightRef.current = false;
-      setRefreshing(false);
+      if (mountedRef.current) setRefreshing(false);
     }
   }, [loadTags]);
 

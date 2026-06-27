@@ -96,10 +96,22 @@ export default function InviteToCircleScreen() {
   const [selected, setSelected] = useState<Record<string, true>>({});
   const [submitting, setSubmitting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
 
-  const loadInvitees = useCallback(async (signal?: { cancelled: boolean }) => {
-    setLoading(true);
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
+
+  const loadInvitees = useCallback(async (
+    signal?: { cancelled: boolean },
+    options?: { showInitialLoading?: boolean },
+  ) => {
+    const showInitialLoading = options?.showInitialLoading ?? true;
+    if (showInitialLoading) setLoading(true);
     const [friendsResult, membersResult] = await Promise.allSettled([
       fetchFriends(),
       circleId
@@ -108,7 +120,7 @@ export default function InviteToCircleScreen() {
           )
         : Promise.resolve([]),
     ]);
-    if (signal?.cancelled) return;
+    if (signal?.cancelled || !mountedRef.current) return;
 
     if (friendsResult.status === 'fulfilled') {
       setFriends(friendsResult.value);
@@ -136,7 +148,9 @@ export default function InviteToCircleScreen() {
       });
     }
 
-    if (!signal?.cancelled) setLoading(false);
+    if (!signal?.cancelled && mountedRef.current && showInitialLoading) {
+      setLoading(false);
+    }
   }, [circleId]);
 
   useEffect(() => {
@@ -152,10 +166,10 @@ export default function InviteToCircleScreen() {
     refreshInFlightRef.current = true;
     setRefreshing(true);
     try {
-      await loadInvitees();
+      await loadInvitees(undefined, { showInitialLoading: false });
     } finally {
       refreshInFlightRef.current = false;
-      setRefreshing(false);
+      if (mountedRef.current) setRefreshing(false);
     }
   }, [loadInvitees]);
 
