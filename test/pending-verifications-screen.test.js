@@ -17,6 +17,20 @@ test('PendingVerificationsScreen lists the current user pending verifications', 
   assert.match(src, /item\.approvedCount\}\/\{item\.requiredCount/);
 });
 
+test('PendingVerificationsScreen supports pull-to-refresh', () => {
+  const src = read(SCREEN);
+
+  assert.match(src, /const \[refreshing, setRefreshing\] = useState\(false\)/);
+  assert.match(src, /handleRefreshVerifications/);
+  assert.match(src, /refreshInFlightRef/);
+  assert.match(src, /if \(refreshInFlightRef\.current\) return;/);
+  assert.match(src, /setRefreshing\(true\)/);
+  assert.match(src, /await load\(\)/);
+  assert.match(src, /finally\s*\{[\s\S]{0,80}setRefreshing\(false\)/);
+  assert.match(src, /refreshing=\{refreshing\}/);
+  assert.match(src, /onRefresh=\{handleRefreshVerifications\}/);
+});
+
 test('PendingVerificationsScreen routes into the respond screen', () => {
   const src = read(SCREEN);
   assert.match(src, /pathname: '\/\(tabs\)\/discover\/verification\/\[id\]'/);
@@ -28,9 +42,19 @@ test('verifications route re-exports the screen', () => {
   assert.match(src, /PendingVerificationsScreen/);
 });
 
-test('Discover header exposes a pending-verifications entry', () => {
+test('Discover header does not expose a pending-verifications entry', () => {
   const src = read(DISCOVER);
-  assert.match(src, /handlePendingVerificationsPress/);
-  assert.match(src, /["'`]\/\(tabs\)\/discover\/verifications["'`]/);
-  assert.match(src, /name="shield-checkmark-outline"/);
+  assert.doesNotMatch(src, /handlePendingVerificationsPress/);
+  assert.doesNotMatch(src, /["'`]\/\(tabs\)\/discover\/verifications["'`]/);
+  assert.doesNotMatch(src, /name="shield-checkmark-outline"/);
+});
+
+test('Discover header exposes the same notification bell entry as the home page', () => {
+  const src = read(DISCOVER);
+  assert.match(src, /useTabBadgeStore/);
+  assert.match(src, /const discoverUnread = useTabBadgeStore\(\(state\) => state\.systemUnread\)/);
+  assert.match(src, /handleOpenNotifications/);
+  assert.match(src, /["'`]\/\(tabs\)\/messages\/notifications["'`]/);
+  assert.match(src, /name="notifications-outline"/);
+  assert.match(src, /<Badge count=\{discoverUnread\} \/>/);
 });

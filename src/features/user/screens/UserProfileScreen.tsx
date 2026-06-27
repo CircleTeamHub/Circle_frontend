@@ -5,14 +5,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
 import { getOrCreateSingleConversation } from '@/im/client';
 import { getProfileSignature } from '@/features/profile/profile-display';
-import { Radius, Spacing, Typography, useTheme } from '@/theme';
-import { ProfileActionRow } from '@/features/user/components/profile-action-row';
+import { Radius, Spacing, Typography, useTheme, type ThemeColors } from '@/theme';
+import {
+  ProfileActionRow,
+  ICON_BADGE_SIZE,
+  ROW_PADDING_H,
+  ROW_GAP,
+} from '@/features/user/components/profile-action-row';
 import type { UserProfileData } from '@/features/user/data/profiles';
 import {
   canOpenSendFriendRequest,
@@ -41,97 +45,129 @@ const INFO_ROW_IDS = ['moments', 'setRemark', 'tags', 'giftCoins', 'moreInfo'] a
 const NON_FRIEND_INFO_ROW_IDS = ['moments', 'giftCoins', 'moreInfo'] as const;
 const SELF_INFO_ROW_IDS = ['moments'] as const;
 
+type InfoRowId = (typeof INFO_ROW_IDS)[number];
+
+interface InfoRowItem {
+  id: InfoRowId;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  iconColor: string;
+  value?: string;
+  onPress?: () => void;
+}
+
+// 每行的图标与主题配色（彩色圆角图标块 + 白色字形，iOS 设置风）
+const ROW_ICON: Record<InfoRowId, keyof typeof Ionicons.glyphMap> = {
+  moments: 'images',
+  setRemark: 'create',
+  tags: 'pricetags',
+  giftCoins: 'gift',
+  moreInfo: 'information-circle',
+};
+
+const ROW_COLOR: Record<InfoRowId, keyof ThemeColors> = {
+  moments: 'blue',
+  setRemark: 'primary',
+  tags: 'success',
+  giftCoins: 'warning',
+  moreInfo: 'purple',
+};
+
+const AVATAR_SIZE = 88;
+
 const s = StyleSheet.create({
-  headerBlock: {
-    flexDirection: 'row',
+  // 居中身份 Hero：头像 → 名字/标签 → 账号 → 性别地区 → 签名 → 徽章，逐层拉开间距。
+  hero: {
+    alignItems: 'center',
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.lg,
     gap: Spacing.md,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.md,
-    alignItems: 'flex-start',
+  },
+  avatarRing: {
+    width: AVATAR_SIZE + 10,
+    height: AVATAR_SIZE + 10,
+    borderRadius: Radius.xxl + 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
   },
   avatarFrame: {
-    width: 68,
-    height: 68,
-    borderRadius: Radius.md,
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: Radius.xxl,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
   },
   avatarImage: {
     width: '100%',
     height: '100%',
   },
-  info: {
-    flex: 1,
-    gap: 6,
+  identity: {
+    alignItems: 'center',
+    gap: Spacing.xs,
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: Spacing.sm,
   },
   badge: {
     borderRadius: Radius.full,
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 4,
   },
   metaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    justifyContent: 'center',
+    gap: Spacing.sm,
   },
   metaChip: {
     borderRadius: Radius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
+  signature: {
+    textAlign: 'center',
+    paddingHorizontal: Spacing.md,
+  },
   badgeIconRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
-    minHeight: 36,
-    alignItems: 'center',
-  },
-  badgeIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.full,
-    alignItems: 'center',
     justifyContent: 'center',
-  },
-  listSection: {
-    marginTop: Spacing.md,
-  },
-  actionSection: {
-    marginTop: Spacing.md,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.lg,
     gap: Spacing.md,
     alignItems: 'center',
   },
+  // 信息行合并成单卡片，行间用内缩分隔线分隔（左缩进对齐文字起点）。
+  card: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+  },
+  rowDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: ROW_PADDING_H + ICON_BADGE_SIZE + ROW_GAP,
+  },
+  actionSection: {
+    marginTop: Spacing.lg,
+    gap: Spacing.sm,
+  },
   actionButton: {
     width: '100%',
-    minHeight: 52,
+    height: 52,
     borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    shadowOffset: {
-      width: 0,
-      height: 8,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 8,
   },
   addButton: {
-    height: 48,
+    height: 50,
     borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
@@ -423,42 +459,40 @@ export default function UserProfileScreen() {
   const canOpenChatInfo =
     !isCurrentUser && profileId !== 'unknown' && friendStatus === 'ACCEPTED';
 
-  const infoRowItems = useMemo(
+  const infoRowItems = useMemo<InfoRowItem[]>(
     () =>
       infoRows.map((id) => {
-        const label = t(`profile.${id}`);
+        const base: InfoRowItem = {
+          id,
+          label: t(`profile.${id}`),
+          icon: ROW_ICON[id],
+          iconColor: colors[ROW_COLOR[id]],
+        };
 
         if (id === 'setRemark') {
-          return {
-            id,
-            label,
-            value: remarkValue,
-            onPress: handleEditRemark,
-          };
+          return { ...base, value: remarkValue, onPress: handleEditRemark };
         }
 
         if (id === 'tags') {
-          return {
-            id,
-            label,
-            value: tagValue,
-            onPress: handleEditTags,
-          };
+          return { ...base, value: tagValue, onPress: handleEditTags };
         }
 
         if (id === 'moments') {
-          return {
-            id,
-            label,
-            onPress: handleOpenMoments,
-          };
+          return { ...base, onPress: handleOpenMoments };
         }
 
-        return { id, label };
+        if (id === 'moreInfo' && canOpenChatInfo) {
+          return { ...base, onPress: handleOpenChatInfo };
+        }
+
+        return base;
       }),
     [
+      canOpenChatInfo,
+      colors,
       handleEditRemark,
       handleEditTags,
+      handleOpenChatInfo,
       handleOpenMoments,
       infoRows,
       remarkValue,
@@ -477,32 +511,26 @@ export default function UserProfileScreen() {
         paddingHorizontal: Spacing.lg,
         paddingBottom: insets.bottom + (showAddFriendButton ? 104 : 32),
       },
+      avatarRing: {
+        backgroundColor: colors.surface,
+        borderColor: colors.primaryLight,
+      },
       avatarFrame: {
         backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
       },
       avatarFallback: {
         color: colors.white,
-        fontSize: 26,
+        fontSize: 32,
         fontWeight: '700' as const,
       },
       name: {
         color: colors.text,
-        fontSize: 22,
-        fontWeight: '700' as const,
+        ...Typography.h1,
       },
       badge: {
         backgroundColor: colors.primaryLight,
       },
       badgeText: {
-        color: colors.primary,
-        ...Typography.tiny,
-        fontWeight: '600' as const,
-      },
-      badgeIcon: {
-        backgroundColor: colors.primaryLight,
-      },
-      badgeIconText: {
         color: colors.primary,
         ...Typography.tiny,
         fontWeight: '700' as const,
@@ -517,25 +545,31 @@ export default function UserProfileScreen() {
       },
       metaChipText: {
         color: colors.textSecondary,
-        ...Typography.tiny,
+        ...Typography.small,
         fontWeight: '600' as const,
       },
       signature: {
         color: colors.textSecondary,
-        ...Typography.caption,
+        ...Typography.bodyRegular,
+        lineHeight: 20,
+      },
+      card: {
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
+      },
+      rowDivider: {
+        backgroundColor: colors.surfaceBorder,
       },
       actionText: {
-        color: colors.primary,
+        color: colors.white,
         ...Typography.body,
         fontWeight: '600' as const,
       },
       actionButton: {
-        backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
-        shadowColor: colors.black,
+        backgroundColor: colors.primary,
       },
       actionButtonPressed: {
-        opacity: 0.9,
+        opacity: 0.85,
       },
       footer: {
         position: 'absolute' as const,
@@ -560,11 +594,7 @@ export default function UserProfileScreen() {
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader
-        title={t('userProfile.title')}
-        rightIcon={canOpenChatInfo ? 'information-circle-outline' : undefined}
-        onRightPress={canOpenChatInfo ? handleOpenChatInfo : undefined}
-      />
+      <NavHeader title={t('userProfile.title')} />
       {fetchError ? (
         <Text style={{ color: colors.error, textAlign: 'center', paddingVertical: 6, ...Typography.small }}>
           {fetchError}
@@ -574,17 +604,18 @@ export default function UserProfileScreen() {
         contentContainerStyle={d.content}
         showsVerticalScrollIndicator={false}
       >
-        <View style={s.headerBlock}>
-          <View style={[s.avatarFrame, d.avatarFrame]}>
-            {profile.avatarUrl ? (
-              <Image source={{ uri: profile.avatarUrl }} style={s.avatarImage} />
-            ) : (
-              <Text style={d.avatarFallback}>
-                {profile.name.charAt(0)}
-              </Text>
-            )}
+        <View style={s.hero}>
+          <View style={[s.avatarRing, d.avatarRing]}>
+            <View style={[s.avatarFrame, d.avatarFrame]}>
+              {profile.avatarUrl ? (
+                <Image source={{ uri: profile.avatarUrl }} style={s.avatarImage} />
+              ) : (
+                <Text style={d.avatarFallback}>{profile.name.charAt(0)}</Text>
+              )}
+            </View>
           </View>
-          <View style={s.info}>
+
+          <View style={s.identity}>
             <View style={s.nameRow}>
               <Text style={d.name}>{displayName}</Text>
               <View style={[s.badge, d.badge]}>
@@ -592,6 +623,9 @@ export default function UserProfileScreen() {
               </View>
             </View>
             <Text style={d.account}>{t('contacts.accountId', { id: profile.accountId })}</Text>
+          </View>
+
+          {profileMetaItems.length > 0 ? (
             <View style={s.metaRow}>
               {profileMetaItems.map((item, index) => (
                 <View key={`${item}-${index}`} style={[s.metaChip, d.metaChip]}>
@@ -612,27 +646,37 @@ export default function UserProfileScreen() {
                 </View>
               ))}
             </View>
-            <Text style={d.signature}>{profile.signature}</Text>
+          ) : null}
+
+          {profile.signature ? (
+            <Text style={[s.signature, d.signature]}>{profile.signature}</Text>
+          ) : null}
+
+          {(profile.displayIcons?.length ?? 0) > 0 ? (
             <View style={s.badgeIconRow}>
               <UserIconRow icons={profile.displayIcons ?? []} />
             </View>
-          </View>
+          ) : null}
         </View>
 
-        <View style={s.listSection}>
-          <Divider />
-          {infoRowItems.map((item, index) => (
-            <View key={item.id}>
-              <ProfileActionRow
-                label={item.label}
-                value={item.value}
-                onPress={item.onPress}
-              />
-              {index < infoRowItems.length - 1 ? <Divider /> : null}
-            </View>
-          ))}
-          <Divider />
-        </View>
+        {infoRowItems.length > 0 ? (
+          <View style={[s.card, d.card]}>
+            {infoRowItems.map((item, index) => (
+              <View key={item.id}>
+                <ProfileActionRow
+                  icon={item.icon}
+                  iconColor={item.iconColor}
+                  label={item.label}
+                  value={item.value}
+                  onPress={item.onPress}
+                />
+                {index < infoRowItems.length - 1 ? (
+                  <View style={[s.rowDivider, d.rowDivider]} />
+                ) : null}
+              </View>
+            ))}
+          </View>
+        ) : null}
 
         {showProfileActions ? (
           <View style={s.actionSection}>

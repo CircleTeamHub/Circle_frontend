@@ -178,9 +178,15 @@ export default function ShareCircleCardScreen() {
                   circleId,
                   conversationID: conversation.id,
                 });
-                inFlightRef.current = false;
+                // 只清掉「发送中」的 UI 态并提示用户；保留 inFlightRef 锁，
+                // 避免真实发送仍在飞行时被再次点击造成重复发送。锁的释放交给
+                // 下方 .finally(clearSendingState)，等真正的发送 settle 再放开。
                 setSendingConversationID('');
                 sendingTimeoutRef.current = null;
+                Alert.alert(
+                  t('common.tip', { defaultValue: '提示' }),
+                  t('common.retryLater', { defaultValue: '请稍后重试' }),
+                );
               }, SENDING_STATE_FALLBACK_MS);
               void sendCircleCardMessage({
                 targetConversationID: conversation.id,

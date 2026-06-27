@@ -434,10 +434,10 @@ export default function CreatePostScreen() {
               <Pressable
                 key={tag}
                 onPress={() => setPostTags(postTags.filter((_, idx) => idx !== i))}
-                style={[s.tagChip, { backgroundColor: colors.primaryLight }]}
+                style={[s.tagChip, { backgroundColor: colors.primary }]}
               >
-                <Text style={{ color: colors.primary, ...Typography.caption }}>#{tag}</Text>
-                <Ionicons name="close" size={12} color={colors.primary} />
+                <Text style={{ color: colors.white, ...Typography.caption }}>#{tag}</Text>
+                <Ionicons name="close" size={12} color={colors.white} />
               </Pressable>
             ))}
           </View>

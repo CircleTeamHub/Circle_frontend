@@ -22,3 +22,31 @@ test('PlazaPostCard only exposes delete to the post owner', () => {
   assert.match(src, /\{isOwnPost \? \(\s*\n\s*<Pressable[\s\S]*?onPress=\{handleDeletePost\}/);
   assert.match(src, /name="trash-outline"/);
 });
+
+test('PlazaPostCard signup button uses a person-add icon instead of a hand', () => {
+  const src = read(SRC);
+
+  assert.match(src, /name=\{signed \? 'checkmark-circle' : 'person-add-outline'\}/);
+  assert.doesNotMatch(src, /hand-right-outline/);
+});
+
+test('PlazaPostCard circle name tag uses squared corners instead of a pill', () => {
+  const src = read(SRC);
+
+  assert.match(
+    src,
+    /tag:\s*\{\s*paddingHorizontal:\s*Spacing\.sm,\s*paddingVertical:\s*1,\s*borderRadius:\s*Radius\.sm,\s*\}/,
+  );
+  assert.doesNotMatch(
+    src,
+    /tag:\s*\{\s*paddingHorizontal:\s*Spacing\.sm,\s*paddingVertical:\s*1,\s*borderRadius:\s*Radius\.full,/,
+  );
+  assert.match(
+    src,
+    /tag:\s*\{\s*backgroundColor:\s*colors\.primary,\s*borderRadius:\s*Radius\.sm,\s*\}/,
+  );
+  assert.doesNotMatch(
+    src,
+    /tag:\s*\{\s*backgroundColor:\s*colors\.primary,\s*borderRadius:\s*Radius\.full,/,
+  );
+});

@@ -16,7 +16,7 @@ import {
 import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -73,6 +73,8 @@ export default function NewFriendsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [navigating, setNavigating] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshInFlightRef = useRef(false);
   const markRead = useFriendActivityUnreadStore((state) => state.markRead);
   const refreshUnreadFriendActivityCount = useFriendActivityUnreadStore(
     (state) => state.refresh,
@@ -109,6 +111,18 @@ export default function NewFriendsScreen() {
       void refreshUnreadFriendActivityCount();
     }, [refreshUnreadFriendActivityCount]),
   );
+
+  const handleRefreshActivities = useCallback(async () => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    setRefreshing(true);
+    try {
+      await Promise.all([loadActivities(), refreshUnreadFriendActivityCount()]);
+    } finally {
+      refreshInFlightRef.current = false;
+      setRefreshing(false);
+    }
+  }, [loadActivities, refreshUnreadFriendActivityCount]);
 
   const d = useMemo(
     () => ({
@@ -257,6 +271,8 @@ export default function NewFriendsScreen() {
         ListEmptyComponent={emptyState}
         contentContainerStyle={s.content}
         showsVerticalScrollIndicator={false}
+        refreshing={refreshing}
+        onRefresh={handleRefreshActivities}
       />
     </View>
   );

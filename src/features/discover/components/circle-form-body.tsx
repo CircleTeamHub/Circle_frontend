@@ -390,12 +390,12 @@ export const CircleFormBody: React.FC<CircleFormBodyProps> = ({ form }) => {
               <Pressable
                 key={city}
                 onPress={() => handleRemoveCity(city)}
-                style={[s.cityChip, { backgroundColor: colors.primaryLight }]}
+                style={[s.cityChip, { backgroundColor: colors.primary }]}
               >
-                <Text style={{ color: colors.primary, ...Typography.caption }}>
+                <Text style={{ color: colors.white, ...Typography.caption }}>
                   {city}
                 </Text>
-                <Ionicons name="close" size={12} color={colors.primary} />
+                <Ionicons name="close" size={12} color={colors.white} />
               </Pressable>
             ))}
           </View>
@@ -431,12 +431,12 @@ export const CircleFormBody: React.FC<CircleFormBodyProps> = ({ form }) => {
             <Pressable
               key={tag}
               onPress={() => form.handleRemoveTag(index)}
-              style={[s.tagChip, { backgroundColor: colors.primaryLight }]}
+              style={[s.tagChip, { backgroundColor: colors.primary }]}
             >
-              <Text style={{ color: colors.primary, ...Typography.caption }}>
+              <Text style={{ color: colors.white, ...Typography.caption }}>
                 #{tag}
               </Text>
-              <Ionicons name="close" size={12} color={colors.primary} />
+              <Ionicons name="close" size={12} color={colors.white} />
             </Pressable>
           ))}
         </View>

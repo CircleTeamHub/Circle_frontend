@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -114,18 +114,31 @@ export default function VerificationRequestScreen() {
   const [responding, setResponding] = useState(false);
   const [responded, setResponded] = useState(false);
   const currentUserId = useAuthStore((state) => state.user?.id);
+  const mountedRef = useRef(true);
+  const requestRef = useRef(0);
+
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
 
   const loadInvitation = useCallback(async () => {
     if (!id) {
       setLoading(false);
       return;
     }
+    // mountedRef + requestRef 双重护栏：卸载或被新一轮加载抢占时不再 setState。
+    const requestId = ++requestRef.current;
     setLoading(true);
     setLoadError(null);
     try {
       const data = await fetchInvitation(id);
+      if (!mountedRef.current || requestId !== requestRef.current) return;
       setInvitation(data);
     } catch (error) {
+      if (!mountedRef.current || requestId !== requestRef.current) return;
       setLoadError(
         t('invitation.loadFailed', { defaultValue: '加载失败，请稍后重试' }),
       );
@@ -133,7 +146,9 @@ export default function VerificationRequestScreen() {
         console.warn('[VerificationRequestScreen] fetchInvitation failed', error);
       }
     } finally {
-      setLoading(false);
+      if (mountedRef.current && requestId === requestRef.current) {
+        setLoading(false);
+      }
     }
   }, [id, t]);
 
@@ -162,16 +177,18 @@ export default function VerificationRequestScreen() {
       setResponding(true);
       try {
         await respondToVerification(id, approve);
+        if (!mountedRef.current) return;
         setResponded(true);
         Alert.alert(approve ? t('invitation.approved') : t('invitation.rejected'), undefined, [
           { text: t('common.confirm'), onPress: () => router.back() },
         ]);
       } catch (error: unknown) {
+        if (!mountedRef.current) return;
         const message =
           error instanceof Error ? error.message : t('common.errorOccurred');
         Alert.alert(t('common.errorOccurred'), message);
       } finally {
-        setResponding(false);
+        if (mountedRef.current) setResponding(false);
       }
     },
     [id, responding, router, t],
@@ -219,6 +236,9 @@ export default function VerificationRequestScreen() {
 
   // 角色判定：申请人本人只能看进度（等待验证）；只有被邀请的验证人才有同意/拒绝；
   // 已响应或申请已结束则显示对应状态文案，而不是再给一次操作按钮。
+  // 身份可能尚未水合（冷启动深链直达此页时 authStore.user 还没填充）。此时所有
+  // 「我是谁」的判定都不可信，必须先按未就绪处理，否则会把合法验证人误判成旁观者。
+  const identityReady = currentUserId != null;
   const isApplicant = invitation.applicant.id === currentUserId;
   const myVerifier = invitation.verifiers.find(
     (v) => v.verifier.id === currentUserId,
@@ -261,6 +281,16 @@ export default function VerificationRequestScreen() {
               </Text>
             )}
           </Pressable>
+        </View>
+      );
+    }
+
+    // 申请仍在进行、但当前用户身份还没水合：先给中性 loading，避免误判为旁观者。
+    // 已结束的申请（settled）与身份无关，可直接落到下面的结果文案。
+    if (!identityReady && !settled && !myResponded) {
+      return (
+        <View style={[s.statusPill, { backgroundColor: colors.surface }]}>
+          <ActivityIndicator color={colors.primary} />
         </View>
       );
     }

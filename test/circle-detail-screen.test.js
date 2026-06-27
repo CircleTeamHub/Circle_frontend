@@ -12,3 +12,18 @@ test('CircleDetailScreen exposes owner-only circle icon actions', () => {
   assert.match(src, /selectCircleIcon/);
   assert.match(src, /圈子图标/);
 });
+
+test('CircleDetailScreen supports pull-to-refresh', () => {
+  const src = read('src/features/discover/screens/CircleDetailScreen.tsx');
+
+  assert.match(src, /RefreshControl/);
+  assert.match(src, /const \[refreshing, setRefreshing\] = useState\(false\)/);
+  assert.match(src, /handleRefreshCircle/);
+  assert.match(src, /refreshInFlightRef/);
+  assert.match(src, /if \(refreshInFlightRef\.current\) return;/);
+  assert.match(src, /setRefreshing\(true\)/);
+  assert.match(src, /await Promise\.all\(\[loadCircle\(\), loadMyInvitation\(\)\]\)/);
+  assert.match(src, /finally\s*\{[\s\S]{0,80}setRefreshing\(false\)/);
+  assert.match(src, /refreshing=\{refreshing\}/);
+  assert.match(src, /onRefresh=\{handleRefreshCircle\}/);
+});

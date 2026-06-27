@@ -83,6 +83,20 @@ test('NotesScreen refreshes notes and groups when returning from note edits', ()
   assert.doesNotMatch(src, /useEffect\(\(\) => \{\s*let cancelled = false;[\s\S]*load\(\)\.catch/);
 });
 
+test('NotesScreen supports pull-to-refresh for notes and groups', () => {
+  const src = read('src/features/notes/screens/NotesScreen.tsx');
+
+  assert.match(src, /const \[refreshing, setRefreshing\] = useState\(false\)/);
+  assert.match(src, /handleRefreshNotes/);
+  assert.match(src, /refreshInFlightRef/);
+  assert.match(src, /if \(refreshInFlightRef\.current\) return;/);
+  assert.match(src, /setRefreshing\(true\)/);
+  assert.match(src, /await load\(\)/);
+  assert.match(src, /finally\s*\{[\s\S]{0,80}setRefreshing\(false\)/);
+  assert.match(src, /refreshing=\{refreshing\}/);
+  assert.match(src, /onRefresh=\{handleRefreshNotes\}/);
+});
+
 test('NotesScreen supports group management and multi-group filtering', () => {
   // 拆分后 NotesScreen 只保留列表 + tab 视图；group CRUD + drag/reorder + Animated.Value
   // 全部下沉到 GroupManagerSheet.tsx（review #60）。
@@ -164,6 +178,30 @@ test('GroupManagerSheet keeps the add group button pressable and focuses the inp
   assert.doesNotMatch(src, /disabled=\{savingGroup \|\| !draftGroupName\.trim\(\)\}/);
 });
 
+test('GroupManagerSheet limits custom note groups to ten', () => {
+  const src = read('src/features/notes/components/GroupManagerSheet.tsx');
+
+  assert.match(src, /MAX_NOTE_GROUPS\s*=\s*10/);
+  assert.match(src, /isCreatingGroupAtLimit/);
+  assert.match(src, /groups\.length\s*>=\s*MAX_NOTE_GROUPS/);
+  assert.match(src, /notes\.alerts\.groupLimitTitle/);
+  assert.match(src, /notes\.alerts\.groupLimitMessage/);
+
+  const submitBlock = src.slice(
+    src.indexOf('const handleSubmitGroupPress'),
+    src.indexOf('const openGroupMembershipEditor'),
+  );
+  assert.ok(submitBlock.includes('isCreatingGroupAtLimit'));
+  assert.ok(submitBlock.indexOf('isCreatingGroupAtLimit') < submitBlock.indexOf('void handleSaveGroup()'));
+
+  const saveBlock = src.slice(
+    src.indexOf('const handleSaveGroup'),
+    src.indexOf('const handleSubmitGroupPress'),
+  );
+  assert.ok(saveBlock.includes('createNoteGroup'));
+  assert.ok(saveBlock.indexOf('isCreatingGroupAtLimit') < saveBlock.indexOf('createNoteGroup'));
+});
+
 test('GroupManagerSheet uses stable drag responders directly on each custom group handle', () => {
   const src = read('src/features/notes/components/GroupManagerSheet.tsx');
   assert.match(src, /dragRespondersRef/);
@@ -186,6 +224,59 @@ test('EditNoteScreen loads and submits multiple group ids', () => {
   assert.match(src, /fetchNoteGroups/);
   assert.match(src, /selectedGroupIds|groupIds/);
   assert.match(src, /groupIds:/);
+});
+
+test('EditNoteScreen does not render selected groups a second time', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+
+  assert.doesNotMatch(src, /selectedGroups/);
+  assert.doesNotMatch(src, /selectedGroupTag/);
+  assert.doesNotMatch(src, /selectedGroupText/);
+  assert.doesNotMatch(src, /notes\.edit\.noGroups/);
+});
+
+test('EditNoteScreen lays out note metadata as compact wrapping rows', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+
+  assert.doesNotMatch(src, /ScrollView/);
+  assert.match(src, /groupLabelRow/);
+  assert.match(src, /folder-open-outline/);
+  assert.match(src, /groupChipsWrap/);
+  assert.match(src, /flexWrap:\s*'wrap'/);
+  assert.match(src, /paddingVertical:\s*5/);
+});
+
+test('EditNoteScreen leaves breathing room around title date and groups', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+
+  assert.match(src, /titleInput:\s*\{[\s\S]*paddingBottom:\s*Spacing\.sm/);
+  assert.match(src, /metaRow:\s*\{[\s\S]*paddingBottom:\s*Spacing\.sm/);
+  assert.match(src, /groupSection:\s*\{[\s\S]*paddingTop:\s*Spacing\.sm/);
+  assert.match(src, /groupSection:\s*\{[\s\S]*gap:\s*Spacing\.sm/);
+});
+
+test('EditNoteScreen group chips use squared tags instead of pill tags', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+
+  assert.match(
+    src,
+    /groupChip:\s*\{\s*borderWidth:\s*1,\s*borderRadius:\s*6/,
+  );
+  assert.doesNotMatch(
+    src,
+    /groupChip:\s*\{\s*borderWidth:\s*1,\s*borderRadius:\s*Radius\.(?:md|pill)/,
+  );
+});
+
+test('EditNoteScreen selected group chips use solid purple cards', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+
+  assert.match(
+    src,
+    /groupChipActive:\s*\{\s*backgroundColor:\s*colors\.primary,\s*borderColor:\s*colors\.primary/,
+  );
+  assert.match(src, /groupChipTextActive:\s*\{\s*color:\s*colors\.white\s*\}/);
+  assert.doesNotMatch(src, /groupChipActive:\s*\{[\s\S]*colors\.primary \+ '18'/);
 });
 
 test('NoteCard renders title and meta', () => {

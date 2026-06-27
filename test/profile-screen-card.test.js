@@ -67,6 +67,21 @@ test('ProfileScreen refreshes current user from backend for live VIP and reputat
   assert.match(src, /setProfileDisplayIcons/);
 });
 
+test('ProfileScreen supports pull-to-refresh for profile data', () => {
+  const src = read('src/features/profile/screens/ProfileScreen.tsx');
+
+  assert.match(src, /const \[refreshing, setRefreshing\] = useState\(false\)/);
+  assert.match(src, /refreshCurrentUser/);
+  assert.match(src, /handleRefreshProfile/);
+  assert.match(src, /refreshInFlightRef/);
+  assert.match(src, /if \(refreshInFlightRef\.current\) return;/);
+  assert.match(src, /setRefreshing\(true\)/);
+  assert.match(src, /await refreshCurrentUser\(\{ force: true \}\)/);
+  assert.match(src, /finally\s*\{[\s\S]{0,80}setRefreshing\(false\)/);
+  assert.match(src, /refreshing=\{refreshing\}/);
+  assert.match(src, /onRefresh=\{handleRefreshProfile\}/);
+});
+
 test('ProfileScreen top-right settings action opens the main settings page', () => {
   const src = read('src/features/profile/screens/ProfileScreen.tsx');
   const settingsHandler = src.match(

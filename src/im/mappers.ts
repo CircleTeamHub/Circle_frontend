@@ -93,7 +93,12 @@ function parseVerificationCardPayload(
 ): VerificationCardData | null {
   try {
     const raw = JSON.parse(data) as Partial<VerificationCardData>;
-    if (!raw || typeof raw.invitationId !== 'string') {
+    // 空串/纯空白 invitationId 同样视为无效——否则点名片会跳到 /verification/ 的空路由。
+    if (
+      !raw ||
+      typeof raw.invitationId !== 'string' ||
+      raw.invitationId.trim() === ''
+    ) {
       return null;
     }
     return {

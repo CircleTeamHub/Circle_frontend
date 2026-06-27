@@ -13,7 +13,7 @@ import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore
 import { Spacing, Typography, useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -116,6 +116,8 @@ export default function ContactsScreen() {
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshInFlightRef = useRef(false);
   const unreadFriendActivityCount = useFriendActivityUnreadStore(
     (state) => state.count,
   );
@@ -146,6 +148,18 @@ export default function ContactsScreen() {
       void refreshUnreadFriendActivityCount();
     }, [loadFriends, refreshUnreadFriendActivityCount]),
   );
+
+  const handleRefreshFriends = useCallback(async () => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    setRefreshing(true);
+    try {
+      await Promise.all([loadFriends(), refreshUnreadFriendActivityCount()]);
+    } finally {
+      refreshInFlightRef.current = false;
+      setRefreshing(false);
+    }
+  }, [loadFriends, refreshUnreadFriendActivityCount]);
 
   const sections = useMemo(() => buildContactSections(friends), [friends]);
   const alphabet = useMemo(() => {
@@ -328,6 +342,8 @@ export default function ContactsScreen() {
         contentContainerStyle={s.listContent}
         showsVerticalScrollIndicator={false}
         stickySectionHeadersEnabled={false}
+        refreshing={refreshing}
+        onRefresh={handleRefreshFriends}
       />
       {alphabet.length > 0 ? (
         <View

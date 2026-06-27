@@ -251,7 +251,7 @@ export default function MyIconsScreen() {
         borderColor: colors.surfaceBorder,
       },
       optionChipSelected: {
-        backgroundColor: colors.primaryLight,
+        backgroundColor: colors.primary,
         borderColor: colors.primary,
       },
       saveButton: {

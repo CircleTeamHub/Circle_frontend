@@ -21,7 +21,7 @@ test('圈子默认头像：所有圈子头像渲染点都走 CircleAvatar', () =
   const surfaces = [
     'src/features/discover/screens/CircleDetailScreen.tsx',
     'src/features/discover/components/my-circles-panel.tsx',
-    'src/features/chat/components/chat-bubble.tsx',
+    'src/features/chat/components/bubbles/circle-card-bubble.tsx',
     'src/features/discover/screens/SelectCircleScreen.tsx',
     'src/features/discover/screens/SelectFilterCirclesScreen.tsx',
   ];

@@ -417,6 +417,8 @@ export default function MessagesScreen() {
 
   const [activeFilterId, setActiveFilterId] = useState("all"); // 当前激活的筛选标签 id
   const [menuVisible, setMenuVisible] = useState(false);        // 右上角弹出菜单的显隐
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshInFlightRef = useRef(false);
 
   // 每次回到消息页都重置到"全部"，并重新拉 OpenIM 会话列表。
   // 群聊可能从群列表、圈子、临时群等入口创建/恢复；只在首次 mount 拉取会漏掉这些更新。
@@ -432,6 +434,22 @@ export default function MessagesScreen() {
       });
     }, []),
   );
+
+  const handleRefreshConversations = useCallback(async () => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    setRefreshing(true);
+    try {
+      await loadConversationList();
+    } catch (err) {
+      if (isDev) {
+        console.warn("[messages] pull refresh loadConversationList failed", err);
+      }
+    } finally {
+      refreshInFlightRef.current = false;
+      setRefreshing(false);
+    }
+  }, []);
 
   // 发现 / 系统通知未读数（realtime 通道维护，跟 discover tab 入口绑定）
   const discoverUnread = useTabBadgeStore((state) => state.systemUnread);
@@ -761,6 +779,8 @@ export default function MessagesScreen() {
         }
         contentContainerStyle={s.listContent}
         showsVerticalScrollIndicator={false}
+        refreshing={refreshing}
+        onRefresh={handleRefreshConversations}
       />
 
       {/* 右上角「+」弹出菜单（Modal 实现，点击蒙层关闭） */}

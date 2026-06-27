@@ -58,6 +58,24 @@ test('chat detail screen wires a tappable emoji picker into the composer', () =>
   assert.match(source, /onSelectionChange=\{handleSelectionChange\}/);
 });
 
+test('re-sending a collected favorite rebuilds by original type via resolveCollectionSendPlan', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatDetailScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  // 按 plan 分发：文本走草稿、语音/笔记/名片按原类型重建。
+  assert.match(source, /resolveCollectionSendPlan\(item\)/);
+  assert.match(source, /plan\.kind === 'text'/);
+  assert.match(source, /case 'voice':/);
+  assert.match(source, /case 'note':/);
+  assert.match(source, /case 'friend':/);
+  // 不再有 ⭐ / title 装饰，正文不重复。
+  assert.doesNotMatch(source, /⭐/);
+  assert.doesNotMatch(source, /\$\{item\.title\}\$\{item\.summary/);
+});
+
 test('chat detail screen reads the local chat background preference for the active conversation', () => {
   const filePath = path.join(
     process.cwd(),
@@ -170,6 +188,20 @@ test('chat detail only restores recording audio mode after enabling it', () => {
   assert.doesNotMatch(
     source,
     /void setAudioModeAsync\(\{ allowsRecording: false \}\)\.catch\(\(\) => undefined\);/,
+  );
+});
+
+test('chat detail snapshots voice file uri before stopping the native recorder', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatDetailScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.doesNotMatch(source, /statusAfterStop/);
+  assert.match(
+    source,
+    /const statusBeforeStop = voiceRecorder\.getStatus\(\);\s*\n\s*const soundPath =\s*\n\s*voiceRecorder\.uri \?\? statusBeforeStop\.url;\s*\n\s*await voiceRecorder\.stop\(\);/,
   );
 });
 

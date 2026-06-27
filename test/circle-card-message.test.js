@@ -60,7 +60,9 @@ test('circle card: type, send, and decode are wired through the IM layer', () =>
 });
 
 test('circle card: bubble renders and taps through to the circle detail', () => {
-  const bubble = read('src/features/chat/components/chat-bubble.tsx');
+  const bubble = read(
+    'src/features/chat/components/bubbles/circle-card-bubble.tsx',
+  );
   assert.match(bubble, /export const CircleCardBubble/);
   assert.match(bubble, /message\.circleCard/);
   // The bubble uses the sent snapshot. The detail screen owns live fetching,
@@ -80,17 +82,20 @@ test('circle card: bubble renders and taps through to the circle detail', () => 
 });
 
 test('circle card bubble uses a compact card layout independent of friend cards', () => {
-  const bubble = read('src/features/chat/components/chat-bubble.tsx');
+  const shared = read('src/features/chat/components/bubbles/shared.tsx');
+  const bubble = read(
+    'src/features/chat/components/bubbles/circle-card-bubble.tsx',
+  );
 
-  assert.match(bubble, /const sCircleCard = StyleSheet\.create/);
-  assert.match(bubble, /card:\s*\{[\s\S]*width:\s*CHAT_CARD_STANDARD_WIDTH/);
+  assert.match(shared, /const sCircleCard = StyleSheet\.create/);
+  assert.match(shared, /card:\s*\{[\s\S]*width:\s*CHAT_CARD_STANDARD_WIDTH/);
   assert.match(
-    bubble,
+    shared,
     /card:\s*\{[\s\S]*paddingVertical:\s*CHAT_CARD_PADDING_VERTICAL/,
   );
   assert.match(bubble, /<CircleAvatar[\s\S]*size=\{48\}/);
-  assert.match(bubble, /sCircleCard\.card/);
-  assert.doesNotMatch(bubble, /const CHAT_CARD_WIDTH = 220/);
+  assert.match(shared, /sCircleCard\.card/);
+  assert.doesNotMatch(shared, /const CHAT_CARD_WIDTH = 220/);
 });
 
 test('ShareCircleCardScreen sends the card to a chosen conversation', () => {

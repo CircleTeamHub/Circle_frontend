@@ -1,63 +1,98 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Spacing, Typography, useTheme } from '@/theme';
+import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 interface ProfileActionRowProps {
+  icon: keyof typeof Ionicons.glyphMap;
+  iconColor: string;
   label: string;
   value?: string;
   onPress?: () => void;
 }
 
+// 行内边距(16) + 图标块(30) + 图标与文字间距(12)，分隔线据此左缩进对齐文字
+export const ICON_BADGE_SIZE = 30;
+export const ROW_PADDING_H = Spacing.md;
+export const ROW_GAP = Spacing.md - 4;
+
 const s = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: ROW_GAP,
+    paddingVertical: 13,
+    paddingHorizontal: ROW_PADDING_H,
+  },
+  pressed: {
+    opacity: 0.55,
+  },
+  iconBadge: {
+    width: ICON_BADGE_SIZE,
+    height: ICON_BADGE_SIZE,
+    borderRadius: Radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  body: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: Spacing.md,
-    paddingVertical: Spacing.md,
+    gap: Spacing.sm,
   },
   right: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: Spacing.xs,
     flexShrink: 1,
+  },
+  value: {
+    flexShrink: 1,
+    textAlign: 'right',
   },
 });
 
-export const ProfileActionRow: React.FC<ProfileActionRowProps> = ({
+export const ProfileActionRow = ({
+  icon,
+  iconColor,
   label,
   value,
   onPress,
-}) => {
+}: ProfileActionRowProps) => {
   const { colors } = useTheme();
 
   const d = useMemo(
     () => ({
-      label: {
-        color: colors.text,
-        ...Typography.body,
-      },
-      value: {
-        color: colors.textSecondary,
-        ...Typography.caption,
-        flexShrink: 1,
-        textAlign: 'right' as const,
-      },
+      iconBadge: { backgroundColor: iconColor },
+      label: { color: colors.text, ...Typography.body },
+      value: { color: colors.textSecondary, ...Typography.caption },
     }),
-    [colors],
+    [colors, iconColor],
   );
 
   return (
-    <Pressable style={s.row} onPress={onPress}>
-      <Text style={d.label}>{label}</Text>
-      <View style={s.right}>
-        {value ? <Text style={d.value}>{value}</Text> : null}
-        <Ionicons
-          name="chevron-forward"
-          size={18}
-          color={colors.textSecondary}
-        />
+    <Pressable
+      style={({ pressed }) => [s.row, pressed && s.pressed]}
+      onPress={onPress}
+    >
+      <View style={[s.iconBadge, d.iconBadge]}>
+        <Ionicons name={icon} size={17} color={colors.white} />
+      </View>
+      <View style={s.body}>
+        <Text style={d.label}>{label}</Text>
+        <View style={s.right}>
+          {value ? (
+            <Text style={[s.value, d.value]} numberOfLines={1}>
+              {value}
+            </Text>
+          ) : null}
+          <Ionicons
+            name="chevron-forward"
+            size={16}
+            color={colors.textSecondary}
+          />
+        </View>
       </View>
     </Pressable>
   );

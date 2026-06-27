@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
@@ -52,6 +52,8 @@ export default function NotesScreen() {
   const [showUnlisted, setShowUnlisted] = useState(false);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshInFlightRef = useRef(false);
   const [managerVisible, setManagerVisible] = useState(false);
   const [qrVisible, setQrVisible] = useState(false);
   const [shareLink, setShareLink] = useState<NoteShareLink | null>(null);
@@ -76,6 +78,18 @@ export default function NotesScreen() {
       });
     }, [load]),
   );
+
+  const handleRefreshNotes = useCallback(async () => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      refreshInFlightRef.current = false;
+      setRefreshing(false);
+    }
+  }, [load]);
 
   const filteredNotes = useMemo(() => {
     let result = notes;
@@ -398,6 +412,8 @@ export default function NotesScreen() {
         ItemSeparatorComponent={() => <View style={[s.divider, d.divider]} />}
         contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
         showsVerticalScrollIndicator={false}
+        refreshing={refreshing}
+        onRefresh={handleRefreshNotes}
         ListEmptyComponent={
           loading ? null : (
             <Text style={[s.emptyText, d.statsText]}>

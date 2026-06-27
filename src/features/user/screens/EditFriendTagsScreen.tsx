@@ -193,7 +193,7 @@ export default function EditFriendTagsScreen() {
         borderColor: colors.surfaceBorder,
       },
       tagChipActive: {
-        backgroundColor: colors.primaryLight,
+        backgroundColor: colors.primary,
         borderColor: colors.primary,
       },
       tagText: {
@@ -202,7 +202,7 @@ export default function EditFriendTagsScreen() {
         fontWeight: '600' as const,
       },
       tagTextActive: {
-        color: colors.primary,
+        color: colors.white,
       },
       saveButton: {
         backgroundColor: colors.primary,

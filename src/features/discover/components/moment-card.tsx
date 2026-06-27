@@ -68,11 +68,13 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.lg,
     paddingTop: Spacing.xs,
+    alignItems: 'center',
   },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
+    gap: 6,
+    paddingVertical: Spacing.xs,
   },
   timeText: {
     ...Typography.small,
@@ -169,26 +171,34 @@ export const MomentCard: React.FC<MomentCardProps> = ({
         <View style={s.headerRow}>
           <Text style={[s.timeText, d.timeText]}>{timeLabel}</Text>
           <View style={s.actionsRow}>
-            <Pressable style={s.actionBtn} onPress={() => onLike(post.id)}>
+            <Pressable
+              style={s.actionBtn}
+              hitSlop={8}
+              onPress={() => onLike(post.id)}
+            >
               <Ionicons
                 name={post.isLikedByMe ? 'heart' : 'heart-outline'}
-                size={16}
+                size={24}
                 color={post.isLikedByMe ? colors.error : colors.textSecondary}
               />
               {post.likeCount > 0 ? (
-                <Text style={{ color: colors.textSecondary, ...Typography.small }}>
+                <Text style={{ color: colors.textSecondary, ...Typography.caption }}>
                   {post.likeCount}
                 </Text>
               ) : null}
             </Pressable>
-            <Pressable style={s.actionBtn} onPress={() => onPress(post.id)}>
+            <Pressable
+              style={s.actionBtn}
+              hitSlop={8}
+              onPress={() => onPress(post.id)}
+            >
               <Ionicons
                 name="chatbubble-outline"
-                size={15}
+                size={22}
                 color={colors.textSecondary}
               />
               {post.commentCount > 0 ? (
-                <Text style={{ color: colors.textSecondary, ...Typography.small }}>
+                <Text style={{ color: colors.textSecondary, ...Typography.caption }}>
                   {post.commentCount}
                 </Text>
               ) : null}

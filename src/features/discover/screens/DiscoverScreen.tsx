@@ -1,7 +1,9 @@
+import { Badge } from "@/components/ui/badge";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { MyCirclesPanel } from "@/features/discover/components/my-circles-panel";
 import { MomentsFeed } from "@/features/discover/components/moments-feed";
 import { PlazaFeed } from "@/features/discover/components/plaza-feed";
+import { useTabBadgeStore } from "@/stores/tabBadgeStore";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -55,6 +57,16 @@ const s = StyleSheet.create({
   filterButton: {
     position: "relative",
   },
+  notificationButton: {
+    position: "relative",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  notificationBadge: {
+    position: "absolute",
+    top: -8,
+    right: -12,
+  },
 });
 
 export default function DiscoverScreen() {
@@ -63,6 +75,7 @@ export default function DiscoverScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState(0);
+  const discoverUnread = useTabBadgeStore((state) => state.systemUnread);
 
   const FILTER_TABS = useMemo(
     () => [
@@ -106,8 +119,8 @@ export default function DiscoverScreen() {
     router.push("/(tabs)/discover/circles");
   }, [router]);
 
-  const handlePendingVerificationsPress = useCallback(() => {
-    router.push("/(tabs)/discover/verifications");
+  const handleOpenNotifications = useCallback(() => {
+    router.push("/(tabs)/messages/notifications");
   }, [router]);
 
   const handleFilterPress = useCallback(() => {
@@ -136,18 +149,20 @@ export default function DiscoverScreen() {
               <Ionicons name="search-outline" size={22} color={colors.text} />
             </Pressable>
             <Pressable
-              onPress={handlePendingVerificationsPress}
+              style={s.notificationButton}
+              onPress={handleOpenNotifications}
               hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel={t('invitation.pendingTitle', {
-                defaultValue: '待我验证',
-              })}
+              accessibilityLabel={t('notifications.title')}
             >
               <Ionicons
-                name="shield-checkmark-outline"
+                name="notifications-outline"
                 size={22}
                 color={colors.text}
               />
+              <View style={s.notificationBadge}>
+                <Badge count={discoverUnread} />
+              </View>
             </Pressable>
             <Pressable
               onPress={handleFilterPress}

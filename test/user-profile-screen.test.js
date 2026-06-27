@@ -385,8 +385,10 @@ test('user profile screen uses account label, meta chips, badge row, and conditi
   assert.match(source, /ProfileActionRow/);
   assert.doesNotMatch(source, /actionSection:\s*{\s*borderTopWidth:/);
   assert.match(source, /actionButton:/);
-  assert.match(source, /shadowOpacity:/);
-  assert.match(source, /elevation:/);
+  // 音视频通话按钮与发起聊天同款 primary 填充：去掉了原先的次级描边样式。
+  assert.doesNotMatch(source, /secondaryButton:/);
+  assert.doesNotMatch(source, /secondaryActionButton:/);
+  assert.doesNotMatch(source, /secondaryActionText:/);
   assert.match(source, /value: remarkValue/);
   assert.match(source, /value: tagValue/);
   assert.match(source, /location-outline/);
@@ -408,7 +410,7 @@ test('user profile screen uses account label, meta chips, badge row, and conditi
   assert.doesNotMatch(source, /setFriendStatus\('NONE'\)/);
 });
 
-test('user profile screen wires the top-right menu into chat info for accepted friends', () => {
+test('user profile screen wires the more-info row into chat info for accepted friends', () => {
   const filePath = path.join(
     process.cwd(),
     'src/features/user/screens/UserProfileScreen.tsx',
@@ -416,7 +418,9 @@ test('user profile screen wires the top-right menu into chat info for accepted f
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /const canOpenChatInfo =[\s\S]*friendStatus === 'ACCEPTED'/);
-  assert.match(source, /<NavHeader[\s\S]*title=\{t\('userProfile\.title'\)\}[\s\S]*rightIcon=\{canOpenChatInfo \? 'information-circle-outline' : undefined\}[\s\S]*onRightPress=\{canOpenChatInfo \? handleOpenChatInfo : undefined\}/);
+  // chat-info 入口收敛到「更多信息」行（仅对已添加好友可点），不再是导航栏右上角菜单。
+  assert.match(source, /id === 'moreInfo' && canOpenChatInfo/);
+  assert.match(source, /onPress: handleOpenChatInfo/);
   assert.match(source, /const handleOpenChatInfo = useCallback/);
   assert.match(source, /friendStatus !== 'ACCEPTED'/);
   assert.match(source, /getChatInfoHref/);

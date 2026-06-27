@@ -17,6 +17,7 @@ import {
   fetchFriendSettings,
   setFriendRemark,
 } from '@/services/api/friends';
+import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 const s = StyleSheet.create({
@@ -166,6 +167,8 @@ export default function EditFriendRemarkScreen() {
     try {
       setIsSaving(true);
       await setFriendRemark(profileId, value);
+      // 广播备注变更，让已挂载的聊天页 / 资料页即时刷新显示名。
+      useFriendRemarkStore.getState().setRemark(profileId, value);
       router.back();
     } catch (nextError) {
       Alert.alert(

@@ -2,13 +2,20 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } 
 import {
   Alert,
   Keyboard,
+  KeyboardAvoidingView,
+  LayoutAnimation,
+  PanResponder,
+  Platform,
+  UIManager,
   View,
   Text,
   TextInput,
   Pressable,
   FlatList,
+  ScrollView,
   StyleSheet,
   ImageBackground,
+  useWindowDimensions,
   type FlatList as FlatListType,
   type GestureResponderEvent,
 } from 'react-native';
@@ -32,6 +39,7 @@ import {
   TransferCardBubble,
 } from '@/features/chat/components/chat-bubble';
 import { EmojiPicker } from '@/features/chat/components/emoji-picker';
+import { VoiceRecordingOverlay } from '@/features/chat/components/voice-recording-overlay';
 import {
   MessageActionMenu,
   type MessageAction,
@@ -81,7 +89,7 @@ import type { NoteSummary } from '@/features/notes/types';
 import { createCollection, type UserCollection } from '@/services/api/collections';
 import {
   buildCollectionInputFromMessage,
-  getCollectedOpenIMMessagePayload,
+  resolveCollectionSendPlan,
 } from '@/features/chat/utils/message-collection';
 import {
   getNotificationRestoreMaxMessages,
@@ -97,6 +105,7 @@ import { useSharePickerStore } from '@/features/chat/store/use-share-picker-stor
 import { useMessageForwardStore } from '@/features/chat/store/use-message-forward-store';
 import { useTransferComposerStore } from '@/features/chat/store/use-transfer-composer-store';
 import { useCallStore } from '@/features/call/store/use-call-store';
+import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import {
   DEFAULT_CHAT_BACKGROUND_PREFERENCE,
   resolveChatBackgroundStyle,
@@ -124,6 +133,7 @@ function logChatSendFailure(
 
 type AttachmentId =
   | 'media'
+  | 'camera'
   | 'voice-call'
   | 'location'
   | 'notes'
@@ -137,7 +147,8 @@ const ATTACHMENT_ITEMS: readonly {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
 }[] = [
-  { id: 'media', icon: 'image-outline', label: '媒体' },
+  { id: 'media', icon: 'image-outline', label: '照片' },
+  { id: 'camera', icon: 'camera-outline', label: '拍照' },
   { id: 'voice-call', icon: 'call-outline', label: '语音通话' },
   { id: 'location', icon: 'location-outline', label: '位置' },
   { id: 'notes', icon: 'create-outline', label: '笔记' },
@@ -147,6 +158,39 @@ const ATTACHMENT_ITEMS: readonly {
   { id: 'transfer', icon: 'card-outline', label: '转账' },
 ];
 
+// 工具面板每页最多 8 个（4 列 × 2 行），超出的横向翻页
+const ATTACHMENT_PAGE_SIZE = 8;
+const ATTACHMENT_PAGES: (typeof ATTACHMENT_ITEMS)[number][][] = Array.from(
+  { length: Math.ceil(ATTACHMENT_ITEMS.length / ATTACHMENT_PAGE_SIZE) },
+  (_, page) =>
+    ATTACHMENT_ITEMS.slice(
+      page * ATTACHMENT_PAGE_SIZE,
+      page * ATTACHMENT_PAGE_SIZE + ATTACHMENT_PAGE_SIZE,
+    ),
+);
+
+// Android 需显式开启 LayoutAnimation（iOS 默认可用）。
+if (
+  Platform.OS === 'android' &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// 底部面板展开/收起的协调布局过渡：面板高度变化与消息区缩放一起平滑动，
+// 输入栏位置由 flex 决定、始终在面板上方，不会割裂。稍慢一点更顺眼。
+const PANEL_LAYOUT_ANIM = {
+  duration: 300,
+  create: {
+    type: LayoutAnimation.Types.easeInEaseOut,
+    property: LayoutAnimation.Properties.opacity,
+  },
+  update: { type: LayoutAnimation.Types.easeInEaseOut },
+  delete: {
+    type: LayoutAnimation.Types.easeInEaseOut,
+    property: LayoutAnimation.Properties.opacity,
+  },
+};
 
 const s = StyleSheet.create({
   header: {
@@ -197,29 +241,44 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  circleBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  voiceRecordingBtn: {
-    borderWidth: 1,
-  },
+  circleBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   composerActionBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
   },
   composerShell: {
     flex: 1,
-    height: 42,
+    height: 52,
     borderWidth: 1,
     borderRadius: Radius.xl,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     gap: Spacing.xs,
   },
-  composerInput: { flex: 1, ...Typography.bodyRegular, padding: 0 },
+  composerInput: { flex: 1, ...Typography.bodyRegular, fontSize: 16, padding: 0 },
+  voiceHoldBar: {
+    flex: 1,
+    height: 52,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  voiceHoldText: { ...Typography.body, fontSize: 16, fontWeight: '600' },
   attachmentPanel: {
     paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.md,
+    paddingTop: Spacing.xs,
+  },
+  attachmentDragHandle: {
+    alignItems: 'center',
+    paddingVertical: Spacing.xs,
+  },
+  attachmentDragBar: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
   },
   attachmentGrid: {
     flexDirection: 'row',
@@ -240,6 +299,19 @@ const s = StyleSheet.create({
   },
   attachmentLabel: {
     ...Typography.small,
+  },
+  attachmentDots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.sm,
+  },
+  attachmentDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   voiceStatus: {
     paddingHorizontal: Spacing.lg,
@@ -280,7 +352,12 @@ export default function ChatDetailScreen() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [attachmentPage, setAttachmentPage] = useState(0);
+  const [attachmentPagerWidth, setAttachmentPagerWidth] = useState(0);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  // 键盘弹起时 KeyboardAvoidingView 已把输入栏顶到键盘上方，此时再叠加 insets.bottom
+  // 安全区 padding 会在输入框与键盘间留一道空白。跟踪键盘可见状态，弹起时收掉这层 padding。
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   // 记录输入框光标位置：表情面板按光标处插入，而不是一律拼到末尾。
   // 用 ref 持续跟踪、用 state 只在插入后短暂受控，避免长期受控干扰中文输入法。
   const selectionRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
@@ -295,6 +372,12 @@ export default function ChatDetailScreen() {
   const voiceRecorderState = useAudioRecorderState(voiceRecorder, 250);
   const [voiceRecordingStartedAt, setVoiceRecordingStartedAt] = useState<number | null>(null);
   const [voiceActionBusy, setVoiceActionBusy] = useState(false);
+  // 语音输入模式：点话筒后输入框变「按住说话」；按住时滑到左侧取消、松手发送。
+  const [voiceInputMode, setVoiceInputMode] = useState(false);
+  const [cancelArmed, setCancelArmed] = useState(false);
+  // PanResponder 闭包只在创建时捕获一次，用 ref 把最新状态/回调透进去，避免读到旧值。
+  const cancelArmedRef = useRef(false);
+  const { width: windowWidth } = useWindowDimensions();
   const [callStarting, setCallStarting] = useState(false);
   const callStartingRef = useRef(false);
   const mountedRef = useRef(true);
@@ -325,11 +408,19 @@ export default function ChatDetailScreen() {
   const [resolvedConversationID, setResolvedConversationID] =
     useState(paramConversationID);
   const conversationID = paramConversationID || resolvedConversationID;
-  const conversationTitle =
+  const paramTitle =
     typeof params.title === 'string' ? params.title : '聊天详情';
   const conversationType =
     params.conversationType === 'group' ? SessionType.Group : SessionType.Single;
   const isGroupChat = conversationType === SessionType.Group;
+  // 单聊标题响应式吃备注覆盖：用户在资料页改备注后即时刷新（参数仅作初始快照）。
+  // 非空覆盖 → 用备注；空串（备注被清除）→ 回退到参数快照；未改过 → 用参数快照。
+  // 群聊标题不是好友备注，保持参数原值。
+  const remarkOverride = useFriendRemarkStore((state) =>
+    isGroupChat ? undefined : state.remarks[sourceID],
+  );
+  const conversationTitle =
+    remarkOverride && remarkOverride.length > 0 ? remarkOverride : paramTitle;
   const avatarUrl =
     typeof params.avatarUrl === 'string' ? params.avatarUrl : undefined;
   const searchedMsgID =
@@ -357,6 +448,24 @@ export default function ChatDetailScreen() {
       cancelled = true;
     };
   }, [paramConversationID, sourceID, isGroupChat]);
+
+  // 跟踪键盘显隐：iOS 用 Will* 事件与 KeyboardAvoidingView 动画同步，避免空白闪一下。
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent =
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, () =>
+      setKeyboardVisible(true),
+    );
+    const hideSub = Keyboard.addListener(hideEvent, () =>
+      setKeyboardVisible(false),
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const backgroundPreference = useChatPreferencesStore(
     (state) =>
@@ -441,8 +550,13 @@ export default function ChatDetailScreen() {
     composerShell: { backgroundColor: colors.inputBg, borderColor: colors.surfaceBorder },
     composerInput: { color: colors.text },
     attachmentPanel: { backgroundColor: colors.background },
+    attachmentDragBar: { backgroundColor: colors.surfaceBorder },
     attachmentIcon: { backgroundColor: colors.surface },
-    voiceRecordingBtn: {
+    voiceHoldBarIdle: {
+      backgroundColor: colors.inputBg,
+      borderColor: colors.surfaceBorder,
+    },
+    voiceHoldBarActive: {
       backgroundColor: colors.primary,
       borderColor: colors.primary,
     },
@@ -838,17 +952,52 @@ export default function ChatDetailScreen() {
 
   const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
 
+  // 面板展开/收起前调一次，让这次布局变化（面板高度 + 消息区缩放）平滑过渡。
+  const animatePanels = useCallback(() => {
+    LayoutAnimation.configureNext(PANEL_LAYOUT_ANIM);
+  }, []);
+
   const handleAttachmentToggle = useCallback(() => {
     Keyboard.dismiss();
+    animatePanels();
     setEmojiOpen(false);
+    setAttachmentPage(0);
     setAttachmentOpen((prev) => !prev);
-  }, []);
+  }, [animatePanels]);
 
   const handleEmojiToggle = useCallback(() => {
     Keyboard.dismiss();
+    animatePanels();
     setAttachmentOpen(false);
     setEmojiOpen((prev) => !prev);
-  }, []);
+  }, [animatePanels]);
+
+  // 在消息区下拉/滚动时收起底部面板与键盘（微信式：拖动列表即收回输入区叠层）。
+  const closeInputPanels = useCallback(() => {
+    animatePanels();
+    setAttachmentOpen(false);
+    setEmojiOpen(false);
+    Keyboard.dismiss();
+  }, [animatePanels]);
+
+  // 附件面板下滑收回。面板里是一堆 Pressable 网格项，触摸落到子项上时子项会先抢
+  // responder；必须用「捕获阶段」onMove...Capture 才能在明显向下滑时从子项手里截下手势。
+  // 阈值要求纵向位移明显大于横向（*1.5），避免点击/斜滑误触发，普通点击（无位移）仍走子项。
+  const attachmentPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponderCapture: (_evt, gesture) =>
+          gesture.dy > 10 && gesture.dy > Math.abs(gesture.dx) * 1.5,
+        onPanResponderRelease: (_evt, gesture) => {
+          if (gesture.dy > 40) {
+            LayoutAnimation.configureNext(PANEL_LAYOUT_ANIM);
+            setAttachmentOpen(false);
+          }
+        },
+        onPanResponderTerminate: () => {},
+      }),
+    [],
+  );
 
   const handleInsertEmoji = useCallback((emoji: string) => {
     setDraft((prev) => {
@@ -907,58 +1056,23 @@ export default function ChatDetailScreen() {
     ],
   );
 
-  const handleVoicePress = useCallback(async () => {
+  // 切换「语音输入模式」：文本框 ↔ 按住说话。退出时若在录音则一并取消。
+  const toggleVoiceInputMode = useCallback(() => {
+    if (isPreviewMode) return;
+    Keyboard.dismiss();
+    LayoutAnimation.configureNext(PANEL_LAYOUT_ANIM);
+    setAttachmentOpen(false);
+    setEmojiOpen(false);
+    setVoiceInputMode((prev) => !prev);
+  }, [isPreviewMode]);
+
+  // 按住开始录音。权限/音频模式准备好后 record()，失败时复位状态。
+  const startHoldRecording = useCallback(async () => {
     if (!sourceID || isPreviewMode || voiceActionBusy) return;
-
-    setSendError(null);
-
-    if (isVoiceRecording) {
-      setVoiceActionBusy(true);
-      try {
-        const statusBeforeStop = voiceRecorder.getStatus();
-        await voiceRecorder.stop();
-        const statusAfterStop = voiceRecorder.getStatus();
-        const soundPath =
-          voiceRecorder.uri ?? statusAfterStop.url ?? statusBeforeStop.url;
-        const elapsedMs =
-          statusBeforeStop.durationMillis ||
-          statusAfterStop.durationMillis ||
-          (voiceRecordingStartedAt ? Date.now() - voiceRecordingStartedAt : 0);
-        const duration = Math.max(1, Math.round(elapsedMs / 1000));
-
-        setVoiceRecordingStartedAt(null);
-
-        if (!soundPath) {
-          throw new Error('录音文件生成失败');
-        }
-
-        const sent = await sendVoiceMessage({
-          sourceID,
-          sessionType: conversationType,
-          soundPath,
-          duration,
-        });
-        appendMessages(conversationID, [sent]);
-      } catch (error) {
-        if (__DEV__) {
-          console.warn(
-            '[chat] voice send failed',
-            error instanceof Error
-              ? { name: error.name, message: error.message }
-              : String(error),
-          );
-        }
-        setVoiceRecordingStartedAt(null);
-        setSendError('语音发送失败，请重试');
-      } finally {
-        inFlightRef.current = false;
-        setVoiceActionBusy(false);
-        restoreRecordingAudioMode();
-      }
-      return;
-    }
-
     if (inFlightRef.current) return;
+    setSendError(null);
+    cancelArmedRef.current = false;
+    setCancelArmed(false);
     setVoiceActionBusy(true);
     try {
       const permission = await requestRecordingPermissionsAsync();
@@ -966,16 +1080,12 @@ export default function ChatDetailScreen() {
         Alert.alert('权限不足', '请在系统设置开启麦克风权限');
         return;
       }
-
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       recordingAudioModeEnabledRef.current = true;
       const status = voiceRecorder.getStatus();
       if (!status.canRecord) {
         await voiceRecorder.prepareToRecordAsync();
       }
-      Keyboard.dismiss();
-      setAttachmentOpen(false);
-      setEmojiOpen(false);
       voiceRecorder.record();
       setVoiceRecordingStartedAt(Date.now());
       inFlightRef.current = true;
@@ -996,17 +1106,108 @@ export default function ChatDetailScreen() {
       setVoiceActionBusy(false);
     }
   }, [
-    appendMessages,
-    conversationID,
-    conversationType,
     isPreviewMode,
-    isVoiceRecording,
-    sourceID,
     restoreRecordingAudioMode,
+    sourceID,
     voiceActionBusy,
     voiceRecorder,
-    voiceRecordingStartedAt,
   ]);
+
+  // 松手结束录音。cancel=true 丢弃；否则发送。录音过短（<800ms）按误触丢弃。
+  const finishHoldRecording = useCallback(
+    async (cancel: boolean) => {
+      // 还没真正开始录音（极快松手 / 权限未过）→ 直接复位，避免空 stop。
+      if (!isRecordingRef.current && voiceRecordingStartedAt == null) {
+        setVoiceActionBusy(false);
+        return;
+      }
+      setVoiceActionBusy(true);
+      try {
+        const statusBeforeStop = voiceRecorder.getStatus();
+        const soundPath = voiceRecorder.uri ?? statusBeforeStop.url;
+        await voiceRecorder.stop();
+        const elapsedMs =
+          statusBeforeStop.durationMillis ||
+          (voiceRecordingStartedAt ? Date.now() - voiceRecordingStartedAt : 0);
+        const duration = Math.max(1, Math.round(elapsedMs / 1000));
+        setVoiceRecordingStartedAt(null);
+
+        if (cancel || elapsedMs < 800) return; // 取消 / 误触：丢弃不发
+        if (!soundPath) throw new Error('录音文件生成失败');
+
+        const sent = await sendVoiceMessage({
+          sourceID,
+          sessionType: conversationType,
+          soundPath,
+          duration,
+        });
+        appendMessages(conversationID, [sent]);
+      } catch (error) {
+        if (__DEV__) {
+          console.warn(
+            '[chat] voice send failed',
+            error instanceof Error
+              ? { name: error.name, message: error.message }
+              : String(error),
+          );
+        }
+        setVoiceRecordingStartedAt(null);
+        if (!cancel) setSendError('语音发送失败，请重试');
+      } finally {
+        inFlightRef.current = false;
+        setVoiceActionBusy(false);
+        restoreRecordingAudioMode();
+        cancelArmedRef.current = false;
+        setCancelArmed(false);
+      }
+    },
+    [
+      appendMessages,
+      conversationID,
+      conversationType,
+      restoreRecordingAudioMode,
+      sourceID,
+      voiceRecorder,
+      voiceRecordingStartedAt,
+    ],
+  );
+
+  // PanResponder 创建一次即可，用 ref 透传最新回调，避免闭包读旧值。
+  const startHoldRef = useRef(startHoldRecording);
+  const finishHoldRef = useRef(finishHoldRecording);
+  const windowWidthRef = useRef(windowWidth);
+  useEffect(() => {
+    startHoldRef.current = startHoldRecording;
+    finishHoldRef.current = finishHoldRecording;
+    windowWidthRef.current = windowWidth;
+  }, [startHoldRecording, finishHoldRecording, windowWidth]);
+
+  const voicePanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => {
+          void startHoldRef.current();
+        },
+        onPanResponderMove: (_evt, gesture) => {
+          // 手指滑到屏幕左侧 40% 区域 → 进入取消态。
+          const armed = gesture.moveX > 0 && gesture.moveX < windowWidthRef.current * 0.4;
+          if (armed !== cancelArmedRef.current) {
+            cancelArmedRef.current = armed;
+            setCancelArmed(armed);
+          }
+        },
+        onPanResponderRelease: () => {
+          void finishHoldRef.current(cancelArmedRef.current);
+        },
+        onPanResponderTerminate: () => {
+          // 手势被系统打断（来电等）→ 当作取消，丢弃录音。
+          void finishHoldRef.current(true);
+        },
+      }),
+    [],
+  );
 
   useEffect(
     () => () => {
@@ -1078,6 +1279,57 @@ export default function ChatDetailScreen() {
     sourceID,
   ]);
 
+  // 相册选择与拍照共用同一套「上传→发送」流程，只有获取 asset 的来源不同。
+  const uploadAndSendImageAsset = useCallback(
+    async (asset: ImagePicker.ImagePickerAsset) => {
+      // 用 || 而非 ??：URI 以 '/' 结尾时 pop() 返回空字符串，?? 不会触发 fallback。
+      const filename = asset.uri.split('/').pop() || 'image.jpg';
+      const contentType =
+        resolveUploadContentType({
+          mimeType: asset.mimeType,
+          fileName: filename,
+        }) ?? 'image/jpeg';
+
+      inFlightRef.current = true;
+
+      try {
+        // 不日志 presign 返回的 fileUrl / uploadUrl —— 这是带签名的临时写凭证，
+        // 任何能捕获 console 输出的渠道（adb logcat、屏幕录制、第三方 SDK 的
+        // breadcrumb）拿到 uploadUrl 就能在过期前向同一对象写入任意内容。
+        const presign = await requestUploadPresign({
+          filename: sanitizeUploadFilename(filename),
+          contentType,
+          folder: 'chat',
+        });
+        await uploadLocalFileToPresignedUrl(presign.uploadUrl, contentType, asset.uri);
+        const sentMessage = await sendImageMessage({
+          sourceID,
+          sessionType: conversationType,
+          url: presign.fileUrl,
+          sourcePath: asset.uri,
+          width: asset.width ?? undefined,
+          height: asset.height ?? undefined,
+          size: asset.fileSize ?? undefined,
+          mimeType: contentType,
+        });
+        appendMessages(conversationID, [sentMessage]);
+      } catch (error) {
+        if (__DEV__) {
+          console.warn(
+            '[chat] image send failed',
+            error instanceof Error
+              ? { name: error.name, message: error.message }
+              : String(error),
+          );
+        }
+        setSendError('图片发送失败，请重试');
+      } finally {
+        inFlightRef.current = false;
+      }
+    },
+    [appendMessages, conversationID, conversationType, sourceID],
+  );
+
   const handlePickMedia = useCallback(async () => {
     if (!sourceID || isPreviewMode) return;
     if (inFlightRef.current) return;
@@ -1094,59 +1346,24 @@ export default function ChatDetailScreen() {
       allowsMultipleSelection: false,
     });
     if (result.canceled || result.assets.length === 0) return;
+    await uploadAndSendImageAsset(result.assets[0]);
+  }, [isPreviewMode, sourceID, uploadAndSendImageAsset]);
 
-    const asset = result.assets[0];
-    // 用 || 而非 ??：URI 以 '/' 结尾时 pop() 返回空字符串，?? 不会触发 fallback。
-    const filename = asset.uri.split('/').pop() || 'image.jpg';
-    const contentType =
-      resolveUploadContentType({
-        mimeType: asset.mimeType,
-        fileName: filename,
-      }) ?? 'image/jpeg';
-
-    inFlightRef.current = true;
-
-    try {
-      // 不日志 presign 返回的 fileUrl / uploadUrl —— 这是带签名的临时写凭证，
-      // 任何能捕获 console 输出的渠道（adb logcat、屏幕录制、第三方 SDK 的
-      // breadcrumb）拿到 uploadUrl 就能在过期前向同一对象写入任意内容。
-      const presign = await requestUploadPresign({
-        filename: sanitizeUploadFilename(filename),
-        contentType,
-        folder: 'chat',
-      });
-      await uploadLocalFileToPresignedUrl(presign.uploadUrl, contentType, asset.uri);
-      const sentMessage = await sendImageMessage({
-        sourceID,
-        sessionType: conversationType,
-        url: presign.fileUrl,
-        sourcePath: asset.uri,
-        width: asset.width ?? undefined,
-        height: asset.height ?? undefined,
-        size: asset.fileSize ?? undefined,
-        mimeType: contentType,
-      });
-      appendMessages(conversationID, [sentMessage]);
-    } catch (error) {
-      if (__DEV__) {
-        console.warn(
-          '[chat] image send failed',
-          error instanceof Error
-            ? { name: error.name, message: error.message }
-            : String(error),
-        );
-      }
-      setSendError('图片发送失败，请重试');
-    } finally {
-      inFlightRef.current = false;
+  const handleTakePhoto = useCallback(async () => {
+    if (!sourceID || isPreviewMode) return;
+    if (inFlightRef.current) return;
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('权限不足', '请在系统设置开启相机权限');
+      return;
     }
-  }, [
-    appendMessages,
-    conversationID,
-    conversationType,
-    isPreviewMode,
-    sourceID,
-  ]);
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 0.85,
+    });
+    if (result.canceled || result.assets.length === 0) return;
+    await uploadAndSendImageAsset(result.assets[0]);
+  }, [isPreviewMode, sourceID, uploadAndSendImageAsset]);
 
   const openSharePicker = useCallback(
     (type: 'note' | 'friend' | 'favorite' | 'quick-reply') => {
@@ -1225,10 +1442,14 @@ export default function ChatDetailScreen() {
 
   const handleAttachmentAction = useCallback(
     (id: AttachmentId) => {
+      LayoutAnimation.configureNext(PANEL_LAYOUT_ANIM);
       setAttachmentOpen(false);
       switch (id) {
         case 'media':
           void handlePickMedia();
+          return;
+        case 'camera':
+          void handleTakePhoto();
           return;
         case 'notes':
           openSharePicker('note');
@@ -1270,6 +1491,7 @@ export default function ChatDetailScreen() {
       conversationTitle,
       conversationType,
       handlePickMedia,
+      handleTakePhoto,
       handleSendCurrentLocation,
       handleStartGroupAudioCall,
       openSharePicker,
@@ -1352,34 +1574,62 @@ export default function ChatDetailScreen() {
 
   const handlePickFavorite = useCallback(
     async (item: UserCollection) => {
-      const payload = getCollectedOpenIMMessagePayload(item.payload);
-      if (payload?.messageType === 'voice' && payload.voice) {
-        if (!sourceID || isPreviewMode) return;
-        if (inFlightRef.current) return;
-        inFlightRef.current = true;
-        try {
-          const sent = await sendVoiceMessageFromSource({
-            sourceID,
-            sessionType: conversationType,
-            sourceUrl: payload.voice.sourceUrl,
-            soundPath: payload.voice.soundPath,
-            duration: payload.voice.duration ?? 1,
-            dataSize: payload.voice.dataSize,
-          });
-          appendMessages(conversationID, [sent]);
-        } catch (error) {
-          if (__DEV__) {
-            console.warn('[ChatDetail] send collected voice failed', error);
-          }
-          setSendError('收藏语音发送失败，请重试');
-        } finally {
-          inFlightRef.current = false;
-        }
+      if (!sourceID || isPreviewMode) return;
+
+      // 收藏的是啥就原样发啥：能按原类型还原的（文本/语音/笔记/名片）忠实重建，
+      // 不加 title 等装饰；其余回退成干净文本。
+      const plan = resolveCollectionSendPlan(item);
+
+      // 文本走统一草稿发送路径（自带 inFlightRef 防抖）。
+      if (plan.kind === 'text') {
+        await sendDraftAsText(plan.text);
         return;
       }
 
-      const text = `⭐ ${item.title}${item.summary ? `\n${item.summary}` : ''}`;
-      await sendDraftAsText(text);
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
+      try {
+        let sent;
+        switch (plan.kind) {
+          case 'voice':
+            sent = await sendVoiceMessageFromSource({
+              sourceID,
+              sessionType: conversationType,
+              sourceUrl: plan.sourceUrl,
+              soundPath: plan.soundPath,
+              duration: plan.duration,
+              dataSize: plan.dataSize,
+            });
+            break;
+          case 'note':
+            sent = await sendNoteCardMessage({
+              sourceID,
+              sessionType: conversationType,
+              payload: plan.noteCard,
+            });
+            break;
+          case 'friend':
+            sent = await sendFriendCardMessage({
+              targetConversationID: conversationID,
+              userID: plan.friendCard.userID,
+              nickname: plan.friendCard.nickname,
+              faceURL: plan.friendCard.faceURL,
+              persona: plan.friendCard.persona,
+              displayIcons: plan.friendCard.displayIcons,
+            });
+            break;
+        }
+        if (sent) {
+          appendMessages(conversationID, [sent]);
+        }
+      } catch (error) {
+        if (__DEV__) {
+          console.warn('[ChatDetail] send collected item failed', error);
+        }
+        setSendError('收藏内容发送失败，请重试');
+      } finally {
+        inFlightRef.current = false;
+      }
     },
     [
       appendMessages,
@@ -1501,7 +1751,13 @@ export default function ChatDetailScreen() {
   ]);
 
   return (
-    <View style={[d.container, { paddingTop: insets.top }]}>
+    <KeyboardAvoidingView
+      style={[d.container, { paddingTop: insets.top }]}
+      // iOS：键盘弹起时给容器底部加 padding，把输入框顶到键盘上方。
+      // Android 走系统 adjustResize，无需 JS 介入（behavior=undefined）。
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={0}
+    >
       <View style={s.header}>
         <Pressable onPress={handleBack} hitSlop={8}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
@@ -1565,6 +1821,10 @@ export default function ChatDetailScreen() {
           keyExtractor={keyExtractor}
           contentContainerStyle={[s.messageList, s.messageListContent, s.messageListInset]}
           showsVerticalScrollIndicator={false}
+          // 下拉/滚动消息列表即收起底部面板与键盘（微信式）。on-drag 让键盘跟手滑落。
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+          onScrollBeginDrag={closeInputPanels}
           // scrollToIndex 在 inverted + 没设 getItemLayout 时，目标 index 超出已渲染窗口
           // 就会抛 "scrollToIndex out of range"。fallback：先滚到能测到的最远 index，
           // 等下一帧布局完再精确跳到目标位置，避免搜索定位时整页崩。
@@ -1608,59 +1868,91 @@ export default function ChatDetailScreen() {
           s.inputBar,
           d.inputBar,
           {
+            // 键盘弹起 / 面板展开时无需安全区 padding（键盘或面板已占住底部），紧贴即可；
+            // 仅在底部裸露时留 insets.bottom 让输入栏避开 home indicator。
             paddingBottom:
-              attachmentOpen || emojiOpen ? Spacing.sm : insets.bottom || 28,
+              attachmentOpen || emojiOpen || keyboardVisible
+                ? Spacing.sm
+                : insets.bottom || 28,
           },
         ]}
       >
+        {/* 左侧：语音模式→切回键盘；文本模式→话筒。录音中由全屏浮层接管，禁用。 */}
         <Pressable
-          style={[
-            s.circleBtn,
-            d.circleBtn,
-            isVoiceRecording ? [s.voiceRecordingBtn, d.voiceRecordingBtn] : null,
-          ]}
-          onPress={handleVoicePress}
-          disabled={isPreviewMode || voiceActionBusy}
+          key="voice-left"
+          style={[s.circleBtn, d.circleBtn]}
+          onPress={toggleVoiceInputMode}
+          disabled={isPreviewMode || isVoiceRecording}
           hitSlop={8}
         >
           <Ionicons
-            name={isVoiceRecording ? 'stop' : 'mic'}
-            size={18}
-            color={isVoiceRecording ? colors.white : colors.textSecondary}
+            name={voiceInputMode ? 'create-outline' : 'mic'}
+            size={22}
+            color={colors.textSecondary}
           />
         </Pressable>
-        <View style={[s.composerShell, d.composerShell]}>
-          <TextInput
-            style={[s.composerInput, d.composerInput]}
-            placeholder={isPreviewMode ? '当前仅预览聊天界面' : '输入消息...'}
-            placeholderTextColor={colors.textSecondary}
-            value={draft}
-            onChangeText={setDraft}
-            selection={selection}
-            onSelectionChange={handleSelectionChange}
-            onSubmitEditing={handleSend}
-            onFocus={() => {
-              setAttachmentOpen(false);
-              setEmojiOpen(false);
-            }}
-            editable={!isPreviewMode}
-          />
-          <Pressable onPress={handleEmojiToggle} hitSlop={8} disabled={isPreviewMode}>
-            <Ionicons
-              name="happy-outline"
-              size={18}
-              color={emojiOpen ? colors.primary : colors.textSecondary}
+
+        {/* 中间：文本模式=输入框；语音模式=按住说话（gesture 元素全程保持挂载）。 */}
+        {voiceInputMode ? (
+          <View
+            key="voice-hold-bar"
+            style={[
+              s.voiceHoldBar,
+              isVoiceRecording ? d.voiceHoldBarActive : d.voiceHoldBarIdle,
+            ]}
+            {...voicePanResponder.panHandlers}
+          >
+            <Text
+              style={[
+                s.voiceHoldText,
+                { color: isVoiceRecording ? colors.white : colors.text },
+              ]}
+            >
+              {isVoiceRecording
+                ? cancelArmed
+                  ? '松开 取消'
+                  : `松开发送 ${voiceElapsedSeconds}"`
+                : '按住 说话'}
+            </Text>
+          </View>
+        ) : (
+          <View key="text-shell" style={[s.composerShell, d.composerShell]}>
+            <TextInput
+              style={[s.composerInput, d.composerInput]}
+              placeholder={isPreviewMode ? '当前仅预览聊天界面' : '输入消息...'}
+              placeholderTextColor={colors.textSecondary}
+              value={draft}
+              onChangeText={setDraft}
+              selection={selection}
+              onSelectionChange={handleSelectionChange}
+              onSubmitEditing={handleSend}
+              onFocus={() => {
+                LayoutAnimation.configureNext(PANEL_LAYOUT_ANIM);
+                setAttachmentOpen(false);
+                setEmojiOpen(false);
+              }}
+              editable={!isPreviewMode}
             />
-          </Pressable>
-        </View>
+            <Pressable onPress={handleEmojiToggle} hitSlop={8} disabled={isPreviewMode}>
+              <Ionicons
+                name="happy-outline"
+                size={22}
+                color={emojiOpen ? colors.primary : colors.textSecondary}
+              />
+            </Pressable>
+          </View>
+        )}
+
+        {/* 右侧：发送/附件。录音中由全屏浮层接管，禁用。 */}
         <Pressable
+          key="voice-right"
           style={[s.circleBtn, s.composerActionBtn, d.circleBtn, d.composerActionBtn]}
           onPress={draft.trim() ? handleSend : handleAttachmentToggle}
-          disabled={sending || isPreviewMode}
+          disabled={sending || isPreviewMode || isVoiceRecording}
         >
           <Ionicons
             name={draft.trim() ? 'send' : 'add'}
-            size={18}
+            size={22}
             color={colors.textSecondary}
           />
         </Pressable>
@@ -1682,32 +1974,80 @@ export default function ChatDetailScreen() {
             d.attachmentPanel,
             { paddingBottom: insets.bottom || Spacing.md },
           ]}
+          {...attachmentPanResponder.panHandlers}
         >
-          <View style={s.attachmentGrid}>
-            {ATTACHMENT_ITEMS.map((item) => (
-              <Pressable
-                key={item.id}
-                style={s.attachmentItem}
-                onPress={() => handleAttachmentAction(item.id)}
-                disabled={item.id === 'voice-call' && callStarting}
-              >
-                <View style={[s.attachmentIcon, d.attachmentIcon]}>
-                  <Ionicons
-                    name={item.icon}
-                    size={26}
-                    color={
-                      item.id === 'voice-call' && callStarting
-                        ? colors.primary
-                        : colors.text
-                    }
-                  />
-                </View>
-                <Text style={[s.attachmentLabel, { color: colors.textSecondary }]}>
-                  {item.id === 'voice-call' && callStarting ? '呼叫中' : item.label}
-                </Text>
-              </Pressable>
-            ))}
+          <View style={s.attachmentDragHandle}>
+            <View style={[s.attachmentDragBar, d.attachmentDragBar]} />
           </View>
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            scrollEnabled={ATTACHMENT_PAGES.length > 1}
+            onLayout={(e) => setAttachmentPagerWidth(e.nativeEvent.layout.width)}
+            onMomentumScrollEnd={(e) => {
+              const w = attachmentPagerWidth || windowWidth - Spacing.md * 2;
+              if (w > 0) {
+                setAttachmentPage(Math.round(e.nativeEvent.contentOffset.x / w));
+              }
+            }}
+          >
+            {ATTACHMENT_PAGES.map((page, pageIndex) => (
+              <View
+                key={pageIndex}
+                style={[
+                  s.attachmentGrid,
+                  { width: attachmentPagerWidth || windowWidth - Spacing.md * 2 },
+                ]}
+              >
+                {page.map((item) => (
+                  <Pressable
+                    key={item.id}
+                    style={s.attachmentItem}
+                    onPress={() => handleAttachmentAction(item.id)}
+                    disabled={item.id === 'voice-call' && callStarting}
+                  >
+                    <View style={[s.attachmentIcon, d.attachmentIcon]}>
+                      <Ionicons
+                        name={item.icon}
+                        size={26}
+                        color={
+                          item.id === 'voice-call' && callStarting
+                            ? colors.primary
+                            : colors.text
+                        }
+                      />
+                    </View>
+                    <Text
+                      style={[s.attachmentLabel, { color: colors.textSecondary }]}
+                    >
+                      {item.id === 'voice-call' && callStarting
+                        ? '呼叫中'
+                        : item.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            ))}
+          </ScrollView>
+          {ATTACHMENT_PAGES.length > 1 ? (
+            <View style={s.attachmentDots}>
+              {ATTACHMENT_PAGES.map((_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    s.attachmentDot,
+                    {
+                      backgroundColor:
+                        i === attachmentPage
+                          ? colors.primary
+                          : colors.surfaceBorder,
+                    },
+                  ]}
+                />
+              ))}
+            </View>
+          ) : null}
         </View>
       ) : null}
 
@@ -1716,6 +2056,14 @@ export default function ChatDetailScreen() {
         actions={messageActions}
         onDismiss={() => setActionMenu(null)}
       />
-    </View>
+
+      {/* 微信式全屏录音浮层：录音时盖在最上层，纯展示（pointerEvents none）。 */}
+      {isVoiceRecording ? (
+        <VoiceRecordingOverlay
+          cancelArmed={cancelArmed}
+          elapsedSeconds={voiceElapsedSeconds}
+        />
+      ) : null}
+    </KeyboardAvoidingView>
   );
 }

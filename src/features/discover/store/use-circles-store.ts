@@ -5,8 +5,13 @@ import {
   fetchMyCircles,
 } from '@/services/api/circles';
 import { getApiErrorMessage } from '@/services/api/errors';
+import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import type { Circle } from '@/types';
 import { deriveManagedCircles } from './managed-circles';
+
+// 「发现圈子」一次最多拉取的圈子数。本地搜索只在这批里过滤，超出部分搜不到——
+// total 超过它时记一条诊断并由 UI 提示，避免「搜了真实存在的圈子却查无结果」的静默错误。
+const ALL_CIRCLES_LIMIT = 100;
 
 interface CirclesState {
   joinedCircles: Circle[];
@@ -14,6 +19,8 @@ interface CirclesState {
   managedCircles: Circle[];
   appliedCircles: Circle[];
   allCircles: Circle[];
+  // 服务端报告的圈子总数；> allCircles.length 时说明列表被 limit 截断。
+  allCirclesTotal: number;
   myCirclesLoading: boolean;
   allCirclesLoading: boolean;
   myCirclesError: string | null;
@@ -34,6 +41,7 @@ export const useCirclesStore = create<CirclesState>((set) => ({
   managedCircles: [],
   appliedCircles: [],
   allCircles: [],
+  allCirclesTotal: 0,
   myCirclesLoading: false,
   allCirclesLoading: false,
   myCirclesError: null,
@@ -91,8 +99,19 @@ export const useCirclesStore = create<CirclesState>((set) => ({
   fetchAllCircles: async () => {
     set({ allCirclesLoading: true, allCirclesError: null });
     try {
-      const result = await fetchCircles({ limit: 100 });
-      set({ allCircles: result.items, allCirclesError: null });
+      const result = await fetchCircles({ limit: ALL_CIRCLES_LIMIT });
+      if (result.total > result.items.length) {
+        logClientDiagnostic('circle_discover_list_capped', {
+          total: result.total,
+          loaded: result.items.length,
+          limit: ALL_CIRCLES_LIMIT,
+        });
+      }
+      set({
+        allCircles: result.items,
+        allCirclesTotal: result.total,
+        allCirclesError: null,
+      });
     } catch (error) {
       set({
         allCirclesError: getApiErrorMessage(
@@ -140,6 +159,7 @@ export const useCirclesStore = create<CirclesState>((set) => ({
       managedCircles: [],
       appliedCircles: [],
       allCircles: [],
+      allCirclesTotal: 0,
       myCirclesLoading: false,
       allCirclesLoading: false,
       myCirclesError: null,

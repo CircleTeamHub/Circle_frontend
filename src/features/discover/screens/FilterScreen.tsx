@@ -184,23 +184,23 @@ export default function FilterScreen() {
         color: colors.text,
         ...Typography.h3,
       },
-      chip: { backgroundColor: colors.primaryLight },
+      chip: { backgroundColor: colors.primary },
       chipText: {
-        color: colors.primary,
+        color: colors.white,
         ...Typography.caption,
         fontWeight: '600' as const,
       },
-      chipRemove: { backgroundColor: colors.primaryLight },
+      chipRemove: { backgroundColor: colors.white },
       emptyHint: {
         color: colors.textSecondary,
         ...Typography.caption,
       },
       divider: { backgroundColor: colors.divider },
       clearBtn: {
-        backgroundColor: colors.primaryLight,
+        backgroundColor: colors.primary,
       },
       clearText: {
-        color: colors.primary,
+        color: colors.white,
         ...Typography.body,
         fontWeight: '600' as const,
       },
@@ -289,7 +289,7 @@ export default function FilterScreen() {
                   <Ionicons
                     name="location-outline"
                     size={12}
-                    color={colors.primary}
+                    color={colors.white}
                   />
                   <Text style={d.chipText} numberOfLines={1}>
                     {city}

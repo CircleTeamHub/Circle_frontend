@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -76,6 +76,8 @@ export default function GroupsScreen() {
   const [groups, setGroups] = useState<GroupItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshInFlightRef = useRef(false);
 
   const loadGroups = useCallback(
     async (signal?: { cancelled: boolean }) => {
@@ -114,6 +116,18 @@ export default function GroupsScreen() {
       void loadGroups();
     }, [loadGroups]),
   );
+
+  const handleRefreshGroups = useCallback(async () => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    setRefreshing(true);
+    try {
+      await loadGroups();
+    } finally {
+      refreshInFlightRef.current = false;
+      setRefreshing(false);
+    }
+  }, [loadGroups]);
 
   const sections = useMemo<GroupSection[]>(() => {
     if (!currentUserID) {
@@ -279,6 +293,8 @@ export default function GroupsScreen() {
         )}
         ListEmptyComponent={emptyState}
         showsVerticalScrollIndicator={false}
+        refreshing={refreshing}
+        onRefresh={handleRefreshGroups}
       />
     </View>
   );

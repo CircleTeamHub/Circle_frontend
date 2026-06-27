@@ -78,7 +78,9 @@ test('verification card: type, send, and decode are wired through the IM layer',
 });
 
 test('verification card: bubble renders and taps through to the verify screen', () => {
-  const bubble = read('src/features/chat/components/chat-bubble.tsx');
+  const bubble = read(
+    'src/features/chat/components/bubbles/verification-card-bubble.tsx',
+  );
   assert.match(bubble, /export const VerificationCardBubble/);
   assert.match(bubble, /message\.verificationCard/);
 
@@ -160,5 +162,32 @@ test('verification card mapper rejects a custom message missing invitationId', (
   );
 
   // Falls through to a non-card type instead of a broken verification card.
+  assert.notEqual(normalize(mapped).type, 'verification-card');
+});
+
+test('verification card mapper rejects an empty-string invitationId', () => {
+  const { mapMessageItemToChatMessage } = loadTsModule(
+    'src/im/mappers.ts',
+    MAPPER_STUBS,
+  );
+
+  const mapped = mapMessageItemToChatMessage(
+    {
+      clientMsgID: 'verify-empty',
+      sendID: 'applicant-1',
+      senderNickname: 'meiguici',
+      contentType: 110,
+      sendTime: new Date(2024, 0, 2, 12, 0, 0).getTime(),
+      status: 2,
+      isRead: false,
+      customElem: {
+        extension: 'circle-verify-v1',
+        // Empty id would otherwise route taps to /verification/ with no id.
+        data: JSON.stringify({ invitationId: '', circleName: 'x' }),
+      },
+    },
+    'me',
+  );
+
   assert.notEqual(normalize(mapped).type, 'verification-card');
 });

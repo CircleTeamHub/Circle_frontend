@@ -70,6 +70,70 @@ test('tags screens load tag data and tagged friends with dedicated routes', () =
   assert.match(tagDetailScreenSource, /buildContactSections/);
 });
 
+test('contacts list screens support pull-to-refresh', () => {
+  const screens = [
+    {
+      name: 'ContactsScreen',
+      source: read('src/features/contacts/screens/ContactsScreen.tsx'),
+      refreshHandler: 'handleRefreshFriends',
+    },
+    {
+      name: 'NewFriendsScreen',
+      source: read('src/features/contacts/screens/NewFriendsScreen.tsx'),
+      refreshHandler: 'handleRefreshActivities',
+    },
+    {
+      name: 'GroupsScreen',
+      source: read('src/features/contacts/screens/GroupsScreen.tsx'),
+      refreshHandler: 'handleRefreshGroups',
+    },
+    {
+      name: 'FriendTagsScreen',
+      source: read('src/features/contacts/screens/FriendTagsScreen.tsx'),
+      refreshHandler: 'handleRefreshTags',
+    },
+    {
+      name: 'FriendTagDetailScreen',
+      source: read('src/features/contacts/screens/FriendTagDetailScreen.tsx'),
+      refreshHandler: 'handleRefreshFriends',
+    },
+  ];
+
+  for (const screen of screens) {
+    assert.match(
+      screen.source,
+      /const \[refreshing, setRefreshing\] = useState\(false\)/,
+      `${screen.name} should keep refresh state`,
+    );
+    assert.match(
+      screen.source,
+      new RegExp(`const ${screen.refreshHandler} = useCallback`),
+      `${screen.name} should define a refresh handler`,
+    );
+    assert.match(
+      screen.source,
+      /refreshInFlightRef/,
+      `${screen.name} should guard repeated refresh requests`,
+    );
+    assert.match(
+      screen.source,
+      /if \(refreshInFlightRef\.current\) return;/,
+      `${screen.name} should ignore refresh while one is already running`,
+    );
+    assert.match(
+      screen.source,
+      new RegExp(`onRefresh=\\{${screen.refreshHandler}\\}`),
+      `${screen.name} should wire onRefresh`,
+    );
+    assert.match(
+      screen.source,
+      /refreshing=\{refreshing\}|RefreshControl/,
+      `${screen.name} should expose native refresh UI`,
+    );
+  }
+}
+);
+
 test('friend activity detail screen supports request handling and single-item read state', () => {
   const routeSource = read('app/(tabs)/contacts/new-friends/[id].tsx');
   const screenSource = read('src/features/contacts/screens/FriendActivityDetailScreen.tsx');

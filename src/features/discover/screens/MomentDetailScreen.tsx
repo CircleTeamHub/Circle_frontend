@@ -55,8 +55,13 @@ const s = StyleSheet.create({
     paddingTop: Spacing.sm,
   },
   timeText: { ...Typography.small },
-  actionsRow: { flexDirection: 'row', gap: Spacing.lg },
-  actionBtn: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
+  actionsRow: { flexDirection: 'row', gap: Spacing.lg, alignItems: 'center' },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: Spacing.xs,
+  },
   commentsHeader: {
     paddingVertical: Spacing.md,
   },
@@ -122,7 +127,9 @@ export default function MomentDetailScreen() {
   const [post, setPost] = useState<MomentPost | null>(storeMoment ?? null);
   const [loading, setLoading] = useState(!storeMoment);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const postRef = useRef<MomentPost | null>(storeMoment ?? null);
+  const refreshInFlightRef = useRef(false);
   const [commentTarget, setCommentTarget] = useState<{
     replyTo: { id: string; nickname: string } | null;
   } | null>(null);
@@ -139,51 +146,51 @@ export default function MomentDetailScreen() {
     }
   }, [storeMoment]);
 
-  const loadMoment = useCallback(() => {
+  const loadMoment = useCallback(async () => {
     if (!id) {
-      return () => undefined;
+      return;
     }
 
-    let cancelled = false;
+    const hasPreviewPost = Boolean(postRef.current);
+    if (!hasPreviewPost) {
+      setLoading(true);
+    }
+    setLoadError(null);
 
-    (async () => {
-      const hasPreviewPost = Boolean(postRef.current);
+    try {
+      const found = await fetchMomentById(id);
+      setPost(found);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        setPost(null);
+        setLoadError(t('moment.notExist'));
+        return;
+      }
+
+      setLoadError(getApiErrorMessage(error, t('moment.loadFailed')));
+    } finally {
       if (!hasPreviewPost) {
-        setLoading(true);
+        setLoading(false);
       }
-      setLoadError(null);
-
-      try {
-        const found = await fetchMomentById(id);
-        if (!cancelled) {
-          setPost(found);
-        }
-      } catch (error) {
-        if (cancelled) {
-          return;
-        }
-
-        if (error instanceof ApiError && error.status === 404) {
-          setPost(null);
-          setLoadError(t('moment.notExist'));
-          return;
-        }
-
-        setLoadError(getApiErrorMessage(error, t('moment.loadFailed')));
-      } finally {
-        if (!cancelled && !hasPreviewPost) {
-          setLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+    }
   }, [id, t]);
 
   // Fallback: fetch from API if not in store
-  useEffect(() => loadMoment(), [loadMoment]);
+  useEffect(() => {
+    void loadMoment();
+  }, [loadMoment]);
+
+  const handleRefreshMoment = useCallback(async () => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    setRefreshing(true);
+    try {
+      await loadMoment();
+    } finally {
+      refreshInFlightRef.current = false;
+      setRefreshing(false);
+    }
+  }, [loadMoment]);
 
   const d = useMemo(
     () => ({
@@ -469,23 +476,24 @@ export default function MomentDetailScreen() {
         <View style={s.metaRow}>
           <Text style={[s.timeText, d.timeText]}>{timeLabel}</Text>
           <View style={s.actionsRow}>
-            <Pressable style={s.actionBtn} onPress={handleLike}>
+            <Pressable style={s.actionBtn} hitSlop={8} onPress={handleLike}>
               <Ionicons
                 name={post.isLikedByMe ? 'heart' : 'heart-outline'}
-                size={18}
+                size={26}
                 color={post.isLikedByMe ? colors.error : colors.textSecondary}
               />
               {post.likeCount > 0 ? (
-                <Text style={{ color: colors.textSecondary, ...Typography.caption }}>
+                <Text style={{ color: colors.textSecondary, ...Typography.body }}>
                   {post.likeCount}
                 </Text>
               ) : null}
             </Pressable>
             <Pressable
               style={s.actionBtn}
+              hitSlop={8}
               onPress={() => setCommentTarget({ replyTo: null })}
             >
-              <Ionicons name="chatbubble-outline" size={17} color={colors.textSecondary} />
+              <Ionicons name="chatbubble-outline" size={24} color={colors.textSecondary} />
               {post.commentCount > 0 ? (
                 <Text style={{ color: colors.textSecondary, ...Typography.caption }}>
                   {post.commentCount}
@@ -543,6 +551,8 @@ export default function MomentDetailScreen() {
         renderItem={renderCommentRow}
         ListHeaderComponent={ListHeader}
         contentContainerStyle={{ paddingHorizontal: Spacing.lg, paddingBottom: 100 }}
+        refreshing={refreshing}
+        onRefresh={handleRefreshMoment}
         ListEmptyComponent={
           <View style={s.emptyComments}>
             <Text style={d.emptyText}>{t('moment.noComments')}</Text>

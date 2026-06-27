@@ -1,12 +1,13 @@
 import { Avatar } from "@/components/ui/avatar";
 import { Divider } from "@/components/ui/divider";
+import { GradientCover } from "@/components/ui/gradient-cover";
 import { MenuRow } from "@/components/ui/menu-row";
 import { UserIconRow } from "@/components/ui/user-icon-row";
 import { getUserProfileHref } from "@/features/user/utils/routes";
 import { fetchCurrentUser } from "@/services/api/auth";
 import { fetchIconOptions } from "@/services/api/icons";
 import { markProfileNotificationsRead } from "@/services/api/notifications";
-import { Radius, Spacing, Typography, useTheme } from "@/theme";
+import { Gradients, Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { DisplayIcon, MenuItem } from "@/types";
 import { useAuthStore } from "@/stores/authStore";
 import { useTabBadgeStore } from "@/stores/tabBadgeStore";
@@ -78,28 +79,40 @@ const s = StyleSheet.create({
   memberCard: {
     borderRadius: Radius.lg,
     padding: Spacing.md,
-    gap: Spacing.sm,
-  },
-  memberStats: {
-    flexDirection: "row",
-    gap: Spacing.sm,
+    gap: Spacing.md - 4,
+    overflow: "hidden",
   },
   memberCardHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  memberStat: {
-    flex: 1,
+  memberHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+  memberStatsPanel: {
+    flexDirection: "row",
+    alignItems: "center",
     borderRadius: Radius.md,
-    paddingVertical: 10,
-    paddingHorizontal: Spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 12,
+  },
+  memberStatCell: {
+    flex: 1,
+    alignItems: "center",
     gap: 4,
+  },
+  memberStatDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: "stretch",
+    marginVertical: 6,
   },
   memberIdentityRow: {
     flexDirection: "row",
     gap: Spacing.md,
-    paddingTop: Spacing.xs,
+    paddingTop: 2,
     alignItems: "center",
   },
   memberIdentityItem: {
@@ -132,6 +145,8 @@ export default function ProfileScreen() {
   const [profileDisplayIcons, setProfileDisplayIcons] = useState<DisplayIcon[]>(
     user?.displayIcons ?? [],
   );
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshInFlightRef = useRef(false);
   const lastRefreshRef = useRef(0);
 
   const MENU_ITEMS: MenuItem[] = MENU_ITEM_KEYS.map((m) => ({
@@ -148,40 +163,44 @@ export default function ProfileScreen() {
       profileAccount: { color: colors.textSecondary, ...Typography.small },
       profileActionLabel: { color: colors.textSecondary, ...Typography.tiny },
       memberCard: {
-        backgroundColor: colors.memberCardBg,
+        // 渐变由 GradientCover 铺底，这里只作 SVG 挂载前的兜底色
+        backgroundColor: "#6E5CF0",
       },
-      memberStat: {
-        backgroundColor: colors.memberTagBgLight,
+      memberStatsPanel: {
+        backgroundColor: "rgba(255, 255, 255, 0.14)",
+        borderColor: "rgba(255, 255, 255, 0.20)",
+      },
+      memberStatDivider: {
+        backgroundColor: "rgba(255, 255, 255, 0.22)",
       },
       memberStatLabel: {
-        color: colors.memberCardText,
+        color: colors.white,
         ...Typography.tiny,
-        opacity: 0.72,
+        opacity: 0.78,
       },
       memberStatValue: {
-        color: colors.memberCardText,
-        fontSize: 20,
+        color: colors.white,
+        fontSize: 22,
         fontWeight: "700" as const,
         fontVariant: ["tabular-nums"] as TextStyle["fontVariant"],
       },
       memberIdentityCircle: {
-        backgroundColor: colors.memberTagBgLight,
+        backgroundColor: "rgba(255, 255, 255, 0.18)",
       },
       memberIdentityLabel: {
-        color: colors.memberCardText,
+        color: colors.white,
         ...Typography.tiny,
         fontWeight: "700" as const,
       },
       memberIdentityHint: {
-        color: colors.memberCardText,
+        color: colors.white,
         ...Typography.small,
         fontWeight: "600" as const,
       },
       memberCardAction: {
-        color: colors.memberCardText,
-        ...Typography.tiny,
+        color: colors.white,
+        ...Typography.caption,
         fontWeight: "700" as const,
-        opacity: 0.8,
       },
     }),
     [colors],
@@ -198,50 +217,65 @@ export default function ProfileScreen() {
     setProfileDisplayIcons(user?.displayIcons ?? []);
   }, [user?.displayIcons]);
 
-  useFocusEffect(
-    useCallback(() => {
+  const refreshCurrentUser = useCallback(
+    async (options?: { force?: boolean; isActive?: () => boolean }) => {
       if (!user) {
-        return undefined;
+        return;
       }
 
       const now = Date.now();
-      if (now - lastRefreshRef.current < 10_000) {
-        return undefined;
+      if (!options?.force && now - lastRefreshRef.current < 10_000) {
+        return;
       }
       lastRefreshRef.current = now;
 
-      let isActive = true;
-
-      const refreshCurrentUser = async () => {
-        try {
-          const [nextUser, nextIcons] = await Promise.all([
-            fetchCurrentUser(),
-            fetchIconOptions(),
-          ]);
-          if (isActive) {
-            setUser(nextUser);
-            setProfileDisplayIcons(nextIcons.displayIcons);
-          }
-          await markProfileNotificationsRead();
-          if (isActive) {
-            setProfileUnread(0);
-          }
-        } catch (error) {
-          // Best-effort refresh; keep existing state on failure. Surface in dev so
-          // a broken /auth/me + notifications round-trip doesn't pass silently.
-          if (__DEV__) {
-            console.warn('[ProfileScreen] refreshCurrentUser failed', error);
-          }
+      const isActive = options?.isActive ?? (() => true);
+      try {
+        const [nextUser, nextIcons] = await Promise.all([
+          fetchCurrentUser(),
+          fetchIconOptions(),
+        ]);
+        if (isActive()) {
+          setUser(nextUser);
+          setProfileDisplayIcons(nextIcons.displayIcons);
         }
-      };
+        await markProfileNotificationsRead();
+        if (isActive()) {
+          setProfileUnread(0);
+        }
+      } catch (error) {
+        // Best-effort refresh; keep existing state on failure. Surface in dev so
+        // a broken /auth/me + notifications round-trip doesn't pass silently.
+        if (__DEV__) {
+          console.warn('[ProfileScreen] refreshCurrentUser failed', error);
+        }
+      }
+    },
+    [setProfileUnread, setUser, user],
+  );
 
-      refreshCurrentUser();
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+      void refreshCurrentUser({ isActive: () => isActive });
 
       return () => {
         isActive = false;
       };
-    }, [setProfileUnread, setUser, user]),
+    }, [refreshCurrentUser]),
   );
+
+  const handleRefreshProfile = useCallback(async () => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    setRefreshing(true);
+    try {
+      await refreshCurrentUser({ force: true });
+    } finally {
+      refreshInFlightRef.current = false;
+      setRefreshing(false);
+    }
+  }, [refreshCurrentUser]);
 
   const handleOpenShare = useCallback(() => {
     router.push("/(tabs)/profile/share");
@@ -338,21 +372,30 @@ export default function ProfileScreen() {
 
       {/* Member card */}
       <Pressable style={[s.memberCard, d.memberCard]} onPress={handleOpenIcons}>
-        <View style={s.memberCardHeader}>
-          <Text style={d.memberCardAction}>
-            {t('profile.myIcons', { defaultValue: '我的图标' })}
-          </Text>
-          <Ionicons name="chevron-forward-outline" size={18} color={colors.memberCardText} />
-        </View>
-        <View style={s.memberStats}>
-          <View style={[s.memberStat, d.memberStat]}>
+        <GradientCover colors={Gradients.memberCard} />
+        <View style={[s.memberStatsPanel, d.memberStatsPanel]}>
+          <View style={s.memberStatCell}>
             <Text style={d.memberStatLabel}>{t('profile.vipLevel')}</Text>
             <Text style={d.memberStatValue}>VIP {vipLevel}</Text>
           </View>
-          <View style={[s.memberStat, d.memberStat]}>
+          <View style={[s.memberStatDivider, d.memberStatDivider]} />
+          <View style={s.memberStatCell}>
             <Text style={d.memberStatLabel}>{t('profile.reputationValue')}</Text>
             <Text style={d.memberStatValue}>{creditScore}</Text>
           </View>
+        </View>
+        <View style={s.memberCardHeader}>
+          <View style={s.memberHeaderLeft}>
+            <Ionicons name="sparkles" size={15} color={colors.white} />
+            <Text style={d.memberCardAction}>
+              {t('profile.myIcons', { defaultValue: '我的徽章' })}
+            </Text>
+          </View>
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color="rgba(255, 255, 255, 0.85)"
+          />
         </View>
         <View style={s.memberIdentityRow}>
           {displayIcons.length > 0 ? (
@@ -362,10 +405,10 @@ export default function ProfileScreen() {
           ) : (
             <View style={s.memberIdentityEmpty}>
               <View style={[s.memberIdentityCircle, d.memberIdentityCircle]}>
-                <Ionicons name="add-outline" size={20} color={colors.memberCardText} />
+                <Ionicons name="add-outline" size={20} color={colors.white} />
               </View>
               <Text style={d.memberIdentityHint}>
-                {t('profile.addIcon', { defaultValue: '添加图标' })}
+                {t('profile.addIcon', { defaultValue: '添加徽章' })}
               </Text>
             </View>
           )}
@@ -388,6 +431,8 @@ export default function ProfileScreen() {
           { paddingTop: insets.top + Spacing.md - 4 },
         ]}
         showsVerticalScrollIndicator={false}
+        refreshing={refreshing}
+        onRefresh={handleRefreshProfile}
       />
     </View>
   );

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -61,6 +61,9 @@ const s = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 80,
   },
+  cappedNotice: {
+    paddingVertical: Spacing.sm,
+  },
 });
 
 export default function DiscoverCirclesScreen() {
@@ -69,13 +72,36 @@ export default function DiscoverCirclesScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const [query, setQuery] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshInFlightRef = useRef(false);
 
-  const { allCircles, allCirclesLoading, allCirclesError, fetchAllCircles } =
-    useCirclesStore();
+  const {
+    allCircles,
+    allCirclesTotal,
+    allCirclesLoading,
+    allCirclesError,
+    fetchAllCircles,
+  } = useCirclesStore();
 
   useEffect(() => {
     fetchAllCircles();
   }, [fetchAllCircles]);
+
+  const handleRefreshCircles = useCallback(async () => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    setRefreshing(true);
+    try {
+      await fetchAllCircles();
+    } finally {
+      refreshInFlightRef.current = false;
+      setRefreshing(false);
+    }
+  }, [fetchAllCircles]);
+
+  // 列表被服务端 limit 截断：本地搜索搜不到截断之外的圈子，给用户一个明确提示，
+  // 避免「搜了真实存在的圈子却查无结果」被误以为是空数据。
+  const capped = allCirclesTotal > allCircles.length;
 
   // 本地按名称/简介/城市过滤；圈子量级小（store 拉 limit 100），本地过滤足够。
   const circles = useMemo(() => {
@@ -232,6 +258,21 @@ export default function DiscoverCirclesScreen() {
           renderItem={renderItem}
           contentContainerStyle={s.listContent}
           keyboardShouldPersistTaps="handled"
+          refreshing={refreshing}
+          onRefresh={handleRefreshCircles}
+          ListHeaderComponent={
+            capped ? (
+              <View style={s.cappedNotice}>
+                <Text style={d.meta}>
+                  {t('discover.searchCappedNotice', {
+                    count: allCircles.length,
+                    defaultValue:
+                      '仅展示前 {{count}} 个圈子，搜索请用更精确的关键词',
+                  })}
+                </Text>
+              </View>
+            ) : null
+          }
           ListEmptyComponent={
             <View style={s.emptyContainer}>
               <Text style={d.emptyText}>

@@ -53,7 +53,7 @@ const s = StyleSheet.create({
   tag: {
     paddingHorizontal: Spacing.sm,
     paddingVertical: 1,
-    borderRadius: Radius.full,
+    borderRadius: Radius.sm,
   },
   conditionRow: {
     flexDirection: 'row',
@@ -116,10 +116,11 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
         ...Typography.small,
       },
       tag: {
-        backgroundColor: colors.primaryLight,
+        backgroundColor: colors.primary,
+        borderRadius: Radius.sm,
       },
       tagText: {
-        color: colors.primary,
+        color: colors.white,
         ...Typography.tinyRegular,
         fontWeight: '600' as const,
       },
@@ -362,9 +363,9 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
         {hasCondition ? (
           <RestrictionBadge restrictions={post.signupRestrictions} />
         ) : (
-          <View style={[s.openBadge, { backgroundColor: `${OPEN_BADGE_COLOR}20` }]}>
-            <Ionicons name="earth-outline" size={10} color={OPEN_BADGE_COLOR} />
-            <Text style={[s.openBadgeText, { color: OPEN_BADGE_COLOR }]}>
+          <View style={[s.openBadge, { backgroundColor: OPEN_BADGE_COLOR }]}>
+            <Ionicons name="earth-outline" size={10} color={colors.white} />
+            <Text style={[s.openBadgeText, { color: colors.white }]}>
               {t('common.noRestriction', { defaultValue: '不限制' })}
             </Text>
           </View>
@@ -396,21 +397,21 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
               s.signupBtn,
               {
                 borderColor: signed ? colors.primary : colors.surfaceBorder,
-                backgroundColor: signed ? colors.primaryLight : 'transparent',
+                backgroundColor: signed ? colors.primary : 'transparent',
                 opacity: !signed && !post.canSignup ? 0.5 : 1,
               },
             ]}
           >
             <Ionicons
-              name={signed ? 'checkmark-circle' : 'hand-right-outline'}
+              name={signed ? 'checkmark-circle' : 'person-add-outline'}
               size={16}
-              color={signed ? colors.primary : colors.textSecondary}
+              color={signed ? colors.white : colors.textSecondary}
             />
             <Text
               style={{
                 fontSize: 13,
                 fontWeight: '600',
-                color: signed ? colors.primary : colors.textSecondary,
+                color: signed ? colors.white : colors.textSecondary,
               }}
             >
               {signed

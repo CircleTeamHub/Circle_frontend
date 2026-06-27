@@ -1,6 +1,7 @@
 import { secureAuthStorage } from '@/storage/secure-auth-storage';
 import { useAuthStore } from '@/stores/authStore';
 import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore';
+import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
 
@@ -68,6 +69,7 @@ export async function clearLocalSession() {
   await resetMessageGroupsStore();
   await resetCirclesStore();
   useFriendActivityUnreadStore.getState().reset();
+  useFriendRemarkStore.getState().reset();
   useTabBadgeStore.getState().reset();
   useWalletRealtimeStore.getState().reset();
 

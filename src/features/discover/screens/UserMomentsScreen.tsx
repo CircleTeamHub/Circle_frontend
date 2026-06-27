@@ -23,6 +23,7 @@ import { useChangeCover } from '@/features/discover/hooks/use-change-cover';
 import { isSameCalendarDay } from '@/features/discover/utils/album-date';
 import { MomentAlbumHeader } from '@/features/discover/components/moment-album-header';
 import { MomentAlbumRow } from '@/features/discover/components/moment-album-row';
+import { getProfileSignature } from '@/features/profile/profile-display';
 import type { MomentPost } from '@/types';
 
 const s = StyleSheet.create({
@@ -56,6 +57,7 @@ export default function UserMomentsScreen() {
   const [cover, setCover] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [nickname, setNickname] = useState<string>(params.name ?? '');
+  const [signature, setSignature] = useState('');
 
   const { changeCover } = useChangeCover(userId, setCover);
 
@@ -68,6 +70,9 @@ export default function UserMomentsScreen() {
         setCover(profile.cover);
         setAvatarUrl(profile.avatarUrl);
         if (profile.nickname) setNickname(profile.nickname);
+        setSignature(
+          getProfileSignature(profile.persona, profile.helloWords, t),
+        );
       } catch (err) {
         if (__DEV__) {
           console.warn('[UserMomentsScreen] fetchUserProfile failed', err);
@@ -77,7 +82,7 @@ export default function UserMomentsScreen() {
     return () => {
       active = false;
     };
-  }, [userId]);
+  }, [t, userId]);
 
   const title = nickname
     ? t('moment.albumTitle', { name: nickname })
@@ -112,6 +117,7 @@ export default function UserMomentsScreen() {
       coverUrl={cover}
       avatarUrl={avatarUrl}
       nickname={nickname || title}
+      signature={signature}
       onPressCover={isOwn ? changeCover : undefined}
       scrollY={scrollY}
     />

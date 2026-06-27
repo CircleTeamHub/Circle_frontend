@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -61,6 +61,8 @@ export default function AdminReviewScreen() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshInFlightRef = useRef(false);
 
   const loadData = useCallback(async () => {
     if (!circleId) return;
@@ -84,12 +86,24 @@ export default function AdminReviewScreen() {
     loadData();
   }, [loadData]);
 
+  const handleRefreshInvitations = useCallback(async () => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    setRefreshing(true);
+    try {
+      await loadData();
+    } finally {
+      refreshInFlightRef.current = false;
+      setRefreshing(false);
+    }
+  }, [loadData]);
+
   const d = useMemo(
     () => ({
       container: { flex: 1, backgroundColor: colors.background },
       name: { color: colors.text, ...Typography.body, fontWeight: '600' as const },
-      progress: { color: colors.primary, ...Typography.caption },
-      progressBadge: { backgroundColor: colors.primaryLight },
+      progress: { color: colors.white, ...Typography.caption },
+      progressBadge: { backgroundColor: colors.primary },
       overrideBtn: { backgroundColor: colors.warning },
       overrideText: { color: colors.white, ...Typography.caption, fontWeight: '600' as const },
       emptyText: { color: colors.textSecondary, ...Typography.body },
@@ -197,6 +211,8 @@ export default function AdminReviewScreen() {
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={s.listContent}
+          refreshing={refreshing}
+          onRefresh={handleRefreshInvitations}
           ListEmptyComponent={
             <View style={s.centerLoader}>
               <Text style={d.emptyText}>{t('invitation.noPendingReviews')}</Text>

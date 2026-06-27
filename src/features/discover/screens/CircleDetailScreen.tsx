@@ -3,6 +3,7 @@ import {
   View,
   Text,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Alert,
@@ -233,6 +234,8 @@ export default function CircleDetailScreen() {
   const [iconSaving, setIconSaving] = useState(false);
   const [enteringGroupChat, setEnteringGroupChat] = useState(false);
   const [joining, setJoining] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshInFlightRef = useRef(false);
   const [myInvitation, setMyInvitation] = useState<CircleInvitation | null>(
     null,
   );
@@ -328,6 +331,18 @@ export default function CircleDetailScreen() {
       void loadMyInvitation();
     }, [loadCircle, loadMyInvitation]),
   );
+
+  const handleRefreshCircle = useCallback(async () => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    setRefreshing(true);
+    try {
+      await Promise.all([loadCircle(), loadMyInvitation()]);
+    } finally {
+      refreshInFlightRef.current = false;
+      setRefreshing(false);
+    }
+  }, [loadCircle, loadMyInvitation]);
 
   const isOwner = circle?.myRole === 'OWNER';
   const isOwnerOrAdmin = isOwner || circle?.myRole === 'ADMIN';
@@ -503,10 +518,10 @@ export default function CircleDetailScreen() {
       textPlaceholder: { color: colors.textSecondary },
       summaryLabel: { color: colors.text },
       summaryValue: { color: colors.textSecondary },
-      categoryChip: { backgroundColor: colors.primaryLight },
-      categoryText: { color: colors.primary, ...Typography.caption },
-      tagChip: { backgroundColor: colors.primaryLight },
-      tagText: { color: colors.primary, ...Typography.caption },
+      categoryChip: { backgroundColor: colors.primary },
+      categoryText: { color: colors.white, ...Typography.caption },
+      tagChip: { backgroundColor: colors.primary },
+      tagText: { color: colors.white, ...Typography.caption },
       avatarEditBadge: { backgroundColor: colors.primary },
       coverEditBadge: { backgroundColor: 'rgba(0,0,0,0.45)' },
       chatBtn: { backgroundColor: colors.primary },
@@ -520,7 +535,7 @@ export default function CircleDetailScreen() {
         borderColor: colors.surfaceBorder,
       },
       iconAssetCardSelected: {
-        backgroundColor: colors.primaryLight,
+        backgroundColor: colors.primary,
         borderColor: colors.primary,
       },
     }),
@@ -568,6 +583,13 @@ export default function CircleDetailScreen() {
         style={s.scroll}
         contentContainerStyle={s.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefreshCircle}
+            tintColor={colors.primary}
+          />
+        }
       >
         {/* ── Cover banner ── */}
         <Pressable

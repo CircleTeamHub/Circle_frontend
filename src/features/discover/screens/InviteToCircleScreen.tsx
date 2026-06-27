@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -95,54 +95,69 @@ export default function InviteToCircleScreen() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Record<string, true>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshInFlightRef = useRef(false);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadInvitees = useCallback(async (signal?: { cancelled: boolean }) => {
     setLoading(true);
-    Promise.allSettled([
+    const [friendsResult, membersResult] = await Promise.allSettled([
       fetchFriends(),
       circleId
         ? fetchCircleDetail(circleId).then((detail) =>
             detail.groupID ? loadGroupMemberList(detail.groupID, 10_000) : [],
           )
         : Promise.resolve([]),
-    ])
-      .then(([friendsResult, membersResult]) => {
-        if (cancelled) return;
+    ]);
+    if (signal?.cancelled) return;
 
-        if (friendsResult.status === 'fulfilled') {
-          setFriends(friendsResult.value);
-        } else {
-          setFriends([]);
-          logClientDiagnostic('circle_invite_friends_load_failed', {
-            circleId,
-            message:
-              friendsResult.reason instanceof Error
-                ? friendsResult.reason.message
-                : String(friendsResult.reason),
-          });
-        }
-
-        if (membersResult.status === 'fulfilled') {
-          setExistingMemberIDs(buildExistingCircleMemberIds(membersResult.value));
-        } else {
-          setExistingMemberIDs(new Set());
-          logClientDiagnostic('circle_invite_members_load_failed', {
-            circleId,
-            message:
-              membersResult.reason instanceof Error
-                ? membersResult.reason.message
-                : String(membersResult.reason),
-          });
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+    if (friendsResult.status === 'fulfilled') {
+      setFriends(friendsResult.value);
+    } else {
+      setFriends([]);
+      logClientDiagnostic('circle_invite_friends_load_failed', {
+        circleId,
+        message:
+          friendsResult.reason instanceof Error
+            ? friendsResult.reason.message
+            : String(friendsResult.reason),
       });
-    return () => {
-      cancelled = true;
-    };
+    }
+
+    if (membersResult.status === 'fulfilled') {
+      setExistingMemberIDs(buildExistingCircleMemberIds(membersResult.value));
+    } else {
+      setExistingMemberIDs(new Set());
+      logClientDiagnostic('circle_invite_members_load_failed', {
+        circleId,
+        message:
+          membersResult.reason instanceof Error
+            ? membersResult.reason.message
+            : String(membersResult.reason),
+      });
+    }
+
+    if (!signal?.cancelled) setLoading(false);
   }, [circleId]);
+
+  useEffect(() => {
+    const signal = { cancelled: false };
+    void loadInvitees(signal);
+    return () => {
+      signal.cancelled = true;
+    };
+  }, [loadInvitees]);
+
+  const handleRefreshInvitees = useCallback(async () => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    setRefreshing(true);
+    try {
+      await loadInvitees();
+    } finally {
+      refreshInFlightRef.current = false;
+      setRefreshing(false);
+    }
+  }, [loadInvitees]);
 
   useEffect(() => {
     setSelected((current) =>
@@ -369,6 +384,8 @@ export default function InviteToCircleScreen() {
           ItemSeparatorComponent={Sep}
           contentContainerStyle={s.listContent}
           keyboardShouldPersistTaps="handled"
+          refreshing={refreshing}
+          onRefresh={handleRefreshInvitees}
         />
       )}
 

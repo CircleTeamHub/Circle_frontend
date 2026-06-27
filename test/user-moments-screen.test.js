@@ -14,6 +14,8 @@ test('UserMomentsScreen wires header + album list + pagination', () => {
   assert.match(src, /onEndReached/);
   assert.match(src, /RefreshControl/);
   assert.match(src, /fetchUserProfile/); // 拉封面/头像
+  assert.match(src, /getProfileSignature/); // 拉个性签名
+  assert.match(src, /signature=\{signature\}/);
   assert.match(src, /moment\/\[id\]/); // 跳详情复用现有路由
   assert.match(src, /discover\.noMoments/); // 空态复用现有文案
 });
