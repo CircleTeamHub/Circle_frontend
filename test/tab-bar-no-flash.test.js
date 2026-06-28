@@ -35,15 +35,16 @@ test('tab bar 通过 Reanimated 动画滑入/滑出，而非瞬间 display 切�
   assert.match(layout, /pointerEvents/);
 });
 
-test('active tab pill uses the same outer geometry as the floating tab bar', () => {
+test('自绘 tab bar：药丸 flex 填满每格、靠内边距留白，天然在 bar 内不溢出', () => {
   const layout = read('app/(tabs)/_layout.tsx');
 
-  assert.match(layout, /const TAB_BAR_HEIGHT = 56/);
+  // bar 是完整胶囊
+  assert.match(layout, /const TAB_BAR_HEIGHT = \d+/);
   assert.match(layout, /const TAB_BAR_RADIUS = TAB_BAR_HEIGHT \/ 2/);
-  assert.match(layout, /const TAB_ACTIVE_PILL_HEIGHT = TAB_BAR_HEIGHT/);
-  assert.match(layout, /const TAB_ACTIVE_PILL_RADIUS = TAB_BAR_RADIUS/);
-  assert.match(layout, /const TAB_PILL_GAP = 0/);
-  assert.match(layout, /overflow: 'hidden' as const/);
-  assert.match(layout, /height: TAB_ACTIVE_PILL_HEIGHT/);
-  assert.match(layout, /borderRadius: TAB_ACTIVE_PILL_RADIUS/);
+  // 上下内边距 → 药丸高 = bar 高 - 2*PAD_V，不靠 overflow 裁剪救场
+  assert.match(layout, /const TAB_BAR_PAD_V/);
+  assert.match(layout, /paddingVertical: TAB_BAR_PAD_V/);
+  // 选中药丸：圆角矩形，flex 填满本格
+  assert.match(layout, /const TAB_PILL_RADIUS/);
+  assert.match(layout, /borderRadius: TAB_PILL_RADIUS/);
 });

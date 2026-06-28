@@ -144,7 +144,7 @@ export interface MenuItem {
 }
 
 export type DisplayIconType = 'SYSTEM' | 'CIRCLE';
-export type SystemIconKey = 'VIP' | 'NEW_USER';
+export type SystemIconKey = 'VIP' | 'NEW_USER' | 'PARTNER';
 
 export interface DisplayIcon {
   id: string;

@@ -162,7 +162,7 @@ export default function ProfileScreen() {
       container: { flex: 1, backgroundColor: colors.background },
       profileName: { color: colors.text, ...Typography.h2 },
       profileAccount: { color: colors.textSecondary, ...Typography.small },
-      profileActionLabel: { color: colors.textSecondary, ...Typography.tiny },
+      profileActionLabel: { color: colors.text, ...Typography.tiny },
       memberCard: {
         // 渐变由 GradientCover 铺底，这里只作 SVG 挂载前的兜底色
         backgroundColor: "#6E5CF0",
@@ -353,7 +353,7 @@ export default function ProfileScreen() {
             <Ionicons
               name="share-social-outline"
               size={20}
-              color={colors.textSecondary}
+              color={colors.text}
             />
             <Text style={d.profileActionLabel}>{t('profile.share')}</Text>
           </Pressable>
@@ -361,7 +361,7 @@ export default function ProfileScreen() {
             <Ionicons
               name={isDark ? "sunny-outline" : "moon-outline"}
               size={20}
-              color={colors.textSecondary}
+              color={colors.text}
             />
             <Text style={d.profileActionLabel}>
               {isDark ? t('profile.lightMode') : t('profile.darkMode')}
@@ -371,7 +371,7 @@ export default function ProfileScreen() {
             <Ionicons
               name="settings-outline"
               size={20}
-              color={colors.textSecondary}
+              color={colors.text}
             />
             <Text style={d.profileActionLabel}>{t('profile.settings')}</Text>
           </Pressable>

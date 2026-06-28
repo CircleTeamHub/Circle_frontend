@@ -2,17 +2,14 @@ import React, { memo, useMemo } from 'react';
 import {
   View,
   Text,
+  Pressable,
   StyleSheet,
-  useWindowDimensions,
   type ViewStyle,
   type TextStyle,
 } from 'react-native';
 import { Tabs, useSegments } from 'expo-router';
-import { StackActions } from '@react-navigation/native';
-import {
-  BottomTabBar,
-  type BottomTabBarProps,
-} from '@react-navigation/bottom-tabs';
+import { CommonActions, StackActions } from '@react-navigation/native';
+import { type BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -23,90 +20,134 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useTheme } from '@/theme';
+import type { ThemeColors } from '@/theme/types';
 
-const TAB_KEYS: {
+type TabKey = {
   name: string;
   icon: keyof typeof Ionicons.glyphMap;
   key: string;
-}[] = [
+};
+
+const TAB_KEYS: TabKey[] = [
   { name: 'messages', icon: 'chatbubble-outline', key: 'tabs.messages' },
   { name: 'contacts', icon: 'people-outline', key: 'tabs.contacts' },
   { name: 'discover', icon: 'play-circle-outline', key: 'tabs.discover' },
   { name: 'profile', icon: 'person-outline', key: 'tabs.profile' },
 ];
 
-interface TabIconProps {
-  icon: keyof typeof Ionicons.glyphMap;
+const TAB_BY_NAME: Record<string, TabKey> = TAB_KEYS.reduce(
+  (acc, tab) => ({ ...acc, [tab.name]: tab }),
+  {},
+);
+
+// —— bar 几何（全部自绘，不再受 React Navigation BottomTabItem 内层 padding 影响）——
+// 隐藏时把整条 bar 向下滑出屏幕：bar 高 + 底距 + 阴影余量。
+const TAB_BAR_HIDDEN_OFFSET = 140;
+const TAB_BAR_HEIGHT = 50;
+const TAB_BAR_RADIUS = TAB_BAR_HEIGHT / 2; // 整条 bar 是完整胶囊，两端半圆
+const TAB_BAR_MARGIN_H = 32; // 左右外边距：再缩一圈后留白更多，bar 更窄
+const TAB_BAR_MARGIN_B = 24; // 距屏幕底部（浮动）
+const TAB_BAR_PAD_H = 4; // 内边距：首尾药丸不贴 bar 内沿
+const TAB_BAR_PAD_V = 4; // 上下内边距：药丸高 = bar 高 - 8
+const TAB_PILL_RADIUS = 14; // 选中药丸：圆角矩形（非完整半圆），贴合设计稿
+const TAB_PILL_GAP = 2; // 每格药丸左右留白，互不相贴
+const TAB_ICON_SIZE = 18;
+// 滑入/滑出：偏短 + ease-out，返回主页时弹得干脆。
+const TAB_BAR_ANIM_DURATION = 200;
+const TAB_BAR_EASING = Easing.out(Easing.cubic);
+
+type TabBarStyles = {
+  tabBarWrapper: ViewStyle;
+  tabBar: ViewStyle;
+  tabItem: ViewStyle;
+  pill: ViewStyle;
+  pillActive: ViewStyle;
+  iconWrap: ViewStyle;
+  badge: ViewStyle;
+  label: TextStyle;
+};
+
+interface TabSlotProps {
+  tab: TabKey;
   label: string;
   focused: boolean;
   showBadgeDot: boolean;
-  activeColor: string;
-  inactiveColor: string;
-  tabIconStyle: ViewStyle;
-  tabIconActiveStyle: ViewStyle;
-  tabIconBadgeStyle: ViewStyle;
-  tabLabelStyle: TextStyle;
+  colors: ThemeColors;
+  styles: TabBarStyles;
+  onPress: () => void;
+  accessibilityLabel: string;
 }
 
-const TabIcon = memo(function TabIcon({
-  icon,
+const TabSlot = memo(function TabSlot({
+  tab,
   label,
   focused,
   showBadgeDot,
-  activeColor,
-  inactiveColor,
-  tabIconStyle,
-  tabIconActiveStyle,
-  tabIconBadgeStyle,
-  tabLabelStyle,
-}: TabIconProps) {
-  const color = focused ? activeColor : inactiveColor;
+  colors,
+  styles,
+  onPress,
+  accessibilityLabel,
+}: TabSlotProps) {
+  const tint = focused ? colors.white : colors.textSecondary;
 
   return (
-    <View style={[tabIconStyle, focused && tabIconActiveStyle]}>
-      {showBadgeDot ? (
-        // 红点的描边用于和背景"挖空"分隔：未选中时背景是 tab 栏(surface)，
-        // 选中时背景是紫色 pill(primary)，否则会露出一圈深色描边。
+    <Pressable
+      onPress={onPress}
+      style={styles.tabItem}
+      accessibilityRole="button"
+      accessibilityState={{ selected: focused }}
+      accessibilityLabel={accessibilityLabel}
+      hitSlop={6}
+    >
+      {({ pressed }) => (
         <View
           style={[
-            tabIconBadgeStyle,
-            focused && { borderColor: tabIconActiveStyle.backgroundColor },
+            styles.pill,
+            focused && styles.pillActive,
+            pressed && { opacity: 0.7 },
           ]}
-        />
-      ) : null}
-      <Ionicons name={icon} size={16} color={color} />
-      <Text style={[tabLabelStyle, { color }]} numberOfLines={1}>
-        {label}
-      </Text>
-    </View>
+        >
+          <View style={styles.iconWrap}>
+            <Ionicons name={tab.icon} size={TAB_ICON_SIZE} color={tint} />
+            {showBadgeDot ? (
+              // 红点描边：未选中时混入 bar(surface)，选中时混入紫色药丸(primary)，
+              // 否则会在彩色背景上露出一圈异色描边。
+              <View
+                style={[
+                  styles.badge,
+                  focused && { borderColor: colors.primary },
+                ]}
+              />
+            ) : null}
+          </View>
+          <Text style={[styles.label, { color: tint }]} numberOfLines={1}>
+            {label}
+          </Text>
+        </View>
+      )}
+    </Pressable>
   );
 });
 
-// 隐藏时把整条 bar 向下滑出屏幕的距离（pill 高度 + 底部间距 + 余量）。
-const TAB_BAR_HIDDEN_OFFSET = 140;
-// bar 几何：常量与下面 tabBar 样式共用，pill 宽度按屏宽算出来「塞满」每一格。
-const TAB_BAR_HEIGHT = 56;
-const TAB_BAR_RADIUS = TAB_BAR_HEIGHT / 2;
-const TAB_ACTIVE_PILL_HEIGHT = TAB_BAR_HEIGHT;
-const TAB_ACTIVE_PILL_RADIUS = TAB_BAR_RADIUS;
-const TAB_BAR_MARGIN_H = 40; // 左右外边距（保持原始 bar 尺寸，勿改）
-const TAB_BAR_PADDING_H = 0; // 内边距设 0：首尾药丸贴到 bar 内沿
-const TAB_PILL_GAP = 0; // 选中药丸必须贴合每个 tab slot，避免首尾溢出
-// 滑入/滑出时长：偏短让返回主页时 bar 弹得更干脆。
-const TAB_BAR_ANIM_DURATION = 200;
-// ease-out：一开始就快速移动，避免默认 ease-in-out 慢启动造成的「延迟才弹」错觉。
-const TAB_BAR_EASING = Easing.out(Easing.cubic);
-
-// 浮动 tab bar 包装层：用 Reanimated 的 translateY+opacity 平滑滑入/滑出，
-// 取代之前 display:none↔flex 的瞬间切换。瞬间切换会在“返回 tab 根页”时于 JS
-// 状态提交那一刻立刻把浮动 bar 翻为可见，满不透明度地盖在仍在退场的详情页之上
-// ——即用户看到的“闪一下”。改成动画后，bar 跟随转场平滑滑回，不再闪烁。
-// 内部仍渲染真正的 BottomTabBar，保留原生 tab 行为、徽标与选中高亮。
-function FloatingTabBar({
+// 浮动 tab bar：Reanimated translateY+opacity 平滑滑入/滑出（取代 display 瞬切，
+// 消除「返回 tab 根页时浮动条闪一下」）。内部整行自绘，每格 flex:1，
+// 选中药丸填满本格 → 不溢出、无缝隙、对齐精确。
+function CustomTabBar({
+  state,
+  navigation,
+  descriptors,
   hidden,
-  wrapperStyle,
-  ...props
-}: BottomTabBarProps & { hidden: boolean; wrapperStyle: ViewStyle }) {
+  colors,
+  badgeMap,
+  styles,
+}: BottomTabBarProps & {
+  hidden: boolean;
+  colors: ThemeColors;
+  badgeMap: Record<string, boolean>;
+  styles: TabBarStyles;
+}) {
+  const { t } = useTranslation();
+
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
       {
@@ -123,13 +164,53 @@ function FloatingTabBar({
   }));
 
   return (
-    // box-none：包装层本身（pill 周围的留白）不拦截触摸，放行给下方内容；
-    // 隐藏时整体 none，避免滑出屏幕的 bar 仍捕获点击。
     <Animated.View
       pointerEvents={hidden ? 'none' : 'box-none'}
-      style={[wrapperStyle, animatedStyle]}
+      style={[styles.tabBarWrapper, animatedStyle]}
     >
-      <BottomTabBar {...props} />
+      <View style={styles.tabBar}>
+        {state.routes.map((route, index) => {
+          const tab = TAB_BY_NAME[route.name];
+          if (!tab) return null;
+
+          const focused = state.index === index;
+          const label = t(tab.key);
+          const hasBadge = badgeMap[route.name] ?? false;
+          const { options } = descriptors[route.key];
+
+          const onPress = () => {
+            // 先发 tabPress：触发 Tabs.Screen 上的 listener（把该 tab 的内嵌栈
+            // popToTop，实现「点 tab 永远回首页」）。再在未聚焦时切换到该 tab。
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
+            if (!focused && !event.defaultPrevented) {
+              navigation.dispatch({
+                ...CommonActions.navigate({ name: route.name, merge: true }),
+                target: state.key,
+              });
+            }
+          };
+
+          return (
+            <TabSlot
+              key={route.key}
+              tab={tab}
+              label={label}
+              focused={focused}
+              showBadgeDot={hasBadge}
+              colors={colors}
+              styles={styles}
+              onPress={onPress}
+              accessibilityLabel={
+                options.tabBarAccessibilityLabel ?? label
+              }
+            />
+          );
+        })}
+      </View>
     </Animated.View>
   );
 }
@@ -139,15 +220,7 @@ export default function TabLayout() {
   const { t } = useTranslation();
   const segments = useSegments();
   const hideTabBar = segments.length > 2;
-  // 按屏宽算出每个高亮药丸的宽度，让它们填满整条 bar（首尾也顶到端头附近）。
-  const { width: windowWidth } = useWindowDimensions();
-  const tabSlotWidth =
-    (windowWidth - TAB_BAR_MARGIN_H * 2 - TAB_BAR_PADDING_H * 2) /
-    TAB_KEYS.length;
-  const pillWidth = Math.max(
-    TAB_ACTIVE_PILL_HEIGHT,
-    Math.round(tabSlotWidth - TAB_PILL_GAP),
-  );
+
   const { messagesUnread, contactsUnread, discoverUnread, profileUnread } =
     useTabBadgeStore(useShallow((state) => ({
       messagesUnread: state.messagesUnread,
@@ -156,63 +229,59 @@ export default function TabLayout() {
       profileUnread: state.profileUnread,
     })));
 
-  const styles = useMemo(() => StyleSheet.create({
-    // 底部锚定的全宽容器：absolute → 屏幕内容全幅延伸到 pill 之下（保持浮动效果）；
-    // FloatingTabBar 对它做 translateY/opacity 动画。
+  const styles = useMemo<TabBarStyles>(() => StyleSheet.create({
+    // 底部锚定的全宽容器：absolute → 内容全幅延伸到浮动条之下；
+    // CustomTabBar 对它做 translateY/opacity 动画。
     tabBarWrapper: {
-      position: 'absolute' as const,
+      position: 'absolute',
       left: 0,
       right: 0,
       bottom: 0,
     },
     tabBar: {
-      backgroundColor: colors.surface,
-      // 整圈描边：让浮动药丸在与背景同色调（尤其暗色模式）时也能看清边界。
-      borderWidth: 1,
-      borderColor: colors.surfaceBorder,
+      flexDirection: 'row',
+      alignItems: 'stretch',
       height: TAB_BAR_HEIGHT,
       borderRadius: TAB_BAR_RADIUS,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
       marginHorizontal: TAB_BAR_MARGIN_H,
-      marginBottom: 28,
-      overflow: 'hidden' as const,
-      // 定位改由 tabBarWrapper 负责，这里保持在文档流内以便容器获得高度、
-      // translateY 能正确带动整条 bar。
-      position: 'relative' as const,
-      paddingHorizontal: TAB_BAR_PADDING_H,
-      paddingBottom: 0,
+      marginBottom: TAB_BAR_MARGIN_B,
+      paddingHorizontal: TAB_BAR_PAD_H,
+      paddingVertical: TAB_BAR_PAD_V,
+      // 不裁剪：阴影完整显示，且药丸本就在内部不会溢出。
       shadowColor: colors.black,
-      shadowOffset: {
-        width: 0,
-        height: 10,
-      },
+      shadowOffset: { width: 0, height: 10 },
       shadowOpacity: 0.08,
       shadowRadius: 24,
       elevation: 10,
     },
-    tabBarItem: {
-      justifyContent: 'center' as const,
-      alignItems: 'center' as const,
-      height: TAB_BAR_HEIGHT,
-      paddingTop: 0,
-      overflow: 'hidden' as const,
+    // 每格等宽：flex:1 平分整条 bar，选中药丸填满本格 → 不溢出、不留缝。
+    tabItem: {
+      flex: 1,
     },
-    tabIcon: {
-      alignItems: 'center' as const,
-      justifyContent: 'center' as const,
-      // 圆角=半高 → 选中高亮是完整胶囊（pill），左右全圆，和 tab 栏端头同款形状。
-      borderRadius: TAB_ACTIVE_PILL_RADIUS,
-      // 宽度按屏宽动态算（填满每格），见 pillWidth；高度保持在 bar 内不溢出。
-      height: TAB_ACTIVE_PILL_HEIGHT,
+    pill: {
+      flex: 1,
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: TAB_PILL_RADIUS,
+      marginHorizontal: TAB_PILL_GAP,
       gap: 2,
-      position: 'relative' as const,
     },
-    tabIconActive: {
+    pillActive: {
       backgroundColor: colors.primary,
     },
-    tabIconBadge: {
-      position: 'absolute' as const,
-      top: 6,
-      right: 12,
+    iconWrap: {
+      position: 'relative',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    badge: {
+      position: 'absolute',
+      top: -2,
+      right: -6,
       width: 8,
       height: 8,
       borderRadius: 999,
@@ -220,10 +289,10 @@ export default function TabLayout() {
       borderWidth: 1.5,
       borderColor: colors.surface,
     },
-    tabLabel: {
+    label: {
       fontSize: 9,
-      fontWeight: '500' as const,
-      letterSpacing: 0.3,
+      fontWeight: '500',
+      letterSpacing: 0.2,
     },
   }), [colors]);
 
@@ -237,18 +306,16 @@ export default function TabLayout() {
   return (
     <Tabs
       tabBar={(props) => (
-        <FloatingTabBar
+        <CustomTabBar
           {...props}
           hidden={hideTabBar}
-          wrapperStyle={styles.tabBarWrapper}
+          colors={colors}
+          badgeMap={badgeMap}
+          styles={styles}
         />
       )}
       screenOptions={{
         headerShown: false,
-        // 始终用 pill 样式，可见性交给 FloatingTabBar 的动画（不再瞬间切 display）。
-        tabBarStyle: styles.tabBar,
-        tabBarShowLabel: false,
-        tabBarItemStyle: styles.tabBarItem,
       }}
     >
       {TAB_KEYS.map((tab) => {
@@ -262,8 +329,8 @@ export default function TabLayout() {
               // 点击 tab 始终回到该 tab 的首页（而非上次停留的子页面）：
               // 把该 tab 的内嵌栈 popToTop。无论当前是否在该 tab 都生效。
               tabPress: () => {
-                const state = navigation.getState();
-                const tabRoute = state.routes.find(
+                const navState = navigation.getState();
+                const tabRoute = navState.routes.find(
                   (r: { name: string }) => r.name === route.name,
                 );
                 const nested = tabRoute?.state as
@@ -278,26 +345,10 @@ export default function TabLayout() {
               },
             })}
             options={{
-              // tabBarShowLabel:false 隐藏视觉文字 —— 但屏幕阅读器仍然需要标签。
-              // 视觉 badge dot 由 TabIcon 内部用 showBadgeDot 渲染（不走 expo-router 的
-              // tabBarBadge —— 那会额外画一个数字 badge）。a11y 这边把"有未读"也读出来。
+              // 视觉文字由自绘 tab bar 渲染；这里只补屏幕阅读器标签（含未读提示）。
               tabBarAccessibilityLabel: hasBadge
                 ? `${label} ${t('tabs.unreadHint', { defaultValue: '有未读' })}`
                 : label,
-              tabBarIcon: ({ focused }) => (
-                <TabIcon
-                  icon={tab.icon}
-                  label={label}
-                  focused={focused}
-                  showBadgeDot={hasBadge}
-                  activeColor={colors.white}
-                  inactiveColor={colors.textSecondary}
-                  tabIconStyle={{ ...styles.tabIcon, width: pillWidth }}
-                  tabIconActiveStyle={styles.tabIconActive}
-                  tabIconBadgeStyle={styles.tabIconBadge}
-                  tabLabelStyle={styles.tabLabel}
-                />
-              ),
             }}
           />
         );

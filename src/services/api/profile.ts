@@ -34,6 +34,18 @@ export async function fetchUserProfile(userId: string) {
   return normalizeUser(user);
 }
 
+export type LikeStatus = { likeCount: number; likedByMeToday: boolean };
+
+/** 给某用户点赞（每人对其每天最多一次），返回最新点赞状态。 */
+export async function likeUser(userId: string): Promise<LikeStatus> {
+  return apiClient<LikeStatus>(`/user/${userId}/like`, { method: 'POST' });
+}
+
+/** 取消今天对某用户的点赞，返回最新点赞状态。 */
+export async function unlikeUser(userId: string): Promise<LikeStatus> {
+  return apiClient<LikeStatus>(`/user/${userId}/like`, { method: 'DELETE' });
+}
+
 export async function updateUserProfile(
   userId: string,
   payload: UpdateProfilePayload,

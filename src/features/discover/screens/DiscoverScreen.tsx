@@ -179,7 +179,7 @@ export default function DiscoverScreen() {
               <Ionicons
                 name="settings-outline"
                 size={22}
-                color={colors.textSecondary}
+                color={colors.text}
               />
             </Pressable>
           </View>

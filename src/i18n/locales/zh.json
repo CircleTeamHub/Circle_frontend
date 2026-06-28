@@ -849,6 +849,9 @@
   },
   "userProfile": {
     "title": "个人信息",
+    "like": "点赞",
+    "unlike": "取消点赞",
+    "likesReceived": "收到的赞",
     "loadFailed": "加载用户资料失败，显示缓存数据",
     "phoneHidden": "未公开",
     "startChat": "发起聊天",
