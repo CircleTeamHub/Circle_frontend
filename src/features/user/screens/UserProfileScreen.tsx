@@ -327,12 +327,30 @@ export default function UserProfileScreen() {
         phone: currentUser.phoneNumber ?? t('userProfile.phoneHidden'),
         remarkHint: currentUser.nickname,
       });
-      // 自己的页面：收到的赞数取自 currentUser（/me 的 receivedLikeCount），无需二次请求。
+      // 自己的页面：先用 currentUser 的赞数即时渲染（无闪烁），再拉一次 /user/:id
+      // 取最新「收到的赞」；likedByMeToday 对自己恒为 false（不能给自己点赞）。
       setLikeStatus({
         likeCount: currentUser.likeCount ?? 0,
         likedByMeToday: false,
       });
-      return;
+      fetchUserProfile(profileId)
+        .then((self) => {
+          if (!cancelled) {
+            setLikeStatus({
+              likeCount: self.likeCount ?? 0,
+              likedByMeToday: false,
+            });
+          }
+        })
+        .catch((error) => {
+          // 拉取失败保留 currentUser 的乐观值，不打断自己主页。
+          if (__DEV__) {
+            console.warn('[UserProfileScreen] self likeCount refresh failed', error);
+          }
+        });
+      return () => {
+        cancelled = true;
+      };
     }
 
     fetchUserProfile(profileId)
