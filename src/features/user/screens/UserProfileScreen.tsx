@@ -38,7 +38,13 @@ import {
   type FriendSettings,
   type FriendStatus,
 } from '@/services/api/friends';
-import { fetchUserProfile } from '@/services/api/profile';
+import {
+  fetchUserProfile,
+  likeUser,
+  unlikeUser,
+  type LikeStatus,
+} from '@/services/api/profile';
+import { ApiError } from '@/services/api/client';
 import { useAuthStore } from '@/stores/authStore';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 
@@ -76,7 +82,37 @@ const ROW_COLOR: Record<InfoRowId, keyof ThemeColors> = {
 
 const AVATAR_SIZE = 88;
 
+// 点赞数缩写：中文 ≥1万用「万」，英文 ≥1k 用「k/M」；去尾 0、超大取整，避免撑爆胶囊。
+function formatLikeCount(n: number, language: string): string {
+  const trim = (v: number) =>
+    v >= 100 ? String(Math.round(v)) : v.toFixed(1).replace(/\.0$/, '');
+  if (language.startsWith('zh')) {
+    return n < 10000 ? String(n) : `${trim(n / 10000)}万`;
+  }
+  if (n < 1000) return String(n);
+  if (n < 1_000_000) return `${trim(n / 1000)}k`;
+  return `${trim(n / 1_000_000)}M`;
+}
+
 const s = StyleSheet.create({
+  // 右上角点赞胶囊：👍 + 被赞数。已赞填充主色、未赞浅底描边（颜色在 JSX 内联）。
+  likeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    // 视觉微调：相对 NavHeader 右侧默认位置下移 10、左移 10。
+    transform: [{ translateX: -10 }, { translateY: 10 }],
+  },
+  likeCount: {
+    ...Typography.small,
+    fontWeight: '600',
+    minWidth: 12,
+    textAlign: 'center',
+  },
   // 居中身份 Hero：头像 → 名字/标签 → 账号 → 性别地区 → 签名 → 徽章，逐层拉开间距。
   hero: {
     alignItems: 'center',
@@ -180,7 +216,7 @@ export default function UserProfileScreen() {
   const router = useRouter();
   const segments = useSegments();
   const { colors } = useTheme();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const params = useLocalSearchParams<{ id?: string; name?: string }>();
   const currentUser = useAuthStore((state) => state.user);
   const [remoteProfile, setRemoteProfile] = useState<UserProfileData | null>(null);
@@ -189,6 +225,8 @@ export default function UserProfileScreen() {
   const [friendStatusLoadError, setFriendStatusLoadError] = useState(false);
   const [friendSettings, setFriendSettings] = useState<FriendSettings | null>(null);
   const [openingChat, setOpeningChat] = useState(false);
+  const [likeStatus, setLikeStatus] = useState<LikeStatus | null>(null);
+  const [liking, setLiking] = useState(false);
   const mountedRef = useRef(true);
 
   useEffect(
@@ -202,6 +240,38 @@ export default function UserProfileScreen() {
     typeof params.id === 'string' ? params.id : 'unknown';
   const scope = getUserProfileScopeFromSegments(segments);
   const isCurrentUser = isCurrentUserProfile(profileId, currentUser);
+
+  const handleToggleLike = useCallback(async () => {
+    if (isCurrentUser || !likeStatus || liking) return;
+    const wasLiked = likeStatus.likedByMeToday;
+    setLiking(true);
+    // 乐观更新，失败回滚。
+    setLikeStatus({
+      likeCount: Math.max(0, likeStatus.likeCount + (wasLiked ? -1 : 1)),
+      likedByMeToday: !wasLiked,
+    });
+    try {
+      const next = wasLiked
+        ? await unlikeUser(profileId)
+        : await likeUser(profileId);
+      if (mountedRef.current) setLikeStatus(next);
+    } catch (error) {
+      if (mountedRef.current) {
+        setLikeStatus({
+          likeCount: likeStatus.likeCount,
+          likedByMeToday: wasLiked,
+        });
+        // 配额满等失败原因提示用户（后端 message 透传，如「今天点赞次数已达上限」）。
+        Alert.alert(
+          '',
+          error instanceof ApiError ? error.message : '操作失败，请稍后再试',
+        );
+      }
+    } finally {
+      if (mountedRef.current) setLiking(false);
+    }
+  }, [isCurrentUser, likeStatus, liking, profileId]);
+
   const remarkOverride = useFriendRemarkStore((state) =>
     isCurrentUser ? undefined : state.remarks[profileId],
   );
@@ -257,7 +327,30 @@ export default function UserProfileScreen() {
         phone: currentUser.phoneNumber ?? t('userProfile.phoneHidden'),
         remarkHint: currentUser.nickname,
       });
-      return;
+      // 自己的页面：先用 currentUser 的赞数即时渲染（无闪烁），再拉一次 /user/:id
+      // 取最新「收到的赞」；likedByMeToday 对自己恒为 false（不能给自己点赞）。
+      setLikeStatus({
+        likeCount: currentUser.likeCount ?? 0,
+        likedByMeToday: false,
+      });
+      fetchUserProfile(profileId)
+        .then((self) => {
+          if (!cancelled) {
+            setLikeStatus({
+              likeCount: self.likeCount ?? 0,
+              likedByMeToday: false,
+            });
+          }
+        })
+        .catch((error) => {
+          // 拉取失败保留 currentUser 的乐观值，不打断自己主页。
+          if (__DEV__) {
+            console.warn('[UserProfileScreen] self likeCount refresh failed', error);
+          }
+        });
+      return () => {
+        cancelled = true;
+      };
     }
 
     fetchUserProfile(profileId)
@@ -280,11 +373,17 @@ export default function UserProfileScreen() {
           phone: profile.phoneNumber ?? t('userProfile.phoneHidden'),
           remarkHint: profile.nickname,
         });
+        // 点赞状态复用同一份 profile，避免对 /user/:id 发起第二次重复请求。
+        setLikeStatus({
+          likeCount: profile.likeCount ?? 0,
+          likedByMeToday: profile.likedByMeToday ?? false,
+        });
       })
       .catch((error) => {
         if (!cancelled) {
           setRemoteProfile(null);
           setFetchError(t('userProfile.loadFailed'));
+          setLikeStatus(null);
         }
         if (__DEV__) {
           console.warn('[UserProfileScreen] fetchUserProfile failed', error);
@@ -614,7 +713,56 @@ export default function UserProfileScreen() {
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title={t('userProfile.title')} />
+      <NavHeader
+        title={t('userProfile.title')}
+        rightSlot={
+          likeStatus ? (
+            <Pressable
+              onPress={isCurrentUser ? undefined : handleToggleLike}
+              disabled={isCurrentUser || liking}
+              hitSlop={8}
+              style={({ pressed }) => [
+                s.likeButton,
+                likeStatus.likedByMeToday
+                  ? { backgroundColor: colors.primary, borderColor: colors.primary }
+                  : {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.primary,
+                    },
+                pressed && !isCurrentUser ? { opacity: 0.7 } : null,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={
+                isCurrentUser
+                  ? t('userProfile.likesReceived', { defaultValue: '收到的赞' })
+                  : likeStatus.likedByMeToday
+                    ? t('userProfile.unlike', { defaultValue: '取消点赞' })
+                    : t('userProfile.like', { defaultValue: '点赞' })
+              }
+            >
+              <Ionicons
+                name={likeStatus.likedByMeToday ? 'thumbs-up' : 'thumbs-up-outline'}
+                size={15}
+                color={
+                  likeStatus.likedByMeToday ? colors.white : colors.primary
+                }
+              />
+              <Text
+                style={[
+                  s.likeCount,
+                  {
+                    color: likeStatus.likedByMeToday
+                      ? colors.white
+                      : colors.primary,
+                  },
+                ]}
+              >
+                {formatLikeCount(likeStatus.likeCount, i18n.language)}
+              </Text>
+            </Pressable>
+          ) : undefined
+        }
+      />
       {fetchError ? (
         <Text style={{ color: colors.error, textAlign: 'center', paddingVertical: 6, ...Typography.small }}>
           {fetchError}

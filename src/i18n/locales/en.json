@@ -852,6 +852,9 @@
   },
   "userProfile": {
     "title": "Profile",
+    "like": "Like",
+    "unlike": "Unlike",
+    "likesReceived": "Likes received",
     "loadFailed": "Failed to load profile, showing cached data",
     "phoneHidden": "Hidden",
     "startChat": "Start Chat",

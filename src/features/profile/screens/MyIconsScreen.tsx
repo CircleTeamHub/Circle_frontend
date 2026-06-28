@@ -7,7 +7,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { NavHeader } from '@/components/ui/nav-header';
@@ -31,7 +30,7 @@ type DraftDisplayIcon = {
   fallbackIconName: string | null;
   type: 'SYSTEM' | 'CIRCLE';
   sortOrder: number;
-  systemKey?: 'VIP' | 'NEW_USER';
+  systemKey?: 'VIP' | 'NEW_USER' | 'PARTNER';
   circleId?: string;
   circleName?: string;
 };
@@ -67,20 +66,6 @@ const s = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  selectedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.sm,
-  },
-  selectedMeta: {
-    flex: 1,
-    gap: 4,
-  },
-  selectedActions: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
   },
   footerButton: {
     minHeight: 48,
@@ -190,21 +175,6 @@ export default function MyIconsScreen() {
     });
   }, []);
 
-  const moveSelectedIcon = useCallback((id: string, direction: -1 | 1) => {
-    setSelectedIcons((current) => {
-      const index = current.findIndex((item) => item.id === id);
-      const nextIndex = index + direction;
-      if (index < 0 || nextIndex < 0 || nextIndex >= current.length) {
-        return current;
-      }
-
-      const next = [...current];
-      const [item] = next.splice(index, 1);
-      next.splice(nextIndex, 0, item);
-      return next.map((entry, order) => ({ ...entry, sortOrder: order }));
-    });
-  }, []);
-
   const handleSave = useCallback(async () => {
     if (!user) {
       router.back();
@@ -262,7 +232,6 @@ export default function MyIconsScreen() {
         ...Typography.body,
         fontWeight: '700' as const,
       },
-      actionIcon: { color: colors.textSecondary },
     }),
     [colors, saving],
   );
@@ -306,27 +275,6 @@ export default function MyIconsScreen() {
             {loading ? '加载中...' : `已选择 ${selectedIcons.length}/${MAX_DISPLAY_ICONS}`}
           </Text>
           <UserIconRow icons={currentDisplayIcons} />
-          {selectedIcons.map((icon, index) => (
-            <View key={icon.id} style={s.selectedRow}>
-              <View style={s.selectedMeta}>
-                <Text style={[s.title, d.title]}>{icon.title}</Text>
-                <Text style={[s.subtitle, d.subtitle]}>
-                  {icon.type === 'SYSTEM' ? '系统图标' : icon.circleName ?? '我的圈子'}
-                </Text>
-              </View>
-              <View style={s.selectedActions}>
-                <Pressable onPress={() => moveSelectedIcon(icon.id, -1)} disabled={index === 0}>
-                  <Ionicons name="arrow-up-outline" size={18} color={colors.textSecondary} />
-                </Pressable>
-                <Pressable
-                  onPress={() => moveSelectedIcon(icon.id, 1)}
-                  disabled={index === selectedIcons.length - 1}
-                >
-                  <Ionicons name="arrow-down-outline" size={18} color={colors.textSecondary} />
-                </Pressable>
-              </View>
-            </View>
-          ))}
         </View>
 
         {renderOptionGroup('系统图标', systemIcons)}

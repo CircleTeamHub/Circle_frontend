@@ -1,6 +1,6 @@
 import { apiClient } from '@/services/api/client';
 import { normalizeMediaUrl } from '@/services/api/utils';
-import type { DisplayIcon, IconOption } from '@/types';
+import type { DisplayIcon, IconOption, SystemIconKey } from '@/types';
 
 export type IconOptionsResponse = {
   systemIcons: IconOption[];
@@ -11,7 +11,7 @@ export type IconOptionsResponse = {
 export type UpdateDisplayIconInput = {
   displayType: 'SYSTEM' | 'CIRCLE';
   sortOrder: number;
-  systemKey?: 'VIP' | 'NEW_USER';
+  systemKey?: SystemIconKey;
   circleId?: string;
 };
 

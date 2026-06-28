@@ -1,100 +1,201 @@
-import { memo } from 'react';
+import { memo, useId } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, {
   Circle,
   Defs,
-  Ellipse,
   G,
   LinearGradient,
   Path,
+  Rect,
   Stop,
+  Text as SvgText,
 } from 'react-native-svg';
-
-type SystemIconKey = 'VIP' | 'NEW_USER';
+import type { SystemIconKey } from '@/types';
 
 type Props = {
   systemKey: SystemIconKey;
   size?: number;
+  level?: number;
 };
 
-function VipIcon({ size }: { size: number }) {
+// 5 款 VIP 配色（VIP1→5 递进，宝石色系）；等级超出 1-5 时取最近档。
+const VIP_PALETTES: Record<
+  number,
+  { main: [string, string, string]; top: [string, string]; text: string }
+> = {
+  1: { main: ['#A8E6A0', '#5DBE5C', '#2E8B43'], top: ['#EAFBE6', '#86D584'], text: '#1E5B2E' },
+  2: { main: ['#A8D4FA', '#3B82F6', '#1E5FD9'], top: ['#E6F2FE', '#7CB4F5'], text: '#15407A' },
+  3: { main: ['#D4BBF7', '#8B5CF6', '#6526C9'], top: ['#F2EAFE', '#B79BF0'], text: '#4A2299' },
+  4: { main: ['#FFE9A8', '#F0B53E', '#B97812'], top: ['#FFF6DC', '#F8CE66'], text: '#7A4E0A' },
+  5: { main: ['#FBC2D0', '#F43F8E', '#BE185D'], top: ['#FEECF1', '#F794B6'], text: '#8A1248' },
+};
+
+// VIP 徽章：宝石切割钻石 + 白切面线 + 中央等级数字；按 VIP 等级（1-5）切换配色。
+function VipIcon({ size, level }: { size: number; level?: number }) {
+  const lv = Math.min(Math.max(Math.round(level ?? 1), 1), 5);
+  const p = VIP_PALETTES[lv];
+  const uid = useId().replace(/:/g, '');
+  const bgId = `vip-dia-${lv}-${uid}`;
+  const topId = `vip-diatop-${lv}-${uid}`;
   return (
     <Svg width={size} height={size} viewBox="0 0 64 64" fill="none">
       <Defs>
-        <LinearGradient id="vip-bg" x1="10" y1="8" x2="54" y2="58">
-          <Stop offset="0" stopColor="#FFF3C2" />
-          <Stop offset="0.45" stopColor="#F9C85B" />
-          <Stop offset="1" stopColor="#B97812" />
+        <LinearGradient id={bgId} x1="12" y1="10" x2="52" y2="56">
+          <Stop offset="0" stopColor={p.main[0]} />
+          <Stop offset="0.5" stopColor={p.main[1]} />
+          <Stop offset="1" stopColor={p.main[2]} />
         </LinearGradient>
-        <LinearGradient id="vip-core" x1="20" y1="18" x2="44" y2="46">
-          <Stop offset="0" stopColor="#FFF9E8" />
-          <Stop offset="1" stopColor="#F4C14D" />
+        <LinearGradient id={topId} x1="18" y1="11" x2="46" y2="26">
+          <Stop offset="0" stopColor={p.top[0]} />
+          <Stop offset="1" stopColor={p.top[1]} />
         </LinearGradient>
       </Defs>
-      <Circle cx="32" cy="32" r="30" fill="url(#vip-bg)" />
-      <Circle cx="32" cy="32" r="25.5" fill="#5B3A06" fillOpacity="0.14" />
-      <Circle cx="32" cy="32" r="22.5" fill="#FFFCF0" fillOpacity="0.2" />
-      <Path
-        d="M20 42L24.4 22.8L32 29.2L39.6 22.8L44 42H20Z"
-        fill="url(#vip-core)"
-      />
-      <Path
-        d="M24.8 25.5L18.5 18.5C18 17.9 18.2 17 19 16.8L24.8 15.5L28.3 10.4C28.8 9.7 29.9 9.7 30.3 10.4L32 12.9L33.7 10.4C34.1 9.7 35.2 9.7 35.7 10.4L39.2 15.5L45 16.8C45.8 17 46 17.9 45.5 18.5L39.2 25.5"
-        fill="#FFF8DC"
-      />
-      <Path
-        d="M32 22L34.6 27.2L40.4 28.1L36.2 32.2L37.2 38L32 35.3L26.8 38L27.8 32.2L23.6 28.1L29.4 27.2L32 22Z"
-        fill="#B97812"
-      />
-      <Ellipse cx="25" cy="17.2" rx="2.1" ry="1.4" fill="#FFFFFF" fillOpacity="0.7" />
-      <Ellipse cx="39.5" cy="14.6" rx="3.2" ry="1.8" fill="#FFFFFF" fillOpacity="0.45" />
+      <Path d="M19 12 L45 12 L56 26 L32 56 L8 26 Z" fill={`url(#${bgId})`} />
+      <Path d="M19 12 L45 12 L50 26 L14 26 Z" fill={`url(#${topId})`} />
+      <Path d="M14 26 L50 26" stroke="#FFFFFF" strokeWidth={0.8} opacity={0.5} fill="none" />
+      <Path d="M8 26 L56 26" stroke="#FFFFFF" strokeWidth={0.8} opacity={0.4} fill="none" />
+      <Path d="M19 12 L26 26 M45 12 L38 26" stroke="#FFFFFF" strokeWidth={0.8} opacity={0.5} fill="none" />
+      <Path d="M14 26 L24 44 M50 26 L40 44" stroke="#FFFFFF" strokeWidth={0.7} opacity={0.3} fill="none" />
+      <Path d="M8 26 L32 56 M56 26 L32 56" stroke="#FFFFFF" strokeWidth={0.7} opacity={0.3} fill="none" />
+      {level != null ? (
+        <SvgText
+          x="32"
+          y="42"
+          textAnchor="middle"
+          fill={p.text}
+          fontSize="19"
+          fontWeight="bold"
+        >
+          {String(level)}
+        </SvgText>
+      ) : null}
     </Svg>
   );
 }
 
+// 新人徽章：绿渐变圆底 + 白色叶子（羽状叶脉、嫩茎），清新有辨识度。
 function NewUserIcon({ size }: { size: number }) {
+  const bgId = `new-bg-${useId().replace(/:/g, '')}`;
   return (
     <Svg width={size} height={size} viewBox="0 0 64 64" fill="none">
       <Defs>
-        <LinearGradient id="new-bg" x1="8" y1="10" x2="54" y2="58">
-          <Stop offset="0" stopColor="#D9FBFF" />
-          <Stop offset="0.45" stopColor="#55D8FF" />
-          <Stop offset="1" stopColor="#0E6BFF" />
-        </LinearGradient>
-        <LinearGradient id="new-core" x1="20" y1="18" x2="42" y2="44">
-          <Stop offset="0" stopColor="#FDFEFF" />
-          <Stop offset="1" stopColor="#BDE8FF" />
+        <LinearGradient id={bgId} x1="10" y1="8" x2="54" y2="58">
+          <Stop offset="0" stopColor="#9BE08F" />
+          <Stop offset="0.55" stopColor="#5DBE5C" />
+          <Stop offset="1" stopColor="#36A046" />
         </LinearGradient>
       </Defs>
-      <Circle cx="32" cy="32" r="30" fill="url(#new-bg)" />
-      <Circle cx="32" cy="32" r="23.5" fill="#073C9B" fillOpacity="0.14" />
-      <Path
-        d="M22.5 38.4C23 31.6 27.1 26.4 33.8 22.6L40.7 18.7C41.9 18 43.4 19.1 43 20.4L40.8 28L47.2 34.1C48.2 35.1 47.5 36.9 46.1 36.9H38.4L34.3 44.3C33.6 45.4 32 45.5 31.3 44.4L28.6 40.2L22.5 38.4Z"
-        fill="url(#new-core)"
+      <Circle cx="32" cy="32" r="30" fill={`url(#${bgId})`} />
+      <Circle
+        cx="32"
+        cy="32"
+        r="24.5"
+        stroke="#FFFFFF"
+        strokeWidth={1.4}
+        fill="none"
+        opacity={0.4}
       />
       <Path
-        d="M34.9 24.7L40.6 21.4L38.3 29.2C38.2 29.6 38.3 30 38.6 30.3L43.7 35.1H37.5C37 35.1 36.5 35.4 36.3 35.8L32.9 41.8L29.9 37.2C29.6 36.8 29.3 36.5 28.8 36.4L24.8 35.3C25.8 31.3 28.6 28.2 34.9 24.7Z"
-        fill="#0C55CB"
+        d="M28 44 C 23 47 19 48.5 16 50.5"
+        stroke="#FFFFFF"
+        strokeWidth={2.6}
+        strokeLinecap="round"
+        fill="none"
       />
-      <G fill="#FDFEFF">
-        <Circle cx="20" cy="21" r="1.8" />
-        <Circle cx="17" cy="27" r="1.2" />
-        <Circle cx="45.2" cy="18.5" r="1.5" />
-      </G>
       <Path
-        d="M15.8 39.8L18.2 35.7L20.6 39.8L24.9 42.2L20.6 44.5L18.2 48.6L15.8 44.5L11.5 42.2L15.8 39.8Z"
-        fill="#FDFEFF"
-        fillOpacity="0.92"
+        d="M20 47.5 L 24.5 46.5 M22.3 44.8 L 22 49.6"
+        stroke="#FFFFFF"
+        strokeWidth={2.2}
+        strokeLinecap="round"
+        fill="none"
+      />
+      <Path
+        d="M27 45 C 21.5 33 27.5 19.5 45 15.5 C 46.5 31 41 43 27 45 Z"
+        stroke="#FFFFFF"
+        strokeWidth={2.6}
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <Path
+        d="M29.5 43 L 42.5 18.5"
+        stroke="#FFFFFF"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        fill="none"
+      />
+      <Path
+        d="M33.5 35.5 L 29 34 M36.5 30 L 32 28.5 M39.5 24.5 L 35 23"
+        stroke="#FFFFFF"
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        fill="none"
       />
     </Svg>
   );
 }
 
-function SystemIconArtComponent({ systemKey, size = 44 }: Props) {
+// 合作达人徽章：蓝渐变八角星底（两枚圆角方形旋转叠加）+ 白色握手，信任专业。
+function PartnerIcon({ size }: { size: number }) {
+  const handshake = Math.round(size * 0.58);
+  const bgId = `partner-bg-${useId().replace(/:/g, '')}`;
+  return (
+    <View style={[styles.partner, { width: size, height: size }]}>
+      <Svg
+        width={size}
+        height={size}
+        viewBox="0 0 64 64"
+        fill="none"
+        style={StyleSheet.absoluteFill}
+      >
+        <Defs>
+          <LinearGradient id={bgId} x1="10" y1="8" x2="54" y2="58">
+            <Stop offset="0" stopColor="#7CC0F8" />
+            <Stop offset="0.55" stopColor="#3B82F6" />
+            <Stop offset="1" stopColor="#2563EB" />
+          </LinearGradient>
+        </Defs>
+        <Rect
+          x="10"
+          y="10"
+          width="44"
+          height="44"
+          rx="11"
+          fill={`url(#${bgId})`}
+        />
+        <G rotation={45} origin="32, 32">
+          <Rect
+            x="10.5"
+            y="10.5"
+            width="43"
+            height="43"
+            rx="11"
+            fill={`url(#${bgId})`}
+          />
+        </G>
+      </Svg>
+      <MaterialCommunityIcons name="handshake" size={handshake} color="#FFFFFF" />
+    </View>
+  );
+}
+
+function SystemIconArtComponent({ systemKey, size = 44, level }: Props) {
   if (systemKey === 'VIP') {
-    return <VipIcon size={size} />;
+    return <VipIcon size={size} level={level} />;
+  }
+
+  if (systemKey === 'PARTNER') {
+    return <PartnerIcon size={size} />;
   }
 
   return <NewUserIcon size={size} />;
 }
+
+const styles = StyleSheet.create({
+  partner: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
 
 export const SystemIconArt = memo(SystemIconArtComponent);

@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, type ReactNode } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { type Href, useNavigation, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +14,8 @@ type NavHeaderAction = {
 
 interface NavHeaderProps {
   title: string;
+  // 自定义右侧内容（优先于 rightIcon/rightActions），用于图标+文字等复合按钮。
+  rightSlot?: ReactNode;
   rightIcon?: keyof typeof Ionicons.glyphMap;
   onRightPress?: () => void;
   rightActions?: NavHeaderAction[];
@@ -44,6 +46,7 @@ const s = StyleSheet.create({
 
 export const NavHeader: React.FC<NavHeaderProps> = ({
   title,
+  rightSlot,
   rightIcon,
   onRightPress,
   rightActions,
@@ -100,7 +103,9 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
       <Text style={d.title} accessibilityRole="header">
         {title}
       </Text>
-      {actions.length > 0 ? (
+      {rightSlot ? (
+        rightSlot
+      ) : actions.length > 0 ? (
         <View style={s.rightActionRow}>
           {actions.map((action) => (
             <Pressable
