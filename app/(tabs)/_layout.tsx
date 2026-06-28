@@ -1,4 +1,4 @@
-import React, { memo, useMemo } from 'react';
+import React, { memo, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import { type BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import Animated, {
   Easing,
   useAnimatedStyle,
+  useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
@@ -35,9 +36,8 @@ const TAB_KEYS: TabKey[] = [
   { name: 'profile', icon: 'person-outline', key: 'tabs.profile' },
 ];
 
-const TAB_BY_NAME: Record<string, TabKey> = TAB_KEYS.reduce(
-  (acc, tab) => ({ ...acc, [tab.name]: tab }),
-  {},
+const TAB_BY_NAME: Record<string, TabKey> = Object.fromEntries(
+  TAB_KEYS.map((tab) => [tab.name, tab]),
 );
 
 // —— bar 几何（全部自绘，不再受 React Navigation BottomTabItem 内层 padding 影响）——
@@ -148,19 +148,22 @@ function CustomTabBar({
 }) {
   const { t } = useTranslation();
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateY: withTiming(hidden ? TAB_BAR_HIDDEN_OFFSET : 0, {
-          duration: TAB_BAR_ANIM_DURATION,
-          easing: TAB_BAR_EASING,
-        }),
-      },
-    ],
-    opacity: withTiming(hidden ? 0 : 1, {
+  // 把 hidden 这个普通 prop 镜像进 shared value 再驱动动画：worklet 依赖被追踪的
+  // shared value，而非闭包捕获的 JS prop——即使将来 CustomTabBar 被 memo 化、
+  // 父级不再随 segment 重渲染，显隐动画也不会失效。
+  const hiddenProgress = useSharedValue(hidden ? 1 : 0);
+  useEffect(() => {
+    hiddenProgress.value = withTiming(hidden ? 1 : 0, {
       duration: TAB_BAR_ANIM_DURATION,
       easing: TAB_BAR_EASING,
-    }),
+    });
+  }, [hidden, hiddenProgress]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: hiddenProgress.value * TAB_BAR_HIDDEN_OFFSET },
+    ],
+    opacity: 1 - hiddenProgress.value,
   }));
 
   return (
@@ -171,7 +174,14 @@ function CustomTabBar({
       <View style={styles.tabBar}>
         {state.routes.map((route, index) => {
           const tab = TAB_BY_NAME[route.name];
-          if (!tab) return null;
+          if (!tab) {
+            if (__DEV__) {
+              console.warn(
+                `[CustomTabBar] route "${route.name}" 未在 TAB_KEYS 中登记，已跳过该 tab。`,
+              );
+            }
+            return null;
+          }
 
           const focused = state.index === index;
           const label = t(tab.key);

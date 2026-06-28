@@ -7,7 +7,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { NavHeader } from '@/components/ui/nav-header';
@@ -67,20 +66,6 @@ const s = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  selectedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.sm,
-  },
-  selectedMeta: {
-    flex: 1,
-    gap: 4,
-  },
-  selectedActions: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
   },
   footerButton: {
     minHeight: 48,
@@ -247,7 +232,6 @@ export default function MyIconsScreen() {
         ...Typography.body,
         fontWeight: '700' as const,
       },
-      actionIcon: { color: colors.textSecondary },
     }),
     [colors, saving],
   );

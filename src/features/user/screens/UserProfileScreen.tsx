@@ -44,6 +44,7 @@ import {
   unlikeUser,
   type LikeStatus,
 } from '@/services/api/profile';
+import { ApiError } from '@/services/api/client';
 import { useAuthStore } from '@/stores/authStore';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 
@@ -240,27 +241,6 @@ export default function UserProfileScreen() {
   const scope = getUserProfileScopeFromSegments(segments);
   const isCurrentUser = isCurrentUserProfile(profileId, currentUser);
 
-  // 点赞状态：拉取被赞总数（看自己/看别人都拉）；看别人时附带「我今天赞过没」。
-  useEffect(() => {
-    if (profileId === 'unknown') return;
-    let cancelled = false;
-    fetchUserProfile(profileId)
-      .then((u) => {
-        if (!cancelled) {
-          setLikeStatus({
-            likeCount: u.likeCount ?? 0,
-            likedByMeToday: u.likedByMeToday ?? false,
-          });
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setLikeStatus(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [profileId]);
-
   const handleToggleLike = useCallback(async () => {
     if (isCurrentUser || !likeStatus || liking) return;
     const wasLiked = likeStatus.likedByMeToday;
@@ -284,7 +264,7 @@ export default function UserProfileScreen() {
         // 配额满等失败原因提示用户（后端 message 透传，如「今天点赞次数已达上限」）。
         Alert.alert(
           '',
-          error instanceof Error ? error.message : '操作失败，请稍后再试',
+          error instanceof ApiError ? error.message : '操作失败，请稍后再试',
         );
       }
     } finally {
@@ -347,6 +327,11 @@ export default function UserProfileScreen() {
         phone: currentUser.phoneNumber ?? t('userProfile.phoneHidden'),
         remarkHint: currentUser.nickname,
       });
+      // 自己的页面：收到的赞数取自 currentUser（/me 的 receivedLikeCount），无需二次请求。
+      setLikeStatus({
+        likeCount: currentUser.likeCount ?? 0,
+        likedByMeToday: false,
+      });
       return;
     }
 
@@ -370,11 +355,17 @@ export default function UserProfileScreen() {
           phone: profile.phoneNumber ?? t('userProfile.phoneHidden'),
           remarkHint: profile.nickname,
         });
+        // 点赞状态复用同一份 profile，避免对 /user/:id 发起第二次重复请求。
+        setLikeStatus({
+          likeCount: profile.likeCount ?? 0,
+          likedByMeToday: profile.likedByMeToday ?? false,
+        });
       })
       .catch((error) => {
         if (!cancelled) {
           setRemoteProfile(null);
           setFetchError(t('userProfile.loadFailed'));
+          setLikeStatus(null);
         }
         if (__DEV__) {
           console.warn('[UserProfileScreen] fetchUserProfile failed', error);

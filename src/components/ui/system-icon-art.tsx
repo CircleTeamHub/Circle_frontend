@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useId } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, {
@@ -33,10 +33,11 @@ const VIP_PALETTES: Record<
 
 // VIP 徽章：宝石切割钻石 + 白切面线 + 中央等级数字；按 VIP 等级（1-5）切换配色。
 function VipIcon({ size, level }: { size: number; level?: number }) {
-  const lv = Math.min(Math.max(Math.round(level ?? 5), 1), 5);
+  const lv = Math.min(Math.max(Math.round(level ?? 1), 1), 5);
   const p = VIP_PALETTES[lv];
-  const bgId = `vip-dia-${lv}`;
-  const topId = `vip-diatop-${lv}`;
+  const uid = useId().replace(/:/g, '');
+  const bgId = `vip-dia-${lv}-${uid}`;
+  const topId = `vip-diatop-${lv}-${uid}`;
   return (
     <Svg width={size} height={size} viewBox="0 0 64 64" fill="none">
       <Defs>
@@ -75,16 +76,17 @@ function VipIcon({ size, level }: { size: number; level?: number }) {
 
 // 新人徽章：绿渐变圆底 + 白色叶子（羽状叶脉、嫩茎），清新有辨识度。
 function NewUserIcon({ size }: { size: number }) {
+  const bgId = `new-bg-${useId().replace(/:/g, '')}`;
   return (
     <Svg width={size} height={size} viewBox="0 0 64 64" fill="none">
       <Defs>
-        <LinearGradient id="new-bg" x1="10" y1="8" x2="54" y2="58">
+        <LinearGradient id={bgId} x1="10" y1="8" x2="54" y2="58">
           <Stop offset="0" stopColor="#9BE08F" />
           <Stop offset="0.55" stopColor="#5DBE5C" />
           <Stop offset="1" stopColor="#36A046" />
         </LinearGradient>
       </Defs>
-      <Circle cx="32" cy="32" r="30" fill="url(#new-bg)" />
+      <Circle cx="32" cy="32" r="30" fill={`url(#${bgId})`} />
       <Circle
         cx="32"
         cy="32"
@@ -136,6 +138,7 @@ function NewUserIcon({ size }: { size: number }) {
 // 合作达人徽章：蓝渐变八角星底（两枚圆角方形旋转叠加）+ 白色握手，信任专业。
 function PartnerIcon({ size }: { size: number }) {
   const handshake = Math.round(size * 0.58);
+  const bgId = `partner-bg-${useId().replace(/:/g, '')}`;
   return (
     <View style={[styles.partner, { width: size, height: size }]}>
       <Svg
@@ -146,7 +149,7 @@ function PartnerIcon({ size }: { size: number }) {
         style={StyleSheet.absoluteFill}
       >
         <Defs>
-          <LinearGradient id="partner-bg" x1="10" y1="8" x2="54" y2="58">
+          <LinearGradient id={bgId} x1="10" y1="8" x2="54" y2="58">
             <Stop offset="0" stopColor="#7CC0F8" />
             <Stop offset="0.55" stopColor="#3B82F6" />
             <Stop offset="1" stopColor="#2563EB" />
@@ -158,7 +161,7 @@ function PartnerIcon({ size }: { size: number }) {
           width="44"
           height="44"
           rx="11"
-          fill="url(#partner-bg)"
+          fill={`url(#${bgId})`}
         />
         <G rotation={45} origin="32, 32">
           <Rect
@@ -167,7 +170,7 @@ function PartnerIcon({ size }: { size: number }) {
             width="43"
             height="43"
             rx="11"
-            fill="url(#partner-bg)"
+            fill={`url(#${bgId})`}
           />
         </G>
       </Svg>
