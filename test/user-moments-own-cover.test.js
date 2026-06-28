@@ -11,5 +11,5 @@ test('UserMomentsScreen lets only the owner change the cover', () => {
   assert.match(src, /onPressCover/);
   // 仅自己相册才接上更换封面
   assert.match(src, /isOwn/);
-  assert.match(src, /=== userId/);
+  assert.match(src, /=== canonicalUserId/);
 });

@@ -37,14 +37,25 @@ const AnimatedFlatList = Animated.createAnimatedComponent(
   FlatList,
 ) as unknown as ComponentType<AnimatedProps<FlatListProps<MomentPost>>>;
 
+function isUuid(value: string | undefined): value is string {
+  return Boolean(
+    value?.match(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    ),
+  );
+}
+
 export default function UserMomentsScreen() {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const router = useRouter();
   const params = useLocalSearchParams<{ id: string; name?: string }>();
-  const userId = params.id;
+  const routeUserId = typeof params.id === 'string' ? params.id : '';
+  const [canonicalUserId, setCanonicalUserId] = useState(() =>
+    isUuid(routeUserId) ? routeUserId : '',
+  );
   const currentUserId = useAuthStore((state) => state.user?.id);
-  const isOwn = !!currentUserId && currentUserId === userId;
+  const isOwn = !!currentUserId && currentUserId === canonicalUserId;
 
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler((event) => {
@@ -52,21 +63,30 @@ export default function UserMomentsScreen() {
   });
 
   const { moments, loading, refreshing, hasMore, error, refresh, loadMore } =
-    useUserMoments(userId);
+    useUserMoments(canonicalUserId);
 
   const [cover, setCover] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [nickname, setNickname] = useState<string>(params.name ?? '');
   const [signature, setSignature] = useState('');
 
-  const { changeCover } = useChangeCover(userId, setCover);
+  const { changeCover } = useChangeCover(canonicalUserId, setCover);
 
   useEffect(() => {
     let active = true;
+    setCanonicalUserId(isUuid(routeUserId) ? routeUserId : '');
+
+    if (!routeUserId) {
+      return () => {
+        active = false;
+      };
+    }
+
     void (async () => {
       try {
-        const profile = await fetchUserProfile(userId);
+        const profile = await fetchUserProfile(routeUserId);
         if (!active) return;
+        setCanonicalUserId(profile.id);
         setCover(profile.cover);
         setAvatarUrl(profile.avatarUrl);
         if (profile.nickname) setNickname(profile.nickname);
@@ -82,7 +102,7 @@ export default function UserMomentsScreen() {
     return () => {
       active = false;
     };
-  }, [t, userId]);
+  }, [t, routeUserId]);
 
   const title = nickname
     ? t('moment.albumTitle', { name: nickname })
@@ -123,7 +143,7 @@ export default function UserMomentsScreen() {
     />
   );
 
-  const ListEmpty = !loading ? (
+  const ListEmpty = !loading && canonicalUserId ? (
     <View style={s.emptyContainer}>
       <Text style={{ color: colors.textSecondary, ...Typography.body }}>
         {error ?? t('discover.noMoments')}
