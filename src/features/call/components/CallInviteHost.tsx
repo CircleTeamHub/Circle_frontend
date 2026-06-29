@@ -108,7 +108,12 @@ export function CallInviteHost() {
   }, [busyAction, incomingCall, resetCallState]);
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={handleReject}
+    >
       <View style={s.overlay}>
         <View style={[s.sheet, { backgroundColor: colors.surface }]}>
           <View style={s.row}>

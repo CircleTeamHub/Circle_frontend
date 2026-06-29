@@ -18,6 +18,7 @@ import { Divider } from '@/components/ui/divider';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import type { Circle } from '@/types';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
   searchWrap: {
@@ -265,7 +266,7 @@ export default function DiscoverCirclesScreen() {
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={s.listContent}
-          keyboardShouldPersistTaps="handled"
+        {...keyboardDismissOnDragProps}
           refreshing={refreshing}
           onRefresh={handleRefreshCircles}
           ListHeaderComponent={

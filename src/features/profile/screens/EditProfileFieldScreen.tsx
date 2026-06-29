@@ -39,6 +39,7 @@ import { loadImagePickerModule } from '@/features/profile/image-picker';
 import {
   getAvatarPickerPermissionDeniedMessage,
 } from '@/features/profile/avatar-picker-feedback';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
   content: {
@@ -486,7 +487,7 @@ export default function EditProfileFieldScreen() {
           s.content,
           { paddingBottom: insets.bottom + Spacing.lg },
         ]}
-        keyboardShouldPersistTaps="handled"
+        {...keyboardDismissOnDragProps}
       >
         <View style={s.fieldBlock}>
           {field.editorType === 'avatar' ? (

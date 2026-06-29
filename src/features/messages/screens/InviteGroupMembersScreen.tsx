@@ -20,6 +20,7 @@ import { inviteUsersToGroup, loadGroupMemberList, toImUserId } from '@/im/client
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { inviteGroupMembers } from '@/services/api/groups';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
   container: { flex: 1 },
@@ -312,7 +313,7 @@ export default function InviteGroupMembersScreen() {
           renderItem={renderItem}
           ItemSeparatorComponent={Sep}
           contentContainerStyle={s.listContent}
-          keyboardShouldPersistTaps="handled"
+        {...keyboardDismissOnDragProps}
         />
       )}
 

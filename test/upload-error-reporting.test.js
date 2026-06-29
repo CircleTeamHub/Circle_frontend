@@ -36,6 +36,8 @@ function loadUpload({
       switch (request) {
         case '@/services/api/client':
           return { apiClient: async () => ({}) };
+        case '@/constants/config':
+          return { API_URL: 'http://10.0.0.195:3000/api/v1' };
         case 'react-native':
           return { Platform: { OS: 'web' } };
         case 'expo-file-system/legacy':

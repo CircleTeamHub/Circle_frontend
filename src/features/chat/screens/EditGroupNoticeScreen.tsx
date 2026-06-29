@@ -3,6 +3,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -11,6 +12,7 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { NavHeader } from '@/components/ui/nav-header';
 import { updateGroupNotice } from '@/im/client';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -20,7 +22,7 @@ const s = StyleSheet.create({
     flex: 1,
   },
   body: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
     gap: Spacing.md,
@@ -111,7 +113,11 @@ export default function EditGroupNoticeScreen() {
       behavior="padding"
     >
       <NavHeader title={t('chat.groupNotice')} />
-      <View style={s.body}>
+      <ScrollView
+        contentContainerStyle={s.body}
+        showsVerticalScrollIndicator={false}
+        {...keyboardDismissOnDragProps}
+      >
         <TextInput
           style={[s.input, d.input]}
           value={draft}
@@ -122,7 +128,7 @@ export default function EditGroupNoticeScreen() {
           autoFocus
           editable={!submitting}
         />
-      </View>
+      </ScrollView>
       <View style={[s.footer, { paddingBottom: insets.bottom + Spacing.lg }]}>
         <Pressable
           style={[s.saveButton, d.saveButton]}

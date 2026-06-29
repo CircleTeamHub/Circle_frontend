@@ -18,6 +18,7 @@ import { changePassword, logoutAll } from '@/services/api/auth';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { clearLocalSession } from '@/services/auth/session';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
   container: {
@@ -141,7 +142,7 @@ export default function ChangePasswordScreen() {
           s.container,
           { paddingBottom: insets.bottom + Spacing.lg },
         ]}
-        keyboardShouldPersistTaps="handled"
+        {...keyboardDismissOnDragProps}
       >
         <View style={s.form}>
           <AuthInput

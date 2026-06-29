@@ -19,6 +19,7 @@ import {
 } from '@/services/api/friends';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
   content: {
@@ -228,6 +229,7 @@ export default function EditFriendRemarkScreen() {
       <ScrollView
         contentContainerStyle={s.content}
         showsVerticalScrollIndicator={false}
+        {...keyboardDismissOnDragProps}
       >
         {stateBlock}
       </ScrollView>

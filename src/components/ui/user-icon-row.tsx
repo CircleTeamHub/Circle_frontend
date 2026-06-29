@@ -3,8 +3,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing, useTheme } from '@/theme';
-import { SystemIconArt } from '@/components/ui/system-icon-art';
 import type { DisplayIcon } from '@/types';
+import { getSystemBadgeAsset } from './user-badge-assets';
 
 type Props = {
   icons: DisplayIcon[];
@@ -42,14 +42,15 @@ const s = StyleSheet.create({
     width: 34,
     height: 34,
   },
-  innerRing: {
-    position: 'absolute',
-    top: 3,
-    right: 3,
-    bottom: 3,
-    left: 3,
-    borderRadius: Radius.full,
-    borderWidth: 1,
+  systemBadgeShell: {
+    width: 52,
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compactSystemBadgeShell: {
+    width: 38,
+    height: 38,
   },
   imageWrap: {
     width: '100%',
@@ -62,21 +63,9 @@ const s = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  systemPrefix: {
-    fontSize: 8,
-    lineHeight: 10,
-    fontWeight: '800',
-    letterSpacing: 0,
-  },
-  systemMain: {
-    fontSize: 15,
-    lineHeight: 17,
-    fontWeight: '900',
-    letterSpacing: 0,
-  },
-  compactSystemMain: {
-    fontSize: 13,
-    lineHeight: 15,
+  systemBadgeImage: {
+    width: '100%',
+    height: '100%',
   },
   label: {
     maxWidth: 62,
@@ -139,11 +128,11 @@ function formatIconLabel(icon: DisplayIcon) {
   }
 
   if (icon.systemKey === 'NEW_USER') {
-    return icon.title || '新用户';
+    return icon.title || 'New Joiner';
   }
 
-  if (icon.systemKey === 'PARTNER') {
-    return icon.title || '合作达人';
+  if (icon.systemKey === 'TOP_COLLABORATOR') {
+    return icon.title || 'Top Collaborator';
   }
 
   return icon.title;
@@ -151,52 +140,36 @@ function formatIconLabel(icon: DisplayIcon) {
 
 export function UserIconBadge({ icon, compact = false, tone = 'default' }: BadgeProps) {
   const { colors } = useTheme();
-  const isVip = icon.type === 'SYSTEM' && icon.systemKey === 'VIP';
-  const isNewUser = icon.type === 'SYSTEM' && icon.systemKey === 'NEW_USER';
-  const isPartner = icon.type === 'SYSTEM' && icon.systemKey === 'PARTNER';
+  const systemBadgeAsset = icon.type === 'SYSTEM' ? getSystemBadgeAsset(icon) : null;
   const label = icon.type === 'SYSTEM' ? formatIconLabel(icon) : icon.circleName ?? icon.title;
-
-  // VIP / 新人 / 合作达人都是完整图形徽章（渐变底+白图标），不套圆形容器，整图渲染、尺寸统一。
-  if (isVip || isNewUser || isPartner) {
-    const dim = compact ? 34 : 44;
-    const graphicLabelColor = tone === 'member' ? colors.white : colors.text;
-    const graphicKey = isPartner ? 'PARTNER' : isNewUser ? 'NEW_USER' : 'VIP';
-    const vipLevel = isVip ? Number(getVipLevel(icon)) || undefined : undefined;
-    return (
-      <View style={s.item}>
-        <SystemIconArt systemKey={graphicKey} size={dim} level={vipLevel} />
-        {!compact ? (
-          <Text style={[s.label, { color: graphicLabelColor }]} numberOfLines={1}>
-            {label}
-          </Text>
-        ) : null}
-      </View>
-    );
-  }
-  // member tone 仅用于个人页紫色渐变会员卡，标签用白色保证对比度
   const labelColor = tone === 'member' ? colors.white : colors.text;
 
-  // 圈子徽章：圆形容器内放圈子图片，无图时用 fallback 图标。
   return (
     <View style={s.item}>
       <View
         style={[
-          s.circle,
-          compact ? s.compactCircle : null,
-          { backgroundColor: colors.surface, borderColor: colors.surfaceBorder },
+          systemBadgeAsset ? s.systemBadgeShell : s.circle,
+          compact ? (systemBadgeAsset ? s.compactSystemBadgeShell : s.compactCircle) : null,
+          systemBadgeAsset
+            ? null
+            : { backgroundColor: colors.surface, borderColor: colors.surfaceBorder },
         ]}
       >
-        <View style={s.imageWrap}>
-          {icon.imageUrl ? (
-            <Image source={{ uri: icon.imageUrl }} style={s.image} contentFit="cover" />
-          ) : (
-            <Ionicons
-              name={resolveFallbackIcon(icon.fallbackIconName)}
-              size={compact ? 12 : 14}
-              color={colors.textSecondary}
-            />
-          )}
-        </View>
+        {systemBadgeAsset ? (
+          <Image source={systemBadgeAsset} style={s.systemBadgeImage} contentFit="contain" />
+        ) : (
+          <View style={s.imageWrap}>
+            {icon.imageUrl ? (
+              <Image source={{ uri: icon.imageUrl }} style={s.image} contentFit="cover" />
+            ) : (
+              <Ionicons
+                name={resolveFallbackIcon(icon.fallbackIconName)}
+                size={compact ? 12 : 14}
+                color={colors.textSecondary}
+              />
+            )}
+          </View>
+        )}
       </View>
       {!compact ? (
         <Text style={[s.label, { color: labelColor }]} numberOfLines={1}>

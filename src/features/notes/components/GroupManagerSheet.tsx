@@ -23,6 +23,7 @@ import {
 } from '@/services/api/notes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { NoteGroup, NoteSummary } from '@/features/notes/types';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 // 抽自 NotesScreen 的"管理分组"Modal —— 把 group CRUD、拖拽排序、成员选择器一并搬过来。
 // state 全部内聚到这个组件，父组件只关心：何时显示、关掉时回调、需要刷新外层 notes 时回调。
@@ -548,7 +549,7 @@ export function GroupManagerSheet({
                 ItemSeparatorComponent={() => (
                   <View style={s.membershipSeparator} />
                 )}
-                keyboardShouldPersistTaps="handled"
+        {...keyboardDismissOnDragProps}
                 showsVerticalScrollIndicator={false}
                 ListEmptyComponent={
                   <Text style={[s.emptyText, d.statsText]}>
@@ -611,6 +612,7 @@ export function GroupManagerSheet({
                 style={s.modalList}
                 contentContainerStyle={s.modalListContent}
                 scrollEnabled={!draggingGroupId}
+                {...keyboardDismissOnDragProps}
               >
                 {displayGroups.map((group) => {
                   const isDragging = draggingGroupId === group.id;

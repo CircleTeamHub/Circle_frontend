@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,6 +21,7 @@ import { useIMStore } from '@/stores/imStore';
 import { mapConversationItemToUI } from '@/im/mappers';
 import { getApiErrorMessage } from '@/services/api/errors';
 import type { Conversation } from '@/types';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
   section: {
@@ -57,6 +59,30 @@ const s = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: Spacing.xl,
+    backgroundColor: 'rgba(0, 0, 0, 0.46)',
+  },
+  renameDialog: {
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+    gap: Spacing.md,
+  },
+  renameActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: Spacing.sm,
+  },
+  renameButton: {
+    minWidth: 72,
+    height: 40,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.md,
+  },
   pendingHint: {
     paddingVertical: Spacing.md,
     alignItems: 'center',
@@ -72,8 +98,12 @@ export default function GroupManagementScreen() {
   const { colors } = useTheme();
   const [groupName, setGroupName] = useState('');
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+  const [renameTarget, setRenameTarget] = useState<{ id: string; name: string } | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+  const [renameSubmitting, setRenameSubmitting] = useState(false);
   // Pattern D inFlightRef：建组 / 改名 / 改成员都是后端写，fast double-tap 必须挡。
   const createInFlightRef = useRef(false);
+  const renameInFlightRef = useRef(false);
 
   const groups = useMessageGroupsStore((state) => state.groups);
   const loading = useMessageGroupsStore((state) => state.loading);
@@ -158,6 +188,24 @@ export default function GroupManagementScreen() {
         color: colors.textSecondary,
         ...Typography.small,
       },
+      renameTitle: {
+        color: colors.text,
+        ...Typography.body,
+        fontWeight: '700' as const,
+      },
+      renameCancelText: {
+        color: colors.textSecondary,
+        ...Typography.body,
+        fontWeight: '600' as const,
+      },
+      renameSaveButton: {
+        backgroundColor: colors.primary,
+      },
+      renameSaveText: {
+        color: colors.white,
+        ...Typography.body,
+        fontWeight: '600' as const,
+      },
       emptyText: {
         color: colors.textSecondary,
         ...Typography.bodyRegular,
@@ -185,8 +233,47 @@ export default function GroupManagementScreen() {
     }
   }, [createGroup, groupName]);
 
+  const closeRenameModal = useCallback(() => {
+    if (renameInFlightRef.current) return;
+    setRenameTarget(null);
+    setRenameDraft('');
+  }, []);
+
+  const resetRenameModal = useCallback(() => {
+    setRenameTarget(null);
+    setRenameDraft('');
+  }, []);
+
+  const handleSubmitRename = useCallback(async () => {
+    if (!renameTarget || renameInFlightRef.current) return;
+
+    const next = renameDraft.trim();
+    if (!next || next === renameTarget.name) {
+      closeRenameModal();
+      return;
+    }
+
+    renameInFlightRef.current = true;
+    setRenameSubmitting(true);
+    try {
+      await renameGroup(renameTarget.id, next);
+      resetRenameModal();
+    } catch (err) {
+      Alert.alert('重命名失败', getApiErrorMessage(err, '请稍后重试'));
+    } finally {
+      renameInFlightRef.current = false;
+      setRenameSubmitting(false);
+    }
+  }, [closeRenameModal, renameDraft, renameGroup, renameTarget, resetRenameModal]);
+
   const handleRename = useCallback(
     (id: string, currentName: string) => {
+      if (typeof Alert.prompt !== 'function') {
+        setRenameTarget({ id, name: currentName });
+        setRenameDraft(currentName);
+        return;
+      }
+
       Alert.prompt(
         '重命名分组',
         '',
@@ -270,6 +357,7 @@ export default function GroupManagementScreen() {
       <ScrollView
         contentContainerStyle={d.content}
         showsVerticalScrollIndicator={false}
+        {...keyboardDismissOnDragProps}
       >
         <View style={s.section}>
           <Text style={d.sectionTitle}>创建分组</Text>
@@ -391,6 +479,52 @@ export default function GroupManagementScreen() {
           </View>
         ) : null}
       </ScrollView>
+      <Modal
+        visible={renameTarget != null}
+        transparent
+        animationType="fade"
+        onRequestClose={closeRenameModal}
+      >
+        <View style={s.modalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeRenameModal} />
+          <View style={[s.renameDialog, { backgroundColor: colors.surface }]}>
+            <Text style={d.renameTitle}>重命名分组</Text>
+            <TextInput
+              style={d.input}
+              value={renameDraft}
+              onChangeText={setRenameDraft}
+              placeholderTextColor={colors.textSecondary}
+              maxLength={32}
+              autoCorrect={false}
+              autoFocus
+              editable={!renameSubmitting}
+              selectTextOnFocus
+              returnKeyType="done"
+              onSubmitEditing={handleSubmitRename}
+            />
+            <View style={s.renameActions}>
+              <Pressable
+                style={s.renameButton}
+                onPress={closeRenameModal}
+                disabled={renameSubmitting}
+              >
+                <Text style={d.renameCancelText}>取消</Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  s.renameButton,
+                  d.renameSaveButton,
+                  renameSubmitting ? { opacity: 0.6 } : null,
+                ]}
+                onPress={handleSubmitRename}
+                disabled={renameSubmitting}
+              >
+                <Text style={d.renameSaveText}>保存</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

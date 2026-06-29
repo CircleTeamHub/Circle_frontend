@@ -22,12 +22,24 @@ test('UserMomentsScreen wires header + album list + pagination', () => {
 
 test('UserMomentsScreen resolves non-UUID route ids before fetching author moments', () => {
   const src = read('src/features/discover/screens/UserMomentsScreen.tsx');
+  const hook = read('src/features/discover/hooks/use-user-moments.ts');
 
   assert.match(src, /function isUuid/);
   assert.match(src, /canonicalUserId/);
   assert.match(src, /useUserMoments\(canonicalUserId\)/);
   assert.match(src, /setCanonicalUserId\(profile\.id\)/);
-  assert.match(src, /!loading && canonicalUserId/);
+  assert.match(src, /profileError/);
+  assert.match(src, /profileResolving/);
+  assert.match(src, /setCover\(null\)/);
+  assert.match(src, /setAvatarUrl\(null\)/);
+  assert.match(src, /setSignature\(''\)/);
+  assert.match(src, /setProfileError\(getApiErrorMessage\(err/);
+  assert.match(src, /!loading && !profileResolving/);
+  assert.match(src, /profileError \?\? error \?\? t\('discover\.noMoments'\)/);
+  assert.match(hook, /if \(!userId\) \{/);
+  assert.match(hook, /setMoments\(\[\]\)/);
+  assert.match(hook, /setHasMore\(false\)/);
+  assert.match(hook, /setLoading\(false\)/);
   assert.doesNotMatch(src, /useUserMoments\(userId\)/);
 });
 

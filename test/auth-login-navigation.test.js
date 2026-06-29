@@ -114,6 +114,28 @@ function loadUseAuth(fixtures = {}) {
   return context.module.exports;
 }
 
+function loadPolicy() {
+  const filePath = path.join(process.cwd(), 'src/components/app/auth-route-policy.ts');
+  const source = fs.readFileSync(filePath, 'utf8');
+  const transpiled = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2020,
+    },
+    fileName: filePath,
+  }).outputText;
+  const context = {
+    module: { exports: {} },
+    exports: {},
+    require: (request) => {
+      throw new Error(`Unexpected import: ${request}`);
+    },
+  };
+  context.exports = context.module.exports;
+  vm.runInNewContext(transpiled, context, { filename: filePath });
+  return context.module.exports;
+}
+
 test('login success lets the global auth guard perform the auth-route redirect', async () => {
   const routerCalls = [];
   const tokens = {
@@ -138,4 +160,49 @@ test('login success lets the global auth guard perform the auth-route redirect',
 
   assert.equal(setSessionCalls.length, 1);
   assert.deepEqual(routerCalls, []);
+});
+
+test('auth success session flags map to the expected global route guard redirects', async () => {
+  const { getAuthRouteDecision } = loadPolicy();
+  const tokens = {
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+    imToken: 'im-token',
+  };
+  const user = {
+    id: 'u1',
+    email: 'alice@example.com',
+    nickname: 'Alice',
+  };
+  const setSessionCalls = [];
+  const { useAuth } = loadUseAuth({
+    tokens,
+    user,
+    setSession: (...args) => setSessionCalls.push(args),
+  });
+
+  await useAuth().login('alice@example.com', 'password123');
+  await useAuth().register('bob@example.com', '123456', 'password123', 'Bob');
+
+  const loginOptions = setSessionCalls[0][2];
+  const registerOptions = setSessionCalls[1][2];
+
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(getAuthRouteDecision({
+      firstSegment: '(auth)',
+      isAuthenticated: true,
+      isLoading: false,
+      onboardingRequired: loginOptions.onboardingRequired,
+    }))),
+    { type: 'redirect', href: '/(tabs)/messages' },
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(getAuthRouteDecision({
+      firstSegment: '(auth)',
+      isAuthenticated: true,
+      isLoading: false,
+      onboardingRequired: registerOptions.onboardingRequired,
+    }))),
+    { type: 'redirect', href: '/(onboarding)/profile' },
+  );
 });

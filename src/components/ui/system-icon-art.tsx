@@ -136,11 +136,11 @@ function NewUserIcon({ size }: { size: number }) {
 }
 
 // 合作达人徽章：蓝渐变八角星底（两枚圆角方形旋转叠加）+ 白色握手，信任专业。
-function PartnerIcon({ size }: { size: number }) {
+function TopCollaboratorIcon({ size }: { size: number }) {
   const handshake = Math.round(size * 0.58);
-  const bgId = `partner-bg-${useId().replace(/:/g, '')}`;
+  const bgId = `top-collaborator-bg-${useId().replace(/:/g, '')}`;
   return (
-    <View style={[styles.partner, { width: size, height: size }]}>
+    <View style={[styles.topCollaborator, { width: size, height: size }]}>
       <Svg
         width={size}
         height={size}
@@ -184,15 +184,15 @@ function SystemIconArtComponent({ systemKey, size = 44, level }: Props) {
     return <VipIcon size={size} level={level} />;
   }
 
-  if (systemKey === 'PARTNER') {
-    return <PartnerIcon size={size} />;
+  if (systemKey === 'TOP_COLLABORATOR') {
+    return <TopCollaboratorIcon size={size} />;
   }
 
   return <NewUserIcon size={size} />;
 }
 
 const styles = StyleSheet.create({
-  partner: {
+  topCollaborator: {
     alignItems: 'center',
     justifyContent: 'center',
   },

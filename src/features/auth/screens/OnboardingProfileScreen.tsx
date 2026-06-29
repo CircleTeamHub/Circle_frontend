@@ -38,6 +38,7 @@ import { loginToOpenIM, logoutFromOpenIM } from '@/im/client';
 import { useAuthStore } from '@/stores/authStore';
 import { useKnownAccountsStore } from '@/stores/knownAccountsStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
   page: {
@@ -333,7 +334,7 @@ export default function OnboardingProfileScreen() {
           s.content,
           { paddingTop: Spacing.xl, paddingBottom: insets.bottom + Spacing.xl },
         ]}
-        keyboardShouldPersistTaps="handled"
+        {...keyboardDismissOnDragProps}
       >
         <View style={s.header}>
           <Text style={d.title}>{t('onboarding.profileTitle')}</Text>

@@ -144,7 +144,7 @@ export interface MenuItem {
 }
 
 export type DisplayIconType = 'SYSTEM' | 'CIRCLE';
-export type SystemIconKey = 'VIP' | 'NEW_USER' | 'PARTNER';
+export type SystemIconKey = 'VIP' | 'NEW_USER' | 'TOP_COLLABORATOR';
 
 export interface DisplayIcon {
   id: string;
@@ -155,6 +155,7 @@ export interface DisplayIcon {
   circleId?: string;
   circleName?: string;
   systemKey?: SystemIconKey;
+  likeCount?: number;
   sortOrder: number;
 }
 
@@ -167,6 +168,7 @@ export interface IconOption {
   circleId?: string;
   circleName?: string;
   systemKey?: SystemIconKey;
+  likeCount?: number;
 }
 
 // ---------------------------------------------------------------------------

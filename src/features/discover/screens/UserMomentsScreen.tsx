@@ -17,6 +17,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { fetchUserProfile } from '@/services/api/profile';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { useAuthStore } from '@/stores/authStore';
 import { useUserMoments } from '@/features/discover/hooks/use-user-moments';
 import { useChangeCover } from '@/features/discover/hooks/use-change-cover';
@@ -69,14 +70,24 @@ export default function UserMomentsScreen() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [nickname, setNickname] = useState<string>(params.name ?? '');
   const [signature, setSignature] = useState('');
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileResolving, setProfileResolving] = useState(false);
 
   const { changeCover } = useChangeCover(canonicalUserId, setCover);
 
   useEffect(() => {
     let active = true;
     setCanonicalUserId(isUuid(routeUserId) ? routeUserId : '');
+    setCover(null);
+    setAvatarUrl(null);
+    setNickname(params.name ?? '');
+    setSignature('');
+    setProfileError(null);
+    setProfileResolving(Boolean(routeUserId));
 
     if (!routeUserId) {
+      setProfileResolving(false);
+      setProfileError(t('common.networkError'));
       return () => {
         active = false;
       };
@@ -94,15 +105,19 @@ export default function UserMomentsScreen() {
           getProfileSignature(profile.persona, profile.helloWords, t),
         );
       } catch (err) {
+        if (!active) return;
+        setProfileError(getApiErrorMessage(err, t('common.networkError')));
         if (__DEV__) {
           console.warn('[UserMomentsScreen] fetchUserProfile failed', err);
         }
+      } finally {
+        if (active) setProfileResolving(false);
       }
     })();
     return () => {
       active = false;
     };
-  }, [t, routeUserId]);
+  }, [params.name, t, routeUserId]);
 
   const title = nickname
     ? t('moment.albumTitle', { name: nickname })
@@ -143,10 +158,10 @@ export default function UserMomentsScreen() {
     />
   );
 
-  const ListEmpty = !loading && canonicalUserId ? (
+  const ListEmpty = !loading && !profileResolving ? (
     <View style={s.emptyContainer}>
       <Text style={{ color: colors.textSecondary, ...Typography.body }}>
-        {error ?? t('discover.noMoments')}
+        {profileError ?? error ?? t('discover.noMoments')}
       </Text>
     </View>
   ) : null;

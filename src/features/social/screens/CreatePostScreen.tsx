@@ -30,6 +30,7 @@ import {
 import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
 import { usePostFormStore } from '@/features/discover/store/use-post-form-store';
 import { useTranslation } from 'react-i18next';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 // VIP 档位对齐 app 实际会员体系（VIP1–VIP5，见 MemberCenterScreen）。
 const VIP_OPTIONS = [
@@ -343,7 +344,11 @@ export default function CreatePostScreen() {
     <View style={[d.container, { paddingTop: insets.top }]}>
       {/* rightIcon 之前没 onRightPress —— 是哑按钮。先去掉，等"发布须知"页面 wire 上时再加。 */}
       <NavHeader title={t('plaza.create.title', { defaultValue: '发布动态' })} />
-      <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        style={s.scroll}
+        showsVerticalScrollIndicator={false}
+        {...keyboardDismissOnDragProps}
+      >
         <View style={[s.inputBox, d.inputBox]}>
           <TextInput
             placeholder="请输入详细内容"

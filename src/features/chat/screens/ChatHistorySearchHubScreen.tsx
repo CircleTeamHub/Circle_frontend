@@ -22,6 +22,7 @@ import {
   getChatHistoryTextHref,
 } from '@/features/user/utils/routes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
   scroll: { flex: 1 },
@@ -118,6 +119,7 @@ export default function ChatHistorySearchHubScreen() {
           { paddingBottom: insets.bottom + Spacing.xl },
         ]}
         showsVerticalScrollIndicator={false}
+        {...keyboardDismissOnDragProps}
       >
         <View style={[s.searchBox, d.searchBox]}>
           <Ionicons name="search-outline" size={18} color={colors.textSecondary} />

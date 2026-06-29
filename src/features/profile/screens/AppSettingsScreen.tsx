@@ -15,6 +15,7 @@ import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
 import { formatCacheSize, getAppCacheSize } from '@/services/cache/clear-app-cache';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 type AppSettingsRoute =
   | string
@@ -516,6 +517,7 @@ export default function AppSettingsScreen() {
       <ScrollView
         contentContainerStyle={d.content}
         showsVerticalScrollIndicator={false}
+        {...keyboardDismissOnDragProps}
       >
         <View style={[s.searchBox, d.searchBox]}>
           <Ionicons name="search-outline" size={26} color={colors.textSecondary} />

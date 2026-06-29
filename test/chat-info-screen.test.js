@@ -269,7 +269,22 @@ test('OpenIM client bundles native filesystem with the main native bundle', () =
 });
 
 test('non-chat filesystem features keep deferring native filesystem loading', () => {
-  const checkedFiles = ['src/services/api/upload.ts', 'src/services/cache/clear-app-cache.ts'];
+  const uploadSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/services/api/upload.ts'),
+    'utf8',
+  );
+
+  assert.doesNotMatch(
+    uploadSource,
+    /^import\s+(?!type\b)[^\n]*from\s+['"]react-native-fs['"]/m,
+  );
+  assert.doesNotMatch(uploadSource, /import\(['"]react-native-fs['"]\)/);
+  assert.match(uploadSource, /require\(['"]react-native-fs['"]\)/);
+  assert.match(uploadSource, /function loadNativeFS/);
+  assert.match(uploadSource, /stopUpload/);
+  assert.match(uploadSource, /expo-file-system\/legacy/);
+
+  const checkedFiles = ['src/services/cache/clear-app-cache.ts'];
 
   for (const relativePath of checkedFiles) {
     const source = fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');

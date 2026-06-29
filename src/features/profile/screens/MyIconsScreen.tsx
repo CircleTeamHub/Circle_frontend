@@ -19,7 +19,7 @@ import {
 } from '@/services/api/icons';
 import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
-import type { DisplayIcon, IconOption } from '@/types';
+import type { DisplayIcon, IconOption, SystemIconKey } from '@/types';
 
 const MAX_DISPLAY_ICONS = 5;
 
@@ -30,7 +30,8 @@ type DraftDisplayIcon = {
   fallbackIconName: string | null;
   type: 'SYSTEM' | 'CIRCLE';
   sortOrder: number;
-  systemKey?: 'VIP' | 'NEW_USER' | 'PARTNER';
+  systemKey?: SystemIconKey;
+  likeCount?: number;
   circleId?: string;
   circleName?: string;
 };
@@ -89,6 +90,7 @@ function optionToDraft(option: IconOption, sortOrder: number): DraftDisplayIcon 
     type: option.type,
     sortOrder,
     systemKey: option.systemKey,
+    likeCount: option.likeCount,
     circleId: option.circleId,
     circleName: option.circleName,
   };

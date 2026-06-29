@@ -21,6 +21,7 @@ import {
   removeFriendTag,
 } from '@/services/api/friends';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
   content: {
@@ -365,6 +366,7 @@ export default function EditFriendTagsScreen() {
       <ScrollView
         contentContainerStyle={s.content}
         showsVerticalScrollIndicator={false}
+        {...keyboardDismissOnDragProps}
       >
         {stateBlock}
       </ScrollView>

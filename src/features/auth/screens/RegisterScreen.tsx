@@ -17,6 +17,7 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { useAuth } from '@/hooks/use-auth';
 import { useSendEmailCode } from '@/hooks/use-send-email-code';
 import { useNetworkStatus } from '@/hooks/use-network-status';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
   container: {
@@ -151,7 +152,7 @@ export default function RegisterScreen() {
           s.container,
           { paddingBottom: insets.bottom + 24 },
         ]}
-        keyboardShouldPersistTaps="handled"
+        {...keyboardDismissOnDragProps}
       >
         {/* Title */}
         <View style={s.titleWrap}>

@@ -20,6 +20,7 @@ import {
 import { reportGroup } from '@/services/api/groups';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const CATEGORY_OPTIONS: readonly {
   id: FriendReportCategory;
@@ -130,7 +131,7 @@ export default function ReportFriendScreen() {
             s.body,
             { paddingBottom: insets.bottom + Spacing.xl },
           ]}
-          keyboardShouldPersistTaps="handled"
+        {...keyboardDismissOnDragProps}
         >
           <Text style={[s.target, { color: colors.textSecondary }]}>
             举报对象：
