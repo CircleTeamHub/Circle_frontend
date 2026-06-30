@@ -67,6 +67,9 @@ export interface NoteSummary {
   imageCount: number;
   videoCount: number;
   mediaCount: number;
+  hasText?: boolean;
+  showcaseCount?: number;
+  hasLocation?: boolean;
   createdAt: string;
   updatedAt: string;
   ownerId?: string | null;

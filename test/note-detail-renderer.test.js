@@ -90,8 +90,11 @@ test('EditNoteScreen preserves structured note sections it cannot edit', () => {
   assert.match(src, /existingSectionsRef/);
   assert.match(src, /note\.sections\?\.text\?\.contentJson/);
   assert.match(src, /location: existingSections\?\.location \?\? null/);
+  assert.match(src, /const preservedMedia =/);
+  assert.match(src, /const sectionMedia = mergeMedia\(\[\.\.\.preservedMedia, \.\.\.media\]\)/);
   assert.match(src, /const preservedShowcase =/);
-  assert.match(src, /const legacyMedia = \[\.\.\.media, \.\.\.preservedShowcase\]/);
+  assert.match(src, /const legacyMedia = mergeMedia\(\[\.\.\.sectionMedia, \.\.\.preservedShowcase\]\)/);
+  assert.match(src, /media: \{ items: sectionMedia \}/);
   assert.match(src, /showcase: \{ items: preservedShowcase \}/);
   assert.match(src, /media: legacyMedia/);
 });

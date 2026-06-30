@@ -147,7 +147,10 @@ export default function EditNoteScreen() {
       );
       const showcase = media.filter((item) => item.type === 'IMAGE');
       const existingSections = existingSectionsRef.current;
-      const preservedShowcase = (existingSections?.showcase?.items ?? showcase)
+      const normalizeSectionMedia = (
+        items: (CreateNoteMediaInput | NoteSections['media']['items'][number])[],
+      ) =>
+        items
         .filter((item): item is CreateNoteMediaInput =>
           Boolean(
             item &&
@@ -168,23 +171,30 @@ export default function EditNoteScreen() {
           ...(typeof item.posterUrl === 'string' ? { posterUrl: item.posterUrl } : {}),
           sortOrder: typeof item.sortOrder === 'number' ? item.sortOrder : index,
         }));
-      const legacyMedia = [...media, ...preservedShowcase].reduce<CreateNoteMediaInput[]>(
-        (items, item) => {
-          const key = `${item.objectKey}:${item.url}`;
-          if (items.some((existing) => `${existing.objectKey}:${existing.url}` === key)) {
-            return items;
-          }
-          return [...items, item];
-        },
-        [],
+      const preservedMedia = normalizeSectionMedia(existingSections?.media?.items ?? media);
+      const preservedShowcase = normalizeSectionMedia(
+        existingSections?.showcase?.items ?? showcase,
       );
+      const mergeMedia = (items: CreateNoteMediaInput[]) =>
+        items.reduce<CreateNoteMediaInput[]>(
+          (merged, item) => {
+            const key = `${item.objectKey}:${item.url}`;
+            if (merged.some((existing) => `${existing.objectKey}:${existing.url}` === key)) {
+              return merged;
+            }
+            return [...merged, { ...item, sortOrder: merged.length }];
+          },
+          [],
+        );
+      const sectionMedia = mergeMedia([...preservedMedia, ...media]);
+      const legacyMedia = mergeMedia([...sectionMedia, ...preservedShowcase]);
       const input = {
         title: trimmedTitle,
         content: plainText,
         contentJson: currentBlocks,
         sections: {
           text: { content: plainText, contentJson: currentBlocks },
-          media: { items: media },
+          media: { items: sectionMedia },
           showcase: { items: preservedShowcase },
           location: existingSections?.location ?? null,
         },

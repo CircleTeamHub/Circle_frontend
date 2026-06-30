@@ -153,6 +153,19 @@ test('chat detail quote action preserves the current draft text', () => {
   assert.doesNotMatch(handlerMatch[0], /setDraft\(''\)/);
 });
 
+test('chat detail virtualizes and caps group mention candidates', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatDetailScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /const MENTION_CANDIDATE_LIMIT = 200/);
+  assert.match(source, /loadGroupMemberList\(sourceID, MENTION_CANDIDATE_LIMIT\)/);
+  assert.match(source, /<FlatList[\s\S]*data=\{visibleMentionCandidates\}/);
+  assert.doesNotMatch(source, /visibleMentionCandidates\.map\(\(member\)/);
+});
+
 test('chat detail guards async send UI state after unmount', () => {
   const source = fs.readFileSync(
     path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),

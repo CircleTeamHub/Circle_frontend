@@ -47,12 +47,16 @@ export function buildNoteCardPayloadFromSummary(
 ): NoteCardData {
   const explicitText = note.sections?.text;
   const hasText =
-    Boolean(explicitText?.content?.trim()) ||
-    (Array.isArray(explicitText?.contentJson) && explicitText.contentJson.length > 0) ||
-    Boolean(note.contentPreview?.trim());
+    typeof note.hasText === 'boolean'
+      ? note.hasText
+      : Boolean(explicitText?.content?.trim()) ||
+        (Array.isArray(explicitText?.contentJson) && explicitText.contentJson.length > 0) ||
+        Boolean(note.contentPreview?.trim());
   const showcaseCount =
-    note.sections?.showcase?.items.length ??
-    (note.cover ? 1 : note.imageCount ?? 0);
+    typeof note.showcaseCount === 'number'
+      ? Math.max(0, note.showcaseCount)
+      : note.sections?.showcase?.items.length ??
+        (note.cover ? 1 : note.imageCount ?? 0);
   return {
     noteId: note.id,
     ownerId: ownerId ?? note.ownerId ?? null,
@@ -64,6 +68,9 @@ export function buildNoteCardPayloadFromSummary(
     groupNames: note.groups.map((group) => group.name),
     hasText,
     showcaseCount,
-    hasLocation: Boolean(note.sections?.location),
+    hasLocation:
+      typeof note.hasLocation === 'boolean'
+        ? note.hasLocation
+        : Boolean(note.sections?.location),
   };
 }

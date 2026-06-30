@@ -53,10 +53,33 @@ test('buildNoteSections derives four sections from legacy content and media', ()
   const sections = buildNoteSections(legacyNote);
 
   assert.equal(sections.text.content, 'plain fallback');
-  assert.equal(sections.text.contentJson?.length, 3);
+  assert.equal(sections.text.contentJson?.length, 1);
   assert.equal(sections.media.items.length, 1);
   assert.equal(sections.showcase.items.length, 1);
   assert.equal(sections.location, null);
+});
+
+test('buildNoteSections removes media blocks from the text region', () => {
+  const sections = buildNoteSections({
+    sections: {
+      text: {
+        content: 'structured',
+        contentJson: [
+          { type: 'paragraph', content: [{ text: 'hello' }] },
+          { type: 'image', props: { url: 'https://cdn.test/one.jpg' } },
+          { type: 'video', props: { url: 'https://cdn.test/one.mp4' } },
+        ],
+      },
+      media: { items: [{ id: 'img-1', type: 'IMAGE', url: 'https://cdn.test/one.jpg' }] },
+      showcase: { items: [] },
+      location: null,
+    },
+  });
+
+  assert.deepEqual(
+    sections.text.contentJson?.map((block) => block.type),
+    ['paragraph'],
+  );
 });
 
 test('getNoteSectionAvailability reports addressable sections', () => {

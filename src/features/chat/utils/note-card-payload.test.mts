@@ -72,3 +72,31 @@ test('buildNoteCardPayloadFromSummary emits structured fields from summary', () 
   assert.equal(payload.showcaseCount, 1);
   assert.equal(payload.hasLocation, true);
 });
+
+test('buildNoteCardPayloadFromSummary uses flattened backend summary flags', () => {
+  const payload = buildNoteCardPayloadFromSummary(
+    {
+      id: 'note-2',
+      title: 'Location note',
+      contentPreview: null,
+      status: 'ACTIVE',
+      available: true,
+      pinned: false,
+      groups: [{ id: 'group-1', name: 'Diary' }],
+      cover: null,
+      imageCount: 1,
+      videoCount: 0,
+      mediaCount: 1,
+      hasText: false,
+      showcaseCount: 4,
+      hasLocation: true,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    },
+    'user-1',
+  );
+
+  assert.equal(payload.hasText, false);
+  assert.equal(payload.showcaseCount, 4);
+  assert.equal(payload.hasLocation, true);
+});

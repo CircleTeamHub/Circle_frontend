@@ -173,6 +173,7 @@ const ATTACHMENT_ITEMS: readonly {
 
 // 工具面板每页最多 8 个（4 列 × 2 行），超出的横向翻页
 const ATTACHMENT_PAGE_SIZE = 8;
+const MENTION_CANDIDATE_LIMIT = 200;
 const ATTACHMENT_PAGES: (typeof ATTACHMENT_ITEMS)[number][][] = Array.from(
   { length: Math.ceil(ATTACHMENT_ITEMS.length / ATTACHMENT_PAGE_SIZE) },
   (_, page) =>
@@ -1226,7 +1227,7 @@ export default function ChatDetailScreen() {
   const loadMentionCandidates = useCallback(async () => {
     if (!isGroupChat || !sourceID) return;
     try {
-      const members = await loadGroupMemberList(sourceID, 10_000);
+      const members = await loadGroupMemberList(sourceID, MENTION_CANDIDATE_LIMIT);
       if (!mountedRef.current) return;
       setMentionCandidates(
         members
@@ -2190,31 +2191,35 @@ export default function ChatDetailScreen() {
       <Divider />
       {mentionPickerVisible ? (
         <View style={[s.mentionPicker, d.composerShell]}>
-          <ScrollView keyboardShouldPersistTaps="handled">
-            {visibleMentionCandidates.length > 0 ? (
-              visibleMentionCandidates.map((member) => (
-                <Pressable
-                  key={member.userID}
-                  style={s.mentionRow}
-                  onPress={() => handlePickMention(member)}
+          <FlatList
+            data={visibleMentionCandidates}
+            keyboardShouldPersistTaps="handled"
+            keyExtractor={(member) => member.userID}
+            initialNumToRender={12}
+            maxToRenderPerBatch={12}
+            windowSize={4}
+            renderItem={({ item: member }) => (
+              <Pressable
+                style={s.mentionRow}
+                onPress={() => handlePickMention(member)}
+              >
+                <Avatar size={28} shape="square" name={member.nickname} />
+                <Text
+                  style={[s.mentionName, { color: colors.text }]}
+                  numberOfLines={1}
                 >
-                  <Avatar size={28} shape="square" name={member.nickname} />
-                  <Text
-                    style={[s.mentionName, { color: colors.text }]}
-                    numberOfLines={1}
-                  >
-                    {member.nickname}
-                  </Text>
-                </Pressable>
-              ))
-            ) : (
+                  {member.nickname}
+                </Text>
+              </Pressable>
+            )}
+            ListEmptyComponent={
               <View style={s.mentionRow}>
                 <Text style={[s.mentionName, { color: colors.textSecondary }]}>
                   {t('chat.mentions.empty', { defaultValue: '暂无可 @ 的成员' })}
                 </Text>
               </View>
-            )}
-          </ScrollView>
+            }
+          />
         </View>
       ) : null}
       {quoteTarget ? (

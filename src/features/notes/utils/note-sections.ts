@@ -51,6 +51,16 @@ function getBlockUrl(block: Record<string, unknown>) {
   return typeof props.url === 'string' ? props.url : '';
 }
 
+function isMediaBlock(block: Record<string, unknown>) {
+  const type = getBlockType(block);
+  return type === 'image' || type === 'video';
+}
+
+function getTextBlocks(blocks: Record<string, unknown>[] | null | undefined) {
+  if (!Array.isArray(blocks)) return null;
+  return blocks.filter((block) => !isMediaBlock(block));
+}
+
 function getLegacyShowcaseItems(note: StructuredNoteInput): StructuredNoteMediaItem[] {
   const blocks = note.contentJson ?? [];
   const byUrl = new Map(
@@ -94,7 +104,7 @@ export function buildNoteSections(note: StructuredNoteInput): NoteSections {
   return {
     text: {
       content: explicit?.text?.content ?? note.content ?? null,
-      contentJson: explicit?.text?.contentJson ?? note.contentJson ?? null,
+      contentJson: getTextBlocks(explicit?.text?.contentJson ?? note.contentJson),
     },
     media: {
       items: normalizeItems(explicit?.media?.items).length > 0
