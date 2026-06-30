@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as ExpoLocation from 'expo-location';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -16,6 +17,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NoteBlockEditor } from '@/features/notes/components/NoteBlockEditor';
+import { useNoteLocationPickerStore } from '@/features/notes/store/use-note-location-picker-store';
 import type { CreateNoteMediaInput, NoteGroup, NoteSections } from '@/features/notes/types';
 import {
   buildNoteMediaMap,
@@ -48,6 +50,8 @@ LogBox.ignoreLogs([
 type LocationDraft = {
   title: string;
   address: string;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 type SectionMediaTarget = 'media' | 'showcase';
@@ -60,6 +64,8 @@ function buildLocationDraft(location: NoteSections['location'] | undefined): Loc
   return {
     title: location?.title?.trim() ?? '',
     address: location?.address?.trim() ?? '',
+    latitude: typeof location?.latitude === 'number' ? location.latitude : null,
+    longitude: typeof location?.longitude === 'number' ? location.longitude : null,
   };
 }
 
@@ -134,7 +140,12 @@ export default function EditNoteScreen() {
   const [locationDraft, setLocationDraft] = useState<LocationDraft>({
     title: '',
     address: '',
+    latitude: null,
+    longitude: null,
   });
+  const consumePickedLocation = useNoteLocationPickerStore(
+    (state) => state.consumePickedLocation,
+  );
 
   useEffect(() => {
     if (!navigating) return;
@@ -157,7 +168,7 @@ export default function EditNoteScreen() {
       existingSectionsRef.current = null;
       setMediaItems([]);
       setShowcaseItems([]);
-      setLocationDraft({ title: '', address: '' });
+      setLocationDraft({ title: '', address: '', latitude: null, longitude: null });
       setEditorMounted(true);
       setLoading(false);
       return () => {
@@ -199,7 +210,7 @@ export default function EditNoteScreen() {
           existingSectionsRef.current = null;
           setMediaItems([]);
           setShowcaseItems([]);
-          setLocationDraft({ title: '', address: '' });
+          setLocationDraft({ title: '', address: '', latitude: null, longitude: null });
           setLoading(false);
           setEditorMounted(true);
         }
@@ -209,6 +220,19 @@ export default function EditNoteScreen() {
       cancelled = true;
     };
   }, [id, isEdit, t]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const picked = consumePickedLocation();
+      if (!picked) return;
+      setLocationDraft({
+        title: picked.title,
+        address: picked.address,
+        latitude: picked.latitude,
+        longitude: picked.longitude,
+      });
+    }, [consumePickedLocation]),
+  );
 
   const handleContentChange = useCallback((newBlocks: Record<string, unknown>[]) => {
     blocksRef.current = getTextOnlyBlocks(newBlocks);
@@ -337,6 +361,62 @@ export default function EditNoteScreen() {
     }
   }, []);
 
+  const handleOpenLocationPicker = useCallback(() => {
+    router.push({
+      pathname: '/(tabs)/profile/notes/location-picker',
+      params: {
+        title: locationDraft.title,
+        address: locationDraft.address,
+        latitude: locationDraft.latitude != null ? String(locationDraft.latitude) : '',
+        longitude: locationDraft.longitude != null ? String(locationDraft.longitude) : '',
+      },
+    } as never);
+  }, [
+    locationDraft.address,
+    locationDraft.latitude,
+    locationDraft.longitude,
+    locationDraft.title,
+    router,
+  ]);
+
+  const handleUseCurrentLocation = useCallback(async () => {
+    const permission = await ExpoLocation.requestForegroundPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('权限不足', '请在系统设置开启定位权限');
+      return;
+    }
+    try {
+      const position = await ExpoLocation.getCurrentPositionAsync({
+        accuracy: ExpoLocation.Accuracy.Balanced,
+      });
+      const latitude = position.coords.latitude;
+      const longitude = position.coords.longitude;
+      let title = '当前位置';
+      let address = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+      try {
+        const places = await ExpoLocation.reverseGeocodeAsync({ latitude, longitude });
+        const place = places[0];
+        if (place) {
+          const parts = [
+            place.city ?? place.region,
+            place.district ?? place.subregion,
+            place.street,
+            place.name,
+          ].filter((part): part is string => Boolean(part));
+          if (parts.length) {
+            title = parts.at(-1) ?? title;
+            address = parts.join(' ');
+          }
+        }
+      } catch {
+        // Geocoding failure should not block coordinate selection.
+      }
+      setLocationDraft({ title, address, latitude, longitude });
+    } catch {
+      Alert.alert('定位失败', '请稍后重试');
+    }
+  }, []);
+
   const navigateBack = useCallback(() => {
     setEditorMounted(false);
     setNavigating(true);
@@ -360,10 +440,15 @@ export default function EditNoteScreen() {
       const sectionShowcase = mergeMedia(showcaseItems);
       const legacyMedia = mergeMedia([...sectionMedia, ...sectionShowcase]);
       const nextLocation =
-        locationDraft.title.trim() || locationDraft.address.trim()
+        locationDraft.title.trim() ||
+        locationDraft.address.trim() ||
+        locationDraft.latitude != null ||
+        locationDraft.longitude != null
           ? {
               title: locationDraft.title.trim() || null,
               address: locationDraft.address.trim() || null,
+              latitude: locationDraft.latitude,
+              longitude: locationDraft.longitude,
             }
           : null;
       const input = {
@@ -405,6 +490,8 @@ export default function EditNoteScreen() {
     isEdit,
     isSubmitting,
     locationDraft.address,
+    locationDraft.latitude,
+    locationDraft.longitude,
     locationDraft.title,
     mediaItems,
     navigateBack,
@@ -696,6 +783,26 @@ export default function EditNoteScreen() {
             t('notes.edit.sections.location', { defaultValue: '地址' }),
             t('notes.edit.sections.locationHint', { defaultValue: '填写位置名称和地址' }),
           )}
+          <View style={s.sectionActions}>
+            <Pressable
+              style={[s.sectionAction, d.sectionAction]}
+              onPress={handleOpenLocationPicker}
+            >
+              <Ionicons name="map-outline" size={17} color={colors.text} />
+              <Text style={[s.sectionActionText, d.sectionActionText]}>
+                {t('notes.edit.pickLocation', { defaultValue: '选择位置' })}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[s.sectionAction, d.sectionAction]}
+              onPress={() => void handleUseCurrentLocation()}
+            >
+              <Ionicons name="navigate-outline" size={17} color={colors.text} />
+              <Text style={[s.sectionActionText, d.sectionActionText]}>
+                {t('notes.edit.useCurrentLocation', { defaultValue: '当前位置' })}
+              </Text>
+            </Pressable>
+          </View>
           <View style={s.locationInputs}>
             <TextInput
               style={[s.locationInput, d.locationInput]}
@@ -724,6 +831,11 @@ export default function EditNoteScreen() {
               returnKeyType="done"
             />
           </View>
+          {locationDraft.latitude != null && locationDraft.longitude != null ? (
+            <Text style={[s.locationCoords, d.sectionSubtitle]}>
+              {locationDraft.latitude.toFixed(5)}, {locationDraft.longitude.toFixed(5)}
+            </Text>
+          ) : null}
         </View>
       </ScrollView>
     </View>
@@ -866,4 +978,5 @@ const s = StyleSheet.create({
     paddingVertical: 10,
     ...Typography.body,
   },
+  locationCoords: { ...Typography.small },
 });

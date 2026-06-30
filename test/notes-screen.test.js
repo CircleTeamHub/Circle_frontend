@@ -317,6 +317,18 @@ test('EditNoteScreen adds content directly inside media showcase and location se
   assert.match(src, /location: nextLocation/);
 });
 
+test('EditNoteScreen can select a real map location and save coordinates', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+
+  assert.match(src, /useNoteLocationPickerStore/);
+  assert.match(src, /useFocusEffect/);
+  assert.match(src, /handleOpenLocationPicker/);
+  assert.match(src, /handleUseCurrentLocation/);
+  assert.match(src, /latitude: locationDraft\.latitude/);
+  assert.match(src, /longitude: locationDraft\.longitude/);
+  assert.match(src, /notes\/location-picker/);
+});
+
 test('NoteCard renders title and meta', () => {
   const src = read('src/features/notes/components/NoteCard.tsx');
   assert.match(src, /note\.title/);
