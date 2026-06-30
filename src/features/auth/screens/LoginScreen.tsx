@@ -1,4 +1,3 @@
-import { Ionicons } from "@expo/vector-icons";
 import { AuthInput } from "@/components/ui/auth-input";
 import { useAuth } from "@/hooks/use-auth";
 import { useSendEmailCode } from "@/hooks/use-send-email-code";
@@ -10,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -21,10 +21,12 @@ import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 type Mode = "password" | "code";
 
+const APP_LOGO_SOURCE = require("../../../../assets/images/login-logo-plane.png");
+
 const s = StyleSheet.create({
   scroll: { flex: 1 },
   container: { paddingHorizontal: Spacing.lg, alignItems: "center", gap: 28 },
-  logoPlane: { marginBottom: -4 },
+  logoPlane: { width: 96, height: 96, marginBottom: -8 },
   headingGroup: { alignItems: "center", gap: Spacing.sm, width: "100%" },
   heading: { fontSize: 28, fontWeight: "700" },
   subtitle: { ...Typography.body },
@@ -127,11 +129,10 @@ export default function LoginScreen() {
       {...keyboardDismissOnDragProps}
     >
       {/* Logo */}
-      <Ionicons
-        name="paper-plane"
-        size={76}
-        color={colors.primary}
+      <Image
+        source={APP_LOGO_SOURCE}
         style={s.logoPlane}
+        resizeMode="contain"
         accessibilityLabel="风信"
       />
 
