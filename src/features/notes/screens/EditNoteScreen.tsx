@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -6,6 +7,7 @@ import {
   Alert,
   LogBox,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -22,12 +24,19 @@ import {
   mergeExtractedMediaWithMediaMap,
 } from '@/features/notes/utils/note-blocks';
 import { formatNoteFullDate } from '@/features/notes/utils/note-format';
+import { getNoteVideoUploadPolicyViolation } from '@/features/notes/utils/note-media-policy';
 import {
   createNote,
   fetchNoteDetail,
   fetchNoteGroups,
   updateNote,
 } from '@/services/api/notes';
+import {
+  requestUploadPresign,
+  resolveUploadContentType,
+  sanitizeUploadFilename,
+  uploadLocalFileToPresignedUrl,
+} from '@/services/api/upload';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 LogBox.ignoreLogs([
@@ -36,49 +45,65 @@ LogBox.ignoreLogs([
   'DomWebView',
 ]);
 
-type SectionMetrics = {
-  imageCount: number;
-  videoCount: number;
-  showcaseCount: number;
-};
-
 type LocationDraft = {
   title: string;
   address: string;
 };
 
-const EMPTY_SECTION_METRICS: SectionMetrics = {
-  imageCount: 0,
-  videoCount: 0,
-  showcaseCount: 0,
-};
+type SectionMediaTarget = 'media' | 'showcase';
+type SectionUploadKind = 'image' | 'video';
+type UploadingSection = `${SectionMediaTarget}:${SectionUploadKind}` | null;
 
-function countMediaItems(
-  items: Partial<CreateNoteMediaInput>[] | NoteSections['media']['items'] | undefined,
-) {
-  if (!Array.isArray(items)) return { imageCount: 0, videoCount: 0 };
-  return items.reduce(
-    (counts, item) => {
-      if (item?.type === 'IMAGE') counts.imageCount += 1;
-      if (item?.type === 'VIDEO') counts.videoCount += 1;
-      return counts;
-    },
-    { imageCount: 0, videoCount: 0 },
-  );
-}
-
-function countShowcaseItems(
-  items: Partial<CreateNoteMediaInput>[] | NoteSections['showcase']['items'] | undefined,
-) {
-  if (!Array.isArray(items)) return 0;
-  return items.filter((item) => item?.type === 'IMAGE' || item?.type === 'VIDEO').length;
-}
+const VIDEO_UPLOAD_TIMEOUT_MS = 5 * 60_000;
 
 function buildLocationDraft(location: NoteSections['location'] | undefined): LocationDraft {
   return {
     title: location?.title?.trim() ?? '',
     address: location?.address?.trim() ?? '',
   };
+}
+
+function getTextOnlyBlocks(blocks: Record<string, unknown>[]) {
+  return blocks.filter((block) => block.type !== 'image' && block.type !== 'video');
+}
+
+function normalizeSectionMedia(
+  items:
+    | (CreateNoteMediaInput | NoteSections['media']['items'][number])[]
+    | undefined,
+) {
+  if (!Array.isArray(items)) return [];
+  return items
+    .filter((item): item is CreateNoteMediaInput =>
+      Boolean(
+        item &&
+          typeof item.objectKey === 'string' &&
+          typeof item.url === 'string' &&
+          (item.type === 'IMAGE' || item.type === 'VIDEO'),
+      ),
+    )
+    .map((item, index): CreateNoteMediaInput => ({
+      type: item.type,
+      objectKey: item.objectKey,
+      url: item.url,
+      ...(typeof item.mimeType === 'string' ? { mimeType: item.mimeType } : {}),
+      ...(typeof item.size === 'number' ? { size: item.size } : {}),
+      ...(typeof item.width === 'number' ? { width: item.width } : {}),
+      ...(typeof item.height === 'number' ? { height: item.height } : {}),
+      ...(typeof item.durationMs === 'number' ? { durationMs: item.durationMs } : {}),
+      ...(typeof item.posterUrl === 'string' ? { posterUrl: item.posterUrl } : {}),
+      sortOrder: typeof item.sortOrder === 'number' ? item.sortOrder : index,
+    }));
+}
+
+function mergeMedia(items: CreateNoteMediaInput[]) {
+  return items.reduce<CreateNoteMediaInput[]>((merged, item) => {
+    const key = `${item.objectKey}:${item.url}`;
+    if (merged.some((existing) => `${existing.objectKey}:${existing.url}` === key)) {
+      return merged;
+    }
+    return [...merged, { ...item, sortOrder: merged.length }];
+  }, []);
 }
 
 export default function EditNoteScreen() {
@@ -99,13 +124,13 @@ export default function EditNoteScreen() {
   const [dateStr, setDateStr] = useState(() =>
     formatNoteFullDate(new Date().toISOString(), t),
   );
-  const mediaMapRef = useRef<Record<string, CreateNoteMediaInput>>({});
   const existingSectionsRef = useRef<Partial<NoteSections> | null>(null);
+  const uploadInFlightRef = useRef(false);
   const [editorMounted, setEditorMounted] = useState(false);
   const [navigating, setNavigating] = useState(false);
-  const [sectionMetrics, setSectionMetrics] = useState<SectionMetrics>(
-    EMPTY_SECTION_METRICS,
-  );
+  const [mediaItems, setMediaItems] = useState<CreateNoteMediaInput[]>([]);
+  const [showcaseItems, setShowcaseItems] = useState<CreateNoteMediaInput[]>([]);
+  const [uploadingSection, setUploadingSection] = useState<UploadingSection>(null);
   const [locationDraft, setLocationDraft] = useState<LocationDraft>({
     title: '',
     address: '',
@@ -129,9 +154,9 @@ export default function EditNoteScreen() {
       });
 
     if (!isEdit || !id) {
-      mediaMapRef.current = {};
       existingSectionsRef.current = null;
-      setSectionMetrics(EMPTY_SECTION_METRICS);
+      setMediaItems([]);
+      setShowcaseItems([]);
       setLocationDraft({ title: '', address: '' });
       setEditorMounted(true);
       setLoading(false);
@@ -145,15 +170,24 @@ export default function EditNoteScreen() {
         if (cancelled) return;
         setTitle(note.title);
         existingSectionsRef.current = note.sections ?? null;
+
         const loaded = note.sections?.text?.contentJson ?? note.contentJson ?? [];
-        blocksRef.current = loaded;
-        setInitialBlocks(loaded.length > 0 ? loaded : null);
-        mediaMapRef.current = buildNoteMediaMap(note.media);
-        const mediaCounts = countMediaItems(note.sections?.media?.items ?? note.media);
-        setSectionMetrics({
-          ...mediaCounts,
-          showcaseCount: countShowcaseItems(note.sections?.showcase?.items),
-        });
+        const textBlocks = getTextOnlyBlocks(loaded);
+        const noteMediaMap = buildNoteMediaMap(note.media);
+        const legacyInlineMedia = mergeExtractedMediaWithMediaMap(
+          extractMediaFromBlocks(loaded),
+          noteMediaMap,
+        );
+
+        blocksRef.current = textBlocks;
+        setInitialBlocks(textBlocks.length > 0 ? textBlocks : null);
+        setMediaItems(normalizeSectionMedia(note.sections?.media?.items ?? note.media));
+        setShowcaseItems(
+          normalizeSectionMedia(
+            note.sections?.showcase?.items ??
+              legacyInlineMedia.filter((item) => item.type === 'IMAGE'),
+          ),
+        );
         setLocationDraft(buildLocationDraft(note.sections?.location));
         setSelectedGroupIds(note.groups.map((group) => group.id));
         setDateStr(formatNoteFullDate(note.createdAt, t));
@@ -162,9 +196,9 @@ export default function EditNoteScreen() {
       })
       .catch(() => {
         if (!cancelled) {
-          mediaMapRef.current = {};
           existingSectionsRef.current = null;
-          setSectionMetrics(EMPTY_SECTION_METRICS);
+          setMediaItems([]);
+          setShowcaseItems([]);
           setLocationDraft({ title: '', address: '' });
           setLoading(false);
           setEditorMounted(true);
@@ -177,27 +211,130 @@ export default function EditNoteScreen() {
   }, [id, isEdit, t]);
 
   const handleContentChange = useCallback((newBlocks: Record<string, unknown>[]) => {
-    blocksRef.current = newBlocks;
-    const media = extractMediaFromBlocks(newBlocks);
-    if (media.length === 0) return;
-    const mediaCounts = countMediaItems(media);
-    setSectionMetrics((current) => ({
-      imageCount: Math.max(current.imageCount, mediaCounts.imageCount),
-      videoCount: Math.max(current.videoCount, mediaCounts.videoCount),
-      showcaseCount: Math.max(
-        current.showcaseCount,
-        media.filter((item) => item.type === 'IMAGE').length,
-      ),
-    }));
+    blocksRef.current = getTextOnlyBlocks(newBlocks);
   }, []);
 
-  const handleMediaUploaded = useCallback((media: CreateNoteMediaInput) => {
-    mediaMapRef.current = { ...mediaMapRef.current, [media.url]: media };
-    setSectionMetrics((current) => ({
-      imageCount: current.imageCount + (media.type === 'IMAGE' ? 1 : 0),
-      videoCount: current.videoCount + (media.type === 'VIDEO' ? 1 : 0),
-      showcaseCount: current.showcaseCount + (media.type === 'IMAGE' ? 1 : 0),
-    }));
+  const handleAddSectionMedia = useCallback(
+    async ({
+      target,
+      kind,
+    }: {
+      target: SectionMediaTarget;
+      kind: SectionUploadKind;
+    }) => {
+      if (uploadInFlightRef.current) return;
+      uploadInFlightRef.current = true;
+      const uploadKey: UploadingSection = `${target}:${kind}`;
+      setUploadingSection(uploadKey);
+      try {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) return;
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: kind === 'video' ? ['videos'] : ['images'],
+          quality: 0.85,
+          allowsMultipleSelection: false,
+        });
+        if (result.canceled || !result.assets.length) return;
+
+        const asset = result.assets[0];
+        if (kind === 'video') {
+          const violation = getNoteVideoUploadPolicyViolation({
+            fileSize: asset.fileSize,
+            duration: asset.duration,
+          });
+          if (violation) {
+            Alert.alert(
+              t('notes.editor.videoRejectedTitle', {
+                defaultValue: '视频无法上传',
+              }),
+              violation === 'size'
+                ? t('notes.editor.videoTooLargeMessage', {
+                    defaultValue: '请选择 200MB 以内的视频',
+                  })
+                : t('notes.editor.videoTooLongMessage', {
+                    defaultValue: '请选择 10 分钟以内的视频',
+                  }),
+            );
+            return;
+          }
+        }
+
+        const fallbackName = kind === 'video' ? 'video.mp4' : 'image.jpg';
+        const fallbackType = kind === 'video' ? 'video/mp4' : 'image/jpeg';
+        const filename = asset.uri.split('/').pop() ?? fallbackName;
+        const contentType =
+          resolveUploadContentType({ mimeType: asset.mimeType, fileName: filename }) ??
+          fallbackType;
+        const presign = await requestUploadPresign({
+          filename: sanitizeUploadFilename(filename),
+          contentType,
+          folder: 'notes',
+        });
+
+        await uploadLocalFileToPresignedUrl(
+          presign.uploadUrl,
+          contentType,
+          asset.uri,
+          kind === 'video' ? VIDEO_UPLOAD_TIMEOUT_MS : undefined,
+        );
+
+        const nextItem: CreateNoteMediaInput = {
+          type: kind === 'video' ? 'VIDEO' : 'IMAGE',
+          objectKey: presign.key,
+          url: presign.fileUrl,
+          width: asset.width ?? undefined,
+          height: asset.height ?? undefined,
+          mimeType: contentType,
+          size: asset.fileSize ?? undefined,
+          durationMs:
+            kind === 'video' && typeof asset.duration === 'number'
+              ? Math.round(asset.duration)
+              : undefined,
+          sortOrder: 0,
+        };
+
+        if (target === 'media') {
+          setMediaItems((current) => [
+            ...current,
+            { ...nextItem, sortOrder: current.length },
+          ]);
+        } else {
+          setShowcaseItems((current) => [
+            ...current,
+            { ...nextItem, sortOrder: current.length },
+          ]);
+        }
+      } catch (error) {
+        Alert.alert(
+          t('notes.editor.mediaUploadFailedTitle', {
+            defaultValue: '上传失败',
+          }),
+          t('notes.editor.mediaUploadFailedMessage', {
+            defaultValue: '请稍后重试',
+          }),
+        );
+        if (__DEV__) {
+          console.warn('[EditNoteScreen] section media upload failed', error);
+        }
+      } finally {
+        uploadInFlightRef.current = false;
+        setUploadingSection(null);
+      }
+    },
+    [t],
+  );
+
+  const handleRemoveSectionMedia = useCallback((target: SectionMediaTarget, url: string) => {
+    const removeByUrl = (items: CreateNoteMediaInput[]) =>
+      items
+        .filter((item) => item.url !== url)
+        .map((item, index) => ({ ...item, sortOrder: index }));
+    if (target === 'media') {
+      setMediaItems((current) => removeByUrl(current));
+    } else {
+      setShowcaseItems((current) => removeByUrl(current));
+    }
   }, []);
 
   const navigateBack = useCallback(() => {
@@ -217,55 +354,11 @@ export default function EditNoteScreen() {
     if (!trimmedTitle) return;
     setIsSubmitting(true);
     try {
-      const currentBlocks = blocksRef.current;
+      const currentBlocks = getTextOnlyBlocks(blocksRef.current);
       const plainText = extractPlainText(currentBlocks);
-      const media = mergeExtractedMediaWithMediaMap(
-        extractMediaFromBlocks(currentBlocks),
-        mediaMapRef.current,
-      );
-      const showcase = media.filter((item) => item.type === 'IMAGE');
-      const existingSections = existingSectionsRef.current;
-      const normalizeSectionMedia = (
-        items: (CreateNoteMediaInput | NoteSections['media']['items'][number])[],
-      ) =>
-        items
-        .filter((item): item is CreateNoteMediaInput =>
-          Boolean(
-            item &&
-              typeof item.objectKey === 'string' &&
-              typeof item.url === 'string' &&
-              (item.type === 'IMAGE' || item.type === 'VIDEO'),
-          ),
-        )
-        .map((item, index): CreateNoteMediaInput => ({
-          type: item.type,
-          objectKey: item.objectKey,
-          url: item.url,
-          ...(typeof item.mimeType === 'string' ? { mimeType: item.mimeType } : {}),
-          ...(typeof item.size === 'number' ? { size: item.size } : {}),
-          ...(typeof item.width === 'number' ? { width: item.width } : {}),
-          ...(typeof item.height === 'number' ? { height: item.height } : {}),
-          ...(typeof item.durationMs === 'number' ? { durationMs: item.durationMs } : {}),
-          ...(typeof item.posterUrl === 'string' ? { posterUrl: item.posterUrl } : {}),
-          sortOrder: typeof item.sortOrder === 'number' ? item.sortOrder : index,
-        }));
-      const preservedMedia = normalizeSectionMedia(existingSections?.media?.items ?? media);
-      const preservedShowcase = normalizeSectionMedia(
-        existingSections?.showcase?.items ?? showcase,
-      );
-      const mergeMedia = (items: CreateNoteMediaInput[]) =>
-        items.reduce<CreateNoteMediaInput[]>(
-          (merged, item) => {
-            const key = `${item.objectKey}:${item.url}`;
-            if (merged.some((existing) => `${existing.objectKey}:${existing.url}` === key)) {
-              return merged;
-            }
-            return [...merged, { ...item, sortOrder: merged.length }];
-          },
-          [],
-      );
-      const sectionMedia = mergeMedia([...preservedMedia, ...media]);
-      const legacyMedia = mergeMedia([...sectionMedia, ...preservedShowcase]);
+      const sectionMedia = mergeMedia(mediaItems);
+      const sectionShowcase = mergeMedia(showcaseItems);
+      const legacyMedia = mergeMedia([...sectionMedia, ...sectionShowcase]);
       const nextLocation =
         locationDraft.title.trim() || locationDraft.address.trim()
           ? {
@@ -280,7 +373,7 @@ export default function EditNoteScreen() {
         sections: {
           text: { content: plainText, contentJson: currentBlocks },
           media: { items: sectionMedia },
-          showcase: { items: preservedShowcase },
+          showcase: { items: sectionShowcase },
           location: nextLocation,
         },
         groupIds: selectedGroupIds,
@@ -313,51 +406,13 @@ export default function EditNoteScreen() {
     isSubmitting,
     locationDraft.address,
     locationDraft.title,
+    mediaItems,
     navigateBack,
     selectedGroupIds,
+    showcaseItems,
     t,
     title,
   ]);
-
-  const editSections = useMemo(
-    () => [
-      {
-        id: 'text',
-        icon: 'text-outline',
-        label: t('notes.edit.sections.text', { defaultValue: '文字' }),
-        value: t('notes.edit.sections.textValue', { defaultValue: '正文' }),
-      },
-      {
-        id: 'media',
-        icon: 'images-outline',
-        label: t('notes.edit.sections.media', { defaultValue: '图片/视频' }),
-        value: `${sectionMetrics.imageCount} 图 ${sectionMetrics.videoCount} 视频`,
-      },
-      {
-        id: 'showcase',
-        icon: 'albums-outline',
-        label: t('notes.edit.sections.showcase', { defaultValue: '展示' }),
-        value: `${sectionMetrics.showcaseCount} 展示`,
-      },
-      {
-        id: 'location',
-        icon: 'location-outline',
-        label: t('notes.edit.sections.location', { defaultValue: '地址' }),
-        value:
-          locationDraft.title.trim() ||
-          locationDraft.address.trim() ||
-          t('notes.edit.sections.noLocation', { defaultValue: '未设置' }),
-      },
-    ],
-    [
-      locationDraft.address,
-      locationDraft.title,
-      sectionMetrics.imageCount,
-      sectionMetrics.showcaseCount,
-      sectionMetrics.videoCount,
-      t,
-    ],
-  );
 
   const d = useMemo(
     () => ({
@@ -379,12 +434,15 @@ export default function EditNoteScreen() {
       groupChipText: { color: colors.textSecondary },
       groupChipTextActive: { color: colors.white },
       sectionTitle: { color: colors.textSecondary },
-      sectionCard: {
-        backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
-      },
-      sectionCardLabel: { color: colors.text },
-      sectionCardValue: { color: colors.textSecondary },
+      sectionHeading: { color: colors.text },
+      sectionSubtitle: { color: colors.textSecondary },
+      sectionDivider: { borderTopColor: colors.surfaceBorder },
+      mediaRow: { backgroundColor: colors.surface, borderColor: colors.surfaceBorder },
+      mediaTitle: { color: colors.text },
+      mediaMeta: { color: colors.textSecondary },
+      emptyText: { color: colors.textSecondary },
+      sectionAction: { borderColor: colors.surfaceBorder },
+      sectionActionText: { color: colors.text },
       locationInput: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
@@ -403,6 +461,87 @@ export default function EditNoteScreen() {
   }
 
   const isDoneDisabled = isSubmitting || !title.trim();
+
+  const renderSectionHeader = (
+    icon: keyof typeof Ionicons.glyphMap,
+    sectionTitle: string,
+    subtitle?: string,
+  ) => (
+    <View style={s.sectionHeader}>
+      <View style={s.sectionHeaderIcon}>
+        <Ionicons name={icon} size={18} color={colors.primary} />
+      </View>
+      <View style={s.sectionHeaderText}>
+        <Text style={[s.sectionHeading, d.sectionHeading]}>{sectionTitle}</Text>
+        {subtitle ? (
+          <Text style={[s.sectionSubtitle, d.sectionSubtitle]}>{subtitle}</Text>
+        ) : null}
+      </View>
+    </View>
+  );
+
+  const renderAddButton = (
+    target: SectionMediaTarget,
+    kind: SectionUploadKind,
+    label: string,
+    icon: keyof typeof Ionicons.glyphMap,
+  ) => {
+    const uploadKey: UploadingSection = `${target}:${kind}`;
+    const loadingLabel = t('notes.edit.uploading', { defaultValue: '上传中...' });
+    return (
+      <Pressable
+        style={[s.sectionAction, d.sectionAction]}
+        onPress={() => void handleAddSectionMedia({ target, kind })}
+        disabled={uploadingSection !== null}
+      >
+        <Ionicons name={icon} size={17} color={colors.text} />
+        <Text style={[s.sectionActionText, d.sectionActionText]}>
+          {uploadingSection === uploadKey ? loadingLabel : label}
+        </Text>
+      </Pressable>
+    );
+  };
+
+  const renderMediaList = (items: CreateNoteMediaInput[], target: SectionMediaTarget) => {
+    if (items.length === 0) {
+      return (
+        <Text style={[s.emptySectionText, d.emptyText]}>
+          {t('notes.edit.emptySection', { defaultValue: '暂无内容' })}
+        </Text>
+      );
+    }
+    return (
+      <View style={s.mediaList}>
+        {items.map((item) => (
+          <View key={`${item.objectKey}:${item.url}`} style={[s.mediaRow, d.mediaRow]}>
+            <View style={s.mediaIconBox}>
+              <Ionicons
+                name={item.type === 'VIDEO' ? 'videocam-outline' : 'image-outline'}
+                size={18}
+                color={colors.primary}
+              />
+            </View>
+            <View style={s.mediaInfo}>
+              <Text style={[s.mediaTitle, d.mediaTitle]} numberOfLines={1}>
+                {item.type === 'VIDEO'
+                  ? t('notes.edit.videoItem', { defaultValue: '视频' })
+                  : t('notes.edit.imageItem', { defaultValue: '图片' })}
+              </Text>
+              <Text style={[s.mediaMeta, d.mediaMeta]} numberOfLines={1}>
+                {item.mimeType ?? item.url}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => handleRemoveSectionMedia(target, item.url)}
+              hitSlop={8}
+            >
+              <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+        ))}
+      </View>
+    );
+  };
 
   return (
     <View style={[s.container, d.container, { paddingTop: insets.top }]}>
@@ -428,121 +567,165 @@ export default function EditNoteScreen() {
         </Pressable>
       </View>
 
-      <TextInput
-        style={[s.titleInput, d.titleInput]}
-        placeholder={t('notes.edit.titlePlaceholder', { defaultValue: '标题' })}
-        placeholderTextColor={colors.textSecondary}
-        value={title}
-        onChangeText={setTitle}
-        maxLength={120}
-        returnKeyType="next"
-      />
-
-      <View style={s.metaRow}>
-        <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
-        <Text style={[s.dateText, d.dateText]}>{dateStr}</Text>
-      </View>
-
-      <View style={s.groupSection}>
-        <View style={s.groupLabelRow}>
-          <Ionicons
-            name="folder-open-outline"
-            size={14}
-            color={colors.textSecondary}
-          />
-          <Text style={[s.sectionTitle, d.sectionTitle]}>
-            {t('notes.edit.groupsLabel', { defaultValue: '分组' })}
-          </Text>
-        </View>
-        <View style={s.groupChipsWrap}>
-          {availableGroups.map((group) => {
-            const selected = selectedGroupIds.includes(group.id);
-            return (
-              <Pressable
-                key={group.id}
-                style={[
-                  s.groupChip,
-                  d.groupChip,
-                  selected ? [s.groupChipActive, d.groupChipActive] : null,
-                ]}
-                onPress={() => toggleGroup(group.id)}
-              >
-                <Text
-                  style={[
-                    s.groupChipText,
-                    d.groupChipText,
-                    selected ? d.groupChipTextActive : null,
-                  ]}
-                >
-                  {group.name}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-
-      <View style={s.sectionGrid}>
-        {editSections.map((section) => (
-          <View key={section.id} style={[s.sectionCard, d.sectionCard]}>
-            <View style={s.sectionCardTop}>
-              <Ionicons
-                name={section.icon as keyof typeof Ionicons.glyphMap}
-                size={16}
-                color={colors.primary}
-              />
-              <Text style={[s.sectionCardLabel, d.sectionCardLabel]}>
-                {section.label}
-              </Text>
-            </View>
-            <Text
-              style={[s.sectionCardValue, d.sectionCardValue]}
-              numberOfLines={1}
-            >
-              {section.value}
-            </Text>
-          </View>
-        ))}
-      </View>
-
-      <View style={s.locationInputs}>
+      <ScrollView
+        style={s.scroll}
+        contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 24 }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <TextInput
-          style={[s.locationInput, d.locationInput]}
-          placeholder={t('notes.edit.locationTitlePlaceholder', {
-            defaultValue: '位置名称',
-          })}
+          style={[s.titleInput, d.titleInput]}
+          placeholder={t('notes.edit.titlePlaceholder', { defaultValue: '标题' })}
           placeholderTextColor={colors.textSecondary}
-          value={locationDraft.title}
-          onChangeText={(value) =>
-            setLocationDraft((current) => ({ ...current, title: value }))
-          }
-          maxLength={80}
+          value={title}
+          onChangeText={setTitle}
+          maxLength={120}
           returnKeyType="next"
         />
-        <TextInput
-          style={[s.locationInput, d.locationInput]}
-          placeholder={t('notes.edit.locationAddressPlaceholder', {
-            defaultValue: '地址',
-          })}
-          placeholderTextColor={colors.textSecondary}
-          value={locationDraft.address}
-          onChangeText={(value) =>
-            setLocationDraft((current) => ({ ...current, address: value }))
-          }
-          maxLength={160}
-          returnKeyType="done"
-        />
-      </View>
 
-      <View style={s.editorWrap}>
-        {editorMounted ? (
-          <NoteBlockEditor
-            initialContent={initialBlocks}
-            onContentChange={handleContentChange}
-            onMediaUploaded={handleMediaUploaded}
-          />
-        ) : null}
-      </View>
+        <View style={s.metaRow}>
+          <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
+          <Text style={[s.dateText, d.dateText]}>{dateStr}</Text>
+        </View>
+
+        <View style={s.groupSection}>
+          <View style={s.groupLabelRow}>
+            <Ionicons
+              name="folder-open-outline"
+              size={14}
+              color={colors.textSecondary}
+            />
+            <Text style={[s.sectionTitle, d.sectionTitle]}>
+              {t('notes.edit.groupsLabel', { defaultValue: '分组' })}
+            </Text>
+          </View>
+          <View style={s.groupChipsWrap}>
+            {availableGroups.map((group) => {
+              const selected = selectedGroupIds.includes(group.id);
+              return (
+                <Pressable
+                  key={group.id}
+                  style={[
+                    s.groupChip,
+                    d.groupChip,
+                    selected ? [s.groupChipActive, d.groupChipActive] : null,
+                  ]}
+                  onPress={() => toggleGroup(group.id)}
+                >
+                  <Text
+                    style={[
+                      s.groupChipText,
+                      d.groupChipText,
+                      selected ? d.groupChipTextActive : null,
+                    ]}
+                  >
+                    {group.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={[s.sectionBlock, d.sectionDivider]}>
+          {renderSectionHeader(
+            'text-outline',
+            t('notes.edit.sections.text', { defaultValue: '文字' }),
+            t('notes.edit.sections.textHint', { defaultValue: '只编辑文字内容' }),
+          )}
+          <View style={s.textEditorFrame}>
+            {editorMounted ? (
+              <NoteBlockEditor
+                initialContent={initialBlocks}
+                onContentChange={handleContentChange}
+                mediaToolbarEnabled={false}
+              />
+            ) : null}
+          </View>
+        </View>
+
+        <View style={[s.sectionBlock, d.sectionDivider]}>
+          {renderSectionHeader(
+            'images-outline',
+            t('notes.edit.sections.media', { defaultValue: '图片/视频' }),
+            `${mediaItems.length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`,
+          )}
+          <View style={s.sectionActions}>
+            {renderAddButton(
+              'media',
+              'image',
+              t('notes.edit.addImage', { defaultValue: '添加图片' }),
+              'image-outline',
+            )}
+            {renderAddButton(
+              'media',
+              'video',
+              t('notes.edit.addVideo', { defaultValue: '添加视频' }),
+              'videocam-outline',
+            )}
+          </View>
+          {renderMediaList(mediaItems, 'media')}
+        </View>
+
+        <View style={[s.sectionBlock, d.sectionDivider]}>
+          {renderSectionHeader(
+            'albums-outline',
+            t('notes.edit.sections.showcase', { defaultValue: '展示' }),
+            `${showcaseItems.length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`,
+          )}
+          <View style={s.sectionActions}>
+            {renderAddButton(
+              'showcase',
+              'image',
+              t('notes.edit.addShowcaseImage', { defaultValue: '添加展示图片' }),
+              'image-outline',
+            )}
+            {renderAddButton(
+              'showcase',
+              'video',
+              t('notes.edit.addShowcaseVideo', { defaultValue: '添加展示视频' }),
+              'videocam-outline',
+            )}
+          </View>
+          {renderMediaList(showcaseItems, 'showcase')}
+        </View>
+
+        <View style={[s.sectionBlock, d.sectionDivider]}>
+          {renderSectionHeader(
+            'location-outline',
+            t('notes.edit.sections.location', { defaultValue: '地址' }),
+            t('notes.edit.sections.locationHint', { defaultValue: '填写位置名称和地址' }),
+          )}
+          <View style={s.locationInputs}>
+            <TextInput
+              style={[s.locationInput, d.locationInput]}
+              placeholder={t('notes.edit.locationTitlePlaceholder', {
+                defaultValue: '位置名称',
+              })}
+              placeholderTextColor={colors.textSecondary}
+              value={locationDraft.title}
+              onChangeText={(value) =>
+                setLocationDraft((current) => ({ ...current, title: value }))
+              }
+              maxLength={80}
+              returnKeyType="next"
+            />
+            <TextInput
+              style={[s.locationInput, d.locationInput]}
+              placeholder={t('notes.edit.locationAddressPlaceholder', {
+                defaultValue: '地址',
+              })}
+              placeholderTextColor={colors.textSecondary}
+              value={locationDraft.address}
+              onChangeText={(value) =>
+                setLocationDraft((current) => ({ ...current, address: value }))
+              }
+              maxLength={160}
+              returnKeyType="done"
+            />
+          </View>
+        </View>
+      </ScrollView>
     </View>
   );
 }
@@ -569,9 +752,10 @@ const s = StyleSheet.create({
     borderRadius: Radius.pill,
   },
   doneBtnText: { ...Typography.body, fontWeight: '600' },
+  scroll: { flex: 1 },
+  scrollContent: { paddingTop: Spacing.md },
   titleInput: {
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
     paddingBottom: Spacing.sm,
     fontSize: 28,
     fontWeight: '700',
@@ -610,47 +794,76 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.sm + 2,
     paddingVertical: 5,
   },
-  groupChipActive: {
-    borderWidth: 1,
-  },
+  groupChipActive: { borderWidth: 1 },
   groupChipText: { ...Typography.small, fontWeight: '600' },
-  sectionGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  sectionBlock: {
+    borderTopWidth: 1,
     paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.sm,
-    gap: Spacing.sm,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.lg,
+    gap: Spacing.md,
   },
-  sectionCard: {
-    width: '48%',
-    minHeight: 54,
-    borderWidth: 1,
-    borderRadius: Radius.sm,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
-    justifyContent: 'center',
-    gap: 3,
-  },
-  sectionCardTop: {
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
-  },
-  sectionCardLabel: { ...Typography.caption, fontWeight: '700' },
-  sectionCardValue: { ...Typography.small },
-  locationInputs: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.sm,
     gap: Spacing.sm,
   },
-  locationInput: {
-    flex: 1,
+  sectionHeaderIcon: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionHeaderText: { flex: 1, gap: 2 },
+  sectionHeading: { ...Typography.h3, fontWeight: '700' },
+  sectionSubtitle: { ...Typography.small },
+  textEditorFrame: {
+    height: 300,
+    minHeight: 300,
+    overflow: 'hidden',
+    borderRadius: Radius.sm,
+  },
+  sectionActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  sectionAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
     borderRadius: Radius.sm,
     paddingHorizontal: Spacing.sm,
     paddingVertical: 8,
-    ...Typography.small,
+    gap: Spacing.xs,
   },
-  editorWrap: { flex: 1 },
+  sectionActionText: { ...Typography.small, fontWeight: '700' },
+  mediaList: { gap: Spacing.sm },
+  mediaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 9,
+    gap: Spacing.sm,
+  },
+  mediaIconBox: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mediaInfo: { flex: 1, minWidth: 0 },
+  mediaTitle: { ...Typography.caption, fontWeight: '700' },
+  mediaMeta: { ...Typography.small },
+  emptySectionText: { ...Typography.small },
+  locationInputs: { gap: Spacing.sm },
+  locationInput: {
+    borderWidth: 1,
+    borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 10,
+    ...Typography.body,
+  },
 });

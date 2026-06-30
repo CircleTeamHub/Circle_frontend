@@ -246,7 +246,6 @@ test('EditNoteScreen does not render selected groups a second time', () => {
 test('EditNoteScreen lays out note metadata as compact wrapping rows', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
-  assert.doesNotMatch(src, /ScrollView/);
   assert.match(src, /groupLabelRow/);
   assert.match(src, /folder-open-outline/);
   assert.match(src, /groupChipsWrap/);
@@ -287,21 +286,30 @@ test('EditNoteScreen selected group chips use solid purple cards', () => {
   assert.doesNotMatch(src, /groupChipActive:\s*\{[\s\S]*colors\.primary \+ '18'/);
 });
 
-test('EditNoteScreen renders four structured note section cards', () => {
+test('EditNoteScreen renders four large structured note edit regions', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
-  assert.match(src, /editSections/);
-  assert.match(src, /id:\s*'text'/);
-  assert.match(src, /id:\s*'media'/);
-  assert.match(src, /id:\s*'showcase'/);
-  assert.match(src, /id:\s*'location'/);
-  assert.match(src, /sectionGrid/);
-  assert.match(src, /sectionCard/);
+  assert.match(src, /ScrollView/);
+  assert.match(src, /renderSectionHeader/);
+  assert.match(src, /sectionBlock/);
+  assert.match(src, /notes\.edit\.sections\.text/);
+  assert.match(src, /notes\.edit\.sections\.media/);
+  assert.match(src, /notes\.edit\.sections\.showcase/);
+  assert.match(src, /notes\.edit\.sections\.location/);
+  assert.doesNotMatch(src, /editSections/);
+  assert.doesNotMatch(src, /sectionGrid/);
 });
 
-test('EditNoteScreen edits and saves the location section separately', () => {
+test('EditNoteScreen adds content directly inside media showcase and location sections', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
+  assert.match(src, /mediaItems/);
+  assert.match(src, /showcaseItems/);
+  assert.match(src, /handleAddSectionMedia/);
+  assert.match(src, /renderAddButton\(\s*'media'/);
+  assert.match(src, /renderAddButton\(\s*'showcase'/);
+  assert.match(src, /renderMediaList/);
+  assert.match(src, /mediaToolbarEnabled=\{false\}/);
   assert.match(src, /locationDraft/);
   assert.match(src, /locationTitlePlaceholder/);
   assert.match(src, /locationAddressPlaceholder/);

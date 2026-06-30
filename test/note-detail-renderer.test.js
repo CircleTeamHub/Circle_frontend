@@ -92,12 +92,13 @@ test('EditNoteScreen preserves structured note sections it cannot edit', () => {
   assert.match(src, /setLocationDraft\(buildLocationDraft\(note\.sections\?\.location\)\)/);
   assert.match(src, /const nextLocation =/);
   assert.match(src, /location: nextLocation/);
-  assert.match(src, /const preservedMedia =/);
-  assert.match(src, /const sectionMedia = mergeMedia\(\[\.\.\.preservedMedia, \.\.\.media\]\)/);
-  assert.match(src, /const preservedShowcase =/);
-  assert.match(src, /const legacyMedia = mergeMedia\(\[\.\.\.sectionMedia, \.\.\.preservedShowcase\]\)/);
+  assert.match(src, /setMediaItems\(normalizeSectionMedia/);
+  assert.match(src, /setShowcaseItems\([\s\S]{0,80}normalizeSectionMedia/);
+  assert.match(src, /const sectionMedia = mergeMedia\(mediaItems\)/);
+  assert.match(src, /const sectionShowcase = mergeMedia\(showcaseItems\)/);
+  assert.match(src, /const legacyMedia = mergeMedia\(\[\.\.\.sectionMedia, \.\.\.sectionShowcase\]\)/);
   assert.match(src, /media: \{ items: sectionMedia \}/);
-  assert.match(src, /showcase: \{ items: preservedShowcase \}/);
+  assert.match(src, /showcase: \{ items: sectionShowcase \}/);
   assert.match(src, /media: legacyMedia/);
 });
 
