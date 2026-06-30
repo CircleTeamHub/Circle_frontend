@@ -108,6 +108,19 @@ test("getSnackbarRoute routes circle post signups to post-signups", () => {
   assert.equal(route.params.title, "Hiking trip");
 });
 
+test("getSnackbarRoute routes auto-ended circle posts to post-signups", () => {
+  const route = getSnackbarRoute(
+    notification({
+      type: "CIRCLE_POST_AUTO_ENDED",
+      fromCirclePost: { id: "p-ended", excerpt: "Board game night", firstImage: null },
+    }),
+    OPTS,
+  );
+  assert.equal(route.pathname, "/(tabs)/messages/post-signups");
+  assert.equal(route.params.postId, "p-ended");
+  assert.equal(route.params.title, "Board game night");
+});
+
 test("getSnackbarRoute falls back to untitledPost for empty excerpts", () => {
   const route = getSnackbarRoute(
     notification({

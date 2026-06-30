@@ -28,6 +28,7 @@ import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import { useCircleForm } from '@/features/discover/hooks/use-circle-form';
 import { CircleFormBody } from '@/features/discover/components/circle-form-body';
 import type { CircleDetail } from '@/types';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
   scroll: { flex: 1, paddingHorizontal: Spacing.lg },
@@ -217,7 +218,7 @@ export default function EditCircleScreen() {
       <ScrollView
         style={s.scroll}
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+        {...keyboardDismissOnDragProps}
       >
         <CircleFormBody form={form} />
         <View style={{ height: Spacing.xl }} />

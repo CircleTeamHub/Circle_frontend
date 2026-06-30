@@ -70,11 +70,20 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
   );
 
   useEffect(() => {
+    if (!userId) {
+      setMoments([]);
+      setPage(1);
+      setHasMore(false);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     void load(1, true).finally(() => {
       if (mountedRef.current) setLoading(false);
     });
-  }, [load]);
+  }, [load, userId]);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);

@@ -20,6 +20,7 @@ import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { fetchNotes } from '@/services/api/notes';
 import i18n from '@/i18n';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 type ShareType = 'note' | 'friend' | 'favorite' | 'quick-reply';
 
@@ -306,7 +307,7 @@ export default function SharePickerScreen() {
             <View style={[s.divider, { backgroundColor: colors.surface }]} />
           )}
           contentContainerStyle={s.noteListContent}
-          keyboardShouldPersistTaps="handled"
+        {...keyboardDismissOnDragProps}
           showsVerticalScrollIndicator={false}
         />
       ) : shareType === 'friend' ? (
@@ -316,7 +317,7 @@ export default function SharePickerScreen() {
           renderItem={renderFriend}
           ItemSeparatorComponent={Sep}
           contentContainerStyle={s.listContent}
-          keyboardShouldPersistTaps="handled"
+        {...keyboardDismissOnDragProps}
         />
       ) : shareType === 'favorite' ? (
         <FlatList
@@ -325,7 +326,7 @@ export default function SharePickerScreen() {
           renderItem={renderFavorite}
           ItemSeparatorComponent={Sep}
           contentContainerStyle={s.listContent}
-          keyboardShouldPersistTaps="handled"
+        {...keyboardDismissOnDragProps}
         />
       ) : (
         <FlatList
@@ -334,7 +335,7 @@ export default function SharePickerScreen() {
           renderItem={renderQuickReply}
           ItemSeparatorComponent={Sep}
           contentContainerStyle={s.listContent}
-          keyboardShouldPersistTaps="handled"
+        {...keyboardDismissOnDragProps}
         />
       )}
     </View>

@@ -15,6 +15,8 @@ import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
 import { formatCacheSize, getAppCacheSize } from '@/services/cache/clear-app-cache';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import { useAuth } from '@/hooks/use-auth';
 
 type AppSettingsRoute =
   | string
@@ -338,6 +340,27 @@ const s = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Spacing.xl,
   },
+  footer: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    paddingTop: Spacing.sm,
+  },
+  secondaryButton: {
+    flex: 1,
+    height: 52,
+    borderRadius: Radius.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dangerButton: {
+    flex: 1,
+    height: 52,
+    borderRadius: Radius.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
 });
 
 export default function AppSettingsScreen() {
@@ -345,6 +368,7 @@ export default function AppSettingsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const { logout, switchAccount, submitting } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [cacheSizeLabel, setCacheSizeLabel] = useState(
     t('appSettings.cacheCalculating'),
@@ -386,6 +410,22 @@ export default function AppSettingsScreen() {
       rowValue: {
         color: colors.textSecondary,
         ...Typography.caption,
+      },
+      secondaryButton: {
+        backgroundColor: colors.surface,
+      },
+      secondaryButtonText: {
+        color: colors.primary,
+        ...Typography.body,
+        fontWeight: '600' as const,
+      },
+      dangerButton: {
+        backgroundColor: colors.error,
+      },
+      dangerButtonText: {
+        color: colors.white,
+        ...Typography.body,
+        fontWeight: '600' as const,
       },
     }),
     [colors, insets.bottom],
@@ -516,6 +556,7 @@ export default function AppSettingsScreen() {
       <ScrollView
         contentContainerStyle={d.content}
         showsVerticalScrollIndicator={false}
+        {...keyboardDismissOnDragProps}
       >
         <View style={[s.searchBox, d.searchBox]}>
           <Ionicons name="search-outline" size={26} color={colors.textSecondary} />
@@ -543,6 +584,32 @@ export default function AppSettingsScreen() {
             <Text style={d.rowValue}>{t('appSettings.searchNoResults')}</Text>
           </View>
         )}
+
+        <View style={s.footer}>
+          <Pressable
+            style={[
+              s.secondaryButton,
+              d.secondaryButton,
+              submitting ? { opacity: 0.6 } : null,
+            ]}
+            onPress={switchAccount}
+            disabled={submitting}
+          >
+            <Text style={d.secondaryButtonText}>{t('settingsPage.switchAccount')}</Text>
+          </Pressable>
+          <Pressable
+            style={[
+              s.dangerButton,
+              d.dangerButton,
+              submitting ? { opacity: 0.6 } : null,
+            ]}
+            onPress={logout}
+            disabled={submitting}
+          >
+            <Ionicons name="log-out-outline" size={20} color={colors.white} />
+            <Text style={d.dangerButtonText}>{t('settingsPage.logout')}</Text>
+          </Pressable>
+        </View>
       </ScrollView>
     </View>
   );

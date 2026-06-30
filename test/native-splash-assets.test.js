@@ -14,6 +14,8 @@ function getLogoCoverage(rel) {
   let minY = image.height;
   let maxX = -1;
   let maxY = -1;
+  let weightedX = 0;
+  let totalWeight = 0;
 
   for (let y = 0; y < image.height; y += 1) {
     for (let x = 0; x < image.width; x += 1) {
@@ -29,6 +31,10 @@ function getLogoCoverage(rel) {
         minY = Math.min(minY, y);
         maxX = Math.max(maxX, x);
         maxY = Math.max(maxY, y);
+        const darkness = 255 - (r + g + b) / 3;
+        const weight = Math.max(1, darkness) * (a / 255);
+        weightedX += (x + 0.5) * weight;
+        totalWeight += weight;
       }
     }
   }
@@ -40,6 +46,7 @@ function getLogoCoverage(rel) {
     coverageY: (maxY - minY + 1) / image.height,
     centerX: (minX + maxX + 1) / 2 / image.width,
     centerY: (minY + maxY + 1) / 2 / image.height,
+    centroidX: weightedX / totalWeight / image.width,
   };
 }
 
@@ -86,22 +93,25 @@ test('expo splash config uses a white background and centered app icon assets', 
     },
     {
       rel: 'assets/images/icon.png',
-      minCoverage: 0.5,
-      maxCoverage: 0.85,
+      minCoverage: 0.42,
+      maxCoverage: 0.52,
+      maxCentroidOffsetX: 0.035,
     },
     {
       rel: 'assets/images/android-icon-foreground.png',
-      minCoverage: 0.5,
-      maxCoverage: 0.85,
+      minCoverage: 0.42,
+      maxCoverage: 0.52,
+      maxCentroidOffsetX: 0.035,
     },
     {
       rel: 'assets/images/android-icon-monochrome.png',
-      minCoverage: 0.5,
-      maxCoverage: 0.85,
+      minCoverage: 0.42,
+      maxCoverage: 0.52,
+      maxCentroidOffsetX: 0.035,
     },
   ];
 
-  for (const { rel, minCoverage, maxCoverage } of assets) {
+  for (const { rel, minCoverage, maxCoverage, maxCentroidOffsetX } of assets) {
     const coverage = getLogoCoverage(rel);
     assert.ok(
       coverage.coverageX > minCoverage && coverage.coverageX < maxCoverage,
@@ -119,6 +129,12 @@ test('expo splash config uses a white background and centered app icon assets', 
       Math.abs(coverage.centerY - 0.5) < 0.05,
       `${rel} should be vertically centered, got center ${coverage.centerY}`,
     );
+    if (typeof maxCentroidOffsetX === 'number') {
+      assert.ok(
+        Math.abs(coverage.centroidX - 0.5) < maxCentroidOffsetX,
+        `${rel} should be visually centered, got weighted center ${coverage.centroidX}`,
+      );
+    }
   }
 
   assertSolidWhitePng('assets/images/android-icon-background.png');

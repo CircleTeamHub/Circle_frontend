@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { MyCirclesPanel } from '@/features/discover/components/my-circles-panel';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
   container: { flex: 1 },
@@ -79,7 +80,7 @@ export default function MyCirclesScreen() {
         style={s.scroll}
         contentContainerStyle={s.content}
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+        {...keyboardDismissOnDragProps}
       >
         {/* 粘贴好友分享的圈子 ID → 打开该圈子详情（在那里加入） */}
         <View style={s.joinRow}>

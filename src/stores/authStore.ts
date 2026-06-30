@@ -46,10 +46,7 @@ export interface AuthUser {
   creditScore: number;
   fancyNumber: boolean;
   displayIcons: DisplayIcon[];
-  /** 收到的累计点赞总数（资料页展示）。 */
-  likeCount?: number;
-  /** 当前登录用户今天是否已为其点赞（仅看他人时有意义）。 */
-  likedByMeToday?: boolean;
+  recognitionCount?: number;
 }
 
 interface AuthState {

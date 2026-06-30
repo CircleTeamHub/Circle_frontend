@@ -35,16 +35,30 @@ test('tab bar 通过 Reanimated 动画滑入/滑出，而非瞬间 display 切�
   assert.match(layout, /pointerEvents/);
 });
 
-test('自绘 tab bar：药丸 flex 填满每格、靠内边距留白，天然在 bar 内不溢出', () => {
+test('自绘 tab bar：避开系统导航栏，选中态保持胶囊形状而不是方块色带', () => {
   const layout = read('app/(tabs)/_layout.tsx');
 
   // bar 是完整胶囊
   assert.match(layout, /const TAB_BAR_HEIGHT = \d+/);
   assert.match(layout, /const TAB_BAR_RADIUS = TAB_BAR_HEIGHT \/ 2/);
-  // 上下内边距 → 药丸高 = bar 高 - 2*PAD_V，不靠 overflow 裁剪救场
+  // Android 三键/手势导航栏会占用底部 safe area，浮动 bar 必须叠加 bottom inset。
+  assert.match(layout, /useSafeAreaInsets/);
+  assert.match(layout, /const insets = useSafeAreaInsets\(\)/);
+  assert.match(layout, /marginBottom: TAB_BAR_MARGIN_B \+ insets\.bottom/);
+  // 上下内边距 → 药丸高 = bar 高 - 2*PAD_V，不靠 flex 拉满救场
   assert.match(layout, /const TAB_BAR_PAD_V/);
+  assert.match(layout, /const TAB_PILL_HEIGHT = TAB_BAR_HEIGHT - TAB_BAR_PAD_V \* 2/);
   assert.match(layout, /paddingVertical: TAB_BAR_PAD_V/);
-  // 选中药丸：圆角矩形，flex 填满本格
+  // 选中药丸：固定高度 + 半圆 radius，避免 Android 上出现矩形紫色块。
   assert.match(layout, /const TAB_PILL_RADIUS/);
+  assert.match(layout, /const TAB_PILL_RADIUS = TAB_PILL_HEIGHT \/ 2/);
+  assert.match(layout, /height: TAB_PILL_HEIGHT/);
   assert.match(layout, /borderRadius: TAB_PILL_RADIUS/);
+  // 切换 tab 后，紫色 active 层必须被稳定的 pill 外壳裁剪，不能靠同一个 View 改背景色。
+  assert.match(layout, /overflow: 'hidden'/);
+  assert.match(layout, /activePillFill: \{/);
+  assert.match(layout, /\.\.\.StyleSheet\.absoluteFillObject/);
+  assert.match(layout, /focused \? <View style=\{styles\.activePillFill\} \/> : null/);
+  assert.doesNotMatch(layout, /focused && styles\.pillActive/);
+  assert.doesNotMatch(layout, /pill:\s*\{[\s\S]*?flex:\s*1/);
 });

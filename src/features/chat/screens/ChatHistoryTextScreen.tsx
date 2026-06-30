@@ -20,6 +20,7 @@ import {
 import { searchConversationTextMessages } from '@/im/client';
 import { getChatDetailHref } from '@/features/user/utils/routes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const PAGE_SIZE = 20;
 
@@ -238,7 +239,7 @@ export default function ChatHistoryTextScreen() {
           data={results}
           keyExtractor={(item) => item.clientMsgID}
           contentContainerStyle={s.listContent}
-          keyboardShouldPersistTaps="handled"
+        {...keyboardDismissOnDragProps}
           onEndReached={() => void handleLoadMore()}
           onEndReachedThreshold={0.3}
           renderItem={({ item }) => (

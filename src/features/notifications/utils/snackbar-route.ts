@@ -32,7 +32,11 @@ export function getSnackbarRoute(
     };
   }
 
-  if (item.type === 'CIRCLE_POST_SIGNUP_CREATED' && item.fromCirclePost?.id) {
+  if (
+    (item.type === 'CIRCLE_POST_SIGNUP_CREATED' ||
+      item.type === 'CIRCLE_POST_AUTO_ENDED') &&
+    item.fromCirclePost?.id
+  ) {
     return {
       pathname: '/(tabs)/messages/post-signups',
       params: {

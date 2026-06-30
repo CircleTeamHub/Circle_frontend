@@ -21,6 +21,7 @@ import {
 } from '@/services/api/auth';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const SECURITY_CODE_PATTERN = /^\d{4,6}$/;
 
@@ -218,7 +219,7 @@ export default function ChangeSecurityCodeScreen() {
           s.container,
           { paddingBottom: insets.bottom + Spacing.lg },
         ]}
-        keyboardShouldPersistTaps="handled"
+        {...keyboardDismissOnDragProps}
       >
         <View style={s.form}>
           {showCurrent ? (

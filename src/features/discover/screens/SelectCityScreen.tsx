@@ -27,6 +27,7 @@ import {
   resolveSingleCitySelection,
   toggleCitySelection,
 } from '@/features/discover/utils/city-selection';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 interface CitySection {
   title: string;
@@ -297,6 +298,7 @@ export default function SelectCityScreen() {
       <SectionList
         sections={sections}
         keyExtractor={(item, index) => `${item}-${index}`}
+        {...keyboardDismissOnDragProps}
         renderSectionHeader={({ section }) => (
           <View style={[s.sectionHeader, { backgroundColor: colors.background }]}>
             <Text style={[s.sectionTitle, { color: colors.text }]}>

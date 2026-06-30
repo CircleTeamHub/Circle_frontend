@@ -22,6 +22,7 @@ import {
   getUserProfileScopeFromSegments,
 } from '@/features/user/utils/routes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
   container: { flex: 1 },
@@ -227,7 +228,7 @@ export default function SearchGroupMembersScreen() {
             s.listContent,
             { paddingBottom: insets.bottom + Spacing.xl },
           ]}
-          keyboardShouldPersistTaps="handled"
+        {...keyboardDismissOnDragProps}
         />
       )}
     </View>

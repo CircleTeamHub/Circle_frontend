@@ -3,9 +3,11 @@ import { buildQuery, normalizeMediaUrl } from '@/services/api/utils';
 import type {
   CirclePlazaPost,
   CreatePlazaPostInput,
+  CollaborationRecognitionResult,
   MyCirclePost,
   PaginatedResponse,
   PostSignupItem,
+  PostSignupsResult,
 } from '@/types';
 
 function normalizePlazaPost(post: CirclePlazaPost): CirclePlazaPost {
@@ -13,6 +15,9 @@ function normalizePlazaPost(post: CirclePlazaPost): CirclePlazaPost {
     ...post,
     // 同 moments.ts 注释：normalizeMediaUrl 是 nullable，?? 接住 fallback；as string 是骗 TS。
     images: post.images.map((url) => normalizeMediaUrl(url) ?? url),
+    // 后端若漏发 expiresAt，类型声明为 string 会骗过 TS，运行时拿到 undefined → new Date() 变 Invalid Date。
+    // 与 normalizeMyPost 对齐，统一兜成 ''，由展示层判空。
+    expiresAt: typeof post.expiresAt === 'string' ? post.expiresAt : '',
     author: {
       ...post.author,
       avatarUrl: post.author.avatarUrl
@@ -111,6 +116,7 @@ function normalizeMyPost(post: unknown): MyCirclePost {
     unreadSignupCount: numberField(p.unreadSignupCount),
     status: stringField(p.status, 'UNKNOWN'),
     createdAt: stringField(p.createdAt),
+    expiresAt: stringField(p.expiresAt),
   };
 }
 
@@ -146,16 +152,22 @@ function normalizePostSignup(signup: unknown): PostSignupItem {
     accountId: stringField(s.accountId),
     signedAt: stringField(s.signedAt),
     seen: booleanField(s.seen),
+    recognized: booleanField(s.recognized),
   };
 }
 
 export async function fetchMyPostSignups(
   postId: string,
-): Promise<PostSignupItem[]> {
-  const { items } = await apiClient<{ items: unknown[] }>(
-    `/circle-plaza/me/posts/${postId}/signups`,
+): Promise<PostSignupsResult> {
+  const res = asRecord(
+    await apiClient<unknown>(`/circle-plaza/me/posts/${postId}/signups`),
   );
-  return items.map(normalizePostSignup);
+  const items = Array.isArray(res.items) ? res.items : [];
+  return {
+    items: items.map(normalizePostSignup),
+    // 后端缺省时按「未开放认可」处理，避免在活动未结束时误放出认可入口。
+    recognitionOpen: booleanField(res.recognitionOpen),
+  };
 }
 
 export async function markMyPostSignupsRead(
@@ -164,6 +176,16 @@ export async function markMyPostSignupsRead(
   return apiClient<{ count: number }>(
     `/circle-plaza/me/posts/${postId}/signups/read`,
     { method: 'POST' },
+  );
+}
+
+export async function submitPostCollaborationRecognitions(
+  postId: string,
+  recipientIds: string[],
+): Promise<CollaborationRecognitionResult> {
+  return apiClient<CollaborationRecognitionResult>(
+    `/circle-plaza/me/posts/${postId}/collaboration-recognitions`,
+    { method: 'POST', body: { recipientIds } },
   );
 }
 

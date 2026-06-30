@@ -26,6 +26,7 @@ import {
   toggleCircleFilterSelection,
 } from '@/features/discover/utils/circle-filter-selection';
 import type { Circle } from '@/types';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
   searchWrap: {
@@ -310,6 +311,7 @@ export default function SelectFilterCirclesScreen() {
           keyExtractor={keyExtractor}
           renderItem={renderItem}
           contentContainerStyle={s.listContent}
+          {...keyboardDismissOnDragProps}
           ListEmptyComponent={
             <View style={s.emptyContainer}>
               <Text style={d.emptyText}>{t('discover.filter.noCircles')}</Text>

@@ -6,6 +6,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -22,6 +23,7 @@ import { getApiErrorMessage } from '@/services/api/errors';
 import { clearLocalSession } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 type GateState = 'checking' | 'locked' | 'verifying' | 'unlocked';
 
@@ -30,6 +32,9 @@ const SECURITY_CODE_PATTERN = /^\d{4,6}$/;
 const s = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  content: {
+    flexGrow: 1,
     paddingHorizontal: Spacing.xl,
     justifyContent: 'center',
   },
@@ -219,52 +224,65 @@ export function LoginSecurityCodeGate() {
     (gateState === 'locked' || gateState === 'verifying');
 
   return (
-    <Modal visible={visible} animationType="fade" presentationStyle="fullScreen">
+    <Modal
+      visible={visible}
+      animationType="fade"
+      presentationStyle="fullScreen"
+      onRequestClose={() => {
+        setError(null);
+      }}
+    >
       <KeyboardAvoidingView
         style={[s.container, d.container]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={s.panel}>
-          <View style={s.titleBlock}>
-            <Text style={[s.title, d.title]}>{t('profile.unlockSecurityCode')}</Text>
-            <Text style={[s.subtitle, d.subtitle]}>
-              {t('profile.unlockSecurityCodeNotice')}
-            </Text>
-          </View>
-
-          {gateState === 'checking' ? (
-            <ActivityIndicator color={colors.primary} />
-          ) : (
-            <View style={s.form}>
-              <AuthInput
-                placeholder={t('profile.unlockSecurityCodePlaceholder')}
-                value={securityCode}
-                onChangeText={setSecurityCode}
-                keyboardType="number-pad"
-                secureTextEntry
-              />
-              {error ? <Text style={[s.error, d.error]}>{error}</Text> : null}
-              <Pressable
-                style={[
-                  s.button,
-                  d.button,
-                  gateState === 'verifying' ? s.buttonDisabled : null,
-                ]}
-                onPress={handleUnlock}
-                disabled={gateState === 'verifying'}
-              >
-                {gateState === 'verifying' ? (
-                  <ActivityIndicator color={colors.white} />
-                ) : (
-                  <Text style={d.buttonText}>{t('profile.unlockSecurityCodeAction')}</Text>
-                )}
-              </Pressable>
-              <Pressable style={s.textButton} onPress={handleLogout}>
-                <Text style={d.textButton}>{t('profile.logoutToLogin')}</Text>
-              </Pressable>
+        <ScrollView
+          contentContainerStyle={s.content}
+          showsVerticalScrollIndicator={false}
+          {...keyboardDismissOnDragProps}
+        >
+          <View style={s.panel}>
+            <View style={s.titleBlock}>
+              <Text style={[s.title, d.title]}>{t('profile.unlockSecurityCode')}</Text>
+              <Text style={[s.subtitle, d.subtitle]}>
+                {t('profile.unlockSecurityCodeNotice')}
+              </Text>
             </View>
-          )}
-        </View>
+
+            {gateState === 'checking' ? (
+              <ActivityIndicator color={colors.primary} />
+            ) : (
+              <View style={s.form}>
+                <AuthInput
+                  placeholder={t('profile.unlockSecurityCodePlaceholder')}
+                  value={securityCode}
+                  onChangeText={setSecurityCode}
+                  keyboardType="number-pad"
+                  secureTextEntry
+                />
+                {error ? <Text style={[s.error, d.error]}>{error}</Text> : null}
+                <Pressable
+                  style={[
+                    s.button,
+                    d.button,
+                    gateState === 'verifying' ? s.buttonDisabled : null,
+                  ]}
+                  onPress={handleUnlock}
+                  disabled={gateState === 'verifying'}
+                >
+                  {gateState === 'verifying' ? (
+                    <ActivityIndicator color={colors.white} />
+                  ) : (
+                    <Text style={d.buttonText}>{t('profile.unlockSecurityCodeAction')}</Text>
+                  )}
+                </Pressable>
+                <Pressable style={s.textButton} onPress={handleLogout}>
+                  <Text style={d.textButton}>{t('profile.logoutToLogin')}</Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
   );

@@ -32,6 +32,7 @@ import {
 } from '@/services/api/notes';
 import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 type TabId = 'all' | 'ungrouped' | string;
 
@@ -423,6 +424,7 @@ export default function NotesScreen() {
         ItemSeparatorComponent={() => <View style={[s.divider, d.divider]} />}
         contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
         showsVerticalScrollIndicator={false}
+        {...keyboardDismissOnDragProps}
         refreshing={refreshing}
         onRefresh={handleRefreshNotes}
         ListEmptyComponent={

@@ -23,6 +23,7 @@ import {
 } from '@/im/client';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
   container: { flex: 1 },
@@ -342,7 +343,7 @@ export default function NewGroupScreen() {
           renderItem={renderItem}
           ItemSeparatorComponent={Sep}
           contentContainerStyle={s.listContent}
-          keyboardShouldPersistTaps="handled"
+        {...keyboardDismissOnDragProps}
         />
       )}
 

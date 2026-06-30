@@ -8,6 +8,10 @@ export default function ContactsLayout() {
     <Stack
       screenOptions={{
         headerShown: false,
+        animation: 'slide_from_right',
+        gestureEnabled: true,
+        fullScreenGestureEnabled: true,
+        gestureDirection: 'horizontal',
         contentStyle: { backgroundColor: colors.background },
       }}
     />

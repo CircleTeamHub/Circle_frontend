@@ -19,6 +19,7 @@ import { NoteCard } from '@/features/notes/components/NoteCard';
 import type { NoteSummary } from '@/features/notes/types';
 import { fetchNotes } from '@/services/api/notes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
   container: { flex: 1 },
@@ -205,7 +206,7 @@ export default function SelectNoteScreen() {
               </View>
             }
             contentContainerStyle={{ paddingBottom: insets.bottom + Spacing.xl }}
-            keyboardShouldPersistTaps="handled"
+        {...keyboardDismissOnDragProps}
             showsVerticalScrollIndicator={false}
           />
         )}
