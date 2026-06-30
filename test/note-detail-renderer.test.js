@@ -89,7 +89,9 @@ test('EditNoteScreen preserves structured note sections it cannot edit', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
   assert.match(src, /existingSectionsRef/);
   assert.match(src, /note\.sections\?\.text\?\.contentJson/);
-  assert.match(src, /location: existingSections\?\.location \?\? null/);
+  assert.match(src, /setLocationDraft\(buildLocationDraft\(note\.sections\?\.location\)\)/);
+  assert.match(src, /const nextLocation =/);
+  assert.match(src, /location: nextLocation/);
   assert.match(src, /const preservedMedia =/);
   assert.match(src, /const sectionMedia = mergeMedia\(\[\.\.\.preservedMedia, \.\.\.media\]\)/);
   assert.match(src, /const preservedShowcase =/);

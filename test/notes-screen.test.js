@@ -287,6 +287,28 @@ test('EditNoteScreen selected group chips use solid purple cards', () => {
   assert.doesNotMatch(src, /groupChipActive:\s*\{[\s\S]*colors\.primary \+ '18'/);
 });
 
+test('EditNoteScreen renders four structured note section cards', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+
+  assert.match(src, /editSections/);
+  assert.match(src, /id:\s*'text'/);
+  assert.match(src, /id:\s*'media'/);
+  assert.match(src, /id:\s*'showcase'/);
+  assert.match(src, /id:\s*'location'/);
+  assert.match(src, /sectionGrid/);
+  assert.match(src, /sectionCard/);
+});
+
+test('EditNoteScreen edits and saves the location section separately', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+
+  assert.match(src, /locationDraft/);
+  assert.match(src, /locationTitlePlaceholder/);
+  assert.match(src, /locationAddressPlaceholder/);
+  assert.match(src, /const nextLocation =/);
+  assert.match(src, /location: nextLocation/);
+});
+
 test('NoteCard renders title and meta', () => {
   const src = read('src/features/notes/components/NoteCard.tsx');
   assert.match(src, /note\.title/);

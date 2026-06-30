@@ -36,6 +36,51 @@ LogBox.ignoreLogs([
   'DomWebView',
 ]);
 
+type SectionMetrics = {
+  imageCount: number;
+  videoCount: number;
+  showcaseCount: number;
+};
+
+type LocationDraft = {
+  title: string;
+  address: string;
+};
+
+const EMPTY_SECTION_METRICS: SectionMetrics = {
+  imageCount: 0,
+  videoCount: 0,
+  showcaseCount: 0,
+};
+
+function countMediaItems(
+  items: Partial<CreateNoteMediaInput>[] | NoteSections['media']['items'] | undefined,
+) {
+  if (!Array.isArray(items)) return { imageCount: 0, videoCount: 0 };
+  return items.reduce(
+    (counts, item) => {
+      if (item?.type === 'IMAGE') counts.imageCount += 1;
+      if (item?.type === 'VIDEO') counts.videoCount += 1;
+      return counts;
+    },
+    { imageCount: 0, videoCount: 0 },
+  );
+}
+
+function countShowcaseItems(
+  items: Partial<CreateNoteMediaInput>[] | NoteSections['showcase']['items'] | undefined,
+) {
+  if (!Array.isArray(items)) return 0;
+  return items.filter((item) => item?.type === 'IMAGE' || item?.type === 'VIDEO').length;
+}
+
+function buildLocationDraft(location: NoteSections['location'] | undefined): LocationDraft {
+  return {
+    title: location?.title?.trim() ?? '',
+    address: location?.address?.trim() ?? '',
+  };
+}
+
 export default function EditNoteScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -58,6 +103,13 @@ export default function EditNoteScreen() {
   const existingSectionsRef = useRef<Partial<NoteSections> | null>(null);
   const [editorMounted, setEditorMounted] = useState(false);
   const [navigating, setNavigating] = useState(false);
+  const [sectionMetrics, setSectionMetrics] = useState<SectionMetrics>(
+    EMPTY_SECTION_METRICS,
+  );
+  const [locationDraft, setLocationDraft] = useState<LocationDraft>({
+    title: '',
+    address: '',
+  });
 
   useEffect(() => {
     if (!navigating) return;
@@ -79,6 +131,8 @@ export default function EditNoteScreen() {
     if (!isEdit || !id) {
       mediaMapRef.current = {};
       existingSectionsRef.current = null;
+      setSectionMetrics(EMPTY_SECTION_METRICS);
+      setLocationDraft({ title: '', address: '' });
       setEditorMounted(true);
       setLoading(false);
       return () => {
@@ -95,6 +149,12 @@ export default function EditNoteScreen() {
         blocksRef.current = loaded;
         setInitialBlocks(loaded.length > 0 ? loaded : null);
         mediaMapRef.current = buildNoteMediaMap(note.media);
+        const mediaCounts = countMediaItems(note.sections?.media?.items ?? note.media);
+        setSectionMetrics({
+          ...mediaCounts,
+          showcaseCount: countShowcaseItems(note.sections?.showcase?.items),
+        });
+        setLocationDraft(buildLocationDraft(note.sections?.location));
         setSelectedGroupIds(note.groups.map((group) => group.id));
         setDateStr(formatNoteFullDate(note.createdAt, t));
         setLoading(false);
@@ -104,6 +164,8 @@ export default function EditNoteScreen() {
         if (!cancelled) {
           mediaMapRef.current = {};
           existingSectionsRef.current = null;
+          setSectionMetrics(EMPTY_SECTION_METRICS);
+          setLocationDraft({ title: '', address: '' });
           setLoading(false);
           setEditorMounted(true);
         }
@@ -116,10 +178,26 @@ export default function EditNoteScreen() {
 
   const handleContentChange = useCallback((newBlocks: Record<string, unknown>[]) => {
     blocksRef.current = newBlocks;
+    const media = extractMediaFromBlocks(newBlocks);
+    if (media.length === 0) return;
+    const mediaCounts = countMediaItems(media);
+    setSectionMetrics((current) => ({
+      imageCount: Math.max(current.imageCount, mediaCounts.imageCount),
+      videoCount: Math.max(current.videoCount, mediaCounts.videoCount),
+      showcaseCount: Math.max(
+        current.showcaseCount,
+        media.filter((item) => item.type === 'IMAGE').length,
+      ),
+    }));
   }, []);
 
   const handleMediaUploaded = useCallback((media: CreateNoteMediaInput) => {
     mediaMapRef.current = { ...mediaMapRef.current, [media.url]: media };
+    setSectionMetrics((current) => ({
+      imageCount: current.imageCount + (media.type === 'IMAGE' ? 1 : 0),
+      videoCount: current.videoCount + (media.type === 'VIDEO' ? 1 : 0),
+      showcaseCount: current.showcaseCount + (media.type === 'IMAGE' ? 1 : 0),
+    }));
   }, []);
 
   const navigateBack = useCallback(() => {
@@ -185,9 +263,16 @@ export default function EditNoteScreen() {
             return [...merged, { ...item, sortOrder: merged.length }];
           },
           [],
-        );
+      );
       const sectionMedia = mergeMedia([...preservedMedia, ...media]);
       const legacyMedia = mergeMedia([...sectionMedia, ...preservedShowcase]);
+      const nextLocation =
+        locationDraft.title.trim() || locationDraft.address.trim()
+          ? {
+              title: locationDraft.title.trim() || null,
+              address: locationDraft.address.trim() || null,
+            }
+          : null;
       const input = {
         title: trimmedTitle,
         content: plainText,
@@ -196,7 +281,7 @@ export default function EditNoteScreen() {
           text: { content: plainText, contentJson: currentBlocks },
           media: { items: sectionMedia },
           showcase: { items: preservedShowcase },
-          location: existingSections?.location ?? null,
+          location: nextLocation,
         },
         groupIds: selectedGroupIds,
         media: legacyMedia,
@@ -222,7 +307,57 @@ export default function EditNoteScreen() {
         console.warn('[EditNoteScreen] save failed', error);
       }
     }
-  }, [id, isEdit, isSubmitting, navigateBack, selectedGroupIds, t, title]);
+  }, [
+    id,
+    isEdit,
+    isSubmitting,
+    locationDraft.address,
+    locationDraft.title,
+    navigateBack,
+    selectedGroupIds,
+    t,
+    title,
+  ]);
+
+  const editSections = useMemo(
+    () => [
+      {
+        id: 'text',
+        icon: 'text-outline',
+        label: t('notes.edit.sections.text', { defaultValue: '文字' }),
+        value: t('notes.edit.sections.textValue', { defaultValue: '正文' }),
+      },
+      {
+        id: 'media',
+        icon: 'images-outline',
+        label: t('notes.edit.sections.media', { defaultValue: '图片/视频' }),
+        value: `${sectionMetrics.imageCount} 图 ${sectionMetrics.videoCount} 视频`,
+      },
+      {
+        id: 'showcase',
+        icon: 'albums-outline',
+        label: t('notes.edit.sections.showcase', { defaultValue: '展示' }),
+        value: `${sectionMetrics.showcaseCount} 展示`,
+      },
+      {
+        id: 'location',
+        icon: 'location-outline',
+        label: t('notes.edit.sections.location', { defaultValue: '地址' }),
+        value:
+          locationDraft.title.trim() ||
+          locationDraft.address.trim() ||
+          t('notes.edit.sections.noLocation', { defaultValue: '未设置' }),
+      },
+    ],
+    [
+      locationDraft.address,
+      locationDraft.title,
+      sectionMetrics.imageCount,
+      sectionMetrics.showcaseCount,
+      sectionMetrics.videoCount,
+      t,
+    ],
+  );
 
   const d = useMemo(
     () => ({
@@ -244,6 +379,17 @@ export default function EditNoteScreen() {
       groupChipText: { color: colors.textSecondary },
       groupChipTextActive: { color: colors.white },
       sectionTitle: { color: colors.textSecondary },
+      sectionCard: {
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
+      },
+      sectionCardLabel: { color: colors.text },
+      sectionCardValue: { color: colors.textSecondary },
+      locationInput: {
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
+        color: colors.text,
+      },
     }),
     [colors],
   );
@@ -336,6 +482,58 @@ export default function EditNoteScreen() {
         </View>
       </View>
 
+      <View style={s.sectionGrid}>
+        {editSections.map((section) => (
+          <View key={section.id} style={[s.sectionCard, d.sectionCard]}>
+            <View style={s.sectionCardTop}>
+              <Ionicons
+                name={section.icon as keyof typeof Ionicons.glyphMap}
+                size={16}
+                color={colors.primary}
+              />
+              <Text style={[s.sectionCardLabel, d.sectionCardLabel]}>
+                {section.label}
+              </Text>
+            </View>
+            <Text
+              style={[s.sectionCardValue, d.sectionCardValue]}
+              numberOfLines={1}
+            >
+              {section.value}
+            </Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={s.locationInputs}>
+        <TextInput
+          style={[s.locationInput, d.locationInput]}
+          placeholder={t('notes.edit.locationTitlePlaceholder', {
+            defaultValue: '位置名称',
+          })}
+          placeholderTextColor={colors.textSecondary}
+          value={locationDraft.title}
+          onChangeText={(value) =>
+            setLocationDraft((current) => ({ ...current, title: value }))
+          }
+          maxLength={80}
+          returnKeyType="next"
+        />
+        <TextInput
+          style={[s.locationInput, d.locationInput]}
+          placeholder={t('notes.edit.locationAddressPlaceholder', {
+            defaultValue: '地址',
+          })}
+          placeholderTextColor={colors.textSecondary}
+          value={locationDraft.address}
+          onChangeText={(value) =>
+            setLocationDraft((current) => ({ ...current, address: value }))
+          }
+          maxLength={160}
+          returnKeyType="done"
+        />
+      </View>
+
       <View style={s.editorWrap}>
         {editorMounted ? (
           <NoteBlockEditor
@@ -416,5 +614,43 @@ const s = StyleSheet.create({
     borderWidth: 1,
   },
   groupChipText: { ...Typography.small, fontWeight: '600' },
+  sectionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  sectionCard: {
+    width: '48%',
+    minHeight: 54,
+    borderWidth: 1,
+    borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    justifyContent: 'center',
+    gap: 3,
+  },
+  sectionCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  sectionCardLabel: { ...Typography.caption, fontWeight: '700' },
+  sectionCardValue: { ...Typography.small },
+  locationInputs: {
+    flexDirection: 'row',
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  locationInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 8,
+    ...Typography.small,
+  },
   editorWrap: { flex: 1 },
 });
