@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { NavHeader } from '@/components/ui/nav-header';
 import { UserIconBadge, UserIconRow } from '@/components/ui/user-icon-row';
 import { fetchCurrentUser } from '@/services/api/auth';
@@ -31,10 +32,24 @@ type DraftDisplayIcon = {
   type: 'SYSTEM' | 'CIRCLE';
   sortOrder: number;
   systemKey?: SystemIconKey;
-  likeCount?: number;
+  recognitionCount?: number;
   circleId?: string;
   circleName?: string;
 };
+
+/**
+ * Badge 说明的 i18n key 段（不直接返回文案，便于多语言）。
+ * 实际文案在 myIcons.explain.<key>.description / .condition。
+ */
+type IconExplanationKey =
+  | 'empty'
+  | 'circle'
+  | 'vip'
+  | 'newUser'
+  | 'topCollaborator'
+  | 'verifiedProfile'
+  | 'circleBuilder'
+  | 'systemDefault';
 
 const s = StyleSheet.create({
   scroll: { flex: 1 },
@@ -57,6 +72,18 @@ const s = StyleSheet.create({
   },
   subtitle: {
     ...Typography.small,
+  },
+  detailTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  detailCopyGroup: {
+    gap: Spacing.xs,
+  },
+  detailLabel: {
+    ...Typography.small,
+    fontWeight: '700',
   },
   optionChip: {
     width: 76,
@@ -81,6 +108,26 @@ const s = StyleSheet.create({
   },
 });
 
+function getIconExplanationKey(option: IconOption | null): IconExplanationKey {
+  if (!option) return 'empty';
+  if (option.type === 'CIRCLE') return 'circle';
+
+  switch (option.systemKey) {
+    case 'VIP':
+      return 'vip';
+    case 'NEW_USER':
+      return 'newUser';
+    case 'TOP_COLLABORATOR':
+      return 'topCollaborator';
+    case 'VERIFIED_PROFILE':
+      return 'verifiedProfile';
+    case 'CIRCLE_BUILDER':
+      return 'circleBuilder';
+    default:
+      return 'systemDefault';
+  }
+}
+
 function optionToDraft(option: IconOption, sortOrder: number): DraftDisplayIcon {
   return {
     id: option.systemKey ?? option.circleId ?? `${option.type}-${option.title}`,
@@ -90,7 +137,7 @@ function optionToDraft(option: IconOption, sortOrder: number): DraftDisplayIcon 
     type: option.type,
     sortOrder,
     systemKey: option.systemKey,
-    likeCount: option.likeCount,
+    recognitionCount: option.recognitionCount,
     circleId: option.circleId,
     circleName: option.circleName,
   };
@@ -108,6 +155,7 @@ export default function MyIconsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const user = useAuthStore((state) => state.user);
   const setUser = useAuthStore((state) => state.setUser);
   const [loading, setLoading] = useState(true);
@@ -115,6 +163,7 @@ export default function MyIconsScreen() {
   const [systemIcons, setSystemIcons] = useState<IconOption[]>([]);
   const [circleIcons, setCircleIcons] = useState<IconOption[]>([]);
   const [selectedIcons, setSelectedIcons] = useState<DraftDisplayIcon[]>([]);
+  const [focusedOption, setFocusedOption] = useState<IconOption | null>(null);
 
   const loadOptions = useCallback(async () => {
     setLoading(true);
@@ -133,13 +182,15 @@ export default function MyIconsScreen() {
       );
     } catch (error) {
       Alert.alert(
-        '图标加载失败',
-        error instanceof Error ? error.message : '请稍后重试',
+        t('myIcons.loadFailedTitle', { defaultValue: '图标加载失败' }),
+        error instanceof Error
+          ? error.message
+          : t('myIcons.retryLater', { defaultValue: '请稍后重试' }),
       );
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadOptions();
@@ -153,29 +204,40 @@ export default function MyIconsScreen() {
       })),
     [selectedIcons],
   );
+  const focusedExplanationKey = useMemo(
+    () => getIconExplanationKey(focusedOption),
+    [focusedOption],
+  );
 
-  const toggleOption = useCallback((option: IconOption) => {
-    const optionId = option.systemKey ?? option.circleId ?? `${option.type}-${option.title}`;
+  const toggleOption = useCallback(
+    (option: IconOption) => {
+      const optionId =
+        option.systemKey ?? option.circleId ?? `${option.type}-${option.title}`;
+      setFocusedOption(option);
 
-    setSelectedIcons((current) => {
-      const existingIndex = current.findIndex((item) => item.id === optionId);
-      if (existingIndex >= 0) {
-        return current
-          .filter((item) => item.id !== optionId)
-          .map((item, index) => ({ ...item, sortOrder: index }));
-      }
+      setSelectedIcons((current) => {
+        const existingIndex = current.findIndex((item) => item.id === optionId);
+        if (existingIndex >= 0) {
+          return current
+            .filter((item) => item.id !== optionId)
+            .map((item, index) => ({ ...item, sortOrder: index }));
+        }
 
-      if (current.length >= MAX_DISPLAY_ICONS) {
-        Alert.alert('最多展示 5 个图标');
-        return current;
-      }
+        if (current.length >= MAX_DISPLAY_ICONS) {
+          Alert.alert(
+            t('myIcons.maxIcons', {
+              count: MAX_DISPLAY_ICONS,
+              defaultValue: `最多展示 ${MAX_DISPLAY_ICONS} 个图标`,
+            }),
+          );
+          return current;
+        }
 
-      return [
-        ...current,
-        optionToDraft(option, current.length),
-      ];
-    });
-  }, []);
+        return [...current, optionToDraft(option, current.length)];
+      });
+    },
+    [t],
+  );
 
   const handleSave = useCallback(async () => {
     if (!user) {
@@ -200,13 +262,15 @@ export default function MyIconsScreen() {
       router.back();
     } catch (error) {
       Alert.alert(
-        '保存失败',
-        error instanceof Error ? error.message : '请稍后重试',
+        t('myIcons.saveFailedTitle', { defaultValue: '保存失败' }),
+        error instanceof Error
+          ? error.message
+          : t('myIcons.retryLater', { defaultValue: '请稍后重试' }),
       );
     } finally {
       setSaving(false);
     }
-  }, [router, selectedIcons, setUser, user]);
+  }, [router, selectedIcons, setUser, user, t]);
 
   const d = useMemo(
     () => ({
@@ -218,6 +282,7 @@ export default function MyIconsScreen() {
       },
       title: { color: colors.text },
       subtitle: { color: colors.textSecondary },
+      detailLabel: { color: colors.text },
       optionChip: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
@@ -265,25 +330,71 @@ export default function MyIconsScreen() {
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title="我的图标" />
+      <NavHeader title={t('myIcons.title', { defaultValue: '我的图标' })} />
       <ScrollView
         style={s.scroll}
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={s.content}
       >
         <View style={[s.card, d.card]}>
-          <Text style={[s.title, d.title]}>当前展示</Text>
+          <Text style={[s.title, d.title]}>
+            {t('myIcons.currentDisplay', { defaultValue: '当前展示' })}
+          </Text>
           <Text style={[s.subtitle, d.subtitle]}>
-            {loading ? '加载中...' : `已选择 ${selectedIcons.length}/${MAX_DISPLAY_ICONS}`}
+            {loading
+              ? t('myIcons.loading', { defaultValue: '加载中...' })
+              : t('myIcons.selectedCount', {
+                  count: selectedIcons.length,
+                  max: MAX_DISPLAY_ICONS,
+                  defaultValue: `已选择 ${selectedIcons.length}/${MAX_DISPLAY_ICONS}`,
+                })}
           </Text>
           <UserIconRow icons={currentDisplayIcons} />
         </View>
 
-        {renderOptionGroup('系统图标', systemIcons)}
-        {renderOptionGroup('我的圈子', circleIcons)}
+        <View style={[s.card, d.card]}>
+          <View style={s.detailTitleRow}>
+            {focusedOption ? (
+              <UserIconBadge icon={optionToPreviewIcon(focusedOption)} compact />
+            ) : null}
+            <Text style={[s.title, d.title]}>
+              {focusedOption?.title ??
+                t('myIcons.explainTitle', { defaultValue: 'Badge 说明' })}
+            </Text>
+          </View>
+          <View style={s.detailCopyGroup}>
+            <Text style={[s.detailLabel, d.detailLabel]}>
+              {t('myIcons.explainIntroLabel', { defaultValue: '介绍' })}
+            </Text>
+            <Text style={[s.subtitle, d.subtitle]}>
+              {t(`myIcons.explain.${focusedExplanationKey}.description`)}
+            </Text>
+          </View>
+          <View style={s.detailCopyGroup}>
+            <Text style={[s.detailLabel, d.detailLabel]}>
+              {t('myIcons.explainConditionLabel', { defaultValue: '获得条件' })}
+            </Text>
+            <Text style={[s.subtitle, d.subtitle]}>
+              {t(`myIcons.explain.${focusedExplanationKey}.condition`)}
+            </Text>
+          </View>
+        </View>
+
+        {renderOptionGroup(
+          t('myIcons.systemGroup', { defaultValue: '系统图标' }),
+          systemIcons,
+        )}
+        {renderOptionGroup(
+          t('myIcons.circleGroup', { defaultValue: '我的圈子' }),
+          circleIcons,
+        )}
 
         <Pressable style={[s.footerButton, d.saveButton]} onPress={handleSave} disabled={saving}>
-          <Text style={d.saveButtonText}>{saving ? '保存中...' : '保存图标'}</Text>
+          <Text style={d.saveButtonText}>
+            {saving
+              ? t('myIcons.saving', { defaultValue: '保存中...' })
+              : t('myIcons.save', { defaultValue: '保存图标' })}
+          </Text>
         </Pressable>
       </ScrollView>
     </View>

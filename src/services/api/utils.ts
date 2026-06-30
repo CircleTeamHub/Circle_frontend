@@ -126,8 +126,6 @@ export function normalizeUser(user: BackendAuthUser): AuthUser {
       ...icon,
       imageUrl: normalizeMediaUrl(icon.imageUrl),
     })),
-    // GET /user/:id 走 likeCount/likedByMeToday；/me 只有 receivedLikeCount。
-    likeCount: user.likeCount ?? user.receivedLikeCount ?? 0,
-    likedByMeToday: user.likedByMeToday ?? false,
+    recognitionCount: user.recognitionCount ?? 0,
   };
 }

@@ -1,5 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Alert,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -8,7 +16,11 @@ import { Avatar } from '@/components/ui/avatar';
 import { Divider } from '@/components/ui/divider';
 import { Spacing, useTheme } from '@/theme';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
-import { fetchMyPostSignups, markMyPostSignupsRead } from '@/services/api/plaza';
+import {
+  fetchMyPostSignups,
+  markMyPostSignupsRead,
+  submitPostCollaborationRecognitions,
+} from '@/services/api/plaza';
 import { getOrCreateSingleConversation } from '@/im/client';
 import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
 import {
@@ -36,8 +48,14 @@ export default function PostSignupsScreen() {
   }>();
 
   const [signups, setSignups] = useState<PostSignupItem[]>([]);
+  const [recognitionOpen, setRecognitionOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedRecognitionIds, setSelectedRecognitionIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [recognitionSubmitting, setRecognitionSubmitting] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -50,9 +68,10 @@ export default function PostSignupsScreen() {
     setRefreshing(true);
     setLoadError(null);
     try {
-      const items = await fetchMyPostSignups(postId);
+      const { items, recognitionOpen: open } = await fetchMyPostSignups(postId);
       if (!mountedRef.current) return;
       setSignups(items);
+      setRecognitionOpen(open);
       const unreadCount = items.filter((item) => !item.seen).length;
       if (unreadCount > 0) {
         try {
@@ -88,6 +107,95 @@ export default function PostSignupsScreen() {
   }, [load]);
 
   const [openingChatFor, setOpeningChatFor] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSearchQuery('');
+    setSelectedRecognitionIds(new Set());
+  }, [postId]);
+
+  const filteredSignups = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return signups;
+    return signups.filter((item) => {
+      const nickname = item.nickname.toLowerCase();
+      const accountId = item.accountId.toLowerCase();
+      return nickname.includes(query) || accountId.includes(query);
+    });
+  }, [searchQuery, signups]);
+
+  // 已被认可的人数（后端 recognized 字段，刷新后仍准确）。每个帖子总额度 3 人，
+  // 已认可的也计入额度，所以本次还能选的名额是 3 - 已认可数。
+  const RECOGNITION_LIMIT = 3;
+  const alreadyRecognizedCount = useMemo(
+    () => signups.filter((item) => item.recognized).length,
+    [signups],
+  );
+  const remainingSlots = Math.max(0, RECOGNITION_LIMIT - alreadyRecognizedCount);
+  // 名额用尽（已认可满 3 人）时彻底锁面板；活动未开放认可由后端 recognitionOpen 控制。
+  const recognitionLocked = remainingSlots === 0;
+
+  const toggleRecognitionSelection = useCallback(
+    (item: PostSignupItem) => {
+      if (recognitionSubmitting || recognitionLocked || item.recognized) return;
+      setSelectedRecognitionIds((current) => {
+        const next = new Set(current);
+        if (next.has(item.userId)) {
+          next.delete(item.userId);
+          return next;
+        }
+        if (current.size >= remainingSlots) {
+          Alert.alert(
+            t('notifications.signupMgmt.recognitionLimitTitle', {
+              defaultValue: '最多选择 3 人',
+            }),
+            t('notifications.signupMgmt.recognitionLimitMessage', {
+              defaultValue: '每个活动最多给 3 位报名者合作认可。',
+            }),
+          );
+          return current;
+        }
+        next.add(item.userId);
+        return next;
+      });
+    },
+    [recognitionSubmitting, recognitionLocked, remainingSlots, t],
+  );
+
+  const submitRecognitions = useCallback(async () => {
+    if (!postId || selectedRecognitionIds.size === 0 || recognitionSubmitting) {
+      return;
+    }
+    setRecognitionSubmitting(true);
+    const recipientIds = Array.from(selectedRecognitionIds);
+    try {
+      const result = await submitPostCollaborationRecognitions(postId, recipientIds);
+      if (!mountedRef.current) return;
+      setSelectedRecognitionIds(new Set());
+      Alert.alert(
+        t('notifications.signupMgmt.recognitionSuccessTitle', {
+          defaultValue: '已提交合作认可',
+        }),
+        t('notifications.signupMgmt.recognitionSuccessMessage', {
+          count: result.count,
+          defaultValue: `已认可 ${result.count} 位报名者。`,
+        }),
+      );
+      // 重新拉取，让 recognized 标记成为「已提交」的唯一真相，刷新/重进都不会丢、也无法重复提交。
+      void load();
+    } catch (error) {
+      if (!mountedRef.current) return;
+      Alert.alert(
+        t('notifications.signupMgmt.recognitionFailedTitle', {
+          defaultValue: '提交失败',
+        }),
+        error instanceof Error
+          ? error.message
+          : t('common.networkError', { defaultValue: '网络错误，请重试' }),
+      );
+    } finally {
+      if (mountedRef.current) setRecognitionSubmitting(false);
+    }
+  }, [postId, recognitionSubmitting, selectedRecognitionIds, t, load]);
 
   const openChat = useCallback(
     async (signer: PostSignupItem) => {
@@ -154,28 +262,168 @@ export default function PostSignupsScreen() {
       </View>
 
       <FlatList
-        data={signups}
+        data={filteredSignups}
         keyExtractor={(item) => item.userId}
-        renderItem={({ item }) => (
-          <Pressable
-            style={s.row}
-            onPress={() => void openChat(item)}
-            disabled={openingChatFor === item.userId}
-          >
-            <Avatar size={48} name={item.nickname} uri={item.avatarUrl ?? undefined} />
-            <View style={s.body}>
-              <Text numberOfLines={1} style={{ fontSize: 16, fontWeight: '600', color: colors.text }}>
-                {item.nickname}
-              </Text>
-              <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-                {t('notifications.signupMgmt.signedAt', {
-                  time: formatRelativeTime(item.signedAt, t),
-                })}
-              </Text>
+        ListHeaderComponent={
+          // 认可面板仅在后端确认活动已结束、可认可时展示（recognitionOpen）。
+          recognitionOpen && signups.length > 0 ? (
+            <View
+              style={[
+                s.recognitionPanel,
+                { borderBottomColor: colors.surfaceBorder },
+              ]}
+            >
+              <View
+                style={[
+                  s.searchBox,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.surfaceBorder,
+                  },
+                ]}
+              >
+                <Ionicons name="search" size={18} color={colors.textSecondary} />
+                <TextInput
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder={t('notifications.signupMgmt.searchPlaceholder', {
+                    defaultValue: '搜索报名者',
+                  })}
+                  placeholderTextColor={colors.textSecondary}
+                  style={[s.searchInput, { color: colors.text }]}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+              <View style={s.recognitionActions}>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  {recognitionLocked
+                    ? t('notifications.signupMgmt.recognitionFull', {
+                        defaultValue: '认可名额已用完',
+                      })
+                    : t('notifications.signupMgmt.recognitionSelectionSummary', {
+                        count: selectedRecognitionIds.size,
+                        max: remainingSlots,
+                        defaultValue: `已选 ${selectedRecognitionIds.size}/${remainingSlots}`,
+                      })}
+                </Text>
+                <Pressable
+                  testID="collaboration-recognition-submit"
+                  onPress={() => void submitRecognitions()}
+                  disabled={
+                    selectedRecognitionIds.size === 0 ||
+                    recognitionSubmitting ||
+                    recognitionLocked
+                  }
+                  style={({ pressed }) => [
+                    s.submitButton,
+                    {
+                      backgroundColor: colors.primary,
+                      opacity:
+                        selectedRecognitionIds.size === 0 ||
+                        recognitionSubmitting ||
+                        recognitionLocked
+                          ? 0.45
+                          : pressed
+                            ? 0.8
+                            : 1,
+                    },
+                  ]}
+                >
+                  <Ionicons name="ribbon-outline" size={16} color={colors.white} />
+                  <Text style={[s.submitText, { color: colors.white }]}>
+                    {recognitionSubmitting
+                      ? t('notifications.signupMgmt.recognitionSubmitting', {
+                          defaultValue: '提交中',
+                        })
+                      : t('notifications.signupMgmt.recognitionSubmit', {
+                          defaultValue: '提交认可',
+                        })}
+                  </Text>
+                </Pressable>
+              </View>
             </View>
-            <Ionicons name="chatbubble-ellipses-outline" size={22} color={colors.textSecondary} />
-          </Pressable>
-        )}
+          ) : null
+        }
+        renderItem={({ item }) => {
+          const selected = selectedRecognitionIds.has(item.userId);
+          const showRecognition = recognitionOpen;
+          const rowDisabled =
+            !showRecognition ||
+            item.recognized ||
+            recognitionLocked ||
+            recognitionSubmitting;
+          return (
+            <Pressable
+              style={[
+                s.row,
+                selected ? { backgroundColor: colors.primaryLight } : null,
+              ]}
+              onPress={
+                rowDisabled ? undefined : () => toggleRecognitionSelection(item)
+              }
+              disabled={rowDisabled}
+            >
+              {showRecognition ? (
+                <View
+                  style={[
+                    s.selectDot,
+                    {
+                      backgroundColor:
+                        selected || item.recognized
+                          ? colors.primary
+                          : colors.surface,
+                      borderColor:
+                        selected || item.recognized
+                          ? colors.primary
+                          : colors.surfaceBorder,
+                      opacity: item.recognized ? 0.6 : 1,
+                    },
+                  ]}
+                >
+                  {selected || item.recognized ? (
+                    <Ionicons name="checkmark" size={14} color={colors.white} />
+                  ) : null}
+                </View>
+              ) : null}
+              <Avatar size={48} name={item.nickname} uri={item.avatarUrl ?? undefined} />
+              <View style={s.body}>
+                <View style={s.nameRow}>
+                  <Text
+                    numberOfLines={1}
+                    style={{ fontSize: 16, fontWeight: '600', color: colors.text }}
+                  >
+                    {item.nickname}
+                  </Text>
+                  {item.recognized ? (
+                    <Text style={[s.recognizedTag, { color: colors.primary }]}>
+                      {t('notifications.signupMgmt.recognizedTag', {
+                        defaultValue: '已认可',
+                      })}
+                    </Text>
+                  ) : null}
+                </View>
+                <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                  {t('notifications.signupMgmt.signedAt', {
+                    time: formatRelativeTime(item.signedAt, t),
+                  })}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => void openChat(item)}
+                disabled={openingChatFor === item.userId}
+                hitSlop={8}
+                style={s.chatButton}
+              >
+                <Ionicons
+                  name="chatbubble-ellipses-outline"
+                  size={22}
+                  color={colors.textSecondary}
+                />
+              </Pressable>
+            </Pressable>
+          );
+        }}
         ItemSeparatorComponent={Divider}
         refreshing={refreshing}
         onRefresh={load}
@@ -183,7 +431,12 @@ export default function PostSignupsScreen() {
         ListEmptyComponent={
           <View style={s.empty}>
             <Text style={{ color: colors.textSecondary, textAlign: 'center' }}>
-              {loadError ?? t('notifications.signupMgmt.noSigners')}
+              {loadError ??
+                (signups.length > 0
+                  ? t('notifications.signupMgmt.noSearchResults', {
+                      defaultValue: '没有匹配的报名者',
+                    })
+                  : t('notifications.signupMgmt.noSigners'))}
             </Text>
             {loadError ? (
               <Pressable
@@ -220,7 +473,62 @@ const s = StyleSheet.create({
     paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.sm,
   },
+  recognitionPanel: {
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  searchBox: {
+    minHeight: 42,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: Spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    paddingVertical: 0,
+  },
+  recognitionActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.sm,
+  },
+  submitButton: {
+    minHeight: 36,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: Spacing.md,
+  },
+  submitText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  selectDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chatButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   body: { flex: 1, gap: 4 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  recognizedTag: { fontSize: 11, fontWeight: '700' },
   empty: { paddingTop: 80, alignItems: 'center', gap: Spacing.md },
   retryBtn: {
     borderWidth: StyleSheet.hairlineWidth,

@@ -15,6 +15,8 @@ const TOP_COLLABORATOR_BADGE_ASSETS = {
 } as const;
 
 const NEW_JOINER_BADGE_ASSET = require('../../../assets/badges/newjoiner.png');
+const VERIFIED_PROFILE_BADGE_ASSET = require('../../../assets/badges/verifie.png');
+const CIRCLE_BUILDER_BADGE_ASSET = require('../../../assets/badges/builder.png');
 
 type BadgeLevel = 1 | 2 | 3 | 4 | 5;
 type CollaboratorLevel = 1 | 2 | 3;
@@ -29,12 +31,12 @@ function readLevel(icon: Pick<DisplayIcon, 'title' | 'systemKey'>) {
 }
 
 export function getTopCollaboratorLevel(
-  likeCount: number | null | undefined,
+  recognitionCount: number | null | undefined,
 ): CollaboratorLevel | null {
-  if (typeof likeCount !== 'number' || !Number.isFinite(likeCount)) return null;
-  if (likeCount >= 10000) return 3;
-  if (likeCount >= 1000) return 2;
-  if (likeCount >= 100) return 1;
+  if (typeof recognitionCount !== 'number' || !Number.isFinite(recognitionCount)) return null;
+  if (recognitionCount >= 10000) return 3;
+  if (recognitionCount >= 1000) return 2;
+  if (recognitionCount >= 100) return 1;
   return null;
 }
 
@@ -49,8 +51,16 @@ export function getSystemBadgeAsset(icon: DisplayIcon) {
   }
 
   if (icon.systemKey === 'TOP_COLLABORATOR') {
-    const levelFromLikes = getTopCollaboratorLevel(icon.likeCount);
-    return levelFromLikes ? TOP_COLLABORATOR_BADGE_ASSETS[levelFromLikes] : null;
+    const levelFromRecognition = getTopCollaboratorLevel(icon.recognitionCount);
+    return levelFromRecognition ? TOP_COLLABORATOR_BADGE_ASSETS[levelFromRecognition] : null;
+  }
+
+  if (icon.systemKey === 'VERIFIED_PROFILE') {
+    return VERIFIED_PROFILE_BADGE_ASSET;
+  }
+
+  if (icon.systemKey === 'CIRCLE_BUILDER') {
+    return CIRCLE_BUILDER_BADGE_ASSET;
   }
 
   return null;

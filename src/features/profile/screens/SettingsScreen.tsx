@@ -14,8 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
-import { Radius, Spacing, Typography, useTheme } from '@/theme';
-import { useAuth } from '@/hooks/use-auth';
+import { Spacing, Typography, useTheme } from '@/theme';
 import { useAuthStore, type AuthUser } from '@/stores/authStore';
 import {
   formatProfileFieldValue,
@@ -60,27 +59,6 @@ const s = StyleSheet.create({
     gap: Spacing.sm,
     flexShrink: 1,
   },
-  footer: {
-    flexDirection: 'row',
-    gap: Spacing.md,
-    paddingTop: Spacing.md,
-  },
-  secondaryButton: {
-    flex: 1,
-    height: 52,
-    borderRadius: Radius.lg,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  dangerButton: {
-    flex: 1,
-    height: 52,
-    borderRadius: Radius.lg,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
 });
 
 function getFieldValue(user: AuthUser | null, fieldId: string) {
@@ -99,7 +77,6 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const { logout, switchAccount, submitting } = useAuth();
   const user = useAuthStore((state) => state.user);
 
   const profileRows = PROFILE_ROW_IDS.map((fieldId) => {
@@ -145,22 +122,6 @@ export default function SettingsScreen() {
         ...Typography.caption,
         textAlign: 'right' as const,
         flexShrink: 1,
-      },
-      secondaryButton: {
-        backgroundColor: colors.surface,
-      },
-      secondaryButtonText: {
-        color: colors.primary,
-        ...Typography.body,
-        fontWeight: '600' as const,
-      },
-      dangerButton: {
-        backgroundColor: colors.error,
-      },
-      dangerButtonText: {
-        color: colors.white,
-        ...Typography.body,
-        fontWeight: '600' as const,
       },
     }),
     [colors, insets.bottom],
@@ -217,32 +178,6 @@ export default function SettingsScreen() {
           {profileRows.map((item, index) =>
             renderRow(item, index, profileRows.length),
           )}
-        </View>
-
-        <View style={s.footer}>
-          <Pressable
-            style={[
-              s.secondaryButton,
-              d.secondaryButton,
-              submitting ? { opacity: 0.6 } : null,
-            ]}
-            onPress={switchAccount}
-            disabled={submitting}
-          >
-            <Text style={d.secondaryButtonText}>{t('settingsPage.switchAccount')}</Text>
-          </Pressable>
-          <Pressable
-            style={[
-              s.dangerButton,
-              d.dangerButton,
-              submitting ? { opacity: 0.6 } : null,
-            ]}
-            onPress={logout}
-            disabled={submitting}
-          >
-            <Ionicons name="log-out-outline" size={20} color={colors.white} />
-            <Text style={d.dangerButtonText}>{t('settingsPage.logout')}</Text>
-          </Pressable>
         </View>
       </ScrollView>
     </View>

@@ -144,7 +144,12 @@ export interface MenuItem {
 }
 
 export type DisplayIconType = 'SYSTEM' | 'CIRCLE';
-export type SystemIconKey = 'VIP' | 'NEW_USER' | 'TOP_COLLABORATOR';
+export type SystemIconKey =
+  | 'VIP'
+  | 'NEW_USER'
+  | 'TOP_COLLABORATOR'
+  | 'VERIFIED_PROFILE'
+  | 'CIRCLE_BUILDER';
 
 export interface DisplayIcon {
   id: string;
@@ -155,7 +160,7 @@ export interface DisplayIcon {
   circleId?: string;
   circleName?: string;
   systemKey?: SystemIconKey;
-  likeCount?: number;
+  recognitionCount?: number;
   sortOrder: number;
 }
 
@@ -168,7 +173,7 @@ export interface IconOption {
   circleId?: string;
   circleName?: string;
   systemKey?: SystemIconKey;
-  likeCount?: number;
+  recognitionCount?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -272,6 +277,7 @@ export interface CirclePlazaPost {
   };
   canInteract: boolean;
   createdAt: string;
+  expiresAt: string;
 }
 
 export interface CreatePlazaPostInput {
@@ -282,6 +288,7 @@ export interface CreatePlazaPostInput {
   city: string | null;
   noteId: string | null;
   isHorn: boolean;
+  expiresInHours: number;
   vipRestriction: number | null;
   creditRestriction: number | null;
   fancyRestriction: boolean;
@@ -395,7 +402,8 @@ export type NotificationType =
   | 'CIRCLE_INVITATION_APPROVED'
   | 'CIRCLE_INVITATION_REJECTED'
   | 'CIRCLE_ADMIN_OVERRIDE_APPROVED'
-  | 'CIRCLE_POST_SIGNUP_CREATED';
+  | 'CIRCLE_POST_SIGNUP_CREATED'
+  | 'CIRCLE_POST_AUTO_ENDED';
 
 export interface NotificationItem {
   id: string;
@@ -425,6 +433,7 @@ export interface MyCirclePost {
   unreadSignupCount: number;
   status: string;
   createdAt: string;
+  expiresAt: string;
 }
 
 /** A person who signed up for one of my posts, with identity to open a chat. */
@@ -436,4 +445,24 @@ export interface PostSignupItem {
   accountId: string;
   signedAt: string;
   seen: boolean;
+  /**
+   * 该报名者是否已被发帖者给过合作认可（后端下发）。
+   * 用于在已认可的人身上展示已认可态、并阻止重复提交（防刷分）。
+   */
+  recognized: boolean;
+}
+
+/**
+ * 报名列表 + 帖子级的认可可用性（后端下发）。
+ * recognitionOpen=false 时（活动未结束 / 已超出认可窗口 / 非本人帖）前端不展示认可面板，
+ * 真正的资格与防刷仍由后端校验，前端只做展示与体验。
+ */
+export interface PostSignupsResult {
+  items: PostSignupItem[];
+  recognitionOpen: boolean;
+}
+
+export interface CollaborationRecognitionResult {
+  count: number;
+  recognizedUserIds: string[];
 }

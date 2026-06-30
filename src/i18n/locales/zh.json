@@ -177,7 +177,8 @@
       "CIRCLE_INVITATION_APPROVED": "你在「{{circle}}」的邀请已全部通过",
       "CIRCLE_INVITATION_REJECTED": "你在「{{circle}}」的一个邀请名额被拒",
       "CIRCLE_ADMIN_OVERRIDE_APPROVED": "管理员通过了你在「{{circle}}」的申请",
-      "CIRCLE_POST_SIGNUP_CREATED": "报名了你的圈子帖子"
+      "CIRCLE_POST_SIGNUP_CREATED": "报名了你的圈子帖子",
+      "CIRCLE_POST_AUTO_ENDED": "活动已结束，请选择合作认可对象"
     },
     "signupMgmt": {
       "untitledPost": "（无内容帖子）",
@@ -186,7 +187,19 @@
       "signersTitle": "报名的人",
       "signedAt": "报名于 {{time}}",
       "noSigners": "还没有人报名",
-      "loadFailed": "报名列表加载失败，请重试"
+      "loadFailed": "报名列表加载失败，请重试",
+      "searchPlaceholder": "搜索报名者",
+      "noSearchResults": "没有匹配的报名者",
+      "recognitionSelectionSummary": "已选 {{count}}/{{max}}",
+      "recognitionFull": "认可名额已用完",
+      "recognizedTag": "已认可",
+      "recognitionSubmit": "提交认可",
+      "recognitionSubmitting": "提交中",
+      "recognitionLimitTitle": "最多选择 3 人",
+      "recognitionLimitMessage": "每个活动最多给 3 位报名者合作认可。",
+      "recognitionSuccessTitle": "已提交合作认可",
+      "recognitionSuccessMessage": "已认可 {{count}} 位报名者。",
+      "recognitionFailedTitle": "提交失败"
     }
   },
   "chat": {
@@ -656,7 +669,29 @@
       "notNoteSet": "不添加",
       "noteLabel": "选择笔记",
       "title": "发布动态",
-      "partialUploadsFailed": "有{{count}}张图片上传失败，请重试"
+      "partialUploadsFailed": "有{{count}}张图片上传失败，请重试",
+      "contentPlaceholder": "请输入详细内容",
+      "hornLabel": "喇叭动态",
+      "selectCircle": "选择圈子",
+      "selectCity": "选择城市",
+      "pleaseSelect": "请选择",
+      "expiryLabel": "帖子到期时间",
+      "expiryPickerTitle": "选择帖子到期时间",
+      "expiry24h": "24 小时后到期",
+      "expiry3d": "3 天后到期",
+      "expiry7d": "7 天后到期",
+      "tagsLabel": "关键词标签（最多{{max}}个）",
+      "tagPlaceholder": "输入标签关键词",
+      "addTag": "添加",
+      "signupRestrictions": "报名限制",
+      "vipRestriction": "VIP限制",
+      "creditRestriction": "信用值限制",
+      "fancyRestriction": "靓号限制",
+      "vipPickerTitle": "选择 VIP 限制",
+      "creditPickerTitle": "选择信用值限制",
+      "noLimit": "不限制",
+      "creditAtLeast": "{{score}}分以上",
+      "submit": "提交"
     },
     "deleteFailedMessage": "请稍后重试",
     "deleteFailedTitle": "删除失败",
@@ -1498,5 +1533,56 @@
   },
   "profileDisplay": {
     "emptySignature": "完善资料后会在这里展示你的介绍。"
+  },
+  "myIcons": {
+    "title": "我的图标",
+    "currentDisplay": "当前展示",
+    "loading": "加载中...",
+    "selectedCount": "已选择 {{count}}/{{max}}",
+    "explainTitle": "Badge 说明",
+    "explainIntroLabel": "介绍",
+    "explainConditionLabel": "获得条件",
+    "systemGroup": "系统图标",
+    "circleGroup": "我的圈子",
+    "save": "保存图标",
+    "saving": "保存中...",
+    "maxIcons": "最多展示 {{count}} 个图标",
+    "loadFailedTitle": "图标加载失败",
+    "saveFailedTitle": "保存失败",
+    "retryLater": "请稍后重试",
+    "explain": {
+      "empty": {
+        "description": "点选一个 Badge，查看它代表什么。",
+        "condition": "不同 Badge 会根据会员、注册、合作认可、资料可信度或圈子建设贡献获得。"
+      },
+      "circle": {
+        "description": "圈子专属 Badge，代表你和这个圈子的身份关系或建设贡献。",
+        "condition": "根据圈子身份、管理权限或圈子配置获得；圈子需保持正常状态。"
+      },
+      "vip": {
+        "description": "付费会员身份 Badge，展示当前 VIP 等级。",
+        "condition": "开通或升级 VIP 后获得，等级随会员等级 1-5 展示。"
+      },
+      "newUser": {
+        "description": "新人身份 Badge，帮助新用户在早期更容易被识别。",
+        "condition": "注册后在新人展示期内获得，账号需保持正常状态。"
+      },
+      "topCollaborator": {
+        "description": "活动合作认可 Badge，展示你在圈子活动中被认可的合作质量。",
+        "condition": "报名圈子活动并在活动结束后被发帖者认可；累计 100/1000/10000 次升级。"
+      },
+      "verifiedProfile": {
+        "description": "资料可信 Badge，表示用户愿意公开可联系资料，账号更可信。",
+        "condition": "公开展示 QQ、微信或手机号之一；手机号作为条件时需要完成验证，且账号无严重违规。"
+      },
+      "circleBuilder": {
+        "description": "圈子建设贡献 Badge，表彰对圈子成长有贡献的圈主或管理员。",
+        "condition": "作为圈主或管理员，圈子创建满 7 天、人数超过 100，且未被封禁或标记违规。"
+      },
+      "systemDefault": {
+        "description": "系统 Badge，用于展示你在平台内的身份或荣誉。",
+        "condition": "满足对应系统规则后获得，并在账号状态正常时展示。"
+      }
+    }
   }
 }

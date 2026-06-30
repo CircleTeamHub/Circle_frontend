@@ -73,6 +73,7 @@ test('fetchAllMyCirclePosts loads every page and normalizes each row defensively
           unreadSignupCount: undefined,
           status: null,
           createdAt: null,
+          expiresAt: null,
         },
       ],
       total: 2,
@@ -91,6 +92,7 @@ test('fetchAllMyCirclePosts loads every page and normalizes each row defensively
           unreadSignupCount: 1,
           status: 'ACTIVE',
           createdAt: '2026-06-05T00:00:00.000Z',
+          expiresAt: '2026-06-06T00:00:00.000Z',
         },
       ],
       total: 2,
@@ -116,6 +118,7 @@ test('fetchAllMyCirclePosts loads every page and normalizes each row defensively
       unreadSignupCount: 0,
       status: 'UNKNOWN',
       createdAt: '',
+      expiresAt: '',
     },
     {
       id: 'post-2',
@@ -126,6 +129,7 @@ test('fetchAllMyCirclePosts loads every page and normalizes each row defensively
       unreadSignupCount: 1,
       status: 'ACTIVE',
       createdAt: '2026-06-05T00:00:00.000Z',
+      expiresAt: '2026-06-06T00:00:00.000Z',
     },
   ]);
 });
@@ -149,15 +153,140 @@ test('fetchMyPostSignups normalizes missing signer fields with safe defaults', a
 
   const signups = await api.fetchMyPostSignups('post-1');
 
-  assert.deepEqual(JSON.parse(JSON.stringify(signups)), [
+  assert.deepEqual(JSON.parse(JSON.stringify(signups)), {
+    items: [
+      {
+        userId: 'user-1',
+        imUserId: '',
+        nickname: '用户',
+        avatarUrl: 'http://192.168.1.65:9000/avatars/u.jpg',
+        accountId: '',
+        signedAt: '',
+        seen: false,
+        recognized: false,
+      },
+    ],
+    // 后端缺省 recognitionOpen → 安全默认为 false（不放出认可入口）。
+    recognitionOpen: false,
+  });
+});
+
+test('fetchMyPostSignups carries recognized flags and recognitionOpen from backend', async () => {
+  const { api } = loadPlazaApi([
     {
-      userId: 'user-1',
-      imUserId: '',
-      nickname: '用户',
-      avatarUrl: 'http://192.168.1.65:9000/avatars/u.jpg',
-      accountId: '',
-      signedAt: '',
-      seen: false,
+      recognitionOpen: true,
+      items: [
+        {
+          userId: 'user-1',
+          imUserId: 'im-1',
+          nickname: 'Ann',
+          avatarUrl: null,
+          accountId: 'a1',
+          signedAt: '2026-06-01T00:00:00Z',
+          seen: true,
+          recognized: true,
+        },
+      ],
+    },
+  ]);
+
+  const result = await api.fetchMyPostSignups('post-1');
+
+  assert.equal(result.recognitionOpen, true);
+  assert.equal(result.items[0].recognized, true);
+});
+
+test('submitPostCollaborationRecognitions posts selected signer ids', async () => {
+  const { api, calls } = loadPlazaApi([
+    { count: 2, recognizedUserIds: ['user-1', 'user-2'] },
+  ]);
+
+  const result = await api.submitPostCollaborationRecognitions('post-1', [
+    'user-1',
+    'user-2',
+  ]);
+
+  assert.equal(
+    calls[0][0],
+    '/circle-plaza/me/posts/post-1/collaboration-recognitions',
+  );
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0][1])), {
+    method: 'POST',
+    body: { recipientIds: ['user-1', 'user-2'] },
+  });
+  assert.deepEqual(result, {
+    count: 2,
+    recognizedUserIds: ['user-1', 'user-2'],
+  });
+});
+
+test('createPlazaPost forwards the selected expiry duration', async () => {
+  const { api, calls } = loadPlazaApi([
+    {
+      id: 'post-1',
+      content: 'hello',
+      images: [],
+      tags: [],
+      city: null,
+      isHorn: false,
+      noteId: null,
+      restrictions: { vipLevel: null, creditScore: null, fancyNumber: false },
+      viewCount: 0,
+      signupCount: 0,
+      signedByMe: false,
+      signupRestrictions: { vipLevel: null, creditScore: null, fancyNumber: false },
+      canSignup: true,
+      author: {
+        id: 'u1',
+        nickname: 'me',
+        avatarUrl: null,
+        avatarFrame: null,
+        accountId: '1001',
+      },
+      circle: { id: 'c1', name: 'circle' },
+      canInteract: true,
+      createdAt: '2026-06-29T00:00:00.000Z',
+      expiresAt: '2026-07-02T00:00:00.000Z',
+    },
+  ]);
+
+  await api.createPlazaPost({
+    content: 'hello',
+    images: [],
+    tags: [],
+    circleId: 'c1',
+    city: null,
+    noteId: null,
+    isHorn: false,
+    expiresInHours: 72,
+    vipRestriction: null,
+    creditRestriction: null,
+    fancyRestriction: false,
+    signupVipRestriction: null,
+    signupCreditRestriction: null,
+    signupFancyRestriction: false,
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0])), [
+    '/circle-plaza/posts',
+    {
+      method: 'POST',
+      body: {
+        content: 'hello',
+        images: [],
+        tags: [],
+        circleId: 'c1',
+        city: null,
+        noteId: null,
+        isHorn: false,
+        expiresInHours: 72,
+        vipRestriction: null,
+        creditRestriction: null,
+        fancyRestriction: false,
+        signupVipRestriction: null,
+        signupCreditRestriction: null,
+        signupFancyRestriction: false,
+      },
     },
   ]);
 });

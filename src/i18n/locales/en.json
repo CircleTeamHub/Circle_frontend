@@ -177,7 +177,8 @@
       "CIRCLE_INVITATION_APPROVED": "your invitation to {{circle}} is fully approved",
       "CIRCLE_INVITATION_REJECTED": "an invitation slot in {{circle}} was rejected",
       "CIRCLE_ADMIN_OVERRIDE_APPROVED": "an admin approved your request in {{circle}}",
-      "CIRCLE_POST_SIGNUP_CREATED": "signed up for your circle post"
+      "CIRCLE_POST_SIGNUP_CREATED": "signed up for your circle post",
+      "CIRCLE_POST_AUTO_ENDED": "your activity ended; choose collaborators to recognize"
     },
     "signupMgmt": {
       "untitledPost": "(untitled post)",
@@ -186,7 +187,19 @@
       "signersTitle": "Signups",
       "signedAt": "Signed up {{time}}",
       "noSigners": "No one has signed up yet",
-      "loadFailed": "Could not load signups. Please try again"
+      "loadFailed": "Could not load signups. Please try again",
+      "searchPlaceholder": "Search signups",
+      "noSearchResults": "No matching signups",
+      "recognitionSelectionSummary": "{{count}}/{{max}} selected",
+      "recognitionFull": "Recognition limit reached",
+      "recognizedTag": "Recognized",
+      "recognitionSubmit": "Submit",
+      "recognitionSubmitting": "Submitting",
+      "recognitionLimitTitle": "Choose up to 3",
+      "recognitionLimitMessage": "Each activity can recognize up to 3 signed-up collaborators.",
+      "recognitionSuccessTitle": "Recognition submitted",
+      "recognitionSuccessMessage": "{{count}} collaborator(s) recognized.",
+      "recognitionFailedTitle": "Submit failed"
     }
   },
   "chat": {
@@ -657,7 +670,29 @@
       "notNoteSet": "None",
       "noteLabel": "Select note",
       "title": "New post",
-      "partialUploadsFailed": "{{count}} images failed to upload, please retry"
+      "partialUploadsFailed": "{{count}} images failed to upload, please retry",
+      "contentPlaceholder": "Write the details here",
+      "hornLabel": "Announcement post",
+      "selectCircle": "Select circle",
+      "selectCity": "Select city",
+      "pleaseSelect": "Please select",
+      "expiryLabel": "Post expiry",
+      "expiryPickerTitle": "Choose post expiry",
+      "expiry24h": "Expires in 24 hours",
+      "expiry3d": "Expires in 3 days",
+      "expiry7d": "Expires in 7 days",
+      "tagsLabel": "Keyword tags (up to {{max}})",
+      "tagPlaceholder": "Enter a keyword tag",
+      "addTag": "Add",
+      "signupRestrictions": "Signup restrictions",
+      "vipRestriction": "VIP requirement",
+      "creditRestriction": "Credit requirement",
+      "fancyRestriction": "Fancy number only",
+      "vipPickerTitle": "Choose VIP requirement",
+      "creditPickerTitle": "Choose credit requirement",
+      "noLimit": "No limit",
+      "creditAtLeast": "{{score}}+ credit",
+      "submit": "Submit"
     },
     "deleteFailedMessage": "Please try again",
     "deleteFailedTitle": "Failed to delete",
@@ -1501,5 +1536,56 @@
   },
   "profileDisplay": {
     "emptySignature": "Your bio will appear here once you complete your profile."
+  },
+  "myIcons": {
+    "title": "My badges",
+    "currentDisplay": "Currently shown",
+    "loading": "Loading...",
+    "selectedCount": "{{count}}/{{max}} selected",
+    "explainTitle": "Badge details",
+    "explainIntroLabel": "About",
+    "explainConditionLabel": "How to earn",
+    "systemGroup": "System badges",
+    "circleGroup": "My circles",
+    "save": "Save badges",
+    "saving": "Saving...",
+    "maxIcons": "You can show up to {{count}} badges",
+    "loadFailedTitle": "Failed to load badges",
+    "saveFailedTitle": "Save failed",
+    "retryLater": "Please try again later",
+    "explain": {
+      "empty": {
+        "description": "Tap a badge to see what it represents.",
+        "condition": "Different badges are earned from membership, registration, collaboration recognition, profile trustworthiness, or circle-building contributions."
+      },
+      "circle": {
+        "description": "A circle-specific badge showing your identity or contribution within that circle.",
+        "condition": "Earned from your circle identity, admin role, or circle configuration; the circle must remain in good standing."
+      },
+      "vip": {
+        "description": "A paid-membership badge that shows your current VIP level.",
+        "condition": "Earned by subscribing to or upgrading VIP; the level follows your membership tier 1-5."
+      },
+      "newUser": {
+        "description": "A new-member badge that helps newcomers be recognized early on.",
+        "condition": "Granted during the new-member window after registration; the account must remain in good standing."
+      },
+      "topCollaborator": {
+        "description": "A collaboration-recognition badge reflecting how others have recognized your collaboration in circle activities.",
+        "condition": "Earned by signing up for circle activities and being recognized by the host after they end; upgrades at 100/1000/10000 recognitions."
+      },
+      "verifiedProfile": {
+        "description": "A profile-trust badge indicating the user is willing to share contact details, making the account more trustworthy.",
+        "condition": "Publicly show at least one of QQ, WeChat, or phone; phone must be verified when used as a condition, and the account must have no serious violations."
+      },
+      "circleBuilder": {
+        "description": "A circle-building badge honoring owners or admins who contribute to a circle's growth.",
+        "condition": "Be an owner or admin of a circle that is at least 7 days old, has over 100 members, and is not banned or flagged."
+      },
+      "systemDefault": {
+        "description": "A system badge that shows your identity or honors on the platform.",
+        "condition": "Earned by meeting the corresponding system rules and shown while the account is in good standing."
+      }
+    }
   }
 }

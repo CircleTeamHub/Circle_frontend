@@ -22,6 +22,7 @@ import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useTheme } from '@/theme';
 import type { ThemeColors } from '@/theme/types';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type TabKey = {
   name: string;
@@ -49,7 +50,8 @@ const TAB_BAR_MARGIN_H = 32; // 左右外边距：再缩一圈后留白更多，
 const TAB_BAR_MARGIN_B = 24; // 距屏幕底部（浮动）
 const TAB_BAR_PAD_H = 4; // 内边距：首尾药丸不贴 bar 内沿
 const TAB_BAR_PAD_V = 4; // 上下内边距：药丸高 = bar 高 - 8
-const TAB_PILL_RADIUS = 14; // 选中药丸：圆角矩形（非完整半圆），贴合设计稿
+const TAB_PILL_HEIGHT = TAB_BAR_HEIGHT - TAB_BAR_PAD_V * 2;
+const TAB_PILL_RADIUS = TAB_PILL_HEIGHT / 2; // 选中药丸：和 tab bar 一样是完整胶囊形状
 const TAB_PILL_GAP = 2; // 每格药丸左右留白，互不相贴
 const TAB_ICON_SIZE = 18;
 // 滑入/滑出：偏短 + ease-out，返回主页时弹得干脆。
@@ -61,7 +63,7 @@ type TabBarStyles = {
   tabBar: ViewStyle;
   tabItem: ViewStyle;
   pill: ViewStyle;
-  pillActive: ViewStyle;
+  activePillFill: ViewStyle;
   iconWrap: ViewStyle;
   badge: ViewStyle;
   label: TextStyle;
@@ -103,10 +105,10 @@ const TabSlot = memo(function TabSlot({
         <View
           style={[
             styles.pill,
-            focused && styles.pillActive,
             pressed && { opacity: 0.7 },
           ]}
         >
+          {focused ? <View style={styles.activePillFill} /> : null}
           <View style={styles.iconWrap}>
             <Ionicons name={tab.icon} size={TAB_ICON_SIZE} color={tint} />
             {showBadgeDot ? (
@@ -228,6 +230,7 @@ function CustomTabBar({
 export default function TabLayout() {
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const segments = useSegments();
   const hideTabBar = segments.length > 2;
 
@@ -250,14 +253,14 @@ export default function TabLayout() {
     },
     tabBar: {
       flexDirection: 'row',
-      alignItems: 'stretch',
+      alignItems: 'center',
       height: TAB_BAR_HEIGHT,
       borderRadius: TAB_BAR_RADIUS,
       backgroundColor: colors.surface,
       borderWidth: 1,
       borderColor: colors.surfaceBorder,
       marginHorizontal: TAB_BAR_MARGIN_H,
-      marginBottom: TAB_BAR_MARGIN_B,
+      marginBottom: TAB_BAR_MARGIN_B + insets.bottom,
       paddingHorizontal: TAB_BAR_PAD_H,
       paddingVertical: TAB_BAR_PAD_V,
       // 不裁剪：阴影完整显示，且药丸本就在内部不会溢出。
@@ -270,17 +273,21 @@ export default function TabLayout() {
     // 每格等宽：flex:1 平分整条 bar，选中药丸填满本格 → 不溢出、不留缝。
     tabItem: {
       flex: 1,
+      justifyContent: 'center',
     },
     pill: {
-      flex: 1,
+      height: TAB_PILL_HEIGHT,
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
       borderRadius: TAB_PILL_RADIUS,
       marginHorizontal: TAB_PILL_GAP,
+      overflow: 'hidden',
       gap: 2,
     },
-    pillActive: {
+    activePillFill: {
+      ...StyleSheet.absoluteFillObject,
+      borderRadius: TAB_PILL_RADIUS,
       backgroundColor: colors.primary,
     },
     iconWrap: {
@@ -304,7 +311,7 @@ export default function TabLayout() {
       fontWeight: '500',
       letterSpacing: 0.2,
     },
-  }), [colors]);
+  }), [colors, insets.bottom]);
 
   const badgeMap: Record<string, boolean> = useMemo(() => ({
     messages: messagesUnread > 0,

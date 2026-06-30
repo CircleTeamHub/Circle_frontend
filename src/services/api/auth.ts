@@ -88,10 +88,7 @@ export type BackendAuthUser = {
   lastOnline: string | null;
   createdAt: string;
   updatedAt: string;
-  // 点赞：GET /user/:id 返回 likeCount + likedByMeToday；/me 返回 receivedLikeCount。
-  likeCount?: number;
-  likedByMeToday?: boolean;
-  receivedLikeCount?: number;
+  recognitionCount?: number;
 };
 
 function getDeviceName() {

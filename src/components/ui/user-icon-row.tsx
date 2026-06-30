@@ -135,6 +135,14 @@ function formatIconLabel(icon: DisplayIcon) {
     return icon.title || 'Top Collaborator';
   }
 
+  if (icon.systemKey === 'VERIFIED_PROFILE') {
+    return icon.title || 'Verified';
+  }
+
+  if (icon.systemKey === 'CIRCLE_BUILDER') {
+    return icon.title || 'Builder';
+  }
+
   return icon.title;
 }
 

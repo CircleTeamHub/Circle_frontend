@@ -33,22 +33,9 @@ import { useTranslation } from 'react-i18next';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 // VIP 档位对齐 app 实际会员体系（VIP1–VIP5，见 MemberCenterScreen）。
-const VIP_OPTIONS = [
-  { label: '不限制', value: null },
-  { label: 'VIP 1', value: 1 },
-  { label: 'VIP 2', value: 2 },
-  { label: 'VIP 3', value: 3 },
-  { label: 'VIP 4', value: 4 },
-  { label: 'VIP 5', value: 5 },
-];
-
-const CREDIT_OPTIONS = [
-  { label: '不限制', value: null },
-  { label: '60分以上', value: 60 },
-  { label: '70分以上', value: 70 },
-  { label: '80分以上', value: 80 },
-  { label: '90分以上', value: 90 },
-];
+// 仅存 value，label 在组件内按当前语言生成（见 useMemo）。
+const VIP_VALUES: (number | null)[] = [null, 1, 2, 3, 4, 5];
+const CREDIT_VALUES: (number | null)[] = [null, 60, 70, 80, 90];
 
 const s = StyleSheet.create({
   scroll: { flex: 1, paddingHorizontal: Spacing.lg },
@@ -167,8 +154,9 @@ export default function CreatePostScreen() {
     number | null
   >(null);
   const [signupFancyEnabled, setSignupFancyEnabled] = useState(false);
+  const [expiresInHours, setExpiresInHours] = useState(24);
   const [activePicker, setActivePicker] = useState<
-    'signupVip' | 'signupCredit' | null
+    'postExpiry' | 'signupVip' | 'signupCredit' | null
   >(null);
   const [submitting, setSubmitting] = useState(false);
   // Pattern D: 防止双击在 setSubmitting flush 之前重复触发 createPlazaPost。
@@ -228,12 +216,58 @@ export default function CreatePostScreen() {
 
   const closePicker = useCallback(() => setActivePicker(null), []);
 
+  const noLimitLabel = t('plaza.create.noLimit', { defaultValue: '不限制' });
+
+  const vipOptions = useMemo(
+    () =>
+      VIP_VALUES.map((value) => ({
+        value,
+        label:
+          value === null ? noLimitLabel : `VIP ${value}`,
+      })),
+    [noLimitLabel],
+  );
+  const creditOptions = useMemo(
+    () =>
+      CREDIT_VALUES.map((value) => ({
+        value,
+        label:
+          value === null
+            ? noLimitLabel
+            : t('plaza.create.creditAtLeast', {
+                score: value,
+                defaultValue: `${value}分以上`,
+              }),
+      })),
+    [noLimitLabel, t],
+  );
+  const expiryOptions = useMemo(
+    () => [
+      {
+        value: 24,
+        label: t('plaza.create.expiry24h', { defaultValue: '24 小时后到期' }),
+      },
+      {
+        value: 72,
+        label: t('plaza.create.expiry3d', { defaultValue: '3 天后到期' }),
+      },
+      {
+        value: 168,
+        label: t('plaza.create.expiry7d', { defaultValue: '7 天后到期' }),
+      },
+    ],
+    [t],
+  );
+
   const signupVipLabel =
-    VIP_OPTIONS.find((o) => o.value === signupVipRestriction)?.label ??
-    '不限制';
+    vipOptions.find((o) => o.value === signupVipRestriction)?.label ??
+    noLimitLabel;
   const signupCreditLabel =
-    CREDIT_OPTIONS.find((o) => o.value === signupCreditRestriction)?.label ??
-    '不限制';
+    creditOptions.find((o) => o.value === signupCreditRestriction)?.label ??
+    noLimitLabel;
+  const expiryLabel =
+    expiryOptions.find((o) => o.value === expiresInHours)?.label ??
+    expiryOptions[0].label;
 
   const canSubmit = content.trim().length > 0 && selectedCircle != null;
 
@@ -296,6 +330,7 @@ export default function CreatePostScreen() {
         city: selectedCity,
         noteId: selectedNote?.id ?? null,
         isHorn: hornEnabled,
+        expiresInHours,
         // 查看/互动限制已合并到报名限制；这三项保留字段但一律传默认值（不限制）。
         vipRestriction: null,
         creditRestriction: null,
@@ -332,6 +367,7 @@ export default function CreatePostScreen() {
     selectedCity,
     selectedNote,
     hornEnabled,
+    expiresInHours,
     signupVipRestriction,
     signupCreditRestriction,
     signupFancyEnabled,
@@ -351,7 +387,9 @@ export default function CreatePostScreen() {
       >
         <View style={[s.inputBox, d.inputBox]}>
           <TextInput
-            placeholder="请输入详细内容"
+            placeholder={t('plaza.create.contentPlaceholder', {
+              defaultValue: '请输入详细内容',
+            })}
             placeholderTextColor={colors.textSecondary}
             multiline
             value={content}
@@ -390,7 +428,9 @@ export default function CreatePostScreen() {
 
         {/* Horn toggle */}
         <View style={s.toggleRow}>
-          <Text style={[s.rowLabel, d.rowLabel]}>喇叭动态</Text>
+          <Text style={[s.rowLabel, d.rowLabel]}>
+            {t('plaza.create.hornLabel', { defaultValue: '喇叭动态' })}
+          </Text>
           <Switch
             value={hornEnabled}
             onValueChange={setHornEnabled}
@@ -403,8 +443,11 @@ export default function CreatePostScreen() {
         {/* Circle picker */}
         <MenuRow
           icon="globe-outline"
-          label="选择圈子"
-          rightText={selectedCircle?.name ?? '请选择'}
+          label={t('plaza.create.selectCircle', { defaultValue: '选择圈子' })}
+          rightText={
+            selectedCircle?.name ??
+            t('plaza.create.pleaseSelect', { defaultValue: '请选择' })
+          }
           onPress={handleSelectCircle}
         />
         <Divider />
@@ -412,9 +455,20 @@ export default function CreatePostScreen() {
         {/* City picker */}
         <MenuRow
           icon="location-outline"
-          label="选择城市"
-          rightText={selectedCity ?? '请选择'}
+          label={t('plaza.create.selectCity', { defaultValue: '选择城市' })}
+          rightText={
+            selectedCity ??
+            t('plaza.create.pleaseSelect', { defaultValue: '请选择' })
+          }
           onPress={handleSelectCity}
+        />
+        <Divider />
+
+        <MenuRow
+          icon="time-outline"
+          label={t('plaza.create.expiryLabel', { defaultValue: '帖子到期时间' })}
+          rightText={expiryLabel}
+          onPress={() => setActivePicker('postExpiry')}
         />
         <Divider />
 
@@ -432,7 +486,10 @@ export default function CreatePostScreen() {
         {/* Post tags */}
         <View style={s.tagSection}>
           <Text style={[s.tagLabel, { color: colors.textSecondary }]}>
-            关键词标签（最多5个）
+            {t('plaza.create.tagsLabel', {
+              max: 5,
+              defaultValue: '关键词标签（最多5个）',
+            })}
           </Text>
           <View style={s.tagRow}>
             {postTags.map((tag, i) => (
@@ -449,7 +506,9 @@ export default function CreatePostScreen() {
           {postTags.length < 5 ? (
             <View style={s.tagInputRow}>
               <TextInput
-                placeholder="输入标签关键词"
+                placeholder={t('plaza.create.tagPlaceholder', {
+                  defaultValue: '输入标签关键词',
+                })}
                 placeholderTextColor={colors.textSecondary}
                 value={postTagInput}
                 onChangeText={setPostTagInput}
@@ -473,7 +532,9 @@ export default function CreatePostScreen() {
                 }}
                 style={[s.addTagBtn, { backgroundColor: colors.primary }]}
               >
-                <Text style={{ color: colors.white, ...Typography.caption }}>添加</Text>
+                <Text style={{ color: colors.white, ...Typography.caption }}>
+                  {t('plaza.create.addTag', { defaultValue: '添加' })}
+                </Text>
               </Pressable>
             </View>
           ) : null}
@@ -482,13 +543,13 @@ export default function CreatePostScreen() {
 
         {/* 报名限制 —— 以下三项都绑定 signup* 字段，控制谁能报名 */}
         <Text style={[s.sectionHeading, { color: colors.textSecondary }]}>
-          报名限制
+          {t('plaza.create.signupRestrictions', { defaultValue: '报名限制' })}
         </Text>
 
         {/* Signup VIP restriction */}
         <MenuRow
           icon="diamond-outline"
-          label="VIP限制"
+          label={t('plaza.create.vipRestriction', { defaultValue: 'VIP限制' })}
           rightText={signupVipLabel}
           onPress={() => setActivePicker('signupVip')}
         />
@@ -497,7 +558,9 @@ export default function CreatePostScreen() {
         {/* Signup credit restriction */}
         <MenuRow
           icon="shield-checkmark-outline"
-          label="信用值限制"
+          label={t('plaza.create.creditRestriction', {
+            defaultValue: '信用值限制',
+          })}
           rightText={signupCreditLabel}
           onPress={() => setActivePicker('signupCredit')}
         />
@@ -506,7 +569,7 @@ export default function CreatePostScreen() {
         {/* Signup fancy number toggle */}
         <MenuRow
           icon="sparkles-outline"
-          label="靓号限制"
+          label={t('plaza.create.fancyRestriction', { defaultValue: '靓号限制' })}
           hasToggle
           toggleValue={signupFancyEnabled}
           onToggle={setSignupFancyEnabled}
@@ -514,17 +577,31 @@ export default function CreatePostScreen() {
       </ScrollView>
 
       <OptionPickerSheet
+        visible={activePicker === 'postExpiry'}
+        title={t('plaza.create.expiryPickerTitle', {
+          defaultValue: '选择帖子到期时间',
+        })}
+        options={expiryOptions}
+        selectedValue={expiresInHours}
+        onSelect={setExpiresInHours}
+        onClose={closePicker}
+      />
+      <OptionPickerSheet
         visible={activePicker === 'signupVip'}
-        title="选择 VIP 限制"
-        options={VIP_OPTIONS}
+        title={t('plaza.create.vipPickerTitle', {
+          defaultValue: '选择 VIP 限制',
+        })}
+        options={vipOptions}
         selectedValue={signupVipRestriction}
         onSelect={setSignupVipRestriction}
         onClose={closePicker}
       />
       <OptionPickerSheet
         visible={activePicker === 'signupCredit'}
-        title="选择信用值限制"
-        options={CREDIT_OPTIONS}
+        title={t('plaza.create.creditPickerTitle', {
+          defaultValue: '选择信用值限制',
+        })}
+        options={creditOptions}
         selectedValue={signupCreditRestriction}
         onSelect={setSignupCreditRestriction}
         onClose={closePicker}
@@ -542,7 +619,9 @@ export default function CreatePostScreen() {
           {submitting ? (
             <ActivityIndicator color={colors.white} />
           ) : (
-            <Text style={[s.submitText, d.submitText]}>提交</Text>
+            <Text style={[s.submitText, d.submitText]}>
+              {t('plaza.create.submit', { defaultValue: '提交' })}
+            </Text>
           )}
         </Pressable>
       </View>

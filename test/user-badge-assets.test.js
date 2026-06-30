@@ -45,6 +45,8 @@ test('local badge artwork is mapped by asset filename', () => {
     'assets/badges/good1.png',
     'assets/badges/good2.png',
     'assets/badges/good3.png',
+    'assets/badges/verifie.png',
+    'assets/badges/builder.png',
   ].forEach((assetPath) => assert.ok(exists(assetPath), `${assetPath} should exist`));
 
   const assets = read('src/components/ui/user-badge-assets.ts');
@@ -58,6 +60,8 @@ test('local badge artwork is mapped by asset filename', () => {
   assert.match(assets, /good1\.png/);
   assert.match(assets, /good2\.png/);
   assert.match(assets, /good3\.png/);
+  assert.match(assets, /verifie\.png/);
+  assert.match(assets, /builder\.png/);
   assert.match(assets, /getSystemBadgeAsset/);
 });
 
@@ -69,7 +73,7 @@ test('UserIconBadge renders system badges from local artwork', () => {
   assert.match(row, /contentFit="contain"/);
 });
 
-test('top collaborator badges are mapped from like-count thresholds', () => {
+test('top collaborator badges are mapped from collaboration recognition thresholds', () => {
   const {
     getTopCollaboratorLevel,
     getSystemBadgeAsset,
@@ -82,15 +86,15 @@ test('top collaborator badges are mapped from like-count thresholds', () => {
   assert.equal(getTopCollaboratorLevel(9999), 2);
   assert.equal(getTopCollaboratorLevel(10000), 3);
 
-  const makeIcon = (likeCount) => ({
-    id: `top-${likeCount}`,
+  const makeIcon = (recognitionCount) => ({
+    id: `top-${recognitionCount}`,
     type: 'SYSTEM',
     systemKey: 'TOP_COLLABORATOR',
     title: 'Top Collaborator',
     imageUrl: null,
     fallbackIconName: null,
     sortOrder: 0,
-    likeCount,
+    recognitionCount,
   });
 
   assert.equal(getSystemBadgeAsset(makeIcon(99)), null);
@@ -105,6 +109,35 @@ test('top collaborator badges are mapped from like-count thresholds', () => {
     }),
     null,
   );
+});
+
+test('verified profile and circle builder badges use their dedicated local artwork', () => {
+  const { getSystemBadgeAsset } = loadBadgeAssets();
+
+  const makeIcon = (systemKey) => ({
+    id: `system-${systemKey}`,
+    type: 'SYSTEM',
+    systemKey,
+    title: systemKey,
+    imageUrl: null,
+    fallbackIconName: null,
+    sortOrder: 0,
+  });
+
+  assert.match(getSystemBadgeAsset(makeIcon('VERIFIED_PROFILE')), /verifie\.png$/);
+  assert.match(getSystemBadgeAsset(makeIcon('CIRCLE_BUILDER')), /builder\.png$/);
+});
+
+test('first release system badge keys are modeled on the client', () => {
+  const types = read('src/types/index.ts');
+
+  [
+    'VIP',
+    'NEW_USER',
+    'TOP_COLLABORATOR',
+    'VERIFIED_PROFILE',
+    'CIRCLE_BUILDER',
+  ].forEach((key) => assert.match(types, new RegExp(`'${key}'`)));
 });
 
 test('partner is not kept as a separate system badge key', () => {
