@@ -103,6 +103,51 @@ test('collected voice round-trips dataSize so re-sent remote voice is not 0KB', 
   assert.equal(recovered.voice.dataSize, 20480);
 });
 
+test('chat-sourced collections preserve conversation route context for locating the original message', () => {
+  const { buildCollectionInputFromMessage, getCollectedOpenIMMessagePayload } =
+    loadTsModule('src/features/chat/utils/message-collection.ts');
+
+  const input = buildCollectionInputFromMessage(
+    {
+      id: 'msg-note-2',
+      type: 'note-card',
+      outgoing: false,
+      senderID: 'sender-1',
+      senderName: '发送人',
+      time: '18:30',
+      noteCard: {
+        noteId: 'note-2',
+        ownerId: 'owner-1',
+        title: '群里的笔记',
+        contentPreview: '笔记摘要',
+        coverUrl: null,
+        imageCount: 1,
+        videoCount: 0,
+        groupNames: [],
+      },
+    },
+    {
+      conversationID: 'sg_group-1',
+      conversationTitle: '项目群',
+      sourceID: 'group-1',
+      conversationType: 'group',
+    },
+  );
+
+  const recovered = getCollectedOpenIMMessagePayload(
+    JSON.parse(JSON.stringify(input.payload)),
+  );
+
+  assert.equal(recovered.messageID, 'msg-note-2');
+  assert.equal(recovered.conversationID, 'sg_group-1');
+  assert.equal(recovered.conversationTitle, '项目群');
+  assert.equal(recovered.sourceID, 'group-1');
+  assert.equal(recovered.conversationType, 'group');
+  assert.equal(recovered.senderID, 'sender-1');
+  assert.equal(recovered.senderName, '发送人');
+  assert.equal(recovered.time, '18:30');
+});
+
 test('re-sending a collected text message sends the original body once, not title+summary', () => {
   const { buildCollectionInputFromMessage, resolveCollectionSendPlan } =
     loadTsModule('src/features/chat/utils/message-collection.ts');

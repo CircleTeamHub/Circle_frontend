@@ -1,5 +1,5 @@
 import type { CreateCollectionInput, UserCollection } from '@/services/api/collections';
-import type { ChatMessage, FriendCardData, NoteCardData } from '@/types';
+import type { ChatMessage, ConversationType, FriendCardData, NoteCardData } from '@/types';
 
 export type CollectedOpenIMMessagePayload = {
   kind: 'openim-message';
@@ -7,6 +7,8 @@ export type CollectedOpenIMMessagePayload = {
   messageType: ChatMessage['type'];
   conversationID: string;
   conversationTitle: string;
+  sourceID?: string;
+  conversationType?: ConversationType;
   senderID?: string;
   senderName?: string;
   time?: string;
@@ -30,6 +32,8 @@ export type CollectedOpenIMMessagePayload = {
 type CollectionContext = {
   conversationID: string;
   conversationTitle: string;
+  sourceID?: string;
+  conversationType?: ConversationType;
 };
 
 function compactText(value: string | null | undefined, max = 80) {
@@ -84,6 +88,8 @@ export function buildCollectionInputFromMessage(
     messageType: message.type,
     conversationID: context.conversationID,
     conversationTitle: context.conversationTitle,
+    sourceID: context.sourceID,
+    conversationType: context.conversationType,
     senderID: message.senderID,
     senderName: message.senderName,
     time: message.time,

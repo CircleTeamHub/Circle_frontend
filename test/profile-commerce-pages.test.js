@@ -112,5 +112,13 @@ test('CollectionsScreen shows collectible content types', () => {
   assert.match(src, /视频/);
   assert.match(src, /语音/);
   assert.match(src, /信息/);
-  assert.match(src, /笔记/);
+  assert.match(src, /收藏笔记/);
+  assert.match(src, /normalizeNoteCardPayload/);
+  assert.match(src, /getCollectedOpenIMMessagePayload/);
+  assert.match(src, /getNoteDetailHref\('profile'/);
+  assert.match(src, /getChatDetailHref\(\s*'profile'/);
+  assert.match(src, /getUserProfileHref\(\s*'profile'/);
+  assert.match(src, /回到消息/);
+  assert.match(src, /发送人/);
+  assert.match(src, /来自/);
 });
