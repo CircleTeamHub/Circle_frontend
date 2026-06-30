@@ -19,16 +19,14 @@ test('login screen renders only the paper plane mark without an app-icon frame',
   assert.doesNotMatch(source, /logoDot/);
 });
 
-test('login screen uses a dark-mode form panel with full-height scroll content', () => {
+test('login screen keeps the original form layout below the logo', () => {
   const source = read('src/features/auth/screens/LoginScreen.tsx');
 
-  assert.match(source, /formPanel/);
-  assert.match(source, /flexGrow:\s*1/);
-  assert.match(source, /formPanel:\s*\{[\s\S]*borderWidth:\s*1/);
-  assert.match(source, /formPanel:\s*\{[\s\S]*borderRadius:\s*Radius\.lg/);
-  assert.match(source, /formPanel:\s*\{[\s\S]*padding:\s*Spacing\.lg/);
-  assert.match(source, /formPanel:\s*\{[\s\S]*width:\s*"100%"/);
-  assert.match(source, /formPanel:\s*\{[\s\S]*backgroundColor:\s*colors\.surface/);
-  assert.match(source, /formPanel:\s*\{[\s\S]*borderColor:\s*colors\.surfaceBorder/);
-  assert.match(source, /Math\.max\(insets\.bottom \+ 24,\s*40\)/);
+  assert.doesNotMatch(source, /formPanel/);
+  assert.doesNotMatch(source, /flexGrow:\s*1/);
+  assert.doesNotMatch(source, /container:\s*\{[^}]*justifyContent:\s*"center"/);
+  assert.doesNotMatch(source, /Math\.max\(insets\.bottom \+ 24,\s*40\)/);
+  assert.match(source, /container:\s*\{\s*paddingHorizontal:\s*Spacing\.lg,\s*alignItems:\s*"center",\s*gap:\s*28\s*\}/);
+  assert.match(source, /paddingBottom:\s*insets\.bottom \+ 24/);
+  assert.match(source, /segment:\s*\{\s*backgroundColor:\s*colors\.surface\s*\}/);
 });

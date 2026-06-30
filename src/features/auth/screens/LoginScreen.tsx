@@ -23,24 +23,11 @@ type Mode = "password" | "code";
 
 const s = StyleSheet.create({
   scroll: { flex: 1 },
-  container: {
-    flexGrow: 1,
-    paddingHorizontal: Spacing.lg,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 28,
-  },
+  container: { paddingHorizontal: Spacing.lg, alignItems: "center", gap: 28 },
   logoPlane: { marginBottom: -4 },
   headingGroup: { alignItems: "center", gap: Spacing.sm, width: "100%" },
   heading: { fontSize: 28, fontWeight: "700" },
   subtitle: { ...Typography.body },
-  formPanel: {
-    width: "100%",
-    borderWidth: 1,
-    borderRadius: Radius.lg,
-    padding: Spacing.lg,
-    gap: Spacing.md,
-  },
   segment: {
     flexDirection: "row",
     width: "100%",
@@ -95,11 +82,7 @@ export default function LoginScreen() {
       scroll: { backgroundColor: colors.background },
       heading: { color: colors.text },
       subtitle: { color: colors.textSecondary },
-      formPanel: {
-        backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
-      },
-      segment: { backgroundColor: colors.background },
+      segment: { backgroundColor: colors.surface },
       segmentActive: { backgroundColor: colors.primary },
       segmentText: { color: colors.textSecondary },
       segmentTextActive: { color: colors.white },
@@ -139,10 +122,7 @@ export default function LoginScreen() {
       style={[s.scroll, d.scroll]}
       contentContainerStyle={[
         s.container,
-        {
-          paddingTop: insets.top + 32,
-          paddingBottom: Math.max(insets.bottom + 24, 40),
-        },
+        { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 24 },
       ]}
       {...keyboardDismissOnDragProps}
     >
@@ -161,129 +141,127 @@ export default function LoginScreen() {
         <Text style={[s.subtitle, d.subtitle]}>{t("auth.loginSubtitle")}</Text>
       </View>
 
-      <View style={[s.formPanel, d.formPanel]}>
-        {/* 登录方式切换 */}
-        <View style={[s.segment, d.segment]}>
-          {(["password", "code"] as Mode[]).map((m) => (
-            <Pressable
-              key={m}
-              style={[s.segmentItem, mode === m && d.segmentActive]}
-              onPress={() => setMode(m)}
+      {/* 登录方式切换 */}
+      <View style={[s.segment, d.segment]}>
+        {(["password", "code"] as Mode[]).map((m) => (
+          <Pressable
+            key={m}
+            style={[s.segmentItem, mode === m && d.segmentActive]}
+            onPress={() => setMode(m)}
+          >
+            <Text
+              style={[
+                s.segmentText,
+                mode === m ? d.segmentTextActive : d.segmentText,
+              ]}
             >
-              <Text
-                style={[
-                  s.segmentText,
-                  mode === m ? d.segmentTextActive : d.segmentText,
-                ]}
-              >
-                {t(m === "password" ? "auth.passwordLogin" : "auth.codeLogin")}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+              {t(m === "password" ? "auth.passwordLogin" : "auth.codeLogin")}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
 
-        {/* Form */}
-        <View style={s.form}>
-          <AuthInput
-            placeholder={t("auth.emailPlaceholder")}
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            textContentType="emailAddress"
-            autoComplete="email"
-          />
+      {/* Form */}
+      <View style={s.form}>
+        <AuthInput
+          placeholder={t("auth.emailPlaceholder")}
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          textContentType="emailAddress"
+          autoComplete="email"
+        />
 
-          {mode === "password" ? (
-            <>
-              <AuthInput
-                placeholder={t("auth.passwordPlaceholder")}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                textContentType="password"
-                autoComplete="current-password"
-              />
-              <View style={s.forgotRow}>
-                <Pressable onPress={onForgotPassword} hitSlop={8}>
-                  <Text style={[s.forgotLink, d.forgotLink]}>
-                    {t("auth.forgotPassword")}
-                  </Text>
-                </Pressable>
-              </View>
-            </>
-          ) : (
+        {mode === "password" ? (
+          <>
             <AuthInput
-              placeholder={t("auth.codePlaceholder")}
-              value={code}
-              onChangeText={setCode}
-              keyboardType="number-pad"
-              textContentType="oneTimeCode"
-              autoComplete="one-time-code"
-              rightElement={
-                <Pressable
-                  style={s.sendBtn}
-                  onPress={onSendCode}
-                  disabled={sendCode.running || sendCode.sending}
-                  hitSlop={8}
-                >
-                  <Text
-                    style={[
-                      s.sendBtnText,
-                      {
-                        color:
-                          sendCode.running || sendCode.sending
-                            ? colors.textSecondary
-                            : colors.primary,
-                      },
-                    ]}
-                  >
-                    {sendCode.running
-                      ? t("auth.resendCodeIn", { seconds: sendCode.seconds })
-                      : sendCode.sending
-                        ? t("auth.sendingCode", { defaultValue: "发送中…" })
-                        : t("auth.sendCode")}
-                  </Text>
-                </Pressable>
-              }
+              placeholder={t("auth.passwordPlaceholder")}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              textContentType="password"
+              autoComplete="current-password"
             />
-          )}
-        </View>
+            <View style={s.forgotRow}>
+              <Pressable onPress={onForgotPassword} hitSlop={8}>
+                <Text style={[s.forgotLink, d.forgotLink]}>
+                  {t("auth.forgotPassword")}
+                </Text>
+              </Pressable>
+            </View>
+          </>
+        ) : (
+          <AuthInput
+            placeholder={t("auth.codePlaceholder")}
+            value={code}
+            onChangeText={setCode}
+            keyboardType="number-pad"
+            textContentType="oneTimeCode"
+            autoComplete="one-time-code"
+            rightElement={
+              <Pressable
+                style={s.sendBtn}
+                onPress={onSendCode}
+                disabled={sendCode.running || sendCode.sending}
+                hitSlop={8}
+              >
+                <Text
+                  style={[
+                    s.sendBtnText,
+                    {
+                      color:
+                        sendCode.running || sendCode.sending
+                          ? colors.textSecondary
+                          : colors.primary,
+                    },
+                  ]}
+                >
+                  {sendCode.running
+                    ? t("auth.resendCodeIn", { seconds: sendCode.seconds })
+                    : sendCode.sending
+                      ? t("auth.sendingCode", { defaultValue: "发送中…" })
+                      : t("auth.sendCode")}
+                </Text>
+              </Pressable>
+            }
+          />
+        )}
+      </View>
 
-        {/* Offline / Error */}
-        {isOffline ? (
-          <Text style={[s.error, d.error]}>{t("auth.offlineHint")}</Text>
-        ) : null}
-        {sendCode.error ? (
-          <Text style={[s.error, d.error]}>{sendCode.error}</Text>
-        ) : null}
-        {error ? <Text style={[s.error, d.error]}>{error}</Text> : null}
+      {/* Offline / Error */}
+      {isOffline ? (
+        <Text style={[s.error, d.error]}>{t("auth.offlineHint")}</Text>
+      ) : null}
+      {sendCode.error ? (
+        <Text style={[s.error, d.error]}>{sendCode.error}</Text>
+      ) : null}
+      {error ? <Text style={[s.error, d.error]}>{error}</Text> : null}
 
-        {/* Login button */}
-        <Pressable
-          style={[s.loginBtn, d.loginBtn, submitting && s.btnDisabled]}
-          onPress={onSubmit}
-          disabled={submitting}
-        >
-          {submitting ? (
-            <ActivityIndicator color={colors.white} />
-          ) : (
-            <Text style={[s.loginBtnText, d.loginBtnText]}>{t("auth.login")}</Text>
-          )}
-        </Pressable>
+      {/* Login button */}
+      <Pressable
+        style={[s.loginBtn, d.loginBtn, submitting && s.btnDisabled]}
+        onPress={onSubmit}
+        disabled={submitting}
+      >
+        {submitting ? (
+          <ActivityIndicator color={colors.white} />
+        ) : (
+          <Text style={[s.loginBtnText, d.loginBtnText]}>{t("auth.login")}</Text>
+        )}
+      </Pressable>
 
-        {/* Register link */}
-        <View style={s.registerRow}>
-          <Text style={[s.registerHint, d.registerHint]}>
-            {t("auth.noAccount")}
-          </Text>
-          <Link href="/(auth)/register" asChild>
-            <Pressable>
-              <Text style={[s.registerLink, d.registerLink]}>
-                {t("auth.registerNow")}
-              </Text>
-            </Pressable>
-          </Link>
-        </View>
+      {/* Register link */}
+      <View style={s.registerRow}>
+        <Text style={[s.registerHint, d.registerHint]}>
+          {t("auth.noAccount")}
+        </Text>
+        <Link href="/(auth)/register" asChild>
+          <Pressable>
+            <Text style={[s.registerLink, d.registerLink]}>
+              {t("auth.registerNow")}
+            </Text>
+          </Pressable>
+        </Link>
       </View>
     </ScrollView>
   );
