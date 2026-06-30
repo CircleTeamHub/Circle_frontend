@@ -12,8 +12,8 @@ test('registration authenticates with returned tokens and starts onboarding', ()
 
   assert.match(source, /const tokens = await registerRequest\(/);
   assert.match(source, /await onAuthSuccess\(tokens,\s*\{[\s\S]*onboardingRequired:\s*true/);
-  assert.match(source, /redirectHref:\s*['"]\/\(onboarding\)\/profile['"]/);
   assert.match(source, /startAppServices:\s*false/);
+  assert.doesNotMatch(source, /redirectHref:/);
   assert.match(source, /if \(options\.startAppServices !== false\)/);
   assert.doesNotMatch(source, /pathname:\s*['"]\/\(auth\)\/login['"][\s\S]*email:\s*normalizedEmail/);
 });
