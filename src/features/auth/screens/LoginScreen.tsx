@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { AuthInput } from "@/components/ui/auth-input";
 import { useAuth } from "@/hooks/use-auth";
 import { useSendEmailCode } from "@/hooks/use-send-email-code";
@@ -9,7 +10,6 @@ import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -21,8 +21,6 @@ import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 type Mode = "password" | "code";
 
-const APP_ICON_SOURCE = require("../../../../assets/images/icon.png");
-
 const s = StyleSheet.create({
   scroll: { flex: 1 },
   container: {
@@ -32,20 +30,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
     gap: 28,
   },
-  logoShell: {
-    width: 104,
-    height: 104,
-    borderRadius: 28,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-  },
-  logo: {
-    width: 72,
-    height: 72,
-    borderRadius: Radius.lg,
-    overflow: "hidden",
-  },
+  logoPlane: { marginBottom: -4 },
   headingGroup: { alignItems: "center", gap: Spacing.sm, width: "100%" },
   heading: { fontSize: 28, fontWeight: "700" },
   subtitle: { ...Typography.body },
@@ -108,10 +93,6 @@ export default function LoginScreen() {
   const d = useMemo(
     () => ({
       scroll: { backgroundColor: colors.background },
-      logoShell: {
-        backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
-      },
       heading: { color: colors.text },
       subtitle: { color: colors.textSecondary },
       formPanel: {
@@ -166,14 +147,13 @@ export default function LoginScreen() {
       {...keyboardDismissOnDragProps}
     >
       {/* Logo */}
-      <View style={[s.logoShell, d.logoShell]}>
-        <Image
-          source={APP_ICON_SOURCE}
-          style={s.logo}
-          resizeMode="contain"
-          accessibilityLabel="风信"
-        />
-      </View>
+      <Ionicons
+        name="paper-plane"
+        size={76}
+        color={colors.primary}
+        style={s.logoPlane}
+        accessibilityLabel="风信"
+      />
 
       {/* Heading */}
       <View style={s.headingGroup}>
