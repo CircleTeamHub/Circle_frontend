@@ -32,6 +32,7 @@ import {
   type MessageItem,
 } from '@openim/rn-client-sdk';
 import type { ChatMessage } from '@/types';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 type PendingForward = {
   message: ChatMessage;
@@ -263,7 +264,7 @@ export default function ForwardPickerScreen() {
         data={filtered}
         keyExtractor={(item) => item.conversationID}
         contentContainerStyle={[s.listContent, { paddingBottom: insets.bottom + Spacing.xl }]}
-        keyboardShouldPersistTaps="handled"
+        {...keyboardDismissOnDragProps}
         renderItem={({ item }) => {
           const busy = sendingID === item.conversationID;
           return (

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -10,6 +11,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 export interface CreateTempChatPayload {
@@ -52,6 +54,9 @@ const s = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     alignSelf: 'center',
+  },
+  content: {
+    gap: Spacing.lg,
   },
   field: {
     gap: Spacing.sm,
@@ -186,66 +191,72 @@ export default function CreateTempChatModal({
       backdropStyle={d.backdrop}
       sheetStyle={[s.card, d.card]}
     >
-      <View style={[s.handle, d.handle]} />
-      <Text style={d.heading}>{t('tempChats.createTitle')}</Text>
-
-      <View style={s.field}>
-        <Text style={d.label}>{t('tempChats.titleLabel')}</Text>
-        <TextInput
-          style={[s.titleInput, d.titleInput]}
-          placeholder={t('tempChats.titlePlaceholder')}
-          placeholderTextColor={colors.textSecondary}
-          value={title}
-          onChangeText={setTitle}
-          maxLength={30}
-        />
-      </View>
-
-      <View style={s.field}>
-        <Text style={d.label}>{t('tempChats.durationLabel')}</Text>
-        <View style={s.chipRow}>
-          {DURATION_OPTIONS.map((option) =>
-            renderChip(
-              t(option.labelKey),
-              ttlMinutes === option.minutes,
-              () => setTtlMinutes(option.minutes),
-              option.minutes,
-            ),
-          )}
-        </View>
-      </View>
-
-      <View style={s.field}>
-        <Text style={d.label}>{t('tempChats.membersLabel')}</Text>
-        <View style={s.chipRow}>
-          {MEMBER_OPTIONS.map((count) =>
-            renderChip(
-              t('tempChats.membersUnit', { count }),
-              maxMembers === count,
-              () => setMaxMembers(count),
-              count,
-            ),
-          )}
-        </View>
-      </View>
-
-      <Pressable
-        style={[
-          s.submitButton,
-          {
-            backgroundColor: colors.primary,
-            opacity: creating ? 0.6 : 1,
-          },
-        ]}
-        onPress={handleSubmit}
-        disabled={creating}
+      <ScrollView
+        contentContainerStyle={s.content}
+        showsVerticalScrollIndicator={false}
+        {...keyboardDismissOnDragProps}
       >
-        {creating ? (
-          <ActivityIndicator color={colors.white} />
-        ) : (
-          <Text style={d.submitText}>{t('tempChats.submit')}</Text>
-        )}
-      </Pressable>
+        <View style={[s.handle, d.handle]} />
+        <Text style={d.heading}>{t('tempChats.createTitle')}</Text>
+
+        <View style={s.field}>
+          <Text style={d.label}>{t('tempChats.titleLabel')}</Text>
+          <TextInput
+            style={[s.titleInput, d.titleInput]}
+            placeholder={t('tempChats.titlePlaceholder')}
+            placeholderTextColor={colors.textSecondary}
+            value={title}
+            onChangeText={setTitle}
+            maxLength={30}
+          />
+        </View>
+
+        <View style={s.field}>
+          <Text style={d.label}>{t('tempChats.durationLabel')}</Text>
+          <View style={s.chipRow}>
+            {DURATION_OPTIONS.map((option) =>
+              renderChip(
+                t(option.labelKey),
+                ttlMinutes === option.minutes,
+                () => setTtlMinutes(option.minutes),
+                option.minutes,
+              ),
+            )}
+          </View>
+        </View>
+
+        <View style={s.field}>
+          <Text style={d.label}>{t('tempChats.membersLabel')}</Text>
+          <View style={s.chipRow}>
+            {MEMBER_OPTIONS.map((count) =>
+              renderChip(
+                t('tempChats.membersUnit', { count }),
+                maxMembers === count,
+                () => setMaxMembers(count),
+                count,
+              ),
+            )}
+          </View>
+        </View>
+
+        <Pressable
+          style={[
+            s.submitButton,
+            {
+              backgroundColor: colors.primary,
+              opacity: creating ? 0.6 : 1,
+            },
+          ]}
+          onPress={handleSubmit}
+          disabled={creating}
+        >
+          {creating ? (
+            <ActivityIndicator color={colors.white} />
+          ) : (
+            <Text style={d.submitText}>{t('tempChats.submit')}</Text>
+          )}
+        </Pressable>
+      </ScrollView>
     </BottomSheetModal>
   );
 }

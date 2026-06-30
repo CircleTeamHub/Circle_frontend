@@ -22,6 +22,7 @@ import {
 } from '@/services/api/friends';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useAuthStore } from '@/stores/authStore';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const PLACEHOLDER_ROW_KEYS = ['remark', 'photoRemark', 'friendPermissions'] as const;
 
@@ -265,6 +266,7 @@ export default function SendFriendRequestScreen() {
       <ScrollView
         contentContainerStyle={s.content}
         showsVerticalScrollIndicator={false}
+        {...keyboardDismissOnDragProps}
       >
         <View style={[s.card, d.card]}>
           <Text style={[s.cardTitle, d.cardTitle]}>{targetName}</Text>

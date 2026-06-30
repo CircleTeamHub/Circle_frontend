@@ -17,6 +17,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 type Mode = "password" | "code";
 
@@ -130,7 +131,7 @@ export default function LoginScreen() {
         s.container,
         { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 24 },
       ]}
-      keyboardShouldPersistTaps="handled"
+        {...keyboardDismissOnDragProps}
     >
       {/* Logo */}
       <Image

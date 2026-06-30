@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
 import { Divider } from '@/components/ui/divider';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { NavHeader } from '@/components/ui/nav-header';
 import { mapConversationItemToUI } from '@/im/mappers';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
@@ -300,7 +301,7 @@ export default function SearchScreen() {
         }
         contentContainerStyle={[s.listContent, d.listContent]}
         stickySectionHeadersEnabled={false}
-        keyboardShouldPersistTaps="handled"
+        {...keyboardDismissOnDragProps}
         ListHeaderComponent={
           <View style={s.headerContent}>
             <View style={[s.searchBox, d.searchBox]}>

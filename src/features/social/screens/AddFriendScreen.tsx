@@ -1,4 +1,5 @@
 import { Avatar } from '@/components/ui/avatar';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { NavHeader } from '@/components/ui/nav-header';
 import { getUserProfileHref } from '@/features/user/utils/routes';
 import {
@@ -14,6 +15,7 @@ import {
   ActivityIndicator,
   Keyboard,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -24,8 +26,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 type SearchState = 'idle' | 'loading' | 'result' | 'not-found' | 'error';
 
 const s = StyleSheet.create({
-  content: {
+  scroll: {
     flex: 1,
+  },
+  content: {
+    flexGrow: 1,
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.xl,
     gap: Spacing.lg,
@@ -164,7 +169,12 @@ export default function AddFriendScreen() {
       <NavHeader
         title={t('addFriend.title', { defaultValue: '添加好友' })}
       />
-      <View style={s.content}>
+      <ScrollView
+        style={s.scroll}
+        contentContainerStyle={s.content}
+        showsVerticalScrollIndicator={false}
+        {...keyboardDismissOnDragProps}
+      >
         <View style={s.searchRow}>
           <View style={[s.searchInput, d.searchInput]}>
             <Ionicons name="search" size={18} color={colors.textSecondary} />
@@ -237,7 +247,7 @@ export default function AddFriendScreen() {
             </Pressable>
           ) : null}
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 }

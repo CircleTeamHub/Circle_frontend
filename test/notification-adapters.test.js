@@ -184,3 +184,27 @@ test("interactive: circle signup notification uses megaphone icon and summary", 
   assert.equal(row.icon, "megaphone-outline");
   assert.equal(row.summary, "notifications.summary.CIRCLE_POST_SIGNUP_CREATED");
 });
+
+test("interactive: auto-ended circle post notification routes to signup management", () => {
+  const { mapNotificationToRow } = load(
+    "src/features/notifications/utils/notification-summary.ts",
+  );
+  const row = mapNotificationToRow(
+    {
+      id: "n5",
+      type: "CIRCLE_POST_AUTO_ENDED",
+      content: "",
+      read: false,
+      createdAt: "2026-06-05T00:00:00Z",
+      fromUser: { id: "author-1", nickname: "Host", avatarUrl: null },
+      fromTrace: null,
+      fromReply: null,
+      fromCircle: null,
+      fromInvitation: null,
+      fromCirclePost: { id: "p1", excerpt: "Hiking", firstImage: null },
+    },
+    t,
+  );
+  assert.equal(row.icon, "megaphone-outline");
+  assert.equal(row.summary, "notifications.summary.CIRCLE_POST_AUTO_ENDED");
+});

@@ -26,6 +26,7 @@ import {
 } from '@/features/discover/utils/circle-invite';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
   container: { flex: 1 },
@@ -397,7 +398,7 @@ export default function InviteToCircleScreen() {
           renderItem={renderItem}
           ItemSeparatorComponent={Sep}
           contentContainerStyle={s.listContent}
-          keyboardShouldPersistTaps="handled"
+        {...keyboardDismissOnDragProps}
           refreshing={refreshing}
           onRefresh={handleRefreshInvitees}
         />

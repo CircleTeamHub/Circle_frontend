@@ -7,6 +7,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -19,6 +20,7 @@ import { fromImUserId } from '@/im/client';
 import { fetchWallet, sendCoinGift } from '@/services/api/coin';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 export default function TransferComposerScreen() {
   const router = useRouter();
@@ -134,11 +136,11 @@ export default function TransferComposerScreen() {
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View
-        style={[
-          s.container,
-          { backgroundColor: colors.background, paddingTop: insets.top },
-        ]}
+      <ScrollView
+        style={[s.scroll, { backgroundColor: colors.background }]}
+        contentContainerStyle={[s.container, { paddingTop: insets.top }]}
+        showsVerticalScrollIndicator={false}
+        {...keyboardDismissOnDragProps}
       >
         <View style={s.header}>
           <Pressable hitSlop={8} onPress={() => router.back()}>
@@ -241,13 +243,14 @@ export default function TransferComposerScreen() {
             {submitting ? '转账中...' : '确认转账'}
           </Text>
         </Pressable>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: Spacing.lg },
+  scroll: { flex: 1 },
+  container: { flexGrow: 1, paddingHorizontal: Spacing.lg },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

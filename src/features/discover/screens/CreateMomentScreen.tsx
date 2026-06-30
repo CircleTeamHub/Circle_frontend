@@ -25,6 +25,7 @@ import {
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
 import { useMomentsStore } from '@/features/discover/store/use-moments-store';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
   scroll: { flex: 1, paddingHorizontal: Spacing.lg },
@@ -203,7 +204,7 @@ export default function CreateMomentScreen() {
       <ScrollView
         style={s.scroll}
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+        {...keyboardDismissOnDragProps}
       >
         <View style={[s.inputBox, d.inputBox]}>
           <TextInput

@@ -16,6 +16,10 @@ function loadUploadApi() {
     fileName: filePath,
   }).outputText;
 
+  let rnfsUploadCalled = false;
+  let stoppedUploadJobId = null;
+  let rnfsShouldHang = false;
+
   const context = {
     module: { exports: {} },
     exports: {},
@@ -81,15 +85,24 @@ function loadUploadApi() {
         return {
           __esModule: true,
           default: {
-            uploadFiles: (options) => ({
-              jobId: 1,
-              promise: Promise.resolve({
-                statusCode: 200,
-                headers: {},
-                body: '',
-                mockedUploadOptions: options,
-              }),
-            }),
+            uploadFiles: (options) => {
+              rnfsUploadCalled = true;
+              if (rnfsShouldHang) {
+                return { jobId: 7, promise: new Promise(() => {}) };
+              }
+              return {
+                jobId: 7,
+                promise: Promise.resolve({
+                  statusCode: 200,
+                  headers: {},
+                  body: '',
+                  mockedUploadOptions: options,
+                }),
+              };
+            },
+            stopUpload: (jobId) => {
+              stoppedUploadJobId = jobId;
+            },
           },
         };
       }
@@ -99,6 +112,11 @@ function loadUploadApi() {
   context.exports = context.module.exports;
 
   vm.runInNewContext(transpiled, context, { filename: filePath });
+  context.module.exports.__getRnfsUploadCalled = () => rnfsUploadCalled;
+  context.module.exports.__setRnfsShouldHang = (value) => {
+    rnfsShouldHang = value;
+  };
+  context.module.exports.__getStoppedUploadJobId = () => stoppedUploadJobId;
   return context.module.exports;
 }
 
@@ -119,17 +137,17 @@ test('upload helpers sanitize filenames and infer supported content types', () =
   );
 });
 
-test('upload.ts does not dynamically import react-native-fs on send path', () => {
+test('upload.ts keeps react-native-fs available for cancellable Android local uploads', () => {
   const source = fs.readFileSync(
     path.join(process.cwd(), 'src/services/api/upload.ts'),
     'utf8',
   );
 
-  assert.doesNotMatch(source, /import\(['"]react-native-fs['"]\)/);
-  assert.match(source, /require\(['"]react-native-fs['"]\)/);
+  assert.match(source, /react-native-fs/);
+  assert.match(source, /stopUpload/);
 });
 
-test('android rejects localhost presigned upload urls', async () => {
+test('android rejects localhost presigned upload urls instead of rewriting the signed host', async () => {
   const { requestUploadPresign } = loadUploadApi();
 
   await assert.rejects(
@@ -139,15 +157,15 @@ test('android rejects localhost presigned upload urls', async () => {
         contentType: 'image/jpeg',
         folder: 'avatars',
       }),
-    /localhost/,
+    /localhost.*403/,
   );
 });
 
-test('local file upload delegates to expo-file-system uploadAsync', async () => {
-  const { uploadLocalFileToPresignedUrl } = loadUploadApi();
+test('android local file upload preserves the presigned host and delegates to cancellable RNFS upload', async () => {
+  const { uploadLocalFileToPresignedUrl, __getRnfsUploadCalled } = loadUploadApi();
 
   const response = await uploadLocalFileToPresignedUrl(
-    'http://localhost:9000/circle/avatars/test.jpeg?signature=123',
+    'http://10.0.0.195:9000/circle/avatars/test.jpeg?signature=123',
     'image/jpeg',
     'file:///data/user/0/com.yiboding.circleim/cache/ImagePicker/test.jpeg',
   );
@@ -155,7 +173,7 @@ test('local file upload delegates to expo-file-system uploadAsync', async () => 
   assert.deepEqual(
     JSON.parse(JSON.stringify(response.mockedUploadOptions)),
     {
-      toUrl: 'http://localhost:9000/circle/avatars/test.jpeg?signature=123',
+      toUrl: 'http://10.0.0.195:9000/circle/avatars/test.jpeg?signature=123',
       binaryStreamOnly: true,
       files: [
         {
@@ -170,5 +188,43 @@ test('local file upload delegates to expo-file-system uploadAsync', async () => 
       },
       method: 'PUT',
     },
+  );
+  assert.equal(__getRnfsUploadCalled(), true);
+});
+
+test('android local file upload stops the native RNFS job when the timeout wins', async () => {
+  const {
+    uploadLocalFileToPresignedUrl,
+    __setRnfsShouldHang,
+    __getStoppedUploadJobId,
+  } = loadUploadApi();
+
+  __setRnfsShouldHang(true);
+
+  await assert.rejects(
+    () =>
+      uploadLocalFileToPresignedUrl(
+        'http://10.0.0.195:9000/circle/avatars/test.jpeg?signature=123',
+        'image/jpeg',
+        'file:///data/user/0/com.yiboding.circleim/cache/ImagePicker/test.jpeg',
+        1,
+      ),
+    /上传超时/,
+  );
+
+  assert.equal(__getStoppedUploadJobId(), 7);
+});
+
+test('local file upload rejects localhost presigned urls before native upload', async () => {
+  const { uploadLocalFileToPresignedUrl } = loadUploadApi();
+
+  await assert.rejects(
+    () =>
+      uploadLocalFileToPresignedUrl(
+        'http://localhost:9000/circle/avatars/test.jpeg?signature=123',
+        'image/jpeg',
+        'file:///data/user/0/com.yiboding.circleim/cache/ImagePicker/test.jpeg',
+      ),
+    /localhost.*403/,
   );
 });

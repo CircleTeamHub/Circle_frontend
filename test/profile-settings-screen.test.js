@@ -426,6 +426,33 @@ test("profile settings screen no longer owns the language picker sheet", () => {
   assert.doesNotMatch(source, /handleToggleLanguage/);
 });
 
+test("account actions live at the bottom of the app settings home, not the profile detail page", () => {
+  const profileSource = fs.readFileSync(
+    path.join(process.cwd(), "src/features/profile/screens/SettingsScreen.tsx"),
+    "utf8",
+  );
+  const appSettingsSource = fs.readFileSync(
+    path.join(
+      process.cwd(),
+      "src/features/profile/screens/AppSettingsScreen.tsx",
+    ),
+    "utf8",
+  );
+
+  assert.doesNotMatch(profileSource, /useAuth\(\)/);
+  assert.doesNotMatch(profileSource, /switchAccount/);
+  assert.doesNotMatch(profileSource, /settingsPage\.switchAccount/);
+  assert.doesNotMatch(profileSource, /settingsPage\.logout/);
+
+  assert.match(appSettingsSource, /useAuth\(\)/);
+  assert.match(appSettingsSource, /const \{ logout, switchAccount, submitting \} = useAuth\(\)/);
+  assert.match(appSettingsSource, /onPress=\{switchAccount\}/);
+  assert.match(appSettingsSource, /onPress=\{logout\}/);
+  assert.match(appSettingsSource, /settingsPage\.switchAccount/);
+  assert.match(appSettingsSource, /settingsPage\.logout/);
+  assert.match(appSettingsSource, /style=\{s\.footer\}/);
+});
+
 test("app settings rows route to their dedicated detail pages", () => {
   const source = fs.readFileSync(
     path.join(
