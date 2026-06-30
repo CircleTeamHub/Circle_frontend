@@ -128,6 +128,7 @@
     "loadFailed": "会话加载失败：{{error}}",
     "noConversations": "暂无会话",
     "swipeMarkRead": "标记已读",
+    "swipeMarkUnread": "标记未读",
     "swipeHide": "隐藏聊天",
     "swipeDelete": "删除",
     "deleteChat": "删除聊天",
@@ -199,7 +200,20 @@
       "collectedHint": "可在我的收藏中查看",
       "collectFailed": "收藏失败",
       "collectFailedHint": "请稍后重试",
-      "copy": "复制"
+      "copy": "复制",
+      "quote": "引用",
+      "delete": "删除",
+      "deleteConfirm": "删除这条本地消息？",
+      "deleteFailed": "删除失败",
+      "deleteFailedHint": "请稍后重试",
+      "report": "举报",
+      "save": "保存",
+      "saveUnsupported": "该消息暂不支持保存",
+      "saveFailed": "保存失败",
+      "saveFailedHint": "请稍后重试"
+    },
+    "mentions": {
+      "empty": "暂无可 @ 的成员"
     },
     "forward": {
       "title": "选择转发对象",
@@ -1368,7 +1382,9 @@
     },
     "detail": {
       "loadFailed": "笔记加载失败，请稍后重试",
-      "notFound": "笔记不存在"
+      "notFound": "笔记不存在",
+      "exportFailedTitle": "导出失败",
+      "exportFailedMessage": "请稍后重试"
     },
     "edit": {
       "done": "完成",

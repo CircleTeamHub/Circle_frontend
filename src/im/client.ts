@@ -654,6 +654,77 @@ export async function sendTextMessage(params: {
   return sentMessage;
 }
 
+export async function sendTextAtMessage(params: {
+  sourceID: string;
+  sessionType: SessionType;
+  text: string;
+  atUserList: string[];
+  atUsersInfo?: { userID: string; nickname: string }[];
+}) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await waitForOpenIMConnectionReady();
+
+  const message = await OpenIMSDK.createTextAtMessage({
+    text: params.text,
+    atUserIDList: params.atUserList,
+    atUsersInfo: params.atUsersInfo?.map((item) => ({
+      atUserID: item.userID,
+      groupNickname: item.nickname,
+    })),
+  });
+  const isSingle = params.sessionType === SessionType.Single;
+  return reportSend({
+    recvID: isSingle ? toImUserId(params.sourceID) : '',
+    groupID: !isSingle ? params.sourceID : '',
+    message,
+    offlinePushInfo: {
+      title: '新消息',
+      desc: params.text,
+      ex: '',
+      iOSPushSound: 'default',
+      iOSBadgeCount: true,
+    },
+  });
+}
+
+export async function sendQuoteMessage(params: {
+  sourceID: string;
+  sessionType: SessionType;
+  text: string;
+  message: MessageItem;
+}) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await waitForOpenIMConnectionReady();
+
+  const message = await OpenIMSDK.createQuoteMessage({
+    text: params.text,
+    message: params.message,
+  });
+  const isSingle = params.sessionType === SessionType.Single;
+  return reportSend({
+    recvID: isSingle ? toImUserId(params.sourceID) : '',
+    groupID: !isSingle ? params.sourceID : '',
+    message,
+    offlinePushInfo: {
+      title: '新消息',
+      desc: params.text,
+      ex: '',
+      iOSPushSound: 'default',
+      iOSBadgeCount: true,
+    },
+  });
+}
+
 export async function sendImageMessage(params: {
   sourceID: string;
   sessionType: SessionType;
@@ -1248,6 +1319,19 @@ export async function deleteConversation(conversationID: string) {
   useIMStore.getState().setMessages(conversationID, []);
   await loadConversationList().catch(() => {
     // 会话已删除，列表刷新失败时等待 SDK 推送同步。
+  });
+}
+
+export async function deleteLocalMessage(conversationID: string, clientMsgID: string) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await OpenIMSDK.deleteMessageFromLocalStorage({ conversationID, clientMsgID });
+  await loadConversationMessages(conversationID).catch(() => {
+    // 删除已完成；刷新失败时等待下一次进入会话重新拉取本地历史。
   });
 }
 

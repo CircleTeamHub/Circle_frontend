@@ -33,6 +33,13 @@ const sReceived = StyleSheet.create({
   receivedAvatarSlot: {
     paddingBottom: 2,
   },
+  quoteBox: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    marginBottom: 6,
+    maxWidth: 240,
+  },
 });
 
 export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
@@ -60,6 +67,13 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
         ...Typography.tinyRegular,
         marginTop: Spacing.xs,
       },
+      quoteBox: {
+        backgroundColor: colors.surface,
+      },
+      quoteText: {
+        color: colors.textSecondary,
+        ...Typography.tinyRegular,
+      },
     }),
     [colors],
   );
@@ -84,6 +98,11 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
       )}
       <View style={sReceived.receivedContent}>
         <View style={[sReceived.receivedBubble, d.receivedBubble]}>
+          {message.quotedText ? (
+            <View style={[sReceived.quoteBox, d.quoteBox]}>
+              <Text style={d.quoteText} numberOfLines={2}>{message.quotedText}</Text>
+            </View>
+          ) : null}
           <Text style={d.bubbleText}>{message.text}</Text>
         </View>
         {message.time ? (

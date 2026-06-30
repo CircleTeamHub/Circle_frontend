@@ -25,6 +25,8 @@ interface MessageActionMenuProps {
 }
 
 const ITEM_WIDTH = 60;
+const VERTICAL_WIDTH = 180;
+const VERTICAL_ITEM_HEIGHT = 50;
 const H_PADDING = Spacing.xs;
 const MENU_HEIGHT = 62;
 const SCREEN_MARGIN = Spacing.md;
@@ -42,6 +44,18 @@ export function MessageActionMenu({
 
   const layout = useMemo(() => {
     if (!anchor || actions.length === 0) return null;
+    const vertical = actions.length > 4;
+    if (vertical) {
+      const menuW = Math.min(VERTICAL_WIDTH, screenW - SCREEN_MARGIN * 2);
+      const left = Math.max(
+        SCREEN_MARGIN,
+        Math.min(anchor.x - menuW / 2, screenW - menuW - SCREEN_MARGIN),
+      );
+      const height = actions.length * VERTICAL_ITEM_HEIGHT + H_PADDING * 2;
+      const placeAbove = anchor.y > height + GAP + 40;
+      const top = placeAbove ? anchor.y - height - GAP : anchor.y + GAP;
+      return { left, top, menuW, vertical };
+    }
     const menuW = Math.min(
       actions.length * ITEM_WIDTH + H_PADDING * 2,
       screenW - SCREEN_MARGIN * 2,
@@ -53,7 +67,7 @@ export function MessageActionMenu({
     // Prefer above the bubble; flip below when too close to the top.
     const placeAbove = anchor.y > MENU_HEIGHT + GAP + 80;
     const top = placeAbove ? anchor.y - MENU_HEIGHT - GAP : anchor.y + GAP;
-    return { left, top, menuW };
+    return { left, top, menuW, vertical };
   }, [anchor, actions.length, screenW]);
 
   if (!anchor || !layout) return null;
@@ -64,6 +78,7 @@ export function MessageActionMenu({
         <View
           style={[
             s.menu,
+            layout.vertical ? s.menuVertical : null,
             {
               left: layout.left,
               top: layout.top,
@@ -75,7 +90,7 @@ export function MessageActionMenu({
           {actions.map((action) => (
             <Pressable
               key={action.key}
-              style={s.item}
+              style={layout.vertical ? s.itemVertical : s.item}
               onPress={() => {
                 onDismiss();
                 action.onPress();
@@ -106,6 +121,10 @@ const s = StyleSheet.create({
     paddingVertical: Spacing.sm,
     paddingHorizontal: H_PADDING,
   },
+  menuVertical: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+  },
   item: {
     flex: 1,
     alignItems: 'center',
@@ -114,4 +133,11 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.xs,
   },
   label: { ...Typography.tiny },
+  itemVertical: {
+    height: VERTICAL_ITEM_HEIGHT,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    paddingHorizontal: Spacing.md,
+  },
 });

@@ -128,6 +128,7 @@
     "loadFailed": "Failed to load conversations: {{error}}",
     "noConversations": "No conversations",
     "swipeMarkRead": "Mark Read",
+    "swipeMarkUnread": "Mark Unread",
     "swipeHide": "Hide Chat",
     "swipeDelete": "Delete",
     "deleteChat": "Delete Chat",
@@ -199,7 +200,20 @@
       "collectedHint": "View it in My Collections",
       "collectFailed": "Save failed",
       "collectFailedHint": "Please try again later",
-      "copy": "Copy"
+      "copy": "Copy",
+      "quote": "Quote",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this local message?",
+      "deleteFailed": "Delete failed",
+      "deleteFailedHint": "Please try again later",
+      "report": "Report",
+      "save": "Save",
+      "saveUnsupported": "This message cannot be saved yet",
+      "saveFailed": "Save failed",
+      "saveFailedHint": "Please try again later"
+    },
+    "mentions": {
+      "empty": "No members available to mention"
     },
     "forward": {
       "title": "Choose a chat",
@@ -1371,7 +1385,9 @@
     },
     "detail": {
       "loadFailed": "Failed to load note, please try again",
-      "notFound": "Note not found"
+      "notFound": "Note not found",
+      "exportFailedTitle": "Export failed",
+      "exportFailedMessage": "Please try again later"
     },
     "edit": {
       "done": "Done",
