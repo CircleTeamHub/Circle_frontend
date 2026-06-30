@@ -12,6 +12,18 @@ test('fetchNotes calls GET /note', () => {
   assert.match(src, /\/note/);
 });
 
+test('fetchNotes exposes backend section summary flags used by shared note cards', () => {
+  const typesSource = read('src/features/notes/types.ts');
+  const payloadSource = read('src/features/chat/utils/note-card-payload.ts');
+
+  assert.match(typesSource, /hasText\?: boolean/);
+  assert.match(typesSource, /showcaseCount\?: number/);
+  assert.match(typesSource, /hasLocation\?: boolean/);
+  assert.match(payloadSource, /typeof note\.hasText === 'boolean'/);
+  assert.match(payloadSource, /typeof note\.showcaseCount === 'number'/);
+  assert.match(payloadSource, /typeof note\.hasLocation === 'boolean'/);
+});
+
 test('fetchNoteDetail calls GET /note/:id', () => {
   const src = read('src/services/api/notes.ts');
   assert.match(src, /fetchNoteDetail/);
@@ -50,6 +62,23 @@ test('createNoteShareLink posts the current notes view to /note/share-links', ()
   assert.match(typesSource, /NoteShareLink/);
   assert.match(src, /createNoteShareLink/);
   assert.match(src, /\/note\/share-links/);
+  assert.match(src, /method:\s*'POST'/);
+  assert.match(src, /body:\s*input/);
+});
+
+test('createNoteExport posts export requests to /note/:id/exports and returns downloadable metadata', () => {
+  const src = read('src/services/api/notes.ts');
+  const typesSource = read('src/features/notes/types.ts');
+
+  assert.match(typesSource, /export type NoteExportFormat = 'IMAGE' \| 'PDF' \| 'IMAGES' \| 'VIDEOS'/);
+  assert.match(typesSource, /interface CreateNoteExportInput/);
+  assert.match(typesSource, /interface NoteExportResult/);
+  assert.match(typesSource, /url: string/);
+  assert.match(typesSource, /filename: string/);
+  assert.match(typesSource, /mimeType: string/);
+  assert.match(typesSource, /expiresAt: string \| null/);
+  assert.match(src, /createNoteExport/);
+  assert.match(src, /`\/note\/\$\{noteId\}\/exports`/);
   assert.match(src, /method:\s*'POST'/);
   assert.match(src, /body:\s*input/);
 });
