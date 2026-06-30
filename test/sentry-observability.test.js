@@ -127,6 +127,37 @@ test("reportError forwards to captureException with extra context", () => {
   assert.equal(calls[0][1].extra.status, 500);
 });
 
+test("reportError promotes API context to tags and fingerprint", () => {
+  const { reportError } = loadSentry();
+  const calls = [];
+  const client = { captureException: (e, ctx) => calls.push([e, ctx]) };
+
+  reportError(new Error("Database error"), {
+    endpointPath: "/note/:id/exports",
+    queryKeys: ["ownerId"],
+    method: "POST",
+    status: 500,
+    apiCode: 10001,
+    failureKind: "api-code",
+  }, client);
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][1].tags.endpointPath, "/note/:id/exports");
+  assert.equal(calls[0][1].tags.method, "POST");
+  assert.equal(calls[0][1].tags.status, "500");
+  assert.equal(calls[0][1].tags.apiCode, "10001");
+  assert.equal(calls[0][1].tags.failureKind, "api-code");
+  assert.equal(calls[0][1].fingerprint.join("|"), [
+    "api",
+    "POST",
+    "/note/:id/exports",
+    "500",
+    "10001",
+    "api-code",
+  ].join("|"));
+  assert.equal(calls[0][1].tags.queryKeys, undefined);
+});
+
 test("reportError is a no-op by default when Sentry was not initialized", () => {
   const calls = [];
   const { reportError } = load("src/observability/sentry.ts", {
