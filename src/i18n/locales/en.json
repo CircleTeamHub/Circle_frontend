@@ -1390,15 +1390,42 @@
       "exportFailedMessage": "Please try again later"
     },
     "edit": {
+      "addImage": "Add image",
+      "addShowcaseImage": "Add showcase image",
+      "addShowcaseVideo": "Add showcase video",
+      "addVideo": "Add video",
       "done": "Done",
       "editTitle": "Edit note",
+      "emptySection": "No content yet",
       "groupsLabel": "Groups",
+      "imageItem": "Image",
+      "itemsCount": "items",
+      "locationAddressPlaceholder": "Address",
+      "locationPreviewTitle": "Selected location",
+      "locationTitlePlaceholder": "Location name",
       "newTitle": "New note",
       "noGroups": "Not in any group",
+      "pickLocation": "Choose location",
       "saveFailedMessage": "Failed to save, please try again",
       "saveFailedTitle": "Failed to save",
       "saving": "Saving...",
-      "titlePlaceholder": "Title"
+      "sections": {
+        "location": "Location",
+        "locationEmpty": "Optional",
+        "locationHint": "Add the place name and address",
+        "locationSelected": "Selected",
+        "media": "Images/Videos",
+        "mediaHint": "Main note media, images and videos supported",
+        "required": "Required",
+        "showcase": "Showcase",
+        "showcaseHint": "Media shown on the shared group card",
+        "text": "Text",
+        "textHint": "Edit text content only"
+      },
+      "titlePlaceholder": "Title",
+      "uploading": "Uploading...",
+      "useCurrentLocation": "Current location",
+      "videoItem": "Video"
     },
     "editor": {
       "mediaUploadFailedMessage": "Please try again",

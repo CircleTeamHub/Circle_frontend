@@ -1387,15 +1387,42 @@
       "exportFailedMessage": "请稍后重试"
     },
     "edit": {
+      "addImage": "添加图片",
+      "addShowcaseImage": "添加展示图片",
+      "addShowcaseVideo": "添加展示视频",
+      "addVideo": "添加视频",
       "done": "完成",
       "editTitle": "编辑笔记",
+      "emptySection": "暂无内容",
       "groupsLabel": "分组",
+      "imageItem": "图片",
+      "itemsCount": "项",
+      "locationAddressPlaceholder": "地址",
+      "locationPreviewTitle": "已选择位置",
+      "locationTitlePlaceholder": "位置名称",
       "newTitle": "新建笔记",
       "noGroups": "未加入任何分组",
+      "pickLocation": "选择位置",
       "saveFailedMessage": "保存失败，请稍后重试",
       "saveFailedTitle": "保存失败",
       "saving": "保存中...",
-      "titlePlaceholder": "标题"
+      "sections": {
+        "location": "地址",
+        "locationEmpty": "可选",
+        "locationHint": "填写位置名称和地址",
+        "locationSelected": "已选择",
+        "media": "图片/视频",
+        "mediaHint": "正文素材，支持图片和视频",
+        "required": "必填",
+        "showcase": "展示",
+        "showcaseHint": "群卡片展示区素材",
+        "text": "文字",
+        "textHint": "只编辑文字内容"
+      },
+      "titlePlaceholder": "标题",
+      "uploading": "上传中...",
+      "useCurrentLocation": "当前位置",
+      "videoItem": "视频"
     },
     "editor": {
       "mediaUploadFailedMessage": "请稍后重试",

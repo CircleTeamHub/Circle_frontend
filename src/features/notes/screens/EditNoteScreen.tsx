@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as ExpoLocation from 'expo-location';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -67,6 +68,11 @@ function buildLocationDraft(location: NoteSections['location'] | undefined): Loc
     latitude: typeof location?.latitude === 'number' ? location.latitude : null,
     longitude: typeof location?.longitude === 'number' ? location.longitude : null,
   };
+}
+
+function buildMapPreviewUrl(latitude: number, longitude: number) {
+  const center = `${latitude.toFixed(6)},${longitude.toFixed(6)}`;
+  return `https://staticmap.openstreetmap.de/staticmap.php?center=${encodeURIComponent(center)}&zoom=15&size=640x260&markers=${encodeURIComponent(`${center},red-pushpin`)}`;
 }
 
 function getTextOnlyBlocks(blocks: Record<string, unknown>[]) {
@@ -521,13 +527,32 @@ export default function EditNoteScreen() {
       groupChipText: { color: colors.textSecondary },
       groupChipTextActive: { color: colors.white },
       sectionTitle: { color: colors.textSecondary },
+      sectionShell: {
+        backgroundColor: colors.background,
+        borderTopColor: colors.surfaceBorder,
+        borderBottomColor: colors.surfaceBorder,
+      },
       sectionHeading: { color: colors.text },
       sectionSubtitle: { color: colors.textSecondary },
+      sectionCountPill: {
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
+      },
+      sectionHeaderMeta: { color: colors.textSecondary },
       sectionDivider: { borderTopColor: colors.surfaceBorder },
       mediaRow: { backgroundColor: colors.surface, borderColor: colors.surfaceBorder },
+      mediaPreviewTile: {
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
+      },
+      mediaBadge: { backgroundColor: colors.background },
       mediaTitle: { color: colors.text },
       mediaMeta: { color: colors.textSecondary },
       emptyText: { color: colors.textSecondary },
+      emptyTray: {
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
+      },
       sectionAction: { borderColor: colors.surfaceBorder },
       sectionActionText: { color: colors.text },
       locationInput: {
@@ -535,6 +560,11 @@ export default function EditNoteScreen() {
         borderColor: colors.surfaceBorder,
         color: colors.text,
       },
+      locationPreviewCard: {
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
+      },
+      locationCoordinatePill: { backgroundColor: colors.background },
     }),
     [colors],
   );
@@ -548,11 +578,16 @@ export default function EditNoteScreen() {
   }
 
   const isDoneDisabled = isSubmitting || !title.trim();
+  const locationPreviewUrl =
+    locationDraft.latitude != null && locationDraft.longitude != null
+      ? buildMapPreviewUrl(locationDraft.latitude, locationDraft.longitude)
+      : null;
 
   const renderSectionHeader = (
     icon: keyof typeof Ionicons.glyphMap,
     sectionTitle: string,
     subtitle?: string,
+    meta?: string,
   ) => (
     <View style={s.sectionHeader}>
       <View style={s.sectionHeaderIcon}>
@@ -564,6 +599,11 @@ export default function EditNoteScreen() {
           <Text style={[s.sectionSubtitle, d.sectionSubtitle]}>{subtitle}</Text>
         ) : null}
       </View>
+      {meta ? (
+        <View style={[s.sectionCountPill, d.sectionCountPill]}>
+          <Text style={[s.sectionHeaderMeta, d.sectionHeaderMeta]}>{meta}</Text>
+        </View>
+      ) : null}
     </View>
   );
 
@@ -592,40 +632,56 @@ export default function EditNoteScreen() {
   const renderMediaList = (items: CreateNoteMediaInput[], target: SectionMediaTarget) => {
     if (items.length === 0) {
       return (
-        <Text style={[s.emptySectionText, d.emptyText]}>
-          {t('notes.edit.emptySection', { defaultValue: '暂无内容' })}
-        </Text>
+        <View style={[s.emptyTray, d.emptyTray]}>
+          <Ionicons name="add-circle-outline" size={18} color={colors.textSecondary} />
+          <Text style={[s.emptySectionText, d.emptyText]}>
+            {t('notes.edit.emptySection', { defaultValue: '暂无内容' })}
+          </Text>
+        </View>
       );
     }
     return (
-      <View style={s.mediaList}>
-        {items.map((item) => (
-          <View key={`${item.objectKey}:${item.url}`} style={[s.mediaRow, d.mediaRow]}>
-            <View style={s.mediaIconBox}>
-              <Ionicons
-                name={item.type === 'VIDEO' ? 'videocam-outline' : 'image-outline'}
-                size={18}
-                color={colors.primary}
-              />
-            </View>
-            <View style={s.mediaInfo}>
-              <Text style={[s.mediaTitle, d.mediaTitle]} numberOfLines={1}>
-                {item.type === 'VIDEO'
-                  ? t('notes.edit.videoItem', { defaultValue: '视频' })
-                  : t('notes.edit.imageItem', { defaultValue: '图片' })}
-              </Text>
-              <Text style={[s.mediaMeta, d.mediaMeta]} numberOfLines={1}>
-                {item.mimeType ?? item.url}
-              </Text>
-            </View>
-            <Pressable
-              onPress={() => handleRemoveSectionMedia(target, item.url)}
-              hitSlop={8}
+      <View style={s.mediaPreviewGrid}>
+        {items.map((item) => {
+          const thumbUri = item.type === 'IMAGE' ? item.url : item.posterUrl;
+          return (
+            <View
+              key={`${item.objectKey}:${item.url}`}
+              style={[s.mediaPreviewTile, d.mediaPreviewTile]}
             >
-              <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
-            </Pressable>
-          </View>
-        ))}
+              {thumbUri ? (
+                <Image source={{ uri: thumbUri }} style={s.mediaThumb} contentFit="cover" />
+              ) : (
+                <View style={s.mediaThumbFallback}>
+                  <Ionicons
+                    name={item.type === 'VIDEO' ? 'videocam-outline' : 'image-outline'}
+                    size={24}
+                    color={colors.primary}
+                  />
+                </View>
+              )}
+              <View style={[s.mediaBadge, d.mediaBadge]}>
+                <Ionicons
+                  name={item.type === 'VIDEO' ? 'videocam' : 'image'}
+                  size={13}
+                  color={colors.text}
+                />
+                <Text style={[s.mediaMeta, d.mediaMeta]} numberOfLines={1}>
+                  {item.type === 'VIDEO'
+                    ? t('notes.edit.videoItem', { defaultValue: '视频' })
+                    : t('notes.edit.imageItem', { defaultValue: '图片' })}
+                </Text>
+              </View>
+              <Pressable
+                style={s.mediaRemoveButton}
+                onPress={() => handleRemoveSectionMedia(target, item.url)}
+                hitSlop={8}
+              >
+                <Ionicons name="close" size={15} color={colors.text} />
+              </Pressable>
+            </View>
+          );
+        })}
       </View>
     );
   };
@@ -714,11 +770,12 @@ export default function EditNoteScreen() {
           </View>
         </View>
 
-        <View style={[s.sectionBlock, d.sectionDivider]}>
+        <View style={[s.sectionBlock, s.sectionShell, d.sectionShell]}>
           {renderSectionHeader(
             'text-outline',
             t('notes.edit.sections.text', { defaultValue: '文字' }),
             t('notes.edit.sections.textHint', { defaultValue: '只编辑文字内容' }),
+            t('notes.edit.sections.required', { defaultValue: '必填' }),
           )}
           <View style={s.textEditorFrame}>
             {editorMounted ? (
@@ -731,10 +788,11 @@ export default function EditNoteScreen() {
           </View>
         </View>
 
-        <View style={[s.sectionBlock, d.sectionDivider]}>
+        <View style={[s.sectionBlock, s.sectionShell, d.sectionShell]}>
           {renderSectionHeader(
             'images-outline',
             t('notes.edit.sections.media', { defaultValue: '图片/视频' }),
+            t('notes.edit.sections.mediaHint', { defaultValue: '正文素材，支持图片和视频' }),
             `${mediaItems.length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`,
           )}
           <View style={s.sectionActions}>
@@ -754,10 +812,11 @@ export default function EditNoteScreen() {
           {renderMediaList(mediaItems, 'media')}
         </View>
 
-        <View style={[s.sectionBlock, d.sectionDivider]}>
+        <View style={[s.sectionBlock, s.sectionShell, d.sectionShell]}>
           {renderSectionHeader(
             'albums-outline',
             t('notes.edit.sections.showcase', { defaultValue: '展示' }),
+            t('notes.edit.sections.showcaseHint', { defaultValue: '群卡片展示区素材' }),
             `${showcaseItems.length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`,
           )}
           <View style={s.sectionActions}>
@@ -777,11 +836,14 @@ export default function EditNoteScreen() {
           {renderMediaList(showcaseItems, 'showcase')}
         </View>
 
-        <View style={[s.sectionBlock, d.sectionDivider]}>
+        <View style={[s.sectionBlock, s.sectionShell, d.sectionShell]}>
           {renderSectionHeader(
             'location-outline',
             t('notes.edit.sections.location', { defaultValue: '地址' }),
             t('notes.edit.sections.locationHint', { defaultValue: '填写位置名称和地址' }),
+            locationPreviewUrl
+              ? t('notes.edit.sections.locationSelected', { defaultValue: '已选择' })
+              : t('notes.edit.sections.locationEmpty', { defaultValue: '可选' }),
           )}
           <View style={s.sectionActions}>
             <Pressable
@@ -831,10 +893,35 @@ export default function EditNoteScreen() {
               returnKeyType="done"
             />
           </View>
-          {locationDraft.latitude != null && locationDraft.longitude != null ? (
-            <Text style={[s.locationCoords, d.sectionSubtitle]}>
-              {locationDraft.latitude.toFixed(5)}, {locationDraft.longitude.toFixed(5)}
-            </Text>
+          {locationPreviewUrl ? (
+            <View style={[s.locationPreviewCard, d.locationPreviewCard]}>
+              <Image
+                source={{ uri: locationPreviewUrl }}
+                style={s.locationMapPreview}
+                contentFit="cover"
+              />
+              <View style={s.locationPreviewInfo}>
+                <View style={s.locationPreviewTitleRow}>
+                  <Ionicons name="location" size={16} color={colors.primary} />
+                  <Text style={[s.mediaTitle, d.mediaTitle]} numberOfLines={1}>
+                    {locationDraft.title ||
+                      t('notes.edit.locationPreviewTitle', {
+                        defaultValue: '已选择位置',
+                      })}
+                  </Text>
+                </View>
+                {locationDraft.address ? (
+                  <Text style={[s.mediaMeta, d.mediaMeta]} numberOfLines={2}>
+                    {locationDraft.address}
+                  </Text>
+                ) : null}
+                <View style={[s.locationCoordinatePill, d.locationCoordinatePill]}>
+                  <Text style={[s.locationCoords, d.sectionSubtitle]} selectable>
+                    {locationDraft.latitude?.toFixed(5)}, {locationDraft.longitude?.toFixed(5)}
+                  </Text>
+                </View>
+              </View>
+            </View>
           ) : null}
         </View>
       </ScrollView>
@@ -915,6 +1002,9 @@ const s = StyleSheet.create({
     paddingBottom: Spacing.lg,
     gap: Spacing.md,
   },
+  sectionShell: {
+    borderBottomWidth: 1,
+  },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -929,6 +1019,13 @@ const s = StyleSheet.create({
   sectionHeaderText: { flex: 1, gap: 2 },
   sectionHeading: { ...Typography.h3, fontWeight: '700' },
   sectionSubtitle: { ...Typography.small },
+  sectionCountPill: {
+    borderWidth: 1,
+    borderRadius: Radius.pill,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+  },
+  sectionHeaderMeta: { ...Typography.small, fontWeight: '700' },
   textEditorFrame: {
     height: 300,
     minHeight: 300,
@@ -950,6 +1047,60 @@ const s = StyleSheet.create({
     gap: Spacing.xs,
   },
   sectionActionText: { ...Typography.small, fontWeight: '700' },
+  mediaPreviewGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  mediaPreviewTile: {
+    width: '31%',
+    minWidth: 96,
+    aspectRatio: 1,
+    borderWidth: 1,
+    borderRadius: Radius.sm,
+    overflow: 'hidden',
+  },
+  mediaThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  mediaThumbFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mediaBadge: {
+    position: 'absolute',
+    left: 6,
+    right: 6,
+    bottom: 6,
+    minHeight: 24,
+    borderRadius: Radius.pill,
+    paddingHorizontal: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  mediaRemoveButton: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.86)',
+  },
+  emptyTray: {
+    borderWidth: 1,
+    borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
   mediaList: { gap: Spacing.sm },
   mediaRow: {
     flexDirection: 'row',
@@ -977,6 +1128,31 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
     paddingVertical: 10,
     ...Typography.body,
+  },
+  locationPreviewCard: {
+    borderWidth: 1,
+    borderRadius: Radius.sm,
+    overflow: 'hidden',
+  },
+  locationMapPreview: {
+    width: '100%',
+    height: 126,
+  },
+  locationPreviewInfo: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    gap: Spacing.xs,
+  },
+  locationPreviewTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  locationCoordinatePill: {
+    alignSelf: 'flex-start',
+    borderRadius: Radius.pill,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
   },
   locationCoords: { ...Typography.small },
 });

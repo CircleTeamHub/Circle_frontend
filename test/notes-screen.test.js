@@ -329,6 +329,37 @@ test('EditNoteScreen can select a real map location and save coordinates', () =>
   assert.match(src, /notes\/location-picker/);
 });
 
+test('EditNoteScreen presents structured regions with quieter section chrome', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+
+  assert.match(src, /sectionShell/);
+  assert.match(src, /sectionHeaderMeta/);
+  assert.match(src, /sectionCountPill/);
+  assert.match(src, /const renderSectionHeader = \([\s\S]*meta\?: string/);
+  assert.match(src, /flexDirection:\s*'row'/);
+});
+
+test('EditNoteScreen renders media as a stable preview grid', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+
+  assert.match(src, /expo-image/);
+  assert.match(src, /mediaPreviewGrid/);
+  assert.match(src, /mediaPreviewTile/);
+  assert.match(src, /mediaThumb/);
+  assert.match(src, /mediaRemoveButton/);
+  assert.match(src, /contentFit="cover"/);
+});
+
+test('EditNoteScreen shows a real map preview for selected locations', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+
+  assert.match(src, /buildMapPreviewUrl/);
+  assert.match(src, /staticmap\.openstreetmap\.de/);
+  assert.match(src, /locationPreviewCard/);
+  assert.match(src, /locationMapPreview/);
+  assert.match(src, /locationCoordinatePill/);
+});
+
 test('NoteCard renders title and meta', () => {
   const src = read('src/features/notes/components/NoteCard.tsx');
   assert.match(src, /note\.title/);

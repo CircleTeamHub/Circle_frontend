@@ -22,6 +22,17 @@ test('NoteLocationPickerScreen renders a WebView-backed map picker', () => {
   assert.match(src, /router\.back\(\)/);
 });
 
+test('NoteLocationPickerScreen keeps the real map full screen with a bottom sheet', () => {
+  const src = read('src/features/notes/screens/NoteLocationPickerScreen.tsx');
+
+  assert.match(src, /\.bottomSheet/);
+  assert.match(src, /safe-area-inset-bottom/);
+  assert.match(src, /mapFrame:\s*\{\s*flex:\s*1/);
+  assert.match(src, /margin:\s*0/);
+  assert.doesNotMatch(src, /\.panel/);
+  assert.doesNotMatch(src, /mapFrame:\s*\{[\s\S]*borderRadius:\s*Radius\.md/);
+});
+
 test('note location picker store carries selected coordinates back to edit screen', () => {
   const src = read('src/features/notes/store/use-note-location-picker-store.ts');
 

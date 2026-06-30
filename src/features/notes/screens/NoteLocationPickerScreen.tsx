@@ -8,7 +8,7 @@ import {
   type PickedNoteLocation,
   useNoteLocationPickerStore,
 } from '@/features/notes/store/use-note-location-picker-store';
-import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { Spacing, Typography, useTheme } from '@/theme';
 
 type MapMessage =
   | ({ type: 'location-selected' } & PickedNoteLocation)
@@ -44,14 +44,18 @@ function buildMapHtml({
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <style>
     html, body, #map { height: 100%; width: 100%; margin: 0; background: #111827; }
-    .panel {
+    .bottomSheet {
       position: fixed;
-      left: 12px;
-      right: 12px;
-      top: 12px;
+      left: 0;
+      right: 0;
+      bottom: 0;
       z-index: 1000;
       display: grid;
       gap: 8px;
+      padding: 12px 12px calc(14px + env(safe-area-inset-bottom));
+      border-radius: 18px 18px 0 0;
+      background: rgba(17, 24, 39, .92);
+      box-shadow: 0 -12px 28px rgba(0, 0, 0, .22);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     .search { display: flex; gap: 8px; }
@@ -76,7 +80,7 @@ function buildMapHtml({
     .picked {
       border-radius: 8px;
       padding: 10px 12px;
-      background: rgba(17, 24, 39, .86);
+      background: rgba(255, 255, 255, .08);
       color: #fff;
       line-height: 1.4;
     }
@@ -85,7 +89,7 @@ function buildMapHtml({
 </head>
 <body>
   <div id="map"></div>
-  <div class="panel">
+  <div class="bottomSheet">
     <div class="search">
       <input id="query" placeholder="搜索地点" value="${safeTitle || safeAddress}">
       <button id="search">搜索</button>
@@ -277,8 +281,7 @@ const s = StyleSheet.create({
   headerSpacer: { width: 24 },
   mapFrame: {
     flex: 1,
-    margin: Spacing.lg,
-    borderRadius: Radius.md,
+    margin: 0,
     overflow: 'hidden',
   },
   loading: {
