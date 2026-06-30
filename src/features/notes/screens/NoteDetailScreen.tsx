@@ -99,26 +99,33 @@ export default function NoteDetailScreen() {
     () => (sections ? getNoteSectionAvailability(sections) : null),
     [sections],
   );
+  const targetSection = useMemo(
+    () => (sections ? getInitialNoteSection(section, sections) : null),
+    [section, sections],
+  );
+
+  const scrollToRequestedSection = useCallback(() => {
+    if (!note || !targetSection) return;
+    const scrollKey = `${note.id}:${targetSection}`;
+    if (scrolledSectionRef.current === scrollKey) return;
+    const y = sectionYRef.current[targetSection];
+    if (typeof y !== 'number') return;
+    scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
+    scrolledSectionRef.current = scrollKey;
+  }, [note, targetSection]);
 
   useEffect(() => {
-    if (!sections || !note) return;
-    const target = getInitialNoteSection(section, sections);
-    const scrollKey = `${note.id}:${target}`;
-    if (scrolledSectionRef.current === scrollKey) return;
-    scrolledSectionRef.current = scrollKey;
-    setTimeout(() => {
-      const y = sectionYRef.current[target];
-      if (typeof y === 'number') {
-        scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
-      }
-    }, 100);
-  }, [note, section, sections]);
+    scrolledSectionRef.current = null;
+    const timer = setTimeout(scrollToRequestedSection, 100);
+    return () => clearTimeout(timer);
+  }, [scrollToRequestedSection]);
 
   const trackSectionLayout = useCallback(
     (kind: NoteSectionKind) => (event: LayoutChangeEvent) => {
       sectionYRef.current[kind] = event.nativeEvent.layout.y;
+      scrollToRequestedSection();
     },
-    [],
+    [scrollToRequestedSection],
   );
 
   const handleExport = useCallback(
@@ -233,6 +240,7 @@ export default function NoteDetailScreen() {
         style={s.scroll}
         contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 32 }]}
         showsVerticalScrollIndicator={false}
+        onContentSizeChange={scrollToRequestedSection}
       >
         {/* Title */}
         <Text style={[s.title, d.title]}>{note.title}</Text>

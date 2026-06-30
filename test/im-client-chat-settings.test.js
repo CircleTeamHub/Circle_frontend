@@ -79,6 +79,9 @@ function loadChatSettingsClient(sdkCalls, storeCalls) {
         deleteConversationAndDeleteAllMsg: async (conversationID) => {
           sdkCalls.push(['deleteConversationAndDeleteAllMsg', conversationID]);
         },
+        deleteMessageFromLocalStorage: async (params) => {
+          sdkCalls.push(['deleteMessageFromLocalStorage', params]);
+        },
         deleteAllMsgFromLocal: async () => {
           sdkCalls.push(['deleteAllMsgFromLocal']);
         },
@@ -119,6 +122,12 @@ function loadChatSettingsClient(sdkCalls, storeCalls) {
             storeCalls.push(['setConversations', ...args]);
           },
           mergeConversations: () => undefined,
+          messagesByConversation: {
+            'conversation-99': [
+              { clientMsgID: 'msg-1', sendTime: 1 },
+              { clientMsgID: 'msg-2', sendTime: 2 },
+            ],
+          },
           clearAllMessages: () => {
             storeCalls.push(['clearAllMessages']);
           },
@@ -262,6 +271,24 @@ test('deleteConversation deletes the OpenIM conversation and refreshes the list'
   assert.deepEqual(normalize(storeCalls), [
     ['setMessages', 'conversation-99', []],
     ['setConversations', []],
+  ]);
+});
+
+test('deleteLocalMessage removes the message from memory even if reload later fails', async () => {
+  const sdkCalls = [];
+  const storeCalls = [];
+  const { deleteLocalMessage } = loadChatSettingsClient(sdkCalls, storeCalls);
+
+  await deleteLocalMessage('conversation-99', 'msg-1');
+
+  assert.deepEqual(normalize(sdkCalls), [
+    ['deleteMessageFromLocalStorage', {
+      conversationID: 'conversation-99',
+      clientMsgID: 'msg-1',
+    }],
+  ]);
+  assert.deepEqual(normalize(storeCalls), [
+    ['setMessages', 'conversation-99', [{ clientMsgID: 'msg-2', sendTime: 2 }]],
   ]);
 });
 

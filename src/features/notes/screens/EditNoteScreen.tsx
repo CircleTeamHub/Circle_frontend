@@ -14,7 +14,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NoteBlockEditor } from '@/features/notes/components/NoteBlockEditor';
-import type { CreateNoteMediaInput, NoteGroup } from '@/features/notes/types';
+import type { CreateNoteMediaInput, NoteGroup, NoteSections } from '@/features/notes/types';
 import {
   buildNoteMediaMap,
   extractMediaFromBlocks,
@@ -55,6 +55,7 @@ export default function EditNoteScreen() {
     formatNoteFullDate(new Date().toISOString(), t),
   );
   const mediaMapRef = useRef<Record<string, CreateNoteMediaInput>>({});
+  const existingSectionsRef = useRef<Partial<NoteSections> | null>(null);
   const [editorMounted, setEditorMounted] = useState(false);
   const [navigating, setNavigating] = useState(false);
 
@@ -77,6 +78,7 @@ export default function EditNoteScreen() {
 
     if (!isEdit || !id) {
       mediaMapRef.current = {};
+      existingSectionsRef.current = null;
       setEditorMounted(true);
       setLoading(false);
       return () => {
@@ -88,7 +90,8 @@ export default function EditNoteScreen() {
       .then((note) => {
         if (cancelled) return;
         setTitle(note.title);
-        const loaded = note.contentJson ?? [];
+        existingSectionsRef.current = note.sections ?? null;
+        const loaded = note.sections?.text?.contentJson ?? note.contentJson ?? [];
         blocksRef.current = loaded;
         setInitialBlocks(loaded.length > 0 ? loaded : null);
         mediaMapRef.current = buildNoteMediaMap(note.media);
@@ -100,6 +103,7 @@ export default function EditNoteScreen() {
       .catch(() => {
         if (!cancelled) {
           mediaMapRef.current = {};
+          existingSectionsRef.current = null;
           setLoading(false);
           setEditorMounted(true);
         }
@@ -142,6 +146,38 @@ export default function EditNoteScreen() {
         mediaMapRef.current,
       );
       const showcase = media.filter((item) => item.type === 'IMAGE');
+      const existingSections = existingSectionsRef.current;
+      const preservedShowcase = (existingSections?.showcase?.items ?? showcase)
+        .filter((item): item is CreateNoteMediaInput =>
+          Boolean(
+            item &&
+              typeof item.objectKey === 'string' &&
+              typeof item.url === 'string' &&
+              (item.type === 'IMAGE' || item.type === 'VIDEO'),
+          ),
+        )
+        .map((item, index): CreateNoteMediaInput => ({
+          type: item.type,
+          objectKey: item.objectKey,
+          url: item.url,
+          ...(typeof item.mimeType === 'string' ? { mimeType: item.mimeType } : {}),
+          ...(typeof item.size === 'number' ? { size: item.size } : {}),
+          ...(typeof item.width === 'number' ? { width: item.width } : {}),
+          ...(typeof item.height === 'number' ? { height: item.height } : {}),
+          ...(typeof item.durationMs === 'number' ? { durationMs: item.durationMs } : {}),
+          ...(typeof item.posterUrl === 'string' ? { posterUrl: item.posterUrl } : {}),
+          sortOrder: typeof item.sortOrder === 'number' ? item.sortOrder : index,
+        }));
+      const legacyMedia = [...media, ...preservedShowcase].reduce<CreateNoteMediaInput[]>(
+        (items, item) => {
+          const key = `${item.objectKey}:${item.url}`;
+          if (items.some((existing) => `${existing.objectKey}:${existing.url}` === key)) {
+            return items;
+          }
+          return [...items, item];
+        },
+        [],
+      );
       const input = {
         title: trimmedTitle,
         content: plainText,
@@ -149,11 +185,11 @@ export default function EditNoteScreen() {
         sections: {
           text: { content: plainText, contentJson: currentBlocks },
           media: { items: media },
-          showcase: { items: showcase },
-          location: null,
+          showcase: { items: preservedShowcase },
+          location: existingSections?.location ?? null,
         },
         groupIds: selectedGroupIds,
-        media,
+        media: legacyMedia,
         status: 'ACTIVE' as const,
       };
       if (isEdit && id) {

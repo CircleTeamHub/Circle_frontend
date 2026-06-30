@@ -815,7 +815,6 @@ export default function ChatDetailScreen() {
 
   const handleQuoteMessage = useCallback((message: ChatMessage) => {
     setQuoteTarget(message);
-    setDraft('');
   }, []);
 
   const handleDeleteMessage = useCallback(

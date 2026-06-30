@@ -138,6 +138,21 @@ test('chat detail screen logs text send failures without logging message bodies'
   }
 });
 
+test('chat detail quote action preserves the current draft text', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatDetailScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+  const handlerMatch = source.match(
+    /const handleQuoteMessage = useCallback\(\(message: ChatMessage\) => \{[\s\S]*?\}, \[\]\);/,
+  );
+
+  assert.ok(handlerMatch, 'quote handler should exist');
+  assert.match(handlerMatch[0], /setQuoteTarget\(message\)/);
+  assert.doesNotMatch(handlerMatch[0], /setDraft\(''\)/);
+});
+
 test('chat detail guards async send UI state after unmount', () => {
   const source = fs.readFileSync(
     path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),

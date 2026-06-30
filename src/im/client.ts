@@ -1330,6 +1330,14 @@ export async function deleteLocalMessage(conversationID: string, clientMsgID: st
   }
 
   await OpenIMSDK.deleteMessageFromLocalStorage({ conversationID, clientMsgID });
+  const state = useIMStore.getState();
+  const currentMessages = state.messagesByConversation[conversationID];
+  if (Array.isArray(currentMessages)) {
+    state.setMessages(
+      conversationID,
+      currentMessages.filter((message) => message.clientMsgID !== clientMsgID),
+    );
+  }
   await loadConversationMessages(conversationID).catch(() => {
     // 删除已完成；刷新失败时等待下一次进入会话重新拉取本地历史。
   });

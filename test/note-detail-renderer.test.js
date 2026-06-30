@@ -85,6 +85,25 @@ test('EditNoteScreen saves with createNote or updateNote', () => {
   assert.match(src, /updateNote/);
 });
 
+test('EditNoteScreen preserves structured note sections it cannot edit', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+  assert.match(src, /existingSectionsRef/);
+  assert.match(src, /note\.sections\?\.text\?\.contentJson/);
+  assert.match(src, /location: existingSections\?\.location \?\? null/);
+  assert.match(src, /const preservedShowcase =/);
+  assert.match(src, /const legacyMedia = \[\.\.\.media, \.\.\.preservedShowcase\]/);
+  assert.match(src, /showcase: \{ items: preservedShowcase \}/);
+  assert.match(src, /media: legacyMedia/);
+});
+
+test('NoteDetailScreen retries section jumps after layout is measured', () => {
+  const src = read('src/features/notes/screens/NoteDetailScreen.tsx');
+  assert.match(src, /scrollToRequestedSection/);
+  assert.match(src, /scrolledSectionRef\.current = scrollKey/);
+  assert.match(src, /onContentSizeChange=\{scrollToRequestedSection\}/);
+  assert.match(src, /sectionYRef\.current\[kind\] = event\.nativeEvent\.layout\.y;[\s\S]{0,120}scrollToRequestedSection\(\)/);
+});
+
 test('EditNoteScreen has disabled done button while submitting', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
   assert.match(src, /isSubmitting/);

@@ -525,19 +525,21 @@ export default function MessagesScreen() {
   );
 
   // 筛选标签列表 = 固定标签 + 用户自定义群组（动态追加）
+  const rawMappedConversations = useMemo(
+    () => rawConversations.map(mapConversationItemToUI),
+    [rawConversations],
+  );
+
   const conversations = useMemo(
-    () => applyLocalUnreadOverrides(
-      rawConversations.map(mapConversationItemToUI),
-      localUnreadOverrides,
-    ),
-    [localUnreadOverrides, rawConversations],
+    () => applyLocalUnreadOverrides(rawMappedConversations, localUnreadOverrides),
+    [localUnreadOverrides, rawMappedConversations],
   );
 
   useEffect(() => {
     setMessagesUnread(
-      totalUnread + countLocalUnreadOverrides(conversations, localUnreadOverrides),
+      totalUnread + countLocalUnreadOverrides(rawMappedConversations, localUnreadOverrides),
     );
-  }, [conversations, localUnreadOverrides, setMessagesUnread, totalUnread]);
+  }, [localUnreadOverrides, rawMappedConversations, setMessagesUnread, totalUnread]);
 
   // Filter 列表 = 基础 4 项 + 用户设置了 pinnedToTabs 的自定义分组。
   // 自定义分组的 id 形如 "custom:<uuid>"，避免和 base id 冲突；filter 逻辑里特判前缀。
