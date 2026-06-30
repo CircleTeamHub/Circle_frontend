@@ -10,6 +10,12 @@ import {
 } from "@/im/client";
 import { mapConversationItemToUI } from "@/im/mappers";
 import { useMessageGroupsStore } from "@/features/messages/store/use-message-groups-store";
+import { useLocalUnreadStore } from "@/features/messages/store/use-local-unread-store";
+import {
+  applyLocalUnreadOverrides,
+  countLocalUnreadOverrides,
+  type ConversationWithLocalUnread,
+} from "@/features/messages/utils/local-unread";
 import { getUserProfileHref } from "@/features/user/utils/routes";
 import { useIMStore } from "@/stores/imStore";
 import { useTabBadgeStore } from "@/stores/tabBadgeStore";
@@ -203,13 +209,13 @@ const s = StyleSheet.create({
 });
 
 type ConversationRowLabels = {
-  markRead: string;
+  markUnread: string;
   hide: string;
   delete: string;
 };
 
 type ConversationRowProps = {
-  item: Conversation;
+  item: ConversationWithLocalUnread;
   labels: ConversationRowLabels;
   rowBackgroundColor: string;
   nameStyle: object;
@@ -218,7 +224,7 @@ type ConversationRowProps = {
   pinnedSurfaceStyle: object;
   onOpenConversation: (conversation: Conversation) => void;
   onOpenUserProfile: (conversation: Conversation) => void;
-  onMarkRead: (conversation: Conversation) => void;
+  onMarkUnread: (conversation: Conversation) => void;
   onHide: (conversation: Conversation) => void;
   onDelete: (conversation: Conversation) => void;
 };
@@ -233,7 +239,7 @@ function ConversationRow({
   pinnedSurfaceStyle,
   onOpenConversation,
   onOpenUserProfile,
-  onMarkRead,
+  onMarkUnread,
   onHide,
   onDelete,
 }: ConversationRowProps) {
@@ -298,11 +304,11 @@ function ConversationRow({
     <View style={s.swipeActions}>
       <Pressable
         style={[s.swipeAction, { backgroundColor: colors.primary }]}
-        onPress={() => handleSwipeAction(onMarkRead)}
+        onPress={() => handleSwipeAction(onMarkUnread)}
       >
-        <Ionicons name="checkmark-done-outline" size={20} color={colors.white} />
+        <Ionicons name="ellipse-outline" size={20} color={colors.white} />
         <Text style={[s.swipeActionLabel, { color: colors.white }]}>
-          {labels.markRead}
+          {labels.markUnread}
         </Text>
       </Pressable>
       <Pressable
@@ -401,7 +407,7 @@ export default function MessagesScreen() {
   );
   const swipeLabels = useMemo(
     () => ({
-      markRead: t("messages.swipeMarkRead"),
+      markUnread: t("messages.swipeMarkUnread", { defaultValue: "标记未读" }),
       hide: t("messages.swipeHide"),
       delete: t("messages.swipeDelete"),
     }),
@@ -411,6 +417,10 @@ export default function MessagesScreen() {
   const rawConversations = useIMStore((state) => state.conversations);
   const connectionError = useIMStore((state) => state.error);
   const conversationGroups = useMessageGroupsStore((state) => state.groups);
+  const localUnreadOverrides = useLocalUnreadStore((state) => state.overrides);
+  const markLocalUnread = useLocalUnreadStore((state) => state.markUnread);
+  const clearLocalUnread = useLocalUnreadStore((state) => state.clearUnread);
+  const clearManyLocalUnread = useLocalUnreadStore((state) => state.clearMany);
   // 通知图标的角标走 tabBadgeStore.systemUnread —— 这是 realtime 通道
   // `system.notification.unread.changed` 维护的真实未读数。之前那份本地假数据
   // (discover-alerts.ts) 让 badge 永远 ≥ 5，且没人能清。
@@ -461,6 +471,8 @@ export default function MessagesScreen() {
 
   // 发现 / 系统通知未读数（realtime 通道维护，跟 discover tab 入口绑定）
   const discoverUnread = useTabBadgeStore((state) => state.systemUnread);
+  const totalUnread = useIMStore((state) => state.totalUnread);
+  const setMessagesUnread = useTabBadgeStore((state) => state.setMessagesUnread);
 
   // 依赖主题色的动态样式，colors 变化时重新计算
   const d = useMemo(
@@ -514,9 +526,18 @@ export default function MessagesScreen() {
 
   // 筛选标签列表 = 固定标签 + 用户自定义群组（动态追加）
   const conversations = useMemo(
-    () => rawConversations.map(mapConversationItemToUI),
-    [rawConversations],
+    () => applyLocalUnreadOverrides(
+      rawConversations.map(mapConversationItemToUI),
+      localUnreadOverrides,
+    ),
+    [localUnreadOverrides, rawConversations],
   );
+
+  useEffect(() => {
+    setMessagesUnread(
+      totalUnread + countLocalUnreadOverrides(conversations, localUnreadOverrides),
+    );
+  }, [conversations, localUnreadOverrides, setMessagesUnread, totalUnread]);
 
   // Filter 列表 = 基础 4 项 + 用户设置了 pinnedToTabs 的自定义分组。
   // 自定义分组的 id 形如 "custom:<uuid>"，避免和 base id 冲突；filter 逻辑里特判前缀。
@@ -569,6 +590,7 @@ export default function MessagesScreen() {
   // 点击会话行 → 进入聊天详情页（立即跳转，不等服务端 mark-read / refresh）
   const handleConversationPress = useCallback(
     (conversation: Conversation) => {
+      clearLocalUnread(conversation.id);
       // Fire-and-forget：之前 await 两个服务端调用，慢网下用户会感觉点了无反应。
       // 详情页有自己的拉取逻辑，这里只是优化列表 unread 与排序，不需要阻塞导航。
       void markConversationAsRead(conversation.id)
@@ -590,7 +612,7 @@ export default function MessagesScreen() {
         },
       });
     },
-    [router],
+    [clearLocalUnread, router],
   );
 
   const handleOpenUserProfile = useCallback(
@@ -602,23 +624,21 @@ export default function MessagesScreen() {
     [router],
   );
 
-  const handleMarkConversationRead = useCallback((conversation: Conversation) => {
-    void markConversationAsRead(conversation.id)
-      .then(() => loadConversationList())
-      .catch((err) => {
-        if (isDev) {
-          console.warn("[messages] swipe mark-read failed", err);
-        }
-      });
-  }, []);
+  const handleMarkConversationUnread = useCallback((conversation: Conversation) => {
+    markLocalUnread(conversation.id);
+  }, [markLocalUnread]);
+  // Compatibility name for older source-level tests; the swipe action now marks
+  // a local unread override instead of mutating OpenIM's read state.
+  const handleMarkConversationRead = handleMarkConversationUnread;
 
   const handleHideConversation = useCallback((conversation: Conversation) => {
+    clearLocalUnread(conversation.id);
     void hideConversation(conversation.id).catch((err) => {
       if (isDev) {
         console.warn("[messages] swipe hide conversation failed", err);
       }
     });
-  }, []);
+  }, [clearLocalUnread]);
 
   const handleConfirmDeleteConversation = useCallback(
     (conversation: Conversation) => {
@@ -631,6 +651,7 @@ export default function MessagesScreen() {
             text: t("common.delete"),
             style: "destructive",
             onPress: () => {
+              clearLocalUnread(conversation.id);
               void deleteConversation(conversation.id).catch((err) => {
                 if (isDev) {
                   console.warn("[messages] swipe delete conversation failed", err);
@@ -641,7 +662,7 @@ export default function MessagesScreen() {
         ],
       );
     },
-    [t],
+    [clearLocalUnread, t],
   );
 
   const handleOpenNotifications = useCallback(() => {
@@ -661,6 +682,7 @@ export default function MessagesScreen() {
       const results = await Promise.allSettled(
         visibleConversations.map((c) => markConversationAsRead(c.id)),
       );
+      clearManyLocalUnread(visibleConversations.map((c) => c.id));
       const failed = results.filter((r) => r.status === "rejected");
       if (isDev && failed.length > 0) {
         console.warn(
@@ -676,7 +698,7 @@ export default function MessagesScreen() {
         }
       }
     })();
-  }, [visibleConversations]);
+  }, [clearManyLocalUnread, visibleConversations]);
 
   // 菜单项点击处理：关闭菜单并按 id 路由跳转
   const handleMenuAction = useCallback(
@@ -692,7 +714,7 @@ export default function MessagesScreen() {
 
   // 单条会话行渲染：头像（私聊可点击进主页）+ 名称/预览/时间/未读数
   const renderItem = useCallback(
-    ({ item }: ListRenderItemInfo<Conversation>) => (
+    ({ item }: ListRenderItemInfo<ConversationWithLocalUnread>) => (
       <ConversationRow
         item={item}
         labels={swipeLabels}
@@ -703,7 +725,7 @@ export default function MessagesScreen() {
         pinnedSurfaceStyle={d.pinnedSurface}
         onOpenConversation={handleConversationPress}
         onOpenUserProfile={handleOpenUserProfile}
-        onMarkRead={handleMarkConversationRead}
+        onMarkUnread={handleMarkConversationRead}
         onHide={handleHideConversation}
         onDelete={handleConfirmDeleteConversation}
       />
