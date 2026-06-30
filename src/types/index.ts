@@ -54,6 +54,9 @@ export interface NoteCardData {
   imageCount: number;
   videoCount: number;
   groupNames: string[];
+  hasText?: boolean;
+  showcaseCount?: number;
+  hasLocation?: boolean;
 }
 
 export interface FriendCardData {
@@ -96,6 +99,7 @@ export interface ChatMessage {
     | 'transfer-card'
     | 'verification-card';
   text?: string;
+  quotedText?: string;
   time?: string;
   senderName?: string;
   // 发送者用户 id（UUID 形式），仅接收消息携带；群聊点头像跳对方资料用。

@@ -258,6 +258,98 @@ Content-Type: application/json
 
 ## 错误处理
 
+---
+
+## 笔记接口 `/api/v1/note`
+
+> 所有接口需要 `Authorization: Bearer <token>`。迁移期后端需同时返回旧字段
+> `content` / `contentJson` / `media` / `imageCount` / `videoCount` 和新字段
+> `sections`，旧客户端继续按旧字段渲染，新客户端优先读取 `sections`。
+
+### 笔记四区结构
+
+`NoteDetail` / `NoteSummary` 可选返回：
+
+```json
+{
+  "sections": {
+    "text": {
+      "content": "纯文本摘要",
+      "contentJson": []
+    },
+    "media": {
+      "items": [
+        {
+          "id": "media-id",
+          "type": "IMAGE",
+          "url": "https://cdn.example.com/a.jpg",
+          "objectKey": "notes/a.jpg",
+          "mimeType": "image/jpeg",
+          "size": 12345,
+          "width": 1200,
+          "height": 900,
+          "durationMs": null,
+          "posterUrl": null,
+          "sortOrder": 0
+        }
+      ]
+    },
+    "showcase": {
+      "items": []
+    },
+    "location": {
+      "title": "深圳南山区",
+      "address": "南航空乘172D",
+      "latitude": 22.5,
+      "longitude": 113.9
+    }
+  }
+}
+```
+
+客户端创建/更新笔记时会同步提交 `sections` 和旧字段，后端应以
+`sections` 为新真理源，并在响应中回填旧字段兼容历史客户端。
+
+### 创建导出任务
+
+```
+POST /note/:id/exports
+```
+
+**Request Body**
+
+```json
+{
+  "format": "IMAGE",
+  "scope": "ALL"
+}
+```
+
+`format` 可为：
+
+- `IMAGE`：生成整篇长图
+- `PDF`：生成 PDF
+- `IMAGES`：打包下载笔记图片
+- `VIDEOS`：打包下载笔记视频
+
+`scope` 默认为 `ALL`，也可传单个媒体 `mediaId` 用于单独下载。
+
+**Response**
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "url": "https://cdn.example.com/exports/note.pdf",
+    "filename": "note.pdf",
+    "mimeType": "application/pdf",
+    "size": 123456,
+    "expiresAt": "2026-06-29T12:00:00.000Z"
+  }
+}
+```
+
 | HTTP 状态码 | 含义 |
 |---|---|
 | `400` | 请求参数错误（字段验证失败） |

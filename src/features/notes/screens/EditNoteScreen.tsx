@@ -141,10 +141,17 @@ export default function EditNoteScreen() {
         extractMediaFromBlocks(currentBlocks),
         mediaMapRef.current,
       );
+      const showcase = media.filter((item) => item.type === 'IMAGE');
       const input = {
         title: trimmedTitle,
         content: plainText,
         contentJson: currentBlocks,
+        sections: {
+          text: { content: plainText, contentJson: currentBlocks },
+          media: { items: media },
+          showcase: { items: showcase },
+          location: null,
+        },
         groupIds: selectedGroupIds,
         media,
         status: 'ACTIVE' as const,

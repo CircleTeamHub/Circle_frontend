@@ -21,6 +21,33 @@ export interface NoteMedia {
   sortOrder: number;
 }
 
+export interface NoteTextSection {
+  content: string | null;
+  contentJson: Record<string, unknown>[] | null;
+}
+
+export interface NoteMediaSection {
+  items: (NoteMedia | CreateNoteMediaInput)[];
+}
+
+export interface NoteShowcaseSection {
+  items: (NoteMedia | CreateNoteMediaInput)[];
+}
+
+export interface NoteLocationSection {
+  title?: string | null;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+}
+
+export interface NoteSections {
+  text: NoteTextSection;
+  media: NoteMediaSection;
+  showcase: NoteShowcaseSection;
+  location: NoteLocationSection | null;
+}
+
 export interface NoteGroup {
   id: string;
   name: string;
@@ -44,12 +71,14 @@ export interface NoteSummary {
   updatedAt: string;
   ownerId?: string | null;
   canEdit?: boolean;
+  sections?: Partial<NoteSections> | null;
 }
 
 export interface NoteDetail extends NoteSummary {
   content: string | null;
   contentJson: Record<string, unknown>[] | null;
   media: NoteMedia[];
+  sections?: Partial<NoteSections> | null;
 }
 
 export interface CreateNoteMediaInput {
@@ -69,6 +98,7 @@ export interface CreateNoteInput {
   title: string;
   content?: string;
   contentJson?: Record<string, unknown>[];
+  sections?: Partial<NoteSections>;
   groupIds?: string[];
   status?: 'ACTIVE' | 'UNLISTED';
   pinned?: boolean;
@@ -97,4 +127,19 @@ export interface NoteShareLink {
   expiresAt: string | null;
   revokedAt: string | null;
   createdAt: string;
+}
+
+export type NoteExportFormat = 'IMAGE' | 'PDF' | 'IMAGES' | 'VIDEOS';
+
+export interface CreateNoteExportInput {
+  format: NoteExportFormat;
+  scope?: 'ALL' | string;
+}
+
+export interface NoteExportResult {
+  url: string;
+  filename: string;
+  mimeType: string;
+  size: number | null;
+  expiresAt: string | null;
 }

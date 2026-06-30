@@ -20,6 +20,7 @@ interface NoteCardBubbleProps {
   selfName?: string;
   selfAvatarUri?: string;
   onPress?: (note: NoteCardData) => void;
+  onSectionPress?: (note: NoteCardData, section: 'text' | 'media' | 'showcase' | 'location') => void;
   onAvatarPress?: () => void;
   hideStatus?: boolean;
 }
@@ -99,6 +100,7 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
   selfName,
   selfAvatarUri,
   onPress,
+  onSectionPress,
   onAvatarPress,
   hideStatus,
 }) => {
@@ -118,17 +120,17 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
 
   // 4 个标签：笔记 / 视频 / 展示 / 位置 —— 笔记内容包含哪一项就显示绿色
   const flags = {
-    note: Boolean(note.contentPreview && note.contentPreview.trim()),
+    note: note.hasText ?? Boolean(note.contentPreview && note.contentPreview.trim()),
     video: note.videoCount > 0,
-    display: note.imageCount > 0,
-    location: note.groupNames.length > 0,
+    display: (note.showcaseCount ?? note.imageCount) > 0,
+    location: note.hasLocation ?? false,
   };
 
-  const chips: { id: keyof typeof flags; label: string }[] = [
-    { id: 'note', label: '笔记' },
-    { id: 'video', label: '视频' },
-    { id: 'display', label: '展示' },
-    { id: 'location', label: '位置' },
+  const chips: { id: keyof typeof flags; label: string; section: 'text' | 'media' | 'showcase' | 'location' }[] = [
+    { id: 'note', label: '笔记', section: 'text' },
+    { id: 'video', label: '视频', section: 'media' },
+    { id: 'display', label: '展示', section: 'showcase' },
+    { id: 'location', label: '位置', section: 'location' },
   ];
 
   const metaSegments: string[] = [];
@@ -183,7 +185,7 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
           {chips.map((chip) => {
             const active = flags[chip.id];
             return (
-              <View
+              <Pressable
                 key={chip.id}
                 style={[
                   sNote.chip,
@@ -194,6 +196,12 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
                     borderColor: active ? NOTE_CARD_GREEN : onCardSecondary,
                   },
                 ]}
+                disabled={!active}
+                onPress={
+                  active && onSectionPress
+                    ? () => onSectionPress(note, chip.section)
+                    : undefined
+                }
               >
                 <Text
                   style={[
@@ -203,7 +211,7 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
                 >
                   {chip.label}
                 </Text>
-              </View>
+              </Pressable>
             );
           })}
         </View>
