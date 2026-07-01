@@ -70,3 +70,12 @@ test('post signups screen gates recognition on backend recognitionOpen and recog
   // 不再用内存态 recognitionSubmitted 作为锁。
   assert.doesNotMatch(source, /recognitionSubmitted/);
 });
+
+test('post signups screen renders compact display badges for each signer', () => {
+  const source = readScreen();
+
+  assert.match(source, /import \{ UserIconRow \} from ['"]@\/components\/ui\/user-icon-row['"]/);
+  assert.match(source, /const displayIcons = item\.displayIcons \?\? \[\]/);
+  assert.match(source, /displayIcons\.length > 0/);
+  assert.match(source, /<UserIconRow[\s\S]*?icons=\{displayIcons\}[\s\S]*?compact[\s\S]*?compactSize="small"/);
+});

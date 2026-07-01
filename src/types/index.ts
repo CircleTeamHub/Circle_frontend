@@ -164,6 +164,7 @@ export interface DisplayIcon {
   circleId?: string;
   circleName?: string;
   systemKey?: SystemIconKey;
+  systemVariant?: string;
   recognitionCount?: number;
   sortOrder: number;
 }
@@ -177,6 +178,7 @@ export interface IconOption {
   circleId?: string;
   circleName?: string;
   systemKey?: SystemIconKey;
+  systemVariant?: string;
   recognitionCount?: number;
 }
 
@@ -274,6 +276,7 @@ export interface CirclePlazaPost {
     avatarUrl: string | null;
     avatarFrame: string | null;
     accountId: string;
+    displayIcons: DisplayIcon[];
   };
   circle: {
     id: string;
@@ -449,6 +452,7 @@ export interface PostSignupItem {
   accountId: string;
   signedAt: string;
   seen: boolean;
+  displayIcons: DisplayIcon[];
   /**
    * 该报名者是否已被发帖者给过合作认可（后端下发）。
    * 用于在已认可的人身上展示已认可态、并阻止重复提交（防刷分）。

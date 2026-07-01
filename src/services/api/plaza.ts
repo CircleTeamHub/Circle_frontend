@@ -8,7 +8,20 @@ import type {
   PaginatedResponse,
   PostSignupItem,
   PostSignupsResult,
+  DisplayIcon,
 } from '@/types';
+
+function normalizeDisplayIcons(icons: unknown): DisplayIcon[] {
+  if (!Array.isArray(icons)) return [];
+
+  return icons.map((icon) => {
+    const item = icon as DisplayIcon;
+    return {
+      ...item,
+      imageUrl: item.imageUrl ? normalizeMediaUrl(item.imageUrl) : null,
+    };
+  });
+}
 
 function normalizePlazaPost(post: CirclePlazaPost): CirclePlazaPost {
   return {
@@ -26,6 +39,7 @@ function normalizePlazaPost(post: CirclePlazaPost): CirclePlazaPost {
       avatarFrame: post.author.avatarFrame
         ? normalizeMediaUrl(post.author.avatarFrame)
         : null,
+      displayIcons: normalizeDisplayIcons(post.author.displayIcons),
     },
   };
 }
@@ -152,6 +166,7 @@ function normalizePostSignup(signup: unknown): PostSignupItem {
     accountId: stringField(s.accountId),
     signedAt: stringField(s.signedAt),
     seen: booleanField(s.seen),
+    displayIcons: normalizeDisplayIcons(s.displayIcons),
     recognized: booleanField(s.recognized),
   };
 }

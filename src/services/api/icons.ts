@@ -12,6 +12,7 @@ export type UpdateDisplayIconInput = {
   displayType: 'SYSTEM' | 'CIRCLE';
   sortOrder: number;
   systemKey?: SystemIconKey;
+  systemVariant?: string;
   circleId?: string;
 };
 

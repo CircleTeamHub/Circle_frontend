@@ -50,3 +50,12 @@ test('PlazaPostCard circle name tag uses squared corners instead of a pill', () 
     /tag:\s*\{\s*backgroundColor:\s*colors\.primary,\s*borderRadius:\s*Radius\.full,/,
   );
 });
+
+test('PlazaPostCard renders compact author display badges beside author info', () => {
+  const src = read(SRC);
+
+  assert.match(src, /import \{ UserIconRow \} from ['"]@\/components\/ui\/user-icon-row['"]/);
+  assert.match(src, /authorDisplayIcons\s*=\s*post\.author\.displayIcons\s*\?\?\s*\[\]/);
+  assert.match(src, /authorDisplayIcons\.length > 0/);
+  assert.match(src, /<UserIconRow[\s\S]*?icons=\{authorDisplayIcons\}[\s\S]*?compact[\s\S]*?compactSize="small"/);
+});

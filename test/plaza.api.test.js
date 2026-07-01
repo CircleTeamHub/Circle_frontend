@@ -134,6 +134,93 @@ test('fetchAllMyCirclePosts loads every page and normalizes each row defensively
   ]);
 });
 
+test('fetchPlazaFeed keeps author display badges and normalizes badge media URLs', async () => {
+  const { api, calls } = loadPlazaApi([
+    {
+      items: [
+        {
+          id: 'post-1',
+          content: 'hello',
+          images: ['http://localhost:9000/posts/a.jpg'],
+          tags: [],
+          city: '深圳',
+          isHorn: false,
+          noteId: null,
+          restrictions: { vipLevel: null, creditScore: null, fancyNumber: false },
+          viewCount: 0,
+          signupCount: 1,
+          signedByMe: false,
+          signupRestrictions: { vipLevel: null, creditScore: null, fancyNumber: false },
+          canSignup: true,
+          author: {
+            id: 'u1',
+            nickname: 'Author',
+            avatarUrl: 'http://localhost:9000/avatars/u1.jpg',
+            avatarFrame: null,
+            accountId: '1001',
+            displayIcons: [
+              {
+                id: 'vip-5',
+                type: 'SYSTEM',
+                title: 'VIP5',
+                imageUrl: null,
+                fallbackIconName: null,
+                systemKey: 'VIP',
+                systemVariant: 'VIP5',
+                sortOrder: 0,
+              },
+              {
+                id: 'circle-1',
+                type: 'CIRCLE',
+                title: '圈子建设者',
+                imageUrl: 'http://localhost:9000/icons/circle.png',
+                fallbackIconName: null,
+                circleId: 'c1',
+                circleName: '圈子建设者',
+                sortOrder: 1,
+              },
+            ],
+          },
+          circle: { id: 'c1', name: 'circle' },
+          canInteract: true,
+          createdAt: '2026-06-29T00:00:00.000Z',
+          expiresAt: '2026-07-02T00:00:00.000Z',
+        },
+      ],
+      total: 1,
+      page: 1,
+      limit: 20,
+      hasMore: false,
+    },
+  ]);
+
+  const result = await api.fetchPlazaFeed({ city: '深圳' });
+
+  assert.equal(calls[0][0], '/circle-plaza/feed?city=%E6%B7%B1%E5%9C%B3');
+  assert.deepEqual(JSON.parse(JSON.stringify(result.items[0].author.displayIcons)), [
+    {
+      id: 'vip-5',
+      type: 'SYSTEM',
+      title: 'VIP5',
+      imageUrl: null,
+      fallbackIconName: null,
+      systemKey: 'VIP',
+      systemVariant: 'VIP5',
+      sortOrder: 0,
+    },
+    {
+      id: 'circle-1',
+      type: 'CIRCLE',
+      title: '圈子建设者',
+      imageUrl: 'http://192.168.1.65:9000/icons/circle.png',
+      fallbackIconName: null,
+      circleId: 'c1',
+      circleName: '圈子建设者',
+      sortOrder: 1,
+    },
+  ]);
+});
+
 test('fetchMyPostSignups normalizes missing signer fields with safe defaults', async () => {
   const { api } = loadPlazaApi([
     {
@@ -163,6 +250,7 @@ test('fetchMyPostSignups normalizes missing signer fields with safe defaults', a
         accountId: '',
         signedAt: '',
         seen: false,
+        displayIcons: [],
         recognized: false,
       },
     ],
@@ -194,6 +282,72 @@ test('fetchMyPostSignups carries recognized flags and recognitionOpen from backe
 
   assert.equal(result.recognitionOpen, true);
   assert.equal(result.items[0].recognized, true);
+});
+
+test('fetchMyPostSignups keeps signer display badges and normalizes badge media URLs', async () => {
+  const { api } = loadPlazaApi([
+    {
+      items: [
+        {
+          userId: 'user-1',
+          imUserId: 'im-1',
+          nickname: 'Ann',
+          avatarUrl: null,
+          accountId: 'a1',
+          signedAt: '2026-06-01T00:00:00Z',
+          seen: true,
+          recognized: false,
+          displayIcons: [
+            {
+              id: 'vip-5',
+              type: 'SYSTEM',
+              title: 'VIP5',
+              imageUrl: null,
+              fallbackIconName: null,
+              systemKey: 'VIP',
+              systemVariant: 'VIP5',
+              sortOrder: 0,
+            },
+            {
+              id: 'circle-1',
+              type: 'CIRCLE',
+              title: '圈子建设者',
+              imageUrl: 'http://localhost:9000/icons/circle.png',
+              fallbackIconName: null,
+              circleId: 'c1',
+              circleName: '圈子建设者',
+              sortOrder: 1,
+            },
+          ],
+        },
+      ],
+    },
+  ]);
+
+  const result = await api.fetchMyPostSignups('post-1');
+
+  assert.deepEqual(JSON.parse(JSON.stringify(result.items[0].displayIcons)), [
+    {
+      id: 'vip-5',
+      type: 'SYSTEM',
+      title: 'VIP5',
+      imageUrl: null,
+      fallbackIconName: null,
+      systemKey: 'VIP',
+      systemVariant: 'VIP5',
+      sortOrder: 0,
+    },
+    {
+      id: 'circle-1',
+      type: 'CIRCLE',
+      title: '圈子建设者',
+      imageUrl: 'http://192.168.1.65:9000/icons/circle.png',
+      fallbackIconName: null,
+      circleId: 'c1',
+      circleName: '圈子建设者',
+      sortOrder: 1,
+    },
+  ]);
 });
 
 test('submitPostCollaborationRecognitions posts selected signer ids', async () => {

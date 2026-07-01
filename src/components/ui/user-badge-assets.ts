@@ -26,8 +26,13 @@ function clampLevel(value: number | null, max: number) {
   return Math.min(value, max);
 }
 
-function readLevel(icon: Pick<DisplayIcon, 'title' | 'systemKey'>) {
-  return Number(icon.title.match(/\d+/)?.[0] ?? icon.systemKey?.match(/\d+/)?.[0] ?? 1);
+function readLevel(icon: Pick<DisplayIcon, 'title' | 'systemKey' | 'systemVariant'>) {
+  return Number(
+    icon.title.match(/\d+/)?.[0] ??
+      icon.systemVariant?.match(/\d+/)?.[0] ??
+      icon.systemKey?.match(/\d+/)?.[0] ??
+      1,
+  );
 }
 
 export function getTopCollaboratorLevel(
@@ -51,8 +56,11 @@ export function getSystemBadgeAsset(icon: DisplayIcon) {
   }
 
   if (icon.systemKey === 'TOP_COLLABORATOR') {
+    const levelFromVariant = Number(icon.systemVariant?.match(/\d+$/)?.[0] ?? 0);
     const levelFromRecognition = getTopCollaboratorLevel(icon.recognitionCount);
-    return levelFromRecognition ? TOP_COLLABORATOR_BADGE_ASSETS[levelFromRecognition] : null;
+    const level =
+      levelFromRecognition ?? ([1, 2, 3].includes(levelFromVariant) ? levelFromVariant : null);
+    return level ? TOP_COLLABORATOR_BADGE_ASSETS[level as CollaboratorLevel] : null;
   }
 
   if (icon.systemKey === 'VERIFIED_PROFILE') {
@@ -64,4 +72,20 @@ export function getSystemBadgeAsset(icon: DisplayIcon) {
   }
 
   return null;
+}
+
+export function getSystemBadgeVisualScale(icon: DisplayIcon) {
+  if (icon.systemKey === 'TOP_COLLABORATOR') {
+    return 1.04;
+  }
+
+  if (icon.systemKey === 'NEW_USER' || icon.systemKey === 'CIRCLE_BUILDER') {
+    return 1.16;
+  }
+
+  if (icon.systemKey === 'VIP') {
+    return clampLevel(readLevel(icon), 5) === 5 ? 1 : 1.16;
+  }
+
+  return 1;
 }
