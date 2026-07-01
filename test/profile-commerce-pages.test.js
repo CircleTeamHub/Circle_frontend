@@ -70,18 +70,28 @@ test('MemberCenterScreen shows VIP1 to VIP5 and links rules', () => {
   assert.match(src, /profile\/member-rules/);
 });
 
-test('CreditScoreScreen explains score status and change rules', () => {
+test('CreditScoreScreen explains score status and change rules via i18n', () => {
   const src = read('src/features/profile/screens/CreditScoreScreen.tsx');
 
   assert.match(src, /useAuthStore/);
   assert.match(src, /creditScore/);
-  assert.match(src, /信誉值详情/);
-  assert.match(src, /当前信誉值/);
-  assert.match(src, /升级情况/);
-  assert.match(src, /如何提升/);
-  assert.match(src, /扣分规则/);
-  assert.match(src, /权益影响/);
-  assert.match(src, /近期记录/);
+  // 文案走 i18n，不再硬编码中文（英文用户否则会看到中文）。
+  assert.match(src, /useTranslation/);
+  assert.match(src, /t\("credit\.title"\)/);
+  assert.match(src, /credit\.tier\./);
+  assert.match(src, /credit\.(improveRules|deductRules|impacts|recentRecords)/);
+  assert.doesNotMatch(src, /信誉值详情/);
+
+  // 两个语言包都必须提供 credit 段的关键 key，避免缺 key 露出裸键名。
+  const zh = JSON.parse(read('src/i18n/locales/zh.json'));
+  const en = JSON.parse(read('src/i18n/locales/en.json'));
+  for (const bundle of [zh, en]) {
+    assert.ok(bundle.credit?.title);
+    assert.ok(bundle.credit?.tier?.excellent?.title);
+    assert.ok(Array.isArray(bundle.credit?.improveRules));
+    assert.ok(bundle.credit?.sections?.recent);
+  }
+  assert.equal(zh.credit.title, '信誉值详情');
 });
 
 test('WalletScreen shows remaining points and recharge packages', () => {

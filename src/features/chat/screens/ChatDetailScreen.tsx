@@ -1633,6 +1633,10 @@ export default function ChatDetailScreen() {
       inFlightRef.current = true;
 
       try {
+        // 提前拦一次：文本等廉价路径靠 reportSend 统一 gate 即可，但图片要先
+        // presign+上传（有成本，且会发一个带签名的临时写凭证给可能被拦的用户）。
+        // 在动手上传前就挡掉，避免无谓开销与凭证外泄面。发送本身仍会在 reportSend
+        // 再兜一层，两处同源（assertLocalCanSendMessage），不会产生口径分叉。
         assertLocalCanSendMessage();
         // 不日志 presign 返回的 fileUrl / uploadUrl —— 这是带签名的临时写凭证，
         // 任何能捕获 console 输出的渠道（adb logcat、屏幕录制、第三方 SDK 的

@@ -29,6 +29,10 @@ function loadTsModule(relativePath, stubs = {}) {
     exports: {},
     require: (specifier) => {
       if (specifier in stubs) return stubs[specifier];
+      // 观测层在测试里是无副作用桩：源码依赖它但 node 无法解析路径别名/原生 Sentry。
+      if (specifier === '@/observability/sentry') {
+        return { reportError: () => {} };
+      }
       return require(specifier);
     },
     Date,
@@ -212,4 +216,54 @@ test('chat detail checks only local credit state before uploading image messages
       uploadBlock.indexOf('requestUploadPresign'),
     'local credit state must be checked before expensive image upload work',
   );
+});
+
+test('assertLocalCanSendMessage fails open (allows) when credit score is unavailable', () => {
+  const reported = [];
+  const creditPolicy = loadTsModule('src/services/api/credit-policy.ts', {
+    '@/services/api/client': { apiClient: async () => ({}) },
+    '@/stores/authStore': {
+      useAuthStore: { getState: () => ({ user: {} }) }, // creditScore 缺失
+    },
+    '@/observability/sentry': { reportError: (e, ctx) => reported.push(ctx) },
+  });
+
+  // 分数未知 → 放行（不抛），且上报一次可观测事件。
+  assert.doesNotThrow(() => creditPolicy.assertLocalCanSendMessage());
+  assert.equal(reported.length, 1);
+  assert.equal(reported[0].op, 'scoreUnavailable');
+});
+
+test('credit gate telemetry reports each event at most once per session', () => {
+  const reported = [];
+  const creditPolicy = loadTsModule('src/services/api/credit-policy.ts', {
+    '@/services/api/client': { apiClient: async () => ({}) },
+    '@/stores/authStore': {
+      useAuthStore: { getState: () => ({ user: { creditScore: 30 } }) },
+    },
+    '@/observability/sentry': { reportError: (e, ctx) => reported.push(ctx) },
+  });
+
+  // 高频发送不应刷量：多次拦截只上报一次。
+  for (let i = 0; i < 5; i += 1) {
+    assert.throws(() => creditPolicy.assertLocalCanSendMessage(), /CreditPolicyError/);
+  }
+  assert.equal(reported.length, 1);
+  assert.equal(reported[0].op, 'blockSend');
+
+  // reset 后可再次上报（测试隔离能力）。
+  creditPolicy.resetCreditGateTelemetry();
+  assert.throws(() => creditPolicy.assertLocalCanSendMessage(), /CreditPolicyError/);
+  assert.equal(reported.length, 2);
+});
+
+test('patch-openim script is fail-soft: never hard-fails a normal install', () => {
+  const src = read('scripts/patch-openim-native-events.mjs');
+
+  // catch 分支必须走 skip（exit 0），不能 process.exit(1) 打挂 npm ci / Android / web。
+  assert.match(src, /function skip\(/);
+  assert.match(src, /process\.exit\(strict \? 1 : 0\)/);
+  assert.doesNotMatch(src, /catch \(error\) \{\s*console\.error[\s\S]*?process\.exit\(1\)/);
+  // 提供严格模式给 iOS CI 显式启用。
+  assert.match(src, /--strict|PATCH_OPENIM_STRICT/);
 });

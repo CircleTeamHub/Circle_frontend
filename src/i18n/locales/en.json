@@ -822,6 +822,45 @@
     "confirmSelection": "Confirm",
     "hint": "Notice"
   },
+  "credit": {
+    "title": "Reputation Details",
+    "current": "Current reputation",
+    "unit": "/ 100",
+    "upgradeTitle": "Progress",
+    "toNext": "{{points}} points to {{title}}",
+    "maxReached": "You've reached the highest reputation tier",
+    "tier": {
+      "excellent": { "title": "Excellent", "detail": "Priority access to high-bar events, collaborations and circle sign-ups." },
+      "good": { "title": "Good", "detail": "Stable reputation; access to most events and social collaboration." },
+      "basic": { "title": "Basic", "detail": "Keep your profile genuine and honor commitments to keep building reputation." },
+      "low": { "title": "Needs work", "detail": "Complete your profile and reduce no-shows and violations." }
+    },
+    "sections": {
+      "improve": "How to improve",
+      "deduct": "What lowers it",
+      "impact": "Where it applies",
+      "recent": "Recent activity"
+    },
+    "improveRules": [
+      "Complete a genuine profile, avatar and contact details",
+      "Attend events you signed up for and earn positive reviews",
+      "Keep posting authentic content; avoid reports and takedowns"
+    ],
+    "deductRules": [
+      "Spam, fake profiles and solicited trades trigger deductions",
+      "Repeated no-shows or organizer complaints hurt your reputation",
+      "Serious violations limit sign-ups, DMs and some circle features"
+    ],
+    "impacts": [
+      "Sign-up bars may combine VIP level and reputation",
+      "High-reputation users can show stronger trust badges",
+      "Low reputation may require manual review for some events"
+    ],
+    "recentRecords": [
+      "No recent reputation changes yet",
+      "Real gains, deductions and appeals will be shown here later"
+    ]
+  },
   "profile": {
     "creditScore": "Credit Score",
     "memberCenter": "Membership",

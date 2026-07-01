@@ -2,43 +2,24 @@ import { NavHeader } from "@/components/ui/nav-header";
 import { useAuthStore } from "@/stores/authStore";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const SCORE_TIERS = [
-  { min: 90, title: "优秀信誉", detail: "可优先参与高门槛活动、合作和圈子报名。" },
-  { min: 75, title: "良好信誉", detail: "信誉状态稳定，可参与大多数活动和社交协作。" },
-  { min: 60, title: "基础信誉", detail: "保持真实资料和正常履约，可继续积累信誉。" },
-  { min: 0, title: "需要提升", detail: "建议完善资料、减少爽约和违规记录。" },
-] as const;
+// 只保留阈值与档位「键」在代码里；所有可见文案走 i18n（credit.tier.* 等）。
+type CreditTierKey = "excellent" | "good" | "basic" | "low";
 
-const NEXT_THRESHOLDS = [
-  { min: 60, title: "基础信誉" },
-  { min: 75, title: "良好信誉" },
-  { min: 90, title: "优秀信誉" },
-] as const;
-
-const IMPROVE_RULES = [
-  "完善真实资料、头像和常用联系方式",
-  "按时参加已报名活动并获得正向评价",
-  "持续发布真实内容，减少被举报或隐藏记录",
+const SCORE_TIERS: readonly { min: number; key: CreditTierKey }[] = [
+  { min: 90, key: "excellent" },
+  { min: 75, key: "good" },
+  { min: 60, key: "basic" },
+  { min: 0, key: "low" },
 ];
 
-const DEDUCT_RULES = [
-  "恶意刷屏、虚假资料、诱导交易会触发扣分",
-  "报名后多次爽约或被主办方投诉会影响信誉",
-  "严重违规会限制报名、私信和部分圈子功能",
-];
-
-const IMPACTS = [
-  "报名门槛可按 VIP 等级和信誉值共同判断",
-  "高信誉用户可展示更高可信度标签",
-  "低信誉时部分活动可能需要人工审核",
-];
-
-const RECENT_RECORDS = [
-  "暂无近期信誉变动记录",
-  "后续会接入真实加分、扣分和申诉流水",
+const NEXT_THRESHOLDS: readonly { min: number; key: CreditTierKey }[] = [
+  { min: 60, key: "basic" },
+  { min: 75, key: "good" },
+  { min: 90, key: "excellent" },
 ];
 
 function clampCreditScore(score: number) {
@@ -111,11 +92,18 @@ const s = StyleSheet.create({
 export default function CreditScoreScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const creditScore = useAuthStore((state) => state.user?.creditScore ?? 0);
   const score = clampCreditScore(creditScore);
   const tier = useMemo(() => getTier(score), [score]);
   const nextTier = useMemo(() => getNextThreshold(score), [score]);
   const progressRemainder = Math.max(0, 100 - score);
+
+  // returnObjects 让整段规则数组从 i18n 取；缺 key 时兜底空数组，避免渲染崩溃。
+  const getRuleList = (key: string): string[] => {
+    const value = t(key, { returnObjects: true });
+    return Array.isArray(value) ? (value as string[]) : [];
+  };
 
   const d = useMemo(
     () => ({
@@ -138,8 +126,11 @@ export default function CreditScoreScreen() {
   );
 
   const upgradeText = nextTier
-    ? `距离 ${nextTier.title} 还差 ${nextTier.min - score} 分`
-    : "已达到当前最高信誉档位";
+    ? t("credit.toNext", {
+        title: t(`credit.tier.${nextTier.key}.title`),
+        points: nextTier.min - score,
+      })
+    : t("credit.maxReached");
 
   const renderRules = (rules: string[]) =>
     rules.map((rule) => (
@@ -151,24 +142,24 @@ export default function CreditScoreScreen() {
 
   return (
     <View style={[s.container, d.container, { paddingTop: insets.top }]}>
-      <NavHeader title="信誉值详情" />
+      <NavHeader title={t("credit.title")} />
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
         <View style={[s.hero, d.hero]}>
           <View style={s.heroHeader}>
             <View>
-              <Text style={d.label}>当前信誉值</Text>
+              <Text style={d.label}>{t("credit.current")}</Text>
               <View style={s.scoreRow}>
                 <Text style={[s.scoreValue, d.scoreValue]}>{score}</Text>
-                <Text style={d.scoreUnit}>/ 100</Text>
+                <Text style={d.scoreUnit}>{t("credit.unit")}</Text>
               </View>
             </View>
             <View style={[s.statusPill, d.statusPill]}>
-              <Text style={d.statusText}>{tier.title}</Text>
+              <Text style={d.statusText}>{t(`credit.tier.${tier.key}.title`)}</Text>
             </View>
           </View>
-          <Text style={d.description}>{tier.detail}</Text>
+          <Text style={d.description}>{t(`credit.tier.${tier.key}.detail`)}</Text>
           <View>
-            <Text style={d.label}>升级情况</Text>
+            <Text style={d.label}>{t("credit.upgradeTitle")}</Text>
             <View style={[s.progressTrack, d.progressTrack]}>
               <View style={[s.progressFill, d.progressFill, { flex: score }]} />
               <View style={{ flex: progressRemainder }} />
@@ -178,23 +169,23 @@ export default function CreditScoreScreen() {
         </View>
 
         <View style={[s.card, d.card]}>
-          <Text style={[s.sectionTitle, d.sectionTitle]}>如何提升</Text>
-          {renderRules(IMPROVE_RULES)}
+          <Text style={[s.sectionTitle, d.sectionTitle]}>{t("credit.sections.improve")}</Text>
+          {renderRules(getRuleList("credit.improveRules"))}
         </View>
 
         <View style={[s.card, d.card]}>
-          <Text style={[s.sectionTitle, d.sectionTitle]}>扣分规则</Text>
-          {renderRules(DEDUCT_RULES)}
+          <Text style={[s.sectionTitle, d.sectionTitle]}>{t("credit.sections.deduct")}</Text>
+          {renderRules(getRuleList("credit.deductRules"))}
         </View>
 
         <View style={[s.card, d.card]}>
-          <Text style={[s.sectionTitle, d.sectionTitle]}>权益影响</Text>
-          {renderRules(IMPACTS)}
+          <Text style={[s.sectionTitle, d.sectionTitle]}>{t("credit.sections.impact")}</Text>
+          {renderRules(getRuleList("credit.impacts"))}
         </View>
 
         <View style={[s.card, d.card]}>
-          <Text style={[s.sectionTitle, d.sectionTitle]}>近期记录</Text>
-          {renderRules(RECENT_RECORDS)}
+          <Text style={[s.sectionTitle, d.sectionTitle]}>{t("credit.sections.recent")}</Text>
+          {renderRules(getRuleList("credit.recentRecords"))}
         </View>
       </ScrollView>
     </View>

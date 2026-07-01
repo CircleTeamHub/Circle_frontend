@@ -1,5 +1,6 @@
 import { apiClient } from '@/services/api/client';
 import { useAuthStore } from '@/stores/authStore';
+import { reportError } from '@/observability/sentry';
 
 export enum CreditPolicyAction {
   SEND_MESSAGE = 'SEND_MESSAGE',
@@ -21,8 +22,30 @@ export type CreditPolicyCheckPayload = {
   targetId?: string;
 };
 
+// 本地快速门槛：仅用于「已知低分」时的即时 UX 拦截，**不是最终授权**。
+// 权威判断在后端 credit-policy.service.ts（同名阈值），最终强制应落在服务端发送
+// 回调；此常量是后端阈值的镜像，改动需两处同步。所有拦截文案统一由
+// buildLowCreditMessage 生成，避免与后端文案漂移。
 const SEND_MESSAGE_MIN_SCORE = 60;
 const SEND_POLICY_CACHE_TTL_MS = 15_000;
+
+function buildLowCreditMessage(minScore: number): string {
+  return `信誉值低于 ${minScore}，暂时无法发送消息`;
+}
+
+// 发送是高频操作：若每次被拦/每次分数缺失都上报，会淹没 Sentry。这里按「事件类型」
+// 每个 app 生命周期只上报一次，既保留可观测性又不刷量。clear* 用于测试隔离。
+const reportedGateEvents = new Set<string>();
+
+function reportGateEventOnce(event: string, context: Record<string, unknown>) {
+  if (reportedGateEvents.has(event)) return;
+  reportedGateEvents.add(event);
+  reportError(new Error(`credit gate: ${event}`), context);
+}
+
+export function resetCreditGateTelemetry() {
+  reportedGateEvents.clear();
+}
 
 const sendPolicyCache = new Map<
   string,
@@ -36,7 +59,7 @@ export class CreditPolicyError extends Error {
   readonly minScore: number;
 
   constructor(decision: CreditPolicyDecision) {
-    super(decision.message ?? '信誉值不足，暂时无法完成该操作');
+    super(decision.message ?? buildLowCreditMessage(decision.minScore));
     this.name = 'CreditPolicyError';
     this.code = decision.code ?? 'LOW_CREDIT_SCORE';
     this.currentScore = decision.currentScore;
@@ -61,6 +84,15 @@ export function clearCreditPolicyCache() {
 export function assertLocalCanSendMessage() {
   const localDenied = getLocalLowCreditDecision();
   if (localDenied) {
+    // 埋点：可回答「是否有用户因信誉被本地拦截」。currentScore 是自身分数，
+    // 非第三方敏感数据；reportError 内部已 sanitize，且永不改变 app 行为。
+    reportGateEventOnce('blockSend', {
+      operation: 'creditGate',
+      op: 'blockSend',
+      code: localDenied.code ?? 'LOW_CREDIT_SCORE',
+      currentScore: localDenied.currentScore,
+      minScore: localDenied.minScore,
+    });
     throw new CreditPolicyError(localDenied);
   }
 }
@@ -84,7 +116,16 @@ function getSendPolicyCacheKey(payload: {
 
 function getLocalLowCreditDecision(): CreditPolicyDecision | null {
   const score = useAuthStore.getState().user?.creditScore;
-  if (typeof score !== 'number' || score >= SEND_MESSAGE_MIN_SCORE) {
+  // 分数未知（资料未加载 / 字段缺失）：本地放行，交由服务端最终裁决。这是有意的
+  // fail-open，但不再静默——上报一次，避免「门槛悄悄失效」无法在生产观测到。
+  if (typeof score !== 'number') {
+    reportGateEventOnce('scoreUnavailable', {
+      operation: 'creditGate',
+      op: 'scoreUnavailable',
+    });
+    return null;
+  }
+  if (score >= SEND_MESSAGE_MIN_SCORE) {
     return null;
   }
   return {
@@ -92,7 +133,7 @@ function getLocalLowCreditDecision(): CreditPolicyDecision | null {
     code: 'LOW_CREDIT_SCORE',
     currentScore: score,
     minScore: SEND_MESSAGE_MIN_SCORE,
-    message: `信誉值低于 ${SEND_MESSAGE_MIN_SCORE}，暂时无法发送消息`,
+    message: buildLowCreditMessage(SEND_MESSAGE_MIN_SCORE),
   };
 }
 
