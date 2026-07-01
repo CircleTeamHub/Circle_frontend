@@ -43,7 +43,7 @@ export function MessageActionMenu({
   onDismiss,
 }: MessageActionMenuProps) {
   const { colors } = useTheme();
-  const { width: screenW } = Dimensions.get('window');
+  const { width: screenW, height: screenH } = Dimensions.get('window');
 
   const layout = useMemo(() => {
     if (!anchor || actions.length === 0) return null;
@@ -64,7 +64,13 @@ export function MessageActionMenu({
       );
       const height = gridRows * GRID_ITEM_HEIGHT + V_PADDING * 2;
       const placeAbove = anchor.y > height + GAP + 40;
-      const top = placeAbove ? anchor.y - height - GAP : anchor.y + GAP;
+      const rawTop = placeAbove ? anchor.y - height - GAP : anchor.y + GAP;
+      // 多行网格在小屏 + 底部锚点时可能溢出屏幕：垂直方向也钳制到可视区内，
+      // 与水平方向的 left 钳制对称。菜单比屏还高的极端情况则顶到 SCREEN_MARGIN。
+      const top = Math.max(
+        SCREEN_MARGIN,
+        Math.min(rawTop, screenH - height - SCREEN_MARGIN),
+      );
       return { compactGrid, gridRows, left, top, menuW };
     }
     const menuW = Math.min(
@@ -79,7 +85,7 @@ export function MessageActionMenu({
     const placeAbove = anchor.y > MENU_HEIGHT + GAP + 80;
     const top = placeAbove ? anchor.y - MENU_HEIGHT - GAP : anchor.y + GAP;
     return { compactGrid, gridRows: 1, left, top, menuW };
-  }, [anchor, actions.length, screenW]);
+  }, [anchor, actions.length, screenW, screenH]);
 
   if (!anchor || !layout) return null;
 

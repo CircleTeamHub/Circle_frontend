@@ -172,6 +172,20 @@ function formatIconLabel(icon: DisplayIcon) {
   return icon.title;
 }
 
+// 徽章外壳尺寸：非 compact 用基础尺寸(在样式里)，compact 分 default/small 两档，
+// 且 system-badge 与普通 circle 各一套。查表取代深层嵌套三元。
+function resolveShellSizeStyle(
+  compact: boolean,
+  isSmallCompact: boolean,
+  hasSystemAsset: boolean,
+) {
+  if (!compact) return null;
+  if (hasSystemAsset) {
+    return isSmallCompact ? s.smallCompactSystemBadgeShell : s.compactSystemBadgeShell;
+  }
+  return isSmallCompact ? s.smallCompactCircle : s.compactCircle;
+}
+
 export function UserIconBadge({
   icon,
   compact = false,
@@ -185,21 +199,16 @@ export function UserIconBadge({
   const label = icon.type === 'SYSTEM' ? formatIconLabel(icon) : icon.circleName ?? icon.title;
   const labelColor = tone === 'member' ? colors.white : colors.text;
   const isSmallCompact = compact && compactSize === 'small';
+  // 四态尺寸（default / compact / smallCompact × system-badge / circle）用查表替代
+  // 深层嵌套三元，可读且易扩展。
+  const shellSizeStyle = resolveShellSizeStyle(compact, isSmallCompact, Boolean(systemBadgeAsset));
 
   return (
     <View style={[s.item, dense ? s.denseItem : null]}>
       <View
         style={[
           systemBadgeAsset ? s.systemBadgeShell : s.circle,
-          compact
-            ? systemBadgeAsset
-              ? isSmallCompact
-                ? s.smallCompactSystemBadgeShell
-                : s.compactSystemBadgeShell
-              : isSmallCompact
-                ? s.smallCompactCircle
-                : s.compactCircle
-            : null,
+          shellSizeStyle,
           systemBadgeAsset
             ? null
             : { backgroundColor: colors.surface, borderColor: colors.surfaceBorder },

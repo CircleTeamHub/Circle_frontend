@@ -57,6 +57,8 @@ export function getSystemBadgeAsset(icon: DisplayIcon) {
 
   if (icon.systemKey === 'TOP_COLLABORATOR') {
     const levelFromVariant = Number(icon.systemVariant?.match(/\d+$/)?.[0] ?? 0);
+    // 契约：getTopCollaboratorLevel 无档位时必须返回 null（不是 0），?? 才会回退到
+    // variant。若它改成返回 0，`0 ?? x` 会短路成 0 使 variant 回退静默失效——改动需谨慎。
     const levelFromRecognition = getTopCollaboratorLevel(icon.recognitionCount);
     const level =
       levelFromRecognition ?? ([1, 2, 3].includes(levelFromVariant) ? levelFromVariant : null);
