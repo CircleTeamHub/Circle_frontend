@@ -47,6 +47,7 @@ test('profile commerce routes export their screens', () => {
   assert.match(read('app/(tabs)/profile/system-announcements.tsx'), /SystemAnnouncementsScreen/);
   assert.match(read('app/(tabs)/profile/member-center.tsx'), /MemberCenterScreen/);
   assert.match(read('app/(tabs)/profile/member-rules.tsx'), /MemberRulesScreen/);
+  assert.match(read('app/(tabs)/profile/credit-score.tsx'), /CreditScoreScreen/);
   assert.match(read('app/(tabs)/profile/wallet.tsx'), /WalletScreen/);
   assert.match(read('app/(tabs)/profile/mall.tsx'), /MallScreen/);
   assert.match(read('app/(tabs)/profile/collections.tsx'), /CollectionsScreen/);
@@ -67,6 +68,20 @@ test('MemberCenterScreen shows VIP1 to VIP5 and links rules', () => {
   assert.match(api, /\/membership\/upgrade/);
   assert.match(src, /会员规则/);
   assert.match(src, /profile\/member-rules/);
+});
+
+test('CreditScoreScreen explains score status and change rules', () => {
+  const src = read('src/features/profile/screens/CreditScoreScreen.tsx');
+
+  assert.match(src, /useAuthStore/);
+  assert.match(src, /creditScore/);
+  assert.match(src, /信誉值详情/);
+  assert.match(src, /当前信誉值/);
+  assert.match(src, /升级情况/);
+  assert.match(src, /如何提升/);
+  assert.match(src, /扣分规则/);
+  assert.match(src, /权益影响/);
+  assert.match(src, /近期记录/);
 });
 
 test('WalletScreen shows remaining points and recharge packages', () => {

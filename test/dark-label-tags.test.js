@@ -22,15 +22,26 @@ test('profile and user profile labels use solid fills', () => {
   const profile = read('src/features/profile/screens/ProfileScreen.tsx');
   const userProfile = read('src/features/user/screens/UserProfileScreen.tsx');
   const loginDevices = read('src/features/profile/screens/LoginDeviceManagementScreen.tsx');
+  const memberStatBlock = profile.match(/memberStat:\s*\{[\s\S]*?\n      \},/)?.[0] ?? '';
 
   assert.doesNotMatch(profile, /memberTagBgLight/);
-  assert.match(profile, /memberStat:\s*\{\s*backgroundColor:\s*colors\.memberTagBg/);
+  assert.match(memberStatBlock, /borderColor:/);
+  assert.doesNotMatch(memberStatBlock, /backgroundColor:\s*colors\.memberTagBg/);
   assert.match(profile, /memberIdentityCircle:\s*\{\s*backgroundColor:\s*colors\.memberTagBg/);
   assert.match(profile, /memberStatValue:\s*\{\s*color:\s*colors\.white/);
   assert.match(userProfile, /badge:\s*\{\s*backgroundColor:\s*colors\.primary/);
   assert.match(userProfile, /badgeText:\s*\{\s*color:\s*colors\.white/);
   assert.match(loginDevices, /badge:\s*\{\s*backgroundColor:\s*colors\.primary/);
   assert.match(loginDevices, /badgeText:\s*\{\s*color:\s*colors\.white/);
+});
+
+test('profile member identity fill uses violet indigo instead of brown', () => {
+  const colors = read('src/theme/colors.ts');
+
+  assert.match(colors, /memberTagBg:\s*'#312E81'/);
+  assert.match(colors, /memberTagBgLight:\s*'rgba\(49, 46, 129, 0\.33\)'/);
+  assert.doesNotMatch(colors, /memberTagBg:\s*'#3D2E1A'/);
+  assert.doesNotMatch(colors, /rgba\(61, 46, 26, 0\.33\)/);
 });
 
 test('selected tag and chip controls use solid primary fills', () => {
