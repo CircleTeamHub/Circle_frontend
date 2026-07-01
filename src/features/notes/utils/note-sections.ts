@@ -96,10 +96,18 @@ function normalizeItems(items: unknown): StructuredNoteMediaItem[] {
   });
 }
 
+function hasExplicitItems(items: unknown) {
+  return Array.isArray(items);
+}
+
 export function buildNoteSections(note: StructuredNoteInput): NoteSections {
   const explicit = note.sections;
   const legacyMedia = normalizeItems(note.media);
   const legacyShowcase = getLegacyShowcaseItems(note);
+  const hasExplicitMedia = hasExplicitItems(explicit?.media?.items);
+  const hasExplicitShowcase = hasExplicitItems(explicit?.showcase?.items);
+  const explicitMedia = normalizeItems(explicit?.media?.items);
+  const explicitShowcase = normalizeItems(explicit?.showcase?.items);
 
   return {
     text: {
@@ -107,14 +115,18 @@ export function buildNoteSections(note: StructuredNoteInput): NoteSections {
       contentJson: getTextBlocks(explicit?.text?.contentJson ?? note.contentJson),
     },
     media: {
-      items: normalizeItems(explicit?.media?.items).length > 0
-        ? normalizeItems(explicit?.media?.items)
-        : legacyMedia,
+      items: hasExplicitMedia
+        ? explicitMedia
+        : hasExplicitShowcase
+          ? []
+          : legacyMedia,
     },
     showcase: {
-      items: normalizeItems(explicit?.showcase?.items).length > 0
-        ? normalizeItems(explicit?.showcase?.items)
-        : legacyShowcase,
+      items: hasExplicitShowcase
+        ? explicitShowcase
+        : hasExplicitMedia
+          ? []
+          : legacyShowcase,
     },
     location: explicit?.location ?? null,
   };

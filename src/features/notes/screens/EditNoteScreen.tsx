@@ -108,6 +108,12 @@ function normalizeSectionMedia(
     }));
 }
 
+function hasSectionMediaItems(
+  items: NoteSections['media']['items'] | NoteSections['showcase']['items'] | undefined,
+) {
+  return Array.isArray(items);
+}
+
 function mergeMedia(items: CreateNoteMediaInput[]) {
   return items.reduce<CreateNoteMediaInput[]>((merged, item) => {
     const key = `${item.objectKey}:${item.url}`;
@@ -195,15 +201,26 @@ export default function EditNoteScreen() {
           extractMediaFromBlocks(loaded),
           noteMediaMap,
         );
+        const hasExplicitMedia = hasSectionMediaItems(note.sections?.media?.items);
+        const hasExplicitShowcase = hasSectionMediaItems(note.sections?.showcase?.items);
 
         blocksRef.current = textBlocks;
         setInitialBlocks(textBlocks.length > 0 ? textBlocks : null);
-        setMediaItems(normalizeSectionMedia(note.sections?.media?.items ?? note.media));
+        setMediaItems(
+          hasExplicitMedia
+            ? normalizeSectionMedia(note.sections?.media?.items)
+            : hasExplicitShowcase
+              ? []
+              : normalizeSectionMedia(note.media),
+        );
         setShowcaseItems(
-          normalizeSectionMedia(
-            note.sections?.showcase?.items ??
-              legacyInlineMedia.filter((item) => item.type === 'IMAGE'),
-          ),
+          hasExplicitShowcase
+            ? normalizeSectionMedia(note.sections?.showcase?.items)
+            : hasExplicitMedia
+              ? []
+              : normalizeSectionMedia(
+                  legacyInlineMedia.filter((item) => item.type === 'IMAGE'),
+                ),
         );
         setLocationDraft(buildLocationDraft(note.sections?.location));
         setSelectedGroupIds(note.groups.map((group) => group.id));
