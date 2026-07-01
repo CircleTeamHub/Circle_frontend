@@ -8,8 +8,38 @@ const bridgePath = path.join(
   'node_modules/@openim/rn-client-sdk/ios/OpenImSdkRn.m',
 );
 
+// 这是一个 iOS-only 的原生桥硬化补丁。作为 postinstall 运行时，任何失败都**绝不能**
+// 阻断 `npm install` / `npm ci` / EAS —— 否则 Android/web 构建、CI 全都会被一个只对
+// iOS 有意义的 patch 拖垮。因此除「参数明确要求严格」外，一律以 exit 0 收尾并告警。
+const strict = process.argv.includes('--strict') || process.env.PATCH_OPENIM_STRICT === '1';
+
+function readSdkVersion() {
+  try {
+    const pkg = JSON.parse(
+      fs.readFileSync(
+        path.join(root, 'node_modules/@openim/rn-client-sdk/package.json'),
+        'utf8',
+      ),
+    );
+    return pkg.version ?? 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+// 补丁不成功时的统一收尾：strict 下才真正 fail，正常安装流程仅告警放行。
+function skip(reason) {
+  const level = strict ? 'error' : 'warn';
+  console[level](
+    `[patch-openim] SKIPPED (sdk=${readSdkVersion()}): ${reason}. ` +
+      `iOS native event hardening NOT applied; re-run pod install after resolving.`,
+  );
+  process.exit(strict ? 1 : 0);
+}
+
 if (!fs.existsSync(bridgePath)) {
-  console.warn('[patch-openim] OpenImSdkRn.m not found; skipping');
+  // 缺文件是常态（Android/web-only 安装、未装 iOS 依赖），安静跳过。
+  console.warn('[patch-openim] OpenImSdkRn.m not found; skipping (non-iOS install?)');
   process.exit(0);
 }
 
@@ -268,8 +298,7 @@ try {
   fs.writeFileSync(bridgePath, next);
   console.log('[patch-openim] OpenIM native event hardening applied');
 } catch (error) {
-  console.error(
-    `[patch-openim] Failed to patch OpenIM native events: ${error.message}`,
-  );
-  process.exit(1);
+  // marker 变动（多因 SDK 升级）会走到这里。绝不 fail 整个安装：仅告警放行，
+  // 需要在 CI 的 iOS 构建前用 `--strict` 或 PATCH_OPENIM_STRICT=1 强校验。
+  skip(error.message);
 }
