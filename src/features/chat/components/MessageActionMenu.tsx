@@ -25,9 +25,12 @@ interface MessageActionMenuProps {
 }
 
 const ITEM_WIDTH = 60;
-const VERTICAL_WIDTH = 180;
-const VERTICAL_ITEM_HEIGHT = 50;
+const GRID_ITEM_WIDTH = 64;
+const GRID_ITEM_HEIGHT = 58;
+const GRID_COLUMNS = 4;
+const COMPACT_GRID_THRESHOLD = 5;
 const H_PADDING = Spacing.xs;
+const V_PADDING = Spacing.sm;
 const MENU_HEIGHT = 62;
 const SCREEN_MARGIN = Spacing.md;
 const GAP = 14; // distance between the touch point and the menu
@@ -44,17 +47,25 @@ export function MessageActionMenu({
 
   const layout = useMemo(() => {
     if (!anchor || actions.length === 0) return null;
-    const vertical = actions.length > 4;
-    if (vertical) {
-      const menuW = Math.min(VERTICAL_WIDTH, screenW - SCREEN_MARGIN * 2);
+    const compactGrid = actions.length >= COMPACT_GRID_THRESHOLD;
+    if (compactGrid) {
+      const maxColumns = Math.max(
+        1,
+        Math.floor(
+          (screenW - SCREEN_MARGIN * 2 - H_PADDING * 2) / GRID_ITEM_WIDTH,
+        ),
+      );
+      const columns = Math.min(GRID_COLUMNS, actions.length, maxColumns);
+      const gridRows = Math.ceil(actions.length / columns);
+      const menuW = columns * GRID_ITEM_WIDTH + H_PADDING * 2;
       const left = Math.max(
         SCREEN_MARGIN,
         Math.min(anchor.x - menuW / 2, screenW - menuW - SCREEN_MARGIN),
       );
-      const height = actions.length * VERTICAL_ITEM_HEIGHT + H_PADDING * 2;
+      const height = gridRows * GRID_ITEM_HEIGHT + V_PADDING * 2;
       const placeAbove = anchor.y > height + GAP + 40;
       const top = placeAbove ? anchor.y - height - GAP : anchor.y + GAP;
-      return { left, top, menuW, vertical };
+      return { compactGrid, gridRows, left, top, menuW };
     }
     const menuW = Math.min(
       actions.length * ITEM_WIDTH + H_PADDING * 2,
@@ -67,7 +78,7 @@ export function MessageActionMenu({
     // Prefer above the bubble; flip below when too close to the top.
     const placeAbove = anchor.y > MENU_HEIGHT + GAP + 80;
     const top = placeAbove ? anchor.y - MENU_HEIGHT - GAP : anchor.y + GAP;
-    return { left, top, menuW, vertical };
+    return { compactGrid, gridRows: 1, left, top, menuW };
   }, [anchor, actions.length, screenW]);
 
   if (!anchor || !layout) return null;
@@ -78,7 +89,7 @@ export function MessageActionMenu({
         <View
           style={[
             s.menu,
-            layout.vertical ? s.menuVertical : null,
+            layout.compactGrid ? s.menuGrid : null,
             {
               left: layout.left,
               top: layout.top,
@@ -90,7 +101,7 @@ export function MessageActionMenu({
           {actions.map((action) => (
             <Pressable
               key={action.key}
-              style={layout.vertical ? s.itemVertical : s.item}
+              style={layout.compactGrid ? s.itemGrid : s.item}
               onPress={() => {
                 onDismiss();
                 action.onPress();
@@ -118,12 +129,13 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: Radius.md,
-    paddingVertical: Spacing.sm,
+    paddingVertical: V_PADDING,
     paddingHorizontal: H_PADDING,
   },
-  menuVertical: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
+  menuGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'flex-start',
   },
   item: {
     flex: 1,
@@ -133,11 +145,12 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.xs,
   },
   label: { ...Typography.tiny },
-  itemVertical: {
-    height: VERTICAL_ITEM_HEIGHT,
-    flexDirection: 'row',
+  itemGrid: {
+    width: GRID_ITEM_WIDTH,
+    height: GRID_ITEM_HEIGHT,
     alignItems: 'center',
-    gap: Spacing.md,
-    paddingHorizontal: Spacing.md,
+    justifyContent: 'center',
+    gap: 4,
+    paddingHorizontal: Spacing.xs,
   },
 });

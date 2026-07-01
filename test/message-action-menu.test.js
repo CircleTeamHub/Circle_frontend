@@ -15,6 +15,16 @@ test('MessageActionMenu is an anchored floating menu (Modal + absolute position)
   assert.match(src, /onDismiss/);
 });
 
+test('MessageActionMenu keeps seven actions in a compact grid instead of a tall sheet', () => {
+  const src = read('src/features/chat/components/MessageActionMenu.tsx');
+  assert.match(src, /COMPACT_GRID_THRESHOLD = 5/);
+  assert.match(src, /GRID_COLUMNS = 4/);
+  assert.match(src, /gridRows/);
+  assert.match(src, /menuGrid/);
+  assert.doesNotMatch(src, /actions\.length > 4/);
+  assert.doesNotMatch(src, /actions\.length \* VERTICAL_ITEM_HEIGHT/);
+});
+
 test('ChatDetailScreen long-press opens the anchored menu instead of an Alert', () => {
   const src = read('src/features/chat/screens/ChatDetailScreen.tsx');
   // long-press captures the touch point and opens the floating menu

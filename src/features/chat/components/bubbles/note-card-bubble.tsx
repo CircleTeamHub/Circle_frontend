@@ -90,7 +90,7 @@ const sNote = StyleSheet.create({
   },
 });
 
-const NOTE_CARD_GREEN = '#4ADE80';
+const NOTE_CARD_ACTIVE_GREEN = '#16A34A';
 
 export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
   message,
@@ -118,7 +118,7 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
 
   if (!note) return null;
 
-  // 4 个标签：笔记 / 视频 / 展示 / 位置 —— 笔记内容包含哪一项就显示绿色
+  // 4 个标签：笔记 / 视频 / 展示 / 位置 —— 笔记内容包含哪一项就高亮显示
   const flags = {
     note: note.hasText ?? Boolean(note.contentPreview && note.contentPreview.trim()),
     video: note.videoCount > 0,
@@ -191,9 +191,9 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
                   sNote.chip,
                   {
                     backgroundColor: active
-                      ? NOTE_CARD_GREEN
+                      ? NOTE_CARD_ACTIVE_GREEN
                       : 'transparent',
-                    borderColor: active ? NOTE_CARD_GREEN : onCardSecondary,
+                    borderColor: active ? NOTE_CARD_ACTIVE_GREEN : onCardSecondary,
                   },
                 ]}
                 disabled={!active}

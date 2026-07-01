@@ -166,6 +166,36 @@ test('chat detail virtualizes and caps group mention candidates', () => {
   assert.doesNotMatch(source, /visibleMentionCandidates\.map\(\(member\)/);
 });
 
+test('chat detail caches group mention candidates and de-dupes in-flight loads', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+  const loaderBlock =
+    source.match(/const loadMentionCandidates = useCallback\(async \(\) => \{[\s\S]*?\}, \[[^\]]*\]\);/)?.[0] ??
+    '';
+
+  assert.match(source, /mentionCandidatesCacheRef/);
+  assert.match(source, /mentionCandidatesInflightRef/);
+  assert.match(loaderBlock, /mentionCandidatesCacheRef\.current\.get\(sourceID\)/);
+  assert.match(loaderBlock, /mentionCandidatesInflightRef\.current\.get\(sourceID\)/);
+  assert.match(loaderBlock, /mentionCandidatesInflightRef\.current\.delete\(sourceID\)/);
+});
+
+test('chat detail sends friend cards without fetching profile during send', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+  const handlerBlock =
+    source.match(/const handlePickFriend = useCallback\([\s\S]*?\n  \);/)?.[0] ??
+    '';
+
+  assert.doesNotMatch(source, /import \{ fetchUserProfile \}/);
+  assert.doesNotMatch(handlerBlock, /fetchUserProfile/);
+  assert.match(handlerBlock, /sendFriendCardMessage/);
+});
+
 test('chat detail guards async send UI state after unmount', () => {
   const source = fs.readFileSync(
     path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
@@ -185,7 +215,12 @@ test('chat detail guards async send UI state after unmount', () => {
     '收藏内容发送失败，请重试',
     '转账卡片发送失败，但积分已扣减',
   ]) {
-    const index = source.indexOf(`setSendError('${message}')`);
+    const direct = `setSendError('${message}')`;
+    const policyAware = `setSendError(getChatSendErrorMessage(error, '${message}'))`;
+    const index =
+      source.indexOf(direct) === -1
+        ? source.indexOf(policyAware)
+        : source.indexOf(direct);
     assert.notEqual(index, -1, `${message} missing`);
     const guardWindow = source.slice(Math.max(0, index - 180), index);
     assert.match(guardWindow, /mountedRef\.current/, `${message} should be mounted-guarded`);

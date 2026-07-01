@@ -88,7 +88,6 @@ import { mapMessageItemToChatMessage } from '@/im/mappers';
 import { useAuthStore } from '@/stores/authStore';
 import { useIMStore } from '@/stores/imStore';
 import { type FriendProfile } from '@/services/api/friends';
-import { fetchUserProfile } from '@/services/api/profile';
 import type { NoteSummary } from '@/features/notes/types';
 import { createCollection, type UserCollection } from '@/services/api/collections';
 import {
@@ -117,9 +116,13 @@ import {
 } from '@/features/chat/store/use-chat-preferences-store';
 import { createGroupCall } from '@/services/api/calls';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
+import {
+  assertLocalCanSendMessage,
+  CreditPolicyError,
+} from '@/services/api/credit-policy';
 import { OnlineState, SessionType } from '@openim/rn-client-sdk';
 import { useTranslation } from 'react-i18next';
-import type { ChatMessage, FriendCardData } from '@/types';
+import type { ChatMessage } from '@/types';
 import {
   buildAtMessagePayload,
   buildQuotePreviewText,
@@ -142,6 +145,10 @@ function logChatSendFailure(
       ? { name: error.name, message: error.message }
       : { message: String(error) };
   console.warn('[chat] text send failed', { ...base, ...context });
+}
+
+function getChatSendErrorMessage(error: unknown, fallback: string) {
+  return error instanceof CreditPolicyError ? error.message : fallback;
 }
 
 type AttachmentId =
@@ -400,6 +407,10 @@ export default function ChatDetailScreen() {
   const [mentionPickerVisible, setMentionPickerVisible] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionCandidates, setMentionCandidates] = useState<MentionTarget[]>([]);
+  const mentionCandidatesCacheRef = useRef(new Map<string, MentionTarget[]>());
+  const mentionCandidatesInflightRef = useRef(
+    new Map<string, Promise<MentionTarget[]>>(),
+  );
   const [mentionTargets, setMentionTargets] = useState<MentionTarget[]>([]);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -1226,17 +1237,37 @@ export default function ChatDetailScreen() {
 
   const loadMentionCandidates = useCallback(async () => {
     if (!isGroupChat || !sourceID) return;
+    const cached = mentionCandidatesCacheRef.current.get(sourceID);
+    if (cached) {
+      setMentionCandidates(cached);
+      return;
+    }
+
+    let request = mentionCandidatesInflightRef.current.get(sourceID);
+    if (!request) {
+      request = loadGroupMemberList(sourceID, MENTION_CANDIDATE_LIMIT)
+        .then((members) =>
+          members
+            .filter((member) => member.userID && member.userID !== currentUserID)
+            .map((member) => ({
+              userID: member.userID,
+              nickname: member.nickname || member.userID,
+            })),
+        )
+        .then((candidates) => {
+          mentionCandidatesCacheRef.current.set(sourceID, candidates);
+          return candidates;
+        })
+        .finally(() => {
+          mentionCandidatesInflightRef.current.delete(sourceID);
+        });
+      mentionCandidatesInflightRef.current.set(sourceID, request);
+    }
+
     try {
-      const members = await loadGroupMemberList(sourceID, MENTION_CANDIDATE_LIMIT);
+      const candidates = await request;
       if (!mountedRef.current) return;
-      setMentionCandidates(
-        members
-          .filter((member) => member.userID && member.userID !== currentUserID)
-          .map((member) => ({
-            userID: member.userID,
-            nickname: member.nickname || member.userID,
-          })),
-      );
+      setMentionCandidates(candidates);
     } catch (error) {
       if (__DEV__) {
         console.warn('[chat] load mention candidates failed', error);
@@ -1314,7 +1345,9 @@ export default function ChatDetailScreen() {
           sessionType: conversationType,
           isGroupChat,
         });
-        if (mountedRef.current) setSendError('消息发送失败，请重试');
+        if (mountedRef.current) {
+          setSendError(getChatSendErrorMessage(error, '消息发送失败，请重试'));
+        }
       } finally {
         inFlightRef.current = false;
       }
@@ -1454,7 +1487,9 @@ export default function ChatDetailScreen() {
         }
         if (mountedRef.current) {
           setVoiceRecordingStartedAt(null);
-          if (!cancel) setSendError('语音发送失败，请重试');
+          if (!cancel) {
+            setSendError(getChatSendErrorMessage(error, '语音发送失败，请重试'));
+          }
         }
       } finally {
         inFlightRef.current = false;
@@ -1569,8 +1604,10 @@ export default function ChatDetailScreen() {
         description,
       });
       appendMessages(conversationID, [sent]);
-    } catch {
-      if (mountedRef.current) setSendError('位置发送失败，请重试');
+    } catch (error) {
+      if (mountedRef.current) {
+        setSendError(getChatSendErrorMessage(error, '位置发送失败，请重试'));
+      }
     } finally {
       inFlightRef.current = false;
     }
@@ -1596,6 +1633,7 @@ export default function ChatDetailScreen() {
       inFlightRef.current = true;
 
       try {
+        assertLocalCanSendMessage();
         // 不日志 presign 返回的 fileUrl / uploadUrl —— 这是带签名的临时写凭证，
         // 任何能捕获 console 输出的渠道（adb logcat、屏幕录制、第三方 SDK 的
         // breadcrumb）拿到 uploadUrl 就能在过期前向同一对象写入任意内容。
@@ -1625,7 +1663,9 @@ export default function ChatDetailScreen() {
               : String(error),
           );
         }
-        if (mountedRef.current) setSendError('图片发送失败，请重试');
+        if (mountedRef.current) {
+          setSendError(getChatSendErrorMessage(error, '图片发送失败，请重试'));
+        }
       } finally {
         inFlightRef.current = false;
       }
@@ -1818,8 +1858,10 @@ export default function ChatDetailScreen() {
           payload: noteCardPayload,
         });
         appendMessages(conversationID, [sent]);
-      } catch {
-        if (mountedRef.current) setSendError('笔记发送失败，请重试');
+      } catch (error) {
+        if (mountedRef.current) {
+          setSendError(getChatSendErrorMessage(error, '笔记发送失败，请重试'));
+        }
       } finally {
         inFlightRef.current = false;
       }
@@ -1840,29 +1882,17 @@ export default function ChatDetailScreen() {
       if (inFlightRef.current) return;
       inFlightRef.current = true;
       try {
-        // 拉一遍完整资料，把 persona + displayIcons 塞进 ext
-        // 失败也无所谓，只是 receiver 看不到 persona/icons，基础名片照样能发。
-        let persona: string | null = null;
-        let displayIcons: FriendCardData['displayIcons'] = [];
-        try {
-          const profile = await fetchUserProfile(friend.id);
-          persona = profile.persona ?? null;
-          displayIcons = profile.displayIcons ?? [];
-        } catch {
-          // ignore — fall back to lean card
-        }
-
         const sent = await sendFriendCardMessage({
           targetConversationID: conversationID,
           userID: friend.id,
           nickname: friend.nickname,
           faceURL: friend.avatarUrl ?? '',
-          persona,
-          displayIcons,
         });
         appendMessages(conversationID, [sent]);
-      } catch {
-        if (mountedRef.current) setSendError('名片发送失败，请重试');
+      } catch (error) {
+        if (mountedRef.current) {
+          setSendError(getChatSendErrorMessage(error, '名片发送失败，请重试'));
+        }
       } finally {
         inFlightRef.current = false;
       }
@@ -1924,7 +1954,9 @@ export default function ChatDetailScreen() {
         if (__DEV__) {
           console.warn('[ChatDetail] send collected item failed', error);
         }
-        if (mountedRef.current) setSendError('收藏内容发送失败，请重试');
+        if (mountedRef.current) {
+          setSendError(getChatSendErrorMessage(error, '收藏内容发送失败，请重试'));
+        }
       } finally {
         inFlightRef.current = false;
       }
@@ -1958,8 +1990,10 @@ export default function ChatDetailScreen() {
           payload,
         });
         appendMessages(conversationID, [sent]);
-      } catch {
-        if (mountedRef.current) setSendError('转账卡片发送失败，但积分已扣减');
+      } catch (error) {
+        if (mountedRef.current) {
+          setSendError(getChatSendErrorMessage(error, '转账卡片发送失败，但积分已扣减'));
+        }
       } finally {
         inFlightRef.current = false;
       }
@@ -2058,7 +2092,9 @@ export default function ChatDetailScreen() {
         sessionType: conversationType,
         isGroupChat,
       });
-      if (mountedRef.current) setSendError('消息发送失败，请重试');
+      if (mountedRef.current) {
+        setSendError(getChatSendErrorMessage(error, '消息发送失败，请重试'));
+      }
     } finally {
       inFlightRef.current = false;
       if (mountedRef.current) setSending(false);
