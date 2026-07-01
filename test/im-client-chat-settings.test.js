@@ -54,6 +54,10 @@ function loadTsModule(relativePath, stubs = {}) {
 DEFAULT_TS_MODULE_STUBS['@/im/media-uri'] = loadTsModule('src/im/media-uri.ts');
 DEFAULT_TS_MODULE_STUBS['@/im/user-id'] = loadTsModule('src/im/user-id.ts');
 DEFAULT_TS_MODULE_STUBS['@/observability/sentry'] = { reportError: () => {} };
+DEFAULT_TS_MODULE_STUBS['@/services/api/credit-policy'] = {
+  assertCanSendMessage: async () => undefined,
+  assertLocalCanSendMessage: () => undefined,
+};
 DEFAULT_TS_MODULE_STUBS['@/features/chat/utils/voice-forward'] = loadTsModule(
   'src/features/chat/utils/voice-forward.ts',
 );

@@ -96,3 +96,9 @@ test('chat info screen routes blacklist, delete, and report through real friend 
   assert.doesNotMatch(source, /openUnsupportedAction\(t\('chat\.report'\)\)/);
   assert.doesNotMatch(source, /openUnsupportedAction\(t\('chat\.deleteFriend'\)\)/);
 });
+
+test('report friend screen explains successful friend reports affect reputation', () => {
+  const source = read('src/features/chat/screens/ReportFriendScreen.tsx');
+
+  assert.match(source, /有效举报会影响对方信誉值/);
+});

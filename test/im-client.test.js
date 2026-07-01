@@ -56,6 +56,10 @@ function loadTsModule(relativePath, stubs = {}) {
 DEFAULT_TS_MODULE_STUBS['@/im/media-uri'] = loadTsModule('src/im/media-uri.ts');
 DEFAULT_TS_MODULE_STUBS['@/im/user-id'] = loadTsModule('src/im/user-id.ts');
 DEFAULT_TS_MODULE_STUBS['@/observability/sentry'] = { reportError: () => {} };
+DEFAULT_TS_MODULE_STUBS['@/services/api/credit-policy'] = {
+  assertCanSendMessage: async () => undefined,
+  assertLocalCanSendMessage: () => undefined,
+};
 DEFAULT_TS_MODULE_STUBS['@/features/chat/utils/voice-forward'] = loadTsModule(
   'src/features/chat/utils/voice-forward.ts',
 );
@@ -248,6 +252,7 @@ test('getOrCreateSingleConversation waits until IM connection is ready before re
 
 test('sendTextMessage waits until IM connection is ready before sending', async () => {
   const sdkCalls = [];
+  const policyCalls = [];
   const storeState = {
     connected: false,
   };
@@ -288,6 +293,11 @@ test('sendTextMessage waits until IM connection is ready before sending', async 
       OPENIM_WS_URL: 'wss://im.example.com',
       OPENIM_LOG_LEVEL: 0,
     },
+    '@/services/api/credit-policy': {
+      assertLocalCanSendMessage: () => {
+        policyCalls.push('local-check');
+      },
+    },
     '@/stores/imStore': {
       useIMStore: {
         getState: () => ({
@@ -323,6 +333,7 @@ test('sendTextMessage waits until IM connection is ready before sending', async 
 
   assert.equal(result.clientMsgID, 'client-1');
   assert.deepEqual(sdkCalls[0], ['createTextMessage', 'hello']);
+  assert.equal(policyCalls.length, 1);
   assert.equal(sdkCalls[1][0], 'sendMessage');
   assert.equal(sdkCalls[1][1].groupID, 'group-1');
   assert.equal(sdkCalls[1][1].recvID, '');

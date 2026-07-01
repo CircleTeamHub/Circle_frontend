@@ -43,6 +43,7 @@ import { registerLogoutHandler } from '@/services/auth/session';
 import { useIMStore } from '@/stores/imStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { reportError } from '@/observability/sentry';
+import { assertLocalCanSendMessage } from '@/services/api/credit-policy';
 
 export { fromImUserId, toImUserId } from '@/im/user-id';
 
@@ -56,9 +57,10 @@ const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 // 所有发送变体最终都走 OpenIMSDK.sendMessage —— 在此统一上报发送失败（用户可见的
 // 关键失败，类似上传），并原样抛出，不改各发送函数的行为。用 bracket 访问避免被批量
 // 替换误伤。
-function reportSend(
+async function reportSend(
   options: Parameters<typeof OpenIMSDK.sendMessage>[0],
 ): ReturnType<typeof OpenIMSDK.sendMessage> {
+  assertLocalCanSendMessage();
   return OpenIMSDK['sendMessage'](options).catch((error: unknown) => {
     reportError(error, { operation: 'openim', op: 'sendMessage' });
     throw error;
