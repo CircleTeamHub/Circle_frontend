@@ -12,6 +12,7 @@ test('login screen uses the existing app logo plane asset without an app-icon fr
   assert.match(source, /assets\/images\/login-logo-plane\.png/);
   assert.match(source, /<Image/);
   assert.match(source, /logoPlane/);
+  assert.match(source, /logoPlane:\s*\{\s*width:\s*80,\s*height:\s*80,\s*marginBottom:\s*-4\s*\}/);
   assert.doesNotMatch(source, /Ionicons/);
   assert.doesNotMatch(source, /paper-plane/);
   assert.doesNotMatch(source, /logoShell/);

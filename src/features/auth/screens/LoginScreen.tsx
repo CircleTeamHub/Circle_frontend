@@ -26,7 +26,7 @@ const APP_LOGO_SOURCE = require("../../../../assets/images/login-logo-plane.png"
 const s = StyleSheet.create({
   scroll: { flex: 1 },
   container: { paddingHorizontal: Spacing.lg, alignItems: "center", gap: 28 },
-  logoPlane: { width: 96, height: 96, marginBottom: -8 },
+  logoPlane: { width: 80, height: 80, marginBottom: -4 },
   headingGroup: { alignItems: "center", gap: Spacing.sm, width: "100%" },
   heading: { fontSize: 28, fontWeight: "700" },
   subtitle: { ...Typography.body },
