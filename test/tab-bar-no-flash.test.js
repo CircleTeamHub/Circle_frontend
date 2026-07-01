@@ -41,10 +41,13 @@ test('自绘 tab bar：避开系统导航栏，选中态保持胶囊形状而不
   // bar 是完整胶囊
   assert.match(layout, /const TAB_BAR_HEIGHT = \d+/);
   assert.match(layout, /const TAB_BAR_RADIUS = TAB_BAR_HEIGHT \/ 2/);
+  // 浮动条贴近底部安全区，不要悬得过高遮住列表主体。
+  assert.match(layout, /const TAB_BAR_MARGIN_B = 2/);
+  assert.match(layout, /const TAB_BAR_SAFE_AREA_OVERLAP = 14/);
   // Android 三键/手势导航栏会占用底部 safe area，浮动 bar 必须叠加 bottom inset。
   assert.match(layout, /useSafeAreaInsets/);
   assert.match(layout, /const insets = useSafeAreaInsets\(\)/);
-  assert.match(layout, /marginBottom: TAB_BAR_MARGIN_B \+ insets\.bottom/);
+  assert.match(layout, /Math\.max\(insets\.bottom - TAB_BAR_SAFE_AREA_OVERLAP, 0\)/);
   // 上下内边距 → 药丸高 = bar 高 - 2*PAD_V，不靠 flex 拉满救场
   assert.match(layout, /const TAB_BAR_PAD_V/);
   assert.match(layout, /const TAB_PILL_HEIGHT = TAB_BAR_HEIGHT - TAB_BAR_PAD_V \* 2/);

@@ -47,7 +47,8 @@ const TAB_BAR_HIDDEN_OFFSET = 140;
 const TAB_BAR_HEIGHT = 50;
 const TAB_BAR_RADIUS = TAB_BAR_HEIGHT / 2; // 整条 bar 是完整胶囊，两端半圆
 const TAB_BAR_MARGIN_H = 32; // 左右外边距：再缩一圈后留白更多，bar 更窄
-const TAB_BAR_MARGIN_B = 24; // 距屏幕底部（浮动）
+const TAB_BAR_MARGIN_B = 2; // 距安全区底部（浮动）
+const TAB_BAR_SAFE_AREA_OVERLAP = 14; // 向下吃掉部分 iOS home indicator 安全区
 const TAB_BAR_PAD_H = 4; // 内边距：首尾药丸不贴 bar 内沿
 const TAB_BAR_PAD_V = 4; // 上下内边距：药丸高 = bar 高 - 8
 const TAB_PILL_HEIGHT = TAB_BAR_HEIGHT - TAB_BAR_PAD_V * 2;
@@ -260,7 +261,7 @@ export default function TabLayout() {
       borderWidth: 1,
       borderColor: colors.surfaceBorder,
       marginHorizontal: TAB_BAR_MARGIN_H,
-      marginBottom: TAB_BAR_MARGIN_B + insets.bottom,
+      marginBottom: TAB_BAR_MARGIN_B + Math.max(insets.bottom - TAB_BAR_SAFE_AREA_OVERLAP, 0),
       paddingHorizontal: TAB_BAR_PAD_H,
       paddingVertical: TAB_BAR_PAD_V,
       // 不裁剪：阴影完整显示，且药丸本就在内部不会溢出。
