@@ -296,3 +296,11 @@ export async function reportFriend(
     body: payload,
   });
 }
+
+// Withdraws the caller's own report(s) against a user and refunds the credit
+// each one deducted. Mirrors the backend DELETE /friend/:id/report route.
+export async function withdrawFriendReport(friendUserId: string) {
+  return apiClient<void>(`/friend/${friendUserId}/report`, {
+    method: 'DELETE',
+  });
+}
