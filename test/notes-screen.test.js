@@ -246,7 +246,6 @@ test('EditNoteScreen does not render selected groups a second time', () => {
 test('EditNoteScreen lays out note metadata as compact wrapping rows', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
-  assert.doesNotMatch(src, /ScrollView/);
   assert.match(src, /groupLabelRow/);
   assert.match(src, /folder-open-outline/);
   assert.match(src, /groupChipsWrap/);
@@ -285,6 +284,80 @@ test('EditNoteScreen selected group chips use solid purple cards', () => {
   );
   assert.match(src, /groupChipTextActive:\s*\{\s*color:\s*colors\.white\s*\}/);
   assert.doesNotMatch(src, /groupChipActive:\s*\{[\s\S]*colors\.primary \+ '18'/);
+});
+
+test('EditNoteScreen renders four large structured note edit regions', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+
+  assert.match(src, /ScrollView/);
+  assert.match(src, /renderSectionHeader/);
+  assert.match(src, /sectionBlock/);
+  assert.match(src, /notes\.edit\.sections\.text/);
+  assert.match(src, /notes\.edit\.sections\.media/);
+  assert.match(src, /notes\.edit\.sections\.showcase/);
+  assert.match(src, /notes\.edit\.sections\.location/);
+  assert.doesNotMatch(src, /editSections/);
+  assert.doesNotMatch(src, /sectionGrid/);
+});
+
+test('EditNoteScreen adds content directly inside media showcase and location sections', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+
+  assert.match(src, /mediaItems/);
+  assert.match(src, /showcaseItems/);
+  assert.match(src, /handleAddSectionMedia/);
+  assert.match(src, /renderAddButton\(\s*'media'/);
+  assert.match(src, /renderAddButton\(\s*'showcase'/);
+  assert.match(src, /renderMediaList/);
+  assert.match(src, /mediaToolbarEnabled=\{false\}/);
+  assert.match(src, /locationDraft/);
+  assert.match(src, /locationTitlePlaceholder/);
+  assert.match(src, /locationAddressPlaceholder/);
+  assert.match(src, /const nextLocation =/);
+  assert.match(src, /location: nextLocation/);
+});
+
+test('EditNoteScreen can select a real map location and save coordinates', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+
+  assert.match(src, /useNoteLocationPickerStore/);
+  assert.match(src, /useFocusEffect/);
+  assert.match(src, /handleOpenLocationPicker/);
+  assert.match(src, /handleUseCurrentLocation/);
+  assert.match(src, /latitude: locationDraft\.latitude/);
+  assert.match(src, /longitude: locationDraft\.longitude/);
+  assert.match(src, /notes\/location-picker/);
+});
+
+test('EditNoteScreen presents structured regions with quieter section chrome', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+
+  assert.match(src, /sectionShell/);
+  assert.match(src, /sectionHeaderMeta/);
+  assert.match(src, /sectionCountPill/);
+  assert.match(src, /const renderSectionHeader = \([\s\S]*meta\?: string/);
+  assert.match(src, /flexDirection:\s*'row'/);
+});
+
+test('EditNoteScreen renders media as a stable preview grid', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+
+  assert.match(src, /expo-image/);
+  assert.match(src, /mediaPreviewGrid/);
+  assert.match(src, /mediaPreviewTile/);
+  assert.match(src, /mediaThumb/);
+  assert.match(src, /mediaRemoveButton/);
+  assert.match(src, /contentFit="cover"/);
+});
+
+test('EditNoteScreen shows a real map preview for selected locations', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+
+  assert.match(src, /buildMapPreviewUrl/);
+  assert.match(src, /staticmap\.openstreetmap\.de/);
+  assert.match(src, /locationPreviewCard/);
+  assert.match(src, /locationMapPreview/);
+  assert.match(src, /locationCoordinatePill/);
 });
 
 test('NoteCard renders title and meta', () => {

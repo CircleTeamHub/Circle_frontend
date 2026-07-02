@@ -1,0 +1,43 @@
+/* global __dirname */
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const fs = require('node:fs');
+
+const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
+
+test('profile notes stack exposes a real map location picker route', () => {
+  const route = read('app/(tabs)/profile/notes/location-picker.tsx');
+  assert.match(route, /NoteLocationPickerScreen/);
+});
+
+test('NoteLocationPickerScreen renders a WebView-backed map picker', () => {
+  const src = read('src/features/notes/screens/NoteLocationPickerScreen.tsx');
+
+  assert.match(src, /react-native-webview/);
+  assert.match(src, /openstreetmap\.org/);
+  assert.match(src, /nominatim\.openstreetmap\.org/);
+  assert.match(src, /onMessage=\{handleMapMessage\}/);
+  assert.match(src, /setPickedLocation/);
+  assert.match(src, /router\.back\(\)/);
+});
+
+test('NoteLocationPickerScreen keeps the real map full screen with a bottom sheet', () => {
+  const src = read('src/features/notes/screens/NoteLocationPickerScreen.tsx');
+
+  assert.match(src, /\.bottomSheet/);
+  assert.match(src, /safe-area-inset-bottom/);
+  assert.match(src, /mapFrame:\s*\{\s*flex:\s*1/);
+  assert.match(src, /margin:\s*0/);
+  assert.doesNotMatch(src, /\.panel/);
+  assert.doesNotMatch(src, /mapFrame:\s*\{[\s\S]*borderRadius:\s*Radius\.md/);
+});
+
+test('note location picker store carries selected coordinates back to edit screen', () => {
+  const src = read('src/features/notes/store/use-note-location-picker-store.ts');
+
+  assert.match(src, /latitude: number/);
+  assert.match(src, /longitude: number/);
+  assert.match(src, /setPickedLocation/);
+  assert.match(src, /consumePickedLocation/);
+});

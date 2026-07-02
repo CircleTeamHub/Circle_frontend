@@ -32,6 +32,7 @@ type DraftDisplayIcon = {
   type: 'SYSTEM' | 'CIRCLE';
   sortOrder: number;
   systemKey?: SystemIconKey;
+  systemVariant?: string;
   recognitionCount?: number;
   circleId?: string;
   circleName?: string;
@@ -87,10 +88,10 @@ const s = StyleSheet.create({
   },
   optionChip: {
     width: 76,
-    minHeight: 78,
+    minHeight: 72,
     borderRadius: Radius.lg,
     paddingHorizontal: Spacing.xs,
-    paddingVertical: Spacing.sm,
+    paddingVertical: Spacing.xs,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -130,13 +131,14 @@ function getIconExplanationKey(option: IconOption | null): IconExplanationKey {
 
 function optionToDraft(option: IconOption, sortOrder: number): DraftDisplayIcon {
   return {
-    id: option.systemKey ?? option.circleId ?? `${option.type}-${option.title}`,
+    id: getOptionIdentity(option),
     title: option.title,
     imageUrl: option.imageUrl,
     fallbackIconName: option.fallbackIconName,
     type: option.type,
     sortOrder,
     systemKey: option.systemKey,
+    systemVariant: option.systemVariant,
     recognitionCount: option.recognitionCount,
     circleId: option.circleId,
     circleName: option.circleName,
@@ -149,6 +151,22 @@ function optionToPreviewIcon(option: IconOption): DisplayIcon {
     id: option.systemKey ?? option.circleId ?? `${option.type}-${option.title}`,
     sortOrder: 0,
   };
+}
+
+function getOptionIdentity(option: Pick<IconOption, 'type' | 'systemKey' | 'systemVariant' | 'circleId' | 'title'>) {
+  if (option.type === 'SYSTEM') {
+    return `system:${option.systemKey}:${option.systemVariant ?? option.systemKey ?? option.title}`;
+  }
+
+  return `circle:${option.circleId ?? option.title}`;
+}
+
+function getDisplayIconIdentity(icon: Pick<DisplayIcon, 'type' | 'systemKey' | 'systemVariant' | 'circleId' | 'id' | 'title'>) {
+  if (icon.type === 'SYSTEM') {
+    return `system:${icon.systemKey}:${icon.systemVariant ?? icon.systemKey ?? icon.title}`;
+  }
+
+  return `circle:${icon.circleId ?? icon.id ?? icon.title}`;
 }
 
 export default function MyIconsScreen() {
@@ -177,7 +195,7 @@ export default function MyIconsScreen() {
           .sort((a, b) => a.sortOrder - b.sortOrder)
           .map((icon) => ({
             ...icon,
-            id: icon.systemKey ?? icon.circleId ?? icon.id,
+            id: getDisplayIconIdentity(icon),
           })),
       );
     } catch (error) {
@@ -211,8 +229,7 @@ export default function MyIconsScreen() {
 
   const toggleOption = useCallback(
     (option: IconOption) => {
-      const optionId =
-        option.systemKey ?? option.circleId ?? `${option.type}-${option.title}`;
+      const optionId = getOptionIdentity(option);
       setFocusedOption(option);
 
       setSelectedIcons((current) => {
@@ -250,6 +267,7 @@ export default function MyIconsScreen() {
       const payload: UpdateDisplayIconInput[] = selectedIcons.map((icon, index) => ({
         displayType: icon.type,
         systemKey: icon.systemKey,
+        systemVariant: icon.systemVariant,
         circleId: icon.circleId,
         sortOrder: index,
       }));
@@ -257,7 +275,7 @@ export default function MyIconsScreen() {
       const refreshedUser = await fetchCurrentUser().catch(() => null);
       setUser({
         ...(refreshedUser ?? user),
-        displayIcons: refreshedUser?.displayIcons ?? nextDisplayIcons,
+        displayIcons: nextDisplayIcons,
       });
       router.back();
     } catch (error) {
@@ -308,7 +326,7 @@ export default function MyIconsScreen() {
       <Text style={[s.title, d.title]}>{title}</Text>
       <View style={s.chipRow}>
         {options.map((option) => {
-          const optionId = option.systemKey ?? option.circleId ?? `${option.type}-${option.title}`;
+          const optionId = getOptionIdentity(option);
           const selected = selectedIcons.some((item) => item.id === optionId);
           return (
             <Pressable
@@ -320,7 +338,7 @@ export default function MyIconsScreen() {
               ]}
               onPress={() => toggleOption(option)}
             >
-              <UserIconBadge icon={optionToPreviewIcon(option)} />
+              <UserIconBadge icon={optionToPreviewIcon(option)} dense />
             </Pressable>
           );
         })}
@@ -330,7 +348,10 @@ export default function MyIconsScreen() {
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title={t('myIcons.title', { defaultValue: '我的图标' })} />
+      <NavHeader
+        title={t('myIcons.title', { defaultValue: '我的图标' })}
+        onBackPress={handleSave}
+      />
       <ScrollView
         style={s.scroll}
         contentInsetAdjustmentBehavior="automatic"

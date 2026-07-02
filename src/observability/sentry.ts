@@ -107,6 +107,12 @@ export interface ReportErrorContext {
   [key: string]: unknown;
 }
 
+type SentryCaptureContext = {
+  extra?: Record<string, unknown>;
+  tags?: Record<string, string>;
+  fingerprint?: string[];
+};
+
 const SENSITIVE_URL_PATTERN = /https?:\/\/[^\s"'<>)]*\?[^\s"'<>)]*/gi;
 const PRESIGNED_URL_MARKERS = [
   'X-Amz-Algorithm=',
@@ -174,6 +180,46 @@ function toSafeError(error: unknown): Error {
   return new Error(sanitizeStringForSentry(String(error)));
 }
 
+function readTagValue(context: Record<string, unknown>, key: string): string | undefined {
+  const value = context[key];
+  if (typeof value === 'string') {
+    const sanitized = sanitizeStringForSentry(value).trim();
+    return sanitized.length > 0 ? sanitized : undefined;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  return undefined;
+}
+
+function buildCaptureContext(
+  safeContext: Record<string, unknown> | undefined,
+): SentryCaptureContext | undefined {
+  if (!safeContext) return undefined;
+
+  const tagKeys = ['endpointPath', 'method', 'status', 'apiCode', 'failureKind'];
+  const tags = tagKeys.reduce<Record<string, string>>((nextTags, key) => {
+    const value = readTagValue(safeContext, key);
+    return value ? { ...nextTags, [key]: value } : nextTags;
+  }, {});
+
+  const captureContext: SentryCaptureContext = { extra: safeContext };
+  if (Object.keys(tags).length > 0) {
+    captureContext.tags = tags;
+  }
+  if (tags.endpointPath && tags.method) {
+    captureContext.fingerprint = [
+      'api',
+      tags.method,
+      tags.endpointPath,
+      tags.status ?? 'unknown-status',
+      tags.apiCode ?? 'no-api-code',
+      tags.failureKind ?? 'http',
+    ];
+  }
+  return captureContext;
+}
+
 /**
  * Reports a handled ("soft failure") error to Sentry — errors that are caught
  * and recovered, so Sentry's automatic handlers never see them. No-op when
@@ -192,10 +238,7 @@ export function reportError(
     const safeContext = context
       ? (sanitizeContextForSentry(context) as Record<string, unknown>)
       : undefined;
-    client.captureException(
-      toSafeError(error),
-      safeContext ? { extra: safeContext } : undefined,
-    );
+    client.captureException(toSafeError(error), buildCaptureContext(safeContext));
   } catch {
     // Observability must never change app behavior.
   }

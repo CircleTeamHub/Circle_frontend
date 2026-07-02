@@ -21,17 +21,12 @@ import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 type Mode = "password" | "code";
 
-const APP_ICON_SOURCE = require("../../../../assets/images/icon.png");
+const APP_LOGO_SOURCE = require("../../../../assets/images/login-logo-plane.png");
 
 const s = StyleSheet.create({
   scroll: { flex: 1 },
   container: { paddingHorizontal: Spacing.lg, alignItems: "center", gap: 28 },
-  logo: {
-    width: 72,
-    height: 72,
-    borderRadius: Radius.lg,
-    overflow: "hidden",
-  },
+  logoPlane: { width: 80, height: 80, marginBottom: -4 },
   headingGroup: { alignItems: "center", gap: Spacing.sm, width: "100%" },
   heading: { fontSize: 28, fontWeight: "700" },
   subtitle: { ...Typography.body },
@@ -131,12 +126,12 @@ export default function LoginScreen() {
         s.container,
         { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 24 },
       ]}
-        {...keyboardDismissOnDragProps}
+      {...keyboardDismissOnDragProps}
     >
       {/* Logo */}
       <Image
-        source={APP_ICON_SOURCE}
-        style={s.logo}
+        source={APP_LOGO_SOURCE}
+        style={s.logoPlane}
         resizeMode="contain"
         accessibilityLabel="风信"
       />

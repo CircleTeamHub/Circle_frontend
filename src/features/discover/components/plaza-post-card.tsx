@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
+import { UserIconRow } from '@/components/ui/user-icon-row';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { getUserProfileHref } from '@/features/user/utils/routes';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
@@ -49,6 +50,9 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.xs,
     marginTop: 3,
+  },
+  authorBadgeRow: {
+    flexShrink: 0,
   },
   tag: {
     paddingHorizontal: Spacing.sm,
@@ -288,6 +292,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
     () => formatRelativeTime(post.createdAt, t),
     [post.createdAt, t],
   );
+  const authorDisplayIcons = post.author.displayIcons ?? [];
 
   return (
     <View style={d.card}>
@@ -312,6 +317,11 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
                 {post.circle.name}
               </Text>
             </View>
+            {authorDisplayIcons.length > 0 ? (
+              <View style={s.authorBadgeRow}>
+                <UserIconRow icons={authorDisplayIcons} compact compactSize="small" />
+              </View>
+            ) : null}
           </View>
           <View style={s.metaRow}>
             {post.city ? <Text style={d.metaText}>{post.city}</Text> : null}

@@ -85,6 +85,34 @@ test('EditNoteScreen saves with createNote or updateNote', () => {
   assert.match(src, /updateNote/);
 });
 
+test('EditNoteScreen preserves structured note sections it cannot edit', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+  assert.match(src, /existingSectionsRef/);
+  assert.match(src, /note\.sections\?\.text\?\.contentJson/);
+  assert.match(src, /setLocationDraft\(buildLocationDraft\(note\.sections\?\.location\)\)/);
+  assert.match(src, /const nextLocation =/);
+  assert.match(src, /location: nextLocation/);
+  assert.match(src, /const hasExplicitMedia = hasSectionMediaItems\(note\.sections\?\.media\?\.items\)/);
+  assert.match(src, /const hasExplicitShowcase = hasSectionMediaItems\(note\.sections\?\.showcase\?\.items\)/);
+  assert.match(src, /hasExplicitMedia[\s\S]{0,120}normalizeSectionMedia\(note\.sections\?\.media\?\.items\)/);
+  assert.match(src, /hasExplicitShowcase[\s\S]{0,120}\?\s*\[\]/);
+  assert.match(src, /setShowcaseItems\([\s\S]{0,80}normalizeSectionMedia/);
+  assert.match(src, /const sectionMedia = mergeMedia\(mediaItems\)/);
+  assert.match(src, /const sectionShowcase = mergeMedia\(showcaseItems\)/);
+  assert.match(src, /const legacyMedia = mergeMedia\(\[\.\.\.sectionMedia, \.\.\.sectionShowcase\]\)/);
+  assert.match(src, /media: \{ items: sectionMedia \}/);
+  assert.match(src, /showcase: \{ items: sectionShowcase \}/);
+  assert.match(src, /media: legacyMedia/);
+});
+
+test('NoteDetailScreen retries section jumps after layout is measured', () => {
+  const src = read('src/features/notes/screens/NoteDetailScreen.tsx');
+  assert.match(src, /scrollToRequestedSection/);
+  assert.match(src, /scrolledSectionRef\.current = scrollKey/);
+  assert.match(src, /onContentSizeChange=\{scrollToRequestedSection\}/);
+  assert.match(src, /sectionYRef\.current\[kind\] = event\.nativeEvent\.layout\.y;[\s\S]{0,120}scrollToRequestedSection\(\)/);
+});
+
 test('EditNoteScreen has disabled done button while submitting', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
   assert.match(src, /isSubmitting/);

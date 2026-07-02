@@ -72,9 +72,15 @@ interface Props {
   initialContent: Record<string, unknown>[] | null;
   onContentChange: (blocks: Record<string, unknown>[]) => void;
   onMediaUploaded?: (media: CreateNoteMediaInput) => void;
+  mediaToolbarEnabled?: boolean;
 }
 
-export function NoteBlockEditor({ initialContent, onContentChange, onMediaUploaded }: Props) {
+export function NoteBlockEditor({
+  initialContent,
+  onContentChange,
+  onMediaUploaded,
+  mediaToolbarEnabled = true,
+}: Props) {
   const { resolvedMode } = useTheme();
   const { t, i18n } = useTranslation();
   // BlockNote runs in the DOM bridge realm where i18n can't reach, so resolve
@@ -274,6 +280,7 @@ export function NoteBlockEditor({ initialContent, onContentChange, onMediaUpload
           theme={resolvedMode}
           language={language}
           toolbarLabels={toolbarLabels}
+          mediaToolbarEnabled={mediaToolbarEnabled}
         />
       </View>
     </DOMBridgeErrorBoundary>

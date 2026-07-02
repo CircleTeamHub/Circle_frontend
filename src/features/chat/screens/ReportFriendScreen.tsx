@@ -92,7 +92,11 @@ export default function ReportFriendScreen() {
       } else {
         await reportFriend(friendUserId, { category, description: trimmed });
       }
-      Alert.alert('举报已提交', '我们会尽快处理，谢谢你的反馈。', [
+      const successMessage =
+        targetType === 'friend'
+          ? '举报已记录，本次有效举报会影响对方信誉值。'
+          : '我们会尽快处理，谢谢你的反馈。';
+      Alert.alert('举报已提交', successMessage, [
         { text: '好的', onPress: () => router.back() },
       ]);
     } catch (error) {

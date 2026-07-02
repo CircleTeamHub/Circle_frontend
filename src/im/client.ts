@@ -43,6 +43,7 @@ import { registerLogoutHandler } from '@/services/auth/session';
 import { useIMStore } from '@/stores/imStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { reportError } from '@/observability/sentry';
+import { assertLocalCanSendMessage } from '@/services/api/credit-policy';
 
 export { fromImUserId, toImUserId } from '@/im/user-id';
 
@@ -56,9 +57,10 @@ const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 // 所有发送变体最终都走 OpenIMSDK.sendMessage —— 在此统一上报发送失败（用户可见的
 // 关键失败，类似上传），并原样抛出，不改各发送函数的行为。用 bracket 访问避免被批量
 // 替换误伤。
-function reportSend(
+async function reportSend(
   options: Parameters<typeof OpenIMSDK.sendMessage>[0],
 ): ReturnType<typeof OpenIMSDK.sendMessage> {
+  assertLocalCanSendMessage();
   return OpenIMSDK['sendMessage'](options).catch((error: unknown) => {
     reportError(error, { operation: 'openim', op: 'sendMessage' });
     throw error;
@@ -652,6 +654,77 @@ export async function sendTextMessage(params: {
   });
 
   return sentMessage;
+}
+
+export async function sendTextAtMessage(params: {
+  sourceID: string;
+  sessionType: SessionType;
+  text: string;
+  atUserList: string[];
+  atUsersInfo?: { userID: string; nickname: string }[];
+}) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await waitForOpenIMConnectionReady();
+
+  const message = await OpenIMSDK.createTextAtMessage({
+    text: params.text,
+    atUserIDList: params.atUserList,
+    atUsersInfo: params.atUsersInfo?.map((item) => ({
+      atUserID: item.userID,
+      groupNickname: item.nickname,
+    })),
+  });
+  const isSingle = params.sessionType === SessionType.Single;
+  return reportSend({
+    recvID: isSingle ? toImUserId(params.sourceID) : '',
+    groupID: !isSingle ? params.sourceID : '',
+    message,
+    offlinePushInfo: {
+      title: '新消息',
+      desc: params.text,
+      ex: '',
+      iOSPushSound: 'default',
+      iOSBadgeCount: true,
+    },
+  });
+}
+
+export async function sendQuoteMessage(params: {
+  sourceID: string;
+  sessionType: SessionType;
+  text: string;
+  message: MessageItem;
+}) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await waitForOpenIMConnectionReady();
+
+  const message = await OpenIMSDK.createQuoteMessage({
+    text: params.text,
+    message: params.message,
+  });
+  const isSingle = params.sessionType === SessionType.Single;
+  return reportSend({
+    recvID: isSingle ? toImUserId(params.sourceID) : '',
+    groupID: !isSingle ? params.sourceID : '',
+    message,
+    offlinePushInfo: {
+      title: '新消息',
+      desc: params.text,
+      ex: '',
+      iOSPushSound: 'default',
+      iOSBadgeCount: true,
+    },
+  });
 }
 
 export async function sendImageMessage(params: {
@@ -1248,6 +1321,27 @@ export async function deleteConversation(conversationID: string) {
   useIMStore.getState().setMessages(conversationID, []);
   await loadConversationList().catch(() => {
     // 会话已删除，列表刷新失败时等待 SDK 推送同步。
+  });
+}
+
+export async function deleteLocalMessage(conversationID: string, clientMsgID: string) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await OpenIMSDK.deleteMessageFromLocalStorage({ conversationID, clientMsgID });
+  const state = useIMStore.getState();
+  const currentMessages = state.messagesByConversation[conversationID];
+  if (Array.isArray(currentMessages)) {
+    state.setMessages(
+      conversationID,
+      currentMessages.filter((message) => message.clientMsgID !== clientMsgID),
+    );
+  }
+  await loadConversationMessages(conversationID).catch(() => {
+    // 删除已完成；刷新失败时等待下一次进入会话重新拉取本地历史。
   });
 }
 

@@ -17,6 +17,41 @@ test('ProfileScreen shows VIP level and credit score in the gold member card', (
   assert.match(memberCardBlock, /\{creditScore\}/);
 });
 
+test('ProfileScreen gives VIP and reputation stats independent value-based backgrounds', () => {
+  const src = read('src/features/profile/screens/ProfileScreen.tsx');
+  const memberCardBlock = src.match(/\{\/\* Member card \*\/\}[\s\S]*?<Divider \/>/)?.[0] ?? '';
+  const memberStatsBlock = memberCardBlock.match(/<View style=\{s\.memberStatsPanel\}>[\s\S]*?<Pressable style=\{s\.memberCardHeader\}/)?.[0] ?? '';
+  const memberStatsPanelStyle = src.match(/memberStatsPanel:\s*\{[\s\S]*?\n  \},/)?.[0] ?? '';
+  const memberStatCellStyle = src.match(/memberStatCell:\s*\{[\s\S]*?\n  \},/)?.[0] ?? '';
+
+  assert.match(src, /getVipStatBackground/);
+  assert.match(src, /getCreditStatBackground/);
+  assert.match(src, /getVipStatTextColor/);
+  assert.match(src, /getCreditStatTextColor/);
+  assert.match(src, /vipStatBackground/);
+  assert.match(src, /creditStatBackground/);
+  assert.match(src, /vipStatTextColor/);
+  assert.match(src, /creditStatTextColor/);
+  assert.match(src, /handleOpenMemberCenter/);
+  assert.match(src, /handleOpenCreditScore/);
+  assert.match(src, /profile\/member-center/);
+  assert.match(src, /profile\/credit-score/);
+  assert.match(memberStatsPanelStyle, /gap:\s*8/);
+  assert.doesNotMatch(memberStatsPanelStyle, /borderWidth/);
+  assert.match(memberStatCellStyle, /gap:\s*3/);
+  assert.match(memberStatCellStyle, /borderRadius:\s*Radius\.md/);
+  assert.match(memberStatCellStyle, /borderWidth:\s*StyleSheet\.hairlineWidth/);
+  assert.match(memberStatCellStyle, /paddingVertical:\s*9/);
+  assert.match(memberCardBlock, /style=\{\[s\.memberStatCell,\s*d\.memberStat,\s*\{ backgroundColor: vipStatBackground \}\]\}/);
+  assert.match(memberCardBlock, /style=\{\[s\.memberStatCell,\s*d\.memberStat,\s*\{ backgroundColor: creditStatBackground \}\]\}/);
+  assert.match(memberStatsBlock, /onPress=\{handleOpenMemberCenter\}/);
+  assert.match(memberStatsBlock, /onPress=\{handleOpenCreditScore\}/);
+  assert.match(memberCardBlock, /style=\{\[d\.memberStatLabel,\s*\{ color: vipStatTextColor \}\]\}/);
+  assert.match(memberCardBlock, /style=\{\[d\.memberStatValue,\s*\{ color: creditStatTextColor \}\]\}/);
+  assert.doesNotMatch(memberCardBlock, /memberStatDivider/);
+  assert.doesNotMatch(memberCardBlock, /style=\{\[s\.memberStatsPanel,\s*d\.memberStat\]\}[\s\S]*?backgroundColor:\s*colors\.memberTagBg/);
+});
+
 test('ProfileScreen removes the old green badge icon', () => {
   const src = read('src/features/profile/screens/ProfileScreen.tsx');
 
@@ -46,7 +81,8 @@ test('ProfileScreen keeps a visible icon-settings entry when no icons are select
   assert.match(memberCardBlock, /displayIcons\.length > 0 \?/);
   assert.match(memberCardBlock, /handleOpenIcons/);
   assert.match(memberCardBlock, /profile\.addIcon/);
-  assert.match(memberCardBlock, /<Pressable[\s\S]*style=\{\[s\.memberCard, d\.memberCard\]\}[\s\S]*onPress=\{handleOpenIcons\}/);
+  assert.match(memberCardBlock, /<Pressable[\s\S]*style=\{s\.memberCardHeader\}[\s\S]*onPress=\{handleOpenIcons\}/);
+  assert.match(memberCardBlock, /<Pressable[\s\S]*style=\{s\.memberIdentityRow\}[\s\S]*onPress=\{handleOpenIcons\}/);
 });
 
 test('ProfileScreen does not show membership or account status beside the moved badge', () => {
@@ -63,8 +99,19 @@ test('ProfileScreen refreshes current user from backend for live VIP and reputat
   assert.match(src, /fetchCurrentUser/);
   assert.match(src, /fetchIconOptions/);
   assert.match(src, /useFocusEffect/);
-  assert.match(src, /setUser\(nextUser\)/);
+  assert.match(src, /setUser\(\{/);
+  assert.match(src, /displayIcons:\s*nextIcons\.displayIcons/);
   assert.match(src, /setProfileDisplayIcons/);
+});
+
+test('ProfileScreen preserves icon-options badges when refreshed user has stale displayIcons', () => {
+  const src = read('src/features/profile/screens/ProfileScreen.tsx');
+  const refreshBlock = src.match(
+    /const refreshCurrentUser = useCallback\([\s\S]*?useFocusEffect/,
+  )?.[0] ?? '';
+
+  assert.match(refreshBlock, /displayIcons:\s*nextIcons\.displayIcons/);
+  assert.doesNotMatch(refreshBlock, /setUser\(nextUser\)/);
 });
 
 test('ProfileScreen supports pull-to-refresh for profile data', () => {

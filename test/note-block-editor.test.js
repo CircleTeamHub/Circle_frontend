@@ -77,6 +77,18 @@ test('DOM editor exposes a video toolbar button wired to onVideoRequest', () => 
   assert.match(src, /videoTitle/);
 });
 
+test('NoteBlockEditor can hide media toolbar buttons for structured note text sections', () => {
+  const nativeSrc = read('src/features/notes/components/NoteBlockEditor.tsx');
+  const domSrc = read('src/features/notes/dom/NoteBlockEditor.dom.tsx');
+
+  assert.match(nativeSrc, /mediaToolbarEnabled\?: boolean/);
+  assert.match(nativeSrc, /mediaToolbarEnabled = true/);
+  assert.match(nativeSrc, /mediaToolbarEnabled=\{mediaToolbarEnabled\}/);
+  assert.match(domSrc, /mediaToolbarEnabled\?: boolean/);
+  assert.match(domSrc, /mediaToolbarEnabled = true/);
+  assert.match(domSrc, /mediaToolbarEnabled \? \(/);
+});
+
 test('DOM editor inserts the pending block by its type (image or video)', () => {
   const src = read('src/features/notes/dom/NoteBlockEditor.dom.tsx');
   assert.match(src, /type: pendingInsert\.type/);

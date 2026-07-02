@@ -44,6 +44,13 @@ const sSent = StyleSheet.create({
   sentStatusIcon: {
     marginTop: 1,
   },
+  quoteBox: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    marginBottom: 6,
+    maxWidth: 240,
+  },
 });
 
 export const SentBubble: React.FC<SentBubbleProps> = ({
@@ -69,6 +76,13 @@ export const SentBubble: React.FC<SentBubbleProps> = ({
         ...Typography.tinyRegular,
         marginTop: Spacing.xs,
       },
+      quoteBox: {
+        backgroundColor: 'rgba(255,255,255,0.18)',
+      },
+      quoteText: {
+        color: 'rgba(255,255,255,0.78)',
+        ...Typography.tinyRegular,
+      },
     }),
     [colors],
   );
@@ -77,6 +91,11 @@ export const SentBubble: React.FC<SentBubbleProps> = ({
     <View style={sSent.sentRow}>
       <View style={sSent.sentContent}>
         <View style={[sSent.sentBubble, d.sentBubble]}>
+          {message.quotedText ? (
+            <View style={[sSent.quoteBox, d.quoteBox]}>
+              <Text style={d.quoteText} numberOfLines={2}>{message.quotedText}</Text>
+            </View>
+          ) : null}
           <Text style={d.sentBubbleText}>{message.text}</Text>
         </View>
         {message.time ? (

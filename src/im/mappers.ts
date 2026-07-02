@@ -70,18 +70,38 @@ function isSystemNotification(contentType: number) {
 function parseNoteCardPayload(data: string): NoteCardData | null {
   try {
     const raw = JSON.parse(data) as Partial<NoteCardData>;
-    if (!raw || typeof raw.noteId !== 'string' || typeof raw.title !== 'string') {
+    if (typeof raw.noteId !== 'string' || typeof raw.title !== 'string') {
       return null;
     }
+    const imageCount =
+      typeof raw.imageCount === 'number' && Number.isFinite(raw.imageCount)
+        ? Math.max(0, raw.imageCount)
+        : 0;
+    const videoCount =
+      typeof raw.videoCount === 'number' && Number.isFinite(raw.videoCount)
+        ? Math.max(0, raw.videoCount)
+        : 0;
+    const contentPreview =
+      typeof raw.contentPreview === 'string' ? raw.contentPreview : null;
     return {
       noteId: raw.noteId,
-      ownerId: raw.ownerId ?? null,
+      ownerId: raw.ownerId,
       title: raw.title,
-      contentPreview: raw.contentPreview ?? null,
-      coverUrl: raw.coverUrl ?? null,
-      imageCount: raw.imageCount ?? 0,
-      videoCount: raw.videoCount ?? 0,
+      contentPreview,
+      coverUrl: typeof raw.coverUrl === 'string' ? raw.coverUrl : null,
+      imageCount,
+      videoCount,
       groupNames: Array.isArray(raw.groupNames) ? raw.groupNames : [],
+      hasText:
+        typeof raw.hasText === 'boolean'
+          ? raw.hasText
+          : Boolean(contentPreview?.trim()),
+      showcaseCount:
+        typeof raw.showcaseCount === 'number' && Number.isFinite(raw.showcaseCount)
+          ? Math.max(0, raw.showcaseCount)
+          : imageCount,
+      hasLocation:
+        typeof raw.hasLocation === 'boolean' ? raw.hasLocation : false,
     };
   } catch {
     return null;
@@ -179,6 +199,10 @@ export function getMessagePreview(message: MessageItem | null, fallback = '') {
   switch (message.contentType) {
     case MessageType.TextMessage:
       return message.textElem?.content ?? fallback;
+    case MessageType.AtTextMessage:
+      return message.atTextElem?.text ?? fallback;
+    case MessageType.QuoteMessage:
+      return message.quoteElem?.text ?? fallback;
     case MessageType.PictureMessage:
       return tImPreview('image', '[图片]');
     case MessageType.VideoMessage:
@@ -292,6 +316,25 @@ export function mapMessageItemToChatMessage(
       outgoing: isSent,
       locationTitle: item.locationElem?.description ?? '位置消息',
       locationAddress: item.locationElem?.description ?? '未知位置',
+      senderName: isSent ? undefined : (item.senderNickname || item.sendID),
+    };
+  }
+
+  if (item.contentType === MessageType.AtTextMessage) {
+    return {
+      ...base,
+      type: isSent ? 'sent' : 'received',
+      text: item.atTextElem?.text ?? item.content,
+      senderName: isSent ? undefined : (item.senderNickname || item.sendID),
+    };
+  }
+
+  if (item.contentType === MessageType.QuoteMessage) {
+    return {
+      ...base,
+      type: isSent ? 'sent' : 'received',
+      text: item.quoteElem?.text ?? item.content,
+      quotedText: getMessagePreview(item.quoteElem?.quoteMessage ?? null, ''),
       senderName: isSent ? undefined : (item.senderNickname || item.sendID),
     };
   }

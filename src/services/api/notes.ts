@@ -1,9 +1,11 @@
 import { apiClient } from './client';
 import type {
   CreateNoteInput,
+  CreateNoteExportInput,
   CreateNoteShareLinkInput,
   ListNotesParams,
   NoteDetail,
+  NoteExportResult,
   NoteGroup,
   NoteShareLink,
   NoteSummary,
@@ -57,6 +59,16 @@ export async function createNoteShareLink(
   input: CreateNoteShareLinkInput,
 ): Promise<NoteShareLink> {
   return apiClient<NoteShareLink>('/note/share-links', {
+    method: 'POST',
+    body: input,
+  });
+}
+
+export async function createNoteExport(
+  noteId: string,
+  input: CreateNoteExportInput,
+): Promise<NoteExportResult> {
+  return apiClient<NoteExportResult>(`/note/${noteId}/exports`, {
     method: 'POST',
     body: input,
   });

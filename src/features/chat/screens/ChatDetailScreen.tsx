@@ -10,6 +10,7 @@ import {
   View,
   Text,
   TextInput,
+  Share,
   Pressable,
   FlatList,
   ScrollView,
@@ -67,10 +68,13 @@ import {
   loadGroupMemberList,
   loadConversationMessages,
   markConversationAsRead,
+  deleteLocalMessage,
   sendFriendCardMessage,
   sendImageMessage,
   sendLocationMessage,
   sendNoteCardMessage,
+  sendQuoteMessage,
+  sendTextAtMessage,
   sendTextMessage,
   sendTransferCardMessage,
   sendVoiceMessage,
@@ -84,7 +88,6 @@ import { mapMessageItemToChatMessage } from '@/im/mappers';
 import { useAuthStore } from '@/stores/authStore';
 import { useIMStore } from '@/stores/imStore';
 import { type FriendProfile } from '@/services/api/friends';
-import { fetchUserProfile } from '@/services/api/profile';
 import type { NoteSummary } from '@/features/notes/types';
 import { createCollection, type UserCollection } from '@/services/api/collections';
 import {
@@ -113,9 +116,22 @@ import {
 } from '@/features/chat/store/use-chat-preferences-store';
 import { createGroupCall } from '@/services/api/calls';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
+import {
+  assertLocalCanSendMessage,
+  CreditPolicyError,
+} from '@/services/api/credit-policy';
 import { OnlineState, SessionType } from '@openim/rn-client-sdk';
 import { useTranslation } from 'react-i18next';
-import type { ChatMessage, FriendCardData } from '@/types';
+import type { ChatMessage } from '@/types';
+import {
+  buildAtMessagePayload,
+  buildQuotePreviewText,
+  filterMentionCandidates,
+  getActiveMentionQuery,
+  getMentionsPresentInText,
+  type MentionTarget,
+} from '@/features/chat/utils/chat-send-payloads';
+import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
 
 // Dev-only structured log for a failed send. Never logs the message body —
 // only the error and conversation kind — to avoid leaking content into logs.
@@ -129,6 +145,10 @@ function logChatSendFailure(
       ? { name: error.name, message: error.message }
       : { message: String(error) };
   console.warn('[chat] text send failed', { ...base, ...context });
+}
+
+function getChatSendErrorMessage(error: unknown, fallback: string) {
+  return error instanceof CreditPolicyError ? error.message : fallback;
 }
 
 type AttachmentId =
@@ -160,6 +180,7 @@ const ATTACHMENT_ITEMS: readonly {
 
 // 工具面板每页最多 8 个（4 列 × 2 行），超出的横向翻页
 const ATTACHMENT_PAGE_SIZE = 8;
+const MENTION_CANDIDATE_LIMIT = 200;
 const ATTACHMENT_PAGES: (typeof ATTACHMENT_ITEMS)[number][][] = Array.from(
   { length: Math.ceil(ATTACHMENT_ITEMS.length / ATTACHMENT_PAGE_SIZE) },
   (_, page) =>
@@ -234,6 +255,40 @@ const s = StyleSheet.create({
     textAlign: 'center',
   },
   sendError: { textAlign: 'center', paddingVertical: 4 },
+  quoteComposerBar: {
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  quoteComposerText: {
+    flex: 1,
+    ...Typography.small,
+  },
+  mentionPicker: {
+    maxHeight: 220,
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.sm,
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+  },
+  mentionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  mentionName: {
+    ...Typography.bodyRegular,
+    flex: 1,
+  },
   inputBar: {
     paddingTop: 10,
     paddingHorizontal: Spacing.md,
@@ -349,6 +404,14 @@ export default function ChatDetailScreen() {
   // 位置 / 笔记 / 名片 / 转账 6 条发送路径共享同一道闸。
   const inFlightRef = useRef(false);
   const [draft, setDraft] = useState('');
+  const [mentionPickerVisible, setMentionPickerVisible] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionCandidates, setMentionCandidates] = useState<MentionTarget[]>([]);
+  const mentionCandidatesCacheRef = useRef(new Map<string, MentionTarget[]>());
+  const mentionCandidatesInflightRef = useRef(
+    new Map<string, Promise<MentionTarget[]>>(),
+  );
+  const [mentionTargets, setMentionTargets] = useState<MentionTarget[]>([]);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
@@ -432,6 +495,10 @@ export default function ChatDetailScreen() {
   const searchedMsgID =
     typeof params.searchedMsgID === 'string' ? params.searchedMsgID : '';
   const isPreviewMode = !conversationID;
+  const visibleMentionCandidates = useMemo(
+    () => filterMentionCandidates(mentionCandidates, mentionQuery),
+    [mentionCandidates, mentionQuery],
+  );
 
   // 入口只给了 sourceID 时，就地把会话解析出来（单聊/群聊各走对应方法）。
   useEffect(() => {
@@ -698,6 +765,8 @@ export default function ChatDetailScreen() {
       const input = buildCollectionInputFromMessage(message, {
         conversationID,
         conversationTitle,
+        sourceID,
+        conversationType: isGroupChat ? 'group' : 'private',
       });
       if (!input) return;
 
@@ -717,7 +786,7 @@ export default function ChatDetailScreen() {
         );
       }
     },
-    [conversationID, conversationTitle, t],
+    [conversationID, conversationTitle, isGroupChat, sourceID, t],
   );
 
   const [actionMenu, setActionMenu] = useState<{
@@ -725,6 +794,7 @@ export default function ChatDetailScreen() {
     x: number;
     y: number;
   } | null>(null);
+  const [quoteTarget, setQuoteTarget] = useState<ChatMessage | null>(null);
 
   const handleCopyMessage = useCallback(async (message: ChatMessage) => {
     const text = message.text?.trim();
@@ -755,6 +825,94 @@ export default function ChatDetailScreen() {
     [conversationID, setPendingForward],
   );
 
+  const handleQuoteMessage = useCallback((message: ChatMessage) => {
+    setQuoteTarget(message);
+  }, []);
+
+  const handleDeleteMessage = useCallback(
+    (message: ChatMessage) => {
+      if (!conversationID) return;
+      Alert.alert(
+        t('chat.messageActions.delete', { defaultValue: '删除' }),
+        t('chat.messageActions.deleteConfirm', {
+          defaultValue: '删除这条本地消息？',
+        }),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('common.delete'),
+            style: 'destructive',
+            onPress: () => {
+              void deleteLocalMessage(conversationID, message.id).catch((error) => {
+                if (__DEV__) {
+                  console.warn('[ChatDetail] delete local message failed', error);
+                }
+                Alert.alert(
+                  t('chat.messageActions.deleteFailed', {
+                    defaultValue: '删除失败',
+                  }),
+                  t('chat.messageActions.deleteFailedHint', {
+                    defaultValue: '请稍后重试',
+                  }),
+                );
+              });
+            },
+          },
+        ],
+      );
+    },
+    [conversationID, t],
+  );
+
+  const handleReportMessage = useCallback(() => {
+    if (isGroupChat) {
+      router.push({
+        pathname: '/(tabs)/messages/report-friend',
+        params: {
+          targetType: 'group',
+          groupID: sourceID,
+          groupName: conversationTitle,
+        },
+      });
+      return;
+    }
+    router.push({
+      pathname: '/(tabs)/messages/report-friend',
+      params: {
+        targetType: 'friend',
+        friendUserId: sourceID,
+        friendName: conversationTitle,
+      },
+    });
+  }, [conversationTitle, isGroupChat, sourceID]);
+
+  const handleSaveMessage = useCallback(
+    async (message: ChatMessage) => {
+      const url = message.imageUrl ?? message.voiceUrl ?? message.voicePath ?? null;
+      try {
+        if (url) {
+          await Share.share({ url, message: url });
+          return;
+        }
+        if (message.text?.trim()) {
+          await Share.share({ message: message.text.trim() });
+          return;
+        }
+        Alert.alert(
+          t('chat.messageActions.saveUnsupported', {
+            defaultValue: '该消息暂不支持保存',
+          }),
+        );
+      } catch {
+        Alert.alert(
+          t('chat.messageActions.saveFailed', { defaultValue: '保存失败' }),
+          t('chat.messageActions.saveFailedHint', { defaultValue: '请稍后重试' }),
+        );
+      }
+    },
+    [t],
+  );
+
   const handleMessageLongPress = useCallback(
     (message: ChatMessage, event: GestureResponderEvent) => {
       if (message.type === 'date') return;
@@ -778,6 +936,12 @@ export default function ChatDetailScreen() {
       });
     }
     actions.push({
+      key: 'quote',
+      icon: 'return-up-back-outline',
+      label: t('chat.messageActions.quote', { defaultValue: '引用' }),
+      onPress: () => handleQuoteMessage(message),
+    });
+    actions.push({
       key: 'forward',
       icon: 'arrow-redo-outline',
       label: t('chat.messageActions.forward'),
@@ -789,8 +953,36 @@ export default function ChatDetailScreen() {
       label: t('chat.messageActions.collect'),
       onPress: () => void handleCollectMessage(message),
     });
+    actions.push({
+      key: 'delete',
+      icon: 'trash-outline',
+      label: t('chat.messageActions.delete', { defaultValue: '删除' }),
+      onPress: () => handleDeleteMessage(message),
+    });
+    actions.push({
+      key: 'report',
+      icon: 'warning-outline',
+      label: t('chat.messageActions.report', { defaultValue: '举报' }),
+      onPress: handleReportMessage,
+    });
+    actions.push({
+      key: 'save',
+      icon: 'download-outline',
+      label: t('chat.messageActions.save', { defaultValue: '保存' }),
+      onPress: () => void handleSaveMessage(message),
+    });
     return actions;
-  }, [actionMenu, handleCollectMessage, handleCopyMessage, handleForwardMessage, t]);
+  }, [
+    actionMenu,
+    handleCollectMessage,
+    handleCopyMessage,
+    handleDeleteMessage,
+    handleForwardMessage,
+    handleQuoteMessage,
+    handleReportMessage,
+    handleSaveMessage,
+    t,
+  ]);
 
   const withMessageActions = useCallback(
     (message: ChatMessage, node: ReactElement) => (
@@ -875,6 +1067,9 @@ export default function ChatDetailScreen() {
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
             onPress={(note) =>
               router.push(getNoteDetailHref(scope, note.noteId, note.ownerId ?? ''))
+            }
+            onSectionPress={(note, section) =>
+              router.push(getNoteDetailHref(scope, note.noteId, note.ownerId ?? '', section))
             }
             hideStatus={isGroupChat}
           />
@@ -967,6 +1162,7 @@ export default function ChatDetailScreen() {
     Keyboard.dismiss();
     animatePanels();
     setEmojiOpen(false);
+    setMentionPickerVisible(false);
     setAttachmentPage(0);
     setAttachmentOpen((prev) => !prev);
   }, [animatePanels]);
@@ -975,6 +1171,7 @@ export default function ChatDetailScreen() {
     Keyboard.dismiss();
     animatePanels();
     setAttachmentOpen(false);
+    setMentionPickerVisible(false);
     setEmojiOpen((prev) => !prev);
   }, [animatePanels]);
 
@@ -983,6 +1180,7 @@ export default function ChatDetailScreen() {
     animatePanels();
     setAttachmentOpen(false);
     setEmojiOpen(false);
+    setMentionPickerVisible(false);
     Keyboard.dismiss();
   }, [animatePanels]);
 
@@ -1020,12 +1218,112 @@ export default function ChatDetailScreen() {
 
   const handleSelectionChange = useCallback(
     (event: { nativeEvent: { selection: { start: number; end: number } } }) => {
-      selectionRef.current = event.nativeEvent.selection;
+      const nextSelection = event.nativeEvent.selection;
+      selectionRef.current = nextSelection;
+      if (isGroupChat) {
+        const activeQuery = getActiveMentionQuery(draft, nextSelection.start);
+        setMentionQuery(activeQuery);
+        if (activeQuery === null) {
+          setMentionPickerVisible(false);
+        } else {
+          setMentionPickerVisible(true);
+        }
+      }
       // 插入后短暂受控把光标移到表情之后；用户再次移动光标时释放受控，交还输入法。
       setSelection((current) => (current ? undefined : current));
     },
-    [],
+    [draft, isGroupChat],
   );
+
+  const loadMentionCandidates = useCallback(async () => {
+    if (!isGroupChat || !sourceID) return;
+    const cached = mentionCandidatesCacheRef.current.get(sourceID);
+    if (cached) {
+      setMentionCandidates(cached);
+      return;
+    }
+
+    let request = mentionCandidatesInflightRef.current.get(sourceID);
+    if (!request) {
+      request = loadGroupMemberList(sourceID, MENTION_CANDIDATE_LIMIT)
+        .then((members) =>
+          members
+            .filter((member) => member.userID && member.userID !== currentUserID)
+            .map((member) => ({
+              userID: member.userID,
+              nickname: member.nickname || member.userID,
+            })),
+        )
+        .then((candidates) => {
+          mentionCandidatesCacheRef.current.set(sourceID, candidates);
+          return candidates;
+        })
+        .finally(() => {
+          mentionCandidatesInflightRef.current.delete(sourceID);
+        });
+      mentionCandidatesInflightRef.current.set(sourceID, request);
+    }
+
+    try {
+      const candidates = await request;
+      if (!mountedRef.current) return;
+      setMentionCandidates(candidates);
+    } catch (error) {
+      if (__DEV__) {
+        console.warn('[chat] load mention candidates failed', error);
+      }
+      if (mountedRef.current) setMentionCandidates([]);
+    }
+  }, [currentUserID, isGroupChat, sourceID]);
+
+  const handleDraftChange = useCallback(
+    (next: string) => {
+      setDraft(next);
+      setMentionTargets((current) => getMentionsPresentInText(next, current));
+      if (!isGroupChat) {
+        setMentionQuery(null);
+        setMentionPickerVisible(false);
+        return;
+      }
+      const selectionStart = selectionRef.current.start;
+      const inferredCursor =
+        selectionStart === draft.length && next.length >= draft.length
+          ? next.length
+          : Math.min(selectionStart, next.length);
+      const activeQuery = getActiveMentionQuery(next, inferredCursor);
+      setMentionQuery(activeQuery);
+      if (activeQuery !== null) {
+        setMentionPickerVisible(true);
+        void loadMentionCandidates();
+      } else {
+        setMentionPickerVisible(false);
+      }
+    },
+    [draft, isGroupChat, loadMentionCandidates],
+  );
+
+  const handlePickMention = useCallback((target: MentionTarget) => {
+    setDraft((current) => {
+      const cursor = Math.min(selectionRef.current.start, current.length);
+      const beforeCursor = current.slice(0, cursor);
+      const atIndex = beforeCursor.lastIndexOf('@');
+      const insert = `@${target.nickname} `;
+      const next =
+        atIndex >= 0
+          ? `${current.slice(0, atIndex)}${insert}${current.slice(cursor)}`
+          : `${current}${insert}`;
+      const nextCursor = (atIndex >= 0 ? atIndex : current.length) + insert.length;
+      selectionRef.current = { start: nextCursor, end: nextCursor };
+      setSelection({ start: nextCursor, end: nextCursor });
+      return next;
+    });
+    setMentionTargets((current) => {
+      if (current.some((item) => item.userID === target.userID)) return current;
+      return [...current, target];
+    });
+    setMentionQuery(null);
+    setMentionPickerVisible(false);
+  }, []);
 
   const sendDraftAsText = useCallback(
     async (text: string) => {
@@ -1047,7 +1345,9 @@ export default function ChatDetailScreen() {
           sessionType: conversationType,
           isGroupChat,
         });
-        if (mountedRef.current) setSendError('消息发送失败，请重试');
+        if (mountedRef.current) {
+          setSendError(getChatSendErrorMessage(error, '消息发送失败，请重试'));
+        }
       } finally {
         inFlightRef.current = false;
       }
@@ -1187,7 +1487,9 @@ export default function ChatDetailScreen() {
         }
         if (mountedRef.current) {
           setVoiceRecordingStartedAt(null);
-          if (!cancel) setSendError('语音发送失败，请重试');
+          if (!cancel) {
+            setSendError(getChatSendErrorMessage(error, '语音发送失败，请重试'));
+          }
         }
       } finally {
         inFlightRef.current = false;
@@ -1302,8 +1604,10 @@ export default function ChatDetailScreen() {
         description,
       });
       appendMessages(conversationID, [sent]);
-    } catch {
-      if (mountedRef.current) setSendError('位置发送失败，请重试');
+    } catch (error) {
+      if (mountedRef.current) {
+        setSendError(getChatSendErrorMessage(error, '位置发送失败，请重试'));
+      }
     } finally {
       inFlightRef.current = false;
     }
@@ -1329,6 +1633,11 @@ export default function ChatDetailScreen() {
       inFlightRef.current = true;
 
       try {
+        // 提前拦一次：文本等廉价路径靠 reportSend 统一 gate 即可，但图片要先
+        // presign+上传（有成本，且会发一个带签名的临时写凭证给可能被拦的用户）。
+        // 在动手上传前就挡掉，避免无谓开销与凭证外泄面。发送本身仍会在 reportSend
+        // 再兜一层，两处同源（assertLocalCanSendMessage），不会产生口径分叉。
+        assertLocalCanSendMessage();
         // 不日志 presign 返回的 fileUrl / uploadUrl —— 这是带签名的临时写凭证，
         // 任何能捕获 console 输出的渠道（adb logcat、屏幕录制、第三方 SDK 的
         // breadcrumb）拿到 uploadUrl 就能在过期前向同一对象写入任意内容。
@@ -1358,7 +1667,9 @@ export default function ChatDetailScreen() {
               : String(error),
           );
         }
-        if (mountedRef.current) setSendError('图片发送失败，请重试');
+        if (mountedRef.current) {
+          setSendError(getChatSendErrorMessage(error, '图片发送失败，请重试'));
+        }
       } finally {
         inFlightRef.current = false;
       }
@@ -1541,23 +1852,20 @@ export default function ChatDetailScreen() {
       if (inFlightRef.current) return;
       inFlightRef.current = true;
       try {
+        const noteCardPayload = {
+          ...buildNoteCardPayloadFromSummary(note, authUser?.id ?? null),
+          ownerId: authUser?.id ?? null,
+        };
         const sent = await sendNoteCardMessage({
           sourceID,
           sessionType: conversationType,
-          payload: {
-            noteId: note.id,
-            ownerId: authUser?.id ?? null,
-            title: note.title,
-            contentPreview: note.contentPreview ?? null,
-            coverUrl: note.cover?.url ?? null,
-            imageCount: note.imageCount ?? 0,
-            videoCount: note.videoCount ?? 0,
-            groupNames: note.groups.map((g) => g.name),
-          },
+          payload: noteCardPayload,
         });
         appendMessages(conversationID, [sent]);
-      } catch {
-        if (mountedRef.current) setSendError('笔记发送失败，请重试');
+      } catch (error) {
+        if (mountedRef.current) {
+          setSendError(getChatSendErrorMessage(error, '笔记发送失败，请重试'));
+        }
       } finally {
         inFlightRef.current = false;
       }
@@ -1578,29 +1886,17 @@ export default function ChatDetailScreen() {
       if (inFlightRef.current) return;
       inFlightRef.current = true;
       try {
-        // 拉一遍完整资料，把 persona + displayIcons 塞进 ext
-        // 失败也无所谓，只是 receiver 看不到 persona/icons，基础名片照样能发。
-        let persona: string | null = null;
-        let displayIcons: FriendCardData['displayIcons'] = [];
-        try {
-          const profile = await fetchUserProfile(friend.id);
-          persona = profile.persona ?? null;
-          displayIcons = profile.displayIcons ?? [];
-        } catch {
-          // ignore — fall back to lean card
-        }
-
         const sent = await sendFriendCardMessage({
           targetConversationID: conversationID,
           userID: friend.id,
           nickname: friend.nickname,
           faceURL: friend.avatarUrl ?? '',
-          persona,
-          displayIcons,
         });
         appendMessages(conversationID, [sent]);
-      } catch {
-        if (mountedRef.current) setSendError('名片发送失败，请重试');
+      } catch (error) {
+        if (mountedRef.current) {
+          setSendError(getChatSendErrorMessage(error, '名片发送失败，请重试'));
+        }
       } finally {
         inFlightRef.current = false;
       }
@@ -1662,7 +1958,9 @@ export default function ChatDetailScreen() {
         if (__DEV__) {
           console.warn('[ChatDetail] send collected item failed', error);
         }
-        if (mountedRef.current) setSendError('收藏内容发送失败，请重试');
+        if (mountedRef.current) {
+          setSendError(getChatSendErrorMessage(error, '收藏内容发送失败，请重试'));
+        }
       } finally {
         inFlightRef.current = false;
       }
@@ -1696,8 +1994,10 @@ export default function ChatDetailScreen() {
           payload,
         });
         appendMessages(conversationID, [sent]);
-      } catch {
-        if (mountedRef.current) setSendError('转账卡片发送失败，但积分已扣减');
+      } catch (error) {
+        if (mountedRef.current) {
+          setSendError(getChatSendErrorMessage(error, '转账卡片发送失败，但积分已扣减'));
+        }
       } finally {
         inFlightRef.current = false;
       }
@@ -1758,19 +2058,47 @@ export default function ChatDetailScreen() {
 
     try {
       setSendError(null);
-      const sentMessage = await sendTextMessage({
-        sourceID,
-        sessionType: conversationType,
-        text: nextText,
-      });
+      const rawQuote = quoteTarget
+        ? useIMStore
+            .getState()
+            .messagesByConversation[conversationID]?.find(
+              (m) => m.clientMsgID === quoteTarget.id,
+            )
+        : undefined;
+      const activeMentionTargets = getMentionsPresentInText(nextText, mentionTargets);
+      const sentMessage =
+        quoteTarget && rawQuote
+          ? await sendQuoteMessage({
+              sourceID,
+              sessionType: conversationType,
+              text: nextText,
+              message: rawQuote,
+            })
+          : isGroupChat && activeMentionTargets.length > 0
+            ? await sendTextAtMessage({
+                sourceID,
+                sessionType: conversationType,
+                ...buildAtMessagePayload(nextText, activeMentionTargets),
+              })
+          : await sendTextMessage({
+              sourceID,
+              sessionType: conversationType,
+              text: nextText,
+            });
       appendMessages(conversationID, [sentMessage]);
       if (mountedRef.current) setDraft('');
+      if (mountedRef.current) setQuoteTarget(null);
+      if (mountedRef.current) setMentionTargets([]);
+      if (mountedRef.current) setMentionQuery(null);
+      if (mountedRef.current) setMentionPickerVisible(false);
     } catch (error) {
       logChatSendFailure(error, {
         sessionType: conversationType,
         isGroupChat,
       });
-      if (mountedRef.current) setSendError('消息发送失败，请重试');
+      if (mountedRef.current) {
+        setSendError(getChatSendErrorMessage(error, '消息发送失败，请重试'));
+      }
     } finally {
       inFlightRef.current = false;
       if (mountedRef.current) setSending(false);
@@ -1782,6 +2110,8 @@ export default function ChatDetailScreen() {
     draft,
     isGroupChat,
     isPreviewMode,
+    mentionTargets,
+    quoteTarget,
     sending,
     sourceID,
   ]);
@@ -1899,6 +2229,52 @@ export default function ChatDetailScreen() {
         ) : null}
       </View>
       <Divider />
+      {mentionPickerVisible ? (
+        <View style={[s.mentionPicker, d.composerShell]}>
+          <FlatList
+            data={visibleMentionCandidates}
+            keyboardShouldPersistTaps="handled"
+            keyExtractor={(member) => member.userID}
+            initialNumToRender={12}
+            maxToRenderPerBatch={12}
+            windowSize={4}
+            renderItem={({ item: member }) => (
+              <Pressable
+                style={s.mentionRow}
+                onPress={() => handlePickMention(member)}
+              >
+                <Avatar size={28} shape="square" name={member.nickname} />
+                <Text
+                  style={[s.mentionName, { color: colors.text }]}
+                  numberOfLines={1}
+                >
+                  {member.nickname}
+                </Text>
+              </Pressable>
+            )}
+            ListEmptyComponent={
+              <View style={s.mentionRow}>
+                <Text style={[s.mentionName, { color: colors.textSecondary }]}>
+                  {t('chat.mentions.empty', { defaultValue: '暂无可 @ 的成员' })}
+                </Text>
+              </View>
+            }
+          />
+        </View>
+      ) : null}
+      {quoteTarget ? (
+        <View style={[s.quoteComposerBar, d.composerShell]}>
+          <Text
+            style={[s.quoteComposerText, { color: colors.textSecondary }]}
+            numberOfLines={1}
+          >
+            {buildQuotePreviewText(quoteTarget)}
+          </Text>
+          <Pressable onPress={() => setQuoteTarget(null)} hitSlop={8}>
+            <Ionicons name="close" size={18} color={colors.textSecondary} />
+          </Pressable>
+        </View>
+      ) : null}
       <View
         style={[
           s.inputBar,
@@ -1958,7 +2334,7 @@ export default function ChatDetailScreen() {
               placeholder={isPreviewMode ? '当前仅预览聊天界面' : '输入消息...'}
               placeholderTextColor={colors.textSecondary}
               value={draft}
-              onChangeText={setDraft}
+              onChangeText={handleDraftChange}
               selection={selection}
               onSelectionChange={handleSelectionChange}
               onSubmitEditing={handleSend}
@@ -1966,6 +2342,7 @@ export default function ChatDetailScreen() {
                 LayoutAnimation.configureNext(PANEL_LAYOUT_ANIM);
                 setAttachmentOpen(false);
                 setEmojiOpen(false);
+                setMentionPickerVisible(false);
               }}
               editable={!isPreviewMode}
             />

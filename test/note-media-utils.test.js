@@ -124,3 +124,32 @@ test('media payload merge preserves known media and drops unmatched blocks witho
     },
   ]);
 });
+
+test('structured showcase media does not backfill the body media section from the legacy aggregate', () => {
+  const { buildNoteSections } = loadTsModule('src/features/notes/utils/note-sections.ts');
+
+  const showcaseImage = {
+    id: 'showcase-1',
+    type: 'IMAGE',
+    objectKey: 'notes/showcase.jpg',
+    url: 'https://cdn.example.test/showcase.jpg',
+    mimeType: 'image/jpeg',
+    sortOrder: 0,
+  };
+
+  const sections = buildNoteSections({
+    content: '',
+    contentJson: [],
+    media: [showcaseImage],
+    sections: {
+      text: { content: '', contentJson: [] },
+      showcase: { items: [showcaseImage] },
+    },
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(sections.media.items)), []);
+  assert.deepEqual(
+    sections.showcase.items.map((item) => item.url),
+    ['https://cdn.example.test/showcase.jpg'],
+  );
+});

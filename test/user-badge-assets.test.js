@@ -128,6 +128,27 @@ test('verified profile and circle builder badges use their dedicated local artwo
   assert.match(getSystemBadgeAsset(makeIcon('CIRCLE_BUILDER')), /builder\.png$/);
 });
 
+test('system badge visual scales compensate for uneven transparent artwork padding', () => {
+  const { getSystemBadgeVisualScale } = loadBadgeAssets();
+  const makeIcon = (systemKey, title = systemKey, recognitionCount) => ({
+    id: `system-${systemKey}`,
+    type: 'SYSTEM',
+    systemKey,
+    title,
+    imageUrl: null,
+    fallbackIconName: null,
+    sortOrder: 0,
+    recognitionCount,
+  });
+
+  assert.equal(getSystemBadgeVisualScale(makeIcon('VIP', 'VIP5')), 1);
+  assert.equal(getSystemBadgeVisualScale(makeIcon('VIP', 'VIP1')), 1.16);
+  assert.equal(getSystemBadgeVisualScale(makeIcon('NEW_USER')), 1.16);
+  assert.equal(getSystemBadgeVisualScale(makeIcon('CIRCLE_BUILDER')), 1.16);
+  assert.equal(getSystemBadgeVisualScale(makeIcon('VERIFIED_PROFILE')), 1);
+  assert.equal(getSystemBadgeVisualScale(makeIcon('TOP_COLLABORATOR', 'Top', 1000)), 1.04);
+});
+
 test('first release system badge keys are modeled on the client', () => {
   const types = read('src/types/index.ts');
 

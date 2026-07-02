@@ -1,8 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
+import { normalizeNoteCardPayload } from '@/features/chat/utils/note-card-payload';
+import { getCollectedOpenIMMessagePayload } from '@/features/chat/utils/message-collection';
+import {
+  getChatDetailHref,
+  getNoteDetailHref,
+  getUserProfileHref,
+} from '@/features/user/utils/routes';
 import { useNetworkStatus } from '@/hooks/use-network-status';
 import {
   deleteCollection,
@@ -11,6 +19,7 @@ import {
   type UserCollection,
 } from '@/services/api/collections';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import type { ConversationType, NoteCardData } from '@/types';
 
 // 'ALL' 是「全部」伪类型：不按类型过滤，拉取所有收藏。其余对应后端 CollectionType。
 type CollectionTab = 'ALL' | CollectionType;
@@ -21,8 +30,92 @@ const COLLECTION_TYPES: { id: CollectionTab; label: string; icon: string }[] = [
   { id: 'VIDEO', label: '视频', icon: 'videocam-outline' },
   { id: 'VOICE', label: '语音', icon: 'mic-outline' },
   { id: 'MESSAGE', label: '信息', icon: 'mail-outline' },
-  { id: 'NOTE', label: '笔记', icon: 'document-text-outline' },
+  { id: 'NOTE', label: '收藏笔记', icon: 'document-text-outline' },
 ];
+
+function getPayloadRecord(payload: unknown): Record<string, unknown> | null {
+  return payload && typeof payload === 'object'
+    ? (payload as Record<string, unknown>)
+    : null;
+}
+
+function resolveCollectionNoteCard(item: UserCollection): NoteCardData | null {
+  const openimPayload = getCollectedOpenIMMessagePayload(item.payload);
+  const noteFromMessage = normalizeNoteCardPayload(openimPayload?.noteCard);
+  if (noteFromMessage) return noteFromMessage;
+
+  const payload = getPayloadRecord(item.payload);
+  const nestedNote = normalizeNoteCardPayload(payload?.noteCard);
+  if (nestedNote) return nestedNote;
+
+  const directNote = normalizeNoteCardPayload(payload);
+  if (directNote) return directNote;
+
+  if (item.type !== 'NOTE') return null;
+  const payloadNoteId = typeof payload?.noteId === 'string' ? payload.noteId : null;
+  const noteId = payloadNoteId ?? item.sourceID;
+  if (!noteId) return null;
+  return {
+    noteId,
+    ownerId: typeof payload?.ownerId === 'string' ? payload.ownerId : null,
+    title: item.title || '收藏笔记',
+    contentPreview: item.summary,
+    coverUrl: null,
+    imageCount: 0,
+    videoCount: 0,
+    groupNames: [],
+  };
+}
+
+type CollectionSource = {
+  messageID: string;
+  conversationID: string;
+  conversationTitle: string;
+  sourceID?: string;
+  conversationType?: ConversationType;
+  senderID?: string;
+  senderName?: string;
+  time?: string;
+};
+
+function inferSourceFromConversationID(conversationID: string) {
+  if (conversationID.startsWith('sg_')) {
+    return {
+      sourceID: conversationID.slice(3),
+      conversationType: 'group' as const,
+    };
+  }
+  return {
+    sourceID: undefined,
+    conversationType: undefined,
+  };
+}
+
+function resolveCollectionSource(item: UserCollection): CollectionSource | null {
+  const payload = getCollectedOpenIMMessagePayload(item.payload);
+  if (!payload?.messageID || !payload.conversationID) return null;
+  const inferred = inferSourceFromConversationID(payload.conversationID);
+  return {
+    messageID: payload.messageID,
+    conversationID: payload.conversationID,
+    conversationTitle: payload.conversationTitle || '聊天',
+    sourceID: payload.sourceID || inferred.sourceID,
+    conversationType: payload.conversationType || inferred.conversationType,
+    senderID: payload.senderID,
+    senderName: payload.senderName,
+    time: payload.time,
+  };
+}
+
+function formatCollectionSource(source: CollectionSource) {
+  return [
+    `来自 ${source.conversationTitle}`,
+    source.senderName,
+    source.time,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
 
 const s = StyleSheet.create({
   content: {
@@ -79,6 +172,37 @@ const s = StyleSheet.create({
   itemText: {
     flex: 1,
     gap: Spacing.xs,
+  },
+  noteMetaRow: {
+    flexDirection: 'row',
+    gap: Spacing.xs,
+    marginTop: Spacing.xs,
+  },
+  noteMetaPill: {
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  sourceRow: {
+    marginTop: Spacing.xs,
+  },
+  sourceActions: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  sourceAction: {
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
 });
 
@@ -212,8 +336,123 @@ export default function CollectionsScreen() {
         ...Typography.caption,
         fontWeight: '700' as const,
       },
+      noteMetaPill: {
+        borderColor: colors.surfaceBorder,
+        backgroundColor: colors.background,
+      },
+      noteMetaText: {
+        color: colors.textSecondary,
+        ...Typography.caption,
+      },
+      sourceAction: {
+        borderColor: colors.surfaceBorder,
+        backgroundColor: colors.background,
+      },
+      sourceActionText: {
+        color: colors.text,
+        ...Typography.caption,
+        fontWeight: '700' as const,
+      },
     }),
     [colors, insets.bottom, insets.top],
+  );
+
+  const openNoteCollection = useCallback((item: UserCollection) => {
+    const note = resolveCollectionNoteCard(item);
+    if (!note) return;
+    router.push(getNoteDetailHref('profile', note.noteId, note.ownerId ?? ''));
+  }, []);
+
+  const openSourceMessage = useCallback((source: CollectionSource) => {
+    if (!source.sourceID || !source.conversationType) return;
+    router.push(
+      getChatDetailHref(
+        'profile',
+        source.sourceID,
+        source.conversationTitle,
+        undefined,
+        source.conversationID,
+        source.messageID,
+        source.conversationType,
+      ),
+    );
+  }, []);
+
+  const openSenderProfile = useCallback((source: CollectionSource) => {
+    if (!source.senderID) return;
+    router.push(getUserProfileHref('profile', source.senderID, source.senderName));
+  }, []);
+
+  const renderNoteMeta = useCallback(
+    (note: NoteCardData) => {
+      const meta = [
+        note.imageCount > 0 ? { icon: 'image-outline', label: `${note.imageCount} 图` } : null,
+        note.videoCount > 0 ? { icon: 'videocam-outline', label: `${note.videoCount} 视频` } : null,
+        note.showcaseCount && note.showcaseCount > 0
+          ? { icon: 'albums-outline', label: `${note.showcaseCount} 展示` }
+          : null,
+        note.hasLocation ? { icon: 'location-outline', label: '位置' } : null,
+      ].filter(Boolean) as { icon: keyof typeof Ionicons.glyphMap; label: string }[];
+
+      if (meta.length === 0) return null;
+      return (
+        <View style={s.noteMetaRow}>
+          {meta.map((item) => (
+            <View key={`${item.icon}-${item.label}`} style={[s.noteMetaPill, d.noteMetaPill]}>
+              <Ionicons name={item.icon} size={12} color={colors.textSecondary} />
+              <Text style={d.noteMetaText}>{item.label}</Text>
+            </View>
+          ))}
+        </View>
+      );
+    },
+    [colors.textSecondary, d.noteMetaPill, d.noteMetaText],
+  );
+
+  const renderSource = useCallback(
+    (source: CollectionSource | null) => {
+      if (!source) return null;
+      const canOpenMessage = Boolean(source.sourceID && source.conversationType);
+      return (
+        <View style={s.sourceRow}>
+          <Text style={d.itemDesc}>{formatCollectionSource(source)}</Text>
+          <View style={s.sourceActions}>
+            {canOpenMessage ? (
+              <Pressable
+                style={[s.sourceAction, d.sourceAction]}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  openSourceMessage(source);
+                }}
+              >
+                <Ionicons name="navigate-outline" size={13} color={colors.text} />
+                <Text style={d.sourceActionText}>回到消息</Text>
+              </Pressable>
+            ) : null}
+            {source.senderID ? (
+              <Pressable
+                style={[s.sourceAction, d.sourceAction]}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  openSenderProfile(source);
+                }}
+              >
+                <Ionicons name="person-outline" size={13} color={colors.text} />
+                <Text style={d.sourceActionText}>发送人</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      );
+    },
+    [
+      colors.text,
+      d.itemDesc,
+      d.sourceAction,
+      d.sourceActionText,
+      openSenderProfile,
+      openSourceMessage,
+    ],
   );
 
   return (
@@ -279,19 +518,50 @@ export default function CollectionsScreen() {
         ) : null}
 
         <View style={s.list}>
-          {items.map((item) => (
-            <View key={item.id} style={[s.itemCard, d.exampleCard]}>
-              <View style={s.itemTop}>
-                <View style={s.itemText}>
-                  <Text style={d.itemTitle}>{item.title}</Text>
-                  {item.summary ? <Text style={d.itemDesc}>{item.summary}</Text> : null}
+          {items.map((item) => {
+            const note = item.type === 'NOTE' ? resolveCollectionNoteCard(item) : null;
+            const source = resolveCollectionSource(item);
+            const title = note?.title ?? item.title;
+            const summary = note?.contentPreview ?? item.summary;
+            const cardBody = (
+              <>
+                <View style={s.itemTop}>
+                  <View style={s.itemText}>
+                    <Text style={d.itemTitle}>{title}</Text>
+                    {summary ? <Text style={d.itemDesc}>{summary}</Text> : null}
+                    {note ? renderNoteMeta(note) : null}
+                    {renderSource(source)}
+                  </View>
+                  <Pressable
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      handleDelete(item.id);
+                    }}
+                  >
+                    <Text style={d.deleteText}>删除</Text>
+                  </Pressable>
                 </View>
-                <Pressable onPress={() => handleDelete(item.id)}>
-                  <Text style={d.deleteText}>删除</Text>
+              </>
+            );
+
+            if (note) {
+              return (
+                <Pressable
+                  key={item.id}
+                  style={[s.itemCard, d.exampleCard]}
+                  onPress={() => openNoteCollection(item)}
+                >
+                  {cardBody}
                 </Pressable>
+              );
+            }
+
+            return (
+              <View key={item.id} style={[s.itemCard, d.exampleCard]}>
+                {cardBody}
               </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
       </ScrollView>
     </View>

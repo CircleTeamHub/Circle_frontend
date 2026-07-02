@@ -4,17 +4,22 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing, useTheme } from '@/theme';
 import type { DisplayIcon } from '@/types';
-import { getSystemBadgeAsset } from './user-badge-assets';
+import { getSystemBadgeAsset, getSystemBadgeVisualScale } from './user-badge-assets';
+
+type CompactSize = 'default' | 'small';
 
 type Props = {
   icons: DisplayIcon[];
   compact?: boolean;
+  compactSize?: CompactSize;
   tone?: 'default' | 'member';
 };
 
 type BadgeProps = {
   icon: DisplayIcon;
   compact?: boolean;
+  compactSize?: CompactSize;
+  dense?: boolean;
   tone?: 'default' | 'member';
 };
 
@@ -25,9 +30,15 @@ const s = StyleSheet.create({
     gap: Spacing.sm,
     alignItems: 'center',
   },
+  smallCompactRow: {
+    gap: 4,
+  },
   item: {
     alignItems: 'center',
     gap: 6,
+  },
+  denseItem: {
+    gap: 2,
   },
   circle: {
     width: 44,
@@ -42,6 +53,10 @@ const s = StyleSheet.create({
     width: 34,
     height: 34,
   },
+  smallCompactCircle: {
+    width: 26,
+    height: 26,
+  },
   systemBadgeShell: {
     width: 52,
     height: 52,
@@ -51,6 +66,10 @@ const s = StyleSheet.create({
   compactSystemBadgeShell: {
     width: 38,
     height: 38,
+  },
+  smallCompactSystemBadgeShell: {
+    width: 30,
+    height: 30,
   },
   imageWrap: {
     width: '100%',
@@ -75,6 +94,9 @@ const s = StyleSheet.create({
     letterSpacing: 0,
     textAlign: 'center',
   },
+  denseLabel: {
+    marginTop: -6,
+  },
   compactCount: {
     width: 34,
     height: 34,
@@ -82,6 +104,10 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
+  },
+  smallCompactCount: {
+    width: 26,
+    height: 26,
   },
 });
 
@@ -112,7 +138,7 @@ function isRenderableIcon(
 function buildIconKey(icon: Partial<DisplayIcon>, index: number) {
   return [
     icon.type ?? 'UNKNOWN',
-    icon.systemKey ?? icon.circleId ?? icon.id ?? icon.title ?? 'icon',
+    icon.systemVariant ?? icon.systemKey ?? icon.circleId ?? icon.id ?? icon.title ?? 'icon',
     index,
   ].join('-');
 }
@@ -146,25 +172,57 @@ function formatIconLabel(icon: DisplayIcon) {
   return icon.title;
 }
 
-export function UserIconBadge({ icon, compact = false, tone = 'default' }: BadgeProps) {
+// 徽章外壳尺寸：非 compact 用基础尺寸(在样式里)，compact 分 default/small 两档，
+// 且 system-badge 与普通 circle 各一套。查表取代深层嵌套三元。
+function resolveShellSizeStyle(
+  compact: boolean,
+  isSmallCompact: boolean,
+  hasSystemAsset: boolean,
+) {
+  if (!compact) return null;
+  if (hasSystemAsset) {
+    return isSmallCompact ? s.smallCompactSystemBadgeShell : s.compactSystemBadgeShell;
+  }
+  return isSmallCompact ? s.smallCompactCircle : s.compactCircle;
+}
+
+export function UserIconBadge({
+  icon,
+  compact = false,
+  compactSize = 'default',
+  dense = false,
+  tone = 'default',
+}: BadgeProps) {
   const { colors } = useTheme();
   const systemBadgeAsset = icon.type === 'SYSTEM' ? getSystemBadgeAsset(icon) : null;
+  const systemBadgeScale = icon.type === 'SYSTEM' ? getSystemBadgeVisualScale(icon) : 1;
   const label = icon.type === 'SYSTEM' ? formatIconLabel(icon) : icon.circleName ?? icon.title;
   const labelColor = tone === 'member' ? colors.white : colors.text;
+  const isSmallCompact = compact && compactSize === 'small';
+  // 四态尺寸（default / compact / smallCompact × system-badge / circle）用查表替代
+  // 深层嵌套三元，可读且易扩展。
+  const shellSizeStyle = resolveShellSizeStyle(compact, isSmallCompact, Boolean(systemBadgeAsset));
 
   return (
-    <View style={s.item}>
+    <View style={[s.item, dense ? s.denseItem : null]}>
       <View
         style={[
           systemBadgeAsset ? s.systemBadgeShell : s.circle,
-          compact ? (systemBadgeAsset ? s.compactSystemBadgeShell : s.compactCircle) : null,
+          shellSizeStyle,
           systemBadgeAsset
             ? null
             : { backgroundColor: colors.surface, borderColor: colors.surfaceBorder },
         ]}
       >
         {systemBadgeAsset ? (
-          <Image source={systemBadgeAsset} style={s.systemBadgeImage} contentFit="contain" />
+          <Image
+            source={systemBadgeAsset}
+            style={[
+              s.systemBadgeImage,
+              systemBadgeScale !== 1 ? { transform: [{ scale: systemBadgeScale }] } : null,
+            ]}
+            contentFit="contain"
+          />
         ) : (
           <View style={s.imageWrap}>
             {icon.imageUrl ? (
@@ -172,7 +230,7 @@ export function UserIconBadge({ icon, compact = false, tone = 'default' }: Badge
             ) : (
               <Ionicons
                 name={resolveFallbackIcon(icon.fallbackIconName)}
-                size={compact ? 12 : 14}
+                size={compact ? (isSmallCompact ? 10 : 12) : 14}
                 color={colors.textSecondary}
               />
             )}
@@ -180,7 +238,10 @@ export function UserIconBadge({ icon, compact = false, tone = 'default' }: Badge
         )}
       </View>
       {!compact ? (
-        <Text style={[s.label, { color: labelColor }]} numberOfLines={1}>
+        <Text
+          style={[s.label, dense ? s.denseLabel : null, { color: labelColor }]}
+          numberOfLines={1}
+        >
           {label}
         </Text>
       ) : null}
@@ -188,23 +249,30 @@ export function UserIconBadge({ icon, compact = false, tone = 'default' }: Badge
   );
 }
 
-function UserIconRowComponent({ icons, compact = false, tone = 'default' }: Props) {
+function UserIconRowComponent({
+  icons,
+  compact = false,
+  compactSize = 'default',
+  tone = 'default',
+}: Props) {
   const { colors } = useTheme();
   const safeIcons = icons.filter((icon) => isRenderableIcon(icon));
   const visibleIcons = compact ? safeIcons.slice(0, 3) : safeIcons;
   const hiddenCount = compact ? Math.max(0, safeIcons.length - visibleIcons.length) : 0;
+  const isSmallCompact = compact && compactSize === 'small';
 
   if (safeIcons.length === 0) {
     return null;
   }
 
   return (
-    <View style={s.row}>
+    <View style={[s.row, isSmallCompact ? s.smallCompactRow : null]}>
       {visibleIcons.map((icon, index) => (
         <UserIconBadge
           key={buildIconKey(icon, index)}
           icon={icon}
           compact={compact}
+          compactSize={compactSize}
           tone={tone}
         />
       ))}
@@ -212,6 +280,7 @@ function UserIconRowComponent({ icons, compact = false, tone = 'default' }: Prop
         <View
           style={[
             s.compactCount,
+            isSmallCompact ? s.smallCompactCount : null,
             {
               backgroundColor: colors.surface,
               borderColor: colors.surfaceBorder,

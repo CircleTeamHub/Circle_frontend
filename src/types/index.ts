@@ -54,6 +54,9 @@ export interface NoteCardData {
   imageCount: number;
   videoCount: number;
   groupNames: string[];
+  hasText?: boolean;
+  showcaseCount?: number;
+  hasLocation?: boolean;
 }
 
 export interface FriendCardData {
@@ -96,6 +99,7 @@ export interface ChatMessage {
     | 'transfer-card'
     | 'verification-card';
   text?: string;
+  quotedText?: string;
   time?: string;
   senderName?: string;
   // 发送者用户 id（UUID 形式），仅接收消息携带；群聊点头像跳对方资料用。
@@ -160,6 +164,7 @@ export interface DisplayIcon {
   circleId?: string;
   circleName?: string;
   systemKey?: SystemIconKey;
+  systemVariant?: string;
   recognitionCount?: number;
   sortOrder: number;
 }
@@ -173,6 +178,7 @@ export interface IconOption {
   circleId?: string;
   circleName?: string;
   systemKey?: SystemIconKey;
+  systemVariant?: string;
   recognitionCount?: number;
 }
 
@@ -270,6 +276,7 @@ export interface CirclePlazaPost {
     avatarUrl: string | null;
     avatarFrame: string | null;
     accountId: string;
+    displayIcons: DisplayIcon[];
   };
   circle: {
     id: string;
@@ -445,6 +452,7 @@ export interface PostSignupItem {
   accountId: string;
   signedAt: string;
   seen: boolean;
+  displayIcons: DisplayIcon[];
   /**
    * 该报名者是否已被发帖者给过合作认可（后端下发）。
    * 用于在已认可的人身上展示已认可态、并阻止重复提交（防刷分）。

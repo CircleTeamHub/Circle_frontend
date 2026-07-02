@@ -128,6 +128,7 @@
     "loadFailed": "Failed to load conversations: {{error}}",
     "noConversations": "No conversations",
     "swipeMarkRead": "Mark Read",
+    "swipeMarkUnread": "Mark Unread",
     "swipeHide": "Hide Chat",
     "swipeDelete": "Delete",
     "deleteChat": "Delete Chat",
@@ -212,7 +213,20 @@
       "collectedHint": "View it in My Collections",
       "collectFailed": "Save failed",
       "collectFailedHint": "Please try again later",
-      "copy": "Copy"
+      "copy": "Copy",
+      "quote": "Quote",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this local message?",
+      "deleteFailed": "Delete failed",
+      "deleteFailedHint": "Please try again later",
+      "report": "Report",
+      "save": "Save",
+      "saveUnsupported": "This message cannot be saved yet",
+      "saveFailed": "Save failed",
+      "saveFailedHint": "Please try again later"
+    },
+    "mentions": {
+      "empty": "No members available to mention"
     },
     "forward": {
       "title": "Choose a chat",
@@ -807,6 +821,45 @@
     "maxCities": "Maximum {{max}} cities",
     "confirmSelection": "Confirm",
     "hint": "Notice"
+  },
+  "credit": {
+    "title": "Reputation Details",
+    "current": "Current reputation",
+    "unit": "/ 100",
+    "upgradeTitle": "Progress",
+    "toNext": "{{points}} points to {{title}}",
+    "maxReached": "You've reached the highest reputation tier",
+    "tier": {
+      "excellent": { "title": "Excellent", "detail": "Priority access to high-bar events, collaborations and circle sign-ups." },
+      "good": { "title": "Good", "detail": "Stable reputation; access to most events and social collaboration." },
+      "basic": { "title": "Basic", "detail": "Keep your profile genuine and honor commitments to keep building reputation." },
+      "low": { "title": "Needs work", "detail": "Complete your profile and reduce no-shows and violations." }
+    },
+    "sections": {
+      "improve": "How to improve",
+      "deduct": "What lowers it",
+      "impact": "Where it applies",
+      "recent": "Recent activity"
+    },
+    "improveRules": [
+      "Complete a genuine profile, avatar and contact details",
+      "Attend events you signed up for and earn positive reviews",
+      "Keep posting authentic content; avoid reports and takedowns"
+    ],
+    "deductRules": [
+      "Spam, fake profiles and solicited trades trigger deductions",
+      "Repeated no-shows or organizer complaints hurt your reputation",
+      "Serious violations limit sign-ups, DMs and some circle features"
+    ],
+    "impacts": [
+      "Sign-up bars may combine VIP level and reputation",
+      "High-reputation users can show stronger trust badges",
+      "Low reputation may require manual review for some events"
+    ],
+    "recentRecords": [
+      "No recent reputation changes yet",
+      "Real gains, deductions and appeals will be shown here later"
+    ]
   },
   "profile": {
     "creditScore": "Credit Score",
@@ -1406,18 +1459,47 @@
     },
     "detail": {
       "loadFailed": "Failed to load note, please try again",
-      "notFound": "Note not found"
+      "notFound": "Note not found",
+      "exportFailedTitle": "Export failed",
+      "exportFailedMessage": "Please try again later"
     },
     "edit": {
+      "addImage": "Add image",
+      "addShowcaseImage": "Add showcase image",
+      "addShowcaseVideo": "Add showcase video",
+      "addVideo": "Add video",
       "done": "Done",
       "editTitle": "Edit note",
+      "emptySection": "No content yet",
       "groupsLabel": "Groups",
+      "imageItem": "Image",
+      "itemsCount": "items",
+      "locationAddressPlaceholder": "Address",
+      "locationPreviewTitle": "Selected location",
+      "locationTitlePlaceholder": "Location name",
       "newTitle": "New note",
       "noGroups": "Not in any group",
+      "pickLocation": "Choose location",
       "saveFailedMessage": "Failed to save, please try again",
       "saveFailedTitle": "Failed to save",
       "saving": "Saving...",
-      "titlePlaceholder": "Title"
+      "sections": {
+        "location": "Location",
+        "locationEmpty": "Optional",
+        "locationHint": "Add the place name and address",
+        "locationSelected": "Selected",
+        "media": "Images/Videos",
+        "mediaHint": "Main note media, images and videos supported",
+        "required": "Required",
+        "showcase": "Showcase",
+        "showcaseHint": "Media shown on the shared group card",
+        "text": "Text",
+        "textHint": "Edit text content only"
+      },
+      "titlePlaceholder": "Title",
+      "uploading": "Uploading...",
+      "useCurrentLocation": "Current location",
+      "videoItem": "Video"
     },
     "editor": {
       "mediaUploadFailedMessage": "Please try again",

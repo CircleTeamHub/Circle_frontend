@@ -47,6 +47,7 @@ test('profile commerce routes export their screens', () => {
   assert.match(read('app/(tabs)/profile/system-announcements.tsx'), /SystemAnnouncementsScreen/);
   assert.match(read('app/(tabs)/profile/member-center.tsx'), /MemberCenterScreen/);
   assert.match(read('app/(tabs)/profile/member-rules.tsx'), /MemberRulesScreen/);
+  assert.match(read('app/(tabs)/profile/credit-score.tsx'), /CreditScoreScreen/);
   assert.match(read('app/(tabs)/profile/wallet.tsx'), /WalletScreen/);
   assert.match(read('app/(tabs)/profile/mall.tsx'), /MallScreen/);
   assert.match(read('app/(tabs)/profile/collections.tsx'), /CollectionsScreen/);
@@ -67,6 +68,30 @@ test('MemberCenterScreen shows VIP1 to VIP5 and links rules', () => {
   assert.match(api, /\/membership\/upgrade/);
   assert.match(src, /会员规则/);
   assert.match(src, /profile\/member-rules/);
+});
+
+test('CreditScoreScreen explains score status and change rules via i18n', () => {
+  const src = read('src/features/profile/screens/CreditScoreScreen.tsx');
+
+  assert.match(src, /useAuthStore/);
+  assert.match(src, /creditScore/);
+  // 文案走 i18n，不再硬编码中文（英文用户否则会看到中文）。
+  assert.match(src, /useTranslation/);
+  assert.match(src, /t\("credit\.title"\)/);
+  assert.match(src, /credit\.tier\./);
+  assert.match(src, /credit\.(improveRules|deductRules|impacts|recentRecords)/);
+  assert.doesNotMatch(src, /信誉值详情/);
+
+  // 两个语言包都必须提供 credit 段的关键 key，避免缺 key 露出裸键名。
+  const zh = JSON.parse(read('src/i18n/locales/zh.json'));
+  const en = JSON.parse(read('src/i18n/locales/en.json'));
+  for (const bundle of [zh, en]) {
+    assert.ok(bundle.credit?.title);
+    assert.ok(bundle.credit?.tier?.excellent?.title);
+    assert.ok(Array.isArray(bundle.credit?.improveRules));
+    assert.ok(bundle.credit?.sections?.recent);
+  }
+  assert.equal(zh.credit.title, '信誉值详情');
 });
 
 test('WalletScreen shows remaining points and recharge packages', () => {
@@ -112,5 +137,13 @@ test('CollectionsScreen shows collectible content types', () => {
   assert.match(src, /视频/);
   assert.match(src, /语音/);
   assert.match(src, /信息/);
-  assert.match(src, /笔记/);
+  assert.match(src, /收藏笔记/);
+  assert.match(src, /normalizeNoteCardPayload/);
+  assert.match(src, /getCollectedOpenIMMessagePayload/);
+  assert.match(src, /getNoteDetailHref\('profile'/);
+  assert.match(src, /getChatDetailHref\(\s*'profile'/);
+  assert.match(src, /getUserProfileHref\(\s*'profile'/);
+  assert.match(src, /回到消息/);
+  assert.match(src, /发送人/);
+  assert.match(src, /来自/);
 });

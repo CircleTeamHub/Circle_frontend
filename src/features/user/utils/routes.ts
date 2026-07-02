@@ -119,12 +119,13 @@ export function getChatDetailHref(
   avatarUrl?: string,
   conversationID?: string,
   searchedMsgID?: string,
+  conversationType: 'private' | 'group' = 'private',
 ): Href {
   // 私聊页在每个 tab 栈下都有 re-export 路由，按来源 scope 入对应栈，
   // 这样返回时回到进入前的上一级，而不是跳到消息首页。
   const params = {
     sourceID,
-    conversationType: 'private',
+    conversationType,
     ...(title ? { title } : {}),
     ...(avatarUrl ? { avatarUrl } : {}),
     ...(conversationID ? { conversationID } : {}),
@@ -148,8 +149,9 @@ export function getNoteDetailHref(
   scope: UserProfileScope,
   id: string,
   ownerId = '',
+  section = '',
 ): Href {
-  const params = { id, ownerId };
+  const params = { id, ownerId, ...(section ? { section } : {}) };
 
   switch (scope) {
     case 'contacts':

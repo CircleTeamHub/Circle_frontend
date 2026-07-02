@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
 import { Divider } from '@/components/ui/divider';
+import { UserIconRow } from '@/components/ui/user-icon-row';
 import { Spacing, useTheme } from '@/theme';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
 import {
@@ -348,6 +349,7 @@ export default function PostSignupsScreen() {
         renderItem={({ item }) => {
           const selected = selectedRecognitionIds.has(item.userId);
           const showRecognition = recognitionOpen;
+          const displayIcons = item.displayIcons ?? [];
           const rowDisabled =
             !showRecognition ||
             item.recognized ||
@@ -401,6 +403,11 @@ export default function PostSignupsScreen() {
                         defaultValue: '已认可',
                       })}
                     </Text>
+                  ) : null}
+                  {displayIcons.length > 0 ? (
+                    <View style={s.badgeRow}>
+                      <UserIconRow icons={displayIcons} compact compactSize="small" />
+                    </View>
                   ) : null}
                 </View>
                 <Text style={{ fontSize: 12, color: colors.textSecondary }}>
@@ -528,6 +535,7 @@ const s = StyleSheet.create({
   },
   body: { flex: 1, gap: 4 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  badgeRow: { flexShrink: 0 },
   recognizedTag: { fontSize: 11, fontWeight: '700' },
   empty: { paddingTop: 80, alignItems: 'center', gap: Spacing.md },
   retryBtn: {

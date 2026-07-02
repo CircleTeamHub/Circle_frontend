@@ -128,6 +128,7 @@
     "loadFailed": "会话加载失败：{{error}}",
     "noConversations": "暂无会话",
     "swipeMarkRead": "标记已读",
+    "swipeMarkUnread": "标记未读",
     "swipeHide": "隐藏聊天",
     "swipeDelete": "删除",
     "deleteChat": "删除聊天",
@@ -212,7 +213,20 @@
       "collectedHint": "可在我的收藏中查看",
       "collectFailed": "收藏失败",
       "collectFailedHint": "请稍后重试",
-      "copy": "复制"
+      "copy": "复制",
+      "quote": "引用",
+      "delete": "删除",
+      "deleteConfirm": "删除这条本地消息？",
+      "deleteFailed": "删除失败",
+      "deleteFailedHint": "请稍后重试",
+      "report": "举报",
+      "save": "保存",
+      "saveUnsupported": "该消息暂不支持保存",
+      "saveFailed": "保存失败",
+      "saveFailedHint": "请稍后重试"
+    },
+    "mentions": {
+      "empty": "暂无可 @ 的成员"
     },
     "forward": {
       "title": "选择转发对象",
@@ -804,6 +818,45 @@
     "maxCities": "最多选择{{max}}个城市",
     "confirmSelection": "确认选择",
     "hint": "提示"
+  },
+  "credit": {
+    "title": "信誉值详情",
+    "current": "当前信誉值",
+    "unit": "/ 100",
+    "upgradeTitle": "升级情况",
+    "toNext": "距离 {{title}} 还差 {{points}} 分",
+    "maxReached": "已达到当前最高信誉档位",
+    "tier": {
+      "excellent": { "title": "优秀信誉", "detail": "可优先参与高门槛活动、合作和圈子报名。" },
+      "good": { "title": "良好信誉", "detail": "信誉状态稳定，可参与大多数活动和社交协作。" },
+      "basic": { "title": "基础信誉", "detail": "保持真实资料和正常履约，可继续积累信誉。" },
+      "low": { "title": "需要提升", "detail": "建议完善资料、减少爽约和违规记录。" }
+    },
+    "sections": {
+      "improve": "如何提升",
+      "deduct": "扣分规则",
+      "impact": "权益影响",
+      "recent": "近期记录"
+    },
+    "improveRules": [
+      "完善真实资料、头像和常用联系方式",
+      "按时参加已报名活动并获得正向评价",
+      "持续发布真实内容，减少被举报或隐藏记录"
+    ],
+    "deductRules": [
+      "恶意刷屏、虚假资料、诱导交易会触发扣分",
+      "报名后多次爽约或被主办方投诉会影响信誉",
+      "严重违规会限制报名、私信和部分圈子功能"
+    ],
+    "impacts": [
+      "报名门槛可按 VIP 等级和信誉值共同判断",
+      "高信誉用户可展示更高可信度标签",
+      "低信誉时部分活动可能需要人工审核"
+    ],
+    "recentRecords": [
+      "暂无近期信誉变动记录",
+      "后续会接入真实加分、扣分和申诉流水"
+    ]
   },
   "profile": {
     "creditScore": "信用值",
@@ -1403,18 +1456,47 @@
     },
     "detail": {
       "loadFailed": "笔记加载失败，请稍后重试",
-      "notFound": "笔记不存在"
+      "notFound": "笔记不存在",
+      "exportFailedTitle": "导出失败",
+      "exportFailedMessage": "请稍后重试"
     },
     "edit": {
+      "addImage": "添加图片",
+      "addShowcaseImage": "添加展示图片",
+      "addShowcaseVideo": "添加展示视频",
+      "addVideo": "添加视频",
       "done": "完成",
       "editTitle": "编辑笔记",
+      "emptySection": "暂无内容",
       "groupsLabel": "分组",
+      "imageItem": "图片",
+      "itemsCount": "项",
+      "locationAddressPlaceholder": "地址",
+      "locationPreviewTitle": "已选择位置",
+      "locationTitlePlaceholder": "位置名称",
       "newTitle": "新建笔记",
       "noGroups": "未加入任何分组",
+      "pickLocation": "选择位置",
       "saveFailedMessage": "保存失败，请稍后重试",
       "saveFailedTitle": "保存失败",
       "saving": "保存中...",
-      "titlePlaceholder": "标题"
+      "sections": {
+        "location": "地址",
+        "locationEmpty": "可选",
+        "locationHint": "填写位置名称和地址",
+        "locationSelected": "已选择",
+        "media": "图片/视频",
+        "mediaHint": "正文素材，支持图片和视频",
+        "required": "必填",
+        "showcase": "展示",
+        "showcaseHint": "群卡片展示区素材",
+        "text": "文字",
+        "textHint": "只编辑文字内容"
+      },
+      "titlePlaceholder": "标题",
+      "uploading": "上传中...",
+      "useCurrentLocation": "当前位置",
+      "videoItem": "视频"
     },
     "editor": {
       "mediaUploadFailedMessage": "请稍后重试",

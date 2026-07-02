@@ -60,3 +60,42 @@ test('MyIconsScreen shows a concise explanation and earning condition for the ta
   }
   assert.match(zh.myIcons.explain.circle.description, /圈子专属/);
 });
+
+test('MyIconsScreen distinguishes VIP badge variants with the same system key', () => {
+  const src = read('src/features/profile/screens/MyIconsScreen.tsx');
+  const types = read('src/types/index.ts');
+  const api = read('src/services/api/icons.ts');
+
+  assert.match(types, /systemVariant\?: string/);
+  assert.match(api, /systemVariant\?: string/);
+  assert.match(src, /systemVariant/);
+  assert.match(src, /system:\$\{option\.systemKey\}:\$\{option\.systemVariant/);
+  assert.match(src, /systemVariant: option\.systemVariant/);
+  assert.match(src, /systemVariant: icon\.systemVariant/);
+});
+
+test('MyIconsScreen keeps badge picker icons visually tight', () => {
+  const src = read('src/features/profile/screens/MyIconsScreen.tsx');
+
+  assert.match(src, /minHeight:\s*72/);
+  assert.match(src, /paddingVertical:\s*Spacing\.xs/);
+  assert.match(src, /<UserIconBadge icon=\{optionToPreviewIcon\(option\)\} dense \/>/);
+});
+
+test('MyIconsScreen preserves saved icon selections when refreshed user data is stale', () => {
+  const src = read('src/features/profile/screens/MyIconsScreen.tsx');
+  const saveBlock = src.match(
+    /const handleSave = useCallback\([\s\S]*?\}, \[router, selectedIcons, setUser, user, t\]\);/,
+  )?.[0] ?? '';
+
+  assert.match(saveBlock, /const nextDisplayIcons = await updateDisplayIcons\(payload\)/);
+  assert.match(saveBlock, /const refreshedUser = await fetchCurrentUser\(\)/);
+  assert.match(saveBlock, /displayIcons:\s*nextDisplayIcons/);
+  assert.doesNotMatch(saveBlock, /displayIcons:\s*refreshedUser\?\.displayIcons\s*\?\?\s*nextDisplayIcons/);
+});
+
+test('MyIconsScreen saves the current selection when leaving with the back button', () => {
+  const src = read('src/features/profile/screens/MyIconsScreen.tsx');
+
+  assert.match(src, /<NavHeader[\s\S]*onBackPress=\{handleSave\}/);
+});

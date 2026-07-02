@@ -3,6 +3,12 @@ import { Divider } from "@/components/ui/divider";
 import { GradientCover } from "@/components/ui/gradient-cover";
 import { MenuRow } from "@/components/ui/menu-row";
 import { UserIconRow } from "@/components/ui/user-icon-row";
+import {
+  getCreditStatBackground,
+  getCreditStatTextColor,
+  getVipStatBackground,
+  getVipStatTextColor,
+} from "@/features/profile/member-stat-colors";
 import { getUserProfileHref } from "@/features/user/utils/routes";
 import { fetchCurrentUser } from "@/services/api/auth";
 import { fetchIconOptions } from "@/services/api/icons";
@@ -95,19 +101,16 @@ const s = StyleSheet.create({
   memberStatsPanel: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingVertical: 12,
+    gap: 8,
   },
   memberStatCell: {
     flex: 1,
     alignItems: "center",
-    gap: 4,
-  },
-  memberStatDivider: {
-    width: StyleSheet.hairlineWidth,
-    alignSelf: "stretch",
-    marginVertical: 6,
+    gap: 3,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 9,
+    overflow: "hidden",
   },
   memberIdentityRow: {
     flexDirection: "row",
@@ -168,11 +171,7 @@ export default function ProfileScreen() {
         backgroundColor: "#6E5CF0",
       },
       memberStat: {
-        backgroundColor: colors.memberTagBg,
-        borderColor: colors.memberTagBg,
-      },
-      memberStatDivider: {
-        backgroundColor: "rgba(255, 255, 255, 0.22)",
+        borderColor: "rgba(255, 255, 255, 0.18)",
       },
       memberStatLabel: {
         color: colors.white,
@@ -212,6 +211,10 @@ export default function ProfileScreen() {
   const displayAccount = user?.accountId || t('profile.notBound');
   const vipLevel = user?.vipLevel ?? 0;
   const creditScore = user?.creditScore ?? 0;
+  const vipStatBackground = getVipStatBackground(vipLevel);
+  const creditStatBackground = getCreditStatBackground(creditScore);
+  const vipStatTextColor = getVipStatTextColor();
+  const creditStatTextColor = getCreditStatTextColor();
   const displayIcons = profileDisplayIcons.length > 0 ? profileDisplayIcons : user?.displayIcons ?? [];
 
   useEffect(() => {
@@ -244,7 +247,10 @@ export default function ProfileScreen() {
           fetchIconOptions(),
         ]);
         if (isActive()) {
-          setUser(nextUser);
+          setUser({
+            ...nextUser,
+            displayIcons: nextIcons.displayIcons,
+          });
           setProfileDisplayIcons(nextIcons.displayIcons);
         }
         await markProfileNotificationsRead();
@@ -291,6 +297,14 @@ export default function ProfileScreen() {
 
   const handleOpenSettings = useCallback(() => {
     router.push("/(tabs)/profile/app-settings");
+  }, [router]);
+
+  const handleOpenMemberCenter = useCallback(() => {
+    router.push("/(tabs)/profile/member-center" as never);
+  }, [router]);
+
+  const handleOpenCreditScore = useCallback(() => {
+    router.push("/(tabs)/profile/credit-score" as never);
   }, [router]);
 
   const handleOpenIcons = useCallback(() => {
@@ -379,20 +393,27 @@ export default function ProfileScreen() {
       </View>
 
       {/* Member card */}
-      <Pressable style={[s.memberCard, d.memberCard]} onPress={handleOpenIcons}>
+      <View style={[s.memberCard, d.memberCard]}>
         <GradientCover colors={Gradients.memberCard} />
-        <View style={[s.memberStatsPanel, d.memberStat]}>
-          <View style={s.memberStatCell}>
-            <Text style={d.memberStatLabel}>{t('profile.vipLevel')}</Text>
-            <Text style={d.memberStatValue}>VIP {vipLevel}</Text>
-          </View>
-          <View style={[s.memberStatDivider, d.memberStatDivider]} />
-          <View style={s.memberStatCell}>
-            <Text style={d.memberStatLabel}>{t('profile.reputationValue')}</Text>
-            <Text style={d.memberStatValue}>{creditScore}</Text>
-          </View>
+        <View style={s.memberStatsPanel}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={handleOpenMemberCenter}
+            style={[s.memberStatCell, d.memberStat, { backgroundColor: vipStatBackground }]}
+          >
+            <Text style={[d.memberStatLabel, { color: vipStatTextColor }]}>{t('profile.vipLevel')}</Text>
+            <Text style={[d.memberStatValue, { color: vipStatTextColor }]}>VIP {vipLevel}</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={handleOpenCreditScore}
+            style={[s.memberStatCell, d.memberStat, { backgroundColor: creditStatBackground }]}
+          >
+            <Text style={[d.memberStatLabel, { color: creditStatTextColor }]}>{t('profile.reputationValue')}</Text>
+            <Text style={[d.memberStatValue, { color: creditStatTextColor }]}>{creditScore}</Text>
+          </Pressable>
         </View>
-        <View style={s.memberCardHeader}>
+        <Pressable style={s.memberCardHeader} onPress={handleOpenIcons}>
           <View style={s.memberHeaderLeft}>
             <Ionicons name="sparkles" size={15} color={colors.white} />
             <Text style={d.memberCardAction}>
@@ -404,8 +425,8 @@ export default function ProfileScreen() {
             size={18}
             color="rgba(255, 255, 255, 0.85)"
           />
-        </View>
-        <View style={s.memberIdentityRow}>
+        </Pressable>
+        <Pressable style={s.memberIdentityRow} onPress={handleOpenIcons}>
           {displayIcons.length > 0 ? (
             <View style={s.memberIdentityItem}>
               <UserIconRow icons={displayIcons} tone="member" />
@@ -420,8 +441,8 @@ export default function ProfileScreen() {
               </Text>
             </View>
           )}
-        </View>
-      </Pressable>
+        </Pressable>
+      </View>
 
       <Divider />
     </View>
