@@ -19,6 +19,7 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { inviteUsersToGroup, loadGroupMemberList, toImUserId } from '@/im/client';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { inviteGroupMembers } from '@/services/api/groups';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
@@ -190,9 +191,14 @@ export default function InviteGroupMembersScreen() {
         { text: t('common.ok'), onPress: () => router.back() },
       ]);
     } catch (error) {
+      // 后端会带 errorCode(如对方不接受群邀请);getApiErrorMessage 按码本地化后填进
+      // "邀请失败：{{error}}" 文案,而不是直接塞后端英文 message。
       Alert.alert(
         t('messages.inviteGroupMembersFailed', {
-          error: error instanceof Error ? error.message : String(error),
+          error: getApiErrorMessage(
+            error,
+            t('common.retryLater', { defaultValue: '请稍后重试' }),
+          ),
         }),
       );
     } finally {

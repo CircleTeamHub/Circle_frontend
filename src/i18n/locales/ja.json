@@ -2132,6 +2132,13 @@
     "MEMBERSHIP_INSUFFICIENT_POINTS": "ポイントが足りません",
     "CIRCLE_MEMBER_LIMIT": "サークルが満員です",
     "CIRCLE_ALREADY_MEMBER": "すでにメンバーです",
-    "CIRCLE_REQUEST_PENDING": "申請はすでに承認待ちです"
+    "CIRCLE_REQUEST_PENDING": "申請はすでに承認待ちです",
+    "GROUP_MANAGER_ONLY": "グループ管理者のみが操作できます",
+    "GROUP_OWNER_CANNOT_LEAVE": "退出する前にオーナーを譲渡してください",
+    "GROUP_INVITE_NOT_ALLOWED": "このユーザーはグループ招待を受け付けていません",
+    "GROUP_REPORT_NOT_VERIFIED": "認証済みのグループメンバーのみ通報できます",
+    "GROUP_REPORT_NOT_ACTIVE": "現在のグループメンバーのみこのグループを通報できます",
+    "GROUP_REPORT_DUPLICATE": "このカテゴリーで既にこのグループを通報済みです",
+    "GROUP_REPORT_DESC_EMPTY": "通報の説明は空にできません"
   }
 }

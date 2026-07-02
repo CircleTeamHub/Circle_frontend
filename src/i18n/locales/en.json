@@ -2135,6 +2135,13 @@
     "MEMBERSHIP_INSUFFICIENT_POINTS": "Not enough points",
     "CIRCLE_MEMBER_LIMIT": "This circle is full",
     "CIRCLE_ALREADY_MEMBER": "You're already a member",
-    "CIRCLE_REQUEST_PENDING": "Your request is already pending"
+    "CIRCLE_REQUEST_PENDING": "Your request is already pending",
+    "GROUP_MANAGER_ONLY": "Only group admins can do this",
+    "GROUP_OWNER_CANNOT_LEAVE": "Transfer ownership before leaving the group",
+    "GROUP_INVITE_NOT_ALLOWED": "This user doesn't accept group invites",
+    "GROUP_REPORT_NOT_VERIFIED": "Only verified group members can report",
+    "GROUP_REPORT_NOT_ACTIVE": "Only current group members can report this group",
+    "GROUP_REPORT_DUPLICATE": "You've already reported this group for this category",
+    "GROUP_REPORT_DESC_EMPTY": "The report description can't be empty"
   }
 }

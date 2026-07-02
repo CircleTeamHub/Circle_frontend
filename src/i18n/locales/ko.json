@@ -2132,6 +2132,13 @@
     "MEMBERSHIP_INSUFFICIENT_POINTS": "포인트가 부족합니다",
     "CIRCLE_MEMBER_LIMIT": "서클 인원이 가득 찼습니다",
     "CIRCLE_ALREADY_MEMBER": "이미 멤버입니다",
-    "CIRCLE_REQUEST_PENDING": "이미 신청이 대기 중입니다"
+    "CIRCLE_REQUEST_PENDING": "이미 신청이 대기 중입니다",
+    "GROUP_MANAGER_ONLY": "그룹 관리자만 할 수 있습니다",
+    "GROUP_OWNER_CANNOT_LEAVE": "나가기 전에 소유권을 이전하세요",
+    "GROUP_INVITE_NOT_ALLOWED": "이 사용자는 그룹 초대를 받지 않습니다",
+    "GROUP_REPORT_NOT_VERIFIED": "인증된 그룹 멤버만 신고할 수 있습니다",
+    "GROUP_REPORT_NOT_ACTIVE": "현재 그룹 멤버만 이 그룹을 신고할 수 있습니다",
+    "GROUP_REPORT_DUPLICATE": "이 항목으로 이미 이 그룹을 신고했습니다",
+    "GROUP_REPORT_DESC_EMPTY": "신고 설명은 비워둘 수 없습니다"
   }
 }

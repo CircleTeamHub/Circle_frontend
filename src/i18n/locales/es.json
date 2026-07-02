@@ -2135,6 +2135,13 @@
     "MEMBERSHIP_INSUFFICIENT_POINTS": "Puntos insuficientes",
     "CIRCLE_MEMBER_LIMIT": "Este círculo está lleno",
     "CIRCLE_ALREADY_MEMBER": "Ya eres miembro",
-    "CIRCLE_REQUEST_PENDING": "Tu solicitud ya está pendiente"
+    "CIRCLE_REQUEST_PENDING": "Tu solicitud ya está pendiente",
+    "GROUP_MANAGER_ONLY": "Solo los administradores del grupo pueden hacer esto",
+    "GROUP_OWNER_CANNOT_LEAVE": "Transfiere la propiedad antes de salir del grupo",
+    "GROUP_INVITE_NOT_ALLOWED": "Este usuario no acepta invitaciones de grupo",
+    "GROUP_REPORT_NOT_VERIFIED": "Solo los miembros verificados del grupo pueden reportar",
+    "GROUP_REPORT_NOT_ACTIVE": "Solo los miembros activos del grupo pueden reportar este grupo",
+    "GROUP_REPORT_DUPLICATE": "Ya has reportado este grupo por esta categoría",
+    "GROUP_REPORT_DESC_EMPTY": "La descripción del reporte no puede estar vacía"
   }
 }

@@ -2132,6 +2132,13 @@
     "MEMBERSHIP_INSUFFICIENT_POINTS": "积分不足",
     "CIRCLE_MEMBER_LIMIT": "圈子成员已满",
     "CIRCLE_ALREADY_MEMBER": "你已是该圈子成员",
-    "CIRCLE_REQUEST_PENDING": "申请已提交，等待处理"
+    "CIRCLE_REQUEST_PENDING": "申请已提交，等待处理",
+    "GROUP_MANAGER_ONLY": "只有群管理员可以操作",
+    "GROUP_OWNER_CANNOT_LEAVE": "群主需先转让群才能退出",
+    "GROUP_INVITE_NOT_ALLOWED": "对方不接受群邀请",
+    "GROUP_REPORT_NOT_VERIFIED": "只有已验证的群成员可以举报",
+    "GROUP_REPORT_NOT_ACTIVE": "只有当前群成员可以举报该群",
+    "GROUP_REPORT_DUPLICATE": "你已就该分类举报过此群",
+    "GROUP_REPORT_DESC_EMPTY": "举报说明不能为空"
   }
 }

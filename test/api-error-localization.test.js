@@ -98,6 +98,13 @@ test('every locale defines all serverErrors codes', () => {
     'CIRCLE_MEMBER_LIMIT',
     'CIRCLE_ALREADY_MEMBER',
     'CIRCLE_REQUEST_PENDING',
+    'GROUP_MANAGER_ONLY',
+    'GROUP_OWNER_CANNOT_LEAVE',
+    'GROUP_INVITE_NOT_ALLOWED',
+    'GROUP_REPORT_NOT_VERIFIED',
+    'GROUP_REPORT_NOT_ACTIVE',
+    'GROUP_REPORT_DUPLICATE',
+    'GROUP_REPORT_DESC_EMPTY',
   ];
   for (const lng of ['zh', 'en', 'ja', 'ko', 'es']) {
     const bundle = JSON.parse(
