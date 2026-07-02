@@ -58,8 +58,10 @@ test('MemberCenterScreen shows VIP1 to VIP5 and links rules', () => {
   const src = read('src/features/profile/screens/MemberCenterScreen.tsx');
   const api = read('src/services/api/membership.ts');
 
+  // VIP1..VIP5 live in the api module's FALLBACK_MEMBERSHIP_PLANS (single source of truth,
+  // also the offline fallback); the screen consumes them via the mapper.
   for (const level of [1, 2, 3, 4, 5]) {
-    assert.match(src, new RegExp(`VIP${level}`));
+    assert.match(api, new RegExp(`VIP${level}`));
   }
 
   assert.match(src, /fetchMembershipPlans/);
@@ -114,8 +116,8 @@ test('WalletScreen shows remaining points and recharge packages', () => {
 test('MallScreen shows requested product areas', () => {
   const src = read('src/features/profile/screens/MallScreen.tsx');
   const api = read('src/services/api/mall.ts');
-  // Product-area names are i18n'd via the labelKey pattern (module-level data holds keys,
-  // the picker renders t(section.titleKey)/t(product.nameKey)); the display copy lives in zh.json.
+  // Backend sends title/name; the api module maps id → i18n key and keeps the backend
+  // string as t()'s defaultValue. Runtime mapping is covered in mall-membership-mapping.test.js.
   const zh = read('src/i18n/locales/zh.json');
 
   assert.match(src, /fetchMallSections/);

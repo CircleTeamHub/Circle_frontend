@@ -6,53 +6,13 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
 import { useNetworkStatus } from '@/hooks/use-network-status';
-import { fetchMallSections, type MallProduct, type MallSection } from '@/services/api/mall';
+import {
+  fetchMallSections,
+  FALLBACK_SECTIONS,
+  type MallProduct,
+  type MallSection,
+} from '@/services/api/mall';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
-
-const FALLBACK_SECTIONS: MallSection[] = [
-  {
-    id: 'cards',
-    titleKey: 'profile.mall.sections.coupons',
-    products: [
-      { id: 'fancy-number-card', nameKey: 'profile.mall.items.fancyNumberCard', icon: 'sparkles-outline', color: '#2563EB', action: 'fancy-number' },
-      { id: 'group-expansion-card', nameKey: 'profile.mall.items.groupExpansionCard', icon: 'people-outline', color: '#E11D48', action: 'group-expansion' },
-      { id: 'generate-recharge-card', nameKey: 'profile.mall.items.generateRechargeCard', icon: 'card-outline', color: '#2563EB', action: 'recharge-card-create' },
-      { id: 'my-recharge-cards', nameKey: 'profile.mall.items.myRechargeCards', icon: 'receipt-outline', color: '#2563EB', action: 'recharge-card-list' },
-    ],
-  },
-  {
-    id: 'membership',
-    titleKey: 'profile.mall.sections.membership',
-    products: [
-      { id: 'membership-upgrade', nameKey: 'profile.mall.items.membershipRecharge', icon: 'diamond-outline', color: '#F59E0B', action: 'membership' },
-      { id: 'experience-exchange', nameKey: 'profile.mall.items.exchangeExperience', icon: 'trending-up-outline', color: '#F59E0B', action: 'experience' },
-      { id: 'points-recharge', nameKey: 'profile.mall.items.pointsRecharge', icon: 'wallet-outline', color: '#F59E0B', action: 'wallet' },
-    ],
-  },
-  {
-    id: 'fancy-number',
-    titleKey: 'profile.mall.sections.fancyNumber',
-    products: [
-      { id: 'choose-fancy-number', nameKey: 'profile.mall.items.chooseFancyNumber', icon: 'ribbon-outline', color: '#E11D48', action: 'fancy-number' },
-      { id: 'renew-fancy-number', nameKey: 'profile.mall.items.renewFancyNumber', icon: 'bookmark-outline', color: '#E11D48', action: 'fancy-number-renew' },
-    ],
-  },
-  {
-    id: 'points',
-    titleKey: 'profile.mall.sections.points',
-    products: [
-      { id: 'redeem-code', nameKey: 'profile.mall.items.redeemCode', icon: 'server-outline', color: '#2563EB', action: 'redeem-code' },
-      { id: 'buy-code', nameKey: 'profile.mall.items.buyCode', icon: 'bag-handle-outline', color: '#2563EB', action: 'buy-code' },
-    ],
-  },
-  {
-    id: 'decoration',
-    titleKey: 'profile.mall.sections.decoration',
-    products: [
-      { id: 'avatar-frame', nameKey: 'profile.mall.items.avatarFrame', icon: 'image-outline', color: '#94A3B8', action: 'avatar-frame' },
-    ],
-  },
-];
 
 const s = StyleSheet.create({
   content: {
@@ -189,7 +149,9 @@ export default function MallScreen() {
           <View key={section.id} style={[s.section, d.section]}>
             <View style={s.sectionTitleRow}>
               <View style={[s.sectionMark, d.sectionMark]} />
-              <Text style={d.sectionTitle}>{t(section.titleKey)}</Text>
+              <Text style={d.sectionTitle}>
+                {t(section.titleKey, { defaultValue: section.defaultTitle })}
+              </Text>
             </View>
             <View style={s.grid}>
               {section.products.map((product) => (
@@ -201,7 +163,9 @@ export default function MallScreen() {
                   <View style={[s.iconWrap, { backgroundColor: `${product.color}22` }]}>
                     <Ionicons name={product.icon as any} size={28} color={product.color} />
                   </View>
-                  <Text style={d.productText}>{t(product.nameKey)}</Text>
+                  <Text style={d.productText}>
+                    {t(product.nameKey, { defaultValue: product.defaultName })}
+                  </Text>
                 </Pressable>
               ))}
             </View>

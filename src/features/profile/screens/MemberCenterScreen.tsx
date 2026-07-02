@@ -9,18 +9,11 @@ import { fetchCurrentUser } from '@/services/api/auth';
 import {
   fetchMembershipPlans,
   upgradeMembership,
+  FALLBACK_MEMBERSHIP_PLANS,
   type MembershipPlan,
 } from '@/services/api/membership';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useAuthStore } from '@/stores/authStore';
-
-const VIP_LEVELS: MembershipPlan[] = [
-  { level: 1, name: 'VIP1', price: 780, perksKey: 'profile.membership.tiers.vip1.perks' },
-  { level: 2, name: 'VIP2', price: 1280, perksKey: 'profile.membership.tiers.vip2.perks' },
-  { level: 3, name: 'VIP3', price: 2100, perksKey: 'profile.membership.tiers.vip3.perks' },
-  { level: 4, name: 'VIP4', price: 4600, perksKey: 'profile.membership.tiers.vip4.perks' },
-  { level: 5, name: 'VIP5', price: 9100, perksKey: 'profile.membership.tiers.vip5.perks' },
-];
 
 const s = StyleSheet.create({
   content: {
@@ -88,7 +81,7 @@ export default function MemberCenterScreen() {
   const { isOffline } = useNetworkStatus();
   const vipLevel = useAuthStore((state) => state.user?.vipLevel ?? 0);
   const setUser = useAuthStore((state) => state.setUser);
-  const [plans, setPlans] = useState<MembershipPlan[]>(VIP_LEVELS);
+  const [plans, setPlans] = useState<MembershipPlan[]>(FALLBACK_MEMBERSHIP_PLANS);
   const [selectedLevel, setSelectedLevel] = useState(Math.min(Math.max(vipLevel || 1, 1), 5));
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -324,7 +317,9 @@ export default function MemberCenterScreen() {
               <View style={s.levelTop}>
                 <View style={s.levelLeft}>
                   <Text style={d.levelName}>{item.name}</Text>
-                  <Text style={d.perk}>{t(item.perksKey)}</Text>
+                  <Text style={d.perk}>
+                    {t(item.perksKey, { defaultValue: item.defaultPerks })}
+                  </Text>
                 </View>
                 <View style={s.levelPoints}>
                   <Text style={d.oldPoints}>{item.price + 100}</Text>
