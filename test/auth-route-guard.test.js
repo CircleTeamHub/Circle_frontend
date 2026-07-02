@@ -172,3 +172,19 @@ test('root layout applies the global auth route guard', () => {
   assert.match(source, /<AuthRouteGuard>/);
   assert.match(source, /<Redirect href=\{decision\.href\}/);
 });
+
+test('redirect keeps the navigator mounted (no infinite-redirect loop)', () => {
+  // Regression: returning <Redirect> alone unmounts the <Stack>, so router.replace
+  // can't settle the segment and the guard re-redirects forever ("Maximum update
+  // depth exceeded"). The redirect branch must render {children} alongside <Redirect>.
+  const source = fs.readFileSync(path.join(process.cwd(), 'app/_layout.tsx'), 'utf8');
+  const redirectBranch =
+    source.match(/if \(decision\.type === 'redirect'\) \{[\s\S]*?\n  \}/)?.[0] ?? '';
+
+  assert.match(redirectBranch, /\{children\}/);
+  assert.ok(
+    redirectBranch.indexOf('{children}') <
+      redirectBranch.indexOf('<Redirect href={decision.href}'),
+    'children (the navigator) must render before/with <Redirect> so it stays mounted',
+  );
+});
