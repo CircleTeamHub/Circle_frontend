@@ -5,22 +5,44 @@ import { storage } from '@/storage';
 
 import zh from './locales/zh.json';
 import en from './locales/en.json';
+import ja from './locales/ja.json';
+import ko from './locales/ko.json';
+import es from './locales/es.json';
 
 const LANGUAGE_KEY = '@circle_im_language';
 
-export type AppLanguage = 'zh' | 'en';
-export type AppLanguagePreference = 'system' | 'zh' | 'en';
+export const APP_LANGUAGE_OPTIONS = [
+  { labelKey: 'appSettings.languageSheet.zh', value: 'zh' },
+  { labelKey: 'appSettings.languageSheet.en', value: 'en' },
+  { labelKey: 'appSettings.languageSheet.ja', value: 'ja' },
+  { labelKey: 'appSettings.languageSheet.ko', value: 'ko' },
+  { labelKey: 'appSettings.languageSheet.es', value: 'es' },
+] as const;
+
+export type AppLanguage = (typeof APP_LANGUAGE_OPTIONS)[number]['value'];
+export type AppLanguagePreference = 'system' | AppLanguage;
 
 const resources = {
   zh: { translation: zh },
   en: { translation: en },
+  ja: { translation: ja },
+  ko: { translation: ko },
+  es: { translation: es },
 };
 
 const i18n = i18next;
 
+function isAppLanguage(value: unknown): value is AppLanguage {
+  return (
+    typeof value === 'string' &&
+    APP_LANGUAGE_OPTIONS.some((option) => option.value === value)
+  );
+}
+
 function getDeviceLanguage(): AppLanguage {
   const locales = getLocales();
-  const lang = locales[0]?.languageCode ?? 'zh';
+  const lang = locales[0]?.languageCode?.toLowerCase() ?? 'zh';
+  if (isAppLanguage(lang)) return lang;
   return lang.startsWith('zh') ? 'zh' : 'en';
 }
 
@@ -34,7 +56,7 @@ function getSavedLanguagePreference(): AppLanguagePreference {
   }
 
   const saved = storage.getString(LANGUAGE_KEY);
-  if (saved === 'zh' || saved === 'en') return saved;
+  if (isAppLanguage(saved)) return saved;
   return 'system';
 }
 
@@ -52,7 +74,14 @@ function getInitialLanguage(): AppLanguage {
 void i18n.use(initReactI18next).init({
   resources,
   lng: getInitialLanguage(),
-  fallbackLng: 'zh',
+  fallbackLng: {
+    zh: ['zh'],
+    en: ['en', 'zh'],
+    ja: ['ja', 'en', 'zh'],
+    ko: ['ko', 'en', 'zh'],
+    es: ['es', 'en', 'zh'],
+    default: ['zh'],
+  },
   interpolation: {
     escapeValue: false,
   },
@@ -76,7 +105,8 @@ export function setLanguage(lang: AppLanguagePreference) {
 }
 
 export function getCurrentLanguage(): AppLanguage {
-  return (i18n.language?.startsWith('zh') ? 'zh' : 'en') as AppLanguage;
+  const language = i18n.language?.toLowerCase();
+  return isAppLanguage(language) ? language : 'zh';
 }
 
 export function getCurrentLanguagePreference(): AppLanguagePreference {

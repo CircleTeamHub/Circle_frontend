@@ -68,6 +68,23 @@ const MENU_ACTION_KEYS: {
   { id: "seatManagement", icon: "call-outline", key: "messages.seatManagement" },
 ];
 
+type PinnedGroupPosition = "single" | "first" | "middle" | "last" | "none";
+
+function getPinnedGroupPosition(
+  items: ConversationWithLocalUnread[],
+  index: number,
+): PinnedGroupPosition {
+  const current = items[index];
+  if (!current?.pinned) return "none";
+
+  const previousPinned = Boolean(items[index - 1]?.pinned);
+  const nextPinned = Boolean(items[index + 1]?.pinned);
+  if (!previousPinned && !nextPinned) return "single";
+  if (!previousPinned) return "first";
+  if (!nextPinned) return "last";
+  return "middle";
+}
+
 // 静态样式（不依赖主题色，提取到组件外避免每次渲染重建）
 const s = StyleSheet.create({
   listContent: {
@@ -103,11 +120,26 @@ const s = StyleSheet.create({
     top: -8,
     right: -12,
   },
-  // 单条会话行外层：保留列表分隔线和行间距
+  // 单条会话行外层：保留普通列表分隔线和行间距
   row: {
     marginHorizontal: -Spacing.sm,
     paddingVertical: Spacing.xs,
     overflow: "hidden",
+  },
+  pinnedRowFirst: {
+    paddingTop: Spacing.xs,
+    paddingBottom: 1,
+  },
+  pinnedRowMiddle: {
+    paddingTop: 1,
+    paddingBottom: 1,
+  },
+  pinnedRowLast: {
+    paddingTop: 1,
+    paddingBottom: Spacing.xs,
+  },
+  pinnedRowSingle: {
+    paddingVertical: Spacing.xs,
   },
   swipeForeground: {
     zIndex: 1,
@@ -142,11 +174,25 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
     borderRadius: Radius.md,
   },
-  // 置顶会话内层背景：比普通行略收窄，避免连续置顶时灰底贴到分割线
+  // 置顶会话内层背景：连续置顶时按组收紧间距和圆角
   pinnedSurface: {
     marginHorizontal: Spacing.xs,
     borderRadius: Radius.lg,
     // backgroundColor 由主题动态注入
+  },
+  pinnedSurfaceFirst: {
+    borderBottomLeftRadius: Radius.sm,
+    borderBottomRightRadius: Radius.sm,
+  },
+  pinnedSurfaceMiddle: {
+    borderRadius: Radius.sm,
+  },
+  pinnedSurfaceLast: {
+    borderTopLeftRadius: Radius.sm,
+    borderTopRightRadius: Radius.sm,
+  },
+  pinnedSurfaceSingle: {
+    borderRadius: Radius.lg,
   },
   // 名称组合
   nameRow: {
@@ -216,6 +262,7 @@ type ConversationRowLabels = {
 
 type ConversationRowProps = {
   item: ConversationWithLocalUnread;
+  pinnedGroupPosition: PinnedGroupPosition;
   labels: ConversationRowLabels;
   rowBackgroundColor: string;
   nameStyle: object;
@@ -231,6 +278,7 @@ type ConversationRowProps = {
 
 function ConversationRow({
   item,
+  pinnedGroupPosition,
   labels,
   rowBackgroundColor,
   nameStyle,
@@ -246,6 +294,36 @@ function ConversationRow({
   const { colors } = useTheme();
   const translateX = useRef(new Animated.Value(0)).current;
   const currentXRef = useRef(0);
+
+  const getPinnedRowStyle = (position: PinnedGroupPosition) => {
+    switch (position) {
+      case "single":
+        return s.pinnedRowSingle;
+      case "first":
+        return s.pinnedRowFirst;
+      case "middle":
+        return s.pinnedRowMiddle;
+      case "last":
+        return s.pinnedRowLast;
+      default:
+        return null;
+    }
+  };
+
+  const getPinnedSurfaceStyle = (position: PinnedGroupPosition) => {
+    switch (position) {
+      case "single":
+        return s.pinnedSurfaceSingle;
+      case "first":
+        return s.pinnedSurfaceFirst;
+      case "middle":
+        return s.pinnedSurfaceMiddle;
+      case "last":
+        return s.pinnedSurfaceLast;
+      default:
+        return null;
+    }
+  };
 
   const animateTo = useCallback(
     (toValue: number) => {
@@ -333,7 +411,7 @@ function ConversationRow({
   );
 
   return (
-    <View style={s.row}>
+    <View style={[s.row, getPinnedRowStyle(pinnedGroupPosition)]}>
       {renderSwipeActions()}
       <Animated.View
         {...panResponder.panHandlers}
@@ -342,7 +420,18 @@ function ConversationRow({
           { backgroundColor: rowBackgroundColor, transform: [{ translateX }] },
         ]}
       >
-        <View style={[s.rowSurface, item.pinned ? [s.pinnedSurface, pinnedSurfaceStyle] : null]}>
+        <View
+          style={[
+            s.rowSurface,
+            item.pinned
+              ? [
+                  s.pinnedSurface,
+                  getPinnedSurfaceStyle(pinnedGroupPosition),
+                  pinnedSurfaceStyle,
+                ]
+              : null,
+          ]}
+        >
           {item.conversationType === "private" ? (
             <Pressable onPress={() => onOpenUserProfile(item)}>
               <Avatar size={40} name={item.name} uri={item.avatarUrl} />
@@ -716,9 +805,10 @@ export default function MessagesScreen() {
 
   // 单条会话行渲染：头像（私聊可点击进主页）+ 名称/预览/时间/未读数
   const renderItem = useCallback(
-    ({ item }: ListRenderItemInfo<ConversationWithLocalUnread>) => (
+    ({ item, index }: ListRenderItemInfo<ConversationWithLocalUnread>) => (
       <ConversationRow
         item={item}
+        pinnedGroupPosition={getPinnedGroupPosition(visibleConversations, index)}
         labels={swipeLabels}
         rowBackgroundColor={colors.background}
         nameStyle={d.name}
@@ -741,10 +831,29 @@ export default function MessagesScreen() {
       handleMarkConversationRead,
       handleOpenUserProfile,
       swipeLabels,
+      visibleConversations,
     ],
   );
 
-  const renderSeparator = useCallback(() => <Divider />, []);
+  const hiddenPinnedSeparatorIDs = useMemo(() => {
+    const ids = new Set<string>();
+    visibleConversations.forEach((conversation, index) => {
+      if (conversation.pinned && visibleConversations[index + 1]?.pinned) {
+        ids.add(conversation.id);
+      }
+    });
+    return ids;
+  }, [visibleConversations]);
+
+  const renderSeparator = useCallback(
+    ({
+      leadingItem,
+    }: {
+      leadingItem?: ConversationWithLocalUnread;
+    }) =>
+      leadingItem && hiddenPinnedSeparatorIDs.has(leadingItem.id) ? null : <Divider />,
+    [hiddenPinnedSeparatorIDs],
+  );
   const keyExtractor = useCallback((item: Conversation) => item.id, []);
 
   // 列表 Header：标题行（含操作按钮）+ 筛选 Tab 栏

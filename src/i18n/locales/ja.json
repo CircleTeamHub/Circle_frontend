@@ -1,0 +1,13 @@
+{
+  "appSettings": {
+    "languageSheet": {
+      "title": "言語を選択",
+      "system": "システムに従う",
+      "zh": "中文",
+      "en": "English",
+      "ja": "日本語",
+      "ko": "한국어",
+      "es": "Español"
+    }
+  }
+}

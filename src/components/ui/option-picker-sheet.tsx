@@ -52,9 +52,14 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg,
-    height: 52,
+    paddingVertical: Spacing.sm,
+    minHeight: 52,
+    gap: Spacing.md,
   },
-  optionLabel: { ...Typography.body },
+  optionLabel: {
+    ...Typography.body,
+    flexShrink: 1,
+  },
 });
 
 export function OptionPickerSheet<T extends string | number | null>({
@@ -120,6 +125,7 @@ export function OptionPickerSheet<T extends string | number | null>({
                 accessibilityLabel={option.label}
               >
                 <Text
+                  numberOfLines={2}
                   style={[
                     s.optionLabel,
                     isSelected ? d.optionLabelSelected : d.optionLabel,
