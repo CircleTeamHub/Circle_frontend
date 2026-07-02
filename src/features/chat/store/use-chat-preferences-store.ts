@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { mmkvJsonStorage } from '@/storage';
-import i18n from '@/i18n';
 
 export type ChatBackgroundPreference =
   | { mode: 'global' }
@@ -10,8 +9,6 @@ export type ChatBackgroundPreference =
 
 export type ChatBackgroundPreset = {
   id: string;
-  labelKey: string;
-  defaultLabel: string;
   color: string;
 };
 
@@ -20,30 +17,10 @@ export const DEFAULT_CHAT_BACKGROUND_PREFERENCE = {
 } as const;
 
 export const CHAT_BACKGROUND_PRESETS: ChatBackgroundPreset[] = [
-  {
-    id: 'morning-mist',
-    labelKey: 'chat.background.preset.mistBlue',
-    defaultLabel: '晨雾蓝',
-    color: '#EAF1FF',
-  },
-  {
-    id: 'forest-breeze',
-    labelKey: 'chat.background.preset.forestGreen',
-    defaultLabel: '森林绿',
-    color: '#E8F6EE',
-  },
-  {
-    id: 'sunset-glow',
-    labelKey: 'chat.background.preset.sunsetOrange',
-    defaultLabel: '落日橙',
-    color: '#FFF1E8',
-  },
-  {
-    id: 'lavender-haze',
-    labelKey: 'chat.background.preset.lavenderPurple',
-    defaultLabel: '薰衣草紫',
-    color: '#F3ECFF',
-  },
+  { id: 'morning-mist', color: '#EAF1FF' },
+  { id: 'forest-breeze', color: '#E8F6EE' },
+  { id: 'sunset-glow', color: '#FFF1E8' },
+  { id: 'lavender-haze', color: '#F3ECFF' },
 ];
 
 type ChatPreferencesState = {
@@ -60,27 +37,9 @@ function findChatBackgroundPreset(presetId: string) {
   return CHAT_BACKGROUND_PRESETS.find((preset) => preset.id === presetId);
 }
 
-function translatePresetLabel(preset?: ChatBackgroundPreset) {
-  if (preset) {
-    return i18n.t(preset.labelKey, { defaultValue: preset.defaultLabel });
-  }
-  return i18n.t('chat.background.presetFallback', { defaultValue: '预设背景' });
-}
-
-export function getChatBackgroundPreferenceLabel(
-  preference?: ChatBackgroundPreference | null,
-) {
-  switch (preference?.mode) {
-    case 'preset':
-      return translatePresetLabel(findChatBackgroundPreset(preference.presetId));
-    case 'image':
-      return i18n.t('chat.background.customImage', { defaultValue: '自定义图片' });
-    case 'global':
-    default:
-      return i18n.t('chat.background.global', { defaultValue: '跟随全局' });
-  }
-}
-
+// 只负责背景视觉（颜色 / 图片）；不产出文案标签。此前有一份 i18n label（含 getChat-
+// BackgroundPreferenceLabel / preset.labelKey）但无任何消费方，且在 useMemo 里调 i18n.t
+// 不会随语言刷新，已作为死代码移除。
 export function resolveChatBackgroundStyle(
   preference: ChatBackgroundPreference | null | undefined,
   fallbackColor: string,
@@ -88,23 +47,13 @@ export function resolveChatBackgroundStyle(
   switch (preference?.mode) {
     case 'preset': {
       const preset = findChatBackgroundPreset(preference.presetId);
-      return {
-        backgroundColor: preset?.color ?? fallbackColor,
-        label: translatePresetLabel(preset),
-      };
+      return { backgroundColor: preset?.color ?? fallbackColor };
     }
     case 'image':
-      return {
-        backgroundColor: fallbackColor,
-        imageUri: preference.uri,
-        label: i18n.t('chat.background.customImage', { defaultValue: '自定义图片' }),
-      };
+      return { backgroundColor: fallbackColor, imageUri: preference.uri };
     case 'global':
     default:
-      return {
-        backgroundColor: fallbackColor,
-        label: i18n.t('chat.background.global', { defaultValue: '跟随全局' }),
-      };
+      return { backgroundColor: fallbackColor };
   }
 }
 

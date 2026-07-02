@@ -463,15 +463,7 @@
       "statusSet": "已设置",
       "statusChoose": "请选择",
       "failedTitle": "设置失败",
-      "failedBody": "图片背景设置失败，请重试。",
-      "presetFallback": "预设背景",
-      "global": "跟随全局",
-      "preset": {
-        "mistBlue": "晨雾蓝",
-        "forestGreen": "森林绿",
-        "sunsetOrange": "落日橙",
-        "lavenderPurple": "薰衣草紫"
-      }
+      "failedBody": "图片背景设置失败，请重试。"
     },
     "attachments": {
       "photos": "照片",

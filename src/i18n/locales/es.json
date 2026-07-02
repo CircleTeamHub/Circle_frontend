@@ -446,15 +446,7 @@
       "statusSet": "Definido",
       "statusChoose": "Elegir",
       "failedTitle": "Error de configuración",
-      "failedBody": "No se pudo definir el fondo con la imagen. Inténtalo de nuevo.",
-      "presetFallback": "Fondo predefinido",
-      "global": "Seguir global",
-      "preset": {
-        "mistBlue": "Azul niebla",
-        "forestGreen": "Verde bosque",
-        "sunsetOrange": "Naranja atardecer",
-        "lavenderPurple": "Morado lavanda"
-      }
+      "failedBody": "No se pudo definir el fondo con la imagen. Inténtalo de nuevo."
     },
     "attachments": {
       "photos": "Fotos",

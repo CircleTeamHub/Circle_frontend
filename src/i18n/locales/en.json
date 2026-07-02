@@ -464,15 +464,7 @@
       "statusSet": "Set",
       "statusChoose": "Choose",
       "failedTitle": "Setup failed",
-      "failedBody": "Failed to set image background. Please try again.",
-      "presetFallback": "Preset background",
-      "global": "Follow global",
-      "preset": {
-        "mistBlue": "Misty Blue",
-        "forestGreen": "Forest Green",
-        "sunsetOrange": "Sunset Orange",
-        "lavenderPurple": "Lavender Purple"
-      }
+      "failedBody": "Failed to set image background. Please try again."
     },
     "attachments": {
       "photos": "Photos",

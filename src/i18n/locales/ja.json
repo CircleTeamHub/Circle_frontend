@@ -445,15 +445,7 @@
       "statusSet": "設定済み",
       "statusChoose": "選択",
       "failedTitle": "設定に失敗しました",
-      "failedBody": "画像の背景を設定できませんでした。もう一度お試しください。",
-      "presetFallback": "プリセット背景",
-      "global": "全体設定に従う",
-      "preset": {
-        "mistBlue": "朝霧ブルー",
-        "forestGreen": "フォレストグリーン",
-        "sunsetOrange": "サンセットオレンジ",
-        "lavenderPurple": "ラベンダーパープル"
-      }
+      "failedBody": "画像の背景を設定できませんでした。もう一度お試しください。"
     },
     "attachments": {
       "photos": "写真",

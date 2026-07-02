@@ -445,15 +445,7 @@
       "statusSet": "설정됨",
       "statusChoose": "선택",
       "failedTitle": "설정 실패",
-      "failedBody": "이미지 배경 설정에 실패했습니다. 다시 시도해 주세요.",
-      "presetFallback": "기본 배경",
-      "global": "전체 설정 따르기",
-      "preset": {
-        "mistBlue": "새벽 안개 블루",
-        "forestGreen": "포레스트 그린",
-        "sunsetOrange": "선셋 오렌지",
-        "lavenderPurple": "라벤더 퍼플"
-      }
+      "failedBody": "이미지 배경 설정에 실패했습니다. 다시 시도해 주세요."
     },
     "attachments": {
       "photos": "사진",
