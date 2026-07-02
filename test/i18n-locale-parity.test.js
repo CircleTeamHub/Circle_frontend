@@ -65,3 +65,42 @@ for (const lng of ['en', ...OTHER_LOCALES]) {
     assert.deepEqual(empty, [], `${lng}.json has empty values: ${empty.join(', ')}`);
   });
 }
+
+// Interpolation placeholder parity. A locale that translates `请求失败 ({{status}})`
+// but drops `{{status}}` silently loses the status code — invisible to key-parity and
+// empty-value checks. Every shared key must carry the SAME set of {{placeholders}} as en.
+const loadFlat = (lng) =>
+  flatten(JSON.parse(fs.readFileSync(path.join(LOCALES_DIR, `${lng}.json`), 'utf8')));
+
+const placeholdersOf = (value) => {
+  const set = new Set();
+  const scan = (s) => {
+    if (typeof s !== 'string') return;
+    const re = /\{\{\s*([a-zA-Z0-9_]+)[^}]*\}\}/g;
+    let m;
+    while ((m = re.exec(s))) set.add(m[1]);
+  };
+  if (Array.isArray(value)) value.forEach(scan);
+  else scan(value);
+  return set;
+};
+
+const enFlatValues = loadFlat('en');
+
+for (const lng of OTHER_LOCALES) {
+  test(`${lng}.json keeps the same {{placeholders}} as en.json`, () => {
+    const lngFlat = loadFlat(lng);
+    const drift = [];
+    for (const key of Object.keys(enFlatValues)) {
+      if (!(key in lngFlat)) continue;
+      const en = [...placeholdersOf(enFlatValues[key])].sort().join(',');
+      const other = [...placeholdersOf(lngFlat[key])].sort().join(',');
+      if (en !== other) drift.push(`${key} — en:{${en}} ${lng}:{${other}}`);
+    }
+    assert.deepEqual(
+      drift,
+      [],
+      `${lng}.json placeholder drift:\n  ${drift.join('\n  ')}`,
+    );
+  });
+}
