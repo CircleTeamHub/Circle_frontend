@@ -2122,6 +2122,16 @@
     "AUTH_CODE_INVALID": "验证码错误或已过期",
     "AUTH_ACCOUNT_ID_TAKEN": "该账号已被占用",
     "AUTH_SECURITY_CODE_INVALID": "当前安全码不正确",
-    "AUTH_SECURITY_CODE_LOCKED": "安全码错误次数过多，请稍后再试"
+    "AUTH_SECURITY_CODE_LOCKED": "安全码错误次数过多，请稍后再试",
+    "COIN_SELF_TRANSFER": "不能给自己转账",
+    "COIN_NOT_FRIEND": "只能给好友转账",
+    "COIN_INSUFFICIENT": "积分余额不足",
+    "COIN_AMOUNT_INVALID": "转账数量必须大于 0",
+    "MEMBERSHIP_INVALID_LEVEL": "会员等级无效",
+    "MEMBERSHIP_LEVEL_NOT_HIGHER": "请选择高于当前等级的会员",
+    "MEMBERSHIP_INSUFFICIENT_POINTS": "积分不足",
+    "CIRCLE_MEMBER_LIMIT": "圈子成员已满",
+    "CIRCLE_ALREADY_MEMBER": "你已是该圈子成员",
+    "CIRCLE_REQUEST_PENDING": "申请已提交，等待处理"
   }
 }

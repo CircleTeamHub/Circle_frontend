@@ -2122,6 +2122,16 @@
     "AUTH_CODE_INVALID": "認証コードが正しくないか、有効期限が切れています",
     "AUTH_ACCOUNT_ID_TAKEN": "このアカウントIDは既に使用されています",
     "AUTH_SECURITY_CODE_INVALID": "現在のセキュリティコードが正しくありません",
-    "AUTH_SECURITY_CODE_LOCKED": "セキュリティコードの試行回数が多すぎます。しばらくしてから再度お試しください"
+    "AUTH_SECURITY_CODE_LOCKED": "セキュリティコードの試行回数が多すぎます。しばらくしてから再度お試しください",
+    "COIN_SELF_TRANSFER": "自分自身には送金できません",
+    "COIN_NOT_FRIEND": "友だちにのみ送金できます",
+    "COIN_INSUFFICIENT": "ポイントが不足しています",
+    "COIN_AMOUNT_INVALID": "金額は0より大きくしてください",
+    "MEMBERSHIP_INVALID_LEVEL": "会員レベルが無効です",
+    "MEMBERSHIP_LEVEL_NOT_HIGHER": "現在より上のレベルを選んでください",
+    "MEMBERSHIP_INSUFFICIENT_POINTS": "ポイントが足りません",
+    "CIRCLE_MEMBER_LIMIT": "サークルが満員です",
+    "CIRCLE_ALREADY_MEMBER": "すでにメンバーです",
+    "CIRCLE_REQUEST_PENDING": "申請はすでに承認待ちです"
   }
 }

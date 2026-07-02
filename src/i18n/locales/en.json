@@ -2125,6 +2125,16 @@
     "AUTH_CODE_INVALID": "The verification code is incorrect or has expired",
     "AUTH_ACCOUNT_ID_TAKEN": "This account ID is already taken",
     "AUTH_SECURITY_CODE_INVALID": "The current security code is incorrect",
-    "AUTH_SECURITY_CODE_LOCKED": "Too many incorrect security code attempts. Please try again later."
+    "AUTH_SECURITY_CODE_LOCKED": "Too many incorrect security code attempts. Please try again later.",
+    "COIN_SELF_TRANSFER": "You can't send coins to yourself",
+    "COIN_NOT_FRIEND": "You can only send coins to friends",
+    "COIN_INSUFFICIENT": "Insufficient coins",
+    "COIN_AMOUNT_INVALID": "The amount must be greater than zero",
+    "MEMBERSHIP_INVALID_LEVEL": "Invalid membership level",
+    "MEMBERSHIP_LEVEL_NOT_HIGHER": "Choose a level higher than your current one",
+    "MEMBERSHIP_INSUFFICIENT_POINTS": "Not enough points",
+    "CIRCLE_MEMBER_LIMIT": "This circle is full",
+    "CIRCLE_ALREADY_MEMBER": "You're already a member",
+    "CIRCLE_REQUEST_PENDING": "Your request is already pending"
   }
 }

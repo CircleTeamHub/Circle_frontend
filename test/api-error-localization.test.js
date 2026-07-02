@@ -80,7 +80,7 @@ test('client.ts threads errorCode onto ApiError', () => {
   assert.match(src, /\)\?\.errorCode/); // unwrapResponse reads it off the payload
 });
 
-test('every locale defines all 6 serverErrors codes', () => {
+test('every locale defines all serverErrors codes', () => {
   const CODES = [
     'AUTH_INVALID_CREDENTIALS',
     'AUTH_EMAIL_TAKEN',
@@ -88,6 +88,16 @@ test('every locale defines all 6 serverErrors codes', () => {
     'AUTH_ACCOUNT_ID_TAKEN',
     'AUTH_SECURITY_CODE_INVALID',
     'AUTH_SECURITY_CODE_LOCKED',
+    'COIN_SELF_TRANSFER',
+    'COIN_NOT_FRIEND',
+    'COIN_INSUFFICIENT',
+    'COIN_AMOUNT_INVALID',
+    'MEMBERSHIP_INVALID_LEVEL',
+    'MEMBERSHIP_LEVEL_NOT_HIGHER',
+    'MEMBERSHIP_INSUFFICIENT_POINTS',
+    'CIRCLE_MEMBER_LIMIT',
+    'CIRCLE_ALREADY_MEMBER',
+    'CIRCLE_REQUEST_PENDING',
   ];
   for (const lng of ['zh', 'en', 'ja', 'ko', 'es']) {
     const bundle = JSON.parse(

@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
 import { useNetworkStatus } from '@/hooks/use-network-status';
 import { fetchCurrentUser } from '@/services/api/auth';
+import { getApiErrorMessage } from '@/services/api/errors';
 import {
   fetchMembershipPlans,
   upgradeMembership,
@@ -136,11 +137,16 @@ export default function MemberCenterScreen() {
           level: result.user.vipLevel,
         }),
       );
-    } catch {
+    } catch (err) {
+      // 后端会带上 errorCode(积分不足 / 等级非法 / 等级不够高),getApiErrorMessage
+      // 优先按码本地化,缺码才回落这句通用兜底。
       setStatusText(
-        t('profile.membership.exchangeError', {
-          defaultValue: '兑换失败，请确认积分余额足够后重试',
-        }),
+        getApiErrorMessage(
+          err,
+          t('profile.membership.exchangeError', {
+            defaultValue: '兑换失败，请确认积分余额足够后重试',
+          }),
+        ),
       );
     } finally {
       setSubmitting(false);

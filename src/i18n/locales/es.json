@@ -2125,6 +2125,16 @@
     "AUTH_CODE_INVALID": "El código de verificación es incorrecto o ha expirado",
     "AUTH_ACCOUNT_ID_TAKEN": "Este ID de cuenta ya está en uso",
     "AUTH_SECURITY_CODE_INVALID": "El código de seguridad actual es incorrecto",
-    "AUTH_SECURITY_CODE_LOCKED": "Demasiados intentos incorrectos del código de seguridad. Inténtalo de nuevo más tarde."
+    "AUTH_SECURITY_CODE_LOCKED": "Demasiados intentos incorrectos del código de seguridad. Inténtalo de nuevo más tarde.",
+    "COIN_SELF_TRANSFER": "No puedes enviarte monedas a ti mismo",
+    "COIN_NOT_FRIEND": "Solo puedes enviar monedas a amigos",
+    "COIN_INSUFFICIENT": "Monedas insuficientes",
+    "COIN_AMOUNT_INVALID": "El importe debe ser mayor que cero",
+    "MEMBERSHIP_INVALID_LEVEL": "Nivel de membresía no válido",
+    "MEMBERSHIP_LEVEL_NOT_HIGHER": "Elige un nivel superior al actual",
+    "MEMBERSHIP_INSUFFICIENT_POINTS": "Puntos insuficientes",
+    "CIRCLE_MEMBER_LIMIT": "Este círculo está lleno",
+    "CIRCLE_ALREADY_MEMBER": "Ya eres miembro",
+    "CIRCLE_REQUEST_PENDING": "Tu solicitud ya está pendiente"
   }
 }
