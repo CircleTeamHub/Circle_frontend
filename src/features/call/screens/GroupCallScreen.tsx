@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { cancelCall, leaveCall, requestJoinToken } from '@/services/api/calls';
 import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -194,6 +195,7 @@ function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
     useRoomContext,
   } = liveKitModule;
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const room = useRoomContext();
   const connectionState = useConnectionState();
   const participants = useParticipants();
@@ -216,16 +218,16 @@ function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
   const connectionLabel = useMemo(() => {
     switch (connectionState) {
       case 'connected':
-        return 'LiveKit 已连接，当前仅开放音频。';
+        return t('call.livekit.connected', { defaultValue: 'LiveKit 已连接，当前仅开放音频。' });
       case 'reconnecting':
       case 'signalReconnecting':
-        return '正在恢复通话连接...';
+        return t('call.status.reconnecting', { defaultValue: '正在恢复通话连接...' });
       case 'connecting':
-        return '正在连接 LiveKit...';
+        return t('call.status.connecting', { defaultValue: '正在连接 LiveKit...' });
       default:
-        return '通话连接已断开。';
+        return t('call.status.disconnected', { defaultValue: '通话连接已断开。' });
     }
-  }, [connectionState]);
+  }, [connectionState, t]);
 
   const handleToggleMic = useCallback(async () => {
     if (muting) return;
@@ -265,9 +267,14 @@ function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
   return (
     <>
       <View style={s.header}>
-        <Text style={[s.eyebrow, { color: colors.primary }]}>群语音通话</Text>
+        <Text style={[s.eyebrow, { color: colors.primary }]}>
+          {t('call.groupCallTitle', { defaultValue: '群语音通话' })}
+        </Text>
         <Text style={[s.title, { color: colors.text }]}>
-          {participantRows.length} 人在线
+          {t('call.participantsOnline', {
+            defaultValue: '{{count}} 人在线',
+            count: participantRows.length,
+          })}
         </Text>
         <Text style={[s.subtitle, { color: colors.textSecondary }]}>
           {connectionLabel}
@@ -289,7 +296,9 @@ function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
               numberOfLines={1}
               style={[s.participantName, { color: colors.text }]}
             >
-              {participant.isLocal ? '我' : participant.name}
+              {participant.isLocal
+                ? t('call.self', { defaultValue: '我' })
+                : participant.name}
             </Text>
           </View>
         ))}
@@ -336,6 +345,7 @@ function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
 
 export default function GroupCallScreen() {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const activeCall = useCallStore((state) => state.activeCall);
   const livekit = useCallStore((state) => state.livekit);
   const setLiveKitCredentials = useCallStore((state) => state.setLiveKitCredentials);
@@ -393,7 +403,7 @@ export default function GroupCallScreen() {
     return (
       <View style={[s.missing, { backgroundColor: colors.background }]}>
         <Text style={[s.missingTitle, { color: colors.text }]}>
-          通话已结束或连接信息已失效
+          {t('call.ended', { defaultValue: '通话已结束或连接信息已失效' })}
         </Text>
         <Pressable
           style={[s.backButton, { backgroundColor: colors.primary }]}
@@ -402,7 +412,9 @@ export default function GroupCallScreen() {
             router.back();
           }}
         >
-          <Text style={[s.backText, { color: colors.white }]}>返回</Text>
+          <Text style={[s.backText, { color: colors.white }]}>
+            {t('common.back', { defaultValue: '返回' })}
+          </Text>
         </Pressable>
       </View>
     );
@@ -413,7 +425,7 @@ export default function GroupCallScreen() {
       <View style={[s.missing, { backgroundColor: colors.background }]}>
         <ActivityIndicator color={colors.primary} />
         <Text style={[s.missingTitle, { color: colors.text }]}>
-          正在准备通话组件...
+          {t('call.preparing', { defaultValue: '正在准备通话组件...' })}
         </Text>
       </View>
     );
@@ -423,10 +435,12 @@ export default function GroupCallScreen() {
     return (
       <View style={[s.missing, { backgroundColor: colors.background }]}>
         <Text style={[s.missingTitle, { color: colors.text }]}>
-          LiveKit 通话组件不可用
+          {t('call.unavailable', { defaultValue: 'LiveKit 通话组件不可用' })}
         </Text>
         <Text style={[s.unavailableText, { color: colors.textSecondary }]}>
-          请使用包含 LiveKit native module 的开发客户端或重新构建应用。
+          {t('call.unavailableHint', {
+            defaultValue: '请使用包含 LiveKit native module 的开发客户端或重新构建应用。',
+          })}
         </Text>
         <Pressable
           style={[s.backButton, { backgroundColor: colors.primary }]}
@@ -435,7 +449,9 @@ export default function GroupCallScreen() {
             router.back();
           }}
         >
-          <Text style={[s.backText, { color: colors.white }]}>返回</Text>
+          <Text style={[s.backText, { color: colors.white }]}>
+            {t('common.back', { defaultValue: '返回' })}
+          </Text>
         </Pressable>
       </View>
     );
@@ -456,7 +472,9 @@ export default function GroupCallScreen() {
           if (typeof __DEV__ !== 'undefined' && __DEV__) {
             console.warn('[call] LiveKit room error', error);
           }
-          setConnectError('通话连接失败，请重试');
+          setConnectError(
+            t('call.connectionFailed', { defaultValue: '通话连接失败，请重试' }),
+          );
         }}
       >
         <CallRoomContent liveKitModule={liveKitModule} />
@@ -474,7 +492,9 @@ export default function GroupCallScreen() {
             {retrying ? (
               <ActivityIndicator color={colors.white} />
             ) : (
-              <Text style={[s.backText, { color: colors.white }]}>重新连接</Text>
+              <Text style={[s.backText, { color: colors.white }]}>
+                {t('call.reconnect', { defaultValue: '重新连接' })}
+              </Text>
             )}
           </Pressable>
         </View>

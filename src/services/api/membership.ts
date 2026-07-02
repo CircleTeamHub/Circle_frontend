@@ -5,7 +5,9 @@ export type MembershipPlan = {
   level: number;
   name: string;
   price: number;
-  perks: string;
+  // i18n key resolved at render via t(); backend may also send a display string,
+  // which t() passes through unchanged for a missing key.
+  perksKey: string;
 };
 
 export type MembershipUser = {

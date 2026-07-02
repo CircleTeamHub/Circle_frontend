@@ -165,17 +165,18 @@ type AttachmentId =
 const ATTACHMENT_ITEMS: readonly {
   id: AttachmentId;
   icon: keyof typeof Ionicons.glyphMap;
+  labelKey: string;
   label: string;
 }[] = [
-  { id: 'media', icon: 'image-outline', label: '照片' },
-  { id: 'camera', icon: 'camera-outline', label: '拍照' },
-  { id: 'voice-call', icon: 'call-outline', label: '语音通话' },
-  { id: 'location', icon: 'location-outline', label: '位置' },
-  { id: 'notes', icon: 'create-outline', label: '笔记' },
-  { id: 'friend-card', icon: 'person-outline', label: '好友名片' },
-  { id: 'favorites', icon: 'star-outline', label: '我的收藏' },
-  { id: 'quick-reply', icon: 'rocket-outline', label: '快捷语' },
-  { id: 'transfer', icon: 'card-outline', label: '转账' },
+  { id: 'media', icon: 'image-outline', labelKey: 'chat.attachments.photos', label: '照片' },
+  { id: 'camera', icon: 'camera-outline', labelKey: 'chat.attachments.camera', label: '拍照' },
+  { id: 'voice-call', icon: 'call-outline', labelKey: 'chat.attachments.voiceCall', label: '语音通话' },
+  { id: 'location', icon: 'location-outline', labelKey: 'chat.attachments.location', label: '位置' },
+  { id: 'notes', icon: 'create-outline', labelKey: 'chat.attachments.notes', label: '笔记' },
+  { id: 'friend-card', icon: 'person-outline', labelKey: 'chat.attachments.friendCard', label: '好友名片' },
+  { id: 'favorites', icon: 'star-outline', labelKey: 'chat.attachments.favorites', label: '我的收藏' },
+  { id: 'quick-reply', icon: 'rocket-outline', labelKey: 'chat.attachments.quickReply', label: '快捷语' },
+  { id: 'transfer', icon: 'card-outline', labelKey: 'chat.attachments.transfer', label: '转账' },
 ];
 
 // 工具面板每页最多 8 个（4 列 × 2 行），超出的横向翻页
@@ -477,7 +478,9 @@ export default function ChatDetailScreen() {
     useState(paramConversationID);
   const conversationID = paramConversationID || resolvedConversationID;
   const paramTitle =
-    typeof params.title === 'string' ? params.title : '聊天详情';
+    typeof params.title === 'string'
+      ? params.title
+      : t('chat.detail.title', { defaultValue: '聊天详情' });
   const conversationType =
     params.conversationType === 'group' ? SessionType.Group : SessionType.Single;
   const isGroupChat = conversationType === SessionType.Group;
@@ -1346,7 +1349,14 @@ export default function ChatDetailScreen() {
           isGroupChat,
         });
         if (mountedRef.current) {
-          setSendError(getChatSendErrorMessage(error, '消息发送失败，请重试'));
+          setSendError(
+            getChatSendErrorMessage(
+              error,
+              t('chat.detail.sendFailedText', {
+                defaultValue: '消息发送失败，请重试',
+              }),
+            ),
+          );
         }
       } finally {
         inFlightRef.current = false;
@@ -1359,6 +1369,7 @@ export default function ChatDetailScreen() {
       isGroupChat,
       isPreviewMode,
       sourceID,
+      t,
     ],
   );
 
@@ -1386,7 +1397,7 @@ export default function ChatDetailScreen() {
     try {
       const permission = await requestRecordingPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert('权限不足', '请在系统设置开启麦克风权限');
+        Alert.alert(t('permissions.insufficientTitle'), t('permissions.microphone'));
         voicePressActiveRef.current = false;
         voiceRecordSessionRef.current += 1;
         return;
@@ -1426,7 +1437,11 @@ export default function ChatDetailScreen() {
       inFlightRef.current = false;
       if (mountedRef.current) {
         setVoiceRecordingStartedAt(null);
-        setSendError('录音启动失败，请重试');
+        setSendError(
+          t('chat.detail.recordStartFailed', {
+            defaultValue: '录音启动失败，请重试',
+          }),
+        );
       }
       if (recordingAudioModeSessionRef.current === recordSession) {
         restoreRecordingAudioMode();
@@ -1441,6 +1456,7 @@ export default function ChatDetailScreen() {
     isPreviewMode,
     restoreRecordingAudioMode,
     sourceID,
+    t,
     voiceActionBusy,
     voiceRecorder,
   ]);
@@ -1488,7 +1504,14 @@ export default function ChatDetailScreen() {
         if (mountedRef.current) {
           setVoiceRecordingStartedAt(null);
           if (!cancel) {
-            setSendError(getChatSendErrorMessage(error, '语音发送失败，请重试'));
+            setSendError(
+              getChatSendErrorMessage(
+                error,
+                t('chat.detail.voiceSendFailed', {
+                  defaultValue: '语音发送失败，请重试',
+                }),
+              ),
+            );
           }
         }
       } finally {
@@ -1505,6 +1528,7 @@ export default function ChatDetailScreen() {
       conversationType,
       restoreRecordingAudioMode,
       sourceID,
+      t,
       voiceRecorder,
       voiceRecordingStartedAt,
     ],
@@ -1568,7 +1592,7 @@ export default function ChatDetailScreen() {
     if (inFlightRef.current) return;
     const permission = await Location.requestForegroundPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('权限不足', '请在系统设置开启定位权限');
+      Alert.alert(t('permissions.insufficientTitle'), t('permissions.location'));
       return;
     }
     inFlightRef.current = true;
@@ -1606,7 +1630,14 @@ export default function ChatDetailScreen() {
       appendMessages(conversationID, [sent]);
     } catch (error) {
       if (mountedRef.current) {
-        setSendError(getChatSendErrorMessage(error, '位置发送失败，请重试'));
+        setSendError(
+          getChatSendErrorMessage(
+            error,
+            t('chat.detail.locationSendFailed', {
+              defaultValue: '位置发送失败，请重试',
+            }),
+          ),
+        );
       }
     } finally {
       inFlightRef.current = false;
@@ -1617,6 +1648,7 @@ export default function ChatDetailScreen() {
     conversationType,
     isPreviewMode,
     sourceID,
+    t,
   ]);
 
   // 相册选择与拍照共用同一套「上传→发送」流程，只有获取 asset 的来源不同。
@@ -1668,13 +1700,20 @@ export default function ChatDetailScreen() {
           );
         }
         if (mountedRef.current) {
-          setSendError(getChatSendErrorMessage(error, '图片发送失败，请重试'));
+          setSendError(
+            getChatSendErrorMessage(
+              error,
+              t('chat.detail.imageSendFailed', {
+                defaultValue: '图片发送失败，请重试',
+              }),
+            ),
+          );
         }
       } finally {
         inFlightRef.current = false;
       }
     },
-    [appendMessages, conversationID, conversationType, sourceID],
+    [appendMessages, conversationID, conversationType, sourceID, t],
   );
 
   const handlePickMedia = useCallback(async () => {
@@ -1682,7 +1721,7 @@ export default function ChatDetailScreen() {
     if (inFlightRef.current) return;
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('权限不足', '请在系统设置开启相册权限');
+      Alert.alert(t('permissions.insufficientTitle'), t('permissions.photoLibrary'));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -1694,14 +1733,14 @@ export default function ChatDetailScreen() {
     });
     if (result.canceled || result.assets.length === 0) return;
     await uploadAndSendImageAsset(result.assets[0]);
-  }, [isPreviewMode, sourceID, uploadAndSendImageAsset]);
+  }, [isPreviewMode, sourceID, t, uploadAndSendImageAsset]);
 
   const handleTakePhoto = useCallback(async () => {
     if (!sourceID || isPreviewMode) return;
     if (inFlightRef.current) return;
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('权限不足', '请在系统设置开启相机权限');
+      Alert.alert(t('permissions.insufficientTitle'), t('permissions.camera'));
       return;
     }
     const result = await ImagePicker.launchCameraAsync({
@@ -1710,7 +1749,7 @@ export default function ChatDetailScreen() {
     });
     if (result.canceled || result.assets.length === 0) return;
     await uploadAndSendImageAsset(result.assets[0]);
-  }, [isPreviewMode, sourceID, uploadAndSendImageAsset]);
+  }, [isPreviewMode, sourceID, t, uploadAndSendImageAsset]);
 
   const openSharePicker = useCallback(
     (type: 'note' | 'friend' | 'favorite' | 'quick-reply') => {
@@ -1726,17 +1765,17 @@ export default function ChatDetailScreen() {
     if (callStartingRef.current) return;
 
     if (!isGroupChat) {
-      Alert.alert('语音通话', '当前只开放群聊语音通话');
+      Alert.alert(t('chat.call.title'), t('chat.call.groupOnly'));
       return;
     }
 
     if (isPreviewMode || !conversationID || !sourceID) {
-      Alert.alert('语音通话', '群聊会话尚未准备好');
+      Alert.alert(t('chat.call.title'), t('chat.call.groupNotReady'));
       return;
     }
 
     if (!authUser?.id) {
-      Alert.alert('语音通话', '请先登录后再发起通话');
+      Alert.alert(t('chat.call.title'), t('chat.call.notLoggedIn'));
       return;
     }
 
@@ -1753,7 +1792,7 @@ export default function ChatDetailScreen() {
       );
 
       if (inviteeIDs.length === 0) {
-        Alert.alert('语音通话', '群内没有可邀请的其他成员');
+        Alert.alert(t('chat.call.title'), t('chat.call.noOtherMembers'));
         return;
       }
 
@@ -1767,7 +1806,7 @@ export default function ChatDetailScreen() {
       router.push('/(chat)/group-call' as never);
     } catch (error) {
       if (mountedRef.current) {
-        Alert.alert('语音通话', '发起失败，请稍后重试');
+        Alert.alert(t('chat.call.title'), t('chat.call.initiateFailed'));
       }
       if (typeof __DEV__ !== 'undefined' && __DEV__) {
         console.warn('[chat] start group audio call failed', error);
@@ -1785,6 +1824,7 @@ export default function ChatDetailScreen() {
     isPreviewMode,
     setActiveCall,
     sourceID,
+    t,
   ]);
 
   const handleAttachmentAction = useCallback(
@@ -1818,7 +1858,7 @@ export default function ChatDetailScreen() {
           return;
         case 'transfer':
           if (conversationType !== SessionType.Single) {
-            Alert.alert('转账', '群聊暂不支持积分转账');
+            Alert.alert(t('chat.transferTitle'), t('chat.transferGroupNotSupported'));
             return;
           }
           if (!sourceID) return;
@@ -1843,6 +1883,7 @@ export default function ChatDetailScreen() {
       handleStartGroupAudioCall,
       openSharePicker,
       sourceID,
+      t,
     ],
   );
 
@@ -1864,7 +1905,14 @@ export default function ChatDetailScreen() {
         appendMessages(conversationID, [sent]);
       } catch (error) {
         if (mountedRef.current) {
-          setSendError(getChatSendErrorMessage(error, '笔记发送失败，请重试'));
+          setSendError(
+            getChatSendErrorMessage(
+              error,
+              t('chat.detail.noteSendFailed', {
+                defaultValue: '笔记发送失败，请重试',
+              }),
+            ),
+          );
         }
       } finally {
         inFlightRef.current = false;
@@ -1877,6 +1925,7 @@ export default function ChatDetailScreen() {
       conversationType,
       isPreviewMode,
       sourceID,
+      t,
     ],
   );
 
@@ -1895,13 +1944,20 @@ export default function ChatDetailScreen() {
         appendMessages(conversationID, [sent]);
       } catch (error) {
         if (mountedRef.current) {
-          setSendError(getChatSendErrorMessage(error, '名片发送失败，请重试'));
+          setSendError(
+            getChatSendErrorMessage(
+              error,
+              t('chat.detail.cardSendFailed', {
+                defaultValue: '名片发送失败，请重试',
+              }),
+            ),
+          );
         }
       } finally {
         inFlightRef.current = false;
       }
     },
-    [appendMessages, conversationID],
+    [appendMessages, conversationID, t],
   );
 
   const handlePickFavorite = useCallback(
@@ -1959,7 +2015,14 @@ export default function ChatDetailScreen() {
           console.warn('[ChatDetail] send collected item failed', error);
         }
         if (mountedRef.current) {
-          setSendError(getChatSendErrorMessage(error, '收藏内容发送失败，请重试'));
+          setSendError(
+            getChatSendErrorMessage(
+              error,
+              t('chat.detail.favoriteSendFailed', {
+                defaultValue: '收藏内容发送失败，请重试',
+              }),
+            ),
+          );
         }
       } finally {
         inFlightRef.current = false;
@@ -1972,6 +2035,7 @@ export default function ChatDetailScreen() {
       isPreviewMode,
       sendDraftAsText,
       sourceID,
+      t,
     ],
   );
 
@@ -1996,7 +2060,14 @@ export default function ChatDetailScreen() {
         appendMessages(conversationID, [sent]);
       } catch (error) {
         if (mountedRef.current) {
-          setSendError(getChatSendErrorMessage(error, '转账卡片发送失败，但积分已扣减'));
+          setSendError(
+            getChatSendErrorMessage(
+              error,
+              t('chat.detail.transferCardSendFailed', {
+                defaultValue: '转账卡片发送失败，但积分已扣减',
+              }),
+            ),
+          );
         }
       } finally {
         inFlightRef.current = false;
@@ -2008,6 +2079,7 @@ export default function ChatDetailScreen() {
       conversationType,
       isPreviewMode,
       sourceID,
+      t,
     ],
   );
 
@@ -2097,7 +2169,14 @@ export default function ChatDetailScreen() {
         isGroupChat,
       });
       if (mountedRef.current) {
-        setSendError(getChatSendErrorMessage(error, '消息发送失败，请重试'));
+        setSendError(
+            getChatSendErrorMessage(
+              error,
+              t('chat.detail.sendFailedText', {
+                defaultValue: '消息发送失败，请重试',
+              }),
+            ),
+          );
       }
     } finally {
       inFlightRef.current = false;
@@ -2114,6 +2193,7 @@ export default function ChatDetailScreen() {
     quoteTarget,
     sending,
     sourceID,
+    t,
   ]);
 
   return (
@@ -2138,12 +2218,14 @@ export default function ChatDetailScreen() {
               <View style={[s.onlineDot, d.onlineDot]} />
               <Text style={[s.headerStatusText, d.headerStatusText]}>
                 {authUser?.accountId === sourceID
-                  ? '自己'
+                  ? t('chat.detail.statusSelf', { defaultValue: '自己' })
                   : conversationType !== SessionType.Single
-                    ? '群聊'
+                    ? t('chat.detail.statusGroup', { defaultValue: '群聊' })
                     : peerOnline
-                      ? '在线'
-                      : '离线'}
+                      ? t('chat.detail.statusOnline', { defaultValue: '在线' })
+                      : t('chat.detail.statusOffline', {
+                          defaultValue: '离线',
+                        })}
               </Text>
             </View>
           </View>
@@ -2214,7 +2296,9 @@ export default function ChatDetailScreen() {
         />
         {isPreviewMode ? (
           <Text style={[s.previewNotice, Typography.small, { color: colors.textSecondary }]}>
-            当前仅预览聊天界面，消息发送会在 IM 接通后开放。
+            {t('chat.detail.previewNotice', {
+              defaultValue: '当前仅预览聊天界面，消息发送会在 IM 接通后开放。',
+            })}
           </Text>
         ) : null}
         {sendError ? (
@@ -2224,7 +2308,10 @@ export default function ChatDetailScreen() {
         ) : null}
         {isVoiceRecording ? (
           <Text style={[s.voiceStatus, { color: colors.primary }]}>
-            正在录音 {voiceElapsedSeconds} 秒
+            {t('chat.detail.recordingSeconds', {
+              defaultValue: '正在录音 {{seconds}} 秒',
+              seconds: voiceElapsedSeconds,
+            })}
           </Text>
         ) : null}
       </View>
@@ -2322,16 +2409,31 @@ export default function ChatDetailScreen() {
             >
               {isVoiceRecording
                 ? cancelArmed
-                  ? '松开 取消'
-                  : `松开发送 ${voiceElapsedSeconds}"`
-                : '按住 说话'}
+                  ? t('chat.detail.voiceReleaseCancel', {
+                      defaultValue: '松开 取消',
+                    })
+                  : t('chat.detail.voiceReleaseSend', {
+                      defaultValue: '松开发送 {{seconds}}"',
+                      seconds: voiceElapsedSeconds,
+                    })
+                : t('chat.detail.voiceHoldToTalk', {
+                    defaultValue: '按住 说话',
+                  })}
             </Text>
           </View>
         ) : (
           <View key="text-shell" style={[s.composerShell, d.composerShell]}>
             <TextInput
               style={[s.composerInput, d.composerInput]}
-              placeholder={isPreviewMode ? '当前仅预览聊天界面' : '输入消息...'}
+              placeholder={
+                isPreviewMode
+                  ? t('chat.detail.previewPlaceholder', {
+                      defaultValue: '当前仅预览聊天界面',
+                    })
+                  : t('chat.detail.inputPlaceholder', {
+                      defaultValue: '输入消息...',
+                    })
+              }
               placeholderTextColor={colors.textSecondary}
               value={draft}
               onChangeText={handleDraftChange}
@@ -2435,8 +2537,8 @@ export default function ChatDetailScreen() {
                       style={[s.attachmentLabel, { color: colors.textSecondary }]}
                     >
                       {item.id === 'voice-call' && callStarting
-                        ? '呼叫中'
-                        : item.label}
+                        ? t('chat.call.calling', { defaultValue: '呼叫中' })
+                        : t(item.labelKey, { defaultValue: item.label })}
                     </Text>
                   </Pressable>
                 ))}

@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme, Radius, Spacing, Typography } from '@/theme';
 import { acceptCall, rejectCall } from '@/services/api/calls';
 import { useCallStore } from '@/features/call/store/use-call-store';
@@ -69,6 +70,7 @@ const s = StyleSheet.create({
 
 export function CallInviteHost() {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const incomingCall = useCallStore((state) => state.incomingCall);
   const setActiveCall = useCallStore((state) => state.setActiveCall);
   const resetCallState = useCallStore((state) => state.resetCallState);
@@ -122,10 +124,18 @@ export function CallInviteHost() {
             </View>
             <View style={s.copy}>
               <Text style={[s.title, { color: colors.text }]}>
-                {incomingCall?.initiator.nickname ?? '群成员'} 发起群语音
+                {t('call.invite.initiatedBy', {
+                  defaultValue: '{{name}} 发起群语音',
+                  name:
+                    incomingCall?.initiator.nickname ??
+                    t('call.invite.groupMember', { defaultValue: '群成员' }),
+                })}
               </Text>
               <Text style={[s.subtitle, { color: colors.textSecondary }]}>
-                {incomingCall?.invitees.length ?? 0} 人被邀请
+                {t('call.invite.inviteeCount', {
+                  defaultValue: '{{count}} 人被邀请',
+                  count: incomingCall?.invitees.length ?? 0,
+                })}
               </Text>
             </View>
           </View>
@@ -141,7 +151,9 @@ export function CallInviteHost() {
               ) : (
                 <>
                   <Ionicons name="close" size={18} color={colors.textSecondary} />
-                  <Text style={[s.actionText, { color: colors.textSecondary }]}>拒绝</Text>
+                  <Text style={[s.actionText, { color: colors.textSecondary }]}>
+                    {t('call.reject', { defaultValue: '拒绝' })}
+                  </Text>
                 </>
               )}
             </Pressable>
@@ -155,7 +167,9 @@ export function CallInviteHost() {
               ) : (
                 <>
                   <Ionicons name="call" size={18} color={colors.white} />
-                  <Text style={[s.actionText, { color: colors.white }]}>接听</Text>
+                  <Text style={[s.actionText, { color: colors.white }]}>
+                    {t('call.accept', { defaultValue: '接听' })}
+                  </Text>
                 </>
               )}
             </Pressable>

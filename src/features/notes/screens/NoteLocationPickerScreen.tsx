@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
@@ -29,14 +30,21 @@ function escapeHtml(value: string) {
     .replaceAll("'", '&#39;');
 }
 
-function buildMapHtml({
-  latitude,
-  longitude,
-  title,
-  address,
-}: PickedNoteLocation) {
+function buildMapHtml(
+  { latitude, longitude, title, address }: PickedNoteLocation,
+  labels: {
+    searchPlaceholder: string;
+    searchButton: string;
+    usePlaceLabel: string;
+    selectedLabel: string;
+  },
+) {
   const safeTitle = escapeHtml(title);
   const safeAddress = escapeHtml(address);
+  const safeSearchPlaceholder = escapeHtml(labels.searchPlaceholder);
+  const safeSearchButton = escapeHtml(labels.searchButton);
+  const safeUsePlaceLabel = escapeHtml(labels.usePlaceLabel);
+  const safeSelectedLabel = escapeHtml(labels.selectedLabel);
   return `<!doctype html>
 <html>
 <head>
@@ -91,17 +99,18 @@ function buildMapHtml({
   <div id="map"></div>
   <div class="bottomSheet">
     <div class="search">
-      <input id="query" placeholder="搜索地点" value="${safeTitle || safeAddress}">
-      <button id="search">搜索</button>
+      <input id="query" placeholder="${safeSearchPlaceholder}" value="${safeTitle || safeAddress}">
+      <button id="search">${safeSearchButton}</button>
     </div>
     <div class="picked">
-      <div id="picked-title">${safeTitle || '已选择位置'}</div>
+      <div id="picked-title">${safeTitle || safeSelectedLabel}</div>
       <small id="picked-address">${safeAddress}</small>
     </div>
-    <button id="confirm">使用这个位置</button>
+    <button id="confirm">${safeUsePlaceLabel}</button>
   </div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
+    const SELECTED_LABEL = ${JSON.stringify(labels.selectedLabel)};
     const post = (payload) => window.ReactNativeWebView.postMessage(JSON.stringify(payload));
     const map = L.map('map', { zoomControl: false }).setView([${latitude}, ${longitude}], 15);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -112,7 +121,7 @@ function buildMapHtml({
 
     const marker = L.marker([${latitude}, ${longitude}], { draggable: true }).addTo(map);
     let picked = {
-      title: ${JSON.stringify(title || '已选择位置')},
+      title: ${JSON.stringify(title || '')} || SELECTED_LABEL,
       address: ${JSON.stringify(address || '')},
       latitude: ${latitude},
       longitude: ${longitude}
@@ -120,19 +129,19 @@ function buildMapHtml({
 
     function updatePicked(next) {
       picked = { ...picked, ...next };
-      document.getElementById('picked-title').textContent = picked.title || '已选择位置';
+      document.getElementById('picked-title').textContent = picked.title || SELECTED_LABEL;
       document.getElementById('picked-address').textContent = picked.address || '';
       marker.setLatLng([picked.latitude, picked.longitude]);
     }
 
     async function reverseGeocode(lat, lon) {
-      updatePicked({ latitude: lat, longitude: lon, title: '已选择位置', address: lat.toFixed(5) + ', ' + lon.toFixed(5) });
+      updatePicked({ latitude: lat, longitude: lon, title: SELECTED_LABEL, address: lat.toFixed(5) + ', ' + lon.toFixed(5) });
       try {
         const url = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=' + encodeURIComponent(lat) + '&lon=' + encodeURIComponent(lon);
         const response = await fetch(url, { headers: { Accept: 'application/json' } });
         const data = await response.json();
         updatePicked({
-          title: data.name || data.display_name?.split(',')[0] || '已选择位置',
+          title: data.name || data.display_name?.split(',')[0] || SELECTED_LABEL,
           address: data.display_name || picked.address
         });
       } catch (error) {
@@ -186,6 +195,7 @@ export default function NoteLocationPickerScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{
     latitude?: string;
     longitude?: string;
@@ -204,7 +214,26 @@ export default function NoteLocationPickerScreen() {
     }),
     [params.address, params.latitude, params.longitude, params.title],
   );
-  const mapHtml = useMemo(() => buildMapHtml(initialLocation), [initialLocation]);
+  const searchPlaceholder = t('notes.location.searchPlaceholder', {
+    defaultValue: '搜索地点',
+  });
+  const searchButton = t('common.search', { defaultValue: '搜索' });
+  const usePlaceLabel = t('notes.location.usePlace', {
+    defaultValue: '使用这个位置',
+  });
+  const selectedLabel = t('notes.location.selectedLabel', {
+    defaultValue: '已选择位置',
+  });
+  const mapHtml = useMemo(
+    () =>
+      buildMapHtml(initialLocation, {
+        searchPlaceholder,
+        searchButton,
+        usePlaceLabel,
+        selectedLabel,
+      }),
+    [initialLocation, searchPlaceholder, searchButton, usePlaceLabel, selectedLabel],
+  );
 
   const handleMapMessage = useCallback(
     (event: WebViewMessageEvent) => {
@@ -221,18 +250,21 @@ export default function NoteLocationPickerScreen() {
         !Number.isFinite(payload.latitude) ||
         !Number.isFinite(payload.longitude)
       ) {
-        Alert.alert('位置无效', '请重新选择位置');
+        Alert.alert(
+          t('notes.location.invalidTitle', { defaultValue: '位置无效' }),
+          t('notes.location.invalidMsg', { defaultValue: '请重新选择位置' }),
+        );
         return;
       }
       setPickedLocation({
-        title: payload.title || '已选择位置',
+        title: payload.title || selectedLabel,
         address: payload.address || '',
         latitude: payload.latitude,
         longitude: payload.longitude,
       });
       router.back();
     },
-    [router, setPickedLocation],
+    [router, selectedLabel, setPickedLocation, t],
   );
 
   return (
@@ -241,7 +273,9 @@ export default function NoteLocationPickerScreen() {
         <Pressable onPress={() => router.back()} hitSlop={8}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
-        <Text style={[s.headerTitle, { color: colors.text }]}>选择位置</Text>
+        <Text style={[s.headerTitle, { color: colors.text }]}>
+          {t('notes.location.selectTitle', { defaultValue: '选择位置' })}
+        </Text>
         <View style={s.headerSpacer} />
       </View>
       <View style={s.mapFrame}>

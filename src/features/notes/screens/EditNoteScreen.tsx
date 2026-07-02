@@ -405,7 +405,10 @@ export default function EditNoteScreen() {
   const handleUseCurrentLocation = useCallback(async () => {
     const permission = await ExpoLocation.requestForegroundPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('权限不足', '请在系统设置开启定位权限');
+      Alert.alert(
+        t('permissions.insufficientTitle', { defaultValue: '权限不足' }),
+        t('permissions.location', { defaultValue: '请在系统设置开启定位权限' }),
+      );
       return;
     }
     try {
@@ -414,7 +417,7 @@ export default function EditNoteScreen() {
       });
       const latitude = position.coords.latitude;
       const longitude = position.coords.longitude;
-      let title = '当前位置';
+      let title = t('notes.edit.useCurrentLocation', { defaultValue: '当前位置' });
       let address = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
       try {
         const places = await ExpoLocation.reverseGeocodeAsync({ latitude, longitude });
@@ -436,9 +439,12 @@ export default function EditNoteScreen() {
       }
       setLocationDraft({ title, address, latitude, longitude });
     } catch {
-      Alert.alert('定位失败', '请稍后重试');
+      Alert.alert(
+        t('notes.location.failedTitle', { defaultValue: '定位失败' }),
+        t('common.retryLater', { defaultValue: '请稍后重试' }),
+      );
     }
-  }, []);
+  }, [t]);
 
   const navigateBack = useCallback(() => {
     setEditorMounted(false);

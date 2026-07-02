@@ -215,14 +215,18 @@ test('chat detail guards async send UI state after unmount', () => {
     '收藏内容发送失败，请重试',
     '转账卡片发送失败，但积分已扣减',
   ]) {
+    // These error strings are now i18n'd: setSendError(t('chat.detail.x', { defaultValue: '中文' })).
+    // The message survives verbatim in the defaultValue, so anchor on that (or the older
+    // direct / policy-aware forms) and still assert the mountedRef guard precedes it.
     const direct = `setSendError('${message}')`;
     const policyAware = `setSendError(getChatSendErrorMessage(error, '${message}'))`;
-    const index =
-      source.indexOf(direct) === -1
-        ? source.indexOf(policyAware)
-        : source.indexOf(direct);
+    const i18nForm = `defaultValue: '${message}'`;
+    let index = source.indexOf(direct);
+    if (index === -1) index = source.indexOf(policyAware);
+    if (index === -1) index = source.indexOf(i18nForm);
     assert.notEqual(index, -1, `${message} missing`);
-    const guardWindow = source.slice(Math.max(0, index - 180), index);
+    // The i18n wrapper puts the string a few lines below the guard, so widen the lookback.
+    const guardWindow = source.slice(Math.max(0, index - 320), index);
     assert.match(guardWindow, /mountedRef\.current/, `${message} should be mounted-guarded`);
   }
   assert.match(source, /if \(mountedRef\.current\) setVoiceActionBusy\(false\)/);

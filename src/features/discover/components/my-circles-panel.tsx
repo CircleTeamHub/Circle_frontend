@@ -173,6 +173,8 @@ export const MyCirclesPanel: React.FC = () => {
         tabs={circleFilterTabs}
         activeIndex={activeTab}
         onTabPress={setActiveTab}
+        // 4 个筛选标签在西语/日语下更长，改可横向滚动避免挤压/换行。
+        scrollable
       />
 
       {myCirclesLoading ? (

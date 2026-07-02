@@ -58,6 +58,10 @@ const MAPPER_STUBS = {
     __esModule: true,
     default: { language: 'zh', t: (_key, options) => options.defaultValue },
   },
+  '@/features/contacts/locale': {
+    getLocalizedDateTimeLocale: (lng) =>
+      lng && lng.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US',
+  },
 };
 
 test('verification card: type, send, and decode are wired through the IM layer', () => {

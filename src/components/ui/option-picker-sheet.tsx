@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 
@@ -72,6 +73,7 @@ export function OptionPickerSheet<T extends string | number | null>({
 }: OptionPickerSheetProps<T>) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
 
   const d = useMemo(
     () => ({
@@ -100,7 +102,7 @@ export function OptionPickerSheet<T extends string | number | null>({
           style={s.closeBtn}
           onPress={onClose}
           accessibilityRole="button"
-          accessibilityLabel="关闭"
+          accessibilityLabel={t('common.close')}
         >
           <Ionicons name="close" size={22} color={colors.textSecondary} />
         </Pressable>

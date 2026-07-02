@@ -1,6 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import type { TFunction } from 'i18next';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
@@ -24,13 +26,13 @@ import type { ConversationType, NoteCardData } from '@/types';
 // 'ALL' 是「全部」伪类型：不按类型过滤，拉取所有收藏。其余对应后端 CollectionType。
 type CollectionTab = 'ALL' | CollectionType;
 
-const COLLECTION_TYPES: { id: CollectionTab; label: string; icon: string }[] = [
-  { id: 'ALL', label: '全部', icon: 'albums-outline' },
-  { id: 'CHAT', label: '聊天记录', icon: 'chatbubble-ellipses-outline' },
-  { id: 'VIDEO', label: '视频', icon: 'videocam-outline' },
-  { id: 'VOICE', label: '语音', icon: 'mic-outline' },
-  { id: 'MESSAGE', label: '信息', icon: 'mail-outline' },
-  { id: 'NOTE', label: '收藏笔记', icon: 'document-text-outline' },
+const COLLECTION_TYPES: { id: CollectionTab; labelKey: string; icon: string }[] = [
+  { id: 'ALL', labelKey: 'profile.collections.tabs.all', icon: 'albums-outline' },
+  { id: 'CHAT', labelKey: 'profile.collections.tabs.chat', icon: 'chatbubble-ellipses-outline' },
+  { id: 'VIDEO', labelKey: 'profile.collections.tabs.video', icon: 'videocam-outline' },
+  { id: 'VOICE', labelKey: 'profile.collections.tabs.voice', icon: 'mic-outline' },
+  { id: 'MESSAGE', labelKey: 'profile.collections.tabs.message', icon: 'mail-outline' },
+  { id: 'NOTE', labelKey: 'profile.collections.tabs.note', icon: 'document-text-outline' },
 ];
 
 function getPayloadRecord(payload: unknown): Record<string, unknown> | null {
@@ -39,7 +41,7 @@ function getPayloadRecord(payload: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function resolveCollectionNoteCard(item: UserCollection): NoteCardData | null {
+function resolveCollectionNoteCard(item: UserCollection, t: TFunction): NoteCardData | null {
   const openimPayload = getCollectedOpenIMMessagePayload(item.payload);
   const noteFromMessage = normalizeNoteCardPayload(openimPayload?.noteCard);
   if (noteFromMessage) return noteFromMessage;
@@ -58,7 +60,7 @@ function resolveCollectionNoteCard(item: UserCollection): NoteCardData | null {
   return {
     noteId,
     ownerId: typeof payload?.ownerId === 'string' ? payload.ownerId : null,
-    title: item.title || '收藏笔记',
+    title: item.title || t('profile.collections.noteFallbackTitle', { defaultValue: '收藏笔记' }),
     contentPreview: item.summary,
     coverUrl: null,
     imageCount: 0,
@@ -91,14 +93,16 @@ function inferSourceFromConversationID(conversationID: string) {
   };
 }
 
-function resolveCollectionSource(item: UserCollection): CollectionSource | null {
+function resolveCollectionSource(item: UserCollection, t: TFunction): CollectionSource | null {
   const payload = getCollectedOpenIMMessagePayload(item.payload);
   if (!payload?.messageID || !payload.conversationID) return null;
   const inferred = inferSourceFromConversationID(payload.conversationID);
   return {
     messageID: payload.messageID,
     conversationID: payload.conversationID,
-    conversationTitle: payload.conversationTitle || '聊天',
+    conversationTitle:
+      payload.conversationTitle ||
+      t('profile.collections.conversationFallback', { defaultValue: '聊天' }),
     sourceID: payload.sourceID || inferred.sourceID,
     conversationType: payload.conversationType || inferred.conversationType,
     senderID: payload.senderID,
@@ -107,9 +111,12 @@ function resolveCollectionSource(item: UserCollection): CollectionSource | null 
   };
 }
 
-function formatCollectionSource(source: CollectionSource) {
+function formatCollectionSource(source: CollectionSource, t: TFunction) {
   return [
-    `来自 ${source.conversationTitle}`,
+    t('profile.collections.fromSource', {
+      defaultValue: '来自 {{title}}',
+      title: source.conversationTitle,
+    }),
     source.senderName,
     source.time,
   ]
@@ -207,6 +214,7 @@ const s = StyleSheet.create({
 });
 
 export default function CollectionsScreen() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { isOffline } = useNetworkStatus();
@@ -241,7 +249,11 @@ export default function CollectionsScreen() {
         }
       } catch {
         if (!cancelled) {
-          setStatusText('收藏加载失败，请稍后重试');
+          setStatusText(
+            t('profile.collections.loadError', {
+              defaultValue: '收藏加载失败，请稍后重试',
+            }),
+          );
         }
       } finally {
         if (!cancelled) {
@@ -255,24 +267,32 @@ export default function CollectionsScreen() {
     return () => {
       cancelled = true;
     };
-  }, [activeType]);
+  }, [activeType, t]);
 
   function handleDelete(id: string) {
-    Alert.alert('确认删除', '确定要删除这条收藏吗？', [
-      { text: '取消', style: 'cancel' },
-      {
-        text: '删除',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteCollection(id);
-            setItems((current) => current.filter((item) => item.id !== id));
-          } catch {
-            setStatusText('删除收藏失败，请稍后重试');
-          }
+    Alert.alert(
+      t('profile.collections.deleteTitle', { defaultValue: '确认删除' }),
+      t('profile.collections.deleteConfirm', { defaultValue: '确定要删除这条收藏吗？' }),
+      [
+        { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+        {
+          text: t('common.delete', { defaultValue: '删除' }),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteCollection(id);
+              setItems((current) => current.filter((item) => item.id !== id));
+            } catch {
+              setStatusText(
+                t('profile.collections.deleteError', {
+                  defaultValue: '删除收藏失败，请稍后重试',
+                }),
+              );
+            }
+          },
         },
-      },
-    ]);
+      ],
+    );
   }
 
   const d = useMemo(
@@ -357,11 +377,14 @@ export default function CollectionsScreen() {
     [colors, insets.bottom, insets.top],
   );
 
-  const openNoteCollection = useCallback((item: UserCollection) => {
-    const note = resolveCollectionNoteCard(item);
-    if (!note) return;
-    router.push(getNoteDetailHref('profile', note.noteId, note.ownerId ?? ''));
-  }, []);
+  const openNoteCollection = useCallback(
+    (item: UserCollection) => {
+      const note = resolveCollectionNoteCard(item, t);
+      if (!note) return;
+      router.push(getNoteDetailHref('profile', note.noteId, note.ownerId ?? ''));
+    },
+    [t],
+  );
 
   const openSourceMessage = useCallback((source: CollectionSource) => {
     if (!source.sourceID || !source.conversationType) return;
@@ -386,12 +409,39 @@ export default function CollectionsScreen() {
   const renderNoteMeta = useCallback(
     (note: NoteCardData) => {
       const meta = [
-        note.imageCount > 0 ? { icon: 'image-outline', label: `${note.imageCount} 图` } : null,
-        note.videoCount > 0 ? { icon: 'videocam-outline', label: `${note.videoCount} 视频` } : null,
-        note.showcaseCount && note.showcaseCount > 0
-          ? { icon: 'albums-outline', label: `${note.showcaseCount} 展示` }
+        note.imageCount > 0
+          ? {
+              icon: 'image-outline',
+              label: t('profile.collections.imageCount', {
+                defaultValue: '{{count}} 图',
+                count: note.imageCount,
+              }),
+            }
           : null,
-        note.hasLocation ? { icon: 'location-outline', label: '位置' } : null,
+        note.videoCount > 0
+          ? {
+              icon: 'videocam-outline',
+              label: t('profile.collections.videoCount', {
+                defaultValue: '{{count}} 视频',
+                count: note.videoCount,
+              }),
+            }
+          : null,
+        note.showcaseCount && note.showcaseCount > 0
+          ? {
+              icon: 'albums-outline',
+              label: t('profile.collections.showcaseCount', {
+                defaultValue: '{{count}} 展示',
+                count: note.showcaseCount,
+              }),
+            }
+          : null,
+        note.hasLocation
+          ? {
+              icon: 'location-outline',
+              label: t('profile.collections.location', { defaultValue: '位置' }),
+            }
+          : null,
       ].filter(Boolean) as { icon: keyof typeof Ionicons.glyphMap; label: string }[];
 
       if (meta.length === 0) return null;
@@ -406,7 +456,7 @@ export default function CollectionsScreen() {
         </View>
       );
     },
-    [colors.textSecondary, d.noteMetaPill, d.noteMetaText],
+    [colors.textSecondary, d.noteMetaPill, d.noteMetaText, t],
   );
 
   const renderSource = useCallback(
@@ -415,7 +465,7 @@ export default function CollectionsScreen() {
       const canOpenMessage = Boolean(source.sourceID && source.conversationType);
       return (
         <View style={s.sourceRow}>
-          <Text style={d.itemDesc}>{formatCollectionSource(source)}</Text>
+          <Text style={d.itemDesc}>{formatCollectionSource(source, t)}</Text>
           <View style={s.sourceActions}>
             {canOpenMessage ? (
               <Pressable
@@ -426,7 +476,9 @@ export default function CollectionsScreen() {
                 }}
               >
                 <Ionicons name="navigate-outline" size={13} color={colors.text} />
-                <Text style={d.sourceActionText}>回到消息</Text>
+                <Text style={d.sourceActionText}>
+                  {t('profile.collections.backToMessages', { defaultValue: '回到消息' })}
+                </Text>
               </Pressable>
             ) : null}
             {source.senderID ? (
@@ -438,7 +490,9 @@ export default function CollectionsScreen() {
                 }}
               >
                 <Ionicons name="person-outline" size={13} color={colors.text} />
-                <Text style={d.sourceActionText}>发送人</Text>
+                <Text style={d.sourceActionText}>
+                  {t('profile.collections.sender', { defaultValue: '发送人' })}
+                </Text>
               </Pressable>
             ) : null}
           </View>
@@ -452,6 +506,7 @@ export default function CollectionsScreen() {
       d.sourceActionText,
       openSenderProfile,
       openSourceMessage,
+      t,
     ],
   );
 
@@ -459,7 +514,11 @@ export default function CollectionsScreen() {
     <View style={d.container}>
       <NavHeader title="" />
       <ScrollView contentContainerStyle={[s.content, d.content]}>
-        {isOffline ? <Text style={d.exampleDesc}>当前无网络连接，部分功能可能不可用</Text> : null}
+        {isOffline ? (
+          <Text style={d.exampleDesc}>
+            {t('common.offline', { defaultValue: '当前无网络连接，部分功能可能不可用' })}
+          </Text>
+        ) : null}
         <View style={s.tabsRow}>
           <ScrollView
             horizontal
@@ -496,7 +555,9 @@ export default function CollectionsScreen() {
                     size={16}
                     color={selected ? colors.white : colors.textSecondary}
                   />
-                  <Text style={[d.tabText, selected && d.tabTextActive]}>{item.label}</Text>
+                  <Text style={[d.tabText, selected && d.tabTextActive]}>
+                    {t(item.labelKey)}
+                  </Text>
                 </Pressable>
               );
             })}
@@ -513,14 +574,16 @@ export default function CollectionsScreen() {
         {!loading && items.length === 0 ? (
           <View style={[s.empty, d.empty]}>
             <Ionicons name={active.icon as any} size={44} color={colors.textSecondary} />
-            <Text style={d.emptyTitle}>还没有收藏</Text>
+            <Text style={d.emptyTitle}>
+              {t('profile.collections.empty', { defaultValue: '还没有收藏' })}
+            </Text>
           </View>
         ) : null}
 
         <View style={s.list}>
           {items.map((item) => {
-            const note = item.type === 'NOTE' ? resolveCollectionNoteCard(item) : null;
-            const source = resolveCollectionSource(item);
+            const note = item.type === 'NOTE' ? resolveCollectionNoteCard(item, t) : null;
+            const source = resolveCollectionSource(item, t);
             const title = note?.title ?? item.title;
             const summary = note?.contentPreview ?? item.summary;
             const cardBody = (
@@ -538,7 +601,9 @@ export default function CollectionsScreen() {
                       handleDelete(item.id);
                     }}
                   >
-                    <Text style={d.deleteText}>删除</Text>
+                    <Text style={d.deleteText}>
+                      {t('common.delete', { defaultValue: '删除' })}
+                    </Text>
                   </Pressable>
                 </View>
               </>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
@@ -72,6 +73,7 @@ const s = StyleSheet.create({
 });
 
 export default function WalletScreen() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { isOffline } = useNetworkStatus();
@@ -98,7 +100,11 @@ export default function WalletScreen() {
         }
       } catch (error) {
         if (!cancelled) {
-          setWalletError('积分余额加载失败，请稍后重试');
+          setWalletError(
+            t('profile.wallet.loadError', {
+              defaultValue: '积分余额加载失败，请稍后重试',
+            }),
+          );
         }
         if (__DEV__) {
           console.warn('[WalletScreen] fetchWallet failed', error);
@@ -115,7 +121,7 @@ export default function WalletScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (typeof realtimeBalance === 'number') {
@@ -130,16 +136,23 @@ export default function WalletScreen() {
     try {
       const wallet = await rechargePoints(selectedPoints);
       setBalance(wallet.balance);
-      setWalletStatus(`已充值 ${selectedPoints} 积分`);
+      setWalletStatus(
+        t('profile.wallet.rechargeSuccess', {
+          defaultValue: '已充值 {{points}} 积分',
+          points: selectedPoints,
+        }),
+      );
     } catch (error) {
-      setWalletError('充值失败，请稍后重试');
+      setWalletError(
+        t('profile.wallet.rechargeError', { defaultValue: '充值失败，请稍后重试' }),
+      );
       if (__DEV__) {
         console.warn('[WalletScreen] rechargePoints failed', error);
       }
     } finally {
       setRecharging(false);
     }
-  }, [selectedPoints]);
+  }, [selectedPoints, t]);
 
   const handleRecharge = useCallback(() => {
     if (recharging) {
@@ -147,14 +160,21 @@ export default function WalletScreen() {
     }
     const pkg = RECHARGE_PACKAGES.find((p) => p.points === selectedPoints);
     Alert.alert(
-      '确认充值',
-      `确定要充值 ${selectedPoints} 积分（${pkg?.price ?? ''}）吗？`,
+      t('profile.wallet.confirmRecharge', { defaultValue: '确认充值' }),
+      t('profile.wallet.confirmRechargeMessage', {
+        defaultValue: '确定要充值 {{points}} 积分（{{price}}）吗？',
+        points: selectedPoints,
+        price: pkg?.price ?? '',
+      }),
       [
-        { text: '取消', style: 'cancel' },
-        { text: '确认充值', onPress: performRecharge },
+        { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+        {
+          text: t('profile.wallet.confirmRecharge', { defaultValue: '确认充值' }),
+          onPress: performRecharge,
+        },
       ],
     );
-  }, [performRecharge, recharging, selectedPoints]);
+  }, [performRecharge, recharging, selectedPoints, t]);
 
   const d = useMemo(
     () => ({
@@ -250,12 +270,21 @@ export default function WalletScreen() {
 
   return (
     <View style={d.container}>
-      <NavHeader title="我的钱包" rightIcon="card-outline" />
+      <NavHeader
+        title={t('profile.wallet.title', { defaultValue: '我的钱包' })}
+        rightIcon="card-outline"
+      />
       <ScrollView contentContainerStyle={[s.content, d.content]}>
-        {isOffline ? <Text style={d.error}>当前无网络连接，部分功能可能不可用</Text> : null}
+        {isOffline ? (
+          <Text style={d.error}>
+            {t('common.offline', { defaultValue: '当前无网络连接，部分功能可能不可用' })}
+          </Text>
+        ) : null}
         <View style={[s.balanceCard, d.balanceCard]}>
           <View style={[s.balanceOrb, d.balanceOrb]} />
-          <Text style={d.balanceLabel}>积分余额</Text>
+          <Text style={d.balanceLabel}>
+            {t('profile.wallet.balance', { defaultValue: '积分余额' })}
+          </Text>
           <Text style={d.balance}>{loadingWallet ? '...' : balance}</Text>
           {walletError ? <Text style={d.error}>{walletError}</Text> : null}
           {walletStatus ? <Text style={d.status}>{walletStatus}</Text> : null}
@@ -263,7 +292,9 @@ export default function WalletScreen() {
 
         <View style={s.sectionTitleWrap}>
           <View style={[s.sectionMark, d.sectionMark]} />
-          <Text style={d.sectionTitle}>积分充值</Text>
+          <Text style={d.sectionTitle}>
+            {t('profile.wallet.recharge', { defaultValue: '积分充值' })}
+          </Text>
         </View>
 
         {RECHARGE_PACKAGES.map((item) => {
@@ -276,7 +307,7 @@ export default function WalletScreen() {
             >
               <View style={s.pointsRow}>
                 <Text style={[d.points, active && d.pointsActive]}>{item.points}</Text>
-                <Text style={d.unit}>积分</Text>
+                <Text style={d.unit}>{t('common.coin', { defaultValue: '积分' })}</Text>
               </View>
               <Text style={[d.price, active && d.priceActive]}>{item.price}</Text>
             </Pressable>
@@ -284,7 +315,14 @@ export default function WalletScreen() {
         })}
 
         <Text style={[s.agreement, d.agreement]}>
-          我已阅读并同意 <Text style={d.link}>《会员服务协议》</Text> 和 <Text style={d.link}>《隐私政策》</Text>
+          {t('profile.wallet.agreementPrefix', { defaultValue: '我已阅读并同意' })}{' '}
+          <Text style={d.link}>
+            {t('profile.wallet.memberAgreement', { defaultValue: '《会员服务协议》' })}
+          </Text>{' '}
+          {t('profile.wallet.agreementAnd', { defaultValue: '和' })}{' '}
+          <Text style={d.link}>
+            {t('common.privacyPolicy', { defaultValue: '《隐私政策》' })}
+          </Text>
         </Text>
 
         <Pressable
@@ -293,7 +331,12 @@ export default function WalletScreen() {
           onPress={handleRecharge}
         >
           <Text style={d.buttonText}>
-            {recharging ? '充值中...' : `立即购买 ${selectedPoints} 积分`}
+            {recharging
+              ? t('profile.wallet.recharging', { defaultValue: '充值中...' })
+              : t('profile.wallet.buyNow', {
+                  defaultValue: '立即购买 {{points}} 积分',
+                  points: selectedPoints,
+                })}
           </Text>
         </Pressable>
       </ScrollView>

@@ -40,7 +40,12 @@
     "daysAgo": "{{count}}d ago",
     "errorOccurred": "Operation failed",
     "networkError": "Network error, please try again",
-    "back": "Back"
+    "back": "Back",
+    "create": "Create",
+    "coin": "Credits",
+    "offline": "No network connection. Some features may be unavailable.",
+    "vip": "VIP",
+    "privacyPolicy": "Privacy Policy"
   },
   "auth": {
     "welcomeBack": "Welcome Back",
@@ -152,7 +157,27 @@
     "inviteGroupMembersSent": "Invitation sent",
     "inviteGroupMembersFailed": "Failed to send invite: {{error}}",
     "inviteGroupMembersAlreadyMembers": "Selected friends are already in this group",
-    "inviteGroupMembersNoInvitableFriends": "No friends available to invite"
+    "inviteGroupMembersNoInvitableFriends": "No friends available to invite",
+    "groups": {
+      "title": "Custom Groups",
+      "createSection": "Create Group",
+      "namePlaceholder": "e.g. Family / Work",
+      "nameRequired": "Please enter a group name",
+      "myGroups": "My Groups",
+      "empty": "No custom groups yet. Create one.",
+      "conversationCount": "{{count}} conversations",
+      "memberHint": "Conversations in 「{{name}}」 (long-press the group name to rename)",
+      "noConversations": "No conversations available to add",
+      "groupChat": "Group chat",
+      "directChat": "Direct chat",
+      "renameTitle": "Rename Group",
+      "deleteTitle": "Delete Group",
+      "deleteConfirm": "Delete 「{{name}}」? Conversations in the group will not be deleted.",
+      "createFailed": "Failed to create",
+      "renameFailed": "Failed to rename",
+      "deleteFailed": "Failed to delete",
+      "saveFailed": "Failed to save"
+    }
   },
   "notifications": {
     "title": "Notifications",
@@ -204,7 +229,29 @@
     }
   },
   "chat": {
-    "detail": "Chat",
+    "detail": {
+      "title": "Chat",
+      "statusSelf": "Me",
+      "statusGroup": "Group chat",
+      "statusOnline": "Online",
+      "statusOffline": "Offline",
+      "previewNotice": "Chat preview only. Sending messages will be available once IM connects.",
+      "recordingSeconds": "Recording {{seconds}}s",
+      "voiceReleaseCancel": "Release to cancel",
+      "voiceReleaseSend": "Release to send {{seconds}}\"",
+      "voiceHoldToTalk": "Hold to talk",
+      "previewPlaceholder": "Chat preview only",
+      "inputPlaceholder": "Type a message…",
+      "sendFailedText": "Failed to send message, please try again",
+      "recordStartFailed": "Failed to start recording, please try again",
+      "voiceSendFailed": "Failed to send voice message, please try again",
+      "locationSendFailed": "Failed to send location, please try again",
+      "imageSendFailed": "Failed to send image, please try again",
+      "noteSendFailed": "Failed to send note, please try again",
+      "cardSendFailed": "Failed to send contact card, please try again",
+      "favoriteSendFailed": "Failed to send favorite, please try again",
+      "transferCardSendFailed": "Failed to send the transfer card, but the credits were already deducted"
+    },
     "messageActions": {
       "title": "Message actions",
       "collect": "Save",
@@ -262,7 +309,8 @@
       "files": "Files",
       "dateTitle": "By Date",
       "prevMonth": "Previous month",
-      "nextMonth": "Next month"
+      "nextMonth": "Next month",
+      "noFiles": "No file records yet"
     },
     "sendFailed": "Failed to send, please retry",
     "self": "Me",
@@ -305,7 +353,47 @@
     "ownerOnlyAction": "Only the group owner or admins can do that.",
     "recommendFriend": "Recommend to Friend",
     "addBlacklist": "Block",
-    "report": "Report",
+    "report": {
+      "paramErrorTitle": "Invalid parameters",
+      "missingTarget": "Missing report target",
+      "selectCategory": "Please select a report category",
+      "fillDescription": "Please fill in the report details",
+      "submitted": "Report submitted",
+      "submitFailed": "Submission failed",
+      "title": "Report",
+      "categories": {
+        "harassment": {
+          "label": "Harassment",
+          "description": "Verbal abuse, sexual harassment, personal threats"
+        },
+        "spam": {
+          "label": "Spam",
+          "description": "Ads, flooding, unsolicited promotion"
+        },
+        "impersonation": {
+          "label": "Impersonation",
+          "description": "Stolen or fake identity"
+        },
+        "fraud": {
+          "label": "Fraud",
+          "description": "Scams, fake transactions, phishing links"
+        },
+        "other": {
+          "label": "Other",
+          "description": "Other behavior that violates platform rules"
+        }
+      },
+      "fallbackGroup": "this group",
+      "fallbackPeer": "this user",
+      "successFriend": "Your report has been recorded. A valid report affects the other party's reputation score.",
+      "successGroup": "We'll handle it as soon as possible. Thanks for your feedback.",
+      "targetLabel": "Report target: ",
+      "selectCategoryLabel": "Select a report category",
+      "detailLabel": "Details",
+      "detailPlaceholder": "Please describe what happened in detail so we can verify and handle it (up to 500 characters)",
+      "submitting": "Submitting…",
+      "submit": "Submit report"
+    },
     "burnMessage": "Auto-delete Messages",
     "selectBurnTime": "Select auto-delete time",
     "burnOff": "Off",
@@ -362,6 +450,58 @@
       "statusChoose": "Choose",
       "failedTitle": "Setup failed",
       "failedBody": "Failed to set image background. Please try again."
+    },
+    "attachments": {
+      "photos": "Photos",
+      "camera": "Camera",
+      "voiceCall": "Voice Call",
+      "location": "Location",
+      "notes": "Notes",
+      "friendCard": "Contact Card",
+      "favorites": "Favorites",
+      "quickReply": "Quick Reply",
+      "transfer": "Transfer"
+    },
+    "call": {
+      "title": "Voice Call",
+      "groupOnly": "Voice calls are only available in group chats",
+      "groupNotReady": "The group chat is not ready yet",
+      "notLoggedIn": "Please log in before starting a call",
+      "noOtherMembers": "No other members to invite in this group",
+      "initiateFailed": "Failed to start the call, please try again later",
+      "calling": "Calling…"
+    },
+    "transferTitle": "Transfer",
+    "transferGroupNotSupported": "Point transfers are not supported in group chats",
+    "transfer": {
+      "invalidAmount": "Please enter a positive integer amount",
+      "balanceNotReadyTitle": "Balance not ready",
+      "balanceNotReadyMsg": "Please wait for the balance to load and try again",
+      "insufficientTitle": "Insufficient balance",
+      "currentBalanceMsg": "Current balance: {{balance}}",
+      "failedTitle": "Transfer failed",
+      "title": "Coin Transfer",
+      "to": "To",
+      "amountLabel": "Transfer amount",
+      "balanceLoadFailed": "Failed to load balance",
+      "currentBalancePrefix": "Current balance: ",
+      "messagePlaceholder": "Message (optional, up to 100 characters)",
+      "fallbackRecipient": "the recipient",
+      "submitting": "Transferring…",
+      "submit": "Confirm transfer"
+    },
+    "recommend": {
+      "sentTitle": "Sent",
+      "sentMsg": "The contact card has been sent.",
+      "title": "Recommend to a Friend",
+      "fallbackFriend": "this friend",
+      "confirmMsg": "Recommend {{friend}} to {{target}}?",
+      "sendFailed": "Send failed",
+      "sending": "Sending…",
+      "sendCardHint": "Send contact card",
+      "pickConversation": "Pick a conversation",
+      "intro": "Send {{friend}}'s contact card to another chat.",
+      "empty": "No chats available to recommend to"
     }
   },
   "contacts": {
@@ -830,10 +970,22 @@
     "toNext": "{{points}} points to {{title}}",
     "maxReached": "You've reached the highest reputation tier",
     "tier": {
-      "excellent": { "title": "Excellent", "detail": "Priority access to high-bar events, collaborations and circle sign-ups." },
-      "good": { "title": "Good", "detail": "Stable reputation; access to most events and social collaboration." },
-      "basic": { "title": "Basic", "detail": "Keep your profile genuine and honor commitments to keep building reputation." },
-      "low": { "title": "Needs work", "detail": "Complete your profile and reduce no-shows and violations." }
+      "excellent": {
+        "title": "Excellent",
+        "detail": "Priority access to high-bar events, collaborations and circle sign-ups."
+      },
+      "good": {
+        "title": "Good",
+        "detail": "Stable reputation; access to most events and social collaboration."
+      },
+      "basic": {
+        "title": "Basic",
+        "detail": "Keep your profile genuine and honor commitments to keep building reputation."
+      },
+      "low": {
+        "title": "Needs work",
+        "detail": "Complete your profile and reduce no-shows and violations."
+      }
     },
     "sections": {
       "improve": "How to improve",
@@ -865,10 +1017,71 @@
     "creditScore": "Credit Score",
     "memberCenter": "Membership",
     "viewMember": "View",
-    "wallet": "Wallet",
-    "mall": "Mall",
+    "wallet": {
+      "title": "My Wallet",
+      "confirmRecharge": "Confirm Recharge",
+      "balance": "Points Balance",
+      "recharge": "Recharge Points",
+      "memberAgreement": "《Membership Service Agreement》",
+      "loadError": "Failed to load points balance. Please try again later.",
+      "rechargeSuccess": "Recharged {{points}} points",
+      "rechargeError": "Recharge failed. Please try again later.",
+      "confirmRechargeMessage": "Recharge {{points}} points ({{price}})?",
+      "agreementPrefix": "I have read and agree to",
+      "agreementAnd": "and",
+      "recharging": "Recharging...",
+      "buyNow": "Buy {{points}} points now"
+    },
+    "mall": {
+      "title": "Steward Mall",
+      "loadError": "Failed to load mall products; showing local catalog.",
+      "sections": {
+        "coupons": "My Cards & Coupons",
+        "membership": "Membership Zone",
+        "fancyNumber": "Fancy Number Zone",
+        "points": "Points Zone",
+        "decoration": "Decoration Zone"
+      },
+      "items": {
+        "fancyNumberCard": "Fancy Number Card",
+        "groupExpansionCard": "Group Expansion Card",
+        "generateRechargeCard": "Generate Recharge Card",
+        "myRechargeCards": "My Recharge Cards",
+        "membershipRecharge": "Membership Recharge",
+        "exchangeExperience": "Exchange Experience",
+        "pointsRecharge": "Points Recharge",
+        "chooseFancyNumber": "Choose Fancy Number",
+        "renewFancyNumber": "Renew Fancy Number",
+        "redeemCode": "Query & Redeem Code",
+        "buyCode": "Buy Code",
+        "avatarFrame": "Avatar Frame"
+      }
+    },
     "viewProducts": "Browse",
-    "collections": "Collections",
+    "collections": {
+      "deleteTitle": "Confirm Deletion",
+      "deleteConfirm": "Are you sure you want to delete this collection?",
+      "imageCount": "{{count}} images",
+      "videoCount": "{{count}} videos",
+      "showcaseCount": "{{count}} showcases",
+      "location": "Location",
+      "backToMessages": "Back to Message",
+      "sender": "Sender",
+      "empty": "No collections yet",
+      "loadError": "Failed to load collections. Please try again later.",
+      "deleteError": "Failed to delete collection. Please try again later.",
+      "noteFallbackTitle": "Saved Note",
+      "conversationFallback": "Chat",
+      "fromSource": "From {{title}}",
+      "tabs": {
+        "all": "All",
+        "chat": "Chat History",
+        "video": "Video",
+        "voice": "Voice",
+        "message": "Message",
+        "note": "Saved Notes"
+      }
+    },
     "viewCollections": "View",
     "notes": "Notes",
     "viewNotes": "View",
@@ -936,7 +1149,52 @@
     "systemAnnouncements": "System Announcements",
     "viewAnnouncements": "Latest",
     "addIcon": "Add badge",
-    "myIcons": "Badge Collection"
+    "myIcons": "Badge Collection",
+    "membership": {
+      "title": "Membership Center",
+      "confirmExchange": "Confirm Exchange",
+      "activateVip": "Activate VIP",
+      "currentLevel": "Current level: VIP{{level}}",
+      "benefitsHint": "Enjoy exclusive member benefits; the higher the level, the more benefits.",
+      "exchange": "Exchange Membership",
+      "currentBadge": "Current Level",
+      "loadError": "Failed to load membership tiers; showing local tier config.",
+      "exchangeSuccess": "Successfully exchanged VIP{{level}}",
+      "exchangeError": "Exchange failed. Please make sure you have enough points and try again.",
+      "confirmExchangeMessage": "Spend {{points}} points to exchange for {{plan}}?",
+      "loadingPlans": "Loading membership tiers",
+      "confirmExchangePlan": "Confirm exchange for {{plan}}",
+      "selectHigher": "Please select a higher membership tier",
+      "tiers": {
+        "vip1": {
+          "perks": "Basic member benefits"
+        },
+        "vip2": {
+          "perks": "More group capacity and basic discounts"
+        },
+        "vip3": {
+          "perks": "Advanced identity badge and points bonus"
+        },
+        "vip4": {
+          "perks": "Exclusive fancy-number discounts and priority access"
+        },
+        "vip5": {
+          "perks": "Supreme member benefits and highest discounts"
+        }
+      }
+    },
+    "memberRules": {
+      "link": "Membership Rules",
+      "title": "Rules & Permissions",
+      "heading": "Membership Rules",
+      "description": "These rules explain membership tiers, points redemption, and permission scope. Payments, orders, and validity periods will be connected to the real backend later.",
+      "rules": {
+        "levels": "VIP1-5 unlock benefits tier by tier; this page only shows tier and benefit descriptions.",
+        "highTier": "Higher-tier members get more group capacity, fancy-number discounts, points bonuses, and priority access.",
+        "consume": "Membership exchange consumes points and takes effect immediately; the exact validity period is subject to the backend order.",
+        "irreversible": "Virtual goods such as memberships, fancy numbers, and group expansion cards cannot be revoked once used."
+      }
+    }
   },
   "userProfile": {
     "title": "Profile",
@@ -1464,7 +1722,12 @@
       "loadFailed": "Failed to load note, please try again",
       "notFound": "Note not found",
       "exportFailedTitle": "Export failed",
-      "exportFailedMessage": "Please try again later"
+      "exportFailedMessage": "Please try again later",
+      "locationFallback": "Location",
+      "downloadImages": "Download images",
+      "downloadVideos": "Download videos",
+      "downloadLongImage": "Generate long image",
+      "downloadPdf": "Download PDF"
     },
     "edit": {
       "addImage": "Add image",
@@ -1598,6 +1861,21 @@
     "tabs": {
       "all": "All {{count}}",
       "ungrouped": "Ungrouped {{count}}"
+    },
+    "section": {
+      "text": "Text",
+      "media": "Photos / Videos",
+      "showcase": "Showcase",
+      "location": "Location"
+    },
+    "location": {
+      "invalidTitle": "Invalid location",
+      "invalidMsg": "Please select the location again",
+      "selectTitle": "Select location",
+      "searchPlaceholder": "Search places",
+      "failedTitle": "Location failed",
+      "usePlace": "Use this location",
+      "selectedLabel": "Selected location"
     }
   },
   "search": {
@@ -1617,7 +1895,18 @@
       "friend": "Choose a friend card",
       "note": "Choose a note",
       "quickReply": "Quick replies"
-    }
+    },
+    "quickReply": {
+      "0": "I'm here, go ahead",
+      "1": "Sure, no problem",
+      "2": "Got it, one moment",
+      "3": "Sorry, I missed your message earlier",
+      "4": "A bit busy today, I'll reply later",
+      "5": "Haha, that's hilarious"
+    },
+    "loadFailed": "Failed to load",
+    "noMatch": "No matches",
+    "empty": "No content yet"
   },
   "profileDisplay": {
     "emptySignature": "Your bio will appear here once you complete your profile."
@@ -1672,5 +1961,74 @@
         "condition": "Earned by meeting the corresponding system rules and shown while the account is in good standing."
       }
     }
+  },
+  "im": {
+    "time": {
+      "yesterday": "Yesterday"
+    },
+    "notification": {
+      "groupCreated": "Group created",
+      "memberInvited": "New member joined",
+      "memberQuit": "A member left the group",
+      "memberKicked": "A member was removed",
+      "groupNameUpdated": "Group name updated",
+      "groupDismissed": "Group disbanded",
+      "messageRevoked": "A message was recalled"
+    },
+    "preview": {
+      "image": "[Photo]",
+      "video": "[Video]",
+      "voice": "[Voice]",
+      "file": "[File]",
+      "location": "[Location]",
+      "typing": "[Typing]",
+      "card": "[Card] {{name}}",
+      "transferWithAmount": "[Transfer] {{amount}} credits",
+      "transfer": "[Transfer]",
+      "note": "[Note] {{title}}",
+      "verification": "[Verify] {{name}} asked you to vouch",
+      "default": "[Message]"
+    }
+  },
+  "permissions": {
+    "insufficientTitle": "Permission needed",
+    "microphone": "Please enable microphone access in Settings",
+    "location": "Please enable location access in Settings",
+    "photoLibrary": "Please enable photo library access in Settings",
+    "camera": "Please enable camera access in Settings"
+  },
+  "call": {
+    "livekit": {
+      "connected": "LiveKit connected. Audio only for now."
+    },
+    "status": {
+      "reconnecting": "Reconnecting the call…",
+      "connecting": "Connecting to LiveKit…",
+      "disconnected": "Call disconnected."
+    },
+    "groupCallTitle": "Group voice call",
+    "participantsOnline": "{{count}} online",
+    "self": "Me",
+    "ended": "The call has ended or the connection info has expired",
+    "preparing": "Preparing call components…",
+    "unavailable": "LiveKit call component unavailable",
+    "unavailableHint": "Please use a dev client that includes the LiveKit native module, or rebuild the app.",
+    "connectionFailed": "Call connection failed, please retry",
+    "reconnect": "Reconnect",
+    "reject": "Decline",
+    "accept": "Accept",
+    "invite": {
+      "initiatedBy": "{{name}} started a group voice call",
+      "inviteeCount": "{{count}} invited",
+      "groupMember": "Group member"
+    }
+  },
+  "emojis": {
+    "face": "Smileys",
+    "gesture": "Gestures",
+    "heart": "Hearts",
+    "animal": "Animals",
+    "food": "Food",
+    "activity": "Activities"
   }
 }

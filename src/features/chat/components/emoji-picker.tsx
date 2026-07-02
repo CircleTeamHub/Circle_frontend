@@ -1,4 +1,5 @@
 import { ScrollView, View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme, Spacing, Typography } from '@/theme';
 import { EMOJI_GROUPS } from '@/constants/emojis';
 
@@ -43,6 +44,7 @@ const s = StyleSheet.create({
 
 export function EmojiPicker({ onSelect }: EmojiPickerProps) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   return (
     <View style={[s.container, { backgroundColor: colors.background }]}>
       <ScrollView
@@ -51,9 +53,9 @@ export function EmojiPicker({ onSelect }: EmojiPickerProps) {
         showsVerticalScrollIndicator={false}
       >
         {EMOJI_GROUPS.map((group) => (
-          <View key={group.label}>
+          <View key={group.labelKey}>
             <Text style={[s.groupLabel, { color: colors.textSecondary }]}>
-              {group.label}
+              {t(`emojis.${group.labelKey}`)}
             </Text>
             <View style={s.grid}>
               {group.emojis.map((emoji) => (

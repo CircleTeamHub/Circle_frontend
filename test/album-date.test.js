@@ -8,7 +8,7 @@ test('album-date helpers exist and branch on language + same-day', () => {
   const src = read('src/features/discover/utils/album-date.ts');
   assert.match(src, /export function getAlbumDateParts/);
   assert.match(src, /export function isSameCalendarDay/);
-  assert.match(src, /language\.startsWith\('zh'\)/);
+  assert.match(src, /startsWith\('zh'\)/);
   assert.match(src, /月/);
   assert.match(src, /MONTHS_EN/);
   assert.match(src, /Number\.isNaN/);

@@ -17,7 +17,9 @@ export type MallProductAction =
 
 export type MallProduct = {
   id: string;
-  name: string;
+  // i18n key resolved at render via t(); backend may also send a display string,
+  // which t() passes through unchanged for a missing key.
+  nameKey: string;
   icon: string;
   color: string;
   action: MallProductAction;
@@ -25,7 +27,8 @@ export type MallProduct = {
 
 export type MallSection = {
   id: string;
-  title: string;
+  // i18n key resolved at render via t(); see MallProduct.nameKey.
+  titleKey: string;
   products: MallProduct[];
 };
 

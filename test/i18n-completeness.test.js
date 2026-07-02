@@ -42,7 +42,10 @@ const collectKeys = () => {
   const keys = new Map(); // key -> first file it appears in
   for (const file of walk(SRC_DIR)) {
     const src = fs.readFileSync(file, 'utf8');
-    const re = /t\(\s*'([a-zA-Z0-9_.]+)'/g;
+    // Negative lookbehind: only match a real `t(` / `i18n.t(` call, not the `t(`
+    // that lives at the end of another identifier — e.g. `trackSectionLayout('text')`
+    // or `format('x')` would otherwise be misread as `t('text')`/`t('x')`.
+    const re = /(?<![A-Za-z0-9_])t\(\s*'([a-zA-Z0-9_.]+)'/g;
     let m;
     while ((m = re.exec(src))) {
       const key = m[1];

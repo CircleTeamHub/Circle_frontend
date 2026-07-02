@@ -8,8 +8,10 @@ const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 test('emoji constants expose grouped emojis', () => {
   const src = read('src/constants/emojis.ts');
   assert.match(src, /EMOJI_GROUPS/);
-  assert.match(src, /'表情'/);
-  assert.match(src, /'手势'/);
+  // Category names moved to i18n: constants carry language-neutral labelKeys,
+  // the picker renders t(`emojis.${labelKey}`). Chinese now lives in the locale JSON.
+  assert.match(src, /labelKey: 'face'/);
+  assert.match(src, /labelKey: 'gesture'/);
   assert.match(src, /😀/);
 });
 

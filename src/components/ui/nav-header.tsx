@@ -74,6 +74,9 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
       title: {
         color: colors.text,
         ...Typography.h3,
+        // 允许长标题（西语/日语更长）收缩并省略，避免把右侧按钮挤出屏幕。
+        flexShrink: 1,
+        marginHorizontal: Spacing.sm,
       },
     }),
     [colors],
@@ -100,7 +103,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
       >
         <Ionicons name="chevron-back" size={24} color={colors.text} />
       </Pressable>
-      <Text style={d.title} accessibilityRole="header">
+      <Text style={d.title} numberOfLines={1} accessibilityRole="header">
         {title}
       </Text>
       {rightSlot ? (

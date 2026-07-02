@@ -171,7 +171,10 @@ export function buildLikedFriendsPreview(
   limit = DEFAULT_LIKED_FRIENDS_PREVIEW_LIMIT,
 ): LikedFriendsPreview {
   const normalizedLanguage = language?.toLowerCase() ?? '';
-  const separator = normalizedLanguage.startsWith('zh') ? '、' : ', ';
+  // 中文、日文列举用顿号「、」；其余语言用逗号。
+  const usesIdeographicComma =
+    normalizedLanguage.startsWith('zh') || normalizedLanguage.startsWith('ja');
+  const separator = usesIdeographicComma ? '、' : ', ';
   const visibleFriends = likedFriends.slice(0, limit);
 
   return {

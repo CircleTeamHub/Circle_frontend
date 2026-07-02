@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
@@ -11,44 +12,44 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 const FALLBACK_SECTIONS: MallSection[] = [
   {
     id: 'cards',
-    title: '我的卡券',
+    titleKey: 'profile.mall.sections.coupons',
     products: [
-      { id: 'fancy-number-card', name: '靓号卡', icon: 'sparkles-outline', color: '#2563EB', action: 'fancy-number' },
-      { id: 'group-expansion-card', name: '群扩容卡', icon: 'people-outline', color: '#E11D48', action: 'group-expansion' },
-      { id: 'generate-recharge-card', name: '生成充值卡', icon: 'card-outline', color: '#2563EB', action: 'recharge-card-create' },
-      { id: 'my-recharge-cards', name: '我的充值卡', icon: 'receipt-outline', color: '#2563EB', action: 'recharge-card-list' },
+      { id: 'fancy-number-card', nameKey: 'profile.mall.items.fancyNumberCard', icon: 'sparkles-outline', color: '#2563EB', action: 'fancy-number' },
+      { id: 'group-expansion-card', nameKey: 'profile.mall.items.groupExpansionCard', icon: 'people-outline', color: '#E11D48', action: 'group-expansion' },
+      { id: 'generate-recharge-card', nameKey: 'profile.mall.items.generateRechargeCard', icon: 'card-outline', color: '#2563EB', action: 'recharge-card-create' },
+      { id: 'my-recharge-cards', nameKey: 'profile.mall.items.myRechargeCards', icon: 'receipt-outline', color: '#2563EB', action: 'recharge-card-list' },
     ],
   },
   {
     id: 'membership',
-    title: '会员专区',
+    titleKey: 'profile.mall.sections.membership',
     products: [
-      { id: 'membership-upgrade', name: '会员充值', icon: 'diamond-outline', color: '#F59E0B', action: 'membership' },
-      { id: 'experience-exchange', name: '兑换经验', icon: 'trending-up-outline', color: '#F59E0B', action: 'experience' },
-      { id: 'points-recharge', name: '积分充值', icon: 'wallet-outline', color: '#F59E0B', action: 'wallet' },
+      { id: 'membership-upgrade', nameKey: 'profile.mall.items.membershipRecharge', icon: 'diamond-outline', color: '#F59E0B', action: 'membership' },
+      { id: 'experience-exchange', nameKey: 'profile.mall.items.exchangeExperience', icon: 'trending-up-outline', color: '#F59E0B', action: 'experience' },
+      { id: 'points-recharge', nameKey: 'profile.mall.items.pointsRecharge', icon: 'wallet-outline', color: '#F59E0B', action: 'wallet' },
     ],
   },
   {
     id: 'fancy-number',
-    title: '靓号专区',
+    titleKey: 'profile.mall.sections.fancyNumber',
     products: [
-      { id: 'choose-fancy-number', name: '自选靓号', icon: 'ribbon-outline', color: '#E11D48', action: 'fancy-number' },
-      { id: 'renew-fancy-number', name: '续费靓号', icon: 'bookmark-outline', color: '#E11D48', action: 'fancy-number-renew' },
+      { id: 'choose-fancy-number', nameKey: 'profile.mall.items.chooseFancyNumber', icon: 'ribbon-outline', color: '#E11D48', action: 'fancy-number' },
+      { id: 'renew-fancy-number', nameKey: 'profile.mall.items.renewFancyNumber', icon: 'bookmark-outline', color: '#E11D48', action: 'fancy-number-renew' },
     ],
   },
   {
     id: 'points',
-    title: '积分专区',
+    titleKey: 'profile.mall.sections.points',
     products: [
-      { id: 'redeem-code', name: '查询&兑换卡密', icon: 'server-outline', color: '#2563EB', action: 'redeem-code' },
-      { id: 'buy-code', name: '购买卡密', icon: 'bag-handle-outline', color: '#2563EB', action: 'buy-code' },
+      { id: 'redeem-code', nameKey: 'profile.mall.items.redeemCode', icon: 'server-outline', color: '#2563EB', action: 'redeem-code' },
+      { id: 'buy-code', nameKey: 'profile.mall.items.buyCode', icon: 'bag-handle-outline', color: '#2563EB', action: 'buy-code' },
     ],
   },
   {
     id: 'decoration',
-    title: '装扮专区',
+    titleKey: 'profile.mall.sections.decoration',
     products: [
-      { id: 'avatar-frame', name: '头像框', icon: 'image-outline', color: '#94A3B8', action: 'avatar-frame' },
+      { id: 'avatar-frame', nameKey: 'profile.mall.items.avatarFrame', icon: 'image-outline', color: '#94A3B8', action: 'avatar-frame' },
     ],
   },
 ];
@@ -94,6 +95,7 @@ const s = StyleSheet.create({
 });
 
 export default function MallScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -113,7 +115,11 @@ export default function MallScreen() {
         }
       } catch {
         if (!cancelled) {
-          setStatusText('商城商品加载失败，已显示本地商品目录');
+          setStatusText(
+            t('profile.mall.loadError', {
+              defaultValue: '商城商品加载失败，已显示本地商品目录',
+            }),
+          );
         }
       }
     }
@@ -123,7 +129,7 @@ export default function MallScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
 
   function handleProductPress(product: MallProduct) {
     if (product.action === 'membership') {
@@ -171,15 +177,19 @@ export default function MallScreen() {
 
   return (
     <View style={d.container}>
-      <NavHeader title="管家商城" />
+      <NavHeader title={t('profile.mall.title', { defaultValue: '管家商城' })} />
       <ScrollView contentContainerStyle={[s.content, d.content]}>
-        {isOffline ? <Text style={d.status}>当前无网络连接，部分功能可能不可用</Text> : null}
+        {isOffline ? (
+          <Text style={d.status}>
+            {t('common.offline', { defaultValue: '当前无网络连接，部分功能可能不可用' })}
+          </Text>
+        ) : null}
         {statusText ? <Text style={d.status}>{statusText}</Text> : null}
         {sections.map((section) => (
-          <View key={section.title} style={[s.section, d.section]}>
+          <View key={section.id} style={[s.section, d.section]}>
             <View style={s.sectionTitleRow}>
               <View style={[s.sectionMark, d.sectionMark]} />
-              <Text style={d.sectionTitle}>{section.title}</Text>
+              <Text style={d.sectionTitle}>{t(section.titleKey)}</Text>
             </View>
             <View style={s.grid}>
               {section.products.map((product) => (
@@ -191,7 +201,7 @@ export default function MallScreen() {
                   <View style={[s.iconWrap, { backgroundColor: `${product.color}22` }]}>
                     <Ionicons name={product.icon as any} size={28} color={product.color} />
                   </View>
-                  <Text style={d.productText}>{product.name}</Text>
+                  <Text style={d.productText}>{t(product.nameKey)}</Text>
                 </Pressable>
               ))}
             </View>

@@ -1,13 +1,15 @@
 // 精选 emoji（分组），聊天输入框的表情面板用。
 // emoji 本质是 unicode 字符，插入文本即可，发出去就是普通文本消息，无需后端改动。
+// 分类名不写死中文：存语言中性的 labelKey，渲染侧用 t(`emojis.${labelKey}`) 取译文，
+// 这样切换语言时表情面板的分类标题也会跟着变。
 export interface EmojiGroup {
-  label: string;
+  labelKey: string;
   emojis: string[];
 }
 
 export const EMOJI_GROUPS: EmojiGroup[] = [
   {
-    label: '表情',
+    labelKey: 'face',
     emojis: [
       '😀', '😁', '😂', '🤣', '😊', '😍', '😘', '😎', '🤔', '😅',
       '😉', '🙂', '🙃', '😏', '🥳', '🤗', '😇', '🤩', '🥰', '😋',
@@ -16,14 +18,14 @@ export const EMOJI_GROUPS: EmojiGroup[] = [
     ],
   },
   {
-    label: '手势',
+    labelKey: 'gesture',
     emojis: [
       '👍', '👎', '👌', '✌️', '🤞', '🤝', '👏', '🙏', '💪', '👋',
       '🙌', '🤙', '✊', '👊', '🫶', '🤟',
     ],
   },
   {
-    label: '爱心',
+    labelKey: 'heart',
     emojis: [
       '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '💔', '💕', '💖',
       '✨', '⭐', '🔥', '💯', '🎉', '🎊', '✅', '❌', '❓', '❗',
@@ -31,7 +33,7 @@ export const EMOJI_GROUPS: EmojiGroup[] = [
     ],
   },
   {
-    label: '动物',
+    labelKey: 'animal',
     emojis: [
       '🐶', '🐱', '🐭', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁',
       '🐮', '🐷', '🐸', '🐵', '🦄', '🐔', '🐧', '🦋', '🌸', '🌈',
@@ -39,14 +41,14 @@ export const EMOJI_GROUPS: EmojiGroup[] = [
     ],
   },
   {
-    label: '食物',
+    labelKey: 'food',
     emojis: [
       '🍎', '🍕', '🍔', '🍟', '🍜', '🍣', '🍰', '🎂', '🍦', '🍩',
       '🍺', '🍻', '🍷', '☕', '🍵', '🥗', '🍚', '🍇', '🍓',
     ],
   },
   {
-    label: '活动',
+    labelKey: 'activity',
     emojis: [
       '⚽', '🏀', '🎮', '🎵', '🎤', '📷', '🎁', '💰', '💡', '📱',
       '💻', '⏰', '🚗', '✈️', '🏔️', '🎯', '👀', '💬', '🚀',

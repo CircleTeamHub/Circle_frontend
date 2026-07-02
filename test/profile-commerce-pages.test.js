@@ -114,18 +114,24 @@ test('WalletScreen shows remaining points and recharge packages', () => {
 test('MallScreen shows requested product areas', () => {
   const src = read('src/features/profile/screens/MallScreen.tsx');
   const api = read('src/services/api/mall.ts');
+  // Product-area names are i18n'd via the labelKey pattern (module-level data holds keys,
+  // the picker renders t(section.titleKey)/t(product.nameKey)); the display copy lives in zh.json.
+  const zh = read('src/i18n/locales/zh.json');
 
   assert.match(src, /fetchMallSections/);
   assert.match(api, /\/mall\/sections/);
-  assert.match(src, /群扩容/);
-  assert.match(src, /靓号/);
-  assert.match(src, /会员充值/);
-  assert.match(src, /积分充值/);
+  assert.match(zh, /群扩容/);
+  assert.match(zh, /靓号/);
+  assert.match(zh, /会员充值/);
+  assert.match(zh, /积分充值/);
 });
 
 test('CollectionsScreen shows collectible content types', () => {
   const src = read('src/features/profile/screens/CollectionsScreen.tsx');
   const api = read('src/services/api/collections.ts');
+  // Content-type labels and row copy are i18n'd (COLLECTION_TYPES holds labelKeys); the
+  // Chinese display strings now live in the locale bundle rather than the component.
+  const zh = read('src/i18n/locales/zh.json');
 
   assert.match(src, /horizontal/);
   assert.match(src, /fetchCollections/);
@@ -133,17 +139,17 @@ test('CollectionsScreen shows collectible content types', () => {
   assert.match(src, /deleteCollection/);
   assert.match(api, /\/collections/);
   assert.doesNotMatch(src, /flexWrap:\s*'wrap'/);
-  assert.match(src, /聊天记录/);
-  assert.match(src, /视频/);
-  assert.match(src, /语音/);
-  assert.match(src, /信息/);
-  assert.match(src, /收藏笔记/);
+  assert.match(zh, /聊天记录/);
+  assert.match(zh, /视频/);
+  assert.match(zh, /语音/);
+  assert.match(zh, /信息/);
+  assert.match(zh, /收藏笔记/);
   assert.match(src, /normalizeNoteCardPayload/);
   assert.match(src, /getCollectedOpenIMMessagePayload/);
   assert.match(src, /getNoteDetailHref\('profile'/);
   assert.match(src, /getChatDetailHref\(\s*'profile'/);
   assert.match(src, /getUserProfileHref\(\s*'profile'/);
-  assert.match(src, /回到消息/);
-  assert.match(src, /发送人/);
-  assert.match(src, /来自/);
+  assert.match(zh, /回到消息/);
+  assert.match(zh, /发送人/);
+  assert.match(zh, /来自/);
 });

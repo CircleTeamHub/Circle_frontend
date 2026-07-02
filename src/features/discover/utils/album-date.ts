@@ -17,9 +17,16 @@ export function getAlbumDateParts(
   }
   const day = String(date.getDate());
   const monthIndex = date.getMonth();
-  const month = language.startsWith('zh')
-    ? `${monthIndex + 1}月`
-    : MONTHS_EN[monthIndex];
+  const lang = language.toLowerCase();
+  // 中/日用「N月」，韩用「N월」，其余语言用英文月份缩写。
+  let month: string;
+  if (lang.startsWith('zh') || lang.startsWith('ja')) {
+    month = `${monthIndex + 1}月`;
+  } else if (lang.startsWith('ko')) {
+    month = `${monthIndex + 1}월`;
+  } else {
+    month = MONTHS_EN[monthIndex];
+  }
   return { day, month };
 }
 

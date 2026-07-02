@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import {
   reportFriend,
   type FriendReportCategory,
@@ -24,20 +25,41 @@ import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const CATEGORY_OPTIONS: readonly {
   id: FriendReportCategory;
-  label: string;
-  description: string;
+  labelKey: string;
+  descriptionKey: string;
 }[] = [
-  { id: 'harassment', label: '骚扰', description: '言语攻击、性骚扰、人身威胁' },
-  { id: 'spam', label: '垃圾信息', description: '广告、刷屏、诱导引流' },
-  { id: 'impersonation', label: '冒充他人', description: '盗用身份、虚假身份' },
-  { id: 'fraud', label: '欺诈', description: '诈骗、虚假交易、链接钓鱼' },
-  { id: 'other', label: '其他', description: '违反平台规则的其他行为' },
+  {
+    id: 'harassment',
+    labelKey: 'chat.report.categories.harassment.label',
+    descriptionKey: 'chat.report.categories.harassment.description',
+  },
+  {
+    id: 'spam',
+    labelKey: 'chat.report.categories.spam.label',
+    descriptionKey: 'chat.report.categories.spam.description',
+  },
+  {
+    id: 'impersonation',
+    labelKey: 'chat.report.categories.impersonation.label',
+    descriptionKey: 'chat.report.categories.impersonation.description',
+  },
+  {
+    id: 'fraud',
+    labelKey: 'chat.report.categories.fraud.label',
+    descriptionKey: 'chat.report.categories.fraud.description',
+  },
+  {
+    id: 'other',
+    labelKey: 'chat.report.categories.other.label',
+    descriptionKey: 'chat.report.categories.other.description',
+  },
 ];
 
 export default function ReportFriendScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{
     friendUserId?: string;
     friendName?: string;
@@ -53,10 +75,10 @@ export default function ReportFriendScreen() {
     targetType === 'group'
       ? typeof params.groupName === 'string'
         ? params.groupName
-        : '该群聊'
+        : t('chat.report.fallbackGroup', { defaultValue: '该群聊' })
       : typeof params.friendName === 'string'
         ? params.friendName
-        : '对方';
+        : t('chat.report.fallbackPeer', { defaultValue: '对方' });
 
   const [category, setCategory] = useState<FriendReportCategory | null>(null);
   const [description, setDescription] = useState('');
@@ -67,20 +89,30 @@ export default function ReportFriendScreen() {
   const handleSubmit = useCallback(async () => {
     if (submitting || inFlightRef.current) return;
     if (targetType === 'friend' && !friendUserId) {
-      Alert.alert('参数错误', '缺少举报对象');
+      Alert.alert(
+        t('chat.report.paramErrorTitle', { defaultValue: '参数错误' }),
+        t('chat.report.missingTarget', { defaultValue: '缺少举报对象' }),
+      );
       return;
     }
     if (targetType === 'group' && !groupID) {
-      Alert.alert('参数错误', '缺少举报对象');
+      Alert.alert(
+        t('chat.report.paramErrorTitle', { defaultValue: '参数错误' }),
+        t('chat.report.missingTarget', { defaultValue: '缺少举报对象' }),
+      );
       return;
     }
     if (!category) {
-      Alert.alert('请选择举报类别');
+      Alert.alert(
+        t('chat.report.selectCategory', { defaultValue: '请选择举报类别' }),
+      );
       return;
     }
     const trimmed = description.trim();
     if (!trimmed) {
-      Alert.alert('请填写举报说明');
+      Alert.alert(
+        t('chat.report.fillDescription', { defaultValue: '请填写举报说明' }),
+      );
       return;
     }
 
@@ -94,18 +126,36 @@ export default function ReportFriendScreen() {
       }
       const successMessage =
         targetType === 'friend'
-          ? '举报已记录，本次有效举报会影响对方信誉值。'
-          : '我们会尽快处理，谢谢你的反馈。';
-      Alert.alert('举报已提交', successMessage, [
-        { text: '好的', onPress: () => router.back() },
-      ]);
+          ? t('chat.report.successFriend', {
+              defaultValue:
+                '举报已记录，本次有效举报会影响对方信誉值。',
+            })
+          : t('chat.report.successGroup', {
+              defaultValue: '我们会尽快处理，谢谢你的反馈。',
+            });
+      Alert.alert(
+        t('chat.report.submitted', { defaultValue: '举报已提交' }),
+        successMessage,
+        [
+          {
+            text: t('common.ok', { defaultValue: '好的' }),
+            onPress: () => router.back(),
+          },
+        ],
+      );
     } catch (error) {
-      Alert.alert('提交失败', getApiErrorMessage(error, '请稍后重试'));
+      Alert.alert(
+        t('chat.report.submitFailed', { defaultValue: '提交失败' }),
+        getApiErrorMessage(
+          error,
+          t('common.retryLater', { defaultValue: '请稍后重试' }),
+        ),
+      );
     } finally {
       inFlightRef.current = false;
       setSubmitting(false);
     }
-  }, [category, description, friendUserId, groupID, router, submitting, targetType]);
+  }, [category, description, friendUserId, groupID, router, submitting, targetType, t]);
 
   const submitDisabled =
     submitting || !category || !description.trim();
@@ -125,7 +175,9 @@ export default function ReportFriendScreen() {
           <Pressable hitSlop={8} onPress={() => router.back()}>
             <Ionicons name="chevron-back" size={24} color={colors.text} />
           </Pressable>
-          <Text style={[s.headerTitle, { color: colors.text }]}>投诉举报</Text>
+          <Text style={[s.headerTitle, { color: colors.text }]}>
+            {t('chat.report.title', { defaultValue: '投诉举报' })}
+          </Text>
           <View style={{ width: 24 }} />
         </View>
 
@@ -138,14 +190,16 @@ export default function ReportFriendScreen() {
         {...keyboardDismissOnDragProps}
         >
           <Text style={[s.target, { color: colors.textSecondary }]}>
-            举报对象：
+            {t('chat.report.targetLabel', { defaultValue: '举报对象：' })}
             <Text style={{ color: colors.text, fontWeight: '600' }}>
               {friendName}
             </Text>
           </Text>
 
           <Text style={[s.sectionLabel, { color: colors.textSecondary }]}>
-            选择举报类别
+            {t('chat.report.selectCategoryLabel', {
+              defaultValue: '选择举报类别',
+            })}
           </Text>
           <View style={[s.categories, { backgroundColor: colors.surface }]}>
             {CATEGORY_OPTIONS.map((opt, idx) => {
@@ -164,12 +218,12 @@ export default function ReportFriendScreen() {
                 >
                   <View style={{ flex: 1 }}>
                     <Text style={[s.categoryLabel, { color: colors.text }]}>
-                      {opt.label}
+                      {t(opt.labelKey)}
                     </Text>
                     <Text
                       style={[s.categoryDesc, { color: colors.textSecondary }]}
                     >
-                      {opt.description}
+                      {t(opt.descriptionKey)}
                     </Text>
                   </View>
                   <Ionicons
@@ -183,14 +237,17 @@ export default function ReportFriendScreen() {
           </View>
 
           <Text style={[s.sectionLabel, { color: colors.textSecondary }]}>
-            详细说明
+            {t('chat.report.detailLabel', { defaultValue: '详细说明' })}
           </Text>
           <View style={[s.textareaWrap, { backgroundColor: colors.surface }]}>
             <TextInput
               style={[s.textarea, { color: colors.text }]}
               value={description}
               onChangeText={setDescription}
-              placeholder="请详细描述发生的事情，便于我们核实处理（最多 500 字）"
+              placeholder={t('chat.report.detailPlaceholder', {
+                defaultValue:
+                  '请详细描述发生的事情，便于我们核实处理（最多 500 字）',
+              })}
               placeholderTextColor={colors.textSecondary}
               multiline
               maxLength={500}
@@ -220,7 +277,9 @@ export default function ReportFriendScreen() {
             disabled={submitDisabled}
           >
             <Text style={[s.submitText, { color: colors.white }]}>
-              {submitting ? '提交中...' : '提交举报'}
+              {submitting
+                ? t('chat.report.submitting', { defaultValue: '提交中...' })
+                : t('chat.report.submit', { defaultValue: '提交举报' })}
             </Text>
           </Pressable>
         </View>
