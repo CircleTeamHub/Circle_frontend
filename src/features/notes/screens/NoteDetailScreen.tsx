@@ -25,6 +25,7 @@ import {
   type NoteSectionKind,
 } from '@/features/notes/utils/note-sections';
 import { createNoteExport, fetchNoteDetail } from '@/services/api/notes';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { ApiError } from '@/services/api/client';
 import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -146,11 +147,12 @@ export default function NoteDetailScreen() {
       } catch (error) {
         Alert.alert(
           t('notes.detail.exportFailedTitle', { defaultValue: '导出失败' }),
-          error instanceof Error
-            ? error.message
-            : t('notes.detail.exportFailedMessage', {
-                defaultValue: '请稍后重试',
-              }),
+          getApiErrorMessage(
+            error,
+            t('notes.detail.exportFailedMessage', {
+              defaultValue: '请稍后重试',
+            }),
+          ),
         );
       } finally {
         setExporting(null);

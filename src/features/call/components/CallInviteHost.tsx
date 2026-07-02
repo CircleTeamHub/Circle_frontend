@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   Pressable,
   StyleSheet,
@@ -12,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme, Radius, Spacing, Typography } from '@/theme';
 import { acceptCall, rejectCall } from '@/services/api/calls';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { useCallStore } from '@/features/call/store/use-call-store';
 
 const s = StyleSheet.create({
@@ -86,13 +88,17 @@ export function CallInviteHost() {
       router.push('/(chat)/group-call' as never);
     } catch (error) {
       resetCallState();
+      Alert.alert(
+        t('common.errorOccurred'),
+        getApiErrorMessage(error, t('common.errorOccurred')),
+      );
       if (typeof __DEV__ !== 'undefined' && __DEV__) {
         console.warn('[call] accept failed', error);
       }
     } finally {
       setBusyAction(null);
     }
-  }, [busyAction, incomingCall, resetCallState, setActiveCall]);
+  }, [busyAction, incomingCall, resetCallState, setActiveCall, t]);
 
   const handleReject = useCallback(async () => {
     if (!incomingCall || busyAction) return;

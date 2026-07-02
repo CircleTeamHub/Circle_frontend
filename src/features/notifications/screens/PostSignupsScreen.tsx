@@ -22,6 +22,7 @@ import {
   markMyPostSignupsRead,
   submitPostCollaborationRecognitions,
 } from '@/services/api/plaza';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { getOrCreateSingleConversation } from '@/im/client';
 import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
 import {
@@ -189,9 +190,10 @@ export default function PostSignupsScreen() {
         t('notifications.signupMgmt.recognitionFailedTitle', {
           defaultValue: '提交失败',
         }),
-        error instanceof Error
-          ? error.message
-          : t('common.networkError', { defaultValue: '网络错误，请重试' }),
+        getApiErrorMessage(
+          error,
+          t('common.networkError', { defaultValue: '网络错误，请重试' }),
+        ),
       );
     } finally {
       if (mountedRef.current) setRecognitionSubmitting(false);

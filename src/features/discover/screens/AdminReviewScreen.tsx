@@ -19,6 +19,7 @@ import {
   adminApproveInvitation,
   fetchPendingInvitationsForCircle,
 } from '@/services/api/circles';
+import { getApiErrorMessage } from '@/services/api/errors';
 import type { CircleInvitation } from '@/types';
 
 const s = StyleSheet.create({
@@ -156,9 +157,10 @@ export default function AdminReviewScreen() {
                 );
                 Alert.alert(t('invitation.overrideApproved'), t('invitation.joinedCircle', { name: inv.applicant.nickname }));
               } catch (error: unknown) {
-                const message =
-                  error instanceof Error ? error.message : t('common.errorOccurred');
-                Alert.alert(t('common.errorOccurred'), message);
+                Alert.alert(
+                  t('common.errorOccurred'),
+                  getApiErrorMessage(error, t('common.errorOccurred')),
+                );
               } finally {
                 setApprovingId(null);
               }

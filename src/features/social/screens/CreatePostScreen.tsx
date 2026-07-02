@@ -21,6 +21,7 @@ import { Divider } from '@/components/ui/divider';
 import { MenuRow } from '@/components/ui/menu-row';
 import { OptionPickerSheet } from '@/components/ui/option-picker-sheet';
 import { createPlazaPost } from '@/services/api/plaza';
+import { getApiErrorMessage } from '@/services/api/errors';
 import {
   requestUploadPresign,
   resolveUploadContentType,
@@ -344,13 +345,12 @@ export default function CreatePostScreen() {
       resetForm();
       router.back();
     } catch (error: unknown) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : t('plaza.create.failedMessage', { defaultValue: '发布失败，请重试' });
       Alert.alert(
         t('plaza.create.failedTitle', { defaultValue: '发布失败' }),
-        message,
+        getApiErrorMessage(
+          error,
+          t('plaza.create.failedMessage', { defaultValue: '发布失败，请重试' }),
+        ),
       );
     } finally {
       inFlightRef.current = false;
