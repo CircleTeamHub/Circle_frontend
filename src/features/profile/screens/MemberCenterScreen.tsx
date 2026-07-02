@@ -12,6 +12,7 @@ import {
   FALLBACK_MEMBERSHIP_PLANS,
   type MembershipPlan,
 } from '@/services/api/membership';
+import { performMembershipUpgradeFlow } from '@/features/profile/membership-upgrade-flow';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -127,21 +128,15 @@ export default function MemberCenterScreen() {
     setSubmitting(true);
     setStatusText(null);
     try {
-      const result = await upgradeMembership(selectedLevel);
-      const nextUser = await fetchCurrentUser();
-      setUser(nextUser);
-      setStatusText(
-        t('profile.membership.exchangeSuccess', {
-          defaultValue: '已成功兑换 VIP{{level}}',
-          level: result.user.vipLevel,
-        }),
-      );
-    } catch {
-      setStatusText(
-        t('profile.membership.exchangeError', {
-          defaultValue: '兑换失败，请确认积分余额足够后重试',
-        }),
-      );
+      await performMembershipUpgradeFlow({
+        selectedLevel,
+        upgradeMembership,
+        fetchCurrentUser,
+        getCurrentUser: () => useAuthStore.getState().user,
+        setUser,
+        setStatusText,
+        t,
+      });
     } finally {
       setSubmitting(false);
     }

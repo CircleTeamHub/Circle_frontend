@@ -128,7 +128,12 @@ test('apiClient reports unexpected 5xx failures to Sentry', async () => {
   const { apiClient } = loadApiClient({
     status: 500,
     ok: false,
-    responseText: JSON.stringify({ code: 1, message: 'boom', data: null }),
+    responseText: JSON.stringify({
+      code: 1,
+      message: 'boom',
+      errorCode: 'CIRCLE_MEMBER_LIMIT',
+      data: null,
+    }),
     onReport: (_err, ctx) => reports.push(ctx),
   });
 
@@ -138,6 +143,7 @@ test('apiClient reports unexpected 5xx failures to Sentry', async () => {
   assert.equal(reports[0].status, 500);
   assert.equal(reports[0].endpointPath, '/circle');
   assert.equal(reports[0].method, 'POST');
+  assert.equal(reports[0].errorCode, 'CIRCLE_MEMBER_LIMIT');
 });
 
 test('apiClient reports sanitized endpoint context to Sentry', async () => {
@@ -172,6 +178,50 @@ test('apiClient does not report expected 4xx errors', async () => {
   await assert.rejects(() => apiClient('/circle/missing'));
 
   assert.equal(reports.length, 0);
+});
+
+test('apiClient preserves backend errorCode on non-ok responses', async () => {
+  const { apiClient } = loadApiClient({
+    status: 400,
+    ok: false,
+    responseText: JSON.stringify({
+      code: 1,
+      message: 'invalid level',
+      errorCode: 'MEMBERSHIP_INVALID_LEVEL',
+      data: null,
+    }),
+  });
+
+  await assert.rejects(
+    () => apiClient('/membership/upgrade', { method: 'POST' }),
+    (err) =>
+      err.name === 'ApiError' &&
+      err.status === 400 &&
+      err.errorCode === 'MEMBERSHIP_INVALID_LEVEL',
+  );
+});
+
+test('apiClient preserves backend errorCode on wrapped api-code failures', async () => {
+  const { apiClient } = loadApiClient({
+    status: 200,
+    ok: true,
+    responseText: JSON.stringify({
+      code: 1001,
+      message: 'not enough points',
+      errorCode: 'MEMBERSHIP_INSUFFICIENT_POINTS',
+      data: null,
+    }),
+  });
+
+  await assert.rejects(
+    () => apiClient('/membership/upgrade', { method: 'POST' }),
+    (err) =>
+      err.name === 'ApiError' &&
+      err.status === 200 &&
+      err.code === 1001 &&
+      err.failureKind === 'api-code' &&
+      err.errorCode === 'MEMBERSHIP_INSUFFICIENT_POINTS',
+  );
 });
 
 test('apiClient reports refresh token failures against the refresh endpoint', async () => {
