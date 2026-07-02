@@ -1531,7 +1531,8 @@
       "agreementPrefix": "다음 내용을 읽고 동의합니다:",
       "agreementAnd": "및",
       "recharging": "충전 중...",
-      "buyNow": "{{points}} 크레딧 지금 구매"
+      "buyNow": "{{points}} 크레딧 지금 구매",
+      "menuLabel": "지갑"
     },
     "mall": {
       "title": "집사 상점",
@@ -1556,7 +1557,8 @@
         "redeemCode": "코드 조회·교환",
         "buyCode": "코드 구매",
         "avatarFrame": "프로필 프레임"
-      }
+      },
+      "menuLabel": "상점"
     },
     "viewProducts": "둘러보기",
     "collections": {
@@ -1581,7 +1583,8 @@
         "voice": "음성",
         "message": "메시지",
         "note": "저장한 노트"
-      }
+      },
+      "menuLabel": "보관함"
     },
     "viewCollections": "보기",
     "notes": "노트",

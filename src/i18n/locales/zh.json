@@ -1099,7 +1099,8 @@
       "agreementPrefix": "我已阅读并同意",
       "agreementAnd": "和",
       "recharging": "充值中...",
-      "buyNow": "立即购买 {{points}} 积分"
+      "buyNow": "立即购买 {{points}} 积分",
+      "menuLabel": "我的钱包"
     },
     "mall": {
       "title": "管家商城",
@@ -1124,7 +1125,8 @@
         "redeemCode": "查询&兑换卡密",
         "buyCode": "购买卡密",
         "avatarFrame": "头像框"
-      }
+      },
+      "menuLabel": "商城"
     },
     "viewProducts": "查看商品",
     "collections": {
@@ -1149,7 +1151,8 @@
         "voice": "语音",
         "message": "信息",
         "note": "收藏笔记"
-      }
+      },
+      "menuLabel": "我的收藏"
     },
     "viewCollections": "查看收藏",
     "notes": "我的笔记",

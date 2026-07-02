@@ -1102,7 +1102,8 @@
       "agreementPrefix": "I have read and agree to",
       "agreementAnd": "and",
       "recharging": "Recharging...",
-      "buyNow": "Buy {{points}} points now"
+      "buyNow": "Buy {{points}} points now",
+      "menuLabel": "Wallet"
     },
     "mall": {
       "title": "Steward Mall",
@@ -1127,7 +1128,8 @@
         "redeemCode": "Query & Redeem Code",
         "buyCode": "Buy Code",
         "avatarFrame": "Avatar Frame"
-      }
+      },
+      "menuLabel": "Mall"
     },
     "viewProducts": "Browse",
     "collections": {
@@ -1152,7 +1154,8 @@
         "voice": "Voice",
         "message": "Message",
         "note": "Saved Notes"
-      }
+      },
+      "menuLabel": "Collections"
     },
     "viewCollections": "View",
     "notes": "Notes",

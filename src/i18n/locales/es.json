@@ -1534,7 +1534,8 @@
       "agreementPrefix": "He leído y acepto",
       "agreementAnd": "y",
       "recharging": "Recargando...",
-      "buyNow": "Comprar {{points}} créditos ahora"
+      "buyNow": "Comprar {{points}} créditos ahora",
+      "menuLabel": "Cartera"
     },
     "mall": {
       "title": "Tienda del conserje",
@@ -1559,7 +1560,8 @@
         "redeemCode": "Consultar y canjear código",
         "buyCode": "Comprar código",
         "avatarFrame": "Marco de avatar"
-      }
+      },
+      "menuLabel": "Tienda"
     },
     "viewProducts": "Explorar",
     "collections": {
@@ -1584,7 +1586,8 @@
         "voice": "Voz",
         "message": "Mensaje",
         "note": "Notas guardadas"
-      }
+      },
+      "menuLabel": "Guardados"
     },
     "viewCollections": "Ver",
     "notes": "Notas",

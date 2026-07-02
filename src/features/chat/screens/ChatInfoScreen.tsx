@@ -1179,7 +1179,7 @@ export default function ChatInfoScreen() {
           </View>
 
           <View style={[s.groupSection, d.groupSection]}>
-            <GroupInfoRow label={t('chat.report')} onPress={handleOpenGroupReport} />
+            <GroupInfoRow label={t('chat.report.title')} onPress={handleOpenGroupReport} />
           </View>
 
           <View style={[d.groupSection]}>
@@ -1260,7 +1260,7 @@ export default function ChatInfoScreen() {
           <Divider />
           <MenuRow
             icon="warning-outline"
-            label={t('chat.report')}
+            label={t('chat.report.title')}
             onPress={() =>
               router.push({
                 pathname: '/(tabs)/messages/report-friend',

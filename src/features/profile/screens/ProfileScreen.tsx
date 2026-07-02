@@ -54,9 +54,9 @@ const MENU_ITEM_KEYS: {
 }[] = [
   { id: MENU_ID.SYSTEM_ANNOUNCEMENTS, icon: "megaphone-outline", labelKey: "profile.systemAnnouncements", rightTextKey: "profile.viewAnnouncements" },
   { id: MENU_ID.MEMBER_CENTER, icon: "gift-outline", labelKey: "profile.memberCenter", rightTextKey: "profile.viewMember" },
-  { id: MENU_ID.WALLET, icon: "wallet-outline", labelKey: "profile.wallet" },
-  { id: MENU_ID.MALL, icon: "hand-left-outline", labelKey: "profile.mall", rightTextKey: "profile.viewProducts" },
-  { id: MENU_ID.COLLECTIONS, icon: "bookmark-outline", labelKey: "profile.collections", rightTextKey: "profile.viewCollections" },
+  { id: MENU_ID.WALLET, icon: "wallet-outline", labelKey: "profile.wallet.menuLabel" },
+  { id: MENU_ID.MALL, icon: "hand-left-outline", labelKey: "profile.mall.menuLabel", rightTextKey: "profile.viewProducts" },
+  { id: MENU_ID.COLLECTIONS, icon: "bookmark-outline", labelKey: "profile.collections.menuLabel", rightTextKey: "profile.viewCollections" },
   { id: MENU_ID.NOTES, icon: "document-text-outline", labelKey: "profile.notes", rightTextKey: "profile.viewNotes" },
   { id: MENU_ID.APP_SETTINGS, icon: "settings-outline", labelKey: "profile.settings" },
 ];

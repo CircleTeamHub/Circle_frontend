@@ -1531,7 +1531,8 @@
       "agreementPrefix": "以下を読み、同意します：",
       "agreementAnd": "および",
       "recharging": "チャージ中...",
-      "buyNow": "{{points}} クレジットを今すぐ購入"
+      "buyNow": "{{points}} クレジットを今すぐ購入",
+      "menuLabel": "ウォレット"
     },
     "mall": {
       "title": "コンシェルジュストア",
@@ -1556,7 +1557,8 @@
         "redeemCode": "コードの照会・引き換え",
         "buyCode": "コードを購入",
         "avatarFrame": "アバターフレーム"
-      }
+      },
+      "menuLabel": "ショップ"
     },
     "viewProducts": "見る",
     "collections": {
@@ -1581,7 +1583,8 @@
         "voice": "音声",
         "message": "メッセージ",
         "note": "保存したノート"
-      }
+      },
+      "menuLabel": "コレクション"
     },
     "viewCollections": "見る",
     "notes": "ノート",
