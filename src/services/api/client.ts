@@ -26,6 +26,8 @@ type ApiResponse<T> = {
   code: number;
   message: string;
   data: T;
+  // 后端稳定错误码(仅错误信封携带);前端据此映射本地化文案,见 services/api/errors.ts。
+  errorCode?: string;
 };
 
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
@@ -185,6 +187,8 @@ export class ApiError extends Error {
   failureKind?: string;
   reportEndpoint?: string;
   reportMethod?: string;
+  // 后端稳定错误码(如 AUTH_INVALID_CREDENTIALS);前端据此做 i18n 映射,缺失回落 message。
+  errorCode?: string;
 
   constructor(
     message: string,
@@ -193,7 +197,8 @@ export class ApiError extends Error {
     data?: unknown,
     failureKind?: string,
     reportEndpoint?: string,
-    reportMethod?: string
+    reportMethod?: string,
+    errorCode?: string
   ) {
     super(message);
     this.name = 'ApiError';
@@ -203,6 +208,7 @@ export class ApiError extends Error {
     this.failureKind = failureKind;
     this.reportEndpoint = reportEndpoint;
     this.reportMethod = reportMethod;
+    this.errorCode = errorCode;
   }
 }
 
@@ -358,7 +364,8 @@ function unwrapResponse<T>(
       isWrappedResponse(payload) ? payload.data : payload,
       undefined,
       reportContext?.endpoint,
-      reportContext?.method
+      reportContext?.method,
+      (payload as { errorCode?: string } | null)?.errorCode
     );
   }
 
@@ -372,7 +379,8 @@ function unwrapResponse<T>(
         payload.data,
         'api-code',
         reportContext?.endpoint,
-        reportContext?.method
+        reportContext?.method,
+        payload.errorCode
       );
     }
 

@@ -2118,5 +2118,13 @@
     "errors": {
       "presignDataInvalid": "Error en el formato de los datos de subida prefirmados"
     }
+  },
+  "serverErrors": {
+    "AUTH_INVALID_CREDENTIALS": "Correo electrónico o contraseña incorrectos",
+    "AUTH_EMAIL_TAKEN": "Este correo electrónico ya está registrado",
+    "AUTH_CODE_INVALID": "El código de verificación es incorrecto o ha expirado",
+    "AUTH_ACCOUNT_ID_TAKEN": "Este ID de cuenta ya está en uso",
+    "AUTH_SECURITY_CODE_INVALID": "El código de seguridad actual es incorrecto",
+    "AUTH_SECURITY_CODE_LOCKED": "Demasiados intentos incorrectos del código de seguridad. Inténtalo de nuevo más tarde."
   }
 }

@@ -2118,5 +2118,13 @@
     "errors": {
       "presignDataInvalid": "Invalid presigned upload data."
     }
+  },
+  "serverErrors": {
+    "AUTH_INVALID_CREDENTIALS": "Incorrect email or password",
+    "AUTH_EMAIL_TAKEN": "This email is already registered",
+    "AUTH_CODE_INVALID": "The verification code is incorrect or has expired",
+    "AUTH_ACCOUNT_ID_TAKEN": "This account ID is already taken",
+    "AUTH_SECURITY_CODE_INVALID": "The current security code is incorrect",
+    "AUTH_SECURITY_CODE_LOCKED": "Too many incorrect security code attempts. Please try again later."
   }
 }

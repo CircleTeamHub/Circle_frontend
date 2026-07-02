@@ -2115,5 +2115,13 @@
     "errors": {
       "presignDataInvalid": "署名付きアップロードデータの形式エラー"
     }
+  },
+  "serverErrors": {
+    "AUTH_INVALID_CREDENTIALS": "メールアドレスまたはパスワードが正しくありません",
+    "AUTH_EMAIL_TAKEN": "このメールアドレスは既に登録されています",
+    "AUTH_CODE_INVALID": "認証コードが正しくないか、有効期限が切れています",
+    "AUTH_ACCOUNT_ID_TAKEN": "このアカウントIDは既に使用されています",
+    "AUTH_SECURITY_CODE_INVALID": "現在のセキュリティコードが正しくありません",
+    "AUTH_SECURITY_CODE_LOCKED": "セキュリティコードの試行回数が多すぎます。しばらくしてから再度お試しください"
   }
 }
