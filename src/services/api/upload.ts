@@ -233,10 +233,10 @@ export async function uploadFileToPresignedUrl(
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         throw new Error(
-            i18n.t('common.errors.uploadTimeout', {
-              defaultValue: '上传超时，请检查网络后重试',
-            }),
-          );
+          i18n.t('common.errors.uploadTimeout', {
+            defaultValue: '上传超时，请检查网络后重试',
+          }),
+        );
       }
       throw error;
     } finally {
