@@ -187,7 +187,17 @@ function AuthRouteGuard({ children }: { children: ReactNode }) {
   });
 
   if (decision.type === 'redirect') {
-    return <Redirect href={decision.href} />;
+    // 关键：重定向时必须保持导航器（children 里的 <Stack>）挂载。
+    // expo-router 的 <Redirect> 靠 router.replace 生效，而 router 需要一个已挂载的
+    // 导航器；若只返回 <Redirect>、把 <Stack> 卸载，replace 无处落地、segment 永不
+    // 更新，getAuthRouteDecision 便持续判定 redirect → 无限重定向（"Maximum update
+    // depth exceeded"）。并存渲染让导航栈常驻、重定向一次即收敛。
+    return (
+      <>
+        {children}
+        <Redirect href={decision.href} />
+      </>
+    );
   }
 
   if (decision.type === 'loading') {
