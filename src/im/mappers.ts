@@ -27,7 +27,7 @@ import {
 } from '@/im/client';
 import { normalizeMediaUrl } from '@/services/api/utils';
 import i18n from '@/i18n';
-import { getLocalizedDateTimeLocale } from '@/features/contacts/locale';
+import { getLocalizedDateTimeLocale } from '@/utils/locale';
 
 // 所有 mapper 产出的字符串走 i18n.t；当前 locale 尚未提供对应 key 时回落到 defaultValue
 // （现有中文文案），这样不动 locale JSON 也能让英文用户在补 key 后立即生效。

@@ -58,7 +58,7 @@ const MAPPER_STUBS = {
     __esModule: true,
     default: { language: 'zh', t: (_key, options) => options.defaultValue },
   },
-  '@/features/contacts/locale': {
+  '@/utils/locale': {
     getLocalizedDateTimeLocale: (lng) =>
       lng && lng.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US',
   },

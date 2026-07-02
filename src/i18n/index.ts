@@ -74,13 +74,11 @@ function getInitialLanguage(): AppLanguage {
 void i18n.use(initReactI18next).init({
   resources,
   lng: getInitialLanguage(),
+  // en 是结构事实源（i18n-locale-parity 保证 en ⊇ 每个 locale 的 base key），因此所有
+  // 语言最终回落到 en，而不是中文 —— 避免非中文用户在偶发缺 key 时意外看到中文。
   fallbackLng: {
-    zh: ['zh'],
-    en: ['en', 'zh'],
-    ja: ['ja', 'en', 'zh'],
-    ko: ['ko', 'en', 'zh'],
-    es: ['es', 'en', 'zh'],
-    default: ['zh'],
+    zh: ['zh', 'en'],
+    default: ['en'],
   },
   interpolation: {
     escapeValue: false,

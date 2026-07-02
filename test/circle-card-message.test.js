@@ -156,7 +156,7 @@ test('circle card mapper recovers avatar from card extension when OpenIM faceURL
         t: (_key, options) => options.defaultValue,
       },
     },
-    '@/features/contacts/locale': {
+    '@/utils/locale': {
       getLocalizedDateTimeLocale: (lng) =>
         lng && lng.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US',
     },

@@ -3,7 +3,7 @@ import {
   type MessageItem,
 } from '@openim/rn-client-sdk';
 import i18n from '@/i18n';
-import { getLocalizedDateTimeLocale } from '@/features/contacts/locale';
+import { getLocalizedDateTimeLocale } from '@/utils/locale';
 import { getMessagePreview } from '@/im/mappers';
 
 function chatHistoryDateLocale() {

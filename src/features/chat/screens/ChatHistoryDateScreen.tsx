@@ -18,7 +18,7 @@ import {
   getChatHistoryMessageTitle,
   resolveChatHistoryRouteParams,
 } from '@/features/chat/chat-history';
-import { getLocalizedDateTimeLocale } from '@/features/contacts/locale';
+import { getLocalizedDateTimeLocale } from '@/utils/locale';
 import { searchConversationMessagesByDate } from '@/im/client';
 import { getChatDetailHref } from '@/features/user/utils/routes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';

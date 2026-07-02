@@ -13,7 +13,7 @@ import {
   rejectFriendRequest,
   type FriendActivity,
 } from '@/services/api/friends';
-import { getLocalizedDateTimeLocale } from '@/features/contacts/locale';
+import { getLocalizedDateTimeLocale } from '@/utils/locale';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';

@@ -399,7 +399,7 @@ test('OpenIM voice messages map to a dedicated ChatMessage voice bubble model', 
         t: (_key, options) => options.defaultValue,
       },
     },
-    '@/features/contacts/locale': {
+    '@/utils/locale': {
       getLocalizedDateTimeLocale: (lng) =>
         lng && lng.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US',
     },
