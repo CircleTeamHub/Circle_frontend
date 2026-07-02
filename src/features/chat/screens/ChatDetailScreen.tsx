@@ -2355,7 +2355,7 @@ export default function ChatDetailScreen() {
             style={[s.quoteComposerText, { color: colors.textSecondary }]}
             numberOfLines={1}
           >
-            {buildQuotePreviewText(quoteTarget)}
+            {buildQuotePreviewText(quoteTarget, t)}
           </Text>
           <Pressable onPress={() => setQuoteTarget(null)} hitSlop={8}>
             <Ionicons name="close" size={18} color={colors.textSecondary} />

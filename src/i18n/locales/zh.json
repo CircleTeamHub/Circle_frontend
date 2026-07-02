@@ -176,8 +176,11 @@
       "createFailed": "创建失败",
       "renameFailed": "重命名失败",
       "deleteFailed": "删除失败",
-      "saveFailed": "保存失败"
-    }
+      "saveFailed": "保存失败",
+      "loadFailed": "加载失败",
+      "nameEmpty": "分组名称不能为空"
+    },
+    "mutedA11y": "消息免打扰"
   },
   "notifications": {
     "title": "消息通知",
@@ -283,7 +286,8 @@
       "single": "私聊",
       "done": "已转发",
       "failed": "转发失败",
-      "failedRetry": "请稍后重试"
+      "failedRetry": "请稍后重试",
+      "locationWithDetail": "[位置] {{detail}}"
     },
     "snackbarNewMessage": "新消息",
     "snackbarPreviewFallback": "[消息]",
@@ -448,7 +452,15 @@
       "statusSet": "已设置",
       "statusChoose": "请选择",
       "failedTitle": "设置失败",
-      "failedBody": "图片背景设置失败，请重试。"
+      "failedBody": "图片背景设置失败，请重试。",
+      "presetFallback": "预设背景",
+      "global": "跟随全局",
+      "preset": {
+        "mistBlue": "晨雾蓝",
+        "forestGreen": "森林绿",
+        "sunsetOrange": "落日橙",
+        "lavenderPurple": "薰衣草紫"
+      }
     },
     "attachments": {
       "photos": "照片",
@@ -501,6 +513,55 @@
       "pickConversation": "选择一个会话",
       "intro": "发送 {{friend}} 的好友名片到另一个聊天。",
       "empty": "暂无可推荐的聊天对象"
+    },
+    "preview": {
+      "verification": "[验证]",
+      "circle": "[圈子] {{name}}"
+    },
+    "collection": {
+      "voiceMessage": "语音消息",
+      "imageMessage": "图片消息",
+      "locationMessage": "位置消息",
+      "note": "笔记",
+      "friendCard": "名片: {{nickname}}",
+      "transfer": "积分转账",
+      "message": "聊天消息",
+      "secondsVoice": "{{seconds}} 秒语音",
+      "personalCard": "个人名片"
+    },
+    "media": {
+      "image": "图片",
+      "video": "视频"
+    },
+    "disappearing": {
+      "off": "关闭",
+      "minutes": "{{duration}}分钟",
+      "seconds": "{{duration}}秒"
+    },
+    "message": {
+      "sending": "发送中",
+      "sendFailed": "发送失败",
+      "read": "已读",
+      "unread": "未读"
+    },
+    "friendCard": {
+      "noPersona": "这个人很懒，什么都没留下",
+      "label": "个人名片"
+    },
+    "noteCard": {
+      "chips": {
+        "note": "笔记",
+        "video": "视频",
+        "display": "展示",
+        "location": "位置"
+      },
+      "imageCount": "{{count}}张图片",
+      "videoCount": "{{count}}个视频",
+      "includes": "包含: {{segments}}"
+    },
+    "voice": {
+      "cancelTip": "松开手指，取消发送",
+      "swipeCancelTip": "左滑取消 · 松开发送"
     }
   },
   "contacts": {
@@ -1852,7 +1913,16 @@
       "fullDate": "{{year}}年{{month}}月{{day}}日 · {{weekday}}",
       "groupOverflow": "{{first}}、{{second}} +{{extra}}",
       "imageCount": "{{count}}图片",
-      "videoCount": "{{count}}视频"
+      "videoCount": "{{count}}视频",
+      "day": {
+        "sun": "星期日",
+        "mon": "星期一",
+        "tue": "星期二",
+        "wed": "星期三",
+        "thu": "星期四",
+        "fri": "星期五",
+        "sat": "星期六"
+      }
     },
     "stats": "共 {{groupCount}} 个分组，合计 {{noteCount}} 条笔记",
     "tabs": {

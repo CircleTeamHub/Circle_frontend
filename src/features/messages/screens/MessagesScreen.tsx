@@ -292,6 +292,7 @@ function ConversationRow({
   onDelete,
 }: ConversationRowProps) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const translateX = useRef(new Animated.Value(0)).current;
   const currentXRef = useRef(0);
 
@@ -454,7 +455,9 @@ function ConversationRow({
                       name="notifications-off-outline"
                       size={15}
                       color={colors.textSecondary}
-                      accessibilityLabel="消息免打扰"
+                      accessibilityLabel={t("messages.mutedA11y", {
+                        defaultValue: "消息免打扰",
+                      })}
                     />
                   </View>
                 ) : null}

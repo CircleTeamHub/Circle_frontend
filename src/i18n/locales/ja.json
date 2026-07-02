@@ -279,7 +279,8 @@
       "single": "個人",
       "done": "転送しました",
       "failed": "転送に失敗しました",
-      "failedRetry": "後でもう一度お試しください"
+      "failedRetry": "後でもう一度お試しください",
+      "locationWithDetail": "[位置情報] {{detail}}"
     },
     "snackbarNewMessage": "新着メッセージ",
     "snackbarPreviewFallback": "[メッセージ]",
@@ -444,7 +445,15 @@
       "statusSet": "設定済み",
       "statusChoose": "選択",
       "failedTitle": "設定に失敗しました",
-      "failedBody": "画像の背景を設定できませんでした。もう一度お試しください。"
+      "failedBody": "画像の背景を設定できませんでした。もう一度お試しください。",
+      "presetFallback": "プリセット背景",
+      "global": "全体設定に従う",
+      "preset": {
+        "mistBlue": "朝霧ブルー",
+        "forestGreen": "フォレストグリーン",
+        "sunsetOrange": "サンセットオレンジ",
+        "lavenderPurple": "ラベンダーパープル"
+      }
     },
     "attachments": {
       "photos": "写真",
@@ -497,6 +506,55 @@
       "pickConversation": "会話を選択",
       "intro": "{{friend}} のプロフィールカードを別のチャットに送信します。",
       "empty": "紹介できるチャットがありません"
+    },
+    "preview": {
+      "verification": "[認証]",
+      "circle": "[サークル] {{name}}"
+    },
+    "collection": {
+      "voiceMessage": "音声メッセージ",
+      "imageMessage": "画像メッセージ",
+      "locationMessage": "位置情報メッセージ",
+      "note": "ノート",
+      "friendCard": "名刺: {{nickname}}",
+      "transfer": "クレジット送金",
+      "message": "チャットメッセージ",
+      "secondsVoice": "{{seconds}}秒の音声",
+      "personalCard": "個人カード"
+    },
+    "media": {
+      "image": "画像",
+      "video": "動画"
+    },
+    "disappearing": {
+      "off": "オフ",
+      "minutes": "{{duration}}分",
+      "seconds": "{{duration}}秒"
+    },
+    "message": {
+      "sending": "送信中",
+      "sendFailed": "送信失敗",
+      "read": "既読",
+      "unread": "未読"
+    },
+    "friendCard": {
+      "noPersona": "この人はまだ何も残していません",
+      "label": "個人カード"
+    },
+    "noteCard": {
+      "chips": {
+        "note": "ノート",
+        "video": "動画",
+        "display": "表示",
+        "location": "位置情報"
+      },
+      "imageCount": "画像{{count}}枚",
+      "videoCount": "動画{{count}}本",
+      "includes": "含む: {{segments}}"
+    },
+    "voice": {
+      "cancelTip": "指を離すと送信をキャンセル",
+      "swipeCancelTip": "左にスワイプでキャンセル · 離して送信"
     }
   },
   "messages": {
@@ -568,8 +626,11 @@
       "createFailed": "作成に失敗しました",
       "renameFailed": "名前の変更に失敗しました",
       "deleteFailed": "削除に失敗しました",
-      "saveFailed": "保存に失敗しました"
-    }
+      "saveFailed": "保存に失敗しました",
+      "loadFailed": "読み込みに失敗しました",
+      "nameEmpty": "グループ名を入力してください"
+    },
+    "mutedA11y": "通知オフ"
   },
   "notes": {
     "actions": {
@@ -729,7 +790,16 @@
       "fullDate": "{{year}}年{{month}}月{{day}}日 · {{weekday}}",
       "groupOverflow": "{{first}}、{{second}} +{{extra}}",
       "imageCount": "画像 {{count}} 枚",
-      "videoCount": "動画 {{count}} 本"
+      "videoCount": "動画 {{count}} 本",
+      "day": {
+        "sun": "日曜日",
+        "mon": "月曜日",
+        "tue": "火曜日",
+        "wed": "水曜日",
+        "thu": "木曜日",
+        "fri": "金曜日",
+        "sat": "土曜日"
+      }
     },
     "stats": "{{groupCount}} グループ · {{noteCount}} 件のノート",
     "tabs": {

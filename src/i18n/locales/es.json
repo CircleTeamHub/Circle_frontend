@@ -279,7 +279,8 @@
       "single": "Directo",
       "done": "Reenviado",
       "failed": "No se pudo reenviar",
-      "failedRetry": "Inténtalo de nuevo más tarde"
+      "failedRetry": "Inténtalo de nuevo más tarde",
+      "locationWithDetail": "[Ubicación] {{detail}}"
     },
     "snackbarNewMessage": "Mensaje nuevo",
     "snackbarPreviewFallback": "[Mensaje]",
@@ -445,7 +446,15 @@
       "statusSet": "Definido",
       "statusChoose": "Elegir",
       "failedTitle": "Error de configuración",
-      "failedBody": "No se pudo definir el fondo con la imagen. Inténtalo de nuevo."
+      "failedBody": "No se pudo definir el fondo con la imagen. Inténtalo de nuevo.",
+      "presetFallback": "Fondo predefinido",
+      "global": "Seguir global",
+      "preset": {
+        "mistBlue": "Azul niebla",
+        "forestGreen": "Verde bosque",
+        "sunsetOrange": "Naranja atardecer",
+        "lavenderPurple": "Morado lavanda"
+      }
     },
     "attachments": {
       "photos": "Fotos",
@@ -498,6 +507,55 @@
       "pickConversation": "Elige una conversación",
       "intro": "Envía la tarjeta de perfil de {{friend}} a otro chat.",
       "empty": "No hay chats a los que recomendar"
+    },
+    "preview": {
+      "verification": "[Verificar]",
+      "circle": "[Círculo] {{name}}"
+    },
+    "collection": {
+      "voiceMessage": "Mensaje de voz",
+      "imageMessage": "Mensaje de imagen",
+      "locationMessage": "Mensaje de ubicación",
+      "note": "Nota",
+      "friendCard": "Tarjeta: {{nickname}}",
+      "transfer": "Transferencia de créditos",
+      "message": "Mensaje de chat",
+      "secondsVoice": "Voz de {{seconds}} s",
+      "personalCard": "Tarjeta personal"
+    },
+    "media": {
+      "image": "Foto",
+      "video": "Vídeo"
+    },
+    "disappearing": {
+      "off": "Desactivado",
+      "minutes": "{{duration}} min",
+      "seconds": "{{duration}} s"
+    },
+    "message": {
+      "sending": "Enviando",
+      "sendFailed": "Fallido",
+      "read": "Leído",
+      "unread": "No leído"
+    },
+    "friendCard": {
+      "noPersona": "Esta persona es muy perezosa y no dejó nada",
+      "label": "Tarjeta de contacto"
+    },
+    "noteCard": {
+      "chips": {
+        "note": "Nota",
+        "video": "Vídeo",
+        "display": "Muestra",
+        "location": "Ubicación"
+      },
+      "imageCount": "{{count}} imágenes",
+      "videoCount": "{{count}} vídeos",
+      "includes": "Incluye: {{segments}}"
+    },
+    "voice": {
+      "cancelTip": "Suelta para cancelar",
+      "swipeCancelTip": "Desliza a la izquierda para cancelar · Suelta para enviar"
     }
   },
   "messages": {
@@ -569,8 +627,11 @@
       "createFailed": "Error al crear",
       "renameFailed": "Error al renombrar",
       "deleteFailed": "Error al eliminar",
-      "saveFailed": "Error al guardar"
-    }
+      "saveFailed": "Error al guardar",
+      "loadFailed": "Error al cargar",
+      "nameEmpty": "El nombre del grupo no puede estar vacío"
+    },
+    "mutedA11y": "Silenciado"
   },
   "notes": {
     "actions": {
@@ -730,7 +791,16 @@
       "fullDate": "{{day}}/{{month}}/{{year}} · {{weekday}}",
       "groupOverflow": "{{first}}, {{second}} +{{extra}}",
       "imageCount": "{{count}} imágenes",
-      "videoCount": "{{count}} videos"
+      "videoCount": "{{count}} videos",
+      "day": {
+        "sun": "domingo",
+        "mon": "lunes",
+        "tue": "martes",
+        "wed": "miércoles",
+        "thu": "jueves",
+        "fri": "viernes",
+        "sat": "sábado"
+      }
     },
     "stats": "{{groupCount}} grupos · {{noteCount}} notas",
     "tabs": {

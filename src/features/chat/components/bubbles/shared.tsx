@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import type { ChatMessage } from '@/types';
 
@@ -18,18 +19,19 @@ interface BubbleStatusTextProps {
  */
 export const BubbleStatusText: React.FC<BubbleStatusTextProps> = ({ message }) => {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const { sendStatus, isRead } = message;
   let text: string;
   let color = colors.textSecondary;
   if (sendStatus === 1) {
-    text = '发送中';
+    text = t('chat.message.sending', { defaultValue: '发送中' });
   } else if (sendStatus === 3) {
-    text = '发送失败';
+    text = t('chat.message.sendFailed', { defaultValue: '发送失败' });
     color = colors.error;
   } else if (isRead) {
-    text = '已读';
+    text = t('chat.message.read', { defaultValue: '已读' });
   } else {
-    text = '未读';
+    text = t('chat.message.unread', { defaultValue: '未读' });
   }
   return (
     <Text style={{ ...Typography.tinyRegular, color, marginLeft: 4 }}>

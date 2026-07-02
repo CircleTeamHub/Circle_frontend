@@ -27,6 +27,13 @@ function loadTsModule(relativePath, stubs = {}) {
       if (specifier in stubs) {
         return stubs[specifier];
       }
+      // @/i18n boots the full i18next runtime; stub a defaultValue-echoing t() here.
+      if (specifier === '@/i18n') {
+        return {
+          __esModule: true,
+          default: { t: (key, opts) => { let s = (opts && opts.defaultValue) || key; if (opts) for (const k of Object.keys(opts)) if (k !== 'defaultValue') s = s.split('{{' + k + '}}').join(String(opts[k])); return s; }, language: 'zh' },
+        };
+      }
 
       return require(specifier);
     },
@@ -165,7 +172,8 @@ test('chat preferences store resolves labels for global, preset, and image backg
       mode: 'preset',
       presetId: CHAT_BACKGROUND_PRESETS[0].id,
     }),
-    CHAT_BACKGROUND_PRESETS[0].label,
+    // Presets now carry labelKey + defaultLabel (i18n'd); the stub t() echoes defaultLabel.
+    CHAT_BACKGROUND_PRESETS[0].defaultLabel,
   );
   assert.equal(
     getChatBackgroundPreferenceLabel({ mode: 'image', uri: 'file:///tmp/bg.png' }),

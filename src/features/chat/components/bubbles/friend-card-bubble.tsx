@@ -1,6 +1,7 @@
 import { View, Text, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme, Typography } from '@/theme';
 import { Avatar } from '@/components/ui/avatar';
 import type { ChatMessage, FriendCardData } from '@/types';
@@ -30,6 +31,7 @@ export const FriendCardBubble: React.FC<FriendCardBubbleProps> = ({
   hideStatus,
 }) => {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const card = message.friendCard;
   if (!card) return null;
 
@@ -73,7 +75,10 @@ export const FriendCardBubble: React.FC<FriendCardBubbleProps> = ({
               style={[sFriendCard.persona, { color: onCardSecondary }]}
               numberOfLines={1}
             >
-              {card.persona?.trim() || '这个人很懒，什么都没留下'}
+              {card.persona?.trim() ||
+                t('chat.friendCard.noPersona', {
+                  defaultValue: '这个人很懒，什么都没留下',
+                })}
             </Text>
           </View>
         </View>
@@ -115,7 +120,7 @@ export const FriendCardBubble: React.FC<FriendCardBubbleProps> = ({
         ) : null}
         <View style={[sFriendCard.divider, { backgroundColor: dividerColor }]} />
         <Text style={[sFriendCard.footer, { color: onCardSecondary }]}>
-          个人名片
+          {t('chat.friendCard.label', { defaultValue: '个人名片' })}
         </Text>
       </Pressable>
 

@@ -279,7 +279,8 @@
       "single": "1:1",
       "done": "전달됨",
       "failed": "전달 실패",
-      "failedRetry": "나중에 다시 시도해 주세요"
+      "failedRetry": "나중에 다시 시도해 주세요",
+      "locationWithDetail": "[위치] {{detail}}"
     },
     "snackbarNewMessage": "새 메시지",
     "snackbarPreviewFallback": "[메시지]",
@@ -444,7 +445,15 @@
       "statusSet": "설정됨",
       "statusChoose": "선택",
       "failedTitle": "설정 실패",
-      "failedBody": "이미지 배경 설정에 실패했습니다. 다시 시도해 주세요."
+      "failedBody": "이미지 배경 설정에 실패했습니다. 다시 시도해 주세요.",
+      "presetFallback": "기본 배경",
+      "global": "전체 설정 따르기",
+      "preset": {
+        "mistBlue": "새벽 안개 블루",
+        "forestGreen": "포레스트 그린",
+        "sunsetOrange": "선셋 오렌지",
+        "lavenderPurple": "라벤더 퍼플"
+      }
     },
     "attachments": {
       "photos": "사진",
@@ -497,6 +506,55 @@
       "pickConversation": "대화 선택",
       "intro": "{{friend}} 님의 프로필 카드를 다른 채팅으로 보냅니다.",
       "empty": "추천할 채팅이 없습니다"
+    },
+    "preview": {
+      "verification": "[인증]",
+      "circle": "[서클] {{name}}"
+    },
+    "collection": {
+      "voiceMessage": "음성 메시지",
+      "imageMessage": "이미지 메시지",
+      "locationMessage": "위치 메시지",
+      "note": "노트",
+      "friendCard": "명함: {{nickname}}",
+      "transfer": "크레딧 송금",
+      "message": "채팅 메시지",
+      "secondsVoice": "{{seconds}}초 음성",
+      "personalCard": "개인 명함"
+    },
+    "media": {
+      "image": "사진",
+      "video": "동영상"
+    },
+    "disappearing": {
+      "off": "끔",
+      "minutes": "{{duration}}분",
+      "seconds": "{{duration}}초"
+    },
+    "message": {
+      "sending": "전송 중",
+      "sendFailed": "전송 실패",
+      "read": "읽음",
+      "unread": "안 읽음"
+    },
+    "friendCard": {
+      "noPersona": "아직 아무것도 남기지 않았어요",
+      "label": "개인 명함"
+    },
+    "noteCard": {
+      "chips": {
+        "note": "노트",
+        "video": "동영상",
+        "display": "표시",
+        "location": "위치"
+      },
+      "imageCount": "이미지 {{count}}장",
+      "videoCount": "동영상 {{count}}개",
+      "includes": "포함: {{segments}}"
+    },
+    "voice": {
+      "cancelTip": "손을 떼면 전송 취소",
+      "swipeCancelTip": "왼쪽으로 밀어 취소 · 손을 떼면 전송"
     }
   },
   "messages": {
@@ -568,8 +626,11 @@
       "createFailed": "만들기에 실패했습니다",
       "renameFailed": "이름 변경에 실패했습니다",
       "deleteFailed": "삭제에 실패했습니다",
-      "saveFailed": "저장에 실패했습니다"
-    }
+      "saveFailed": "저장에 실패했습니다",
+      "loadFailed": "불러오기 실패",
+      "nameEmpty": "그룹 이름을 입력해 주세요"
+    },
+    "mutedA11y": "알림 끔"
   },
   "notes": {
     "actions": {
@@ -729,7 +790,16 @@
       "fullDate": "{{year}}년 {{month}}월 {{day}}일 · {{weekday}}",
       "groupOverflow": "{{first}}, {{second}} 외 {{extra}}",
       "imageCount": "이미지 {{count}}장",
-      "videoCount": "동영상 {{count}}개"
+      "videoCount": "동영상 {{count}}개",
+      "day": {
+        "sun": "일요일",
+        "mon": "월요일",
+        "tue": "화요일",
+        "wed": "수요일",
+        "thu": "목요일",
+        "fri": "금요일",
+        "sat": "토요일"
+      }
     },
     "stats": "그룹 {{groupCount}}개 · 노트 {{noteCount}}개",
     "tabs": {

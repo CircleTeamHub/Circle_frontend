@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { mmkvJsonStorage } from '@/storage';
+import i18n from '@/i18n';
 
 export type ChatBackgroundPreference =
   | { mode: 'global' }
@@ -9,7 +10,8 @@ export type ChatBackgroundPreference =
 
 export type ChatBackgroundPreset = {
   id: string;
-  label: string;
+  labelKey: string;
+  defaultLabel: string;
   color: string;
 };
 
@@ -18,10 +20,30 @@ export const DEFAULT_CHAT_BACKGROUND_PREFERENCE = {
 } as const;
 
 export const CHAT_BACKGROUND_PRESETS: ChatBackgroundPreset[] = [
-  { id: 'morning-mist', label: '晨雾蓝', color: '#EAF1FF' },
-  { id: 'forest-breeze', label: '森林绿', color: '#E8F6EE' },
-  { id: 'sunset-glow', label: '落日橙', color: '#FFF1E8' },
-  { id: 'lavender-haze', label: '薰衣草紫', color: '#F3ECFF' },
+  {
+    id: 'morning-mist',
+    labelKey: 'chat.background.preset.mistBlue',
+    defaultLabel: '晨雾蓝',
+    color: '#EAF1FF',
+  },
+  {
+    id: 'forest-breeze',
+    labelKey: 'chat.background.preset.forestGreen',
+    defaultLabel: '森林绿',
+    color: '#E8F6EE',
+  },
+  {
+    id: 'sunset-glow',
+    labelKey: 'chat.background.preset.sunsetOrange',
+    defaultLabel: '落日橙',
+    color: '#FFF1E8',
+  },
+  {
+    id: 'lavender-haze',
+    labelKey: 'chat.background.preset.lavenderPurple',
+    defaultLabel: '薰衣草紫',
+    color: '#F3ECFF',
+  },
 ];
 
 type ChatPreferencesState = {
@@ -38,17 +60,24 @@ function findChatBackgroundPreset(presetId: string) {
   return CHAT_BACKGROUND_PRESETS.find((preset) => preset.id === presetId);
 }
 
+function translatePresetLabel(preset?: ChatBackgroundPreset) {
+  if (preset) {
+    return i18n.t(preset.labelKey, { defaultValue: preset.defaultLabel });
+  }
+  return i18n.t('chat.background.presetFallback', { defaultValue: '预设背景' });
+}
+
 export function getChatBackgroundPreferenceLabel(
   preference?: ChatBackgroundPreference | null,
 ) {
   switch (preference?.mode) {
     case 'preset':
-      return findChatBackgroundPreset(preference.presetId)?.label ?? '预设背景';
+      return translatePresetLabel(findChatBackgroundPreset(preference.presetId));
     case 'image':
-      return '自定义图片';
+      return i18n.t('chat.background.customImage', { defaultValue: '自定义图片' });
     case 'global':
     default:
-      return '跟随全局';
+      return i18n.t('chat.background.global', { defaultValue: '跟随全局' });
   }
 }
 
@@ -61,20 +90,20 @@ export function resolveChatBackgroundStyle(
       const preset = findChatBackgroundPreset(preference.presetId);
       return {
         backgroundColor: preset?.color ?? fallbackColor,
-        label: preset?.label ?? '预设背景',
+        label: translatePresetLabel(preset),
       };
     }
     case 'image':
       return {
         backgroundColor: fallbackColor,
         imageUri: preference.uri,
-        label: '自定义图片',
+        label: i18n.t('chat.background.customImage', { defaultValue: '自定义图片' }),
       };
     case 'global':
     default:
       return {
         backgroundColor: fallbackColor,
-        label: '跟随全局',
+        label: i18n.t('chat.background.global', { defaultValue: '跟随全局' }),
       };
   }
 }

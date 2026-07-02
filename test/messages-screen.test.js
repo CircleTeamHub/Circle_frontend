@@ -55,7 +55,9 @@ test('messages screen shows a muted indicator for conversations with notificatio
   assert.match(screenSource, /mutedIndicator:\s*\{[\s\S]{0,160}position: "absolute"[\s\S]{0,160}top: 20[\s\S]{0,160}right: 0/);
   assert.match(screenSource, /item\.muted \? \(/);
   assert.match(screenSource, /<Text style=\{timeStyle\}>\{item\.time\}<\/Text>[\s\S]{0,240}name="notifications-off-outline"/);
-  assert.match(screenSource, /accessibilityLabel="消息免打扰"/);
+  // The muted a11y label is now i18n'd; the Chinese survives as the defaultValue.
+  assert.match(screenSource, /accessibilityLabel=\{t\("messages\.mutedA11y"/);
+  assert.match(screenSource, /defaultValue: "消息免打扰"/);
   assert.doesNotMatch(screenSource, /name="volume-mute-outline"/);
 });
 

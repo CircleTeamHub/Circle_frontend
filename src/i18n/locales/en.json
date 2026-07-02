@@ -176,8 +176,11 @@
       "createFailed": "Failed to create",
       "renameFailed": "Failed to rename",
       "deleteFailed": "Failed to delete",
-      "saveFailed": "Failed to save"
-    }
+      "saveFailed": "Failed to save",
+      "loadFailed": "Failed to load",
+      "nameEmpty": "Group name cannot be empty"
+    },
+    "mutedA11y": "Muted"
   },
   "notifications": {
     "title": "Notifications",
@@ -283,7 +286,8 @@
       "single": "Direct",
       "done": "Forwarded",
       "failed": "Forward failed",
-      "failedRetry": "Please try again later"
+      "failedRetry": "Please try again later",
+      "locationWithDetail": "[Location] {{detail}}"
     },
     "snackbarNewMessage": "New message",
     "snackbarPreviewFallback": "[Message]",
@@ -449,7 +453,15 @@
       "statusSet": "Set",
       "statusChoose": "Choose",
       "failedTitle": "Setup failed",
-      "failedBody": "Failed to set image background. Please try again."
+      "failedBody": "Failed to set image background. Please try again.",
+      "presetFallback": "Preset background",
+      "global": "Follow global",
+      "preset": {
+        "mistBlue": "Misty Blue",
+        "forestGreen": "Forest Green",
+        "sunsetOrange": "Sunset Orange",
+        "lavenderPurple": "Lavender Purple"
+      }
     },
     "attachments": {
       "photos": "Photos",
@@ -502,6 +514,55 @@
       "pickConversation": "Pick a conversation",
       "intro": "Send {{friend}}'s contact card to another chat.",
       "empty": "No chats available to recommend to"
+    },
+    "preview": {
+      "verification": "[Verify]",
+      "circle": "[Circle] {{name}}"
+    },
+    "collection": {
+      "voiceMessage": "Voice message",
+      "imageMessage": "Image message",
+      "locationMessage": "Location message",
+      "note": "Note",
+      "friendCard": "Card: {{nickname}}",
+      "transfer": "Credits transfer",
+      "message": "Chat message",
+      "secondsVoice": "{{seconds}}s voice",
+      "personalCard": "Personal card"
+    },
+    "media": {
+      "image": "Photo",
+      "video": "Video"
+    },
+    "disappearing": {
+      "off": "Off",
+      "minutes": "{{duration}} min",
+      "seconds": "{{duration}}s"
+    },
+    "message": {
+      "sending": "Sending",
+      "sendFailed": "Failed",
+      "read": "Read",
+      "unread": "Unread"
+    },
+    "friendCard": {
+      "noPersona": "This person is too lazy to leave anything",
+      "label": "Contact card"
+    },
+    "noteCard": {
+      "chips": {
+        "note": "Note",
+        "video": "Video",
+        "display": "Display",
+        "location": "Location"
+      },
+      "imageCount": "{{count}} images",
+      "videoCount": "{{count}} videos",
+      "includes": "Includes: {{segments}}"
+    },
+    "voice": {
+      "cancelTip": "Release to cancel",
+      "swipeCancelTip": "Slide left to cancel · Release to send"
     }
   },
   "contacts": {
@@ -1855,7 +1916,16 @@
       "fullDate": "{{year}}-{{month}}-{{day}} · {{weekday}}",
       "groupOverflow": "{{first}}, {{second}} +{{extra}}",
       "imageCount": "{{count}} images",
-      "videoCount": "{{count}} videos"
+      "videoCount": "{{count}} videos",
+      "day": {
+        "sun": "Sunday",
+        "mon": "Monday",
+        "tue": "Tuesday",
+        "wed": "Wednesday",
+        "thu": "Thursday",
+        "fri": "Friday",
+        "sat": "Saturday"
+      }
     },
     "stats": "{{groupCount}} groups · {{noteCount}} notes",
     "tabs": {

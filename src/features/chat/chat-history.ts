@@ -57,11 +57,14 @@ export function formatChatHistoryMonth(sendTime: number) {
 export function getChatHistoryMessageTitle(message: MessageItem) {
   switch (message.contentType) {
     case MessageType.PictureMessage:
-      return '图片';
+      return i18n.t('chat.media.image', { defaultValue: '图片' });
     case MessageType.VideoMessage:
-      return '视频';
+      return i18n.t('chat.media.video', { defaultValue: '视频' });
     case MessageType.FileMessage:
-      return message.fileElem?.fileName || '[文件]';
+      return (
+        message.fileElem?.fileName ||
+        i18n.t('im.preview.file', { defaultValue: '[文件]' })
+      );
     default:
       return getMessagePreview(message, message.content);
   }

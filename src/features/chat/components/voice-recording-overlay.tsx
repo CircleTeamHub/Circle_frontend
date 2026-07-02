@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme, Spacing, Typography } from '@/theme';
 
 // 波形条：对称包络（中间高、两端低）+ 稳定的伪随机抖动，形成类似微信的录音波形外观。
@@ -28,6 +29,7 @@ export const VoiceRecordingOverlay: React.FC<VoiceRecordingOverlayProps> = ({
   elapsedSeconds,
 }) => {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const pulse = useRef(new Animated.Value(0.7)).current;
 
   useEffect(() => {
@@ -96,7 +98,11 @@ export const VoiceRecordingOverlay: React.FC<VoiceRecordingOverlayProps> = ({
           </View>
         </View>
         <Text style={[styles.hint, { color: colors.white }]}>
-          {cancelArmed ? '松开手指，取消发送' : '左滑取消 · 松开发送'}
+          {cancelArmed
+            ? t('chat.voice.cancelTip', { defaultValue: '松开手指，取消发送' })
+            : t('chat.voice.swipeCancelTip', {
+                defaultValue: '左滑取消 · 松开发送',
+              })}
         </Text>
       </View>
     </View>

@@ -1,3 +1,5 @@
+import i18n from '@/i18n';
+
 type ChatInfoConversation = {
   isPinned?: boolean | null;
   recvMsgOpt?: number | null;
@@ -12,14 +14,20 @@ export type ChatInfoState = {
 
 function formatBurnLabel(burnDuration?: number | null) {
   if (!burnDuration) {
-    return '关闭';
+    return i18n.t('chat.disappearing.off', { defaultValue: '关闭' });
   }
 
   if (burnDuration >= 60 && burnDuration % 60 === 0) {
-    return `${burnDuration / 60}分钟`;
+    return i18n.t('chat.disappearing.minutes', {
+      duration: burnDuration / 60,
+      defaultValue: '{{duration}}分钟',
+    });
   }
 
-  return `${burnDuration}秒`;
+  return i18n.t('chat.disappearing.seconds', {
+    duration: burnDuration,
+    defaultValue: '{{duration}}秒',
+  });
 }
 
 export function buildChatInfoState(
