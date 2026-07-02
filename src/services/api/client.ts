@@ -192,13 +192,23 @@ export class ApiError extends Error {
 
   constructor(
     message: string,
-    status: number,
-    code?: number,
-    data?: unknown,
-    failureKind?: string,
-    reportEndpoint?: string,
-    reportMethod?: string,
-    errorCode?: string
+    {
+      status,
+      code,
+      data,
+      failureKind,
+      reportEndpoint,
+      reportMethod,
+      errorCode,
+    }: {
+      status: number;
+      code?: number;
+      data?: unknown;
+      failureKind?: string;
+      reportEndpoint?: string;
+      reportMethod?: string;
+      errorCode?: string;
+    }
   ) {
     super(message);
     this.name = 'ApiError';
@@ -238,12 +248,12 @@ async function readPayload<T>(
       i18n.t('common.errors.invalidServerResponse', {
         defaultValue: '服务返回了无效数据',
       }),
-      res.status,
-      undefined,
-      undefined,
-      'invalid-json',
-      reportContext.endpoint,
-      reportContext.method
+      {
+        status: res.status,
+        failureKind: 'invalid-json',
+        reportEndpoint: reportContext.endpoint,
+        reportMethod: reportContext.method,
+      }
     );
   }
 }
@@ -319,24 +329,24 @@ async function executeRequest<T>(
         i18n.t('common.errors.requestTimeout', {
           defaultValue: '请求超时，请检查网络连接后重试',
         }),
-        0,
-        undefined,
-        undefined,
-        'timeout',
-        endpoint,
-        method
+        {
+          status: 0,
+          failureKind: 'timeout',
+          reportEndpoint: endpoint,
+          reportMethod: method,
+        }
       );
     }
     throw new ApiError(
       i18n.t('common.errors.networkUnavailable', {
         defaultValue: '网络异常，请确认后端服务已启动',
       }),
-      0,
-      undefined,
-      undefined,
-      'network',
-      endpoint,
-      method
+      {
+        status: 0,
+        failureKind: 'network',
+        reportEndpoint: endpoint,
+        reportMethod: method,
+      }
     );
   } finally {
     clearTimeout(timer);
@@ -359,13 +369,14 @@ function unwrapResponse<T>(
           status: res.status,
           defaultValue: '请求失败 ({{status}})',
         }),
-      res.status,
-      isWrappedResponse(payload) ? payload.code : undefined,
-      isWrappedResponse(payload) ? payload.data : payload,
-      undefined,
-      reportContext?.endpoint,
-      reportContext?.method,
-      (payload as { errorCode?: string } | null)?.errorCode
+      {
+        status: res.status,
+        code: isWrappedResponse(payload) ? payload.code : undefined,
+        data: isWrappedResponse(payload) ? payload.data : payload,
+        reportEndpoint: reportContext?.endpoint,
+        reportMethod: reportContext?.method,
+        errorCode: (payload as { errorCode?: string } | null)?.errorCode,
+      }
     );
   }
 
@@ -374,13 +385,15 @@ function unwrapResponse<T>(
       throw new ApiError(
         payload.message ||
           i18n.t('common.errors.requestFailed', { defaultValue: '请求失败' }),
-        res.status,
-        payload.code,
-        payload.data,
-        'api-code',
-        reportContext?.endpoint,
-        reportContext?.method,
-        payload.errorCode
+        {
+          status: res.status,
+          code: payload.code,
+          data: payload.data,
+          failureKind: 'api-code',
+          reportEndpoint: reportContext?.endpoint,
+          reportMethod: reportContext?.method,
+          errorCode: payload.errorCode,
+        }
       );
     }
 
@@ -404,7 +417,7 @@ async function refreshAccessToken() {
         i18n.t('common.errors.sessionExpired', {
           defaultValue: '登录已过期，请重新登录',
         }),
-        401,
+        { status: 401 }
       );
     }
 
@@ -430,7 +443,7 @@ async function refreshAccessToken() {
         i18n.t('common.errors.refreshResponseInvalid', {
           defaultValue: '刷新返回数据格式异常，请重新登录',
         }),
-        401,
+        { status: 401 }
       );
     }
 
@@ -504,6 +517,9 @@ export async function apiClient<T>(
           : {}),
         ...(error instanceof ApiError && error.failureKind
           ? { failureKind: error.failureKind }
+          : {}),
+        ...(error instanceof ApiError && error.errorCode
+          ? { errorCode: error.errorCode }
           : {}),
       });
     }
