@@ -18,6 +18,7 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { SessionType } from '@openim/rn-client-sdk';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { addVerifierToInvitation } from '@/services/api/circles';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { sendVerificationCardMessage } from '@/im/client';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -140,9 +141,10 @@ export default function SelectVerifierScreen() {
         Alert.alert(t('invitation.invited'), t('invitation.invitedMessage', { name: friend.nickname }));
         router.back();
       } catch (error: unknown) {
-        const message =
-          error instanceof Error ? error.message : t('invitation.addFailed');
-        Alert.alert(t('invitation.addFailed'), message);
+        Alert.alert(
+          t('invitation.addFailed'),
+          getApiErrorMessage(error, t('invitation.addFailed')),
+        );
       } finally {
         setSubmittingId(null);
       }

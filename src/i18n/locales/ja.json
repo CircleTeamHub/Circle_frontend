@@ -2169,6 +2169,22 @@
     "GROUP_NOT_FOUND": "グループが見つかりません",
     "GROUP_MEMBER_NOT_FOUND": "グループメンバーが見つかりません",
     "GROUP_USE_LEAVE_ENDPOINT": "自分を退出させるには退出機能を使用してください",
-    "GROUP_MEMBERSHIP_VERIFY_UNAVAILABLE": "現在グループメンバーシップを確認できません。もう一度お試しください"
+    "GROUP_MEMBERSHIP_VERIFY_UNAVAILABLE": "現在グループメンバーシップを確認できません。もう一度お試しください",
+    "INVITATION_INVITER_NOT_MEMBER": "サークルのアクティブメンバーのみが他の人を招待できます",
+    "INVITATION_NOT_ALLOWED": "相手はサークルの招待を受け付けていません",
+    "INVITATION_ALREADY_PENDING": "このユーザーには保留中の招待が既にあります",
+    "INVITATION_NOT_FOUND": "招待が見つかりません",
+    "INVITATION_APPLICANT_ONLY": "申請者のみが検証者を追加できます",
+    "INVITATION_NOT_PENDING": "この招待は保留中ではなくなりました",
+    "INVITATION_VERIFIER_NOT_MEMBER": "検証者はこのサークルのアクティブメンバーである必要があります",
+    "INVITATION_ALREADY_VERIFIER": "このユーザーは既に検証者です",
+    "INVITATION_SLOTS_FILLED": "検証者の枠が埋まっています",
+    "INVITATION_NO_PENDING_VERIFICATION": "保留中の検証リクエストはありません",
+    "INVITATION_OWNER_ADMIN_ONLY": "サークルのオーナーまたは管理者のみが実行できます",
+    "INVITATION_VIEW_FORBIDDEN": "この招待を表示する権限がありません",
+    "TEMP_CHAT_LINK_INVALID": "リンクが無効です",
+    "TEMP_CHAT_ENDED": "一時チャットは終了しました",
+    "TEMP_CHAT_FULL": "参加人数が上限に達しています",
+    "TEMP_CHAT_CREATOR_ONLY": "作成者のみが終了できます"
   }
 }

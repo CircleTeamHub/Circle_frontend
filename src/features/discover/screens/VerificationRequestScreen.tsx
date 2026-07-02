@@ -15,6 +15,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { fetchInvitation, respondToVerification } from '@/services/api/circles';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { useAuthStore } from '@/stores/authStore';
 import type { CircleInvitation } from '@/types';
 
@@ -184,9 +185,10 @@ export default function VerificationRequestScreen() {
         ]);
       } catch (error: unknown) {
         if (!mountedRef.current) return;
-        const message =
-          error instanceof Error ? error.message : t('common.errorOccurred');
-        Alert.alert(t('common.errorOccurred'), message);
+        Alert.alert(
+          t('common.errorOccurred'),
+          getApiErrorMessage(error, t('common.errorOccurred')),
+        );
       } finally {
         if (mountedRef.current) setResponding(false);
       }

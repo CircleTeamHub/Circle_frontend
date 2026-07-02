@@ -2169,6 +2169,22 @@
     "GROUP_NOT_FOUND": "群不存在",
     "GROUP_MEMBER_NOT_FOUND": "群成员不存在",
     "GROUP_USE_LEAVE_ENDPOINT": "退出自己请使用退群功能",
-    "GROUP_MEMBERSHIP_VERIFY_UNAVAILABLE": "暂时无法验证群成员身份，请稍后再试"
+    "GROUP_MEMBERSHIP_VERIFY_UNAVAILABLE": "暂时无法验证群成员身份，请稍后再试",
+    "INVITATION_INVITER_NOT_MEMBER": "只有圈子活跃成员才能邀请他人",
+    "INVITATION_NOT_ALLOWED": "对方不接受圈子邀请",
+    "INVITATION_ALREADY_PENDING": "该用户已有待处理的邀请",
+    "INVITATION_NOT_FOUND": "邀请不存在",
+    "INVITATION_APPLICANT_ONLY": "只有申请人可以添加验证人",
+    "INVITATION_NOT_PENDING": "该邀请已处理，无法再操作",
+    "INVITATION_VERIFIER_NOT_MEMBER": "验证人必须是本圈子的活跃成员",
+    "INVITATION_ALREADY_VERIFIER": "该用户已是验证人",
+    "INVITATION_SLOTS_FILLED": "验证名额已满",
+    "INVITATION_NO_PENDING_VERIFICATION": "你没有待处理的验证请求",
+    "INVITATION_OWNER_ADMIN_ONLY": "仅圈主或管理员可操作",
+    "INVITATION_VIEW_FORBIDDEN": "你无权查看该邀请",
+    "TEMP_CHAT_LINK_INVALID": "链接无效",
+    "TEMP_CHAT_ENDED": "临时聊天已结束",
+    "TEMP_CHAT_FULL": "人数已满",
+    "TEMP_CHAT_CREATOR_ONLY": "只有创建者可以结束"
   }
 }

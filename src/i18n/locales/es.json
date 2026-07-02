@@ -2172,6 +2172,22 @@
     "GROUP_NOT_FOUND": "Grupo no encontrado",
     "GROUP_MEMBER_NOT_FOUND": "Miembro del grupo no encontrado",
     "GROUP_USE_LEAVE_ENDPOINT": "Usa la opción de salir para quitarte a ti mismo",
-    "GROUP_MEMBERSHIP_VERIFY_UNAVAILABLE": "No se puede verificar la membresía del grupo ahora. Inténtalo de nuevo."
+    "GROUP_MEMBERSHIP_VERIFY_UNAVAILABLE": "No se puede verificar la membresía del grupo ahora. Inténtalo de nuevo.",
+    "INVITATION_INVITER_NOT_MEMBER": "Solo los miembros activos del círculo pueden invitar a otros",
+    "INVITATION_NOT_ALLOWED": "Este usuario no acepta invitaciones al círculo",
+    "INVITATION_ALREADY_PENDING": "Este usuario ya tiene una invitación pendiente",
+    "INVITATION_NOT_FOUND": "Invitación no encontrada",
+    "INVITATION_APPLICANT_ONLY": "Solo el solicitante puede añadir verificadores",
+    "INVITATION_NOT_PENDING": "Esta invitación ya no está pendiente",
+    "INVITATION_VERIFIER_NOT_MEMBER": "El verificador debe ser un miembro activo de este círculo",
+    "INVITATION_ALREADY_VERIFIER": "Este usuario ya es un verificador",
+    "INVITATION_SLOTS_FILLED": "Todos los espacios de verificación están llenos",
+    "INVITATION_NO_PENDING_VERIFICATION": "No tienes ninguna solicitud de verificación pendiente",
+    "INVITATION_OWNER_ADMIN_ONLY": "Solo el propietario o administrador del círculo puede hacer esto",
+    "INVITATION_VIEW_FORBIDDEN": "No tienes permiso para ver esta invitación",
+    "TEMP_CHAT_LINK_INVALID": "Enlace no válido",
+    "TEMP_CHAT_ENDED": "Este chat temporal ha finalizado",
+    "TEMP_CHAT_FULL": "Este chat está lleno",
+    "TEMP_CHAT_CREATOR_ONLY": "Solo el creador puede finalizar este chat"
   }
 }

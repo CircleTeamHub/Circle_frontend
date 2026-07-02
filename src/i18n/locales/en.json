@@ -2172,6 +2172,22 @@
     "GROUP_NOT_FOUND": "Group not found",
     "GROUP_MEMBER_NOT_FOUND": "Group member not found",
     "GROUP_USE_LEAVE_ENDPOINT": "Use the leave option to remove yourself",
-    "GROUP_MEMBERSHIP_VERIFY_UNAVAILABLE": "Can't verify group membership right now. Please try again."
+    "GROUP_MEMBERSHIP_VERIFY_UNAVAILABLE": "Can't verify group membership right now. Please try again.",
+    "INVITATION_INVITER_NOT_MEMBER": "Only active circle members can invite others",
+    "INVITATION_NOT_ALLOWED": "This user doesn't accept circle invites",
+    "INVITATION_ALREADY_PENDING": "This user already has a pending invitation",
+    "INVITATION_NOT_FOUND": "Invitation not found",
+    "INVITATION_APPLICANT_ONLY": "Only the applicant can add verifiers",
+    "INVITATION_NOT_PENDING": "This invitation is no longer pending",
+    "INVITATION_VERIFIER_NOT_MEMBER": "The verifier must be an active member of this circle",
+    "INVITATION_ALREADY_VERIFIER": "This user is already a verifier",
+    "INVITATION_SLOTS_FILLED": "All verifier slots are filled",
+    "INVITATION_NO_PENDING_VERIFICATION": "You have no pending verification request",
+    "INVITATION_OWNER_ADMIN_ONLY": "Only the circle owner or admin can do this",
+    "INVITATION_VIEW_FORBIDDEN": "You aren't allowed to view this invitation",
+    "TEMP_CHAT_LINK_INVALID": "Invalid link",
+    "TEMP_CHAT_ENDED": "This temporary chat has ended",
+    "TEMP_CHAT_FULL": "This chat is full",
+    "TEMP_CHAT_CREATOR_ONLY": "Only the creator can end this chat"
   }
 }
