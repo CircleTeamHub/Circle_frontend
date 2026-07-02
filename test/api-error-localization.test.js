@@ -5,8 +5,8 @@ const path = require('node:path');
 const ts = require('typescript');
 
 // getApiErrorMessage turns a backend stable errorCode into a localized string
-// (serverErrors.<code>), falling back to the backend message, then the caller's
-// fallback. Backend attaches the code via `throw new X({ message, errorCode })`
+// (serverErrors.<code>), falling back to the caller's fallback. Backend attaches
+// the code via `throw new X({ message, errorCode })`
 // and all-exception.filter surfaces it; client.ts threads it onto ApiError.
 
 // Fake i18n whose t() knows one serverErrors key and otherwise echoes defaultValue.
@@ -44,12 +44,11 @@ function loadServerErrorCodes() {
   return moduleObj.exports;
 }
 
-const BACKEND_CODES_PATH = path.join(
-  process.cwd(),
-  '..',
-  'circle_be',
-  'src/common/app-error-codes.ts',
-);
+const BACKEND_CODES_PATH =
+  process.env.BACKEND_CODES_PATH ||
+  path.join(process.cwd(), '..', 'circle_be', 'src/common/app-error-codes.ts');
+const REQUIRE_BACKEND_ERROR_CODES =
+  process.env.REQUIRE_BACKEND_ERROR_CODES === '1';
 
 function loadBackendErrorCodes() {
   const filePath = BACKEND_CODES_PATH;
@@ -95,9 +94,9 @@ test('uses the caller fallback when the errorCode is unknown', () => {
   assert.equal(getApiErrorMessage(err, 'fallback'), 'fallback');
 });
 
-test('uses the backend message when there is no errorCode', () => {
+test('uses the caller fallback when ApiError has no errorCode', () => {
   const err = new FakeApiError('请求失败', undefined);
-  assert.equal(getApiErrorMessage(err, 'fallback'), '请求失败');
+  assert.equal(getApiErrorMessage(err, 'fallback'), 'fallback');
 });
 
 test('non-ApiError falls through to Error.message, then the fallback', () => {
@@ -263,8 +262,15 @@ test('every locale defines all serverErrors codes', () => {
 // frontend-only CI has no sibling repo, so skip instead of ENOENT-failing the suite.
 test(
   'frontend SERVER_ERROR_CODES matches the backend APP_ERROR_CODES',
-  { skip: !fs.existsSync(BACKEND_CODES_PATH) },
+  {
+    skip:
+      !REQUIRE_BACKEND_ERROR_CODES && !fs.existsSync(BACKEND_CODES_PATH),
+  },
   () => {
+    assert.ok(
+      fs.existsSync(BACKEND_CODES_PATH),
+      `backend APP_ERROR_CODES file must exist at ${BACKEND_CODES_PATH}`,
+    );
     const contractCodes = [...loadServerErrorCodes().SERVER_ERROR_CODES].sort();
     const backendCodes = [...loadBackendErrorCodes().APP_ERROR_CODES].sort();
     assert.deepEqual(

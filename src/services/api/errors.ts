@@ -20,7 +20,7 @@ export function getApiErrorMessage(error: unknown, fallback: string): string {
         defaultValue: fallback,
       });
     }
-    return error.message || fallback;
+    return fallback;
   }
 
   if (error instanceof Error && error.message) {
