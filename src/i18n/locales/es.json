@@ -1906,7 +1906,18 @@
     "coin": "Créditos",
     "offline": "Sin conexión a Internet. Algunas funciones podrían no estar disponibles.",
     "vip": "VIP",
-    "privacyPolicy": "Política de privacidad"
+    "privacyPolicy": "Política de privacidad",
+    "errors": {
+      "requestTimeout": "Se agotó el tiempo de la solicitud. Comprueba tu conexión e inténtalo de nuevo.",
+      "networkUnavailable": "Error de red. Asegúrate de que el servidor esté en funcionamiento.",
+      "invalidServerResponse": "El servidor devolvió datos no válidos",
+      "requestFailedWithStatus": "La solicitud falló ({{status}})",
+      "requestFailed": "La solicitud falló",
+      "sessionExpired": "Tu sesión ha caducado. Inicia sesión de nuevo.",
+      "refreshResponseInvalid": "Respuesta de actualización no válida. Inicia sesión de nuevo.",
+      "uploadTimeout": "Se agotó el tiempo de la subida. Comprueba tu conexión e inténtalo de nuevo.",
+      "uploadFailedWithStatus": "La subida falló ({{status}})"
+    }
   },
   "credit": {
     "title": "Detalles de reputación",
@@ -2100,5 +2111,17 @@
     "animal": "Animales",
     "food": "Comida",
     "activity": "Actividades"
+  },
+  "coin": {
+    "errors": {
+      "invalidAmount": "Cantidad de créditos no válida",
+      "walletDataInvalid": "Error en el formato de los datos de la cartera",
+      "rechargeDataInvalid": "Error en el formato de la respuesta de recarga"
+    }
+  },
+  "upload": {
+    "errors": {
+      "presignDataInvalid": "Error en el formato de los datos de subida prefirmados"
+    }
   }
 }

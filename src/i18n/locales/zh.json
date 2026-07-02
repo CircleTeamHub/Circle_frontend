@@ -45,7 +45,18 @@
     "coin": "积分",
     "offline": "当前无网络连接，部分功能可能不可用",
     "vip": "VIP",
-    "privacyPolicy": "《隐私政策》"
+    "privacyPolicy": "《隐私政策》",
+    "errors": {
+      "requestTimeout": "请求超时，请检查网络连接后重试",
+      "networkUnavailable": "网络异常，请确认后端服务已启动",
+      "invalidServerResponse": "服务返回了无效数据",
+      "requestFailedWithStatus": "请求失败 ({{status}})",
+      "requestFailed": "请求失败",
+      "sessionExpired": "登录已过期，请重新登录",
+      "refreshResponseInvalid": "刷新返回数据格式异常，请重新登录",
+      "uploadTimeout": "上传超时，请检查网络后重试",
+      "uploadFailedWithStatus": "上传失败 ({{status}})"
+    }
   },
   "auth": {
     "welcomeBack": "欢迎回来",
@@ -2097,5 +2108,17 @@
     "animal": "动物",
     "food": "食物",
     "activity": "活动"
+  },
+  "coin": {
+    "errors": {
+      "walletDataInvalid": "钱包数据格式异常",
+      "invalidAmount": "积分数量无效",
+      "rechargeDataInvalid": "充值返回数据格式异常"
+    }
+  },
+  "upload": {
+    "errors": {
+      "presignDataInvalid": "预签名上传数据格式异常"
+    }
   }
 }

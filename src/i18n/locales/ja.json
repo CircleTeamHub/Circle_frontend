@@ -1903,7 +1903,18 @@
     "coin": "クレジット",
     "offline": "ネットワークに接続していません。一部の機能が利用できない場合があります。",
     "vip": "VIP",
-    "privacyPolicy": "プライバシーポリシー"
+    "privacyPolicy": "プライバシーポリシー",
+    "errors": {
+      "requestTimeout": "リクエストがタイムアウトしました。接続を確認して再試行してください。",
+      "networkUnavailable": "ネットワークエラーです。サーバーが起動しているか確認してください。",
+      "invalidServerResponse": "サーバーから無効なデータが返されました",
+      "requestFailedWithStatus": "リクエストに失敗しました（{{status}}）",
+      "requestFailed": "リクエストに失敗しました",
+      "sessionExpired": "セッションの有効期限が切れました。もう一度サインインしてください。",
+      "refreshResponseInvalid": "更新レスポンスが無効です。もう一度サインインしてください。",
+      "uploadTimeout": "アップロードがタイムアウトしました。接続を確認して再試行してください。",
+      "uploadFailedWithStatus": "アップロードに失敗しました（{{status}}）"
+    }
   },
   "credit": {
     "title": "信頼度の詳細",
@@ -2097,5 +2108,17 @@
     "animal": "動物",
     "food": "食べ物",
     "activity": "アクティビティ"
+  },
+  "coin": {
+    "errors": {
+      "invalidAmount": "クレジットの数量が無効です",
+      "walletDataInvalid": "ウォレットデータの形式エラー",
+      "rechargeDataInvalid": "チャージレスポンスの形式エラー"
+    }
+  },
+  "upload": {
+    "errors": {
+      "presignDataInvalid": "署名付きアップロードデータの形式エラー"
+    }
   }
 }

@@ -10,6 +10,7 @@
 import { API_URL } from '@/constants/config';
 import { clearLocalSession } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
+import i18n from '@/i18n';
 import { reportError, shouldReportHttpFailure } from '@/observability/sentry';
 
 type RequestOptions = {
@@ -228,7 +229,9 @@ async function readPayload<T>(
     return JSON.parse(text) as ApiResponse<T>;
   } catch {
     throw new ApiError(
-      '服务返回了无效数据',
+      i18n.t('common.errors.invalidServerResponse', {
+        defaultValue: '服务返回了无效数据',
+      }),
       res.status,
       undefined,
       undefined,
@@ -307,7 +310,9 @@ async function executeRequest<T>(
     });
     if (error instanceof Error && error.name === 'AbortError') {
       throw new ApiError(
-        '请求超时，请检查网络连接后重试',
+        i18n.t('common.errors.requestTimeout', {
+          defaultValue: '请求超时，请检查网络连接后重试',
+        }),
         0,
         undefined,
         undefined,
@@ -317,7 +322,9 @@ async function executeRequest<T>(
       );
     }
     throw new ApiError(
-      '网络异常，请确认后端服务已启动',
+      i18n.t('common.errors.networkUnavailable', {
+        defaultValue: '网络异常，请确认后端服务已启动',
+      }),
       0,
       undefined,
       undefined,
@@ -341,7 +348,11 @@ function unwrapResponse<T>(
 ): T {
   if (!res.ok) {
     throw new ApiError(
-      (payload as { message?: string } | null)?.message ?? `请求失败 (${res.status})`,
+      (payload as { message?: string } | null)?.message ??
+        i18n.t('common.errors.requestFailedWithStatus', {
+          status: res.status,
+          defaultValue: '请求失败 ({{status}})',
+        }),
       res.status,
       isWrappedResponse(payload) ? payload.code : undefined,
       isWrappedResponse(payload) ? payload.data : payload,
@@ -354,7 +365,8 @@ function unwrapResponse<T>(
   if (isWrappedResponse(payload)) {
     if (payload.code !== 0) {
       throw new ApiError(
-        payload.message || '请求失败',
+        payload.message ||
+          i18n.t('common.errors.requestFailed', { defaultValue: '请求失败' }),
         res.status,
         payload.code,
         payload.data,
@@ -380,7 +392,12 @@ async function refreshAccessToken() {
 
     if (!refreshToken) {
       await clearLocalSession();
-      throw new ApiError('登录已过期，请重新登录', 401);
+      throw new ApiError(
+        i18n.t('common.errors.sessionExpired', {
+          defaultValue: '登录已过期，请重新登录',
+        }),
+        401,
+      );
     }
 
     const { res, payload } = await executeRequest<{
@@ -401,7 +418,12 @@ async function refreshAccessToken() {
 
     if (!isTokenPair(tokens)) {
       // 后端字段缺失 / 重命名 / 类型异常 — 视为刷新失败，避免后续带着 Bearer undefined 死循环。
-      throw new ApiError('刷新返回数据格式异常，请重新登录', 401);
+      throw new ApiError(
+        i18n.t('common.errors.refreshResponseInvalid', {
+          defaultValue: '刷新返回数据格式异常，请重新登录',
+        }),
+        401,
+      );
     }
 
     setTokens(tokens);

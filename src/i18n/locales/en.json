@@ -45,7 +45,18 @@
     "coin": "Credits",
     "offline": "No network connection. Some features may be unavailable.",
     "vip": "VIP",
-    "privacyPolicy": "Privacy Policy"
+    "privacyPolicy": "Privacy Policy",
+    "errors": {
+      "requestTimeout": "Request timed out. Check your connection and try again.",
+      "networkUnavailable": "Network error. Make sure the backend service is running.",
+      "invalidServerResponse": "The server returned invalid data.",
+      "requestFailedWithStatus": "Request failed ({{status}})",
+      "requestFailed": "Request failed",
+      "sessionExpired": "Your session has expired. Please sign in again.",
+      "refreshResponseInvalid": "Couldn't refresh your session. Please sign in again.",
+      "uploadTimeout": "Upload timed out. Check your connection and try again.",
+      "uploadFailedWithStatus": "Upload failed ({{status}})"
+    }
   },
   "auth": {
     "welcomeBack": "Welcome Back",
@@ -2100,5 +2111,17 @@
     "animal": "Animals",
     "food": "Food",
     "activity": "Activities"
+  },
+  "coin": {
+    "errors": {
+      "walletDataInvalid": "Invalid wallet data.",
+      "invalidAmount": "Invalid credit amount.",
+      "rechargeDataInvalid": "Invalid recharge response."
+    }
+  },
+  "upload": {
+    "errors": {
+      "presignDataInvalid": "Invalid presigned upload data."
+    }
   }
 }
