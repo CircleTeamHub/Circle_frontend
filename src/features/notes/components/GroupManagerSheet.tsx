@@ -21,6 +21,7 @@ import {
   updateNoteGroup,
   updateNoteGroupIds,
 } from '@/services/api/notes';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { NoteGroup, NoteSummary } from '@/features/notes/types';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
@@ -144,9 +145,12 @@ export function GroupManagerSheet({
       setSavingGroup(false);
       Alert.alert(
         t('notes.alerts.saveFailedTitle', { defaultValue: '保存失败' }),
-        t('notes.alerts.saveGroupFailed', {
-          defaultValue: '分组保存失败，请稍后再试。',
-        }),
+        getApiErrorMessage(
+          error,
+          t('notes.alerts.saveGroupFailed', {
+            defaultValue: '分组保存失败，请稍后再试。',
+          }),
+        ),
       );
       if (__DEV__) {
         console.warn('[GroupManagerSheet] saveGroup failed', error);

@@ -115,6 +115,7 @@ import {
   useChatPreferencesStore,
 } from '@/features/chat/store/use-chat-preferences-store';
 import { createGroupCall } from '@/services/api/calls';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import {
   assertLocalCanSendMessage,
@@ -1806,7 +1807,10 @@ export default function ChatDetailScreen() {
       router.push('/(chat)/group-call' as never);
     } catch (error) {
       if (mountedRef.current) {
-        Alert.alert(t('chat.call.title'), t('chat.call.initiateFailed'));
+        Alert.alert(
+          t('chat.call.title'),
+          getApiErrorMessage(error, t('chat.call.initiateFailed')),
+        );
       }
       if (typeof __DEV__ !== 'undefined' && __DEV__) {
         console.warn('[chat] start group audio call failed', error);

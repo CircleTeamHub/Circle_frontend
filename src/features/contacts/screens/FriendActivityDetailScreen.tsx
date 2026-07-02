@@ -13,6 +13,7 @@ import {
   rejectFriendRequest,
   type FriendActivity,
 } from '@/services/api/friends';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { getLocalizedDateTimeLocale } from '@/utils/locale';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useLocalSearchParams } from 'expo-router';
@@ -229,7 +230,7 @@ export default function FriendActivityDetailScreen() {
       } catch (nextError) {
         Alert.alert(
           t('contacts.friendActivity.handleFailed'),
-          nextError instanceof Error ? nextError.message : t('contacts.friendActivity.handleError'),
+          getApiErrorMessage(nextError, t('contacts.friendActivity.handleError')),
         );
       } finally {
         setHandling(false);
@@ -264,9 +265,10 @@ export default function FriendActivityDetailScreen() {
             } catch (nextError) {
               Alert.alert(
                 t('contacts.friendActivity.handleFailed'),
-                nextError instanceof Error
-                  ? nextError.message
-                  : t('contacts.friendActivity.handleError'),
+                getApiErrorMessage(
+                  nextError,
+                  t('contacts.friendActivity.handleError'),
+                ),
               );
             } finally {
               setHandling(false);

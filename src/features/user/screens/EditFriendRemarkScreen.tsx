@@ -17,6 +17,7 @@ import {
   fetchFriendSettings,
   setFriendRemark,
 } from '@/services/api/friends';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
@@ -188,7 +189,7 @@ export default function EditFriendRemarkScreen() {
       if (!mountedRef.current) return;
       Alert.alert(
         t('validation.saveFailed'),
-        nextError instanceof Error ? nextError.message : t('userProfile.editRemark.saveFailed'),
+        getApiErrorMessage(nextError, t('userProfile.editRemark.saveFailed')),
       );
     } finally {
       if (mountedRef.current) setIsSaving(false);

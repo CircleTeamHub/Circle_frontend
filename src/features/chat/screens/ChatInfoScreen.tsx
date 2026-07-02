@@ -43,6 +43,7 @@ import {
   removeFriendFromBlacklist,
 } from '@/services/api/friends';
 import { leaveGroup, removeGroupMember } from '@/services/api/groups';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { useIMStore } from '@/stores/imStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { DisplayIcon } from '@/types';
@@ -495,11 +496,15 @@ export default function ChatInfoScreen() {
 
   const openActionError = useCallback(
     (error: unknown) => {
-      // Never surface the raw error to the user; log it for devs instead.
       if (__DEV__) {
         console.warn('[chat-info] action failed', error);
       }
-      Alert.alert(t('common.errorOccurred'), t('common.networkError'));
+      // getApiErrorMessage only surfaces whitelisted localized copy (never the
+      // raw backend text), falling back to the generic message otherwise.
+      Alert.alert(
+        t('common.errorOccurred'),
+        getApiErrorMessage(error, t('common.networkError')),
+      );
     },
     [t],
   );

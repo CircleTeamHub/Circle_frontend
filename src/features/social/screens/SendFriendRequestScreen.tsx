@@ -20,6 +20,7 @@ import {
   fetchFriendTags,
   type FriendTag,
 } from '@/services/api/friends';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useAuthStore } from '@/stores/authStore';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
@@ -253,7 +254,7 @@ export default function SendFriendRequestScreen() {
     } catch (error) {
       Alert.alert(
         t('contacts.request.sendFailedTitle'),
-        error instanceof Error ? error.message : t('contacts.request.sendFailed'),
+        getApiErrorMessage(error, t('contacts.request.sendFailed')),
       );
     } finally {
       setIsSubmitting(false);

@@ -20,6 +20,7 @@ import {
   type FriendTag,
   removeFriendTag,
 } from '@/services/api/friends';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
@@ -260,7 +261,7 @@ export default function EditFriendTagsScreen() {
       if (!mountedRef.current) return;
       Alert.alert(
         t('userProfile.editTags.createFailedTitle'),
-        nextError instanceof Error ? nextError.message : t('userProfile.editTags.createFailed'),
+        getApiErrorMessage(nextError, t('userProfile.editTags.createFailed')),
       );
     } finally {
       if (mountedRef.current) setIsCreatingTag(false);
@@ -289,7 +290,7 @@ export default function EditFriendTagsScreen() {
       if (!mountedRef.current) return;
       Alert.alert(
         t('validation.saveFailed'),
-        nextError instanceof Error ? nextError.message : t('userProfile.editTags.saveFailed'),
+        getApiErrorMessage(nextError, t('userProfile.editTags.saveFailed')),
       );
     } finally {
       if (mountedRef.current) setIsSaving(false);
