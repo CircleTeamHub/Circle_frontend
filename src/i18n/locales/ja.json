@@ -2185,6 +2185,26 @@
     "TEMP_CHAT_LINK_INVALID": "リンクが無効です",
     "TEMP_CHAT_ENDED": "一時チャットは終了しました",
     "TEMP_CHAT_FULL": "参加人数が上限に達しています",
-    "TEMP_CHAT_CREATOR_ONLY": "作成者のみが終了できます"
+    "TEMP_CHAT_CREATOR_ONLY": "作成者のみが終了できます",
+    "PLAZA_NOT_ACTIVE_MEMBER": "サークルのアクティブメンバーのみが投稿できます",
+    "PLAZA_ADMIN_ONLY_POST": "このサークルでは管理者のみが投稿できます",
+    "PLAZA_NOTE_INVALID": "そのノートは利用できないか、あなたのものではありません",
+    "PLAZA_POST_NOT_FOUND": "投稿が見つかりません",
+    "PLAZA_DELETE_AUTHOR_ONLY": "投稿者のみが削除できます",
+    "PLAZA_SIGNUP_SELF": "自分の投稿には応募できません",
+    "PLAZA_SIGNUP_INELIGIBLE": "この投稿の応募条件を満たしていません",
+    "PLAZA_RECOGNIZE_MIN_ONE": "コラボレーターを少なくとも1人選択してください",
+    "PLAZA_RECOGNIZE_MAX_THREE": "コラボレーターは最大3人まで選択できます",
+    "PLAZA_RECOGNIZE_SELF": "自分を認定することはできません",
+    "PLAZA_RECOGNIZE_MIN_SIGNUPS": "コラボレーターを認定するには3人以上の応募が必要です",
+    "PLAZA_RECOGNIZE_NOT_SIGNED": "応募したユーザーのみを認定できます",
+    "PLAZA_RECOGNIZE_NOT_MEMBER": "サークルのアクティブメンバーのみを認定できます",
+    "PLAZA_RECOGNIZE_BLOCKED": "ブロックしたユーザーは認定できません",
+    "PLAZA_RECOGNIZE_ALREADY": "コラボレーション認定は既に送信されています",
+    "TRACE_MOMENT_NOT_FOUND": "モーメントが見つかりません",
+    "TRACE_DELETE_AUTHOR_ONLY": "投稿者のみが削除できます",
+    "TRACE_REPLY_TARGET_NOT_FOUND": "返信先のコメントが存在しません",
+    "TRACE_COMMENT_NOT_FOUND": "コメントが見つかりません",
+    "TRACE_ACCESS_FORBIDDEN": "このモーメントを閲覧する権限がありません"
   }
 }

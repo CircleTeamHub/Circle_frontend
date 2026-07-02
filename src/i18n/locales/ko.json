@@ -2185,6 +2185,26 @@
     "TEMP_CHAT_LINK_INVALID": "유효하지 않은 링크입니다",
     "TEMP_CHAT_ENDED": "임시 채팅이 종료되었습니다",
     "TEMP_CHAT_FULL": "인원이 가득 찼습니다",
-    "TEMP_CHAT_CREATOR_ONLY": "생성자만 종료할 수 있습니다"
+    "TEMP_CHAT_CREATOR_ONLY": "생성자만 종료할 수 있습니다",
+    "PLAZA_NOT_ACTIVE_MEMBER": "서클의 활성 멤버만 게시할 수 있습니다",
+    "PLAZA_ADMIN_ONLY_POST": "이 서클에서는 관리자만 게시할 수 있습니다",
+    "PLAZA_NOTE_INVALID": "해당 노트를 사용할 수 없거나 본인의 것이 아닙니다",
+    "PLAZA_POST_NOT_FOUND": "게시물을 찾을 수 없습니다",
+    "PLAZA_DELETE_AUTHOR_ONLY": "작성자만 이 게시물을 삭제할 수 있습니다",
+    "PLAZA_SIGNUP_SELF": "자신의 게시물에는 신청할 수 없습니다",
+    "PLAZA_SIGNUP_INELIGIBLE": "이 게시물의 신청 요건을 충족하지 않습니다",
+    "PLAZA_RECOGNIZE_MIN_ONE": "협업자를 한 명 이상 선택하세요",
+    "PLAZA_RECOGNIZE_MAX_THREE": "협업자는 최대 세 명까지 선택할 수 있습니다",
+    "PLAZA_RECOGNIZE_SELF": "자신을 인정할 수 없습니다",
+    "PLAZA_RECOGNIZE_MIN_SIGNUPS": "협업자를 인정하려면 신청자가 세 명 이상이어야 합니다",
+    "PLAZA_RECOGNIZE_NOT_SIGNED": "신청한 사용자만 인정할 수 있습니다",
+    "PLAZA_RECOGNIZE_NOT_MEMBER": "서클의 활성 멤버만 인정할 수 있습니다",
+    "PLAZA_RECOGNIZE_BLOCKED": "차단한 사용자는 인정할 수 없습니다",
+    "PLAZA_RECOGNIZE_ALREADY": "협업 인정이 이미 제출되었습니다",
+    "TRACE_MOMENT_NOT_FOUND": "모먼트를 찾을 수 없습니다",
+    "TRACE_DELETE_AUTHOR_ONLY": "작성자만 삭제할 수 있습니다",
+    "TRACE_REPLY_TARGET_NOT_FOUND": "답글 대상 댓글이 존재하지 않습니다",
+    "TRACE_COMMENT_NOT_FOUND": "댓글을 찾을 수 없습니다",
+    "TRACE_ACCESS_FORBIDDEN": "이 모먼트를 볼 권한이 없습니다"
   }
 }

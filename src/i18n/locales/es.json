@@ -2188,6 +2188,26 @@
     "TEMP_CHAT_LINK_INVALID": "Enlace no válido",
     "TEMP_CHAT_ENDED": "Este chat temporal ha finalizado",
     "TEMP_CHAT_FULL": "Este chat está lleno",
-    "TEMP_CHAT_CREATOR_ONLY": "Solo el creador puede finalizar este chat"
+    "TEMP_CHAT_CREATOR_ONLY": "Solo el creador puede finalizar este chat",
+    "PLAZA_NOT_ACTIVE_MEMBER": "Solo los miembros activos del círculo pueden publicar",
+    "PLAZA_ADMIN_ONLY_POST": "Solo los administradores pueden publicar en este círculo",
+    "PLAZA_NOTE_INVALID": "Esa nota no está disponible o no es tuya",
+    "PLAZA_POST_NOT_FOUND": "Publicación no encontrada",
+    "PLAZA_DELETE_AUTHOR_ONLY": "Solo el autor puede eliminar esta publicación",
+    "PLAZA_SIGNUP_SELF": "No puedes inscribirte en tu propia publicación",
+    "PLAZA_SIGNUP_INELIGIBLE": "No cumples los requisitos de inscripción de esta publicación",
+    "PLAZA_RECOGNIZE_MIN_ONE": "Selecciona al menos un colaborador",
+    "PLAZA_RECOGNIZE_MAX_THREE": "Selecciona como máximo tres colaboradores",
+    "PLAZA_RECOGNIZE_SELF": "No puedes reconocerte a ti mismo",
+    "PLAZA_RECOGNIZE_MIN_SIGNUPS": "Se necesitan al menos tres inscritos para reconocer colaboradores",
+    "PLAZA_RECOGNIZE_NOT_SIGNED": "Solo se puede reconocer a usuarios inscritos",
+    "PLAZA_RECOGNIZE_NOT_MEMBER": "Solo se puede reconocer a miembros activos del círculo",
+    "PLAZA_RECOGNIZE_BLOCKED": "No puedes reconocer a un usuario bloqueado",
+    "PLAZA_RECOGNIZE_ALREADY": "El reconocimiento de colaboración ya se ha enviado",
+    "TRACE_MOMENT_NOT_FOUND": "Momento no encontrado",
+    "TRACE_DELETE_AUTHOR_ONLY": "Solo el autor puede eliminar esto",
+    "TRACE_REPLY_TARGET_NOT_FOUND": "El comentario al que respondes ya no existe",
+    "TRACE_COMMENT_NOT_FOUND": "Comentario no encontrado",
+    "TRACE_ACCESS_FORBIDDEN": "No tienes permiso para ver este momento"
   }
 }

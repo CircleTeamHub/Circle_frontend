@@ -2188,6 +2188,26 @@
     "TEMP_CHAT_LINK_INVALID": "Invalid link",
     "TEMP_CHAT_ENDED": "This temporary chat has ended",
     "TEMP_CHAT_FULL": "This chat is full",
-    "TEMP_CHAT_CREATOR_ONLY": "Only the creator can end this chat"
+    "TEMP_CHAT_CREATOR_ONLY": "Only the creator can end this chat",
+    "PLAZA_NOT_ACTIVE_MEMBER": "Only active circle members can post",
+    "PLAZA_ADMIN_ONLY_POST": "Only admins can post in this circle",
+    "PLAZA_NOTE_INVALID": "That note is unavailable or not yours",
+    "PLAZA_POST_NOT_FOUND": "Post not found",
+    "PLAZA_DELETE_AUTHOR_ONLY": "Only the author can delete this post",
+    "PLAZA_SIGNUP_SELF": "You can't sign up for your own post",
+    "PLAZA_SIGNUP_INELIGIBLE": "You don't meet this post's signup requirements",
+    "PLAZA_RECOGNIZE_MIN_ONE": "Select at least one collaborator",
+    "PLAZA_RECOGNIZE_MAX_THREE": "Select at most three collaborators",
+    "PLAZA_RECOGNIZE_SELF": "You can't recognize yourself",
+    "PLAZA_RECOGNIZE_MIN_SIGNUPS": "At least three signups are needed to recognize collaborators",
+    "PLAZA_RECOGNIZE_NOT_SIGNED": "Only users who signed up can be recognized",
+    "PLAZA_RECOGNIZE_NOT_MEMBER": "Only active circle members can be recognized",
+    "PLAZA_RECOGNIZE_BLOCKED": "You can't recognize a blocked user",
+    "PLAZA_RECOGNIZE_ALREADY": "Collaboration recognition has already been submitted",
+    "TRACE_MOMENT_NOT_FOUND": "Moment not found",
+    "TRACE_DELETE_AUTHOR_ONLY": "Only the author can delete this",
+    "TRACE_REPLY_TARGET_NOT_FOUND": "The comment you're replying to no longer exists",
+    "TRACE_COMMENT_NOT_FOUND": "Comment not found",
+    "TRACE_ACCESS_FORBIDDEN": "You aren't allowed to view this moment"
   }
 }
