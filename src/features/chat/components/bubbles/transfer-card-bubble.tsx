@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import { Avatar } from '@/components/ui/avatar';
 import type { ChatMessage, TransferCardData } from '@/types';
@@ -103,6 +104,7 @@ export const TransferCardBubble: React.FC<TransferCardBubbleProps> = ({
   hideStatus,
 }) => {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const data = message.transferCard;
   if (!data) return null;
 
@@ -129,7 +131,9 @@ export const TransferCardBubble: React.FC<TransferCardBubbleProps> = ({
             {/* toLocaleString 自动加千分位（1000000 → 1,000,000）；
                 后端上限是 1_000_000（LIMITS.TRANSFER_MAX_AMOUNT），不会出现 NaN/Infinity */}
             <Text style={sTransfer.amount}>{data.amount.toLocaleString()}</Text>
-            <Text style={sTransfer.unit}>积分</Text>
+            <Text style={sTransfer.unit}>
+              {t('common.coin', { defaultValue: '积分' })}
+            </Text>
           </View>
         </View>
         {data.message ? (
@@ -138,7 +142,9 @@ export const TransferCardBubble: React.FC<TransferCardBubbleProps> = ({
           </Text>
         ) : null}
         <View style={sTransfer.divider} />
-        <Text style={sTransfer.footer}>积分转账</Text>
+        <Text style={sTransfer.footer}>
+          {t('chat.transfer.title', { defaultValue: '积分转账' })}
+        </Text>
       </Pressable>
       {message.time ? (
         <View style={sTransfer.timeRow}>

@@ -12,6 +12,7 @@
  */
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import i18n from '@/i18n';
 import { mmkvJsonStorage } from '@/storage';
 import {
   createConversationGroup,
@@ -98,7 +99,7 @@ export const useMessageGroupsStore = create<ConversationGroupsState>()(
           const message =
             err && typeof err === 'object' && typeof (err as { message?: unknown }).message === 'string'
               ? (err as { message: string }).message
-              : '加载失败';
+              : i18n.t('messages.groups.loadFailed', { defaultValue: '加载失败' });
           set({ loading: false, error: message });
         }
       },
@@ -118,7 +119,9 @@ export const useMessageGroupsStore = create<ConversationGroupsState>()(
       rename: async (id, name) => {
         const trimmed = name.trim();
         if (!trimmed) {
-          throw new Error('分组名称不能为空');
+          throw new Error(
+            i18n.t('messages.groups.nameEmpty', { defaultValue: '分组名称不能为空' }),
+          );
         }
         const previous = get().groups;
         const optimistic = previous.map((g) =>

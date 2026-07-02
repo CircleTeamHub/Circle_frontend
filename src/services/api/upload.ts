@@ -9,6 +9,7 @@ import {
   isPlainObject,
 } from '@/utils/validate';
 import { reportError } from '@/observability/sentry';
+import i18n from '@/i18n';
 
 const SIGNED_URL_PATTERN = /https?:\/\/[^\s"'<>)]*\?[^\s"'<>)]*/gi;
 
@@ -187,7 +188,9 @@ export async function requestUploadPresign(payload: {
   const response = expectShape(
     raw,
     isUploadPresignShape,
-    '预签名上传数据格式异常',
+    i18n.t('upload.errors.presignDataInvalid', {
+      defaultValue: '预签名上传数据格式异常',
+    }),
   );
 
   return assertUploadUrlReachableOnCurrentPlatform(response);
@@ -229,7 +232,11 @@ export async function uploadFileToPresignedUrl(
       });
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error('上传超时，请检查网络后重试');
+        throw new Error(
+          i18n.t('common.errors.uploadTimeout', {
+            defaultValue: '上传超时，请检查网络后重试',
+          }),
+        );
       }
       throw error;
     } finally {
@@ -238,7 +245,12 @@ export async function uploadFileToPresignedUrl(
 
     if (!response.ok) {
       // 这个函数也被聊天图片 / 笔记附件 / 动态图等用，"头像上传失败" 误导用户。
-      throw new Error(`上传失败 (${response.status})`);
+      throw new Error(
+        i18n.t('common.errors.uploadFailedWithStatus', {
+          status: response.status,
+          defaultValue: '上传失败 ({{status}})',
+        }),
+      );
     }
   });
 }
@@ -269,7 +281,11 @@ async function withUploadTimeout<T>(
               }
             }
           }
-          reject(new Error('上传超时，请检查网络后重试'));
+          reject(new Error(
+            i18n.t('common.errors.uploadTimeout', {
+              defaultValue: '上传超时，请检查网络后重试',
+            }),
+          ));
         }, timeoutMs);
       }),
     ]);
@@ -310,7 +326,12 @@ export async function uploadLocalFileToPresignedUrl(
       }, timeoutMs);
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw new Error(`上传失败 (${response.statusCode})`);
+        throw new Error(
+          i18n.t('common.errors.uploadFailedWithStatus', {
+            status: response.statusCode,
+            defaultValue: '上传失败 ({{status}})',
+          }),
+        );
       }
 
       return response;
@@ -330,7 +351,12 @@ export async function uploadLocalFileToPresignedUrl(
     );
 
     if (response.status < 200 || response.status >= 300) {
-      throw new Error(`上传失败 (${response.status})`);
+      throw new Error(
+        i18n.t('common.errors.uploadFailedWithStatus', {
+          status: response.status,
+          defaultValue: '上传失败 ({{status}})',
+        }),
+      );
     }
 
     return response;

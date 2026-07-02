@@ -106,6 +106,15 @@ function loadUploadApi() {
           },
         };
       }
+      if (request === '@/i18n') {
+        return {
+          __esModule: true,
+          default: {
+            t: (key, opts) => { let s = (opts && opts.defaultValue) || key; if (opts) for (const k of Object.keys(opts)) if (k !== 'defaultValue') s = s.split('{{' + k + '}}').join(String(opts[k])); return s; },
+            language: 'zh',
+          },
+        };
+      }
       return require(request);
     },
   };

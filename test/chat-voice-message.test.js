@@ -399,6 +399,10 @@ test('OpenIM voice messages map to a dedicated ChatMessage voice bubble model', 
         t: (_key, options) => options.defaultValue,
       },
     },
+    '@/utils/locale': {
+      getLocalizedDateTimeLocale: (lng) =>
+        lng && lng.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US',
+    },
   });
 
   const mapped = mapMessageItemToChatMessage(

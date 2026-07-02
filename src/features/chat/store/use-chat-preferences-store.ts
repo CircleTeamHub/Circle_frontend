@@ -9,7 +9,6 @@ export type ChatBackgroundPreference =
 
 export type ChatBackgroundPreset = {
   id: string;
-  label: string;
   color: string;
 };
 
@@ -18,10 +17,10 @@ export const DEFAULT_CHAT_BACKGROUND_PREFERENCE = {
 } as const;
 
 export const CHAT_BACKGROUND_PRESETS: ChatBackgroundPreset[] = [
-  { id: 'morning-mist', label: '晨雾蓝', color: '#EAF1FF' },
-  { id: 'forest-breeze', label: '森林绿', color: '#E8F6EE' },
-  { id: 'sunset-glow', label: '落日橙', color: '#FFF1E8' },
-  { id: 'lavender-haze', label: '薰衣草紫', color: '#F3ECFF' },
+  { id: 'morning-mist', color: '#EAF1FF' },
+  { id: 'forest-breeze', color: '#E8F6EE' },
+  { id: 'sunset-glow', color: '#FFF1E8' },
+  { id: 'lavender-haze', color: '#F3ECFF' },
 ];
 
 type ChatPreferencesState = {
@@ -38,20 +37,9 @@ function findChatBackgroundPreset(presetId: string) {
   return CHAT_BACKGROUND_PRESETS.find((preset) => preset.id === presetId);
 }
 
-export function getChatBackgroundPreferenceLabel(
-  preference?: ChatBackgroundPreference | null,
-) {
-  switch (preference?.mode) {
-    case 'preset':
-      return findChatBackgroundPreset(preference.presetId)?.label ?? '预设背景';
-    case 'image':
-      return '自定义图片';
-    case 'global':
-    default:
-      return '跟随全局';
-  }
-}
-
+// 只负责背景视觉（颜色 / 图片）；不产出文案标签。此前有一份 i18n label（含 getChat-
+// BackgroundPreferenceLabel / preset.labelKey）但无任何消费方，且在 useMemo 里调 i18n.t
+// 不会随语言刷新，已作为死代码移除。
 export function resolveChatBackgroundStyle(
   preference: ChatBackgroundPreference | null | undefined,
   fallbackColor: string,
@@ -59,23 +47,13 @@ export function resolveChatBackgroundStyle(
   switch (preference?.mode) {
     case 'preset': {
       const preset = findChatBackgroundPreset(preference.presetId);
-      return {
-        backgroundColor: preset?.color ?? fallbackColor,
-        label: preset?.label ?? '预设背景',
-      };
+      return { backgroundColor: preset?.color ?? fallbackColor };
     }
     case 'image':
-      return {
-        backgroundColor: fallbackColor,
-        imageUri: preference.uri,
-        label: '自定义图片',
-      };
+      return { backgroundColor: fallbackColor, imageUri: preference.uri };
     case 'global':
     default:
-      return {
-        backgroundColor: fallbackColor,
-        label: '跟随全局',
-      };
+      return { backgroundColor: fallbackColor };
   }
 }
 

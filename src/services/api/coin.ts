@@ -1,5 +1,6 @@
 import { LIMITS } from '@/constants/config';
 import { apiClient } from '@/services/api/client';
+import i18n from '@/i18n';
 import {
   expectShape,
   isFiniteNonNegativeNumber,
@@ -38,7 +39,11 @@ export type CoinTransaction = {
 
 export async function fetchWallet() {
   const raw = await apiClient<Wallet>('/coin/wallet');
-  return expectShape(raw, isWalletShape, '钱包数据格式异常');
+  return expectShape(
+    raw,
+    isWalletShape,
+    i18n.t('coin.errors.walletDataInvalid', { defaultValue: '钱包数据格式异常' }),
+  );
 }
 
 export async function fetchCoinTransactions() {
@@ -53,7 +58,9 @@ function assertValidCoinAmount(amount: number): void {
     amount <= 0 ||
     amount > LIMITS.TRANSFER_MAX_AMOUNT
   ) {
-    throw new Error('积分数量无效');
+    throw new Error(
+      i18n.t('coin.errors.invalidAmount', { defaultValue: '积分数量无效' }),
+    );
   }
 }
 
@@ -63,7 +70,13 @@ export async function rechargePoints(amount: number) {
     method: 'POST',
     body: { amount },
   });
-  return expectShape(raw, isWalletShape, '充值返回数据格式异常');
+  return expectShape(
+    raw,
+    isWalletShape,
+    i18n.t('coin.errors.rechargeDataInvalid', {
+      defaultValue: '充值返回数据格式异常',
+    }),
+  );
 }
 
 export async function sendCoinGift(payload: {

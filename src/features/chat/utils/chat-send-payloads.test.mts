@@ -64,10 +64,21 @@ test('filterMentionCandidates matches nickname and user id case-insensitively', 
 });
 
 test('buildQuotePreviewText returns compact text for text and media messages', () => {
+  // buildQuotePreviewText now takes `t` (pure util, no i18n import). Fake it with a
+  // defaultValue-echoing t that also interpolates {{vars}}, mirroring i18next behavior.
+  const t = ((key: string, opts: Record<string, unknown> = {}) => {
+    let s = String(opts.defaultValue ?? key);
+    for (const [k, v] of Object.entries(opts)) {
+      if (k === 'defaultValue') continue;
+      s = s.replace(new RegExp(`{{${k}}}`, 'g'), String(v));
+    }
+    return s;
+  }) as unknown as Parameters<typeof buildQuotePreviewText>[1];
+
   assert.equal(
-    buildQuotePreviewText({ id: 'm1', type: 'received', text: 'hello world' }),
+    buildQuotePreviewText({ id: 'm1', type: 'received', text: 'hello world' }, t),
     'hello world',
   );
-  assert.equal(buildQuotePreviewText({ id: 'm2', type: 'image' }), '[图片]');
-  assert.equal(buildQuotePreviewText({ id: 'm3', type: 'note-card', noteCard: { noteId: 'n1', title: 'Trip', contentPreview: null, coverUrl: null, imageCount: 0, videoCount: 0, groupNames: [] } }), '[笔记] Trip');
+  assert.equal(buildQuotePreviewText({ id: 'm2', type: 'image' }, t), '[图片]');
+  assert.equal(buildQuotePreviewText({ id: 'm3', type: 'note-card', noteCard: { noteId: 'n1', title: 'Trip', contentPreview: null, coverUrl: null, imageCount: 0, videoCount: 0, groupNames: [] } }, t), '[笔记] Trip');
 });

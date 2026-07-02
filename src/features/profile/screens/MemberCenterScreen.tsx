@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
@@ -8,18 +9,11 @@ import { fetchCurrentUser } from '@/services/api/auth';
 import {
   fetchMembershipPlans,
   upgradeMembership,
+  FALLBACK_MEMBERSHIP_PLANS,
   type MembershipPlan,
 } from '@/services/api/membership';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useAuthStore } from '@/stores/authStore';
-
-const VIP_LEVELS = [
-  { level: 1, name: 'VIP1', price: 780, perks: '基础会员权益' },
-  { level: 2, name: 'VIP2', price: 1280, perks: '更多群容量与基础折扣' },
-  { level: 3, name: 'VIP3', price: 2100, perks: '高级身份标识与积分加成' },
-  { level: 4, name: 'VIP4', price: 4600, perks: '专属靓号折扣与优先体验' },
-  { level: 5, name: 'VIP5', price: 9100, perks: '至尊会员权益与最高折扣' },
-];
 
 const s = StyleSheet.create({
   content: {
@@ -80,13 +74,14 @@ const s = StyleSheet.create({
 });
 
 export default function MemberCenterScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { isOffline } = useNetworkStatus();
   const vipLevel = useAuthStore((state) => state.user?.vipLevel ?? 0);
   const setUser = useAuthStore((state) => state.setUser);
-  const [plans, setPlans] = useState<MembershipPlan[]>(VIP_LEVELS);
+  const [plans, setPlans] = useState<MembershipPlan[]>(FALLBACK_MEMBERSHIP_PLANS);
   const [selectedLevel, setSelectedLevel] = useState(Math.min(Math.max(vipLevel || 1, 1), 5));
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -108,7 +103,11 @@ export default function MemberCenterScreen() {
         }
       } catch {
         if (!cancelled) {
-          setStatusText('会员等级加载失败，已显示本地等级配置');
+          setStatusText(
+            t('profile.membership.loadError', {
+              defaultValue: '会员等级加载失败，已显示本地等级配置',
+            }),
+          );
         }
       } finally {
         if (!cancelled) {
@@ -122,7 +121,7 @@ export default function MemberCenterScreen() {
     return () => {
       cancelled = true;
     };
-  }, [vipLevel]);
+  }, [t, vipLevel]);
 
   const performUpgrade = useCallback(async () => {
     setSubmitting(true);
@@ -131,27 +130,43 @@ export default function MemberCenterScreen() {
       const result = await upgradeMembership(selectedLevel);
       const nextUser = await fetchCurrentUser();
       setUser(nextUser);
-      setStatusText(`已成功兑换 VIP${result.user.vipLevel}`);
+      setStatusText(
+        t('profile.membership.exchangeSuccess', {
+          defaultValue: '已成功兑换 VIP{{level}}',
+          level: result.user.vipLevel,
+        }),
+      );
     } catch {
-      setStatusText('兑换失败，请确认积分余额足够后重试');
+      setStatusText(
+        t('profile.membership.exchangeError', {
+          defaultValue: '兑换失败，请确认积分余额足够后重试',
+        }),
+      );
     } finally {
       setSubmitting(false);
     }
-  }, [selectedLevel, setUser]);
+  }, [selectedLevel, setUser, t]);
 
   const handleUpgrade = useCallback(() => {
     if (!canUpgrade) {
       return;
     }
     Alert.alert(
-      '确认兑换',
-      `确定要消耗 ${selectedPlan.price} 积分兑换 ${selectedPlan.name} 吗？`,
+      t('profile.membership.confirmExchange', { defaultValue: '确认兑换' }),
+      t('profile.membership.confirmExchangeMessage', {
+        defaultValue: '确定要消耗 {{points}} 积分兑换 {{plan}} 吗？',
+        points: selectedPlan.price,
+        plan: selectedPlan.name,
+      }),
       [
-        { text: '取消', style: 'cancel' },
-        { text: '确认兑换', onPress: performUpgrade },
+        { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+        {
+          text: t('profile.membership.confirmExchange', { defaultValue: '确认兑换' }),
+          onPress: performUpgrade,
+        },
       ],
     );
-  }, [canUpgrade, performUpgrade, selectedPlan.name, selectedPlan.price]);
+  }, [canUpgrade, performUpgrade, selectedPlan.name, selectedPlan.price, t]);
 
   const d = useMemo(
     () => ({
@@ -247,7 +262,7 @@ export default function MemberCenterScreen() {
   return (
     <View style={d.container}>
       <NavHeader
-        title="会员中心"
+        title={t('profile.membership.title', { defaultValue: '会员中心' })}
         rightIcon="help-circle-outline"
         onRightPress={() => router.push('/(tabs)/profile/member-rules' as never)}
       />
@@ -255,18 +270,37 @@ export default function MemberCenterScreen() {
         contentContainerStyle={[s.content, d.content]}
         showsVerticalScrollIndicator={false}
       >
-        {isOffline ? <Text style={d.status}>当前无网络连接，部分功能可能不可用</Text> : null}
+        {isOffline ? (
+          <Text style={d.status}>
+            {t('common.offline', { defaultValue: '当前无网络连接，部分功能可能不可用' })}
+          </Text>
+        ) : null}
         <View style={[s.hero, d.hero]}>
           <View style={[s.heroOrb, d.heroOrb]} />
-          <Text style={d.heroTitle}>开通VIP会员</Text>
-          <Text style={d.heroText}>当前等级：VIP{vipLevel}</Text>
-          <Text style={d.heroText}>尊享会员权益，等级越高权益越多。</Text>
+          <Text style={d.heroTitle}>
+            {t('profile.membership.activateVip', { defaultValue: '开通VIP会员' })}
+          </Text>
+          <Text style={d.heroText}>
+            {t('profile.membership.currentLevel', {
+              defaultValue: '当前等级：VIP{{level}}',
+              level: vipLevel,
+            })}
+          </Text>
+          <Text style={d.heroText}>
+            {t('profile.membership.benefitsHint', {
+              defaultValue: '尊享会员权益，等级越高权益越多。',
+            })}
+          </Text>
         </View>
 
         <View style={s.sectionHeader}>
-          <Text style={d.sectionTitle}>兑换会员</Text>
+          <Text style={d.sectionTitle}>
+            {t('profile.membership.exchange', { defaultValue: '兑换会员' })}
+          </Text>
           <Pressable onPress={() => router.push('/(tabs)/profile/member-rules' as never)}>
-            <Text style={d.rulesLink}>会员规则</Text>
+            <Text style={d.rulesLink}>
+              {t('profile.memberRules.link', { defaultValue: '会员规则' })}
+            </Text>
           </Pressable>
         </View>
 
@@ -283,15 +317,21 @@ export default function MemberCenterScreen() {
               <View style={s.levelTop}>
                 <View style={s.levelLeft}>
                   <Text style={d.levelName}>{item.name}</Text>
-                  <Text style={d.perk}>{item.perks}</Text>
+                  <Text style={d.perk}>
+                    {t(item.perksKey, { defaultValue: item.defaultPerks })}
+                  </Text>
                 </View>
                 <View style={s.levelPoints}>
                   <Text style={d.oldPoints}>{item.price + 100}</Text>
                   <Text style={d.points}>{item.price}</Text>
-                  <Text style={d.pointsUnit}>积分</Text>
+                  <Text style={d.pointsUnit}>{t('common.coin', { defaultValue: '积分' })}</Text>
                 </View>
               </View>
-              {isCurrent ? <Text style={d.currentBadge}>当前等级</Text> : null}
+              {isCurrent ? (
+                <Text style={d.currentBadge}>
+                  {t('profile.membership.currentBadge', { defaultValue: '当前等级' })}
+                </Text>
+              ) : null}
             </Pressable>
           );
         })}
@@ -305,10 +345,15 @@ export default function MemberCenterScreen() {
         >
           <Text style={d.ctaText}>
             {loadingPlans
-              ? '正在加载会员等级'
+              ? t('profile.membership.loadingPlans', { defaultValue: '正在加载会员等级' })
               : canUpgrade
-                ? `确认兑换 ${selectedPlan.name}`
-                : '请选择更高会员等级'}
+                ? t('profile.membership.confirmExchangePlan', {
+                    defaultValue: '确认兑换 {{plan}}',
+                    plan: selectedPlan.name,
+                  })
+                : t('profile.membership.selectHigher', {
+                    defaultValue: '请选择更高会员等级',
+                  })}
           </Text>
         </Pressable>
       </ScrollView>

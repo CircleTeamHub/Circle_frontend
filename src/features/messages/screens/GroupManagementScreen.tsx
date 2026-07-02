@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Alert,
   Modal,
@@ -96,6 +97,7 @@ const s = StyleSheet.create({
 export default function GroupManagementScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const [groupName, setGroupName] = useState('');
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<{ id: string; name: string } | null>(null);
@@ -218,7 +220,7 @@ export default function GroupManagementScreen() {
     if (createInFlightRef.current) return;
     const trimmed = groupName.trim();
     if (!trimmed) {
-      Alert.alert('请输入分组名称');
+      Alert.alert(t('messages.groups.nameRequired', { defaultValue: '请输入分组名称' }));
       return;
     }
     createInFlightRef.current = true;
@@ -227,11 +229,14 @@ export default function GroupManagementScreen() {
       setGroupName('');
       setActiveGroupId(created.id);
     } catch (err) {
-      Alert.alert('创建失败', getApiErrorMessage(err, '请稍后重试'));
+      Alert.alert(
+        t('messages.groups.createFailed', { defaultValue: '创建失败' }),
+        getApiErrorMessage(err, t('common.retryLater', { defaultValue: '请稍后重试' })),
+      );
     } finally {
       createInFlightRef.current = false;
     }
-  }, [createGroup, groupName]);
+  }, [createGroup, groupName, t]);
 
   const closeRenameModal = useCallback(() => {
     if (renameInFlightRef.current) return;
@@ -259,12 +264,15 @@ export default function GroupManagementScreen() {
       await renameGroup(renameTarget.id, next);
       resetRenameModal();
     } catch (err) {
-      Alert.alert('重命名失败', getApiErrorMessage(err, '请稍后重试'));
+      Alert.alert(
+        t('messages.groups.renameFailed', { defaultValue: '重命名失败' }),
+        getApiErrorMessage(err, t('common.retryLater', { defaultValue: '请稍后重试' })),
+      );
     } finally {
       renameInFlightRef.current = false;
       setRenameSubmitting(false);
     }
-  }, [closeRenameModal, renameDraft, renameGroup, renameTarget, resetRenameModal]);
+  }, [closeRenameModal, renameDraft, renameGroup, renameTarget, resetRenameModal, t]);
 
   const handleRename = useCallback(
     (id: string, currentName: string) => {
@@ -275,7 +283,7 @@ export default function GroupManagementScreen() {
       }
 
       Alert.prompt(
-        '重命名分组',
+        t('messages.groups.renameTitle', { defaultValue: '重命名分组' }),
         '',
         async (input) => {
           const next = (input ?? '').trim();
@@ -283,39 +291,48 @@ export default function GroupManagementScreen() {
           try {
             await renameGroup(id, next);
           } catch (err) {
-            Alert.alert('重命名失败', getApiErrorMessage(err, '请稍后重试'));
+            Alert.alert(
+              t('messages.groups.renameFailed', { defaultValue: '重命名失败' }),
+              getApiErrorMessage(err, t('common.retryLater', { defaultValue: '请稍后重试' })),
+            );
           }
         },
         'plain-text',
         currentName,
       );
     },
-    [renameGroup],
+    [renameGroup, t],
   );
 
   const handleDelete = useCallback(
     (id: string, name: string) => {
       Alert.alert(
-        '删除分组',
-        `确认删除「${name}」？分组内的会话不会被删除。`,
+        t('messages.groups.deleteTitle', { defaultValue: '删除分组' }),
+        t('messages.groups.deleteConfirm', {
+          defaultValue: '确认删除「{{name}}」？分组内的会话不会被删除。',
+          name,
+        }),
         [
-          { text: '取消', style: 'cancel' },
+          { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
           {
-            text: '删除',
+            text: t('common.delete', { defaultValue: '删除' }),
             style: 'destructive',
             onPress: async () => {
               try {
                 if (activeGroupId === id) setActiveGroupId(null);
                 await removeGroup(id);
               } catch (err) {
-                Alert.alert('删除失败', getApiErrorMessage(err, '请稍后重试'));
+                Alert.alert(
+                  t('messages.groups.deleteFailed', { defaultValue: '删除失败' }),
+                  getApiErrorMessage(err, t('common.retryLater', { defaultValue: '请稍后重试' })),
+                );
               }
             },
           },
         ],
       );
     },
-    [activeGroupId, removeGroup],
+    [activeGroupId, removeGroup, t],
   );
 
   const handleTogglePinned = useCallback(
@@ -323,10 +340,13 @@ export default function GroupManagementScreen() {
       try {
         await setPinnedToTabs(id, nextValue);
       } catch (err) {
-        Alert.alert('保存失败', getApiErrorMessage(err, '请稍后重试'));
+        Alert.alert(
+          t('messages.groups.saveFailed', { defaultValue: '保存失败' }),
+          getApiErrorMessage(err, t('common.retryLater', { defaultValue: '请稍后重试' })),
+        );
       }
     },
-    [setPinnedToTabs],
+    [setPinnedToTabs, t],
   );
 
   const handleToggleMember = useCallback(
@@ -340,10 +360,13 @@ export default function GroupManagementScreen() {
       try {
         await setMembers(groupId, nextIDs);
       } catch (err) {
-        Alert.alert('保存失败', getApiErrorMessage(err, '请稍后重试'));
+        Alert.alert(
+          t('messages.groups.saveFailed', { defaultValue: '保存失败' }),
+          getApiErrorMessage(err, t('common.retryLater', { defaultValue: '请稍后重试' })),
+        );
       }
     },
-    [groups, setMembers],
+    [groups, setMembers, t],
   );
 
   const activeGroup = useMemo(
@@ -353,40 +376,48 @@ export default function GroupManagementScreen() {
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title="自定义分组" />
+      <NavHeader title={t('messages.groups.title', { defaultValue: '自定义分组' })} />
       <ScrollView
         contentContainerStyle={d.content}
         showsVerticalScrollIndicator={false}
         {...keyboardDismissOnDragProps}
       >
         <View style={s.section}>
-          <Text style={d.sectionTitle}>创建分组</Text>
+          <Text style={d.sectionTitle}>
+            {t('messages.groups.createSection', { defaultValue: '创建分组' })}
+          </Text>
           <View style={s.inputRow}>
             <TextInput
               style={d.input}
               value={groupName}
               onChangeText={setGroupName}
-              placeholder="例如：家人 / 工作"
+              placeholder={t('messages.groups.namePlaceholder', {
+                defaultValue: '例如：家人 / 工作',
+              })}
               placeholderTextColor={colors.textSecondary}
               maxLength={32}
               autoCorrect={false}
             />
             <Pressable style={d.createButton} onPress={handleCreate}>
-              <Text style={d.createButtonText}>创建</Text>
+              <Text style={d.createButtonText}>
+                {t('common.create', { defaultValue: '创建' })}
+              </Text>
             </Pressable>
           </View>
         </View>
 
         <View style={s.section}>
           <Text style={d.sectionTitle}>
-            我的分组
-            {loading ? ' · 加载中…' : ''}
+            {t('messages.groups.myGroups', { defaultValue: '我的分组' })}
+            {loading ? ` · ${t('common.loading', { defaultValue: '加载中…' })}` : ''}
             {error ? ` · ${error}` : ''}
           </Text>
 
           {!loading && groups.length === 0 ? (
             <Text style={[s.emptyText, d.emptyText]}>
-              还没有自定义分组。建一个吧。
+              {t('messages.groups.empty', {
+                defaultValue: '还没有自定义分组。建一个吧。',
+              })}
             </Text>
           ) : null}
 
@@ -404,7 +435,12 @@ export default function GroupManagementScreen() {
                     {group.name}
                   </Text>
                   <View style={s.rowRight}>
-                    <Text style={d.rowValue}>{memberCount} 个会话</Text>
+                    <Text style={d.rowValue}>
+                      {t('messages.groups.conversationCount', {
+                        defaultValue: '{{count}} 个会话',
+                        count: memberCount,
+                      })}
+                    </Text>
                     {/* pinnedToTabs 开关：决定该分组是否在 MessagesScreen 顶部 tab 显示 */}
                     <Switch
                       value={group.pinnedToTabs}
@@ -437,10 +473,15 @@ export default function GroupManagementScreen() {
         {activeGroup ? (
           <View style={s.section}>
             <Text style={d.sectionTitle}>
-              「{activeGroup.name}」的会话（长按分组名可改名）
+              {t('messages.groups.memberHint', {
+                defaultValue: '「{{name}}」的会话（长按分组名可改名）',
+                name: activeGroup.name,
+              })}
             </Text>
             {conversations.length === 0 ? (
-              <Text style={[s.emptyText, d.emptyText]}>暂无会话可加入</Text>
+              <Text style={[s.emptyText, d.emptyText]}>
+                {t('messages.groups.noConversations', { defaultValue: '暂无会话可加入' })}
+              </Text>
             ) : (
               conversations.map((conversation, index) => {
                 const checked = activeGroup.conversationIDs.includes(
@@ -462,7 +503,9 @@ export default function GroupManagementScreen() {
                           {conversation.name}
                         </Text>
                         <Text style={d.conversationSubtitle} numberOfLines={1}>
-                          {conversation.conversationType === 'group' ? '群聊' : '私聊'}
+                          {conversation.conversationType === 'group'
+                            ? t('messages.groups.groupChat', { defaultValue: '群聊' })
+                            : t('messages.groups.directChat', { defaultValue: '私聊' })}
                         </Text>
                       </View>
                       <Ionicons
@@ -488,7 +531,9 @@ export default function GroupManagementScreen() {
         <View style={s.modalBackdrop}>
           <Pressable style={StyleSheet.absoluteFill} onPress={closeRenameModal} />
           <View style={[s.renameDialog, { backgroundColor: colors.surface }]}>
-            <Text style={d.renameTitle}>重命名分组</Text>
+            <Text style={d.renameTitle}>
+              {t('messages.groups.renameTitle', { defaultValue: '重命名分组' })}
+            </Text>
             <TextInput
               style={d.input}
               value={renameDraft}
@@ -508,7 +553,9 @@ export default function GroupManagementScreen() {
                 onPress={closeRenameModal}
                 disabled={renameSubmitting}
               >
-                <Text style={d.renameCancelText}>取消</Text>
+                <Text style={d.renameCancelText}>
+                  {t('common.cancel', { defaultValue: '取消' })}
+                </Text>
               </Pressable>
               <Pressable
                 style={[
@@ -519,7 +566,9 @@ export default function GroupManagementScreen() {
                 onPress={handleSubmitRename}
                 disabled={renameSubmitting}
               >
-                <Text style={d.renameSaveText}>保存</Text>
+                <Text style={d.renameSaveText}>
+                  {t('common.save', { defaultValue: '保存' })}
+                </Text>
               </Pressable>
             </View>
           </View>

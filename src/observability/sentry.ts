@@ -197,7 +197,15 @@ function buildCaptureContext(
 ): SentryCaptureContext | undefined {
   if (!safeContext) return undefined;
 
-  const tagKeys = ['endpointPath', 'method', 'status', 'apiCode', 'failureKind'];
+  const tagKeys = [
+    'endpointPath',
+    'method',
+    'status',
+    'apiCode',
+    'failureKind',
+    'operation',
+    'kind',
+  ];
   const tags = tagKeys.reduce<Record<string, string>>((nextTags, key) => {
     const value = readTagValue(safeContext, key);
     return value ? { ...nextTags, [key]: value } : nextTags;
@@ -215,6 +223,14 @@ function buildCaptureContext(
       tags.status ?? 'unknown-status',
       tags.apiCode ?? 'no-api-code',
       tags.failureKind ?? 'http',
+    ];
+  } else if (tags.operation) {
+    // 非 API 失败（如 upload）：error.message 已本地化，若沿用 Sentry 默认按消息分组，
+    // 同一故障会按语言碎成多个 issue。用稳定的 operation + kind 组 fingerprint。
+    captureContext.fingerprint = [
+      tags.operation,
+      tags.kind ?? 'unknown-kind',
+      tags.failureKind ?? 'error',
     ];
   }
   return captureContext;

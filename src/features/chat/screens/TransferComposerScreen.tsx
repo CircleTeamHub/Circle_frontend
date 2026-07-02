@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { Avatar } from '@/components/ui/avatar';
 import { useTransferComposerStore } from '@/features/chat/store/use-transfer-composer-store';
 import { fromImUserId } from '@/im/client';
@@ -26,6 +27,7 @@ export default function TransferComposerScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{
     recipientId?: string;
     recipientName?: string;
@@ -34,7 +36,9 @@ export default function TransferComposerScreen() {
   const recipientId =
     typeof params.recipientId === 'string' ? params.recipientId : '';
   const recipientName =
-    typeof params.recipientName === 'string' ? params.recipientName : '对方';
+    typeof params.recipientName === 'string'
+      ? params.recipientName
+      : t('chat.transfer.fallbackRecipient', { defaultValue: '对方' });
   const recipientAvatar =
     typeof params.recipientAvatar === 'string'
       ? params.recipientAvatar
@@ -84,17 +88,28 @@ export default function TransferComposerScreen() {
     if (submitting || inFlightRef.current) return;
     const value = Number(amount.trim());
     if (!Number.isInteger(value) || value <= 0) {
-      Alert.alert('请输入正整数积分');
+      Alert.alert(t('chat.transfer.invalidAmount', { defaultValue: '请输入正整数积分' }));
       return;
     }
     // 余额还在加载或加载失败时不允许提交：之前 balance===null 走 fall-through
     // 把客户端检查直接跳过，用户可以发起 > 实际余额的转账，全靠服务端拒回兜底。
     if (balance == null) {
-      Alert.alert('余额未就绪', '请等待余额加载完成后再试');
+      Alert.alert(
+        t('chat.transfer.balanceNotReadyTitle', { defaultValue: '余额未就绪' }),
+        t('chat.transfer.balanceNotReadyMsg', {
+          defaultValue: '请等待余额加载完成后再试',
+        }),
+      );
       return;
     }
     if (value > balance) {
-      Alert.alert('余额不足', `当前积分余额：${balance}`);
+      Alert.alert(
+        t('chat.transfer.insufficientTitle', { defaultValue: '余额不足' }),
+        t('chat.transfer.currentBalanceMsg', {
+          defaultValue: '当前积分余额：{{balance}}',
+          balance,
+        }),
+      );
       return;
     }
 
@@ -116,12 +131,18 @@ export default function TransferComposerScreen() {
       });
       router.back();
     } catch (error) {
-      Alert.alert('转账失败', getApiErrorMessage(error, '请稍后重试'));
+      Alert.alert(
+        t('chat.transfer.failedTitle', { defaultValue: '转账失败' }),
+        getApiErrorMessage(
+          error,
+          t('common.retryLater', { defaultValue: '请稍后重试' }),
+        ),
+      );
     } finally {
       inFlightRef.current = false;
       setSubmitting(false);
     }
-  }, [amount, balance, message, recipientId, router, setPending, submitting]);
+  }, [amount, balance, message, recipientId, router, setPending, submitting, t]);
 
   const value = Number(amount.trim());
   const submitDisabled =
@@ -146,7 +167,9 @@ export default function TransferComposerScreen() {
           <Pressable hitSlop={8} onPress={() => router.back()}>
             <Ionicons name="chevron-back" size={24} color={colors.text} />
           </Pressable>
-          <Text style={[s.headerTitle, { color: colors.text }]}>积分转账</Text>
+          <Text style={[s.headerTitle, { color: colors.text }]}>
+            {t('chat.transfer.title', { defaultValue: '积分转账' })}
+          </Text>
           <View style={{ width: 24 }} />
         </View>
 
@@ -159,7 +182,7 @@ export default function TransferComposerScreen() {
           />
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={[s.recipientLabel, { color: colors.textSecondary }]}>
-              转给
+              {t('chat.transfer.to', { defaultValue: '转给' })}
             </Text>
             <Text
               style={[s.recipientName, { color: colors.text }]}
@@ -172,7 +195,7 @@ export default function TransferComposerScreen() {
 
         <View style={s.amountSection}>
           <Text style={[s.amountLabel, { color: colors.textSecondary }]}>
-            转账积分
+            {t('chat.transfer.amountLabel', { defaultValue: '转账积分' })}
           </Text>
           <View style={s.amountRow}>
             <TextInput
@@ -184,14 +207,18 @@ export default function TransferComposerScreen() {
               placeholderTextColor={colors.textSecondary}
               maxLength={8}
             />
-            <Text style={[s.amountUnit, { color: colors.text }]}>积分</Text>
+            <Text style={[s.amountUnit, { color: colors.text }]}>
+              {t('common.coin', { defaultValue: '积分' })}
+            </Text>
           </View>
           {loadingBalance ? (
             <ActivityIndicator color={colors.primary} style={{ marginTop: 8 }} />
           ) : balanceError ? (
             <View style={s.balanceErrorRow}>
               <Text style={[s.balanceText, { color: colors.error }]}>
-                余额加载失败
+                {t('chat.transfer.balanceLoadFailed', {
+                  defaultValue: '余额加载失败',
+                })}
               </Text>
               <Pressable
                 hitSlop={6}
@@ -201,13 +228,14 @@ export default function TransferComposerScreen() {
                 <Text
                   style={[Typography.small, { color: colors.primary, fontWeight: '600' }]}
                 >
-                  重试
+                  {t('common.retry', { defaultValue: '重试' })}
                 </Text>
               </Pressable>
             </View>
           ) : (
             <Text style={[s.balanceText, { color: colors.textSecondary }]}>
-              当前余额：{balance ?? '-'} 积分
+              {t('chat.transfer.currentBalancePrefix', { defaultValue: '当前余额：' })}
+              {balance ?? '-'} {t('common.coin', { defaultValue: '积分' })}
             </Text>
           )}
         </View>
@@ -217,7 +245,9 @@ export default function TransferComposerScreen() {
             style={[s.messageInput, { color: colors.text }]}
             value={message}
             onChangeText={setMessage}
-            placeholder="留言（可选，最多 100 字）"
+            placeholder={t('chat.transfer.messagePlaceholder', {
+              defaultValue: '留言（可选，最多 100 字）',
+            })}
             placeholderTextColor={colors.textSecondary}
             maxLength={100}
             multiline
@@ -240,7 +270,9 @@ export default function TransferComposerScreen() {
           disabled={submitDisabled}
         >
           <Text style={[s.submitText, { color: colors.white }]}>
-            {submitting ? '转账中...' : '确认转账'}
+            {submitting
+              ? t('chat.transfer.submitting', { defaultValue: '转账中...' })
+              : t('chat.transfer.submit', { defaultValue: '确认转账' })}
           </Text>
         </Pressable>
       </ScrollView>

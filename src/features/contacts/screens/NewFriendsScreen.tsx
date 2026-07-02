@@ -7,7 +7,7 @@ import {
   getFriendActivityDisplayName,
 } from '@/features/contacts/friend-activities';
 import { getFriendActivityDetailHref } from '@/features/user/utils/routes';
-import { getLocalizedDateTimeLocale } from '@/features/contacts/locale';
+import { getLocalizedDateTimeLocale } from '@/utils/locale';
 import {
   fetchFriendActivities,
   markFriendActivityRead,

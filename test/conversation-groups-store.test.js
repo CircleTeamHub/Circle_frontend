@@ -42,6 +42,12 @@ function loadStore(apiMocks) {
       if (specifier === 'zustand/middleware') return require('zustand/middleware');
       if (specifier === '@/storage') return { mmkvJsonStorage };
       if (specifier === '@/services/api/conversation-groups') return apiMocks;
+      if (specifier === '@/i18n') {
+        return {
+          __esModule: true,
+          default: { t: (key, opts) => { let s = (opts && opts.defaultValue) || key; if (opts) for (const k of Object.keys(opts)) if (k !== 'defaultValue') s = s.split('{{' + k + '}}').join(String(opts[k])); return s; }, language: 'zh' },
+        };
+      }
       throw new Error(`Unexpected import: ${specifier}`);
     },
   };

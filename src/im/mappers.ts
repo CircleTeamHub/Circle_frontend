@@ -27,6 +27,7 @@ import {
 } from '@/im/client';
 import { normalizeMediaUrl } from '@/services/api/utils';
 import i18n from '@/i18n';
+import { getLocalizedDateTimeLocale } from '@/utils/locale';
 
 // 所有 mapper 产出的字符串走 i18n.t；当前 locale 尚未提供对应 key 时回落到 defaultValue
 // （现有中文文案），这样不动 locale JSON 也能让英文用户在补 key 后立即生效。
@@ -144,7 +145,7 @@ function formatTimestamp(timestamp: number) {
   const isToday = date.toDateString() === now.toDateString();
 
   if (isToday) {
-    return date.toLocaleTimeString('zh-CN', {
+    return date.toLocaleTimeString(getLocalizedDateTimeLocale(i18n.language), {
       hour: '2-digit',
       minute: '2-digit',
     });
@@ -157,9 +158,9 @@ function formatTimestamp(timestamp: number) {
     return tImTime('yesterday', '昨天');
   }
 
-  // 月/日 格式按当前 i18n 语言走原生 toLocaleDateString；
-  // 旧实现写死 'zh-CN' —— 切英文时数字格式也得跟着切。
-  const locale = i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US';
+  // 月/日 格式按当前 i18n 语言走原生 toLocaleDateString；集中到 getLocalizedDateTimeLocale
+  // 覆盖 zh/en/ja/ko/es，避免旧的 zh/en 二元判断让新语言错用格式。
+  const locale = getLocalizedDateTimeLocale(i18n.language);
   return date.toLocaleDateString(locale, {
     month: 'numeric',
     day: 'numeric',

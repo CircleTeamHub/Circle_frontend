@@ -40,7 +40,23 @@
     "daysAgo": "{{count}}天前",
     "errorOccurred": "操作失败",
     "networkError": "网络异常，请稍后重试",
-    "back": "返回"
+    "back": "返回",
+    "create": "创建",
+    "coin": "积分",
+    "offline": "当前无网络连接，部分功能可能不可用",
+    "vip": "VIP",
+    "privacyPolicy": "《隐私政策》",
+    "errors": {
+      "requestTimeout": "请求超时，请检查网络连接后重试",
+      "networkUnavailable": "网络异常，请确认后端服务已启动",
+      "invalidServerResponse": "服务返回了无效数据",
+      "requestFailedWithStatus": "请求失败 ({{status}})",
+      "requestFailed": "请求失败",
+      "sessionExpired": "登录已过期，请重新登录",
+      "refreshResponseInvalid": "刷新返回数据格式异常，请重新登录",
+      "uploadTimeout": "上传超时，请检查网络后重试",
+      "uploadFailedWithStatus": "上传失败 ({{status}})"
+    }
   },
   "auth": {
     "welcomeBack": "欢迎回来",
@@ -152,7 +168,30 @@
     "inviteGroupMembersSent": "邀请已发送",
     "inviteGroupMembersFailed": "发送邀请失败：{{error}}",
     "inviteGroupMembersAlreadyMembers": "所选好友已经在群聊中",
-    "inviteGroupMembersNoInvitableFriends": "没有可邀请的好友"
+    "inviteGroupMembersNoInvitableFriends": "没有可邀请的好友",
+    "groups": {
+      "title": "自定义分组",
+      "createSection": "创建分组",
+      "namePlaceholder": "例如：家人 / 工作",
+      "nameRequired": "请输入分组名称",
+      "myGroups": "我的分组",
+      "empty": "还没有自定义分组。建一个吧。",
+      "conversationCount": "{{count}} 个会话",
+      "memberHint": "「{{name}}」的会话（长按分组名可改名）",
+      "noConversations": "暂无会话可加入",
+      "groupChat": "群聊",
+      "directChat": "私聊",
+      "renameTitle": "重命名分组",
+      "deleteTitle": "删除分组",
+      "deleteConfirm": "确认删除「{{name}}」？分组内的会话不会被删除。",
+      "createFailed": "创建失败",
+      "renameFailed": "重命名失败",
+      "deleteFailed": "删除失败",
+      "saveFailed": "保存失败",
+      "loadFailed": "加载失败",
+      "nameEmpty": "分组名称不能为空"
+    },
+    "mutedA11y": "消息免打扰"
   },
   "notifications": {
     "title": "消息通知",
@@ -204,7 +243,29 @@
     }
   },
   "chat": {
-    "detail": "聊天详情",
+    "detail": {
+      "title": "聊天详情",
+      "statusSelf": "自己",
+      "statusGroup": "群聊",
+      "statusOnline": "在线",
+      "statusOffline": "离线",
+      "previewNotice": "当前仅预览聊天界面，消息发送会在 IM 接通后开放。",
+      "recordingSeconds": "正在录音 {{seconds}} 秒",
+      "voiceReleaseCancel": "松开 取消",
+      "voiceReleaseSend": "松开发送 {{seconds}}\"",
+      "voiceHoldToTalk": "按住 说话",
+      "previewPlaceholder": "当前仅预览聊天界面",
+      "inputPlaceholder": "输入消息...",
+      "sendFailedText": "消息发送失败，请重试",
+      "recordStartFailed": "录音启动失败，请重试",
+      "voiceSendFailed": "语音发送失败，请重试",
+      "locationSendFailed": "位置发送失败，请重试",
+      "imageSendFailed": "图片发送失败，请重试",
+      "noteSendFailed": "笔记发送失败，请重试",
+      "cardSendFailed": "名片发送失败，请重试",
+      "favoriteSendFailed": "收藏内容发送失败，请重试",
+      "transferCardSendFailed": "转账卡片发送失败，但积分已扣减"
+    },
     "messageActions": {
       "title": "消息操作",
       "collect": "收藏",
@@ -236,7 +297,8 @@
       "single": "私聊",
       "done": "已转发",
       "failed": "转发失败",
-      "failedRetry": "请稍后重试"
+      "failedRetry": "请稍后重试",
+      "locationWithDetail": "[位置] {{detail}}"
     },
     "snackbarNewMessage": "新消息",
     "snackbarPreviewFallback": "[消息]",
@@ -262,7 +324,8 @@
       "files": "文件",
       "dateTitle": "按日期",
       "prevMonth": "上个月",
-      "nextMonth": "下个月"
+      "nextMonth": "下个月",
+      "noFiles": "暂无文件记录"
     },
     "sendFailed": "消息发送失败，请重试",
     "self": "自己",
@@ -304,7 +367,47 @@
     "ownerOnlyAction": "仅群主或管理员可执行该操作。",
     "recommendFriend": "把他推荐给朋友",
     "addBlacklist": "加入黑名单",
-    "report": "投诉举报",
+    "report": {
+      "paramErrorTitle": "参数错误",
+      "missingTarget": "缺少举报对象",
+      "selectCategory": "请选择举报类别",
+      "fillDescription": "请填写举报说明",
+      "submitted": "举报已提交",
+      "submitFailed": "提交失败",
+      "title": "投诉举报",
+      "categories": {
+        "harassment": {
+          "label": "骚扰",
+          "description": "言语攻击、性骚扰、人身威胁"
+        },
+        "spam": {
+          "label": "垃圾信息",
+          "description": "广告、刷屏、诱导引流"
+        },
+        "impersonation": {
+          "label": "冒充他人",
+          "description": "盗用身份、虚假身份"
+        },
+        "fraud": {
+          "label": "欺诈",
+          "description": "诈骗、虚假交易、链接钓鱼"
+        },
+        "other": {
+          "label": "其他",
+          "description": "违反平台规则的其他行为"
+        }
+      },
+      "fallbackGroup": "该群聊",
+      "fallbackPeer": "对方",
+      "successFriend": "举报已记录，本次有效举报会影响对方信誉值。",
+      "successGroup": "我们会尽快处理，谢谢你的反馈。",
+      "targetLabel": "举报对象：",
+      "selectCategoryLabel": "选择举报类别",
+      "detailLabel": "详细说明",
+      "detailPlaceholder": "请详细描述发生的事情，便于我们核实处理（最多 500 字）",
+      "submitting": "提交中...",
+      "submit": "提交举报"
+    },
     "burnMessage": "好友消息自毁",
     "selectBurnTime": "选择消息自毁时间",
     "burnOff": "关闭",
@@ -361,6 +464,107 @@
       "statusChoose": "请选择",
       "failedTitle": "设置失败",
       "failedBody": "图片背景设置失败，请重试。"
+    },
+    "attachments": {
+      "photos": "照片",
+      "camera": "拍照",
+      "voiceCall": "语音通话",
+      "location": "位置",
+      "notes": "笔记",
+      "friendCard": "好友名片",
+      "favorites": "我的收藏",
+      "quickReply": "快捷语",
+      "transfer": "转账"
+    },
+    "call": {
+      "title": "语音通话",
+      "groupOnly": "当前只开放群聊语音通话",
+      "groupNotReady": "群聊会话尚未准备好",
+      "notLoggedIn": "请先登录后再发起通话",
+      "noOtherMembers": "群内没有可邀请的其他成员",
+      "initiateFailed": "发起失败，请稍后重试",
+      "calling": "呼叫中"
+    },
+    "transferTitle": "转账",
+    "transferGroupNotSupported": "群聊暂不支持积分转账",
+    "transfer": {
+      "invalidAmount": "请输入正整数积分",
+      "balanceNotReadyTitle": "余额未就绪",
+      "balanceNotReadyMsg": "请等待余额加载完成后再试",
+      "insufficientTitle": "余额不足",
+      "currentBalanceMsg": "当前积分余额：{{balance}}",
+      "failedTitle": "转账失败",
+      "title": "积分转账",
+      "to": "转给",
+      "amountLabel": "转账积分",
+      "balanceLoadFailed": "余额加载失败",
+      "currentBalancePrefix": "当前余额：",
+      "messagePlaceholder": "留言（可选，最多 100 字）",
+      "fallbackRecipient": "对方",
+      "submitting": "转账中...",
+      "submit": "确认转账"
+    },
+    "recommend": {
+      "sentTitle": "已发送",
+      "sentMsg": "好友名片已发送。",
+      "title": "推荐给朋友",
+      "fallbackFriend": "这位好友",
+      "confirmMsg": "确认把 {{friend}} 推荐给 {{target}} 吗？",
+      "sendFailed": "发送失败",
+      "sending": "发送中…",
+      "sendCardHint": "发送好友名片",
+      "pickConversation": "选择一个会话",
+      "intro": "发送 {{friend}} 的好友名片到另一个聊天。",
+      "empty": "暂无可推荐的聊天对象"
+    },
+    "preview": {
+      "verification": "[验证]",
+      "circle": "[圈子] {{name}}"
+    },
+    "collection": {
+      "voiceMessage": "语音消息",
+      "imageMessage": "图片消息",
+      "locationMessage": "位置消息",
+      "note": "笔记",
+      "friendCard": "名片: {{nickname}}",
+      "transfer": "积分转账",
+      "message": "聊天消息",
+      "secondsVoice": "{{seconds}} 秒语音",
+      "personalCard": "个人名片"
+    },
+    "media": {
+      "image": "图片",
+      "video": "视频"
+    },
+    "disappearing": {
+      "off": "关闭",
+      "minutes": "{{duration}}分钟",
+      "seconds": "{{duration}}秒"
+    },
+    "message": {
+      "sending": "发送中",
+      "sendFailed": "发送失败",
+      "read": "已读",
+      "unread": "未读"
+    },
+    "friendCard": {
+      "noPersona": "这个人很懒，什么都没留下",
+      "label": "个人名片"
+    },
+    "noteCard": {
+      "chips": {
+        "note": "笔记",
+        "video": "视频",
+        "display": "展示",
+        "location": "位置"
+      },
+      "imageCount": "{{count}}张图片",
+      "videoCount": "{{count}}个视频",
+      "includes": "包含: {{segments}}"
+    },
+    "voice": {
+      "cancelTip": "松开手指，取消发送",
+      "swipeCancelTip": "左滑取消 · 松开发送"
     }
   },
   "contacts": {
@@ -827,10 +1031,22 @@
     "toNext": "距离 {{title}} 还差 {{points}} 分",
     "maxReached": "已达到当前最高信誉档位",
     "tier": {
-      "excellent": { "title": "优秀信誉", "detail": "可优先参与高门槛活动、合作和圈子报名。" },
-      "good": { "title": "良好信誉", "detail": "信誉状态稳定，可参与大多数活动和社交协作。" },
-      "basic": { "title": "基础信誉", "detail": "保持真实资料和正常履约，可继续积累信誉。" },
-      "low": { "title": "需要提升", "detail": "建议完善资料、减少爽约和违规记录。" }
+      "excellent": {
+        "title": "优秀信誉",
+        "detail": "可优先参与高门槛活动、合作和圈子报名。"
+      },
+      "good": {
+        "title": "良好信誉",
+        "detail": "信誉状态稳定，可参与大多数活动和社交协作。"
+      },
+      "basic": {
+        "title": "基础信誉",
+        "detail": "保持真实资料和正常履约，可继续积累信誉。"
+      },
+      "low": {
+        "title": "需要提升",
+        "detail": "建议完善资料、减少爽约和违规记录。"
+      }
     },
     "sections": {
       "improve": "如何提升",
@@ -862,10 +1078,74 @@
     "creditScore": "信用值",
     "memberCenter": "会员中心",
     "viewMember": "查看会员",
-    "wallet": "我的钱包",
-    "mall": "商城",
+    "wallet": {
+      "title": "我的钱包",
+      "confirmRecharge": "确认充值",
+      "balance": "积分余额",
+      "recharge": "积分充值",
+      "memberAgreement": "《会员服务协议》",
+      "loadError": "积分余额加载失败，请稍后重试",
+      "rechargeSuccess": "已充值 {{points}} 积分",
+      "rechargeError": "充值失败，请稍后重试",
+      "confirmRechargeMessage": "确定要充值 {{points}} 积分（{{price}}）吗？",
+      "agreementPrefix": "我已阅读并同意",
+      "agreementAnd": "和",
+      "recharging": "充值中...",
+      "buyNow": "立即购买 {{points}} 积分",
+      "menuLabel": "我的钱包"
+    },
+    "mall": {
+      "title": "管家商城",
+      "loadError": "商城商品加载失败，已显示本地商品目录",
+      "sections": {
+        "coupons": "我的卡券",
+        "membership": "会员专区",
+        "fancyNumber": "靓号专区",
+        "points": "积分专区",
+        "decoration": "装扮专区"
+      },
+      "items": {
+        "fancyNumberCard": "靓号卡",
+        "groupExpansionCard": "群扩容卡",
+        "generateRechargeCard": "生成充值卡",
+        "myRechargeCards": "我的充值卡",
+        "membershipRecharge": "会员充值",
+        "exchangeExperience": "兑换经验",
+        "pointsRecharge": "积分充值",
+        "chooseFancyNumber": "自选靓号",
+        "renewFancyNumber": "续费靓号",
+        "redeemCode": "查询&兑换卡密",
+        "buyCode": "购买卡密",
+        "avatarFrame": "头像框"
+      },
+      "menuLabel": "商城"
+    },
     "viewProducts": "查看商品",
-    "collections": "我的收藏",
+    "collections": {
+      "deleteTitle": "确认删除",
+      "deleteConfirm": "确定要删除这条收藏吗？",
+      "imageCount": "{{count}} 图",
+      "videoCount": "{{count}} 视频",
+      "showcaseCount": "{{count}} 展示",
+      "location": "位置",
+      "backToMessages": "回到消息",
+      "sender": "发送人",
+      "empty": "还没有收藏",
+      "loadError": "收藏加载失败，请稍后重试",
+      "deleteError": "删除收藏失败，请稍后重试",
+      "noteFallbackTitle": "收藏笔记",
+      "conversationFallback": "聊天",
+      "fromSource": "来自 {{title}}",
+      "tabs": {
+        "all": "全部",
+        "chat": "聊天记录",
+        "video": "视频",
+        "voice": "语音",
+        "message": "信息",
+        "note": "收藏笔记"
+      },
+      "menuLabel": "我的收藏"
+    },
     "viewCollections": "查看收藏",
     "notes": "我的笔记",
     "viewNotes": "查看笔记",
@@ -933,7 +1213,52 @@
     "systemAnnouncements": "系统公告",
     "viewAnnouncements": "查看最新",
     "addIcon": "添加徽章",
-    "myIcons": "我的徽章"
+    "myIcons": "我的徽章",
+    "membership": {
+      "title": "会员中心",
+      "confirmExchange": "确认兑换",
+      "activateVip": "开通VIP会员",
+      "currentLevel": "当前等级：VIP{{level}}",
+      "benefitsHint": "尊享会员权益，等级越高权益越多。",
+      "exchange": "兑换会员",
+      "currentBadge": "当前等级",
+      "loadError": "会员等级加载失败，已显示本地等级配置",
+      "exchangeSuccess": "已成功兑换 VIP{{level}}",
+      "exchangeError": "兑换失败，请确认积分余额足够后重试",
+      "confirmExchangeMessage": "确定要消耗 {{points}} 积分兑换 {{plan}} 吗？",
+      "loadingPlans": "正在加载会员等级",
+      "confirmExchangePlan": "确认兑换 {{plan}}",
+      "selectHigher": "请选择更高会员等级",
+      "tiers": {
+        "vip1": {
+          "perks": "基础会员权益"
+        },
+        "vip2": {
+          "perks": "更多群容量与基础折扣"
+        },
+        "vip3": {
+          "perks": "高级身份标识与积分加成"
+        },
+        "vip4": {
+          "perks": "专属靓号折扣与优先体验"
+        },
+        "vip5": {
+          "perks": "至尊会员权益与最高折扣"
+        }
+      }
+    },
+    "memberRules": {
+      "link": "会员规则",
+      "title": "规则和权限说明",
+      "heading": "会员规则",
+      "description": "以下规则用于说明会员等级、积分兑换和权限范围。支付、订单和有效期将在后续接入真实后端。",
+      "rules": {
+        "levels": "VIP1-5 按会员等级逐级解锁权益，当前页面仅展示等级与权益说明。",
+        "highTier": "高等级会员可获得更多群容量、靓号折扣、积分加成和优先体验资格。",
+        "consume": "会员兑换消耗积分，兑换后立即生效；具体有效期以后端订单为准。",
+        "irreversible": "会员、靓号、群扩容卡等虚拟商品一经使用不可撤销。"
+      }
+    }
   },
   "userProfile": {
     "title": "个人信息",
@@ -1074,7 +1399,10 @@
       "title": "选择语言",
       "system": "跟随系统",
       "zh": "中文",
-      "en": "English"
+      "en": "English",
+      "ja": "日本語",
+      "ko": "한국어",
+      "es": "Español"
     },
     "rows": {
       "profile": {
@@ -1458,7 +1786,12 @@
       "loadFailed": "笔记加载失败，请稍后重试",
       "notFound": "笔记不存在",
       "exportFailedTitle": "导出失败",
-      "exportFailedMessage": "请稍后重试"
+      "exportFailedMessage": "请稍后重试",
+      "locationFallback": "位置",
+      "downloadImages": "下载图片",
+      "downloadVideos": "下载视频",
+      "downloadLongImage": "生成长图",
+      "downloadPdf": "下载PDF"
     },
     "edit": {
       "addImage": "添加图片",
@@ -1586,12 +1919,36 @@
       "fullDate": "{{year}}年{{month}}月{{day}}日 · {{weekday}}",
       "groupOverflow": "{{first}}、{{second}} +{{extra}}",
       "imageCount": "{{count}}图片",
-      "videoCount": "{{count}}视频"
+      "videoCount": "{{count}}视频",
+      "day": {
+        "sun": "星期日",
+        "mon": "星期一",
+        "tue": "星期二",
+        "wed": "星期三",
+        "thu": "星期四",
+        "fri": "星期五",
+        "sat": "星期六"
+      }
     },
     "stats": "共 {{groupCount}} 个分组，合计 {{noteCount}} 条笔记",
     "tabs": {
       "all": "全部 {{count}}",
       "ungrouped": "未分组 {{count}}"
+    },
+    "section": {
+      "text": "文字",
+      "media": "图片 / 视频",
+      "showcase": "展示",
+      "location": "地址"
+    },
+    "location": {
+      "invalidTitle": "位置无效",
+      "invalidMsg": "请重新选择位置",
+      "selectTitle": "选择位置",
+      "searchPlaceholder": "搜索地点",
+      "failedTitle": "定位失败",
+      "usePlace": "使用这个位置",
+      "selectedLabel": "已选择位置"
     }
   },
   "search": {
@@ -1611,7 +1968,18 @@
       "friend": "选择好友名片",
       "note": "选择笔记",
       "quickReply": "快捷语"
-    }
+    },
+    "quickReply": {
+      "0": "在的，你说",
+      "1": "好的，没问题",
+      "2": "收到，稍等一下",
+      "3": "抱歉刚才没看到消息",
+      "4": "今天有点忙，晚点回复",
+      "5": "哈哈，太有意思了"
+    },
+    "loadFailed": "加载失败",
+    "noMatch": "没有匹配项",
+    "empty": "暂无内容"
   },
   "profileDisplay": {
     "emptySignature": "完善资料后会在这里展示你的介绍。"
@@ -1665,6 +2033,87 @@
         "description": "系统 Badge，用于展示你在平台内的身份或荣誉。",
         "condition": "满足对应系统规则后获得，并在账号状态正常时展示。"
       }
+    }
+  },
+  "im": {
+    "time": {
+      "yesterday": "昨天"
+    },
+    "notification": {
+      "groupCreated": "群聊已创建",
+      "memberInvited": "新成员加入群聊",
+      "memberQuit": "有成员退出群聊",
+      "memberKicked": "有成员被移出群聊",
+      "groupNameUpdated": "群名称已更新",
+      "groupDismissed": "群已解散",
+      "messageRevoked": "一条消息被撤回"
+    },
+    "preview": {
+      "image": "[图片]",
+      "video": "[视频]",
+      "voice": "[语音]",
+      "file": "[文件]",
+      "location": "[位置]",
+      "typing": "[正在输入]",
+      "card": "[名片] {{name}}",
+      "transferWithAmount": "[转账] {{amount}} 积分",
+      "transfer": "[转账]",
+      "note": "[笔记] {{title}}",
+      "verification": "[验证] {{name}} 邀请你担保",
+      "default": "[消息]"
+    }
+  },
+  "permissions": {
+    "insufficientTitle": "权限不足",
+    "microphone": "请在系统设置开启麦克风权限",
+    "location": "请在系统设置开启定位权限",
+    "photoLibrary": "请在系统设置开启相册权限",
+    "camera": "请在系统设置开启相机权限"
+  },
+  "call": {
+    "livekit": {
+      "connected": "LiveKit 已连接，当前仅开放音频。"
+    },
+    "status": {
+      "reconnecting": "正在恢复通话连接...",
+      "connecting": "正在连接 LiveKit...",
+      "disconnected": "通话连接已断开。"
+    },
+    "groupCallTitle": "群语音通话",
+    "participantsOnline": "{{count}} 人在线",
+    "self": "我",
+    "ended": "通话已结束或连接信息已失效",
+    "preparing": "正在准备通话组件...",
+    "unavailable": "LiveKit 通话组件不可用",
+    "unavailableHint": "请使用包含 LiveKit native module 的开发客户端或重新构建应用。",
+    "connectionFailed": "通话连接失败，请重试",
+    "reconnect": "重新连接",
+    "reject": "拒绝",
+    "accept": "接听",
+    "invite": {
+      "initiatedBy": "{{name}} 发起群语音",
+      "inviteeCount": "{{count}} 人被邀请",
+      "groupMember": "群成员"
+    }
+  },
+  "emojis": {
+    "face": "表情",
+    "gesture": "手势",
+    "heart": "爱心",
+    "animal": "动物",
+    "food": "食物",
+    "activity": "活动"
+  },
+  "coin": {
+    "errors": {
+      "walletDataInvalid": "钱包数据格式异常",
+      "invalidAmount": "积分数量无效",
+      "rechargeDataInvalid": "充值返回数据格式异常"
+    }
+  },
+  "upload": {
+    "errors": {
+      "presignDataInvalid": "预签名上传数据格式异常"
     }
   }
 }

@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import type { MessageItem } from '@openim/rn-client-sdk';
 import { NavHeader } from '@/components/ui/nav-header';
 import {
@@ -45,6 +46,7 @@ const s = StyleSheet.create({
 export default function ChatHistoryFilesScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{
     conversationID?: string;
     sourceID?: string;
@@ -81,7 +83,11 @@ export default function ChatHistoryFilesScreen() {
       })
       .catch((e: unknown) => {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : '加载失败');
+          setError(
+            e instanceof Error
+              ? e.message
+              : t('chat.history.loadFailed', { defaultValue: '加载失败' }),
+          );
         }
       })
       .finally(() => {
@@ -93,7 +99,7 @@ export default function ChatHistoryFilesScreen() {
     return () => {
       cancelled = true;
     };
-  }, [conversationID]);
+  }, [conversationID, t]);
 
   const handleLoadMore = useCallback(async () => {
     if (loadingMore || !hasMore || !conversationID) {
@@ -137,12 +143,16 @@ export default function ChatHistoryFilesScreen() {
         setHasMore(messages.length === PAGE_SIZE);
       })
       .catch((e: unknown) => {
-        setError(e instanceof Error ? e.message : '加载失败');
+        setError(
+          e instanceof Error
+            ? e.message
+            : t('chat.history.loadFailed', { defaultValue: '加载失败' }),
+        );
       })
       .finally(() => {
         setLoading(false);
       });
-  }, [conversationID]);
+  }, [conversationID, t]);
 
   const d = useMemo(
     () => ({
@@ -181,7 +191,7 @@ export default function ChatHistoryFilesScreen() {
   return (
     <View style={[s.container, d.container, { paddingTop: insets.top }]}>
       <NavHeader
-        title="文件"
+        title={t('chat.history.files', { defaultValue: '文件' })}
         fallbackHref={getChatDetailHref('messages', sourceID, title, undefined, conversationID)}
       />
       <View style={s.content}>
@@ -205,18 +215,22 @@ export default function ChatHistoryFilesScreen() {
               <View>
                 <Text style={[s.centeredText, d.errorText]}>{error}</Text>
                 <Pressable style={d.retryButton} onPress={handleRetry}>
-                  <Text style={d.retryText}>重试</Text>
+                  <Text style={d.retryText}>
+                    {t('common.retry', { defaultValue: '重试' })}
+                  </Text>
                 </Pressable>
               </View>
             ) : (
               <Text style={[s.centeredText, d.centeredText]}>
-                暂无文件记录
+                {t('chat.history.noFiles', { defaultValue: '暂无文件记录' })}
               </Text>
             )
           }
           ListFooterComponent={
             loadingMore ? (
-              <Text style={[s.centeredText, d.centeredText]}>加载中…</Text>
+              <Text style={[s.centeredText, d.centeredText]}>
+                {t('common.loading', { defaultValue: '加载中…' })}
+              </Text>
             ) : null
           }
         />

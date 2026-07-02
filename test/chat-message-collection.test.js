@@ -23,7 +23,17 @@ function loadTsModule(relativePath) {
   const context = {
     module: { exports: {} },
     exports: {},
-    require,
+    // message-collection.ts imports @/i18n (full i18next runtime); stub a defaultValue-echoing
+    // t() and pass everything else through to the real require.
+    require: (specifier) => {
+      if (specifier === '@/i18n') {
+        return {
+          __esModule: true,
+          default: { t: (key, opts) => { let s = (opts && opts.defaultValue) || key; if (opts) for (const k of Object.keys(opts)) if (k !== 'defaultValue') s = s.split('{{' + k + '}}').join(String(opts[k])); return s; }, language: 'zh' },
+        };
+      }
+      return require(specifier);
+    },
   };
   context.exports = context.module.exports;
 

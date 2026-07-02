@@ -73,6 +73,16 @@ function loadApiClient({
           shouldReportHttpFailure: (s) => s === undefined || s === 0 || s >= 500,
         };
       }
+      if (request === '@/i18n') {
+        // client.ts i18n's its user-facing error messages; echo defaultValue (+ {{}} interp).
+        return {
+          __esModule: true,
+          default: {
+            t: (key, opts) => { let s = (opts && opts.defaultValue) || key; if (opts) for (const k of Object.keys(opts)) if (k !== 'defaultValue') s = s.split('{{' + k + '}}').join(String(opts[k])); return s; },
+            language: 'zh',
+          },
+        };
+      }
       return require(request);
     },
   };

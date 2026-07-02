@@ -81,6 +81,9 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
+    flexShrink: 1,
+    justifyContent: 'flex-end',
+    maxWidth: '55%',
   },
   iconBox: {
     width: 48,
@@ -161,6 +164,8 @@ export function SettingsDetailScreen({
       value: {
         color: colors.text,
         ...Typography.caption,
+        flexShrink: 1,
+        textAlign: 'right' as const,
       },
       mutedValue: {
         color: colors.textSecondary,
@@ -232,7 +237,11 @@ export function SettingsDetailScreen({
             </View>
           </View>
           <View style={s.rowRight}>
-            {valueText ? <Text style={d.value}>{valueText}</Text> : null}
+            {valueText ? (
+              <Text numberOfLines={2} style={d.value}>
+                {valueText}
+              </Text>
+            ) : null}
             {row.statusKey ? (
               <Text
                 style={[

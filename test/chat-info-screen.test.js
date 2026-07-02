@@ -312,9 +312,14 @@ test('i18n defaults to following the system language when no preference is saved
   const filePath = path.join(process.cwd(), 'src/i18n/index.ts');
   const source = fs.readFileSync(filePath, 'utf8');
 
-  assert.match(source, /export type AppLanguagePreference = 'system' \| 'zh' \| 'en'/);
+  assert.match(source, /export const APP_LANGUAGE_OPTIONS/);
+  for (const lang of ['zh', 'en', 'ja', 'ko', 'es']) {
+    assert.match(source, new RegExp(`value:\\s*'${lang}'`));
+    assert.match(source, new RegExp(`resources[\\s\\S]*${lang}:\\s*\\{\\s*translation:\\s*${lang}\\s*\\}`));
+  }
+  assert.match(source, /export type AppLanguagePreference = 'system' \| AppLanguage/);
   assert.match(source, /function getSavedLanguagePreference\(\): AppLanguagePreference/);
-  assert.match(source, /if \(saved === 'zh' \|\| saved === 'en'\) return saved;/);
+  assert.match(source, /if \(isAppLanguage\(saved\)\) return saved;/);
   assert.match(source, /return 'system';/);
   assert.match(source, /export function getCurrentLanguagePreference\(\): AppLanguagePreference/);
   assert.match(source, /export function setLanguage\(lang: AppLanguagePreference\)/);

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-test('messages screen renders pinned conversations as separated rounded surfaces without a pin icon', () => {
+test('messages screen renders pinned conversations as compact grouped surfaces without a pin icon', () => {
   const filePath = path.join(
     process.cwd(),
     'src/features/messages/screens/MessagesScreen.tsx',
@@ -11,11 +11,19 @@ test('messages screen renders pinned conversations as separated rounded surfaces
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /pinnedSurface/);
-  assert.match(source, /item\.pinned \? \[s\.pinnedSurface, pinnedSurfaceStyle\] : null/);
+  assert.match(source, /type PinnedGroupPosition = "single" \| "first" \| "middle" \| "last" \| "none"/);
+  assert.match(source, /getPinnedGroupPosition/);
+  assert.match(source, /pinnedGroupPosition=\{getPinnedGroupPosition\(visibleConversations, index\)\}/);
+  assert.match(source, /getPinnedRowStyle\(pinnedGroupPosition\)/);
+  assert.match(source, /getPinnedSurfaceStyle\(pinnedGroupPosition\)/);
   assert.match(source, /pinnedSurfaceStyle=\{d\.pinnedSurface\}/);
-  assert.match(source, /borderRadius: Radius\.lg/);
+  assert.match(source, /pinnedRowMiddle/);
+  assert.match(source, /pinnedSurfaceMiddle/);
   assert.doesNotMatch(source, /name="pin"/);
-  assert.doesNotMatch(source, /leadingItem\?\.pinned \? null : <Divider \/>/);
+  assert.match(source, /const hiddenPinnedSeparatorIDs = useMemo/);
+  assert.match(source, /visibleConversations\[index \+ 1\]\?\.pinned/);
+  assert.match(source, /hiddenPinnedSeparatorIDs\.has\(leadingItem\.id\) \? null : <Divider \/>/);
+  assert.doesNotMatch(source, /trailingItem/);
   assert.match(source, /ItemSeparatorComponent=\{renderSeparator\}/);
 });
 
@@ -47,7 +55,9 @@ test('messages screen shows a muted indicator for conversations with notificatio
   assert.match(screenSource, /mutedIndicator:\s*\{[\s\S]{0,160}position: "absolute"[\s\S]{0,160}top: 20[\s\S]{0,160}right: 0/);
   assert.match(screenSource, /item\.muted \? \(/);
   assert.match(screenSource, /<Text style=\{timeStyle\}>\{item\.time\}<\/Text>[\s\S]{0,240}name="notifications-off-outline"/);
-  assert.match(screenSource, /accessibilityLabel="消息免打扰"/);
+  // The muted a11y label is now i18n'd; the Chinese survives as the defaultValue.
+  assert.match(screenSource, /accessibilityLabel=\{t\("messages\.mutedA11y"/);
+  assert.match(screenSource, /defaultValue: "消息免打扰"/);
   assert.doesNotMatch(screenSource, /name="volume-mute-outline"/);
 });
 

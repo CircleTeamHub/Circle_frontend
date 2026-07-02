@@ -91,9 +91,11 @@ test('chat info screen routes blacklist, delete, and report through real friend 
   assert.match(source, /onToggle={handleToggleBlacklist}/);
   assert.match(source, /label=\{t\('chat\.deleteFriend'\)\}/);
   assert.match(source, /onPress={deletePending \? undefined : handleConfirmDeleteContact}/);
-  assert.match(source, /label=\{t\('chat\.report'\)\}/);
+  // chat.report became an object namespace (report screen keys); the row label
+  // now uses the report-screen title string chat.report.title (same "投诉举报").
+  assert.match(source, /label=\{t\('chat\.report\.title'\)\}/);
   assert.match(source, /messages\/report-friend/);
-  assert.doesNotMatch(source, /openUnsupportedAction\(t\('chat\.report'\)\)/);
+  assert.doesNotMatch(source, /openUnsupportedAction\(t\('chat\.report\.title'\)\)/);
   assert.doesNotMatch(source, /openUnsupportedAction\(t\('chat\.deleteFriend'\)\)/);
 });
 

@@ -7,6 +7,7 @@ import {
 } from '@/components/ui/option-picker-sheet';
 import { SettingsDetailScreen } from '@/features/profile/components/settings-detail';
 import {
+  APP_LANGUAGE_OPTIONS,
   getCurrentLanguagePreference,
   setLanguage,
   type AppLanguagePreference,
@@ -43,8 +44,10 @@ export default function AppearanceSettingsScreen() {
   const languageOptions = useMemo<PickerOption<AppLanguagePreference>[]>(
     () => [
       { label: t('appSettings.languageSheet.system'), value: 'system' },
-      { label: t('appSettings.languageSheet.zh'), value: 'zh' },
-      { label: t('appSettings.languageSheet.en'), value: 'en' },
+      ...APP_LANGUAGE_OPTIONS.map((option) => ({
+        label: t(option.labelKey),
+        value: option.value,
+      })),
     ],
     [t],
   );

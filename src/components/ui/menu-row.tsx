@@ -30,11 +30,19 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
+    // 占据剩余空间并允许收缩，长标签（西语/日语）才能省略而不是把右侧挤掉。
+    flex: 1,
+  },
+  labelCol: {
+    flexShrink: 1,
   },
   right: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
+    // 右侧（箭头/开关/值）保持内容宽度，不被左侧长文本压缩。
+    flexShrink: 0,
+    marginLeft: Spacing.sm,
   },
   indicatorDot: {
     width: 8,
@@ -102,12 +110,17 @@ export const MenuRow: React.FC<MenuRowProps> = ({
         ) : (
           <Ionicons name={icon} size={20} color={colors.text} />
         )}
-        <View>
-          <Text style={[d.label, destructive && d.destructive]}>
+        <View style={s.labelCol}>
+          <Text
+            style={[d.label, destructive && d.destructive]}
+            numberOfLines={1}
+          >
             {label}
           </Text>
           {subtitle ? (
-            <Text style={d.subtitle}>{subtitle}</Text>
+            <Text style={d.subtitle} numberOfLines={2}>
+              {subtitle}
+            </Text>
           ) : null}
         </View>
       </View>

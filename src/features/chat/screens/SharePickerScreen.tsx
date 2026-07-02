@@ -96,7 +96,11 @@ export default function SharePickerScreen() {
       } catch (err) {
         if (!cancelled) {
           // 不再只 dev-warn —— 暴露给用户 + 提供重试，"加载失败"和"真的空"区分开。
-          setError(err instanceof Error ? err.message : '加载失败');
+          setError(
+            err instanceof Error
+              ? err.message
+              : i18n.t('share.loadFailed', { defaultValue: '加载失败' }),
+          );
         }
         if (typeof __DEV__ !== 'undefined' && __DEV__) {
           console.warn(`[share-picker] fetch ${shareType} failed`, err);
@@ -256,7 +260,7 @@ export default function SharePickerScreen() {
         <Ionicons name="search-outline" size={16} color={colors.textSecondary} />
         <TextInput
           style={[s.searchInput, { color: colors.text }]}
-          placeholder="搜索"
+          placeholder={i18n.t('common.search', { defaultValue: '搜索' })}
           placeholderTextColor={colors.textSecondary}
           value={query}
           onChangeText={setQuery}
@@ -289,13 +293,17 @@ export default function SharePickerScreen() {
               backgroundColor: colors.primary,
             }}
           >
-            <Text style={{ color: colors.white, ...Typography.body }}>重试</Text>
+            <Text style={{ color: colors.white, ...Typography.body }}>
+              {i18n.t('common.retry', { defaultValue: '重试' })}
+            </Text>
           </Pressable>
         </View>
       ) : empty ? (
         <View style={s.center}>
           <Text style={{ color: colors.textSecondary, ...Typography.bodyRegular }}>
-            {query ? '没有匹配项' : '暂无内容'}
+            {query
+              ? i18n.t('share.noMatch', { defaultValue: '没有匹配项' })
+              : i18n.t('share.empty', { defaultValue: '暂无内容' })}
           </Text>
         </View>
       ) : shareType === 'note' ? (

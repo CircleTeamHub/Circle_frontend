@@ -1096,15 +1096,15 @@ test("appearance settings only controls theme and language preferences", () => {
   assert.match(source, /setThemeMode/);
   assert.match(source, /setLanguage/);
   assert.match(source, /getCurrentLanguagePreference/);
+  assert.match(source, /APP_LANGUAGE_OPTIONS/);
   assert.match(source, /OptionPickerSheet/);
   assert.match(source, /selectedValue=\{themeMode\}/);
   assert.match(source, /selectedValue=\{languagePreference\}/);
   assert.match(source, /settingsDetails\.appearance\.themeSheet\.system/);
   assert.match(source, /settingsDetails\.appearance\.themeSheet\.light/);
   assert.match(source, /settingsDetails\.appearance\.themeSheet\.dark/);
-  assert.match(source, /appSettings\.languageSheet\.system/);
-  assert.match(source, /appSettings\.languageSheet\.zh/);
-  assert.match(source, /appSettings\.languageSheet\.en/);
+  assert.match(source, /APP_LANGUAGE_OPTIONS\.map/);
+  assert.doesNotMatch(source, /value:\s*'zh'[\s\S]*value:\s*'en'/);
   for (const removedKey of [
     "displayMode",
     "fontSize",
@@ -1167,4 +1167,44 @@ test("system announcements screen exposes latest app information and patches", (
   assert.match(source, /systemAnnouncements\.latestAppInfo/);
   assert.match(source, /systemAnnouncements\.updates/);
   assert.match(source, /systemAnnouncements\.patches/);
+});
+
+test("language picker and settings rows allow long translated labels", () => {
+  const pickerSource = fs.readFileSync(
+    path.join(process.cwd(), "src/components/ui/option-picker-sheet.tsx"),
+    "utf8",
+  );
+  const settingsDetailSource = fs.readFileSync(
+    path.join(process.cwd(), "src/features/profile/components/settings-detail.tsx"),
+    "utf8",
+  );
+
+  assert.match(pickerSource, /optionRow:\s*\{[\s\S]*minHeight:\s*52/);
+  assert.match(pickerSource, /optionLabel:\s*\{[\s\S]*flexShrink:\s*1/);
+  assert.match(pickerSource, /numberOfLines=\{2\}/);
+  assert.match(settingsDetailSource, /rowRight:\s*\{[\s\S]*flexShrink:\s*1/);
+  assert.match(settingsDetailSource, /value:\s*\{[\s\S]*textAlign:\s*'right'/);
+  assert.match(settingsDetailSource, /numberOfLines=\{2\}/);
+});
+
+test("every locale defines labels for all supported language picker options", () => {
+  const localeCodes = ["zh", "en", "ja", "ko", "es"];
+  const languageSheetKeys = ["title", "system", "zh", "en", "ja", "ko", "es"];
+
+  for (const localeCode of localeCodes) {
+    const locale = JSON.parse(
+      fs.readFileSync(
+        path.join(process.cwd(), `src/i18n/locales/${localeCode}.json`),
+        "utf8",
+      ),
+    );
+    const languageSheet = locale.appSettings?.languageSheet ?? {};
+    const missing = languageSheetKeys.filter((key) => !languageSheet[key]);
+
+    assert.deepEqual(
+      missing,
+      [],
+      `${localeCode}.json appSettings.languageSheet is missing: ${missing.join(", ")}`,
+    );
+  }
 });

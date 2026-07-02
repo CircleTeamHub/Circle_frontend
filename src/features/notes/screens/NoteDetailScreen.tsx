@@ -259,7 +259,9 @@ export default function NoteDetailScreen() {
           <>
             {availability?.hasText ? (
               <View onLayout={trackSectionLayout('text')} style={s.section}>
-                <Text style={[s.sectionTitle, d.sectionTitle]}>文字</Text>
+                <Text style={[s.sectionTitle, d.sectionTitle]}>
+                  {t('notes.section.text', { defaultValue: '文字' })}
+                </Text>
                 {sections.text.contentJson && sections.text.contentJson.length > 0 ? (
                   <NoteBlockRenderer blocks={sections.text.contentJson} />
                 ) : sections.text.content || note.content ? (
@@ -272,7 +274,9 @@ export default function NoteDetailScreen() {
 
             {availability?.hasMedia ? (
               <View onLayout={trackSectionLayout('media')} style={s.section}>
-                <Text style={[s.sectionTitle, d.sectionTitle]}>图片 / 视频</Text>
+                <Text style={[s.sectionTitle, d.sectionTitle]}>
+                  {t('notes.section.media', { defaultValue: '图片 / 视频' })}
+                </Text>
                 <NoteBlockRenderer
                   blocks={sections.media.items.map((item) => ({
                     id: item.id ?? item.url,
@@ -285,7 +289,9 @@ export default function NoteDetailScreen() {
 
             {availability?.hasShowcase ? (
               <View onLayout={trackSectionLayout('showcase')} style={s.section}>
-                <Text style={[s.sectionTitle, d.sectionTitle]}>展示</Text>
+                <Text style={[s.sectionTitle, d.sectionTitle]}>
+                  {t('notes.section.showcase', { defaultValue: '展示' })}
+                </Text>
                 <NoteBlockRenderer
                   blocks={sections.showcase.items.map((item) => ({
                     id: item.id ?? item.url,
@@ -298,12 +304,15 @@ export default function NoteDetailScreen() {
 
             {availability?.hasLocation ? (
               <View onLayout={trackSectionLayout('location')} style={s.section}>
-                <Text style={[s.sectionTitle, d.sectionTitle]}>地址</Text>
+                <Text style={[s.sectionTitle, d.sectionTitle]}>
+                  {t('notes.section.location', { defaultValue: '地址' })}
+                </Text>
                 <View style={[s.locationCard, d.sectionCard]}>
                   <Ionicons name="location-outline" size={20} color={colors.primary} />
                   <View style={{ flex: 1 }}>
                     <Text style={[s.locationTitle, { color: colors.text }]}>
-                      {sections.location?.title || '位置'}
+                      {sections.location?.title ||
+                        t('notes.detail.locationFallback', { defaultValue: '位置' })}
                     </Text>
                     {sections.location?.address ? (
                       <Text style={[s.meta, d.meta]}>{sections.location.address}</Text>
@@ -325,10 +334,26 @@ export default function NoteDetailScreen() {
         <Pressable style={s.modalBackdrop} onPress={() => setDownloadMenuVisible(false)}>
           <View style={[s.downloadSheet, d.downloadSheet]}>
             {[
-              ['IMAGES', '下载图片', 'image-outline'],
-              ['VIDEOS', '下载视频', 'videocam-outline'],
-              ['IMAGE', '生成长图', 'camera-outline'],
-              ['PDF', '下载PDF', 'document-text-outline'],
+              [
+                'IMAGES',
+                t('notes.detail.downloadImages', { defaultValue: '下载图片' }),
+                'image-outline',
+              ],
+              [
+                'VIDEOS',
+                t('notes.detail.downloadVideos', { defaultValue: '下载视频' }),
+                'videocam-outline',
+              ],
+              [
+                'IMAGE',
+                t('notes.detail.downloadLongImage', { defaultValue: '生成长图' }),
+                'camera-outline',
+              ],
+              [
+                'PDF',
+                t('notes.detail.downloadPdf', { defaultValue: '下载PDF' }),
+                'document-text-outline',
+              ],
             ].map(([format, label, icon]) => (
               <Pressable
                 key={format}
@@ -342,7 +367,9 @@ export default function NoteDetailScreen() {
                   color={colors.text}
                 />
                 <Text style={[s.downloadLabel, { color: colors.text }]}>
-                  {exporting === format ? '处理中...' : label}
+                  {exporting === format
+                    ? t('common.processing', { defaultValue: '处理中...' })
+                    : label}
                 </Text>
               </Pressable>
             ))}

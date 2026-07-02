@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import { Avatar } from '@/components/ui/avatar';
 import type { ChatMessage, NoteCardData } from '@/types';
@@ -105,6 +106,7 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
   hideStatus,
 }) => {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const note = message.noteCard;
 
   const avatarNode = (
@@ -126,17 +128,39 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
     location: note.hasLocation ?? false,
   };
 
-  const chips: { id: keyof typeof flags; label: string; section: 'text' | 'media' | 'showcase' | 'location' }[] = [
-    { id: 'note', label: '笔记', section: 'text' },
-    { id: 'video', label: '视频', section: 'media' },
-    { id: 'display', label: '展示', section: 'showcase' },
-    { id: 'location', label: '位置', section: 'location' },
+  const chips: {
+    id: keyof typeof flags;
+    labelKey: string;
+    defaultLabel: string;
+    section: 'text' | 'media' | 'showcase' | 'location';
+  }[] = [
+    { id: 'note', labelKey: 'chat.noteCard.chips.note', defaultLabel: '笔记', section: 'text' },
+    { id: 'video', labelKey: 'chat.noteCard.chips.video', defaultLabel: '视频', section: 'media' },
+    { id: 'display', labelKey: 'chat.noteCard.chips.display', defaultLabel: '展示', section: 'showcase' },
+    { id: 'location', labelKey: 'chat.noteCard.chips.location', defaultLabel: '位置', section: 'location' },
   ];
 
   const metaSegments: string[] = [];
-  if (note.imageCount > 0) metaSegments.push(`${note.imageCount}张图片`);
-  if (note.videoCount > 0) metaSegments.push(`${note.videoCount}个视频`);
-  const metaLine = metaSegments.length ? `包含: ${metaSegments.join('|')}` : null;
+  if (note.imageCount > 0)
+    metaSegments.push(
+      t('chat.noteCard.imageCount', {
+        defaultValue: '{{count}}张图片',
+        count: note.imageCount,
+      }),
+    );
+  if (note.videoCount > 0)
+    metaSegments.push(
+      t('chat.noteCard.videoCount', {
+        defaultValue: '{{count}}个视频',
+        count: note.videoCount,
+      }),
+    );
+  const metaLine = metaSegments.length
+    ? t('chat.noteCard.includes', {
+        defaultValue: '包含: {{segments}}',
+        segments: metaSegments.join('|'),
+      })
+    : null;
 
   const cardBg = outgoing ? colors.sentBubble : colors.receivedBubble;
   const onCardColor = outgoing ? colors.white : colors.text;
@@ -209,7 +233,7 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
                     { color: active ? colors.white : onCardSecondary },
                   ]}
                 >
-                  {chip.label}
+                  {t(chip.labelKey, { defaultValue: chip.defaultLabel })}
                 </Text>
               </Pressable>
             );

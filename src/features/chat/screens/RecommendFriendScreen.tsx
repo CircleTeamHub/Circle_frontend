@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { Avatar } from '@/components/ui/avatar';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
@@ -55,6 +56,7 @@ const s = StyleSheet.create({
 export default function RecommendFriendScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{
     conversationID?: string;
     friendId?: string;
@@ -70,7 +72,9 @@ export default function RecommendFriendScreen() {
     typeof params.conversationID === 'string' ? params.conversationID : '';
   const friendId = typeof params.friendId === 'string' ? params.friendId : '';
   const friendName =
-    typeof params.friendName === 'string' ? params.friendName : '这位好友';
+    typeof params.friendName === 'string'
+      ? params.friendName
+      : t('chat.recommend.fallbackFriend', { defaultValue: '这位好友' });
 
   useEffect(() => {
     if (rawConversations.length > 0) {
@@ -100,12 +104,16 @@ export default function RecommendFriendScreen() {
       }
 
       Alert.alert(
-        '推荐给朋友',
-        `确认把 ${friendName} 推荐给 ${conversation.name} 吗？`,
+        t('chat.recommend.title', { defaultValue: '推荐给朋友' }),
+        t('chat.recommend.confirmMsg', {
+          defaultValue: '确认把 {{friend}} 推荐给 {{target}} 吗？',
+          friend: friendName,
+          target: conversation.name,
+        }),
         [
-          { text: '取消', style: 'cancel' },
+          { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
           {
-            text: '发送',
+            text: t('common.send', { defaultValue: '发送' }),
             onPress: () => {
               if (inFlightRef.current) return;
               inFlightRef.current = true;
@@ -117,17 +125,25 @@ export default function RecommendFriendScreen() {
                 faceURL: '',
               })
                 .then(() => {
-                  Alert.alert('已发送', '好友名片已发送。', [
-                    {
-                      text: '知道了',
-                      onPress: () => router.back(),
-                    },
-                  ]);
+                  Alert.alert(
+                    t('chat.recommend.sentTitle', { defaultValue: '已发送' }),
+                    t('chat.recommend.sentMsg', {
+                      defaultValue: '好友名片已发送。',
+                    }),
+                    [
+                      {
+                        text: t('common.ok', { defaultValue: '知道了' }),
+                        onPress: () => router.back(),
+                      },
+                    ],
+                  );
                 })
                 .catch((error: unknown) => {
                   Alert.alert(
-                    '发送失败',
-                    error instanceof Error ? error.message : '请稍后重试',
+                    t('chat.recommend.sendFailed', { defaultValue: '发送失败' }),
+                    error instanceof Error
+                      ? error.message
+                      : t('common.retryLater', { defaultValue: '请稍后重试' }),
                   );
                 })
                 .finally(() => {
@@ -140,7 +156,7 @@ export default function RecommendFriendScreen() {
         { cancelable: true },
       );
     },
-    [friendId, friendName, sendingConversationID],
+    [friendId, friendName, sendingConversationID, t],
   );
 
   const renderItem = useCallback(
@@ -162,12 +178,17 @@ export default function RecommendFriendScreen() {
             style={[Typography.caption, { color: colors.textSecondary }]}
             numberOfLines={1}
           >
-            {sendingConversationID === item.id ? '发送中…' : item.message || '发送好友名片'}
+            {sendingConversationID === item.id
+              ? t('chat.recommend.sending', { defaultValue: '发送中…' })
+              : item.message ||
+                t('chat.recommend.sendCardHint', {
+                  defaultValue: '发送好友名片',
+                })}
           </Text>
         </View>
       </Pressable>
     ),
-    [colors.text, colors.textSecondary, confirmSend, sendingConversationID],
+    [colors.text, colors.textSecondary, confirmSend, sendingConversationID, t],
   );
 
   return (
@@ -177,7 +198,7 @@ export default function RecommendFriendScreen() {
         { paddingTop: insets.top, backgroundColor: colors.background },
       ]}
     >
-      <NavHeader title="推荐给朋友" />
+      <NavHeader title={t('chat.recommend.title', { defaultValue: '推荐给朋友' })} />
       <FlatList
         data={conversations}
         keyExtractor={(item) => item.id}
@@ -187,17 +208,24 @@ export default function RecommendFriendScreen() {
           <View style={s.content}>
             <View style={[s.introCard, { backgroundColor: colors.surface }]}>
               <Text style={[Typography.body, { color: colors.text, fontWeight: '600' }]}>
-                选择一个会话
+                {t('chat.recommend.pickConversation', {
+                  defaultValue: '选择一个会话',
+                })}
               </Text>
               <Text style={[Typography.caption, { color: colors.textSecondary }]}>
-                发送 {friendName} 的好友名片到另一个聊天。
+                {t('chat.recommend.intro', {
+                  defaultValue: '发送 {{friend}} 的好友名片到另一个聊天。',
+                  friend: friendName,
+                })}
               </Text>
             </View>
           </View>
         }
         ListEmptyComponent={
           <Text style={[s.empty, Typography.bodyRegular, { color: colors.textSecondary }]}>
-            暂无可推荐的聊天对象
+            {t('chat.recommend.empty', {
+              defaultValue: '暂无可推荐的聊天对象',
+            })}
           </Text>
         }
         contentContainerStyle={[

@@ -1,3 +1,4 @@
+import i18n from '@/i18n';
 import type { CreateCollectionInput, UserCollection } from '@/services/api/collections';
 import type { ChatMessage, ConversationType, FriendCardData, NoteCardData } from '@/types';
 
@@ -49,29 +50,55 @@ function getCollectionType(message: ChatMessage): CreateCollectionInput['type'] 
 }
 
 function getCollectionTitle(message: ChatMessage) {
-  if (message.type === 'voice') return '语音消息';
-  if (message.type === 'image') return '图片消息';
-  if (message.type === 'location') return message.locationTitle || '位置消息';
-  if (message.type === 'note-card') return message.noteCard?.title || '笔记';
+  if (message.type === 'voice')
+    return i18n.t('chat.collection.voiceMessage', { defaultValue: '语音消息' });
+  if (message.type === 'image')
+    return i18n.t('chat.collection.imageMessage', { defaultValue: '图片消息' });
+  if (message.type === 'location')
+    return (
+      message.locationTitle ||
+      i18n.t('chat.collection.locationMessage', { defaultValue: '位置消息' })
+    );
+  if (message.type === 'note-card')
+    return (
+      message.noteCard?.title ||
+      i18n.t('chat.collection.note', { defaultValue: '笔记' })
+    );
   if (message.type === 'friend-card') {
-    return `名片: ${message.friendCard?.nickname ?? '好友'}`;
+    return i18n.t('chat.collection.friendCard', {
+      nickname:
+        message.friendCard?.nickname ??
+        i18n.t('chat.friend', { defaultValue: '好友' }),
+      defaultValue: '名片: {{nickname}}',
+    });
   }
-  if (message.type === 'transfer-card') return '积分转账';
-  return compactText(message.text, 40) || '聊天消息';
+  if (message.type === 'transfer-card')
+    return i18n.t('chat.collection.transfer', { defaultValue: '积分转账' });
+  return (
+    compactText(message.text, 40) ||
+    i18n.t('chat.collection.message', { defaultValue: '聊天消息' })
+  );
 }
 
 function getCollectionSummary(message: ChatMessage) {
   if (message.type === 'voice') {
     const seconds = Math.max(1, Math.round(message.voiceDuration ?? 1));
-    return `${seconds} 秒语音`;
+    return i18n.t('chat.collection.secondsVoice', {
+      seconds,
+      defaultValue: '{{seconds}} 秒语音',
+    });
   }
-  if (message.type === 'image') return '图片';
+  if (message.type === 'image')
+    return i18n.t('chat.media.image', { defaultValue: '图片' });
   if (message.type === 'location') return message.locationAddress ?? null;
   if (message.type === 'note-card') return compactText(message.noteCard?.contentPreview, 120) || null;
-  if (message.type === 'friend-card') return '个人名片';
+  if (message.type === 'friend-card')
+    return i18n.t('chat.collection.personalCard', { defaultValue: '个人名片' });
   if (message.type === 'transfer-card') {
     const amount = message.transferCard?.amount;
-    return typeof amount === 'number' ? `${amount} 积分` : '积分转账';
+    return typeof amount === 'number'
+      ? `${amount} ${i18n.t('common.coin', { defaultValue: '积分' })}`
+      : i18n.t('chat.collection.transfer', { defaultValue: '积分转账' });
   }
   return compactText(message.text, 120) || null;
 }

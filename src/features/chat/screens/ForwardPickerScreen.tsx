@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import i18n from '@/i18n';
 import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
 import { useMessageForwardStore } from '@/features/chat/store/use-message-forward-store';
@@ -94,10 +95,20 @@ function getForwardFallbackText(message: ChatMessage) {
     return message.text?.trim() ?? '';
   }
   if (message.type === 'location') {
-    return `[位置] ${message.locationTitle ?? message.locationAddress ?? ''}`.trim();
+    return i18n
+      .t('chat.forward.locationWithDetail', {
+        detail: message.locationTitle ?? message.locationAddress ?? '',
+        defaultValue: '[位置] {{detail}}',
+      })
+      .trim();
   }
   if (message.type === 'transfer-card') {
-    return `[转账] ${message.transferCard?.amount ?? ''} 积分`.trim();
+    return i18n
+      .t('im.preview.transferWithAmount', {
+        amount: message.transferCard?.amount ?? '',
+        defaultValue: '[转账] {{amount}} 积分',
+      })
+      .trim();
   }
   return '';
 }

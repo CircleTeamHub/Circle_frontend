@@ -62,7 +62,7 @@ export const FilterTabs: React.FC<FilterTabsProps> = ({
           accessibilityLabel={tab}
           accessibilityState={{ selected: active }}
         >
-          <Text style={[d.label, active && d.labelActive]}>
+          <Text style={[d.label, active && d.labelActive]} numberOfLines={1}>
             {tab}
           </Text>
         </Pressable>

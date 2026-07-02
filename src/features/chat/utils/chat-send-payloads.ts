@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next';
 import type { ChatMessage } from '@/types';
 
 export type MentionTarget = {
@@ -62,27 +63,41 @@ export function buildAtMessagePayload(text: string, mentions: MentionTarget[]) {
   };
 }
 
-export function buildQuotePreviewText(message: ChatMessage) {
+// `t` is passed in (not a module-level i18n import) so this util stays pure and its
+// isolated unit test doesn't have to boot the full i18n runtime. Matches note-format.ts.
+export function buildQuotePreviewText(message: ChatMessage, t: TFunction) {
   const text = message.text?.trim();
   if (text) return text.length > 120 ? `${text.slice(0, 117)}...` : text;
   switch (message.type) {
     case 'image':
-      return '[图片]';
+      return t('im.preview.image', { defaultValue: '[图片]' });
     case 'voice':
-      return '[语音]';
+      return t('im.preview.voice', { defaultValue: '[语音]' });
     case 'location':
-      return message.locationTitle || '[位置]';
+      return (
+        message.locationTitle ||
+        t('im.preview.location', { defaultValue: '[位置]' })
+      );
     case 'note-card':
-      return `[笔记] ${message.noteCard?.title ?? ''}`.trim();
+      return t('im.preview.note', {
+        title: message.noteCard?.title ?? '',
+        defaultValue: '[笔记] {{title}}',
+      }).trim();
     case 'friend-card':
-      return `[名片] ${message.friendCard?.nickname ?? ''}`.trim();
+      return t('im.preview.card', {
+        name: message.friendCard?.nickname ?? '',
+        defaultValue: '[名片] {{name}}',
+      }).trim();
     case 'transfer-card':
-      return '[转账]';
+      return t('im.preview.transfer', { defaultValue: '[转账]' });
     case 'verification-card':
-      return '[验证]';
+      return t('chat.preview.verification', { defaultValue: '[验证]' });
     case 'circle-card':
-      return `[圈子] ${message.circleCard?.name ?? ''}`.trim();
+      return t('chat.preview.circle', {
+        name: message.circleCard?.name ?? '',
+        defaultValue: '[圈子] {{name}}',
+      }).trim();
     default:
-      return '[消息]';
+      return t('im.preview.default', { defaultValue: '[消息]' });
   }
 }
