@@ -232,8 +232,8 @@ export default function NoteDetailScreen() {
       container: { backgroundColor: colors.background },
       title: { color: colors.text },
       meta: { color: colors.textSecondary },
-      // 分组标签：方形深紫实心块 + 白字（用户指定）
-      groupTag: { backgroundColor: colors.deepPurple },
+      // 分组标签：方形品牌紫实心块 + 白字（brandPurple = 会员卡渐变核心色）
+      groupTag: { backgroundColor: colors.brandPurple },
       groupTagText: { color: colors.white },
       content: { color: colors.text },
       iconBtn: {

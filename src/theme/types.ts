@@ -10,6 +10,8 @@ export interface ThemeColors {
   primaryLight: string;
   /** 比 primary 深一档的靛蓝，用于需要更重的实心按钮/强调面 */
   primaryDeep: string;
+  /** 品牌紫：会员卡渐变（Gradients.memberCard）的核心色，白字配它已在会员卡验证 */
+  brandPurple: string;
   text: string;
   textSecondary: string;
   white: string;

@@ -409,10 +409,12 @@ test('NoteDetailScreen follows the divider + icon-chip section design', () => {
   assert.match(detail, /sourceCard: \{ backgroundColor: colors\.primaryLight \}/);
   assert.match(detail, /sourceBtn: \{ backgroundColor: colors\.primaryDeep \}/);
 
-  // 分组标签：方形深紫实心块 + 白字。
-  assert.match(detail, /groupTag: \{ backgroundColor: colors\.deepPurple \}/);
+  // 分组标签：方形品牌紫实心块 + 白字（brandPurple = 会员卡渐变核心 #7C5CF0）。
+  assert.match(detail, /groupTag: \{ backgroundColor: colors\.brandPurple \}/);
   assert.match(detail, /groupTagText: \{ color: colors\.white \}/);
   assert.match(detail, /groupTag:\s*\{[\s\S]*?borderRadius:\s*Radius\.xs/);
+  const colorsSrc = read('src/theme/colors.ts');
+  assert.match(colorsSrc, /brandPurple: '#7C5CF0'/);
 
   // 媒体满宽圆角，按真实宽高比渲染（比例夹在 3:4 与 16:9 之间），
   // 无尺寸信息回退方图。
