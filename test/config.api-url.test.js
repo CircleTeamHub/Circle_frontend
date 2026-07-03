@@ -28,6 +28,11 @@ module.exports = { API_URL };
     module: { exports: {} },
     exports: {},
     process: { env },
+    // These tests exercise URL normalization under a dev build (Expo dev host),
+    // so __DEV__ is true and the transport-security guard is a no-op. The guard's
+    // release-mode blocking logic is covered directly in transport-security.test.mts.
+    __DEV__: true,
+    evaluateTransportGuard: () => null,
     Constants: {
       expoConfig: {
         hostUri: options.hostUri ?? '10.0.0.195:8081',

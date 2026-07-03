@@ -10,6 +10,27 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { APP_DISPLAY_NAME } from './branding';
+import { evaluateTransportGuard } from './transport-security';
+
+// 传输安全守卫：release 构建（!__DEV__）禁止明文 http/ws 打到公网 host，避免误配把
+// Bearer token / 金额报文走明文。dev 一律放行（本地开发不受影响）；私网 / 本机 host
+// 也放行（局域网自托管、模拟器回环联调）；测试期需要明文公网 IP 时，在构建环境设置
+// EXPO_PUBLIC_ALLOW_INSECURE_TRANSPORT=1 显式放行。
+const IS_DEV_BUILD = typeof __DEV__ !== 'undefined' && __DEV__;
+const ALLOW_INSECURE_TRANSPORT =
+  process.env.EXPO_PUBLIC_ALLOW_INSECURE_TRANSPORT === '1' ||
+  process.env.EXPO_PUBLIC_ALLOW_INSECURE_TRANSPORT === 'true';
+
+function assertSecureTransport(rawUrl: string, label: string): string {
+  const problem = evaluateTransportGuard(rawUrl, label, {
+    isDev: IS_DEV_BUILD,
+    allowInsecure: ALLOW_INSECURE_TRANSPORT,
+  });
+  if (problem) {
+    throw new Error(problem);
+  }
+  return rawUrl;
+}
 
 const API_PORT = '3000';
 const OPENIM_API_PORT = '10002';
@@ -59,16 +80,23 @@ function getDefaultOpenIMWsUrl() {
   return `ws://${getDefaultHost()}:${OPENIM_WS_PORT}`;
 }
 
-export const API_URL = ensureVersionedApiUrl(
-  process.env.EXPO_PUBLIC_API_URL ?? getDefaultApiUrl()
+export const API_URL = assertSecureTransport(
+  ensureVersionedApiUrl(process.env.EXPO_PUBLIC_API_URL ?? getDefaultApiUrl()),
+  'API_URL',
 );
 
-export const OPENIM_API_URL = trimTrailingSlash(
-  process.env.EXPO_PUBLIC_OPENIM_API_URL ?? getDefaultOpenIMApiUrl()
+export const OPENIM_API_URL = assertSecureTransport(
+  trimTrailingSlash(
+    process.env.EXPO_PUBLIC_OPENIM_API_URL ?? getDefaultOpenIMApiUrl()
+  ),
+  'OPENIM_API_URL',
 );
 
-export const OPENIM_WS_URL = trimTrailingSlash(
-  process.env.EXPO_PUBLIC_OPENIM_WS_URL ?? getDefaultOpenIMWsUrl()
+export const OPENIM_WS_URL = assertSecureTransport(
+  trimTrailingSlash(
+    process.env.EXPO_PUBLIC_OPENIM_WS_URL ?? getDefaultOpenIMWsUrl()
+  ),
+  'OPENIM_WS_URL',
 );
 
 /**
@@ -92,8 +120,11 @@ function deriveRealtimeUrlFromApi(apiUrl: string): string {
   }
 }
 
-export const REALTIME_WS_URL = trimTrailingSlash(
-  process.env.EXPO_PUBLIC_REALTIME_WS_URL ?? deriveRealtimeUrlFromApi(API_URL),
+export const REALTIME_WS_URL = assertSecureTransport(
+  trimTrailingSlash(
+    process.env.EXPO_PUBLIC_REALTIME_WS_URL ?? deriveRealtimeUrlFromApi(API_URL),
+  ),
+  'REALTIME_WS_URL',
 );
 
 // OpenIM SDK 日志级别：0=关闭 1=fatal 2=error 3=warn 4=info 5=debug
