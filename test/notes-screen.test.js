@@ -394,18 +394,28 @@ test('ProfileScreen does not include the assistant menu item', () => {
   assert.doesNotMatch(src, /profile\.assistant/);
 });
 
-test('NoteDetailScreen frames sections and media in bordered cards', () => {
+test('NoteDetailScreen follows the divider + icon-chip section design', () => {
   const detail = read('src/features/notes/screens/NoteDetailScreen.tsx');
   const renderer = read('src/features/notes/components/NoteBlockRenderer.tsx');
 
-  // 详情页小节 = surface 卡片（和编辑页同语言），媒体块带细边"相框"，
-  // 竖图 contain 的留白垫页面底色而不是裸露透明。
-  assert.match(detail, /sectionCard:\s*\{\s*borderWidth:\s*1,\s*borderRadius:\s*Radius\.lg/);
-  assert.match(detail, /\[s\.section, s\.sectionCard, d\.sectionCard\]/);
-  assert.match(renderer, /mediaFrame:\s*\{[\s\S]*?borderWidth:\s*StyleSheet\.hairlineWidth/);
-  assert.match(renderer, /backgroundColor:\s*colors\.background/);
+  // 设计稿：小节之间用发丝分隔线 + 主色浅底图标章头分段；
+  // 正文是主角，不加章头直接展开。
+  assert.match(detail, /divider:\s*\{\s*height:\s*StyleSheet\.hairlineWidth/);
+  assert.match(detail, /sectionIconChip/);
+  assert.match(detail, /renderSectionHeader\(\s*'image-outline'/);
+  assert.doesNotMatch(detail, /sectionCard:/);
 
-  // 正文只有空段落时不渲染光秃秃的"文字"眉标。
+  // 来源名片：主色浅底 + 实心主色"查看原消息"胶囊。
+  assert.match(detail, /sourceCard: \{ backgroundColor: colors\.primaryLight \}/);
+  assert.match(detail, /sourceBtn: \{ backgroundColor: colors\.primary \}/);
+
+  // 媒体满宽圆角，按真实宽高比渲染（比例夹在 3:4 与 16:9 之间），
+  // 无尺寸信息回退方图。
+  assert.match(renderer, /resolveMediaAspectRatio/);
+  assert.match(renderer, /Math\.min\(16 \/ 9, Math\.max\(3 \/ 4, width \/ height\)\)/);
+  assert.match(renderer, /mediaFrame:\s*\{\s*borderRadius:\s*Radius\.lg,\s*overflow:\s*'hidden'/);
+
+  // 正文只有空段落时整节不渲染。
   assert.match(detail, /textSectionHasContent/);
   assert.match(detail, /availability\?\.hasText && textSectionHasContent/);
   assert.match(detail, /extractPlainText\(blocks\)\.trim\(\)\.length > 0/);

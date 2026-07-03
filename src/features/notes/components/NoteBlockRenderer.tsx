@@ -7,16 +7,32 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 type Block = Record<string, unknown>;
 type InlineNode = Record<string, unknown>;
 
+// 满宽媒体按真实宽高比渲染（设计稿：无边框圆角大图）。比例夹在
+// [3:4, 16:9] 之间，极端全景/长图用 cover 轻裁，避免版面被撑破。
+function resolveMediaAspectRatio(
+  props: Record<string, unknown>,
+  fallback: number,
+) {
+  const width = typeof props.width === 'number' ? props.width : 0;
+  const height = typeof props.height === 'number' ? props.height : 0;
+  if (width > 0 && height > 0) {
+    return Math.min(16 / 9, Math.max(3 / 4, width / height));
+  }
+  return fallback;
+}
+
 function VideoBlock({
   url,
   caption,
   captionColor,
-  frameStyle,
+  aspectRatio,
+  backgroundColor,
 }: {
   url: string;
   caption: string;
   captionColor: string;
-  frameStyle: { backgroundColor: string; borderColor: string };
+  aspectRatio: number;
+  backgroundColor: string;
 }) {
   // useVideoPlayer is called unconditionally — the empty-url guard lives in the
   // caller (BlockView), so this component always receives a valid source.
@@ -25,9 +41,9 @@ function VideoBlock({
   });
   return (
     <View>
-      <View style={[s.mediaFrame, frameStyle]}>
+      <View style={[s.mediaFrame, { backgroundColor }]}>
         <VideoView
-          style={s.media}
+          style={[s.media, { aspectRatio }]}
           player={player}
           nativeControls
           contentFit="contain"
@@ -71,14 +87,8 @@ function BlockView({ block }: { block: Block }) {
       text: colors.text,
       secondary: colors.textSecondary,
       primary: colors.primary,
-      // 竖图 contain 后两侧会露底：垫页面底色 + 细边做成"相框"，
-      // 留白读起来是刻意的卡纸而不是没铺满；在 surface 小节卡片里也有层次。
-      mediaFrame: {
-        backgroundColor: colors.background,
-        borderColor: colors.surfaceBorder,
-      },
       codeBlock: {
-        backgroundColor: colors.background,
+        backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
       },
     }),
@@ -140,10 +150,16 @@ function BlockView({ block }: { block: Block }) {
       const url = typeof props.url === 'string' ? props.url : '';
       const caption = typeof props.caption === 'string' ? props.caption : '';
       if (!url) return null;
+      // 无尺寸信息（正文行内旧图）回退方图；有尺寸按真实比例满宽展示。
+      const aspectRatio = resolveMediaAspectRatio(props, 1);
       return (
         <View>
-          <View style={[s.mediaFrame, d.mediaFrame]}>
-            <Image source={{ uri: url }} style={s.media} contentFit="contain" />
+          <View style={s.mediaFrame}>
+            <Image
+              source={{ uri: url }}
+              style={[s.media, { aspectRatio }]}
+              contentFit="cover"
+            />
           </View>
           {caption ? (
             <Text style={[s.caption, { color: d.secondary }]}>{caption}</Text>
@@ -161,7 +177,8 @@ function BlockView({ block }: { block: Block }) {
           url={url}
           caption={caption}
           captionColor={d.secondary}
-          frameStyle={d.mediaFrame}
+          aspectRatio={resolveMediaAspectRatio(props, 16 / 9)}
+          backgroundColor={colors.black}
         />
       );
     }
@@ -213,10 +230,9 @@ const s = StyleSheet.create({
   },
   mediaFrame: {
     borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
-  media: { width: '100%', height: 300 },
+  media: { width: '100%' },
   caption: {
     ...Typography.small,
     textAlign: 'center',
