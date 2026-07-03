@@ -77,14 +77,21 @@ test('NotesScreen passes the current user as owner when opening note details', (
   assert.match(src, /useAuthStore/);
   assert.match(src, /currentUserId/);
   assert.match(src, /pathname: '\/\(tabs\)\/profile\/notes\/\[id\]'/);
-  assert.match(src, /params: \{ id: item\.id, ownerId: currentUserId \?\? '' \}/);
+  // NoteCard 已 memo，跳转回调改为稳定 useCallback（携带 note 参数）。
+  assert.match(src, /params: \{ id: note\.id, ownerId: currentUserId \?\? '' \}/);
+  assert.match(src, /onPress=\{openNote\}/);
 });
 
 test('NotesScreen refreshes notes and groups when returning from note edits', () => {
   const src = read('src/features/notes/screens/NotesScreen.tsx');
   assert.match(src, /useFocusEffect/);
   assert.match(src, /void load\(\)/);
-  assert.match(src, /if \(mountedRef\.current\) setLoading\(false\)/);
+  // 失败时除了停 spinner 还要标记错误态（列表区提供重试入口），不再静默吞掉。
+  assert.match(
+    src,
+    /if \(mountedRef\.current\) \{\s*setLoadError\(true\);\s*setLoading\(false\);/,
+  );
+  assert.match(src, /notes\.loadFailed/);
   assert.doesNotMatch(src, /useEffect\(\(\) => \{\s*let cancelled = false;[\s\S]*load\(\)\.catch/);
 });
 
@@ -262,17 +269,15 @@ test('EditNoteScreen leaves breathing room around title date and groups', () => 
   assert.match(src, /groupSection:\s*\{[\s\S]*gap:\s*Spacing\.sm/);
 });
 
-test('EditNoteScreen group chips use squared tags instead of pill tags', () => {
+test('EditNoteScreen group chips use pill tags from the radius scale', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
+  // 简约化重设计：分组 chip 统一为胶囊形，圆角必须来自 Radius token 而非魔法数。
   assert.match(
     src,
-    /groupChip:\s*\{\s*borderWidth:\s*1,\s*borderRadius:\s*6/,
+    /groupChip:\s*\{\s*borderWidth:\s*1,\s*borderRadius:\s*Radius\.full/,
   );
-  assert.doesNotMatch(
-    src,
-    /groupChip:\s*\{\s*borderWidth:\s*1,\s*borderRadius:\s*Radius\.(?:md|pill)/,
-  );
+  assert.doesNotMatch(src, /groupChip:\s*\{\s*borderWidth:\s*1,\s*borderRadius:\s*\d/);
 });
 
 test('EditNoteScreen selected group chips use solid purple cards', () => {
@@ -332,9 +337,15 @@ test('EditNoteScreen can select a real map location and save coordinates', () =>
 test('EditNoteScreen presents structured regions with quieter section chrome', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
+  // 分区从贯穿全宽的分隔线改为安静的卡片（surface 底 + 细边 + 大圆角），
+  // 小节头收敛成 眉标 + 右侧计数文本，不再有计数胶囊和解释性副标题。
   assert.match(src, /sectionShell/);
   assert.match(src, /sectionHeaderMeta/);
-  assert.match(src, /sectionCountPill/);
+  assert.match(
+    src,
+    /sectionBlock:\s*\{[\s\S]*?borderRadius:\s*Radius\.lg/,
+  );
+  assert.doesNotMatch(src, /sectionCountPill/);
   assert.match(src, /const renderSectionHeader = \([\s\S]*meta\?: string/);
   assert.match(src, /flexDirection:\s*'row'/);
 });

@@ -7,7 +7,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   LogBox,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -137,6 +139,9 @@ export default function EditNoteScreen() {
   const [initialBlocks, setInitialBlocks] = useState<Record<string, unknown>[] | null>(null);
   const [availableGroups, setAvailableGroups] = useState<NoteGroup[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
+  // 编辑时必须原样回传：后端 PATCH 对缺省 pinned 按 false 处理，
+  // 不带的话「编辑一篇置顶笔记」会静默取消置顶。
+  const pinnedRef = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(isEdit);
   const [dateStr, setDateStr] = useState(() =>
@@ -224,6 +229,7 @@ export default function EditNoteScreen() {
         );
         setLocationDraft(buildLocationDraft(note.sections?.location));
         setSelectedGroupIds(note.groups.map((group) => group.id));
+        pinnedRef.current = note.pinned;
         setDateStr(formatNoteFullDate(note.createdAt, t));
         setLoading(false);
         setEditorMounted(true);
@@ -492,12 +498,13 @@ export default function EditNoteScreen() {
         },
         groupIds: selectedGroupIds,
         media: legacyMedia,
-        status: 'ACTIVE' as const,
       };
       if (isEdit && id) {
-        await updateNote(id, input);
+        // 不带 status —— 后端按现状保留，避免把「已下架」笔记编辑一次就重新上架；
+        // pinned 原样回传，防止编辑动作静默取消置顶。
+        await updateNote(id, { ...input, pinned: pinnedRef.current });
       } else {
-        await createNote(input);
+        await createNote({ ...input, status: 'ACTIVE' });
       }
       navigateBack();
     } catch (error) {
@@ -550,20 +557,15 @@ export default function EditNoteScreen() {
       groupChipText: { color: colors.textSecondary },
       groupChipTextActive: { color: colors.white },
       sectionTitle: { color: colors.textSecondary },
+      // 分区做成安静的卡片：surface 底 + 细边，取代原来贯穿全宽的分隔线
       sectionShell: {
-        backgroundColor: colors.background,
-        borderTopColor: colors.surfaceBorder,
-        borderBottomColor: colors.surfaceBorder,
-      },
-      sectionHeading: { color: colors.text },
-      sectionSubtitle: { color: colors.textSecondary },
-      sectionCountPill: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
       },
+      editorFrame: { borderColor: colors.surfaceBorder },
+      sectionHeading: { color: colors.text },
+      sectionSubtitle: { color: colors.textSecondary },
       sectionHeaderMeta: { color: colors.textSecondary },
-      sectionDivider: { borderTopColor: colors.surfaceBorder },
-      mediaRow: { backgroundColor: colors.surface, borderColor: colors.surfaceBorder },
       mediaPreviewTile: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
@@ -606,26 +608,17 @@ export default function EditNoteScreen() {
       ? buildMapPreviewUrl(locationDraft.latitude, locationDraft.longitude)
       : null;
 
+  // 眉标式小节头：图标 + 标签 + 右侧计数，去掉解释性副标题让内容当主角。
   const renderSectionHeader = (
     icon: keyof typeof Ionicons.glyphMap,
     sectionTitle: string,
-    subtitle?: string,
     meta?: string,
   ) => (
     <View style={s.sectionHeader}>
-      <View style={s.sectionHeaderIcon}>
-        <Ionicons name={icon} size={18} color={colors.primary} />
-      </View>
-      <View style={s.sectionHeaderText}>
-        <Text style={[s.sectionHeading, d.sectionHeading]}>{sectionTitle}</Text>
-        {subtitle ? (
-          <Text style={[s.sectionSubtitle, d.sectionSubtitle]}>{subtitle}</Text>
-        ) : null}
-      </View>
+      <Ionicons name={icon} size={15} color={colors.primary} />
+      <Text style={[s.sectionHeading, d.sectionHeading]}>{sectionTitle}</Text>
       {meta ? (
-        <View style={[s.sectionCountPill, d.sectionCountPill]}>
-          <Text style={[s.sectionHeaderMeta, d.sectionHeaderMeta]}>{meta}</Text>
-        </View>
+        <Text style={[s.sectionHeaderMeta, d.sectionHeaderMeta]}>{meta}</Text>
       ) : null}
     </View>
   );
@@ -710,7 +703,11 @@ export default function EditNoteScreen() {
   };
 
   return (
-    <View style={[s.container, d.container, { paddingTop: insets.top }]}>
+    <KeyboardAvoidingView
+      style={[s.container, d.container, { paddingTop: insets.top }]}
+      // 底部的位置输入框会被键盘盖住：iOS 用 padding 顶起，Android 交给系统 resize。
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       <View style={s.header}>
         <Pressable onPress={navigateBack} hitSlop={8}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
@@ -793,14 +790,13 @@ export default function EditNoteScreen() {
           </View>
         </View>
 
-        <View style={[s.sectionBlock, s.sectionShell, d.sectionShell]}>
+        <View style={[s.sectionBlock, d.sectionShell]}>
           {renderSectionHeader(
             'text-outline',
             t('notes.edit.sections.text', { defaultValue: '文字' }),
-            t('notes.edit.sections.textHint', { defaultValue: '只编辑文字内容' }),
             t('notes.edit.sections.required', { defaultValue: '必填' }),
           )}
-          <View style={s.textEditorFrame}>
+          <View style={[s.textEditorFrame, d.editorFrame]}>
             {editorMounted ? (
               <NoteBlockEditor
                 initialContent={initialBlocks}
@@ -811,11 +807,10 @@ export default function EditNoteScreen() {
           </View>
         </View>
 
-        <View style={[s.sectionBlock, s.sectionShell, d.sectionShell]}>
+        <View style={[s.sectionBlock, d.sectionShell]}>
           {renderSectionHeader(
             'images-outline',
             t('notes.edit.sections.media', { defaultValue: '图片/视频' }),
-            t('notes.edit.sections.mediaHint', { defaultValue: '正文素材，支持图片和视频' }),
             `${mediaItems.length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`,
           )}
           <View style={s.sectionActions}>
@@ -835,11 +830,10 @@ export default function EditNoteScreen() {
           {renderMediaList(mediaItems, 'media')}
         </View>
 
-        <View style={[s.sectionBlock, s.sectionShell, d.sectionShell]}>
+        <View style={[s.sectionBlock, d.sectionShell]}>
           {renderSectionHeader(
             'albums-outline',
             t('notes.edit.sections.showcase', { defaultValue: '展示' }),
-            t('notes.edit.sections.showcaseHint', { defaultValue: '群卡片展示区素材' }),
             `${showcaseItems.length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`,
           )}
           <View style={s.sectionActions}>
@@ -859,11 +853,10 @@ export default function EditNoteScreen() {
           {renderMediaList(showcaseItems, 'showcase')}
         </View>
 
-        <View style={[s.sectionBlock, s.sectionShell, d.sectionShell]}>
+        <View style={[s.sectionBlock, d.sectionShell]}>
           {renderSectionHeader(
             'location-outline',
             t('notes.edit.sections.location', { defaultValue: '地址' }),
-            t('notes.edit.sections.locationHint', { defaultValue: '填写位置名称和地址' }),
             locationPreviewUrl
               ? t('notes.edit.sections.locationSelected', { defaultValue: '已选择' })
               : t('notes.edit.sections.locationEmpty', { defaultValue: '可选' }),
@@ -948,7 +941,7 @@ export default function EditNoteScreen() {
           ) : null}
         </View>
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -1012,48 +1005,39 @@ const s = StyleSheet.create({
   },
   groupChip: {
     borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: Spacing.sm + 2,
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.sm + 4,
     paddingVertical: 5,
   },
   groupChipActive: { borderWidth: 1 },
   groupChipText: { ...Typography.small, fontWeight: '600' },
   sectionBlock: {
-    borderTopWidth: 1,
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.lg,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
     gap: Spacing.md,
-  },
-  sectionShell: {
-    borderBottomWidth: 1,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: Spacing.xs + 2,
   },
-  sectionHeaderIcon: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
+  sectionHeading: {
+    flex: 1,
+    ...Typography.caption,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
-  sectionHeaderText: { flex: 1, gap: 2 },
-  sectionHeading: { ...Typography.h3, fontWeight: '700' },
   sectionSubtitle: { ...Typography.small },
-  sectionCountPill: {
-    borderWidth: 1,
-    borderRadius: Radius.pill,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-  },
-  sectionHeaderMeta: { ...Typography.small, fontWeight: '700' },
+  sectionHeaderMeta: { ...Typography.small },
   textEditorFrame: {
-    height: 300,
-    minHeight: 300,
+    height: 320,
+    minHeight: 320,
     overflow: 'hidden',
-    borderRadius: Radius.sm,
+    borderRadius: Radius.md,
+    borderWidth: 1,
   },
   sectionActions: {
     flexDirection: 'row',
@@ -1064,12 +1048,12 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderRadius: Radius.sm,
-    paddingHorizontal: Spacing.sm,
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.md,
     paddingVertical: 8,
     gap: Spacing.xs,
   },
-  sectionActionText: { ...Typography.small, fontWeight: '700' },
+  sectionActionText: { ...Typography.small, fontWeight: '600' },
   mediaPreviewGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1080,7 +1064,7 @@ const s = StyleSheet.create({
     minWidth: 96,
     aspectRatio: 1,
     borderWidth: 1,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.md,
     overflow: 'hidden',
   },
   mediaThumb: {
@@ -1117,44 +1101,28 @@ const s = StyleSheet.create({
   },
   emptyTray: {
     borderWidth: 1,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.md,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
   },
-  mediaList: { gap: Spacing.sm },
-  mediaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: Radius.sm,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 9,
-    gap: Spacing.sm,
-  },
-  mediaIconBox: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mediaInfo: { flex: 1, minWidth: 0 },
   mediaTitle: { ...Typography.caption, fontWeight: '700' },
   mediaMeta: { ...Typography.small },
   emptySectionText: { ...Typography.small },
   locationInputs: { gap: Spacing.sm },
   locationInput: {
     borderWidth: 1,
-    borderRadius: Radius.sm,
-    paddingHorizontal: Spacing.sm,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
     paddingVertical: 10,
     ...Typography.body,
+    fontWeight: '400',
   },
   locationPreviewCard: {
     borderWidth: 1,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.md,
     overflow: 'hidden',
   },
   locationMapPreview: {

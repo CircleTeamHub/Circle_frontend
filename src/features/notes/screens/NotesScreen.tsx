@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
@@ -36,6 +36,14 @@ import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 type TabId = 'all' | 'ungrouped' | string;
 
+const keyExtractor = (item: NoteSummary) => item.id;
+
+// 提到组件外并 memo：内联箭头组件每次渲染都是新类型，FlatList 无法复用分隔线。
+const ItemSeparator = memo(function ItemSeparator() {
+  const { colors } = useTheme();
+  return <View style={[s.divider, { backgroundColor: colors.divider }]} />;
+});
+
 export default function NotesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -53,6 +61,7 @@ export default function NotesScreen() {
   const [showUnlisted, setShowUnlisted] = useState(false);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
@@ -77,6 +86,7 @@ export default function NotesScreen() {
     if (!mountedRef.current) return;
     setNotes(notesData);
     setGroups(groupsData);
+    setLoadError(false);
     setLoading(false);
   }, [showUnlisted]);
 
@@ -84,7 +94,11 @@ export default function NotesScreen() {
     useCallback(() => {
       setLoading(true);
       void load().catch(() => {
-        if (mountedRef.current) setLoading(false);
+        // 加载失败不能静默吞掉 —— 空列表和网络错误要区分开，给用户重试入口。
+        if (mountedRef.current) {
+          setLoadError(true);
+          setLoading(false);
+        }
       });
     }, [load]),
   );
@@ -182,12 +196,47 @@ export default function NotesScreen() {
     [activeTab],
   );
 
-  const handlePin = useCallback(async (note: NoteSummary) => {
-    await togglePinNote(note.id, !note.pinned);
-    setNotes((prev) =>
-      prev.map((item) => (item.id === note.id ? { ...item, pinned: !item.pinned } : item)),
-    );
-  }, []);
+  const handlePin = useCallback(
+    async (note: NoteSummary) => {
+      try {
+        await togglePinNote(note.id, !note.pinned);
+      } catch {
+        if (mountedRef.current) {
+          Alert.alert(
+            t('notes.alerts.pinFailedTitle', { defaultValue: '操作失败' }),
+            t('common.retryLater', { defaultValue: '请稍后重试' }),
+          );
+        }
+        return;
+      }
+      if (!mountedRef.current) return;
+      setNotes((prev) =>
+        prev.map((item) => (item.id === note.id ? { ...item, pinned: !item.pinned } : item)),
+      );
+    },
+    [t],
+  );
+
+  // NoteCard 已 memo：回调保持稳定引用，搜索输入等高频重渲时卡片不再全量重绘。
+  const openNote = useCallback(
+    (note: NoteSummary) =>
+      router.push({
+        pathname: '/(tabs)/profile/notes/[id]',
+        params: { id: note.id, ownerId: currentUserId ?? '' },
+      } as never),
+    [currentUserId, router],
+  );
+
+  const openNoteEditor = useCallback(
+    (note: NoteSummary) =>
+      router.push(`/(tabs)/profile/notes/edit?id=${note.id}` as never),
+    [router],
+  );
+
+  const handlePinPress = useCallback(
+    (note: NoteSummary) => void handlePin(note),
+    [handlePin],
+  );
 
   const notesShareTitle = t('notes.share.title', { defaultValue: '我的笔记' });
 
@@ -296,8 +345,15 @@ export default function NotesScreen() {
       searchWrap: { backgroundColor: colors.surface },
       searchInput: { color: colors.text },
       searchPlaceholder: colors.textSecondary,
-      divider: { backgroundColor: colors.surface },
-      bottomBar: { backgroundColor: colors.surface },
+      divider: { backgroundColor: colors.divider },
+      bottomBar: {
+        backgroundColor: colors.background,
+        borderTopColor: colors.surfaceBorder,
+      },
+      ghostBtn: {
+        borderColor: colors.surfaceBorder,
+        backgroundColor: colors.surface,
+      },
       newBtn: { backgroundColor: colors.primary },
       newBtnText: { color: colors.white },
       otherBtnText: { color: colors.text },
@@ -309,19 +365,12 @@ export default function NotesScreen() {
     ({ item }: { item: NoteSummary }) => (
       <NoteCard
         note={item}
-        onPress={() =>
-          router.push({
-            pathname: '/(tabs)/profile/notes/[id]',
-            params: { id: item.id, ownerId: currentUserId ?? '' },
-          } as never)
-        }
-        onEditPress={() =>
-          router.push(`/(tabs)/profile/notes/edit?id=${item.id}` as never)
-        }
-        onPinPress={() => handlePin(item)}
+        onPress={openNote}
+        onEditPress={openNoteEditor}
+        onPinPress={handlePinPress}
       />
     ),
-    [currentUserId, handlePin, router],
+    [handlePinPress, openNote, openNoteEditor],
   );
 
   const statsText = t('notes.stats', {
@@ -337,9 +386,6 @@ export default function NotesScreen() {
           <Pressable onPress={() => router.back()} hitSlop={8}>
             <Ionicons name="chevron-back" size={24} color={colors.text} />
           </Pressable>
-          <Text style={[s.headerTitle, d.headerTitle]}>
-            {t('notes.title', { defaultValue: '我的笔记' })}
-          </Text>
           <View style={s.headerRight}>
             <Pressable
               style={[s.unlistedBtn, d.unlistedBtn]}
@@ -375,6 +421,12 @@ export default function NotesScreen() {
           </View>
         </View>
 
+        {/* 大标题 + 统计副标题：列表页的"刊头"，其余元素都退到次级 */}
+        <Text style={[s.pageTitle, d.headerTitle]}>
+          {t('notes.title', { defaultValue: '我的笔记' })}
+        </Text>
+        <Text style={[s.statsText, d.statsText]}>{statsText}</Text>
+
         <View style={s.tabsRow}>
           <ScrollView
             horizontal
@@ -401,8 +453,6 @@ export default function NotesScreen() {
           ) : null}
         </View>
 
-        <Text style={[s.statsText, d.statsText]}>{statsText}</Text>
-
         <View style={[s.searchWrap, d.searchWrap]}>
           <Ionicons name="search-outline" size={16} color={d.searchPlaceholder} />
           <TextInput
@@ -419,16 +469,32 @@ export default function NotesScreen() {
 
       <FlatList
         data={filteredNotes}
-        keyExtractor={(item) => item.id}
+        keyExtractor={keyExtractor}
         renderItem={renderNote}
-        ItemSeparatorComponent={() => <View style={[s.divider, d.divider]} />}
+        ItemSeparatorComponent={ItemSeparator}
         contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
         showsVerticalScrollIndicator={false}
         {...keyboardDismissOnDragProps}
         refreshing={refreshing}
         onRefresh={handleRefreshNotes}
         ListEmptyComponent={
-          loading ? null : (
+          loading ? null : loadError ? (
+            <View style={s.emptyWrap}>
+              <Text style={[s.emptyText, d.statsText]}>
+                {t('notes.loadFailed', {
+                  defaultValue: '笔记加载失败，请检查网络后重试',
+                })}
+              </Text>
+              <Pressable
+                style={[s.retryBtn, d.newBtn]}
+                onPress={() => void handleRefreshNotes()}
+              >
+                <Text style={[s.bottomBtnText, d.newBtnText]}>
+                  {t('common.retry', { defaultValue: '重试' })}
+                </Text>
+              </Pressable>
+            </View>
+          ) : (
             <Text style={[s.emptyText, d.statsText]}>
               {search.trim()
                 ? t('notes.empty.noMatch', { defaultValue: '没有匹配的笔记' })
@@ -440,7 +506,7 @@ export default function NotesScreen() {
 
       <View style={[s.bottomBar, d.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
         <Pressable
-          style={s.bottomBtn}
+          style={[s.bottomBtn, s.ghostBtn, d.ghostBtn]}
           onPress={() => void handleShareNotes()}
         >
           <Ionicons name="share-outline" size={18} color={colors.text} />
@@ -449,7 +515,7 @@ export default function NotesScreen() {
           </Text>
         </Pressable>
         <Pressable
-          style={s.bottomBtn}
+          style={[s.bottomBtn, s.ghostBtn, d.ghostBtn]}
           onPress={openQrSheet}
         >
           <Ionicons name="qr-code-outline" size={18} color={colors.text} />
@@ -458,7 +524,7 @@ export default function NotesScreen() {
           </Text>
         </Pressable>
         <Pressable
-          style={[s.bottomBtn, s.newBtnShape, d.newBtn]}
+          style={[s.bottomBtn, d.newBtn]}
           onPress={() => router.push('/(tabs)/profile/notes/edit' as never)}
         >
           <Ionicons name="add" size={18} color={colors.white} />
@@ -496,15 +562,15 @@ const s = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 48,
-    gap: Spacing.sm,
+    justifyContent: 'space-between',
+    height: 44,
   },
-  headerTitle: { flex: 1, textAlign: 'center', ...Typography.h2 },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
   },
+  pageTitle: { ...Typography.h1, marginTop: Spacing.xs },
   unlistedBtn: {
     paddingHorizontal: Spacing.sm + 4,
     paddingVertical: 4,
@@ -514,7 +580,7 @@ const s = StyleSheet.create({
   tabsRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    marginTop: Spacing.sm,
+    marginTop: Spacing.md,
   },
   tabsScroll: { flex: 1 },
   tabsContent: { gap: Spacing.lg, paddingHorizontal: 2, alignItems: 'flex-end' },
@@ -529,24 +595,32 @@ const s = StyleSheet.create({
   tabLine: { height: 2, borderRadius: 1, width: '100%', marginTop: 4 },
   statsText: {
     ...Typography.small,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.sm,
+    marginTop: Spacing.xs,
   },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.sm,
-    height: 40,
-    gap: Spacing.xs,
-    marginBottom: Spacing.sm,
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.md,
+    height: 44,
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.xs,
   },
   searchInput: { flex: 1, ...Typography.bodyRegular },
   divider: { height: StyleSheet.hairlineWidth, marginHorizontal: Spacing.lg },
+  emptyWrap: { alignItems: 'center', gap: Spacing.md },
   emptyText: {
     textAlign: 'center',
     paddingTop: Spacing.xl,
     ...Typography.bodyRegular,
+  },
+  retryBtn: {
+    paddingHorizontal: Spacing.lg,
+    height: 40,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   bottomBar: {
     position: 'absolute',
@@ -557,6 +631,7 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.sm + 4,
     gap: Spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   bottomBtn: {
     flex: 1,
@@ -567,6 +642,6 @@ const s = StyleSheet.create({
     borderRadius: Radius.pill,
     gap: Spacing.xs,
   },
-  newBtnShape: {},
+  ghostBtn: { borderWidth: 1 },
   bottomBtnText: { ...Typography.body, fontWeight: '600' },
 });
