@@ -239,9 +239,9 @@ export default function NoteDetailScreen() {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
       },
-      // 来源名片：主色浅底的"提示条"，CTA 是实心主色胶囊
+      // 来源名片：主色浅底的"提示条"，CTA 用深一档的实心靛蓝更压得住
       sourceCard: { backgroundColor: colors.primaryLight },
-      sourceBtn: { backgroundColor: colors.primary },
+      sourceBtn: { backgroundColor: colors.primaryDeep },
       sectionIconChip: { backgroundColor: colors.primaryLight },
       sectionHeading: { color: colors.text },
       divider: { backgroundColor: colors.surfaceBorder },
@@ -613,9 +613,10 @@ const s = StyleSheet.create({
     borderRadius: Radius.full,
   },
   sourceBtnText: { ...Typography.small, fontWeight: '600' },
-  // 小节之间用发丝分隔线 + 图标章头分段，正文不设头直接展开（设计稿）
+  // 小节之间用分隔线 + 图标章头分段，正文不设头直接展开（设计稿）。
+  // 1pt 实线：发丝线在真机上太淡，分段感立不住。
   section: { gap: Spacing.md - 4, marginBottom: Spacing.lg },
-  divider: { height: StyleSheet.hairlineWidth, marginBottom: Spacing.md - 4 },
+  divider: { height: 1, marginBottom: Spacing.md - 4 },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -8,6 +8,8 @@ export interface ThemeColors {
   divider: string;
   primary: string;
   primaryLight: string;
+  /** 比 primary 深一档的靛蓝，用于需要更重的实心按钮/强调面 */
+  primaryDeep: string;
   text: string;
   textSecondary: string;
   white: string;

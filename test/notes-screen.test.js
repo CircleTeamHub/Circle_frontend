@@ -398,16 +398,16 @@ test('NoteDetailScreen follows the divider + icon-chip section design', () => {
   const detail = read('src/features/notes/screens/NoteDetailScreen.tsx');
   const renderer = read('src/features/notes/components/NoteBlockRenderer.tsx');
 
-  // 设计稿：小节之间用发丝分隔线 + 主色浅底图标章头分段；
+  // 设计稿：小节之间用 1pt 分隔线（发丝线真机太淡）+ 主色浅底图标章头分段；
   // 正文是主角，不加章头直接展开。
-  assert.match(detail, /divider:\s*\{\s*height:\s*StyleSheet\.hairlineWidth/);
+  assert.match(detail, /divider:\s*\{\s*height:\s*1,/);
   assert.match(detail, /sectionIconChip/);
   assert.match(detail, /renderSectionHeader\(\s*'image-outline'/);
   assert.doesNotMatch(detail, /sectionCard:/);
 
-  // 来源名片：主色浅底 + 实心主色"查看原消息"胶囊。
+  // 来源名片：主色浅底 + 深一档实心靛蓝"查看原消息"胶囊（primaryDeep token）。
   assert.match(detail, /sourceCard: \{ backgroundColor: colors\.primaryLight \}/);
-  assert.match(detail, /sourceBtn: \{ backgroundColor: colors\.primary \}/);
+  assert.match(detail, /sourceBtn: \{ backgroundColor: colors\.primaryDeep \}/);
 
   // 媒体满宽圆角，按真实宽高比渲染（比例夹在 3:4 与 16:9 之间），
   // 无尺寸信息回退方图。
