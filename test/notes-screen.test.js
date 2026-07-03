@@ -26,43 +26,23 @@ test('NotesScreen has 已下架 filter button', () => {
   assert.match(src, /已下架/);
 });
 
-test('NotesScreen creates a managed share link before invoking native Share', () => {
+test('NotesScreen bottom bar keeps only the 新建 button', () => {
   const src = read('src/features/notes/screens/NotesScreen.tsx');
 
-  assert.match(src, /Share/);
+  // 底栏只留「新建」；整表分享 + 二维码入口移除（分享改走单条：卡片⋯菜单 + 详情页头部）。
+  assert.match(src, /notes\.actions\.new/);
+  assert.doesNotMatch(src, /notes\.actions\.qrCode/);
+  assert.doesNotMatch(src, /qr-code-outline/);
+  // 整表分享/二维码相关逻辑已清理干净。
+  assert.doesNotMatch(src, /handleShareNotes\b/);
+  assert.doesNotMatch(src, /buildShareInput/);
+  assert.doesNotMatch(src, /ensureShareLink/);
+  assert.doesNotMatch(src, /openQrSheet/);
+  assert.doesNotMatch(src, /NoteShareQrSheet/);
+  assert.doesNotMatch(src, /qrVisible/);
+  // 单条笔记分享仍在（菜单里的「分享」）。
+  assert.match(src, /handleShareNote\b/);
   assert.match(src, /createNoteShareLink/);
-  assert.match(src, /buildShareInput/);
-  assert.match(src, /nextShareLink\.url/);
-  assert.match(src, /handleShareNotes/);
-  assert.match(src, /Share\.share/);
-  assert.doesNotMatch(src, /Linking\.createURL/);
-  assert.doesNotMatch(src, /notes\.stopgap\.share/);
-});
-
-test('NotesScreen opens a QR sheet for the managed share link', () => {
-  const screenSrc = read('src/features/notes/screens/NotesScreen.tsx');
-  const sheetSrc = read('src/features/notes/components/NoteShareQrSheet.tsx');
-
-  assert.match(screenSrc, /NoteShareQrSheet/);
-  assert.match(screenSrc, /qrVisible/);
-  assert.match(screenSrc, /openQrSheet/);
-  assert.match(screenSrc, /createNoteShareLink/);
-  assert.match(screenSrc, /shareUrl=\{shareLink\?\.url \?\? ''\}/);
-  assert.match(screenSrc, /loading=\{shareLinkLoading\}/);
-  assert.match(screenSrc, /errorMessage=\{shareLinkError\}/);
-  assert.match(screenSrc, /if \(mountedRef\.current\) setShareLink\(nextShareLink\)/);
-  assert.match(screenSrc, /if \(mountedRef\.current\) setShareLinkError\(message\)/);
-  assert.match(screenSrc, /if \(mountedRef\.current\) setShareLinkLoading\(false\)/);
-  assert.match(screenSrc, /nextShareLink = await ensureShareLink\(\);[\s\S]*if \(!mountedRef\.current\) return;[\s\S]*Share\.share/);
-  assert.doesNotMatch(screenSrc, /notes\.stopgap\.qrCode/);
-
-  assert.match(sheetSrc, /react-native-qrcode-svg/);
-  assert.match(sheetSrc, /QRCode/);
-  assert.match(sheetSrc, /shareUrl/);
-  assert.match(sheetSrc, /loading/);
-  assert.match(sheetSrc, /errorMessage/);
-  assert.match(sheetSrc, /expo-clipboard/);
-  assert.match(sheetSrc, /Share\.share/);
 });
 
 test('NotesScreen fetches notes and groups', () => {
@@ -449,4 +429,25 @@ test('NoteDetailScreen follows the divider + icon-chip section design', () => {
   assert.doesNotMatch(detail, /textSectionHasContent/);
   assert.doesNotMatch(detail, /extractPlainText\(/);
   assert.doesNotMatch(detail, /import \{ extractPlainText \}/);
+});
+
+test('NoteDetailScreen header adds a share button left of download', () => {
+  const src = read('src/features/notes/screens/NoteDetailScreen.tsx');
+
+  // 分享按钮在下载按钮左边，走单条分享链接 + 系统分享面板。
+  assert.match(src, /handleShareNote/);
+  assert.match(src, /createNoteShareLink/);
+  const shareIdx = src.indexOf("name=\"share-outline\"");
+  const downloadIdx = src.indexOf("name=\"download-outline\"");
+  assert.ok(shareIdx > 0 && downloadIdx > 0, 'both header icons exist');
+  assert.ok(shareIdx < downloadIdx, 'share sits before download');
+});
+
+test('GroupManagerSheet name input is a visible shadowed pill', () => {
+  const src = read('src/features/notes/components/GroupManagerSheet.tsx');
+
+  // 之前边框用 surface（隐形）；现在可见边框 + background 凹槽底 + 阴影 + 胶囊圆角。
+  assert.match(src, /modalInput:\s*\{[\s\S]*?borderColor:\s*colors\.surfaceBorder/);
+  assert.match(src, /modalInput:\s*\{[\s\S]*?backgroundColor:\s*colors\.background/);
+  assert.match(src, /modalInput:\s*\{[\s\S]*?borderRadius:\s*Radius\.full[\s\S]*?shadowOpacity/);
 });

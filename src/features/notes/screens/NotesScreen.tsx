@@ -17,14 +17,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NoteCard } from '@/features/notes/components/NoteCard';
 import { NoteActionsSheet } from '@/features/notes/components/NoteActionsSheet';
 import { GroupManagerSheet } from '@/features/notes/components/GroupManagerSheet';
-import { NoteShareQrSheet } from '@/features/notes/components/NoteShareQrSheet';
 import { useNotesSettingsStore } from '@/features/notes/store/use-notes-settings-store';
-import type {
-  CreateNoteShareLinkInput,
-  NoteGroup,
-  NoteShareLink,
-  NoteSummary,
-} from '@/features/notes/types';
+import type { NoteGroup, NoteSummary } from '@/features/notes/types';
 import {
   createNoteShareLink,
   deleteNote,
@@ -70,10 +64,6 @@ export default function NotesScreen() {
   const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
   const [managerVisible, setManagerVisible] = useState(false);
-  const [qrVisible, setQrVisible] = useState(false);
-  const [shareLink, setShareLink] = useState<NoteShareLink | null>(null);
-  const [shareLinkLoading, setShareLinkLoading] = useState(false);
-  const [shareLinkError, setShareLinkError] = useState<string | null>(null);
 
   useEffect(
     () => () => {
@@ -187,11 +177,6 @@ export default function NotesScreen() {
   }, [activeTab, groups, showGroups, showUngrouped]);
 
   const closeManager = useCallback(() => setManagerVisible(false), []);
-  const closeQrSheet = useCallback(() => setQrVisible(false), []);
-  useEffect(() => {
-    setShareLink(null);
-    setShareLinkError(null);
-  }, [activeTab, search, showUnlisted, filteredNotes]);
 
   const handleActiveGroupDeleted = useCallback(
     (groupId: string) => {
@@ -304,95 +289,6 @@ export default function NotesScreen() {
     [t],
   );
 
-  const notesShareTitle = t('notes.share.title', { defaultValue: '我的笔记' });
-
-  const buildShareInput = useCallback((): CreateNoteShareLinkInput => {
-    const input: CreateNoteShareLinkInput = {
-      title: notesShareTitle,
-      status: showUnlisted ? 'UNLISTED' : 'ACTIVE',
-      noteIds: filteredNotes.map((note) => note.id),
-    };
-    if (activeTab === 'ungrouped') {
-      input.group = 'ungrouped';
-    } else if (activeTab !== 'all') {
-      input.groupId = activeTab;
-    }
-    const trimmedSearch = search.trim();
-    if (trimmedSearch) input.search = trimmedSearch;
-    return input;
-  }, [activeTab, filteredNotes, notesShareTitle, search, showUnlisted]);
-
-  const ensureShareLink = useCallback(async () => {
-    if (shareLink) return shareLink;
-    setShareLinkLoading(true);
-    setShareLinkError(null);
-    try {
-      const nextShareLink = await createNoteShareLink(buildShareInput());
-      if (mountedRef.current) setShareLink(nextShareLink);
-      return nextShareLink;
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : t('notes.share.createFailedMessage', {
-              defaultValue: '无法生成分享链接，请稍后重试。',
-            });
-      if (mountedRef.current) setShareLinkError(message);
-      throw error;
-    } finally {
-      if (mountedRef.current) setShareLinkLoading(false);
-    }
-  }, [buildShareInput, shareLink, t]);
-
-  const handleShareNotes = useCallback(async () => {
-    let nextShareLink: NoteShareLink;
-    try {
-      nextShareLink = await ensureShareLink();
-    } catch {
-      if (!mountedRef.current) return;
-      Alert.alert(
-        t('notes.share.createFailedTitle', { defaultValue: '分享链接生成失败' }),
-        t('notes.share.createFailedMessage', {
-          defaultValue: '无法生成分享链接，请稍后重试。',
-        }),
-      );
-      return;
-    }
-    if (!mountedRef.current) return;
-    try {
-      await Share.share({
-        message: t('notes.share.message', {
-          title: notesShareTitle,
-          url: nextShareLink.url,
-          defaultValue: `${notesShareTitle}\n${nextShareLink.url}`,
-        }),
-      });
-    } catch {
-      try {
-        const Clipboard = await import('expo-clipboard');
-        await Clipboard.setStringAsync(nextShareLink.url);
-        Alert.alert(
-          t('notes.share.copiedTitle', { defaultValue: '已复制' }),
-          t('notes.share.copiedMessage', {
-            defaultValue: '笔记链接已复制到剪贴板。',
-          }),
-        );
-      } catch {
-        Alert.alert(
-          t('notes.share.failedTitle', { defaultValue: '分享失败' }),
-          t('notes.share.failedMessage', {
-            defaultValue: '无法打开系统分享面板，请稍后重试。',
-          }),
-        );
-      }
-    }
-  }, [ensureShareLink, notesShareTitle, t]);
-
-  const openQrSheet = useCallback(() => {
-    setQrVisible(true);
-    void ensureShareLink().catch(() => undefined);
-  }, [ensureShareLink]);
-
   const d = useMemo(
     () => ({
       container: { backgroundColor: colors.background },
@@ -416,13 +312,8 @@ export default function NotesScreen() {
         backgroundColor: colors.background,
         borderTopColor: colors.surfaceBorder,
       },
-      ghostBtn: {
-        borderColor: colors.surfaceBorder,
-        backgroundColor: colors.surface,
-      },
       newBtn: { backgroundColor: colors.primary },
       newBtnText: { color: colors.white },
-      otherBtnText: { color: colors.text },
     }),
     [colors, showUnlisted],
   );
@@ -567,24 +458,6 @@ export default function NotesScreen() {
 
       <View style={[s.bottomBar, d.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
         <Pressable
-          style={[s.bottomBtn, s.ghostBtn, d.ghostBtn]}
-          onPress={() => void handleShareNotes()}
-        >
-          <Ionicons name="share-outline" size={18} color={colors.text} />
-          <Text style={[s.bottomBtnText, d.otherBtnText]}>
-            {t('notes.actions.share', { defaultValue: '分享' })}
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[s.bottomBtn, s.ghostBtn, d.ghostBtn]}
-          onPress={openQrSheet}
-        >
-          <Ionicons name="qr-code-outline" size={18} color={colors.text} />
-          <Text style={[s.bottomBtnText, d.otherBtnText]}>
-            {t('notes.actions.qrCode', { defaultValue: '二维码' })}
-          </Text>
-        </Pressable>
-        <Pressable
           style={[s.bottomBtn, d.newBtn]}
           onPress={() => router.push('/(tabs)/profile/notes/edit' as never)}
         >
@@ -603,15 +476,6 @@ export default function NotesScreen() {
         notes={notes}
         onMembershipsChanged={load}
         onActiveGroupDeleted={handleActiveGroupDeleted}
-      />
-      <NoteShareQrSheet
-        visible={qrVisible}
-        title={notesShareTitle}
-        shareUrl={shareLink?.url ?? ''}
-        noteCount={filteredNotes.length}
-        loading={shareLinkLoading}
-        errorMessage={shareLinkError}
-        onClose={closeQrSheet}
       />
       <NoteActionsSheet
         note={menuNote}
@@ -711,6 +575,5 @@ const s = StyleSheet.create({
     borderRadius: Radius.pill,
     gap: Spacing.xs,
   },
-  ghostBtn: { borderWidth: 1 },
   bottomBtnText: { ...Typography.body, fontWeight: '600' },
 });

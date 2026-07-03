@@ -26,7 +26,11 @@ import {
   getNoteSectionAvailability,
   type NoteSectionKind,
 } from '@/features/notes/utils/note-sections';
-import { createNoteExport, fetchNoteDetail } from '@/services/api/notes';
+import {
+  createNoteExport,
+  createNoteShareLink,
+  fetchNoteDetail,
+} from '@/services/api/notes';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { ApiError } from '@/services/api/client';
 import { useAuthStore } from '@/stores/authStore';
@@ -162,6 +166,38 @@ export default function NoteDetailScreen() {
     },
     [exporting, note, t],
   );
+
+  const [sharing, setSharing] = useState(false);
+  // 分享单条笔记：生成只含这条笔记的分享链接，走系统分享面板。
+  const handleShareNote = useCallback(async () => {
+    if (!note || sharing) return;
+    setSharing(true);
+    try {
+      const link = await createNoteShareLink({
+        title: note.title,
+        noteIds: [note.id],
+      });
+      await Share.share({
+        message: t('notes.share.message', {
+          title: note.title,
+          url: link.url,
+          defaultValue: `${note.title}\n${link.url}`,
+        }),
+      });
+    } catch (error) {
+      Alert.alert(
+        t('notes.share.createFailedTitle', { defaultValue: '分享链接生成失败' }),
+        getApiErrorMessage(
+          error,
+          t('notes.share.createFailedMessage', {
+            defaultValue: '无法生成分享链接，请稍后重试。',
+          }),
+        ),
+      );
+    } finally {
+      setSharing(false);
+    }
+  }, [note, sharing, t]);
 
   const canEditNote = useMemo(() => {
     if (!note) return false;
@@ -300,6 +336,16 @@ export default function NoteDetailScreen() {
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
         <View style={s.headerActions}>
+          <Pressable
+            style={[s.headerIconBtn, d.iconBtn]}
+            onPress={() => void handleShareNote()}
+            hitSlop={4}
+            disabled={sharing}
+            accessibilityRole="button"
+            accessibilityLabel={t('notes.actions.share', { defaultValue: '分享' })}
+          >
+            <Ionicons name="share-outline" size={18} color={colors.text} />
+          </Pressable>
           <Pressable
             style={[s.headerIconBtn, d.iconBtn]}
             onPress={() => setDownloadMenuVisible(true)}

@@ -446,7 +446,13 @@ export function GroupManagerSheet({
       groupRow: { backgroundColor: colors.background },
       groupName: { color: colors.text },
       groupCount: { color: colors.textSecondary },
-      modalInput: { color: colors.text, borderColor: colors.surface },
+      // 之前 borderColor 用了 surface（与面板同色 = 隐形）。改成可见边框 +
+      // background 凹槽底，让输入框在面板上明显立出来。
+      modalInput: {
+        color: colors.text,
+        borderColor: colors.surfaceBorder,
+        backgroundColor: colors.background,
+      },
       modalActionText: { color: colors.textSecondary },
       saveBtn: { backgroundColor: colors.primary },
       saveBtnText: { color: colors.white },
@@ -846,13 +852,19 @@ const s = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 4,
   },
-  modalEditor: { gap: Spacing.sm },
+  modalEditor: { gap: Spacing.md },
+  // 明显的胶囊输入：可见边框 + 凹槽底 + 轻阴影，一眼看出是可输入区域。
   modalInput: {
     borderWidth: 1,
-    borderRadius: Radius.md,
+    borderRadius: Radius.full,
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingVertical: Spacing.sm + 2,
     ...Typography.bodyRegular,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   modalButtons: {
     flexDirection: 'row',
