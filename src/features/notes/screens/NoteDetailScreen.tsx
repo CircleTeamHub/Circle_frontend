@@ -623,13 +623,13 @@ const s = StyleSheet.create({
     gap: Spacing.sm + 2,
   },
   sectionIconChip: {
-    width: 28,
-    height: 28,
+    width: 30,
+    height: 30,
     borderRadius: Radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sectionHeading: { ...Typography.body, fontWeight: '600' },
+  sectionHeading: { ...Typography.h3, fontWeight: '700' },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
