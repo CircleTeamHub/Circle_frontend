@@ -550,9 +550,10 @@ export default function EditNoteScreen() {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
       },
+      // 选中态用笔记品牌紫（与详情页分组标签同一支），不用靛蓝 primary
       groupChipActive: {
-        backgroundColor: colors.primary,
-        borderColor: colors.primary,
+        backgroundColor: colors.brandPurple,
+        borderColor: colors.brandPurple,
       },
       groupChipText: { color: colors.textSecondary },
       groupChipTextActive: { color: colors.white },
@@ -1005,7 +1006,8 @@ const s = StyleSheet.create({
   },
   groupChip: {
     borderWidth: 1,
-    borderRadius: Radius.full,
+    // 方形（与详情页分组标签一致）
+    borderRadius: Radius.xs,
     paddingHorizontal: Spacing.sm + 4,
     paddingVertical: 5,
   },

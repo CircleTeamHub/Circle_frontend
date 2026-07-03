@@ -269,26 +269,28 @@ test('EditNoteScreen leaves breathing room around title date and groups', () => 
   assert.match(src, /groupSection:\s*\{[\s\S]*gap:\s*Spacing\.sm/);
 });
 
-test('EditNoteScreen group chips use pill tags from the radius scale', () => {
+test('EditNoteScreen group chips are square (matching the detail tags)', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
-  // 简约化重设计：分组 chip 统一为胶囊形，圆角必须来自 Radius token 而非魔法数。
-  assert.match(
-    src,
-    /groupChip:\s*\{\s*borderWidth:\s*1,\s*borderRadius:\s*Radius\.full/,
-  );
-  assert.doesNotMatch(src, /groupChip:\s*\{\s*borderWidth:\s*1,\s*borderRadius:\s*\d/);
+  // 锁定 StyleSheet 里的 groupChip 块（以 borderWidth:1 起头，区别于 d memo 里只有
+  // 颜色的同名键）；[^}] 截到第一个右括号，别串到后面别的样式。
+  const block = src.match(/groupChip:\s*\{\s*borderWidth:\s*1,[^}]*\}/);
+  assert.ok(block, 'groupChip style block not found');
+  // 方形：圆角来自 Radius token（Radius.xs），不用胶囊也不用魔法数。
+  assert.match(block[0], /borderRadius:\s*Radius\.xs/);
+  assert.doesNotMatch(block[0], /Radius\.full/);
+  assert.doesNotMatch(block[0], /borderRadius:\s*\d/);
 });
 
-test('EditNoteScreen selected group chips use solid purple cards', () => {
+test('EditNoteScreen selected group chips use the note brand purple', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
+  // 选中态用笔记品牌紫 brandPurple（与详情页分组标签同一支），不再是靛蓝 primary。
   assert.match(
     src,
-    /groupChipActive:\s*\{\s*backgroundColor:\s*colors\.primary,\s*borderColor:\s*colors\.primary/,
+    /groupChipActive:\s*\{\s*backgroundColor:\s*colors\.brandPurple,\s*borderColor:\s*colors\.brandPurple/,
   );
   assert.match(src, /groupChipTextActive:\s*\{\s*color:\s*colors\.white\s*\}/);
-  assert.doesNotMatch(src, /groupChipActive:\s*\{[\s\S]*colors\.primary \+ '18'/);
 });
 
 test('EditNoteScreen renders four large structured note edit regions', () => {
