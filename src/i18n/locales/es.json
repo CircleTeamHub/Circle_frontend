@@ -832,7 +832,20 @@
     "list": {
       "fromSource": "De {{name}}"
     },
-    "loadFailed": "No se pudieron cargar las notas. Revisa tu conexión e inténtalo de nuevo"
+    "loadFailed": "No se pudieron cargar las notas. Revisa tu conexión e inténtalo de nuevo",
+    "shareToChat": {
+      "title": "Compartir con un amigo o grupo",
+      "confirmTitle": "Enviar nota",
+      "confirmMessage": "¿Enviar «{{title}}» a {{name}}?",
+      "sentTitle": "Enviada",
+      "sentMessage": "Nota enviada al chat.",
+      "failedTitle": "Error al enviar",
+      "sending": "Enviando…",
+      "loadFailed": "No se pudieron cargar los chats. Inténtalo de nuevo",
+      "empty": "No hay chats para enviar",
+      "groupHint": "Grupo",
+      "friendHint": "Amigo"
+    }
   },
   "tempChats": {
     "title": "Gestión de plazas",

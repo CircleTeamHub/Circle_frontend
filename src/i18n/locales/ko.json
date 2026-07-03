@@ -831,7 +831,20 @@
     "list": {
       "fromSource": "{{name}}에서"
     },
-    "loadFailed": "노트를 불러오지 못했어요. 네트워크 확인 후 다시 시도해 주세요"
+    "loadFailed": "노트를 불러오지 못했어요. 네트워크 확인 후 다시 시도해 주세요",
+    "shareToChat": {
+      "title": "친구나 그룹에 공유",
+      "confirmTitle": "노트 보내기",
+      "confirmMessage": "“{{title}}”을(를) {{name}}에게 보낼까요？",
+      "sentTitle": "보냈어요",
+      "sentMessage": "노트를 채팅으로 보냈어요.",
+      "failedTitle": "전송 실패",
+      "sending": "보내는 중...",
+      "loadFailed": "채팅을 불러오지 못했어요. 다시 시도해 주세요",
+      "empty": "보낼 수 있는 채팅이 없어요",
+      "groupHint": "그룹",
+      "friendHint": "친구"
+    }
   },
   "tempChats": {
     "title": "좌석 관리",

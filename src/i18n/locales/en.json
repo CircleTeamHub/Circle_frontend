@@ -1965,7 +1965,20 @@
     "list": {
       "fromSource": "From {{name}}"
     },
-    "loadFailed": "Couldn't load notes. Check your connection and try again"
+    "loadFailed": "Couldn't load notes. Check your connection and try again",
+    "shareToChat": {
+      "title": "Share to a friend or group",
+      "confirmTitle": "Send note",
+      "confirmMessage": "Send “{{title}}” to {{name}}?",
+      "sentTitle": "Sent",
+      "sentMessage": "Note sent to the chat.",
+      "failedTitle": "Send failed",
+      "sending": "Sending…",
+      "loadFailed": "Couldn’t load chats. Please try again",
+      "empty": "No chats to send to yet",
+      "groupHint": "Group",
+      "friendHint": "Friend"
+    }
   },
   "search": {
     "loadFriendsFailed": "Failed to load friends, please try again",

@@ -17,6 +17,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { NoteBlockRenderer } from '@/features/notes/components/NoteBlockRenderer';
+import { ShareNoteSheet } from '@/features/notes/components/ShareNoteSheet';
+import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
 import type { NoteDetail, NoteExportFormat } from '@/features/notes/types';
 import { formatNoteFullDate } from '@/features/notes/utils/note-format';
 import { getChatDetailHref } from '@/features/user/utils/routes';
@@ -26,11 +28,7 @@ import {
   getNoteSectionAvailability,
   type NoteSectionKind,
 } from '@/features/notes/utils/note-sections';
-import {
-  createNoteExport,
-  createNoteShareLink,
-  fetchNoteDetail,
-} from '@/services/api/notes';
+import { createNoteExport, fetchNoteDetail } from '@/services/api/notes';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { ApiError } from '@/services/api/client';
 import { useAuthStore } from '@/stores/authStore';
@@ -167,37 +165,16 @@ export default function NoteDetailScreen() {
     [exporting, note, t],
   );
 
-  const [sharing, setSharing] = useState(false);
-  // 分享单条笔记：生成只含这条笔记的分享链接，走系统分享面板。
-  const handleShareNote = useCallback(async () => {
-    if (!note || sharing) return;
-    setSharing(true);
-    try {
-      const link = await createNoteShareLink({
-        title: note.title,
-        noteIds: [note.id],
-      });
-      await Share.share({
-        message: t('notes.share.message', {
-          title: note.title,
-          url: link.url,
-          defaultValue: `${note.title}\n${link.url}`,
-        }),
-      });
-    } catch (error) {
-      Alert.alert(
-        t('notes.share.createFailedTitle', { defaultValue: '分享链接生成失败' }),
-        getApiErrorMessage(
-          error,
-          t('notes.share.createFailedMessage', {
-            defaultValue: '无法生成分享链接，请稍后重试。',
-          }),
-        ),
-      );
-    } finally {
-      setSharing(false);
-    }
-  }, [note, sharing, t]);
+  // 分享单条笔记：打开会话选择器，把笔记以卡片消息发给好友/群聊。
+  const [shareOpen, setShareOpen] = useState(false);
+  const handleShareNote = useCallback(() => setShareOpen(true), []);
+  const sharePayload = useMemo(
+    () =>
+      shareOpen && note
+        ? buildNoteCardPayloadFromSummary(note, note.ownerId ?? ownerId)
+        : null,
+    [note, ownerId, shareOpen],
+  );
 
   const canEditNote = useMemo(() => {
     if (!note) return false;
@@ -338,9 +315,8 @@ export default function NoteDetailScreen() {
         <View style={s.headerActions}>
           <Pressable
             style={[s.headerIconBtn, d.iconBtn]}
-            onPress={() => void handleShareNote()}
+            onPress={handleShareNote}
             hitSlop={4}
-            disabled={sharing}
             accessibilityRole="button"
             accessibilityLabel={t('notes.actions.share', { defaultValue: '分享' })}
           >
@@ -573,6 +549,11 @@ export default function NoteDetailScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      <ShareNoteSheet
+        payload={sharePayload}
+        onClose={() => setShareOpen(false)}
+      />
     </View>
   );
 }

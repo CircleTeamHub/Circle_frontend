@@ -1962,7 +1962,20 @@
     "list": {
       "fromSource": "来自 {{name}}"
     },
-    "loadFailed": "笔记加载失败，请检查网络后重试"
+    "loadFailed": "笔记加载失败，请检查网络后重试",
+    "shareToChat": {
+      "title": "分享给好友或群聊",
+      "confirmTitle": "发送笔记",
+      "confirmMessage": "把「{{title}}」发送给 {{name}}？",
+      "sentTitle": "已发送",
+      "sentMessage": "笔记已发送到聊天。",
+      "failedTitle": "发送失败",
+      "sending": "发送中...",
+      "loadFailed": "无法加载聊天对象，请稍后重试",
+      "empty": "暂无可发送的聊天对象",
+      "groupHint": "群聊",
+      "friendHint": "好友"
+    }
   },
   "search": {
     "loadFriendsFailed": "好友列表加载失败，请稍后重试",

@@ -831,7 +831,20 @@
     "list": {
       "fromSource": "{{name}}から"
     },
-    "loadFailed": "ノートを読み込めませんでした。ネットワークを確認して再試行してください"
+    "loadFailed": "ノートを読み込めませんでした。ネットワークを確認して再試行してください",
+    "shareToChat": {
+      "title": "友だちやグループに共有",
+      "confirmTitle": "ノートを送信",
+      "confirmMessage": "「{{title}}」を {{name}} に送信しますか？",
+      "sentTitle": "送信しました",
+      "sentMessage": "ノートをチャットに送信しました。",
+      "failedTitle": "送信に失敗しました",
+      "sending": "送信中...",
+      "loadFailed": "チャットを読み込めませんでした。もう一度お試しください",
+      "empty": "送信できるチャットがありません",
+      "groupHint": "グループ",
+      "friendHint": "友だち"
+    }
   },
   "tempChats": {
     "title": "枠の管理",

@@ -7,7 +7,6 @@ import {
   FlatList,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -16,17 +15,14 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NoteCard } from '@/features/notes/components/NoteCard';
 import { NoteActionsSheet } from '@/features/notes/components/NoteActionsSheet';
+import { ShareNoteSheet } from '@/features/notes/components/ShareNoteSheet';
 import { GroupManagerSheet } from '@/features/notes/components/GroupManagerSheet';
+import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
 import { useNotesSettingsStore } from '@/features/notes/store/use-notes-settings-store';
 import type { NoteGroup, NoteSummary } from '@/features/notes/types';
-import {
-  createNoteShareLink,
-  deleteNote,
-  fetchNoteGroups,
-  fetchNotes,
-  togglePinNote,
-} from '@/services/api/notes';
+import { deleteNote, fetchNoteGroups, fetchNotes, togglePinNote } from '@/services/api/notes';
 import { useAuthStore } from '@/stores/authStore';
+import type { NoteCardData } from '@/types';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
@@ -60,6 +56,10 @@ export default function NotesScreen() {
   const [loadError, setLoadError] = useState(false);
   // 「⋯」动作菜单针对的笔记（null = 关闭）
   const [menuNote, setMenuNote] = useState<NoteSummary | null>(null);
+  // 分享会话选择器：非空即打开，携带要发送的笔记卡片
+  const [shareNotePayload, setShareNotePayload] = useState<NoteCardData | null>(
+    null,
+  );
   const [refreshing, setRefreshing] = useState(false);
   const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
@@ -225,35 +225,16 @@ export default function NotesScreen() {
   const openMenu = useCallback((note: NoteSummary) => setMenuNote(note), []);
   const closeMenu = useCallback(() => setMenuNote(null), []);
 
-  // 单条笔记分享：生成只含这条笔记的分享链接，走系统分享面板。
+  // 单条笔记分享：打开会话选择器，把笔记以卡片消息发给好友/群聊。
   const handleShareNote = useCallback(
-    async (note: NoteSummary) => {
-      try {
-        const link = await createNoteShareLink({
-          title: note.title,
-          noteIds: [note.id],
-        });
-        if (!mountedRef.current) return;
-        await Share.share({
-          message: t('notes.share.message', {
-            title: note.title,
-            url: link.url,
-            defaultValue: `${note.title}\n${link.url}`,
-          }),
-        });
-      } catch {
-        if (mountedRef.current) {
-          Alert.alert(
-            t('notes.share.createFailedTitle', { defaultValue: '分享链接生成失败' }),
-            t('notes.share.createFailedMessage', {
-              defaultValue: '无法生成分享链接，请稍后重试。',
-            }),
-          );
-        }
-      }
+    (note: NoteSummary) => {
+      setShareNotePayload(
+        buildNoteCardPayloadFromSummary(note, note.ownerId ?? currentUserId),
+      );
     },
-    [t],
+    [currentUserId],
   );
+  const closeShareNote = useCallback(() => setShareNotePayload(null), []);
 
   const handleDeleteNote = useCallback(
     (note: NoteSummary) => {
@@ -485,6 +466,7 @@ export default function NotesScreen() {
         onShare={handleShareNote}
         onDelete={handleDeleteNote}
       />
+      <ShareNoteSheet payload={shareNotePayload} onClose={closeShareNote} />
     </View>
   );
 }

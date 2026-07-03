@@ -40,9 +40,11 @@ test('NotesScreen bottom bar keeps only the 新建 button', () => {
   assert.doesNotMatch(src, /openQrSheet/);
   assert.doesNotMatch(src, /NoteShareQrSheet/);
   assert.doesNotMatch(src, /qrVisible/);
-  // 单条笔记分享仍在（菜单里的「分享」）。
+  // 单条笔记分享改为「弹会话选择器发给好友/群聊」：不再生成网页分享链接。
   assert.match(src, /handleShareNote\b/);
-  assert.match(src, /createNoteShareLink/);
+  assert.match(src, /<ShareNoteSheet/);
+  assert.match(src, /buildNoteCardPayloadFromSummary/);
+  assert.doesNotMatch(src, /createNoteShareLink/);
 });
 
 test('NotesScreen fetches notes and groups', () => {
@@ -434,9 +436,11 @@ test('NoteDetailScreen follows the divider + icon-chip section design', () => {
 test('NoteDetailScreen header adds a share button left of download', () => {
   const src = read('src/features/notes/screens/NoteDetailScreen.tsx');
 
-  // 分享按钮在下载按钮左边，走单条分享链接 + 系统分享面板。
+  // 分享按钮在下载按钮左边，点开弹会话选择器发给好友/群聊（非网页链接/系统面板）。
   assert.match(src, /handleShareNote/);
-  assert.match(src, /createNoteShareLink/);
+  assert.match(src, /<ShareNoteSheet/);
+  assert.match(src, /buildNoteCardPayloadFromSummary/);
+  assert.doesNotMatch(src, /createNoteShareLink/);
   const shareIdx = src.indexOf("name=\"share-outline\"");
   const downloadIdx = src.indexOf("name=\"download-outline\"");
   assert.ok(shareIdx > 0 && downloadIdx > 0, 'both header icons exist');
@@ -450,4 +454,18 @@ test('GroupManagerSheet name input is a visible shadowed pill', () => {
   assert.match(src, /modalInput:\s*\{[\s\S]*?borderColor:\s*colors\.surfaceBorder/);
   assert.match(src, /modalInput:\s*\{[\s\S]*?backgroundColor:\s*colors\.background/);
   assert.match(src, /modalInput:\s*\{[\s\S]*?borderRadius:\s*Radius\.full[\s\S]*?shadowOpacity/);
+});
+
+test('ShareNoteSheet sends the note as a card to a chosen friend/group', () => {
+  const sheet = read('src/features/notes/components/ShareNoteSheet.tsx');
+  const client = read('src/im/client.ts');
+
+  // 会话选择器：列出会话（好友/群聊），点选把笔记以卡片消息发过去。
+  assert.match(sheet, /loadConversationList/);
+  assert.match(sheet, /sendNoteCardToConversation/);
+  assert.match(sheet, /BottomSheetModal/);
+  assert.match(sheet, /notes\.shareToChat\.title/);
+  // 后端发送按会话解析 recvID/groupID（与 friend/circle 名片一致）。
+  assert.match(client, /export async function sendNoteCardToConversation/);
+  assert.match(client, /targetConversation\.conversationType === SessionType\.Group/);
 });
