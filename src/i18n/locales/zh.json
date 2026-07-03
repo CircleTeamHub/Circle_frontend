@@ -1762,7 +1762,11 @@
     "actions": {
       "new": "新建",
       "qrCode": "二维码",
-      "share": "分享"
+      "share": "分享",
+      "pin": "置顶",
+      "unpin": "取消置顶",
+      "edit": "编辑",
+      "more": "更多"
     },
     "alerts": {
       "deleteFailedTitle": "删除失败",
@@ -1778,7 +1782,9 @@
       "saveGroupFailed": "分组保存失败，请稍后再试。",
       "saveMembershipsFailed": "笔记分组保存失败，请稍后再试。",
       "deleteGroupMessage": "删除\"{{name}}\"后不会删除笔记，只会移出该分组。",
-      "pinFailedTitle": "操作失败"
+      "pinFailedTitle": "操作失败",
+      "deleteTitle": "删除笔记",
+      "deleteConfirm": "确定删除这条笔记吗？删除后不可恢复。"
     },
     "detail": {
       "loadFailed": "笔记加载失败，请稍后重试",

@@ -1765,7 +1765,11 @@
     "actions": {
       "new": "New",
       "qrCode": "QR code",
-      "share": "Share"
+      "share": "Share",
+      "pin": "Pin to top",
+      "unpin": "Unpin",
+      "edit": "Edit",
+      "more": "More"
     },
     "alerts": {
       "deleteFailedTitle": "Failed to delete",
@@ -1781,7 +1785,9 @@
       "saveGroupFailed": "Failed to save group, please try again.",
       "saveMembershipsFailed": "Failed to save note groups, please try again.",
       "deleteGroupMessage": "Deleting \"{{name}}\" won't delete its notes — they're just removed from the group.",
-      "pinFailedTitle": "Action failed"
+      "pinFailedTitle": "Action failed",
+      "deleteTitle": "Delete note",
+      "deleteConfirm": "Delete this note? This cannot be undone."
     },
     "detail": {
       "loadFailed": "Failed to load note, please try again",

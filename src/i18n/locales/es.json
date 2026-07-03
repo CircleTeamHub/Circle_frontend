@@ -632,7 +632,11 @@
     "actions": {
       "new": "Nueva",
       "qrCode": "Código QR",
-      "share": "Compartir"
+      "share": "Compartir",
+      "pin": "Fijar arriba",
+      "unpin": "Dejar de fijar",
+      "edit": "Editar",
+      "more": "Más"
     },
     "alerts": {
       "deleteFailedTitle": "Error al eliminar",
@@ -648,7 +652,9 @@
       "saveGroupFailed": "No se pudo guardar el grupo, inténtalo de nuevo.",
       "saveMembershipsFailed": "No se pudieron guardar los grupos de notas, inténtalo de nuevo.",
       "deleteGroupMessage": "Eliminar \"{{name}}\" no borrará sus notas; solo se quitarán del grupo.",
-      "pinFailedTitle": "No se pudo completar"
+      "pinFailedTitle": "No se pudo completar",
+      "deleteTitle": "Eliminar nota",
+      "deleteConfirm": "¿Eliminar esta nota? No se puede deshacer."
     },
     "detail": {
       "loadFailed": "No se pudo cargar la nota, inténtalo de nuevo",

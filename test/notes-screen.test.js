@@ -379,10 +379,25 @@ test('NoteCard renders title and meta', () => {
   assert.match(src, /buildNoteMeta/);
 });
 
-test('NoteCard has pin and edit actions', () => {
-  const src = read('src/features/notes/components/NoteCard.tsx');
-  assert.match(src, /onPinPress/);
-  assert.match(src, /onEditPress/);
+test('NoteCard exposes a single more-actions button (not per-action buttons)', () => {
+  const card = read('src/features/notes/components/NoteCard.tsx');
+  const screen = read('src/features/notes/screens/NotesScreen.tsx');
+  const sheet = read('src/features/notes/components/NoteActionsSheet.tsx');
+
+  // 卡片上两个按钮（置顶/编辑）收敛成一个「⋯」，打开动作菜单。
+  assert.match(card, /onMorePress\?: \(note: NoteSummary\) => void/);
+  assert.match(card, /ellipsis-horizontal/);
+  assert.doesNotMatch(card, /onPinPress/);
+  assert.doesNotMatch(card, /onEditPress/);
+
+  // 菜单承载置顶/编辑/分享/删除四个动作。
+  assert.match(screen, /<NoteActionsSheet/);
+  assert.match(screen, /onMorePress=\{openMenu\}/);
+  assert.match(sheet, /notes\.actions\.pin/);
+  assert.match(sheet, /notes\.actions\.edit/);
+  assert.match(sheet, /notes\.actions\.share/);
+  assert.match(sheet, /common\.delete/);
+  assert.match(sheet, /trash-outline/);
 });
 
 test('ProfileScreen navigates to notes on menu item press', () => {

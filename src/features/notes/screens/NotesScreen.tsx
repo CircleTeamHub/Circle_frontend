@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NoteCard } from '@/features/notes/components/NoteCard';
+import { NoteActionsSheet } from '@/features/notes/components/NoteActionsSheet';
 import { GroupManagerSheet } from '@/features/notes/components/GroupManagerSheet';
 import { NoteShareQrSheet } from '@/features/notes/components/NoteShareQrSheet';
 import { useNotesSettingsStore } from '@/features/notes/store/use-notes-settings-store';
@@ -26,6 +27,7 @@ import type {
 } from '@/features/notes/types';
 import {
   createNoteShareLink,
+  deleteNote,
   fetchNoteGroups,
   fetchNotes,
   togglePinNote,
@@ -62,6 +64,8 @@ export default function NotesScreen() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  // 「⋯」动作菜单针对的笔记（null = 关闭）
+  const [menuNote, setMenuNote] = useState<NoteSummary | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
@@ -233,9 +237,71 @@ export default function NotesScreen() {
     [router],
   );
 
-  const handlePinPress = useCallback(
-    (note: NoteSummary) => void handlePin(note),
-    [handlePin],
+  const openMenu = useCallback((note: NoteSummary) => setMenuNote(note), []);
+  const closeMenu = useCallback(() => setMenuNote(null), []);
+
+  // 单条笔记分享：生成只含这条笔记的分享链接，走系统分享面板。
+  const handleShareNote = useCallback(
+    async (note: NoteSummary) => {
+      try {
+        const link = await createNoteShareLink({
+          title: note.title,
+          noteIds: [note.id],
+        });
+        if (!mountedRef.current) return;
+        await Share.share({
+          message: t('notes.share.message', {
+            title: note.title,
+            url: link.url,
+            defaultValue: `${note.title}\n${link.url}`,
+          }),
+        });
+      } catch {
+        if (mountedRef.current) {
+          Alert.alert(
+            t('notes.share.createFailedTitle', { defaultValue: '分享链接生成失败' }),
+            t('notes.share.createFailedMessage', {
+              defaultValue: '无法生成分享链接，请稍后重试。',
+            }),
+          );
+        }
+      }
+    },
+    [t],
+  );
+
+  const handleDeleteNote = useCallback(
+    (note: NoteSummary) => {
+      Alert.alert(
+        t('notes.alerts.deleteTitle', { defaultValue: '删除笔记' }),
+        t('notes.alerts.deleteConfirm', {
+          defaultValue: '确定删除这条笔记吗？删除后不可恢复。',
+        }),
+        [
+          { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+          {
+            text: t('common.delete', { defaultValue: '删除' }),
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await deleteNote(note.id);
+                if (mountedRef.current) {
+                  setNotes((prev) => prev.filter((item) => item.id !== note.id));
+                }
+              } catch {
+                if (mountedRef.current) {
+                  Alert.alert(
+                    t('notes.alerts.deleteFailedTitle', { defaultValue: '删除失败' }),
+                    t('common.retryLater', { defaultValue: '请稍后重试' }),
+                  );
+                }
+              }
+            },
+          },
+        ],
+      );
+    },
+    [t],
   );
 
   const notesShareTitle = t('notes.share.title', { defaultValue: '我的笔记' });
@@ -363,14 +429,9 @@ export default function NotesScreen() {
 
   const renderNote = useCallback(
     ({ item }: { item: NoteSummary }) => (
-      <NoteCard
-        note={item}
-        onPress={openNote}
-        onEditPress={openNoteEditor}
-        onPinPress={handlePinPress}
-      />
+      <NoteCard note={item} onPress={openNote} onMorePress={openMenu} />
     ),
-    [handlePinPress, openNote, openNoteEditor],
+    [openMenu, openNote],
   );
 
   const statsText = t('notes.stats', {
@@ -551,6 +612,14 @@ export default function NotesScreen() {
         loading={shareLinkLoading}
         errorMessage={shareLinkError}
         onClose={closeQrSheet}
+      />
+      <NoteActionsSheet
+        note={menuNote}
+        onClose={closeMenu}
+        onPin={handlePin}
+        onEdit={openNoteEditor}
+        onShare={handleShareNote}
+        onDelete={handleDeleteNote}
       />
     </View>
   );

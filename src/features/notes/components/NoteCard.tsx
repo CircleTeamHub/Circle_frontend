@@ -11,8 +11,8 @@ interface Props {
   note: NoteSummary;
   /** 回调统一携带 note，父层可用稳定的 useCallback，让 memo 生效 */
   onPress: (note: NoteSummary) => void;
-  onEditPress?: (note: NoteSummary) => void;
-  onPinPress?: (note: NoteSummary) => void;
+  /** 点「⋯」打开动作菜单（置顶/编辑/分享/删除）——由父层承载菜单 */
+  onMorePress?: (note: NoteSummary) => void;
   showActions?: boolean;
   accessibilityLabel?: string;
   accessibilityRole?: 'button';
@@ -21,8 +21,7 @@ interface Props {
 function NoteCardInner({
   note,
   onPress,
-  onEditPress,
-  onPinPress,
+  onMorePress,
   showActions = true,
   accessibilityLabel,
   accessibilityRole = 'button',
@@ -39,9 +38,8 @@ function NoteCardInner({
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
       },
-      pinIcon: note.pinned ? colors.primary : colors.textSecondary,
     }),
-    [colors, note.pinned],
+    [colors],
   );
 
   const meta = buildNoteMeta(
@@ -63,23 +61,15 @@ function NoteCardInner({
 
   const handlePress = useCallback(() => onPress(note), [note, onPress]);
 
-  const handlePin = useCallback(
+  const handleMore = useCallback(
     (e: { stopPropagation: () => void }) => {
       e.stopPropagation();
-      onPinPress?.(note);
+      onMorePress?.(note);
     },
-    [note, onPinPress],
+    [note, onMorePress],
   );
 
-  const handleEdit = useCallback(
-    (e: { stopPropagation: () => void }) => {
-      e.stopPropagation();
-      onEditPress?.(note);
-    },
-    [note, onEditPress],
-  );
-
-  const canShowActions = showActions && onPinPress && onEditPress;
+  const canShowActions = showActions && Boolean(onMorePress);
 
   return (
     <Pressable
@@ -101,9 +91,14 @@ function NoteCardInner({
       )}
 
       <View style={s.content}>
-        <Text style={[s.title, d.title]} numberOfLines={1}>
-          {note.title}
-        </Text>
+        <View style={s.titleRow}>
+          {note.pinned ? (
+            <Ionicons name="bookmark" size={13} color={colors.primary} />
+          ) : null}
+          <Text style={[s.title, d.title]} numberOfLines={1}>
+            {note.title}
+          </Text>
+        </View>
         {note.contentPreview ? (
           <Text style={[s.preview, d.preview]} numberOfLines={2}>
             {note.contentPreview}
@@ -134,18 +129,15 @@ function NoteCardInner({
       </View>
 
       {canShowActions ? (
-        <View style={s.actions}>
-          <Pressable onPress={handlePin} hitSlop={8}>
-            <Ionicons
-              name={note.pinned ? 'bookmark' : 'bookmark-outline'}
-              size={20}
-              color={d.pinIcon}
-            />
-          </Pressable>
-          <Pressable onPress={handleEdit} hitSlop={8}>
-            <Ionicons name="create-outline" size={20} color={colors.textSecondary} />
-          </Pressable>
-        </View>
+        <Pressable
+          onPress={handleMore}
+          hitSlop={10}
+          style={s.moreBtn}
+          accessibilityRole="button"
+          accessibilityLabel={t('notes.actions.more', { defaultValue: '更多' })}
+        >
+          <Ionicons name="ellipsis-horizontal" size={20} color={colors.textSecondary} />
+        </Pressable>
       ) : null}
     </Pressable>
   );
@@ -177,7 +169,13 @@ const s = StyleSheet.create({
     flex: 1,
     gap: 4,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
   title: {
+    flexShrink: 1,
     ...Typography.body,
     fontWeight: '600',
   },
@@ -198,9 +196,11 @@ const s = StyleSheet.create({
     ...Typography.small,
     fontWeight: '500',
   },
-  actions: {
-    gap: Spacing.sm,
+  moreBtn: {
+    width: 32,
+    height: 32,
     alignItems: 'center',
-    paddingTop: 2,
+    justifyContent: 'center',
+    marginTop: -2,
   },
 });

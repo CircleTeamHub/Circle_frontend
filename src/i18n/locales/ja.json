@@ -631,7 +631,11 @@
     "actions": {
       "new": "新規",
       "qrCode": "QRコード",
-      "share": "共有"
+      "share": "共有",
+      "pin": "上部に固定",
+      "unpin": "固定を解除",
+      "edit": "編集",
+      "more": "その他"
     },
     "alerts": {
       "deleteFailedTitle": "削除に失敗しました",
@@ -647,7 +651,9 @@
       "saveGroupFailed": "グループの保存に失敗しました。もう一度お試しください。",
       "saveMembershipsFailed": "ノートのグループを保存できませんでした。もう一度お試しください。",
       "deleteGroupMessage": "「{{name}}」を削除してもノートは消えず、グループから外れるだけです。",
-      "pinFailedTitle": "操作に失敗しました"
+      "pinFailedTitle": "操作に失敗しました",
+      "deleteTitle": "ノートを削除",
+      "deleteConfirm": "このノートを削除しますか？元に戻せません。"
     },
     "detail": {
       "loadFailed": "ノートを読み込めませんでした。もう一度お試しください",
