@@ -615,7 +615,7 @@ export default function EditNoteScreen() {
     meta?: string,
   ) => (
     <View style={s.sectionHeader}>
-      <Ionicons name={icon} size={15} color={colors.primary} />
+      <Ionicons name={icon} size={18} color={colors.primary} />
       <Text style={[s.sectionHeading, d.sectionHeading]}>{sectionTitle}</Text>
       {meta ? (
         <Text style={[s.sectionHeaderMeta, d.sectionHeaderMeta]}>{meta}</Text>
@@ -1026,9 +1026,9 @@ const s = StyleSheet.create({
   },
   sectionHeading: {
     flex: 1,
-    ...Typography.caption,
-    fontWeight: '600',
-    letterSpacing: 0.5,
+    // 与详情页小节标题同档（h3/700），编辑页分段更醒目。
+    ...Typography.h3,
+    fontWeight: '700',
   },
   sectionSubtitle: { ...Typography.small },
   sectionHeaderMeta: { ...Typography.small },
