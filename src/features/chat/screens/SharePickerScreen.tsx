@@ -91,7 +91,8 @@ export default function SharePickerScreen() {
           if (!cancelled) setFriends(res);
         } else if (shareType === 'favorite') {
           const res = await fetchCollections();
-          if (!cancelled) setFavorites(res);
+          // NOTE 收藏已迁到「我的笔记」（发笔记走「笔记」入口），这里不再展示遗留数据。
+          if (!cancelled) setFavorites(res.filter((c) => c.type !== 'NOTE'));
         }
       } catch (err) {
         if (!cancelled) {

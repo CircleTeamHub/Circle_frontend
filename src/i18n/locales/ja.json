@@ -266,7 +266,10 @@
       "save": "保存",
       "saveUnsupported": "このメッセージはまだ保存できません",
       "saveFailed": "保存に失敗しました",
-      "saveFailedHint": "後でもう一度お試しください"
+      "saveFailedHint": "後でもう一度お試しください",
+      "noteCollected": "マイノートに追加しました",
+      "noteAlreadyCollected": "すでにマイノートにあります",
+      "noteCollectedHint": "「マイノート」で確認できます"
     },
     "mentions": {
       "empty": "メンションできるメンバーがいません"
@@ -643,7 +646,8 @@
       "saveFailedTitle": "保存に失敗しました",
       "saveGroupFailed": "グループの保存に失敗しました。もう一度お試しください。",
       "saveMembershipsFailed": "ノートのグループを保存できませんでした。もう一度お試しください。",
-      "deleteGroupMessage": "「{{name}}」を削除してもノートは消えず、グループから外れるだけです。"
+      "deleteGroupMessage": "「{{name}}」を削除してもノートは消えず、グループから外れるだけです。",
+      "pinFailedTitle": "操作に失敗しました"
     },
     "detail": {
       "loadFailed": "ノートを読み込めませんでした。もう一度お試しください",
@@ -654,7 +658,11 @@
       "downloadImages": "画像をダウンロード",
       "downloadVideos": "動画をダウンロード",
       "downloadLongImage": "長い画像を生成",
-      "downloadPdf": "PDFをダウンロード"
+      "downloadPdf": "PDFをダウンロード",
+      "sourceGroupLabel": "グループチャットから",
+      "sourcePrivateLabel": "個人チャットから",
+      "sourceSharedBy": "{{name}}さんがシェア",
+      "sourceLocate": "元のメッセージを見る"
     },
     "edit": {
       "addImage": "画像を追加",
@@ -812,7 +820,11 @@
       "failedTitle": "位置情報の取得に失敗しました",
       "usePlace": "この位置を使用",
       "selectedLabel": "選択した位置"
-    }
+    },
+    "list": {
+      "fromSource": "{{name}}から"
+    },
+    "loadFailed": "ノートを読み込めませんでした。ネットワークを確認して再試行してください"
   },
   "tempChats": {
     "title": "枠の管理",
@@ -1556,16 +1568,11 @@
     "collections": {
       "deleteTitle": "削除の確認",
       "deleteConfirm": "この保存済みアイテムを削除しますか？",
-      "imageCount": "{{count}}枚の画像",
-      "videoCount": "{{count}}本の動画",
-      "showcaseCount": "{{count}}件のショーケース",
-      "location": "位置情報",
       "backToMessages": "メッセージに戻る",
       "sender": "送信者",
       "empty": "保存済みアイテムはまだありません",
       "loadError": "コレクションの読み込みに失敗しました。しばらくしてから再試行してください。",
       "deleteError": "コレクションの削除に失敗しました。しばらくしてから再試行してください。",
-      "noteFallbackTitle": "保存したノート",
       "conversationFallback": "チャット",
       "fromSource": "{{title}} より",
       "tabs": {
@@ -1573,8 +1580,7 @@
         "chat": "チャット履歴",
         "video": "動画",
         "voice": "音声",
-        "message": "メッセージ",
-        "note": "保存したノート"
+        "message": "メッセージ"
       },
       "menuLabel": "コレクション"
     },

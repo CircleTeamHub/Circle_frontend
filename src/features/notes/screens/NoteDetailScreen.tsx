@@ -15,9 +15,11 @@ import {
   type LayoutChangeEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Avatar } from '@/components/ui/avatar';
 import { NoteBlockRenderer } from '@/features/notes/components/NoteBlockRenderer';
 import type { NoteDetail, NoteExportFormat } from '@/features/notes/types';
 import { formatNoteFullDate } from '@/features/notes/utils/note-format';
+import { getChatDetailHref } from '@/features/user/utils/routes';
 import {
   buildNoteSections,
   getInitialNoteSection,
@@ -168,15 +170,56 @@ export default function NoteDetailScreen() {
     return Boolean(resolvedOwnerId && currentUserId === resolvedOwnerId);
   }, [currentUserId, note, ownerId]);
 
+  // 收藏来的笔记 → 来源名片：群聊展示群名片（附分享人），私聊展示对方名片。
+  // 后端快照缺关键字段（历史坏数据）时整卡不渲染，避免点了跳不动。
+  const collectedSource = useMemo(() => {
+    const from = note?.collectedFrom;
+    if (!from?.conversationID || !from.clientMsgID) return null;
+    const isGroup = from.conversationType === 'group';
+    const peer = isGroup ? from.group : from.sender;
+    if (!peer?.id || !peer.name) return null;
+    const subtitle = isGroup
+      ? [
+          t('notes.detail.sourceGroupLabel', { defaultValue: '来自群聊' }),
+          from.sender?.name
+            ? t('notes.detail.sourceSharedBy', {
+                defaultValue: '{{name}} 分享',
+                name: from.sender.name,
+              })
+            : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : t('notes.detail.sourcePrivateLabel', { defaultValue: '来自私聊' });
+    return { isGroup, peer, subtitle, from };
+  }, [note?.collectedFrom, t]);
+
+  const handleOpenSource = useCallback(() => {
+    if (!collectedSource) return;
+    const { isGroup, peer, from } = collectedSource;
+    // 聊天页固定挂在 messages 栈下打开，searchedMsgID 触发历史定位滚动。
+    router.push(
+      getChatDetailHref(
+        'messages',
+        peer.id,
+        peer.name,
+        peer.faceURL ?? undefined,
+        from.conversationID,
+        from.clientMsgID,
+        isGroup ? 'group' : 'private',
+      ),
+    );
+  }, [collectedSource, router]);
+
   const d = useMemo(
     () => ({
       container: { backgroundColor: colors.background },
       title: { color: colors.text },
       meta: { color: colors.textSecondary },
-      groupTag: { backgroundColor: colors.primary + '33' },
+      groupTag: { backgroundColor: colors.primaryLight },
       groupTagText: { color: colors.primary },
       content: { color: colors.text },
-      sectionTitle: { color: colors.text },
+      sectionTitle: { color: colors.textSecondary },
       sectionCard: { backgroundColor: colors.surface, borderColor: colors.surfaceBorder },
       downloadSheet: { backgroundColor: colors.surface, borderColor: colors.surfaceBorder },
     }),
@@ -256,6 +299,50 @@ export default function NoteDetailScreen() {
             </View>
           ))}
         </View>
+
+        {/* 收藏来源名片：点击跳回聊天并定位到分享这条笔记的消息 */}
+        {collectedSource ? (
+          <Pressable
+            style={[s.sourceCard, d.sectionCard]}
+            onPress={handleOpenSource}
+            accessibilityRole="button"
+            accessibilityLabel={t('notes.detail.sourceLocate', {
+              defaultValue: '查看原消息',
+            })}
+          >
+            <Avatar
+              size={40}
+              shape="square"
+              name={collectedSource.peer.name}
+              uri={collectedSource.peer.faceURL ?? undefined}
+            />
+            <View style={s.sourceCardText}>
+              <Text
+                style={[s.sourceCardName, { color: colors.text }]}
+                numberOfLines={1}
+              >
+                {collectedSource.peer.name}
+              </Text>
+              <Text style={[s.meta, d.meta]} numberOfLines={1}>
+                {collectedSource.subtitle}
+              </Text>
+            </View>
+            <View style={s.sourceCardAction}>
+              <Ionicons
+                name={
+                  collectedSource.isGroup
+                    ? 'chatbubbles-outline'
+                    : 'chatbubble-outline'
+                }
+                size={15}
+                color={colors.primary}
+              />
+              <Text style={[s.sourceCardActionText, { color: colors.primary }]}>
+                {t('notes.detail.sourceLocate', { defaultValue: '查看原消息' })}
+              </Text>
+            </View>
+          </Pressable>
+        ) : null}
 
         {sections ? (
           <>
@@ -405,23 +492,43 @@ const s = StyleSheet.create({
     paddingTop: Spacing.md,
     gap: Spacing.sm,
   },
-  title: { ...Typography.h1, fontWeight: '700', marginBottom: Spacing.xs },
+  // 详情页的"刊头"：标题是唯一的重型元素，其余信息全部退为次级。
+  title: { ...Typography.title, lineHeight: 40, marginBottom: Spacing.sm },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: Spacing.sm,
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.lg,
   },
-  meta: { ...Typography.caption },
+  meta: { ...Typography.caption, fontWeight: '400' },
   groupTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingHorizontal: Spacing.sm + 2,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
   },
   groupTagText: { ...Typography.small, fontWeight: '600' },
-  bodyText: { ...Typography.bodyRegular, lineHeight: 24 },
-  section: { gap: Spacing.sm, marginBottom: Spacing.lg },
-  sectionTitle: { ...Typography.h2, fontWeight: '700' },
+  bodyText: { ...Typography.bodyRegular, fontSize: 15, lineHeight: 26 },
+  sourceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    borderWidth: 1,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  sourceCardText: { flex: 1, gap: 2 },
+  sourceCardName: { ...Typography.body, fontWeight: '600' },
+  sourceCardAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  sourceCardActionText: { ...Typography.small, fontWeight: '600' },
+  section: { gap: Spacing.sm, marginBottom: Spacing.xl },
+  // 小节标签做成安静的"眉标"：内容才是主角，标签只负责指路。
+  sectionTitle: { ...Typography.small, fontWeight: '600', letterSpacing: 1.5 },
   locationCard: {
     flexDirection: 'row',
     alignItems: 'center',

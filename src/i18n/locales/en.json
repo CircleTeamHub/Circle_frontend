@@ -284,7 +284,10 @@
       "save": "Save",
       "saveUnsupported": "This message cannot be saved yet",
       "saveFailed": "Save failed",
-      "saveFailedHint": "Please try again later"
+      "saveFailedHint": "Please try again later",
+      "noteCollected": "Added to My Notes",
+      "noteAlreadyCollected": "Already in My Notes",
+      "noteCollectedHint": "You can view it in My Notes"
     },
     "mentions": {
       "empty": "No members available to mention"
@@ -1127,16 +1130,11 @@
     "collections": {
       "deleteTitle": "Confirm Deletion",
       "deleteConfirm": "Are you sure you want to delete this collection?",
-      "imageCount": "{{count}} images",
-      "videoCount": "{{count}} videos",
-      "showcaseCount": "{{count}} showcases",
-      "location": "Location",
       "backToMessages": "Back to Message",
       "sender": "Sender",
       "empty": "No collections yet",
       "loadError": "Failed to load collections. Please try again later.",
       "deleteError": "Failed to delete collection. Please try again later.",
-      "noteFallbackTitle": "Saved Note",
       "conversationFallback": "Chat",
       "fromSource": "From {{title}}",
       "tabs": {
@@ -1144,8 +1142,7 @@
         "chat": "Chat History",
         "video": "Video",
         "voice": "Voice",
-        "message": "Message",
-        "note": "Saved Notes"
+        "message": "Message"
       },
       "menuLabel": "Collections"
     },
@@ -1783,7 +1780,8 @@
       "saveFailedTitle": "Failed to save",
       "saveGroupFailed": "Failed to save group, please try again.",
       "saveMembershipsFailed": "Failed to save note groups, please try again.",
-      "deleteGroupMessage": "Deleting \"{{name}}\" won't delete its notes — they're just removed from the group."
+      "deleteGroupMessage": "Deleting \"{{name}}\" won't delete its notes — they're just removed from the group.",
+      "pinFailedTitle": "Action failed"
     },
     "detail": {
       "loadFailed": "Failed to load note, please try again",
@@ -1794,7 +1792,11 @@
       "downloadImages": "Download images",
       "downloadVideos": "Download videos",
       "downloadLongImage": "Generate long image",
-      "downloadPdf": "Download PDF"
+      "downloadPdf": "Download PDF",
+      "sourceGroupLabel": "From group chat",
+      "sourcePrivateLabel": "From private chat",
+      "sourceSharedBy": "Shared by {{name}}",
+      "sourceLocate": "View original message"
     },
     "edit": {
       "addImage": "Add image",
@@ -1952,7 +1954,11 @@
       "failedTitle": "Location failed",
       "usePlace": "Use this location",
       "selectedLabel": "Selected location"
-    }
+    },
+    "list": {
+      "fromSource": "From {{name}}"
+    },
+    "loadFailed": "Couldn't load notes. Check your connection and try again"
   },
   "search": {
     "loadFriendsFailed": "Failed to load friends, please try again",

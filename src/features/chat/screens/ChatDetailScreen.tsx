@@ -89,9 +89,11 @@ import { useAuthStore } from '@/stores/authStore';
 import { useIMStore } from '@/stores/imStore';
 import { type FriendProfile } from '@/services/api/friends';
 import type { NoteSummary } from '@/features/notes/types';
+import { collectNote } from '@/services/api/notes';
 import { createCollection, type UserCollection } from '@/services/api/collections';
 import {
   buildCollectionInputFromMessage,
+  buildNoteCollectSource,
   resolveCollectionSendPlan,
 } from '@/features/chat/utils/message-collection';
 import {
@@ -766,6 +768,50 @@ export default function ChatDetailScreen() {
   const handleCollectMessage = useCallback(
     async (message: ChatMessage) => {
       if (!conversationID) return;
+
+      // 笔记卡片：不进「收藏」列表，直接快照复制进「我的笔记」，
+      // 并带上来源名片（群/用户）+ 消息定位信息，详情页可一键跳回聊天。
+      if (message.type === 'note-card') {
+        const source = buildNoteCollectSource(message, {
+          conversationID,
+          conversationTitle,
+          sourceID,
+          conversationType: isGroupChat ? 'group' : 'private',
+          conversationAvatarUrl: avatarUrl,
+          currentUser: {
+            id: currentUserID ?? undefined,
+            name: selfName,
+            faceURL: selfAvatarUri,
+          },
+        });
+        if (!source || !message.noteCard) return;
+
+        try {
+          const result = await collectNote(message.noteCard.noteId, source);
+          Alert.alert(
+            result.alreadyCollected
+              ? t('chat.messageActions.noteAlreadyCollected', {
+                  defaultValue: '已在我的笔记中',
+                })
+              : t('chat.messageActions.noteCollected', {
+                  defaultValue: '已添加到我的笔记',
+                }),
+            t('chat.messageActions.noteCollectedHint', {
+              defaultValue: '可在「我的笔记」中查看',
+            }),
+          );
+        } catch (error) {
+          if (__DEV__) {
+            console.warn('[ChatDetail] collect note failed', error);
+          }
+          Alert.alert(
+            t('chat.messageActions.collectFailed'),
+            getApiErrorMessage(error, t('chat.messageActions.collectFailedHint')),
+          );
+        }
+        return;
+      }
+
       const input = buildCollectionInputFromMessage(message, {
         conversationID,
         conversationTitle,
@@ -790,7 +836,17 @@ export default function ChatDetailScreen() {
         );
       }
     },
-    [conversationID, conversationTitle, isGroupChat, sourceID, t],
+    [
+      avatarUrl,
+      conversationID,
+      conversationTitle,
+      currentUserID,
+      isGroupChat,
+      selfAvatarUri,
+      selfName,
+      sourceID,
+      t,
+    ],
   );
 
   const [actionMenu, setActionMenu] = useState<{

@@ -284,7 +284,10 @@
       "save": "保存",
       "saveUnsupported": "该消息暂不支持保存",
       "saveFailed": "保存失败",
-      "saveFailedHint": "请稍后重试"
+      "saveFailedHint": "请稍后重试",
+      "noteCollected": "已添加到我的笔记",
+      "noteAlreadyCollected": "已在我的笔记中",
+      "noteCollectedHint": "可在「我的笔记」中查看"
     },
     "mentions": {
       "empty": "暂无可 @ 的成员"
@@ -1124,16 +1127,11 @@
     "collections": {
       "deleteTitle": "确认删除",
       "deleteConfirm": "确定要删除这条收藏吗？",
-      "imageCount": "{{count}} 图",
-      "videoCount": "{{count}} 视频",
-      "showcaseCount": "{{count}} 展示",
-      "location": "位置",
       "backToMessages": "回到消息",
       "sender": "发送人",
       "empty": "还没有收藏",
       "loadError": "收藏加载失败，请稍后重试",
       "deleteError": "删除收藏失败，请稍后重试",
-      "noteFallbackTitle": "收藏笔记",
       "conversationFallback": "聊天",
       "fromSource": "来自 {{title}}",
       "tabs": {
@@ -1141,8 +1139,7 @@
         "chat": "聊天记录",
         "video": "视频",
         "voice": "语音",
-        "message": "信息",
-        "note": "收藏笔记"
+        "message": "信息"
       },
       "menuLabel": "我的收藏"
     },
@@ -1780,7 +1777,8 @@
       "saveFailedTitle": "保存失败",
       "saveGroupFailed": "分组保存失败，请稍后再试。",
       "saveMembershipsFailed": "笔记分组保存失败，请稍后再试。",
-      "deleteGroupMessage": "删除\"{{name}}\"后不会删除笔记，只会移出该分组。"
+      "deleteGroupMessage": "删除\"{{name}}\"后不会删除笔记，只会移出该分组。",
+      "pinFailedTitle": "操作失败"
     },
     "detail": {
       "loadFailed": "笔记加载失败，请稍后重试",
@@ -1791,7 +1789,11 @@
       "downloadImages": "下载图片",
       "downloadVideos": "下载视频",
       "downloadLongImage": "生成长图",
-      "downloadPdf": "下载PDF"
+      "downloadPdf": "下载PDF",
+      "sourceGroupLabel": "来自群聊",
+      "sourcePrivateLabel": "来自私聊",
+      "sourceSharedBy": "{{name}} 分享",
+      "sourceLocate": "查看原消息"
     },
     "edit": {
       "addImage": "添加图片",
@@ -1949,7 +1951,11 @@
       "failedTitle": "定位失败",
       "usePlace": "使用这个位置",
       "selectedLabel": "已选择位置"
-    }
+    },
+    "list": {
+      "fromSource": "来自 {{name}}"
+    },
+    "loadFailed": "笔记加载失败，请检查网络后重试"
   },
   "search": {
     "loadFriendsFailed": "好友列表加载失败，请稍后重试",

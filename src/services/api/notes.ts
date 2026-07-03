@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type {
+  CollectNoteSource,
   CreateNoteInput,
   CreateNoteExportInput,
   CreateNoteShareLinkInput,
@@ -41,6 +42,24 @@ export async function updateNoteGroupIds(
   return apiClient<{ id: string; groupIds: string[] }>(`/note/${id}/groups`, {
     method: 'PATCH',
     body: { groupIds },
+  });
+}
+
+export type CollectNoteResult = {
+  note: NoteDetail;
+  /** true = 本来就是自己的笔记，或此前已收藏过（幂等，不产生新副本） */
+  alreadyCollected: boolean;
+};
+
+// 聊天里收藏他人笔记 → 服务端快照复制成一条自己的笔记（带来源名片），
+// 取代旧的 createCollection(type: NOTE) 收藏页方案。
+export async function collectNote(
+  noteId: string,
+  source: CollectNoteSource,
+): Promise<CollectNoteResult> {
+  return apiClient<CollectNoteResult>('/note/collect', {
+    method: 'POST',
+    body: { noteId, source },
   });
 }
 

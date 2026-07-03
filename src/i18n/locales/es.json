@@ -266,7 +266,10 @@
       "save": "Guardar",
       "saveUnsupported": "Este mensaje aún no se puede guardar",
       "saveFailed": "No se pudo guardar",
-      "saveFailedHint": "Inténtalo de nuevo más tarde"
+      "saveFailedHint": "Inténtalo de nuevo más tarde",
+      "noteCollected": "Añadida a mis notas",
+      "noteAlreadyCollected": "Ya está en mis notas",
+      "noteCollectedHint": "Puedes verla en Mis notas"
     },
     "mentions": {
       "empty": "No hay miembros para mencionar"
@@ -644,7 +647,8 @@
       "saveFailedTitle": "Error al guardar",
       "saveGroupFailed": "No se pudo guardar el grupo, inténtalo de nuevo.",
       "saveMembershipsFailed": "No se pudieron guardar los grupos de notas, inténtalo de nuevo.",
-      "deleteGroupMessage": "Eliminar \"{{name}}\" no borrará sus notas; solo se quitarán del grupo."
+      "deleteGroupMessage": "Eliminar \"{{name}}\" no borrará sus notas; solo se quitarán del grupo.",
+      "pinFailedTitle": "No se pudo completar"
     },
     "detail": {
       "loadFailed": "No se pudo cargar la nota, inténtalo de nuevo",
@@ -655,7 +659,11 @@
       "downloadImages": "Descargar imágenes",
       "downloadVideos": "Descargar videos",
       "downloadLongImage": "Generar imagen larga",
-      "downloadPdf": "Descargar PDF"
+      "downloadPdf": "Descargar PDF",
+      "sourceGroupLabel": "De un chat de grupo",
+      "sourcePrivateLabel": "De un chat privado",
+      "sourceSharedBy": "Compartida por {{name}}",
+      "sourceLocate": "Ver mensaje original"
     },
     "edit": {
       "addImage": "Añadir imagen",
@@ -813,7 +821,11 @@
       "failedTitle": "Error de ubicación",
       "usePlace": "Usar esta ubicación",
       "selectedLabel": "Ubicación seleccionada"
-    }
+    },
+    "list": {
+      "fromSource": "De {{name}}"
+    },
+    "loadFailed": "No se pudieron cargar las notas. Revisa tu conexión e inténtalo de nuevo"
   },
   "tempChats": {
     "title": "Gestión de plazas",
@@ -1559,16 +1571,11 @@
     "collections": {
       "deleteTitle": "Confirmar eliminación",
       "deleteConfirm": "¿Seguro que quieres eliminar este elemento guardado?",
-      "imageCount": "{{count}} imágenes",
-      "videoCount": "{{count}} videos",
-      "showcaseCount": "{{count}} exhibiciones",
-      "location": "Ubicación",
       "backToMessages": "Volver a Mensajes",
       "sender": "Remitente",
       "empty": "Aún no hay elementos guardados",
       "loadError": "Error al cargar los guardados. Inténtalo de nuevo más tarde.",
       "deleteError": "Error al eliminar el guardado. Inténtalo de nuevo más tarde.",
-      "noteFallbackTitle": "Nota guardada",
       "conversationFallback": "Chat",
       "fromSource": "De {{title}}",
       "tabs": {
@@ -1576,8 +1583,7 @@
         "chat": "Historial de chat",
         "video": "Video",
         "voice": "Voz",
-        "message": "Mensaje",
-        "note": "Notas guardadas"
+        "message": "Mensaje"
       },
       "menuLabel": "Guardados"
     },
