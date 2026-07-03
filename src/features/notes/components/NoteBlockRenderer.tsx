@@ -11,10 +11,12 @@ function VideoBlock({
   url,
   caption,
   captionColor,
+  frameStyle,
 }: {
   url: string;
   caption: string;
   captionColor: string;
+  frameStyle: { backgroundColor: string; borderColor: string };
 }) {
   // useVideoPlayer is called unconditionally — the empty-url guard lives in the
   // caller (BlockView), so this component always receives a valid source.
@@ -22,13 +24,15 @@ function VideoBlock({
     p.loop = false;
   });
   return (
-    <View style={s.imageWrap}>
-      <VideoView
-        style={s.image}
-        player={player}
-        nativeControls
-        contentFit="contain"
-      />
+    <View>
+      <View style={[s.mediaFrame, frameStyle]}>
+        <VideoView
+          style={s.media}
+          player={player}
+          nativeControls
+          contentFit="contain"
+        />
+      </View>
       {caption ? (
         <Text style={[s.caption, { color: captionColor }]}>{caption}</Text>
       ) : null}
@@ -67,6 +71,16 @@ function BlockView({ block }: { block: Block }) {
       text: colors.text,
       secondary: colors.textSecondary,
       primary: colors.primary,
+      // 竖图 contain 后两侧会露底：垫页面底色 + 细边做成"相框"，
+      // 留白读起来是刻意的卡纸而不是没铺满；在 surface 小节卡片里也有层次。
+      mediaFrame: {
+        backgroundColor: colors.background,
+        borderColor: colors.surfaceBorder,
+      },
+      codeBlock: {
+        backgroundColor: colors.background,
+        borderColor: colors.surfaceBorder,
+      },
     }),
     [colors],
   );
@@ -115,7 +129,7 @@ function BlockView({ block }: { block: Block }) {
 
     case 'codeBlock':
       return (
-        <View style={[s.codeBlock, { backgroundColor: colors.surface }]}>
+        <View style={[s.codeBlock, d.codeBlock]}>
           <Text style={[s.code, { color: d.text }]}>
             <InlineContent nodes={content} textColor={d.text} />
           </Text>
@@ -127,8 +141,10 @@ function BlockView({ block }: { block: Block }) {
       const caption = typeof props.caption === 'string' ? props.caption : '';
       if (!url) return null;
       return (
-        <View style={s.imageWrap}>
-          <Image source={{ uri: url }} style={s.image} contentFit="contain" />
+        <View>
+          <View style={[s.mediaFrame, d.mediaFrame]}>
+            <Image source={{ uri: url }} style={s.media} contentFit="contain" />
+          </View>
           {caption ? (
             <Text style={[s.caption, { color: d.secondary }]}>{caption}</Text>
           ) : null}
@@ -140,7 +156,14 @@ function BlockView({ block }: { block: Block }) {
       const url = typeof props.url === 'string' ? props.url : '';
       const caption = typeof props.caption === 'string' ? props.caption : '';
       if (!url) return null;
-      return <VideoBlock url={url} caption={caption} captionColor={d.secondary} />;
+      return (
+        <VideoBlock
+          url={url}
+          caption={caption}
+          captionColor={d.secondary}
+          frameStyle={d.mediaFrame}
+        />
+      );
     }
 
     default:
@@ -180,15 +203,20 @@ const s = StyleSheet.create({
     paddingVertical: Spacing.xs,
   },
   codeBlock: {
-    borderRadius: Radius.sm,
-    padding: Spacing.sm,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Spacing.md,
   },
   code: {
     fontFamily: 'monospace',
     ...Typography.small,
   },
-  imageWrap: { borderRadius: Radius.sm, overflow: 'hidden' },
-  image: { width: '100%', height: 240 },
+  mediaFrame: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+  },
+  media: { width: '100%', height: 300 },
   caption: {
     ...Typography.small,
     textAlign: 'center',

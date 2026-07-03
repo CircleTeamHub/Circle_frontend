@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
 import { NoteBlockRenderer } from '@/features/notes/components/NoteBlockRenderer';
 import type { NoteDetail, NoteExportFormat } from '@/features/notes/types';
+import { extractPlainText } from '@/features/notes/utils/note-blocks';
 import { formatNoteFullDate } from '@/features/notes/utils/note-format';
 import { getChatDetailHref } from '@/features/user/utils/routes';
 import {
@@ -102,6 +103,18 @@ export default function NoteDetailScreen() {
     () => (sections ? getNoteSectionAvailability(sections) : null),
     [sections],
   );
+  // hasText 只看结构存在与否：只有空段落的正文也会算 true，渲染出一个
+  // 光秃秃的眉标。这里再确认真的有可见内容（文字，或旧数据遗留的行内媒体块）。
+  const textSectionHasContent = useMemo(() => {
+    if (!sections) return false;
+    if (sections.text.content?.trim() || note?.content?.trim()) return true;
+    const blocks = sections.text.contentJson;
+    if (!Array.isArray(blocks) || blocks.length === 0) return false;
+    return (
+      blocks.some((block) => block.type === 'image' || block.type === 'video') ||
+      extractPlainText(blocks).trim().length > 0
+    );
+  }, [note?.content, sections]);
   const targetSection = useMemo(
     () => (sections ? getInitialNoteSection(section, sections) : null),
     [section, sections],
@@ -349,8 +362,11 @@ export default function NoteDetailScreen() {
 
         {sections ? (
           <>
-            {availability?.hasText ? (
-              <View onLayout={trackSectionLayout('text')} style={s.section}>
+            {availability?.hasText && textSectionHasContent ? (
+              <View
+                onLayout={trackSectionLayout('text')}
+                style={[s.section, s.sectionCard, d.sectionCard]}
+              >
                 <Text style={[s.sectionTitle, d.sectionTitle]}>
                   {t('notes.section.text', { defaultValue: '文字' })}
                 </Text>
@@ -365,7 +381,10 @@ export default function NoteDetailScreen() {
             ) : null}
 
             {availability?.hasMedia ? (
-              <View onLayout={trackSectionLayout('media')} style={s.section}>
+              <View
+                onLayout={trackSectionLayout('media')}
+                style={[s.section, s.sectionCard, d.sectionCard]}
+              >
                 <Text style={[s.sectionTitle, d.sectionTitle]}>
                   {t('notes.section.media', { defaultValue: '图片 / 视频' })}
                 </Text>
@@ -380,7 +399,10 @@ export default function NoteDetailScreen() {
             ) : null}
 
             {availability?.hasShowcase ? (
-              <View onLayout={trackSectionLayout('showcase')} style={s.section}>
+              <View
+                onLayout={trackSectionLayout('showcase')}
+                style={[s.section, s.sectionCard, d.sectionCard]}
+              >
                 <Text style={[s.sectionTitle, d.sectionTitle]}>
                   {t('notes.section.showcase', { defaultValue: '展示' })}
                 </Text>
@@ -395,11 +417,15 @@ export default function NoteDetailScreen() {
             ) : null}
 
             {availability?.hasLocation ? (
-              <View onLayout={trackSectionLayout('location')} style={s.section}>
+              <View
+                onLayout={trackSectionLayout('location')}
+                style={[s.section, s.sectionCard, d.sectionCard]}
+              >
                 <Text style={[s.sectionTitle, d.sectionTitle]}>
                   {t('notes.section.location', { defaultValue: '地址' })}
                 </Text>
-                <View style={[s.locationCard, d.sectionCard]}>
+                {/* 已在小节卡片内，行内不再套第二层边框 */}
+                <View style={s.locationRow}>
                   <Ionicons name="location-outline" size={20} color={colors.primary} />
                   <View style={{ flex: 1 }}>
                     <Text style={[s.locationTitle, { color: colors.text }]}>
@@ -529,16 +555,19 @@ const s = StyleSheet.create({
     gap: Spacing.xs,
   },
   sourceCardActionText: { ...Typography.small, fontWeight: '600' },
-  section: { gap: Spacing.sm, marginBottom: Spacing.xl },
+  section: { gap: Spacing.sm + 4, marginBottom: Spacing.md },
+  // 小节做成安静的卡片（和编辑页同语言）：surface 底 + 细边框出内容。
+  sectionCard: {
+    borderWidth: 1,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+  },
   // 小节标签做成安静的"眉标"：内容才是主角，标签只负责指路。
   sectionTitle: { ...Typography.small, fontWeight: '600', letterSpacing: 1.5 },
-  locationCard: {
+  locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    borderWidth: 1,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
   },
   locationTitle: { ...Typography.body, fontWeight: '600' },
   modalBackdrop: {

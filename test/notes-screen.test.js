@@ -393,3 +393,20 @@ test('ProfileScreen does not include the assistant menu item', () => {
   const src = read('src/features/profile/screens/ProfileScreen.tsx');
   assert.doesNotMatch(src, /profile\.assistant/);
 });
+
+test('NoteDetailScreen frames sections and media in bordered cards', () => {
+  const detail = read('src/features/notes/screens/NoteDetailScreen.tsx');
+  const renderer = read('src/features/notes/components/NoteBlockRenderer.tsx');
+
+  // 详情页小节 = surface 卡片（和编辑页同语言），媒体块带细边"相框"，
+  // 竖图 contain 的留白垫页面底色而不是裸露透明。
+  assert.match(detail, /sectionCard:\s*\{\s*borderWidth:\s*1,\s*borderRadius:\s*Radius\.lg/);
+  assert.match(detail, /\[s\.section, s\.sectionCard, d\.sectionCard\]/);
+  assert.match(renderer, /mediaFrame:\s*\{[\s\S]*?borderWidth:\s*StyleSheet\.hairlineWidth/);
+  assert.match(renderer, /backgroundColor:\s*colors\.background/);
+
+  // 正文只有空段落时不渲染光秃秃的"文字"眉标。
+  assert.match(detail, /textSectionHasContent/);
+  assert.match(detail, /availability\?\.hasText && textSectionHasContent/);
+  assert.match(detail, /extractPlainText\(blocks\)\.trim\(\)\.length > 0/);
+});
