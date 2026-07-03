@@ -18,7 +18,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { NoteBlockRenderer } from '@/features/notes/components/NoteBlockRenderer';
 import type { NoteDetail, NoteExportFormat } from '@/features/notes/types';
-import { extractPlainText } from '@/features/notes/utils/note-blocks';
 import { formatNoteFullDate } from '@/features/notes/utils/note-format';
 import { getChatDetailHref } from '@/features/user/utils/routes';
 import {
@@ -103,18 +102,6 @@ export default function NoteDetailScreen() {
     () => (sections ? getNoteSectionAvailability(sections) : null),
     [sections],
   );
-  // hasText 只看结构存在与否：只有空段落的正文也会算 true，渲染出一个
-  // 光秃秃的眉标。这里再确认真的有可见内容（文字，或旧数据遗留的行内媒体块）。
-  const textSectionHasContent = useMemo(() => {
-    if (!sections) return false;
-    if (sections.text.content?.trim() || note?.content?.trim()) return true;
-    const blocks = sections.text.contentJson;
-    if (!Array.isArray(blocks) || blocks.length === 0) return false;
-    return (
-      blocks.some((block) => block.type === 'image' || block.type === 'video') ||
-      extractPlainText(blocks).trim().length > 0
-    );
-  }, [note?.content, sections]);
   const targetSection = useMemo(
     () => (sections ? getInitialNoteSection(section, sections) : null),
     [section, sections],
@@ -286,7 +273,10 @@ export default function NoteDetailScreen() {
     );
   }
 
-  const showTextSection = Boolean(availability?.hasText && textSectionHasContent);
+  // 正文可见性直接信 util 的 hasText（content 有字，或有文字 block）。
+  // 曾用 extractPlainText 再嗅一遍，但它不递归嵌套 children，会把缩进列表等
+  // 真实正文误判为空而整段藏掉 —— 眉标已移除，空正文最多留个空行，无需再嗅。
+  const showTextSection = Boolean(availability?.hasText);
   const showMediaSection = Boolean(availability?.hasMedia);
   const showShowcaseSection = Boolean(availability?.hasShowcase);
 

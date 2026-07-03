@@ -422,8 +422,11 @@ test('NoteDetailScreen follows the divider + icon-chip section design', () => {
   assert.match(renderer, /Math\.min\(16 \/ 9, Math\.max\(3 \/ 4, width \/ height\)\)/);
   assert.match(renderer, /mediaFrame:\s*\{\s*borderRadius:\s*Radius\.lg,\s*overflow:\s*'hidden'/);
 
-  // 正文只有空段落时整节不渲染。
-  assert.match(detail, /textSectionHasContent/);
-  assert.match(detail, /availability\?\.hasText && textSectionHasContent/);
-  assert.match(detail, /extractPlainText\(blocks\)\.trim\(\)\.length > 0/);
+  // 正文可见性直接信 util 的 hasText —— 不再用 extractPlainText 二次嗅探
+  // （它不递归嵌套 children，会把缩进列表等真实正文误判为空而整段藏掉）。
+  assert.match(detail, /const showTextSection = Boolean\(availability\?\.hasText\)/);
+  assert.doesNotMatch(detail, /textSectionHasContent/);
+  // 不再调用 extractPlainText 嗅探正文（裸词可能出现在注释里，只查真实调用）。
+  assert.doesNotMatch(detail, /extractPlainText\(/);
+  assert.doesNotMatch(detail, /import \{ extractPlainText \}/);
 });
