@@ -1941,7 +1941,8 @@
       "text": "文字",
       "media": "图片 · 视频",
       "showcase": "展示",
-      "location": "地址"
+      "location": "地址",
+      "emptyText": "暂无文字内容"
     },
     "location": {
       "invalidTitle": "位置无效",

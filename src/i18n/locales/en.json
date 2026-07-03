@@ -1944,7 +1944,8 @@
       "text": "Text",
       "media": "Photos · Videos",
       "showcase": "Showcase",
-      "location": "Location"
+      "location": "Location",
+      "emptyText": "No text yet"
     },
     "location": {
       "invalidTitle": "Invalid location",

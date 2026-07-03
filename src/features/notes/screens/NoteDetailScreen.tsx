@@ -273,14 +273,13 @@ export default function NoteDetailScreen() {
     );
   }
 
-  // 正文可见性直接信 util 的 hasText（content 有字，或有文字 block）。
-  // 曾用 extractPlainText 再嗅一遍，但它不递归嵌套 children，会把缩进列表等
-  // 真实正文误判为空而整段藏掉 —— 眉标已移除，空正文最多留个空行，无需再嗅。
-  const showTextSection = Boolean(availability?.hasText);
+  // 文字区始终展示（heading + 分割线保持各区域结构一致）；hasTextBody 只决定
+  // 展示正文还是「暂无文字」占位。hasText 直接信 util（content 有字或有文字 block）。
+  const hasTextBody = Boolean(availability?.hasText);
   const showMediaSection = Boolean(availability?.hasMedia);
   const showShowcaseSection = Boolean(availability?.hasShowcase);
 
-  // 小节章头：主色浅底图标章 + 加粗标签（正文小节不用，直接展开）
+  // 小节章头：主色浅底图标章 + 加粗标签。每个区域（含文字）都用它，保持结构一致。
   const renderSectionHeader = (
     icon: keyof typeof Ionicons.glyphMap,
     label: string,
@@ -386,24 +385,31 @@ export default function NoteDetailScreen() {
 
         {sections ? (
           <>
-            {/* 正文是主角：不加眉标，直接展开（设计稿） */}
-            {showTextSection ? (
-              <View onLayout={trackSectionLayout('text')} style={s.section}>
-                {sections.text.contentJson && sections.text.contentJson.length > 0 ? (
+            {/* 文字区始终展示（heading + 分割线与各区域结构一致），无正文给占位 */}
+            <View onLayout={trackSectionLayout('text')} style={s.section}>
+              {renderSectionHeader(
+                'text-outline',
+                t('notes.section.text', { defaultValue: '文字' }),
+              )}
+              {hasTextBody ? (
+                sections.text.contentJson &&
+                sections.text.contentJson.length > 0 ? (
                   <NoteBlockRenderer blocks={sections.text.contentJson} />
-                ) : sections.text.content || note.content ? (
+                ) : (
                   <Text style={[s.bodyText, d.content]}>
                     {sections.text.content || note.content}
                   </Text>
-                ) : null}
-              </View>
-            ) : null}
+                )
+              ) : (
+                <Text style={[s.emptyHint, d.meta]}>
+                  {t('notes.section.emptyText', { defaultValue: '暂无文字内容' })}
+                </Text>
+              )}
+            </View>
 
             {showMediaSection ? (
               <View onLayout={trackSectionLayout('media')} style={s.section}>
-                {showTextSection ? (
-                  <View style={[s.divider, d.divider]} />
-                ) : null}
+                <View style={[s.divider, d.divider]} />
                 {renderSectionHeader(
                   'image-outline',
                   t('notes.section.media', { defaultValue: '图片 · 视频' }),
@@ -425,9 +431,7 @@ export default function NoteDetailScreen() {
 
             {showShowcaseSection ? (
               <View onLayout={trackSectionLayout('showcase')} style={s.section}>
-                {showTextSection || showMediaSection ? (
-                  <View style={[s.divider, d.divider]} />
-                ) : null}
+                <View style={[s.divider, d.divider]} />
                 {renderSectionHeader(
                   'albums-outline',
                   t('notes.section.showcase', { defaultValue: '展示' }),
@@ -449,9 +453,7 @@ export default function NoteDetailScreen() {
 
             {availability?.hasLocation ? (
               <View onLayout={trackSectionLayout('location')} style={s.section}>
-                {showTextSection || showMediaSection || showShowcaseSection ? (
-                  <View style={[s.divider, d.divider]} />
-                ) : null}
+                <View style={[s.divider, d.divider]} />
                 {renderSectionHeader(
                   'location-outline',
                   t('notes.section.location', { defaultValue: '地址' }),
@@ -575,6 +577,7 @@ const s = StyleSheet.create({
   },
   groupTagText: { ...Typography.small, fontWeight: '600' },
   bodyText: { ...Typography.bodyRegular, fontSize: 15, lineHeight: 26 },
+  emptyHint: { ...Typography.caption, fontWeight: '400' },
   // 来源名片（设计稿）：主色浅底 + 方圆角头像 + 实心主色 CTA 胶囊
   sourceCard: {
     flexDirection: 'row',

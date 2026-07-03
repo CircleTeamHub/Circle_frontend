@@ -810,7 +810,8 @@
       "text": "テキスト",
       "media": "画像 · 動画",
       "showcase": "ショーケース",
-      "location": "住所"
+      "location": "住所",
+      "emptyText": "テキストはありません"
     },
     "location": {
       "invalidTitle": "無効な位置情報",

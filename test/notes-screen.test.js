@@ -405,6 +405,8 @@ test('NoteDetailScreen follows the divider + icon-chip section design', () => {
   assert.match(detail, /divider:\s*\{\s*height:\s*1,/);
   assert.match(detail, /sectionIconChip/);
   assert.match(detail, /renderSectionHeader\(\s*'image-outline'/);
+  // 文字区也有自己的 heading（text-outline）—— 所有区域结构一致。
+  assert.match(detail, /renderSectionHeader\(\s*'text-outline'/);
   assert.doesNotMatch(detail, /sectionCard:/);
 
   // 来源名片：主色浅底 + 深一档实心靛蓝"查看原消息"胶囊（primaryDeep token）。
@@ -424,11 +426,12 @@ test('NoteDetailScreen follows the divider + icon-chip section design', () => {
   assert.match(renderer, /Math\.min\(16 \/ 9, Math\.max\(3 \/ 4, width \/ height\)\)/);
   assert.match(renderer, /mediaFrame:\s*\{\s*borderRadius:\s*Radius\.lg,\s*overflow:\s*'hidden'/);
 
-  // 正文可见性直接信 util 的 hasText —— 不再用 extractPlainText 二次嗅探
+  // 文字区始终展示（heading + 分割线与各区域一致）；hasTextBody 只决定
+  // 展示正文还是「暂无文字」占位。不再用 extractPlainText 二次嗅探
   // （它不递归嵌套 children，会把缩进列表等真实正文误判为空而整段藏掉）。
-  assert.match(detail, /const showTextSection = Boolean\(availability\?\.hasText\)/);
+  assert.match(detail, /const hasTextBody = Boolean\(availability\?\.hasText\)/);
+  assert.match(detail, /notes\.section\.emptyText/);
   assert.doesNotMatch(detail, /textSectionHasContent/);
-  // 不再调用 extractPlainText 嗅探正文（裸词可能出现在注释里，只查真实调用）。
   assert.doesNotMatch(detail, /extractPlainText\(/);
   assert.doesNotMatch(detail, /import \{ extractPlainText \}/);
 });

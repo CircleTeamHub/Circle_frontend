@@ -811,7 +811,8 @@
       "text": "Texto",
       "media": "Imágenes · Videos",
       "showcase": "Exhibición",
-      "location": "Ubicación"
+      "location": "Ubicación",
+      "emptyText": "Sin texto todavía"
     },
     "location": {
       "invalidTitle": "Ubicación no válida",

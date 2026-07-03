@@ -810,7 +810,8 @@
       "text": "텍스트",
       "media": "사진 · 동영상",
       "showcase": "쇼케이스",
-      "location": "주소"
+      "location": "주소",
+      "emptyText": "텍스트 없음"
     },
     "location": {
       "invalidTitle": "유효하지 않은 위치",
