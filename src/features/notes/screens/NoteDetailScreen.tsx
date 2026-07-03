@@ -171,8 +171,11 @@ export default function NoteDetailScreen() {
   }, [currentUserId, note, ownerId]);
 
   // 收藏来的笔记 → 来源名片：群聊展示群名片（附分享人），私聊展示对方名片。
+  // 名片是收藏者的私人定位标记：转发出去的笔记不带它，别人打开也不渲染
+  // （后端只对笔记主人返回 collectedFrom，这里再按归属兜一层）。
   // 后端快照缺关键字段（历史坏数据）时整卡不渲染，避免点了跳不动。
   const collectedSource = useMemo(() => {
+    if (!canEditNote) return null;
     const from = note?.collectedFrom;
     if (!from?.conversationID || !from.clientMsgID) return null;
     const isGroup = from.conversationType === 'group';
@@ -192,7 +195,7 @@ export default function NoteDetailScreen() {
           .join(' · ')
       : t('notes.detail.sourcePrivateLabel', { defaultValue: '来自私聊' });
     return { isGroup, peer, subtitle, from };
-  }, [note?.collectedFrom, t]);
+  }, [canEditNote, note?.collectedFrom, t]);
 
   const handleOpenSource = useCallback(() => {
     if (!collectedSource) return;

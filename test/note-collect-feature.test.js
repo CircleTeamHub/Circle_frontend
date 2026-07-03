@@ -54,6 +54,16 @@ test('NoteDetailScreen renders a source card and jumps back to the sharing messa
   assert.match(src, /if \(!from\?\.conversationID \|\| !from\.clientMsgID\) return null/);
 });
 
+test('the source card is private to the note owner and never rides along on shares', () => {
+  const detail = read('src/features/notes/screens/NoteDetailScreen.tsx');
+  const payload = read('src/features/chat/utils/note-card-payload.ts');
+
+  // 名片只给「我」看：详情页按归属兜底（后端也只对主人返回 collectedFrom）。
+  assert.match(detail, /if \(!canEditNote\) return null/);
+  // 转发/分享笔记的聊天卡片 payload 永远不携带来源快照。
+  assert.doesNotMatch(payload, /collectedFrom/);
+});
+
 test('NoteCard shows the collect source on list rows', () => {
   const src = read('src/features/notes/components/NoteCard.tsx');
 
