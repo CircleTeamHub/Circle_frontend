@@ -232,8 +232,9 @@ export default function NoteDetailScreen() {
       container: { backgroundColor: colors.background },
       title: { color: colors.text },
       meta: { color: colors.textSecondary },
-      groupTag: { backgroundColor: colors.primaryLight },
-      groupTagText: { color: colors.primary },
+      // 分组标签：方形深紫实心块 + 白字（用户指定）
+      groupTag: { backgroundColor: colors.deepPurple },
+      groupTagText: { color: colors.white },
       content: { color: colors.text },
       iconBtn: {
         backgroundColor: colors.surface,
@@ -578,9 +579,9 @@ const s = StyleSheet.create({
   },
   meta: { ...Typography.caption, fontWeight: '400' },
   groupTag: {
-    paddingHorizontal: Spacing.sm + 2,
+    paddingHorizontal: Spacing.sm,
     paddingVertical: 3,
-    borderRadius: Radius.full,
+    borderRadius: Radius.xs,
   },
   groupTagText: { ...Typography.small, fontWeight: '600' },
   bodyText: { ...Typography.bodyRegular, fontSize: 15, lineHeight: 26 },
