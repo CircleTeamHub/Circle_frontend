@@ -17,13 +17,24 @@ import { evaluateTransportGuard } from './transport-security';
 // 也放行（局域网自托管、模拟器回环联调）；测试期需要明文公网 IP 时，在构建环境设置
 // EXPO_PUBLIC_ALLOW_INSECURE_TRANSPORT=1 显式放行。
 const IS_DEV_BUILD = typeof __DEV__ !== 'undefined' && __DEV__;
+
+// Expo web 静态渲染（SSG）会在 Node 里、以 production 模式执行本模块，但此刻没有运行时
+// EXPO_PUBLIC_* 注入。它是构建期产物、不是最终运行时——若在这里 throw 会直接打断
+// `expo export --platform web`（CI 的 Web Export 步骤）。因此把 SSG 视作放行上下文：
+// 真正的 web 客户端运行时（浏览器，window 存在）与原生运行时仍照常强校验。
+const IS_WEB_STATIC_RENDER =
+  Platform.OS === 'web' && typeof window === 'undefined';
+
+// dev 或 web-SSG：放宽「缺少必需配置」与「明文传输」两道启动期校验。
+const RELAX_TRANSPORT_CHECKS = IS_DEV_BUILD || IS_WEB_STATIC_RENDER;
+
 const ALLOW_INSECURE_TRANSPORT =
   process.env.EXPO_PUBLIC_ALLOW_INSECURE_TRANSPORT === '1' ||
   process.env.EXPO_PUBLIC_ALLOW_INSECURE_TRANSPORT === 'true';
 
 function assertSecureTransport(rawUrl: string, label: string): string {
   const problem = evaluateTransportGuard(rawUrl, label, {
-    isDev: IS_DEV_BUILD,
+    isDev: RELAX_TRANSPORT_CHECKS,
     allowInsecure: ALLOW_INSECURE_TRANSPORT,
   });
   if (problem) {
@@ -41,7 +52,7 @@ function getRequiredTransportValue(
   if (trimmedValue) {
     return trimmedValue;
   }
-  if (!IS_DEV_BUILD) {
+  if (!RELAX_TRANSPORT_CHECKS) {
     throw new Error(
       `[config] 缺少 release 必需配置 ${envName}。请在 .env.production 或 EAS Build 环境变量中显式设置。`,
     );
