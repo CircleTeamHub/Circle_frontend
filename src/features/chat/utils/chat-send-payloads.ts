@@ -4,7 +4,11 @@ import type { ChatMessage } from '@/types';
 export type MentionTarget = {
   userID: string;
   nickname: string;
+  isAll?: boolean;
 };
+
+// OpenIM uses this sentinel inside atUserIDList to represent @all.
+export const AT_ALL_USER_ID = 'AtAllTag';
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -53,12 +57,19 @@ export function buildAtMessagePayload(text: string, mentions: MentionTarget[]) {
   const atUsersInfo = mentions.flatMap((mention) => {
     if (!mention.userID || seen.has(mention.userID)) return [];
     seen.add(mention.userID);
+    if (mention.isAll || mention.userID === AT_ALL_USER_ID) return [];
     return [{ userID: mention.userID, nickname: mention.nickname }];
   });
 
   return {
     text,
-    atUserList: atUsersInfo.map((item) => item.userID),
+    atUserList: Array.from(
+      new Set(
+        mentions.flatMap((mention) =>
+          mention.userID ? [mention.userID] : [],
+        ),
+      ),
+    ),
     atUsersInfo,
   };
 }

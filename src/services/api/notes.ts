@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type {
+  CollectNoteSource,
   CreateNoteInput,
   CreateNoteExportInput,
   CreateNoteShareLinkInput,
@@ -44,10 +45,42 @@ export async function updateNoteGroupIds(
   });
 }
 
+export type CollectNoteResult = {
+  note: NoteDetail;
+  /** true = 本来就是自己的笔记，或此前已收藏过（幂等，不产生新副本） */
+  alreadyCollected: boolean;
+};
+
+// 聊天里收藏他人笔记 → 服务端快照复制成一条自己的笔记（带来源名片），
+// 取代旧的 createCollection(type: NOTE) 收藏页方案。
+export async function collectNote(
+  noteId: string,
+  source: CollectNoteSource,
+): Promise<CollectNoteResult> {
+  return apiClient<CollectNoteResult>('/note/collect', {
+    method: 'POST',
+    body: { noteId, source },
+  });
+}
+
 export async function togglePinNote(id: string, pinned: boolean): Promise<void> {
   await apiClient<{ id: string; pinned: boolean }>(`/note/${id}/pin`, {
     method: 'PATCH',
     body: { pinned },
+  });
+}
+
+export async function unlistNote(id: string): Promise<void> {
+  await apiClient<{ id: string; status: 'UNLISTED' }>(`/note/${id}/status`, {
+    method: 'PATCH',
+    body: { status: 'UNLISTED' },
+  });
+}
+
+export async function relistNote(id: string): Promise<void> {
+  await apiClient<{ id: string; status: 'ACTIVE' }>(`/note/${id}/status`, {
+    method: 'PATCH',
+    body: { status: 'ACTIVE' },
   });
 }
 

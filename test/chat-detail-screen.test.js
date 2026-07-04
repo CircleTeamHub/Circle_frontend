@@ -166,6 +166,18 @@ test('chat detail virtualizes and caps group mention candidates', () => {
   assert.doesNotMatch(source, /visibleMentionCandidates\.map\(\(member\)/);
 });
 
+test('chat detail exposes @all as the first group mention candidate', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(source, /AT_ALL_USER_ID/);
+  assert.match(source, /allMentionTarget/);
+  assert.match(source, /setMentionCandidates\(\[allMentionTarget, \.\.\.cached\]\)/);
+  assert.match(source, /setMentionCandidates\(\[allMentionTarget, \.\.\.candidates\]\)/);
+});
+
 test('chat detail caches group mention candidates and de-dupes in-flight loads', () => {
   const source = fs.readFileSync(
     path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),

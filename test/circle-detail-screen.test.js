@@ -9,8 +9,15 @@ test('CircleDetailScreen exposes owner-only circle icon actions', () => {
   const src = read('src/features/discover/screens/CircleDetailScreen.tsx');
 
   assert.match(src, /uploadCircleIcon/);
-  assert.match(src, /selectCircleIcon/);
+  assert.doesNotMatch(src, /selectCircleIcon/);
   assert.match(src, /圈子图标/);
+  assert.match(src, /<View style=\{s\.iconSection\}>/);
+  assert.doesNotMatch(
+    src,
+    /<View style=\{\[s\.sectionCard,\s*d\.sectionCard,\s*s\.iconSection\]\}>/,
+  );
+  assert.doesNotMatch(src, /availableIconAssets[\s\S]{0,120}\.map/);
+  assert.doesNotMatch(src, /handleSelectCircleIcon/);
 });
 
 test('CircleDetailScreen supports pull-to-refresh', () => {

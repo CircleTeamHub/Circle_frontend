@@ -81,6 +81,40 @@ test('normalizeUser keeps backend city field', () => {
   assert.equal(normalized.city, '杭州');
 });
 
+test('normalizeUser maps profile like counts from public and self user responses', () => {
+  const { normalizeUser } = loadApiUtils();
+  const baseUser = {
+    id: 'user-1',
+    accountId: 'account-1',
+    username: 'alice',
+    nickname: 'Alice',
+    avatarUrl: null,
+    avatarFrame: null,
+    cover: null,
+    email: null,
+    phoneNumber: null,
+    wechat: null,
+    qq: null,
+    whatsup: null,
+    persona: null,
+    helloWords: null,
+    birthday: null,
+    gender: 'unset',
+    role: 'USER',
+    status: 'ACTIVE',
+    lastOnline: null,
+    createdAt: '2026-04-08T00:00:00.000Z',
+    updatedAt: '2026-04-08T00:00:00.000Z',
+    city: '杭州',
+  };
+
+  assert.equal(normalizeUser({ ...baseUser, likeCount: 3 }).likeCount, 3);
+  assert.equal(
+    normalizeUser({ ...baseUser, receivedLikeCount: 4 }).likeCount,
+    4,
+  );
+});
+
 test('normalizeMediaUrl rewrites localhost media host without clobbering service port', () => {
   const { normalizeMediaUrl } = loadApiUtils();
 

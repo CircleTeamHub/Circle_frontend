@@ -60,9 +60,10 @@ test('NoteDetailScreen only shows edit when the current user can edit', () => {
   assert.match(screenSrc, /ownerId/);
   assert.match(screenSrc, /note\.canEdit/);
   assert.match(screenSrc, /const canEditNote =/);
+  // 编辑入口只对可编辑者渲染（设计稿后是圆形描边按钮 + 铅笔图标）。
   assert.match(
     screenSrc,
-    /\{canEditNote \? \([\s\S]*<Pressable onPress=\{handleEdit\} hitSlop=\{8\}>[\s\S]*create-outline/,
+    /\{canEditNote \? \([\s\S]*onPress=\{handleEdit\}[\s\S]*pencil-outline/,
   );
 });
 

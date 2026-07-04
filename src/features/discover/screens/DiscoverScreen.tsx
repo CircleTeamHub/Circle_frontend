@@ -120,7 +120,7 @@ export default function DiscoverScreen() {
   }, [router]);
 
   const handleOpenNotifications = useCallback(() => {
-    router.push("/(tabs)/messages/notifications");
+    router.push("/(tabs)/discover/notification-center");
   }, [router]);
 
   const handleFilterPress = useCallback(() => {

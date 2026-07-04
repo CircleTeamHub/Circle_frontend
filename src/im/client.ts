@@ -1078,6 +1078,55 @@ export async function sendNoteCardMessage(params: {
 }
 
 /**
+ * 把笔记卡片发到指定会话（好友或群聊）—— 供"分享笔记到聊天"的会话选择器用。
+ * 按会话解析 recvID/groupID（与 friend/circle 名片一致），避免调用方自己拼
+ * sourceID/sessionType 时踩 IM/业务 id 转换的坑。
+ */
+export async function sendNoteCardToConversation(params: {
+  targetConversationID: string;
+  payload: NoteCardPayload;
+}) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await waitForOpenIMConnectionReady();
+
+  const targetConversation = useIMStore
+    .getState()
+    .conversations.find(
+      (conversation) => conversation.conversationID === params.targetConversationID,
+    );
+
+  if (!targetConversation) {
+    throw new Error('目标会话不存在');
+  }
+
+  const message = await OpenIMSDK.createCustomMessage({
+    data: JSON.stringify(params.payload),
+    extension: NOTE_CARD_EXTENSION,
+    description: `[笔记] ${params.payload.title}`,
+  });
+
+  const isGroup =
+    targetConversation.conversationType === SessionType.Group;
+  return reportSend({
+    recvID: isGroup ? '' : targetConversation.userID,
+    groupID: isGroup ? targetConversation.groupID : '',
+    message,
+    offlinePushInfo: {
+      title: '新消息',
+      desc: `[笔记] ${params.payload.title}`,
+      ex: '',
+      iOSPushSound: 'default',
+      iOSBadgeCount: true,
+    },
+  });
+}
+
+/**
  * Circle-verification invite card. Sent to a friend when the applicant adds
  * them as a verifier; tapping it opens the verify screen to approve/reject.
  */

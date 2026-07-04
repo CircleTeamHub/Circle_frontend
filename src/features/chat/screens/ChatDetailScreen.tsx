@@ -10,7 +10,6 @@ import {
   View,
   Text,
   TextInput,
-  Share,
   Pressable,
   FlatList,
   ScrollView,
@@ -89,9 +88,11 @@ import { useAuthStore } from '@/stores/authStore';
 import { useIMStore } from '@/stores/imStore';
 import { type FriendProfile } from '@/services/api/friends';
 import type { NoteSummary } from '@/features/notes/types';
+import { collectNote } from '@/services/api/notes';
 import { createCollection, type UserCollection } from '@/services/api/collections';
 import {
   buildCollectionInputFromMessage,
+  buildNoteCollectSource,
   resolveCollectionSendPlan,
 } from '@/features/chat/utils/message-collection';
 import {
@@ -125,6 +126,7 @@ import { OnlineState, SessionType } from '@openim/rn-client-sdk';
 import { useTranslation } from 'react-i18next';
 import type { ChatMessage } from '@/types';
 import {
+  AT_ALL_USER_ID,
   buildAtMessagePayload,
   buildQuotePreviewText,
   filterMentionCandidates,
@@ -503,6 +505,10 @@ export default function ChatDetailScreen() {
     () => filterMentionCandidates(mentionCandidates, mentionQuery),
     [mentionCandidates, mentionQuery],
   );
+  const allMentionTarget = useMemo<MentionTarget>(
+    () => ({ userID: AT_ALL_USER_ID, nickname: '所有人', isAll: true }),
+    [],
+  );
 
   // 入口只给了 sourceID 时，就地把会话解析出来（单聊/群聊各走对应方法）。
   useEffect(() => {
@@ -766,6 +772,50 @@ export default function ChatDetailScreen() {
   const handleCollectMessage = useCallback(
     async (message: ChatMessage) => {
       if (!conversationID) return;
+
+      // 笔记卡片：不进「收藏」列表，直接快照复制进「我的笔记」，
+      // 并带上来源名片（群/用户）+ 消息定位信息，详情页可一键跳回聊天。
+      if (message.type === 'note-card') {
+        const source = buildNoteCollectSource(message, {
+          conversationID,
+          conversationTitle,
+          sourceID,
+          conversationType: isGroupChat ? 'group' : 'private',
+          conversationAvatarUrl: avatarUrl,
+          currentUser: {
+            id: currentUserID ?? undefined,
+            name: selfName,
+            faceURL: selfAvatarUri,
+          },
+        });
+        if (!source || !message.noteCard) return;
+
+        try {
+          const result = await collectNote(message.noteCard.noteId, source);
+          Alert.alert(
+            result.alreadyCollected
+              ? t('chat.messageActions.noteAlreadyCollected', {
+                  defaultValue: '已在我的笔记中',
+                })
+              : t('chat.messageActions.noteCollected', {
+                  defaultValue: '已添加到我的笔记',
+                }),
+            t('chat.messageActions.noteCollectedHint', {
+              defaultValue: '可在「我的笔记」中查看',
+            }),
+          );
+        } catch (error) {
+          if (__DEV__) {
+            console.warn('[ChatDetail] collect note failed', error);
+          }
+          Alert.alert(
+            t('chat.messageActions.collectFailed'),
+            getApiErrorMessage(error, t('chat.messageActions.collectFailedHint')),
+          );
+        }
+        return;
+      }
+
       const input = buildCollectionInputFromMessage(message, {
         conversationID,
         conversationTitle,
@@ -790,7 +840,17 @@ export default function ChatDetailScreen() {
         );
       }
     },
-    [conversationID, conversationTitle, isGroupChat, sourceID, t],
+    [
+      avatarUrl,
+      conversationID,
+      conversationTitle,
+      currentUserID,
+      isGroupChat,
+      selfAvatarUri,
+      selfName,
+      sourceID,
+      t,
+    ],
   );
 
   const [actionMenu, setActionMenu] = useState<{
@@ -890,33 +950,6 @@ export default function ChatDetailScreen() {
     });
   }, [conversationTitle, isGroupChat, sourceID]);
 
-  const handleSaveMessage = useCallback(
-    async (message: ChatMessage) => {
-      const url = message.imageUrl ?? message.voiceUrl ?? message.voicePath ?? null;
-      try {
-        if (url) {
-          await Share.share({ url, message: url });
-          return;
-        }
-        if (message.text?.trim()) {
-          await Share.share({ message: message.text.trim() });
-          return;
-        }
-        Alert.alert(
-          t('chat.messageActions.saveUnsupported', {
-            defaultValue: '该消息暂不支持保存',
-          }),
-        );
-      } catch {
-        Alert.alert(
-          t('chat.messageActions.saveFailed', { defaultValue: '保存失败' }),
-          t('chat.messageActions.saveFailedHint', { defaultValue: '请稍后重试' }),
-        );
-      }
-    },
-    [t],
-  );
-
   const handleMessageLongPress = useCallback(
     (message: ChatMessage, event: GestureResponderEvent) => {
       if (message.type === 'date') return;
@@ -969,12 +1002,6 @@ export default function ChatDetailScreen() {
       label: t('chat.messageActions.report', { defaultValue: '举报' }),
       onPress: handleReportMessage,
     });
-    actions.push({
-      key: 'save',
-      icon: 'download-outline',
-      label: t('chat.messageActions.save', { defaultValue: '保存' }),
-      onPress: () => void handleSaveMessage(message),
-    });
     return actions;
   }, [
     actionMenu,
@@ -984,20 +1011,26 @@ export default function ChatDetailScreen() {
     handleForwardMessage,
     handleQuoteMessage,
     handleReportMessage,
-    handleSaveMessage,
     t,
   ]);
+
+  const getMessageLongPressHandler = useCallback(
+    (message: ChatMessage) => (event: GestureResponderEvent) => {
+      handleMessageLongPress(message, event);
+    },
+    [handleMessageLongPress],
+  );
 
   const withMessageActions = useCallback(
     (message: ChatMessage, node: ReactElement) => (
       <Pressable
-        onLongPress={(event) => handleMessageLongPress(message, event)}
+        onLongPress={getMessageLongPressHandler(message)}
         delayLongPress={350}
       >
         {node}
       </Pressable>
     ),
-    [handleMessageLongPress],
+    [getMessageLongPressHandler],
   );
 
   const renderItem = useCallback(({ item }: { item: ChatMessage }) => {
@@ -1031,6 +1064,7 @@ export default function ChatDetailScreen() {
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
           />
         ));
       case 'image':
@@ -1043,6 +1077,7 @@ export default function ChatDetailScreen() {
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
             hideStatus={isGroupChat}
           />
         ));
@@ -1056,6 +1091,7 @@ export default function ChatDetailScreen() {
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
             hideStatus={isGroupChat}
           />
         ));
@@ -1069,6 +1105,7 @@ export default function ChatDetailScreen() {
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
             onPress={(note) =>
               router.push(getNoteDetailHref(scope, note.noteId, note.ownerId ?? ''))
             }
@@ -1088,6 +1125,7 @@ export default function ChatDetailScreen() {
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
             onPress={(card) =>
               router.push(getUserProfileHref(scope, card.userID, card.nickname))
             }
@@ -1104,6 +1142,7 @@ export default function ChatDetailScreen() {
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
             onPress={(card) =>
               router.push(`/(tabs)/discover/circle/${encodeURIComponent(card.circleId)}`)
             }
@@ -1111,7 +1150,7 @@ export default function ChatDetailScreen() {
           />
         ));
       case 'verification-card':
-        return withMessageActions(item, (
+        return (
           <VerificationCardBubble
             message={item}
             outgoing={Boolean(item.outgoing)}
@@ -1128,7 +1167,7 @@ export default function ChatDetailScreen() {
             }
             hideStatus={isGroupChat}
           />
-        ));
+        );
       case 'transfer-card':
         return withMessageActions(item, (
           <TransferCardBubble
@@ -1139,6 +1178,7 @@ export default function ChatDetailScreen() {
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
             hideStatus={isGroupChat}
           />
         ));
@@ -1152,6 +1192,7 @@ export default function ChatDetailScreen() {
     selfAvatarUri,
     selfName,
     scope,
+    getMessageLongPressHandler,
     withMessageActions,
   ]);
 
@@ -1243,7 +1284,7 @@ export default function ChatDetailScreen() {
     if (!isGroupChat || !sourceID) return;
     const cached = mentionCandidatesCacheRef.current.get(sourceID);
     if (cached) {
-      setMentionCandidates(cached);
+      setMentionCandidates([allMentionTarget, ...cached]);
       return;
     }
 
@@ -1271,14 +1312,14 @@ export default function ChatDetailScreen() {
     try {
       const candidates = await request;
       if (!mountedRef.current) return;
-      setMentionCandidates(candidates);
+      setMentionCandidates([allMentionTarget, ...candidates]);
     } catch (error) {
       if (__DEV__) {
         console.warn('[chat] load mention candidates failed', error);
       }
       if (mountedRef.current) setMentionCandidates([]);
     }
-  }, [currentUserID, isGroupChat, sourceID]);
+  }, [allMentionTarget, currentUserID, isGroupChat, sourceID]);
 
   const handleDraftChange = useCallback(
     (next: string) => {

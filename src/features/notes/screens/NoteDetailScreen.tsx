@@ -15,9 +15,13 @@ import {
   type LayoutChangeEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
 import { NoteBlockRenderer } from '@/features/notes/components/NoteBlockRenderer';
+import { ShareNoteSheet } from '@/features/notes/components/ShareNoteSheet';
+import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
 import type { NoteDetail, NoteExportFormat } from '@/features/notes/types';
 import { formatNoteFullDate } from '@/features/notes/utils/note-format';
+import { getChatDetailHref } from '@/features/user/utils/routes';
 import {
   buildNoteSections,
   getInitialNoteSection,
@@ -161,6 +165,17 @@ export default function NoteDetailScreen() {
     [exporting, note, t],
   );
 
+  // 分享单条笔记：打开会话选择器，把笔记以卡片消息发给好友/群聊。
+  const [shareOpen, setShareOpen] = useState(false);
+  const handleShareNote = useCallback(() => setShareOpen(true), []);
+  const sharePayload = useMemo(
+    () =>
+      shareOpen && note
+        ? buildNoteCardPayloadFromSummary(note, note.ownerId ?? ownerId)
+        : null,
+    [note, ownerId, shareOpen],
+  );
+
   const canEditNote = useMemo(() => {
     if (!note) return false;
     if (typeof note.canEdit === 'boolean') return note.canEdit;
@@ -168,16 +183,69 @@ export default function NoteDetailScreen() {
     return Boolean(resolvedOwnerId && currentUserId === resolvedOwnerId);
   }, [currentUserId, note, ownerId]);
 
+  // 收藏来的笔记 → 来源名片：群聊展示群名片（附分享人），私聊展示对方名片。
+  // 名片是收藏者的私人定位标记：转发出去的笔记不带它，别人打开也不渲染
+  // （后端只对笔记主人返回 collectedFrom，这里再按归属兜一层）。
+  // 后端快照缺关键字段（历史坏数据）时整卡不渲染，避免点了跳不动。
+  const collectedSource = useMemo(() => {
+    if (!canEditNote) return null;
+    const from = note?.collectedFrom;
+    if (!from?.conversationID || !from.clientMsgID) return null;
+    const isGroup = from.conversationType === 'group';
+    const peer = isGroup ? from.group : from.sender;
+    if (!peer?.id || !peer.name) return null;
+    const subtitle = isGroup
+      ? [
+          t('notes.detail.sourceGroupLabel', { defaultValue: '来自群聊' }),
+          from.sender?.name
+            ? t('notes.detail.sourceSharedBy', {
+                defaultValue: '{{name}} 分享',
+                name: from.sender.name,
+              })
+            : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : t('notes.detail.sourcePrivateLabel', { defaultValue: '来自私聊' });
+    return { isGroup, peer, subtitle, from };
+  }, [canEditNote, note?.collectedFrom, t]);
+
+  const handleOpenSource = useCallback(() => {
+    if (!collectedSource) return;
+    const { isGroup, peer, from } = collectedSource;
+    // 聊天页固定挂在 messages 栈下打开，searchedMsgID 触发历史定位滚动。
+    router.push(
+      getChatDetailHref(
+        'messages',
+        peer.id,
+        peer.name,
+        peer.faceURL ?? undefined,
+        from.conversationID,
+        from.clientMsgID,
+        isGroup ? 'group' : 'private',
+      ),
+    );
+  }, [collectedSource, router]);
+
   const d = useMemo(
     () => ({
       container: { backgroundColor: colors.background },
       title: { color: colors.text },
       meta: { color: colors.textSecondary },
-      groupTag: { backgroundColor: colors.primary + '33' },
-      groupTagText: { color: colors.primary },
+      // 分组标签：方形品牌紫实心块 + 白字（brandPurple = 会员卡渐变核心色）
+      groupTag: { backgroundColor: colors.brandPurple },
+      groupTagText: { color: colors.white },
       content: { color: colors.text },
-      sectionTitle: { color: colors.text },
-      sectionCard: { backgroundColor: colors.surface, borderColor: colors.surfaceBorder },
+      iconBtn: {
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
+      },
+      // 来源名片：主色浅底的"提示条"，CTA 用深一档的实心靛蓝更压得住
+      sourceCard: { backgroundColor: colors.primaryLight },
+      sourceBtn: { backgroundColor: colors.primaryDeep },
+      sectionIconChip: { backgroundColor: colors.primaryLight },
+      sectionHeading: { color: colors.text },
+      divider: { backgroundColor: colors.surfaceBorder },
       downloadSheet: { backgroundColor: colors.surface, borderColor: colors.surfaceBorder },
     }),
     [colors],
@@ -218,20 +286,52 @@ export default function NoteDetailScreen() {
     );
   }
 
+  // 文字区始终展示（heading + 分割线保持各区域结构一致）；hasTextBody 只决定
+  // 展示正文还是「暂无文字」占位。hasText 直接信 util（content 有字或有文字 block）。
+  const hasTextBody = Boolean(availability?.hasText);
+  const showMediaSection = Boolean(availability?.hasMedia);
+  const showShowcaseSection = Boolean(availability?.hasShowcase);
+
+  // 小节章头：主色浅底图标章 + 加粗标签。每个区域（含文字）都用它，保持结构一致。
+  const renderSectionHeader = (
+    icon: keyof typeof Ionicons.glyphMap,
+    label: string,
+  ) => (
+    <View style={s.sectionHeader}>
+      <View style={[s.sectionIconChip, d.sectionIconChip]}>
+        <Ionicons name={icon} size={15} color={colors.primary} />
+      </View>
+      <Text style={[s.sectionHeading, d.sectionHeading]}>{label}</Text>
+    </View>
+  );
+
   return (
     <View style={[s.container, d.container, { paddingTop: insets.top }]}>
-      {/* Header */}
+      {/* Header：右侧动作是圆形描边按钮（设计稿） */}
       <View style={s.header}>
         <Pressable onPress={() => router.back()} hitSlop={8}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
         <View style={s.headerActions}>
-          <Pressable onPress={() => setDownloadMenuVisible(true)} hitSlop={8}>
-            <Ionicons name="download-outline" size={22} color={colors.text} />
+          <Pressable
+            style={[s.headerIconBtn, d.iconBtn]}
+            onPress={handleShareNote}
+            hitSlop={4}
+            accessibilityRole="button"
+            accessibilityLabel={t('notes.actions.share', { defaultValue: '分享' })}
+          >
+            <Ionicons name="share-outline" size={18} color={colors.text} />
+          </Pressable>
+          <Pressable
+            style={[s.headerIconBtn, d.iconBtn]}
+            onPress={() => setDownloadMenuVisible(true)}
+            hitSlop={4}
+          >
+            <Ionicons name="download-outline" size={18} color={colors.text} />
           </Pressable>
           {canEditNote ? (
-            <Pressable onPress={handleEdit} hitSlop={8}>
-              <Ionicons name="create-outline" size={22} color={colors.text} />
+            <Pressable style={[s.headerIconBtn, d.iconBtn]} onPress={handleEdit} hitSlop={4}>
+              <Ionicons name="pencil-outline" size={17} color={colors.text} />
             </Pressable>
           ) : null}
         </View>
@@ -250,6 +350,9 @@ export default function NoteDetailScreen() {
         {/* Date + groups */}
         <View style={s.metaRow}>
           <Text style={[s.meta, d.meta]}>{formatNoteFullDate(note.createdAt, t)}</Text>
+          {note.groups.length > 0 ? (
+            <Text style={[s.meta, d.meta]}>·</Text>
+          ) : null}
           {note.groups.map((group) => (
             <View key={group.id} style={[s.groupTag, d.groupTag]}>
               <Text style={[s.groupTagText, d.groupTagText]}>{group.name}</Text>
@@ -257,48 +360,114 @@ export default function NoteDetailScreen() {
           ))}
         </View>
 
+        {/* 收藏来源名片：主色浅底提示条，点击/CTA 跳回聊天定位到分享消息 */}
+        {collectedSource ? (
+          <Pressable
+            style={[s.sourceCard, d.sourceCard]}
+            onPress={handleOpenSource}
+            accessibilityRole="button"
+            accessibilityLabel={t('notes.detail.sourceLocate', {
+              defaultValue: '查看原消息',
+            })}
+          >
+            {collectedSource.peer.faceURL ? (
+              <Image
+                source={{ uri: collectedSource.peer.faceURL }}
+                style={s.sourceAvatar}
+                contentFit="cover"
+              />
+            ) : (
+              <View style={[s.sourceAvatar, { backgroundColor: colors.primary }]}>
+                <Ionicons
+                  name={collectedSource.isGroup ? 'people' : 'person'}
+                  size={20}
+                  color={colors.white}
+                />
+              </View>
+            )}
+            <View style={s.sourceCardText}>
+              <Text
+                style={[s.sourceCardName, { color: colors.text }]}
+                numberOfLines={1}
+              >
+                {collectedSource.peer.name}
+              </Text>
+              <Text style={[s.sourceSubtitle, d.meta]} numberOfLines={1}>
+                {`↳ ${collectedSource.subtitle}`}
+              </Text>
+            </View>
+            <View style={[s.sourceBtn, d.sourceBtn]}>
+              <Text style={[s.sourceBtnText, { color: colors.white }]}>
+                {t('notes.detail.sourceLocate', { defaultValue: '查看原消息' })}
+              </Text>
+              <Ionicons name="chevron-forward" size={12} color={colors.white} />
+            </View>
+          </Pressable>
+        ) : null}
+
         {sections ? (
           <>
-            {availability?.hasText ? (
-              <View onLayout={trackSectionLayout('text')} style={s.section}>
-                <Text style={[s.sectionTitle, d.sectionTitle]}>
-                  {t('notes.section.text', { defaultValue: '文字' })}
-                </Text>
-                {sections.text.contentJson && sections.text.contentJson.length > 0 ? (
+            {/* 文字区始终展示（heading + 分割线与各区域结构一致），无正文给占位 */}
+            <View onLayout={trackSectionLayout('text')} style={s.section}>
+              {renderSectionHeader(
+                'text-outline',
+                t('notes.section.text', { defaultValue: '文字' }),
+              )}
+              {hasTextBody ? (
+                sections.text.contentJson &&
+                sections.text.contentJson.length > 0 ? (
                   <NoteBlockRenderer blocks={sections.text.contentJson} />
-                ) : sections.text.content || note.content ? (
+                ) : (
                   <Text style={[s.bodyText, d.content]}>
                     {sections.text.content || note.content}
                   </Text>
-                ) : null}
-              </View>
-            ) : null}
-
-            {availability?.hasMedia ? (
-              <View onLayout={trackSectionLayout('media')} style={s.section}>
-                <Text style={[s.sectionTitle, d.sectionTitle]}>
-                  {t('notes.section.media', { defaultValue: '图片 / 视频' })}
+                )
+              ) : (
+                <Text style={[s.emptyHint, d.meta]}>
+                  {t('notes.section.emptyText', { defaultValue: '暂无文字内容' })}
                 </Text>
+              )}
+            </View>
+
+            {showMediaSection ? (
+              <View onLayout={trackSectionLayout('media')} style={s.section}>
+                <View style={[s.divider, d.divider]} />
+                {renderSectionHeader(
+                  'image-outline',
+                  t('notes.section.media', { defaultValue: '图片 · 视频' }),
+                )}
                 <NoteBlockRenderer
                   blocks={sections.media.items.map((item) => ({
                     id: item.id ?? item.url,
                     type: item.type === 'VIDEO' ? 'video' : 'image',
-                    props: { url: item.url, caption: '' },
+                    props: {
+                      url: item.url,
+                      caption: '',
+                      width: item.width ?? undefined,
+                      height: item.height ?? undefined,
+                    },
                   }))}
                 />
               </View>
             ) : null}
 
-            {availability?.hasShowcase ? (
+            {showShowcaseSection ? (
               <View onLayout={trackSectionLayout('showcase')} style={s.section}>
-                <Text style={[s.sectionTitle, d.sectionTitle]}>
-                  {t('notes.section.showcase', { defaultValue: '展示' })}
-                </Text>
+                <View style={[s.divider, d.divider]} />
+                {renderSectionHeader(
+                  'albums-outline',
+                  t('notes.section.showcase', { defaultValue: '展示' }),
+                )}
                 <NoteBlockRenderer
                   blocks={sections.showcase.items.map((item) => ({
                     id: item.id ?? item.url,
                     type: item.type === 'VIDEO' ? 'video' : 'image',
-                    props: { url: item.url, caption: '' },
+                    props: {
+                      url: item.url,
+                      caption: '',
+                      width: item.width ?? undefined,
+                      height: item.height ?? undefined,
+                    },
                   }))}
                 />
               </View>
@@ -306,10 +475,12 @@ export default function NoteDetailScreen() {
 
             {availability?.hasLocation ? (
               <View onLayout={trackSectionLayout('location')} style={s.section}>
-                <Text style={[s.sectionTitle, d.sectionTitle]}>
-                  {t('notes.section.location', { defaultValue: '地址' })}
-                </Text>
-                <View style={[s.locationCard, d.sectionCard]}>
+                <View style={[s.divider, d.divider]} />
+                {renderSectionHeader(
+                  'location-outline',
+                  t('notes.section.location', { defaultValue: '地址' }),
+                )}
+                <View style={s.locationRow}>
                   <Ionicons name="location-outline" size={20} color={colors.primary} />
                   <View style={{ flex: 1 }}>
                     <Text style={[s.locationTitle, { color: colors.text }]}>
@@ -378,6 +549,11 @@ export default function NoteDetailScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      <ShareNoteSheet
+        payload={sharePayload}
+        onClose={() => setShareOpen(false)}
+      />
     </View>
   );
 }
@@ -395,40 +571,90 @@ const s = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.md,
-    minWidth: 52,
+    gap: Spacing.sm + 4,
     justifyContent: 'flex-end',
+  },
+  headerIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scroll: { flex: 1 },
   scrollContent: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
-    gap: Spacing.sm,
   },
-  title: { ...Typography.h1, fontWeight: '700', marginBottom: Spacing.xs },
+  // 详情页的"刊头"：标题是唯一的重型元素，其余信息全部退为次级。
+  title: { ...Typography.title, lineHeight: 40, marginBottom: Spacing.sm },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: Spacing.sm,
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.lg,
   },
-  meta: { ...Typography.caption },
+  meta: { ...Typography.caption, fontWeight: '400' },
   groupTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+    borderRadius: Radius.xs,
   },
   groupTagText: { ...Typography.small, fontWeight: '600' },
-  bodyText: { ...Typography.bodyRegular, lineHeight: 24 },
-  section: { gap: Spacing.sm, marginBottom: Spacing.lg },
-  sectionTitle: { ...Typography.h2, fontWeight: '700' },
-  locationCard: {
+  bodyText: { ...Typography.bodyRegular, fontSize: 15, lineHeight: 26 },
+  emptyHint: { ...Typography.caption, fontWeight: '400' },
+  // 来源名片（设计稿）：主色浅底 + 方圆角头像 + 实心主色 CTA 胶囊
+  sourceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm + 4,
+    borderRadius: Radius.lg,
+    padding: Spacing.sm + 4,
+    marginBottom: Spacing.lg,
+  },
+  sourceAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  sourceCardText: { flex: 1, gap: 2 },
+  sourceCardName: { ...Typography.body, fontWeight: '600' },
+  sourceSubtitle: { ...Typography.small },
+  sourceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    height: 32,
+    paddingHorizontal: Spacing.sm + 4,
+    borderRadius: Radius.full,
+  },
+  sourceBtnText: { ...Typography.small, fontWeight: '600' },
+  // 小节之间用分隔线 + 图标章头分段，正文不设头直接展开（设计稿）。
+  // 1pt 实线：发丝线在真机上太淡，分段感立不住。
+  section: { gap: Spacing.md - 4, marginBottom: Spacing.lg },
+  divider: { height: 1, marginBottom: Spacing.md - 4 },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm + 2,
+  },
+  sectionIconChip: {
+    width: 30,
+    height: 30,
+    borderRadius: Radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionHeading: { ...Typography.h3, fontWeight: '700' },
+  locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    borderWidth: 1,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
   },
   locationTitle: { ...Typography.body, fontWeight: '600' },
   modalBackdrop: {

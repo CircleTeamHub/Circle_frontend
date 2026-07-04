@@ -2,7 +2,9 @@ import type { CirclePlazaPost } from '@/types';
 
 export type DiscoverFeedState = {
   plazaPosts: CirclePlazaPost[];
-  plazaPage: number;
+  // Keyset cursor for the next page (null = start from newest). Replaces page
+  // numbers so a prepended post can't shift the pagination window.
+  plazaCursor: string | null;
   plazaHasMore: boolean;
   plazaLoading: boolean;
   plazaRefreshing: boolean;
@@ -12,7 +14,7 @@ export type DiscoverFeedState = {
 
 type ApplyPlazaFetchSuccessArgs = {
   reset: boolean;
-  page: number;
+  nextCursor: string | null;
   items: CirclePlazaPost[];
   hasMore: boolean;
   requestQueryVersion: number;
@@ -35,7 +37,7 @@ export function applyPlazaFetchSuccess(
     plazaPosts: args.reset
       ? args.items
       : mergePlazaPosts(state.plazaPosts, args.items),
-    plazaPage: args.page + 1,
+    plazaCursor: args.nextCursor,
     plazaHasMore: args.hasMore,
     plazaLoading: false,
     plazaRefreshing: false,
