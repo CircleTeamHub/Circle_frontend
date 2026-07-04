@@ -31,6 +31,14 @@ test("notification snackbar host delegates routing to the pure resolver", () => 
   assert.match(host, /router\.push\(\s*getSnackbarRoute/);
 });
 
+test("notification snackbar host passes current stack scope to the route resolver", () => {
+  const host = read(
+    "src/features/notifications/components/NotificationSnackbarHost.tsx",
+  );
+  assert.match(host, /const notificationScope = .*includes\('discover'\)/);
+  assert.match(host, /scope: notificationScope/);
+});
+
 test("notification snackbar host marks notifications read optimistically", () => {
   const host = read(
     "src/features/notifications/components/NotificationSnackbarHost.tsx",

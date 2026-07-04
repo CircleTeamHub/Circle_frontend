@@ -31,6 +31,7 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
   // Guards loadMore against overlapping calls (FlatList can fire onEndReached
   // twice before `loading` state commits).
   const inFlightRef = useRef(false);
+  const requestSeqRef = useRef(0);
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -41,13 +42,15 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
   const load = useCallback(
     async (cursorArg: string | undefined, replace: boolean) => {
       if (!userId) return;
+      const requestSeq = ++requestSeqRef.current;
+      const requestUserId = userId;
       try {
         if (mountedRef.current) setError(null);
-        const result = await fetchUserMoments(userId, {
+        const result = await fetchUserMoments(requestUserId, {
           cursor: cursorArg,
           limit: PAGE_SIZE,
         });
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || requestSeq !== requestSeqRef.current) return;
         setMoments((prev) => {
           const base = replace ? [] : prev;
           const seen = new Set(base.map((m) => m.id));
@@ -63,7 +66,7 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
         setHasMore(result.hasMore);
         setCursor(result.nextCursor ?? null);
       } catch (err) {
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || requestSeq !== requestSeqRef.current) return;
         setError(err instanceof Error ? err.message : t('common.networkError'));
       }
     },

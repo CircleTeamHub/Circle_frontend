@@ -240,7 +240,7 @@ export function CircleShortcutOrderSheet({
       dragRespondersRef.current.set(circleId, responder);
       return responder;
     },
-    [circles, finishDrag],
+    [circles, dragY, finishDrag],
   );
   const handleSave = useCallback(() => {
     onSave(normalizedDraftOrderIds);

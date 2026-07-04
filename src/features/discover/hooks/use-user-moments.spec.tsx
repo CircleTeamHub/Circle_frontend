@@ -88,3 +88,38 @@ test('a fetch that resolves after unmount does not update state or error', async
   expect(errorSpy).not.toHaveBeenCalled();
   errorSpy.mockRestore();
 });
+
+test('a stale user fetch cannot overwrite moments after userId changes', async () => {
+  let resolveUser1: (value: MomentPage) => void = () => {};
+  let resolveUser2: (value: MomentPage) => void = () => {};
+  mockFetch
+    .mockImplementationOnce(
+      () => new Promise((resolve) => (resolveUser1 = resolve)),
+    )
+    .mockImplementationOnce(
+      () => new Promise((resolve) => (resolveUser2 = resolve)),
+    );
+
+  const { result, rerender } = renderHook<
+    ReturnType<typeof useUserMoments>,
+    { userId: string }
+  >(
+    ({ userId }) => useUserMoments(userId),
+    { initialProps: { userId: 'user-1' } },
+  );
+
+  rerender({ userId: 'user-2' });
+
+  await act(async () => {
+    resolveUser2(pageOf(['b'], false));
+  });
+
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  expect(result.current.moments.map((m) => m.id)).toEqual(['b']);
+
+  await act(async () => {
+    resolveUser1(pageOf(['a'], false));
+  });
+
+  expect(result.current.moments.map((m) => m.id)).toEqual(['b']);
+});

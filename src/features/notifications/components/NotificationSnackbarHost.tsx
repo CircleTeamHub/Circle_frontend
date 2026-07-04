@@ -43,6 +43,9 @@ export function NotificationSnackbarHost() {
   // True when the user is already looking at the conversation list — a chat
   // toast there is redundant, so we skip past it.
   const onMessagesList = segments[segments.length - 1] === 'messages';
+  const notificationScope = (segments as readonly string[]).includes('discover')
+    ? 'discover'
+    : 'messages';
 
   const [shown, setShown] = useState(current);
 
@@ -188,9 +191,10 @@ export function NotificationSnackbarHost() {
     router.push(
       getSnackbarRoute(shown, {
         untitledPost: t('notifications.signupMgmt.untitledPost'),
+        scope: notificationScope,
       }),
     );
-  }, [shown, clearTimer, dismissCurrent, router, t]);
+  }, [shown, clearTimer, dismissCurrent, notificationScope, router, t]);
 
   if (!shown || !row || (shown.kind === 'chat' && onMessagesList)) {
     return null;

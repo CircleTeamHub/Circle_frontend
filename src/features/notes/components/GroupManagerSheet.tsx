@@ -250,6 +250,7 @@ export function GroupManagerSheet({
       return currentlySelected !== selectedNoteIds.has(note.id);
     });
 
+    let shouldReloadAfterFailure = false;
     try {
       // 走 PATCH /note/:id/groups（review #59）—— 每条 note 只 1 个请求，没有 fetch detail
       // 也不需要把整张 note 的 title/content/media 全重发一遍。
@@ -263,17 +264,26 @@ export function GroupManagerSheet({
             : currentGroupIds.filter((id) => id !== group.id);
 
           await updateNoteGroupIds(note.id, nextGroupIds);
+          shouldReloadAfterFailure = true;
         },
       );
       resetGroupMembershipEditor();
       await onMembershipsChanged();
     } catch (error) {
       setSavingMemberships(false);
+      if (shouldReloadAfterFailure) {
+        await onMembershipsChanged();
+      }
       Alert.alert(
         t('notes.alerts.saveFailedTitle', { defaultValue: '保存失败' }),
-        t('notes.alerts.saveMembershipsFailed', {
-          defaultValue: '笔记分组保存失败，请稍后再试。',
-        }),
+        shouldReloadAfterFailure
+          ? t('notes.alerts.saveMembershipsPartialFailed', {
+              defaultValue:
+                '部分笔记分组可能已保存，列表已刷新为最新状态。请确认后重试。',
+            })
+          : t('notes.alerts.saveMembershipsFailed', {
+              defaultValue: '笔记分组保存失败，请稍后再试。',
+            }),
       );
       if (__DEV__) {
         console.warn('[GroupManagerSheet] saveGroupMemberships failed', error);

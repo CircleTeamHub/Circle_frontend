@@ -178,6 +178,13 @@ test('GroupManagerSheet lets a group directly choose which notes belong to it', 
   assert.doesNotMatch(src, /fetchNoteDetail/);
 });
 
+test('GroupManagerSheet reloads memberships after a partial save failure', () => {
+  const src = read('src/features/notes/components/GroupManagerSheet.tsx');
+  assert.match(src, /let shouldReloadAfterFailure = false/);
+  assert.match(src, /shouldReloadAfterFailure = true/);
+  assert.match(src, /if \(shouldReloadAfterFailure\) \{\s*await onMembershipsChanged\(\);/);
+});
+
 test('GroupManagerSheet optimizes group note assignment for larger note lists', () => {
   const src = read('src/features/notes/components/GroupManagerSheet.tsx');
   assert.match(src, /membershipSearch/);
@@ -547,4 +554,11 @@ test('ShareNoteSheet sends the note as a card to a chosen friend/group', () => {
   // 后端发送按会话解析 recvID/groupID（与 friend/circle 名片一致）。
   assert.match(client, /export async function sendNoteCardToConversation/);
   assert.match(client, /targetConversation\.conversationType === SessionType\.Group/);
+});
+
+test('ShareNoteSheet maps send failures to stable user-facing copy', () => {
+  const sheet = read('src/features/notes/components/ShareNoteSheet.tsx');
+  assert.match(sheet, /getShareNoteSendErrorMessage/);
+  assert.match(sheet, /notes\.shareToChat\.failedMessage/);
+  assert.doesNotMatch(sheet, /error instanceof Error\s*\?\s*error\.message/);
 });

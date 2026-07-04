@@ -24,6 +24,12 @@ interface ShareNoteSheetProps {
   onClose: () => void;
 }
 
+function getShareNoteSendErrorMessage(t: ReturnType<typeof useTranslation>['t']) {
+  return t('notes.shareToChat.failedMessage', {
+    defaultValue: 'Unable to send this note right now. Please try again.',
+  });
+}
+
 /**
  * 分享笔记到聊天：选一个会话（好友或群聊），把笔记以卡片消息发过去，
  * 对方点卡片即可打开这条笔记。取代旧的系统分享面板 / 网页分享链接。
@@ -122,13 +128,11 @@ export function ShareNoteSheet({ payload, onClose }: ShareNoteSheetProps) {
                     }),
                   );
                 })
-                .catch((error: unknown) => {
+                .catch(() => {
                   if (!mountedRef.current) return;
                   Alert.alert(
                     t('notes.shareToChat.failedTitle', { defaultValue: '发送失败' }),
-                    error instanceof Error
-                      ? error.message
-                      : t('common.retryLater', { defaultValue: '请稍后重试' }),
+                    getShareNoteSendErrorMessage(t),
                   );
                 })
                 .finally(() => {

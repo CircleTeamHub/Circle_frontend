@@ -23,7 +23,10 @@ test('useUserMoments guards against setState-after-unmount', () => {
   assert.match(src, /mountedRef/);
   assert.match(src, /mountedRef\.current = false/);
   // 异步 resolve 后、写 state 前先判挂载状态
-  assert.match(src, /if \(!mountedRef\.current\) return/);
+  assert.match(
+    src,
+    /if \(!mountedRef\.current(?: \|\| requestSeq !== requestSeqRef\.current)?\) return/,
+  );
   assert.match(src, /if \(mountedRef\.current\) setLoading\(false\)/);
 });
 
