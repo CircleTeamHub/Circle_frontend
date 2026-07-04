@@ -1,6 +1,6 @@
 # Client Remediation Plan — `circle-im` (Expo / React Native)
 
-> **Status:** Planning only — no code has been changed.
+> **Status:** Living plan — C-01/C-02 client-side fixes have started landing.
 > **Date:** 2026-07-02
 > **Author:** Security/perf review follow-up
 
@@ -17,6 +17,48 @@ Two items connect back to the backend:
   support on `/coin/gift`.
 - **C-01 (HTTPS/WSS)** is the client half of backend finding F-04 (transport / IP
   trust).
+
+## Completed fixes
+
+Updated 2026-07-04 on branch `fix/p2-transport-and-log-hardening`.
+
+- **C-01 client runtime guard:** `src/constants/config.ts` now fails fast in
+  release builds when required transport env vars are missing
+  (`EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_OPENIM_API_URL`,
+  `EXPO_PUBLIC_OPENIM_WS_URL`). This prevents a shipped build from silently
+  falling back to development `localhost` / private-network defaults.
+- **C-01 plaintext transport guard:** `src/constants/transport-security.ts`
+  rejects public `http://` / `ws://` endpoints in release unless explicitly
+  allowed with `EXPO_PUBLIC_ALLOW_INSECURE_TRANSPORT=1` or `true`. Dev builds and
+  explicit local/private hosts remain supported for local development and internal
+  testing.
+- **C-01 realtime default hardening:** `REALTIME_WS_URL` is derived from
+  `API_URL` when not explicitly set, mapping `https -> wss` and preserving the
+  API host/port instead of falling back to a hardcoded dev-style websocket URL.
+- **C-01 error hygiene:** transport guard errors now redact URL credentials,
+  query strings, and fragments before throwing, so a bad env var cannot leak
+  tokens or signed parameters into CI/crash logs.
+- **C-02 release console stripping:** `babel.config.js` enables
+  `babel-plugin-transform-remove-console` for production builds, stripping
+  `console.log` / `warn` / `info` / `debug` while preserving `console.error`.
+- **Related API error hygiene:** `src/features/profile/screens/MyIconsScreen.tsx`
+  now maps API failures through `getApiErrorMessage` instead of displaying raw
+  unknown backend messages.
+
+Validation already run for these landed fixes:
+
+- `npm run typecheck`
+- `npm run expo:config`
+- `npm run lint`
+- `npm test` (944 passed)
+- `npm run test:behavior` (6 passed)
+
+Remaining C-01/C-02 follow-ups:
+
+- Native transport backstop is still pending: explicitly verify/lock iOS ATS and
+  Android cleartext policy (`usesCleartextTraffic=false`) in native config.
+- A release bundle artifact check is still pending: build/grep the production
+  bundle to verify stripped `console.*` output in the final artifact.
 
 ---
 
