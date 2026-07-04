@@ -19,6 +19,7 @@ import { getSnackbarRoute } from '@/features/notifications/utils/snackbar-route'
 import { useNotificationFeedback } from '@/features/notifications/hooks/use-notification-feedback';
 import { useNotificationCenterStore } from '@/features/notifications/store/use-notification-center-store';
 import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
+import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 
 const AUTO_DISMISS_MS = 4_000;
 const ENTER_MS = 220;
@@ -170,6 +171,13 @@ export function NotificationSnackbarHost() {
       // Optimistically mark read locally so the notification center reflects
       // the tap immediately, regardless of the network call's outcome.
       useNotificationCenterStore.getState().markInteractiveReadLocal(shown.id);
+      if (!shown.read) {
+        const badgeStore = useTabBadgeStore.getState();
+        badgeStore.setDiscoverUnread(
+          Math.max(0, badgeStore.discoverUnread - 1),
+        );
+        badgeStore.setSystemUnread(Math.max(0, badgeStore.systemUnread - 1));
+      }
       void markNotificationRead(shown.id).catch((error) => {
         if (isDev) {
           console.warn('[NotificationSnackbarHost] mark read failed', error);

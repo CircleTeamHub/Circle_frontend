@@ -27,6 +27,7 @@ import { getOrCreateSingleConversation } from '@/im/client';
 import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
 import {
   getChatDetailHref,
+  getUserProfileHref,
   getUserProfileScopeFromSegments,
 } from '@/features/user/utils/routes';
 import { useNotificationCenterStore } from '@/features/notifications/store/use-notification-center-store';
@@ -244,6 +245,13 @@ export default function PostSignupsScreen() {
     [router, scope, t],
   );
 
+  const openSignerProfile = useCallback(
+    (signer: PostSignupItem) => {
+      router.push(getUserProfileHref(scope, signer.userId, signer.nickname));
+    },
+    [router, scope],
+  );
+
   return (
     <View
       style={[
@@ -361,12 +369,11 @@ export default function PostSignupsScreen() {
             <Pressable
               style={[
                 s.row,
-                selected ? { backgroundColor: colors.primaryLight } : null,
+                selected ? [s.selectedRow, { backgroundColor: colors.primaryLight }] : null,
               ]}
               onPress={
                 rowDisabled ? undefined : () => toggleRecognitionSelection(item)
               }
-              disabled={rowDisabled}
             >
               {showRecognition ? (
                 <View
@@ -390,7 +397,14 @@ export default function PostSignupsScreen() {
                   ) : null}
                 </View>
               ) : null}
-              <Avatar size={48} name={item.nickname} uri={item.avatarUrl ?? undefined} />
+              <Pressable
+                onPress={() => openSignerProfile(item)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={item.nickname}
+              >
+                <Avatar size={48} name={item.nickname} uri={item.avatarUrl ?? undefined} />
+              </Pressable>
               <View style={s.body}>
                 <View style={s.nameRow}>
                   <Text
@@ -418,18 +432,20 @@ export default function PostSignupsScreen() {
                   })}
                 </Text>
               </View>
-              <Pressable
-                onPress={() => void openChat(item)}
-                disabled={openingChatFor === item.userId}
-                hitSlop={8}
-                style={s.chatButton}
-              >
-                <Ionicons
-                  name="chatbubble-ellipses-outline"
-                  size={22}
-                  color={colors.textSecondary}
-                />
-              </Pressable>
+              {showRecognition ? null : (
+                <Pressable
+                  onPress={() => void openChat(item)}
+                  disabled={openingChatFor === item.userId}
+                  hitSlop={8}
+                  style={s.chatButton}
+                >
+                  <Ionicons
+                    name="chatbubble-ellipses-outline"
+                    size={22}
+                    color={colors.textSecondary}
+                  />
+                </Pressable>
+              )}
             </Pressable>
           );
         }}
@@ -481,6 +497,9 @@ const s = StyleSheet.create({
     gap: 12,
     paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.sm,
+  },
+  selectedRow: {
+    borderRadius: 18,
   },
   recognitionPanel: {
     gap: Spacing.sm,

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Spacing, useTheme } from '@/theme';
@@ -23,6 +23,7 @@ import {
   type NotificationRowData,
 } from '@/features/notifications/utils/notification-summary';
 import { mapMyPostToRow } from '@/features/notifications/utils/my-post-summary';
+import { getSnackbarRoute } from '@/features/notifications/utils/snackbar-route';
 import {
   NotificationTabBar,
   type NotificationTabKey,
@@ -44,6 +45,7 @@ interface Row {
 export default function NotificationCenterScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const segments = useSegments();
   const { colors } = useTheme();
   const { t } = useTranslation();
   const mountedRef = useRef(true);
@@ -56,6 +58,9 @@ export default function NotificationCenterScreen() {
   const [filter, setFilter] = useState<ReadFilter>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const notificationScope = (segments as readonly string[]).includes('discover')
+    ? 'discover'
+    : 'messages';
 
   useEffect(() => {
     return () => {
@@ -133,12 +138,23 @@ export default function NotificationCenterScreen() {
   const handleMarkAll = useCallback(async () => {
     if (tab === 'interactive') {
       const previousInteractive = store().interactive;
+      const previousDiscoverUnread = useTabBadgeStore.getState().discoverUnread;
+      const previousSystemUnread = useTabBadgeStore.getState().systemUnread;
+      const unreadInteractiveCount = previousInteractive.filter((item) => !item.read).length;
       store().markAllInteractiveReadLocal();
+      useTabBadgeStore.getState().setDiscoverUnread(0);
+      useTabBadgeStore
+        .getState()
+        .setSystemUnread(
+          Math.max(0, previousSystemUnread - unreadInteractiveCount),
+        );
       try {
         await markAllNotificationsRead();
       } catch (error) {
         if (isDev) console.warn('[NotificationCenterScreen] mark all failed', error);
         store().setInteractive(previousInteractive);
+        useTabBadgeStore.getState().setDiscoverUnread(previousDiscoverUnread);
+        useTabBadgeStore.getState().setSystemUnread(previousSystemUnread);
         await load();
       }
       return;
@@ -164,28 +180,41 @@ export default function NotificationCenterScreen() {
   }, [load, tab, store]);
 
   const handleRowPress = useCallback(
-    (id: string, title: string, verificationInvitationId: string | null) => {
-      if (tab === 'interactive') {
-        store().markInteractiveReadLocal(id);
-        void markNotificationRead(id).catch((e) => isDev && console.warn(e));
-        // 「邀请你验证」通知直达验证页；其余互动通知仅标记已读。
-        if (verificationInvitationId) {
-          router.push({
-            pathname: '/(tabs)/discover/verification/[id]',
-            params: { id: verificationInvitationId },
-          });
+    (raw: NotificationItem | MyCirclePost, view: NotificationRowData) => {
+      if ('type' in raw) {
+        store().markInteractiveReadLocal(raw.id);
+        if (!raw.read) {
+          const badgeStore = useTabBadgeStore.getState();
+          badgeStore.setDiscoverUnread(
+            Math.max(0, badgeStore.discoverUnread - 1),
+          );
+          badgeStore.setSystemUnread(
+            Math.max(0, badgeStore.systemUnread - 1),
+          );
         }
+        void markNotificationRead(raw.id).catch((e) => isDev && console.warn(e));
+        const route = getSnackbarRoute(
+          { ...raw, kind: 'notification' },
+          {
+            untitledPost: t('notifications.signupMgmt.untitledPost'),
+            scope: notificationScope,
+          },
+        );
+        router.push(route);
         return;
       }
       // 报名管理: open the post's signer list. Opening it marks signups read
       // server-side, so zero the local badge optimistically.
-      store().markPostSignupsSeenLocal(id);
+      store().markPostSignupsSeenLocal(raw.id);
       router.push({
-        pathname: '/(tabs)/messages/post-signups',
-        params: { postId: id, title },
+        pathname:
+          notificationScope === 'discover'
+            ? '/(tabs)/discover/post-signups'
+            : '/(tabs)/messages/post-signups',
+        params: { postId: raw.id, title: view.title },
       });
     },
-    [tab, store, router],
+    [store, router, t, notificationScope],
   );
 
   return (
@@ -232,13 +261,7 @@ export default function NotificationCenterScreen() {
         renderItem={({ item }) => (
           <NotificationRow
             data={item.view}
-            onPress={() =>
-              handleRowPress(
-                item.view.id,
-                item.view.title,
-                item.view.verificationInvitationId,
-              )
-            }
+            onPress={() => handleRowPress(item.raw, item.view)}
           />
         )}
         ItemSeparatorComponent={Divider}

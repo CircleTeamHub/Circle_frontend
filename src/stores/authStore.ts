@@ -46,6 +46,7 @@ export interface AuthUser {
   creditScore: number;
   fancyNumber: boolean;
   displayIcons: DisplayIcon[];
+  likeCount?: number;
   recognitionCount?: number;
 }
 

@@ -10,7 +10,6 @@ import {
   View,
   Text,
   TextInput,
-  Share,
   Pressable,
   FlatList,
   ScrollView,
@@ -127,6 +126,7 @@ import { OnlineState, SessionType } from '@openim/rn-client-sdk';
 import { useTranslation } from 'react-i18next';
 import type { ChatMessage } from '@/types';
 import {
+  AT_ALL_USER_ID,
   buildAtMessagePayload,
   buildQuotePreviewText,
   filterMentionCandidates,
@@ -504,6 +504,10 @@ export default function ChatDetailScreen() {
   const visibleMentionCandidates = useMemo(
     () => filterMentionCandidates(mentionCandidates, mentionQuery),
     [mentionCandidates, mentionQuery],
+  );
+  const allMentionTarget = useMemo<MentionTarget>(
+    () => ({ userID: AT_ALL_USER_ID, nickname: '所有人', isAll: true }),
+    [],
   );
 
   // 入口只给了 sourceID 时，就地把会话解析出来（单聊/群聊各走对应方法）。
@@ -946,33 +950,6 @@ export default function ChatDetailScreen() {
     });
   }, [conversationTitle, isGroupChat, sourceID]);
 
-  const handleSaveMessage = useCallback(
-    async (message: ChatMessage) => {
-      const url = message.imageUrl ?? message.voiceUrl ?? message.voicePath ?? null;
-      try {
-        if (url) {
-          await Share.share({ url, message: url });
-          return;
-        }
-        if (message.text?.trim()) {
-          await Share.share({ message: message.text.trim() });
-          return;
-        }
-        Alert.alert(
-          t('chat.messageActions.saveUnsupported', {
-            defaultValue: '该消息暂不支持保存',
-          }),
-        );
-      } catch {
-        Alert.alert(
-          t('chat.messageActions.saveFailed', { defaultValue: '保存失败' }),
-          t('chat.messageActions.saveFailedHint', { defaultValue: '请稍后重试' }),
-        );
-      }
-    },
-    [t],
-  );
-
   const handleMessageLongPress = useCallback(
     (message: ChatMessage, event: GestureResponderEvent) => {
       if (message.type === 'date') return;
@@ -1025,12 +1002,6 @@ export default function ChatDetailScreen() {
       label: t('chat.messageActions.report', { defaultValue: '举报' }),
       onPress: handleReportMessage,
     });
-    actions.push({
-      key: 'save',
-      icon: 'download-outline',
-      label: t('chat.messageActions.save', { defaultValue: '保存' }),
-      onPress: () => void handleSaveMessage(message),
-    });
     return actions;
   }, [
     actionMenu,
@@ -1040,20 +1011,26 @@ export default function ChatDetailScreen() {
     handleForwardMessage,
     handleQuoteMessage,
     handleReportMessage,
-    handleSaveMessage,
     t,
   ]);
+
+  const getMessageLongPressHandler = useCallback(
+    (message: ChatMessage) => (event: GestureResponderEvent) => {
+      handleMessageLongPress(message, event);
+    },
+    [handleMessageLongPress],
+  );
 
   const withMessageActions = useCallback(
     (message: ChatMessage, node: ReactElement) => (
       <Pressable
-        onLongPress={(event) => handleMessageLongPress(message, event)}
+        onLongPress={getMessageLongPressHandler(message)}
         delayLongPress={350}
       >
         {node}
       </Pressable>
     ),
-    [handleMessageLongPress],
+    [getMessageLongPressHandler],
   );
 
   const renderItem = useCallback(({ item }: { item: ChatMessage }) => {
@@ -1087,6 +1064,7 @@ export default function ChatDetailScreen() {
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
           />
         ));
       case 'image':
@@ -1099,6 +1077,7 @@ export default function ChatDetailScreen() {
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
             hideStatus={isGroupChat}
           />
         ));
@@ -1112,6 +1091,7 @@ export default function ChatDetailScreen() {
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
             hideStatus={isGroupChat}
           />
         ));
@@ -1125,6 +1105,7 @@ export default function ChatDetailScreen() {
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
             onPress={(note) =>
               router.push(getNoteDetailHref(scope, note.noteId, note.ownerId ?? ''))
             }
@@ -1144,6 +1125,7 @@ export default function ChatDetailScreen() {
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
             onPress={(card) =>
               router.push(getUserProfileHref(scope, card.userID, card.nickname))
             }
@@ -1160,6 +1142,7 @@ export default function ChatDetailScreen() {
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
             onPress={(card) =>
               router.push(`/(tabs)/discover/circle/${encodeURIComponent(card.circleId)}`)
             }
@@ -1167,7 +1150,7 @@ export default function ChatDetailScreen() {
           />
         ));
       case 'verification-card':
-        return withMessageActions(item, (
+        return (
           <VerificationCardBubble
             message={item}
             outgoing={Boolean(item.outgoing)}
@@ -1184,7 +1167,7 @@ export default function ChatDetailScreen() {
             }
             hideStatus={isGroupChat}
           />
-        ));
+        );
       case 'transfer-card':
         return withMessageActions(item, (
           <TransferCardBubble
@@ -1195,6 +1178,7 @@ export default function ChatDetailScreen() {
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
             hideStatus={isGroupChat}
           />
         ));
@@ -1208,6 +1192,7 @@ export default function ChatDetailScreen() {
     selfAvatarUri,
     selfName,
     scope,
+    getMessageLongPressHandler,
     withMessageActions,
   ]);
 
@@ -1299,7 +1284,7 @@ export default function ChatDetailScreen() {
     if (!isGroupChat || !sourceID) return;
     const cached = mentionCandidatesCacheRef.current.get(sourceID);
     if (cached) {
-      setMentionCandidates(cached);
+      setMentionCandidates([allMentionTarget, ...cached]);
       return;
     }
 
@@ -1327,14 +1312,14 @@ export default function ChatDetailScreen() {
     try {
       const candidates = await request;
       if (!mountedRef.current) return;
-      setMentionCandidates(candidates);
+      setMentionCandidates([allMentionTarget, ...candidates]);
     } catch (error) {
       if (__DEV__) {
         console.warn('[chat] load mention candidates failed', error);
       }
       if (mountedRef.current) setMentionCandidates([]);
     }
-  }, [currentUserID, isGroupChat, sourceID]);
+  }, [allMentionTarget, currentUserID, isGroupChat, sourceID]);
 
   const handleDraftChange = useCallback(
     (next: string) => {

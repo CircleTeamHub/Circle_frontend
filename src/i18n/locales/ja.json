@@ -635,6 +635,8 @@
       "pin": "上部に固定",
       "unpin": "固定を解除",
       "edit": "編集",
+      "unlist": "非公開にする",
+      "relist": "公開に戻す",
       "more": "その他"
     },
     "alerts": {
@@ -652,8 +654,10 @@
       "saveMembershipsFailed": "ノートのグループを保存できませんでした。もう一度お試しください。",
       "deleteGroupMessage": "「{{name}}」を削除してもノートは消えず、グループから外れるだけです。",
       "pinFailedTitle": "操作に失敗しました",
-      "deleteTitle": "ノートを削除",
-      "deleteConfirm": "このノートを削除しますか？元に戻せません。"
+      "relistFailedTitle": "公開に戻せませんでした",
+      "unlistFailedTitle": "非公開にできませんでした",
+      "unlistTitle": "ノートを非公開にする",
+      "unlistConfirm": "非公開にしたノートは非公開リストで確認できます。1か月後に自動削除されます。"
     },
     "detail": {
       "loadFailed": "ノートを読み込めませんでした。もう一度お試しください",
@@ -725,14 +729,15 @@
     },
     "empty": {
       "noMatch": "一致するノートがありません",
-      "noNotes": "まだノートがありません"
+      "noNotes": "まだノートがありません",
+      "noUnlisted": "非公開のノートはありません"
     },
     "manageGroups": {
       "cancelEdit": "編集をキャンセル",
-      "copy": "「すべて」と「未分類」は先頭に固定されます。よく使うカスタムグループを前に移動できます。",
+      "copy": "「すべて」と「未分類」は固定グループのため変更できません。",
       "createNew": "グループを追加",
       "limitHint": "{{count}}/{{max}} 個のグループを作成済み",
-      "namePlaceholder": "グループ名を入力（例：東京）",
+      "namePlaceholder": "新しいグループを追加する名前を入力",
       "saveEdit": "変更を保存",
       "saving": "保存中...",
       "title": "グループを管理",
@@ -747,29 +752,6 @@
       "copy": "「{{name}}」に追加するノートを選択してください。"
     },
     "searchPlaceholder": "検索したい内容を入力",
-    "settings": {
-      "cardSaveSection": "プロフィールカードの保存",
-      "confirmCardSave": "カード保存の確認",
-      "cooldownTitle": "クールダウン中",
-      "defaultSaveCard": "カードをデフォルトで保存",
-      "displaySection": "表示",
-      "manualRefreshHint1": "リストやグループ数がサーバーと一致しないときに使えます。",
-      "manualRefreshHint2": "タップするとサーバーからノートとグループのリストを取得し直します。",
-      "manualRefreshHint3": "頻繁な実行を防ぐため、更新後はクールダウン期間になります。",
-      "manualRefreshTitle": "手動更新",
-      "refresh": "再取得",
-      "refreshFailedMessage": "接続を確認してからお試しください。",
-      "refreshFailedTitle": "更新に失敗しました",
-      "refreshedTitle": "更新しました",
-      "refreshing": "更新中...",
-      "showGroups": "グループ情報を表示",
-      "showMedia": "メディアを表示",
-      "showSortToolbar": "並べ替えツールバーを表示",
-      "showUngrouped": "未分類を表示",
-      "title": "ノート設定",
-      "cooldownMessage": "{{remain}} 秒後にもう一度お試しください。",
-      "refreshedMessage": "グループ数：{{groupCount}}\n表示中のノート数：{{noteCount}}"
-    },
     "share": {
       "copiedMessage": "ノートのリンクをクリップボードにコピーしました。",
       "copiedTitle": "コピーしました",
@@ -786,12 +768,10 @@
       "message": "{{title}}\n{{url}}",
       "qrHint": "スキャンしてこのノートリスト（{{count}} 件）を開きます。"
     },
-    "stopgap": {
-      "deletedNotes": "削除済みノートのリストは近日公開予定です。お楽しみに。",
-      "title": "近日公開"
-    },
     "title": "マイノート",
     "unlisted": "非公開",
+    "unlistedTitle": "非公開のノート",
+    "unlistedAutoDeleteHint": "非公開にしたノートは1か月後に自動削除されます。",
     "format": {
       "fullDate": "{{year}}年{{month}}月{{day}}日 · {{weekday}}",
       "groupOverflow": "{{first}}、{{second}} +{{extra}}",
@@ -1149,7 +1129,9 @@
     "management": "サークル",
     "moments": "モーメント",
     "noActivity": "アクティビティなし",
+    "noActiveActivity": "進行中のアクティビティはありません",
     "joinCircleHint": "サークルに参加すると広場の投稿が見られます",
+    "endedActivityHiddenHint": "終了または期限切れのアクティビティは広場に表示されません",
     "circleDetail": "サークル詳細",
     "createCircle": "サークルを作成",
     "discoverCircles": "サークルを発見",
@@ -1195,6 +1177,11 @@
       "selectedCount": "{{count}}/{{max}}選択",
       "noCircles": "選択できるサークルなし",
       "maxCircles": "最大{{max}}サークル"
+    },
+    "shortcutOrder": {
+      "title": "サークルの順序を編集",
+      "hint": "横並びのサークル一覧はこの順序で表示されます",
+      "reset": "標準に戻す"
     },
     "commentInput": {
       "placeholder": "コメントを書く...",
@@ -2227,11 +2214,13 @@
     "PLAZA_RECOGNIZE_NOT_MEMBER": "サークルのアクティブメンバーのみを認定できます",
     "PLAZA_RECOGNIZE_BLOCKED": "ブロックしたユーザーは認定できません",
     "PLAZA_RECOGNIZE_ALREADY": "コラボレーション認定は既に送信されています",
+    "PLAZA_INVALID_CURSOR": "この広場ページは期限切れです。更新してもう一度お試しください。",
     "TRACE_MOMENT_NOT_FOUND": "モーメントが見つかりません",
     "TRACE_DELETE_AUTHOR_ONLY": "投稿者のみが削除できます",
     "TRACE_REPLY_TARGET_NOT_FOUND": "返信先のコメントが存在しません",
     "TRACE_COMMENT_NOT_FOUND": "コメントが見つかりません",
     "TRACE_ACCESS_FORBIDDEN": "このモーメントを閲覧する権限がありません",
+    "TRACE_INVALID_CURSOR": "このフィードページは期限切れです。更新してもう一度お試しください。",
     "FRIEND_SELF_ADD": "自分を友だちに追加することはできません",
     "FRIEND_USER_NOT_FOUND": "ユーザーが見つかりません",
     "FRIEND_BLOCKED_CANNOT_REQUEST": "このユーザーに友だち申請を送信できません",

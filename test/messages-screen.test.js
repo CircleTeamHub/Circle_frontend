@@ -140,6 +140,19 @@ test('messages screen counts local unread overrides before applying local badges
   );
 });
 
+test('messages screen no longer exposes the notification bell entry', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/messages/screens/MessagesScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.doesNotMatch(source, /handleOpenNotifications/);
+  assert.doesNotMatch(source, /["'`]\/\(tabs\)\/messages\/notifications["'`]/);
+  assert.doesNotMatch(source, /name="notifications-outline"/);
+  assert.doesNotMatch(source, /<Badge count=\{discoverUnread\} \/>/);
+});
+
 test('messages screen plus menu no longer exposes group management', () => {
   const filePath = path.join(
     process.cwd(),

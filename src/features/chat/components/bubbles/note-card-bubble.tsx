@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, type GestureResponderEvent } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -23,6 +23,7 @@ interface NoteCardBubbleProps {
   onPress?: (note: NoteCardData) => void;
   onSectionPress?: (note: NoteCardData, section: 'text' | 'media' | 'showcase' | 'location') => void;
   onAvatarPress?: () => void;
+  onLongPress?: (event: GestureResponderEvent) => void;
   hideStatus?: boolean;
 }
 
@@ -103,6 +104,7 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
   onPress,
   onSectionPress,
   onAvatarPress,
+  onLongPress,
   hideStatus,
 }) => {
   const { colors } = useTheme();
@@ -173,6 +175,8 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
       <Pressable
         style={[sNote.card, { backgroundColor: cardBg }]}
         onPress={onPress ? () => onPress(note) : undefined}
+        onLongPress={onLongPress}
+        delayLongPress={350}
       >
         <View style={sNote.topRow}>
           {note.coverUrl ? (
@@ -221,6 +225,8 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
                   },
                 ]}
                 disabled={!active}
+                onLongPress={onLongPress}
+                delayLongPress={350}
                 onPress={
                   active && onSectionPress
                     ? () => onSectionPress(note, chip.section)

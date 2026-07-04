@@ -40,6 +40,16 @@ test("notification snackbar host marks notifications read optimistically", () =>
   assert.match(host, /markNotificationRead\(shown\.id\)/);
 });
 
+test("notification snackbar host keeps unread badges in sync when tapped", () => {
+  const host = read(
+    "src/features/notifications/components/NotificationSnackbarHost.tsx",
+  );
+  assert.match(host, /useTabBadgeStore/);
+  assert.match(host, /if \(!shown\.read\)/);
+  assert.match(host, /Math\.max\(0, badgeStore\.discoverUnread - 1\)/);
+  assert.match(host, /Math\.max\(0, badgeStore\.systemUnread - 1\)/);
+});
+
 test("notification snackbar host suppresses chat banners on the messages list", () => {
   const host = read(
     "src/features/notifications/components/NotificationSnackbarHost.tsx",

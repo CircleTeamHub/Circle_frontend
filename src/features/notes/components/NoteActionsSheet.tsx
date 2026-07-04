@@ -14,7 +14,7 @@ interface NoteActionsSheetProps {
   onPin: (note: NoteSummary) => void;
   onEdit: (note: NoteSummary) => void;
   onShare: (note: NoteSummary) => void;
-  onDelete: (note: NoteSummary) => void;
+  onUnlist: (note: NoteSummary) => void;
 }
 
 type NoteAction = {
@@ -31,7 +31,7 @@ export function NoteActionsSheet({
   onPin,
   onEdit,
   onShare,
-  onDelete,
+  onUnlist,
 }: NoteActionsSheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -72,13 +72,17 @@ export function NoteActionsSheet({
           label: t('notes.actions.share', { defaultValue: '分享' }),
           run: () => onShare(note),
         },
-        {
-          key: 'delete',
-          icon: 'trash-outline',
-          label: t('common.delete', { defaultValue: '删除' }),
-          destructive: true,
-          run: () => onDelete(note),
-        },
+        ...(note.status === 'UNLISTED'
+          ? []
+          : [
+              {
+                key: 'unlist',
+                icon: 'archive-outline' as const,
+                label: t('notes.actions.unlist', { defaultValue: '下架' }),
+                destructive: true,
+                run: () => onUnlist(note),
+              },
+            ]),
       ]
     : [];
 

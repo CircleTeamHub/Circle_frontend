@@ -58,6 +58,31 @@ test('post signups screen supports searching and submitting up to three collabor
   assert.match(source, /collaboration-recognition-submit/);
 });
 
+test('post signups screen uses recognition selection instead of chat when recognition is open', () => {
+  const source = readScreen();
+
+  assert.match(source, /const showRecognition = recognitionOpen/);
+  assert.match(source, /showRecognition \? null : \(/);
+  assert.match(source, /chatbubble-ellipses-outline/);
+  assert.match(source, /onPress=\{\s*rowDisabled \? undefined : \(\) => toggleRecognitionSelection\(item\)\s*\}/);
+});
+
+test('post signups screen rounds the selected recognition row background', () => {
+  const source = readScreen();
+
+  assert.match(source, /selected \? \[s\.selectedRow, \{ backgroundColor: colors\.primaryLight \}\] : null/);
+  assert.match(source, /selectedRow:\s*\{[^}]*borderRadius:\s*18/s);
+});
+
+test('post signups screen opens signer profile from the avatar in the current stack', () => {
+  const source = readScreen();
+
+  assert.match(source, /getUserProfileHref/);
+  assert.match(source, /const openSignerProfile = useCallback/);
+  assert.match(source, /router\.push\(getUserProfileHref\(scope, signer\.userId, signer\.nickname\)\)/);
+  assert.match(source, /onPress=\{\(\) => openSignerProfile\(item\)\}[\s\S]*?<Avatar/);
+});
+
 test('post signups screen gates recognition on backend recognitionOpen and recognized flags', () => {
   const source = readScreen();
 

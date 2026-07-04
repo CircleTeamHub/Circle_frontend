@@ -11,7 +11,7 @@ interface Props {
   note: NoteSummary;
   /** 回调统一携带 note，父层可用稳定的 useCallback，让 memo 生效 */
   onPress: (note: NoteSummary) => void;
-  /** 点「⋯」打开动作菜单（置顶/编辑/分享/删除）——由父层承载菜单 */
+  /** 点「⋯」打开动作菜单（置顶/编辑/分享/下架）——由父层承载菜单 */
   onMorePress?: (note: NoteSummary) => void;
   showActions?: boolean;
   accessibilityLabel?: string;

@@ -70,6 +70,20 @@ export async function togglePinNote(id: string, pinned: boolean): Promise<void> 
   });
 }
 
+export async function unlistNote(id: string): Promise<void> {
+  await apiClient<{ id: string; status: 'UNLISTED' }>(`/note/${id}/status`, {
+    method: 'PATCH',
+    body: { status: 'UNLISTED' },
+  });
+}
+
+export async function relistNote(id: string): Promise<void> {
+  await apiClient<{ id: string; status: 'ACTIVE' }>(`/note/${id}/status`, {
+    method: 'PATCH',
+    body: { status: 'ACTIVE' },
+  });
+}
+
 export async function deleteNote(id: string): Promise<void> {
   await apiClient<void>(`/note/${id}`, { method: 'DELETE' });
 }

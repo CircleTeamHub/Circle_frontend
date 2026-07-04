@@ -678,7 +678,9 @@
     "management": "圈子管理",
     "moments": "朋友圈",
     "noActivity": "暂无动态",
+    "noActiveActivity": "暂无进行中的动态",
     "joinCircleHint": "加入圈子后即可看到广场动态",
+    "endedActivityHiddenHint": "已结束或过期的动态不会展示在广场",
     "circleDetail": "圈子详情",
     "createCircle": "创建圈子",
     "discoverCircles": "发现圈子",
@@ -724,6 +726,11 @@
       "selectedCount": "已选{{count}}/{{max}}",
       "noCircles": "暂无可选圈子",
       "maxCircles": "最多选择{{max}}个圈子"
+    },
+    "shortcutOrder": {
+      "title": "调整圈子顺序",
+      "hint": "上方横向列表会按这个顺序展示",
+      "reset": "恢复默认"
     },
     "commentInput": {
       "placeholder": "写评论...",
@@ -1766,6 +1773,8 @@
       "pin": "置顶",
       "unpin": "取消置顶",
       "edit": "编辑",
+      "unlist": "下架",
+      "relist": "上架",
       "more": "更多"
     },
     "alerts": {
@@ -1783,8 +1792,10 @@
       "saveMembershipsFailed": "笔记分组保存失败，请稍后再试。",
       "deleteGroupMessage": "删除\"{{name}}\"后不会删除笔记，只会移出该分组。",
       "pinFailedTitle": "操作失败",
-      "deleteTitle": "删除笔记",
-      "deleteConfirm": "确定删除这条笔记吗？删除后不可恢复。"
+      "relistFailedTitle": "上架失败",
+      "unlistFailedTitle": "下架失败",
+      "unlistTitle": "下架笔记",
+      "unlistConfirm": "下架后可在已下架列表查看，已下架笔记会在一个月后自动删除。"
     },
     "detail": {
       "loadFailed": "笔记加载失败，请稍后重试",
@@ -1856,14 +1867,15 @@
     },
     "empty": {
       "noMatch": "没有匹配的笔记",
-      "noNotes": "暂无笔记"
+      "noNotes": "暂无笔记",
+      "noUnlisted": "暂无已下架笔记"
     },
     "manageGroups": {
       "cancelEdit": "取消编辑",
-      "copy": "\"全部\"和\"未分组\"固定在前面，常用自定义分组可以排在前面。",
+      "copy": "全部和未分组为固定分组无法修改。",
       "createNew": "新增分组",
       "limitHint": "已创建 {{count}}/{{max}} 个分组",
-      "namePlaceholder": "输入分组名，如上海",
+      "namePlaceholder": "输入分组名添加新的分组",
       "saveEdit": "保存修改",
       "saving": "保存中...",
       "title": "管理分组",
@@ -1878,29 +1890,6 @@
       "copy": "为\"{{name}}\"选择要加入的笔记。"
     },
     "searchPlaceholder": "输入你想搜索的内容",
-    "settings": {
-      "cardSaveSection": "名片保存",
-      "confirmCardSave": "名片保存确认",
-      "cooldownTitle": "冷却中",
-      "defaultSaveCard": "默认保存名片",
-      "displaySection": "页面显示",
-      "manualRefreshHint1": "列表和分组数与服务器不一致时可使用。",
-      "manualRefreshHint2": "点击后会从服务器重新拉取笔记和分组列表。",
-      "manualRefreshHint3": "为避免频繁触发，操作后会进入冷却期。",
-      "manualRefreshTitle": "手动刷新",
-      "refresh": "重新拉取",
-      "refreshFailedMessage": "请检查网络后再试。",
-      "refreshFailedTitle": "刷新失败",
-      "refreshedTitle": "已刷新",
-      "refreshing": "刷新中...",
-      "showGroups": "显示分组信息",
-      "showMedia": "显示包含媒体",
-      "showSortToolbar": "显示排序工具栏",
-      "showUngrouped": "显示未分组",
-      "title": "笔记设置",
-      "cooldownMessage": "请在 {{remain}} 秒后再试。",
-      "refreshedMessage": "当前分组数：{{groupCount}}\n当前可见笔记数：{{noteCount}}"
-    },
     "share": {
       "copiedMessage": "笔记链接已复制到剪贴板。",
       "copiedTitle": "已复制",
@@ -1917,12 +1906,10 @@
       "message": "{{title}}\n{{url}}",
       "qrHint": "扫码打开当前笔记列表（{{count}} 条）。"
     },
-    "stopgap": {
-      "deletedNotes": "已删除笔记列表即将上线，敬请期待。",
-      "title": "即将上线"
-    },
     "title": "我的笔记",
     "unlisted": "已下架",
+    "unlistedTitle": "已下架笔记",
+    "unlistedAutoDeleteHint": "已下架笔记会在一个月后自动删除。",
     "format": {
       "fullDate": "{{year}}年{{month}}月{{day}}日 · {{weekday}}",
       "groupOverflow": "{{first}}、{{second}} +{{extra}}",
@@ -2227,11 +2214,13 @@
     "PLAZA_RECOGNIZE_NOT_MEMBER": "只能认可圈子的活跃成员",
     "PLAZA_RECOGNIZE_BLOCKED": "不能认可已拉黑的用户",
     "PLAZA_RECOGNIZE_ALREADY": "合作认可已提交，无法重复操作",
+    "PLAZA_INVALID_CURSOR": "广场分页已过期，请刷新后重试",
     "TRACE_MOMENT_NOT_FOUND": "动态不存在",
     "TRACE_DELETE_AUTHOR_ONLY": "只有作者可以删除",
     "TRACE_REPLY_TARGET_NOT_FOUND": "回复的评论不存在",
     "TRACE_COMMENT_NOT_FOUND": "评论不存在",
     "TRACE_ACCESS_FORBIDDEN": "你无权查看该动态",
+    "TRACE_INVALID_CURSOR": "动态分页已过期，请刷新后重试",
     "FRIEND_SELF_ADD": "不能添加自己为好友",
     "FRIEND_USER_NOT_FOUND": "用户不存在",
     "FRIEND_BLOCKED_CANNOT_REQUEST": "无法向该用户发送好友申请",

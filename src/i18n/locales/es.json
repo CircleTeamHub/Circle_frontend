@@ -636,6 +636,8 @@
       "pin": "Fijar arriba",
       "unpin": "Dejar de fijar",
       "edit": "Editar",
+      "unlist": "Retirar",
+      "relist": "Volver a publicar",
       "more": "Más"
     },
     "alerts": {
@@ -653,8 +655,10 @@
       "saveMembershipsFailed": "No se pudieron guardar los grupos de notas, inténtalo de nuevo.",
       "deleteGroupMessage": "Eliminar \"{{name}}\" no borrará sus notas; solo se quitarán del grupo.",
       "pinFailedTitle": "No se pudo completar",
-      "deleteTitle": "Eliminar nota",
-      "deleteConfirm": "¿Eliminar esta nota? No se puede deshacer."
+      "relistFailedTitle": "No se pudo volver a publicar",
+      "unlistFailedTitle": "No se pudo retirar",
+      "unlistTitle": "Retirar nota",
+      "unlistConfirm": "Podrás verla en Retiradas. Las notas retiradas se eliminan automáticamente después de un mes."
     },
     "detail": {
       "loadFailed": "No se pudo cargar la nota, inténtalo de nuevo",
@@ -726,14 +730,15 @@
     },
     "empty": {
       "noMatch": "No hay notas coincidentes",
-      "noNotes": "Aún no hay notas"
+      "noNotes": "Aún no hay notas",
+      "noUnlisted": "No hay notas retiradas"
     },
     "manageGroups": {
       "cancelEdit": "Cancelar edición",
-      "copy": "\"Todas\" y \"Sin grupo\" van primero; mueve al frente los grupos que uses más.",
+      "copy": "\"Todas\" y \"Sin grupo\" son grupos fijos y no se pueden editar.",
       "createNew": "Añadir grupo",
       "limitHint": "{{count}}/{{max}} grupos creados",
-      "namePlaceholder": "Escribe un nombre de grupo, p. ej. Madrid",
+      "namePlaceholder": "Escribe un nombre para añadir un grupo nuevo",
       "saveEdit": "Guardar cambios",
       "saving": "Guardando...",
       "title": "Gestionar grupos",
@@ -748,29 +753,6 @@
       "copy": "Elige las notas para añadir a \"{{name}}\"."
     },
     "searchPlaceholder": "Escribe lo que quieres buscar",
-    "settings": {
-      "cardSaveSection": "Guardado de tarjetas",
-      "confirmCardSave": "Confirmar guardado de tarjeta",
-      "cooldownTitle": "En espera",
-      "defaultSaveCard": "Guardar tarjetas por defecto",
-      "displaySection": "Visualización",
-      "manualRefreshHint1": "Úsalo cuando la lista o el número de grupos difiera del servidor.",
-      "manualRefreshHint2": "Al tocar, se vuelven a obtener las listas de notas y grupos del servidor.",
-      "manualRefreshHint3": "Para evitar activaciones frecuentes, hay una espera tras cada actualización.",
-      "manualRefreshTitle": "Actualización manual",
-      "refresh": "Volver a obtener",
-      "refreshFailedMessage": "Revisa tu conexión e inténtalo de nuevo.",
-      "refreshFailedTitle": "Error al actualizar",
-      "refreshedTitle": "Actualizado",
-      "refreshing": "Actualizando...",
-      "showGroups": "Mostrar info de grupos",
-      "showMedia": "Mostrar multimedia",
-      "showSortToolbar": "Mostrar barra de orden",
-      "showUngrouped": "Mostrar sin grupo",
-      "title": "Ajustes de notas",
-      "cooldownMessage": "Inténtalo de nuevo en {{remain}} s.",
-      "refreshedMessage": "Grupos: {{groupCount}}\nNotas visibles: {{noteCount}}"
-    },
     "share": {
       "copiedMessage": "Enlace de la nota copiado al portapapeles.",
       "copiedTitle": "Copiado",
@@ -787,12 +769,10 @@
       "message": "{{title}}\n{{url}}",
       "qrHint": "Escanea para abrir esta lista de notas ({{count}})."
     },
-    "stopgap": {
-      "deletedNotes": "La lista de notas eliminadas llegará pronto. No te lo pierdas.",
-      "title": "Próximamente"
-    },
     "title": "Mis notas",
     "unlisted": "Retirada",
+    "unlistedTitle": "Notas retiradas",
+    "unlistedAutoDeleteHint": "Las notas retiradas se eliminan automáticamente después de un mes.",
     "format": {
       "fullDate": "{{day}}/{{month}}/{{year}} · {{weekday}}",
       "groupOverflow": "{{first}}, {{second}} +{{extra}}",
@@ -1152,7 +1132,9 @@
     "management": "Círculos",
     "moments": "Momentos",
     "noActivity": "Sin actividad",
+    "noActiveActivity": "Sin actividad activa",
     "joinCircleHint": "Únete a un círculo para ver las publicaciones de la plaza",
+    "endedActivityHiddenHint": "Las actividades finalizadas o vencidas no se muestran en la plaza",
     "circleDetail": "Detalles del círculo",
     "createCircle": "Crear círculo",
     "discoverCircles": "Descubrir círculos",
@@ -1198,6 +1180,11 @@
       "selectedCount": "{{count}}/{{max}} elegidos",
       "noCircles": "No hay círculos disponibles",
       "maxCircles": "Máximo {{max}} círculos"
+    },
+    "shortcutOrder": {
+      "title": "Editar orden de círculos",
+      "hint": "La lista horizontal usará este orden",
+      "reset": "Restablecer orden"
     },
     "commentInput": {
       "placeholder": "Escribe un comentario...",
@@ -2230,11 +2217,13 @@
     "PLAZA_RECOGNIZE_NOT_MEMBER": "Solo se puede reconocer a miembros activos del círculo",
     "PLAZA_RECOGNIZE_BLOCKED": "No puedes reconocer a un usuario bloqueado",
     "PLAZA_RECOGNIZE_ALREADY": "El reconocimiento de colaboración ya se ha enviado",
+    "PLAZA_INVALID_CURSOR": "Esta página de la plaza caducó. Actualiza e inténtalo de nuevo.",
     "TRACE_MOMENT_NOT_FOUND": "Momento no encontrado",
     "TRACE_DELETE_AUTHOR_ONLY": "Solo el autor puede eliminar esto",
     "TRACE_REPLY_TARGET_NOT_FOUND": "El comentario al que respondes ya no existe",
     "TRACE_COMMENT_NOT_FOUND": "Comentario no encontrado",
     "TRACE_ACCESS_FORBIDDEN": "No tienes permiso para ver este momento",
+    "TRACE_INVALID_CURSOR": "Esta página del feed caducó. Actualiza e inténtalo de nuevo.",
     "FRIEND_SELF_ADD": "No puedes añadirte a ti mismo como amigo",
     "FRIEND_USER_NOT_FOUND": "Usuario no encontrado",
     "FRIEND_BLOCKED_CANNOT_REQUEST": "No puedes enviar una solicitud de amistad a este usuario",

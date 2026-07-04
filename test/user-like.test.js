@@ -17,7 +17,13 @@ test('normalizeUser preserves collaboration recognition progress without profile
   const auth = read('src/services/api/auth.ts');
   const utils = read('src/services/api/utils.ts');
 
+  assert.match(auth, /likeCount\?: number/);
+  assert.match(auth, /receivedLikeCount\?: number/);
   assert.match(auth, /recognitionCount\?: number/);
+  assert.match(
+    utils,
+    /likeCount: user\.likeCount \?\? user\.receivedLikeCount \?\? 0/,
+  );
   assert.match(utils, /recognitionCount: user\.recognitionCount \?\? 0/);
   assert.doesNotMatch(utils, /likedByMeToday/);
 });

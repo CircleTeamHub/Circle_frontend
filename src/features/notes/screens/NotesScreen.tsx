@@ -18,9 +18,8 @@ import { NoteActionsSheet } from '@/features/notes/components/NoteActionsSheet';
 import { ShareNoteSheet } from '@/features/notes/components/ShareNoteSheet';
 import { GroupManagerSheet } from '@/features/notes/components/GroupManagerSheet';
 import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
-import { useNotesSettingsStore } from '@/features/notes/store/use-notes-settings-store';
 import type { NoteGroup, NoteSummary } from '@/features/notes/types';
-import { deleteNote, fetchNoteGroups, fetchNotes, togglePinNote } from '@/services/api/notes';
+import { fetchNoteGroups, fetchNotes, togglePinNote, unlistNote } from '@/services/api/notes';
 import { useAuthStore } from '@/stores/authStore';
 import type { NoteCardData } from '@/types';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -43,14 +42,9 @@ export default function NotesScreen() {
   const { t } = useTranslation();
   const currentUserId = useAuthStore((state) => state.user?.id);
 
-  const showGroups = useNotesSettingsStore((st) => st.showGroups);
-  const showUngrouped = useNotesSettingsStore((st) => st.showUngrouped);
-  const showSortToolbar = useNotesSettingsStore((st) => st.showSortToolbar);
-
   const [notes, setNotes] = useState<NoteSummary[]>([]);
   const [groups, setGroups] = useState<NoteGroup[]>([]);
   const [activeTab, setActiveTab] = useState<TabId>('all');
-  const [showUnlisted, setShowUnlisted] = useState(false);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -74,7 +68,7 @@ export default function NotesScreen() {
 
   const load = useCallback(async () => {
     const [notesData, groupsData] = await Promise.all([
-      fetchNotes({ status: showUnlisted ? 'UNLISTED' : 'ACTIVE' }),
+      fetchNotes({ status: 'ACTIVE' }),
       fetchNoteGroups(),
     ]);
     if (!mountedRef.current) return;
@@ -82,7 +76,7 @@ export default function NotesScreen() {
     setGroups(groupsData);
     setLoadError(false);
     setLoading(false);
-  }, [showUnlisted]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -144,37 +138,18 @@ export default function NotesScreen() {
         }),
       },
     ];
-    if (showUngrouped) {
-      list.push({
-        id: 'ungrouped',
-        label: t('notes.tabs.ungrouped', {
-          count: ungroupedCount,
-          defaultValue: `未分组 ${ungroupedCount}`,
-        }),
-      });
-    }
-    if (showGroups) {
-      groups.forEach((group) => {
-        list.push({ id: group.id, label: `${group.name} ${group.noteCount}` });
-      });
-    }
+    list.push({
+      id: 'ungrouped',
+      label: t('notes.tabs.ungrouped', {
+        count: ungroupedCount,
+        defaultValue: `未分组 ${ungroupedCount}`,
+      }),
+    });
+    groups.forEach((group) => {
+      list.push({ id: group.id, label: `${group.name} ${group.noteCount}` });
+    });
     return list;
-  }, [groups, notes.length, showGroups, showUngrouped, t, ungroupedCount]);
-
-  useEffect(() => {
-    if (activeTab === 'ungrouped' && !showUngrouped) {
-      setActiveTab('all');
-      return;
-    }
-    if (
-      !showGroups &&
-      activeTab !== 'all' &&
-      activeTab !== 'ungrouped' &&
-      groups.some((group) => group.id === activeTab)
-    ) {
-      setActiveTab('all');
-    }
-  }, [activeTab, groups, showGroups, showUngrouped]);
+  }, [groups, notes.length, t, ungroupedCount]);
 
   const closeManager = useCallback(() => setManagerVisible(false), []);
 
@@ -236,28 +211,27 @@ export default function NotesScreen() {
   );
   const closeShareNote = useCallback(() => setShareNotePayload(null), []);
 
-  const handleDeleteNote = useCallback(
+  const handleUnlistNote = useCallback(
     (note: NoteSummary) => {
       Alert.alert(
-        t('notes.alerts.deleteTitle', { defaultValue: '删除笔记' }),
-        t('notes.alerts.deleteConfirm', {
-          defaultValue: '确定删除这条笔记吗？删除后不可恢复。',
+        t('notes.alerts.unlistTitle', { defaultValue: '下架笔记' }),
+        t('notes.alerts.unlistConfirm', {
+          defaultValue:
+            '下架后可在已下架列表查看，已下架笔记会在一个月后自动删除。',
         }),
         [
           { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
           {
-            text: t('common.delete', { defaultValue: '删除' }),
+            text: t('notes.actions.unlist', { defaultValue: '下架' }),
             style: 'destructive',
             onPress: async () => {
               try {
-                await deleteNote(note.id);
-                if (mountedRef.current) {
-                  setNotes((prev) => prev.filter((item) => item.id !== note.id));
-                }
+                await unlistNote(note.id);
+                if (mountedRef.current) await load();
               } catch {
                 if (mountedRef.current) {
                   Alert.alert(
-                    t('notes.alerts.deleteFailedTitle', { defaultValue: '删除失败' }),
+                    t('notes.alerts.unlistFailedTitle', { defaultValue: '下架失败' }),
                     t('common.retryLater', { defaultValue: '请稍后重试' }),
                   );
                 }
@@ -267,7 +241,7 @@ export default function NotesScreen() {
         ],
       );
     },
-    [t],
+    [load, t],
   );
 
   const d = useMemo(
@@ -276,10 +250,10 @@ export default function NotesScreen() {
       header: { backgroundColor: colors.background },
       headerTitle: { color: colors.text },
       unlistedBtn: {
-        backgroundColor: showUnlisted ? colors.primary : colors.surface,
+        backgroundColor: colors.surface,
       },
       unlistedBtnText: {
-        color: showUnlisted ? colors.white : colors.text,
+        color: colors.text,
       },
       tabActive: { color: colors.text },
       tabInactive: { color: colors.textSecondary },
@@ -296,7 +270,7 @@ export default function NotesScreen() {
       newBtn: { backgroundColor: colors.primary },
       newBtnText: { color: colors.white },
     }),
-    [colors, showUnlisted],
+    [colors],
   );
 
   const renderNote = useCallback(
@@ -322,34 +296,13 @@ export default function NotesScreen() {
           <View style={s.headerRight}>
             <Pressable
               style={[s.unlistedBtn, d.unlistedBtn]}
-              onPress={() => setShowUnlisted((value) => !value)}
+              onPress={() =>
+                router.push('/(tabs)/profile/notes/unlisted' as never)
+              }
             >
               <Text style={[s.unlistedBtnText, d.unlistedBtnText]}>
                 {t('notes.unlisted', { defaultValue: '已下架' })}
               </Text>
-            </Pressable>
-            {/* TODO: 接入"已删除笔记"页面（同 `已下架` toggle 的反向流程）。
-               目前先弹 Alert 当 stopgap，避免静默无响应误导用户。 */}
-            <Pressable
-              hitSlop={8}
-              onPress={() =>
-                Alert.alert(
-                  t('notes.stopgap.title', { defaultValue: '即将上线' }),
-                  t('notes.stopgap.deletedNotes', {
-                    defaultValue: '已删除笔记列表即将上线，敬请期待。',
-                  }),
-                )
-              }
-            >
-              <Ionicons name="trash-outline" size={22} color={colors.textSecondary} />
-            </Pressable>
-            <Pressable
-              hitSlop={8}
-              onPress={() =>
-                router.push('/(tabs)/profile/notes/settings' as never)
-              }
-            >
-              <Ionicons name="settings-outline" size={22} color={colors.text} />
             </Pressable>
           </View>
         </View>
@@ -379,11 +332,9 @@ export default function NotesScreen() {
               );
             })}
           </ScrollView>
-          {showSortToolbar ? (
-            <Pressable style={s.manageTab} onPress={() => setManagerVisible(true)}>
-              <Ionicons name="ellipsis-horizontal" size={20} color={colors.textSecondary} />
-            </Pressable>
-          ) : null}
+          <Pressable style={s.manageTab} onPress={() => setManagerVisible(true)}>
+            <Ionicons name="ellipsis-horizontal" size={20} color={colors.textSecondary} />
+          </Pressable>
         </View>
 
         <View style={[s.searchWrap, d.searchWrap]}>
@@ -464,7 +415,7 @@ export default function NotesScreen() {
         onPin={handlePin}
         onEdit={openNoteEditor}
         onShare={handleShareNote}
-        onDelete={handleDeleteNote}
+        onUnlist={handleUnlistNote}
       />
       <ShareNoteSheet payload={shareNotePayload} onClose={closeShareNote} />
     </View>

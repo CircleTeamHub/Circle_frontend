@@ -679,7 +679,9 @@
     "management": "Circles",
     "moments": "Moments",
     "noActivity": "No activity",
+    "noActiveActivity": "No active activity",
     "joinCircleHint": "Join a circle to see plaza posts",
+    "endedActivityHiddenHint": "Ended or expired activities are hidden from the plaza",
     "circleDetail": "Circle Details",
     "createCircle": "Create Circle",
     "discoverCircles": "Discover circles",
@@ -725,6 +727,11 @@
       "selectedCount": "{{count}}/{{max}} selected",
       "noCircles": "No circles available",
       "maxCircles": "Maximum {{max}} circles"
+    },
+    "shortcutOrder": {
+      "title": "Edit circle order",
+      "hint": "The horizontal circle list will use this order",
+      "reset": "Reset order"
     },
     "commentInput": {
       "placeholder": "Write a comment...",
@@ -1769,6 +1776,8 @@
       "pin": "Pin to top",
       "unpin": "Unpin",
       "edit": "Edit",
+      "unlist": "Unlist",
+      "relist": "Relist",
       "more": "More"
     },
     "alerts": {
@@ -1786,8 +1795,10 @@
       "saveMembershipsFailed": "Failed to save note groups, please try again.",
       "deleteGroupMessage": "Deleting \"{{name}}\" won't delete its notes — they're just removed from the group.",
       "pinFailedTitle": "Action failed",
-      "deleteTitle": "Delete note",
-      "deleteConfirm": "Delete this note? This cannot be undone."
+      "relistFailedTitle": "Failed to relist",
+      "unlistFailedTitle": "Failed to unlist",
+      "unlistTitle": "Unlist note",
+      "unlistConfirm": "You can view it in Unlisted. Unlisted notes are automatically deleted after one month."
     },
     "detail": {
       "loadFailed": "Failed to load note, please try again",
@@ -1859,14 +1870,15 @@
     },
     "empty": {
       "noMatch": "No matching notes",
-      "noNotes": "No notes yet"
+      "noNotes": "No notes yet",
+      "noUnlisted": "No unlisted notes"
     },
     "manageGroups": {
       "cancelEdit": "Cancel editing",
-      "copy": "\"All\" and \"Ungrouped\" stay first; move frequently used custom groups up front.",
+      "copy": "All and Ungrouped are fixed groups and cannot be edited.",
       "createNew": "Add group",
       "limitHint": "{{count}}/{{max}} groups created",
-      "namePlaceholder": "Enter a group name, e.g. Shanghai",
+      "namePlaceholder": "Enter a group name to add a new group",
       "saveEdit": "Save changes",
       "saving": "Saving...",
       "title": "Manage groups",
@@ -1881,29 +1893,6 @@
       "copy": "Choose notes to add to \"{{name}}\"."
     },
     "searchPlaceholder": "Type what you want to search",
-    "settings": {
-      "cardSaveSection": "Card saving",
-      "confirmCardSave": "Confirm card saving",
-      "cooldownTitle": "Cooling down",
-      "defaultSaveCard": "Save cards by default",
-      "displaySection": "Display",
-      "manualRefreshHint1": "Use this when the list or group count differs from the server.",
-      "manualRefreshHint2": "Tapping re-fetches the note and group lists from the server.",
-      "manualRefreshHint3": "To avoid frequent triggers, a cooldown applies after each refresh.",
-      "manualRefreshTitle": "Manual refresh",
-      "refresh": "Re-fetch",
-      "refreshFailedMessage": "Check your connection and try again.",
-      "refreshFailedTitle": "Refresh failed",
-      "refreshedTitle": "Refreshed",
-      "refreshing": "Refreshing...",
-      "showGroups": "Show group info",
-      "showMedia": "Show media",
-      "showSortToolbar": "Show sort toolbar",
-      "showUngrouped": "Show ungrouped",
-      "title": "Note settings",
-      "cooldownMessage": "Try again in {{remain}}s.",
-      "refreshedMessage": "Groups: {{groupCount}}\nVisible notes: {{noteCount}}"
-    },
     "share": {
       "copiedMessage": "Note link copied to clipboard.",
       "copiedTitle": "Copied",
@@ -1920,12 +1909,10 @@
       "message": "{{title}}\n{{url}}",
       "qrHint": "Scan to open this note list ({{count}})."
     },
-    "stopgap": {
-      "deletedNotes": "The deleted-notes list is coming soon. Stay tuned.",
-      "title": "Coming soon"
-    },
     "title": "My notes",
     "unlisted": "Unlisted",
+    "unlistedTitle": "Unlisted notes",
+    "unlistedAutoDeleteHint": "Unlisted notes are automatically deleted after one month.",
     "format": {
       "fullDate": "{{year}}-{{month}}-{{day}} · {{weekday}}",
       "groupOverflow": "{{first}}, {{second}} +{{extra}}",
@@ -2230,11 +2217,13 @@
     "PLAZA_RECOGNIZE_NOT_MEMBER": "Only active circle members can be recognized",
     "PLAZA_RECOGNIZE_BLOCKED": "You can't recognize a blocked user",
     "PLAZA_RECOGNIZE_ALREADY": "Collaboration recognition has already been submitted",
+    "PLAZA_INVALID_CURSOR": "This plaza page expired. Please refresh and try again.",
     "TRACE_MOMENT_NOT_FOUND": "Moment not found",
     "TRACE_DELETE_AUTHOR_ONLY": "Only the author can delete this",
     "TRACE_REPLY_TARGET_NOT_FOUND": "The comment you're replying to no longer exists",
     "TRACE_COMMENT_NOT_FOUND": "Comment not found",
     "TRACE_ACCESS_FORBIDDEN": "You aren't allowed to view this moment",
+    "TRACE_INVALID_CURSOR": "This feed page expired. Please refresh and try again.",
     "FRIEND_SELF_ADD": "You can't add yourself as a friend",
     "FRIEND_USER_NOT_FOUND": "User not found",
     "FRIEND_BLOCKED_CANNOT_REQUEST": "You can't send a friend request to this user",

@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
 
+const ROOT = path.join(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
 test('NotesScreen renders 我的笔记 title', () => {
@@ -21,9 +22,37 @@ test('NotesScreen has 新建 button', () => {
   assert.match(src, /新建/);
 });
 
-test('NotesScreen has 已下架 filter button', () => {
+test('NotesScreen has 已下架 entry button', () => {
   const src = read('src/features/notes/screens/NotesScreen.tsx');
   assert.match(src, /已下架/);
+});
+
+test('NotesScreen opens a standalone unlisted notes page instead of filtering inline', () => {
+  const src = read('src/features/notes/screens/NotesScreen.tsx');
+
+  assert.doesNotMatch(src, /trash-outline/);
+  assert.doesNotMatch(src, /deletedNotes/);
+  assert.doesNotMatch(src, /showUnlisted/);
+  assert.doesNotMatch(src, /status: showUnlisted \? 'UNLISTED' : 'ACTIVE'/);
+  assert.match(src, /fetchNotes\(\{ status: 'ACTIVE' \}\)/);
+  assert.match(src, /\/\(tabs\)\/profile\/notes\/unlisted/);
+  assert.doesNotMatch(src, /notes\.unlistedAutoDeleteHint/);
+});
+
+test('UnlistedNotesScreen lists only unlisted notes and can relist them', () => {
+  const screen = read('src/features/notes/screens/UnlistedNotesScreen.tsx');
+  const route = read('app/(tabs)/profile/notes/unlisted.tsx');
+  const zh = read('src/i18n/locales/zh.json');
+
+  assert.match(route, /UnlistedNotesScreen/);
+  assert.match(screen, /fetchNotes\(\{ status: 'UNLISTED' \}\)/);
+  assert.match(screen, /relistNote/);
+  assert.match(screen, /notes\.actions\.relist/);
+  assert.match(screen, /cloud-upload-outline/);
+  assert.match(screen, /notes\.unlistedAutoDeleteHint/);
+  assert.match(screen, /notes\.empty\.noUnlisted/);
+  assert.match(zh, /已下架笔记会在一个月后自动删除。/);
+  assert.match(zh, /上架/);
 });
 
 test('NotesScreen bottom bar keeps only the 新建 button', () => {
@@ -45,6 +74,30 @@ test('NotesScreen bottom bar keeps only the 新建 button', () => {
   assert.match(src, /<ShareNoteSheet/);
   assert.match(src, /buildNoteCardPayloadFromSummary/);
   assert.doesNotMatch(src, /createNoteShareLink/);
+});
+
+test('NotesScreen no longer exposes the old top-right settings page', () => {
+  const src = read('src/features/notes/screens/NotesScreen.tsx');
+
+  assert.doesNotMatch(src, /settings-outline/);
+  assert.doesNotMatch(src, /\/\(tabs\)\/profile\/notes\/settings/);
+  assert.doesNotMatch(src, /useNotesSettingsStore/);
+  assert.equal(
+    fs.existsSync(
+      path.join(ROOT, 'src/features/notes/screens/NotesSettingsScreen.tsx'),
+    ),
+    false,
+  );
+  assert.equal(
+    fs.existsSync(
+      path.join(ROOT, 'src/features/notes/store/use-notes-settings-store.ts'),
+    ),
+    false,
+  );
+  assert.equal(
+    fs.existsSync(path.join(ROOT, 'app/(tabs)/profile/notes/settings.tsx')),
+    false,
+  );
 });
 
 test('NotesScreen fetches notes and groups', () => {
@@ -166,6 +219,20 @@ test('GroupManagerSheet keeps the group manager backdrop behind the editor contr
   assert.match(src, /modalCard:\s*{[\s\S]*elevation:\s*1/);
 });
 
+test('GroupManagerSheet presents group management as a bottom sheet with updated copy', () => {
+  const src = read('src/features/notes/components/GroupManagerSheet.tsx');
+  const zh = read('src/i18n/locales/zh.json');
+
+  assert.match(src, /animationType="slide"/);
+  assert.match(src, /modalOverlay:\s*{[\s\S]*justifyContent:\s*'flex-end'[\s\S]*paddingHorizontal:\s*0/);
+  assert.match(src, /modalCard:\s*{[\s\S]*borderTopLeftRadius:\s*Radius\.xl[\s\S]*borderTopRightRadius:\s*Radius\.xl/);
+  assert.match(src, /modalCard:\s*{[\s\S]*borderBottomLeftRadius:\s*0[\s\S]*borderBottomRightRadius:\s*0/);
+  assert.match(src, /全部和未分组为固定分组无法修改。/);
+  assert.match(src, /输入分组名添加新的分组/);
+  assert.match(zh, /全部和未分组为固定分组无法修改。/);
+  assert.match(zh, /输入分组名添加新的分组/);
+});
+
 test('GroupManagerSheet keeps the add group button pressable and focuses the input for empty names', () => {
   const src = read('src/features/notes/components/GroupManagerSheet.tsx');
   assert.match(src, /groupNameInputRef/);
@@ -214,6 +281,13 @@ test('GroupManagerSheet prevents ScrollView from stealing group drag gestures', 
   assert.match(src, /scrollEnabled=\{!draggingGroupId\}/);
   assert.match(src, /onMoveShouldSetPanResponderCapture:\s*\(\) => true/);
   assert.match(src, /onShouldBlockNativeResponder:\s*\(\) => true/);
+});
+
+test('GroupManagerSheet resets drag offset synchronously when releasing a group', () => {
+  const src = read('src/features/notes/components/GroupManagerSheet.tsx');
+  assert.match(src, /dragY\.stopAnimation\(\)/);
+  assert.match(src, /dragY\.setValue\(0\)/);
+  assert.doesNotMatch(src, /Animated\.spring\(dragY/);
 });
 
 test('EditNoteScreen loads and submits multiple group ids', () => {
@@ -372,14 +446,19 @@ test('NoteCard exposes a single more-actions button (not per-action buttons)', (
   assert.doesNotMatch(card, /onPinPress/);
   assert.doesNotMatch(card, /onEditPress/);
 
-  // 菜单承载置顶/编辑/分享/删除四个动作。
+  // 菜单承载置顶/编辑/分享/下架四个动作；不再暴露删除。
   assert.match(screen, /<NoteActionsSheet/);
   assert.match(screen, /onMorePress=\{openMenu\}/);
+  assert.match(screen, /unlistNote/);
+  assert.match(screen, /handleUnlistNote/);
   assert.match(sheet, /notes\.actions\.pin/);
   assert.match(sheet, /notes\.actions\.edit/);
   assert.match(sheet, /notes\.actions\.share/);
-  assert.match(sheet, /common\.delete/);
-  assert.match(sheet, /trash-outline/);
+  assert.match(sheet, /notes\.actions\.unlist/);
+  assert.match(sheet, /archive-outline/);
+  assert.doesNotMatch(sheet, /common\.delete/);
+  assert.doesNotMatch(sheet, /trash-outline/);
+  assert.doesNotMatch(sheet, /onDelete/);
 });
 
 test('ProfileScreen navigates to notes on menu item press', () => {

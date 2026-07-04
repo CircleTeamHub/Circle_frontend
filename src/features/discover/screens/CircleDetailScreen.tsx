@@ -22,7 +22,6 @@ import { GradientCover } from '@/components/ui/gradient-cover';
 import { CircleAvatar } from '@/components/ui/circle-avatar';
 import {
   fetchCircleDetail,
-  selectCircleIcon,
   uploadCircleIcon,
   leaveCircle,
   joinCircle,
@@ -432,34 +431,6 @@ export default function CircleDetailScreen() {
     );
   }, [id, router, t]);
 
-  const handleSelectCircleIcon = useCallback(
-    async (iconAssetId: string) => {
-      if (!id || !isOwnerOrAdmin || iconSaving) {
-        return;
-      }
-
-      try {
-        setIconSaving(true);
-        await selectCircleIcon(id, iconAssetId);
-        if (mountedRef.current) {
-          await loadCircle();
-        }
-      } catch (error) {
-        if (mountedRef.current) {
-          Alert.alert(
-            t('circle.error'),
-            error instanceof Error ? error.message : t('circle.loadError'),
-          );
-        }
-      } finally {
-        if (mountedRef.current) {
-          setIconSaving(false);
-        }
-      }
-    },
-    [iconSaving, id, isOwnerOrAdmin, loadCircle, t],
-  );
-
   const handleUploadCircleIcon = useCallback(async () => {
     if (!id || !isOwnerOrAdmin || iconSaving) {
       return;
@@ -498,11 +469,10 @@ export default function CircleDetailScreen() {
         folder: 'avatars',
       });
       await uploadLocalFileToPresignedUrl(presign.uploadUrl, contentType, asset.uri);
-      const created = await uploadCircleIcon(id, {
+      await uploadCircleIcon(id, {
         imageUrl: presign.fileUrl,
         name: circle?.name ? `${circle.name}-icon` : 'circle-icon',
       });
-      await selectCircleIcon(id, created.id);
       if (mountedRef.current) {
         await loadCircle();
       }
@@ -547,10 +517,6 @@ export default function CircleDetailScreen() {
       iconAssetCard: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
-      },
-      iconAssetCardSelected: {
-        backgroundColor: colors.primary,
-        borderColor: colors.primary,
       },
     }),
     [colors],
@@ -683,7 +649,7 @@ export default function CircleDetailScreen() {
           <Text style={[s.sectionTitle, d.sectionTitle]}>
             {t('circle.icon.sectionTitle', { defaultValue: '圈子图标' })}
           </Text>
-          <View style={[s.sectionCard, d.sectionCard, s.iconSection]}>
+          <View style={s.iconSection}>
             <View style={s.iconGrid}>
               {circle.currentIconUrl ? (
                 <View style={[s.iconAssetCard, d.iconAssetCard]}>
@@ -695,43 +661,6 @@ export default function CircleDetailScreen() {
                   </Text>
                 </View>
               ) : null}
-              {isOwnerOrAdmin
-                ? circle.availableIconAssets
-                    ?.filter((asset) => asset.imageUrl)
-                    .map((asset) => {
-                      const selected = asset.id === circle.currentIconAssetID;
-                    return (
-                      <Pressable
-                        key={asset.id}
-                        style={[
-                          s.iconAssetCard,
-                          d.iconAssetCard,
-                          selected ? d.iconAssetCardSelected : null,
-                        ]}
-                        onPress={() => handleSelectCircleIcon(asset.id)}
-                      >
-                        <View style={s.iconAssetPreview}>
-                          {asset.imageUrl ? (
-                            <Image
-                              source={{ uri: asset.imageUrl }}
-                              style={s.iconAssetImage}
-                              contentFit="cover"
-                            />
-                          ) : (
-                            <Ionicons
-                              name="sparkles-outline"
-                              size={22}
-                              color={colors.textSecondary}
-                            />
-                          )}
-                        </View>
-                        <Text style={{ color: colors.text }} numberOfLines={1}>
-                          {asset.name}
-                        </Text>
-                      </Pressable>
-                    );
-                  })
-                : null}
             </View>
             {isOwnerOrAdmin ? (
               <Pressable

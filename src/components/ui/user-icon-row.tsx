@@ -23,6 +23,8 @@ type BadgeProps = {
   tone?: 'default' | 'member';
 };
 
+const CIRCLE_BADGE_LABEL = '圈子徽章';
+
 const s = StyleSheet.create({
   row: {
     flexDirection: 'row',
@@ -41,21 +43,63 @@ const s = StyleSheet.create({
     gap: 2,
   },
   circle: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: Radius.full,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  compactCircle: {
+  badgeFrame: {
+    width: 52,
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compactBadgeFrame: {
+    width: 38,
+    height: 38,
+  },
+  smallCompactBadgeFrame: {
+    width: 30,
+    height: 30,
+  },
+  circleSlot: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  circleSlotRaised: {
+    transform: [{ translateY: -4 }],
+  },
+  circleOrnament: {
+    width: 46,
+    height: 46,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  compactCircleOrnament: {
     width: 34,
     height: 34,
   },
+  smallCompactCircleOrnament: {
+    width: 28,
+    height: 28,
+  },
+  compactCircle: {
+    width: 30,
+    height: 30,
+  },
   smallCompactCircle: {
-    width: 26,
-    height: 26,
+    width: 24,
+    height: 24,
   },
   systemBadgeShell: {
     width: 52,
@@ -183,7 +227,23 @@ function resolveShellSizeStyle(
   if (hasSystemAsset) {
     return isSmallCompact ? s.smallCompactSystemBadgeShell : s.compactSystemBadgeShell;
   }
+  return isSmallCompact ? s.smallCompactBadgeFrame : s.compactBadgeFrame;
+}
+
+function resolveCircleSizeStyle(
+  compact: boolean,
+  isSmallCompact: boolean,
+) {
+  if (!compact) return null;
   return isSmallCompact ? s.smallCompactCircle : s.compactCircle;
+}
+
+function resolveCircleOrnamentSizeStyle(
+  compact: boolean,
+  isSmallCompact: boolean,
+) {
+  if (!compact) return null;
+  return isSmallCompact ? s.smallCompactCircleOrnament : s.compactCircleOrnament;
 }
 
 export function UserIconBadge({
@@ -196,22 +256,21 @@ export function UserIconBadge({
   const { colors } = useTheme();
   const systemBadgeAsset = icon.type === 'SYSTEM' ? getSystemBadgeAsset(icon) : null;
   const systemBadgeScale = icon.type === 'SYSTEM' ? getSystemBadgeVisualScale(icon) : 1;
-  const label = icon.type === 'SYSTEM' ? formatIconLabel(icon) : icon.circleName ?? icon.title;
+  const label = icon.type === 'SYSTEM' ? formatIconLabel(icon) : CIRCLE_BADGE_LABEL;
   const labelColor = tone === 'member' ? colors.white : colors.text;
   const isSmallCompact = compact && compactSize === 'small';
   // 四态尺寸（default / compact / smallCompact × system-badge / circle）用查表替代
   // 深层嵌套三元，可读且易扩展。
   const shellSizeStyle = resolveShellSizeStyle(compact, isSmallCompact, Boolean(systemBadgeAsset));
+  const circleSizeStyle = resolveCircleSizeStyle(compact, isSmallCompact);
+  const circleOrnamentSizeStyle = resolveCircleOrnamentSizeStyle(compact, isSmallCompact);
 
   return (
     <View style={[s.item, dense ? s.denseItem : null]}>
       <View
         style={[
-          systemBadgeAsset ? s.systemBadgeShell : s.circle,
+          systemBadgeAsset ? s.systemBadgeShell : s.badgeFrame,
           shellSizeStyle,
-          systemBadgeAsset
-            ? null
-            : { backgroundColor: colors.surface, borderColor: colors.surfaceBorder },
         ]}
       >
         {systemBadgeAsset ? (
@@ -224,16 +283,34 @@ export function UserIconBadge({
             contentFit="contain"
           />
         ) : (
-          <View style={s.imageWrap}>
-            {icon.imageUrl ? (
-              <Image source={{ uri: icon.imageUrl }} style={s.image} contentFit="cover" />
-            ) : (
-              <Ionicons
-                name={resolveFallbackIcon(icon.fallbackIconName)}
-                size={compact ? (isSmallCompact ? 10 : 12) : 14}
-                color={colors.textSecondary}
-              />
-            )}
+          <View style={[s.circleSlot, !compact ? s.circleSlotRaised : null]}>
+            <View
+              style={[
+                s.circleOrnament,
+                circleOrnamentSizeStyle,
+                { backgroundColor: colors.white, borderColor: colors.surfaceBorder },
+              ]}
+            >
+              <View
+                style={[
+                  s.circle,
+                  circleSizeStyle,
+                  { backgroundColor: colors.surface, borderColor: colors.surfaceBorder },
+                ]}
+              >
+                <View style={s.imageWrap}>
+                  {icon.imageUrl ? (
+                    <Image source={{ uri: icon.imageUrl }} style={s.image} contentFit="cover" />
+                  ) : (
+                    <Ionicons
+                      name={resolveFallbackIcon(icon.fallbackIconName)}
+                      size={compact ? (isSmallCompact ? 10 : 12) : 14}
+                      color={colors.textSecondary}
+                    />
+                  )}
+                </View>
+              </View>
+            </View>
           </View>
         )}
       </View>

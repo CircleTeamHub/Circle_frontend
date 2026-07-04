@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, type GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Spacing, Typography } from '@/theme';
 import { Avatar } from '@/components/ui/avatar';
@@ -18,6 +18,7 @@ interface LocationCardProps {
   selfName?: string;
   selfAvatarUri?: string;
   onAvatarPress?: () => void;
+  onLongPress?: (event: GestureResponderEvent) => void;
 }
 
 const sLocation = StyleSheet.create({
@@ -73,6 +74,7 @@ export const LocationCard: React.FC<LocationCardProps> = ({
   selfName,
   selfAvatarUri,
   onAvatarPress,
+  onLongPress,
 }) => {
   const { colors } = useTheme();
 
@@ -114,7 +116,11 @@ export const LocationCard: React.FC<LocationCardProps> = ({
 
   const cardNode = (
     <View style={sLocation.locationCardBody}>
-      <View style={[sLocation.locationCard, d.locationCard]}>
+      <Pressable
+        style={[sLocation.locationCard, d.locationCard]}
+        onLongPress={onLongPress}
+        delayLongPress={350}
+      >
         <View style={sLocation.locationImage}>
           <View style={[sLocation.locationImageFallback, d.locationImageFallback]}>
             <Ionicons name="location" size={32} color={colors.textSecondary} />
@@ -124,7 +130,7 @@ export const LocationCard: React.FC<LocationCardProps> = ({
           <Text style={d.locationTitle}>{message.locationTitle}</Text>
           <Text style={d.locationAddress}>{message.locationAddress}</Text>
         </View>
-      </View>
+      </Pressable>
       {message.time ? <Text style={d.timeText}>{message.time}</Text> : null}
     </View>
   );
