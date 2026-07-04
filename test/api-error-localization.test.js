@@ -113,7 +113,12 @@ test('client.ts threads errorCode onto ApiError', () => {
   const moduleObj = { exports: {} };
   const shimRequire = (spec) => {
     if (spec === '@/constants/config') return { API_URL: 'http://example.test' };
-    if (spec === '@/services/auth/session') return { clearLocalSession: async () => {} };
+    if (spec === '@/services/auth/session') {
+      return {
+        clearLocalSession: async () => {},
+        registerLogoutHandler: () => () => {},
+      };
+    }
     if (spec === '@/stores/authStore') {
       return {
         useAuthStore: {
@@ -178,7 +183,12 @@ test('ApiError accepts an options object for optional fields', () => {
   const moduleObj = { exports: {} };
   const shimRequire = (spec) => {
     if (spec === '@/constants/config') return { API_URL: 'http://example.test' };
-    if (spec === '@/services/auth/session') return { clearLocalSession: async () => {} };
+    if (spec === '@/services/auth/session') {
+      return {
+        clearLocalSession: async () => {},
+        registerLogoutHandler: () => () => {},
+      };
+    }
     if (spec === '@/stores/authStore') {
       return {
         useAuthStore: {

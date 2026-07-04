@@ -124,3 +124,51 @@ test('authStore keeps valid hydrated tokens without clearing', () => {
   assert.equal(state.accessToken, 'a');
   assert.equal(state.isAuthenticated, true);
 });
+
+test('authStore advances sessionEpoch on session identity changes', () => {
+  const { useAuthStore, persistOptions } = loadAuthStore();
+  assert.equal(useAuthStore.getState().sessionEpoch, 0);
+
+  const user = {
+    id: 'u1',
+    accountId: 'a1',
+    uid: 'uid1',
+    nickname: 'Alice',
+    avatarUrl: null,
+    avatarFrame: null,
+    cover: null,
+    email: null,
+    phoneNumber: null,
+    wechat: null,
+    qq: null,
+    whatsup: null,
+    persona: null,
+    helloWords: null,
+    birthday: null,
+    gender: 'unset',
+    role: 'user',
+    status: 'active',
+    lastOnline: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    city: null,
+    vipLevel: 0,
+    creditScore: 0,
+    fancyNumber: false,
+    displayIcons: [],
+  };
+
+  useAuthStore
+    .getState()
+    .setSession({ accessToken: 'a1', refreshToken: 'r1' }, user);
+  assert.equal(useAuthStore.getState().sessionEpoch, 1);
+
+  useAuthStore.getState().setTokens({ accessToken: 'a2', refreshToken: 'r2' });
+  assert.equal(useAuthStore.getState().sessionEpoch, 2);
+
+  useAuthStore.getState().clearSession();
+  assert.equal(useAuthStore.getState().sessionEpoch, 3);
+
+  const partialized = persistOptions.partialize(useAuthStore.getState());
+  assert.equal(partialized.sessionEpoch, undefined);
+});

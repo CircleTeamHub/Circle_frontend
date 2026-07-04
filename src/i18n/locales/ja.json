@@ -1922,6 +1922,7 @@
       "requestFailed": "リクエストに失敗しました",
       "sessionExpired": "セッションの有効期限が切れました。もう一度サインインしてください。",
       "refreshResponseInvalid": "更新レスポンスが無効です。もう一度サインインしてください。",
+      "sessionChangedDuringRefresh": "セッション更新中にアカウントが切り替わりました。もう一度お試しください。",
       "uploadTimeout": "アップロードがタイムアウトしました。接続を確認して再試行してください。",
       "uploadFailedWithStatus": "アップロードに失敗しました（{{status}}）"
     }
