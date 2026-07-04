@@ -6,11 +6,13 @@ import {
   applyPlazaFetchSuccess,
 } from '@/features/discover/store/discover-state';
 import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-filter-store';
-import { clampCircleFilterIds } from '@/features/discover/utils/circle-filter-selection';
+import {
+  clampCircleFilterIds,
+} from '@/features/discover/utils/circle-filter-selection';
 
 interface DiscoverState {
   plazaPosts: CirclePlazaPost[];
-  plazaPage: number;
+  plazaCursor: string | null;
   plazaHasMore: boolean;
   plazaLoading: boolean;
   plazaRefreshing: boolean;
@@ -28,7 +30,7 @@ interface DiscoverState {
 
 export const useDiscoverStore = create<DiscoverState>((set, get) => ({
   plazaPosts: [],
-  plazaPage: 1,
+  plazaCursor: null,
   plazaHasMore: true,
   plazaLoading: false,
   plazaRefreshing: false,
@@ -42,7 +44,8 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
     if (!reset && state.plazaLoading) return;
     if (!reset && !state.plazaHasMore) return;
 
-    const page = reset ? 1 : state.plazaPage;
+    // reset starts from the newest (no cursor); paginate follows nextCursor.
+    const cursor = reset ? undefined : (state.plazaCursor ?? undefined);
     const requestQueryVersion = state.plazaQueryVersion;
     const requestId = state.plazaLatestRequestId + 1;
 
@@ -58,9 +61,10 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
     try {
       const { appliedCircleIds, appliedCities } =
         useDiscoverFilterStore.getState();
+      const selectedCircleId = state.selectedCircleId ?? undefined;
       const cappedCircleIds = clampCircleFilterIds(appliedCircleIds);
       const circleIds =
-        state.selectedCircleId || cappedCircleIds.length === 0
+        selectedCircleId || cappedCircleIds.length === 0
           ? undefined
           : cappedCircleIds.join(',');
       const cities =
@@ -69,18 +73,18 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
           : appliedCities.join(',');
 
       const result = await fetchPlazaFeed({
-        circleId: state.selectedCircleId ?? undefined,
+        circleId: selectedCircleId,
         circleIds,
         city: state.selectedCity ?? undefined,
         cities,
-        page,
+        cursor,
         limit: 20,
       });
 
       set((current) =>
         applyPlazaFetchSuccess(current, {
           reset,
-          page,
+          nextCursor: result.nextCursor ?? null,
           items: result.items,
           hasMore: result.hasMore,
           requestQueryVersion,
@@ -102,7 +106,7 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
       selectedCircleId: circleId,
       selectedCity: city,
       plazaPosts: [],
-      plazaPage: 1,
+      plazaCursor: null,
       plazaHasMore: true,
       plazaLoading: false,
       plazaRefreshing: false,
@@ -119,7 +123,7 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
   reset: () =>
     set({
       plazaPosts: [],
-      plazaPage: 1,
+      plazaCursor: null,
       plazaHasMore: true,
       plazaLoading: false,
       plazaRefreshing: false,

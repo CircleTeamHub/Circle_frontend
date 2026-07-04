@@ -17,13 +17,18 @@ type MomentPage = PaginatedResponse<MomentPost>;
 
 // The hook only reads `.id` (for dedup) and `.hasMore`, so loose page objects
 // are enough for this behavior test.
-const pageOf = (ids: string[], hasMore: boolean) =>
+const pageOf = (
+  ids: string[],
+  hasMore: boolean,
+  nextCursor: string | null = hasMore ? 'next' : null,
+) =>
   ({
     items: ids.map((id) => ({ id })),
     total: ids.length,
     page: 1,
     limit: ids.length,
     hasMore,
+    nextCursor,
   }) as MomentPage;
 
 beforeEach(() => {
@@ -49,9 +54,13 @@ test('loadMore issues a single request when triggered twice rapidly', async () =
     result.current.loadMore();
   });
 
-  // The inFlightRef guard collapses the duplicate into a single page-2 request.
+  // The inFlightRef guard collapses the duplicate into a single next-page
+  // request, keyed by the first page's cursor rather than a page number.
   expect(mockFetch).toHaveBeenCalledTimes(2);
-  expect(mockFetch).toHaveBeenLastCalledWith('user-1', { page: 2, limit: 20 });
+  expect(mockFetch).toHaveBeenLastCalledWith('user-1', {
+    cursor: 'next',
+    limit: 20,
+  });
 
   await act(async () => {
     resolvePage2(pageOf(['b'], false));

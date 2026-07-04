@@ -25,6 +25,7 @@ function normalizeMoment(post: MomentPost): MomentPost {
 export async function fetchMomentsFeed(params?: {
   page?: number;
   limit?: number;
+  cursor?: string;
 }): Promise<PaginatedResponse<MomentPost>> {
   const result = await apiClient<PaginatedResponse<MomentPost>>(
     `/trace/feed${buildQuery(params ?? {})}`,
@@ -38,7 +39,7 @@ export async function fetchMomentsFeed(params?: {
 
 export async function fetchUserMoments(
   userId: string,
-  params?: { page?: number; limit?: number },
+  params?: { page?: number; limit?: number; cursor?: string },
 ): Promise<PaginatedResponse<MomentPost>> {
   const result = await apiClient<PaginatedResponse<MomentPost>>(
     `/trace/feed${buildQuery({ ...(params ?? {}), authorId: userId })}`,
