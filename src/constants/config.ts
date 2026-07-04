@@ -32,6 +32,23 @@ function assertSecureTransport(rawUrl: string, label: string): string {
   return rawUrl;
 }
 
+function getRequiredTransportValue(
+  value: string | undefined,
+  envName: string,
+  developmentFallback: string,
+): string {
+  const trimmedValue = value?.trim();
+  if (trimmedValue) {
+    return trimmedValue;
+  }
+  if (!IS_DEV_BUILD) {
+    throw new Error(
+      `[config] 缺少 release 必需配置 ${envName}。请在 .env.production 或 EAS Build 环境变量中显式设置。`,
+    );
+  }
+  return developmentFallback;
+}
+
 const API_PORT = '3000';
 const OPENIM_API_PORT = '10002';
 const OPENIM_WS_PORT = '10001';
@@ -81,20 +98,34 @@ function getDefaultOpenIMWsUrl() {
 }
 
 export const API_URL = assertSecureTransport(
-  ensureVersionedApiUrl(process.env.EXPO_PUBLIC_API_URL ?? getDefaultApiUrl()),
+  ensureVersionedApiUrl(
+    getRequiredTransportValue(
+      process.env.EXPO_PUBLIC_API_URL,
+      'EXPO_PUBLIC_API_URL',
+      getDefaultApiUrl(),
+    ),
+  ),
   'API_URL',
 );
 
 export const OPENIM_API_URL = assertSecureTransport(
   trimTrailingSlash(
-    process.env.EXPO_PUBLIC_OPENIM_API_URL ?? getDefaultOpenIMApiUrl()
+    getRequiredTransportValue(
+      process.env.EXPO_PUBLIC_OPENIM_API_URL,
+      'EXPO_PUBLIC_OPENIM_API_URL',
+      getDefaultOpenIMApiUrl(),
+    ),
   ),
   'OPENIM_API_URL',
 );
 
 export const OPENIM_WS_URL = assertSecureTransport(
   trimTrailingSlash(
-    process.env.EXPO_PUBLIC_OPENIM_WS_URL ?? getDefaultOpenIMWsUrl()
+    getRequiredTransportValue(
+      process.env.EXPO_PUBLIC_OPENIM_WS_URL,
+      'EXPO_PUBLIC_OPENIM_WS_URL',
+      getDefaultOpenIMWsUrl(),
+    ),
   ),
   'OPENIM_WS_URL',
 );

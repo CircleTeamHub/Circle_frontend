@@ -56,6 +56,16 @@ export function classifyTransport(rawUrl: string): TransportClass {
     : 'insecure-remote';
 }
 
+function redactUrlForError(rawUrl: string): string {
+  try {
+    const parsed = new URL(rawUrl);
+    const portPart = parsed.port ? `:${parsed.port}` : '';
+    return `${parsed.protocol}//${parsed.hostname}${portPart}${parsed.pathname}`;
+  } catch {
+    return '<invalid-url>';
+  }
+}
+
 export interface TransportGuardOptions {
   /** dev 构建：一律放行（本地开发不受影响）。 */
   isDev: boolean;
@@ -77,7 +87,7 @@ export function evaluateTransportGuard(
   }
   if (classifyTransport(rawUrl) === 'insecure-remote') {
     return (
-      `[config] 不安全的 ${label}: 明文地址「${rawUrl}」在 release 构建中被拒绝。` +
+      `[config] 不安全的 ${label}: 明文地址「${redactUrlForError(rawUrl)}」在 release 构建中被拒绝。` +
       '请改用 https/wss；若确为测试期明文 IP，请在构建环境设置 ' +
       'EXPO_PUBLIC_ALLOW_INSECURE_TRANSPORT=1 显式放行。'
     );

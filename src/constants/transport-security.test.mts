@@ -70,6 +70,22 @@ test('evaluateTransportGuard: release + public http is blocked with a helpful me
   assert.ok(msg.includes('EXPO_PUBLIC_ALLOW_INSECURE_TRANSPORT'));
 });
 
+test('evaluateTransportGuard: release error redacts URL credentials and query', () => {
+  const msg = evaluateTransportGuard(
+    'http://user:secret@api.example.com/path?token=leaked',
+    'API_URL',
+    {
+      isDev: false,
+      allowInsecure: false,
+    },
+  );
+  assert.ok(typeof msg === 'string');
+  assert.ok(msg.includes('http://api.example.com/path'));
+  assert.ok(!msg.includes('user'));
+  assert.ok(!msg.includes('secret'));
+  assert.ok(!msg.includes('token=leaked'));
+});
+
 test('evaluateTransportGuard: release + https is allowed', () => {
   assert.equal(
     evaluateTransportGuard('https://api.example.com/api/v1', 'API_URL', {

@@ -31,7 +31,7 @@ module.exports = { API_URL };
     // These tests exercise URL normalization under a dev build (Expo dev host),
     // so __DEV__ is true and the transport-security guard is a no-op. The guard's
     // release-mode blocking logic is covered directly in transport-security.test.mts.
-    __DEV__: true,
+    __DEV__: options.dev ?? true,
     evaluateTransportGuard: () => null,
     Constants: {
       expoConfig: {
@@ -70,4 +70,11 @@ test('API_URL preserves an explicit versioned path and trims trailing slashes', 
   });
 
   assert.equal(API_URL, 'http://example.com:3000/api/v1');
+});
+
+test('release config requires explicit backend transport environment variables', () => {
+  assert.throws(
+    () => loadConfigWithEnv({}, { dev: false }),
+    /EXPO_PUBLIC_API_URL/,
+  );
 });
