@@ -44,3 +44,9 @@ test('expo branding config uses Windnote display names and preserves legacy deep
   assert.equal(app.ios.bundleIdentifier, 'com.yiboding.circleim');
   assert.equal(app.android.package, 'com.yiboding.circleim');
 });
+
+test('android native config disables platform backups for local chat data', () => {
+  const app = readJson('app.json').expo;
+
+  assert.equal(app.android.allowBackup, false);
+});

@@ -127,7 +127,7 @@ export async function ensureOpenIMInitialized() {
       const RNFS = loadNativeFS();
       const dataDir = await getOpenIMDataDir();
 
-      await RNFS.mkdir(dataDir);
+      await RNFS.mkdir(dataDir, { NSURLIsExcludedFromBackupKey: true });
 
       // 在 initSDK 之前先绑定 listeners —— 否则 onConnecting / onConnectSuccess
       // 在 initSDK 内部即将触发时 JS 层还没挂回调，会被 native 直接丢成
