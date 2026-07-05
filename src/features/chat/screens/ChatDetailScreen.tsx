@@ -396,7 +396,6 @@ export default function ChatDetailScreen() {
   const currentUserID = useIMStore((state) => state.currentUserID);
   const setActiveConversation = useIMStore((state) => state.setActiveConversation);
   const appendMessages = useIMStore((state) => state.appendMessages);
-  const onlineStatusByUser = useIMStore((state) => state.onlineStatusByUser);
   const authUser = useAuthStore((state) => state.user);
   const flatListRef = useRef<FlatListType<ChatMessage>>(null);
   const scrolledToSearchRef = useRef(false);
@@ -612,8 +611,12 @@ export default function ChatDetailScreen() {
         : null,
     [conversationType, sourceID],
   );
-  const peerOnline =
-    peerImId != null && onlineStatusByUser[peerImId] === OnlineState.Online;
+  // 只订阅对方这一个用户的在线状态切片，而非整个 onlineStatusByUser map——
+  // 其他用户上下线不再触发本页重渲染。
+  const peerOnlineStatus = useIMStore((state) =>
+    peerImId != null ? state.onlineStatusByUser[peerImId] : undefined,
+  );
+  const peerOnline = peerOnlineStatus === OnlineState.Online;
   const statusColor =
     conversationType !== SessionType.Single || authUser?.accountId === sourceID
       ? colors.online

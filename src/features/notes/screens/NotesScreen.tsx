@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Alert,
   FlatList,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -424,6 +425,10 @@ export default function NotesScreen() {
         ItemSeparatorComponent={() => <View style={[s.divider, d.divider]} />}
         contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
         showsVerticalScrollIndicator={false}
+        initialNumToRender={12}
+        maxToRenderPerBatch={12}
+        windowSize={11}
+        removeClippedSubviews={Platform.OS === 'android'}
         {...keyboardDismissOnDragProps}
         refreshing={refreshing}
         onRefresh={handleRefreshNotes}

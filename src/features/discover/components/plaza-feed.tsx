@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useShallow } from 'zustand/react/shallow';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
@@ -57,14 +58,32 @@ export const PlazaFeed: React.FC = () => {
     selectedCity,
     fetchPlazaPosts,
     setPlazaFilter,
-  } = useDiscoverStore();
+  } = useDiscoverStore(
+    useShallow((s) => ({
+      plazaPosts: s.plazaPosts,
+      plazaLoading: s.plazaLoading,
+      plazaRefreshing: s.plazaRefreshing,
+      plazaHasMore: s.plazaHasMore,
+      selectedCircleId: s.selectedCircleId,
+      selectedCity: s.selectedCity,
+      fetchPlazaPosts: s.fetchPlazaPosts,
+      setPlazaFilter: s.setPlazaFilter,
+    })),
+  );
 
   const {
     joinedCircles,
     createdCircles,
     myCirclesError,
     fetchMyCircles,
-  } = useCirclesStore();
+  } = useCirclesStore(
+    useShallow((s) => ({
+      joinedCircles: s.joinedCircles,
+      createdCircles: s.createdCircles,
+      myCirclesError: s.myCirclesError,
+      fetchMyCircles: s.fetchMyCircles,
+    })),
+  );
   const filterCircleIds = useDiscoverFilterStore((st) => st.appliedCircleIds);
   const filterCities = useDiscoverFilterStore((st) => st.appliedCities);
 

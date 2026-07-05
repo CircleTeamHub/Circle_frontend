@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useShallow } from 'zustand/react/shallow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -49,7 +50,15 @@ export default function SelectCircleScreen() {
     myCirclesLoading,
     myCirclesError,
     fetchMyCircles,
-  } = useCirclesStore();
+  } = useCirclesStore(
+    useShallow((s) => ({
+      joinedCircles: s.joinedCircles,
+      createdCircles: s.createdCircles,
+      myCirclesLoading: s.myCirclesLoading,
+      myCirclesError: s.myCirclesError,
+      fetchMyCircles: s.fetchMyCircles,
+    })),
+  );
 
   useEffect(() => {
     fetchMyCircles();

@@ -23,7 +23,7 @@ import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { Conversation } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
 import { type Href, useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
@@ -276,7 +276,7 @@ type ConversationRowProps = {
   onDelete: (conversation: Conversation) => void;
 };
 
-function ConversationRow({
+function ConversationRowImpl({
   item,
   pinnedGroupPosition,
   labels,
@@ -481,6 +481,9 @@ function ConversationRow({
 //   1. 展示所有会话，支持按标签筛选（全部/未读/群聊/私聊/自定义群组）
 //   2. 头部操作栏：通知跳转、搜索、一键已读
 //   3. 点击头像可进入用户主页（仅私聊），点击会话行进入聊天详情
+// memo 化会话行：配合上游稳定的 item 引用，未变化的行跳过重渲染。
+const ConversationRow = memo(ConversationRowImpl);
+
 export default function MessagesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -617,10 +620,23 @@ export default function MessagesScreen() {
   );
 
   // 筛选标签列表 = 固定标签 + 用户自定义群组（动态追加）
-  const rawMappedConversations = useMemo(
-    () => rawConversations.map(mapConversationItemToUI),
-    [rawConversations],
-  );
+  // 按源 ConversationItem 引用缓存映射结果：未变化的会话保持同一 UI 对象引用。
+  // 配合 applyLocalUnreadOverrides 对未覆盖项的引用透传 + memo 化的 ConversationRow，
+  // 新消息到达时只有变化的那几行重渲染，而非整列表。
+  const convMapCacheRef = useRef<
+    WeakMap<object, ReturnType<typeof mapConversationItemToUI>>
+  >(new WeakMap());
+  const rawMappedConversations = useMemo(() => {
+    const cache = convMapCacheRef.current;
+    return rawConversations.map((raw) => {
+      let mapped = cache.get(raw);
+      if (!mapped) {
+        mapped = mapConversationItemToUI(raw);
+        cache.set(raw, mapped);
+      }
+      return mapped;
+    });
+  }, [rawConversations]);
 
   const conversations = useMemo(
     () => applyLocalUnreadOverrides(rawMappedConversations, localUnreadOverrides),
