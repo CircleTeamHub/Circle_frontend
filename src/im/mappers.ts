@@ -447,13 +447,23 @@ export function mapMessageItemToChatMessage(
       item.pictureElem?.bigPicture ??
       item.pictureElem?.sourcePicture ??
       item.pictureElem?.snapshotPicture;
+    // 列表气泡优先用 snapshotPicture 缩略图，避免大群刷图时逐张拉原图。
+    const thumb =
+      item.pictureElem?.snapshotPicture ??
+      item.pictureElem?.sourcePicture ??
+      item.pictureElem?.bigPicture;
     const rawUrl = pic?.url;
+    const thumbUrl = thumb?.url;
     if (rawUrl && rawUrl.length > 0) {
       return {
         ...base,
         type: 'image',
         outgoing: isSent,
         imageUrl: normalizeMediaUrl(rawUrl) ?? rawUrl,
+        imageThumbUrl:
+          thumbUrl && thumbUrl.length > 0
+            ? normalizeMediaUrl(thumbUrl) ?? thumbUrl
+            : undefined,
         imageWidth: pic?.width ?? undefined,
         imageHeight: pic?.height ?? undefined,
         senderName: isSent ? undefined : (item.senderNickname || item.sendID),
