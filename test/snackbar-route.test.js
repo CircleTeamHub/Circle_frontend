@@ -144,6 +144,18 @@ test("getSnackbarRoute routes verification requests to the verify screen", () =>
   assert.equal(route.params.id, "inv1");
 });
 
+test("getSnackbarRoute routes circle invitation result notifications to invitation detail", () => {
+  const route = getSnackbarRoute(
+    notification({
+      type: "CIRCLE_INVITATION_APPROVED",
+      fromInvitation: { id: "inv2", status: "APPROVED" },
+    }),
+    OPTS,
+  );
+  assert.equal(route.pathname, "/(tabs)/discover/invitation/[id]");
+  assert.equal(route.params.id, "inv2");
+});
+
 test("getSnackbarRoute falls back when a verification request lacks an invitation id", () => {
   const route = getSnackbarRoute(
     notification({ type: "CIRCLE_VERIFICATION_REQUESTED", fromInvitation: null }),
@@ -160,6 +172,30 @@ test("getSnackbarRoute routes friend requests to new-friends", () => {
   assert.equal(route, "/(tabs)/contacts/new-friends");
 });
 
+test("getSnackbarRoute routes message-linked notifications to the exact chat message", () => {
+  const route = getSnackbarRoute(
+    notification({
+      type: "MEMBER_MENTION",
+      fromMessage: {
+        conversationID: "conv-1",
+        sourceID: "group-1",
+        conversationType: "group",
+        title: "Squad",
+        clientMsgID: "client-msg-7",
+        avatarUrl: "https://cdn/group.png",
+      },
+    }),
+    OPTS,
+  );
+  assert.equal(route.pathname, "/(tabs)/messages/chat-detail");
+  assert.equal(route.params.conversationID, "conv-1");
+  assert.equal(route.params.sourceID, "group-1");
+  assert.equal(route.params.conversationType, "group");
+  assert.equal(route.params.title, "Squad");
+  assert.equal(route.params.avatarUrl, "https://cdn/group.png");
+  assert.equal(route.params.searchedMsgID, "client-msg-7");
+});
+
 test("getSnackbarRoute routes trace-linked notifications to the moment", () => {
   const route = getSnackbarRoute(
     notification({ fromTrace: { id: "t9", excerpt: "x", firstImage: null } }),
@@ -167,6 +203,19 @@ test("getSnackbarRoute routes trace-linked notifications to the moment", () => {
   );
   assert.equal(route.pathname, "/(tabs)/discover/moment/[id]");
   assert.equal(route.params.id, "t9");
+});
+
+test("getSnackbarRoute carries reply anchors into moment detail", () => {
+  const route = getSnackbarRoute(
+    notification({
+      fromTrace: { id: "t9", excerpt: "x", firstImage: null },
+      fromReply: { id: "r7", content: "reply" },
+    }),
+    OPTS,
+  );
+  assert.equal(route.pathname, "/(tabs)/discover/moment/[id]");
+  assert.equal(route.params.id, "t9");
+  assert.equal(route.params.targetCommentId, "r7");
 });
 
 test("getSnackbarRoute defaults to the notification center", () => {

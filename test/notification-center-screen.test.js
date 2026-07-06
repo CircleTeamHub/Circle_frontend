@@ -33,3 +33,33 @@ test('notification center refreshes after mark-all failures instead of swallowin
   assert.match(source, /const previousSignupPosts = store\(\)\.signupPosts/);
   assert.match(source, /await load\(\)/);
 });
+
+test('notification center rows use the shared notification route resolver', () => {
+  const source = readScreen();
+
+  assert.match(source, /getSnackbarRoute/);
+  assert.match(source, /kind: 'notification'/);
+  assert.match(source, /router\.push\(\s*getSnackbarRoute/);
+  assert.doesNotMatch(source, /verificationInvitationId/);
+});
+
+test('notification center exposes per-row mark-read and delete actions', () => {
+  const source = readScreen();
+
+  assert.match(source, /deleteNotification/);
+  assert.match(source, /handleRowMarkRead/);
+  assert.match(source, /handleRowDelete/);
+  assert.match(source, /removeInteractiveLocal/);
+  assert.match(source, /Alert\.alert/);
+  assert.match(source, /onMarkRead=/);
+  assert.match(source, /onDelete=/);
+});
+
+test('notification center loads more interactive notifications by page', () => {
+  const source = readScreen();
+
+  assert.match(source, /loadMoreInteractive/);
+  assert.match(source, /fetchNotifications\(nextPage\)/);
+  assert.match(source, /appendInteractivePage/);
+  assert.match(source, /onEndReached=/);
+});

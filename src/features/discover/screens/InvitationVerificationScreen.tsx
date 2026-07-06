@@ -14,6 +14,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { fetchInvitation } from '@/services/api/circles';
+import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import type { CircleInvitation, CircleInvitationVerifier } from '@/types';
 
 const TOTAL_SLOTS = 10;
@@ -124,6 +125,10 @@ export default function InvitationVerificationScreen() {
   useEffect(() => {
     loadInvitation();
   }, [loadInvitation]);
+
+  useEffect(() => {
+    void markMatchingTargetNotificationsRead({ invitationId: id });
+  }, [id]);
 
   const d = useMemo(
     () => ({

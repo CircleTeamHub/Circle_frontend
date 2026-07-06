@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Text,
   View,
+  type FlatList as FlatListType,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -36,6 +37,7 @@ import { useMomentsStore } from '@/features/discover/store/use-moments-store';
 import { useAuthStore } from '@/stores/authStore';
 import { ApiError } from '@/services/api/client';
 import { getApiErrorMessage } from '@/services/api/errors';
+import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import type { MomentPost } from '@/types';
 
 const s = StyleSheet.create({
@@ -92,6 +94,9 @@ const s = StyleSheet.create({
   replyItem: {
     marginLeft: 40,
   },
+  targetCommentHighlight: {
+    borderRadius: Radius.md,
+  },
   commentBody: { flex: 1, gap: 2 },
   commentUser: { ...Typography.caption, fontWeight: '600' },
   commentText: { ...Typography.bodyRegular, lineHeight: 20 },
@@ -113,7 +118,10 @@ export default function MomentDetailScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, targetCommentId } = useLocalSearchParams<{
+    id: string;
+    targetCommentId?: string;
+  }>();
 
   const storeMoment = useMomentsStore((s) =>
     s.moments.find((m) => m.id === id),
@@ -132,6 +140,11 @@ export default function MomentDetailScreen() {
   const mountedRef = useRef(true);
   const requestRef = useRef(0);
   const refreshInFlightRef = useRef(false);
+  const listRef = useRef<FlatListType<MomentCommentRow>>(null);
+  const scrolledToTargetCommentRef = useRef<string | null>(null);
+  const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(
+    null,
+  );
   const [commentTarget, setCommentTarget] = useState<{
     replyTo: { id: string; nickname: string } | null;
   } | null>(null);
@@ -196,6 +209,13 @@ export default function MomentDetailScreen() {
     void loadMoment();
   }, [loadMoment]);
 
+  useEffect(() => {
+    void markMatchingTargetNotificationsRead({
+      traceId: id,
+      replyId: targetCommentId,
+    });
+  }, [id, targetCommentId]);
+
   const handleRefreshMoment = useCallback(async () => {
     if (refreshInFlightRef.current) return;
     refreshInFlightRef.current = true;
@@ -222,6 +242,7 @@ export default function MomentDetailScreen() {
       detailRefreshError: { backgroundColor: colors.surface },
       detailRefreshErrorText: { color: colors.textSecondary },
       detailRefreshRetry: { color: colors.primary },
+      targetCommentHighlight: { backgroundColor: colors.primaryLight },
       emptyText: { color: colors.textSecondary, ...Typography.body },
     }),
     [colors],
@@ -293,6 +314,35 @@ export default function MomentDetailScreen() {
     () => flattenMomentCommentThreads(commentThreads),
     [commentThreads],
   );
+  useEffect(() => {
+    if (
+      !targetCommentId ||
+      commentRows.length === 0 ||
+      scrolledToTargetCommentRef.current === targetCommentId
+    ) {
+      return;
+    }
+
+    const index = commentRows.findIndex((row) => row.comment.id === targetCommentId);
+    if (index < 0) {
+      return;
+    }
+
+    scrolledToTargetCommentRef.current = targetCommentId;
+    setHighlightedCommentId(targetCommentId);
+    listRef.current?.scrollToIndex({
+      index,
+      animated: true,
+      viewPosition: 0.35,
+    });
+
+    const timer = setTimeout(() => {
+      if (mountedRef.current) {
+        setHighlightedCommentId(null);
+      }
+    }, 2200);
+    return () => clearTimeout(timer);
+  }, [commentRows, targetCommentId]);
 
   const isOwner =
     !!currentUserId && !!post && currentUserId === post.author.id;
@@ -418,7 +468,13 @@ export default function MomentDetailScreen() {
   const renderCommentRow = ({ item }: { item: MomentCommentRow }) => (
     <View>
       <Pressable
-        style={[s.commentItem, item.isReply ? s.replyItem : null]}
+        style={[
+          s.commentItem,
+          item.isReply ? s.replyItem : null,
+          item.comment.id === highlightedCommentId
+            ? [s.targetCommentHighlight, d.targetCommentHighlight]
+            : null,
+        ]}
         onLongPress={
           !!currentUserId && item.comment.user.id === currentUserId
             ? () => handleDeleteComment(item.comment.id)
@@ -562,6 +618,7 @@ export default function MomentDetailScreen() {
         }
       />
       <FlatList
+        ref={listRef}
         data={commentRows}
         keyExtractor={(item) => item.id}
         renderItem={renderCommentRow}
@@ -569,6 +626,19 @@ export default function MomentDetailScreen() {
         contentContainerStyle={{ paddingHorizontal: Spacing.lg, paddingBottom: 100 }}
         refreshing={refreshing}
         onRefresh={handleRefreshMoment}
+        onScrollToIndexFailed={(info) => {
+          listRef.current?.scrollToIndex({
+            index: Math.max(0, Math.min(info.highestMeasuredFrameIndex, info.index)),
+            animated: false,
+          });
+          setTimeout(() => {
+            listRef.current?.scrollToIndex({
+              index: info.index,
+              animated: true,
+              viewPosition: 0.35,
+            });
+          }, 250);
+        }}
         ListEmptyComponent={
           <View style={s.emptyComments}>
             <Text style={d.emptyText}>{t('moment.noComments')}</Text>

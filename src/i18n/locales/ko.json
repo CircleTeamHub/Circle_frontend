@@ -2000,6 +2000,9 @@
   "systemAnnouncements": {
     "title": "시스템 공지",
     "subtitle": "windnote.ai 앱의 최신 정보, 버전 업데이트, 패치 안내가 여기에 표시됩니다.",
+    "systemNotifications": "시스템 알림",
+    "empty": "시스템 알림이 없습니다",
+    "loadFailed": "시스템 알림을 불러오지 못했습니다. 아래로 당겨 다시 시도하세요",
     "latestAppInfo": {
       "title": "앱 최신 정보",
       "meta": "windnote.ai 1.0.0",
@@ -2191,6 +2194,7 @@
     "PLAZA_NOTE_INVALID": "해당 노트를 사용할 수 없거나 본인의 것이 아닙니다",
     "PLAZA_POST_NOT_FOUND": "게시물을 찾을 수 없습니다",
     "PLAZA_DELETE_AUTHOR_ONLY": "작성자만 이 게시물을 삭제할 수 있습니다",
+    "PLAZA_INVALID_CURSOR": "게시물 목록이 업데이트되었습니다. 새로고침해 주세요",
     "PLAZA_SIGNUP_SELF": "자신의 게시물에는 신청할 수 없습니다",
     "PLAZA_SIGNUP_INELIGIBLE": "이 게시물의 신청 요건을 충족하지 않습니다",
     "PLAZA_RECOGNIZE_MIN_ONE": "협업자를 한 명 이상 선택하세요",
@@ -2206,6 +2210,7 @@
     "TRACE_REPLY_TARGET_NOT_FOUND": "답글 대상 댓글이 존재하지 않습니다",
     "TRACE_COMMENT_NOT_FOUND": "댓글을 찾을 수 없습니다",
     "TRACE_ACCESS_FORBIDDEN": "이 모먼트를 볼 권한이 없습니다",
+    "TRACE_INVALID_CURSOR": "모먼트 목록이 업데이트되었습니다. 새로고침해 주세요",
     "FRIEND_SELF_ADD": "자신을 친구로 추가할 수 없습니다",
     "FRIEND_USER_NOT_FOUND": "사용자를 찾을 수 없습니다",
     "FRIEND_BLOCKED_CANNOT_REQUEST": "이 사용자에게 친구 요청을 보낼 수 없습니다",

@@ -399,6 +399,14 @@ export interface CreateMomentInput {
 
 export type NotificationType =
   | 'SYSTEM'
+  | 'MESSAGE_RECEIVED'
+  | 'MEMBER_MENTION'
+  | 'MESSAGE_QUOTE'
+  | 'SQUAD_INVITE'
+  | 'MISSION_INVITE'
+  | 'SQUAD_REQUEST_RECEIVED'
+  | 'SQUAD_REQUEST_ACCEPTED'
+  | 'SQUAD_REQUEST_REJECTED'
   | 'TRACE_LIKE'
   | 'TRACE_COMMENT'
   | 'COMMENT_REPLY'
@@ -428,6 +436,16 @@ export interface NotificationItem {
     firstImage: string | null;
   } | null;
   fromInvitation: { id: string; status: string } | null;
+  fromMessage?: {
+    id?: string;
+    messageID?: string;
+    clientMsgID?: string;
+    conversationID?: string;
+    sourceID?: string;
+    conversationType?: ConversationType;
+    title?: string;
+    avatarUrl?: string | null;
+  } | null;
 }
 
 /** A circle post authored by the current user, for the signup-management list. */

@@ -22,7 +22,8 @@
         "NSPhotoLibraryUsageDescription": "允许风信访问你的照片，用于选择并上传头像。",
         "NSLocationWhenInUseUsageDescription": "允许风信在使用期间获取位置，用于在聊天中分享当前位置。",
         "NSCameraUsageDescription": "允许风信使用相机拍照发送和扫描二维码。",
-        "NSMicrophoneUsageDescription": "允许风信使用麦克风录制语音消息并进行语音通话。"
+        "NSMicrophoneUsageDescription": "允许风信使用麦克风录制语音消息并进行语音通话。",
+        "NSUserNotificationsUsageDescription": "允许风信发送好友、群聊和互动通知。"
       }
     },
     "android": {
@@ -43,6 +44,7 @@
     "plugins": [
       "expo-router",
       "expo-image",
+      "expo-notifications",
       "expo-web-browser",
       "expo-localization",
       [

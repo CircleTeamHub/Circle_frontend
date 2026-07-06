@@ -117,6 +117,7 @@ import {
 import { createGroupCall } from '@/services/api/calls';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
+import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import {
   assertLocalCanSendMessage,
   CreditPolicyError,
@@ -249,6 +250,9 @@ const s = StyleSheet.create({
   },
   messageListInset: {
     paddingHorizontal: 2,
+  },
+  targetMessageHighlight: {
+    borderRadius: Radius.lg,
   },
   previewNotice: {
     paddingHorizontal: Spacing.lg,
@@ -637,6 +641,7 @@ export default function ChatDetailScreen() {
       backgroundColor: colors.primary,
       borderColor: colors.primary,
     },
+    targetMessageHighlight: { backgroundColor: colors.primaryLight },
   }), [backgroundStyle.backgroundColor, colors, statusColor]);
   const isVoiceRecording =
     voiceRecorderState.isRecording || voiceRecordingStartedAt != null;
@@ -715,6 +720,15 @@ export default function ChatDetailScreen() {
   ]);
 
   useEffect(() => {
+    if (!conversationID && !sourceID) return;
+    void markMatchingTargetNotificationsRead({
+      conversationID,
+      sourceID,
+      messageID: searchedMsgID,
+    });
+  }, [conversationID, searchedMsgID, sourceID]);
+
+  useEffect(() => {
     if (!peerImId) return;
     void subscribeUserOnlineStatus([peerImId]).catch((err) => {
       // 拿不到状态时 UI 回落显示离线；dev 下记录，避免长期静默掉订阅。
@@ -756,7 +770,13 @@ export default function ChatDetailScreen() {
         animated: true,
         viewPosition: 0.3,
       });
-      return;
+      setHighlightedMessageID(searchedMsgID);
+      const timer = setTimeout(() => {
+        if (mountedRef.current) {
+          setHighlightedMessageID(null);
+        }
+      }, 2200);
+      return () => clearTimeout(timer);
     }
   }, [messages, searchedMsgID]);
 
@@ -799,6 +819,9 @@ export default function ChatDetailScreen() {
     y: number;
   } | null>(null);
   const [quoteTarget, setQuoteTarget] = useState<ChatMessage | null>(null);
+  const [highlightedMessageID, setHighlightedMessageID] = useState<string | null>(
+    null,
+  );
 
   const handleCopyMessage = useCallback(async (message: ChatMessage) => {
     const text = message.text?.trim();
@@ -991,13 +1014,18 @@ export default function ChatDetailScreen() {
   const withMessageActions = useCallback(
     (message: ChatMessage, node: ReactElement) => (
       <Pressable
+        style={
+          message.id === highlightedMessageID
+            ? [s.targetMessageHighlight, d.targetMessageHighlight]
+            : undefined
+        }
         onLongPress={(event) => handleMessageLongPress(message, event)}
         delayLongPress={350}
       >
         {node}
       </Pressable>
     ),
-    [handleMessageLongPress],
+    [d.targetMessageHighlight, handleMessageLongPress, highlightedMessageID],
   );
 
   const renderItem = useCallback(({ item }: { item: ChatMessage }) => {

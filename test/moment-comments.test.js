@@ -205,7 +205,10 @@ test('Moment detail refreshes full detail data and renders dividers outside row 
   assert.doesNotMatch(detailSrc, /if\s*\(\s*post\s*\|\|\s*!id\s*\)/);
   assert.match(detailSrc, /post\.commentCount > 0/);
   assert.doesNotMatch(detailSrc, /post\.comments\.length > 0 \? t\('moment\.commentsCount'/);
-  assert.match(detailSrc, /<View>\s*<(?:View|Pressable)\s*[\s\S]*style=\{\[s\.commentItem, item\.isReply \? s\.replyItem : null\]\}[\s\S]*<\/(?:View|Pressable)>\s*<Divider \/>\s*<\/View>/);
+  assert.match(
+    detailSrc,
+    /<View>\s*<(?:View|Pressable)\s*[\s\S]*style=\{\[\s*s\.commentItem,\s*item\.isReply \? s\.replyItem : null,[\s\S]*?\]\}[\s\S]*<\/(?:View|Pressable)>\s*<Divider \/>\s*<\/View>/,
+  );
 });
 
 test('Moment detail supports pull-to-refresh', () => {

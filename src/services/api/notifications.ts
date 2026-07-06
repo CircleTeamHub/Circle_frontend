@@ -12,6 +12,18 @@ export type NotificationUnreadSummary = {
   totalUnread: number;
 };
 
+export type PushTokenPlatform = 'ios' | 'android' | 'web';
+
+export type PushTokenProvider = 'expo';
+
+export type RegisterPushTokenInput = {
+  token: string;
+  platform: PushTokenPlatform;
+  provider: PushTokenProvider;
+  projectId?: string | null;
+  appVersion?: string | null;
+};
+
 // 三个未读数都会进 Badge.count 渲染；非数字会让 RN 的 Text 节点抛错。
 function isNotificationSummaryShape(
   value: unknown,
@@ -47,6 +59,14 @@ export async function fetchNotifications(
   return apiClient<NotificationItem[]>(`/notification/list?page=${page}`);
 }
 
+export async function fetchProfileNotifications(
+  page = 1,
+): Promise<NotificationItem[]> {
+  return apiClient<NotificationItem[]>(
+    `/notification/profile/list?page=${page}`,
+  );
+}
+
 export async function markNotificationRead(id: string): Promise<void> {
   await apiClient<void>(`/notification/${id}/read`, { method: 'PUT' });
 }
@@ -59,4 +79,18 @@ export async function markAllNotificationsRead(): Promise<{ count: number }> {
 
 export async function deleteNotification(id: string): Promise<void> {
   await apiClient<void>(`/notification/${id}`, { method: 'DELETE' });
+}
+
+export async function registerPushToken(input: RegisterPushTokenInput): Promise<void> {
+  await apiClient<void>('/notification/push-token', {
+    method: 'PUT',
+    body: input,
+  });
+}
+
+export async function deletePushToken(token: string): Promise<void> {
+  await apiClient<void>('/notification/push-token', {
+    method: 'DELETE',
+    body: { token },
+  });
 }

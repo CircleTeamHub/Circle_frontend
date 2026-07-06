@@ -2000,6 +2000,9 @@
   "systemAnnouncements": {
     "title": "システムのお知らせ",
     "subtitle": "windnote.aiアプリの最新情報、バージョン更新、パッチ情報をここでまとめてお知らせします。",
+    "systemNotifications": "システム通知",
+    "empty": "システム通知はありません",
+    "loadFailed": "システム通知を読み込めませんでした。下に引いて再試行してください",
     "latestAppInfo": {
       "title": "アプリの最新情報",
       "meta": "windnote.ai 1.0.0",
@@ -2191,6 +2194,7 @@
     "PLAZA_NOTE_INVALID": "そのノートは利用できないか、あなたのものではありません",
     "PLAZA_POST_NOT_FOUND": "投稿が見つかりません",
     "PLAZA_DELETE_AUTHOR_ONLY": "投稿者のみが削除できます",
+    "PLAZA_INVALID_CURSOR": "投稿リストが更新されました。再読み込みしてください",
     "PLAZA_SIGNUP_SELF": "自分の投稿には応募できません",
     "PLAZA_SIGNUP_INELIGIBLE": "この投稿の応募条件を満たしていません",
     "PLAZA_RECOGNIZE_MIN_ONE": "コラボレーターを少なくとも1人選択してください",
@@ -2206,6 +2210,7 @@
     "TRACE_REPLY_TARGET_NOT_FOUND": "返信先のコメントが存在しません",
     "TRACE_COMMENT_NOT_FOUND": "コメントが見つかりません",
     "TRACE_ACCESS_FORBIDDEN": "このモーメントを閲覧する権限がありません",
+    "TRACE_INVALID_CURSOR": "モーメントリストが更新されました。再読み込みしてください",
     "FRIEND_SELF_ADD": "自分を友だちに追加することはできません",
     "FRIEND_USER_NOT_FOUND": "ユーザーが見つかりません",
     "FRIEND_BLOCKED_CANNOT_REQUEST": "このユーザーに友だち申請を送信できません",

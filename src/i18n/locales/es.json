@@ -2003,6 +2003,9 @@
   "systemAnnouncements": {
     "title": "Anuncios del sistema",
     "subtitle": "Aquí aparecerán la información más reciente de la app windnote.ai, las novedades de versiones y las notas de los parches.",
+    "systemNotifications": "Notificaciones del sistema",
+    "empty": "No hay notificaciones del sistema",
+    "loadFailed": "No se pudieron cargar las notificaciones del sistema. Desliza para reintentar",
     "latestAppInfo": {
       "title": "Información de la app",
       "meta": "windnote.ai 1.0.0",
@@ -2194,6 +2197,7 @@
     "PLAZA_NOTE_INVALID": "Esa nota no está disponible o no es tuya",
     "PLAZA_POST_NOT_FOUND": "Publicación no encontrada",
     "PLAZA_DELETE_AUTHOR_ONLY": "Solo el autor puede eliminar esta publicación",
+    "PLAZA_INVALID_CURSOR": "La lista de publicaciones cambió. Actualiza e inténtalo de nuevo",
     "PLAZA_SIGNUP_SELF": "No puedes inscribirte en tu propia publicación",
     "PLAZA_SIGNUP_INELIGIBLE": "No cumples los requisitos de inscripción de esta publicación",
     "PLAZA_RECOGNIZE_MIN_ONE": "Selecciona al menos un colaborador",
@@ -2209,6 +2213,7 @@
     "TRACE_REPLY_TARGET_NOT_FOUND": "El comentario al que respondes ya no existe",
     "TRACE_COMMENT_NOT_FOUND": "Comentario no encontrado",
     "TRACE_ACCESS_FORBIDDEN": "No tienes permiso para ver este momento",
+    "TRACE_INVALID_CURSOR": "La lista de momentos cambió. Actualiza e inténtalo de nuevo",
     "FRIEND_SELF_ADD": "No puedes añadirte a ti mismo como amigo",
     "FRIEND_USER_NOT_FOUND": "Usuario no encontrado",
     "FRIEND_BLOCKED_CANNOT_REQUEST": "No puedes enviar una solicitud de amistad a este usuario",

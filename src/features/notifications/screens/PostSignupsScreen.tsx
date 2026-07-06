@@ -30,6 +30,7 @@ import {
   getUserProfileScopeFromSegments,
 } from '@/features/user/utils/routes';
 import { useNotificationCenterStore } from '@/features/notifications/store/use-notification-center-store';
+import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import type { PostSignupItem } from '@/types';
 
@@ -107,6 +108,10 @@ export default function PostSignupsScreen() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void markMatchingTargetNotificationsRead({ circlePostId: postId });
+  }, [postId]);
 
   const [openingChatFor, setOpeningChatFor] = useState<string | null>(null);
 

@@ -7,7 +7,7 @@ import {
 import { useFonts } from 'expo-font';        // 加载自定义字体
 import { Redirect, Stack, useSegments } from 'expo-router';          // Expo Router 的 Stack 导航（页面栈）
 import * as SplashScreen from 'expo-splash-screen'; // 控制启动屏（闪屏）的显示与隐藏
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { StatusBar } from 'expo-status-bar'; // 控制顶部状态栏样式（文字颜色等）
 import 'react-native-reanimated';             // 必须在入口文件最早引入，启用动画引擎
 import { ActivityIndicator, NativeModules, View } from 'react-native';
@@ -23,10 +23,13 @@ import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-f
 
 // 项目自定义主题系统：ThemeProvider 提供主题上下文，useTheme 读取当前主题
 import { getAuthRouteDecision } from '@/components/app/auth-route-policy';
+import { LaunchReveal } from '@/components/app/launch-reveal';
 import { LoginSecurityCodeGate } from '@/components/app/login-security-code-gate';
 import { SessionBootstrap } from '@/components/app/session-bootstrap';
 import { AccountSwitcherSheet } from '@/features/profile/components/account-switcher-sheet';
 import { NotificationSnackbarHost } from '@/features/notifications/components/NotificationSnackbarHost';
+import { PushNotificationRouteHandler } from '@/features/notifications/components/PushNotificationRouteHandler';
+import { PushNotificationTokenRegistrar } from '@/features/notifications/components/PushNotificationTokenRegistrar';
 import { CallInviteHost } from '@/features/call/components/CallInviteHost';
 import { ThemeProvider, useTheme } from '@/theme';
 import {
@@ -234,6 +237,8 @@ function RootLayout() {
    * 主题在迁移完成后才挂载 ThemeProvider，初始 useState 即可读到迁移过的值。
    */
   const [migrated, setMigrated] = useState(false);
+  const [nativeSplashHidden, setNativeSplashHidden] = useState(false);
+  const [launchRevealDone, setLaunchRevealDone] = useState(false);
   useEffect(() => {
     let cancelled = false;
 
@@ -256,15 +261,31 @@ function RootLayout() {
     if (error) throw error;
   }, [error]);
 
-  // 字体和迁移都就绪后隐藏启动屏。dev 下 React 18 strict mode 会让 effect 跑两次，
-  // 第二次 hideAsync 会被 expo-splash-screen 抛 "called multiple times" —— catch 掉。
+  // 字体和迁移都就绪后隐藏系统启动屏，再播放 React Native 层的入场动画。
   useEffect(() => {
-    if (loaded && migrated) {
-      SplashScreen.hideAsync().catch(() => {
-        // 已经被隐藏；忽略即可。
-      });
+    if (!loaded || !migrated || nativeSplashHidden) {
+      return;
     }
-  }, [loaded, migrated]);
+
+    let cancelled = false;
+    SplashScreen.hideAsync()
+      .catch(() => {
+        // 已经被隐藏；忽略即可。
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setNativeSplashHidden(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loaded, migrated, nativeSplashHidden]);
+
+  const handleLaunchRevealFinish = useCallback(() => {
+    setLaunchRevealDone(true);
+  }, []);
 
   // 字体或迁移未就绪前不渲染任何内容（启动屏仍显示）
   if (!loaded || !migrated) return null;
@@ -276,10 +297,15 @@ function RootLayout() {
       <AuthRouteGuard>
         <RootStack />
         <NotificationSnackbarHost />
+        <PushNotificationRouteHandler />
+        <PushNotificationTokenRegistrar />
         <CallInviteHost />
         <AccountSwitcherSheet />
         <LoginSecurityCodeGate />
       </AuthRouteGuard>
+      {!launchRevealDone ? (
+        <LaunchReveal play={nativeSplashHidden} onFinish={handleLaunchRevealFinish} />
+      ) : null}
     </ThemeProvider>
   );
 }

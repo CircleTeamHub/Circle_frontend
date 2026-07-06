@@ -56,6 +56,12 @@ test("fetchNotifications calls /notification/list with page", async () => {
   assert.equal(calls[0][0], "/notification/list?page=2");
 });
 
+test("fetchProfileNotifications calls /notification/profile/list with page", async () => {
+  const { api, calls } = loadApi("src/services/api/notifications.ts", []);
+  await api.fetchProfileNotifications(3);
+  assert.equal(calls[0][0], "/notification/profile/list?page=3");
+});
+
 test("markNotificationRead PUTs /notification/:id/read", async () => {
   const { api, calls } = loadApi("src/services/api/notifications.ts", undefined);
   await api.markNotificationRead("n1");
@@ -75,4 +81,28 @@ test("deleteNotification DELETEs /notification/:id", async () => {
   await api.deleteNotification("n1");
   assert.equal(calls[0][0], "/notification/n1");
   assert.equal(calls[0][1].method, "DELETE");
+});
+
+test("registerPushToken PUTs the device push token", async () => {
+  const { api, calls } = loadApi("src/services/api/notifications.ts", undefined);
+  await api.registerPushToken({
+    token: "ExponentPushToken[abc]",
+    platform: "ios",
+    provider: "expo",
+  });
+  assert.equal(calls[0][0], "/notification/push-token");
+  assert.equal(calls[0][1].method, "PUT");
+  assert.deepEqual(calls[0][1].body, {
+    token: "ExponentPushToken[abc]",
+    platform: "ios",
+    provider: "expo",
+  });
+});
+
+test("deletePushToken DELETEs the stored device push token", async () => {
+  const { api, calls } = loadApi("src/services/api/notifications.ts", undefined);
+  await api.deletePushToken("ExponentPushToken[abc]");
+  assert.equal(calls[0][0], "/notification/push-token");
+  assert.equal(calls[0][1].method, "DELETE");
+  assert.equal(calls[0][1].body.token, "ExponentPushToken[abc]");
 });

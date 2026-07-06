@@ -1440,6 +1440,9 @@
   "systemAnnouncements": {
     "title": "System Announcements",
     "subtitle": "Latest windnote.ai app information, release updates, and patch notes will appear here.",
+    "systemNotifications": "System Notifications",
+    "empty": "No system notifications",
+    "loadFailed": "System notifications failed to load. Pull to retry",
     "latestAppInfo": {
       "title": "Latest App Info",
       "meta": "windnote.ai 1.0.0",
@@ -2194,6 +2197,7 @@
     "PLAZA_NOTE_INVALID": "That note is unavailable or not yours",
     "PLAZA_POST_NOT_FOUND": "Post not found",
     "PLAZA_DELETE_AUTHOR_ONLY": "Only the author can delete this post",
+    "PLAZA_INVALID_CURSOR": "The post list changed. Refresh and try again",
     "PLAZA_SIGNUP_SELF": "You can't sign up for your own post",
     "PLAZA_SIGNUP_INELIGIBLE": "You don't meet this post's signup requirements",
     "PLAZA_RECOGNIZE_MIN_ONE": "Select at least one collaborator",
@@ -2209,6 +2213,7 @@
     "TRACE_REPLY_TARGET_NOT_FOUND": "The comment you're replying to no longer exists",
     "TRACE_COMMENT_NOT_FOUND": "Comment not found",
     "TRACE_ACCESS_FORBIDDEN": "You aren't allowed to view this moment",
+    "TRACE_INVALID_CURSOR": "The moment list changed. Refresh and try again",
     "FRIEND_SELF_ADD": "You can't add yourself as a friend",
     "FRIEND_USER_NOT_FOUND": "User not found",
     "FRIEND_BLOCKED_CANNOT_REQUEST": "You can't send a friend request to this user",

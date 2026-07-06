@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Spacing, useTheme } from '@/theme';
 import { Divider } from '@/components/ui/divider';
 import {
+  deleteNotification,
   fetchNotifications,
   markAllNotificationsRead,
   markNotificationRead,
@@ -33,8 +34,11 @@ import {
 } from '@/features/notifications/components/ReadFilterBar';
 import { NotificationRow } from '@/features/notifications/components/NotificationRow';
 import { NotificationEmptyState } from '@/features/notifications/components/NotificationEmptyState';
+import { getSnackbarRoute } from '@/features/notifications/utils/snackbar-route';
+import { logClientDiagnostic } from '@/utils/client-diagnostics';
 
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+const PAGE_SIZE = 20;
 
 interface Row {
   raw: NotificationItem | MyCirclePost;
@@ -55,6 +59,9 @@ export default function NotificationCenterScreen() {
   const [tab, setTab] = useState<NotificationTabKey>('interactive');
   const [filter, setFilter] = useState<ReadFilter>('all');
   const [refreshing, setRefreshing] = useState(false);
+  const [interactivePage, setInteractivePage] = useState(1);
+  const [interactiveHasMore, setInteractiveHasMore] = useState(true);
+  const [loadingMoreInteractive, setLoadingMoreInteractive] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -75,6 +82,8 @@ export default function NotificationCenterScreen() {
       let failed = false;
       if (notificationsResult.status === 'fulfilled') {
         store().setInteractive(notificationsResult.value);
+        setInteractivePage(1);
+        setInteractiveHasMore(notificationsResult.value.length >= PAGE_SIZE);
       } else {
         failed = true;
         if (isDev) {
@@ -108,6 +117,48 @@ export default function NotificationCenterScreen() {
       if (mountedRef.current) setRefreshing(false);
     }
   }, [store, t]);
+
+  const loadMoreInteractive = useCallback(async () => {
+    if (
+      tab !== 'interactive' ||
+      loadingMoreInteractive ||
+      refreshing ||
+      !interactiveHasMore
+    ) {
+      return;
+    }
+
+    const nextPage = interactivePage + 1;
+    setLoadingMoreInteractive(true);
+    try {
+      const nextItems = await fetchNotifications(nextPage);
+      if (!mountedRef.current) return;
+      store().appendInteractivePage(nextItems);
+      setInteractivePage(nextPage);
+      setInteractiveHasMore(nextItems.length >= PAGE_SIZE);
+    } catch (error) {
+      if (isDev) {
+        console.warn('[NotificationCenterScreen] load more failed', error);
+      }
+      if (mountedRef.current) {
+        setLoadError(
+          t('notifications.loadFailed', {
+            defaultValue: '部分消息加载失败，请下拉重试',
+          }),
+        );
+      }
+    } finally {
+      if (mountedRef.current) setLoadingMoreInteractive(false);
+    }
+  }, [
+    interactiveHasMore,
+    interactivePage,
+    loadingMoreInteractive,
+    refreshing,
+    store,
+    tab,
+    t,
+  ]);
 
   useEffect(() => {
     void load();
@@ -164,28 +215,80 @@ export default function NotificationCenterScreen() {
   }, [load, tab, store]);
 
   const handleRowPress = useCallback(
-    (id: string, title: string, verificationInvitationId: string | null) => {
+    (row: Row) => {
+      const { raw, view } = row;
       if (tab === 'interactive') {
-        store().markInteractiveReadLocal(id);
-        void markNotificationRead(id).catch((e) => isDev && console.warn(e));
-        // 「邀请你验证」通知直达验证页；其余互动通知仅标记已读。
-        if (verificationInvitationId) {
-          router.push({
-            pathname: '/(tabs)/discover/verification/[id]',
-            params: { id: verificationInvitationId },
-          });
-        }
+        const notification = raw as NotificationItem;
+        store().markInteractiveReadLocal(notification.id);
+        void markNotificationRead(notification.id).catch((e) => isDev && console.warn(e));
+        logClientDiagnostic('notification_open', {
+          source: 'notification_center',
+          notificationId: notification.id,
+        });
+        router.push(
+          getSnackbarRoute(
+            { ...notification, kind: 'notification' },
+            {
+              untitledPost: t('notifications.signupMgmt.untitledPost'),
+            },
+          ),
+        );
         return;
       }
       // 报名管理: open the post's signer list. Opening it marks signups read
       // server-side, so zero the local badge optimistically.
-      store().markPostSignupsSeenLocal(id);
+      store().markPostSignupsSeenLocal(view.id);
       router.push({
         pathname: '/(tabs)/messages/post-signups',
-        params: { postId: id, title },
+        params: { postId: view.id, title: view.title },
       });
     },
-    [tab, store, router],
+    [tab, store, router, t],
+  );
+
+  const handleRowMarkRead = useCallback(
+    async (row: Row) => {
+      if (tab !== 'interactive' || !row.view.unread) return;
+      const notification = row.raw as NotificationItem;
+      const previousInteractive = store().interactive;
+      store().markInteractiveReadLocal(notification.id);
+      try {
+        await markNotificationRead(notification.id);
+      } catch (error) {
+        if (isDev) console.warn('[NotificationCenterScreen] mark row failed', error);
+        store().setInteractive(previousInteractive);
+        await load();
+      }
+    },
+    [load, store, tab],
+  );
+
+  const handleRowDelete = useCallback(
+    (row: Row) => {
+      if (tab !== 'interactive') return;
+      const notification = row.raw as NotificationItem;
+      Alert.alert(t('common.delete'), row.view.title, [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.delete'),
+          style: 'destructive',
+          onPress: async () => {
+            const previousInteractive = store().interactive;
+            store().removeInteractiveLocal(notification.id);
+            try {
+              await deleteNotification(notification.id);
+            } catch (error) {
+              if (isDev) {
+                console.warn('[NotificationCenterScreen] delete failed', error);
+              }
+              store().setInteractive(previousInteractive);
+              await load();
+            }
+          },
+        },
+      ]);
+    },
+    [load, store, t, tab],
   );
 
   return (
@@ -232,16 +335,20 @@ export default function NotificationCenterScreen() {
         renderItem={({ item }) => (
           <NotificationRow
             data={item.view}
-            onPress={() =>
-              handleRowPress(
-                item.view.id,
-                item.view.title,
-                item.view.verificationInvitationId,
-              )
+            onPress={() => handleRowPress(item)}
+            onMarkRead={
+              tab === 'interactive' && item.view.unread
+                ? () => void handleRowMarkRead(item)
+                : undefined
+            }
+            onDelete={
+              tab === 'interactive' ? () => handleRowDelete(item) : undefined
             }
           />
         )}
         ItemSeparatorComponent={Divider}
+        onEndReached={loadMoreInteractive}
+        onEndReachedThreshold={0.4}
         refreshing={refreshing}
         onRefresh={load}
         contentContainerStyle={{

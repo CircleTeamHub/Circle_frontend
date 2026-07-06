@@ -32,6 +32,28 @@ export function getSnackbarRoute(
     };
   }
 
+  if (item.kind === 'notification' && item.fromMessage) {
+    const message = item.fromMessage;
+    const sourceID = message.sourceID || message.conversationID;
+    const searchedMsgID =
+      message.clientMsgID || message.messageID || message.id || '';
+    if (sourceID) {
+      return {
+        pathname: '/(tabs)/messages/chat-detail',
+        params: {
+          ...(message.conversationID
+            ? { conversationID: message.conversationID }
+            : {}),
+          sourceID,
+          title: message.title || item.fromUser?.nickname || '',
+          conversationType: message.conversationType ?? 'private',
+          ...(message.avatarUrl ? { avatarUrl: message.avatarUrl } : {}),
+          ...(searchedMsgID ? { searchedMsgID } : {}),
+        },
+      };
+    }
+  }
+
   if (
     (item.type === 'CIRCLE_POST_SIGNUP_CREATED' ||
       item.type === 'CIRCLE_POST_AUTO_ENDED') &&
@@ -54,6 +76,18 @@ export function getSnackbarRoute(
     };
   }
 
+  if (
+    (item.type === 'CIRCLE_INVITATION_APPROVED' ||
+      item.type === 'CIRCLE_INVITATION_REJECTED' ||
+      item.type === 'CIRCLE_ADMIN_OVERRIDE_APPROVED') &&
+    item.fromInvitation?.id
+  ) {
+    return {
+      pathname: '/(tabs)/discover/invitation/[id]',
+      params: { id: item.fromInvitation.id },
+    };
+  }
+
   if (item.type.startsWith('FRIEND_REQUEST')) {
     return '/(tabs)/contacts/new-friends';
   }
@@ -61,7 +95,10 @@ export function getSnackbarRoute(
   if (item.fromTrace?.id) {
     return {
       pathname: '/(tabs)/discover/moment/[id]',
-      params: { id: item.fromTrace.id },
+      params: {
+        id: item.fromTrace.id,
+        ...(item.fromReply?.id ? { targetCommentId: item.fromReply.id } : {}),
+      },
     };
   }
 
