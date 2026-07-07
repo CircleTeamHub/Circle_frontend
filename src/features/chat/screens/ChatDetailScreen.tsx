@@ -1377,7 +1377,14 @@ export default function ChatDetailScreen() {
           text,
           onCreate: (message) => {
             optimisticClientMsgID = message.clientMsgID;
-            appendMessages(conversationID, [message]);
+            // createTextMessage 未必带 sendTime；缺失时补客户端时间戳，
+            // 否则 mergeMessageList 会按 sendTime=0 把「发送中」气泡排到最旧位置
+            // （inverted 列表顶部）而非输入框上方。成功回调用真实 sentMessage 覆盖后归位。
+            const stamped =
+              message.sendTime && message.sendTime > 0
+                ? message
+                : { ...message, sendTime: Date.now() };
+            appendMessages(conversationID, [stamped]);
           },
         });
         appendMessages(conversationID, [sentMessage]);
