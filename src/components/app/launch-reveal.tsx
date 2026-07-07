@@ -144,7 +144,9 @@ const styles = StyleSheet.create({
     elevation: 1000,
   },
   panel: {
-    backgroundColor: '#FFFFFF',
+    // 品牌靛蓝幕布：登录页背景近白（#F8F9FA），白色幕布拉开时与背景同色 → 完全不可见。
+    // 用品牌主色让「拉幕」在白底上高对比、清晰可见（飞机以 tintColor 显白，浮于幕布之上）。
+    backgroundColor: '#6366F1',
     position: 'absolute',
     top: 0,
   },
@@ -158,5 +160,7 @@ const styles = StyleSheet.create({
     left: '50%',
     position: 'absolute',
     top: '50%',
+    // 幕布为深色品牌色，飞机染白后清晰浮于其上。
+    tintColor: '#FFFFFF',
   },
 });
