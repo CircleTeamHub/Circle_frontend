@@ -35,6 +35,7 @@ import {
 import { NotificationRow } from '@/features/notifications/components/NotificationRow';
 import { NotificationEmptyState } from '@/features/notifications/components/NotificationEmptyState';
 import { getSnackbarRoute } from '@/features/notifications/utils/snackbar-route';
+import { reportNotificationFailure } from '@/features/notifications/utils/report-failure';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
@@ -137,9 +138,9 @@ export default function NotificationCenterScreen() {
       setInteractivePage(nextPage);
       setInteractiveHasMore(nextItems.length >= PAGE_SIZE);
     } catch (error) {
-      if (isDev) {
-        console.warn('[NotificationCenterScreen] load more failed', error);
-      }
+      reportNotificationFailure('notification_load_more_failed', error, {
+        page: nextPage,
+      });
       if (mountedRef.current) {
         setLoadError(
           t('notifications.loadFailed', {
@@ -188,7 +189,7 @@ export default function NotificationCenterScreen() {
       try {
         await markAllNotificationsRead();
       } catch (error) {
-        if (isDev) console.warn('[NotificationCenterScreen] mark all failed', error);
+        reportNotificationFailure('notification_mark_all_read_failed', error);
         store().setInteractive(previousInteractive);
         await load();
       }
@@ -255,7 +256,9 @@ export default function NotificationCenterScreen() {
       try {
         await markNotificationRead(notification.id);
       } catch (error) {
-        if (isDev) console.warn('[NotificationCenterScreen] mark row failed', error);
+        reportNotificationFailure('notification_mark_read_failed', error, {
+          notificationId: notification.id,
+        });
         store().setInteractive(previousInteractive);
         await load();
       }
@@ -278,9 +281,9 @@ export default function NotificationCenterScreen() {
             try {
               await deleteNotification(notification.id);
             } catch (error) {
-              if (isDev) {
-                console.warn('[NotificationCenterScreen] delete failed', error);
-              }
+              reportNotificationFailure('notification_delete_failed', error, {
+                notificationId: notification.id,
+              });
               store().setInteractive(previousInteractive);
               await load();
             }

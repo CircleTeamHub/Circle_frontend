@@ -11,6 +11,7 @@ import {
   markProfileNotificationsRead,
 } from '@/services/api/notifications';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
+import { reportNotificationFailure } from '@/features/notifications/utils/report-failure';
 import type { NotificationItem } from '@/types';
 
 const ANNOUNCEMENTS = [
@@ -129,9 +130,9 @@ export default function SystemAnnouncementsScreen() {
       setHasMore(rows.length >= PAGE_SIZE);
       setLoadError(null);
     } catch (error) {
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[SystemAnnouncementsScreen] load failed', error);
-      }
+      reportNotificationFailure('notification_load_more_failed', error, {
+        page: 1,
+      });
       if (mountedRef.current) {
         setLoadError(
           t('systemAnnouncements.loadFailed', {
@@ -156,9 +157,10 @@ export default function SystemAnnouncementsScreen() {
           if (active) setProfileUnread(0);
         })
         .catch((error) => {
-          if (typeof __DEV__ !== 'undefined' && __DEV__) {
-            console.warn('[SystemAnnouncementsScreen] mark read failed', error);
-          }
+          reportNotificationFailure(
+            'notification_mark_all_read_failed',
+            error,
+          );
         });
       return () => {
         active = false;
@@ -180,9 +182,9 @@ export default function SystemAnnouncementsScreen() {
       setPage(nextPage);
       setHasMore(rows.length >= PAGE_SIZE);
     } catch (error) {
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[SystemAnnouncementsScreen] load more failed', error);
-      }
+      reportNotificationFailure('notification_load_more_failed', error, {
+        page: nextPage,
+      });
     } finally {
       if (mountedRef.current) setLoadingMore(false);
     }

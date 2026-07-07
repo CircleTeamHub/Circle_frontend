@@ -1,7 +1,13 @@
-import { useEffect, useRef } from 'react';
-import { usePathname, useRouter, type Href } from 'expo-router';
+import { useCallback, useEffect, useRef } from 'react';
+import {
+  usePathname,
+  useRootNavigationState,
+  useRouter,
+  type Href,
+} from 'expo-router';
 import { resolvePushNotificationRoute } from '@/features/notifications/utils/push-notification-route';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
+import { useAuthStore } from '@/stores/authStore';
 
 type NotificationsModule = typeof import('expo-notifications');
 type NotificationResponse = Awaited<
@@ -9,6 +15,18 @@ type NotificationResponse = Awaited<
 >;
 
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+// 去重已处理响应的 id 集合上限：长会话里点过的通知会持续累积，
+// 保留最近 HANDLED_LIMIT 个足以覆盖「冷启动 getLast + listener 双触发」的去重窗口。
+const HANDLED_LIMIT = 300;
+
+function rememberHandled(set: Set<string>, key: string) {
+  set.add(key);
+  if (set.size > HANDLED_LIMIT) {
+    // Set 保持插入顺序，淘汰最早进入的，避免无界增长。
+    const oldest = set.values().next().value;
+    if (oldest !== undefined) set.delete(oldest);
+  }
+}
 
 function responseKey(response: NonNullable<NotificationResponse>) {
   return response.notification.request.identifier;
@@ -53,9 +71,40 @@ function isAlreadyOnTarget(pathname: string, route: Href) {
 export function PushNotificationRouteHandler() {
   const router = useRouter();
   const pathname = usePathname();
+  // 根导航栈就绪前 router.push 会丢失（冷启动深链常见）；navState.key 存在即就绪。
+  const navState = useRootNavigationState();
+  const navReady = Boolean(navState?.key);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
   const pathnameRef = useRef(pathname);
+  const navReadyRef = useRef(navReady);
+  const authedRef = useRef(isAuthenticated);
   const handledRef = useRef(new Set<string>());
+  // 导航未就绪 / 未登录时暂存目标路由，待两者都满足再跳（见下方 flush effect）。
+  const pendingRouteRef = useRef<Href | null>(null);
   pathnameRef.current = pathname;
+  navReadyRef.current = navReady;
+  authedRef.current = isAuthenticated;
+
+  const navigate = useCallback(
+    (route: Href) => {
+      if (isAlreadyOnTarget(pathnameRef.current, route)) {
+        router.replace(route);
+      } else {
+        router.push(route);
+      }
+    },
+    [router],
+  );
+
+  // 导航就绪 + 已登录后，flush 暂存的冷启动/登出期间收到的深链。
+  useEffect(() => {
+    if (navReady && isAuthenticated && pendingRouteRef.current) {
+      const route = pendingRouteRef.current;
+      pendingRouteRef.current = null;
+      navigate(route);
+    }
+  }, [navReady, isAuthenticated, navigate]);
 
   useEffect(() => {
     let mounted = true;
@@ -71,15 +120,18 @@ export function PushNotificationRouteHandler() {
       );
       if (!route) return;
 
-      handledRef.current.add(key);
+      rememberHandled(handledRef.current, key);
       logClientDiagnostic('notification_open', {
         source: 'system_push',
         notificationId: key,
       });
-      if (isAlreadyOnTarget(pathnameRef.current, route)) {
-        router.replace(route);
+      // 未登录：不把用户推进受保护区（AuthRouteGuard 会兜底到登录），
+      // 但把目标暂存，登录后 flush，避免深链丢失。
+      // 导航未就绪（冷启动）：同样暂存，就绪后 flush。
+      if (navReadyRef.current && authedRef.current) {
+        navigate(route);
       } else {
-        router.push(route);
+        pendingRouteRef.current = route;
       }
     };
 
@@ -116,7 +168,7 @@ export function PushNotificationRouteHandler() {
       mounted = false;
       subscription?.remove();
     };
-  }, [router]);
+  }, [navigate]);
 
   return null;
 }

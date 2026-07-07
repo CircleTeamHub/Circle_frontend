@@ -10,6 +10,7 @@ import { registerLogoutHandler } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
 import { storage } from '@/storage';
 import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
+import { reportNotificationFailure } from '@/features/notifications/utils/report-failure';
 
 type NotificationsModule = typeof import('expo-notifications');
 type NotificationPermissionResult = Awaited<
@@ -88,7 +89,7 @@ async function unregisterStoredPushToken() {
   try {
     await deletePushToken(stored.token);
   } catch (error) {
-    if (isDev) console.warn('[notifications] push token unregister failed', error);
+    reportNotificationFailure('push_token_unregister_failed', error);
   } finally {
     setStoredRegistration(null);
   }
@@ -157,7 +158,9 @@ export function PushNotificationTokenRegistrar() {
         setStoredRegistration({ token, userId });
       }
     })().catch((error) => {
-      if (isDev) console.warn('[notifications] push token registration failed', error);
+      reportNotificationFailure('push_token_register_failed', error, {
+        platform: Platform.OS,
+      });
     });
 
     return () => {
