@@ -11,13 +11,14 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
+import LottieView from 'lottie-react-native';
 
 const planeImage = require('../../../assets/images/login-logo-plane.png');
+const foldSource = require('../../../assets/lottie/plane-fold.json');
 
-// 折叠段素材开关：把「你的 logo 折成飞机」的 Lottie JSON 放到
-// assets/lottie/plane-fold.json 后，改为 true 并解开下方 LottieView 分支即可。
-// 见 assets/lottie/README.md。当前用风格化代码折叠占位。
-const HAS_FOLD_LOTTIE = false;
+// 折叠段素材开关：assets/lottie/plane-fold.json 到位后为 true，折叠段用 Lottie 播放，
+// 之后由主机身（PNG）接棒起飞。换素材只需替换该 json（无需再次原生重建）。
+const HAS_FOLD_LOTTIE = true;
 
 // 品牌紫（发光尾迹/占位折叠用）。
 const BRAND = '#6366F1';
@@ -107,6 +108,8 @@ export function LaunchReveal({ play, onFinish, onReveal }: LaunchRevealProps) {
   const safeWidth = Math.max(width, 1);
   const safeHeight = Math.max(height, 1);
   const planeSize = Math.min(150, Math.max(112, Math.min(safeWidth, safeHeight) * 0.32));
+  // Lottie 画布 500×500 里飞机居中偏小，容器放大约 2× 让视觉尺寸与尾迹/整体协调。
+  const lottieSize = planeSize * 2;
 
   useEffect(() => {
     if (!play) {
@@ -158,44 +161,32 @@ export function LaunchReveal({ play, onFinish, onReveal }: LaunchRevealProps) {
     );
   };
 
-  // 主机身：logo 出现 → 折叠成型 → 起飞绕屏 → 冲向镜头（放大+淡出）。
+  // 主机身（Lottie 紫飞机）：浮现成型 → 起飞绕屏 → 冲向镜头（放大+淡出）。
+  // 折叠/悬浮段由 Lottie 自身动画演绎，这里只驱动整体的浮现、位移、俯冲。
   const planeStyle = useAnimatedStyle(() => {
     const p = progress.value;
 
-    // 出现：淡入 + 轻微放大。
+    // 浮现：淡入 + 轻微放大成型。
     const inOpacity = interpolate(p, [T.logoIn[0], T.logoIn[1]], [0, 1], Extrapolation.CLAMP);
-    const inScale = interpolate(p, [T.logoIn[0], T.logoIn[1]], [0.6, 1], Extrapolation.CLAMP);
+    const inScale = interpolate(p, [T.logoIn[0], T.logoIn[1]], [0.62, 1], Extrapolation.CLAMP);
 
-    // 风格化折叠占位（有真 Lottie 时这段由 Lottie 承担，主机身在折叠段先隐身）：
-    // 扁平(scaleX 0.1、rotateX 感 via scaleY 压扁) → 展开成型。
-    const foldX = interpolate(p, [T.fold[0], T.fold[1]], [0.12, 1], Extrapolation.CLAMP);
-    const foldY = interpolate(p, [T.fold[0], (T.fold[0] + T.fold[1]) / 2, T.fold[1]], [0.5, 0.86, 1], Extrapolation.CLAMP);
-    const foldSpin = interpolate(p, [T.fold[0], T.fold[1]], [-18, 0], Extrapolation.CLAMP);
-
-    // swoosh 位置 + 俯冲。
+    // 绕屏 swoosh 位置（swoosh 起点前经 CLAMP 恒为 0，飞机在中心悬浮）。
     const swooshX = pathX(p);
     const swooshY = pathY(p);
-    const diveScale = interpolate(p, [T.dive[0], T.dive[1]], [1, 7], Extrapolation.CLAMP);
+
+    // 冲向镜头：放大掠过 + 淡出，略微下压制造透视。
+    const diveScale = interpolate(p, [T.dive[0], T.dive[1]], [1, 6.5], Extrapolation.CLAMP);
     const diveFade = interpolate(p, [T.dive[0], T.dive[1]], [1, 0], Extrapolation.CLAMP);
-    // 俯冲时朝画面中心并略微下压，制造「冲向镜头」的透视感。
-    const diveX = interpolate(p, [T.dive[0], T.dive[1]], [0, 0], Extrapolation.CLAMP);
     const diveY = interpolate(p, [T.dive[0], T.dive[1]], [0, safeHeight * 0.04], Extrapolation.CLAMP);
 
-    const inFold = p < T.fold[1];
-    // 有真 Lottie 时，折叠段隐藏主机身（交给 Lottie）；占位模式下主机身自己演折叠。
-    const foldGate = HAS_FOLD_LOTTIE && p >= T.fold[0] && inFold ? 0 : 1;
-
-    const opacity = Math.min(inOpacity, diveFade) * foldGate;
-    const scale = (inFold ? Math.min(inScale, foldX) : 1) * (p >= T.dive[0] ? diveScale : 1);
+    const scale = (p < T.logoIn[1] ? inScale : 1) * (p >= T.dive[0] ? diveScale : 1);
 
     return {
-      opacity,
+      opacity: inOpacity * diveFade,
       transform: [
-        { translateX: swooshX + diveX },
+        { translateX: swooshX },
         { translateY: swooshY + diveY },
-        { rotate: `${inFold ? foldSpin : 0}deg` },
-        { scaleX: scale },
-        { scaleY: (inFold ? foldY : 1) * (p >= T.dive[0] ? diveScale : 1) },
+        { scale },
       ],
     };
   });
@@ -221,24 +212,28 @@ export function LaunchReveal({ play, onFinish, onReveal }: LaunchRevealProps) {
           strength={0.28 - i * 0.03}
         />
       ))}
-      {/* 折叠段：放入 plane-fold.json 后启用（见 README）。当前占位由主机身自身演绎。
-      {HAS_FOLD_LOTTIE ? (
-        <LottieFold progress={progress} planeSize={planeSize} window={T.fold} />
-      ) : null} */}
-      <Animated.Image
-        source={planeImage}
-        resizeMode="contain"
+      {/* 主机身：复用主题紫的 Lottie 飞机，贯穿浮现→绕屏→冲镜。Lottie 尺寸约 2×，
+          因飞机在 500×500 画布里居中偏小。 */}
+      <Animated.View
         style={[
           styles.plane,
           {
-            width: planeSize,
-            height: planeSize,
-            marginLeft: -planeSize / 2,
-            marginTop: -planeSize / 2,
+            width: lottieSize,
+            height: lottieSize,
+            marginLeft: -lottieSize / 2,
+            marginTop: -lottieSize / 2,
           },
           planeStyle,
         ]}
-      />
+      >
+        <LottieView
+          source={foldSource}
+          autoPlay
+          loop
+          resizeMode="contain"
+          style={styles.lottie}
+        />
+      </Animated.View>
     </View>
   );
 }
@@ -261,5 +256,9 @@ const styles = StyleSheet.create({
     left: '50%',
     position: 'absolute',
     top: '50%',
+  },
+  lottie: {
+    width: '100%',
+    height: '100%',
   },
 });
