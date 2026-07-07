@@ -23,12 +23,9 @@ export function LaunchReveal({ play, onFinish }: LaunchRevealProps) {
   const safeWidth = Math.max(width, 1);
   const safeHeight = Math.max(height, 1);
   const planeSize = Math.min(128, Math.max(100, Math.min(safeWidth, safeHeight) * 0.28));
-  // 轨道半径取屏幕短边的比例，并夹住确保飞机整体不出屏（水平方向最紧）。
-  // 半径需明显大于飞机尺寸，盘旋才看得出「绕圈」而非原地自转。
-  const orbitRadius = Math.min(
-    Math.min(safeWidth, safeHeight) * 0.3,
-    safeWidth / 2 - planeSize / 2 - 12,
-  );
+  // 先向左飞的距离，以及掉头后向右飞出屏幕外的距离（需 > 半屏 + 半个机身，确保完全飞出）。
+  const flyLeftDist = safeWidth * 0.3;
+  const flyOutDist = safeWidth / 2 + planeSize;
 
   useEffect(() => {
     if (!play) {
@@ -51,36 +48,36 @@ export function LaunchReveal({ play, onFinish }: LaunchRevealProps) {
   }, [onFinish, play, progress]);
 
   const planeStyle = useAnimatedStyle(() => {
-    // 盘旋阶段：progress 0→0.72 走完整整一圈。
-    const orbitProgress = Math.min(progress.value / 0.72, 1);
-    // 半径在前 16% 从 0 平滑展开到定值后保持恒定，飞机沿完整圆周飞行；
-    // 之前用 sin(π·orbitProgress) 会让半径在首尾都归零 → 飞机停在中心只自转 = 原地打转。
-    const radiusGrow = interpolate(
-      orbitProgress,
-      [0, 0.16],
-      [0, 1],
+    // 飞行阶段（progress 0→0.72）：先向左飞 → 掉头 → 向右加速飞出右侧屏幕外；
+    // 之后（0.72→1）幕布左右拉开「开屏」。
+    const p = progress.value;
+    // 水平：中心 → 左(-flyLeftDist) → 掉头向右飞出屏幕(flyOutDist)。
+    const translateX = interpolate(
+      p,
+      [0, 0.28, 0.72],
+      [0, -flyLeftDist, flyOutDist],
       Extrapolation.CLAMP,
     );
-    const angle = orbitProgress * Math.PI * 2 - Math.PI / 2;
-    const revealProgress = interpolate(
-      progress.value,
-      [0.72, 1],
-      [0, 1],
+    // 垂直：轻微起伏，让飞行更自然（先略降、掉头后爬升飞出）。
+    const translateY = interpolate(
+      p,
+      [0, 0.28, 0.5, 0.72],
+      [0, 14, -6, -40],
       Extrapolation.CLAMP,
     );
+    // 面向：向左飞时镜像(scaleX -1 → 机头朝左)，在最左端经侧身(0)翻到 scaleX 1 向右飞 = 掉头。
+    const facing = interpolate(p, [0.24, 0.34], [-1, 1], Extrapolation.CLAMP);
+    // 机身随飞行姿态轻微俯仰。
+    const tilt = interpolate(p, [0, 0.28, 0.72], [0, 8, -12], Extrapolation.CLAMP);
 
     return {
-      opacity: interpolate(
-        progress.value,
-        [0, 0.72, 0.9, 1],
-        [1, 1, 0.5, 0],
-        Extrapolation.CLAMP,
-      ),
+      // 飞出屏幕前保持不透明；接近开屏时（此刻已飞出右侧）淡出兜底。
+      opacity: interpolate(p, [0, 0.66, 0.72], [1, 1, 0], Extrapolation.CLAMP),
       transform: [
-        { translateX: Math.cos(angle) * orbitRadius * radiusGrow },
-        { translateY: Math.sin(angle) * orbitRadius * radiusGrow },
-        { rotate: `${orbitProgress * 360}deg` },
-        { scale: interpolate(revealProgress, [0, 1], [1, 0.88], Extrapolation.CLAMP) },
+        { translateX },
+        { translateY },
+        { rotate: `${tilt}deg` },
+        { scaleX: facing },
       ],
     };
   });
