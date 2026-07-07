@@ -16,11 +16,12 @@ import LottieView from 'lottie-react-native';
 // 换素材只需替换该 json（无需再次原生重建）。
 const foldSource = require('../../../assets/lottie/plane-fold.json');
 
-// 极简开场：白底播放 Lottie 飞机 → 揭幕（遮罩淡出 + App 从中心弹性展开）。
-const DURATION_MS = 3200;
+// 开场：白底播放「信封开→折成飞机→飞走」的一次性 Lottie → 飞机飞走瞬间揭幕
+// （遮罩淡出 + App 从中心弹性展开）。Lottie 本身 2.4s，总时长留一点揭幕缓冲。
+const DURATION_MS = 2800;
 const T = {
-  planeIn: [0, 0.1],
-  reveal: [0.78, 1],
+  planeIn: [0, 0.06],
+  reveal: [0.86, 1],
 } as const;
 
 type LaunchRevealProps = {
@@ -71,17 +72,13 @@ export function LaunchReveal({ play, onFinish, onReveal }: LaunchRevealProps) {
     },
   );
 
-  // 飞机：轻微浮现成型 → 保持 Lottie 自身动画 → 揭幕时略放大并淡出。
+  // 容器只做淡入/收尾淡出，运动全交给 Lottie（信封开→折→飞走）自身完成。
   const planeStyle = useAnimatedStyle(() => {
     const p = progress.value;
     const appear = interpolate(p, [T.planeIn[0], T.planeIn[1]], [0, 1], Extrapolation.CLAMP);
-    const inScale = interpolate(p, [T.planeIn[0], T.planeIn[1]], [0.72, 1], Extrapolation.CLAMP);
-    const out = interpolate(p, [T.reveal[0], T.reveal[0] + 0.14], [1, 0], Extrapolation.CLAMP);
-    const upScale = interpolate(p, [T.reveal[0], T.reveal[1]], [1, 1.1], Extrapolation.CLAMP);
-    return {
-      opacity: appear * out,
-      transform: [{ scale: inScale * upScale }],
-    };
+    // 收尾淡出（此时飞机已在 Lottie 里飞走，画面基本空）。
+    const out = interpolate(p, [T.reveal[0] + 0.06, T.reveal[1]], [1, 0], Extrapolation.CLAMP);
+    return { opacity: appear * out };
   });
 
   // 揭幕：白色遮罩淡出，露出下面已渲染好的 App（配合 _layout 的中心弹性放大）。
@@ -111,7 +108,7 @@ export function LaunchReveal({ play, onFinish, onReveal }: LaunchRevealProps) {
           ref={lottieRef}
           source={foldSource}
           autoPlay
-          loop
+          loop={false}
           speed={1}
           resizeMode="contain"
           style={styles.lottie}
