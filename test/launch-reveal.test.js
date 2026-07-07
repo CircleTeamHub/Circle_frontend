@@ -4,10 +4,11 @@ const fs = require('node:fs');
 
 const read = (path) => fs.readFileSync(path, 'utf8');
 
-test('launch reveal uses the standalone plane asset and Reanimated', () => {
+test('launch reveal plays the themed Lottie plane and Reanimated', () => {
   const source = read('src/components/app/launch-reveal.tsx');
 
-  assert.match(source, /login-logo-plane\.png/);
+  assert.match(source, /plane-fold\.json/);
+  assert.match(source, /lottie-react-native/);
   assert.match(source, /useSharedValue/);
   assert.match(source, /useAnimatedStyle/);
   assert.match(source, /withTiming/);
