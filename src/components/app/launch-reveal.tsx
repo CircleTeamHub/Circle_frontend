@@ -5,6 +5,7 @@ import Animated, {
   Extrapolation,
   interpolate,
   useAnimatedStyle,
+  useAnimatedReaction,
   useSharedValue,
   withTiming,
   type SharedValue,
@@ -37,6 +38,8 @@ const T = {
 type LaunchRevealProps = {
   play: boolean;
   onFinish: () => void;
+  /** 揭幕时机（progress 越过 reveal 起点）回调一次，供上层做「App 从中心弹性展开」。 */
+  onReveal?: () => void;
 };
 
 const TRAIL_COUNT = 6;
@@ -97,9 +100,10 @@ function TrailGhost({
   );
 }
 
-export function LaunchReveal({ play, onFinish }: LaunchRevealProps) {
+export function LaunchReveal({ play, onFinish, onReveal }: LaunchRevealProps) {
   const { width, height } = useWindowDimensions();
   const progress = useSharedValue(0);
+  const revealFired = useSharedValue(false);
   const safeWidth = Math.max(width, 1);
   const safeHeight = Math.max(height, 1);
   const planeSize = Math.min(150, Math.max(112, Math.min(safeWidth, safeHeight) * 0.32));
@@ -119,6 +123,19 @@ export function LaunchReveal({ play, onFinish }: LaunchRevealProps) {
       },
     );
   }, [onFinish, play, progress]);
+
+  // 越过揭幕起点时回调一次 onReveal（供 _layout 启动 App 弹性展开），与遮罩淡出同步。
+  useAnimatedReaction(
+    () => progress.value,
+    (p) => {
+      if (!revealFired.value && p >= T.reveal[0]) {
+        revealFired.value = true;
+        if (onReveal) {
+          scheduleOnRN(onReveal);
+        }
+      }
+    },
+  );
 
   // 绕屏 swoosh 路径（worklet 与 JS 都会用，故写成可在 worklet 内内联的纯函数）。
   // 起飞后先向左下沉、划一道弧再回到中心偏上，随后进入俯冲。

@@ -9,7 +9,12 @@ import { Redirect, Stack, useSegments } from 'expo-router';          // Expo Rou
 import * as SplashScreen from 'expo-splash-screen'; // 控制启动屏（闪屏）的显示与隐藏
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { StatusBar } from 'expo-status-bar'; // 控制顶部状态栏样式（文字颜色等）
-import 'react-native-reanimated';             // 必须在入口文件最早引入，启用动画引擎
+// 必须在入口文件最早引入，启用动画引擎（具名导入同样会执行其原生初始化副作用）
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
 import { ActivityIndicator, NativeModules, View } from 'react-native';
 import { rehydrateLanguageFromStorage } from '@/i18n';
 import { migrateFromAsyncStorage } from '@/storage';
@@ -283,9 +288,21 @@ function RootLayout() {
     };
   }, [loaded, migrated, nativeSplashHidden]);
 
+  // App「从中心弹性展开」：开场序列冲镜揭幕时，把整个 UI 从略缩放 spring 弹到 1。
+  // 幕布覆盖期间 UI 一直是 0.92（藏在遮罩后不可见），揭幕瞬间带回弹地放大 = 弹性展开。
+  const appScale = useSharedValue(0.92);
+  const appScaleStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: appScale.value }],
+  }));
+  const springAppOpen = useCallback(() => {
+    appScale.value = withSpring(1, { damping: 11, stiffness: 150, mass: 0.7 });
+  }, [appScale]);
+
   const handleLaunchRevealFinish = useCallback(() => {
+    // 兜底：即使 onReveal 未触发，序列结束也确保 UI 回到 1（避免卡在 0.92）。
+    springAppOpen();
     setLaunchRevealDone(true);
-  }, []);
+  }, [springAppOpen]);
 
   // 字体或迁移未就绪前不渲染任何内容（启动屏仍显示）
   if (!loaded || !migrated) return null;
@@ -295,7 +312,9 @@ function RootLayout() {
     <ThemeProvider>
       <SessionBootstrap />
       <AuthRouteGuard>
-        <RootStack />
+        <Animated.View style={[{ flex: 1 }, appScaleStyle]}>
+          <RootStack />
+        </Animated.View>
         <NotificationSnackbarHost />
         <PushNotificationRouteHandler />
         <PushNotificationTokenRegistrar />
@@ -304,7 +323,11 @@ function RootLayout() {
         <LoginSecurityCodeGate />
       </AuthRouteGuard>
       {!launchRevealDone ? (
-        <LaunchReveal play={nativeSplashHidden} onFinish={handleLaunchRevealFinish} />
+        <LaunchReveal
+          play={nativeSplashHidden}
+          onReveal={springAppOpen}
+          onFinish={handleLaunchRevealFinish}
+        />
       ) : null}
     </ThemeProvider>
   );
