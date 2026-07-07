@@ -22,8 +22,13 @@ export function LaunchReveal({ play, onFinish }: LaunchRevealProps) {
   const progress = useSharedValue(0);
   const safeWidth = Math.max(width, 1);
   const safeHeight = Math.max(height, 1);
-  const planeSize = Math.min(156, Math.max(120, Math.min(safeWidth, safeHeight) * 0.34));
-  const orbitRadius = planeSize * 0.38;
+  const planeSize = Math.min(128, Math.max(100, Math.min(safeWidth, safeHeight) * 0.28));
+  // 轨道半径取屏幕短边的比例，并夹住确保飞机整体不出屏（水平方向最紧）。
+  // 半径需明显大于飞机尺寸，盘旋才看得出「绕圈」而非原地自转。
+  const orbitRadius = Math.min(
+    Math.min(safeWidth, safeHeight) * 0.3,
+    safeWidth / 2 - planeSize / 2 - 12,
+  );
 
   useEffect(() => {
     if (!play) {
@@ -46,8 +51,16 @@ export function LaunchReveal({ play, onFinish }: LaunchRevealProps) {
   }, [onFinish, play, progress]);
 
   const planeStyle = useAnimatedStyle(() => {
+    // 盘旋阶段：progress 0→0.72 走完整整一圈。
     const orbitProgress = Math.min(progress.value / 0.72, 1);
-    const orbitEase = Math.sin(Math.PI * orbitProgress);
+    // 半径在前 16% 从 0 平滑展开到定值后保持恒定，飞机沿完整圆周飞行；
+    // 之前用 sin(π·orbitProgress) 会让半径在首尾都归零 → 飞机停在中心只自转 = 原地打转。
+    const radiusGrow = interpolate(
+      orbitProgress,
+      [0, 0.16],
+      [0, 1],
+      Extrapolation.CLAMP,
+    );
     const angle = orbitProgress * Math.PI * 2 - Math.PI / 2;
     const revealProgress = interpolate(
       progress.value,
@@ -64,8 +77,8 @@ export function LaunchReveal({ play, onFinish }: LaunchRevealProps) {
         Extrapolation.CLAMP,
       ),
       transform: [
-        { translateX: Math.cos(angle) * orbitRadius * orbitEase },
-        { translateY: Math.sin(angle) * orbitRadius * orbitEase },
+        { translateX: Math.cos(angle) * orbitRadius * radiusGrow },
+        { translateY: Math.sin(angle) * orbitRadius * radiusGrow },
         { rotate: `${orbitProgress * 360}deg` },
         { scale: interpolate(revealProgress, [0, 1], [1, 0.88], Extrapolation.CLAMP) },
       ],
