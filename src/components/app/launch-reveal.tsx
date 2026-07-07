@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, {
   Easing,
@@ -17,10 +17,10 @@ import LottieView from 'lottie-react-native';
 const foldSource = require('../../../assets/lottie/plane-fold.json');
 
 // 极简开场：白底播放 Lottie 飞机 → 揭幕（遮罩淡出 + App 从中心弹性展开）。
-const DURATION_MS = 2600;
+const DURATION_MS = 3200;
 const T = {
-  planeIn: [0, 0.12],
-  reveal: [0.72, 1],
+  planeIn: [0, 0.1],
+  reveal: [0.78, 1],
 } as const;
 
 type LaunchRevealProps = {
@@ -35,13 +35,17 @@ export function LaunchReveal({ play, onFinish, onReveal }: LaunchRevealProps) {
   const progress = useSharedValue(0);
   const revealFired = useSharedValue(false);
   const minDim = Math.min(Math.max(width, 1), Math.max(height, 1));
-  // Lottie 画布 500×500 里飞机居中偏小，容器取屏幕短边的 0.62 让视觉尺寸合适。
-  const size = Math.min(300, Math.max(200, minDim * 0.62));
+  // Lottie 画布 500×500 里飞机居中偏小，容器取屏幕短边的 0.78 让飞机足够醒目。
+  const size = Math.min(360, Math.max(240, minDim * 0.78));
+  const lottieRef = useRef<LottieView>(null);
 
   useEffect(() => {
     if (!play) {
       return;
     }
+    // New Arch 下 autoPlay 偶发不触发，显式 play() 兜底确保 Lottie 一定在动。
+    lottieRef.current?.reset();
+    lottieRef.current?.play();
     progress.value = 0;
     progress.value = withTiming(
       1,
@@ -104,9 +108,11 @@ export function LaunchReveal({ play, onFinish, onReveal }: LaunchRevealProps) {
         ]}
       >
         <LottieView
+          ref={lottieRef}
           source={foldSource}
           autoPlay
           loop
+          speed={1}
           resizeMode="contain"
           style={styles.lottie}
         />
