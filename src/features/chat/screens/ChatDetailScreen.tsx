@@ -84,7 +84,10 @@ import {
   unsubscribeUserOnlineStatus,
 } from '@/im/client';
 import { restoreConversationMessages } from '@/im/history-restore';
-import { mapMessageItemToChatMessage } from '@/im/mappers';
+import {
+  createMessageMapCache,
+  mapMessageItemsToChatMessages,
+} from '@/im/mappers';
 import { useAuthStore } from '@/stores/authStore';
 import { useIMStore } from '@/stores/imStore';
 import { type FriendProfile } from '@/services/api/friends';
@@ -121,7 +124,7 @@ import {
   assertLocalCanSendMessage,
   CreditPolicyError,
 } from '@/services/api/credit-policy';
-import { OnlineState, SessionType, type MessageItem } from '@openim/rn-client-sdk';
+import { OnlineState, SessionType } from '@openim/rn-client-sdk';
 import { useTranslation } from 'react-i18next';
 import type { ChatMessage } from '@/types';
 import {
@@ -745,32 +748,19 @@ export default function ChatDetailScreen() {
   // FlatList 的 CellRenderer 因此跳过未变行的重渲染（无需给气泡加 memo）。
   // 某条消息被更新时（读回执/状态变化）会得到新的 MessageItem 引用 → 缓存未命中
   // → 只有那一行重渲染。currentUserID 变化时整体失效重建。
-  const messageMapCacheRef = useRef<{
-    userID: string | null;
-    cache: WeakMap<MessageItem, ChatMessage>;
-  }>({ userID: currentUserID, cache: new WeakMap() });
+  const messageMapCacheRef = useRef<ReturnType<typeof createMessageMapCache> | null>(
+    null,
+  );
 
   const messages = useMemo(() => {
-    const box = messageMapCacheRef.current;
-    if (box.userID !== currentUserID) {
-      box.userID = currentUserID;
-      box.cache = new WeakMap();
-    }
-    const source = conversationMessages ?? [];
-    const result: ChatMessage[] = [];
-    // inverted 列表：index 0 = 最新消息，故从后往前取。
-    for (let i = source.length - 1; i >= 0; i -= 1) {
-      const raw = source[i];
-      let mapped = box.cache.get(raw);
-      if (!mapped) {
-        const next = mapMessageItemToChatMessage(raw, currentUserID);
-        if (!next) continue;
-        box.cache.set(raw, next);
-        mapped = next;
-      }
-      result.push(mapped);
-    }
-    return result;
+    const box =
+      messageMapCacheRef.current ?? createMessageMapCache(currentUserID);
+    messageMapCacheRef.current = box;
+    return mapMessageItemsToChatMessages(
+      conversationMessages ?? [],
+      currentUserID,
+      box,
+    );
   }, [currentUserID, conversationMessages]);
 
   // 搜索定位：在 inverted 列表里 scrollToIndex 仍然按 index 计数，找到就跳。
