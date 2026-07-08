@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -20,7 +21,16 @@ function extractBetween(src, start, end) {
   return src.slice(startIndex, endIndex);
 }
 
+function applyOpenIMNativeEventPatch() {
+  execFileSync(process.execPath, [patchScriptPath, '--strict'], {
+    cwd: process.cwd(),
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+}
+
 test('OpenIM iOS bridge guards native events before sending them to React Native', () => {
+  applyOpenIMNativeEventPatch();
+
   const src = fs.readFileSync(openIMBridgePath, 'utf8');
   const supportedStart = src.indexOf('supportedEvents');
   const supportedEnd = src.indexOf('startObserving', supportedStart);
