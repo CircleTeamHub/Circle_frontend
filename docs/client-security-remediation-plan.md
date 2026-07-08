@@ -53,6 +53,22 @@ Validation already run for these landed fixes:
 - `npm test` (944 passed)
 - `npm run test:behavior` (6 passed)
 
+Updated 2026-07-04 on branch `fix/local-data-backup-exclusion`.
+
+- **C-06 Android backup backstop:** `app.json` now sets
+  `expo.android.allowBackup=false`, preventing Android Auto Backup from copying the
+  app's local data, including plaintext OpenIM message storage and MMKV-backed
+  cached metadata.
+- **C-06 iOS OpenIM backup exclusion:** `src/im/client.ts` now creates the OpenIM
+  data directory with `NSURLIsExcludedFromBackupKey=true`, so the local OpenIM
+  message/log directory is excluded from iCloud/iTunes backups when initialized.
+- **C-06 regression coverage:** `test/native-branding-config.test.js` asserts the
+  Android backup setting, and `test/im-client.test.js` asserts the OpenIM data
+  directory is created with the iOS backup-exclusion option.
+- **C-06 Android artifact gate:** `test/native-branding-config.test.js` also
+  introspects the generated Android manifest and asserts the final application node
+  contains `android:allowBackup="false"`.
+
 Remaining C-01/C-02 follow-ups:
 
 - Native transport backstop is still pending: explicitly verify/lock iOS ATS and
