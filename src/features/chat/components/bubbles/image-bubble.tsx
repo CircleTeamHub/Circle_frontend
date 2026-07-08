@@ -83,6 +83,8 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
       : { width: Math.round(maxSide * ratio), height: maxSide };
   }, [message.imageHeight, message.imageWidth]);
 
+  // 列表气泡优先渲染缩略图；缺失时回退到原图。原图查看留给点击放大流程。
+  const displayUri = message.imageThumbUrl ?? message.imageUrl;
   const imageNode = (
     <View style={[sImage.body, outgoing ? sImage.bodyOutgoing : null]}>
       <Pressable
@@ -90,15 +92,17 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
         onLongPress={onLongPress}
         delayLongPress={350}
       >
-        {message.imageUrl ? (
+        {displayUri ? (
           <Image
-            source={{ uri: message.imageUrl }}
+            source={{ uri: displayUri }}
             style={[sImage.image, dimensions]}
             contentFit="cover"
+            transition={150}
+            cachePolicy="memory-disk"
             onError={(event) => {
               if (__DEV__) {
                 console.warn('[chat] image load failed', {
-                  uri: message.imageUrl,
+                  uri: displayUri,
                   error: event.error,
                 });
               }

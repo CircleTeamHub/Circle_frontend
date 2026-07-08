@@ -300,7 +300,12 @@ export function UserIconBadge({
               >
                 <View style={s.imageWrap}>
                   {icon.imageUrl ? (
-                    <Image source={{ uri: icon.imageUrl }} style={s.image} contentFit="cover" />
+                    <Image
+                      source={{ uri: icon.imageUrl }}
+                      recyclingKey={icon.imageUrl}
+                      style={s.image}
+                      contentFit="cover"
+                    />
                   ) : (
                     <Ionicons
                       name={resolveFallbackIcon(icon.fallbackIconName)}

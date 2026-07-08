@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -450,6 +451,10 @@ export default function PostSignupsScreen() {
           );
         }}
         ItemSeparatorComponent={Divider}
+        initialNumToRender={12}
+        maxToRenderPerBatch={12}
+        windowSize={11}
+        removeClippedSubviews={Platform.OS === 'android'}
         refreshing={refreshing}
         onRefresh={load}
         contentContainerStyle={{ paddingHorizontal: Spacing.md, paddingBottom: 40 }}
