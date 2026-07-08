@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, type GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
@@ -21,6 +21,7 @@ interface TransferCardBubbleProps {
   selfAvatarUri?: string;
   onPress?: (data: TransferCardData) => void;
   onAvatarPress?: () => void;
+  onLongPress?: (event: GestureResponderEvent) => void;
   hideStatus?: boolean;
 }
 
@@ -101,6 +102,7 @@ export const TransferCardBubble: React.FC<TransferCardBubbleProps> = ({
   selfAvatarUri,
   onPress,
   onAvatarPress,
+  onLongPress,
   hideStatus,
 }) => {
   const { colors } = useTheme();
@@ -122,6 +124,8 @@ export const TransferCardBubble: React.FC<TransferCardBubbleProps> = ({
       <Pressable
         style={sTransfer.card}
         onPress={onPress ? () => onPress(data) : undefined}
+        onLongPress={onLongPress}
+        delayLongPress={350}
       >
         <View style={sTransfer.topRow}>
           <View style={sTransfer.iconWrap}>

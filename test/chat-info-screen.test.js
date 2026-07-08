@@ -87,6 +87,34 @@ test('chat info screen renders a dedicated group info layout for group conversat
   assert.match(source, /getGroupMemberSearchHref/);
 });
 
+test('chat info screen refreshes group member names and avatars from user profiles on focus', () => {
+  const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /import \{ fetchUserProfile \} from '@\/services\/api\/profile'/);
+  assert.match(source, /const GROUP_MEMBER_PROFILE_REFRESH_LIMIT = 200/);
+  assert.match(source, /async function refreshGroupMemberProfiles/);
+  assert.match(source, /fetchUserProfile\(fromImUserId\(member\.userID\)\)/);
+  assert.match(source, /nickname: profile\.nickname \|\| member\.nickname/);
+  assert.match(source, /faceURL: profile\.avatarUrl \?\? member\.faceURL/);
+  assert.match(
+    source,
+    /useFocusEffect\([\s\S]*loadGroupMemberList\(groupID,\s*10_000\)[\s\S]*refreshGroupMemberProfiles\(members\)/,
+  );
+});
+
+test('chat info screen lets the current user open their own profile from the group member grid', () => {
+  const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /const handleOpenMemberProfile = useCallback/);
+  assert.match(source, /router\.push\(getUserProfileHref\('messages',\s*fromImUserId\(member\.userID\)/);
+  assert.doesNotMatch(
+    source,
+    /handleOpenMemberProfile[\s\S]{0,160}member\.userID === currentUserID/,
+  );
+});
+
 test('chat info screen gives group rows real actions instead of unsupported placeholders', () => {
   const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
   const source = fs.readFileSync(filePath, 'utf8');

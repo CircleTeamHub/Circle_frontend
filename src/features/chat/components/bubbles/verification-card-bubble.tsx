@@ -1,4 +1,4 @@
-import { View } from 'react-native';
+import { View, type GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/theme';
@@ -15,6 +15,7 @@ interface VerificationCardBubbleProps {
   selfAvatarUri?: string;
   onPress?: (card: VerificationCardData) => void;
   onAvatarPress?: () => void;
+  onLongPress?: (event: GestureResponderEvent) => void;
   hideStatus?: boolean;
 }
 
@@ -30,6 +31,7 @@ export const VerificationCardBubble: React.FC<VerificationCardBubbleProps> = ({
   selfAvatarUri,
   onPress,
   onAvatarPress,
+  onLongPress,
   hideStatus,
 }) => {
   const { colors } = useTheme();
@@ -74,6 +76,7 @@ export const VerificationCardBubble: React.FC<VerificationCardBubbleProps> = ({
       footer={t('invitation.cardFooter', { defaultValue: '点击为 TA 验证' })}
       onPress={onPress ? () => onPress(card) : undefined}
       onAvatarPress={onAvatarPress}
+      onLongPress={onLongPress}
       hideStatus={hideStatus}
     />
   );

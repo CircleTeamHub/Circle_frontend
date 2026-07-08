@@ -74,15 +74,16 @@ const ROW_COLOR: Record<InfoRowId, keyof ThemeColors> = {
   moreInfo: 'purple',
 };
 
-const AVATAR_SIZE = 88;
+const AVATAR_SIZE = 72;
+const RECOGNITION_COUNT_ICON_SOURCE = require('../../../../assets/images/like-outline.png');
 
 const s = StyleSheet.create({
   // 居中身份 Hero：头像 → 名字/标签 → 账号 → 性别地区 → 签名 → 徽章，逐层拉开间距。
   hero: {
     alignItems: 'center',
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.lg,
-    gap: Spacing.md,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.md,
+    gap: Spacing.sm,
   },
   avatarRing: {
     width: AVATAR_SIZE + 10,
@@ -106,7 +107,7 @@ const s = StyleSheet.create({
   },
   identity: {
     alignItems: 'center',
-    gap: Spacing.xs,
+    gap: 2,
   },
   nameRow: {
     flexDirection: 'row',
@@ -124,12 +125,12 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: Spacing.sm,
+    gap: Spacing.xs,
   },
   metaChip: {
     borderRadius: Radius.full,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -143,8 +144,24 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: Spacing.md,
+    gap: Spacing.sm,
     alignItems: 'center',
+  },
+  recognitionPill: {
+    minWidth: 58,
+    height: 32,
+    borderRadius: Radius.full,
+    paddingLeft: 6,
+    paddingRight: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  recognitionIconImage: {
+    width: 18,
+    height: 18,
   },
   // 信息行合并成单卡片，行间用内缩分隔线分隔（左缩进对齐文字起点）。
   card: {
@@ -157,18 +174,18 @@ const s = StyleSheet.create({
     marginLeft: ROW_PADDING_H + ICON_BADGE_SIZE + ROW_GAP,
   },
   actionSection: {
-    marginTop: Spacing.lg,
-    gap: Spacing.sm,
+    marginTop: Spacing.md,
+    gap: Spacing.xs,
   },
   actionButton: {
     width: '100%',
-    height: 52,
+    height: 48,
     borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   addButton: {
-    height: 50,
+    height: 48,
     borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
@@ -223,81 +240,91 @@ export default function UserProfileScreen() {
       city: null,
       signature: '',
       phone: '',
+      likeCount: 0,
+      recognitionCount: 0,
     }),
     [fallbackName, profileId, t],
   );
 
-  useEffect(() => {
-    let cancelled = false;
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
 
-    setFetchError(null);
-
-    // params 中没有 id 时 profileId 为 'unknown'，跳过请求，使用 fallback 静态数据
-    if (profileId === 'unknown') {
-      return;
-    }
-
-    if (isCurrentUser && currentUser) {
       setFetchError(null);
-      setFriendStatus(null);
-      setRemoteProfile({
-        id: currentUser.id,
-        name: currentUser.nickname || currentUser.accountId,
-        accountId: currentUser.accountId,
-        avatarUrl: currentUser.avatarUrl ?? undefined,
-        memberLabel: currentUser.role === 'ADMIN' ? t('profile.admin') : t('profile.normalUser'),
-        badges: [currentUser.role === 'ADMIN' ? t('profile.admin') : t('profile.normalUser')],
-        gender: currentUser.gender,
-        city: currentUser.city,
-        signature: getProfileSignature(
-          currentUser.persona,
-          currentUser.helloWords,
-          t,
-        ),
-        displayIcons: currentUser.displayIcons ?? [],
-        phone: currentUser.phoneNumber ?? t('userProfile.phoneHidden'),
-        remarkHint: currentUser.nickname,
-      });
+
+      // params 中没有 id 时 profileId 为 'unknown'，跳过请求，使用 fallback 静态数据
+      if (profileId === 'unknown') {
+        return () => {
+          cancelled = true;
+        };
+      }
+
+      if (isCurrentUser && currentUser) {
+        setFetchError(null);
+        setFriendStatus(null);
+        setRemoteProfile({
+          id: currentUser.id,
+          name: currentUser.nickname || currentUser.accountId,
+          accountId: currentUser.accountId,
+          avatarUrl: currentUser.avatarUrl ?? undefined,
+          memberLabel: currentUser.role === 'ADMIN' ? t('profile.admin') : t('profile.normalUser'),
+          badges: [currentUser.role === 'ADMIN' ? t('profile.admin') : t('profile.normalUser')],
+          gender: currentUser.gender,
+          city: currentUser.city,
+          signature: getProfileSignature(
+            currentUser.persona,
+            currentUser.helloWords,
+            t,
+          ),
+          displayIcons: currentUser.displayIcons ?? [],
+          likeCount: currentUser.likeCount ?? 0,
+          recognitionCount: currentUser.recognitionCount ?? 0,
+          phone: currentUser.phoneNumber ?? t('userProfile.phoneHidden'),
+          remarkHint: currentUser.nickname,
+        });
+        return () => {
+          cancelled = true;
+        };
+      }
+
+      fetchUserProfile(profileId)
+        .then((profile) => {
+          if (cancelled) {
+            return;
+          }
+
+          setRemoteProfile({
+            id: profile.id,
+            name: profile.nickname || profile.accountId,
+            accountId: profile.accountId,
+            avatarUrl: profile.avatarUrl ?? undefined,
+            memberLabel: profile.role === 'ADMIN' ? t('profile.admin') : t('profile.normalUser'),
+            badges: [profile.role === 'ADMIN' ? t('profile.admin') : t('profile.normalUser')],
+            displayIcons: profile.displayIcons ?? [],
+            likeCount: profile.likeCount ?? 0,
+            recognitionCount: profile.recognitionCount ?? 0,
+            gender: profile.gender,
+            city: profile.city,
+            signature: getProfileSignature(profile.persona, profile.helloWords, t),
+            phone: profile.phoneNumber ?? t('userProfile.phoneHidden'),
+            remarkHint: profile.nickname,
+          });
+        })
+        .catch((error) => {
+          if (!cancelled) {
+            setRemoteProfile(null);
+            setFetchError(t('userProfile.loadFailed'));
+          }
+          if (__DEV__) {
+            console.warn('[UserProfileScreen] fetchUserProfile failed', error);
+          }
+        });
+
       return () => {
         cancelled = true;
       };
-    }
-
-    fetchUserProfile(profileId)
-      .then((profile) => {
-        if (cancelled) {
-          return;
-        }
-
-        setRemoteProfile({
-          id: profile.id,
-          name: profile.nickname || profile.accountId,
-          accountId: profile.accountId,
-          avatarUrl: profile.avatarUrl ?? undefined,
-          memberLabel: profile.role === 'ADMIN' ? t('profile.admin') : t('profile.normalUser'),
-          badges: [profile.role === 'ADMIN' ? t('profile.admin') : t('profile.normalUser')],
-          displayIcons: profile.displayIcons ?? [],
-          gender: profile.gender,
-          city: profile.city,
-          signature: getProfileSignature(profile.persona, profile.helloWords, t),
-          phone: profile.phoneNumber ?? t('userProfile.phoneHidden'),
-          remarkHint: profile.nickname,
-        });
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setRemoteProfile(null);
-          setFetchError(t('userProfile.loadFailed'));
-        }
-        if (__DEV__) {
-          console.warn('[UserProfileScreen] fetchUserProfile failed', error);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentUser, isCurrentUser, profileId, t]);
+    }, [currentUser, isCurrentUser, profileId, t]),
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -399,6 +426,7 @@ export default function UserProfileScreen() {
     hasFriendStatusLoadError: friendStatusLoadError,
   });
   const showAddFriendButton = canSendFriendRequest;
+  const likeCount = Math.max(0, profile.likeCount ?? 0);
 
   const handleAddFriend = useCallback(() => {
     if (!canSendFriendRequest || profileId === 'unknown') {
@@ -532,7 +560,7 @@ export default function UserProfileScreen() {
       },
       content: {
         paddingHorizontal: Spacing.lg,
-        paddingBottom: insets.bottom + (showAddFriendButton ? 104 : 32),
+        paddingBottom: insets.bottom + (showAddFriendButton ? 96 : 24),
       },
       avatarRing: {
         backgroundColor: colors.surface,
@@ -576,6 +604,15 @@ export default function UserProfileScreen() {
         ...Typography.bodyRegular,
         lineHeight: 20,
       },
+      recognitionPill: {
+        backgroundColor: colors.surface,
+        borderColor: colors.primaryLight,
+      },
+      recognitionText: {
+        color: colors.primary,
+        ...Typography.caption,
+        fontWeight: '700' as const,
+      },
       card: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
@@ -617,7 +654,26 @@ export default function UserProfileScreen() {
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title={t('userProfile.title')} />
+      <NavHeader
+        title={t('userProfile.title')}
+        rightSlot={
+          <View
+            style={[s.recognitionPill, d.recognitionPill]}
+            accessibilityLabel={t('userProfile.likesReceived', {
+              count: likeCount,
+              defaultValue: `获赞 ${likeCount}`,
+            })}
+          >
+            <Image
+              source={RECOGNITION_COUNT_ICON_SOURCE}
+              style={s.recognitionIconImage}
+              contentFit="contain"
+              tintColor={colors.primary}
+            />
+            <Text style={d.recognitionText}>{likeCount}</Text>
+          </View>
+        }
+      />
       {fetchError ? (
         <Text style={{ color: colors.error, textAlign: 'center', paddingVertical: 6, ...Typography.small }}>
           {fetchError}
@@ -672,7 +728,9 @@ export default function UserProfileScreen() {
           ) : null}
 
           {profile.signature ? (
-            <Text style={[s.signature, d.signature]}>{profile.signature}</Text>
+            <Text style={[s.signature, d.signature]} numberOfLines={2}>
+              {profile.signature}
+            </Text>
           ) : null}
 
           {(profile.displayIcons?.length ?? 0) > 0 ? (

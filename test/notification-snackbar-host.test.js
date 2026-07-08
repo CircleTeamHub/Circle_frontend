@@ -31,6 +31,14 @@ test("notification snackbar host delegates routing to the pure resolver", () => 
   assert.match(host, /router\.push\(\s*getSnackbarRoute/);
 });
 
+test("notification snackbar host passes current stack scope to the route resolver", () => {
+  const host = read(
+    "src/features/notifications/components/NotificationSnackbarHost.tsx",
+  );
+  assert.match(host, /const notificationScope = .*includes\('discover'\)/);
+  assert.match(host, /scope: notificationScope/);
+});
+
 test("notification snackbar host marks notifications read optimistically", () => {
   const host = read(
     "src/features/notifications/components/NotificationSnackbarHost.tsx",
@@ -38,6 +46,16 @@ test("notification snackbar host marks notifications read optimistically", () =>
   assert.match(host, /useNotificationCenterStore/);
   assert.match(host, /markInteractiveReadLocal\(shown\.id\)/);
   assert.match(host, /markNotificationRead\(shown\.id\)/);
+});
+
+test("notification snackbar host keeps unread badges in sync when tapped", () => {
+  const host = read(
+    "src/features/notifications/components/NotificationSnackbarHost.tsx",
+  );
+  assert.match(host, /useTabBadgeStore/);
+  assert.match(host, /if \(!shown\.read\)/);
+  assert.match(host, /Math\.max\(0, badgeStore\.discoverUnread - 1\)/);
+  assert.match(host, /Math\.max\(0, badgeStore\.systemUnread - 1\)/);
 });
 
 test("notification snackbar host suppresses chat banners on the messages list", () => {

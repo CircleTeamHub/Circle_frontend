@@ -42,6 +42,7 @@ import {
   fetchFriendStatus,
   removeFriendFromBlacklist,
 } from '@/services/api/friends';
+import { fetchUserProfile } from '@/services/api/profile';
 import { leaveGroup, removeGroupMember } from '@/services/api/groups';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useIMStore } from '@/stores/imStore';
@@ -144,6 +145,7 @@ const initialActionPending = {
 };
 const GROUP_MEMBER_COLUMNS = 5;
 const COLLAPSED_GROUP_MEMBER_ROWS = 4;
+const GROUP_MEMBER_PROFILE_REFRESH_LIMIT = 200;
 
 type ConversationActionKey = keyof typeof initialActionPending;
 type OptimisticConversationState = {
@@ -152,6 +154,41 @@ type OptimisticConversationState = {
   burnDuration?: number;
 };
 type OptimisticConversationStateKey = keyof OptimisticConversationState;
+
+async function refreshGroupMemberProfiles(
+  members: GroupMemberItem[],
+): Promise<GroupMemberItem[]> {
+  const membersToRefresh = members.slice(0, GROUP_MEMBER_PROFILE_REFRESH_LIMIT);
+  const profileResults = await Promise.allSettled(
+    membersToRefresh.map((member) => fetchUserProfile(fromImUserId(member.userID))),
+  );
+  const profilesById = new Map<
+    string,
+    Awaited<ReturnType<typeof fetchUserProfile>>
+  >();
+  for (const result of profileResults) {
+    if (result.status === 'fulfilled') {
+      profilesById.set(result.value.id, result.value);
+    }
+  }
+
+  if (profilesById.size === 0) {
+    return members;
+  }
+
+  return members.map((member) => {
+    const profile = profilesById.get(fromImUserId(member.userID));
+    if (!profile) {
+      return member;
+    }
+
+    return {
+      ...member,
+      nickname: profile.nickname || member.nickname,
+      faceURL: profile.avatarUrl ?? member.faceURL,
+    };
+  });
+}
 
 type GroupInfoRowProps = {
   label: string;
@@ -443,9 +480,13 @@ export default function ChatInfoScreen() {
         });
 
       loadGroupMemberList(groupID, 10_000)
-        .then((members) => {
+        .then(async (members) => {
           if (!cancelled) {
             setGroupMembers(members);
+          }
+          const refreshedMembers = await refreshGroupMemberProfiles(members);
+          if (!cancelled) {
+            setGroupMembers(refreshedMembers);
           }
         })
         .catch(() => {
@@ -753,13 +794,13 @@ export default function ChatInfoScreen() {
 
   const handleOpenMemberProfile = useCallback(
     (member: GroupMemberItem) => {
-      if (!member.userID || member.userID === currentUserID) {
+      if (!member.userID) {
         return;
       }
 
       router.push(getUserProfileHref('messages', fromImUserId(member.userID), member.nickname || undefined));
     },
-    [currentUserID],
+    [],
   );
 
   const handleKickMember = useCallback(

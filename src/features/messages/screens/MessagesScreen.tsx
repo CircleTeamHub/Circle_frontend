@@ -103,7 +103,7 @@ const s = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  // 右侧操作按钮组（通知、已读、搜索、+）
+  // 右侧操作按钮组（已读、搜索、+）
   actionRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -113,12 +113,6 @@ const s = StyleSheet.create({
     position: "relative",
     justifyContent: "center",
     alignItems: "center",
-  },
-  // 通知图标右上角的未读角标
-  actionBadge: {
-    position: "absolute",
-    top: -8,
-    right: -12,
   },
   // 单条会话行外层：保留普通列表分隔线和行间距
   row: {
@@ -479,7 +473,7 @@ function ConversationRowImpl({
 // MessagesScreen：消息列表主页面
 // 功能：
 //   1. 展示所有会话，支持按标签筛选（全部/未读/群聊/私聊/自定义群组）
-//   2. 头部操作栏：通知跳转、搜索、一键已读
+//   2. 头部操作栏：搜索、一键已读
 //   3. 点击头像可进入用户主页（仅私聊），点击会话行进入聊天详情
 // memo 化会话行：配合上游稳定的 item 引用，未变化的行跳过重渲染。
 const ConversationRow = memo(ConversationRowImpl);
@@ -516,10 +510,6 @@ export default function MessagesScreen() {
   const markLocalUnread = useLocalUnreadStore((state) => state.markUnread);
   const clearLocalUnread = useLocalUnreadStore((state) => state.clearUnread);
   const clearManyLocalUnread = useLocalUnreadStore((state) => state.clearMany);
-  // 通知图标的角标走 tabBadgeStore.systemUnread —— 这是 realtime 通道
-  // `system.notification.unread.changed` 维护的真实未读数。之前那份本地假数据
-  // (discover-alerts.ts) 让 badge 永远 ≥ 5，且没人能清。
-
   const [activeFilterId, setActiveFilterId] = useState("all"); // 当前激活的筛选标签 id
   const [menuVisible, setMenuVisible] = useState(false);        // 右上角弹出菜单的显隐
   const [refreshing, setRefreshing] = useState(false);
@@ -564,8 +554,6 @@ export default function MessagesScreen() {
     }
   }, []);
 
-  // 发现 / 系统通知未读数（realtime 通道维护，跟 discover tab 入口绑定）
-  const discoverUnread = useTabBadgeStore((state) => state.systemUnread);
   const totalUnread = useIMStore((state) => state.totalUnread);
   const setMessagesUnread = useTabBadgeStore((state) => state.setMessagesUnread);
 
@@ -775,10 +763,6 @@ export default function MessagesScreen() {
     [clearLocalUnread, t],
   );
 
-  const handleOpenNotifications = useCallback(() => {
-    router.push("/(tabs)/messages/notifications");
-  }, [router]);
-
   // 点击搜索图标 → 跳转搜索页
   const handleOpenFind = useCallback(() => {
     router.push("/(tabs)/messages/find");
@@ -881,22 +865,6 @@ export default function MessagesScreen() {
       <View style={s.titleRow}>
         <Text style={d.title}>{t('messages.title')}</Text>
         <View style={s.actionRow}>
-          {/* 通知按钮：右上角显示未读角标 */}
-          <Pressable
-            style={s.actionButton}
-            onPress={handleOpenNotifications}
-          >
-            <Ionicons
-              name="notifications-outline"
-              size={24}
-              color={colors.text}
-            />
-            <View style={s.actionBadge}>
-              {/* 这个图标导航到 /(tabs)/discover —— 角标只反映"发现/系统通知"未读，
-                  不再 max(IM totalUnread, ...) 以免 IM 消息和发现页通知混在一起。 */}
-              <Badge count={discoverUnread} />
-            </View>
-          </Pressable>
           {/* ✓✓：一键已读（按当前筛选范围） */}
           <Pressable style={s.actionButton} onPress={handleClearUnread}>
             <Ionicons
@@ -922,7 +890,7 @@ export default function MessagesScreen() {
         scrollable
       />
     </View>
-  ), [activeTab, colors, d, filterItems, handleClearUnread, handleOpenFind, handleOpenNotifications, discoverUnread, t]);
+  ), [activeTab, colors, d, filterItems, handleClearUnread, handleOpenFind, t]);
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>

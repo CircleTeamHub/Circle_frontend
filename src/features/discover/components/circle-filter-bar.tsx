@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react';
-import { FlatList, Pressable, StyleSheet, Text } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { Circle } from '@/types';
 
@@ -8,6 +9,7 @@ interface CircleFilterBarProps {
   circles: Circle[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  onEditOrder: () => void;
 }
 
 interface FilterItem {
@@ -16,8 +18,14 @@ interface FilterItem {
 }
 
 const s = StyleSheet.create({
-  list: {
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
     marginBottom: Spacing.sm,
+  },
+  list: {
+    flex: 1,
   },
   listContent: {
     gap: Spacing.sm,
@@ -32,12 +40,22 @@ const s = StyleSheet.create({
     ...Typography.caption,
     fontWeight: '600',
   },
+  editButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    transform: [{ translateX: Spacing.xs }],
+  },
 });
 
 export const CircleFilterBar: React.FC<CircleFilterBarProps> = ({
   circles,
   selectedId,
   onSelect,
+  onEditOrder,
 }) => {
   const { t } = useTranslation();
   const { colors } = useTheme();
@@ -81,14 +99,33 @@ export const CircleFilterBar: React.FC<CircleFilterBarProps> = ({
   const keyExtractor = useCallback((item: FilterItem) => item.id ?? 'all', []);
 
   return (
-    <FlatList
-      data={items}
-      renderItem={renderItem}
-      keyExtractor={keyExtractor}
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      style={s.list}
-      contentContainerStyle={s.listContent}
-    />
+    <View style={s.container}>
+      <FlatList
+        data={items}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={s.list}
+        contentContainerStyle={s.listContent}
+      />
+      <Pressable
+        style={[
+          s.editButton,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.surfaceBorder,
+          },
+        ]}
+        onPress={onEditOrder}
+        hitSlop={8}
+      >
+        <Ionicons
+          name="reorder-three-outline"
+          size={22}
+          color={colors.textSecondary}
+        />
+      </Pressable>
+    </View>
   );
 };

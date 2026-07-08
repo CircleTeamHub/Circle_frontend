@@ -40,7 +40,7 @@ function makePost(id: string): CirclePlazaPost {
 function makeState(overrides: Partial<DiscoverFeedState> = {}): DiscoverFeedState {
   return {
     plazaPosts: [],
-    plazaPage: 1,
+    plazaCursor: null,
     plazaHasMore: true,
     plazaLoading: true,
     plazaRefreshing: false,
@@ -53,7 +53,7 @@ function makeState(overrides: Partial<DiscoverFeedState> = {}): DiscoverFeedStat
 test('ignores stale plaza responses from an older filter version', () => {
   const currentState = makeState({
     plazaPosts: [makePost('new-filter-post')],
-    plazaPage: 2,
+    plazaCursor: 'cursor-a',
     plazaHasMore: true,
     plazaQueryVersion: 7,
     plazaLatestRequestId: 10,
@@ -61,7 +61,7 @@ test('ignores stale plaza responses from an older filter version', () => {
 
   const nextState = applyPlazaFetchSuccess(currentState, {
     reset: true,
-    page: 1,
+    nextCursor: null,
     items: [makePost('stale-post')],
     hasMore: false,
     requestQueryVersion: 6,
@@ -75,12 +75,12 @@ test('appends plaza results onto the latest state, preserving locally prepended 
   const prependedPost = makePost('prepended');
   const currentState = makeState({
     plazaPosts: [prependedPost, makePost('existing')],
-    plazaPage: 2,
+    plazaCursor: 'cursor-1',
   });
 
   const nextState = applyPlazaFetchSuccess(currentState, {
     reset: false,
-    page: 2,
+    nextCursor: 'cursor-2',
     items: [makePost('server-page-2')],
     hasMore: true,
     requestQueryVersion: 3,
@@ -91,4 +91,6 @@ test('appends plaza results onto the latest state, preserving locally prepended 
     nextState.plazaPosts.map((post) => post.id),
     ['prepended', 'existing', 'server-page-2'],
   );
+  // The next page follows the server's cursor, not a page counter.
+  assert.equal(nextState.plazaCursor, 'cursor-2');
 });

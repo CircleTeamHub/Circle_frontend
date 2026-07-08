@@ -266,7 +266,10 @@
       "save": "저장",
       "saveUnsupported": "이 메시지는 아직 저장할 수 없습니다",
       "saveFailed": "저장 실패",
-      "saveFailedHint": "나중에 다시 시도해 주세요"
+      "saveFailedHint": "나중에 다시 시도해 주세요",
+      "noteCollected": "내 노트에 추가했어요",
+      "noteAlreadyCollected": "이미 내 노트에 있어요",
+      "noteCollectedHint": "'내 노트'에서 확인할 수 있어요"
     },
     "mentions": {
       "empty": "멘션할 수 있는 멤버가 없습니다"
@@ -628,7 +631,13 @@
     "actions": {
       "new": "새로 만들기",
       "qrCode": "QR 코드",
-      "share": "공유"
+      "share": "공유",
+      "pin": "상단 고정",
+      "unpin": "고정 해제",
+      "edit": "편집",
+      "unlist": "내리기",
+      "relist": "올리기",
+      "more": "더보기"
     },
     "alerts": {
       "deleteFailedTitle": "삭제 실패",
@@ -643,7 +652,13 @@
       "saveFailedTitle": "저장 실패",
       "saveGroupFailed": "그룹을 저장하지 못했습니다. 다시 시도해 주세요.",
       "saveMembershipsFailed": "노트 그룹을 저장하지 못했습니다. 다시 시도해 주세요.",
-      "deleteGroupMessage": "\"{{name}}\"을(를) 삭제해도 노트는 삭제되지 않으며 그룹에서만 제외됩니다."
+      "saveMembershipsPartialFailed": "일부 노트 그룹이 저장되었을 수 있습니다. 목록을 최신 상태로 새로고침했으니 확인 후 다시 시도해 주세요.",
+      "deleteGroupMessage": "\"{{name}}\"을(를) 삭제해도 노트는 삭제되지 않으며 그룹에서만 제외됩니다.",
+      "pinFailedTitle": "작업 실패",
+      "relistFailedTitle": "올리기 실패",
+      "unlistFailedTitle": "내리기 실패",
+      "unlistTitle": "노트 내리기",
+      "unlistConfirm": "내린 노트는 내림 목록에서 볼 수 있으며 한 달 후 자동 삭제됩니다."
     },
     "detail": {
       "loadFailed": "노트를 불러오지 못했습니다. 다시 시도해 주세요",
@@ -654,7 +669,11 @@
       "downloadImages": "이미지 다운로드",
       "downloadVideos": "동영상 다운로드",
       "downloadLongImage": "롱 이미지 생성",
-      "downloadPdf": "PDF 다운로드"
+      "downloadPdf": "PDF 다운로드",
+      "sourceGroupLabel": "그룹 채팅에서",
+      "sourcePrivateLabel": "개인 채팅에서",
+      "sourceSharedBy": "{{name}}님이 공유",
+      "sourceLocate": "원본 메시지 보기"
     },
     "edit": {
       "addImage": "이미지 추가",
@@ -711,14 +730,15 @@
     },
     "empty": {
       "noMatch": "일치하는 노트가 없습니다",
-      "noNotes": "아직 노트가 없습니다"
+      "noNotes": "아직 노트가 없습니다",
+      "noUnlisted": "내린 노트가 없습니다"
     },
     "manageGroups": {
       "cancelEdit": "편집 취소",
-      "copy": "\"전체\"와 \"미분류\"는 맨 앞에 고정됩니다. 자주 쓰는 사용자 그룹을 앞으로 옮기세요.",
+      "copy": "\"전체\"와 \"미분류\"는 고정 그룹이라 수정할 수 없습니다.",
       "createNew": "그룹 추가",
       "limitHint": "{{count}}/{{max}}개 그룹 생성됨",
-      "namePlaceholder": "그룹 이름 입력, 예: 서울",
+      "namePlaceholder": "새 그룹을 추가할 그룹 이름 입력",
       "saveEdit": "변경 사항 저장",
       "saving": "저장 중...",
       "title": "그룹 관리",
@@ -733,29 +753,6 @@
       "copy": "\"{{name}}\"에 추가할 노트를 선택하세요."
     },
     "searchPlaceholder": "검색할 내용을 입력하세요",
-    "settings": {
-      "cardSaveSection": "카드 저장",
-      "confirmCardSave": "카드 저장 확인",
-      "cooldownTitle": "대기 중",
-      "defaultSaveCard": "기본으로 카드 저장",
-      "displaySection": "표시",
-      "manualRefreshHint1": "목록이나 그룹 수가 서버와 다를 때 사용하세요.",
-      "manualRefreshHint2": "탭하면 서버에서 노트와 그룹 목록을 다시 가져옵니다.",
-      "manualRefreshHint3": "잦은 실행을 막기 위해 새로고침 후 대기 시간이 적용됩니다.",
-      "manualRefreshTitle": "수동 새로고침",
-      "refresh": "다시 가져오기",
-      "refreshFailedMessage": "연결을 확인한 후 다시 시도해 주세요.",
-      "refreshFailedTitle": "새로고침 실패",
-      "refreshedTitle": "새로고침됨",
-      "refreshing": "새로고침 중...",
-      "showGroups": "그룹 정보 표시",
-      "showMedia": "미디어 표시",
-      "showSortToolbar": "정렬 도구 모음 표시",
-      "showUngrouped": "미분류 표시",
-      "title": "노트 설정",
-      "cooldownMessage": "{{remain}}초 후에 다시 시도해 주세요.",
-      "refreshedMessage": "그룹: {{groupCount}}\n표시 중인 노트: {{noteCount}}"
-    },
     "share": {
       "copiedMessage": "노트 링크가 클립보드에 복사되었습니다.",
       "copiedTitle": "복사됨",
@@ -772,12 +769,10 @@
       "message": "{{title}}\n{{url}}",
       "qrHint": "스캔하여 이 노트 목록({{count}}개)을 엽니다."
     },
-    "stopgap": {
-      "deletedNotes": "삭제된 노트 목록이 곧 제공됩니다. 기대해 주세요.",
-      "title": "출시 예정"
-    },
     "title": "내 노트",
     "unlisted": "내림",
+    "unlistedTitle": "내린 노트",
+    "unlistedAutoDeleteHint": "내린 노트는 한 달 후 자동 삭제됩니다.",
     "format": {
       "fullDate": "{{year}}년 {{month}}월 {{day}}일 · {{weekday}}",
       "groupOverflow": "{{first}}, {{second}} 외 {{extra}}",
@@ -800,9 +795,10 @@
     },
     "section": {
       "text": "텍스트",
-      "media": "사진 / 동영상",
+      "media": "사진 · 동영상",
       "showcase": "쇼케이스",
-      "location": "주소"
+      "location": "주소",
+      "emptyText": "텍스트 없음"
     },
     "location": {
       "invalidTitle": "유효하지 않은 위치",
@@ -812,6 +808,24 @@
       "failedTitle": "위치 확인 실패",
       "usePlace": "이 위치 사용",
       "selectedLabel": "선택한 위치"
+    },
+    "list": {
+      "fromSource": "{{name}}에서"
+    },
+    "loadFailed": "노트를 불러오지 못했어요. 네트워크 확인 후 다시 시도해 주세요",
+    "shareToChat": {
+      "title": "친구나 그룹에 공유",
+      "confirmTitle": "노트 보내기",
+      "confirmMessage": "“{{title}}”을(를) {{name}}에게 보낼까요？",
+      "sentTitle": "보냈어요",
+      "sentMessage": "노트를 채팅으로 보냈어요.",
+      "failedTitle": "전송 실패",
+      "failedMessage": "지금은 이 노트를 보낼 수 없습니다. 다시 시도해 주세요.",
+      "sending": "보내는 중...",
+      "loadFailed": "채팅을 불러오지 못했어요. 다시 시도해 주세요",
+      "empty": "보낼 수 있는 채팅이 없어요",
+      "groupHint": "그룹",
+      "friendHint": "친구"
     }
   },
   "tempChats": {
@@ -1117,7 +1131,9 @@
     "management": "서클",
     "moments": "모먼트",
     "noActivity": "활동 없음",
+    "noActiveActivity": "진행 중인 활동 없음",
     "joinCircleHint": "서클에 참여하면 광장 게시물을 볼 수 있어요",
+    "endedActivityHiddenHint": "종료되었거나 만료된 활동은 광장에 표시되지 않아요",
     "circleDetail": "서클 상세",
     "createCircle": "서클 만들기",
     "discoverCircles": "서클 발견",
@@ -1163,6 +1179,11 @@
       "selectedCount": "{{count}}/{{max}} 선택",
       "noCircles": "선택할 수 있는 서클 없음",
       "maxCircles": "최대 {{max}}개 서클"
+    },
+    "shortcutOrder": {
+      "title": "서클 순서 편집",
+      "hint": "가로 서클 목록이 이 순서로 표시돼요",
+      "reset": "기본 순서로"
     },
     "commentInput": {
       "placeholder": "댓글 쓰기...",
@@ -1556,16 +1577,11 @@
     "collections": {
       "deleteTitle": "삭제 확인",
       "deleteConfirm": "이 보관 항목을 삭제하시겠어요?",
-      "imageCount": "이미지 {{count}}개",
-      "videoCount": "동영상 {{count}}개",
-      "showcaseCount": "쇼케이스 {{count}}개",
-      "location": "위치",
       "backToMessages": "메시지로 돌아가기",
       "sender": "보낸 사람",
       "empty": "아직 보관한 항목이 없습니다",
       "loadError": "컬렉션을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
       "deleteError": "컬렉션 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.",
-      "noteFallbackTitle": "저장한 노트",
       "conversationFallback": "채팅",
       "fromSource": "{{title}}에서",
       "tabs": {
@@ -1573,8 +1589,7 @@
         "chat": "채팅 기록",
         "video": "동영상",
         "voice": "음성",
-        "message": "메시지",
-        "note": "저장한 노트"
+        "message": "메시지"
       },
       "menuLabel": "보관함"
     },
@@ -2201,11 +2216,13 @@
     "PLAZA_RECOGNIZE_NOT_MEMBER": "서클의 활성 멤버만 인정할 수 있습니다",
     "PLAZA_RECOGNIZE_BLOCKED": "차단한 사용자는 인정할 수 없습니다",
     "PLAZA_RECOGNIZE_ALREADY": "협업 인정이 이미 제출되었습니다",
+    "PLAZA_INVALID_CURSOR": "이 광장 페이지가 만료되었습니다. 새로고침 후 다시 시도하세요.",
     "TRACE_MOMENT_NOT_FOUND": "모먼트를 찾을 수 없습니다",
     "TRACE_DELETE_AUTHOR_ONLY": "작성자만 삭제할 수 있습니다",
     "TRACE_REPLY_TARGET_NOT_FOUND": "답글 대상 댓글이 존재하지 않습니다",
     "TRACE_COMMENT_NOT_FOUND": "댓글을 찾을 수 없습니다",
     "TRACE_ACCESS_FORBIDDEN": "이 모먼트를 볼 권한이 없습니다",
+    "TRACE_INVALID_CURSOR": "이 피드 페이지가 만료되었습니다. 새로고침 후 다시 시도하세요.",
     "FRIEND_SELF_ADD": "자신을 친구로 추가할 수 없습니다",
     "FRIEND_USER_NOT_FOUND": "사용자를 찾을 수 없습니다",
     "FRIEND_BLOCKED_CANNOT_REQUEST": "이 사용자에게 친구 요청을 보낼 수 없습니다",

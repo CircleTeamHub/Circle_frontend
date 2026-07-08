@@ -171,6 +171,39 @@ test('user profile screen renders unified display icons from backend data', () =
   assert.match(source, /UserIconRow/);
 });
 
+test('user profile screen shows received like count in the header', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/user/screens/UserProfileScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /rightSlot=\{/);
+  assert.match(source, /recognitionPill/);
+  assert.match(source, /like-outline\.png/);
+  assert.match(source, /recognitionIconImage/);
+  assert.match(source, /source=\{RECOGNITION_COUNT_ICON_SOURCE\}/);
+  assert.doesNotMatch(source, /name="thumbs-up"/);
+  assert.doesNotMatch(source, /name="heart"/);
+  assert.match(source, /profile\.likeCount \?\? 0/);
+  assert.match(source, /currentUser\.likeCount \?\? 0/);
+  assert.match(source, /userProfile\.likesReceived/);
+  assert.doesNotMatch(source, /const recognitionCount = Math\.max/);
+});
+
+test('user profile screen refreshes profile data when returning to focus', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/user/screens/UserProfileScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(
+    source,
+    /useFocusEffect\(\s*useCallback\(\(\) => \{[\s\S]*fetchUserProfile\(profileId\)/,
+  );
+});
+
 test('user profile route helpers preserve scope for the request form', () => {
   const {
     getChatInfoHref,

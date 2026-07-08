@@ -17,13 +17,18 @@ type MomentPage = PaginatedResponse<MomentPost>;
 
 // The hook only reads `.id` (for dedup) and `.hasMore`, so loose page objects
 // are enough for this behavior test.
-const pageOf = (ids: string[], hasMore: boolean) =>
+const pageOf = (
+  ids: string[],
+  hasMore: boolean,
+  nextCursor: string | null = hasMore ? 'next' : null,
+) =>
   ({
     items: ids.map((id) => ({ id })),
     total: ids.length,
     page: 1,
     limit: ids.length,
     hasMore,
+    nextCursor,
   }) as MomentPage;
 
 beforeEach(() => {
@@ -49,9 +54,13 @@ test('loadMore issues a single request when triggered twice rapidly', async () =
     result.current.loadMore();
   });
 
-  // The inFlightRef guard collapses the duplicate into a single page-2 request.
+  // The inFlightRef guard collapses the duplicate into a single next-page
+  // request, keyed by the first page's cursor rather than a page number.
   expect(mockFetch).toHaveBeenCalledTimes(2);
-  expect(mockFetch).toHaveBeenLastCalledWith('user-1', { page: 2, limit: 20 });
+  expect(mockFetch).toHaveBeenLastCalledWith('user-1', {
+    cursor: 'next',
+    limit: 20,
+  });
 
   await act(async () => {
     resolvePage2(pageOf(['b'], false));
@@ -78,4 +87,39 @@ test('a fetch that resolves after unmount does not update state or error', async
 
   expect(errorSpy).not.toHaveBeenCalled();
   errorSpy.mockRestore();
+});
+
+test('a stale user fetch cannot overwrite moments after userId changes', async () => {
+  let resolveUser1: (value: MomentPage) => void = () => {};
+  let resolveUser2: (value: MomentPage) => void = () => {};
+  mockFetch
+    .mockImplementationOnce(
+      () => new Promise((resolve) => (resolveUser1 = resolve)),
+    )
+    .mockImplementationOnce(
+      () => new Promise((resolve) => (resolveUser2 = resolve)),
+    );
+
+  const { result, rerender } = renderHook<
+    ReturnType<typeof useUserMoments>,
+    { userId: string }
+  >(
+    ({ userId }) => useUserMoments(userId),
+    { initialProps: { userId: 'user-1' } },
+  );
+
+  rerender({ userId: 'user-2' });
+
+  await act(async () => {
+    resolveUser2(pageOf(['b'], false));
+  });
+
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  expect(result.current.moments.map((m) => m.id)).toEqual(['b']);
+
+  await act(async () => {
+    resolveUser1(pageOf(['a'], false));
+  });
+
+  expect(result.current.moments.map((m) => m.id)).toEqual(['b']);
 });

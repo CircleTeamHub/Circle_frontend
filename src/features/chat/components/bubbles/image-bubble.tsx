@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, type GestureResponderEvent } from 'react-native';
 import { Image } from 'expo-image';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import { Avatar } from '@/components/ui/avatar';
@@ -14,6 +14,7 @@ interface ImageBubbleProps {
   selfName?: string;
   selfAvatarUri?: string;
   onAvatarPress?: () => void;
+  onLongPress?: (event: GestureResponderEvent) => void;
   hideStatus?: boolean;
 }
 
@@ -58,6 +59,7 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
   selfName,
   selfAvatarUri,
   onAvatarPress,
+  onLongPress,
   hideStatus,
 }) => {
   const { colors } = useTheme();
@@ -85,7 +87,11 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
   const displayUri = message.imageThumbUrl ?? message.imageUrl;
   const imageNode = (
     <View style={[sImage.body, outgoing ? sImage.bodyOutgoing : null]}>
-      <View style={sImage.imageWrap}>
+      <Pressable
+        style={sImage.imageWrap}
+        onLongPress={onLongPress}
+        delayLongPress={350}
+      >
         {displayUri ? (
           <Image
             source={{ uri: displayUri }}
@@ -103,7 +109,7 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
             }}
           />
         ) : null}
-      </View>
+      </Pressable>
       {message.time ? (
         <View style={sImage.timeRow}>
           <Text

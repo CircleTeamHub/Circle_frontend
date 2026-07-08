@@ -318,10 +318,14 @@ export interface CircleDetail extends Circle {
 
 export interface PaginatedResponse<T> {
   items: T[];
-  total: number;
+  // `null` on the keyset (cursor) path — that path skips the per-page count().
+  total: number | null;
   page: number;
   limit: number;
   hasMore: boolean;
+  // Opaque keyset cursor for the next page; pass back as `cursor`. Absent/null
+  // means no more pages (or an offset-mode response the client can ignore).
+  nextCursor?: string | null;
 }
 
 export interface CreateCircleInput {

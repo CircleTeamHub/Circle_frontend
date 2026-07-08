@@ -93,18 +93,22 @@ export default function NoteBlockEditor({
   // Pass a JSON string across the bridge — Expo DOM bridge cannot serialize
   // BlockNote Block objects directly (they contain non-plain properties that
   // cause "Functions are not supported in arguments").
-  function serializeBlocks(): string {
+  // 序列化失败时返回 null 并跳过本次上报：以前回退成 '[]' 会把 native 侧的
+  // 正文覆盖成空文档，用户此时点保存就丢内容。保留上一次成功的内容更安全。
+  function serializeBlocks(): string | null {
     try {
       return JSON.stringify(editor.document);
-    } catch {
-      return '[]';
+    } catch (error) {
+      console.warn('[NoteBlockEditor.dom] failed to serialize blocks', error);
+      return null;
     }
   }
 
   // Fire content changes up to native
   useEditorChange(() => {
     if (unmounted.current) return;
-    onContentChange(serializeBlocks());
+    const serialized = serializeBlocks();
+    if (serialized != null) onContentChange(serialized);
   }, editor);
 
   // Track cursor block type for toolbar highlight
