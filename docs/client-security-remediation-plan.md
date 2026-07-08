@@ -65,6 +65,9 @@ Updated 2026-07-04 on branch `fix/local-data-backup-exclusion`.
 - **C-06 regression coverage:** `test/native-branding-config.test.js` asserts the
   Android backup setting, and `test/im-client.test.js` asserts the OpenIM data
   directory is created with the iOS backup-exclusion option.
+- **C-06 Android artifact gate:** `test/native-branding-config.test.js` also
+  introspects the generated Android manifest and asserts the final application node
+  contains `android:allowBackup="false"`.
 
 Remaining C-01/C-02 follow-ups:
 
