@@ -18,10 +18,11 @@ const foldSource = require('../../../assets/lottie/plane-fold.json');
 
 // 开场：白底播放「信封开→折成飞机→飞走」的一次性 Lottie → 飞机飞走瞬间揭幕
 // （遮罩淡出 + App 从中心弹性展开）。Lottie 本身 2.4s，总时长留一点揭幕缓冲。
-const DURATION_MS = 2000;
+// 完整 Lottie 为 2.4s（144/60）。揭幕排在动画播完之后，确保整段(含转向飞走)播完。
+const DURATION_MS = 2700;
 const T = {
-  planeIn: [0, 0.08],
-  reveal: [0.9, 1],
+  planeIn: [0, 0.05],
+  reveal: [0.92, 1],
 } as const;
 
 type LaunchRevealProps = {
@@ -44,9 +45,9 @@ export function LaunchReveal({ play, onFinish, onReveal }: LaunchRevealProps) {
     if (!play) {
       return;
     }
-    // 只播到「折成飞机起飞」(帧 0→108)，砍掉结尾缩小消失+poof 的怪尾巴。
+    // 完整播放整段动画（信封开→折成飞机→转向飞走→poof），一帧不删。
     lottieRef.current?.reset();
-    lottieRef.current?.play(0, 108);
+    lottieRef.current?.play();
     progress.value = 0;
     progress.value = withTiming(
       1,
