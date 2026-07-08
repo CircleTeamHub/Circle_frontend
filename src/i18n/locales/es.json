@@ -1925,6 +1925,7 @@
       "requestFailed": "La solicitud falló",
       "sessionExpired": "Tu sesión ha caducado. Inicia sesión de nuevo.",
       "refreshResponseInvalid": "Respuesta de actualización no válida. Inicia sesión de nuevo.",
+      "sessionChangedDuringRefresh": "La cuenta cambió mientras se actualizaba la sesión. Inténtalo de nuevo.",
       "uploadTimeout": "Se agotó el tiempo de la subida. Comprueba tu conexión e inténtalo de nuevo.",
       "uploadFailedWithStatus": "La subida falló ({{status}})"
     }

@@ -54,7 +54,10 @@ function loadApiClient({
         return { API_URL: 'http://192.168.1.65:3000/api/v1' };
       }
       if (request === '@/services/auth/session') {
-        return { clearLocalSession: async () => {} };
+        return {
+          clearLocalSession: async () => {},
+          registerLogoutHandler: () => () => {},
+        };
       }
       if (request === '@/stores/authStore') {
         return {
