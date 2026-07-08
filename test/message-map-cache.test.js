@@ -86,3 +86,62 @@ test('message mapper cache remaps an optimistic message after SDK mutates its st
   mapped = mapMessageItemsToChatMessages([message], 'self', cache);
   assert.equal(mapped[0].sendStatus, 2);
 });
+
+test('message mapper uses snapshotPicture as the image thumbnail when present', () => {
+  const { mapMessageItemToChatMessage } = loadTsModule(
+    'src/im/mappers.ts',
+    MAPPER_STUBS,
+  );
+
+  const mapped = mapMessageItemToChatMessage(
+    {
+      clientMsgID: 'img-1',
+      sendID: 'self',
+      recvID: 'peer',
+      sessionType: 1,
+      contentType: 102,
+      sendTime: Date.now(),
+      status: 2,
+      pictureElem: {
+        bigPicture: { url: 'https://cdn.example.com/full.jpg', width: 1200 },
+        snapshotPicture: {
+          url: 'https://cdn.example.com/thumb.jpg',
+          width: 240,
+        },
+      },
+    },
+    'self',
+  );
+
+  assert.equal(mapped.type, 'image');
+  assert.equal(mapped.imageUrl, 'https://cdn.example.com/full.jpg');
+  assert.equal(mapped.imageThumbUrl, 'https://cdn.example.com/thumb.jpg');
+});
+
+test('message mapper falls back to sourcePicture for image thumbnails', () => {
+  const { mapMessageItemToChatMessage } = loadTsModule(
+    'src/im/mappers.ts',
+    MAPPER_STUBS,
+  );
+
+  const mapped = mapMessageItemToChatMessage(
+    {
+      clientMsgID: 'img-2',
+      sendID: 'self',
+      recvID: 'peer',
+      sessionType: 1,
+      contentType: 102,
+      sendTime: Date.now(),
+      status: 2,
+      pictureElem: {
+        bigPicture: { url: 'https://cdn.example.com/full.jpg' },
+        sourcePicture: { url: 'https://cdn.example.com/source.jpg' },
+      },
+    },
+    'self',
+  );
+
+  assert.equal(mapped.type, 'image');
+  assert.equal(mapped.imageUrl, 'https://cdn.example.com/full.jpg');
+  assert.equal(mapped.imageThumbUrl, 'https://cdn.example.com/source.jpg');
+});
