@@ -120,7 +120,9 @@ export default function DiscoverScreen() {
   }, [router]);
 
   const handleOpenNotifications = useCallback(() => {
-    router.push("/(tabs)/messages/notifications");
+    // Open the notification center inside the Discover (动态) stack so backing out
+    // returns here, not to the messages/chat tab.
+    router.push("/(tabs)/discover/notification-center");
   }, [router]);
 
   const handleFilterPress = useCallback(() => {
