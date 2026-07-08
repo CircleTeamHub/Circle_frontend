@@ -57,6 +57,8 @@ interface AuthState {
   user: AuthUser | null;
   isAuthenticated: boolean;
   onboardingRequired: boolean;
+  // Runtime-only auth credential generation. This advances on login/logout and
+  // token rotation, so do not treat it as a stable user identity version.
   sessionEpoch: number;
   isLoading: boolean;
   hasHydrated: boolean;
