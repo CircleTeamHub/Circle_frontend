@@ -16,10 +16,35 @@ import LottieView from 'lottie-react-native';
 // 换素材只需替换该 json（无需再次原生重建）。
 const foldSource = require('../../../assets/lottie/plane-fold.json');
 
+type LottieTimeline = {
+  fr?: number;
+  ip?: number;
+  op?: number;
+};
+
+const lottieTimeline = foldSource as LottieTimeline;
+const lottieFramerate = Number(lottieTimeline.fr) > 0 ? Number(lottieTimeline.fr) : 60;
+const lottieStartFrame = Number.isFinite(Number(lottieTimeline.ip))
+  ? Number(lottieTimeline.ip)
+  : 0;
+const lottieEndFrame = Number.isFinite(Number(lottieTimeline.op))
+  ? Number(lottieTimeline.op)
+  : lottieStartFrame;
+// Lottie 播放速度（<1 更慢）。飞机飞得慢一点就调小这个值；
+// 实际播放时长按此换算，揭幕时机随之延后，保持同步。
+const LOTTIE_SPEED = 0.75;
+const LOTTIE_DURATION_MS = Math.max(
+  0,
+  Math.round(
+    ((lottieEndFrame - lottieStartFrame) / lottieFramerate / LOTTIE_SPEED) * 1000,
+  ),
+);
+const REVEAL_BUFFER_MS = 300;
+
 // 开场：白底播放「信封开→折成飞机→飞走」的一次性 Lottie → 飞机飞走瞬间揭幕
 // （遮罩淡出 + App 从中心弹性展开）。Lottie 本身 2.4s，总时长留一点揭幕缓冲。
-// 完整 Lottie 为 2.4s（144/60）。揭幕排在动画播完之后，确保整段(含转向飞走)播完。
-const DURATION_MS = 2700;
+// progress 是时间轴，必须线性递增；缓动只应放在具体视觉插值里，不能影响揭幕时机。
+const DURATION_MS = LOTTIE_DURATION_MS + REVEAL_BUFFER_MS;
 const T = {
   planeIn: [0, 0.05],
   reveal: [0.92, 1],
@@ -37,7 +62,7 @@ export function LaunchReveal({ play, onFinish, onReveal }: LaunchRevealProps) {
   const progress = useSharedValue(0);
   const revealFired = useSharedValue(false);
   const minDim = Math.min(Math.max(width, 1), Math.max(height, 1));
-  // Lottie 画布 500×500 里飞机居中偏小，容器取屏幕短边的 0.78 让飞机足够醒目。
+  // 当前 Lottie 是大画布，容器取屏幕短边的 0.78 让纸飞机主体足够醒目。
   const size = Math.min(360, Math.max(240, minDim * 0.78));
   const lottieRef = useRef<LottieView>(null);
 
@@ -51,7 +76,7 @@ export function LaunchReveal({ play, onFinish, onReveal }: LaunchRevealProps) {
     progress.value = 0;
     progress.value = withTiming(
       1,
-      { duration: DURATION_MS, easing: Easing.inOut(Easing.cubic) },
+      { duration: DURATION_MS, easing: Easing.linear },
       (finished) => {
         if (finished) {
           scheduleOnRN(onFinish);
@@ -109,7 +134,7 @@ export function LaunchReveal({ play, onFinish, onReveal }: LaunchRevealProps) {
           ref={lottieRef}
           source={foldSource}
           loop={false}
-          speed={1}
+          speed={LOTTIE_SPEED}
           resizeMode="contain"
           style={styles.lottie}
         />
