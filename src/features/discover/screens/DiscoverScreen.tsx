@@ -6,7 +6,7 @@ import { PlazaFeed } from "@/features/discover/components/plaza-feed";
 import { useTabBadgeStore } from "@/stores/tabBadgeStore";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { type Href, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -122,7 +122,7 @@ export default function DiscoverScreen() {
   const handleOpenNotifications = useCallback(() => {
     // Open the notification center inside the Discover (动态) stack so backing out
     // returns here, not to the messages/chat tab.
-    router.push("/(tabs)/discover/notification-center");
+    router.push("/(tabs)/discover/notification-center" as Href);
   }, [router]);
 
   const handleFilterPress = useCallback(() => {

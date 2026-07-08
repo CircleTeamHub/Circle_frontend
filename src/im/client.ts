@@ -127,7 +127,7 @@ export async function ensureOpenIMInitialized() {
       const RNFS = loadNativeFS();
       const dataDir = await getOpenIMDataDir();
 
-      await RNFS.mkdir(dataDir);
+      await RNFS.mkdir(dataDir, { NSURLIsExcludedFromBackupKey: true });
 
       // 在 initSDK 之前先绑定 listeners —— 否则 onConnecting / onConnectSuccess
       // 在 initSDK 内部即将触发时 JS 层还没挂回调，会被 native 直接丢成
@@ -629,6 +629,8 @@ export async function sendTextMessage(params: {
   sourceID: string;
   sessionType: SessionType;
   text: string;
+  // 乐观发送钩子：消息创建后（发送中状态）立即回调，调用方可先上屏再等网络确认。
+  onCreate?: (message: MessageItem) => void;
 }) {
   const initialized = await ensureOpenIMInitialized();
 
@@ -639,6 +641,7 @@ export async function sendTextMessage(params: {
   await waitForOpenIMConnectionReady();
 
   const message = await OpenIMSDK.createTextMessage(params.text);
+  params.onCreate?.(message);
   const isSingle = params.sessionType === SessionType.Single;
   const sentMessage = await reportSend({
     recvID: isSingle ? toImUserId(params.sourceID) : '',
@@ -1105,6 +1108,55 @@ export async function sendNoteCardMessage(params: {
   return reportSend({
     recvID: isSingle ? toImUserId(params.sourceID) : '',
     groupID: !isSingle ? params.sourceID : '',
+    message,
+    offlinePushInfo: {
+      title: '新消息',
+      desc: `[笔记] ${params.payload.title}`,
+      ex: '',
+      iOSPushSound: 'default',
+      iOSBadgeCount: true,
+    },
+  });
+}
+
+/**
+ * 把笔记卡片发到指定会话（好友或群聊）—— 供"分享笔记到聊天"的会话选择器用。
+ * 按会话解析 recvID/groupID（与 friend/circle 名片一致），避免调用方自己拼
+ * sourceID/sessionType 时踩 IM/业务 id 转换的坑。
+ */
+export async function sendNoteCardToConversation(params: {
+  targetConversationID: string;
+  payload: NoteCardPayload;
+}) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await waitForOpenIMConnectionReady();
+
+  const targetConversation = useIMStore
+    .getState()
+    .conversations.find(
+      (conversation) => conversation.conversationID === params.targetConversationID,
+    );
+
+  if (!targetConversation) {
+    throw new Error('目标会话不存在');
+  }
+
+  const message = await OpenIMSDK.createCustomMessage({
+    data: JSON.stringify(params.payload),
+    extension: NOTE_CARD_EXTENSION,
+    description: `[笔记] ${params.payload.title}`,
+  });
+
+  const isGroup =
+    targetConversation.conversationType === SessionType.Group;
+  return reportSend({
+    recvID: isGroup ? '' : targetConversation.userID,
+    groupID: isGroup ? targetConversation.groupID : '',
     message,
     offlinePushInfo: {
       title: '新消息',

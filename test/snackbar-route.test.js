@@ -29,6 +29,7 @@ const { getSnackbarRoute } = load(
   "src/features/notifications/utils/snackbar-route.ts",
 );
 const OPTS = { untitledPost: "(untitled post)" };
+const DISCOVER_OPTS = { untitledPost: "(untitled post)", scope: "discover" };
 
 function notification(overrides = {}) {
   return {
@@ -104,6 +105,19 @@ test("getSnackbarRoute routes circle post signups to post-signups", () => {
     OPTS,
   );
   assert.equal(route.pathname, "/(tabs)/messages/post-signups");
+  assert.equal(route.params.postId, "p1");
+  assert.equal(route.params.title, "Hiking trip");
+});
+
+test("getSnackbarRoute keeps circle post signups inside the discover stack when requested", () => {
+  const route = getSnackbarRoute(
+    notification({
+      type: "CIRCLE_POST_SIGNUP_CREATED",
+      fromCirclePost: { id: "p1", excerpt: "Hiking trip", firstImage: null },
+    }),
+    DISCOVER_OPTS,
+  );
+  assert.equal(route.pathname, "/(tabs)/discover/post-signups");
   assert.equal(route.params.postId, "p1");
   assert.equal(route.params.title, "Hiking trip");
 });
@@ -221,4 +235,9 @@ test("getSnackbarRoute carries reply anchors into moment detail", () => {
 test("getSnackbarRoute defaults to the notification center", () => {
   const route = getSnackbarRoute(notification(), OPTS);
   assert.equal(route, "/(tabs)/messages/notifications");
+});
+
+test("getSnackbarRoute defaults to the discover notification center for discover scope", () => {
+  const route = getSnackbarRoute(notification(), DISCOVER_OPTS);
+  assert.equal(route, "/(tabs)/discover/notification-center");
 });

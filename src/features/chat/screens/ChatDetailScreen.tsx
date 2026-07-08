@@ -10,7 +10,6 @@ import {
   View,
   Text,
   TextInput,
-  Share,
   Pressable,
   FlatList,
   ScrollView,
@@ -85,14 +84,19 @@ import {
   unsubscribeUserOnlineStatus,
 } from '@/im/client';
 import { restoreConversationMessages } from '@/im/history-restore';
-import { mapMessageItemToChatMessage } from '@/im/mappers';
+import {
+  createMessageMapCache,
+  mapMessageItemsToChatMessages,
+} from '@/im/mappers';
 import { useAuthStore } from '@/stores/authStore';
 import { useIMStore } from '@/stores/imStore';
 import { type FriendProfile } from '@/services/api/friends';
 import type { NoteSummary } from '@/features/notes/types';
+import { collectNote } from '@/services/api/notes';
 import { createCollection, type UserCollection } from '@/services/api/collections';
 import {
   buildCollectionInputFromMessage,
+  buildNoteCollectSource,
   resolveCollectionSendPlan,
 } from '@/features/chat/utils/message-collection';
 import {
@@ -127,6 +131,7 @@ import { OnlineState, SessionType } from '@openim/rn-client-sdk';
 import { useTranslation } from 'react-i18next';
 import type { ChatMessage } from '@/types';
 import {
+  AT_ALL_USER_ID,
   buildAtMessagePayload,
   buildQuotePreviewText,
   filterMentionCandidates,
@@ -399,10 +404,8 @@ export default function ChatDetailScreen() {
   const segments = useSegments();
   const scope = getUserProfileScopeFromSegments(segments);
   const currentUserID = useIMStore((state) => state.currentUserID);
-  const messagesByConversation = useIMStore((state) => state.messagesByConversation);
   const setActiveConversation = useIMStore((state) => state.setActiveConversation);
   const appendMessages = useIMStore((state) => state.appendMessages);
-  const onlineStatusByUser = useIMStore((state) => state.onlineStatusByUser);
   const authUser = useAuthStore((state) => state.user);
   const flatListRef = useRef<FlatListType<ChatMessage>>(null);
   const scrolledToSearchRef = useRef(false);
@@ -483,6 +486,12 @@ export default function ChatDetailScreen() {
   const [resolvedConversationID, setResolvedConversationID] =
     useState(paramConversationID);
   const conversationID = paramConversationID || resolvedConversationID;
+  // 只订阅当前会话的消息切片，而非整个 messagesByConversation map。
+  // 其他会话来消息时 appendMessages 会新建顶层对象，但本会话的数组引用不变，
+  // zustand 的 Object.is 相等判断因此不会触发本页重渲染——这是聊天页最大的流畅提升。
+  const conversationMessages = useIMStore(
+    (state) => state.messagesByConversation[conversationID],
+  );
   const paramTitle =
     typeof params.title === 'string'
       ? params.title
@@ -507,6 +516,10 @@ export default function ChatDetailScreen() {
   const visibleMentionCandidates = useMemo(
     () => filterMentionCandidates(mentionCandidates, mentionQuery),
     [mentionCandidates, mentionQuery],
+  );
+  const allMentionTarget = useMemo<MentionTarget>(
+    () => ({ userID: AT_ALL_USER_ID, nickname: '所有人', isAll: true }),
+    [],
   );
 
   // 入口只给了 sourceID 时，就地把会话解析出来（单聊/群聊各走对应方法）。
@@ -612,8 +625,12 @@ export default function ChatDetailScreen() {
         : null,
     [conversationType, sourceID],
   );
-  const peerOnline =
-    peerImId != null && onlineStatusByUser[peerImId] === OnlineState.Online;
+  // 只订阅对方这一个用户的在线状态切片，而非整个 onlineStatusByUser map——
+  // 其他用户上下线不再触发本页重渲染。
+  const peerOnlineStatus = useIMStore((state) =>
+    peerImId != null ? state.onlineStatusByUser[peerImId] : undefined,
+  );
+  const peerOnline = peerOnlineStatus === OnlineState.Online;
   const statusColor =
     conversationType !== SessionType.Single || authUser?.accountId === sourceID
       ? colors.online
@@ -748,23 +765,35 @@ export default function ChatDetailScreen() {
 
   // FlatList 用 inverted 渲染：index 0 = 最新消息，自然停在底部。
   // 因此把按时间升序的 messages 反转一次，新到旧排列。
+  // 按 MessageItem 引用缓存映射结果：未变化的消息保持同一 ChatMessage 引用，
+  // FlatList 的 CellRenderer 因此跳过未变行的重渲染（无需给气泡加 memo）。
+  // 某条消息被更新时（读回执/状态变化）会得到新的 MessageItem 引用 → 缓存未命中
+  // → 只有那一行重渲染。currentUserID 变化时整体失效重建。
+  const messageMapCacheRef = useRef<ReturnType<typeof createMessageMapCache> | null>(
+    null,
+  );
+
   const messages = useMemo(() => {
-    // Collapse duplicate system notices: the "you're now friends" line can come
-    // from both OpenIM's native FriendAdded and the local insert on accept —
-    // keep only the first per distinct text so it never shows twice.
+    const box =
+      messageMapCacheRef.current ?? createMessageMapCache(currentUserID);
+    messageMapCacheRef.current = box;
+    const mapped = mapMessageItemsToChatMessages(
+      conversationMessages ?? [],
+      currentUserID,
+      box,
+    );
+    // Collapse duplicate "you're now friends" system notices — the line can come
+    // from both OpenIM's native FriendAdded and the local insert on accept.
+    // Keep element references intact so the CellRenderer cache above still holds.
     const seenSystemNotice = new Set<string>();
-    return [...(messagesByConversation[conversationID] ?? [])]
-      .reverse()
-      .map((item) => mapMessageItemToChatMessage(item, currentUserID))
-      .filter((item): item is ChatMessage => Boolean(item))
-      .filter((item) => {
-        if (item.type !== 'system-notice') return true;
-        const key = item.text ?? '';
-        if (seenSystemNotice.has(key)) return false;
-        seenSystemNotice.add(key);
-        return true;
-      });
-  }, [conversationID, currentUserID, messagesByConversation]);
+    return mapped.filter((item) => {
+      if (item.type !== 'system-notice') return true;
+      const key = item.text ?? '';
+      if (seenSystemNotice.has(key)) return false;
+      seenSystemNotice.add(key);
+      return true;
+    });
+  }, [currentUserID, conversationMessages]);
 
   // 搜索定位：在 inverted 列表里 scrollToIndex 仍然按 index 计数，找到就跳。
   useEffect(() => {
@@ -796,6 +825,50 @@ export default function ChatDetailScreen() {
   const handleCollectMessage = useCallback(
     async (message: ChatMessage) => {
       if (!conversationID) return;
+
+      // 笔记卡片：不进「收藏」列表，直接快照复制进「我的笔记」，
+      // 并带上来源名片（群/用户）+ 消息定位信息，详情页可一键跳回聊天。
+      if (message.type === 'note-card') {
+        const source = buildNoteCollectSource(message, {
+          conversationID,
+          conversationTitle,
+          sourceID,
+          conversationType: isGroupChat ? 'group' : 'private',
+          conversationAvatarUrl: avatarUrl,
+          currentUser: {
+            id: currentUserID ?? undefined,
+            name: selfName,
+            faceURL: selfAvatarUri,
+          },
+        });
+        if (!source || !message.noteCard) return;
+
+        try {
+          const result = await collectNote(message.noteCard.noteId, source);
+          Alert.alert(
+            result.alreadyCollected
+              ? t('chat.messageActions.noteAlreadyCollected', {
+                  defaultValue: '已在我的笔记中',
+                })
+              : t('chat.messageActions.noteCollected', {
+                  defaultValue: '已添加到我的笔记',
+                }),
+            t('chat.messageActions.noteCollectedHint', {
+              defaultValue: '可在「我的笔记」中查看',
+            }),
+          );
+        } catch (error) {
+          if (__DEV__) {
+            console.warn('[ChatDetail] collect note failed', error);
+          }
+          Alert.alert(
+            t('chat.messageActions.collectFailed'),
+            getApiErrorMessage(error, t('chat.messageActions.collectFailedHint')),
+          );
+        }
+        return;
+      }
+
       const input = buildCollectionInputFromMessage(message, {
         conversationID,
         conversationTitle,
@@ -820,7 +893,17 @@ export default function ChatDetailScreen() {
         );
       }
     },
-    [conversationID, conversationTitle, isGroupChat, sourceID, t],
+    [
+      avatarUrl,
+      conversationID,
+      conversationTitle,
+      currentUserID,
+      isGroupChat,
+      selfAvatarUri,
+      selfName,
+      sourceID,
+      t,
+    ],
   );
 
   const [actionMenu, setActionMenu] = useState<{
@@ -923,33 +1006,6 @@ export default function ChatDetailScreen() {
     });
   }, [conversationTitle, isGroupChat, sourceID]);
 
-  const handleSaveMessage = useCallback(
-    async (message: ChatMessage) => {
-      const url = message.imageUrl ?? message.voiceUrl ?? message.voicePath ?? null;
-      try {
-        if (url) {
-          await Share.share({ url, message: url });
-          return;
-        }
-        if (message.text?.trim()) {
-          await Share.share({ message: message.text.trim() });
-          return;
-        }
-        Alert.alert(
-          t('chat.messageActions.saveUnsupported', {
-            defaultValue: '该消息暂不支持保存',
-          }),
-        );
-      } catch {
-        Alert.alert(
-          t('chat.messageActions.saveFailed', { defaultValue: '保存失败' }),
-          t('chat.messageActions.saveFailedHint', { defaultValue: '请稍后重试' }),
-        );
-      }
-    },
-    [t],
-  );
-
   const handleMessageLongPress = useCallback(
     (message: ChatMessage, event: GestureResponderEvent) => {
       if (message.type === 'date') return;
@@ -1002,12 +1058,6 @@ export default function ChatDetailScreen() {
       label: t('chat.messageActions.report', { defaultValue: '举报' }),
       onPress: handleReportMessage,
     });
-    actions.push({
-      key: 'save',
-      icon: 'download-outline',
-      label: t('chat.messageActions.save', { defaultValue: '保存' }),
-      onPress: () => void handleSaveMessage(message),
-    });
     return actions;
   }, [
     actionMenu,
@@ -1017,9 +1067,15 @@ export default function ChatDetailScreen() {
     handleForwardMessage,
     handleQuoteMessage,
     handleReportMessage,
-    handleSaveMessage,
     t,
   ]);
+
+  const getMessageLongPressHandler = useCallback(
+    (message: ChatMessage) => (event: GestureResponderEvent) => {
+      handleMessageLongPress(message, event);
+    },
+    [handleMessageLongPress],
+  );
 
   const withMessageActions = useCallback(
     (message: ChatMessage, node: ReactElement) => (
@@ -1029,13 +1085,13 @@ export default function ChatDetailScreen() {
             ? [s.targetMessageHighlight, d.targetMessageHighlight]
             : undefined
         }
-        onLongPress={(event) => handleMessageLongPress(message, event)}
+        onLongPress={getMessageLongPressHandler(message)}
         delayLongPress={350}
       >
         {node}
       </Pressable>
     ),
-    [d.targetMessageHighlight, handleMessageLongPress, highlightedMessageID],
+    [d.targetMessageHighlight, getMessageLongPressHandler, highlightedMessageID],
   );
 
   const renderItem = useCallback(({ item }: { item: ChatMessage }) => {
@@ -1070,6 +1126,7 @@ export default function ChatDetailScreen() {
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
           />
         ));
       case 'image':
@@ -1082,6 +1139,7 @@ export default function ChatDetailScreen() {
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
             hideStatus={isGroupChat}
           />
         ));
@@ -1095,6 +1153,7 @@ export default function ChatDetailScreen() {
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
             hideStatus={isGroupChat}
           />
         ));
@@ -1108,6 +1167,7 @@ export default function ChatDetailScreen() {
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
             onPress={(note) =>
               router.push(getNoteDetailHref(scope, note.noteId, note.ownerId ?? ''))
             }
@@ -1127,6 +1187,7 @@ export default function ChatDetailScreen() {
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
             onPress={(card) =>
               router.push(getUserProfileHref(scope, card.userID, card.nickname))
             }
@@ -1143,6 +1204,7 @@ export default function ChatDetailScreen() {
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
             onPress={(card) =>
               router.push(`/(tabs)/discover/circle/${encodeURIComponent(card.circleId)}`)
             }
@@ -1150,7 +1212,7 @@ export default function ChatDetailScreen() {
           />
         ));
       case 'verification-card':
-        return withMessageActions(item, (
+        return (
           <VerificationCardBubble
             message={item}
             outgoing={Boolean(item.outgoing)}
@@ -1167,7 +1229,7 @@ export default function ChatDetailScreen() {
             }
             hideStatus={isGroupChat}
           />
-        ));
+        );
       case 'transfer-card':
         return withMessageActions(item, (
           <TransferCardBubble
@@ -1178,6 +1240,7 @@ export default function ChatDetailScreen() {
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
             hideStatus={isGroupChat}
           />
         ));
@@ -1191,6 +1254,7 @@ export default function ChatDetailScreen() {
     selfAvatarUri,
     selfName,
     scope,
+    getMessageLongPressHandler,
     withMessageActions,
   ]);
 
@@ -1282,7 +1346,7 @@ export default function ChatDetailScreen() {
     if (!isGroupChat || !sourceID) return;
     const cached = mentionCandidatesCacheRef.current.get(sourceID);
     if (cached) {
-      setMentionCandidates(cached);
+      setMentionCandidates([allMentionTarget, ...cached]);
       return;
     }
 
@@ -1310,14 +1374,14 @@ export default function ChatDetailScreen() {
     try {
       const candidates = await request;
       if (!mountedRef.current) return;
-      setMentionCandidates(candidates);
+      setMentionCandidates([allMentionTarget, ...candidates]);
     } catch (error) {
       if (__DEV__) {
         console.warn('[chat] load mention candidates failed', error);
       }
       if (mountedRef.current) setMentionCandidates([]);
     }
-  }, [currentUserID, isGroupChat, sourceID]);
+  }, [allMentionTarget, currentUserID, isGroupChat, sourceID]);
 
   const handleDraftChange = useCallback(
     (next: string) => {
@@ -1376,14 +1440,25 @@ export default function ChatDetailScreen() {
       }
       if (inFlightRef.current) return;
       inFlightRef.current = true;
+      // 乐观发送：创建即上屏（发送中态）；成功后同 clientMsgID 覆盖，失败标记失败态。
+      let optimisticClientMsgID: string | null = null;
       try {
         const sentMessage = await sendTextMessage({
           sourceID,
           sessionType: conversationType,
           text,
+          onCreate: (message) => {
+            optimisticClientMsgID = message.clientMsgID;
+            appendMessages(conversationID, [message]);
+          },
         });
         appendMessages(conversationID, [sentMessage]);
       } catch (error) {
+        if (optimisticClientMsgID) {
+          useIMStore
+            .getState()
+            .markMessageSendFailed(conversationID, optimisticClientMsgID);
+        }
         logChatSendFailure(error, {
           sessionType: conversationType,
           isGroupChat,
@@ -2310,6 +2385,13 @@ export default function ChatDetailScreen() {
           inverted
           renderItem={renderItem}
           keyExtractor={keyExtractor}
+          // 虚拟化调优：限制单批渲染数与窗口大小，降低活跃/长会话的渲染与内存压力。
+          // 消息气泡高度可变，无法安全提供 getItemLayout，故只调这几个安全项；
+          // removeClippedSubviews 仅在 Android 开启（iOS 上 inverted 列表可能出现空白格）。
+          initialNumToRender={15}
+          maxToRenderPerBatch={10}
+          windowSize={11}
+          removeClippedSubviews={Platform.OS === 'android'}
           contentContainerStyle={[s.messageList, s.messageListContent, s.messageListInset]}
           showsVerticalScrollIndicator={false}
           // 下拉/滚动消息列表即收起底部面板与键盘（微信式）。on-drag 让键盘跟手滑落。

@@ -64,6 +64,69 @@ DEFAULT_TS_MODULE_STUBS['@/features/chat/utils/voice-forward'] = loadTsModule(
   'src/features/chat/utils/voice-forward.ts',
 );
 
+test('ensureOpenIMInitialized excludes the OpenIM data directory from iOS backups', async () => {
+  const mkdirCalls = [];
+  const initCalls = [];
+  const { ensureOpenIMInitialized } = loadTsModule('src/im/client.ts', {
+    '@openim/rn-client-sdk': {
+      __esModule: true,
+      default: {
+        initSDK: async (params) => {
+          initCalls.push(params);
+        },
+      },
+      LogLevel: { Info: 0 },
+      SessionType: { Single: 1, Group: 2 },
+      ViewType: { History: 0 },
+    },
+    'react-native-fs': {
+      __esModule: true,
+      default: {
+        DocumentDirectoryPath: '/tmp/documents',
+        mkdir: async (...args) => {
+          mkdirCalls.push(args);
+        },
+      },
+    },
+    'react-native': {
+      Platform: { OS: 'ios' },
+    },
+    '@/constants/config': {
+      OPENIM_API_URL: 'https://im.example.com',
+      OPENIM_WS_URL: 'wss://im.example.com',
+      OPENIM_LOG_LEVEL: 0,
+    },
+    '@/stores/imStore': {
+      useIMStore: {
+        getState: () => ({
+          connected: true,
+          setError: () => undefined,
+          setInitialized: () => undefined,
+          setCurrentUserID: () => undefined,
+          setConnecting: () => undefined,
+          reset: () => undefined,
+        }),
+      },
+    },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: {
+        getState: () => ({
+          setMessagesUnread: () => undefined,
+        }),
+      },
+    },
+  });
+
+  const initialized = await ensureOpenIMInitialized();
+
+  assert.equal(initialized, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(mkdirCalls)), [
+    ['/tmp/documents/openim', { NSURLIsExcludedFromBackupKey: true }],
+  ]);
+  assert.equal(initCalls[0].dataDir, '/tmp/documents/openim');
+  assert.equal(initCalls[0].logFilePath, '/tmp/documents/openim');
+});
+
 test('getOrCreateSingleConversation fetches a private conversation and merges it into store', async () => {
   const mergeCalls = [];
   const getOneConversationCalls = [];

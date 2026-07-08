@@ -109,6 +109,8 @@ export interface ChatMessage {
   locationAddress?: string;
   // For image messages: source URL + optional intrinsic dimensions for layout
   imageUrl?: string;
+  // 列表气泡优先用缩略图渲染，避免直接拉原图；点开原图查看时才用 imageUrl。
+  imageThumbUrl?: string;
   imageWidth?: number;
   imageHeight?: number;
   // For voice messages: local cache path or remote source URL plus duration in seconds.
@@ -317,10 +319,14 @@ export interface CircleDetail extends Circle {
 
 export interface PaginatedResponse<T> {
   items: T[];
-  total: number;
+  // `null` on the keyset (cursor) path — that path skips the per-page count().
+  total: number | null;
   page: number;
   limit: number;
   hasMore: boolean;
+  // Opaque keyset cursor for the next page; pass back as `cursor`. Absent/null
+  // means no more pages (or an offset-mode response the client can ignore).
+  nextCursor?: string | null;
 }
 
 export interface CreateCircleInput {

@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Spacing, useTheme } from '@/theme';
 import { Divider } from '@/components/ui/divider';
 import {
-  deleteNotification,
   fetchNotifications,
   markAllNotificationsRead,
   markNotificationRead,
@@ -24,6 +23,7 @@ import {
   type NotificationRowData,
 } from '@/features/notifications/utils/notification-summary';
 import { mapMyPostToRow } from '@/features/notifications/utils/my-post-summary';
+import { getSnackbarRoute } from '@/features/notifications/utils/snackbar-route';
 import {
   NotificationTabBar,
   type NotificationTabKey,
@@ -34,12 +34,8 @@ import {
 } from '@/features/notifications/components/ReadFilterBar';
 import { NotificationRow } from '@/features/notifications/components/NotificationRow';
 import { NotificationEmptyState } from '@/features/notifications/components/NotificationEmptyState';
-import { getSnackbarRoute } from '@/features/notifications/utils/snackbar-route';
-import { reportNotificationFailure } from '@/features/notifications/utils/report-failure';
-import { logClientDiagnostic } from '@/utils/client-diagnostics';
 
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
-const PAGE_SIZE = 20;
 
 interface Row {
   raw: NotificationItem | MyCirclePost;
@@ -49,6 +45,7 @@ interface Row {
 export default function NotificationCenterScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const segments = useSegments();
   const { colors } = useTheme();
   const { t } = useTranslation();
   const mountedRef = useRef(true);
@@ -60,10 +57,10 @@ export default function NotificationCenterScreen() {
   const [tab, setTab] = useState<NotificationTabKey>('interactive');
   const [filter, setFilter] = useState<ReadFilter>('all');
   const [refreshing, setRefreshing] = useState(false);
-  const [interactivePage, setInteractivePage] = useState(1);
-  const [interactiveHasMore, setInteractiveHasMore] = useState(true);
-  const [loadingMoreInteractive, setLoadingMoreInteractive] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const notificationScope = (segments as readonly string[]).includes('discover')
+    ? 'discover'
+    : 'messages';
 
   useEffect(() => {
     return () => {
@@ -83,8 +80,6 @@ export default function NotificationCenterScreen() {
       let failed = false;
       if (notificationsResult.status === 'fulfilled') {
         store().setInteractive(notificationsResult.value);
-        setInteractivePage(1);
-        setInteractiveHasMore(notificationsResult.value.length >= PAGE_SIZE);
       } else {
         failed = true;
         if (isDev) {
@@ -119,48 +114,6 @@ export default function NotificationCenterScreen() {
     }
   }, [store, t]);
 
-  const loadMoreInteractive = useCallback(async () => {
-    if (
-      tab !== 'interactive' ||
-      loadingMoreInteractive ||
-      refreshing ||
-      !interactiveHasMore
-    ) {
-      return;
-    }
-
-    const nextPage = interactivePage + 1;
-    setLoadingMoreInteractive(true);
-    try {
-      const nextItems = await fetchNotifications(nextPage);
-      if (!mountedRef.current) return;
-      store().appendInteractivePage(nextItems);
-      setInteractivePage(nextPage);
-      setInteractiveHasMore(nextItems.length >= PAGE_SIZE);
-    } catch (error) {
-      reportNotificationFailure('notification_load_more_failed', error, {
-        page: nextPage,
-      });
-      if (mountedRef.current) {
-        setLoadError(
-          t('notifications.loadFailed', {
-            defaultValue: '部分消息加载失败，请下拉重试',
-          }),
-        );
-      }
-    } finally {
-      if (mountedRef.current) setLoadingMoreInteractive(false);
-    }
-  }, [
-    interactiveHasMore,
-    interactivePage,
-    loadingMoreInteractive,
-    refreshing,
-    store,
-    tab,
-    t,
-  ]);
-
   useEffect(() => {
     void load();
   }, [load]);
@@ -185,12 +138,23 @@ export default function NotificationCenterScreen() {
   const handleMarkAll = useCallback(async () => {
     if (tab === 'interactive') {
       const previousInteractive = store().interactive;
+      const previousDiscoverUnread = useTabBadgeStore.getState().discoverUnread;
+      const previousSystemUnread = useTabBadgeStore.getState().systemUnread;
+      const unreadInteractiveCount = previousInteractive.filter((item) => !item.read).length;
       store().markAllInteractiveReadLocal();
+      useTabBadgeStore.getState().setDiscoverUnread(0);
+      useTabBadgeStore
+        .getState()
+        .setSystemUnread(
+          Math.max(0, previousSystemUnread - unreadInteractiveCount),
+        );
       try {
         await markAllNotificationsRead();
       } catch (error) {
-        reportNotificationFailure('notification_mark_all_read_failed', error);
+        if (isDev) console.warn('[NotificationCenterScreen] mark all failed', error);
         store().setInteractive(previousInteractive);
+        useTabBadgeStore.getState().setDiscoverUnread(previousDiscoverUnread);
+        useTabBadgeStore.getState().setSystemUnread(previousSystemUnread);
         await load();
       }
       return;
@@ -216,82 +180,41 @@ export default function NotificationCenterScreen() {
   }, [load, tab, store]);
 
   const handleRowPress = useCallback(
-    (row: Row) => {
-      const { raw, view } = row;
-      if (tab === 'interactive') {
-        const notification = raw as NotificationItem;
-        store().markInteractiveReadLocal(notification.id);
-        void markNotificationRead(notification.id).catch((e) => isDev && console.warn(e));
-        logClientDiagnostic('notification_open', {
-          source: 'notification_center',
-          notificationId: notification.id,
-        });
-        router.push(
-          getSnackbarRoute(
-            { ...notification, kind: 'notification' },
-            {
-              untitledPost: t('notifications.signupMgmt.untitledPost'),
-            },
-          ),
+    (raw: NotificationItem | MyCirclePost, view: NotificationRowData) => {
+      if ('type' in raw) {
+        store().markInteractiveReadLocal(raw.id);
+        if (!raw.read) {
+          const badgeStore = useTabBadgeStore.getState();
+          badgeStore.setDiscoverUnread(
+            Math.max(0, badgeStore.discoverUnread - 1),
+          );
+          badgeStore.setSystemUnread(
+            Math.max(0, badgeStore.systemUnread - 1),
+          );
+        }
+        void markNotificationRead(raw.id).catch((e) => isDev && console.warn(e));
+        const route = getSnackbarRoute(
+          { ...raw, kind: 'notification' },
+          {
+            untitledPost: t('notifications.signupMgmt.untitledPost'),
+            scope: notificationScope,
+          },
         );
+        router.push(route);
         return;
       }
       // 报名管理: open the post's signer list. Opening it marks signups read
       // server-side, so zero the local badge optimistically.
-      store().markPostSignupsSeenLocal(view.id);
+      store().markPostSignupsSeenLocal(raw.id);
       router.push({
-        pathname: '/(tabs)/messages/post-signups',
-        params: { postId: view.id, title: view.title },
+        pathname:
+          notificationScope === 'discover'
+            ? '/(tabs)/discover/post-signups'
+            : '/(tabs)/messages/post-signups',
+        params: { postId: raw.id, title: view.title },
       });
     },
-    [tab, store, router, t],
-  );
-
-  const handleRowMarkRead = useCallback(
-    async (row: Row) => {
-      if (tab !== 'interactive' || !row.view.unread) return;
-      const notification = row.raw as NotificationItem;
-      const previousInteractive = store().interactive;
-      store().markInteractiveReadLocal(notification.id);
-      try {
-        await markNotificationRead(notification.id);
-      } catch (error) {
-        reportNotificationFailure('notification_mark_read_failed', error, {
-          notificationId: notification.id,
-        });
-        store().setInteractive(previousInteractive);
-        await load();
-      }
-    },
-    [load, store, tab],
-  );
-
-  const handleRowDelete = useCallback(
-    (row: Row) => {
-      if (tab !== 'interactive') return;
-      const notification = row.raw as NotificationItem;
-      Alert.alert(t('common.delete'), row.view.title, [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('common.delete'),
-          style: 'destructive',
-          onPress: async () => {
-            const previousInteractive = store().interactive;
-            store().removeInteractiveLocal(notification.id);
-            try {
-              await deleteNotification(notification.id);
-            } catch (error) {
-              reportNotificationFailure('notification_delete_failed', error, {
-                notificationId: notification.id,
-              });
-              store().setInteractive(previousInteractive);
-              await load();
-            }
-          },
-        },
-      ]);
-    },
-    [load, store, t, tab],
+    [store, router, t, notificationScope],
   );
 
   return (
@@ -338,20 +261,10 @@ export default function NotificationCenterScreen() {
         renderItem={({ item }) => (
           <NotificationRow
             data={item.view}
-            onPress={() => handleRowPress(item)}
-            onMarkRead={
-              tab === 'interactive' && item.view.unread
-                ? () => void handleRowMarkRead(item)
-                : undefined
-            }
-            onDelete={
-              tab === 'interactive' ? () => handleRowDelete(item) : undefined
-            }
+            onPress={() => handleRowPress(item.raw, item.view)}
           />
         )}
         ItemSeparatorComponent={Divider}
-        onEndReached={loadMoreInteractive}
-        onEndReachedThreshold={0.4}
         refreshing={refreshing}
         onRefresh={load}
         contentContainerStyle={{

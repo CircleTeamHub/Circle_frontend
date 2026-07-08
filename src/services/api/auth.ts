@@ -88,6 +88,8 @@ export type BackendAuthUser = {
   lastOnline: string | null;
   createdAt: string;
   updatedAt: string;
+  receivedLikeCount?: number;
+  likeCount?: number;
   recognitionCount?: number;
 };
 

@@ -166,8 +166,40 @@ export function bindOpenIMListeners() {
   };
   OpenIMSDK.on('onRecvC2CReadReceipt', handleC2CReadReceipt);
 
+  // 入站消息合并缓冲：活跃群里 onRecvNewMessages 可能高频触发，攒
+  // MESSAGE_FLUSH_INTERVAL_MS 合并成一次 appendMessages，把每秒 N 次 setState
+  // 压到 ~8 次，避免刷屏时聊天页逐条重渲染。按会话分桶，unbind 时会 flush 不丢消息。
+  const MESSAGE_FLUSH_INTERVAL_MS = 120;
+  let pendingByConversation = new Map<string, MessageItem[]>();
+  let messageFlushTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const flushPendingMessages = () => {
+    messageFlushTimer = null;
+    if (pendingByConversation.size === 0) return;
+    const batches = pendingByConversation;
+    pendingByConversation = new Map();
+    const { appendMessages } = useIMStore.getState();
+    batches.forEach((msgs, conversationID) => {
+      if (msgs.length > 0) appendMessages(conversationID, msgs);
+    });
+  };
+
+  const bufferMessages = (conversationID: string, msgs: MessageItem[]) => {
+    const existing = pendingByConversation.get(conversationID);
+    pendingByConversation.set(
+      conversationID,
+      existing ? [...existing, ...msgs] : msgs,
+    );
+    if (!messageFlushTimer) {
+      messageFlushTimer = setTimeout(
+        flushPendingMessages,
+        MESSAGE_FLUSH_INTERVAL_MS,
+      );
+    }
+  };
+
   const handleNewMessages = (messages: MessageItem[]) => {
-    const { activeConversation, currentUserID, appendMessages, conversations } =
+    const { activeConversation, currentUserID, conversations } =
       useIMStore.getState();
 
     if (!activeConversation) {
@@ -195,7 +227,7 @@ export function bindOpenIMListeners() {
       );
 
     if (matched.length > 0) {
-      appendMessages(activeConversation.conversationID, matched);
+      bufferMessages(activeConversation.conversationID, matched);
     }
   };
   OpenIMSDK.on('onRecvNewMessages', handleNewMessages);
@@ -210,6 +242,12 @@ export function bindOpenIMListeners() {
   OpenIMSDK.on('onUserStatusChanged', handleUserStatusChanged);
 
   unbindAll = () => {
+    // 卸载前 flush 缓冲，避免丢失最后一批还没落 store 的消息。
+    if (messageFlushTimer) {
+      clearTimeout(messageFlushTimer);
+      messageFlushTimer = null;
+    }
+    flushPendingMessages();
     OpenIMSDK.off('onConnecting', handleConnecting);
     OpenIMSDK.off('onConnectSuccess', handleConnected);
     OpenIMSDK.off('onConnectFailed', handleConnectFailed);

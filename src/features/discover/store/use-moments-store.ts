@@ -4,7 +4,10 @@ import type { MomentComment, MomentPost } from '@/types';
 
 interface MomentsState {
   moments: MomentPost[];
-  page: number;
+  // Keyset cursor for the next page (null = start from newest). Replaces page
+  // numbers: prepending a new moment no longer shifts the pagination window, so
+  // load-more can't skip or duplicate rows across an insert.
+  cursor: string | null;
   hasMore: boolean;
   loading: boolean;
   refreshing: boolean;
@@ -34,7 +37,7 @@ function mergeMoments(
 
 export const useMomentsStore = create<MomentsState>((set, get) => ({
   moments: [],
-  page: 1,
+  cursor: null,
   hasMore: true,
   loading: false,
   refreshing: false,
@@ -49,7 +52,9 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
     if (!reset && state.loading) return;
     if (!reset && !state.hasMore) return;
 
-    const page = reset ? 1 : state.page;
+    // reset starts from the newest (no cursor); paginate follows the last
+    // page's nextCursor.
+    const cursor = reset ? undefined : (state.cursor ?? undefined);
     const requestId = state.latestRequestId + 1;
     set({
       latestRequestId: requestId,
@@ -57,10 +62,10 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
     });
 
     try {
-      const result = await fetchMomentsFeed({ page, limit: 20 });
+      const result = await fetchMomentsFeed({ cursor, limit: 20 });
       set((current) => {
-        // reset 抢占后，旧 paginate 响应会落在这里，要丢弃避免把 page 推到错误值或
-        // 把过期数据塞回去（map dedup 能避免重复 key，但 page+1 / hasMore 还是会污染）。
+        // reset 抢占后，旧 paginate 响应会落在这里，要丢弃避免把 cursor 推到错误值或
+        // 把过期数据塞回去（map dedup 能避免重复 key，但 cursor / hasMore 还是会污染）。
         if (current.latestRequestId !== requestId) {
           return reset ? { refreshing: false } : { loading: false };
         }
@@ -68,7 +73,7 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
           moments: reset
             ? result.items
             : mergeMoments(current.moments, result.items),
-          page: page + 1,
+          cursor: result.nextCursor ?? null,
           hasMore: result.hasMore,
           lastRefreshTime: reset
             ? new Date().toISOString()
@@ -128,7 +133,7 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
   reset: () =>
     set({
       moments: [],
-      page: 1,
+      cursor: null,
       hasMore: true,
       loading: false,
       refreshing: false,

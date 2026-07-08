@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
@@ -24,6 +25,28 @@ function loadTsModule(relativePath) {
   return context.module.exports;
 }
 
+function loadIntrospectedAndroidApplicationAttributes() {
+  const output = execFileSync(
+    process.execPath,
+    [
+      require.resolve('expo/bin/cli'),
+      'config',
+      '--type',
+      'introspect',
+      '--json',
+    ],
+    {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  );
+  const introspected = JSON.parse(output);
+
+  return introspected._internal.modResults.android.manifest.manifest
+    .application[0].$;
+}
+
 test('expo branding config uses Windnote display names and preserves legacy deep links', () => {
   const app = readJson('app.json').expo;
   const branding = loadTsModule('src/constants/branding.ts');
@@ -43,4 +66,16 @@ test('expo branding config uses Windnote display names and preserves legacy deep
   ]);
   assert.equal(app.ios.bundleIdentifier, 'com.yiboding.circleim');
   assert.equal(app.android.package, 'com.yiboding.circleim');
+});
+
+test('android native config disables platform backups for local chat data', () => {
+  const app = readJson('app.json').expo;
+
+  assert.equal(app.android.allowBackup, false);
+});
+
+test('android prebuild manifest disables platform backups for local chat data', () => {
+  const applicationAttributes = loadIntrospectedAndroidApplicationAttributes();
+
+  assert.equal(applicationAttributes['android:allowBackup'], 'false');
 });

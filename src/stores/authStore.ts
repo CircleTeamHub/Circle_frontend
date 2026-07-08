@@ -46,6 +46,7 @@ export interface AuthUser {
   creditScore: number;
   fancyNumber: boolean;
   displayIcons: DisplayIcon[];
+  likeCount?: number;
   recognitionCount?: number;
 }
 
@@ -56,6 +57,9 @@ interface AuthState {
   user: AuthUser | null;
   isAuthenticated: boolean;
   onboardingRequired: boolean;
+  // Runtime-only auth credential generation. This advances on login/logout and
+  // token rotation, so do not treat it as a stable user identity version.
+  sessionEpoch: number;
   isLoading: boolean;
   hasHydrated: boolean;
 
@@ -89,11 +93,12 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       isAuthenticated: false,
       onboardingRequired: false,
+      sessionEpoch: 0,
       isLoading: true,
       hasHydrated: false,
 
       setSession: ({ accessToken, refreshToken, imToken }, user, options) =>
-        set({
+        set((state) => ({
           accessToken,
           refreshToken,
           imToken: imToken || null,
@@ -101,7 +106,8 @@ export const useAuthStore = create<AuthState>()(
           isAuthenticated: true,
           onboardingRequired: options?.onboardingRequired ?? false,
           isLoading: false,
-        }),
+          sessionEpoch: state.sessionEpoch + 1,
+        })),
 
       setTokens: ({ accessToken, refreshToken, imToken }) =>
         set((state) => ({
@@ -112,6 +118,7 @@ export const useAuthStore = create<AuthState>()(
               ? imToken
               : state.imToken,
           isAuthenticated: true,
+          sessionEpoch: state.sessionEpoch + 1,
         })),
 
       setUser: (user) => set({ user }),
@@ -120,7 +127,7 @@ export const useAuthStore = create<AuthState>()(
         set({ onboardingRequired: required }),
 
       clearSession: () =>
-        set({
+        set((state) => ({
           accessToken: null,
           refreshToken: null,
           imToken: null,
@@ -128,7 +135,8 @@ export const useAuthStore = create<AuthState>()(
           isAuthenticated: false,
           onboardingRequired: false,
           isLoading: false,
-        }),
+          sessionEpoch: state.sessionEpoch + 1,
+        })),
 
       setLoading: (loading) => set({ isLoading: loading }),
 

@@ -126,6 +126,7 @@ export function normalizeUser(user: BackendAuthUser): AuthUser {
       ...icon,
       imageUrl: normalizeMediaUrl(icon.imageUrl),
     })),
+    likeCount: user.likeCount ?? user.receivedLikeCount ?? 0,
     recognitionCount: user.recognitionCount ?? 0,
   };
 }

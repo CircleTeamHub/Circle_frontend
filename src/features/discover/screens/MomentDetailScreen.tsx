@@ -344,6 +344,25 @@ export default function MomentDetailScreen() {
     return () => clearTimeout(timer);
   }, [commentRows, targetCommentId]);
 
+  // Precompute each comment's formatted timestamp once per list/locale change,
+  // instead of running Date + toLocaleString for every row on every render.
+  const commentTimeById = useMemo(() => {
+    const locale = i18n.language || 'zh-CN';
+    const map = new Map<string, string>();
+    for (const row of commentRows) {
+      map.set(
+        row.comment.id,
+        new Date(row.comment.createdAt).toLocaleString(locale, {
+          month: 'numeric',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+      );
+    }
+    return map;
+  }, [commentRows, i18n.language]);
+
   const isOwner =
     !!currentUserId && !!post && currentUserId === post.author.id;
 
@@ -494,15 +513,7 @@ export default function MomentDetailScreen() {
           </Text>
           <Text style={[s.commentText, d.commentText]}>{item.comment.content}</Text>
           <Text style={[s.commentTime, d.commentTime]}>
-            {new Date(item.comment.createdAt).toLocaleString(
-              i18n.language || 'zh-CN',
-              {
-                month: 'numeric',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              },
-            )}
+            {commentTimeById.get(item.comment.id)}
           </Text>
         </View>
         <Pressable

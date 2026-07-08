@@ -48,10 +48,20 @@ test('togglePinNote calls PATCH /note/:id/pin', () => {
   assert.match(src, /\/pin/);
 });
 
-test('deleteNote calls DELETE /note/:id', () => {
+test('unlistNote calls PATCH /note/:id/status with UNLISTED', () => {
   const src = read('src/services/api/notes.ts');
-  assert.match(src, /deleteNote/);
-  assert.match(src, /DELETE/);
+  assert.match(src, /unlistNote/);
+  assert.match(src, /`\/note\/\$\{id\}\/status`/);
+  assert.match(src, /method:\s*'PATCH'/);
+  assert.match(src, /status:\s*'UNLISTED'/);
+});
+
+test('relistNote calls PATCH /note/:id/status with ACTIVE', () => {
+  const src = read('src/services/api/notes.ts');
+  assert.match(src, /relistNote/);
+  assert.match(src, /`\/note\/\$\{id\}\/status`/);
+  assert.match(src, /method:\s*'PATCH'/);
+  assert.match(src, /status:\s*'ACTIVE'/);
 });
 
 test('createNoteShareLink posts the current notes view to /note/share-links', () => {

@@ -9,7 +9,15 @@ import type { NotificationSnackbarItem } from '@/features/notifications/store/us
 export type SnackbarRouteOptions = {
   /** Fallback title for an untitled circle post. */
   untitledPost: string;
+  /** Tab stack that should own non-chat notification detail routes. */
+  scope?: 'messages' | 'discover';
 };
+
+function getNotificationCenterFallback(scope: SnackbarRouteOptions['scope']): Href {
+  return scope === 'discover'
+    ? ('/(tabs)/discover/notification-center' as Href)
+    : '/(tabs)/messages/notifications';
+}
 
 export function getSnackbarRoute(
   item: NotificationSnackbarItem,
@@ -60,7 +68,10 @@ export function getSnackbarRoute(
     item.fromCirclePost?.id
   ) {
     return {
-      pathname: '/(tabs)/messages/post-signups',
+      pathname:
+        options.scope === 'discover'
+          ? '/(tabs)/discover/post-signups'
+          : '/(tabs)/messages/post-signups',
       params: {
         postId: item.fromCirclePost.id,
         title: item.fromCirclePost.excerpt || options.untitledPost,
@@ -102,5 +113,5 @@ export function getSnackbarRoute(
     };
   }
 
-  return '/(tabs)/messages/notifications';
+  return getNotificationCenterFallback(options.scope);
 }

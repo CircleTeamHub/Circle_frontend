@@ -1,5 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
-import { Component, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Component, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Platform, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { CreateNoteMediaInput } from '@/features/notes/types';
@@ -75,7 +75,7 @@ interface Props {
   mediaToolbarEnabled?: boolean;
 }
 
-export function NoteBlockEditor({
+function NoteBlockEditorImpl({
   initialContent,
   onContentChange,
   onMediaUploaded,
@@ -290,3 +290,7 @@ export function NoteBlockEditor({
 const s = StyleSheet.create({
   container: { flex: 1 },
 });
+
+// props 稳定（initialContent/onContentChange/mediaToolbarEnabled 不随父屏无关状态变化），
+// memo 化避免编辑父屏（如标题输入）每次按键都重渲染这个较重的 DOM 编辑器包裹层。
+export const NoteBlockEditor = memo(NoteBlockEditorImpl);

@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import type { GestureResponderEvent } from 'react-native';
 import { Radius } from '@/theme';
 import { Avatar } from '@/components/ui/avatar';
 import { CircleAvatar } from '@/components/ui/circle-avatar';
@@ -14,6 +15,7 @@ interface CircleCardBubbleProps {
   selfAvatarUri?: string;
   onPress?: (card: CircleCardData) => void;
   onAvatarPress?: () => void;
+  onLongPress?: (event: GestureResponderEvent) => void;
   hideStatus?: boolean;
 }
 
@@ -28,6 +30,7 @@ export const CircleCardBubble: React.FC<CircleCardBubbleProps> = ({
   selfAvatarUri,
   onPress,
   onAvatarPress,
+  onLongPress,
   hideStatus,
 }) => {
   const { t } = useTranslation();
@@ -60,6 +63,7 @@ export const CircleCardBubble: React.FC<CircleCardBubbleProps> = ({
       footer={t('circle.card.footer')}
       onPress={onPress ? () => onPress(card) : undefined}
       onAvatarPress={onAvatarPress}
+      onLongPress={onLongPress}
       hideStatus={hideStatus}
     />
   );

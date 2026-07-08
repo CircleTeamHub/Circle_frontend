@@ -120,11 +120,21 @@ export function GroupManagerSheet({
     setSavingMemberships(false);
   }, []);
 
+  const resetDragState = useCallback(() => {
+    dragMetaRef.current = null;
+    dragPreviewGroupsRef.current = null;
+    dragY.stopAnimation();
+    dragY.setValue(0);
+    setDraggingGroupId(null);
+    setDragPreviewGroups(null);
+  }, [dragY]);
+
   const handleClose = useCallback(() => {
+    resetDragState();
     resetGroupDraft();
     resetGroupMembershipEditor();
     onClose();
-  }, [onClose, resetGroupDraft, resetGroupMembershipEditor]);
+  }, [onClose, resetDragState, resetGroupDraft, resetGroupMembershipEditor]);
 
   const handleSaveGroup = useCallback(async () => {
     const trimmedName = draftGroupName.trim();
@@ -240,6 +250,7 @@ export function GroupManagerSheet({
       return currentlySelected !== selectedNoteIds.has(note.id);
     });
 
+    let shouldReloadAfterFailure = false;
     try {
       // 走 PATCH /note/:id/groups（review #59）—— 每条 note 只 1 个请求，没有 fetch detail
       // 也不需要把整张 note 的 title/content/media 全重发一遍。
@@ -253,17 +264,26 @@ export function GroupManagerSheet({
             : currentGroupIds.filter((id) => id !== group.id);
 
           await updateNoteGroupIds(note.id, nextGroupIds);
+          shouldReloadAfterFailure = true;
         },
       );
       resetGroupMembershipEditor();
       await onMembershipsChanged();
     } catch (error) {
       setSavingMemberships(false);
+      if (shouldReloadAfterFailure) {
+        await onMembershipsChanged();
+      }
       Alert.alert(
         t('notes.alerts.saveFailedTitle', { defaultValue: '保存失败' }),
-        t('notes.alerts.saveMembershipsFailed', {
-          defaultValue: '笔记分组保存失败，请稍后再试。',
-        }),
+        shouldReloadAfterFailure
+          ? t('notes.alerts.saveMembershipsPartialFailed', {
+              defaultValue:
+                '部分笔记分组可能已保存，列表已刷新为最新状态。请确认后重试。',
+            })
+          : t('notes.alerts.saveMembershipsFailed', {
+              defaultValue: '笔记分组保存失败，请稍后再试。',
+            }),
       );
       if (__DEV__) {
         console.warn('[GroupManagerSheet] saveGroupMemberships failed', error);
@@ -353,21 +373,12 @@ export function GroupManagerSheet({
       (group, index) => group.id !== groupsRef.current[index]?.id,
     );
 
-    dragMetaRef.current = null;
-    setDraggingGroupId(null);
-    setDragPreviewGroups(null);
-    Animated.spring(dragY, {
-      toValue: 0,
-      useNativeDriver: true,
-      stiffness: 220,
-      damping: 26,
-      mass: 0.8,
-    }).start(() => dragY.setValue(0));
+    resetDragState();
 
     if (meta && changed) {
       void handleReorderGroups(finalGroups);
     }
-  }, [dragY, handleReorderGroups]);
+  }, [handleReorderGroups, resetDragState]);
 
   const getDragResponder = useCallback(
     (groupId: string) => {
@@ -446,7 +457,13 @@ export function GroupManagerSheet({
       groupRow: { backgroundColor: colors.background },
       groupName: { color: colors.text },
       groupCount: { color: colors.textSecondary },
-      modalInput: { color: colors.text, borderColor: colors.surface },
+      // 之前 borderColor 用了 surface（与面板同色 = 隐形）。改成可见边框 +
+      // background 凹槽底，让输入框在面板上明显立出来。
+      modalInput: {
+        color: colors.text,
+        borderColor: colors.surfaceBorder,
+        backgroundColor: colors.background,
+      },
       modalActionText: { color: colors.textSecondary },
       saveBtn: { backgroundColor: colors.primary },
       saveBtnText: { color: colors.white },
@@ -505,7 +522,7 @@ export function GroupManagerSheet({
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType="slide"
       onRequestClose={handleClose}
     >
       <View style={[s.modalOverlay, d.modalOverlay]} pointerEvents="box-none">
@@ -601,8 +618,7 @@ export function GroupManagerSheet({
               </Text>
               <Text style={[s.modalCopy, d.modalCopy]}>
                 {t('notes.manageGroups.copy', {
-                  defaultValue:
-                    '"全部"和"未分组"固定在前面，常用自定义分组可以排在前面。',
+                  defaultValue: '全部和未分组为固定分组无法修改。',
                 })}
               </Text>
               <Text style={[s.limitText, d.limitText]}>
@@ -706,7 +722,7 @@ export function GroupManagerSheet({
                   ref={groupNameInputRef}
                   style={[s.modalInput, d.modalInput]}
                   placeholder={t('notes.manageGroups.namePlaceholder', {
-                    defaultValue: '输入分组名，如上海',
+                    defaultValue: '输入分组名添加新的分组',
                   })}
                   placeholderTextColor={colors.textSecondary}
                   value={draftGroupName}
@@ -763,15 +779,23 @@ const s = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    padding: Spacing.lg,
+    paddingHorizontal: 0,
+    paddingTop: Spacing.xl,
   },
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 0,
   },
   modalCard: {
-    borderRadius: Radius.lg,
-    padding: Spacing.lg,
+    width: '100%',
+    maxHeight: '88%',
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.xl,
     gap: Spacing.md,
     zIndex: 1,
     elevation: 1,
@@ -846,13 +870,19 @@ const s = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 4,
   },
-  modalEditor: { gap: Spacing.sm },
+  modalEditor: { gap: Spacing.md },
+  // 明显的胶囊输入：可见边框 + 凹槽底 + 轻阴影，一眼看出是可输入区域。
   modalInput: {
     borderWidth: 1,
-    borderRadius: Radius.md,
+    borderRadius: Radius.full,
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingVertical: Spacing.sm + 2,
     ...Typography.bodyRegular,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   modalButtons: {
     flexDirection: 'row',

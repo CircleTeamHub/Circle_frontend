@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { NavHeader } from '@/components/ui/nav-header';
 import { UserIconBadge, UserIconRow } from '@/components/ui/user-icon-row';
 import { fetchCurrentUser } from '@/services/api/auth';
+import { getApiErrorMessage } from '@/services/api/errors';
 import {
   fetchIconOptions,
   updateDisplayIcons,
@@ -201,9 +202,10 @@ export default function MyIconsScreen() {
     } catch (error) {
       Alert.alert(
         t('myIcons.loadFailedTitle', { defaultValue: '图标加载失败' }),
-        error instanceof Error
-          ? error.message
-          : t('myIcons.retryLater', { defaultValue: '请稍后重试' }),
+        getApiErrorMessage(
+          error,
+          t('myIcons.retryLater', { defaultValue: '请稍后重试' }),
+        ),
       );
     } finally {
       setLoading(false);
@@ -281,9 +283,10 @@ export default function MyIconsScreen() {
     } catch (error) {
       Alert.alert(
         t('myIcons.saveFailedTitle', { defaultValue: '保存失败' }),
-        error instanceof Error
-          ? error.message
-          : t('myIcons.retryLater', { defaultValue: '请稍后重试' }),
+        getApiErrorMessage(
+          error,
+          t('myIcons.retryLater', { defaultValue: '请稍后重试' }),
+        ),
       );
     } finally {
       setSaving(false);

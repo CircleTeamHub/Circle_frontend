@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
 
+const ROOT = path.join(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
 test('NotesScreen renders 我的笔记 title', () => {
@@ -21,48 +22,82 @@ test('NotesScreen has 新建 button', () => {
   assert.match(src, /新建/);
 });
 
-test('NotesScreen has 已下架 filter button', () => {
+test('NotesScreen has 已下架 entry button', () => {
   const src = read('src/features/notes/screens/NotesScreen.tsx');
   assert.match(src, /已下架/);
 });
 
-test('NotesScreen creates a managed share link before invoking native Share', () => {
+test('NotesScreen opens a standalone unlisted notes page instead of filtering inline', () => {
   const src = read('src/features/notes/screens/NotesScreen.tsx');
 
-  assert.match(src, /Share/);
-  assert.match(src, /createNoteShareLink/);
-  assert.match(src, /buildShareInput/);
-  assert.match(src, /nextShareLink\.url/);
-  assert.match(src, /handleShareNotes/);
-  assert.match(src, /Share\.share/);
-  assert.doesNotMatch(src, /Linking\.createURL/);
-  assert.doesNotMatch(src, /notes\.stopgap\.share/);
+  assert.doesNotMatch(src, /trash-outline/);
+  assert.doesNotMatch(src, /deletedNotes/);
+  assert.doesNotMatch(src, /showUnlisted/);
+  assert.doesNotMatch(src, /status: showUnlisted \? 'UNLISTED' : 'ACTIVE'/);
+  assert.match(src, /fetchNotes\(\{ status: 'ACTIVE' \}\)/);
+  assert.match(src, /\/\(tabs\)\/profile\/notes\/unlisted/);
+  assert.doesNotMatch(src, /notes\.unlistedAutoDeleteHint/);
 });
 
-test('NotesScreen opens a QR sheet for the managed share link', () => {
-  const screenSrc = read('src/features/notes/screens/NotesScreen.tsx');
-  const sheetSrc = read('src/features/notes/components/NoteShareQrSheet.tsx');
+test('UnlistedNotesScreen lists only unlisted notes and can relist them', () => {
+  const screen = read('src/features/notes/screens/UnlistedNotesScreen.tsx');
+  const route = read('app/(tabs)/profile/notes/unlisted.tsx');
+  const zh = read('src/i18n/locales/zh.json');
 
-  assert.match(screenSrc, /NoteShareQrSheet/);
-  assert.match(screenSrc, /qrVisible/);
-  assert.match(screenSrc, /openQrSheet/);
-  assert.match(screenSrc, /createNoteShareLink/);
-  assert.match(screenSrc, /shareUrl=\{shareLink\?\.url \?\? ''\}/);
-  assert.match(screenSrc, /loading=\{shareLinkLoading\}/);
-  assert.match(screenSrc, /errorMessage=\{shareLinkError\}/);
-  assert.match(screenSrc, /if \(mountedRef\.current\) setShareLink\(nextShareLink\)/);
-  assert.match(screenSrc, /if \(mountedRef\.current\) setShareLinkError\(message\)/);
-  assert.match(screenSrc, /if \(mountedRef\.current\) setShareLinkLoading\(false\)/);
-  assert.match(screenSrc, /nextShareLink = await ensureShareLink\(\);[\s\S]*if \(!mountedRef\.current\) return;[\s\S]*Share\.share/);
-  assert.doesNotMatch(screenSrc, /notes\.stopgap\.qrCode/);
+  assert.match(route, /UnlistedNotesScreen/);
+  assert.match(screen, /fetchNotes\(\{ status: 'UNLISTED' \}\)/);
+  assert.match(screen, /relistNote/);
+  assert.match(screen, /notes\.actions\.relist/);
+  assert.match(screen, /cloud-upload-outline/);
+  assert.match(screen, /notes\.unlistedAutoDeleteHint/);
+  assert.match(screen, /notes\.empty\.noUnlisted/);
+  assert.match(zh, /已下架笔记会在一个月后自动删除。/);
+  assert.match(zh, /上架/);
+});
 
-  assert.match(sheetSrc, /react-native-qrcode-svg/);
-  assert.match(sheetSrc, /QRCode/);
-  assert.match(sheetSrc, /shareUrl/);
-  assert.match(sheetSrc, /loading/);
-  assert.match(sheetSrc, /errorMessage/);
-  assert.match(sheetSrc, /expo-clipboard/);
-  assert.match(sheetSrc, /Share\.share/);
+test('NotesScreen bottom bar keeps only the 新建 button', () => {
+  const src = read('src/features/notes/screens/NotesScreen.tsx');
+
+  // 底栏只留「新建」；整表分享 + 二维码入口移除（分享改走单条：卡片⋯菜单 + 详情页头部）。
+  assert.match(src, /notes\.actions\.new/);
+  assert.doesNotMatch(src, /notes\.actions\.qrCode/);
+  assert.doesNotMatch(src, /qr-code-outline/);
+  // 整表分享/二维码相关逻辑已清理干净。
+  assert.doesNotMatch(src, /handleShareNotes\b/);
+  assert.doesNotMatch(src, /buildShareInput/);
+  assert.doesNotMatch(src, /ensureShareLink/);
+  assert.doesNotMatch(src, /openQrSheet/);
+  assert.doesNotMatch(src, /NoteShareQrSheet/);
+  assert.doesNotMatch(src, /qrVisible/);
+  // 单条笔记分享改为「弹会话选择器发给好友/群聊」：不再生成网页分享链接。
+  assert.match(src, /handleShareNote\b/);
+  assert.match(src, /<ShareNoteSheet/);
+  assert.match(src, /buildNoteCardPayloadFromSummary/);
+  assert.doesNotMatch(src, /createNoteShareLink/);
+});
+
+test('NotesScreen no longer exposes the old top-right settings page', () => {
+  const src = read('src/features/notes/screens/NotesScreen.tsx');
+
+  assert.doesNotMatch(src, /settings-outline/);
+  assert.doesNotMatch(src, /\/\(tabs\)\/profile\/notes\/settings/);
+  assert.doesNotMatch(src, /useNotesSettingsStore/);
+  assert.equal(
+    fs.existsSync(
+      path.join(ROOT, 'src/features/notes/screens/NotesSettingsScreen.tsx'),
+    ),
+    false,
+  );
+  assert.equal(
+    fs.existsSync(
+      path.join(ROOT, 'src/features/notes/store/use-notes-settings-store.ts'),
+    ),
+    false,
+  );
+  assert.equal(
+    fs.existsSync(path.join(ROOT, 'app/(tabs)/profile/notes/settings.tsx')),
+    false,
+  );
 });
 
 test('NotesScreen fetches notes and groups', () => {
@@ -77,14 +112,21 @@ test('NotesScreen passes the current user as owner when opening note details', (
   assert.match(src, /useAuthStore/);
   assert.match(src, /currentUserId/);
   assert.match(src, /pathname: '\/\(tabs\)\/profile\/notes\/\[id\]'/);
-  assert.match(src, /params: \{ id: item\.id, ownerId: currentUserId \?\? '' \}/);
+  // NoteCard 已 memo，跳转回调改为稳定 useCallback（携带 note 参数）。
+  assert.match(src, /params: \{ id: note\.id, ownerId: currentUserId \?\? '' \}/);
+  assert.match(src, /onPress=\{openNote\}/);
 });
 
 test('NotesScreen refreshes notes and groups when returning from note edits', () => {
   const src = read('src/features/notes/screens/NotesScreen.tsx');
   assert.match(src, /useFocusEffect/);
   assert.match(src, /void load\(\)/);
-  assert.match(src, /if \(mountedRef\.current\) setLoading\(false\)/);
+  // 失败时除了停 spinner 还要标记错误态（列表区提供重试入口），不再静默吞掉。
+  assert.match(
+    src,
+    /if \(mountedRef\.current\) \{\s*setLoadError\(true\);\s*setLoading\(false\);/,
+  );
+  assert.match(src, /notes\.loadFailed/);
   assert.doesNotMatch(src, /useEffect\(\(\) => \{\s*let cancelled = false;[\s\S]*load\(\)\.catch/);
 });
 
@@ -136,6 +178,13 @@ test('GroupManagerSheet lets a group directly choose which notes belong to it', 
   assert.doesNotMatch(src, /fetchNoteDetail/);
 });
 
+test('GroupManagerSheet reloads memberships after a partial save failure', () => {
+  const src = read('src/features/notes/components/GroupManagerSheet.tsx');
+  assert.match(src, /let shouldReloadAfterFailure = false/);
+  assert.match(src, /shouldReloadAfterFailure = true/);
+  assert.match(src, /if \(shouldReloadAfterFailure\) \{\s*await onMembershipsChanged\(\);/);
+});
+
 test('GroupManagerSheet optimizes group note assignment for larger note lists', () => {
   const src = read('src/features/notes/components/GroupManagerSheet.tsx');
   assert.match(src, /membershipSearch/);
@@ -175,6 +224,20 @@ test('GroupManagerSheet keeps the group manager backdrop behind the editor contr
   assert.match(src, /modalBackdrop:\s*{[\s\S]*zIndex:\s*0/);
   assert.match(src, /modalCard:\s*{[\s\S]*zIndex:\s*1/);
   assert.match(src, /modalCard:\s*{[\s\S]*elevation:\s*1/);
+});
+
+test('GroupManagerSheet presents group management as a bottom sheet with updated copy', () => {
+  const src = read('src/features/notes/components/GroupManagerSheet.tsx');
+  const zh = read('src/i18n/locales/zh.json');
+
+  assert.match(src, /animationType="slide"/);
+  assert.match(src, /modalOverlay:\s*{[\s\S]*justifyContent:\s*'flex-end'[\s\S]*paddingHorizontal:\s*0/);
+  assert.match(src, /modalCard:\s*{[\s\S]*borderTopLeftRadius:\s*Radius\.xl[\s\S]*borderTopRightRadius:\s*Radius\.xl/);
+  assert.match(src, /modalCard:\s*{[\s\S]*borderBottomLeftRadius:\s*0[\s\S]*borderBottomRightRadius:\s*0/);
+  assert.match(src, /全部和未分组为固定分组无法修改。/);
+  assert.match(src, /输入分组名添加新的分组/);
+  assert.match(zh, /全部和未分组为固定分组无法修改。/);
+  assert.match(zh, /输入分组名添加新的分组/);
 });
 
 test('GroupManagerSheet keeps the add group button pressable and focuses the input for empty names', () => {
@@ -227,6 +290,13 @@ test('GroupManagerSheet prevents ScrollView from stealing group drag gestures', 
   assert.match(src, /onShouldBlockNativeResponder:\s*\(\) => true/);
 });
 
+test('GroupManagerSheet resets drag offset synchronously when releasing a group', () => {
+  const src = read('src/features/notes/components/GroupManagerSheet.tsx');
+  assert.match(src, /dragY\.stopAnimation\(\)/);
+  assert.match(src, /dragY\.setValue\(0\)/);
+  assert.doesNotMatch(src, /Animated\.spring\(dragY/);
+});
+
 test('EditNoteScreen loads and submits multiple group ids', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
   assert.match(src, /fetchNoteGroups/);
@@ -262,28 +332,28 @@ test('EditNoteScreen leaves breathing room around title date and groups', () => 
   assert.match(src, /groupSection:\s*\{[\s\S]*gap:\s*Spacing\.sm/);
 });
 
-test('EditNoteScreen group chips use squared tags instead of pill tags', () => {
+test('EditNoteScreen group chips are square (matching the detail tags)', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
-  assert.match(
-    src,
-    /groupChip:\s*\{\s*borderWidth:\s*1,\s*borderRadius:\s*6/,
-  );
-  assert.doesNotMatch(
-    src,
-    /groupChip:\s*\{\s*borderWidth:\s*1,\s*borderRadius:\s*Radius\.(?:md|pill)/,
-  );
+  // 锁定 StyleSheet 里的 groupChip 块（以 borderWidth:1 起头，区别于 d memo 里只有
+  // 颜色的同名键）；[^}] 截到第一个右括号，别串到后面别的样式。
+  const block = src.match(/groupChip:\s*\{\s*borderWidth:\s*1,[^}]*\}/);
+  assert.ok(block, 'groupChip style block not found');
+  // 方形：圆角来自 Radius token（Radius.xs），不用胶囊也不用魔法数。
+  assert.match(block[0], /borderRadius:\s*Radius\.xs/);
+  assert.doesNotMatch(block[0], /Radius\.full/);
+  assert.doesNotMatch(block[0], /borderRadius:\s*\d/);
 });
 
-test('EditNoteScreen selected group chips use solid purple cards', () => {
+test('EditNoteScreen selected group chips use the note brand purple', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
+  // 选中态用笔记品牌紫 brandPurple（与详情页分组标签同一支），不再是靛蓝 primary。
   assert.match(
     src,
-    /groupChipActive:\s*\{\s*backgroundColor:\s*colors\.primary,\s*borderColor:\s*colors\.primary/,
+    /groupChipActive:\s*\{\s*backgroundColor:\s*colors\.brandPurple,\s*borderColor:\s*colors\.brandPurple/,
   );
   assert.match(src, /groupChipTextActive:\s*\{\s*color:\s*colors\.white\s*\}/);
-  assert.doesNotMatch(src, /groupChipActive:\s*\{[\s\S]*colors\.primary \+ '18'/);
 });
 
 test('EditNoteScreen renders four large structured note edit regions', () => {
@@ -332,9 +402,15 @@ test('EditNoteScreen can select a real map location and save coordinates', () =>
 test('EditNoteScreen presents structured regions with quieter section chrome', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
+  // 分区从贯穿全宽的分隔线改为安静的卡片（surface 底 + 细边 + 大圆角），
+  // 小节头收敛成 眉标 + 右侧计数文本，不再有计数胶囊和解释性副标题。
   assert.match(src, /sectionShell/);
   assert.match(src, /sectionHeaderMeta/);
-  assert.match(src, /sectionCountPill/);
+  assert.match(
+    src,
+    /sectionBlock:\s*\{[\s\S]*?borderRadius:\s*Radius\.lg/,
+  );
+  assert.doesNotMatch(src, /sectionCountPill/);
   assert.match(src, /const renderSectionHeader = \([\s\S]*meta\?: string/);
   assert.match(src, /flexDirection:\s*'row'/);
 });
@@ -366,10 +442,30 @@ test('NoteCard renders title and meta', () => {
   assert.match(src, /buildNoteMeta/);
 });
 
-test('NoteCard has pin and edit actions', () => {
-  const src = read('src/features/notes/components/NoteCard.tsx');
-  assert.match(src, /onPinPress/);
-  assert.match(src, /onEditPress/);
+test('NoteCard exposes a single more-actions button (not per-action buttons)', () => {
+  const card = read('src/features/notes/components/NoteCard.tsx');
+  const screen = read('src/features/notes/screens/NotesScreen.tsx');
+  const sheet = read('src/features/notes/components/NoteActionsSheet.tsx');
+
+  // 卡片上两个按钮（置顶/编辑）收敛成一个「⋯」，打开动作菜单。
+  assert.match(card, /onMorePress\?: \(note: NoteSummary\) => void/);
+  assert.match(card, /ellipsis-horizontal/);
+  assert.doesNotMatch(card, /onPinPress/);
+  assert.doesNotMatch(card, /onEditPress/);
+
+  // 菜单承载置顶/编辑/分享/下架四个动作；不再暴露删除。
+  assert.match(screen, /<NoteActionsSheet/);
+  assert.match(screen, /onMorePress=\{openMenu\}/);
+  assert.match(screen, /unlistNote/);
+  assert.match(screen, /handleUnlistNote/);
+  assert.match(sheet, /notes\.actions\.pin/);
+  assert.match(sheet, /notes\.actions\.edit/);
+  assert.match(sheet, /notes\.actions\.share/);
+  assert.match(sheet, /notes\.actions\.unlist/);
+  assert.match(sheet, /archive-outline/);
+  assert.doesNotMatch(sheet, /common\.delete/);
+  assert.doesNotMatch(sheet, /trash-outline/);
+  assert.doesNotMatch(sheet, /onDelete/);
 });
 
 test('ProfileScreen navigates to notes on menu item press', () => {
@@ -381,4 +477,88 @@ test('ProfileScreen navigates to notes on menu item press', () => {
 test('ProfileScreen does not include the assistant menu item', () => {
   const src = read('src/features/profile/screens/ProfileScreen.tsx');
   assert.doesNotMatch(src, /profile\.assistant/);
+});
+
+test('NoteDetailScreen follows the divider + icon-chip section design', () => {
+  const detail = read('src/features/notes/screens/NoteDetailScreen.tsx');
+  const renderer = read('src/features/notes/components/NoteBlockRenderer.tsx');
+
+  // 设计稿：小节之间用 1pt 分隔线（发丝线真机太淡）+ 主色浅底图标章头分段；
+  // 正文是主角，不加章头直接展开。
+  assert.match(detail, /divider:\s*\{\s*height:\s*1,/);
+  assert.match(detail, /sectionIconChip/);
+  assert.match(detail, /renderSectionHeader\(\s*'image-outline'/);
+  // 文字区也有自己的 heading（text-outline）—— 所有区域结构一致。
+  assert.match(detail, /renderSectionHeader\(\s*'text-outline'/);
+  assert.doesNotMatch(detail, /sectionCard:/);
+
+  // 来源名片：主色浅底 + 深一档实心靛蓝"查看原消息"胶囊（primaryDeep token）。
+  assert.match(detail, /sourceCard: \{ backgroundColor: colors\.primaryLight \}/);
+  assert.match(detail, /sourceBtn: \{ backgroundColor: colors\.primaryDeep \}/);
+
+  // 分组标签：方形品牌紫实心块 + 白字（brandPurple = 会员卡渐变核心 #7C5CF0）。
+  assert.match(detail, /groupTag: \{ backgroundColor: colors\.brandPurple \}/);
+  assert.match(detail, /groupTagText: \{ color: colors\.white \}/);
+  assert.match(detail, /groupTag:\s*\{[\s\S]*?borderRadius:\s*Radius\.xs/);
+  const colorsSrc = read('src/theme/colors.ts');
+  assert.match(colorsSrc, /brandPurple: '#7C5CF0'/);
+
+  // 媒体满宽圆角，按真实宽高比渲染（比例夹在 3:4 与 16:9 之间），
+  // 无尺寸信息回退方图。
+  assert.match(renderer, /resolveMediaAspectRatio/);
+  assert.match(renderer, /Math\.min\(16 \/ 9, Math\.max\(3 \/ 4, width \/ height\)\)/);
+  assert.match(renderer, /mediaFrame:\s*\{\s*borderRadius:\s*Radius\.lg,\s*overflow:\s*'hidden'/);
+
+  // 文字区始终展示（heading + 分割线与各区域一致）；hasTextBody 只决定
+  // 展示正文还是「暂无文字」占位。不再用 extractPlainText 二次嗅探
+  // （它不递归嵌套 children，会把缩进列表等真实正文误判为空而整段藏掉）。
+  assert.match(detail, /const hasTextBody = Boolean\(availability\?\.hasText\)/);
+  assert.match(detail, /notes\.section\.emptyText/);
+  assert.doesNotMatch(detail, /textSectionHasContent/);
+  assert.doesNotMatch(detail, /extractPlainText\(/);
+  assert.doesNotMatch(detail, /import \{ extractPlainText \}/);
+});
+
+test('NoteDetailScreen header adds a share button left of download', () => {
+  const src = read('src/features/notes/screens/NoteDetailScreen.tsx');
+
+  // 分享按钮在下载按钮左边，点开弹会话选择器发给好友/群聊（非网页链接/系统面板）。
+  assert.match(src, /handleShareNote/);
+  assert.match(src, /<ShareNoteSheet/);
+  assert.match(src, /buildNoteCardPayloadFromSummary/);
+  assert.doesNotMatch(src, /createNoteShareLink/);
+  const shareIdx = src.indexOf("name=\"share-outline\"");
+  const downloadIdx = src.indexOf("name=\"download-outline\"");
+  assert.ok(shareIdx > 0 && downloadIdx > 0, 'both header icons exist');
+  assert.ok(shareIdx < downloadIdx, 'share sits before download');
+});
+
+test('GroupManagerSheet name input is a visible shadowed pill', () => {
+  const src = read('src/features/notes/components/GroupManagerSheet.tsx');
+
+  // 之前边框用 surface（隐形）；现在可见边框 + background 凹槽底 + 阴影 + 胶囊圆角。
+  assert.match(src, /modalInput:\s*\{[\s\S]*?borderColor:\s*colors\.surfaceBorder/);
+  assert.match(src, /modalInput:\s*\{[\s\S]*?backgroundColor:\s*colors\.background/);
+  assert.match(src, /modalInput:\s*\{[\s\S]*?borderRadius:\s*Radius\.full[\s\S]*?shadowOpacity/);
+});
+
+test('ShareNoteSheet sends the note as a card to a chosen friend/group', () => {
+  const sheet = read('src/features/notes/components/ShareNoteSheet.tsx');
+  const client = read('src/im/client.ts');
+
+  // 会话选择器：列出会话（好友/群聊），点选把笔记以卡片消息发过去。
+  assert.match(sheet, /loadConversationList/);
+  assert.match(sheet, /sendNoteCardToConversation/);
+  assert.match(sheet, /BottomSheetModal/);
+  assert.match(sheet, /notes\.shareToChat\.title/);
+  // 后端发送按会话解析 recvID/groupID（与 friend/circle 名片一致）。
+  assert.match(client, /export async function sendNoteCardToConversation/);
+  assert.match(client, /targetConversation\.conversationType === SessionType\.Group/);
+});
+
+test('ShareNoteSheet maps send failures to stable user-facing copy', () => {
+  const sheet = read('src/features/notes/components/ShareNoteSheet.tsx');
+  assert.match(sheet, /getShareNoteSendErrorMessage/);
+  assert.match(sheet, /notes\.shareToChat\.failedMessage/);
+  assert.doesNotMatch(sheet, /error instanceof Error\s*\?\s*error\.message/);
 });

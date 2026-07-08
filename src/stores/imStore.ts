@@ -48,6 +48,8 @@ interface IMState {
   appendMessages: (conversationID: string, messages: MessageItem[]) => void;
   /** 收到对方读回执时把对应 clientMsgID 列表标记为 isRead=true。 */
   markMessagesRead: (conversationID: string, clientMsgIDs: string[]) => void;
+  /** 乐观发送失败时把对应 clientMsgID 的消息标记为失败态 status=3。 */
+  markMessageSendFailed: (conversationID: string, clientMsgID: string) => void;
   /** 批量更新某些用户的在线状态（订阅返回值或 onUserStatusChanged 都走这里）。 */
   setUserOnlineStatuses: (
     statuses: readonly { userID: string; status: OnlineState }[],
@@ -168,6 +170,26 @@ export const useIMStore = create<IMState>((set) => ({
         if (idSet.has(msg.clientMsgID) && !msg.isRead) {
           changed = true;
           return { ...msg, isRead: true };
+        }
+        return msg;
+      });
+      if (!changed) return state;
+      return {
+        messagesByConversation: {
+          ...state.messagesByConversation,
+          [conversationID]: next,
+        },
+      };
+    }),
+  markMessageSendFailed: (conversationID, clientMsgID) =>
+    set((state) => {
+      const list = state.messagesByConversation[conversationID];
+      if (!list || list.length === 0) return state;
+      let changed = false;
+      const next = list.map((msg) => {
+        if (msg.clientMsgID === clientMsgID && msg.status !== 3) {
+          changed = true;
+          return { ...msg, status: 3 as MessageItem['status'] };
         }
         return msg;
       });

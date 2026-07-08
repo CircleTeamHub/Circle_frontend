@@ -7,7 +7,7 @@ function read(relativePath) {
   return fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
 }
 
-test('plaza feed filter bar uses only my joined or created circles', () => {
+test('plaza feed filter bar uses membership-scoped circles including owned circles', () => {
   const source = read('src/features/discover/components/plaza-feed.tsx');
 
   assert.match(source, /joinedCircles/);
@@ -17,7 +17,86 @@ test('plaza feed filter bar uses only my joined or created circles', () => {
   assert.doesNotMatch(source, /fetchAllCircles/);
 });
 
-test('plaza feed request applies saved multi-circle and city filters', () => {
+test('plaza feed preserves backend circle ids instead of silently dropping them', () => {
+  const feed = read('src/features/discover/components/plaza-feed.tsx');
+  const store = read('src/features/discover/store/use-discover-store.ts');
+
+  assert.doesNotMatch(feed, /isBackendUuid/);
+  assert.doesNotMatch(store, /isBackendUuid/);
+  assert.match(store, /const cappedCircleIds = clampCircleFilterIds\(appliedCircleIds\);/);
+  assert.match(store, /selectedCircleId: circleId,/);
+});
+
+test('plaza feed does not paginate while the first page is still empty', () => {
+  const source = read('src/features/discover/components/plaza-feed.tsx');
+
+  assert.match(source, /plazaPosts\.length > 0/);
+  assert.match(source, /plazaPosts\.length,\s*plazaLoading,\s*plazaHasMore,\s*fetchPlazaPosts/);
+});
+
+test('plaza feed selected-circle empty state explains ended posts are hidden', () => {
+  const source = read('src/features/discover/components/plaza-feed.tsx');
+
+  assert.match(source, /selectedCircleId/);
+  assert.match(source, /discover\.noActiveActivity/);
+  assert.match(source, /discover\.endedActivityHiddenHint/);
+});
+
+test('plaza feed empty state never tells joined users to join a circle', () => {
+  const source = read('src/features/discover/components/plaza-feed.tsx');
+  const emptyStateBlock = source.match(/const ListEmpty = !plazaLoading \? \([\s\S]*?\n  \) : null;/)?.[0] ?? '';
+
+  assert.match(emptyStateBlock, /discover\.noActiveActivity/);
+  assert.match(emptyStateBlock, /discover\.endedActivityHiddenHint/);
+  assert.doesNotMatch(emptyStateBlock, /discover\.joinCircleHint/);
+});
+
+test('plaza feed keeps circle shortcuts independent from the global filter', () => {
+  const source = read('src/features/discover/components/plaza-feed.tsx');
+
+  assert.match(source, /orderCircleShortcuts\(myPlazaCircles/);
+  assert.doesNotMatch(source, /applyCircleFilter\(myPlazaCircles/);
+  assert.doesNotMatch(source, /activeFilterSummary/);
+  assert.doesNotMatch(source, /clearFilter/);
+});
+
+test('circle filter bar always labels all as all', () => {
+  const source = read('src/features/discover/components/circle-filter-bar.tsx');
+
+  assert.match(source, /t\('common\.all'\)/);
+  assert.doesNotMatch(source, /isFiltered/);
+  assert.doesNotMatch(source, /discover\.filter\.filteredAll/);
+});
+
+test('plaza feed lets users edit persisted circle shortcut order from the right side', () => {
+  const feed = read('src/features/discover/components/plaza-feed.tsx');
+  const bar = read('src/features/discover/components/circle-filter-bar.tsx');
+  const sheet = read('src/features/discover/components/circle-shortcut-order-sheet.tsx');
+
+  assert.match(feed, /useCircleShortcutOrderStore/);
+  assert.match(feed, /orderCircleShortcuts/);
+  assert.match(feed, /CircleShortcutOrderSheet/);
+  assert.match(bar, /onEditOrder/);
+  assert.match(bar, /reorder-three-outline/);
+  assert.match(bar, /translateX:\s*Spacing\.xs/);
+  assert.match(sheet, /PanResponder/);
+  assert.match(sheet, /getDragResponder/);
+  assert.match(sheet, /scrollEnabled=\{!draggingCircleId\}/);
+  assert.match(sheet, /reorderCircleShortcut/);
+  assert.match(sheet, /reorder-three-outline/);
+  assert.match(sheet, /new Animated\.Value\(0\)/);
+  assert.match(sheet, /translateY:\s*dragY/);
+  assert.match(sheet, /Animated\.View/);
+  assert.match(sheet, /draggingRow/);
+  assert.match(sheet, /dragY\.stopAnimation\(\)/);
+  assert.doesNotMatch(sheet, /Animated\.spring\(dragY/);
+  assert.doesNotMatch(sheet, /colors\.primaryLight/);
+  assert.doesNotMatch(sheet, /transform:\s*isDragging\s*\?/);
+  assert.doesNotMatch(sheet, /chevron-up/);
+  assert.doesNotMatch(sheet, /chevron-down/);
+});
+
+test('plaza feed request applies saved multi-circle and city filters only for all', () => {
   const source = read('src/features/discover/store/use-discover-store.ts');
 
   assert.match(source, /useDiscoverFilterStore/);
@@ -25,6 +104,7 @@ test('plaza feed request applies saved multi-circle and city filters', () => {
   assert.match(source, /appliedCities/);
   assert.match(source, /circleIds[,:\s]/);
   assert.match(source, /cities[,:\s]/);
+  assert.match(source, /selectedCircleId \|\| cappedCircleIds\.length === 0/);
 });
 
 test('plaza feed request caps saved multi-circle filters before sending', () => {

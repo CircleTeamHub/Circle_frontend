@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { useShallow } from 'zustand/react/shallow';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { useMomentsStore } from '@/features/discover/store/use-moments-store';
 import { toggleMomentLike, fetchNewMomentsCount } from '@/services/api/moments';
@@ -54,14 +55,28 @@ export const MomentsFeed: React.FC = () => {
     lastRefreshTime,
     fetchMoments,
     toggleLike: storeToggleLike,
-  } = useMomentsStore();
+  } = useMomentsStore(
+    useShallow((s) => ({
+      moments: s.moments,
+      loading: s.loading,
+      hasMore: s.hasMore,
+      lastRefreshTime: s.lastRefreshTime,
+      fetchMoments: s.fetchMoments,
+      toggleLike: s.toggleLike,
+    })),
+  );
 
   const [refreshing, setRefreshing] = useState(false);
   const [newCount, setNewCount] = useState(0);
+  const lastFocusFetchRef = useRef(0);
 
-  // Auto refresh on focus (silent, no spinner)
+  // Auto refresh on focus (silent, no spinner), throttled to 30s so rapid
+  // re-focus doesn't refetch the whole feed.
   useFocusEffect(
     useCallback(() => {
+      const now = Date.now();
+      if (now - lastFocusFetchRef.current < 30_000) return;
+      lastFocusFetchRef.current = now;
       fetchMoments(true);
     }, [fetchMoments]),
   );

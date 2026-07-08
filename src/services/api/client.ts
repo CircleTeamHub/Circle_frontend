@@ -8,7 +8,7 @@
  * - 统一错误格式：ApiError（包含 status、code、data）
  */
 import { API_URL } from '@/constants/config';
-import { clearLocalSession } from '@/services/auth/session';
+import { clearLocalSession, registerLogoutHandler } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
 import i18n from '@/i18n';
 import { reportError, shouldReportHttpFailure } from '@/observability/sentry';
@@ -225,6 +225,12 @@ export class ApiError extends Error {
 // token 刷新 Promise 单例：多个并发请求同时 401 时，只发一次 /auth/refresh
 let refreshPromise: Promise<string> | null = null;
 
+function resetRefreshPromise() {
+  refreshPromise = null;
+}
+
+registerLogoutHandler(resetRefreshPromise);
+
 async function readPayload<T>(
   res: Response,
   reportContext: { endpoint: string; method: string }
@@ -408,8 +414,10 @@ async function refreshAccessToken() {
     return refreshPromise;
   }
 
-  refreshPromise = (async () => {
-    const { refreshToken, setTokens } = useAuthStore.getState();
+  const sessionEpochAtStart = useAuthStore.getState().sessionEpoch;
+
+  const activeRefreshPromise = (async () => {
+    const { refreshToken } = useAuthStore.getState();
 
     if (!refreshToken) {
       await clearLocalSession();
@@ -447,19 +455,34 @@ async function refreshAccessToken() {
       );
     }
 
-    setTokens(tokens);
+    const currentAuthState = useAuthStore.getState();
+    if (currentAuthState.sessionEpoch !== sessionEpochAtStart) {
+      throw new ApiError(
+        i18n.t('common.errors.sessionChangedDuringRefresh', {
+          defaultValue: 'Session changed during token refresh',
+        }),
+        { status: 401, failureKind: 'session-changed' },
+      );
+    }
+
+    currentAuthState.setTokens(tokens);
 
     return tokens.accessToken;
   })()
     .catch(async (error) => {
-      await clearLocalSession();
+      if (useAuthStore.getState().sessionEpoch === sessionEpochAtStart) {
+        await clearLocalSession();
+      }
       throw error;
     })
     .finally(() => {
-      refreshPromise = null;
+      if (refreshPromise === activeRefreshPromise) {
+        refreshPromise = null;
+      }
     });
 
-  return refreshPromise;
+  refreshPromise = activeRefreshPromise;
+  return activeRefreshPromise;
 }
 
 function shouldReportApiFailure(error: unknown, status: number | undefined): boolean {

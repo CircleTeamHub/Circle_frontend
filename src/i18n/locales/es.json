@@ -266,7 +266,10 @@
       "save": "Guardar",
       "saveUnsupported": "Este mensaje aún no se puede guardar",
       "saveFailed": "No se pudo guardar",
-      "saveFailedHint": "Inténtalo de nuevo más tarde"
+      "saveFailedHint": "Inténtalo de nuevo más tarde",
+      "noteCollected": "Añadida a mis notas",
+      "noteAlreadyCollected": "Ya está en mis notas",
+      "noteCollectedHint": "Puedes verla en Mis notas"
     },
     "mentions": {
       "empty": "No hay miembros para mencionar"
@@ -629,7 +632,13 @@
     "actions": {
       "new": "Nueva",
       "qrCode": "Código QR",
-      "share": "Compartir"
+      "share": "Compartir",
+      "pin": "Fijar arriba",
+      "unpin": "Dejar de fijar",
+      "edit": "Editar",
+      "unlist": "Retirar",
+      "relist": "Volver a publicar",
+      "more": "Más"
     },
     "alerts": {
       "deleteFailedTitle": "Error al eliminar",
@@ -644,7 +653,13 @@
       "saveFailedTitle": "Error al guardar",
       "saveGroupFailed": "No se pudo guardar el grupo, inténtalo de nuevo.",
       "saveMembershipsFailed": "No se pudieron guardar los grupos de notas, inténtalo de nuevo.",
-      "deleteGroupMessage": "Eliminar \"{{name}}\" no borrará sus notas; solo se quitarán del grupo."
+      "saveMembershipsPartialFailed": "Es posible que algunos grupos de notas se hayan guardado. La lista se actualizó con el estado más reciente; revísala e inténtalo de nuevo.",
+      "deleteGroupMessage": "Eliminar \"{{name}}\" no borrará sus notas; solo se quitarán del grupo.",
+      "pinFailedTitle": "No se pudo completar",
+      "relistFailedTitle": "No se pudo volver a publicar",
+      "unlistFailedTitle": "No se pudo retirar",
+      "unlistTitle": "Retirar nota",
+      "unlistConfirm": "Podrás verla en Retiradas. Las notas retiradas se eliminan automáticamente después de un mes."
     },
     "detail": {
       "loadFailed": "No se pudo cargar la nota, inténtalo de nuevo",
@@ -655,7 +670,11 @@
       "downloadImages": "Descargar imágenes",
       "downloadVideos": "Descargar videos",
       "downloadLongImage": "Generar imagen larga",
-      "downloadPdf": "Descargar PDF"
+      "downloadPdf": "Descargar PDF",
+      "sourceGroupLabel": "De un chat de grupo",
+      "sourcePrivateLabel": "De un chat privado",
+      "sourceSharedBy": "Compartida por {{name}}",
+      "sourceLocate": "Ver mensaje original"
     },
     "edit": {
       "addImage": "Añadir imagen",
@@ -712,14 +731,15 @@
     },
     "empty": {
       "noMatch": "No hay notas coincidentes",
-      "noNotes": "Aún no hay notas"
+      "noNotes": "Aún no hay notas",
+      "noUnlisted": "No hay notas retiradas"
     },
     "manageGroups": {
       "cancelEdit": "Cancelar edición",
-      "copy": "\"Todas\" y \"Sin grupo\" van primero; mueve al frente los grupos que uses más.",
+      "copy": "\"Todas\" y \"Sin grupo\" son grupos fijos y no se pueden editar.",
       "createNew": "Añadir grupo",
       "limitHint": "{{count}}/{{max}} grupos creados",
-      "namePlaceholder": "Escribe un nombre de grupo, p. ej. Madrid",
+      "namePlaceholder": "Escribe un nombre para añadir un grupo nuevo",
       "saveEdit": "Guardar cambios",
       "saving": "Guardando...",
       "title": "Gestionar grupos",
@@ -734,29 +754,6 @@
       "copy": "Elige las notas para añadir a \"{{name}}\"."
     },
     "searchPlaceholder": "Escribe lo que quieres buscar",
-    "settings": {
-      "cardSaveSection": "Guardado de tarjetas",
-      "confirmCardSave": "Confirmar guardado de tarjeta",
-      "cooldownTitle": "En espera",
-      "defaultSaveCard": "Guardar tarjetas por defecto",
-      "displaySection": "Visualización",
-      "manualRefreshHint1": "Úsalo cuando la lista o el número de grupos difiera del servidor.",
-      "manualRefreshHint2": "Al tocar, se vuelven a obtener las listas de notas y grupos del servidor.",
-      "manualRefreshHint3": "Para evitar activaciones frecuentes, hay una espera tras cada actualización.",
-      "manualRefreshTitle": "Actualización manual",
-      "refresh": "Volver a obtener",
-      "refreshFailedMessage": "Revisa tu conexión e inténtalo de nuevo.",
-      "refreshFailedTitle": "Error al actualizar",
-      "refreshedTitle": "Actualizado",
-      "refreshing": "Actualizando...",
-      "showGroups": "Mostrar info de grupos",
-      "showMedia": "Mostrar multimedia",
-      "showSortToolbar": "Mostrar barra de orden",
-      "showUngrouped": "Mostrar sin grupo",
-      "title": "Ajustes de notas",
-      "cooldownMessage": "Inténtalo de nuevo en {{remain}} s.",
-      "refreshedMessage": "Grupos: {{groupCount}}\nNotas visibles: {{noteCount}}"
-    },
     "share": {
       "copiedMessage": "Enlace de la nota copiado al portapapeles.",
       "copiedTitle": "Copiado",
@@ -773,12 +770,10 @@
       "message": "{{title}}\n{{url}}",
       "qrHint": "Escanea para abrir esta lista de notas ({{count}})."
     },
-    "stopgap": {
-      "deletedNotes": "La lista de notas eliminadas llegará pronto. No te lo pierdas.",
-      "title": "Próximamente"
-    },
     "title": "Mis notas",
     "unlisted": "Retirada",
+    "unlistedTitle": "Notas retiradas",
+    "unlistedAutoDeleteHint": "Las notas retiradas se eliminan automáticamente después de un mes.",
     "format": {
       "fullDate": "{{day}}/{{month}}/{{year}} · {{weekday}}",
       "groupOverflow": "{{first}}, {{second}} +{{extra}}",
@@ -801,9 +796,10 @@
     },
     "section": {
       "text": "Texto",
-      "media": "Imágenes / Videos",
+      "media": "Imágenes · Videos",
       "showcase": "Exhibición",
-      "location": "Ubicación"
+      "location": "Ubicación",
+      "emptyText": "Sin texto todavía"
     },
     "location": {
       "invalidTitle": "Ubicación no válida",
@@ -813,6 +809,24 @@
       "failedTitle": "Error de ubicación",
       "usePlace": "Usar esta ubicación",
       "selectedLabel": "Ubicación seleccionada"
+    },
+    "list": {
+      "fromSource": "De {{name}}"
+    },
+    "loadFailed": "No se pudieron cargar las notas. Revisa tu conexión e inténtalo de nuevo",
+    "shareToChat": {
+      "title": "Compartir con un amigo o grupo",
+      "confirmTitle": "Enviar nota",
+      "confirmMessage": "¿Enviar «{{title}}» a {{name}}?",
+      "sentTitle": "Enviada",
+      "sentMessage": "Nota enviada al chat.",
+      "failedTitle": "Error al enviar",
+      "failedMessage": "No se puede enviar esta nota ahora. Inténtalo de nuevo.",
+      "sending": "Enviando…",
+      "loadFailed": "No se pudieron cargar los chats. Inténtalo de nuevo",
+      "empty": "No hay chats para enviar",
+      "groupHint": "Grupo",
+      "friendHint": "Amigo"
     }
   },
   "tempChats": {
@@ -1120,7 +1134,9 @@
     "management": "Círculos",
     "moments": "Momentos",
     "noActivity": "Sin actividad",
+    "noActiveActivity": "Sin actividad activa",
     "joinCircleHint": "Únete a un círculo para ver las publicaciones de la plaza",
+    "endedActivityHiddenHint": "Las actividades finalizadas o vencidas no se muestran en la plaza",
     "circleDetail": "Detalles del círculo",
     "createCircle": "Crear círculo",
     "discoverCircles": "Descubrir círculos",
@@ -1166,6 +1182,11 @@
       "selectedCount": "{{count}}/{{max}} elegidos",
       "noCircles": "No hay círculos disponibles",
       "maxCircles": "Máximo {{max}} círculos"
+    },
+    "shortcutOrder": {
+      "title": "Editar orden de círculos",
+      "hint": "La lista horizontal usará este orden",
+      "reset": "Restablecer orden"
     },
     "commentInput": {
       "placeholder": "Escribe un comentario...",
@@ -1559,16 +1580,11 @@
     "collections": {
       "deleteTitle": "Confirmar eliminación",
       "deleteConfirm": "¿Seguro que quieres eliminar este elemento guardado?",
-      "imageCount": "{{count}} imágenes",
-      "videoCount": "{{count}} videos",
-      "showcaseCount": "{{count}} exhibiciones",
-      "location": "Ubicación",
       "backToMessages": "Volver a Mensajes",
       "sender": "Remitente",
       "empty": "Aún no hay elementos guardados",
       "loadError": "Error al cargar los guardados. Inténtalo de nuevo más tarde.",
       "deleteError": "Error al eliminar el guardado. Inténtalo de nuevo más tarde.",
-      "noteFallbackTitle": "Nota guardada",
       "conversationFallback": "Chat",
       "fromSource": "De {{title}}",
       "tabs": {
@@ -1576,8 +1592,7 @@
         "chat": "Historial de chat",
         "video": "Video",
         "voice": "Voz",
-        "message": "Mensaje",
-        "note": "Notas guardadas"
+        "message": "Mensaje"
       },
       "menuLabel": "Guardados"
     },
@@ -1910,6 +1925,7 @@
       "requestFailed": "La solicitud falló",
       "sessionExpired": "Tu sesión ha caducado. Inicia sesión de nuevo.",
       "refreshResponseInvalid": "Respuesta de actualización no válida. Inicia sesión de nuevo.",
+      "sessionChangedDuringRefresh": "La cuenta cambió mientras se actualizaba la sesión. Inténtalo de nuevo.",
       "uploadTimeout": "Se agotó el tiempo de la subida. Comprueba tu conexión e inténtalo de nuevo.",
       "uploadFailedWithStatus": "La subida falló ({{status}})"
     }
@@ -2209,12 +2225,13 @@
     "PLAZA_RECOGNIZE_NOT_MEMBER": "Solo se puede reconocer a miembros activos del círculo",
     "PLAZA_RECOGNIZE_BLOCKED": "No puedes reconocer a un usuario bloqueado",
     "PLAZA_RECOGNIZE_ALREADY": "El reconocimiento de colaboración ya se ha enviado",
+    "PLAZA_INVALID_CURSOR": "Esta página de la plaza caducó. Actualiza e inténtalo de nuevo.",
     "TRACE_MOMENT_NOT_FOUND": "Momento no encontrado",
     "TRACE_DELETE_AUTHOR_ONLY": "Solo el autor puede eliminar esto",
     "TRACE_REPLY_TARGET_NOT_FOUND": "El comentario al que respondes ya no existe",
     "TRACE_COMMENT_NOT_FOUND": "Comentario no encontrado",
     "TRACE_ACCESS_FORBIDDEN": "No tienes permiso para ver este momento",
-    "TRACE_INVALID_CURSOR": "La lista de momentos cambió. Actualiza e inténtalo de nuevo",
+    "TRACE_INVALID_CURSOR": "Esta página del feed caducó. Actualiza e inténtalo de nuevo.",
     "FRIEND_SELF_ADD": "No puedes añadirte a ti mismo como amigo",
     "FRIEND_USER_NOT_FOUND": "Usuario no encontrado",
     "FRIEND_BLOCKED_CANNOT_REQUEST": "No puedes enviar una solicitud de amistad a este usuario",

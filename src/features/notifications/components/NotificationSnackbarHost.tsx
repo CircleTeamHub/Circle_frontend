@@ -20,6 +20,7 @@ import { useNotificationFeedback } from '@/features/notifications/hooks/use-noti
 import { useNotificationCenterStore } from '@/features/notifications/store/use-notification-center-store';
 import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
+import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 
 const AUTO_DISMISS_MS = 4_000;
 const ENTER_MS = 220;
@@ -43,6 +44,9 @@ export function NotificationSnackbarHost() {
   // True when the user is already looking at the conversation list — a chat
   // toast there is redundant, so we skip past it.
   const onMessagesList = segments[segments.length - 1] === 'messages';
+  const notificationScope = (segments as readonly string[]).includes('discover')
+    ? 'discover'
+    : 'messages';
 
   const [shown, setShown] = useState(current);
 
@@ -171,6 +175,13 @@ export function NotificationSnackbarHost() {
       // Optimistically mark read locally so the notification center reflects
       // the tap immediately, regardless of the network call's outcome.
       useNotificationCenterStore.getState().markInteractiveReadLocal(shown.id);
+      if (!shown.read) {
+        const badgeStore = useTabBadgeStore.getState();
+        badgeStore.setDiscoverUnread(
+          Math.max(0, badgeStore.discoverUnread - 1),
+        );
+        badgeStore.setSystemUnread(Math.max(0, badgeStore.systemUnread - 1));
+      }
       void markNotificationRead(shown.id).catch((error) => {
         if (isDev) {
           console.warn('[NotificationSnackbarHost] mark read failed', error);
@@ -185,9 +196,10 @@ export function NotificationSnackbarHost() {
     router.push(
       getSnackbarRoute(shown, {
         untitledPost: t('notifications.signupMgmt.untitledPost'),
+        scope: notificationScope,
       }),
     );
-  }, [shown, clearTimer, dismissCurrent, router, t]);
+  }, [shown, clearTimer, dismissCurrent, notificationScope, router, t]);
 
   if (!shown || !row || (shown.kind === 'chat' && onMessagesList)) {
     return null;
