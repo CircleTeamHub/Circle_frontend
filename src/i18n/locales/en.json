@@ -2052,7 +2052,8 @@
       "memberKicked": "A member was removed",
       "groupNameUpdated": "Group name updated",
       "groupDismissed": "Group disbanded",
-      "messageRevoked": "A message was recalled"
+      "messageRevoked": "A message was recalled",
+      "friendAdded": "You're now friends — say hello!"
     },
     "preview": {
       "image": "[Photo]",

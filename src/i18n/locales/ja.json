@@ -2075,7 +2075,8 @@
       "memberKicked": "メンバーが削除されました",
       "groupNameUpdated": "グループ名を更新しました",
       "groupDismissed": "グループが解散しました",
-      "messageRevoked": "メッセージが取り消されました"
+      "messageRevoked": "メッセージが取り消されました",
+      "friendAdded": "友だちになりました。挨拶してみましょう"
     },
     "preview": {
       "image": "[写真]",

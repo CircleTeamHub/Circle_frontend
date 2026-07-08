@@ -14,6 +14,8 @@ import {
   type FriendActivity,
 } from '@/services/api/friends';
 import { getApiErrorMessage } from '@/services/api/errors';
+import { insertLocalFriendAddedNotice } from '@/im/client';
+import { useAuthStore } from '@/stores/authStore';
 import { getLocalizedDateTimeLocale } from '@/utils/locale';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useLocalSearchParams } from 'expo-router';
@@ -86,6 +88,7 @@ export default function FriendActivityDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [handling, setHandling] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const selfUserId = useAuthStore((state) => state.user?.id ?? null);
 
   const activityId = typeof params.id === 'string' ? params.id : '';
 
@@ -210,6 +213,15 @@ export default function FriendActivityDetailScreen() {
       try {
         if (decision === 'accept') {
           await acceptFriendRequest(activity.requestId);
+          // WeChat-style: drop a local "你们已经是好友了" notice into the chat so
+          // it isn't empty when the user opens it, without waiting on OpenIM.
+          // Best-effort — a failure must not fail the accept.
+          if (selfUserId && activity.counterparty?.id) {
+            void insertLocalFriendAddedNotice({
+              selfUserID: selfUserId,
+              friendUserID: activity.counterparty.id,
+            }).catch(() => undefined);
+          }
           setActivity((current) =>
             current ? { ...current, requestState: 'ACCEPTED' } : current,
           );
@@ -236,7 +248,7 @@ export default function FriendActivityDetailScreen() {
         setHandling(false);
       }
     },
-    [activity, handling, t],
+    [activity, handling, selfUserId, t],
   );
 
   const handleCancel = useCallback(() => {

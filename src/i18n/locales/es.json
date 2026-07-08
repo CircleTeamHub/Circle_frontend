@@ -2078,7 +2078,8 @@
       "memberKicked": "Se eliminó a un miembro",
       "groupNameUpdated": "Nombre del grupo actualizado",
       "groupDismissed": "Grupo disuelto",
-      "messageRevoked": "Se retiró un mensaje"
+      "messageRevoked": "Se retiró un mensaje",
+      "friendAdded": "Ahora son amigos, ¡salúdense!"
     },
     "preview": {
       "image": "[Foto]",

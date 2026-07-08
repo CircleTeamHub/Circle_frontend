@@ -23,6 +23,7 @@ import {
   NOTE_CARD_EXTENSION,
   TRANSFER_CARD_EXTENSION,
   VERIFICATION_CARD_EXTENSION,
+  FRIEND_ADDED_NOTICE_EXTENSION,
   fromImUserId,
 } from '@/im/client';
 import { normalizeMediaUrl } from '@/services/api/utils';
@@ -289,7 +290,19 @@ export function mapMessageItemToChatMessage(
     return null;
   }
 
-  // 系统/群通知消息不渲染为聊天气泡（创建群聊后 SDK 自动塞的 GroupCreated
+  // 好友刚建立时 OpenIM 会塞一条 FriendAdded 通知——渲染成一条居中灰色系统提示
+  // （微信「你们已经是好友了，开始聊天吧」那条），让会话不再空着。必须放在下面
+  // 通用的系统通知过滤之前。
+  if (item.contentType === MessageType.FriendAdded) {
+    return {
+      id: item.clientMsgID,
+      type: 'system-notice',
+      text: tImNotification('friendAdded', '你们已经是好友了，开始聊天吧'),
+      time: formatTimestamp(item.sendTime),
+    };
+  }
+
+  // 其余系统/群通知消息不渲染为聊天气泡（创建群聊后 SDK 自动塞的 GroupCreated
   // 之前会被当成普通文本显示成 [消息] 气泡）。
   if (isSystemNotification(item.contentType)) {
     return null;
@@ -342,6 +355,17 @@ export function mapMessageItemToChatMessage(
 
   if (item.contentType === MessageType.CustomMessage) {
     const ext = item.customElem?.extension;
+    if (ext === FRIEND_ADDED_NOTICE_EXTENSION) {
+      // Locally-inserted "you're now friends" notice (see
+      // insertLocalFriendAddedNotice). Same centered line as the native
+      // FriendAdded; the chat screen dedupes if both are present.
+      return {
+        id: item.clientMsgID,
+        type: 'system-notice',
+        text: tImNotification('friendAdded', '你们已经是好友了，开始聊天吧'),
+        time: formatTimestamp(item.sendTime),
+      };
+    }
     if (ext === NOTE_CARD_EXTENSION) {
       const payload = parseNoteCardPayload(item.customElem?.data ?? '');
       if (payload) {

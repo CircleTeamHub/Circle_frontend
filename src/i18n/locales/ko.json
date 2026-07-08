@@ -2075,7 +2075,8 @@
       "memberKicked": "멤버가 내보내졌습니다",
       "groupNameUpdated": "그룹 이름이 변경되었습니다",
       "groupDismissed": "그룹이 해산되었습니다",
-      "messageRevoked": "메시지가 회수되었습니다"
+      "messageRevoked": "메시지가 회수되었습니다",
+      "friendAdded": "이제 친구가 되었어요. 인사해 보세요"
     },
     "preview": {
       "image": "[사진]",

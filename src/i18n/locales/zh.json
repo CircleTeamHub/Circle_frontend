@@ -2049,7 +2049,8 @@
       "memberKicked": "有成员被移出群聊",
       "groupNameUpdated": "群名称已更新",
       "groupDismissed": "群已解散",
-      "messageRevoked": "一条消息被撤回"
+      "messageRevoked": "一条消息被撤回",
+      "friendAdded": "你们已经是好友了，开始聊天吧"
     },
     "preview": {
       "image": "[图片]",

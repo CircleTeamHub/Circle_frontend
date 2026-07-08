@@ -28,6 +28,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { Divider } from '@/components/ui/divider';
 import {
   DatePill,
+  SystemNoticePill,
   ReceivedBubble,
   SentBubble,
   LocationCard,
@@ -747,14 +748,23 @@ export default function ChatDetailScreen() {
 
   // FlatList 用 inverted 渲染：index 0 = 最新消息，自然停在底部。
   // 因此把按时间升序的 messages 反转一次，新到旧排列。
-  const messages = useMemo(
-    () =>
-      [...(messagesByConversation[conversationID] ?? [])]
-        .reverse()
-        .map((item) => mapMessageItemToChatMessage(item, currentUserID))
-        .filter((item): item is ChatMessage => Boolean(item)),
-    [conversationID, currentUserID, messagesByConversation],
-  );
+  const messages = useMemo(() => {
+    // Collapse duplicate system notices: the "you're now friends" line can come
+    // from both OpenIM's native FriendAdded and the local insert on accept —
+    // keep only the first per distinct text so it never shows twice.
+    const seenSystemNotice = new Set<string>();
+    return [...(messagesByConversation[conversationID] ?? [])]
+      .reverse()
+      .map((item) => mapMessageItemToChatMessage(item, currentUserID))
+      .filter((item): item is ChatMessage => Boolean(item))
+      .filter((item) => {
+        if (item.type !== 'system-notice') return true;
+        const key = item.text ?? '';
+        if (seenSystemNotice.has(key)) return false;
+        seenSystemNotice.add(key);
+        return true;
+      });
+  }, [conversationID, currentUserID, messagesByConversation]);
 
   // 搜索定位：在 inverted 列表里 scrollToIndex 仍然按 index 计数，找到就跳。
   useEffect(() => {
@@ -1031,6 +1041,7 @@ export default function ChatDetailScreen() {
   const renderItem = useCallback(({ item }: { item: ChatMessage }) => {
     switch (item.type) {
       case 'date': return <DatePill text={item.text ?? ''} />;
+      case 'system-notice': return <SystemNoticePill text={item.text ?? ''} />;
       case 'received':
         return withMessageActions(item, (
           <ReceivedBubble

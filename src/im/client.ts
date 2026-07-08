@@ -982,9 +982,48 @@ export const NOTE_CARD_EXTENSION = 'note-card-v1';
 /** Same idea for the points-transfer card. Payload is `TransferCardData`. */
 export const TRANSFER_CARD_EXTENSION = 'transfer-card-v1';
 
+/**
+ * Marks a locally-inserted "you're now friends" system notice. Rendered as a
+ * centered gray line (same as OpenIM's native FriendAdded). Never sent to the
+ * server — see insertLocalFriendAddedNotice.
+ */
+export const FRIEND_ADDED_NOTICE_EXTENSION = 'friend-added-notice-v1';
+
 export interface TransferCardPayload {
   amount: number;
   message: string | null;
+}
+
+/**
+ * WeChat-style guarantee for the "你们已经是好友了" line: insert a local-only
+ * system notice into the single conversation with `friendUserID` right after a
+ * friend request is accepted, so the chat is never empty even if OpenIM's
+ * native FriendAdded notification is delayed or never emitted (admin
+ * import_friend may not emit one).
+ *
+ * Local-only (insertSingleMessageToLocalStorage — never hits the server). Sent
+ * as `self → friend` so it doesn't bump the unread count. If the native
+ * FriendAdded also arrives, the chat screen dedupes the two identical notices.
+ * Best-effort: callers should not let a failure here block the accept flow.
+ */
+export async function insertLocalFriendAddedNotice(params: {
+  selfUserID: string;
+  friendUserID: string;
+}): Promise<void> {
+  const initialized = await ensureOpenIMInitialized();
+  if (!initialized) return;
+
+  const message = await OpenIMSDK.createCustomMessage({
+    data: JSON.stringify({ kind: 'friend_added' }),
+    extension: FRIEND_ADDED_NOTICE_EXTENSION,
+    description: '',
+  });
+
+  await OpenIMSDK.insertSingleMessageToLocalStorage({
+    message,
+    sendID: toImUserId(params.selfUserID),
+    recvID: toImUserId(params.friendUserID),
+  });
 }
 
 export async function sendTransferCardMessage(params: {

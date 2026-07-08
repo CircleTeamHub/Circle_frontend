@@ -90,6 +90,7 @@ export interface ChatMessage {
     | 'sent'
     | 'received'
     | 'date'
+    | 'system-notice'
     | 'location'
     | 'image'
     | 'voice'
