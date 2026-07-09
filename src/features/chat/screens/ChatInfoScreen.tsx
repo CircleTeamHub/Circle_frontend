@@ -628,16 +628,16 @@ export default function ChatInfoScreen() {
       return;
     }
 
-    router.push(getEditFriendRemarkHref('messages', friendId, friendName, friendFallbackName));
-  }, [friendFallbackName, friendId, friendName]);
+    router.push(getEditFriendRemarkHref(scope, friendId, friendName, friendFallbackName));
+  }, [friendFallbackName, friendId, friendName, scope]);
 
   const handleOpenTags = useCallback(() => {
     if (!friendId) {
       return;
     }
 
-    router.push(getEditFriendTagsHref('messages', friendId, friendName));
-  }, [friendId, friendName]);
+    router.push(getEditFriendTagsHref(scope, friendId, friendName));
+  }, [friendId, friendName, scope]);
 
   const handleOpenChatBackground = useCallback(() => {
     if (!resolvedConversationID) {
@@ -798,9 +798,9 @@ export default function ChatInfoScreen() {
         return;
       }
 
-      router.push(getUserProfileHref('messages', fromImUserId(member.userID), member.nickname || undefined));
+      router.push(getUserProfileHref(scope, fromImUserId(member.userID), member.nickname || undefined));
     },
-    [],
+    [scope],
   );
 
   const handleKickMember = useCallback(
