@@ -188,6 +188,9 @@ export function getMessagePreview(message: MessageItem | null, fallback = '') {
   }
 
   if (isSystemNotification(message.contentType)) {
+    // 好友刚建立的 FriendAdded 通知——会话列表也要给出预览（对话渲染见下方 296 行），
+    // 否则最后一条是它时列表这行会空白。
+    if (message.contentType === MessageType.FriendAdded) return tImNotification('friendAdded', '你们已经是好友了，开始聊天吧');
     if (message.contentType === MessageType.GroupCreated) return tImNotification('groupCreated', '群聊已创建');
     if (message.contentType === MessageType.MemberInvited) return tImNotification('memberInvited', '新成员加入群聊');
     if (message.contentType === MessageType.MemberQuit) return tImNotification('memberQuit', '有成员退出群聊');
