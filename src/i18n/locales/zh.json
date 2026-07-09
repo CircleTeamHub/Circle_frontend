@@ -616,7 +616,13 @@
       "cancel": "撤回申请",
       "cancelConfirm": "撤回",
       "cancelMessage": "确定撤回这条好友申请吗？",
-      "cancelTitle": "撤回申请"
+      "cancelTitle": "撤回申请",
+      "status": {
+        "PENDING": "待处理",
+        "ACCEPTED": "已接受",
+        "REJECTED": "已拒绝",
+        "WITHDRAWN": "已撤回"
+      }
     },
     "tagsScreen": {
       "title": "标签",
@@ -2211,7 +2217,7 @@
     "PLAZA_NOTE_INVALID": "笔记不存在、不可用或不属于你",
     "PLAZA_POST_NOT_FOUND": "帖子不存在",
     "PLAZA_DELETE_AUTHOR_ONLY": "只有作者可以删除该帖子",
-    "PLAZA_INVALID_CURSOR": "帖子列表已更新，请重新刷新",
+    "PLAZA_INVALID_CURSOR": "广场分页已过期，请刷新后重试",
     "PLAZA_SIGNUP_SELF": "不能给自己发布的帖子报名",
     "PLAZA_SIGNUP_INELIGIBLE": "你的等级不满足该帖子的报名要求",
     "PLAZA_RECOGNIZE_MIN_ONE": "请至少选择一位协作者",
@@ -2222,7 +2228,6 @@
     "PLAZA_RECOGNIZE_NOT_MEMBER": "只能认可圈子的活跃成员",
     "PLAZA_RECOGNIZE_BLOCKED": "不能认可已拉黑的用户",
     "PLAZA_RECOGNIZE_ALREADY": "合作认可已提交，无法重复操作",
-    "PLAZA_INVALID_CURSOR": "广场分页已过期，请刷新后重试",
     "TRACE_MOMENT_NOT_FOUND": "动态不存在",
     "TRACE_DELETE_AUTHOR_ONLY": "只有作者可以删除",
     "TRACE_REPLY_TARGET_NOT_FOUND": "回复的评论不存在",

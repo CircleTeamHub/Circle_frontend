@@ -1376,7 +1376,13 @@
       "cancel": "申請を取り消す",
       "cancelConfirm": "取り消す",
       "cancelMessage": "この友だち申請を取り消しますか？",
-      "cancelTitle": "申請を取り消す"
+      "cancelTitle": "申請を取り消す",
+      "status": {
+        "PENDING": "保留中",
+        "ACCEPTED": "承認済み",
+        "REJECTED": "拒否済み",
+        "WITHDRAWN": "取り消し済み"
+      }
     },
     "tagsScreen": {
       "title": "タグ",
@@ -2211,7 +2217,7 @@
     "PLAZA_NOTE_INVALID": "そのノートは利用できないか、あなたのものではありません",
     "PLAZA_POST_NOT_FOUND": "投稿が見つかりません",
     "PLAZA_DELETE_AUTHOR_ONLY": "投稿者のみが削除できます",
-    "PLAZA_INVALID_CURSOR": "投稿リストが更新されました。再読み込みしてください",
+    "PLAZA_INVALID_CURSOR": "この広場ページは期限切れです。更新してもう一度お試しください。",
     "PLAZA_SIGNUP_SELF": "自分の投稿には応募できません",
     "PLAZA_SIGNUP_INELIGIBLE": "この投稿の応募条件を満たしていません",
     "PLAZA_RECOGNIZE_MIN_ONE": "コラボレーターを少なくとも1人選択してください",
@@ -2222,7 +2228,6 @@
     "PLAZA_RECOGNIZE_NOT_MEMBER": "サークルのアクティブメンバーのみを認定できます",
     "PLAZA_RECOGNIZE_BLOCKED": "ブロックしたユーザーは認定できません",
     "PLAZA_RECOGNIZE_ALREADY": "コラボレーション認定は既に送信されています",
-    "PLAZA_INVALID_CURSOR": "この広場ページは期限切れです。更新してもう一度お試しください。",
     "TRACE_MOMENT_NOT_FOUND": "モーメントが見つかりません",
     "TRACE_DELETE_AUTHOR_ONLY": "投稿者のみが削除できます",
     "TRACE_REPLY_TARGET_NOT_FOUND": "返信先のコメントが存在しません",

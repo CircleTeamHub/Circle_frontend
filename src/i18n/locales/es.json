@@ -1379,7 +1379,13 @@
       "cancel": "Retirar solicitud",
       "cancelConfirm": "Retirar",
       "cancelMessage": "¿Retirar esta solicitud de amistad?",
-      "cancelTitle": "Retirar solicitud"
+      "cancelTitle": "Retirar solicitud",
+      "status": {
+        "PENDING": "Pendiente",
+        "ACCEPTED": "Aceptada",
+        "REJECTED": "Rechazada",
+        "WITHDRAWN": "Retirada"
+      }
     },
     "tagsScreen": {
       "title": "Etiquetas",
@@ -2214,7 +2220,7 @@
     "PLAZA_NOTE_INVALID": "Esa nota no está disponible o no es tuya",
     "PLAZA_POST_NOT_FOUND": "Publicación no encontrada",
     "PLAZA_DELETE_AUTHOR_ONLY": "Solo el autor puede eliminar esta publicación",
-    "PLAZA_INVALID_CURSOR": "La lista de publicaciones cambió. Actualiza e inténtalo de nuevo",
+    "PLAZA_INVALID_CURSOR": "Esta página de la plaza caducó. Actualiza e inténtalo de nuevo.",
     "PLAZA_SIGNUP_SELF": "No puedes inscribirte en tu propia publicación",
     "PLAZA_SIGNUP_INELIGIBLE": "No cumples los requisitos de inscripción de esta publicación",
     "PLAZA_RECOGNIZE_MIN_ONE": "Selecciona al menos un colaborador",
@@ -2225,7 +2231,6 @@
     "PLAZA_RECOGNIZE_NOT_MEMBER": "Solo se puede reconocer a miembros activos del círculo",
     "PLAZA_RECOGNIZE_BLOCKED": "No puedes reconocer a un usuario bloqueado",
     "PLAZA_RECOGNIZE_ALREADY": "El reconocimiento de colaboración ya se ha enviado",
-    "PLAZA_INVALID_CURSOR": "Esta página de la plaza caducó. Actualiza e inténtalo de nuevo.",
     "TRACE_MOMENT_NOT_FOUND": "Momento no encontrado",
     "TRACE_DELETE_AUTHOR_ONLY": "Solo el autor puede eliminar esto",
     "TRACE_REPLY_TARGET_NOT_FOUND": "El comentario al que respondes ya no existe",

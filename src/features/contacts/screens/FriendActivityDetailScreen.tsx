@@ -384,7 +384,9 @@ export default function FriendActivityDetailScreen() {
               </Pressable>
             ) : (
               <Text style={d.stateText}>
-                {t('contacts.friendActivity.currentStatus', { status: activity.requestState })}
+                {t('contacts.friendActivity.currentStatus', {
+                  status: t(`contacts.friendActivity.status.${activity.requestState}`),
+                })}
               </Text>
             )}
           </View>

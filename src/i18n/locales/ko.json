@@ -1376,7 +1376,13 @@
       "cancel": "요청 취소",
       "cancelConfirm": "취소",
       "cancelMessage": "이 친구 요청을 취소하시겠습니까?",
-      "cancelTitle": "요청 취소"
+      "cancelTitle": "요청 취소",
+      "status": {
+        "PENDING": "대기 중",
+        "ACCEPTED": "수락됨",
+        "REJECTED": "거절됨",
+        "WITHDRAWN": "철회됨"
+      }
     },
     "tagsScreen": {
       "title": "태그",
@@ -2211,7 +2217,7 @@
     "PLAZA_NOTE_INVALID": "해당 노트를 사용할 수 없거나 본인의 것이 아닙니다",
     "PLAZA_POST_NOT_FOUND": "게시물을 찾을 수 없습니다",
     "PLAZA_DELETE_AUTHOR_ONLY": "작성자만 이 게시물을 삭제할 수 있습니다",
-    "PLAZA_INVALID_CURSOR": "게시물 목록이 업데이트되었습니다. 새로고침해 주세요",
+    "PLAZA_INVALID_CURSOR": "이 광장 페이지가 만료되었습니다. 새로고침 후 다시 시도하세요.",
     "PLAZA_SIGNUP_SELF": "자신의 게시물에는 신청할 수 없습니다",
     "PLAZA_SIGNUP_INELIGIBLE": "이 게시물의 신청 요건을 충족하지 않습니다",
     "PLAZA_RECOGNIZE_MIN_ONE": "협업자를 한 명 이상 선택하세요",
@@ -2222,7 +2228,6 @@
     "PLAZA_RECOGNIZE_NOT_MEMBER": "서클의 활성 멤버만 인정할 수 있습니다",
     "PLAZA_RECOGNIZE_BLOCKED": "차단한 사용자는 인정할 수 없습니다",
     "PLAZA_RECOGNIZE_ALREADY": "협업 인정이 이미 제출되었습니다",
-    "PLAZA_INVALID_CURSOR": "이 광장 페이지가 만료되었습니다. 새로고침 후 다시 시도하세요.",
     "TRACE_MOMENT_NOT_FOUND": "모먼트를 찾을 수 없습니다",
     "TRACE_DELETE_AUTHOR_ONLY": "작성자만 삭제할 수 있습니다",
     "TRACE_REPLY_TARGET_NOT_FOUND": "답글 대상 댓글이 존재하지 않습니다",

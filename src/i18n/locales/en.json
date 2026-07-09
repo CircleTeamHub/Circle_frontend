@@ -617,7 +617,13 @@
       "cancel": "Withdraw request",
       "cancelConfirm": "Withdraw",
       "cancelMessage": "Withdraw this friend request?",
-      "cancelTitle": "Withdraw request"
+      "cancelTitle": "Withdraw request",
+      "status": {
+        "PENDING": "Pending",
+        "ACCEPTED": "Accepted",
+        "REJECTED": "Rejected",
+        "WITHDRAWN": "Withdrawn"
+      }
     },
     "tagsScreen": {
       "title": "Tags",
@@ -2214,7 +2220,7 @@
     "PLAZA_NOTE_INVALID": "That note is unavailable or not yours",
     "PLAZA_POST_NOT_FOUND": "Post not found",
     "PLAZA_DELETE_AUTHOR_ONLY": "Only the author can delete this post",
-    "PLAZA_INVALID_CURSOR": "The post list changed. Refresh and try again",
+    "PLAZA_INVALID_CURSOR": "This plaza page expired. Please refresh and try again.",
     "PLAZA_SIGNUP_SELF": "You can't sign up for your own post",
     "PLAZA_SIGNUP_INELIGIBLE": "You don't meet this post's signup requirements",
     "PLAZA_RECOGNIZE_MIN_ONE": "Select at least one collaborator",
@@ -2225,7 +2231,6 @@
     "PLAZA_RECOGNIZE_NOT_MEMBER": "Only active circle members can be recognized",
     "PLAZA_RECOGNIZE_BLOCKED": "You can't recognize a blocked user",
     "PLAZA_RECOGNIZE_ALREADY": "Collaboration recognition has already been submitted",
-    "PLAZA_INVALID_CURSOR": "This plaza page expired. Please refresh and try again.",
     "TRACE_MOMENT_NOT_FOUND": "Moment not found",
     "TRACE_DELETE_AUTHOR_ONLY": "Only the author can delete this",
     "TRACE_REPLY_TARGET_NOT_FOUND": "The comment you're replying to no longer exists",
