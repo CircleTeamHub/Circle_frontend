@@ -19,6 +19,7 @@ import {
 import { getUserProfileHref } from "@/features/user/utils/routes";
 import { useIMStore } from "@/stores/imStore";
 import { useTabBadgeStore } from "@/stores/tabBadgeStore";
+import { useAuthStore } from "@/stores/authStore";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { Conversation } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
@@ -505,6 +506,9 @@ export default function MessagesScreen() {
 
   const rawConversations = useIMStore((state) => state.conversations);
   const connectionError = useIMStore((state) => state.error);
+  // 空 imToken = 登录时 OpenIM token 没签出来（OpenIM 抽风等），IM 登录被静默跳过。
+  // 这种状态下"暂无会话"是误导——明确提示 IM 未接入，引导重新登录。
+  const imLoginSkipped = useAuthStore((state) => !state.imToken);
   const conversationGroups = useMessageGroupsStore((state) => state.groups);
   const localUnreadOverrides = useLocalUnreadStore((state) => state.overrides);
   const markLocalUnread = useLocalUnreadStore((state) => state.markUnread);
@@ -902,7 +906,11 @@ export default function MessagesScreen() {
         ListHeaderComponent={ListHeader}
         ListEmptyComponent={
           <Text style={d.emptyText}>
-            {connectionError ? t('messages.loadFailed', { error: connectionError }) : t('messages.noConversations')}
+            {connectionError
+              ? t('messages.loadFailed', { error: connectionError })
+              : imLoginSkipped
+                ? t('messages.imNotConnected')
+                : t('messages.noConversations')}
           </Text>
         }
         contentContainerStyle={s.listContent}

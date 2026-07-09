@@ -144,6 +144,7 @@
     "groupManagement": "Group Management",
     "loadFailed": "Failed to load conversations: {{error}}",
     "noConversations": "No conversations",
+    "imNotConnected": "IM isn't connected. Please sign in again.",
     "swipeMarkRead": "Mark Read",
     "swipeMarkUnread": "Mark Unread",
     "swipeHide": "Hide Chat",

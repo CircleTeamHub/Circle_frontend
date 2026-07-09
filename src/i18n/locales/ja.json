@@ -577,6 +577,7 @@
     "groupManagement": "グループ管理",
     "loadFailed": "会話の読み込みに失敗しました：{{error}}",
     "noConversations": "会話がありません",
+    "imNotConnected": "IM に接続されていません。再度ログインしてください。",
     "swipeMarkRead": "既読にする",
     "swipeMarkUnread": "未読にする",
     "swipeHide": "チャットを非表示",

@@ -144,6 +144,7 @@
     "groupManagement": "群组管理",
     "loadFailed": "会话加载失败：{{error}}",
     "noConversations": "暂无会话",
+    "imNotConnected": "IM 未连接，请重新登录后重试",
     "swipeMarkRead": "标记已读",
     "swipeMarkUnread": "标记未读",
     "swipeHide": "隐藏聊天",

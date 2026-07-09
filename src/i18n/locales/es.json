@@ -578,6 +578,7 @@
     "groupManagement": "Gestión de grupos",
     "loadFailed": "No se pudieron cargar las conversaciones: {{error}}",
     "noConversations": "No hay conversaciones",
+    "imNotConnected": "IM no está conectado. Vuelve a iniciar sesión.",
     "swipeMarkRead": "Marcar leído",
     "swipeMarkUnread": "Marcar no leído",
     "swipeHide": "Ocultar chat",
