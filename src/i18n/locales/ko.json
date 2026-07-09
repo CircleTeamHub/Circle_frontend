@@ -2292,6 +2292,8 @@
     "FRIEND_ACTIVITY_NOT_FOUND": "활동을 찾을 수 없습니다",
     "FRIEND_BLOCK_NOT_FOUND": "이 사용자는 차단되어 있지 않습니다",
     "FRIEND_TAG_NAME_EMPTY": "태그 이름은 비워 둘 수 없습니다",
+    "FRIEND_REQUEST_MESSAGE_INVALID": "메시지는 비워 둘 수 없으며 500자 이내여야 합니다",
+    "FRIEND_REQUEST_MESSAGE_LIMIT": "상대가 답장하기 전에는 최대 5개의 메시지만 보낼 수 있습니다",
     "NOTE_NOT_FOUND": "노트를 찾을 수 없습니다",
     "NOTE_GROUP_NOT_FOUND": "노트 그룹을 찾을 수 없습니다",
     "NOTE_IMAGE_TOO_LARGE": "이미지가 너무 커서 삽입할 수 없습니다",

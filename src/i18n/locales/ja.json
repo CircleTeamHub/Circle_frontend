@@ -2292,6 +2292,8 @@
     "FRIEND_ACTIVITY_NOT_FOUND": "アクティビティが見つかりません",
     "FRIEND_BLOCK_NOT_FOUND": "このユーザーはブロックされていません",
     "FRIEND_TAG_NAME_EMPTY": "タグ名を空にすることはできません",
+    "FRIEND_REQUEST_MESSAGE_INVALID": "メッセージは空にできず、500文字以内で入力してください",
+    "FRIEND_REQUEST_MESSAGE_LIMIT": "相手が返信するまでに送れるメッセージは最大5件です",
     "NOTE_NOT_FOUND": "ノートが見つかりません",
     "NOTE_GROUP_NOT_FOUND": "ノートグループが見つかりません",
     "NOTE_IMAGE_TOO_LARGE": "画像が大きすぎて埋め込めません",

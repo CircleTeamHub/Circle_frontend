@@ -2292,6 +2292,8 @@
     "FRIEND_ACTIVITY_NOT_FOUND": "动态不存在",
     "FRIEND_BLOCK_NOT_FOUND": "该用户未被拉黑",
     "FRIEND_TAG_NAME_EMPTY": "标签名称不能为空",
+    "FRIEND_REQUEST_MESSAGE_INVALID": "留言内容不能为空，且不能超过 500 字",
+    "FRIEND_REQUEST_MESSAGE_LIMIT": "对方回复前最多发送 5 条留言",
     "NOTE_NOT_FOUND": "笔记不存在",
     "NOTE_GROUP_NOT_FOUND": "笔记分组不存在",
     "NOTE_IMAGE_TOO_LARGE": "图片过大，无法嵌入",

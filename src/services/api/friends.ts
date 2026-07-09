@@ -326,3 +326,34 @@ export async function reportFriend(
     body: payload,
   });
 }
+
+// ─── Friend request message thread ──────────────────────────────────────────
+// Multi-round text exchange between requester and recipient before accept/reject.
+// Not real-time chat (they aren't friends yet): fetched on entry, notification-driven.
+export type FriendRequestMessage = {
+  id: string;
+  senderId: string;
+  content: string;
+  createdAt: string;
+};
+
+export async function fetchFriendRequestMessages(
+  requestId: string,
+): Promise<FriendRequestMessage[]> {
+  return apiClient<FriendRequestMessage[]>(
+    `/friend/requests/${requestId}/messages`,
+  );
+}
+
+export async function sendFriendRequestMessage(
+  requestId: string,
+  content: string,
+): Promise<FriendRequestMessage> {
+  return apiClient<FriendRequestMessage>(
+    `/friend/requests/${requestId}/messages`,
+    {
+      method: 'POST',
+      body: { content },
+    },
+  );
+}
