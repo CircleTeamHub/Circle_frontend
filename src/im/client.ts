@@ -49,6 +49,9 @@ export { fromImUserId, toImUserId } from '@/im/user-id';
 
 // SDK 初始化 Promise 单例：避免并发重复 initSDK，登出后置为 null 允许重新初始化
 let initPromise: Promise<void> | null = null;
+// 「僵尸登录态」自愈开关：native SDK 自报 Logged 但资源已卸载时，unInitSDK 重建一次。
+// 模块级 —— 每个 JS 生命周期（含每次 hot-reload）最多自愈一次，避免登录环路。
+let staleLoginSelfHealAttempted = false;
 type NativeFSModule = typeof NativeFS & { default?: typeof NativeFS };
 let rnfsModule: typeof NativeFS | null = null;
 
@@ -162,6 +165,35 @@ export async function ensureOpenIMInitialized() {
   return true;
 }
 
+/** 是否为 OpenIM 的 10004「资源未加载」错误 —— 僵尸登录态的特征。 */
+function isOpenIMResourceNotLoadedError(error: unknown): boolean {
+  const code = (error as { code?: number })?.code;
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return (
+    code === 10004 ||
+    message.includes('10004') ||
+    message.includes('not load resource') ||
+    message.includes('Resource initialization incomplete')
+  );
+}
+
+/**
+ * 轻量只读探针：native SDK 自报 Logged 后，用 getSelfUserInfo 确认资源是否真的可用。
+ * 抛 10004 → 资源已卸载（hot-reload / 重装后的僵尸态），返回 false。
+ * 其它错误保守地当作已加载，避免无关失败误触发一次重登。
+ */
+async function isOpenIMSessionResourceLoaded(): Promise<boolean> {
+  try {
+    await OpenIMSDK.getSelfUserInfo();
+    return true;
+  } catch (error) {
+    if (isOpenIMResourceNotLoadedError(error)) {
+      return false;
+    }
+    return true;
+  }
+}
+
 /**
  * 登录 OpenIM。
  * 登录前先确保 SDK 已初始化；失败时重置 connecting 状态，防止 store 卡死。
@@ -180,14 +212,50 @@ export async function loginToOpenIM(userID: string, imToken: string) {
     useIMStore.getState().setCurrentUserID(imUserID);
     useIMStore.getState().setError(null);
 
-    // Hot reload 后 native SDK 进程通常还活着，重复 login 会被 OpenIM 拒成
-    // 10102 "User has logged in repeatedly"。先查状态，已登录就直接复用，
-    // 跳过 login 调用并把 connecting 置回 false。
+    // Hot reload / 重装后 native SDK 进程通常还活着，重复 login 会被 OpenIM 拒成
+    // 10102 "User has logged in repeatedly"。先查状态，已登录就复用。
     const status = await OpenIMSDK.getLoginStatus().catch(() => LoginStatus.Logout);
     if (status === LoginStatus.Logged) {
-      useIMStore.getState().setConnecting(false);
-      useIMStore.getState().setConnected(true);
-      return true;
+      // 但「自报 Logged」不等于资源还在：hot-reload / devicectl 覆盖重装后，SDK 常
+      // 停在「已登录但资源已卸载」的僵尸态 —— getLoginStatus 仍回 Logged，可任何真实
+      // 调用都抛 10004，会话列表被拉空。探针确认资源是否真的可用。
+      if (await isOpenIMSessionResourceLoaded()) {
+        useIMStore.getState().setConnecting(false);
+        useIMStore.getState().setConnected(true);
+        return true;
+      }
+
+      if (staleLoginSelfHealAttempted) {
+        // 本生命周期已自愈过一次仍是僵尸态：不再重置，避免登录环路。沿用旧行为标记
+        // 已连，交给 onConnectSuccess / 后续拉取兜底，或由用户冷启动彻底恢复。
+        if (isDev) {
+          console.warn(
+            '[openim] 资源在一次自愈后仍未加载，跳过后续重置（请冷启动 app）',
+          );
+        }
+        useIMStore.getState().setConnecting(false);
+        useIMStore.getState().setConnected(true);
+        return true;
+      }
+
+      // 僵尸态自愈：login() 会撞 10102、logout() 会撞 10004，都救不回来 —— 必须
+      // unInitSDK 彻底拆除，再 initSDK + login 才能重载资源。每个生命周期只做一次。
+      staleLoginSelfHealAttempted = true;
+      if (isDev) {
+        console.warn('[openim] 检测到僵尸登录态（资源已卸载），重建 SDK 后重登');
+      }
+      try {
+        await OpenIMSDK.unInitSDK();
+      } catch (error) {
+        // 拆除失败不阻断：下面 ensureOpenIMInitialized 仍会尝试重建。
+        reportError(error, { operation: 'openim', op: 'unInit' });
+      }
+      initPromise = null;
+      useIMStore.getState().reset();
+      await ensureOpenIMInitialized();
+      useIMStore.getState().setCurrentUserID(imUserID);
+      useIMStore.getState().setError(null);
+      // 落到下面走一次干净 login。
     }
 
     useIMStore.getState().setConnecting(true);
@@ -195,6 +263,8 @@ export async function loginToOpenIM(userID: string, imToken: string) {
       userID: imUserID,
       token: imToken,
     });
+    // 干净登录成功：允许后续（下次 reload 的新僵尸态）再次自愈。
+    staleLoginSelfHealAttempted = false;
 
     return true;
   } catch (error) {
