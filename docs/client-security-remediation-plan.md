@@ -68,6 +68,9 @@ Updated 2026-07-04 on branch `fix/local-data-backup-exclusion`.
 - **C-06 Android artifact gate:** `test/native-branding-config.test.js` also
   introspects the generated Android manifest and asserts the final application node
   contains `android:allowBackup="false"`.
+- **C-06 Android owned backup rules:** Project-owned Android backup rules explicitly
+  exclude OpenIM, MMKV, and SecureStore from cloud backup and device transfer,
+  including transports that ignore `allowBackup=false`.
 
 Remaining C-01/C-02 follow-ups:
 
