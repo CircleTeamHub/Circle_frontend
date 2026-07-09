@@ -89,6 +89,11 @@ test('push notification data resolves to app routes with anchors', () => {
   });
   assert.equal(verificationRoute.pathname, '/(tabs)/discover/verification/[id]');
   assert.equal(verificationRoute.params.id, 'inv-3');
+
+  const friendMessageRoute = resolvePushNotificationRoute({
+    type: 'FRIEND_REQUEST_MESSAGE',
+  });
+  assert.equal(friendMessageRoute, '/(tabs)/contacts/new-friends');
 });
 
 test('root layout mounts system push notification response routing', () => {
