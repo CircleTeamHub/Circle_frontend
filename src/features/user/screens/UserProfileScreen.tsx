@@ -560,7 +560,7 @@ export default function UserProfileScreen() {
       },
       content: {
         paddingHorizontal: Spacing.lg,
-        paddingBottom: insets.bottom + (showAddFriendButton ? 96 : 24),
+        paddingBottom: insets.bottom + 24,
       },
       avatarRing: {
         backgroundColor: colors.surface,
@@ -631,12 +631,6 @@ export default function UserProfileScreen() {
       actionButtonPressed: {
         opacity: 0.85,
       },
-      footer: {
-        position: 'absolute' as const,
-        left: Spacing.lg,
-        right: Spacing.lg,
-        bottom: insets.bottom + Spacing.md,
-      },
       addButton: {
         backgroundColor: colors.primary,
       },
@@ -649,7 +643,7 @@ export default function UserProfileScreen() {
         backgroundColor: colors.surfaceBorder,
       },
     }),
-    [colors, insets.bottom, showAddFriendButton],
+    [colors, insets.bottom],
   );
 
   return (
@@ -795,23 +789,21 @@ export default function UserProfileScreen() {
             >
               <Text style={d.actionText}>{t('userProfile.avCall')}</Text>
             </Pressable>
+            {showAddFriendButton ? (
+              <Pressable
+                style={({ pressed }) => [
+                  s.actionButton,
+                  d.addButton,
+                  pressed && d.actionButtonPressed,
+                ]}
+                onPress={handleAddFriend}
+              >
+                <Text style={d.addButtonText}>{t('userProfile.addFriendRequest')}</Text>
+              </Pressable>
+            ) : null}
           </View>
         ) : null}
       </ScrollView>
-
-      {showAddFriendButton ? (
-        <View style={d.footer}>
-          <Pressable
-            style={[
-              s.addButton,
-              d.addButton,
-            ]}
-            onPress={handleAddFriend}
-          >
-            <Text style={d.addButtonText}>{t('userProfile.addFriendRequest')}</Text>
-          </Pressable>
-        </View>
-      ) : null}
     </View>
   );
 }
