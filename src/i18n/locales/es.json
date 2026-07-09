@@ -1419,7 +1419,6 @@
       "targetFallback": "Este usuario",
       "selfFallback": "Yo",
       "defaultMessage": "Hola, soy {{name}}",
-      "intro": "Completa los datos de la solicitud antes de enviarla.",
       "messageLabel": "Mensaje de verificación",
       "messagePlaceholder": "Escribe un mensaje de verificación",
       "remarkLabel": "Nombre de nota",
@@ -1430,11 +1429,27 @@
       "noTagsTitle": "Aún no hay etiquetas",
       "noTagsHint": "Puedes crear etiquetas luego en Contactos > Etiquetas",
       "tagLoadError": "No se pudieron cargar las etiquetas. La solicitud se enviará sin etiquetas.",
-      "placeholderDisabled": "Solo un marcador, aún no disponible",
-      "placeholderRows": {
-        "remark": "Nota",
-        "photoRemark": "Nota de foto",
-        "friendPermissions": "Permisos de amigo"
+      "descriptionLabel": "Descripción",
+      "descriptionPlaceholder": "Agrega una nota sobre esta persona (solo visible para ti)",
+      "photosLabel": "Notas con fotos",
+      "photos": {
+        "hint": "Hasta {{count}} fotos, solo visibles para ti",
+        "add": "Agregar foto",
+        "remove": "Quitar foto",
+        "limitTitle": "Límite de fotos alcanzado",
+        "limitHint": "Puedes agregar como máximo {{count}} fotos",
+        "uploadFailedTitle": "Error al subir la foto"
+      },
+      "permissionLabel": "Permisos de amigo",
+      "permissionOptions": {
+        "FULL": {
+          "title": "Chat y Momentos",
+          "hint": "Esta persona podrá ver tus Momentos"
+        },
+        "CHAT_ONLY": {
+          "title": "Solo chat",
+          "hint": "Esta persona no podrá ver tus Momentos"
+        }
       },
       "sentTitle": "Solicitud enviada",
       "sentMessage": "Se envió una solicitud de amistad a {{name}}.",
@@ -1497,6 +1512,11 @@
     "like": "Me gusta",
     "unlike": "Ya no me gusta",
     "likesReceived": "Me gusta recibidos",
+    "photoNotesTitle": "Notas con fotos",
+    "permissionValues": {
+      "FULL": "Chat y Momentos",
+      "CHAT_ONLY": "Solo chat"
+    },
     "loadFailed": "No se pudo cargar el perfil, mostrando datos en caché",
     "phoneHidden": "Oculto",
     "startChat": "Iniciar chat",
@@ -1661,6 +1681,8 @@
     "moments": "Momentos",
     "setRemark": "Definir alias",
     "tags": "Etiquetas",
+    "description": "Descripción",
+    "permission": "Permisos de amigo",
     "giftCoins": "Regalar monedas",
     "moreInfo": "Más información",
     "editProfile": "Editar perfil",

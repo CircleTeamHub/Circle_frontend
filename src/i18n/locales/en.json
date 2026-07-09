@@ -657,7 +657,6 @@
       "targetFallback": "This user",
       "selfFallback": "Me",
       "defaultMessage": "Hi, I'm {{name}}",
-      "intro": "Fill in the request details before sending.",
       "messageLabel": "Verification Message",
       "messagePlaceholder": "Enter a verification message",
       "remarkLabel": "Remark Name",
@@ -668,11 +667,27 @@
       "noTagsTitle": "No tags yet",
       "noTagsHint": "You can create tags later in Contacts > Tags",
       "tagLoadError": "Failed to load tags. The request will be sent without tags.",
-      "placeholderDisabled": "Placeholder only, not available yet",
-      "placeholderRows": {
-        "remark": "Remark",
-        "photoRemark": "Photo Remark",
-        "friendPermissions": "Friend Permissions"
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "Add a note about this person (visible only to you)",
+      "photosLabel": "Photo Notes",
+      "photos": {
+        "hint": "Up to {{count}} photos, visible only to you",
+        "add": "Add photo",
+        "remove": "Remove photo",
+        "limitTitle": "Photo limit reached",
+        "limitHint": "You can add at most {{count}} photos",
+        "uploadFailedTitle": "Photo upload failed"
+      },
+      "permissionLabel": "Friend Permissions",
+      "permissionOptions": {
+        "FULL": {
+          "title": "Chat & Moments",
+          "hint": "This person can see your Moments"
+        },
+        "CHAT_ONLY": {
+          "title": "Chat only",
+          "hint": "This person won't be able to see your Moments"
+        }
       },
       "sentTitle": "Request Sent",
       "sentMessage": "Sent a friend request to {{name}}.",
@@ -1219,6 +1234,8 @@
     "moments": "Moments",
     "setRemark": "Set Remark",
     "tags": "Tags",
+    "description": "Description",
+    "permission": "Friend Permissions",
     "giftCoins": "Gift Coins",
     "moreInfo": "More Info",
     "editProfile": "Edit Profile",
@@ -1279,6 +1296,11 @@
     "like": "Like",
     "unlike": "Unlike",
     "likesReceived": "Likes received",
+    "photoNotesTitle": "Photo Notes",
+    "permissionValues": {
+      "FULL": "Chat & Moments",
+      "CHAT_ONLY": "Chat only"
+    },
     "loadFailed": "Failed to load profile, showing cached data",
     "phoneHidden": "Hidden",
     "startChat": "Start Chat",

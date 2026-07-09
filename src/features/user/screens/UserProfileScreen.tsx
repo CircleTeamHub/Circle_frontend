@@ -42,7 +42,15 @@ import { fetchUserProfile } from '@/services/api/profile';
 import { useAuthStore } from '@/stores/authStore';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 
-const INFO_ROW_IDS = ['moments', 'setRemark', 'tags', 'giftCoins', 'moreInfo'] as const;
+const INFO_ROW_IDS = [
+  'moments',
+  'setRemark',
+  'tags',
+  'description',
+  'permission',
+  'giftCoins',
+  'moreInfo',
+] as const;
 const NON_FRIEND_INFO_ROW_IDS = ['moments', 'giftCoins', 'moreInfo'] as const;
 const SELF_INFO_ROW_IDS = ['moments'] as const;
 
@@ -62,6 +70,8 @@ const ROW_ICON: Record<InfoRowId, keyof typeof Ionicons.glyphMap> = {
   moments: 'images',
   setRemark: 'create',
   tags: 'pricetags',
+  description: 'document-text',
+  permission: 'eye',
   giftCoins: 'gift',
   moreInfo: 'information-circle',
 };
@@ -70,6 +80,8 @@ const ROW_COLOR: Record<InfoRowId, keyof ThemeColors> = {
   moments: 'blue',
   setRemark: 'primary',
   tags: 'success',
+  description: 'orange',
+  permission: 'deepPurple',
   giftCoins: 'warning',
   moreInfo: 'purple',
 };
@@ -172,6 +184,23 @@ const s = StyleSheet.create({
   rowDivider: {
     height: StyleSheet.hairlineWidth,
     marginLeft: ROW_PADDING_H + ICON_BADGE_SIZE + ROW_GAP,
+  },
+  photoNotesTitle: {
+    ...Typography.small,
+    fontWeight: '600',
+    paddingHorizontal: ROW_PADDING_H,
+    paddingTop: Spacing.md,
+  },
+  photoNotesStrip: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    padding: ROW_PADDING_H,
+  },
+  photoNote: {
+    width: 76,
+    height: 76,
+    borderRadius: Radius.md,
   },
   actionSection: {
     marginTop: Spacing.md,
@@ -412,10 +441,16 @@ export default function UserProfileScreen() {
     remarkOverride === undefined
       ? friendSettings?.remark?.trim() || t('profileFields.notSet')
       : remarkOverride.remark ?? t('profileFields.notSet');
+  const descriptionValue = friendSettings?.description?.trim() ?? '';
+  const photoNotes = friendSettings?.photos ?? [];
+  const permissionValue = t(
+    `userProfile.permissionValues.${friendSettings?.permission ?? 'FULL'}`,
+  );
   const infoRows = isCurrentUser
     ? SELF_INFO_ROW_IDS
     : friendStatus === 'ACCEPTED'
-      ? INFO_ROW_IDS
+      ? // The description row is noise when the viewer never wrote one, so drop it.
+        INFO_ROW_IDS.filter((id) => id !== 'description' || descriptionValue)
       : NON_FRIEND_INFO_ROW_IDS;
   const showProfileActions = !isCurrentUser;
   const canSendFriendRequest = canOpenSendFriendRequest({
@@ -528,6 +563,14 @@ export default function UserProfileScreen() {
           return { ...base, value: tagValue, onPress: handleEditTags };
         }
 
+        if (id === 'description') {
+          return { ...base, value: descriptionValue };
+        }
+
+        if (id === 'permission') {
+          return { ...base, value: permissionValue };
+        }
+
         if (id === 'moments') {
           return { ...base, onPress: handleOpenMoments };
         }
@@ -541,11 +584,13 @@ export default function UserProfileScreen() {
     [
       canOpenChatInfo,
       colors,
+      descriptionValue,
       handleEditRemark,
       handleEditTags,
       handleOpenChatInfo,
       handleOpenMoments,
       infoRows,
+      permissionValue,
       remarkValue,
       t,
       tagValue,
@@ -619,6 +664,12 @@ export default function UserProfileScreen() {
       },
       rowDivider: {
         backgroundColor: colors.surfaceBorder,
+      },
+      photoNotesTitle: {
+        color: colors.textSecondary,
+      },
+      photoNote: {
+        backgroundColor: colors.background,
       },
       actionText: {
         color: colors.white,
@@ -750,6 +801,24 @@ export default function UserProfileScreen() {
                 ) : null}
               </View>
             ))}
+          </View>
+        ) : null}
+
+        {!isCurrentUser && friendStatus === 'ACCEPTED' && photoNotes.length > 0 ? (
+          <View style={[s.card, d.card]}>
+            <Text style={[s.photoNotesTitle, d.photoNotesTitle]}>
+              {t('userProfile.photoNotesTitle')}
+            </Text>
+            <View style={s.photoNotesStrip}>
+              {photoNotes.map((uri) => (
+                <Image
+                  key={uri}
+                  source={{ uri }}
+                  style={[s.photoNote, d.photoNote]}
+                  contentFit="cover"
+                />
+              ))}
+            </View>
           </View>
         ) : null}
 

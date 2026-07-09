@@ -656,7 +656,6 @@
       "targetFallback": "对方",
       "selfFallback": "我",
       "defaultMessage": "你好，我是 {{name}}",
-      "intro": "填写申请信息后发送给对方。",
       "messageLabel": "验证消息",
       "messagePlaceholder": "输入验证消息",
       "remarkLabel": "备注名",
@@ -667,11 +666,27 @@
       "noTagsTitle": "暂无标签",
       "noTagsHint": "可稍后在联系人标签中创建",
       "tagLoadError": "标签加载失败，发送申请时将不会附带标签。",
-      "placeholderDisabled": "占位功能，暂未开放",
-      "placeholderRows": {
-        "remark": "备注",
-        "photoRemark": "照片备注",
-        "friendPermissions": "朋友权限"
+      "descriptionLabel": "描述",
+      "descriptionPlaceholder": "补充一段对 TA 的描述（仅自己可见）",
+      "photosLabel": "照片备注",
+      "photos": {
+        "hint": "最多可添加 {{count}} 张，仅自己可见",
+        "add": "添加照片",
+        "remove": "移除照片",
+        "limitTitle": "照片数量已达上限",
+        "limitHint": "最多只能添加 {{count}} 张照片",
+        "uploadFailedTitle": "照片上传失败"
+      },
+      "permissionLabel": "朋友权限",
+      "permissionOptions": {
+        "FULL": {
+          "title": "聊天、朋友圈",
+          "hint": "对方可以看到你的朋友圈"
+        },
+        "CHAT_ONLY": {
+          "title": "仅聊天",
+          "hint": "对方将无法看到你的朋友圈"
+        }
       },
       "sentTitle": "申请已发送",
       "sentMessage": "已向 {{name}} 发送好友申请。",
@@ -1216,6 +1231,8 @@
     "moments": "朋友圈",
     "setRemark": "设置备注",
     "tags": "标签",
+    "description": "描述",
+    "permission": "朋友权限",
     "giftCoins": "给该用户赠送金币",
     "moreInfo": "更多信息",
     "editProfile": "编辑资料",
@@ -1276,6 +1293,11 @@
     "like": "点赞",
     "unlike": "取消点赞",
     "likesReceived": "收到的赞",
+    "photoNotesTitle": "照片备注",
+    "permissionValues": {
+      "FULL": "聊天、朋友圈",
+      "CHAT_ONLY": "仅聊天"
+    },
     "loadFailed": "加载用户资料失败，显示缓存数据",
     "phoneHidden": "未公开",
     "startChat": "发起聊天",

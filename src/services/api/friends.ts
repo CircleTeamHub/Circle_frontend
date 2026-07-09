@@ -21,10 +21,15 @@ export type FriendTag = {
   updatedAt?: string;
 };
 
+export type FriendPermission = 'FULL' | 'CHAT_ONLY';
+
 export type FriendSettings = {
   remark: string | null;
   assignedTags: FriendTag[];
   availableTags: FriendTag[];
+  description: string | null;
+  photos: string[];
+  permission: FriendPermission;
 };
 
 export type FriendStatus =
@@ -81,6 +86,9 @@ export type CreateFriendRequestInput = {
   message?: string;
   remark?: string;
   tagIds?: string[];
+  description?: string;
+  photos?: string[];
+  permission?: FriendPermission;
 };
 
 type CreateFriendRequestBody = {
@@ -88,6 +96,9 @@ type CreateFriendRequestBody = {
   message?: string;
   remark?: string;
   tagIds?: string[];
+  description?: string;
+  photos?: string[];
+  permission?: FriendPermission;
 };
 
 function normalizeFriendProfile(friend: FriendProfile): FriendProfile {
@@ -119,12 +130,23 @@ function buildCreateFriendRequestBody(
   const message = normalizeFriendRequestText(input.message);
   const remark = normalizeFriendRequestText(input.remark);
   const tagIds = input.tagIds?.map((tagId) => tagId.trim()).filter(Boolean);
+  const description = normalizeFriendRequestText(input.description);
+  const photos = input.photos?.map((photo) => photo.trim()).filter(Boolean);
+  // Only send a permission when it diverges from the server default (FULL) so an
+  // untouched selector never bloats the payload.
+  const permission =
+    input.permission && input.permission !== 'FULL'
+      ? input.permission
+      : undefined;
 
   return {
     targetId: input.targetId,
     ...(message ? { message } : {}),
     ...(remark ? { remark } : {}),
     ...(tagIds && tagIds.length > 0 ? { tagIds } : {}),
+    ...(description ? { description } : {}),
+    ...(photos && photos.length > 0 ? { photos } : {}),
+    ...(permission ? { permission } : {}),
   };
 }
 
@@ -157,7 +179,15 @@ export async function fetchFriendStatus(targetId: string) {
 }
 
 export async function fetchFriendSettings(friendUserId: string) {
-  return apiClient<FriendSettings>(`/friend/${friendUserId}/settings`);
+  const settings = await apiClient<FriendSettings>(
+    `/friend/${friendUserId}/settings`,
+  );
+  return {
+    ...settings,
+    photos: (settings.photos ?? [])
+      .map((photo) => normalizeMediaUrl(photo))
+      .filter((photo): photo is string => Boolean(photo)),
+  };
 }
 
 export async function addFriendToBlacklist(friendUserId: string) {

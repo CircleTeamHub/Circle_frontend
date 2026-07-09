@@ -1416,7 +1416,6 @@
       "targetFallback": "相手",
       "selfFallback": "自分",
       "defaultMessage": "こんにちは、{{name}} です",
-      "intro": "申請内容を入力してから送信してください。",
       "messageLabel": "認証メッセージ",
       "messagePlaceholder": "認証メッセージを入力",
       "remarkLabel": "表示名",
@@ -1427,11 +1426,27 @@
       "noTagsTitle": "タグがありません",
       "noTagsHint": "後で「連絡先 > タグ」で作成できます",
       "tagLoadError": "タグの読み込みに失敗しました。タグを付けずに申請を送信します。",
-      "placeholderDisabled": "プレースホルダーのみ、まだ利用できません",
-      "placeholderRows": {
-        "remark": "表示名",
-        "photoRemark": "写真の表示名",
-        "friendPermissions": "友だちの権限"
+      "descriptionLabel": "説明",
+      "descriptionPlaceholder": "この相手についてのメモを追加（自分のみ表示）",
+      "photosLabel": "写真メモ",
+      "photos": {
+        "hint": "最大 {{count}} 枚まで、自分のみ表示",
+        "add": "写真を追加",
+        "remove": "写真を削除",
+        "limitTitle": "写真の上限に達しました",
+        "limitHint": "写真は最大 {{count}} 枚までです",
+        "uploadFailedTitle": "写真のアップロードに失敗しました"
+      },
+      "permissionLabel": "友だちの権限",
+      "permissionOptions": {
+        "FULL": {
+          "title": "チャット・モーメンツ",
+          "hint": "相手はあなたのモーメンツを見られます"
+        },
+        "CHAT_ONLY": {
+          "title": "チャットのみ",
+          "hint": "相手はあなたのモーメンツを見られません"
+        }
       },
       "sentTitle": "申請を送信しました",
       "sentMessage": "{{name}} さんに友だち申請を送信しました。",
@@ -1494,6 +1509,11 @@
     "like": "いいね",
     "unlike": "いいねを取り消す",
     "likesReceived": "受け取ったいいね",
+    "photoNotesTitle": "写真メモ",
+    "permissionValues": {
+      "FULL": "チャット・モーメンツ",
+      "CHAT_ONLY": "チャットのみ"
+    },
     "loadFailed": "プロフィールの読み込みに失敗しました。キャッシュデータを表示しています",
     "phoneHidden": "非公開",
     "startChat": "チャットを開始",
@@ -1658,6 +1678,8 @@
     "moments": "モーメント",
     "setRemark": "メモを設定",
     "tags": "タグ",
+    "description": "説明",
+    "permission": "友だちの権限",
     "giftCoins": "コインを贈る",
     "moreInfo": "詳細情報",
     "editProfile": "プロフィールを編集",
