@@ -33,8 +33,10 @@ Both cloud and device-transfer rules will exclude:
   portable across device keystores.
 
 The plugin will own these resources instead of depending on the transitive
-`expo-secure-store` rule files. It will write deterministic XML during Expo
-prebuild and overwrite the manifest references after earlier plugins run.
+`expo-secure-store` rule files. Expo SecureStore is configured with
+`configureAndroidBackup=false` so it does not compete for the same manifest
+attributes. The project plugin writes deterministic XML during Expo prebuild
+and supplies the final manifest references.
 
 ### iOS policy
 
@@ -56,9 +58,10 @@ Tests will verify:
    two Windnote-owned XML resources.
 2. The plugin writes both XML files into a temporary Android project and each
    relevant backup mode excludes OpenIM, MMKV, and SecureStore.
-3. Both Discover notification-center call sites contain no `as Href` cast.
-4. The existing iOS OpenIM directory exclusion test remains green.
-5. Full typecheck, lint, Expo config validation, Node tests, and behavior tests
+3. Real Expo introspection emits no SecureStore backup-rule conflict.
+4. Both Discover notification-center call sites contain no `as Href` cast.
+5. iOS initialization rejects before `initSDK` if backup exclusion fails.
+6. Full typecheck, lint, Expo config validation, Node tests, and behavior tests
    pass before the branch is considered ready.
 
 ## Scope

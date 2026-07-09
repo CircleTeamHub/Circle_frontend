@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { execFileSync } = require('node:child_process');
+const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -29,23 +29,32 @@ function loadTsModule(relativePath) {
   return context.module.exports;
 }
 
-function loadIntrospectedAndroidApplicationAttributes() {
-  const output = execFileSync(
+function runExpoConfig(args) {
+  const result = spawnSync(
     process.execPath,
     [
       require.resolve('expo/bin/cli'),
       'config',
-      '--type',
-      'introspect',
-      '--json',
+      ...args,
     ],
     {
       cwd: process.cwd(),
       encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
     },
   );
-  const introspected = JSON.parse(output);
+
+  assert.equal(
+    result.status,
+    0,
+    `Expo config failed:\n${result.stderr || result.stdout}`,
+  );
+
+  return result;
+}
+
+function loadIntrospectedAndroidApplicationAttributes() {
+  const result = runExpoConfig(['--type', 'introspect', '--json']);
+  const introspected = JSON.parse(result.stdout);
 
   return introspected._internal.modResults.android.manifest.manifest
     .application[0].$;
@@ -92,7 +101,16 @@ test('android prebuild manifest disables platform backups for local chat data', 
   );
 });
 
-test('owned Android backup rules exclude device-bound local data', async () => {
+test('Expo introspection has no SecureStore backup-rule conflict', () => {
+  const result = runExpoConfig(['--type', 'introspect']);
+
+  assert.doesNotMatch(
+    result.stderr,
+    /Expo-secure-store tried to apply Android Auto Backup rules/,
+  );
+});
+
+test('dangerous mod writes owned Android backup rules', async () => {
   const projectRoot = fs.mkdtempSync(
     path.join(os.tmpdir(), 'windnote-backup-rules-'),
   );
@@ -104,8 +122,20 @@ test('owned Android backup rules exclude device-bound local data', async () => {
   ];
 
   try {
-    assert.equal(typeof plugin.writeAndroidBackupRuleFiles, 'function');
-    await plugin.writeAndroidBackupRuleFiles(projectRoot);
+    const config = plugin({ name: 'windnote-test', slug: 'windnote-test' });
+    const dangerousMod = config.mods?.android?.dangerous;
+
+    assert.equal(typeof dangerousMod, 'function');
+    await dangerousMod({
+      ...config,
+      modResults: {},
+      modRequest: {
+        projectRoot,
+        platform: 'android',
+        modName: 'dangerous',
+        projectName: 'windnote-test',
+      },
+    });
 
     const xmlDir = path.join(
       projectRoot,

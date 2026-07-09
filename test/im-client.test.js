@@ -127,6 +127,66 @@ test('ensureOpenIMInitialized excludes the OpenIM data directory from iOS backup
   assert.equal(initCalls[0].logFilePath, '/tmp/documents/openim');
 });
 
+test('ensureOpenIMInitialized aborts when iOS backup exclusion cannot be applied', async () => {
+  const initCalls = [];
+  const initializedStates = [];
+  const mkdirError = new Error('backup exclusion failed');
+  const { ensureOpenIMInitialized } = loadTsModule('src/im/client.ts', {
+    '@openim/rn-client-sdk': {
+      __esModule: true,
+      default: {
+        initSDK: async (params) => {
+          initCalls.push(params);
+        },
+      },
+      LogLevel: { Info: 0 },
+      SessionType: { Single: 1, Group: 2 },
+      ViewType: { History: 0 },
+    },
+    'react-native-fs': {
+      __esModule: true,
+      default: {
+        DocumentDirectoryPath: '/tmp/documents',
+        mkdir: async () => {
+          throw mkdirError;
+        },
+      },
+    },
+    'react-native': {
+      Platform: { OS: 'ios' },
+    },
+    '@/constants/config': {
+      OPENIM_API_URL: 'https://im.example.com',
+      OPENIM_WS_URL: 'wss://im.example.com',
+      OPENIM_LOG_LEVEL: 0,
+    },
+    '@/stores/imStore': {
+      useIMStore: {
+        getState: () => ({
+          connected: false,
+          setError: () => undefined,
+          setInitialized: (initialized) => initializedStates.push(initialized),
+          setCurrentUserID: () => undefined,
+          setConnecting: () => undefined,
+          reset: () => undefined,
+        }),
+      },
+    },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: {
+        getState: () => ({
+          setMessagesUnread: () => undefined,
+        }),
+      },
+    },
+  });
+
+  await assert.rejects(ensureOpenIMInitialized(), /backup exclusion failed/);
+
+  assert.equal(initCalls.length, 0);
+  assert.deepEqual(initializedStates, [false]);
+});
+
 test('getOrCreateSingleConversation fetches a private conversation and merges it into store', async () => {
   const mergeCalls = [];
   const getOneConversationCalls = [];

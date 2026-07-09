@@ -70,7 +70,9 @@ Updated 2026-07-04 on branch `fix/local-data-backup-exclusion`.
   contains `android:allowBackup="false"`.
 - **C-06 Android owned backup rules:** Project-owned Android backup rules explicitly
   exclude OpenIM, MMKV, and SecureStore from cloud backup and device transfer,
-  including transports that ignore `allowBackup=false`.
+  including transports that ignore `allowBackup=false`. Expo SecureStore's own
+  backup-rule generation is disabled with `configureAndroidBackup=false` to avoid
+  competing manifest ownership and prebuild warnings.
 
 Remaining C-01/C-02 follow-ups:
 
