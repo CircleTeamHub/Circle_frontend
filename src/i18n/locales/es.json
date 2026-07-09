@@ -579,6 +579,7 @@
     "loadFailed": "No se pudieron cargar las conversaciones: {{error}}",
     "noConversations": "No hay conversaciones",
     "imNotConnected": "IM no está conectado. Vuelve a iniciar sesión.",
+    "imConnecting": "Conectando con IM…",
     "swipeMarkRead": "Marcar leído",
     "swipeMarkUnread": "Marcar no leído",
     "swipeHide": "Ocultar chat",

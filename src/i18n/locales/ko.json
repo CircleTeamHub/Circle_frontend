@@ -578,6 +578,7 @@
     "loadFailed": "대화를 불러오지 못했습니다: {{error}}",
     "noConversations": "대화가 없습니다",
     "imNotConnected": "IM에 연결되어 있지 않습니다. 다시 로그인해 주세요.",
+    "imConnecting": "IM에 연결 중…",
     "swipeMarkRead": "읽음 표시",
     "swipeMarkUnread": "안 읽음 표시",
     "swipeHide": "채팅 숨기기",
