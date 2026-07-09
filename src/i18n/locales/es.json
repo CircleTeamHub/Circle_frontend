@@ -404,7 +404,7 @@
     "clearHistoryWarning": "Esto eliminará permanentemente todos los mensajes de esta conversación.",
     "clear": "Borrar",
     "deleteFriend": "Eliminar contacto",
-    "deleteFriendWarning": "Esto eliminará a este contacto de tus amigos.",
+    "deleteFriendWarning": "Esto eliminará a este contacto de tus amigos y borrará de forma permanente todo tu historial de chat con él.",
     "deleted": "Eliminado",
     "friendDeleted": "El contacto fue eliminado.",
     "leave": "Salir",

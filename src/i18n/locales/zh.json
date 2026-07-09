@@ -424,7 +424,7 @@
     "clearHistoryWarning": "清空后将删除当前会话的聊天记录，且无法恢复。",
     "clear": "清空",
     "deleteFriend": "删除联系人",
-    "deleteFriendWarning": "删除后将解除好友关系。",
+    "deleteFriendWarning": "删除后将解除好友关系，与 TA 的所有聊天记录也会被清空。",
     "deleted": "已删除",
     "friendDeleted": "联系人已删除。",
     "leave": "退出",

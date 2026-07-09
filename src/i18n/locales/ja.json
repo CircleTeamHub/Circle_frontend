@@ -403,7 +403,7 @@
     "clearHistoryWarning": "この会話のすべてのメッセージが完全に削除されます。",
     "clear": "消去",
     "deleteFriend": "連絡先を削除",
-    "deleteFriendWarning": "この連絡先との友だち関係が解除されます。",
+    "deleteFriendWarning": "この連絡先との友だち関係が解除され、これまでのチャット履歴もすべて削除されます。",
     "deleted": "削除しました",
     "friendDeleted": "連絡先を削除しました。",
     "leave": "退出",

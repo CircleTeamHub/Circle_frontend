@@ -403,7 +403,7 @@
     "clearHistoryWarning": "이 대화의 모든 메시지가 영구적으로 삭제됩니다.",
     "clear": "지우기",
     "deleteFriend": "연락처 삭제",
-    "deleteFriendWarning": "삭제하면 이 연락처와 친구 관계가 해제됩니다.",
+    "deleteFriendWarning": "삭제하면 이 연락처와 친구 관계가 해제되고, 지금까지의 모든 대화 기록도 삭제됩니다.",
     "deleted": "삭제됨",
     "friendDeleted": "연락처를 삭제했습니다.",
     "leave": "나가기",

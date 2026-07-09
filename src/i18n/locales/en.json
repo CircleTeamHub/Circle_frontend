@@ -425,7 +425,7 @@
     "clearHistoryWarning": "This will permanently delete all messages in this conversation.",
     "clear": "Clear",
     "deleteFriend": "Remove Contact",
-    "deleteFriendWarning": "This will unfriend this contact.",
+    "deleteFriendWarning": "This will unfriend this contact and permanently delete your entire chat history with them.",
     "deleted": "Removed",
     "friendDeleted": "Contact has been removed.",
     "leave": "Leave",
