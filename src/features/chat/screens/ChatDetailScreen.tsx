@@ -2422,7 +2422,7 @@ export default function ChatDetailScreen() {
         {isPreviewMode ? (
           <Text style={[s.previewNotice, Typography.small, { color: colors.textSecondary }]}>
             {t('chat.detail.previewNotice', {
-              defaultValue: '当前仅预览聊天界面，消息发送会在 IM 接通后开放。',
+              defaultValue: '连接尚未完成，请稍后重试',
             })}
           </Text>
         ) : null}
@@ -2553,7 +2553,7 @@ export default function ChatDetailScreen() {
               placeholder={
                 isPreviewMode
                   ? t('chat.detail.previewPlaceholder', {
-                      defaultValue: '当前仅预览聊天界面',
+                      defaultValue: '连接尚未完成',
                     })
                   : t('chat.detail.inputPlaceholder', {
                       defaultValue: '输入消息...',
