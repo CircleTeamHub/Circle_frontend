@@ -49,6 +49,7 @@ export { fromImUserId, toImUserId } from '@/im/user-id';
 
 // SDK 初始化 Promise 单例：避免并发重复 initSDK，登出后置为 null 允许重新初始化
 let initPromise: Promise<void> | null = null;
+let logoutPromise: Promise<void> | null = null;
 type NativeFSModule = typeof NativeFS & { default?: typeof NativeFS };
 let rnfsModule: typeof NativeFS | null = null;
 
@@ -175,6 +176,9 @@ export async function loginToOpenIM(userID: string, imToken: string) {
   }
 
   try {
+    if (logoutPromise) {
+      await logoutPromise;
+    }
     await ensureOpenIMInitialized();
     const imUserID = toImUserId(userID);
     useIMStore.getState().setCurrentUserID(imUserID);
@@ -222,7 +226,7 @@ export async function loginToOpenIM(userID: string, imToken: string) {
  * 无论 SDK logout 是否成功都会清空本地状态。
  * 登出后清空 initPromise，下次登录时会重新执行 initSDK。
  */
-export async function logoutFromOpenIM() {
+async function performLogoutFromOpenIM() {
   if (!isNativeIMSupported() || !initPromise) {
     useIMStore.getState().reset();
     return;
@@ -251,6 +255,22 @@ export async function logoutFromOpenIM() {
     initPromise = null;
     useIMStore.getState().reset();
   }
+}
+
+export function logoutFromOpenIM(): Promise<void> {
+  if (logoutPromise) {
+    return logoutPromise;
+  }
+
+  const operation = performLogoutFromOpenIM();
+  let trackedOperation: Promise<void>;
+  trackedOperation = operation.finally(() => {
+    if (logoutPromise === trackedOperation) {
+      logoutPromise = null;
+    }
+  });
+  logoutPromise = trackedOperation;
+  return trackedOperation;
 }
 
 export async function loadConversationList(count = 100) {

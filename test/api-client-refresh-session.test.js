@@ -386,3 +386,57 @@ test('logout handler drops an in-flight refresh singleton so the next session ca
   assert.equal(harness.setTokenCalls[0].accessToken, 'access-b-next');
   assert.equal(harness.setTokenCalls[0].refreshToken, 'refresh-b-next');
 });
+
+test('a newer session bypasses an older refresh singleton without resetting it', async () => {
+  const harness = loadApiClientHarness();
+  const oldRefresh = deferred();
+  const newRefresh = deferred();
+  harness.refreshResponses.push(oldRefresh, newRefresh);
+
+  const oldRequest = harness.apiClient('/profile/me');
+  await waitFor(
+    () =>
+      harness.fetchCalls.filter(([url]) => String(url).endsWith('/auth/refresh'))
+        .length === 1,
+  );
+
+  harness.authState.accessToken = 'access-b';
+  harness.authState.refreshToken = 'refresh-b';
+  harness.authState.sessionEpoch += 1;
+
+  const firstNewRequest = harness.apiClient('/wallet/first');
+  const secondNewRequest = harness.apiClient('/wallet/second');
+  await waitFor(
+    () =>
+      harness.fetchCalls.filter(([url]) => String(url).endsWith('/auth/refresh'))
+        .length === 2,
+  );
+
+  assert.equal(
+    harness.fetchCalls.filter(([url]) => String(url).endsWith('/auth/refresh'))
+      .length,
+    2,
+  );
+
+  oldRefresh.resolve(
+    response(true, 200, {
+      code: 0,
+      message: 'ok',
+      data: { accessToken: 'access-a-next', refreshToken: 'refresh-a-next' },
+    }),
+  );
+  await assert.rejects(oldRequest, /session changed/i);
+
+  newRefresh.resolve(
+    response(true, 200, {
+      code: 0,
+      message: 'ok',
+      data: { accessToken: 'access-b-next', refreshToken: 'refresh-b-next' },
+    }),
+  );
+
+  await assert.rejects(firstNewRequest);
+  await assert.rejects(secondNewRequest);
+  assert.equal(harness.setTokenCalls.length, 1);
+  assert.equal(harness.setTokenCalls[0].accessToken, 'access-b-next');
+});
