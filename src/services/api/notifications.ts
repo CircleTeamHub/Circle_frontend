@@ -101,10 +101,14 @@ export async function revokePushToken(
   });
 }
 
-export async function deleteLegacyPushToken(token: string): Promise<void> {
+export async function deleteLegacyPushToken(
+  token: string,
+  options: { accessToken: string },
+): Promise<void> {
   await apiClient<void>('/notification/push-token', {
     method: 'DELETE',
     body: { token },
     retryOnAuthError: false,
+    accessToken: options.accessToken,
   });
 }

@@ -8,6 +8,7 @@ import {
   type PushTokenPlatform,
 } from '@/services/api/notifications';
 import { storage } from '@/storage';
+import { useAuthStore } from '@/stores/authStore';
 import { reportNotificationFailure } from '@/features/notifications/utils/report-failure';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 
@@ -55,6 +56,9 @@ type PushTokenRegistrationOrchestratorDependencies = {
   registerPushToken: typeof registerPushToken;
   revokePushToken: typeof revokePushToken;
   deleteLegacyPushToken?: typeof deleteLegacyPushToken;
+  getAccessToken?: () => string | null;
+  scheduleRetry?: (callback: () => void, delayMs: number) => unknown;
+  cancelRetry?: (handle: unknown) => void;
   now: () => number;
   reportFailure: typeof reportNotificationFailure;
   reportDiagnostic: typeof logClientDiagnostic;
@@ -286,6 +290,9 @@ export function createPushTokenRegistrationOrchestrator(
   let flushPromise: Promise<void> | null = null;
   let flushFailures = 0;
   let nextFlushAt = 0;
+  let retryHandle: unknown = null;
+  let resumeBlockedRegistration: (() => void) | null = null;
+  const legacyCleanupInFlight = new Set<string>();
 
   function enqueueRemoteMutation(operation: () => Promise<void>) {
     const result = mutationTail.then(operation, operation);
@@ -329,15 +336,34 @@ export function createPushTokenRegistrationOrchestrator(
           flushFailures += 1;
           nextFlushAt =
             dependencies.now() + Math.min(60_000, 1_000 * 2 ** (flushFailures - 1));
+          if (retryHandle === null && dependencies.scheduleRetry) {
+            const delay = nextFlushAt - dependencies.now();
+            retryHandle = dependencies.scheduleRetry(() => {
+              retryHandle = null;
+              void flushPendingRevocations();
+            }, delay);
+          }
           break;
         }
       }
       if (dependencies.getPendingRevocations().length === 0) {
         flushFailures = 0;
         nextFlushAt = 0;
+        if (retryHandle !== null && dependencies.cancelRetry) {
+          dependencies.cancelRetry(retryHandle);
+          retryHandle = null;
+        }
       }
     }).finally(() => {
       flushPromise = null;
+      if (
+        dependencies.getPendingRevocations().length <
+        REVOCATION_BACKPRESSURE_THRESHOLD
+      ) {
+        const resume = resumeBlockedRegistration;
+        resumeBlockedRegistration = null;
+        resume?.();
+      }
     });
     return flushPromise;
   }
@@ -347,22 +373,26 @@ export function createPushTokenRegistrationOrchestrator(
       !userId ||
       !dependencies.getLegacyCleanups ||
       !dependencies.removeLegacyCleanup ||
-      !dependencies.deleteLegacyPushToken
+      !dependencies.deleteLegacyPushToken ||
+      !dependencies.getAccessToken
     ) {
       return;
     }
-    void enqueueRemoteMutation(async () => {
-      for (const cleanup of dependencies.getLegacyCleanups!()) {
-        if (cleanup.userId !== userId) continue;
-        try {
-          await dependencies.deleteLegacyPushToken!(cleanup.token);
-          dependencies.removeLegacyCleanup!(cleanup);
-        } catch (error) {
-          dependencies.reportFailure('push_token_unregister_failed', error);
-          break;
-        }
-      }
-    });
+    const accessToken = dependencies.getAccessToken();
+    if (!accessToken) return;
+    for (const cleanup of dependencies.getLegacyCleanups()) {
+      if (cleanup.userId !== userId) continue;
+      const key = `${cleanup.userId}\u0000${cleanup.token}`;
+      if (legacyCleanupInFlight.has(key)) continue;
+      legacyCleanupInFlight.add(key);
+      void dependencies
+        .deleteLegacyPushToken(cleanup.token, { accessToken })
+        .then(() => dependencies.removeLegacyCleanup!(cleanup))
+        .catch((error) =>
+          dependencies.reportFailure('push_token_unregister_failed', error),
+        )
+        .finally(() => legacyCleanupInFlight.delete(key));
+    }
   }
 
   function retireStoredRegistration() {
@@ -382,9 +412,10 @@ export function createPushTokenRegistrationOrchestrator(
     void flushPendingRevocations();
   }
 
-  return {
+  const orchestrator = {
     flushPendingRevocations,
     logout() {
+      resumeBlockedRegistration = null;
       const authenticatedUserId =
         desiredRegistration.kind === 'enabled'
           ? desiredRegistration.userId
@@ -404,6 +435,7 @@ export function createPushTokenRegistrationOrchestrator(
     }) {
       void flushPendingRevocations();
       if (!input.isAuthenticated || !input.userId) {
+        resumeBlockedRegistration = null;
         desiredRegistration = { kind: 'signed-out' };
         logoutGateClosed = false;
         retireStoredRegistration();
@@ -413,6 +445,7 @@ export function createPushTokenRegistrationOrchestrator(
       flushLegacyCleanups(input.userId);
       if (logoutGateClosed || input.isCancelled?.()) return;
       if (!input.pushEnabled) {
+        resumeBlockedRegistration = null;
         desiredRegistration = { kind: 'disabled' };
         retireStoredRegistration();
         dependencies.retireLegacyRegistration?.();
@@ -445,6 +478,14 @@ export function createPushTokenRegistrationOrchestrator(
           count: pendingRevocationCount,
           threshold: REVOCATION_BACKPRESSURE_THRESHOLD,
         });
+        resumeBlockedRegistration = () => {
+          if (
+            desiredRegistration.kind === 'enabled' &&
+            desiredRegistration.owner === owner
+          ) {
+            void orchestrator.sync(input);
+          }
+        };
         return;
       }
       const isCurrentOwner = () =>
@@ -497,9 +538,16 @@ export function createPushTokenRegistrationOrchestrator(
 
       const legacy = dependencies.getLegacyRegistration?.() ?? null;
       const result = await notifications.getExpoPushTokenAsync({ projectId });
-      const token =
-        legacy?.userId === input.userId ? legacy.token : result.data;
+      const token = result.data;
       if (!token || isStale()) return;
+
+      if (
+        legacy?.userId === input.userId &&
+        legacy.token !== token
+      ) {
+        dependencies.retireLegacyRegistration?.();
+        flushLegacyCleanups(input.userId);
+      }
 
       let candidate = dependencies.getStoredRegistration();
       if (
@@ -567,6 +615,7 @@ export function createPushTokenRegistrationOrchestrator(
       });
     },
   };
+  return orchestrator;
 }
 
 function isNotificationGranted(
@@ -608,6 +657,9 @@ function createDefaultPushTokenRegistrationOrchestrator() {
     registerPushToken,
     revokePushToken,
     deleteLegacyPushToken,
+    getAccessToken: () => useAuthStore.getState().accessToken,
+    scheduleRetry: (callback, delayMs) => setTimeout(callback, delayMs),
+    cancelRetry: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
     now: Date.now,
     reportFailure: reportNotificationFailure,
     reportDiagnostic: logClientDiagnostic,

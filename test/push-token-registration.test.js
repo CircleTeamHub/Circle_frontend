@@ -95,9 +95,11 @@ function makeHarness(options = {}) {
   const revokeCalls = [];
   const diagnostics = [];
   const failures = [];
+  const legacyDeleteCalls = [];
   let secretCalls = 0;
   let moduleLoads = 0;
   let now = 0;
+  const scheduledRetries = [];
   const notifications = options.notifications ?? {
     IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
     getPermissionsAsync: async () => ({ granted: true }),
@@ -170,9 +172,20 @@ function makeHarness(options = {}) {
       revokeCalls.push({ token, revocationSecret });
       return options.revokePushToken?.(token, revocationSecret);
     },
-    deleteLegacyPushToken: async (token) =>
-      options.deleteLegacyPushToken?.(token),
+    deleteLegacyPushToken: async (token, deleteOptions) => {
+      legacyDeleteCalls.push({ token, options: deleteOptions });
+      return options.deleteLegacyPushToken?.(token, deleteOptions);
+    },
+    getAccessToken: () => options.accessToken ?? 'captured-access-token',
     now: () => now,
+    scheduleRetry: (callback, delayMs) => {
+      const task = { callback, delayMs, cancelled: false };
+      scheduledRetries.push(task);
+      return task;
+    },
+    cancelRetry: (task) => {
+      task.cancelled = true;
+    },
     reportFailure: (...args) => failures.push(args),
     reportDiagnostic: (...args) => diagnostics.push(args),
   });
@@ -188,9 +201,26 @@ function makeHarness(options = {}) {
     getModuleLoads: () => moduleLoads,
     getLegacy: () => legacy,
     getLegacyCleanups: () => legacyCleanups,
+    legacyDeleteCalls,
+    setLegacyCleanups: (value) => {
+      legacyCleanups = [...value];
+    },
+    setRevocations: (value) => {
+      revocations = [...value];
+    },
     advanceTime: (milliseconds) => {
       now += milliseconds;
     },
+    runScheduledRetries: async () => {
+      for (const task of scheduledRetries.splice(0)) {
+        if (task.cancelled) continue;
+        now += task.delayMs;
+        task.callback();
+      }
+      await Promise.resolve();
+    },
+    getScheduledRetryCount: () =>
+      scheduledRetries.filter((task) => !task.cancelled).length,
   };
 }
 
@@ -708,10 +738,37 @@ test('concurrent flush triggers share one pass and stop after the first failure'
   assert.equal(harness.getRevocations().length, 50);
 });
 
+test('saturation automatically resumes registration after one scheduled successful retry', async () => {
+  const revocations = Array.from({ length: 50 }, (_, index) => ({
+    token: `auto-retry-${index}`,
+    revocationSecret: `${String(index).padStart(8, '0')}-5555-4555-8555-555555555555`,
+  }));
+  let revokeFails = true;
+  const harness = makeHarness({
+    revocations,
+    revokePushToken: async () => {
+      if (revokeFails) throw new Error('offline');
+    },
+  });
+  await harness.orchestrator.sync(enabled());
+  await harness.orchestrator.flushPendingRevocations();
+  assert.equal(harness.registerCalls.length, 0);
+  assert.equal(harness.getScheduledRetryCount(), 1);
+
+  revokeFails = false;
+  await harness.runScheduledRetries();
+  await harness.orchestrator.flushPendingRevocations();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(harness.getScheduledRetryCount(), 0);
+  assert.equal(harness.getRevocations().length, 0);
+  assert.equal(harness.registerCalls.length, 1);
+});
+
 test('same-user legacy active rotates the same token with a real new secret', async () => {
   const harness = makeHarness({
     legacy: { token: 'legacy-token', userId: 'legacy-user' },
-    token: 'different-expo-token',
+    token: 'legacy-token',
     secret: SECRET_B,
   });
   await harness.orchestrator.sync(enabled('legacy-user'));
@@ -719,6 +776,21 @@ test('same-user legacy active rotates the same token with a real new secret', as
   assert.equal(harness.registerCalls[0].revocationSecret, SECRET_B);
   assert.equal(harness.getLegacy(), null);
   assert.equal(harness.getStored().status, 'registered');
+});
+
+test('same-user legacy active with a rotated Expo token cleans old and registers current', async () => {
+  const deleted = [];
+  const harness = makeHarness({
+    legacy: { token: 'obsolete-legacy-token', userId: 'legacy-user' },
+    token: 'current-expo-token',
+    secret: SECRET_B,
+    deleteLegacyPushToken: async (token) => deleted.push(token),
+  });
+  await harness.orchestrator.sync(enabled('legacy-user'));
+  assert.equal(harness.registerCalls[0].token, 'current-expo-token');
+  assert.equal(harness.registerCalls[0].revocationSecret, SECRET_B);
+  assert.equal(deleted[0], 'obsolete-legacy-token');
+  assert.equal(harness.getLegacyCleanups().length, 0);
 });
 
 test('signed-out legacy active becomes durable cleanup and retries for that user later', async () => {
@@ -788,4 +860,38 @@ test('cross-user legacy active survives B registration and restart until A can c
   await restarted.orchestrator.sync(enabled('user-a'));
   assert.equal(deletedAsA[0], 'legacy-token-a');
   assert.equal(restarted.getLegacyCleanups().length, 0);
+});
+
+test('logout starts captured-token legacy cleanup even while public revoke is hung', async () => {
+  const publicRevoke = deferred();
+  const publicStarted = deferred();
+  const legacyDelete = deferred();
+  const harness = makeHarness({
+    accessToken: 'access-before-clear',
+    revokePushToken: async () => {
+      publicStarted.resolve();
+      return publicRevoke.promise;
+    },
+    deleteLegacyPushToken: async () => legacyDelete.promise,
+  });
+  await harness.orchestrator.sync(enabled('user-a'));
+  harness.setRevocations([
+    { token: 'public-old', revocationSecret: SECRET_B },
+  ]);
+  harness.setLegacyCleanups([
+    { token: 'legacy-old', userId: 'user-a', legacy: true },
+  ]);
+  harness.orchestrator.flushPendingRevocations();
+  await publicStarted.promise;
+
+  harness.orchestrator.logout();
+
+  assert.equal(harness.legacyDeleteCalls.length, 1);
+  assert.equal(harness.legacyDeleteCalls[0].token, 'legacy-old');
+  assert.equal(
+    harness.legacyDeleteCalls[0].options.accessToken,
+    'access-before-clear',
+  );
+  publicRevoke.resolve();
+  legacyDelete.resolve();
 });
