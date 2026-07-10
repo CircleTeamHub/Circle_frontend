@@ -5,6 +5,14 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+function deferred() {
+  let resolve;
+  const promise = new Promise((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
 function loadSessionModule(mocks) {
   const filePath = path.join(process.cwd(), 'src/services/auth/session.ts');
   const source = fs.readFileSync(filePath, 'utf8');
@@ -39,12 +47,14 @@ function makeBaseMocks() {
   const calls = [];
   const secureAuthRemovals = [];
 
-  const authStore = {
-    getState: () => ({
+  const authState = {
+    sessionEpoch: 1,
       clearSession: () => {
         calls.push('clearSession');
       },
-    }),
+  };
+  const authStore = {
+    getState: () => authState,
     persist: {
       clearStorage: async () => {
         calls.push('clearStorage');
@@ -93,7 +103,7 @@ function makeBaseMocks() {
     },
   };
 
-  return { mocks, calls, secureAuthRemovals, authStore };
+  return { mocks, calls, secureAuthRemovals, authStore, authState };
 }
 
 test('clearLocalSession runs registered teardown handlers, then resets stores auth-first, then clears persistence', async () => {
@@ -168,6 +178,28 @@ test('clearLocalSession still clears local state when a teardown handler throws'
     'resetWalletRealtime',
     'clearStorage',
   ]);
+});
+
+test('guarded clearLocalSession skips session clearing when ownership changes during async teardown', async () => {
+  const { mocks, calls, secureAuthRemovals, authState } = makeBaseMocks();
+  const { clearLocalSession, registerLogoutHandler } = loadSessionModule(mocks);
+  const handlerStarted = deferred();
+  const releaseHandler = deferred();
+
+  registerLogoutHandler(async () => {
+    calls.push('disconnectRealtime');
+    handlerStarted.resolve();
+    await releaseHandler.promise;
+  });
+
+  const clearing = clearLocalSession(1);
+  await handlerStarted.promise;
+  authState.sessionEpoch = 2;
+  releaseHandler.resolve();
+  await clearing;
+
+  assert.deepEqual(calls, ['disconnectRealtime']);
+  assert.deepEqual(secureAuthRemovals, []);
 });
 
 test('clearLocalSession falls back to secure auth removeItem when persist.clearStorage rejects (defense in depth: tokens must not remain on disk)', async () => {

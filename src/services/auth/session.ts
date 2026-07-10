@@ -52,7 +52,7 @@ export function registerLogoutHandler(handler: LogoutHandler): () => void {
   };
 }
 
-export async function clearLocalSession() {
+export async function clearLocalSession(expectedSessionEpoch?: number) {
   // teardown 失败不影响后续状态清理；失败汇总到末尾一次性 warn。
   const handlerFailures: unknown[] = [];
   for (const handler of logoutHandlers) {
@@ -65,6 +65,13 @@ export async function clearLocalSession() {
 
   // 先清 auth，让订阅 useAuthStore 的组件立刻看到"未登录"，
   // 避免 dependent store 被清空后触发"重新拉取"再被丢弃的请求。
+  if (
+    expectedSessionEpoch !== undefined &&
+    useAuthStore.getState().sessionEpoch !== expectedSessionEpoch
+  ) {
+    return;
+  }
+
   useAuthStore.getState().clearSession();
   await resetMessageGroupsStore();
   await resetCirclesStore();

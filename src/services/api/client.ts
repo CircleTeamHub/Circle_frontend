@@ -440,7 +440,7 @@ async function refreshAccessToken(sessionEpoch: number) {
     const { refreshToken } = useAuthStore.getState();
 
     if (!refreshToken) {
-      await clearLocalSession();
+      await clearLocalSession(sessionEpoch);
       throw new ApiError(
         i18n.t('common.errors.sessionExpired', {
           defaultValue: '登录已过期，请重新登录',
@@ -484,7 +484,7 @@ async function refreshAccessToken(sessionEpoch: number) {
   })()
     .catch(async (error) => {
       if (useAuthStore.getState().sessionEpoch === sessionEpoch) {
-        await clearLocalSession();
+        await clearLocalSession(sessionEpoch);
       }
       throw error;
     })

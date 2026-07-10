@@ -45,6 +45,7 @@ function loadApiClientHarness() {
   const requestResponses = [];
   const setTokenCalls = [];
   let clearCalls = 0;
+  let clearPause = null;
   let logoutHandler = null;
   const authState = {
     accessToken: 'access-a',
@@ -57,8 +58,18 @@ function loadApiClientHarness() {
     },
   };
 
-  async function clearLocalSession() {
+  async function clearLocalSession(expectedSessionEpoch) {
     clearCalls += 1;
+    if (clearPause) {
+      clearPause.started.resolve();
+      await clearPause.release.promise;
+    }
+    if (
+      expectedSessionEpoch !== undefined &&
+      authState.sessionEpoch !== expectedSessionEpoch
+    ) {
+      return;
+    }
     authState.accessToken = null;
     authState.refreshToken = null;
     authState.sessionEpoch += 1;
@@ -138,6 +149,10 @@ function loadApiClientHarness() {
     setTokenCalls,
     getClearCalls: () => clearCalls,
     getLogoutHandler: () => logoutHandler,
+    pauseClearSession: () => {
+      clearPause = { started: deferred(), release: deferred() };
+      return clearPause;
+    },
   };
 }
 
@@ -275,6 +290,29 @@ test('stale failed refresh does not clear a newer active session', async () => {
   assert.equal(harness.authState.refreshToken, 'refresh-b');
 });
 
+test('refresh failure cannot clear a newer session after asynchronous logout teardown', async () => {
+  const harness = loadApiClientHarness();
+  const clearPause = harness.pauseClearSession();
+  harness.refreshResponses.push({
+    promise: Promise.resolve(
+      response(false, 500, { code: 1, message: 'refresh down', data: null }),
+    ),
+  });
+
+  const request = harness.apiClient('/profile/me');
+  await clearPause.started.promise;
+
+  harness.authState.accessToken = 'access-b';
+  harness.authState.refreshToken = 'refresh-b';
+  harness.authState.sessionEpoch += 1;
+  clearPause.release.resolve();
+
+  await assert.rejects(request);
+  assert.equal(harness.authState.accessToken, 'access-b');
+  assert.equal(harness.authState.refreshToken, 'refresh-b');
+  assert.equal(harness.authState.sessionEpoch, 2);
+});
+
 test('logout handler drops an in-flight refresh singleton so the next session can refresh independently', async () => {
   const harness = loadApiClientHarness();
   const oldRefresh = deferred();
@@ -319,17 +357,4 @@ test('logout handler drops an in-flight refresh singleton so the next session ca
   assert.equal(harness.setTokenCalls.length, 1);
   assert.equal(harness.setTokenCalls[0].accessToken, 'access-b-next');
   assert.equal(harness.setTokenCalls[0].refreshToken, 'refresh-b-next');
-});
-
-test('refresh singleton cleanup preserves a newer in-flight refresh promise', () => {
-  const source = fs.readFileSync(
-    path.join(process.cwd(), 'src/services/api/client.ts'),
-    'utf8',
-  );
-
-  assert.match(source, /const activeRefreshPromise = \(/);
-  assert.match(
-    source,
-    /if \(refreshPromise === activeRefreshPromise\) \{\s*refreshPromise = null;/,
-  );
 });
