@@ -396,6 +396,7 @@ export interface MomentComment {
   user: { id: string; nickname: string };
   replyTo: { id: string; nickname: string } | null;
   createdAt: string;
+  ignoredMentionCount: number;
 }
 
 export interface CreateMomentInput {

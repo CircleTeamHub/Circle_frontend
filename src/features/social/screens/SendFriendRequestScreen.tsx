@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   ActivityIndicator,
@@ -16,7 +16,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { NavHeader } from '@/components/ui/nav-header';
 import { buildSendFriendRequestInitialMessage } from '@/features/social/send-friend-request';
-import { getFriendRequestSubmitState } from '@/features/social/send-friend-request-submit';
+import {
+  createSingleFlightRunner,
+  getFriendRequestSubmitState,
+} from '@/features/social/send-friend-request-submit';
 import {
   useFriendPhotoNotes,
   FRIEND_PHOTO_NOTE_LIMIT,
@@ -182,6 +185,7 @@ export default function SendFriendRequestScreen() {
   const [isLoadingTags, setIsLoadingTags] = useState(true);
   const [tagLoadError, setTagLoadError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitRunnerRef = useRef(createSingleFlightRunner());
   const {
     photos,
     addPhoto,
@@ -330,28 +334,30 @@ export default function SendFriendRequestScreen() {
       return;
     }
 
-    try {
-      setIsSubmitting(true);
-      await createFriendRequest({
-        targetId: profileId,
-        message,
-        remark,
-        tagIds: selectedTagIds,
-        description,
-        photos,
-        permission,
-      });
-      Alert.alert(t('contacts.request.sentTitle'), t('contacts.request.sentMessage', { name: targetName }), [
-        { text: t('common.ok'), onPress: () => router.back() },
-      ]);
-    } catch (error) {
-      Alert.alert(
-        t('contacts.request.sendFailedTitle'),
-        getApiErrorMessage(error, t('contacts.request.sendFailed')),
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
+    await submitRunnerRef.current.run(async () => {
+      try {
+        setIsSubmitting(true);
+        await createFriendRequest({
+          targetId: profileId,
+          message,
+          remark,
+          tagIds: selectedTagIds,
+          description,
+          photos,
+          permission,
+        });
+        Alert.alert(t('contacts.request.sentTitle'), t('contacts.request.sentMessage', { name: targetName }), [
+          { text: t('common.ok'), onPress: () => router.back() },
+        ]);
+      } catch (error) {
+        Alert.alert(
+          t('contacts.request.sendFailedTitle'),
+          getApiErrorMessage(error, t('contacts.request.sendFailed')),
+        );
+      } finally {
+        setIsSubmitting(false);
+      }
+    });
   };
 
   return (

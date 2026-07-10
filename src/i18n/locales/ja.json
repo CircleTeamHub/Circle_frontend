@@ -906,6 +906,7 @@
     "coverUpdateFailed": "カバーの更新に失敗しました",
     "commentFailedMessage": "ネットワークエラーです。もう一度お試しください",
     "commentFailedTitle": "コメントに失敗しました",
+    "mentionsIgnored": "メンションした{{count}}人はこの投稿を閲覧できないため、通知されませんでした。",
     "deleteCommentMessage": "このコメントを削除しますか？",
     "deleteCommentTitle": "コメントを削除",
     "deleteFailedMessage": "もう一度お試しください",

@@ -57,6 +57,8 @@ const alice = {
   friendsSince: '2026-01-01',
   remark: null,
 };
+const alex1 = { ...alice, id: 'alex-1', accountId: 'alex1', nickname: 'Alex' };
+const alex2 = { ...alice, id: 'alex-2', accountId: 'alex2', nickname: 'Alex' };
 
 const mockFetchFriends = fetchFriends as jest.MockedFunction<typeof fetchFriends>;
 const mockPicker = ImagePicker.launchImageLibraryAsync as jest.Mock;
@@ -79,9 +81,15 @@ async function selectAlice() {
   fireEvent.press(screen.getByText('Alice'));
 }
 
+async function selectAlex(index: number) {
+  fireEvent.press(screen.getByLabelText('提到好友'));
+  await waitFor(() => expect(screen.getAllByText('Alex')).toHaveLength(2));
+  fireEvent.press(screen.getAllByText('Alex')[index]);
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
-  mockFetchFriends.mockResolvedValue([alice]);
+  mockFetchFriends.mockResolvedValue([alice, alex1, alex2]);
   mockPicker.mockResolvedValue({
     canceled: false,
     assets: [{ uri: 'file://comment.jpg' }],
@@ -121,7 +129,7 @@ test('success clears text, image, and mention selection without resurrecting a m
   });
 
   expect(onSubmit).toHaveBeenCalledWith(
-    '@Alice @Alice',
+    '@Alice',
     undefined,
     ['https://cdn/comment.jpg'],
     ['alice-id'],
@@ -142,6 +150,37 @@ test('success clears text, image, and mention selection without resurrecting a m
     undefined,
     undefined,
     [],
+  );
+});
+
+test('same-nickname selections keep separate ids and deleting the first keeps only the second', async () => {
+  const onSubmit = jest.fn().mockResolvedValue(undefined);
+  render(
+    <MomentCommentInput
+      replyTo={null}
+      onSubmit={onSubmit}
+      onDismiss={jest.fn()}
+    />,
+  );
+
+  await selectAlex(0);
+  await selectAlex(1);
+  const input = screen.getByPlaceholderText('写评论...');
+  expect(input.props.value).toBe('@Alex @Alex ');
+
+  fireEvent(input, 'selectionChange', {
+    nativeEvent: { selection: { start: 0, end: 6 } },
+  });
+  fireEvent.changeText(input, '@Alex ');
+  await act(async () => {
+    fireEvent(input, 'submitEditing');
+  });
+
+  expect(onSubmit).toHaveBeenCalledWith(
+    '@Alex',
+    undefined,
+    undefined,
+    ['alex-2'],
   );
 });
 
@@ -186,12 +225,15 @@ test('submit rejection retains the draft and selected mention for retry', async 
 
   await selectAlice();
   const input = screen.getByPlaceholderText('写评论...');
-  fireEvent.changeText(input, 'retry @Alice');
+  fireEvent(input, 'selectionChange', {
+    nativeEvent: { selection: { start: 0, end: 0 } },
+  });
+  fireEvent.changeText(input, 'retry @Alice ');
 
   await act(async () => {
     fireEvent(input, 'submitEditing');
   });
-  expect(input.props.value).toBe('retry @Alice');
+  expect(input.props.value).toBe('retry @Alice ');
   expect(onSubmit).toHaveBeenLastCalledWith(
     'retry @Alice',
     undefined,

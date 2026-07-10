@@ -1004,6 +1004,7 @@
     "coverUpdateFailed": "封面更新失败",
     "commentFailedMessage": "网络异常，请稍后重试",
     "commentFailedTitle": "评论失败",
+    "mentionsIgnored": "有 {{count}} 位被提及的用户无法查看这条动态，因此未收到通知。",
     "deleteCommentMessage": "确定删除这条评论吗？",
     "deleteCommentTitle": "删除评论",
     "deleteFailedMessage": "请稍后重试",

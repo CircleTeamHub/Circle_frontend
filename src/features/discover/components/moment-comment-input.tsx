@@ -12,6 +12,8 @@ import {
   Text,
   TextInput,
   View,
+  type NativeSyntheticEvent,
+  type TextInputSelectionChangeEventData,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,11 +32,12 @@ import {
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
 import {
-  getMentionsPresentInText,
-  getMentionedUserIds,
-  selectMentionTarget,
-  type MentionTarget,
-} from '@/features/chat/utils/chat-send-payloads';
+  getMomentMentionedUserIds,
+  insertMomentMention,
+  reconcileMomentMentionOccurrences,
+  type MomentMentionOccurrence,
+  type MomentTextSelection,
+} from '@/features/discover/utils/moment-comment-mentions';
 
 interface MomentCommentInputProps {
   replyTo: { id: string; nickname: string } | null;
@@ -154,11 +157,14 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
   const [panel, setPanel] = useState<PanelKind>('none');
   const [friends, setFriends] = useState<FriendProfile[] | null>(null);
   const [friendsError, setFriendsError] = useState(false);
-  const [mentionTargets, setMentionTargets] = useState<MentionTarget[]>([]);
+  const [mentionOccurrences, setMentionOccurrences] = useState<
+    MomentMentionOccurrence[]
+  >([]);
   // 键盘弹起时它已盖住底部安全区——此时底部垫片必须归零，否则输入条和
   // 键盘之间会出现一段 34px 的空白。键盘收起才恢复安全区高度。
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const inputRef = useRef<TextInput>(null);
+  const selectionRef = useRef<MomentTextSelection>({ start: 0, end: 0 });
 
   useEffect(() => {
     const showEvent =
@@ -215,30 +221,52 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
   }, [friends]);
 
   const handleSelectEmoji = useCallback((emoji: string) => {
-    setText((prev) => prev + emoji);
+    setText((prev) => {
+      const next = prev + emoji;
+      selectionRef.current = { start: next.length, end: next.length };
+      return next;
+    });
   }, []);
 
-  const handleTextChange = useCallback((nextText: string) => {
-    setText(nextText);
-    setMentionTargets((current) =>
-      getMentionsPresentInText(nextText, current),
-    );
-  }, []);
+  const handleTextChange = useCallback(
+    (nextText: string) => {
+      setMentionOccurrences((current) =>
+        reconcileMomentMentionOccurrences(
+          text,
+          nextText,
+          current,
+          selectionRef.current,
+        ),
+      );
+      setText(nextText);
+    },
+    [text],
+  );
 
-  const handleMentionFriend = useCallback((friend: FriendProfile) => {
-    // 插到末尾并补空格，和抖音一致；@ 之前若无空格补一个。
-    setText((prev) =>
-      `${prev}${prev && !prev.endsWith(' ') ? ' ' : ''}@${friend.nickname} `,
-    );
-    setMentionTargets((current) =>
-      selectMentionTarget(current, {
+  const handleSelectionChange = useCallback(
+    (event: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => {
+      selectionRef.current = event.nativeEvent.selection;
+    },
+    [],
+  );
+
+  const handleMentionFriend = useCallback(
+    (friend: FriendProfile) => {
+      const next = insertMomentMention(text, mentionOccurrences, {
         userID: friend.id,
         nickname: friend.nickname,
-      }),
-    );
-    setPanel('none');
-    inputRef.current?.focus();
-  }, []);
+      });
+      setText(next.text);
+      setMentionOccurrences(next.occurrences);
+      selectionRef.current = {
+        start: next.text.length,
+        end: next.text.length,
+      };
+      setPanel('none');
+      inputRef.current?.focus();
+    },
+    [mentionOccurrences, text],
+  );
 
   const handleSend = useCallback(async () => {
     const trimmed = text.trim();
@@ -280,22 +308,20 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
       }
 
       try {
-        const mentionedUserIds = getMentionedUserIds(
-          trimmed,
-          mentionTargets,
-        );
+        const mentionedUserIds = getMomentMentionedUserIds(mentionOccurrences);
         await onSubmit(trimmed, replyTo?.id, images, mentionedUserIds);
         // onSubmit 成功后由父组件决定是否调用 onDismiss（一般会清掉 commentTarget）。
         setText('');
         setImageUri(null);
-        setMentionTargets([]);
+        setMentionOccurrences([]);
+        selectionRef.current = { start: 0, end: 0 };
       } catch {
         // 父组件已经处理过错误展示。这里只负责保留输入内容让用户重试。
       }
     } finally {
       setSubmitting(false);
     }
-  }, [text, imageUri, submitting, replyTo, onSubmit, t, mentionTargets]);
+  }, [text, imageUri, submitting, replyTo, onSubmit, t, mentionOccurrences]);
 
   const renderFriendRow = useCallback(
     ({ item }: { item: FriendProfile }) => (
@@ -368,6 +394,7 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
             ref={inputRef}
             value={text}
             onChangeText={handleTextChange}
+            onSelectionChange={handleSelectionChange}
             placeholder={
               replyTo
                 ? t('discover.commentInput.replyTo', {

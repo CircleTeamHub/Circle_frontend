@@ -20,6 +20,7 @@ import { Divider } from '@/components/ui/divider';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { ImageGrid } from '@/features/discover/components/image-grid';
 import { MomentCommentInput } from '@/features/discover/components/moment-comment-input';
+import { MomentMentionNotice } from '@/features/discover/components/moment-mention-notice';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
 import {
   buildMomentCommentThreads,
@@ -168,6 +169,8 @@ export default function MomentDetailScreen() {
   const [post, setPost] = useState<MomentPost | null>(storeMoment ?? null);
   const [loading, setLoading] = useState(!storeMoment);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [mentionNotice, setMentionNotice] = useState<string | null>(null);
+  const dismissMentionNotice = useCallback(() => setMentionNotice(null), []);
   const [refreshing, setRefreshing] = useState(false);
   const postRef = useRef<MomentPost | null>(storeMoment ?? null);
   const mountedRef = useRef(true);
@@ -324,6 +327,13 @@ export default function MomentDetailScreen() {
         );
         storeAddComment(post.id, comment);
         setCommentTarget(null);
+        if (comment.ignoredMentionCount > 0) {
+          setMentionNotice(
+            t('moment.mentionsIgnored', {
+              count: comment.ignoredMentionCount,
+            }),
+          );
+        }
       } catch (error) {
         // 之前是 silent fail —— 输入框被 dismiss、评论没出现、用户没反馈。
         // 现在保留 commentTarget 让用户重试（含已输入文本），并弹错误提示。
@@ -751,6 +761,10 @@ export default function MomentDetailScreen() {
           onDismiss={() => setCommentTarget(null)}
         />
       ) : null}
+      <MomentMentionNotice
+        message={mentionNotice}
+        onDismiss={dismissMentionNotice}
+      />
     </View>
   );
 }

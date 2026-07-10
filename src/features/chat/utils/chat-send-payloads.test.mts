@@ -7,41 +7,8 @@ import {
   filterMentionCandidates,
   getActiveMentionQuery,
   getMentionsPresentInText,
-  getMentionedUserIds,
-  selectMentionTarget,
   type MentionTarget,
 } from './chat-send-payloads.ts';
-
-test('selected comment mentions produce ids only while present in text', () => {
-  const targets = selectMentionTarget([], {
-    userID: 'alice-id',
-    nickname: 'Alice',
-  });
-
-  assert.deepEqual(getMentionedUserIds('hello @Alice ', targets), ['alice-id']);
-  assert.deepEqual(getMentionedUserIds('hello', targets), []);
-});
-
-test('selectMentionTarget dedupes the same user id', () => {
-  const alice = { userID: 'alice-id', nickname: 'Alice' };
-
-  assert.deepEqual(
-    selectMentionTarget(selectMentionTarget([], alice), alice),
-    [alice],
-  );
-});
-
-test('a pruned mention target cannot be resurrected by manually retyping its text', () => {
-  const alice = { userID: 'alice-id', nickname: 'Alice' };
-  const selected = selectMentionTarget([], alice);
-  const afterDeletion = getMentionsPresentInText('hello', selected);
-
-  assert.deepEqual(afterDeletion, []);
-  assert.deepEqual(
-    getMentionedUserIds('manually typed @Alice', afterDeletion),
-    [],
-  );
-});
 
 test('buildAtMessagePayload dedupes selected mention ids and preserves text', () => {
   const mentions: MentionTarget[] = [

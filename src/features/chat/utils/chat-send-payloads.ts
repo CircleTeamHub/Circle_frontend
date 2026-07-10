@@ -33,24 +33,6 @@ export function getMentionsPresentInText(
   });
 }
 
-export function selectMentionTarget(
-  targets: MentionTarget[],
-  target: MentionTarget,
-): MentionTarget[] {
-  return targets.some((current) => current.userID === target.userID)
-    ? targets
-    : [...targets, target];
-}
-
-export function getMentionedUserIds(
-  text: string,
-  targets: MentionTarget[],
-): string[] {
-  return getMentionsPresentInText(text, targets).map(
-    (target) => target.userID,
-  );
-}
-
 export function getActiveMentionQuery(text: string, cursor: number) {
   const beforeCursor = text.slice(0, Math.max(0, Math.min(cursor, text.length)));
   const match = /(?:^|\s)@([^\s@]*)$/.exec(beforeCursor);

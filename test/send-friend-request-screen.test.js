@@ -238,6 +238,8 @@ test('send friend request screen is wired to i18n-driven form copy', () => {
   assert.match(source, /selectedTagIds/);
   assert.match(source, /isSubmitting/);
   assert.match(source, /getFriendRequestSubmitState/);
+  assert.match(source, /useRef\(createSingleFlightRunner\(\)\)/);
+  assert.match(source, /submitRunnerRef\.current\.run/);
   assert.match(source, /if \(submitState\.disabled\) \{/);
   assert.match(source, /disabled=\{submitState\.disabled\}/);
   assert.doesNotMatch(source, /NavHeader title="发送好友申请"/);

@@ -23,6 +23,7 @@ import {
 import { getApiErrorMessage } from '@/services/api/errors';
 import { MomentCard } from './moment-card';
 import { MomentCommentInput } from './moment-comment-input';
+import { MomentMentionNotice } from './moment-mention-notice';
 import type { MomentPost } from '@/types';
 
 const s = StyleSheet.create({
@@ -81,6 +82,8 @@ export const MomentsFeed: React.FC = () => {
 
   const [refreshing, setRefreshing] = useState(false);
   const [newCount, setNewCount] = useState(0);
+  const [mentionNotice, setMentionNotice] = useState<string | null>(null);
+  const dismissMentionNotice = useCallback(() => setMentionNotice(null), []);
   // 就地评论/回复目标（微信朋友圈式），设置后弹出输入浮层，无需进详情页。
   const [commentTarget, setCommentTarget] = useState<{
     momentId: string;
@@ -219,6 +222,13 @@ export const MomentsFeed: React.FC = () => {
         });
         storeAddComment(target.momentId, comment);
         setCommentTarget(null);
+        if (comment.ignoredMentionCount > 0) {
+          setMentionNotice(
+            t('moment.mentionsIgnored', {
+              count: comment.ignoredMentionCount,
+            }),
+          );
+        }
       } catch (error) {
         // 与详情页同款：保留输入内容让用户重试，并弹错误提示（reject 让输入框不关闭）。
         Alert.alert(
@@ -313,6 +323,10 @@ export const MomentsFeed: React.FC = () => {
           onDismiss={() => setCommentTarget(null)}
         />
       ) : null}
+      <MomentMentionNotice
+        message={mentionNotice}
+        onDismiss={dismissMentionNotice}
+      />
     </View>
   );
 };
