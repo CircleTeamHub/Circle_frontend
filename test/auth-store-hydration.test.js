@@ -164,10 +164,10 @@ test('authStore advances sessionEpoch on session identity changes', () => {
   assert.equal(useAuthStore.getState().sessionEpoch, 1);
 
   useAuthStore.getState().setTokens({ accessToken: 'a2', refreshToken: 'r2' });
-  assert.equal(useAuthStore.getState().sessionEpoch, 2);
+  assert.equal(useAuthStore.getState().sessionEpoch, 1);
 
   useAuthStore.getState().clearSession();
-  assert.equal(useAuthStore.getState().sessionEpoch, 3);
+  assert.equal(useAuthStore.getState().sessionEpoch, 2);
 
   const partialized = persistOptions.partialize(useAuthStore.getState());
   assert.equal(partialized.sessionEpoch, undefined);

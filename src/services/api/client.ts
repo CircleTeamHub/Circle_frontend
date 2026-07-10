@@ -224,12 +224,29 @@ export class ApiError extends Error {
 
 // token 刷新 Promise 单例：多个并发请求同时 401 时，只发一次 /auth/refresh
 let refreshPromise: Promise<string> | null = null;
+let refreshPromiseSessionEpoch: number | null = null;
 
 function resetRefreshPromise() {
   refreshPromise = null;
+  refreshPromiseSessionEpoch = null;
 }
 
 registerLogoutHandler(resetRefreshPromise);
+
+function sessionChangedError() {
+  return new ApiError(
+    i18n.t('common.errors.sessionChangedDuringRefresh', {
+      defaultValue: 'Session changed during token refresh',
+    }),
+    { status: 401, failureKind: 'session-changed' },
+  );
+}
+
+function assertSessionEpoch(sessionEpoch: number) {
+  if (useAuthStore.getState().sessionEpoch !== sessionEpoch) {
+    throw sessionChangedError();
+  }
+}
 
 async function readPayload<T>(
   res: Response,
@@ -409,12 +426,15 @@ function unwrapResponse<T>(
   return (payload as T | null) ?? (undefined as T);
 }
 
-async function refreshAccessToken() {
-  if (refreshPromise) {
+async function refreshAccessToken(sessionEpoch: number) {
+  if (
+    refreshPromise &&
+    refreshPromiseSessionEpoch === sessionEpoch
+  ) {
     return refreshPromise;
   }
 
-  const sessionEpochAtStart = useAuthStore.getState().sessionEpoch;
+  assertSessionEpoch(sessionEpoch);
 
   const activeRefreshPromise = (async () => {
     const { refreshToken } = useAuthStore.getState();
@@ -456,21 +476,14 @@ async function refreshAccessToken() {
     }
 
     const currentAuthState = useAuthStore.getState();
-    if (currentAuthState.sessionEpoch !== sessionEpochAtStart) {
-      throw new ApiError(
-        i18n.t('common.errors.sessionChangedDuringRefresh', {
-          defaultValue: 'Session changed during token refresh',
-        }),
-        { status: 401, failureKind: 'session-changed' },
-      );
-    }
+    assertSessionEpoch(sessionEpoch);
 
     currentAuthState.setTokens(tokens);
 
     return tokens.accessToken;
   })()
     .catch(async (error) => {
-      if (useAuthStore.getState().sessionEpoch === sessionEpochAtStart) {
+      if (useAuthStore.getState().sessionEpoch === sessionEpoch) {
         await clearLocalSession();
       }
       throw error;
@@ -478,10 +491,12 @@ async function refreshAccessToken() {
     .finally(() => {
       if (refreshPromise === activeRefreshPromise) {
         refreshPromise = null;
+        refreshPromiseSessionEpoch = null;
       }
     });
 
   refreshPromise = activeRefreshPromise;
+  refreshPromiseSessionEpoch = sessionEpoch;
   return activeRefreshPromise;
 }
 
@@ -498,11 +513,18 @@ export async function apiClient<T>(
   options: RequestOptions = {}
 ): Promise<T> {
   const { auth = true, retryOnAuthError = true } = options;
+  const requestSessionEpoch =
+    auth && retryOnAuthError ? useAuthStore.getState().sessionEpoch : null;
   try {
     const initialRequest = await executeRequest<T>(endpoint, options);
 
     if (initialRequest.res.status === 401 && auth && retryOnAuthError) {
-      const nextAccessToken = await refreshAccessToken();
+      if (requestSessionEpoch === null) {
+        throw sessionChangedError();
+      }
+      assertSessionEpoch(requestSessionEpoch);
+      const nextAccessToken = await refreshAccessToken(requestSessionEpoch);
+      assertSessionEpoch(requestSessionEpoch);
       const retryRequest = await executeRequest<T>(
         endpoint,
         { ...options, retryOnAuthError: false },

@@ -57,8 +57,8 @@ interface AuthState {
   user: AuthUser | null;
   isAuthenticated: boolean;
   onboardingRequired: boolean;
-  // Runtime-only auth credential generation. This advances on login/logout and
-  // token rotation, so do not treat it as a stable user identity version.
+  // Runtime-only auth session identity generation. This advances when a session
+  // starts or ends, but remains stable while that session's tokens rotate.
   sessionEpoch: number;
   isLoading: boolean;
   hasHydrated: boolean;
@@ -118,7 +118,6 @@ export const useAuthStore = create<AuthState>()(
               ? imToken
               : state.imToken,
           isAuthenticated: true,
-          sessionEpoch: state.sessionEpoch + 1,
         })),
 
       setUser: (user) => set({ user }),
