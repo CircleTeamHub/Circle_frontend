@@ -862,6 +862,7 @@
       "fancyLabel": "Fancy Number Required",
       "memberPostLabel": "Members Can Post",
       "requireApprovalLabel": "Require approval to join",
+      "vipAtLeast": "VIP {{level}} or above",
       "nameRequired": "Circle name required (min 2 chars)",
       "descRequired": "Description required (min 10 chars)",
       "submitButton": "Create Circle",

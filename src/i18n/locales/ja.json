@@ -996,6 +996,7 @@
       "fancyLabel": "ファンシー番号が必要",
       "memberPostLabel": "メンバー投稿可",
       "requireApprovalLabel": "参加には承認が必要",
+      "vipAtLeast": "VIP {{level}} 以上",
       "nameRequired": "サークル名を入力してください（2文字以上）",
       "descRequired": "説明を入力してください（10文字以上）",
       "submitButton": "サークルを作成",

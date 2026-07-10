@@ -999,6 +999,7 @@
       "fancyLabel": "Requiere número especial",
       "memberPostLabel": "Miembros pueden publicar",
       "requireApprovalLabel": "Requiere aprobación para unirse",
+      "vipAtLeast": "VIP {{level}} o superior",
       "nameRequired": "Nombre requerido (mín. 2 caracteres)",
       "descRequired": "Descripción requerida (mín. 10 caracteres)",
       "submitButton": "Crear círculo",
