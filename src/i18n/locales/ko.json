@@ -892,6 +892,7 @@
     "comments": "댓글",
     "commentsCount": "댓글 ({{count}})",
     "noComments": "댓글이 없습니다",
+    "imageTag": "[사진]",
     "showMoreComments": "댓글 {{count}}개 더 보기",
     "showMoreComments_other": "댓글 {{count}}개 더 보기",
     "moreLikedFriends": "외 {{count}}명",
@@ -1190,6 +1191,14 @@
     },
     "commentInput": {
       "placeholder": "댓글 쓰기...",
+      "barPlaceholder": "생각을 나눠보세요…",
+      "pickImage": "사진 추가",
+      "mention": "친구 멘션",
+      "emoji": "이모지",
+      "mentionTitle": "멘션할 친구 선택",
+      "noFriends": "아직 친구가 없어요",
+      "friendsLoadFailed": "친구 목록을 불러오지 못했어요",
+      "imageUploadFailedTitle": "사진 업로드 실패",
       "replyTo": "{{nickname}}에게 답글"
     },
     "restrictionBadge": {

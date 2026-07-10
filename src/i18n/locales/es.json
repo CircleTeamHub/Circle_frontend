@@ -893,6 +893,7 @@
     "comments": "Comentarios",
     "commentsCount": "Comentarios ({{count}})",
     "noComments": "Sin comentarios",
+    "imageTag": "[Foto]",
     "showMoreComments": "Ver {{count}} comentarios más",
     "showMoreComments_one": "Ver {{count}} comentario más",
     "showMoreComments_other": "Ver {{count}} comentarios más",
@@ -1193,6 +1194,14 @@
     },
     "commentInput": {
       "placeholder": "Escribe un comentario...",
+      "barPlaceholder": "Comparte lo que piensas…",
+      "pickImage": "Añadir foto",
+      "mention": "Mencionar a un amigo",
+      "emoji": "Emojis",
+      "mentionTitle": "Elige a quién mencionar",
+      "noFriends": "Aún no tienes amigos",
+      "friendsLoadFailed": "No se pudieron cargar los amigos",
+      "imageUploadFailedTitle": "Error al subir la foto",
       "replyTo": "Responder a {{nickname}}"
     },
     "restrictionBadge": {

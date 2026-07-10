@@ -19,6 +19,13 @@ interface MomentCardProps {
   post: MomentPost;
   onLike: (postId: string) => void;
   onPress: (postId: string) => void;
+  /** 点评论按钮：就地评论（缺省时退回跳详情）。 */
+  onComment?: (postId: string) => void;
+  /** 点已有评论：就地回复该评论（缺省时退回跳详情）。 */
+  onReplyComment?: (
+    postId: string,
+    replyTo: { id: string; nickname: string },
+  ) => void;
 }
 
 const s = StyleSheet.create({
@@ -85,6 +92,8 @@ export const MomentCard: React.FC<MomentCardProps> = ({
   post,
   onLike,
   onPress,
+  onComment,
+  onReplyComment,
 }) => {
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
@@ -190,7 +199,7 @@ export const MomentCard: React.FC<MomentCardProps> = ({
             <Pressable
               style={s.actionBtn}
               hitSlop={8}
-              onPress={() => onPress(post.id)}
+              onPress={() => (onComment ?? onPress)(post.id)}
             >
               <Ionicons
                 name="chatbubble-outline"
@@ -226,7 +235,14 @@ export const MomentCard: React.FC<MomentCardProps> = ({
               <View key={thread.comment.id} style={s.commentThread}>
                 <Pressable
                   style={s.commentRow}
-                  onPress={() => onPress(post.id)}
+                  onPress={() =>
+                    onReplyComment
+                      ? onReplyComment(post.id, {
+                          id: thread.comment.id,
+                          nickname: thread.comment.user.nickname,
+                        })
+                      : onPress(post.id)
+                  }
                 >
                   <Text style={d.commentUser}>
                     {thread.comment.user.nickname}
@@ -241,14 +257,26 @@ export const MomentCard: React.FC<MomentCardProps> = ({
                       </Text>
                     </>
                   ) : null}
-                  <Text style={d.commentText}>: {thread.comment.content}</Text>
+                  <Text style={d.commentText}>
+                    : {thread.comment.content}
+                    {thread.comment.images?.length
+                      ? `${thread.comment.content ? ' ' : ''}${t('moment.imageTag', { defaultValue: '[图片]' })}`
+                      : ''}
+                  </Text>
                 </Pressable>
 
                 {thread.replies.map((reply) => (
                   <Pressable
                     key={reply.id}
                     style={[s.commentRow, s.replyRow]}
-                    onPress={() => onPress(post.id)}
+                    onPress={() =>
+                      onReplyComment
+                        ? onReplyComment(post.id, {
+                            id: reply.id,
+                            nickname: reply.user.nickname,
+                          })
+                        : onPress(post.id)
+                    }
                   >
                     <Text style={d.commentUser}>{reply.user.nickname}</Text>
                     {reply.replyTo ? (
@@ -261,7 +289,12 @@ export const MomentCard: React.FC<MomentCardProps> = ({
                         </Text>
                       </>
                     ) : null}
-                    <Text style={d.commentText}>: {reply.content}</Text>
+                    <Text style={d.commentText}>
+                      : {reply.content}
+                      {reply.images?.length
+                        ? `${reply.content ? ' ' : ''}${t('moment.imageTag', { defaultValue: '[图片]' })}`
+                        : ''}
+                    </Text>
                   </Pressable>
                 ))}
               </View>

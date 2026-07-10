@@ -762,6 +762,14 @@
     },
     "commentInput": {
       "placeholder": "写评论...",
+      "barPlaceholder": "有什么想法，展开说说",
+      "pickImage": "添加图片",
+      "mention": "提到好友",
+      "emoji": "表情",
+      "mentionTitle": "选择提醒的好友",
+      "noFriends": "暂无好友",
+      "friendsLoadFailed": "好友加载失败",
+      "imageUploadFailedTitle": "图片上传失败",
       "replyTo": "回复 {{nickname}}"
     },
     "restrictionBadge": {
@@ -982,6 +990,7 @@
     "comments": "评论",
     "commentsCount": "评论 ({{count}})",
     "noComments": "暂无评论",
+    "imageTag": "[图片]",
     "showMoreComments": "查看更多 {{count}} 条评论",
     "showMoreComments_other": "查看更多 {{count}} 条评论",
     "moreLikedFriends": "等 {{count}} 人",

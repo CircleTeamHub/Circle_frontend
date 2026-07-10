@@ -88,7 +88,7 @@ export async function toggleMomentLike(
 
 export async function addMomentComment(
   traceId: string,
-  input: { content: string; replyToId?: string },
+  input: { content: string; replyToId?: string; images?: string[] },
 ): Promise<MomentComment> {
   return apiClient<MomentComment>(`/trace/${traceId}/comment`, {
     method: 'POST',

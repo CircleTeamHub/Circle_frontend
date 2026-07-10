@@ -12,6 +12,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
@@ -40,13 +41,19 @@ import { getApiErrorMessage } from '@/services/api/errors';
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import type { MomentPost } from '@/types';
 
+// Unified icon scale for the post action row so like / comment read as one
+// system instead of 26 / 24.
+const IconSize = {
+  action: 22,
+} as const;
+
 const s = StyleSheet.create({
   content: { paddingHorizontal: Spacing.lg },
-  postSection: { gap: Spacing.sm, paddingVertical: Spacing.md },
+  postSection: { gap: Spacing.md, paddingVertical: Spacing.md },
   authorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm + 2,
+    gap: Spacing.sm + Spacing.xs,
   },
   authorName: { ...Typography.body, fontWeight: '600' },
   postContent: { ...Typography.bodyRegular, lineHeight: 22 },
@@ -54,16 +61,17 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: Spacing.sm,
+    paddingTop: Spacing.xs,
   },
   timeText: { ...Typography.small },
-  actionsRow: { flexDirection: 'row', gap: Spacing.lg, alignItems: 'center' },
+  actionsRow: { flexDirection: 'row', gap: Spacing.md, alignItems: 'center' },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Spacing.xs + 2,
     paddingVertical: Spacing.xs,
   },
+  countText: { ...Typography.caption },
   commentsHeader: {
     paddingVertical: Spacing.md,
   },
@@ -89,22 +97,47 @@ const s = StyleSheet.create({
   commentItem: {
     flexDirection: 'row',
     gap: Spacing.sm,
-    paddingVertical: Spacing.sm + 2,
+    paddingVertical: Spacing.md,
   },
   replyItem: {
-    marginLeft: 40,
+    marginLeft: Spacing.xl + Spacing.sm,
   },
   targetCommentHighlight: {
     borderRadius: Radius.md,
   },
-  commentBody: { flex: 1, gap: 2 },
+  commentBody: { flex: 1, gap: Spacing.xs },
   commentUser: { ...Typography.caption, fontWeight: '600' },
   commentText: { ...Typography.bodyRegular, lineHeight: 20 },
+  commentImage: {
+    width: 140,
+    height: 140,
+    borderRadius: Radius.md,
+  },
   commentTime: { ...Typography.small },
   replyLabel: { ...Typography.caption },
   emptyComments: {
     alignItems: 'center',
     paddingVertical: Spacing.xl,
+  },
+  // 底部常驻评论触发栏（仿抖音）：点击唤起 MomentCommentInput 浮层。
+  commentBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  commentBarPill: {
+    flex: 1,
+    height: 40,
+    borderRadius: Radius.full,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+  },
+  commentBarPlaceholder: {
+    ...Typography.bodyRegular,
   },
   centerLoader: {
     flex: 1,
@@ -270,10 +303,14 @@ export default function MomentDetailScreen() {
   }, [post, storeToggleLike]);
 
   const handleSubmitComment = useCallback(
-    async (content: string, replyToId?: string) => {
+    async (content: string, replyToId?: string, images?: string[]) => {
       if (!post) return;
       try {
-        const comment = await addMomentComment(post.id, { content, replyToId });
+        const comment = await addMomentComment(post.id, {
+          content,
+          replyToId,
+          images,
+        });
         setPost((p) =>
           p
             ? { ...p, comments: [...p.comments, comment], commentCount: p.commentCount + 1 }
@@ -494,6 +531,14 @@ export default function MomentDetailScreen() {
             ? [s.targetCommentHighlight, d.targetCommentHighlight]
             : null,
         ]}
+        onPress={() =>
+          setCommentTarget({
+            replyTo: {
+              id: item.comment.id,
+              nickname: item.comment.user.nickname,
+            },
+          })
+        }
         onLongPress={
           !!currentUserId && item.comment.user.id === currentUserId
             ? () => handleDeleteComment(item.comment.id)
@@ -511,23 +556,20 @@ export default function MomentDetailScreen() {
               </Text>
             ) : null}
           </Text>
-          <Text style={[s.commentText, d.commentText]}>{item.comment.content}</Text>
+          {item.comment.content ? (
+            <Text style={[s.commentText, d.commentText]}>{item.comment.content}</Text>
+          ) : null}
+          {item.comment.images?.length ? (
+            <Image
+              source={{ uri: item.comment.images[0] }}
+              style={[s.commentImage, { backgroundColor: colors.surface }]}
+              contentFit="cover"
+            />
+          ) : null}
           <Text style={[s.commentTime, d.commentTime]}>
             {commentTimeById.get(item.comment.id)}
           </Text>
         </View>
-        <Pressable
-          onPress={() =>
-            setCommentTarget({
-              replyTo: {
-                id: item.comment.id,
-                nickname: item.comment.user.nickname,
-              },
-            })
-          }
-        >
-          <Ionicons name="chatbubble-outline" size={14} color={colors.textSecondary} />
-        </Pressable>
       </Pressable>
       <Divider />
     </View>
@@ -562,11 +604,11 @@ export default function MomentDetailScreen() {
             <Pressable style={s.actionBtn} hitSlop={8} onPress={handleLike}>
               <Ionicons
                 name={post.isLikedByMe ? 'heart' : 'heart-outline'}
-                size={26}
+                size={IconSize.action}
                 color={post.isLikedByMe ? colors.error : colors.textSecondary}
               />
               {post.likeCount > 0 ? (
-                <Text style={{ color: colors.textSecondary, ...Typography.body }}>
+                <Text style={[s.countText, { color: colors.textSecondary }]}>
                   {post.likeCount}
                 </Text>
               ) : null}
@@ -576,9 +618,13 @@ export default function MomentDetailScreen() {
               hitSlop={8}
               onPress={() => setCommentTarget({ replyTo: null })}
             >
-              <Ionicons name="chatbubble-outline" size={24} color={colors.textSecondary} />
+              <Ionicons
+                name="chatbubble-outline"
+                size={IconSize.action}
+                color={colors.textSecondary}
+              />
               {post.commentCount > 0 ? (
-                <Text style={{ color: colors.textSecondary, ...Typography.caption }}>
+                <Text style={[s.countText, { color: colors.textSecondary }]}>
                   {post.commentCount}
                 </Text>
               ) : null}
@@ -656,6 +702,41 @@ export default function MomentDetailScreen() {
           </View>
         }
       />
+
+      {!commentTarget ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('discover.commentInput.barPlaceholder', {
+            defaultValue: '有什么想法，展开说说',
+          })}
+          style={[
+            s.commentBar,
+            {
+              backgroundColor: colors.surface,
+              borderTopColor: colors.divider,
+              paddingBottom: insets.bottom || Spacing.sm,
+            },
+          ]}
+          onPress={() => setCommentTarget({ replyTo: null })}
+        >
+          <View
+            style={[s.commentBarPill, { backgroundColor: colors.background }]}
+          >
+            <Text
+              style={[s.commentBarPlaceholder, { color: colors.textSecondary }]}
+            >
+              {t('discover.commentInput.barPlaceholder', {
+                defaultValue: '有什么想法，展开说说',
+              })}
+            </Text>
+            <Ionicons
+              name="happy-outline"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </View>
+        </Pressable>
+      ) : null}
 
       {commentTarget ? (
         <MomentCommentInput

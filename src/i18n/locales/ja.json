@@ -892,6 +892,7 @@
     "comments": "コメント",
     "commentsCount": "コメント ({{count}})",
     "noComments": "コメントはありません",
+    "imageTag": "[画像]",
     "showMoreComments": "他 {{count}} 件のコメントを見る",
     "showMoreComments_other": "他 {{count}} 件のコメントを見る",
     "moreLikedFriends": "他 {{count}} 人",
@@ -1190,6 +1191,14 @@
     },
     "commentInput": {
       "placeholder": "コメントを書く...",
+      "barPlaceholder": "感想を書いてみましょう…",
+      "pickImage": "画像を追加",
+      "mention": "友だちをメンション",
+      "emoji": "絵文字",
+      "mentionTitle": "メンションする友だちを選択",
+      "noFriends": "まだ友だちがいません",
+      "friendsLoadFailed": "友だちを読み込めませんでした",
+      "imageUploadFailedTitle": "画像のアップロードに失敗しました",
       "replyTo": "{{nickname}}に返信"
     },
     "restrictionBadge": {

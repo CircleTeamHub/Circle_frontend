@@ -393,6 +393,8 @@ export interface MomentPost {
 export interface MomentComment {
   id: string;
   content: string;
+  /** 评论附图（后端 TraceComment.images，当前最多 1 张）。 */
+  images?: string[];
   user: { id: string; nickname: string };
   replyTo: { id: string; nickname: string } | null;
   createdAt: string;

@@ -763,6 +763,14 @@
     },
     "commentInput": {
       "placeholder": "Write a comment...",
+      "barPlaceholder": "Share your thoughts…",
+      "pickImage": "Add photo",
+      "mention": "Mention a friend",
+      "emoji": "Emoji",
+      "mentionTitle": "Mention a friend",
+      "noFriends": "No friends yet",
+      "friendsLoadFailed": "Couldn't load friends",
+      "imageUploadFailedTitle": "Photo upload failed",
       "replyTo": "Reply to {{nickname}}"
     },
     "restrictionBadge": {
@@ -983,6 +991,7 @@
     "comments": "Comments",
     "commentsCount": "Comments ({{count}})",
     "noComments": "No comments",
+    "imageTag": "[Photo]",
     "showMoreComments": "View {{count}} more comments",
     "showMoreComments_one": "View {{count}} more comment",
     "showMoreComments_other": "View {{count}} more comments",
