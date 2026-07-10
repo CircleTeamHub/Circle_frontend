@@ -38,6 +38,32 @@ function response(identifier, data = {}) {
   };
 }
 
+function fakeScheduler() {
+  const scheduled = [];
+  return {
+    schedule(callback, delayMs) {
+      const task = { callback, delayMs, cancelled: false };
+      scheduled.push(task);
+      return () => {
+        task.cancelled = true;
+      };
+    },
+    runNext() {
+      const task = scheduled.find((item) => !item.cancelled);
+      if (!task) return false;
+      task.cancelled = true;
+      task.callback();
+      return true;
+    },
+    activeCount() {
+      return scheduled.filter((item) => !item.cancelled).length;
+    },
+    delays() {
+      return scheduled.map((item) => item.delayMs);
+    },
+  };
+}
+
 function harness({
   ready = true,
   currentUserId = 'user-1',
@@ -45,6 +71,7 @@ function harness({
   navigate,
   markReadLocal,
   logOpen,
+  scheduler,
 } = {}) {
   const navigated = [];
   const localReads = [];
@@ -71,6 +98,7 @@ function harness({
       failures.push([error.message, id, stage]),
     reportDrop: (reason, identifier) => drops.push([reason, identifier]),
     logOpen: logOpen ?? ((identifier) => diagnostics.push(identifier)),
+    scheduleRetry: scheduler?.schedule,
   });
   controller.setReadiness(ready, ready ? currentUserId : null);
   return {
@@ -238,6 +266,125 @@ test('retains a failed navigation and retries the full FIFO on readiness flush',
     'backend-retry-1',
     'navigate',
   ]);
+});
+
+test('autonomously retries a warm navigation failure without readiness changes', () => {
+  const scheduler = fakeScheduler();
+  const navigated = [];
+  let attempts = 0;
+  const h = harness({
+    scheduler,
+    navigate: (route) => {
+      attempts += 1;
+      if (attempts === 1) throw new Error('router warming up');
+      navigated.push(route);
+    },
+  });
+
+  h.controller.handleResponse(
+    response('expo-auto-retry', {
+      route: '/auto-retry',
+      notificationId: 'backend-auto-retry',
+    }),
+  );
+  assert.equal(scheduler.activeCount(), 1);
+  assert.deepEqual(navigated, []);
+
+  scheduler.runNext();
+
+  assert.deepEqual(navigated, ['/auto-retry']);
+  assert.deepEqual(h.apiReads, ['backend-auto-retry']);
+  assert.equal(scheduler.activeCount(), 0);
+});
+
+test('terminally drops after bounded retries and continues the FIFO', () => {
+  const scheduler = fakeScheduler();
+  const navigated = [];
+  const h = harness({
+    ready: false,
+    scheduler,
+    navigate: (route) => {
+      if (route === '/permanent-failure') throw new Error('router rejected');
+      navigated.push(route);
+    },
+  });
+  h.controller.handleResponse(
+    response('expo-permanent-failure', {
+      route: '/permanent-failure',
+      notificationId: 'backend-permanent-failure',
+    }),
+  );
+  h.controller.handleResponse(
+    response('expo-after-failure', {
+      route: '/after-failure',
+      notificationId: 'backend-after-failure',
+    }),
+  );
+
+  h.controller.setReadiness(true, 'user-1');
+  assert.equal(scheduler.activeCount(), 1);
+  scheduler.runNext();
+  assert.equal(scheduler.activeCount(), 1);
+  scheduler.runNext();
+
+  assert.deepEqual(navigated, ['/after-failure']);
+  assert.deepEqual(h.apiReads, ['backend-after-failure']);
+  assert.equal(
+    h.failures.filter((item) => item[2] === 'navigate').length,
+    3,
+  );
+  assert.deepEqual(h.drops.at(-1), [
+    'navigate-failed',
+    'expo-permanent-failure',
+  ]);
+  assert.deepEqual(scheduler.delays(), [50, 150]);
+});
+
+test('a duplicate queued delivery triggers an immediate flush attempt', () => {
+  const scheduler = fakeScheduler();
+  const navigated = [];
+  let shouldFail = true;
+  const h = harness({
+    scheduler,
+    navigate: (route) => {
+      if (shouldFail) throw new Error('first attempt failed');
+      navigated.push(route);
+    },
+  });
+  const duplicate = response('expo-duplicate-retry', {
+    route: '/duplicate-retry',
+    notificationId: 'backend-duplicate-retry',
+  });
+
+  h.controller.handleResponse(duplicate);
+  shouldFail = false;
+  h.controller.handleResponse(duplicate);
+
+  assert.deepEqual(navigated, ['/duplicate-retry']);
+  assert.deepEqual(h.apiReads, ['backend-duplicate-retry']);
+  assert.equal(scheduler.activeCount(), 0);
+});
+
+test('dispose cancels scheduled retry navigation', () => {
+  const scheduler = fakeScheduler();
+  let attempts = 0;
+  const h = harness({
+    scheduler,
+    navigate: () => {
+      attempts += 1;
+      throw new Error('not ready');
+    },
+  });
+
+  h.controller.handleResponse(
+    response('expo-dispose', { route: '/dispose' }),
+  );
+  assert.equal(attempts, 1);
+  h.controller.dispose();
+  assert.equal(scheduler.activeCount(), 0);
+  scheduler.runNext();
+
+  assert.equal(attempts, 1);
 });
 
 test('contains log and local-read throws after successful navigation', () => {

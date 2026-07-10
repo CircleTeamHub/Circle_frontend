@@ -153,6 +153,8 @@ test('root layout mounts system push notification response routing', () => {
   assert.match(host, /setReadiness\(navReady, authenticatedUserId\)/);
   assert.match(host, /state\.user\?\.id/);
   assert.match(host, /initializePushResponseListener/);
+  assert.match(host, /controller\.activate\(\)/);
+  assert.match(host, /controller\.dispose\(\)/);
   assert.match(host, /markInteractiveReadLocal/);
   assert.match(host, /markNotificationRead/);
   assert.match(host, /reportNotificationFailure\('notification_mark_read_failed'/);

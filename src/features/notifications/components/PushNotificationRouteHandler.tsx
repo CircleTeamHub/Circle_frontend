@@ -94,6 +94,7 @@ export function PushNotificationRouteHandler() {
   useEffect(() => {
     let mounted = true;
     let subscription: { remove: () => void } | null = null;
+    controller.activate();
 
     void import('expo-notifications')
       .then((notifications) => {
@@ -125,6 +126,7 @@ export function PushNotificationRouteHandler() {
     return () => {
       mounted = false;
       subscription?.remove();
+      controller.dispose();
     };
   }, [controller]);
 

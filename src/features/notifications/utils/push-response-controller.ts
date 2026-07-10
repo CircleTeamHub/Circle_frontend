@@ -16,9 +16,14 @@ type PendingResponse = {
   notificationId: string;
   requestIdentifier: string;
   targetUserId: string;
+  openAttempts: number;
 };
 
 type FailureStage = 'navigate' | 'log-open' | 'local-read' | 'remote-read';
+type DropReason =
+  | 'account-mismatch'
+  | 'missing-target-user'
+  | 'navigate-failed';
 
 type ControllerDependencies = {
   resolveRoute: (data: PushData) => Href | null;
@@ -31,15 +36,15 @@ type ControllerDependencies = {
     stage: FailureStage,
     requestIdentifier: string,
   ) => void;
-  reportDrop: (
-    reason: 'account-mismatch' | 'missing-target-user',
-    requestIdentifier: string,
-  ) => void;
+  reportDrop: (reason: DropReason, requestIdentifier: string) => void;
   logOpen: (requestIdentifier: string) => void;
+  scheduleRetry?: (callback: () => void, delayMs: number) => () => void;
 };
 
 const HANDLED_LIMIT = 300;
 const PENDING_LIMIT = 50;
+const MAX_OPEN_ATTEMPTS = 3;
+const RETRY_DELAYS_MS = [50, 150] as const;
 
 function text(value: unknown) {
   return typeof value === 'string' ? value : '';
@@ -91,6 +96,14 @@ export function createPushResponseController(deps: ControllerDependencies) {
   let currentUserId: string | null = null;
   const pending: PendingResponse[] = [];
   let flushing = false;
+  let disposed = false;
+  let cancelRetry: (() => void) | null = null;
+  const scheduleRetry =
+    deps.scheduleRetry ??
+    ((callback: () => void, delayMs: number) => {
+      const timer = setTimeout(callback, delayMs);
+      return () => clearTimeout(timer);
+    });
 
   const remember = (identifier: string) => {
     handledIds.add(identifier);
@@ -117,7 +130,7 @@ export function createPushResponseController(deps: ControllerDependencies) {
   };
 
   const safeReportDrop = (
-    reason: 'account-mismatch' | 'missing-target-user',
+    reason: DropReason,
     requestIdentifier: string,
   ) => {
     try {
@@ -127,12 +140,37 @@ export function createPushResponseController(deps: ControllerDependencies) {
     }
   };
 
+  const cancelScheduledRetry = () => {
+    cancelRetry?.();
+    cancelRetry = null;
+  };
+
+  const scheduleOpenRetry = (attempts: number) => {
+    if (cancelRetry || disposed) return;
+    const delay =
+      RETRY_DELAYS_MS[
+        Math.min(attempts - 1, RETRY_DELAYS_MS.length - 1)
+      ];
+    cancelRetry = scheduleRetry(() => {
+      cancelRetry = null;
+      if (!disposed) flush();
+    }, delay);
+  };
+
   const dispatch = (item: PendingResponse) => {
     try {
       deps.navigate(item.route);
     } catch (error) {
+      item.openAttempts += 1;
       safeReport(error, item, 'navigate');
-      return false;
+      if (item.openAttempts >= MAX_OPEN_ATTEMPTS) {
+        queuedIds.delete(item.requestIdentifier);
+        remember(item.requestIdentifier);
+        safeReportDrop('navigate-failed', item.requestIdentifier);
+        return 'drop' as const;
+      }
+      scheduleOpenRetry(item.openAttempts);
+      return 'retry' as const;
     }
 
     queuedIds.delete(item.requestIdentifier);
@@ -158,11 +196,12 @@ export function createPushResponseController(deps: ControllerDependencies) {
         safeReport(error, item, 'remote-read');
       }
     }
-    return true;
+    return 'success' as const;
   };
 
-  const flush = () => {
-    if (!navReady || !currentUserId || flushing) return;
+  function flush() {
+    if (disposed || !navReady || !currentUserId || flushing) return;
+    cancelScheduledRetry();
     flushing = true;
     try {
       for (let index = 0; index < pending.length; ) {
@@ -171,15 +210,26 @@ export function createPushResponseController(deps: ControllerDependencies) {
           index += 1;
           continue;
         }
-        if (!dispatch(item)) break;
+        const result = dispatch(item);
+        if (result === 'retry') break;
         pending.splice(index, 1);
       }
     } finally {
       flushing = false;
     }
-  };
+  }
 
   return {
+    activate() {
+      disposed = false;
+      flush();
+    },
+
+    dispose() {
+      disposed = true;
+      cancelScheduledRetry();
+    },
+
     setReadiness(nextNavReady: boolean, nextUserId: string | null) {
       navReady = nextNavReady;
       currentUserId = nextUserId;
@@ -187,12 +237,11 @@ export function createPushResponseController(deps: ControllerDependencies) {
     },
 
     handleResponse(response: PushNotificationResponse | null | undefined) {
-      if (!response) return;
+      if (disposed || !response) return;
       const request = response.notification.request;
-      if (
-        handledIds.has(request.identifier) ||
-        queuedIds.has(request.identifier)
-      ) {
+      if (handledIds.has(request.identifier)) return;
+      if (queuedIds.has(request.identifier)) {
+        flush();
         return;
       }
       const data = request.content.data ?? {};
@@ -216,6 +265,7 @@ export function createPushResponseController(deps: ControllerDependencies) {
         notificationId: text(data.notificationId),
         requestIdentifier: request.identifier,
         targetUserId,
+        openAttempts: 0,
       };
       queuedIds.add(request.identifier);
       pending.push(item);
