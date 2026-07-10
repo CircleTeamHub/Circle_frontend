@@ -99,10 +99,12 @@ test('logout removes local registration before remote delete and disables auth r
 
   await orchestrator.unregisterStoredPushToken({ retryOnAuthError: false });
 
-  assert.deepEqual(events, [
-    ['storage', null],
-    ['delete', 'ExponentPushToken[abc]', { retryOnAuthError: false }],
-  ]);
+  assert.equal(events.length, 2);
+  assert.equal(events[0][0], 'storage');
+  assert.equal(events[0][1], null);
+  assert.equal(events[1][0], 'delete');
+  assert.equal(events[1][1], 'ExponentPushToken[abc]');
+  assert.equal(events[1][2].retryOnAuthError, false);
   assert.equal(stored, null);
   assert.equal(failures.length, 1);
   assert.equal(failures[0][0], 'push_token_unregister_failed');
@@ -496,7 +498,12 @@ test('logout during backend registration deletes the remotely registered token w
     pushEnabled: true,
   });
   await registrationStarted.promise;
-  const logoutPromise = orchestrator.logout();
+  let logoutSettled = false;
+  const logoutPromise = orchestrator.logout().then(() => {
+    logoutSettled = true;
+  });
+  await Promise.resolve();
+  assert.equal(logoutSettled, false);
   registration.resolve();
   await Promise.all([logoutPromise, syncPromise]);
 
@@ -592,11 +599,11 @@ test('same-user replacement does not let a stale PUT delete the currently desire
   });
   await firstRegistrationStarted.promise;
   firstCancelled = true;
-  await orchestrator.sync(input);
+  const replacementSync = orchestrator.sync(input);
   firstRegistration.resolve();
-  await staleSync;
+  await Promise.all([staleSync, replacementSync]);
 
-  assert.equal(registerCalls, 2);
+  assert.equal(registerCalls, 1);
   assert.equal(stored.token, 'ExponentPushToken[replacement]');
   assert.equal(stored.userId, 'same-user');
   assert.equal(deletes.length, 0);
@@ -641,16 +648,79 @@ test('toggle-off during a stale PUT cleans the remote token with normal auth ret
   });
   await registrationStarted.promise;
   cancelled = true;
-  await orchestrator.sync({
+  const toggleOffSync = orchestrator.sync({
     isAuthenticated: true,
     userId: 'toggle-user',
     pushEnabled: false,
   });
   registration.resolve();
-  await staleSync;
+  await Promise.all([staleSync, toggleOffSync]);
 
   assert.equal(stored, null);
   assert.equal(deletes.length, 1);
   assert.equal(deletes[0][0], 'ExponentPushToken[toggle-race]');
   assert.equal(Object.keys(deletes[0][1]).length, 0);
+});
+
+test('cross-user registrations serialize so the desired user is the final remote owner', async () => {
+  const { createPushTokenRegistrationOrchestrator } = loadRegistrar();
+  const firstRegistration = deferred();
+  const firstRegistrationStarted = deferred();
+  const tokenResults = [
+    'ExponentPushToken[user-a]',
+    'ExponentPushToken[user-b]',
+  ];
+  const mutationOrder = [];
+  let stored = null;
+  const orchestrator = createPushTokenRegistrationOrchestrator({
+    platform: 'ios',
+    appVersion: null,
+    getProjectId: () => 'project-real',
+    getStoredRegistration: () => stored,
+    setStoredRegistration: (value) => {
+      stored = value;
+    },
+    loadNotificationsModule: async () => ({
+      IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
+      getPermissionsAsync: async () => ({ granted: true }),
+      getExpoPushTokenAsync: async () => ({ data: tokenResults.shift() }),
+    }),
+    registerPushToken: async ({ token }) => {
+      mutationOrder.push(`PUT ${token}`);
+      if (token === 'ExponentPushToken[user-a]') {
+        firstRegistrationStarted.resolve();
+        return firstRegistration.promise;
+      }
+    },
+    deletePushToken: async (token) => {
+      mutationOrder.push(`DELETE ${token}`);
+    },
+    reportFailure: () => {},
+    reportDiagnostic: () => {},
+  });
+
+  const userASync = orchestrator.sync({
+    isAuthenticated: true,
+    userId: 'user-a',
+    pushEnabled: true,
+  });
+  await firstRegistrationStarted.promise;
+  const userBSync = orchestrator.sync({
+    isAuthenticated: true,
+    userId: 'user-b',
+    pushEnabled: true,
+  });
+  await Promise.resolve();
+
+  assert.deepEqual(mutationOrder, ['PUT ExponentPushToken[user-a]']);
+
+  firstRegistration.resolve();
+  await Promise.all([userASync, userBSync]);
+
+  assert.deepEqual(mutationOrder, [
+    'PUT ExponentPushToken[user-a]',
+    'PUT ExponentPushToken[user-b]',
+  ]);
+  assert.equal(stored.token, 'ExponentPushToken[user-b]');
+  assert.equal(stored.userId, 'user-b');
 });

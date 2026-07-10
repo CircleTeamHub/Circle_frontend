@@ -92,13 +92,19 @@ export function createPushTokenRegistrationOrchestrator(
     | { kind: 'signed-out' };
 
   const permissionAttemptedUserIds = new Set<string>();
-  let generation = 0;
   let logoutGateClosed = false;
   let nextOwner = 0;
   let desiredRegistration: DesiredRegistration = { kind: 'signed-out' };
-  const getDesiredRegistration = (): DesiredRegistration => desiredRegistration;
+  let remoteRegistration = dependencies.getStoredRegistration();
+  let mutationTail: Promise<void> = Promise.resolve();
 
-  async function deleteRemotePushToken(
+  function enqueueRemoteMutation(operation: () => Promise<void>) {
+    const result = mutationTail.then(operation, operation);
+    mutationTail = result.catch(() => {});
+    return result;
+  }
+
+  async function performRemoteDelete(
     token: string,
     options: PushTokenDeleteOptions,
   ) {
@@ -109,16 +115,48 @@ export function createPushTokenRegistrationOrchestrator(
     }
   }
 
-  async function unregisterStoredPushToken(
+  function clearStoredRegistration() {
+    const stored = dependencies.getStoredRegistration();
+    if (stored) dependencies.setStoredRegistration(null);
+    return stored;
+  }
+
+  function reconcileUndesiredRegistration(fallbackToken: string | null) {
+    return enqueueRemoteMutation(async () => {
+      const desiredBefore = desiredRegistration;
+      if (desiredBefore.kind === 'enabled') return;
+
+      const tokens = Array.from(
+        new Set(
+          [remoteRegistration?.token ?? null, fallbackToken].filter(
+            (token): token is string => Boolean(token),
+          ),
+        ),
+      );
+      for (const token of tokens) {
+        const currentDesired = desiredRegistration;
+        if (currentDesired.kind === 'enabled') return;
+        await performRemoteDelete(
+          token,
+          currentDesired.kind === 'disabled'
+            ? {}
+            : { retryOnAuthError: false },
+        );
+        if (remoteRegistration?.token === token) remoteRegistration = null;
+        if (desiredRegistration.kind === 'enabled') return;
+      }
+    });
+  }
+
+  function unregisterStoredPushToken(
     options: PushTokenDeleteOptions = {},
   ) {
-    const stored = dependencies.getStoredRegistration();
-    if (!stored) return;
-
-    // Local state is authoritative for teardown. Clear it before touching the
-    // network so a failed DELETE cannot revive this registration.
-    dependencies.setStoredRegistration(null);
-    await deleteRemotePushToken(stored.token, options);
+    desiredRegistration =
+      options.retryOnAuthError === false
+        ? { kind: 'signed-out' }
+        : { kind: 'disabled' };
+    const stored = clearStoredRegistration();
+    return reconcileUndesiredRegistration(stored?.token ?? null);
   }
 
   return {
@@ -126,8 +164,8 @@ export function createPushTokenRegistrationOrchestrator(
     async logout() {
       logoutGateClosed = true;
       desiredRegistration = { kind: 'signed-out' };
-      generation += 1;
-      await unregisterStoredPushToken({ retryOnAuthError: false });
+      const stored = clearStoredRegistration();
+      await reconcileUndesiredRegistration(stored?.token ?? null);
     },
     async sync(input: {
       isAuthenticated: boolean;
@@ -138,24 +176,24 @@ export function createPushTokenRegistrationOrchestrator(
       if (!input.isAuthenticated || !input.userId) {
         desiredRegistration = { kind: 'signed-out' };
         logoutGateClosed = false;
+        const stored = clearStoredRegistration();
+        await reconcileUndesiredRegistration(stored?.token ?? null);
         return;
       }
       if (logoutGateClosed || input.isCancelled?.()) return;
       if (!input.pushEnabled) {
         desiredRegistration = { kind: 'disabled' };
-        generation += 1;
-        await unregisterStoredPushToken();
+        const stored = clearStoredRegistration();
+        await reconcileUndesiredRegistration(stored?.token ?? null);
         return;
       }
       if (dependencies.platform === 'web') return;
-      const runGeneration = generation;
       const owner = ++nextOwner;
       desiredRegistration = { kind: 'enabled', owner, userId: input.userId };
       const isCurrentOwner = () =>
         desiredRegistration.kind === 'enabled' &&
         desiredRegistration.owner === owner;
       const isStale = () =>
-        generation !== runGeneration ||
         !isCurrentOwner() ||
         Boolean(input.isCancelled?.());
 
@@ -199,33 +237,32 @@ export function createPushTokenRegistrationOrchestrator(
       const token = result.data;
       if (!token || isStale()) return;
 
-      const stored = dependencies.getStoredRegistration();
-      if (stored?.token === token && stored.userId === input.userId) return;
+      await enqueueRemoteMutation(async () => {
+        if (!isCurrentOwner() || input.isCancelled?.()) return;
 
-      await dependencies.registerPushToken({
-        token,
-        platform: dependencies.platform,
-        provider: 'expo',
-        projectId,
-        appVersion: dependencies.appVersion,
-      });
-      if (isStale()) {
-        const currentDesired = getDesiredRegistration();
+        if (
+          remoteRegistration?.token !== token ||
+          remoteRegistration.userId !== input.userId
+        ) {
+          await dependencies.registerPushToken({
+            token,
+            platform: dependencies.platform,
+            provider: 'expo',
+            projectId,
+            appVersion: dependencies.appVersion,
+          });
+          remoteRegistration = { token, userId: input.userId };
+        }
+
+        const currentDesired = desiredRegistration;
         if (
           currentDesired.kind === 'enabled' &&
-          currentDesired.userId === input.userId
+          currentDesired.userId === input.userId &&
+          (currentDesired.owner !== owner || !input.isCancelled?.())
         ) {
-          return;
+          dependencies.setStoredRegistration({ token, userId: input.userId });
         }
-        await deleteRemotePushToken(
-          token,
-          currentDesired.kind === 'disabled'
-            ? {}
-            : { retryOnAuthError: false },
-        );
-        return;
-      }
-      dependencies.setStoredRegistration({ token, userId: input.userId });
+      });
     },
   };
 }
