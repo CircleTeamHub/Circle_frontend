@@ -332,6 +332,24 @@ test('missing refresh token cannot clear a newer session after asynchronous logo
   assert.equal(harness.authState.sessionEpoch, 2);
 });
 
+test('same-session failed refresh clears the active local session', async () => {
+  const harness = loadApiClientHarness();
+  const refresh = deferred();
+  harness.refreshResponses.push(refresh);
+
+  const request = harness.apiClient('/profile/me');
+  await waitFor(() => harness.fetchCalls.length === 2);
+
+  refresh.resolve(
+    response(false, 500, { code: 1, message: 'refresh down', data: null }),
+  );
+
+  await assert.rejects(request);
+  assert.equal(harness.getClearCalls(), 1);
+  assert.equal(harness.authState.accessToken, null);
+  assert.equal(harness.authState.refreshToken, null);
+});
+
 test('logout handler drops an in-flight refresh singleton so the next session can refresh independently', async () => {
   const harness = loadApiClientHarness();
   const oldRefresh = deferred();
