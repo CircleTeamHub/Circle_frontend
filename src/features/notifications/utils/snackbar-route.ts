@@ -13,10 +13,14 @@ export type SnackbarRouteOptions = {
   scope?: 'messages' | 'discover';
 };
 
+const DISCOVER_NOTIFICATION_CENTER_ROUTE =
+  '/(tabs)/discover/notification-center';
+const MESSAGES_NOTIFICATION_CENTER_ROUTE = '/(tabs)/messages/notifications';
+
 function getNotificationCenterFallback(scope: SnackbarRouteOptions['scope']): Href {
   return scope === 'discover'
-    ? '/(tabs)/discover/notification-center'
-    : '/(tabs)/messages/notifications';
+    ? DISCOVER_NOTIFICATION_CENTER_ROUTE
+    : MESSAGES_NOTIFICATION_CENTER_ROUTE;
 }
 
 export function getSnackbarRoute(
