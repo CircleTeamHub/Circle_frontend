@@ -353,6 +353,8 @@ export function mapMessageItemToChatMessage(
       id: item.clientMsgID,
       type: 'system-notice',
       systemNoticeKind: 'friend-added',
+      systemNoticeSource: 'native',
+      systemNoticeTimestamp: item.sendTime,
       text: tImNotification('friendAdded', '你们已经是好友了，开始聊天吧'),
       time: formatTimestamp(item.sendTime),
     };
@@ -434,6 +436,8 @@ export function mapMessageItemToChatMessage(
         id: item.clientMsgID,
         type: 'system-notice',
         systemNoticeKind: 'friend-added',
+        systemNoticeSource: 'local',
+        systemNoticeTimestamp: item.sendTime,
         text: tImNotification('friendAdded', '你们已经是好友了，开始聊天吧'),
         time: formatTimestamp(item.sendTime),
       };

@@ -2,8 +2,65 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
+const ts = require('typescript');
 
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
+
+const MESSAGE_TYPE = {
+  CustomMessage: 110,
+  TypingMessage: 113,
+  FriendAdded: 1201,
+};
+const FRIEND_ADDED_NOTICE_EXTENSION = 'friend-added-notice-v1';
+
+function loadMappers() {
+  const filePath = path.join(process.cwd(), 'src/im/mappers.ts');
+  const transpiled = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2020,
+    },
+    fileName: filePath,
+  }).outputText;
+  const context = {
+    module: { exports: {} },
+    exports: {},
+    require: (specifier) => {
+      if (specifier === '@openim/rn-client-sdk') {
+        return { MessageType: MESSAGE_TYPE, SessionType: { Group: 2 } };
+      }
+      if (specifier === '@/im/client') {
+        return {
+          NOTE_CARD_EXTENSION: 'note-card-v1',
+          TRANSFER_CARD_EXTENSION: 'transfer-card-v1',
+          VERIFICATION_CARD_EXTENSION: 'circle-verify-v1',
+          FRIEND_ADDED_NOTICE_EXTENSION,
+          fromImUserId: (id) => id,
+        };
+      }
+      if (specifier === '@/services/api/utils') {
+        return { normalizeMediaUrl: (url) => url };
+      }
+      if (specifier === '@/i18n') {
+        return {
+          __esModule: true,
+          default: {
+            language: 'en',
+            t: (_key, options) => options.defaultValue,
+          },
+        };
+      }
+      if (specifier === '@/utils/locale') {
+        return { getLocalizedDateTimeLocale: () => 'en-US' };
+      }
+      throw new Error(`Unexpected import: ${specifier}`);
+    },
+  };
+  context.exports = context.module.exports;
+  vm.runInNewContext(transpiled, context, { filename: filePath });
+  return context.module.exports;
+}
 
 test('ChatMessage supports a system-notice variant', () => {
   const types = read('src/types/index.ts');
@@ -64,20 +121,98 @@ test('the local notice maps to a system-notice via its extension', () => {
   assert.match(mappers, /systemNoticeKind: 'friend-added'/);
 });
 
-test('friend-added dedupe collapses native + local while preserving ordinary equal-text notices', async () => {
+test('friend-added dedupe pairs actual mapped native/local events within a bounded window', async () => {
+  const { mapMessageItemToChatMessage } = loadMappers();
   const { collapseDuplicateFriendAddedNotices } = await import(
     '../src/features/chat/utils/system-notice-dedupe.ts'
   );
-  const messages = [
-    { id: 'native', type: 'system-notice', text: 'same', systemNoticeKind: 'friend-added' },
-    { id: 'local', type: 'system-notice', text: 'same', systemNoticeKind: 'friend-added' },
-    { id: 'group-1', type: 'system-notice', text: 'same' },
-    { id: 'group-2', type: 'system-notice', text: 'same' },
+  const mapNative = (id, sendTime) =>
+    mapMessageItemToChatMessage(
+      { clientMsgID: id, contentType: MESSAGE_TYPE.FriendAdded, sendTime },
+      null,
+    );
+  const mapLocal = (id, sendTime) =>
+    mapMessageItemToChatMessage(
+      {
+        clientMsgID: id,
+        contentType: MESSAGE_TYPE.CustomMessage,
+        sendTime,
+        sendID: 'self',
+        customElem: { extension: FRIEND_ADDED_NOTICE_EXTENSION },
+      },
+      'self',
+    );
+
+  const newestNative = mapNative('native-new', 1_000_000);
+  const pairedLocal = mapLocal('local-new', 999_000);
+  assert.equal(newestNative.systemNoticeSource, 'native');
+  assert.equal(newestNative.systemNoticeTimestamp, 1_000_000);
+  assert.equal(pairedLocal.systemNoticeSource, 'local');
+  assert.equal(pairedLocal.systemNoticeTimestamp, 999_000);
+
+  assert.deepEqual(
+    collapseDuplicateFriendAddedNotices([newestNative, pairedLocal]).map(
+      (message) => message.id,
+    ),
+    ['native-new'],
+  );
+
+  const olderNative = mapNative('native-old', 100_000);
+  const olderLocal = mapLocal('local-old', 99_000);
+  assert.deepEqual(
+    collapseDuplicateFriendAddedNotices([
+      newestNative,
+      pairedLocal,
+      olderNative,
+      olderLocal,
+    ]).map((message) => message.id),
+    ['native-new', 'native-old'],
+  );
+
+  assert.deepEqual(
+    collapseDuplicateFriendAddedNotices([
+      mapNative('native-unpaired', 3_000_000),
+      mapLocal('local-unpaired', 2_600_000),
+    ]).map((message) => message.id),
+    ['native-unpaired', 'local-unpaired'],
+  );
+
+  const sameSource = [
+    mapNative('native-a', 2_000_000),
+    mapNative('native-b', 1_999_000),
+  ];
+  const ordinaryAndIncomplete = [
+    { id: 'group-1', type: 'system-notice', text: newestNative.text },
+    { id: 'group-2', type: 'system-notice', text: newestNative.text },
+    {
+      id: 'missing-time',
+      type: 'system-notice',
+      text: newestNative.text,
+      systemNoticeKind: 'friend-added',
+      systemNoticeSource: 'local',
+    },
+    {
+      id: 'missing-source',
+      type: 'system-notice',
+      text: newestNative.text,
+      systemNoticeKind: 'friend-added',
+      systemNoticeTimestamp: 1_999_000,
+    },
   ];
 
   assert.deepEqual(
-    collapseDuplicateFriendAddedNotices(messages).map((message) => message.id),
-    ['native', 'group-1', 'group-2'],
+    collapseDuplicateFriendAddedNotices([
+      ...sameSource,
+      ...ordinaryAndIncomplete,
+    ]).map((message) => message.id),
+    [
+      'native-a',
+      'native-b',
+      'group-1',
+      'group-2',
+      'missing-time',
+      'missing-source',
+    ],
   );
 });
 

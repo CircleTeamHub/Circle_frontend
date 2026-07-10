@@ -101,6 +101,8 @@ export interface ChatMessage {
     | 'verification-card';
   text?: string;
   systemNoticeKind?: 'friend-added';
+  systemNoticeSource?: 'native' | 'local';
+  systemNoticeTimestamp?: number;
   quotedText?: string;
   time?: string;
   senderName?: string;
