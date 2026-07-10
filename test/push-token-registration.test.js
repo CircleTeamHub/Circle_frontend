@@ -64,6 +64,14 @@ function loadRegistrar() {
   return context.module.exports;
 }
 
+function deferred() {
+  let resolve;
+  const promise = new Promise((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 test('logout removes local registration before remote delete and disables auth retry', async () => {
   const { createPushTokenRegistrationOrchestrator } = loadRegistrar();
   const events = [];
@@ -352,4 +360,188 @@ test('missing project ID reports a diagnostic and stops before requesting an Exp
   assert.equal(diagnostics.length, 1);
   assert.equal(diagnostics[0][0], 'push_token_project_id_missing');
   assert.equal(diagnostics[0][1].platform, 'android');
+});
+
+test('logout during a permission request invalidates registration before token lookup', async () => {
+  const { createPushTokenRegistrationOrchestrator } = loadRegistrar();
+  const permission = deferred();
+  const permissionStarted = deferred();
+  let stored = null;
+  let tokenRequests = 0;
+  let registrations = 0;
+  const deletes = [];
+  const orchestrator = createPushTokenRegistrationOrchestrator({
+    platform: 'ios',
+    appVersion: null,
+    getProjectId: () => 'project-real',
+    getStoredRegistration: () => stored,
+    setStoredRegistration: (value) => {
+      stored = value;
+    },
+    loadNotificationsModule: async () => ({
+      IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
+      getPermissionsAsync: async () => ({ granted: false, canAskAgain: true }),
+      requestPermissionsAsync: async () => {
+        permissionStarted.resolve();
+        return permission.promise;
+      },
+      getExpoPushTokenAsync: async () => {
+        tokenRequests += 1;
+        return { data: 'must-not-register' };
+      },
+    }),
+    registerPushToken: async () => {
+      registrations += 1;
+    },
+    deletePushToken: async (...args) => deletes.push(args),
+    reportFailure: () => {},
+    reportDiagnostic: () => {},
+  });
+
+  const syncPromise = orchestrator.sync({
+    isAuthenticated: true,
+    userId: 'permission-race',
+    pushEnabled: true,
+  });
+  await permissionStarted.promise;
+  const logoutPromise = orchestrator.logout();
+  permission.resolve({ granted: true, canAskAgain: true });
+  await Promise.all([logoutPromise, syncPromise]);
+
+  assert.equal(stored, null);
+  assert.equal(tokenRequests, 0);
+  assert.equal(registrations, 0);
+  assert.equal(deletes.length, 0);
+});
+
+test('logout during Expo token lookup prevents backend registration without remote cleanup', async () => {
+  const { createPushTokenRegistrationOrchestrator } = loadRegistrar();
+  const tokenResult = deferred();
+  const tokenStarted = deferred();
+  let stored = null;
+  let registrations = 0;
+  const deletes = [];
+  const orchestrator = createPushTokenRegistrationOrchestrator({
+    platform: 'ios',
+    appVersion: null,
+    getProjectId: () => 'project-real',
+    getStoredRegistration: () => stored,
+    setStoredRegistration: (value) => {
+      stored = value;
+    },
+    loadNotificationsModule: async () => ({
+      IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
+      getPermissionsAsync: async () => ({ granted: true }),
+      getExpoPushTokenAsync: async () => {
+        tokenStarted.resolve();
+        return tokenResult.promise;
+      },
+    }),
+    registerPushToken: async () => {
+      registrations += 1;
+    },
+    deletePushToken: async (...args) => deletes.push(args),
+    reportFailure: () => {},
+    reportDiagnostic: () => {},
+  });
+
+  const syncPromise = orchestrator.sync({
+    isAuthenticated: true,
+    userId: 'token-race',
+    pushEnabled: true,
+  });
+  await tokenStarted.promise;
+  const logoutPromise = orchestrator.logout();
+  tokenResult.resolve({ data: 'ExponentPushToken[token-race]' });
+  await Promise.all([logoutPromise, syncPromise]);
+
+  assert.equal(stored, null);
+  assert.equal(registrations, 0);
+  assert.equal(deletes.length, 0);
+});
+
+test('logout during backend registration deletes the remotely registered token without persisting it', async () => {
+  const { createPushTokenRegistrationOrchestrator } = loadRegistrar();
+  const registration = deferred();
+  const registrationStarted = deferred();
+  let stored = null;
+  const deletes = [];
+  const orchestrator = createPushTokenRegistrationOrchestrator({
+    platform: 'ios',
+    appVersion: null,
+    getProjectId: () => 'project-real',
+    getStoredRegistration: () => stored,
+    setStoredRegistration: (value) => {
+      stored = value;
+    },
+    loadNotificationsModule: async () => ({
+      IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
+      getPermissionsAsync: async () => ({ granted: true }),
+      getExpoPushTokenAsync: async () => ({
+        data: 'ExponentPushToken[register-race]',
+      }),
+    }),
+    registerPushToken: async () => {
+      registrationStarted.resolve();
+      return registration.promise;
+    },
+    deletePushToken: async (...args) => deletes.push(args),
+    reportFailure: () => {},
+    reportDiagnostic: () => {},
+  });
+
+  const syncPromise = orchestrator.sync({
+    isAuthenticated: true,
+    userId: 'register-race',
+    pushEnabled: true,
+  });
+  await registrationStarted.promise;
+  const logoutPromise = orchestrator.logout();
+  registration.resolve();
+  await Promise.all([logoutPromise, syncPromise]);
+
+  assert.equal(stored, null);
+  assert.equal(deletes.length, 1);
+  assert.equal(deletes[0][0], 'ExponentPushToken[register-race]');
+  assert.equal(deletes[0][1].retryOnAuthError, false);
+});
+
+test('logout blocks stale authenticated resync until an unauthenticated transition is observed', async () => {
+  const { createPushTokenRegistrationOrchestrator } = loadRegistrar();
+  let registrations = 0;
+  const orchestrator = createPushTokenRegistrationOrchestrator({
+    platform: 'ios',
+    appVersion: null,
+    getProjectId: () => 'project-real',
+    getStoredRegistration: () => null,
+    setStoredRegistration: () => {},
+    loadNotificationsModule: async () => ({
+      IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
+      getPermissionsAsync: async () => ({ granted: true }),
+      getExpoPushTokenAsync: async () => ({ data: 'ExponentPushToken[new]' }),
+    }),
+    registerPushToken: async () => {
+      registrations += 1;
+    },
+    deletePushToken: async () => {},
+    reportFailure: () => {},
+    reportDiagnostic: () => {},
+  });
+  const authenticated = {
+    isAuthenticated: true,
+    userId: 'same-user',
+    pushEnabled: true,
+  };
+
+  await orchestrator.logout();
+  await orchestrator.sync(authenticated);
+  assert.equal(registrations, 0);
+
+  await orchestrator.sync({
+    isAuthenticated: false,
+    userId: '',
+    pushEnabled: true,
+  });
+  await orchestrator.sync(authenticated);
+  assert.equal(registrations, 1);
 });

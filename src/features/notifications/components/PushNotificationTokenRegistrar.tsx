@@ -87,6 +87,19 @@ export function createPushTokenRegistrationOrchestrator(
   dependencies: PushTokenRegistrationOrchestratorDependencies,
 ) {
   const permissionAttemptedUserIds = new Set<string>();
+  let generation = 0;
+  let logoutGateClosed = false;
+
+  async function deleteRemotePushToken(
+    token: string,
+    options: PushTokenDeleteOptions,
+  ) {
+    try {
+      await dependencies.deletePushToken(token, options);
+    } catch (error) {
+      dependencies.reportFailure('push_token_unregister_failed', error);
+    }
+  }
 
   async function unregisterStoredPushToken(
     options: PushTokenDeleteOptions = {},
@@ -97,39 +110,42 @@ export function createPushTokenRegistrationOrchestrator(
     // Local state is authoritative for teardown. Clear it before touching the
     // network so a failed DELETE cannot revive this registration.
     dependencies.setStoredRegistration(null);
-    try {
-      await dependencies.deletePushToken(stored.token, options);
-    } catch (error) {
-      dependencies.reportFailure('push_token_unregister_failed', error);
-    }
+    await deleteRemotePushToken(stored.token, options);
   }
 
   return {
     unregisterStoredPushToken,
+    async logout() {
+      logoutGateClosed = true;
+      generation += 1;
+      await unregisterStoredPushToken({ retryOnAuthError: false });
+    },
     async sync(input: {
       isAuthenticated: boolean;
       userId: string;
       pushEnabled: boolean;
       isCancelled?: () => boolean;
     }) {
-      if (
-        !input.isAuthenticated ||
-        !input.userId ||
-        input.isCancelled?.()
-      ) {
+      if (!input.isAuthenticated || !input.userId) {
+        logoutGateClosed = false;
         return;
       }
+      if (logoutGateClosed || input.isCancelled?.()) return;
       if (!input.pushEnabled) {
+        generation += 1;
         await unregisterStoredPushToken();
         return;
       }
       if (dependencies.platform === 'web') return;
+      const runGeneration = generation;
+      const isStale = () =>
+        generation !== runGeneration || Boolean(input.isCancelled?.());
 
       const notifications = await dependencies.loadNotificationsModule();
-      if (!notifications || input.isCancelled?.()) return;
+      if (!notifications || isStale()) return;
 
       let permissions = await notifications.getPermissionsAsync();
-      if (input.isCancelled?.()) return;
+      if (isStale()) return;
       if (!isNotificationGranted(permissions, notifications)) {
         if (
           permissions.canAskAgain === false ||
@@ -146,7 +162,7 @@ export function createPushTokenRegistrationOrchestrator(
           },
         });
         if (
-          input.isCancelled?.() ||
+          isStale() ||
           !isNotificationGranted(permissions, notifications)
         ) {
           return;
@@ -163,7 +179,7 @@ export function createPushTokenRegistrationOrchestrator(
 
       const result = await notifications.getExpoPushTokenAsync({ projectId });
       const token = result.data;
-      if (!token || input.isCancelled?.()) return;
+      if (!token || isStale()) return;
 
       const stored = dependencies.getStoredRegistration();
       if (stored?.token === token && stored.userId === input.userId) return;
@@ -175,9 +191,11 @@ export function createPushTokenRegistrationOrchestrator(
         projectId,
         appVersion: dependencies.appVersion,
       });
-      if (!input.isCancelled?.()) {
-        dependencies.setStoredRegistration({ token, userId: input.userId });
+      if (isStale()) {
+        await deleteRemotePushToken(token, { retryOnAuthError: false });
+        return;
       }
+      dependencies.setStoredRegistration({ token, userId: input.userId });
     },
   };
 }
@@ -226,11 +244,7 @@ export function PushNotificationTokenRegistrar() {
 
   useEffect(
     () =>
-      registerLogoutHandler(() =>
-        pushTokenRegistrationOrchestrator.unregisterStoredPushToken({
-          retryOnAuthError: false,
-        }),
-      ),
+      registerLogoutHandler(() => pushTokenRegistrationOrchestrator.logout()),
     [],
   );
 
@@ -244,8 +258,6 @@ export function PushNotificationTokenRegistrar() {
   }, []);
 
   useEffect(() => {
-    if (!isAuthenticated || !userId) return;
-
     let cancelled = false;
     const runKey = `${userId}:${pushEnabled}:${permissionRefreshKey}`;
     if (inFlightKeyRef.current === runKey) return;
