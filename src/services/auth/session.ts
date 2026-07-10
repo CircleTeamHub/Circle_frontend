@@ -5,7 +5,7 @@ import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
 
-type PersistCapableAuthStore = typeof useAuthStore & {
+type PersistCapableAuthStore = {
   persist?: {
     clearStorage?: () => Promise<void> | void;
   };
@@ -24,18 +24,18 @@ const logoutHandlers: LogoutHandler[] = [];
 
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 
-async function resetMessageGroupsStore() {
+async function loadMessageGroupsStore() {
   const { useMessageGroupsStore } = await import(
     '@/features/messages/store/use-message-groups-store'
   );
-  useMessageGroupsStore.getState().reset();
+  return useMessageGroupsStore;
 }
 
-async function resetCirclesStore() {
+async function loadCirclesStore() {
   const { useCirclesStore } = await import(
     '@/features/discover/store/use-circles-store'
   );
-  useCirclesStore.getState().reset();
+  return useCirclesStore;
 }
 
 /**
@@ -63,6 +63,9 @@ export async function clearLocalSession(expectedSessionEpoch?: number) {
     }
   }
 
+  const useMessageGroupsStore = await loadMessageGroupsStore();
+  const useCirclesStore = await loadCirclesStore();
+
   // 先清 auth，让订阅 useAuthStore 的组件立刻看到"未登录"，
   // 避免 dependent store 被清空后触发"重新拉取"再被丢弃的请求。
   if (
@@ -73,8 +76,9 @@ export async function clearLocalSession(expectedSessionEpoch?: number) {
   }
 
   useAuthStore.getState().clearSession();
-  await resetMessageGroupsStore();
-  await resetCirclesStore();
+  const clearedSessionEpoch = useAuthStore.getState().sessionEpoch;
+  useMessageGroupsStore.getState().reset();
+  useCirclesStore.getState().reset();
   useFriendActivityUnreadStore.getState().reset();
   useFriendRemarkStore.getState().reset();
   useTabBadgeStore.getState().reset();
@@ -82,7 +86,13 @@ export async function clearLocalSession(expectedSessionEpoch?: number) {
 
   let persistCleared = false;
   try {
-    await (useAuthStore as PersistCapableAuthStore).persist?.clearStorage?.();
+    const persistenceClear = (useAuthStore as PersistCapableAuthStore)
+      .persist?.clearStorage?.();
+    if (persistenceClear && typeof persistenceClear.then === 'function') {
+      await persistenceClear;
+    } else {
+      await secureAuthStorage.removeItem('circle-im-auth');
+    }
     persistCleared = true;
   } catch (err) {
     if (isDev) console.warn('[session] persist.clearStorage failed', err);
@@ -94,6 +104,14 @@ export async function clearLocalSession(expectedSessionEpoch?: number) {
       await secureAuthStorage.removeItem('circle-im-auth');
     } catch (err) {
       if (isDev) console.warn('[session] secure auth removeItem fallback failed', err);
+    }
+  }
+
+  if (useAuthStore.getState().sessionEpoch !== clearedSessionEpoch) {
+    try {
+      await useAuthStore.setState({});
+    } catch (err) {
+      if (isDev) console.warn('[session] persist newer auth session failed', err);
     }
   }
 

@@ -5,6 +5,14 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+function deferred() {
+  let resolve;
+  const promise = new Promise((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
 function parse(value) {
   return JSON.parse(value);
 }
@@ -19,6 +27,7 @@ function loadSecureAuthStorage({
   failLegacyRemove = false,
   failSecureGet = false,
   failSecureStoreImport = false,
+  pauseSecureDelete,
 } = {}) {
   const filePath = path.join(process.cwd(), 'src/storage/secure-auth-storage.ts');
   const source = fs.readFileSync(filePath, 'utf8');
@@ -55,6 +64,10 @@ function loadSecureAuthStorage({
     deleteItemAsync: async (key) => {
       assertValidSecureStoreKey(key);
       calls.push(['secure:delete', key]);
+      if (pauseSecureDelete?.key === key) {
+        pauseSecureDelete.started.resolve();
+        await pauseSecureDelete.release.promise;
+      }
       delete secure[key];
     },
   };
@@ -214,6 +227,33 @@ test('secureAuthStorage removeItem deletes SecureStore and legacy MMKV auth stat
   assert.equal(secure['circle-im-auth.imToken'], undefined);
   assert.equal(secure['circle-im-auth.tokens'], undefined);
   assert.equal(legacy['circle-im-auth'], undefined);
+});
+
+test('secureAuthStorage serializes a newer auth write behind an in-flight auth removal', async () => {
+  const pauseSecureDelete = {
+    key: 'circle-im-auth.accessToken',
+    started: deferred(),
+    release: deferred(),
+  };
+  const { secureAuthStorage, secure } = loadSecureAuthStorage({
+    secureValues: {
+      'circle-im-auth.accessToken': 'access-a',
+      'circle-im-auth.refreshToken': 'refresh-a',
+    },
+    pauseSecureDelete,
+  });
+
+  const removing = secureAuthStorage.removeItem('circle-im-auth');
+  await pauseSecureDelete.started.promise;
+  const writing = secureAuthStorage.setItem(
+    'circle-im-auth',
+    '{"state":{"accessToken":"access-b","refreshToken":"refresh-b","isAuthenticated":true}}',
+  );
+  pauseSecureDelete.release.resolve();
+  await Promise.all([removing, writing]);
+
+  assert.equal(secure['circle-im-auth.accessToken'], 'access-b');
+  assert.equal(secure['circle-im-auth.refreshToken'], 'refresh-b');
 });
 
 test('secureAuthStorage stores known-account tokens per account and keeps MMKV metadata token-free', async () => {

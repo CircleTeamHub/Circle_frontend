@@ -313,6 +313,25 @@ test('refresh failure cannot clear a newer session after asynchronous logout tea
   assert.equal(harness.authState.sessionEpoch, 2);
 });
 
+test('missing refresh token cannot clear a newer session after asynchronous logout teardown', async () => {
+  const harness = loadApiClientHarness();
+  const clearPause = harness.pauseClearSession();
+  harness.authState.refreshToken = null;
+
+  const request = harness.apiClient('/profile/me');
+  await clearPause.started.promise;
+
+  harness.authState.accessToken = 'access-b';
+  harness.authState.refreshToken = 'refresh-b';
+  harness.authState.sessionEpoch += 1;
+  clearPause.release.resolve();
+
+  await assert.rejects(request);
+  assert.equal(harness.authState.accessToken, 'access-b');
+  assert.equal(harness.authState.refreshToken, 'refresh-b');
+  assert.equal(harness.authState.sessionEpoch, 2);
+});
+
 test('logout handler drops an in-flight refresh singleton so the next session can refresh independently', async () => {
   const harness = loadApiClientHarness();
   const oldRefresh = deferred();
@@ -345,6 +364,14 @@ test('logout handler drops an in-flight refresh singleton so the next session ca
   );
   await assert.rejects(oldRequest, /session changed/i);
 
+  const thirdRequest = harness.apiClient('/wallet/third');
+  await waitFor(() => harness.fetchCalls.length >= 5);
+  assert.equal(
+    harness.fetchCalls.filter(([url]) => String(url).endsWith('/auth/refresh'))
+      .length,
+    2,
+  );
+
   newRefresh.resolve(
     response(true, 200, {
       code: 0,
@@ -354,6 +381,7 @@ test('logout handler drops an in-flight refresh singleton so the next session ca
   );
 
   await assert.rejects(newRequest);
+  await assert.rejects(thirdRequest);
   assert.equal(harness.setTokenCalls.length, 1);
   assert.equal(harness.setTokenCalls[0].accessToken, 'access-b-next');
   assert.equal(harness.setTokenCalls[0].refreshToken, 'refresh-b-next');
