@@ -22,8 +22,6 @@ export interface CircleFormState {
   joinCreditRestriction: number | null;
   joinFancyRestriction: boolean;
   memberCanPost: boolean;
-  /** 开 = 加入需担保审核（isPublic=false）；关 = 公开圈秒进（默认）。 */
-  requireJoinApproval: boolean;
 }
 
 const INITIAL_FORM_STATE: CircleFormState = {
@@ -39,7 +37,6 @@ const INITIAL_FORM_STATE: CircleFormState = {
   joinCreditRestriction: null,
   joinFancyRestriction: false,
   memberCanPost: true,
-  requireJoinApproval: false,
 };
 
 export interface CircleFormApi extends CircleFormState {
@@ -49,7 +46,6 @@ export interface CircleFormApi extends CircleFormState {
   setRules: (value: string) => void;
   setJoinFancyRestriction: (value: boolean) => void;
   setMemberCanPost: (value: boolean) => void;
-  setRequireJoinApproval: (value: boolean) => void;
   // VIP/信用分限制改为 sheet 直选（语义：所选等级及以上可加入）。
   setJoinVipRestriction: (value: number | null) => void;
   setJoinCreditRestriction: (value: number | null) => void;
@@ -86,11 +82,6 @@ export function useCircleForm(): CircleFormApi {
   );
   const setMemberCanPost = useCallback(
     (value: boolean) => setState((s) => ({ ...s, memberCanPost: value })),
-    [],
-  );
-  const setRequireJoinApproval = useCallback(
-    (value: boolean) =>
-      setState((s) => ({ ...s, requireJoinApproval: value })),
     [],
   );
 
@@ -153,7 +144,6 @@ export function useCircleForm(): CircleFormApi {
     setRules,
     setJoinFancyRestriction,
     setMemberCanPost,
-    setRequireJoinApproval,
     setJoinVipRestriction,
     setJoinCreditRestriction,
     toggleCategory,

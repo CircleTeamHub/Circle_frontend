@@ -995,7 +995,6 @@
       "restrictionsSection": "制限",
       "fancyLabel": "ファンシー番号が必要",
       "memberPostLabel": "メンバー投稿可",
-      "requireApprovalLabel": "参加には承認が必要",
       "vipAtLeast": "VIP {{level}} 以上",
       "nameRequired": "サークル名を入力してください（2文字以上）",
       "descRequired": "説明を入力してください（10文字以上）",
@@ -2132,6 +2131,7 @@
     "notification": {
       "groupCreated": "グループを作成しました",
       "memberInvited": "新しいメンバーが参加しました",
+      "memberJoined": "{{names}}さんがグループに参加しました",
       "memberQuit": "メンバーがグループを退出しました",
       "memberKicked": "メンバーが削除されました",
       "groupNameUpdated": "グループ名を更新しました",

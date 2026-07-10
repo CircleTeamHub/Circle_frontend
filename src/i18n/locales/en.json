@@ -861,7 +861,6 @@
       "restrictionsSection": "Restrictions",
       "fancyLabel": "Fancy Number Required",
       "memberPostLabel": "Members Can Post",
-      "requireApprovalLabel": "Require approval to join",
       "vipAtLeast": "VIP {{level}} or above",
       "nameRequired": "Circle name required (min 2 chars)",
       "descRequired": "Description required (min 10 chars)",
@@ -2109,6 +2108,7 @@
     "notification": {
       "groupCreated": "Group created",
       "memberInvited": "New member joined",
+      "memberJoined": "{{names}} joined the group",
       "memberQuit": "A member left the group",
       "memberKicked": "A member was removed",
       "groupNameUpdated": "Group name updated",

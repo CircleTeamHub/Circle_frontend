@@ -995,7 +995,6 @@
       "restrictionsSection": "제한",
       "fancyLabel": "특별 번호 필요",
       "memberPostLabel": "멤버 게시 가능",
-      "requireApprovalLabel": "가입 승인 필요",
       "vipAtLeast": "VIP {{level}} 이상",
       "nameRequired": "서클 이름을 입력하세요 (최소 2자)",
       "descRequired": "소개를 입력하세요 (최소 10자)",
@@ -2132,6 +2131,7 @@
     "notification": {
       "groupCreated": "그룹이 생성되었습니다",
       "memberInvited": "새 멤버가 참여했습니다",
+      "memberJoined": "{{names}}님이 그룹에 참여했습니다",
       "memberQuit": "멤버가 그룹을 나갔습니다",
       "memberKicked": "멤버가 내보내졌습니다",
       "groupNameUpdated": "그룹 이름이 변경되었습니다",

@@ -126,8 +126,6 @@ export default function CreateCircleScreen() {
         joinCreditRestriction: form.joinCreditRestriction,
         joinFancyRestriction: form.joinFancyRestriction || undefined,
         memberCanPost: form.memberCanPost,
-        // 开了「加入需担保审核」= 私密圈（join 进 PENDING，走担保/圈主审批）。
-        isPublic: !form.requireJoinApproval,
       });
       await fetchMyCircles();
       resetCreateCircleForm();
@@ -171,7 +169,7 @@ export default function CreateCircleScreen() {
         showsVerticalScrollIndicator={false}
         {...keyboardDismissOnDragProps}
       >
-        <CircleFormBody form={form} showJoinApproval />
+        <CircleFormBody form={form} />
         <View style={{ height: Spacing.xl }} />
       </ScrollView>
 
