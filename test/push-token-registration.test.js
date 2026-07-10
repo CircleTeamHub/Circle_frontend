@@ -490,3 +490,46 @@ test('retiring an exact duplicate tombstone does not grow the unresolved queue',
   await harness.orchestrator.flushPendingRevocations();
   assert.equal(harness.getRevocations().length, 1);
 });
+
+test('saturated user replacement retires A before blocking B until flush succeeds', async () => {
+  const revocations = Array.from({ length: 50 }, (_, index) => ({
+    token: `queued-token-${index}`,
+    revocationSecret: `${String(index).padStart(8, '0')}-3333-4333-8333-333333333333`,
+  }));
+  let revokeFails = true;
+  const harness = makeHarness({
+    revocations,
+    stored: {
+      token: 'active-user-a-token',
+      userId: 'user-a',
+      revocationSecret: SECRET_A,
+      status: 'registered',
+    },
+    token: 'user-b-token',
+    secret: SECRET_B,
+    revokePushToken: async () => {
+      if (revokeFails) throw new Error('offline');
+    },
+  });
+
+  await harness.orchestrator.sync(enabled('user-b'));
+
+  assert.equal(harness.getStored(), null);
+  assert.equal(harness.getRevocations().length, 51);
+  assert.equal(
+    harness
+      .getRevocations()
+      .some((item) => item.token === 'active-user-a-token' && item.revocationSecret === SECRET_A),
+    true,
+  );
+  assert.equal(harness.registerCalls.length, 0);
+
+  revokeFails = false;
+  await harness.orchestrator.flushPendingRevocations();
+  await harness.orchestrator.sync(enabled('user-b'));
+
+  assert.equal(harness.getRevocations().length, 0);
+  assert.equal(harness.registerCalls.length, 1);
+  assert.equal(harness.getStored().userId, 'user-b');
+  assert.equal(harness.getStored().status, 'registered');
+});

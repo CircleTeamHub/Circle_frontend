@@ -233,6 +233,13 @@ export function createPushTokenRegistrationOrchestrator(
       if (dependencies.platform === 'web') return;
       const owner = ++nextOwner;
       desiredRegistration = { kind: 'enabled', owner, userId: input.userId };
+      const storedForAnotherUser = dependencies.getStoredRegistration();
+      if (
+        storedForAnotherUser &&
+        storedForAnotherUser.userId !== input.userId
+      ) {
+        retireStoredRegistration();
+      }
       const pendingRevocationCount = dependencies.getPendingRevocations().length;
       if (
         pendingRevocationCount >= REVOCATION_BACKPRESSURE_THRESHOLD
@@ -242,9 +249,6 @@ export function createPushTokenRegistrationOrchestrator(
           threshold: REVOCATION_BACKPRESSURE_THRESHOLD,
         });
         return;
-      }
-      if (dependencies.getStoredRegistration()?.userId !== input.userId) {
-        retireStoredRegistration();
       }
       const isCurrentOwner = () =>
         desiredRegistration.kind === 'enabled' &&
