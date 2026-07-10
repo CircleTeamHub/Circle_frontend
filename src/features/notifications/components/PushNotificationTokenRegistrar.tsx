@@ -86,9 +86,17 @@ function setStoredRegistration(value: StoredPushRegistration | null) {
 export function createPushTokenRegistrationOrchestrator(
   dependencies: PushTokenRegistrationOrchestratorDependencies,
 ) {
+  type DesiredRegistration =
+    | { kind: 'enabled'; owner: number; userId: string }
+    | { kind: 'disabled' }
+    | { kind: 'signed-out' };
+
   const permissionAttemptedUserIds = new Set<string>();
   let generation = 0;
   let logoutGateClosed = false;
+  let nextOwner = 0;
+  let desiredRegistration: DesiredRegistration = { kind: 'signed-out' };
+  const getDesiredRegistration = (): DesiredRegistration => desiredRegistration;
 
   async function deleteRemotePushToken(
     token: string,
@@ -117,6 +125,7 @@ export function createPushTokenRegistrationOrchestrator(
     unregisterStoredPushToken,
     async logout() {
       logoutGateClosed = true;
+      desiredRegistration = { kind: 'signed-out' };
       generation += 1;
       await unregisterStoredPushToken({ retryOnAuthError: false });
     },
@@ -127,19 +136,28 @@ export function createPushTokenRegistrationOrchestrator(
       isCancelled?: () => boolean;
     }) {
       if (!input.isAuthenticated || !input.userId) {
+        desiredRegistration = { kind: 'signed-out' };
         logoutGateClosed = false;
         return;
       }
       if (logoutGateClosed || input.isCancelled?.()) return;
       if (!input.pushEnabled) {
+        desiredRegistration = { kind: 'disabled' };
         generation += 1;
         await unregisterStoredPushToken();
         return;
       }
       if (dependencies.platform === 'web') return;
       const runGeneration = generation;
+      const owner = ++nextOwner;
+      desiredRegistration = { kind: 'enabled', owner, userId: input.userId };
+      const isCurrentOwner = () =>
+        desiredRegistration.kind === 'enabled' &&
+        desiredRegistration.owner === owner;
       const isStale = () =>
-        generation !== runGeneration || Boolean(input.isCancelled?.());
+        generation !== runGeneration ||
+        !isCurrentOwner() ||
+        Boolean(input.isCancelled?.());
 
       const notifications = await dependencies.loadNotificationsModule();
       if (!notifications || isStale()) return;
@@ -192,7 +210,19 @@ export function createPushTokenRegistrationOrchestrator(
         appVersion: dependencies.appVersion,
       });
       if (isStale()) {
-        await deleteRemotePushToken(token, { retryOnAuthError: false });
+        const currentDesired = getDesiredRegistration();
+        if (
+          currentDesired.kind === 'enabled' &&
+          currentDesired.userId === input.userId
+        ) {
+          return;
+        }
+        await deleteRemotePushToken(
+          token,
+          currentDesired.kind === 'disabled'
+            ? {}
+            : { retryOnAuthError: false },
+        );
         return;
       }
       dependencies.setStoredRegistration({ token, userId: input.userId });

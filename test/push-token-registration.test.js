@@ -545,3 +545,112 @@ test('logout blocks stale authenticated resync until an unauthenticated transiti
   await orchestrator.sync(authenticated);
   assert.equal(registrations, 1);
 });
+
+test('same-user replacement does not let a stale PUT delete the currently desired token', async () => {
+  const { createPushTokenRegistrationOrchestrator } = loadRegistrar();
+  const firstRegistration = deferred();
+  const firstRegistrationStarted = deferred();
+  let firstCancelled = false;
+  let registerCalls = 0;
+  let stored = null;
+  const deletes = [];
+  const orchestrator = createPushTokenRegistrationOrchestrator({
+    platform: 'ios',
+    appVersion: null,
+    getProjectId: () => 'project-real',
+    getStoredRegistration: () => stored,
+    setStoredRegistration: (value) => {
+      stored = value;
+    },
+    loadNotificationsModule: async () => ({
+      IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
+      getPermissionsAsync: async () => ({ granted: true }),
+      getExpoPushTokenAsync: async () => ({
+        data: 'ExponentPushToken[replacement]',
+      }),
+    }),
+    registerPushToken: async () => {
+      registerCalls += 1;
+      if (registerCalls === 1) {
+        firstRegistrationStarted.resolve();
+        return firstRegistration.promise;
+      }
+    },
+    deletePushToken: async (...args) => deletes.push(args),
+    reportFailure: () => {},
+    reportDiagnostic: () => {},
+  });
+  const input = {
+    isAuthenticated: true,
+    userId: 'same-user',
+    pushEnabled: true,
+  };
+
+  const staleSync = orchestrator.sync({
+    ...input,
+    isCancelled: () => firstCancelled,
+  });
+  await firstRegistrationStarted.promise;
+  firstCancelled = true;
+  await orchestrator.sync(input);
+  firstRegistration.resolve();
+  await staleSync;
+
+  assert.equal(registerCalls, 2);
+  assert.equal(stored.token, 'ExponentPushToken[replacement]');
+  assert.equal(stored.userId, 'same-user');
+  assert.equal(deletes.length, 0);
+});
+
+test('toggle-off during a stale PUT cleans the remote token with normal auth retry', async () => {
+  const { createPushTokenRegistrationOrchestrator } = loadRegistrar();
+  const registration = deferred();
+  const registrationStarted = deferred();
+  let cancelled = false;
+  let stored = null;
+  const deletes = [];
+  const orchestrator = createPushTokenRegistrationOrchestrator({
+    platform: 'ios',
+    appVersion: null,
+    getProjectId: () => 'project-real',
+    getStoredRegistration: () => stored,
+    setStoredRegistration: (value) => {
+      stored = value;
+    },
+    loadNotificationsModule: async () => ({
+      IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
+      getPermissionsAsync: async () => ({ granted: true }),
+      getExpoPushTokenAsync: async () => ({
+        data: 'ExponentPushToken[toggle-race]',
+      }),
+    }),
+    registerPushToken: async () => {
+      registrationStarted.resolve();
+      return registration.promise;
+    },
+    deletePushToken: async (...args) => deletes.push(args),
+    reportFailure: () => {},
+    reportDiagnostic: () => {},
+  });
+
+  const staleSync = orchestrator.sync({
+    isAuthenticated: true,
+    userId: 'toggle-user',
+    pushEnabled: true,
+    isCancelled: () => cancelled,
+  });
+  await registrationStarted.promise;
+  cancelled = true;
+  await orchestrator.sync({
+    isAuthenticated: true,
+    userId: 'toggle-user',
+    pushEnabled: false,
+  });
+  registration.resolve();
+  await staleSync;
+
+  assert.equal(stored, null);
+  assert.equal(deletes.length, 1);
+  assert.equal(deletes[0][0], 'ExponentPushToken[toggle-race]');
+  assert.equal(Object.keys(deletes[0][1]).length, 0);
+});
