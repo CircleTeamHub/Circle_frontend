@@ -1336,6 +1336,7 @@
   "search": {
     "loadFriendsFailed": "친구 목록을 불러오지 못했어요. 다시 시도하세요",
     "noResults": "결과 없음",
+    "messageMatchCount": "관련 메시지 {{count}}건",
     "placeholder": "검색...",
     "placeholderHint": "키워드를 입력해 채팅과 친구를 검색하세요",
     "sections": {

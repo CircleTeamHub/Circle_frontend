@@ -1336,6 +1336,7 @@
   "search": {
     "loadFriendsFailed": "友だちリストの読み込みに失敗しました。再試行してください",
     "noResults": "結果がありません",
+    "messageMatchCount": "関連するメッセージ {{count}} 件",
     "placeholder": "検索...",
     "placeholderHint": "キーワードを入力してチャットや友だちを検索",
     "sections": {

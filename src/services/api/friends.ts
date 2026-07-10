@@ -10,6 +10,8 @@ export type FriendProfile = {
   gender: string;
   lastOnline: string | null;
   friendsSince: string;
+  // 当前用户给该好友设的备注（可空）。用于按备注搜索/展示。
+  remark: string | null;
 };
 
 export type FriendTag = {
@@ -106,6 +108,8 @@ function normalizeFriendProfile(friend: FriendProfile): FriendProfile {
     ...friend,
     avatarUrl: normalizeMediaUrl(friend.avatarUrl),
     avatarFrame: normalizeMediaUrl(friend.avatarFrame),
+    // 兼容尚未部署新后端的响应：缺 remark 时归一为 null。
+    remark: friend.remark ?? null,
   };
 }
 

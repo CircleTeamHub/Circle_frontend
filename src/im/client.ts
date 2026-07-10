@@ -24,6 +24,7 @@ import OpenIMSDK, {
   type GroupItem,
   type GroupMemberItem,
   type SearchMessageResult,
+  type SearchMessageResultItem,
   type ConversationItem,
   type MessageItem,
 } from '@openim/rn-client-sdk';
@@ -1578,6 +1579,36 @@ export async function searchConversationTextMessages(params: {
     pageIndex: params.pageIndex ?? 1,
     count: params.count ?? 20,
   });
+}
+
+// 全局搜索：跨所有会话按关键词搜文本消息。传空 conversationID 让 OpenIM 做全局检索，
+// 返回按会话分组的结果（每组带会话信息 + 命中消息列表），供搜索页「聊天记录」段用。
+export async function searchAllTextMessages(params: {
+  keyword: string;
+  pageIndex?: number;
+  count?: number;
+}): Promise<SearchMessageResultItem[]> {
+  const keyword = params.keyword.trim();
+
+  if (!keyword) {
+    return [];
+  }
+
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    return [];
+  }
+
+  const result = await OpenIMSDK.searchLocalMessages({
+    conversationID: '',
+    keywordList: [keyword],
+    keywordListMatchType: 0,
+    messageTypeList: [MessageType.TextMessage],
+    pageIndex: params.pageIndex ?? 1,
+    count: params.count ?? 50,
+  });
+  return result.searchResultItems ?? result.findResultItems ?? [];
 }
 
 export async function searchConversationMediaMessages(params: {

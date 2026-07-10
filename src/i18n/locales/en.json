@@ -2020,6 +2020,7 @@
   "search": {
     "loadFriendsFailed": "Failed to load friends, please try again",
     "noResults": "No results",
+    "messageMatchCount": "{{count}} related messages",
     "placeholder": "Search...",
     "placeholderHint": "Type a keyword to search chats and friends",
     "sections": {

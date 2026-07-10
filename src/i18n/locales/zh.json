@@ -2017,6 +2017,7 @@
   "search": {
     "loadFriendsFailed": "好友列表加载失败，请稍后重试",
     "noResults": "暂无匹配结果",
+    "messageMatchCount": "{{count}} 条相关聊天记录",
     "placeholder": "搜索...",
     "placeholderHint": "输入关键字搜索聊天记录、好友",
     "sections": {

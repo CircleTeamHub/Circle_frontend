@@ -1339,6 +1339,7 @@
   "search": {
     "loadFriendsFailed": "No se pudieron cargar los amigos, inténtalo de nuevo",
     "noResults": "Sin resultados",
+    "messageMatchCount": "{{count}} mensajes relacionados",
     "placeholder": "Buscar...",
     "placeholderHint": "Escribe una palabra clave para buscar chats y amigos",
     "sections": {
