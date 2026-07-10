@@ -17,3 +17,18 @@ test('circle detail keeps scroll position when returning from sub-pages', () => 
     /useFocusEffect\(\s*useCallback\(\(\) => \{[\s\S]*?loadCircle\(\{ showInitialLoading: !hasLoadedRef\.current \}\)/,
   );
 });
+
+test('circle detail renders silent refresh failures inline without replacing content', () => {
+  const src = read('src/features/discover/screens/CircleDetailScreen.tsx');
+
+  assert.match(src, /const \[loadError, setLoadError\] = useState<string \| null>\(null\)/);
+  assert.match(src, /loadError && circle/);
+  assert.match(
+    src,
+    /onPress=\{\(\) =>\s*void loadCircle\(\{ showInitialLoading: false \}\)\s*\}/,
+  );
+  assert.doesNotMatch(
+    src,
+    /catch \(error\) \{[\s\S]*?Alert\.alert\(t\('circle\.error'\), t\('circle\.loadError'\)\)/,
+  );
+});

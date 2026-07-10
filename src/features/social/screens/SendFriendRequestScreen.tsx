@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { NavHeader } from '@/components/ui/nav-header';
 import { buildSendFriendRequestInitialMessage } from '@/features/social/send-friend-request';
+import { getFriendRequestSubmitState } from '@/features/social/send-friend-request-submit';
 import {
   useFriendPhotoNotes,
   FRIEND_PHOTO_NOTE_LIMIT,
@@ -188,6 +189,11 @@ export default function SendFriendRequestScreen() {
     uploading: isUploadingPhoto,
     canAddMore: canAddMorePhotos,
   } = useFriendPhotoNotes();
+  const submitState = getFriendRequestSubmitState({
+    hasProfile: Boolean(profileId),
+    isSubmitting,
+    isUploadingPhoto,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -320,7 +326,7 @@ export default function SendFriendRequestScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!profileId || isSubmitting) {
+    if (submitState.disabled) {
       return;
     }
 
@@ -551,12 +557,16 @@ export default function SendFriendRequestScreen() {
           style={[
             s.submitButton,
             d.submitButton,
-            !profileId || isSubmitting ? d.submitButtonDisabled : null,
+            submitState.disabled ? d.submitButtonDisabled : null,
           ]}
-          disabled={!profileId || isSubmitting}
+          disabled={submitState.disabled}
           onPress={handleSubmit}
         >
-          <Text style={d.submitText}>{isSubmitting ? t('common.sending') : t('common.send')}</Text>
+          <Text style={d.submitText}>
+            {submitState.activity === 'idle'
+              ? t('common.send')
+              : t('common.sending')}
+          </Text>
         </Pressable>
       </View>
     </View>

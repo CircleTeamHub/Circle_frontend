@@ -29,6 +29,11 @@ import {
   sanitizeUploadFilename,
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
+import {
+  getMentionedUserIds,
+  selectMentionTarget,
+  type MentionTarget,
+} from '@/features/chat/utils/chat-send-payloads';
 
 interface MomentCommentInputProps {
   replyTo: { id: string; nickname: string } | null;
@@ -38,6 +43,7 @@ interface MomentCommentInputProps {
     content: string,
     replyToId?: string,
     images?: string[],
+    mentionedUserIds?: string[],
   ) => void | Promise<void>;
   onDismiss: () => void;
 }
@@ -147,6 +153,7 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
   const [panel, setPanel] = useState<PanelKind>('none');
   const [friends, setFriends] = useState<FriendProfile[] | null>(null);
   const [friendsError, setFriendsError] = useState(false);
+  const [mentionTargets, setMentionTargets] = useState<MentionTarget[]>([]);
   // 键盘弹起时它已盖住底部安全区——此时底部垫片必须归零，否则输入条和
   // 键盘之间会出现一段 34px 的空白。键盘收起才恢复安全区高度。
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -210,10 +217,16 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
     setText((prev) => prev + emoji);
   }, []);
 
-  const handleMentionFriend = useCallback((nickname: string) => {
+  const handleMentionFriend = useCallback((friend: FriendProfile) => {
     // 插到末尾并补空格，和抖音一致；@ 之前若无空格补一个。
     setText((prev) =>
-      `${prev}${prev && !prev.endsWith(' ') ? ' ' : ''}@${nickname} `,
+      `${prev}${prev && !prev.endsWith(' ') ? ' ' : ''}@${friend.nickname} `,
+    );
+    setMentionTargets((current) =>
+      selectMentionTarget(current, {
+        userID: friend.id,
+        nickname: friend.nickname,
+      }),
     );
     setPanel('none');
     inputRef.current?.focus();
@@ -259,23 +272,28 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
       }
 
       try {
-        await onSubmit(trimmed, replyTo?.id, images);
+        const mentionedUserIds = getMentionedUserIds(
+          trimmed,
+          mentionTargets,
+        );
+        await onSubmit(trimmed, replyTo?.id, images, mentionedUserIds);
         // onSubmit 成功后由父组件决定是否调用 onDismiss（一般会清掉 commentTarget）。
         setText('');
         setImageUri(null);
+        setMentionTargets([]);
       } catch {
         // 父组件已经处理过错误展示。这里只负责保留输入内容让用户重试。
       }
     } finally {
       setSubmitting(false);
     }
-  }, [text, imageUri, submitting, replyTo, onSubmit, t]);
+  }, [text, imageUri, submitting, replyTo, onSubmit, t, mentionTargets]);
 
   const renderFriendRow = useCallback(
     ({ item }: { item: FriendProfile }) => (
       <Pressable
         style={s.friendRow}
-        onPress={() => handleMentionFriend(item.nickname)}
+        onPress={() => handleMentionFriend(item)}
       >
         <Avatar size={32} name={item.nickname} uri={item.avatarUrl ?? undefined} />
         <Text style={[s.friendName, { color: colors.text }]}>

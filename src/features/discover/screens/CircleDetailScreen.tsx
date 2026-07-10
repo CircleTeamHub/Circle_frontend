@@ -39,6 +39,7 @@ import {
   joinCircle,
   fetchMyApplications,
 } from '@/services/api/circles';
+import { ApiError } from '@/services/api/client';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useChangeCircleCover } from '@/features/discover/hooks/use-change-circle-cover';
 import { useChangeCircleAvatar } from '@/features/discover/hooks/use-change-circle-avatar';
@@ -52,6 +53,7 @@ import {
 import { getOrCreateGroupConversation } from '@/im/client';
 import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
 import type { CircleDetail, CircleInvitation } from '@/types';
+import { reduceCircleLoadFailure } from '@/features/discover/utils/circle-detail-load-state';
 
 const s = StyleSheet.create({
   scroll: { flex: 1 },
@@ -231,6 +233,23 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  refreshError: {
+    marginTop: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: Radius.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.md,
+  },
+  refreshErrorText: {
+    ...Typography.caption,
+    flex: 1,
+  },
+  refreshRetryText: {
+    ...Typography.caption,
+    fontWeight: '600',
+  },
 });
 
 export default function CircleDetailScreen() {
@@ -246,6 +265,7 @@ export default function CircleDetailScreen() {
 
   const [circle, setCircle] = useState<CircleDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [iconSaving, setIconSaving] = useState(false);
   const [enteringGroupChat, setEnteringGroupChat] = useState(false);
   const [joining, setJoining] = useState(false);
@@ -318,15 +338,28 @@ export default function CircleDetailScreen() {
     const requestId = ++circleRequestRef.current;
     const showInitialLoading = options?.showInitialLoading ?? true;
     if (showInitialLoading) setLoading(true);
+    setLoadError(null);
     try {
       const data = await fetchCircleDetail(id);
       if (!mountedRef.current || requestId !== circleRequestRef.current) return;
       setCircle(data);
       hasLoadedRef.current = true;
-    } catch {
+    } catch (error) {
       if (!mountedRef.current || requestId !== circleRequestRef.current) return;
-      Alert.alert(t('circle.error'), t('circle.loadError'));
-      setCircle(null);
+      const isNotFound = error instanceof ApiError && error.status === 404;
+      setLoadError(
+        isNotFound ? null : getApiErrorMessage(error, t('circle.loadError')),
+      );
+      setCircle((current) => {
+        const result = reduceCircleLoadFailure({
+          circle: current,
+          hasLoaded: hasLoadedRef.current,
+          isLatestRequest: requestId === circleRequestRef.current,
+          isNotFound,
+        });
+        hasLoadedRef.current = result.hasLoaded;
+        return result.circle;
+      });
     } finally {
       if (
         mountedRef.current &&
@@ -542,6 +575,9 @@ export default function CircleDetailScreen() {
       adminBtnText: { color: colors.text },
       dangerBtn: { backgroundColor: colors.error },
       dangerBtnText: { color: colors.white },
+      refreshError: { backgroundColor: colors.surface },
+      refreshErrorText: { color: colors.textSecondary },
+      refreshRetryText: { color: colors.primary },
       iconAssetCard: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
@@ -566,7 +602,17 @@ export default function CircleDetailScreen() {
       <View style={[d.container, { paddingTop: insets.top }]}>
         <NavHeader title={t('circle.detail')} />
         <View style={s.centerLoader}>
-          <Text style={{ color: colors.textSecondary }}>{t('circle.notExist')}</Text>
+          <Text style={{ color: colors.textSecondary }}>
+            {loadError ?? t('circle.notExist')}
+          </Text>
+          {loadError ? (
+            <Pressable
+              onPress={() => void loadCircle()}
+              style={{ marginTop: Spacing.md }}
+            >
+              <Text style={d.refreshRetryText}>{t('common.retry')}</Text>
+            </Pressable>
+          ) : null}
         </View>
       </View>
     );
@@ -596,6 +642,22 @@ export default function CircleDetailScreen() {
           />
         }
       >
+        {loadError && circle ? (
+          <View style={[s.refreshError, d.refreshError]}>
+            <Text style={[s.refreshErrorText, d.refreshErrorText]}>
+              {loadError}
+            </Text>
+            <Pressable
+              onPress={() =>
+                void loadCircle({ showInitialLoading: false })
+              }
+            >
+              <Text style={[s.refreshRetryText, d.refreshRetryText]}>
+                {t('common.retry')}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
         {/* ── Cover banner ── */}
         <Pressable
           style={s.coverWrap}

@@ -202,7 +202,12 @@ export const MomentsFeed: React.FC = () => {
   );
 
   const handleSubmitComment = useCallback(
-    async (content: string, replyToId?: string, images?: string[]) => {
+    async (
+      content: string,
+      replyToId?: string,
+      images?: string[],
+      mentionedUserIds?: string[],
+    ) => {
       const target = commentTarget;
       if (!target) return;
       try {
@@ -210,6 +215,7 @@ export const MomentsFeed: React.FC = () => {
           content,
           replyToId,
           images,
+          mentionedUserIds,
         });
         storeAddComment(target.momentId, comment);
         setCommentTarget(null);

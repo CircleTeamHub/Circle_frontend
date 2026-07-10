@@ -237,7 +237,9 @@ test('send friend request screen is wired to i18n-driven form copy', () => {
   assert.match(source, /fetchFriendTags/);
   assert.match(source, /selectedTagIds/);
   assert.match(source, /isSubmitting/);
-  assert.match(source, /disabled=\{!profileId \|\| isSubmitting\}/);
+  assert.match(source, /getFriendRequestSubmitState/);
+  assert.match(source, /if \(submitState\.disabled\) \{/);
+  assert.match(source, /disabled=\{submitState\.disabled\}/);
   assert.doesNotMatch(source, /NavHeader title="发送好友申请"/);
   assert.doesNotMatch(source, /验证消息|备注名|照片备注|朋友权限|发送中\.\.\.|暂无标签/);
 });

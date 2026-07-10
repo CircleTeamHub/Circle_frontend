@@ -303,13 +303,19 @@ export default function MomentDetailScreen() {
   }, [post, storeToggleLike]);
 
   const handleSubmitComment = useCallback(
-    async (content: string, replyToId?: string, images?: string[]) => {
+    async (
+      content: string,
+      replyToId?: string,
+      images?: string[],
+      mentionedUserIds?: string[],
+    ) => {
       if (!post) return;
       try {
         const comment = await addMomentComment(post.id, {
           content,
           replyToId,
           images,
+          mentionedUserIds,
         });
         setPost((p) =>
           p

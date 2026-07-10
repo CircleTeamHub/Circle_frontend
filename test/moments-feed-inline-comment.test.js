@@ -41,11 +41,14 @@ test('comment composer supports image, mention, and emoji (Douyin parity)', () =
   assert.match(input, /launchImageLibraryAsync/);
   assert.match(input, /requestUploadPresign/);
   assert.match(input, /uploadLocalFileToPresignedUrl/);
-  assert.match(input, /onSubmit\(trimmed, replyTo\?\.id, images\)/);
+  assert.match(
+    input,
+    /onSubmit\(trimmed, replyTo\?\.id, images, mentionedUserIds\)/,
+  );
   // 表情复用聊天页的 EmojiPicker；@ 用好友列表插入 @昵称
   assert.match(input, /EmojiPicker/);
   assert.match(input, /fetchFriends/);
-  assert.match(input, /@\$\{nickname\} /);
+  assert.match(input, /@\$\{friend\.nickname\} /);
   // 纯图评论可发送（文字或图片其一即可）
   assert.match(input, /text\.trim\(\)\.length > 0 \|\| imageUri !== null/);
 });
