@@ -235,6 +235,9 @@ export default function CircleDetailScreen() {
   const [joining, setJoining] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const refreshInFlightRef = useRef(false);
+  // 首次成功加载后置 true：之后 focus 回本页只做静默刷新，不再进 loading 分支
+  //（loading 分支会卸载整个 ScrollView，重挂后滚动位置归零 = 返回跳回顶部）。
+  const hasLoadedRef = useRef(false);
   const [myInvitation, setMyInvitation] = useState<CircleInvitation | null>(
     null,
   );
@@ -297,6 +300,7 @@ export default function CircleDetailScreen() {
       const data = await fetchCircleDetail(id);
       if (!mountedRef.current || requestId !== circleRequestRef.current) return;
       setCircle(data);
+      hasLoadedRef.current = true;
     } catch {
       if (!mountedRef.current || requestId !== circleRequestRef.current) return;
       Alert.alert(t('circle.error'), t('circle.loadError'));
@@ -337,7 +341,9 @@ export default function CircleDetailScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      void loadCircle();
+      // 从子页面（入圈审核/邀请等）返回时静默刷新，保住滚动位置；
+      // 只有首次进入（或首载失败后）才显示整页 loading。
+      void loadCircle({ showInitialLoading: !hasLoadedRef.current });
       void loadMyInvitation();
     }, [loadCircle, loadMyInvitation]),
   );
