@@ -50,6 +50,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({
         >
           <Image
             source={{ uri }}
+            recyclingKey={uri}
             style={s.image}
             contentFit="cover"
             transition={200}

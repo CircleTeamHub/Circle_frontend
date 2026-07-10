@@ -108,6 +108,8 @@ export interface ChatMessage {
   locationAddress?: string;
   // For image messages: source URL + optional intrinsic dimensions for layout
   imageUrl?: string;
+  // 列表气泡优先用缩略图渲染，避免直接拉原图；点开原图查看时才用 imageUrl。
+  imageThumbUrl?: string;
   imageWidth?: number;
   imageHeight?: number;
   // For voice messages: local cache path or remote source URL plus duration in seconds.

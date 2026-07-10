@@ -79,7 +79,7 @@ function NoteCardInner({
       accessibilityLabel={accessibilityLabel}
     >
       {note.cover ? (
-        <Image source={{ uri: note.cover.url }} style={s.thumbnail} contentFit="cover" />
+        <Image source={{ uri: note.cover.url }} recyclingKey={note.cover.url} style={s.thumbnail} contentFit="cover" />
       ) : (
         <View style={[s.thumbnail, s.thumbnailFallback, d.placeholder]}>
           <Ionicons

@@ -629,6 +629,8 @@ export async function sendTextMessage(params: {
   sourceID: string;
   sessionType: SessionType;
   text: string;
+  // 乐观发送钩子：消息创建后（发送中状态）立即回调，调用方可先上屏再等网络确认。
+  onCreate?: (message: MessageItem) => void;
 }) {
   const initialized = await ensureOpenIMInitialized();
 
@@ -639,6 +641,7 @@ export async function sendTextMessage(params: {
   await waitForOpenIMConnectionReady();
 
   const message = await OpenIMSDK.createTextMessage(params.text);
+  params.onCreate?.(message);
   const isSingle = params.sessionType === SessionType.Single;
   const sentMessage = await reportSend({
     recvID: isSingle ? toImUserId(params.sourceID) : '',

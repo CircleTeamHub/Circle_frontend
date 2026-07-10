@@ -54,6 +54,7 @@
       "requestFailed": "Request failed",
       "sessionExpired": "Your session has expired. Please sign in again.",
       "refreshResponseInvalid": "Couldn't refresh your session. Please sign in again.",
+      "sessionChangedDuringRefresh": "Your account changed while refreshing the session. Please try again.",
       "uploadTimeout": "Upload timed out. Check your connection and try again.",
       "uploadFailedWithStatus": "Upload failed ({{status}})"
     }

@@ -447,13 +447,23 @@ export function mapMessageItemToChatMessage(
       item.pictureElem?.bigPicture ??
       item.pictureElem?.sourcePicture ??
       item.pictureElem?.snapshotPicture;
+    // 列表气泡优先用 snapshotPicture 缩略图，避免大群刷图时逐张拉原图。
+    const thumb =
+      item.pictureElem?.snapshotPicture ??
+      item.pictureElem?.sourcePicture ??
+      item.pictureElem?.bigPicture;
     const rawUrl = pic?.url;
+    const thumbUrl = thumb?.url;
     if (rawUrl && rawUrl.length > 0) {
       return {
         ...base,
         type: 'image',
         outgoing: isSent,
         imageUrl: normalizeMediaUrl(rawUrl) ?? rawUrl,
+        imageThumbUrl:
+          thumbUrl && thumbUrl.length > 0
+            ? normalizeMediaUrl(thumbUrl) ?? thumbUrl
+            : undefined,
         imageWidth: pic?.width ?? undefined,
         imageHeight: pic?.height ?? undefined,
         senderName: isSent ? undefined : (item.senderNickname || item.sendID),
@@ -484,4 +494,41 @@ export function mapMessageItemToChatMessage(
     // 仅接收到的消息携带 senderName，优先用昵称，没有则 fallback 到 sendID
     senderName: isSent ? undefined : (item.senderNickname || item.sendID),
   };
+}
+
+export type MessageMapCache = {
+  userID: string | null;
+  cache: WeakMap<MessageItem, ChatMessage>;
+};
+
+export function createMessageMapCache(userID: string | null): MessageMapCache {
+  return { userID, cache: new WeakMap() };
+}
+
+export function mapMessageItemsToChatMessages(
+  source: readonly MessageItem[],
+  currentUserID: string | null,
+  box: MessageMapCache,
+) {
+  if (box.userID !== currentUserID) {
+    box.userID = currentUserID;
+    box.cache = new WeakMap();
+  }
+
+  const result: ChatMessage[] = [];
+  for (let i = source.length - 1; i >= 0; i -= 1) {
+    const raw = source[i];
+    // OpenIM can mutate the optimistic message object in place when sendMessage
+    // completes. Do not cache the pending version or the row can stay "sending".
+    const cacheable = raw.status !== 1;
+    let mapped = cacheable ? box.cache.get(raw) : undefined;
+    if (!mapped) {
+      const next = mapMessageItemToChatMessage(raw, currentUserID);
+      if (!next) continue;
+      if (cacheable) box.cache.set(raw, next);
+      mapped = next;
+    }
+    result.push(mapped);
+  }
+  return result;
 }

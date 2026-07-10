@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useShallow } from 'zustand/react/shallow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -83,7 +84,15 @@ export default function DiscoverCirclesScreen() {
     allCirclesLoading,
     allCirclesError,
     fetchAllCircles,
-  } = useCirclesStore();
+  } = useCirclesStore(
+    useShallow((s) => ({
+      allCircles: s.allCircles,
+      allCirclesTotal: s.allCirclesTotal,
+      allCirclesLoading: s.allCirclesLoading,
+      allCirclesError: s.allCirclesError,
+      fetchAllCircles: s.fetchAllCircles,
+    })),
+  );
 
   useEffect(() => {
     fetchAllCircles();

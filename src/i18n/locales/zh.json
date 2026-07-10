@@ -54,6 +54,7 @@
       "requestFailed": "请求失败",
       "sessionExpired": "登录已过期，请重新登录",
       "refreshResponseInvalid": "刷新返回数据格式异常，请重新登录",
+      "sessionChangedDuringRefresh": "账号已切换，请重新操作",
       "uploadTimeout": "上传超时，请检查网络后重试",
       "uploadFailedWithStatus": "上传失败 ({{status}})"
     }

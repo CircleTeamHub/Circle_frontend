@@ -47,7 +47,7 @@ export const NotificationRow = memo(function NotificationRow({ data, onPress }: 
         </View>
       </View>
       {data.previewImage ? (
-        <Image source={{ uri: data.previewImage }} style={s.preview} contentFit="cover" />
+        <Image source={{ uri: data.previewImage }} recyclingKey={data.previewImage} style={s.preview} contentFit="cover" />
       ) : null}
     </Pressable>
   );
