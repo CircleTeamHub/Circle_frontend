@@ -39,6 +39,11 @@ const INVITATION_NOTIFICATION_TYPES = new Set([
   'CIRCLE_ADMIN_OVERRIDE_APPROVED',
 ]);
 
+const CIRCLE_POST_NOTIFICATION_TYPES = new Set([
+  'CIRCLE_POST_SIGNUP_CREATED',
+  'CIRCLE_POST_AUTO_ENDED',
+]);
+
 export function resolvePushNotificationRoute(data: PushData): Href | null {
   const route = firstText(data, ['route', 'screen', 'target']).toLowerCase();
   const type = firstText(data, ['type', 'notificationType']).toUpperCase();
@@ -83,12 +88,29 @@ export function resolvePushNotificationRoute(data: PushData): Href | null {
     };
   }
 
-  if (postId && (route === 'post-signups' || route === 'circle_post')) {
+  if (
+    postId &&
+    (route === 'post-signups' ||
+      route === 'circle_post' ||
+      CIRCLE_POST_NOTIFICATION_TYPES.has(type))
+  ) {
     return {
       pathname: '/(tabs)/messages/post-signups',
       params: {
         postId,
         title: firstText(data, ['title', 'postTitle']),
+      },
+    };
+  }
+
+  if (type === 'PROFILE_LIKE') {
+    const fromUserId = firstText(data, ['fromUserId', 'fromUserID']);
+    if (!fromUserId) return '/(tabs)/messages/notifications';
+    return {
+      pathname: '/(tabs)/messages/user/[id]',
+      params: {
+        id: fromUserId,
+        name: firstText(data, ['fromUserNickname', 'fromUserName']),
       },
     };
   }

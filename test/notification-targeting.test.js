@@ -94,6 +94,38 @@ test('push notification data resolves to app routes with anchors', () => {
     type: 'FRIEND_REQUEST_MESSAGE',
   });
   assert.equal(friendMessageRoute, '/(tabs)/contacts/new-friends');
+
+  for (const type of ['CIRCLE_POST_SIGNUP_CREATED', 'CIRCLE_POST_AUTO_ENDED']) {
+    const signupRoute = resolvePushNotificationRoute({
+      type,
+      postId: 'post-7',
+    });
+    assert.equal(signupRoute.pathname, '/(tabs)/messages/post-signups');
+    assert.equal(signupRoute.params.postId, 'post-7');
+  }
+
+  const profileLikeRoute = resolvePushNotificationRoute({
+    type: 'PROFILE_LIKE',
+    fromUserId: 'user / 8',
+    fromUserNickname: 'Ada',
+  });
+  assert.equal(profileLikeRoute.pathname, '/(tabs)/messages/user/[id]');
+  assert.equal(profileLikeRoute.params.id, 'user / 8');
+  assert.equal(profileLikeRoute.params.name, 'Ada');
+
+  assert.equal(
+    resolvePushNotificationRoute({ type: 'PROFILE_LIKE' }),
+    '/(tabs)/messages/notifications',
+  );
+
+  const traceMentionRoute = resolvePushNotificationRoute({
+    type: 'TRACE_MENTION',
+    traceId: 'moment-mention',
+    replyId: 'reply-mention',
+  });
+  assert.equal(traceMentionRoute.pathname, '/(tabs)/discover/moment/[id]');
+  assert.equal(traceMentionRoute.params.id, 'moment-mention');
+  assert.equal(traceMentionRoute.params.targetCommentId, 'reply-mention');
 });
 
 test('root layout mounts system push notification response routing', () => {
@@ -111,7 +143,13 @@ test('root layout mounts system push notification response routing', () => {
   assert.match(host, /shouldShowBanner:\s*false/);
   assert.match(host, /logClientDiagnostic\('notification_open'/);
   assert.match(host, /usePathname/);
-  assert.match(host, /router\.replace/);
+  assert.match(host, /routerRef\.current\.replace/);
+  assert.match(host, /createPushResponseController/);
+  assert.match(host, /controllerRef/);
+  assert.match(host, /setReadiness\(navReady, isAuthenticated\)/);
+  assert.match(host, /markInteractiveReadLocal/);
+  assert.match(host, /markNotificationRead/);
+  assert.match(host, /reportNotificationFailure\('notification_mark_read_failed'/);
 });
 
 test('root layout registers and unregisters native push tokens', () => {
