@@ -50,7 +50,14 @@ export default function NotificationCenterScreen() {
   const { t } = useTranslation();
   const mountedRef = useRef(true);
 
-  const interactive = useNotificationCenterStore((s) => s.interactive);
+  const rawInteractive = useNotificationCenterStore((s) => s.interactive);
+  // 报名通知（有人报名 CIRCLE_POST_SIGNUP_CREATED）已在「报名管理」以未读计数体现，
+  // 互动消息里不再重复展示——否则同一件事两个 tab 各出现一次。
+  const interactive = useMemo(
+    () =>
+      rawInteractive.filter((n) => n.type !== 'CIRCLE_POST_SIGNUP_CREATED'),
+    [rawInteractive],
+  );
   const signupPosts = useNotificationCenterStore((s) => s.signupPosts);
   const store = useNotificationCenterStore.getState;
 

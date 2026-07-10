@@ -138,8 +138,8 @@ export default function CreatePostScreen() {
   const router = useRouter();
 
   const prependPlazaPost = useDiscoverStore((s) => s.prependPlazaPost);
-  const selectedCircle = usePostFormStore((s) => s.selectedCircle);
-  const selectedCity = usePostFormStore((s) => s.selectedCity);
+  const selectedCircles = usePostFormStore((s) => s.selectedCircles);
+  const selectedCities = usePostFormStore((s) => s.selectedCities);
   const selectedNote = usePostFormStore((s) => s.selectedNote);
   const resetForm = usePostFormStore((s) => s.reset);
 
@@ -208,7 +208,10 @@ export default function CreatePostScreen() {
   }, [router]);
 
   const handleSelectCity = useCallback(() => {
-    router.push('/(tabs)/discover/select-city');
+    router.push({
+      pathname: '/(tabs)/discover/select-city',
+      params: { multiSelect: 'true', target: 'post' },
+    });
   }, [router]);
 
   const handleSelectNote = useCallback(() => {
@@ -270,11 +273,11 @@ export default function CreatePostScreen() {
     expiryOptions.find((o) => o.value === expiresInHours)?.label ??
     expiryOptions[0].label;
 
-  const canSubmit = content.trim().length > 0 && selectedCircle != null;
+  const canSubmit = content.trim().length > 0 && selectedCircles.length > 0;
 
   const handleSubmit = useCallback(async () => {
     if (inFlightRef.current || !canSubmit || submitting) return;
-    if (!selectedCircle) return;
+    if (selectedCircles.length === 0) return;
 
     inFlightRef.current = true;
     setSubmitting(true);
@@ -327,8 +330,8 @@ export default function CreatePostScreen() {
         content: content.trim(),
         images: uploadedUrls,
         tags: postTags,
-        circleId: selectedCircle.id,
-        city: selectedCity,
+        circleIds: selectedCircles.map((c) => c.id),
+        cities: selectedCities,
         noteId: selectedNote?.id ?? null,
         isHorn: hornEnabled,
         expiresInHours,
@@ -359,12 +362,12 @@ export default function CreatePostScreen() {
   }, [
     canSubmit,
     submitting,
-    selectedCircle,
+    selectedCircles,
     images,
     content,
     postTags,
     resetForm,
-    selectedCity,
+    selectedCities,
     selectedNote,
     hornEnabled,
     expiresInHours,
@@ -440,25 +443,27 @@ export default function CreatePostScreen() {
         </View>
         <Divider />
 
-        {/* Circle picker */}
+        {/* Circle picker（多选） */}
         <MenuRow
           icon="globe-outline"
           label={t('plaza.create.selectCircle', { defaultValue: '选择圈子' })}
           rightText={
-            selectedCircle?.name ??
-            t('plaza.create.pleaseSelect', { defaultValue: '请选择' })
+            selectedCircles.length > 0
+              ? selectedCircles.map((c) => c.name).join('、')
+              : t('plaza.create.pleaseSelect', { defaultValue: '请选择' })
           }
           onPress={handleSelectCircle}
         />
         <Divider />
 
-        {/* City picker */}
+        {/* City picker（多选） */}
         <MenuRow
           icon="location-outline"
           label={t('plaza.create.selectCity', { defaultValue: '选择城市' })}
           rightText={
-            selectedCity ??
-            t('plaza.create.pleaseSelect', { defaultValue: '请选择' })
+            selectedCities.length > 0
+              ? selectedCities.join('、')
+              : t('plaza.create.pleaseSelect', { defaultValue: '请选择' })
           }
           onPress={handleSelectCity}
         />

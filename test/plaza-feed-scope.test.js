@@ -145,7 +145,8 @@ test('discover filter screens always refresh my circles instead of trusting stal
 test('discover city filter starts with no city filter instead of nationwide', () => {
   const source = read('src/features/discover/screens/SelectCityScreen.tsx');
 
-  assert.match(source, /emptyMultiSelectIsNationwide:\s*target !== 'filter'/);
+  // 只有建圈(circle)空选才视为「全国」；筛选(filter)与发帖(post)空选 = 不限定。
+  assert.match(source, /emptyMultiSelectIsNationwide:\s*target === 'circle'/);
 });
 
 test('discover filter screen does not reset draft selections when returning from child pickers', () => {

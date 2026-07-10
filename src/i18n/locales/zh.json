@@ -572,6 +572,10 @@
     "voice": {
       "cancelTip": "松开手指，取消发送",
       "swipeCancelTip": "左滑取消 · 松开发送"
+    },
+    "plazaPostCard": {
+      "footer": "报名 {{count}} · {{author}}",
+      "pendingPreview": "[活动] {{title}}"
     }
   },
   "contacts": {
@@ -971,7 +975,19 @@
     "signUp": "报名",
     "signedUp": "已报名",
     "signupBlockedTitle": "暂不可报名",
-    "signupRestrictionMessage": "报名需满足：{{requirements}}"
+    "signupRestrictionMessage": "报名需满足：{{requirements}}",
+    "circlePicker": {
+      "selectedCount": "已选 {{count}} 个圈子"
+    },
+    "signup": {
+      "chatOpener": "你报名了我发起的活动，开始聊天吧",
+      "cardUntitled": "活动分享"
+    },
+    "postDetail": {
+      "title": "活动详情",
+      "notExist": "帖子不存在或已结束",
+      "loadFailed": "加载失败，请稍后重试"
+    }
   },
   "moment": {
     "createTitle": "发朋友圈",
@@ -2128,7 +2144,8 @@
       "transfer": "[转账]",
       "note": "[笔记] {{title}}",
       "verification": "[验证] {{name}} 邀请你担保",
-      "default": "[消息]"
+      "default": "[消息]",
+      "plazaPost": "[活动] {{title}}"
     }
   },
   "permissions": {

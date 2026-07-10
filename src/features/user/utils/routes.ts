@@ -428,6 +428,19 @@ export function getCircleDetailHref(scope: CircleScope, circleId: string): Href 
   };
 }
 
+export function getPlazaPostDetailHref(
+  scope: CircleScope,
+  postId: string,
+): Href {
+  return {
+    pathname:
+      scope === 'messages'
+        ? '/(tabs)/messages/plaza-post-detail'
+        : '/(tabs)/discover/plaza-post-detail',
+    params: { id: postId },
+  };
+}
+
 export function getCircleEditHref(scope: CircleScope, circleId: string): Href {
   return {
     pathname:

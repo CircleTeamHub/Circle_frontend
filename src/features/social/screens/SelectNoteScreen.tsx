@@ -80,7 +80,9 @@ export default function SelectNoteScreen() {
     setLoading(true);
     setError(null);
 
-    fetchNotes({ status: 'ACTIVE' })
+    // No status filter: omitting status returns all non-deleted notes (ACTIVE +
+    // UNLISTED). Filtering to ACTIVE hid unlisted notes, so the picker looked empty.
+    fetchNotes()
       .then((data) => {
         if (!cancelled) setNotes(data);
       })

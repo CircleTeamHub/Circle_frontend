@@ -63,6 +63,11 @@ export async function fetchPlazaFeed(params?: {
   };
 }
 
+export async function fetchPlazaPost(id: string): Promise<CirclePlazaPost> {
+  const post = await apiClient<CirclePlazaPost>(`/circle-plaza/posts/${id}`);
+  return normalizePlazaPost(post);
+}
+
 export async function createPlazaPost(
   input: CreatePlazaPostInput,
 ): Promise<CirclePlazaPost> {

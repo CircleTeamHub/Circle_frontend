@@ -10,7 +10,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
 import { markNotificationRead } from '@/services/api/notifications';
 import { Radius, Spacing, useTheme } from '@/theme';
@@ -252,7 +251,6 @@ export function NotificationSnackbarHost() {
             {row.summary}
           </Text>
         </View>
-        <Ionicons name={row.icon} size={20} color={colors.primary} />
       </Pressable>
       </Animated.View>
     </View>

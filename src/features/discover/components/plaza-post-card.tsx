@@ -314,7 +314,12 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
             </Pressable>
             <View style={[s.tag, d.tag]}>
               <Text style={d.tagText} numberOfLines={1}>
-                {post.circle.name}
+                {post.circles?.length
+                  ? post.circles[0].name +
+                    (post.circles.length > 1
+                      ? ` +${post.circles.length - 1}`
+                      : '')
+                  : post.circle.name}
               </Text>
             </View>
             {authorDisplayIcons.length > 0 ? (
@@ -324,7 +329,11 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
             ) : null}
           </View>
           <View style={s.metaRow}>
-            {post.city ? <Text style={d.metaText}>{post.city}</Text> : null}
+            {post.cities?.length || post.city ? (
+              <Text style={d.metaText} numberOfLines={1}>
+                {post.cities?.length ? post.cities.join(' · ') : post.city}
+              </Text>
+            ) : null}
             <Text style={d.metaText}>· {timeLabel}</Text>
           </View>
         </View>

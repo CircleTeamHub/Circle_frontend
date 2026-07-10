@@ -12,6 +12,7 @@ import type {
   FriendCardData,
   TransferCardData,
   VerificationCardData,
+  PlazaPostCardData,
 } from '@/types';
 import {
   MessageType,
@@ -23,6 +24,7 @@ import {
   NOTE_CARD_EXTENSION,
   TRANSFER_CARD_EXTENSION,
   VERIFICATION_CARD_EXTENSION,
+  PLAZA_POST_CARD_EXTENSION,
   FRIEND_ADDED_NOTICE_EXTENSION,
   fromImUserId,
 } from '@/im/client';
@@ -193,6 +195,33 @@ function parseVerificationCardPayload(
   }
 }
 
+function parsePlazaPostCardPayload(data: string): PlazaPostCardData | null {
+  try {
+    const raw = JSON.parse(data) as Partial<PlazaPostCardData>;
+    if (typeof raw.postId !== 'string' || typeof raw.title !== 'string') {
+      return null;
+    }
+    const signupCount =
+      typeof raw.signupCount === 'number' && Number.isFinite(raw.signupCount)
+        ? Math.max(0, raw.signupCount)
+        : 0;
+    return {
+      postId: raw.postId,
+      title: raw.title,
+      contentPreview:
+        typeof raw.contentPreview === 'string' ? raw.contentPreview : null,
+      coverUrl: typeof raw.coverUrl === 'string' ? raw.coverUrl : null,
+      circleName: typeof raw.circleName === 'string' ? raw.circleName : '',
+      city: typeof raw.city === 'string' ? raw.city : null,
+      signupCount,
+      authorNickname:
+        typeof raw.authorNickname === 'string' ? raw.authorNickname : '',
+    };
+  } catch {
+    return null;
+  }
+}
+
 // 将毫秒时间戳格式化为显示文本：今天显示时间，昨天显示"昨天"，更早显示日期
 // 注意：timestamp <= 0 视为无效值，返回空字符串
 function formatTimestamp(timestamp: number) {
@@ -292,6 +321,13 @@ export function getMessagePreview(message: MessageItem | null, fallback = '') {
       if (ext === NOTE_CARD_EXTENSION) {
         const payload = parseNoteCardPayload(message.customElem?.data ?? '');
         if (payload) return tImPreview('note', '[笔记] {{title}}', { title: payload.title });
+      }
+      if (ext === PLAZA_POST_CARD_EXTENSION) {
+        const payload = parsePlazaPostCardPayload(message.customElem?.data ?? '');
+        if (payload)
+          return tImPreview('plazaPost', '[活动] {{title}}', {
+            title: payload.title,
+          });
       }
       if (ext === VERIFICATION_CARD_EXTENSION) {
         const payload = parseVerificationCardPayload(
@@ -450,6 +486,21 @@ export function mapMessageItemToChatMessage(
           type: 'note-card',
           outgoing: isSent,
           noteCard: payload,
+          senderName: isSent ? undefined : (item.senderNickname || item.sendID),
+        };
+      }
+    }
+    if (ext === PLAZA_POST_CARD_EXTENSION) {
+      const payload = parsePlazaPostCardPayload(item.customElem?.data ?? '');
+      if (payload) {
+        return {
+          ...base,
+          type: 'plaza-post-card',
+          outgoing: isSent,
+          plazaPostCard: {
+            ...payload,
+            coverUrl: normalizeMediaUrl(payload.coverUrl) ?? null,
+          },
           senderName: isSent ? undefined : (item.senderNickname || item.sendID),
         };
       }

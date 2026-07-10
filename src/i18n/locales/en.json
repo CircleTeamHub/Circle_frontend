@@ -573,6 +573,10 @@
     "voice": {
       "cancelTip": "Release to cancel",
       "swipeCancelTip": "Slide left to cancel · Release to send"
+    },
+    "plazaPostCard": {
+      "footer": "{{count}} signed up · {{author}}",
+      "pendingPreview": "[Event] {{title}}"
     }
   },
   "contacts": {
@@ -972,7 +976,19 @@
     "signUp": "Sign up",
     "signedUp": "Signed up",
     "signupBlockedTitle": "Sign-up unavailable",
-    "signupRestrictionMessage": "To sign up: {{requirements}}"
+    "signupRestrictionMessage": "To sign up: {{requirements}}",
+    "circlePicker": {
+      "selectedCount": "{{count}} circle(s) selected"
+    },
+    "signup": {
+      "chatOpener": "You signed up for my activity — let's chat!",
+      "cardUntitled": "Shared activity"
+    },
+    "postDetail": {
+      "title": "Activity",
+      "notExist": "This post no longer exists",
+      "loadFailed": "Failed to load, please try again"
+    }
   },
   "moment": {
     "createTitle": "New Moment",
@@ -2131,7 +2147,8 @@
       "transfer": "[Transfer]",
       "note": "[Note] {{title}}",
       "verification": "[Verify] {{name}} asked you to vouch",
-      "default": "[Message]"
+      "default": "[Message]",
+      "plazaPost": "[Event] {{title}}"
     }
   },
   "permissions": {

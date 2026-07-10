@@ -37,6 +37,25 @@ const s = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 80,
   },
+  footer: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+  },
+  countText: {
+    ...Typography.caption,
+    textAlign: 'center',
+    paddingBottom: Spacing.sm,
+  },
+  confirmBtn: {
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmText: {
+    ...Typography.body,
+    fontWeight: '600',
+  },
 });
 
 export default function SelectCircleScreen() {
@@ -90,44 +109,51 @@ export default function SelectCircleScreen() {
     [colors],
   );
 
-  const setSelectedCircle = usePostFormStore((s) => s.setSelectedCircle);
+  const selectedCircles = usePostFormStore((s) => s.selectedCircles);
+  const toggleCircle = usePostFormStore((s) => s.toggleCircle);
+  const selectedIds = useMemo(
+    () => new Set(selectedCircles.map((c) => c.id)),
+    [selectedCircles],
+  );
 
-  const handleSelect = useCallback(
+  const handleToggle = useCallback(
     (circle: Circle) => {
-      setSelectedCircle({ id: circle.id, name: circle.name });
-      router.back();
+      toggleCircle({ id: circle.id, name: circle.name });
     },
-    [router, setSelectedCircle],
+    [toggleCircle],
   );
 
   const renderItem = useCallback(
-    ({ item }: { item: Circle }) => (
-      <View>
-        <Pressable style={s.row} onPress={() => handleSelect(item)}>
-          <CircleAvatar
-            uri={item.avatarUrl}
-            size={44}
-            borderRadius={Radius.sm}
-            style={d.cover}
-          />
-          <View style={s.info}>
-            <Text style={d.name}>{item.name}</Text>
-            {item.description ? (
-              <Text style={d.desc} numberOfLines={1}>
-                {item.description}
-              </Text>
-            ) : null}
-          </View>
-          <Ionicons
-            name="chevron-forward"
-            size={18}
-            color={colors.textSecondary}
-          />
-        </Pressable>
-        <Divider />
-      </View>
-    ),
-    [handleSelect, d, colors],
+    ({ item }: { item: Circle }) => {
+      const isSelected = selectedIds.has(item.id);
+      return (
+        <View>
+          <Pressable style={s.row} onPress={() => handleToggle(item)}>
+            <CircleAvatar
+              uri={item.avatarUrl}
+              size={44}
+              borderRadius={Radius.sm}
+              style={d.cover}
+            />
+            <View style={s.info}>
+              <Text style={d.name}>{item.name}</Text>
+              {item.description ? (
+                <Text style={d.desc} numberOfLines={1}>
+                  {item.description}
+                </Text>
+              ) : null}
+            </View>
+            <Ionicons
+              name={isSelected ? 'checkmark-circle' : 'ellipse-outline'}
+              size={22}
+              color={isSelected ? colors.primary : colors.surfaceBorder}
+            />
+          </Pressable>
+          <Divider />
+        </View>
+      );
+    },
+    [handleToggle, selectedIds, d, colors],
   );
 
   return (
@@ -167,6 +193,34 @@ export default function SelectCircleScreen() {
           }
         />
       )}
+
+      {circles.length > 0 ? (
+        <View style={[s.footer, { paddingBottom: insets.bottom || 34 }]}>
+          <Text style={[s.countText, { color: colors.textSecondary }]}>
+            {t('plaza.circlePicker.selectedCount', {
+              count: selectedCircles.length,
+              defaultValue: '已选 {{count}} 个圈子',
+            })}
+          </Text>
+          <Pressable
+            style={[
+              s.confirmBtn,
+              {
+                backgroundColor:
+                  selectedCircles.length > 0
+                    ? colors.primary
+                    : colors.surfaceBorder,
+              },
+            ]}
+            disabled={selectedCircles.length === 0}
+            onPress={() => router.back()}
+          >
+            <Text style={[s.confirmText, { color: colors.white }]}>
+              {t('city.confirmSelection', { defaultValue: '确定' })}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }

@@ -550,6 +550,10 @@
     "voice": {
       "cancelTip": "손을 떼면 전송 취소",
       "swipeCancelTip": "왼쪽으로 밀어 취소 · 손을 떼면 전송"
+    },
+    "plazaPostCard": {
+      "footer": "신청 {{count}} · {{author}}",
+      "pendingPreview": "[활동] {{title}}"
     }
   },
   "messages": {
@@ -1283,7 +1287,19 @@
     "signUp": "신청",
     "signedUp": "신청함",
     "signupBlockedTitle": "지금은 신청할 수 없어요",
-    "signupRestrictionMessage": "신청 조건: {{requirements}}"
+    "signupRestrictionMessage": "신청 조건: {{requirements}}",
+    "circlePicker": {
+      "selectedCount": "{{count}}개 서클 선택됨"
+    },
+    "signup": {
+      "chatOpener": "제가 올린 활동에 신청하셨네요, 채팅해요",
+      "cardUntitled": "활동 공유"
+    },
+    "postDetail": {
+      "title": "활동 상세",
+      "notExist": "게시물이 없거나 종료되었습니다",
+      "loadFailed": "불러오기 실패, 나중에 다시 시도하세요"
+    }
   },
   "notifications": {
     "title": "알림",
@@ -2154,7 +2170,8 @@
       "transfer": "[송금]",
       "note": "[노트] {{title}}",
       "verification": "[인증] {{name}}님이 보증을 요청했습니다",
-      "default": "[메시지]"
+      "default": "[메시지]",
+      "plazaPost": "[활동] {{title}}"
     }
   },
   "permissions": {

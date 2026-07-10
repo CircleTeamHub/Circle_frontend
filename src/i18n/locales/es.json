@@ -551,6 +551,10 @@
     "voice": {
       "cancelTip": "Suelta para cancelar",
       "swipeCancelTip": "Desliza a la izquierda para cancelar · Suelta para enviar"
+    },
+    "plazaPostCard": {
+      "footer": "{{count}} inscritos · {{author}}",
+      "pendingPreview": "[Evento] {{title}}"
     }
   },
   "messages": {
@@ -1286,7 +1290,19 @@
     "signUp": "Inscribirse",
     "signedUp": "Inscrito",
     "signupBlockedTitle": "Inscripción no disponible",
-    "signupRestrictionMessage": "Para inscribirte: {{requirements}}"
+    "signupRestrictionMessage": "Para inscribirte: {{requirements}}",
+    "circlePicker": {
+      "selectedCount": "{{count}} círculo(s) seleccionado(s)"
+    },
+    "signup": {
+      "chatOpener": "Te inscribiste en mi actividad, ¡hablemos!",
+      "cardUntitled": "Actividad compartida"
+    },
+    "postDetail": {
+      "title": "Detalle de la actividad",
+      "notExist": "La publicación no existe o ha finalizado",
+      "loadFailed": "Error al cargar, inténtalo de nuevo"
+    }
   },
   "notifications": {
     "title": "Notificaciones",
@@ -2157,7 +2173,8 @@
       "transfer": "[Transferencia]",
       "note": "[Nota] {{title}}",
       "verification": "[Verificar] {{name}} te pidió que avales",
-      "default": "[Mensaje]"
+      "default": "[Mensaje]",
+      "plazaPost": "[Evento] {{title}}"
     }
   },
   "permissions": {
