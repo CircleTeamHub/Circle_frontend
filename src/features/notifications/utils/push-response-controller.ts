@@ -14,6 +14,7 @@ export type PushNotificationResponse = {
 type PendingResponse = {
   route: Href;
   notificationId: string;
+  requestIdentifier: string;
 };
 
 type ControllerDependencies = {
@@ -26,6 +27,7 @@ type ControllerDependencies = {
 };
 
 const HANDLED_LIMIT = 300;
+const PENDING_LIMIT = 50;
 
 function text(value: unknown) {
   return typeof value === 'string' ? value : '';
@@ -74,7 +76,8 @@ export function createPushResponseController(deps: ControllerDependencies) {
   const handled = new Set<string>();
   let navReady = false;
   let authenticated = false;
-  let pending: PendingResponse | null = null;
+  const pending: PendingResponse[] = [];
+  let flushing = false;
 
   const remember = (identifier: string) => {
     handled.add(identifier);
@@ -98,10 +101,16 @@ export function createPushResponseController(deps: ControllerDependencies) {
   };
 
   const flush = () => {
-    if (!navReady || !authenticated || !pending) return;
-    const item = pending;
-    pending = null;
-    open(item);
+    if (!navReady || !authenticated || flushing) return;
+    flushing = true;
+    try {
+      while (pending.length > 0) {
+        const item = pending.shift();
+        if (item) open(item);
+      }
+    } finally {
+      flushing = false;
+    }
   };
 
   return {
@@ -124,11 +133,16 @@ export function createPushResponseController(deps: ControllerDependencies) {
       const item = {
         route,
         notificationId: text(data.notificationId),
+        requestIdentifier: request.identifier,
       };
       if (navReady && authenticated) {
         open(item);
       } else {
-        pending = item;
+        pending.push(item);
+        if (pending.length > PENDING_LIMIT) {
+          const dropped = pending.shift();
+          if (dropped) handled.delete(dropped.requestIdentifier);
+        }
       }
     },
   };

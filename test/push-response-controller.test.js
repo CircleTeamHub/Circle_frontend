@@ -96,6 +96,71 @@ test('queues one cold response and flushes navigation and backend read once when
   assert.deepEqual(h.diagnostics, ['expo-request-1']);
 });
 
+test('queues distinct cold responses and flushes them once in arrival order', () => {
+  const h = harness({ ready: false });
+
+  h.controller.handleResponse(
+    response('expo-cold-1', {
+      route: '/cold-1',
+      notificationId: 'backend-cold-1',
+    }),
+  );
+  h.controller.handleResponse(
+    response('expo-cold-2', {
+      route: '/cold-2',
+      notificationId: 'backend-cold-2',
+    }),
+  );
+  h.controller.handleResponse(
+    response('expo-cold-1', {
+      route: '/cold-1',
+      notificationId: 'backend-cold-1',
+    }),
+  );
+
+  h.controller.setReadiness(true, true);
+  h.controller.setReadiness(true, true);
+
+  assert.deepEqual(h.navigated, ['/cold-1', '/cold-2']);
+  assert.deepEqual(h.localReads, ['backend-cold-1', 'backend-cold-2']);
+  assert.deepEqual(h.apiReads, ['backend-cold-1', 'backend-cold-2']);
+});
+
+test('bounds the pending queue and lets an overflowed response retry later', () => {
+  const h = harness({ ready: false });
+  for (let index = 0; index <= 50; index += 1) {
+    h.controller.handleResponse(
+      response(`expo-overflow-${index}`, {
+        route: `/overflow-${index}`,
+        notificationId: `backend-overflow-${index}`,
+      }),
+    );
+  }
+
+  h.controller.setReadiness(true, true);
+
+  assert.deepEqual(
+    h.navigated,
+    Array.from({ length: 50 }, (_, index) => `/overflow-${index + 1}`),
+  );
+  assert.deepEqual(
+    h.apiReads,
+    Array.from(
+      { length: 50 },
+      (_, index) => `backend-overflow-${index + 1}`,
+    ),
+  );
+
+  h.controller.handleResponse(
+    response('expo-overflow-0', {
+      route: '/overflow-0-retry',
+      notificationId: 'backend-overflow-0',
+    }),
+  );
+  assert.equal(h.navigated.at(-1), '/overflow-0-retry');
+  assert.equal(h.apiReads.at(-1), 'backend-overflow-0');
+});
+
 test('handles a warm response immediately and navigates without a backend notification id', () => {
   const h = harness();
 
