@@ -37,6 +37,12 @@ function isNotificationSummaryShape(
   );
 }
 
+function isNotificationOpenOwnershipShape(
+  value: unknown,
+): value is { owned: boolean } {
+  return isPlainObject(value) && typeof value.owned === 'boolean';
+}
+
 export async function fetchNotificationUnreadSummary() {
   const raw = await apiClient<NotificationUnreadSummary>(
     '/notification/unread-summary',
@@ -70,6 +76,19 @@ export async function fetchProfileNotifications(
 
 export async function markNotificationRead(id: string): Promise<void> {
   await apiClient<void>(`/notification/${id}/read`, { method: 'PUT' });
+}
+
+export async function verifyNotificationOpenOwnership(
+  id: string,
+): Promise<{ owned: boolean }> {
+  const raw = await apiClient<{ owned: boolean }>(
+    `/notification/${id}/open-ownership`,
+  );
+  return expectShape(
+    raw,
+    isNotificationOpenOwnershipShape,
+    '通知归属数据格式异常',
+  );
 }
 
 export async function markAllNotificationsRead(): Promise<{ count: number }> {

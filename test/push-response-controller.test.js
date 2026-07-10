@@ -64,6 +64,20 @@ function fakeScheduler() {
   };
 }
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((onResolve, onReject) => {
+    resolve = onResolve;
+    reject = onReject;
+  });
+  return { promise, resolve, reject };
+}
+
+async function settlePromises() {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 function harness({
   ready = true,
   currentUserId = 'user-1',
@@ -72,6 +86,7 @@ function harness({
   markReadLocal,
   logOpen,
   scheduler,
+  verifyOwnership,
 } = {}) {
   const navigated = [];
   const localReads = [];
@@ -79,6 +94,7 @@ function harness({
   const failures = [];
   const diagnostics = [];
   const drops = [];
+  const ownershipCalls = [];
   let rejectRead;
   const readPromise = new Promise((resolve, reject) => {
     rejectRead = reject;
@@ -99,6 +115,12 @@ function harness({
     reportDrop: (reason, identifier) => drops.push([reason, identifier]),
     logOpen: logOpen ?? ((identifier) => diagnostics.push(identifier)),
     scheduleRetry: scheduler?.schedule,
+    verifyOpenOwnership: (id) => {
+      ownershipCalls.push(id);
+      return verifyOwnership
+        ? verifyOwnership(id)
+        : Promise.resolve({ owned: true });
+    },
   });
   controller.setReadiness(ready, ready ? currentUserId : null);
   return {
@@ -109,6 +131,7 @@ function harness({
     failures,
     diagnostics,
     drops,
+    ownershipCalls,
     rejectRead,
   };
 }
@@ -204,11 +227,11 @@ test('terminally drops a warm response targeted at another account', () => {
   ]);
 });
 
-test('terminally drops and diagnoses a response missing its target account', () => {
+test('terminally drops a legacy response missing its backend notification id', () => {
   const h = harness();
   const legacy = response('expo-missing-target', {
     route: '/legacy',
-    notificationId: 'backend-legacy',
+    notificationId: undefined,
     toUserId: undefined,
   });
 
@@ -223,8 +246,158 @@ test('terminally drops and diagnoses a response missing its target account', () 
   assert.deepEqual(h.navigated, []);
   assert.deepEqual(h.apiReads, []);
   assert.deepEqual(h.drops, [
-    ['missing-target-user', 'expo-missing-target'],
+    ['missing-legacy-notification-id', 'expo-missing-target'],
   ]);
+});
+
+test('cold legacy response waits for login then opens after ownership verification', async () => {
+  const ownership = deferred();
+  const h = harness({
+    ready: false,
+    verifyOwnership: () => ownership.promise,
+  });
+  h.controller.handleResponse(
+    response('expo-legacy-owned-cold', {
+      route: '/legacy-owned-cold',
+      notificationId: 'backend-legacy-owned-cold',
+      toUserId: undefined,
+    }),
+  );
+  assert.deepEqual(h.ownershipCalls, []);
+
+  h.controller.setReadiness(true, 'user-1');
+  assert.deepEqual(h.ownershipCalls, ['backend-legacy-owned-cold']);
+  assert.deepEqual(h.navigated, []);
+
+  ownership.resolve({ owned: true });
+  await settlePromises();
+  assert.deepEqual(h.navigated, ['/legacy-owned-cold']);
+  assert.deepEqual(h.apiReads, ['backend-legacy-owned-cold']);
+});
+
+test('warm legacy response opens only when ownership is true', async () => {
+  const ownership = deferred();
+  const h = harness({ verifyOwnership: () => ownership.promise });
+  h.controller.handleResponse(
+    response('expo-legacy-owned-warm', {
+      route: '/legacy-owned-warm',
+      notificationId: 'backend-legacy-owned-warm',
+      toUserId: undefined,
+    }),
+  );
+
+  assert.deepEqual(h.navigated, []);
+  ownership.resolve({ owned: true });
+  await settlePromises();
+
+  assert.deepEqual(h.navigated, ['/legacy-owned-warm']);
+  assert.deepEqual(h.apiReads, ['backend-legacy-owned-warm']);
+});
+
+test('legacy ownership false terminally drops without navigation or read', async () => {
+  const h = harness({
+    verifyOwnership: async () => ({ owned: false }),
+  });
+  h.controller.handleResponse(
+    response('expo-legacy-not-owned', {
+      route: '/legacy-not-owned',
+      notificationId: 'backend-legacy-not-owned',
+      toUserId: undefined,
+    }),
+  );
+  await settlePromises();
+
+  assert.deepEqual(h.navigated, []);
+  assert.deepEqual(h.apiReads, []);
+  assert.deepEqual(h.drops, [
+    ['ownership-denied', 'expo-legacy-not-owned'],
+  ]);
+});
+
+test('legacy ownership result is dropped after an account switch', async () => {
+  const ownership = deferred();
+  const h = harness({ verifyOwnership: () => ownership.promise });
+  h.controller.handleResponse(
+    response('expo-legacy-switch', {
+      route: '/legacy-switch',
+      notificationId: 'backend-legacy-switch',
+      toUserId: undefined,
+    }),
+  );
+  h.controller.setReadiness(true, 'user-2');
+  ownership.resolve({ owned: true });
+  await settlePromises();
+
+  assert.deepEqual(h.navigated, []);
+  assert.deepEqual(h.apiReads, []);
+  assert.deepEqual(h.drops, [
+    ['ownership-account-changed', 'expo-legacy-switch'],
+  ]);
+});
+
+test('duplicate legacy deliveries coalesce one ownership verification', async () => {
+  const ownership = deferred();
+  const h = harness({ verifyOwnership: () => ownership.promise });
+  const legacy = response('expo-legacy-duplicate', {
+    route: '/legacy-duplicate',
+    notificationId: 'backend-legacy-duplicate',
+    toUserId: undefined,
+  });
+
+  h.controller.handleResponse(legacy);
+  h.controller.handleResponse(legacy);
+  h.controller.setReadiness(true, 'user-1');
+  assert.deepEqual(h.ownershipCalls, ['backend-legacy-duplicate']);
+
+  ownership.resolve({ owned: true });
+  await settlePromises();
+  assert.deepEqual(h.navigated, ['/legacy-duplicate']);
+});
+
+test('legacy verification failure terminally drops and reports', async () => {
+  const h = harness({
+    verifyOwnership: async () => {
+      throw new Error('ownership unavailable');
+    },
+  });
+  h.controller.handleResponse(
+    response('expo-legacy-failure', {
+      route: '/legacy-failure',
+      notificationId: 'backend-legacy-failure',
+      toUserId: undefined,
+    }),
+  );
+  await settlePromises();
+
+  assert.deepEqual(h.navigated, []);
+  assert.deepEqual(h.apiReads, []);
+  assert.deepEqual(h.failures.at(-1), [
+    'ownership unavailable',
+    'backend-legacy-failure',
+    'ownership-verify',
+  ]);
+  assert.deepEqual(h.drops.at(-1), [
+    'ownership-failed',
+    'expo-legacy-failure',
+  ]);
+});
+
+test('dispose ignores late legacy ownership completion', async () => {
+  const ownership = deferred();
+  const h = harness({ verifyOwnership: () => ownership.promise });
+  h.controller.handleResponse(
+    response('expo-legacy-dispose', {
+      route: '/legacy-dispose',
+      notificationId: 'backend-legacy-dispose',
+      toUserId: undefined,
+    }),
+  );
+  h.controller.dispose();
+  ownership.resolve({ owned: true });
+  await settlePromises();
+
+  assert.deepEqual(h.navigated, []);
+  assert.deepEqual(h.apiReads, []);
 });
 
 test('retains a failed navigation and retries the full FIFO on readiness flush', () => {

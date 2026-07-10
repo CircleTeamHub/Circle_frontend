@@ -33,8 +33,12 @@ function loadApi(filePathRel, apiResponse) {
       }
       if (specifier === "@/utils/validate") {
         return {
-          expectShape: (v) => v,
-          isPlainObject: () => true,
+          expectShape: (v, predicate) => {
+            if (!predicate(v)) throw new Error("invalid shape");
+            return v;
+          },
+          isPlainObject: (v) =>
+            typeof v === "object" && v !== null && !Array.isArray(v),
           isFiniteNonNegativeNumber: () => true,
         };
       }
@@ -67,6 +71,25 @@ test("markNotificationRead PUTs /notification/:id/read", async () => {
   await api.markNotificationRead("n1");
   assert.equal(calls[0][0], "/notification/n1/read");
   assert.equal(calls[0][1].method, "PUT");
+});
+
+test("verifyNotificationOpenOwnership GETs and validates ownership", async () => {
+  const { api, calls } = loadApi("src/services/api/notifications.ts", {
+    owned: true,
+  });
+  assert.deepEqual(await api.verifyNotificationOpenOwnership("n1"), {
+    owned: true,
+  });
+  assert.equal(calls[0][0], "/notification/n1/open-ownership");
+  assert.equal(calls[0][1], undefined);
+
+  const invalid = loadApi("src/services/api/notifications.ts", {
+    owned: "yes",
+  });
+  await assert.rejects(
+    invalid.api.verifyNotificationOpenOwnership("n1"),
+    /invalid shape/,
+  );
 });
 
 test("markAllNotificationsRead PUTs /notification/read-all", async () => {

@@ -15,15 +15,24 @@ type PendingResponse = {
   route: Href;
   notificationId: string;
   requestIdentifier: string;
-  targetUserId: string;
+  targetUserId: string | null;
+  ownershipState: 'not-required' | 'idle' | 'verifying' | 'verified';
   openAttempts: number;
 };
 
-type FailureStage = 'navigate' | 'log-open' | 'local-read' | 'remote-read';
+type FailureStage =
+  | 'navigate'
+  | 'log-open'
+  | 'local-read'
+  | 'remote-read'
+  | 'ownership-verify';
 type DropReason =
   | 'account-mismatch'
-  | 'missing-target-user'
-  | 'navigate-failed';
+  | 'missing-legacy-notification-id'
+  | 'navigate-failed'
+  | 'ownership-account-changed'
+  | 'ownership-denied'
+  | 'ownership-failed';
 
 type ControllerDependencies = {
   resolveRoute: (data: PushData) => Href | null;
@@ -38,6 +47,9 @@ type ControllerDependencies = {
   ) => void;
   reportDrop: (reason: DropReason, requestIdentifier: string) => void;
   logOpen: (requestIdentifier: string) => void;
+  verifyOpenOwnership: (
+    notificationId: string,
+  ) => Promise<{ owned: boolean }>;
   scheduleRetry?: (callback: () => void, delayMs: number) => () => void;
 };
 
@@ -97,6 +109,8 @@ export function createPushResponseController(deps: ControllerDependencies) {
   const pending: PendingResponse[] = [];
   let flushing = false;
   let disposed = false;
+  let lifecycleGeneration = 0;
+  let accountGeneration = 0;
   let cancelRetry: (() => void) | null = null;
   const scheduleRetry =
     deps.scheduleRetry ??
@@ -138,6 +152,76 @@ export function createPushResponseController(deps: ControllerDependencies) {
     } catch {
       // A diagnostic sink failure must not revive a terminally dropped tap.
     }
+  };
+
+  const terminalDrop = (item: PendingResponse, reason: DropReason) => {
+    const index = pending.indexOf(item);
+    if (index >= 0) pending.splice(index, 1);
+    queuedIds.delete(item.requestIdentifier);
+    remember(item.requestIdentifier);
+    safeReportDrop(reason, item.requestIdentifier);
+  };
+
+  const verifyLegacyOwnership = (item: PendingResponse, userId: string) => {
+    if (item.ownershipState !== 'idle') return;
+    item.ownershipState = 'verifying';
+    const startedLifecycleGeneration = lifecycleGeneration;
+    const startedAccountGeneration = accountGeneration;
+
+    let verification: Promise<{ owned: boolean }>;
+    try {
+      verification = deps.verifyOpenOwnership(item.notificationId);
+    } catch (error) {
+      safeReport(error, item, 'ownership-verify');
+      terminalDrop(item, 'ownership-failed');
+      return;
+    }
+
+    void verification
+      .then(({ owned }) => {
+        if (
+          disposed ||
+          lifecycleGeneration !== startedLifecycleGeneration ||
+          !queuedIds.has(item.requestIdentifier)
+        ) {
+          return;
+        }
+        if (
+          accountGeneration !== startedAccountGeneration ||
+          currentUserId !== userId
+        ) {
+          terminalDrop(item, 'ownership-account-changed');
+          flush();
+          return;
+        }
+        if (!owned) {
+          terminalDrop(item, 'ownership-denied');
+          flush();
+          return;
+        }
+        item.targetUserId = userId;
+        item.ownershipState = 'verified';
+        flush();
+      })
+      .catch((error) => {
+        if (
+          disposed ||
+          lifecycleGeneration !== startedLifecycleGeneration ||
+          !queuedIds.has(item.requestIdentifier)
+        ) {
+          return;
+        }
+        if (
+          accountGeneration !== startedAccountGeneration ||
+          currentUserId !== userId
+        ) {
+          terminalDrop(item, 'ownership-account-changed');
+        } else {
+          safeReport(error, item, 'ownership-verify');
+          terminalDrop(item, 'ownership-failed');
+        }
+        flush();
+      });
   };
 
   const cancelScheduledRetry = () => {
@@ -206,6 +290,12 @@ export function createPushResponseController(deps: ControllerDependencies) {
     try {
       for (let index = 0; index < pending.length; ) {
         const item = pending[index];
+        if (!item.targetUserId) {
+          if (item.ownershipState === 'idle') {
+            verifyLegacyOwnership(item, currentUserId);
+          }
+          break;
+        }
         if (item.targetUserId !== currentUserId) {
           index += 1;
           continue;
@@ -227,11 +317,18 @@ export function createPushResponseController(deps: ControllerDependencies) {
 
     dispose() {
       disposed = true;
+      lifecycleGeneration += 1;
+      for (const item of pending) {
+        if (item.ownershipState === 'verifying') {
+          item.ownershipState = 'idle';
+        }
+      }
       cancelScheduledRetry();
     },
 
     setReadiness(nextNavReady: boolean, nextUserId: string | null) {
       navReady = nextNavReady;
+      if (currentUserId !== nextUserId) accountGeneration += 1;
       currentUserId = nextUserId;
       flush();
     },
@@ -249,22 +346,28 @@ export function createPushResponseController(deps: ControllerDependencies) {
       if (!route) return;
 
       const targetUserId = text(data.toUserId);
-      if (!targetUserId) {
+      const notificationId = text(data.notificationId);
+      if (!targetUserId && !notificationId) {
         remember(request.identifier);
-        safeReportDrop('missing-target-user', request.identifier);
+        safeReportDrop('missing-legacy-notification-id', request.identifier);
         return;
       }
-      if (currentUserId && targetUserId !== currentUserId) {
+      if (
+        targetUserId &&
+        currentUserId &&
+        targetUserId !== currentUserId
+      ) {
         remember(request.identifier);
         safeReportDrop('account-mismatch', request.identifier);
         return;
       }
 
-      const item = {
+      const item: PendingResponse = {
         route,
-        notificationId: text(data.notificationId),
+        notificationId,
         requestIdentifier: request.identifier,
-        targetUserId,
+        targetUserId: targetUserId || null,
+        ownershipState: targetUserId ? 'not-required' : 'idle',
         openAttempts: 0,
       };
       queuedIds.add(request.identifier);

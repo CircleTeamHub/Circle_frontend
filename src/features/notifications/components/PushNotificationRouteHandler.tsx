@@ -13,7 +13,10 @@ import {
 import { initializePushResponseListener } from '@/features/notifications/utils/push-response-listener';
 import { reportNotificationFailure } from '@/features/notifications/utils/report-failure';
 import { useNotificationCenterStore } from '@/features/notifications/store/use-notification-center-store';
-import { markNotificationRead } from '@/services/api/notifications';
+import {
+  markNotificationRead,
+  verifyNotificationOpenOwnership,
+} from '@/services/api/notifications';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -52,6 +55,7 @@ export function PushNotificationRouteHandler() {
           .markInteractiveReadLocal(notificationId);
       },
       markReadRemote: markNotificationRead,
+      verifyOpenOwnership: verifyNotificationOpenOwnership,
       reportFailure: (error, notificationId, stage, requestIdentifier) => {
         if (stage === 'local-read' || stage === 'remote-read') {
           reportNotificationFailure('notification_mark_read_failed', error, {
