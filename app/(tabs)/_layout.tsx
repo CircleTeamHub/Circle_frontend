@@ -334,9 +334,6 @@ export default function TabLayout() {
       )}
       screenOptions={{
         headerShown: false,
-        // 离开 tab 时把该 tab 的栈弹回首页：被跨 tab 压栈的页面（聊天点圈子
-        // 名片 → discover/circle）不会赖在栈顶,再点该 tab 永远是首页。
-        popToTopOnBlur: true,
       }}
     >
       {TAB_KEYS.map((tab) => {

@@ -51,6 +51,8 @@ import {
   getTabHomeHref,
   getChatInfoTopHref,
   getNoteDetailHref,
+  getCircleDetailHref,
+  getVerificationDetailHref,
 } from '@/features/user/utils/routes';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
@@ -1259,7 +1261,13 @@ export default function ChatDetailScreen() {
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
             onLongPress={getMessageLongPressHandler(item)}
             onPress={(card) =>
-              router.push(`/(tabs)/discover/circle/${encodeURIComponent(card.circleId)}`)
+              // 在当前栈内打开圈子详情（从哪进从哪出），不跨 tab 压栈。
+              router.push(
+                getCircleDetailHref(
+                  scope === 'discover' ? 'discover' : 'messages',
+                  card.circleId,
+                ),
+              )
             }
             hideStatus={isGroupChat}
           />
@@ -1275,10 +1283,12 @@ export default function ChatDetailScreen() {
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
             onPress={(card) =>
-              router.push({
-                pathname: '/(tabs)/discover/verification/[id]',
-                params: { id: card.invitationId },
-              })
+              router.push(
+                getVerificationDetailHref(
+                  scope === 'discover' ? 'discover' : 'messages',
+                  card.invitationId,
+                ),
+              )
             }
             hideStatus={isGroupChat}
           />

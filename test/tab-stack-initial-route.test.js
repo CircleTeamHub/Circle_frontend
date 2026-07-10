@@ -5,11 +5,12 @@ const path = require('node:path');
 
 const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
-test('tabs pop their stack to home on blur (no stuck cross-tab screens)', () => {
+test('tabs keep per-tab stack state (popToTopOnBlur must stay off)', () => {
   const layout = read('app/(tabs)/_layout.tsx');
-  // 离开 tab 即弹回首页：否则跨 tab 压栈的页面留在栈顶,
-  // 点 tab 永远进那个页面而不是首页。
-  assert.match(layout, /popToTopOnBlur: true/);
+  // 曾用 popToTopOnBlur 兜底跨 tab 压栈,但它会连正常的 tab 内浏览状态一起
+  // 清掉。正确解法是圈子路由按 scope 镜像(聊天名片在本 tab 内打开),
+  // tab 状态保留。
+  assert.doesNotMatch(layout, /popToTopOnBlur/);
 });
 
 test('every tab stack anchors index as initialRouteName (cross-tab push safety)', () => {

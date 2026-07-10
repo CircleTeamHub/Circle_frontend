@@ -11,7 +11,19 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import {
+  useFocusEffect,
+  useLocalSearchParams,
+  useRouter,
+  useSegments,
+} from 'expo-router';
+import {
+  getCircleAdminHref,
+  getCircleEditHref,
+  getCircleInviteHref,
+  getCircleScopeFromSegments,
+  getInvitationDetailHref,
+} from '@/features/user/utils/routes';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -227,6 +239,10 @@ export default function CircleDetailScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  // 本页镜像在 messages/discover 两个栈（聊天圈子名片在本 tab 内打开），
+  // 所有内部跳转都要留在当前栈里，做到「从哪进从哪出」。
+  const segments = useSegments();
+  const circleScope = getCircleScopeFromSegments(segments);
 
   const [circle, setCircle] = useState<CircleDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -254,7 +270,10 @@ export default function CircleDetailScreen() {
       setEnteringGroupChat(true);
       const conversation = await getOrCreateGroupConversation(groupID);
       router.push({
-        pathname: '/(tabs)/discover/chat-detail',
+        pathname:
+          circleScope === 'messages'
+            ? '/(tabs)/messages/chat-detail'
+            : '/(tabs)/discover/chat-detail',
         params: {
           conversationID: conversation.conversationID,
           sourceID: groupID,
@@ -266,7 +285,10 @@ export default function CircleDetailScreen() {
       if (shouldOpenChatPreview(error)) {
         // IM 未接通：退化成预览模式（无 conversationID）。
         router.push({
-          pathname: '/(tabs)/discover/chat-detail',
+          pathname:
+          circleScope === 'messages'
+            ? '/(tabs)/messages/chat-detail'
+            : '/(tabs)/discover/chat-detail',
           params: {
             sourceID: groupID,
             conversationType: 'group',
@@ -279,7 +301,7 @@ export default function CircleDetailScreen() {
     } finally {
       if (mountedRef.current) setEnteringGroupChat(false);
     }
-  }, [circle?.groupID, circle?.name, enteringGroupChat, router, t]);
+  }, [circle?.groupID, circle?.name, circleScope, enteringGroupChat, router, t]);
 
   useEffect(() => {
     return () => {
@@ -558,10 +580,7 @@ export default function CircleDetailScreen() {
         onRightPress={
           isOwnerOrAdmin
             ? () =>
-                router.push({
-                  pathname: '/(tabs)/discover/circle/[id]/edit',
-                  params: { id: circle.id },
-                })
+                router.push(getCircleEditHref(circleScope, circle.id))
             : undefined
         }
       />
@@ -790,10 +809,9 @@ export default function CircleDetailScreen() {
                 <Pressable
                   style={[s.actionBtn, d.chatBtn]}
                   onPress={() =>
-                    router.push({
-                      pathname: '/(tabs)/discover/invitation/[id]',
-                      params: { id: myInvitation.id },
-                    })
+                    router.push(
+                      getInvitationDetailHref(circleScope, myInvitation.id),
+                    )
                   }
                 >
                   <Text style={[s.actionBtnText, d.chatBtnText]}>
@@ -843,14 +861,14 @@ export default function CircleDetailScreen() {
             <Pressable
               style={[s.actionBtn, d.chatBtn]}
               onPress={() =>
-                router.push({
-                  pathname: '/(tabs)/discover/circle/[id]/invite',
-                  params: {
-                    id: circle.id,
-                    title: circle.name,
-                    avatar: circle.avatarUrl ?? '',
-                  },
-                })
+                router.push(
+                  getCircleInviteHref(
+                    circleScope,
+                    circle.id,
+                    circle.name,
+                    circle.avatarUrl ?? '',
+                  ),
+                )
               }
             >
               <Text style={[s.actionBtnText, d.chatBtnText]}>
@@ -864,10 +882,7 @@ export default function CircleDetailScreen() {
             <Pressable
               style={[s.actionBtn, d.adminBtn]}
               onPress={() =>
-                router.push({
-                  pathname: '/(tabs)/discover/circle/[id]/admin',
-                  params: { id: circle.id },
-                })
+                router.push(getCircleAdminHref(circleScope, circle.id))
               }
             >
               <Text style={[s.actionBtnText, d.adminBtnText]}>{t('circle.adminReview')}</Text>

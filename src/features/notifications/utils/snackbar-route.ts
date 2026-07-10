@@ -14,9 +14,11 @@ export type SnackbarRouteOptions = {
 };
 
 function getNotificationCenterFallback(scope: SnackbarRouteOptions['scope']): Href {
-  return scope === 'discover'
-    ? ('/(tabs)/discover/notification-center' as Href)
-    : '/(tabs)/messages/notifications';
+  // 拆成两条 return 收敛推断,避免三元合并出巨型 Href 联合触发 TS2590。
+  if (scope === 'discover') {
+    return '/(tabs)/discover/notification-center' as Href;
+  }
+  return '/(tabs)/messages/notifications' as Href;
 }
 
 export function getSnackbarRoute(

@@ -8,8 +8,12 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import {
+  getCircleScopeFromSegments,
+  getSelectVerifierHref,
+} from '@/features/user/utils/routes';
 import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -97,6 +101,8 @@ export default function InvitationVerificationScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const router = useRouter();
+  // 本页镜像在 messages/discover 两栈，子页跳转留在当前栈。
+  const segments = useSegments();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [invitation, setInvitation] = useState<CircleInvitation | null>(null);
   const [loading, setLoading] = useState(true);
@@ -161,15 +167,14 @@ export default function InvitationVerificationScreen() {
 
   const handleAddVerifier = useCallback(() => {
     if (!invitation) return;
-    router.push({
-      pathname: '/(tabs)/discover/invitation/[id]/select-verifier',
-      params: {
+    router.push(
+      getSelectVerifierHref(getCircleScopeFromSegments(segments), {
         id: invitation.id,
         circleId: invitation.circleId,
         circleName: invitation.circleName,
-      },
-    });
-  }, [router, invitation]);
+      }),
+    );
+  }, [router, invitation, segments]);
 
   if (loading) {
     return (
