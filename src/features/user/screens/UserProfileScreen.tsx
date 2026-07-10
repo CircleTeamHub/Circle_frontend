@@ -56,6 +56,14 @@ const SELF_INFO_ROW_IDS = ['moments'] as const;
 
 type InfoRowId = (typeof INFO_ROW_IDS)[number];
 
+// 资料行按语义分成多张卡片渲染（卡间留白），避免全部挤在一张长卡里。
+// 顺序沿用 INFO_ROW_IDS，只在语义边界处切开：内容 / 我的标注 / 权限与更多。
+const INFO_ROW_GROUPS = [
+  ['moments'],
+  ['setRemark', 'tags', 'description'],
+  ['permission', 'giftCoins', 'moreInfo'],
+] as const;
+
 interface InfoRowItem {
   id: InfoRowId;
   label: string;
@@ -87,6 +95,7 @@ const ROW_COLOR: Record<InfoRowId, keyof ThemeColors> = {
 };
 
 const AVATAR_SIZE = 72;
+const CARD_GAP = 12; // 分组卡片之间的垂直留白
 const RECOGNITION_COUNT_ICON_SOURCE = require('../../../../assets/images/like-outline.png');
 
 const s = StyleSheet.create({
@@ -175,7 +184,10 @@ const s = StyleSheet.create({
     width: 18,
     height: 18,
   },
-  // 信息行合并成单卡片，行间用内缩分隔线分隔（左缩进对齐文字起点）。
+  // 资料行按语义拆成多张分组卡片，卡间留白；卡内行间用内缩分隔线（左缩进对齐文字起点）。
+  sections: {
+    gap: CARD_GAP,
+  },
   card: {
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
@@ -597,6 +609,17 @@ export default function UserProfileScreen() {
     ],
   );
 
+  const infoRowGroups = useMemo(() => {
+    const itemById = new Map(
+      infoRowItems.map((item) => [item.id, item] as const),
+    );
+    return INFO_ROW_GROUPS.map((group) =>
+      group
+        .map((id) => itemById.get(id))
+        .filter((item): item is InfoRowItem => item !== undefined),
+    ).filter((group) => group.length > 0);
+  }, [infoRowItems]);
+
   const d = useMemo(
     () => ({
       container: {
@@ -785,40 +808,44 @@ export default function UserProfileScreen() {
           ) : null}
         </View>
 
-        {infoRowItems.length > 0 ? (
-          <View style={[s.card, d.card]}>
-            {infoRowItems.map((item, index) => (
-              <View key={item.id}>
-                <ProfileActionRow
-                  icon={item.icon}
-                  iconColor={item.iconColor}
-                  label={item.label}
-                  value={item.value}
-                  onPress={item.onPress}
-                />
-                {index < infoRowItems.length - 1 ? (
-                  <View style={[s.rowDivider, d.rowDivider]} />
-                ) : null}
+        {infoRowGroups.length > 0 ? (
+          <View style={s.sections}>
+            {infoRowGroups.map((group, groupIndex) => (
+              <View key={`info-group-${groupIndex}`} style={[s.card, d.card]}>
+                {group.map((item, index) => (
+                  <View key={item.id}>
+                    <ProfileActionRow
+                      icon={item.icon}
+                      iconColor={item.iconColor}
+                      label={item.label}
+                      value={item.value}
+                      onPress={item.onPress}
+                    />
+                    {index < group.length - 1 ? (
+                      <View style={[s.rowDivider, d.rowDivider]} />
+                    ) : null}
+                  </View>
+                ))}
               </View>
             ))}
-          </View>
-        ) : null}
 
-        {!isCurrentUser && friendStatus === 'ACCEPTED' && photoNotes.length > 0 ? (
-          <View style={[s.card, d.card]}>
-            <Text style={[s.photoNotesTitle, d.photoNotesTitle]}>
-              {t('userProfile.photoNotesTitle')}
-            </Text>
-            <View style={s.photoNotesStrip}>
-              {photoNotes.map((uri) => (
-                <Image
-                  key={uri}
-                  source={{ uri }}
-                  style={[s.photoNote, d.photoNote]}
-                  contentFit="cover"
-                />
-              ))}
-            </View>
+            {!isCurrentUser && friendStatus === 'ACCEPTED' && photoNotes.length > 0 ? (
+              <View style={[s.card, d.card]}>
+                <Text style={[s.photoNotesTitle, d.photoNotesTitle]}>
+                  {t('userProfile.photoNotesTitle')}
+                </Text>
+                <View style={s.photoNotesStrip}>
+                  {photoNotes.map((uri) => (
+                    <Image
+                      key={uri}
+                      source={{ uri }}
+                      style={[s.photoNote, d.photoNote]}
+                      contentFit="cover"
+                    />
+                  ))}
+                </View>
+              </View>
+            ) : null}
           </View>
         ) : null}
 

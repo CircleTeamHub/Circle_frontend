@@ -21,7 +21,7 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: ROW_GAP,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: ROW_PADDING_H,
   },
   pressed: {
