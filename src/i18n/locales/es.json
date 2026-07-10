@@ -997,6 +997,7 @@
       "restrictionsSection": "Restricciones",
       "fancyLabel": "Requiere número especial",
       "memberPostLabel": "Miembros pueden publicar",
+      "requireApprovalLabel": "Requiere aprobación para unirse",
       "nameRequired": "Nombre requerido (mín. 2 caracteres)",
       "descRequired": "Descripción requerida (mín. 10 caracteres)",
       "submitButton": "Crear círculo",

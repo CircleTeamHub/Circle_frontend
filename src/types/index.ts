@@ -344,6 +344,8 @@ export interface CreateCircleInput {
   joinFancyRestriction?: boolean;
   maxMembers?: number;
   memberCanPost?: boolean;
+  /** false = 私密圈：加入需担保审核；缺省/true = 公开圈秒进。 */
+  isPublic?: boolean;
 }
 
 // ---------------------------------------------------------------------------

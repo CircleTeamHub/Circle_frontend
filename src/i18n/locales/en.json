@@ -853,6 +853,7 @@
       "restrictionsSection": "Restrictions",
       "fancyLabel": "Fancy Number Required",
       "memberPostLabel": "Members Can Post",
+      "requireApprovalLabel": "Require approval to join",
       "nameRequired": "Circle name required (min 2 chars)",
       "descRequired": "Description required (min 10 chars)",
       "submitButton": "Create Circle",

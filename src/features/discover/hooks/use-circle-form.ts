@@ -28,6 +28,8 @@ export interface CircleFormState {
   joinCreditRestriction: number | null;
   joinFancyRestriction: boolean;
   memberCanPost: boolean;
+  /** 开 = 加入需担保审核（isPublic=false）；关 = 公开圈秒进（默认）。 */
+  requireJoinApproval: boolean;
 }
 
 const INITIAL_FORM_STATE: CircleFormState = {
@@ -44,6 +46,7 @@ const INITIAL_FORM_STATE: CircleFormState = {
   joinCreditRestriction: null,
   joinFancyRestriction: false,
   memberCanPost: true,
+  requireJoinApproval: false,
 };
 
 export interface CircleFormApi extends CircleFormState {
@@ -54,6 +57,7 @@ export interface CircleFormApi extends CircleFormState {
   setTagInput: (value: string) => void;
   setJoinFancyRestriction: (value: boolean) => void;
   setMemberCanPost: (value: boolean) => void;
+  setRequireJoinApproval: (value: boolean) => void;
   toggleCategory: (value: string) => void;
   handleAddCustomCategory: () => void;
   handlePickAvatar: () => Promise<void>;
@@ -95,6 +99,11 @@ export function useCircleForm(): CircleFormApi {
   );
   const setMemberCanPost = useCallback(
     (value: boolean) => setState((s) => ({ ...s, memberCanPost: value })),
+    [],
+  );
+  const setRequireJoinApproval = useCallback(
+    (value: boolean) =>
+      setState((s) => ({ ...s, requireJoinApproval: value })),
     [],
   );
 
@@ -186,6 +195,7 @@ export function useCircleForm(): CircleFormApi {
     setTagInput,
     setJoinFancyRestriction,
     setMemberCanPost,
+    setRequireJoinApproval,
     toggleCategory,
     handleAddCustomCategory,
     handlePickAvatar,

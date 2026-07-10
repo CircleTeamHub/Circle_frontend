@@ -852,6 +852,7 @@
       "restrictionsSection": "权限与限制",
       "fancyLabel": "需要靓号",
       "memberPostLabel": "成员可发帖",
+      "requireApprovalLabel": "加入需担保审核",
       "nameRequired": "请填写圈子名称（至少2字）",
       "descRequired": "请填写圈子描述（至少10字）",
       "submitButton": "创建圈子",

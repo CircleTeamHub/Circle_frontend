@@ -25,6 +25,8 @@ import type { CircleFormApi } from '@/features/discover/hooks/use-circle-form';
 
 interface CircleFormBodyProps {
   form: CircleFormApi;
+  /** 仅建圈页展示「加入需担保审核」开关（后端 PATCH 尚不支持改 isPublic，编辑页不显示假开关）。 */
+  showJoinApproval?: boolean;
 }
 
 const s = StyleSheet.create({
@@ -141,7 +143,10 @@ const s = StyleSheet.create({
   rowLabel: { ...Typography.bodyRegular },
 });
 
-export const CircleFormBody: React.FC<CircleFormBodyProps> = ({ form }) => {
+export const CircleFormBody: React.FC<CircleFormBodyProps> = ({
+  form,
+  showJoinApproval = false,
+}) => {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const router = useRouter();
@@ -513,6 +518,25 @@ export const CircleFormBody: React.FC<CircleFormBodyProps> = ({ form }) => {
             thumbColor={colors.white}
           />
         </View>
+        {showJoinApproval ? (
+          <>
+            <Divider />
+            {/* 开 = 私密圈（加入需担保验证 + 圈主可代批）；关 = 公开圈秒进。 */}
+            <View style={s.toggleRow}>
+              <Text style={[s.rowLabel, d.rowLabel]}>
+                {t('circle.create.requireApprovalLabel', {
+                  defaultValue: '加入需担保审核',
+                })}
+              </Text>
+              <Switch
+                value={form.requireJoinApproval}
+                onValueChange={form.setRequireJoinApproval}
+                trackColor={{ false: colors.surfaceBorder, true: colors.primary }}
+                thumbColor={colors.white}
+              />
+            </View>
+          </>
+        ) : null}
       </View>
     </>
   );

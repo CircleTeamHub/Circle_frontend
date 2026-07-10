@@ -994,6 +994,7 @@
       "restrictionsSection": "제한",
       "fancyLabel": "특별 번호 필요",
       "memberPostLabel": "멤버 게시 가능",
+      "requireApprovalLabel": "가입 승인 필요",
       "nameRequired": "서클 이름을 입력하세요 (최소 2자)",
       "descRequired": "소개를 입력하세요 (최소 10자)",
       "submitButton": "서클 만들기",
