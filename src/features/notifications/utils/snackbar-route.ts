@@ -103,6 +103,17 @@ export function getSnackbarRoute(
     return '/(tabs)/contacts/new-friends';
   }
 
+  // 资料点赞：直达点赞者主页，方便回赞 / 加好友。
+  if (item.type === 'PROFILE_LIKE' && item.fromUser?.id) {
+    return {
+      pathname:
+        options.scope === 'discover'
+          ? '/(tabs)/discover/user/[id]'
+          : '/(tabs)/messages/user/[id]',
+      params: { id: item.fromUser.id, name: item.fromUser.nickname },
+    };
+  }
+
   if (item.fromTrace?.id) {
     return {
       pathname: '/(tabs)/discover/moment/[id]',

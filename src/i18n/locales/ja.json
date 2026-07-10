@@ -1288,6 +1288,7 @@
     "summary": {
       "default": "通知を送りました",
       "TRACE_LIKE": "あなたのモーメントにいいねしました",
+      "PROFILE_LIKE": "あなたにいいねしました",
       "TRACE_COMMENT": "あなたのモーメントにコメントしました",
       "COMMENT_REPLY": "あなたに返信しました",
       "FRIEND_REQUEST_RECEIVED": "友だち申請を送りました",

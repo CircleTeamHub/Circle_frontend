@@ -1288,6 +1288,7 @@
     "summary": {
       "default": "알림을 보냈어요",
       "TRACE_LIKE": "회원님의 모먼트를 좋아합니다",
+      "PROFILE_LIKE": "회원님을 좋아합니다",
       "TRACE_COMMENT": "회원님의 모먼트에 댓글을 남겼어요",
       "COMMENT_REPLY": "회원님에게 답글을 남겼어요",
       "FRIEND_REQUEST_RECEIVED": "친구 신청을 보냈어요",

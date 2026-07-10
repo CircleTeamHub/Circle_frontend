@@ -1291,6 +1291,7 @@
     "summary": {
       "default": "te envió una notificación",
       "TRACE_LIKE": "le gustó tu momento",
+      "PROFILE_LIKE": "te dio un me gusta",
       "TRACE_COMMENT": "comentó tu momento",
       "COMMENT_REPLY": "te respondió",
       "FRIEND_REQUEST_RECEIVED": "quiere agregarte como amigo",

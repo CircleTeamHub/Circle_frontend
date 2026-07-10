@@ -211,6 +211,7 @@
     "summary": {
       "default": "sent you a notification",
       "TRACE_LIKE": "liked your moment",
+      "PROFILE_LIKE": "liked you",
       "TRACE_COMMENT": "commented on your moment",
       "COMMENT_REPLY": "replied to you",
       "FRIEND_REQUEST_RECEIVED": "wants to add you as a friend",

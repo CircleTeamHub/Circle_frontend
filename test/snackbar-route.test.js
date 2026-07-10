@@ -178,6 +178,31 @@ test("getSnackbarRoute falls back when a verification request lacks an invitatio
   assert.equal(route, "/(tabs)/messages/notifications");
 });
 
+test("getSnackbarRoute routes profile likes to the liker's profile per scope", () => {
+  const item = notification({
+    type: "PROFILE_LIKE",
+    fromUser: { id: "user-9", nickname: "小赞", avatarUrl: null },
+  });
+
+  const messagesRoute = getSnackbarRoute(item, OPTS);
+  assert.equal(messagesRoute.pathname, "/(tabs)/messages/user/[id]");
+  assert.equal(messagesRoute.params.id, "user-9");
+  assert.equal(messagesRoute.params.name, "小赞");
+
+  const discoverRoute = getSnackbarRoute(item, DISCOVER_OPTS);
+  assert.equal(discoverRoute.pathname, "/(tabs)/discover/user/[id]");
+  assert.equal(discoverRoute.params.id, "user-9");
+  assert.equal(discoverRoute.params.name, "小赞");
+});
+
+test("getSnackbarRoute falls back when a profile like lacks the liker", () => {
+  const route = getSnackbarRoute(
+    notification({ type: "PROFILE_LIKE", fromUser: null }),
+    OPTS,
+  );
+  assert.equal(route, "/(tabs)/messages/notifications");
+});
+
 test("getSnackbarRoute routes friend requests to new-friends", () => {
   const route = getSnackbarRoute(
     notification({ type: "FRIEND_REQUEST_RECEIVED" }),
