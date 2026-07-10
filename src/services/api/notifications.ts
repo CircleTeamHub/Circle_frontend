@@ -88,9 +88,13 @@ export async function registerPushToken(input: RegisterPushTokenInput): Promise<
   });
 }
 
-export async function deletePushToken(token: string): Promise<void> {
+export async function deletePushToken(
+  token: string,
+  options: { retryOnAuthError?: boolean } = {},
+): Promise<void> {
   await apiClient<void>('/notification/push-token', {
     method: 'DELETE',
     body: { token },
+    ...options,
   });
 }

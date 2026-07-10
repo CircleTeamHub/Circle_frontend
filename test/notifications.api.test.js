@@ -101,8 +101,11 @@ test("registerPushToken PUTs the device push token", async () => {
 
 test("deletePushToken DELETEs the stored device push token", async () => {
   const { api, calls } = loadApi("src/services/api/notifications.ts", undefined);
-  await api.deletePushToken("ExponentPushToken[abc]");
+  await api.deletePushToken("ExponentPushToken[abc]", {
+    retryOnAuthError: false,
+  });
   assert.equal(calls[0][0], "/notification/push-token");
   assert.equal(calls[0][1].method, "DELETE");
   assert.equal(calls[0][1].body.token, "ExponentPushToken[abc]");
+  assert.equal(calls[0][1].retryOnAuthError, false);
 });
