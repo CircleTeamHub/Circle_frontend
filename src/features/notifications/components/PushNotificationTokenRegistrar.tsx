@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import Constants from 'expo-constants';
+import * as Crypto from 'expo-crypto';
 import {
-  deletePushToken,
   registerPushToken,
+  revokePushToken,
   type PushTokenPlatform,
 } from '@/services/api/notifications';
 import { registerLogoutHandler } from '@/services/auth/session';
@@ -21,9 +22,14 @@ type NotificationPermissionResult = Awaited<
 type StoredPushRegistration = {
   token: string;
   userId: string;
+  revocationSecret: string;
+  status: 'pending' | 'registered';
 };
 
-type PushTokenDeleteOptions = { retryOnAuthError?: boolean };
+type PushTokenRevocation = Pick<
+  StoredPushRegistration,
+  'token' | 'revocationSecret'
+>;
 
 type PushTokenRegistrationOrchestratorDependencies = {
   platform: PushTokenPlatform;
@@ -31,17 +37,19 @@ type PushTokenRegistrationOrchestratorDependencies = {
   getProjectId: () => string | null;
   getStoredRegistration: () => StoredPushRegistration | null;
   setStoredRegistration: (value: StoredPushRegistration | null) => void;
+  getPendingRevocations: () => PushTokenRevocation[];
+  setPendingRevocations: (value: PushTokenRevocation[]) => void;
+  generateRevocationSecret: () => string;
   loadNotificationsModule: () => Promise<NotificationsModule | null>;
   registerPushToken: typeof registerPushToken;
-  deletePushToken: (
-    token: string,
-    options?: PushTokenDeleteOptions,
-  ) => Promise<void>;
+  revokePushToken: typeof revokePushToken;
   reportFailure: typeof reportNotificationFailure;
   reportDiagnostic: typeof logClientDiagnostic;
 };
 
 const PUSH_REGISTRATION_KEY = 'circle-im-push-registration';
+const PUSH_REVOCATIONS_KEY = 'circle-im-push-revocations';
+const MAX_PENDING_REVOCATIONS = 50;
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 
 function getProjectId() {
@@ -67,12 +75,47 @@ function getStoredRegistration(): StoredPushRegistration | null {
     return typeof parsed.token === 'string' &&
       parsed.token.length > 0 &&
       typeof parsed.userId === 'string' &&
-      parsed.userId.length > 0
-      ? { token: parsed.token, userId: parsed.userId }
+      parsed.userId.length > 0 &&
+      typeof parsed.revocationSecret === 'string' &&
+      parsed.revocationSecret.length >= 32 &&
+      (parsed.status === 'pending' || parsed.status === 'registered')
+      ? {
+          token: parsed.token,
+          userId: parsed.userId,
+          revocationSecret: parsed.revocationSecret,
+          status: parsed.status,
+        }
       : null;
   } catch {
     return null;
   }
+}
+
+function getPendingRevocations(): PushTokenRevocation[] {
+  const raw = storage.getString(PUSH_REVOCATIONS_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (item): item is PushTokenRevocation =>
+        typeof item === 'object' &&
+        item !== null &&
+        typeof (item as PushTokenRevocation).token === 'string' &&
+        typeof (item as PushTokenRevocation).revocationSecret === 'string' &&
+        (item as PushTokenRevocation).revocationSecret.length >= 32,
+    );
+  } catch {
+    return [];
+  }
+}
+
+function setPendingRevocations(value: PushTokenRevocation[]) {
+  if (value.length === 0) {
+    storage.remove(PUSH_REVOCATIONS_KEY);
+    return;
+  }
+  storage.set(PUSH_REVOCATIONS_KEY, JSON.stringify(value));
 }
 
 function setStoredRegistration(value: StoredPushRegistration | null) {
@@ -95,7 +138,6 @@ export function createPushTokenRegistrationOrchestrator(
   let logoutGateClosed = false;
   let nextOwner = 0;
   let desiredRegistration: DesiredRegistration = { kind: 'signed-out' };
-  let remoteRegistration = dependencies.getStoredRegistration();
   let mutationTail: Promise<void> = Promise.resolve();
 
   function enqueueRemoteMutation(operation: () => Promise<void>) {
@@ -104,68 +146,73 @@ export function createPushTokenRegistrationOrchestrator(
     return result;
   }
 
-  async function performRemoteDelete(
-    token: string,
-    options: PushTokenDeleteOptions,
-  ) {
-    try {
-      await dependencies.deletePushToken(token, options);
-    } catch (error) {
-      dependencies.reportFailure('push_token_unregister_failed', error);
+  function revocationKey(value: PushTokenRevocation) {
+    return `${value.token}\u0000${value.revocationSecret}`;
+  }
+
+  function addPendingRevocation(value: PushTokenRevocation) {
+    const key = revocationKey(value);
+    const current = dependencies.getPendingRevocations();
+    if (current.some((item) => revocationKey(item) === key)) return;
+    const capped =
+      current.length >= MAX_PENDING_REVOCATIONS
+        ? current.slice(-(MAX_PENDING_REVOCATIONS - 1))
+        : current;
+    if (capped.length !== current.length) {
+      dependencies.reportDiagnostic('push_token_revocation_queue_capped', {
+        cap: MAX_PENDING_REVOCATIONS,
+      });
     }
+    dependencies.setPendingRevocations([...capped, value]);
   }
 
-  function clearStoredRegistration() {
-    const stored = dependencies.getStoredRegistration();
-    if (stored) dependencies.setStoredRegistration(null);
-    return stored;
+  function removePendingRevocation(value: PushTokenRevocation) {
+    const key = revocationKey(value);
+    dependencies.setPendingRevocations(
+      dependencies
+        .getPendingRevocations()
+        .filter((item) => revocationKey(item) !== key),
+    );
   }
 
-  function reconcileUndesiredRegistration(fallbackToken: string | null) {
+  function flushPendingRevocations() {
     return enqueueRemoteMutation(async () => {
-      const desiredBefore = desiredRegistration;
-      if (desiredBefore.kind === 'enabled') return;
-
-      const tokens = Array.from(
-        new Set(
-          [remoteRegistration?.token ?? null, fallbackToken].filter(
-            (token): token is string => Boolean(token),
-          ),
-        ),
-      );
-      for (const token of tokens) {
-        const currentDesired = desiredRegistration;
-        if (currentDesired.kind === 'enabled') return;
-        await performRemoteDelete(
-          token,
-          currentDesired.kind === 'disabled'
-            ? {}
-            : { retryOnAuthError: false },
-        );
-        if (remoteRegistration?.token === token) remoteRegistration = null;
-        if (desiredRegistration.kind === 'enabled') return;
+      for (const revocation of dependencies.getPendingRevocations()) {
+        if (
+          !dependencies
+            .getPendingRevocations()
+            .some((item) => revocationKey(item) === revocationKey(revocation))
+        ) {
+          continue;
+        }
+        try {
+          await dependencies.revokePushToken(
+            revocation.token,
+            revocation.revocationSecret,
+          );
+          removePendingRevocation(revocation);
+        } catch (error) {
+          dependencies.reportFailure('push_token_revoke_failed', error);
+        }
       }
     });
   }
 
-  function unregisterStoredPushToken(
-    options: PushTokenDeleteOptions = {},
-  ) {
-    desiredRegistration =
-      options.retryOnAuthError === false
-        ? { kind: 'signed-out' }
-        : { kind: 'disabled' };
-    const stored = clearStoredRegistration();
-    return reconcileUndesiredRegistration(stored?.token ?? null);
+  function retireStoredRegistration() {
+    const stored = dependencies.getStoredRegistration();
+    if (!stored) return;
+    addPendingRevocation(stored);
+    dependencies.setStoredRegistration(null);
+    void flushPendingRevocations();
   }
 
   return {
-    unregisterStoredPushToken,
-    async logout() {
+    flushPendingRevocations,
+    logout() {
       logoutGateClosed = true;
       desiredRegistration = { kind: 'signed-out' };
-      const stored = clearStoredRegistration();
-      await reconcileUndesiredRegistration(stored?.token ?? null);
+      retireStoredRegistration();
+      void flushPendingRevocations();
     },
     async sync(input: {
       isAuthenticated: boolean;
@@ -173,23 +220,25 @@ export function createPushTokenRegistrationOrchestrator(
       pushEnabled: boolean;
       isCancelled?: () => boolean;
     }) {
+      void flushPendingRevocations();
       if (!input.isAuthenticated || !input.userId) {
         desiredRegistration = { kind: 'signed-out' };
         logoutGateClosed = false;
-        const stored = clearStoredRegistration();
-        await reconcileUndesiredRegistration(stored?.token ?? null);
+        retireStoredRegistration();
         return;
       }
       if (logoutGateClosed || input.isCancelled?.()) return;
       if (!input.pushEnabled) {
         desiredRegistration = { kind: 'disabled' };
-        const stored = clearStoredRegistration();
-        await reconcileUndesiredRegistration(stored?.token ?? null);
+        retireStoredRegistration();
         return;
       }
       if (dependencies.platform === 'web') return;
       const owner = ++nextOwner;
       desiredRegistration = { kind: 'enabled', owner, userId: input.userId };
+      if (dependencies.getStoredRegistration()?.userId !== input.userId) {
+        retireStoredRegistration();
+      }
       const isCurrentOwner = () =>
         desiredRegistration.kind === 'enabled' &&
         desiredRegistration.owner === owner;
@@ -210,13 +259,18 @@ export function createPushTokenRegistrationOrchestrator(
           return;
         }
         permissionAttemptedUserIds.add(input.userId);
-        permissions = await notifications.requestPermissionsAsync({
-          ios: {
-            allowAlert: true,
-            allowBadge: true,
-            allowSound: true,
-          },
-        });
+        try {
+          permissions = await notifications.requestPermissionsAsync({
+            ios: {
+              allowAlert: true,
+              allowBadge: true,
+              allowSound: true,
+            },
+          });
+        } catch (error) {
+          permissionAttemptedUserIds.delete(input.userId);
+          throw error;
+        }
         if (
           isStale() ||
           !isNotificationGranted(permissions, notifications)
@@ -237,30 +291,64 @@ export function createPushTokenRegistrationOrchestrator(
       const token = result.data;
       if (!token || isStale()) return;
 
+      let candidate = dependencies.getStoredRegistration();
+      if (
+        candidate &&
+        dependencies
+          .getPendingRevocations()
+          .some((item) => revocationKey(item) === revocationKey(candidate!))
+      ) {
+        dependencies.setStoredRegistration(null);
+        candidate = null;
+      }
+      if (candidate?.token !== token || candidate.userId !== input.userId) {
+        retireStoredRegistration();
+        candidate = {
+          token,
+          userId: input.userId,
+          revocationSecret: dependencies.generateRevocationSecret(),
+          status: 'pending',
+        };
+        dependencies.setStoredRegistration(candidate);
+      }
+      if (candidate.status === 'registered') return;
+
+      const registrationCandidate = candidate;
       await enqueueRemoteMutation(async () => {
         if (!isCurrentOwner() || input.isCancelled?.()) return;
 
+        const activeBefore = dependencies.getStoredRegistration();
         if (
-          remoteRegistration?.token !== token ||
-          remoteRegistration.userId !== input.userId
+          activeBefore?.token !== registrationCandidate.token ||
+          activeBefore.userId !== registrationCandidate.userId ||
+          activeBefore.revocationSecret !== registrationCandidate.revocationSecret
         ) {
-          await dependencies.registerPushToken({
-            token,
-            platform: dependencies.platform,
-            provider: 'expo',
-            projectId,
-            appVersion: dependencies.appVersion,
-          });
-          remoteRegistration = { token, userId: input.userId };
+          return;
         }
+        if (activeBefore.status === 'registered') return;
+
+        await dependencies.registerPushToken({
+          token,
+          platform: dependencies.platform,
+          provider: 'expo',
+          revocationSecret: registrationCandidate.revocationSecret,
+          projectId,
+          appVersion: dependencies.appVersion,
+        });
 
         const currentDesired = desiredRegistration;
+        const activeAfter = dependencies.getStoredRegistration();
         if (
           currentDesired.kind === 'enabled' &&
           currentDesired.userId === input.userId &&
-          (currentDesired.owner !== owner || !input.isCancelled?.())
+          activeAfter?.token === registrationCandidate.token &&
+          activeAfter.userId === registrationCandidate.userId &&
+          activeAfter.revocationSecret === registrationCandidate.revocationSecret
         ) {
-          dependencies.setStoredRegistration({ token, userId: input.userId });
+          dependencies.setStoredRegistration({
+            ...registrationCandidate,
+            status: 'registered',
+          });
         }
       });
     },
@@ -293,9 +381,12 @@ const pushTokenRegistrationOrchestrator =
     getProjectId,
     getStoredRegistration,
     setStoredRegistration,
+    getPendingRevocations,
+    setPendingRevocations,
+    generateRevocationSecret: () => Crypto.randomUUID(),
     loadNotificationsModule,
     registerPushToken,
-    deletePushToken,
+    revokePushToken,
     reportFailure: reportNotificationFailure,
     reportDiagnostic: logClientDiagnostic,
   });

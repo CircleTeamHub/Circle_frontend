@@ -125,7 +125,8 @@ test('root layout registers and unregisters native push tokens', () => {
   assert.ok(appConfig.expo.plugins.includes('expo-notifications'));
   assert.match(registrar, /getExpoPushTokenAsync/);
   assert.match(registrar, /registerPushToken/);
-  assert.match(registrar, /deletePushToken/);
+  assert.match(registrar, /revokePushToken/);
+  assert.match(registrar, /Crypto\.randomUUID/);
   assert.match(registrar, /useAppSettingsStore/);
   assert.match(registrar, /useAuthStore/);
   assert.match(registrar, /registerLogoutHandler/);

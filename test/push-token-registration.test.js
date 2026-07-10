@@ -5,6 +5,19 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+const SECRET_A = '11111111-1111-4111-8111-111111111111';
+const SECRET_B = '22222222-2222-4222-8222-222222222222';
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 function loadRegistrar() {
   const filePath = path.join(
     process.cwd(),
@@ -20,14 +33,17 @@ function loadRegistrar() {
     },
     fileName: filePath,
   }).outputText;
-
   const noopStore = Object.assign(() => undefined, { getState: () => ({}) });
   const context = {
     module: { exports: {} },
     exports: {},
     require: (specifier) => {
       if (specifier === 'react') {
-        return { useEffect() {}, useRef: (value) => ({ current: value }), useState: (value) => [value, () => {}] };
+        return {
+          useEffect() {},
+          useRef: (value) => ({ current: value }),
+          useState: (value) => [value, () => {}],
+        };
       }
       if (specifier === 'react-native') {
         return {
@@ -38,9 +54,10 @@ function loadRegistrar() {
       if (specifier === 'expo-constants') {
         return { __esModule: true, default: { expoConfig: null } };
       }
+      if (specifier === 'expo-crypto') return { randomUUID: () => SECRET_A };
       if (specifier === 'react/jsx-runtime') return {};
       if (specifier === '@/services/api/notifications') {
-        return { deletePushToken() {}, registerPushToken() {} };
+        return { registerPushToken() {}, revokePushToken() {} };
       }
       if (specifier === '@/services/auth/session') {
         return { registerLogoutHandler() {} };
@@ -64,663 +81,331 @@ function loadRegistrar() {
   return context.module.exports;
 }
 
-function deferred() {
-  let resolve;
-  const promise = new Promise((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-  return { promise, resolve };
-}
-
-test('logout removes local registration before remote delete and disables auth retry', async () => {
+function makeHarness(options = {}) {
   const { createPushTokenRegistrationOrchestrator } = loadRegistrar();
-  const events = [];
-  let stored = { token: 'ExponentPushToken[abc]', userId: 'user-1' };
-  const remoteError = new Error('offline');
+  let stored = options.stored ?? null;
+  let revocations = [...(options.revocations ?? [])];
+  const registerCalls = [];
+  const revokeCalls = [];
+  const diagnostics = [];
   const failures = [];
-  const orchestrator = createPushTokenRegistrationOrchestrator({
-    platform: 'ios',
-    appVersion: '1.0.0',
-    getProjectId: () => 'project-1',
-    getStoredRegistration: () => stored,
-    setStoredRegistration: (value) => {
-      events.push(['storage', value]);
-      stored = value;
-    },
-    loadNotificationsModule: async () => null,
-    registerPushToken: async () => {},
-    deletePushToken: async (token, options) => {
-      events.push(['delete', token, options]);
-      throw remoteError;
-    },
-    reportFailure: (...args) => failures.push(args),
-    reportDiagnostic: () => {},
-  });
-
-  await orchestrator.unregisterStoredPushToken({ retryOnAuthError: false });
-
-  assert.equal(events.length, 2);
-  assert.equal(events[0][0], 'storage');
-  assert.equal(events[0][1], null);
-  assert.equal(events[1][0], 'delete');
-  assert.equal(events[1][1], 'ExponentPushToken[abc]');
-  assert.equal(events[1][2].retryOnAuthError, false);
-  assert.equal(stored, null);
-  assert.equal(failures.length, 1);
-  assert.equal(failures[0][0], 'push_token_unregister_failed');
-  assert.equal(failures[0][1], remoteError);
-});
-
-test('turning push off unregisters with normal auth retry behavior', async () => {
-  const { createPushTokenRegistrationOrchestrator } = loadRegistrar();
-  let stored = { token: 'ExponentPushToken[off]', userId: 'user-1' };
-  const deletes = [];
-  const orchestrator = createPushTokenRegistrationOrchestrator({
-    platform: 'ios',
-    appVersion: '1.0.0',
-    getProjectId: () => 'project-1',
-    getStoredRegistration: () => stored,
-    setStoredRegistration: (value) => {
-      stored = value;
-    },
-    loadNotificationsModule: async () => null,
-    registerPushToken: async () => {},
-    deletePushToken: async (...args) => deletes.push(args),
-    reportFailure: () => {},
-    reportDiagnostic: () => {},
-  });
-
-  await orchestrator.sync({
-    isAuthenticated: true,
-    userId: 'user-1',
-    pushEnabled: false,
-  });
-
-  assert.equal(stored, null);
-  assert.equal(deletes.length, 1);
-  assert.equal(deletes[0][0], 'ExponentPushToken[off]');
-  assert.equal(Object.keys(deletes[0][1]).length, 0);
-});
-
-test('first native run requests notification permission once and registers after provisional grant', async () => {
-  const { createPushTokenRegistrationOrchestrator } = loadRegistrar();
-  let stored = null;
-  const permissionRequests = [];
-  const tokenRequests = [];
-  const registrations = [];
-  const notifications = {
+  let secretCalls = 0;
+  let moduleLoads = 0;
+  const notifications = options.notifications ?? {
     IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
-    getPermissionsAsync: async () => ({
-      granted: false,
-      canAskAgain: true,
-      ios: { status: 'undetermined' },
+    getPermissionsAsync: async () => ({ granted: true }),
+    getExpoPushTokenAsync: async () => ({
+      data: options.token ?? 'ExponentPushToken[default]',
     }),
-    requestPermissionsAsync: async (options) => {
-      permissionRequests.push(options);
-      return {
-        granted: false,
-        canAskAgain: true,
-        ios: { status: 'provisional' },
-      };
-    },
-    getExpoPushTokenAsync: async (options) => {
-      tokenRequests.push(options);
-      return { data: 'ExponentPushToken[first-run]' };
-    },
   };
   const orchestrator = createPushTokenRegistrationOrchestrator({
-    platform: 'ios',
-    appVersion: '1.2.3',
-    getProjectId: () => 'project-real',
+    platform: options.platform ?? 'ios',
+    appVersion: '1.0.0',
+    getProjectId: () =>
+      Object.prototype.hasOwnProperty.call(options, 'projectId')
+        ? options.projectId
+        : 'project-real',
     getStoredRegistration: () => stored,
     setStoredRegistration: (value) => {
       stored = value;
     },
-    loadNotificationsModule: async () => notifications,
-    registerPushToken: async (input) => registrations.push(input),
-    deletePushToken: async () => {},
-    reportFailure: () => {},
-    reportDiagnostic: () => {},
+    getPendingRevocations: () => revocations,
+    setPendingRevocations: (value) => {
+      revocations = [...value];
+    },
+    generateRevocationSecret: () => {
+      secretCalls += 1;
+      return options.generateRevocationSecret?.() ?? options.secret ?? SECRET_A;
+    },
+    loadNotificationsModule: async () => {
+      moduleLoads += 1;
+      return notifications;
+    },
+    registerPushToken: async (input) => {
+      registerCalls.push(input);
+      return options.registerPushToken?.(input, stored);
+    },
+    revokePushToken: async (token, revocationSecret) => {
+      revokeCalls.push({ token, revocationSecret });
+      return options.revokePushToken?.(token, revocationSecret);
+    },
+    reportFailure: (...args) => failures.push(args),
+    reportDiagnostic: (...args) => diagnostics.push(args),
+  });
+  return {
+    orchestrator,
+    registerCalls,
+    revokeCalls,
+    diagnostics,
+    failures,
+    getStored: () => stored,
+    getRevocations: () => revocations,
+    getSecretCalls: () => secretCalls,
+    getModuleLoads: () => moduleLoads,
+  };
+}
+
+const enabled = (userId = 'user-1') => ({
+  isAuthenticated: true,
+  userId,
+  pushEnabled: true,
+});
+
+test('first native run requests permission and registers a persisted pending secret', async () => {
+  const permissionRequests = [];
+  const notifications = {
+    IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
+    getPermissionsAsync: async () => ({ granted: false, canAskAgain: true }),
+    requestPermissionsAsync: async (request) => {
+      permissionRequests.push(request);
+      return { granted: false, ios: { status: 'provisional' } };
+    },
+    getExpoPushTokenAsync: async (request) => {
+      assert.equal(request.projectId, 'project-real');
+      return { data: 'ExponentPushToken[first]' };
+    },
+  };
+  const harness = makeHarness({
+    notifications,
+    registerPushToken: async ({ revocationSecret }, activeCandidate) => {
+      assert.equal(activeCandidate.status, 'pending');
+      assert.equal(activeCandidate.revocationSecret, revocationSecret);
+    },
   });
 
-  await orchestrator.sync({
-    isAuthenticated: true,
-    userId: 'user-1',
-    pushEnabled: true,
-  });
+  await harness.orchestrator.sync(enabled());
 
   assert.equal(permissionRequests.length, 1);
   assert.equal(permissionRequests[0].ios.allowAlert, true);
   assert.equal(permissionRequests[0].ios.allowBadge, true);
   assert.equal(permissionRequests[0].ios.allowSound, true);
-  assert.equal(tokenRequests.length, 1);
-  assert.equal(tokenRequests[0].projectId, 'project-real');
-  assert.equal(registrations.length, 1);
-  assert.equal(registrations[0].token, 'ExponentPushToken[first-run]');
-  assert.equal(registrations[0].projectId, 'project-real');
-  assert.equal(registrations[0].platform, 'ios');
-  assert.equal(registrations[0].appVersion, '1.2.3');
-  assert.equal(stored.token, 'ExponentPushToken[first-run]');
-  assert.equal(stored.userId, 'user-1');
+  assert.equal(harness.registerCalls[0].revocationSecret, SECRET_A);
+  assert.equal(harness.getSecretCalls(), 1);
+  assert.equal(harness.getStored().status, 'registered');
 });
 
-test('permanently denied native permission is neither requested nor registered', async () => {
-  const { createPushTokenRegistrationOrchestrator } = loadRegistrar();
-  let requestCount = 0;
-  let tokenCount = 0;
-  let registerCount = 0;
-  const notifications = {
-    IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
-    getPermissionsAsync: async () => ({
-      granted: false,
-      canAskAgain: false,
-      ios: { status: 'denied' },
-    }),
-    requestPermissionsAsync: async () => {
-      requestCount += 1;
-      return { granted: false, canAskAgain: false };
-    },
-    getExpoPushTokenAsync: async () => {
-      tokenCount += 1;
-      return { data: 'should-not-exist' };
-    },
-  };
-  const orchestrator = createPushTokenRegistrationOrchestrator({
-    platform: 'ios',
-    appVersion: null,
-    getProjectId: () => 'project-real',
-    getStoredRegistration: () => null,
-    setStoredRegistration: () => {},
-    loadNotificationsModule: async () => notifications,
-    registerPushToken: async () => {
-      registerCount += 1;
-    },
-    deletePushToken: async () => {},
-    reportFailure: () => {},
-    reportDiagnostic: () => {},
-  });
-
-  await orchestrator.sync({
-    isAuthenticated: true,
-    userId: 'user-denied',
-    pushEnabled: true,
-  });
-
-  assert.equal(requestCount, 0);
-  assert.equal(tokenCount, 0);
-  assert.equal(registerCount, 0);
-});
-
-test('AppState-style refresh does not reprompt the same user after one session attempt', async () => {
-  const { createPushTokenRegistrationOrchestrator } = loadRegistrar();
-  let permissionChecks = 0;
-  let permissionRequests = 0;
-  const notifications = {
-    IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
-    getPermissionsAsync: async () => {
-      permissionChecks += 1;
-      return { granted: false, canAskAgain: true };
-    },
-    requestPermissionsAsync: async () => {
-      permissionRequests += 1;
-      return { granted: false, canAskAgain: true };
-    },
-    getExpoPushTokenAsync: async () => ({ data: 'unused' }),
-  };
-  const orchestrator = createPushTokenRegistrationOrchestrator({
-    platform: 'ios',
-    appVersion: null,
-    getProjectId: () => 'project-real',
-    getStoredRegistration: () => null,
-    setStoredRegistration: () => {},
-    loadNotificationsModule: async () => notifications,
-    registerPushToken: async () => {},
-    deletePushToken: async () => {},
-    reportFailure: () => {},
-    reportDiagnostic: () => {},
-  });
-  const input = {
-    isAuthenticated: true,
-    userId: 'user-refresh',
-    pushEnabled: true,
-  };
-
-  await orchestrator.sync(input);
-  await orchestrator.sync(input);
-
-  assert.equal(permissionChecks, 2);
-  assert.equal(permissionRequests, 1);
-});
-
-test('web never loads the native notifications module or registers a push token', async () => {
-  const { createPushTokenRegistrationOrchestrator } = loadRegistrar();
-  let moduleLoads = 0;
-  let registrations = 0;
-  const orchestrator = createPushTokenRegistrationOrchestrator({
-    platform: 'web',
-    appVersion: null,
-    getProjectId: () => 'project-real',
-    getStoredRegistration: () => null,
-    setStoredRegistration: () => {},
-    loadNotificationsModule: async () => {
-      moduleLoads += 1;
-      return {
-        IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
-        getPermissionsAsync: async () => ({ granted: true }),
-        getExpoPushTokenAsync: async () => ({ data: 'web-token' }),
-      };
-    },
-    registerPushToken: async () => {
-      registrations += 1;
-    },
-    deletePushToken: async () => {},
-    reportFailure: () => {},
-    reportDiagnostic: () => {},
-  });
-
-  await orchestrator.sync({
-    isAuthenticated: true,
-    userId: 'web-user',
-    pushEnabled: true,
-  });
-
-  assert.equal(moduleLoads, 0);
-  assert.equal(registrations, 0);
-});
-
-test('missing project ID reports a diagnostic and stops before requesting an Expo token', async () => {
-  const { createPushTokenRegistrationOrchestrator } = loadRegistrar();
-  let tokenRequests = 0;
-  const diagnostics = [];
-  const orchestrator = createPushTokenRegistrationOrchestrator({
-    platform: 'android',
-    appVersion: null,
-    getProjectId: () => null,
-    getStoredRegistration: () => null,
-    setStoredRegistration: () => {},
-    loadNotificationsModule: async () => ({
+test('permanently denied permission is not requested or registered', async () => {
+  let requests = 0;
+  const harness = makeHarness({
+    notifications: {
       IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
-      getPermissionsAsync: async () => ({ granted: true }),
-      getExpoPushTokenAsync: async () => {
-        tokenRequests += 1;
-        return { data: 'must-not-be-requested' };
-      },
-    }),
-    registerPushToken: async () => {},
-    deletePushToken: async () => {},
-    reportFailure: () => {},
-    reportDiagnostic: (...args) => diagnostics.push(args),
-  });
-
-  await orchestrator.sync({
-    isAuthenticated: true,
-    userId: 'user-no-project',
-    pushEnabled: true,
-  });
-
-  assert.equal(tokenRequests, 0);
-  assert.equal(diagnostics.length, 1);
-  assert.equal(diagnostics[0][0], 'push_token_project_id_missing');
-  assert.equal(diagnostics[0][1].platform, 'android');
-});
-
-test('logout during a permission request invalidates registration before token lookup', async () => {
-  const { createPushTokenRegistrationOrchestrator } = loadRegistrar();
-  const permission = deferred();
-  const permissionStarted = deferred();
-  let stored = null;
-  let tokenRequests = 0;
-  let registrations = 0;
-  const deletes = [];
-  const orchestrator = createPushTokenRegistrationOrchestrator({
-    platform: 'ios',
-    appVersion: null,
-    getProjectId: () => 'project-real',
-    getStoredRegistration: () => stored,
-    setStoredRegistration: (value) => {
-      stored = value;
-    },
-    loadNotificationsModule: async () => ({
-      IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
-      getPermissionsAsync: async () => ({ granted: false, canAskAgain: true }),
+      getPermissionsAsync: async () => ({ granted: false, canAskAgain: false }),
       requestPermissionsAsync: async () => {
-        permissionStarted.resolve();
-        return permission.promise;
+        requests += 1;
       },
-      getExpoPushTokenAsync: async () => {
-        tokenRequests += 1;
-        return { data: 'must-not-register' };
-      },
-    }),
-    registerPushToken: async () => {
-      registrations += 1;
     },
-    deletePushToken: async (...args) => deletes.push(args),
-    reportFailure: () => {},
-    reportDiagnostic: () => {},
   });
-
-  const syncPromise = orchestrator.sync({
-    isAuthenticated: true,
-    userId: 'permission-race',
-    pushEnabled: true,
-  });
-  await permissionStarted.promise;
-  const logoutPromise = orchestrator.logout();
-  permission.resolve({ granted: true, canAskAgain: true });
-  await Promise.all([logoutPromise, syncPromise]);
-
-  assert.equal(stored, null);
-  assert.equal(tokenRequests, 0);
-  assert.equal(registrations, 0);
-  assert.equal(deletes.length, 0);
+  await harness.orchestrator.sync(enabled());
+  assert.equal(requests, 0);
+  assert.equal(harness.registerCalls.length, 0);
 });
 
-test('logout during Expo token lookup prevents backend registration without remote cleanup', async () => {
-  const { createPushTokenRegistrationOrchestrator } = loadRegistrar();
-  const tokenResult = deferred();
-  const tokenStarted = deferred();
-  let stored = null;
-  let registrations = 0;
-  const deletes = [];
-  const orchestrator = createPushTokenRegistrationOrchestrator({
-    platform: 'ios',
-    appVersion: null,
-    getProjectId: () => 'project-real',
-    getStoredRegistration: () => stored,
-    setStoredRegistration: (value) => {
-      stored = value;
+test('completed denial prompts once per user, while a request exception may retry', async () => {
+  let requestCalls = 0;
+  const requestError = new Error('native failure');
+  const notifications = {
+    IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
+    getPermissionsAsync: async () => ({ granted: false, canAskAgain: true }),
+    requestPermissionsAsync: async () => {
+      requestCalls += 1;
+      if (requestCalls === 1) throw requestError;
+      return { granted: false, canAskAgain: true };
     },
-    loadNotificationsModule: async () => ({
-      IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
-      getPermissionsAsync: async () => ({ granted: true }),
-      getExpoPushTokenAsync: async () => {
-        tokenStarted.resolve();
-        return tokenResult.promise;
-      },
-    }),
-    registerPushToken: async () => {
-      registrations += 1;
-    },
-    deletePushToken: async (...args) => deletes.push(args),
-    reportFailure: () => {},
-    reportDiagnostic: () => {},
-  });
-
-  const syncPromise = orchestrator.sync({
-    isAuthenticated: true,
-    userId: 'token-race',
-    pushEnabled: true,
-  });
-  await tokenStarted.promise;
-  const logoutPromise = orchestrator.logout();
-  tokenResult.resolve({ data: 'ExponentPushToken[token-race]' });
-  await Promise.all([logoutPromise, syncPromise]);
-
-  assert.equal(stored, null);
-  assert.equal(registrations, 0);
-  assert.equal(deletes.length, 0);
-});
-
-test('logout during backend registration deletes the remotely registered token without persisting it', async () => {
-  const { createPushTokenRegistrationOrchestrator } = loadRegistrar();
-  const registration = deferred();
-  const registrationStarted = deferred();
-  let stored = null;
-  const deletes = [];
-  const orchestrator = createPushTokenRegistrationOrchestrator({
-    platform: 'ios',
-    appVersion: null,
-    getProjectId: () => 'project-real',
-    getStoredRegistration: () => stored,
-    setStoredRegistration: (value) => {
-      stored = value;
-    },
-    loadNotificationsModule: async () => ({
-      IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
-      getPermissionsAsync: async () => ({ granted: true }),
-      getExpoPushTokenAsync: async () => ({
-        data: 'ExponentPushToken[register-race]',
-      }),
-    }),
-    registerPushToken: async () => {
-      registrationStarted.resolve();
-      return registration.promise;
-    },
-    deletePushToken: async (...args) => deletes.push(args),
-    reportFailure: () => {},
-    reportDiagnostic: () => {},
-  });
-
-  const syncPromise = orchestrator.sync({
-    isAuthenticated: true,
-    userId: 'register-race',
-    pushEnabled: true,
-  });
-  await registrationStarted.promise;
-  let logoutSettled = false;
-  const logoutPromise = orchestrator.logout().then(() => {
-    logoutSettled = true;
-  });
-  await Promise.resolve();
-  assert.equal(logoutSettled, false);
-  registration.resolve();
-  await Promise.all([logoutPromise, syncPromise]);
-
-  assert.equal(stored, null);
-  assert.equal(deletes.length, 1);
-  assert.equal(deletes[0][0], 'ExponentPushToken[register-race]');
-  assert.equal(deletes[0][1].retryOnAuthError, false);
-});
-
-test('logout blocks stale authenticated resync until an unauthenticated transition is observed', async () => {
-  const { createPushTokenRegistrationOrchestrator } = loadRegistrar();
-  let registrations = 0;
-  const orchestrator = createPushTokenRegistrationOrchestrator({
-    platform: 'ios',
-    appVersion: null,
-    getProjectId: () => 'project-real',
-    getStoredRegistration: () => null,
-    setStoredRegistration: () => {},
-    loadNotificationsModule: async () => ({
-      IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
-      getPermissionsAsync: async () => ({ granted: true }),
-      getExpoPushTokenAsync: async () => ({ data: 'ExponentPushToken[new]' }),
-    }),
-    registerPushToken: async () => {
-      registrations += 1;
-    },
-    deletePushToken: async () => {},
-    reportFailure: () => {},
-    reportDiagnostic: () => {},
-  });
-  const authenticated = {
-    isAuthenticated: true,
-    userId: 'same-user',
-    pushEnabled: true,
   };
-
-  await orchestrator.logout();
-  await orchestrator.sync(authenticated);
-  assert.equal(registrations, 0);
-
-  await orchestrator.sync({
-    isAuthenticated: false,
-    userId: '',
-    pushEnabled: true,
-  });
-  await orchestrator.sync(authenticated);
-  assert.equal(registrations, 1);
+  const harness = makeHarness({ notifications });
+  await assert.rejects(harness.orchestrator.sync(enabled()), requestError);
+  await harness.orchestrator.sync(enabled());
+  await harness.orchestrator.sync(enabled());
+  assert.equal(requestCalls, 2);
 });
 
-test('same-user replacement does not let a stale PUT delete the currently desired token', async () => {
-  const { createPushTokenRegistrationOrchestrator } = loadRegistrar();
-  const firstRegistration = deferred();
-  const firstRegistrationStarted = deferred();
-  let firstCancelled = false;
-  let registerCalls = 0;
-  let stored = null;
-  const deletes = [];
-  const orchestrator = createPushTokenRegistrationOrchestrator({
-    platform: 'ios',
-    appVersion: null,
-    getProjectId: () => 'project-real',
-    getStoredRegistration: () => stored,
-    setStoredRegistration: (value) => {
-      stored = value;
+test('web never loads native registration and missing project id stops with a diagnostic', async () => {
+  const web = makeHarness({ platform: 'web' });
+  web.orchestrator.flushPendingRevocations();
+  await web.orchestrator.sync(enabled());
+  assert.equal(web.getModuleLoads(), 0);
+  assert.equal(web.registerCalls.length, 0);
+
+  const missing = makeHarness({ projectId: null });
+  await missing.orchestrator.sync(enabled());
+  assert.equal(missing.registerCalls.length, 0);
+  assert.equal(missing.diagnostics[0][0], 'push_token_project_id_missing');
+});
+
+test('logout returns immediately during a hung PUT and persists a revocation tombstone', async () => {
+  const put = deferred();
+  const putStarted = deferred();
+  const harness = makeHarness({
+    registerPushToken: async () => {
+      putStarted.resolve();
+      return put.promise;
     },
-    loadNotificationsModule: async () => ({
+  });
+  const syncPromise = harness.orchestrator.sync(enabled());
+  await putStarted.promise;
+
+  const result = harness.orchestrator.logout();
+
+  assert.equal(result, undefined);
+  assert.equal(harness.getStored(), null);
+  assert.equal(harness.getRevocations().length, 1);
+  assert.equal(harness.revokeCalls.length, 0);
+  put.resolve();
+  await syncPromise;
+});
+
+test('a PUT that completes after logout is followed by public revoke with the same secret', async () => {
+  const put = deferred();
+  const putStarted = deferred();
+  const order = [];
+  const harness = makeHarness({
+    registerPushToken: async ({ revocationSecret }) => {
+      order.push(`PUT ${revocationSecret}`);
+      putStarted.resolve();
+      return put.promise;
+    },
+    revokePushToken: async (_token, secret) => {
+      order.push(`REVOKE ${secret}`);
+    },
+  });
+  const syncPromise = harness.orchestrator.sync(enabled());
+  await putStarted.promise;
+  harness.orchestrator.logout();
+  put.resolve();
+  await syncPromise;
+  await harness.orchestrator.flushPendingRevocations();
+
+  assert.deepEqual(order, [`PUT ${SECRET_A}`, `REVOKE ${SECRET_A}`]);
+  assert.equal(harness.getRevocations().length, 0);
+});
+
+test('ambiguous PUT failure keeps pending candidate and logout tombstone for later revoke', async () => {
+  const timeout = new Error('timeout');
+  const harness = makeHarness({
+    registerPushToken: async () => {
+      throw timeout;
+    },
+    revokePushToken: async () => {
+      throw new Error('offline');
+    },
+  });
+  await assert.rejects(harness.orchestrator.sync(enabled()), timeout);
+  assert.equal(harness.getStored().status, 'pending');
+  harness.orchestrator.logout();
+  await harness.orchestrator.flushPendingRevocations();
+  assert.equal(harness.getStored(), null);
+  assert.equal(harness.getRevocations().length, 1);
+  assert.equal(harness.getRevocations()[0].revocationSecret, SECRET_A);
+});
+
+test('failed revoke remains queued and retries on the next AppState-style sync', async () => {
+  let attempts = 0;
+  const harness = makeHarness({
+    revocations: [{ token: 'old-token', revocationSecret: SECRET_A }],
+    revokePushToken: async () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error('offline');
+    },
+  });
+  harness.orchestrator.flushPendingRevocations();
+  await harness.orchestrator.sync(enabled());
+  await harness.orchestrator.flushPendingRevocations();
+  assert.equal(attempts >= 2, true);
+  assert.equal(harness.getRevocations().length, 0);
+});
+
+test('user A pending PUT is serialized before revoke A and PUT B', async () => {
+  const putA = deferred();
+  const putAStarted = deferred();
+  const tokens = ['token-a', 'token-b'];
+  const secrets = [SECRET_A, SECRET_B];
+  const order = [];
+  let secretIndex = 0;
+  const harness = makeHarness({
+    notifications: {
       IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
       getPermissionsAsync: async () => ({ granted: true }),
-      getExpoPushTokenAsync: async () => ({
-        data: 'ExponentPushToken[replacement]',
-      }),
-    }),
-    registerPushToken: async () => {
-      registerCalls += 1;
-      if (registerCalls === 1) {
-        firstRegistrationStarted.resolve();
-        return firstRegistration.promise;
+      getExpoPushTokenAsync: async () => ({ data: tokens.shift() }),
+    },
+    generateRevocationSecret: () => secrets[secretIndex++],
+    registerPushToken: async ({ token, revocationSecret }) => {
+      order.push(`PUT ${token} ${revocationSecret}`);
+      if (token === 'token-a') {
+        putAStarted.resolve();
+        return putA.promise;
       }
     },
-    deletePushToken: async (...args) => deletes.push(args),
-    reportFailure: () => {},
-    reportDiagnostic: () => {},
+    revokePushToken: async (token, secret) => {
+      order.push(`REVOKE ${token} ${secret}`);
+    },
   });
-  const input = {
-    isAuthenticated: true,
-    userId: 'same-user',
-    pushEnabled: true,
-  };
-
-  const staleSync = orchestrator.sync({
-    ...input,
-    isCancelled: () => firstCancelled,
-  });
-  await firstRegistrationStarted.promise;
-  firstCancelled = true;
-  const replacementSync = orchestrator.sync(input);
-  firstRegistration.resolve();
-  await Promise.all([staleSync, replacementSync]);
-
-  assert.equal(registerCalls, 1);
-  assert.equal(stored.token, 'ExponentPushToken[replacement]');
-  assert.equal(stored.userId, 'same-user');
-  assert.equal(deletes.length, 0);
+  const userA = harness.orchestrator.sync(enabled('user-a'));
+  await putAStarted.promise;
+  const userB = harness.orchestrator.sync(enabled('user-b'));
+  putA.resolve();
+  await Promise.all([userA, userB]);
+  await harness.orchestrator.flushPendingRevocations();
+  assert.deepEqual(order, [
+    `PUT token-a ${SECRET_A}`,
+    `REVOKE token-a ${SECRET_A}`,
+    `PUT token-b ${SECRET_B}`,
+  ]);
+  assert.equal(harness.getStored().userId, 'user-b');
 });
 
-test('toggle-off during a stale PUT cleans the remote token with normal auth retry', async () => {
-  const { createPushTokenRegistrationOrchestrator } = loadRegistrar();
-  const registration = deferred();
-  const registrationStarted = deferred();
-  let cancelled = false;
-  let stored = null;
-  const deletes = [];
-  const orchestrator = createPushTokenRegistrationOrchestrator({
-    platform: 'ios',
-    appVersion: null,
-    getProjectId: () => 'project-real',
-    getStoredRegistration: () => stored,
-    setStoredRegistration: (value) => {
-      stored = value;
-    },
-    loadNotificationsModule: async () => ({
-      IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
-      getPermissionsAsync: async () => ({ granted: true }),
-      getExpoPushTokenAsync: async () => ({
-        data: 'ExponentPushToken[toggle-race]',
-      }),
-    }),
+test('same pending candidate retries with one generated secret and registered candidate skips', async () => {
+  let attempts = 0;
+  const harness = makeHarness({
     registerPushToken: async () => {
-      registrationStarted.resolve();
-      return registration.promise;
+      attempts += 1;
+      if (attempts === 1) throw new Error('timeout');
     },
-    deletePushToken: async (...args) => deletes.push(args),
-    reportFailure: () => {},
-    reportDiagnostic: () => {},
   });
+  await assert.rejects(harness.orchestrator.sync(enabled()));
+  await harness.orchestrator.sync(enabled());
+  await harness.orchestrator.sync(enabled());
+  assert.equal(attempts, 2);
+  assert.equal(harness.getSecretCalls(), 1);
+  assert.equal(harness.registerCalls[0].revocationSecret, SECRET_A);
+  assert.equal(harness.registerCalls[1].revocationSecret, SECRET_A);
+});
 
-  const staleSync = orchestrator.sync({
-    isAuthenticated: true,
-    userId: 'toggle-user',
-    pushEnabled: true,
-    isCancelled: () => cancelled,
+test('same-user AppState replacement coalesces behind one pending PUT', async () => {
+  const put = deferred();
+  const putStarted = deferred();
+  const harness = makeHarness({
+    registerPushToken: async () => {
+      putStarted.resolve();
+      return put.promise;
+    },
   });
-  await registrationStarted.promise;
-  cancelled = true;
-  const toggleOffSync = orchestrator.sync({
+  const first = harness.orchestrator.sync(enabled());
+  await putStarted.promise;
+  const replacement = harness.orchestrator.sync(enabled());
+  put.resolve();
+  await Promise.all([first, replacement]);
+  assert.equal(harness.registerCalls.length, 1);
+  assert.equal(harness.revokeCalls.length, 0);
+  assert.equal(harness.getStored().status, 'registered');
+});
+
+test('toggle-off retires locally and uses public revocation without auth state', async () => {
+  const harness = makeHarness({
+    stored: {
+      token: 'registered-token',
+      userId: 'user-1',
+      revocationSecret: SECRET_A,
+      status: 'registered',
+    },
+  });
+  await harness.orchestrator.sync({
     isAuthenticated: true,
-    userId: 'toggle-user',
+    userId: 'user-1',
     pushEnabled: false,
   });
-  registration.resolve();
-  await Promise.all([staleSync, toggleOffSync]);
-
-  assert.equal(stored, null);
-  assert.equal(deletes.length, 1);
-  assert.equal(deletes[0][0], 'ExponentPushToken[toggle-race]');
-  assert.equal(Object.keys(deletes[0][1]).length, 0);
-});
-
-test('cross-user registrations serialize so the desired user is the final remote owner', async () => {
-  const { createPushTokenRegistrationOrchestrator } = loadRegistrar();
-  const firstRegistration = deferred();
-  const firstRegistrationStarted = deferred();
-  const tokenResults = [
-    'ExponentPushToken[user-a]',
-    'ExponentPushToken[user-b]',
-  ];
-  const mutationOrder = [];
-  let stored = null;
-  const orchestrator = createPushTokenRegistrationOrchestrator({
-    platform: 'ios',
-    appVersion: null,
-    getProjectId: () => 'project-real',
-    getStoredRegistration: () => stored,
-    setStoredRegistration: (value) => {
-      stored = value;
-    },
-    loadNotificationsModule: async () => ({
-      IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
-      getPermissionsAsync: async () => ({ granted: true }),
-      getExpoPushTokenAsync: async () => ({ data: tokenResults.shift() }),
-    }),
-    registerPushToken: async ({ token }) => {
-      mutationOrder.push(`PUT ${token}`);
-      if (token === 'ExponentPushToken[user-a]') {
-        firstRegistrationStarted.resolve();
-        return firstRegistration.promise;
-      }
-    },
-    deletePushToken: async (token) => {
-      mutationOrder.push(`DELETE ${token}`);
-    },
-    reportFailure: () => {},
-    reportDiagnostic: () => {},
-  });
-
-  const userASync = orchestrator.sync({
-    isAuthenticated: true,
-    userId: 'user-a',
-    pushEnabled: true,
-  });
-  await firstRegistrationStarted.promise;
-  const userBSync = orchestrator.sync({
-    isAuthenticated: true,
-    userId: 'user-b',
-    pushEnabled: true,
-  });
-  await Promise.resolve();
-
-  assert.deepEqual(mutationOrder, ['PUT ExponentPushToken[user-a]']);
-
-  firstRegistration.resolve();
-  await Promise.all([userASync, userBSync]);
-
-  assert.deepEqual(mutationOrder, [
-    'PUT ExponentPushToken[user-a]',
-    'PUT ExponentPushToken[user-b]',
-  ]);
-  assert.equal(stored.token, 'ExponentPushToken[user-b]');
-  assert.equal(stored.userId, 'user-b');
+  await harness.orchestrator.flushPendingRevocations();
+  assert.equal(harness.getStored(), null);
+  assert.equal(harness.revokeCalls.length, 1);
+  assert.equal(harness.revokeCalls[0].token, 'registered-token');
+  assert.equal(harness.revokeCalls[0].revocationSecret, SECRET_A);
 });

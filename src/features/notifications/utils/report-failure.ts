@@ -11,6 +11,7 @@ const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 export type NotificationFailureEvent =
   | 'push_token_register_failed'
   | 'push_token_unregister_failed'
+  | 'push_token_revoke_failed'
   | 'notification_mark_read_failed'
   | 'notification_delete_failed'
   | 'notification_load_more_failed'

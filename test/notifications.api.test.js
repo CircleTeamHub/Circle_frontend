@@ -89,6 +89,7 @@ test("registerPushToken PUTs the device push token", async () => {
     token: "ExponentPushToken[abc]",
     platform: "ios",
     provider: "expo",
+    revocationSecret: "12345678-1234-4234-9234-123456789abc",
   });
   assert.equal(calls[0][0], "/notification/push-token");
   assert.equal(calls[0][1].method, "PUT");
@@ -96,16 +97,23 @@ test("registerPushToken PUTs the device push token", async () => {
     token: "ExponentPushToken[abc]",
     platform: "ios",
     provider: "expo",
+    revocationSecret: "12345678-1234-4234-9234-123456789abc",
   });
 });
 
-test("deletePushToken DELETEs the stored device push token", async () => {
+test("revokePushToken uses the public unauthenticated revoke endpoint", async () => {
   const { api, calls } = loadApi("src/services/api/notifications.ts", undefined);
-  await api.deletePushToken("ExponentPushToken[abc]", {
-    retryOnAuthError: false,
-  });
-  assert.equal(calls[0][0], "/notification/push-token");
+  await api.revokePushToken(
+    "ExponentPushToken[abc]",
+    "12345678-1234-4234-9234-123456789abc",
+  );
+  assert.equal(calls[0][0], "/notification/push-token/revoke");
   assert.equal(calls[0][1].method, "DELETE");
   assert.equal(calls[0][1].body.token, "ExponentPushToken[abc]");
+  assert.equal(
+    calls[0][1].body.revocationSecret,
+    "12345678-1234-4234-9234-123456789abc",
+  );
+  assert.equal(calls[0][1].auth, false);
   assert.equal(calls[0][1].retryOnAuthError, false);
 });

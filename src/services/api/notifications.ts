@@ -20,6 +20,7 @@ export type RegisterPushTokenInput = {
   token: string;
   platform: PushTokenPlatform;
   provider: PushTokenProvider;
+  revocationSecret: string;
   projectId?: string | null;
   appVersion?: string | null;
 };
@@ -88,13 +89,14 @@ export async function registerPushToken(input: RegisterPushTokenInput): Promise<
   });
 }
 
-export async function deletePushToken(
+export async function revokePushToken(
   token: string,
-  options: { retryOnAuthError?: boolean } = {},
+  revocationSecret: string,
 ): Promise<void> {
-  await apiClient<void>('/notification/push-token', {
+  await apiClient<void>('/notification/push-token/revoke', {
     method: 'DELETE',
-    body: { token },
-    ...options,
+    body: { token, revocationSecret },
+    auth: false,
+    retryOnAuthError: false,
   });
 }
