@@ -15,14 +15,26 @@ type PendingResponse = {
   route: Href;
   notificationId: string;
   requestIdentifier: string;
+  targetUserId: string;
 };
+
+type FailureStage = 'navigate' | 'log-open' | 'local-read' | 'remote-read';
 
 type ControllerDependencies = {
   resolveRoute: (data: PushData) => Href | null;
   navigate: (route: Href) => void;
   markReadLocal: (notificationId: string) => void;
   markReadRemote: (notificationId: string) => Promise<void>;
-  reportFailure: (error: unknown, notificationId: string) => void;
+  reportFailure: (
+    error: unknown,
+    notificationId: string,
+    stage: FailureStage,
+    requestIdentifier: string,
+  ) => void;
+  reportDrop: (
+    reason: 'account-mismatch' | 'missing-target-user',
+    requestIdentifier: string,
+  ) => void;
   logOpen: (requestIdentifier: string) => void;
 };
 
@@ -73,40 +85,94 @@ export function isAlreadyOnPushTarget(pathname: string, route: Href) {
 }
 
 export function createPushResponseController(deps: ControllerDependencies) {
-  const handled = new Set<string>();
+  const handledIds = new Set<string>();
+  const queuedIds = new Set<string>();
   let navReady = false;
-  let authenticated = false;
+  let currentUserId: string | null = null;
   const pending: PendingResponse[] = [];
   let flushing = false;
 
   const remember = (identifier: string) => {
-    handled.add(identifier);
-    if (handled.size <= HANDLED_LIMIT) return;
-    const oldest = handled.values().next().value;
-    if (oldest !== undefined) handled.delete(oldest);
+    handledIds.add(identifier);
+    if (handledIds.size <= HANDLED_LIMIT) return;
+    const oldest = handledIds.values().next().value;
+    if (oldest !== undefined) handledIds.delete(oldest);
   };
 
-  const open = ({ route, notificationId }: PendingResponse) => {
+  const safeReport = (
+    error: unknown,
+    item: PendingResponse,
+    stage: FailureStage,
+  ) => {
+    try {
+      deps.reportFailure(
+        error,
+        item.notificationId,
+        stage,
+        item.requestIdentifier,
+      );
+    } catch {
+      // Reporting must never alter push response state or navigation.
+    }
+  };
+
+  const safeReportDrop = (
+    reason: 'account-mismatch' | 'missing-target-user',
+    requestIdentifier: string,
+  ) => {
+    try {
+      deps.reportDrop(reason, requestIdentifier);
+    } catch {
+      // A diagnostic sink failure must not revive a terminally dropped tap.
+    }
+  };
+
+  const dispatch = (item: PendingResponse) => {
+    try {
+      deps.navigate(item.route);
+    } catch (error) {
+      safeReport(error, item, 'navigate');
+      return false;
+    }
+
+    queuedIds.delete(item.requestIdentifier);
+    remember(item.requestIdentifier);
+    try {
+      deps.logOpen(item.requestIdentifier);
+    } catch (error) {
+      safeReport(error, item, 'log-open');
+    }
+
+    const { notificationId } = item;
     if (notificationId) {
-      deps.markReadLocal(notificationId);
+      try {
+        deps.markReadLocal(notificationId);
+      } catch (error) {
+        safeReport(error, item, 'local-read');
+      }
       try {
         void deps.markReadRemote(notificationId).catch((error) => {
-          deps.reportFailure(error, notificationId);
+          safeReport(error, item, 'remote-read');
         });
       } catch (error) {
-        deps.reportFailure(error, notificationId);
+        safeReport(error, item, 'remote-read');
       }
     }
-    deps.navigate(route);
+    return true;
   };
 
   const flush = () => {
-    if (!navReady || !authenticated || flushing) return;
+    if (!navReady || !currentUserId || flushing) return;
     flushing = true;
     try {
-      while (pending.length > 0) {
-        const item = pending.shift();
-        if (item) open(item);
+      for (let index = 0; index < pending.length; ) {
+        const item = pending[index];
+        if (item.targetUserId !== currentUserId) {
+          index += 1;
+          continue;
+        }
+        if (!dispatch(item)) break;
+        pending.splice(index, 1);
       }
     } finally {
       flushing = false;
@@ -114,36 +180,50 @@ export function createPushResponseController(deps: ControllerDependencies) {
   };
 
   return {
-    setReadiness(nextNavReady: boolean, nextAuthenticated: boolean) {
+    setReadiness(nextNavReady: boolean, nextUserId: string | null) {
       navReady = nextNavReady;
-      authenticated = nextAuthenticated;
+      currentUserId = nextUserId;
       flush();
     },
 
     handleResponse(response: PushNotificationResponse | null | undefined) {
       if (!response) return;
       const request = response.notification.request;
-      if (handled.has(request.identifier)) return;
+      if (
+        handledIds.has(request.identifier) ||
+        queuedIds.has(request.identifier)
+      ) {
+        return;
+      }
       const data = request.content.data ?? {};
       const route = deps.resolveRoute(data);
       if (!route) return;
 
-      remember(request.identifier);
-      deps.logOpen(request.identifier);
+      const targetUserId = text(data.toUserId);
+      if (!targetUserId) {
+        remember(request.identifier);
+        safeReportDrop('missing-target-user', request.identifier);
+        return;
+      }
+      if (currentUserId && targetUserId !== currentUserId) {
+        remember(request.identifier);
+        safeReportDrop('account-mismatch', request.identifier);
+        return;
+      }
+
       const item = {
         route,
         notificationId: text(data.notificationId),
         requestIdentifier: request.identifier,
+        targetUserId,
       };
-      if (navReady && authenticated) {
-        open(item);
-      } else {
-        pending.push(item);
-        if (pending.length > PENDING_LIMIT) {
-          const dropped = pending.shift();
-          if (dropped) handled.delete(dropped.requestIdentifier);
-        }
+      queuedIds.add(request.identifier);
+      pending.push(item);
+      if (pending.length > PENDING_LIMIT) {
+        const dropped = pending.shift();
+        if (dropped) queuedIds.delete(dropped.requestIdentifier);
       }
+      flush();
     },
   };
 }

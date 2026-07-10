@@ -133,11 +133,15 @@ test('root layout mounts system push notification response routing', () => {
   const host = read(
     'src/features/notifications/components/PushNotificationRouteHandler.tsx',
   );
+  const listener = read(
+    'src/features/notifications/utils/push-response-listener.ts',
+  );
+  const nativeWiring = `${host}\n${listener}`;
 
   assert.match(rootLayout, /PushNotificationRouteHandler/);
-  assert.match(host, /addNotificationResponseReceivedListener/);
-  assert.match(host, /getLastNotificationResponse/);
-  assert.match(host, /clearLastNotificationResponse/);
+  assert.match(nativeWiring, /addNotificationResponseReceivedListener/);
+  assert.match(nativeWiring, /getLastNotificationResponse/);
+  assert.match(nativeWiring, /clearLastNotificationResponse/);
   assert.match(host, /resolvePushNotificationRoute/);
   assert.match(host, /setNotificationHandler/);
   assert.match(host, /shouldShowBanner:\s*false/);
@@ -146,7 +150,9 @@ test('root layout mounts system push notification response routing', () => {
   assert.match(host, /routerRef\.current\.replace/);
   assert.match(host, /createPushResponseController/);
   assert.match(host, /controllerRef/);
-  assert.match(host, /setReadiness\(navReady, isAuthenticated\)/);
+  assert.match(host, /setReadiness\(navReady, authenticatedUserId\)/);
+  assert.match(host, /state\.user\?\.id/);
+  assert.match(host, /initializePushResponseListener/);
   assert.match(host, /markInteractiveReadLocal/);
   assert.match(host, /markNotificationRead/);
   assert.match(host, /reportNotificationFailure\('notification_mark_read_failed'/);

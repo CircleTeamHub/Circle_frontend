@@ -32,18 +32,26 @@ function response(identifier, data = {}) {
     notification: {
       request: {
         identifier,
-        content: { data },
+        content: { data: { toUserId: 'user-1', ...data } },
       },
     },
   };
 }
 
-function harness({ ready = true, resolveRoute = (data) => data.route ?? null } = {}) {
+function harness({
+  ready = true,
+  currentUserId = 'user-1',
+  resolveRoute = (data) => data.route ?? null,
+  navigate,
+  markReadLocal,
+  logOpen,
+} = {}) {
   const navigated = [];
   const localReads = [];
   const apiReads = [];
   const failures = [];
   const diagnostics = [];
+  const drops = [];
   let rejectRead;
   const readPromise = new Promise((resolve, reject) => {
     rejectRead = reject;
@@ -53,16 +61,18 @@ function harness({ ready = true, resolveRoute = (data) => data.route ?? null } =
   );
   const controller = createPushResponseController({
     resolveRoute,
-    navigate: (route) => navigated.push(route),
-    markReadLocal: (id) => localReads.push(id),
+    navigate: navigate ?? ((route) => navigated.push(route)),
+    markReadLocal: markReadLocal ?? ((id) => localReads.push(id)),
     markReadRemote: (id) => {
       apiReads.push(id);
       return readPromise;
     },
-    reportFailure: (error, id) => failures.push([error.message, id]),
-    logOpen: (identifier) => diagnostics.push(identifier),
+    reportFailure: (error, id, stage) =>
+      failures.push([error.message, id, stage]),
+    reportDrop: (reason, identifier) => drops.push([reason, identifier]),
+    logOpen: logOpen ?? ((identifier) => diagnostics.push(identifier)),
   });
-  controller.setReadiness(ready, ready);
+  controller.setReadiness(ready, ready ? currentUserId : null);
   return {
     controller,
     navigated,
@@ -70,6 +80,7 @@ function harness({ ready = true, resolveRoute = (data) => data.route ?? null } =
     apiReads,
     failures,
     diagnostics,
+    drops,
     rejectRead,
   };
 }
@@ -86,9 +97,9 @@ test('queues one cold response and flushes navigation and backend read once when
   assert.deepEqual(h.navigated, []);
   assert.deepEqual(h.localReads, []);
 
-  h.controller.setReadiness(true, false);
-  h.controller.setReadiness(true, true);
-  h.controller.setReadiness(true, true);
+  h.controller.setReadiness(true, null);
+  h.controller.setReadiness(true, 'user-1');
+  h.controller.setReadiness(true, 'user-1');
 
   assert.deepEqual(h.navigated, ['/target']);
   assert.deepEqual(h.localReads, ['backend-notification-1']);
@@ -118,12 +129,142 @@ test('queues distinct cold responses and flushes them once in arrival order', ()
     }),
   );
 
-  h.controller.setReadiness(true, true);
-  h.controller.setReadiness(true, true);
+  h.controller.setReadiness(true, 'user-1');
+  h.controller.setReadiness(true, 'user-1');
 
   assert.deepEqual(h.navigated, ['/cold-1', '/cold-2']);
   assert.deepEqual(h.localReads, ['backend-cold-1', 'backend-cold-2']);
   assert.deepEqual(h.apiReads, ['backend-cold-1', 'backend-cold-2']);
+});
+
+test('keeps a cold response queued until its target account becomes active', () => {
+  const h = harness({ ready: false });
+  h.controller.handleResponse(
+    response('expo-account-a', {
+      route: '/account-a',
+      notificationId: 'backend-account-a',
+      toUserId: 'user-a',
+    }),
+  );
+
+  h.controller.setReadiness(true, 'user-b');
+  assert.deepEqual(h.navigated, []);
+  assert.deepEqual(h.apiReads, []);
+
+  h.controller.setReadiness(true, 'user-a');
+  h.controller.setReadiness(true, 'user-a');
+  assert.deepEqual(h.navigated, ['/account-a']);
+  assert.deepEqual(h.apiReads, ['backend-account-a']);
+});
+
+test('terminally drops a warm response targeted at another account', () => {
+  const h = harness({ currentUserId: 'user-b' });
+  const mismatch = response('expo-warm-mismatch', {
+    route: '/account-a',
+    notificationId: 'backend-account-a',
+    toUserId: 'user-a',
+  });
+
+  h.controller.handleResponse(mismatch);
+  h.controller.setReadiness(true, 'user-a');
+  h.controller.handleResponse(mismatch);
+
+  assert.deepEqual(h.navigated, []);
+  assert.deepEqual(h.apiReads, []);
+  assert.deepEqual(h.drops, [
+    ['account-mismatch', 'expo-warm-mismatch'],
+  ]);
+});
+
+test('terminally drops and diagnoses a response missing its target account', () => {
+  const h = harness();
+  const legacy = response('expo-missing-target', {
+    route: '/legacy',
+    notificationId: 'backend-legacy',
+    toUserId: undefined,
+  });
+
+  h.controller.handleResponse(legacy);
+  h.controller.handleResponse(
+    response('expo-missing-target', {
+      route: '/legacy-retry',
+      toUserId: 'user-1',
+    }),
+  );
+
+  assert.deepEqual(h.navigated, []);
+  assert.deepEqual(h.apiReads, []);
+  assert.deepEqual(h.drops, [
+    ['missing-target-user', 'expo-missing-target'],
+  ]);
+});
+
+test('retains a failed navigation and retries the full FIFO on readiness flush', () => {
+  const navigated = [];
+  let shouldThrow = true;
+  const h = harness({
+    ready: false,
+    navigate: (route) => {
+      if (shouldThrow) {
+        shouldThrow = false;
+        throw new Error('router unavailable');
+      }
+      navigated.push(route);
+    },
+  });
+  h.controller.handleResponse(
+    response('expo-retry-1', {
+      route: '/retry-1',
+      notificationId: 'backend-retry-1',
+    }),
+  );
+  h.controller.handleResponse(
+    response('expo-retry-2', {
+      route: '/retry-2',
+      notificationId: 'backend-retry-2',
+    }),
+  );
+
+  h.controller.setReadiness(true, 'user-1');
+  assert.deepEqual(navigated, []);
+  assert.deepEqual(h.apiReads, []);
+
+  h.controller.setReadiness(true, 'user-1');
+  h.controller.setReadiness(true, 'user-1');
+  assert.deepEqual(navigated, ['/retry-1', '/retry-2']);
+  assert.deepEqual(h.apiReads, ['backend-retry-1', 'backend-retry-2']);
+  assert.deepEqual(h.failures[0], [
+    'router unavailable',
+    'backend-retry-1',
+    'navigate',
+  ]);
+});
+
+test('contains log and local-read throws after successful navigation', () => {
+  const navigated = [];
+  const h = harness({
+    navigate: (route) => navigated.push(route),
+    logOpen: () => {
+      throw new Error('diagnostic unavailable');
+    },
+    markReadLocal: () => {
+      throw new Error('store unavailable');
+    },
+  });
+  const notification = response('expo-contained-failures', {
+    route: '/still-open',
+    notificationId: 'backend-contained',
+  });
+
+  h.controller.handleResponse(notification);
+  h.controller.handleResponse(notification);
+
+  assert.deepEqual(navigated, ['/still-open']);
+  assert.deepEqual(h.apiReads, ['backend-contained']);
+  assert.deepEqual(h.failures.slice(0, 2), [
+    ['diagnostic unavailable', 'backend-contained', 'log-open'],
+    ['store unavailable', 'backend-contained', 'local-read'],
+  ]);
 });
 
 test('bounds the pending queue and lets an overflowed response retry later', () => {
@@ -137,7 +278,7 @@ test('bounds the pending queue and lets an overflowed response retry later', () 
     );
   }
 
-  h.controller.setReadiness(true, true);
+  h.controller.setReadiness(true, 'user-1');
 
   assert.deepEqual(
     h.navigated,
@@ -222,7 +363,9 @@ test('reports remote read failure without blocking navigation', async () => {
 
   h.rejectRead(new Error('offline'));
   await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.deepEqual(h.failures, [['offline', 'backend-failure']]);
+  assert.deepEqual(h.failures, [
+    ['offline', 'backend-failure', 'remote-read'],
+  ]);
 });
 
 test('recognizes encoded profile user target for replace navigation', () => {
@@ -244,4 +387,42 @@ test('recognizes encoded profile user target for replace navigation', () => {
     }),
     false,
   );
+});
+
+test('registers the listener before reading and clearing the last response', () => {
+  const { initializePushResponseListener } = load(
+    'src/features/notifications/utils/push-response-listener.ts',
+  );
+  const operations = [];
+  const handled = [];
+  const arriving = response('expo-init-overlap', { route: '/overlap' });
+  let listener;
+  const subscription = { remove() {} };
+  const notifications = {
+    addNotificationResponseReceivedListener(callback) {
+      operations.push('listen');
+      listener = callback;
+      return subscription;
+    },
+    getLastNotificationResponse() {
+      operations.push('get-last');
+      listener(arriving);
+      return arriving;
+    },
+    clearLastNotificationResponse() {
+      operations.push('clear-last');
+    },
+  };
+  const seen = new Set();
+
+  const result = initializePushResponseListener(notifications, (item) => {
+    const identifier = item.notification.request.identifier;
+    if (seen.has(identifier)) return;
+    seen.add(identifier);
+    handled.push(identifier);
+  });
+
+  assert.equal(result, subscription);
+  assert.deepEqual(operations, ['listen', 'get-last', 'clear-last']);
+  assert.deepEqual(handled, ['expo-init-overlap']);
 });
