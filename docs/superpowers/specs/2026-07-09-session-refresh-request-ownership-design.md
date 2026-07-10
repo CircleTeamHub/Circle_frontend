@@ -54,7 +54,9 @@ Regression coverage will prove:
 ## Rebase Strategy
 
 The effective auth baseline is already present in current `origin/main` through
-PR #46. After the fix is committed and verified, rebuild the branch as a linear
-series on current `origin/main`, preserving only the route regression/fix,
-request-ownership hardening, tests, and this design/plan. Keep a temporary local
-backup ref until the rebased tree and full CI have been verified.
+PR #46, and PR #50 later placed the typed-routes fix in that baseline. After the
+fix is committed and verified, rebuild the branch as a linear series on current
+`origin/main`, preserving only the request-ownership hardening, tests, and this
+design/plan. Verify the route regression against the updated baseline. Keep a
+temporary local backup ref until the rebased tree and full CI have been
+verified.

@@ -152,7 +152,7 @@ git commit -m "fix(auth): bind retries to the originating session"
 - Verify: `test/snackbar-route.test.js`
 
 **Interfaces:**
-- Consumes: current `origin/main`, branch cut point `c5acca4`.
+- Consumes: current `origin/main`, branch cut point `56957a4` after PR #50.
 - Produces: a linear `fix/session-refresh-epoch` branch with no merge commits above `origin/main`.
 
 - [ ] **Step 1: Refresh `origin/main` and create a temporary backup ref**
@@ -165,10 +165,13 @@ git branch backup/session-refresh-epoch-pre-rebase HEAD
 - [ ] **Step 2: Rebase branch-specific commits**
 
 ```text
-git rebase --onto origin/main c5acca4
+git rebase --onto origin/main 56957a4
 ```
 
-Resolve route conflicts by keeping literal typed routes without `as Href`. Preserve the request-ownership tests and implementation.
+Skip old merge-transport commits when their changes are already upstream. The
+typed-routes fix is supplied by PR #50 in `origin/main`; verify that the rebased
+tree keeps literal typed routes without `as Href`. Preserve the
+request-ownership tests and implementation.
 
 - [ ] **Step 3: Verify the rebased diff and history**
 
