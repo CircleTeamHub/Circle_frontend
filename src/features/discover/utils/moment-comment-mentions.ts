@@ -12,6 +12,14 @@ export type MomentMentionTarget = Pick<
 
 export type MomentTextSelection = { start: number; end: number };
 
+export const MOMENT_MENTION_LIMIT = 20;
+
+export type MomentMentionInsertResult = {
+  text: string;
+  occurrences: MomentMentionOccurrence[];
+  limitReached: boolean;
+};
+
 type ResolvedTextEdit = {
   oldStart: number;
   oldEnd: number;
@@ -85,13 +93,16 @@ export function insertMomentMention(
   text: string,
   occurrences: MomentMentionOccurrence[],
   target: MomentMentionTarget,
-): { text: string; occurrences: MomentMentionOccurrence[] } {
+): MomentMentionInsertResult {
   if (
     !target.userID ||
     !target.nickname.trim() ||
     occurrences.some((occurrence) => occurrence.userID === target.userID)
   ) {
-    return { text, occurrences };
+    return { text, occurrences, limitReached: false };
+  }
+  if (occurrences.length >= MOMENT_MENTION_LIMIT) {
+    return { text, occurrences, limitReached: true };
   }
 
   const prefix = `${text}${text && !text.endsWith(' ') ? ' ' : ''}`;
@@ -105,6 +116,7 @@ export function insertMomentMention(
   return {
     text: `${prefix}${mentionText} `,
     occurrences: [...occurrences, occurrence],
+    limitReached: false,
   };
 }
 

@@ -135,6 +135,18 @@ test('all locales define the ignored moment mention notice', () => {
   }
 });
 
+test('all locales define the moment mention limit message', () => {
+  for (const locale of ['en', 'es', 'ja', 'ko', 'zh']) {
+    const messages = JSON.parse(
+      fs.readFileSync(
+        path.join(process.cwd(), `src/i18n/locales/${locale}.json`),
+        'utf8',
+      ),
+    );
+    assert.equal(typeof messages.moment.mentionLimit, 'string', locale);
+  }
+});
+
 test('comment composer and both parents forward active mention ids', () => {
   const input = fs.readFileSync(
     path.join(process.cwd(), 'src/features/discover/components/moment-comment-input.tsx'),

@@ -1008,6 +1008,7 @@
     "commentFailedMessage": "Network error, please try again",
     "commentFailedTitle": "Failed to comment",
     "mentionsIgnored": "{{count}} mentioned people could not view this moment and were not notified.",
+    "mentionLimit": "You can mention up to {{count}} friends in one comment.",
     "deleteCommentMessage": "Delete this comment?",
     "deleteCommentTitle": "Delete comment",
     "deleteFailedMessage": "Please try again",

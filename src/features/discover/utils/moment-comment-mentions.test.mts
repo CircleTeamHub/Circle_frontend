@@ -3,8 +3,42 @@ import assert from 'node:assert/strict';
 import {
   getMomentMentionedUserIds,
   insertMomentMention,
+  MOMENT_MENTION_LIMIT,
   reconcileMomentMentionOccurrences,
 } from './moment-comment-mentions.ts';
+
+test('mention insertion accepts 20 unique users and refuses the 21st', () => {
+  let state = {
+    text: '',
+    occurrences: [] as ReturnType<
+      typeof insertMomentMention
+    >['occurrences'],
+    limitReached: false,
+  };
+  for (let index = 0; index < MOMENT_MENTION_LIMIT; index += 1) {
+    state = insertMomentMention(state.text, state.occurrences, {
+      userID: `user-${index}`,
+      nickname: `User${index}`,
+    });
+    assert.equal(state.limitReached, false);
+  }
+
+  const atLimit = state;
+  const duplicate = insertMomentMention(state.text, state.occurrences, {
+    userID: 'user-0',
+    nickname: 'User0',
+  });
+  assert.equal(duplicate.limitReached, false);
+  assert.deepEqual(duplicate.occurrences, atLimit.occurrences);
+
+  const blocked = insertMomentMention(state.text, state.occurrences, {
+    userID: 'user-20',
+    nickname: 'User20',
+  });
+  assert.equal(blocked.limitReached, true);
+  assert.equal(blocked.text, atLimit.text);
+  assert.deepEqual(blocked.occurrences, atLimit.occurrences);
+});
 
 test('two selected users with the same nickname keep separate occurrence identities', () => {
   const first = insertMomentMention('', [], {
@@ -86,7 +120,9 @@ test('manual mention text has no ids and duplicate user selection is ignored', (
     nickname: 'Alex',
   });
 
-  assert.deepEqual(duplicate, first);
+  assert.equal(duplicate.text, first.text);
+  assert.deepEqual(duplicate.occurrences, first.occurrences);
+  assert.equal(duplicate.limitReached, false);
   assert.equal(first.text, 'manual @Alex @Alex ');
   assert.deepEqual(getMomentMentionedUserIds(first.occurrences), ['alex-1']);
 });

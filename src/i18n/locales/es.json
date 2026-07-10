@@ -910,6 +910,7 @@
     "commentFailedMessage": "Error de red, inténtalo de nuevo",
     "commentFailedTitle": "Error al comentar",
     "mentionsIgnored": "{{count}} personas mencionadas no pudieron ver esta publicación y no recibieron ninguna notificación.",
+    "mentionLimit": "Puedes mencionar hasta {{count}} amigos en un comentario.",
     "deleteCommentMessage": "¿Eliminar este comentario?",
     "deleteCommentTitle": "Eliminar comentario",
     "deleteFailedMessage": "Inténtalo de nuevo",

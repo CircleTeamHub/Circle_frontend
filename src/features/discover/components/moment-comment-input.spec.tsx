@@ -6,6 +6,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 import { MomentCommentInput } from './moment-comment-input';
 import { fetchFriends } from '@/services/api/friends';
 import * as ImagePicker from 'expo-image-picker';
@@ -89,6 +90,7 @@ async function selectAlex(index: number) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   mockFetchFriends.mockResolvedValue([alice, alex1, alex2]);
   mockPicker.mockResolvedValue({
     canceled: false,
@@ -107,6 +109,101 @@ beforeEach(() => {
     mimeType: null,
     body: '',
   });
+});
+
+test('the 21st unique mention is not appended and shows the localized limit message', async () => {
+  const friends = Array.from({ length: 21 }, (_, index) => ({
+    ...alice,
+    id: `user-${index}`,
+    accountId: `user-${index}`,
+    nickname: `User${index}`,
+  }));
+  mockFetchFriends.mockResolvedValue(friends);
+  render(
+    <MomentCommentInput
+      replyTo={null}
+      onSubmit={jest.fn()}
+      onDismiss={jest.fn()}
+    />,
+  );
+
+  for (const friend of friends) {
+    fireEvent.press(screen.getByLabelText('提到好友'));
+    await waitFor(() => expect(screen.getByText(friend.nickname)).toBeTruthy());
+    fireEvent.press(screen.getByText(friend.nickname));
+  }
+
+  const input = screen.getByPlaceholderText('写评论...');
+  expect(input.props.value).toContain('@User19');
+  expect(input.props.value).not.toContain('@User20');
+  expect(Alert.alert).toHaveBeenCalledWith(expect.stringContaining('20'));
+});
+
+test('two synchronous submits run onSubmit once and the lock releases after success', async () => {
+  let resolveSubmit: () => void = () => {};
+  const onSubmit = jest
+    .fn()
+    .mockImplementationOnce(
+      () => new Promise<void>((resolve) => (resolveSubmit = resolve)),
+    )
+    .mockResolvedValueOnce(undefined);
+  render(
+    <MomentCommentInput
+      replyTo={null}
+      onSubmit={onSubmit}
+      onDismiss={jest.fn()}
+    />,
+  );
+  const input = screen.getByPlaceholderText('写评论...');
+  fireEvent.changeText(input, 'first');
+
+  await act(async () => {
+    fireEvent(input, 'submitEditing');
+    fireEvent(input, 'submitEditing');
+  });
+  expect(onSubmit).toHaveBeenCalledTimes(1);
+
+  await act(async () => resolveSubmit());
+  fireEvent.changeText(input, 'second');
+  await act(async () => {
+    fireEvent(input, 'submitEditing');
+  });
+  expect(onSubmit).toHaveBeenCalledTimes(2);
+});
+
+test('two synchronous image submits start one upload', async () => {
+  let resolvePresign: (
+    value: Awaited<ReturnType<typeof requestUploadPresign>>,
+  ) => void = () => {};
+  mockPresign.mockImplementationOnce(
+    () => new Promise((resolve) => (resolvePresign = resolve)),
+  );
+  const onSubmit = jest.fn().mockResolvedValue(undefined);
+  render(
+    <MomentCommentInput
+      replyTo={null}
+      onSubmit={onSubmit}
+      onDismiss={jest.fn()}
+    />,
+  );
+
+  fireEvent.press(screen.getByLabelText('添加图片'));
+  await waitFor(() => expect(screen.getByLabelText('删除')).toBeTruthy());
+  const input = screen.getByPlaceholderText('写评论...');
+  await act(async () => {
+    fireEvent(input, 'submitEditing');
+    fireEvent(input, 'submitEditing');
+  });
+  expect(mockPresign).toHaveBeenCalledTimes(1);
+
+  await act(async () => {
+    resolvePresign({
+      uploadUrl: 'https://upload/comment',
+      fileUrl: 'https://cdn/comment.jpg',
+      key: 'posts/comment.jpg',
+    });
+  });
+  await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
 });
 
 test('success clears text, image, and mention selection without resurrecting a manually typed mention', async () => {

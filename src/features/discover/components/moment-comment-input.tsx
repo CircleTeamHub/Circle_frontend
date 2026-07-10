@@ -34,6 +34,7 @@ import {
 import {
   getMomentMentionedUserIds,
   insertMomentMention,
+  MOMENT_MENTION_LIMIT,
   reconcileMomentMentionOccurrences,
   type MomentMentionOccurrence,
   type MomentTextSelection,
@@ -165,6 +166,7 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const selectionRef = useRef<MomentTextSelection>({ start: 0, end: 0 });
+  const submitInFlightRef = useRef(false);
 
   useEffect(() => {
     const showEvent =
@@ -256,6 +258,17 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
         userID: friend.id,
         nickname: friend.nickname,
       });
+      if (next.limitReached) {
+        Alert.alert(
+          t('moment.mentionLimit', {
+            count: MOMENT_MENTION_LIMIT,
+            defaultValue: `最多只能提及 ${MOMENT_MENTION_LIMIT} 位好友`,
+          }),
+        );
+        setPanel('none');
+        inputRef.current?.focus();
+        return;
+      }
       setText(next.text);
       setMentionOccurrences(next.occurrences);
       selectionRef.current = {
@@ -265,12 +278,19 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
       setPanel('none');
       inputRef.current?.focus();
     },
-    [mentionOccurrences, text],
+    [mentionOccurrences, t, text],
   );
 
   const handleSend = useCallback(async () => {
     const trimmed = text.trim();
-    if ((!trimmed && !imageUri) || submitting) return;
+    if (
+      (!trimmed && !imageUri) ||
+      submitting ||
+      submitInFlightRef.current
+    ) {
+      return;
+    }
+    submitInFlightRef.current = true;
     setSubmitting(true);
     try {
       let images: string[] | undefined;
@@ -319,6 +339,7 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
         // 父组件已经处理过错误展示。这里只负责保留输入内容让用户重试。
       }
     } finally {
+      submitInFlightRef.current = false;
       setSubmitting(false);
     }
   }, [text, imageUri, submitting, replyTo, onSubmit, t, mentionOccurrences]);
@@ -508,6 +529,7 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
             ) : (
               <FlatList
                 data={friends ?? []}
+                initialNumToRender={MOMENT_MENTION_LIMIT + 1}
                 keyExtractor={(item) => item.id}
                 renderItem={renderFriendRow}
                 keyboardShouldPersistTaps="handled"
