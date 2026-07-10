@@ -30,6 +30,7 @@ import {
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
 import {
+  getMentionsPresentInText,
   getMentionedUserIds,
   selectMentionTarget,
   type MentionTarget,
@@ -217,6 +218,13 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
     setText((prev) => prev + emoji);
   }, []);
 
+  const handleTextChange = useCallback((nextText: string) => {
+    setText(nextText);
+    setMentionTargets((current) =>
+      getMentionsPresentInText(nextText, current),
+    );
+  }, []);
+
   const handleMentionFriend = useCallback((friend: FriendProfile) => {
     // 插到末尾并补空格，和抖音一致；@ 之前若无空格补一个。
     setText((prev) =>
@@ -359,7 +367,7 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
           <TextInput
             ref={inputRef}
             value={text}
-            onChangeText={setText}
+            onChangeText={handleTextChange}
             placeholder={
               replyTo
                 ? t('discover.commentInput.replyTo', {

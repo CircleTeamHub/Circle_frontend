@@ -31,6 +31,18 @@ test('selectMentionTarget dedupes the same user id', () => {
   );
 });
 
+test('a pruned mention target cannot be resurrected by manually retyping its text', () => {
+  const alice = { userID: 'alice-id', nickname: 'Alice' };
+  const selected = selectMentionTarget([], alice);
+  const afterDeletion = getMentionsPresentInText('hello', selected);
+
+  assert.deepEqual(afterDeletion, []);
+  assert.deepEqual(
+    getMentionedUserIds('manually typed @Alice', afterDeletion),
+    [],
+  );
+});
+
 test('buildAtMessagePayload dedupes selected mention ids and preserves text', () => {
   const mentions: MentionTarget[] = [
     { userID: 'u1', nickname: 'Alice' },
