@@ -61,11 +61,29 @@ test('the local notice maps to a system-notice via its extension', () => {
   const mappers = read('src/im/mappers.ts');
   assert.match(mappers, /FRIEND_ADDED_NOTICE_EXTENSION/);
   assert.match(mappers, /ext === FRIEND_ADDED_NOTICE_EXTENSION/);
+  assert.match(mappers, /systemNoticeKind: 'friend-added'/);
 });
 
-test('chat screen dedupes duplicate system notices (native + local)', () => {
+test('friend-added dedupe collapses native + local while preserving ordinary equal-text notices', async () => {
+  const { collapseDuplicateFriendAddedNotices } = await import(
+    '../src/features/chat/utils/system-notice-dedupe.ts'
+  );
+  const messages = [
+    { id: 'native', type: 'system-notice', text: 'same', systemNoticeKind: 'friend-added' },
+    { id: 'local', type: 'system-notice', text: 'same', systemNoticeKind: 'friend-added' },
+    { id: 'group-1', type: 'system-notice', text: 'same' },
+    { id: 'group-2', type: 'system-notice', text: 'same' },
+  ];
+
+  assert.deepEqual(
+    collapseDuplicateFriendAddedNotices(messages).map((message) => message.id),
+    ['native', 'group-1', 'group-2'],
+  );
+});
+
+test('chat screen wires mapped messages through friend-added dedupe', () => {
   const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
-  assert.match(screen, /seenSystemNotice/);
+  assert.match(screen, /collapseDuplicateFriendAddedNotices\(mapped\)/);
 });
 
 test('accept flow inserts the local notice best-effort', () => {

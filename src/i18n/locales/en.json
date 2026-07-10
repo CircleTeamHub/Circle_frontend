@@ -2277,6 +2277,7 @@
     "TRACE_DELETE_AUTHOR_ONLY": "Only the author can delete this",
     "TRACE_REPLY_TARGET_NOT_FOUND": "The comment you're replying to no longer exists",
     "TRACE_COMMENT_NOT_FOUND": "Comment not found",
+    "TRACE_EMPTY_COMMENT": "Comment cannot be empty",
     "TRACE_ACCESS_FORBIDDEN": "You aren't allowed to view this moment",
     "TRACE_INVALID_CURSOR": "This feed page expired. Please refresh and try again.",
     "FRIEND_SELF_ADD": "You can't add yourself as a friend",

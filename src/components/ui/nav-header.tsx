@@ -67,10 +67,6 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
     } else if (fallbackHref) {
       router.replace(fallbackHref);
     }
-    // typedRoutes 的 Href 联合体超出 TS 表示上限——deps 数组含 Href 变量时
-    // 数组字面量类型触发全联合求值(TS2590),只能编译器级抑制。
-    // expo 修复后 expect-error 会反向报警提醒清理。运行时无影响。
-    // @ts-expect-error TS2590: typed-routes Href union too complex
   }, [fallbackHref, navigation, onBackPress, router]);
 
   const d = useMemo(

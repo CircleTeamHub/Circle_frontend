@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -361,12 +361,7 @@ export default function ChatInfoScreen() {
   currentConversationIDRef.current = resolvedConversationID;
   const baseState = useMemo(() => buildChatInfoState(conversation), [conversation]);
   const displayIcons = useMemo(() => [] as DisplayIcon[], []);
-  // typedRoutes 的 Href 联合体超出 TS 表示上限——多分支返回合并成全联合即爆,
-  // 任何收敛写法(泛型标注/as any)都压不住,只能编译器级抑制。expo 修复后
-  // expect-error 会反向报警提醒清理。运行时无影响。
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  // @ts-expect-error TS2590: typed-routes Href union too complex
-  const backHref = useMemo<any>(() => {
+  const backHref = useMemo<Href>(() => {
     if (originScope === 'messages') {
       if (isGroupConversation) {
         return {

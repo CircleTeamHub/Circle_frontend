@@ -2274,6 +2274,7 @@
     "TRACE_DELETE_AUTHOR_ONLY": "投稿者のみが削除できます",
     "TRACE_REPLY_TARGET_NOT_FOUND": "返信先のコメントが存在しません",
     "TRACE_COMMENT_NOT_FOUND": "コメントが見つかりません",
+    "TRACE_EMPTY_COMMENT": "コメントを入力してください",
     "TRACE_ACCESS_FORBIDDEN": "このモーメントを閲覧する権限がありません",
     "TRACE_INVALID_CURSOR": "このフィードページは期限切れです。更新してもう一度お試しください。",
     "FRIEND_SELF_ADD": "自分を友だちに追加することはできません",

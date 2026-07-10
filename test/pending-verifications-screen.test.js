@@ -55,11 +55,11 @@ test('Discover header opens notification center inside the discover stack', () =
   const src = read(DISCOVER);
   const route = read('app/(tabs)/discover/notification-center.tsx');
   assert.match(src, /useTabBadgeStore/);
-  assert.match(src, /const discoverUnread = useTabBadgeStore\(\(state\) => state\.systemUnread\)/);
+  assert.match(src, /const bellUnread = useTabBadgeStore\(\(state\) => state\.discoverUnread\)/);
   assert.match(src, /handleOpenNotifications/);
   assert.match(src, /["'`]\/\(tabs\)\/discover\/notification-center["'`]/);
   assert.doesNotMatch(src, /["'`]\/\(tabs\)\/messages\/notifications["'`]/);
   assert.match(route, /NotificationCenterScreen/);
   assert.match(src, /name="notifications-outline"/);
-  assert.match(src, /<Badge count=\{discoverUnread\} \/>/);
+  assert.match(src, /<Badge count=\{bellUnread\} \/>/);
 });

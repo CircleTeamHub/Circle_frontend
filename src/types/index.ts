@@ -100,6 +100,7 @@ export interface ChatMessage {
     | 'transfer-card'
     | 'verification-card';
   text?: string;
+  systemNoticeKind?: 'friend-added';
   quotedText?: string;
   time?: string;
   senderName?: string;

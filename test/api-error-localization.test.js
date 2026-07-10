@@ -15,7 +15,10 @@ const I18N = {
   default: {
     language: 'en',
     t: (key, opts) => {
-      const table = { 'serverErrors.AUTH_INVALID_CREDENTIALS': 'Incorrect email or password' };
+      const table = {
+        'serverErrors.AUTH_INVALID_CREDENTIALS': 'Incorrect email or password',
+        'serverErrors.TRACE_EMPTY_COMMENT': 'Comment cannot be empty',
+      };
       if (table[key]) return table[key];
       return opts && 'defaultValue' in opts ? opts.defaultValue : key;
     },
@@ -87,6 +90,11 @@ const { getApiErrorMessage } = loadErrors();
 test('maps a known errorCode to its localized serverErrors string', () => {
   const err = new FakeApiError('邮箱或密码错误', 'AUTH_INVALID_CREDENTIALS');
   assert.equal(getApiErrorMessage(err, 'fallback'), 'Incorrect email or password');
+});
+
+test('maps the empty-comment backend code to localized copy', () => {
+  const err = new FakeApiError('评论内容不能为空', 'TRACE_EMPTY_COMMENT');
+  assert.equal(getApiErrorMessage(err, 'fallback'), 'Comment cannot be empty');
 });
 
 test('uses the caller fallback when the errorCode is unknown', () => {
@@ -264,6 +272,22 @@ test('every locale defines all serverErrors codes', () => {
       expectedCodes,
       `${lng}.json serverErrors keys must match en.json`,
     );
+  }
+});
+
+test('empty moment comments use the backend error contract in every locale', () => {
+  const { SERVER_ERROR_CODES } = loadServerErrorCodes();
+  assert.ok(SERVER_ERROR_CODES.includes('TRACE_EMPTY_COMMENT'));
+
+  for (const lng of ['en', 'zh', 'ja', 'ko', 'es']) {
+    const bundle = JSON.parse(
+      fs.readFileSync(
+        path.join(process.cwd(), `src/i18n/locales/${lng}.json`),
+        'utf8',
+      ),
+    );
+    assert.equal(typeof bundle.serverErrors.TRACE_EMPTY_COMMENT, 'string');
+    assert.ok(bundle.serverErrors.TRACE_EMPTY_COMMENT.trim().length > 0);
   }
 });
 

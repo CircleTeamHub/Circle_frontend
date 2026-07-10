@@ -84,7 +84,7 @@ function getJoinedMemberNames(message: MessageItem): string {
   try {
     const parsed = JSON.parse(detail) as {
       entrantUser?: { nickname?: unknown };
-      invitedUserList?: Array<{ nickname?: unknown }>;
+      invitedUserList?: { nickname?: unknown }[];
     };
     const candidates = parsed.entrantUser
       ? [parsed.entrantUser]
@@ -352,6 +352,7 @@ export function mapMessageItemToChatMessage(
     return {
       id: item.clientMsgID,
       type: 'system-notice',
+      systemNoticeKind: 'friend-added',
       text: tImNotification('friendAdded', '你们已经是好友了，开始聊天吧'),
       time: formatTimestamp(item.sendTime),
     };
@@ -432,6 +433,7 @@ export function mapMessageItemToChatMessage(
       return {
         id: item.clientMsgID,
         type: 'system-notice',
+        systemNoticeKind: 'friend-added',
         text: tImNotification('friendAdded', '你们已经是好友了，开始聊天吧'),
         time: formatTimestamp(item.sendTime),
       };

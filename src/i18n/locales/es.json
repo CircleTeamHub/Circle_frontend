@@ -2277,6 +2277,7 @@
     "TRACE_DELETE_AUTHOR_ONLY": "Solo el autor puede eliminar esto",
     "TRACE_REPLY_TARGET_NOT_FOUND": "El comentario al que respondes ya no existe",
     "TRACE_COMMENT_NOT_FOUND": "Comentario no encontrado",
+    "TRACE_EMPTY_COMMENT": "El comentario no puede estar vacío",
     "TRACE_ACCESS_FORBIDDEN": "No tienes permiso para ver este momento",
     "TRACE_INVALID_CURSOR": "Esta página del feed caducó. Actualiza e inténtalo de nuevo.",
     "FRIEND_SELF_ADD": "No puedes añadirte a ti mismo como amigo",

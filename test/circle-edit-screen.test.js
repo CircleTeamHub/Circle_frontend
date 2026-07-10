@@ -95,10 +95,7 @@ test('circle api exposes updateCircle through PATCH /circle/:id', async () => {
 test('circle detail screen routes owners and admins to the edit circle screen', () => {
   const source = read('src/features/discover/screens/CircleDetailScreen.tsx');
 
-  assert.match(
-    source,
-    /pathname: '\/\(tabs\)\/discover\/circle\/\[id\]\/edit'/,
-  );
+  assert.match(source, /getCircleEditHref\(circleScope, circle\.id\)/);
   assert.doesNotMatch(source, /editInProgress/);
 });
 

@@ -2274,6 +2274,7 @@
     "TRACE_DELETE_AUTHOR_ONLY": "只有作者可以删除",
     "TRACE_REPLY_TARGET_NOT_FOUND": "回复的评论不存在",
     "TRACE_COMMENT_NOT_FOUND": "评论不存在",
+    "TRACE_EMPTY_COMMENT": "评论内容不能为空",
     "TRACE_ACCESS_FORBIDDEN": "你无权查看该动态",
     "TRACE_INVALID_CURSOR": "动态分页已过期，请刷新后重试",
     "FRIEND_SELF_ADD": "不能添加自己为好友",

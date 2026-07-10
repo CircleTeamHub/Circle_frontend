@@ -143,6 +143,7 @@ import {
   type MentionTarget,
 } from '@/features/chat/utils/chat-send-payloads';
 import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
+import { collapseDuplicateFriendAddedNotices } from '@/features/chat/utils/system-notice-dedupe';
 
 // Dev-only structured log for a failed send. Never logs the message body —
 // only the error and conversation kind — to avoid leaking content into logs.
@@ -797,22 +798,8 @@ export default function ChatDetailScreen() {
       currentUserID,
       box,
     );
-    // Collapse duplicate "you're now friends" system notices — the line can come
-    // from both OpenIM's native FriendAdded and the local insert on accept.
-    // 只收敛这一种：群通知（如多条「新成员加入群聊」）每条都是独立事件，不能按文案去重。
-    // Keep element references intact so the CellRenderer cache above still holds.
-    const friendAddedText = t('im.notification.friendAdded', {
-      defaultValue: '你们已经是好友了，开始聊天吧',
-    });
-    let seenFriendAdded = false;
-    return mapped.filter((item) => {
-      if (item.type !== 'system-notice') return true;
-      if ((item.text ?? '') !== friendAddedText) return true;
-      if (seenFriendAdded) return false;
-      seenFriendAdded = true;
-      return true;
-    });
-  }, [currentUserID, conversationMessages, t]);
+    return collapseDuplicateFriendAddedNotices(mapped);
+  }, [currentUserID, conversationMessages]);
 
   // 搜索定位：在 inverted 列表里 scrollToIndex 仍然按 index 计数，找到就跳。
   useEffect(() => {
