@@ -227,10 +227,11 @@ const PANEL_LAYOUT_ANIM = {
 
 const s = StyleSheet.create({
   // 群聊接收气泡上方的发送者名字（缩进对齐气泡起点 = 头像宽 + 间距）。
+  // marginBottom 给名字与气泡之间留一点呼吸空间，避免名字贴着气泡显得拥挤。
   senderLabel: {
     ...Typography.small,
     marginLeft: AVATAR_SIZE + Spacing.sm,
-    marginBottom: 2,
+    marginBottom: Spacing.xs + 2,
   },
   header: {
     height: 60,
@@ -431,6 +432,11 @@ export default function ChatDetailScreen() {
     new Map<string, Promise<MentionTarget[]>>(),
   );
   const [mentionTargets, setMentionTargets] = useState<MentionTarget[]>([]);
+  // 群成员权威昵称表：senderID(UUID 形式) → 群内昵称。用于接收气泡上方的发送者名字，
+  // 覆盖「消息自带 senderNickname 为空 → 只能显示原始 hex id/群名」的情况（访客、早期账号常见）。
+  const [groupMemberNames, setGroupMemberNames] = useState<
+    Record<string, string>
+  >({});
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
@@ -795,7 +801,7 @@ export default function ChatDetailScreen() {
     // from both OpenIM's native FriendAdded and the local insert on accept.
     // 只收敛这一种：群通知（如多条「新成员加入群聊」）每条都是独立事件，不能按文案去重。
     // Keep element references intact so the CellRenderer cache above still holds.
-    const friendAddedText = t('im.notifications.friendAdded', {
+    const friendAddedText = t('im.notification.friendAdded', {
       defaultValue: '你们已经是好友了，开始聊天吧',
     });
     let seenFriendAdded = false;
@@ -1090,16 +1096,23 @@ export default function ChatDetailScreen() {
     [handleMessageLongPress],
   );
 
-  // 群聊接收消息的显示名：本地备注覆盖 > 消息自带昵称 > 会话标题。
+  // 群聊接收消息的显示名：本地备注覆盖 > 群成员权威昵称 > 消息自带昵称 > 会话标题。
+  // 群成员昵称排在消息自带 senderNickname 之前——后者可能为空而回落成原始 hex id，
+  // 成员表里的昵称才是能稳定显示的「对方名字」。
   const allRemarkOverrides = useFriendRemarkStore((state) => state.remarks);
   const receivedDisplayName = useCallback(
     (msg: ChatMessage) => {
       const override = msg.senderID
         ? allRemarkOverrides[msg.senderID]
         : undefined;
-      return override?.remark || msg.senderName || conversationTitle;
+      const memberName = msg.senderID
+        ? groupMemberNames[msg.senderID]
+        : undefined;
+      return (
+        override?.remark || memberName || msg.senderName || conversationTitle
+      );
     },
-    [allRemarkOverrides, conversationTitle],
+    [allRemarkOverrides, groupMemberNames, conversationTitle],
   );
 
   // 群聊头像用发送者本人的（新消息自带最新头像）；单聊沿用会话头像参数。
@@ -1446,6 +1459,36 @@ export default function ChatDetailScreen() {
       if (mountedRef.current) setMentionCandidates([]);
     }
   }, [allMentionTarget, currentUserID, isGroupChat, sourceID]);
+
+  // 群聊打开时拉一次成员表，建 senderID→昵称映射给发送者名字标签兜底。
+  // 单聊不需要（气泡不显示发送者名字）。
+  useEffect(() => {
+    if (!isGroupChat || !sourceID) {
+      setGroupMemberNames({});
+      return;
+    }
+    let cancelled = false;
+    loadGroupMemberList(sourceID, 500)
+      .then((members) => {
+        if (cancelled) return;
+        const map: Record<string, string> = {};
+        for (const member of members) {
+          const nickname = member.nickname?.trim();
+          if (member.userID && nickname) {
+            map[fromImUserId(member.userID)] = nickname;
+          }
+        }
+        setGroupMemberNames(map);
+      })
+      .catch((error) => {
+        if (__DEV__) {
+          console.warn('[chat] load group member names failed', error);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isGroupChat, sourceID]);
 
   const handleDraftChange = useCallback(
     (next: string) => {

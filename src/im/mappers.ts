@@ -32,8 +32,12 @@ import { getLocalizedDateTimeLocale } from '@/utils/locale';
 
 // 所有 mapper 产出的字符串走 i18n.t；当前 locale 尚未提供对应 key 时回落到 defaultValue
 // （现有中文文案），这样不动 locale JSON 也能让英文用户在补 key 后立即生效。
-function tImNotification(key: string, fallback: string) {
-  return i18n.t(`im.notification.${key}`, { defaultValue: fallback });
+function tImNotification(
+  key: string,
+  fallback: string,
+  vars?: Record<string, unknown>,
+) {
+  return i18n.t(`im.notification.${key}`, { defaultValue: fallback, ...vars });
 }
 function tImPreview(key: string, fallback: string, vars?: Record<string, unknown>) {
   return i18n.t(`im.preview.${key}`, { defaultValue: fallback, ...vars });
@@ -69,15 +73,46 @@ function isSystemNotification(contentType: number) {
   return SYSTEM_NOTIFICATION_CONTENT_TYPES.has(contentType);
 }
 
+// OpenIM 入群/邀请通知的 notificationElem.detail（JSON 字符串）里带成员信息：
+// MemberEnter → { entrantUser: { nickname } }；MemberInvited → { invitedUserList: [{ nickname }] }。
+// 解析出昵称用「张三、李四」形式拼接；拿不到时返回空串，调用方回落到通用文案。
+function getJoinedMemberNames(message: MessageItem): string {
+  const detail = message.notificationElem?.detail;
+  if (!detail) {
+    return '';
+  }
+  try {
+    const parsed = JSON.parse(detail) as {
+      entrantUser?: { nickname?: unknown };
+      invitedUserList?: Array<{ nickname?: unknown }>;
+    };
+    const candidates = parsed.entrantUser
+      ? [parsed.entrantUser]
+      : Array.isArray(parsed.invitedUserList)
+        ? parsed.invitedUserList
+        : [];
+    const names = candidates
+      .map((m) => (typeof m?.nickname === 'string' ? m.nickname.trim() : ''))
+      .filter(Boolean);
+    return names.join('、');
+  } catch {
+    return '';
+  }
+}
+
 // 群通知类消息的展示文案：会话列表预览与聊天流灰条共用。
 // 返回 null 的类型（OA 通知/禁言变更等）不在聊天流渲染。
-function getGroupNoticeText(contentType: number): string | null {
-  switch (contentType) {
+function getGroupNoticeText(message: MessageItem): string | null {
+  switch (message.contentType) {
     case MessageType.GroupCreated:
       return tImNotification('groupCreated', '群聊已创建');
     case MessageType.MemberInvited:
-    case MessageType.MemberEnter:
-      return tImNotification('memberInvited', '新成员加入群聊');
+    case MessageType.MemberEnter: {
+      const names = getJoinedMemberNames(message);
+      return names
+        ? tImNotification('memberJoined', '{{names}} 加入群聊', { names })
+        : tImNotification('memberInvited', '新成员加入群聊');
+    }
     case MessageType.MemberQuit:
       return tImNotification('memberQuit', '有成员退出群聊');
     case MessageType.MemberKicked:
@@ -215,7 +250,7 @@ export function getMessagePreview(message: MessageItem | null, fallback = '') {
     // 好友刚建立的 FriendAdded 通知——会话列表也要给出预览（对话渲染见下方），
     // 否则最后一条是它时列表这行会空白。
     if (message.contentType === MessageType.FriendAdded) return tImNotification('friendAdded', '你们已经是好友了，开始聊天吧');
-    return getGroupNoticeText(message.contentType) ?? '';
+    return getGroupNoticeText(message) ?? '';
   }
 
   switch (message.contentType) {
@@ -324,7 +359,7 @@ export function mapMessageItemToChatMessage(
 
   // 群通知类消息（群已创建/新成员加入/退群/改名/解散/撤回）渲染成居中灰条，
   // 微信样式——否则新圈子群里只有这类消息时聊天页会显示成一片空白。
-  const groupNoticeText = getGroupNoticeText(item.contentType);
+  const groupNoticeText = getGroupNoticeText(item);
   if (groupNoticeText) {
     return {
       id: item.clientMsgID,
