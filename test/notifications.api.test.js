@@ -117,3 +117,12 @@ test("revokePushToken uses the public unauthenticated revoke endpoint", async ()
   assert.equal(calls[0][1].auth, false);
   assert.equal(calls[0][1].retryOnAuthError, false);
 });
+
+test("deleteLegacyPushToken uses authenticated non-retrying cleanup", async () => {
+  const { api, calls } = loadApi("src/services/api/notifications.ts", undefined);
+  await api.deleteLegacyPushToken("legacy-token");
+  assert.equal(calls[0][0], "/notification/push-token");
+  assert.equal(calls[0][1].method, "DELETE");
+  assert.equal(calls[0][1].body.token, "legacy-token");
+  assert.equal(calls[0][1].retryOnAuthError, false);
+});

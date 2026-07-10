@@ -18,10 +18,10 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-function loadRegistrar() {
+function loadRegistrar(storageOverride, sharedGlobal) {
   const filePath = path.join(
     process.cwd(),
-    'src/features/notifications/components/PushNotificationTokenRegistrar.tsx',
+    'src/features/notifications/services/push-token-registration.ts',
   );
   const source = fs.readFileSync(filePath, 'utf8');
   const transpiled = ts.transpileModule(source, {
@@ -37,6 +37,7 @@ function loadRegistrar() {
   const context = {
     module: { exports: {} },
     exports: {},
+    ...(sharedGlobal ? { globalThis: sharedGlobal } : {}),
     require: (specifier) => {
       if (specifier === 'react') {
         return {
@@ -63,7 +64,10 @@ function loadRegistrar() {
         return { registerLogoutHandler() {} };
       }
       if (specifier === '@/storage') {
-        return { storage: { getString() {}, set() {}, remove() {} } };
+        return {
+          storage:
+            storageOverride ?? { getString() {}, set() {}, remove() {} },
+        };
       }
       if (specifier === '@/stores/authStore') return { useAuthStore: noopStore };
       if (specifier === '@/features/profile/store/use-app-settings-store') {
@@ -85,12 +89,15 @@ function makeHarness(options = {}) {
   const { createPushTokenRegistrationOrchestrator } = loadRegistrar();
   let stored = options.stored ?? null;
   let revocations = [...(options.revocations ?? [])];
+  let legacy = options.legacy ?? null;
+  let legacyCleanups = [...(options.legacyCleanups ?? [])];
   const registerCalls = [];
   const revokeCalls = [];
   const diagnostics = [];
   const failures = [];
   let secretCalls = 0;
   let moduleLoads = 0;
+  let now = 0;
   const notifications = options.notifications ?? {
     IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
     getPermissionsAsync: async () => ({ granted: true }),
@@ -113,6 +120,40 @@ function makeHarness(options = {}) {
     setPendingRevocations: (value) => {
       revocations = [...value];
     },
+    retireStoredRegistration: () => {
+      const active = stored;
+      if (!active) return null;
+      const exists = revocations.some(
+        (item) =>
+          item.token === active.token &&
+          item.revocationSecret === active.revocationSecret,
+      );
+      revocations = exists ? revocations : [...revocations, active];
+      stored = null;
+      return active;
+    },
+    getLegacyRegistration: () => legacy,
+    replaceLegacyRegistration: (value) => {
+      legacy = null;
+      stored = value;
+    },
+    retireLegacyRegistration: () => {
+      const active = legacy;
+      if (!active) return null;
+      legacyCleanups = legacyCleanups.some(
+        (item) => item.token === active.token && item.userId === active.userId,
+      )
+        ? legacyCleanups
+        : [...legacyCleanups, { ...active, legacy: true }];
+      legacy = null;
+      return active;
+    },
+    getLegacyCleanups: () => legacyCleanups,
+    removeLegacyCleanup: (value) => {
+      legacyCleanups = legacyCleanups.filter(
+        (item) => item.token !== value.token || item.userId !== value.userId,
+      );
+    },
     generateRevocationSecret: () => {
       secretCalls += 1;
       return options.generateRevocationSecret?.() ?? options.secret ?? SECRET_A;
@@ -129,6 +170,9 @@ function makeHarness(options = {}) {
       revokeCalls.push({ token, revocationSecret });
       return options.revokePushToken?.(token, revocationSecret);
     },
+    deleteLegacyPushToken: async (token) =>
+      options.deleteLegacyPushToken?.(token),
+    now: () => now,
     reportFailure: (...args) => failures.push(args),
     reportDiagnostic: (...args) => diagnostics.push(args),
   });
@@ -142,6 +186,11 @@ function makeHarness(options = {}) {
     getRevocations: () => revocations,
     getSecretCalls: () => secretCalls,
     getModuleLoads: () => moduleLoads,
+    getLegacy: () => legacy,
+    getLegacyCleanups: () => legacyCleanups,
+    advanceTime: (milliseconds) => {
+      now += milliseconds;
+    },
   };
 }
 
@@ -149,6 +198,106 @@ const enabled = (userId = 'user-1') => ({
   isAuthenticated: true,
   userId,
   pushEnabled: true,
+});
+
+function memoryStorage(initial = {}) {
+  const values = new Map(Object.entries(initial));
+  const writes = [];
+  return {
+    storage: {
+      getString: (key) => values.get(key),
+      set: (key, value) => {
+        writes.push([key, value]);
+        values.set(key, value);
+      },
+      remove: (key) => values.delete(key),
+    },
+    writes,
+    read: (key) => values.get(key),
+  };
+}
+
+test('v2 retirement atomically writes active null plus tombstone once', () => {
+  const active = {
+    token: 'atomic-token',
+    userId: 'user-1',
+    revocationSecret: SECRET_A,
+    status: 'pending',
+  };
+  const memory = memoryStorage({
+    'circle-im-push-registration': JSON.stringify({
+      version: 2,
+      active,
+      tombstones: [],
+    }),
+  });
+  const { retireStoredRegistrationAtomically } = loadRegistrar(memory.storage);
+  memory.writes.length = 0;
+  retireStoredRegistrationAtomically();
+  assert.equal(memory.writes.length, 1);
+  const persisted = JSON.parse(memory.writes[0][1]);
+  assert.equal(persisted.active, null);
+  assert.equal(persisted.tombstones[0].revocationSecret, SECRET_A);
+});
+
+test('restart migration preserves legacy active and tombstone wins duplicate modern active', () => {
+  const legacyMemory = memoryStorage({
+    'circle-im-push-registration': JSON.stringify({
+      token: 'legacy-token',
+      userId: 'legacy-user',
+    }),
+  });
+  const legacyModule = loadRegistrar(legacyMemory.storage);
+  const legacyState = legacyModule.readPushState();
+  assert.equal(legacyState.version, 2);
+  assert.equal(legacyState.active.token, 'legacy-token');
+  assert.equal('revocationSecret' in legacyState.active, false);
+
+  const modern = {
+    token: 'duplicate-active',
+    userId: 'user-1',
+    revocationSecret: SECRET_A,
+    status: 'registered',
+  };
+  const duplicateMemory = memoryStorage({
+    'circle-im-push-registration': JSON.stringify({
+      version: 2,
+      active: modern,
+      tombstones: [{ token: modern.token, revocationSecret: SECRET_A }],
+    }),
+  });
+  const restarted = loadRegistrar(duplicateMemory.storage).readPushState();
+  assert.equal(restarted.active, null);
+  assert.equal(restarted.tombstones.length, 1);
+
+  const legacyDuplicateMemory = memoryStorage({
+    'circle-im-push-registration': JSON.stringify({
+      version: 2,
+      active: { token: 'legacy-duplicate', userId: 'legacy-user' },
+      tombstones: [
+        {
+          token: 'legacy-duplicate',
+          userId: 'legacy-user',
+          legacy: true,
+        },
+      ],
+    }),
+  });
+  const legacyRestarted = loadRegistrar(
+    legacyDuplicateMemory.storage,
+  ).readPushState();
+  assert.equal(legacyRestarted.active, null);
+});
+
+test('Fast Refresh module access reuses one coordinator and stable logout handler', () => {
+  const sharedGlobal = {};
+  const memory = memoryStorage();
+  const firstModule = loadRegistrar(memory.storage, sharedGlobal);
+  const secondModule = loadRegistrar(memory.storage, sharedGlobal);
+  const first = firstModule.getSharedPushTokenRegistrationOrchestrator();
+  const second = secondModule.getSharedPushTokenRegistrationOrchestrator();
+  assert.equal(first, second);
+  assert.equal(first.logout, second.logout);
 });
 
 test('first native run requests permission and registers a persisted pending secret', async () => {
@@ -308,6 +457,8 @@ test('failed revoke remains queued and retries on the next AppState-style sync',
     },
   });
   harness.orchestrator.flushPendingRevocations();
+  await harness.orchestrator.flushPendingRevocations();
+  harness.advanceTime(1_000);
   await harness.orchestrator.sync(enabled());
   await harness.orchestrator.flushPendingRevocations();
   assert.equal(attempts >= 2, true);
@@ -464,7 +615,9 @@ test('registration pauses at revocation saturation and resumes after a successfu
   assert.equal(harness.diagnostics[0][0], 'push_token_revocation_backpressure');
   assert.equal(JSON.stringify(harness.diagnostics).includes(SECRET_A), false);
 
+  await harness.orchestrator.flushPendingRevocations();
   revokeFails = false;
+  harness.advanceTime(1_000);
   await harness.orchestrator.flushPendingRevocations();
   await harness.orchestrator.sync(enabled());
 
@@ -524,7 +677,9 @@ test('saturated user replacement retires A before blocking B until flush succeed
   );
   assert.equal(harness.registerCalls.length, 0);
 
+  await harness.orchestrator.flushPendingRevocations();
   revokeFails = false;
+  harness.advanceTime(1_000);
   await harness.orchestrator.flushPendingRevocations();
   await harness.orchestrator.sync(enabled('user-b'));
 
@@ -532,4 +687,72 @@ test('saturated user replacement retires A before blocking B until flush succeed
   assert.equal(harness.registerCalls.length, 1);
   assert.equal(harness.getStored().userId, 'user-b');
   assert.equal(harness.getStored().status, 'registered');
+});
+
+test('concurrent flush triggers share one pass and stop after the first failure', async () => {
+  const revocations = Array.from({ length: 50 }, (_, index) => ({
+    token: `single-flight-${index}`,
+    revocationSecret: `${String(index).padStart(8, '0')}-4444-4444-8444-444444444444`,
+  }));
+  const harness = makeHarness({
+    revocations,
+    revokePushToken: async () => {
+      throw new Error('offline');
+    },
+  });
+  const first = harness.orchestrator.flushPendingRevocations();
+  const second = harness.orchestrator.flushPendingRevocations();
+  assert.equal(first, second);
+  await Promise.all([first, second]);
+  assert.equal(harness.revokeCalls.length, 1);
+  assert.equal(harness.getRevocations().length, 50);
+});
+
+test('same-user legacy active rotates the same token with a real new secret', async () => {
+  const harness = makeHarness({
+    legacy: { token: 'legacy-token', userId: 'legacy-user' },
+    token: 'different-expo-token',
+    secret: SECRET_B,
+  });
+  await harness.orchestrator.sync(enabled('legacy-user'));
+  assert.equal(harness.registerCalls[0].token, 'legacy-token');
+  assert.equal(harness.registerCalls[0].revocationSecret, SECRET_B);
+  assert.equal(harness.getLegacy(), null);
+  assert.equal(harness.getStored().status, 'registered');
+});
+
+test('signed-out legacy active becomes durable cleanup and retries for that user later', async () => {
+  const deleted = [];
+  const harness = makeHarness({
+    legacy: { token: 'legacy-cleanup', userId: 'legacy-user' },
+    deleteLegacyPushToken: async (token) => deleted.push(token),
+  });
+  await harness.orchestrator.sync({
+    isAuthenticated: false,
+    userId: '',
+    pushEnabled: true,
+  });
+  assert.equal(harness.getLegacy(), null);
+  assert.equal(harness.getLegacyCleanups().length, 1);
+  assert.equal(deleted.length, 0);
+  await harness.orchestrator.sync(enabled('legacy-user'));
+  await Promise.resolve();
+  assert.equal(deleted[0], 'legacy-cleanup');
+  assert.equal(harness.getLegacyCleanups().length, 0);
+});
+
+test('disabled authenticated legacy cleanup is scheduled without awaiting network', async () => {
+  const deletion = deferred();
+  const harness = makeHarness({
+    legacy: { token: 'legacy-disabled', userId: 'legacy-user' },
+    deleteLegacyPushToken: async () => deletion.promise,
+  });
+  await harness.orchestrator.sync({
+    isAuthenticated: true,
+    userId: 'legacy-user',
+    pushEnabled: false,
+  });
+  assert.equal(harness.getLegacy(), null);
+  assert.equal(harness.getLegacyCleanups().length, 1);
+  deletion.resolve();
 });

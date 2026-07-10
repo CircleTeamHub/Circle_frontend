@@ -119,14 +119,17 @@ test('root layout registers and unregisters native push tokens', () => {
   const registrar = read(
     'src/features/notifications/components/PushNotificationTokenRegistrar.tsx',
   );
+  const registrationService = read(
+    'src/features/notifications/services/push-token-registration.ts',
+  );
   const appConfig = JSON.parse(read('app.json'));
 
   assert.match(rootLayout, /PushNotificationTokenRegistrar/);
   assert.ok(appConfig.expo.plugins.includes('expo-notifications'));
-  assert.match(registrar, /getExpoPushTokenAsync/);
-  assert.match(registrar, /registerPushToken/);
-  assert.match(registrar, /revokePushToken/);
-  assert.match(registrar, /Crypto\.randomUUID/);
+  assert.match(registrationService, /getExpoPushTokenAsync/);
+  assert.match(registrationService, /registerPushToken/);
+  assert.match(registrationService, /revokePushToken/);
+  assert.match(registrationService, /Crypto\.randomUUID/);
   assert.match(registrar, /useAppSettingsStore/);
   assert.match(registrar, /useAuthStore/);
   assert.match(registrar, /registerLogoutHandler/);
