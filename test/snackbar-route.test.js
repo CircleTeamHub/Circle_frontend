@@ -31,6 +31,18 @@ const { getSnackbarRoute } = load(
 const OPTS = { untitledPost: "(untitled post)" };
 const DISCOVER_OPTS = { untitledPost: "(untitled post)", scope: "discover" };
 
+test('notification center routes stay checked by Expo typed routes', () => {
+  const files = [
+    'src/features/notifications/utils/snackbar-route.ts',
+    'src/features/discover/screens/DiscoverScreen.tsx',
+  ];
+
+  for (const rel of files) {
+    const source = fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
+    assert.doesNotMatch(source, /\bas\s+Href\b/);
+  }
+});
+
 function notification(overrides = {}) {
   return {
     kind: "notification",
