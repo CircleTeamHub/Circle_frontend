@@ -6,7 +6,7 @@ import { PlazaFeed } from "@/features/discover/components/plaza-feed";
 import { useTabBadgeStore } from "@/stores/tabBadgeStore";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import { Ionicons } from "@expo/vector-icons";
-import { type Href, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -120,7 +120,7 @@ export default function DiscoverScreen() {
   }, [router]);
 
   const handleOpenNotifications = useCallback(() => {
-    router.push("/(tabs)/discover/notification-center" as Href);
+    router.push("/(tabs)/discover/notification-center");
   }, [router]);
 
   const handleFilterPress = useCallback(() => {

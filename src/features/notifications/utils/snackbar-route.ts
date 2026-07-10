@@ -15,7 +15,7 @@ export type SnackbarRouteOptions = {
 
 function getNotificationCenterFallback(scope: SnackbarRouteOptions['scope']): Href {
   return scope === 'discover'
-    ? ('/(tabs)/discover/notification-center' as Href)
+    ? '/(tabs)/discover/notification-center'
     : '/(tabs)/messages/notifications';
 }
 
