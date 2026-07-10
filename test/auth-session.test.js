@@ -5,6 +5,14 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+function deferred() {
+  let resolve;
+  const promise = new Promise((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
 function loadSessionModule(mocks) {
   const filePath = path.join(process.cwd(), 'src/services/auth/session.ts');
   const source = fs.readFileSync(filePath, 'utf8');
@@ -20,6 +28,7 @@ function loadSessionModule(mocks) {
     module: { exports: {} },
     exports: {},
     require: (request) => {
+      mocks.__onRequire?.(request);
       if (request in mocks) {
         return mocks[request];
       }
@@ -39,12 +48,20 @@ function makeBaseMocks() {
   const calls = [];
   const secureAuthRemovals = [];
 
+  const authState = {
+    sessionEpoch: 1,
+    accessToken: 'access-a',
+    refreshToken: 'refresh-a',
+    clearSession: () => {
+      calls.push('clearSession');
+      authState.sessionEpoch += 1;
+    },
+  };
   const authStore = {
-    getState: () => ({
-      clearSession: () => {
-        calls.push('clearSession');
-      },
-    }),
+    getState: () => authState,
+    setState: () => {
+      calls.push('persistCurrent');
+    },
     persist: {
       clearStorage: async () => {
         calls.push('clearStorage');
@@ -53,7 +70,12 @@ function makeBaseMocks() {
   };
 
   const mocks = {
-    '@/stores/authStore': { useAuthStore: authStore },
+    '@/stores/authStore': {
+      useAuthStore: authStore,
+      persistCurrentAuthState: async () => {
+        authStore.setState({});
+      },
+    },
     '@/storage/secure-auth-storage': {
       secureAuthStorage: {
         removeItem: (key) => {
@@ -93,7 +115,7 @@ function makeBaseMocks() {
     },
   };
 
-  return { mocks, calls, secureAuthRemovals, authStore };
+  return { mocks, calls, secureAuthRemovals, authStore, authState };
 }
 
 test('clearLocalSession runs registered teardown handlers, then resets stores auth-first, then clears persistence', async () => {
@@ -168,6 +190,228 @@ test('clearLocalSession still clears local state when a teardown handler throws'
     'resetWalletRealtime',
     'clearStorage',
   ]);
+});
+
+test('guarded clearLocalSession skips session clearing when ownership changes during async teardown', async () => {
+  const { mocks, calls, secureAuthRemovals, authState } = makeBaseMocks();
+  const { clearLocalSession, registerLogoutHandler } = loadSessionModule(mocks);
+  const handlerStarted = deferred();
+  const releaseHandler = deferred();
+
+  registerLogoutHandler(async () => {
+    calls.push('disconnectRealtime');
+    handlerStarted.resolve();
+    await releaseHandler.promise;
+  });
+
+  const clearing = clearLocalSession(1);
+  await handlerStarted.promise;
+  authState.sessionEpoch = 2;
+  releaseHandler.resolve();
+  await clearing;
+
+  assert.deepEqual(calls, ['disconnectRealtime']);
+  assert.deepEqual(secureAuthRemovals, []);
+});
+
+test('logout handlers start together and stale async handlers cannot reset a newer session', async () => {
+  const { mocks, calls, authState } = makeBaseMocks();
+  const { clearLocalSession, registerLogoutHandler } = loadSessionModule(mocks);
+  const handlerStarted = deferred();
+  const releaseHandler = deferred();
+
+  registerLogoutHandler(async (context) => {
+    calls.push('logoutIM:start');
+    handlerStarted.resolve();
+    await releaseHandler.promise;
+    if (!context || context.isCurrent()) {
+      calls.push('resetIM');
+    }
+  });
+  registerLogoutHandler(() => {
+    calls.push('disconnectRealtime');
+  });
+
+  const clearing = clearLocalSession(1);
+  await handlerStarted.promise;
+
+  assert.ok(
+    calls.includes('disconnectRealtime'),
+    'synchronous teardown must run before an earlier async handler settles',
+  );
+
+  authState.sessionEpoch = 2;
+  calls.push('sessionB');
+  releaseHandler.resolve();
+  await clearing;
+
+  assert.equal(calls.includes('resetIM'), false);
+  assert.equal(calls.filter((call) => call === 'disconnectRealtime').length, 1);
+  assert.equal(calls.some((call) => call.startsWith('reset')), false);
+});
+
+test('concurrent clears for the same session share one teardown', async () => {
+  const { mocks, calls } = makeBaseMocks();
+  const { clearLocalSession, registerLogoutHandler } = loadSessionModule(mocks);
+  const handlerStarted = deferred();
+  const releaseHandler = deferred();
+  let handlerCalls = 0;
+
+  registerLogoutHandler(async () => {
+    handlerCalls += 1;
+    handlerStarted.resolve();
+    await releaseHandler.promise;
+  });
+
+  const firstClear = clearLocalSession(1);
+  await handlerStarted.promise;
+  const secondClear = clearLocalSession(1);
+
+  assert.equal(handlerCalls, 1);
+  releaseHandler.resolve();
+  await Promise.all([firstClear, secondClear]);
+
+  assert.equal(handlerCalls, 1);
+  assert.equal(calls.filter((call) => call === 'clearSession').length, 1);
+});
+
+test('a clear for a newer session waits for the older teardown and then runs', async () => {
+  const { mocks, calls, authState } = makeBaseMocks();
+  const { clearLocalSession, registerLogoutHandler } = loadSessionModule(mocks);
+  const firstHandlerStarted = deferred();
+  const releaseFirstHandler = deferred();
+  const handledEpochs = [];
+
+  registerLogoutHandler(async (context) => {
+    handledEpochs.push(context.sessionEpoch);
+    if (context.sessionEpoch === 1) {
+      firstHandlerStarted.resolve();
+      await releaseFirstHandler.promise;
+    }
+  });
+
+  const firstClear = clearLocalSession(1);
+  await firstHandlerStarted.promise;
+
+  authState.sessionEpoch = 2;
+  const secondClear = clearLocalSession(2);
+  assert.deepEqual(handledEpochs, [1]);
+
+  releaseFirstHandler.resolve();
+  await Promise.all([firstClear, secondClear]);
+
+  assert.deepEqual(handledEpochs, [1, 2]);
+  assert.equal(calls.filter((call) => call === 'clearSession').length, 1);
+  assert.equal(authState.sessionEpoch, 3);
+});
+
+test('guarded clearLocalSession skips all resets when the session changes during module loading', async () => {
+  const { mocks, calls, authState } = makeBaseMocks();
+  mocks.__onRequire = (request) => {
+    if (request === '@/features/messages/store/use-message-groups-store') {
+      authState.accessToken = 'access-b';
+      authState.refreshToken = 'refresh-b';
+      authState.sessionEpoch += 1;
+    }
+  };
+  const { clearLocalSession } = loadSessionModule(mocks);
+
+  await clearLocalSession(1);
+
+  assert.deepEqual(calls, []);
+  assert.equal(authState.accessToken, 'access-b');
+  assert.equal(authState.refreshToken, 'refresh-b');
+});
+
+test('clearLocalSession re-persists a newer session after Zustand void clearStorage finishes', async () => {
+  const { mocks, calls, authStore, authState } = makeBaseMocks();
+  const persistenceStarted = deferred();
+  const releasePersistence = deferred();
+  const persistCurrentStarted = deferred();
+  const releasePersistCurrent = deferred();
+  let persistedAccessToken = 'access-a';
+  let firstRemoval = true;
+  let storageQueue = Promise.resolve();
+
+  const enqueueStorageMutation = (action) => {
+    const next = storageQueue.then(action, action);
+    storageQueue = next.catch(() => {});
+    return next;
+  };
+
+  mocks['@/storage/secure-auth-storage'].secureAuthStorage.removeItem = () =>
+    enqueueStorageMutation(async () => {
+      calls.push('removeItem:start');
+      if (firstRemoval) {
+        firstRemoval = false;
+        persistenceStarted.resolve();
+        await releasePersistence.promise;
+      }
+      persistedAccessToken = null;
+      calls.push('removeItem:done');
+    });
+  authStore.persist.clearStorage = () => {
+    calls.push('clearStorage');
+    void mocks['@/storage/secure-auth-storage'].secureAuthStorage.removeItem(
+      'circle-im-auth',
+    );
+  };
+  authStore.setState = () => {
+    calls.push('persistCurrent');
+    void enqueueStorageMutation(async () => {
+      persistCurrentStarted.resolve();
+      await releasePersistCurrent.promise;
+      persistedAccessToken = authState.accessToken;
+      calls.push('persistCurrent:done');
+    });
+  };
+  mocks['@/stores/authStore'].persistCurrentAuthState = () => {
+    calls.push('persistCurrent:explicit');
+    return enqueueStorageMutation(async () => {
+      await releasePersistCurrent.promise;
+      persistedAccessToken = authState.accessToken;
+      calls.push('persistCurrent:explicit:done');
+    });
+  };
+  const { clearLocalSession } = loadSessionModule(mocks);
+
+  const clearing = clearLocalSession(1);
+  await persistenceStarted.promise;
+
+  authState.accessToken = 'access-b';
+  authState.refreshToken = 'refresh-b';
+  authState.sessionEpoch += 1;
+  calls.push('sessionB');
+  authStore.setState({});
+  releasePersistence.resolve();
+  await persistCurrentStarted.promise;
+
+  let clearingSettled = false;
+  void clearing.then(() => {
+    clearingSettled = true;
+  });
+  await Promise.resolve();
+  assert.equal(
+    clearingSettled,
+    false,
+    'clearLocalSession must await the explicit newer-session persistence',
+  );
+
+  releasePersistCurrent.resolve();
+  await clearing;
+  await storageQueue;
+
+  const sessionBIndex = calls.indexOf('sessionB');
+  assert.ok(calls.indexOf('persistCurrent') > sessionBIndex);
+  assert.ok(
+    calls.slice(sessionBIndex + 1).every((call) => !call.startsWith('reset')),
+    'B stores must not reset after B starts',
+  );
+  assert.equal(persistedAccessToken, 'access-b');
+  assert.ok(
+    calls.indexOf('persistCurrent:explicit:done') >
+      calls.lastIndexOf('removeItem:done'),
+  );
 });
 
 test('clearLocalSession falls back to secure auth removeItem when persist.clearStorage rejects (defense in depth: tokens must not remain on disk)', async () => {

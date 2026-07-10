@@ -12,6 +12,9 @@ import { useTranslation } from "react-i18next";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+const DISCOVER_NOTIFICATION_CENTER_ROUTE =
+  "/(tabs)/discover/notification-center";
+
 const s = StyleSheet.create({
   header: {
     paddingHorizontal: Spacing.lg,
@@ -120,7 +123,7 @@ export default function DiscoverScreen() {
   }, [router]);
 
   const handleOpenNotifications = useCallback(() => {
-    router.push("/(tabs)/discover/notification-center");
+    router.push(DISCOVER_NOTIFICATION_CENTER_ROUTE);
   }, [router]);
 
   const handleFilterPress = useCallback(() => {
