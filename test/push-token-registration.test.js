@@ -756,3 +756,36 @@ test('disabled authenticated legacy cleanup is scheduled without awaiting networ
   assert.equal(harness.getLegacyCleanups().length, 1);
   deletion.resolve();
 });
+
+test('cross-user legacy active survives B registration and restart until A can clean it', async () => {
+  const deletedAsB = [];
+  const userB = makeHarness({
+    legacy: { token: 'legacy-token-a', userId: 'user-a' },
+    token: 'modern-token-b',
+    secret: SECRET_B,
+    deleteLegacyPushToken: async (token) => deletedAsB.push(token),
+  });
+
+  await userB.orchestrator.sync(enabled('user-b'));
+
+  assert.equal(userB.getStored().userId, 'user-b');
+  assert.equal(userB.getStored().token, 'modern-token-b');
+  assert.equal(userB.getLegacyCleanups().length, 1);
+  assert.equal(userB.getLegacyCleanups()[0].token, 'legacy-token-a');
+  assert.equal(deletedAsB.length, 0);
+
+  const deletedAsA = [];
+  const restarted = makeHarness({
+    stored: userB.getStored(),
+    legacyCleanups: userB.getLegacyCleanups(),
+    token: 'modern-token-a',
+    deleteLegacyPushToken: async (token) => deletedAsA.push(token),
+  });
+  await restarted.orchestrator.sync(enabled('user-b'));
+  assert.equal(restarted.getLegacyCleanups().length, 1);
+  assert.equal(deletedAsA.length, 0);
+
+  await restarted.orchestrator.sync(enabled('user-a'));
+  assert.equal(deletedAsA[0], 'legacy-token-a');
+  assert.equal(restarted.getLegacyCleanups().length, 0);
+});

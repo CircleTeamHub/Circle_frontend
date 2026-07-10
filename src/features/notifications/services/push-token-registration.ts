@@ -429,6 +429,14 @@ export function createPushTokenRegistrationOrchestrator(
       ) {
         retireStoredRegistration();
       }
+      const legacyForAnotherUser =
+        dependencies.getLegacyRegistration?.() ?? null;
+      if (
+        legacyForAnotherUser &&
+        legacyForAnotherUser.userId !== input.userId
+      ) {
+        dependencies.retireLegacyRegistration?.();
+      }
       const pendingRevocationCount = dependencies.getPendingRevocations().length;
       if (
         pendingRevocationCount >= REVOCATION_BACKPRESSURE_THRESHOLD
