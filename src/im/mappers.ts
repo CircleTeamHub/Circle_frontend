@@ -69,6 +69,30 @@ function isSystemNotification(contentType: number) {
   return SYSTEM_NOTIFICATION_CONTENT_TYPES.has(contentType);
 }
 
+// 群通知类消息的展示文案：会话列表预览与聊天流灰条共用。
+// 返回 null 的类型（OA 通知/禁言变更等）不在聊天流渲染。
+function getGroupNoticeText(contentType: number): string | null {
+  switch (contentType) {
+    case MessageType.GroupCreated:
+      return tImNotification('groupCreated', '群聊已创建');
+    case MessageType.MemberInvited:
+    case MessageType.MemberEnter:
+      return tImNotification('memberInvited', '新成员加入群聊');
+    case MessageType.MemberQuit:
+      return tImNotification('memberQuit', '有成员退出群聊');
+    case MessageType.MemberKicked:
+      return tImNotification('memberKicked', '有成员被移出群聊');
+    case MessageType.GroupNameUpdated:
+      return tImNotification('groupNameUpdated', '群名称已更新');
+    case MessageType.GroupDismissed:
+      return tImNotification('groupDismissed', '群已解散');
+    case MessageType.RevokeMessage:
+      return tImNotification('messageRevoked', '一条消息被撤回');
+    default:
+      return null;
+  }
+}
+
 function parseNoteCardPayload(data: string): NoteCardData | null {
   try {
     const raw = JSON.parse(data) as Partial<NoteCardData>;
@@ -188,17 +212,10 @@ export function getMessagePreview(message: MessageItem | null, fallback = '') {
   }
 
   if (isSystemNotification(message.contentType)) {
-    // 好友刚建立的 FriendAdded 通知——会话列表也要给出预览（对话渲染见下方 296 行），
+    // 好友刚建立的 FriendAdded 通知——会话列表也要给出预览（对话渲染见下方），
     // 否则最后一条是它时列表这行会空白。
     if (message.contentType === MessageType.FriendAdded) return tImNotification('friendAdded', '你们已经是好友了，开始聊天吧');
-    if (message.contentType === MessageType.GroupCreated) return tImNotification('groupCreated', '群聊已创建');
-    if (message.contentType === MessageType.MemberInvited) return tImNotification('memberInvited', '新成员加入群聊');
-    if (message.contentType === MessageType.MemberQuit) return tImNotification('memberQuit', '有成员退出群聊');
-    if (message.contentType === MessageType.MemberKicked) return tImNotification('memberKicked', '有成员被移出群聊');
-    if (message.contentType === MessageType.GroupNameUpdated) return tImNotification('groupNameUpdated', '群名称已更新');
-    if (message.contentType === MessageType.GroupDismissed) return tImNotification('groupDismissed', '群已解散');
-    if (message.contentType === MessageType.RevokeMessage) return tImNotification('messageRevoked', '一条消息被撤回');
-    return '';
+    return getGroupNoticeText(message.contentType) ?? '';
   }
 
   switch (message.contentType) {
@@ -305,8 +322,19 @@ export function mapMessageItemToChatMessage(
     };
   }
 
-  // 其余系统/群通知消息不渲染为聊天气泡（创建群聊后 SDK 自动塞的 GroupCreated
-  // 之前会被当成普通文本显示成 [消息] 气泡）。
+  // 群通知类消息（群已创建/新成员加入/退群/改名/解散/撤回）渲染成居中灰条，
+  // 微信样式——否则新圈子群里只有这类消息时聊天页会显示成一片空白。
+  const groupNoticeText = getGroupNoticeText(item.contentType);
+  if (groupNoticeText) {
+    return {
+      id: item.clientMsgID,
+      type: 'system-notice',
+      text: groupNoticeText,
+      time: formatTimestamp(item.sendTime),
+    };
+  }
+
+  // 其余系统通知（OA 通知/禁言变更等）没有面向用户的文案，不渲染。
   if (isSystemNotification(item.contentType)) {
     return null;
   }
@@ -324,6 +352,10 @@ export function mapMessageItemToChatMessage(
     isRead: isSent ? Boolean(item.isRead) : undefined,
     // 接收消息带上发送者的用户 id（还原成 UUID 形式），群聊点头像可跳对方资料。
     senderID: isSent ? undefined : fromImUserId(item.sendID),
+    // 发送者头像：群聊气泡必须用发送者本人的（会话头像在群聊里是群头像）。
+    senderAvatarUrl: isSent
+      ? undefined
+      : (normalizeMediaUrl(item.senderFaceUrl || null) ?? undefined),
   };
 
   if (item.contentType === MessageType.LocationMessage) {

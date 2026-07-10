@@ -114,6 +114,7 @@ import { useMessageForwardStore } from '@/features/chat/store/use-message-forwar
 import { useTransferComposerStore } from '@/features/chat/store/use-transfer-composer-store';
 import { useCallStore } from '@/features/call/store/use-call-store';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
+import { AVATAR_SIZE } from '@/features/chat/components/bubbles/shared';
 import {
   DEFAULT_CHAT_BACKGROUND_PREFERENCE,
   resolveChatBackgroundStyle,
@@ -223,6 +224,12 @@ const PANEL_LAYOUT_ANIM = {
 };
 
 const s = StyleSheet.create({
+  // 群聊接收气泡上方的发送者名字（缩进对齐气泡起点 = 头像宽 + 间距）。
+  senderLabel: {
+    ...Typography.small,
+    marginLeft: AVATAR_SIZE + Spacing.sm,
+    marginBottom: 2,
+  },
   header: {
     height: 60,
     flexDirection: 'row',
@@ -784,16 +791,20 @@ export default function ChatDetailScreen() {
     );
     // Collapse duplicate "you're now friends" system notices — the line can come
     // from both OpenIM's native FriendAdded and the local insert on accept.
+    // 只收敛这一种：群通知（如多条「新成员加入群聊」）每条都是独立事件，不能按文案去重。
     // Keep element references intact so the CellRenderer cache above still holds.
-    const seenSystemNotice = new Set<string>();
+    const friendAddedText = t('im.notifications.friendAdded', {
+      defaultValue: '你们已经是好友了，开始聊天吧',
+    });
+    let seenFriendAdded = false;
     return mapped.filter((item) => {
       if (item.type !== 'system-notice') return true;
-      const key = item.text ?? '';
-      if (seenSystemNotice.has(key)) return false;
-      seenSystemNotice.add(key);
+      if ((item.text ?? '') !== friendAddedText) return true;
+      if (seenFriendAdded) return false;
+      seenFriendAdded = true;
       return true;
     });
-  }, [currentUserID, conversationMessages]);
+  }, [currentUserID, conversationMessages, t]);
 
   // 搜索定位：在 inverted 列表里 scrollToIndex 仍然按 index 计数，找到就跳。
   useEffect(() => {
@@ -1077,6 +1088,43 @@ export default function ChatDetailScreen() {
     [handleMessageLongPress],
   );
 
+  // 群聊接收消息的显示名：本地备注覆盖 > 消息自带昵称 > 会话标题。
+  const allRemarkOverrides = useFriendRemarkStore((state) => state.remarks);
+  const receivedDisplayName = useCallback(
+    (msg: ChatMessage) => {
+      const override = msg.senderID
+        ? allRemarkOverrides[msg.senderID]
+        : undefined;
+      return override?.remark || msg.senderName || conversationTitle;
+    },
+    [allRemarkOverrides, conversationTitle],
+  );
+
+  // 群聊头像用发送者本人的（新消息自带最新头像）；单聊沿用会话头像参数。
+  const receivedAvatarUri = useCallback(
+    (msg: ChatMessage) =>
+      isGroupChat ? msg.senderAvatarUrl : (avatarUrl ?? msg.senderAvatarUrl),
+    [isGroupChat, avatarUrl],
+  );
+
+  // 群聊在接收气泡上方显示发送者名字（微信样式）。senderID 仅接收消息携带。
+  const withGroupSenderLabel = useCallback(
+    (message: ChatMessage, node: ReactElement): ReactElement => {
+      if (!isGroupChat || !message.senderID) {
+        return node;
+      }
+      return (
+        <View>
+          <Text style={[s.senderLabel, { color: colors.textSecondary }]}>
+            {receivedDisplayName(message)}
+          </Text>
+          {node}
+        </View>
+      );
+    },
+    [isGroupChat, receivedDisplayName, colors.textSecondary],
+  );
+
   const withMessageActions = useCallback(
     (message: ChatMessage, node: ReactElement) => (
       <Pressable
@@ -1088,10 +1136,15 @@ export default function ChatDetailScreen() {
         onLongPress={getMessageLongPressHandler(message)}
         delayLongPress={350}
       >
-        {node}
+        {withGroupSenderLabel(message, node)}
       </Pressable>
     ),
-    [d.targetMessageHighlight, getMessageLongPressHandler, highlightedMessageID],
+    [
+      d.targetMessageHighlight,
+      getMessageLongPressHandler,
+      highlightedMessageID,
+      withGroupSenderLabel,
+    ],
   );
 
   const renderItem = useCallback(({ item }: { item: ChatMessage }) => {
@@ -1102,8 +1155,8 @@ export default function ChatDetailScreen() {
         return withMessageActions(item, (
           <ReceivedBubble
             message={item}
-            senderName={item.senderName ?? conversationTitle}
-            senderAvatarUri={avatarUrl}
+            senderName={receivedDisplayName(item)}
+            senderAvatarUri={receivedAvatarUri(item)}
             onAvatarPress={() => handleOpenMessageSender(item)}
           />
         ));
@@ -1121,8 +1174,8 @@ export default function ChatDetailScreen() {
           <LocationCard
             message={item}
             outgoing={Boolean(item.outgoing)}
-            senderName={item.senderName ?? conversationTitle}
-            senderAvatarUri={avatarUrl}
+            senderName={receivedDisplayName(item)}
+            senderAvatarUri={receivedAvatarUri(item)}
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
@@ -1134,8 +1187,8 @@ export default function ChatDetailScreen() {
           <ImageBubble
             message={item}
             outgoing={Boolean(item.outgoing)}
-            senderName={item.senderName ?? conversationTitle}
-            senderAvatarUri={avatarUrl}
+            senderName={receivedDisplayName(item)}
+            senderAvatarUri={receivedAvatarUri(item)}
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
@@ -1148,8 +1201,8 @@ export default function ChatDetailScreen() {
           <VoiceBubble
             message={item}
             outgoing={Boolean(item.outgoing)}
-            senderName={item.senderName ?? conversationTitle}
-            senderAvatarUri={avatarUrl}
+            senderName={receivedDisplayName(item)}
+            senderAvatarUri={receivedAvatarUri(item)}
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
@@ -1162,8 +1215,8 @@ export default function ChatDetailScreen() {
           <NoteCardBubble
             message={item}
             outgoing={Boolean(item.outgoing)}
-            senderName={item.senderName ?? conversationTitle}
-            senderAvatarUri={avatarUrl}
+            senderName={receivedDisplayName(item)}
+            senderAvatarUri={receivedAvatarUri(item)}
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
@@ -1182,8 +1235,8 @@ export default function ChatDetailScreen() {
           <FriendCardBubble
             message={item}
             outgoing={Boolean(item.outgoing)}
-            senderName={item.senderName ?? conversationTitle}
-            senderAvatarUri={avatarUrl}
+            senderName={receivedDisplayName(item)}
+            senderAvatarUri={receivedAvatarUri(item)}
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
@@ -1199,8 +1252,8 @@ export default function ChatDetailScreen() {
           <CircleCardBubble
             message={item}
             outgoing={Boolean(item.outgoing)}
-            senderName={item.senderName ?? conversationTitle}
-            senderAvatarUri={avatarUrl}
+            senderName={receivedDisplayName(item)}
+            senderAvatarUri={receivedAvatarUri(item)}
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
@@ -1212,12 +1265,12 @@ export default function ChatDetailScreen() {
           />
         ));
       case 'verification-card':
-        return (
+        return withGroupSenderLabel(item,
           <VerificationCardBubble
             message={item}
             outgoing={Boolean(item.outgoing)}
-            senderName={item.senderName ?? conversationTitle}
-            senderAvatarUri={avatarUrl}
+            senderName={receivedDisplayName(item)}
+            senderAvatarUri={receivedAvatarUri(item)}
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
@@ -1235,8 +1288,8 @@ export default function ChatDetailScreen() {
           <TransferCardBubble
             message={item}
             outgoing={Boolean(item.outgoing)}
-            senderName={item.senderName ?? conversationTitle}
-            senderAvatarUri={avatarUrl}
+            senderName={receivedDisplayName(item)}
+            senderAvatarUri={receivedAvatarUri(item)}
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
@@ -1247,8 +1300,9 @@ export default function ChatDetailScreen() {
       default: return null;
     }
   }, [
-    avatarUrl,
-    conversationTitle,
+    receivedAvatarUri,
+    receivedDisplayName,
+    withGroupSenderLabel,
     handleOpenMessageSender,
     isGroupChat,
     selfAvatarUri,

@@ -105,6 +105,8 @@ export interface ChatMessage {
   senderName?: string;
   // 发送者用户 id（UUID 形式），仅接收消息携带；群聊点头像跳对方资料用。
   senderID?: string;
+  // 发送者头像（仅接收消息携带）；群聊气泡用它而不是会话头像参数。
+  senderAvatarUrl?: string;
   locationTitle?: string;
   locationAddress?: string;
   // For image messages: source URL + optional intrinsic dimensions for layout
