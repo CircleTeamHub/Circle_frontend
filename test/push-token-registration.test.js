@@ -409,3 +409,84 @@ test('toggle-off retires locally and uses public revocation without auth state',
   assert.equal(harness.revokeCalls[0].token, 'registered-token');
   assert.equal(harness.revokeCalls[0].revocationSecret, SECRET_A);
 });
+
+test('the 51st distinct retirement is preserved without exposing its secret in diagnostics', async () => {
+  const existing = Array.from({ length: 50 }, (_, index) => ({
+    token: `old-token-${index}`,
+    revocationSecret: `${String(index).padStart(8, '0')}-1111-4111-8111-111111111111`,
+  }));
+  const secret51 = '51515151-1111-4111-8111-111111111111';
+  const harness = makeHarness({
+    revocations: existing,
+    stored: {
+      token: 'active-token-51',
+      userId: 'user-1',
+      revocationSecret: secret51,
+      status: 'pending',
+    },
+    revokePushToken: async () => {
+      throw new Error('offline');
+    },
+  });
+
+  harness.orchestrator.logout();
+  await harness.orchestrator.flushPendingRevocations();
+
+  assert.equal(harness.getRevocations().length, 51);
+  assert.equal(
+    harness
+      .getRevocations()
+      .some((item) => item.token === 'active-token-51' && item.revocationSecret === secret51),
+    true,
+  );
+  assert.equal(harness.diagnostics.length > 0, true);
+  assert.equal(JSON.stringify(harness.diagnostics).includes(secret51), false);
+});
+
+test('registration pauses at revocation saturation and resumes after a successful flush', async () => {
+  const revocations = Array.from({ length: 50 }, (_, index) => ({
+    token: `saturated-token-${index}`,
+    revocationSecret: `${String(index).padStart(8, '0')}-2222-4222-8222-222222222222`,
+  }));
+  let revokeFails = true;
+  const harness = makeHarness({
+    revocations,
+    revokePushToken: async () => {
+      if (revokeFails) throw new Error('offline');
+    },
+  });
+
+  await harness.orchestrator.sync(enabled());
+
+  assert.equal(harness.registerCalls.length, 0);
+  assert.equal(harness.getStored(), null);
+  assert.equal(harness.getRevocations().length, 50);
+  assert.equal(harness.diagnostics[0][0], 'push_token_revocation_backpressure');
+  assert.equal(JSON.stringify(harness.diagnostics).includes(SECRET_A), false);
+
+  revokeFails = false;
+  await harness.orchestrator.flushPendingRevocations();
+  await harness.orchestrator.sync(enabled());
+
+  assert.equal(harness.getRevocations().length, 0);
+  assert.equal(harness.registerCalls.length, 1);
+  assert.equal(harness.getStored().status, 'registered');
+});
+
+test('retiring an exact duplicate tombstone does not grow the unresolved queue', async () => {
+  const duplicate = { token: 'duplicate-token', revocationSecret: SECRET_A };
+  const harness = makeHarness({
+    revocations: [duplicate],
+    stored: {
+      ...duplicate,
+      userId: 'user-1',
+      status: 'pending',
+    },
+    revokePushToken: async () => {
+      throw new Error('offline');
+    },
+  });
+  harness.orchestrator.logout();
+  await harness.orchestrator.flushPendingRevocations();
+  assert.equal(harness.getRevocations().length, 1);
+});

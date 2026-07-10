@@ -49,7 +49,7 @@ type PushTokenRegistrationOrchestratorDependencies = {
 
 const PUSH_REGISTRATION_KEY = 'circle-im-push-registration';
 const PUSH_REVOCATIONS_KEY = 'circle-im-push-revocations';
-const MAX_PENDING_REVOCATIONS = 50;
+const REVOCATION_BACKPRESSURE_THRESHOLD = 50;
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 
 function getProjectId() {
@@ -154,16 +154,13 @@ export function createPushTokenRegistrationOrchestrator(
     const key = revocationKey(value);
     const current = dependencies.getPendingRevocations();
     if (current.some((item) => revocationKey(item) === key)) return;
-    const capped =
-      current.length >= MAX_PENDING_REVOCATIONS
-        ? current.slice(-(MAX_PENDING_REVOCATIONS - 1))
-        : current;
-    if (capped.length !== current.length) {
-      dependencies.reportDiagnostic('push_token_revocation_queue_capped', {
-        cap: MAX_PENDING_REVOCATIONS,
+    if (current.length >= REVOCATION_BACKPRESSURE_THRESHOLD) {
+      dependencies.reportDiagnostic('push_token_revocation_queue_saturated', {
+        count: current.length + 1,
+        threshold: REVOCATION_BACKPRESSURE_THRESHOLD,
       });
     }
-    dependencies.setPendingRevocations([...capped, value]);
+    dependencies.setPendingRevocations([...current, value]);
   }
 
   function removePendingRevocation(value: PushTokenRevocation) {
@@ -236,6 +233,16 @@ export function createPushTokenRegistrationOrchestrator(
       if (dependencies.platform === 'web') return;
       const owner = ++nextOwner;
       desiredRegistration = { kind: 'enabled', owner, userId: input.userId };
+      const pendingRevocationCount = dependencies.getPendingRevocations().length;
+      if (
+        pendingRevocationCount >= REVOCATION_BACKPRESSURE_THRESHOLD
+      ) {
+        dependencies.reportDiagnostic('push_token_revocation_backpressure', {
+          count: pendingRevocationCount,
+          threshold: REVOCATION_BACKPRESSURE_THRESHOLD,
+        });
+        return;
+      }
       if (dependencies.getStoredRegistration()?.userId !== input.userId) {
         retireStoredRegistration();
       }
