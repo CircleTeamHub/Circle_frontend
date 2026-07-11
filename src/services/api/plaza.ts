@@ -82,6 +82,16 @@ export async function deletePlazaPost(id: string): Promise<void> {
   await apiClient<void>(`/circle-plaza/posts/${id}`, { method: 'DELETE' });
 }
 
+export async function reportPlazaPost(
+  id: string,
+  reason?: string,
+): Promise<{ reported: boolean }> {
+  return apiClient<{ reported: boolean }>(`/circle-plaza/posts/${id}/report`, {
+    method: 'POST',
+    body: reason ? { reason } : {},
+  });
+}
+
 export async function signupForPost(
   id: string,
 ): Promise<{ signed: boolean; signupCount: number }> {

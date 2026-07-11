@@ -54,3 +54,13 @@ test('UserIconRow supports a smaller compact size for dense inline contexts', ()
   assert.match(row, /smallCompactCount/);
   assert.match(row, /compactSize === 'small'/);
 });
+
+test('UserIconRow lets tight layouts cap the compact badge count via maxVisible', () => {
+  const row = read('src/components/ui/user-icon-row.tsx');
+
+  // 可选 maxVisible（默认 3）：compact 模式下按它 slice，其余折叠成 "+N"。
+  assert.match(row, /maxVisible\?:\s*number/);
+  assert.match(row, /maxVisible\s*=\s*3/);
+  assert.match(row, /compactLimit\s*=\s*Math\.max\(1,\s*maxVisible\)/);
+  assert.match(row, /safeIcons\.slice\(0,\s*compactLimit\)/);
+});

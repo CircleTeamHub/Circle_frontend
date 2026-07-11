@@ -63,8 +63,8 @@
       "circleSection": "サークル通知",
       "circleGlobal": "サークル通知を受け取る",
       "circleGlobalHint": "オン：オフライン通知・ローカル音・未読バッジを有効化\nオフ：すべての通知を無効化",
-      "circleSound": "サウンド通知",
-      "circleSoundHint": "オン：通知音を再生\nオフ：ミュート（未読バッジは表示）",
+      "circleBanner": "バナー通知",
+      "circleBannerHint": "オン：新しい通知でバナーを表示\nオフ：バナーなし（未読バッジは表示）",
       "circleRingtone": "サークル通知の着信音",
       "circleDefault": "サークル既定",
       "offlineReminder": "オフライン通知",
@@ -553,7 +553,12 @@
     },
     "plazaPostCard": {
       "footer": "参加 {{count}} · {{author}}",
-      "pendingPreview": "[イベント] {{title}}"
+      "pendingPreview": "[イベント] {{title}}",
+      "badge": "イベント",
+      "by": "{{author}}さんが主催",
+      "signupCount": "{{count}}人が参加",
+      "signupEmpty": "まだ誰も参加していません",
+      "cta": "参加する"
     }
   },
   "messages": {
@@ -1165,12 +1170,27 @@
       "global": "サークル通知を受け取る",
       "globalOnHint": "オン：オフライン通知＋サウンド＋赤い点を有効化",
       "globalOffHint": "オフ：すべての通知を無効化（各スイッチも無効）",
-      "sound": "サウンド通知",
-      "soundOnHint": "オン：通知音を再生",
-      "soundOffHint": "オフ：ミュート（未読の赤い点は保持）",
+      "banner": "バナー通知",
+      "bannerOnHint": "オン：新しい通知でバナーを表示",
+      "bannerOffHint": "オフ：バナーなし（未読の赤い点は保持）",
       "offline": "オフライン通知",
       "offlineOnHint": "オン：アプリがオフラインのときバナー通知を受信",
       "offlineOffHint": "オフ：オフラインのバナー通知を受け取らない"
+    },
+    "guide": {
+      "title": "サークルの遊び方",
+      "entryHint": "カードの色 · 遊び方",
+      "intro": "サークルでアクティビティを立ち上げ、参加しよう。数ステップで始められます。",
+      "colorsTitle": "カードの色 = 残り時間",
+      "colorsIntro": "アクティビティカード左側のバーは、締切が近づくほど色が変わります。暖色ほど急ぎ：",
+      "colorPurple": "紫：残り3日以上、余裕あり。",
+      "colorGreen": "緑：残り3日以内、まもなく終了。",
+      "colorOrange": "オレンジ：残り1日未満、早めに応募を。",
+      "stepsTitle": "遊び方",
+      "step1": "アクティビティを立ち上げる：サークルに投稿し、期間（1/3/7日）や応募条件を設定。複数のサークル・都市に同時公開できます。",
+      "step2": "応募する：気になるアクティビティで「応募」をタップ。条件を満たせば参加でき、いつでもキャンセルできます。",
+      "step3": "見逃さない：新しいアクティビティはバナーで通知され、すぐ応募できます（このページのスイッチで切替）。",
+      "step4": "認可で締めくくる：終了後、主催者は最大3名の活躍した参加者を認可でき、認可された人は通知・いいね・バッジを獲得します。"
     },
     "filter": {
       "title": "絞り込み",
@@ -1278,6 +1298,25 @@
     "deleteFailedTitle": "削除に失敗しました",
     "deleteMessage": "元に戻せません。削除しますか？",
     "deleteTitle": "投稿を削除",
+    "actions": {
+      "more": "その他",
+      "share": "シェア",
+      "report": "通報"
+    },
+    "share": {
+      "title": "共有先",
+      "opener": "アクティビティをシェアします。見てみてね",
+      "noFriends": "共有できる友だちがいません"
+    },
+    "report": {
+      "title": "投稿を通報",
+      "message": "この投稿を通報しますか？",
+      "confirm": "通報",
+      "doneTitle": "通報しました",
+      "doneMessage": "ご報告ありがとうございます。確認します。",
+      "failedTitle": "通報に失敗しました",
+      "failedMessage": "後でもう一度お試しください"
+    },
     "restriction": {
       "fancyNumber": "特別IDユーザー",
       "separator": "、",
@@ -1326,8 +1365,10 @@
       "CIRCLE_INVITATION_APPROVED": "「{{circle}}」への招待がすべて承認されました",
       "CIRCLE_INVITATION_REJECTED": "「{{circle}}」の招待枠の1つが却下されました",
       "CIRCLE_ADMIN_OVERRIDE_APPROVED": "管理者が「{{circle}}」でのあなたの申請を承認しました",
+      "CIRCLE_POST_PUBLISHED": "サークルに新しいアクティビティを投稿しました",
       "CIRCLE_POST_SIGNUP_CREATED": "あなたのサークル投稿に応募しました",
-      "CIRCLE_POST_AUTO_ENDED": "アクティビティが終了しました。認可する協力者を選んでください"
+      "CIRCLE_POST_AUTO_ENDED": "アクティビティが終了しました。認可する協力者を選んでください",
+      "CIRCLE_POST_COLLABORATION_RECOGNIZED": "あなたの活動での協力を認めました"
     },
     "signupMgmt": {
       "untitledPost": "（タイトルなしの投稿）",
@@ -2287,6 +2328,7 @@
     "PLAZA_RECOGNIZE_NOT_MEMBER": "サークルのアクティブメンバーのみを認定できます",
     "PLAZA_RECOGNIZE_BLOCKED": "ブロックしたユーザーは認定できません",
     "PLAZA_RECOGNIZE_ALREADY": "コラボレーション認定は既に送信されています",
+    "PLAZA_REPORT_SELF": "自分の投稿は通報できません",
     "TRACE_MOMENT_NOT_FOUND": "モーメントが見つかりません",
     "TRACE_DELETE_AUTHOR_ONLY": "投稿者のみが削除できます",
     "TRACE_REPLY_TARGET_NOT_FOUND": "返信先のコメントが存在しません",

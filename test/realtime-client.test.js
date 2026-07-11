@@ -60,7 +60,7 @@ test('realtime notification.created only prepends bell types but banners everyth
   }
   // 好友申请不进铃铛列表（专属「新的朋友」收件箱），横幅不受影响。
   assert.doesNotMatch(client, /'FRIEND_REQUEST_RECEIVED'/);
-  // prepend 受白名单门控；横幅入队在门外无条件执行。
+  // prepend 受白名单门控；横幅入队在铃铛门外执行（圈子类另受「圈子通知设置」门控，见下）。
   assert.match(
     client,
     /if \(BELL_NOTIFICATION_TYPES\.has\(payload\.type\)\) \{[\s\S]*?setInteractive\(/,
@@ -68,6 +68,21 @@ test('realtime notification.created only prepends bell types but banners everyth
   assert.match(
     client,
     /\}\s*\n\s*useNotificationSnackbarStore\.getState\(\)\.enqueueNotification\(payload\);/,
+  );
+});
+
+test('realtime gates circle-notification banners on the circle notification settings', () => {
+  const client = read('src/realtime/client.ts');
+
+  // 圈子通知（CIRCLE_*）的横幅受「圈子通知设置」控制：总开关或「通知提醒」关闭时
+  // 不弹横幅（但铃铛/红点仍在门前处理，通知本身不丢）。
+  assert.match(client, /useCircleNotificationStore/);
+  assert.match(client, /payload\.type\.startsWith\('CIRCLE_'\)/);
+  assert.match(client, /!globalEnabled \|\| !bannerEnabled/);
+  // 门控发生在铃铛 setInteractive 之后、横幅 enqueueNotification 之前。
+  assert.match(
+    client,
+    /startsWith\('CIRCLE_'\)[\s\S]*?return;[\s\S]*?enqueueNotification\(payload\)/,
   );
 });
 

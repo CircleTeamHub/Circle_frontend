@@ -221,8 +221,10 @@
       "CIRCLE_INVITATION_APPROVED": "your invitation to {{circle}} is fully approved",
       "CIRCLE_INVITATION_REJECTED": "an invitation slot in {{circle}} was rejected",
       "CIRCLE_ADMIN_OVERRIDE_APPROVED": "an admin approved your request in {{circle}}",
+      "CIRCLE_POST_PUBLISHED": "posted a new activity in your circle",
       "CIRCLE_POST_SIGNUP_CREATED": "signed up for your circle post",
-      "CIRCLE_POST_AUTO_ENDED": "your activity ended; choose collaborators to recognize"
+      "CIRCLE_POST_AUTO_ENDED": "your activity ended; choose collaborators to recognize",
+      "CIRCLE_POST_COLLABORATION_RECOGNIZED": "recognized your collaboration"
     },
     "signupMgmt": {
       "untitledPost": "(untitled post)",
@@ -576,7 +578,12 @@
     },
     "plazaPostCard": {
       "footer": "{{count}} signed up · {{author}}",
-      "pendingPreview": "[Event] {{title}}"
+      "pendingPreview": "[Event] {{title}}",
+      "badge": "Event",
+      "by": "by {{author}}",
+      "signupCount": "{{count}} going",
+      "signupEmpty": "Be the first to join",
+      "cta": "Join"
     }
   },
   "contacts": {
@@ -735,12 +742,27 @@
       "global": "Receive Circle Notifications",
       "globalOnHint": "On: enables offline alerts + sound + red dot",
       "globalOffHint": "Off: disables all notifications (local switches disabled)",
-      "sound": "Sound Alert",
-      "soundOnHint": "On: play notification sound",
-      "soundOffHint": "Off: muted (unread red dot kept)",
+      "banner": "Notification Banner",
+      "bannerOnHint": "On: show a banner for new notifications",
+      "bannerOffHint": "Off: no banner (unread red dot kept)",
       "offline": "Offline Alert",
       "offlineOnHint": "On: receive circle banner notifications when app is offline",
       "offlineOffHint": "Off: no offline banner notifications"
+    },
+    "guide": {
+      "title": "How Circle Activities Work",
+      "entryHint": "Card colors · how to play",
+      "intro": "Start and join activities in your circles in just a few steps.",
+      "colorsTitle": "Card color = time left",
+      "colorsIntro": "The bar on the left of each activity card changes color as the deadline nears — warmer means more urgent:",
+      "colorPurple": "Purple: more than 3 days left, plenty of time.",
+      "colorGreen": "Green: within 3 days, ending soon.",
+      "colorOrange": "Orange: less than 1 day left — sign up now.",
+      "stepsTitle": "How to play",
+      "step1": "Start an activity: post in a circle, set how long it runs (1/3/7 days) and any sign-up requirements, and share it to several circles and cities at once.",
+      "step2": "Sign up: tap 'Sign up' on an activity you like; join if you meet the requirements, and cancel anytime.",
+      "step3": "Stay in the loop: new activities pop up as a banner so you can sign up right away (toggle it with the switches on this page).",
+      "step4": "Wrap up with recognition: after an activity ends, the host can recognize up to 3 standout participants, who each get a notification, a like, and a badge."
     },
     "filter": {
       "title": "Filter",
@@ -967,6 +989,25 @@
     "deleteFailedTitle": "Failed to delete",
     "deleteMessage": "This can't be undone. Delete anyway?",
     "deleteTitle": "Delete post",
+    "actions": {
+      "more": "More",
+      "share": "Share",
+      "report": "Report"
+    },
+    "share": {
+      "title": "Share to",
+      "opener": "Sharing an activity with you — take a look",
+      "noFriends": "No friends to share with yet"
+    },
+    "report": {
+      "title": "Report post",
+      "message": "Report this post?",
+      "confirm": "Report",
+      "doneTitle": "Reported",
+      "doneMessage": "Thanks — we'll review it shortly.",
+      "failedTitle": "Report failed",
+      "failedMessage": "Please try again"
+    },
     "restriction": {
       "fancyNumber": "Fancy-ID users",
       "separator": ", ",
@@ -1590,8 +1631,8 @@
       "circleSection": "Circle Notifications",
       "circleGlobal": "Receive Circle Notifications",
       "circleGlobalHint": "On: offline notifications, local sound, and red dots are enabled\nOff: all notifications are disabled",
-      "circleSound": "Sound Reminder",
-      "circleSoundHint": "On: play notification sound\nOff: silent with unread red dots retained",
+      "circleBanner": "Notification Banner",
+      "circleBannerHint": "On: show a banner for new notifications\nOff: no banner (unread red dot kept)",
       "circleRingtone": "Circle Notification Ringtone",
       "circleDefault": "Circle Default",
       "offlineReminder": "Offline Reminder",
@@ -2290,6 +2331,7 @@
     "PLAZA_RECOGNIZE_NOT_MEMBER": "Only active circle members can be recognized",
     "PLAZA_RECOGNIZE_BLOCKED": "You can't recognize a blocked user",
     "PLAZA_RECOGNIZE_ALREADY": "Collaboration recognition has already been submitted",
+    "PLAZA_REPORT_SELF": "You can't report your own post",
     "TRACE_MOMENT_NOT_FOUND": "Moment not found",
     "TRACE_DELETE_AUTHOR_ONLY": "Only the author can delete this",
     "TRACE_REPLY_TARGET_NOT_FOUND": "The comment you're replying to no longer exists",

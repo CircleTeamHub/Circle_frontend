@@ -1,6 +1,5 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
-import * as Crypto from 'expo-crypto';
 import {
   deleteLegacyPushToken,
   registerPushToken,
@@ -36,6 +35,11 @@ type PushStateV2 = {
   active: StoredPushRegistration | LegacyPushRegistration | null;
   tombstones: (PushTokenRevocation | LegacyPushCleanup)[];
 };
+type RuntimeCrypto = {
+  randomUUID?: () => string;
+  getRandomValues?: <T extends Uint8Array>(array: T) => T;
+};
+type ExpoCryptoModule = { randomUUID?: () => string };
 
 type PushTokenRegistrationOrchestratorDependencies = {
   platform: PushTokenPlatform;
@@ -68,6 +72,10 @@ const PUSH_REGISTRATION_KEY = 'circle-im-push-registration';
 const LEGACY_PUSH_REVOCATIONS_KEY = 'circle-im-push-revocations';
 const REVOCATION_BACKPRESSURE_THRESHOLD = 50;
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+
+declare const require:
+  | ((specifier: string) => unknown)
+  | undefined;
 
 function getProjectId() {
   const constants = Constants as typeof Constants & {
@@ -272,6 +280,60 @@ function removeLegacyCleanup(value: LegacyPushCleanup) {
         ),
     ),
   });
+}
+
+function createUuidV4FromBytes(bytes: Uint8Array) {
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(
+    12,
+    16,
+  )}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function getRuntimeCrypto() {
+  return (
+    (globalThis as typeof globalThis & { crypto?: RuntimeCrypto }).crypto ??
+    null
+  );
+}
+
+function generateFallbackRevocationSecret() {
+  const runtimeCrypto = getRuntimeCrypto();
+  if (typeof runtimeCrypto?.randomUUID === 'function') {
+    return runtimeCrypto.randomUUID();
+  }
+
+  const bytes = new Uint8Array(16);
+  if (typeof runtimeCrypto?.getRandomValues === 'function') {
+    runtimeCrypto.getRandomValues(bytes);
+  } else {
+    if (!isDev) {
+      throw new Error('Secure random source unavailable for push revocation');
+    }
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = Math.floor(Math.random() * 256);
+    }
+  }
+  return createUuidV4FromBytes(bytes);
+}
+
+function generateRevocationSecret() {
+  try {
+    if (typeof require === 'function') {
+      const crypto = require('expo-crypto') as ExpoCryptoModule;
+      const uuid = crypto.randomUUID?.();
+      if (typeof uuid === 'string' && uuid.length >= 32) return uuid;
+    }
+  } catch (error) {
+    if (isDev) {
+      console.warn('[notifications] expo-crypto unavailable', error);
+    }
+  }
+  return generateFallbackRevocationSecret();
 }
 
 export function createPushTokenRegistrationOrchestrator(
@@ -652,7 +714,7 @@ function createDefaultPushTokenRegistrationOrchestrator() {
     retireLegacyRegistration: retireLegacyRegistrationAtomically,
     getLegacyCleanups,
     removeLegacyCleanup,
-    generateRevocationSecret: () => Crypto.randomUUID(),
+    generateRevocationSecret,
     loadNotificationsModule,
     registerPushToken,
     revokePushToken,

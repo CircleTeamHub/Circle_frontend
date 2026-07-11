@@ -63,8 +63,8 @@
       "circleSection": "Notificaciones de Círculo",
       "circleGlobal": "Recibir notificaciones de Círculo",
       "circleGlobalHint": "Activado: notificaciones sin conexión, sonido local y puntos rojos\nDesactivado: todas las notificaciones se desactivan",
-      "circleSound": "Aviso con sonido",
-      "circleSoundHint": "Activado: reproduce sonido de notificación\nDesactivado: silencio, con puntos rojos de no leídos",
+      "circleBanner": "Banner de notificación",
+      "circleBannerHint": "Activado: muestra un banner para notificaciones nuevas\nDesactivado: sin banner (se conserva el punto rojo)",
       "circleRingtone": "Tono de notificaciones de Círculo",
       "circleDefault": "Predeterminado de Círculo",
       "offlineReminder": "Aviso sin conexión",
@@ -554,7 +554,12 @@
     },
     "plazaPostCard": {
       "footer": "{{count}} inscritos · {{author}}",
-      "pendingPreview": "[Evento] {{title}}"
+      "pendingPreview": "[Evento] {{title}}",
+      "badge": "Evento",
+      "by": "por {{author}}",
+      "signupCount": "{{count}} apuntados",
+      "signupEmpty": "Sé el primero en apuntarte",
+      "cta": "Apuntarme"
     }
   },
   "messages": {
@@ -1168,12 +1173,27 @@
       "global": "Recibir notificaciones del círculo",
       "globalOnHint": "Activado: alertas sin conexión + sonido + punto rojo",
       "globalOffHint": "Desactivado: sin notificaciones (interruptores locales desactivados)",
-      "sound": "Alerta de sonido",
-      "soundOnHint": "Activado: reproducir sonido de notificación",
-      "soundOffHint": "Desactivado: silenciado (se conserva el punto rojo)",
+      "banner": "Banner de notificación",
+      "bannerOnHint": "Activado: muestra un banner para notificaciones nuevas",
+      "bannerOffHint": "Desactivado: sin banner (se conserva el punto rojo)",
       "offline": "Alerta sin conexión",
       "offlineOnHint": "Activado: recibe avisos del círculo con la app sin conexión",
       "offlineOffHint": "Desactivado: sin avisos sin conexión"
+    },
+    "guide": {
+      "title": "Cómo funcionan los círculos",
+      "entryHint": "Colores de la tarjeta · cómo jugar",
+      "intro": "Crea y únete a actividades en tus círculos en pocos pasos.",
+      "colorsTitle": "Color de la tarjeta = tiempo restante",
+      "colorsIntro": "La barra a la izquierda de cada tarjeta cambia de color al acercarse el cierre; más cálido significa más urgente:",
+      "colorPurple": "Morado: quedan más de 3 días, tiempo de sobra.",
+      "colorGreen": "Verde: menos de 3 días, termina pronto.",
+      "colorOrange": "Naranja: menos de 1 día, inscríbete ya.",
+      "stepsTitle": "Cómo jugar",
+      "step1": "Crea una actividad: publica en un círculo, define su duración (1/3/7 días) y los requisitos de inscripción, y compártela en varios círculos y ciudades a la vez.",
+      "step2": "Inscríbete: toca «Inscribirse» en una actividad que te guste; únete si cumples los requisitos y cancela cuando quieras.",
+      "step3": "Entérate al momento: las nuevas actividades aparecen como un banner para inscribirte enseguida (actívalo con los interruptores de esta página).",
+      "step4": "Cierra con reconocimiento: al terminar, el anfitrión puede reconocer hasta 3 participantes destacados, que reciben una notificación, un me gusta y una insignia."
     },
     "filter": {
       "title": "Filtrar",
@@ -1281,6 +1301,25 @@
     "deleteFailedTitle": "Error al eliminar",
     "deleteMessage": "No se puede deshacer. ¿Eliminar de todos modos?",
     "deleteTitle": "Eliminar publicación",
+    "actions": {
+      "more": "Más",
+      "share": "Compartir",
+      "report": "Reportar"
+    },
+    "share": {
+      "title": "Compartir con",
+      "opener": "Te comparto una actividad, échale un vistazo",
+      "noFriends": "Aún no tienes amigos para compartir"
+    },
+    "report": {
+      "title": "Reportar publicación",
+      "message": "¿Reportar esta publicación?",
+      "confirm": "Reportar",
+      "doneTitle": "Reportado",
+      "doneMessage": "Gracias, lo revisaremos pronto.",
+      "failedTitle": "Error al reportar",
+      "failedMessage": "Inténtalo de nuevo"
+    },
     "restriction": {
       "fancyNumber": "Usuarios con ID premium",
       "separator": ", ",
@@ -1329,8 +1368,10 @@
       "CIRCLE_INVITATION_APPROVED": "tu invitación a {{circle}} fue aprobada por completo",
       "CIRCLE_INVITATION_REJECTED": "se rechazó una plaza de invitación en {{circle}}",
       "CIRCLE_ADMIN_OVERRIDE_APPROVED": "un administrador aprobó tu solicitud en {{circle}}",
+      "CIRCLE_POST_PUBLISHED": "publicó una nueva actividad en tu círculo",
       "CIRCLE_POST_SIGNUP_CREATED": "se inscribió en tu publicación del círculo",
-      "CIRCLE_POST_AUTO_ENDED": "tu actividad terminó; elige colaboradores para reconocer"
+      "CIRCLE_POST_AUTO_ENDED": "tu actividad terminó; elige colaboradores para reconocer",
+      "CIRCLE_POST_COLLABORATION_RECOGNIZED": "reconoció tu colaboración"
     },
     "signupMgmt": {
       "untitledPost": "(publicación sin título)",
@@ -2290,6 +2331,7 @@
     "PLAZA_RECOGNIZE_NOT_MEMBER": "Solo se puede reconocer a miembros activos del círculo",
     "PLAZA_RECOGNIZE_BLOCKED": "No puedes reconocer a un usuario bloqueado",
     "PLAZA_RECOGNIZE_ALREADY": "El reconocimiento de colaboración ya se ha enviado",
+    "PLAZA_REPORT_SELF": "No puedes reportar tu propia publicación",
     "TRACE_MOMENT_NOT_FOUND": "Momento no encontrado",
     "TRACE_DELETE_AUTHOR_ONLY": "Solo el autor puede eliminar esto",
     "TRACE_REPLY_TARGET_NOT_FOUND": "El comentario al que respondes ya no existe",

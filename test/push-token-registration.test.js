@@ -18,7 +18,7 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-function loadRegistrar(storageOverride, sharedGlobal) {
+function loadRegistrar(storageOverride, sharedGlobal, options = {}) {
   const filePath = path.join(
     process.cwd(),
     'src/features/notifications/services/push-token-registration.ts',
@@ -53,9 +53,28 @@ function loadRegistrar(storageOverride, sharedGlobal) {
         };
       }
       if (specifier === 'expo-constants') {
-        return { __esModule: true, default: { expoConfig: null } };
+        return {
+          __esModule: true,
+          default: options.constants ?? { expoConfig: null },
+        };
       }
-      if (specifier === 'expo-crypto') return { randomUUID: () => SECRET_A };
+      if (specifier === 'expo-notifications') {
+        return (
+          options.notifications ?? {
+            IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
+            getPermissionsAsync: async () => ({ granted: true }),
+            getExpoPushTokenAsync: async () => ({
+              data: 'ExponentPushToken[default]',
+            }),
+          }
+        );
+      }
+      if (specifier === 'expo-crypto') {
+        if (options.throwExpoCrypto) {
+          throw new Error('Cannot find native module ExpoCrypto');
+        }
+        return { randomUUID: () => SECRET_A };
+      }
       if (specifier === 'react/jsx-runtime') return {};
       if (specifier === '@/services/api/notifications') {
         return { registerPushToken() {}, revokePushToken() {} };
@@ -328,6 +347,36 @@ test('Fast Refresh module access reuses one coordinator and stable logout handle
   const second = secondModule.getSharedPushTokenRegistrationOrchestrator();
   assert.equal(first, second);
   assert.equal(first.logout, second.logout);
+});
+
+test('default registration falls back when ExpoCrypto native module is unavailable', async () => {
+  const memory = memoryStorage();
+  const module = loadRegistrar(
+    memory.storage,
+    { crypto: { randomUUID: () => SECRET_B } },
+    {
+      throwExpoCrypto: true,
+      constants: {
+        expoConfig: {
+          version: '1.0.0',
+          extra: { eas: { projectId: 'project-real' } },
+        },
+      },
+      notifications: {
+        IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
+        getPermissionsAsync: async () => ({ granted: true }),
+        getExpoPushTokenAsync: async () => ({
+          data: 'ExponentPushToken[fallback]',
+        }),
+      },
+    },
+  );
+
+  await module.pushTokenRegistrationOrchestrator.sync(enabled());
+
+  const persisted = JSON.parse(memory.read('circle-im-push-registration'));
+  assert.equal(persisted.active.revocationSecret, SECRET_B);
+  assert.equal(persisted.active.status, 'registered');
 });
 
 test('first native run requests permission and registers a persisted pending secret', async () => {

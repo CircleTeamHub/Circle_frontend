@@ -13,6 +13,12 @@ type Props = {
   compact?: boolean;
   compactSize?: CompactSize;
   tone?: 'default' | 'member';
+  // compact 模式下最多展示几个徽章，其余折叠成 "+N"。默认 3；空间紧张的卡片
+  // （如广场帖头部，要给用户名/圈子标签让位）可传更小值。非 compact 不受影响。
+  maxVisible?: number;
+  // compact 下超出 maxVisible 时是否显示 "+N" 折叠计数。默认 true；广场帖头部
+  // 传 false —— 超出不折叠，只固定展示前 maxVisible 枚（配合上游按优先级排序）。
+  showOverflowCount?: boolean;
 };
 
 type BadgeProps = {
@@ -336,11 +342,17 @@ function UserIconRowComponent({
   compact = false,
   compactSize = 'default',
   tone = 'default',
+  maxVisible = 3,
+  showOverflowCount = true,
 }: Props) {
   const { colors } = useTheme();
   const safeIcons = icons.filter((icon) => isRenderableIcon(icon));
-  const visibleIcons = compact ? safeIcons.slice(0, 3) : safeIcons;
-  const hiddenCount = compact ? Math.max(0, safeIcons.length - visibleIcons.length) : 0;
+  const compactLimit = Math.max(1, maxVisible);
+  const visibleIcons = compact ? safeIcons.slice(0, compactLimit) : safeIcons;
+  const hiddenCount =
+    compact && showOverflowCount
+      ? Math.max(0, safeIcons.length - visibleIcons.length)
+      : 0;
   const isSmallCompact = compact && compactSize === 'small';
 
   if (safeIcons.length === 0) {
