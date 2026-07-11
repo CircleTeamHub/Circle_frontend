@@ -108,15 +108,34 @@ test('PlazaPostCard keeps the name readable and moves the circle tag to line 2',
   assert.match(src, /tag:\s*\{[^}]*maxWidth:\s*\d+[^}]*\}/);
   // 城市文本可收缩省略，避免把时间挤没。
   assert.match(src, /metaCity:\s*\{[^}]*flexShrink:\s*1[^}]*\}/);
-  // 身份徽章最多展示 3 枚（+N 折叠其余）。
+  // 身份徽章固定展示 3 枚。
   assert.match(src, /<UserIconRow[\s\S]*?maxVisible=\{3\}/);
+});
+
+test('PlazaPostCard shows a fixed 3 badges (no +N fold), prioritizing VIP + credibility', () => {
+  const src = read(SRC);
+
+  // 超出不折叠 "+N"，固定展示前 3 枚。
+  assert.match(
+    src,
+    /<UserIconRow[\s\S]*?maxVisible=\{3\}[\s\S]*?showOverflowCount=\{false\}/,
+  );
+  // 优先级：VIP 最前，其后信誉相关（VERIFIED_PROFILE 认证 / TOP_COLLABORATOR 协作）。
+  assert.match(src, /BADGE_DISPLAY_PRIORITY[\s\S]*?VIP:\s*0/);
+  assert.match(src, /VERIFIED_PROFILE:\s*1/);
+  assert.match(src, /TOP_COLLABORATOR:\s*2/);
+  // authorDisplayIcons 按 badgeDisplayRank 不可变排序（不 mutate 原数组）。
+  assert.match(src, /\[\.\.\.icons\]\.sort\(/);
+  assert.match(src, /badgeDisplayRank\(a\)\s*-\s*badgeDisplayRank\(b\)/);
 });
 
 test('PlazaPostCard renders compact author display badges beside author info', () => {
   const src = read(SRC);
 
   assert.match(src, /import \{ UserIconRow \} from ['"]@\/components\/ui\/user-icon-row['"]/);
-  assert.match(src, /authorDisplayIcons\s*=\s*post\.author\.displayIcons\s*\?\?\s*\[\]/);
+  // authorDisplayIcons 由 post.author.displayIcons 经优先级排序（useMemo）得来。
+  assert.match(src, /const authorDisplayIcons = useMemo\(/);
+  assert.match(src, /post\.author\.displayIcons\s*\?\?\s*\[\]/);
   assert.match(src, /authorDisplayIcons\.length > 0/);
   assert.match(src, /<UserIconRow[\s\S]*?icons=\{authorDisplayIcons\}[\s\S]*?compact[\s\S]*?compactSize="small"/);
 });

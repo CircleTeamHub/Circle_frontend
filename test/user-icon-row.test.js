@@ -63,4 +63,9 @@ test('UserIconRow lets tight layouts cap the compact badge count via maxVisible'
   assert.match(row, /maxVisible\s*=\s*3/);
   assert.match(row, /compactLimit\s*=\s*Math\.max\(1,\s*maxVisible\)/);
   assert.match(row, /safeIcons\.slice\(0,\s*compactLimit\)/);
+
+  // 可选 showOverflowCount（默认 true）：传 false 时超出不折叠 "+N"，只固定展示前 N 枚。
+  assert.match(row, /showOverflowCount\?:\s*boolean/);
+  assert.match(row, /showOverflowCount\s*=\s*true/);
+  assert.match(row, /compact && showOverflowCount/);
 });

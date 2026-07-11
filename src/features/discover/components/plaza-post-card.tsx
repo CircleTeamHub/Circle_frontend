@@ -415,7 +415,16 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
     () => formatRelativeTime(post.createdAt, t),
     [post.createdAt, t],
   );
-  const authorDisplayIcons = post.author.displayIcons ?? [];
+  // 不可变排序（不改 post.author.displayIcons）：优先 VIP + 信誉相关徽章，同级保持
+  // 服务端 sortOrder。头部只取前 3 枚且不折叠，排序保证露出的是最重要的身份徽章。
+  const authorDisplayIcons = useMemo(() => {
+    const icons = post.author.displayIcons ?? [];
+    return [...icons].sort((a, b) => {
+      const rankDiff = badgeDisplayRank(a) - badgeDisplayRank(b);
+      if (rankDiff !== 0) return rankDiff;
+      return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+    });
+  }, [post.author.displayIcons]);
 
   // 左侧强调竖条配色按「距到期的剩余时间」分档，随时间推移逐级跳变：≤1天(橙) →
   // ≤3天(绿) → 更久(紫)。越接近到期越暖，推动及时报名（不用红色，观感更柔和）。
@@ -448,12 +457,14 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
             </Pressable>
             {authorDisplayIcons.length > 0 ? (
               <View style={s.authorBadgeRow}>
-                {/* 第一行只剩用户名 + 身份徽章（圈子标签已下移）：徽章最多 3 枚 + "+N"。 */}
+                {/* 第一行只剩用户名 + 身份徽章（圈子标签已下移）：固定展示前 3 枚，
+                    超出不折叠 "+N"（icons 已按 VIP + 信誉优先排序）。 */}
                 <UserIconRow
                   icons={authorDisplayIcons}
                   compact
                   compactSize="small"
                   maxVisible={3}
+                  showOverflowCount={false}
                 />
               </View>
             ) : null}
