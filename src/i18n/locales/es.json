@@ -1340,7 +1340,15 @@
     "postDetail": {
       "title": "Detalle de la actividad",
       "notExist": "La publicación no existe o ha finalizado",
-      "loadFailed": "Error al cargar, inténtalo de nuevo"
+      "loadFailed": "Error al cargar, inténtalo de nuevo",
+      "notMemberTitle": "No se puede ver",
+      "notMemberNamed": "No eres miembro de {{circle}}. Únete para ver esta actividad.",
+      "notMember": "No eres miembro de este círculo",
+      "joinCircle": "Solicitar unirse al círculo",
+      "joinSubmittedTitle": "Solicitud enviada",
+      "joinSubmittedMessage": "Se envió tu solicitud. Podrás ver la actividad cuando la aprueben.",
+      "joinFailedTitle": "Error en la solicitud",
+      "joinFailedMessage": "Inténtalo de nuevo"
     }
   },
   "notifications": {
@@ -2332,6 +2340,7 @@
     "PLAZA_RECOGNIZE_BLOCKED": "No puedes reconocer a un usuario bloqueado",
     "PLAZA_RECOGNIZE_ALREADY": "El reconocimiento de colaboración ya se ha enviado",
     "PLAZA_REPORT_SELF": "No puedes reportar tu propia publicación",
+    "PLAZA_NOT_CIRCLE_MEMBER": "No eres miembro de este círculo",
     "TRACE_MOMENT_NOT_FOUND": "Momento no encontrado",
     "TRACE_DELETE_AUTHOR_ONLY": "Solo el autor puede eliminar esto",
     "TRACE_REPLY_TARGET_NOT_FOUND": "El comentario al que respondes ya no existe",

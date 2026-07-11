@@ -1337,7 +1337,15 @@
     "postDetail": {
       "title": "활동 상세",
       "notExist": "게시물이 없거나 종료되었습니다",
-      "loadFailed": "불러오기 실패, 나중에 다시 시도하세요"
+      "loadFailed": "불러오기 실패, 나중에 다시 시도하세요",
+      "notMemberTitle": "볼 수 없어요",
+      "notMemberNamed": "「{{circle}}」의 멤버가 아니에요. 가입하면 활동을 볼 수 있어요.",
+      "notMember": "이 서클의 멤버가 아니에요",
+      "joinCircle": "서클 가입 신청",
+      "joinSubmittedTitle": "신청 완료",
+      "joinSubmittedMessage": "가입 신청을 보냈어요. 승인되면 활동을 볼 수 있어요.",
+      "joinFailedTitle": "신청 실패",
+      "joinFailedMessage": "나중에 다시 시도해 주세요"
     }
   },
   "notifications": {
@@ -2329,6 +2337,7 @@
     "PLAZA_RECOGNIZE_BLOCKED": "차단한 사용자는 인정할 수 없습니다",
     "PLAZA_RECOGNIZE_ALREADY": "협업 인정이 이미 제출되었습니다",
     "PLAZA_REPORT_SELF": "자신의 게시물은 신고할 수 없습니다",
+    "PLAZA_NOT_CIRCLE_MEMBER": "이 서클의 멤버가 아니에요",
     "TRACE_MOMENT_NOT_FOUND": "모먼트를 찾을 수 없습니다",
     "TRACE_DELETE_AUTHOR_ONLY": "작성자만 삭제할 수 있습니다",
     "TRACE_REPLY_TARGET_NOT_FOUND": "답글 대상 댓글이 존재하지 않습니다",

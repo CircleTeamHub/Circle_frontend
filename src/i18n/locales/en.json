@@ -1028,7 +1028,15 @@
     "postDetail": {
       "title": "Activity",
       "notExist": "This post no longer exists",
-      "loadFailed": "Failed to load, please try again"
+      "loadFailed": "Failed to load, please try again",
+      "notMemberTitle": "Can't view this",
+      "notMemberNamed": "You're not a member of {{circle}}. Join to view this activity.",
+      "notMember": "You're not a member of this circle",
+      "joinCircle": "Request to join circle",
+      "joinSubmittedTitle": "Request sent",
+      "joinSubmittedMessage": "Your join request was sent. You can view the activity once approved.",
+      "joinFailedTitle": "Request failed",
+      "joinFailedMessage": "Please try again"
     }
   },
   "moment": {
@@ -2332,6 +2340,7 @@
     "PLAZA_RECOGNIZE_BLOCKED": "You can't recognize a blocked user",
     "PLAZA_RECOGNIZE_ALREADY": "Collaboration recognition has already been submitted",
     "PLAZA_REPORT_SELF": "You can't report your own post",
+    "PLAZA_NOT_CIRCLE_MEMBER": "You're not a member of this circle",
     "TRACE_MOMENT_NOT_FOUND": "Moment not found",
     "TRACE_DELETE_AUTHOR_ONLY": "Only the author can delete this",
     "TRACE_REPLY_TARGET_NOT_FOUND": "The comment you're replying to no longer exists",

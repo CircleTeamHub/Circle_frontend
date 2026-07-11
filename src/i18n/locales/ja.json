@@ -1337,7 +1337,15 @@
     "postDetail": {
       "title": "活動の詳細",
       "notExist": "投稿が存在しないか終了しました",
-      "loadFailed": "読み込みに失敗しました。後でもう一度お試しください"
+      "loadFailed": "読み込みに失敗しました。後でもう一度お試しください",
+      "notMemberTitle": "表示できません",
+      "notMemberNamed": "「{{circle}}」のメンバーではありません。参加するとこのアクティビティを表示できます。",
+      "notMember": "このサークルのメンバーではありません",
+      "joinCircle": "サークルに参加申請",
+      "joinSubmittedTitle": "申請を送信しました",
+      "joinSubmittedMessage": "参加申請を送信しました。承認されると表示できます。",
+      "joinFailedTitle": "申請に失敗しました",
+      "joinFailedMessage": "後でもう一度お試しください"
     }
   },
   "notifications": {
@@ -2329,6 +2337,7 @@
     "PLAZA_RECOGNIZE_BLOCKED": "ブロックしたユーザーは認定できません",
     "PLAZA_RECOGNIZE_ALREADY": "コラボレーション認定は既に送信されています",
     "PLAZA_REPORT_SELF": "自分の投稿は通報できません",
+    "PLAZA_NOT_CIRCLE_MEMBER": "このサークルのメンバーではありません",
     "TRACE_MOMENT_NOT_FOUND": "モーメントが見つかりません",
     "TRACE_DELETE_AUTHOR_ONLY": "投稿者のみが削除できます",
     "TRACE_REPLY_TARGET_NOT_FOUND": "返信先のコメントが存在しません",

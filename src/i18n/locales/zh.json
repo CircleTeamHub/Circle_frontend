@@ -1027,7 +1027,15 @@
     "postDetail": {
       "title": "活动详情",
       "notExist": "帖子不存在或已结束",
-      "loadFailed": "加载失败，请稍后重试"
+      "loadFailed": "加载失败，请稍后重试",
+      "notMemberTitle": "无法查看",
+      "notMemberNamed": "你不是「{{circle}}」的成员，加入后即可查看活动",
+      "notMember": "你不是本圈子成员，无法查看",
+      "joinCircle": "申请加入圈子",
+      "joinSubmittedTitle": "已提交申请",
+      "joinSubmittedMessage": "加入申请已提交，通过后即可查看活动",
+      "joinFailedTitle": "申请失败",
+      "joinFailedMessage": "请稍后重试"
     }
   },
   "moment": {
@@ -2329,6 +2337,7 @@
     "PLAZA_RECOGNIZE_BLOCKED": "不能认可已拉黑的用户",
     "PLAZA_RECOGNIZE_ALREADY": "合作认可已提交，无法重复操作",
     "PLAZA_REPORT_SELF": "不能举报自己的帖子",
+    "PLAZA_NOT_CIRCLE_MEMBER": "你不是本圈子成员，无法查看",
     "TRACE_MOMENT_NOT_FOUND": "动态不存在",
     "TRACE_DELETE_AUTHOR_ONLY": "只有作者可以删除",
     "TRACE_REPLY_TARGET_NOT_FOUND": "回复的评论不存在",
