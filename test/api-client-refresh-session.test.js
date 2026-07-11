@@ -405,6 +405,62 @@ test('logout handler drops an in-flight refresh singleton so the next session ca
   assert.equal(harness.setTokenCalls[0].refreshToken, 'refresh-b-next');
 });
 
+test('settled stale refresh cleanup does not drop a newer in-flight refresh promise', async () => {
+  const harness = loadApiClientHarness();
+  const oldRefresh = deferred();
+  const newRefresh = deferred();
+  harness.refreshResponses.push(oldRefresh, newRefresh);
+
+  const oldRequest = harness.apiClient('/profile/me');
+  await waitFor(() => harness.fetchCalls.length === 2);
+
+  const logoutHandler = harness.getLogoutHandler();
+  assert.equal(typeof logoutHandler, 'function');
+  logoutHandler();
+  harness.authState.accessToken = 'access-b';
+  harness.authState.refreshToken = 'refresh-b';
+  harness.authState.sessionEpoch += 1;
+
+  const newRequest = harness.apiClient('/wallet');
+  await waitFor(
+    () =>
+      harness.fetchCalls.filter(([url]) => String(url).endsWith('/auth/refresh'))
+        .length === 2,
+  );
+
+  oldRefresh.resolve(
+    response(true, 200, {
+      code: 0,
+      message: 'ok',
+      data: { accessToken: 'access-a-next', refreshToken: 'refresh-a-next' },
+    }),
+  );
+  await assert.rejects(oldRequest, /session changed/i);
+
+  const thirdRequest = harness.apiClient('/settings');
+  await waitFor(() =>
+    harness.fetchCalls.some(([url]) => String(url).endsWith('/settings')),
+  );
+  await Promise.resolve();
+
+  newRefresh.resolve(
+    response(true, 200, {
+      code: 0,
+      message: 'ok',
+      data: { accessToken: 'access-b-next', refreshToken: 'refresh-b-next' },
+    }),
+  );
+
+  await assert.rejects(newRequest);
+  await assert.rejects(thirdRequest);
+  assert.equal(
+    harness.fetchCalls.filter(([url]) => String(url).endsWith('/auth/refresh'))
+      .length,
+    2,
+  );
+  assert.equal(harness.setTokenCalls.length, 1);
+});
+
 test('a newer session bypasses an older refresh singleton without resetting it', async () => {
   const harness = loadApiClientHarness();
   const oldRefresh = deferred();
