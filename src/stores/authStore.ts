@@ -57,8 +57,8 @@ interface AuthState {
   user: AuthUser | null;
   isAuthenticated: boolean;
   onboardingRequired: boolean;
-  // Runtime-only auth credential generation. This advances on login/logout and
-  // token rotation, so do not treat it as a stable user identity version.
+  // Runtime-only auth session identity generation. This advances when a session
+  // starts or ends, but remains stable while that session's tokens rotate.
   sessionEpoch: number;
   isLoading: boolean;
   hasHydrated: boolean;
@@ -82,6 +82,29 @@ interface AuthState {
   clearSession: () => void;
   setLoading: (loading: boolean) => void;
   setHydrated: (hydrated: boolean) => void;
+}
+
+const AUTH_PERSIST_KEY = 'circle-im-auth';
+
+function partializeAuthState(state: AuthState) {
+  return {
+    accessToken: state.accessToken,
+    refreshToken: state.refreshToken,
+    imToken: state.imToken,
+    user: state.user,
+    isAuthenticated: state.isAuthenticated,
+    onboardingRequired: state.onboardingRequired,
+  };
+}
+
+export async function persistCurrentAuthState(): Promise<void> {
+  await secureAuthStorage.setItem(
+    AUTH_PERSIST_KEY,
+    JSON.stringify({
+      state: partializeAuthState(useAuthStore.getState()),
+      version: AUTH_PERSIST_VERSION,
+    }),
+  );
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -118,7 +141,6 @@ export const useAuthStore = create<AuthState>()(
               ? imToken
               : state.imToken,
           isAuthenticated: true,
-          sessionEpoch: state.sessionEpoch + 1,
         })),
 
       setUser: (user) => set({ user }),
@@ -143,7 +165,7 @@ export const useAuthStore = create<AuthState>()(
       setHydrated: (hydrated) => set({ hasHydrated: hydrated }),
     }),
     {
-      name: 'circle-im-auth',
+      name: AUTH_PERSIST_KEY,
       version: AUTH_PERSIST_VERSION,
       storage: createJSONStorage(() => secureAuthStorage),
       // 关闭"建店即自动水合"：secureAuthStorage 走 SecureStore(Keychain) 异步读，
@@ -177,14 +199,7 @@ export const useAuthStore = create<AuthState>()(
             : {}),
         };
       },
-      partialize: (state) => ({
-        accessToken: state.accessToken,
-        refreshToken: state.refreshToken,
-        imToken: state.imToken,
-        user: state.user,
-        isAuthenticated: state.isAuthenticated,
-        onboardingRequired: state.onboardingRequired,
-      }),
+      partialize: partializeAuthState,
       onRehydrateStorage: () => (state, error) => {
         const nextState = state ?? useAuthStore.getState();
         // SecureStore 持久化读取完成，通知 SessionBootstrap 可以开始执行

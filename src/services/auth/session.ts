@@ -1,11 +1,14 @@
 import { secureAuthStorage } from '@/storage/secure-auth-storage';
-import { useAuthStore } from '@/stores/authStore';
+import {
+  persistCurrentAuthState,
+  useAuthStore,
+} from '@/stores/authStore';
 import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
 
-type PersistCapableAuthStore = typeof useAuthStore & {
+type PersistCapableAuthStore = {
   persist?: {
     clearStorage?: () => Promise<void> | void;
   };
@@ -19,23 +22,30 @@ type PersistCapableAuthStore = typeof useAuthStore & {
  * IM / 实时通道在自身模块加载时通过 registerLogoutHandler 注册 teardown，
  * 由 SessionBootstrap 在 app 启动时确保两个模块都被求值过。
  */
-type LogoutHandler = () => void | Promise<void>;
+export interface LogoutContext {
+  readonly sessionEpoch: number;
+  isCurrent: () => boolean;
+}
+
+type LogoutHandler = (context: LogoutContext) => void | Promise<void>;
 const logoutHandlers: LogoutHandler[] = [];
+let activeClearPromise: Promise<void> | null = null;
+let activeClearSessionEpoch: number | null = null;
 
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 
-async function resetMessageGroupsStore() {
+async function loadMessageGroupsStore() {
   const { useMessageGroupsStore } = await import(
     '@/features/messages/store/use-message-groups-store'
   );
-  useMessageGroupsStore.getState().reset();
+  return useMessageGroupsStore;
 }
 
-async function resetCirclesStore() {
+async function loadCirclesStore() {
   const { useCirclesStore } = await import(
     '@/features/discover/store/use-circles-store'
   );
-  useCirclesStore.getState().reset();
+  return useCirclesStore;
 }
 
 /**
@@ -52,22 +62,41 @@ export function registerLogoutHandler(handler: LogoutHandler): () => void {
   };
 }
 
-export async function clearLocalSession() {
+async function performClearLocalSession(sessionEpoch: number) {
   // teardown 失败不影响后续状态清理；失败汇总到末尾一次性 warn。
   const handlerFailures: unknown[] = [];
+  const context: LogoutContext = {
+    sessionEpoch,
+    isCurrent: () => useAuthStore.getState().sessionEpoch === sessionEpoch,
+  };
+  const pendingHandlers: Promise<void>[] = [];
+
   for (const handler of logoutHandlers) {
     try {
-      await handler();
+      pendingHandlers.push(
+        Promise.resolve(handler(context)).catch((err) => {
+          handlerFailures.push(err);
+        }),
+      );
     } catch (err) {
       handlerFailures.push(err);
     }
   }
+  await Promise.all(pendingHandlers);
+
+  const useMessageGroupsStore = await loadMessageGroupsStore();
+  const useCirclesStore = await loadCirclesStore();
 
   // 先清 auth，让订阅 useAuthStore 的组件立刻看到"未登录"，
   // 避免 dependent store 被清空后触发"重新拉取"再被丢弃的请求。
+  if (!context.isCurrent()) {
+    return;
+  }
+
   useAuthStore.getState().clearSession();
-  await resetMessageGroupsStore();
-  await resetCirclesStore();
+  const clearedSessionEpoch = useAuthStore.getState().sessionEpoch;
+  useMessageGroupsStore.getState().reset();
+  useCirclesStore.getState().reset();
   useFriendActivityUnreadStore.getState().reset();
   useFriendRemarkStore.getState().reset();
   useTabBadgeStore.getState().reset();
@@ -75,7 +104,13 @@ export async function clearLocalSession() {
 
   let persistCleared = false;
   try {
-    await (useAuthStore as PersistCapableAuthStore).persist?.clearStorage?.();
+    const persistenceClear = (useAuthStore as PersistCapableAuthStore)
+      .persist?.clearStorage?.();
+    if (persistenceClear && typeof persistenceClear.then === 'function') {
+      await persistenceClear;
+    } else {
+      await secureAuthStorage.removeItem('circle-im-auth');
+    }
     persistCleared = true;
   } catch (err) {
     if (isDev) console.warn('[session] persist.clearStorage failed', err);
@@ -90,7 +125,45 @@ export async function clearLocalSession() {
     }
   }
 
+  if (useAuthStore.getState().sessionEpoch !== clearedSessionEpoch) {
+    try {
+      await persistCurrentAuthState();
+    } catch (err) {
+      if (isDev) console.warn('[session] persist newer auth session failed', err);
+    }
+  }
+
   if (isDev && handlerFailures.length > 0) {
     console.warn('[session] logout handlers failed', handlerFailures);
   }
+}
+
+export function clearLocalSession(expectedSessionEpoch?: number): Promise<void> {
+  const sessionEpoch =
+    expectedSessionEpoch ?? useAuthStore.getState().sessionEpoch;
+
+  if (useAuthStore.getState().sessionEpoch !== sessionEpoch) {
+    return Promise.resolve();
+  }
+
+  if (activeClearPromise) {
+    if (activeClearSessionEpoch === sessionEpoch) {
+      return activeClearPromise;
+    }
+    return activeClearPromise
+      .catch(() => undefined)
+      .then(() => clearLocalSession(sessionEpoch));
+  }
+
+  const operation = performClearLocalSession(sessionEpoch);
+  let trackedOperation: Promise<void>;
+  trackedOperation = operation.finally(() => {
+    if (activeClearPromise === trackedOperation) {
+      activeClearPromise = null;
+      activeClearSessionEpoch = null;
+    }
+  });
+  activeClearSessionEpoch = sessionEpoch;
+  activeClearPromise = trackedOperation;
+  return trackedOperation;
 }

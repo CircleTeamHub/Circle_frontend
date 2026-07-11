@@ -53,6 +53,7 @@ let initPromise: Promise<void> | null = null;
 // 「僵尸登录态」自愈开关：native SDK 自报 Logged 但资源已卸载时，unInitSDK 重建一次。
 // 模块级 —— 每个 JS 生命周期（含每次 hot-reload）最多自愈一次，避免登录环路。
 let staleLoginSelfHealAttempted = false;
+let logoutPromise: Promise<void> | null = null;
 type NativeFSModule = typeof NativeFS & { default?: typeof NativeFS };
 let rnfsModule: typeof NativeFS | null = null;
 
@@ -208,6 +209,9 @@ export async function loginToOpenIM(userID: string, imToken: string) {
   }
 
   try {
+    if (logoutPromise) {
+      await logoutPromise;
+    }
     await ensureOpenIMInitialized();
     const imUserID = toImUserId(userID);
     useIMStore.getState().setCurrentUserID(imUserID);
@@ -293,7 +297,7 @@ export async function loginToOpenIM(userID: string, imToken: string) {
  * 无论 SDK logout 是否成功都会清空本地状态。
  * 登出后清空 initPromise，下次登录时会重新执行 initSDK。
  */
-export async function logoutFromOpenIM() {
+async function performLogoutFromOpenIM() {
   if (!isNativeIMSupported() || !initPromise) {
     useIMStore.getState().reset();
     return;
@@ -322,6 +326,22 @@ export async function logoutFromOpenIM() {
     initPromise = null;
     useIMStore.getState().reset();
   }
+}
+
+export function logoutFromOpenIM(): Promise<void> {
+  if (logoutPromise) {
+    return logoutPromise;
+  }
+
+  const operation = performLogoutFromOpenIM();
+  let trackedOperation: Promise<void>;
+  trackedOperation = operation.finally(() => {
+    if (logoutPromise === trackedOperation) {
+      logoutPromise = null;
+    }
+  });
+  logoutPromise = trackedOperation;
+  return trackedOperation;
 }
 
 export async function loadConversationList(count = 100) {

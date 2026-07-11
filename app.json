@@ -77,7 +77,12 @@
           "enableBackgroundRecording": false
         }
       ],
-      "expo-secure-store",
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": false
+        }
+      ],
       "@sentry/react-native",
       "./plugins/with-local-sentry-auto-upload-disabled",
       "./plugins/with-android-allow-backup-disabled"

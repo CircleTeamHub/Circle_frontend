@@ -5,6 +5,14 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+function deferred() {
+  let resolve;
+  const promise = new Promise((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
 // client.ts 顶层会 import @/im/listeners 和 @/services/auth/session 用于事件绑定 / teardown
 // 注册；测试里我们不关心它们的副作用，全部 no-op 兜底即可。call-site 仍可通过 stubs 覆盖。
 const DEFAULT_TS_MODULE_STUBS = {
@@ -125,6 +133,150 @@ test('ensureOpenIMInitialized excludes the OpenIM data directory from iOS backup
   ]);
   assert.equal(initCalls[0].dataDir, '/tmp/documents/openim');
   assert.equal(initCalls[0].logFilePath, '/tmp/documents/openim');
+});
+
+test('ensureOpenIMInitialized aborts when iOS backup exclusion cannot be applied', async () => {
+  const initCalls = [];
+  const initializedStates = [];
+  const mkdirError = new Error('backup exclusion failed');
+  const { ensureOpenIMInitialized } = loadTsModule('src/im/client.ts', {
+    '@openim/rn-client-sdk': {
+      __esModule: true,
+      default: {
+        initSDK: async (params) => {
+          initCalls.push(params);
+        },
+      },
+      LogLevel: { Info: 0 },
+      SessionType: { Single: 1, Group: 2 },
+      ViewType: { History: 0 },
+    },
+    'react-native-fs': {
+      __esModule: true,
+      default: {
+        DocumentDirectoryPath: '/tmp/documents',
+        mkdir: async () => {
+          throw mkdirError;
+        },
+      },
+    },
+    'react-native': {
+      Platform: { OS: 'ios' },
+    },
+    '@/constants/config': {
+      OPENIM_API_URL: 'https://im.example.com',
+      OPENIM_WS_URL: 'wss://im.example.com',
+      OPENIM_LOG_LEVEL: 0,
+    },
+    '@/stores/imStore': {
+      useIMStore: {
+        getState: () => ({
+          connected: false,
+          setError: () => undefined,
+          setInitialized: (initialized) => initializedStates.push(initialized),
+          setCurrentUserID: () => undefined,
+          setConnecting: () => undefined,
+          reset: () => undefined,
+        }),
+      },
+    },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: {
+        getState: () => ({
+          setMessagesUnread: () => undefined,
+        }),
+      },
+    },
+  });
+
+  await assert.rejects(ensureOpenIMInitialized(), /backup exclusion failed/);
+
+  assert.equal(initCalls.length, 0);
+  assert.deepEqual(initializedStates, [false]);
+});
+
+test('login waits for an in-flight OpenIM logout before starting the next session', async () => {
+  const logoutGate = deferred();
+  const calls = [];
+  const storeState = { connected: true };
+  const sdk = {
+    initSDK: async () => {
+      calls.push('init');
+    },
+    logout: async () => {
+      calls.push('logout:start');
+      await logoutGate.promise;
+      calls.push('logout:done');
+    },
+    getLoginStatus: async () => {
+      calls.push('getLoginStatus');
+      return 0;
+    },
+    login: async ({ userID }) => {
+      calls.push(`login:${userID}`);
+    },
+  };
+  const { ensureOpenIMInitialized, loginToOpenIM, logoutFromOpenIM } =
+    loadTsModule('src/im/client.ts', {
+      '@openim/rn-client-sdk': {
+        __esModule: true,
+        default: sdk,
+        LoginStatus: { Logout: 0, Logged: 3 },
+        LogLevel: { Info: 0 },
+        SessionType: { Single: 1, Group: 2 },
+        ViewType: { History: 0 },
+      },
+      'react-native-fs': {
+        __esModule: true,
+        default: {
+          DocumentDirectoryPath: '/tmp',
+          mkdir: async () => undefined,
+        },
+      },
+      'react-native': { Platform: { OS: 'ios' } },
+      '@/constants/config': {
+        OPENIM_API_URL: 'https://im.example.com',
+        OPENIM_WS_URL: 'wss://im.example.com',
+        OPENIM_LOG_LEVEL: 0,
+      },
+      '@/stores/imStore': {
+        useIMStore: {
+          getState: () => ({
+            connected: storeState.connected,
+            setError: () => undefined,
+            setInitialized: () => undefined,
+            setCurrentUserID: () => undefined,
+            setConnecting: () => undefined,
+            setConnected: (connected) => {
+              storeState.connected = connected;
+            },
+            reset: () => {
+              storeState.connected = false;
+              calls.push('reset');
+            },
+          }),
+        },
+      },
+      '@/stores/tabBadgeStore': {
+        useTabBadgeStore: {
+          getState: () => ({ setMessagesUnread: () => undefined }),
+        },
+      },
+    });
+
+  await ensureOpenIMInitialized();
+  const logout = logoutFromOpenIM();
+  const login = loginToOpenIM('user-b', 'im-token-b');
+  await Promise.resolve();
+
+  assert.equal(calls.includes('getLoginStatus'), false);
+  assert.equal(calls.some((call) => call.startsWith('login:')), false);
+
+  logoutGate.resolve();
+  await Promise.all([logout, login]);
+
+  assert.ok(calls.indexOf('getLoginStatus') > calls.indexOf('logout:done'));
+  assert.ok(calls.indexOf('login:userb') > calls.indexOf('logout:done'));
 });
 
 test('getOrCreateSingleConversation fetches a private conversation and merges it into store', async () => {

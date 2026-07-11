@@ -13,12 +13,17 @@ export type SnackbarRouteOptions = {
   scope?: 'messages' | 'discover';
 };
 
+const DISCOVER_NOTIFICATION_CENTER_ROUTE =
+  '/(tabs)/discover/notification-center' satisfies Href;
+const MESSAGES_NOTIFICATION_CENTER_ROUTE =
+  '/(tabs)/messages/notifications' satisfies Href;
+
 function getNotificationCenterFallback(scope: SnackbarRouteOptions['scope']): Href {
   // 拆成两条 return 收敛推断,避免三元合并出巨型 Href 联合触发 TS2590。
   if (scope === 'discover') {
-    return '/(tabs)/discover/notification-center' as Href;
+    return DISCOVER_NOTIFICATION_CENTER_ROUTE;
   }
-  return '/(tabs)/messages/notifications' as Href;
+  return MESSAGES_NOTIFICATION_CENTER_ROUTE;
 }
 
 export function getSnackbarRoute(
