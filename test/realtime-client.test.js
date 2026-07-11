@@ -26,6 +26,60 @@ test('realtime client routes websocket badge events into the unified tab badge s
   assert.match(client, /setRealtimeConnected/);
 });
 
+test('realtime client authenticates with a message frame, never via the URL', () => {
+  const client = read('src/realtime/client.ts');
+
+  // 网关只认 {type:'auth',token} 消息帧；URL 带 token 会泄漏进日志且不被读取。
+  assert.match(
+    client,
+    /onopen[\s\S]*?send\(JSON\.stringify\(\{ type: 'auth', token: normalizedToken \}\)\)/,
+  );
+  assert.doesNotMatch(client, /[?&]token=/);
+  assert.doesNotMatch(client, /encodeURIComponent\(token\)/);
+  assert.match(client, /new WebSocket\(REALTIME_WS_URL\)/);
+});
+
+test('realtime notification.created only prepends bell types but banners everything non-system', () => {
+  const client = read('src/realtime/client.ts');
+
+  // 铃铛列表类型白名单镜像后端 DISCOVER_NOTIFICATION_TYPES，须含全部互动类型。
+  assert.match(client, /BELL_NOTIFICATION_TYPES/);
+  for (const type of [
+    'TRACE_LIKE',
+    'TRACE_COMMENT',
+    'COMMENT_REPLY',
+    'CIRCLE_VERIFICATION_REQUESTED',
+    'CIRCLE_INVITATION_APPROVED',
+    'CIRCLE_INVITATION_REJECTED',
+    'CIRCLE_ADMIN_OVERRIDE_APPROVED',
+    'CIRCLE_POST_SIGNUP_CREATED',
+    'CIRCLE_POST_AUTO_ENDED',
+    'PROFILE_LIKE',
+  ]) {
+    assert.match(client, new RegExp(`'${type}'`));
+  }
+  // 好友申请不进铃铛列表（专属「新的朋友」收件箱），横幅不受影响。
+  assert.doesNotMatch(client, /'FRIEND_REQUEST_RECEIVED'/);
+  // prepend 受白名单门控；横幅入队在门外无条件执行。
+  assert.match(
+    client,
+    /if \(BELL_NOTIFICATION_TYPES\.has\(payload\.type\)\) \{[\s\S]*?setInteractive\(/,
+  );
+  assert.match(
+    client,
+    /\}\s*\n\s*useNotificationSnackbarStore\.getState\(\)\.enqueueNotification\(payload\);/,
+  );
+});
+
+test('discover bell badge reads the interactive unread count, not systemUnread', () => {
+  const screen = read('src/features/discover/screens/DiscoverScreen.tsx');
+
+  // 铃铛红点必须由 interaction.unread.changed 驱动的 discoverUnread 供数。
+  assert.match(screen, /useTabBadgeStore\(\(state\) => state\.discoverUnread\)/);
+  assert.doesNotMatch(screen, /useTabBadgeStore\(\(state\) => state\.systemUnread\)/);
+  assert.match(screen, /Badge count=\{bellUnread\}/);
+});
+
 test('session bootstrap and logout wire realtime connection lifecycle to auth state', () => {
   const bootstrap = read('src/components/app/session-bootstrap.tsx');
   const session = read('src/services/auth/session.ts');

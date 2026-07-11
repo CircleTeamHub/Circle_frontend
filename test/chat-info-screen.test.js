@@ -108,7 +108,11 @@ test('chat info screen lets the current user open their own profile from the gro
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /const handleOpenMemberProfile = useCallback/);
-  assert.match(source, /router\.push\(getUserProfileHref\('messages',\s*fromImUserId\(member\.userID\)/);
+  // 群成员 → profile 必须按本屏所在 tab 栈(originScope=scope)推断，chat-info 在
+  // messages/contacts/discover/profile 都有 re-export；写死 'messages' 会把 profile
+  // 推进 messages 栈、串栈污染(与 AddFriend 同类 bug)。
+  assert.match(source, /router\.push\(getUserProfileHref\(scope,\s*fromImUserId\(member\.userID\)/);
+  assert.doesNotMatch(source, /getUserProfileHref\(\s*['"]messages['"],\s*fromImUserId/);
   assert.doesNotMatch(
     source,
     /handleOpenMemberProfile[\s\S]{0,160}member\.userID === currentUserID/,

@@ -126,6 +126,31 @@ test('api dev logs redact presigned upload URLs and object keys', async () => {
   assert.match(serializedLogs, /\[REDACTED/);
 });
 
+test('api dev logs redact push revocation secrets in register and revoke bodies', async () => {
+  const logs = [];
+  const secret = '12345678-1234-4234-9234-123456789abc';
+  const { apiClient } = loadApiClient({
+    logs,
+    responses: [
+      { ok: true, status: 200, responseText: '' },
+      { ok: true, status: 200, responseText: '' },
+    ],
+  });
+  await apiClient('/notification/push-token', {
+    method: 'PUT',
+    body: { token: 'push-token', revocationSecret: secret },
+  });
+  await apiClient('/notification/push-token/revoke', {
+    method: 'DELETE',
+    auth: false,
+    body: { token: 'push-token', revocationSecret: secret },
+  });
+  const serializedLogs = JSON.stringify(logs);
+  assert.doesNotMatch(serializedLogs, new RegExp(secret));
+  assert.match(serializedLogs, /revocationSecret/);
+  assert.match(serializedLogs, /\[REDACTED\]/);
+});
+
 test('apiClient reports unexpected 5xx failures to Sentry', async () => {
   const reports = [];
   const { apiClient } = loadApiClient({

@@ -51,6 +51,22 @@ test("removeInteractiveLocal drops the row", () => {
   assert.equal(useNotificationCenterStore.getState().interactive.length, 0);
 });
 
+test("appendInteractivePage appends newer pages without duplicating rows", () => {
+  const { useNotificationCenterStore } = load(
+    "src/features/notifications/store/use-notification-center-store.ts",
+  );
+  const store = useNotificationCenterStore.getState();
+  const first = { id: "n1", type: "SYSTEM", content: "x", read: false, createdAt: "", fromUser: null, fromTrace: null, fromReply: null };
+  const second = { ...first, id: "n2", content: "y" };
+  store.setInteractive([first]);
+  store.appendInteractivePage([first, second]);
+
+  assert.equal(
+    useNotificationCenterStore.getState().interactive.map((item) => item.id).join(","),
+    "n1,n2",
+  );
+});
+
 test("markPostSignupsSeenLocal clears unread signup count", () => {
   const { useNotificationCenterStore } = load(
     "src/features/notifications/store/use-notification-center-store.ts",

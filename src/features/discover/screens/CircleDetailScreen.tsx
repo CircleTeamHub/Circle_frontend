@@ -11,7 +11,19 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import {
+  useFocusEffect,
+  useLocalSearchParams,
+  useRouter,
+  useSegments,
+} from 'expo-router';
+import {
+  getCircleAdminHref,
+  getCircleEditHref,
+  getCircleInviteHref,
+  getCircleScopeFromSegments,
+  getInvitationDetailHref,
+} from '@/features/user/utils/routes';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -27,6 +39,7 @@ import {
   joinCircle,
   fetchMyApplications,
 } from '@/services/api/circles';
+import { ApiError } from '@/services/api/client';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useChangeCircleCover } from '@/features/discover/hooks/use-change-circle-cover';
 import { useChangeCircleAvatar } from '@/features/discover/hooks/use-change-circle-avatar';
@@ -40,6 +53,7 @@ import {
 import { getOrCreateGroupConversation } from '@/im/client';
 import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
 import type { CircleDetail, CircleInvitation } from '@/types';
+import { reduceCircleLoadFailure } from '@/features/discover/utils/circle-detail-load-state';
 
 const s = StyleSheet.create({
   scroll: { flex: 1 },
@@ -219,6 +233,23 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  refreshError: {
+    marginTop: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: Radius.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.md,
+  },
+  refreshErrorText: {
+    ...Typography.caption,
+    flex: 1,
+  },
+  refreshRetryText: {
+    ...Typography.caption,
+    fontWeight: '600',
+  },
 });
 
 export default function CircleDetailScreen() {
@@ -227,14 +258,22 @@ export default function CircleDetailScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  // 本页镜像在 messages/discover 两个栈（聊天圈子名片在本 tab 内打开），
+  // 所有内部跳转都要留在当前栈里，做到「从哪进从哪出」。
+  const segments = useSegments();
+  const circleScope = getCircleScopeFromSegments(segments);
 
   const [circle, setCircle] = useState<CircleDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [iconSaving, setIconSaving] = useState(false);
   const [enteringGroupChat, setEnteringGroupChat] = useState(false);
   const [joining, setJoining] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const refreshInFlightRef = useRef(false);
+  // 首次成功加载后置 true：之后 focus 回本页只做静默刷新，不再进 loading 分支
+  //（loading 分支会卸载整个 ScrollView，重挂后滚动位置归零 = 返回跳回顶部）。
+  const hasLoadedRef = useRef(false);
   const [myInvitation, setMyInvitation] = useState<CircleInvitation | null>(
     null,
   );
@@ -251,7 +290,10 @@ export default function CircleDetailScreen() {
       setEnteringGroupChat(true);
       const conversation = await getOrCreateGroupConversation(groupID);
       router.push({
-        pathname: '/(tabs)/discover/chat-detail',
+        pathname:
+          circleScope === 'messages'
+            ? '/(tabs)/messages/chat-detail'
+            : '/(tabs)/discover/chat-detail',
         params: {
           conversationID: conversation.conversationID,
           sourceID: groupID,
@@ -263,7 +305,10 @@ export default function CircleDetailScreen() {
       if (shouldOpenChatPreview(error)) {
         // IM 未接通：退化成预览模式（无 conversationID）。
         router.push({
-          pathname: '/(tabs)/discover/chat-detail',
+          pathname:
+          circleScope === 'messages'
+            ? '/(tabs)/messages/chat-detail'
+            : '/(tabs)/discover/chat-detail',
           params: {
             sourceID: groupID,
             conversationType: 'group',
@@ -276,7 +321,7 @@ export default function CircleDetailScreen() {
     } finally {
       if (mountedRef.current) setEnteringGroupChat(false);
     }
-  }, [circle?.groupID, circle?.name, enteringGroupChat, router, t]);
+  }, [circle?.groupID, circle?.name, circleScope, enteringGroupChat, router, t]);
 
   useEffect(() => {
     return () => {
@@ -293,14 +338,28 @@ export default function CircleDetailScreen() {
     const requestId = ++circleRequestRef.current;
     const showInitialLoading = options?.showInitialLoading ?? true;
     if (showInitialLoading) setLoading(true);
+    setLoadError(null);
     try {
       const data = await fetchCircleDetail(id);
       if (!mountedRef.current || requestId !== circleRequestRef.current) return;
       setCircle(data);
-    } catch {
+      hasLoadedRef.current = true;
+    } catch (error) {
       if (!mountedRef.current || requestId !== circleRequestRef.current) return;
-      Alert.alert(t('circle.error'), t('circle.loadError'));
-      setCircle(null);
+      const isNotFound = error instanceof ApiError && error.status === 404;
+      setLoadError(
+        isNotFound ? null : getApiErrorMessage(error, t('circle.loadError')),
+      );
+      setCircle((current) => {
+        const result = reduceCircleLoadFailure({
+          circle: current,
+          hasLoaded: hasLoadedRef.current,
+          isLatestRequest: requestId === circleRequestRef.current,
+          isNotFound,
+        });
+        hasLoadedRef.current = result.hasLoaded;
+        return result.circle;
+      });
     } finally {
       if (
         mountedRef.current &&
@@ -337,7 +396,9 @@ export default function CircleDetailScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      void loadCircle();
+      // 从子页面（入圈审核/邀请等）返回时静默刷新，保住滚动位置；
+      // 只有首次进入（或首载失败后）才显示整页 loading。
+      void loadCircle({ showInitialLoading: !hasLoadedRef.current });
       void loadMyInvitation();
     }, [loadCircle, loadMyInvitation]),
   );
@@ -514,6 +575,9 @@ export default function CircleDetailScreen() {
       adminBtnText: { color: colors.text },
       dangerBtn: { backgroundColor: colors.error },
       dangerBtnText: { color: colors.white },
+      refreshError: { backgroundColor: colors.surface },
+      refreshErrorText: { color: colors.textSecondary },
+      refreshRetryText: { color: colors.primary },
       iconAssetCard: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
@@ -538,7 +602,17 @@ export default function CircleDetailScreen() {
       <View style={[d.container, { paddingTop: insets.top }]}>
         <NavHeader title={t('circle.detail')} />
         <View style={s.centerLoader}>
-          <Text style={{ color: colors.textSecondary }}>{t('circle.notExist')}</Text>
+          <Text style={{ color: colors.textSecondary }}>
+            {loadError ?? t('circle.notExist')}
+          </Text>
+          {loadError ? (
+            <Pressable
+              onPress={() => void loadCircle()}
+              style={{ marginTop: Spacing.md }}
+            >
+              <Text style={d.refreshRetryText}>{t('common.retry')}</Text>
+            </Pressable>
+          ) : null}
         </View>
       </View>
     );
@@ -552,10 +626,7 @@ export default function CircleDetailScreen() {
         onRightPress={
           isOwnerOrAdmin
             ? () =>
-                router.push({
-                  pathname: '/(tabs)/discover/circle/[id]/edit',
-                  params: { id: circle.id },
-                })
+                router.push(getCircleEditHref(circleScope, circle.id))
             : undefined
         }
       />
@@ -571,6 +642,22 @@ export default function CircleDetailScreen() {
           />
         }
       >
+        {loadError && circle ? (
+          <View style={[s.refreshError, d.refreshError]}>
+            <Text style={[s.refreshErrorText, d.refreshErrorText]}>
+              {loadError}
+            </Text>
+            <Pressable
+              onPress={() =>
+                void loadCircle({ showInitialLoading: false })
+              }
+            >
+              <Text style={[s.refreshRetryText, d.refreshRetryText]}>
+                {t('common.retry')}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
         {/* ── Cover banner ── */}
         <Pressable
           style={s.coverWrap}
@@ -784,10 +871,9 @@ export default function CircleDetailScreen() {
                 <Pressable
                   style={[s.actionBtn, d.chatBtn]}
                   onPress={() =>
-                    router.push({
-                      pathname: '/(tabs)/discover/invitation/[id]',
-                      params: { id: myInvitation.id },
-                    })
+                    router.push(
+                      getInvitationDetailHref(circleScope, myInvitation.id),
+                    )
                   }
                 >
                   <Text style={[s.actionBtnText, d.chatBtnText]}>
@@ -837,14 +923,14 @@ export default function CircleDetailScreen() {
             <Pressable
               style={[s.actionBtn, d.chatBtn]}
               onPress={() =>
-                router.push({
-                  pathname: '/(tabs)/discover/circle/[id]/invite',
-                  params: {
-                    id: circle.id,
-                    title: circle.name,
-                    avatar: circle.avatarUrl ?? '',
-                  },
-                })
+                router.push(
+                  getCircleInviteHref(
+                    circleScope,
+                    circle.id,
+                    circle.name,
+                    circle.avatarUrl ?? '',
+                  ),
+                )
               }
             >
               <Text style={[s.actionBtnText, d.chatBtnText]}>
@@ -858,10 +944,7 @@ export default function CircleDetailScreen() {
             <Pressable
               style={[s.actionBtn, d.adminBtn]}
               onPress={() =>
-                router.push({
-                  pathname: '/(tabs)/discover/circle/[id]/admin',
-                  params: { id: circle.id },
-                })
+                router.push(getCircleAdminHref(circleScope, circle.id))
               }
             >
               <Text style={[s.actionBtnText, d.adminBtnText]}>{t('circle.adminReview')}</Text>

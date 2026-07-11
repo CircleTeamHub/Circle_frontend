@@ -78,7 +78,9 @@ export default function DiscoverScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState(0);
-  const discoverUnread = useTabBadgeStore((state) => state.systemUnread);
+  // 铃铛红点 = 铃铛中心「互动」列表的未读数，由 interaction.unread.changed 实时驱动。
+  // 之前误读 systemUnread（只有系统通知/快照兜底才更新），互动通知到达时铃铛不亮。
+  const bellUnread = useTabBadgeStore((state) => state.discoverUnread);
 
   const FILTER_TABS = useMemo(
     () => [
@@ -164,7 +166,7 @@ export default function DiscoverScreen() {
                 color={colors.text}
               />
               <View style={s.notificationBadge}>
-                <Badge count={discoverUnread} />
+                <Badge count={bellUnread} />
               </View>
             </Pressable>
             <Pressable

@@ -23,6 +23,7 @@ import {
   NOTE_CARD_EXTENSION,
   TRANSFER_CARD_EXTENSION,
   VERIFICATION_CARD_EXTENSION,
+  FRIEND_ADDED_NOTICE_EXTENSION,
   fromImUserId,
 } from '@/im/client';
 import { normalizeMediaUrl } from '@/services/api/utils';
@@ -31,8 +32,12 @@ import { getLocalizedDateTimeLocale } from '@/utils/locale';
 
 // 所有 mapper 产出的字符串走 i18n.t；当前 locale 尚未提供对应 key 时回落到 defaultValue
 // （现有中文文案），这样不动 locale JSON 也能让英文用户在补 key 后立即生效。
-function tImNotification(key: string, fallback: string) {
-  return i18n.t(`im.notification.${key}`, { defaultValue: fallback });
+function tImNotification(
+  key: string,
+  fallback: string,
+  vars?: Record<string, unknown>,
+) {
+  return i18n.t(`im.notification.${key}`, { defaultValue: fallback, ...vars });
 }
 function tImPreview(key: string, fallback: string, vars?: Record<string, unknown>) {
   return i18n.t(`im.preview.${key}`, { defaultValue: fallback, ...vars });
@@ -66,6 +71,61 @@ const SYSTEM_NOTIFICATION_CONTENT_TYPES = new Set<number>([
 
 function isSystemNotification(contentType: number) {
   return SYSTEM_NOTIFICATION_CONTENT_TYPES.has(contentType);
+}
+
+// OpenIM 入群/邀请通知的 notificationElem.detail（JSON 字符串）里带成员信息：
+// MemberEnter → { entrantUser: { nickname } }；MemberInvited → { invitedUserList: [{ nickname }] }。
+// 解析出昵称用「张三、李四」形式拼接；拿不到时返回空串，调用方回落到通用文案。
+function getJoinedMemberNames(message: MessageItem): string {
+  const detail = message.notificationElem?.detail;
+  if (!detail) {
+    return '';
+  }
+  try {
+    const parsed = JSON.parse(detail) as {
+      entrantUser?: { nickname?: unknown };
+      invitedUserList?: { nickname?: unknown }[];
+    };
+    const candidates = parsed.entrantUser
+      ? [parsed.entrantUser]
+      : Array.isArray(parsed.invitedUserList)
+        ? parsed.invitedUserList
+        : [];
+    const names = candidates
+      .map((m) => (typeof m?.nickname === 'string' ? m.nickname.trim() : ''))
+      .filter(Boolean);
+    return names.join('、');
+  } catch {
+    return '';
+  }
+}
+
+// 群通知类消息的展示文案：会话列表预览与聊天流灰条共用。
+// 返回 null 的类型（OA 通知/禁言变更等）不在聊天流渲染。
+function getGroupNoticeText(message: MessageItem): string | null {
+  switch (message.contentType) {
+    case MessageType.GroupCreated:
+      return tImNotification('groupCreated', '群聊已创建');
+    case MessageType.MemberInvited:
+    case MessageType.MemberEnter: {
+      const names = getJoinedMemberNames(message);
+      return names
+        ? tImNotification('memberJoined', '{{names}} 加入群聊', { names })
+        : tImNotification('memberInvited', '新成员加入群聊');
+    }
+    case MessageType.MemberQuit:
+      return tImNotification('memberQuit', '有成员退出群聊');
+    case MessageType.MemberKicked:
+      return tImNotification('memberKicked', '有成员被移出群聊');
+    case MessageType.GroupNameUpdated:
+      return tImNotification('groupNameUpdated', '群名称已更新');
+    case MessageType.GroupDismissed:
+      return tImNotification('groupDismissed', '群已解散');
+    case MessageType.RevokeMessage:
+      return tImNotification('messageRevoked', '一条消息被撤回');
+    default:
+      return null;
+  }
 }
 
 function parseNoteCardPayload(data: string): NoteCardData | null {
@@ -187,14 +247,10 @@ export function getMessagePreview(message: MessageItem | null, fallback = '') {
   }
 
   if (isSystemNotification(message.contentType)) {
-    if (message.contentType === MessageType.GroupCreated) return tImNotification('groupCreated', '群聊已创建');
-    if (message.contentType === MessageType.MemberInvited) return tImNotification('memberInvited', '新成员加入群聊');
-    if (message.contentType === MessageType.MemberQuit) return tImNotification('memberQuit', '有成员退出群聊');
-    if (message.contentType === MessageType.MemberKicked) return tImNotification('memberKicked', '有成员被移出群聊');
-    if (message.contentType === MessageType.GroupNameUpdated) return tImNotification('groupNameUpdated', '群名称已更新');
-    if (message.contentType === MessageType.GroupDismissed) return tImNotification('groupDismissed', '群已解散');
-    if (message.contentType === MessageType.RevokeMessage) return tImNotification('messageRevoked', '一条消息被撤回');
-    return '';
+    // 好友刚建立的 FriendAdded 通知——会话列表也要给出预览（对话渲染见下方），
+    // 否则最后一条是它时列表这行会空白。
+    if (message.contentType === MessageType.FriendAdded) return tImNotification('friendAdded', '你们已经是好友了，开始聊天吧');
+    return getGroupNoticeText(message) ?? '';
   }
 
   switch (message.contentType) {
@@ -289,8 +345,34 @@ export function mapMessageItemToChatMessage(
     return null;
   }
 
-  // 系统/群通知消息不渲染为聊天气泡（创建群聊后 SDK 自动塞的 GroupCreated
-  // 之前会被当成普通文本显示成 [消息] 气泡）。
+  // 好友刚建立时 OpenIM 会塞一条 FriendAdded 通知——渲染成一条居中灰色系统提示
+  // （微信「你们已经是好友了，开始聊天吧」那条），让会话不再空着。必须放在下面
+  // 通用的系统通知过滤之前。
+  if (item.contentType === MessageType.FriendAdded) {
+    return {
+      id: item.clientMsgID,
+      type: 'system-notice',
+      systemNoticeKind: 'friend-added',
+      systemNoticeSource: 'native',
+      systemNoticeTimestamp: item.sendTime,
+      text: tImNotification('friendAdded', '你们已经是好友了，开始聊天吧'),
+      time: formatTimestamp(item.sendTime),
+    };
+  }
+
+  // 群通知类消息（群已创建/新成员加入/退群/改名/解散/撤回）渲染成居中灰条，
+  // 微信样式——否则新圈子群里只有这类消息时聊天页会显示成一片空白。
+  const groupNoticeText = getGroupNoticeText(item);
+  if (groupNoticeText) {
+    return {
+      id: item.clientMsgID,
+      type: 'system-notice',
+      text: groupNoticeText,
+      time: formatTimestamp(item.sendTime),
+    };
+  }
+
+  // 其余系统通知（OA 通知/禁言变更等）没有面向用户的文案，不渲染。
   if (isSystemNotification(item.contentType)) {
     return null;
   }
@@ -308,6 +390,10 @@ export function mapMessageItemToChatMessage(
     isRead: isSent ? Boolean(item.isRead) : undefined,
     // 接收消息带上发送者的用户 id（还原成 UUID 形式），群聊点头像可跳对方资料。
     senderID: isSent ? undefined : fromImUserId(item.sendID),
+    // 发送者头像：群聊气泡必须用发送者本人的（会话头像在群聊里是群头像）。
+    senderAvatarUrl: isSent
+      ? undefined
+      : (normalizeMediaUrl(item.senderFaceUrl || null) ?? undefined),
   };
 
   if (item.contentType === MessageType.LocationMessage) {
@@ -342,6 +428,20 @@ export function mapMessageItemToChatMessage(
 
   if (item.contentType === MessageType.CustomMessage) {
     const ext = item.customElem?.extension;
+    if (ext === FRIEND_ADDED_NOTICE_EXTENSION) {
+      // Locally-inserted "you're now friends" notice (see
+      // insertLocalFriendAddedNotice). Same centered line as the native
+      // FriendAdded; the chat screen dedupes if both are present.
+      return {
+        id: item.clientMsgID,
+        type: 'system-notice',
+        systemNoticeKind: 'friend-added',
+        systemNoticeSource: 'local',
+        systemNoticeTimestamp: item.sendTime,
+        text: tImNotification('friendAdded', '你们已经是好友了，开始聊天吧'),
+        time: formatTimestamp(item.sendTime),
+      };
+    }
     if (ext === NOTE_CARD_EXTENSION) {
       const payload = parseNoteCardPayload(item.customElem?.data ?? '');
       if (payload) {

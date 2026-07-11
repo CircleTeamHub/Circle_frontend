@@ -471,3 +471,23 @@ test('registerLogoutHandler is idempotent for the same handler reference (HMR sa
   const ran = calls.filter((c) => c === 'once').length;
   assert.equal(ran, 1, 'duplicate registrations of the same handler must collapse');
 });
+
+test('clearLocalSession does not await background push revocation started by a synchronous logout handler', async () => {
+  const { mocks, calls } = makeBaseMocks();
+  const { clearLocalSession, registerLogoutHandler } = loadSessionModule(mocks);
+  let settleRevocation;
+  const hungRevocation = new Promise((resolve) => {
+    settleRevocation = resolve;
+  });
+
+  registerLogoutHandler(() => {
+    calls.push('pushTombstonePersisted');
+    void hungRevocation;
+  });
+
+  await clearLocalSession();
+
+  assert.equal(calls[0], 'pushTombstonePersisted');
+  assert.ok(calls.includes('clearSession'));
+  settleRevocation();
+});

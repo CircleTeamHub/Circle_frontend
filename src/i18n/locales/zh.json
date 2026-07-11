@@ -144,6 +144,8 @@
     "groupManagement": "群组管理",
     "loadFailed": "会话加载失败：{{error}}",
     "noConversations": "暂无会话",
+    "imNotConnected": "IM 未连接，请重新登录后重试",
+    "imConnecting": "正在连接 IM…",
     "swipeMarkRead": "标记已读",
     "swipeMarkUnread": "标记未读",
     "swipeHide": "隐藏聊天",
@@ -209,6 +211,7 @@
     "summary": {
       "default": "给你发来一条新通知",
       "TRACE_LIKE": "点赞了你的动态",
+      "PROFILE_LIKE": "赞了你",
       "TRACE_COMMENT": "评论了你的动态",
       "COMMENT_REPLY": "回复了你",
       "FRIEND_REQUEST_RECEIVED": "申请添加你为好友",
@@ -250,12 +253,12 @@
       "statusGroup": "群聊",
       "statusOnline": "在线",
       "statusOffline": "离线",
-      "previewNotice": "当前仅预览聊天界面，消息发送会在 IM 接通后开放。",
+      "previewNotice": "连接尚未完成，请稍后重试",
       "recordingSeconds": "正在录音 {{seconds}} 秒",
       "voiceReleaseCancel": "松开 取消",
       "voiceReleaseSend": "松开发送 {{seconds}}\"",
       "voiceHoldToTalk": "按住 说话",
-      "previewPlaceholder": "当前仅预览聊天界面",
+      "previewPlaceholder": "连接尚未完成",
       "inputPlaceholder": "输入消息...",
       "sendFailedText": "消息发送失败，请重试",
       "recordStartFailed": "录音启动失败，请重试",
@@ -422,7 +425,7 @@
     "clearHistoryWarning": "清空后将删除当前会话的聊天记录，且无法恢复。",
     "clear": "清空",
     "deleteFriend": "删除联系人",
-    "deleteFriendWarning": "删除后将解除好友关系。",
+    "deleteFriendWarning": "删除后将解除好友关系，与 TA 的所有聊天记录也会被清空。",
     "deleted": "已删除",
     "friendDeleted": "联系人已删除。",
     "leave": "退出",
@@ -594,6 +597,9 @@
       "loadingDetail": "正在加载好友动态详情...",
       "message": "附言",
       "noMessage": "对方没有填写附言",
+      "replyPlaceholder": "输入留言…",
+      "send": "发送",
+      "sendFailed": "发送失败，请稍后重试",
       "accepted": "已接受",
       "acceptedMessage": "你已通过这条好友申请。",
       "rejected": "已拒绝",
@@ -616,7 +622,13 @@
       "cancel": "撤回申请",
       "cancelConfirm": "撤回",
       "cancelMessage": "确定撤回这条好友申请吗？",
-      "cancelTitle": "撤回申请"
+      "cancelTitle": "撤回申请",
+      "status": {
+        "PENDING": "待处理",
+        "ACCEPTED": "已接受",
+        "REJECTED": "已拒绝",
+        "WITHDRAWN": "已撤回"
+      }
     },
     "tagsScreen": {
       "title": "标签",
@@ -650,7 +662,6 @@
       "targetFallback": "对方",
       "selfFallback": "我",
       "defaultMessage": "你好，我是 {{name}}",
-      "intro": "填写申请信息后发送给对方。",
       "messageLabel": "验证消息",
       "messagePlaceholder": "输入验证消息",
       "remarkLabel": "备注名",
@@ -661,11 +672,27 @@
       "noTagsTitle": "暂无标签",
       "noTagsHint": "可稍后在联系人标签中创建",
       "tagLoadError": "标签加载失败，发送申请时将不会附带标签。",
-      "placeholderDisabled": "占位功能，暂未开放",
-      "placeholderRows": {
-        "remark": "备注",
-        "photoRemark": "照片备注",
-        "friendPermissions": "朋友权限"
+      "descriptionLabel": "描述",
+      "descriptionPlaceholder": "补充一段对 TA 的描述（仅自己可见）",
+      "photosLabel": "照片备注",
+      "photos": {
+        "hint": "最多可添加 {{count}} 张，仅自己可见",
+        "add": "添加照片",
+        "remove": "移除照片",
+        "limitTitle": "照片数量已达上限",
+        "limitHint": "最多只能添加 {{count}} 张照片",
+        "uploadFailedTitle": "照片上传失败"
+      },
+      "permissionLabel": "朋友权限",
+      "permissionOptions": {
+        "FULL": {
+          "title": "聊天、朋友圈",
+          "hint": "对方可以看到你的朋友圈"
+        },
+        "CHAT_ONLY": {
+          "title": "仅聊天",
+          "hint": "对方将无法看到你的朋友圈"
+        }
       },
       "sentTitle": "申请已发送",
       "sentMessage": "已向 {{name}} 发送好友申请。",
@@ -735,6 +762,14 @@
     },
     "commentInput": {
       "placeholder": "写评论...",
+      "barPlaceholder": "有什么想法，展开说说",
+      "pickImage": "添加图片",
+      "mention": "提到好友",
+      "emoji": "表情",
+      "mentionTitle": "选择提醒的好友",
+      "noFriends": "暂无好友",
+      "friendsLoadFailed": "好友加载失败",
+      "imageUploadFailedTitle": "图片上传失败",
       "replyTo": "回复 {{nickname}}"
     },
     "restrictionBadge": {
@@ -825,6 +860,7 @@
       "restrictionsSection": "权限与限制",
       "fancyLabel": "需要靓号",
       "memberPostLabel": "成员可发帖",
+      "vipAtLeast": "VIP {{level}} 及以上",
       "nameRequired": "请填写圈子名称（至少2字）",
       "descRequired": "请填写圈子描述（至少10字）",
       "submitButton": "创建圈子",
@@ -954,6 +990,7 @@
     "comments": "评论",
     "commentsCount": "评论 ({{count}})",
     "noComments": "暂无评论",
+    "imageTag": "[图片]",
     "showMoreComments": "查看更多 {{count}} 条评论",
     "showMoreComments_other": "查看更多 {{count}} 条评论",
     "moreLikedFriends": "等 {{count}} 人",
@@ -967,6 +1004,8 @@
     "coverUpdateFailed": "封面更新失败",
     "commentFailedMessage": "网络异常，请稍后重试",
     "commentFailedTitle": "评论失败",
+    "mentionsIgnored": "有 {{count}} 位被提及的用户无法查看这条动态，因此未收到通知。",
+    "mentionLimit": "每条评论最多可以提及 {{count}} 位好友。",
     "deleteCommentMessage": "确定删除这条评论吗？",
     "deleteCommentTitle": "删除评论",
     "deleteFailedMessage": "请稍后重试",
@@ -1210,6 +1249,8 @@
     "moments": "朋友圈",
     "setRemark": "设置备注",
     "tags": "标签",
+    "description": "描述",
+    "permission": "朋友权限",
     "giftCoins": "给该用户赠送金币",
     "moreInfo": "更多信息",
     "editProfile": "编辑资料",
@@ -1270,6 +1311,11 @@
     "like": "点赞",
     "unlike": "取消点赞",
     "likesReceived": "收到的赞",
+    "photoNotesTitle": "照片备注",
+    "permissionValues": {
+      "FULL": "聊天、朋友圈",
+      "CHAT_ONLY": "仅聊天"
+    },
     "loadFailed": "加载用户资料失败，显示缓存数据",
     "phoneHidden": "未公开",
     "startChat": "发起聊天",
@@ -1442,6 +1488,9 @@
   "systemAnnouncements": {
     "title": "系统公告",
     "subtitle": "这里会集中展示风信的最新 App 信息、版本更新和补丁说明。",
+    "systemNotifications": "系统通知",
+    "empty": "暂无系统通知",
+    "loadFailed": "系统通知加载失败，请下拉重试",
     "latestAppInfo": {
       "title": "最新 App 信息",
       "meta": "风信1.0.0",
@@ -1970,6 +2019,7 @@
   "search": {
     "loadFriendsFailed": "好友列表加载失败，请稍后重试",
     "noResults": "暂无匹配结果",
+    "messageMatchCount": "{{count}} 条相关聊天记录",
     "placeholder": "搜索...",
     "placeholderHint": "输入关键字搜索聊天记录、好友",
     "sections": {
@@ -2058,11 +2108,13 @@
     "notification": {
       "groupCreated": "群聊已创建",
       "memberInvited": "新成员加入群聊",
+      "memberJoined": "{{names}} 加入群聊",
       "memberQuit": "有成员退出群聊",
       "memberKicked": "有成员被移出群聊",
       "groupNameUpdated": "群名称已更新",
       "groupDismissed": "群已解散",
-      "messageRevoked": "一条消息被撤回"
+      "messageRevoked": "一条消息被撤回",
+      "friendAdded": "你们已经是好友了，开始聊天吧"
     },
     "preview": {
       "image": "[图片]",
@@ -2207,6 +2259,7 @@
     "PLAZA_NOTE_INVALID": "笔记不存在、不可用或不属于你",
     "PLAZA_POST_NOT_FOUND": "帖子不存在",
     "PLAZA_DELETE_AUTHOR_ONLY": "只有作者可以删除该帖子",
+    "PLAZA_INVALID_CURSOR": "广场分页已过期，请刷新后重试",
     "PLAZA_SIGNUP_SELF": "不能给自己发布的帖子报名",
     "PLAZA_SIGNUP_INELIGIBLE": "你的等级不满足该帖子的报名要求",
     "PLAZA_RECOGNIZE_MIN_ONE": "请至少选择一位协作者",
@@ -2217,11 +2270,11 @@
     "PLAZA_RECOGNIZE_NOT_MEMBER": "只能认可圈子的活跃成员",
     "PLAZA_RECOGNIZE_BLOCKED": "不能认可已拉黑的用户",
     "PLAZA_RECOGNIZE_ALREADY": "合作认可已提交，无法重复操作",
-    "PLAZA_INVALID_CURSOR": "广场分页已过期，请刷新后重试",
     "TRACE_MOMENT_NOT_FOUND": "动态不存在",
     "TRACE_DELETE_AUTHOR_ONLY": "只有作者可以删除",
     "TRACE_REPLY_TARGET_NOT_FOUND": "回复的评论不存在",
     "TRACE_COMMENT_NOT_FOUND": "评论不存在",
+    "TRACE_EMPTY_COMMENT": "评论内容不能为空",
     "TRACE_ACCESS_FORBIDDEN": "你无权查看该动态",
     "TRACE_INVALID_CURSOR": "动态分页已过期，请刷新后重试",
     "FRIEND_SELF_ADD": "不能添加自己为好友",
@@ -2260,6 +2313,8 @@
     "FRIEND_ACTIVITY_NOT_FOUND": "动态不存在",
     "FRIEND_BLOCK_NOT_FOUND": "该用户未被拉黑",
     "FRIEND_TAG_NAME_EMPTY": "标签名称不能为空",
+    "FRIEND_REQUEST_MESSAGE_INVALID": "留言内容不能为空，且不能超过 500 字",
+    "FRIEND_REQUEST_MESSAGE_LIMIT": "对方回复前最多发送 5 条留言",
     "NOTE_NOT_FOUND": "笔记不存在",
     "NOTE_GROUP_NOT_FOUND": "笔记分组不存在",
     "NOTE_IMAGE_TOO_LARGE": "图片过大，无法嵌入",

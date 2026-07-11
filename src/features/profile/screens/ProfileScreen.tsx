@@ -12,11 +12,9 @@ import {
 import { getUserProfileHref } from "@/features/user/utils/routes";
 import { fetchCurrentUser } from "@/services/api/auth";
 import { fetchIconOptions } from "@/services/api/icons";
-import { markProfileNotificationsRead } from "@/services/api/notifications";
 import { Gradients, Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { DisplayIcon, MenuItem } from "@/types";
 import { useAuthStore } from "@/stores/authStore";
-import { useTabBadgeStore } from "@/stores/tabBadgeStore";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -144,7 +142,6 @@ export default function ProfileScreen() {
   const { t } = useTranslation();
   const user = useAuthStore((state) => state.user);
   const setUser = useAuthStore((state) => state.setUser);
-  const setProfileUnread = useTabBadgeStore((state) => state.setProfileUnread);
   const [profileDisplayIcons, setProfileDisplayIcons] = useState<DisplayIcon[]>(
     user?.displayIcons ?? [],
   );
@@ -253,10 +250,6 @@ export default function ProfileScreen() {
           });
           setProfileDisplayIcons(nextIcons.displayIcons);
         }
-        await markProfileNotificationsRead();
-        if (isActive()) {
-          setProfileUnread(0);
-        }
       } catch (error) {
         // Best-effort refresh; keep existing state on failure. Surface in dev so
         // a broken /auth/me + notifications round-trip doesn't pass silently.
@@ -265,7 +258,7 @@ export default function ProfileScreen() {
         }
       }
     },
-    [setProfileUnread, setUser, user],
+    [setUser, user],
   );
 
   useFocusEffect(

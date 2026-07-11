@@ -231,12 +231,12 @@
       "statusGroup": "Grupo",
       "statusOnline": "En línea",
       "statusOffline": "Desconectado",
-      "previewNotice": "Solo vista previa del chat. Podrás enviar mensajes cuando se conecte el IM.",
+      "previewNotice": "La conexión aún no está lista. Vuelve a intentarlo en un momento.",
       "recordingSeconds": "Grabando {{seconds}} s",
       "voiceReleaseCancel": "Suelta para cancelar",
       "voiceReleaseSend": "Suelta para enviar {{seconds}}\"",
       "voiceHoldToTalk": "Mantén para hablar",
-      "previewPlaceholder": "Solo vista previa del chat",
+      "previewPlaceholder": "La conexión no está lista",
       "inputPlaceholder": "Escribe un mensaje…",
       "sendFailedText": "No se pudo enviar el mensaje, inténtalo de nuevo",
       "recordStartFailed": "No se pudo iniciar la grabación, inténtalo de nuevo",
@@ -404,7 +404,7 @@
     "clearHistoryWarning": "Esto eliminará permanentemente todos los mensajes de esta conversación.",
     "clear": "Borrar",
     "deleteFriend": "Eliminar contacto",
-    "deleteFriendWarning": "Esto eliminará a este contacto de tus amigos.",
+    "deleteFriendWarning": "Esto eliminará a este contacto de tus amigos y borrará de forma permanente todo tu historial de chat con él.",
     "deleted": "Eliminado",
     "friendDeleted": "El contacto fue eliminado.",
     "leave": "Salir",
@@ -578,6 +578,8 @@
     "groupManagement": "Gestión de grupos",
     "loadFailed": "No se pudieron cargar las conversaciones: {{error}}",
     "noConversations": "No hay conversaciones",
+    "imNotConnected": "IM no está conectado. Vuelve a iniciar sesión.",
+    "imConnecting": "Conectando con IM…",
     "swipeMarkRead": "Marcar leído",
     "swipeMarkUnread": "Marcar no leído",
     "swipeHide": "Ocultar chat",
@@ -891,6 +893,7 @@
     "comments": "Comentarios",
     "commentsCount": "Comentarios ({{count}})",
     "noComments": "Sin comentarios",
+    "imageTag": "[Foto]",
     "showMoreComments": "Ver {{count}} comentarios más",
     "showMoreComments_one": "Ver {{count}} comentario más",
     "showMoreComments_other": "Ver {{count}} comentarios más",
@@ -906,6 +909,8 @@
     "coverUpdateFailed": "Error al actualizar la portada",
     "commentFailedMessage": "Error de red, inténtalo de nuevo",
     "commentFailedTitle": "Error al comentar",
+    "mentionsIgnored": "{{count}} personas mencionadas no pudieron ver esta publicación y no recibieron ninguna notificación.",
+    "mentionLimit": "Puedes mencionar hasta {{count}} amigos en un comentario.",
     "deleteCommentMessage": "¿Eliminar este comentario?",
     "deleteCommentTitle": "Eliminar comentario",
     "deleteFailedMessage": "Inténtalo de nuevo",
@@ -995,6 +1000,7 @@
       "restrictionsSection": "Restricciones",
       "fancyLabel": "Requiere número especial",
       "memberPostLabel": "Miembros pueden publicar",
+      "vipAtLeast": "VIP {{level}} o superior",
       "nameRequired": "Nombre requerido (mín. 2 caracteres)",
       "descRequired": "Descripción requerida (mín. 10 caracteres)",
       "submitButton": "Crear círculo",
@@ -1190,6 +1196,14 @@
     },
     "commentInput": {
       "placeholder": "Escribe un comentario...",
+      "barPlaceholder": "Comparte lo que piensas…",
+      "pickImage": "Añadir foto",
+      "mention": "Mencionar a un amigo",
+      "emoji": "Emojis",
+      "mentionTitle": "Elige a quién mencionar",
+      "noFriends": "Aún no tienes amigos",
+      "friendsLoadFailed": "No se pudieron cargar los amigos",
+      "imageUploadFailedTitle": "Error al subir la foto",
       "replyTo": "Responder a {{nickname}}"
     },
     "restrictionBadge": {
@@ -1289,6 +1303,7 @@
     "summary": {
       "default": "te envió una notificación",
       "TRACE_LIKE": "le gustó tu momento",
+      "PROFILE_LIKE": "te dio un me gusta",
       "TRACE_COMMENT": "comentó tu momento",
       "COMMENT_REPLY": "te respondió",
       "FRIEND_REQUEST_RECEIVED": "quiere agregarte como amigo",
@@ -1326,6 +1341,7 @@
   "search": {
     "loadFriendsFailed": "No se pudieron cargar los amigos, inténtalo de nuevo",
     "noResults": "Sin resultados",
+    "messageMatchCount": "{{count}} mensajes relacionados",
     "placeholder": "Buscar...",
     "placeholderHint": "Escribe una palabra clave para buscar chats y amigos",
     "sections": {
@@ -1357,6 +1373,9 @@
       "loadingDetail": "Cargando detalles de la actividad...",
       "message": "Mensaje",
       "noMessage": "Sin mensaje adjunto",
+      "replyPlaceholder": "Escribe un mensaje…",
+      "send": "Enviar",
+      "sendFailed": "No se pudo enviar. Inténtalo de nuevo.",
       "accepted": "Aceptada",
       "acceptedMessage": "Aceptaste esta solicitud de amistad.",
       "rejected": "Rechazada",
@@ -1379,7 +1398,13 @@
       "cancel": "Retirar solicitud",
       "cancelConfirm": "Retirar",
       "cancelMessage": "¿Retirar esta solicitud de amistad?",
-      "cancelTitle": "Retirar solicitud"
+      "cancelTitle": "Retirar solicitud",
+      "status": {
+        "PENDING": "Pendiente",
+        "ACCEPTED": "Aceptada",
+        "REJECTED": "Rechazada",
+        "WITHDRAWN": "Retirada"
+      }
     },
     "tagsScreen": {
       "title": "Etiquetas",
@@ -1413,7 +1438,6 @@
       "targetFallback": "Este usuario",
       "selfFallback": "Yo",
       "defaultMessage": "Hola, soy {{name}}",
-      "intro": "Completa los datos de la solicitud antes de enviarla.",
       "messageLabel": "Mensaje de verificación",
       "messagePlaceholder": "Escribe un mensaje de verificación",
       "remarkLabel": "Nombre de nota",
@@ -1424,11 +1448,27 @@
       "noTagsTitle": "Aún no hay etiquetas",
       "noTagsHint": "Puedes crear etiquetas luego en Contactos > Etiquetas",
       "tagLoadError": "No se pudieron cargar las etiquetas. La solicitud se enviará sin etiquetas.",
-      "placeholderDisabled": "Solo un marcador, aún no disponible",
-      "placeholderRows": {
-        "remark": "Nota",
-        "photoRemark": "Nota de foto",
-        "friendPermissions": "Permisos de amigo"
+      "descriptionLabel": "Descripción",
+      "descriptionPlaceholder": "Agrega una nota sobre esta persona (solo visible para ti)",
+      "photosLabel": "Notas con fotos",
+      "photos": {
+        "hint": "Hasta {{count}} fotos, solo visibles para ti",
+        "add": "Agregar foto",
+        "remove": "Quitar foto",
+        "limitTitle": "Límite de fotos alcanzado",
+        "limitHint": "Puedes agregar como máximo {{count}} fotos",
+        "uploadFailedTitle": "Error al subir la foto"
+      },
+      "permissionLabel": "Permisos de amigo",
+      "permissionOptions": {
+        "FULL": {
+          "title": "Chat y Momentos",
+          "hint": "Esta persona podrá ver tus Momentos"
+        },
+        "CHAT_ONLY": {
+          "title": "Solo chat",
+          "hint": "Esta persona no podrá ver tus Momentos"
+        }
       },
       "sentTitle": "Solicitud enviada",
       "sentMessage": "Se envió una solicitud de amistad a {{name}}.",
@@ -1491,6 +1531,11 @@
     "like": "Me gusta",
     "unlike": "Ya no me gusta",
     "likesReceived": "Me gusta recibidos",
+    "photoNotesTitle": "Notas con fotos",
+    "permissionValues": {
+      "FULL": "Chat y Momentos",
+      "CHAT_ONLY": "Solo chat"
+    },
     "loadFailed": "No se pudo cargar el perfil, mostrando datos en caché",
     "phoneHidden": "Oculto",
     "startChat": "Iniciar chat",
@@ -1655,6 +1700,8 @@
     "moments": "Momentos",
     "setRemark": "Definir alias",
     "tags": "Etiquetas",
+    "description": "Descripción",
+    "permission": "Permisos de amigo",
     "giftCoins": "Regalar monedas",
     "moreInfo": "Más información",
     "editProfile": "Editar perfil",
@@ -2019,6 +2066,9 @@
   "systemAnnouncements": {
     "title": "Anuncios del sistema",
     "subtitle": "Aquí aparecerán la información más reciente de la app windnote.ai, las novedades de versiones y las notas de los parches.",
+    "systemNotifications": "Notificaciones del sistema",
+    "empty": "No hay notificaciones del sistema",
+    "loadFailed": "No se pudieron cargar las notificaciones del sistema. Desliza para reintentar",
     "latestAppInfo": {
       "title": "Información de la app",
       "meta": "windnote.ai 1.0.0",
@@ -2087,11 +2137,13 @@
     "notification": {
       "groupCreated": "Grupo creado",
       "memberInvited": "Nuevo miembro se unió",
+      "memberJoined": "{{names}} se unió al grupo",
       "memberQuit": "Un miembro salió del grupo",
       "memberKicked": "Se eliminó a un miembro",
       "groupNameUpdated": "Nombre del grupo actualizado",
       "groupDismissed": "Grupo disuelto",
-      "messageRevoked": "Se retiró un mensaje"
+      "messageRevoked": "Se retiró un mensaje",
+      "friendAdded": "Ahora son amigos, ¡salúdense!"
     },
     "preview": {
       "image": "[Foto]",
@@ -2210,6 +2262,7 @@
     "PLAZA_NOTE_INVALID": "Esa nota no está disponible o no es tuya",
     "PLAZA_POST_NOT_FOUND": "Publicación no encontrada",
     "PLAZA_DELETE_AUTHOR_ONLY": "Solo el autor puede eliminar esta publicación",
+    "PLAZA_INVALID_CURSOR": "Esta página de la plaza caducó. Actualiza e inténtalo de nuevo.",
     "PLAZA_SIGNUP_SELF": "No puedes inscribirte en tu propia publicación",
     "PLAZA_SIGNUP_INELIGIBLE": "No cumples los requisitos de inscripción de esta publicación",
     "PLAZA_RECOGNIZE_MIN_ONE": "Selecciona al menos un colaborador",
@@ -2220,11 +2273,11 @@
     "PLAZA_RECOGNIZE_NOT_MEMBER": "Solo se puede reconocer a miembros activos del círculo",
     "PLAZA_RECOGNIZE_BLOCKED": "No puedes reconocer a un usuario bloqueado",
     "PLAZA_RECOGNIZE_ALREADY": "El reconocimiento de colaboración ya se ha enviado",
-    "PLAZA_INVALID_CURSOR": "Esta página de la plaza caducó. Actualiza e inténtalo de nuevo.",
     "TRACE_MOMENT_NOT_FOUND": "Momento no encontrado",
     "TRACE_DELETE_AUTHOR_ONLY": "Solo el autor puede eliminar esto",
     "TRACE_REPLY_TARGET_NOT_FOUND": "El comentario al que respondes ya no existe",
     "TRACE_COMMENT_NOT_FOUND": "Comentario no encontrado",
+    "TRACE_EMPTY_COMMENT": "El comentario no puede estar vacío",
     "TRACE_ACCESS_FORBIDDEN": "No tienes permiso para ver este momento",
     "TRACE_INVALID_CURSOR": "Esta página del feed caducó. Actualiza e inténtalo de nuevo.",
     "FRIEND_SELF_ADD": "No puedes añadirte a ti mismo como amigo",
@@ -2263,6 +2316,8 @@
     "FRIEND_ACTIVITY_NOT_FOUND": "Actividad no encontrada",
     "FRIEND_BLOCK_NOT_FOUND": "Este usuario no está bloqueado",
     "FRIEND_TAG_NAME_EMPTY": "El nombre de la etiqueta no puede estar vacío",
+    "FRIEND_REQUEST_MESSAGE_INVALID": "El mensaje no puede estar vacío y debe tener 500 caracteres o menos",
+    "FRIEND_REQUEST_MESSAGE_LIMIT": "Puedes enviar hasta 5 mensajes antes de que respondan",
     "NOTE_NOT_FOUND": "Nota no encontrada",
     "NOTE_GROUP_NOT_FOUND": "Grupo de notas no encontrado",
     "NOTE_IMAGE_TOO_LARGE": "La imagen es demasiado grande para insertarla",

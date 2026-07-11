@@ -42,11 +42,27 @@ import { fetchUserProfile } from '@/services/api/profile';
 import { useAuthStore } from '@/stores/authStore';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 
-const INFO_ROW_IDS = ['moments', 'setRemark', 'tags', 'giftCoins', 'moreInfo'] as const;
+const INFO_ROW_IDS = [
+  'moments',
+  'setRemark',
+  'tags',
+  'description',
+  'permission',
+  'giftCoins',
+  'moreInfo',
+] as const;
 const NON_FRIEND_INFO_ROW_IDS = ['moments', 'giftCoins', 'moreInfo'] as const;
 const SELF_INFO_ROW_IDS = ['moments'] as const;
 
 type InfoRowId = (typeof INFO_ROW_IDS)[number];
+
+// 资料行按语义分成多张卡片渲染（卡间留白），避免全部挤在一张长卡里。
+// 顺序沿用 INFO_ROW_IDS，只在语义边界处切开：内容 / 我的标注 / 权限与更多。
+const INFO_ROW_GROUPS = [
+  ['moments'],
+  ['setRemark', 'tags', 'description'],
+  ['permission', 'giftCoins', 'moreInfo'],
+] as const;
 
 interface InfoRowItem {
   id: InfoRowId;
@@ -62,6 +78,8 @@ const ROW_ICON: Record<InfoRowId, keyof typeof Ionicons.glyphMap> = {
   moments: 'images',
   setRemark: 'create',
   tags: 'pricetags',
+  description: 'document-text',
+  permission: 'eye',
   giftCoins: 'gift',
   moreInfo: 'information-circle',
 };
@@ -70,11 +88,14 @@ const ROW_COLOR: Record<InfoRowId, keyof ThemeColors> = {
   moments: 'blue',
   setRemark: 'primary',
   tags: 'success',
+  description: 'orange',
+  permission: 'deepPurple',
   giftCoins: 'warning',
   moreInfo: 'purple',
 };
 
 const AVATAR_SIZE = 72;
+const CARD_GAP = 12; // 分组卡片之间的垂直留白
 const RECOGNITION_COUNT_ICON_SOURCE = require('../../../../assets/images/like-outline.png');
 
 const s = StyleSheet.create({
@@ -163,7 +184,10 @@ const s = StyleSheet.create({
     width: 18,
     height: 18,
   },
-  // 信息行合并成单卡片，行间用内缩分隔线分隔（左缩进对齐文字起点）。
+  // 资料行按语义拆成多张分组卡片，卡间留白；卡内行间用内缩分隔线（左缩进对齐文字起点）。
+  sections: {
+    gap: CARD_GAP,
+  },
   card: {
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
@@ -172,6 +196,23 @@ const s = StyleSheet.create({
   rowDivider: {
     height: StyleSheet.hairlineWidth,
     marginLeft: ROW_PADDING_H + ICON_BADGE_SIZE + ROW_GAP,
+  },
+  photoNotesTitle: {
+    ...Typography.small,
+    fontWeight: '600',
+    paddingHorizontal: ROW_PADDING_H,
+    paddingTop: Spacing.md,
+  },
+  photoNotesStrip: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    padding: ROW_PADDING_H,
+  },
+  photoNote: {
+    width: 76,
+    height: 76,
+    borderRadius: Radius.md,
   },
   actionSection: {
     marginTop: Spacing.md,
@@ -412,10 +453,16 @@ export default function UserProfileScreen() {
     remarkOverride === undefined
       ? friendSettings?.remark?.trim() || t('profileFields.notSet')
       : remarkOverride.remark ?? t('profileFields.notSet');
+  const descriptionValue = friendSettings?.description?.trim() ?? '';
+  const photoNotes = friendSettings?.photos ?? [];
+  const permissionValue = t(
+    `userProfile.permissionValues.${friendSettings?.permission ?? 'FULL'}`,
+  );
   const infoRows = isCurrentUser
     ? SELF_INFO_ROW_IDS
     : friendStatus === 'ACCEPTED'
-      ? INFO_ROW_IDS
+      ? // The description row is noise when the viewer never wrote one, so drop it.
+        INFO_ROW_IDS.filter((id) => id !== 'description' || descriptionValue)
       : NON_FRIEND_INFO_ROW_IDS;
   const showProfileActions = !isCurrentUser;
   const canSendFriendRequest = canOpenSendFriendRequest({
@@ -528,6 +575,14 @@ export default function UserProfileScreen() {
           return { ...base, value: tagValue, onPress: handleEditTags };
         }
 
+        if (id === 'description') {
+          return { ...base, value: descriptionValue };
+        }
+
+        if (id === 'permission') {
+          return { ...base, value: permissionValue };
+        }
+
         if (id === 'moments') {
           return { ...base, onPress: handleOpenMoments };
         }
@@ -541,16 +596,29 @@ export default function UserProfileScreen() {
     [
       canOpenChatInfo,
       colors,
+      descriptionValue,
       handleEditRemark,
       handleEditTags,
       handleOpenChatInfo,
       handleOpenMoments,
       infoRows,
+      permissionValue,
       remarkValue,
       t,
       tagValue,
     ],
   );
+
+  const infoRowGroups = useMemo(() => {
+    const itemById = new Map(
+      infoRowItems.map((item) => [item.id, item] as const),
+    );
+    return INFO_ROW_GROUPS.map((group) =>
+      group
+        .map((id) => itemById.get(id))
+        .filter((item): item is InfoRowItem => item !== undefined),
+    ).filter((group) => group.length > 0);
+  }, [infoRowItems]);
 
   const d = useMemo(
     () => ({
@@ -560,7 +628,7 @@ export default function UserProfileScreen() {
       },
       content: {
         paddingHorizontal: Spacing.lg,
-        paddingBottom: insets.bottom + (showAddFriendButton ? 96 : 24),
+        paddingBottom: insets.bottom + 24,
       },
       avatarRing: {
         backgroundColor: colors.surface,
@@ -620,6 +688,12 @@ export default function UserProfileScreen() {
       rowDivider: {
         backgroundColor: colors.surfaceBorder,
       },
+      photoNotesTitle: {
+        color: colors.textSecondary,
+      },
+      photoNote: {
+        backgroundColor: colors.background,
+      },
       actionText: {
         color: colors.white,
         ...Typography.body,
@@ -630,12 +704,6 @@ export default function UserProfileScreen() {
       },
       actionButtonPressed: {
         opacity: 0.85,
-      },
-      footer: {
-        position: 'absolute' as const,
-        left: Spacing.lg,
-        right: Spacing.lg,
-        bottom: insets.bottom + Spacing.md,
       },
       addButton: {
         backgroundColor: colors.primary,
@@ -649,7 +717,7 @@ export default function UserProfileScreen() {
         backgroundColor: colors.surfaceBorder,
       },
     }),
-    [colors, insets.bottom, showAddFriendButton],
+    [colors, insets.bottom],
   );
 
   return (
@@ -740,22 +808,44 @@ export default function UserProfileScreen() {
           ) : null}
         </View>
 
-        {infoRowItems.length > 0 ? (
-          <View style={[s.card, d.card]}>
-            {infoRowItems.map((item, index) => (
-              <View key={item.id}>
-                <ProfileActionRow
-                  icon={item.icon}
-                  iconColor={item.iconColor}
-                  label={item.label}
-                  value={item.value}
-                  onPress={item.onPress}
-                />
-                {index < infoRowItems.length - 1 ? (
-                  <View style={[s.rowDivider, d.rowDivider]} />
-                ) : null}
+        {infoRowGroups.length > 0 ? (
+          <View style={s.sections}>
+            {infoRowGroups.map((group, groupIndex) => (
+              <View key={`info-group-${groupIndex}`} style={[s.card, d.card]}>
+                {group.map((item, index) => (
+                  <View key={item.id}>
+                    <ProfileActionRow
+                      icon={item.icon}
+                      iconColor={item.iconColor}
+                      label={item.label}
+                      value={item.value}
+                      onPress={item.onPress}
+                    />
+                    {index < group.length - 1 ? (
+                      <View style={[s.rowDivider, d.rowDivider]} />
+                    ) : null}
+                  </View>
+                ))}
               </View>
             ))}
+
+            {!isCurrentUser && friendStatus === 'ACCEPTED' && photoNotes.length > 0 ? (
+              <View style={[s.card, d.card]}>
+                <Text style={[s.photoNotesTitle, d.photoNotesTitle]}>
+                  {t('userProfile.photoNotesTitle')}
+                </Text>
+                <View style={s.photoNotesStrip}>
+                  {photoNotes.map((uri) => (
+                    <Image
+                      key={uri}
+                      source={{ uri }}
+                      style={[s.photoNote, d.photoNote]}
+                      contentFit="cover"
+                    />
+                  ))}
+                </View>
+              </View>
+            ) : null}
           </View>
         ) : null}
 
@@ -795,23 +885,21 @@ export default function UserProfileScreen() {
             >
               <Text style={d.actionText}>{t('userProfile.avCall')}</Text>
             </Pressable>
+            {showAddFriendButton ? (
+              <Pressable
+                style={({ pressed }) => [
+                  s.actionButton,
+                  d.addButton,
+                  pressed && d.actionButtonPressed,
+                ]}
+                onPress={handleAddFriend}
+              >
+                <Text style={d.addButtonText}>{t('userProfile.addFriendRequest')}</Text>
+              </Pressable>
+            ) : null}
           </View>
         ) : null}
       </ScrollView>
-
-      {showAddFriendButton ? (
-        <View style={d.footer}>
-          <Pressable
-            style={[
-              s.addButton,
-              d.addButton,
-            ]}
-            onPress={handleAddFriend}
-          >
-            <Text style={d.addButtonText}>{t('userProfile.addFriendRequest')}</Text>
-          </Pressable>
-        </View>
-      ) : null}
     </View>
   );
 }

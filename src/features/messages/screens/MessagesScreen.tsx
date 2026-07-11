@@ -19,6 +19,7 @@ import {
 import { getUserProfileHref } from "@/features/user/utils/routes";
 import { useIMStore } from "@/stores/imStore";
 import { useTabBadgeStore } from "@/stores/tabBadgeStore";
+import { useAuthStore } from "@/stores/authStore";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { Conversation } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
@@ -96,6 +97,19 @@ const s = StyleSheet.create({
     gap: Spacing.lg,
     paddingTop: Spacing.md,
     paddingBottom: Spacing.sm,
+  },
+  imBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: Radius.md,
+  },
+  imBannerText: {
+    ...Typography.small,
+    fontWeight: "600",
   },
   // 标题行：左侧"消息"文字 + 右侧操作按钮组
   titleRow: {
@@ -505,6 +519,11 @@ export default function MessagesScreen() {
 
   const rawConversations = useIMStore((state) => state.conversations);
   const connectionError = useIMStore((state) => state.error);
+  const imConnected = useIMStore((state) => state.connected);
+  const imConnecting = useIMStore((state) => state.connecting);
+  // 空 imToken = 登录时 OpenIM token 没签出来（OpenIM 抽风等），IM 登录被静默跳过。
+  // 这种状态下"暂无会话"是误导——明确提示 IM 未接入，引导重新登录。
+  const imLoginSkipped = useAuthStore((state) => !state.imToken);
   const conversationGroups = useMessageGroupsStore((state) => state.groups);
   const localUnreadOverrides = useLocalUnreadStore((state) => state.overrides);
   const markLocalUnread = useLocalUnreadStore((state) => state.markUnread);
@@ -567,6 +586,12 @@ export default function MessagesScreen() {
       title: {
         color: colors.text,
         ...Typography.title,
+      },
+      imBanner: {
+        backgroundColor: colors.warning,
+      },
+      imBannerText: {
+        color: colors.white,
       },
       name: {
         color: colors.text,
@@ -889,8 +914,24 @@ export default function MessagesScreen() {
         onTabPress={(index) => setActiveFilterId(filterItems[index]?.id ?? "all")}
         scrollable
       />
+      {/* IM 未连接横幅：WS 没连上就显示（缓存的会话列表能看、但发消息会失败），
+          一眼区分"没连上"和"消息丢了"。connecting 时给出"连接中"过渡文案。 */}
+      {!imConnected ? (
+        <View style={[s.imBanner, d.imBanner]}>
+          <Ionicons
+            name={imConnecting ? "sync-outline" : "cloud-offline-outline"}
+            size={15}
+            color={d.imBannerText.color}
+          />
+          <Text style={[s.imBannerText, d.imBannerText]}>
+            {imConnecting
+              ? t("messages.imConnecting")
+              : t("messages.imNotConnected")}
+          </Text>
+        </View>
+      ) : null}
     </View>
-  ), [activeTab, colors, d, filterItems, handleClearUnread, handleOpenFind, t]);
+  ), [activeTab, colors, d, filterItems, handleClearUnread, handleOpenFind, imConnected, imConnecting, t]);
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
@@ -902,7 +943,11 @@ export default function MessagesScreen() {
         ListHeaderComponent={ListHeader}
         ListEmptyComponent={
           <Text style={d.emptyText}>
-            {connectionError ? t('messages.loadFailed', { error: connectionError }) : t('messages.noConversations')}
+            {connectionError
+              ? t('messages.loadFailed', { error: connectionError })
+              : imLoginSkipped
+                ? t('messages.imNotConnected')
+                : t('messages.noConversations')}
           </Text>
         }
         contentContainerStyle={s.listContent}

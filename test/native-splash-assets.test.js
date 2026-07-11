@@ -92,10 +92,15 @@ test('expo splash config uses a white background and centered app icon assets', 
       maxCoverage: 0.6,
     },
     {
+      // iOS home-screen icon is full-bleed: iOS applies its own rounded mask and
+      // does NOT crop a safe zone the way Android adaptive icons do, so the logo
+      // must fill most of the canvas (a safe-zone-padded image renders as a tiny
+      // logo lost in whitespace). Kept distinct from the Android foreground below.
+      // Centroid check omitted — the paper plane's visual mass is inherently
+      // off-center, which is fine for a bbox-centered full-bleed icon.
       rel: 'assets/images/icon.png',
-      minCoverage: 0.42,
-      maxCoverage: 0.52,
-      maxCentroidOffsetX: 0.035,
+      minCoverage: 0.7,
+      maxCoverage: 0.84,
     },
     {
       rel: 'assets/images/android-icon-foreground.png',

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -361,7 +361,7 @@ export default function ChatInfoScreen() {
   currentConversationIDRef.current = resolvedConversationID;
   const baseState = useMemo(() => buildChatInfoState(conversation), [conversation]);
   const displayIcons = useMemo(() => [] as DisplayIcon[], []);
-  const backHref = useMemo(() => {
+  const backHref = useMemo<Href>(() => {
     if (originScope === 'messages') {
       if (isGroupConversation) {
         return {
@@ -375,7 +375,7 @@ export default function ChatInfoScreen() {
               : {}),
             ...(conversation?.faceURL ? { avatarUrl: conversation.faceURL } : {}),
           },
-        } as const;
+        };
       }
 
       return getChatDetailHref(
@@ -628,16 +628,16 @@ export default function ChatInfoScreen() {
       return;
     }
 
-    router.push(getEditFriendRemarkHref('messages', friendId, friendName, friendFallbackName));
-  }, [friendFallbackName, friendId, friendName]);
+    router.push(getEditFriendRemarkHref(scope, friendId, friendName, friendFallbackName));
+  }, [friendFallbackName, friendId, friendName, scope]);
 
   const handleOpenTags = useCallback(() => {
     if (!friendId) {
       return;
     }
 
-    router.push(getEditFriendTagsHref('messages', friendId, friendName));
-  }, [friendId, friendName]);
+    router.push(getEditFriendTagsHref(scope, friendId, friendName));
+  }, [friendId, friendName, scope]);
 
   const handleOpenChatBackground = useCallback(() => {
     if (!resolvedConversationID) {
@@ -798,9 +798,9 @@ export default function ChatInfoScreen() {
         return;
       }
 
-      router.push(getUserProfileHref('messages', fromImUserId(member.userID), member.nickname || undefined));
+      router.push(getUserProfileHref(scope, fromImUserId(member.userID), member.nickname || undefined));
     },
-    [],
+    [scope],
   );
 
   const handleKickMember = useCallback(

@@ -56,7 +56,7 @@ test('CircleDetailScreen exposes the invite entry to active members', () => {
 
   assert.match(src, /const isActiveMember = circle\?\.myStatus === 'ACTIVE'/);
   assert.match(src, /\{isActiveMember \? \(/);
-  assert.match(src, /circle\/\[id\]\/invite/);
+  assert.match(src, /getCircleInviteHref\(\s*circleScope/);
 });
 
 test('CircleDetailScreen only exposes group chat to active members', () => {
@@ -77,9 +77,9 @@ test('invite entry is a menu: send circle card + invite contacts', () => {
   );
   // option 1: send the circle as a chat card (opens the share picker)
   assert.match(menu, /handleSendCard/);
-  assert.match(menu, /circle\/\[id\]\/share/);
+  assert.match(menu, /getCircleShareHref\(circleScope/);
   // option 2: navigates to the friend picker
-  assert.match(menu, /invite-friends/);
+  assert.match(menu, /getCircleInviteFriendsHref\(circleScope/);
 });
 
 test('invite-friends route renders the friend picker', () => {

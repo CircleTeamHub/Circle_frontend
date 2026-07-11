@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   AppState,
   FlatList,
   Pressable,
@@ -14,11 +15,22 @@ import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { useMomentsStore } from '@/features/discover/store/use-moments-store';
-import { toggleMomentLike, fetchNewMomentsCount } from '@/services/api/moments';
+import {
+  addMomentComment,
+  toggleMomentLike,
+  fetchNewMomentsCount,
+} from '@/services/api/moments';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { MomentCard } from './moment-card';
+import { MomentCommentInput } from './moment-comment-input';
+import { MomentMentionNotice } from './moment-mention-notice';
 import type { MomentPost } from '@/types';
 
 const s = StyleSheet.create({
+  // MomentCommentInput 是 absolute 全铺浮层，需要一个定位上下文来托管。
+  feedContainer: {
+    flex: 1,
+  },
   listContent: {
     paddingBottom: 100,
     gap: Spacing.lg,
@@ -55,6 +67,7 @@ export const MomentsFeed: React.FC = () => {
     lastRefreshTime,
     fetchMoments,
     toggleLike: storeToggleLike,
+    addComment: storeAddComment,
   } = useMomentsStore(
     useShallow((s) => ({
       moments: s.moments,
@@ -63,11 +76,19 @@ export const MomentsFeed: React.FC = () => {
       lastRefreshTime: s.lastRefreshTime,
       fetchMoments: s.fetchMoments,
       toggleLike: s.toggleLike,
+      addComment: s.addComment,
     })),
   );
 
   const [refreshing, setRefreshing] = useState(false);
   const [newCount, setNewCount] = useState(0);
+  const [mentionNotice, setMentionNotice] = useState<string | null>(null);
+  const dismissMentionNotice = useCallback(() => setMentionNotice(null), []);
+  // 就地评论/回复目标（微信朋友圈式），设置后弹出输入浮层，无需进详情页。
+  const [commentTarget, setCommentTarget] = useState<{
+    momentId: string;
+    replyTo: { id: string; nickname: string } | null;
+  } | null>(null);
   const lastFocusFetchRef = useRef(0);
 
   // Auto refresh on focus (silent, no spinner), throttled to 30s so rapid
@@ -172,15 +193,73 @@ export const MomentsFeed: React.FC = () => {
     [router],
   );
 
+  const handleComment = useCallback((postId: string) => {
+    setCommentTarget({ momentId: postId, replyTo: null });
+  }, []);
+
+  const handleReplyComment = useCallback(
+    (postId: string, replyTo: { id: string; nickname: string }) => {
+      setCommentTarget({ momentId: postId, replyTo });
+    },
+    [],
+  );
+
+  const handleSubmitComment = useCallback(
+    async (
+      content: string,
+      replyToId?: string,
+      images?: string[],
+      mentionedUserIds?: string[],
+    ) => {
+      const target = commentTarget;
+      if (!target) return;
+      try {
+        const comment = await addMomentComment(target.momentId, {
+          content,
+          replyToId,
+          images,
+          mentionedUserIds,
+        });
+        storeAddComment(target.momentId, comment);
+        setCommentTarget(null);
+        if (comment.ignoredMentionCount > 0) {
+          setMentionNotice(
+            t('moment.mentionsIgnored', {
+              count: comment.ignoredMentionCount,
+            }),
+          );
+        }
+      } catch (error) {
+        // 与详情页同款：保留输入内容让用户重试，并弹错误提示（reject 让输入框不关闭）。
+        Alert.alert(
+          t('moment.commentFailedTitle', { defaultValue: '评论失败' }),
+          getApiErrorMessage(
+            error,
+            t('moment.commentFailedMessage', {
+              defaultValue: '网络异常，请稍后重试',
+            }),
+          ),
+        );
+        if (__DEV__) {
+          console.warn('[MomentsFeed] addMomentComment failed', error);
+        }
+        throw error;
+      }
+    },
+    [commentTarget, storeAddComment, t],
+  );
+
   const renderItem = useCallback(
     ({ item }: { item: MomentPost }) => (
       <MomentCard
         post={item}
         onLike={handleLike}
         onPress={handlePress}
+        onComment={handleComment}
+        onReplyComment={handleReplyComment}
       />
     ),
-    [handleLike, handlePress],
+    [handleLike, handlePress, handleComment, handleReplyComment],
   );
 
   const keyExtractor = useCallback((item: MomentPost) => item.id, []);
@@ -216,24 +295,38 @@ export const MomentsFeed: React.FC = () => {
     ) : null;
 
   return (
-    <FlatList
-      data={moments}
-      renderItem={renderItem}
-      keyExtractor={keyExtractor}
-      ListHeaderComponent={ListHeader}
-      ListEmptyComponent={ListEmpty}
-      ListFooterComponent={ListFooter}
-      contentContainerStyle={s.listContent}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          tintColor={colors.primary}
+    <View style={s.feedContainer}>
+      <FlatList
+        data={moments}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
+        ListHeaderComponent={ListHeader}
+        ListEmptyComponent={ListEmpty}
+        ListFooterComponent={ListFooter}
+        contentContainerStyle={s.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.primary}
+          />
+        }
+        onEndReached={handleEndReached}
+        onEndReachedThreshold={0.3}
+        showsVerticalScrollIndicator={false}
+      />
+
+      {commentTarget ? (
+        <MomentCommentInput
+          replyTo={commentTarget.replyTo}
+          onSubmit={handleSubmitComment}
+          onDismiss={() => setCommentTarget(null)}
         />
-      }
-      onEndReached={handleEndReached}
-      onEndReachedThreshold={0.3}
-      showsVerticalScrollIndicator={false}
-    />
+      ) : null}
+      <MomentMentionNotice
+        message={mentionNotice}
+        onDismiss={dismissMentionNotice}
+      />
+    </View>
   );
 };

@@ -39,6 +39,7 @@ const SENSITIVE_KEYS = new Set([
   'token',
   'accesstoken',
   'refreshtoken',
+  'revocationsecret',
   'imtoken',
   'idtoken',
   'authorization',

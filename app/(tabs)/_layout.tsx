@@ -298,13 +298,13 @@ export default function TabLayout() {
     },
     badge: {
       position: 'absolute',
-      top: -2,
-      right: -6,
-      width: 8,
-      height: 8,
+      top: -3,
+      right: -7,
+      width: 11,
+      height: 11,
       borderRadius: 999,
       backgroundColor: colors.error,
-      borderWidth: 1.5,
+      borderWidth: 2,
       borderColor: colors.surface,
     },
     label: {

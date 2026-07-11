@@ -19,6 +19,7 @@ import { getSnackbarRoute } from '@/features/notifications/utils/snackbar-route'
 import { useNotificationFeedback } from '@/features/notifications/hooks/use-notification-feedback';
 import { useNotificationCenterStore } from '@/features/notifications/store/use-notification-center-store';
 import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
+import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 
 const AUTO_DISMISS_MS = 4_000;
@@ -187,6 +188,10 @@ export function NotificationSnackbarHost() {
         }
       });
     }
+    logClientDiagnostic('notification_open', {
+      source: shown.kind === 'chat' ? 'chat_snackbar' : 'notification_snackbar',
+      notificationId: shown.id,
+    });
 
     router.push(
       getSnackbarRoute(shown, {

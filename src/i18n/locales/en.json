@@ -144,6 +144,8 @@
     "groupManagement": "Group Management",
     "loadFailed": "Failed to load conversations: {{error}}",
     "noConversations": "No conversations",
+    "imNotConnected": "IM isn't connected. Please sign in again.",
+    "imConnecting": "Connecting to IM…",
     "swipeMarkRead": "Mark Read",
     "swipeMarkUnread": "Mark Unread",
     "swipeHide": "Hide Chat",
@@ -209,6 +211,7 @@
     "summary": {
       "default": "sent you a notification",
       "TRACE_LIKE": "liked your moment",
+      "PROFILE_LIKE": "liked you",
       "TRACE_COMMENT": "commented on your moment",
       "COMMENT_REPLY": "replied to you",
       "FRIEND_REQUEST_RECEIVED": "wants to add you as a friend",
@@ -250,12 +253,12 @@
       "statusGroup": "Group chat",
       "statusOnline": "Online",
       "statusOffline": "Offline",
-      "previewNotice": "Chat preview only. Sending messages will be available once IM connects.",
+      "previewNotice": "The connection isn't ready yet. Please try again shortly.",
       "recordingSeconds": "Recording {{seconds}}s",
       "voiceReleaseCancel": "Release to cancel",
       "voiceReleaseSend": "Release to send {{seconds}}\"",
       "voiceHoldToTalk": "Hold to talk",
-      "previewPlaceholder": "Chat preview only",
+      "previewPlaceholder": "Connection not ready",
       "inputPlaceholder": "Type a message…",
       "sendFailedText": "Failed to send message, please try again",
       "recordStartFailed": "Failed to start recording, please try again",
@@ -423,7 +426,7 @@
     "clearHistoryWarning": "This will permanently delete all messages in this conversation.",
     "clear": "Clear",
     "deleteFriend": "Remove Contact",
-    "deleteFriendWarning": "This will unfriend this contact.",
+    "deleteFriendWarning": "This will unfriend this contact and permanently delete your entire chat history with them.",
     "deleted": "Removed",
     "friendDeleted": "Contact has been removed.",
     "leave": "Leave",
@@ -595,6 +598,9 @@
       "loadingDetail": "Loading activity details...",
       "message": "Message",
       "noMessage": "No message attached",
+      "replyPlaceholder": "Write a message…",
+      "send": "Send",
+      "sendFailed": "Couldn't send. Please try again.",
       "accepted": "Accepted",
       "acceptedMessage": "You accepted this friend request.",
       "rejected": "Rejected",
@@ -617,7 +623,13 @@
       "cancel": "Withdraw request",
       "cancelConfirm": "Withdraw",
       "cancelMessage": "Withdraw this friend request?",
-      "cancelTitle": "Withdraw request"
+      "cancelTitle": "Withdraw request",
+      "status": {
+        "PENDING": "Pending",
+        "ACCEPTED": "Accepted",
+        "REJECTED": "Rejected",
+        "WITHDRAWN": "Withdrawn"
+      }
     },
     "tagsScreen": {
       "title": "Tags",
@@ -651,7 +663,6 @@
       "targetFallback": "This user",
       "selfFallback": "Me",
       "defaultMessage": "Hi, I'm {{name}}",
-      "intro": "Fill in the request details before sending.",
       "messageLabel": "Verification Message",
       "messagePlaceholder": "Enter a verification message",
       "remarkLabel": "Remark Name",
@@ -662,11 +673,27 @@
       "noTagsTitle": "No tags yet",
       "noTagsHint": "You can create tags later in Contacts > Tags",
       "tagLoadError": "Failed to load tags. The request will be sent without tags.",
-      "placeholderDisabled": "Placeholder only, not available yet",
-      "placeholderRows": {
-        "remark": "Remark",
-        "photoRemark": "Photo Remark",
-        "friendPermissions": "Friend Permissions"
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "Add a note about this person (visible only to you)",
+      "photosLabel": "Photo Notes",
+      "photos": {
+        "hint": "Up to {{count}} photos, visible only to you",
+        "add": "Add photo",
+        "remove": "Remove photo",
+        "limitTitle": "Photo limit reached",
+        "limitHint": "You can add at most {{count}} photos",
+        "uploadFailedTitle": "Photo upload failed"
+      },
+      "permissionLabel": "Friend Permissions",
+      "permissionOptions": {
+        "FULL": {
+          "title": "Chat & Moments",
+          "hint": "This person can see your Moments"
+        },
+        "CHAT_ONLY": {
+          "title": "Chat only",
+          "hint": "This person won't be able to see your Moments"
+        }
       },
       "sentTitle": "Request Sent",
       "sentMessage": "Sent a friend request to {{name}}.",
@@ -736,6 +763,14 @@
     },
     "commentInput": {
       "placeholder": "Write a comment...",
+      "barPlaceholder": "Share your thoughts…",
+      "pickImage": "Add photo",
+      "mention": "Mention a friend",
+      "emoji": "Emoji",
+      "mentionTitle": "Mention a friend",
+      "noFriends": "No friends yet",
+      "friendsLoadFailed": "Couldn't load friends",
+      "imageUploadFailedTitle": "Photo upload failed",
       "replyTo": "Reply to {{nickname}}"
     },
     "restrictionBadge": {
@@ -826,6 +861,7 @@
       "restrictionsSection": "Restrictions",
       "fancyLabel": "Fancy Number Required",
       "memberPostLabel": "Members Can Post",
+      "vipAtLeast": "VIP {{level}} or above",
       "nameRequired": "Circle name required (min 2 chars)",
       "descRequired": "Description required (min 10 chars)",
       "submitButton": "Create Circle",
@@ -955,6 +991,7 @@
     "comments": "Comments",
     "commentsCount": "Comments ({{count}})",
     "noComments": "No comments",
+    "imageTag": "[Photo]",
     "showMoreComments": "View {{count}} more comments",
     "showMoreComments_one": "View {{count}} more comment",
     "showMoreComments_other": "View {{count}} more comments",
@@ -970,6 +1007,8 @@
     "coverUpdateFailed": "Failed to update cover",
     "commentFailedMessage": "Network error, please try again",
     "commentFailedTitle": "Failed to comment",
+    "mentionsIgnored": "{{count}} mentioned people could not view this moment and were not notified.",
+    "mentionLimit": "You can mention up to {{count}} friends in one comment.",
     "deleteCommentMessage": "Delete this comment?",
     "deleteCommentTitle": "Delete comment",
     "deleteFailedMessage": "Please try again",
@@ -1213,6 +1252,8 @@
     "moments": "Moments",
     "setRemark": "Set Remark",
     "tags": "Tags",
+    "description": "Description",
+    "permission": "Friend Permissions",
     "giftCoins": "Gift Coins",
     "moreInfo": "More Info",
     "editProfile": "Edit Profile",
@@ -1273,6 +1314,11 @@
     "like": "Like",
     "unlike": "Unlike",
     "likesReceived": "Likes received",
+    "photoNotesTitle": "Photo Notes",
+    "permissionValues": {
+      "FULL": "Chat & Moments",
+      "CHAT_ONLY": "Chat only"
+    },
     "loadFailed": "Failed to load profile, showing cached data",
     "phoneHidden": "Hidden",
     "startChat": "Start Chat",
@@ -1445,6 +1491,9 @@
   "systemAnnouncements": {
     "title": "System Announcements",
     "subtitle": "Latest windnote.ai app information, release updates, and patch notes will appear here.",
+    "systemNotifications": "System Notifications",
+    "empty": "No system notifications",
+    "loadFailed": "System notifications failed to load. Pull to retry",
     "latestAppInfo": {
       "title": "Latest App Info",
       "meta": "windnote.ai 1.0.0",
@@ -1973,6 +2022,7 @@
   "search": {
     "loadFriendsFailed": "Failed to load friends, please try again",
     "noResults": "No results",
+    "messageMatchCount": "{{count}} related messages",
     "placeholder": "Search...",
     "placeholderHint": "Type a keyword to search chats and friends",
     "sections": {
@@ -2061,11 +2111,13 @@
     "notification": {
       "groupCreated": "Group created",
       "memberInvited": "New member joined",
+      "memberJoined": "{{names}} joined the group",
       "memberQuit": "A member left the group",
       "memberKicked": "A member was removed",
       "groupNameUpdated": "Group name updated",
       "groupDismissed": "Group disbanded",
-      "messageRevoked": "A message was recalled"
+      "messageRevoked": "A message was recalled",
+      "friendAdded": "You're now friends — say hello!"
     },
     "preview": {
       "image": "[Photo]",
@@ -2210,6 +2262,7 @@
     "PLAZA_NOTE_INVALID": "That note is unavailable or not yours",
     "PLAZA_POST_NOT_FOUND": "Post not found",
     "PLAZA_DELETE_AUTHOR_ONLY": "Only the author can delete this post",
+    "PLAZA_INVALID_CURSOR": "This plaza page expired. Please refresh and try again.",
     "PLAZA_SIGNUP_SELF": "You can't sign up for your own post",
     "PLAZA_SIGNUP_INELIGIBLE": "You don't meet this post's signup requirements",
     "PLAZA_RECOGNIZE_MIN_ONE": "Select at least one collaborator",
@@ -2220,11 +2273,11 @@
     "PLAZA_RECOGNIZE_NOT_MEMBER": "Only active circle members can be recognized",
     "PLAZA_RECOGNIZE_BLOCKED": "You can't recognize a blocked user",
     "PLAZA_RECOGNIZE_ALREADY": "Collaboration recognition has already been submitted",
-    "PLAZA_INVALID_CURSOR": "This plaza page expired. Please refresh and try again.",
     "TRACE_MOMENT_NOT_FOUND": "Moment not found",
     "TRACE_DELETE_AUTHOR_ONLY": "Only the author can delete this",
     "TRACE_REPLY_TARGET_NOT_FOUND": "The comment you're replying to no longer exists",
     "TRACE_COMMENT_NOT_FOUND": "Comment not found",
+    "TRACE_EMPTY_COMMENT": "Comment cannot be empty",
     "TRACE_ACCESS_FORBIDDEN": "You aren't allowed to view this moment",
     "TRACE_INVALID_CURSOR": "This feed page expired. Please refresh and try again.",
     "FRIEND_SELF_ADD": "You can't add yourself as a friend",
@@ -2263,6 +2316,8 @@
     "FRIEND_ACTIVITY_NOT_FOUND": "Activity not found",
     "FRIEND_BLOCK_NOT_FOUND": "This user isn't blocked",
     "FRIEND_TAG_NAME_EMPTY": "Tag name can't be empty",
+    "FRIEND_REQUEST_MESSAGE_INVALID": "Message can't be empty and must be 500 characters or fewer",
+    "FRIEND_REQUEST_MESSAGE_LIMIT": "You can send up to 5 messages before they reply",
     "NOTE_NOT_FOUND": "Note not found",
     "NOTE_GROUP_NOT_FOUND": "Note group not found",
     "NOTE_IMAGE_TOO_LARGE": "The image is too large to embed",

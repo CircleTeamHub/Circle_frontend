@@ -75,10 +75,7 @@ test('circle card: bubble renders and taps through to the circle detail', () => 
   assert.match(chat, /case 'circle-card':/);
   assert.match(chat, /<CircleCardBubble/);
   // tapping opens the circle detail (where the join button lives)
-  assert.match(
-    chat,
-    /router\.push\(`\/\(tabs\)\/discover\/circle\/\$\{encodeURIComponent\(card\.circleId\)\}`\)/,
-  );
+  assert.match(chat, /getCircleDetailHref\([\s\S]*card\.circleId/);
 });
 
 test('circle card bubble uses a compact card layout independent of friend cards', () => {

@@ -1,0 +1,57 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const path = require('node:path');
+
+const configPath = path.join(process.cwd(), 'app.config.js');
+const appJson = require('../app.json');
+
+function loadConfig(env = {}) {
+  const previous = {
+    EXPO_PUBLIC_EAS_PROJECT_ID: process.env.EXPO_PUBLIC_EAS_PROJECT_ID,
+    GOOGLE_SERVICES_FILE: process.env.GOOGLE_SERVICES_FILE,
+  };
+
+  for (const key of Object.keys(previous)) {
+    if (key in env) process.env[key] = env[key];
+    else delete process.env[key];
+  }
+
+  try {
+    delete require.cache[require.resolve(configPath)];
+    return require(configPath)();
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
+test('dynamic app config preserves the static Expo config', () => {
+  const config = loadConfig();
+
+  assert.equal(config.name, appJson.expo.name);
+  assert.equal(config.slug, appJson.expo.slug);
+  assert.deepEqual(config.plugins, appJson.expo.plugins);
+  assert.deepEqual(config.ios, appJson.expo.ios);
+  assert.equal(config.android.package, appJson.expo.android.package);
+});
+test('dynamic app config maps optional push build environment values', () => {
+  const config = loadConfig({
+    EXPO_PUBLIC_EAS_PROJECT_ID: 'eas-project-id',
+    GOOGLE_SERVICES_FILE: './secrets/google-services.json',
+  });
+
+  assert.equal(config.extra.eas.projectId, 'eas-project-id');
+  assert.equal(
+    config.android.googleServicesFile,
+    './secrets/google-services.json',
+  );
+});
+
+test('dynamic app config omits unset optional push build values', () => {
+  const config = loadConfig();
+
+  assert.equal(config.extra?.eas?.projectId, undefined);
+  assert.equal(config.android.googleServicesFile, undefined);
+});

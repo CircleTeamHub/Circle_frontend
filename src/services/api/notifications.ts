@@ -12,6 +12,19 @@ export type NotificationUnreadSummary = {
   totalUnread: number;
 };
 
+export type PushTokenPlatform = 'ios' | 'android' | 'web';
+
+export type PushTokenProvider = 'expo';
+
+export type RegisterPushTokenInput = {
+  token: string;
+  platform: PushTokenPlatform;
+  provider: PushTokenProvider;
+  revocationSecret: string;
+  projectId?: string | null;
+  appVersion?: string | null;
+};
+
 // 三个未读数都会进 Badge.count 渲染；非数字会让 RN 的 Text 节点抛错。
 function isNotificationSummaryShape(
   value: unknown,
@@ -22,6 +35,12 @@ function isNotificationSummaryShape(
     isFiniteNonNegativeNumber(value.profileUnread) &&
     isFiniteNonNegativeNumber(value.totalUnread)
   );
+}
+
+function isNotificationOpenOwnershipShape(
+  value: unknown,
+): value is { owned: boolean } {
+  return isPlainObject(value) && typeof value.owned === 'boolean';
 }
 
 export async function fetchNotificationUnreadSummary() {
@@ -47,8 +66,29 @@ export async function fetchNotifications(
   return apiClient<NotificationItem[]>(`/notification/list?page=${page}`);
 }
 
+export async function fetchProfileNotifications(
+  page = 1,
+): Promise<NotificationItem[]> {
+  return apiClient<NotificationItem[]>(
+    `/notification/profile/list?page=${page}`,
+  );
+}
+
 export async function markNotificationRead(id: string): Promise<void> {
   await apiClient<void>(`/notification/${id}/read`, { method: 'PUT' });
+}
+
+export async function verifyNotificationOpenOwnership(
+  id: string,
+): Promise<{ owned: boolean }> {
+  const raw = await apiClient<{ owned: boolean }>(
+    `/notification/${id}/open-ownership`,
+  );
+  return expectShape(
+    raw,
+    isNotificationOpenOwnershipShape,
+    '通知归属数据格式异常',
+  );
 }
 
 export async function markAllNotificationsRead(): Promise<{ count: number }> {
@@ -59,4 +99,35 @@ export async function markAllNotificationsRead(): Promise<{ count: number }> {
 
 export async function deleteNotification(id: string): Promise<void> {
   await apiClient<void>(`/notification/${id}`, { method: 'DELETE' });
+}
+
+export async function registerPushToken(input: RegisterPushTokenInput): Promise<void> {
+  await apiClient<void>('/notification/push-token', {
+    method: 'PUT',
+    body: input,
+  });
+}
+
+export async function revokePushToken(
+  token: string,
+  revocationSecret: string,
+): Promise<void> {
+  await apiClient<void>('/notification/push-token/revoke', {
+    method: 'DELETE',
+    body: { token, revocationSecret },
+    auth: false,
+    retryOnAuthError: false,
+  });
+}
+
+export async function deleteLegacyPushToken(
+  token: string,
+  options: { accessToken: string },
+): Promise<void> {
+  await apiClient<void>('/notification/push-token', {
+    method: 'DELETE',
+    body: { token },
+    retryOnAuthError: false,
+    accessToken: options.accessToken,
+  });
 }

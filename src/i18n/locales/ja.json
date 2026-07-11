@@ -231,12 +231,12 @@
       "statusGroup": "グループ",
       "statusOnline": "オンライン",
       "statusOffline": "オフライン",
-      "previewNotice": "現在はチャット画面のプレビューのみです。メッセージの送信はIM接続後に利用できます。",
+      "previewNotice": "接続がまだ完了していません。しばらくしてから再試行してください。",
       "recordingSeconds": "録音中 {{seconds}}秒",
       "voiceReleaseCancel": "指を離してキャンセル",
       "voiceReleaseSend": "指を離して送信 {{seconds}}\"",
       "voiceHoldToTalk": "押しながら話す",
-      "previewPlaceholder": "チャット画面のプレビューのみ",
+      "previewPlaceholder": "接続がまだ完了していません",
       "inputPlaceholder": "メッセージを入力…",
       "sendFailedText": "メッセージを送信できませんでした。もう一度お試しください",
       "recordStartFailed": "録音を開始できませんでした。もう一度お試しください",
@@ -403,7 +403,7 @@
     "clearHistoryWarning": "この会話のすべてのメッセージが完全に削除されます。",
     "clear": "消去",
     "deleteFriend": "連絡先を削除",
-    "deleteFriendWarning": "この連絡先との友だち関係が解除されます。",
+    "deleteFriendWarning": "この連絡先との友だち関係が解除され、これまでのチャット履歴もすべて削除されます。",
     "deleted": "削除しました",
     "friendDeleted": "連絡先を削除しました。",
     "leave": "退出",
@@ -577,6 +577,8 @@
     "groupManagement": "グループ管理",
     "loadFailed": "会話の読み込みに失敗しました：{{error}}",
     "noConversations": "会話がありません",
+    "imNotConnected": "IM に接続されていません。再度ログインしてください。",
+    "imConnecting": "IM に接続中…",
     "swipeMarkRead": "既読にする",
     "swipeMarkUnread": "未読にする",
     "swipeHide": "チャットを非表示",
@@ -890,6 +892,7 @@
     "comments": "コメント",
     "commentsCount": "コメント ({{count}})",
     "noComments": "コメントはありません",
+    "imageTag": "[画像]",
     "showMoreComments": "他 {{count}} 件のコメントを見る",
     "showMoreComments_other": "他 {{count}} 件のコメントを見る",
     "moreLikedFriends": "他 {{count}} 人",
@@ -903,6 +906,8 @@
     "coverUpdateFailed": "カバーの更新に失敗しました",
     "commentFailedMessage": "ネットワークエラーです。もう一度お試しください",
     "commentFailedTitle": "コメントに失敗しました",
+    "mentionsIgnored": "メンションした{{count}}人はこの投稿を閲覧できないため、通知されませんでした。",
+    "mentionLimit": "1件のコメントでメンションできる友達は{{count}}人までです。",
     "deleteCommentMessage": "このコメントを削除しますか？",
     "deleteCommentTitle": "コメントを削除",
     "deleteFailedMessage": "もう一度お試しください",
@@ -992,6 +997,7 @@
       "restrictionsSection": "制限",
       "fancyLabel": "ファンシー番号が必要",
       "memberPostLabel": "メンバー投稿可",
+      "vipAtLeast": "VIP {{level}} 以上",
       "nameRequired": "サークル名を入力してください（2文字以上）",
       "descRequired": "説明を入力してください（10文字以上）",
       "submitButton": "サークルを作成",
@@ -1187,6 +1193,14 @@
     },
     "commentInput": {
       "placeholder": "コメントを書く...",
+      "barPlaceholder": "感想を書いてみましょう…",
+      "pickImage": "画像を追加",
+      "mention": "友だちをメンション",
+      "emoji": "絵文字",
+      "mentionTitle": "メンションする友だちを選択",
+      "noFriends": "まだ友だちがいません",
+      "friendsLoadFailed": "友だちを読み込めませんでした",
+      "imageUploadFailedTitle": "画像のアップロードに失敗しました",
       "replyTo": "{{nickname}}に返信"
     },
     "restrictionBadge": {
@@ -1286,6 +1300,7 @@
     "summary": {
       "default": "通知を送りました",
       "TRACE_LIKE": "あなたのモーメントにいいねしました",
+      "PROFILE_LIKE": "あなたにいいねしました",
       "TRACE_COMMENT": "あなたのモーメントにコメントしました",
       "COMMENT_REPLY": "あなたに返信しました",
       "FRIEND_REQUEST_RECEIVED": "友だち申請を送りました",
@@ -1323,6 +1338,7 @@
   "search": {
     "loadFriendsFailed": "友だちリストの読み込みに失敗しました。再試行してください",
     "noResults": "結果がありません",
+    "messageMatchCount": "関連するメッセージ {{count}} 件",
     "placeholder": "検索...",
     "placeholderHint": "キーワードを入力してチャットや友だちを検索",
     "sections": {
@@ -1354,6 +1370,9 @@
       "loadingDetail": "アクティビティの詳細を読み込み中...",
       "message": "メッセージ",
       "noMessage": "メッセージはありません",
+      "replyPlaceholder": "メッセージを入力…",
+      "send": "送信",
+      "sendFailed": "送信に失敗しました。しばらくしてからもう一度お試しください",
       "accepted": "承認済み",
       "acceptedMessage": "この友だち申請を承認しました。",
       "rejected": "拒否済み",
@@ -1376,7 +1395,13 @@
       "cancel": "申請を取り消す",
       "cancelConfirm": "取り消す",
       "cancelMessage": "この友だち申請を取り消しますか？",
-      "cancelTitle": "申請を取り消す"
+      "cancelTitle": "申請を取り消す",
+      "status": {
+        "PENDING": "保留中",
+        "ACCEPTED": "承認済み",
+        "REJECTED": "拒否済み",
+        "WITHDRAWN": "取り消し済み"
+      }
     },
     "tagsScreen": {
       "title": "タグ",
@@ -1410,7 +1435,6 @@
       "targetFallback": "相手",
       "selfFallback": "自分",
       "defaultMessage": "こんにちは、{{name}} です",
-      "intro": "申請内容を入力してから送信してください。",
       "messageLabel": "認証メッセージ",
       "messagePlaceholder": "認証メッセージを入力",
       "remarkLabel": "表示名",
@@ -1421,11 +1445,27 @@
       "noTagsTitle": "タグがありません",
       "noTagsHint": "後で「連絡先 > タグ」で作成できます",
       "tagLoadError": "タグの読み込みに失敗しました。タグを付けずに申請を送信します。",
-      "placeholderDisabled": "プレースホルダーのみ、まだ利用できません",
-      "placeholderRows": {
-        "remark": "表示名",
-        "photoRemark": "写真の表示名",
-        "friendPermissions": "友だちの権限"
+      "descriptionLabel": "説明",
+      "descriptionPlaceholder": "この相手についてのメモを追加（自分のみ表示）",
+      "photosLabel": "写真メモ",
+      "photos": {
+        "hint": "最大 {{count}} 枚まで、自分のみ表示",
+        "add": "写真を追加",
+        "remove": "写真を削除",
+        "limitTitle": "写真の上限に達しました",
+        "limitHint": "写真は最大 {{count}} 枚までです",
+        "uploadFailedTitle": "写真のアップロードに失敗しました"
+      },
+      "permissionLabel": "友だちの権限",
+      "permissionOptions": {
+        "FULL": {
+          "title": "チャット・モーメンツ",
+          "hint": "相手はあなたのモーメンツを見られます"
+        },
+        "CHAT_ONLY": {
+          "title": "チャットのみ",
+          "hint": "相手はあなたのモーメンツを見られません"
+        }
       },
       "sentTitle": "申請を送信しました",
       "sentMessage": "{{name}} さんに友だち申請を送信しました。",
@@ -1488,6 +1528,11 @@
     "like": "いいね",
     "unlike": "いいねを取り消す",
     "likesReceived": "受け取ったいいね",
+    "photoNotesTitle": "写真メモ",
+    "permissionValues": {
+      "FULL": "チャット・モーメンツ",
+      "CHAT_ONLY": "チャットのみ"
+    },
     "loadFailed": "プロフィールの読み込みに失敗しました。キャッシュデータを表示しています",
     "phoneHidden": "非公開",
     "startChat": "チャットを開始",
@@ -1652,6 +1697,8 @@
     "moments": "モーメント",
     "setRemark": "メモを設定",
     "tags": "タグ",
+    "description": "説明",
+    "permission": "友だちの権限",
     "giftCoins": "コインを贈る",
     "moreInfo": "詳細情報",
     "editProfile": "プロフィールを編集",
@@ -2016,6 +2063,9 @@
   "systemAnnouncements": {
     "title": "システムのお知らせ",
     "subtitle": "windnote.aiアプリの最新情報、バージョン更新、パッチ情報をここでまとめてお知らせします。",
+    "systemNotifications": "システム通知",
+    "empty": "システム通知はありません",
+    "loadFailed": "システム通知を読み込めませんでした。下に引いて再試行してください",
     "latestAppInfo": {
       "title": "アプリの最新情報",
       "meta": "windnote.ai 1.0.0",
@@ -2084,11 +2134,13 @@
     "notification": {
       "groupCreated": "グループを作成しました",
       "memberInvited": "新しいメンバーが参加しました",
+      "memberJoined": "{{names}}さんがグループに参加しました",
       "memberQuit": "メンバーがグループを退出しました",
       "memberKicked": "メンバーが削除されました",
       "groupNameUpdated": "グループ名を更新しました",
       "groupDismissed": "グループが解散しました",
-      "messageRevoked": "メッセージが取り消されました"
+      "messageRevoked": "メッセージが取り消されました",
+      "friendAdded": "友だちになりました。挨拶してみましょう"
     },
     "preview": {
       "image": "[写真]",
@@ -2207,6 +2259,7 @@
     "PLAZA_NOTE_INVALID": "そのノートは利用できないか、あなたのものではありません",
     "PLAZA_POST_NOT_FOUND": "投稿が見つかりません",
     "PLAZA_DELETE_AUTHOR_ONLY": "投稿者のみが削除できます",
+    "PLAZA_INVALID_CURSOR": "この広場ページは期限切れです。更新してもう一度お試しください。",
     "PLAZA_SIGNUP_SELF": "自分の投稿には応募できません",
     "PLAZA_SIGNUP_INELIGIBLE": "この投稿の応募条件を満たしていません",
     "PLAZA_RECOGNIZE_MIN_ONE": "コラボレーターを少なくとも1人選択してください",
@@ -2217,11 +2270,11 @@
     "PLAZA_RECOGNIZE_NOT_MEMBER": "サークルのアクティブメンバーのみを認定できます",
     "PLAZA_RECOGNIZE_BLOCKED": "ブロックしたユーザーは認定できません",
     "PLAZA_RECOGNIZE_ALREADY": "コラボレーション認定は既に送信されています",
-    "PLAZA_INVALID_CURSOR": "この広場ページは期限切れです。更新してもう一度お試しください。",
     "TRACE_MOMENT_NOT_FOUND": "モーメントが見つかりません",
     "TRACE_DELETE_AUTHOR_ONLY": "投稿者のみが削除できます",
     "TRACE_REPLY_TARGET_NOT_FOUND": "返信先のコメントが存在しません",
     "TRACE_COMMENT_NOT_FOUND": "コメントが見つかりません",
+    "TRACE_EMPTY_COMMENT": "コメントを入力してください",
     "TRACE_ACCESS_FORBIDDEN": "このモーメントを閲覧する権限がありません",
     "TRACE_INVALID_CURSOR": "このフィードページは期限切れです。更新してもう一度お試しください。",
     "FRIEND_SELF_ADD": "自分を友だちに追加することはできません",
@@ -2260,6 +2313,8 @@
     "FRIEND_ACTIVITY_NOT_FOUND": "アクティビティが見つかりません",
     "FRIEND_BLOCK_NOT_FOUND": "このユーザーはブロックされていません",
     "FRIEND_TAG_NAME_EMPTY": "タグ名を空にすることはできません",
+    "FRIEND_REQUEST_MESSAGE_INVALID": "メッセージは空にできず、500文字以内で入力してください",
+    "FRIEND_REQUEST_MESSAGE_LIMIT": "相手が返信するまでに送れるメッセージは最大5件です",
     "NOTE_NOT_FOUND": "ノートが見つかりません",
     "NOTE_GROUP_NOT_FOUND": "ノートグループが見つかりません",
     "NOTE_IMAGE_TOO_LARGE": "画像が大きすぎて埋め込めません",

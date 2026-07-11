@@ -14,13 +14,16 @@ export type SnackbarRouteOptions = {
 };
 
 const DISCOVER_NOTIFICATION_CENTER_ROUTE =
-  '/(tabs)/discover/notification-center';
-const MESSAGES_NOTIFICATION_CENTER_ROUTE = '/(tabs)/messages/notifications';
+  '/(tabs)/discover/notification-center' satisfies Href;
+const MESSAGES_NOTIFICATION_CENTER_ROUTE =
+  '/(tabs)/messages/notifications' satisfies Href;
 
 function getNotificationCenterFallback(scope: SnackbarRouteOptions['scope']): Href {
-  return scope === 'discover'
-    ? DISCOVER_NOTIFICATION_CENTER_ROUTE
-    : MESSAGES_NOTIFICATION_CENTER_ROUTE;
+  // 拆成两条 return 收敛推断,避免三元合并出巨型 Href 联合触发 TS2590。
+  if (scope === 'discover') {
+    return DISCOVER_NOTIFICATION_CENTER_ROUTE;
+  }
+  return MESSAGES_NOTIFICATION_CENTER_ROUTE;
 }
 
 export function getSnackbarRoute(
@@ -42,6 +45,28 @@ export function getSnackbarRoute(
         ...(item.id ? { searchedMsgID: item.id } : {}),
       },
     };
+  }
+
+  if (item.kind === 'notification' && item.fromMessage) {
+    const message = item.fromMessage;
+    const sourceID = message.sourceID || message.conversationID;
+    const searchedMsgID =
+      message.clientMsgID || message.messageID || message.id || '';
+    if (sourceID) {
+      return {
+        pathname: '/(tabs)/messages/chat-detail',
+        params: {
+          ...(message.conversationID
+            ? { conversationID: message.conversationID }
+            : {}),
+          sourceID,
+          title: message.title || item.fromUser?.nickname || '',
+          conversationType: message.conversationType ?? 'private',
+          ...(message.avatarUrl ? { avatarUrl: message.avatarUrl } : {}),
+          ...(searchedMsgID ? { searchedMsgID } : {}),
+        },
+      };
+    }
   }
 
   if (
@@ -69,14 +94,40 @@ export function getSnackbarRoute(
     };
   }
 
+  if (
+    (item.type === 'CIRCLE_INVITATION_APPROVED' ||
+      item.type === 'CIRCLE_INVITATION_REJECTED' ||
+      item.type === 'CIRCLE_ADMIN_OVERRIDE_APPROVED') &&
+    item.fromInvitation?.id
+  ) {
+    return {
+      pathname: '/(tabs)/discover/invitation/[id]',
+      params: { id: item.fromInvitation.id },
+    };
+  }
+
   if (item.type.startsWith('FRIEND_REQUEST')) {
     return '/(tabs)/contacts/new-friends';
+  }
+
+  // 资料点赞：直达点赞者主页，方便回赞 / 加好友。
+  if (item.type === 'PROFILE_LIKE' && item.fromUser?.id) {
+    return {
+      pathname:
+        options.scope === 'discover'
+          ? '/(tabs)/discover/user/[id]'
+          : '/(tabs)/messages/user/[id]',
+      params: { id: item.fromUser.id, name: item.fromUser.nickname },
+    };
   }
 
   if (item.fromTrace?.id) {
     return {
       pathname: '/(tabs)/discover/moment/[id]',
-      params: { id: item.fromTrace.id },
+      params: {
+        id: item.fromTrace.id,
+        ...(item.fromReply?.id ? { targetCommentId: item.fromReply.id } : {}),
+      },
     };
   }
 

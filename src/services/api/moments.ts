@@ -7,6 +7,18 @@ import type {
   PaginatedResponse,
 } from '@/types';
 
+export function normalizeMomentComment(comment: MomentComment): MomentComment {
+  return {
+    ...comment,
+    images: comment.images?.map((url) => normalizeMediaUrl(url) ?? url),
+    ignoredMentionCount:
+      Number.isInteger(comment.ignoredMentionCount) &&
+      comment.ignoredMentionCount >= 0
+        ? comment.ignoredMentionCount
+        : 0,
+  };
+}
+
 function normalizeMoment(post: MomentPost): MomentPost {
   return {
     ...post,
@@ -19,6 +31,7 @@ function normalizeMoment(post: MomentPost): MomentPost {
         ? normalizeMediaUrl(post.author.avatarUrl)
         : null,
     },
+    comments: post.comments.map(normalizeMomentComment),
   };
 }
 
@@ -88,12 +101,22 @@ export async function toggleMomentLike(
 
 export async function addMomentComment(
   traceId: string,
-  input: { content: string; replyToId?: string },
+  input: {
+    content: string;
+    replyToId?: string;
+    images?: string[];
+    mentionedUserIds?: string[];
+  },
 ): Promise<MomentComment> {
-  return apiClient<MomentComment>(`/trace/${traceId}/comment`, {
+  const { mentionedUserIds, ...commentInput } = input;
+  const comment = await apiClient<MomentComment>(`/trace/${traceId}/comment`, {
     method: 'POST',
-    body: input,
+    body: {
+      ...commentInput,
+      ...(mentionedUserIds?.length ? { mentionedUserIds } : {}),
+    },
   });
+  return normalizeMomentComment(comment);
 }
 
 export async function deleteMomentComment(

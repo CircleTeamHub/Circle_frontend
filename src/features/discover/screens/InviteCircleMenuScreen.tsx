@@ -1,8 +1,13 @@
 import { useCallback } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import {
+  getCircleInviteFriendsHref,
+  getCircleScopeFromSegments,
+  getCircleShareHref,
+} from '@/features/user/utils/routes';
 import { NavHeader } from '@/components/ui/nav-header';
 import { MenuRow } from '@/components/ui/menu-row';
 import { Divider } from '@/components/ui/divider';
@@ -33,20 +38,19 @@ export default function InviteCircleMenuScreen() {
   const circleId = typeof params.id === 'string' ? params.id : '';
   const circleName = typeof params.title === 'string' ? params.title : '';
   const circleAvatar = typeof params.avatar === 'string' ? params.avatar : '';
+  // 留在当前栈（messages/discover 均有本页镜像），返回链路不跨 tab。
+  const segments = useSegments();
+  const circleScope = getCircleScopeFromSegments(segments);
 
   const handleSendCard = useCallback(() => {
-    router.push({
-      pathname: '/(tabs)/discover/circle/[id]/share',
-      params: { id: circleId, title: circleName, avatar: circleAvatar },
-    });
-  }, [circleId, circleName, circleAvatar, router]);
+    router.push(
+      getCircleShareHref(circleScope, circleId, circleName, circleAvatar),
+    );
+  }, [circleScope, circleId, circleName, circleAvatar, router]);
 
   const handleInviteContacts = useCallback(() => {
-    router.push({
-      pathname: '/(tabs)/discover/circle/[id]/invite-friends',
-      params: { id: circleId, title: circleName },
-    });
-  }, [circleId, circleName, router]);
+    router.push(getCircleInviteFriendsHref(circleScope, circleId, circleName));
+  }, [circleScope, circleId, circleName, router]);
 
   return (
     <View

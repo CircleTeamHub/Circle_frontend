@@ -37,7 +37,8 @@ test('chat detail screen supports preview mode without an IM conversation', () =
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /const isPreviewMode = !conversationID/);
-  assert.match(source, /当前仅预览聊天界面/);
+  // 预览态文案已改为「连接尚未完成」（IM 未就绪的准确提示，替代旧的「仅预览」框架）
+  assert.match(source, /连接尚未完成/);
   assert.match(source, /editable=\{!isPreviewMode\}/);
   assert.match(source, /disabled=\{sending \|\| isPreviewMode \|\| isVoiceRecording\}/);
 });

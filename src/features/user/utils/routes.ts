@@ -405,3 +405,128 @@ export function getUserProfileScopeFromSegments(
 
   return 'messages';
 }
+
+// ── Circle scope routes ──────────────────────────────────────────────────────
+// 圈子详情及其子页镜像在 messages 与 discover 两个栈：聊天里的圈子名片/验证
+// 卡必须在本 tab 内打开（从哪进从哪出），不允许跨 tab 压栈把用户扔去动态页。
+
+export type CircleScope = 'messages' | 'discover';
+
+export function getCircleScopeFromSegments(
+  segments: readonly string[],
+): CircleScope {
+  return segments.includes('messages') ? 'messages' : 'discover';
+}
+
+export function getCircleDetailHref(scope: CircleScope, circleId: string): Href {
+  return {
+    pathname:
+      scope === 'messages'
+        ? '/(tabs)/messages/circle/[id]'
+        : '/(tabs)/discover/circle/[id]',
+    params: { id: circleId },
+  };
+}
+
+export function getCircleEditHref(scope: CircleScope, circleId: string): Href {
+  return {
+    pathname:
+      scope === 'messages'
+        ? '/(tabs)/messages/circle/[id]/edit'
+        : '/(tabs)/discover/circle/[id]/edit',
+    params: { id: circleId },
+  };
+}
+
+export function getCircleAdminHref(scope: CircleScope, circleId: string): Href {
+  return {
+    pathname:
+      scope === 'messages'
+        ? '/(tabs)/messages/circle/[id]/admin'
+        : '/(tabs)/discover/circle/[id]/admin',
+    params: { id: circleId },
+  };
+}
+
+export function getCircleInviteHref(
+  scope: CircleScope,
+  circleId: string,
+  title: string,
+  avatar: string,
+): Href {
+  return {
+    pathname:
+      scope === 'messages'
+        ? '/(tabs)/messages/circle/[id]/invite'
+        : '/(tabs)/discover/circle/[id]/invite',
+    params: { id: circleId, title, avatar },
+  };
+}
+
+export function getCircleShareHref(
+  scope: CircleScope,
+  circleId: string,
+  title: string,
+  avatar: string,
+): Href {
+  return {
+    pathname:
+      scope === 'messages'
+        ? '/(tabs)/messages/circle/[id]/share'
+        : '/(tabs)/discover/circle/[id]/share',
+    params: { id: circleId, title, avatar },
+  };
+}
+
+export function getCircleInviteFriendsHref(
+  scope: CircleScope,
+  circleId: string,
+  title: string,
+): Href {
+  return {
+    pathname:
+      scope === 'messages'
+        ? '/(tabs)/messages/circle/[id]/invite-friends'
+        : '/(tabs)/discover/circle/[id]/invite-friends',
+    params: { id: circleId, title },
+  };
+}
+
+export function getInvitationDetailHref(
+  scope: CircleScope,
+  invitationId: string,
+): Href {
+  return {
+    pathname:
+      scope === 'messages'
+        ? '/(tabs)/messages/invitation/[id]'
+        : '/(tabs)/discover/invitation/[id]',
+    params: { id: invitationId },
+  };
+}
+
+export function getSelectVerifierHref(
+  scope: CircleScope,
+  params: { id: string; circleId: string; circleName: string },
+): Href {
+  return {
+    pathname:
+      scope === 'messages'
+        ? '/(tabs)/messages/invitation/[id]/select-verifier'
+        : '/(tabs)/discover/invitation/[id]/select-verifier',
+    params,
+  };
+}
+
+export function getVerificationDetailHref(
+  scope: CircleScope,
+  invitationId: string,
+): Href {
+  return {
+    pathname:
+      scope === 'messages'
+        ? '/(tabs)/messages/verification/[id]'
+        : '/(tabs)/discover/verification/[id]',
+    params: { id: invitationId },
+  };
+}

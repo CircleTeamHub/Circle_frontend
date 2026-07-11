@@ -18,9 +18,24 @@ export interface NotificationRowData {
 }
 
 function iconFor(type: NotificationType): keyof typeof Ionicons.glyphMap {
+  if (
+    type === 'MESSAGE_RECEIVED' ||
+    type === 'MEMBER_MENTION' ||
+    type === 'MESSAGE_QUOTE'
+  )
+    return 'chatbubble-ellipses-outline';
+  if (
+    type === 'SQUAD_INVITE' ||
+    type === 'SQUAD_REQUEST_RECEIVED' ||
+    type === 'SQUAD_REQUEST_ACCEPTED' ||
+    type === 'SQUAD_REQUEST_REJECTED'
+  )
+    return 'people-outline';
+  if (type === 'MISSION_INVITE') return 'flag-outline';
   if (type === 'TRACE_COMMENT' || type === 'COMMENT_REPLY')
     return 'chatbubble-outline';
   if (type === 'TRACE_LIKE') return 'heart-outline';
+  if (type === 'PROFILE_LIKE') return 'thumbs-up-outline';
   if (
     type === 'CIRCLE_POST_SIGNUP_CREATED' ||
     type === 'CIRCLE_POST_AUTO_ENDED'
