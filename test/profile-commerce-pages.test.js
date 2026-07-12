@@ -145,13 +145,22 @@ test('CollectionsScreen shows collectible content types', () => {
   assert.match(zh, /视频/);
   assert.match(zh, /语音/);
   assert.match(zh, /信息/);
-  assert.match(zh, /收藏笔记/);
-  assert.match(src, /normalizeNoteCardPayload/);
   assert.match(src, /getCollectedOpenIMMessagePayload/);
-  assert.match(src, /getNoteDetailHref\('profile'/);
   assert.match(src, /getChatDetailHref\(\s*'profile'/);
   assert.match(src, /getUserProfileHref\(\s*'profile'/);
   assert.match(zh, /回到消息/);
   assert.match(zh, /发送人/);
   assert.match(zh, /来自/);
+});
+
+test('CollectionsScreen no longer lists NOTE collections (notes go to My Notes)', () => {
+  const src = read('src/features/profile/screens/CollectionsScreen.tsx');
+
+  // 收藏笔记已改为 collectNote 直接复制进「我的笔记」：
+  // 收藏页不再有 NOTE 标签页，也过滤掉历史遗留的 NOTE 收藏项。
+  assert.doesNotMatch(src, /profile\.collections\.tabs\.note/);
+  assert.doesNotMatch(src, /normalizeNoteCardPayload/);
+  assert.doesNotMatch(src, /getNoteDetailHref/);
+  assert.match(src, /Exclude<CollectionType, 'NOTE'>/);
+  assert.match(src, /item\.type !== 'NOTE'/);
 });

@@ -37,7 +37,8 @@ test('chat detail screen supports preview mode without an IM conversation', () =
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /const isPreviewMode = !conversationID/);
-  assert.match(source, /当前仅预览聊天界面/);
+  // 预览态文案已改为「连接尚未完成」（IM 未就绪的准确提示，替代旧的「仅预览」框架）
+  assert.match(source, /连接尚未完成/);
   assert.match(source, /editable=\{!isPreviewMode\}/);
   assert.match(source, /disabled=\{sending \|\| isPreviewMode \|\| isVoiceRecording\}/);
 });
@@ -164,6 +165,18 @@ test('chat detail virtualizes and caps group mention candidates', () => {
   assert.match(source, /loadGroupMemberList\(sourceID, MENTION_CANDIDATE_LIMIT\)/);
   assert.match(source, /<FlatList[\s\S]*data=\{visibleMentionCandidates\}/);
   assert.doesNotMatch(source, /visibleMentionCandidates\.map\(\(member\)/);
+});
+
+test('chat detail exposes @all as the first group mention candidate', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(source, /AT_ALL_USER_ID/);
+  assert.match(source, /allMentionTarget/);
+  assert.match(source, /setMentionCandidates\(\[allMentionTarget, \.\.\.cached\]\)/);
+  assert.match(source, /setMentionCandidates\(\[allMentionTarget, \.\.\.candidates\]\)/);
 });
 
 test('chat detail caches group mention candidates and de-dupes in-flight loads', () => {

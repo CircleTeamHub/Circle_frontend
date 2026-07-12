@@ -10,7 +10,7 @@ const MINE = 'src/features/discover/screens/MyCirclesScreen.tsx';
 test('CircleDetailScreen: invite button shares the primary style of 进入群聊', () => {
   const src = read(DETAIL);
   // invite routes to the invite screen using the chat (primary) button style
-  assert.match(src, /circle\/\[id\]\/invite[\s\S]*?d\.chatBtnText/);
+  assert.match(src, /getCircleInviteHref\([\s\S]*?d\.chatBtnText/);
   // the old purple invite style is gone
   assert.doesNotMatch(src, /inviteBtn/);
 });

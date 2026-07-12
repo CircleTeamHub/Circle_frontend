@@ -24,6 +24,7 @@ import OpenIMSDK, {
   type GroupItem,
   type GroupMemberItem,
   type SearchMessageResult,
+  type SearchMessageResultItem,
   type ConversationItem,
   type MessageItem,
 } from '@openim/rn-client-sdk';
@@ -49,6 +50,10 @@ export { fromImUserId, toImUserId } from '@/im/user-id';
 
 // SDK 初始化 Promise 单例：避免并发重复 initSDK，登出后置为 null 允许重新初始化
 let initPromise: Promise<void> | null = null;
+// 「僵尸登录态」自愈开关：native SDK 自报 Logged 但资源已卸载时，unInitSDK 重建一次。
+// 模块级 —— 每个 JS 生命周期（含每次 hot-reload）最多自愈一次，避免登录环路。
+let staleLoginSelfHealAttempted = false;
+let logoutPromise: Promise<void> | null = null;
 type NativeFSModule = typeof NativeFS & { default?: typeof NativeFS };
 let rnfsModule: typeof NativeFS | null = null;
 
@@ -127,7 +132,7 @@ export async function ensureOpenIMInitialized() {
       const RNFS = loadNativeFS();
       const dataDir = await getOpenIMDataDir();
 
-      await RNFS.mkdir(dataDir);
+      await RNFS.mkdir(dataDir, { NSURLIsExcludedFromBackupKey: true });
 
       // 在 initSDK 之前先绑定 listeners —— 否则 onConnecting / onConnectSuccess
       // 在 initSDK 内部即将触发时 JS 层还没挂回调，会被 native 直接丢成
@@ -162,6 +167,35 @@ export async function ensureOpenIMInitialized() {
   return true;
 }
 
+/** 是否为 OpenIM 的 10004「资源未加载」错误 —— 僵尸登录态的特征。 */
+function isOpenIMResourceNotLoadedError(error: unknown): boolean {
+  const code = (error as { code?: number })?.code;
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return (
+    code === 10004 ||
+    message.includes('10004') ||
+    message.includes('not load resource') ||
+    message.includes('Resource initialization incomplete')
+  );
+}
+
+/**
+ * 轻量只读探针：native SDK 自报 Logged 后，用 getSelfUserInfo 确认资源是否真的可用。
+ * 抛 10004 → 资源已卸载（hot-reload / 重装后的僵尸态），返回 false。
+ * 其它错误保守地当作已加载，避免无关失败误触发一次重登。
+ */
+async function isOpenIMSessionResourceLoaded(): Promise<boolean> {
+  try {
+    await OpenIMSDK.getSelfUserInfo();
+    return true;
+  } catch (error) {
+    if (isOpenIMResourceNotLoadedError(error)) {
+      return false;
+    }
+    return true;
+  }
+}
+
 /**
  * 登录 OpenIM。
  * 登录前先确保 SDK 已初始化；失败时重置 connecting 状态，防止 store 卡死。
@@ -175,19 +209,58 @@ export async function loginToOpenIM(userID: string, imToken: string) {
   }
 
   try {
+    if (logoutPromise) {
+      await logoutPromise;
+    }
     await ensureOpenIMInitialized();
     const imUserID = toImUserId(userID);
     useIMStore.getState().setCurrentUserID(imUserID);
     useIMStore.getState().setError(null);
 
-    // Hot reload 后 native SDK 进程通常还活着，重复 login 会被 OpenIM 拒成
-    // 10102 "User has logged in repeatedly"。先查状态，已登录就直接复用，
-    // 跳过 login 调用并把 connecting 置回 false。
+    // Hot reload / 重装后 native SDK 进程通常还活着，重复 login 会被 OpenIM 拒成
+    // 10102 "User has logged in repeatedly"。先查状态，已登录就复用。
     const status = await OpenIMSDK.getLoginStatus().catch(() => LoginStatus.Logout);
     if (status === LoginStatus.Logged) {
-      useIMStore.getState().setConnecting(false);
-      useIMStore.getState().setConnected(true);
-      return true;
+      // 但「自报 Logged」不等于资源还在：hot-reload / devicectl 覆盖重装后，SDK 常
+      // 停在「已登录但资源已卸载」的僵尸态 —— getLoginStatus 仍回 Logged，可任何真实
+      // 调用都抛 10004，会话列表被拉空。探针确认资源是否真的可用。
+      if (await isOpenIMSessionResourceLoaded()) {
+        useIMStore.getState().setConnecting(false);
+        useIMStore.getState().setConnected(true);
+        return true;
+      }
+
+      if (staleLoginSelfHealAttempted) {
+        // 本生命周期已自愈过一次仍是僵尸态：不再重置，避免登录环路。沿用旧行为标记
+        // 已连，交给 onConnectSuccess / 后续拉取兜底，或由用户冷启动彻底恢复。
+        if (isDev) {
+          console.warn(
+            '[openim] 资源在一次自愈后仍未加载，跳过后续重置（请冷启动 app）',
+          );
+        }
+        useIMStore.getState().setConnecting(false);
+        useIMStore.getState().setConnected(true);
+        return true;
+      }
+
+      // 僵尸态自愈：login() 会撞 10102、logout() 会撞 10004，都救不回来 —— 必须
+      // unInitSDK 彻底拆除，再 initSDK + login 才能重载资源。每个生命周期只做一次。
+      staleLoginSelfHealAttempted = true;
+      if (isDev) {
+        console.warn('[openim] 检测到僵尸登录态（资源已卸载），重建 SDK 后重登');
+      }
+      try {
+        await OpenIMSDK.unInitSDK();
+      } catch (error) {
+        // 拆除失败不阻断：下面 ensureOpenIMInitialized 仍会尝试重建。
+        reportError(error, { operation: 'openim', op: 'unInit' });
+      }
+      initPromise = null;
+      useIMStore.getState().reset();
+      await ensureOpenIMInitialized();
+      useIMStore.getState().setCurrentUserID(imUserID);
+      useIMStore.getState().setError(null);
+      // 落到下面走一次干净 login。
     }
 
     useIMStore.getState().setConnecting(true);
@@ -195,6 +268,8 @@ export async function loginToOpenIM(userID: string, imToken: string) {
       userID: imUserID,
       token: imToken,
     });
+    // 干净登录成功：允许后续（下次 reload 的新僵尸态）再次自愈。
+    staleLoginSelfHealAttempted = false;
 
     return true;
   } catch (error) {
@@ -222,7 +297,7 @@ export async function loginToOpenIM(userID: string, imToken: string) {
  * 无论 SDK logout 是否成功都会清空本地状态。
  * 登出后清空 initPromise，下次登录时会重新执行 initSDK。
  */
-export async function logoutFromOpenIM() {
+async function performLogoutFromOpenIM() {
   if (!isNativeIMSupported() || !initPromise) {
     useIMStore.getState().reset();
     return;
@@ -251,6 +326,22 @@ export async function logoutFromOpenIM() {
     initPromise = null;
     useIMStore.getState().reset();
   }
+}
+
+export function logoutFromOpenIM(): Promise<void> {
+  if (logoutPromise) {
+    return logoutPromise;
+  }
+
+  const operation = performLogoutFromOpenIM();
+  let trackedOperation: Promise<void>;
+  trackedOperation = operation.finally(() => {
+    if (logoutPromise === trackedOperation) {
+      logoutPromise = null;
+    }
+  });
+  logoutPromise = trackedOperation;
+  return trackedOperation;
 }
 
 export async function loadConversationList(count = 100) {
@@ -985,9 +1076,48 @@ export const NOTE_CARD_EXTENSION = 'note-card-v1';
 /** Same idea for the points-transfer card. Payload is `TransferCardData`. */
 export const TRANSFER_CARD_EXTENSION = 'transfer-card-v1';
 
+/**
+ * Marks a locally-inserted "you're now friends" system notice. Rendered as a
+ * centered gray line (same as OpenIM's native FriendAdded). Never sent to the
+ * server — see insertLocalFriendAddedNotice.
+ */
+export const FRIEND_ADDED_NOTICE_EXTENSION = 'friend-added-notice-v1';
+
 export interface TransferCardPayload {
   amount: number;
   message: string | null;
+}
+
+/**
+ * WeChat-style guarantee for the "你们已经是好友了" line: insert a local-only
+ * system notice into the single conversation with `friendUserID` right after a
+ * friend request is accepted, so the chat is never empty even if OpenIM's
+ * native FriendAdded notification is delayed or never emitted (admin
+ * import_friend may not emit one).
+ *
+ * Local-only (insertSingleMessageToLocalStorage — never hits the server). Sent
+ * as `self → friend` so it doesn't bump the unread count. If the native
+ * FriendAdded also arrives, the chat screen dedupes the two identical notices.
+ * Best-effort: callers should not let a failure here block the accept flow.
+ */
+export async function insertLocalFriendAddedNotice(params: {
+  selfUserID: string;
+  friendUserID: string;
+}): Promise<void> {
+  const initialized = await ensureOpenIMInitialized();
+  if (!initialized) return;
+
+  const message = await OpenIMSDK.createCustomMessage({
+    data: JSON.stringify({ kind: 'friend_added' }),
+    extension: FRIEND_ADDED_NOTICE_EXTENSION,
+    description: '',
+  });
+
+  await OpenIMSDK.insertSingleMessageToLocalStorage({
+    message,
+    sendID: toImUserId(params.selfUserID),
+    recvID: toImUserId(params.friendUserID),
+  });
 }
 
 export async function sendTransferCardMessage(params: {
@@ -1069,6 +1199,55 @@ export async function sendNoteCardMessage(params: {
   return reportSend({
     recvID: isSingle ? toImUserId(params.sourceID) : '',
     groupID: !isSingle ? params.sourceID : '',
+    message,
+    offlinePushInfo: {
+      title: '新消息',
+      desc: `[笔记] ${params.payload.title}`,
+      ex: '',
+      iOSPushSound: 'default',
+      iOSBadgeCount: true,
+    },
+  });
+}
+
+/**
+ * 把笔记卡片发到指定会话（好友或群聊）—— 供"分享笔记到聊天"的会话选择器用。
+ * 按会话解析 recvID/groupID（与 friend/circle 名片一致），避免调用方自己拼
+ * sourceID/sessionType 时踩 IM/业务 id 转换的坑。
+ */
+export async function sendNoteCardToConversation(params: {
+  targetConversationID: string;
+  payload: NoteCardPayload;
+}) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await waitForOpenIMConnectionReady();
+
+  const targetConversation = useIMStore
+    .getState()
+    .conversations.find(
+      (conversation) => conversation.conversationID === params.targetConversationID,
+    );
+
+  if (!targetConversation) {
+    throw new Error('目标会话不存在');
+  }
+
+  const message = await OpenIMSDK.createCustomMessage({
+    data: JSON.stringify(params.payload),
+    extension: NOTE_CARD_EXTENSION,
+    description: `[笔记] ${params.payload.title}`,
+  });
+
+  const isGroup =
+    targetConversation.conversationType === SessionType.Group;
+  return reportSend({
+    recvID: isGroup ? '' : targetConversation.userID,
+    groupID: isGroup ? targetConversation.groupID : '',
     message,
     offlinePushInfo: {
       title: '新消息',
@@ -1420,6 +1599,36 @@ export async function searchConversationTextMessages(params: {
     pageIndex: params.pageIndex ?? 1,
     count: params.count ?? 20,
   });
+}
+
+// 全局搜索：跨所有会话按关键词搜文本消息。传空 conversationID 让 OpenIM 做全局检索，
+// 返回按会话分组的结果（每组带会话信息 + 命中消息列表），供搜索页「聊天记录」段用。
+export async function searchAllTextMessages(params: {
+  keyword: string;
+  pageIndex?: number;
+  count?: number;
+}): Promise<SearchMessageResultItem[]> {
+  const keyword = params.keyword.trim();
+
+  if (!keyword) {
+    return [];
+  }
+
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    return [];
+  }
+
+  const result = await OpenIMSDK.searchLocalMessages({
+    conversationID: '',
+    keywordList: [keyword],
+    keywordListMatchType: 0,
+    messageTypeList: [MessageType.TextMessage],
+    pageIndex: params.pageIndex ?? 1,
+    count: params.count ?? 50,
+  });
+  return result.searchResultItems ?? result.findResultItems ?? [];
 }
 
 export async function searchConversationMediaMessages(params: {

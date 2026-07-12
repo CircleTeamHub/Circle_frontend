@@ -8,7 +8,7 @@
  * - 统一错误格式：ApiError（包含 status、code、data）
  */
 import { API_URL } from '@/constants/config';
-import { clearLocalSession } from '@/services/auth/session';
+import { clearLocalSession, registerLogoutHandler } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
 import i18n from '@/i18n';
 import { reportError, shouldReportHttpFailure } from '@/observability/sentry';
@@ -39,6 +39,7 @@ const SENSITIVE_KEYS = new Set([
   'token',
   'accesstoken',
   'refreshtoken',
+  'revocationsecret',
   'imtoken',
   'idtoken',
   'authorization',
@@ -224,6 +225,29 @@ export class ApiError extends Error {
 
 // token 刷新 Promise 单例：多个并发请求同时 401 时，只发一次 /auth/refresh
 let refreshPromise: Promise<string> | null = null;
+let refreshPromiseSessionEpoch: number | null = null;
+
+function resetRefreshPromise() {
+  refreshPromise = null;
+  refreshPromiseSessionEpoch = null;
+}
+
+registerLogoutHandler(resetRefreshPromise);
+
+function sessionChangedError() {
+  return new ApiError(
+    i18n.t('common.errors.sessionChangedDuringRefresh', {
+      defaultValue: 'Session changed during token refresh',
+    }),
+    { status: 401, failureKind: 'session-changed' },
+  );
+}
+
+function assertSessionEpoch(sessionEpoch: number) {
+  if (useAuthStore.getState().sessionEpoch !== sessionEpoch) {
+    throw sessionChangedError();
+  }
+}
 
 async function readPayload<T>(
   res: Response,
@@ -403,16 +427,21 @@ function unwrapResponse<T>(
   return (payload as T | null) ?? (undefined as T);
 }
 
-async function refreshAccessToken() {
-  if (refreshPromise) {
+async function refreshAccessToken(sessionEpoch: number) {
+  if (
+    refreshPromise &&
+    refreshPromiseSessionEpoch === sessionEpoch
+  ) {
     return refreshPromise;
   }
 
-  refreshPromise = (async () => {
-    const { refreshToken, setTokens } = useAuthStore.getState();
+  assertSessionEpoch(sessionEpoch);
+
+  const activeRefreshPromise = (async () => {
+    const { refreshToken } = useAuthStore.getState();
 
     if (!refreshToken) {
-      await clearLocalSession();
+      await clearLocalSession(sessionEpoch);
       throw new ApiError(
         i18n.t('common.errors.sessionExpired', {
           defaultValue: '登录已过期，请重新登录',
@@ -447,19 +476,29 @@ async function refreshAccessToken() {
       );
     }
 
-    setTokens(tokens);
+    const currentAuthState = useAuthStore.getState();
+    assertSessionEpoch(sessionEpoch);
+
+    currentAuthState.setTokens(tokens);
 
     return tokens.accessToken;
   })()
     .catch(async (error) => {
-      await clearLocalSession();
+      if (useAuthStore.getState().sessionEpoch === sessionEpoch) {
+        await clearLocalSession(sessionEpoch);
+      }
       throw error;
     })
     .finally(() => {
-      refreshPromise = null;
+      if (refreshPromise === activeRefreshPromise) {
+        refreshPromise = null;
+        refreshPromiseSessionEpoch = null;
+      }
     });
 
-  return refreshPromise;
+  refreshPromise = activeRefreshPromise;
+  refreshPromiseSessionEpoch = sessionEpoch;
+  return activeRefreshPromise;
 }
 
 function shouldReportApiFailure(error: unknown, status: number | undefined): boolean {
@@ -475,11 +514,18 @@ export async function apiClient<T>(
   options: RequestOptions = {}
 ): Promise<T> {
   const { auth = true, retryOnAuthError = true } = options;
+  const requestSessionEpoch =
+    auth && retryOnAuthError ? useAuthStore.getState().sessionEpoch : null;
   try {
     const initialRequest = await executeRequest<T>(endpoint, options);
 
     if (initialRequest.res.status === 401 && auth && retryOnAuthError) {
-      const nextAccessToken = await refreshAccessToken();
+      if (requestSessionEpoch === null) {
+        throw sessionChangedError();
+      }
+      assertSessionEpoch(requestSessionEpoch);
+      const nextAccessToken = await refreshAccessToken(requestSessionEpoch);
+      assertSessionEpoch(requestSessionEpoch);
       const retryRequest = await executeRequest<T>(
         endpoint,
         { ...options, retryOnAuthError: false },

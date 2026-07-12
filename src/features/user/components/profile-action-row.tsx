@@ -11,8 +11,8 @@ interface ProfileActionRowProps {
   onPress?: () => void;
 }
 
-// 行内边距(16) + 图标块(30) + 图标与文字间距(12)，分隔线据此左缩进对齐文字
-export const ICON_BADGE_SIZE = 30;
+// 行内边距(16) + 图标块(28) + 图标与文字间距(12)，分隔线据此左缩进对齐文字
+export const ICON_BADGE_SIZE = 28;
 export const ROW_PADDING_H = Spacing.md;
 export const ROW_GAP = Spacing.md - 4;
 
@@ -21,7 +21,7 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: ROW_GAP,
-    paddingVertical: 13,
+    paddingVertical: 12,
     paddingHorizontal: ROW_PADDING_H,
   },
   pressed: {

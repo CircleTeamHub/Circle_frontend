@@ -1,4 +1,4 @@
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, Pressable, type GestureResponderEvent } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +16,7 @@ interface FriendCardBubbleProps {
   selfAvatarUri?: string;
   onPress?: (card: FriendCardData) => void;
   onAvatarPress?: () => void;
+  onLongPress?: (event: GestureResponderEvent) => void;
   hideStatus?: boolean;
 }
 
@@ -28,6 +29,7 @@ export const FriendCardBubble: React.FC<FriendCardBubbleProps> = ({
   selfAvatarUri,
   onPress,
   onAvatarPress,
+  onLongPress,
   hideStatus,
 }) => {
   const { colors } = useTheme();
@@ -56,6 +58,8 @@ export const FriendCardBubble: React.FC<FriendCardBubbleProps> = ({
       <Pressable
         style={[sFriendCard.card, { backgroundColor: cardBg }]}
         onPress={onPress ? () => onPress(card) : undefined}
+        onLongPress={onLongPress}
+        delayLongPress={350}
       >
         <View style={sFriendCard.topRow}>
           <Avatar

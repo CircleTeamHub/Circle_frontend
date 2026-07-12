@@ -2,6 +2,12 @@ import { Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/theme';
 
+// 跨 tab 压栈（横幅/通知从其它 tab push 到本栈的 chat-detail 等）时，
+// 给栈底垫上首页，保证返回有处可去、tab 不会卡死在被压入的页面。
+export const unstable_settings = {
+  initialRouteName: 'index',
+};
+
 export default function MessagesLayout() {
   const { colors } = useTheme();
   const { t } = useTranslation();

@@ -7,6 +7,9 @@ export const darkColors: ThemeColors = {
   divider: '#2E2F38',
   primary: '#6366F1',
   primaryLight: 'rgba(99, 102, 241, 0.25)',
+  primaryDeep: '#4F46E5',
+  // 会员卡渐变 ['#5B4BE6','#7C5CF0','#A86BF0'] 的核心色，app 的品牌紫
+  brandPurple: '#7C5CF0',
   text: '#FAFAF9',
   textSecondary: '#6B7280',
   white: '#FFFFFF',
@@ -45,6 +48,9 @@ export const lightColors: ThemeColors = {
   divider: '#F0F0F0',
   primary: '#6366F1',
   primaryLight: 'rgba(99, 102, 241, 0.15)',
+  primaryDeep: '#4F46E5',
+  // 会员卡渐变 ['#5B4BE6','#7C5CF0','#A86BF0'] 的核心色，app 的品牌紫
+  brandPurple: '#7C5CF0',
   text: '#1A1B23',
   textSecondary: '#6B7280',
   white: '#FFFFFF',

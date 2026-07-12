@@ -6,6 +6,7 @@ interface NotificationCenterState {
   /** 报名管理 tab: posts the current user authored. */
   signupPosts: MyCirclePost[];
   setInteractive: (items: NotificationItem[]) => void;
+  appendInteractivePage: (items: NotificationItem[]) => void;
   setSignupPosts: (items: MyCirclePost[]) => void;
   markInteractiveReadLocal: (id: string) => void;
   removeInteractiveLocal: (id: string) => void;
@@ -20,6 +21,16 @@ export const useNotificationCenterStore = create<NotificationCenterState>(
     interactive: [],
     signupPosts: [],
     setInteractive: (items) => set({ interactive: items }),
+    appendInteractivePage: (items) =>
+      set((s) => {
+        const seen = new Set(s.interactive.map((item) => item.id));
+        return {
+          interactive: [
+            ...s.interactive,
+            ...items.filter((item) => !seen.has(item.id)),
+          ],
+        };
+      }),
     setSignupPosts: (items) => set({ signupPosts: items }),
     markInteractiveReadLocal: (id) =>
       set((s) => ({

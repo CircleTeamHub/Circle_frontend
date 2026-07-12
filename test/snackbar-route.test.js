@@ -29,6 +29,19 @@ const { getSnackbarRoute } = load(
   "src/features/notifications/utils/snackbar-route.ts",
 );
 const OPTS = { untitledPost: "(untitled post)" };
+const DISCOVER_OPTS = { untitledPost: "(untitled post)", scope: "discover" };
+
+test('notification center routes stay checked by Expo typed routes', () => {
+  const files = [
+    'src/features/notifications/utils/snackbar-route.ts',
+    'src/features/discover/screens/DiscoverScreen.tsx',
+  ];
+
+  for (const rel of files) {
+    const source = fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
+    assert.doesNotMatch(source, /\bas\s+Href\b/);
+  }
+});
 
 function notification(overrides = {}) {
   return {
@@ -108,6 +121,19 @@ test("getSnackbarRoute routes circle post signups to post-signups", () => {
   assert.equal(route.params.title, "Hiking trip");
 });
 
+test("getSnackbarRoute keeps circle post signups inside the discover stack when requested", () => {
+  const route = getSnackbarRoute(
+    notification({
+      type: "CIRCLE_POST_SIGNUP_CREATED",
+      fromCirclePost: { id: "p1", excerpt: "Hiking trip", firstImage: null },
+    }),
+    DISCOVER_OPTS,
+  );
+  assert.equal(route.pathname, "/(tabs)/discover/post-signups");
+  assert.equal(route.params.postId, "p1");
+  assert.equal(route.params.title, "Hiking trip");
+});
+
 test("getSnackbarRoute routes auto-ended circle posts to post-signups", () => {
   const route = getSnackbarRoute(
     notification({
@@ -144,9 +170,46 @@ test("getSnackbarRoute routes verification requests to the verify screen", () =>
   assert.equal(route.params.id, "inv1");
 });
 
+test("getSnackbarRoute routes circle invitation result notifications to invitation detail", () => {
+  const route = getSnackbarRoute(
+    notification({
+      type: "CIRCLE_INVITATION_APPROVED",
+      fromInvitation: { id: "inv2", status: "APPROVED" },
+    }),
+    OPTS,
+  );
+  assert.equal(route.pathname, "/(tabs)/discover/invitation/[id]");
+  assert.equal(route.params.id, "inv2");
+});
+
 test("getSnackbarRoute falls back when a verification request lacks an invitation id", () => {
   const route = getSnackbarRoute(
     notification({ type: "CIRCLE_VERIFICATION_REQUESTED", fromInvitation: null }),
+    OPTS,
+  );
+  assert.equal(route, "/(tabs)/messages/notifications");
+});
+
+test("getSnackbarRoute routes profile likes to the liker's profile per scope", () => {
+  const item = notification({
+    type: "PROFILE_LIKE",
+    fromUser: { id: "user-9", nickname: "小赞", avatarUrl: null },
+  });
+
+  const messagesRoute = getSnackbarRoute(item, OPTS);
+  assert.equal(messagesRoute.pathname, "/(tabs)/messages/user/[id]");
+  assert.equal(messagesRoute.params.id, "user-9");
+  assert.equal(messagesRoute.params.name, "小赞");
+
+  const discoverRoute = getSnackbarRoute(item, DISCOVER_OPTS);
+  assert.equal(discoverRoute.pathname, "/(tabs)/discover/user/[id]");
+  assert.equal(discoverRoute.params.id, "user-9");
+  assert.equal(discoverRoute.params.name, "小赞");
+});
+
+test("getSnackbarRoute falls back when a profile like lacks the liker", () => {
+  const route = getSnackbarRoute(
+    notification({ type: "PROFILE_LIKE", fromUser: null }),
     OPTS,
   );
   assert.equal(route, "/(tabs)/messages/notifications");
@@ -160,6 +223,30 @@ test("getSnackbarRoute routes friend requests to new-friends", () => {
   assert.equal(route, "/(tabs)/contacts/new-friends");
 });
 
+test("getSnackbarRoute routes message-linked notifications to the exact chat message", () => {
+  const route = getSnackbarRoute(
+    notification({
+      type: "MEMBER_MENTION",
+      fromMessage: {
+        conversationID: "conv-1",
+        sourceID: "group-1",
+        conversationType: "group",
+        title: "Squad",
+        clientMsgID: "client-msg-7",
+        avatarUrl: "https://cdn/group.png",
+      },
+    }),
+    OPTS,
+  );
+  assert.equal(route.pathname, "/(tabs)/messages/chat-detail");
+  assert.equal(route.params.conversationID, "conv-1");
+  assert.equal(route.params.sourceID, "group-1");
+  assert.equal(route.params.conversationType, "group");
+  assert.equal(route.params.title, "Squad");
+  assert.equal(route.params.avatarUrl, "https://cdn/group.png");
+  assert.equal(route.params.searchedMsgID, "client-msg-7");
+});
+
 test("getSnackbarRoute routes trace-linked notifications to the moment", () => {
   const route = getSnackbarRoute(
     notification({ fromTrace: { id: "t9", excerpt: "x", firstImage: null } }),
@@ -169,7 +256,25 @@ test("getSnackbarRoute routes trace-linked notifications to the moment", () => {
   assert.equal(route.params.id, "t9");
 });
 
+test("getSnackbarRoute carries reply anchors into moment detail", () => {
+  const route = getSnackbarRoute(
+    notification({
+      fromTrace: { id: "t9", excerpt: "x", firstImage: null },
+      fromReply: { id: "r7", content: "reply" },
+    }),
+    OPTS,
+  );
+  assert.equal(route.pathname, "/(tabs)/discover/moment/[id]");
+  assert.equal(route.params.id, "t9");
+  assert.equal(route.params.targetCommentId, "r7");
+});
+
 test("getSnackbarRoute defaults to the notification center", () => {
   const route = getSnackbarRoute(notification(), OPTS);
   assert.equal(route, "/(tabs)/messages/notifications");
+});
+
+test("getSnackbarRoute defaults to the discover notification center for discover scope", () => {
+  const route = getSnackbarRoute(notification(), DISCOVER_OPTS);
+  assert.equal(route, "/(tabs)/discover/notification-center");
 });

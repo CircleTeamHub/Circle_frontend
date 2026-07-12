@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   ActivityIndicator,
@@ -13,11 +13,21 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { NavHeader } from '@/components/ui/nav-header';
 import { buildSendFriendRequestInitialMessage } from '@/features/social/send-friend-request';
 import {
+  createSingleFlightRunner,
+  getFriendRequestSubmitState,
+} from '@/features/social/send-friend-request-submit';
+import {
+  useFriendPhotoNotes,
+  FRIEND_PHOTO_NOTE_LIMIT,
+} from '@/features/social/hooks/use-friend-photo-notes';
+import {
   createFriendRequest,
   fetchFriendTags,
+  type FriendPermission,
   type FriendTag,
 } from '@/services/api/friends';
 import { getApiErrorMessage } from '@/services/api/errors';
@@ -25,7 +35,7 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useAuthStore } from '@/stores/authStore';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
-const PLACEHOLDER_ROW_KEYS = ['remark', 'photoRemark', 'friendPermissions'] as const;
+const PERMISSION_OPTIONS: readonly FriendPermission[] = ['FULL', 'CHAT_ONLY'];
 
 const s = StyleSheet.create({
   content: {
@@ -88,6 +98,53 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  photosWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  photoTile: {
+    width: 72,
+    height: 72,
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+  },
+  photoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  photoRemove: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addPhotoTile: {
+    width: 72,
+    height: 72,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  permissionOption: {
+    minHeight: 56,
+    borderWidth: 1,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.sm,
+  },
+  permissionMeta: {
+    flex: 1,
+    gap: 2,
+  },
   footer: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
@@ -121,11 +178,26 @@ export default function SendFriendRequestScreen() {
   );
   const [message, setMessage] = useState(initialMessage);
   const [remark, setRemark] = useState('');
+  const [description, setDescription] = useState('');
+  const [permission, setPermission] = useState<FriendPermission>('FULL');
   const [tags, setTags] = useState<FriendTag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [isLoadingTags, setIsLoadingTags] = useState(true);
   const [tagLoadError, setTagLoadError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitRunnerRef = useRef(createSingleFlightRunner());
+  const {
+    photos,
+    addPhoto,
+    removePhoto,
+    uploading: isUploadingPhoto,
+    canAddMore: canAddMorePhotos,
+  } = useFriendPhotoNotes();
+  const submitState = getFriendRequestSubmitState({
+    hasProfile: Boolean(profileId),
+    isSubmitting,
+    isUploadingPhoto,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -171,10 +243,6 @@ export default function SendFriendRequestScreen() {
       cardTitle: {
         color: colors.text,
       },
-      helperText: {
-        color: colors.textSecondary,
-        ...Typography.small,
-      },
       fieldLabel: {
         color: colors.textSecondary,
       },
@@ -212,6 +280,32 @@ export default function SendFriendRequestScreen() {
       tagChipTextActive: {
         color: colors.white,
       },
+      photoTile: {
+        backgroundColor: colors.background,
+      },
+      photoRemove: {
+        backgroundColor: 'rgba(0,0,0,0.55)',
+      },
+      addPhotoTile: {
+        borderColor: colors.surfaceBorder,
+        backgroundColor: colors.background,
+      },
+      permissionOption: {
+        borderColor: colors.surfaceBorder,
+        backgroundColor: colors.background,
+      },
+      permissionOptionActive: {
+        borderColor: colors.primary,
+      },
+      permissionTitle: {
+        color: colors.text,
+        ...Typography.bodyRegular,
+        fontWeight: '600' as const,
+      },
+      permissionHint: {
+        color: colors.textSecondary,
+        ...Typography.tiny,
+      },
       submitButton: {
         backgroundColor: colors.primary,
       },
@@ -236,29 +330,34 @@ export default function SendFriendRequestScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!profileId || isSubmitting) {
+    if (submitState.disabled) {
       return;
     }
 
-    try {
-      setIsSubmitting(true);
-      await createFriendRequest({
-        targetId: profileId,
-        message,
-        remark,
-        tagIds: selectedTagIds,
-      });
-      Alert.alert(t('contacts.request.sentTitle'), t('contacts.request.sentMessage', { name: targetName }), [
-        { text: t('common.ok'), onPress: () => router.back() },
-      ]);
-    } catch (error) {
-      Alert.alert(
-        t('contacts.request.sendFailedTitle'),
-        getApiErrorMessage(error, t('contacts.request.sendFailed')),
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
+    await submitRunnerRef.current.run(async () => {
+      try {
+        setIsSubmitting(true);
+        await createFriendRequest({
+          targetId: profileId,
+          message,
+          remark,
+          tagIds: selectedTagIds,
+          description,
+          photos,
+          permission,
+        });
+        Alert.alert(t('contacts.request.sentTitle'), t('contacts.request.sentMessage', { name: targetName }), [
+          { text: t('common.ok'), onPress: () => router.back() },
+        ]);
+      } catch (error) {
+        Alert.alert(
+          t('contacts.request.sendFailedTitle'),
+          getApiErrorMessage(error, t('contacts.request.sendFailed')),
+        );
+      } finally {
+        setIsSubmitting(false);
+      }
+    });
   };
 
   return (
@@ -271,7 +370,6 @@ export default function SendFriendRequestScreen() {
       >
         <View style={[s.card, d.card]}>
           <Text style={[s.cardTitle, d.cardTitle]}>{targetName}</Text>
-          <Text style={d.helperText}>{t('contacts.request.intro')}</Text>
         </View>
 
         <View style={[s.card, d.card]}>
@@ -354,24 +452,109 @@ export default function SendFriendRequestScreen() {
         </View>
 
         <View style={[s.card, d.card]}>
-          {/* placeholder only rows for Task 4 UI */}
-          {PLACEHOLDER_ROW_KEYS.map((rowKey) => (
-            <Pressable
-              key={rowKey}
-              disabled
-              style={[s.placeholderRow, d.placeholderRow]}
-            >
-              <View style={s.placeholderMeta}>
-                <Text style={d.placeholderTitle}>{t(`contacts.request.placeholderRows.${rowKey}`)}</Text>
-                <Text style={d.placeholderHint}>{t('contacts.request.placeholderDisabled')}</Text>
-              </View>
-              <Ionicons
-                name="chevron-forward"
-                size={18}
-                color={colors.textSecondary}
-              />
-            </Pressable>
-          ))}
+          <View style={s.fieldBlock}>
+            <Text style={[s.fieldLabel, d.fieldLabel]}>
+              {t('contacts.request.descriptionLabel')}
+            </Text>
+            <TextInput
+              value={description}
+              onChangeText={setDescription}
+              multiline
+              maxLength={500}
+              placeholder={t('contacts.request.descriptionPlaceholder')}
+              placeholderTextColor={colors.textSecondary}
+              style={[s.input, s.messageInput, d.input]}
+            />
+          </View>
+
+          <View style={s.fieldBlock}>
+            <Text style={[s.fieldLabel, d.fieldLabel]}>
+              {t('contacts.request.photosLabel')}
+            </Text>
+            <View style={s.photosWrap}>
+              {photos.map((uri) => (
+                <View key={uri} style={[s.photoTile, d.photoTile]}>
+                  <Image
+                    source={{ uri }}
+                    style={s.photoImage}
+                    contentFit="cover"
+                  />
+                  <Pressable
+                    style={[s.photoRemove, d.photoRemove]}
+                    onPress={() => removePhoto(uri)}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('contacts.request.photos.remove')}
+                  >
+                    <Ionicons name="close" size={14} color={colors.white} />
+                  </Pressable>
+                </View>
+              ))}
+              {canAddMorePhotos ? (
+                <Pressable
+                  style={[s.addPhotoTile, d.addPhotoTile]}
+                  onPress={addPhoto}
+                  disabled={isUploadingPhoto}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('contacts.request.photos.add')}
+                >
+                  {isUploadingPhoto ? (
+                    <ActivityIndicator color={colors.primary} />
+                  ) : (
+                    <Ionicons
+                      name="add"
+                      size={26}
+                      color={colors.textSecondary}
+                    />
+                  )}
+                </Pressable>
+              ) : null}
+            </View>
+            <Text style={d.placeholderHint}>
+              {t('contacts.request.photos.hint', {
+                count: FRIEND_PHOTO_NOTE_LIMIT,
+              })}
+            </Text>
+          </View>
+
+          <View style={s.fieldBlock}>
+            <Text style={[s.fieldLabel, d.fieldLabel]}>
+              {t('contacts.request.permissionLabel')}
+            </Text>
+            {PERMISSION_OPTIONS.map((option) => {
+              const selected = permission === option;
+
+              return (
+                <Pressable
+                  key={option}
+                  style={[
+                    s.permissionOption,
+                    d.permissionOption,
+                    selected ? d.permissionOptionActive : null,
+                  ]}
+                  onPress={() => setPermission(option)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                >
+                  <View style={s.permissionMeta}>
+                    <Text style={d.permissionTitle}>
+                      {t(`contacts.request.permissionOptions.${option}.title`)}
+                    </Text>
+                    <Text style={d.permissionHint}>
+                      {t(`contacts.request.permissionOptions.${option}.hint`)}
+                    </Text>
+                  </View>
+                  <Ionicons
+                    name={
+                      selected ? 'radio-button-on' : 'radio-button-off'
+                    }
+                    size={20}
+                    color={selected ? colors.primary : colors.textSecondary}
+                  />
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
       </ScrollView>
 
@@ -380,12 +563,16 @@ export default function SendFriendRequestScreen() {
           style={[
             s.submitButton,
             d.submitButton,
-            !profileId || isSubmitting ? d.submitButtonDisabled : null,
+            submitState.disabled ? d.submitButtonDisabled : null,
           ]}
-          disabled={!profileId || isSubmitting}
+          disabled={submitState.disabled}
           onPress={handleSubmit}
         >
-          <Text style={d.submitText}>{isSubmitting ? t('common.sending') : t('common.send')}</Text>
+          <Text style={d.submitText}>
+            {submitState.activity === 'idle'
+              ? t('common.send')
+              : t('common.sending')}
+          </Text>
         </Pressable>
       </View>
     </View>

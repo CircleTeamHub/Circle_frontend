@@ -12,6 +12,9 @@ import { useTranslation } from "react-i18next";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+const DISCOVER_NOTIFICATION_CENTER_ROUTE =
+  "/(tabs)/discover/notification-center";
+
 const s = StyleSheet.create({
   header: {
     paddingHorizontal: Spacing.lg,
@@ -75,7 +78,9 @@ export default function DiscoverScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState(0);
-  const discoverUnread = useTabBadgeStore((state) => state.systemUnread);
+  // 铃铛红点 = 铃铛中心「互动」列表的未读数，由 interaction.unread.changed 实时驱动。
+  // 之前误读 systemUnread（只有系统通知/快照兜底才更新），互动通知到达时铃铛不亮。
+  const bellUnread = useTabBadgeStore((state) => state.discoverUnread);
 
   const FILTER_TABS = useMemo(
     () => [
@@ -120,7 +125,7 @@ export default function DiscoverScreen() {
   }, [router]);
 
   const handleOpenNotifications = useCallback(() => {
-    router.push("/(tabs)/messages/notifications");
+    router.push(DISCOVER_NOTIFICATION_CENTER_ROUTE);
   }, [router]);
 
   const handleFilterPress = useCallback(() => {
@@ -161,7 +166,7 @@ export default function DiscoverScreen() {
                 color={colors.text}
               />
               <View style={s.notificationBadge}>
-                <Badge count={discoverUnread} />
+                <Badge count={bellUnread} />
               </View>
             </Pressable>
             <Pressable

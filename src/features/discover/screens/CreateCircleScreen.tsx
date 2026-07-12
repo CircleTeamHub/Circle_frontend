@@ -122,7 +122,6 @@ export default function CreateCircleScreen() {
         avatarUrl: uploadedAvatarUrl,
         cities: selectedCities.length > 0 ? selectedCities : undefined,
         rules: form.rules.trim() || undefined,
-        tags: form.tags.length > 0 ? form.tags : undefined,
         joinVipRestriction: form.joinVipRestriction,
         joinCreditRestriction: form.joinCreditRestriction,
         joinFancyRestriction: form.joinFancyRestriction || undefined,

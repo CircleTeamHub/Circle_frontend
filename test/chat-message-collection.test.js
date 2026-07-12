@@ -119,22 +119,13 @@ test('chat-sourced collections preserve conversation route context for locating 
 
   const input = buildCollectionInputFromMessage(
     {
-      id: 'msg-note-2',
-      type: 'note-card',
+      id: 'msg-text-2',
+      type: 'received',
       outgoing: false,
       senderID: 'sender-1',
       senderName: '发送人',
       time: '18:30',
-      noteCard: {
-        noteId: 'note-2',
-        ownerId: 'owner-1',
-        title: '群里的笔记',
-        contentPreview: '笔记摘要',
-        coverUrl: null,
-        imageCount: 1,
-        videoCount: 0,
-        groupNames: [],
-      },
+      text: '群里的重要消息',
     },
     {
       conversationID: 'sg_group-1',
@@ -148,7 +139,7 @@ test('chat-sourced collections preserve conversation route context for locating 
     JSON.parse(JSON.stringify(input.payload)),
   );
 
-  assert.equal(recovered.messageID, 'msg-note-2');
+  assert.equal(recovered.messageID, 'msg-text-2');
   assert.equal(recovered.conversationID, 'sg_group-1');
   assert.equal(recovered.conversationTitle, '项目群');
   assert.equal(recovered.sourceID, 'group-1');
@@ -156,6 +147,139 @@ test('chat-sourced collections preserve conversation route context for locating 
   assert.equal(recovered.senderID, 'sender-1');
   assert.equal(recovered.senderName, '发送人');
   assert.equal(recovered.time, '18:30');
+});
+
+// ── 收藏笔记 → 我的笔记（collectNote）────────────────────────────────────────
+
+test('note-card messages no longer produce a collection item (they go to My Notes)', () => {
+  const { buildCollectionInputFromMessage } = loadTsModule(
+    'src/features/chat/utils/message-collection.ts',
+  );
+
+  const input = buildCollectionInputFromMessage(
+    {
+      id: 'msg-note-1',
+      type: 'note-card',
+      outgoing: false,
+      noteCard: {
+        noteId: 'note-1',
+        ownerId: 'owner-1',
+        title: '笔记',
+        contentPreview: null,
+        coverUrl: null,
+        imageCount: 0,
+        videoCount: 0,
+        groupNames: [],
+      },
+    },
+    { conversationID: 'si_me_peer', conversationTitle: 'Peer Chat' },
+  );
+
+  assert.equal(input, null);
+});
+
+test('buildNoteCollectSource carries the group card and actual sender for group chats', () => {
+  const { buildNoteCollectSource } = loadTsModule(
+    'src/features/chat/utils/message-collection.ts',
+  );
+
+  const source = buildNoteCollectSource(
+    {
+      id: 'msg-note-9',
+      type: 'note-card',
+      outgoing: false,
+      senderID: 'user-2',
+      senderName: '小王',
+      noteCard: { noteId: 'note-9', title: 'T' },
+    },
+    {
+      conversationID: 'sg_group-1',
+      conversationTitle: '产品讨论群',
+      sourceID: 'group-1',
+      conversationType: 'group',
+      conversationAvatarUrl: 'https://cdn.example.com/group.png',
+    },
+  );
+
+  assert.deepEqual(JSON.parse(JSON.stringify(source)), {
+    conversationType: 'group',
+    conversationID: 'sg_group-1',
+    clientMsgID: 'msg-note-9',
+    sender: { id: 'user-2', name: '小王' },
+    group: {
+      id: 'group-1',
+      name: '产品讨论群',
+      faceURL: 'https://cdn.example.com/group.png',
+    },
+  });
+});
+
+test('buildNoteCollectSource uses the conversation peer as the card for private chats', () => {
+  const { buildNoteCollectSource } = loadTsModule(
+    'src/features/chat/utils/message-collection.ts',
+  );
+
+  const source = buildNoteCollectSource(
+    {
+      id: 'msg-note-10',
+      type: 'note-card',
+      outgoing: false,
+      senderID: 'peer-1',
+      senderName: '好友A',
+      noteCard: { noteId: 'note-10', title: 'T' },
+    },
+    {
+      conversationID: 'si_me_peer',
+      conversationTitle: '好友A',
+      sourceID: 'peer-1',
+      conversationType: 'private',
+      conversationAvatarUrl: 'https://cdn.example.com/a.png',
+    },
+  );
+
+  assert.deepEqual(JSON.parse(JSON.stringify(source)), {
+    conversationType: 'private',
+    conversationID: 'si_me_peer',
+    clientMsgID: 'msg-note-10',
+    sender: {
+      id: 'peer-1',
+      name: '好友A',
+      faceURL: 'https://cdn.example.com/a.png',
+    },
+  });
+});
+
+test('buildNoteCollectSource falls back to the current user for own group messages and drops non-http faceURL', () => {
+  const { buildNoteCollectSource } = loadTsModule(
+    'src/features/chat/utils/message-collection.ts',
+  );
+
+  // 自己发的群消息没有 senderID → sender 回落到当前用户；
+  // 本地文件路径头像不是合法 URL → 不上送（后端 IsUrl 校验会 400）。
+  const source = buildNoteCollectSource(
+    {
+      id: 'msg-note-11',
+      type: 'note-card',
+      outgoing: true,
+      noteCard: { noteId: 'note-11', title: 'T' },
+    },
+    {
+      conversationID: 'sg_group-1',
+      conversationTitle: '产品讨论群',
+      sourceID: 'group-1',
+      conversationType: 'group',
+      conversationAvatarUrl: 'file:///local/group.png',
+      currentUser: { id: 'me-1', name: '', faceURL: 'file:///me.png' },
+    },
+  );
+
+  assert.deepEqual(JSON.parse(JSON.stringify(source)), {
+    conversationType: 'group',
+    conversationID: 'sg_group-1',
+    clientMsgID: 'msg-note-11',
+    sender: { id: 'me-1', name: 'me-1' },
+    group: { id: 'group-1', name: '产品讨论群' },
+  });
 });
 
 test('re-sending a collected text message sends the original body once, not title+summary', () => {
@@ -218,10 +342,13 @@ test('re-sending a collected voice rebuilds a voice message from its source url'
   assert.equal(plan.dataSize, 20480);
 });
 
-test('re-sending a collected note card rebuilds the note card, not a text label', () => {
-  const { buildCollectionInputFromMessage, resolveCollectionSendPlan } =
-    loadTsModule('src/features/chat/utils/message-collection.ts');
+test('re-sending a LEGACY collected note card still rebuilds the note card (old rows in DB)', () => {
+  const { resolveCollectionSendPlan } = loadTsModule(
+    'src/features/chat/utils/message-collection.ts',
+  );
 
+  // 新收藏不再产生 NOTE 收藏项，但历史数据仍可能带 note-card payload；
+  // send plan 保留还原能力作为兜底。
   const noteCard = {
     noteId: 'note-1',
     ownerId: 'u-1',
@@ -232,16 +359,18 @@ test('re-sending a collected note card rebuilds the note card, not a text label'
     videoCount: 0,
     groupNames: [],
   };
-  const input = buildCollectionInputFromMessage(
-    { id: 'msg-note-1', type: 'note-card', outgoing: false, noteCard },
-    { conversationID: 'si_me_peer', conversationTitle: 'Peer Chat' },
-  );
-
   const plan = resolveCollectionSendPlan({
     id: 'c-note',
-    title: input.title,
-    summary: input.summary ?? null,
-    payload: JSON.parse(JSON.stringify(input.payload)),
+    title: '我的笔记',
+    summary: '正文预览',
+    payload: {
+      kind: 'openim-message',
+      messageID: 'msg-note-1',
+      messageType: 'note-card',
+      conversationID: 'si_me_peer',
+      conversationTitle: 'Peer Chat',
+      noteCard,
+    },
   });
 
   assert.equal(plan.kind, 'note');

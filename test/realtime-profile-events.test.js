@@ -25,11 +25,15 @@ test('realtime client handles profile, wallet, and system-notification websocket
 
 test('profile and wallet screens consume realtime notification helpers', () => {
   const profile = read('src/features/profile/screens/ProfileScreen.tsx');
+  const systemAnnouncements = read(
+    'src/features/profile/screens/SystemAnnouncementsScreen.tsx',
+  );
   const wallet = read('src/features/profile/screens/WalletScreen.tsx');
   const notificationsApi = read('src/services/api/notifications.ts');
 
-  assert.match(profile, /markProfileNotificationsRead/);
-  assert.match(profile, /setProfileUnread\(0\)/);
+  assert.doesNotMatch(profile, /markProfileNotificationsRead/);
+  assert.match(systemAnnouncements, /markProfileNotificationsRead/);
+  assert.match(systemAnnouncements, /setProfileUnread\(0\)/);
   assert.match(wallet, /useWalletRealtimeStore/);
   assert.match(wallet, /realtimeBalance/);
   assert.match(notificationsApi, /fetchNotificationUnreadSummary/);

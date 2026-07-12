@@ -33,6 +33,13 @@ const KNOWN_ACCOUNTS_KEY = 'circle-im-known-accounts';
 let authReadDegraded = false;
 let knownAccountsReadDegraded = false;
 const explicitlyRemovedKnownAccountIds = new Set<string>();
+let authMutationQueue: Promise<void> = Promise.resolve();
+
+function enqueueAuthMutation(action: () => Promise<void>): Promise<void> {
+  const next = authMutationQueue.then(action, action);
+  authMutationQueue = next.catch(() => {});
+  return next;
+}
 
 interface PersistEnvelope {
   state?: Record<string, unknown>;
@@ -490,7 +497,7 @@ export const secureAuthStorage: StateStorage = {
   },
   setItem: async (key, value) => {
     if (key === AUTH_KEY) {
-      await setAuthItem(key, value);
+      await enqueueAuthMutation(() => setAuthItem(key, value));
       return;
     }
     if (key === KNOWN_ACCOUNTS_KEY) {
@@ -512,8 +519,10 @@ export const secureAuthStorage: StateStorage = {
       return;
     }
     if (key === AUTH_KEY) {
-      await writeTokenBundle(key, null);
-      await removeLegacyItem(key);
+      await enqueueAuthMutation(async () => {
+        await writeTokenBundle(key, null);
+        await removeLegacyItem(key);
+      });
       return;
     }
 

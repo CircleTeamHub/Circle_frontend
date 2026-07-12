@@ -124,10 +124,9 @@ function clearReconnectTimer() {
   reconnectTimer = null;
 }
 
-function buildRealtimeUrl(token: string) {
-  const separator = REALTIME_WS_URL.includes('?') ? '&' : '?';
-  return `${REALTIME_WS_URL}${separator}token=${encodeURIComponent(token)}`;
-}
+// 注意：网关只认「消息帧认证」（连上后 10s 内发 {type:'auth',token}），
+// URL query 里的 token 不会被读取（后端已移除 URL 认证以防 JWT 泄漏进日志）。
+// 所以这里不往 URL 拼 token——认证在 onopen 里发帧完成。
 
 function scheduleReconnect() {
   if (manualDisconnect || !currentToken || reconnectTimer) {
@@ -215,6 +214,22 @@ function isNotificationItem(value: unknown): value is NotificationItem {
   );
 }
 
+// 铃铛「互动」列表收录的类型 —— 镜像后端 DISCOVER_NOTIFICATION_TYPES
+// (notification.constants.ts)。好友申请类有专属「新的朋友」收件箱
+// (contactsUnread)，横幅照弹，但不得混进铃铛列表。
+const BELL_NOTIFICATION_TYPES: ReadonlySet<string> = new Set([
+  'TRACE_LIKE',
+  'TRACE_COMMENT',
+  'COMMENT_REPLY',
+  'CIRCLE_VERIFICATION_REQUESTED',
+  'CIRCLE_INVITATION_APPROVED',
+  'CIRCLE_INVITATION_REJECTED',
+  'CIRCLE_ADMIN_OVERRIDE_APPROVED',
+  'CIRCLE_POST_SIGNUP_CREATED',
+  'CIRCLE_POST_AUTO_ENDED',
+  'PROFILE_LIKE',
+]);
+
 function handleNotificationCreated(payload: unknown) {
   if (!isNotificationItem(payload)) {
     return;
@@ -226,11 +241,13 @@ function handleNotificationCreated(payload: unknown) {
     return;
   }
 
-  const store = useNotificationCenterStore.getState();
-  store.setInteractive([
-    payload,
-    ...store.interactive.filter((item) => item.id !== payload.id),
-  ]);
+  if (BELL_NOTIFICATION_TYPES.has(payload.type)) {
+    const store = useNotificationCenterStore.getState();
+    store.setInteractive([
+      payload,
+      ...store.interactive.filter((item) => item.id !== payload.id),
+    ]);
+  }
   useNotificationSnackbarStore.getState().enqueueNotification(payload);
 }
 
@@ -387,11 +404,20 @@ export function connectRealtime(token: string) {
   currentToken = normalizedToken;
   closeSocket();
 
-  const nextSocket = new WebSocket(buildRealtimeUrl(normalizedToken));
+  const nextSocket = new WebSocket(REALTIME_WS_URL);
   socket = nextSocket;
 
   nextSocket.onopen = () => {
     reconnectAttempt = 0;
+    // 必须先发认证帧，否则网关 10s 后以 1008 踢掉连接，且期间收不到任何事件。
+    // 认证成功后网关会立刻回推一帧 badge.snapshot，等于隐式 ack + 红点全量同步。
+    try {
+      nextSocket.send(JSON.stringify({ type: 'auth', token: normalizedToken }));
+    } catch (err) {
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn('[realtime] failed to send auth frame', err);
+      }
+    }
     useTabBadgeStore.getState().setRealtimeConnected(true);
   };
 

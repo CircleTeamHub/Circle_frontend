@@ -67,7 +67,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
     } else if (fallbackHref) {
       router.replace(fallbackHref);
     }
-  }, [fallbackHref, navigation, onBackPress, router]);
+  }, [fallbackHref, navigation, onBackPress, router] as const);
 
   const d = useMemo(
     () => ({

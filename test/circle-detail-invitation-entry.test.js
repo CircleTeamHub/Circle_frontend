@@ -27,7 +27,6 @@ test('a PENDING applicant with an invitation gets a verify-entry into the invita
   const src = read(SRC);
   // The entry is gated on having an invitation, not just PENDING membership.
   assert.match(src, /myInvitation \?/);
-  assert.match(src, /pathname: '\/\(tabs\)\/discover\/invitation\/\[id\]'/);
-  assert.match(src, /params: \{ id: myInvitation\.id \}/);
+  assert.match(src, /getInvitationDetailHref\(\s*circleScope,\s*myInvitation\.id/);
   assert.match(src, /circle\.inviteVerifiers/);
 });

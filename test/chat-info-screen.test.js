@@ -87,6 +87,38 @@ test('chat info screen renders a dedicated group info layout for group conversat
   assert.match(source, /getGroupMemberSearchHref/);
 });
 
+test('chat info screen refreshes group member names and avatars from user profiles on focus', () => {
+  const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /import \{ fetchUserProfile \} from '@\/services\/api\/profile'/);
+  assert.match(source, /const GROUP_MEMBER_PROFILE_REFRESH_LIMIT = 200/);
+  assert.match(source, /async function refreshGroupMemberProfiles/);
+  assert.match(source, /fetchUserProfile\(fromImUserId\(member\.userID\)\)/);
+  assert.match(source, /nickname: profile\.nickname \|\| member\.nickname/);
+  assert.match(source, /faceURL: profile\.avatarUrl \?\? member\.faceURL/);
+  assert.match(
+    source,
+    /useFocusEffect\([\s\S]*loadGroupMemberList\(groupID,\s*10_000\)[\s\S]*refreshGroupMemberProfiles\(members\)/,
+  );
+});
+
+test('chat info screen lets the current user open their own profile from the group member grid', () => {
+  const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /const handleOpenMemberProfile = useCallback/);
+  // 群成员 → profile 必须按本屏所在 tab 栈(originScope=scope)推断，chat-info 在
+  // messages/contacts/discover/profile 都有 re-export；写死 'messages' 会把 profile
+  // 推进 messages 栈、串栈污染(与 AddFriend 同类 bug)。
+  assert.match(source, /router\.push\(getUserProfileHref\(scope,\s*fromImUserId\(member\.userID\)/);
+  assert.doesNotMatch(source, /getUserProfileHref\(\s*['"]messages['"],\s*fromImUserId/);
+  assert.doesNotMatch(
+    source,
+    /handleOpenMemberProfile[\s\S]{0,160}member\.userID === currentUserID/,
+  );
+});
+
 test('chat info screen gives group rows real actions instead of unsupported placeholders', () => {
   const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
   const source = fs.readFileSync(filePath, 'utf8');

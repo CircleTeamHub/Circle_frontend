@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
@@ -8,7 +8,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -16,26 +15,26 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NoteCard } from '@/features/notes/components/NoteCard';
+import { NoteActionsSheet } from '@/features/notes/components/NoteActionsSheet';
+import { ShareNoteSheet } from '@/features/notes/components/ShareNoteSheet';
 import { GroupManagerSheet } from '@/features/notes/components/GroupManagerSheet';
-import { NoteShareQrSheet } from '@/features/notes/components/NoteShareQrSheet';
-import { useNotesSettingsStore } from '@/features/notes/store/use-notes-settings-store';
-import type {
-  CreateNoteShareLinkInput,
-  NoteGroup,
-  NoteShareLink,
-  NoteSummary,
-} from '@/features/notes/types';
-import {
-  createNoteShareLink,
-  fetchNoteGroups,
-  fetchNotes,
-  togglePinNote,
-} from '@/services/api/notes';
+import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
+import type { NoteGroup, NoteSummary } from '@/features/notes/types';
+import { fetchNoteGroups, fetchNotes, togglePinNote, unlistNote } from '@/services/api/notes';
 import { useAuthStore } from '@/stores/authStore';
+import type { NoteCardData } from '@/types';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 type TabId = 'all' | 'ungrouped' | string;
+
+const keyExtractor = (item: NoteSummary) => item.id;
+
+// 提到组件外并 memo：内联箭头组件每次渲染都是新类型，FlatList 无法复用分隔线。
+const ItemSeparator = memo(function ItemSeparator() {
+  const { colors } = useTheme();
+  return <View style={[s.divider, { backgroundColor: colors.divider }]} />;
+});
 
 export default function NotesScreen() {
   const router = useRouter();
@@ -44,24 +43,22 @@ export default function NotesScreen() {
   const { t } = useTranslation();
   const currentUserId = useAuthStore((state) => state.user?.id);
 
-  const showGroups = useNotesSettingsStore((st) => st.showGroups);
-  const showUngrouped = useNotesSettingsStore((st) => st.showUngrouped);
-  const showSortToolbar = useNotesSettingsStore((st) => st.showSortToolbar);
-
   const [notes, setNotes] = useState<NoteSummary[]>([]);
   const [groups, setGroups] = useState<NoteGroup[]>([]);
   const [activeTab, setActiveTab] = useState<TabId>('all');
-  const [showUnlisted, setShowUnlisted] = useState(false);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  // 「⋯」动作菜单针对的笔记（null = 关闭）
+  const [menuNote, setMenuNote] = useState<NoteSummary | null>(null);
+  // 分享会话选择器：非空即打开，携带要发送的笔记卡片
+  const [shareNotePayload, setShareNotePayload] = useState<NoteCardData | null>(
+    null,
+  );
   const [refreshing, setRefreshing] = useState(false);
   const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
   const [managerVisible, setManagerVisible] = useState(false);
-  const [qrVisible, setQrVisible] = useState(false);
-  const [shareLink, setShareLink] = useState<NoteShareLink | null>(null);
-  const [shareLinkLoading, setShareLinkLoading] = useState(false);
-  const [shareLinkError, setShareLinkError] = useState<string | null>(null);
 
   useEffect(
     () => () => {
@@ -72,20 +69,25 @@ export default function NotesScreen() {
 
   const load = useCallback(async () => {
     const [notesData, groupsData] = await Promise.all([
-      fetchNotes({ status: showUnlisted ? 'UNLISTED' : 'ACTIVE' }),
+      fetchNotes({ status: 'ACTIVE' }),
       fetchNoteGroups(),
     ]);
     if (!mountedRef.current) return;
     setNotes(notesData);
     setGroups(groupsData);
+    setLoadError(false);
     setLoading(false);
-  }, [showUnlisted]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
       void load().catch(() => {
-        if (mountedRef.current) setLoading(false);
+        // 加载失败不能静默吞掉 —— 空列表和网络错误要区分开，给用户重试入口。
+        if (mountedRef.current) {
+          setLoadError(true);
+          setLoading(false);
+        }
       });
     }, [load]),
   );
@@ -137,44 +139,20 @@ export default function NotesScreen() {
         }),
       },
     ];
-    if (showUngrouped) {
-      list.push({
-        id: 'ungrouped',
-        label: t('notes.tabs.ungrouped', {
-          count: ungroupedCount,
-          defaultValue: `未分组 ${ungroupedCount}`,
-        }),
-      });
-    }
-    if (showGroups) {
-      groups.forEach((group) => {
-        list.push({ id: group.id, label: `${group.name} ${group.noteCount}` });
-      });
-    }
+    list.push({
+      id: 'ungrouped',
+      label: t('notes.tabs.ungrouped', {
+        count: ungroupedCount,
+        defaultValue: `未分组 ${ungroupedCount}`,
+      }),
+    });
+    groups.forEach((group) => {
+      list.push({ id: group.id, label: `${group.name} ${group.noteCount}` });
+    });
     return list;
-  }, [groups, notes.length, showGroups, showUngrouped, t, ungroupedCount]);
-
-  useEffect(() => {
-    if (activeTab === 'ungrouped' && !showUngrouped) {
-      setActiveTab('all');
-      return;
-    }
-    if (
-      !showGroups &&
-      activeTab !== 'all' &&
-      activeTab !== 'ungrouped' &&
-      groups.some((group) => group.id === activeTab)
-    ) {
-      setActiveTab('all');
-    }
-  }, [activeTab, groups, showGroups, showUngrouped]);
+  }, [groups, notes.length, t, ungroupedCount]);
 
   const closeManager = useCallback(() => setManagerVisible(false), []);
-  const closeQrSheet = useCallback(() => setQrVisible(false), []);
-  useEffect(() => {
-    setShareLink(null);
-    setShareLinkError(null);
-  }, [activeTab, search, showUnlisted, filteredNotes]);
 
   const handleActiveGroupDeleted = useCallback(
     (groupId: string) => {
@@ -183,101 +161,89 @@ export default function NotesScreen() {
     [activeTab],
   );
 
-  const handlePin = useCallback(async (note: NoteSummary) => {
-    await togglePinNote(note.id, !note.pinned);
-    setNotes((prev) =>
-      prev.map((item) => (item.id === note.id ? { ...item, pinned: !item.pinned } : item)),
-    );
-  }, []);
-
-  const notesShareTitle = t('notes.share.title', { defaultValue: '我的笔记' });
-
-  const buildShareInput = useCallback((): CreateNoteShareLinkInput => {
-    const input: CreateNoteShareLinkInput = {
-      title: notesShareTitle,
-      status: showUnlisted ? 'UNLISTED' : 'ACTIVE',
-      noteIds: filteredNotes.map((note) => note.id),
-    };
-    if (activeTab === 'ungrouped') {
-      input.group = 'ungrouped';
-    } else if (activeTab !== 'all') {
-      input.groupId = activeTab;
-    }
-    const trimmedSearch = search.trim();
-    if (trimmedSearch) input.search = trimmedSearch;
-    return input;
-  }, [activeTab, filteredNotes, notesShareTitle, search, showUnlisted]);
-
-  const ensureShareLink = useCallback(async () => {
-    if (shareLink) return shareLink;
-    setShareLinkLoading(true);
-    setShareLinkError(null);
-    try {
-      const nextShareLink = await createNoteShareLink(buildShareInput());
-      if (mountedRef.current) setShareLink(nextShareLink);
-      return nextShareLink;
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : t('notes.share.createFailedMessage', {
-              defaultValue: '无法生成分享链接，请稍后重试。',
-            });
-      if (mountedRef.current) setShareLinkError(message);
-      throw error;
-    } finally {
-      if (mountedRef.current) setShareLinkLoading(false);
-    }
-  }, [buildShareInput, shareLink, t]);
-
-  const handleShareNotes = useCallback(async () => {
-    let nextShareLink: NoteShareLink;
-    try {
-      nextShareLink = await ensureShareLink();
-    } catch {
-      if (!mountedRef.current) return;
-      Alert.alert(
-        t('notes.share.createFailedTitle', { defaultValue: '分享链接生成失败' }),
-        t('notes.share.createFailedMessage', {
-          defaultValue: '无法生成分享链接，请稍后重试。',
-        }),
-      );
-      return;
-    }
-    if (!mountedRef.current) return;
-    try {
-      await Share.share({
-        message: t('notes.share.message', {
-          title: notesShareTitle,
-          url: nextShareLink.url,
-          defaultValue: `${notesShareTitle}\n${nextShareLink.url}`,
-        }),
-      });
-    } catch {
+  const handlePin = useCallback(
+    async (note: NoteSummary) => {
       try {
-        const Clipboard = await import('expo-clipboard');
-        await Clipboard.setStringAsync(nextShareLink.url);
-        Alert.alert(
-          t('notes.share.copiedTitle', { defaultValue: '已复制' }),
-          t('notes.share.copiedMessage', {
-            defaultValue: '笔记链接已复制到剪贴板。',
-          }),
-        );
+        await togglePinNote(note.id, !note.pinned);
       } catch {
-        Alert.alert(
-          t('notes.share.failedTitle', { defaultValue: '分享失败' }),
-          t('notes.share.failedMessage', {
-            defaultValue: '无法打开系统分享面板，请稍后重试。',
-          }),
-        );
+        if (mountedRef.current) {
+          Alert.alert(
+            t('notes.alerts.pinFailedTitle', { defaultValue: '操作失败' }),
+            t('common.retryLater', { defaultValue: '请稍后重试' }),
+          );
+        }
+        return;
       }
-    }
-  }, [ensureShareLink, notesShareTitle, t]);
+      if (!mountedRef.current) return;
+      setNotes((prev) =>
+        prev.map((item) => (item.id === note.id ? { ...item, pinned: !item.pinned } : item)),
+      );
+    },
+    [t],
+  );
 
-  const openQrSheet = useCallback(() => {
-    setQrVisible(true);
-    void ensureShareLink().catch(() => undefined);
-  }, [ensureShareLink]);
+  // NoteCard 已 memo：回调保持稳定引用，搜索输入等高频重渲时卡片不再全量重绘。
+  const openNote = useCallback(
+    (note: NoteSummary) =>
+      router.push({
+        pathname: '/(tabs)/profile/notes/[id]',
+        params: { id: note.id, ownerId: currentUserId ?? '' },
+      } as never),
+    [currentUserId, router],
+  );
+
+  const openNoteEditor = useCallback(
+    (note: NoteSummary) =>
+      router.push(`/(tabs)/profile/notes/edit?id=${note.id}` as never),
+    [router],
+  );
+
+  const openMenu = useCallback((note: NoteSummary) => setMenuNote(note), []);
+  const closeMenu = useCallback(() => setMenuNote(null), []);
+
+  // 单条笔记分享：打开会话选择器，把笔记以卡片消息发给好友/群聊。
+  const handleShareNote = useCallback(
+    (note: NoteSummary) => {
+      setShareNotePayload(
+        buildNoteCardPayloadFromSummary(note, note.ownerId ?? currentUserId),
+      );
+    },
+    [currentUserId],
+  );
+  const closeShareNote = useCallback(() => setShareNotePayload(null), []);
+
+  const handleUnlistNote = useCallback(
+    (note: NoteSummary) => {
+      Alert.alert(
+        t('notes.alerts.unlistTitle', { defaultValue: '下架笔记' }),
+        t('notes.alerts.unlistConfirm', {
+          defaultValue:
+            '下架后可在已下架列表查看，已下架笔记会在一个月后自动删除。',
+        }),
+        [
+          { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+          {
+            text: t('notes.actions.unlist', { defaultValue: '下架' }),
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await unlistNote(note.id);
+                if (mountedRef.current) await load();
+              } catch {
+                if (mountedRef.current) {
+                  Alert.alert(
+                    t('notes.alerts.unlistFailedTitle', { defaultValue: '下架失败' }),
+                    t('common.retryLater', { defaultValue: '请稍后重试' }),
+                  );
+                }
+              }
+            },
+          },
+        ],
+      );
+    },
+    [load, t],
+  );
 
   const d = useMemo(
     () => ({
@@ -285,10 +251,10 @@ export default function NotesScreen() {
       header: { backgroundColor: colors.background },
       headerTitle: { color: colors.text },
       unlistedBtn: {
-        backgroundColor: showUnlisted ? colors.primary : colors.surface,
+        backgroundColor: colors.surface,
       },
       unlistedBtnText: {
-        color: showUnlisted ? colors.white : colors.text,
+        color: colors.text,
       },
       tabActive: { color: colors.text },
       tabInactive: { color: colors.textSecondary },
@@ -297,32 +263,22 @@ export default function NotesScreen() {
       searchWrap: { backgroundColor: colors.surface },
       searchInput: { color: colors.text },
       searchPlaceholder: colors.textSecondary,
-      divider: { backgroundColor: colors.surface },
-      bottomBar: { backgroundColor: colors.surface },
+      divider: { backgroundColor: colors.divider },
+      bottomBar: {
+        backgroundColor: colors.background,
+        borderTopColor: colors.surfaceBorder,
+      },
       newBtn: { backgroundColor: colors.primary },
       newBtnText: { color: colors.white },
-      otherBtnText: { color: colors.text },
     }),
-    [colors, showUnlisted],
+    [colors],
   );
 
   const renderNote = useCallback(
     ({ item }: { item: NoteSummary }) => (
-      <NoteCard
-        note={item}
-        onPress={() =>
-          router.push({
-            pathname: '/(tabs)/profile/notes/[id]',
-            params: { id: item.id, ownerId: currentUserId ?? '' },
-          } as never)
-        }
-        onEditPress={() =>
-          router.push(`/(tabs)/profile/notes/edit?id=${item.id}` as never)
-        }
-        onPinPress={() => handlePin(item)}
-      />
+      <NoteCard note={item} onPress={openNote} onMorePress={openMenu} />
     ),
-    [currentUserId, handlePin, router],
+    [openMenu, openNote],
   );
 
   const statsText = t('notes.stats', {
@@ -338,43 +294,25 @@ export default function NotesScreen() {
           <Pressable onPress={() => router.back()} hitSlop={8}>
             <Ionicons name="chevron-back" size={24} color={colors.text} />
           </Pressable>
-          <Text style={[s.headerTitle, d.headerTitle]}>
-            {t('notes.title', { defaultValue: '我的笔记' })}
-          </Text>
           <View style={s.headerRight}>
             <Pressable
               style={[s.unlistedBtn, d.unlistedBtn]}
-              onPress={() => setShowUnlisted((value) => !value)}
+              onPress={() =>
+                router.push('/(tabs)/profile/notes/unlisted' as never)
+              }
             >
               <Text style={[s.unlistedBtnText, d.unlistedBtnText]}>
                 {t('notes.unlisted', { defaultValue: '已下架' })}
               </Text>
             </Pressable>
-            {/* TODO: 接入"已删除笔记"页面（同 `已下架` toggle 的反向流程）。
-               目前先弹 Alert 当 stopgap，避免静默无响应误导用户。 */}
-            <Pressable
-              hitSlop={8}
-              onPress={() =>
-                Alert.alert(
-                  t('notes.stopgap.title', { defaultValue: '即将上线' }),
-                  t('notes.stopgap.deletedNotes', {
-                    defaultValue: '已删除笔记列表即将上线，敬请期待。',
-                  }),
-                )
-              }
-            >
-              <Ionicons name="trash-outline" size={22} color={colors.textSecondary} />
-            </Pressable>
-            <Pressable
-              hitSlop={8}
-              onPress={() =>
-                router.push('/(tabs)/profile/notes/settings' as never)
-              }
-            >
-              <Ionicons name="settings-outline" size={22} color={colors.text} />
-            </Pressable>
           </View>
         </View>
+
+        {/* 大标题 + 统计副标题：列表页的"刊头"，其余元素都退到次级 */}
+        <Text style={[s.pageTitle, d.headerTitle]}>
+          {t('notes.title', { defaultValue: '我的笔记' })}
+        </Text>
+        <Text style={[s.statsText, d.statsText]}>{statsText}</Text>
 
         <View style={s.tabsRow}>
           <ScrollView
@@ -395,14 +333,10 @@ export default function NotesScreen() {
               );
             })}
           </ScrollView>
-          {showSortToolbar ? (
-            <Pressable style={s.manageTab} onPress={() => setManagerVisible(true)}>
-              <Ionicons name="ellipsis-horizontal" size={20} color={colors.textSecondary} />
-            </Pressable>
-          ) : null}
+          <Pressable style={s.manageTab} onPress={() => setManagerVisible(true)}>
+            <Ionicons name="ellipsis-horizontal" size={20} color={colors.textSecondary} />
+          </Pressable>
         </View>
-
-        <Text style={[s.statsText, d.statsText]}>{statsText}</Text>
 
         <View style={[s.searchWrap, d.searchWrap]}>
           <Ionicons name="search-outline" size={16} color={d.searchPlaceholder} />
@@ -420,9 +354,9 @@ export default function NotesScreen() {
 
       <FlatList
         data={filteredNotes}
-        keyExtractor={(item) => item.id}
+        keyExtractor={keyExtractor}
         renderItem={renderNote}
-        ItemSeparatorComponent={() => <View style={[s.divider, d.divider]} />}
+        ItemSeparatorComponent={ItemSeparator}
         contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
         showsVerticalScrollIndicator={false}
         initialNumToRender={12}
@@ -433,7 +367,23 @@ export default function NotesScreen() {
         refreshing={refreshing}
         onRefresh={handleRefreshNotes}
         ListEmptyComponent={
-          loading ? null : (
+          loading ? null : loadError ? (
+            <View style={s.emptyWrap}>
+              <Text style={[s.emptyText, d.statsText]}>
+                {t('notes.loadFailed', {
+                  defaultValue: '笔记加载失败，请检查网络后重试',
+                })}
+              </Text>
+              <Pressable
+                style={[s.retryBtn, d.newBtn]}
+                onPress={() => void handleRefreshNotes()}
+              >
+                <Text style={[s.bottomBtnText, d.newBtnText]}>
+                  {t('common.retry', { defaultValue: '重试' })}
+                </Text>
+              </Pressable>
+            </View>
+          ) : (
             <Text style={[s.emptyText, d.statsText]}>
               {search.trim()
                 ? t('notes.empty.noMatch', { defaultValue: '没有匹配的笔记' })
@@ -445,25 +395,7 @@ export default function NotesScreen() {
 
       <View style={[s.bottomBar, d.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
         <Pressable
-          style={s.bottomBtn}
-          onPress={() => void handleShareNotes()}
-        >
-          <Ionicons name="share-outline" size={18} color={colors.text} />
-          <Text style={[s.bottomBtnText, d.otherBtnText]}>
-            {t('notes.actions.share', { defaultValue: '分享' })}
-          </Text>
-        </Pressable>
-        <Pressable
-          style={s.bottomBtn}
-          onPress={openQrSheet}
-        >
-          <Ionicons name="qr-code-outline" size={18} color={colors.text} />
-          <Text style={[s.bottomBtnText, d.otherBtnText]}>
-            {t('notes.actions.qrCode', { defaultValue: '二维码' })}
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[s.bottomBtn, s.newBtnShape, d.newBtn]}
+          style={[s.bottomBtn, d.newBtn]}
           onPress={() => router.push('/(tabs)/profile/notes/edit' as never)}
         >
           <Ionicons name="add" size={18} color={colors.white} />
@@ -482,15 +414,15 @@ export default function NotesScreen() {
         onMembershipsChanged={load}
         onActiveGroupDeleted={handleActiveGroupDeleted}
       />
-      <NoteShareQrSheet
-        visible={qrVisible}
-        title={notesShareTitle}
-        shareUrl={shareLink?.url ?? ''}
-        noteCount={filteredNotes.length}
-        loading={shareLinkLoading}
-        errorMessage={shareLinkError}
-        onClose={closeQrSheet}
+      <NoteActionsSheet
+        note={menuNote}
+        onClose={closeMenu}
+        onPin={handlePin}
+        onEdit={openNoteEditor}
+        onShare={handleShareNote}
+        onUnlist={handleUnlistNote}
       />
+      <ShareNoteSheet payload={shareNotePayload} onClose={closeShareNote} />
     </View>
   );
 }
@@ -501,15 +433,15 @@ const s = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 48,
-    gap: Spacing.sm,
+    justifyContent: 'space-between',
+    height: 44,
   },
-  headerTitle: { flex: 1, textAlign: 'center', ...Typography.h2 },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
   },
+  pageTitle: { ...Typography.h1, marginTop: Spacing.xs },
   unlistedBtn: {
     paddingHorizontal: Spacing.sm + 4,
     paddingVertical: 4,
@@ -519,7 +451,7 @@ const s = StyleSheet.create({
   tabsRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    marginTop: Spacing.sm,
+    marginTop: Spacing.md,
   },
   tabsScroll: { flex: 1 },
   tabsContent: { gap: Spacing.lg, paddingHorizontal: 2, alignItems: 'flex-end' },
@@ -534,24 +466,32 @@ const s = StyleSheet.create({
   tabLine: { height: 2, borderRadius: 1, width: '100%', marginTop: 4 },
   statsText: {
     ...Typography.small,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.sm,
+    marginTop: Spacing.xs,
   },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.sm,
-    height: 40,
-    gap: Spacing.xs,
-    marginBottom: Spacing.sm,
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.md,
+    height: 44,
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.xs,
   },
   searchInput: { flex: 1, ...Typography.bodyRegular },
   divider: { height: StyleSheet.hairlineWidth, marginHorizontal: Spacing.lg },
+  emptyWrap: { alignItems: 'center', gap: Spacing.md },
   emptyText: {
     textAlign: 'center',
     paddingTop: Spacing.xl,
     ...Typography.bodyRegular,
+  },
+  retryBtn: {
+    paddingHorizontal: Spacing.lg,
+    height: 40,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   bottomBar: {
     position: 'absolute',
@@ -562,6 +502,7 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.sm + 4,
     gap: Spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   bottomBtn: {
     flex: 1,
@@ -572,6 +513,5 @@ const s = StyleSheet.create({
     borderRadius: Radius.pill,
     gap: Spacing.xs,
   },
-  newBtnShape: {},
   bottomBtnText: { ...Typography.body, fontWeight: '600' },
 });

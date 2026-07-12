@@ -1,4 +1,5 @@
 import i18n from '@/i18n';
+import type { CollectNoteSource, NoteCollectPeer } from '@/features/notes/types';
 import type { CreateCollectionInput, UserCollection } from '@/services/api/collections';
 import type { ChatMessage, ConversationType, FriendCardData, NoteCardData } from '@/types';
 
@@ -45,7 +46,6 @@ function compactText(value: string | null | undefined, max = 80) {
 
 function getCollectionType(message: ChatMessage): CreateCollectionInput['type'] {
   if (message.type === 'voice') return 'VOICE';
-  if (message.type === 'note-card') return 'NOTE';
   return 'MESSAGE';
 }
 
@@ -58,11 +58,6 @@ function getCollectionTitle(message: ChatMessage) {
     return (
       message.locationTitle ||
       i18n.t('chat.collection.locationMessage', { defaultValue: '位置消息' })
-    );
-  if (message.type === 'note-card')
-    return (
-      message.noteCard?.title ||
-      i18n.t('chat.collection.note', { defaultValue: '笔记' })
     );
   if (message.type === 'friend-card') {
     return i18n.t('chat.collection.friendCard', {
@@ -91,7 +86,6 @@ function getCollectionSummary(message: ChatMessage) {
   if (message.type === 'image')
     return i18n.t('chat.media.image', { defaultValue: '图片' });
   if (message.type === 'location') return message.locationAddress ?? null;
-  if (message.type === 'note-card') return compactText(message.noteCard?.contentPreview, 120) || null;
   if (message.type === 'friend-card')
     return i18n.t('chat.collection.personalCard', { defaultValue: '个人名片' });
   if (message.type === 'transfer-card') {
@@ -103,11 +97,90 @@ function getCollectionSummary(message: ChatMessage) {
   return compactText(message.text, 120) || null;
 }
 
+/**
+ * 从聊天收藏笔记的来源构造：群聊带群名片（sender 记录实际分享人），
+ * 私聊把会话对方作为名片主体。faceURL 仅在是合法 http(s) 地址时上送
+ * （后端 DTO 做了 IsUrl 校验，本地路径/空串会被 400）。
+ */
+export type NoteCollectContext = CollectionContext & {
+  conversationAvatarUrl?: string;
+  currentUser?: { id?: string; name?: string; faceURL?: string };
+};
+
+function sanitizeFaceURL(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  return /^https?:\/\//.test(url) ? url : undefined;
+}
+
+function buildPeer(
+  id: string | undefined,
+  name: string | undefined,
+  faceURL?: string,
+): NoteCollectPeer | null {
+  const trimmedId = id?.trim();
+  if (!trimmedId) return null;
+  return {
+    id: trimmedId,
+    // 名称兜底用 id：后端 DTO 要求 name 非空，而部分历史消息可能缺 senderName。
+    name: name?.trim() || trimmedId,
+    ...(sanitizeFaceURL(faceURL) ? { faceURL: sanitizeFaceURL(faceURL) } : {}),
+  };
+}
+
+export function buildNoteCollectSource(
+  message: ChatMessage,
+  context: NoteCollectContext,
+): CollectNoteSource | null {
+  if (message.type !== 'note-card' || !message.noteCard) return null;
+  if (!context.conversationID || !context.sourceID) return null;
+
+  if (context.conversationType === 'group') {
+    const group = buildPeer(
+      context.sourceID,
+      context.conversationTitle,
+      context.conversationAvatarUrl,
+    );
+    // 群消息：接收方向带 senderID；自己发的消息回落到当前用户。
+    const sender =
+      buildPeer(message.senderID, message.senderName) ??
+      buildPeer(
+        context.currentUser?.id,
+        context.currentUser?.name,
+        context.currentUser?.faceURL,
+      );
+    if (!group || !sender) return null;
+    return {
+      conversationType: 'group',
+      conversationID: context.conversationID,
+      clientMsgID: message.id,
+      sender,
+      group,
+    };
+  }
+
+  // 私聊：名片主体固定是会话对方（“谁发给我的/在哪个会话”），
+  // 即使这条笔记消息是自己转发的，跳转定位仍然落在这个会话。
+  const sender = buildPeer(
+    context.sourceID,
+    context.conversationTitle,
+    context.conversationAvatarUrl,
+  );
+  if (!sender) return null;
+  return {
+    conversationType: 'private',
+    conversationID: context.conversationID,
+    clientMsgID: message.id,
+    sender,
+  };
+}
+
 export function buildCollectionInputFromMessage(
   message: ChatMessage,
   context: CollectionContext,
 ): CreateCollectionInput | null {
   if (message.type === 'date') return null;
+  // 笔记卡片不再进「收藏」：改走 collectNote 直接复制进「我的笔记」。
+  if (message.type === 'note-card') return null;
 
   const payload: CollectedOpenIMMessagePayload = {
     kind: 'openim-message',
@@ -143,7 +216,6 @@ export function buildCollectionInputFromMessage(
     };
   }
 
-  if (message.type === 'note-card') payload.noteCard = message.noteCard;
   if (message.type === 'friend-card') payload.friendCard = message.friendCard;
   if (message.type === 'transfer-card') payload.transferCard = message.transferCard;
 

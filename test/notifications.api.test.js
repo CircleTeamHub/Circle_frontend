@@ -33,8 +33,12 @@ function loadApi(filePathRel, apiResponse) {
       }
       if (specifier === "@/utils/validate") {
         return {
-          expectShape: (v) => v,
-          isPlainObject: () => true,
+          expectShape: (v, predicate) => {
+            if (!predicate(v)) throw new Error("invalid shape");
+            return v;
+          },
+          isPlainObject: (v) =>
+            typeof v === "object" && v !== null && !Array.isArray(v),
           isFiniteNonNegativeNumber: () => true,
         };
       }
@@ -56,11 +60,36 @@ test("fetchNotifications calls /notification/list with page", async () => {
   assert.equal(calls[0][0], "/notification/list?page=2");
 });
 
+test("fetchProfileNotifications calls /notification/profile/list with page", async () => {
+  const { api, calls } = loadApi("src/services/api/notifications.ts", []);
+  await api.fetchProfileNotifications(3);
+  assert.equal(calls[0][0], "/notification/profile/list?page=3");
+});
+
 test("markNotificationRead PUTs /notification/:id/read", async () => {
   const { api, calls } = loadApi("src/services/api/notifications.ts", undefined);
   await api.markNotificationRead("n1");
   assert.equal(calls[0][0], "/notification/n1/read");
   assert.equal(calls[0][1].method, "PUT");
+});
+
+test("verifyNotificationOpenOwnership GETs and validates ownership", async () => {
+  const { api, calls } = loadApi("src/services/api/notifications.ts", {
+    owned: true,
+  });
+  assert.deepEqual(await api.verifyNotificationOpenOwnership("n1"), {
+    owned: true,
+  });
+  assert.equal(calls[0][0], "/notification/n1/open-ownership");
+  assert.equal(calls[0][1], undefined);
+
+  const invalid = loadApi("src/services/api/notifications.ts", {
+    owned: "yes",
+  });
+  await assert.rejects(
+    invalid.api.verifyNotificationOpenOwnership("n1"),
+    /invalid shape/,
+  );
 });
 
 test("markAllNotificationsRead PUTs /notification/read-all", async () => {
@@ -75,4 +104,51 @@ test("deleteNotification DELETEs /notification/:id", async () => {
   await api.deleteNotification("n1");
   assert.equal(calls[0][0], "/notification/n1");
   assert.equal(calls[0][1].method, "DELETE");
+});
+
+test("registerPushToken PUTs the device push token", async () => {
+  const { api, calls } = loadApi("src/services/api/notifications.ts", undefined);
+  await api.registerPushToken({
+    token: "ExponentPushToken[abc]",
+    platform: "ios",
+    provider: "expo",
+    revocationSecret: "12345678-1234-4234-9234-123456789abc",
+  });
+  assert.equal(calls[0][0], "/notification/push-token");
+  assert.equal(calls[0][1].method, "PUT");
+  assert.deepEqual(calls[0][1].body, {
+    token: "ExponentPushToken[abc]",
+    platform: "ios",
+    provider: "expo",
+    revocationSecret: "12345678-1234-4234-9234-123456789abc",
+  });
+});
+
+test("revokePushToken uses the public unauthenticated revoke endpoint", async () => {
+  const { api, calls } = loadApi("src/services/api/notifications.ts", undefined);
+  await api.revokePushToken(
+    "ExponentPushToken[abc]",
+    "12345678-1234-4234-9234-123456789abc",
+  );
+  assert.equal(calls[0][0], "/notification/push-token/revoke");
+  assert.equal(calls[0][1].method, "DELETE");
+  assert.equal(calls[0][1].body.token, "ExponentPushToken[abc]");
+  assert.equal(
+    calls[0][1].body.revocationSecret,
+    "12345678-1234-4234-9234-123456789abc",
+  );
+  assert.equal(calls[0][1].auth, false);
+  assert.equal(calls[0][1].retryOnAuthError, false);
+});
+
+test("deleteLegacyPushToken uses authenticated non-retrying cleanup", async () => {
+  const { api, calls } = loadApi("src/services/api/notifications.ts", undefined);
+  await api.deleteLegacyPushToken("legacy-token", {
+    accessToken: "captured-access-token",
+  });
+  assert.equal(calls[0][0], "/notification/push-token");
+  assert.equal(calls[0][1].method, "DELETE");
+  assert.equal(calls[0][1].body.token, "legacy-token");
+  assert.equal(calls[0][1].retryOnAuthError, false);
+  assert.equal(calls[0][1].accessToken, "captured-access-token");
 });

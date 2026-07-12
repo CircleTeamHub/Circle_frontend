@@ -19,6 +19,7 @@ import {
 import { getUserProfileHref } from "@/features/user/utils/routes";
 import { useIMStore } from "@/stores/imStore";
 import { useTabBadgeStore } from "@/stores/tabBadgeStore";
+import { useAuthStore } from "@/stores/authStore";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { Conversation } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
@@ -97,13 +98,26 @@ const s = StyleSheet.create({
     paddingTop: Spacing.md,
     paddingBottom: Spacing.sm,
   },
+  imBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: Radius.md,
+  },
+  imBannerText: {
+    ...Typography.small,
+    fontWeight: "600",
+  },
   // 标题行：左侧"消息"文字 + 右侧操作按钮组
   titleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  // 右侧操作按钮组（通知、已读、搜索、+）
+  // 右侧操作按钮组（已读、搜索、+）
   actionRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -113,12 +127,6 @@ const s = StyleSheet.create({
     position: "relative",
     justifyContent: "center",
     alignItems: "center",
-  },
-  // 通知图标右上角的未读角标
-  actionBadge: {
-    position: "absolute",
-    top: -8,
-    right: -12,
   },
   // 单条会话行外层：保留普通列表分隔线和行间距
   row: {
@@ -479,7 +487,7 @@ function ConversationRowImpl({
 // MessagesScreen：消息列表主页面
 // 功能：
 //   1. 展示所有会话，支持按标签筛选（全部/未读/群聊/私聊/自定义群组）
-//   2. 头部操作栏：通知跳转、搜索、一键已读
+//   2. 头部操作栏：搜索、一键已读
 //   3. 点击头像可进入用户主页（仅私聊），点击会话行进入聊天详情
 // memo 化会话行：配合上游稳定的 item 引用，未变化的行跳过重渲染。
 const ConversationRow = memo(ConversationRowImpl);
@@ -511,15 +519,16 @@ export default function MessagesScreen() {
 
   const rawConversations = useIMStore((state) => state.conversations);
   const connectionError = useIMStore((state) => state.error);
+  const imConnected = useIMStore((state) => state.connected);
+  const imConnecting = useIMStore((state) => state.connecting);
+  // 空 imToken = 登录时 OpenIM token 没签出来（OpenIM 抽风等），IM 登录被静默跳过。
+  // 这种状态下"暂无会话"是误导——明确提示 IM 未接入，引导重新登录。
+  const imLoginSkipped = useAuthStore((state) => !state.imToken);
   const conversationGroups = useMessageGroupsStore((state) => state.groups);
   const localUnreadOverrides = useLocalUnreadStore((state) => state.overrides);
   const markLocalUnread = useLocalUnreadStore((state) => state.markUnread);
   const clearLocalUnread = useLocalUnreadStore((state) => state.clearUnread);
   const clearManyLocalUnread = useLocalUnreadStore((state) => state.clearMany);
-  // 通知图标的角标走 tabBadgeStore.systemUnread —— 这是 realtime 通道
-  // `system.notification.unread.changed` 维护的真实未读数。之前那份本地假数据
-  // (discover-alerts.ts) 让 badge 永远 ≥ 5，且没人能清。
-
   const [activeFilterId, setActiveFilterId] = useState("all"); // 当前激活的筛选标签 id
   const [menuVisible, setMenuVisible] = useState(false);        // 右上角弹出菜单的显隐
   const [refreshing, setRefreshing] = useState(false);
@@ -564,8 +573,6 @@ export default function MessagesScreen() {
     }
   }, []);
 
-  // 发现 / 系统通知未读数（realtime 通道维护，跟 discover tab 入口绑定）
-  const discoverUnread = useTabBadgeStore((state) => state.systemUnread);
   const totalUnread = useIMStore((state) => state.totalUnread);
   const setMessagesUnread = useTabBadgeStore((state) => state.setMessagesUnread);
 
@@ -579,6 +586,12 @@ export default function MessagesScreen() {
       title: {
         color: colors.text,
         ...Typography.title,
+      },
+      imBanner: {
+        backgroundColor: colors.warning,
+      },
+      imBannerText: {
+        color: colors.white,
       },
       name: {
         color: colors.text,
@@ -775,10 +788,6 @@ export default function MessagesScreen() {
     [clearLocalUnread, t],
   );
 
-  const handleOpenNotifications = useCallback(() => {
-    router.push("/(tabs)/messages/notifications");
-  }, [router]);
-
   // 点击搜索图标 → 跳转搜索页
   const handleOpenFind = useCallback(() => {
     router.push("/(tabs)/messages/find");
@@ -881,22 +890,6 @@ export default function MessagesScreen() {
       <View style={s.titleRow}>
         <Text style={d.title}>{t('messages.title')}</Text>
         <View style={s.actionRow}>
-          {/* 通知按钮：右上角显示未读角标 */}
-          <Pressable
-            style={s.actionButton}
-            onPress={handleOpenNotifications}
-          >
-            <Ionicons
-              name="notifications-outline"
-              size={24}
-              color={colors.text}
-            />
-            <View style={s.actionBadge}>
-              {/* 这个图标导航到 /(tabs)/discover —— 角标只反映"发现/系统通知"未读，
-                  不再 max(IM totalUnread, ...) 以免 IM 消息和发现页通知混在一起。 */}
-              <Badge count={discoverUnread} />
-            </View>
-          </Pressable>
           {/* ✓✓：一键已读（按当前筛选范围） */}
           <Pressable style={s.actionButton} onPress={handleClearUnread}>
             <Ionicons
@@ -921,8 +914,24 @@ export default function MessagesScreen() {
         onTabPress={(index) => setActiveFilterId(filterItems[index]?.id ?? "all")}
         scrollable
       />
+      {/* IM 未连接横幅：WS 没连上就显示（缓存的会话列表能看、但发消息会失败），
+          一眼区分"没连上"和"消息丢了"。connecting 时给出"连接中"过渡文案。 */}
+      {!imConnected ? (
+        <View style={[s.imBanner, d.imBanner]}>
+          <Ionicons
+            name={imConnecting ? "sync-outline" : "cloud-offline-outline"}
+            size={15}
+            color={d.imBannerText.color}
+          />
+          <Text style={[s.imBannerText, d.imBannerText]}>
+            {imConnecting
+              ? t("messages.imConnecting")
+              : t("messages.imNotConnected")}
+          </Text>
+        </View>
+      ) : null}
     </View>
-  ), [activeTab, colors, d, filterItems, handleClearUnread, handleOpenFind, handleOpenNotifications, discoverUnread, t]);
+  ), [activeTab, colors, d, filterItems, handleClearUnread, handleOpenFind, imConnected, imConnecting, t]);
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
@@ -934,7 +943,11 @@ export default function MessagesScreen() {
         ListHeaderComponent={ListHeader}
         ListEmptyComponent={
           <Text style={d.emptyText}>
-            {connectionError ? t('messages.loadFailed', { error: connectionError }) : t('messages.noConversations')}
+            {connectionError
+              ? t('messages.loadFailed', { error: connectionError })
+              : imLoginSkipped
+                ? t('messages.imNotConnected')
+                : t('messages.noConversations')}
           </Text>
         }
         contentContainerStyle={s.listContent}

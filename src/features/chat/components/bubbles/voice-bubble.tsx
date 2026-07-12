@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, type GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { setAudioModeAsync, useAudioPlayer, type AudioStatus } from 'expo-audio';
 import { useTheme, Spacing, Typography } from '@/theme';
@@ -16,6 +16,7 @@ interface VoiceBubbleProps {
   selfName?: string;
   selfAvatarUri?: string;
   onAvatarPress?: () => void;
+  onLongPress?: (event: GestureResponderEvent) => void;
   hideStatus?: boolean;
 }
 
@@ -89,6 +90,7 @@ export const VoiceBubble: React.FC<VoiceBubbleProps> = ({
   selfName,
   selfAvatarUri,
   onAvatarPress,
+  onLongPress,
   hideStatus,
 }) => {
   const { colors } = useTheme();
@@ -196,9 +198,10 @@ export const VoiceBubble: React.FC<VoiceBubbleProps> = ({
           !voiceSource ? { opacity: 0.64 } : null,
         ]}
         onPress={handlePress}
+        onLongPress={onLongPress}
+        delayLongPress={350}
         accessibilityRole="button"
         accessibilityLabel={playing ? '暂停语音消息' : '播放语音消息'}
-        disabled={!voiceSource}
       >
         <Ionicons
           name={playing ? 'pause-circle' : 'play-circle'}

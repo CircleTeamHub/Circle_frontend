@@ -15,6 +15,8 @@ export interface UserProfileData {
   memberLabel: string;
   badges: string[];
   displayIcons?: import('@/types').DisplayIcon[];
+  likeCount?: number;
+  recognitionCount?: number;
   gender?: string | null;
   city?: string | null;
   signature: string;
