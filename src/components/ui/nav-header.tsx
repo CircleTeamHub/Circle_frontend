@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react';
+import { useCallback, useMemo, type ReactNode } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { type Href, useNavigation, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -58,7 +58,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   const navigation = useNavigation();
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const handleBackPress = () => {
+  const handleBackPress = useCallback(() => {
     if (onBackPress) {
       onBackPress();
     } else if (navigation.canGoBack()) {
@@ -66,7 +66,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
     } else if (fallbackHref) {
       router.replace(fallbackHref);
     }
-  };
+  }, [fallbackHref, navigation, onBackPress, router] as const);
 
   const d = useMemo(
     () => ({
