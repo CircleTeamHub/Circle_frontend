@@ -92,8 +92,11 @@ test('circle notification preferences only promise in-app presentation control',
   const profileSettings = read('src/features/profile/screens/NotificationSettingsScreen.tsx');
   const client = read('src/realtime/client.ts');
   const locales = [
-    JSON.parse(read('src/i18n/locales/en.json')),
-    JSON.parse(read('src/i18n/locales/zh.json')),
+    { data: JSON.parse(read('src/i18n/locales/en.json')), unsupported: /offline|push|all notifications/i },
+    { data: JSON.parse(read('src/i18n/locales/zh.json')), unsupported: /离线|推送|所有通知/i },
+    { data: JSON.parse(read('src/i18n/locales/es.json')), unsupported: /sin conexión|todas las notificaciones/i },
+    { data: JSON.parse(read('src/i18n/locales/ja.json')), unsupported: /オフライン|すべての通知/i },
+    { data: JSON.parse(read('src/i18n/locales/ko.json')), unsupported: /오프라인|모든 알림/i },
   ];
 
   assert.equal(store.includes('offlineEnabled'), false);
@@ -102,16 +105,21 @@ test('circle notification preferences only promise in-app presentation control',
   assert.match(store, /migrate:/);
   assert.equal(settings.includes('notifications.offline'), false);
   assert.equal(profileSettings.includes('offlineReminder'), false);
-  for (const locale of locales) {
+  for (const { data: locale, unsupported } of locales) {
     const copy = JSON.stringify({
       discover: locale.discover.notifications,
       profileGlobal: locale.settingsDetails.notifications.circleGlobalHint,
       profileBanner: locale.settingsDetails.notifications.circleBannerHint,
     });
-    assert.doesNotMatch(copy, /offline|push|all notifications|离线|推送|所有通知/i);
+    assert.doesNotMatch(copy, unsupported);
   }
   assert.match(client, /const \{ inAppEnabled, bannerEnabled \}/);
   assert.match(client, /!inAppEnabled \|\| !bannerEnabled/);
+});
+
+test('app settings search omits the removed circle offline preference', () => {
+  const appSettings = read('src/features/profile/screens/AppSettingsScreen.tsx');
+  assert.equal(appSettings.includes("'offlineReminder'"), false);
 });
 
 test('discover bell badge reads the interactive unread count, not systemUnread', () => {

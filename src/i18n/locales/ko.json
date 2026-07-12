@@ -61,10 +61,10 @@
       "groupOffline": "그룹 오프라인 푸시",
       "groupOfflineHint": "끄면 그룹 오프라인 푸시 알림을 받지 않습니다",
       "circleSection": "서클 알림",
-      "circleGlobal": "서클 알림 받기",
-      "circleGlobalHint": "켜기: 오프라인 알림, 로컬 소리, 빨간 점 사용\n끄기: 모든 알림 사용 안 함",
-      "circleBanner": "배너 알림",
-      "circleBannerHint": "켜기: 새 알림이 오면 배너 표시\n끄기: 배너 없음(안 읽음 빨간 점 유지)",
+      "circleGlobal": "앱에서 서클 알림 표시",
+      "circleGlobalHint": "앱 사용 중 서클 알림 표시 방식을 설정합니다",
+      "circleBanner": "앱 내 배너",
+      "circleBannerHint": "읽지 않음 표시는 유지하고 배너 표시 여부를 설정합니다",
       "circleRingtone": "서클 알림음",
       "circleDefault": "서클 기본값"
     },
@@ -1165,12 +1165,12 @@
     "addFriendHint": "친구를 추가하면 모먼트를 볼 수 있어요",
     "notifications": {
       "title": "서클 알림 설정",
-      "global": "서클 알림 받기",
-      "globalOnHint": "켜짐: 오프라인 알림 + 소리 + 빨간 점 사용",
-      "globalOffHint": "꺼짐: 모든 알림 사용 안 함 (개별 설정도 비활성화)",
-      "banner": "배너 알림",
-      "bannerOnHint": "켜기: 새 알림이 오면 배너 표시",
-      "bannerOffHint": "끄기: 배너 없음 (안 읽음 빨간 점은 유지)"
+      "global": "앱에서 서클 알림 표시",
+      "globalOnHint": "켜짐: 앱 내 알림 표시를 설정할 수 있습니다",
+      "globalOffHint": "꺼짐: 앱 내 서클 알림 배너를 숨깁니다",
+      "banner": "앱 내 배너",
+      "bannerOnHint": "켜기: 앱 사용 중 배너를 표시합니다",
+      "bannerOffHint": "끄기: 읽지 않음 표시는 유지하고 배너를 숨깁니다"
     },
     "guide": {
       "title": "서클 이용 방법",

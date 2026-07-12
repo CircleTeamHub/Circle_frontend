@@ -61,10 +61,10 @@
       "groupOffline": "Notificaciones de grupo sin conexión",
       "groupOfflineHint": "Si se desactiva, no recibirás avisos de grupo sin conexión",
       "circleSection": "Notificaciones de Círculo",
-      "circleGlobal": "Recibir notificaciones de Círculo",
-      "circleGlobalHint": "Activado: notificaciones sin conexión, sonido local y puntos rojos\nDesactivado: todas las notificaciones se desactivan",
-      "circleBanner": "Banner de notificación",
-      "circleBannerHint": "Activado: muestra un banner para notificaciones nuevas\nDesactivado: sin banner (se conserva el punto rojo)",
+      "circleGlobal": "Mostrar notificaciones de Círculo en la app",
+      "circleGlobalHint": "Controla cómo se muestran las notificaciones de Círculo mientras usas la app",
+      "circleBanner": "Banner en la app",
+      "circleBannerHint": "Muestra u oculta banners y conserva los indicadores de no leídos",
       "circleRingtone": "Tono de notificaciones de Círculo",
       "circleDefault": "Predeterminado de Círculo"
     },
@@ -1168,12 +1168,12 @@
     "addFriendHint": "Agrega amigos para ver sus momentos",
     "notifications": {
       "title": "Ajustes de notificaciones del círculo",
-      "global": "Recibir notificaciones del círculo",
-      "globalOnHint": "Activado: alertas sin conexión + sonido + punto rojo",
-      "globalOffHint": "Desactivado: sin notificaciones (interruptores locales desactivados)",
-      "banner": "Banner de notificación",
-      "bannerOnHint": "Activado: muestra un banner para notificaciones nuevas",
-      "bannerOffHint": "Desactivado: sin banner (se conserva el punto rojo)"
+      "global": "Mostrar notificaciones del círculo en la app",
+      "globalOnHint": "Activado: permite controlar su presentación en la app",
+      "globalOffHint": "Desactivado: oculta los banners del círculo en la app",
+      "banner": "Banner en la app",
+      "bannerOnHint": "Activado: muestra un banner mientras usas la app",
+      "bannerOffHint": "Desactivado: oculta banners y conserva los indicadores de no leídos"
     },
     "guide": {
       "title": "Cómo funcionan los círculos",

@@ -61,10 +61,10 @@
       "groupOffline": "グループのオフラインプッシュ",
       "groupOfflineHint": "オフにするとグループのオフラインプッシュを受信しません",
       "circleSection": "サークル通知",
-      "circleGlobal": "サークル通知を受け取る",
-      "circleGlobalHint": "オン：オフライン通知・ローカル音・未読バッジを有効化\nオフ：すべての通知を無効化",
-      "circleBanner": "バナー通知",
-      "circleBannerHint": "オン：新しい通知でバナーを表示\nオフ：バナーなし（未読バッジは表示）",
+      "circleGlobal": "アプリ内でサークル通知を表示",
+      "circleGlobalHint": "アプリ使用中のサークル通知の表示方法を設定します",
+      "circleBanner": "アプリ内バナー",
+      "circleBannerHint": "未読表示を残したままバナーの表示・非表示を切り替えます",
       "circleRingtone": "サークル通知の着信音",
       "circleDefault": "サークル既定"
     },
@@ -1165,12 +1165,12 @@
     "addFriendHint": "友だちを追加するとモーメントが見られます",
     "notifications": {
       "title": "サークル通知設定",
-      "global": "サークル通知を受け取る",
-      "globalOnHint": "オン：オフライン通知＋サウンド＋赤い点を有効化",
-      "globalOffHint": "オフ：すべての通知を無効化（各スイッチも無効）",
-      "banner": "バナー通知",
-      "bannerOnHint": "オン：新しい通知でバナーを表示",
-      "bannerOffHint": "オフ：バナーなし（未読の赤い点は保持）"
+      "global": "アプリ内でサークル通知を表示",
+      "globalOnHint": "オン：アプリ内の通知表示を設定できます",
+      "globalOffHint": "オフ：アプリ内のサークル通知バナーを非表示にします",
+      "banner": "アプリ内バナー",
+      "bannerOnHint": "オン：アプリ使用中にバナーを表示します",
+      "bannerOffHint": "オフ：未読表示を残したままバナーを非表示にします"
     },
     "guide": {
       "title": "サークルの遊び方",

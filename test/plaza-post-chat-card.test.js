@@ -142,6 +142,15 @@ test('plaza detail missing route id starts in a stable error state', () => {
   const detail = read('src/features/discover/screens/PlazaPostDetailScreen.tsx');
   assert.match(detail, /useState\(Boolean\(id\)\)/);
   assert.match(detail, /useState<string \| null>\(id \? null :/);
+  const missingIdBranch = detail.slice(
+    detail.indexOf('if (!id) {'),
+    detail.indexOf('setLoading(true)'),
+  );
+  assert.match(missingIdBranch, /setLoading\(false\)/);
+  assert.match(missingIdBranch, /setError\(/);
+  assert.match(missingIdBranch, /return;/);
+  assert.doesNotMatch(missingIdBranch, /fetchPlazaPost\(/);
+  assert.ok(detail.indexOf('fetchPlazaPost(id)') > detail.indexOf('setLoading(true)'));
 });
 
 test('i18n keys present in zh + en', () => {

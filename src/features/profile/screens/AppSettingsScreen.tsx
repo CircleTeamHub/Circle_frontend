@@ -151,7 +151,6 @@ const NOTIFICATION_SEARCH_ROWS: AppSettingsRow[] = [
   'circleGlobal',
   'circleSound',
   'circleRingtone',
-  'offlineReminder',
 ].map((key) => ({
   id: `notifications-${key}`,
   labelKey: `settingsDetails.notifications.${key}`,
