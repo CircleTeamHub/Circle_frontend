@@ -12,7 +12,7 @@
  * 该 store 不使用 persist，所有状态在 app 重启后从 SDK 重新拉取。
  */
 import { create } from 'zustand';
-import { OnlineState } from '@openim/rn-client-sdk';
+import { MessageStatus, OnlineState } from '@openim/rn-client-sdk';
 import type { ConversationItem, MessageItem, SessionType } from '@openim/rn-client-sdk';
 
 // 当前打开的会话标识，供 listeners 判断新消息是否属于当前页面
@@ -48,7 +48,7 @@ interface IMState {
   appendMessages: (conversationID: string, messages: MessageItem[]) => void;
   /** 收到对方读回执时把对应 clientMsgID 列表标记为 isRead=true。 */
   markMessagesRead: (conversationID: string, clientMsgIDs: string[]) => void;
-  /** 乐观发送失败时把对应 clientMsgID 的消息标记为失败态 status=3。 */
+  /** 乐观发送失败时把对应 clientMsgID 的消息标记为失败态（MessageStatus.Failed）。 */
   markMessageSendFailed: (conversationID: string, clientMsgID: string) => void;
   /** 批量更新某些用户的在线状态（订阅返回值或 onUserStatusChanged 都走这里）。 */
   setUserOnlineStatuses: (
@@ -187,9 +187,12 @@ export const useIMStore = create<IMState>((set) => ({
       if (!list || list.length === 0) return state;
       let changed = false;
       const next = list.map((msg) => {
-        if (msg.clientMsgID === clientMsgID && msg.status !== 3) {
+        if (
+          msg.clientMsgID === clientMsgID &&
+          msg.status !== MessageStatus.Failed
+        ) {
           changed = true;
-          return { ...msg, status: 3 as MessageItem['status'] };
+          return { ...msg, status: MessageStatus.Failed };
         }
         return msg;
       });

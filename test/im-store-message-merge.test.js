@@ -39,7 +39,10 @@ function loadIMStore() {
         };
       }
       if (request === '@openim/rn-client-sdk') {
-        return { OnlineState: {} };
+        return {
+          MessageStatus: { Sending: 1, Succeed: 2, Failed: 3 },
+          OnlineState: {},
+        };
       }
       throw new Error(`Unexpected import: ${request}`);
     },
