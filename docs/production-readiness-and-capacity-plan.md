@@ -62,7 +62,7 @@ Express 从未 `app.set('trust proxy')`，而所有流量经 Caddy 反代进来�
 ### P0-3 · 生产栈没有 Redis → 缓存/限流/backplane 全静默退化
 `docker-compose.prod.yml` 无 redis 服务，`gen-env.sh` 不产 `REDIS_URL`，Joi 又把它标为 optional。
 - 证据：`redis.service.ts:29-36`（空 URL → `isEnabled()=false`），`realtime.service.ts:232-239`（backplane 订阅直接 early-return），`setup.ts:188-195`（限流 store 退化进程内存）。
-- 影响：徽章缓存、Lua CAS 版本缓存、分布式限流、realtime 扇出**全部退化成进程内存**；每个 WS 连接跑 4 个 `count(*)`；**一旦起第 2 个副本，realtime 事件丢一半**（A 副本产生的通话邀请/未读永远到不了 pin 在 B 副本的用户）。
+- 原审计影响推导：徽章缓存、Lua CAS 版本缓存、分布式限流、realtime 扇出可能退化成进程内存；每个 WS 连接可能触发 4 个 `count(*)`。缺少跨副本 backplane 时，跨副本 realtime 事件可能丢失，实际比例取决于副本拓扑、事件来源与连接分布，须通过多副本测试测量。
 - 修复：compose 加 `redis:7-alpine`（内网 + 密码）；`gen-env.sh` 产出 `REDIS_URL`；生产环境 Joi 改 `.required()`。
 
 ### P0-4 · OpenIM 栈默认密钥公网裸奔
@@ -169,7 +169,7 @@ compose healthcheck 打 `/api/v1/outbox/health`（`docker-compose.prod.yml:101-1
 场景推导：1000 REST QPS × 每请求 3~5 查询 ≈ **3000~5000 DB QPS**。查询次数、耗时、锁竞争与缓存命中率必须在固定后端 SHA 上测量。
 
 ### 3.5 媒体带宽（最易忽略）
-按“1 万在线、5% 同时拉取 500KB 对象”的简化场景会得到 **约 2Gbps 瞬时数据率**；真实带宽取决于下载时长、缓存命中、对象分布和协议开销。本文没有固定云套餐或报价证据，不拿该推导替代 CDN/出口压测与供应商配额确认。
+按“1 万在线、5%（500 个客户端）各拉取一个 500KB 对象，且 500 个对象都在同一个 1 秒窗口内传完”的简化场景，会得到 **约 2Gbps 数据率**。这是明确的 scenario assumption：完成时间改变会反向线性改变所需带宽（例如传输窗口加倍则平均数据率减半）；真实带宽还取决于缓存命中、对象分布和协议开销。本文没有固定云套餐或报价证据，不拿该推导替代 CDN/出口压测与供应商配额确认。
 
 ### 3.6 当前架构在此量级的结局
 原审计指出 trust proxy、连接池、feed/count、网关 fd 与 outbox 等风险，但这些容量阈值尚未在固定输入上复现。**决策 gate：单节点只可作为 non-HA 的开发、staging 或容量基线；是否满足任何生产负载必须由代表性压测证明，且容量通过不代表 HA 通过。**
@@ -315,7 +315,7 @@ compose healthcheck 打 `/api/v1/outbox/health`（`docker-compose.prod.yml:101-1
 - 审阅 OpenIM 或替代供应商的书面商业条款，确认授权主体、产品、版本、平台、用户/设备范围、期限和终止后处置；
 - 给出书面批准，或要求替换组件、取得商业授权、改变交付方式/源码策略；工程团队不得自行作最终法律判断。
 
-发布证据包至少包含 SBOM/依赖清单、许可证与 NOTICE、补丁清单、律师/法务书面决定、供应商授权文件及对应构建 SHA。任何一项缺失，external TestFlight、APK、Ad Hoc、enterprise distribution 与其他第三方 binary 分发均为 **NO-GO**。
+发布证据包至少包含 SBOM/依赖清单、许可证与 NOTICE、补丁清单、律师/法务书面决定、对应构建 SHA，以及适用时的供应商授权文件；若供应商授权文件不适用，须由 qualified counsel / 合格律师书面确认不适用。任何适用项缺失，external TestFlight、APK、Ad Hoc、enterprise distribution 与其他第三方 binary 分发均为 **NO-GO**。
 
 ---
 
