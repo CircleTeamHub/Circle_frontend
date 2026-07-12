@@ -36,6 +36,8 @@ function iconFor(type: NotificationType): keyof typeof Ionicons.glyphMap {
     return 'chatbubble-outline';
   if (type === 'TRACE_LIKE') return 'heart-outline';
   if (type === 'PROFILE_LIKE') return 'thumbs-up-outline';
+  if (type === 'CIRCLE_POST_COLLABORATION_RECOGNIZED') return 'ribbon-outline';
+  if (type === 'CIRCLE_POST_PUBLISHED') return 'sparkles-outline';
   if (
     type === 'CIRCLE_POST_SIGNUP_CREATED' ||
     type === 'CIRCLE_POST_AUTO_ENDED'

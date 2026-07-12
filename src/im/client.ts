@@ -45,6 +45,7 @@ import { useIMStore } from '@/stores/imStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { reportError } from '@/observability/sentry';
 import { assertLocalCanSendMessage } from '@/services/api/credit-policy';
+import type { PlazaPostCardData } from '@/types';
 
 export { fromImUserId, toImUserId } from '@/im/user-id';
 
@@ -1252,6 +1253,52 @@ export async function sendNoteCardToConversation(params: {
     offlinePushInfo: {
       title: '新消息',
       desc: `[笔记] ${params.payload.title}`,
+      ex: '',
+      iOSPushSound: 'default',
+      iOSBadgeCount: true,
+    },
+  });
+}
+
+/**
+ * Circle plaza-post share card. Wraps a circle post (活动/帖子) as a rich bubble
+ * so recipients see title / cover / circle / signups and tap through to detail.
+ * Used by the "share post to chat" entry and the signup → chat auto flow.
+ */
+export const PLAZA_POST_CARD_EXTENSION = 'plaza-post-card-v1';
+
+function plazaPostCardPreview(payload: PlazaPostCardData) {
+  return `[活动] ${payload.title}`;
+}
+
+export async function sendPlazaPostCardMessage(params: {
+  sourceID: string;
+  sessionType: SessionType;
+  payload: PlazaPostCardData;
+}) {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized) {
+    throw new Error(getUnsupportedPlatformMessage());
+  }
+
+  await waitForOpenIMConnectionReady();
+
+  const preview = plazaPostCardPreview(params.payload);
+  const message = await OpenIMSDK.createCustomMessage({
+    data: JSON.stringify(params.payload),
+    extension: PLAZA_POST_CARD_EXTENSION,
+    description: preview,
+  });
+
+  const isSingle = params.sessionType === SessionType.Single;
+  return reportSend({
+    recvID: isSingle ? toImUserId(params.sourceID) : '',
+    groupID: !isSingle ? params.sourceID : '',
+    message,
+    offlinePushInfo: {
+      title: '新消息',
+      desc: preview,
       ex: '',
       iOSPushSound: 'default',
       iOSBadgeCount: true,

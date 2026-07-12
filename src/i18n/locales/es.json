@@ -61,14 +61,12 @@
       "groupOffline": "Notificaciones de grupo sin conexión",
       "groupOfflineHint": "Si se desactiva, no recibirás avisos de grupo sin conexión",
       "circleSection": "Notificaciones de Círculo",
-      "circleGlobal": "Recibir notificaciones de Círculo",
-      "circleGlobalHint": "Activado: notificaciones sin conexión, sonido local y puntos rojos\nDesactivado: todas las notificaciones se desactivan",
-      "circleSound": "Aviso con sonido",
-      "circleSoundHint": "Activado: reproduce sonido de notificación\nDesactivado: silencio, con puntos rojos de no leídos",
+      "circleGlobal": "Mostrar notificaciones de Círculo en la app",
+      "circleGlobalHint": "Controla cómo se muestran las notificaciones de Círculo mientras usas la app",
+      "circleBanner": "Banner en la app",
+      "circleBannerHint": "Muestra u oculta banners y conserva los indicadores de no leídos",
       "circleRingtone": "Tono de notificaciones de Círculo",
-      "circleDefault": "Predeterminado de Círculo",
-      "offlineReminder": "Aviso sin conexión",
-      "offlineReminderHint": "Activado: recibe banners de Círculo con la app sin conexión\nDesactivado: sin avisos sin conexión"
+      "circleDefault": "Predeterminado de Círculo"
     },
     "appearance": {
       "title": "Pantalla",
@@ -551,6 +549,15 @@
     "voice": {
       "cancelTip": "Suelta para cancelar",
       "swipeCancelTip": "Desliza a la izquierda para cancelar · Suelta para enviar"
+    },
+    "plazaPostCard": {
+      "footer": "{{count}} inscritos · {{author}}",
+      "pendingPreview": "[Evento] {{title}}",
+      "badge": "Evento",
+      "by": "por {{author}}",
+      "signupCount": "{{count}} apuntados",
+      "signupEmpty": "Sé el primero en apuntarte",
+      "cta": "Apuntarme"
     }
   },
   "messages": {
@@ -1161,15 +1168,27 @@
     "addFriendHint": "Agrega amigos para ver sus momentos",
     "notifications": {
       "title": "Ajustes de notificaciones del círculo",
-      "global": "Recibir notificaciones del círculo",
-      "globalOnHint": "Activado: alertas sin conexión + sonido + punto rojo",
-      "globalOffHint": "Desactivado: sin notificaciones (interruptores locales desactivados)",
-      "sound": "Alerta de sonido",
-      "soundOnHint": "Activado: reproducir sonido de notificación",
-      "soundOffHint": "Desactivado: silenciado (se conserva el punto rojo)",
-      "offline": "Alerta sin conexión",
-      "offlineOnHint": "Activado: recibe avisos del círculo con la app sin conexión",
-      "offlineOffHint": "Desactivado: sin avisos sin conexión"
+      "global": "Mostrar notificaciones del círculo en la app",
+      "globalOnHint": "Activado: permite controlar su presentación en la app",
+      "globalOffHint": "Desactivado: oculta los banners del círculo en la app",
+      "banner": "Banner en la app",
+      "bannerOnHint": "Activado: muestra un banner mientras usas la app",
+      "bannerOffHint": "Desactivado: oculta banners y conserva los indicadores de no leídos"
+    },
+    "guide": {
+      "title": "Cómo funcionan los círculos",
+      "entryHint": "Colores de la tarjeta · cómo jugar",
+      "intro": "Crea y únete a actividades en tus círculos en pocos pasos.",
+      "colorsTitle": "Color de la tarjeta = tiempo restante",
+      "colorsIntro": "La barra a la izquierda de cada tarjeta cambia de color al acercarse el cierre; más cálido significa más urgente:",
+      "colorPurple": "Morado: quedan más de 3 días, tiempo de sobra.",
+      "colorGreen": "Verde: menos de 3 días, termina pronto.",
+      "colorOrange": "Naranja: menos de 1 día, inscríbete ya.",
+      "stepsTitle": "Cómo jugar",
+      "step1": "Crea una actividad: publica en un círculo, define su duración (1/3/7 días) y los requisitos de inscripción, y compártela en varios círculos y ciudades a la vez.",
+      "step2": "Inscríbete: toca «Inscribirse» en una actividad que te guste; únete si cumples los requisitos y cancela cuando quieras.",
+      "step3": "Entérate al momento: las nuevas actividades aparecen como un banner para inscribirte enseguida (actívalo con los interruptores de esta página).",
+      "step4": "Cierra con reconocimiento: al terminar, el anfitrión puede reconocer hasta 3 participantes destacados, que reciben una notificación, un me gusta y una insignia."
     },
     "filter": {
       "title": "Filtrar",
@@ -1277,6 +1296,25 @@
     "deleteFailedTitle": "Error al eliminar",
     "deleteMessage": "No se puede deshacer. ¿Eliminar de todos modos?",
     "deleteTitle": "Eliminar publicación",
+    "actions": {
+      "more": "Más",
+      "share": "Compartir",
+      "report": "Reportar"
+    },
+    "share": {
+      "title": "Compartir con",
+      "opener": "Te comparto una actividad, échale un vistazo",
+      "noFriends": "Aún no tienes amigos para compartir"
+    },
+    "report": {
+      "title": "Reportar publicación",
+      "message": "¿Reportar esta publicación?",
+      "confirm": "Reportar",
+      "doneTitle": "Reportado",
+      "doneMessage": "Gracias, lo revisaremos pronto.",
+      "failedTitle": "Error al reportar",
+      "failedMessage": "Inténtalo de nuevo"
+    },
     "restriction": {
       "fancyNumber": "Usuarios con ID premium",
       "separator": ", ",
@@ -1286,7 +1324,27 @@
     "signUp": "Inscribirse",
     "signedUp": "Inscrito",
     "signupBlockedTitle": "Inscripción no disponible",
-    "signupRestrictionMessage": "Para inscribirte: {{requirements}}"
+    "signupRestrictionMessage": "Para inscribirte: {{requirements}}",
+    "circlePicker": {
+      "selectedCount": "{{count}} círculo(s) seleccionado(s)"
+    },
+    "signup": {
+      "chatOpener": "Te inscribiste en mi actividad, ¡hablemos!",
+      "cardUntitled": "Actividad compartida"
+    },
+    "postDetail": {
+      "title": "Detalle de la actividad",
+      "notExist": "La publicación no existe o ha finalizado",
+      "loadFailed": "Error al cargar, inténtalo de nuevo",
+      "notMemberTitle": "No se puede ver",
+      "notMemberNamed": "No eres miembro de {{circle}}. Únete para ver esta actividad.",
+      "notMember": "No eres miembro de este círculo",
+      "joinCircle": "Solicitar unirse al círculo",
+      "joinSubmittedTitle": "Solicitud enviada",
+      "joinSubmittedMessage": "Se envió tu solicitud. Podrás ver la actividad cuando la aprueben.",
+      "joinFailedTitle": "Error en la solicitud",
+      "joinFailedMessage": "Inténtalo de nuevo"
+    }
   },
   "notifications": {
     "title": "Notificaciones",
@@ -1313,8 +1371,10 @@
       "CIRCLE_INVITATION_APPROVED": "tu invitación a {{circle}} fue aprobada por completo",
       "CIRCLE_INVITATION_REJECTED": "se rechazó una plaza de invitación en {{circle}}",
       "CIRCLE_ADMIN_OVERRIDE_APPROVED": "un administrador aprobó tu solicitud en {{circle}}",
+      "CIRCLE_POST_PUBLISHED": "publicó una nueva actividad en tu círculo",
       "CIRCLE_POST_SIGNUP_CREATED": "se inscribió en tu publicación del círculo",
-      "CIRCLE_POST_AUTO_ENDED": "tu actividad terminó; elige colaboradores para reconocer"
+      "CIRCLE_POST_AUTO_ENDED": "tu actividad terminó; elige colaboradores para reconocer",
+      "CIRCLE_POST_COLLABORATION_RECOGNIZED": "reconoció tu colaboración"
     },
     "signupMgmt": {
       "untitledPost": "(publicación sin título)",
@@ -2157,7 +2217,8 @@
       "transfer": "[Transferencia]",
       "note": "[Nota] {{title}}",
       "verification": "[Verificar] {{name}} te pidió que avales",
-      "default": "[Mensaje]"
+      "default": "[Mensaje]",
+      "plazaPost": "[Evento] {{title}}"
     }
   },
   "permissions": {
@@ -2273,6 +2334,8 @@
     "PLAZA_RECOGNIZE_NOT_MEMBER": "Solo se puede reconocer a miembros activos del círculo",
     "PLAZA_RECOGNIZE_BLOCKED": "No puedes reconocer a un usuario bloqueado",
     "PLAZA_RECOGNIZE_ALREADY": "El reconocimiento de colaboración ya se ha enviado",
+    "PLAZA_REPORT_SELF": "No puedes reportar tu propia publicación",
+    "PLAZA_NOT_CIRCLE_MEMBER": "No eres miembro de este círculo",
     "TRACE_MOMENT_NOT_FOUND": "Momento no encontrado",
     "TRACE_DELETE_AUTHOR_ONLY": "Solo el autor puede eliminar esto",
     "TRACE_REPLY_TARGET_NOT_FOUND": "El comentario al que respondes ya no existe",

@@ -74,6 +74,11 @@ test("notification snackbar host skips SYSTEM toasts via the realtime handler", 
   assert.match(client, /if \(payload\.type === 'SYSTEM'\) \{\s*\n\s*return;/);
 });
 
+test("realtime bell notification allow-list includes trace mentions", () => {
+  const client = read("src/realtime/client.ts");
+  assert.match(client, /'TRACE_MENTION'/);
+});
+
 test("notification snackbar host supports swipe-up-to-dismiss", () => {
   const host = read(
     "src/features/notifications/components/NotificationSnackbarHost.tsx",

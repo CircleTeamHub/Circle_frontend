@@ -23,6 +23,15 @@ test('realtime client handles profile, wallet, and system-notification websocket
   assert.match(store, /profileUnread/);
 });
 
+test('websocket reconnect path triggers realtime recovery after auth', () => {
+  const client = read('src/realtime/client.ts');
+  const onOpenBody = client.match(/nextSocket\.onopen = \(\) => \{[\s\S]*?\n\s*\};/);
+
+  assert.ok(onOpenBody);
+  assert.match(onOpenBody[0], /send\(JSON\.stringify\(\{ type: 'auth'/);
+  assert.match(onOpenBody[0], /recoverTabBadgeSnapshot\(\{ force: shouldForceRecovery \}\)/);
+});
+
 test('profile and wallet screens consume realtime notification helpers', () => {
   const profile = read('src/features/profile/screens/ProfileScreen.tsx');
   const systemAnnouncements = read(

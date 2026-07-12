@@ -22,6 +22,7 @@ function loadListenersHarness() {
   const offCalls = [];
   const timers = [];
   const appendCalls = [];
+  const markReadCalls = [];
   const state = {
     activeConversation: {
       conversationID: 'conv-1',
@@ -46,6 +47,9 @@ function loadListenersHarness() {
     on: (event, handler) => handlers.set(event, handler),
     off: (event, handler) => offCalls.push([event, handler]),
     getConversationListSplit: async () => [],
+    markConversationMessageAsRead: async (conversationID) => {
+      markReadCalls.push(conversationID);
+    },
   };
 
   const context = {
@@ -114,7 +118,9 @@ function loadListenersHarness() {
     handlers,
     timers,
     appendCalls,
+    markReadCalls,
     offCalls,
+    state,
   };
 }
 
@@ -139,6 +145,8 @@ test('bindOpenIMListeners batches active-conversation messages until the flush t
   assert.equal(harness.appendCalls[0][1].length, 2);
   assert.equal(harness.appendCalls[0][1][0], first);
   assert.equal(harness.appendCalls[0][1][1], second);
+  // 用户正停留在该会话：flush 落库后对活跃会话标记一次已读，清未读 + 回执。
+  assert.deepEqual(harness.markReadCalls, ['conv-1']);
 });
 
 test('bindOpenIMListeners flushes pending active-conversation messages on unbind', () => {
@@ -157,4 +165,23 @@ test('bindOpenIMListeners flushes pending active-conversation messages on unbind
   assert.equal(harness.appendCalls[0][0], 'conv-1');
   assert.equal(harness.appendCalls[0][1].length, 1);
   assert.equal(harness.appendCalls[0][1][0], message);
+  // unbind 前 flush 也会对仍活跃的会话标记已读。
+  assert.deepEqual(harness.markReadCalls, ['conv-1']);
+});
+
+test('does not mark read when the user left the conversation before flush', () => {
+  const harness = loadListenersHarness();
+  harness.bindOpenIMListeners();
+  const handleNewMessages = harness.handlers.get('onRecvNewMessages');
+  const message = { clientMsgID: 'm1', groupID: 'group-1', sessionType: 2 };
+
+  handleNewMessages([message]);
+  // 用户在 120ms flush 窗口内离开了该会话页（activeConversation 被清空）。
+  harness.state.activeConversation = null;
+
+  harness.timers[0].callback();
+
+  // 消息仍落库（避免丢消息），但不再标记已读——用户已经不在看了。
+  assert.equal(harness.appendCalls.length, 1);
+  assert.deepEqual(harness.markReadCalls, []);
 });

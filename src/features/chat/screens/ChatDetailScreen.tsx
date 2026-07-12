@@ -36,6 +36,7 @@ import {
   NoteCardBubble,
   FriendCardBubble,
   CircleCardBubble,
+  PlazaPostCardBubble,
   VerificationCardBubble,
   TransferCardBubble,
 } from '@/features/chat/components/chat-bubble';
@@ -52,6 +53,7 @@ import {
   getChatInfoTopHref,
   getNoteDetailHref,
   getCircleDetailHref,
+  getPlazaPostDetailHref,
   getVerificationDetailHref,
 } from '@/features/user/utils/routes';
 import * as ImagePicker from 'expo-image-picker';
@@ -79,6 +81,7 @@ import {
   sendTextAtMessage,
   sendTextMessage,
   sendTransferCardMessage,
+  sendPlazaPostCardMessage,
   sendVoiceMessage,
   sendVoiceMessageFromSource,
   subscribeUserOnlineStatus,
@@ -112,6 +115,7 @@ import {
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
 import { useSharePickerStore } from '@/features/chat/store/use-share-picker-store';
+import { usePendingChatCardStore } from '@/features/chat/store/use-pending-chat-card-store';
 import { useMessageForwardStore } from '@/features/chat/store/use-message-forward-store';
 import { useTransferComposerStore } from '@/features/chat/store/use-transfer-composer-store';
 import { useCallStore } from '@/features/call/store/use-call-store';
@@ -132,7 +136,7 @@ import {
 } from '@/services/api/credit-policy';
 import { OnlineState, SessionType } from '@openim/rn-client-sdk';
 import { useTranslation } from 'react-i18next';
-import type { ChatMessage } from '@/types';
+import type { ChatMessage, PlazaPostCardData } from '@/types';
 import {
   AT_ALL_USER_ID,
   buildAtMessagePayload,
@@ -457,6 +461,9 @@ export default function ChatDetailScreen() {
   const consumePendingShare = useSharePickerStore((s) => s.consume);
   const setPendingForward = useMessageForwardStore((s) => s.setPending);
   const consumePendingTransfer = useTransferComposerStore((s) => s.consume);
+  const consumePendingChatCard = usePendingChatCardStore((s) => s.consumeFor);
+  // 待发送的圈子帖子卡片（报名→聊天自动挂上，贴在输入框上方，可撤掉）。
+  const [pendingCard, setPendingCard] = useState<PlazaPostCardData | null>(null);
   const setActiveCall = useCallStore((state) => state.setActiveCall);
   const voiceRecorder = useAudioRecorder(RecordingPresets.LOW_QUALITY);
   const voiceRecorderState = useAudioRecorderState(voiceRecorder, 250);
@@ -1267,6 +1274,28 @@ export default function ChatDetailScreen() {
                 getCircleDetailHref(
                   scope === 'discover' ? 'discover' : 'messages',
                   card.circleId,
+                ),
+              )
+            }
+            hideStatus={isGroupChat}
+          />
+        ));
+      case 'plaza-post-card':
+        return withMessageActions(item, (
+          <PlazaPostCardBubble
+            message={item}
+            outgoing={Boolean(item.outgoing)}
+            senderName={receivedDisplayName(item)}
+            senderAvatarUri={receivedAvatarUri(item)}
+            selfName={selfName}
+            selfAvatarUri={selfAvatarUri}
+            onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
+            onPress={(card) =>
+              router.push(
+                getPlazaPostDetailHref(
+                  scope === 'discover' ? 'discover' : 'messages',
+                  card.postId,
                 ),
               )
             }
@@ -2308,6 +2337,12 @@ export default function ChatDetailScreen() {
       if (transfer) {
         void handleSendTransferCard(transfer);
       }
+      // 报名→聊天：把预挂的帖子卡片显示为待发送引用，并预填开场白（不覆盖非空草稿）。
+      const cardPending = sourceID ? consumePendingChatCard(sourceID) : null;
+      if (cardPending) {
+        setPendingCard(cardPending.card);
+        setDraft((prev) => prev || cardPending.draftText);
+      }
       const item = consumePendingShare();
       if (!item) return;
       switch (item.kind) {
@@ -2327,6 +2362,8 @@ export default function ChatDetailScreen() {
     }, [
       consumePendingShare,
       consumePendingTransfer,
+      consumePendingChatCard,
+      sourceID,
       handlePickFavorite,
       handlePickFriend,
       handlePickNote,
@@ -2338,7 +2375,8 @@ export default function ChatDetailScreen() {
   const handleSend = useCallback(async () => {
     const nextText = draft.trim();
 
-    if (!nextText || sending || !sourceID || isPreviewMode) {
+    // 有待发送卡片时，即使文字为空也允许发送（只发卡片）。
+    if ((!nextText && !pendingCard) || sending || !sourceID || isPreviewMode) {
       return;
     }
     if (inFlightRef.current) return;
@@ -2347,34 +2385,47 @@ export default function ChatDetailScreen() {
 
     try {
       setSendError(null);
-      const rawQuote = quoteTarget
-        ? useIMStore
-            .getState()
-            .messagesByConversation[conversationID]?.find(
-              (m) => m.clientMsgID === quoteTarget.id,
-            )
-        : undefined;
-      const activeMentionTargets = getMentionsPresentInText(nextText, mentionTargets);
-      const sentMessage =
-        quoteTarget && rawQuote
-          ? await sendQuoteMessage({
-              sourceID,
-              sessionType: conversationType,
-              text: nextText,
-              message: rawQuote,
-            })
-          : isGroupChat && activeMentionTargets.length > 0
-            ? await sendTextAtMessage({
+      // 1) 先发帖子卡片（报名→聊天带上下文）。成功后清空待发卡片。
+      if (pendingCard) {
+        const cardMessage = await sendPlazaPostCardMessage({
+          sourceID,
+          sessionType: conversationType,
+          payload: pendingCard,
+        });
+        appendMessages(conversationID, [cardMessage]);
+        if (mountedRef.current) setPendingCard(null);
+      }
+      // 2) 再发文字（非空才发）。
+      if (nextText) {
+        const rawQuote = quoteTarget
+          ? useIMStore
+              .getState()
+              .messagesByConversation[conversationID]?.find(
+                (m) => m.clientMsgID === quoteTarget.id,
+              )
+          : undefined;
+        const activeMentionTargets = getMentionsPresentInText(nextText, mentionTargets);
+        const sentMessage =
+          quoteTarget && rawQuote
+            ? await sendQuoteMessage({
                 sourceID,
                 sessionType: conversationType,
-                ...buildAtMessagePayload(nextText, activeMentionTargets),
+                text: nextText,
+                message: rawQuote,
               })
-          : await sendTextMessage({
-              sourceID,
-              sessionType: conversationType,
-              text: nextText,
-            });
-      appendMessages(conversationID, [sentMessage]);
+            : isGroupChat && activeMentionTargets.length > 0
+              ? await sendTextAtMessage({
+                  sourceID,
+                  sessionType: conversationType,
+                  ...buildAtMessagePayload(nextText, activeMentionTargets),
+                })
+            : await sendTextMessage({
+                sourceID,
+                sessionType: conversationType,
+                text: nextText,
+              });
+        appendMessages(conversationID, [sentMessage]);
+      }
       if (mountedRef.current) setDraft('');
       if (mountedRef.current) setQuoteTarget(null);
       if (mountedRef.current) setMentionTargets([]);
@@ -2410,6 +2461,7 @@ export default function ChatDetailScreen() {
     quoteTarget,
     sending,
     sourceID,
+    pendingCard,
     t,
   ]);
 
@@ -2586,6 +2638,22 @@ export default function ChatDetailScreen() {
           </Pressable>
         </View>
       ) : null}
+      {pendingCard ? (
+        <View style={[s.quoteComposerBar, d.composerShell]}>
+          <Text
+            style={[s.quoteComposerText, { color: colors.textSecondary }]}
+            numberOfLines={1}
+          >
+            {t('chat.plazaPostCard.pendingPreview', {
+              title: pendingCard.title,
+              defaultValue: '[活动] {{title}}',
+            })}
+          </Text>
+          <Pressable onPress={() => setPendingCard(null)} hitSlop={8}>
+            <Ionicons name="close" size={18} color={colors.textSecondary} />
+          </Pressable>
+        </View>
+      ) : null}
       <View
         style={[
           s.inputBar,
@@ -2686,11 +2754,11 @@ export default function ChatDetailScreen() {
         <Pressable
           key="voice-right"
           style={[s.circleBtn, s.composerActionBtn, d.circleBtn, d.composerActionBtn]}
-          onPress={draft.trim() ? handleSend : handleAttachmentToggle}
+          onPress={draft.trim() || pendingCard ? handleSend : handleAttachmentToggle}
           disabled={sending || isPreviewMode || isVoiceRecording}
         >
           <Ionicons
-            name={draft.trim() ? 'send' : 'add'}
+            name={draft.trim() || pendingCard ? 'send' : 'add'}
             size={22}
             color={colors.textSecondary}
           />

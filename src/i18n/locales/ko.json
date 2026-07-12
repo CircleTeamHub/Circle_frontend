@@ -61,14 +61,12 @@
       "groupOffline": "그룹 오프라인 푸시",
       "groupOfflineHint": "끄면 그룹 오프라인 푸시 알림을 받지 않습니다",
       "circleSection": "서클 알림",
-      "circleGlobal": "서클 알림 받기",
-      "circleGlobalHint": "켜기: 오프라인 알림, 로컬 소리, 빨간 점 사용\n끄기: 모든 알림 사용 안 함",
-      "circleSound": "소리 알림",
-      "circleSoundHint": "켜기: 알림음 재생\n끄기: 무음(안 읽음 빨간 점 유지)",
+      "circleGlobal": "앱에서 서클 알림 표시",
+      "circleGlobalHint": "앱 사용 중 서클 알림 표시 방식을 설정합니다",
+      "circleBanner": "앱 내 배너",
+      "circleBannerHint": "읽지 않음 표시는 유지하고 배너 표시 여부를 설정합니다",
       "circleRingtone": "서클 알림음",
-      "circleDefault": "서클 기본값",
-      "offlineReminder": "오프라인 알림",
-      "offlineReminderHint": "켜기: 앱이 오프라인일 때 서클 배너 받기\n끄기: 오프라인 알림 없음"
+      "circleDefault": "서클 기본값"
     },
     "appearance": {
       "title": "화면",
@@ -550,6 +548,15 @@
     "voice": {
       "cancelTip": "손을 떼면 전송 취소",
       "swipeCancelTip": "왼쪽으로 밀어 취소 · 손을 떼면 전송"
+    },
+    "plazaPostCard": {
+      "footer": "신청 {{count}} · {{author}}",
+      "pendingPreview": "[활동] {{title}}",
+      "badge": "활동",
+      "by": "{{author}}님 주최",
+      "signupCount": "{{count}}명 참가",
+      "signupEmpty": "아직 신청자가 없어요",
+      "cta": "신청하기"
     }
   },
   "messages": {
@@ -1158,15 +1165,27 @@
     "addFriendHint": "친구를 추가하면 모먼트를 볼 수 있어요",
     "notifications": {
       "title": "서클 알림 설정",
-      "global": "서클 알림 받기",
-      "globalOnHint": "켜짐: 오프라인 알림 + 소리 + 빨간 점 사용",
-      "globalOffHint": "꺼짐: 모든 알림 사용 안 함 (개별 설정도 비활성화)",
-      "sound": "소리 알림",
-      "soundOnHint": "켜짐: 알림음 재생",
-      "soundOffHint": "꺼짐: 무음 (읽지 않음 빨간 점은 유지)",
-      "offline": "오프라인 알림",
-      "offlineOnHint": "켜짐: 앱이 오프라인일 때 배너 알림 수신",
-      "offlineOffHint": "꺼짐: 오프라인 배너 알림 받지 않음"
+      "global": "앱에서 서클 알림 표시",
+      "globalOnHint": "켜짐: 앱 내 알림 표시를 설정할 수 있습니다",
+      "globalOffHint": "꺼짐: 앱 내 서클 알림 배너를 숨깁니다",
+      "banner": "앱 내 배너",
+      "bannerOnHint": "켜기: 앱 사용 중 배너를 표시합니다",
+      "bannerOffHint": "끄기: 읽지 않음 표시는 유지하고 배너를 숨깁니다"
+    },
+    "guide": {
+      "title": "서클 이용 방법",
+      "entryHint": "카드 색상 · 이용 방법",
+      "intro": "서클에서 활동을 열고 참여해 보세요. 몇 단계면 시작할 수 있어요.",
+      "colorsTitle": "카드 색 = 남은 시간",
+      "colorsIntro": "활동 카드 왼쪽 막대는 마감이 다가올수록 색이 바뀌어요. 따뜻할수록 급해요:",
+      "colorPurple": "보라: 3일 이상 남음, 여유 있어요.",
+      "colorGreen": "초록: 3일 이내, 곧 마감.",
+      "colorOrange": "주황: 1일 미만, 지금 신청하세요.",
+      "stepsTitle": "이용 방법",
+      "step1": "활동 열기: 서클에 게시하고 기간(1/3/7일)과 신청 조건을 설정하세요. 여러 서클과 도시에 동시에 올릴 수 있어요.",
+      "step2": "신청하기: 관심 있는 활동에서 「신청」을 누르세요. 조건을 충족하면 참여할 수 있고 언제든 취소할 수 있어요.",
+      "step3": "놓치지 않기: 새 활동은 배너로 알려 바로 신청할 수 있어요(이 페이지의 스위치로 켜고 끄기).",
+      "step4": "인정으로 마무리: 활동이 끝나면 주최자가 우수 참가자를 최대 3명까지 인정할 수 있고, 인정받은 사람은 알림과 좋아요·배지를 받아요."
     },
     "filter": {
       "title": "필터",
@@ -1274,6 +1293,25 @@
     "deleteFailedTitle": "삭제하지 못했어요",
     "deleteMessage": "되돌릴 수 없어요. 삭제할까요?",
     "deleteTitle": "게시물 삭제",
+    "actions": {
+      "more": "더보기",
+      "share": "공유",
+      "report": "신고"
+    },
+    "share": {
+      "title": "공유 대상",
+      "opener": "활동을 공유해요. 같이 봐요",
+      "noFriends": "공유할 친구가 없어요"
+    },
+    "report": {
+      "title": "게시물 신고",
+      "message": "이 게시물을 신고할까요?",
+      "confirm": "신고",
+      "doneTitle": "신고함",
+      "doneMessage": "알려주셔서 감사합니다. 곧 확인하겠습니다.",
+      "failedTitle": "신고 실패",
+      "failedMessage": "나중에 다시 시도해 주세요"
+    },
     "restriction": {
       "fancyNumber": "특별 ID 사용자",
       "separator": ", ",
@@ -1283,7 +1321,27 @@
     "signUp": "신청",
     "signedUp": "신청함",
     "signupBlockedTitle": "지금은 신청할 수 없어요",
-    "signupRestrictionMessage": "신청 조건: {{requirements}}"
+    "signupRestrictionMessage": "신청 조건: {{requirements}}",
+    "circlePicker": {
+      "selectedCount": "{{count}}개 서클 선택됨"
+    },
+    "signup": {
+      "chatOpener": "제가 올린 활동에 신청하셨네요, 채팅해요",
+      "cardUntitled": "활동 공유"
+    },
+    "postDetail": {
+      "title": "활동 상세",
+      "notExist": "게시물이 없거나 종료되었습니다",
+      "loadFailed": "불러오기 실패, 나중에 다시 시도하세요",
+      "notMemberTitle": "볼 수 없어요",
+      "notMemberNamed": "「{{circle}}」의 멤버가 아니에요. 가입하면 활동을 볼 수 있어요.",
+      "notMember": "이 서클의 멤버가 아니에요",
+      "joinCircle": "서클 가입 신청",
+      "joinSubmittedTitle": "신청 완료",
+      "joinSubmittedMessage": "가입 신청을 보냈어요. 승인되면 활동을 볼 수 있어요.",
+      "joinFailedTitle": "신청 실패",
+      "joinFailedMessage": "나중에 다시 시도해 주세요"
+    }
   },
   "notifications": {
     "title": "알림",
@@ -1310,8 +1368,10 @@
       "CIRCLE_INVITATION_APPROVED": "「{{circle}}」 초대가 모두 승인됐어요",
       "CIRCLE_INVITATION_REJECTED": "「{{circle}}」의 초대 자리 하나가 거절됐어요",
       "CIRCLE_ADMIN_OVERRIDE_APPROVED": "관리자가 「{{circle}}」에서 회원님의 신청을 승인했어요",
+      "CIRCLE_POST_PUBLISHED": "서클에 새 활동을 올렸어요",
       "CIRCLE_POST_SIGNUP_CREATED": "회원님의 서클 게시물에 신청했어요",
-      "CIRCLE_POST_AUTO_ENDED": "활동이 종료됐어요. 인정할 협업자를 선택하세요"
+      "CIRCLE_POST_AUTO_ENDED": "활동이 종료됐어요. 인정할 협업자를 선택하세요",
+      "CIRCLE_POST_COLLABORATION_RECOGNIZED": "회원님의 활동 협업을 인정했어요"
     },
     "signupMgmt": {
       "untitledPost": "(제목 없는 게시물)",
@@ -2154,7 +2214,8 @@
       "transfer": "[송금]",
       "note": "[노트] {{title}}",
       "verification": "[인증] {{name}}님이 보증을 요청했습니다",
-      "default": "[메시지]"
+      "default": "[메시지]",
+      "plazaPost": "[활동] {{title}}"
     }
   },
   "permissions": {
@@ -2270,6 +2331,8 @@
     "PLAZA_RECOGNIZE_NOT_MEMBER": "서클의 활성 멤버만 인정할 수 있습니다",
     "PLAZA_RECOGNIZE_BLOCKED": "차단한 사용자는 인정할 수 없습니다",
     "PLAZA_RECOGNIZE_ALREADY": "협업 인정이 이미 제출되었습니다",
+    "PLAZA_REPORT_SELF": "자신의 게시물은 신고할 수 없습니다",
+    "PLAZA_NOT_CIRCLE_MEMBER": "이 서클의 멤버가 아니에요",
     "TRACE_MOMENT_NOT_FOUND": "모먼트를 찾을 수 없습니다",
     "TRACE_DELETE_AUTHOR_ONLY": "작성자만 삭제할 수 있습니다",
     "TRACE_REPLY_TARGET_NOT_FOUND": "답글 대상 댓글이 존재하지 않습니다",

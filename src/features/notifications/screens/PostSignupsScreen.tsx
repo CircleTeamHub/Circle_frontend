@@ -20,11 +20,14 @@ import { Spacing, useTheme } from '@/theme';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
 import {
   fetchMyPostSignups,
+  fetchPlazaPost,
   markMyPostSignupsRead,
   submitPostCollaborationRecognitions,
 } from '@/services/api/plaza';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { getOrCreateSingleConversation } from '@/im/client';
+import { usePendingChatCardStore } from '@/features/chat/store/use-pending-chat-card-store';
+import { toPlazaPostCardData } from '@/features/discover/utils/plaza-post-card';
 import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
 import {
   getChatDetailHref,
@@ -34,7 +37,7 @@ import {
 import { useNotificationCenterStore } from '@/features/notifications/store/use-notification-center-store';
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
-import type { PostSignupItem } from '@/types';
+import type { CirclePlazaPost, PlazaPostCardData, PostSignupItem } from '@/types';
 
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 
@@ -53,6 +56,9 @@ export default function PostSignupsScreen() {
   }>();
 
   const [signups, setSignups] = useState<PostSignupItem[]>([]);
+  // 拉一次帖子，供「找 TA 聊天」构造帖子卡片（报名→聊天自动带上下文）。
+  const [post, setPost] = useState<CirclePlazaPost | null>(null);
+  const setPendingChatCard = usePendingChatCardStore((s) => s.setPending);
   const [recognitionOpen, setRecognitionOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -67,6 +73,26 @@ export default function PostSignupsScreen() {
       mountedRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!postId) return;
+    fetchPlazaPost(postId)
+      .then((data) => {
+        if (mountedRef.current) setPost(data);
+      })
+      .catch(() => {
+        // 帖子卡片是锦上添花——拉不到就退化成纯开场白，不打断聊天入口。
+      });
+  }, [postId]);
+
+  const buildPostCard = useCallback(
+    (p: CirclePlazaPost): PlazaPostCardData =>
+      toPlazaPostCardData(
+        p,
+        t('plaza.signup.cardUntitled', { defaultValue: '活动分享' }),
+      ),
+    [t],
+  );
 
   const load = useCallback(async () => {
     if (!postId) return;
@@ -211,10 +237,21 @@ export default function PostSignupsScreen() {
     async (signer: PostSignupItem) => {
       if (openingChatRef.current) return;
       openingChatRef.current = true;
+      // 报名→聊天：先构造卡片，目的地解析成功后再紧邻导航写入待发状态。
+      const pendingChatCard = post
+        ? {
+          conversationKey: signer.userId,
+          card: buildPostCard(post),
+          draftText: t('plaza.signup.chatOpener', {
+            defaultValue: '你报名了我发起的活动，开始聊天吧',
+          }),
+        }
+        : null;
       try {
         setOpeningChatFor(signer.userId);
         // 先解析单聊会话拿到 conversationID，否则聊天页只会停在预览模式。
         const conversation = await getOrCreateSingleConversation(signer.userId);
+        if (pendingChatCard) setPendingChatCard(pendingChatCard);
         router.push(
           getChatDetailHref(
             scope,
@@ -226,6 +263,7 @@ export default function PostSignupsScreen() {
         );
       } catch (error) {
         if (shouldOpenChatPreview(error)) {
+          if (pendingChatCard) setPendingChatCard(pendingChatCard);
           // IM 未接通：退化成预览模式（无 conversationID）。
           router.push(
             getChatDetailHref(
@@ -248,7 +286,7 @@ export default function PostSignupsScreen() {
         if (mountedRef.current) setOpeningChatFor(null);
       }
     },
-    [router, scope, t],
+    [router, scope, t, post, setPendingChatCard, buildPostCard],
   );
 
   const openSignerProfile = useCallback(

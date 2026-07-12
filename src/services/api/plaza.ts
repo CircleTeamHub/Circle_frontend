@@ -63,6 +63,11 @@ export async function fetchPlazaFeed(params?: {
   };
 }
 
+export async function fetchPlazaPost(id: string): Promise<CirclePlazaPost> {
+  const post = await apiClient<CirclePlazaPost>(`/circle-plaza/posts/${id}`);
+  return normalizePlazaPost(post);
+}
+
 export async function createPlazaPost(
   input: CreatePlazaPostInput,
 ): Promise<CirclePlazaPost> {
@@ -75,6 +80,16 @@ export async function createPlazaPost(
 
 export async function deletePlazaPost(id: string): Promise<void> {
   await apiClient<void>(`/circle-plaza/posts/${id}`, { method: 'DELETE' });
+}
+
+export async function reportPlazaPost(
+  id: string,
+  reason?: string,
+): Promise<{ reported: boolean }> {
+  return apiClient<{ reported: boolean }>(`/circle-plaza/posts/${id}/report`, {
+    method: 'POST',
+    body: reason ? { reason } : {},
+  });
 }
 
 export async function signupForPost(

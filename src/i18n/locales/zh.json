@@ -221,8 +221,10 @@
       "CIRCLE_INVITATION_APPROVED": "你在「{{circle}}」的邀请已全部通过",
       "CIRCLE_INVITATION_REJECTED": "你在「{{circle}}」的一个邀请名额被拒",
       "CIRCLE_ADMIN_OVERRIDE_APPROVED": "管理员通过了你在「{{circle}}」的申请",
+      "CIRCLE_POST_PUBLISHED": "在圈子发布了新活动",
       "CIRCLE_POST_SIGNUP_CREATED": "报名了你的圈子帖子",
-      "CIRCLE_POST_AUTO_ENDED": "活动已结束，请选择合作认可对象"
+      "CIRCLE_POST_AUTO_ENDED": "活动已结束，请选择合作认可对象",
+      "CIRCLE_POST_COLLABORATION_RECOGNIZED": "认可了你的活动协作"
     },
     "signupMgmt": {
       "untitledPost": "（无内容帖子）",
@@ -572,6 +574,15 @@
     "voice": {
       "cancelTip": "松开手指，取消发送",
       "swipeCancelTip": "左滑取消 · 松开发送"
+    },
+    "plazaPostCard": {
+      "footer": "报名 {{count}} · {{author}}",
+      "pendingPreview": "[活动] {{title}}",
+      "badge": "活动",
+      "by": "由 {{author}} 发起",
+      "signupCount": "{{count}} 人已报名",
+      "signupEmpty": "还没有人报名，来当第一个",
+      "cta": "去报名"
     }
   },
   "contacts": {
@@ -727,15 +738,27 @@
     "addFriendHint": "添加好友后即可看到朋友的动态",
     "notifications": {
       "title": "圈子通知设置",
-      "global": "全局接收圈子通知",
-      "globalOnHint": "开启：默认打开离线通知+本地声音+红点",
-      "globalOffHint": "关闭：禁用所有通知（本地开关同步禁用）",
-      "sound": "声音提醒",
-      "soundOnHint": "开启：播放通知声音",
-      "soundOffHint": "关闭：静音（保留未读红点）",
-      "offline": "离线提醒",
-      "offlineOnHint": "开启：APP离线时将收到圈子横幅通知",
-      "offlineOffHint": "关闭：不再接收离线横幅通知"
+      "global": "在应用内显示圈子通知",
+      "globalOnHint": "开启：允许控制应用内的通知展示",
+      "globalOffHint": "关闭：隐藏应用内圈子通知横幅",
+      "banner": "应用内横幅",
+      "bannerOnHint": "开启：使用应用时显示通知横幅",
+      "bannerOffHint": "关闭：隐藏横幅并保留未读提示"
+    },
+    "guide": {
+      "title": "圈子玩法说明",
+      "entryHint": "卡片颜色含义 · 活动怎么玩",
+      "intro": "在圈子里发起和参加活动，几步就能玩起来。",
+      "colorsTitle": "卡片颜色 = 活动剩余时间",
+      "colorsIntro": "活动卡左侧竖条的颜色会随距到期时间自动变化，越暖越紧急：",
+      "colorPurple": "紫色：距结束还有 3 天以上，时间充裕。",
+      "colorGreen": "绿色：距结束 3 天以内，临近结束。",
+      "colorOrange": "橙色：距结束不到 1 天，抓紧报名。",
+      "stepsTitle": "怎么玩",
+      "step1": "发起活动：在圈子发帖，可设置有效期（1/3/7 天）和报名门槛，支持同时发到多个圈子和城市。",
+      "step2": "报名参加：看到感兴趣的活动点「报名」，满足门槛即可加入，报名后随时可取消。",
+      "step3": "及时提醒：圈子有新活动会弹横幅通知，方便第一时间报名（可在本页的通知开关里调整）。",
+      "step4": "结束认可：活动结束后，发起人可认可最多 3 位优秀参与者，被认可者会收到通知，并获得点赞与徽章。"
     },
     "filter": {
       "title": "筛选",
@@ -962,6 +985,25 @@
     "deleteFailedTitle": "删除失败",
     "deleteMessage": "删除后无法恢复，确定删除吗？",
     "deleteTitle": "删除帖子",
+    "actions": {
+      "more": "更多",
+      "share": "分享",
+      "report": "举报"
+    },
+    "share": {
+      "title": "分享给",
+      "opener": "分享给你一个活动，一起来看看",
+      "noFriends": "还没有好友可以分享"
+    },
+    "report": {
+      "title": "举报帖子",
+      "message": "确定要举报这条帖子吗？",
+      "confirm": "举报",
+      "doneTitle": "已举报",
+      "doneMessage": "感谢反馈，我们会尽快处理。",
+      "failedTitle": "举报失败",
+      "failedMessage": "请稍后重试"
+    },
     "restriction": {
       "fancyNumber": "靓号用户",
       "separator": "、",
@@ -971,7 +1013,27 @@
     "signUp": "报名",
     "signedUp": "已报名",
     "signupBlockedTitle": "暂不可报名",
-    "signupRestrictionMessage": "报名需满足：{{requirements}}"
+    "signupRestrictionMessage": "报名需满足：{{requirements}}",
+    "circlePicker": {
+      "selectedCount": "已选 {{count}} 个圈子"
+    },
+    "signup": {
+      "chatOpener": "你报名了我发起的活动，开始聊天吧",
+      "cardUntitled": "活动分享"
+    },
+    "postDetail": {
+      "title": "活动详情",
+      "notExist": "帖子不存在或已结束",
+      "loadFailed": "加载失败，请稍后重试",
+      "notMemberTitle": "无法查看",
+      "notMemberNamed": "你不是「{{circle}}」的成员，加入后即可查看活动",
+      "notMember": "你不是本圈子成员，无法查看",
+      "joinCircle": "申请加入圈子",
+      "joinSubmittedTitle": "已提交申请",
+      "joinSubmittedMessage": "加入申请已提交，通过后即可查看活动",
+      "joinFailedTitle": "申请失败",
+      "joinFailedMessage": "请稍后重试"
+    }
   },
   "moment": {
     "createTitle": "发朋友圈",
@@ -1569,14 +1631,12 @@
       "groupOffline": "群聊离线推送",
       "groupOfflineHint": "关闭后不再接收群聊离线推送提醒",
       "circleSection": "圈子通知",
-      "circleGlobal": "全局接收圈子通知",
-      "circleGlobalHint": "开启：默认打开离线通知+本地声音+红点\n关闭：禁用所有通知",
-      "circleSound": "声音提醒",
-      "circleSoundHint": "开启：播放通知声音\n关闭：静音（保留未读红点）",
+      "circleGlobal": "在应用内显示圈子通知",
+      "circleGlobalHint": "控制使用应用时圈子通知的展示",
+      "circleBanner": "应用内横幅",
+      "circleBannerHint": "显示或隐藏横幅，并保留未读提示",
       "circleRingtone": "圈子通知铃声",
-      "circleDefault": "圈子默认",
-      "offlineReminder": "离线提醒",
-      "offlineReminderHint": "开启：APP离线时将收到圈子横幅通知\n关闭：不再接收离线提醒"
+      "circleDefault": "圈子默认"
     },
     "appearance": {
       "title": "界面与显示",
@@ -2128,7 +2188,8 @@
       "transfer": "[转账]",
       "note": "[笔记] {{title}}",
       "verification": "[验证] {{name}} 邀请你担保",
-      "default": "[消息]"
+      "default": "[消息]",
+      "plazaPost": "[活动] {{title}}"
     }
   },
   "permissions": {
@@ -2270,6 +2331,8 @@
     "PLAZA_RECOGNIZE_NOT_MEMBER": "只能认可圈子的活跃成员",
     "PLAZA_RECOGNIZE_BLOCKED": "不能认可已拉黑的用户",
     "PLAZA_RECOGNIZE_ALREADY": "合作认可已提交，无法重复操作",
+    "PLAZA_REPORT_SELF": "不能举报自己的帖子",
+    "PLAZA_NOT_CIRCLE_MEMBER": "你不是本圈子成员，无法查看",
     "TRACE_MOMENT_NOT_FOUND": "动态不存在",
     "TRACE_DELETE_AUTHOR_ONLY": "只有作者可以删除",
     "TRACE_REPLY_TARGET_NOT_FOUND": "回复的评论不存在",

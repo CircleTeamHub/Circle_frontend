@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
-import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Spacing, Typography, useTheme } from '@/theme';
@@ -46,6 +48,22 @@ const s = StyleSheet.create({
   divider: {
     height: 1,
   },
+  guideRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    paddingVertical: Spacing.lg,
+  },
+  guideText: {
+    flex: 1,
+    gap: Spacing.xs,
+  },
+  guideTitle: {
+    ...Typography.h3,
+  },
+  guideHint: {
+    ...Typography.caption,
+  },
 });
 
 const NotificationItem: React.FC<NotificationItemProps> = ({
@@ -84,18 +102,15 @@ export default function CircleNotificationSettingsScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const router = useRouter();
 
-  const globalEnabled = useCircleNotificationStore((st) => st.globalEnabled);
-  const soundEnabled = useCircleNotificationStore((st) => st.soundEnabled);
-  const offlineEnabled = useCircleNotificationStore((st) => st.offlineEnabled);
-  const setGlobalEnabled = useCircleNotificationStore(
-    (st) => st.setGlobalEnabled,
+  const inAppEnabled = useCircleNotificationStore((st) => st.inAppEnabled);
+  const bannerEnabled = useCircleNotificationStore((st) => st.bannerEnabled);
+  const setInAppEnabled = useCircleNotificationStore(
+    (st) => st.setInAppEnabled,
   );
-  const setSoundEnabled = useCircleNotificationStore(
-    (st) => st.setSoundEnabled,
-  );
-  const setOfflineEnabled = useCircleNotificationStore(
-    (st) => st.setOfflineEnabled,
+  const setBannerEnabled = useCircleNotificationStore(
+    (st) => st.setBannerEnabled,
   );
 
   const d = useMemo(
@@ -123,34 +138,48 @@ export default function CircleNotificationSettingsScreen() {
           {t('discover.notifications.title')}
         </Text>
 
+        {/* 圈子玩法说明入口：讲清卡片颜色含义 + 活动怎么玩。 */}
+        <Pressable
+          style={s.guideRow}
+          onPress={() => router.push('/(tabs)/discover/guide')}
+          accessibilityRole="button"
+          accessibilityLabel={t('discover.guide.title')}
+        >
+          <Ionicons name="book-outline" size={22} color={colors.primary} />
+          <View style={s.guideText}>
+            <Text style={[s.guideTitle, { color: colors.text }]}>
+              {t('discover.guide.title')}
+            </Text>
+            <Text style={[s.guideHint, { color: colors.textSecondary }]}>
+              {t('discover.guide.entryHint')}
+            </Text>
+          </View>
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={colors.textSecondary}
+          />
+        </Pressable>
+
+        <View style={[s.divider, d.divider]} />
+
         <NotificationItem
           title={t('discover.notifications.global')}
           onHint={t('discover.notifications.globalOnHint')}
           offHint={t('discover.notifications.globalOffHint')}
-          value={globalEnabled}
-          onToggle={setGlobalEnabled}
+          value={inAppEnabled}
+          onToggle={setInAppEnabled}
         />
 
         <View style={[s.divider, d.divider]} />
 
         <NotificationItem
-          title={t('discover.notifications.sound')}
-          onHint={t('discover.notifications.soundOnHint')}
-          offHint={t('discover.notifications.soundOffHint')}
-          value={globalEnabled && soundEnabled}
-          disabled={!globalEnabled}
-          onToggle={setSoundEnabled}
-        />
-
-        <View style={[s.divider, d.divider]} />
-
-        <NotificationItem
-          title={t('discover.notifications.offline')}
-          onHint={t('discover.notifications.offlineOnHint')}
-          offHint={t('discover.notifications.offlineOffHint')}
-          value={globalEnabled && offlineEnabled}
-          disabled={!globalEnabled}
-          onToggle={setOfflineEnabled}
+          title={t('discover.notifications.banner')}
+          onHint={t('discover.notifications.bannerOnHint')}
+          offHint={t('discover.notifications.bannerOffHint')}
+          value={inAppEnabled && bannerEnabled}
+          disabled={!inAppEnabled}
+          onToggle={setBannerEnabled}
         />
       </ScrollView>
     </View>

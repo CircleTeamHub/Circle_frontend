@@ -79,6 +79,17 @@ export interface VerificationCardData {
   applicantName: string;
 }
 
+export interface PlazaPostCardData {
+  postId: string;
+  title: string;
+  contentPreview: string | null;
+  coverUrl: string | null;
+  circleName: string;
+  city: string | null;
+  signupCount: number;
+  authorNickname: string;
+}
+
 export interface TransferCardData {
   amount: number;
   message: string | null;
@@ -98,7 +109,8 @@ export interface ChatMessage {
     | 'friend-card'
     | 'circle-card'
     | 'transfer-card'
-    | 'verification-card';
+    | 'verification-card'
+    | 'plaza-post-card';
   text?: string;
   systemNoticeKind?: 'friend-added';
   systemNoticeSource?: 'native' | 'local';
@@ -137,6 +149,8 @@ export interface ChatMessage {
   transferCard?: TransferCardData;
   // For verification-card messages: parsed circle-verification invite payload
   verificationCard?: VerificationCardData;
+  // For plaza-post-card messages: parsed circle-post share payload
+  plazaPostCard?: PlazaPostCardData;
   // OpenIM 发送状态：1=发送中, 2=已送达, 3=失败。仅自己发出的消息有意义。
   sendStatus?: 1 | 2 | 3;
   // 对方是否已读，由 onRecvC2CReadReceipt 维护。仅自己发出的消息有意义。
@@ -262,6 +276,7 @@ export interface CirclePlazaPost {
   images: string[];
   tags: string[];
   city: string | null;
+  cities: string[];
   isHorn: boolean;
   noteId: string | null;
   restrictions: {
@@ -290,6 +305,7 @@ export interface CirclePlazaPost {
     id: string;
     name: string;
   };
+  circles: { id: string; name: string }[];
   canInteract: boolean;
   createdAt: string;
   expiresAt: string;
@@ -299,8 +315,8 @@ export interface CreatePlazaPostInput {
   content: string;
   images: string[];
   tags: string[];
-  circleId: string;
-  city: string | null;
+  circleIds: string[];
+  cities: string[];
   noteId: string | null;
   isHorn: boolean;
   expiresInHours: number;
@@ -433,8 +449,10 @@ export type NotificationType =
   | 'CIRCLE_INVITATION_APPROVED'
   | 'CIRCLE_INVITATION_REJECTED'
   | 'CIRCLE_ADMIN_OVERRIDE_APPROVED'
+  | 'CIRCLE_POST_PUBLISHED'
   | 'CIRCLE_POST_SIGNUP_CREATED'
   | 'CIRCLE_POST_AUTO_ENDED'
+  | 'CIRCLE_POST_COLLABORATION_RECOGNIZED'
   | 'PROFILE_LIKE';
 
 export interface NotificationItem {

@@ -24,7 +24,6 @@ import {
   MAX_CITY_SELECTION,
   buildInitialCityPickerState,
   resolveMultiCitySelection,
-  resolveSingleCitySelection,
   toggleCitySelection,
 } from '@/features/discover/utils/city-selection';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
@@ -128,11 +127,19 @@ export default function SelectCityScreen() {
   const router = useRouter();
   const user = useAuthStore((st) => st.user);
   const params = useLocalSearchParams<{ multiSelect?: string; target?: string }>();
-  const isMultiSelect = params.multiSelect === 'true';
+  // 三个入口都走多选：发帖(post)、建圈(circle)、筛选(filter)。
+  // circle-form 仅传 multiSelect=true（无 target）→ 归为 circle，保持原行为。
   const target: 'post' | 'circle' | 'filter' =
-    params.target === 'filter' ? 'filter' : isMultiSelect ? 'circle' : 'post';
-  const formCity = usePostFormStore((st) => st.selectedCity);
-  const setFormCity = usePostFormStore((st) => st.setSelectedCity);
+    params.target === 'filter'
+      ? 'filter'
+      : params.target === 'post'
+        ? 'post'
+        : params.multiSelect === 'true'
+          ? 'circle'
+          : 'post';
+  const isMultiSelect = params.multiSelect === 'true';
+  const formCities = usePostFormStore((st) => st.selectedCities);
+  const setFormCities = usePostFormStore((st) => st.setSelectedCities);
   const circleCities = useCreateCircleFormStore((st) => st.selectedCities);
   const setCircleCities = useCreateCircleFormStore((st) => st.setSelectedCities);
   const filterCities = useDiscoverFilterStore((st) => st.draftCities);
@@ -145,17 +152,23 @@ export default function SelectCityScreen() {
   const [isNationwide, setIsNationwide] = useState(false);
 
   useEffect(() => {
-    const multiCities = target === 'filter' ? filterCities : circleCities;
+    const multiCities =
+      target === 'filter'
+        ? filterCities
+        : target === 'post'
+          ? formCities
+          : circleCities;
     const nextState = buildInitialCityPickerState({
       isMultiSelect,
-      singleCity: formCity,
+      singleCity: null,
       multiCities,
-      emptyMultiSelectIsNationwide: target !== 'filter',
+      // 发帖城市为可选标签，空 = 不限定（非「全国」）；仅建圈空选才视为全国。
+      emptyMultiSelectIsNationwide: target === 'circle',
     });
 
     setSelected(nextState.selected);
     setIsNationwide(nextState.isNationwide);
-  }, [circleCities, filterCities, formCity, isMultiSelect, target]);
+  }, [circleCities, filterCities, formCities, isMultiSelect, target]);
 
   const sections: CitySection[] = useMemo(() => {
     if (!search.trim()) {
@@ -205,22 +218,22 @@ export default function SelectCityScreen() {
   }, [isVip, t]);
 
   const handleConfirm = useCallback(() => {
+    const resolved = resolveMultiCitySelection(selected, isNationwide);
     if (target === 'filter') {
-      setFilterCities(resolveMultiCitySelection(selected, isNationwide));
-    } else if (isMultiSelect) {
-      setCircleCities(resolveMultiCitySelection(selected, isNationwide));
+      setFilterCities(resolved);
+    } else if (target === 'circle') {
+      setCircleCities(resolved);
     } else {
-      setFormCity(resolveSingleCitySelection(selected, isNationwide));
+      setFormCities(resolved); // post
     }
     router.back();
   }, [
-    isMultiSelect,
     isNationwide,
     router,
     selected,
     setCircleCities,
     setFilterCities,
-    setFormCity,
+    setFormCities,
     target,
   ]);
 

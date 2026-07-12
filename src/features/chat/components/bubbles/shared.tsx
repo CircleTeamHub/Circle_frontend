@@ -1,4 +1,12 @@
-import { View, Text, StyleSheet, Pressable, type GestureResponderEvent } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  type GestureResponderEvent,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import type { ChatMessage } from '@/types';
@@ -94,11 +102,29 @@ export const sFriendCard = StyleSheet.create({
   },
 });
 
+// 卡片气泡通用外壳样式：左右方向布局、头像位、底部时间/状态行。
+// 由 CardBubbleFrame 使用；圈子卡 / 帖子卡 / verification 卡共享同一外壳，
+// 只是卡片本体各不相同。
+export const sCardFrame = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: Spacing.sm,
+  },
+  rowOutgoing: { justifyContent: 'flex-end' },
+  body: {},
+  bodyOutgoing: { alignItems: 'flex-end' },
+  avatarSlot: { paddingBottom: 2 },
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    marginTop: Spacing.xs,
+  },
+});
+
 export const sCircleCard = StyleSheet.create({
-  row: sFriendCard.row,
-  rowOutgoing: sFriendCard.rowOutgoing,
   body: { maxWidth: CHAT_CARD_STANDARD_WIDTH },
-  bodyOutgoing: sFriendCard.bodyOutgoing,
   card: {
     width: CHAT_CARD_STANDARD_WIDTH,
     borderRadius: Radius.md,
@@ -116,8 +142,6 @@ export const sCircleCard = StyleSheet.create({
   persona: { ...Typography.small, lineHeight: 17 },
   divider: { height: StyleSheet.hairlineWidth, marginTop: 2 },
   footer: { ...Typography.tinyRegular, paddingTop: 1 },
-  avatarSlot: sFriendCard.avatarSlot,
-  timeRow: sFriendCard.timeRow,
   leadingIcon: {
     width: 48,
     height: 48,
@@ -126,6 +150,81 @@ export const sCircleCard = StyleSheet.create({
     justifyContent: 'center',
   },
 });
+
+export interface CardBubbleFrameProps {
+  message: ChatMessage;
+  outgoing: boolean;
+  // 卡片旁的小头像（发送者 / 自己），尺寸 AVATAR_SIZE。
+  avatarNode: React.ReactNode;
+  onAvatarPress?: () => void;
+  hideStatus?: boolean;
+  // 约束卡片本体宽度 / 对齐的 body 容器样式（各卡片传入自己的 maxWidth）。
+  bodyStyle?: StyleProp<ViewStyle>;
+  // 卡片本体（通常是一个可点的 Pressable 卡片）。
+  children: React.ReactNode;
+}
+
+// 卡片气泡外壳：负责头像行、左右方向布局、底部时间 + 发送状态。
+// 卡片本体（children）由各卡片自定义，从而在共享外壳下拥有各自的视觉：
+// 圈子卡 / verification 卡走紧凑气泡（CompactCardBubble），帖子卡走海报卡。
+export const CardBubbleFrame: React.FC<CardBubbleFrameProps> = ({
+  message,
+  outgoing,
+  avatarNode,
+  onAvatarPress,
+  hideStatus,
+  bodyStyle,
+  children,
+}) => {
+  const { colors } = useTheme();
+
+  const body = (
+    <View
+      style={[
+        sCardFrame.body,
+        outgoing ? sCardFrame.bodyOutgoing : null,
+        bodyStyle,
+      ]}
+    >
+      {children}
+
+      {message.time ? (
+        <View style={sCardFrame.timeRow}>
+          <Text
+            style={{ ...Typography.tinyRegular, color: colors.textSecondary }}
+          >
+            {message.time}
+          </Text>
+          {outgoing && !hideStatus ? (
+            <BubbleStatusText message={message} />
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  );
+
+  if (outgoing) {
+    return (
+      <View style={[sCardFrame.row, sCardFrame.rowOutgoing]}>
+        {body}
+        <View style={sCardFrame.avatarSlot}>{avatarNode}</View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={sCardFrame.row}>
+      {onAvatarPress ? (
+        <Pressable style={sCardFrame.avatarSlot} onPress={onAvatarPress}>
+          {avatarNode}
+        </Pressable>
+      ) : (
+        <View style={sCardFrame.avatarSlot}>{avatarNode}</View>
+      )}
+      {body}
+    </View>
+  );
+};
 
 export interface CompactCardBubbleProps {
   message: ChatMessage;
@@ -144,8 +243,8 @@ export interface CompactCardBubbleProps {
 }
 
 // Shared compact-card scaffold for circle-share and verification-invite cards.
-// Both render the same row/divider/footer/time layout (sCircleCard); only the
-// leading visual and the three text slots differ, so they pass those in.
+// Both render the same topRow/divider/footer layout (sCircleCard) inside the
+// common CardBubbleFrame; only the leading visual and three text slots differ.
 export const CompactCardBubble: React.FC<CompactCardBubbleProps> = ({
   message,
   outgoing,
@@ -168,8 +267,15 @@ export const CompactCardBubble: React.FC<CompactCardBubbleProps> = ({
     : colors.textSecondary;
   const dividerColor = outgoing ? 'rgba(255,255,255,0.25)' : colors.divider;
 
-  const cardNode = (
-    <View style={[sCircleCard.body, outgoing ? sCircleCard.bodyOutgoing : null]}>
+  return (
+    <CardBubbleFrame
+      message={message}
+      outgoing={outgoing}
+      avatarNode={avatarNode}
+      onAvatarPress={onAvatarPress}
+      hideStatus={hideStatus}
+      bodyStyle={sCircleCard.body}
+    >
       <Pressable
         style={[sCircleCard.card, { backgroundColor: cardBg }]}
         onPress={onPress}
@@ -198,41 +304,6 @@ export const CompactCardBubble: React.FC<CompactCardBubbleProps> = ({
           {footer}
         </Text>
       </Pressable>
-
-      {message.time ? (
-        <View style={sCircleCard.timeRow}>
-          <Text
-            style={{ ...Typography.tinyRegular, color: colors.textSecondary }}
-          >
-            {message.time}
-          </Text>
-          {outgoing && !hideStatus ? (
-            <BubbleStatusText message={message} />
-          ) : null}
-        </View>
-      ) : null}
-    </View>
-  );
-
-  if (outgoing) {
-    return (
-      <View style={[sCircleCard.row, sCircleCard.rowOutgoing]}>
-        {cardNode}
-        <View style={sCircleCard.avatarSlot}>{avatarNode}</View>
-      </View>
-    );
-  }
-
-  return (
-    <View style={sCircleCard.row}>
-      {onAvatarPress ? (
-        <Pressable style={sCircleCard.avatarSlot} onPress={onAvatarPress}>
-          {avatarNode}
-        </Pressable>
-      ) : (
-        <View style={sCircleCard.avatarSlot}>{avatarNode}</View>
-      )}
-      {cardNode}
-    </View>
+    </CardBubbleFrame>
   );
 };

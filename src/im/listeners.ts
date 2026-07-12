@@ -178,9 +178,23 @@ export function bindOpenIMListeners() {
     if (pendingByConversation.size === 0) return;
     const batches = pendingByConversation;
     pendingByConversation = new Map();
-    const { appendMessages } = useIMStore.getState();
+    const { appendMessages, activeConversation } = useIMStore.getState();
     batches.forEach((msgs, conversationID) => {
-      if (msgs.length > 0) appendMessages(conversationID, msgs);
+      if (msgs.length === 0) return;
+      appendMessages(conversationID, msgs);
+      // 用户此刻正停留在这个会话页：把刚落地的消息立即标记已读。ChatDetailScreen
+      // 只在挂载时标一次，覆盖不了「页面已打开、对方又发消息」——这里补上，既清掉
+      // 会话列表未读 badge 和 tab 总未读，也给发送方回一条已读回执。只对当前活跃
+      // 会话执行；直接调 OpenIMSDK，避免与 client.ts 形成循环依赖。
+      if (conversationID === activeConversation?.conversationID) {
+        void OpenIMSDK.markConversationMessageAsRead(conversationID).catch(
+          (err) => {
+            if (typeof __DEV__ !== 'undefined' && __DEV__) {
+              console.warn('[openim] mark active conversation read failed', err);
+            }
+          },
+        );
+      }
     });
   };
 

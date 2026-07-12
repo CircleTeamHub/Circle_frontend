@@ -58,7 +58,6 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   const navigation = useNavigation();
   const { colors } = useTheme();
   const { t } = useTranslation();
-
   const handleBackPress = useCallback(() => {
     if (onBackPress) {
       onBackPress();

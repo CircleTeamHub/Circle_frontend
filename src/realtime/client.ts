@@ -2,9 +2,13 @@ import { REALTIME_WS_URL } from '@/constants/config';
 import { fetchMySignupsUnreadCount } from '@/services/api/plaza';
 import { fetchUnreadFriendActivityCount } from '@/services/api/friends';
 import { fetchCurrentUser } from '@/services/api/auth';
-import { fetchNotificationUnreadSummary } from '@/services/api/notifications';
+import {
+  fetchNotifications,
+  fetchNotificationUnreadSummary,
+} from '@/services/api/notifications';
 import { useNotificationCenterStore } from '@/features/notifications/store/use-notification-center-store';
 import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
+import { useCircleNotificationStore } from '@/features/discover/store/use-circle-notification-store';
 import { useCallStore } from '@/features/call/store/use-call-store';
 import { registerLogoutHandler } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
@@ -114,6 +118,7 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let currentToken: string | null = null;
 let manualDisconnect = false;
 let reconnectAttempt = 0;
+let reconnectRecoveryPending = false;
 
 function clearReconnectTimer() {
   if (!reconnectTimer) {
@@ -153,6 +158,7 @@ function scheduleReconnect() {
       return;
     }
 
+    reconnectRecoveryPending = true;
     connectRealtime(token);
   }, delay);
 }
@@ -221,12 +227,15 @@ const BELL_NOTIFICATION_TYPES: ReadonlySet<string> = new Set([
   'TRACE_LIKE',
   'TRACE_COMMENT',
   'COMMENT_REPLY',
+  'TRACE_MENTION',
   'CIRCLE_VERIFICATION_REQUESTED',
   'CIRCLE_INVITATION_APPROVED',
   'CIRCLE_INVITATION_REJECTED',
   'CIRCLE_ADMIN_OVERRIDE_APPROVED',
+  'CIRCLE_POST_PUBLISHED',
   'CIRCLE_POST_SIGNUP_CREATED',
   'CIRCLE_POST_AUTO_ENDED',
+  'CIRCLE_POST_COLLABORATION_RECOGNIZED',
   'PROFILE_LIKE',
 ]);
 
@@ -248,7 +257,29 @@ function handleNotificationCreated(payload: unknown) {
       ...store.interactive.filter((item) => item.id !== payload.id),
     ]);
   }
+
+  // 圈子通知（CIRCLE_*）的横幅受「圈子通知设置」控制：总开关或「通知提醒」关闭时，
+  // 通知照常进铃铛列表 + 红点（上面已处理），但不弹横幅。非圈子通知不受影响。
+  if (payload.type.startsWith('CIRCLE_')) {
+    const { inAppEnabled, bannerEnabled } =
+      useCircleNotificationStore.getState();
+    if (!inAppEnabled || !bannerEnabled) {
+      return;
+    }
+  }
+
   useNotificationSnackbarStore.getState().enqueueNotification(payload);
+}
+
+function mergeRecoveredInteractiveNotifications(items: NotificationItem[]) {
+  if (items.length === 0) return;
+
+  const store = useNotificationCenterStore.getState();
+  const recoveredIds = new Set(items.map((item) => item.id));
+  store.setInteractive([
+    ...items,
+    ...store.interactive.filter((item) => !recoveredIds.has(item.id)),
+  ]);
 }
 
 function handleRealtimeEvent(message: RealtimeEvent) {
@@ -350,9 +381,9 @@ function handleSocketMessage(rawData: string) {
 const RECOVERY_THROTTLE_MS = 30_000;
 let lastRecoveryAt = 0;
 
-export async function recoverTabBadgeSnapshot() {
+export async function recoverTabBadgeSnapshot(options?: { force?: boolean }) {
   const now = Date.now();
-  if (now - lastRecoveryAt < RECOVERY_THROTTLE_MS) {
+  if (!options?.force && now - lastRecoveryAt < RECOVERY_THROTTLE_MS) {
     return;
   }
   lastRecoveryAt = now;
@@ -376,6 +407,16 @@ export async function recoverTabBadgeSnapshot() {
     // Recovery is best-effort; keep the latest known badge state on failure.
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
       console.warn('[realtime] badge snapshot recovery failed', err);
+    }
+  }
+
+  try {
+    mergeRecoveredInteractiveNotifications(await fetchNotifications(1));
+  } catch (err) {
+    // Recovery is best-effort; the notification center screen still has its
+    // own pull-to-refresh path if this list backfill fails.
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.warn('[realtime] notification list recovery failed', err);
     }
   }
 }
@@ -408,9 +449,12 @@ export function connectRealtime(token: string) {
   socket = nextSocket;
 
   nextSocket.onopen = () => {
+    const shouldForceRecovery = reconnectRecoveryPending;
+    reconnectRecoveryPending = false;
     reconnectAttempt = 0;
     // 必须先发认证帧，否则网关 10s 后以 1008 踢掉连接，且期间收不到任何事件。
-    // 认证成功后网关会立刻回推一帧 badge.snapshot，等于隐式 ack + 红点全量同步。
+    // 认证成功后网关会立刻回推一帧 badge.snapshot；这里再补一次 HTTP
+    // recovery，把断线期间错过的 notification.created 列表项拉回来。
     try {
       nextSocket.send(JSON.stringify({ type: 'auth', token: normalizedToken }));
     } catch (err) {
@@ -419,6 +463,7 @@ export function connectRealtime(token: string) {
       }
     }
     useTabBadgeStore.getState().setRealtimeConnected(true);
+    void recoverTabBadgeSnapshot({ force: shouldForceRecovery });
   };
 
   nextSocket.onmessage = (event) => {
@@ -449,6 +494,7 @@ export function connectRealtime(token: string) {
 export function disconnectRealtime() {
   manualDisconnect = true;
   currentToken = null;
+  reconnectRecoveryPending = false;
   clearReconnectTimer();
   useTabBadgeStore.getState().setRealtimeConnected(false);
   closeSocket();

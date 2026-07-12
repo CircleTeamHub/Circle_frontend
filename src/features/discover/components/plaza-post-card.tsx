@@ -8,17 +8,23 @@ import { UserIconRow } from '@/components/ui/user-icon-row';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { getUserProfileHref } from '@/features/user/utils/routes';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
+import { getPostExpiryTier } from '@/features/discover/utils/plaza-post-expiry';
 import {
   cancelSignup,
   signupForPost,
   deletePlazaPost,
+  reportPlazaPost,
 } from '@/services/api/plaza';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useAuthStore } from '@/stores/authStore';
 import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
 import { ImageGrid } from './image-grid';
 import { RestrictionBadge } from './restriction-badge';
-import type { CirclePlazaPost } from '@/types';
+import {
+  PlazaPostActionsSheet,
+  type PostAction,
+} from './plaza-post-actions-sheet';
+import type { CirclePlazaPost, DisplayIcon, SystemIconKey } from '@/types';
 
 interface PlazaPostCardProps {
   post: CirclePlazaPost;
@@ -27,7 +33,39 @@ interface PlazaPostCardProps {
 // "不限制" 徽章配色（绿色=开放给所有人），与 RestrictionBadge 的彩色徽章风格统一。
 const OPEN_BADGE_COLOR = '#10B981';
 
+// 广场卡头部只固定展示 3 枚徽章且不折叠 "+N"，因此按「身份/信誉」优先级排序，优先露出
+// VIP 和信誉相关（VERIFIED_PROFILE 认证 / TOP_COLLABORATOR 协作口碑）徽章；圈子(CIRCLE)
+// 徽章、新人徽章靠后。同优先级保持服务端的 sortOrder。
+const BADGE_DISPLAY_PRIORITY: Record<SystemIconKey, number> = {
+  VIP: 0,
+  VERIFIED_PROFILE: 1,
+  TOP_COLLABORATOR: 2,
+  CIRCLE_BUILDER: 3,
+  NEW_USER: 4,
+};
+
+function badgeDisplayRank(icon: DisplayIcon): number {
+  if (
+    icon.type === 'SYSTEM' &&
+    icon.systemKey &&
+    icon.systemKey in BADGE_DISPLAY_PRIORITY
+  ) {
+    return BADGE_DISPLAY_PRIORITY[icon.systemKey];
+  }
+  // 圈子徽章 / 未知 systemKey 排在所有系统身份徽章之后。
+  return 100;
+}
+
 const s = StyleSheet.create({
+  // 活动卡片左侧强调竖条 —— 给广场帖一个「活动」身份，普通 horn 用橙、常规用主色。
+  // 卡片 overflow:hidden 让竖条顶到圆角内被裁切，观感干净。
+  accent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -41,15 +79,22 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.sm,
   },
-  // 用户名过长时收缩并省略，圈子 badge 不收缩（RN flexShrink 默认 0），二者始终同行。
+  // 第一行只剩用户名 + 身份徽章（圈子标签已下移到第二行）。用户名给最低收缩权重
+  // + minWidth 兜底：溢出时省略而非被挤没，短名（如"丁哥"）完整显示。
   nameShrink: {
     flexShrink: 1,
+    minWidth: 32,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,
-    marginTop: 3,
+    marginTop: 4,
+  },
+  // 第二行的城市文本：可收缩省略，过长时先让位给圈子标签/时间，而不是把时间挤没。
+  metaCity: {
+    flexShrink: 1,
+    minWidth: 0,
   },
   authorBadgeRow: {
     flexShrink: 0,
@@ -58,6 +103,8 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
     paddingVertical: 1,
     borderRadius: Radius.sm,
+    // 圈子标签在第二行：仅设宽度上限（圈子名过长时省略），不参与收缩，让城市文本先让位。
+    maxWidth: 132,
   },
   conditionRow: {
     flexDirection: 'row',
@@ -107,8 +154,12 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
       card: {
         backgroundColor: colors.surface,
         borderRadius: Radius.lg,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: colors.surfaceBorder,
         padding: Spacing.md,
+        paddingLeft: Spacing.md + 4,
         gap: Spacing.md - 4,
+        overflow: 'hidden' as const,
       },
       authorName: {
         color: colors.text,
@@ -140,6 +191,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
   const [signed, setSigned] = useState(post.signedByMe);
   const [signupCount, setSignupCount] = useState(post.signupCount);
   const [busy, setBusy] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
 
   const currentUserId = useAuthStore((state) => state.user?.id);
   const isOwnPost = !!currentUserId && currentUserId === post.author.id;
@@ -189,6 +241,77 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
       ],
     );
   }, [post.id, storeRemovePlazaPost, t]);
+
+  const handleShare = useCallback(() => {
+    // 分享到对话：进好友选择页，选中后把帖子作为聊天卡片发到该会话。
+    router.push({
+      pathname: '/(tabs)/discover/share-post',
+      params: { postId: post.id },
+    });
+  }, [router, post.id]);
+
+  const handleReport = useCallback(() => {
+    Alert.alert(
+      t('plaza.report.title', { defaultValue: '举报帖子' }),
+      t('plaza.report.message', { defaultValue: '确定要举报这条帖子吗？' }),
+      [
+        { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+        {
+          text: t('plaza.report.confirm', { defaultValue: '举报' }),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await reportPlazaPost(post.id);
+              Alert.alert(
+                t('plaza.report.doneTitle', { defaultValue: '已举报' }),
+                t('plaza.report.doneMessage', {
+                  defaultValue: '感谢反馈，我们会尽快处理。',
+                }),
+              );
+            } catch (error) {
+              Alert.alert(
+                t('plaza.report.failedTitle', { defaultValue: '举报失败' }),
+                getApiErrorMessage(
+                  error,
+                  t('plaza.report.failedMessage', { defaultValue: '请稍后重试' }),
+                ),
+              );
+            }
+          },
+        },
+      ],
+    );
+  }, [post.id, t]);
+
+  const postActions = useMemo<PostAction[]>(() => {
+    const actions: PostAction[] = [
+      {
+        key: 'share',
+        label: t('plaza.actions.share', { defaultValue: '分享' }),
+        icon: 'share-outline',
+        onPress: handleShare,
+      },
+    ];
+    // 自己的帖子可删除；别人的帖子可举报。删除从原右上角独立按钮移入此菜单。
+    if (isOwnPost) {
+      actions.push({
+        key: 'delete',
+        label: t('common.delete', { defaultValue: '删除' }),
+        icon: 'trash-outline',
+        destructive: true,
+        onPress: handleDeletePost,
+      });
+    } else {
+      actions.push({
+        key: 'report',
+        label: t('plaza.actions.report', { defaultValue: '举报' }),
+        icon: 'flag-outline',
+        destructive: true,
+        onPress: handleReport,
+      });
+    }
+    return actions;
+  }, [t, isOwnPost, handleShare, handleDeletePost, handleReport]);
 
   const buildSignupReasonText = useCallback((): string => {
     const reasons: string[] = [];
@@ -292,10 +415,30 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
     () => formatRelativeTime(post.createdAt, t),
     [post.createdAt, t],
   );
-  const authorDisplayIcons = post.author.displayIcons ?? [];
+  // 不可变排序（不改 post.author.displayIcons）：优先 VIP + 信誉相关徽章，同级保持
+  // 服务端 sortOrder。头部只取前 3 枚且不折叠，排序保证露出的是最重要的身份徽章。
+  const authorDisplayIcons = useMemo(() => {
+    const icons = post.author.displayIcons ?? [];
+    return [...icons].sort((a, b) => {
+      const rankDiff = badgeDisplayRank(a) - badgeDisplayRank(b);
+      if (rankDiff !== 0) return rankDiff;
+      return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+    });
+  }, [post.author.displayIcons]);
+
+  // 左侧强调竖条配色按「距到期的剩余时间」分档，随时间推移逐级跳变：≤1天(橙) →
+  // ≤3天(绿) → 更久(紫)。越接近到期越暖，推动及时报名（不用红色，观感更柔和）。
+  const accentColor = useMemo(() => {
+    const tier = getPostExpiryTier(post.expiresAt);
+    if (tier === 'urgent') return colors.warning;
+    if (tier === 'soon') return colors.success;
+    return colors.primary;
+  }, [post.expiresAt, colors]);
 
   return (
     <View style={d.card}>
+      {/* 左侧「活动」强调竖条：配色随距到期剩余时间逐级跳变(>3天紫→≤3天绿→≤1天橙)。 */}
+      <View style={[s.accent, { backgroundColor: accentColor }]} />
       {/* Header */}
       <View style={s.header}>
         <Pressable onPress={handleAvatarPress}>
@@ -312,39 +455,56 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
                 {post.author.nickname}
               </Text>
             </Pressable>
-            <View style={[s.tag, d.tag]}>
-              <Text style={d.tagText} numberOfLines={1}>
-                {post.circle.name}
-              </Text>
-            </View>
             {authorDisplayIcons.length > 0 ? (
               <View style={s.authorBadgeRow}>
-                <UserIconRow icons={authorDisplayIcons} compact compactSize="small" />
+                {/* 第一行只剩用户名 + 身份徽章（圈子标签已下移）：固定展示前 3 枚，
+                    超出不折叠 "+N"（icons 已按 VIP + 信誉优先排序）。 */}
+                <UserIconRow
+                  icons={authorDisplayIcons}
+                  compact
+                  compactSize="small"
+                  maxVisible={3}
+                  showOverflowCount={false}
+                />
               </View>
             ) : null}
           </View>
           <View style={s.metaRow}>
-            {post.city ? <Text style={d.metaText}>{post.city}</Text> : null}
+            {/* 圈子标签下移到第二行，作为「归属」锚点，与城市 · 时间同排。 */}
+            <View style={[s.tag, d.tag]}>
+              <Text style={d.tagText} numberOfLines={1}>
+                {post.circles?.length
+                  ? post.circles[0].name +
+                    (post.circles.length > 1
+                      ? ` +${post.circles.length - 1}`
+                      : '')
+                  : post.circle.name}
+              </Text>
+            </View>
+            {post.cities?.length || post.city ? (
+              <Text style={[d.metaText, s.metaCity]} numberOfLines={1}>
+                {post.cities?.length ? post.cities.join(' · ') : post.city}
+              </Text>
+            ) : null}
             <Text style={d.metaText}>· {timeLabel}</Text>
           </View>
         </View>
         {post.isHorn ? (
           <Ionicons name="megaphone" size={18} color={colors.warning} />
         ) : null}
-        {isOwnPost ? (
-          <Pressable
-            onPress={handleDeletePost}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.delete', { defaultValue: '删除' })}
-          >
-            <Ionicons
-              name="trash-outline"
-              size={18}
-              color={colors.textSecondary}
-            />
-          </Pressable>
-        ) : null}
+        {/* 右上角「更多」：分享 / 举报 / 删除（删除已从独立按钮移入此菜单）。 */}
+        <Pressable
+          onPress={() => setMenuVisible(true)}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t('plaza.actions.more', { defaultValue: '更多' })}
+        >
+          <Ionicons
+            name="ellipsis-horizontal"
+            size={18}
+            color={colors.textSecondary}
+          />
+        </Pressable>
       </View>
 
       {/* Body */}
@@ -405,23 +565,26 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
             hitSlop={6}
             style={[
               s.signupBtn,
-              {
-                borderColor: signed ? colors.primary : colors.surfaceBorder,
-                backgroundColor: signed ? colors.primary : 'transparent',
-                opacity: !signed && !post.canSignup ? 0.5 : 1,
-              },
+              // 未报名 = 实心主色强 CTA（推动及时报名）；已报名 = 克制的成功色描边确认态。
+              signed
+                ? { borderColor: colors.success, backgroundColor: 'transparent' }
+                : {
+                    borderColor: colors.primary,
+                    backgroundColor: colors.primary,
+                    opacity: post.canSignup ? 1 : 0.5,
+                  },
             ]}
           >
             <Ionicons
-              name={signed ? 'checkmark-circle' : 'person-add-outline'}
+              name={signed ? 'checkmark-circle' : 'person-add'}
               size={16}
-              color={signed ? colors.white : colors.textSecondary}
+              color={signed ? colors.success : colors.white}
             />
             <Text
               style={{
                 fontSize: 13,
-                fontWeight: '600',
-                color: signed ? colors.white : colors.textSecondary,
+                fontWeight: '700',
+                color: signed ? colors.success : colors.white,
               }}
             >
               {signed
@@ -432,6 +595,12 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
           </Pressable>
         )}
       </View>
+
+      <PlazaPostActionsSheet
+        visible={menuVisible}
+        actions={postActions}
+        onClose={() => setMenuVisible(false)}
+      />
     </View>
   );
 };

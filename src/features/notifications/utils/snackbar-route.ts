@@ -69,6 +69,18 @@ export function getSnackbarRoute(
     }
   }
 
+  // 圈子新帖发布 → 直达帖子详情页，方便及时报名（收件人是成员，不能进作者专属的
+  // 报名管理页）。
+  if (item.type === 'CIRCLE_POST_PUBLISHED' && item.fromCirclePost?.id) {
+    return {
+      pathname:
+        options.scope === 'discover'
+          ? '/(tabs)/discover/plaza-post-detail'
+          : '/(tabs)/messages/plaza-post-detail',
+      params: { id: item.fromCirclePost.id },
+    };
+  }
+
   if (
     (item.type === 'CIRCLE_POST_SIGNUP_CREATED' ||
       item.type === 'CIRCLE_POST_AUTO_ENDED') &&
@@ -110,8 +122,12 @@ export function getSnackbarRoute(
     return '/(tabs)/contacts/new-friends';
   }
 
-  // 资料点赞：直达点赞者主页，方便回赞 / 加好友。
-  if (item.type === 'PROFILE_LIKE' && item.fromUser?.id) {
+  // 资料点赞 / 活动协作认可：直达对方（点赞者 / 认可者）主页，方便回赞 / 加好友。
+  if (
+    (item.type === 'PROFILE_LIKE' ||
+      item.type === 'CIRCLE_POST_COLLABORATION_RECOGNIZED') &&
+    item.fromUser?.id
+  ) {
     return {
       pathname:
         options.scope === 'discover'

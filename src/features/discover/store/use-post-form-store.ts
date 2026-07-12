@@ -1,24 +1,40 @@
 import { create } from 'zustand';
 
+export interface PostFormCircle {
+  id: string;
+  name: string;
+}
+
 interface PostFormState {
-  selectedCircle: { id: string; name: string } | null;
-  selectedCity: string | null;
+  // 发帖：圈子 + 城市均为多选；笔记仍单选。
+  selectedCircles: PostFormCircle[];
+  selectedCities: string[];
   selectedNote: { id: string; title: string } | null;
 
-  setSelectedCircle: (circle: { id: string; name: string } | null) => void;
-  setSelectedCity: (city: string | null) => void;
+  setSelectedCircles: (circles: PostFormCircle[]) => void;
+  toggleCircle: (circle: PostFormCircle) => void;
+  setSelectedCities: (cities: string[]) => void;
   setSelectedNote: (note: { id: string; title: string } | null) => void;
   reset: () => void;
 }
 
 export const usePostFormStore = create<PostFormState>((set) => ({
-  selectedCircle: null,
-  selectedCity: null,
+  selectedCircles: [],
+  selectedCities: [],
   selectedNote: null,
 
-  setSelectedCircle: (circle) => set({ selectedCircle: circle }),
-  setSelectedCity: (city) => set({ selectedCity: city }),
+  setSelectedCircles: (circles) => set({ selectedCircles: circles }),
+  toggleCircle: (circle) =>
+    set((state) => {
+      const exists = state.selectedCircles.some((c) => c.id === circle.id);
+      return {
+        selectedCircles: exists
+          ? state.selectedCircles.filter((c) => c.id !== circle.id)
+          : [...state.selectedCircles, circle],
+      };
+    }),
+  setSelectedCities: (cities) => set({ selectedCities: cities }),
   setSelectedNote: (note) => set({ selectedNote: note }),
   reset: () =>
-    set({ selectedCircle: null, selectedCity: null, selectedNote: null }),
+    set({ selectedCircles: [], selectedCities: [], selectedNote: null }),
 }));

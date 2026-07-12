@@ -134,6 +134,19 @@ test("getSnackbarRoute keeps circle post signups inside the discover stack when 
   assert.equal(route.params.title, "Hiking trip");
 });
 
+test("getSnackbarRoute routes a published circle post to the post detail (not the author-only signups page)", () => {
+  const route = getSnackbarRoute(
+    notification({
+      type: "CIRCLE_POST_PUBLISHED",
+      fromCirclePost: { id: "p1", excerpt: "Hiking trip", firstImage: null },
+    }),
+    DISCOVER_OPTS,
+  );
+  // 收件人是成员，进得去帖子详情报名，进不去作者专属的报名管理页。
+  assert.equal(route.pathname, "/(tabs)/discover/plaza-post-detail");
+  assert.equal(route.params.id, "p1");
+});
+
 test("getSnackbarRoute routes auto-ended circle posts to post-signups", () => {
   const route = getSnackbarRoute(
     notification({
