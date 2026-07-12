@@ -9,6 +9,7 @@
     "web": "expo start --web",
     "postinstall": "node scripts/patch-openim-native-events.mjs",
     "lint": "expo lint --max-warnings 0",
+    "pretypecheck": "expo customize tsconfig.json",
     "typecheck": "tsc --noEmit",
     "expo:config": "expo config --type public",
     "test": "node --test \"test/*.js\" \"src/**/*.test.mts\"",
