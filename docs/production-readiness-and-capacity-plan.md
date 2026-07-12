@@ -1,55 +1,68 @@
 # 生产就绪度审计 & 高并发容量方案
 
-> 范围：`circle-im`（Expo RN 前端）+ `circle_be`（NestJS 后端）+ `openim-docker`（IM 基础设施）
-> 审计日期：2026-07-04
-> 方法：8 维度多智能体深读全部源码 + 部署配置；产出的 29 条 critical/high 结论各派独立 agent 以"证伪"立场逐条核查，**29/29 全部确认**，下文每条均附 `file:line` 证据。
+> 原审计范围：`circle-im`（Expo RN 前端）+ `circle_be`（NestJS 后端）+ `openim-docker`（IM 基础设施）
+> 原审计日期：2026-07-04；本次证据校正日期：2026-07-11
+> 证据规则：只有能从本分支固定版本复查的内容才称为“仓库已验证事实”。其余内容必须标为场景假设、`unavailable/unpinned` 审计输入、未决供应商问题或法律审查 gate；不得把原审计笔记、issue 摘要或容量推导写成实测结论。
+
+### 审计输入与 provenance
+
+| 输入 | 版本 / 可用性 | 本文可作出的声明 |
+|---|---|---|
+| `circle-im` 前端仓库 | verified SHA `4be235fde1032da9ac17e2757bf6cf6b3cc60e22` | 可复查该 SHA 中的前端依赖、脚本与源码事实 |
+| `circle_be` 后端仓库 | `unavailable/unpinned`（本分支未包含源码或固定 SHA） | 下文后端 `file:line` 仅保留为原审计待复核项，不是本次独立验证 |
+| `openim-docker` / OpenIM 服务端 | `unavailable/unpinned`（本分支未包含源码、镜像 digest 或固定 tag/SHA） | 拓扑、网关能力与配置结论必须在锁定版本后重验 |
+| 私有 `temp-chat-web` | `unavailable/unpinned` | 不据此作许可证或分发结论 |
+| 原始 agent scratchpad、benchmark 与生产 telemetry | `unavailable/unpinned` | “29/29”、QPS、连接数、成本等不得视为复现实验结果 |
+| OpenIM 官网、商业材料、GitHub issues 与报价 | `unavailable/unpinned`（未保存带日期快照或合同） | 仅能形成待供应商书面确认的问题，不能证明功能边界、许可义务或价格 |
+
+后文保留原审计中有定位价值的风险项，但所有依赖 `unavailable/unpinned` 输入的断言，都必须在上线决策前以固定 SHA、镜像 digest、配置快照、可复现测试或书面材料重新闭环。
 
 ---
 
 ## 0. 总结论（TL;DR）
 
-**代码架构质量高于同阶段项目平均水平，且是为水平扩展设计过的；但部署形态是测试级的。当前状态：不能上生产、撑不了高 QPS、谈不上高可用。**
+**本分支证据不足以证明完整系统已达到生产、高 QPS 或 HA 标准。由于后端/OpenIM 输入未固定、容量未压测、HA/DR 未演练且第三方分发法律 gate 未闭环，当前生产决策为 NO-GO。**
 
-关键点：最致命的几个问题都是"几行配置"级别，**这是一条修配置 + 补运维的路，不是重构的路。**
+原审计提供了有价值的风险定位，但不能预先断言修配置即可解决，也不能据此决定重构；应在固定输入上复核后按证据确定修复范围。
 
 | 判定项 | 结论 |
 |---|---|
-| 生产就绪 | ❌ 否（内测/封闭测试可以） |
-| 高 QPS | ❌ 否（当前实际硬顶约 5 QPS；P0 修完可到中等量级；1 万在线需 P2 拓扑） |
-| 高可用 | ❌ 否（单 VM、RPO=∞、故障靠人肉发现） |
+| 生产就绪 | ❌ NO-GO，直到证据、容量、HA/DR、安全和法律 gate 闭环；此结论不授权任何第三方测试分发 |
+| 高 QPS | ⚠️ 未验收（原审计推导出限流与连接池风险，但没有固定后端输入、benchmark 或生产 telemetry） |
+| 高可用 | ❌ 当前描述为单 failure domain，不能算 HA；RTO/RPO 尚未由业务方批准 |
 
-| 维度 | 代码质量 | 部署现状 | 高 QPS / HA |
+| 维度 | 原审计记录（待复核） | 原部署记录（待复核） | 当前决策 |
 |---|---|---|---|
-| 后端架构 (NestJS) | ⭐⭐⭐⭐ 分层清晰、校验/错误封装规范 | 两个 boot-order bug | 修配置后可以 |
-| 数据层 (Prisma/PG) | ⭐⭐⭐⭐ 索引意识强、keyset 分页 | 连接池 10、无调优 | 否，有明确崩溃顺序 |
-| 水平扩展性 | ⭐⭐⭐⭐ 代码几乎 replica-ready | 生产没 Redis，全部退化 | 2 副本今天就会坏 |
-| 部署/可用性 | — | 单 VM、无备份、无回滚 | ❌ 最弱一环 |
-| OpenIM 消息层 | ⭐⭐⭐⭐ BE 集成层成熟 | 默认密钥公网裸奔 | 单节点 ~1 万连接封顶 |
-| 前端 (Expo RN) | ⭐⭐⭐⭐ API 层健壮、列表规范 | session 过于易碎 | 会放大后端故障 |
-| 安全/认证 | ⭐⭐⭐⭐ argon2id、无 IDOR | 邮件根本发不出去 | — |
-| 可观测性 | ⭐⭐⭐⭐ 埋点齐全 | 生产什么都没接 | 3 点故障没人知道 |
+| 后端架构 (NestJS) | 分层与错误封装记录 | boot-order 风险记录 | 固定 SHA 后复核 |
+| 数据层 (Prisma/PG) | 索引与分页记录 | 连接池风险记录 | query trace + 压测 |
+| 水平扩展性 | replica-ready 设计记录 | Redis 缺失记录 | 多副本正确性测试 |
+| 部署/可用性 | — | 单 failure domain、备份/回滚缺口记录 | 独立 HA/DR gate |
+| OpenIM 消息层 | 集成层记录 | 默认密钥与暴露面记录 | 固定版本 + 多 gateway PoC |
+| 前端 (Expo RN) | 本分支可复查 | session 韧性风险 | 故障场景测试 |
+| 安全/认证 | 原审计安全抽样 | 邮件服务风险记录 | 固定输入安全验收 |
+| 可观测性 | 埋点记录 | 生产接线缺口记录 | 监控/告警演练 |
 
 ---
 
-## 1. 已验证的关键阻塞项（放真实流量前必须清）
+## 1. 原审计的关键阻塞项（固定输入后复核，放真实流量前闭环）
 
-> 全部经对抗验证 `confirmed=True`。序号即优先级。
+> 以下优先级与 `circle_be` / `openim-docker` 的 `file:line` 来自原审计记录。由于这些输入在本分支 `unavailable/unpinned`，它们是待复核阻塞项，不等同于本次仓库验证；修复或上线 gate 必须回到固定版本重新确认。下列 QPS、并发、连接数与耗时阈值均为原审计 scenario assumptions，复现前不代表容量事实。
 
-### P0-1 · `trust proxy` 未设 → 全站硬顶 ~5 QPS
+### P0-1 · 原审计推导：`trust proxy` 未设可能导致全站约 5 QPS 限流
 Express 从未 `app.set('trust proxy')`，而所有流量经 Caddy 反代进来，于是**所有限流器把全部用户 key 到同一个 Caddy 容器 IP**。
 - 证据：`circle_be/src/setup.ts:184-207,357-363`（createLimiter 无 keyGenerator，全局 300 req/min）；`docker-compose.prod.yml:99-100`（circle_be 仅 expose，不发布主机端口）+ `deploy/Caddyfile.admin:6`。
-- 影响：全局 300 req/min 变成"全站每分钟 300 请求"（~5 QPS）；任何人失败登录 10 次 = **全站锁登录 15 分钟**；per-attacker 防爆破彻底失效。
+- 原审计影响推导：若上述配置成立，全局 300 req/min 会变成"全站每分钟 300 请求"（约 5 QPS）；该阈值必须在固定配置上复现。
 - 修复：`app.set('trust proxy', 1)` + Caddy 覆写/清洗 `X-Forwarded-For`；staging 验证 `req.ip` 为真实客户端 IP 后再放量。
 
 ### P0-2 · 数据库连接池 = 默认 10，无获取超时
 `new PrismaPg({ connectionString })` 未传池参数（`src/prisma/prisma.service.ts:39-45`），pg.Pool 默认 `max=10` 且 `connectionTimeoutMillis=0`（永久等待）。driver adapter 模式下 URL 里的 `connection_limit` 也不生效。
-- 影响：整个后端只有 10 个 DB 连接。好友请求持锁跨 4-6 查询、点赞是 Serializable 事务重试 3 次——**~50 并发即占满，其余请求无限排队而非快速失败，p99 全线雪崩**。
+- 原审计影响推导：后端池可能只有 10 个 DB 连接；“约 50 并发占满”是待压测的 scenario assumption，不是实测阈值。
 - 修复：`new PrismaPg({ connectionString, max: <按机型>, connectionTimeoutMillis: 5000, idleTimeoutMillis: 30000 })`；compose 里给 Postgres 调 `shared_buffers/effective_cache_size/max_connections`；池饱和度打进 metrics。
 
 ### P0-3 · 生产栈没有 Redis → 缓存/限流/backplane 全静默退化
 `docker-compose.prod.yml` 无 redis 服务，`gen-env.sh` 不产 `REDIS_URL`，Joi 又把它标为 optional。
 - 证据：`redis.service.ts:29-36`（空 URL → `isEnabled()=false`），`realtime.service.ts:232-239`（backplane 订阅直接 early-return），`setup.ts:188-195`（限流 store 退化进程内存）。
-- 影响：徽章缓存、Lua CAS 版本缓存、分布式限流、realtime 扇出**全部退化成进程内存**；每个 WS 连接跑 4 个 `count(*)`；**一旦起第 2 个副本，realtime 事件丢一半**（A 副本产生的通话邀请/未读永远到不了 pin 在 B 副本的用户）。
+- 原审计影响推导：徽章缓存、Lua CAS 版本缓存、分布式限流、realtime 扇出可能退化成进程内存；每个 WS 连接可能触发 4 个 `count(*)`。缺少跨副本 backplane 时，跨副本 realtime 事件可能丢失，实际比例取决于副本拓扑、事件来源与连接分布，须通过多副本测试测量。
 - 修复：compose 加 `redis:7-alpine`（内网 + 密码）；`gen-env.sh` 产出 `REDIS_URL`；生产环境 Joi 改 `.required()`。
 
 ### P0-4 · OpenIM 栈默认密钥公网裸奔
@@ -67,7 +80,7 @@ Express 从未 `app.set('trust proxy')`，而所有流量经 Caddy 反代进来�
 - 影响：**真实用户注册和验证码登录完全不可用**，只有预置密码账号能登。
 - 修复：接真实 Mailer（SMTP/163/阿里云）按 env 选择，生产 env 校验必填，部署前 gate 一次测试发送。
 
-### P0-7 · 零备份，RPO = ∞
+### P0-7 · 原审计未发现备份（RPO 未定义）
 仓库 grep 不到任何 `pg_dump/mongodump/pg_basebackup/wal-g/restic` 或快照工具；`docker-compose.prod.yml:141-145` 是裸 local volume；DEPLOY.md 从未提备份。
 - 影响：**磁盘损坏 / 误 `down -v` / 勒索 / 实例丢失 → 所有账号、笔记、朋友圈、聊天记录、媒体永久丢失，无恢复路径**。全部发现里最优先的一条。
 - 修复：每日 `pg_dump -Fc` + `mongodump` + `mc mirror` 到腾讯 COS（异机）+ 保留策略 + **演练一次恢复**；开 Lighthouse 自动快照做第二层；条件允许上 wal-g PITR。
@@ -108,20 +121,32 @@ compose healthcheck 打 `/api/v1/outbox/health`（`docker-compose.prod.yml:101-1
 
 ---
 
-## 2. QPS 崩溃顺序（修完 P0-1/P0-2 之后的下一批瓶颈）
+## 2. 容量风险顺序（修完 P0-1/P0-2 后的待验证假设）
 
-按代码实测的用户可感知劣化顺序：
+以下顺序来自原审计的静态代码推导，并非代码 benchmark、压测或生产观测。后端与 OpenIM 输入仍为 `unavailable/unpinned`；锁定版本后应逐项设计负载测试，以测量结果决定真实瓶颈顺序。
 
 1. **WS 徽章 count(*) 放大**：无 Redis 时每个 WS 连接跑 4 个 count（`realtime.service.ts:326-349`），每次点赞/评论触发实时 count 广播（`realtime.service.ts:403-421,437-455`）——直打 Postgres。
 2. **trace feed fan-out-on-read**：`getAcceptedFriendIds` 不带 take（上限 5000 好友），`fromID IN(...)` 让 `[fromID, createdAt, id]` 索引无法按全局时间序输出，**每页 bitmap 扫全部可见 traces 再 top-N 排序 + 每页 20×20 include 树**。大好友量用户每次下拉刷新 = 全表级操作（`trace.service.ts:109-175,554-563`）。
 3. **Notification count 风暴**：表只有 `[toUserID]` 索引（`schema.prisma:986-987`），unread count 每次互动实时触发，表只增不删——热门用户被点赞一波 = 最大表上的 count(*) 风暴。
 4. **toggleLike Serializable 重试风暴**：`trace.service.ts:354-386` 用 Serializable 事务打单个热点计数行，热门帖并发点赞产生 P2034 中止 + 重试（每次占用池连接跨 3+ round trip）。
-5. **OpenIM 网关 fd 上限 ~1 万**：验证 agent 追到 mage 源码 `Setrlimit(RLIMIT_NOFILE, 10000)`——号称 10 万连接是纸面数字，限流/熔断默认关闭（`config/openim-msggateway.yml:32,41`）。
+5. **OpenIM 网关 fd / 连接上限待测**：原审计记录称某未固定版本存在 `Setrlimit(RLIMIT_NOFILE, 10000)`；不能据此推断当前候选版本的稳定连接上限，必须固定版本后做 PoC。
 6. **outbox 20 行/分钟**：好友/群同步 `@Cron(EVERY_MINUTE)` + 批量 20 + 串行（`friend-sync-outbox.processor.ts:6,32`），高负载下 OpenIM 关系落后 Postgres 无界增长——"App 里是好友但聊不了天"。
 
 ---
 
-## 3. 容量测算：10~20 万注册、1 万同时在线 ≈ 多少 QPS
+## 3. 容量场景：10~20 万注册、1 万同时在线（全部为 scenario assumptions / 场景假设）
+
+本节所有 QPS、活跃率、消息 fan-out、对象大小和带宽数字都是规划用 scenario assumptions，不是实测数据、供应商承诺或容量保证。建模输入如下，任何输入改变都必须重新计算并压测：
+
+| 建模输入 | 场景假设 | 需要补齐的证据 |
+|---|---|---|
+| 注册 / 同时在线 | 10~20 万注册、1 万同时在线 | DAU、峰值并发和连接时长 telemetry |
+| REST 活动率 | 活跃用户每分钟 1~2 请求；朋友圈每 30s 轮询 | 按端点拆分的会话回放或埋点 |
+| 聊天活动率 | 在线用户 15% 聊天、每人 15s 一条 | 消息速率分布和峰谷系数 |
+| 消息 fan-out | 出站为入站 5~10 倍；示例群 100 人 | 群规模分布、在线率及离线推送策略 |
+| 数据库放大 | 每个 REST 请求 3~5 次查询 | 固定 SHA 上的 query trace |
+| 媒体对象大小 | 示例图片 500KB，5% 在线用户并发下载 | p50/p95 对象大小与缓存命中率 |
+| 峰值系数 | 晚高峰按稳态 2 倍 | 生产 telemetry 或业务批准的保守系数 |
 
 ### 3.1 REST API（打 circle_be）
 
@@ -131,62 +156,74 @@ compose healthcheck 打 `/api/v1/outbox/health`（`docker-compose.prod.yml:101-1
 | 自然操作（刷 feed、进个人页、点赞、切 tab refetch） | 活跃用户 1~2 请求/分钟 | 170~330 |
 | 徽章/未读、token refresh、上传 presign 等 | 零碎 | 50~100 |
 
-- **稳态 ≈ 550~750 QPS**；晚高峰 ×2 ≈ **1000~1500 QPS**。
-- 若按 P1 把 30s 轮询改成 WS 推送，直接砍掉 333，稳态降到 **~250~450 QPS**。
+- 场景推导：**稳态 ≈ 550~750 QPS**；若采用 2 倍峰值系数，则为 **1000~1500 QPS**。
+- 场景推导：若把 30s 轮询改成 WS 推送，理论上减少约 333 QPS，稳态约为 **250~450 QPS**；需用客户端行为与服务端压测验证。
 
 ### 3.2 长连接
-1 万在线 = **1 万条 circle_be realtime WS + 1 万条 OpenIM msggateway WS = 2 万条常驻 socket**。
-⚠️ **OpenIM 网关 fd 上限就是 10000——1 万在线正好顶死，还没算 Kafka/Mongo 客户端占用的 fd。**
+在“一名在线用户各保持一条业务 WS 和一条 IM WS”的场景假设下，1 万在线对应约 **2 万条常驻 socket**。OpenIM 网关的 fd、连接路由与多网关能力不得沿用未固定版本的原审计数字；应对锁定版本做 PoC，并记录 OS/container limits 与稳定连接上限。
 
 ### 3.3 IM 消息
-假设 15% 在聊天、每人 15s 一条 ≈ **100 msg/s 入站**；群聊扇出（一条 100 人群消息 = 100 次投递），出站按 5~10× ≈ **500~1000 投递/s**。Kafka 本身无压力，压力在单容器内那条 msgtransfer/push 流水线和共享 CPU。
+基于上表活动率与 fan-out 场景假设，约为 **100 msg/s 入站**、**500~1000 投递/s**。不能在没有固定 OpenIM 版本和压测的情况下断言 Kafka 或任一流水线“无压力”。
 
 ### 3.4 数据库
-1000 REST QPS × 每请求 3~5 查询 ≈ **3000~5000 DB QPS**，且混着 feed fan-out-on-read 重查询和每次互动的 count(*)。
+场景推导：1000 REST QPS × 每请求 3~5 查询 ≈ **3000~5000 DB QPS**。查询次数、耗时、锁竞争与缓存命中率必须在固定后端 SHA 上测量。
 
 ### 3.5 媒体带宽（最易忽略）
-1 万在线刷图，5% 并发拉 500KB 图 ≈ **2Gbps 级出口**。Lighthouse 套餐带宽 30~200Mbps——**图片走 CDN 不是优化项，是这个量级的生存条件**。
+按“1 万在线、5%（500 个客户端）各拉取一个 500KB 对象，且 500 个对象都在同一个 1 秒窗口内传完”的简化场景，会得到 **约 2Gbps 数据率**。这是明确的 scenario assumption：完成时间改变会反向线性改变所需带宽（例如传输窗口加倍则平均数据率减半）；真实带宽还取决于缓存命中、对象分布和协议开销。本文没有固定云套餐或报价证据，不拿该推导替代 CDN/出口压测与供应商配额确认。
 
 ### 3.6 当前架构在此量级的结局
-trust proxy 没修 = 全站 5 QPS，连 0.5% 的量都进不来；修完后 10 连接池 ~50 并发雪崩；就算池调大，单 Postgres 扛不住 feed 重查询 + count 风暴；OpenIM 单网关 fd 顶死在 1 万；outbox 20 行/分钟随便超；一台 VM 内存和带宽物理上就不够。
-**结论：单机形态无论怎么调参都到不了 1 万在线，必须走 P2 拓扑。**
+原审计指出 trust proxy、连接池、feed/count、网关 fd 与 outbox 等风险，但这些容量阈值尚未在固定输入上复现。**决策 gate：单节点只可作为 non-HA 的开发、staging 或容量基线；是否满足任何生产负载必须由代表性压测证明，且容量通过不代表 HA 通过。**
 
 ---
 
-## 4. 支撑 1 万在线的目标架构
+## 4. 容量拓扑与 HA 拓扑（两个独立 gate）
 
-```
-                     CDN（图片/视频，回源 COS）
-                          │
-用户 ──► CLB / Caddy ──┬─► circle_be × 2~3 副本（各 4C8G）
-                       │     └─ REST + realtime WS（Redis backplane 扇出）
-                       ├─► OpenIM 节点（4C16G，msggateway 拆独立容器 ×2，ulimit 调 10w+，前置 TLS）
-                       │     └─ Kafka / Mongo(replicaSet) / etcd 内网
-                       ├─► TencentDB PostgreSQL（4C16G 起，读写分离可后置）
-                       ├─► 云 Redis（2~4G：缓存 + 限流 + backplane）
-                       └─► COS（替掉自建 MinIO）+ LiveKit Cloud（已是云）
-独立小机：Prometheus/Grafana/Alertmanager + Uptime-Kuma
-```
+### 4.1 单节点容量 / staging 选项（明确 non-HA）
 
-**预算感（腾讯国际站，月）**：2× 应用机 + 1× OpenIM 机 ≈ $150~250；TencentDB PG ≈ $80~150；Redis ≈ $20~40；COS+CDN 按量（图片社交大头，几十到几百刀）。合计 **$300~600/月** 量级。
+可用一台或单 failure domain 的环境做功能测试、容量基线和故障注入准备。它即使通过 1500 QPS 或 1 万连接等**验收提案**，仍然是 **non-HA**：主机、磁盘、网络、数据库、消息队列或网关任一单点故障都可能导致服务中断或数据丢失。不得把“容量压测通过”写成“生产 HA 通过”。
 
-### 在 1 万在线从"建议"变"硬性"的事项
+### 4.2 HA 参考拓扑要求
 
-| 事项 | 为什么在 1 万在线是硬性的 |
+生产 HA 设计至少需要以下能力；云产品名称、实例规格和节点数只有在设计评审、PoC 和报价后才能固定：
+
+- 多个独立 failure domains（例如不同可用区/机架），入口负载均衡、`circle_be` 应用节点、realtime/IM gateways 在域间冗余；滚动发布或单域故障时仍能服务。
+- Kafka、MongoDB 与 etcd 采用 quorum-aware placement。投票成员不得集中在同一 failure domain；节点数、replication factor、选主/仲裁参数由锁定版本的官方文档和故障演练确认，不能把“多容器”当成“有 quorum”。
+- Postgres、Redis、对象存储及 OpenIM 数据路径必须有经评审的冗余/故障转移方案；管理型服务也需验证部署域、故障转移语义和客户端重连行为。
+- 备份与快照要有异 failure domain 副本、保留策略、加密/访问控制、监控告警和书面 runbook；必须按计划执行 restore drill，并保存恢复时间与数据缺口证据。
+- 容量、HA 与灾难恢复分别验收：峰值负载压测证明容量；单节点/单域/依赖故障注入证明 HA；从备份恢复证明 DR。
+
+### 4.3 上线验收提案（待业务批准，不是既有证据）
+
+| Gate | Acceptance proposal | 通过证据 |
+|---|---|---|
+| 容量 | 1500 REST QPS 混合场景、1 万业务 WS + 1 万 IM WS、1 万 WS 重连风暴 | 固定 SHA/镜像 digest、负载模型、p50/p95/p99、错误率、资源水位与测试报告 |
+| failure domain | 任一应用节点、gateway 或单 failure domain 丢失时，服务在批准的错误率/延迟预算内继续 | 故障注入记录、告警、自动故障转移与回切记录 |
+| quorum | 逐项演练 Kafka/Mongo/etcd 的单成员与单域故障，确认不会 split-brain 且达到厂商支持的 quorum | 固定版本配置、成员分布、选主日志和读写验证 |
+| 备份恢复 | 定期从隔离备份完整恢复 Postgres、Mongo、对象存储和必要配置 | restore drill 记录与校验结果 |
+| RTO | **提案：≤ 60 分钟**；须由业务、运维和安全共同批准 | 从事故/演练开始到关键路径恢复的时间线 |
+| RPO | **提案：≤ 15 分钟**；须按数据类型评审，聊天/账号/媒体可不同 | 恢复点、最后可验证事务/对象及数据缺口报告 |
+
+### 4.4 成本口径
+
+原 `$300~600/月` 只是少量计算/数据库/缓存实例的过时 scenario assumption，**不是完整 HA budget，也不是当前供应商报价**。重新估算必须基于固定区域、规格、计费周期、承诺折扣与实测用量，并明确列出 included 与 excluded。
+
+当前成本模型明确 excluded / 不包含：load balancer、monitoring、logs、backups/snapshots、LiveKit、additional HA nodes、cross-zone/public traffic，以及 CDN/COS 请求费与出口、告警/值班、安全与许可证/法律审查成本。任何预算评审遗漏这些费用都不得通过生产 gate。
+
+### 4.5 在该容量场景下优先验证的事项
+
+| 事项 | 验证目标 |
 |---|---|
-| P0 全部 | 前提中的前提 |
-| 轮询改 WS 推送 + 焦点 refetch 加 TTL | 砍掉 1/3+ 的 REST QPS，省一台机器 |
-| Notification 复合索引 + unread 部分索引 + badge 广播去抖 | 每秒几百次互动 = count 风暴，第一个用户可感知卡点 |
-| **Feed 改 fan-out-on-write（timeline 表按 viewerId 建索引）** | fan-out-on-read 在 10 万社交图上 O(N)/页，无绕过办法 |
-| FE session 硬化 + WS 重连去上限 | 一次部署 = 1 万人重连风暴；现在代码还会全登出，风暴 ×2 |
-| WS 连接时的 4 个 count(*) 走 Redis 快照 | 重连风暴 = 瞬时 4 万条查询，部署后雪崩的直接引信 |
-| outbox 加即时 kick + 批量并发 + SKIP LOCKED | 20 行/分钟几分钟就积压 |
-| cron 分布式锁 + throttler Redis storage + 按用户 channel 订阅 | 多副本正确性前提 |
-| 压测验收 | k6 打 1500 QPS 混合场景 + 模拟 1 万 WS 同时重连，不达标不上量 |
+| P0 待复核项 | 在固定后端/OpenIM 输入上确认风险与修复，不沿用 unpinned 行号作验收 |
+| 轮询改 WS 推送 + 焦点 refetch 加 TTL | 测量 REST 降幅、WS 增量与断线恢复行为 |
+| Notification 索引 + badge 广播去抖 | 通过 query trace 与热点负载验证 count 风险 |
+| Feed fan-out 策略 | 用真实社交图分布比较 fan-out-on-read / write，而非先验认定唯一实现 |
+| FE session 硬化 + WS 持续重连 | 在后端重启、超时和 token 过期场景验证不误登出、不形成重连风暴 |
+| outbox / cron / throttler 多副本正确性 | 验证锁、幂等、吞吐、积压恢复和跨副本一致性 |
+| 容量压测 | 使用 4.3 的验收提案；目标值由业务批准后才成为 gate |
 
 ---
 
-## 5. 架构优点（不用重做，避免误伤）
+## 5. 原审计记载的架构优点（后端项待固定输入复核）
 
 - 无状态 JWT + Postgres 存储的 refresh token rotation，带重用检测（`refresh-token.service.ts:83-130`）
 - 事务性 outbox + CAS 认领 + 陈旧锁恢复 + 指数退避（`friend-sync-outbox.processor.ts`）
@@ -198,13 +235,15 @@ trust proxy 没修 = 全站 5 QPS，连 0.5% 的量都进不来；修完后 10 �
 - argon2id 密码/验证码哈希，账号枚举安全的登录错误，抽样 note/trace/friend/temp-chat **无 IDOR**
 - 前端：单飞 token refresh（防并发风暴）、每请求 15s 超时、统一 ApiError + errorCode i18n、热列表全用 FlatList、IM 消息内存上限 200 条
 
-> 真正难的多实例问题（会话、上传、outbox、realtime）代码里都已解决——**是部署配置让这些设计失效，而不是设计本身有问题**。
+> 这些条目可作为保留设计的候选清单，但不能证明多实例正确性已经解决。后端项须在固定 SHA 上复核，并通过多副本、故障注入和数据一致性测试后再作结论。
 
 ---
 
 ## 6. 修复路线图
 
-### P0 — 本周内，让机器能安全见人（多数配置级，约几天）
+本路线图保留原审计的候选动作，仅作为未验证的 sequencing proposal，不构成时间表、结果保证或生产资格结论。涉及 `circle_be`、`openim-docker` 和客户端 SDK 的条目须先在固定版本上复核；实施排期与 production eligibility 只有在复核成立并通过对应 gates 后才能确定。
+
+### P0 — sequencing proposal：先处理暴露面与基础运行门槛
 1. `trust proxy` + Caddy XFF 清洗
 2. Prisma 池配置 + Postgres 基础调优
 3. compose 加 Redis + `REDIS_URL` 生产必填
@@ -217,101 +256,67 @@ trust proxy 没修 = 全站 5 QPS，连 0.5% 的量都进不来；修完后 10 �
 10. `/etc/docker/daemon.json` 日志轮转 + 每容器 mem_limit + 换 ≥8GB（建议 16GB）机型
 11. 双端 Sentry DSN
 
-### P1 — 一个月内，可运营
+### P1 — sequencing proposal：再补齐可观测性、恢复与容量基础
 - 监控栈上服务器（scrape `circle_be:3000` + token + 磁盘/outbox 告警）
 - 前端三处只在 401/403 清 session；WS 重连去 10 次上限
 - 加 `GET /auth/im-token` 补发端点修 IM token 三死角
 - Notification 补 `[toUserID, createdAt]` + unread 部分索引；friend list/activities 加分页
 - CI 构建镜像推 registry 按 tag 部署（获得回滚能力）
 - cron 加分布式锁；throttler 换 Redis storage
-- FE feed store 用已装好的 MMKV persist 落盘冷启动缓存（无需引入 SQLite）
+- FE feed persistence 当前尚未实现；候选方案是用已安装的 MMKV + zustand `persist` 落盘冷启动缓存，须经固定客户端版本验证和相应 gate 验收后再决定
 
-### P2 — 规模化（真正的高 QPS / HA）
+### P2 — 规模化容量与独立 HA/DR gate
 - feed 改 fan-out-on-write（timeline 表 `[viewerId, createdAt DESC, id DESC]`）
 - badge 广播去抖；WS 连接 count 走 Redis 快照
 - Postgres / 对象存储迁管理型服务（TencentDB PG + COS）
-- circle_be ≥2 副本 + 独立 cron worker 容器
-- OpenIM 拆容器、Mongo 转 replicaSet、提 ulimit、开网关限流
+- circle_be 多副本 + 独立 cron worker；节点跨 failure domains，副本数由容量和故障预算决定
+- OpenIM 多 gateway PoC；Kafka/Mongo/etcd 做 quorum-aware 跨域部署与故障演练
+- 文档化备份、定期 restore drill，并由业务批准 RTO/RPO
 - 图片/视频全量走 CDN
-- k6 + WebSocket 重连风暴压测验收（1500 QPS 混合 + 1 万 WS 同时重连）
+- k6 + WebSocket 重连风暴压测（1500 QPS + 1 万 WS 是待批准 acceptance proposal，不是现有能力声明）
 
 ---
 
 ## 附一：关于是否引入 SQLite
 
-**不需要。** 前端存储分层已覆盖所有场景：聊天记录由 OpenIM SDK 原生本地库管；登录态用 SecureStore + zustand persist；REST feed 只是"服务器权威 + 客户端展示缓存"，用已装好的 `react-native-mmkv` + zustand `persist` 落盘最后一页即可（P1 顺手做）。SQLite 只在"离线编辑 + 同步合并 / 本地全文搜索 / 复杂本地关系模型"时才有价值，本项目一个都没有；引入它反而增加本地 schema 迁移、缓存失效、双写一致性等高风险面。后端侧 Postgres 是正确选择，SQLite 撑不了多连接写入，方向相反。
+**暂定不引入。** 当前 feed persistence 尚未实现；用已安装的 `react-native-mmkv` + zustand `persist` 落盘服务器权威 feed 的展示缓存只是 proposal，不是已验证实现。聊天 local history 是否由 OpenIM SDK 原生本地库完整承担，也必须针对 pinned package/version 验证其保存范围、升级行为和恢复语义。基于当前已验证需求，尚未发现必须使用 SQLite 的离线编辑与同步合并、本地全文搜索或复杂本地关系模型，因此暂定不引入 SQLite；如果这些需求、SDK 验证结论或任一 production gate 发生变化，必须重新评估该决策。后端多连接写入仍由 Postgres 承担，与客户端是否需要 SQLite 是两个独立问题。
 
 ---
 
 ## 附二：OpenIM 商业版 vs 开源版 —— 是否需要商业版
 
-> 结论来自 2026-07-04 多智能体网络调研（5 路并行 + 对抗核实），来源为 openim.io 官方文档、openimsdk.com/enterprise 企业对比表、GitHub issues。
+原网络调研没有在本分支保存固定 OpenIM 版本、页面快照、供应商合同或可复现 PoC，因此商业/开源功能边界与价格均为 **unresolved**。GitHub issues `#3660`、`#2298`、`#3373` 只能作为追问线索，不能证明某个开源版本缺少多 gateway、连接路由或 HA 能力，也不能证明商业版一定提供这些能力。
 
-**功能层面结论：不需要买商业版。** OpenIM 在本项目里只承担"消息通道"这一角色，而消息通道恰好是 100% 开源（Apache-2.0）覆盖的部分。商业版的卖点你要么已自建、要么用 LiveKit 替代。
+### 多 gateway / 商业边界决策 gate
 
-### 商业版独有功能（已核实，去营销水分）
+在选择自托管开源版、购买商业支持或迁移供应商之前，必须同时完成：
 
-| 商业版独有 | 核实结论 | 对 circle-im |
-|---|---|---|
-| **群组/多人音视频 + 视频会议** RTC 媒体栈（单会议百人视频/千人订阅/服务端录制） | ✅ verified-primary，官方文档原话"群音视频不开源" | ❌ 冗余——已用 LiveKit Cloud，且不过 OpenIM |
-| **朋友圈/工作圈** moments | ✅ 确认开源服务端 0 命中 | ❌ 冗余——trace + circle-plaza 已自建 |
-| **成品 UI 客户端 App** 商用授权 | ⚠️ 夸大——开源仓库其实是完整生产级 App，真门槛是 SDK 许可（见附三） | ❌ 冗余——有自建 Expo App |
-| **纯 JS SDK / Web / Admin 后台源码** | ✅ verified-primary，闭源"免费用不给源码" | ❌ 冗余——有自建 NestJS 后端 + circle_admin_web |
-| **组织架构**（政企通讯录） | ✅ 商业独有 | ❌ 冗余——社交 App，非企业办公场景 |
-| **HA 集群 + K8s + 深度调优 + 十万级会话** | ⚠️ 能力未从开源扣留（README 就支持 K8s+集群），买的是**协调逻辑 + SLA/支持** | ⚠️ 唯一可能有价值的一类 |
+1. 固定候选 OpenIM 服务端与客户端版本：源码 commit SHA、镜像 digest、Helm/chart 或 compose 版本、配置与许可证文件；未固定时保持 `unavailable/unpinned`。
+2. 对该固定版本完成多 gateway PoC：至少覆盖连接分配、跨 gateway 消息路由、节点/单域故障、重连风暴、滚动升级、限流以及 Kafka/Mongo/etcd quorum 行为，并保存测试结果。
+3. 若 PoC 无法回答商业边界，取得 OpenIM 的**书面确认**，逐项说明开源版和商业产品在多 gateway、HA、支持/SLA、升级路径及许可证上的权利与限制；销售口头说明不通过 gate。
+4. 对相同负载模型取得可比较报价，明确 included / excluded、流量、存储、支持、迁移和退出成本。本文不提供或推断任何供应商价格。
 
-**重要反向发现（别为这些付费）**：万人群（10 万成员群）、消息漫游、离线消息、云存储、多端同步、账号导入/禁用、读回执——经核实**全在开源 Apache-2.0 版**，被部分文章误列成商业功能。
-
-### 唯一的技术天花板
-
-商业版对本项目**唯一**可能真有价值的：**分布式 msggateway 横向扩展（一致性哈希连接/消息路由）**。维护者在 GitHub issue #3660/#2298/#3373 明确表示这个**不移植到开源版**——"请自己写代码或升级商业版"。这对应审计 P2 里"单点 msggateway、无 HA"。但现在是单 VM 测试期，远未到该拐点。
-
-### 定价现实
-
-OpenIM 商业版**无任何公开报价**，100% contact-sales（contact@openim.io）合同制，签约前无法预估 TCO。对比之下"买省心"的托管 SaaS 定价透明且按峰值 DAU 计费：环信 ~¥3,300–5,800/月、融云 ~¥5,500–9,500/月、腾讯云 IM 旗舰版 ~¥7,000–12,000/月（海外用户 Sendbird/Stream 贵 5–15 倍）。这些一次性买断 HA + 运维 + 审核对接，通常比 OpenIM 不透明报价更划算。
-
-### 底线建议
-
-**现在别买。** 继续自托管开源版，把审计 P2 里能自己搞定的做掉。三个会翻转结论的条件：
-1. **规模拐点**：稳定逼近 1 万在线且需多网关节点时——但此时更可能选托管 SaaS 而非 OpenIM 商业版（先并排比价）。
-2. **SDK 闭源商用许可**：见附三——这是**许可层**问题，不是功能层，且已实际触发。
-3. **上架中国区 / 服务器迁大陆**：触发的是"接第三方内容审核 + 合规实体"，而 **OpenIM 商业版并不提供审核引擎**，所以这也不是买它的理由。当前 US 托管 + US 用户状态下该义务基本不绑定。
-
-> 内容审核：开源版和商业版 OpenIM 都不自带审核引擎，无论如何都得自己用 webhook 接第三方（阿里云/腾讯天御/数美）——买商业版解决不了这个缺口。
+在上述 gate 完成前，采购与功能边界结论必须保持“未决”，不能给出购买/不购买或“某功能 100% 开源/商业独有”的确定结论。
 
 ---
 
-## 附三：OpenIM 客户端 SDK 许可风险（上架前硬性 gate）⚠️
+## 附三：第三方组件许可与二进制分发 gate ⚠️
 
-> 实测两处 OpenIM 客户端 SDK 的自带 LICENSE 文件确认（非营销页），对**闭源商用**是真实法律风险。
+本前端固定 SHA 可验证：`package.json` 声明 `@openim/rn-client-sdk` 范围 `^3.8.3-patch.12.3`，lockfile 解析到 `3.8.3-patch.12.3`，且 `postinstall` 调用 `scripts/patch-openim-native-events.mjs`。这些只是仓库事实；本分支没有保存该发布包的 LICENSE/NOTICE 全文、商业授权合同或律师意见，不能据此给出许可证义务或“可以闭源分发”的法律结论。私有 `temp-chat-web` 仍为 `unavailable/unpinned`。
 
-| 组件 | OpenIM SDK 依赖 | 许可证 |
-|---|---|---|
-| **手机 App**（circle-im，核心产品） | `@openim/rn-client-sdk@3.8.3-patch.12.3` | **AGPL-3.0-only** ⚠️ 最强 copyleft |
-| 访客网页（temp-chat-web，私有 repo） | `@openim/client-sdk@3.8.3`（`src/lib/openim.ts` 直接 import） | **GPL-3.0-only** |
-| — | `@openim/protocol` | Apache-2.0（无问题） |
+### 不可绕过的 pre-distribution gate
 
-### 含义（保守 / FSF 解读）
+**在任何第三方能够取得二进制之前**，必须完成开源许可证与商业许可证审查；这明确包括 external TestFlight、直接/商店 APK、Ad Hoc、enterprise distribution，以及任何客户、测试者、合作方或审核人员可访问的构建。内部开发设备也应受访问控制和组件清单管理，但“测试”“内测”或“未正式上架”不能自动降低或豁免分发 gate。
 
-- **AGPL-3.0（手机 App）是主要雷点**：copyleft 触发点是"分发（conveying）"。上架 App Store / TestFlight / 发 APK = 把内嵌的 AGPL SDK 分发给用户 → 保守解读下**整个 App 构成衍生作品，须以 AGPL-3.0 授权并提供完整源码**，与闭源 App 根本冲突。AGPL 另有"网络条款"。
-- **加重情节**：依赖是 `3.8.3-patch.12.3`，且 `postinstall` 的 `scripts/patch-openim-native-events.mjs` **修改了 SDK** → 分发修改版 AGPL 代码，copyleft 义务更硬。
-- **GPL-3.0（网页端）** 稍弱（无网络条款），但网页 JS bundle 是分发给浏览器的目标代码，保守解读同样要求提供合并 bundle 的源码。
+由具备相关司法辖区和开源软件经验的 qualified counsel / 合格律师基于实际交付物决定义务，包括但不限于：
 
-### 边界
+- 固定所有第三方组件及传递依赖的精确版本、来源、LICENSE/NOTICE、修改补丁和打包/链接方式；
+- 判断目标分发渠道与司法辖区下的 notice、源码提供、署名、修改披露、再许可或商业授权要求；
+- 审阅 OpenIM 或替代供应商的书面商业条款，确认授权主体、产品、版本、平台、用户/设备范围、期限和终止后处置；
+- 给出书面批准，或要求替换组件、取得商业授权、改变交付方式/源码策略；工程团队不得自行作最终法律判断。
 
-非法律意见。"链接 SDK 是否构成衍生作品"存在学界争议，动态链接从宽解读存在；但保守/主流解读对闭源商用不利，而 OpenIM 卖商业授权的核心目的正是解除这条 copyleft。
-
-### 这如何改写附二的结论
-
-**功能上**不需要商业版；但**许可上**这是本项目最后真会付钱给 OpenIM 的唯一理由，且绑定**核心手机 App** 而非边角网页。换句话说——需要的不是商业版"功能包"，而是让闭源 App 合法内嵌 AGPL SDK 的**商业 SDK 授权**。
-
-### 建议动作（上架前必须闭环）
-
-1. 单独向 OpenIM 销售问"闭源商用 App 内嵌 rn-client-sdk 的 **SDK 授权费**"，别被打包进整套商业版报价。
-2. 上架前找懂开源许可的**律师**确认。
-3. 备选：换非 copyleft IM SDK（腾讯云 IM/融云 SDK 通常商用友好，或自封 WebSocket）——较大改动。
-4. 测试期（TestFlight/内测）风险低，但**"上架前解决 SDK 授权"列为硬性 gate**。
+发布证据包至少包含 SBOM/依赖清单、许可证与 NOTICE、补丁清单、律师/法务书面决定、对应构建 SHA，以及适用时的供应商授权文件；若供应商授权文件不适用，须由 qualified counsel / 合格律师书面确认不适用。任何适用项缺失，external TestFlight、APK、Ad Hoc、enterprise distribution 与其他第三方 binary 分发均为 **NO-GO**。
 
 ---
 
-*本文档结论均来自 2026-07-04 全量源码审计（29 条 critical/high 全部经独立对抗验证确认）+ 商业版对比调研 + SDK 许可实测。原始证据 digest 见会话 scratchpad。*
+*本文档保留 2026-07-04 原审计的待复核风险清单，并于 2026-07-11 校正证据 provenance、scenario assumptions、供应商未决项及法律/HA 决策 gate。只有 provenance 表标为 verified 的仓库输入可在本分支直接复查。*
