@@ -2,11 +2,36 @@ import type { Href } from 'expo-router';
 
 export type UserProfileScope = 'messages' | 'contacts' | 'profile' | 'discover';
 
+type UserProfileHref = {
+  pathname:
+    | '/(tabs)/messages/user/[id]'
+    | '/(tabs)/contacts/user/[id]'
+    | '/(tabs)/profile/user/[id]'
+    | '/(tabs)/discover/user/[id]';
+  params: { id: string; name?: string };
+};
+
+type ChatDetailHref = {
+  pathname:
+    | '/(tabs)/messages/chat-detail'
+    | '/(tabs)/contacts/chat-detail'
+    | '/(tabs)/profile/chat-detail'
+    | '/(tabs)/discover/chat-detail';
+  params: {
+    sourceID: string;
+    conversationType: 'private' | 'group';
+    title?: string;
+    avatarUrl?: string;
+    conversationID?: string;
+    searchedMsgID?: string;
+  };
+};
+
 export function getUserProfileHref(
   scope: UserProfileScope,
   id: string,
   name?: string,
-): Href {
+): UserProfileHref {
   const params = name ? { id, name } : { id };
 
   switch (scope) {
@@ -120,7 +145,7 @@ export function getChatDetailHref(
   conversationID?: string,
   searchedMsgID?: string,
   conversationType: 'private' | 'group' = 'private',
-): Href {
+): ChatDetailHref {
   // 私聊页在每个 tab 栈下都有 re-export 路由，按来源 scope 入对应栈，
   // 这样返回时回到进入前的上一级，而不是跳到消息首页。
   const params = {
