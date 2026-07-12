@@ -16,7 +16,9 @@ import { Avatar } from '@/components/ui/avatar';
 import { Divider } from '@/components/ui/divider';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { NavHeader } from '@/components/ui/nav-header';
-import { mapConversationItemToUI } from '@/im/mappers';
+import { getMessagePreview, mapConversationItemToUI } from '@/im/mappers';
+import { searchAllTextMessages } from '@/im/client';
+import type { SearchMessageResultItem } from '@openim/rn-client-sdk';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { useIMStore } from '@/stores/imStore';
 import { getUserProfileHref, type UserProfileScope } from '@/features/user/utils/routes';
@@ -26,6 +28,11 @@ import type { Conversation } from '@/types';
 type ChatResult = {
   kind: 'chat';
   data: Conversation;
+  // 命中消息内容时带上：命中条数 + 首条命中消息预览，用于「聊天记录」副行展示。
+  matchCount?: number;
+  snippet?: string;
+  // 首条命中消息的 clientMsgID —— 点击后作为 searchedMsgID 直接定位到该消息。
+  targetMsgID?: string;
 };
 
 type ContactResult = {
@@ -91,6 +98,9 @@ export default function SearchScreen() {
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [friendsLoading, setFriendsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [messageMatches, setMessageMatches] = useState<
+    SearchMessageResultItem[]
+  >([]);
 
   const rawConversations = useIMStore((state) => state.conversations);
   const conversations = useMemo(
@@ -144,22 +154,75 @@ export default function SearchScreen() {
   }, [loadFriends]);
 
   const trimmedQuery = query.trim().toLowerCase();
+  const keyword = query.trim();
+
+  // 全局搜聊天记录（消息正文）：防抖 250ms，避免每次按键都打本地检索。
+  // 走 OpenIM 本地全文检索，返回按会话分组的命中；空词即时清空。
+  useEffect(() => {
+    if (!keyword) {
+      setMessageMatches([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      searchAllTextMessages({ keyword, count: 50 })
+        .then((items) => {
+          if (!cancelled) setMessageMatches(items);
+        })
+        .catch((error) => {
+          if (cancelled) return;
+          setMessageMatches([]);
+          if (__DEV__) {
+            console.warn('[SearchScreen] searchAllTextMessages failed', error);
+          }
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [keyword]);
 
   const sections = useMemo<SearchSection[]>(() => {
     if (!trimmedQuery) {
       return [];
     }
 
-    const matchedChats: ChatResult[] = conversations
-      .filter((conversation) => {
-        const haystack = `${conversation.name}${conversation.message ?? ''}`.toLowerCase();
-        return haystack.includes(trimmedQuery);
-      })
-      .map((conversation) => ({ kind: 'chat' as const, data: conversation }));
+    // 「聊天记录」= 消息正文命中（OpenIM 全文检索）+ 会话名命中，按会话去重。
+    // 正文命中排前面并带命中条数/摘要；仅名字命中的补在后面，副行沿用最后一条消息。
+    const conversationById = new Map(conversations.map((c) => [c.id, c]));
+    const chatById = new Map<string, ChatResult>();
+
+    for (const match of messageMatches) {
+      const conversation = conversationById.get(match.conversationID);
+      if (!conversation) continue;
+      const firstHit = match.messageList?.[0];
+      chatById.set(conversation.id, {
+        kind: 'chat',
+        data: conversation,
+        matchCount: match.messageCount,
+        snippet: firstHit ? getMessagePreview(firstHit) : undefined,
+        targetMsgID: firstHit?.clientMsgID || undefined,
+      });
+    }
+
+    for (const conversation of conversations) {
+      if (chatById.has(conversation.id)) continue;
+      const haystack =
+        `${conversation.name}${conversation.message ?? ''}`.toLowerCase();
+      if (haystack.includes(trimmedQuery)) {
+        chatById.set(conversation.id, { kind: 'chat', data: conversation });
+      }
+    }
+
+    const matchedChats: ChatResult[] = [...chatById.values()];
 
     const matchedFriends: ContactResult[] = friends
       .filter((friend) => {
-        const haystack = `${friend.nickname}${friend.accountId}`.toLowerCase();
+        // 备注（我给对方设的名字）也要能搜到——之前只匹配昵称/账号，
+        // 用户按自己设的备注搜就一条都出不来。
+        const haystack =
+          `${friend.remark ?? ''}${friend.nickname}${friend.accountId}`.toLowerCase();
         return haystack.includes(trimmedQuery);
       })
       .map((friend) => ({ kind: 'contact' as const, data: friend }));
@@ -178,9 +241,9 @@ export default function SearchScreen() {
       });
     }
     return out;
-  }, [conversations, friends, t, trimmedQuery]);
+  }, [conversations, friends, messageMatches, t, trimmedQuery]);
 
-  const handlePressChat = (conversation: Conversation) => {
+  const handlePressChat = (conversation: Conversation, targetMsgID?: string) => {
     // router.push 会把 params 通过 URL 序列化；avatarUrl 为 falsy（null/undefined/空串）时会变
     // 成字符串 "null" / "undefined"，下游误以为有值。只传存在的值。
     const params: Record<string, string> = {
@@ -192,6 +255,10 @@ export default function SearchScreen() {
     if (conversation.avatarUrl) {
       params.avatarUrl = conversation.avatarUrl;
     }
+    // 命中聊天记录：带上 searchedMsgID，聊天页会围绕该消息恢复历史并滚动高亮定位。
+    if (targetMsgID) {
+      params.searchedMsgID = targetMsgID;
+    }
     router.push({
       pathname: '/(tabs)/messages/chat-detail',
       params,
@@ -199,7 +266,13 @@ export default function SearchScreen() {
   };
 
   const handlePressFriend = (friend: FriendProfile) => {
-    router.push(getUserProfileHref(currentScope, friend.id, friend.nickname));
+    router.push(
+      getUserProfileHref(
+        currentScope,
+        friend.id,
+        friend.remark?.trim() || friend.nickname,
+      ),
+    );
   };
 
   const d = useMemo(
@@ -253,8 +326,20 @@ export default function SearchScreen() {
   const renderItem = ({ item }: { item: SearchResultItem }) => {
     if (item.kind === 'chat') {
       const conversation = item.data;
+      // 多条命中 → 显示「N 条相关聊天记录」；单条 → 直接显示命中消息；
+      // 仅名字命中 → 沿用最后一条消息预览。
+      const subtitle =
+        item.matchCount && item.matchCount > 1
+          ? t('search.messageMatchCount', {
+              count: item.matchCount,
+              defaultValue: '{{count}} 条相关聊天记录',
+            })
+          : item.snippet || conversation.message || ' ';
       return (
-        <Pressable style={s.resultRow} onPress={() => handlePressChat(conversation)}>
+        <Pressable
+          style={s.resultRow}
+          onPress={() => handlePressChat(conversation, item.targetMsgID)}
+        >
           <Avatar size={40} name={conversation.name} uri={conversation.avatarUrl} />
           <View style={s.resultBody}>
             <View style={s.resultTopRow}>
@@ -266,7 +351,7 @@ export default function SearchScreen() {
               ) : null}
             </View>
             <Text style={d.resultSubtitle} numberOfLines={1}>
-              {conversation.message || ' '}
+              {subtitle}
             </Text>
           </View>
         </Pressable>
@@ -274,15 +359,20 @@ export default function SearchScreen() {
     }
 
     const friend = item.data;
+    // 有备注时以备注为主名（微信风格），副行给出真实昵称，让「按备注搜到」的结果一目了然；
+    // 无备注时保持昵称 + 账号。
+    const remark = friend.remark?.trim();
+    const displayName = remark || friend.nickname;
+    const subtitle = remark ? friend.nickname : friend.accountId;
     return (
       <Pressable style={s.resultRow} onPress={() => handlePressFriend(friend)}>
-        <Avatar size={40} name={friend.nickname} uri={friend.avatarUrl ?? undefined} />
+        <Avatar size={40} name={displayName} uri={friend.avatarUrl ?? undefined} />
         <View style={s.resultBody}>
           <Text style={d.resultTitle} numberOfLines={1}>
-            {friend.nickname}
+            {displayName}
           </Text>
           <Text style={d.resultSubtitle} numberOfLines={1}>
-            {friend.accountId}
+            {subtitle}
           </Text>
         </View>
       </Pressable>

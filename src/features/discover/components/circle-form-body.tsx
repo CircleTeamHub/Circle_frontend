@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -13,11 +13,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Divider } from '@/components/ui/divider';
 import { MenuRow } from '@/components/ui/menu-row';
+import { OptionPickerSheet } from '@/components/ui/option-picker-sheet';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useCreateCircleFormStore } from '@/features/discover/store/use-create-circle-form-store';
 import {
   CIRCLE_CREDIT_OPTIONS_VALUES,
-  CIRCLE_MAX_TAGS,
   CIRCLE_PRESET_CATEGORY_KEYS,
   CIRCLE_VIP_OPTIONS_VALUES,
 } from '@/features/discover/constants/circle-form';
@@ -177,14 +177,23 @@ export const CircleFormBody: React.FC<CircleFormBodyProps> = ({ form }) => {
   const VIP_OPTIONS = useMemo(
     () =>
       CIRCLE_VIP_OPTIONS_VALUES.map((value) => ({
+        // 语义：所选等级及以上可加入（与后端 vipLevel < restriction 拒绝一致）。
         label:
           value === null
             ? t('common.noRestriction')
-            : t(`vipOptions.vip${value}`),
+            : t('circle.create.vipAtLeast', {
+                level: value,
+                defaultValue: `VIP ${value} 及以上`,
+              }),
         value,
       })),
     [t],
   );
+
+  // VIP/信用分限制的选择 sheet（点击行弹起，直选而非循环切换）。
+  const [activeRestrictionSheet, setActiveRestrictionSheet] = useState<
+    'vip' | 'credit' | null
+  >(null);
 
   const CREDIT_OPTIONS = useMemo(
     () =>
@@ -423,51 +432,6 @@ export const CircleFormBody: React.FC<CircleFormBodyProps> = ({ form }) => {
           />
         </View>
 
-        <Text style={[s.rowLabel, d.rowLabel, { marginBottom: Spacing.sm }]}>
-          {t('circle.create.tagsLabel')}
-        </Text>
-        <View style={s.tagRow}>
-          {form.tags.map((tag, index) => (
-            <Pressable
-              key={tag}
-              onPress={() => form.handleRemoveTag(index)}
-              style={[s.tagChip, { backgroundColor: colors.primary }]}
-            >
-              <Text style={{ color: colors.white, ...Typography.caption }}>
-                #{tag}
-              </Text>
-              <Ionicons name="close" size={12} color={colors.white} />
-            </Pressable>
-          ))}
-        </View>
-        {form.tags.length < CIRCLE_MAX_TAGS ? (
-          <View style={s.tagInputRow}>
-            <TextInput
-              placeholder={t('circle.create.tagPlaceholder')}
-              placeholderTextColor={colors.textSecondary}
-              value={form.tagInput}
-              onChangeText={form.setTagInput}
-              onSubmitEditing={form.handleAddTag}
-              maxLength={10}
-              style={[
-                s.tagInput,
-                {
-                  borderColor: colors.surfaceBorder,
-                  color: colors.text,
-                  backgroundColor: colors.surface,
-                },
-              ]}
-            />
-            <Pressable
-              onPress={form.handleAddTag}
-              style={[s.addTagBtn, { backgroundColor: colors.primary }]}
-            >
-              <Text style={{ color: colors.white, ...Typography.caption }}>
-                {t('common.add')}
-              </Text>
-            </Pressable>
-          </View>
-        ) : null}
       </View>
 
       {/* ── 权限与限制 ── */}
@@ -480,14 +444,14 @@ export const CircleFormBody: React.FC<CircleFormBodyProps> = ({ form }) => {
           icon="diamond-outline"
           label={t('circle.joinVipRestriction')}
           rightText={vipLabel}
-          onPress={form.cycleVip}
+          onPress={() => setActiveRestrictionSheet('vip')}
         />
         <Divider />
         <MenuRow
           icon="shield-checkmark-outline"
           label={t('circle.joinCreditRestriction')}
           rightText={creditLabel}
-          onPress={form.cycleCredit}
+          onPress={() => setActiveRestrictionSheet('credit')}
         />
         <Divider />
         <View style={s.toggleRow}>
@@ -514,6 +478,24 @@ export const CircleFormBody: React.FC<CircleFormBodyProps> = ({ form }) => {
           />
         </View>
       </View>
+
+      {/* VIP / 信用分限制选择 sheet（所选等级及以上可加入） */}
+      <OptionPickerSheet
+        visible={activeRestrictionSheet === 'vip'}
+        title={t('circle.joinVipRestriction')}
+        options={VIP_OPTIONS}
+        selectedValue={form.joinVipRestriction}
+        onSelect={form.setJoinVipRestriction}
+        onClose={() => setActiveRestrictionSheet(null)}
+      />
+      <OptionPickerSheet
+        visible={activeRestrictionSheet === 'credit'}
+        title={t('circle.joinCreditRestriction')}
+        options={CREDIT_OPTIONS}
+        selectedValue={form.joinCreditRestriction}
+        onSelect={form.setJoinCreditRestriction}
+        onClose={() => setActiveRestrictionSheet(null)}
+      />
     </>
   );
 };

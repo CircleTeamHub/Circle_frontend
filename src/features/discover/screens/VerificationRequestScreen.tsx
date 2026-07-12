@@ -17,6 +17,7 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { fetchInvitation, respondToVerification } from '@/services/api/circles';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useAuthStore } from '@/stores/authStore';
+import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import type { CircleInvitation } from '@/types';
 
 const s = StyleSheet.create({
@@ -156,6 +157,10 @@ export default function VerificationRequestScreen() {
   useEffect(() => {
     loadInvitation();
   }, [loadInvitation]);
+
+  useEffect(() => {
+    void markMatchingTargetNotificationsRead({ invitationId: id });
+  }, [id]);
 
   const d = useMemo(
     () => ({

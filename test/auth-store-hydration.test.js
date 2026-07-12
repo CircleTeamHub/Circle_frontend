@@ -17,6 +17,7 @@ function loadAuthStore() {
   }).outputText;
 
   let persistOptions;
+  const storageSetCalls = [];
   const context = {
     module: { exports: {} },
     exports: {},
@@ -53,7 +54,13 @@ function loadAuthStore() {
         };
       }
       if (request === '@/storage/secure-auth-storage') {
-        return { secureAuthStorage: {} };
+        return {
+          secureAuthStorage: {
+            setItem: async (...args) => {
+              storageSetCalls.push(args);
+            },
+          },
+        };
       }
       if (request === './authPersist') {
         return {
@@ -68,7 +75,7 @@ function loadAuthStore() {
   context.exports = context.module.exports;
 
   vm.runInNewContext(transpiled, context, { filename: filePath });
-  return { ...context.module.exports, persistOptions };
+  return { ...context.module.exports, persistOptions, storageSetCalls };
 }
 
 function spyClearSession(useAuthStore) {
@@ -123,4 +130,78 @@ test('authStore keeps valid hydrated tokens without clearing', () => {
   assert.equal(cleared.calls, 0);
   assert.equal(state.accessToken, 'a');
   assert.equal(state.isAuthenticated, true);
+});
+
+test('authStore advances sessionEpoch on session identity changes', () => {
+  const { useAuthStore, persistOptions } = loadAuthStore();
+  assert.equal(useAuthStore.getState().sessionEpoch, 0);
+
+  const user = {
+    id: 'u1',
+    accountId: 'a1',
+    uid: 'uid1',
+    nickname: 'Alice',
+    avatarUrl: null,
+    avatarFrame: null,
+    cover: null,
+    email: null,
+    phoneNumber: null,
+    wechat: null,
+    qq: null,
+    whatsup: null,
+    persona: null,
+    helloWords: null,
+    birthday: null,
+    gender: 'unset',
+    role: 'user',
+    status: 'active',
+    lastOnline: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    city: null,
+    vipLevel: 0,
+    creditScore: 0,
+    fancyNumber: false,
+    displayIcons: [],
+  };
+
+  useAuthStore
+    .getState()
+    .setSession({ accessToken: 'a1', refreshToken: 'r1' }, user);
+  assert.equal(useAuthStore.getState().sessionEpoch, 1);
+
+  useAuthStore.getState().setTokens({ accessToken: 'a2', refreshToken: 'r2' });
+  assert.equal(useAuthStore.getState().sessionEpoch, 1);
+
+  useAuthStore.getState().clearSession();
+  assert.equal(useAuthStore.getState().sessionEpoch, 2);
+
+  const partialized = persistOptions.partialize(useAuthStore.getState());
+  assert.equal(partialized.sessionEpoch, undefined);
+});
+
+test('persistCurrentAuthState writes an awaitable Zustand-compatible snapshot', async () => {
+  const { useAuthStore, persistCurrentAuthState, storageSetCalls } =
+    loadAuthStore();
+  useAuthStore.setState({
+    accessToken: 'access-b',
+    refreshToken: 'refresh-b',
+    imToken: 'im-b',
+    user: { id: 'user-b' },
+    isAuthenticated: true,
+    onboardingRequired: false,
+    sessionEpoch: 7,
+  });
+
+  await persistCurrentAuthState();
+
+  assert.equal(storageSetCalls.length, 1);
+  assert.equal(storageSetCalls[0][0], 'circle-im-auth');
+  const envelope = JSON.parse(storageSetCalls[0][1]);
+  assert.equal(envelope.version, 1);
+  assert.equal(envelope.state.accessToken, 'access-b');
+  assert.equal(envelope.state.refreshToken, 'refresh-b');
+  assert.equal(envelope.state.user.id, 'user-b');
+  assert.equal(envelope.state.sessionEpoch, undefined);
+  assert.equal(envelope.state.isLoading, undefined);
 });

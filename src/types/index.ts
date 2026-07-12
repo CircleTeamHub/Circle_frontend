@@ -90,6 +90,7 @@ export interface ChatMessage {
     | 'sent'
     | 'received'
     | 'date'
+    | 'system-notice'
     | 'location'
     | 'image'
     | 'voice'
@@ -99,15 +100,22 @@ export interface ChatMessage {
     | 'transfer-card'
     | 'verification-card';
   text?: string;
+  systemNoticeKind?: 'friend-added';
+  systemNoticeSource?: 'native' | 'local';
+  systemNoticeTimestamp?: number;
   quotedText?: string;
   time?: string;
   senderName?: string;
   // 发送者用户 id（UUID 形式），仅接收消息携带；群聊点头像跳对方资料用。
   senderID?: string;
+  // 发送者头像（仅接收消息携带）；群聊气泡用它而不是会话头像参数。
+  senderAvatarUrl?: string;
   locationTitle?: string;
   locationAddress?: string;
   // For image messages: source URL + optional intrinsic dimensions for layout
   imageUrl?: string;
+  // 列表气泡优先用缩略图渲染，避免直接拉原图；点开原图查看时才用 imageUrl。
+  imageThumbUrl?: string;
   imageWidth?: number;
   imageHeight?: number;
   // For voice messages: local cache path or remote source URL plus duration in seconds.
@@ -316,10 +324,14 @@ export interface CircleDetail extends Circle {
 
 export interface PaginatedResponse<T> {
   items: T[];
-  total: number;
+  // `null` on the keyset (cursor) path — that path skips the per-page count().
+  total: number | null;
   page: number;
   limit: number;
   hasMore: boolean;
+  // Opaque keyset cursor for the next page; pass back as `cursor`. Absent/null
+  // means no more pages (or an offset-mode response the client can ignore).
+  nextCursor?: string | null;
 }
 
 export interface CreateCircleInput {
@@ -382,9 +394,12 @@ export interface MomentPost {
 export interface MomentComment {
   id: string;
   content: string;
+  /** 评论附图（后端 TraceComment.images，当前最多 1 张）。 */
+  images?: string[];
   user: { id: string; nickname: string };
   replyTo: { id: string; nickname: string } | null;
   createdAt: string;
+  ignoredMentionCount: number;
 }
 
 export interface CreateMomentInput {
@@ -399,18 +414,28 @@ export interface CreateMomentInput {
 
 export type NotificationType =
   | 'SYSTEM'
+  | 'MESSAGE_RECEIVED'
+  | 'MEMBER_MENTION'
+  | 'MESSAGE_QUOTE'
+  | 'SQUAD_INVITE'
+  | 'MISSION_INVITE'
+  | 'SQUAD_REQUEST_RECEIVED'
+  | 'SQUAD_REQUEST_ACCEPTED'
+  | 'SQUAD_REQUEST_REJECTED'
   | 'TRACE_LIKE'
   | 'TRACE_COMMENT'
   | 'COMMENT_REPLY'
   | 'FRIEND_REQUEST_RECEIVED'
   | 'FRIEND_REQUEST_ACCEPTED'
   | 'FRIEND_REQUEST_REJECTED'
+  | 'FRIEND_REQUEST_MESSAGE'
   | 'CIRCLE_VERIFICATION_REQUESTED'
   | 'CIRCLE_INVITATION_APPROVED'
   | 'CIRCLE_INVITATION_REJECTED'
   | 'CIRCLE_ADMIN_OVERRIDE_APPROVED'
   | 'CIRCLE_POST_SIGNUP_CREATED'
-  | 'CIRCLE_POST_AUTO_ENDED';
+  | 'CIRCLE_POST_AUTO_ENDED'
+  | 'PROFILE_LIKE';
 
 export interface NotificationItem {
   id: string;
@@ -428,6 +453,16 @@ export interface NotificationItem {
     firstImage: string | null;
   } | null;
   fromInvitation: { id: string; status: string } | null;
+  fromMessage?: {
+    id?: string;
+    messageID?: string;
+    clientMsgID?: string;
+    conversationID?: string;
+    sourceID?: string;
+    conversationType?: ConversationType;
+    title?: string;
+    avatarUrl?: string | null;
+  } | null;
 }
 
 /** A circle post authored by the current user, for the signup-management list. */

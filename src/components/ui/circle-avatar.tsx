@@ -40,6 +40,7 @@ export function CircleAvatar({
       <View style={[container, style]}>
         <Image
           source={{ uri }}
+          recyclingKey={uri}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
         />

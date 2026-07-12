@@ -1,5 +1,6 @@
 export { BubbleStatusText } from './bubbles/shared';
 export { DatePill } from './bubbles/date-pill';
+export { SystemNoticePill } from './bubbles/system-notice-pill';
 export { ReceivedBubble } from './bubbles/received-bubble';
 export { SentBubble } from './bubbles/sent-bubble';
 export { LocationCard } from './bubbles/location-card';

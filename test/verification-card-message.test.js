@@ -91,8 +91,7 @@ test('verification card: bubble renders and taps through to the verify screen', 
   const chat = read('src/features/chat/screens/ChatDetailScreen.tsx');
   assert.match(chat, /case 'verification-card':/);
   assert.match(chat, /<VerificationCardBubble/);
-  assert.match(chat, /pathname: '\/\(tabs\)\/discover\/verification\/\[id\]'/);
-  assert.match(chat, /params: \{ id: card\.invitationId \}/);
+  assert.match(chat, /getVerificationDetailHref\([\s\S]*card\.invitationId/);
 });
 
 test('adding a verifier also sends a verification card to that friend', () => {

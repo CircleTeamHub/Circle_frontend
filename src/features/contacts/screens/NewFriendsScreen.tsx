@@ -13,6 +13,7 @@ import {
   markFriendActivityRead,
   type FriendActivity,
 } from '@/services/api/friends';
+import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -118,6 +119,7 @@ export default function NewFriendsScreen() {
   useFocusEffect(
     useCallback(() => {
       void refreshUnreadFriendActivityCount();
+      void markMatchingTargetNotificationsRead({ friendRequests: true });
     }, [refreshUnreadFriendActivityCount]),
   );
 

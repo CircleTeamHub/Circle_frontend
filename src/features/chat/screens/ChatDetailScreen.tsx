@@ -10,7 +10,6 @@ import {
   View,
   Text,
   TextInput,
-  Share,
   Pressable,
   FlatList,
   ScrollView,
@@ -28,6 +27,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { Divider } from '@/components/ui/divider';
 import {
   DatePill,
+  SystemNoticePill,
   ReceivedBubble,
   SentBubble,
   LocationCard,
@@ -51,6 +51,8 @@ import {
   getTabHomeHref,
   getChatInfoTopHref,
   getNoteDetailHref,
+  getCircleDetailHref,
+  getVerificationDetailHref,
 } from '@/features/user/utils/routes';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
@@ -84,14 +86,19 @@ import {
   unsubscribeUserOnlineStatus,
 } from '@/im/client';
 import { restoreConversationMessages } from '@/im/history-restore';
-import { mapMessageItemToChatMessage } from '@/im/mappers';
+import {
+  createMessageMapCache,
+  mapMessageItemsToChatMessages,
+} from '@/im/mappers';
 import { useAuthStore } from '@/stores/authStore';
 import { useIMStore } from '@/stores/imStore';
 import { type FriendProfile } from '@/services/api/friends';
 import type { NoteSummary } from '@/features/notes/types';
+import { collectNote } from '@/services/api/notes';
 import { createCollection, type UserCollection } from '@/services/api/collections';
 import {
   buildCollectionInputFromMessage,
+  buildNoteCollectSource,
   resolveCollectionSendPlan,
 } from '@/features/chat/utils/message-collection';
 import {
@@ -109,6 +116,7 @@ import { useMessageForwardStore } from '@/features/chat/store/use-message-forwar
 import { useTransferComposerStore } from '@/features/chat/store/use-transfer-composer-store';
 import { useCallStore } from '@/features/call/store/use-call-store';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
+import { AVATAR_SIZE } from '@/features/chat/components/bubbles/shared';
 import {
   DEFAULT_CHAT_BACKGROUND_PREFERENCE,
   resolveChatBackgroundStyle,
@@ -117,6 +125,7 @@ import {
 import { createGroupCall } from '@/services/api/calls';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
+import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import {
   assertLocalCanSendMessage,
   CreditPolicyError,
@@ -125,6 +134,7 @@ import { OnlineState, SessionType } from '@openim/rn-client-sdk';
 import { useTranslation } from 'react-i18next';
 import type { ChatMessage } from '@/types';
 import {
+  AT_ALL_USER_ID,
   buildAtMessagePayload,
   buildQuotePreviewText,
   filterMentionCandidates,
@@ -133,6 +143,7 @@ import {
   type MentionTarget,
 } from '@/features/chat/utils/chat-send-payloads';
 import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
+import { collapseDuplicateFriendAddedNotices } from '@/features/chat/utils/system-notice-dedupe';
 
 // Dev-only structured log for a failed send. Never logs the message body —
 // only the error and conversation kind — to avoid leaking content into logs.
@@ -216,6 +227,13 @@ const PANEL_LAYOUT_ANIM = {
 };
 
 const s = StyleSheet.create({
+  // 群聊接收气泡上方的发送者名字（缩进对齐气泡起点 = 头像宽 + 间距）。
+  // marginBottom 给名字与气泡之间留一点呼吸空间，避免名字贴着气泡显得拥挤。
+  senderLabel: {
+    ...Typography.small,
+    marginLeft: AVATAR_SIZE + Spacing.sm,
+    marginBottom: Spacing.xs + 2,
+  },
   header: {
     height: 60,
     flexDirection: 'row',
@@ -249,6 +267,9 @@ const s = StyleSheet.create({
   },
   messageListInset: {
     paddingHorizontal: 2,
+  },
+  targetMessageHighlight: {
+    borderRadius: Radius.lg,
   },
   previewNotice: {
     paddingHorizontal: Spacing.lg,
@@ -394,10 +415,8 @@ export default function ChatDetailScreen() {
   const segments = useSegments();
   const scope = getUserProfileScopeFromSegments(segments);
   const currentUserID = useIMStore((state) => state.currentUserID);
-  const messagesByConversation = useIMStore((state) => state.messagesByConversation);
   const setActiveConversation = useIMStore((state) => state.setActiveConversation);
   const appendMessages = useIMStore((state) => state.appendMessages);
-  const onlineStatusByUser = useIMStore((state) => state.onlineStatusByUser);
   const authUser = useAuthStore((state) => state.user);
   const flatListRef = useRef<FlatListType<ChatMessage>>(null);
   const scrolledToSearchRef = useRef(false);
@@ -414,6 +433,11 @@ export default function ChatDetailScreen() {
     new Map<string, Promise<MentionTarget[]>>(),
   );
   const [mentionTargets, setMentionTargets] = useState<MentionTarget[]>([]);
+  // 群成员权威昵称表：senderID(UUID 形式) → 群内昵称。用于接收气泡上方的发送者名字，
+  // 覆盖「消息自带 senderNickname 为空 → 只能显示原始 hex id/群名」的情况（访客、早期账号常见）。
+  const [groupMemberNames, setGroupMemberNames] = useState<
+    Record<string, string>
+  >({});
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
@@ -478,6 +502,12 @@ export default function ChatDetailScreen() {
   const [resolvedConversationID, setResolvedConversationID] =
     useState(paramConversationID);
   const conversationID = paramConversationID || resolvedConversationID;
+  // 只订阅当前会话的消息切片，而非整个 messagesByConversation map。
+  // 其他会话来消息时 appendMessages 会新建顶层对象，但本会话的数组引用不变，
+  // zustand 的 Object.is 相等判断因此不会触发本页重渲染——这是聊天页最大的流畅提升。
+  const conversationMessages = useIMStore(
+    (state) => state.messagesByConversation[conversationID],
+  );
   const paramTitle =
     typeof params.title === 'string'
       ? params.title
@@ -502,6 +532,10 @@ export default function ChatDetailScreen() {
   const visibleMentionCandidates = useMemo(
     () => filterMentionCandidates(mentionCandidates, mentionQuery),
     [mentionCandidates, mentionQuery],
+  );
+  const allMentionTarget = useMemo<MentionTarget>(
+    () => ({ userID: AT_ALL_USER_ID, nickname: '所有人', isAll: true }),
+    [],
   );
 
   // 入口只给了 sourceID 时，就地把会话解析出来（单聊/群聊各走对应方法）。
@@ -607,8 +641,12 @@ export default function ChatDetailScreen() {
         : null,
     [conversationType, sourceID],
   );
-  const peerOnline =
-    peerImId != null && onlineStatusByUser[peerImId] === OnlineState.Online;
+  // 只订阅对方这一个用户的在线状态切片，而非整个 onlineStatusByUser map——
+  // 其他用户上下线不再触发本页重渲染。
+  const peerOnlineStatus = useIMStore((state) =>
+    peerImId != null ? state.onlineStatusByUser[peerImId] : undefined,
+  );
+  const peerOnline = peerOnlineStatus === OnlineState.Online;
   const statusColor =
     conversationType !== SessionType.Single || authUser?.accountId === sourceID
       ? colors.online
@@ -637,6 +675,7 @@ export default function ChatDetailScreen() {
       backgroundColor: colors.primary,
       borderColor: colors.primary,
     },
+    targetMessageHighlight: { backgroundColor: colors.primaryLight },
   }), [backgroundStyle.backgroundColor, colors, statusColor]);
   const isVoiceRecording =
     voiceRecorderState.isRecording || voiceRecordingStartedAt != null;
@@ -715,6 +754,15 @@ export default function ChatDetailScreen() {
   ]);
 
   useEffect(() => {
+    if (!conversationID && !sourceID) return;
+    void markMatchingTargetNotificationsRead({
+      conversationID,
+      sourceID,
+      messageID: searchedMsgID,
+    });
+  }, [conversationID, searchedMsgID, sourceID]);
+
+  useEffect(() => {
     if (!peerImId) return;
     void subscribeUserOnlineStatus([peerImId]).catch((err) => {
       // 拿不到状态时 UI 回落显示离线；dev 下记录，避免长期静默掉订阅。
@@ -733,14 +781,25 @@ export default function ChatDetailScreen() {
 
   // FlatList 用 inverted 渲染：index 0 = 最新消息，自然停在底部。
   // 因此把按时间升序的 messages 反转一次，新到旧排列。
-  const messages = useMemo(
-    () =>
-      [...(messagesByConversation[conversationID] ?? [])]
-        .reverse()
-        .map((item) => mapMessageItemToChatMessage(item, currentUserID))
-        .filter((item): item is ChatMessage => Boolean(item)),
-    [conversationID, currentUserID, messagesByConversation],
+  // 按 MessageItem 引用缓存映射结果：未变化的消息保持同一 ChatMessage 引用，
+  // FlatList 的 CellRenderer 因此跳过未变行的重渲染（无需给气泡加 memo）。
+  // 某条消息被更新时（读回执/状态变化）会得到新的 MessageItem 引用 → 缓存未命中
+  // → 只有那一行重渲染。currentUserID 变化时整体失效重建。
+  const messageMapCacheRef = useRef<ReturnType<typeof createMessageMapCache> | null>(
+    null,
   );
+
+  const messages = useMemo(() => {
+    const box =
+      messageMapCacheRef.current ?? createMessageMapCache(currentUserID);
+    messageMapCacheRef.current = box;
+    const mapped = mapMessageItemsToChatMessages(
+      conversationMessages ?? [],
+      currentUserID,
+      box,
+    );
+    return collapseDuplicateFriendAddedNotices(mapped);
+  }, [currentUserID, conversationMessages]);
 
   // 搜索定位：在 inverted 列表里 scrollToIndex 仍然按 index 计数，找到就跳。
   useEffect(() => {
@@ -756,7 +815,13 @@ export default function ChatDetailScreen() {
         animated: true,
         viewPosition: 0.3,
       });
-      return;
+      setHighlightedMessageID(searchedMsgID);
+      const timer = setTimeout(() => {
+        if (mountedRef.current) {
+          setHighlightedMessageID(null);
+        }
+      }, 2200);
+      return () => clearTimeout(timer);
     }
   }, [messages, searchedMsgID]);
 
@@ -766,6 +831,50 @@ export default function ChatDetailScreen() {
   const handleCollectMessage = useCallback(
     async (message: ChatMessage) => {
       if (!conversationID) return;
+
+      // 笔记卡片：不进「收藏」列表，直接快照复制进「我的笔记」，
+      // 并带上来源名片（群/用户）+ 消息定位信息，详情页可一键跳回聊天。
+      if (message.type === 'note-card') {
+        const source = buildNoteCollectSource(message, {
+          conversationID,
+          conversationTitle,
+          sourceID,
+          conversationType: isGroupChat ? 'group' : 'private',
+          conversationAvatarUrl: avatarUrl,
+          currentUser: {
+            id: currentUserID ?? undefined,
+            name: selfName,
+            faceURL: selfAvatarUri,
+          },
+        });
+        if (!source || !message.noteCard) return;
+
+        try {
+          const result = await collectNote(message.noteCard.noteId, source);
+          Alert.alert(
+            result.alreadyCollected
+              ? t('chat.messageActions.noteAlreadyCollected', {
+                  defaultValue: '已在我的笔记中',
+                })
+              : t('chat.messageActions.noteCollected', {
+                  defaultValue: '已添加到我的笔记',
+                }),
+            t('chat.messageActions.noteCollectedHint', {
+              defaultValue: '可在「我的笔记」中查看',
+            }),
+          );
+        } catch (error) {
+          if (__DEV__) {
+            console.warn('[ChatDetail] collect note failed', error);
+          }
+          Alert.alert(
+            t('chat.messageActions.collectFailed'),
+            getApiErrorMessage(error, t('chat.messageActions.collectFailedHint')),
+          );
+        }
+        return;
+      }
+
       const input = buildCollectionInputFromMessage(message, {
         conversationID,
         conversationTitle,
@@ -790,7 +899,17 @@ export default function ChatDetailScreen() {
         );
       }
     },
-    [conversationID, conversationTitle, isGroupChat, sourceID, t],
+    [
+      avatarUrl,
+      conversationID,
+      conversationTitle,
+      currentUserID,
+      isGroupChat,
+      selfAvatarUri,
+      selfName,
+      sourceID,
+      t,
+    ],
   );
 
   const [actionMenu, setActionMenu] = useState<{
@@ -799,6 +918,9 @@ export default function ChatDetailScreen() {
     y: number;
   } | null>(null);
   const [quoteTarget, setQuoteTarget] = useState<ChatMessage | null>(null);
+  const [highlightedMessageID, setHighlightedMessageID] = useState<string | null>(
+    null,
+  );
 
   const handleCopyMessage = useCallback(async (message: ChatMessage) => {
     const text = message.text?.trim();
@@ -890,33 +1012,6 @@ export default function ChatDetailScreen() {
     });
   }, [conversationTitle, isGroupChat, sourceID]);
 
-  const handleSaveMessage = useCallback(
-    async (message: ChatMessage) => {
-      const url = message.imageUrl ?? message.voiceUrl ?? message.voicePath ?? null;
-      try {
-        if (url) {
-          await Share.share({ url, message: url });
-          return;
-        }
-        if (message.text?.trim()) {
-          await Share.share({ message: message.text.trim() });
-          return;
-        }
-        Alert.alert(
-          t('chat.messageActions.saveUnsupported', {
-            defaultValue: '该消息暂不支持保存',
-          }),
-        );
-      } catch {
-        Alert.alert(
-          t('chat.messageActions.saveFailed', { defaultValue: '保存失败' }),
-          t('chat.messageActions.saveFailedHint', { defaultValue: '请稍后重试' }),
-        );
-      }
-    },
-    [t],
-  );
-
   const handleMessageLongPress = useCallback(
     (message: ChatMessage, event: GestureResponderEvent) => {
       if (message.type === 'date') return;
@@ -969,12 +1064,6 @@ export default function ChatDetailScreen() {
       label: t('chat.messageActions.report', { defaultValue: '举报' }),
       onPress: handleReportMessage,
     });
-    actions.push({
-      key: 'save',
-      icon: 'download-outline',
-      label: t('chat.messageActions.save', { defaultValue: '保存' }),
-      onPress: () => void handleSaveMessage(message),
-    });
     return actions;
   }, [
     actionMenu,
@@ -984,31 +1073,92 @@ export default function ChatDetailScreen() {
     handleForwardMessage,
     handleQuoteMessage,
     handleReportMessage,
-    handleSaveMessage,
     t,
   ]);
+
+  const getMessageLongPressHandler = useCallback(
+    (message: ChatMessage) => (event: GestureResponderEvent) => {
+      handleMessageLongPress(message, event);
+    },
+    [handleMessageLongPress],
+  );
+
+  // 群聊接收消息的显示名：本地备注覆盖 > 群成员权威昵称 > 消息自带昵称 > 会话标题。
+  // 群成员昵称排在消息自带 senderNickname 之前——后者可能为空而回落成原始 hex id，
+  // 成员表里的昵称才是能稳定显示的「对方名字」。
+  const allRemarkOverrides = useFriendRemarkStore((state) => state.remarks);
+  const receivedDisplayName = useCallback(
+    (msg: ChatMessage) => {
+      const override = msg.senderID
+        ? allRemarkOverrides[msg.senderID]
+        : undefined;
+      const memberName = msg.senderID
+        ? groupMemberNames[msg.senderID]
+        : undefined;
+      return (
+        override?.remark || memberName || msg.senderName || conversationTitle
+      );
+    },
+    [allRemarkOverrides, groupMemberNames, conversationTitle],
+  );
+
+  // 群聊头像用发送者本人的（新消息自带最新头像）；单聊沿用会话头像参数。
+  const receivedAvatarUri = useCallback(
+    (msg: ChatMessage) =>
+      isGroupChat ? msg.senderAvatarUrl : (avatarUrl ?? msg.senderAvatarUrl),
+    [isGroupChat, avatarUrl],
+  );
+
+  // 群聊在接收气泡上方显示发送者名字（微信样式）。senderID 仅接收消息携带。
+  const withGroupSenderLabel = useCallback(
+    (message: ChatMessage, node: ReactElement): ReactElement => {
+      if (!isGroupChat || !message.senderID) {
+        return node;
+      }
+      return (
+        <View>
+          <Text style={[s.senderLabel, { color: colors.textSecondary }]}>
+            {receivedDisplayName(message)}
+          </Text>
+          {node}
+        </View>
+      );
+    },
+    [isGroupChat, receivedDisplayName, colors.textSecondary],
+  );
 
   const withMessageActions = useCallback(
     (message: ChatMessage, node: ReactElement) => (
       <Pressable
-        onLongPress={(event) => handleMessageLongPress(message, event)}
+        style={
+          message.id === highlightedMessageID
+            ? [s.targetMessageHighlight, d.targetMessageHighlight]
+            : undefined
+        }
+        onLongPress={getMessageLongPressHandler(message)}
         delayLongPress={350}
       >
-        {node}
+        {withGroupSenderLabel(message, node)}
       </Pressable>
     ),
-    [handleMessageLongPress],
+    [
+      d.targetMessageHighlight,
+      getMessageLongPressHandler,
+      highlightedMessageID,
+      withGroupSenderLabel,
+    ],
   );
 
   const renderItem = useCallback(({ item }: { item: ChatMessage }) => {
     switch (item.type) {
       case 'date': return <DatePill text={item.text ?? ''} />;
+      case 'system-notice': return <SystemNoticePill text={item.text ?? ''} />;
       case 'received':
         return withMessageActions(item, (
           <ReceivedBubble
             message={item}
-            senderName={item.senderName ?? conversationTitle}
-            senderAvatarUri={avatarUrl}
+            senderName={receivedDisplayName(item)}
+            senderAvatarUri={receivedAvatarUri(item)}
             onAvatarPress={() => handleOpenMessageSender(item)}
           />
         ));
@@ -1026,11 +1176,12 @@ export default function ChatDetailScreen() {
           <LocationCard
             message={item}
             outgoing={Boolean(item.outgoing)}
-            senderName={item.senderName ?? conversationTitle}
-            senderAvatarUri={avatarUrl}
+            senderName={receivedDisplayName(item)}
+            senderAvatarUri={receivedAvatarUri(item)}
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
           />
         ));
       case 'image':
@@ -1038,11 +1189,12 @@ export default function ChatDetailScreen() {
           <ImageBubble
             message={item}
             outgoing={Boolean(item.outgoing)}
-            senderName={item.senderName ?? conversationTitle}
-            senderAvatarUri={avatarUrl}
+            senderName={receivedDisplayName(item)}
+            senderAvatarUri={receivedAvatarUri(item)}
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
             hideStatus={isGroupChat}
           />
         ));
@@ -1051,11 +1203,12 @@ export default function ChatDetailScreen() {
           <VoiceBubble
             message={item}
             outgoing={Boolean(item.outgoing)}
-            senderName={item.senderName ?? conversationTitle}
-            senderAvatarUri={avatarUrl}
+            senderName={receivedDisplayName(item)}
+            senderAvatarUri={receivedAvatarUri(item)}
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
             hideStatus={isGroupChat}
           />
         ));
@@ -1064,11 +1217,12 @@ export default function ChatDetailScreen() {
           <NoteCardBubble
             message={item}
             outgoing={Boolean(item.outgoing)}
-            senderName={item.senderName ?? conversationTitle}
-            senderAvatarUri={avatarUrl}
+            senderName={receivedDisplayName(item)}
+            senderAvatarUri={receivedAvatarUri(item)}
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
             onPress={(note) =>
               router.push(getNoteDetailHref(scope, note.noteId, note.ownerId ?? ''))
             }
@@ -1083,11 +1237,12 @@ export default function ChatDetailScreen() {
           <FriendCardBubble
             message={item}
             outgoing={Boolean(item.outgoing)}
-            senderName={item.senderName ?? conversationTitle}
-            senderAvatarUri={avatarUrl}
+            senderName={receivedDisplayName(item)}
+            senderAvatarUri={receivedAvatarUri(item)}
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
             onPress={(card) =>
               router.push(getUserProfileHref(scope, card.userID, card.nickname))
             }
@@ -1099,59 +1254,71 @@ export default function ChatDetailScreen() {
           <CircleCardBubble
             message={item}
             outgoing={Boolean(item.outgoing)}
-            senderName={item.senderName ?? conversationTitle}
-            senderAvatarUri={avatarUrl}
+            senderName={receivedDisplayName(item)}
+            senderAvatarUri={receivedAvatarUri(item)}
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
             onPress={(card) =>
-              router.push(`/(tabs)/discover/circle/${encodeURIComponent(card.circleId)}`)
+              // 在当前栈内打开圈子详情（从哪进从哪出），不跨 tab 压栈。
+              router.push(
+                getCircleDetailHref(
+                  scope === 'discover' ? 'discover' : 'messages',
+                  card.circleId,
+                ),
+              )
             }
             hideStatus={isGroupChat}
           />
         ));
       case 'verification-card':
-        return withMessageActions(item, (
+        return withGroupSenderLabel(item,
           <VerificationCardBubble
             message={item}
             outgoing={Boolean(item.outgoing)}
-            senderName={item.senderName ?? conversationTitle}
-            senderAvatarUri={avatarUrl}
+            senderName={receivedDisplayName(item)}
+            senderAvatarUri={receivedAvatarUri(item)}
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
             onPress={(card) =>
-              router.push({
-                pathname: '/(tabs)/discover/verification/[id]',
-                params: { id: card.invitationId },
-              })
+              router.push(
+                getVerificationDetailHref(
+                  scope === 'discover' ? 'discover' : 'messages',
+                  card.invitationId,
+                ),
+              )
             }
             hideStatus={isGroupChat}
           />
-        ));
+        );
       case 'transfer-card':
         return withMessageActions(item, (
           <TransferCardBubble
             message={item}
             outgoing={Boolean(item.outgoing)}
-            senderName={item.senderName ?? conversationTitle}
-            senderAvatarUri={avatarUrl}
+            senderName={receivedDisplayName(item)}
+            senderAvatarUri={receivedAvatarUri(item)}
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
             hideStatus={isGroupChat}
           />
         ));
       default: return null;
     }
   }, [
-    avatarUrl,
-    conversationTitle,
+    receivedAvatarUri,
+    receivedDisplayName,
+    withGroupSenderLabel,
     handleOpenMessageSender,
     isGroupChat,
     selfAvatarUri,
     selfName,
     scope,
+    getMessageLongPressHandler,
     withMessageActions,
   ]);
 
@@ -1243,7 +1410,7 @@ export default function ChatDetailScreen() {
     if (!isGroupChat || !sourceID) return;
     const cached = mentionCandidatesCacheRef.current.get(sourceID);
     if (cached) {
-      setMentionCandidates(cached);
+      setMentionCandidates([allMentionTarget, ...cached]);
       return;
     }
 
@@ -1271,14 +1438,44 @@ export default function ChatDetailScreen() {
     try {
       const candidates = await request;
       if (!mountedRef.current) return;
-      setMentionCandidates(candidates);
+      setMentionCandidates([allMentionTarget, ...candidates]);
     } catch (error) {
       if (__DEV__) {
         console.warn('[chat] load mention candidates failed', error);
       }
       if (mountedRef.current) setMentionCandidates([]);
     }
-  }, [currentUserID, isGroupChat, sourceID]);
+  }, [allMentionTarget, currentUserID, isGroupChat, sourceID]);
+
+  // 群聊打开时拉一次成员表，建 senderID→昵称映射给发送者名字标签兜底。
+  // 单聊不需要（气泡不显示发送者名字）。
+  useEffect(() => {
+    if (!isGroupChat || !sourceID) {
+      setGroupMemberNames({});
+      return;
+    }
+    let cancelled = false;
+    loadGroupMemberList(sourceID, 500)
+      .then((members) => {
+        if (cancelled) return;
+        const map: Record<string, string> = {};
+        for (const member of members) {
+          const nickname = member.nickname?.trim();
+          if (member.userID && nickname) {
+            map[fromImUserId(member.userID)] = nickname;
+          }
+        }
+        setGroupMemberNames(map);
+      })
+      .catch((error) => {
+        if (__DEV__) {
+          console.warn('[chat] load group member names failed', error);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isGroupChat, sourceID]);
 
   const handleDraftChange = useCallback(
     (next: string) => {
@@ -1337,14 +1534,25 @@ export default function ChatDetailScreen() {
       }
       if (inFlightRef.current) return;
       inFlightRef.current = true;
+      // 乐观发送：创建即上屏（发送中态）；成功后同 clientMsgID 覆盖，失败标记失败态。
+      let optimisticClientMsgID: string | null = null;
       try {
         const sentMessage = await sendTextMessage({
           sourceID,
           sessionType: conversationType,
           text,
+          onCreate: (message) => {
+            optimisticClientMsgID = message.clientMsgID;
+            appendMessages(conversationID, [message]);
+          },
         });
         appendMessages(conversationID, [sentMessage]);
       } catch (error) {
+        if (optimisticClientMsgID) {
+          useIMStore
+            .getState()
+            .markMessageSendFailed(conversationID, optimisticClientMsgID);
+        }
         logChatSendFailure(error, {
           sessionType: conversationType,
           isGroupChat,
@@ -2271,6 +2479,13 @@ export default function ChatDetailScreen() {
           inverted
           renderItem={renderItem}
           keyExtractor={keyExtractor}
+          // 虚拟化调优：限制单批渲染数与窗口大小，降低活跃/长会话的渲染与内存压力。
+          // 消息气泡高度可变，无法安全提供 getItemLayout，故只调这几个安全项；
+          // removeClippedSubviews 仅在 Android 开启（iOS 上 inverted 列表可能出现空白格）。
+          initialNumToRender={15}
+          maxToRenderPerBatch={10}
+          windowSize={11}
+          removeClippedSubviews={Platform.OS === 'android'}
           contentContainerStyle={[s.messageList, s.messageListContent, s.messageListInset]}
           showsVerticalScrollIndicator={false}
           // 下拉/滚动消息列表即收起底部面板与键盘（微信式）。on-drag 让键盘跟手滑落。
@@ -2301,7 +2516,7 @@ export default function ChatDetailScreen() {
         {isPreviewMode ? (
           <Text style={[s.previewNotice, Typography.small, { color: colors.textSecondary }]}>
             {t('chat.detail.previewNotice', {
-              defaultValue: '当前仅预览聊天界面，消息发送会在 IM 接通后开放。',
+              defaultValue: '连接尚未完成，请稍后重试',
             })}
           </Text>
         ) : null}
@@ -2432,7 +2647,7 @@ export default function ChatDetailScreen() {
               placeholder={
                 isPreviewMode
                   ? t('chat.detail.previewPlaceholder', {
-                      defaultValue: '当前仅预览聊天界面',
+                      defaultValue: '连接尚未完成',
                     })
                   : t('chat.detail.inputPlaceholder', {
                       defaultValue: '输入消息...',

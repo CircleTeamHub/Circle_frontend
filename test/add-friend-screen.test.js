@@ -19,6 +19,11 @@ test('add friend screen is a minimal account-id search flow', () => {
   assert.match(source, /id: result\.accountId/);
   assert.match(source, /handleSearch/);
   assert.match(source, /getUserProfileHref/);
+  // 打开搜到的用户 profile 必须按本屏所在 tab 栈推断 scope(messages/contacts 都有
+  // re-export),不能写死 'contacts' —— 否则从聊天页搜索进来会把 profile 推进 contacts
+  // 栈,导致退出串栈、通讯录 tab 卡在 profile。
+  assert.match(source, /getUserProfileScopeFromSegments/);
+  assert.doesNotMatch(source, /getUserProfileHref\(\s*['"]contacts['"]/);
   assert.doesNotMatch(source, /查看详情并添加好友/);
   assert.doesNotMatch(source, /搜索账号/);
   assert.doesNotMatch(source, /placeholder="输入对方 accountId"/);

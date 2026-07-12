@@ -51,6 +51,7 @@ export async function fetchPlazaFeed(params?: {
   cities?: string;
   page?: number;
   limit?: number;
+  cursor?: string;
 }): Promise<PaginatedResponse<CirclePlazaPost>> {
   const result = await apiClient<PaginatedResponse<CirclePlazaPost>>(
     `/circle-plaza/feed${buildQuery(params ?? {})}`,

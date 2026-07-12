@@ -19,7 +19,8 @@ interface UseUserMomentsResult {
 export function useUserMoments(userId: string): UseUserMomentsResult {
   const { t } = useTranslation();
   const [moments, setMoments] = useState<MomentPost[]>([]);
-  const [page, setPage] = useState(1);
+  // Keyset cursor for the next page (null = start from newest).
+  const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -30,6 +31,7 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
   // Guards loadMore against overlapping calls (FlatList can fire onEndReached
   // twice before `loading` state commits).
   const inFlightRef = useRef(false);
+  const requestSeqRef = useRef(0);
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -38,15 +40,17 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
   }, []);
 
   const load = useCallback(
-    async (nextPage: number, replace: boolean) => {
+    async (cursorArg: string | undefined, replace: boolean) => {
       if (!userId) return;
+      const requestSeq = ++requestSeqRef.current;
+      const requestUserId = userId;
       try {
         if (mountedRef.current) setError(null);
-        const result = await fetchUserMoments(userId, {
-          page: nextPage,
+        const result = await fetchUserMoments(requestUserId, {
+          cursor: cursorArg,
           limit: PAGE_SIZE,
         });
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || requestSeq !== requestSeqRef.current) return;
         setMoments((prev) => {
           const base = replace ? [] : prev;
           const seen = new Set(base.map((m) => m.id));
@@ -60,9 +64,9 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
           return merged;
         });
         setHasMore(result.hasMore);
-        setPage(nextPage);
+        setCursor(result.nextCursor ?? null);
       } catch (err) {
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || requestSeq !== requestSeqRef.current) return;
         setError(err instanceof Error ? err.message : t('common.networkError'));
       }
     },
@@ -72,7 +76,7 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
   useEffect(() => {
     if (!userId) {
       setMoments([]);
-      setPage(1);
+      setCursor(null);
       setHasMore(false);
       setError(null);
       setLoading(false);
@@ -80,14 +84,14 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
     }
 
     setLoading(true);
-    void load(1, true).finally(() => {
+    void load(undefined, true).finally(() => {
       if (mountedRef.current) setLoading(false);
     });
   }, [load, userId]);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
-    await load(1, true);
+    await load(undefined, true);
     if (mountedRef.current) setRefreshing(false);
   }, [load]);
 
@@ -98,10 +102,10 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
     if (inFlightRef.current || loading || refreshing || !hasMore) return;
     inFlightRef.current = true;
     setLoading(true);
-    await load(page + 1, false);
+    await load(cursor ?? undefined, false);
     inFlightRef.current = false;
     if (mountedRef.current) setLoading(false);
-  }, [loading, refreshing, hasMore, page, load]);
+  }, [loading, refreshing, hasMore, cursor, load]);
 
   return { moments, loading, refreshing, hasMore, error, refresh, loadMore };
 }

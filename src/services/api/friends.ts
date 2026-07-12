@@ -10,6 +10,8 @@ export type FriendProfile = {
   gender: string;
   lastOnline: string | null;
   friendsSince: string;
+  // 当前用户给该好友设的备注（可空）。用于按备注搜索/展示。
+  remark: string | null;
 };
 
 export type FriendTag = {
@@ -21,10 +23,15 @@ export type FriendTag = {
   updatedAt?: string;
 };
 
+export type FriendPermission = 'FULL' | 'CHAT_ONLY';
+
 export type FriendSettings = {
   remark: string | null;
   assignedTags: FriendTag[];
   availableTags: FriendTag[];
+  description: string | null;
+  photos: string[];
+  permission: FriendPermission;
 };
 
 export type FriendStatus =
@@ -81,6 +88,9 @@ export type CreateFriendRequestInput = {
   message?: string;
   remark?: string;
   tagIds?: string[];
+  description?: string;
+  photos?: string[];
+  permission?: FriendPermission;
 };
 
 type CreateFriendRequestBody = {
@@ -88,6 +98,9 @@ type CreateFriendRequestBody = {
   message?: string;
   remark?: string;
   tagIds?: string[];
+  description?: string;
+  photos?: string[];
+  permission?: FriendPermission;
 };
 
 function normalizeFriendProfile(friend: FriendProfile): FriendProfile {
@@ -95,6 +108,8 @@ function normalizeFriendProfile(friend: FriendProfile): FriendProfile {
     ...friend,
     avatarUrl: normalizeMediaUrl(friend.avatarUrl),
     avatarFrame: normalizeMediaUrl(friend.avatarFrame),
+    // 兼容尚未部署新后端的响应：缺 remark 时归一为 null。
+    remark: friend.remark ?? null,
   };
 }
 
@@ -119,12 +134,23 @@ function buildCreateFriendRequestBody(
   const message = normalizeFriendRequestText(input.message);
   const remark = normalizeFriendRequestText(input.remark);
   const tagIds = input.tagIds?.map((tagId) => tagId.trim()).filter(Boolean);
+  const description = normalizeFriendRequestText(input.description);
+  const photos = input.photos?.map((photo) => photo.trim()).filter(Boolean);
+  // Only send a permission when it diverges from the server default (FULL) so an
+  // untouched selector never bloats the payload.
+  const permission =
+    input.permission && input.permission !== 'FULL'
+      ? input.permission
+      : undefined;
 
   return {
     targetId: input.targetId,
     ...(message ? { message } : {}),
     ...(remark ? { remark } : {}),
     ...(tagIds && tagIds.length > 0 ? { tagIds } : {}),
+    ...(description ? { description } : {}),
+    ...(photos && photos.length > 0 ? { photos } : {}),
+    ...(permission ? { permission } : {}),
   };
 }
 
@@ -157,7 +183,15 @@ export async function fetchFriendStatus(targetId: string) {
 }
 
 export async function fetchFriendSettings(friendUserId: string) {
-  return apiClient<FriendSettings>(`/friend/${friendUserId}/settings`);
+  const settings = await apiClient<FriendSettings>(
+    `/friend/${friendUserId}/settings`,
+  );
+  return {
+    ...settings,
+    photos: (settings.photos ?? [])
+      .map((photo) => normalizeMediaUrl(photo))
+      .filter((photo): photo is string => Boolean(photo)),
+  };
 }
 
 export async function addFriendToBlacklist(friendUserId: string) {
@@ -295,4 +329,35 @@ export async function reportFriend(
     method: 'POST',
     body: payload,
   });
+}
+
+// ─── Friend request message thread ──────────────────────────────────────────
+// Multi-round text exchange between requester and recipient before accept/reject.
+// Not real-time chat (they aren't friends yet): fetched on entry, notification-driven.
+export type FriendRequestMessage = {
+  id: string;
+  senderId: string;
+  content: string;
+  createdAt: string;
+};
+
+export async function fetchFriendRequestMessages(
+  requestId: string,
+): Promise<FriendRequestMessage[]> {
+  return apiClient<FriendRequestMessage[]>(
+    `/friend/requests/${requestId}/messages`,
+  );
+}
+
+export async function sendFriendRequestMessage(
+  requestId: string,
+  content: string,
+): Promise<FriendRequestMessage> {
+  return apiClient<FriendRequestMessage>(
+    `/friend/requests/${requestId}/messages`,
+    {
+      method: 'POST',
+      body: { content },
+    },
+  );
 }

@@ -103,6 +103,73 @@ test('createFriendRequest forwards non-empty message, remark, and tagIds in the 
   ]);
 });
 
+test('createFriendRequest forwards description and photos, and only sends a non-default permission', async () => {
+  const calls = [];
+  const { createFriendRequest } = loadTsModule('src/services/api/friends.ts', {
+    '@/services/api/client': {
+      apiClient: async (endpoint, options) => {
+        calls.push({ endpoint, options });
+      },
+    },
+    '@/services/api/utils': { normalizeMediaUrl: (value) => value },
+  });
+
+  await createFriendRequest({
+    targetId: 'target-id',
+    description: '  设计大会认识的  ',
+    photos: ['https://cdn/a.jpg', ' https://cdn/b.jpg '],
+    permission: 'CHAT_ONLY',
+  });
+  // FULL is the server default, so it must be omitted from the body.
+  await createFriendRequest({ targetId: 'target-id', permission: 'FULL' });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
+    {
+      endpoint: '/friend/requests',
+      options: {
+        method: 'POST',
+        body: {
+          targetId: 'target-id',
+          description: '设计大会认识的',
+          photos: ['https://cdn/a.jpg', 'https://cdn/b.jpg'],
+          permission: 'CHAT_ONLY',
+        },
+      },
+    },
+    {
+      endpoint: '/friend/requests',
+      options: {
+        method: 'POST',
+        body: { targetId: 'target-id' },
+      },
+    },
+  ]);
+});
+
+test('fetchFriendSettings normalizes photo urls and passes through other fields', async () => {
+  const { fetchFriendSettings } = loadTsModule('src/services/api/friends.ts', {
+    '@/services/api/client': {
+      apiClient: async () => ({
+        remark: '乔酷',
+        assignedTags: [],
+        availableTags: [],
+        description: '设计大会认识的',
+        photos: ['friends/a.jpg', ''],
+        permission: 'CHAT_ONLY',
+      }),
+    },
+    '@/services/api/utils': {
+      normalizeMediaUrl: (value) => (value ? `https://cdn/${value}` : null),
+    },
+  });
+
+  const settings = await fetchFriendSettings('friend-1');
+
+  assert.equal(settings.description, '设计大会认识的');
+  assert.equal(settings.permission, 'CHAT_ONLY');
+  assert.deepEqual(settings.photos, ['https://cdn/friends/a.jpg']);
+});
+
 test('createFriendRequest still supports the positional message overload', async () => {
   const calls = [];
   const { createFriendRequest } = loadTsModule('src/services/api/friends.ts', {
@@ -160,13 +227,21 @@ test('send friend request screen is wired to i18n-driven form copy', () => {
 
   assert.match(source, /useTranslation\(/);
   assert.match(source, /contacts\.request\./);
-  assert.match(source, /placeholder only/i);
+  // The three "coming soon" placeholder rows are now real, wired controls.
+  assert.doesNotMatch(source, /placeholder only|placeholderDisabled|PLACEHOLDER_ROW/i);
+  assert.match(source, /descriptionLabel/);
+  assert.match(source, /useFriendPhotoNotes/);
+  assert.match(source, /permissionOptions\./);
   assert.match(source, /buildSendFriendRequestInitialMessage/);
   assert.match(source, /useAuthStore/);
   assert.match(source, /fetchFriendTags/);
   assert.match(source, /selectedTagIds/);
   assert.match(source, /isSubmitting/);
-  assert.match(source, /disabled=\{!profileId \|\| isSubmitting\}/);
+  assert.match(source, /getFriendRequestSubmitState/);
+  assert.match(source, /useRef\(createSingleFlightRunner\(\)\)/);
+  assert.match(source, /submitRunnerRef\.current\.run/);
+  assert.match(source, /if \(submitState\.disabled\) \{/);
+  assert.match(source, /disabled=\{submitState\.disabled\}/);
   assert.doesNotMatch(source, /NavHeader title="发送好友申请"/);
   assert.doesNotMatch(source, /验证消息|备注名|照片备注|朋友权限|发送中\.\.\.|暂无标签/);
 });

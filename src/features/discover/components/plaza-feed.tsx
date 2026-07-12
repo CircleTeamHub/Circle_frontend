@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -9,13 +9,16 @@ import {
   View,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useShallow } from 'zustand/react/shallow';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-filter-store';
-import { applyCircleFilter } from '@/features/discover/utils/circle-filter';
+import { useCircleShortcutOrderStore } from '@/features/discover/store/use-circle-shortcut-order-store';
+import { orderCircleShortcuts } from '@/features/discover/utils/circle-shortcut-order';
 import { PlazaPostCard } from './plaza-post-card';
 import { CircleFilterBar } from './circle-filter-bar';
+import { CircleShortcutOrderSheet } from './circle-shortcut-order-sheet';
 import type { CirclePlazaPost } from '@/types';
 
 const s = StyleSheet.create({
@@ -48,6 +51,7 @@ const s = StyleSheet.create({
 export const PlazaFeed: React.FC = () => {
   const { t } = useTranslation();
   const { colors } = useTheme();
+  const [isOrderSheetVisible, setIsOrderSheetVisible] = useState(false);
   const {
     plazaPosts,
     plazaLoading,
@@ -57,16 +61,37 @@ export const PlazaFeed: React.FC = () => {
     selectedCity,
     fetchPlazaPosts,
     setPlazaFilter,
-  } = useDiscoverStore();
+  } = useDiscoverStore(
+    useShallow((s) => ({
+      plazaPosts: s.plazaPosts,
+      plazaLoading: s.plazaLoading,
+      plazaRefreshing: s.plazaRefreshing,
+      plazaHasMore: s.plazaHasMore,
+      selectedCircleId: s.selectedCircleId,
+      selectedCity: s.selectedCity,
+      fetchPlazaPosts: s.fetchPlazaPosts,
+      setPlazaFilter: s.setPlazaFilter,
+    })),
+  );
 
   const {
     joinedCircles,
     createdCircles,
     myCirclesError,
     fetchMyCircles,
-  } = useCirclesStore();
+  } = useCirclesStore(
+    useShallow((s) => ({
+      joinedCircles: s.joinedCircles,
+      createdCircles: s.createdCircles,
+      myCirclesError: s.myCirclesError,
+      fetchMyCircles: s.fetchMyCircles,
+    })),
+  );
   const filterCircleIds = useDiscoverFilterStore((st) => st.appliedCircleIds);
   const filterCities = useDiscoverFilterStore((st) => st.appliedCities);
+  const shortcutOrderIds = useCircleShortcutOrderStore((st) => st.orderIds);
+  const setShortcutOrderIds = useCircleShortcutOrderStore((st) => st.setOrderIds);
+  const resetShortcutOrder = useCircleShortcutOrderStore((st) => st.resetOrder);
 
   const myPlazaCircles = useMemo(() => {
     const byId = new Map(joinedCircles.map((circle) => [circle.id, circle]));
@@ -77,12 +102,8 @@ export const PlazaFeed: React.FC = () => {
   }, [createdCircles, joinedCircles]);
 
   const visibleCircles = useMemo(
-    () =>
-      applyCircleFilter(myPlazaCircles, {
-        circleIds: filterCircleIds,
-        cities: filterCities,
-      }),
-    [myPlazaCircles, filterCircleIds, filterCities],
+    () => orderCircleShortcuts(myPlazaCircles, shortcutOrderIds),
+    [myPlazaCircles, shortcutOrderIds],
   );
 
   useEffect(() => {
@@ -104,10 +125,10 @@ export const PlazaFeed: React.FC = () => {
   }, [fetchPlazaPosts]);
 
   const handleEndReached = useCallback(() => {
-    if (!plazaLoading && plazaHasMore) {
+    if (plazaPosts.length > 0 && !plazaLoading && plazaHasMore) {
       fetchPlazaPosts(false);
     }
-  }, [plazaLoading, plazaHasMore, fetchPlazaPosts]);
+  }, [plazaPosts.length, plazaLoading, plazaHasMore, fetchPlazaPosts]);
 
   const handleCircleSelect = useCallback(
     (id: string | null) => {
@@ -115,6 +136,14 @@ export const PlazaFeed: React.FC = () => {
     },
     [setPlazaFilter],
   );
+
+  const handleOpenOrderSheet = useCallback(() => {
+    setIsOrderSheetVisible(true);
+  }, []);
+
+  const handleCloseOrderSheet = useCallback(() => {
+    setIsOrderSheetVisible(false);
+  }, []);
 
   const renderItem = useCallback(
     ({ item }: { item: CirclePlazaPost }) => <PlazaPostCard post={item} />,
@@ -131,6 +160,7 @@ export const PlazaFeed: React.FC = () => {
             circles={visibleCircles}
             selectedId={selectedCircleId}
             onSelect={handleCircleSelect}
+            onEditOrder={handleOpenOrderSheet}
           />
         ) : null}
         {myCirclesError ? (
@@ -156,10 +186,14 @@ export const PlazaFeed: React.FC = () => {
   const ListEmpty = !plazaLoading ? (
     <View style={s.emptyContainer}>
       <Text style={{ color: colors.textSecondary, ...Typography.body }}>
-        {t('discover.noActivity')}
+        {t('discover.noActiveActivity', {
+          defaultValue: '暂无进行中的动态',
+        })}
       </Text>
       <Text style={{ color: colors.textSecondary, ...Typography.caption }}>
-        {t('discover.joinCircleHint')}
+        {t('discover.endedActivityHiddenHint', {
+          defaultValue: '已结束或过期的动态不会展示在广场',
+        })}
       </Text>
     </View>
   ) : null;
@@ -172,24 +206,34 @@ export const PlazaFeed: React.FC = () => {
     ) : null;
 
   return (
-    <FlatList
-      data={plazaPosts}
-      renderItem={renderItem}
-      keyExtractor={keyExtractor}
-      ListHeaderComponent={ListHeader}
-      ListEmptyComponent={ListEmpty}
-      ListFooterComponent={ListFooter}
-      contentContainerStyle={s.listContent}
-      refreshControl={
-        <RefreshControl
-          refreshing={plazaRefreshing}
-          onRefresh={handleRefresh}
-          tintColor={colors.primary}
-        />
-      }
-      onEndReached={handleEndReached}
-      onEndReachedThreshold={0.3}
-      showsVerticalScrollIndicator={false}
-    />
+    <>
+      <FlatList
+        data={plazaPosts}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
+        ListHeaderComponent={ListHeader}
+        ListEmptyComponent={ListEmpty}
+        ListFooterComponent={ListFooter}
+        contentContainerStyle={s.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={plazaRefreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.primary}
+          />
+        }
+        onEndReached={handleEndReached}
+        onEndReachedThreshold={0.3}
+        showsVerticalScrollIndicator={false}
+      />
+      <CircleShortcutOrderSheet
+        visible={isOrderSheetVisible}
+        circles={myPlazaCircles}
+        orderIds={shortcutOrderIds}
+        onSave={setShortcutOrderIds}
+        onReset={resetShortcutOrder}
+        onClose={handleCloseOrderSheet}
+      />
+    </>
   );
 };

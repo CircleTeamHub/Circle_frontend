@@ -54,7 +54,10 @@ function loadApiClient({
         return { API_URL: 'http://192.168.1.65:3000/api/v1' };
       }
       if (request === '@/services/auth/session') {
-        return { clearLocalSession: async () => {} };
+        return {
+          clearLocalSession: async () => {},
+          registerLogoutHandler: () => () => {},
+        };
       }
       if (request === '@/stores/authStore') {
         return {
@@ -121,6 +124,31 @@ test('api dev logs redact presigned upload URLs and object keys', async () => {
   assert.doesNotMatch(serializedLogs, /X-Amz-Signature/);
   assert.doesNotMatch(serializedLogs, /circle\/chat\/user\/file\.heic/);
   assert.match(serializedLogs, /\[REDACTED/);
+});
+
+test('api dev logs redact push revocation secrets in register and revoke bodies', async () => {
+  const logs = [];
+  const secret = '12345678-1234-4234-9234-123456789abc';
+  const { apiClient } = loadApiClient({
+    logs,
+    responses: [
+      { ok: true, status: 200, responseText: '' },
+      { ok: true, status: 200, responseText: '' },
+    ],
+  });
+  await apiClient('/notification/push-token', {
+    method: 'PUT',
+    body: { token: 'push-token', revocationSecret: secret },
+  });
+  await apiClient('/notification/push-token/revoke', {
+    method: 'DELETE',
+    auth: false,
+    body: { token: 'push-token', revocationSecret: secret },
+  });
+  const serializedLogs = JSON.stringify(logs);
+  assert.doesNotMatch(serializedLogs, new RegExp(secret));
+  assert.match(serializedLogs, /revocationSecret/);
+  assert.match(serializedLogs, /\[REDACTED\]/);
 });
 
 test('apiClient reports unexpected 5xx failures to Sentry', async () => {

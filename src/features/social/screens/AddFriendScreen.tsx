@@ -1,14 +1,17 @@
 import { Avatar } from '@/components/ui/avatar';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { NavHeader } from '@/components/ui/nav-header';
-import { getUserProfileHref } from '@/features/user/utils/routes';
+import {
+  getUserProfileHref,
+  getUserProfileScopeFromSegments,
+} from '@/features/user/utils/routes';
 import {
   searchUsersByAccountId,
   type PublicUser,
 } from '@/services/api/users';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useSegments } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -84,6 +87,10 @@ function getDisplayName(user: PublicUser) {
 export default function AddFriendScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const segments = useSegments();
+  // 按本屏所在 tab 栈(messages / contacts 都有 re-export)推断 scope，
+  // 打开搜到的用户 profile 时进同一个栈——否则会串栈污染导航。
+  const scope = getUserProfileScopeFromSegments(segments);
   const { colors } = useTheme();
   const { t } = useTranslation();
   const [keyword, setKeyword] = useState('');
@@ -160,9 +167,9 @@ export default function AddFriendScreen() {
     }
 
     router.push(
-      getUserProfileHref('contacts', result.id, getDisplayName(result)),
+      getUserProfileHref(scope, result.id, getDisplayName(result)),
     );
-  }, [result, router]);
+  }, [result, router, scope]);
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>

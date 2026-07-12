@@ -47,6 +47,7 @@ export const Avatar: React.FC<AvatarProps> = ({
     return (
       <Image
         source={{ uri }}
+        recyclingKey={uri}
         style={[d.image, { width: size, height: size, borderRadius }]}
       />
     );

@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, type GestureResponderEvent } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import type { ChatMessage } from '@/types';
@@ -139,6 +139,7 @@ export interface CompactCardBubbleProps {
   avatarNode: React.ReactNode;
   onPress?: () => void;
   onAvatarPress?: () => void;
+  onLongPress?: (event: GestureResponderEvent) => void;
   hideStatus?: boolean;
 }
 
@@ -155,6 +156,7 @@ export const CompactCardBubble: React.FC<CompactCardBubbleProps> = ({
   avatarNode,
   onPress,
   onAvatarPress,
+  onLongPress,
   hideStatus,
 }) => {
   const { colors } = useTheme();
@@ -171,6 +173,8 @@ export const CompactCardBubble: React.FC<CompactCardBubbleProps> = ({
       <Pressable
         style={[sCircleCard.card, { backgroundColor: cardBg }]}
         onPress={onPress}
+        onLongPress={onLongPress}
+        delayLongPress={350}
       >
         <View style={sCircleCard.topRow}>
           {leading}

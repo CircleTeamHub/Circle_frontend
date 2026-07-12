@@ -7,10 +7,12 @@ import {
   StyleSheet,
   Text,
   View,
+  type FlatList as FlatListType,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
@@ -18,6 +20,7 @@ import { Divider } from '@/components/ui/divider';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { ImageGrid } from '@/features/discover/components/image-grid';
 import { MomentCommentInput } from '@/features/discover/components/moment-comment-input';
+import { MomentMentionNotice } from '@/features/discover/components/moment-mention-notice';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
 import {
   buildMomentCommentThreads,
@@ -36,15 +39,22 @@ import { useMomentsStore } from '@/features/discover/store/use-moments-store';
 import { useAuthStore } from '@/stores/authStore';
 import { ApiError } from '@/services/api/client';
 import { getApiErrorMessage } from '@/services/api/errors';
+import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import type { MomentPost } from '@/types';
+
+// Unified icon scale for the post action row so like / comment read as one
+// system instead of 26 / 24.
+const IconSize = {
+  action: 22,
+} as const;
 
 const s = StyleSheet.create({
   content: { paddingHorizontal: Spacing.lg },
-  postSection: { gap: Spacing.sm, paddingVertical: Spacing.md },
+  postSection: { gap: Spacing.md, paddingVertical: Spacing.md },
   authorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm + 2,
+    gap: Spacing.sm + Spacing.xs,
   },
   authorName: { ...Typography.body, fontWeight: '600' },
   postContent: { ...Typography.bodyRegular, lineHeight: 22 },
@@ -52,16 +62,17 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: Spacing.sm,
+    paddingTop: Spacing.xs,
   },
   timeText: { ...Typography.small },
-  actionsRow: { flexDirection: 'row', gap: Spacing.lg, alignItems: 'center' },
+  actionsRow: { flexDirection: 'row', gap: Spacing.md, alignItems: 'center' },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Spacing.xs + 2,
     paddingVertical: Spacing.xs,
   },
+  countText: { ...Typography.caption },
   commentsHeader: {
     paddingVertical: Spacing.md,
   },
@@ -87,19 +98,47 @@ const s = StyleSheet.create({
   commentItem: {
     flexDirection: 'row',
     gap: Spacing.sm,
-    paddingVertical: Spacing.sm + 2,
+    paddingVertical: Spacing.md,
   },
   replyItem: {
-    marginLeft: 40,
+    marginLeft: Spacing.xl + Spacing.sm,
   },
-  commentBody: { flex: 1, gap: 2 },
+  targetCommentHighlight: {
+    borderRadius: Radius.md,
+  },
+  commentBody: { flex: 1, gap: Spacing.xs },
   commentUser: { ...Typography.caption, fontWeight: '600' },
   commentText: { ...Typography.bodyRegular, lineHeight: 20 },
+  commentImage: {
+    width: 140,
+    height: 140,
+    borderRadius: Radius.md,
+  },
   commentTime: { ...Typography.small },
   replyLabel: { ...Typography.caption },
   emptyComments: {
     alignItems: 'center',
     paddingVertical: Spacing.xl,
+  },
+  // 底部常驻评论触发栏（仿抖音）：点击唤起 MomentCommentInput 浮层。
+  commentBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  commentBarPill: {
+    flex: 1,
+    height: 40,
+    borderRadius: Radius.full,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+  },
+  commentBarPlaceholder: {
+    ...Typography.bodyRegular,
   },
   centerLoader: {
     flex: 1,
@@ -113,7 +152,10 @@ export default function MomentDetailScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, targetCommentId } = useLocalSearchParams<{
+    id: string;
+    targetCommentId?: string;
+  }>();
 
   const storeMoment = useMomentsStore((s) =>
     s.moments.find((m) => m.id === id),
@@ -127,11 +169,18 @@ export default function MomentDetailScreen() {
   const [post, setPost] = useState<MomentPost | null>(storeMoment ?? null);
   const [loading, setLoading] = useState(!storeMoment);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [mentionNotice, setMentionNotice] = useState<string | null>(null);
+  const dismissMentionNotice = useCallback(() => setMentionNotice(null), []);
   const [refreshing, setRefreshing] = useState(false);
   const postRef = useRef<MomentPost | null>(storeMoment ?? null);
   const mountedRef = useRef(true);
   const requestRef = useRef(0);
   const refreshInFlightRef = useRef(false);
+  const listRef = useRef<FlatListType<MomentCommentRow>>(null);
+  const scrolledToTargetCommentRef = useRef<string | null>(null);
+  const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(
+    null,
+  );
   const [commentTarget, setCommentTarget] = useState<{
     replyTo: { id: string; nickname: string } | null;
   } | null>(null);
@@ -196,6 +245,13 @@ export default function MomentDetailScreen() {
     void loadMoment();
   }, [loadMoment]);
 
+  useEffect(() => {
+    void markMatchingTargetNotificationsRead({
+      traceId: id,
+      replyId: targetCommentId,
+    });
+  }, [id, targetCommentId]);
+
   const handleRefreshMoment = useCallback(async () => {
     if (refreshInFlightRef.current) return;
     refreshInFlightRef.current = true;
@@ -222,6 +278,7 @@ export default function MomentDetailScreen() {
       detailRefreshError: { backgroundColor: colors.surface },
       detailRefreshErrorText: { color: colors.textSecondary },
       detailRefreshRetry: { color: colors.primary },
+      targetCommentHighlight: { backgroundColor: colors.primaryLight },
       emptyText: { color: colors.textSecondary, ...Typography.body },
     }),
     [colors],
@@ -249,10 +306,20 @@ export default function MomentDetailScreen() {
   }, [post, storeToggleLike]);
 
   const handleSubmitComment = useCallback(
-    async (content: string, replyToId?: string) => {
+    async (
+      content: string,
+      replyToId?: string,
+      images?: string[],
+      mentionedUserIds?: string[],
+    ) => {
       if (!post) return;
       try {
-        const comment = await addMomentComment(post.id, { content, replyToId });
+        const comment = await addMomentComment(post.id, {
+          content,
+          replyToId,
+          images,
+          mentionedUserIds,
+        });
         setPost((p) =>
           p
             ? { ...p, comments: [...p.comments, comment], commentCount: p.commentCount + 1 }
@@ -260,6 +327,13 @@ export default function MomentDetailScreen() {
         );
         storeAddComment(post.id, comment);
         setCommentTarget(null);
+        if (comment.ignoredMentionCount > 0) {
+          setMentionNotice(
+            t('moment.mentionsIgnored', {
+              count: comment.ignoredMentionCount,
+            }),
+          );
+        }
       } catch (error) {
         // 之前是 silent fail —— 输入框被 dismiss、评论没出现、用户没反馈。
         // 现在保留 commentTarget 让用户重试（含已输入文本），并弹错误提示。
@@ -293,6 +367,54 @@ export default function MomentDetailScreen() {
     () => flattenMomentCommentThreads(commentThreads),
     [commentThreads],
   );
+  useEffect(() => {
+    if (
+      !targetCommentId ||
+      commentRows.length === 0 ||
+      scrolledToTargetCommentRef.current === targetCommentId
+    ) {
+      return;
+    }
+
+    const index = commentRows.findIndex((row) => row.comment.id === targetCommentId);
+    if (index < 0) {
+      return;
+    }
+
+    scrolledToTargetCommentRef.current = targetCommentId;
+    setHighlightedCommentId(targetCommentId);
+    listRef.current?.scrollToIndex({
+      index,
+      animated: true,
+      viewPosition: 0.35,
+    });
+
+    const timer = setTimeout(() => {
+      if (mountedRef.current) {
+        setHighlightedCommentId(null);
+      }
+    }, 2200);
+    return () => clearTimeout(timer);
+  }, [commentRows, targetCommentId]);
+
+  // Precompute each comment's formatted timestamp once per list/locale change,
+  // instead of running Date + toLocaleString for every row on every render.
+  const commentTimeById = useMemo(() => {
+    const locale = i18n.language || 'zh-CN';
+    const map = new Map<string, string>();
+    for (const row of commentRows) {
+      map.set(
+        row.comment.id,
+        new Date(row.comment.createdAt).toLocaleString(locale, {
+          month: 'numeric',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+      );
+    }
+    return map;
+  }, [commentRows, i18n.language]);
 
   const isOwner =
     !!currentUserId && !!post && currentUserId === post.author.id;
@@ -418,7 +540,21 @@ export default function MomentDetailScreen() {
   const renderCommentRow = ({ item }: { item: MomentCommentRow }) => (
     <View>
       <Pressable
-        style={[s.commentItem, item.isReply ? s.replyItem : null]}
+        style={[
+          s.commentItem,
+          item.isReply ? s.replyItem : null,
+          item.comment.id === highlightedCommentId
+            ? [s.targetCommentHighlight, d.targetCommentHighlight]
+            : null,
+        ]}
+        onPress={() =>
+          setCommentTarget({
+            replyTo: {
+              id: item.comment.id,
+              nickname: item.comment.user.nickname,
+            },
+          })
+        }
         onLongPress={
           !!currentUserId && item.comment.user.id === currentUserId
             ? () => handleDeleteComment(item.comment.id)
@@ -436,31 +572,20 @@ export default function MomentDetailScreen() {
               </Text>
             ) : null}
           </Text>
-          <Text style={[s.commentText, d.commentText]}>{item.comment.content}</Text>
+          {item.comment.content ? (
+            <Text style={[s.commentText, d.commentText]}>{item.comment.content}</Text>
+          ) : null}
+          {item.comment.images?.length ? (
+            <Image
+              source={{ uri: item.comment.images[0] }}
+              style={[s.commentImage, { backgroundColor: colors.surface }]}
+              contentFit="cover"
+            />
+          ) : null}
           <Text style={[s.commentTime, d.commentTime]}>
-            {new Date(item.comment.createdAt).toLocaleString(
-              i18n.language || 'zh-CN',
-              {
-                month: 'numeric',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              },
-            )}
+            {commentTimeById.get(item.comment.id)}
           </Text>
         </View>
-        <Pressable
-          onPress={() =>
-            setCommentTarget({
-              replyTo: {
-                id: item.comment.id,
-                nickname: item.comment.user.nickname,
-              },
-            })
-          }
-        >
-          <Ionicons name="chatbubble-outline" size={14} color={colors.textSecondary} />
-        </Pressable>
       </Pressable>
       <Divider />
     </View>
@@ -495,11 +620,11 @@ export default function MomentDetailScreen() {
             <Pressable style={s.actionBtn} hitSlop={8} onPress={handleLike}>
               <Ionicons
                 name={post.isLikedByMe ? 'heart' : 'heart-outline'}
-                size={26}
+                size={IconSize.action}
                 color={post.isLikedByMe ? colors.error : colors.textSecondary}
               />
               {post.likeCount > 0 ? (
-                <Text style={{ color: colors.textSecondary, ...Typography.body }}>
+                <Text style={[s.countText, { color: colors.textSecondary }]}>
                   {post.likeCount}
                 </Text>
               ) : null}
@@ -509,9 +634,13 @@ export default function MomentDetailScreen() {
               hitSlop={8}
               onPress={() => setCommentTarget({ replyTo: null })}
             >
-              <Ionicons name="chatbubble-outline" size={24} color={colors.textSecondary} />
+              <Ionicons
+                name="chatbubble-outline"
+                size={IconSize.action}
+                color={colors.textSecondary}
+              />
               {post.commentCount > 0 ? (
-                <Text style={{ color: colors.textSecondary, ...Typography.caption }}>
+                <Text style={[s.countText, { color: colors.textSecondary }]}>
                   {post.commentCount}
                 </Text>
               ) : null}
@@ -562,6 +691,7 @@ export default function MomentDetailScreen() {
         }
       />
       <FlatList
+        ref={listRef}
         data={commentRows}
         keyExtractor={(item) => item.id}
         renderItem={renderCommentRow}
@@ -569,12 +699,60 @@ export default function MomentDetailScreen() {
         contentContainerStyle={{ paddingHorizontal: Spacing.lg, paddingBottom: 100 }}
         refreshing={refreshing}
         onRefresh={handleRefreshMoment}
+        onScrollToIndexFailed={(info) => {
+          listRef.current?.scrollToIndex({
+            index: Math.max(0, Math.min(info.highestMeasuredFrameIndex, info.index)),
+            animated: false,
+          });
+          setTimeout(() => {
+            listRef.current?.scrollToIndex({
+              index: info.index,
+              animated: true,
+              viewPosition: 0.35,
+            });
+          }, 250);
+        }}
         ListEmptyComponent={
           <View style={s.emptyComments}>
             <Text style={d.emptyText}>{t('moment.noComments')}</Text>
           </View>
         }
       />
+
+      {!commentTarget ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('discover.commentInput.barPlaceholder', {
+            defaultValue: '有什么想法，展开说说',
+          })}
+          style={[
+            s.commentBar,
+            {
+              backgroundColor: colors.surface,
+              borderTopColor: colors.divider,
+              paddingBottom: insets.bottom || Spacing.sm,
+            },
+          ]}
+          onPress={() => setCommentTarget({ replyTo: null })}
+        >
+          <View
+            style={[s.commentBarPill, { backgroundColor: colors.background }]}
+          >
+            <Text
+              style={[s.commentBarPlaceholder, { color: colors.textSecondary }]}
+            >
+              {t('discover.commentInput.barPlaceholder', {
+                defaultValue: '有什么想法，展开说说',
+              })}
+            </Text>
+            <Ionicons
+              name="happy-outline"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </View>
+        </Pressable>
+      ) : null}
 
       {commentTarget ? (
         <MomentCommentInput
@@ -583,6 +761,10 @@ export default function MomentDetailScreen() {
           onDismiss={() => setCommentTarget(null)}
         />
       ) : null}
+      <MomentMentionNotice
+        message={mentionNotice}
+        onDismiss={dismissMentionNotice}
+      />
     </View>
   );
 }

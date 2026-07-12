@@ -1,5 +1,11 @@
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type GestureResponderEvent,
+} from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +17,8 @@ import type { NotificationRowData } from '@/features/notifications/utils/notific
 interface Props {
   data: NotificationRowData;
   onPress: () => void;
+  onMarkRead?: () => void;
+  onDelete?: () => void;
 }
 
 const s = StyleSheet.create({
@@ -21,11 +29,31 @@ const s = StyleSheet.create({
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   preview: { width: 52, height: 52, borderRadius: Radius.sm },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  actionButton: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Radius.full,
+  },
 });
 
-export const NotificationRow = memo(function NotificationRow({ data, onPress }: Props) {
+export const NotificationRow = memo(function NotificationRow({
+  data,
+  onPress,
+  onMarkRead,
+  onDelete,
+}: Props) {
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const handleAction = (
+    event: GestureResponderEvent,
+    action: (() => void) | undefined,
+  ) => {
+    event.stopPropagation();
+    action?.();
+  };
   return (
     <Pressable style={s.row} onPress={onPress}>
       <View style={s.avatarWrap}>
@@ -47,7 +75,33 @@ export const NotificationRow = memo(function NotificationRow({ data, onPress }: 
         </View>
       </View>
       {data.previewImage ? (
-        <Image source={{ uri: data.previewImage }} style={s.preview} contentFit="cover" />
+        <Image source={{ uri: data.previewImage }} recyclingKey={data.previewImage} style={s.preview} contentFit="cover" />
+      ) : null}
+      {onMarkRead || onDelete ? (
+        <View style={s.actions}>
+          {data.unread && onMarkRead ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('notifications.markAllRead')}
+              hitSlop={8}
+              onPress={(event) => handleAction(event, onMarkRead)}
+              style={[s.actionButton, { backgroundColor: colors.primaryLight }]}
+            >
+              <Ionicons name="checkmark-done-outline" size={17} color={colors.primary} />
+            </Pressable>
+          ) : null}
+          {onDelete ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('common.delete')}
+              hitSlop={8}
+              onPress={(event) => handleAction(event, onDelete)}
+              style={[s.actionButton, { backgroundColor: colors.surface }]}
+            >
+              <Ionicons name="trash-outline" size={17} color={colors.error} />
+            </Pressable>
+          ) : null}
+        </View>
       ) : null}
     </Pressable>
   );

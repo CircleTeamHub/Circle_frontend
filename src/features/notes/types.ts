@@ -55,6 +55,38 @@ export interface NoteGroup {
   noteCount: number;
 }
 
+/** 收藏来源名片主体：群或用户 */
+export interface NoteCollectPeer {
+  id: string;
+  name: string;
+  faceURL?: string | null;
+}
+
+/**
+ * 聊天里收藏笔记时随请求上送的来源信息。
+ * 群聊必带 group（详情页展示群名片）；私聊 sender 即会话对方（展示用户名片）。
+ */
+export interface CollectNoteSource {
+  conversationType: 'private' | 'group';
+  conversationID: string;
+  clientMsgID: string;
+  sender: NoteCollectPeer;
+  group?: NoteCollectPeer;
+}
+
+/** 后端落库后的来源快照（笔记详情/列表随 note 返回） */
+export interface NoteCollectedFrom {
+  kind?: 'chat';
+  conversationType: 'private' | 'group';
+  conversationID: string;
+  clientMsgID: string;
+  sender: NoteCollectPeer;
+  group?: NoteCollectPeer | null;
+  sourceNoteId?: string;
+  sourceOwnerId?: string | null;
+  collectedAt?: string;
+}
+
 export interface NoteSummary {
   id: string;
   title: string;
@@ -75,6 +107,8 @@ export interface NoteSummary {
   ownerId?: string | null;
   canEdit?: boolean;
   sections?: Partial<NoteSections> | null;
+  /** 从聊天收藏来的笔记带来源快照；自建笔记为 null/缺省 */
+  collectedFrom?: NoteCollectedFrom | null;
 }
 
 export interface NoteDetail extends NoteSummary {

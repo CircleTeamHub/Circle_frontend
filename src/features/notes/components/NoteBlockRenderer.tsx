@@ -7,14 +7,32 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 type Block = Record<string, unknown>;
 type InlineNode = Record<string, unknown>;
 
+// 满宽媒体按真实宽高比渲染（设计稿：无边框圆角大图）。比例夹在
+// [3:4, 16:9] 之间，极端全景/长图用 cover 轻裁，避免版面被撑破。
+function resolveMediaAspectRatio(
+  props: Record<string, unknown>,
+  fallback: number,
+) {
+  const width = typeof props.width === 'number' ? props.width : 0;
+  const height = typeof props.height === 'number' ? props.height : 0;
+  if (width > 0 && height > 0) {
+    return Math.min(16 / 9, Math.max(3 / 4, width / height));
+  }
+  return fallback;
+}
+
 function VideoBlock({
   url,
   caption,
   captionColor,
+  aspectRatio,
+  backgroundColor,
 }: {
   url: string;
   caption: string;
   captionColor: string;
+  aspectRatio: number;
+  backgroundColor: string;
 }) {
   // useVideoPlayer is called unconditionally — the empty-url guard lives in the
   // caller (BlockView), so this component always receives a valid source.
@@ -22,13 +40,15 @@ function VideoBlock({
     p.loop = false;
   });
   return (
-    <View style={s.imageWrap}>
-      <VideoView
-        style={s.image}
-        player={player}
-        nativeControls
-        contentFit="contain"
-      />
+    <View>
+      <View style={[s.mediaFrame, { backgroundColor }]}>
+        <VideoView
+          style={[s.media, { aspectRatio }]}
+          player={player}
+          nativeControls
+          contentFit="contain"
+        />
+      </View>
       {caption ? (
         <Text style={[s.caption, { color: captionColor }]}>{caption}</Text>
       ) : null}
@@ -67,6 +87,10 @@ function BlockView({ block }: { block: Block }) {
       text: colors.text,
       secondary: colors.textSecondary,
       primary: colors.primary,
+      codeBlock: {
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
+      },
     }),
     [colors],
   );
@@ -115,7 +139,7 @@ function BlockView({ block }: { block: Block }) {
 
     case 'codeBlock':
       return (
-        <View style={[s.codeBlock, { backgroundColor: colors.surface }]}>
+        <View style={[s.codeBlock, d.codeBlock]}>
           <Text style={[s.code, { color: d.text }]}>
             <InlineContent nodes={content} textColor={d.text} />
           </Text>
@@ -126,9 +150,17 @@ function BlockView({ block }: { block: Block }) {
       const url = typeof props.url === 'string' ? props.url : '';
       const caption = typeof props.caption === 'string' ? props.caption : '';
       if (!url) return null;
+      // 无尺寸信息（正文行内旧图）回退方图；有尺寸按真实比例满宽展示。
+      const aspectRatio = resolveMediaAspectRatio(props, 1);
       return (
-        <View style={s.imageWrap}>
-          <Image source={{ uri: url }} style={s.image} contentFit="contain" />
+        <View>
+          <View style={s.mediaFrame}>
+            <Image
+              source={{ uri: url }}
+              style={[s.media, { aspectRatio }]}
+              contentFit="cover"
+            />
+          </View>
           {caption ? (
             <Text style={[s.caption, { color: d.secondary }]}>{caption}</Text>
           ) : null}
@@ -140,7 +172,15 @@ function BlockView({ block }: { block: Block }) {
       const url = typeof props.url === 'string' ? props.url : '';
       const caption = typeof props.caption === 'string' ? props.caption : '';
       if (!url) return null;
-      return <VideoBlock url={url} caption={caption} captionColor={d.secondary} />;
+      return (
+        <VideoBlock
+          url={url}
+          caption={caption}
+          captionColor={d.secondary}
+          aspectRatio={resolveMediaAspectRatio(props, 16 / 9)}
+          backgroundColor={colors.black}
+        />
+      );
     }
 
     default:
@@ -180,15 +220,19 @@ const s = StyleSheet.create({
     paddingVertical: Spacing.xs,
   },
   codeBlock: {
-    borderRadius: Radius.sm,
-    padding: Spacing.sm,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Spacing.md,
   },
   code: {
     fontFamily: 'monospace',
     ...Typography.small,
   },
-  imageWrap: { borderRadius: Radius.sm, overflow: 'hidden' },
-  image: { width: '100%', height: 240 },
+  mediaFrame: {
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+  },
+  media: { width: '100%' },
   caption: {
     ...Typography.small,
     textAlign: 'center',

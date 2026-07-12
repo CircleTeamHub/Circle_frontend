@@ -1167,6 +1167,10 @@ test("system announcements screen exposes latest app information and patches", (
   assert.match(source, /systemAnnouncements\.latestAppInfo/);
   assert.match(source, /systemAnnouncements\.updates/);
   assert.match(source, /systemAnnouncements\.patches/);
+  assert.match(source, /fetchProfileNotifications/);
+  assert.match(source, /markProfileNotificationsRead/);
+  assert.match(source, /FlatList/);
+  assert.match(source, /systemAnnouncements\.empty/);
 });
 
 test("language picker and settings rows allow long translated labels", () => {

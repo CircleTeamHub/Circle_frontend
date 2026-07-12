@@ -31,6 +31,17 @@ test('UserIconRow renders system badges from local artwork and circle icons in c
   assert.match(row, /resolveFallbackIcon/);
   assert.match(row, /function buildIconKey/);
   assert.match(row, /function isRenderableIcon/);
+  assert.match(row, /const CIRCLE_BADGE_LABEL = '圈子徽章'/);
+  assert.match(row, /icon\.type === 'SYSTEM' \? formatIconLabel\(icon\) : CIRCLE_BADGE_LABEL/);
+  assert.match(row, /badgeFrame/);
+  assert.match(row, /systemBadgeAsset \? s\.systemBadgeShell : s\.badgeFrame/);
+  assert.match(row, /circleOrnament/);
+  assert.match(row, /compactCircleOrnament/);
+  assert.match(row, /smallCompactCircleOrnament/);
+  assert.match(row, /s\.circleOrnament/);
+  assert.match(row, /circleSlotRaised/);
+  assert.match(row, /<View style=\{\[s\.circleSlot,\s*!compact \? s\.circleSlotRaised : null\]\}>/);
+  assert.match(row, /width:\s*40,\s*\n\s*height:\s*40,/);
 });
 
 test('UserIconRow supports a smaller compact size for dense inline contexts', () => {

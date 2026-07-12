@@ -5,6 +5,7 @@ import { useCirclesStore } from "@/features/discover/store/use-circles-store";
 import { useDiscoverFilterStore } from "@/features/discover/store/use-discover-filter-store";
 import { applyCircleFilter } from "@/features/discover/utils/circle-filter";
 import { useTranslation } from "react-i18next";
+import { useShallow } from "zustand/react/shallow";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { Circle } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
@@ -72,7 +73,17 @@ export const MyCirclesPanel: React.FC = () => {
     myCirclesLoading,
     myCirclesError,
     fetchMyCircles,
-  } = useCirclesStore();
+  } = useCirclesStore(
+    useShallow((s) => ({
+      joinedCircles: s.joinedCircles,
+      createdCircles: s.createdCircles,
+      managedCircles: s.managedCircles,
+      appliedCircles: s.appliedCircles,
+      myCirclesLoading: s.myCirclesLoading,
+      myCirclesError: s.myCirclesError,
+      fetchMyCircles: s.fetchMyCircles,
+    })),
+  );
 
   useEffect(() => {
     fetchMyCircles();
