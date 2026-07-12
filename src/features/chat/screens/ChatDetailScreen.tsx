@@ -133,6 +133,7 @@ import {
   type MentionTarget,
 } from '@/features/chat/utils/chat-send-payloads';
 import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
+import { stampOptimisticMessage } from '@/features/chat/utils/optimistic-message';
 
 // Dev-only structured log for a failed send. Never logs the message body —
 // only the error and conversation kind — to avoid leaking content into logs.
@@ -1380,10 +1381,7 @@ export default function ChatDetailScreen() {
             // createTextMessage 未必带 sendTime；缺失时补客户端时间戳，
             // 否则 mergeMessageList 会按 sendTime=0 把「发送中」气泡排到最旧位置
             // （inverted 列表顶部）而非输入框上方。成功回调用真实 sentMessage 覆盖后归位。
-            const stamped =
-              message.sendTime && message.sendTime > 0
-                ? message
-                : { ...message, sendTime: Date.now() };
+            const stamped = stampOptimisticMessage(message, Date.now());
             appendMessages(conversationID, [stamped]);
           },
         });

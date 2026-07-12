@@ -45,6 +45,11 @@ function loadStore() {
   return useIMStore;
 }
 
+function loadOptimisticMessageHelper() {
+  return loadTsModule('src/features/chat/utils/optimistic-message.ts')
+    .stampOptimisticMessage;
+}
+
 function msg(clientMsgID, overrides = {}) {
   return {
     clientMsgID,
@@ -114,4 +119,65 @@ test('无实际变更时 reducer 不应产生新引用（避免全列表重渲�
 
   const after = useIMStore.getState().messagesByConversation.conv1;
   assert.equal(after, before, '无变更时应返回同一数组引用');
+});
+
+test('optimistic message remains newest through failure and successful replacement', () => {
+  const useIMStore = loadStore();
+  const stampOptimisticMessage = loadOptimisticMessageHelper();
+  const optimistic = stampOptimisticMessage(
+    msg('optimistic', { sendTime: 0, status: 1 }),
+    2000,
+  );
+  useIMStore.getState().appendMessages('ordering', [
+    msg('older', { sendTime: 1000 }),
+    optimistic,
+  ]);
+
+  const ids = useIMStore.getState().messagesByConversation.ordering.map(
+    (message) => message.clientMsgID,
+  );
+  assert.equal(ids.at(-1), 'optimistic');
+
+  useIMStore.getState().markMessageSendFailed('ordering', 'optimistic');
+  const failedIds = useIMStore.getState().messagesByConversation.ordering.map(
+    (message) => message.clientMsgID,
+  );
+  assert.equal(failedIds.at(-1), 'optimistic');
+  assert.equal(
+    useIMStore.getState().messagesByConversation.ordering.at(-1).status,
+    3,
+  );
+
+  useIMStore.getState().appendMessages('ordering', [
+    msg('optimistic', { sendTime: 2000, status: 2 }),
+  ]);
+  const successfulList =
+    useIMStore.getState().messagesByConversation.ordering;
+  assert.equal(
+    successfulList.filter(
+      (message) => message.clientMsgID === 'optimistic',
+    ).length,
+    1,
+  );
+});
+
+test('optimistic message survives the 200-message cap', () => {
+  const useIMStore = loadStore();
+  const stampOptimisticMessage = loadOptimisticMessageHelper();
+  const history = Array.from({ length: 200 }, (_, index) =>
+    msg(`history-${index}`, { sendTime: index + 1 }),
+  );
+  const optimistic = stampOptimisticMessage(
+    msg('optimistic', { sendTime: 0, status: 1 }),
+    201,
+  );
+
+  useIMStore.getState().appendMessages('capped', [...history, optimistic]);
+
+  const capped = useIMStore.getState().messagesByConversation.capped;
+  assert.equal(capped.length, 200);
+  assert.equal(
+    capped.some((message) => message.clientMsgID === 'optimistic'),
+    true,
+  );
 });
