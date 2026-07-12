@@ -136,7 +136,7 @@ compose healthcheck 打 `/api/v1/outbox/health`（`docker-compose.prod.yml:101-1
 
 ## 3. 容量场景：10~20 万注册、1 万同时在线（全部为 scenario assumptions / 场景假设）
 
-本节所有 QPS、活跃率、消息 fan-out、对象大小和带宽数字都是规划用 scenario assumptions，不是代码实测、供应商承诺或容量保证。建模输入如下，任何输入改变都必须重新计算并压测：
+本节所有 QPS、活跃率、消息 fan-out、对象大小和带宽数字都是规划用 scenario assumptions，不是实测数据、供应商承诺或容量保证。建模输入如下，任何输入改变都必须重新计算并压测：
 
 | 建模输入 | 场景假设 | 需要补齐的证据 |
 |---|---|---|
@@ -241,9 +241,9 @@ compose healthcheck 打 `/api/v1/outbox/health`（`docker-compose.prod.yml:101-1
 
 ## 6. 修复路线图
 
-本路线图保留原审计的候选动作；涉及 `circle_be` 或 `openim-docker` 的条目须先在固定版本上复核。只有复核成立、方案评审和相应验收通过后，候选动作才成为已批准实施项。
+本路线图保留原审计的候选动作，仅作为未验证的 sequencing proposal，不构成时间表、结果保证或生产资格结论。涉及 `circle_be`、`openim-docker` 和客户端 SDK 的条目须先在固定版本上复核；实施排期与 production eligibility 只有在复核成立并通过对应 gates 后才能确定。
 
-### P0 — 本周内，让机器能安全见人（多数配置级，约几天）
+### P0 — sequencing proposal：先处理暴露面与基础运行门槛
 1. `trust proxy` + Caddy XFF 清洗
 2. Prisma 池配置 + Postgres 基础调优
 3. compose 加 Redis + `REDIS_URL` 生产必填
@@ -256,14 +256,14 @@ compose healthcheck 打 `/api/v1/outbox/health`（`docker-compose.prod.yml:101-1
 10. `/etc/docker/daemon.json` 日志轮转 + 每容器 mem_limit + 换 ≥8GB（建议 16GB）机型
 11. 双端 Sentry DSN
 
-### P1 — 一个月内，可运营
+### P1 — sequencing proposal：再补齐可观测性、恢复与容量基础
 - 监控栈上服务器（scrape `circle_be:3000` + token + 磁盘/outbox 告警）
 - 前端三处只在 401/403 清 session；WS 重连去 10 次上限
 - 加 `GET /auth/im-token` 补发端点修 IM token 三死角
 - Notification 补 `[toUserID, createdAt]` + unread 部分索引；friend list/activities 加分页
 - CI 构建镜像推 registry 按 tag 部署（获得回滚能力）
 - cron 加分布式锁；throttler 换 Redis storage
-- FE feed store 用已装好的 MMKV persist 落盘冷启动缓存（无需引入 SQLite）
+- FE feed persistence 当前尚未实现；候选方案是用已安装的 MMKV + zustand `persist` 落盘冷启动缓存，须经固定客户端版本验证和相应 gate 验收后再决定
 
 ### P2 — 规模化容量与独立 HA/DR gate
 - feed 改 fan-out-on-write（timeline 表 `[viewerId, createdAt DESC, id DESC]`）
@@ -279,7 +279,7 @@ compose healthcheck 打 `/api/v1/outbox/health`（`docker-compose.prod.yml:101-1
 
 ## 附一：关于是否引入 SQLite
 
-**不需要。** 前端存储分层已覆盖所有场景：聊天记录由 OpenIM SDK 原生本地库管；登录态用 SecureStore + zustand persist；REST feed 只是"服务器权威 + 客户端展示缓存"，用已装好的 `react-native-mmkv` + zustand `persist` 落盘最后一页即可（P1 顺手做）。SQLite 只在"离线编辑 + 同步合并 / 本地全文搜索 / 复杂本地关系模型"时才有价值，本项目一个都没有；引入它反而增加本地 schema 迁移、缓存失效、双写一致性等高风险面。后端侧 Postgres 是正确选择，SQLite 撑不了多连接写入，方向相反。
+**暂定不引入。** 当前 feed persistence 尚未实现；用已安装的 `react-native-mmkv` + zustand `persist` 落盘服务器权威 feed 的展示缓存只是 proposal，不是已验证实现。聊天 local history 是否由 OpenIM SDK 原生本地库完整承担，也必须针对 pinned package/version 验证其保存范围、升级行为和恢复语义。基于当前已验证需求，尚未发现必须使用 SQLite 的离线编辑与同步合并、本地全文搜索或复杂本地关系模型，因此暂定不引入 SQLite；如果这些需求、SDK 验证结论或任一 production gate 发生变化，必须重新评估该决策。后端多连接写入仍由 Postgres 承担，与客户端是否需要 SQLite 是两个独立问题。
 
 ---
 
