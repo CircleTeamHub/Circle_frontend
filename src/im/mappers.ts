@@ -195,10 +195,23 @@ function parseVerificationCardPayload(
   }
 }
 
-function parsePlazaPostCardPayload(data: string): PlazaPostCardData | null {
+const PLAZA_POST_CARD_ID_MAX_LENGTH = 256;
+const PLAZA_POST_CARD_TITLE_MAX_LENGTH = 200;
+
+export function parsePlazaPostCardData(data: string): PlazaPostCardData | null {
   try {
     const raw = JSON.parse(data) as Partial<PlazaPostCardData>;
     if (typeof raw.postId !== 'string' || typeof raw.title !== 'string') {
+      return null;
+    }
+    const postId = raw.postId.trim();
+    const title = raw.title.trim();
+    if (
+      postId.length === 0 ||
+      postId.length > PLAZA_POST_CARD_ID_MAX_LENGTH ||
+      title.length === 0 ||
+      title.length > PLAZA_POST_CARD_TITLE_MAX_LENGTH
+    ) {
       return null;
     }
     const signupCount =
@@ -206,8 +219,8 @@ function parsePlazaPostCardPayload(data: string): PlazaPostCardData | null {
         ? Math.max(0, raw.signupCount)
         : 0;
     return {
-      postId: raw.postId,
-      title: raw.title,
+      postId,
+      title,
       contentPreview:
         typeof raw.contentPreview === 'string' ? raw.contentPreview : null,
       coverUrl: typeof raw.coverUrl === 'string' ? raw.coverUrl : null,
@@ -323,7 +336,7 @@ export function getMessagePreview(message: MessageItem | null, fallback = '') {
         if (payload) return tImPreview('note', '[笔记] {{title}}', { title: payload.title });
       }
       if (ext === PLAZA_POST_CARD_EXTENSION) {
-        const payload = parsePlazaPostCardPayload(message.customElem?.data ?? '');
+        const payload = parsePlazaPostCardData(message.customElem?.data ?? '');
         if (payload)
           return tImPreview('plazaPost', '[活动] {{title}}', {
             title: payload.title,
@@ -491,7 +504,7 @@ export function mapMessageItemToChatMessage(
       }
     }
     if (ext === PLAZA_POST_CARD_EXTENSION) {
-      const payload = parsePlazaPostCardPayload(item.customElem?.data ?? '');
+      const payload = parsePlazaPostCardData(item.customElem?.data ?? '');
       if (payload) {
         return {
           ...base,

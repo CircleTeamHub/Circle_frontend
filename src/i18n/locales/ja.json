@@ -66,9 +66,7 @@
       "circleBanner": "バナー通知",
       "circleBannerHint": "オン：新しい通知でバナーを表示\nオフ：バナーなし（未読バッジは表示）",
       "circleRingtone": "サークル通知の着信音",
-      "circleDefault": "サークル既定",
-      "offlineReminder": "オフライン通知",
-      "offlineReminderHint": "オン：アプリがオフラインのときサークルのバナーを受信\nオフ：オフライン通知なし"
+      "circleDefault": "サークル既定"
     },
     "appearance": {
       "title": "表示",
@@ -1172,10 +1170,7 @@
       "globalOffHint": "オフ：すべての通知を無効化（各スイッチも無効）",
       "banner": "バナー通知",
       "bannerOnHint": "オン：新しい通知でバナーを表示",
-      "bannerOffHint": "オフ：バナーなし（未読の赤い点は保持）",
-      "offline": "オフライン通知",
-      "offlineOnHint": "オン：アプリがオフラインのときバナー通知を受信",
-      "offlineOffHint": "オフ：オフラインのバナー通知を受け取らない"
+      "bannerOffHint": "オフ：バナーなし（未読の赤い点は保持）"
     },
     "guide": {
       "title": "サークルの遊び方",

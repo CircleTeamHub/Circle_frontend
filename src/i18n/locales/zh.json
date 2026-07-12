@@ -738,15 +738,12 @@
     "addFriendHint": "添加好友后即可看到朋友的动态",
     "notifications": {
       "title": "圈子通知设置",
-      "global": "全局接收圈子通知",
-      "globalOnHint": "开启：默认打开离线通知+本地声音+红点",
-      "globalOffHint": "关闭：禁用所有通知（本地开关同步禁用）",
-      "banner": "通知提醒",
-      "bannerOnHint": "开启：新消息弹出横幅提醒",
-      "bannerOffHint": "关闭：不弹横幅（保留未读红点）",
-      "offline": "离线提醒",
-      "offlineOnHint": "开启：APP离线时将收到圈子横幅通知",
-      "offlineOffHint": "关闭：不再接收离线横幅通知"
+      "global": "在应用内显示圈子通知",
+      "globalOnHint": "开启：允许控制应用内的通知展示",
+      "globalOffHint": "关闭：隐藏应用内圈子通知横幅",
+      "banner": "应用内横幅",
+      "bannerOnHint": "开启：使用应用时显示通知横幅",
+      "bannerOffHint": "关闭：隐藏横幅并保留未读提示"
     },
     "guide": {
       "title": "圈子玩法说明",
@@ -1634,14 +1631,12 @@
       "groupOffline": "群聊离线推送",
       "groupOfflineHint": "关闭后不再接收群聊离线推送提醒",
       "circleSection": "圈子通知",
-      "circleGlobal": "全局接收圈子通知",
-      "circleGlobalHint": "开启：默认打开离线通知+本地声音+红点\n关闭：禁用所有通知",
-      "circleBanner": "通知提醒",
-      "circleBannerHint": "开启：新消息弹出横幅提醒\n关闭：不弹横幅（保留未读红点）",
+      "circleGlobal": "在应用内显示圈子通知",
+      "circleGlobalHint": "控制使用应用时圈子通知的展示",
+      "circleBanner": "应用内横幅",
+      "circleBannerHint": "显示或隐藏横幅，并保留未读提示",
       "circleRingtone": "圈子通知铃声",
-      "circleDefault": "圈子默认",
-      "offlineReminder": "离线提醒",
-      "offlineReminderHint": "开启：APP离线时将收到圈子横幅通知\n关闭：不再接收离线提醒"
+      "circleDefault": "圈子默认"
     },
     "appearance": {
       "title": "界面与显示",

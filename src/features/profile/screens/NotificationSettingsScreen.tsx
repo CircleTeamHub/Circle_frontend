@@ -6,17 +6,13 @@ import { useCircleNotificationStore } from '@/features/discover/store/use-circle
 export default function NotificationSettingsScreen() {
   const settings = useAppSettingsStore((s) => s.settings);
   const setSetting = useAppSettingsStore((s) => s.setSetting);
-  const circleGlobalEnabled = useCircleNotificationStore((s) => s.globalEnabled);
+  const circleInAppEnabled = useCircleNotificationStore((s) => s.inAppEnabled);
   const circleBannerEnabled = useCircleNotificationStore((s) => s.bannerEnabled);
-  const circleOfflineEnabled = useCircleNotificationStore((s) => s.offlineEnabled);
-  const setCircleGlobalEnabled = useCircleNotificationStore(
-    (s) => s.setGlobalEnabled,
+  const setCircleInAppEnabled = useCircleNotificationStore(
+    (s) => s.setInAppEnabled,
   );
   const setCircleBannerEnabled = useCircleNotificationStore(
     (s) => s.setBannerEnabled,
-  );
-  const setCircleOfflineEnabled = useCircleNotificationStore(
-    (s) => s.setOfflineEnabled,
   );
   const soundEnabled = useNotificationFeedbackStore((s) => s.soundEnabled);
   const hapticsEnabled = useNotificationFeedbackStore((s) => s.hapticsEnabled);
@@ -122,8 +118,8 @@ export default function NotificationSettingsScreen() {
               labelKey: 'settingsDetails.notifications.circleGlobal',
               subtitleKey: 'settingsDetails.notifications.circleGlobalHint',
               type: 'toggle',
-              value: circleGlobalEnabled,
-              onValueChange: setCircleGlobalEnabled,
+              value: circleInAppEnabled,
+              onValueChange: setCircleInAppEnabled,
             },
             {
               id: 'circle-banner',
@@ -132,21 +128,12 @@ export default function NotificationSettingsScreen() {
               type: 'toggle',
               value: circleBannerEnabled,
               onValueChange: setCircleBannerEnabled,
-              disabled: !circleGlobalEnabled,
+              disabled: !circleInAppEnabled,
             },
             {
               id: 'circle-ringtone',
               labelKey: 'settingsDetails.notifications.circleRingtone',
               valueKey: 'settingsDetails.notifications.circleDefault',
-            },
-            {
-              id: 'offline-reminder',
-              labelKey: 'settingsDetails.notifications.offlineReminder',
-              subtitleKey: 'settingsDetails.notifications.offlineReminderHint',
-              type: 'toggle',
-              value: circleOfflineEnabled,
-              onValueChange: setCircleOfflineEnabled,
-              disabled: !circleGlobalEnabled,
             },
           ],
         },

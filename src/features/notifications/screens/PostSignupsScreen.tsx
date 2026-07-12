@@ -237,20 +237,21 @@ export default function PostSignupsScreen() {
     async (signer: PostSignupItem) => {
       if (openingChatRef.current) return;
       openingChatRef.current = true;
-      // 报名→聊天：预挂该帖子的卡片 + 开场白到目标会话；聊天页获焦后消费。
-      if (post) {
-        setPendingChatCard({
+      // 报名→聊天：先构造卡片，目的地解析成功后再紧邻导航写入待发状态。
+      const pendingChatCard = post
+        ? {
           conversationKey: signer.userId,
           card: buildPostCard(post),
           draftText: t('plaza.signup.chatOpener', {
             defaultValue: '你报名了我发起的活动，开始聊天吧',
           }),
-        });
-      }
+        }
+        : null;
       try {
         setOpeningChatFor(signer.userId);
         // 先解析单聊会话拿到 conversationID，否则聊天页只会停在预览模式。
         const conversation = await getOrCreateSingleConversation(signer.userId);
+        if (pendingChatCard) setPendingChatCard(pendingChatCard);
         router.push(
           getChatDetailHref(
             scope,
@@ -262,6 +263,7 @@ export default function PostSignupsScreen() {
         );
       } catch (error) {
         if (shouldOpenChatPreview(error)) {
+          if (pendingChatCard) setPendingChatCard(pendingChatCard);
           // IM 未接通：退化成预览模式（无 conversationID）。
           router.push(
             getChatDetailHref(

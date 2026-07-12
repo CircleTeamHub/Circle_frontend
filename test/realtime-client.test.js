@@ -78,12 +78,40 @@ test('realtime gates circle-notification banners on the circle notification sett
   // 不弹横幅（但铃铛/红点仍在门前处理，通知本身不丢）。
   assert.match(client, /useCircleNotificationStore/);
   assert.match(client, /payload\.type\.startsWith\('CIRCLE_'\)/);
-  assert.match(client, /!globalEnabled \|\| !bannerEnabled/);
+  assert.match(client, /!inAppEnabled \|\| !bannerEnabled/);
   // 门控发生在铃铛 setInteractive 之后、横幅 enqueueNotification 之前。
   assert.match(
     client,
     /startsWith\('CIRCLE_'\)[\s\S]*?return;[\s\S]*?enqueueNotification\(payload\)/,
   );
+});
+
+test('circle notification preferences only promise in-app presentation control', () => {
+  const store = read('src/features/discover/store/use-circle-notification-store.ts');
+  const settings = read('src/features/discover/screens/CircleNotificationSettingsScreen.tsx');
+  const profileSettings = read('src/features/profile/screens/NotificationSettingsScreen.tsx');
+  const client = read('src/realtime/client.ts');
+  const locales = [
+    JSON.parse(read('src/i18n/locales/en.json')),
+    JSON.parse(read('src/i18n/locales/zh.json')),
+  ];
+
+  assert.equal(store.includes('offlineEnabled'), false);
+  assert.match(store, /version:\s*1/);
+  assert.match(store, /partialize:[\s\S]*?inAppEnabled:[\s\S]*?bannerEnabled:/);
+  assert.match(store, /migrate:/);
+  assert.equal(settings.includes('notifications.offline'), false);
+  assert.equal(profileSettings.includes('offlineReminder'), false);
+  for (const locale of locales) {
+    const copy = JSON.stringify({
+      discover: locale.discover.notifications,
+      profileGlobal: locale.settingsDetails.notifications.circleGlobalHint,
+      profileBanner: locale.settingsDetails.notifications.circleBannerHint,
+    });
+    assert.doesNotMatch(copy, /offline|push|all notifications|离线|推送|所有通知/i);
+  }
+  assert.match(client, /const \{ inAppEnabled, bannerEnabled \}/);
+  assert.match(client, /!inAppEnabled \|\| !bannerEnabled/);
 });
 
 test('discover bell badge reads the interactive unread count, not systemUnread', () => {

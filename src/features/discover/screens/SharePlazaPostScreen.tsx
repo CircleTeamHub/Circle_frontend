@@ -104,8 +104,8 @@ export default function SharePlazaPostScreen() {
       if (!post || sendingRef.current) return;
       sendingRef.current = true;
       setSendingTo(friend.id);
-      // 把帖子压成聊天卡片，预挂到目标单聊；聊天页获焦后消费并显示为待发引用。
-      setPendingChatCard({
+      // 先构造卡片；仅在聊天目的地解析成功后，紧邻导航写入待发状态。
+      const pendingChatCard = {
         conversationKey: friend.id,
         card: toPlazaPostCardData(
           post,
@@ -114,9 +114,10 @@ export default function SharePlazaPostScreen() {
         draftText: t('plaza.share.opener', {
           defaultValue: '分享给你一个活动，一起来看看',
         }),
-      });
+      };
       try {
         const conversation = await getOrCreateSingleConversation(friend.id);
+        setPendingChatCard(pendingChatCard);
         router.push(
           getChatDetailHref(
             SCOPE,
@@ -128,6 +129,7 @@ export default function SharePlazaPostScreen() {
         );
       } catch (err) {
         if (shouldOpenChatPreview(err)) {
+          setPendingChatCard(pendingChatCard);
           router.push(
             getChatDetailHref(
               SCOPE,

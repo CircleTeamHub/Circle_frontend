@@ -31,3 +31,18 @@ test('plaza post card share opens the friend picker, not the OS share sheet', ()
   assert.match(src, /pathname: '\/\(tabs\)\/discover\/share-post'/);
   assert.doesNotMatch(src, /Share\.share/);
 });
+
+test('share plaza post only stages the card after resolving a destination', () => {
+  const src = read('src/features/discover/screens/SharePlazaPostScreen.tsx');
+  const handler = src.slice(src.indexOf('const handleSelect'), src.indexOf('const renderFriend'));
+  const resolution = handler.indexOf('await getOrCreateSingleConversation');
+  const normalStage = handler.indexOf('setPendingChatCard', resolution);
+  const normalNavigation = handler.indexOf('router.push', normalStage);
+  const fallback = handler.indexOf('if (shouldOpenChatPreview');
+  const fallbackStage = handler.indexOf('setPendingChatCard', fallback);
+  const fallbackNavigation = handler.indexOf('router.push', fallbackStage);
+
+  assert.equal(normalStage > resolution && normalStage < normalNavigation, true);
+  assert.equal(handler.slice(0, resolution).includes('setPendingChatCard'), false);
+  assert.equal(fallbackStage > fallback && fallbackStage < fallbackNavigation, true);
+});

@@ -104,17 +104,13 @@ export default function CircleNotificationSettingsScreen() {
   const { colors } = useTheme();
   const router = useRouter();
 
-  const globalEnabled = useCircleNotificationStore((st) => st.globalEnabled);
+  const inAppEnabled = useCircleNotificationStore((st) => st.inAppEnabled);
   const bannerEnabled = useCircleNotificationStore((st) => st.bannerEnabled);
-  const offlineEnabled = useCircleNotificationStore((st) => st.offlineEnabled);
-  const setGlobalEnabled = useCircleNotificationStore(
-    (st) => st.setGlobalEnabled,
+  const setInAppEnabled = useCircleNotificationStore(
+    (st) => st.setInAppEnabled,
   );
   const setBannerEnabled = useCircleNotificationStore(
     (st) => st.setBannerEnabled,
-  );
-  const setOfflineEnabled = useCircleNotificationStore(
-    (st) => st.setOfflineEnabled,
   );
 
   const d = useMemo(
@@ -171,8 +167,8 @@ export default function CircleNotificationSettingsScreen() {
           title={t('discover.notifications.global')}
           onHint={t('discover.notifications.globalOnHint')}
           offHint={t('discover.notifications.globalOffHint')}
-          value={globalEnabled}
-          onToggle={setGlobalEnabled}
+          value={inAppEnabled}
+          onToggle={setInAppEnabled}
         />
 
         <View style={[s.divider, d.divider]} />
@@ -181,20 +177,9 @@ export default function CircleNotificationSettingsScreen() {
           title={t('discover.notifications.banner')}
           onHint={t('discover.notifications.bannerOnHint')}
           offHint={t('discover.notifications.bannerOffHint')}
-          value={globalEnabled && bannerEnabled}
-          disabled={!globalEnabled}
+          value={inAppEnabled && bannerEnabled}
+          disabled={!inAppEnabled}
           onToggle={setBannerEnabled}
-        />
-
-        <View style={[s.divider, d.divider]} />
-
-        <NotificationItem
-          title={t('discover.notifications.offline')}
-          onHint={t('discover.notifications.offlineOnHint')}
-          offHint={t('discover.notifications.offlineOffHint')}
-          value={globalEnabled && offlineEnabled}
-          disabled={!globalEnabled}
-          onToggle={setOfflineEnabled}
         />
       </ScrollView>
     </View>

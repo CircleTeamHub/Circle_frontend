@@ -66,9 +66,7 @@
       "circleBanner": "배너 알림",
       "circleBannerHint": "켜기: 새 알림이 오면 배너 표시\n끄기: 배너 없음(안 읽음 빨간 점 유지)",
       "circleRingtone": "서클 알림음",
-      "circleDefault": "서클 기본값",
-      "offlineReminder": "오프라인 알림",
-      "offlineReminderHint": "켜기: 앱이 오프라인일 때 서클 배너 받기\n끄기: 오프라인 알림 없음"
+      "circleDefault": "서클 기본값"
     },
     "appearance": {
       "title": "화면",
@@ -1172,10 +1170,7 @@
       "globalOffHint": "꺼짐: 모든 알림 사용 안 함 (개별 설정도 비활성화)",
       "banner": "배너 알림",
       "bannerOnHint": "켜기: 새 알림이 오면 배너 표시",
-      "bannerOffHint": "끄기: 배너 없음 (안 읽음 빨간 점은 유지)",
-      "offline": "오프라인 알림",
-      "offlineOnHint": "켜짐: 앱이 오프라인일 때 배너 알림 수신",
-      "offlineOffHint": "꺼짐: 오프라인 배너 알림 받지 않음"
+      "bannerOffHint": "끄기: 배너 없음 (안 읽음 빨간 점은 유지)"
     },
     "guide": {
       "title": "서클 이용 방법",

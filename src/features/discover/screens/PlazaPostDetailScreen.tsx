@@ -56,13 +56,26 @@ export default function PlazaPostDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const [post, setPost] = useState<CirclePlazaPost | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(Boolean(id));
+  const [error, setError] = useState<string | null>(id ? null : t(
+    'plaza.postDetail.notExist',
+    { defaultValue: '帖子不存在或已结束' },
+  ));
   const [restricted, setRestricted] = useState<RestrictedInfo | null>(null);
   const [joining, setJoining] = useState(false);
 
   const load = useCallback(() => {
-    if (!id) return;
+    if (!id) {
+      setPost(null);
+      setRestricted(null);
+      setLoading(false);
+      setError(
+        t('plaza.postDetail.notExist', {
+          defaultValue: '帖子不存在或已结束',
+        }),
+      );
+      return;
+    }
     setLoading(true);
     setError(null);
     setRestricted(null);

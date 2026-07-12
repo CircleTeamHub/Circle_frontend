@@ -739,15 +739,12 @@
     "addFriendHint": "Add friends to see their moments",
     "notifications": {
       "title": "Circle Notification Settings",
-      "global": "Receive Circle Notifications",
-      "globalOnHint": "On: enables offline alerts + sound + red dot",
-      "globalOffHint": "Off: disables all notifications (local switches disabled)",
-      "banner": "Notification Banner",
-      "bannerOnHint": "On: show a banner for new notifications",
-      "bannerOffHint": "Off: no banner (unread red dot kept)",
-      "offline": "Offline Alert",
-      "offlineOnHint": "On: receive circle banner notifications when app is offline",
-      "offlineOffHint": "Off: no offline banner notifications"
+      "global": "Show Circle Notifications in App",
+      "globalOnHint": "On: allow in-app presentation controls",
+      "globalOffHint": "Off: hide in-app Circle notification banners",
+      "banner": "In-App Banner",
+      "bannerOnHint": "On: show a banner while using the app",
+      "bannerOffHint": "Off: hide banners while keeping unread indicators"
     },
     "guide": {
       "title": "How Circle Activities Work",
@@ -1637,14 +1634,12 @@
       "groupOffline": "Group Offline Push",
       "groupOfflineHint": "When off, offline group push reminders will not be received",
       "circleSection": "Circle Notifications",
-      "circleGlobal": "Receive Circle Notifications",
-      "circleGlobalHint": "On: offline notifications, local sound, and red dots are enabled\nOff: all notifications are disabled",
-      "circleBanner": "Notification Banner",
-      "circleBannerHint": "On: show a banner for new notifications\nOff: no banner (unread red dot kept)",
+      "circleGlobal": "Show Circle Notifications in App",
+      "circleGlobalHint": "Controls Circle notification presentation while using the app",
+      "circleBanner": "In-App Banner",
+      "circleBannerHint": "Show or hide banners while keeping unread indicators",
       "circleRingtone": "Circle Notification Ringtone",
-      "circleDefault": "Circle Default",
-      "offlineReminder": "Offline Reminder",
-      "offlineReminderHint": "On: receive Circle banners when the app is offline\nOff: no offline reminders"
+      "circleDefault": "Circle Default"
     },
     "appearance": {
       "title": "Display",

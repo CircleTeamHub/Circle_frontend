@@ -66,9 +66,7 @@
       "circleBanner": "Banner de notificación",
       "circleBannerHint": "Activado: muestra un banner para notificaciones nuevas\nDesactivado: sin banner (se conserva el punto rojo)",
       "circleRingtone": "Tono de notificaciones de Círculo",
-      "circleDefault": "Predeterminado de Círculo",
-      "offlineReminder": "Aviso sin conexión",
-      "offlineReminderHint": "Activado: recibe banners de Círculo con la app sin conexión\nDesactivado: sin avisos sin conexión"
+      "circleDefault": "Predeterminado de Círculo"
     },
     "appearance": {
       "title": "Pantalla",
@@ -1175,10 +1173,7 @@
       "globalOffHint": "Desactivado: sin notificaciones (interruptores locales desactivados)",
       "banner": "Banner de notificación",
       "bannerOnHint": "Activado: muestra un banner para notificaciones nuevas",
-      "bannerOffHint": "Desactivado: sin banner (se conserva el punto rojo)",
-      "offline": "Alerta sin conexión",
-      "offlineOnHint": "Activado: recibe avisos del círculo con la app sin conexión",
-      "offlineOffHint": "Desactivado: sin avisos sin conexión"
+      "bannerOffHint": "Desactivado: sin banner (se conserva el punto rojo)"
     },
     "guide": {
       "title": "Cómo funcionan los círculos",

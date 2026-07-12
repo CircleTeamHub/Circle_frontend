@@ -261,9 +261,9 @@ function handleNotificationCreated(payload: unknown) {
   // 圈子通知（CIRCLE_*）的横幅受「圈子通知设置」控制：总开关或「通知提醒」关闭时，
   // 通知照常进铃铛列表 + 红点（上面已处理），但不弹横幅。非圈子通知不受影响。
   if (payload.type.startsWith('CIRCLE_')) {
-    const { globalEnabled, bannerEnabled } =
+    const { inAppEnabled, bannerEnabled } =
       useCircleNotificationStore.getState();
-    if (!globalEnabled || !bannerEnabled) {
+    if (!inAppEnabled || !bannerEnabled) {
       return;
     }
   }
