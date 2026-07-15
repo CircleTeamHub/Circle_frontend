@@ -52,7 +52,7 @@ Refactor shared required-value and URL helpers without changing the existing sem
 metadata | signing | distribution | all
 ```
 
-Keep a missing scope equivalent to `all` so the existing workflow remains functional between the Task 1 and Task 2 commits. Reject an unknown scope and emit every validation error as `::error::...`.
+Keep a missing scope on a temporary legacy path that validates metadata, signing, and the existing `RELEASES_TOKEN` requirement without the new distribution variables; this keeps the existing workflow functional between the Task 1 and Task 2 commits. Explicit `all` validates metadata, signing, and distribution. Reject an unknown scope and emit every validation error as `::error::...`.
 
 - [ ] **Step 4: Run the focused test and verify GREEN**
 
