@@ -1637,6 +1637,7 @@
     "memberCenter": "会員",
     "viewMember": "見る",
     "wallet": {
+      "purchaseUnavailable": "クレジットの購入はまだ利用できません。現在、このページには残高のみが表示されます。",
       "title": "マイウォレット",
       "confirmRecharge": "チャージを確認",
       "balance": "クレジット残高",

@@ -1194,6 +1194,7 @@
     "memberCenter": "Membership",
     "viewMember": "View",
     "wallet": {
+      "purchaseUnavailable": "Point purchases are not available yet. This page currently shows your balance only.",
       "title": "My Wallet",
       "confirmRecharge": "Confirm Recharge",
       "balance": "Points Balance",

@@ -96,15 +96,15 @@ test('CreditScoreScreen explains score status and change rules via i18n', () => 
   assert.equal(zh.credit.title, '信誉值详情');
 });
 
-test('WalletScreen shows the balance without exposing unsupported recharge', () => {
+test('WalletScreen shows the balance without an unsupported recharge action', () => {
   const src = read('src/features/profile/screens/WalletScreen.tsx');
   const api = read('src/services/api/coin.ts');
 
   assert.match(src, /fetchWallet/);
   assert.match(api, /\/coin\/wallet/);
-  assert.match(src, /purchaseUnavailable/);
   assert.doesNotMatch(src, /rechargePoints|RECHARGE_PACKAGES/);
-  assert.doesNotMatch(api, /rechargePoints|\/coin\/recharge/);
+  assert.doesNotMatch(api, /\/coin\/recharge/);
+  assert.match(src, /purchaseUnavailable/);
   assert.match(src, /积分余额/);
   assert.doesNotMatch(src, /帮积分/);
 });

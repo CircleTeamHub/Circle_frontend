@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -10,7 +10,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { NavHeader } from '@/components/ui/nav-header';
 import { CircleAvatar } from '@/components/ui/circle-avatar';
@@ -110,18 +110,36 @@ export default function SelectCircleScreen() {
   );
 
   const selectedCircles = usePostFormStore((s) => s.selectedCircles);
-  const toggleCircle = usePostFormStore((s) => s.toggleCircle);
+  const setSelectedCircles = usePostFormStore((s) => s.setSelectedCircles);
+  const [draftCircles, setDraftCircles] = useState(selectedCircles);
+
+  useFocusEffect(
+    useCallback(() => {
+      setDraftCircles(selectedCircles);
+    }, [selectedCircles]),
+  );
+
   const selectedIds = useMemo(
-    () => new Set(selectedCircles.map((c) => c.id)),
-    [selectedCircles],
+    () => new Set(draftCircles.map((c) => c.id)),
+    [draftCircles],
   );
 
   const handleToggle = useCallback(
     (circle: Circle) => {
-      toggleCircle({ id: circle.id, name: circle.name });
+      setDraftCircles((current) => {
+        const exists = current.some((item) => item.id === circle.id);
+        return exists
+          ? current.filter((item) => item.id !== circle.id)
+          : [...current, { id: circle.id, name: circle.name }];
+      });
     },
-    [toggleCircle],
+    [],
   );
+
+  const handleConfirm = useCallback(() => {
+    setSelectedCircles(draftCircles);
+    router.back();
+  }, [draftCircles, router, setSelectedCircles]);
 
   const renderItem = useCallback(
     ({ item }: { item: Circle }) => {
@@ -198,7 +216,7 @@ export default function SelectCircleScreen() {
         <View style={[s.footer, { paddingBottom: insets.bottom || 34 }]}>
           <Text style={[s.countText, { color: colors.textSecondary }]}>
             {t('plaza.circlePicker.selectedCount', {
-              count: selectedCircles.length,
+              count: draftCircles.length,
               defaultValue: '已选 {{count}} 个圈子',
             })}
           </Text>
@@ -207,13 +225,13 @@ export default function SelectCircleScreen() {
               s.confirmBtn,
               {
                 backgroundColor:
-                  selectedCircles.length > 0
+                  draftCircles.length > 0
                     ? colors.primary
                     : colors.surfaceBorder,
               },
             ]}
-            disabled={selectedCircles.length === 0}
-            onPress={() => router.back()}
+            disabled={draftCircles.length === 0}
+            onPress={handleConfirm}
           >
             <Text style={[s.confirmText, { color: colors.white }]}>
               {t('city.confirmSelection', { defaultValue: '确定' })}

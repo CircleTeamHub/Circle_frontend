@@ -230,10 +230,7 @@ test('secureAuthStorage removes user PII while migrating legacy auth metadata', 
   assert.equal(value.state.user.phoneNumber, null);
   assert.equal(value.state.user.birthday, null);
   assert.equal(value.state.user.city, null);
-  assert.doesNotMatch(
-    legacy['circle-im-auth'],
-    /alice@example\.com|13800138000|1990-01-01|Shanghai/,
-  );
+  assert.doesNotMatch(legacy['circle-im-auth'], /alice@example\.com|13800138000|1990-01-01|Shanghai/);
 });
 
 test('secureAuthStorage writes only auth tokens to SecureStore and keeps user metadata sanitized in MMKV', async () => {
@@ -368,10 +365,7 @@ test('secureAuthStorage removes user PII from known-account metadata', async () 
   );
 
   assert.match(legacy['circle-im-known-accounts'], /Alice/);
-  assert.doesNotMatch(
-    legacy['circle-im-known-accounts'],
-    /alice@example\.com|13800138000|Shanghai/,
-  );
+  assert.doesNotMatch(legacy['circle-im-known-accounts'], /alice@example\.com|13800138000|Shanghai/);
 });
 
 test('secureAuthStorage escapes known-account user ids before using them in SecureStore keys', async () => {

@@ -129,13 +129,16 @@ export default function TransferComposerScreen() {
         message: normalizedMessage,
       });
       idempotencyRef.current = idempotency;
-      await sendCoinGift({
-        // 后端期望业务侧 UUID（带连字符）；如果 sourceID 是从消息列表来的 IM 形式，
-        // 这里还原。已经是 UUID 的字符串会原样透传。
-        recipientId: normalizedRecipientId,
-        amount: value,
-        message: normalizedMessage || undefined,
-      }, { idempotencyKey: idempotency.key });
+      await sendCoinGift(
+        {
+          // 后端期望业务侧 UUID（带连字符）；如果 sourceID 是从消息列表来的 IM 形式，
+          // 这里还原。已经是 UUID 的字符串会原样透传。
+          recipientId: normalizedRecipientId,
+          amount: value,
+          message: normalizedMessage || undefined,
+        },
+        { idempotencyKey: idempotency.key },
+      );
       // 转账成功后通过 store 通知 ChatDetailScreen 在重新拿到焦点时
       // 发出对应 IM 卡片消息（不在这里发，避免 IM 失败但积分已扣）
       setPending({
