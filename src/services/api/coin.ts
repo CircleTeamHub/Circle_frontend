@@ -1,6 +1,7 @@
 import { LIMITS } from '@/constants/config';
 import { apiClient } from '@/services/api/client';
 import i18n from '@/i18n';
+import { generateIdempotencyKey } from '@/utils/idempotency-key';
 import {
   expectShape,
   isFiniteNonNegativeNumber,
@@ -64,11 +65,17 @@ function assertValidCoinAmount(amount: number): void {
   }
 }
 
-export async function rechargePoints(amount: number) {
+export async function rechargePoints(
+  amount: number,
+  options?: { idempotencyKey?: string },
+) {
   assertValidCoinAmount(amount);
   const raw = await apiClient<Wallet>('/coin/recharge', {
     method: 'POST',
     body: { amount },
+    headers: {
+      'Idempotency-Key': options?.idempotencyKey ?? generateIdempotencyKey(),
+    },
   });
   return expectShape(
     raw,
@@ -79,14 +86,20 @@ export async function rechargePoints(amount: number) {
   );
 }
 
-export async function sendCoinGift(payload: {
-  recipientId: string;
-  amount: number;
-  message?: string;
-}) {
+export async function sendCoinGift(
+  payload: {
+    recipientId: string;
+    amount: number;
+    message?: string;
+  },
+  options?: { idempotencyKey?: string },
+) {
   assertValidCoinAmount(payload.amount);
   return apiClient<void>('/coin/gift', {
     method: 'POST',
     body: payload,
+    headers: {
+      'Idempotency-Key': options?.idempotencyKey ?? generateIdempotencyKey(),
+    },
   });
 }

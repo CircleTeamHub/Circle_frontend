@@ -15,8 +15,11 @@ test("known accounts store persists saved account tokens in SecureStore via pure
   assert.doesNotMatch(store, /mmkvJsonStorage/);
   assert.match(store, /upsertKnownAccount/);
   assert.match(store, /removeKnownAccount/);
-  // 持久化字段包含 token，支持免密快速切号
-  assert.match(store, /partialize:\s*\(state\)\s*=>\s*\(\{\s*accounts:\s*state\.accounts\s*\}\)/);
+  // 持久化字段包含 token（支持免密快速切号）；用户 PII 在落盘前经
+  // sanitizeUserForPersist 清空（C-05），因此 partialize 会 map 每个 account。
+  assert.match(store, /partialize:\s*\(state\)\s*=>\s*\(\{/);
+  assert.match(store, /accounts:\s*state\.accounts\.map/);
+  assert.match(store, /user:\s*sanitizeUserForPersist\(account\.user\)/);
 
   const logic = read("src/stores/knownAccountsLogic.ts");
   // 纯逻辑文件只能 import type，运行时不得拉入 SecureStore/MMKV/authStore

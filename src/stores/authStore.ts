@@ -16,6 +16,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { secureAuthStorage } from '@/storage/secure-auth-storage';
 import type { DisplayIcon } from '@/types';
 import { migrateAuthPersist, AUTH_PERSIST_VERSION } from './authPersist';
+import { sanitizeUserForPersist } from './persisted-user';
 
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 
@@ -91,7 +92,7 @@ function partializeAuthState(state: AuthState) {
     accessToken: state.accessToken,
     refreshToken: state.refreshToken,
     imToken: state.imToken,
-    user: state.user,
+    user: sanitizeUserForPersist(state.user),
     isAuthenticated: state.isAuthenticated,
     onboardingRequired: state.onboardingRequired,
   };

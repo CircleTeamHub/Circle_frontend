@@ -20,6 +20,7 @@ import {
   removeKnownAccount,
   type KnownAccount,
 } from '@/stores/knownAccountsLogic';
+import { sanitizeUserForPersist } from '@/stores/persisted-user';
 
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 
@@ -54,7 +55,12 @@ export const useKnownAccountsStore = create<KnownAccountsState>()(
     {
       name: 'circle-im-known-accounts',
       storage: createJSONStorage(() => secureAuthStorage),
-      partialize: (state) => ({ accounts: state.accounts }),
+      partialize: (state) => ({
+        accounts: state.accounts.map((account) => ({
+          ...account,
+          user: sanitizeUserForPersist(account.user),
+        })),
+      }),
       // 读失败时 secureAuthStorage 已进入 degraded（merge-only、不删 token），
       // 这里仅做可观测性记录，避免静默吞掉 Keychain 读错误。
       onRehydrateStorage: () => (_state, error) => {

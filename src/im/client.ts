@@ -36,7 +36,7 @@ import {
   OPENIM_LOG_LEVEL,
   OPENIM_WS_URL,
 } from '@/constants/config';
-import { bindOpenIMListeners } from '@/im/listeners';
+import { bindOpenIMListeners, unbindOpenIMListeners } from '@/im/listeners';
 import { stripFileScheme } from '@/im/media-uri';
 import { resolveVoiceSendStrategy } from '@/features/chat/utils/voice-forward';
 import { toImUserId } from '@/im/user-id';
@@ -298,9 +298,21 @@ export async function loginToOpenIM(userID: string, imToken: string) {
  * 无论 SDK logout 是否成功都会清空本地状态。
  * 登出后清空 initPromise，下次登录时会重新执行 initSDK。
  */
+/**
+ * IM 登出 teardown：解绑监听器 → 清空 init 单例 → 重置 store。
+ * 解绑是关键——否则账号 A 的 OpenIMSDK.on(...) handler 会常驻进账号 B 的会话；
+ * 置空 initPromise 后下次登录会重新 initSDK，并由 bindOpenIMListeners 干净重绑。
+ * 幂等：未初始化 / 未绑定时各步骤均为安全 no-op。
+ */
+function finalizeIMTeardown() {
+  unbindOpenIMListeners();
+  initPromise = null;
+  useIMStore.getState().reset();
+}
+
 async function performLogoutFromOpenIM() {
   if (!isNativeIMSupported() || !initPromise) {
-    useIMStore.getState().reset();
+    finalizeIMTeardown();
     return;
   }
 
@@ -308,8 +320,7 @@ async function performLogoutFromOpenIM() {
   // 直接 OpenIMSDK.logout() 会报 10004「Resource initialization incomplete」。
   // 此时跳过 SDK logout、只清本地状态并重置 initPromise（下次登录会重新 initSDK）。
   if (!useIMStore.getState().connected) {
-    initPromise = null;
-    useIMStore.getState().reset();
+    finalizeIMTeardown();
     return;
   }
 
@@ -323,9 +334,7 @@ async function performLogoutFromOpenIM() {
     }
     reportError(err, { operation: 'openim', op: 'logout' });
   } finally {
-    // 清空 initPromise，确保下次登录能重新执行 initSDK
-    initPromise = null;
-    useIMStore.getState().reset();
+    finalizeIMTeardown();
   }
 }
 
