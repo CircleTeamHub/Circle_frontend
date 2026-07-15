@@ -69,6 +69,15 @@ test('Android release workflow preflight validates the exact public tag without 
   assert.match(preflight, /actions\/setup-node@/);
   assert.match(preflight, /run: npm ci/);
   assert.match(preflight, /run: npm run ci/);
+  const validationIndex = preflight.indexOf(
+    '- name: Validate release metadata and ancestry',
+  );
+  assert.ok(
+    preflight.indexOf('- name: Setup Node') < validationIndex &&
+      validationIndex < preflight.indexOf('- name: Install dependencies') &&
+      validationIndex < preflight.indexOf('- name: Run application checks'),
+    'metadata and ancestry validation must run after Node setup and before application work',
+  );
 });
 
 test('Android release workflow builds and verifies a private signed artifact', () => {
