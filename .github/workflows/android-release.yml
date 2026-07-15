@@ -1,0 +1,122 @@
+name: Publish Android APK
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag, for example v1.2.0"
+        required: true
+        type: string
+
+concurrency:
+  group: android-release-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-publish:
+    name: Build and publish APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+      RELEASE_REPOSITORY: CircleTeamHub/windnote-releases
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5.5.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+
+      - name: Validate release configuration
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_CERT_SHA256: ${{ vars.ANDROID_CERT_SHA256 }}
+          RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
+          EXPO_PUBLIC_OPENIM_API_URL: ${{ vars.EXPO_PUBLIC_OPENIM_API_URL }}
+          EXPO_PUBLIC_OPENIM_WS_URL: ${{ vars.EXPO_PUBLIC_OPENIM_WS_URL }}
+        run: |
+          set -euo pipefail
+          node .github/scripts/validate-android-release.js
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run application checks
+        run: npm run ci
+
+      - name: Generate Android project
+        run: npx expo prebuild --platform android --clean --no-install
+
+      - name: Restore Android signing key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          signing_dir="$RUNNER_TEMP/android-signing"
+          mkdir -p "$signing_dir"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$signing_dir/windnote-release.jks"
+          chmod 600 "$signing_dir/windnote-release.jks"
+          echo "ANDROID_KEYSTORE_PATH=$signing_dir/windnote-release.jks" >> "$GITHUB_ENV"
+
+      - name: Build signed release APK
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
+          EXPO_PUBLIC_OPENIM_API_URL: ${{ vars.EXPO_PUBLIC_OPENIM_API_URL }}
+          EXPO_PUBLIC_OPENIM_WS_URL: ${{ vars.EXPO_PUBLIC_OPENIM_WS_URL }}
+          SENTRY_DISABLE_AUTO_UPLOAD: "true"
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Verify and stage APK
+        env:
+          EXPECTED_CERT_SHA256: ${{ vars.ANDROID_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          apk_source="android/app/build/outputs/apk/release/app-release.apk"
+          test -f "$apk_source"
+          apksigner_path="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
+          test -n "$apksigner_path"
+          cert_output="$("$apksigner_path" verify --verbose --print-certs "$apk_source")"
+          actual_cert="$(printf '%s\n' "$cert_output" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1 | tr -d ':' | tr '[:lower:]' '[:upper:]')"
+          expected_cert="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ':' | tr '[:lower:]' '[:upper:]')"
+          if [[ -z "$actual_cert" || "$actual_cert" != "$expected_cert" ]]; then
+            echo "::error::APK signer certificate does not match ANDROID_CERT_SHA256"
+            exit 1
+          fi
+          cp "$apk_source" "$RUNNER_TEMP/windnote.apk"
+          echo "APK_PATH=$RUNNER_TEMP/windnote.apk" >> "$GITHUB_ENV"
+
+      - name: Publish public GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        run: node .github/scripts/publish-android-release.js
