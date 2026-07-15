@@ -152,6 +152,7 @@ Require the document to state:
 - protected `android-release-publish` environment required reviewers;
 - environment-only `RELEASES_TOKEN`, approval flag, and HTTPS evidence URL;
 - `ANDROID_PUBLIC_RELEASE_ENABLED` must remain false until protection is verified;
+- current GitHub Free/private repositories cannot provide the required environment secrets/reviewers, so promotion remains unavailable until the organization gains that capability or deliberately changes visibility;
 - commands to inventory repository secrets and inspect required-reviewer protection plus the environment deployment branch/tag policy;
 - the repository's SBOM/LICENSE/NOTICE/patch/legal evidence gate;
 - tag and artifact verification steps.
