@@ -1,0 +1,283 @@
+# Tag-triggered Android release: run the full quality gate, generate the
+# native project (`expo prebuild` — android/ is gitignored CNG output), build
+# a release-signed APK with the version taken from the git tag, and publish it
+# as a GitHub Release. Discord is notified either way.
+#
+# Native changes must come from app.json/app.config.js + config plugins, never
+# hand-edits to a local android/ folder — CI regenerates it from config every
+# release. Release signing is injected post-prebuild by
+# scripts/patch-android-release-signing.mjs; versions flow from the tag via
+# CIRCLE_APP_VERSION / CIRCLE_ANDROID_VERSION_CODE (read in app.config.js).
+#
+# Usage:   git tag v0.1.0 && git push origin v0.1.0
+# Rebuild: Actions -> Release Android -> Run workflow with an existing tag
+#          (produces a fresh, higher versionCode for the same versionName).
+#
+# iOS is intentionally absent: the repo has no ios/ project yet and shipping
+# iOS requires an Apple Developer account + signing material + TestFlight.
+# When those exist, add a macOS job here next to build_android.
+#
+# One-time setup (repo/org Settings -> Secrets and variables -> Actions):
+#   secrets:
+#     ANDROID_RELEASE_KEYSTORE_B64   base64 of the release keystore (see docs
+#                                    below for the keytool one-liner)
+#     ANDROID_RELEASE_STORE_PASSWORD keystore password
+#     ANDROID_RELEASE_KEY_ALIAS      key alias
+#     ANDROID_RELEASE_KEY_PASSWORD   key password
+#     DISCORD_WEBHOOK_URL            already used by ci.yml
+#   variables (baked into the JS bundle; release builds refuse to start
+#   without them — see src/constants/config.ts):
+#     EXPO_PUBLIC_API_URL, EXPO_PUBLIC_OPENIM_API_URL, EXPO_PUBLIC_OPENIM_WS_URL
+#
+# Generate the keystore once, locally, then never commit it:
+#   keytool -genkeypair -v -keystore release.keystore -alias circleim \
+#     -keyalg RSA -keysize 2048 -validity 10000
+#   base64 -w0 release.keystore   # -> ANDROID_RELEASE_KEYSTORE_B64
+# Losing this keystore means installed users must uninstall to upgrade — back
+# it up somewhere safe.
+
+name: Release Android
+
+on:
+  push:
+    tags:
+      - "v[0-9]*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing v* tag to rebuild and re-publish"
+        required: true
+        type: string
+
+concurrency:
+  group: release-android
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  # Full quality gate at the released commit. Unlike the backend release
+  # (which promotes a main-tested image), an APK build has no prebuilt
+  # artifact to reuse, so the gate reruns here before the expensive build.
+  test:
+    name: Verify & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.tag.outputs.version }}
+    steps:
+      - name: Determine release tag
+        id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then TAG="$INPUT_TAG"; else TAG="$REF_NAME"; fi
+          case "$TAG" in
+            v[0-9]*) ;;
+            *)
+              echo "Refusing to release non-version tag: $TAG" >&2
+              exit 1
+              ;;
+          esac
+          {
+            echo "tag=$TAG"
+            echo "version=${TAG#v}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Verify tag commit is on main
+        run: |
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "Tag ${{ steps.tag.outputs.tag }} is not an ancestor of origin/main." >&2
+            echo "Releases must point at commits that went through main." >&2
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Quality Gate
+        run: npm run ci
+
+  build_android:
+    name: Build & Publish APK
+    runs-on: ubuntu-latest
+    needs: [test]
+    timeout-minutes: 60
+    permissions:
+      contents: write # creates the GitHub Release with the APK attached
+    env:
+      RELEASE_TAG: ${{ needs.test.outputs.tag }}
+      # app.config.js reads these during `expo prebuild`, so the tag is the
+      # single source of truth for versionName/versionCode.
+      CIRCLE_APP_VERSION: ${{ needs.test.outputs.version }}
+      CIRCLE_ANDROID_VERSION_CODE: ${{ github.run_number }}
+      # Baked into the JS bundle at build time; release builds hard-fail at
+      # startup when these are missing, so fail the build early instead.
+      EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
+      EXPO_PUBLIC_OPENIM_API_URL: ${{ vars.EXPO_PUBLIC_OPENIM_API_URL }}
+      EXPO_PUBLIC_OPENIM_WS_URL: ${{ vars.EXPO_PUBLIC_OPENIM_WS_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Check required configuration
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_B64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+        run: |
+          missing=0
+          for pair in \
+            "EXPO_PUBLIC_API_URL:$EXPO_PUBLIC_API_URL" \
+            "EXPO_PUBLIC_OPENIM_API_URL:$EXPO_PUBLIC_OPENIM_API_URL" \
+            "EXPO_PUBLIC_OPENIM_WS_URL:$EXPO_PUBLIC_OPENIM_WS_URL" \
+            "ANDROID_RELEASE_KEYSTORE_B64:$KEYSTORE_B64" \
+            "ANDROID_RELEASE_STORE_PASSWORD:$STORE_PASSWORD" \
+            "ANDROID_RELEASE_KEY_ALIAS:$KEY_ALIAS" \
+            "ANDROID_RELEASE_KEY_PASSWORD:$KEY_PASSWORD"; do
+            name="${pair%%:*}"
+            value="${pair#*:}"
+            if [ -z "$value" ]; then
+              echo "Missing required secret/variable: $name" >&2
+              missing=1
+            fi
+          done
+          if [ "$missing" = "1" ]; then
+            echo "Configure them in repo Settings (see the header of this workflow)." >&2
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Install Dependencies
+        run: npm ci
+
+      # android/ is gitignored (CNG): generate it from app.config.js + config
+      # plugins, then inject release signing into the generated Gradle project.
+      - name: Generate native project
+        run: |
+          npx expo prebuild --platform android --no-install
+          node scripts/patch-android-release-signing.mjs
+
+      - name: Decode release keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_B64 }}
+        run: |
+          printf '%s' "$KEYSTORE_B64" | base64 -d > android/app/release.keystore
+
+      # ORG_GRADLE_PROJECT_* env vars become Gradle project properties without
+      # ever appearing in argv; the patched build.gradle only switches to
+      # release signing when circleReleaseStoreFile is present.
+      - name: Build release APK
+        env:
+          ORG_GRADLE_PROJECT_circleReleaseStoreFile: release.keystore
+          ORG_GRADLE_PROJECT_circleReleaseStorePassword: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+          ORG_GRADLE_PROJECT_circleReleaseKeyAlias: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          ORG_GRADLE_PROJECT_circleReleaseKeyPassword: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+        run: |
+          chmod +x android/gradlew
+          cd android
+          ./gradlew :app:assembleRelease --no-daemon
+
+      # Signing material must not outlive the build.
+      - name: Clean keystore
+        if: always()
+        run: rm -f android/app/release.keystore
+
+      - name: Collect APK
+        run: |
+          apk="android/app/build/outputs/apk/release/app-release.apk"
+          if [ ! -f "$apk" ]; then
+            echo "Expected APK not found: $apk" >&2
+            exit 1
+          fi
+          cp "$apk" "circleim-$RELEASE_TAG.apk"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: "Release ${{ env.RELEASE_TAG }}"
+          generate_release_notes: true
+          files: circleim-${{ env.RELEASE_TAG }}.apk
+
+  notify:
+    name: Notify Discord
+    runs-on: ubuntu-latest
+    needs: [test, build_android]
+    if: always()
+    timeout-minutes: 5
+    env:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+    steps:
+      - name: Send Discord Notification
+        if: ${{ env.DISCORD_WEBHOOK_URL != '' }}
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          RELEASE_TAG: ${{ needs.test.outputs.tag || github.ref_name }}
+        run: |
+          node <<'NODE' > payload.json
+          const needs = JSON.parse(process.env.NEEDS_JSON);
+          const jobLines = Object.entries(needs).map(
+            ([name, job]) => `${name}: ${job.result}`,
+          );
+          const failed = Object.values(needs).some((job) =>
+            ['failure', 'cancelled'].includes(job.result),
+          );
+
+          const repo = process.env.GITHUB_REPOSITORY;
+          const runUrl = `${process.env.GITHUB_SERVER_URL}/${repo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+          const releaseUrl = `${process.env.GITHUB_SERVER_URL}/${repo}/releases/tag/${process.env.RELEASE_TAG}`;
+
+          const payload = {
+            username: 'GitHub Actions',
+            content: [
+              failed
+                ? `:rotating_light: **Android release ${process.env.RELEASE_TAG} failed**`
+                : `:rocket: **Android release ${process.env.RELEASE_TAG} published**`,
+              `**Repository:** ${repo}`,
+              `**Jobs:** ${jobLines.join(', ')}`,
+              failed ? `**Run:** ${runUrl}` : `**APK:** ${releaseUrl}`,
+            ].join('\n'),
+          };
+
+          process.stdout.write(JSON.stringify(payload));
+          NODE
+
+          curl --fail-with-body \
+            -H 'Content-Type: application/json' \
+            -d @payload.json \
+            "$DISCORD_WEBHOOK_URL"
