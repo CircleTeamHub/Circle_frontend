@@ -128,6 +128,19 @@ test('release rollout documentation records the fail-closed operating contract',
   assert.match(documentation, /tag[^\n]*commit[^\n]*main/i);
   assert.match(documentation, /push[^\n]*v\*/i);
   assert.match(documentation, /manual[^\n]*existing tag/i);
+  const newReleaseTrigger = documentation.match(
+    /### New release[^\n]*\n([\s\S]*?)(?=\n### )/i,
+  );
+  const existingTagRerun = documentation.match(
+    /### Existing tag rerun[^\n]*\n([\s\S]*?)(?=\n## |$)/i,
+  );
+  assert.ok(newReleaseTrigger, 'expected a separate new-release trigger path');
+  assert.ok(existingTagRerun, 'expected a separate existing-tag rerun path');
+  assert.match(newReleaseTrigger[1], /git push origin v1\.2\.3/);
+  assert.doesNotMatch(newReleaseTrigger[1], /gh workflow run/);
+  assert.match(existingTagRerun[1], /gh workflow run/);
+  assert.doesNotMatch(existingTagRerun[1], /git push origin/);
+  assert.match(documentation, /choose exactly one[^\n]*trigger path/i);
   assert.match(documentation, /immutable[^\n]*digest/i);
 
   assert.match(documentation, /Actions[^\n]*(?:jobs|results)/i);

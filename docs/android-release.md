@@ -76,9 +76,13 @@ The decision must address notice, source-offer, attribution, modification-disclo
 1. Choose a strict stable semver `major.minor.patch`: three non-negative decimal integers, no leading zeroes except `0`, and no prerelease/build suffix. Minor and patch must each be below 1000.
 2. Update `app.json` so `expo.version` is exactly `major.minor.patch` and `expo.android.versionCode` follows `versionCode = major * 1,000,000 + minor * 1,000 + patch`.
 3. Merge the reviewed release changes to `main`, synchronize locally, and create the `vmajor.minor.patch` tag on that exact commit on `main`. Confirm the tag commit is an ancestor of `origin/main`.
-4. Push the new `v*` tag to start the workflow, or use `workflow_dispatch` with the manual existing tag when re-running an already-existing tag. The manual input is a tag name, not an arbitrary branch or SHA.
+4. Choose exactly one trigger path below: push a new `v*` tag, or use `workflow_dispatch` only when re-running an already-existing tag. The manual input for an existing tag is a tag name, not an arbitrary branch or SHA.
 
-Example inspection and trigger commands (replace the example version, but do not move an existing tag):
+Replace the example version, but do not move an existing tag.
+
+### New release
+
+Use this path once for a version whose tag does not yet exist:
 
 ```sh
 git fetch origin main --tags
@@ -86,6 +90,13 @@ git switch main
 git pull --ff-only origin main
 git tag -a v1.2.3 -m 'Android v1.2.3'
 git push origin v1.2.3
+```
+
+### Existing tag rerun
+
+Use this alternative path only to rerun a tag that already exists; do not push or recreate the tag:
+
+```sh
 gh workflow run .github/workflows/android-release.yml --ref main -f release_tag=v1.2.3
 ```
 
