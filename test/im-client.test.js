@@ -18,6 +18,7 @@ function deferred() {
 const DEFAULT_TS_MODULE_STUBS = {
   '@/im/listeners': {
     bindOpenIMListeners: () => () => {},
+    unbindOpenIMListeners: () => {},
   },
   '@/services/auth/session': {
     registerLogoutHandler: () => () => {},
@@ -622,4 +623,87 @@ test('forwardMessage uses the native createForwardMessage primitive (preserves m
   assert.equal(sdkCalls[1][1].recvID, 'user9');
   assert.equal(sdkCalls[1][1].groupID, '');
   assert.equal(sent.clientMsgID, 'forward-1');
+});
+
+test('logoutFromOpenIM unbinds OpenIM listeners and a later init rebinds them (C-07)', async () => {
+  let bindCalls = 0;
+  let unbindCalls = 0;
+  const storeState = { connected: true };
+  const sdk = {
+    initSDK: async () => undefined,
+    logout: async () => undefined,
+    getLoginStatus: async () => 0,
+    login: async () => undefined,
+  };
+  const { ensureOpenIMInitialized, logoutFromOpenIM } = loadTsModule(
+    'src/im/client.ts',
+    {
+      '@/im/listeners': {
+        bindOpenIMListeners: () => {
+          bindCalls += 1;
+          return () => {};
+        },
+        unbindOpenIMListeners: () => {
+          unbindCalls += 1;
+        },
+      },
+      '@openim/rn-client-sdk': {
+        __esModule: true,
+        default: sdk,
+        LoginStatus: { Logout: 0, Logged: 3 },
+        LogLevel: { Info: 0 },
+        SessionType: { Single: 1, Group: 2 },
+        ViewType: { History: 0 },
+      },
+      'react-native-fs': {
+        __esModule: true,
+        default: {
+          DocumentDirectoryPath: '/tmp',
+          mkdir: async () => undefined,
+        },
+      },
+      'react-native': { Platform: { OS: 'ios' } },
+      '@/constants/config': {
+        OPENIM_API_URL: 'https://im.example.com',
+        OPENIM_WS_URL: 'wss://im.example.com',
+        OPENIM_LOG_LEVEL: 0,
+      },
+      '@/stores/imStore': {
+        useIMStore: {
+          getState: () => ({
+            connected: storeState.connected,
+            setError: () => undefined,
+            setInitialized: () => undefined,
+            setCurrentUserID: () => undefined,
+            setConnecting: () => undefined,
+            setConnected: (connected) => {
+              storeState.connected = connected;
+            },
+            reset: () => {
+              storeState.connected = false;
+            },
+          }),
+        },
+      },
+      '@/stores/tabBadgeStore': {
+        useTabBadgeStore: {
+          getState: () => ({ setMessagesUnread: () => undefined }),
+        },
+      },
+    },
+  );
+
+  await ensureOpenIMInitialized();
+  assert.equal(bindCalls, 1);
+  assert.equal(unbindCalls, 0);
+
+  // Logout must unbind the SDK listeners so account A's handlers never persist
+  // into account B's session.
+  await logoutFromOpenIM();
+  assert.equal(unbindCalls, 1);
+
+  // A subsequent init rebinds cleanly (initPromise was reset on logout).
+  storeState.connected = true;
+  await ensureOpenIMInitialized();
+  assert.equal(bindCalls, 2);
 });

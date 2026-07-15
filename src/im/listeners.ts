@@ -278,3 +278,13 @@ export function bindOpenIMListeners() {
 
   return unbindAll;
 }
+
+/**
+ * 解绑所有 OpenIM 监听器（登出 teardown 调用）。
+ * bindOpenIMListeners 在 unbindAll 存在时会早返回；解绑并置 null 后，下一次
+ * ensureOpenIMInitialized → bindOpenIMListeners 会针对新 SDK 会话重新注册，
+ * 避免账号 A 的 handler 常驻进账号 B 的会话。幂等：未绑定时为 no-op。
+ */
+export function unbindOpenIMListeners(): void {
+  unbindAll?.();
+}
