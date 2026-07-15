@@ -94,10 +94,10 @@ git push origin v1.2.3
 
 ### Existing tag rerun
 
-Use this alternative path only to rerun a tag that already exists; do not push or recreate the tag:
+Use this alternative path only to rerun a tag that already exists; do not push or recreate the tag. Both `--ref` and `release_tag` must name that same tag so the protected environment evaluates the `v*` tag deployment policy:
 
 ```sh
-gh workflow run .github/workflows/android-release.yml --ref main -f release_tag=v1.2.3
+gh workflow run .github/workflows/android-release.yml --ref v1.2.3 -f release_tag=v1.2.3
 ```
 
 Publishing is immutable by digest. A rerun may reuse `windnote.apk` only when its recorded SHA-256 digest equals the candidate artifact. A different digest for the same release tag is a hard failure, not permission to overwrite the asset.

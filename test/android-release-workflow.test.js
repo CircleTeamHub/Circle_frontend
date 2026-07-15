@@ -138,7 +138,10 @@ test('release rollout documentation records the fail-closed operating contract',
   assert.ok(existingTagRerun, 'expected a separate existing-tag rerun path');
   assert.match(newReleaseTrigger[1], /git push origin v1\.2\.3/);
   assert.doesNotMatch(newReleaseTrigger[1], /gh workflow run/);
-  assert.match(existingTagRerun[1], /gh workflow run/);
+  assert.match(
+    existingTagRerun[1],
+    /gh workflow run \.github\/workflows\/android-release\.yml --ref v1\.2\.3 -f release_tag=v1\.2\.3/,
+  );
   assert.doesNotMatch(existingTagRerun[1], /git push origin/);
   assert.match(documentation, /choose exactly one[^\n]*trigger path/i);
   assert.match(documentation, /immutable[^\n]*digest/i);
