@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { registerLogoutHandler } from '@/services/auth/session';
 import type {
   CallInvitePayload,
   CallLiveKitCredentials,
@@ -211,3 +212,8 @@ export const useCallStore = create<CallStoreState>((set) => ({
   resetCallState: () =>
     set({ incomingCall: null, activeCall: null, livekit: null }),
 }));
+
+// 登出时清空通话状态，避免账号 A 的来电弹窗 / 活动通话残留进账号 B 的会话。
+registerLogoutHandler(() => {
+  useCallStore.getState().resetCallState();
+});

@@ -264,6 +264,15 @@ function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
     }
   }, [activeCall, authUser?.id, leaving, resetCallState, room]);
 
+  // 离开通话屏幕（系统返回手势 / router.back / 通话结束导致 LiveKitRoom 卸载）时
+  // 断开 LiveKit，释放麦克风与 WebRTC 房间——否则通话结束后 mic 可能仍热、
+  // 房间在后台常驻，造成隐私泄漏与电量 / 内存泄漏。disconnect 幂等，与手动挂断不冲突。
+  useEffect(() => {
+    return () => {
+      room.disconnect().catch(() => undefined);
+    };
+  }, [room]);
+
   return (
     <>
       <View style={s.header}>

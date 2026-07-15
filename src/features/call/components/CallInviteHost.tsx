@@ -15,6 +15,7 @@ import { useTheme, Radius, Spacing, Typography } from '@/theme';
 import { acceptCall, rejectCall } from '@/services/api/calls';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useCallStore } from '@/features/call/store/use-call-store';
+import { useIncomingCallExpiry } from '@/features/call/hooks/use-incoming-call-expiry';
 
 const s = StyleSheet.create({
   overlay: {
@@ -114,6 +115,10 @@ export function CallInviteHost() {
       setBusyAction(null);
     }
   }, [busyAction, incomingCall, resetCallState]);
+
+  // 安全网：来电到 expiresAt 仍未接听 / 拒绝时自动清除，避免丢失的终止推送把
+  // 全屏来电弹窗永久卡住。
+  useIncomingCallExpiry(incomingCall, resetCallState);
 
   return (
     <Modal
