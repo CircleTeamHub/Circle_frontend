@@ -1,0 +1,112 @@
+# Android release rollout
+
+This runbook is fail-closed. PR #57 and `.github/workflows/android-release.yml` are the only canonical workflow for Android releases. PR #56 must not merge. Do not copy or retain a second release workflow.
+
+## Pipeline contract
+
+The ordered pipeline is: secret-free preflight → signed and certificate-verified private artifact retained for 30 days → default-disabled protected promotion → best-effort Discord notification. Preflight validates the exact tag, its commit, release metadata, ancestry from `main`, and application checks without reading secrets. Build signs the APK, checks its certificate fingerprint, generates its checksum, and uploads only the private Actions artifact. Promotion downloads that artifact, verifies the checksum and distribution evidence, and is skipped unless explicitly enabled. Discord runs last with `always()` and cannot change the release result.
+
+PR #57 does not by itself authorize public distribution. A successful private build is not evidence that the legal or promotion gates passed.
+
+## Repository configuration
+
+Configure metadata and signing for the private build without putting secret values in documentation, logs, issues, or pull requests.
+
+- Repository variable `EXPO_PUBLIC_API_URL`: production HTTPS API base URL, without embedded credentials.
+- Repository variable `EXPO_PUBLIC_OPENIM_API_URL`: production HTTPS OpenIM API URL, without embedded credentials.
+- Repository variable `EXPO_PUBLIC_OPENIM_WS_URL`: production WSS OpenIM WebSocket URL, without embedded credentials.
+- Repository variable `ANDROID_CERT_SHA256`: expected signing certificate SHA-256 fingerprint.
+- Repository secret `ANDROID_KEYSTORE_BASE64`: base64-encoded release keystore.
+- Repository secret `ANDROID_KEYSTORE_PASSWORD`: release keystore password.
+- Repository secret `ANDROID_KEY_ALIAS`: signing key alias.
+- Repository secret `ANDROID_KEY_PASSWORD`: signing key password.
+
+`RELEASES_TOKEN` must not be repository-scoped. It is a promotion credential and, if promotion becomes supportable, belongs only to the protected `android-release-publish` environment. A Discord webhook is optional; notification is best-effort.
+
+Keep an encrypted, access-controlled, tested keystore backup separate from GitHub. Losing the signing keystore or its credentials can prevent safe upgrades; never regenerate it casually for an existing application identity.
+
+## Current verified blocker
+
+The current verified organization plan is CircleTeamHub GitHub Free. The `CircleTeamHub/Circle_frontend` repository is private. On this plan, GitHub required reviewers are unavailable for this private repository, and environment secrets are unavailable for this private repository. Therefore the protected promotion design cannot presently be enforced.
+
+`ANDROID_PUBLIC_RELEASE_ENABLED` must remain absent or false. Public promotion is unavailable. Do not bypass the gate with a repository token, a personal local upload, a duplicate workflow, or an unprotected environment. A private, signed Actions artifact may still be produced for controlled verification, but it is not approval to distribute the binary.
+
+Verify the blocker from an authenticated `gh` session:
+
+```sh
+gh api orgs/CircleTeamHub --jq '.plan.name'
+gh api repos/CircleTeamHub/Circle_frontend --jq '.visibility'
+gh secret list --repo CircleTeamHub/Circle_frontend
+gh api repos/CircleTeamHub/Circle_frontend/environments/android-release-publish
+gh api repos/CircleTeamHub/Circle_frontend/environments/android-release-publish/deployment-branch-policies
+```
+
+The first two commands must show a plan with the needed private-repository environment capabilities and the expected visibility before enablement is considered. The secret inventory must confirm there is no `RELEASES_TOKEN` at repository scope; the command lists names only and must never be used to expose values. Inspect the environment response for required reviewers, `prevent_self_review`, and its deployment branch/tag policy. Inspect the deployment policy response for an allowlisted tag pattern such as `v*`, not an unrestricted branch or tag. A 404 from either environment command, or the current plan result, means do not enable public promotion.
+
+## Future enablement gate
+
+Revisit promotion only after GitHub can enforce the complete design. Capability may come from Enterprise required reviewers for a private repo, or from a deliberate visibility decision that has received its own security, legal, and operational review. Visibility must never be changed merely to make this workflow pass.
+
+Before setting `ANDROID_PUBLIC_RELEASE_ENABLED=true`, all of the following must be true:
+
+1. The `android-release-publish` environment has required reviewers, prevent self-review enabled, and a deployment tag policy that admits only the approved release tag pattern (normally `v*`).
+2. The environment-only `RELEASES_TOKEN` secret is in `android-release-publish`, is absent from repository secrets, and has only the permissions needed to publish to `CircleTeamHub/windnote-releases`.
+3. The environment variable `ANDROID_DISTRIBUTION_APPROVED=true` records the approval state for that gate.
+4. The environment variable `ANDROID_DISTRIBUTION_EVIDENCE_URL` is an HTTPS URL without embedded credentials and points reviewers to the complete, version-specific evidence package.
+5. The legal evidence gate below passes for the exact build SHA and release tag.
+6. The verification commands above show the expected protection and deployment policy. A missing policy, missing reviewer, self-review, 404, or unsupported plan is a stop condition.
+
+Only after an authorized reviewer confirms every condition may a repository administrator set the repository variable `ANDROID_PUBLIC_RELEASE_ENABLED=true`. Remove or set it to false immediately when any condition stops being true.
+
+## Legal evidence gate
+
+The legal gate is inherited from `docs/production-readiness-and-capacity-plan.md`. Its evidence package must include all of the following for the candidate binary:
+
+- an SBOM / dependency list with exact direct and transitive component versions and sources;
+- the applicable LICENSE and NOTICE materials;
+- a patch list describing local modifications and packaging/linking treatment;
+- a qualified legal written decision covering the intended channel and jurisdiction;
+- the exact build SHA;
+- vendor authorization when applicable, or a written decision from qualified counsel that it is not applicable.
+
+The decision must address notice, source-offer, attribution, modification-disclosure, relicensing, and commercial-license obligations as applicable. Missing evidence is NO-GO. This repository and this runbook do not claim that legal approval exists.
+
+## Prepare and start a release
+
+1. Choose a strict stable semver `major.minor.patch`: three non-negative decimal integers, no leading zeroes except `0`, and no prerelease/build suffix. Minor and patch must each be below 1000.
+2. Update `app.json` so `expo.version` is exactly `major.minor.patch` and `expo.android.versionCode` follows `versionCode = major * 1,000,000 + minor * 1,000 + patch`.
+3. Merge the reviewed release changes to `main`, synchronize locally, and create the `vmajor.minor.patch` tag on that exact commit on `main`. Confirm the tag commit is an ancestor of `origin/main`.
+4. Push the new `v*` tag to start the workflow, or use `workflow_dispatch` with the manual existing tag when re-running an already-existing tag. The manual input is a tag name, not an arbitrary branch or SHA.
+
+Example inspection and trigger commands (replace the example version, but do not move an existing tag):
+
+```sh
+git fetch origin main --tags
+git switch main
+git pull --ff-only origin main
+git tag -a v1.2.3 -m 'Android v1.2.3'
+git push origin v1.2.3
+gh workflow run .github/workflows/android-release.yml --ref main -f release_tag=v1.2.3
+```
+
+Publishing is immutable by digest. A rerun may reuse `windnote.apk` only when its recorded SHA-256 digest equals the candidate artifact. A different digest for the same release tag is a hard failure, not permission to overwrite the asset.
+
+## Verify the release
+
+Open the GitHub Actions run and record the Actions jobs/results for `preflight`, `build`, `publish`, and `notify`. Expected outcomes under the current fail-closed configuration are successful preflight and build, skipped publish, and a notify result that cannot fail the release.
+
+For the exact candidate:
+
+- confirm the checked-out tag and reported commit equal the intended build SHA on `main`;
+- compare the `apksigner` certificate fingerprint with repository variable `ANDROID_CERT_SHA256`;
+- download the private artifact and validate the artifact checksum with `sha256sum -c windnote.apk.sha256`;
+- when legally permitted, perform an APK install on a clean supported device and verify launch, authentication, API calls, OpenIM WebSocket behavior, and backend connectivity against the intended production HTTPS/WSS endpoints;
+- if public promotion is enabled in the future, confirm the public `windnote.apk` digest equals the private artifact digest and preserve the evidence URL and reviewer decision with the release record.
+
+Do not treat Discord delivery as verification. It is only an observable, best-effort summary.
+
+## Rollback and incident handling
+
+To stop promotion, disable `ANDROID_PUBLIC_RELEASE_ENABLED` by removing it or setting it to false. Cancel any run that has not passed the protected environment, revoke the environment-only token if exposure is suspected, and preserve the Actions logs and evidence for review.
+
+Never overwrite or move a published tag. Never replace an asset with different bytes under the same tag. Correct the problem, increment the application versions, and publish a new higher semver tag through the complete pipeline. If signing material may be compromised, stop releases and follow the key-rotation/application-identity procedure before building again; verify the encrypted keystore backup before relying on it.

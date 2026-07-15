@@ -26,6 +26,128 @@ const workflowStep = (job, stepName) => {
   return nextStep === -1 ? remainder : remainder.slice(0, nextStep + 1);
 };
 
+test('release rollout documentation records the fail-closed operating contract', () => {
+  const documentation = read('docs/android-release.md');
+
+  assert.match(documentation, /PR #57/);
+  assert.match(documentation, /\.github\/workflows\/android-release\.yml/);
+  assert.match(documentation, /only canonical workflow/i);
+  assert.match(documentation, /PR #56[^\n]*(?:must not|do not) merge/i);
+  assert.match(
+    documentation,
+    /secret-free preflight[\s\S]*signed[\s\S]*certificate[\s\S]*private artifact[\s\S]*30 days[\s\S]*default-disabled[\s\S]*protected promotion[\s\S]*best-effort Discord/i,
+  );
+
+  for (const repositoryVariable of [
+    'EXPO_PUBLIC_API_URL',
+    'EXPO_PUBLIC_OPENIM_API_URL',
+    'EXPO_PUBLIC_OPENIM_WS_URL',
+    'ANDROID_CERT_SHA256',
+  ]) {
+    assert.match(
+      documentation,
+      new RegExp(`repository[^\\n]*${repositoryVariable}`, 'i'),
+    );
+  }
+  for (const repositorySecret of [
+    'ANDROID_KEYSTORE_BASE64',
+    'ANDROID_KEYSTORE_PASSWORD',
+    'ANDROID_KEY_ALIAS',
+    'ANDROID_KEY_PASSWORD',
+  ]) {
+    assert.match(
+      documentation,
+      new RegExp(`repository[^\\n]*${repositorySecret}`, 'i'),
+    );
+  }
+  assert.match(
+    documentation,
+    /RELEASES_TOKEN[^\n]*(?:must not|never)[^\n]*repository/i,
+  );
+
+  assert.match(documentation, /CircleTeamHub[^\n]*GitHub Free/i);
+  assert.match(documentation, /Circle_frontend[^\n]*private/i);
+  assert.match(documentation, /required reviewers[^\n]*unavailable/i);
+  assert.match(documentation, /environment secrets[^\n]*unavailable/i);
+  assert.match(
+    documentation,
+    /ANDROID_PUBLIC_RELEASE_ENABLED[^\n]*(?:absent|false)/i,
+  );
+  assert.match(documentation, /public promotion[^\n]*unavailable/i);
+  assert.match(documentation, /(?:do not|never)[^\n]*repo(?:sitory)? token/i);
+
+  assert.match(
+    documentation,
+    /Enterprise[^\n]*required reviewers[^\n]*private repo/i,
+  );
+  assert.match(documentation, /deliberate visibility decision/i);
+  assert.match(documentation, /android-release-publish/);
+  assert.match(documentation, /prevent self-review/i);
+  assert.match(documentation, /deployment[^\n]*(?:tag|branch)[^\n]*policy/i);
+  assert.match(documentation, /environment-only[^\n]*RELEASES_TOKEN/i);
+  assert.match(documentation, /ANDROID_DISTRIBUTION_APPROVED=true/);
+  assert.match(
+    documentation,
+    /ANDROID_DISTRIBUTION_EVIDENCE_URL[^\n]*HTTPS/i,
+  );
+
+  for (const command of [
+    "gh api orgs/CircleTeamHub --jq '.plan.name'",
+    "gh api repos/CircleTeamHub/Circle_frontend --jq '.visibility'",
+    'gh secret list --repo CircleTeamHub/Circle_frontend',
+    'gh api repos/CircleTeamHub/Circle_frontend/environments/android-release-publish',
+    'gh api repos/CircleTeamHub/Circle_frontend/environments/android-release-publish/deployment-branch-policies',
+  ]) {
+    assert.ok(
+      documentation.includes(command),
+      `expected verification command: ${command}`,
+    );
+  }
+  assert.match(documentation, /404[^\n]*(?:do not|must not)[^\n]*enable/i);
+
+  for (const evidenceTerm of [
+    'SBOM',
+    'dependency list',
+    'LICENSE',
+    'NOTICE',
+    'patch list',
+    'qualified legal',
+    'written decision',
+    'build SHA',
+    'vendor authorization',
+  ]) {
+    assert.match(documentation, new RegExp(evidenceTerm, 'i'));
+  }
+
+  assert.match(documentation, /app\.json[^\n]*version[^\n]*versionCode/i);
+  assert.match(
+    documentation,
+    /versionCode\s*=\s*major\s*\*\s*1,?000,?000\s*\+\s*minor\s*\*\s*1,?000\s*\+\s*patch/i,
+  );
+  assert.match(documentation, /strict stable semver/i);
+  assert.match(documentation, /tag[^\n]*commit[^\n]*main/i);
+  assert.match(documentation, /push[^\n]*v\*/i);
+  assert.match(documentation, /manual[^\n]*existing tag/i);
+  assert.match(documentation, /immutable[^\n]*digest/i);
+
+  assert.match(documentation, /Actions[^\n]*(?:jobs|results)/i);
+  assert.match(documentation, /certificate fingerprint/i);
+  assert.match(documentation, /artifact checksum/i);
+  assert.match(documentation, /APK[^\n]*install/i);
+  assert.match(documentation, /backend connectivity/i);
+  assert.match(documentation, /legally permitted/i);
+  assert.match(
+    documentation,
+    /disable[^\n]*ANDROID_PUBLIC_RELEASE_ENABLED/i,
+  );
+  assert.match(
+    documentation,
+    /never[^\n]*(?:overwrite|move)[^\n]*published tag/i,
+  );
+  assert.match(documentation, /new higher semver/i);
+  assert.match(documentation, /keystore[^\n]*backup/i);
+});
+
 test('Android release workflow has one controlled release entry point', () => {
   const workflow = read('.github/workflows/android-release.yml');
   const jobs = workflow.slice(workflow.indexOf('\njobs:'));
