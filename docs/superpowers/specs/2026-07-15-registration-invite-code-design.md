@@ -25,7 +25,9 @@ Extend the backend `User` model with:
 - `invitedByUserId String?`: the inviter's user ID, if one was supplied at registration.
 - A named self-relation from `invitedBy` to `invitees`.
 
-The migration will copy each existing user's current unique `accountId` into `inviteCode`, then make `inviteCode` required and unique. New registrations generate one unique account ID and initially use the same value for both `accountId` and `inviteCode`. The two fields are independent afterward, so later account-ID changes do not invalidate existing invite codes.
+The migration will copy `lower(accountId)` into `inviteCode`, then make `inviteCode` required and unique. The database already enforces a unique index on `lower(accountId)`, so this normalization cannot create a case-only collision. The migration retains that invariant explicitly and must fail rather than silently choose a different inviter if unexpected duplicate normalized values exist.
+
+New registrations initially use the same lowercase random value for both `accountId` and `inviteCode`. Candidate generation must verify that the value is absent from both columns. It retries boundedly on pre-check collisions and on database unique-constraint races; exhausting the retry budget returns the existing service-unavailable failure rather than a partially created user. The two fields are independent after creation, so later account-ID changes do not invalidate existing invite codes or make an old code available for reuse.
 
 Deleting an inviter must not delete invitees. The foreign key therefore uses `ON DELETE SET NULL`.
 
@@ -53,7 +55,7 @@ The registration screen adds an `AuthInput` between nickname and the agreement c
 - The auth hook trims the value and passes it to the API layer.
 - The API request omits `inviteCode` when the trimmed value is empty.
 
-`BackendAuthUser` and the local auth user type include the returned `inviteCode`. The existing share screen replaces its hard-coded code with `user.inviteCode`; if an old or incomplete session has no code, the copy action is unavailable and the screen shows a localized fallback rather than copying a fake value.
+`BackendAuthUser` includes the guaranteed `inviteCode` returned by fresh backend responses. The persisted frontend auth-user type temporarily treats it as optional so legacy sessions can hydrate safely until `/auth/me` refreshes them. The existing share screen replaces its hard-coded code with `user.inviteCode`; if an old or incomplete session has no code, the copy action is unavailable and the screen shows a localized fallback rather than copying a fake value.
 
 All supported locale files receive the new registration labels and `AUTH_INVITE_CODE_INVALID` message.
 
