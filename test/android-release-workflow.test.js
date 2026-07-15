@@ -8,6 +8,163 @@ const { spawnSync } = require('node:child_process');
 const read = (relativePath) =>
   fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
 
+const workflowJob = (workflow, jobName) => {
+  const jobs = workflow.slice(workflow.indexOf('\njobs:'));
+  const header = `\n  ${jobName}:`;
+  const start = jobs.indexOf(header);
+  assert.notEqual(start, -1, `expected ${jobName} job`);
+  const remainder = jobs.slice(start + header.length);
+  const nextJob = remainder.search(/^  [a-z][a-z0-9-]*:\s*$/m);
+  return nextJob === -1 ? remainder : remainder.slice(0, nextJob);
+};
+
+const workflowStep = (job, stepName) => {
+  const start = job.indexOf(`      - name: ${stepName}`);
+  assert.notEqual(start, -1, `expected ${stepName} step`);
+  const remainder = job.slice(start);
+  const nextStep = remainder.slice(1).search(/^      - name:/m);
+  return nextStep === -1 ? remainder : remainder.slice(0, nextStep + 1);
+};
+
+test('Android release workflow has one controlled release entry point', () => {
+  const workflow = read('.github/workflows/android-release.yml');
+  const jobs = workflow.slice(workflow.indexOf('\njobs:'));
+
+  assert.equal((workflow.match(/tags:/g) || []).length, 1);
+  assert.match(workflow, /push:\s*\n\s+tags:\s*\n\s+- ["']v\*["']/);
+  assert.match(
+    workflow,
+    /workflow_dispatch:\s*\n\s+inputs:\s*\n\s+release_tag:[\s\S]*?required: true[\s\S]*?type: string/,
+  );
+  assert.match(
+    workflow,
+    /RELEASE_TAG: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.release_tag \|\| github\.ref_name \}\}/,
+  );
+  assert.equal((workflow.match(/group: android-release-publish/g) || []).length, 1);
+  assert.match(workflow, /cancel-in-progress: false/);
+  assert.match(workflow, /permissions:\s*\n\s+contents: read/);
+  assert.doesNotMatch(workflow, /contents: write/);
+  assert.match(workflow, /RELEASE_REPOSITORY: CircleTeamHub\/windnote-releases/);
+  assert.deepEqual(
+    [...jobs.matchAll(/^  ([a-z][a-z0-9-]*):\s*$/gm)].map((match) => match[1]),
+    ['preflight', 'build', 'publish', 'notify'],
+  );
+});
+
+test('Android release workflow preflight validates the exact public tag without secrets', () => {
+  const workflow = read('.github/workflows/android-release.yml');
+  const preflight = workflowJob(workflow, 'preflight');
+
+  assert.doesNotMatch(preflight, /secrets\./);
+  assert.match(preflight, /outputs:[\s\S]*release_tag:[\s\S]*commit_sha:/);
+  assert.match(preflight, /ref: refs\/tags\/\$\{\{ env\.RELEASE_TAG \}\}/);
+  assert.match(preflight, /fetch-depth: 0/);
+  assert.match(preflight, /persist-credentials: false/);
+  assert.match(preflight, /validate-android-release\.js metadata/);
+  assert.match(preflight, /git rev-parse "refs\/tags\/\$RELEASE_TAG\^\{commit\}"/);
+  assert.match(preflight, /test "\$\(git rev-parse HEAD\)" = "\$tag_commit"/);
+  assert.match(preflight, /git merge-base --is-ancestor HEAD origin\/main/);
+  assert.match(preflight, /release_tag=\$RELEASE_TAG.*GITHUB_OUTPUT/);
+  assert.match(preflight, /commit_sha=\$tag_commit.*GITHUB_OUTPUT/);
+  assert.match(preflight, /actions\/setup-node@/);
+  assert.match(preflight, /run: npm ci/);
+  assert.match(preflight, /run: npm run ci/);
+});
+
+test('Android release workflow builds and verifies a private signed artifact', () => {
+  const workflow = read('.github/workflows/android-release.yml');
+  const build = workflowJob(workflow, 'build');
+  const signing = workflowStep(build, 'Validate signing configuration');
+
+  assert.match(build, /needs: preflight/);
+  assert.match(build, /ref: \$\{\{ needs\.preflight\.outputs\.commit_sha \}\}/);
+  assert.match(build, /persist-credentials: false/);
+  for (const name of [
+    'ANDROID_KEYSTORE_BASE64',
+    'ANDROID_KEYSTORE_PASSWORD',
+    'ANDROID_KEY_ALIAS',
+    'ANDROID_KEY_PASSWORD',
+    'ANDROID_CERT_SHA256',
+  ]) {
+    assert.match(signing, new RegExp(`^          ${name}:`, 'm'));
+  }
+  assert.equal((signing.match(/^          [A-Z][A-Z0-9_]+:/gm) || []).length, 5);
+  assert.match(signing, /validate-android-release\.js signing/);
+  assert.doesNotMatch(build, /RELEASES_TOKEN/);
+  assert.match(build, /actions\/setup-node@/);
+  assert.match(build, /actions\/setup-java@/);
+  assert.match(build, /gradle\/actions\/setup-gradle@/);
+  assert.match(build, /run: npm ci/);
+  assert.match(build, /npx expo prebuild --platform android --clean --no-install/);
+  assert.match(build, /RUNNER_TEMP\/android-signing/);
+  assert.match(build, /chmod 600/);
+  assert.match(build, /\.\/gradlew assembleRelease/);
+  assert.match(build, /EXPO_PUBLIC_API_URL:/);
+  assert.match(build, /EXPO_PUBLIC_OPENIM_API_URL:/);
+  assert.match(build, /EXPO_PUBLIC_OPENIM_WS_URL:/);
+  assert.match(build, /SENTRY_DISABLE_AUTO_UPLOAD: ["']true["']/);
+  assert.match(build, /apksigner.*verify --verbose --print-certs/);
+  assert.match(build, /ANDROID_CERT_SHA256/);
+  assert.match(build, /windnote\.apk\.sha256/);
+  assert.match(
+    build,
+    /actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a/,
+  );
+});
+
+test('Android release workflow protects promotion and reports observable results', () => {
+  const workflow = read('.github/workflows/android-release.yml');
+  const preflight = workflowJob(workflow, 'preflight');
+  const build = workflowJob(workflow, 'build');
+  const publish = workflowJob(workflow, 'publish');
+  const notify = workflowJob(workflow, 'notify');
+  const publisher = workflowStep(publish, 'Publish public GitHub release');
+  const notification = workflowStep(notify, 'Notify Discord');
+
+  assert.match(publish, /needs: \[preflight, build\]/);
+  assert.match(publish, /if: \$\{\{ vars\.ANDROID_PUBLIC_RELEASE_ENABLED == 'true' \}\}/);
+  assert.match(publish, /environment: android-release-publish/);
+  assert.match(publish, /ref: \$\{\{ needs\.preflight\.outputs\.commit_sha \}\}/);
+  assert.match(publish, /persist-credentials: false/);
+  assert.match(
+    publish,
+    /actions\/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c/,
+  );
+  assert.match(publish, /sha256sum -c/);
+  assert.match(publish, /ANDROID_PUBLIC_RELEASE_ENABLED: \$\{\{ vars\.ANDROID_PUBLIC_RELEASE_ENABLED \}\}/);
+  assert.match(publish, /ANDROID_DISTRIBUTION_APPROVED: \$\{\{ vars\.ANDROID_DISTRIBUTION_APPROVED \}\}/);
+  assert.match(publish, /ANDROID_DISTRIBUTION_EVIDENCE_URL: \$\{\{ vars\.ANDROID_DISTRIBUTION_EVIDENCE_URL \}\}/);
+  assert.match(publish, /validate-android-release\.js distribution/);
+  assert.equal((workflow.match(/secrets\.RELEASES_TOKEN/g) || []).length, 1);
+  assert.doesNotMatch(preflight, /RELEASES_TOKEN/);
+  assert.doesNotMatch(build, /RELEASES_TOKEN/);
+  assert.match(publisher, /GH_TOKEN: \$\{\{ secrets\.RELEASES_TOKEN \}\}/);
+  assert.match(publisher, /RELEASE_TAG: \$\{\{ needs\.preflight\.outputs\.release_tag \}\}/);
+  assert.match(publisher, /RELEASE_REPOSITORY: CircleTeamHub\/windnote-releases/);
+  assert.match(publisher, /APK_PATH:/);
+  assert.match(publisher, /node \.github\/scripts\/publish-android-release\.js/);
+  for (const signingSecret of [
+    'secrets.ANDROID_KEYSTORE_BASE64',
+    'secrets.ANDROID_KEYSTORE_PASSWORD',
+    'secrets.ANDROID_KEY_ALIAS',
+    'secrets.ANDROID_KEY_PASSWORD',
+  ]) {
+    assert.doesNotMatch(`${preflight}\n${publish}\n${notify}`, new RegExp(signingSecret.replace('.', '\\.')));
+  }
+
+  assert.match(notify, /needs: \[preflight, build, publish\]/);
+  assert.match(notify, /if: \$\{\{ always\(\) \}\}/);
+  assert.match(notify, /needs\.preflight\.result/);
+  assert.match(notify, /needs\.build\.result/);
+  assert.match(notify, /needs\.publish\.result/);
+  assert.match(notify, /github\.com\/\$\{\{ github\.repository \}\}\/actions\/runs\/\$\{\{ github\.run_id \}\}/);
+  assert.match(notify, /github\.com\/CircleTeamHub\/windnote-releases\/releases\/tag/);
+  assert.equal((workflow.match(/secrets\.DISCORD_WEBHOOK_URL/g) || []).length, 1);
+  assert.match(notification, /DISCORD_WEBHOOK_URL: \$\{\{ secrets\.DISCORD_WEBHOOK_URL \}\}/);
+  assert.match(notification, /-z "\$DISCORD_WEBHOOK_URL"/);
+  assert.doesNotMatch(notify, /reject/i);
+});
+
 test('Android releases publish a consistently named APK to the public repository', () => {
   const workflow = read('.github/workflows/android-release.yml');
 
