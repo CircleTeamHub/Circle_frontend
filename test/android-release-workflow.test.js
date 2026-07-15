@@ -101,6 +101,11 @@ test('Android release workflow builds and verifies a private signed artifact', (
   assert.match(signing, /validate-android-release\.js signing/);
   assert.doesNotMatch(build, /RELEASES_TOKEN/);
   assert.match(build, /actions\/setup-node@/);
+  assert.ok(
+    build.indexOf('- name: Setup Node') <
+      build.indexOf('- name: Validate signing configuration'),
+    'Node setup must run before signing validation',
+  );
   assert.match(build, /actions\/setup-java@/);
   assert.match(build, /gradle\/actions\/setup-gradle@/);
   assert.match(build, /run: npm ci/);
@@ -117,7 +122,7 @@ test('Android release workflow builds and verifies a private signed artifact', (
   assert.match(build, /windnote\.apk\.sha256/);
   assert.match(
     build,
-    /actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a/,
+    /actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7\.0\.1/,
   );
 });
 
@@ -137,13 +142,24 @@ test('Android release workflow protects promotion and reports observable results
   assert.match(publish, /persist-credentials: false/);
   assert.match(
     publish,
-    /actions\/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c/,
+    /actions\/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8\.0\.1/,
   );
   assert.match(publish, /sha256sum -c/);
   assert.match(publish, /ANDROID_PUBLIC_RELEASE_ENABLED: \$\{\{ vars\.ANDROID_PUBLIC_RELEASE_ENABLED \}\}/);
   assert.match(publish, /ANDROID_DISTRIBUTION_APPROVED: \$\{\{ vars\.ANDROID_DISTRIBUTION_APPROVED \}\}/);
   assert.match(publish, /ANDROID_DISTRIBUTION_EVIDENCE_URL: \$\{\{ vars\.ANDROID_DISTRIBUTION_EVIDENCE_URL \}\}/);
   assert.match(publish, /validate-android-release\.js distribution/);
+  assert.match(
+    publish,
+    /actions\/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7\.0\.0/,
+  );
+  const publishNodeIndex = publish.indexOf('- name: Setup Node');
+  assert.ok(
+    publish.indexOf('- name: Checkout validated commit') < publishNodeIndex &&
+      publishNodeIndex < publish.indexOf('validate-android-release.js distribution') &&
+      publishNodeIndex < publish.indexOf('publish-android-release.js'),
+    'publish Node setup must precede validator and publisher scripts',
+  );
   assert.equal((workflow.match(/secrets\.RELEASES_TOKEN/g) || []).length, 1);
   assert.doesNotMatch(preflight, /RELEASES_TOKEN/);
   assert.doesNotMatch(build, /RELEASES_TOKEN/);
