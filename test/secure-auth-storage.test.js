@@ -103,6 +103,22 @@ function loadSecureAuthStorage({
         return secureStore;
       }
       if (request === '@/storage') return { mmkvJsonStorage };
+      if (request === '@/stores/persisted-user') {
+        return {
+          sanitizeUserForPersist: (user) => ({
+            ...user,
+            email: null,
+            phoneNumber: null,
+            wechat: null,
+            qq: null,
+            whatsup: null,
+            persona: null,
+            helloWords: null,
+            birthday: null,
+            city: null,
+          }),
+        };
+      }
       throw new Error(`Unexpected import: ${request}`);
     },
   };
@@ -153,7 +169,13 @@ test('secureAuthStorage migrates old MMKV auth state into SecureStore once', asy
 
   const value = await secureAuthStorage.getItem('circle-im-auth');
 
-  assert.deepEqual(parse(value), parse(legacyValue));
+  const migrated = parse(value);
+  assert.equal(migrated.state.accessToken, 'legacy');
+  assert.equal(migrated.state.refreshToken, 'refresh');
+  assert.equal(migrated.state.imToken, 'im');
+  assert.equal(migrated.state.user.id, 'u1');
+  assert.equal(migrated.state.user.nickname, 'Alice');
+  assert.equal(migrated.state.user.email, null);
   assert.equal(
     secure['circle-im-auth.accessToken'],
     'legacy',
@@ -180,6 +202,35 @@ test('secureAuthStorage migrates old MMKV auth state into SecureStore once', asy
     accessSet[3].keychainAccessible,
     'AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY',
   );
+});
+
+test('secureAuthStorage removes user PII while migrating legacy auth metadata', async () => {
+  const legacyValue = JSON.stringify({
+    state: {
+      accessToken: 'legacy',
+      refreshToken: 'refresh',
+      user: {
+        id: 'u1',
+        nickname: 'Alice',
+        email: 'alice@example.com',
+        phoneNumber: '13800138000',
+        birthday: '1990-01-01',
+        city: 'Shanghai',
+      },
+    },
+  });
+  const { secureAuthStorage, legacy } = loadSecureAuthStorage({
+    legacyValues: { 'circle-im-auth': legacyValue },
+  });
+
+  const value = parse(await secureAuthStorage.getItem('circle-im-auth'));
+
+  assert.equal(value.state.user.nickname, 'Alice');
+  assert.equal(value.state.user.email, null);
+  assert.equal(value.state.user.phoneNumber, null);
+  assert.equal(value.state.user.birthday, null);
+  assert.equal(value.state.user.city, null);
+  assert.doesNotMatch(legacy['circle-im-auth'], /alice@example\.com|13800138000|1990-01-01|Shanghai/);
 });
 
 test('secureAuthStorage writes only auth tokens to SecureStore and keeps user metadata sanitized in MMKV', async () => {
@@ -287,6 +338,34 @@ test('secureAuthStorage stores known-account tokens per account and keeps MMKV m
   assert.equal(secure['circle-im-known-accounts.u2.imToken'], undefined);
   assert.match(legacy['circle-im-known-accounts'], /Alice|Bob/);
   assert.doesNotMatch(legacy['circle-im-known-accounts'], /a1|r1|i1|a2|r2/);
+});
+
+test('secureAuthStorage removes user PII from known-account metadata', async () => {
+  const { secureAuthStorage, legacy } = loadSecureAuthStorage();
+
+  await secureAuthStorage.setItem(
+    'circle-im-known-accounts',
+    JSON.stringify({
+      state: {
+        accounts: [
+          {
+            user: {
+              id: 'u1',
+              nickname: 'Alice',
+              email: 'alice@example.com',
+              phoneNumber: '13800138000',
+              city: 'Shanghai',
+            },
+            accessToken: 'a1',
+            refreshToken: 'r1',
+          },
+        ],
+      },
+    }),
+  );
+
+  assert.match(legacy['circle-im-known-accounts'], /Alice/);
+  assert.doesNotMatch(legacy['circle-im-known-accounts'], /alice@example\.com|13800138000|Shanghai/);
 });
 
 test('secureAuthStorage escapes known-account user ids before using them in SecureStore keys', async () => {

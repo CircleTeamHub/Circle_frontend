@@ -65,27 +65,6 @@ function assertValidCoinAmount(amount: number): void {
   }
 }
 
-export async function rechargePoints(
-  amount: number,
-  options?: { idempotencyKey?: string },
-) {
-  assertValidCoinAmount(amount);
-  const raw = await apiClient<Wallet>('/coin/recharge', {
-    method: 'POST',
-    body: { amount },
-    headers: {
-      'Idempotency-Key': options?.idempotencyKey ?? generateIdempotencyKey(),
-    },
-  });
-  return expectShape(
-    raw,
-    isWalletShape,
-    i18n.t('coin.errors.rechargeDataInvalid', {
-      defaultValue: '充值返回数据格式异常',
-    }),
-  );
-}
-
 export async function sendCoinGift(
   payload: {
     recipientId: string;

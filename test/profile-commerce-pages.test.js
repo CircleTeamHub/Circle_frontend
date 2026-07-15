@@ -96,21 +96,17 @@ test('CreditScoreScreen explains score status and change rules via i18n', () => 
   assert.equal(zh.credit.title, '信誉值详情');
 });
 
-test('WalletScreen shows remaining points and recharge packages', () => {
+test('WalletScreen shows the balance without an unsupported recharge action', () => {
   const src = read('src/features/profile/screens/WalletScreen.tsx');
   const api = read('src/services/api/coin.ts');
 
   assert.match(src, /fetchWallet/);
-  assert.match(src, /rechargePoints/);
   assert.match(api, /\/coin\/wallet/);
-  assert.match(api, /\/coin\/recharge/);
+  assert.doesNotMatch(src, /rechargePoints|RECHARGE_PACKAGES/);
+  assert.doesNotMatch(api, /\/coin\/recharge/);
+  assert.match(src, /purchaseUnavailable/);
   assert.match(src, /积分余额/);
   assert.doesNotMatch(src, /帮积分/);
-  assert.match(src, /100/);
-  assert.match(src, /300/);
-  assert.match(src, /500/);
-  assert.match(src, /1000/);
-  assert.match(src, /2000/);
 });
 
 test('MallScreen shows requested product areas', () => {

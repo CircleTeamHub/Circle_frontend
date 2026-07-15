@@ -1191,6 +1191,7 @@
     "memberCenter": "会员中心",
     "viewMember": "查看会员",
     "wallet": {
+      "purchaseUnavailable": "积分购买暂未开放。当前页面仅显示余额。",
       "title": "我的钱包",
       "confirmRecharge": "确认充值",
       "balance": "积分余额",

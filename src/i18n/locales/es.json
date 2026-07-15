@@ -1640,6 +1640,7 @@
     "memberCenter": "Membresía",
     "viewMember": "Ver",
     "wallet": {
+      "purchaseUnavailable": "La compra de créditos aún no está disponible. Esta página solo muestra tu saldo.",
       "title": "Mi cartera",
       "confirmRecharge": "Confirmar recarga",
       "balance": "Saldo de créditos",

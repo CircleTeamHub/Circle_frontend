@@ -1,6 +1,7 @@
 import type * as SecureStoreModule from 'expo-secure-store';
 import type { StateStorage } from 'zustand/middleware';
 import { mmkvJsonStorage } from '@/storage';
+import { sanitizeUserForPersist } from '@/stores/persisted-user';
 
 type SecureStoreApi = typeof SecureStoreModule;
 type SecureStoreOptions = SecureStoreModule.SecureStoreOptions;
@@ -217,7 +218,12 @@ async function writeTokenBundle(key: string, tokens: TokenBundle | null) {
 
 function sanitizeAuthEnvelope(envelope: PersistEnvelope | null): PersistEnvelope {
   const state = isRecord(envelope?.state) ? stripTokenFields(envelope.state) : {};
-  return envelopeWithState(envelope, state);
+  return envelopeWithState(envelope, {
+    ...state,
+    ...(isRecord(state.user)
+      ? { user: sanitizeUserForPersist(state.user) }
+      : {}),
+  });
 }
 
 async function loadAuthItem(key: string): Promise<string | null> {
@@ -291,7 +297,13 @@ function getAccountUserId(account: unknown): string | null {
 }
 
 function sanitizeKnownAccount(account: Record<string, unknown>) {
-  return stripTokenFields(account);
+  const sanitized = stripTokenFields(account);
+  return {
+    ...sanitized,
+    ...(isRecord(sanitized.user)
+      ? { user: sanitizeUserForPersist(sanitized.user) }
+      : {}),
+  };
 }
 
 function getKnownAccounts(envelope: PersistEnvelope | null): Record<string, unknown>[] {
