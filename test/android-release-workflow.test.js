@@ -84,6 +84,7 @@ test('Android release workflow builds and verifies a private signed artifact', (
   const workflow = read('.github/workflows/android-release.yml');
   const build = workflowJob(workflow, 'build');
   const signing = workflowStep(build, 'Validate signing configuration');
+  const upload = workflowStep(build, 'Upload private release artifact');
 
   assert.match(build, /needs: preflight/);
   assert.match(build, /ref: \$\{\{ needs\.preflight\.outputs\.commit_sha \}\}/);
@@ -124,6 +125,7 @@ test('Android release workflow builds and verifies a private signed artifact', (
     build,
     /actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7\.0\.1/,
   );
+  assert.match(upload, /retention-days: 30/);
 });
 
 test('Android release workflow protects promotion and reports observable results', () => {
@@ -185,6 +187,7 @@ test('Android release workflow protects promotion and reports observable results
   assert.match(notify, /github\.com\/\$\{\{ github\.repository \}\}\/actions\/runs\/\$\{\{ github\.run_id \}\}/);
   assert.match(notify, /github\.com\/CircleTeamHub\/windnote-releases\/releases\/tag/);
   assert.equal((workflow.match(/secrets\.DISCORD_WEBHOOK_URL/g) || []).length, 1);
+  assert.match(notification, /continue-on-error: true/);
   assert.match(notification, /DISCORD_WEBHOOK_URL: \$\{\{ secrets\.DISCORD_WEBHOOK_URL \}\}/);
   assert.match(notification, /-z "\$DISCORD_WEBHOOK_URL"/);
   assert.doesNotMatch(notify, /reject/i);

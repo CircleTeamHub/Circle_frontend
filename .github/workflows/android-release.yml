@@ -159,7 +159,7 @@ jobs:
             ${{ runner.temp }}/windnote.apk
             ${{ runner.temp }}/windnote.apk.sha256
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 30
 
   publish:
     name: Promote APK to public release
@@ -216,6 +216,7 @@ jobs:
 
     steps:
       - name: Notify Discord
+        continue-on-error: true
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           PREFLIGHT_RESULT: ${{ needs.preflight.result }}
