@@ -78,17 +78,16 @@ test('sendCoinGift reuses an explicitly provided idempotency key', async () => {
   assert.equal(calls[0].options.headers['Idempotency-Key'], 'explicit-key');
 });
 
-test('rechargePoints attaches an Idempotency-Key header (C-04)', async () => {
-  const calls = [];
-  const coin = loadCoinModule(
-    baseStubs(async (endpoint, options) => {
-      calls.push({ endpoint, options });
-      return { id: 'w', userID: 'u', balance: 100, updatedAt: 'x' };
-    }),
+test('wallet does not expose the unsupported client-side recharge flow', () => {
+  const coinSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/services/api/coin.ts'),
+    'utf8',
+  );
+  const walletSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/profile/screens/WalletScreen.tsx'),
+    'utf8',
   );
 
-  await coin.rechargePoints(50);
-
-  assert.equal(calls[0].endpoint, '/coin/recharge');
-  assert.equal(calls[0].options.headers['Idempotency-Key'], 'gen-key');
+  assert.doesNotMatch(coinSource, /rechargePoints|\/coin\/recharge/);
+  assert.doesNotMatch(walletSource, /rechargePoints|RECHARGE_PACKAGES|performRecharge/);
 });

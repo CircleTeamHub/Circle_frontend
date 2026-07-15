@@ -1643,6 +1643,7 @@
       "recharge": "クレジットをチャージ",
       "memberAgreement": "会員サービス規約",
       "loadError": "クレジット残高の読み込みに失敗しました。しばらくしてから再試行してください。",
+      "purchaseUnavailable": "ポイント購入はまだご利用いただけません。現在、このページには残高のみが表示されます。",
       "rechargeSuccess": "{{points}} クレジットをチャージしました",
       "rechargeError": "チャージに失敗しました。しばらくしてから再試行してください。",
       "confirmRechargeMessage": "{{points}} クレジット（{{price}}）をチャージしますか？",

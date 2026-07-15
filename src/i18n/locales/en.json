@@ -1200,6 +1200,7 @@
       "recharge": "Recharge Points",
       "memberAgreement": "《Membership Service Agreement》",
       "loadError": "Failed to load points balance. Please try again later.",
+      "purchaseUnavailable": "Points purchases are not available yet. This page currently shows your balance only.",
       "rechargeSuccess": "Recharged {{points}} points",
       "rechargeError": "Recharge failed. Please try again later.",
       "confirmRechargeMessage": "Recharge {{points}} points ({{price}})?",

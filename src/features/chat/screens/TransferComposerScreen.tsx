@@ -17,6 +17,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Avatar } from '@/components/ui/avatar';
 import { useTransferComposerStore } from '@/features/chat/store/use-transfer-composer-store';
+import {
+  resolveTransferIdempotency,
+  type TransferIdempotency,
+} from '@/features/chat/utils/transfer-idempotency';
 import { fromImUserId } from '@/im/client';
 import { fetchWallet, sendCoinGift } from '@/services/api/coin';
 import { getApiErrorMessage } from '@/services/api/errors';
@@ -54,6 +58,7 @@ export default function TransferComposerScreen() {
   const [submitting, setSubmitting] = useState(false);
   // Pattern D 第二道：state 在 fast double-tap 下可能晚一帧，用 ref 在 handler 入口兜底。
   const inFlightRef = useRef(false);
+  const idempotencyRef = useRef<TransferIdempotency | null>(null);
 
   // 余额加载逻辑抽出函数 —— 失败后用户能从 UI 重试，不必退出页面重进。
   const loadBalance = useCallback(() => {
@@ -116,19 +121,28 @@ export default function TransferComposerScreen() {
     inFlightRef.current = true;
     setSubmitting(true);
     try {
+      const normalizedRecipientId = fromImUserId(recipientId);
+      const normalizedMessage = message.trim() || null;
+      const idempotency = resolveTransferIdempotency(idempotencyRef.current, {
+        recipientId: normalizedRecipientId,
+        amount: value,
+        message: normalizedMessage,
+      });
+      idempotencyRef.current = idempotency;
       await sendCoinGift({
         // 后端期望业务侧 UUID（带连字符）；如果 sourceID 是从消息列表来的 IM 形式，
         // 这里还原。已经是 UUID 的字符串会原样透传。
-        recipientId: fromImUserId(recipientId),
+        recipientId: normalizedRecipientId,
         amount: value,
-        message: message.trim() || undefined,
-      });
+        message: normalizedMessage || undefined,
+      }, { idempotencyKey: idempotency.key });
       // 转账成功后通过 store 通知 ChatDetailScreen 在重新拿到焦点时
       // 发出对应 IM 卡片消息（不在这里发，避免 IM 失败但积分已扣）
       setPending({
         amount: value,
-        message: message.trim() || null,
+        message: normalizedMessage,
       });
+      idempotencyRef.current = null;
       router.back();
     } catch (error) {
       Alert.alert(

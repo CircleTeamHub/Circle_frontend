@@ -1197,6 +1197,7 @@
       "recharge": "积分充值",
       "memberAgreement": "《会员服务协议》",
       "loadError": "积分余额加载失败，请稍后重试",
+      "purchaseUnavailable": "积分购买暂未开放。当前页面仅显示余额。",
       "rechargeSuccess": "已充值 {{points}} 积分",
       "rechargeError": "充值失败，请稍后重试",
       "confirmRechargeMessage": "确定要充值 {{points}} 积分（{{price}}）吗？",

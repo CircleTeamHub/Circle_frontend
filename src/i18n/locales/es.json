@@ -1646,6 +1646,7 @@
       "recharge": "Recargar créditos",
       "memberAgreement": "Acuerdo de servicio de membresía",
       "loadError": "Error al cargar el saldo de créditos. Inténtalo de nuevo más tarde.",
+      "purchaseUnavailable": "La compra de puntos aún no está disponible. Por ahora, esta página solo muestra tu saldo.",
       "rechargeSuccess": "Recargaste {{points}} créditos",
       "rechargeError": "Error en la recarga. Inténtalo de nuevo más tarde.",
       "confirmRechargeMessage": "¿Recargar {{points}} créditos ({{price}})?",
