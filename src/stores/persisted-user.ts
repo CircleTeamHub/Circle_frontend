@@ -1,5 +1,3 @@
-import type { AuthUser } from './authStore';
-
 /**
  * 持久化前清空敏感 PII。
  *
@@ -8,7 +6,7 @@ import type { AuthUser } from './authStore';
  * 这些字段登录后由 /auth/me 回填到内存，所以仅从「持久化快照」中剔除即可——在线运行时
  * 体验不变。token 已单独保存在 SecureStore（Keychain）。
  */
-export function sanitizeUserForPersist<T extends AuthUser | null>(user: T): T {
+export function sanitizeUserForPersist<T extends object | null>(user: T): T {
   if (!user) return user;
   return {
     ...user,
