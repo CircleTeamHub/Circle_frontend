@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { spawnSync } = require('node:child_process');
 
 const read = (relativePath) =>
   fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
@@ -53,25 +54,98 @@ test('the Expo config applies production signing to generated Android projects',
   );
 });
 
-test('release validation requires production config and matching app versions', () => {
+test('release validation metadata requires matching app versions and secure public URLs', () => {
   const {
-    validateReleaseConfig,
+    validateReleaseMetadata,
   } = require('../.github/scripts/validate-android-release');
   const env = {
     RELEASE_TAG: 'v1.0.0',
-    ANDROID_KEYSTORE_BASE64: 'a2V5c3RvcmU=',
-    ANDROID_KEYSTORE_PASSWORD: 'store-password',
-    ANDROID_KEY_ALIAS: 'windnote',
-    ANDROID_KEY_PASSWORD: 'key-password',
-    ANDROID_CERT_SHA256: 'a'.repeat(64),
-    RELEASES_TOKEN: 'token',
     EXPO_PUBLIC_API_URL: 'https://api.windnote.test',
     EXPO_PUBLIC_OPENIM_API_URL: 'https://im.windnote.test',
     EXPO_PUBLIC_OPENIM_WS_URL: 'wss://im.windnote.test/ws',
   };
   const app = { version: '1.0.0', android: { versionCode: 1_000_000 } };
 
-  assert.deepEqual(validateReleaseConfig({ env, app }), []);
+  assert.deepEqual(validateReleaseMetadata({ env, app }), []);
+
+  for (const name of [
+    'EXPO_PUBLIC_API_URL',
+    'EXPO_PUBLIC_OPENIM_API_URL',
+    'EXPO_PUBLIC_OPENIM_WS_URL',
+  ]) {
+    assert.match(
+      validateReleaseMetadata({ env: { ...env, [name]: '' }, app }).join('\n'),
+      new RegExp(name),
+    );
+  }
+
+  assert.match(
+    validateReleaseMetadata({
+      env: { ...env, EXPO_PUBLIC_API_URL: 'http://api.windnote.test' },
+      app,
+    }).join('\n'),
+    /EXPO_PUBLIC_API_URL.*https/,
+  );
+  assert.match(
+    validateReleaseMetadata({
+      env: {
+        ...env,
+        EXPO_PUBLIC_OPENIM_WS_URL: 'wss://user:password@im.windnote.test/ws',
+      },
+      app,
+    }).join('\n'),
+    /EXPO_PUBLIC_OPENIM_WS_URL.*wss.*without embedded credentials/,
+  );
+  assert.match(
+    validateReleaseMetadata({ env: { ...env, RELEASE_TAG: 'v1.0.1' }, app }).join(
+      '\n',
+    ),
+    /does not match app version/,
+  );
+  assert.match(
+    validateReleaseMetadata({
+      env: { ...env, RELEASE_TAG: 'v1.0.0-beta.1' },
+      app,
+    }).join('\n'),
+    /stable semantic version/,
+  );
+  assert.match(
+    validateReleaseMetadata({
+      env,
+      app: { ...app, android: { versionCode: 1 } },
+    }).join('\n'),
+    /versionCode.*1000000/,
+  );
+
+  assert.deepEqual(
+    validateReleaseMetadata({
+      env: {
+        ...env,
+        ANDROID_KEYSTORE_BASE64: '',
+        ANDROID_CERT_SHA256: 'invalid',
+        RELEASES_TOKEN: '',
+        ANDROID_PUBLIC_RELEASE_ENABLED: 'false',
+      },
+      app,
+    }),
+    [],
+    'metadata validation must not inspect signing or distribution settings',
+  );
+});
+
+test('release validation signing requires credentials and a SHA-256 fingerprint', () => {
+  const {
+    validateSigningConfig,
+  } = require('../.github/scripts/validate-android-release');
+  const env = {
+    ANDROID_KEYSTORE_BASE64: 'a2V5c3RvcmU=',
+    ANDROID_KEYSTORE_PASSWORD: 'store-password',
+    ANDROID_KEY_ALIAS: 'windnote',
+    ANDROID_KEY_PASSWORD: 'key-password',
+    ANDROID_CERT_SHA256: Array(32).fill('aB').join(':'),
+  };
+
+  assert.deepEqual(validateSigningConfig({ env }), []);
 
   for (const name of [
     'ANDROID_KEYSTORE_BASE64',
@@ -79,43 +153,121 @@ test('release validation requires production config and matching app versions', 
     'ANDROID_KEY_ALIAS',
     'ANDROID_KEY_PASSWORD',
     'ANDROID_CERT_SHA256',
-    'RELEASES_TOKEN',
-    'EXPO_PUBLIC_API_URL',
-    'EXPO_PUBLIC_OPENIM_API_URL',
-    'EXPO_PUBLIC_OPENIM_WS_URL',
   ]) {
     assert.match(
-      validateReleaseConfig({ env: { ...env, [name]: '' }, app }).join('\n'),
+      validateSigningConfig({ env: { ...env, [name]: '' } }).join('\n'),
       new RegExp(name),
     );
   }
 
   assert.match(
-    validateReleaseConfig({
-      env: { ...env, EXPO_PUBLIC_API_URL: 'http://api.windnote.test' },
-      app,
+    validateSigningConfig({
+      env: { ...env, ANDROID_CERT_SHA256: 'g'.repeat(64) },
     }).join('\n'),
-    /EXPO_PUBLIC_API_URL.*https/,
+    /SHA-256 certificate fingerprint/,
   );
+});
+
+test('release validation distribution requires explicit approval and secure evidence', () => {
+  const {
+    validateDistributionApproval,
+  } = require('../.github/scripts/validate-android-release');
+  const env = {
+    ANDROID_PUBLIC_RELEASE_ENABLED: 'true',
+    ANDROID_DISTRIBUTION_APPROVED: 'true',
+    ANDROID_DISTRIBUTION_EVIDENCE_URL:
+      'https://compliance.windnote.test/releases/1.0.0',
+  };
+
+  assert.deepEqual(validateDistributionApproval({ env }), []);
+
+  for (const name of [
+    'ANDROID_PUBLIC_RELEASE_ENABLED',
+    'ANDROID_DISTRIBUTION_APPROVED',
+  ]) {
+    assert.match(
+      validateDistributionApproval({ env: { ...env, [name]: 'false' } }).join(
+        '\n',
+      ),
+      new RegExp(`${name}.*true`),
+    );
+  }
+
   assert.match(
-    validateReleaseConfig({ env: { ...env, RELEASE_TAG: 'v1.0.1' }, app }).join(
-      '\n',
-    ),
-    /does not match app version/,
-  );
-  assert.match(
-    validateReleaseConfig({ env: { ...env, RELEASE_TAG: 'v1.0.0-beta.1' }, app }).join(
-      '\n',
-    ),
-    /stable semantic version/,
-  );
-  assert.match(
-    validateReleaseConfig({
-      env,
-      app: { ...app, android: { versionCode: 1 } },
+    validateDistributionApproval({
+      env: {
+        ...env,
+        ANDROID_DISTRIBUTION_EVIDENCE_URL:
+          'https://reviewer:secret@compliance.windnote.test/releases/1.0.0',
+      },
     }).join('\n'),
-    /versionCode.*1000000/,
+    /ANDROID_DISTRIBUTION_EVIDENCE_URL.*https.*without embedded credentials/,
   );
+  assert.match(
+    validateDistributionApproval({
+      env: { ...env, ANDROID_DISTRIBUTION_EVIDENCE_URL: '' },
+    }).join('\n'),
+    /ANDROID_DISTRIBUTION_EVIDENCE_URL.*required/,
+  );
+});
+
+test('release validation CLI supports scoped and default-all validation', () => {
+  const script = path.join(
+    process.cwd(),
+    '.github/scripts/validate-android-release.js',
+  );
+  const metadataEnv = {
+    RELEASE_TAG: 'v1.0.0',
+    EXPO_PUBLIC_API_URL: 'https://api.windnote.test',
+    EXPO_PUBLIC_OPENIM_API_URL: 'https://im.windnote.test',
+    EXPO_PUBLIC_OPENIM_WS_URL: 'wss://im.windnote.test/ws',
+  };
+  const signingEnv = {
+    ANDROID_KEYSTORE_BASE64: 'a2V5c3RvcmU=',
+    ANDROID_KEYSTORE_PASSWORD: 'store-password',
+    ANDROID_KEY_ALIAS: 'windnote',
+    ANDROID_KEY_PASSWORD: 'key-password',
+    ANDROID_CERT_SHA256: 'a'.repeat(64),
+  };
+  const distributionEnv = {
+    ANDROID_PUBLIC_RELEASE_ENABLED: 'true',
+    ANDROID_DISTRIBUTION_APPROVED: 'true',
+    ANDROID_DISTRIBUTION_EVIDENCE_URL:
+      'https://compliance.windnote.test/releases/1.0.0',
+  };
+  const run = (args, env) =>
+    spawnSync(process.execPath, [script, ...args], {
+      cwd: process.cwd(),
+      env: { PATH: process.env.PATH, ...env },
+      encoding: 'utf8',
+    });
+
+  assert.equal(run(['metadata'], metadataEnv).status, 0);
+  assert.equal(run(['signing'], signingEnv).status, 0);
+  assert.equal(run(['distribution'], distributionEnv).status, 0);
+  assert.equal(
+    run(['all'], {
+      ...metadataEnv,
+      ...signingEnv,
+      ...distributionEnv,
+    }).status,
+    0,
+  );
+  assert.equal(
+    run([], { ...metadataEnv, ...signingEnv, ...distributionEnv }).status,
+    0,
+  );
+
+  const defaultAllFailure = run([], { ...metadataEnv, ...signingEnv });
+  assert.equal(defaultAllFailure.status, 1);
+  assert.match(
+    defaultAllFailure.stderr,
+    /::error::ANDROID_PUBLIC_RELEASE_ENABLED.*true/,
+  );
+
+  const unknownScope = run(['publishing'], {});
+  assert.equal(unknownScope.status, 1);
+  assert.match(unknownScope.stderr, /::error::Unknown validation scope: publishing/);
 });
 
 test('release publishing is immutable and only advances a newer stable version', () => {
