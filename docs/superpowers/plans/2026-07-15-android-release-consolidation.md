@@ -49,10 +49,10 @@ Expected: FAIL because the three scoped validator exports do not exist.
 Refactor shared required-value and URL helpers without changing the existing semantic version formula. Add a CLI scope selected by `process.argv[2]`:
 
 ```text
-metadata | signing | distribution
+metadata | signing | distribution | all
 ```
 
-Reject an unknown or missing scope and emit every validation error as `::error::...`.
+Keep a missing scope equivalent to `all` so the existing workflow remains functional between the Task 1 and Task 2 commits. Reject an unknown scope and emit every validation error as `::error::...`.
 
 - [ ] **Step 4: Run the focused test and verify GREEN**
 
@@ -75,11 +75,17 @@ git commit -m "test: separate Android release validation gates"
 
 Extend the existing workflow test to require:
 
+- exactly one `push.tags: ["v*"]` release trigger plus a required `workflow_dispatch.inputs.release_tag` input;
+- tag resolution from `inputs.release_tag` for manual runs and `github.ref_name` for tag pushes;
+- one `android-release-publish` concurrency group with `cancel-in-progress: false`;
+- top-level `contents: read` permissions, no broader build permission, and the fixed `CircleTeamHub/windnote-releases` destination;
 - `preflight`, `build`, `publish`, and `notify` jobs;
 - preflight checkout with `fetch-depth: 0` and `persist-credentials: false`;
 - `git merge-base --is-ancestor HEAD origin/main` before any `secrets.` reference;
+- no release-secret reference inside the complete preflight job;
 - checkout by the exact preflight commit SHA in later jobs;
 - `metadata`, `signing`, and `distribution` validator invocations in their respective jobs;
+- Android signing secrets confined to the build job and `RELEASES_TOKEN` absent there;
 - `SENTRY_DISABLE_AUTO_UPLOAD: "true"` on the Gradle build;
 - certificate verification before artifact upload;
 - pinned `actions/upload-artifact` and `actions/download-artifact` actions;
@@ -100,7 +106,7 @@ Expected: FAIL because the current workflow is a single secret-bearing build-and
 
 - [ ] **Step 3: Implement the preflight job**
 
-Resolve the tag, output both tag and commit SHA, check out with full history/no persisted credentials, validate metadata, require the commit to be on `origin/main`, then run `npm ci` and `npm run ci`. Do not map any release secret in this job.
+Define required manual input `release_tag`. Resolve the tag from `inputs.release_tag` on `workflow_dispatch` and `github.ref_name` on tag pushes, output both tag and commit SHA, check out with full history/no persisted credentials, validate metadata, require the commit to be on `origin/main`, then run `npm ci` and `npm run ci`. Do not map or reference any release secret in this job.
 
 - [ ] **Step 4: Implement the private build job**
 
@@ -146,7 +152,7 @@ Require the document to state:
 - protected `android-release-publish` environment required reviewers;
 - environment-only `RELEASES_TOKEN`, approval flag, and HTTPS evidence URL;
 - `ANDROID_PUBLIC_RELEASE_ENABLED` must remain false until protection is verified;
-- commands to inventory repository secrets and inspect environment protection;
+- commands to inventory repository secrets and inspect required-reviewer protection plus the environment deployment branch/tag policy;
 - the repository's SBOM/LICENSE/NOTICE/patch/legal evidence gate;
 - tag and artifact verification steps.
 
