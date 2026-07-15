@@ -53,7 +53,9 @@ function validateReleaseMetadata({ env, app }) {
 
   requireValues(errors, env, METADATA_ENV);
 
-  const match = /^v(\d+)\.(\d+)\.(\d+)$/.exec(env.RELEASE_TAG ?? '');
+  const match = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(
+    env.RELEASE_TAG ?? '',
+  );
   if (!match) {
     errors.push('RELEASE_TAG must be a stable semantic version such as v1.2.3.');
   } else {
@@ -93,8 +95,13 @@ function validateSigningConfig({ env }) {
   const errors = [];
   requireValues(errors, env, SIGNING_ENV);
 
-  const fingerprint = (env.ANDROID_CERT_SHA256 ?? '').replaceAll(':', '');
-  if (fingerprint && !/^[a-fA-F0-9]{64}$/.test(fingerprint)) {
+  const fingerprint = env.ANDROID_CERT_SHA256 ?? '';
+  if (
+    fingerprint &&
+    !/^(?:[a-fA-F0-9]{64}|(?:[a-fA-F0-9]{2}:){31}[a-fA-F0-9]{2})$/.test(
+      fingerprint,
+    )
+  ) {
     errors.push('ANDROID_CERT_SHA256 must be a SHA-256 certificate fingerprint.');
   }
 
@@ -128,12 +135,27 @@ function readApp() {
   ).expo;
 }
 
+function validateLegacyReleaseConfig({ env, app }) {
+  const errors = [
+    ...validateReleaseMetadata({ env, app }),
+    ...validateSigningConfig({ env }),
+  ];
+  requireValues(errors, env, ['RELEASES_TOKEN']);
+  return errors;
+}
+
 function main() {
-  const scope = process.argv[2] ?? 'all';
+  const scope = process.argv[2];
   let errors;
 
   try {
     switch (scope) {
+      case undefined:
+        errors = validateLegacyReleaseConfig({
+          env: process.env,
+          app: readApp(),
+        });
+        break;
       case 'metadata':
         errors = validateReleaseMetadata({ env: process.env, app: readApp() });
         break;

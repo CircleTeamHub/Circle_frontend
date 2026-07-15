@@ -111,6 +111,13 @@ test('release validation metadata requires matching app versions and secure publ
   );
   assert.match(
     validateReleaseMetadata({
+      env: { ...env, RELEASE_TAG: 'v01.0.0' },
+      app,
+    }).join('\n'),
+    /stable semantic version/,
+  );
+  assert.match(
+    validateReleaseMetadata({
       env,
       app: { ...app, android: { versionCode: 1 } },
     }).join('\n'),
@@ -166,6 +173,28 @@ test('release validation signing requires credentials and a SHA-256 fingerprint'
     }).join('\n'),
     /SHA-256 certificate fingerprint/,
   );
+
+  const contiguousFingerprint = 'ab'.repeat(32);
+  assert.deepEqual(
+    validateSigningConfig({
+      env: { ...env, ANDROID_CERT_SHA256: contiguousFingerprint },
+    }),
+    [],
+  );
+
+  for (const fingerprint of [
+    `:${contiguousFingerprint}`,
+    `${contiguousFingerprint}:`,
+    `ab::cd:${Array(30).fill('ef').join(':')}`,
+    `${'a'.repeat(3)}:${'b'.repeat(61)}`,
+  ]) {
+    assert.match(
+      validateSigningConfig({
+        env: { ...env, ANDROID_CERT_SHA256: fingerprint },
+      }).join('\n'),
+      /SHA-256 certificate fingerprint/,
+    );
+  }
 });
 
 test('release validation distribution requires explicit approval and secure evidence', () => {
@@ -211,7 +240,7 @@ test('release validation distribution requires explicit approval and secure evid
   );
 });
 
-test('release validation CLI supports scoped and default-all validation', () => {
+test('release validation CLI supports scoped and legacy validation', () => {
   const script = path.join(
     process.cwd(),
     '.github/scripts/validate-android-release.js',
@@ -235,6 +264,11 @@ test('release validation CLI supports scoped and default-all validation', () => 
     ANDROID_DISTRIBUTION_EVIDENCE_URL:
       'https://compliance.windnote.test/releases/1.0.0',
   };
+  const legacyEnv = {
+    ...metadataEnv,
+    ...signingEnv,
+    RELEASES_TOKEN: 'release-token',
+  };
   const run = (args, env) =>
     spawnSync(process.execPath, [script, ...args], {
       cwd: process.cwd(),
@@ -253,15 +287,19 @@ test('release validation CLI supports scoped and default-all validation', () => 
     }).status,
     0,
   );
-  assert.equal(
-    run([], { ...metadataEnv, ...signingEnv, ...distributionEnv }).status,
-    0,
-  );
+  assert.equal(run([], legacyEnv).status, 0);
 
-  const defaultAllFailure = run([], { ...metadataEnv, ...signingEnv });
-  assert.equal(defaultAllFailure.status, 1);
+  const missingLegacyToken = run([], {
+    ...metadataEnv,
+    ...signingEnv,
+  });
+  assert.equal(missingLegacyToken.status, 1);
+  assert.match(missingLegacyToken.stderr, /::error::RELEASES_TOKEN is required/);
+
+  const explicitAllFailure = run(['all'], legacyEnv);
+  assert.equal(explicitAllFailure.status, 1);
   assert.match(
-    defaultAllFailure.stderr,
+    explicitAllFailure.stderr,
     /::error::ANDROID_PUBLIC_RELEASE_ENABLED.*true/,
   );
 
