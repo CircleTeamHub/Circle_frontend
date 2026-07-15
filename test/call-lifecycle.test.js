@@ -28,42 +28,33 @@ function loadTsModule(relativePath, stubs = {}) {
   return context.module.exports;
 }
 
-const SAMPLE_INVITE = {
-  callId: 'c1',
-  conversationID: 'g1',
-  sessionType: 'group',
-  callType: 'AUDIO',
-  initiator: { id: 'u1', nickname: 'A', avatarUrl: null },
-  invitees: [],
-  createdAt: '2026-01-01T00:00:00.000Z',
-  expiresAt: '2026-01-01T00:00:45.000Z',
-};
-
 // C-08 ②: logout must clear an in-flight incoming call / active call so account
-// A's ring popup can't bleed into account B.
-test('use-call-store registers a logout handler that clears call state (C-08)', () => {
+// A's ring popup can't bleed into account B. The teardown side-effect module
+// registers a logout handler that calls resetCallState.
+test('call-session-teardown registers a logout handler that clears call state (C-08)', () => {
   let logoutHandler;
-  const { useCallStore } = loadTsModule(
-    'src/features/call/store/use-call-store.ts',
-    {
-      '@/services/auth/session': {
-        registerLogoutHandler: (handler) => {
-          logoutHandler = handler;
-          return () => {};
-        },
+  let resetCalls = 0;
+  loadTsModule('src/features/call/call-session-teardown.ts', {
+    '@/services/auth/session': {
+      registerLogoutHandler: (handler) => {
+        logoutHandler = handler;
+        return () => {};
       },
     },
-  );
-
-  useCallStore.getState().handleCallInvite(SAMPLE_INVITE);
-  assert.ok(useCallStore.getState().incomingCall);
-  assert.ok(useCallStore.getState().activeCall);
+    '@/features/call/store/use-call-store': {
+      useCallStore: {
+        getState: () => ({
+          resetCallState: () => {
+            resetCalls += 1;
+          },
+        }),
+      },
+    },
+  });
 
   assert.equal(typeof logoutHandler, 'function');
   logoutHandler();
-
-  assert.equal(useCallStore.getState().incomingCall, null);
-  assert.equal(useCallStore.getState().activeCall, null);
+  assert.equal(resetCalls, 1);
 });
 
 // C-08 ③: leaving the call screen (back gesture / router.back / call-ended

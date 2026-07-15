@@ -16,6 +16,7 @@ import { acceptCall, rejectCall } from '@/services/api/calls';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useCallStore } from '@/features/call/store/use-call-store';
 import { useIncomingCallExpiry } from '@/features/call/hooks/use-incoming-call-expiry';
+import '@/features/call/call-session-teardown';
 
 const s = StyleSheet.create({
   overlay: {

@@ -68,6 +68,9 @@ function loadAuthStore() {
           migrateAuthPersist: (state) => state,
         };
       }
+      if (request === './persisted-user') {
+        return { sanitizeUserForPersist: (user) => user };
+      }
       if (request === '@/types') return {};
       throw new Error(`Unexpected import: ${request}`);
     },
