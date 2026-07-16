@@ -4,9 +4,16 @@ on:
   pull_request:
     branches:
       - main
+    # Docs-only changes can't break the build — skip the whole matrix.
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
   push:
     branches:
       - main
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
 
 concurrency:
   group: frontend-ci-${{ github.workflow }}-${{ github.ref }}
@@ -39,10 +46,32 @@ jobs:
       - name: Lint Workflows
         run: actionlint
 
-  security-audit:
-    name: Security Audit (report)
+  secret-scan:
+    name: Secret Scan
     runs-on: ubuntu-latest
     timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: TruffleHog
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified
+
+  # Single install → every Node check. Previously typecheck / expo-config / lint /
+  # test / web-export / security-audit / expo-doctor were 7 separate jobs that
+  # each ran `npm ci` (7 redundant installs per run). Consolidating trades a bit
+  # of parallel wall-clock for ~6 fewer dependency installs. Fast gates run first
+  # so a cheap failure short-circuits before the slow web export; the two
+  # advisory reports are continue-on-error and never fail the job.
+  verify:
+    name: Verify (typecheck, lint, test, web export)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -57,7 +86,22 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Audit Production Dependencies
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Expo Config Smoke
+        run: npm run expo:config
+
+      - name: Test
+        run: npm test
+
+      - name: Web Export
+        run: npx expo export --platform web
+
+      - name: Audit Production Dependencies (report)
         continue-on-error: true
         run: |
           set +e
@@ -109,83 +153,8 @@ jobs:
 
           exit "$audit_status"
 
-  secret-scan:
-    name: Secret Scan
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: TruffleHog
-        uses: trufflesecurity/trufflehog@main
-        with:
-          extra_args: --only-verified
-
-  typecheck:
-    name: Typecheck
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: "22"
-          cache: npm
-
-      - name: Install Dependencies
-        run: npm ci
-
-      - name: Typecheck
-        run: npm run typecheck
-
-  expo-config:
-    name: Expo Config
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: "22"
-          cache: npm
-
-      - name: Install Dependencies
-        run: npm ci
-
-      - name: Expo Config Smoke
-        run: npm run expo:config
-
-  expo-doctor:
-    name: Expo Doctor (report)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: "22"
-          cache: npm
-
-      - name: Install Dependencies
-        run: npm ci
-
       - name: Expo Health Report
+        continue-on-error: true
         run: |
           set +e
 
@@ -220,82 +189,13 @@ jobs:
             echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
 
-  web-export:
-    name: Web Export
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: "22"
-          cache: npm
-
-      - name: Install Dependencies
-        run: npm ci
-
-      - name: Export Web Bundle
-        run: npx expo export --platform web
-
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: "22"
-          cache: npm
-
-      - name: Install Dependencies
-        run: npm ci
-
-      - name: Lint
-        run: npm run lint
-
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: "22"
-          cache: npm
-
-      - name: Install Dependencies
-        run: npm ci
-
-      - name: Test
-        run: npm test
-
   notify:
     name: Notify Discord
     runs-on: ubuntu-latest
     needs:
       - workflow-lint
-      - security-audit
       - secret-scan
-      - typecheck
-      - expo-config
-      - expo-doctor
-      - web-export
-      - lint
-      - test
+      - verify
     if: ${{ always() && (contains(join(needs.*.result, ','), 'failure') || contains(join(needs.*.result, ','), 'cancelled')) }}
     timeout-minutes: 5
     env:
