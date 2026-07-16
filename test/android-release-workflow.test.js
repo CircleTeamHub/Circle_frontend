@@ -403,8 +403,8 @@ test('Android releases publish versioned and latest APKs to Cloudflare R2', () =
     '- name: Promote APK to Cloudflare R2 latest',
   );
   assert.ok(
-    versionedIndex < githubIndex && githubIndex < latestIndex,
-    'R2 latest must advance only after both the versioned R2 object and GitHub release succeed',
+    githubIndex < versionedIndex && versionedIndex < latestIndex,
+    'R2 objects must change only after the GitHub release accepts the exact APK',
   );
 });
 
