@@ -120,6 +120,8 @@ test("share screen only exposes invite code sharing without QR content", () => {
   assert.doesNotMatch(source, /handleShareQr|shareQrTitle|shareQrSubtitle|qrTitle|qrSubtitle/);
   assert.match(source, /copyInviteTitle/);
   assert.match(source, /handleCopyInviteCode/);
+  assert.doesNotMatch(source, /CIRCLE-134273011|const INVITE_CODE/);
+  assert.match(source, /user\?\.inviteCode/);
   for (const removedKey of [
     "qrTitle",
     "qrSubtitle",

@@ -99,6 +99,7 @@ export function normalizeUser(user: BackendAuthUser): AuthUser {
   return {
     id: user.id,
     accountId: user.accountId,
+    inviteCode: user.inviteCode,
     uid: user.accountId,
     nickname: user.nickname,
     avatarUrl: normalizeMediaUrl(user.avatarUrl),

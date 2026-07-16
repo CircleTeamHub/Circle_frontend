@@ -186,6 +186,7 @@ export function useAuth() {
       code: string,
       password: string,
       nickname: string,
+      inviteCode = '',
     ) => {
       if (inFlightRef.current) return;
       safeSetError(null);
@@ -195,6 +196,7 @@ export function useAuth() {
         code,
         password,
         nickname,
+        inviteCode,
       );
       if (invalid) {
         safeSetError(i18n.t(invalid));
@@ -204,11 +206,15 @@ export function useAuth() {
       inFlightRef.current = true;
       safeSetSubmitting(true);
       try {
+        const normalizedInviteCode = inviteCode.trim();
         const tokens = await registerRequest({
           email: normalizedEmail,
           code: code.trim(),
           password,
           nickname: nickname.trim(),
+          ...(normalizedInviteCode
+            ? { inviteCode: normalizedInviteCode }
+            : {}),
         });
         await onAuthSuccess(tokens, {
           onboardingRequired: true,

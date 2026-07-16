@@ -1886,6 +1886,8 @@
     "assignChats": "チャットをこのグループに割り当て"
   },
   "shareScreen": {
+    "inviteUnavailable": "招待コードを利用できません",
+    "inviteUnavailableSubtitle": "アカウント情報を更新してもう一度お試しください",
     "inviteCode": "招待コード",
     "copyInviteTitle": "招待コードをコピー",
     "copyInviteSubtitle": "コピーしてチャットや他のアプリに貼り付けられます",
@@ -1949,6 +1951,8 @@
     "confirmPasswordHint": "パスワードをもう一度入力",
     "nickname": "ニックネーム",
     "nicknameHint": "あなたの名前を決めましょう",
+    "inviteCode": "招待コード（任意）",
+    "inviteCodePlaceholder": "招待コードを入力（任意）",
     "agreement": "利用規約とプライバシーポリシーを読み、同意します",
     "hasAccount": "すでにアカウントをお持ちの方",
     "loginNow": "今すぐログイン",
@@ -1973,6 +1977,7 @@
       "invalidCode": "6桁の認証コードを入力してください",
       "nicknameRequired": "ニックネームを入力してください",
       "nicknameTooLong": "ニックネームは50文字以内にしてください",
+      "invalidInviteCode": "招待コードの形式が正しくありません",
       "loginFailed": "ログインに失敗しました。もう一度お試しください",
       "registerFailed": "登録に失敗しました。もう一度お試しください",
       "sendCodeFailed": "送信に失敗しました。もう一度お試しください"
@@ -2246,6 +2251,7 @@
     }
   },
   "serverErrors": {
+    "AUTH_INVITE_CODE_INVALID": "招待コードが無効です",
     "AUTH_INVALID_CREDENTIALS": "メールアドレスまたはパスワードが正しくありません",
     "AUTH_EMAIL_TAKEN": "このメールアドレスは既に登録されています",
     "AUTH_CODE_INVALID": "認証コードが正しくないか、有効期限が切れています",
@@ -2345,7 +2351,9 @@
     "FRIEND_BLOCKED_CANNOT_REQUEST": "このユーザーに友だち申請を送信できません",
     "FRIEND_STRANGER_MSG_NOT_ALLOWED": "このユーザーは知らない人からのメッセージを受け付けていません",
     "FRIEND_ALREADY_FRIENDS": "すでに友だちです",
+    "FRIEND_REQUEST_ALREADY_HANDLED": "この友だち申請は既に処理済みです",
     "FRIEND_REQUEST_ALREADY_PENDING": "友だち申請は既に送信済みで、相手の対応待ちです",
+    "FRIEND_REQUEST_NOT_PENDING": "この友だち申請は待機中ではありません",
     "FRIEND_PENDING_REQUEST_NOT_FOUND": "その友だち申請は存在しないか、既に処理済みです",
     "FRIEND_REQUESTER_UNAVAILABLE": "申請者のアカウントは利用できません",
     "FRIEND_FRIENDSHIP_NOT_FOUND": "まだ友だちではありません",

@@ -17,8 +17,13 @@ export const PASSWORD_MIN = 6;
 export const PASSWORD_MAX = 64;
 export const NICKNAME_MAX = 50;
 export const CODE_LENGTH = 6;
+export const INVITE_CODE_MIN = 4;
+export const INVITE_CODE_MAX = 32;
 
 const CODE_RE = new RegExp(`^\\d{${CODE_LENGTH}}$`);
+const INVITE_CODE_RE = new RegExp(
+  `^[a-zA-Z0-9_-]{${INVITE_CODE_MIN},${INVITE_CODE_MAX}}$`,
+);
 
 export type ValidationError = string | null;
 
@@ -49,6 +54,13 @@ export function validateNickname(nickname: string): ValidationError {
   return null;
 }
 
+export function validateInviteCode(inviteCode: string): ValidationError {
+  const trimmed = inviteCode.trim();
+  if (!trimmed) return null;
+  if (!INVITE_CODE_RE.test(trimmed)) return 'auth.errors.invalidInviteCode';
+  return null;
+}
+
 /** 复合校验：返回第一个未通过项的 key（?? 短路，顺序即展示优先级）。 */
 export function validateLoginForm(email: string, password: string): ValidationError {
   return validateEmail(email) ?? validatePassword(password);
@@ -63,11 +75,13 @@ export function validateRegisterForm(
   code: string,
   password: string,
   nickname: string,
+  inviteCode = '',
 ): ValidationError {
   return (
     validateEmail(email) ??
     validateCode(code) ??
     validatePassword(password) ??
-    validateNickname(nickname)
+    validateNickname(nickname) ??
+    validateInviteCode(inviteCode)
   );
 }

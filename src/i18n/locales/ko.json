@@ -1886,6 +1886,8 @@
     "assignChats": "이 그룹에 채팅 지정"
   },
   "shareScreen": {
+    "inviteUnavailable": "초대 코드를 사용할 수 없습니다",
+    "inviteUnavailableSubtitle": "계정 정보를 새로고침한 후 다시 시도해 주세요",
     "inviteCode": "초대 코드",
     "copyInviteTitle": "초대 코드 복사",
     "copyInviteSubtitle": "복사해서 채팅이나 다른 앱에 붙여넣으세요",
@@ -1949,6 +1951,8 @@
     "confirmPasswordHint": "비밀번호를 다시 입력하세요",
     "nickname": "닉네임",
     "nicknameHint": "닉네임을 정해 보세요",
+    "inviteCode": "초대 코드(선택)",
+    "inviteCodePlaceholder": "초대 코드 입력(선택)",
     "agreement": "이용약관 및 개인정보 처리방침을 읽었으며 이에 동의합니다",
     "hasAccount": "이미 계정이 있으신가요?",
     "loginNow": "지금 로그인",
@@ -1973,6 +1977,7 @@
       "invalidCode": "6자리 인증번호를 입력하세요",
       "nicknameRequired": "닉네임을 입력하세요",
       "nicknameTooLong": "닉네임은 50자 이하여야 합니다",
+      "invalidInviteCode": "초대 코드 형식이 올바르지 않습니다",
       "loginFailed": "로그인에 실패했습니다. 다시 시도해 주세요",
       "registerFailed": "가입에 실패했습니다. 다시 시도해 주세요",
       "sendCodeFailed": "발송에 실패했습니다. 다시 시도해 주세요"
@@ -2246,6 +2251,7 @@
     }
   },
   "serverErrors": {
+    "AUTH_INVITE_CODE_INVALID": "초대 코드가 올바르지 않습니다",
     "AUTH_INVALID_CREDENTIALS": "이메일 또는 비밀번호가 올바르지 않습니다",
     "AUTH_EMAIL_TAKEN": "이미 가입된 이메일입니다",
     "AUTH_CODE_INVALID": "인증 코드가 올바르지 않거나 만료되었습니다",
@@ -2345,7 +2351,9 @@
     "FRIEND_BLOCKED_CANNOT_REQUEST": "이 사용자에게 친구 요청을 보낼 수 없습니다",
     "FRIEND_STRANGER_MSG_NOT_ALLOWED": "이 사용자는 낯선 사람의 메시지를 받지 않습니다",
     "FRIEND_ALREADY_FRIENDS": "이미 친구입니다",
+    "FRIEND_REQUEST_ALREADY_HANDLED": "이 친구 요청은 이미 처리되었습니다",
     "FRIEND_REQUEST_ALREADY_PENDING": "친구 요청이 이미 대기 중입니다",
+    "FRIEND_REQUEST_NOT_PENDING": "이 친구 요청은 더 이상 대기 중이 아닙니다",
     "FRIEND_PENDING_REQUEST_NOT_FOUND": "해당 친구 요청이 존재하지 않거나 이미 처리되었습니다",
     "FRIEND_REQUESTER_UNAVAILABLE": "요청한 사용자를 더 이상 사용할 수 없습니다",
     "FRIEND_FRIENDSHIP_NOT_FOUND": "아직 친구가 아닙니다",
