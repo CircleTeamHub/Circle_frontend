@@ -11,10 +11,10 @@ import {
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { cancelCall, leaveCall, requestJoinToken } from '@/services/api/calls';
-import { useAuthStore } from '@/stores/authStore';
+import { requestJoinToken } from '@/services/api/calls';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useCallStore } from '@/features/call/store/use-call-store';
+import { leaveActiveCall } from '@/features/call/call-session-teardown';
 import { ensureLiveKitGlobals } from '@/utils/livekit-globals';
 
 type LiveKitModule = {
@@ -201,8 +201,6 @@ function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
   const participants = useParticipants();
   const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
   const activeCall = useCallStore((state) => state.activeCall);
-  const resetCallState = useCallStore((state) => state.resetCallState);
-  const authUser = useAuthStore((state) => state.user);
   const [muting, setMuting] = useState(false);
   const [leaving, setLeaving] = useState(false);
 
@@ -247,28 +245,24 @@ function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
     if (!activeCall || leaving) return;
     setLeaving(true);
     try {
-      if (activeCall.status === 'RINGING' && activeCall.initiator.id === authUser?.id) {
-        await cancelCall(activeCall.id);
-      } else {
-        await leaveCall(activeCall.id);
-      }
-    } catch (error) {
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[call] leave failed', error);
-      }
-    } finally {
+      // 通知后端 + 清空本地状态统一走 leaveActiveCall（幂等，内部已吞掉网络错误）。
+      await leaveActiveCall();
       await room.disconnect().catch(() => undefined);
-      resetCallState();
+    } finally {
+      // 无论如何都要放用户离开，不能把人卡在一个转圈的挂断按钮上。
       setLeaving(false);
       router.back();
     }
-  }, [activeCall, authUser?.id, leaving, resetCallState, room]);
+  }, [activeCall, leaving, room]);
 
-  // 离开通话屏幕（系统返回手势 / router.back / 通话结束导致 LiveKitRoom 卸载）时
-  // 断开 LiveKit，释放麦克风与 WebRTC 房间——否则通话结束后 mic 可能仍热、
-  // 房间在后台常驻，造成隐私泄漏与电量 / 内存泄漏。disconnect 幂等，与手动挂断不冲突。
+  // 离开通话屏幕（系统返回手势 / router.back / 通话结束导致 LiveKitRoom 卸载）时：
+  // 1. leaveActiveCall —— 告诉后端我们走了，否则返回手势离开的人会永远挂在成员列表里
+  //    显示为 JOINED。activeCall 已被清空（挂断按钮跑完 / 对端结束通话）时它会自行跳过。
+  // 2. disconnect —— 释放麦克风与 WebRTC 房间，否则 mic 可能仍热、房间在后台常驻，
+  //    造成隐私泄漏与电量 / 内存泄漏。disconnect 幂等，与手动挂断不冲突。
   useEffect(() => {
     return () => {
+      void leaveActiveCall();
       room.disconnect().catch(() => undefined);
     };
   }, [room]);

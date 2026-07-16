@@ -111,7 +111,9 @@ type RealtimeEvent =
 
 const RECONNECT_BASE_MS = 1_000;
 const RECONNECT_MAX_MS = 30_000;
-const MAX_RECONNECT_ATTEMPTS = 10;
+// 退避指数封顶：2^5 * 1s 已经越过 RECONNECT_MAX_MS，再往上乘只会把 attempt
+// 累到 Math.pow 溢出成 Infinity。封顶后延迟稳定停在 RECONNECT_MAX_MS。
+const RECONNECT_MAX_EXPONENT = 5;
 
 let socket: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -138,12 +140,13 @@ function scheduleReconnect() {
     return;
   }
 
-  if (reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
-    return;
-  }
-
+  // 封顶的是「延迟」不是「次数」：后端滚动重启、隧道过夜、长时间断网都可能连续失败
+  // 几十次。一旦就此永久放弃，来电邀请与红点在本次进程剩余时间里再也不会到达，且用户
+  // 完全无感。登出（manualDisconnect）是唯一的永久终止条件；回到前台时
+  // connectRealtime 会把 reconnectAttempt 归零并立刻重连。
   const baseDelay = Math.min(
-    RECONNECT_BASE_MS * Math.pow(2, reconnectAttempt),
+    RECONNECT_BASE_MS *
+      Math.pow(2, Math.min(reconnectAttempt, RECONNECT_MAX_EXPONENT)),
     RECONNECT_MAX_MS,
   );
   const jitter = baseDelay * 0.2 * Math.random();
@@ -159,7 +162,10 @@ function scheduleReconnect() {
     }
 
     reconnectRecoveryPending = true;
-    connectRealtime(token);
+    // 走 openRealtimeSocket 而不是 connectRealtime：后者是「显式连接意图」的入口，
+    // 会把 reconnectAttempt 归零 —— 从重连定时器里调它，退避就永远停在第一档，
+    // 变成断网期间每秒锤一次后端。计数只由 onopen（连上了）归零。
+    openRealtimeSocket(token);
   }, delay);
 }
 
@@ -421,18 +427,7 @@ export async function recoverTabBadgeSnapshot(options?: { force?: boolean }) {
   }
 }
 
-export function connectRealtime(token: string) {
-  const normalizedToken = token.trim();
-
-  if (!normalizedToken) {
-    disconnectRealtime();
-    return;
-  }
-
-  manualDisconnect = false;
-  reconnectAttempt = 0;
-  clearReconnectTimer();
-
+function openRealtimeSocket(normalizedToken: string) {
   if (
     currentToken === normalizedToken &&
     socket &&
@@ -489,6 +484,26 @@ export function connectRealtime(token: string) {
       scheduleReconnect();
     }
   };
+}
+
+/**
+ * 显式的连接意图：登录 / token 轮换 / 回到前台。
+ *
+ * 这些时机都意味着「情况变了，现在就重试」，所以把退避归零并立刻建连；
+ * 断线后的自动重连不走这里（见 scheduleReconnect），否则退避无法递增。
+ */
+export function connectRealtime(token: string) {
+  const normalizedToken = token.trim();
+
+  if (!normalizedToken) {
+    disconnectRealtime();
+    return;
+  }
+
+  manualDisconnect = false;
+  reconnectAttempt = 0;
+  clearReconnectTimer();
+  openRealtimeSocket(normalizedToken);
 }
 
 export function disconnectRealtime() {
