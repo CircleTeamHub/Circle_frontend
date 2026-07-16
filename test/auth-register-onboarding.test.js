@@ -128,7 +128,7 @@ test('session bootstrap reconciles stale onboarding state before starting app se
   );
   assert.ok(
     source.indexOf('hasCompletedOnboardingProfile(user)') <
-      source.indexOf('loginToOpenIM(user.id, imToken)'),
+      source.indexOf('ensureOpenIMLogin(user.id, imToken)'),
     'OpenIM bootstrap login must wait until onboarding profile is complete',
   );
   assert.ok(
@@ -136,6 +136,20 @@ test('session bootstrap reconciles stale onboarding state before starting app se
       source.indexOf('useMessageGroupsStore.getState().load()'),
     'conversation groups load must wait until onboarding profile is complete',
   );
+  // /auth/me 瞬时失败后的降级补登走 recoverOpenIMLogin，它绕开了上面那道门禁，
+  // 必须自带一道等价的 —— 否则 onboarding 未完成的用户会被补登进 IM。
+  assert.match(
+    source,
+    /if \(onboardingPending \|\| !cachedUser \|\| !cachedImToken\) \{\s*return;/,
+  );
+  // 且补登只能读快照：拿一份可能过期的 user 回写路由输入，正是「onboarding 被弹回」的老根因。
+  const recoverBody = source.slice(
+    source.indexOf('const recoverOpenIMLogin'),
+    source.indexOf('useEffect(() => {', source.indexOf('const recoverOpenIMLogin')),
+  );
+  assert.ok(recoverBody.length > 0, 'recoverOpenIMLogin must exist');
+  assert.doesNotMatch(recoverBody, /setOnboardingRequired\(/);
+  assert.doesNotMatch(recoverBody, /setUser\(/);
 });
 
 test('root layout waits for persisted auth hydration before rendering routes', () => {
