@@ -210,6 +210,45 @@ jobs:
         working-directory: ${{ runner.temp }}/android-release
         run: sha256sum -c windnote.apk.sha256
 
+      - name: Upload versioned APK to Cloudflare R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: "true"
+          R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID }}
+          R2_BUCKET: windnote-apk-releases
+          RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+          APK_PATH: ${{ runner.temp }}/android-release/windnote.apk
+          CHECKSUM_PATH: ${{ runner.temp }}/android-release/windnote.apk.sha256
+        run: |
+          set -euo pipefail
+          test -n "$AWS_ACCESS_KEY_ID"
+          test -n "$AWS_SECRET_ACCESS_KEY"
+          test -n "$R2_ACCOUNT_ID"
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          object_key="android/releases/${RELEASE_TAG}/windnote.apk"
+          apk_sha="$(awk '{print $1}' "$CHECKSUM_PATH")"
+          apk_size="$(wc -c < "$APK_PATH" | tr -d '[:space:]')"
+          aws s3api put-object \
+            --endpoint-url "$endpoint" \
+            --bucket "$R2_BUCKET" \
+            --key "$object_key" \
+            --body "$APK_PATH" \
+            --content-type application/vnd.android.package-archive \
+            --content-disposition "attachment; filename=\"windnote-${RELEASE_TAG}.apk\"" \
+            --cache-control "public, max-age=31536000, immutable" \
+            --metadata "sha256=$apk_sha" \
+            >/dev/null
+          read -r uploaded_size uploaded_sha <<< "$(aws s3api head-object \
+            --endpoint-url "$endpoint" \
+            --bucket "$R2_BUCKET" \
+            --key "$object_key" \
+            --query '[ContentLength, Metadata.sha256]' \
+            --output text)"
+          test "$uploaded_size" = "$apk_size"
+          test "$uploaded_sha" = "$apk_sha"
+
       - name: Publish public GitHub release
         env:
           GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
@@ -217,6 +256,49 @@ jobs:
           RELEASE_REPOSITORY: CircleTeamHub/windnote-releases
           APK_PATH: ${{ runner.temp }}/android-release/windnote.apk
         run: node .github/scripts/publish-android-release.js
+
+      - name: Promote APK to Cloudflare R2 latest
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: "true"
+          R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID }}
+          R2_BUCKET: windnote-apk-releases
+          R2_PUBLIC_APK_URL: https://pub-9d36120697ca455b9fb0e430da8b9481.r2.dev/android/latest/windnote.apk
+          APK_PATH: ${{ runner.temp }}/android-release/windnote.apk
+          CHECKSUM_PATH: ${{ runner.temp }}/android-release/windnote.apk.sha256
+        run: |
+          set -euo pipefail
+          test -n "$AWS_ACCESS_KEY_ID"
+          test -n "$AWS_SECRET_ACCESS_KEY"
+          test -n "$R2_ACCOUNT_ID"
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          object_key="android/latest/windnote.apk"
+          apk_sha="$(awk '{print $1}' "$CHECKSUM_PATH")"
+          apk_size="$(wc -c < "$APK_PATH" | tr -d '[:space:]')"
+          aws s3api put-object \
+            --endpoint-url "$endpoint" \
+            --bucket "$R2_BUCKET" \
+            --key "$object_key" \
+            --body "$APK_PATH" \
+            --content-type application/vnd.android.package-archive \
+            --content-disposition 'attachment; filename="windnote.apk"' \
+            --cache-control "public, max-age=300" \
+            --metadata "sha256=$apk_sha" \
+            >/dev/null
+          read -r uploaded_size uploaded_sha <<< "$(aws s3api head-object \
+            --endpoint-url "$endpoint" \
+            --bucket "$R2_BUCKET" \
+            --key "$object_key" \
+            --query '[ContentLength, Metadata.sha256]' \
+            --output text)"
+          test "$uploaded_size" = "$apk_size"
+          test "$uploaded_sha" = "$apk_sha"
+          curl --fail --silent --show-error --head --retry 5 --retry-all-errors \
+            "$R2_PUBLIC_APK_URL" > "$RUNNER_TEMP/r2-latest-headers.txt"
+          grep -qi '^content-type: application/vnd.android.package-archive' \
+            "$RUNNER_TEMP/r2-latest-headers.txt"
 
   notify:
     name: Report release result
