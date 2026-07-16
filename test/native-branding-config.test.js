@@ -52,11 +52,14 @@ function runExpoConfig(args) {
   return result;
 }
 
-function loadIntrospectedAndroidApplicationAttributes() {
+function loadIntrospectedConfig() {
   const result = runExpoConfig(['--type', 'introspect', '--json']);
-  const introspected = JSON.parse(result.stdout);
 
-  return introspected._internal.modResults.android.manifest.manifest
+  return JSON.parse(result.stdout);
+}
+
+function loadIntrospectedAndroidApplicationAttributes() {
+  return loadIntrospectedConfig()._internal.modResults.android.manifest.manifest
     .application[0].$;
 }
 
@@ -99,6 +102,40 @@ test('android prebuild manifest disables platform backups for local chat data', 
     applicationAttributes['android:dataExtractionRules'],
     '@xml/windnote_data_extraction_rules',
   );
+});
+
+// 两端的平台默认值本来就是安全的（iOS ATS 默认不允许任意加载；Android
+// targetSdk>=28 起 usesCleartextTraffic 默认 false）。这里显式写死不是在修漏洞，
+// 而是纵深防御：挡住将来某个依赖的 config plugin 往 manifest / infoPlist 里悄悄
+// 合并一个宽松值——那种回归没有测试根本看不出来。JS 侧的 assertSecureTransport
+// （constants/transport-security.ts）只管我们自己拼的 URL，管不到原生栈。
+test('app config pins transport security to encrypted-only on both platforms', () => {
+  const app = readJson('app.json').expo;
+  const buildProperties = app.plugins.find(
+    (plugin) => Array.isArray(plugin) && plugin[0] === 'expo-build-properties',
+  );
+
+  assert.ok(
+    buildProperties,
+    'expo-build-properties must stay configured — it is what pins usesCleartextTraffic',
+  );
+  assert.equal(buildProperties[1].android.usesCleartextTraffic, false);
+  assert.equal(
+    app.ios.infoPlist.NSAppTransportSecurity.NSAllowsArbitraryLoads,
+    false,
+  );
+});
+
+test('prebuild config forbids cleartext traffic on both platforms', () => {
+  const introspected = loadIntrospectedConfig();
+  const applicationAttributes =
+    introspected._internal.modResults.android.manifest.manifest.application[0].$;
+  const infoPlist = introspected._internal.modResults.ios.infoPlist;
+
+  // 走到 manifest 属性 / infoPlist 这一层，才证明 plugin 真的被应用了；
+  // 只断言 app.json 的话，plugin 掉了也照样绿。
+  assert.equal(applicationAttributes['android:usesCleartextTraffic'], 'false');
+  assert.equal(infoPlist.NSAppTransportSecurity.NSAllowsArbitraryLoads, false);
 });
 
 test('Expo introspection has no SecureStore backup-rule conflict', () => {

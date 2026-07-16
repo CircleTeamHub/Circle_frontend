@@ -101,6 +101,40 @@ jobs:
       - name: Web Export
         run: npx expo export --platform web
 
+      # babel.config.js 只在 production 构建挂 transform-remove-console，而
+      # api.env('production') 没解析到是「静默失效」——strip 哪天不生效，没有人会知道。
+      # 复用上一步 Web Export 已经产出的 dist/（NODE_ENV=production，strip 生效），
+      # 不额外付构建成本。
+      - name: Assert console.* stripped from release bundle
+        run: |
+          set -euo pipefail
+          bundle_dir=dist/_expo/static/js
+
+          # 先证明真的有 bundle 可查：grep 对着错路径只会安静地「没找到」，
+          # 那会把这道闸门变成永久绿灯——比没有检查更糟。
+          if [ ! -d "$bundle_dir" ]; then
+            echo "::error::$bundle_dir not found — expo export layout changed; this guard would silently pass"
+            exit 1
+          fi
+          bundle_count="$(find "$bundle_dir" -name '*.js' -type f | wc -l | tr -d '[:space:]')"
+          if [ "$bundle_count" -eq 0 ]; then
+            echo "::error::no JS bundles under $bundle_dir — this guard would silently pass"
+            exit 1
+          fi
+
+          # 例外：reanimated 会把 worklet 源码序列化成字符串塞进 bundle
+          # （_worklet_..._init_data.code）。那里面的 console.warn 是字符串字面量、
+          # 不是调用表达式，babel 插件按设计就碰不到，且是 vendor 代码——不是我们的
+          # 泄漏面。除它以外，任何一条都算 app 代码泄漏。
+          leaks="$(grep -rhoE '.{0,60}console\.(log|warn|info|debug)\(' "$bundle_dir" --include='*.js' | grep -v 'ReanimatedLogLevel' || true)"
+          if [ -n "$leaks" ]; then
+            echo "::error::console.* survived the production bundle — transform-remove-console did not run"
+            printf '%s\n' "$leaks"
+            exit 1
+          fi
+
+          echo "OK: $bundle_count bundle(s) checked, no app console.* survived"
+
       - name: Audit Production Dependencies (report)
         continue-on-error: true
         run: |

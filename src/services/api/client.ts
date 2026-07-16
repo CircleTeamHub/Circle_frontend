@@ -12,6 +12,7 @@ import { clearLocalSession, registerLogoutHandler } from '@/services/auth/sessio
 import { useAuthStore } from '@/stores/authStore';
 import i18n from '@/i18n';
 import { reportError, shouldReportHttpFailure } from '@/observability/sentry';
+import { redactSensitiveFields, redactSensitiveHeaders } from '@/utils/redact';
 
 type RequestOptions = {
   method?: string;
@@ -31,61 +32,6 @@ type ApiResponse<T> = {
 };
 
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
-
-// 日志脱敏字段列表：dev 日志中匹配到（不区分大小写）任意层级的这些 key 会被替换为 [REDACTED]。
-// 防止 password/token/Authorization/cookie 等通过控制台、Metro 日志、屏幕录制泄漏。
-const SENSITIVE_KEYS = new Set([
-  'password',
-  'token',
-  'accesstoken',
-  'refreshtoken',
-  'revocationsecret',
-  'imtoken',
-  'idtoken',
-  'authorization',
-  'cookie',
-  'apikey',
-  'secret',
-]);
-const SENSITIVE_URL_KEYS = new Set(['uploadurl', 'fileurl']);
-const PRESIGNED_URL_MARKERS = [
-  'X-Amz-Algorithm=',
-  'X-Amz-Credential=',
-  'X-Amz-Signature=',
-  'x-id=PutObject',
-];
-
-function redactSensitiveString(value: string): string {
-  return PRESIGNED_URL_MARKERS.some((marker) => value.includes(marker))
-    ? '[REDACTED_URL]'
-    : value;
-}
-
-function shouldRedactObjectKey(key: string, value: unknown): boolean {
-  return (
-    key.toLowerCase() === 'key' &&
-    typeof value === 'string' &&
-    value.includes('/')
-  );
-}
-
-function redactSensitiveFields(value: unknown): unknown {
-  if (value == null) return value;
-  if (Array.isArray(value)) return value.map(redactSensitiveFields);
-  if (typeof value === 'string') return redactSensitiveString(value);
-  if (typeof value !== 'object') return value;
-  const redacted: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-    const key = k.toLowerCase();
-    redacted[k] =
-      SENSITIVE_KEYS.has(key) ||
-      SENSITIVE_URL_KEYS.has(key) ||
-      shouldRedactObjectKey(k, v)
-      ? '[REDACTED]'
-      : redactSensitiveFields(v);
-  }
-  return redacted;
-}
 
 function formatLogData(value: unknown) {
   if (value == null) {
@@ -111,14 +57,6 @@ function safeBodyTextForLog(text: string): unknown {
   } catch {
     return '[non-json body]';
   }
-}
-
-function safeHeadersForLog(headers: Record<string, string>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(headers)) {
-    out[k] = SENSITIVE_KEYS.has(k.toLowerCase()) ? '[REDACTED]' : v;
-  }
-  return out;
 }
 
 function sanitizeEndpointSegment(segment: string): string {
@@ -337,7 +275,7 @@ async function executeRequest<T>(
     method,
     auth,
     hasAccessToken: Boolean(accessToken),
-    headers: safeHeadersForLog(headers),
+    headers: redactSensitiveHeaders(headers),
     body: formatLogData(body),
   });
 

@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const ts = require('typescript');
+const { loadTsModule } = require('./helpers/load-ts-module');
 
 // getApiErrorMessage turns a backend stable errorCode into a localized string
 // (serverErrors.<code>), falling back to the caller's fallback. Backend attaches
@@ -141,6 +142,7 @@ test('client.ts threads errorCode onto ApiError', () => {
       };
     }
     if (spec === '@/i18n') return I18N;
+    if (spec === '@/utils/redact') return loadTsModule('src/utils/redact.ts');
     return require(spec);
   };
   const fn = new Function(
@@ -211,6 +213,7 @@ test('ApiError accepts an options object for optional fields', () => {
       };
     }
     if (spec === '@/i18n') return I18N;
+    if (spec === '@/utils/redact') return loadTsModule('src/utils/redact.ts');
     return require(spec);
   };
   const fn = new Function(

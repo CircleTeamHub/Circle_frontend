@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { loadTsModule } = require('./helpers/load-ts-module');
 
 function loadApiClient({
   responseText,
@@ -75,6 +76,10 @@ function loadApiClient({
           reportError: onReport,
           shouldReportHttpFailure: (s) => s === undefined || s === 0 || s >= 500,
         };
+      }
+      if (request === '@/utils/redact') {
+        // 真模块，不是 stub：脱敏就是这几个断言要验的东西，换成假的等于不测。
+        return loadTsModule('src/utils/redact.ts');
       }
       if (request === '@/i18n') {
         // client.ts i18n's its user-facing error messages; echo defaultValue (+ {{}} interp).
