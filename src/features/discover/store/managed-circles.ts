@@ -8,10 +8,23 @@ type JoinedCircleLike = {
   myRole?: CircleRole | null;
 };
 
+export function getJoinedCirclesNeedingRoleFallback<
+  TCircle extends JoinedCircleLike,
+>(circles: TCircle[]): TCircle[] {
+  return circles.filter((circle) => circle.myRole == null);
+}
+
+type CircleDetailLike = {
+  id: string;
+  myRole: CircleRole | null;
+};
+
 interface DeriveManagedCirclesInput<TCircle extends CircleLike> {
   createdCircles: TCircle[];
   /** 来自 GET /circle/my?tab=joined —— 每项自带 myRole。 */
   joinedCircles: (TCircle & JoinedCircleLike)[];
+  /** Compatibility data for older backends that omit myRole from the list. */
+  joinedCircleDetails?: CircleDetailLike[];
 }
 
 /**
@@ -24,6 +37,7 @@ interface DeriveManagedCirclesInput<TCircle extends CircleLike> {
 export function deriveManagedCircles<TCircle extends CircleLike>({
   createdCircles,
   joinedCircles,
+  joinedCircleDetails = [],
 }: DeriveManagedCirclesInput<TCircle>): TCircle[] {
   const managedCircles: TCircle[] = [];
   const seenCircleIds = new Set<string>();
@@ -36,12 +50,16 @@ export function deriveManagedCircles<TCircle extends CircleLike>({
     seenCircleIds.add(circle.id);
   }
 
+  const detailRoleByCircleId = new Map(
+    joinedCircleDetails.map((detail) => [detail.id, detail.myRole]),
+  );
+
   for (const circle of joinedCircles) {
     if (seenCircleIds.has(circle.id)) {
       continue;
     }
-    // 角色缺失时保守跳过：宁可不显示，也不误判成管理员。
-    if (circle.myRole !== 'OWNER' && circle.myRole !== 'ADMIN') {
+    const role = circle.myRole ?? detailRoleByCircleId.get(circle.id);
+    if (role !== 'OWNER' && role !== 'ADMIN') {
       continue;
     }
 

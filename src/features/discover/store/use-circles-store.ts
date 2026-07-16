@@ -1,9 +1,16 @@
 import { create } from 'zustand';
-import { fetchCircles, fetchMyCircles } from '@/services/api/circles';
+import {
+  fetchCircleDetail,
+  fetchCircles,
+  fetchMyCircles,
+} from '@/services/api/circles';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import type { Circle } from '@/types';
-import { deriveManagedCircles } from './managed-circles';
+import {
+  deriveManagedCircles,
+  getJoinedCirclesNeedingRoleFallback,
+} from './managed-circles';
 
 // 「发现圈子」一次最多拉取的圈子数。本地搜索只在这批里过滤，超出部分搜不到——
 // total 超过它时记一条诊断并由 UI 提示，避免「搜了真实存在的圈子却查无结果」的静默错误。
@@ -62,10 +69,17 @@ export const useCirclesStore = create<CirclesState>((set) => ({
       const joinedCandidates = joined.filter(
         (circle) => !createdCircleIds.has(circle.id),
       );
-      // joined 项自带 myRole（GET /circle/my 直接返回），无需逐个拉圈子详情。
+      const fallbackDetails = await Promise.allSettled(
+        getJoinedCirclesNeedingRoleFallback(joinedCandidates).map((circle) =>
+          fetchCircleDetail(circle.id),
+        ),
+      );
       const managedCircles = deriveManagedCircles({
         createdCircles: created,
         joinedCircles: joinedCandidates,
+        joinedCircleDetails: fallbackDetails.flatMap((result) =>
+          result.status === 'fulfilled' ? [result.value] : [],
+        ),
       });
 
       set({

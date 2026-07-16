@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { deriveManagedCircles } from './managed-circles.ts';
+import {
+  deriveManagedCircles,
+  getJoinedCirclesNeedingRoleFallback,
+} from './managed-circles.ts';
 
 test('deriveManagedCircles keeps created circles and adds joined circles the user administers', () => {
   const createdCircles = [
@@ -37,4 +40,30 @@ test('deriveManagedCircles does not treat an unknown role as managed', () => {
   });
 
   assert.deepEqual(managedCircles, []);
+});
+
+test('deriveManagedCircles uses detail roles when the joined list omits myRole', () => {
+  const joinedCircles = [{ id: 'legacy-admin', name: 'Legacy Admin' }];
+
+  const managedCircles = deriveManagedCircles({
+    createdCircles: [],
+    joinedCircles,
+    joinedCircleDetails: [{ id: 'legacy-admin', myRole: 'ADMIN' as const }],
+  });
+
+  assert.deepEqual(managedCircles, joinedCircles);
+});
+
+test('role fallback only fetches details for joined rows without myRole', () => {
+  const candidates = [
+    { id: 'missing' },
+    { id: 'null', myRole: null },
+    { id: 'admin', myRole: 'ADMIN' as const },
+    { id: 'member', myRole: 'MEMBER' as const },
+  ];
+
+  assert.deepEqual(
+    getJoinedCirclesNeedingRoleFallback(candidates).map((circle) => circle.id),
+    ['missing', 'null'],
+  );
 });
