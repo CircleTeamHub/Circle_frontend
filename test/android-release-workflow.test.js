@@ -222,6 +222,11 @@ test('Android release workflow builds and verifies a private signed artifact', (
   const workflow = read('.github/workflows/android-release.yml');
   const build = workflowJob(workflow, 'build');
   const signing = workflowStep(build, 'Validate signing configuration');
+  const signingKeyVerification = workflowStep(
+    build,
+    'Verify restored signing key',
+  );
+  const apkVerification = workflowStep(build, 'Verify and stage APK');
   const upload = workflowStep(build, 'Upload private release artifact');
 
   assert.match(build, /needs: preflight/);
@@ -252,6 +257,10 @@ test('Android release workflow builds and verifies a private signed artifact', (
   assert.match(build, /npx expo prebuild --platform android --clean --no-install/);
   assert.match(build, /RUNNER_TEMP\/android-signing/);
   assert.match(build, /chmod 600/);
+  assert.match(signingKeyVerification, /keytool -list -v/);
+  assert.match(signingKeyVerification, /ANDROID_KEYSTORE_PATH/);
+  assert.match(signingKeyVerification, /ANDROID_CERT_SHA256/);
+  assert.match(signingKeyVerification, /tr -d '\[:space:\]:'/);
   assert.match(
     build,
     /\.\/gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a/,
@@ -261,6 +270,9 @@ test('Android release workflow builds and verifies a private signed artifact', (
   assert.match(build, /EXPO_PUBLIC_OPENIM_WS_URL:/);
   assert.match(build, /SENTRY_DISABLE_AUTO_UPLOAD: ["']true["']/);
   assert.match(build, /apksigner.*verify --verbose --print-certs/);
+  assert.match(apkVerification, /certificate SHA-256 digest/);
+  assert.match(apkVerification, /tr -d '\[:space:\]:'/);
+  assert.match(apkVerification, /Actual: \$actual_cert/);
   assert.match(build, /ANDROID_CERT_SHA256/);
   assert.match(build, /windnote\.apk\.sha256/);
   assert.match(
