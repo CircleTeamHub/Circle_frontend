@@ -5,9 +5,11 @@ import type {
   CircleDetail,
   CircleInvitation,
   CreateCircleInput,
+  MyCircle,
 } from '@/types';
 
-function normalizeCircle(circle: Circle): Circle {
+// 泛型：保留调用方的具体类型（如 MyCircle 的 myRole），不要窄化成 Circle。
+function normalizeCircle<T extends Circle>(circle: T): T {
   return {
     ...circle,
     avatarUrl: circle.avatarUrl ? normalizeMediaUrl(circle.avatarUrl) : null,
@@ -40,8 +42,9 @@ export async function fetchCircles(params?: {
 
 export async function fetchMyCircles(
   tab: 'joined' | 'created' | 'applied',
-): Promise<Circle[]> {
-  const circles = await apiClient<Circle[]>(`/circle/my?tab=${tab}`);
+): Promise<MyCircle[]> {
+  // myRole 随列表下发 —— 调用方不必再为角色逐个拉 /circle/:id。
+  const circles = await apiClient<MyCircle[]>(`/circle/my?tab=${tab}`);
   return circles.map(normalizeCircle);
 }
 
