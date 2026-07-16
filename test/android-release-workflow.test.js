@@ -365,6 +365,49 @@ test('Android releases publish a consistently named APK to the public repository
   assert.doesNotMatch(workflow, /--clobber/);
 });
 
+test('Android releases publish versioned and latest APKs to Cloudflare R2', () => {
+  const workflow = read('.github/workflows/android-release.yml');
+  const publish = workflowJob(workflow, 'publish');
+  const versionedUpload = workflowStep(
+    publish,
+    'Upload versioned APK to Cloudflare R2',
+  );
+  const latestUpload = workflowStep(
+    publish,
+    'Promote APK to Cloudflare R2 latest',
+  );
+
+  for (const step of [versionedUpload, latestUpload]) {
+    assert.match(step, /AWS_ACCESS_KEY_ID: \$\{\{ secrets\.R2_ACCESS_KEY_ID \}\}/);
+    assert.match(step, /AWS_SECRET_ACCESS_KEY: \$\{\{ secrets\.R2_SECRET_ACCESS_KEY \}\}/);
+    assert.match(step, /R2_ACCOUNT_ID: \$\{\{ vars\.R2_ACCOUNT_ID \}\}/);
+    assert.match(step, /R2_BUCKET: windnote-apk-releases/);
+  }
+
+  assert.match(
+    versionedUpload,
+    /android\/releases\/\$\{RELEASE_TAG\}\/windnote\.apk/,
+  );
+  assert.match(versionedUpload, /application\/vnd\.android\.package-archive/);
+  assert.match(versionedUpload, /sha256=/);
+  assert.match(latestUpload, /android\/latest\/windnote\.apk/);
+  assert.match(latestUpload, /head-object/);
+  assert.match(latestUpload, /R2_PUBLIC_APK_URL/);
+  assert.match(latestUpload, /curl --fail.*--head/);
+
+  const versionedIndex = publish.indexOf(
+    '- name: Upload versioned APK to Cloudflare R2',
+  );
+  const githubIndex = publish.indexOf('- name: Publish public GitHub release');
+  const latestIndex = publish.indexOf(
+    '- name: Promote APK to Cloudflare R2 latest',
+  );
+  assert.ok(
+    versionedIndex < githubIndex && githubIndex < latestIndex,
+    'R2 latest must advance only after both the versioned R2 object and GitHub release succeed',
+  );
+});
+
 test('the Expo config applies production signing to generated Android projects', () => {
   const app = JSON.parse(read('app.json')).expo;
   const {
