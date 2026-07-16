@@ -120,6 +120,25 @@ jobs:
           chmod 600 "$signing_dir/windnote-release.jks"
           echo "ANDROID_KEYSTORE_PATH=$signing_dir/windnote-release.jks" >> "$GITHUB_ENV"
 
+      - name: Verify restored signing key
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          EXPECTED_CERT_SHA256: ${{ vars.ANDROID_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          key_output="$(keytool -list -v -J-Duser.language=en \
+            -keystore "$ANDROID_KEYSTORE_PATH" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS")"
+          actual_cert="$(printf '%s\n' "$key_output" | sed -nE 's/^[[:space:]]*SHA256:[[:space:]]*([[:xdigit:]:]+)[[:space:]]*$/\1/p' | head -n 1 | tr -d '[:space:]:' | tr '[:lower:]' '[:upper:]')"
+          expected_cert="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d '[:space:]:' | tr '[:lower:]' '[:upper:]')"
+          if [[ -z "$actual_cert" || "$actual_cert" != "$expected_cert" ]]; then
+            echo "::error::Restored signing key certificate does not match ANDROID_CERT_SHA256. Actual: $actual_cert Expected: $expected_cert"
+            exit 1
+          fi
+          echo "Restored signing key certificate SHA-256: $actual_cert"
+
       - name: Build signed release APK
         working-directory: android
         env:
@@ -142,10 +161,11 @@ jobs:
           apksigner_path="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
           test -n "$apksigner_path"
           cert_output="$("$apksigner_path" verify --verbose --print-certs "$apk_source")"
-          actual_cert="$(printf '%s\n' "$cert_output" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1 | tr -d ':' | tr '[:lower:]' '[:upper:]')"
-          expected_cert="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ':' | tr '[:lower:]' '[:upper:]')"
+          printf '%s\n' "$cert_output"
+          actual_cert="$(printf '%s\n' "$cert_output" | sed -nE 's/^.*certificate SHA-256 digest:[[:space:]]*([[:xdigit:]:]+)[[:space:]]*$/\1/p' | head -n 1 | tr -d '[:space:]:' | tr '[:lower:]' '[:upper:]')"
+          expected_cert="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d '[:space:]:' | tr '[:lower:]' '[:upper:]')"
           if [[ -z "$actual_cert" || "$actual_cert" != "$expected_cert" ]]; then
-            echo "::error::APK signer certificate does not match ANDROID_CERT_SHA256"
+            echo "::error::APK signer certificate does not match ANDROID_CERT_SHA256. Actual: $actual_cert Expected: $expected_cert"
             exit 1
           fi
           cp "$apk_source" "$RUNNER_TEMP/windnote.apk"
