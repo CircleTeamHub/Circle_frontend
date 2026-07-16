@@ -707,3 +707,98 @@ test('logoutFromOpenIM unbinds OpenIM listeners and a later init rebinds them (C
   await ensureOpenIMInitialized();
   assert.equal(bindCalls, 2);
 });
+
+function imageSdkStubs(capture) {
+  return {
+    '@openim/rn-client-sdk': {
+      __esModule: true,
+      default: {
+        initSDK: async () => undefined,
+        getLoginStatus: async () => 3,
+        login: async () => undefined,
+        createImageMessageByURL: async (args) => {
+          capture.args = args;
+          return { clientMsgID: 'img-1' };
+        },
+        sendMessage: async (opts) => opts.message,
+      },
+      LoginStatus: { Logout: 0, Logged: 3 },
+      LogLevel: { Info: 0 },
+      SessionType: { Single: 1, Group: 2 },
+      ViewType: { History: 0 },
+    },
+    'react-native-fs': {
+      __esModule: true,
+      default: { DocumentDirectoryPath: '/tmp', mkdir: async () => undefined },
+    },
+    'react-native': { Platform: { OS: 'ios' } },
+    '@/constants/config': {
+      OPENIM_API_URL: 'https://im.example.com',
+      OPENIM_WS_URL: 'wss://im.example.com',
+      OPENIM_LOG_LEVEL: 0,
+    },
+    '@/stores/imStore': {
+      useIMStore: {
+        getState: () => ({
+          connected: true,
+          setError: () => undefined,
+          setInitialized: () => undefined,
+          setCurrentUserID: () => undefined,
+          setConnecting: () => undefined,
+          setConnected: () => undefined,
+          reset: () => undefined,
+        }),
+      },
+    },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: { getState: () => ({ setMessagesUnread: () => undefined }) },
+    },
+  };
+}
+
+test('sendImageMessage uses the thumbnail for snapshotPicture, original for big/source (P9-2)', async () => {
+  const capture = {};
+  const { sendImageMessage } = loadTsModule(
+    'src/im/client.ts',
+    imageSdkStubs(capture),
+  );
+
+  await sendImageMessage({
+    sourceID: 'user-1',
+    sessionType: 1,
+    url: 'https://cdn.example.com/big.jpg',
+    sourcePath: '/local/big.jpg',
+    width: 4000,
+    height: 3000,
+    size: 5_000_000,
+    mimeType: 'image/jpeg',
+    thumbUrl: 'https://cdn.example.com/thumb.jpg',
+    thumbWidth: 512,
+    thumbHeight: 384,
+  });
+
+  assert.equal(capture.args.bigPicture.url, 'https://cdn.example.com/big.jpg');
+  assert.equal(capture.args.sourcePicture.url, 'https://cdn.example.com/big.jpg');
+  assert.equal(capture.args.snapshotPicture.url, 'https://cdn.example.com/thumb.jpg');
+  assert.equal(capture.args.snapshotPicture.width, 512);
+  assert.equal(capture.args.snapshotPicture.height, 384);
+});
+
+test('sendImageMessage falls back to the original when no thumbnail is provided (P9-2)', async () => {
+  const capture = {};
+  const { sendImageMessage } = loadTsModule(
+    'src/im/client.ts',
+    imageSdkStubs(capture),
+  );
+
+  await sendImageMessage({
+    sourceID: 'user-1',
+    sessionType: 1,
+    url: 'https://cdn.example.com/big.jpg',
+    sourcePath: '/local/big.jpg',
+    mimeType: 'image/jpeg',
+  });
+
+  assert.equal(capture.args.snapshotPicture.url, 'https://cdn.example.com/big.jpg');
+  assert.equal(capture.args.bigPicture.url, 'https://cdn.example.com/big.jpg');
+});
