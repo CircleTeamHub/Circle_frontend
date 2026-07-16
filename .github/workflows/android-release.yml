@@ -184,6 +184,8 @@ jobs:
   publish:
     name: Promote APK to public release
     needs: [preflight, build]
+    if: ${{ vars.ANDROID_PUBLIC_RELEASE_ENABLED == 'true' }}
+    environment: android-release-publish
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -209,6 +211,13 @@ jobs:
       - name: Verify artifact checksum
         working-directory: ${{ runner.temp }}/android-release
         run: sha256sum -c windnote.apk.sha256
+
+      - name: Validate distribution approval
+        env:
+          ANDROID_PUBLIC_RELEASE_ENABLED: ${{ vars.ANDROID_PUBLIC_RELEASE_ENABLED }}
+          ANDROID_DISTRIBUTION_APPROVED: ${{ vars.ANDROID_DISTRIBUTION_APPROVED }}
+          ANDROID_DISTRIBUTION_EVIDENCE_URL: ${{ vars.ANDROID_DISTRIBUTION_EVIDENCE_URL }}
+        run: node .github/scripts/validate-android-release.js distribution
 
       - name: Publish public GitHub release
         env:

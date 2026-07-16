@@ -292,10 +292,13 @@ test('Android release workflow publishes the verified APK and reports observable
   const notification = workflowStep(notify, 'Notify Discord');
 
   assert.match(publish, /needs: \[preflight, build\]/);
-  assert.doesNotMatch(publish, /ANDROID_PUBLIC_RELEASE_ENABLED/);
-  assert.doesNotMatch(publish, /ANDROID_DISTRIBUTION_APPROVED/);
-  assert.doesNotMatch(publish, /ANDROID_DISTRIBUTION_EVIDENCE_URL/);
-  assert.doesNotMatch(publish, /environment:/);
+  assert.match(
+    publish,
+    /if: \$\{\{ vars\.ANDROID_PUBLIC_RELEASE_ENABLED == 'true' \}\}/,
+  );
+  assert.match(publish, /environment: android-release-publish/);
+  assert.match(publish, /ANDROID_DISTRIBUTION_APPROVED/);
+  assert.match(publish, /ANDROID_DISTRIBUTION_EVIDENCE_URL/);
   assert.match(publish, /ref: \$\{\{ needs\.preflight\.outputs\.commit_sha \}\}/);
   assert.match(publish, /persist-credentials: false/);
   assert.match(
@@ -303,7 +306,7 @@ test('Android release workflow publishes the verified APK and reports observable
     /actions\/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8\.0\.1/,
   );
   assert.match(publish, /sha256sum -c/);
-  assert.doesNotMatch(publish, /validate-android-release\.js distribution/);
+  assert.match(publish, /validate-android-release\.js distribution/);
   assert.match(
     publish,
     /actions\/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7\.0\.0/,
