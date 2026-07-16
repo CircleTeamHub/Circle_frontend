@@ -3,7 +3,15 @@ import { router } from 'expo-router';
 import type { TFunction } from 'i18next';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Alert,
+  FlatList,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
 import { getCollectedOpenIMMessagePayload } from '@/features/chat/utils/message-collection';
@@ -91,7 +99,15 @@ function formatCollectionSource(source: CollectionSource, t: TFunction) {
 const s = StyleSheet.create({
   content: {
     paddingHorizontal: Spacing.lg,
+  },
+  // 头部各块之间的间距（原先由 content 的 gap 提供）；末尾的 lg 隔开首个列表项。
+  listHeader: {
     gap: Spacing.lg,
+    marginBottom: Spacing.lg,
+  },
+  // 列表项之间比头部更紧（原 s.list 的 gap）。
+  separator: {
+    height: Spacing.sm,
   },
   tabsRow: {
     position: 'relative',
@@ -127,9 +143,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.md,
   },
-  list: {
-    gap: Spacing.sm,
-  },
   itemCard: {
     borderRadius: Radius.lg,
     padding: Spacing.md,
@@ -162,6 +175,11 @@ const s = StyleSheet.create({
     gap: 5,
   },
 });
+
+// 模块级：引用稳定，不会每次渲染都让 FlatList 重建分隔件。
+function ItemSeparator() {
+  return <View style={s.separator} />;
+}
 
 export default function CollectionsScreen() {
   const { t } = useTranslation();
@@ -220,31 +238,35 @@ export default function CollectionsScreen() {
     };
   }, [activeType, t]);
 
-  function handleDelete(id: string) {
-    Alert.alert(
-      t('profile.collections.deleteTitle', { defaultValue: '确认删除' }),
-      t('profile.collections.deleteConfirm', { defaultValue: '确定要删除这条收藏吗？' }),
-      [
-        { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
-        {
-          text: t('common.delete', { defaultValue: '删除' }),
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteCollection(id);
-              setItems((current) => current.filter((item) => item.id !== id));
-            } catch {
-              setStatusText(
-                t('profile.collections.deleteError', {
-                  defaultValue: '删除收藏失败，请稍后重试',
-                }),
-              );
-            }
+  // useCallback：作为 prop 传进列表行，引用稳定 renderItem 的 memo 才有意义。
+  const handleDelete = useCallback(
+    (id: string) => {
+      Alert.alert(
+        t('profile.collections.deleteTitle', { defaultValue: '确认删除' }),
+        t('profile.collections.deleteConfirm', { defaultValue: '确定要删除这条收藏吗？' }),
+        [
+          { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+          {
+            text: t('common.delete', { defaultValue: '删除' }),
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await deleteCollection(id);
+                setItems((current) => current.filter((item) => item.id !== id));
+              } catch {
+                setStatusText(
+                  t('profile.collections.deleteError', {
+                    defaultValue: '删除收藏失败，请稍后重试',
+                  }),
+                );
+              }
+            },
           },
-        },
-      ],
-    );
-  }
+        ],
+      );
+    },
+    [t],
+  );
 
   const d = useMemo(
     () => ({
@@ -391,105 +413,119 @@ export default function CollectionsScreen() {
     ],
   );
 
+  const renderItem = useCallback(
+    ({ item }: { item: UserCollection }) => {
+      const source = resolveCollectionSource(item, t);
+      return (
+        <View style={[s.itemCard, d.exampleCard]}>
+          <View style={s.itemTop}>
+            <View style={s.itemText}>
+              <Text style={d.itemTitle}>{item.title}</Text>
+              {item.summary ? (
+                <Text style={d.itemDesc}>{item.summary}</Text>
+              ) : null}
+              {renderSource(source)}
+            </View>
+            <Pressable
+              onPress={(event) => {
+                event.stopPropagation();
+                handleDelete(item.id);
+              }}
+            >
+              <Text style={d.deleteText}>
+                {t('common.delete', { defaultValue: '删除' })}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      );
+    },
+    [d, handleDelete, renderSource, t],
+  );
+
+  const listHeader = (
+    <View style={s.listHeader}>
+      {isOffline ? (
+        <Text style={d.exampleDesc}>
+          {t('common.offline', { defaultValue: '当前无网络连接，部分功能可能不可用' })}
+        </Text>
+      ) : null}
+      <View style={s.tabsRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.tabs}
+          scrollEventThrottle={16}
+          onLayout={(e) => {
+            tabsViewportWidth.current = e.nativeEvent.layout.width;
+            recomputeTabsHint();
+          }}
+          onContentSizeChange={(contentWidth) => {
+            tabsContentWidth.current = contentWidth;
+            recomputeTabsHint();
+          }}
+          onScroll={(e) => {
+            const { contentOffset, contentSize, layoutMeasurement } =
+              e.nativeEvent;
+            // 还有内容在右侧未露出 → 显示提示；滚到末尾（留 8px 容差）隐藏。
+            setShowTabsHint(
+              contentOffset.x + layoutMeasurement.width < contentSize.width - 8,
+            );
+          }}
+        >
+          {COLLECTION_TYPES.map((item) => {
+            const selected = activeType === item.id;
+            return (
+              <Pressable
+                key={item.id}
+                style={[s.tab, d.tab, selected && d.tabActive]}
+                onPress={() => setActiveType(item.id)}
+              >
+                <Ionicons
+                  name={item.icon as any}
+                  size={16}
+                  color={selected ? colors.white : colors.textSecondary}
+                />
+                <Text style={[d.tabText, selected && d.tabTextActive]}>
+                  {t(item.labelKey)}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        {showTabsHint ? (
+          <View style={[s.tabsHint, d.tabsHint]} pointerEvents="none">
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </View>
+        ) : null}
+      </View>
+
+      {statusText ? <Text style={d.exampleDesc}>{statusText}</Text> : null}
+    </View>
+  );
+
   return (
     <View style={d.container}>
       <NavHeader title="" />
-      <ScrollView contentContainerStyle={[s.content, d.content]}>
-        {isOffline ? (
-          <Text style={d.exampleDesc}>
-            {t('common.offline', { defaultValue: '当前无网络连接，部分功能可能不可用' })}
-          </Text>
-        ) : null}
-        <View style={s.tabsRow}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={s.tabs}
-            scrollEventThrottle={16}
-            onLayout={(e) => {
-              tabsViewportWidth.current = e.nativeEvent.layout.width;
-              recomputeTabsHint();
-            }}
-            onContentSizeChange={(contentWidth) => {
-              tabsContentWidth.current = contentWidth;
-              recomputeTabsHint();
-            }}
-            onScroll={(e) => {
-              const { contentOffset, contentSize, layoutMeasurement } =
-                e.nativeEvent;
-              // 还有内容在右侧未露出 → 显示提示；滚到末尾（留 8px 容差）隐藏。
-              setShowTabsHint(
-                contentOffset.x + layoutMeasurement.width < contentSize.width - 8,
-              );
-            }}
-          >
-            {COLLECTION_TYPES.map((item) => {
-              const selected = activeType === item.id;
-              return (
-                <Pressable
-                  key={item.id}
-                  style={[s.tab, d.tab, selected && d.tabActive]}
-                  onPress={() => setActiveType(item.id)}
-                >
-                  <Ionicons
-                    name={item.icon as any}
-                    size={16}
-                    color={selected ? colors.white : colors.textSecondary}
-                  />
-                  <Text style={[d.tabText, selected && d.tabTextActive]}>
-                    {t(item.labelKey)}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-          {showTabsHint ? (
-            <View style={[s.tabsHint, d.tabsHint]} pointerEvents="none">
-              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+      {/* 收藏无分页、随使用无限增长 —— 必须虚拟化，不能 ScrollView + map 全量挂载。 */}
+      <FlatList
+        data={items}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        contentContainerStyle={[s.content, d.content]}
+        ListHeaderComponent={listHeader}
+        ItemSeparatorComponent={ItemSeparator}
+        ListEmptyComponent={
+          loading ? null : (
+            <View style={[s.empty, d.empty]}>
+              <Ionicons name={active.icon as any} size={44} color={colors.textSecondary} />
+              <Text style={d.emptyTitle}>
+                {t('profile.collections.empty', { defaultValue: '还没有收藏' })}
+              </Text>
             </View>
-          ) : null}
-        </View>
-
-        {statusText ? <Text style={d.exampleDesc}>{statusText}</Text> : null}
-
-        {!loading && items.length === 0 ? (
-          <View style={[s.empty, d.empty]}>
-            <Ionicons name={active.icon as any} size={44} color={colors.textSecondary} />
-            <Text style={d.emptyTitle}>
-              {t('profile.collections.empty', { defaultValue: '还没有收藏' })}
-            </Text>
-          </View>
-        ) : null}
-
-        <View style={s.list}>
-          {items.map((item) => {
-            const source = resolveCollectionSource(item, t);
-            return (
-              <View key={item.id} style={[s.itemCard, d.exampleCard]}>
-                <View style={s.itemTop}>
-                  <View style={s.itemText}>
-                    <Text style={d.itemTitle}>{item.title}</Text>
-                    {item.summary ? (
-                      <Text style={d.itemDesc}>{item.summary}</Text>
-                    ) : null}
-                    {renderSource(source)}
-                  </View>
-                  <Pressable
-                    onPress={(event) => {
-                      event.stopPropagation();
-                      handleDelete(item.id);
-                    }}
-                  >
-                    <Text style={d.deleteText}>
-                      {t('common.delete', { defaultValue: '删除' })}
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-            );
-          })}
-        </View>
-      </ScrollView>
+          )
+        }
+      />
     </View>
   );
 }
