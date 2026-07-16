@@ -149,6 +149,7 @@ import {
 import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
 import { stampOptimisticMessage } from '@/features/chat/utils/optimistic-message';
 import { collapseDuplicateFriendAddedNotices } from '@/features/chat/utils/system-notice-dedupe';
+import { generateChatImageThumbnail } from '@/features/chat/utils/image-thumbnail';
 
 // Dev-only structured log for a failed send. Never logs the message body —
 // only the error and conversation kind — to avoid leaking content into logs.
@@ -1922,6 +1923,31 @@ export default function ChatDetailScreen() {
           folder: 'chat',
         });
         await uploadLocalFileToPresignedUrl(presign.uploadUrl, contentType, asset.uri);
+
+        // 生成并上传一张缩略图供列表气泡显示；失败 / 原图已够小时退化为原图（thumb* 留空）。
+        const thumbnail = await generateChatImageThumbnail(
+          asset.uri,
+          asset.width ?? undefined,
+        );
+        let thumbUrl: string | undefined;
+        let thumbWidth: number | undefined;
+        let thumbHeight: number | undefined;
+        if (thumbnail) {
+          const thumbPresign = await requestUploadPresign({
+            filename: sanitizeUploadFilename(`thumb-${filename}`),
+            contentType: 'image/jpeg',
+            folder: 'chat',
+          });
+          await uploadLocalFileToPresignedUrl(
+            thumbPresign.uploadUrl,
+            'image/jpeg',
+            thumbnail.uri,
+          );
+          thumbUrl = thumbPresign.fileUrl;
+          thumbWidth = thumbnail.width;
+          thumbHeight = thumbnail.height;
+        }
+
         const sentMessage = await sendImageMessage({
           sourceID,
           sessionType: conversationType,
@@ -1931,6 +1957,9 @@ export default function ChatDetailScreen() {
           height: asset.height ?? undefined,
           size: asset.fileSize ?? undefined,
           mimeType: contentType,
+          thumbUrl,
+          thumbWidth,
+          thumbHeight,
         });
         appendMessages(conversationID, [sentMessage]);
       } catch (error) {

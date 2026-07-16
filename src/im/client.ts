@@ -844,6 +844,9 @@ export async function sendImageMessage(params: {
   height?: number;
   size?: number;
   mimeType?: string;
+  thumbUrl?: string;
+  thumbWidth?: number;
+  thumbHeight?: number;
 }) {
   const initialized = await ensureOpenIMInitialized();
 
@@ -861,12 +864,24 @@ export async function sendImageMessage(params: {
     height: params.height ?? 0,
     url: params.url,
   };
+  // 列表气泡用缩略图(snapshotPicture)显示，避免逐张拉全尺寸原图；缩略图缺失
+  // （生成失败 / 原图已够小）时退化为原图，行为与之前一致。
+  const snapshotPicture = params.thumbUrl
+    ? {
+        uuid: '',
+        type: 'image/jpeg',
+        size: 0,
+        width: params.thumbWidth ?? 0,
+        height: params.thumbHeight ?? 0,
+        url: params.thumbUrl,
+      }
+    : picBase;
   // SDK 需要本地路径不带 file:// 前缀（播放端用 toPlayableUri 还原 scheme）
   const localPath = stripFileScheme(params.sourcePath);
   const message = await OpenIMSDK.createImageMessageByURL({
     sourcePicture: picBase,
     bigPicture: picBase,
-    snapshotPicture: picBase,
+    snapshotPicture,
     sourcePath: localPath,
   });
 
