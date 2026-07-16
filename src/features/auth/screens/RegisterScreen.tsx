@@ -91,6 +91,7 @@ export default function RegisterScreen() {
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [nickname, setNickname] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [agreed, setAgreed] = useState(false);
   const sendCode = useSendEmailCode('register');
   const { isOffline } = useNetworkStatus();
@@ -225,6 +226,13 @@ export default function RegisterScreen() {
           autoComplete="name"
         />
 
+        <AuthInput
+          label={t('auth.inviteCode')}
+          placeholder={t('auth.inviteCodePlaceholder')}
+          value={inviteCode}
+          onChangeText={setInviteCode}
+        />
+
         {/* Agreement */}
         <Pressable style={s.agreementRow} onPress={() => setAgreed(!agreed)}>
           <View style={[s.checkbox, d.checkbox, agreed && d.checkboxChecked]}>
@@ -256,7 +264,7 @@ export default function RegisterScreen() {
           ]}
           onPress={() => {
             if (submitting || !agreed) return;
-            register(email, code, password, nickname);
+            register(email, code, password, nickname, inviteCode);
           }}
           disabled={submitting || !agreed}
         >

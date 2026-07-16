@@ -13,8 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Spacing, Typography, useTheme } from '@/theme';
-
-const INVITE_CODE = 'CIRCLE-134273011';
+import { useAuthStore } from '@/stores/authStore';
 
 const s = StyleSheet.create({
   inviteBlock: {
@@ -31,12 +30,17 @@ const s = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
+  actionDisabled: {
+    opacity: 0.5,
+  },
 });
 
 export default function ShareScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const user = useAuthStore((state) => state.user);
+  const inviteCode = user?.inviteCode;
 
   const d = useMemo(
     () => ({
@@ -70,21 +74,22 @@ export default function ShareScreen() {
   );
 
   const handleCopyInviteCode = useCallback(async () => {
+    if (!inviteCode) return;
     try {
       const Clipboard = await import('expo-clipboard');
-      await Clipboard.setStringAsync(INVITE_CODE);
+      await Clipboard.setStringAsync(inviteCode);
       Alert.alert(t('shareScreen.copiedTitle'), t('shareScreen.copiedMessage'));
       return;
     } catch {
       await Share.share({
-        message: t('shareScreen.copyMessage', { code: INVITE_CODE }),
+        message: t('shareScreen.copyMessage', { code: inviteCode }),
       });
       Alert.alert(
         t('shareScreen.copyFallbackTitle'),
         t('shareScreen.copyFallbackMessage'),
       );
     }
-  }, [t]);
+  }, [inviteCode, t]);
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
@@ -95,15 +100,27 @@ export default function ShareScreen() {
       >
         <View style={s.inviteBlock}>
           <Text style={d.inviteLabel}>{t('shareScreen.inviteCode')}</Text>
-          <Text style={d.inviteCode}>{INVITE_CODE}</Text>
+          <Text style={d.inviteCode} selectable={Boolean(inviteCode)}>
+            {inviteCode ?? t('shareScreen.inviteUnavailable')}
+          </Text>
         </View>
 
         <View>
-          <Pressable style={s.actionRow} onPress={handleCopyInviteCode}>
+          <Pressable
+            style={[s.actionRow, !inviteCode && s.actionDisabled]}
+            onPress={handleCopyInviteCode}
+            disabled={!inviteCode}
+          >
             <Ionicons name="copy-outline" size={22} color={colors.text} />
             <View style={s.actionTextWrap}>
               <Text style={d.actionTitle}>{t('shareScreen.copyInviteTitle')}</Text>
-              <Text style={d.actionSubtitle}>{t('shareScreen.copyInviteSubtitle')}</Text>
+              <Text style={d.actionSubtitle}>
+                {t(
+                  inviteCode
+                    ? 'shareScreen.copyInviteSubtitle'
+                    : 'shareScreen.inviteUnavailableSubtitle',
+                )}
+              </Text>
             </View>
           </Pressable>
         </View>

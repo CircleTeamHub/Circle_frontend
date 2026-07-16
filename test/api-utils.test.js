@@ -55,6 +55,7 @@ test('normalizeUser keeps backend city field', () => {
   const normalized = normalizeUser({
     id: 'user-1',
     accountId: 'account-1',
+    inviteCode: 'invite-1',
     username: 'alice',
     nickname: 'Alice',
     avatarUrl: null,
@@ -78,6 +79,7 @@ test('normalizeUser keeps backend city field', () => {
   });
 
   assert.equal(normalized.uid, 'account-1');
+  assert.equal(normalized.inviteCode, 'invite-1');
   assert.equal(normalized.city, '杭州');
 });
 

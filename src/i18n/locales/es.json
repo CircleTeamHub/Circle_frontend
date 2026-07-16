@@ -1891,6 +1891,8 @@
     "assignChats": "Asignar chats a este grupo"
   },
   "shareScreen": {
+    "inviteUnavailable": "Código de invitación no disponible",
+    "inviteUnavailableSubtitle": "Actualiza la información de tu cuenta e inténtalo de nuevo",
     "inviteCode": "Código de invitación",
     "copyInviteTitle": "Copiar código de invitación",
     "copyInviteSubtitle": "Cópialo y pégalo en un chat u otra app",
@@ -1954,6 +1956,8 @@
     "confirmPasswordHint": "Vuelve a introducir tu contraseña",
     "nickname": "Apodo",
     "nicknameHint": "Elige un nombre para ti",
+    "inviteCode": "Código de invitación (opcional)",
+    "inviteCodePlaceholder": "Introduce un código de invitación (opcional)",
     "agreement": "He leído y acepto los Términos del servicio y la Política de privacidad",
     "hasAccount": "¿Ya tienes cuenta?",
     "loginNow": "Iniciar sesión",
@@ -1978,6 +1982,7 @@
       "invalidCode": "Introduce el código de 6 dígitos",
       "nicknameRequired": "Introduce un apodo",
       "nicknameTooLong": "El apodo debe tener como máximo 50 caracteres",
+      "invalidInviteCode": "El formato del código de invitación no es válido",
       "loginFailed": "Error al iniciar sesión, inténtalo de nuevo",
       "registerFailed": "Error al registrarse, inténtalo de nuevo",
       "sendCodeFailed": "Error al enviar, inténtalo de nuevo"
@@ -2251,6 +2256,7 @@
     }
   },
   "serverErrors": {
+    "AUTH_INVITE_CODE_INVALID": "El código de invitación no es válido",
     "AUTH_INVALID_CREDENTIALS": "Correo electrónico o contraseña incorrectos",
     "AUTH_EMAIL_TAKEN": "Este correo electrónico ya está registrado",
     "AUTH_CODE_INVALID": "El código de verificación es incorrecto o ha expirado",
@@ -2350,7 +2356,9 @@
     "FRIEND_BLOCKED_CANNOT_REQUEST": "No puedes enviar una solicitud de amistad a este usuario",
     "FRIEND_STRANGER_MSG_NOT_ALLOWED": "Este usuario no acepta mensajes de desconocidos",
     "FRIEND_ALREADY_FRIENDS": "Ya sois amigos",
+    "FRIEND_REQUEST_ALREADY_HANDLED": "Esta solicitud de amistad ya se ha procesado",
     "FRIEND_REQUEST_ALREADY_PENDING": "Ya hay una solicitud de amistad pendiente",
+    "FRIEND_REQUEST_NOT_PENDING": "Esta solicitud de amistad ya no está pendiente",
     "FRIEND_PENDING_REQUEST_NOT_FOUND": "Esa solicitud de amistad ya no existe",
     "FRIEND_REQUESTER_UNAVAILABLE": "El solicitante ya no está disponible",
     "FRIEND_FRIENDSHIP_NOT_FOUND": "Todavía no sois amigos",

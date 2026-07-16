@@ -65,6 +65,7 @@ function ensureAuthTokens(value: unknown): AuthTokens {
 export type BackendAuthUser = {
   id: string;
   accountId: string;
+  inviteCode: string;
   nickname: string;
   avatarUrl: string | null;
   avatarFrame: string | null;
@@ -146,8 +147,10 @@ export async function register(payload: {
   code: string;
   password: string;
   nickname: string;
+  inviteCode?: string;
 }) {
   const email = payload.email.trim().toLowerCase();
+  const inviteCode = payload.inviteCode?.trim().toLowerCase();
   const raw = await apiClient<AuthTokens>("/auth/register", {
     method: "POST",
     auth: false,
@@ -159,6 +162,7 @@ export async function register(payload: {
       code: payload.code.trim(),
       password: payload.password,
       nickname: payload.nickname.trim(),
+      ...(inviteCode ? { inviteCode } : {}),
       platform: getOpenIMPlatformID(),
     },
   });

@@ -364,7 +364,44 @@ test("register posts email/code/password/nickname", async () => {
   assert.equal(calls[0].email, "new@example.com");
   assert.equal(calls[0].code, "123456");
   assert.equal(calls[0].nickname, "Hi");
+  assert.equal(calls[0].inviteCode, undefined);
   assert.equal(tokens.imToken, null);
+});
+
+test("register normalizes and posts a populated invite code", async () => {
+  const calls = [];
+  const { register } = loadAuthApi(async (_endpoint, options) => {
+    calls.push(options.body);
+    return { accessToken: "a", refreshToken: "r", imToken: null };
+  });
+
+  await register({
+    email: "new@example.com",
+    code: "123456",
+    password: "password1",
+    nickname: "New User",
+    inviteCode: "  AbC-123  ",
+  });
+
+  assert.equal(calls[0].inviteCode, "abc-123");
+});
+
+test("register omits a whitespace-only invite code", async () => {
+  const calls = [];
+  const { register } = loadAuthApi(async (_endpoint, options) => {
+    calls.push(options.body);
+    return { accessToken: "a", refreshToken: "r", imToken: null };
+  });
+
+  await register({
+    email: "new@example.com",
+    code: "123456",
+    password: "password1",
+    nickname: "New User",
+    inviteCode: "   ",
+  });
+
+  assert.equal(Object.hasOwn(calls[0], "inviteCode"), false);
 });
 
 test("requestEmailCode posts email and purpose", async () => {

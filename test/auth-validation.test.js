@@ -78,6 +78,15 @@ test("validateNickname enforces non-empty and <=50", () => {
   assert.equal(V.validateNickname("Circle"), null);
 });
 
+test("validateInviteCode is optional and follows the account-id format", () => {
+  assert.equal(V.validateInviteCode(""), null);
+  assert.equal(V.validateInviteCode("   "), null);
+  assert.equal(V.validateInviteCode("abc123"), null);
+  assert.equal(V.validateInviteCode(" AbC-123 "), null);
+  assert.equal(V.validateInviteCode("abc"), "auth.errors.invalidInviteCode");
+  assert.equal(V.validateInviteCode("bad code!"), "auth.errors.invalidInviteCode");
+});
+
 test("composite validators short-circuit in display order", () => {
   // 邮箱先错，即使密码也错，也只报邮箱。
   assert.equal(
@@ -107,7 +116,11 @@ test("composite validators short-circuit in display order", () => {
     "auth.errors.nicknameRequired",
   );
   assert.equal(
-    V.validateRegisterForm("a@b.com", "123456", "123456", "nick"),
+    V.validateRegisterForm("a@b.com", "123456", "123456", "nick", "bad code!"),
+    "auth.errors.invalidInviteCode",
+  );
+  assert.equal(
+    V.validateRegisterForm("a@b.com", "123456", "123456", "nick", "abc123"),
     null,
   );
 });

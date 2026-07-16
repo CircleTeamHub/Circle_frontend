@@ -23,6 +23,7 @@ const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 export interface AuthUser {
   id: string;
   accountId: string;
+  inviteCode?: string;
   uid: string;
   nickname: string;
   avatarUrl: string | null;
