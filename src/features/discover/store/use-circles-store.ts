@@ -1,9 +1,5 @@
 import { create } from 'zustand';
-import {
-  fetchCircleDetail,
-  fetchCircles,
-  fetchMyCircles,
-} from '@/services/api/circles';
+import { fetchCircles, fetchMyCircles } from '@/services/api/circles';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import type { Circle } from '@/types';
@@ -66,15 +62,10 @@ export const useCirclesStore = create<CirclesState>((set) => ({
       const joinedCandidates = joined.filter(
         (circle) => !createdCircleIds.has(circle.id),
       );
-      const joinedCircleDetails = await Promise.allSettled(
-        joinedCandidates.map((circle) => fetchCircleDetail(circle.id)),
-      );
+      // joined 项自带 myRole（GET /circle/my 直接返回），无需逐个拉圈子详情。
       const managedCircles = deriveManagedCircles({
         createdCircles: created,
         joinedCircles: joinedCandidates,
-        joinedCircleDetails: joinedCircleDetails.flatMap((result) =>
-          result.status === 'fulfilled' ? [result.value] : [],
-        ),
       });
 
       set({

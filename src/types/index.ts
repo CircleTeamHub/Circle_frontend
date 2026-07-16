@@ -328,8 +328,15 @@ export interface CreatePlazaPostInput {
   signupFancyRestriction: boolean;
 }
 
+export type CircleRole = 'OWNER' | 'ADMIN' | 'MEMBER';
+
+/** GET /circle/my 的返回项：比 Circle 多带调用者在该圈子的角色。 */
+export interface MyCircle extends Circle {
+  myRole: CircleRole | null;
+}
+
 export interface CircleDetail extends Circle {
-  myRole: 'OWNER' | 'ADMIN' | 'MEMBER' | null;
+  myRole: CircleRole | null;
   myStatus: 'ACTIVE' | 'PENDING' | 'REJECTED' | null;
   availableIconAssets?: {
     id: string;
