@@ -225,6 +225,7 @@ test('Android release workflow builds and verifies a private signed artifact', (
   const upload = workflowStep(build, 'Upload private release artifact');
 
   assert.match(build, /needs: preflight/);
+  assert.match(build, /timeout-minutes: 60/);
   assert.match(build, /ref: \$\{\{ needs\.preflight\.outputs\.commit_sha \}\}/);
   assert.match(build, /persist-credentials: false/);
   for (const name of [
@@ -251,7 +252,10 @@ test('Android release workflow builds and verifies a private signed artifact', (
   assert.match(build, /npx expo prebuild --platform android --clean --no-install/);
   assert.match(build, /RUNNER_TEMP\/android-signing/);
   assert.match(build, /chmod 600/);
-  assert.match(build, /\.\/gradlew assembleRelease/);
+  assert.match(
+    build,
+    /\.\/gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a/,
+  );
   assert.match(build, /EXPO_PUBLIC_API_URL:/);
   assert.match(build, /EXPO_PUBLIC_OPENIM_API_URL:/);
   assert.match(build, /EXPO_PUBLIC_OPENIM_WS_URL:/);
@@ -266,7 +270,7 @@ test('Android release workflow builds and verifies a private signed artifact', (
   assert.match(upload, /retention-days: 30/);
 });
 
-test('Android release workflow protects promotion and reports observable results', () => {
+test('Android release workflow publishes the verified APK and reports observable results', () => {
   const workflow = read('.github/workflows/android-release.yml');
   const preflight = workflowJob(workflow, 'preflight');
   const build = workflowJob(workflow, 'build');
@@ -276,8 +280,10 @@ test('Android release workflow protects promotion and reports observable results
   const notification = workflowStep(notify, 'Notify Discord');
 
   assert.match(publish, /needs: \[preflight, build\]/);
-  assert.match(publish, /if: \$\{\{ vars\.ANDROID_PUBLIC_RELEASE_ENABLED == 'true' \}\}/);
-  assert.match(publish, /environment: android-release-publish/);
+  assert.doesNotMatch(publish, /ANDROID_PUBLIC_RELEASE_ENABLED/);
+  assert.doesNotMatch(publish, /ANDROID_DISTRIBUTION_APPROVED/);
+  assert.doesNotMatch(publish, /ANDROID_DISTRIBUTION_EVIDENCE_URL/);
+  assert.doesNotMatch(publish, /environment:/);
   assert.match(publish, /ref: \$\{\{ needs\.preflight\.outputs\.commit_sha \}\}/);
   assert.match(publish, /persist-credentials: false/);
   assert.match(
@@ -285,10 +291,7 @@ test('Android release workflow protects promotion and reports observable results
     /actions\/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8\.0\.1/,
   );
   assert.match(publish, /sha256sum -c/);
-  assert.match(publish, /ANDROID_PUBLIC_RELEASE_ENABLED: \$\{\{ vars\.ANDROID_PUBLIC_RELEASE_ENABLED \}\}/);
-  assert.match(publish, /ANDROID_DISTRIBUTION_APPROVED: \$\{\{ vars\.ANDROID_DISTRIBUTION_APPROVED \}\}/);
-  assert.match(publish, /ANDROID_DISTRIBUTION_EVIDENCE_URL: \$\{\{ vars\.ANDROID_DISTRIBUTION_EVIDENCE_URL \}\}/);
-  assert.match(publish, /validate-android-release\.js distribution/);
+  assert.doesNotMatch(publish, /validate-android-release\.js distribution/);
   assert.match(
     publish,
     /actions\/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7\.0\.0/,
@@ -296,9 +299,8 @@ test('Android release workflow protects promotion and reports observable results
   const publishNodeIndex = publish.indexOf('- name: Setup Node');
   assert.ok(
     publish.indexOf('- name: Checkout validated commit') < publishNodeIndex &&
-      publishNodeIndex < publish.indexOf('validate-android-release.js distribution') &&
       publishNodeIndex < publish.indexOf('publish-android-release.js'),
-    'publish Node setup must precede validator and publisher scripts',
+    'publish Node setup must precede the publisher script',
   );
   assert.equal((workflow.match(/secrets\.RELEASES_TOKEN/g) || []).length, 1);
   assert.doesNotMatch(preflight, /RELEASES_TOKEN/);
