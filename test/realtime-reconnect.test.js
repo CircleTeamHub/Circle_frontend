@@ -1,0 +1,320 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const ts = require('typescript');
+
+const RECONNECT_MAX_MS = 30_000;
+// scheduleReconnect 里 delay = baseDelay + baseDelay * 0.2 * Math.random()
+const JITTER_CEILING = 1.2;
+
+function loadRealtimeHarness() {
+  const filePath = path.join(process.cwd(), 'src/realtime/client.ts');
+  const transpiled = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2020,
+    },
+    fileName: filePath,
+  }).outputText;
+
+  const sockets = [];
+
+  class FakeWebSocket {
+    static CONNECTING = 0;
+    static OPEN = 1;
+    static CLOSING = 2;
+    static CLOSED = 3;
+
+    constructor(url) {
+      this.url = url;
+      this.readyState = FakeWebSocket.CONNECTING;
+      this.sent = [];
+      this.onopen = null;
+      this.onmessage = null;
+      this.onerror = null;
+      this.onclose = null;
+      sockets.push(this);
+    }
+
+    send(data) {
+      this.sent.push(data);
+    }
+
+    close() {
+      this.readyState = FakeWebSocket.CLOSED;
+    }
+  }
+
+  // 极简 fake timer：只需要「读出下一个 delay」和「手动触发」。
+  let nextTimerId = 1;
+  const timers = new Map();
+
+  const realtimeConnected = [];
+  const stubStore = (state) => ({ getState: () => state });
+
+  const context = {
+    module: { exports: {} },
+    exports: {},
+    __DEV__: false,
+    console,
+    WebSocket: FakeWebSocket,
+    setTimeout: (fn, delay) => {
+      const id = nextTimerId++;
+      timers.set(id, { fn, delay });
+      return id;
+    },
+    clearTimeout: (id) => {
+      timers.delete(id);
+    },
+    require: (request) => {
+      switch (request) {
+        case '@/constants/config':
+          return { REALTIME_WS_URL: 'wss://realtime.example.test/ws' };
+        case '@/services/api/plaza':
+          return { fetchMySignupsUnreadCount: async () => 0 };
+        case '@/services/api/friends':
+          return { fetchUnreadFriendActivityCount: async () => 0 };
+        case '@/services/api/auth':
+          return { fetchCurrentUser: async () => ({ id: 'user-1' }) };
+        case '@/services/api/notifications':
+          return {
+            fetchNotifications: async () => [],
+            fetchNotificationUnreadSummary: async () => ({
+              discoverUnread: 0,
+              profileUnread: 0,
+              totalUnread: 0,
+            }),
+          };
+        case '@/features/notifications/store/use-notification-center-store':
+          return {
+            useNotificationCenterStore: stubStore({
+              interactive: [],
+              setInteractive: () => {},
+            }),
+          };
+        case '@/features/notifications/store/use-notification-snackbar-store':
+          return {
+            useNotificationSnackbarStore: stubStore({
+              enqueueNotification: () => {},
+            }),
+          };
+        case '@/features/discover/store/use-circle-notification-store':
+          return {
+            useCircleNotificationStore: stubStore({
+              inAppEnabled: true,
+              bannerEnabled: true,
+            }),
+          };
+        case '@/features/call/store/use-call-store':
+          return { useCallStore: stubStore({}) };
+        case '@/features/call/realtime-guards':
+          return {
+            isCallInvitePayload: () => false,
+            isCallParticipantPayload: () => false,
+            isCallStatePayload: () => false,
+          };
+        case '@/services/auth/session':
+          return { registerLogoutHandler: () => () => {} };
+        case '@/stores/authStore':
+          return { useAuthStore: stubStore({ setUser: () => {} }) };
+        case '@/stores/tabBadgeStore':
+          return {
+            useTabBadgeStore: stubStore({
+              applySnapshot: () => {},
+              setContactsUnread: () => {},
+              setDiscoverUnread: () => {},
+              setSignupUnread: () => {},
+              setProfileUnread: () => {},
+              setSystemUnread: () => {},
+              setRealtimeConnected: (value) => realtimeConnected.push(value),
+            }),
+          };
+        case '@/stores/walletRealtimeStore':
+          return {
+            useWalletRealtimeStore: stubStore({ setRealtimeBalance: () => {} }),
+          };
+        default:
+          return require(request);
+      }
+    },
+  };
+  context.exports = context.module.exports;
+  vm.runInNewContext(transpiled, context, { filename: filePath });
+
+  function pendingTimer() {
+    const entries = [...timers.entries()];
+    if (entries.length > 1) {
+      throw new Error(`expected at most one reconnect timer, got ${entries.length}`);
+    }
+    return entries[0] ?? null;
+  }
+
+  return {
+    ...context.module.exports,
+    sockets,
+    realtimeConnected,
+    latestSocket: () => sockets[sockets.length - 1],
+    pendingDelay: () => pendingTimer()?.[1].delay ?? null,
+    hasPendingReconnect: () => pendingTimer() !== null,
+    // 触发挂起的重连定时器，返回它原本的 delay。
+    runPendingReconnect: () => {
+      const entry = pendingTimer();
+      if (!entry) throw new Error('no reconnect timer scheduled');
+      const [id, timer] = entry;
+      timers.delete(id);
+      timer.fn();
+      return timer.delay;
+    },
+  };
+}
+
+// 让最新的 socket 以「连不上」收场：网关拒绝 / 后端重启 / 断网都走 onclose。
+function failLatestSocket(harness) {
+  const socket = harness.latestSocket();
+  socket.readyState = 3;
+  socket.onclose();
+}
+
+function openLatestSocket(harness) {
+  const socket = harness.latestSocket();
+  socket.readyState = 1;
+  socket.onopen();
+}
+
+// P0-12d: 连续失败 10 次后永久放弃，意味着来电邀请和红点在本次进程剩余时间里
+// 再也不会到达，而且用户完全无感。后端滚动重启 / 过夜断网都能轻松打满 10 次。
+test('realtime keeps rescheduling reconnects far past the old 10-attempt cap', () => {
+  const harness = loadRealtimeHarness();
+  harness.connectRealtime('token-a');
+  assert.equal(harness.sockets.length, 1);
+
+  for (let attempt = 1; attempt <= 25; attempt += 1) {
+    failLatestSocket(harness);
+    assert.equal(
+      harness.hasPendingReconnect(),
+      true,
+      `expected a reconnect to be scheduled after failure #${attempt}`,
+    );
+    harness.runPendingReconnect();
+    assert.equal(harness.sockets.length, attempt + 1);
+  }
+});
+
+test('reconnect backoff escalates and then clamps at RECONNECT_MAX_MS', () => {
+  const harness = loadRealtimeHarness();
+  harness.connectRealtime('token-a');
+
+  const delays = [];
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    failLatestSocket(harness);
+    delays.push(harness.runPendingReconnect());
+  }
+
+  // 每档都是 base + [0, 20%) 抖动，逐档翻倍直到撞上 30s 上限。
+  const expectedBases = [
+    1_000, 2_000, 4_000, 8_000, 16_000,
+    RECONNECT_MAX_MS, RECONNECT_MAX_MS, RECONNECT_MAX_MS,
+    RECONNECT_MAX_MS, RECONNECT_MAX_MS, RECONNECT_MAX_MS, RECONNECT_MAX_MS,
+  ];
+  delays.forEach((delay, index) => {
+    const base = expectedBases[index];
+    assert.ok(
+      delay >= base && delay < base * JITTER_CEILING,
+      `delay #${index} (${delay}) should sit in [${base}, ${base * JITTER_CEILING})`,
+    );
+  });
+
+  // 封顶的是延迟，不是次数：再失败多少次也不会超过 30s * 抖动。
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    failLatestSocket(harness);
+    const delay = harness.runPendingReconnect();
+    assert.ok(delay < RECONNECT_MAX_MS * JITTER_CEILING);
+  }
+});
+
+test('a successful connection resets the backoff to the first step', () => {
+  const harness = loadRealtimeHarness();
+  harness.connectRealtime('token-a');
+
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    failLatestSocket(harness);
+    harness.runPendingReconnect();
+  }
+  failLatestSocket(harness);
+  assert.ok(harness.pendingDelay() >= RECONNECT_MAX_MS);
+  harness.runPendingReconnect();
+
+  openLatestSocket(harness);
+  failLatestSocket(harness);
+
+  const delay = harness.pendingDelay();
+  assert.ok(
+    delay >= 1_000 && delay < 1_000 * JITTER_CEILING,
+    `backoff should restart at ~1s after a successful open, got ${delay}`,
+  );
+});
+
+// 回到前台 / token 轮换是「显式连接意图」：立刻重连，不等退避跑完。
+test('an explicit connect resets the backoff and reconnects immediately', () => {
+  const harness = loadRealtimeHarness();
+  harness.connectRealtime('token-a');
+
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    failLatestSocket(harness);
+    harness.runPendingReconnect();
+  }
+  failLatestSocket(harness);
+  assert.equal(harness.hasPendingReconnect(), true);
+
+  const socketsBefore = harness.sockets.length;
+  harness.connectRealtime('token-a');
+
+  assert.equal(harness.hasPendingReconnect(), false, 'pending backoff timer should be dropped');
+  assert.equal(harness.sockets.length, socketsBefore + 1, 'should reconnect immediately');
+
+  failLatestSocket(harness);
+  const delay = harness.pendingDelay();
+  assert.ok(
+    delay >= 1_000 && delay < 1_000 * JITTER_CEILING,
+    `backoff should restart at ~1s after an explicit connect, got ${delay}`,
+  );
+});
+
+// 登出是唯一的永久终止条件。
+test('logout stops reconnecting permanently', () => {
+  const harness = loadRealtimeHarness();
+  harness.connectRealtime('token-a');
+
+  failLatestSocket(harness);
+  harness.runPendingReconnect();
+
+  // 先抓住 onclose：真实世界里 close 事件可能已经排在队列上、logout 之后才派发。
+  const socket = harness.latestSocket();
+  const queuedOnClose = socket.onclose;
+
+  harness.disconnectRealtime();
+  assert.equal(harness.hasPendingReconnect(), false, 'logout should drop the pending backoff timer');
+  assert.equal(socket.onclose, null, 'logout should detach the socket handlers');
+
+  queuedOnClose();
+  assert.equal(harness.hasPendingReconnect(), false, 'logout must not schedule a reconnect');
+});
+
+test('reconnected sockets re-send the auth frame', () => {
+  const harness = loadRealtimeHarness();
+  harness.connectRealtime('token-a');
+
+  for (let attempt = 0; attempt < 15; attempt += 1) {
+    failLatestSocket(harness);
+    harness.runPendingReconnect();
+  }
+  openLatestSocket(harness);
+
+  assert.deepEqual(JSON.parse(harness.latestSocket().sent[0]), {
+    type: 'auth',
+    token: 'token-a',
+  });
+  assert.equal(harness.realtimeConnected.at(-1), true);
+});

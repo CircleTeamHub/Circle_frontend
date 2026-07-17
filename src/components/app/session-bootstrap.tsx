@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 import { fetchCurrentUser } from '@/services/api/auth';
+import { isDefinitiveAuthFailure } from '@/services/api/client';
 import { loginToOpenIM, logoutFromOpenIM } from '@/im/client';
 import {
   connectRealtime,
@@ -147,9 +148,12 @@ export function SessionBootstrap() {
         // 用户面板已就绪后再拉自定义会话分组；失败不阻断主流程（store 内部已 dev-warn）。
         // MessagesScreen 的顶部 filter tab 依赖这份数据。
         void useMessageGroupsStore.getState().load();
-      } catch {
-        // /auth/me 请求失败（token 已过期/无效），清除 session 触发跳转登录页
-        if (!cancelled) {
+      } catch (error) {
+        // 只有服务端明确否认凭证（401 / 403，含刷新失败）才清 session 跳登录页。
+        // 网络不可达 / 超时 / 5xx 只是「这一刻够不到服务器」——在地铁里冷启动一次
+        // 不该等于登出：保留磁盘上的 token 与上一次的 user 快照（authStore 已持久化），
+        // app 照常进入，后续请求自然会重试。
+        if (!cancelled && isDefinitiveAuthFailure(error)) {
           await clearLocalSession();
         }
       } finally {

@@ -223,6 +223,26 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * 「服务端明确否认了这份凭证」——只有这种失败才允许销毁本地 session。
+ *
+ * 401 / 403 是服务端给出的认证结论（含刷新返回体形状异常时我们自己抛的 401）。
+ * 而网络不可达 / 超时 / 5xx / 网关脏响应只说明「这一刻够不到服务器」，
+ * 把它们也当成登出信号，等于让后端抖一下就把所有在线用户踢下线。
+ * session-changed 是本地会话已被换掉（新登录 / 已登出），不是服务端的认证结论。
+ */
+export function isDefinitiveAuthFailure(error: unknown): boolean {
+  if (!(error instanceof ApiError)) {
+    return false;
+  }
+
+  if (error.failureKind === 'session-changed') {
+    return false;
+  }
+
+  return error.status === 401 || error.status === 403;
+}
+
 // token 刷新 Promise 单例：多个并发请求同时 401 时，只发一次 /auth/refresh
 let refreshPromise: Promise<string> | null = null;
 let refreshPromiseSessionEpoch: number | null = null;
@@ -484,7 +504,12 @@ async function refreshAccessToken(sessionEpoch: number) {
     return tokens.accessToken;
   })()
     .catch(async (error) => {
-      if (useAuthStore.getState().sessionEpoch === sessionEpoch) {
+      // 只有服务端明确否认 refresh token 时才清 session。网络 / 超时 / 5xx 一律原样抛出：
+      // 登录态保留，singleton 已在 finally 里释放，下一个请求会重新发起刷新。
+      if (
+        isDefinitiveAuthFailure(error) &&
+        useAuthStore.getState().sessionEpoch === sessionEpoch
+      ) {
         await clearLocalSession(sessionEpoch);
       }
       throw error;

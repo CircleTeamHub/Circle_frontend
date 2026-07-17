@@ -92,6 +92,9 @@ function loadApiClientHarness() {
       if (String(url).endsWith('/auth/refresh')) {
         const next = refreshResponses.shift();
         if (!next) throw new Error('missing refresh response');
+        // `{ error }` 模拟 fetch 本身抛错（断网 / DNS 失败），走 client.ts 的
+        // network 分支；`{ promise }` 才是拿到了 HTTP 响应。
+        if (next.error) throw next.error;
         return next.promise;
       }
       const next = requestResponses.shift();
@@ -295,7 +298,7 @@ test('refresh failure cannot clear a newer session after asynchronous logout tea
   const clearPause = harness.pauseClearSession();
   harness.refreshResponses.push({
     promise: Promise.resolve(
-      response(false, 500, { code: 1, message: 'refresh down', data: null }),
+      response(false, 401, { code: 1, message: 'refresh rejected', data: null }),
     ),
   });
 
@@ -332,7 +335,40 @@ test('missing refresh token cannot clear a newer session after asynchronous logo
   assert.equal(harness.authState.sessionEpoch, 2);
 });
 
-test('same-session failed refresh clears the active local session', async () => {
+// P0-12a: 只有「服务端明确否认 refresh token」才是登出信号。刷新遇到 5xx / 断网 /
+// 超时时清 session，等于让后端抖一下就把所有在线用户踢下线。
+test('same-session refresh rejected with 401 clears the active local session', async () => {
+  const harness = loadApiClientHarness();
+  const refresh = deferred();
+  harness.refreshResponses.push(refresh);
+
+  const request = harness.apiClient('/profile/me');
+  await waitFor(() => harness.fetchCalls.length === 2);
+
+  refresh.resolve(
+    response(false, 401, { code: 1, message: 'refresh token expired', data: null }),
+  );
+
+  await assert.rejects(request);
+  assert.equal(harness.getClearCalls(), 1);
+  assert.equal(harness.authState.accessToken, null);
+  assert.equal(harness.authState.refreshToken, null);
+});
+
+test('same-session refresh rejected with 403 clears the active local session', async () => {
+  const harness = loadApiClientHarness();
+  harness.refreshResponses.push({
+    promise: Promise.resolve(
+      response(false, 403, { code: 1, message: 'refresh token revoked', data: null }),
+    ),
+  });
+
+  await assert.rejects(harness.apiClient('/profile/me'));
+  assert.equal(harness.getClearCalls(), 1);
+  assert.equal(harness.authState.accessToken, null);
+});
+
+test('same-session refresh failing with 5xx keeps the session instead of logging out', async () => {
   const harness = loadApiClientHarness();
   const refresh = deferred();
   harness.refreshResponses.push(refresh);
@@ -345,9 +381,110 @@ test('same-session failed refresh clears the active local session', async () => 
   );
 
   await assert.rejects(request);
+  assert.equal(harness.getClearCalls(), 0);
+  assert.equal(harness.authState.accessToken, 'access-a');
+  assert.equal(harness.authState.refreshToken, 'refresh-a');
+  assert.equal(harness.authState.sessionEpoch, 1);
+});
+
+test('same-session refresh failing on a network error keeps the session', async () => {
+  const harness = loadApiClientHarness();
+  harness.refreshResponses.push({
+    error: new TypeError('Network request failed'),
+  });
+
+  const request = harness.apiClient('/profile/me');
+
+  await assert.rejects(request, (error) => {
+    assert.equal(error.status, 0);
+    assert.equal(error.failureKind, 'network');
+    return true;
+  });
+  assert.equal(harness.getClearCalls(), 0);
+  assert.equal(harness.authState.accessToken, 'access-a');
+  assert.equal(harness.authState.refreshToken, 'refresh-a');
+});
+
+test('a transient refresh failure does not stop the next request from refreshing', async () => {
+  const harness = loadApiClientHarness();
+  harness.refreshResponses.push(
+    { error: new TypeError('Network request failed') },
+    {
+      promise: Promise.resolve(
+        response(true, 200, {
+          code: 0,
+          message: 'ok',
+          data: { accessToken: 'access-a-next', refreshToken: 'refresh-a-next' },
+        }),
+      ),
+    },
+  );
+  harness.requestResponses.push(
+    { promise: Promise.resolve(response(false, 401, { code: 1, message: 'expired', data: null })) },
+    { promise: Promise.resolve(response(false, 401, { code: 1, message: 'expired', data: null })) },
+    { promise: Promise.resolve(response(true, 200, { code: 0, message: 'ok', data: { ok: true } })) },
+  );
+
+  // 网络抖动那次刷新失败，但会话必须留着 —— 网络恢复后的下一个请求应当能正常刷新并成功。
+  await assert.rejects(harness.apiClient('/profile/me'));
+  assert.equal(harness.getClearCalls(), 0);
+
+  const recovered = await harness.apiClient('/profile/me');
+  assert.equal(recovered.ok, true);
+  assert.equal(harness.authState.accessToken, 'access-a-next');
+  assert.equal(harness.authState.sessionEpoch, 1);
+});
+
+test('refresh returning a malformed token pair clears the session', async () => {
+  const harness = loadApiClientHarness();
+  harness.refreshResponses.push({
+    promise: Promise.resolve(
+      response(true, 200, {
+        code: 0,
+        message: 'ok',
+        data: { accessToken: 'only-half-a-pair' },
+      }),
+    ),
+  });
+
+  await assert.rejects(harness.apiClient('/profile/me'));
   assert.equal(harness.getClearCalls(), 1);
   assert.equal(harness.authState.accessToken, null);
-  assert.equal(harness.authState.refreshToken, null);
+});
+
+test('isDefinitiveAuthFailure only treats a server auth verdict as a logout signal', () => {
+  const { isDefinitiveAuthFailure, ApiError } = loadApiClientHarness();
+
+  assert.equal(isDefinitiveAuthFailure(new ApiError('unauthorized', { status: 401 })), true);
+  assert.equal(isDefinitiveAuthFailure(new ApiError('forbidden', { status: 403 })), true);
+
+  assert.equal(
+    isDefinitiveAuthFailure(
+      new ApiError('timeout', { status: 0, failureKind: 'timeout' }),
+    ),
+    false,
+  );
+  assert.equal(
+    isDefinitiveAuthFailure(
+      new ApiError('offline', { status: 0, failureKind: 'network' }),
+    ),
+    false,
+  );
+  assert.equal(isDefinitiveAuthFailure(new ApiError('bad gateway', { status: 502 })), false);
+  assert.equal(
+    isDefinitiveAuthFailure(
+      new ApiError('html error page', { status: 200, failureKind: 'invalid-json' }),
+    ),
+    false,
+  );
+  // 会话已被换掉是本地信号，不是服务端对凭证的结论。
+  assert.equal(
+    isDefinitiveAuthFailure(
+      new ApiError('session changed', { status: 401, failureKind: 'session-changed' }),
+    ),
+    false,
+  );
+  assert.equal(isDefinitiveAuthFailure(new Error('boom')), false);
 });
 
 test('logout handler drops an in-flight refresh singleton so the next session can refresh independently', async () => {
