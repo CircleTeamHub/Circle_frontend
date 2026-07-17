@@ -149,6 +149,7 @@ import {
 import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
 import { stampOptimisticMessage } from '@/features/chat/utils/optimistic-message';
 import { collapseDuplicateFriendAddedNotices } from '@/features/chat/utils/system-notice-dedupe';
+import { isChatImageTooLarge } from '@/features/chat/utils/chat-media-policy';
 import { uploadChatImageThumbnail } from '@/features/chat/utils/image-thumbnail';
 
 // Dev-only structured log for a failed send. Never logs the message body —
@@ -1898,6 +1899,14 @@ export default function ChatDetailScreen() {
   // 相册选择与拍照共用同一套「上传→发送」流程，只有获取 asset 的来源不同。
   const uploadAndSendImageAsset = useCallback(
     async (asset: ImagePicker.ImagePickerAsset) => {
+      // 体积 gate 与下面的 assertLocalCanSendMessage 同理：在 presign+上传之前拦掉。
+      // 否则一张几十 MB 的原图会整份传完、用户干等之后才发现发不出去。上限与头像 /
+      // 圈子封面 / 好友照片一致（10MB），此前只有聊天发图这条路径漏了 gate。
+      if (isChatImageTooLarge(asset.fileSize)) {
+        Alert.alert(t('validation.imageTooLarge'), t('validation.imageSizeLimit'));
+        return;
+      }
+
       // 用 || 而非 ??：URI 以 '/' 结尾时 pop() 返回空字符串，?? 不会触发 fallback。
       const filename = asset.uri.split('/').pop() || 'image.jpg';
       const contentType =
