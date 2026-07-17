@@ -2,6 +2,29 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadTsModule } = require('./helpers/load-ts-module');
 
+// 可控定时器:让测试自己决定「15s 到了」,并观察定时器有没有被提前解除。
+function makeFakeTimers() {
+  let pending = null;
+  return {
+    setTimeout: (fn) => {
+      pending = fn;
+      return 42;
+    },
+    clearTimeout: () => {
+      pending = null;
+    },
+    isArmed: () => pending !== null,
+    fire: () => {
+      if (!pending) {
+        throw new Error('没有 armed 的定时器可触发');
+      }
+      const fn = pending;
+      pending = null;
+      fn();
+    },
+  };
+}
+
 // 响应体读取失败(res.text() reject)时 client.ts 的行为。
 function loadApiClient({
   textError,
@@ -9,6 +32,9 @@ function loadApiClient({
   ok = true,
   responseText = '',
   onReport = () => {},
+  timers,
+  hangBody = false,
+  onBodyRead,
 }) {
   return loadTsModule('src/services/api/client.ts', {
     context: {
@@ -19,13 +45,24 @@ function loadApiClient({
       FormData,
       URL,
       URLSearchParams,
-      setTimeout,
-      clearTimeout,
+      setTimeout: timers ? timers.setTimeout : setTimeout,
+      clearTimeout: timers ? timers.clearTimeout : clearTimeout,
       // headers 已到、body 读到一半断流:fetch 已 resolve,失败发生在 res.text()。
-      fetch: async () => ({
+      fetch: async (url, options) => ({
         ok,
         status,
         text: async () => {
+          onBodyRead?.();
+          if (hangBody) {
+            // body 流卡住:只有 signal 被 abort 才结束——模拟流式 fetch 的真实行为。
+            return new Promise((_, reject) => {
+              options.signal.addEventListener('abort', () => {
+                const aborted = new Error('Aborted');
+                aborted.name = 'AbortError';
+                reject(aborted);
+              });
+            });
+          }
           if (textError) {
             throw textError;
           }
@@ -141,6 +178,39 @@ test('apiClient treats a non-Error AbortError as a timeout', async () => {
   await assert.rejects(
     () => apiClient('/circle'),
     (err) => err.name === 'ApiError' && err.failureKind === 'timeout',
+  );
+});
+
+// 15s 定时器必须罩住 body 读:流式 fetch(web)下 fetch 只等到 headers,body 还在传。
+// fetch 一 resolve 就 clearTimeout,等于 body 读没有任何上限——卡住的流会永久挂起。
+test('the request timeout still covers the response body read', async () => {
+  const timers = makeFakeTimers();
+  let armedDuringBodyRead = null;
+  const { apiClient } = loadApiClient({
+    timers,
+    hangBody: true,
+    onBodyRead: () => {
+      armedDuringBodyRead = timers.isArmed();
+    },
+  });
+
+  const pending = apiClient('/circle');
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(
+    armedDuringBodyRead,
+    true,
+    'body 读期间定时器必须仍然 armed,否则卡住的 body 流没有任何超时上限',
+  );
+
+  timers.fire(); // 15s 到
+
+  await assert.rejects(
+    () => pending,
+    (err) =>
+      err.name === 'ApiError' &&
+      err.status === 0 &&
+      err.failureKind === 'timeout',
   );
 });
 

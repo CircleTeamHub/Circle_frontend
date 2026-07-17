@@ -224,10 +224,9 @@ function isAbortError(error: unknown): boolean {
 // shouldReportApiFailure 只给 invalid-json 开了后门,取 res.status 会让 200 上的断流
 // 被判成「无需上报」,信号彻底丢掉。
 //
-// AbortError 只可能来自本文件那个 15s 定时器(RequestOptions 不暴露 signal)。
-// 定时器在 fetch resolve 后、readPayload 前就被 clearTimeout 关掉,唯一的缝隙是
-// abort() 抢在 fetch resolve 的续延之前执行:body 流已被中断,到 text() 才 reject。
-// 那种情况确实是超时,归入既有 timeout 分支。
+// AbortError 只可能来自本文件那个 15s 定时器(RequestOptions 不暴露 signal),
+// 而定时器一直活到 body 读完(见 executeRequest),所以 body 读到一半超时会在这里
+// reject——归入既有 timeout 分支。
 function bodyReadError(
   error: unknown,
   reportContext: { endpoint: string; method: string }
@@ -334,63 +333,68 @@ async function executeRequest<T>(
   });
 
   const controller = new AbortController();
+  // 15s 是整个请求的预算:headers + body。定时器必须活到 body 读完为止——
+  // 流式 fetch(web)下 fetch 只等到 headers 就 resolve,body 还在传;
+  // 若在那时就 clearTimeout,body 读将没有任何上限,卡住的流会永久挂起。
   const timer = setTimeout(() => controller.abort(), 15_000);
 
   const serializedBody = body == null ? undefined : serializeRequestBody(body);
 
-  let res: Response;
   try {
-    res = await fetch(url, {
-      method,
-      headers: {
-        // 只有 JSON / urlencoded 才由我们设置 Content-Type；
-        // FormData 必须让 fetch 自动加上含 multipart boundary 的头。
-        ...(serializedBody?.contentType
-          ? { 'Content-Type': serializedBody.contentType }
-          : {}),
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        ...headers,
-      },
-      ...(serializedBody ? { body: serializedBody.body } : {}),
-      signal: controller.signal,
-    });
-  } catch (error) {
-    logApiEvent('network-error', {
-      url,
-      method,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    if (isAbortError(error)) {
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method,
+        headers: {
+          // 只有 JSON / urlencoded 才由我们设置 Content-Type；
+          // FormData 必须让 fetch 自动加上含 multipart boundary 的头。
+          ...(serializedBody?.contentType
+            ? { 'Content-Type': serializedBody.contentType }
+            : {}),
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          ...headers,
+        },
+        ...(serializedBody ? { body: serializedBody.body } : {}),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      logApiEvent('network-error', {
+        url,
+        method,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      if (isAbortError(error)) {
+        throw new ApiError(
+          i18n.t('common.errors.requestTimeout', {
+            defaultValue: '请求超时，请检查网络连接后重试',
+          }),
+          {
+            status: 0,
+            failureKind: 'timeout',
+            reportEndpoint: endpoint,
+            reportMethod: method,
+          }
+        );
+      }
       throw new ApiError(
-        i18n.t('common.errors.requestTimeout', {
-          defaultValue: '请求超时，请检查网络连接后重试',
+        i18n.t('common.errors.networkUnavailable', {
+          defaultValue: '网络异常，请确认后端服务已启动',
         }),
         {
           status: 0,
-          failureKind: 'timeout',
+          failureKind: 'network',
           reportEndpoint: endpoint,
           reportMethod: method,
         }
       );
     }
-    throw new ApiError(
-      i18n.t('common.errors.networkUnavailable', {
-        defaultValue: '网络异常，请确认后端服务已启动',
-      }),
-      {
-        status: 0,
-        failureKind: 'network',
-        reportEndpoint: endpoint,
-        reportMethod: method,
-      }
-    );
+
+    const payload = await readPayload<T>(res, { endpoint, method });
+
+    return { res, payload };
   } finally {
     clearTimeout(timer);
   }
-
-  const payload = await readPayload<T>(res, { endpoint, method });
-
-  return { res, payload };
 }
 
 function unwrapResponse<T>(
