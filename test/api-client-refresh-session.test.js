@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { loadTsModule } = require('./helpers/load-ts-module');
 
 function deferred() {
   let resolve;
@@ -136,6 +137,9 @@ function loadApiClientHarness() {
             language: 'zh',
           },
         };
+      }
+      if (request === '@/utils/redact') {
+        return loadTsModule('src/utils/redact.ts');
       }
       return require(request);
     },

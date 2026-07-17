@@ -146,7 +146,11 @@ export async function ensureOpenIMInitialized() {
         dataDir,
         logFilePath: dataDir,
         logLevel: OPENIM_LOG_LEVEL as LogLevel,
-        isLogStandardOutput: true,
+        // SDK 的 stdout 是 native 侧直接写的，babel 的 transform-remove-console
+        // 管不到它——production 里保持 true 等于把会话 / 消息元数据一直吐给
+        // logcat / Console.app（同机任意 app 可读）。落盘日志（logFilePath）不受
+        // 影响，线上排查仍按 OPENIM_LOG_LEVEL 走文件。
+        isLogStandardOutput: isDev,
       });
 
       useIMStore.getState().setInitialized(true);

@@ -31,6 +31,7 @@
     "@sentry/react-native": "~7.11.0",
     "expo": "~55.0.6",
     "expo-audio": "~55.0.14",
+    "expo-build-properties": "~55.0.16",
     "expo-camera": "~55.0.19",
     "expo-clipboard": "~55.0.9",
     "expo-constants": "~55.0.9",
