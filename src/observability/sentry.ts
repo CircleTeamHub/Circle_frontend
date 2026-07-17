@@ -6,6 +6,10 @@
 // With no DSN it is a complete no-op — nothing is sent and nothing crashes.
 import Constants from 'expo-constants';
 import * as Sentry from '@sentry/react-native';
+import {
+  readDiagnosticBreadcrumbs,
+  type DiagnosticBreadcrumb,
+} from '@/utils/client-diagnostics';
 
 /** Minimal slice of the Sentry SDK we depend on — lets tests inject a fake. */
 export interface SentryLike {
@@ -194,8 +198,10 @@ function readTagValue(context: Record<string, unknown>, key: string): string | u
 
 function buildCaptureContext(
   safeContext: Record<string, unknown> | undefined,
+  breadcrumbs: readonly DiagnosticBreadcrumb[],
 ): SentryCaptureContext | undefined {
-  if (!safeContext) return undefined;
+  const hasBreadcrumbs = breadcrumbs.length > 0;
+  if (!safeContext && !hasBreadcrumbs) return undefined;
 
   const tagKeys = [
     'endpointPath',
@@ -207,11 +213,19 @@ function buildCaptureContext(
     'kind',
   ];
   const tags = tagKeys.reduce<Record<string, string>>((nextTags, key) => {
-    const value = readTagValue(safeContext, key);
+    const value = safeContext ? readTagValue(safeContext, key) : undefined;
     return value ? { ...nextTags, [key]: value } : nextTags;
   }, {});
 
-  const captureContext: SentryCaptureContext = { extra: safeContext };
+  // 诊断面包屑作为「这次上报」的附加上下文。它不是独立事件：没有 captureException
+  // 就没有这段数据。clientDiagnostics 再过一遍 sanitizeContextForSentry，与 context
+  // 同一套值级规则（第三层）。
+  const extra: Record<string, unknown> = { ...safeContext };
+  if (hasBreadcrumbs) {
+    extra.clientDiagnostics = sanitizeContextForSentry(breadcrumbs);
+  }
+
+  const captureContext: SentryCaptureContext = { extra };
   if (Object.keys(tags).length > 0) {
     captureContext.tags = tags;
   }
@@ -237,9 +251,26 @@ function buildCaptureContext(
 }
 
 /**
+ * 面包屑是「装饰」这次上报的附加信息，绝不能反过来把上报本身弄丢：reportError 整体
+ * 包在 try/catch 里（且是静默的），一旦读面包屑抛异常，就会连 captureException 一起
+ * 吞掉——错误上报静默消失，比没有面包屑严重得多。所以单独兜一层，失败就退化成无面包屑。
+ */
+function safeReadBreadcrumbs(): readonly DiagnosticBreadcrumb[] {
+  try {
+    return readDiagnosticBreadcrumbs() ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Reports a handled ("soft failure") error to Sentry — errors that are caught
  * and recovered, so Sentry's automatic handlers never see them. No-op when
  * Sentry is not initialized. `client` is injectable for tests.
+ *
+ * 这里是 client diagnostics 面包屑离开设备的唯一时机：面包屑只作为「本来就要发的
+ * 这条错误」的附加上下文搭车，不构成独立事件。Sentry 没被 init / 这次不报错 →
+ * 面包屑一个字节都不出去。见 utils/client-diagnostics 的白名单说明。
  */
 export function reportError(
   error: unknown,
@@ -254,7 +285,10 @@ export function reportError(
     const safeContext = context
       ? (sanitizeContextForSentry(context) as Record<string, unknown>)
       : undefined;
-    client.captureException(toSafeError(error), buildCaptureContext(safeContext));
+    client.captureException(
+      toSafeError(error),
+      buildCaptureContext(safeContext, safeReadBreadcrumbs()),
+    );
   } catch {
     // Observability must never change app behavior.
   }

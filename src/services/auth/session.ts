@@ -7,6 +7,7 @@ import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
+import { resetDiagnosticBreadcrumbs } from '@/utils/client-diagnostics';
 
 type PersistCapableAuthStore = {
   persist?: {
@@ -101,6 +102,9 @@ async function performClearLocalSession(sessionEpoch: number) {
   useFriendRemarkStore.getState().reset();
   useTabBadgeStore.getState().reset();
   useWalletRealtimeStore.getState().reset();
+  // 诊断面包屑是进程级内存缓冲，而切换账号不重启 app。不清的话，上一个账号的
+  // circleId / conversationID 会搭下一个账号的错误上报离开设备。
+  resetDiagnosticBreadcrumbs();
 
   let persistCleared = false;
   try {

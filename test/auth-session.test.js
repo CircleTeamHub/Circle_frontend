@@ -113,6 +113,9 @@ function makeBaseMocks() {
         getState: () => ({ reset: () => calls.push('resetWalletRealtime') }),
       },
     },
+    '@/utils/client-diagnostics': {
+      resetDiagnosticBreadcrumbs: () => calls.push('resetDiagnosticBreadcrumbs'),
+    },
   };
 
   return { mocks, calls, secureAuthRemovals, authStore, authState };
@@ -134,6 +137,8 @@ test('clearLocalSession runs registered teardown handlers, then resets stores au
   // Handlers fire first (in registration order). Auth is cleared BEFORE dependent
   // stores so subscribers see "logged out" before "data is empty", preventing
   // mid-logout refetches. Persist storage is cleared last.
+  // resetDiagnosticBreadcrumbs 与其他 store reset 同批：诊断面包屑是进程级内存缓冲，
+  // 切号不重启，不清就会把上个账号的 id 带进下个账号的错误上报。
   assert.deepEqual(calls, [
     'disconnectRealtime',
     'logoutIM',
@@ -144,6 +149,7 @@ test('clearLocalSession runs registered teardown handlers, then resets stores au
     'resetFriendRemark',
     'resetTabBadge',
     'resetWalletRealtime',
+    'resetDiagnosticBreadcrumbs',
     'clearStorage',
   ]);
 });
@@ -188,6 +194,7 @@ test('clearLocalSession still clears local state when a teardown handler throws'
     'resetFriendRemark',
     'resetTabBadge',
     'resetWalletRealtime',
+    'resetDiagnosticBreadcrumbs',
     'clearStorage',
   ]);
 });
