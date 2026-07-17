@@ -139,6 +139,16 @@ test('chat detail screen logs text send failures without logging message bodies'
   }
 });
 
+test('chat detail treats the complete thumbnail upload path as best effort', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatDetailScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /uploadChatImageThumbnail\(/);
+});
+
 test('chat detail quote action preserves the current draft text', () => {
   const filePath = path.join(
     process.cwd(),

@@ -3,6 +3,11 @@ import {
   SaveFormat,
   type ImageResult,
 } from 'expo-image-manipulator';
+import {
+  requestUploadPresign,
+  sanitizeUploadFilename,
+  uploadLocalFileToPresignedUrl,
+} from '@/services/api/upload';
 
 const THUMB_MAX_WIDTH = 512;
 
@@ -26,6 +31,35 @@ export async function generateChatImageThumbnail(
       compress: 0.6,
       format: SaveFormat.JPEG,
     });
+  } catch {
+    return null;
+  }
+}
+
+export async function uploadChatImageThumbnail(
+  uri: string,
+  originalWidth: number | undefined,
+  filename: string,
+): Promise<{ url: string; width: number; height: number } | null> {
+  try {
+    const thumbnail = await generateChatImageThumbnail(uri, originalWidth);
+    if (!thumbnail) return null;
+
+    const presign = await requestUploadPresign({
+      filename: sanitizeUploadFilename(`thumb-${filename}`),
+      contentType: 'image/jpeg',
+      folder: 'chat',
+    });
+    await uploadLocalFileToPresignedUrl(
+      presign.uploadUrl,
+      'image/jpeg',
+      thumbnail.uri,
+    );
+    return {
+      url: presign.fileUrl,
+      width: thumbnail.width,
+      height: thumbnail.height,
+    };
   } catch {
     return null;
   }
