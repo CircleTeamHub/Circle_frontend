@@ -207,11 +207,65 @@ function assertSessionEpoch(sessionEpoch: number) {
   }
 }
 
+// AbortError 在部分运行时是 DOMException,不保证 instanceof Error,按 name 判定。
+function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { name?: unknown }).name === 'AbortError'
+  );
+}
+
+// 响应体读取失败:headers 到了但 body 没读完。fetch 此时已经 resolve,
+// executeRequest 里 fetch 的 catch 兜不到,必须在这里转成 ApiError——
+// 否则原始 TypeError 带着 status===undefined 逃逸,用户看到未本地化的英文报错。
+//
+// status 固定 0:body 没读完即传输失败,与 network/timeout 同约定。别改成 res.status——
+// shouldReportApiFailure 只给 invalid-json 开了后门,取 res.status 会让 200 上的断流
+// 被判成「无需上报」,信号彻底丢掉。
+//
+// AbortError 只可能来自本文件那个 15s 定时器(RequestOptions 不暴露 signal)。
+// 定时器在 fetch resolve 后、readPayload 前就被 clearTimeout 关掉,唯一的缝隙是
+// abort() 抢在 fetch resolve 的续延之前执行:body 流已被中断,到 text() 才 reject。
+// 那种情况确实是超时,归入既有 timeout 分支。
+function bodyReadError(
+  error: unknown,
+  reportContext: { endpoint: string; method: string }
+): ApiError {
+  const timedOut = isAbortError(error);
+  return new ApiError(
+    timedOut
+      ? i18n.t('common.errors.requestTimeout', {
+          defaultValue: '请求超时，请检查网络连接后重试',
+        })
+      : i18n.t('common.errors.networkUnavailable', {
+          defaultValue: '网络异常，请确认后端服务已启动',
+        }),
+    {
+      status: 0,
+      failureKind: timedOut ? 'timeout' : 'body-read',
+      reportEndpoint: reportContext.endpoint,
+      reportMethod: reportContext.method,
+    }
+  );
+}
+
 async function readPayload<T>(
   res: Response,
   reportContext: { endpoint: string; method: string }
 ): Promise<ApiResponse<T> | null> {
-  const text = await res.text();
+  let text: string;
+  try {
+    text = await res.text();
+  } catch (error) {
+    logApiEvent('body-read-error', {
+      endpoint: reportContext.endpoint,
+      method: reportContext.method,
+      status: res.status,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw bodyReadError(error, reportContext);
+  }
 
   logApiEvent('response', {
     status: res.status,
@@ -306,7 +360,7 @@ async function executeRequest<T>(
       method,
       error: error instanceof Error ? error.message : String(error),
     });
-    if (error instanceof Error && error.name === 'AbortError') {
+    if (isAbortError(error)) {
       throw new ApiError(
         i18n.t('common.errors.requestTimeout', {
           defaultValue: '请求超时，请检查网络连接后重试',
