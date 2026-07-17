@@ -159,6 +159,18 @@ test('root layout mounts system push notification response routing', () => {
   assert.match(host, /markNotificationRead/);
   assert.match(host, /verifyNotificationOpenOwnership/);
   assert.match(host, /reportNotificationFailure\('notification_mark_read_failed'/);
+  // 「点了推送跳不过去」曾经只有 dev 日志(logClientDiagnostic 生产是 no-op),
+  // 于是推送最核心的失败在生产全黑。这几条锁住它们真的接进了生产 sink。
+  assert.match(host, /reportNotificationFailure\('notification_navigate_failed'/);
+  assert.match(
+    host,
+    /reportNotificationFailure\(\s*'notification_ownership_verify_failed'/,
+  );
+  assert.match(host, /reportNotificationFailure\(\s*'notification_payload_invalid'/);
+  // 重试耗尽的终态要能和「抛一次后重试成功」区分开,否则 Sentry 里两者一模一样。
+  assert.match(host, /reportNotificationFailure\(\s*'notification_navigate_abandoned'/);
+  // 设计内的正常行为不该进 Sentry:切号收到旧号推送 / 后端判定非本人 / 校验期间切号。
+  assert.doesNotMatch(host, /reportNotificationFailure\('notification_response_dropped'/);
 });
 
 test('root layout registers and unregisters native push tokens', () => {

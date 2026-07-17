@@ -124,6 +124,10 @@ const PRESIGNED_URL_MARKERS = [
   'X-Amz-Signature=',
   'x-id=PutObject',
 ];
+// 这份清单与 utils/redact.ts 的 SENSITIVE_KEYS 是两份独立的表（那份给日志，这份给
+// Sentry 上报），已经分叉过一次：redact 有 revocationsecret，这里漏了，而推送撤销密钥
+// 正是通知链路的密钥之一。精确匹配的 Set 不会因为有 'secret' 就拦住
+// 'revocationsecret'。往任一份加敏感字段时，另一份也要加。
 const SENSITIVE_CONTEXT_KEYS = new Set([
   'authorization',
   'cookie',
@@ -131,6 +135,7 @@ const SENSITIVE_CONTEXT_KEYS = new Set([
   'token',
   'accesstoken',
   'refreshtoken',
+  'revocationsecret',
   'imtoken',
   'idtoken',
   'apikey',
