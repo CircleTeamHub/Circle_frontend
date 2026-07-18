@@ -342,3 +342,116 @@ test('dev diagnostics keep firing for failures Sentry deliberately skips', () =>
   assert.equal(diagnostics[0][0], 'notification_delete_failed');
   assert.equal(warnCalls.length, 1);
 });
+
+// 上面所有用例都用本文件顶部那个同形的 ApiError 桩,证明的是「给定 ApiError 就不重复报」。
+// 但去重真正依赖的前提是「apiClient 只会抛 ApiError」——那是 client.ts 的性质,桩验证不了。
+// 这个洞真实存在过:readPayload 的 res.text() 曾在 fetch 的 try/catch 之外,读 body 断网
+// 抛裸 TypeError,于是 client.ts 报一次、这里再报一次(旧 docstring 记录的就是它)。
+// 所以这条用真模块跑真链路,把那个不变量钉死。
+function loadRealApiClient({ sentry, fetchImpl }) {
+  return loadTsModule('src/services/api/client.ts', {
+    context: {
+      __DEV__: false,
+      AbortController,
+      ArrayBuffer,
+      Blob,
+      FormData,
+      URL,
+      URLSearchParams,
+      setTimeout,
+      clearTimeout,
+      fetch: fetchImpl,
+      console: { log: () => {} },
+    },
+    requireShim: (request) => {
+      switch (request) {
+        case '@/constants/config':
+          return { API_URL: 'http://127.0.0.1:3000/api/v1' };
+        case '@/services/auth/session':
+          return {
+            clearLocalSession: async () => {},
+            registerLogoutHandler: () => () => {},
+          };
+        case '@/stores/authStore':
+          return {
+            useAuthStore: {
+              getState: () => ({
+                accessToken: 'access-token',
+                refreshToken: 'refresh-token',
+                sessionEpoch: 1,
+                setTokens: () => {},
+              }),
+            },
+          };
+        case '@/observability/sentry':
+          return sentry;
+        case '@/utils/redact':
+          return loadTsModule('src/utils/redact.ts');
+        case '@/i18n':
+          return {
+            __esModule: true,
+            default: { t: (key, opts) => (opts && opts.defaultValue) || key },
+          };
+        default:
+          return require(request);
+      }
+    },
+  });
+}
+
+test('a dropped response body on a notification call yields exactly one Sentry issue', async () => {
+  // 两个模块共用一个 sink——「同一根因几条 issue」要数的就是它。
+  const reports = [];
+  const sentry = {
+    reportError: (error, context) => reports.push({ error, context }),
+    shouldReportHttpFailure: (s) => s === undefined || s === 0 || s >= 500,
+  };
+  const apiModule = loadRealApiClient({
+    sentry,
+    // headers 到了,body 读一半断流。
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      text: async () => {
+        throw new TypeError('Network request failed');
+      },
+    }),
+  });
+  const { reportNotificationFailure } = loadTsModule(
+    'src/features/notifications/utils/report-failure.ts',
+    {
+      context: { __DEV__: false, console: { warn: () => {} } },
+      requireShim: (request) => {
+        switch (request) {
+          case '@/utils/client-diagnostics':
+            return { logClientDiagnostic: () => {} };
+          case '@/observability/sentry':
+            return sentry;
+          // 同一个模块实例 → 同一个 ApiError 类身份,instanceof 才有意义。
+          case '@/services/api/client':
+            return apiModule;
+          default:
+            return require(request);
+        }
+      },
+    },
+  );
+
+  let caught;
+  try {
+    await apiModule.apiClient('/notification/123/read', { method: 'POST' });
+  } catch (error) {
+    caught = error;
+    reportNotificationFailure('notification_mark_read_failed', error, {
+      notificationId: '123',
+    });
+  }
+
+  // 修好前:TypeError、status undefined、未本地化文案、两条 issue。
+  assert.equal(caught.name, 'ApiError');
+  assert.equal(caught.status, 0);
+  assert.equal(caught.message, '网络异常，请确认后端服务已启动');
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0].context.failureKind, 'body-read');
+  assert.equal(reports[0].context.endpointPath, '/notification/:id/read');
+});
