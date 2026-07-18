@@ -76,6 +76,17 @@ function failureSignature(
   )}`;
 }
 
+function errorForProductionReport(
+  event: NotificationFailureEvent,
+  error: unknown,
+): unknown {
+  if (event !== 'notification_navigate_failed') return error;
+
+  const safeError = new Error('Notification navigation failed');
+  safeError.name = 'NotificationNavigationError';
+  return safeError;
+}
+
 export function reportNotificationFailure(
   event: NotificationFailureEvent,
   error: unknown,
@@ -98,5 +109,9 @@ export function reportNotificationFailure(
 
   // operation + kind 必须排在 context 之后：sentry.ts 靠这两个 tag 组稳定
   // fingerprint，被调用方 context 覆盖掉就会退回按 message 分组。
-  reportError(error, { ...context, operation: 'notifications', kind: event });
+  reportError(errorForProductionReport(event, error), {
+    ...context,
+    operation: 'notifications',
+    kind: event,
+  });
 }
