@@ -352,7 +352,6 @@ export default function GroupCallScreen() {
   const activeCall = useCallStore((state) => state.activeCall);
   const livekit = useCallStore((state) => state.livekit);
   const setLiveKitCredentials = useCallStore((state) => state.setLiveKitCredentials);
-  const resetCallState = useCallStore((state) => state.resetCallState);
   const [connectError, setConnectError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [roomVersion, setRoomVersion] = useState(0);
@@ -402,6 +401,11 @@ export default function GroupCallScreen() {
     }
   }, [activeCall, retrying, setLiveKitCredentials]);
 
+  const handleFallbackBack = useCallback(() => {
+    void leaveActiveCall();
+    router.back();
+  }, []);
+
   if (!activeCall || !livekit) {
     return (
       <View style={[s.missing, { backgroundColor: colors.background }]}>
@@ -410,10 +414,7 @@ export default function GroupCallScreen() {
         </Text>
         <Pressable
           style={[s.backButton, { backgroundColor: colors.primary }]}
-          onPress={() => {
-            resetCallState();
-            router.back();
-          }}
+          onPress={handleFallbackBack}
         >
           <Text style={[s.backText, { color: colors.white }]}>
             {t('common.back', { defaultValue: '返回' })}
@@ -447,10 +448,7 @@ export default function GroupCallScreen() {
         </Text>
         <Pressable
           style={[s.backButton, { backgroundColor: colors.primary }]}
-          onPress={() => {
-            resetCallState();
-            router.back();
-          }}
+          onPress={handleFallbackBack}
         >
           <Text style={[s.backText, { color: colors.white }]}>
             {t('common.back', { defaultValue: '返回' })}
