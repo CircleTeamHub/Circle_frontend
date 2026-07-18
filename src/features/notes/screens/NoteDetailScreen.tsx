@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -22,6 +22,7 @@ import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card
 import type { NoteDetail, NoteExportFormat } from '@/features/notes/types';
 import { formatNoteFullDate } from '@/features/notes/utils/note-format';
 import { getChatDetailHref } from '@/features/user/utils/routes';
+import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import {
   buildNoteSections,
   getInitialNoteSection,
@@ -92,7 +93,22 @@ export default function NoteDetailScreen() {
     };
   }, [id, t]);
 
-  useEffect(() => loadNote(), [loadNote]);
+  // useFocusEffect 而不是 useEffect：笔记媒体现在走 presign-on-read，URL 是有 TTL 的短时
+  // 签名。只在 mount 拉一次的话，从编辑页/别的 tab 回来时手里还是旧签名，过期就整屏空图。
+  // 每次获得焦点重拉既拿到新签名，也顺带刷新编辑后的内容（与 NotesScreen 一致）。
+  useFocusEffect(loadNote);
+
+  // 图片 403 自愈：presign 签名过期时重拉一次拿新签名（App 挂后台数小时再回来滚动，
+  // 焦点没变、useFocusEffect 不触发，只能靠这里）。30s 节流 —— 图片本身坏掉时重拉救不了，
+  // 不能让 onError → refetch → onError 打转。
+  const lastMediaRetryRef = useRef(0);
+  const handleMediaError = useCallback(() => {
+    const now = Date.now();
+    if (now - lastMediaRetryRef.current < 30_000) return;
+    lastMediaRetryRef.current = now;
+    logClientDiagnostic('note_media_load_failed', { noteId: id });
+    loadNote();
+  }, [id, loadNote]);
 
   const handleEdit = useCallback(() => {
     if (!note) return;
@@ -416,7 +432,10 @@ export default function NoteDetailScreen() {
               {hasTextBody ? (
                 sections.text.contentJson &&
                 sections.text.contentJson.length > 0 ? (
-                  <NoteBlockRenderer blocks={sections.text.contentJson} />
+                  <NoteBlockRenderer
+                    blocks={sections.text.contentJson}
+                    onMediaError={handleMediaError}
+                  />
                 ) : (
                   <Text style={[s.bodyText, d.content]}>
                     {sections.text.content || note.content}
@@ -437,6 +456,7 @@ export default function NoteDetailScreen() {
                   t('notes.section.media', { defaultValue: '图片 · 视频' }),
                 )}
                 <NoteBlockRenderer
+                  onMediaError={handleMediaError}
                   blocks={sections.media.items.map((item) => ({
                     id: item.id ?? item.url,
                     type: item.type === 'VIDEO' ? 'video' : 'image',
@@ -459,6 +479,7 @@ export default function NoteDetailScreen() {
                   t('notes.section.showcase', { defaultValue: '展示' }),
                 )}
                 <NoteBlockRenderer
+                  onMediaError={handleMediaError}
                   blocks={sections.showcase.items.map((item) => ({
                     id: item.id ?? item.url,
                     type: item.type === 'VIDEO' ? 'video' : 'image',
