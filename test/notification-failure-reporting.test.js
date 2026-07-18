@@ -229,6 +229,27 @@ test('reports a push tap that never reached its screen', () => {
   assert.equal(reports[0].context.kind, 'notification_navigate_failed');
 });
 
+test('navigation failures discard route and user text before Sentry', () => {
+  const { reportNotificationFailure, reports } = loadReportFailure();
+  const rawError = new Error(
+    'No route for /chat/detail?nickname=Alice&conversationID=conv-secret&messageID=msg-secret',
+  );
+  rawError.stack = `${rawError.message}\n    at /profile/Alice`;
+
+  reportNotificationFailure('notification_navigate_failed', rawError, {
+    notificationId: 'notification-1',
+    source: 'system_push',
+  });
+
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0].error.name, 'NotificationNavigationError');
+  assert.equal(reports[0].error.message, 'Notification navigation failed');
+  assert.doesNotMatch(
+    `${reports[0].error.message}\n${reports[0].error.stack ?? ''}`,
+    /Alice|conv-secret|msg-secret|\/chat\/detail|\/profile\//,
+  );
+});
+
 test('caller context cannot clobber the fingerprint tags', () => {
   const { reportNotificationFailure, reports } = loadReportFailure();
 

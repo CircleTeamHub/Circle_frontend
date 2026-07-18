@@ -235,3 +235,21 @@ test('GroupCallScreen routes its unmount through leaveActiveCall and disconnects
   assert.doesNotMatch(src, /\bcancelCall\b/);
   assert.doesNotMatch(src, /\bleaveCall\b/);
 });
+
+test('GroupCallScreen fallback exits notify the backend before navigating back', () => {
+  const src = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/call/screens/GroupCallScreen.tsx'),
+    'utf8',
+  );
+
+  assert.doesNotMatch(src, /\bresetCallState\b/);
+  assert.match(
+    src,
+    /const handleFallbackBack = useCallback\(\(\) => \{\s*void leaveActiveCall\(\);\s*router\.back\(\);\s*\}, \[\]\);/,
+  );
+  assert.equal(
+    (src.match(/onPress=\{handleFallbackBack\}/g) ?? []).length,
+    2,
+    'both fallback back buttons must use the backend-aware exit',
+  );
+});
