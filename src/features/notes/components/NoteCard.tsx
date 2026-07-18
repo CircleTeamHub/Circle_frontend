@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import type { NoteSummary } from '@/features/notes/types';
 import { buildNoteMeta } from '@/features/notes/utils/note-format';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { logClientDiagnostic } from '@/utils/client-diagnostics';
 
 interface Props {
   note: NoteSummary;
@@ -79,7 +80,17 @@ function NoteCardInner({
       accessibilityLabel={accessibilityLabel}
     >
       {note.cover ? (
-        <Image source={{ uri: note.cover.url }} recyclingKey={note.cover.url} style={s.thumbnail} contentFit="cover" />
+        <Image
+          source={{ uri: note.cover.url }}
+          recyclingKey={note.cover.url}
+          style={s.thumbnail}
+          contentFit="cover"
+          // 封面走 presign-on-read，签名过期会 403 变空白。列表本身有 focus/下拉刷新会
+          // 自愈，这里只记一条诊断，用来观察 TTL 是否偏短。
+          onError={() =>
+            logClientDiagnostic('note_cover_load_failed', { noteId: note.id })
+          }
+        />
       ) : (
         <View style={[s.thumbnail, s.thumbnailFallback, d.placeholder]}>
           <Ionicons

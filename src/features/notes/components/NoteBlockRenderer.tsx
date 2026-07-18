@@ -80,7 +80,13 @@ function InlineContent({ nodes, textColor }: { nodes: unknown[]; textColor: stri
   );
 }
 
-function BlockView({ block }: { block: Block }) {
+function BlockView({
+  block,
+  onMediaError,
+}: {
+  block: Block;
+  onMediaError?: () => void;
+}) {
   const { colors } = useTheme();
   const d = useMemo(
     () => ({
@@ -159,6 +165,7 @@ function BlockView({ block }: { block: Block }) {
               source={{ uri: url }}
               style={[s.media, { aspectRatio }]}
               contentFit="cover"
+              onError={onMediaError}
             />
           </View>
           {caption ? (
@@ -190,13 +197,22 @@ function BlockView({ block }: { block: Block }) {
 
 interface Props {
   blocks: Record<string, unknown>[];
+  /**
+   * 媒体加载失败时回调。笔记媒体走 presign-on-read，URL 是有 TTL 的短时签名 —— 手里的
+   * URL 过期后会 403，图片静默变空白。上层收到后重拉一次笔记即可拿到新签名。
+   */
+  onMediaError?: () => void;
 }
 
-export function NoteBlockRenderer({ blocks }: Props) {
+export function NoteBlockRenderer({ blocks, onMediaError }: Props) {
   return (
     <View style={s.container}>
       {blocks.map((block, i) => (
-        <BlockView key={typeof block.id === 'string' ? block.id : i} block={block} />
+        <BlockView
+          key={typeof block.id === 'string' ? block.id : i}
+          block={block}
+          onMediaError={onMediaError}
+        />
       ))}
     </View>
   );
