@@ -20,15 +20,15 @@ test('im client imports reportError', () => {
 });
 
 test('all message sends funnel through a reporting wrapper', () => {
-  // The wrapper exists and reports with op 'sendMessage'.
+  // The wrapper exists and reports with kind 'sendMessage'.
   assert.match(src, /function reportSend\(/);
-  assert.match(src, /reportError\(\s*error,\s*\{\s*operation: 'openim',\s*op: 'sendMessage'/);
+  assert.match(src, /reportError\(\s*error,\s*\{\s*operation: 'openim',\s*kind: 'sendMessage'/);
   // No raw OpenIMSDK.sendMessage( call sites remain (all go through reportSend).
   assert.doesNotMatch(src, /OpenIMSDK\.sendMessage\(/);
 });
 
 test('init / login / logout failures are reported', () => {
-  assert.match(src, /reportError\([^;]*op: 'init'/);
-  assert.match(src, /reportError\([^;]*op: 'login'/);
-  assert.match(src, /reportError\([^;]*op: 'logout'/);
+  assert.match(src, /reportError\([^;]*kind: 'init'/);
+  assert.match(src, /reportError\([^;]*kind: 'login'/);
+  assert.match(src, /reportError\([^;]*kind: 'logout'/);
 });

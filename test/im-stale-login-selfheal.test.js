@@ -35,7 +35,7 @@ test('self-heal rebuilds via unInitSDK (login/logout alone cannot recover)', () 
   // A stale "Logged but unloaded" state deadlocks login (10102) / logout (10004);
   // the only recovery is a full unInitSDK -> initSDK -> login.
   assert.match(src, /OpenIMSDK\.unInitSDK\(/);
-  assert.match(src, /reportError\([^;]*op: 'unInit'/);
+  assert.match(src, /reportError\([^;]*kind: 'unInit'/);
   // After tearing down it forces a fresh init before the clean login.
   assert.match(
     src,

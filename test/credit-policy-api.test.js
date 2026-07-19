@@ -113,7 +113,7 @@ test('assertLocalCanSendMessage fails open (allows) when credit score is unavail
   // 分数未知 → 放行（不抛），且上报一次可观测事件。
   assert.doesNotThrow(() => creditPolicy.assertLocalCanSendMessage());
   assert.equal(reported.length, 1);
-  assert.equal(reported[0].op, 'scoreUnavailable');
+  assert.equal(reported[0].kind, 'scoreUnavailable');
 });
 
 test('credit gate telemetry reports each event at most once per session', () => {
@@ -131,7 +131,7 @@ test('credit gate telemetry reports each event at most once per session', () => 
     assert.throws(() => creditPolicy.assertLocalCanSendMessage(), /CreditPolicyError/);
   }
   assert.equal(reported.length, 1);
-  assert.equal(reported[0].op, 'blockSend');
+  assert.equal(reported[0].kind, 'blockSend');
 
   // reset 后可再次上报（测试隔离能力）。
   creditPolicy.resetCreditGateTelemetry();
