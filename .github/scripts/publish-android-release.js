@@ -41,6 +41,12 @@ function isNewerStableVersion(candidate, current) {
   return false;
 }
 
+function shouldPromoteLatest(candidate, current) {
+  return (
+    !current || candidate === current || isNewerStableVersion(candidate, current)
+  );
+}
+
 function fileDigest(filePath) {
   const hash = crypto.createHash('sha256');
   hash.update(fs.readFileSync(filePath));
@@ -71,6 +77,7 @@ function publishRelease({
     'latest release',
   );
   const latestTag = latestResult.status === 0 ? latestResult.stdout.trim() : '';
+  const promoteLatest = shouldPromoteLatest(releaseTag, latestTag);
   const assetSpec = `${apkPath}#windnote.apk`;
 
   if (releaseResult.status === 0) {
@@ -112,7 +119,7 @@ function publishRelease({
     ]);
   }
 
-  if (!latestTag || isNewerStableVersion(releaseTag, latestTag)) {
+  if (promoteLatest) {
     invoke(runGh, [
       'release',
       'edit',
@@ -122,16 +129,28 @@ function publishRelease({
       '--latest',
     ]);
   }
+
+  return { promoteLatest };
+}
+
+function writePromoteLatestOutput(promoteLatest, outputPath) {
+  fs.appendFileSync(outputPath, `promote_latest=${promoteLatest}\n`);
 }
 
 function main() {
-  publishRelease({
+  const { promoteLatest } = publishRelease({
     releaseTag: process.env.RELEASE_TAG,
     repository: process.env.RELEASE_REPOSITORY,
     apkPath: process.env.APK_PATH,
   });
+  writePromoteLatestOutput(promoteLatest, process.env.GITHUB_OUTPUT);
 }
 
 if (require.main === module) main();
 
-module.exports = { isNewerStableVersion, publishRelease };
+module.exports = {
+  isNewerStableVersion,
+  publishRelease,
+  shouldPromoteLatest,
+  writePromoteLatestOutput,
+};
