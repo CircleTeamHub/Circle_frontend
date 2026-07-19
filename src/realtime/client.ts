@@ -10,7 +10,7 @@ import { useNotificationCenterStore } from '@/features/notifications/store/use-n
 import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
 import { useCircleNotificationStore } from '@/features/discover/store/use-circle-notification-store';
 import { useCallStore } from '@/features/call/store/use-call-store';
-import { registerLogoutHandler } from '@/services/auth/session';
+import { clearLocalSession, registerLogoutHandler } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
@@ -114,6 +114,26 @@ const RECONNECT_MAX_MS = 30_000;
 // 退避指数封顶：2^5 * 1s 已经越过 RECONNECT_MAX_MS，再往上乘只会把 attempt
 // 累到 Math.pow 溢出成 Infinity。封顶后延迟稳定停在 RECONNECT_MAX_MS。
 const RECONNECT_MAX_EXPONENT = 5;
+
+// 网关用 1008 表达三种拒绝：会话被撤销、连接数超限、10s 内没发认证帧。只有
+// 「撤销」是终态 —— token 已经作废，重连多少次都会在认证后被同样踢掉。三者
+// code 相同，靠 reason 区分（与后端 REVOKED_CLOSE_REASON 对齐）。
+const REVOKED_CLOSE_CODE = 1008;
+const REVOKED_CLOSE_REASON = 'Session revoked';
+
+/**
+ * 只认「明确说了是撤销」的关闭帧。RN 的 close 事件不保证带 reason，测试里也
+ * 有无参调用 onclose 的用法；拿不准时一律当成普通断线去重连 —— 误重连只是多
+ * 一次退避，误登出会把还有效的会话踹掉。
+ */
+function isRevokedClose(event: unknown): boolean {
+  if (typeof event !== 'object' || event === null) {
+    return false;
+  }
+
+  const { code, reason } = event as { code?: unknown; reason?: unknown };
+  return code === REVOKED_CLOSE_CODE && reason === REVOKED_CLOSE_REASON;
+}
 
 let socket: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -446,7 +466,9 @@ function openRealtimeSocket(normalizedToken: string) {
   nextSocket.onopen = () => {
     const shouldForceRecovery = reconnectRecoveryPending;
     reconnectRecoveryPending = false;
-    reconnectAttempt = 0;
+    // 退避不在这里归零：握手成功只说明 WS 通了，认证还没发生。网关可能紧接着
+    // 以 1008 踢掉（会话撤销 / 连接数超限），那时归零会让退避永远停在第一档，
+    // 退化成每秒锤一次后端。归零挪到 onmessage —— 收到帧才代表认证真的过了。
     // 必须先发认证帧，否则网关 10s 后以 1008 踢掉连接，且期间收不到任何事件。
     // 认证成功后网关会立刻回推一帧 badge.snapshot；这里再补一次 HTTP
     // recovery，把断线期间错过的 notification.created 列表项拉回来。
@@ -466,6 +488,9 @@ function openRealtimeSocket(normalizedToken: string) {
       return;
     }
 
+    // 未认证的连接拿不到任何一帧，所以收到帧 = 认证已通过 = 这条连接真的可用。
+    // 这是退避唯一的归零点（显式 connectRealtime 除外）。
+    reconnectAttempt = 0;
     handleSocketMessage(event.data);
   };
 
@@ -473,16 +498,27 @@ function openRealtimeSocket(normalizedToken: string) {
     useTabBadgeStore.getState().setRealtimeConnected(false);
   };
 
-  nextSocket.onclose = () => {
+  nextSocket.onclose = (event: unknown) => {
     if (socket === nextSocket) {
       socket = null;
     }
 
     useTabBadgeStore.getState().setRealtimeConnected(false);
 
-    if (!manualDisconnect) {
-      scheduleReconnect();
+    if (manualDisconnect) {
+      return;
     }
+
+    // 会话被撤销时重连是有害的：服务端已经作废这个 token，每次重连都会在认证
+    // 后被立刻踢回来，而用户毫无察觉（红点与来电静默消失，直到 token 自然过期）。
+    // 走和 HTTP 401 相同的出口，把用户送回登录页。
+    if (isRevokedClose(event)) {
+      currentToken = null;
+      void clearLocalSession();
+      return;
+    }
+
+    scheduleReconnect();
   };
 }
 
