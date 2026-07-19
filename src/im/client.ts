@@ -312,19 +312,21 @@ function isOpenIMResourceNotLoadedError(error: unknown): boolean {
 }
 
 /**
- * 轻量只读探针：native SDK 自报 Logged 后，用 getSelfUserInfo 确认资源是否真的可用。
- * 抛 10004 → 资源已卸载（hot-reload / 重装后的僵尸态），返回 false。
- * 其它错误保守地当作已加载，避免无关失败误触发一次重登。
+ * 轻量只读探针：native SDK 自报 Logged 后，用 getSelfUserInfo 同时确认资源和身份。
+ * 10004 表示资源已卸载；其它读取失败也不会返回可复用身份。
  */
-async function isOpenIMSessionResourceLoaded(): Promise<boolean> {
+async function getOpenIMSessionProbe(): Promise<{
+  resourceLoaded: boolean;
+  userID: string | null;
+}> {
   try {
-    await OpenIMSDK.getSelfUserInfo();
-    return true;
+    const currentUser = await OpenIMSDK.getSelfUserInfo();
+    return { resourceLoaded: true, userID: currentUser.userID };
   } catch (error) {
-    if (isOpenIMResourceNotLoadedError(error)) {
-      return false;
-    }
-    return true;
+    return {
+      resourceLoaded: !isOpenIMResourceNotLoadedError(error),
+      userID: null,
+    };
   }
 }
 
@@ -383,13 +385,15 @@ export async function loginToOpenIM(
       // 但「自报 Logged」不等于资源还在：hot-reload / devicectl 覆盖重装后，SDK 常
       // 停在「已登录但资源已卸载」的僵尸态 —— getLoginStatus 仍回 Logged，可任何真实
       // 调用都抛 10004，会话列表被拉空。探针确认资源是否真的可用。
-      if (await isOpenIMSessionResourceLoaded()) {
+      const nativeSession = await getOpenIMSessionProbe();
+      if (nativeSession.userID === imUserID) {
+        staleLoginSelfHealAttempted = false;
         useIMStore.getState().setConnecting(false);
         useIMStore.getState().setConnected(true);
         return true;
       }
 
-      if (staleLoginSelfHealAttempted) {
+      if (!nativeSession.resourceLoaded && staleLoginSelfHealAttempted) {
         // 本生命周期已自愈过一次仍是僵尸态：不再重置，避免登录环路。沿用旧行为标记
         // 已连，交给 onConnectSuccess / 后续拉取兜底，或由用户冷启动彻底恢复。
         if (isDev) {
@@ -397,16 +401,16 @@ export async function loginToOpenIM(
             '[openim] 资源在一次自愈后仍未加载，跳过后续重置（请冷启动 app）',
           );
         }
-        useIMStore.getState().setConnecting(false);
-        useIMStore.getState().setConnected(true);
-        return true;
+        throw new Error('OpenIM native session identity could not be verified');
       }
 
       // 僵尸态自愈：login() 会撞 10102、logout() 会撞 10004，都救不回来 —— 必须
       // unInitSDK 彻底拆除，再 initSDK + login 才能重载资源。每个生命周期只做一次。
-      staleLoginSelfHealAttempted = true;
+      if (!nativeSession.resourceLoaded) {
+        staleLoginSelfHealAttempted = true;
+      }
       if (isDev) {
-        console.warn('[openim] 检测到僵尸登录态（资源已卸载），重建 SDK 后重登');
+        console.warn('[openim] 原生会话不可复用，重建 SDK 后重登');
       }
       try {
         await OpenIMSDK.unInitSDK();
@@ -447,9 +451,14 @@ export async function loginToOpenIM(
         reportError(error, { operation: 'openim', kind: 'forceReloginDup' });
         throw error;
       }
-      useIMStore.getState().setConnecting(false);
-      useIMStore.getState().setConnected(true);
-      return true;
+      const imUserID = toImUserId(userID);
+      const nativeSession = await getOpenIMSessionProbe();
+      if (nativeSession.userID === imUserID) {
+        staleLoginSelfHealAttempted = false;
+        useIMStore.getState().setConnecting(false);
+        useIMStore.getState().setConnected(true);
+        return true;
+      }
     }
     // 登录失败时重置 connecting，并把 currentUserID 也清掉 —— 它在 L167 已经被乐观写入
     // 之后任何登录前的失败都会让 store 残留一个错误身份，影响 read-receipt 路由 / 气泡对齐。
@@ -480,7 +489,7 @@ function finalizeIMTeardown() {
 async function performLogoutFromOpenIM(
   options: { forceNative?: boolean } = {},
 ) {
-  if (!isNativeIMSupported() || !initPromise) {
+  if (!isNativeIMSupported()) {
     finalizeIMTeardown();
     return;
   }
@@ -491,7 +500,12 @@ async function performLogoutFromOpenIM(
   // round 3 review：forceNative 例外 —— token 恢复的陈旧登录拆除发生在
   // login 刚返回、onConnectSuccess 还没翻 connected 的窗口里，跳过
   // SDK.logout 会把 native 侧留在旧用户的登录态上（10004 之类报错无害，吞）。
-  if (!useIMStore.getState().connected && !options.forceNative) {
+  const nativeStatus = await OpenIMSDK.getLoginStatus().catch(() => null);
+  if (
+    nativeStatus === LoginStatus.Logout &&
+    !useIMStore.getState().connected &&
+    !options.forceNative
+  ) {
     finalizeIMTeardown();
     return;
   }

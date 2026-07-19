@@ -67,6 +67,87 @@ function loadTsModule(relativePath, stubs = {}) {
   return context.module.exports;
 }
 
+function createIMSessionHarness({
+  connected = false,
+  loginStatus = 0,
+  nativeUserID = null,
+  loginError = null,
+} = {}) {
+  const calls = [];
+  const storeState = { connected };
+  const sdk = {
+    initSDK: async () => {
+      calls.push('init');
+    },
+    unInitSDK: async () => {
+      calls.push('unInit');
+    },
+    getLoginStatus: async () => {
+      calls.push('getLoginStatus');
+      return loginStatus;
+    },
+    getSelfUserInfo: async () => {
+      calls.push('getSelfUserInfo');
+      return { userID: nativeUserID };
+    },
+    login: async ({ userID }) => {
+      calls.push(`login:${userID}`);
+      if (loginError) throw loginError;
+    },
+    logout: async () => {
+      calls.push('logout');
+    },
+  };
+  const client = loadTsModule('src/im/client.ts', {
+    '@openim/rn-client-sdk': {
+      __esModule: true,
+      default: sdk,
+      LoginStatus: { Logout: 0, Logged: 3 },
+      LogLevel: { Info: 0 },
+      SessionType: { Single: 1, Group: 2 },
+      ViewType: { History: 0 },
+    },
+    'react-native-fs': {
+      __esModule: true,
+      default: {
+        DocumentDirectoryPath: '/tmp',
+        mkdir: async () => undefined,
+      },
+    },
+    'react-native': { Platform: { OS: 'android' } },
+    '@/constants/config': {
+      OPENIM_API_URL: 'https://im.example.com',
+      OPENIM_WS_URL: 'wss://im.example.com',
+      OPENIM_LOG_LEVEL: 0,
+    },
+    '@/stores/imStore': {
+      useIMStore: {
+        getState: () => ({
+          connected: storeState.connected,
+          setError: () => undefined,
+          setInitialized: () => undefined,
+          setCurrentUserID: () => undefined,
+          setConnecting: () => undefined,
+          setConnected: (value) => {
+            storeState.connected = value;
+          },
+          reset: () => {
+            calls.push('reset');
+            storeState.connected = false;
+          },
+        }),
+      },
+    },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: {
+        getState: () => ({ setMessagesUnread: () => undefined }),
+      },
+    },
+  });
+
+  return { calls, client };
+}
+
 // client.ts 顶层现在还会 import @/im/media-uri（本地路径 scheme 处理）；注入真实实现以便 require 解析。
 DEFAULT_TS_MODULE_STUBS['@/im/media-uri'] = loadTsModule('src/im/media-uri.ts');
 DEFAULT_TS_MODULE_STUBS['@/im/user-id'] = loadTsModule('src/im/user-id.ts');
@@ -283,14 +364,82 @@ test('login waits for an in-flight OpenIM logout before starting the next sessio
   const login = loginToOpenIM('user-b', 'im-token-b');
   await Promise.resolve();
 
-  assert.equal(calls.includes('getLoginStatus'), false);
+  assert.equal(
+    calls.filter((call) => call === 'getLoginStatus').length,
+    1,
+    'only the in-flight logout may inspect native status before teardown finishes',
+  );
   assert.equal(calls.some((call) => call.startsWith('login:')), false);
 
   logoutGate.resolve();
   await Promise.all([logout, login]);
 
-  assert.ok(calls.indexOf('getLoginStatus') > calls.indexOf('logout:done'));
+  assert.ok(calls.lastIndexOf('getLoginStatus') > calls.indexOf('logout:done'));
   assert.ok(calls.indexOf('login:userb') > calls.indexOf('logout:done'));
+});
+
+test('logout clears a native Logged session even when the JS store says disconnected', async () => {
+  const { calls, client } = createIMSessionHarness({
+    connected: false,
+    loginStatus: 3,
+    nativeUserID: 'usera',
+  });
+
+  await client.logoutFromOpenIM();
+
+  assert.ok(calls.includes('getLoginStatus'));
+  assert.ok(calls.includes('logout'));
+  assert.ok(calls.indexOf('logout') < calls.indexOf('reset'));
+});
+
+test('login rebuilds a Logged native session that belongs to another user', async () => {
+  const { calls, client } = createIMSessionHarness({
+    connected: true,
+    loginStatus: 3,
+    nativeUserID: 'usera',
+  });
+
+  const loggedIn = await client.loginToOpenIM('user-b', 'token-b');
+
+  assert.equal(loggedIn, true);
+  assert.deepEqual(
+    calls.filter((call) =>
+      [
+        'init',
+        'getLoginStatus',
+        'getSelfUserInfo',
+        'unInit',
+        'reset',
+        'login:userb',
+      ].includes(call),
+    ),
+    ['init', 'getLoginStatus', 'getSelfUserInfo', 'unInit', 'reset', 'init', 'login:userb'],
+  );
+});
+
+test('duplicate login is successful only when the native identity matches', async () => {
+  const duplicateLogin = Object.assign(new Error('User has logged in repeatedly'), {
+    code: 10102,
+  });
+  const matching = createIMSessionHarness({
+    loginStatus: 0,
+    nativeUserID: 'userb',
+    loginError: duplicateLogin,
+  });
+  const mismatched = createIMSessionHarness({
+    loginStatus: 0,
+    nativeUserID: 'usera',
+    loginError: duplicateLogin,
+  });
+
+  assert.equal(
+    await matching.client.loginToOpenIM('user-b', 'token-b'),
+    true,
+  );
+  await assert.rejects(
+    mismatched.client.loginToOpenIM('user-b', 'token-b'),
+    /logged in repeatedly/,
+  );
 });
 
 test('getOrCreateSingleConversation fetches a private conversation and merges it into store', async () => {
