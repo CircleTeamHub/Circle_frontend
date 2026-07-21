@@ -2415,6 +2415,7 @@
     "CONVGROUP_NOT_FOUND": "分组不存在",
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "会话不存在",
     "COLLECTION_NOT_FOUND": "收藏不存在",
+    "COLLECTION_LIMIT": "收藏数量已达上限，请先清理不再需要的收藏",
     "ICON_DISPLAY_LIMIT": "最多只能展示 5 个图标",
     "ICON_INVALID_SYSTEM_SELECTION": "图标选择无效",
     "ICON_INVALID_CIRCLE_SELECTION": "圈子图标选择无效",

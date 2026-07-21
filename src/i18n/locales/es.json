@@ -2418,6 +2418,7 @@
     "CONVGROUP_NOT_FOUND": "Grupo no encontrado",
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "Conversación no encontrada",
     "COLLECTION_NOT_FOUND": "Colección no encontrada",
+    "COLLECTION_LIMIT": "Límite de colecciones alcanzado; elimina las que no necesites",
     "ICON_DISPLAY_LIMIT": "Puedes mostrar como máximo 5 iconos",
     "ICON_INVALID_SYSTEM_SELECTION": "Selección de icono no válida",
     "ICON_INVALID_CIRCLE_SELECTION": "Selección de icono de círculo no válida",

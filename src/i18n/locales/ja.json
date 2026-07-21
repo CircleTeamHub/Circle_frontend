@@ -2415,6 +2415,7 @@
     "CONVGROUP_NOT_FOUND": "グループが見つかりません",
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "会話が見つかりません",
     "COLLECTION_NOT_FOUND": "コレクションが見つかりません",
+    "COLLECTION_LIMIT": "コレクションの上限に達しました。不要なものを削除してください",
     "ICON_DISPLAY_LIMIT": "表示できるアイコンは最大5個です",
     "ICON_INVALID_SYSTEM_SELECTION": "アイコンの選択が無効です",
     "ICON_INVALID_CIRCLE_SELECTION": "サークルアイコンの選択が無効です",
