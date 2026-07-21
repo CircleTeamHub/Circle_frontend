@@ -190,6 +190,32 @@ export async function logout(refreshToken: string) {
   });
 }
 
+/** FE#92 忘记密码：请求重置验证码（未注册邮箱后端静默成功，防枚举）。 */
+export async function requestPasswordReset(email: string) {
+  return apiClient<void>("/auth/password/reset-request", {
+    method: "POST",
+    auth: false,
+    body: { email: email.trim().toLowerCase() },
+  });
+}
+
+/** FE#92 忘记密码：验证码换新密码（成功后后端撤销全部会话）。 */
+export async function resetPassword(payload: {
+  email: string;
+  code: string;
+  newPassword: string;
+}) {
+  return apiClient<void>("/auth/password/reset", {
+    method: "POST",
+    auth: false,
+    body: {
+      email: payload.email.trim().toLowerCase(),
+      code: payload.code.trim(),
+      newPassword: payload.newPassword,
+    },
+  });
+}
+
 export async function changePassword(payload: {
   oldPassword: string;
   newPassword: string;

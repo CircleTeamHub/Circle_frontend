@@ -65,6 +65,17 @@ function assertValidCoinAmount(amount: number): void {
   }
 }
 
+/**
+ * #100：IM 转账卡片送达回执。凭 sendCoinGift 用过的同一枚 Idempotency-Key
+ * 定位礼物；后端置位后补偿 cron 不再服务端补发卡片。
+ */
+export async function markGiftCardSent(idempotencyKey: string) {
+  return apiClient<void>('/coin/gift/card-sent', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
+  });
+}
+
 export async function sendCoinGift(
   payload: {
     recipientId: string;

@@ -3,12 +3,11 @@ import { useAuth } from "@/hooks/use-auth";
 import { useSendEmailCode } from "@/hooks/use-send-email-code";
 import { useNetworkStatus } from "@/hooks/use-network-status";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
-import { Link, useLocalSearchParams } from "expo-router";
+import { Link, router, useLocalSearchParams } from "expo-router";
 import { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -103,13 +102,10 @@ export default function LoginScreen() {
   }, [sendCode, email]);
 
   const onForgotPassword = useCallback(() => {
-    Alert.alert(
-      t("auth.forgotPassword"),
-      t("auth.forgotPasswordHint", {
-        defaultValue: "可改用验证码登录；如需找回账号请联系客服。",
-      }),
-    );
-  }, [t]);
+    // FE#92：真实重置流程（circle_be PR #120 起后端可用），不再是占位提示。
+    // 新路由在 expo typegen 重新生成前先 as never（仓内 group-call 同款惯例）
+    router.push("/(auth)/forgot-password" as never);
+  }, []);
 
   const onSubmit = useCallback(() => {
     if (mode === "password") {

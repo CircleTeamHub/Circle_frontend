@@ -109,7 +109,17 @@
       "sendCodeFailed": "发送失败，请重试"
     },
     "hidePassword": "隐藏密码",
-    "showPassword": "显示密码"
+    "showPassword": "显示密码",
+    "resendIn": "{{seconds}}s 后重发",
+    "resetPassword": {
+      "intro": "输入注册邮箱，我们会发送验证码用于重置密码。",
+      "newPasswordPlaceholder": "新密码（至少 6 位）",
+      "submit": "重置密码",
+      "submitting": "重置中…",
+      "successTitle": "密码已重置",
+      "successBody": "所有设备已退出登录，请用新密码重新登录。",
+      "failed": "重置失败，请检查验证码后重试"
+    }
   },
   "onboarding": {
     "profileTitle": "完善个人资料",
@@ -1201,7 +1211,6 @@
       "recharge": "积分充值",
       "memberAgreement": "《会员服务协议》",
       "loadError": "积分余额加载失败，请稍后重试",
-      "purchaseUnavailable": "积分购买暂未开放。当前页面仅显示余额。",
       "rechargeSuccess": "已充值 {{points}} 积分",
       "rechargeError": "充值失败，请稍后重试",
       "confirmRechargeMessage": "确定要充值 {{points}} 积分（{{price}}）吗？",
@@ -1892,7 +1901,8 @@
       "edit": "编辑",
       "unlist": "下架",
       "relist": "上架",
-      "more": "更多"
+      "more": "更多",
+      "restore": "恢复"
     },
     "alerts": {
       "deleteFailedTitle": "删除失败",
@@ -1913,7 +1923,8 @@
       "relistFailedTitle": "上架失败",
       "unlistFailedTitle": "下架失败",
       "unlistTitle": "下架笔记",
-      "unlistConfirm": "下架后可在已下架列表查看，已下架笔记会在一个月后自动删除。"
+      "unlistConfirm": "下架后可在已下架列表查看，已下架笔记会在一个月后自动删除。",
+      "restoreFailedTitle": "恢复失败"
     },
     "detail": {
       "loadFailed": "笔记加载失败，请稍后重试",
@@ -1986,7 +1997,8 @@
     "empty": {
       "noMatch": "没有匹配的笔记",
       "noNotes": "暂无笔记",
-      "noUnlisted": "暂无已下架笔记"
+      "noUnlisted": "暂无已下架笔记",
+      "noDeleted": "回收站是空的"
     },
     "manageGroups": {
       "cancelEdit": "取消编辑",
@@ -2081,7 +2093,10 @@
       "empty": "暂无可发送的聊天对象",
       "groupHint": "群聊",
       "friendHint": "好友"
-    }
+    },
+    "recycleBin": "回收站",
+    "recycleBinTitle": "回收站",
+    "recycleBinHint": "已删除的笔记可在这里恢复。"
   },
   "search": {
     "loadFriendsFailed": "好友列表加载失败，请稍后重试",

@@ -127,6 +127,7 @@ import {
   useChatPreferencesStore,
 } from '@/features/chat/store/use-chat-preferences-store';
 import { createGroupCall } from '@/services/api/calls';
+import { markGiftCardSent } from '@/services/api/coin';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
@@ -2314,7 +2315,11 @@ export default function ChatDetailScreen() {
   );
 
   const handleSendTransferCard = useCallback(
-    async (payload: { amount: number; message: string | null }) => {
+    async (payload: {
+      amount: number;
+      message: string | null;
+      idempotencyKey?: string | null;
+    }) => {
       if (!sourceID || isPreviewMode) return;
       if (inFlightRef.current) return;
       inFlightRef.current = true;
@@ -2322,9 +2327,14 @@ export default function ChatDetailScreen() {
         const sent = await sendTransferCardMessage({
           sourceID,
           sessionType: conversationType,
-          payload,
+          payload: { amount: payload.amount, message: payload.message },
         });
         appendMessages(conversationID, [sent]);
+        // #100：告知后端卡片已由客户端送达，补偿 cron 不再重发。回执失败
+        // 无害（最坏 = 服务端多补一张同構卡片），静默尽力而为。
+        if (payload.idempotencyKey) {
+          void markGiftCardSent(payload.idempotencyKey).catch(() => undefined);
+        }
       } catch (error) {
         if (mountedRef.current) {
           setSendError(

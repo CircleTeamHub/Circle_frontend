@@ -144,6 +144,7 @@ export default function TransferComposerScreen() {
       setPending({
         amount: value,
         message: normalizedMessage,
+        idempotencyKey: idempotency.key,
       });
       idempotencyRef.current = null;
       router.back();

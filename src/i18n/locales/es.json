@@ -647,7 +647,8 @@
       "edit": "Editar",
       "unlist": "Retirar",
       "relist": "Volver a publicar",
-      "more": "Más"
+      "more": "Más",
+      "restore": "Restaurar"
     },
     "alerts": {
       "deleteFailedTitle": "Error al eliminar",
@@ -668,7 +669,8 @@
       "relistFailedTitle": "No se pudo volver a publicar",
       "unlistFailedTitle": "No se pudo retirar",
       "unlistTitle": "Retirar nota",
-      "unlistConfirm": "Podrás verla en Retiradas. Las notas retiradas se eliminan automáticamente después de un mes."
+      "unlistConfirm": "Podrás verla en Retiradas. Las notas retiradas se eliminan automáticamente después de un mes.",
+      "restoreFailedTitle": "No se pudo restaurar"
     },
     "detail": {
       "loadFailed": "No se pudo cargar la nota, inténtalo de nuevo",
@@ -741,7 +743,8 @@
     "empty": {
       "noMatch": "No hay notas coincidentes",
       "noNotes": "Aún no hay notas",
-      "noUnlisted": "No hay notas retiradas"
+      "noUnlisted": "No hay notas retiradas",
+      "noDeleted": "La papelera está vacía"
     },
     "manageGroups": {
       "cancelEdit": "Cancelar edición",
@@ -836,7 +839,10 @@
       "empty": "No hay chats para enviar",
       "groupHint": "Grupo",
       "friendHint": "Amigo"
-    }
+    },
+    "recycleBin": "Papelera",
+    "recycleBinTitle": "Papelera",
+    "recycleBinHint": "Las notas eliminadas se pueden restaurar aquí."
   },
   "tempChats": {
     "title": "Gestión de plazas",
@@ -1640,14 +1646,13 @@
     "memberCenter": "Membresía",
     "viewMember": "Ver",
     "wallet": {
-      "purchaseUnavailable": "La compra de créditos aún no está disponible. Esta página solo muestra tu saldo.",
+      "purchaseUnavailable": "La compra de puntos aún no está disponible. Por ahora, esta página solo muestra tu saldo.",
       "title": "Mi cartera",
       "confirmRecharge": "Confirmar recarga",
       "balance": "Saldo de créditos",
       "recharge": "Recargar créditos",
       "memberAgreement": "Acuerdo de servicio de membresía",
       "loadError": "Error al cargar el saldo de créditos. Inténtalo de nuevo más tarde.",
-      "purchaseUnavailable": "La compra de puntos aún no está disponible. Por ahora, esta página solo muestra tu saldo.",
       "rechargeSuccess": "Recargaste {{points}} créditos",
       "rechargeError": "Error en la recarga. Inténtalo de nuevo más tarde.",
       "confirmRechargeMessage": "¿Recargar {{points}} créditos ({{price}})?",
@@ -1988,7 +1993,17 @@
       "sendCodeFailed": "Error al enviar, inténtalo de nuevo"
     },
     "hidePassword": "Ocultar contraseña",
-    "showPassword": "Mostrar contraseña"
+    "showPassword": "Mostrar contraseña",
+    "resendIn": "Reenviar en {{seconds}}s",
+    "resetPassword": {
+      "intro": "Introduce tu correo registrado y te enviaremos un código para restablecer la contraseña.",
+      "newPasswordPlaceholder": "Nueva contraseña (mín. 6 caracteres)",
+      "submit": "Restablecer contraseña",
+      "submitting": "Restableciendo…",
+      "successTitle": "Contraseña restablecida",
+      "successBody": "Se cerró la sesión en todos los dispositivos. Inicia sesión con tu nueva contraseña.",
+      "failed": "No se pudo restablecer; verifica el código e inténtalo de nuevo"
+    }
   },
   "common": {
     "save": "Guardar",

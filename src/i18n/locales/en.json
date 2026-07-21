@@ -109,7 +109,17 @@
       "sendCodeFailed": "Failed to send, please try again"
     },
     "hidePassword": "Hide password",
-    "showPassword": "Show password"
+    "showPassword": "Show password",
+    "resendIn": "Resend in {{seconds}}s",
+    "resetPassword": {
+      "intro": "Enter your registered email and we will send a verification code to reset your password.",
+      "newPasswordPlaceholder": "New password (min 6 chars)",
+      "submit": "Reset password",
+      "submitting": "Resetting…",
+      "successTitle": "Password reset",
+      "successBody": "All devices have been signed out. Please log in with your new password.",
+      "failed": "Reset failed — check the code and try again"
+    }
   },
   "onboarding": {
     "profileTitle": "Complete your profile",
@@ -1197,14 +1207,13 @@
     "memberCenter": "Membership",
     "viewMember": "View",
     "wallet": {
-      "purchaseUnavailable": "Point purchases are not available yet. This page currently shows your balance only.",
+      "purchaseUnavailable": "Points purchases are not available yet. This page currently shows your balance only.",
       "title": "My Wallet",
       "confirmRecharge": "Confirm Recharge",
       "balance": "Points Balance",
       "recharge": "Recharge Points",
       "memberAgreement": "《Membership Service Agreement》",
       "loadError": "Failed to load points balance. Please try again later.",
-      "purchaseUnavailable": "Points purchases are not available yet. This page currently shows your balance only.",
       "rechargeSuccess": "Recharged {{points}} points",
       "rechargeError": "Recharge failed. Please try again later.",
       "confirmRechargeMessage": "Recharge {{points}} points ({{price}})?",
@@ -1895,7 +1904,8 @@
       "edit": "Edit",
       "unlist": "Unlist",
       "relist": "Relist",
-      "more": "More"
+      "more": "More",
+      "restore": "Restore"
     },
     "alerts": {
       "deleteFailedTitle": "Failed to delete",
@@ -1916,7 +1926,8 @@
       "relistFailedTitle": "Failed to relist",
       "unlistFailedTitle": "Failed to unlist",
       "unlistTitle": "Unlist note",
-      "unlistConfirm": "You can view it in Unlisted. Unlisted notes are automatically deleted after one month."
+      "unlistConfirm": "You can view it in Unlisted. Unlisted notes are automatically deleted after one month.",
+      "restoreFailedTitle": "Restore failed"
     },
     "detail": {
       "loadFailed": "Failed to load note, please try again",
@@ -1989,7 +2000,8 @@
     "empty": {
       "noMatch": "No matching notes",
       "noNotes": "No notes yet",
-      "noUnlisted": "No unlisted notes"
+      "noUnlisted": "No unlisted notes",
+      "noDeleted": "The recycle bin is empty"
     },
     "manageGroups": {
       "cancelEdit": "Cancel editing",
@@ -2084,7 +2096,10 @@
       "empty": "No chats to send to yet",
       "groupHint": "Group",
       "friendHint": "Friend"
-    }
+    },
+    "recycleBin": "Recycle bin",
+    "recycleBinTitle": "Recycle bin",
+    "recycleBinHint": "Deleted notes can be restored here."
   },
   "search": {
     "loadFriendsFailed": "Failed to load friends, please try again",

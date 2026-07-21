@@ -298,6 +298,16 @@ export default function NotesScreen() {
             <Pressable
               style={[s.unlistedBtn, d.unlistedBtn]}
               onPress={() =>
+                router.push('/(tabs)/profile/notes/recycle-bin' as never)
+              }
+            >
+              <Text style={[s.unlistedBtnText, d.unlistedBtnText]}>
+                {t('notes.recycleBin', { defaultValue: '回收站' })}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[s.unlistedBtn, d.unlistedBtn]}
+              onPress={() =>
                 router.push('/(tabs)/profile/notes/unlisted' as never)
               }
             >

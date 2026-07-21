@@ -646,7 +646,8 @@
       "edit": "編集",
       "unlist": "非公開にする",
       "relist": "公開に戻す",
-      "more": "その他"
+      "more": "その他",
+      "restore": "復元"
     },
     "alerts": {
       "deleteFailedTitle": "削除に失敗しました",
@@ -667,7 +668,8 @@
       "relistFailedTitle": "公開に戻せませんでした",
       "unlistFailedTitle": "非公開にできませんでした",
       "unlistTitle": "ノートを非公開にする",
-      "unlistConfirm": "非公開にしたノートは非公開リストで確認できます。1か月後に自動削除されます。"
+      "unlistConfirm": "非公開にしたノートは非公開リストで確認できます。1か月後に自動削除されます。",
+      "restoreFailedTitle": "復元に失敗しました"
     },
     "detail": {
       "loadFailed": "ノートを読み込めませんでした。もう一度お試しください",
@@ -740,7 +742,8 @@
     "empty": {
       "noMatch": "一致するノートがありません",
       "noNotes": "まだノートがありません",
-      "noUnlisted": "非公開のノートはありません"
+      "noUnlisted": "非公開のノートはありません",
+      "noDeleted": "ごみ箱は空です"
     },
     "manageGroups": {
       "cancelEdit": "編集をキャンセル",
@@ -835,7 +838,10 @@
       "empty": "送信できるチャットがありません",
       "groupHint": "グループ",
       "friendHint": "友だち"
-    }
+    },
+    "recycleBin": "ごみ箱",
+    "recycleBinTitle": "ごみ箱",
+    "recycleBinHint": "削除したノートはここから復元できます。"
   },
   "tempChats": {
     "title": "枠の管理",
@@ -1637,14 +1643,13 @@
     "memberCenter": "会員",
     "viewMember": "見る",
     "wallet": {
-      "purchaseUnavailable": "クレジットの購入はまだ利用できません。現在、このページには残高のみが表示されます。",
+      "purchaseUnavailable": "ポイント購入はまだご利用いただけません。現在、このページには残高のみが表示されます。",
       "title": "マイウォレット",
       "confirmRecharge": "チャージを確認",
       "balance": "クレジット残高",
       "recharge": "クレジットをチャージ",
       "memberAgreement": "会員サービス規約",
       "loadError": "クレジット残高の読み込みに失敗しました。しばらくしてから再試行してください。",
-      "purchaseUnavailable": "ポイント購入はまだご利用いただけません。現在、このページには残高のみが表示されます。",
       "rechargeSuccess": "{{points}} クレジットをチャージしました",
       "rechargeError": "チャージに失敗しました。しばらくしてから再試行してください。",
       "confirmRechargeMessage": "{{points}} クレジット（{{price}}）をチャージしますか？",
@@ -1985,7 +1990,17 @@
       "sendCodeFailed": "送信に失敗しました。もう一度お試しください"
     },
     "hidePassword": "パスワードを非表示",
-    "showPassword": "パスワードを表示"
+    "showPassword": "パスワードを表示",
+    "resendIn": "{{seconds}}秒後に再送",
+    "resetPassword": {
+      "intro": "登録済みメールアドレスを入力すると、パスワード再設定用の認証コードを送信します。",
+      "newPasswordPlaceholder": "新しいパスワード（6文字以上）",
+      "submit": "パスワードを再設定",
+      "submitting": "再設定中…",
+      "successTitle": "パスワードを再設定しました",
+      "successBody": "すべての端末からログアウトしました。新しいパスワードでログインしてください。",
+      "failed": "再設定に失敗しました。コードを確認してもう一度お試しください"
+    }
   },
   "common": {
     "save": "保存",

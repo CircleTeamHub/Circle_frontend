@@ -646,7 +646,8 @@
       "edit": "편집",
       "unlist": "내리기",
       "relist": "올리기",
-      "more": "더보기"
+      "more": "더보기",
+      "restore": "복원"
     },
     "alerts": {
       "deleteFailedTitle": "삭제 실패",
@@ -667,7 +668,8 @@
       "relistFailedTitle": "올리기 실패",
       "unlistFailedTitle": "내리기 실패",
       "unlistTitle": "노트 내리기",
-      "unlistConfirm": "내린 노트는 내림 목록에서 볼 수 있으며 한 달 후 자동 삭제됩니다."
+      "unlistConfirm": "내린 노트는 내림 목록에서 볼 수 있으며 한 달 후 자동 삭제됩니다.",
+      "restoreFailedTitle": "복원 실패"
     },
     "detail": {
       "loadFailed": "노트를 불러오지 못했습니다. 다시 시도해 주세요",
@@ -740,7 +742,8 @@
     "empty": {
       "noMatch": "일치하는 노트가 없습니다",
       "noNotes": "아직 노트가 없습니다",
-      "noUnlisted": "내린 노트가 없습니다"
+      "noUnlisted": "내린 노트가 없습니다",
+      "noDeleted": "휴지통이 비어 있습니다"
     },
     "manageGroups": {
       "cancelEdit": "편집 취소",
@@ -835,7 +838,10 @@
       "empty": "보낼 수 있는 채팅이 없어요",
       "groupHint": "그룹",
       "friendHint": "친구"
-    }
+    },
+    "recycleBin": "휴지통",
+    "recycleBinTitle": "휴지통",
+    "recycleBinHint": "삭제한 노트를 여기에서 복원할 수 있습니다."
   },
   "tempChats": {
     "title": "좌석 관리",
@@ -1637,14 +1643,13 @@
     "memberCenter": "멤버십",
     "viewMember": "보기",
     "wallet": {
-      "purchaseUnavailable": "크레딧 구매는 아직 이용할 수 없습니다. 현재 이 페이지에는 잔액만 표시됩니다.",
+      "purchaseUnavailable": "포인트 구매는 아직 지원되지 않습니다. 현재 이 페이지에는 잔액만 표시됩니다.",
       "title": "내 지갑",
       "confirmRecharge": "충전 확인",
       "balance": "크레딧 잔액",
       "recharge": "크레딧 충전",
       "memberAgreement": "회원 서비스 약관",
       "loadError": "크레딧 잔액을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
-      "purchaseUnavailable": "포인트 구매는 아직 지원되지 않습니다. 현재 이 페이지에는 잔액만 표시됩니다.",
       "rechargeSuccess": "{{points}} 크레딧을 충전했습니다",
       "rechargeError": "충전에 실패했습니다. 잠시 후 다시 시도해 주세요.",
       "confirmRechargeMessage": "{{points}} 크레딧({{price}})을 충전하시겠어요?",
@@ -1985,7 +1990,17 @@
       "sendCodeFailed": "발송에 실패했습니다. 다시 시도해 주세요"
     },
     "hidePassword": "비밀번호 숨기기",
-    "showPassword": "비밀번호 표시"
+    "showPassword": "비밀번호 표시",
+    "resendIn": "{{seconds}}초 후 재전송",
+    "resetPassword": {
+      "intro": "가입한 이메일을 입력하면 비밀번호 재설정용 인증 코드를 보내드립니다.",
+      "newPasswordPlaceholder": "새 비밀번호(6자 이상)",
+      "submit": "비밀번호 재설정",
+      "submitting": "재설정 중…",
+      "successTitle": "비밀번호가 재설정되었습니다",
+      "successBody": "모든 기기에서 로그아웃되었습니다. 새 비밀번호로 다시 로그인해 주세요.",
+      "failed": "재설정에 실패했습니다. 코드를 확인하고 다시 시도해 주세요"
+    }
   },
   "common": {
     "save": "저장",

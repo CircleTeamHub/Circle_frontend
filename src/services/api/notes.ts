@@ -84,6 +84,16 @@ export async function relistNote(id: string): Promise<void> {
   });
 }
 
+/** FE#92 回收站：已软删笔记列表。 */
+export async function fetchDeletedNotes(): Promise<NoteSummary[]> {
+  return apiClient<NoteSummary[]>('/note/recycle-bin');
+}
+
+/** FE#92 回收站：恢复软删笔记（后端恢复为 ACTIVE）。 */
+export async function restoreNote(id: string): Promise<void> {
+  return apiClient<void>(`/note/${id}/restore`, { method: 'POST' });
+}
+
 export async function deleteNote(id: string): Promise<void> {
   await apiClient<void>(`/note/${id}`, { method: 'DELETE' });
 }
