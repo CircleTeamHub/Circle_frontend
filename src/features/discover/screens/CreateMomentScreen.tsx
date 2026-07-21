@@ -25,6 +25,7 @@ import {
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
 import { useMomentsStore } from '@/features/discover/store/use-moments-store';
+import { mapWithConcurrency } from '@/utils/concurrency';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
@@ -127,6 +128,18 @@ export default function CreateMomentScreen() {
   const canSubmit = content.trim().length > 0;
 
   const handlePickImages = useCallback(async () => {
+    // 显式请求相册权限 + 拒绝态提示（#109）。iOS PHPicker / Android 13+ photo
+    // picker 本身无需权限，requestMediaLibraryPermissionsAsync 在这些平台直接
+    // granted，不多弹窗；老 Android 才真正走系统授权。与 use-change-cover 同模式。
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert(
+        t('validation.cannotSelectImage'),
+        t('validation.albumPermission'),
+      );
+      return;
+    }
+
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
@@ -138,7 +151,7 @@ export default function CreateMomentScreen() {
       ...prev,
       ...result.assets.map((a) => a.uri).slice(0, 9 - prev.length),
     ]);
-  }, [images.length]);
+  }, [images.length, t]);
 
   const handleRemoveImage = useCallback((index: number) => {
     setImages((prev) => prev.filter((_, i) => i !== index));
@@ -148,10 +161,9 @@ export default function CreateMomentScreen() {
     if (!canSubmit || submitting) return;
     setSubmitting(true);
     try {
-      const uploadedUrls: string[] = [];
-      let failedUploads = 0;
-
-      for (const uri of images) {
+      // 并发上传，cap=3（#108）：串行九图最坏 ~18s；全量并发又会同时打满
+      // presign + S3 PUT。per-item 失败就地吞掉记 null，序号与所选图片一一对应。
+      const outcomes = await mapWithConcurrency(images, 3, async (uri) => {
         try {
           const fileName = uri.split('/').pop() ?? 'photo.jpg';
           const contentType = resolveUploadContentType({ fileName }) ?? 'image/jpeg';
@@ -161,9 +173,8 @@ export default function CreateMomentScreen() {
             folder: 'posts',
           });
           await uploadLocalFileToPresignedUrl(presign.uploadUrl, contentType, uri);
-          uploadedUrls.push(presign.fileUrl);
+          return presign.fileUrl;
         } catch (error) {
-          failedUploads += 1;
           if (__DEV__) {
             console.warn(
               '[CreateMomentScreen] image upload failed',
@@ -171,8 +182,13 @@ export default function CreateMomentScreen() {
               error,
             );
           }
+          return null;
         }
-      }
+      });
+      const uploadedUrls = outcomes.filter(
+        (url): url is string => typeof url === 'string',
+      );
+      const failedUploads = images.length - uploadedUrls.length;
 
       if (failedUploads > 0) {
         const reason =

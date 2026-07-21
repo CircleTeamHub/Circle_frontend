@@ -31,6 +31,13 @@ interface CirclesState {
   reset: () => void;
 }
 
+// 单飞句柄（#106）：plaza-feed 与 SelectCircleScreen 都会在 mount 时触发同一份
+// 拉取，旧实现无防重入（并发 last-write-wins），且 fetchMyCircles 会在 await 前
+// 先清空四个列表 —— 第二个并发调用让已渲染的列表闪空。改为：并发调用合并进同一个
+// Promise；列表不预清，旧数据保留到新响应落地。
+let myCirclesInFlight: Promise<void> | null = null;
+let allCirclesInFlight: Promise<void> | null = null;
+
 export const useCirclesStore = create<CirclesState>((set) => ({
   joinedCircles: [],
   createdCircles: [],
@@ -43,76 +50,91 @@ export const useCirclesStore = create<CirclesState>((set) => ({
   myCirclesError: null,
   allCirclesError: null,
 
-  fetchMyCircles: async () => {
-    set({
-      joinedCircles: [],
-      createdCircles: [],
-      managedCircles: [],
-      appliedCircles: [],
-      myCirclesLoading: true,
-      myCirclesError: null,
-    });
-    try {
-      const [joined, created, applied] = await Promise.all([
-        fetchMyCircles('joined'),
-        fetchMyCircles('created'),
-        fetchMyCircles('applied'),
-      ]);
-      const createdCircleIds = new Set(created.map((circle) => circle.id));
-      const joinedCandidates = joined.filter(
-        (circle) => !createdCircleIds.has(circle.id),
-      );
-      // joined 项自带 myRole（GET /circle/my 直接返回），无需逐个拉圈子详情。
-      const managedCircles = deriveManagedCircles({
-        createdCircles: created,
-        joinedCircles: joinedCandidates,
-      });
-
-      set({
-        joinedCircles: joined,
-        createdCircles: created,
-        managedCircles,
-        appliedCircles: applied,
-        myCirclesError: null,
-      });
-    } catch (error) {
-      set({
-        myCirclesError: getApiErrorMessage(
-          error,
-          '加载圈子列表失败，请稍后重试',
-        ),
-      });
-    } finally {
-      set({ myCirclesLoading: false });
+  fetchMyCircles: () => {
+    if (myCirclesInFlight) {
+      return myCirclesInFlight;
     }
+    const run = (async () => {
+      set({ myCirclesLoading: true, myCirclesError: null });
+      try {
+        const [joined, created, applied] = await Promise.all([
+          fetchMyCircles('joined'),
+          fetchMyCircles('created'),
+          fetchMyCircles('applied'),
+        ]);
+        const createdCircleIds = new Set(created.map((circle) => circle.id));
+        const joinedCandidates = joined.filter(
+          (circle) => !createdCircleIds.has(circle.id),
+        );
+        // joined 项自带 myRole（GET /circle/my 直接返回），无需逐个拉圈子详情。
+        const managedCircles = deriveManagedCircles({
+          createdCircles: created,
+          joinedCircles: joinedCandidates,
+        });
+
+        set({
+          joinedCircles: joined,
+          createdCircles: created,
+          managedCircles,
+          appliedCircles: applied,
+          myCirclesError: null,
+        });
+      } catch (error) {
+        set({
+          myCirclesError: getApiErrorMessage(
+            error,
+            '加载圈子列表失败，请稍后重试',
+          ),
+        });
+      } finally {
+        set({ myCirclesLoading: false });
+      }
+    })().finally(() => {
+      if (myCirclesInFlight === run) {
+        myCirclesInFlight = null;
+      }
+    });
+    myCirclesInFlight = run;
+    return run;
   },
 
-  fetchAllCircles: async () => {
-    set({ allCirclesLoading: true, allCirclesError: null });
-    try {
-      const result = await fetchCircles({ limit: ALL_CIRCLES_LIMIT });
-      if (result.total > result.items.length) {
-        logClientDiagnostic('circle_discover_list_capped', {
-          total: result.total,
-          loaded: result.items.length,
-          limit: ALL_CIRCLES_LIMIT,
-        });
-      }
-      set({
-        allCircles: result.items,
-        allCirclesTotal: result.total,
-        allCirclesError: null,
-      });
-    } catch (error) {
-      set({
-        allCirclesError: getApiErrorMessage(
-          error,
-          '加载圈子筛选失败，请稍后重试',
-        ),
-      });
-    } finally {
-      set({ allCirclesLoading: false });
+  fetchAllCircles: () => {
+    if (allCirclesInFlight) {
+      return allCirclesInFlight;
     }
+    const run = (async () => {
+      set({ allCirclesLoading: true, allCirclesError: null });
+      try {
+        const result = await fetchCircles({ limit: ALL_CIRCLES_LIMIT });
+        if (result.total > result.items.length) {
+          logClientDiagnostic('circle_discover_list_capped', {
+            total: result.total,
+            loaded: result.items.length,
+            limit: ALL_CIRCLES_LIMIT,
+          });
+        }
+        set({
+          allCircles: result.items,
+          allCirclesTotal: result.total,
+          allCirclesError: null,
+        });
+      } catch (error) {
+        set({
+          allCirclesError: getApiErrorMessage(
+            error,
+            '加载圈子筛选失败，请稍后重试',
+          ),
+        });
+      } finally {
+        set({ allCirclesLoading: false });
+      }
+    })().finally(() => {
+      if (allCirclesInFlight === run) {
+        allCirclesInFlight = null;
+      }
+    });
+    allCirclesInFlight = run;
+    return run;
   },
 
   patchCircle: (id, patch) =>
