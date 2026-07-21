@@ -292,9 +292,16 @@ test('Android release workflow publishes the verified APK and reports observable
   const notification = workflowStep(notify, 'Notify Discord');
 
   assert.match(publish, /needs: \[preflight, build\]/);
-  assert.doesNotMatch(publish, /ANDROID_PUBLIC_RELEASE_ENABLED/);
+  // #84：文档承诺的 default-disabled 门禁现在由 workflow 强制执行 —— 只有仓库
+  // 变量显式为 'true' 时 publish 才跑，v* tag 默认止步于私有 artifact。
+  assert.match(
+    publish,
+    /if: \$\{\{ vars\.ANDROID_PUBLIC_RELEASE_ENABLED == 'true' \}\}/,
+  );
   assert.doesNotMatch(publish, /ANDROID_DISTRIBUTION_APPROVED/);
   assert.doesNotMatch(publish, /ANDROID_DISTRIBUTION_EVIDENCE_URL/);
+  // Free plan 没有 protected environment，环境保护缺位记录在
+  // docs/android-release.md「Workflow enforcement status」。
   assert.doesNotMatch(publish, /environment:/);
   assert.match(publish, /ref: \$\{\{ needs\.preflight\.outputs\.commit_sha \}\}/);
   assert.match(publish, /persist-credentials: false/);

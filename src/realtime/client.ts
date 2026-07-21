@@ -118,6 +118,13 @@ const RECONNECT_MAX_EXPONENT = 5;
 // 网关用 1008 表达三种拒绝：会话被撤销、连接数超限、10s 内没发认证帧。只有
 // 「撤销」是终态 —— token 已经作废，重连多少次都会在认证后被同样踢掉。三者
 // code 相同，靠 reason 区分（与后端 REVOKED_CLOSE_REASON 对齐）。
+//
+// ⚠️ 跨仓字符串契约（#102）：这个字面量必须与
+//   circle_be/src/realtime/realtime.service.ts 的 REVOKED_CLOSE_REASON
+// 逐字节一致。它是终态判定的**唯一**依据（code 1008 不够），任何一侧改词、
+// 另一侧的测试都不会报警 —— 撤销登出会静默退化成重连环直到 JWT 过期（~1h）。
+// 改动必须两仓同步 + 双方 pin 测试同步更新
+// （本仓 test/realtime-revoked-contract.test.js）。
 const REVOKED_CLOSE_CODE = 1008;
 const REVOKED_CLOSE_REASON = 'Session revoked';
 
