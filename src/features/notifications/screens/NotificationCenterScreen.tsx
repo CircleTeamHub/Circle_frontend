@@ -146,22 +146,14 @@ export default function NotificationCenterScreen() {
     if (tab === 'interactive') {
       const previousInteractive = store().interactive;
       const previousDiscoverUnread = useTabBadgeStore.getState().discoverUnread;
-      const previousSystemUnread = useTabBadgeStore.getState().systemUnread;
-      const unreadInteractiveCount = previousInteractive.filter((item) => !item.read).length;
       store().markAllInteractiveReadLocal();
       useTabBadgeStore.getState().setDiscoverUnread(0);
-      useTabBadgeStore
-        .getState()
-        .setSystemUnread(
-          Math.max(0, previousSystemUnread - unreadInteractiveCount),
-        );
       try {
         await markAllNotificationsRead();
       } catch (error) {
         if (isDev) console.warn('[NotificationCenterScreen] mark all failed', error);
         store().setInteractive(previousInteractive);
         useTabBadgeStore.getState().setDiscoverUnread(previousDiscoverUnread);
-        useTabBadgeStore.getState().setSystemUnread(previousSystemUnread);
         await load();
       }
       return;
@@ -194,9 +186,6 @@ export default function NotificationCenterScreen() {
           const badgeStore = useTabBadgeStore.getState();
           badgeStore.setDiscoverUnread(
             Math.max(0, badgeStore.discoverUnread - 1),
-          );
-          badgeStore.setSystemUnread(
-            Math.max(0, badgeStore.systemUnread - 1),
           );
         }
         void markNotificationRead(raw.id).catch((e) => isDev && console.warn(e));

@@ -94,8 +94,11 @@ export type BackendAuthUser = {
   recognitionCount?: number;
 };
 
+// 会话管理列表里用来区分设备的展示名。用 modelName（"iPhone 15 Pro"）而不是
+// deviceName —— 后者在 iOS 上是用户自命名（"Alice 的 iPhone"），是实名 PII，
+// 会被后端持久化并从 GET /auth/sessions 原样吐回（#98）。
 function getDeviceName() {
-  return Device.deviceName ?? `circle-im-${Device.osName ?? "device"}`;
+  return Device.modelName ?? `circle-im-${Device.osName ?? "device"}`;
 }
 
 export async function requestEmailCode(payload: {

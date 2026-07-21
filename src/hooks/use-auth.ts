@@ -25,6 +25,7 @@ import {
   type AuthTokens,
 } from '@/services/api/auth';
 import { clearLocalSession } from '@/services/auth/session';
+import { isDefinitiveAuthFailure } from '@/services/api/client';
 import { loginToOpenIM, logoutFromOpenIM } from '@/im/client';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useMessageGroupsStore } from '@/features/messages/store/use-message-groups-store';
@@ -332,17 +333,29 @@ export function useAuth() {
         useAccountSwitcherStore.getState().close();
         router.replace('/(tabs)/messages');
       } catch (switchError) {
-        // session 已过期：移除死账号，跳登录页并预填账号 id。
-        useKnownAccountsStore.getState().removeAccount(account.user.id);
-        await clearLocalSession();
-        useAccountSwitcherStore.getState().close();
-        if (isDev) {
-          console.warn('[auth] switch account failed (session expired)', switchError);
+        // 只有服务端明确否认凭证（401/403，含刷新失败）才算「session 已过期」——
+        // 移除死账号，跳登录页并预填账号 id。后端重启 / 掉网 / 5xx 时删账号
+        // 等于把一个好账号连同当前会话一起炸掉（#101）。
+        if (isDefinitiveAuthFailure(switchError)) {
+          useKnownAccountsStore.getState().removeAccount(account.user.id);
+          await clearLocalSession();
+          useAccountSwitcherStore.getState().close();
+          if (isDev) {
+            console.warn('[auth] switch account failed (session expired)', switchError);
+          }
+          router.replace({
+            pathname: '/(auth)/login',
+            params: { email: account.user.email ?? '' },
+          });
+        } else {
+          // 瞬时失败：目标账号 token 已乐观激活（上面 setSession），与冷启动
+          // 同哲学 —— 带着快照进 app，后续请求自然重试；账号列表保持完整。
+          useAccountSwitcherStore.getState().close();
+          if (isDev) {
+            console.warn('[auth] switch account degraded (transient)', switchError);
+          }
+          router.replace('/(tabs)/messages');
         }
-        router.replace({
-          pathname: '/(auth)/login',
-          params: { email: account.user.email ?? '' },
-        });
       } finally {
         inFlightRef.current = false;
         safeSetSubmitting(false);

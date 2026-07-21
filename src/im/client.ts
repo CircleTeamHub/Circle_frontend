@@ -37,6 +37,8 @@ import {
   OPENIM_WS_URL,
 } from '@/constants/config';
 import { bindOpenIMListeners, unbindOpenIMListeners } from '@/im/listeners';
+import { IMClientError, IM_ERROR_CODES } from '@/im/error-codes';
+import { getOpenIMDataDirPath } from '@/im/data-dir';
 import { stripFileScheme } from '@/im/media-uri';
 import { resolveVoiceSendStrategy } from '@/features/chat/utils/voice-forward';
 import { toImUserId } from '@/im/user-id';
@@ -96,11 +98,20 @@ function loadNativeFS() {
 
 async function getOpenIMDataDir() {
   const RNFS = loadNativeFS();
-  return `${RNFS.DocumentDirectoryPath}/openim`;
+  return getOpenIMDataDirPath(RNFS.DocumentDirectoryPath);
 }
 
 function getUnsupportedPlatformMessage() {
   return 'OpenIM 仅支持 iOS/Android development build';
+}
+
+// 统一带 code 抛错：chat-preview 等按 IM_ERROR_CODES 判定，不再匹配 message 文本
+// —— 这两条文案是 i18n 清扫的遗留目标，谁动了文案都不该悄悄杀死预览模式（#99）。
+function unsupportedPlatformError() {
+  return new IMClientError(
+    IM_ERROR_CODES.UNSUPPORTED_PLATFORM,
+    getUnsupportedPlatformMessage(),
+  );
 }
 
 async function waitForOpenIMConnectionReady(timeoutMs = 5000, intervalMs = 50) {
@@ -114,7 +125,10 @@ async function waitForOpenIMConnectionReady(timeoutMs = 5000, intervalMs = 50) {
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
 
-  throw new Error('IM 连接尚未完成，请稍后重试');
+  throw new IMClientError(
+    IM_ERROR_CODES.CONNECTION_NOT_READY,
+    'IM 连接尚未完成，请稍后重试',
+  );
 }
 
 /**
@@ -392,7 +406,7 @@ export async function getOrCreateSingleConversation(sourceID: string) {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -411,7 +425,7 @@ export async function getOrCreateGroupConversation(groupID: string) {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -439,7 +453,7 @@ export async function createGroupChat(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -497,7 +511,7 @@ export async function inviteUsersToGroup(groupID: string, userIDList: string[]) 
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.inviteUserToGroup({
@@ -511,7 +525,7 @@ export async function leaveGroupChat(groupID: string) {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.quitGroup(groupID);
@@ -524,7 +538,7 @@ export async function updateGroupName(groupID: string, groupName: string) {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.setGroupInfo({ groupID, groupName });
@@ -537,7 +551,7 @@ export async function updateGroupNotice(groupID: string, notification: string) {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.setGroupInfo({ groupID, notification });
@@ -551,7 +565,7 @@ export async function updateGroupMemberAlias(
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.setGroupMemberInfo({ groupID, userID, nickname });
@@ -565,7 +579,7 @@ export async function kickGroupMembers(
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.kickGroupMember({ groupID, userIDList, reason });
@@ -575,7 +589,7 @@ export async function hideConversation(conversationID: string) {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.hideConversation(conversationID);
@@ -588,7 +602,7 @@ export async function resetConversationGroupAtType(conversationID: string) {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.resetConversationGroupAtType(conversationID);
@@ -605,7 +619,7 @@ export async function setConversationExtension(
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   let current: Record<string, unknown> = {};
@@ -644,7 +658,7 @@ export async function setConversationExtension(
 export async function getJoinedGroups(): Promise<GroupItem[]> {
   const initialized = await ensureOpenIMInitialized();
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
   await waitForOpenIMConnectionReady();
   return OpenIMSDK.getJoinedGroupList();
@@ -740,7 +754,7 @@ export async function sendTextMessage(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -774,7 +788,7 @@ export async function sendTextAtMessage(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -811,7 +825,7 @@ export async function sendQuoteMessage(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -855,7 +869,7 @@ export async function sendImageMessage(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -914,7 +928,7 @@ export async function sendLocationMessage(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -949,7 +963,7 @@ export async function sendVoiceMessage(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -989,7 +1003,7 @@ export async function sendVoiceMessageByUrl(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -1074,7 +1088,7 @@ export async function forwardMessage(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -1157,7 +1171,7 @@ export async function sendTransferCardMessage(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -1213,7 +1227,7 @@ export async function sendNoteCardMessage(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -1251,7 +1265,7 @@ export async function sendNoteCardToConversation(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -1307,7 +1321,7 @@ export async function sendPlazaPostCardMessage(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -1354,7 +1368,7 @@ export async function sendVerificationCardMessage(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -1405,7 +1419,7 @@ export async function sendFriendCardMessage(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -1469,7 +1483,7 @@ export async function sendCircleCardMessage(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -1521,7 +1535,7 @@ export async function toggleConversationPinned(
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.pinConversation({ conversationID, isPinned });
@@ -1534,7 +1548,7 @@ export async function setConversationMute(
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.setConversationRecvMessageOpt({
@@ -1550,7 +1564,7 @@ export async function setConversationBurnDuration(
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.setConversationBurnDuration({ conversationID, burnDuration });
@@ -1560,7 +1574,7 @@ export async function clearConversationMessages(conversationID: string) {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.clearConversationAndDeleteAllMsg(conversationID);
@@ -1571,7 +1585,7 @@ export async function deleteConversation(conversationID: string) {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.deleteConversationAndDeleteAllMsg(conversationID);
@@ -1585,7 +1599,7 @@ export async function deleteLocalMessage(conversationID: string, clientMsgID: st
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.deleteMessageFromLocalStorage({ conversationID, clientMsgID });
@@ -1606,7 +1620,7 @@ export async function clearAllLocalMessages() {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.deleteAllMsgFromLocal();

@@ -55,7 +55,8 @@ test("notification snackbar host keeps unread badges in sync when tapped", () =>
   assert.match(host, /useTabBadgeStore/);
   assert.match(host, /if \(!shown\.read\)/);
   assert.match(host, /Math\.max\(0, badgeStore\.discoverUnread - 1\)/);
-  assert.match(host, /Math\.max\(0, badgeStore\.systemUnread - 1\)/);
+  // systemUnread 已整体删除（#103）。
+  assert.doesNotMatch(host, /systemUnread/i);
 });
 
 test("notification snackbar host suppresses chat banners on the messages list", () => {
