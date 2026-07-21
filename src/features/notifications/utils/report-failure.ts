@@ -22,11 +22,13 @@ const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
  *   于是真正留给这里的，正好是从不经过 apiClient 的那些：getExpoPushTokenAsync
  *   抛错（FCM/APNs 配置错、projectId 无效）、权限调用抛错、导航抛错（点了推送什么
  *   都不发生）、以及 generateRevocationSecret 生产独有的 hard throw。
- *   注意这个过滤器不是 client.ts 规则的严格补集：apiClient 里 readPayload 的
- *   res.text() 在 fetch 的 try/catch 之外，读 body 中途断网会抛裸 TypeError，
- *   status 为 undefined —— client.ts 会报它、又原样抛出，于是这里再报一次。这条路
- *   很窄（且被下面的去重压到每会话一条），要根治得让 sink 自己按 error 实例去重，
- *   那会改动 5 个调用方共用的 reportError，另议。
+ *   这个过滤器现在是 client.ts 规则的严格补集。曾经不是：readPayload 的 res.text()
+ *   在 fetch 的 try/catch 之外，读 body 中途断网会抛裸 TypeError（status 为
+ *   undefined），client.ts 报它、又原样抛出，于是这里的 instanceof ApiError 接不住、
+ *   再报一次。该洞已修（body 读失败转成 status 0、failureKind 'body-read' 的
+ *   ApiError），apiClient 只抛 ApiError，本过滤器因此不再漏。
+ *   这条不变量是本函数去重的前提，测试见 test/api-client-body-read.test.js 与
+ *   test/notification-report-failure.test.js 里那条跨模块的集成用例。
  *
  * - 注册器每次 app 切前台都重跑 sync；撤销队列失败后每 60s 重试且永不停止；导航失败
  *   还会自重试 3 次。按次上报的话，一个系统性故障就能按「用户数 × 前台次数」刷爆配额。

@@ -68,7 +68,7 @@ async function reportSend(
 ): ReturnType<typeof OpenIMSDK.sendMessage> {
   assertLocalCanSendMessage();
   return OpenIMSDK['sendMessage'](options).catch((error: unknown) => {
-    reportError(error, { operation: 'openim', op: 'sendMessage' });
+    reportError(error, { operation: 'openim', kind: 'sendMessage' });
     throw error;
   });
 }
@@ -162,7 +162,7 @@ export async function ensureOpenIMInitialized() {
       useIMStore
         .getState()
         .setError(error instanceof Error ? error.message : 'OpenIM 初始化失败');
-      reportError(error, { operation: 'openim', op: 'init' });
+      reportError(error, { operation: 'openim', kind: 'init' });
       throw error;
     });
   }
@@ -258,7 +258,7 @@ export async function loginToOpenIM(userID: string, imToken: string) {
         await OpenIMSDK.unInitSDK();
       } catch (error) {
         // 拆除失败不阻断：下面 ensureOpenIMInitialized 仍会尝试重建。
-        reportError(error, { operation: 'openim', op: 'unInit' });
+        reportError(error, { operation: 'openim', kind: 'unInit' });
       }
       initPromise = null;
       useIMStore.getState().reset();
@@ -292,7 +292,7 @@ export async function loginToOpenIM(userID: string, imToken: string) {
     // 之后任何登录前的失败都会让 store 残留一个错误身份，影响 read-receipt 路由 / 气泡对齐。
     useIMStore.getState().setConnecting(false);
     useIMStore.getState().setCurrentUserID(null);
-    reportError(error, { operation: 'openim', op: 'login' });
+    reportError(error, { operation: 'openim', kind: 'login' });
     throw error;
   }
 }
@@ -336,7 +336,7 @@ async function performLogoutFromOpenIM() {
     if (isDev) {
       console.warn('[openim] SDK logout failed (local state still reset)', err);
     }
-    reportError(err, { operation: 'openim', op: 'logout' });
+    reportError(err, { operation: 'openim', kind: 'logout' });
   } finally {
     finalizeIMTeardown();
   }

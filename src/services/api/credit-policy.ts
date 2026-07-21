@@ -55,7 +55,7 @@ function getLocalLowCreditDecision(): CreditPolicyDecision | null {
   if (typeof score !== 'number') {
     reportGateEventOnce('scoreUnavailable', {
       operation: 'creditGate',
-      op: 'scoreUnavailable',
+      kind: 'scoreUnavailable',
     });
     return null;
   }
@@ -78,7 +78,7 @@ export function assertLocalCanSendMessage() {
     // 非第三方敏感数据；reportError 内部已 sanitize，且永不改变 app 行为。
     reportGateEventOnce('blockSend', {
       operation: 'creditGate',
-      op: 'blockSend',
+      kind: 'blockSend',
       code: localDenied.code ?? 'LOW_CREDIT_SCORE',
       currentScore: localDenied.currentScore,
       minScore: localDenied.minScore,
