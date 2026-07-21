@@ -84,6 +84,13 @@ function loadListenersHarness() {
       if (request === '@/services/auth/session') {
         return { clearLocalSession: async () => undefined };
       }
+      if (request === '@/im/token-recovery') {
+        return {
+          registerIMLoginExecutor: () => {},
+          recoverIMSession: async () => false,
+          isIMReloginPending: () => false,
+        };
+      }
       if (request === '@/im/snackbar') {
         return { buildChatSnackbar: () => null };
       }

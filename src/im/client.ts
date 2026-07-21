@@ -37,6 +37,7 @@ import {
   OPENIM_WS_URL,
 } from '@/constants/config';
 import { bindOpenIMListeners, unbindOpenIMListeners } from '@/im/listeners';
+import { registerIMLoginExecutor } from '@/im/token-recovery';
 import { stripFileScheme } from '@/im/media-uri';
 import { resolveVoiceSendStrategy } from '@/features/chat/utils/voice-forward';
 import { toImUserId } from '@/im/user-id';
@@ -78,6 +79,10 @@ async function reportSend(
 // 直接传函数引用而不是包一层箭头：session.ts 按引用去重，箭头每次模块求值都是新引用，
 // HMR 时会让同一个 teardown 累积多次（已经被 Batch 01 的 dedup 暴露过）。
 registerLogoutHandler(logoutFromOpenIM);
+
+// token-recovery 不 import 本模块（避免 client → listeners → token-recovery → client
+// 模块环），真正的 OpenIM 登录函数在这里注入。同样按引用注册，幂等。
+registerIMLoginExecutor(loginToOpenIM);
 
 function isNativeIMSupported() {
   return Platform.OS === 'ios' || Platform.OS === 'android';
