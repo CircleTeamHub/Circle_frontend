@@ -9,6 +9,9 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
 import { getOrCreateSingleConversation } from '@/im/client';
+import { getApiErrorMessage } from '@/services/api/errors';
+import { createDirectCall } from '@/services/api/calls';
+import { useCallStore } from '@/features/call/store/use-call-store';
 import { getProfileSignature } from '@/features/profile/profile-display';
 import { Radius, Spacing, Typography, useTheme, type ThemeColors } from '@/theme';
 import {
@@ -543,6 +546,30 @@ export default function UserProfileScreen() {
     }
   }, [displayName, openingChat, profile.avatarUrl, profileId, router, scope, t]);
 
+  const [startingCall, setStartingCall] = useState(false);
+  const setActiveCall = useCallStore((state) => state.setActiveCall);
+  const handleStartVoiceCall = useCallback(async () => {
+    if (startingCall || isCurrentUser || profileId === 'unknown') return;
+    setStartingCall(true);
+    try {
+      const response = await createDirectCall({
+        calleeID: profileId,
+        callType: 'AUDIO',
+      });
+      if (!mountedRef.current) return;
+      setActiveCall(response.call, response.livekit);
+      router.push('/(chat)/group-call' as never);
+    } catch (error) {
+      if (!mountedRef.current) return;
+      Alert.alert(
+        t('userProfile.avCall'),
+        getApiErrorMessage(error, t('common.networkError')),
+      );
+    } finally {
+      if (mountedRef.current) setStartingCall(false);
+    }
+  }, [isCurrentUser, profileId, router, setActiveCall, startingCall, t]);
+
   const handleOpenChatInfo = useCallback(() => {
     if (
       isCurrentUser ||
@@ -872,18 +899,16 @@ export default function UserProfileScreen() {
                 d.actionButton,
                 pressed && d.actionButtonPressed,
               ]}
-              // 之前没 onPress，纯哑按钮。RTC SDK 还没接入（同 chat-detail 视频按钮 → #28），
-              // 至少弹个 stopgap 别让用户以为没响应。
-              onPress={() =>
-                Alert.alert(
-                  t('userProfile.avCall'),
-                  t('userProfile.avCallComingSoon', {
-                    defaultValue: '音视频通话功能即将上线，敬请期待。',
-                  }),
-                )
-              }
+              // 1:1 语音（circle_be#113 / 本仓 #90）：好友/拉黑门禁由后端裁决，
+              // 403 CALL_NOT_FRIEND 走 serverErrors 文案。
+              onPress={() => {
+                void handleStartVoiceCall();
+              }}
+              disabled={startingCall}
             >
-              <Text style={d.actionText}>{t('userProfile.avCall')}</Text>
+              <Text style={d.actionText}>
+                {startingCall ? t('userProfile.callStarting') : t('userProfile.avCall')}
+              </Text>
             </Pressable>
             {showAddFriendButton ? (
               <Pressable

@@ -39,6 +39,7 @@ import {
   PlazaPostCardBubble,
   VerificationCardBubble,
   TransferCardBubble,
+  CallRecordBubble,
 } from '@/features/chat/components/chat-bubble';
 import { EmojiPicker } from '@/features/chat/components/emoji-picker';
 import { VoiceRecordingOverlay } from '@/features/chat/components/voice-recording-overlay';
@@ -126,7 +127,7 @@ import {
   resolveChatBackgroundStyle,
   useChatPreferencesStore,
 } from '@/features/chat/store/use-chat-preferences-store';
-import { createGroupCall } from '@/services/api/calls';
+import { createDirectCall, createGroupCall } from '@/services/api/calls';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
@@ -1159,6 +1160,83 @@ export default function ChatDetailScreen() {
     ],
   );
 
+  const handleStartCall = useCallback(async () => {
+    if (callStartingRef.current) return;
+
+    if (isPreviewMode || !conversationID || !sourceID) {
+      Alert.alert(t('chat.call.title'), t('chat.call.groupNotReady'));
+      return;
+    }
+
+    if (!authUser?.id) {
+      Alert.alert(t('chat.call.title'), t('chat.call.notLoggedIn'));
+      return;
+    }
+
+    callStartingRef.current = true;
+    setCallStarting(true);
+    try {
+      // 1:1（circle_be#113）：sourceID 即对方 UUID（见 mapConversationItemToUI），
+      // 直接走 direct 端点；好友/拉黑门禁由后端裁决，403 文案走 serverErrors。
+      if (!isGroupChat) {
+        const response = await createDirectCall({
+          calleeID: sourceID,
+          callType: 'AUDIO',
+        });
+        if (!mountedRef.current) return;
+        setActiveCall(response.call, response.livekit);
+        router.push('/(chat)/group-call' as never);
+        return;
+      }
+
+      const members = await loadGroupMemberList(sourceID, 10_000);
+      const inviteeIDs = Array.from(
+        new Set(
+          members
+            .map((member) => fromImUserId(member.userID))
+            .filter((userID) => userID && userID !== authUser.id),
+        ),
+      );
+
+      if (inviteeIDs.length === 0) {
+        Alert.alert(t('chat.call.title'), t('chat.call.noOtherMembers'));
+        return;
+      }
+
+      const response = await createGroupCall({
+        conversationID,
+        callType: 'AUDIO',
+        inviteeIDs,
+      });
+      if (!mountedRef.current) return;
+      setActiveCall(response.call, response.livekit);
+      router.push('/(chat)/group-call' as never);
+    } catch (error) {
+      if (mountedRef.current) {
+        Alert.alert(
+          t('chat.call.title'),
+          getApiErrorMessage(error, t('chat.call.initiateFailed')),
+        );
+      }
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn('[chat] start group audio call failed', error);
+      }
+    } finally {
+      callStartingRef.current = false;
+      if (mountedRef.current) {
+        setCallStarting(false);
+      }
+    }
+  }, [
+    authUser?.id,
+    conversationID,
+    isGroupChat,
+    isPreviewMode,
+    setActiveCall,
+    sourceID,
+    t,
+  ]);
+
   const renderItem = useCallback(({ item }: { item: ChatMessage }) => {
     switch (item.type) {
       case 'date': return <DatePill text={item.text ?? ''} />;
@@ -1339,6 +1417,22 @@ export default function ChatDetailScreen() {
             hideStatus={isGroupChat}
           />
         ));
+      case 'call-record':
+        return (
+          <CallRecordBubble
+            message={item}
+            outgoing={Boolean(item.outgoing)}
+            senderName={receivedDisplayName(item)}
+            senderAvatarUri={receivedAvatarUri(item)}
+            selfName={selfName}
+            selfAvatarUri={selfAvatarUri}
+            onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            // 1:1 里点通话记录 = 回拨；群聊回拨走标题栏通话入口，避免误触发全群振铃。
+            onCallBack={isGroupChat ? undefined : handleStartCall}
+            onLongPress={getMessageLongPressHandler(item)}
+            hideStatus={isGroupChat}
+          />
+        );
       default: return null;
     }
   }, [
@@ -1352,6 +1446,7 @@ export default function ChatDetailScreen() {
     scope,
     getMessageLongPressHandler,
     withMessageActions,
+    handleStartCall,
   ]);
 
   const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
@@ -2025,74 +2120,6 @@ export default function ChatDetailScreen() {
     [],
   );
 
-  const handleStartGroupAudioCall = useCallback(async () => {
-    if (callStartingRef.current) return;
-
-    if (!isGroupChat) {
-      Alert.alert(t('chat.call.title'), t('chat.call.groupOnly'));
-      return;
-    }
-
-    if (isPreviewMode || !conversationID || !sourceID) {
-      Alert.alert(t('chat.call.title'), t('chat.call.groupNotReady'));
-      return;
-    }
-
-    if (!authUser?.id) {
-      Alert.alert(t('chat.call.title'), t('chat.call.notLoggedIn'));
-      return;
-    }
-
-    callStartingRef.current = true;
-    setCallStarting(true);
-    try {
-      const members = await loadGroupMemberList(sourceID, 10_000);
-      const inviteeIDs = Array.from(
-        new Set(
-          members
-            .map((member) => fromImUserId(member.userID))
-            .filter((userID) => userID && userID !== authUser.id),
-        ),
-      );
-
-      if (inviteeIDs.length === 0) {
-        Alert.alert(t('chat.call.title'), t('chat.call.noOtherMembers'));
-        return;
-      }
-
-      const response = await createGroupCall({
-        conversationID,
-        callType: 'AUDIO',
-        inviteeIDs,
-      });
-      if (!mountedRef.current) return;
-      setActiveCall(response.call, response.livekit);
-      router.push('/(chat)/group-call' as never);
-    } catch (error) {
-      if (mountedRef.current) {
-        Alert.alert(
-          t('chat.call.title'),
-          getApiErrorMessage(error, t('chat.call.initiateFailed')),
-        );
-      }
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[chat] start group audio call failed', error);
-      }
-    } finally {
-      callStartingRef.current = false;
-      if (mountedRef.current) {
-        setCallStarting(false);
-      }
-    }
-  }, [
-    authUser?.id,
-    conversationID,
-    isGroupChat,
-    isPreviewMode,
-    setActiveCall,
-    sourceID,
-    t,
-  ]);
 
   const handleAttachmentAction = useCallback(
     (id: AttachmentId) => {
@@ -2121,7 +2148,7 @@ export default function ChatDetailScreen() {
           void handleSendCurrentLocation();
           return;
         case 'voice-call':
-          void handleStartGroupAudioCall();
+          void handleStartCall();
           return;
         case 'transfer':
           if (conversationType !== SessionType.Single) {
@@ -2147,7 +2174,7 @@ export default function ChatDetailScreen() {
       handlePickMedia,
       handleTakePhoto,
       handleSendCurrentLocation,
-      handleStartGroupAudioCall,
+      handleStartCall,
       openSharePicker,
       sourceID,
       t,

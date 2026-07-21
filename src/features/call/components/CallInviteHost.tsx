@@ -16,6 +16,7 @@ import { acceptCall, rejectCall } from '@/services/api/calls';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useCallStore } from '@/features/call/store/use-call-store';
 import { useIncomingCallExpiry } from '@/features/call/hooks/use-incoming-call-expiry';
+import { useCallReconciliation } from '@/features/call/hooks/use-call-reconciliation';
 import '@/features/call/call-session-teardown';
 
 const s = StyleSheet.create({
@@ -75,6 +76,8 @@ const s = StyleSheet.create({
 export function CallInviteHost() {
   const { colors } = useTheme();
   const { t } = useTranslation();
+  // 回前台时与服务端对账（#93）：清掉断线期间已在服务端结束的本地通话残留。
+  useCallReconciliation();
   const incomingCall = useCallStore((state) => state.incomingCall);
   const setActiveCall = useCallStore((state) => state.setActiveCall);
   const resetCallState = useCallStore((state) => state.resetCallState);

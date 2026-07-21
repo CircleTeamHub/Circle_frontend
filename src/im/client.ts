@@ -1294,6 +1294,8 @@ export async function sendNoteCardToConversation(params: {
  * Used by the "share post to chat" entry and the signup → chat auto flow.
  */
 export const PLAZA_POST_CARD_EXTENSION = 'plaza-post-card-v1';
+// 通话留痕卡片：由 circle_be 服务端在通话终局时下发（#115），客户端只读不发。
+export const CALL_RECORD_EXTENSION = 'call-record-v1';
 
 function plazaPostCardPreview(payload: PlazaPostCardData) {
   return `[活动] ${payload.title}`;

@@ -586,6 +586,15 @@
       "signupCount": "{{count}} 人已报名",
       "signupEmpty": "还没有人报名，来当第一个",
       "cta": "去报名"
+    },
+    "callRecord": {
+      "duration": "通话时长 {{duration}}",
+      "canceledBySelf": "已取消",
+      "canceledByPeer": "对方已取消",
+      "noAnswer": "对方未接听",
+      "missed": "未接听",
+      "failed": "通话未接通",
+      "ended": "通话已结束"
     }
   },
   "contacts": {
@@ -1201,7 +1210,6 @@
       "recharge": "积分充值",
       "memberAgreement": "《会员服务协议》",
       "loadError": "积分余额加载失败，请稍后重试",
-      "purchaseUnavailable": "积分购买暂未开放。当前页面仅显示余额。",
       "rechargeSuccess": "已充值 {{points}} 积分",
       "rechargeError": "充值失败，请稍后重试",
       "confirmRechargeMessage": "确定要充值 {{points}} 积分（{{price}}）吗？",
@@ -1420,7 +1428,8 @@
       "empty": "还没有标签，先创建一个再保存。"
     },
     "avCallComingSoon": "音视频通话功能即将上线，敬请期待。",
-    "unknownUser": "未命名用户"
+    "unknownUser": "未命名用户",
+    "callStarting": "拨打中…"
   },
   "profileFields": {
     "avatar": "头像",
@@ -2196,7 +2205,9 @@
       "note": "[笔记] {{title}}",
       "verification": "[验证] {{name}} 邀请你担保",
       "default": "[消息]",
-      "plazaPost": "[活动] {{title}}"
+      "plazaPost": "[活动] {{title}}",
+      "voiceCall": "[语音通话]",
+      "videoCall": "[视频通话]"
     }
   },
   "permissions": {
@@ -2397,6 +2408,7 @@
     "CALL_NOT_FOUND": "通话不存在",
     "CALL_NOT_ALLOWED": "你无权进行此通话操作",
     "CALL_ALREADY_ACTIVE": "你已在一个进行中的通话中",
+    "CALL_NOT_FRIEND": "只能与好友通话",
     "CONVGROUP_NOT_FOUND": "分组不存在",
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "会话不存在",
     "COLLECTION_NOT_FOUND": "收藏不存在",

@@ -587,6 +587,15 @@
       "signupCount": "{{count}} going",
       "signupEmpty": "Be the first to join",
       "cta": "Join"
+    },
+    "callRecord": {
+      "duration": "Call duration {{duration}}",
+      "canceledBySelf": "Canceled",
+      "canceledByPeer": "Canceled by the other side",
+      "noAnswer": "No answer",
+      "missed": "Missed call",
+      "failed": "Call failed",
+      "ended": "Call ended"
     }
   },
   "contacts": {
@@ -1197,14 +1206,13 @@
     "memberCenter": "Membership",
     "viewMember": "View",
     "wallet": {
-      "purchaseUnavailable": "Point purchases are not available yet. This page currently shows your balance only.",
+      "purchaseUnavailable": "Points purchases are not available yet. This page currently shows your balance only.",
       "title": "My Wallet",
       "confirmRecharge": "Confirm Recharge",
       "balance": "Points Balance",
       "recharge": "Recharge Points",
       "memberAgreement": "《Membership Service Agreement》",
       "loadError": "Failed to load points balance. Please try again later.",
-      "purchaseUnavailable": "Points purchases are not available yet. This page currently shows your balance only.",
       "rechargeSuccess": "Recharged {{points}} points",
       "rechargeError": "Recharge failed. Please try again later.",
       "confirmRechargeMessage": "Recharge {{points}} points ({{price}})?",
@@ -1423,7 +1431,8 @@
       "empty": "No tags yet. Create one before saving."
     },
     "avCallComingSoon": "Voice and video calls are coming soon. Stay tuned.",
-    "unknownUser": "Unnamed user"
+    "unknownUser": "Unnamed user",
+    "callStarting": "Calling…"
   },
   "profileFields": {
     "avatar": "Avatar",
@@ -2199,7 +2208,9 @@
       "note": "[Note] {{title}}",
       "verification": "[Verify] {{name}} asked you to vouch",
       "default": "[Message]",
-      "plazaPost": "[Event] {{title}}"
+      "plazaPost": "[Event] {{title}}",
+      "voiceCall": "[Voice call]",
+      "videoCall": "[Video call]"
     }
   },
   "permissions": {
@@ -2400,6 +2411,7 @@
     "CALL_NOT_FOUND": "Call not found",
     "CALL_NOT_ALLOWED": "You can't perform this call action",
     "CALL_ALREADY_ACTIVE": "You're already in an active call",
+    "CALL_NOT_FRIEND": "You can only call friends",
     "CONVGROUP_NOT_FOUND": "Group not found",
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "Conversation not found",
     "COLLECTION_NOT_FOUND": "Collection not found",

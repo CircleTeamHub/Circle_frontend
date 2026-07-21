@@ -558,6 +558,15 @@
       "signupCount": "{{count}} apuntados",
       "signupEmpty": "Sé el primero en apuntarte",
       "cta": "Apuntarme"
+    },
+    "callRecord": {
+      "duration": "Duración {{duration}}",
+      "canceledBySelf": "Cancelada",
+      "canceledByPeer": "Cancelada por la otra parte",
+      "noAnswer": "Sin respuesta",
+      "missed": "Llamada perdida",
+      "failed": "Llamada fallida",
+      "ended": "Llamada finalizada"
     }
   },
   "messages": {
@@ -1633,21 +1642,21 @@
       "empty": "Aún no hay etiquetas. Crea una antes de guardar."
     },
     "avCallComingSoon": "Las llamadas de voz y video llegarán pronto. No te lo pierdas.",
-    "unknownUser": "Usuario sin nombre"
+    "unknownUser": "Usuario sin nombre",
+    "callStarting": "Llamando…"
   },
   "profile": {
     "creditScore": "Puntuación de crédito",
     "memberCenter": "Membresía",
     "viewMember": "Ver",
     "wallet": {
-      "purchaseUnavailable": "La compra de créditos aún no está disponible. Esta página solo muestra tu saldo.",
+      "purchaseUnavailable": "La compra de puntos aún no está disponible. Por ahora, esta página solo muestra tu saldo.",
       "title": "Mi cartera",
       "confirmRecharge": "Confirmar recarga",
       "balance": "Saldo de créditos",
       "recharge": "Recargar créditos",
       "memberAgreement": "Acuerdo de servicio de membresía",
       "loadError": "Error al cargar el saldo de créditos. Inténtalo de nuevo más tarde.",
-      "purchaseUnavailable": "La compra de puntos aún no está disponible. Por ahora, esta página solo muestra tu saldo.",
       "rechargeSuccess": "Recargaste {{points}} créditos",
       "rechargeError": "Error en la recarga. Inténtalo de nuevo más tarde.",
       "confirmRechargeMessage": "¿Recargar {{points}} créditos ({{price}})?",
@@ -2225,7 +2234,9 @@
       "note": "[Nota] {{title}}",
       "verification": "[Verificar] {{name}} te pidió que avales",
       "default": "[Mensaje]",
-      "plazaPost": "[Evento] {{title}}"
+      "plazaPost": "[Evento] {{title}}",
+      "voiceCall": "[Llamada de voz]",
+      "videoCall": "[Videollamada]"
     }
   },
   "permissions": {
@@ -2400,6 +2411,7 @@
     "CALL_NOT_FOUND": "Llamada no encontrada",
     "CALL_NOT_ALLOWED": "No puedes realizar esta acción de llamada",
     "CALL_ALREADY_ACTIVE": "Ya estás en una llamada activa",
+    "CALL_NOT_FRIEND": "Solo puedes llamar a tus amigos",
     "CONVGROUP_NOT_FOUND": "Grupo no encontrado",
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "Conversación no encontrada",
     "COLLECTION_NOT_FOUND": "Colección no encontrada",

@@ -557,6 +557,15 @@
       "signupCount": "{{count}}명 참가",
       "signupEmpty": "아직 신청자가 없어요",
       "cta": "신청하기"
+    },
+    "callRecord": {
+      "duration": "통화 시간 {{duration}}",
+      "canceledBySelf": "취소됨",
+      "canceledByPeer": "상대방이 취소했습니다",
+      "noAnswer": "응답 없음",
+      "missed": "부재중 전화",
+      "failed": "통화 연결 실패",
+      "ended": "통화 종료"
     }
   },
   "messages": {
@@ -1630,21 +1639,21 @@
       "empty": "아직 태그가 없습니다. 저장하기 전에 하나 만드세요."
     },
     "avCallComingSoon": "음성・영상 통화 기능이 곧 출시됩니다. 기대해 주세요.",
-    "unknownUser": "이름 없는 사용자"
+    "unknownUser": "이름 없는 사용자",
+    "callStarting": "전화 거는 중…"
   },
   "profile": {
     "creditScore": "신용 점수",
     "memberCenter": "멤버십",
     "viewMember": "보기",
     "wallet": {
-      "purchaseUnavailable": "크레딧 구매는 아직 이용할 수 없습니다. 현재 이 페이지에는 잔액만 표시됩니다.",
+      "purchaseUnavailable": "포인트 구매는 아직 지원되지 않습니다. 현재 이 페이지에는 잔액만 표시됩니다.",
       "title": "내 지갑",
       "confirmRecharge": "충전 확인",
       "balance": "크레딧 잔액",
       "recharge": "크레딧 충전",
       "memberAgreement": "회원 서비스 약관",
       "loadError": "크레딧 잔액을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
-      "purchaseUnavailable": "포인트 구매는 아직 지원되지 않습니다. 현재 이 페이지에는 잔액만 표시됩니다.",
       "rechargeSuccess": "{{points}} 크레딧을 충전했습니다",
       "rechargeError": "충전에 실패했습니다. 잠시 후 다시 시도해 주세요.",
       "confirmRechargeMessage": "{{points}} 크레딧({{price}})을 충전하시겠어요?",
@@ -2222,7 +2231,9 @@
       "note": "[노트] {{title}}",
       "verification": "[인증] {{name}}님이 보증을 요청했습니다",
       "default": "[메시지]",
-      "plazaPost": "[활동] {{title}}"
+      "plazaPost": "[활동] {{title}}",
+      "voiceCall": "[음성 통화]",
+      "videoCall": "[영상 통화]"
     }
   },
   "permissions": {
@@ -2397,6 +2408,7 @@
     "CALL_NOT_FOUND": "통화를 찾을 수 없습니다",
     "CALL_NOT_ALLOWED": "이 통화 작업을 수행할 수 없습니다",
     "CALL_ALREADY_ACTIVE": "이미 진행 중인 통화가 있습니다",
+    "CALL_NOT_FRIEND": "친구와만 통화할 수 있습니다",
     "CONVGROUP_NOT_FOUND": "그룹을 찾을 수 없습니다",
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "대화를 찾을 수 없습니다",
     "COLLECTION_NOT_FOUND": "컬렉션을 찾을 수 없습니다",

@@ -12,3 +12,4 @@ export { CircleCardBubble } from './bubbles/circle-card-bubble';
 export { PlazaPostCardBubble } from './bubbles/plaza-post-card-bubble';
 export { VerificationCardBubble } from './bubbles/verification-card-bubble';
 export { TransferCardBubble } from './bubbles/transfer-card-bubble';
+export { CallRecordBubble } from './bubbles/call-record-bubble';

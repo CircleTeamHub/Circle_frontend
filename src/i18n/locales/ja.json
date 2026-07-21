@@ -557,6 +557,15 @@
       "signupCount": "{{count}}人が参加",
       "signupEmpty": "まだ誰も参加していません",
       "cta": "参加する"
+    },
+    "callRecord": {
+      "duration": "通話時間 {{duration}}",
+      "canceledBySelf": "キャンセルしました",
+      "canceledByPeer": "相手がキャンセルしました",
+      "noAnswer": "応答なし",
+      "missed": "不在着信",
+      "failed": "通話に失敗しました",
+      "ended": "通話が終了しました"
     }
   },
   "messages": {
@@ -1630,21 +1639,21 @@
       "empty": "タグがありません。保存する前に作成してください。"
     },
     "avCallComingSoon": "音声・ビデオ通話機能は近日公開予定です。お楽しみに。",
-    "unknownUser": "名前未設定のユーザー"
+    "unknownUser": "名前未設定のユーザー",
+    "callStarting": "発信中…"
   },
   "profile": {
     "creditScore": "信用スコア",
     "memberCenter": "会員",
     "viewMember": "見る",
     "wallet": {
-      "purchaseUnavailable": "クレジットの購入はまだ利用できません。現在、このページには残高のみが表示されます。",
+      "purchaseUnavailable": "ポイント購入はまだご利用いただけません。現在、このページには残高のみが表示されます。",
       "title": "マイウォレット",
       "confirmRecharge": "チャージを確認",
       "balance": "クレジット残高",
       "recharge": "クレジットをチャージ",
       "memberAgreement": "会員サービス規約",
       "loadError": "クレジット残高の読み込みに失敗しました。しばらくしてから再試行してください。",
-      "purchaseUnavailable": "ポイント購入はまだご利用いただけません。現在、このページには残高のみが表示されます。",
       "rechargeSuccess": "{{points}} クレジットをチャージしました",
       "rechargeError": "チャージに失敗しました。しばらくしてから再試行してください。",
       "confirmRechargeMessage": "{{points}} クレジット（{{price}}）をチャージしますか？",
@@ -2222,7 +2231,9 @@
       "note": "[ノート] {{title}}",
       "verification": "[認証] {{name}} から保証の依頼があります",
       "default": "[メッセージ]",
-      "plazaPost": "[イベント] {{title}}"
+      "plazaPost": "[イベント] {{title}}",
+      "voiceCall": "[音声通話]",
+      "videoCall": "[ビデオ通話]"
     }
   },
   "permissions": {
@@ -2397,6 +2408,7 @@
     "CALL_NOT_FOUND": "通話が見つかりません",
     "CALL_NOT_ALLOWED": "この通話操作は許可されていません",
     "CALL_ALREADY_ACTIVE": "すでに通話中です",
+    "CALL_NOT_FRIEND": "通話できるのは友達のみです",
     "CONVGROUP_NOT_FOUND": "グループが見つかりません",
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "会話が見つかりません",
     "COLLECTION_NOT_FOUND": "コレクションが見つかりません",

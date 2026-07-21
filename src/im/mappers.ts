@@ -13,6 +13,7 @@ import type {
   TransferCardData,
   VerificationCardData,
   PlazaPostCardData,
+  CallRecordData,
 } from '@/types';
 import {
   MessageType,
@@ -25,6 +26,7 @@ import {
   TRANSFER_CARD_EXTENSION,
   VERIFICATION_CARD_EXTENSION,
   PLAZA_POST_CARD_EXTENSION,
+  CALL_RECORD_EXTENSION,
   FRIEND_ADDED_NOTICE_EXTENSION,
   fromImUserId,
 } from '@/im/client';
@@ -198,6 +200,31 @@ function parseVerificationCardPayload(
 const PLAZA_POST_CARD_ID_MAX_LENGTH = 256;
 const PLAZA_POST_CARD_TITLE_MAX_LENGTH = 200;
 
+/** 通话留痕卡片（#115）：服务端在通话终局下发。字段校验从宽——endReason 未知值照渲染。 */
+export function parseCallRecordData(data: string): CallRecordData | null {
+  try {
+    const raw = JSON.parse(data) as Partial<CallRecordData> & {
+      type?: string;
+    };
+    if (raw.type !== 'call_record' || typeof raw.callId !== 'string') {
+      return null;
+    }
+    return {
+      callId: raw.callId,
+      callType: raw.callType === 'VIDEO' ? 'VIDEO' : 'AUDIO',
+      sessionType: raw.sessionType === 'group' ? 'group' : 'single',
+      endReason: (raw.endReason ?? 'NORMAL') as CallRecordData['endReason'],
+      durationSeconds:
+        typeof raw.durationSeconds === 'number' && raw.durationSeconds >= 0
+          ? raw.durationSeconds
+          : null,
+      initiatorID: typeof raw.initiatorID === 'string' ? raw.initiatorID : '',
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function parsePlazaPostCardData(data: string): PlazaPostCardData | null {
   try {
     const raw = JSON.parse(data) as Partial<PlazaPostCardData>;
@@ -341,6 +368,14 @@ export function getMessagePreview(message: MessageItem | null, fallback = '') {
           return tImPreview('plazaPost', '[活动] {{title}}', {
             title: payload.title,
           });
+      }
+      if (ext === CALL_RECORD_EXTENSION) {
+        const payload = parseCallRecordData(message.customElem?.data ?? '');
+        if (payload)
+          return tImPreview(
+            payload.callType === 'VIDEO' ? 'videoCall' : 'voiceCall',
+            payload.callType === 'VIDEO' ? '[视频通话]' : '[语音通话]',
+          );
       }
       if (ext === VERIFICATION_CARD_EXTENSION) {
         const payload = parseVerificationCardPayload(
@@ -514,6 +549,18 @@ export function mapMessageItemToChatMessage(
             ...payload,
             coverUrl: normalizeMediaUrl(payload.coverUrl) ?? null,
           },
+          senderName: isSent ? undefined : (item.senderNickname || item.sendID),
+        };
+      }
+    }
+    if (ext === CALL_RECORD_EXTENSION) {
+      const payload = parseCallRecordData(item.customElem?.data ?? '');
+      if (payload) {
+        return {
+          ...base,
+          type: 'call-record',
+          outgoing: isSent,
+          callRecord: payload,
           senderName: isSent ? undefined : (item.senderNickname || item.sendID),
         };
       }
