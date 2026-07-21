@@ -41,6 +41,7 @@ import { stripFileScheme } from '@/im/media-uri';
 import { resolveVoiceSendStrategy } from '@/features/chat/utils/voice-forward';
 import { toImUserId } from '@/im/user-id';
 import { registerLogoutHandler } from '@/services/auth/session';
+import { storage } from '@/storage';
 import { useIMStore } from '@/stores/imStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { reportError } from '@/observability/sentry';
@@ -172,6 +173,52 @@ export async function ensureOpenIMInitialized() {
   return true;
 }
 
+// 上一次成功发起 OpenIM 登录的 IM userID（设备级 MMKV，不随登出清除）。
+const OPENIM_DATA_OWNER_KEY = 'circle-im-openim-data-owner';
+
+/**
+ * 换号即清上一账号的 OpenIM 本地库（#96）。
+ *
+ * 消息 SQLite 落在 ${Documents}/openim，登出**有意不删** —— 同账号重登可秒开
+ * 且离线可读历史。共享设备的泄漏点在「下一个人登自己的号」：此时上一账号的库
+ * 还躺在磁盘上。中间路线：只在检测到**不同账号**登录时整目录删除，重新全量同步
+ * 的代价由真正需要隔离的场景付。
+ *
+ * 时序约束：必须发生在 initSDK 之前（SDK 未持文件句柄）。in-process 切号时
+ * logout 已把 initPromise 置空，正好满足；若 SDK 意外仍在运行则跳过且**不**
+ * 转移 owner 登记，让下一次干净登录补上这次清理。首次升级（无登记）只登记不删。
+ * 失败不阻断登录：隐私加固尽力而为，但要可见（dev-warn + 上报）。
+ */
+async function wipeStaleOpenIMDataOnAccountChange(imUserID: string) {
+  try {
+    const previousOwner = storage.getString(OPENIM_DATA_OWNER_KEY);
+    if (previousOwner === imUserID) {
+      return;
+    }
+    if (previousOwner && initPromise) {
+      if (isDev) {
+        console.warn(
+          '[openim] account changed but SDK is initialized; deferring stale data wipe',
+        );
+      }
+      return;
+    }
+    if (previousOwner) {
+      const RNFS = loadNativeFS();
+      const dataDir = await getOpenIMDataDir();
+      if (await RNFS.exists(dataDir)) {
+        await RNFS.unlink(dataDir);
+      }
+    }
+    storage.set(OPENIM_DATA_OWNER_KEY, imUserID);
+  } catch (error) {
+    if (isDev) {
+      console.warn('[openim] stale data wipe on account change failed', error);
+    }
+    reportError(error, { operation: 'openim', kind: 'accountDataWipe' });
+  }
+}
+
 /** 是否为 OpenIM 的 10004「资源未加载」错误 —— 僵尸登录态的特征。 */
 function isOpenIMResourceNotLoadedError(error: unknown): boolean {
   const code = (error as { code?: number })?.code;
@@ -217,8 +264,10 @@ export async function loginToOpenIM(userID: string, imToken: string) {
     if (logoutPromise) {
       await logoutPromise;
     }
-    await ensureOpenIMInitialized();
     const imUserID = toImUserId(userID);
+    // 换号检测必须在 initSDK 之前（#96）：SDK 还没持有本地库句柄时删目录才安全。
+    await wipeStaleOpenIMDataOnAccountChange(imUserID);
+    await ensureOpenIMInitialized();
     useIMStore.getState().setCurrentUserID(imUserID);
     useIMStore.getState().setError(null);
 

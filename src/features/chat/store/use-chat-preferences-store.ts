@@ -31,6 +31,8 @@ type ChatPreferencesState = {
     preference: ChatBackgroundPreference,
   ) => void;
   clearChatBackgroundPreference: (conversationID: string) => void;
+  // 登出 teardown 用（#97）：背景偏好按 conversationID 归属账号，不得跨号残留。
+  resetForLogout: () => void;
 };
 
 function findChatBackgroundPreset(presetId: string) {
@@ -98,6 +100,8 @@ export const useChatPreferencesStore = create<ChatPreferencesState>()(
             backgroundsByConversationID: nextBackgroundsByConversationID,
           };
         }),
+
+      resetForLogout: () => set({ backgroundsByConversationID: {} }),
     }),
     {
       name: 'circle-im-chat-preferences',
