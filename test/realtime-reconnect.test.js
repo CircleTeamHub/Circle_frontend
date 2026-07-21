@@ -52,6 +52,7 @@ function loadRealtimeHarness() {
   const timers = new Map();
 
   const realtimeConnected = [];
+  const clearedSessions = [];
   const stubStore = (state) => ({ getState: () => state });
 
   const context = {
@@ -116,7 +117,13 @@ function loadRealtimeHarness() {
             isCallStatePayload: () => false,
           };
         case '@/services/auth/session':
-          return { registerLogoutHandler: () => () => {} };
+          return {
+            registerLogoutHandler: () => () => {},
+            clearLocalSession: () => {
+              clearedSessions.push(true);
+              return Promise.resolve();
+            },
+          };
         case '@/stores/authStore':
           return { useAuthStore: stubStore({ setUser: () => {} }) };
         case '@/stores/tabBadgeStore':
@@ -155,6 +162,7 @@ function loadRealtimeHarness() {
     ...context.module.exports,
     sockets,
     realtimeConnected,
+    clearedSessions,
     latestSocket: () => sockets[sockets.length - 1],
     pendingDelay: () => pendingTimer()?.[1].delay ?? null,
     hasPendingReconnect: () => pendingTimer() !== null,
@@ -181,6 +189,21 @@ function openLatestSocket(harness) {
   const socket = harness.latestSocket();
   socket.readyState = 1;
   socket.onopen();
+}
+
+// 认证通过后网关立刻回推一帧 badge.snapshot。收到帧才代表这条连接真的可用 ——
+// 握手成功之后网关仍可能以 1008 把它踢掉。
+function deliverSnapshot(harness) {
+  harness.latestSocket().onmessage({
+    data: JSON.stringify({ type: 'badge.snapshot', payload: {} }),
+  });
+}
+
+// 网关主动拒绝：code + reason 都带上，和后端 REVOKED_CLOSE_* 对齐。
+function rejectLatestSocket(harness, code, reason) {
+  const socket = harness.latestSocket();
+  socket.readyState = 3;
+  socket.onclose({ code, reason });
 }
 
 // P0-12d: 连续失败 10 次后永久放弃，意味着来电邀请和红点在本次进程剩余时间里
@@ -247,6 +270,7 @@ test('a successful connection resets the backoff to the first step', () => {
   harness.runPendingReconnect();
 
   openLatestSocket(harness);
+  deliverSnapshot(harness);
   failLatestSocket(harness);
 
   const delay = harness.pendingDelay();
@@ -300,6 +324,66 @@ test('logout stops reconnecting permanently', () => {
 
   queuedOnClose();
   assert.equal(harness.hasPendingReconnect(), false, 'logout must not schedule a reconnect');
+});
+
+// 后端把会话撤销应用到活跃 WebSocket 之后，被踢的连接如果照常重连，就会在
+// 「握手成功 → 认证 → 被 1008 踢 → 重连」上打转，直到 token 自然过期（约 1h）。
+test('a revoked session stops reconnecting and logs out instead of looping', () => {
+  const harness = loadRealtimeHarness();
+  harness.connectRealtime('token-a');
+  openLatestSocket(harness);
+  deliverSnapshot(harness);
+
+  rejectLatestSocket(harness, 1008, 'Session revoked');
+
+  assert.equal(
+    harness.hasPendingReconnect(),
+    false,
+    'a revoked session must not schedule a reconnect',
+  );
+  assert.equal(
+    harness.clearedSessions.length,
+    1,
+    'a revoked session should fall out through the same exit as an HTTP 401',
+  );
+});
+
+// 同为 1008，但连接数超限是暂时的（另一台设备下线就好了），必须继续重连。
+test('other 1008 rejections still reconnect, on an escalating backoff', () => {
+  const harness = loadRealtimeHarness();
+  harness.connectRealtime('token-a');
+  openLatestSocket(harness);
+  deliverSnapshot(harness);
+
+  rejectLatestSocket(harness, 1008, 'Too many connections');
+
+  assert.equal(harness.hasPendingReconnect(), true);
+  assert.equal(harness.clearedSessions.length, 0, 'must not log the user out');
+});
+
+// 风暴的成因：网关是在认证「之后」才踢人的，所以握手一定会先成功。退避若在
+// onopen 归零，每一轮都从最短延迟重来，等于每秒锤一次后端。
+test('a socket killed right after the handshake keeps escalating the backoff', () => {
+  const harness = loadRealtimeHarness();
+  harness.connectRealtime('token-a');
+
+  const delays = [];
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    // 握手成功、认证帧发出，但一帧都没收到就被踢 —— 连接从未真正可用。
+    openLatestSocket(harness);
+    rejectLatestSocket(harness, 1008, 'Too many connections');
+    delays.push(harness.runPendingReconnect());
+  }
+
+  const expectedBases = [1_000, 2_000, 4_000, 8_000, 16_000];
+  delays.forEach((delay, index) => {
+    const base = expectedBases[index];
+    assert.ok(
+      delay >= base && delay < base * JITTER_CEILING,
+      `delay #${index} (${delay}) should sit in [${base}, ${base * JITTER_CEILING}) — ` +
+        'a handshake that never got authenticated must not reset the backoff',
+    );
+  });
 });
 
 test('reconnected sockets re-send the auth frame', () => {
