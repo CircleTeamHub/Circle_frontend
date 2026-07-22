@@ -1,5 +1,9 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
+import {
+  OPENIM_DATA_DIR_NAME,
+  getOpenIMDataDirPath,
+} from '@/im/data-dir';
 
 export interface ClearAppCacheResult {
   clearedEntries: number;
@@ -26,9 +30,14 @@ const MAX_DIRECTORY_DEPTH = 16;
 // Names within the cache root that the app must NOT touch when "Clear Cache"
 // runs. These belong to the OS, system frameworks, or other native modules
 // that own their own lifecycle. Matching is done on the entry's basename.
+//
+// 不变量（#113）：匹配只发生在缓存根的「第一层 readDir」上，不递归。因此所有需要
+// 豁免的状态必须落在缓存根第一层（或压根不在缓存根下——MMKV 在 Documents、OpenIM
+// 在 DocumentDirectory，两者今天都不受清理影响，这份清单是纵深防御）。如果未来有
+// 关键状态嵌进缓存根的子目录，要么把它挪出来，要么把 isDenylisted 改成递归检查。
 const CACHE_CLEAR_DENYLIST = new Set([
   // OpenIM SDK state (defensive — currently lives under DocumentDirectory)
-  'openim',
+  OPENIM_DATA_DIR_NAME,
   // Persistent stores accidentally placed under cache by some libs
   'mmkv',
   'RCTAsyncLocalStorage_V1',
@@ -114,7 +123,7 @@ async function getOpenIMDirectory() {
   }
 
   const RNFS = await loadNativeFS();
-  return `${RNFS.DocumentDirectoryPath}/openim`;
+  return getOpenIMDataDirPath(RNFS.DocumentDirectoryPath);
 }
 
 async function getDirectorySize(

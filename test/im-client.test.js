@@ -20,6 +20,12 @@ const DEFAULT_TS_MODULE_STUBS = {
     bindOpenIMListeners: () => () => {},
     unbindOpenIMListeners: () => {},
   },
+  '@/im/token-recovery': {
+    registerIMLoginExecutor: () => {},
+    registerIMLogoutExecutor: () => {},
+    recoverIMSession: async () => false,
+    isIMReloginPending: () => false,
+  },
   '@/services/auth/session': {
     registerLogoutHandler: () => () => {},
   },
@@ -64,6 +70,11 @@ function loadTsModule(relativePath, stubs = {}) {
 // client.ts 顶层现在还会 import @/im/media-uri（本地路径 scheme 处理）；注入真实实现以便 require 解析。
 DEFAULT_TS_MODULE_STUBS['@/im/media-uri'] = loadTsModule('src/im/media-uri.ts');
 DEFAULT_TS_MODULE_STUBS['@/im/user-id'] = loadTsModule('src/im/user-id.ts');
+DEFAULT_TS_MODULE_STUBS['@/im/error-codes'] = loadTsModule('src/im/error-codes.ts');
+DEFAULT_TS_MODULE_STUBS['@/im/data-dir'] = loadTsModule('src/im/data-dir.ts');
+DEFAULT_TS_MODULE_STUBS['@/storage'] = {
+  storage: { getString: () => undefined, set: () => {}, remove: () => {} },
+};
 DEFAULT_TS_MODULE_STUBS['@/observability/sentry'] = { reportError: () => {} };
 DEFAULT_TS_MODULE_STUBS['@/services/api/credit-policy'] = {
   assertCanSendMessage: async () => undefined,
@@ -232,6 +243,8 @@ test('login waits for an in-flight OpenIM logout before starting the next sessio
         default: {
           DocumentDirectoryPath: '/tmp',
           mkdir: async () => undefined,
+          exists: async () => false,
+          unlink: async () => undefined,
         },
       },
       'react-native': { Platform: { OS: 'ios' } },
@@ -328,6 +341,8 @@ test('getOrCreateSingleConversation fetches a private conversation and merges it
       default: {
         DocumentDirectoryPath: '/tmp',
         mkdir: async () => undefined,
+          exists: async () => false,
+          unlink: async () => undefined,
       },
     },
     'react-native': {
@@ -423,6 +438,8 @@ test('getOrCreateSingleConversation waits until IM connection is ready before re
       default: {
         DocumentDirectoryPath: '/tmp',
         mkdir: async () => undefined,
+          exists: async () => false,
+          unlink: async () => undefined,
       },
     },
     'react-native': {
@@ -499,6 +516,8 @@ test('sendTextMessage waits until IM connection is ready before sending', async 
       default: {
         DocumentDirectoryPath: '/tmp',
         mkdir: async () => undefined,
+          exists: async () => false,
+          unlink: async () => undefined,
       },
     },
     'react-native': {
@@ -583,7 +602,12 @@ test('forwardMessage uses the native createForwardMessage primitive (preserves m
     },
     'react-native-fs': {
       __esModule: true,
-      default: { DocumentDirectoryPath: '/tmp', mkdir: async () => undefined },
+      default: {
+        DocumentDirectoryPath: '/tmp',
+        mkdir: async () => undefined,
+        exists: async () => false,
+        unlink: async () => undefined,
+      },
     },
     'react-native': { Platform: { OS: 'ios' } },
     '@/constants/config': {
@@ -660,6 +684,8 @@ test('logoutFromOpenIM unbinds OpenIM listeners and a later init rebinds them (C
         default: {
           DocumentDirectoryPath: '/tmp',
           mkdir: async () => undefined,
+          exists: async () => false,
+          unlink: async () => undefined,
         },
       },
       'react-native': { Platform: { OS: 'ios' } },
@@ -729,7 +755,12 @@ function imageSdkStubs(capture) {
     },
     'react-native-fs': {
       __esModule: true,
-      default: { DocumentDirectoryPath: '/tmp', mkdir: async () => undefined },
+      default: {
+        DocumentDirectoryPath: '/tmp',
+        mkdir: async () => undefined,
+        exists: async () => false,
+        unlink: async () => undefined,
+      },
     },
     'react-native': { Platform: { OS: 'ios' } },
     '@/constants/config': {

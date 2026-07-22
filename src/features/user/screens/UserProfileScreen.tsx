@@ -9,6 +9,9 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
 import { getOrCreateSingleConversation } from '@/im/client';
+import { getApiErrorMessage } from '@/services/api/errors';
+import { createDirectCall } from '@/services/api/calls';
+import { useCallStore } from '@/features/call/store/use-call-store';
 import { getProfileSignature } from '@/features/profile/profile-display';
 import { Radius, Spacing, Typography, useTheme, type ThemeColors } from '@/theme';
 import {
@@ -543,6 +546,45 @@ export default function UserProfileScreen() {
     }
   }, [displayName, openingChat, profile.avatarUrl, profileId, router, scope, t]);
 
+  const [startingCall, setStartingCall] = useState(false);
+  // review 修复：state 版守卫要等 React 提交才生效，快速双击都会以
+  // startingCall===false 进入，双发非幂等的 POST /calls/direct。ref 同步生效
+  //（与聊天页 callStartingRef 同模式）；state 仅保留给按钮 UI。
+  const callStartingRef = useRef(false);
+  const setActiveCall = useCallStore((state) => state.setActiveCall);
+  const handleStartVoiceCall = useCallback(async () => {
+    if (
+      callStartingRef.current ||
+      startingCall ||
+      isCurrentUser ||
+      profileId === 'unknown'
+    )
+      return;
+    callStartingRef.current = true;
+    setStartingCall(true);
+    try {
+      const response = await createDirectCall({
+        calleeID: profileId,
+        callType: 'AUDIO',
+      });
+      // round 2 review：呼叫已在服务端创建、对端已在响铃 —— 即使本页面已
+      // unmount（用户先行离开），也必须落全局通话态并进通话页；否则主叫端
+      // 没有任何 UI 能管理这通还在响的电话。store 与 router 都是全局对象，
+      // unmount 后调用安全。
+      setActiveCall(response.call, response.livekit);
+      router.push('/(chat)/group-call' as never);
+    } catch (error) {
+      if (!mountedRef.current) return;
+      Alert.alert(
+        t('userProfile.avCall'),
+        getApiErrorMessage(error, t('common.networkError')),
+      );
+    } finally {
+      callStartingRef.current = false;
+      if (mountedRef.current) setStartingCall(false);
+    }
+  }, [isCurrentUser, profileId, router, setActiveCall, startingCall, t]);
+
   const handleOpenChatInfo = useCallback(() => {
     if (
       isCurrentUser ||
@@ -872,18 +914,16 @@ export default function UserProfileScreen() {
                 d.actionButton,
                 pressed && d.actionButtonPressed,
               ]}
-              // 之前没 onPress，纯哑按钮。RTC SDK 还没接入（同 chat-detail 视频按钮 → #28），
-              // 至少弹个 stopgap 别让用户以为没响应。
-              onPress={() =>
-                Alert.alert(
-                  t('userProfile.avCall'),
-                  t('userProfile.avCallComingSoon', {
-                    defaultValue: '音视频通话功能即将上线，敬请期待。',
-                  }),
-                )
-              }
+              // 1:1 语音（circle_be#113 / 本仓 #90）：好友/拉黑门禁由后端裁决，
+              // 403 CALL_NOT_FRIEND 走 serverErrors 文案。
+              onPress={() => {
+                void handleStartVoiceCall();
+              }}
+              disabled={startingCall}
             >
-              <Text style={d.actionText}>{t('userProfile.avCall')}</Text>
+              <Text style={d.actionText}>
+                {startingCall ? t('userProfile.callStarting') : t('userProfile.avCall')}
+              </Text>
             </Pressable>
             {showAddFriendButton ? (
               <Pressable

@@ -557,6 +557,15 @@
       "signupCount": "{{count}}명 참가",
       "signupEmpty": "아직 신청자가 없어요",
       "cta": "신청하기"
+    },
+    "callRecord": {
+      "duration": "통화 시간 {{duration}}",
+      "canceledBySelf": "취소됨",
+      "canceledByPeer": "상대방이 취소했습니다",
+      "noAnswer": "응답 없음",
+      "missed": "부재중 전화",
+      "failed": "통화 연결 실패",
+      "ended": "통화 종료"
     }
   },
   "messages": {
@@ -1637,7 +1646,8 @@
       "empty": "아직 태그가 없습니다. 저장하기 전에 하나 만드세요."
     },
     "avCallComingSoon": "음성・영상 통화 기능이 곧 출시됩니다. 기대해 주세요.",
-    "unknownUser": "이름 없는 사용자"
+    "unknownUser": "이름 없는 사용자",
+    "callStarting": "전화 거는 중…"
   },
   "profile": {
     "creditScore": "신용 점수",
@@ -2207,7 +2217,10 @@
     "invite": {
       "initiatedBy": "{{name}}님이 그룹 음성 통화를 시작했습니다",
       "inviteeCount": "{{count}}명 초대됨",
-      "groupMember": "그룹 멤버"
+      "groupMember": "그룹 멤버",
+      "initiatedBySingle": "{{name}}님이 음성 통화에 초대했습니다",
+      "friend": "친구",
+      "singleSubtitle": "음성 통화"
     }
   },
   "im": {
@@ -2238,7 +2251,9 @@
       "note": "[노트] {{title}}",
       "verification": "[인증] {{name}}님이 보증을 요청했습니다",
       "default": "[메시지]",
-      "plazaPost": "[활동] {{title}}"
+      "plazaPost": "[활동] {{title}}",
+      "voiceCall": "[음성 통화]",
+      "videoCall": "[영상 통화]"
     }
   },
   "permissions": {
@@ -2341,6 +2356,7 @@
     "TEMP_CHAT_ENDED": "임시 채팅이 종료되었습니다",
     "TEMP_CHAT_FULL": "인원이 가득 찼습니다",
     "TEMP_CHAT_CREATOR_ONLY": "생성자만 종료할 수 있습니다",
+    "TEMP_CHAT_JOIN_FAILED": "참여하지 못했습니다. 다시 시도해 주세요",
     "PLAZA_NOT_ACTIVE_MEMBER": "서클의 활성 멤버만 게시할 수 있습니다",
     "PLAZA_ADMIN_ONLY_POST": "이 서클에서는 관리자만 게시할 수 있습니다",
     "PLAZA_NOTE_INVALID": "해당 노트를 사용할 수 없거나 본인의 것이 아닙니다",
@@ -2411,10 +2427,13 @@
     "NOTE_GROUP_NOT_FOUND": "노트 그룹을 찾을 수 없습니다",
     "NOTE_IMAGE_TOO_LARGE": "이미지가 너무 커서 삽입할 수 없습니다",
     "NOTE_SHARE_LINK_INVALID": "유효하지 않은 공유 링크입니다",
+    "NOTE_SHARE_LINK_LIMIT": "공유 링크 한도에 도달했습니다. 사용하지 않는 링크를 먼저 취소해 주세요",
     "CALL_NOT_INVITED": "이 통화에 초대되지 않았습니다",
     "CALL_NOT_FOUND": "통화를 찾을 수 없습니다",
     "CALL_NOT_ALLOWED": "이 통화 작업을 수행할 수 없습니다",
     "CALL_ALREADY_ACTIVE": "이미 진행 중인 통화가 있습니다",
+    "UPLOAD_PAYLOAD_TOO_LARGE": "파일이 너무 커서 업로드할 수 없습니다",
+    "CALL_NOT_FRIEND": "친구와만 통화할 수 있습니다",
     "CONVGROUP_NOT_FOUND": "그룹을 찾을 수 없습니다",
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "대화를 찾을 수 없습니다",
     "COLLECTION_NOT_FOUND": "컬렉션을 찾을 수 없습니다",

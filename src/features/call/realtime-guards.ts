@@ -21,7 +21,9 @@ export function isCallInvitePayload(value: unknown): value is CallInvitePayload 
   return (
     typeof payload.callId === 'string' &&
     typeof payload.conversationID === 'string' &&
-    payload.sessionType === 'group' &&
+    // round 2 review（P1）：1:1 呼叫的邀请 sessionType='single'，只放行
+    // 'group' 会让被叫端静默丢掉全部单聊来电 —— 主叫入会、被叫永远不响铃。
+    (payload.sessionType === 'group' || payload.sessionType === 'single') &&
     (payload.callType === 'AUDIO' || payload.callType === 'VIDEO') &&
     isCallUserLite(payload.initiator) &&
     Array.isArray(payload.invitees) &&

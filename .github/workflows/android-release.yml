@@ -184,6 +184,11 @@ jobs:
   publish:
     name: Promote APK to public release
     needs: [preflight, build]
+    # 默认关死的发布门禁（#84；docs/android-release.md 描述的 fail-closed 契约）：
+    # 只有仓库变量 ANDROID_PUBLIC_RELEASE_ENABLED 显式设为 'true' 时才把 APK
+    # 提升为公开 GitHub release + R2 公网桶。默认（变量缺失/false）v* tag 推送
+    # 只产出私有 Actions artifact。在 AGPL 分发问题（#95）有结论前保持关闭。
+    if: ${{ vars.ANDROID_PUBLIC_RELEASE_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -199,6 +204,20 @@ jobs:
         with:
           node-version: "22"
           cache: npm
+
+      # review 修复：分发证据门禁在公开发布前强制执行 —— 只靠
+      # ANDROID_PUBLIC_RELEASE_ENABLED 一个变量时，单次误设即可在没有任何
+      # 自动化证据校验的情况下把公网 APK 发出去。APPROVED/EVIDENCE_URL 从
+      # 仓库变量注入，校验逻辑与文档同源（validate-android-release.js）。
+      - name: Enforce distribution evidence gate
+        env:
+          # round 2 review：校验器同时要求 ANDROID_PUBLIC_RELEASE_ENABLED
+          # === 'true'，而 GitHub 的 vars 上下文不会自动注入 runner 环境 ——
+          # 不传的话即使正当启用发布，门禁也会在下载产物前误拦。
+          ANDROID_PUBLIC_RELEASE_ENABLED: ${{ vars.ANDROID_PUBLIC_RELEASE_ENABLED }}
+          ANDROID_DISTRIBUTION_APPROVED: ${{ vars.ANDROID_DISTRIBUTION_APPROVED }}
+          ANDROID_DISTRIBUTION_EVIDENCE_URL: ${{ vars.ANDROID_DISTRIBUTION_EVIDENCE_URL }}
+        run: node .github/scripts/validate-android-release.js distribution
 
       - name: Download private release artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1

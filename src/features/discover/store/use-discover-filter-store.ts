@@ -16,6 +16,8 @@ interface DiscoverFilterState {
   removeDraftCity: (city: string) => void;
   clearDraft: () => void;
   saveFilter: () => void;
+  // 登出 teardown 用（#97）：appliedCircleIds 引用账号的圈子，不得跨号残留。
+  resetForLogout: () => void;
 }
 
 export const useDiscoverFilterStore = create<DiscoverFilterState>()(
@@ -57,6 +59,14 @@ export const useDiscoverFilterStore = create<DiscoverFilterState>()(
           appliedCities: [...draftCities],
         });
       },
+
+      resetForLogout: () =>
+        set({
+          appliedCircleIds: [],
+          appliedCities: [],
+          draftCircleIds: [],
+          draftCities: [],
+        }),
     }),
     {
       name: 'circle-im-discover-filter',

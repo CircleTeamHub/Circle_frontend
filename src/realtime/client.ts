@@ -32,7 +32,6 @@ type BadgeSnapshotPayload = {
   discoverUnread?: number;
   signupUnread?: number;
   profileUnread?: number;
-  systemUnread?: number;
 };
 
 type RealtimeEvent =
@@ -118,6 +117,13 @@ const RECONNECT_MAX_EXPONENT = 5;
 // 网关用 1008 表达三种拒绝：会话被撤销、连接数超限、10s 内没发认证帧。只有
 // 「撤销」是终态 —— token 已经作废，重连多少次都会在认证后被同样踢掉。三者
 // code 相同，靠 reason 区分（与后端 REVOKED_CLOSE_REASON 对齐）。
+//
+// ⚠️ 跨仓字符串契约（#102）：这个字面量必须与
+//   circle_be/src/realtime/realtime.service.ts 的 REVOKED_CLOSE_REASON
+// 逐字节一致。它是终态判定的**唯一**依据（code 1008 不够），任何一侧改词、
+// 另一侧的测试都不会报警 —— 撤销登出会静默退化成重连环直到 JWT 过期（~1h）。
+// 改动必须两仓同步 + 双方 pin 测试同步更新
+// （本仓 test/realtime-revoked-contract.test.js）。
 const REVOKED_CLOSE_CODE = 1008;
 const REVOKED_CLOSE_REASON = 'Session revoked';
 
@@ -217,7 +223,6 @@ function applyBadgeSnapshot(snapshot: BadgeSnapshotPayload) {
     discoverUnread: snapshot.discoverUnread,
     signupUnread: snapshot.signupUnread,
     profileUnread: snapshot.profileUnread,
-    systemUnread: snapshot.systemUnread,
   });
 }
 
@@ -344,11 +349,14 @@ function handleRealtimeEvent(message: RealtimeEvent) {
       return;
     case 'system.notification.unread.changed':
       badgeStore.setProfileUnread(message.payload?.count ?? 0);
-      badgeStore.setSystemUnread(message.payload?.count ?? 0);
       return;
     case 'user.profile.summary.changed':
       refreshCurrentUserSummaryBestEffort();
       return;
+    // 下面三个事件后端都在真实路径上发，这里「有意不处理」而不是「已处理」（#104）：
+    // 每个都与一个客户端已消费的事件同批到达（interaction-unread / notification.created），
+    // 徽标与通知列表不受影响。丢掉的是增强 payload —— traceId/commentId 可深链到评论、
+    // invitationId+status 可原地更新邀请页。要做时请对着 #104 的清单接。
     case 'circle.post.interaction.created':
       return;
     case 'circle.invitation.reviewed':
@@ -427,7 +435,6 @@ export async function recoverTabBadgeSnapshot(options?: { force?: boolean }) {
       discoverUnread: notificationSummary.discoverUnread,
       signupUnread,
       profileUnread: notificationSummary.profileUnread,
-      systemUnread: notificationSummary.totalUnread,
     });
   } catch (err) {
     // Recovery is best-effort; keep the latest known badge state on failure.

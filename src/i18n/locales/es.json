@@ -558,6 +558,15 @@
       "signupCount": "{{count}} apuntados",
       "signupEmpty": "Sé el primero en apuntarte",
       "cta": "Apuntarme"
+    },
+    "callRecord": {
+      "duration": "Duración {{duration}}",
+      "canceledBySelf": "Cancelada",
+      "canceledByPeer": "Cancelada por la otra parte",
+      "noAnswer": "Sin respuesta",
+      "missed": "Llamada perdida",
+      "failed": "Llamada fallida",
+      "ended": "Llamada finalizada"
     }
   },
   "messages": {
@@ -1640,7 +1649,8 @@
       "empty": "Aún no hay etiquetas. Crea una antes de guardar."
     },
     "avCallComingSoon": "Las llamadas de voz y video llegarán pronto. No te lo pierdas.",
-    "unknownUser": "Usuario sin nombre"
+    "unknownUser": "Usuario sin nombre",
+    "callStarting": "Llamando…"
   },
   "profile": {
     "creditScore": "Puntuación de crédito",
@@ -2210,7 +2220,10 @@
     "invite": {
       "initiatedBy": "{{name}} inició una llamada de voz grupal",
       "inviteeCount": "{{count}} invitados",
-      "groupMember": "Miembro del grupo"
+      "groupMember": "Miembro del grupo",
+      "initiatedBySingle": "{{name}} te invita a una llamada de voz",
+      "friend": "Amigo",
+      "singleSubtitle": "Llamada de voz"
     }
   },
   "im": {
@@ -2241,7 +2254,9 @@
       "note": "[Nota] {{title}}",
       "verification": "[Verificar] {{name}} te pidió que avales",
       "default": "[Mensaje]",
-      "plazaPost": "[Evento] {{title}}"
+      "plazaPost": "[Evento] {{title}}",
+      "voiceCall": "[Llamada de voz]",
+      "videoCall": "[Videollamada]"
     }
   },
   "permissions": {
@@ -2344,6 +2359,7 @@
     "TEMP_CHAT_ENDED": "Este chat temporal ha finalizado",
     "TEMP_CHAT_FULL": "Este chat está lleno",
     "TEMP_CHAT_CREATOR_ONLY": "Solo el creador puede finalizar este chat",
+    "TEMP_CHAT_JOIN_FAILED": "No se pudo unir, inténtalo de nuevo",
     "PLAZA_NOT_ACTIVE_MEMBER": "Solo los miembros activos del círculo pueden publicar",
     "PLAZA_ADMIN_ONLY_POST": "Solo los administradores pueden publicar en este círculo",
     "PLAZA_NOTE_INVALID": "Esa nota no está disponible o no es tuya",
@@ -2414,10 +2430,13 @@
     "NOTE_GROUP_NOT_FOUND": "Grupo de notas no encontrado",
     "NOTE_IMAGE_TOO_LARGE": "La imagen es demasiado grande para insertarla",
     "NOTE_SHARE_LINK_INVALID": "Este enlace para compartir no es válido",
+    "NOTE_SHARE_LINK_LIMIT": "Límite de enlaces compartidos alcanzado; revoca los que no uses",
     "CALL_NOT_INVITED": "No has sido invitado a esta llamada",
     "CALL_NOT_FOUND": "Llamada no encontrada",
     "CALL_NOT_ALLOWED": "No puedes realizar esta acción de llamada",
     "CALL_ALREADY_ACTIVE": "Ya estás en una llamada activa",
+    "UPLOAD_PAYLOAD_TOO_LARGE": "El archivo es demasiado grande para subirlo",
+    "CALL_NOT_FRIEND": "Solo puedes llamar a tus amigos",
     "CONVGROUP_NOT_FOUND": "Grupo no encontrado",
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "Conversación no encontrada",
     "COLLECTION_NOT_FOUND": "Colección no encontrada",

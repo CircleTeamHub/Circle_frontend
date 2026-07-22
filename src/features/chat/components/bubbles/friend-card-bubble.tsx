@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme, Typography } from '@/theme';
 import { Avatar } from '@/components/ui/avatar';
+import { resolveFallbackIcon } from '@/components/ui/user-icon-row';
 import type { ChatMessage, FriendCardData } from '@/types';
 import { AVATAR_SIZE, BubbleStatusText, sFriendCard } from './shared';
 
@@ -103,10 +104,10 @@ export const FriendCardBubble: React.FC<FriendCardBubbleProps> = ({
                     />
                   ) : (
                     <Ionicons
-                      name={
-                        (icon.fallbackIconName as keyof typeof Ionicons.glyphMap) ??
-                        'ribbon-outline'
-                      }
+                      name={resolveFallbackIcon(
+                        icon.fallbackIconName,
+                        'ribbon-outline',
+                      )}
                       size={14}
                       color={onCardColor}
                     />

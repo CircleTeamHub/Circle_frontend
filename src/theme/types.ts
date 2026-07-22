@@ -24,6 +24,10 @@ export interface ThemeColors {
   blue: string;
   purple: string;
   deepPurple: string;
+  /** 圈子加入门槛徽章（restriction-badge）实心底色。 */
+  badgeVip: string;
+  badgeCredit: string;
+  badgeFancy: string;
   sentBubble: string;
   receivedBubble: string;
   inputBg: string;

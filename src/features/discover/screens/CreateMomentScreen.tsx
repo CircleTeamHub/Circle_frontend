@@ -25,6 +25,7 @@ import {
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
 import { useMomentsStore } from '@/features/discover/store/use-moments-store';
+import { mapWithConcurrency } from '@/utils/concurrency';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
@@ -127,18 +128,29 @@ export default function CreateMomentScreen() {
   const canSubmit = content.trim().length > 0;
 
   const handlePickImages = useCallback(async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsMultipleSelection: true,
-      selectionLimit: 9 - images.length,
-      quality: 0.8,
-    });
-    if (result.canceled) return;
-    setImages((prev) => [
-      ...prev,
-      ...result.assets.map((a) => a.uri).slice(0, 9 - prev.length),
-    ]);
-  }, [images.length]);
+    // review 修复：先开 picker、失败才引导（#109 的门禁反了）。iOS PHPicker /
+    // Android 13+ 系统 photo picker 无需相册权限即可返回所选图片 —— 前置的
+    // 相册权限请求会把「曾拒绝过广义相册权限」的用户挡在一个本不需要权限的
+    // 入口外。仅当 launch 本身失败（老系统真的要权限）时再提示去设置。
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: true,
+        selectionLimit: 9 - images.length,
+        quality: 0.8,
+      });
+      if (result.canceled) return;
+      setImages((prev) => [
+        ...prev,
+        ...result.assets.map((a) => a.uri).slice(0, 9 - prev.length),
+      ]);
+    } catch {
+      Alert.alert(
+        t('validation.cannotSelectImage'),
+        t('validation.albumPermission'),
+      );
+    }
+  }, [images.length, t]);
 
   const handleRemoveImage = useCallback((index: number) => {
     setImages((prev) => prev.filter((_, i) => i !== index));
@@ -148,10 +160,9 @@ export default function CreateMomentScreen() {
     if (!canSubmit || submitting) return;
     setSubmitting(true);
     try {
-      const uploadedUrls: string[] = [];
-      let failedUploads = 0;
-
-      for (const uri of images) {
+      // 并发上传，cap=3（#108）：串行九图最坏 ~18s；全量并发又会同时打满
+      // presign + S3 PUT。per-item 失败就地吞掉记 null，序号与所选图片一一对应。
+      const outcomes = await mapWithConcurrency(images, 3, async (uri) => {
         try {
           const fileName = uri.split('/').pop() ?? 'photo.jpg';
           const contentType = resolveUploadContentType({ fileName }) ?? 'image/jpeg';
@@ -161,9 +172,8 @@ export default function CreateMomentScreen() {
             folder: 'posts',
           });
           await uploadLocalFileToPresignedUrl(presign.uploadUrl, contentType, uri);
-          uploadedUrls.push(presign.fileUrl);
+          return presign.fileUrl;
         } catch (error) {
-          failedUploads += 1;
           if (__DEV__) {
             console.warn(
               '[CreateMomentScreen] image upload failed',
@@ -171,8 +181,13 @@ export default function CreateMomentScreen() {
               error,
             );
           }
+          return null;
         }
-      }
+      });
+      const uploadedUrls = outcomes.filter(
+        (url): url is string => typeof url === 'string',
+      );
+      const failedUploads = images.length - uploadedUrls.length;
 
       if (failedUploads > 0) {
         const reason =

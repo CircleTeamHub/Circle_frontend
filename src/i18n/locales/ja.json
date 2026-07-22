@@ -557,6 +557,15 @@
       "signupCount": "{{count}}人が参加",
       "signupEmpty": "まだ誰も参加していません",
       "cta": "参加する"
+    },
+    "callRecord": {
+      "duration": "通話時間 {{duration}}",
+      "canceledBySelf": "キャンセルしました",
+      "canceledByPeer": "相手がキャンセルしました",
+      "noAnswer": "応答なし",
+      "missed": "不在着信",
+      "failed": "通話に失敗しました",
+      "ended": "通話が終了しました"
     }
   },
   "messages": {
@@ -1637,7 +1646,8 @@
       "empty": "タグがありません。保存する前に作成してください。"
     },
     "avCallComingSoon": "音声・ビデオ通話機能は近日公開予定です。お楽しみに。",
-    "unknownUser": "名前未設定のユーザー"
+    "unknownUser": "名前未設定のユーザー",
+    "callStarting": "発信中…"
   },
   "profile": {
     "creditScore": "信用スコア",
@@ -2207,7 +2217,10 @@
     "invite": {
       "initiatedBy": "{{name}} がグループ音声通話を開始しました",
       "inviteeCount": "{{count}} 人を招待",
-      "groupMember": "グループメンバー"
+      "groupMember": "グループメンバー",
+      "initiatedBySingle": "{{name}}さんから音声通話の招待",
+      "friend": "友だち",
+      "singleSubtitle": "音声通話"
     }
   },
   "im": {
@@ -2238,7 +2251,9 @@
       "note": "[ノート] {{title}}",
       "verification": "[認証] {{name}} から保証の依頼があります",
       "default": "[メッセージ]",
-      "plazaPost": "[イベント] {{title}}"
+      "plazaPost": "[イベント] {{title}}",
+      "voiceCall": "[音声通話]",
+      "videoCall": "[ビデオ通話]"
     }
   },
   "permissions": {
@@ -2341,6 +2356,7 @@
     "TEMP_CHAT_ENDED": "一時チャットは終了しました",
     "TEMP_CHAT_FULL": "参加人数が上限に達しています",
     "TEMP_CHAT_CREATOR_ONLY": "作成者のみが終了できます",
+    "TEMP_CHAT_JOIN_FAILED": "参加に失敗しました。もう一度お試しください",
     "PLAZA_NOT_ACTIVE_MEMBER": "サークルのアクティブメンバーのみが投稿できます",
     "PLAZA_ADMIN_ONLY_POST": "このサークルでは管理者のみが投稿できます",
     "PLAZA_NOTE_INVALID": "そのノートは利用できないか、あなたのものではありません",
@@ -2411,10 +2427,13 @@
     "NOTE_GROUP_NOT_FOUND": "ノートグループが見つかりません",
     "NOTE_IMAGE_TOO_LARGE": "画像が大きすぎて埋め込めません",
     "NOTE_SHARE_LINK_INVALID": "この共有リンクは無効です",
+    "NOTE_SHARE_LINK_LIMIT": "共有リンクの上限に達しました。不要なリンクを取り消してください",
     "CALL_NOT_INVITED": "この通話に招待されていません",
     "CALL_NOT_FOUND": "通話が見つかりません",
     "CALL_NOT_ALLOWED": "この通話操作は許可されていません",
     "CALL_ALREADY_ACTIVE": "すでに通話中です",
+    "UPLOAD_PAYLOAD_TOO_LARGE": "ファイルが大きすぎてアップロードできません",
+    "CALL_NOT_FRIEND": "通話できるのは友達のみです",
     "CONVGROUP_NOT_FOUND": "グループが見つかりません",
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "会話が見つかりません",
     "COLLECTION_NOT_FOUND": "コレクションが見つかりません",

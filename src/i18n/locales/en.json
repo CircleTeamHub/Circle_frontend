@@ -597,6 +597,15 @@
       "signupCount": "{{count}} going",
       "signupEmpty": "Be the first to join",
       "cta": "Join"
+    },
+    "callRecord": {
+      "duration": "Call duration {{duration}}",
+      "canceledBySelf": "Canceled",
+      "canceledByPeer": "Canceled by the other side",
+      "noAnswer": "No answer",
+      "missed": "Missed call",
+      "failed": "Call failed",
+      "ended": "Call ended"
     }
   },
   "contacts": {
@@ -1432,7 +1441,8 @@
       "empty": "No tags yet. Create one before saving."
     },
     "avCallComingSoon": "Voice and video calls are coming soon. Stay tuned.",
-    "unknownUser": "Unnamed user"
+    "unknownUser": "Unnamed user",
+    "callStarting": "Calling…"
   },
   "profileFields": {
     "avatar": "Avatar",
@@ -2215,7 +2225,9 @@
       "note": "[Note] {{title}}",
       "verification": "[Verify] {{name}} asked you to vouch",
       "default": "[Message]",
-      "plazaPost": "[Event] {{title}}"
+      "plazaPost": "[Event] {{title}}",
+      "voiceCall": "[Voice call]",
+      "videoCall": "[Video call]"
     }
   },
   "permissions": {
@@ -2248,7 +2260,10 @@
     "invite": {
       "initiatedBy": "{{name}} started a group voice call",
       "inviteeCount": "{{count}} invited",
-      "groupMember": "Group member"
+      "groupMember": "Group member",
+      "initiatedBySingle": "{{name}} invites you to a voice call",
+      "friend": "Friend",
+      "singleSubtitle": "Voice call"
     }
   },
   "emojis": {
@@ -2344,6 +2359,7 @@
     "TEMP_CHAT_ENDED": "This temporary chat has ended",
     "TEMP_CHAT_FULL": "This chat is full",
     "TEMP_CHAT_CREATOR_ONLY": "Only the creator can end this chat",
+    "TEMP_CHAT_JOIN_FAILED": "Failed to join, please try again",
     "PLAZA_NOT_ACTIVE_MEMBER": "Only active circle members can post",
     "PLAZA_ADMIN_ONLY_POST": "Only admins can post in this circle",
     "PLAZA_NOTE_INVALID": "That note is unavailable or not yours",
@@ -2414,10 +2430,13 @@
     "NOTE_GROUP_NOT_FOUND": "Note group not found",
     "NOTE_IMAGE_TOO_LARGE": "The image is too large to embed",
     "NOTE_SHARE_LINK_INVALID": "This share link is not valid",
+    "NOTE_SHARE_LINK_LIMIT": "Share link limit reached — revoke unused links first",
     "CALL_NOT_INVITED": "You haven't been invited to this call",
     "CALL_NOT_FOUND": "Call not found",
     "CALL_NOT_ALLOWED": "You can't perform this call action",
     "CALL_ALREADY_ACTIVE": "You're already in an active call",
+    "UPLOAD_PAYLOAD_TOO_LARGE": "File is too large to upload",
+    "CALL_NOT_FRIEND": "You can only call friends",
     "CONVGROUP_NOT_FOUND": "Group not found",
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "Conversation not found",
     "COLLECTION_NOT_FOUND": "Collection not found",
