@@ -16,7 +16,11 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { useSendEmailCode } from '@/hooks/use-send-email-code';
 import { resetPassword } from '@/services/api/auth';
 import { getApiErrorMessage } from '@/services/api/errors';
-import { validateCode, validateEmail } from '@/features/auth/validation';
+import {
+  validateCode,
+  validateEmail,
+  validatePassword,
+} from '@/features/auth/validation';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
@@ -87,9 +91,11 @@ export function ForgotPasswordScreen() {
   const onSubmit = useCallback(async () => {
     if (!canSubmit || submitInFlightRef.current) return;
     setError(null);
-    // review 修复：与共享校验契约对齐（6 位验证码）—— 4/5 位残码不再打到
-    // 后端变成格式错误的重置尝试，白白消耗敏感限流配额。
-    const invalidField = validateEmail(email) ?? validateCode(code);
+    // review 修复：与共享校验契约对齐（6 位验证码 + 密码长度上限）——
+    // 4/5 位残码、超 64 字符的粘贴密码不再打到后端变成格式错误的重置尝试，
+    // 白白消耗敏感限流配额。
+    const invalidField =
+      validateEmail(email) ?? validateCode(code) ?? validatePassword(newPassword);
     if (invalidField) {
       setError(t(invalidField));
       return;

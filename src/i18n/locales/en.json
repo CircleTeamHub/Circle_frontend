@@ -1927,7 +1927,8 @@
       "unlistFailedTitle": "Failed to unlist",
       "unlistTitle": "Unlist note",
       "unlistConfirm": "You can view it in Unlisted. Unlisted notes are automatically deleted after one month.",
-      "restoreFailedTitle": "Restore failed"
+      "restoreFailedTitle": "Restore failed",
+      "refreshFailedTitle": "Refresh failed"
     },
     "detail": {
       "loadFailed": "Failed to load note, please try again",

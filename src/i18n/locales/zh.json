@@ -1924,7 +1924,8 @@
       "unlistFailedTitle": "下架失败",
       "unlistTitle": "下架笔记",
       "unlistConfirm": "下架后可在已下架列表查看，已下架笔记会在一个月后自动删除。",
-      "restoreFailedTitle": "恢复失败"
+      "restoreFailedTitle": "恢复失败",
+      "refreshFailedTitle": "刷新失败"
     },
     "detail": {
       "loadFailed": "笔记加载失败，请稍后重试",

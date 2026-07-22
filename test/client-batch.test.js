@@ -125,10 +125,80 @@ test('转账卡片发出后向后端回执，key 贯穿 pending store (#100)', (
   assert.match(composer, /idempotencyKey: idempotency\.key/);
 
   const chat = read('src/features/chat/screens/ChatDetailScreen.tsx');
-  assert.match(chat, /markGiftCardSent\(payload\.idempotencyKey\)/);
+  // round 2：回执改为持久化挂账（enqueue → flush），不再 fire-and-forget
+  assert.match(chat, /enqueueGiftCardAck\(payload\.idempotencyKey\)/);
+  assert.match(chat, /flushPendingGiftCardAcks\(\)/);
 
   const api = read('src/services/api/coin.ts');
   assert.match(api, /\/coin\/gift\/card-sent/);
+});
+
+test('卡片回执持久挂账：失败保留、成功销账、app 重启不丢 (round 2)', async () => {
+  const stored = new Map();
+  let markCalls = 0;
+  let markShouldFail = true;
+  const mod = loadTsModule('src/features/chat/utils/gift-card-ack.ts', {
+    requireShim: (specifier) => {
+      if (specifier === '@/storage') {
+        return {
+          storage: {
+            getString: (key) => stored.get(key),
+            set: (key, value) => stored.set(key, value),
+          },
+        };
+      }
+      if (specifier === '@/services/api/coin') {
+        return {
+          markGiftCardSent: async () => {
+            markCalls += 1;
+            if (markShouldFail) throw new Error('timeout');
+          },
+        };
+      }
+      throw new Error(`unexpected import in gift-card-ack: ${specifier}`);
+    },
+  });
+
+  // 发卡成功 → 入账；回执失败 → 挂账保留（持久化在 storage 里）
+  mod.enqueueGiftCardAck('key-1');
+  await mod.flushPendingGiftCardAcks();
+  assert.equal(markCalls, 1);
+  assert.match(String(stored.get('circle-im-gift-card-pending-acks')), /key-1/);
+
+  // 网络恢复后再 flush → 销账
+  markShouldFail = false;
+  await mod.flushPendingGiftCardAcks();
+  assert.equal(markCalls, 2);
+  assert.doesNotMatch(
+    String(stored.get('circle-im-gift-card-pending-acks')),
+    /key-1/,
+  );
+});
+
+test('回收站：恢复成功与刷新失败分离；刷新失败可感知 (round 2)', () => {
+  const screen = read('src/features/notes/screens/RecycleBinScreen.tsx');
+  // 恢复失败先 return —— 之后的列表刷新失败绝不再弹「恢复失败」
+  const restore = screen.slice(
+    screen.indexOf('const handleRestore'),
+    screen.indexOf('const d = useMemo'),
+  );
+  assert.match(restore, /restoreFailedTitle[\s\S]*return;/);
+  // 服务端已恢复：本地先移行，刷新失败静默保留
+  assert.match(restore, /setNotes\(\(prev\) => prev\.filter/);
+  // 下拉刷新失败被捕获并提示（不再 unhandled rejection）
+  const refresh = screen.slice(
+    screen.indexOf('const handleRefresh'),
+    screen.indexOf('const closeMenu'),
+  );
+  assert.match(refresh, /catch[\s\S]*refreshFailedTitle/);
+});
+
+test('忘记密码提交前校验密码长度（round 2）', () => {
+  const screen = read('src/features/auth/screens/ForgotPasswordScreen.tsx');
+  assert.match(
+    screen,
+    /validateEmail\(email\) \?\? validateCode\(code\) \?\? validatePassword\(newPassword\)/,
+  );
 });
 
 // ---------------------------------------------------------------------------

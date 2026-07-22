@@ -670,7 +670,8 @@
       "unlistFailedTitle": "No se pudo retirar",
       "unlistTitle": "Retirar nota",
       "unlistConfirm": "Podrás verla en Retiradas. Las notas retiradas se eliminan automáticamente después de un mes.",
-      "restoreFailedTitle": "No se pudo restaurar"
+      "restoreFailedTitle": "No se pudo restaurar",
+      "refreshFailedTitle": "Error al actualizar"
     },
     "detail": {
       "loadFailed": "No se pudo cargar la nota, inténtalo de nuevo",

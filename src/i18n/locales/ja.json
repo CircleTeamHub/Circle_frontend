@@ -669,7 +669,8 @@
       "unlistFailedTitle": "非公開にできませんでした",
       "unlistTitle": "ノートを非公開にする",
       "unlistConfirm": "非公開にしたノートは非公開リストで確認できます。1か月後に自動削除されます。",
-      "restoreFailedTitle": "復元に失敗しました"
+      "restoreFailedTitle": "復元に失敗しました",
+      "refreshFailedTitle": "更新に失敗しました"
     },
     "detail": {
       "loadFailed": "ノートを読み込めませんでした。もう一度お試しください",

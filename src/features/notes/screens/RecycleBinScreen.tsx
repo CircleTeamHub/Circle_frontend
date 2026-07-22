@@ -76,11 +76,21 @@ export default function RecycleBinScreen() {
     setRefreshing(true);
     try {
       await load();
+    } catch {
+      // round 2 review：下拉刷新/重试失败此前直接外抛（void 调用方 →
+      // unhandled rejection），且已有列表下 loadError 恒 false、用户毫无
+      // 感知。吞掉异常 + 提示一条轻量报错；已加载的数据原样保留。
+      if (mountedRef.current) {
+        Alert.alert(
+          t('notes.alerts.refreshFailedTitle', { defaultValue: '刷新失败' }),
+          t('common.retryLater', { defaultValue: '请稍后重试' }),
+        );
+      }
     } finally {
       refreshInFlightRef.current = false;
       if (mountedRef.current) setRefreshing(false);
     }
-  }, [load]);
+  }, [load, t]);
 
   const closeMenu = useCallback(() => setMenuNote(null), []);
 
@@ -90,7 +100,6 @@ export default function RecycleBinScreen() {
     closeMenu();
     try {
       await restoreNote(note.id);
-      if (mountedRef.current) await load();
     } catch {
       if (mountedRef.current) {
         Alert.alert(
@@ -98,6 +107,17 @@ export default function RecycleBinScreen() {
           t('common.retryLater', { defaultValue: '请稍后重试' }),
         );
       }
+      return;
+    }
+    // round 2 review：恢复已在服务端成功 —— 之后的列表刷新失败不能再报
+    // 「恢复失败」（用户会对着已恢复的笔记反复重试）。本地先把这行移出
+    // 列表（乐观且真实：服务端已恢复），刷新失败只静默保留现状。
+    if (!mountedRef.current) return;
+    setNotes((prev) => prev.filter((item) => item.id !== note.id));
+    try {
+      await load();
+    } catch {
+      // 列表下次 focus / 下拉时自然重试
     }
   }, [closeMenu, load, menuNote, t]);
 

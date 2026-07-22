@@ -127,7 +127,10 @@ import {
   useChatPreferencesStore,
 } from '@/features/chat/store/use-chat-preferences-store';
 import { createGroupCall } from '@/services/api/calls';
-import { markGiftCardSent } from '@/services/api/coin';
+import {
+  enqueueGiftCardAck,
+  flushPendingGiftCardAcks,
+} from '@/features/chat/utils/gift-card-ack';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
@@ -492,6 +495,10 @@ export default function ChatDetailScreen() {
   useEffect(() => {
     isRecordingRef.current = voiceRecorderState.isRecording;
   }, [voiceRecorderState.isRecording]);
+  useEffect(() => {
+    // 冲销上次可能丢失的卡片回执挂账（幂等，无账时零成本）
+    void flushPendingGiftCardAcks();
+  }, []);
   useEffect(() => {
     return () => {
       mountedRef.current = false;
@@ -2330,10 +2337,13 @@ export default function ChatDetailScreen() {
           payload: { amount: payload.amount, message: payload.message },
         });
         appendMessages(conversationID, [sent]);
-        // #100：告知后端卡片已由客户端送达，补偿 cron 不再重发。回执失败
-        // 无害（最坏 = 服务端多补一张同構卡片），静默尽力而为。
+        // #100：告知后端卡片已由客户端送达，补偿 cron 不再重发。
+        // round 2 review：回执是防重发的唯一信号，不能 fire-and-forget ——
+        // 先持久化挂账再冲销：回执丢失（超时/退后台）时下次进聊天页续冲，
+        // app 被杀也不丢账；后端按 key 幂等，重复回执无害。
         if (payload.idempotencyKey) {
-          void markGiftCardSent(payload.idempotencyKey).catch(() => undefined);
+          enqueueGiftCardAck(payload.idempotencyKey);
+          void flushPendingGiftCardAcks();
         }
       } catch (error) {
         if (mountedRef.current) {
