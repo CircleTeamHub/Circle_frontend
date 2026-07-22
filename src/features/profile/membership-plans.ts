@@ -62,7 +62,6 @@ export type MembershipBenefitId =
 
 export type MembershipBenefitValue =
   | number
-  | '999+'
   | 'unlimited'
   | 'silver'
   | 'gold'
@@ -104,22 +103,22 @@ export const MEMBERSHIP_BENEFITS = [
   {
     id: 'group-member-limit',
     labelKey: 'profile.membership.benefits.groupMemberLimit',
-    values: { silver: 300, gold: 500, diamond: 1000, super: 3000 },
+    values: { silver: 200, gold: 400, diamond: 1000, super: 3000 },
   },
   {
     id: 'joined-groups',
     labelKey: 'profile.membership.benefits.joinedGroups',
-    values: { silver: 200, gold: 500, diamond: '999+', super: 'unlimited' },
+    values: { silver: 200, gold: 300, diamond: 1000, super: 2000 },
   },
   {
     id: 'note-storage',
     labelKey: 'profile.membership.benefits.noteStorage',
-    values: { silver: 100, gold: 500, diamond: '999+', super: 'unlimited' },
+    values: { silver: 100, gold: 500, diamond: 1000, super: 3000 },
   },
   {
     id: 'city-filters',
     labelKey: 'profile.membership.benefits.cityFilters',
-    values: { silver: 5, gold: 20, diamond: 50, super: 'unlimited' },
+    values: { silver: 2, gold: 10, diamond: 50, super: 'unlimited' },
   },
   {
     id: 'fancy-number',

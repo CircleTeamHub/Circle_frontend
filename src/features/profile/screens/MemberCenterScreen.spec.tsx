@@ -187,7 +187,7 @@ test('regular user selects tiers and receives an activation contact state', asyn
   fireEvent.press(screen.getByLabelText('白银会员，1 个月，¥298'));
 
   expect(screen.getByText('联系客服开通 白银会员')).toBeTruthy();
-  expect(screen.getByText('300 人')).toBeTruthy();
+  expect(screen.getByText('200 人')).toBeTruthy();
 });
 
 test('member tier selection distinguishes current, upgrade, and lower states', async () => {
