@@ -272,6 +272,42 @@ test('returning focus refreshes only the owning auth session', async () => {
   if (typeof staleFocusCleanup === 'function') staleFocusCleanup();
 });
 
+test('focus refresh updates membership without replacing badges or unrelated user fields', async () => {
+  const badge = {
+    id: 'badge-a',
+    type: 'SYSTEM' as const,
+    title: 'Verified',
+    imageUrl: null,
+    fallbackIconName: 'shield-checkmark',
+    systemKey: 'VERIFIED_PROFILE' as const,
+    sortOrder: 1,
+  };
+  const current = {
+    ...user(1),
+    nickname: 'Current profile',
+    creditScore: 888,
+    displayIcons: [badge],
+  };
+  const staleResponse = {
+    ...current,
+    vipLevel: 3,
+    nickname: 'Stale profile',
+    creditScore: 100,
+    displayIcons: [],
+  };
+  setAuth(current, 7);
+  mockFetchCurrentUser.mockResolvedValueOnce(staleResponse);
+
+  render(<MemberCenterScreen />);
+
+  await waitFor(() =>
+    expect(mockAuth.state.setUser).toHaveBeenCalledWith({
+      ...current,
+      vipLevel: 3,
+    }),
+  );
+});
+
 test('focus refresh ignores unmount and reports failure without error data', async () => {
   let resolveRefresh!: (value: AuthUser) => void;
   mockFetchCurrentUser.mockReturnValueOnce(
