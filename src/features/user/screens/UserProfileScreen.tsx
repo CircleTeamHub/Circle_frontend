@@ -12,6 +12,7 @@ import { getOrCreateSingleConversation } from '@/im/client';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { createDirectCall } from '@/services/api/calls';
 import { useCallStore } from '@/features/call/store/use-call-store';
+import type { CallType } from '@/features/call/types';
 import { getProfileSignature } from '@/features/profile/profile-display';
 import { Radius, Spacing, Typography, useTheme, type ThemeColors } from '@/theme';
 import {
@@ -552,7 +553,7 @@ export default function UserProfileScreen() {
   //（与聊天页 callStartingRef 同模式）；state 仅保留给按钮 UI。
   const callStartingRef = useRef(false);
   const setActiveCall = useCallStore((state) => state.setActiveCall);
-  const handleStartVoiceCall = useCallback(async () => {
+  const startCallWithType = useCallback(async (callType: CallType) => {
     if (
       callStartingRef.current ||
       startingCall ||
@@ -565,7 +566,7 @@ export default function UserProfileScreen() {
     try {
       const response = await createDirectCall({
         calleeID: profileId,
-        callType: 'AUDIO',
+        callType,
       });
       // round 2 review：呼叫已在服务端创建、对端已在响铃 —— 即使本页面已
       // unmount（用户先行离开），也必须落全局通话态并进通话页；否则主叫端
@@ -584,6 +585,26 @@ export default function UserProfileScreen() {
       if (mountedRef.current) setStartingCall(false);
     }
   }, [isCurrentUser, profileId, router, setActiveCall, startingCall, t]);
+
+  // #119：按钮文案本就是「音视频通话」—— 点击先选语音还是视频。
+  const handleStartVoiceCall = useCallback(() => {
+    if (callStartingRef.current || startingCall) return;
+    Alert.alert(t('call.chooseType', { defaultValue: '发起通话' }), undefined, [
+      {
+        text: t('call.typeVoice', { defaultValue: '语音通话' }),
+        onPress: () => {
+          void startCallWithType('AUDIO');
+        },
+      },
+      {
+        text: t('call.typeVideo', { defaultValue: '视频通话' }),
+        onPress: () => {
+          void startCallWithType('VIDEO');
+        },
+      },
+      { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+    ]);
+  }, [startCallWithType, startingCall, t]);
 
   const handleOpenChatInfo = useCallback(() => {
     if (

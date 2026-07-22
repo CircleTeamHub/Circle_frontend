@@ -2196,7 +2196,8 @@
   },
   "call": {
     "livekit": {
-      "connected": "LiveKit에 연결되었습니다. 현재는 음성만 지원합니다."
+      "connected": "LiveKit에 연결되었습니다. 현재는 음성만 지원합니다.",
+      "connectedVideo": "LiveKit에 연결되었습니다. 영상 통화 중입니다."
     },
     "status": {
       "reconnecting": "통화를 다시 연결하는 중…",
@@ -2204,6 +2205,7 @@
       "disconnected": "통화가 끊겼습니다."
     },
     "groupCallTitle": "그룹 음성 통화",
+    "videoCallTitle": "영상 통화",
     "participantsOnline": "{{count}}명 접속 중",
     "self": "나",
     "ended": "통화가 종료되었거나 연결 정보가 만료되었습니다",
@@ -2221,7 +2223,10 @@
       "initiatedBySingle": "{{name}}님이 음성 통화에 초대했습니다",
       "friend": "친구",
       "singleSubtitle": "음성 통화"
-    }
+    },
+    "chooseType": "통화 시작",
+    "typeVoice": "음성 통화",
+    "typeVideo": "영상 통화"
   },
   "im": {
     "time": {

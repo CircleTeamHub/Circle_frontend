@@ -2196,7 +2196,8 @@
   },
   "call": {
     "livekit": {
-      "connected": "LiveKit に接続しました。現在は音声のみです。"
+      "connected": "LiveKit に接続しました。現在は音声のみです。",
+      "connectedVideo": "LiveKit に接続しました。ビデオ通話中です。"
     },
     "status": {
       "reconnecting": "通話を再接続しています…",
@@ -2204,6 +2205,7 @@
       "disconnected": "通話が切断されました。"
     },
     "groupCallTitle": "グループ音声通話",
+    "videoCallTitle": "ビデオ通話",
     "participantsOnline": "{{count}} 人がオンライン",
     "self": "自分",
     "ended": "通話が終了したか、接続情報の有効期限が切れています",
@@ -2221,7 +2223,10 @@
       "initiatedBySingle": "{{name}}さんから音声通話の招待",
       "friend": "友だち",
       "singleSubtitle": "音声通話"
-    }
+    },
+    "chooseType": "通話を開始",
+    "typeVoice": "音声通話",
+    "typeVideo": "ビデオ通話"
   },
   "im": {
     "time": {

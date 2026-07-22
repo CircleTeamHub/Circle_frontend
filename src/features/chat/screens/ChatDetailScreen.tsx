@@ -133,6 +133,7 @@ import {
   flushPendingGiftCardAcks,
 } from '@/features/chat/utils/gift-card-ack';
 import { resolveDirectCalleeID } from '@/features/call/resolve-direct-callee';
+import type { CallType } from '@/features/call/types';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
@@ -1169,7 +1170,7 @@ export default function ChatDetailScreen() {
     ],
   );
 
-  const handleStartCall = useCallback(async () => {
+  const startCallWithType = useCallback(async (callType: CallType) => {
     if (callStartingRef.current) return;
 
     if (isPreviewMode || !conversationID || !sourceID) {
@@ -1198,7 +1199,7 @@ export default function ChatDetailScreen() {
         }
         const response = await createDirectCall({
           calleeID,
-          callType: 'AUDIO',
+          callType,
         });
         // round 3 review：呼叫已在服务端创建、对端在响铃 —— 即使本页已
         // unmount（用户先行离开）也要落全局通话态并进通话页（store/router
@@ -1224,7 +1225,7 @@ export default function ChatDetailScreen() {
 
       const response = await createGroupCall({
         conversationID,
-        callType: 'AUDIO',
+        callType,
         inviteeIDs,
       });
       // 同上：成功创建的群呼即使页面已 unmount 也要进入通话 UI
@@ -1238,7 +1239,7 @@ export default function ChatDetailScreen() {
         );
       }
       if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[chat] start group audio call failed', error);
+        console.warn('[chat] start call failed', error);
       }
     } finally {
       callStartingRef.current = false;
@@ -1255,6 +1256,26 @@ export default function ChatDetailScreen() {
     sourceID,
     t,
   ]);
+
+  // #119：通话入口先选类型（语音 / 视频），再走原发起流程。
+  const handleStartCall = useCallback(() => {
+    if (callStartingRef.current) return;
+    Alert.alert(t('call.chooseType', { defaultValue: '发起通话' }), undefined, [
+      {
+        text: t('call.typeVoice', { defaultValue: '语音通话' }),
+        onPress: () => {
+          void startCallWithType('AUDIO');
+        },
+      },
+      {
+        text: t('call.typeVideo', { defaultValue: '视频通话' }),
+        onPress: () => {
+          void startCallWithType('VIDEO');
+        },
+      },
+      { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+    ]);
+  }, [startCallWithType, t]);
 
   const renderItem = useCallback(({ item }: { item: ChatMessage }) => {
     switch (item.type) {
