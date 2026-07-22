@@ -298,8 +298,10 @@ test('Android release workflow publishes the verified APK and reports observable
     publish,
     /if: \$\{\{ vars\.ANDROID_PUBLIC_RELEASE_ENABLED == 'true' \}\}/,
   );
-  assert.doesNotMatch(publish, /ANDROID_DISTRIBUTION_APPROVED/);
-  assert.doesNotMatch(publish, /ANDROID_DISTRIBUTION_EVIDENCE_URL/);
+  // review 修复：公开发布前强制分发证据门禁 —— 单个 ENABLED 变量误设不再
+  // 足以在无证据校验下发出公网 APK。
+  assert.match(publish, /ANDROID_DISTRIBUTION_APPROVED/);
+  assert.match(publish, /ANDROID_DISTRIBUTION_EVIDENCE_URL/);
   // Free plan 没有 protected environment，环境保护缺位记录在
   // docs/android-release.md「Workflow enforcement status」。
   assert.doesNotMatch(publish, /environment:/);
@@ -310,7 +312,13 @@ test('Android release workflow publishes the verified APK and reports observable
     /actions\/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8\.0\.1/,
   );
   assert.match(publish, /sha256sum -c/);
-  assert.doesNotMatch(publish, /validate-android-release\.js distribution/);
+  assert.match(publish, /validate-android-release\.js distribution/);
+  // 门禁必须先于发布脚本执行
+  assert.ok(
+    publish.indexOf('validate-android-release.js distribution') <
+      publish.indexOf('publish-android-release.js'),
+    'distribution gate must run before the publisher script',
+  );
   assert.match(
     publish,
     /actions\/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7\.0\.0/,
