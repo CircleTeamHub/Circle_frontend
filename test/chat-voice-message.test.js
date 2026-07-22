@@ -9,6 +9,12 @@ const DEFAULT_CLIENT_STUBS = {
   '@/im/listeners': {
     bindOpenIMListeners: () => () => {},
   },
+  '@/im/token-recovery': {
+    registerIMLoginExecutor: () => {},
+    registerIMLogoutExecutor: () => {},
+    recoverIMSession: async () => false,
+    isIMReloginPending: () => false,
+  },
   '@/services/auth/session': {
     registerLogoutHandler: () => () => {},
   },

@@ -37,6 +37,10 @@ import {
   OPENIM_WS_URL,
 } from '@/constants/config';
 import { bindOpenIMListeners, unbindOpenIMListeners } from '@/im/listeners';
+import {
+  registerIMLoginExecutor,
+  registerIMLogoutExecutor,
+} from '@/im/token-recovery';
 import { stripFileScheme } from '@/im/media-uri';
 import { resolveVoiceSendStrategy } from '@/features/chat/utils/voice-forward';
 import { toImUserId } from '@/im/user-id';
@@ -74,10 +78,20 @@ async function reportSend(
 }
 
 // 注册到 session 的登出 teardown，由 clearLocalSession 统一调度。
-// 函数声明会被 hoisting，所以这里在模块顶层引用 logoutFromOpenIM 是安全的。
-// 直接传函数引用而不是包一层箭头：session.ts 按引用去重，箭头每次模块求值都是新引用，
-// HMR 时会让同一个 teardown 累积多次（已经被 Batch 01 的 dedup 暴露过）。
-registerLogoutHandler(logoutFromOpenIM);
+// 模块级 const 保证按引用去重仍成立（HMR 语义与函数引用一致）；包一层是
+// 因为 logoutFromOpenIM 现在的第一参是 forceNative 选项，不能直接吃
+// session 传来的 LogoutContext。
+const sessionIMLogoutHandler = () => logoutFromOpenIM();
+registerLogoutHandler(sessionIMLogoutHandler);
+
+// token-recovery 不 import 本模块（避免 client → listeners → token-recovery → client
+// 模块环），真正的 OpenIM 登录函数在这里注入。同样按引用注册，幂等。
+// 恢复路径必须强制真登录（review 修复 P1）：token 过期时 getLoginStatus 很可能
+// 仍报 Logged，普通路径的复用快捷会让新 token 永远交不到 SDK 手里。
+registerIMLoginExecutor((userId, imToken) =>
+  loginToOpenIM(userId, imToken, { forceRelogin: true }),
+);
+registerIMLogoutExecutor((options) => logoutFromOpenIM(options));
 
 function isNativeIMSupported() {
   return Platform.OS === 'ios' || Platform.OS === 'android';
@@ -205,7 +219,11 @@ async function isOpenIMSessionResourceLoaded(): Promise<boolean> {
  * 登录 OpenIM。
  * 登录前先确保 SDK 已初始化；失败时重置 connecting 状态，防止 store 卡死。
  */
-export async function loginToOpenIM(userID: string, imToken: string) {
+export async function loginToOpenIM(
+  userID: string,
+  imToken: string,
+  options: { forceRelogin?: boolean } = {},
+) {
   if (!imToken || !isNativeIMSupported()) {
     if (!isNativeIMSupported()) {
       useIMStore.getState().setError(getUnsupportedPlatformMessage());
@@ -225,7 +243,17 @@ export async function loginToOpenIM(userID: string, imToken: string) {
     // Hot reload / 重装后 native SDK 进程通常还活着，重复 login 会被 OpenIM 拒成
     // 10102 "User has logged in repeatedly"。先查状态，已登录就复用。
     const status = await OpenIMSDK.getLoginStatus().catch(() => LoginStatus.Logout);
-    if (status === LoginStatus.Logged) {
+    if (status === LoginStatus.Logged && options.forceRelogin) {
+      // token 恢复路径（review 修复 P1）：SDK 仍自报 Logged，但手里的 token 已被
+      // 服务端拒绝 —— 复用快捷会「成功返回」却让 SDK 继续拿着死 token 收发全断。
+      // 先 logout 拆干净（失败不阻断：僵尸态下 login 自会失败并走恢复重试），
+      // 落到下面用新 token 干净重登。
+      try {
+        await OpenIMSDK.logout();
+      } catch (error) {
+        reportError(error, { operation: 'openim', kind: 'forceReloginLogout' });
+      }
+    } else if (status === LoginStatus.Logged) {
       // 但「自报 Logged」不等于资源还在：hot-reload / devicectl 覆盖重装后，SDK 常
       // 停在「已登录但资源已卸载」的僵尸态 —— getLoginStatus 仍回 Logged，可任何真实
       // 调用都抛 10004，会话列表被拉空。探针确认资源是否真的可用。
@@ -280,10 +308,19 @@ export async function loginToOpenIM(userID: string, imToken: string) {
   } catch (error) {
     // 10102 = 重复登录。代表 native SDK 已经持有有效会话（hot reload 常见），
     // 直接当作登录成功，避免 SessionBootstrap 把它当真正的失败丢出来。
+    // round 2 review：forceRelogin（token 恢复）模式例外 —— 此时「已持有的
+    // 会话」正拿着一枚被服务端拒绝的死 token（强制 logout 刚刚失败过），
+    // 把 10102 当成功会清掉恢复欠账、消息保持全断。按失败抛出，恢复层
+    // 记欠账、回前台重试（届时僵尸自愈路径可再拆一次）。
     const code = (error as { code?: number })?.code;
     const msg =
       error instanceof Error ? error.message : String(error ?? '');
     if (code === 10102 || msg.includes('User has logged in repeatedly')) {
+      if (options.forceRelogin) {
+        useIMStore.getState().setConnecting(false);
+        reportError(error, { operation: 'openim', kind: 'forceReloginDup' });
+        throw error;
+      }
       useIMStore.getState().setConnecting(false);
       useIMStore.getState().setConnected(true);
       return true;
@@ -314,7 +351,9 @@ function finalizeIMTeardown() {
   useIMStore.getState().reset();
 }
 
-async function performLogoutFromOpenIM() {
+async function performLogoutFromOpenIM(
+  options: { forceNative?: boolean } = {},
+) {
   if (!isNativeIMSupported() || !initPromise) {
     finalizeIMTeardown();
     return;
@@ -323,7 +362,10 @@ async function performLogoutFromOpenIM() {
   // SDK 已初始化但未连接（登录还在进行 / 登录失败 / 已断开）时，没有可登出的会话，
   // 直接 OpenIMSDK.logout() 会报 10004「Resource initialization incomplete」。
   // 此时跳过 SDK logout、只清本地状态并重置 initPromise（下次登录会重新 initSDK）。
-  if (!useIMStore.getState().connected) {
+  // round 3 review：forceNative 例外 —— token 恢复的陈旧登录拆除发生在
+  // login 刚返回、onConnectSuccess 还没翻 connected 的窗口里，跳过
+  // SDK.logout 会把 native 侧留在旧用户的登录态上（10004 之类报错无害，吞）。
+  if (!useIMStore.getState().connected && !options.forceNative) {
     finalizeIMTeardown();
     return;
   }
@@ -342,12 +384,14 @@ async function performLogoutFromOpenIM() {
   }
 }
 
-export function logoutFromOpenIM(): Promise<void> {
+export function logoutFromOpenIM(
+  options: { forceNative?: boolean } = {},
+): Promise<void> {
   if (logoutPromise) {
     return logoutPromise;
   }
 
-  const operation = performLogoutFromOpenIM();
+  const operation = performLogoutFromOpenIM(options);
   let trackedOperation: Promise<void>;
   trackedOperation = operation.finally(() => {
     if (logoutPromise === trackedOperation) {

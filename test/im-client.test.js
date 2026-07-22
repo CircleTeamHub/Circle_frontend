@@ -20,6 +20,12 @@ const DEFAULT_TS_MODULE_STUBS = {
     bindOpenIMListeners: () => () => {},
     unbindOpenIMListeners: () => {},
   },
+  '@/im/token-recovery': {
+    registerIMLoginExecutor: () => {},
+    registerIMLogoutExecutor: () => {},
+    recoverIMSession: async () => false,
+    isIMReloginPending: () => false,
+  },
   '@/services/auth/session': {
     registerLogoutHandler: () => () => {},
   },
