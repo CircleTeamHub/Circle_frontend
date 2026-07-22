@@ -1,13 +1,86 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createMMKV } from 'react-native-mmkv';
+import type { MMKV } from 'react-native-mmkv';
 import type { StateStorage } from 'zustand/middleware';
+import {
+  getEncryptedInstance,
+  initEncryptedStorage,
+} from './encrypted-init';
+
+const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+
+function warnNotReady(op: string, key?: string): void {
+  if (isDev) {
+    console.warn(
+      `[storage] ${op}(${key ?? ''}) before initEncryptedStorage() resolved — ` +
+        'returning fallback. Startup-path readers must tolerate this and ' +
+        're-apply after the app gate (see i18n rehydrateLanguageFromStorage).',
+    );
+  }
+}
 
 /**
- * Singleton MMKV instance for the entire app.
- * Synchronous, ~30x faster than AsyncStorage. Used as the persistence
- * layer for all zustand stores and ad-hoc preference reads/writes.
+ * Singleton MMKV handle（FE#87 起为加密实例的同步壳）。
+ *
+ * 真实实例由 initEncryptedStorage() 在启动门内异步建好（密钥在
+ * SecureStore）。壳保持旧的同步 API 形状 —— 初始化完成后所有调用零开销
+ * 直达；初始化前的读返回 undefined/false、写与删丢弃并 dev 告警。
+ * 启动期唯一的两个前置读者（i18n 模块求值、主题首读）都有门后重应用补偿。
  */
-export const storage = createMMKV({ id: 'circle-im' });
+export const storage = {
+  getString(key: string): string | undefined {
+    const mmkv = getEncryptedInstance();
+    if (!mmkv) {
+      warnNotReady('getString', key);
+      return undefined;
+    }
+    return mmkv.getString(key);
+  },
+  getBoolean(key: string): boolean | undefined {
+    const mmkv = getEncryptedInstance();
+    if (!mmkv) {
+      warnNotReady('getBoolean', key);
+      return undefined;
+    }
+    return mmkv.getBoolean(key);
+  },
+  set(key: string, value: string | number | boolean): void {
+    const mmkv = getEncryptedInstance();
+    if (!mmkv) {
+      warnNotReady('set', key);
+      return;
+    }
+    mmkv.set(key, value);
+  },
+  remove(key: string): void {
+    const mmkv = getEncryptedInstance();
+    if (!mmkv) {
+      warnNotReady('remove', key);
+      return;
+    }
+    mmkv.remove(key);
+  },
+  contains(key: string): boolean {
+    const mmkv = getEncryptedInstance();
+    if (!mmkv) {
+      warnNotReady('contains', key);
+      return false;
+    }
+    return mmkv.contains(key);
+  },
+  clearAll(): void {
+    const mmkv = getEncryptedInstance();
+    if (!mmkv) {
+      warnNotReady('clearAll');
+      return;
+    }
+    mmkv.clearAll();
+  },
+} satisfies Partial<Record<keyof MMKV, unknown>> as unknown as Pick<
+  MMKV,
+  'getString' | 'getBoolean' | 'set' | 'remove' | 'contains' | 'clearAll'
+>;
+
+export { initEncryptedStorage };
 
 /**
  * Zustand-compatible JSON storage adapter backed by MMKV.
@@ -15,12 +88,31 @@ export const storage = createMMKV({ id: 'circle-im' });
  * to satisfy zustand's StateStorage type.
  */
 export const mmkvJsonStorage: StateStorage = {
-  getItem: (key) => storage.getString(key) ?? null,
+  // 初始化前返回 Promise（zustand persist 支持异步 storage，hydration 顺延
+  // 到启动门内完成）；初始化后同步直达，保住 MMKV 的速度优势。
+  getItem: (key) => {
+    if (getEncryptedInstance()) return storage.getString(key) ?? null;
+    return initEncryptedStorage().then(
+      (mmkv) => mmkv.getString(key) ?? null,
+    );
+  },
   setItem: (key, value) => {
-    storage.set(key, value);
+    if (getEncryptedInstance()) {
+      storage.set(key, value);
+      return;
+    }
+    return initEncryptedStorage().then((mmkv) => {
+      mmkv.set(key, value);
+    });
   },
   removeItem: (key) => {
-    storage.remove(key);
+    if (getEncryptedInstance()) {
+      storage.remove(key);
+      return;
+    }
+    return initEncryptedStorage().then((mmkv) => {
+      mmkv.remove(key);
+    });
   },
 };
 
