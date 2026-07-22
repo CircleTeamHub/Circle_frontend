@@ -185,37 +185,55 @@ const OPENIM_DATA_OWNER_KEY = 'circle-im-openim-data-owner';
  * 的代价由真正需要隔离的场景付。
  *
  * 时序约束：必须发生在 initSDK 之前（SDK 未持文件句柄）。in-process 切号时
- * logout 已把 initPromise 置空，正好满足；若 SDK 意外仍在运行则跳过且**不**
- * 转移 owner 登记，让下一次干净登录补上这次清理。首次升级（无登记）只登记不删。
- * 失败不阻断登录：隐私加固尽力而为，但要可见（dev-warn + 上报）。
+ * logout 已把 initPromise 置空，正好满足；若 SDK 意外仍在运行则**中止本次
+ * 登录**且不转移 owner 登记（review 修复：带着别人库继续登录正是要堵的洞）。
+ * 首次升级（无登记）只登记不删。
+ *
+ * 返回值 = 是否可以安全继续登录。review 修复（P1）：删库失败（DB 被锁 /
+ * 文件系统错误）时旧账号的聊天库还在磁盘上 —— 继续登录会让新账号打开上一个
+ * 账号的本地库，把「清理失败」直接变成隐私泄漏。此时中止登录、不转移 owner，
+ * 下次登录重试清理。
  */
-async function wipeStaleOpenIMDataOnAccountChange(imUserID: string) {
+async function wipeStaleOpenIMDataOnAccountChange(
+  imUserID: string,
+): Promise<boolean> {
   try {
     const previousOwner = storage.getString(OPENIM_DATA_OWNER_KEY);
     if (previousOwner === imUserID) {
-      return;
+      return true;
     }
     if (previousOwner && initPromise) {
       if (isDev) {
         console.warn(
-          '[openim] account changed but SDK is initialized; deferring stale data wipe',
+          '[openim] account changed but SDK is initialized; aborting login until clean teardown',
         );
       }
-      return;
+      return false;
     }
     if (previousOwner) {
       const RNFS = loadNativeFS();
       const dataDir = await getOpenIMDataDir();
       if (await RNFS.exists(dataDir)) {
+        // review 修复：unlink 前先 unInitSDK —— logout 曾被拒绝时 native 侧
+        // 可能仍持有 DB 句柄，在活 SDK 下删库正是会造成损坏的场景。SDK 本就
+        // 未初始化时该调用报错无害（吞掉）。
+        try {
+          await OpenIMSDK.unInitSDK();
+        } catch {
+          // 未初始化 / 已拆除时的报错是预期内噪音
+        }
+        initPromise = null;
         await RNFS.unlink(dataDir);
       }
     }
     storage.set(OPENIM_DATA_OWNER_KEY, imUserID);
+    return true;
   } catch (error) {
     if (isDev) {
       console.warn('[openim] stale data wipe on account change failed', error);
     }
     reportError(error, { operation: 'openim', kind: 'accountDataWipe' });
+    return false;
   }
 }
 
@@ -266,7 +284,15 @@ export async function loginToOpenIM(userID: string, imToken: string) {
     }
     const imUserID = toImUserId(userID);
     // 换号检测必须在 initSDK 之前（#96）：SDK 还没持有本地库句柄时删目录才安全。
-    await wipeStaleOpenIMDataOnAccountChange(imUserID);
+    const wipeSafe = await wipeStaleOpenIMDataOnAccountChange(imUserID);
+    if (!wipeSafe) {
+      // review 修复（P1）：上一账号的库没清掉就不给新账号开门。
+      useIMStore.getState().setConnecting(false);
+      useIMStore
+        .getState()
+        .setError('本地聊天数据清理失败，请重启应用后重试');
+      return false;
+    }
     await ensureOpenIMInitialized();
     useIMStore.getState().setCurrentUserID(imUserID);
     useIMStore.getState().setError(null);
@@ -386,6 +412,14 @@ async function performLogoutFromOpenIM() {
       console.warn('[openim] SDK logout failed (local state still reset)', err);
     }
     reportError(err, { operation: 'openim', kind: 'logout' });
+    // review 修复：logout 被拒 ≠ native 已释放 DB 句柄。unInit 强制拆除后再
+    // 清本地单例 —— 否则 initPromise 置空会让下次换号 wipe 误判「无活 SDK」，
+    // 在句柄仍被持有时删库（正是要避免的损坏场景）。
+    try {
+      await OpenIMSDK.unInitSDK();
+    } catch (uninitErr) {
+      reportError(uninitErr, { operation: 'openim', kind: 'unInit' });
+    }
   } finally {
     finalizeIMTeardown();
   }
