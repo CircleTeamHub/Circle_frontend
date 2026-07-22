@@ -105,15 +105,18 @@ export const MomentsFeed: React.FC = () => {
 
   // 新帖检测改为广播驱动（#89）：后端在好友发/删朋友圈时推 moments.feed.updated，
   // realtime client bump 信号，这里收到后查一次新帖数 —— 不再 30s 轮询。
-  const checkNewMoments = useCallback(async () => {
-    if (!lastRefreshTime) return;
+  // 返回是否成功：信号处理只有在查询成功后才推进（review P2）。
+  const checkNewMoments = useCallback(async (): Promise<boolean> => {
+    if (!lastRefreshTime) return true;
     try {
       const count = await fetchNewMomentsCount(lastRefreshTime);
       setNewCount(count);
+      return true;
     } catch (error) {
       if (__DEV__) {
         console.warn('[MomentsFeed] fetchNewMomentsCount failed', error);
       }
+      return false;
     }
   }, [lastRefreshTime]);
 
@@ -123,11 +126,28 @@ export const MomentsFeed: React.FC = () => {
     if (feedSignalVersion === handledSignalRef.current) return;
     // 尾沿去抖：一批好友接连发帖会连续 bump，800ms 内的多次信号合并成一次查询
     //（每次 bump 触发 effect 重跑，cleanup 把上一个 timer 掐掉）。
-    const timer = setTimeout(() => {
-      handledSignalRef.current = feedSignalVersion;
-      void checkNewMoments();
-    }, 800);
-    return () => clearTimeout(timer);
+    // review P2：查询失败不推进 handled，15s 后重试一次；再失败就留给下一个
+    // 信号 / 回前台补查兜底 —— 有界重试，不退化回轮询。
+    let cancelled = false;
+    let retried = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const run = async () => {
+      const ok = await checkNewMoments();
+      if (cancelled) return;
+      if (ok) {
+        handledSignalRef.current = feedSignalVersion;
+        return;
+      }
+      if (!retried) {
+        retried = true;
+        timer = setTimeout(run, 15_000);
+      }
+    };
+    timer = setTimeout(run, 800);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [feedSignalVersion, checkNewMoments]);
 
   // 回到前台补查一次，兜住后台/断连期间漏掉的广播（WS 后台不保活）。

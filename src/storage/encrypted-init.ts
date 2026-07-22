@@ -58,9 +58,22 @@ async function readOrCreateKey(): Promise<{ key: string; fresh: boolean }> {
   return { key, fresh: true };
 }
 
-/** 阶梯 3：换 id 新建加密恢复库并落标记。这里再抛就交给 init 的最终 catch。 */
+/**
+ * 阶梯 3：换 id 的加密恢复库（带自身的重建路径 —— 恢复库文件损坏时明文
+ * 重开 + 清库 + recrypt，不引入无限 id 轮换）。这里再抛就交给 init 的最终
+ * catch（壳回退模式，可重试）。
+ */
 async function openRecoveryStore(key: string): Promise<MMKV> {
-  const recovery = createMMKV({ id: RECOVERY_STORE_ID, encryptionKey: key });
+  let recovery: MMKV;
+  try {
+    recovery = createMMKV({ id: RECOVERY_STORE_ID, encryptionKey: key });
+  } catch (recoveryError) {
+    warnDev('[storage] recovery store open failed; rebuilding it', recoveryError);
+    const rebuilt = createMMKV({ id: RECOVERY_STORE_ID });
+    rebuilt.clearAll();
+    rebuilt.recrypt(key);
+    recovery = rebuilt;
+  }
   await SecureStore.setItemAsync(
     ACTIVE_STORE_MARKER_KEY,
     RECOVERY_STORE_ID,
@@ -75,7 +88,19 @@ async function openStore(key: string, fresh: boolean): Promise<MMKV> {
     () => null,
   );
   if (marker === RECOVERY_STORE_ID) {
-    return createMMKV({ id: RECOVERY_STORE_ID, encryptionKey: key });
+    try {
+      return createMMKV({ id: RECOVERY_STORE_ID, encryptionKey: key });
+    } catch (markedError) {
+      // review P2：标记着的恢复库自己也打不开时不能让 init 每次启动都拒绝 ——
+      // 清标记回落主库阶梯（阶梯尽头的 openRecoveryStore 会重建并重写标记）。
+      warnDev(
+        '[storage] marked recovery store failed to open; retrying primary ladder',
+        markedError,
+      );
+      await SecureStore.deleteItemAsync(ACTIVE_STORE_MARKER_KEY).catch(
+        () => undefined,
+      );
+    }
   }
 
   try {

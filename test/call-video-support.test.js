@@ -85,6 +85,15 @@ test('video tile rendering is bounded and local-first (review P2)', () => {
   assert.match(source, /a\.participant\.identity === localIdentity/);
 });
 
+test('subscription-side pruning + audio calls never render camera tracks (review P2 round 2)', () => {
+  const source = read('src/features/call/screens/GroupCallScreen.tsx');
+
+  // adaptiveStream/dynacast：未渲染的视频轨在订阅/发布两侧被裁剪
+  assert.match(source, /options=\{\{ adaptiveStream: true, dynacast: true \}\}/);
+  // AUDIO 通话里异常端发布的相机轨不得进入渲染 map
+  assert.match(source, /if \(!isVideoCall\) return map;/);
+});
+
 test('call chooser cannot be stacked by rapid taps (review P2)', () => {
   for (const relPath of [
     'src/features/chat/screens/ChatDetailScreen.tsx',

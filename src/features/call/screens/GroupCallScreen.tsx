@@ -33,6 +33,8 @@ type LiveKitModule = {
       connect?: boolean;
       audio?: boolean;
       video?: boolean;
+      // livekit-client RoomOptions 的子集（只声明用到的字段）
+      options?: { adaptiveStream?: boolean; dynacast?: boolean };
       onError?: (error: Error) => void;
     }>
   >;
@@ -254,6 +256,9 @@ function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
     // review P2：大群里无上限渲染视频轨会吃满带宽/内存。本地画面优先，
     // 之后按轨道顺序取到上限；超出者回退头像瓦片（音频不受影响）。
     const map = new Map<string, LiveKitTrackReference>();
+    // review P2：语音通话不渲染任何相机轨 —— 异常端在 AUDIO 房间里发布摄像
+    // 头也不能把视频塞进语音 UI（adaptiveStream 会因不渲染而暂停其下行）。
+    if (!isVideoCall) return map;
     const localIdentity = localParticipant.identity;
     const ordered = [...cameraTracks].sort((a, b) => {
       if (a.participant.identity === localIdentity) return -1;
@@ -266,7 +271,7 @@ function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
       map.set(trackRef.participant.identity, trackRef);
     }
     return map;
-  }, [cameraTracks, localParticipant.identity]);
+  }, [cameraTracks, isVideoCall, localParticipant.identity]);
 
   const participantRows = useMemo(
     () =>
@@ -615,6 +620,10 @@ export default function GroupCallScreen() {
         connect
         audio
         video={activeCall.callType === 'VIDEO'}
+        // review P2：订阅侧裁剪 —— adaptiveStream 让未渲染/不可见的视频轨
+        // 自动暂停下行，dynacast 让发布端按需暂停无人看的层；渲染上限
+        // MAX_VIDEO_TILES 是第二道闸。
+        options={{ adaptiveStream: true, dynacast: true }}
         onError={(error) => {
           if (typeof __DEV__ !== 'undefined' && __DEV__) {
             console.warn('[call] LiveKit room error', error);
