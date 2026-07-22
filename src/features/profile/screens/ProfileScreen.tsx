@@ -9,6 +9,10 @@ import {
   getVipStatBackground,
   getVipStatTextColor,
 } from "@/features/profile/member-stat-colors";
+import {
+  getMembershipTierForVipLevel,
+  type MembershipTier,
+} from "@/features/profile/membership-plans";
 import { getUserProfileHref } from "@/features/user/utils/routes";
 import { fetchCurrentUser } from "@/services/api/auth";
 import { fetchIconOptions } from "@/services/api/icons";
@@ -33,6 +37,13 @@ const MENU_ID = {
 } as const;
 
 type MenuId = (typeof MENU_ID)[keyof typeof MENU_ID];
+
+const DEFAULT_MEMBERSHIP_NAMES: Record<MembershipTier, string> = {
+  silver: "白银会员",
+  gold: "黄金会员",
+  diamond: "钻石会员",
+  super: "超级会员",
+};
 
 const MENU_ROUTE: Record<MenuId, string> = {
   [MENU_ID.SYSTEM_ANNOUNCEMENTS]: "/(tabs)/profile/system-announcements",
@@ -207,6 +218,12 @@ export default function ProfileScreen() {
   const displayName = user?.nickname || user?.accountId || t('profile.notLoggedIn');
   const displayAccount = user?.accountId || t('profile.notBound');
   const vipLevel = user?.vipLevel ?? 0;
+  const membershipTier = getMembershipTierForVipLevel(vipLevel);
+  const membershipLabel = membershipTier
+    ? t(`profile.membership.tiers.${membershipTier}.name`, {
+        defaultValue: DEFAULT_MEMBERSHIP_NAMES[membershipTier],
+      })
+    : t('profile.membership.regularUser', { defaultValue: '普通用户' });
   const creditScore = user?.creditScore ?? 0;
   const vipStatBackground = getVipStatBackground(vipLevel);
   const creditStatBackground = getCreditStatBackground(creditScore);
@@ -395,7 +412,14 @@ export default function ProfileScreen() {
             style={[s.memberStatCell, d.memberStat, { backgroundColor: vipStatBackground }]}
           >
             <Text style={[d.memberStatLabel, { color: vipStatTextColor }]}>{t('profile.vipLevel')}</Text>
-            <Text style={[d.memberStatValue, { color: vipStatTextColor }]}>VIP {vipLevel}</Text>
+            <Text
+              style={[d.memberStatValue, { color: vipStatTextColor }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.72}
+            >
+              {membershipLabel}
+            </Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"

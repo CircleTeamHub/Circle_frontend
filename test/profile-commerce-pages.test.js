@@ -54,22 +54,76 @@ test('profile commerce routes export their screens', () => {
   assert.match(read('app/(tabs)/profile/app-settings.tsx'), /AppSettingsScreen/);
 });
 
-test('MemberCenterScreen shows VIP1 to VIP5 and links rules', () => {
+test('MemberCenterScreen renders the four-tier catalog without legacy commerce APIs', () => {
   const src = read('src/features/profile/screens/MemberCenterScreen.tsx');
-  const api = read('src/services/api/membership.ts');
+  const catalog = read('src/features/profile/membership-plans.ts');
 
-  // VIP1..VIP5 live in the api module's FALLBACK_MEMBERSHIP_PLANS (single source of truth,
-  // also the offline fallback); the screen consumes them via the mapper.
-  for (const level of [1, 2, 3, 4, 5]) {
-    assert.match(api, new RegExp(`VIP${level}`));
+  for (const [tier, price] of [
+    ['silver', 298],
+    ['gold', 1288],
+    ['diamond', 1998],
+    ['super', 3998],
+  ]) {
+    assert.match(catalog, new RegExp(`tier: '${tier}'[\\s\\S]*?amount: ${price}`));
   }
 
-  assert.match(src, /fetchMembershipPlans/);
-  assert.match(src, /upgradeMembership/);
-  assert.match(api, /\/membership\/plans/);
-  assert.match(api, /\/membership\/upgrade/);
-  assert.match(src, /会员规则/);
+  assert.match(src, /MEMBERSHIP_PLANS\.map/);
+  assert.match(src, /MEMBERSHIP_BENEFITS\.map/);
+  assert.doesNotMatch(src, /@\/services\/api\/membership/);
+  assert.doesNotMatch(src, /fetchMembershipPlans|upgradeMembership|performMembershipUpgradeFlow/);
+  assert.doesNotMatch(src, /积分|兑换会员|确认兑换/);
+});
+
+test('MemberCenterScreen provides horizontal selection, tier markers, and selected benefits', () => {
+  const src = read('src/features/profile/screens/MemberCenterScreen.tsx');
+
+  assert.match(src, /horizontal/);
+  assert.match(src, /showsHorizontalScrollIndicator/);
+  assert.match(src, /plan\.recommended/);
+  assert.match(src, /defaultValue: '推荐'/);
+  assert.match(src, /duration\.type === 'lifetime'/);
+  assert.match(src, /defaultValue: '永久'/);
+  assert.match(src, /benefit\.values\[selectedPlan\.tier\]/);
+  assert.match(src, /defaultValue: '会员权益'/);
   assert.match(src, /profile\/member-rules/);
+});
+
+test('MemberCenterScreen routes configured support and otherwise shows a clear fallback', () => {
+  const src = read('src/features/profile/screens/MemberCenterScreen.tsx');
+  const env = read('.env.example');
+
+  assert.match(src, /process\.env\.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID/);
+  assert.match(src, /getUserProfileHref\(\s*'profile',\s*MEMBERSHIP_SUPPORT_USER_ID/);
+  assert.match(src, /router\.push/);
+  assert.match(src, /Alert\.alert/);
+  assert.match(src, /defaultValue: '客服账号暂未配置'/);
+  assert.match(src, /defaultValue: '请联系平台官方客服咨询会员开通或升级。'/);
+  assert.match(env, /EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID=/);
+  assert.doesNotMatch(src, /微信|WeChat|支付宝|Alipay/);
+});
+
+test('MemberCenterScreen distinguishes activation, upgrade, current, and lower-tier contact states', () => {
+  const src = read('src/features/profile/screens/MemberCenterScreen.tsx');
+
+  assert.match(src, /selectedPlan\.level > currentPlanLevel/);
+  assert.match(src, /selectedPlan\.level === currentPlanLevel/);
+  assert.match(src, /contactToActivate/);
+  assert.match(src, /defaultValue: '联系客服开通 {{plan}}'/);
+  assert.match(src, /contactToUpgrade/);
+  assert.match(src, /defaultValue: '联系客服升级至 {{plan}}'/);
+  assert.match(src, /defaultValue: '当前已是 {{plan}}，联系客服咨询'/);
+  assert.match(src, /defaultValue: '当前会员等级更高，联系客服咨询'/);
+  assert.match(src, /defaultValue: '已开通会员可联系客服补差价升级/);
+});
+
+test('ProfileScreen displays effective four-tier membership labels', () => {
+  const src = read('src/features/profile/screens/ProfileScreen.tsx');
+
+  assert.match(src, /getMembershipTierForVipLevel/);
+  assert.match(src, /getMembershipTierForVipLevel\(vipLevel\)/);
+  assert.match(src, /defaultValue: '普通用户'/);
+  assert.match(src, /super: ["']超级会员["']/);
+  assert.doesNotMatch(src, />VIP \{vipLevel\}</);
 });
 
 test('CreditScoreScreen explains score status and change rules via i18n', () => {
