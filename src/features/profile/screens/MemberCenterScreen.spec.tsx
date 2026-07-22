@@ -180,6 +180,9 @@ test('regular user selects tiers and receives an activation contact state', asyn
   expect(screen.getByText('普通用户')).toBeTruthy();
   expect(screen.getByText('联系客服开通 钻石会员')).toBeTruthy();
   expect(screen.getByText('1000 人')).toBeTruthy();
+  expect(screen.getByText('单群人数上限')).toBeTruthy();
+  expect(screen.queryByText('可创建群聊')).toBeNull();
+  expect(screen.queryByText('高级圈子')).toBeNull();
 
   fireEvent.press(screen.getByLabelText('白银会员，1 个月，¥298'));
 
@@ -357,10 +360,12 @@ test('rules screen states the exact support-assisted membership contract', () =>
     '会员不在 App 内使用积分兑换或直接购买。联系客服后，由客服人工核实并开通会员。',
     '已开通会员可联系客服补差价升级；升级后立即生效，原会员剩余价值由客服核算抵扣。',
     '会员到期后仅停止会员权益，不删除账号、聊天、笔记或其他用户内容。',
-    '页面展示的“不限”仍受后端较高的合理使用与防滥用上限约束，实际权限以后端为准。',
+    '会员规则仅适用于会员中心列出的权益；其中展示的“不限”仍受后端较高的合理使用与防滥用上限约束，实际权限以后端为准。',
     '语音转文字是所有用户可用的免费基础功能，不受会员等级限制。',
     '当前会员权益不包含头像框或动态头像承诺。',
   ]) {
     expect(screen.getByText(text)).toBeTruthy();
   }
+
+  expect(screen.queryByText(/创建群.*上限|高级圈子|优先客服/)).toBeNull();
 });

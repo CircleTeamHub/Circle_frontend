@@ -1826,16 +1826,13 @@
         "badge": "Insignia de membresía",
         "groupMemberLimit": "Miembros por grupo",
         "joinedGroups": "Grupos a los que puedes unirte",
-        "createdGroups": "Grupos que puedes crear",
         "noteStorage": "Almacenamiento de notas",
         "cityFilters": "Filtros de ciudad",
-        "fancyNumber": "Número premium de regalo",
-        "premiumCircle": "Círculo premium"
+        "fancyNumber": "Número premium de regalo"
       },
       "benefitValues": {
         "group-member-limit": "{{value}} personas",
         "joined-groups": "{{value}} grupos",
-        "created-groups": "{{value}} grupos",
         "note-storage": "{{value}} notas",
         "city-filters": "{{value}} ciudades",
         "unlimited": "Ilimitado",
@@ -1847,11 +1844,7 @@
         "super-lifetime": "Súper de por vida",
         "none": "Ninguno",
         "one-gift": "Un regalo",
-        "one-premium-gift": "Un número premium de regalo",
-        "silver-circle": "Círculo Plata",
-        "gold-circle": "Círculo Oro",
-        "diamond-circle": "Círculo Diamante",
-        "super-member-circle": "Círculo de miembros Súper"
+        "one-premium-gift": "Un número premium de regalo"
       }
     },
     "memberRules": {
@@ -1864,7 +1857,7 @@
         "supportActivation": "La membresía no se puede canjear con puntos ni comprar en la aplicación. Tras el contacto, atención al cliente la verifica y concede manualmente.",
         "upgrade": "Los miembros actuales pueden contactar con atención al cliente para pagar la diferencia de una mejora. Se activa de inmediato y se aplica el valor restante de la membresía.",
         "expiry": "Cuando vence la membresía, solo se detienen sus beneficios. No se eliminan cuentas, chats, notas ni otro contenido del usuario.",
-        "fairUse": "Los beneficios mostrados como ilimitados siguen sujetos a límites elevados de uso razonable y prevención de abusos del backend. Los permisos reales los determina el backend.",
+        "fairUse": "Las reglas de membresía solo se aplican a los beneficios indicados en el Centro de membresía. Los beneficios indicados como ilimitados siguen sujetos a límites elevados de uso razonable y prevención de abusos del backend. Los permisos reales los determina el backend.",
         "voiceToText": "La conversión de voz a texto es una función básica gratuita para todos y no está limitada por el nivel de membresía.",
         "excludedVisualBenefits": "Los beneficios actuales no prometen marcos de avatar ni avatares animados."
       }

@@ -1385,16 +1385,13 @@
         "badge": "Membership badge",
         "groupMemberLimit": "Members per group",
         "joinedGroups": "Groups you can join",
-        "createdGroups": "Groups you can create",
         "noteStorage": "Note storage",
         "cityFilters": "City filters",
-        "fancyNumber": "Premium number gift",
-        "premiumCircle": "Premium circle"
+        "fancyNumber": "Premium number gift"
       },
       "benefitValues": {
         "group-member-limit": "{{value}} people",
         "joined-groups": "{{value}} groups",
-        "created-groups": "{{value}} groups",
         "note-storage": "{{value}} notes",
         "city-filters": "{{value}} cities",
         "unlimited": "Unlimited",
@@ -1406,11 +1403,7 @@
         "super-lifetime": "Super lifetime",
         "none": "None",
         "one-gift": "One gift",
-        "one-premium-gift": "One premium number gift",
-        "silver-circle": "Silver circle",
-        "gold-circle": "Gold circle",
-        "diamond-circle": "Diamond circle",
-        "super-member-circle": "Super member circle"
+        "one-premium-gift": "One premium number gift"
       }
     },
     "memberRules": {
@@ -1423,7 +1416,7 @@
         "supportActivation": "Membership cannot be redeemed with points or purchased in the app. After contact, customer service manually verifies and grants membership.",
         "upgrade": "Current members may contact customer service to pay the difference for an upgrade. It takes effect immediately, with remaining membership value applied by customer service.",
         "expiry": "When membership expires, only membership benefits stop. Accounts, chats, notes, and other user content are not deleted.",
-        "fairUse": "Displayed unlimited benefits remain subject to high backend fair-use and abuse-prevention limits. Actual permissions are determined by the backend.",
+        "fairUse": "Membership rules apply only to benefits listed in the Membership Center. Any listed unlimited benefit remains subject to high backend fair-use and abuse-prevention limits. Actual permissions are determined by the backend.",
         "voiceToText": "Voice-to-text is a free basic feature for every user and is not restricted by membership tier.",
         "excludedVisualBenefits": "Current membership benefits do not promise avatar frames or animated avatars."
       }

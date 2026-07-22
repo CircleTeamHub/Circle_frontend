@@ -29,7 +29,7 @@ const RULES = [
   {
     key: 'profile.memberRules.rules.fairUse',
     defaultValue:
-      '页面展示的“不限”仍受后端较高的合理使用与防滥用上限约束，实际权限以后端为准。',
+      '会员规则仅适用于会员中心列出的权益；其中展示的“不限”仍受后端较高的合理使用与防滥用上限约束，实际权限以后端为准。',
   },
   {
     key: 'profile.memberRules.rules.voiceToText',

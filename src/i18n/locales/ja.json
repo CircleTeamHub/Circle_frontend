@@ -1823,16 +1823,13 @@
         "badge": "会員バッジ",
         "groupMemberLimit": "1グループの人数上限",
         "joinedGroups": "参加可能なグループ",
-        "createdGroups": "作成可能なグループ",
         "noteStorage": "ノート保存数",
         "cityFilters": "都市フィルター",
-        "fancyNumber": "プレミアム番号特典",
-        "premiumCircle": "プレミアムサークル"
+        "fancyNumber": "プレミアム番号特典"
       },
       "benefitValues": {
         "group-member-limit": "{{value}}人",
         "joined-groups": "{{value}}グループ",
-        "created-groups": "{{value}}グループ",
         "note-storage": "{{value}}件",
         "city-filters": "{{value}}都市",
         "unlimited": "無制限",
@@ -1844,11 +1841,7 @@
         "super-lifetime": "スーパー永久",
         "none": "なし",
         "one-gift": "1回贈呈",
-        "one-premium-gift": "プレミアム番号を1回贈呈",
-        "silver-circle": "シルバーサークル",
-        "gold-circle": "ゴールドサークル",
-        "diamond-circle": "ダイヤモンドサークル",
-        "super-member-circle": "スーパー会員サークル"
+        "one-premium-gift": "プレミアム番号を1回贈呈"
       }
     },
     "memberRules": {
@@ -1861,7 +1854,7 @@
         "supportActivation": "会員資格はアプリ内でポイント交換または直接購入できません。連絡後、カスタマーサービスが手動で確認して付与します。",
         "upgrade": "開通済みの会員は、カスタマーサービスに連絡して差額を支払うことでアップグレードできます。すぐに有効になり、残存価値はカスタマーサービスが充当します。",
         "expiry": "会員期限が切れた場合、会員特典のみ停止します。アカウント、チャット、ノートなどのユーザーコンテンツは削除されません。",
-        "fairUse": "「無制限」と表示される特典にも、バックエンドの高い水準の公正利用・不正利用防止上限が適用されます。実際の権限はバックエンドを正とします。",
+        "fairUse": "会員ルールは会員センターに記載された特典にのみ適用されます。そのうち「無制限」と表示される特典にも、バックエンドの高い水準の公正利用・不正利用防止上限が適用されます。実際の権限はバックエンドを正とします。",
         "voiceToText": "音声テキスト変換は全ユーザー向けの無料基本機能で、会員ランクによる制限はありません。",
         "excludedVisualBenefits": "現在の会員特典には、アバターフレームや動くアバターの提供保証は含まれません。"
       }

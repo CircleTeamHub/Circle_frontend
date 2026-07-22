@@ -43,7 +43,7 @@ test('catalog defines the four exact membership plans', () => {
   ]);
 });
 
-test('catalog defines every value in the nine benefit rows', () => {
+test('catalog defines every value in the seven benefit rows', () => {
   assert.deepEqual(MEMBERSHIP_BENEFITS, [
     {
       id: 'name-color',
@@ -76,11 +76,6 @@ test('catalog defines every value in the nine benefit rows', () => {
       values: { silver: 200, gold: 500, diamond: '999+', super: 'unlimited' },
     },
     {
-      id: 'created-groups',
-      labelKey: 'profile.membership.benefits.createdGroups',
-      values: { silver: 20, gold: 100, diamond: 300, super: 'unlimited' },
-    },
-    {
       id: 'note-storage',
       labelKey: 'profile.membership.benefits.noteStorage',
       values: { silver: 100, gold: 500, diamond: '999+', super: 'unlimited' },
@@ -100,23 +95,15 @@ test('catalog defines every value in the nine benefit rows', () => {
         super: 'one-premium-gift',
       },
     },
-    {
-      id: 'premium-circle',
-      labelKey: 'profile.membership.benefits.premiumCircle',
-      values: {
-        silver: 'silver-circle',
-        gold: 'gold-circle',
-        diamond: 'diamond-circle',
-        super: 'super-member-circle',
-      },
-    },
   ]);
 });
 
 test('catalog excludes benefits reserved for the base product or later releases', () => {
   const benefitIds = MEMBERSHIP_BENEFITS.map((benefit) => benefit.id);
 
-  assert.equal(benefitIds.length, 9);
+  assert.equal(benefitIds.length, 7);
+  assert.equal(benefitIds.includes('created-groups'), false);
+  assert.equal(benefitIds.includes('premium-circle'), false);
   assert.equal(benefitIds.includes('voice-to-text'), false);
   assert.equal(benefitIds.includes('avatar-frame'), false);
   assert.equal(benefitIds.includes('animated-avatar'), false);

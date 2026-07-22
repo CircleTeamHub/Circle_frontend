@@ -56,11 +56,9 @@ export type MembershipBenefitId =
   | 'badge'
   | 'group-member-limit'
   | 'joined-groups'
-  | 'created-groups'
   | 'note-storage'
   | 'city-filters'
-  | 'fancy-number'
-  | 'premium-circle';
+  | 'fancy-number';
 
 export type MembershipBenefitValue =
   | number
@@ -74,11 +72,7 @@ export type MembershipBenefitValue =
   | 'super-lifetime'
   | 'none'
   | 'one-gift'
-  | 'one-premium-gift'
-  | 'silver-circle'
-  | 'gold-circle'
-  | 'diamond-circle'
-  | 'super-member-circle';
+  | 'one-premium-gift';
 
 export type MembershipBenefit = {
   id: MembershipBenefitId;
@@ -118,11 +112,6 @@ export const MEMBERSHIP_BENEFITS = [
     values: { silver: 200, gold: 500, diamond: '999+', super: 'unlimited' },
   },
   {
-    id: 'created-groups',
-    labelKey: 'profile.membership.benefits.createdGroups',
-    values: { silver: 20, gold: 100, diamond: 300, super: 'unlimited' },
-  },
-  {
     id: 'note-storage',
     labelKey: 'profile.membership.benefits.noteStorage',
     values: { silver: 100, gold: 500, diamond: '999+', super: 'unlimited' },
@@ -140,16 +129,6 @@ export const MEMBERSHIP_BENEFITS = [
       gold: 'none',
       diamond: 'one-gift',
       super: 'one-premium-gift',
-    },
-  },
-  {
-    id: 'premium-circle',
-    labelKey: 'profile.membership.benefits.premiumCircle',
-    values: {
-      silver: 'silver-circle',
-      gold: 'gold-circle',
-      diamond: 'diamond-circle',
-      super: 'super-member-circle',
     },
   },
 ] as const satisfies readonly MembershipBenefit[];

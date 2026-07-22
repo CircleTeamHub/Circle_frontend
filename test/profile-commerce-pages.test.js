@@ -76,6 +76,7 @@ test('MemberCenterScreen renders the four-tier catalog without legacy commerce A
 
 test('MemberCenterScreen provides horizontal selection, tier markers, and selected benefits', () => {
   const src = read('src/features/profile/screens/MemberCenterScreen.tsx');
+  const catalog = read('src/features/profile/membership-plans.ts');
 
   assert.match(src, /horizontal/);
   assert.match(src, /showsHorizontalScrollIndicator/);
@@ -89,6 +90,8 @@ test('MemberCenterScreen provides horizontal selection, tier markers, and select
   assert.match(src, /flexWrap:\s*'wrap'/);
   assert.match(src, /flexShrink:\s*1/);
   assert.match(src, /numberOfLines=\{2\}/);
+  assert.doesNotMatch(src, /created-groups|premium-circle|silver-circle|gold-circle|diamond-circle|super-member-circle/);
+  assert.doesNotMatch(catalog, /created-groups|premium-circle|silver-circle|gold-circle|diamond-circle|super-member-circle/);
 });
 
 test('MemberCenterScreen routes configured support and otherwise shows a clear fallback', () => {
@@ -174,6 +177,10 @@ test('MemberRulesScreen and every locale use the four-tier support-assisted cont
   assert.doesNotMatch(rules, /levels|highTier|consume|irreversible/);
   assert.match(rules, /不在 App 内使用积分兑换或直接购买/);
   assert.doesNotMatch(rules, /VIP1-5|微信|WeChat|支付宝|Alipay/);
+  assert.doesNotMatch(
+    rules,
+    /创建群.*上限|created.{0,8}(?:group|circle).{0,8}(?:count|limit)|高级圈子|premium.{0,8}circle|priority.{0,8}(?:support|customer service)|优先客服/i,
+  );
 
   for (const locale of locales) {
     const bundle = JSON.parse(read(`src/i18n/locales/${locale}.json`));
@@ -196,6 +203,28 @@ test('MemberRulesScreen and every locale use the four-tier support-assisted cont
     ]) {
       assert.equal(membership?.[obsolete], undefined, `${locale}: obsolete ${obsolete}`);
     }
+    assert.equal(membership?.benefits?.createdGroups, undefined, `${locale}: createdGroups`);
+    assert.equal(membership?.benefits?.premiumCircle, undefined, `${locale}: premiumCircle`);
+    for (const removedValue of [
+      'created-groups',
+      'silver-circle',
+      'gold-circle',
+      'diamond-circle',
+      'super-member-circle',
+    ]) {
+      assert.equal(
+        membership?.benefitValues?.[removedValue],
+        undefined,
+        `${locale}: ${removedValue}`,
+      );
+    }
+
+    const activeMembershipCopy = JSON.stringify({ membership, memberRules });
+    assert.doesNotMatch(
+      activeMembershipCopy,
+      /priority customer service|priority support|优先客服|優先.{0,8}(?:サポート|カスタマー)|우선.{0,8}고객|atención prioritaria/i,
+      `${locale}: customer service must remain a contact channel, not a paid benefit`,
+    );
   }
 });
 

@@ -1823,16 +1823,13 @@
         "badge": "회원 배지",
         "groupMemberLimit": "그룹당 인원 한도",
         "joinedGroups": "가입 가능한 그룹",
-        "createdGroups": "생성 가능한 그룹",
         "noteStorage": "노트 저장 공간",
         "cityFilters": "도시 필터",
-        "fancyNumber": "프리미엄 번호 증정",
-        "premiumCircle": "프리미엄 서클"
+        "fancyNumber": "프리미엄 번호 증정"
       },
       "benefitValues": {
         "group-member-limit": "{{value}}명",
         "joined-groups": "{{value}}개 그룹",
-        "created-groups": "{{value}}개 그룹",
         "note-storage": "{{value}}개 노트",
         "city-filters": "{{value}}개 도시",
         "unlimited": "무제한",
@@ -1844,11 +1841,7 @@
         "super-lifetime": "슈퍼 평생",
         "none": "없음",
         "one-gift": "1회 증정",
-        "one-premium-gift": "프리미엄 번호 1회 증정",
-        "silver-circle": "실버 서클",
-        "gold-circle": "골드 서클",
-        "diamond-circle": "다이아몬드 서클",
-        "super-member-circle": "슈퍼 회원 서클"
+        "one-premium-gift": "프리미엄 번호 1회 증정"
       }
     },
     "memberRules": {
@@ -1861,7 +1854,7 @@
         "supportActivation": "회원 자격은 앱에서 포인트로 교환하거나 직접 구매할 수 없습니다. 문의 후 고객센터가 수동으로 확인하고 부여합니다.",
         "upgrade": "기존 회원은 고객센터에 문의해 차액을 지불하고 업그레이드할 수 있습니다. 즉시 적용되며 남은 회원 가치는 고객센터가 반영합니다.",
         "expiry": "회원 기간이 만료되면 회원 혜택만 중지됩니다. 계정, 채팅, 노트 및 기타 사용자 콘텐츠는 삭제되지 않습니다.",
-        "fairUse": "화면에 표시된 무제한 혜택에도 백엔드의 높은 수준의 공정 사용 및 남용 방지 한도가 적용됩니다. 실제 권한은 백엔드를 기준으로 합니다.",
+        "fairUse": "회원 규칙은 회원 센터에 표시된 혜택에만 적용됩니다. 그중 무제한으로 표시된 혜택에도 백엔드의 높은 수준의 공정 사용 및 남용 방지 한도가 적용됩니다. 실제 권한은 백엔드를 기준으로 합니다.",
         "voiceToText": "음성 텍스트 변환은 모든 사용자를 위한 무료 기본 기능이며 회원 등급의 제한을 받지 않습니다.",
         "excludedVisualBenefits": "현재 회원 혜택에는 아바타 프레임이나 움직이는 아바타 제공 약속이 포함되지 않습니다."
       }
