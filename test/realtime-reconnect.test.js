@@ -101,6 +101,10 @@ function loadRealtimeHarness() {
               enqueueNotification: () => {},
             }),
           };
+        case '@/features/discover/store/use-moments-feed-signal-store':
+          return {
+            useMomentsFeedSignalStore: stubStore({ bump: () => {} }),
+          };
         case '@/features/discover/store/use-circle-notification-store':
           return {
             useCircleNotificationStore: stubStore({

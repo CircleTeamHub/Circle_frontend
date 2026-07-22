@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { useMomentsStore } from '@/features/discover/store/use-moments-store';
+import { useMomentsFeedSignalStore } from '@/features/discover/store/use-moments-feed-signal-store';
 import {
   addMomentComment,
   toggleMomentLike,
@@ -102,50 +103,40 @@ export const MomentsFeed: React.FC = () => {
     }, [fetchMoments]),
   );
 
-  // Poll for new posts every 30s, but only while app is foregrounded.
-  // 后台时清掉定时器避免 JS bridge 被叫醒；回到前台立即补一次拉取再继续 polling。
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  useEffect(() => {
+  // 新帖检测改为广播驱动（#89）：后端在好友发/删朋友圈时推 moments.feed.updated，
+  // realtime client bump 信号，这里收到后查一次新帖数 —— 不再 30s 轮询。
+  const checkNewMoments = useCallback(async () => {
     if (!lastRefreshTime) return;
-
-    const pollOnce = async () => {
-      try {
-        const count = await fetchNewMomentsCount(lastRefreshTime);
-        setNewCount(count);
-      } catch (error) {
-        if (__DEV__) {
-          console.warn('[MomentsFeed] fetchNewMomentsCount failed', error);
-        }
+    try {
+      const count = await fetchNewMomentsCount(lastRefreshTime);
+      setNewCount(count);
+    } catch (error) {
+      if (__DEV__) {
+        console.warn('[MomentsFeed] fetchNewMomentsCount failed', error);
       }
-    };
-
-    const startInterval = () => {
-      if (intervalRef.current != null) return;
-      intervalRef.current = setInterval(pollOnce, 30_000);
-    };
-
-    const stopInterval = () => {
-      if (intervalRef.current != null) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    };
-
-    if (AppState.currentState === 'active') startInterval();
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') {
-        pollOnce();
-        startInterval();
-      } else {
-        stopInterval();
-      }
-    });
-
-    return () => {
-      sub.remove();
-      stopInterval();
-    };
+    }
   }, [lastRefreshTime]);
+
+  const feedSignalVersion = useMomentsFeedSignalStore((s) => s.version);
+  const handledSignalRef = useRef(0);
+  useEffect(() => {
+    if (feedSignalVersion === handledSignalRef.current) return;
+    // 尾沿去抖：一批好友接连发帖会连续 bump，800ms 内的多次信号合并成一次查询
+    //（每次 bump 触发 effect 重跑，cleanup 把上一个 timer 掐掉）。
+    const timer = setTimeout(() => {
+      handledSignalRef.current = feedSignalVersion;
+      void checkNewMoments();
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [feedSignalVersion, checkNewMoments]);
+
+  // 回到前台补查一次，兜住后台/断连期间漏掉的广播（WS 后台不保活）。
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void checkNewMoments();
+    });
+    return () => sub.remove();
+  }, [checkNewMoments]);
 
   // Manual pull-to-refresh
   const handleRefresh = useCallback(async () => {
