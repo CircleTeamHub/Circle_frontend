@@ -25,6 +25,7 @@ function buildHarness({
     routerReplace: [],
     imSetError: [],
     executor: [],
+    knownUpserts: [],
   };
 
   const authState = {
@@ -39,10 +40,12 @@ function buildHarness({
   };
 
   const imState = {
+    currentUserID: null,
     setError: (message) => {
       calls.imSetError.push(message);
     },
   };
+  const knownAccounts = [];
 
   const shims = {
     'expo-router': {
@@ -80,6 +83,17 @@ function buildHarness({
     '@/stores/imStore': {
       useIMStore: { getState: () => imState },
     },
+    '@/stores/knownAccountsStore': {
+      useKnownAccountsStore: {
+        getState: () => ({
+          accounts: knownAccounts,
+          upsertAccount: (account) => {
+            calls.knownUpserts.push(account);
+          },
+        }),
+      },
+    },
+    '@/im/user-id': loadTsModule('src/im/user-id.ts'),
   };
 
   const mod = loadTsModule('src/im/token-recovery.ts', {
@@ -100,7 +114,7 @@ function buildHarness({
     );
   }
 
-  return { mod, calls, authState };
+  return { mod, calls, authState, imState, knownAccounts };
 }
 
 test('token recovery: 换新 token → 写回 store → 原地重登，不动业务会话', async () => {
@@ -336,13 +350,15 @@ test('单飞按 sessionEpoch 记账：切号后当前会话另起恢复，不复
   assert.equal(typeof secondResult, 'boolean');
 });
 
-test('executor await 期间切号：拆除陈旧 IM 登录并按失败返回 (review)', async () => {
+test('executor await 期间切号：SDK 还连着旧身份才拆除 (review + round 2)', async () => {
   let logoutCalls = 0;
   let harness;
   harness = buildHarness({
     executor: async () => {
-      // 登录成功返回前用户已切号
+      // 登录成功返回前用户已切号；SDK 此刻连着的还是旧用户（round 2：
+      // 拆除范围限定于此 —— currentUserID 与旧用户 IM id 相同）
       harness.authState.sessionEpoch = 99;
+      harness.imState.currentUserID = 'user1'; // toImUserId('user-1')
       return true;
     },
   });
@@ -356,6 +372,59 @@ test('executor await 期间切号：拆除陈旧 IM 登录并按失败返回 (re
   // 刚完成的是旧用户的 OpenIM 登录 —— 必须拆除，防消息路由到错误身份
   assert.equal(logoutCalls, 1);
   assert.equal(harness.mod.isIMReloginPending(), false);
+});
+
+test('executor await 期间切号：B 已登上自己的 IM 时绝不拆 (round 2)', async () => {
+  let logoutCalls = 0;
+  let harness;
+  harness = buildHarness({
+    executor: async () => {
+      harness.authState.sessionEpoch = 99;
+      // B 会话已完成自己的 IM 登录：currentUserID 是 B 的 im id
+      harness.imState.currentUserID = 'userB';
+      return true;
+    },
+  });
+  harness.mod.registerIMLogoutExecutor(async () => {
+    logoutCalls += 1;
+  });
+
+  const recovered = await harness.mod.recoverIMSession();
+
+  assert.equal(recovered, false);
+  // 无差别 logout 会把 B 刚建好的会话拆掉 —— 必须跳过
+  assert.equal(logoutCalls, 0);
+});
+
+test('恢复成功把新 imToken 写回 knownAccountsStore（切走再切回不用死 token）(round 2)', async () => {
+  const harness = buildHarness();
+  harness.knownAccounts.push({
+    user: { id: 'user-1' },
+    accessToken: 'old-access',
+    refreshToken: 'old-refresh',
+    imToken: 'dead-im-token',
+    updatedAt: 1,
+  });
+  harness.authState.accessToken = 'access-a';
+  harness.authState.refreshToken = 'refresh-a';
+
+  const recovered = await harness.mod.recoverIMSession();
+
+  assert.equal(recovered, true);
+  assert.equal(harness.calls.knownUpserts.length, 1);
+  const upsert = JSON.parse(JSON.stringify(harness.calls.knownUpserts[0]));
+  assert.equal(upsert.imToken, 'fresh-token');
+  assert.equal(upsert.user.id, 'user-1');
+});
+
+test('client：forceRelogin 下 10102 不再当成功（死 token 会话不能清欠账）(round 2)', () => {
+  const client = read('src/im/client.ts');
+  const dupBlock = client.slice(
+    client.indexOf("code === 10102 || msg.includes('User has logged in repeatedly')"),
+    client.indexOf('登录失败时重置 connecting'),
+  );
+  assert.match(dupBlock, /options\.forceRelogin/);
+  assert.match(dupBlock, /throw error;/);
 });
 
 test('恢复执行器强制真登录：Logged 快捷不吞新 token (review P1)', () => {

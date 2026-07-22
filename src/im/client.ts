@@ -307,10 +307,19 @@ export async function loginToOpenIM(
   } catch (error) {
     // 10102 = 重复登录。代表 native SDK 已经持有有效会话（hot reload 常见），
     // 直接当作登录成功，避免 SessionBootstrap 把它当真正的失败丢出来。
+    // round 2 review：forceRelogin（token 恢复）模式例外 —— 此时「已持有的
+    // 会话」正拿着一枚被服务端拒绝的死 token（强制 logout 刚刚失败过），
+    // 把 10102 当成功会清掉恢复欠账、消息保持全断。按失败抛出，恢复层
+    // 记欠账、回前台重试（届时僵尸自愈路径可再拆一次）。
     const code = (error as { code?: number })?.code;
     const msg =
       error instanceof Error ? error.message : String(error ?? '');
     if (code === 10102 || msg.includes('User has logged in repeatedly')) {
+      if (options.forceRelogin) {
+        useIMStore.getState().setConnecting(false);
+        reportError(error, { operation: 'openim', kind: 'forceReloginDup' });
+        throw error;
+      }
       useIMStore.getState().setConnecting(false);
       useIMStore.getState().setConnected(true);
       return true;

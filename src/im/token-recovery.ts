@@ -24,6 +24,8 @@ import { isDefinitiveAuthFailure } from '@/services/api/client';
 import { clearLocalSession } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
 import { useIMStore } from '@/stores/imStore';
+import { useKnownAccountsStore } from '@/stores/knownAccountsStore';
+import { toImUserId } from '@/im/user-id';
 
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 
@@ -88,9 +90,7 @@ async function performRecovery(): Promise<boolean> {
       // review 修复：清理与跳转都锚定 startEpoch —— 请求 unwinding 期间用户
       // 已重新登录/切号时，无作用域的 clear 会把新会话也抹掉再踢回登录页。
       reloginPending = false;
-      const epochStillCurrent =
-        useAuthStore.getState().sessionEpoch === startEpoch;
-      if (epochStillCurrent) {
+      if (useAuthStore.getState().sessionEpoch === startEpoch) {
         useIMStore.getState().setError(
           i18n.t('common.errors.sessionExpired', {
             defaultValue: '登录已过期，请重新登录',
@@ -98,7 +98,10 @@ async function performRecovery(): Promise<boolean> {
         );
       }
       await clearLocalSession(startEpoch);
-      if (epochStillCurrent) {
+      // round 2 review：路由决策在 clearLocalSession 的 await **之后**重读
+      // epoch —— 清理执行期间用户可能已重新登录（epoch 前进，clear 对新会话
+      // no-op），拿 await 前缓存的布尔去 replace 会把有效新会话踢回登录页。
+      if (useAuthStore.getState().sessionEpoch === startEpoch) {
         router.replace('/(auth)/login');
       }
       return false;
@@ -121,6 +124,24 @@ async function performRecovery(): Promise<boolean> {
   }
 
   useAuthStore.getState().setImToken(imToken);
+  // round 2 review：新 imToken 同步进快速切号的账号列表 —— 否则切走再切回
+  // 会用 account.imToken 里那枚已被拒绝的旧 token 登 IM，失败路径只 warn
+  // 不再恢复，聊天断连到冷启动。仅在该账号已在列表且业务凭证齐备时写。
+  const authNow = useAuthStore.getState();
+  if (authNow.accessToken && authNow.refreshToken && authNow.user) {
+    const known = useKnownAccountsStore
+      .getState()
+      .accounts.find((account) => account.user.id === user.id);
+    if (known) {
+      useKnownAccountsStore.getState().upsertAccount({
+        ...known,
+        accessToken: authNow.accessToken,
+        refreshToken: authNow.refreshToken,
+        imToken,
+        updatedAt: Date.now(),
+      });
+    }
+  }
 
   if (!imLoginExecutor) {
     // client.ts 未被求值（理论上不可能：listeners 由它绑定）。记欠账兜底。
@@ -134,7 +155,12 @@ async function performRecovery(): Promise<boolean> {
     // 「旧用户」的 OpenIM 登录，放着不管消息会路由到错误身份下。拆掉并按
     // 失败返回（新会话的 IM 登录由它自己的启动流程负责）。
     if (useAuthStore.getState().sessionEpoch !== startEpoch) {
-      if (loggedIn && imLogoutExecutor) {
+      // round 2 review：拆除范围限定「SDK 仍连着旧用户」——B 会话若已完成
+      // 自己的 IM 登录，无差别 logout 会把刚建好的新会话一并拆掉。
+      // currentUserID 是 IM 侧 id（toImUserId 归一），与旧用户比对后再动手。
+      const currentImUser = useIMStore.getState().currentUserID;
+      const staleImUser = toImUserId(user.id);
+      if (loggedIn && imLogoutExecutor && currentImUser === staleImUser) {
         await imLogoutExecutor().catch(() => undefined);
       }
       reloginPending = false;
