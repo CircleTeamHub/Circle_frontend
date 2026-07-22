@@ -2200,7 +2200,10 @@
     "invite": {
       "initiatedBy": "{{name}}님이 그룹 음성 통화를 시작했습니다",
       "inviteeCount": "{{count}}명 초대됨",
-      "groupMember": "그룹 멤버"
+      "groupMember": "그룹 멤버",
+      "initiatedBySingle": "{{name}}님이 음성 통화에 초대했습니다",
+      "friend": "친구",
+      "singleSubtitle": "음성 통화"
     }
   },
   "im": {

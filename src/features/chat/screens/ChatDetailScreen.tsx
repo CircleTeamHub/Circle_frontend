@@ -128,6 +128,7 @@ import {
   useChatPreferencesStore,
 } from '@/features/chat/store/use-chat-preferences-store';
 import { createDirectCall, createGroupCall } from '@/services/api/calls';
+import { resolveDirectCalleeID } from '@/features/call/resolve-direct-callee';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
@@ -1176,14 +1177,24 @@ export default function ChatDetailScreen() {
     callStartingRef.current = true;
     setCallStarting(true);
     try {
-      // 1:1（circle_be#113）：sourceID 即对方 UUID（见 mapConversationItemToUI），
-      // 直接走 direct 端点；好友/拉黑门禁由后端裁决，403 文案走 serverErrors。
+      // 1:1（circle_be#113）：正常入口 sourceID 即对方 UUID（见
+      // mapConversationItemToUI）。round 3 review：推送路由的兜底是
+      // sourceID || conversationID —— 这里可能拿到 'si_...' 会话 id，直接
+      // 当 calleeID 必失败。统一走 resolveDirectCalleeID：si_ 形式从会话
+      // id 里解出对端（剔除自己 + 还原 UUID），解不出来给可控提示。
       if (!isGroupChat) {
+        const calleeID = resolveDirectCalleeID(sourceID, authUser.id);
+        if (!calleeID) {
+          Alert.alert(t('chat.call.title'), t('chat.call.initiateFailed'));
+          return;
+        }
         const response = await createDirectCall({
-          calleeID: sourceID,
+          calleeID,
           callType: 'AUDIO',
         });
-        if (!mountedRef.current) return;
+        // round 3 review：呼叫已在服务端创建、对端在响铃 —— 即使本页已
+        // unmount（用户先行离开）也要落全局通话态并进通话页（store/router
+        // 都是全局对象，unmount 后调用安全），与主页拨打路径一致。
         setActiveCall(response.call, response.livekit);
         router.push('/(chat)/group-call' as never);
         return;
@@ -1208,7 +1219,7 @@ export default function ChatDetailScreen() {
         callType: 'AUDIO',
         inviteeIDs,
       });
-      if (!mountedRef.current) return;
+      // 同上：成功创建的群呼即使页面已 unmount 也要进入通话 UI
       setActiveCall(response.call, response.livekit);
       router.push('/(chat)/group-call' as never);
     } catch (error) {

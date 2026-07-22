@@ -2240,7 +2240,10 @@
     "invite": {
       "initiatedBy": "{{name}} 发起群语音",
       "inviteeCount": "{{count}} 人被邀请",
-      "groupMember": "群成员"
+      "groupMember": "群成员",
+      "initiatedBySingle": "{{name}} 邀请你语音通话",
+      "friend": "好友",
+      "singleSubtitle": "语音通话"
     }
   },
   "emojis": {

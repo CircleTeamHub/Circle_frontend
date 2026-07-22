@@ -2243,7 +2243,10 @@
     "invite": {
       "initiatedBy": "{{name}} started a group voice call",
       "inviteeCount": "{{count}} invited",
-      "groupMember": "Group member"
+      "groupMember": "Group member",
+      "initiatedBySingle": "{{name}} invites you to a voice call",
+      "friend": "Friend",
+      "singleSubtitle": "Voice call"
     }
   },
   "emojis": {

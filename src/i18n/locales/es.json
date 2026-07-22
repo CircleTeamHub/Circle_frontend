@@ -2203,7 +2203,10 @@
     "invite": {
       "initiatedBy": "{{name}} inició una llamada de voz grupal",
       "inviteeCount": "{{count}} invitados",
-      "groupMember": "Miembro del grupo"
+      "groupMember": "Miembro del grupo",
+      "initiatedBySingle": "{{name}} te invita a una llamada de voz",
+      "friend": "Amigo",
+      "singleSubtitle": "Llamada de voz"
     }
   },
   "im": {

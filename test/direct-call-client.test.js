@@ -98,8 +98,10 @@ test('fetchCurrentCall：无通话返回 null，有通话归一化且不要求 L
 test('1:1 聊天页与用户主页都接上了 direct call（FE#90 不再「即将上线」）', () => {
   const chat = read('src/features/chat/screens/ChatDetailScreen.tsx');
   // 1:1 分支走 direct，群聊保持原群呼路径
-  assert.match(chat, /if \(!isGroupChat\) \{\s*const response = await createDirectCall\(\{/);
-  assert.match(chat, /calleeID: sourceID,/);
+  assert.match(chat, /resolveDirectCalleeID\(sourceID, authUser\.id\)/);
+  assert.match(chat, /createDirectCall\(\{\s*calleeID,/);
+  // round 3：calleeID 经 resolveDirectCalleeID 解析（推送兜底的 si_ 形式）
+  assert.match(chat, /calleeID,/);
   // 不再存在「仅群聊可用」的拦截
   assert.doesNotMatch(chat, /chat\.call\.groupOnly/);
 
@@ -268,6 +270,53 @@ test('realtime 邀请守卫放行 single 会话（round 2 P1：被叫端此前�
     guards.isCallInvitePayload({ ...base, sessionType: 'weird' }),
     false,
   );
+});
+
+test('resolveDirectCalleeID：UUID 直通、si_ 解对端、sg_/坏形状拒绝 (round 3)', () => {
+  const mod = loadTsModule('src/features/call/resolve-direct-callee.ts', {
+    requireShim: (specifier) => {
+      if (specifier === '@/im/user-id') {
+        return loadTsModule('src/im/user-id.ts');
+      }
+      throw new Error(`unexpected import: ${specifier}`);
+    },
+  });
+  const self = '11111111-2222-3333-4444-555555555555';
+  const peer = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+  const strip = (v) => v.replace(/-/g, '');
+  // 正常入口：sourceID 即对方 UUID
+  assert.equal(mod.resolveDirectCalleeID(peer, self), peer);
+  // 推送兜底：si_ 会话 id → 剔除自己、还原对端 UUID
+  assert.equal(
+    mod.resolveDirectCalleeID(`si_${strip(peer)}_${strip(self)}`, self),
+    peer,
+  );
+  assert.equal(
+    mod.resolveDirectCalleeID(`si_${strip(self)}_${strip(peer)}`, self),
+    peer,
+  );
+  // 群会话 / 自聊 / 坏形状：拒绝而不是把坏 id 打给后端
+  assert.equal(mod.resolveDirectCalleeID('sg_whatever', self), null);
+  assert.equal(
+    mod.resolveDirectCalleeID(`si_${strip(self)}_${strip(self)}`, self),
+    null,
+  );
+  assert.equal(mod.resolveDirectCalleeID('si_short_bad', self), null);
+
+  // ChatDetail 接线：direct 分支必须经 resolver，且成功路径不再被 unmount 吞
+  const chat = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  assert.match(chat, /resolveDirectCalleeID\(sourceID, authUser\.id\)/);
+  const directBlock = chat.slice(
+    chat.indexOf('resolveDirectCalleeID(sourceID'),
+    chat.indexOf("router.push('/(chat)/group-call' as never);\n        return;"),
+  );
+  assert.doesNotMatch(directBlock, /if \(!mountedRef\.current\) return;/);
+});
+
+test('单聊来电弹窗按 sessionType 分支文案 (round 3)', () => {
+  const host = read('src/features/call/components/CallInviteHost.tsx');
+  assert.match(host, /initiatedBySingle/);
+  assert.match(host, /sessionType === 'single'/);
 });
 
 test('对账在请求前捕获目标 callId，在飞期间来的新电话不被误清 (review)', () => {
