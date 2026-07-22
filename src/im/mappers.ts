@@ -214,9 +214,13 @@ export function parseCallRecordData(data: string): CallRecordData | null {
       callType: raw.callType === 'VIDEO' ? 'VIDEO' : 'AUDIO',
       sessionType: raw.sessionType === 'group' ? 'group' : 'single',
       endReason: (raw.endReason ?? 'NORMAL') as CallRecordData['endReason'],
+      // round 2 review：Number.isFinite 拒掉 1e309→Infinity/NaN（typeof 也是
+      // 'number'），floor 归一到非负整数 —— 否则渲染出 'Infinity:NaN'。
       durationSeconds:
-        typeof raw.durationSeconds === 'number' && raw.durationSeconds >= 0
-          ? raw.durationSeconds
+        typeof raw.durationSeconds === 'number' &&
+        Number.isFinite(raw.durationSeconds) &&
+        raw.durationSeconds >= 0
+          ? Math.floor(raw.durationSeconds)
           : null,
       initiatorID: typeof raw.initiatorID === 'string' ? raw.initiatorID : '',
     };

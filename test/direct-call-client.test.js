@@ -128,6 +128,33 @@ test('call_record 自定义消息按 extension 判别渲染为通话记录气泡
   assert.match(bubble, /chat\.callRecord\.missed/);
 });
 
+function mapperRequireShim(specifier) {
+  if (specifier === '@openim/rn-client-sdk') {
+    return { MessageType: {}, SessionType: { Single: 1, Group: 3 } };
+  }
+  if (specifier === '@/im/client') {
+    return {
+      NOTE_CARD_EXTENSION: 'note-card-v1',
+      TRANSFER_CARD_EXTENSION: 'transfer-card-v1',
+      VERIFICATION_CARD_EXTENSION: 'verification-card-v1',
+      PLAZA_POST_CARD_EXTENSION: 'plaza-post-card-v1',
+      CALL_RECORD_EXTENSION: 'call-record-v1',
+      FRIEND_ADDED_NOTICE_EXTENSION: 'friend-added-v1',
+      fromImUserId: (v) => v,
+    };
+  }
+  if (specifier === '@/services/api/utils') {
+    return { normalizeMediaUrl: (v) => v };
+  }
+  if (specifier === '@/i18n') {
+    return { __esModule: true, default: { t: (_k, o) => o?.defaultValue ?? _k } };
+  }
+  if (specifier === '@/utils/locale') {
+    return { getLocalizedDateTimeLocale: () => 'zh-CN' };
+  }
+  throw new Error(`unexpected import in mappers: ${specifier}`);
+}
+
 test('parseCallRecordData 从宽解析，坏数据不炸', () => {
   const mappers = loadTsModule('src/im/mappers.ts', {
     requireShim: (specifier) => {
@@ -184,6 +211,29 @@ test('parseCallRecordData 从宽解析，坏数据不炸', () => {
   assert.equal(clamped.durationSeconds, null);
 });
 
+test('parseCallRecordData 拒绝非有限时长并归一小数（round 2）', () => {
+  const mappers = loadTsModule('src/im/mappers.ts', {
+    requireShim: mapperRequireShim,
+  });
+  const base = {
+    type: 'call_record',
+    callId: 'c1',
+    callType: 'AUDIO',
+    sessionType: 'single',
+    endReason: 'NORMAL',
+    initiatorID: 'u1',
+  };
+  const parse = (durationSeconds) =>
+    mappers.parseCallRecordData(
+      JSON.stringify({ ...base, durationSeconds }),
+    );
+  // JSON.parse 会把 1e309 变成 Infinity —— 必须拒掉，否则渲染 Infinity:NaN
+  assert.equal(parse(1e309).durationSeconds, null);
+  assert.equal(parse(65.9).durationSeconds, 65);
+  assert.equal(parse(-3).durationSeconds, null);
+  assert.equal(parse(120).durationSeconds, 120);
+});
+
 test('回前台通话对账：本地残留在服务端已消失时被清掉 (#93)', () => {
   const hook = read('src/features/call/hooks/use-call-reconciliation.ts');
   assert.match(hook, /fetchCurrentCall\(\)/);
@@ -193,6 +243,31 @@ test('回前台通话对账：本地残留在服务端已消失时被清掉 (#93
 
   const host = read('src/features/call/components/CallInviteHost.tsx');
   assert.match(host, /useCallReconciliation\(\)/);
+});
+
+test('realtime 邀请守卫放行 single 会话（round 2 P1：被叫端此前收不到 1:1 来电）', () => {
+  const guards = loadTsModule('src/features/call/realtime-guards.ts');
+  const base = {
+    callId: 'call-1',
+    conversationID: 'si_a_b',
+    callType: 'AUDIO',
+    initiator: { id: 'u1', nickname: 'Alice', avatarUrl: null },
+    invitees: [{ id: 'u2', nickname: 'Bob', avatarUrl: null }],
+    expiresAt: '2026-07-22T02:00:00.000Z',
+    createdAt: '2026-07-22T01:59:00.000Z',
+  };
+  assert.equal(
+    guards.isCallInvitePayload({ ...base, sessionType: 'single' }),
+    true,
+  );
+  assert.equal(
+    guards.isCallInvitePayload({ ...base, sessionType: 'group' }),
+    true,
+  );
+  assert.equal(
+    guards.isCallInvitePayload({ ...base, sessionType: 'weird' }),
+    false,
+  );
 });
 
 test('对账在请求前捕获目标 callId，在飞期间来的新电话不被误清 (review)', () => {

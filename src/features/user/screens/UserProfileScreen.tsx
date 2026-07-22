@@ -567,7 +567,10 @@ export default function UserProfileScreen() {
         calleeID: profileId,
         callType: 'AUDIO',
       });
-      if (!mountedRef.current) return;
+      // round 2 review：呼叫已在服务端创建、对端已在响铃 —— 即使本页面已
+      // unmount（用户先行离开），也必须落全局通话态并进通话页；否则主叫端
+      // 没有任何 UI 能管理这通还在响的电话。store 与 router 都是全局对象，
+      // unmount 后调用安全。
       setActiveCall(response.call, response.livekit);
       router.push('/(chat)/group-call' as never);
     } catch (error) {
