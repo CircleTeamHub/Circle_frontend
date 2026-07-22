@@ -1,24 +1,90 @@
-import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  type TextStyle,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
-import { useNetworkStatus } from '@/hooks/use-network-status';
+import {
+  MEMBERSHIP_BENEFITS,
+  MEMBERSHIP_PLANS,
+  getMembershipTierForVipLevel,
+  type MembershipBenefitId,
+  type MembershipBenefitValue,
+  type MembershipTier,
+} from '@/features/profile/membership-plans';
+import { getUserProfileHref } from '@/features/user/utils/routes';
 import { fetchCurrentUser } from '@/services/api/auth';
-import {
-  fetchMembershipPlans,
-  upgradeMembership,
-  FALLBACK_MEMBERSHIP_PLANS,
-  type MembershipPlan,
-} from '@/services/api/membership';
-import { performMembershipUpgradeFlow } from '@/features/profile/membership-upgrade-flow';
-import {
-  resolveMembershipUpgradeIdempotency,
-  type MembershipUpgradeIdempotency,
-} from '@/features/profile/membership-idempotency';
-import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useAuthStore } from '@/stores/authStore';
+import { Radius, Spacing, Typography, useTheme } from '@/theme';
+
+function getMembershipSupportUserId(): string | undefined {
+  return process.env.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID?.trim() || undefined;
+}
+
+const DEFAULT_TIER_NAMES: Record<MembershipTier, string> = {
+  silver: '白银会员',
+  gold: '黄金会员',
+  diamond: '钻石会员',
+  super: '超级会员',
+};
+
+const DEFAULT_BENEFIT_LABELS: Record<MembershipBenefitId, string> = {
+  'name-color': '名字颜色',
+  badge: '会员徽章',
+  'group-member-limit': '单群人数上限',
+  'joined-groups': '可加入群聊',
+  'note-storage': '笔记存储',
+  'city-filters': '城市筛选',
+  'fancy-number': '靓号赠送',
+};
+
+const DEFAULT_NAMED_BENEFIT_VALUES: Record<
+  Exclude<MembershipBenefitValue, number | '999+'>,
+  string
+> = {
+  unlimited: '不限',
+  silver: '银色',
+  gold: '金色',
+  rainbow: '七彩',
+  'exclusive-shimmer': '专属流光',
+  diamond: '钻石',
+  'super-lifetime': '超级永久',
+  none: '无',
+  'one-gift': '赠送 1 次',
+  'one-premium-gift': '赠送高级靓号 1 次',
+};
+
+const TIER_ACCENTS: Omit<Record<MembershipTier, string>, 'super'> = {
+  silver: '#64748B',
+  gold: '#B7791F',
+  diamond: '#2563EB',
+};
+
+function formatCountBenefit(
+  benefitId: MembershipBenefitId,
+  value: number,
+): string {
+  switch (benefitId) {
+    case 'group-member-limit':
+      return `${value} 人`;
+    case 'joined-groups':
+    case 'city-filters':
+      return `${value} 个`;
+    case 'note-storage':
+      return `${value} 条`;
+    default:
+      return String(value);
+  }
+}
 
 const s = StyleSheet.create({
   content: {
@@ -26,55 +92,79 @@ const s = StyleSheet.create({
     gap: Spacing.lg,
   },
   hero: {
-    borderRadius: Radius.xl,
+    borderRadius: Radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Spacing.lg,
-    minHeight: 128,
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  heroOrb: {
-    position: 'absolute',
-    width: 170,
-    height: 170,
-    borderRadius: 999,
-    right: -30,
-    top: -50,
-    opacity: 0.28,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  levelCard: {
-    borderRadius: Radius.lg,
-    borderWidth: 1.5,
-    padding: Spacing.md,
-    gap: Spacing.sm,
-  },
-  levelTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: Spacing.md,
-  },
-  levelLeft: {
-    flex: 1,
-    gap: 3,
-  },
-  levelPoints: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
     gap: Spacing.xs,
   },
+  currentLabel: {
+    textTransform: 'uppercase',
+  },
+  sectionHeader: {
+    minHeight: 32,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: Spacing.md,
+  },
+  tierList: {
+    gap: Spacing.sm,
+    paddingRight: Spacing.lg,
+  },
+  tierCard: {
+    width: 172,
+    minHeight: 184,
+    borderRadius: Radius.sm,
+    borderWidth: 1.5,
+    padding: Spacing.md,
+    justifyContent: 'space-between',
+    gap: Spacing.sm,
+  },
+  tierMarkerRow: {
+    minHeight: 22,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+  },
+  tierMarker: {
+    borderRadius: Radius.xs,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    flexWrap: 'wrap',
+    gap: 2,
+  },
+  benefitsPanel: {
+    borderRadius: Radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+  },
+  benefitRow: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  benefitText: {
+    flex: 1,
+    gap: 2,
+  },
+  contactSection: {
+    gap: Spacing.sm,
+  },
   cta: {
-    height: 52,
-    borderRadius: Radius.lg,
+    minHeight: 52,
+    borderRadius: Radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  status: {
-    textAlign: 'center',
+    paddingHorizontal: Spacing.md,
   },
 });
 
@@ -83,103 +173,119 @@ export default function MemberCenterScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
-  const { isOffline } = useNetworkStatus();
   const vipLevel = useAuthStore((state) => state.user?.vipLevel ?? 0);
-  const setUser = useAuthStore((state) => state.setUser);
-  const [plans, setPlans] = useState<MembershipPlan[]>(FALLBACK_MEMBERSHIP_PLANS);
-  const [selectedLevel, setSelectedLevel] = useState(Math.min(Math.max(vipLevel || 1, 1), 5));
-  const [loadingPlans, setLoadingPlans] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const upgradeIdempotencyRef = useRef<MembershipUpgradeIdempotency | null>(
-    null,
+  const currentTier = getMembershipTierForVipLevel(vipLevel);
+  const currentPlan = currentTier
+    ? MEMBERSHIP_PLANS.find((plan) => plan.tier === currentTier)
+    : undefined;
+  const currentPlanLevel = currentPlan?.level ?? 0;
+  const [selectedTier, setSelectedTier] = useState<MembershipTier>(
+    currentTier ?? 'diamond',
   );
-  const [statusText, setStatusText] = useState<string | null>(null);
-  const selectedPlan = plans.find((item) => item.level === selectedLevel) ?? plans[0];
-  const canUpgrade = selectedLevel > vipLevel && !submitting && !isOffline;
 
   useEffect(() => {
-    let cancelled = false;
+    setSelectedTier(currentTier ?? 'diamond');
+  }, [currentTier]);
 
-    async function loadPlans() {
-      setLoadingPlans(true);
-      try {
-        const nextPlans = await fetchMembershipPlans();
-        if (!cancelled) {
-          setPlans(nextPlans);
-          const nextLevel = Math.min(Math.max(vipLevel || 1, 1), 5);
-          setSelectedLevel(nextLevel);
-        }
-      } catch {
-        if (!cancelled) {
-          setStatusText(
-            t('profile.membership.loadError', {
-              defaultValue: '会员等级加载失败，已显示本地等级配置',
-            }),
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingPlans(false);
-        }
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      const owner = useAuthStore.getState();
+      const ownerUserId = owner.user?.id;
+      const ownerAccountId = owner.user?.accountId;
+      const ownerSessionEpoch = owner.sessionEpoch;
+
+      if (ownerUserId && ownerAccountId) {
+        void fetchCurrentUser()
+          .then((nextUser) => {
+            if (!active) return;
+
+            const latest = useAuthStore.getState();
+            const ownsRequest =
+              latest.sessionEpoch === ownerSessionEpoch &&
+              latest.user?.id === ownerUserId &&
+              latest.user?.accountId === ownerAccountId;
+            const responseMatchesOwner =
+              nextUser.id === ownerUserId && nextUser.accountId === ownerAccountId;
+
+            if (ownsRequest && responseMatchesOwner && latest.user) {
+              latest.setUser({
+                ...latest.user,
+                vipLevel: nextUser.vipLevel,
+              });
+            }
+          })
+          .catch(() => {
+            if (active && typeof __DEV__ !== 'undefined' && __DEV__) {
+              console.warn('[MemberCenterScreen] user refresh failed');
+            }
+          });
       }
-    }
 
-    loadPlans();
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
 
-    return () => {
-      cancelled = true;
-    };
-  }, [t, vipLevel]);
+  const selectedPlan =
+    MEMBERSHIP_PLANS.find((plan) => plan.tier === selectedTier) ??
+    MEMBERSHIP_PLANS[2];
+  const selectedPlanName = t(selectedPlan.nameKey, {
+    defaultValue: DEFAULT_TIER_NAMES[selectedPlan.tier],
+  });
+  const currentMembershipName = currentTier
+    ? t(`profile.membership.tiers.${currentTier}.name`, {
+        defaultValue: DEFAULT_TIER_NAMES[currentTier],
+      })
+    : t('profile.membership.regularUser', { defaultValue: '普通用户' });
+  const isUpgrade = currentPlanLevel > 0 && selectedPlan.level > currentPlanLevel;
+  const isCurrent = currentPlanLevel > 0 && selectedPlan.level === currentPlanLevel;
+  const isLowerTier = currentPlanLevel > selectedPlan.level;
 
-  const performUpgrade = useCallback(async () => {
-    setSubmitting(true);
-    setStatusText(null);
-    // review 修复（P1）：幂等键跟随升级意图存活 —— 同一等级的重试（响应
-    // 丢失后再点）复用同一枚键让后端去重生效；换等级自动换键；成功后失效。
-    const idempotency = resolveMembershipUpgradeIdempotency(
-      upgradeIdempotencyRef.current,
-      { level: selectedLevel },
-    );
-    upgradeIdempotencyRef.current = idempotency;
-    try {
-      await performMembershipUpgradeFlow({
-        selectedLevel,
-        upgradeMembership: async (level) => {
-          const result = await upgradeMembership(level, idempotency.key);
-          upgradeIdempotencyRef.current = null;
-          return result;
-        },
-        fetchCurrentUser,
-        getCurrentUser: () => useAuthStore.getState().user,
-        setUser,
-        setStatusText,
-        t,
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  }, [selectedLevel, setUser, t]);
+  const contactLabel = !currentTier
+    ? t('profile.membership.contactToActivate', {
+        defaultValue: '联系客服开通 {{plan}}',
+        plan: selectedPlanName,
+      })
+    : isUpgrade
+      ? t('profile.membership.contactToUpgrade', {
+          defaultValue: '联系客服升级至 {{plan}}',
+          plan: selectedPlanName,
+        })
+      : isCurrent
+        ? t('profile.membership.contactForCurrent', {
+            defaultValue: '当前已是 {{plan}}，联系客服咨询',
+            plan: selectedPlanName,
+          })
+        : isLowerTier
+          ? t('profile.membership.contactForLowerTier', {
+              defaultValue: '当前会员等级更高，联系客服咨询',
+            })
+          : t('profile.membership.contactSupport', { defaultValue: '联系客服咨询' });
 
-  const handleUpgrade = useCallback(() => {
-    if (!canUpgrade) {
+  const handleContactSupport = useCallback(() => {
+    const membershipSupportUserId = getMembershipSupportUserId();
+    if (membershipSupportUserId) {
+      router.push(
+        getUserProfileHref(
+          'profile',
+          membershipSupportUserId,
+          t('profile.membership.supportName', { defaultValue: '官方客服' }),
+        ),
+      );
       return;
     }
+
     Alert.alert(
-      t('profile.membership.confirmExchange', { defaultValue: '确认兑换' }),
-      t('profile.membership.confirmExchangeMessage', {
-        defaultValue: '确定要消耗 {{points}} 积分兑换 {{plan}} 吗？',
-        points: selectedPlan.price,
-        plan: selectedPlan.name,
+      t('profile.membership.supportUnavailableTitle', {
+        defaultValue: '客服账号暂未配置',
       }),
-      [
-        { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
-        {
-          text: t('profile.membership.confirmExchange', { defaultValue: '确认兑换' }),
-          onPress: performUpgrade,
-        },
-      ],
+      t('profile.membership.supportUnavailableMessage', {
+        defaultValue: '请联系平台官方客服咨询会员开通或升级。',
+      }),
     );
-  }, [canUpgrade, performUpgrade, selectedPlan.name, selectedPlan.price, t]);
+  }, [router, t]);
 
   const d = useMemo(
     () => ({
@@ -192,81 +298,109 @@ export default function MemberCenterScreen() {
         paddingBottom: insets.bottom + Spacing.xl,
       },
       hero: {
-        backgroundColor: colors.memberCardBg,
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
       },
-      heroOrb: {
-        backgroundColor: colors.white,
+      currentLabel: {
+        color: colors.textSecondary,
+        ...Typography.tiny,
       },
-      heroTitle: {
-        color: '#D946EF',
+      currentMembership: {
+        color: colors.text,
         ...Typography.h1,
       },
       heroText: {
-        color: colors.memberCardText,
-        ...Typography.body,
-        marginTop: Spacing.xs,
+        color: colors.textSecondary,
+        ...Typography.bodyRegular,
       },
       sectionTitle: {
         color: colors.text,
         ...Typography.h2,
+        flexShrink: 1,
       },
       rulesLink: {
         color: colors.primary,
         ...Typography.caption,
         fontWeight: '700' as const,
+        flexShrink: 1,
       },
-      levelCard: {
+      tierCard: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
       },
-      levelCardActive: {
-        borderColor: '#FACC15',
-        backgroundColor: 'rgba(250, 204, 21, 0.12)',
+      tierCardSelected: {
+        backgroundColor: colors.primaryLight,
       },
-      levelName: {
+      tierMarker: {
+        backgroundColor: colors.primary,
+      },
+      lifetimeMarker: {
+        backgroundColor: colors.text,
+      },
+      tierMarkerText: {
+        color: colors.white,
+        ...Typography.tiny,
+        fontWeight: '700' as const,
+      },
+      tierName: {
         color: colors.text,
         ...Typography.h3,
+        flexShrink: 1,
       },
-      perk: {
+      duration: {
         color: colors.textSecondary,
         ...Typography.caption,
       },
-      oldPoints: {
-        color: colors.textSecondary,
-        fontSize: 20,
+      currency: {
+        color: colors.text,
+        ...Typography.body,
         fontWeight: '700' as const,
-        textDecorationLine: 'line-through' as const,
       },
-      points: {
-        color: colors.orange,
-        fontSize: 30,
+      price: {
+        color: colors.text,
+        fontSize: 28,
         fontWeight: '800' as const,
-        fontVariant: ['tabular-nums'] as any,
+        fontVariant: ['tabular-nums'] as TextStyle['fontVariant'],
       },
-      pointsUnit: {
-        color: colors.orange,
-        ...Typography.caption,
+      selectedHint: {
+        color: colors.primary,
+        ...Typography.small,
         fontWeight: '700' as const,
       },
-      currentBadge: {
-        color: colors.success,
-        ...Typography.caption,
-        fontWeight: '700' as const,
+      benefitsPanel: {
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
+      },
+      benefitDivider: {
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: colors.divider,
+      },
+      benefitLabel: {
+        color: colors.textSecondary,
+        ...Typography.small,
+      },
+      benefitValue: {
+        color: colors.text,
+        ...Typography.body,
+      },
+      upgradeNote: {
+        color: colors.textSecondary,
+        ...Typography.small,
+        lineHeight: 18,
       },
       cta: {
         backgroundColor: colors.primary,
-      },
-      ctaDisabled: {
-        backgroundColor: colors.surfaceBorder,
       },
       ctaText: {
         color: colors.white,
         ...Typography.body,
         fontWeight: '700' as const,
+        textAlign: 'center' as const,
+        flexShrink: 1,
       },
-      status: {
-        color: colors.textSecondary,
-        ...Typography.caption,
+      tierAccents: {
+        ...TIER_ACCENTS,
+        super: colors.text,
       },
     }),
     [colors, insets.bottom, insets.top],
@@ -277,98 +411,183 @@ export default function MemberCenterScreen() {
       <NavHeader
         title={t('profile.membership.title', { defaultValue: '会员中心' })}
         rightIcon="help-circle-outline"
+        rightAccessibilityLabel={t('profile.memberRules.link', {
+          defaultValue: '会员规则',
+        })}
         onRightPress={() => router.push('/(tabs)/profile/member-rules' as never)}
       />
       <ScrollView
         contentContainerStyle={[s.content, d.content]}
         showsVerticalScrollIndicator={false}
       >
-        {isOffline ? (
-          <Text style={d.status}>
-            {t('common.offline', { defaultValue: '当前无网络连接，部分功能可能不可用' })}
-          </Text>
-        ) : null}
         <View style={[s.hero, d.hero]}>
-          <View style={[s.heroOrb, d.heroOrb]} />
-          <Text style={d.heroTitle}>
-            {t('profile.membership.activateVip', { defaultValue: '开通VIP会员' })}
+          <Text style={[s.currentLabel, d.currentLabel]}>
+            {t('profile.membership.currentIdentity', { defaultValue: '当前身份' })}
           </Text>
+          <Text style={d.currentMembership}>{currentMembershipName}</Text>
           <Text style={d.heroText}>
-            {t('profile.membership.currentLevel', {
-              defaultValue: '当前等级：VIP{{level}}',
-              level: vipLevel,
-            })}
-          </Text>
-          <Text style={d.heroText}>
-            {t('profile.membership.benefitsHint', {
-              defaultValue: '尊享会员权益，等级越高权益越多。',
+            {t('profile.membership.catalogHint', {
+              defaultValue: '选择会员档位查看对应权益，开通和升级由客服协助处理。',
             })}
           </Text>
         </View>
 
         <View style={s.sectionHeader}>
           <Text style={d.sectionTitle}>
-            {t('profile.membership.exchange', { defaultValue: '兑换会员' })}
+            {t('profile.membership.chooseTier', { defaultValue: '选择会员档位' })}
           </Text>
-          <Pressable onPress={() => router.push('/(tabs)/profile/member-rules' as never)}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('profile.memberRules.link', {
+              defaultValue: '会员规则',
+            })}
+            hitSlop={8}
+            onPress={() => router.push('/(tabs)/profile/member-rules' as never)}
+          >
             <Text style={d.rulesLink}>
               {t('profile.memberRules.link', { defaultValue: '会员规则' })}
             </Text>
           </Pressable>
         </View>
 
-        {plans.map((item) => {
-          const active = selectedLevel === item.level;
-          const isCurrent = vipLevel === item.level;
+        <ScrollView
+          horizontal
+          contentContainerStyle={s.tierList}
+          showsHorizontalScrollIndicator={false}
+        >
+          {MEMBERSHIP_PLANS.map((plan) => {
+            const selected = plan.tier === selectedPlan.tier;
+            const planName = t(plan.nameKey, {
+              defaultValue: DEFAULT_TIER_NAMES[plan.tier],
+            });
+            const duration =
+              plan.duration.type === 'lifetime'
+                ? t('profile.membership.duration.lifetime', { defaultValue: '永久' })
+                : t('profile.membership.duration.months', {
+                    defaultValue: '{{count}} 个月',
+                    count: plan.duration.months,
+                  });
 
-          return (
-            <Pressable
-              key={item.level}
-              style={[s.levelCard, d.levelCard, active && d.levelCardActive]}
-              onPress={() => setSelectedLevel(item.level)}
-            >
-              <View style={s.levelTop}>
-                <View style={s.levelLeft}>
-                  <Text style={d.levelName}>{item.name}</Text>
-                  <Text style={d.perk}>
-                    {t(item.perksKey, { defaultValue: item.defaultPerks })}
+            return (
+              <Pressable
+                key={plan.tier}
+                accessibilityRole="button"
+                accessibilityLabel={t('profile.membership.planAccessibilityLabel', {
+                  defaultValue: '{{plan}}，{{duration}}，¥{{price}}',
+                  plan: planName,
+                  duration,
+                  price: plan.price.amount,
+                })}
+                accessibilityState={{ selected }}
+                style={[
+                  s.tierCard,
+                  d.tierCard,
+                  selected && d.tierCardSelected,
+                  selected && { borderColor: d.tierAccents[plan.tier] },
+                ]}
+                onPress={() => setSelectedTier(plan.tier)}
+              >
+                <View>
+                  <View style={s.tierMarkerRow}>
+                    {plan.recommended ? (
+                      <View style={[s.tierMarker, d.tierMarker]}>
+                        <Text style={d.tierMarkerText}>
+                          {t('profile.membership.recommended', { defaultValue: '推荐' })}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {plan.duration.type === 'lifetime' ? (
+                      <View style={[s.tierMarker, d.lifetimeMarker]}>
+                        <Text style={d.tierMarkerText}>
+                          {t('profile.membership.lifetime', { defaultValue: '永久' })}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Text style={d.tierName} numberOfLines={2}>
+                    {planName}
+                  </Text>
+                  <Text style={d.duration}>{duration}</Text>
+                </View>
+                <View>
+                  <View style={s.priceRow}>
+                    <Text style={d.currency}>¥</Text>
+                    <Text style={d.price} selectable>
+                      {plan.price.amount}
+                    </Text>
+                  </View>
+                  <Text style={d.selectedHint}>
+                    {selected
+                      ? t('profile.membership.selected', { defaultValue: '已选择' })
+                      : ' '}
                   </Text>
                 </View>
-                <View style={s.levelPoints}>
-                  <Text style={d.oldPoints}>{item.price + 100}</Text>
-                  <Text style={d.points}>{item.price}</Text>
-                  <Text style={d.pointsUnit}>{t('common.coin', { defaultValue: '积分' })}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        <Text style={d.sectionTitle}>
+          {t('profile.membership.benefitsTitle', { defaultValue: '会员权益' })}
+        </Text>
+        <View style={[s.benefitsPanel, d.benefitsPanel]}>
+          {MEMBERSHIP_BENEFITS.map((benefit, index) => {
+            const value = benefit.values[selectedPlan.tier];
+            const defaultValue =
+              typeof value === 'number'
+                ? formatCountBenefit(benefit.id, value)
+                : DEFAULT_NAMED_BENEFIT_VALUES[value];
+            const valueText =
+              typeof value === 'number'
+                ? t(`profile.membership.benefitValues.${benefit.id}`, {
+                    defaultValue,
+                    value,
+                  })
+                : t(`profile.membership.benefitValues.${value}`, { defaultValue });
+
+            return (
+              <View
+                key={benefit.id}
+                style={[
+                  s.benefitRow,
+                  index < MEMBERSHIP_BENEFITS.length - 1 && d.benefitDivider,
+                ]}
+              >
+                <Ionicons
+                  name="checkmark-circle"
+                  size={20}
+                  color={d.tierAccents[selectedPlan.tier]}
+                />
+                <View style={s.benefitText}>
+                  <Text style={d.benefitLabel}>
+                    {t(benefit.labelKey, {
+                      defaultValue: DEFAULT_BENEFIT_LABELS[benefit.id],
+                    })}
+                  </Text>
+                  <Text style={d.benefitValue} selectable>
+                    {valueText}
+                  </Text>
                 </View>
               </View>
-              {isCurrent ? (
-                <Text style={d.currentBadge}>
-                  {t('profile.membership.currentBadge', { defaultValue: '当前等级' })}
-                </Text>
-              ) : null}
-            </Pressable>
-          );
-        })}
+            );
+          })}
+        </View>
 
-        {statusText ? <Text style={[s.status, d.status]}>{statusText}</Text> : null}
-
-        <Pressable
-          style={[s.cta, canUpgrade ? d.cta : d.ctaDisabled]}
-          disabled={!canUpgrade}
-          onPress={handleUpgrade}
-        >
-          <Text style={d.ctaText}>
-            {loadingPlans
-              ? t('profile.membership.loadingPlans', { defaultValue: '正在加载会员等级' })
-              : canUpgrade
-                ? t('profile.membership.confirmExchangePlan', {
-                    defaultValue: '确认兑换 {{plan}}',
-                    plan: selectedPlan.name,
-                  })
-                : t('profile.membership.selectHigher', {
-                    defaultValue: '请选择更高会员等级',
-                  })}
+        <View style={s.contactSection}>
+          <Text style={d.upgradeNote}>
+            {t('profile.membership.upgradeDifferenceNote', {
+              defaultValue: '已开通会员可联系客服补差价升级，升级后立即生效，原会员剩余价值由客服核算抵扣。',
+            })}
           </Text>
-        </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={contactLabel}
+            style={[s.cta, d.cta]}
+            onPress={handleContactSupport}
+          >
+            <Text style={d.ctaText}>{contactLabel}</Text>
+          </Pressable>
+        </View>
       </ScrollView>
     </View>
   );

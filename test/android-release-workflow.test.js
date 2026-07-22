@@ -199,6 +199,10 @@ test('Android release workflow preflight validates the exact public tag without 
   assert.match(preflight, /fetch-depth: 0/);
   assert.match(preflight, /persist-credentials: false/);
   assert.match(preflight, /validate-android-release\.js metadata/);
+  assert.match(
+    preflight,
+    /EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: \$\{\{ vars\.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID \}\}/,
+  );
   assert.match(preflight, /git rev-parse "refs\/tags\/\$RELEASE_TAG\^\{commit\}"/);
   assert.match(preflight, /test "\$\(git rev-parse HEAD\)" = "\$tag_commit"/);
   assert.match(preflight, /git merge-base --is-ancestor HEAD origin\/main/);
@@ -268,6 +272,10 @@ test('Android release workflow builds and verifies a private signed artifact', (
   assert.match(build, /EXPO_PUBLIC_API_URL:/);
   assert.match(build, /EXPO_PUBLIC_OPENIM_API_URL:/);
   assert.match(build, /EXPO_PUBLIC_OPENIM_WS_URL:/);
+  assert.match(
+    build,
+    /EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: \$\{\{ vars\.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID \}\}/,
+  );
   assert.match(build, /SENTRY_DISABLE_AUTO_UPLOAD: ["']true["']/);
   assert.match(build, /apksigner.*verify --verbose --print-certs/);
   assert.match(apkVerification, /certificate SHA-256 digest/);
@@ -470,6 +478,7 @@ test('release validation metadata requires matching app versions and secure publ
     EXPO_PUBLIC_API_URL: 'https://api.windnote.test',
     EXPO_PUBLIC_OPENIM_API_URL: 'https://im.windnote.test',
     EXPO_PUBLIC_OPENIM_WS_URL: 'wss://im.windnote.test/ws',
+    EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: 'official-support',
   };
   const app = { version: '1.0.0', android: { versionCode: 1_000_000 } };
 
@@ -479,6 +488,7 @@ test('release validation metadata requires matching app versions and secure publ
     'EXPO_PUBLIC_API_URL',
     'EXPO_PUBLIC_OPENIM_API_URL',
     'EXPO_PUBLIC_OPENIM_WS_URL',
+    'EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID',
   ]) {
     assert.match(
       validateReleaseMetadata({ env: { ...env, [name]: '' }, app }).join('\n'),
@@ -657,6 +667,7 @@ test('release validation CLI supports scoped and legacy validation', () => {
     EXPO_PUBLIC_API_URL: 'https://api.windnote.test',
     EXPO_PUBLIC_OPENIM_API_URL: 'https://im.windnote.test',
     EXPO_PUBLIC_OPENIM_WS_URL: 'wss://im.windnote.test/ws',
+    EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: 'official-support',
   };
   const signingEnv = {
     ANDROID_KEYSTORE_BASE64: 'a2V5c3RvcmU=',

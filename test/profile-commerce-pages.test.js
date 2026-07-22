@@ -86,6 +86,9 @@ test('MemberCenterScreen provides horizontal selection, tier markers, and select
   assert.match(src, /benefit\.values\[selectedPlan\.tier\]/);
   assert.match(src, /defaultValue: '会员权益'/);
   assert.match(src, /profile\/member-rules/);
+  assert.match(src, /flexWrap:\s*'wrap'/);
+  assert.match(src, /flexShrink:\s*1/);
+  assert.match(src, /numberOfLines=\{2\}/);
 });
 
 test('MemberCenterScreen routes configured support and otherwise shows a clear fallback', () => {
@@ -93,13 +96,23 @@ test('MemberCenterScreen routes configured support and otherwise shows a clear f
   const env = read('.env.example');
 
   assert.match(src, /process\.env\.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID/);
-  assert.match(src, /getUserProfileHref\(\s*'profile',\s*MEMBERSHIP_SUPPORT_USER_ID/);
+  assert.match(src, /getUserProfileHref\([\s\S]*'profile',[\s\S]*membershipSupportUserId/);
   assert.match(src, /router\.push/);
   assert.match(src, /Alert\.alert/);
   assert.match(src, /defaultValue: '客服账号暂未配置'/);
   assert.match(src, /defaultValue: '请联系平台官方客服咨询会员开通或升级。'/);
   assert.match(env, /EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID=/);
   assert.doesNotMatch(src, /微信|WeChat|支付宝|Alipay/);
+});
+
+test('MemberCenterScreen refreshes the owning account on focus without stale overwrite', () => {
+  const src = read('src/features/profile/screens/MemberCenterScreen.tsx');
+
+  assert.match(src, /useFocusEffect/);
+  assert.match(src, /fetchCurrentUser/);
+  assert.match(src, /sessionEpoch/);
+  assert.match(src, /useAuthStore\.getState\(\)/);
+  assert.match(src, /active = false/);
 });
 
 test('MemberCenterScreen distinguishes activation, upgrade, current, and lower-tier contact states', () => {
@@ -124,6 +137,66 @@ test('ProfileScreen displays effective four-tier membership labels', () => {
   assert.match(src, /defaultValue: '普通用户'/);
   assert.match(src, /super: ["']超级会员["']/);
   assert.doesNotMatch(src, />VIP \{vipLevel\}</);
+});
+
+test('MemberRulesScreen and every locale use the four-tier support-assisted contract', () => {
+  const rules = read('src/features/profile/screens/MemberRulesScreen.tsx');
+  const locales = ['zh', 'en', 'ja', 'ko', 'es'];
+  const requiredMembershipKeys = [
+    'regularUser',
+    'currentIdentity',
+    'catalogHint',
+    'chooseTier',
+    'recommended',
+    'lifetime',
+    'selected',
+    'benefitsTitle',
+    'contactToActivate',
+    'contactToUpgrade',
+    'contactForCurrent',
+    'contactForLowerTier',
+    'upgradeDifferenceNote',
+    'supportUnavailableTitle',
+    'supportUnavailableMessage',
+  ];
+  const requiredRuleKeys = [
+    'catalog',
+    'supportActivation',
+    'upgrade',
+    'expiry',
+    'fairUse',
+    'voiceToText',
+    'excludedVisualBenefits',
+  ];
+
+  assert.match(rules, /profile\.memberRules\.rules\.catalog/);
+  assert.match(rules, /profile\.memberRules\.rules\.voiceToText/);
+  assert.doesNotMatch(rules, /levels|highTier|consume|irreversible/);
+  assert.match(rules, /不在 App 内使用积分兑换或直接购买/);
+  assert.doesNotMatch(rules, /VIP1-5|微信|WeChat|支付宝|Alipay/);
+
+  for (const locale of locales) {
+    const bundle = JSON.parse(read(`src/i18n/locales/${locale}.json`));
+    const membership = bundle.profile?.membership;
+    const memberRules = bundle.profile?.memberRules;
+
+    for (const key of requiredMembershipKeys) assert.ok(membership?.[key], `${locale}: ${key}`);
+    for (const tier of ['silver', 'gold', 'diamond', 'super']) {
+      assert.ok(membership?.tiers?.[tier]?.name, `${locale}: tier ${tier}`);
+    }
+    for (const key of requiredRuleKeys) assert.ok(memberRules?.rules?.[key], `${locale}: rule ${key}`);
+    for (const obsolete of [
+      'confirmExchange',
+      'activateVip',
+      'currentLevel',
+      'exchange',
+      'confirmExchangeMessage',
+      'confirmExchangePlan',
+      'selectHigher',
+    ]) {
+      assert.equal(membership?.[obsolete], undefined, `${locale}: obsolete ${obsolete}`);
+    }
+  }
 });
 
 test('CreditScoreScreen explains score status and change rules via i18n', () => {

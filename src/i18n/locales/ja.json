@@ -1788,47 +1788,82 @@
     "myIcons": "バッジコレクション",
     "membership": {
       "title": "会員センター",
-      "confirmExchange": "交換を確認",
-      "activateVip": "VIPを開始",
-      "currentLevel": "現在のレベル：VIP{{level}}",
-      "benefitsHint": "会員限定特典をお楽しみください。レベルが高いほど特典が増えます。",
-      "exchange": "会員を交換",
-      "currentBadge": "現在のレベル",
-      "loadError": "VIPランクの読み込みに失敗しました。ローカルのランク設定を表示しています。",
-      "exchangeSuccess": "VIP{{level}} と交換しました",
-      "exchangeError": "交換に失敗しました。クレジット残高が十分かご確認のうえ再試行してください。",
-      "confirmExchangeMessage": "{{points}} クレジットを使って {{plan}} と交換しますか？",
-      "loadingPlans": "VIPランクを読み込み中",
-      "confirmExchangePlan": "{{plan}} との交換を確認",
-      "selectHigher": "より上位のVIPランクを選択してください",
+      "regularUser": "一般ユーザー",
+      "currentIdentity": "現在のステータス",
+      "catalogHint": "会員ランクを選択して特典を確認できます。開通とアップグレードはカスタマーサービスが対応します。",
+      "chooseTier": "会員ランクを選択",
+      "recommended": "おすすめ",
+      "lifetime": "永久",
+      "selected": "選択中",
+      "benefitsTitle": "会員特典",
+      "contactToActivate": "カスタマーサービスに連絡して {{plan}} を開通",
+      "contactToUpgrade": "カスタマーサービスに連絡して {{plan}} にアップグレード",
+      "contactForCurrent": "現在 {{plan}} です。カスタマーサービスに相談",
+      "contactForLowerTier": "現在の会員ランクの方が上位です。カスタマーサービスに相談",
+      "contactSupport": "カスタマーサービスに連絡",
+      "upgradeDifferenceNote": "開通済みの会員は、カスタマーサービスに連絡して差額を支払うことでアップグレードできます。すぐに有効になり、残存価値はカスタマーサービスが算定して充当します。",
+      "supportName": "公式カスタマーサービス",
+      "supportUnavailableTitle": "カスタマーサービスアカウントが未設定です",
+      "supportUnavailableMessage": "会員の開通またはアップグレードについて、プラットフォームの公式カスタマーサービスにお問い合わせください。",
+      "planAccessibilityLabel": "{{plan}}、{{duration}}、CNY {{price}}",
+      "duration": {
+        "months": "{{count}}か月",
+        "lifetime": "永久"
+      },
+      "exchangeSuccess": "会員レベルを {{level}} に更新しました",
+      "exchangeError": "会員レベルを更新できませんでした。後でもう一度お試しください。",
       "tiers": {
-        "vip1": {
-          "perks": "基本のVIP特典"
-        },
-        "vip2": {
-          "perks": "グループ容量の拡大と基本割引"
-        },
-        "vip3": {
-          "perks": "上位の識別バッジとクレジット加算"
-        },
-        "vip4": {
-          "perks": "ゴロ番号の限定割引と優先利用"
-        },
-        "vip5": {
-          "perks": "最高のVIP特典と最大割引"
-        }
+        "silver": { "name": "シルバー会員" },
+        "gold": { "name": "ゴールド会員" },
+        "diamond": { "name": "ダイヤモンド会員" },
+        "super": { "name": "スーパー会員" }
+      },
+      "benefits": {
+        "nameColor": "名前の色",
+        "badge": "会員バッジ",
+        "groupMemberLimit": "1グループの人数上限",
+        "joinedGroups": "参加可能なグループ",
+        "createdGroups": "作成可能なグループ",
+        "noteStorage": "ノート保存数",
+        "cityFilters": "都市フィルター",
+        "fancyNumber": "プレミアム番号特典",
+        "premiumCircle": "プレミアムサークル"
+      },
+      "benefitValues": {
+        "group-member-limit": "{{value}}人",
+        "joined-groups": "{{value}}グループ",
+        "created-groups": "{{value}}グループ",
+        "note-storage": "{{value}}件",
+        "city-filters": "{{value}}都市",
+        "unlimited": "無制限",
+        "silver": "シルバー",
+        "gold": "ゴールド",
+        "rainbow": "レインボー",
+        "exclusive-shimmer": "限定シマー",
+        "diamond": "ダイヤモンド",
+        "super-lifetime": "スーパー永久",
+        "none": "なし",
+        "one-gift": "1回贈呈",
+        "one-premium-gift": "プレミアム番号を1回贈呈",
+        "silver-circle": "シルバーサークル",
+        "gold-circle": "ゴールドサークル",
+        "diamond-circle": "ダイヤモンドサークル",
+        "super-member-circle": "スーパー会員サークル"
       }
     },
     "memberRules": {
       "link": "会員ルール",
       "title": "ルールと権限の説明",
       "heading": "会員ルール",
-      "description": "以下のルールはVIPランク、クレジット交換、権限範囲について説明します。支払い・注文・有効期間は今後、実際のバックエンドに接続されます。",
+      "description": "会員資格はカスタマーサービスが手動で確認して付与します。このページは特典カタログを表示し、実際の権限はバックエンドを正とします。",
       "rules": {
-        "levels": "VIP1〜5はランクごとに特典が段階的に解放されます。このページではランクと特典の説明のみを表示します。",
-        "highTier": "上位ランクのVIPは、より大きなグループ容量、ゴロ番号割引、クレジット加算、優先利用の資格を得られます。",
-        "consume": "VIP交換はクレジットを消費し、交換後すぐに有効になります。正確な有効期間はバックエンドの注文に準じます。",
-        "irreversible": "VIP・ゴロ番号・グループ拡張カードなどのバーチャル商品は、一度使用すると取り消せません。"
+        "catalog": "シルバー会員 CNY 298 / 1か月、ゴールド会員 CNY 1,288 / 6か月、ダイヤモンド会員 CNY 1,998 / 1年、スーパー会員 CNY 3,998 / 永久。",
+        "supportActivation": "会員資格はアプリ内でポイント交換または直接購入できません。連絡後、カスタマーサービスが手動で確認して付与します。",
+        "upgrade": "開通済みの会員は、カスタマーサービスに連絡して差額を支払うことでアップグレードできます。すぐに有効になり、残存価値はカスタマーサービスが充当します。",
+        "expiry": "会員期限が切れた場合、会員特典のみ停止します。アカウント、チャット、ノートなどのユーザーコンテンツは削除されません。",
+        "fairUse": "「無制限」と表示される特典にも、バックエンドの高い水準の公正利用・不正利用防止上限が適用されます。実際の権限はバックエンドを正とします。",
+        "voiceToText": "音声テキスト変換は全ユーザー向けの無料基本機能で、会員ランクによる制限はありません。",
+        "excludedVisualBenefits": "現在の会員特典には、アバターフレームや動くアバターの提供保証は含まれません。"
       }
     }
   },

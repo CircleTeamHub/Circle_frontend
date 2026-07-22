@@ -1347,47 +1347,82 @@
     "myIcons": "我的徽章",
     "membership": {
       "title": "会员中心",
-      "confirmExchange": "确认兑换",
-      "activateVip": "开通VIP会员",
-      "currentLevel": "当前等级：VIP{{level}}",
-      "benefitsHint": "尊享会员权益，等级越高权益越多。",
-      "exchange": "兑换会员",
-      "currentBadge": "当前等级",
-      "loadError": "会员等级加载失败，已显示本地等级配置",
-      "exchangeSuccess": "已成功兑换 VIP{{level}}",
-      "exchangeError": "兑换失败，请确认积分余额足够后重试",
-      "confirmExchangeMessage": "确定要消耗 {{points}} 积分兑换 {{plan}} 吗？",
-      "loadingPlans": "正在加载会员等级",
-      "confirmExchangePlan": "确认兑换 {{plan}}",
-      "selectHigher": "请选择更高会员等级",
+      "regularUser": "普通用户",
+      "currentIdentity": "当前身份",
+      "catalogHint": "选择会员档位查看对应权益，开通和升级由客服协助处理。",
+      "chooseTier": "选择会员档位",
+      "recommended": "推荐",
+      "lifetime": "永久",
+      "selected": "已选择",
+      "benefitsTitle": "会员权益",
+      "contactToActivate": "联系客服开通 {{plan}}",
+      "contactToUpgrade": "联系客服升级至 {{plan}}",
+      "contactForCurrent": "当前已是 {{plan}}，联系客服咨询",
+      "contactForLowerTier": "当前会员等级更高，联系客服咨询",
+      "contactSupport": "联系客服咨询",
+      "upgradeDifferenceNote": "已开通会员可联系客服补差价升级，升级后立即生效，原会员剩余价值由客服核算抵扣。",
+      "supportName": "官方客服",
+      "supportUnavailableTitle": "客服账号暂未配置",
+      "supportUnavailableMessage": "请联系平台官方客服咨询会员开通或升级。",
+      "planAccessibilityLabel": "{{plan}}，{{duration}}，¥{{price}}",
+      "duration": {
+        "months": "{{count}} 个月",
+        "lifetime": "永久"
+      },
+      "exchangeSuccess": "会员等级已更新为 {{level}}",
+      "exchangeError": "会员等级更新失败，请稍后重试",
       "tiers": {
-        "vip1": {
-          "perks": "基础会员权益"
-        },
-        "vip2": {
-          "perks": "更多群容量与基础折扣"
-        },
-        "vip3": {
-          "perks": "高级身份标识与积分加成"
-        },
-        "vip4": {
-          "perks": "专属靓号折扣与优先体验"
-        },
-        "vip5": {
-          "perks": "至尊会员权益与最高折扣"
-        }
+        "silver": { "name": "白银会员" },
+        "gold": { "name": "黄金会员" },
+        "diamond": { "name": "钻石会员" },
+        "super": { "name": "超级会员" }
+      },
+      "benefits": {
+        "nameColor": "名字颜色",
+        "badge": "会员徽章",
+        "groupMemberLimit": "单群人数上限",
+        "joinedGroups": "可加入群聊",
+        "createdGroups": "可创建群聊",
+        "noteStorage": "笔记存储",
+        "cityFilters": "城市筛选",
+        "fancyNumber": "靓号赠送",
+        "premiumCircle": "高级圈子"
+      },
+      "benefitValues": {
+        "group-member-limit": "{{value}} 人",
+        "joined-groups": "{{value}} 个",
+        "created-groups": "{{value}} 个",
+        "note-storage": "{{value}} 条",
+        "city-filters": "{{value}} 个",
+        "unlimited": "不限",
+        "silver": "银色",
+        "gold": "金色",
+        "rainbow": "七彩",
+        "exclusive-shimmer": "专属流光",
+        "diamond": "钻石",
+        "super-lifetime": "超级永久",
+        "none": "无",
+        "one-gift": "赠送 1 次",
+        "one-premium-gift": "赠送高级靓号 1 次",
+        "silver-circle": "白银圈",
+        "gold-circle": "黄金圈",
+        "diamond-circle": "钻石圈",
+        "super-member-circle": "超级会员圈"
       }
     },
     "memberRules": {
       "link": "会员规则",
       "title": "规则和权限说明",
       "heading": "会员规则",
-      "description": "以下规则用于说明会员等级、积分兑换和权限范围。支付、订单和有效期将在后续接入真实后端。",
+      "description": "会员由客服人工核实并开通，页面展示权益目录，实际权限以后端为准。",
       "rules": {
-        "levels": "VIP1-5 按会员等级逐级解锁权益，当前页面仅展示等级与权益说明。",
-        "highTier": "高等级会员可获得更多群容量、靓号折扣、积分加成和优先体验资格。",
-        "consume": "会员兑换消耗积分，兑换后立即生效；具体有效期以后端订单为准。",
-        "irreversible": "会员、靓号、群扩容卡等虚拟商品一经使用不可撤销。"
+        "catalog": "白银会员 ¥298 / 1 个月；黄金会员 ¥1288 / 6 个月；钻石会员 ¥1998 / 1 年；超级会员 ¥3998 / 永久。",
+        "supportActivation": "会员不在 App 内使用积分兑换或直接购买。联系客服后，由客服人工核实并开通会员。",
+        "upgrade": "已开通会员可联系客服补差价升级；升级后立即生效，原会员剩余价值由客服核算抵扣。",
+        "expiry": "会员到期后仅停止会员权益，不删除账号、聊天、笔记或其他用户内容。",
+        "fairUse": "页面展示的“不限”仍受后端较高的合理使用与防滥用上限约束，实际权限以后端为准。",
+        "voiceToText": "语音转文字是所有用户可用的免费基础功能，不受会员等级限制。",
+        "excludedVisualBenefits": "当前会员权益不包含头像框或动态头像承诺。"
       }
     }
   },

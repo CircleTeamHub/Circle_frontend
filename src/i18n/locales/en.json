@@ -1350,47 +1350,82 @@
     "myIcons": "Badge Collection",
     "membership": {
       "title": "Membership Center",
-      "confirmExchange": "Confirm Exchange",
-      "activateVip": "Activate VIP",
-      "currentLevel": "Current level: VIP{{level}}",
-      "benefitsHint": "Enjoy exclusive member benefits; the higher the level, the more benefits.",
-      "exchange": "Exchange Membership",
-      "currentBadge": "Current Level",
-      "loadError": "Failed to load membership tiers; showing local tier config.",
-      "exchangeSuccess": "Successfully exchanged VIP{{level}}",
-      "exchangeError": "Exchange failed. Please make sure you have enough points and try again.",
-      "confirmExchangeMessage": "Spend {{points}} points to exchange for {{plan}}?",
-      "loadingPlans": "Loading membership tiers",
-      "confirmExchangePlan": "Confirm exchange for {{plan}}",
-      "selectHigher": "Please select a higher membership tier",
+      "regularUser": "Regular user",
+      "currentIdentity": "Current status",
+      "catalogHint": "Select a tier to view its benefits. Customer service assists with activation and upgrades.",
+      "chooseTier": "Choose a membership tier",
+      "recommended": "Recommended",
+      "lifetime": "Lifetime",
+      "selected": "Selected",
+      "benefitsTitle": "Membership benefits",
+      "contactToActivate": "Contact customer service to activate {{plan}}",
+      "contactToUpgrade": "Contact customer service to upgrade to {{plan}}",
+      "contactForCurrent": "You already have {{plan}}; contact customer service",
+      "contactForLowerTier": "Your current tier is higher; contact customer service",
+      "contactSupport": "Contact customer service",
+      "upgradeDifferenceNote": "Current members can contact customer service to pay the difference for an upgrade. The upgrade takes effect immediately, and customer service applies the remaining membership value.",
+      "supportName": "Official customer service",
+      "supportUnavailableTitle": "Customer service account unavailable",
+      "supportUnavailableMessage": "Please contact the platform's official customer service about membership activation or upgrades.",
+      "planAccessibilityLabel": "{{plan}}, {{duration}}, CNY {{price}}",
+      "duration": {
+        "months": "{{count}} months",
+        "lifetime": "Lifetime"
+      },
+      "exchangeSuccess": "Membership level updated to {{level}}",
+      "exchangeError": "Unable to update membership. Please try again later.",
       "tiers": {
-        "vip1": {
-          "perks": "Basic member benefits"
-        },
-        "vip2": {
-          "perks": "More group capacity and basic discounts"
-        },
-        "vip3": {
-          "perks": "Advanced identity badge and points bonus"
-        },
-        "vip4": {
-          "perks": "Exclusive fancy-number discounts and priority access"
-        },
-        "vip5": {
-          "perks": "Supreme member benefits and highest discounts"
-        }
+        "silver": { "name": "Silver membership" },
+        "gold": { "name": "Gold membership" },
+        "diamond": { "name": "Diamond membership" },
+        "super": { "name": "Super membership" }
+      },
+      "benefits": {
+        "nameColor": "Name color",
+        "badge": "Membership badge",
+        "groupMemberLimit": "Members per group",
+        "joinedGroups": "Groups you can join",
+        "createdGroups": "Groups you can create",
+        "noteStorage": "Note storage",
+        "cityFilters": "City filters",
+        "fancyNumber": "Premium number gift",
+        "premiumCircle": "Premium circle"
+      },
+      "benefitValues": {
+        "group-member-limit": "{{value}} people",
+        "joined-groups": "{{value}} groups",
+        "created-groups": "{{value}} groups",
+        "note-storage": "{{value}} notes",
+        "city-filters": "{{value}} cities",
+        "unlimited": "Unlimited",
+        "silver": "Silver",
+        "gold": "Gold",
+        "rainbow": "Rainbow",
+        "exclusive-shimmer": "Exclusive shimmer",
+        "diamond": "Diamond",
+        "super-lifetime": "Super lifetime",
+        "none": "None",
+        "one-gift": "One gift",
+        "one-premium-gift": "One premium number gift",
+        "silver-circle": "Silver circle",
+        "gold-circle": "Gold circle",
+        "diamond-circle": "Diamond circle",
+        "super-member-circle": "Super member circle"
       }
     },
     "memberRules": {
       "link": "Membership Rules",
       "title": "Rules & Permissions",
       "heading": "Membership Rules",
-      "description": "These rules explain membership tiers, points redemption, and permission scope. Payments, orders, and validity periods will be connected to the real backend later.",
+      "description": "Customer service manually verifies and grants membership. This page shows the benefit catalog; backend permissions remain authoritative.",
       "rules": {
-        "levels": "VIP1-5 unlock benefits tier by tier; this page only shows tier and benefit descriptions.",
-        "highTier": "Higher-tier members get more group capacity, fancy-number discounts, points bonuses, and priority access.",
-        "consume": "Membership exchange consumes points and takes effect immediately; the exact validity period is subject to the backend order.",
-        "irreversible": "Virtual goods such as memberships, fancy numbers, and group expansion cards cannot be revoked once used."
+        "catalog": "Silver membership: CNY 298 / 1 month; Gold: CNY 1,288 / 6 months; Diamond: CNY 1,998 / 1 year; Super: CNY 3,998 / lifetime.",
+        "supportActivation": "Membership cannot be redeemed with points or purchased in the app. After contact, customer service manually verifies and grants membership.",
+        "upgrade": "Current members may contact customer service to pay the difference for an upgrade. It takes effect immediately, with remaining membership value applied by customer service.",
+        "expiry": "When membership expires, only membership benefits stop. Accounts, chats, notes, and other user content are not deleted.",
+        "fairUse": "Displayed unlimited benefits remain subject to high backend fair-use and abuse-prevention limits. Actual permissions are determined by the backend.",
+        "voiceToText": "Voice-to-text is a free basic feature for every user and is not restricted by membership tier.",
+        "excludedVisualBenefits": "Current membership benefits do not promise avatar frames or animated avatars."
       }
     }
   },

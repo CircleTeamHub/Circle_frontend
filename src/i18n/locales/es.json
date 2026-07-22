@@ -1791,47 +1791,82 @@
     "myIcons": "Mis insignias",
     "membership": {
       "title": "Centro de membresía",
-      "confirmExchange": "Confirmar canje",
-      "activateVip": "Activar VIP",
-      "currentLevel": "Nivel actual: VIP{{level}}",
-      "benefitsHint": "Disfruta de beneficios exclusivos de miembro; cuanto mayor sea el nivel, más beneficios.",
-      "exchange": "Canjear membresía",
-      "currentBadge": "Nivel actual",
-      "loadError": "Error al cargar los niveles VIP; mostrando la configuración local de niveles.",
-      "exchangeSuccess": "Canjeaste VIP{{level}} correctamente",
-      "exchangeError": "Error en el canje. Asegúrate de tener suficientes créditos e inténtalo de nuevo.",
-      "confirmExchangeMessage": "¿Gastar {{points}} créditos para canjear {{plan}}?",
-      "loadingPlans": "Cargando niveles VIP",
-      "confirmExchangePlan": "Confirmar canje de {{plan}}",
-      "selectHigher": "Selecciona un nivel VIP superior",
+      "regularUser": "Usuario regular",
+      "currentIdentity": "Estado actual",
+      "catalogHint": "Selecciona un nivel para ver sus beneficios. Atención al cliente gestiona la activación y las mejoras.",
+      "chooseTier": "Elige un nivel de membresía",
+      "recommended": "Recomendado",
+      "lifetime": "De por vida",
+      "selected": "Seleccionado",
+      "benefitsTitle": "Beneficios de membresía",
+      "contactToActivate": "Contactar con atención al cliente para activar {{plan}}",
+      "contactToUpgrade": "Contactar con atención al cliente para mejorar a {{plan}}",
+      "contactForCurrent": "Ya tienes {{plan}}; contactar con atención al cliente",
+      "contactForLowerTier": "Tu nivel actual es superior; contactar con atención al cliente",
+      "contactSupport": "Contactar con atención al cliente",
+      "upgradeDifferenceNote": "Los miembros actuales pueden contactar con atención al cliente para pagar la diferencia de una mejora. Se activa de inmediato y atención al cliente aplica el valor restante de la membresía.",
+      "supportName": "Atención al cliente oficial",
+      "supportUnavailableTitle": "Cuenta de atención al cliente no disponible",
+      "supportUnavailableMessage": "Contacta con la atención al cliente oficial de la plataforma para activar o mejorar la membresía.",
+      "planAccessibilityLabel": "{{plan}}, {{duration}}, CNY {{price}}",
+      "duration": {
+        "months": "{{count}} meses",
+        "lifetime": "De por vida"
+      },
+      "exchangeSuccess": "Nivel de membresía actualizado a {{level}}",
+      "exchangeError": "No se pudo actualizar la membresía. Inténtalo de nuevo más tarde.",
       "tiers": {
-        "vip1": {
-          "perks": "Beneficios básicos de miembro"
-        },
-        "vip2": {
-          "perks": "Más capacidad de grupo y descuentos básicos"
-        },
-        "vip3": {
-          "perks": "Insignia de identidad avanzada y créditos extra"
-        },
-        "vip4": {
-          "perks": "Descuentos exclusivos en números premium y acceso prioritario"
-        },
-        "vip5": {
-          "perks": "Beneficios supremos de miembro y los mayores descuentos"
-        }
+        "silver": { "name": "Membresía Plata" },
+        "gold": { "name": "Membresía Oro" },
+        "diamond": { "name": "Membresía Diamante" },
+        "super": { "name": "Membresía Súper" }
+      },
+      "benefits": {
+        "nameColor": "Color del nombre",
+        "badge": "Insignia de membresía",
+        "groupMemberLimit": "Miembros por grupo",
+        "joinedGroups": "Grupos a los que puedes unirte",
+        "createdGroups": "Grupos que puedes crear",
+        "noteStorage": "Almacenamiento de notas",
+        "cityFilters": "Filtros de ciudad",
+        "fancyNumber": "Número premium de regalo",
+        "premiumCircle": "Círculo premium"
+      },
+      "benefitValues": {
+        "group-member-limit": "{{value}} personas",
+        "joined-groups": "{{value}} grupos",
+        "created-groups": "{{value}} grupos",
+        "note-storage": "{{value}} notas",
+        "city-filters": "{{value}} ciudades",
+        "unlimited": "Ilimitado",
+        "silver": "Plata",
+        "gold": "Oro",
+        "rainbow": "Arcoíris",
+        "exclusive-shimmer": "Brillo exclusivo",
+        "diamond": "Diamante",
+        "super-lifetime": "Súper de por vida",
+        "none": "Ninguno",
+        "one-gift": "Un regalo",
+        "one-premium-gift": "Un número premium de regalo",
+        "silver-circle": "Círculo Plata",
+        "gold-circle": "Círculo Oro",
+        "diamond-circle": "Círculo Diamante",
+        "super-member-circle": "Círculo de miembros Súper"
       }
     },
     "memberRules": {
       "link": "Reglas de membresía",
       "title": "Reglas y permisos",
       "heading": "Reglas de membresía",
-      "description": "Estas reglas explican los niveles VIP, el canje de créditos y el alcance de los permisos. Los pagos, pedidos y periodos de validez se conectarán al backend real más adelante.",
+      "description": "Atención al cliente verifica y concede manualmente la membresía. Esta pantalla muestra el catálogo de beneficios; los permisos del backend son la fuente de autoridad.",
       "rules": {
-        "levels": "VIP1-5 desbloquean beneficios nivel por nivel; esta página solo muestra la descripción de niveles y beneficios.",
-        "highTier": "Los miembros de nivel superior obtienen más capacidad de grupo, descuentos en números premium, créditos extra y acceso prioritario.",
-        "consume": "El canje VIP consume créditos y se activa de inmediato; el periodo de validez exacto depende del pedido del backend.",
-        "irreversible": "Los productos virtuales como VIP, números premium y tarjetas de ampliación de grupo no se pueden revocar una vez usados."
+        "catalog": "Membresía Plata: CNY 298 / 1 mes; Oro: CNY 1.288 / 6 meses; Diamante: CNY 1.998 / 1 año; Súper: CNY 3.998 / de por vida.",
+        "supportActivation": "La membresía no se puede canjear con puntos ni comprar en la aplicación. Tras el contacto, atención al cliente la verifica y concede manualmente.",
+        "upgrade": "Los miembros actuales pueden contactar con atención al cliente para pagar la diferencia de una mejora. Se activa de inmediato y se aplica el valor restante de la membresía.",
+        "expiry": "Cuando vence la membresía, solo se detienen sus beneficios. No se eliminan cuentas, chats, notas ni otro contenido del usuario.",
+        "fairUse": "Los beneficios mostrados como ilimitados siguen sujetos a límites elevados de uso razonable y prevención de abusos del backend. Los permisos reales los determina el backend.",
+        "voiceToText": "La conversión de voz a texto es una función básica gratuita para todos y no está limitada por el nivel de membresía.",
+        "excludedVisualBenefits": "Los beneficios actuales no prometen marcos de avatar ni avatares animados."
       }
     }
   },
