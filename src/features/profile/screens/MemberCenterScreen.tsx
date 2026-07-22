@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,6 +13,10 @@ import {
   type MembershipPlan,
 } from '@/services/api/membership';
 import { performMembershipUpgradeFlow } from '@/features/profile/membership-upgrade-flow';
+import {
+  resolveMembershipUpgradeIdempotency,
+  type MembershipUpgradeIdempotency,
+} from '@/features/profile/membership-idempotency';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -86,6 +90,9 @@ export default function MemberCenterScreen() {
   const [selectedLevel, setSelectedLevel] = useState(Math.min(Math.max(vipLevel || 1, 1), 5));
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const upgradeIdempotencyRef = useRef<MembershipUpgradeIdempotency | null>(
+    null,
+  );
   const [statusText, setStatusText] = useState<string | null>(null);
   const selectedPlan = plans.find((item) => item.level === selectedLevel) ?? plans[0];
   const canUpgrade = selectedLevel > vipLevel && !submitting && !isOffline;
@@ -127,10 +134,21 @@ export default function MemberCenterScreen() {
   const performUpgrade = useCallback(async () => {
     setSubmitting(true);
     setStatusText(null);
+    // review 修复（P1）：幂等键跟随升级意图存活 —— 同一等级的重试（响应
+    // 丢失后再点）复用同一枚键让后端去重生效；换等级自动换键；成功后失效。
+    const idempotency = resolveMembershipUpgradeIdempotency(
+      upgradeIdempotencyRef.current,
+      { level: selectedLevel },
+    );
+    upgradeIdempotencyRef.current = idempotency;
     try {
       await performMembershipUpgradeFlow({
         selectedLevel,
-        upgradeMembership,
+        upgradeMembership: async (level) => {
+          const result = await upgradeMembership(level, idempotency.key);
+          upgradeIdempotencyRef.current = null;
+          return result;
+        },
         fetchCurrentUser,
         getCurrentUser: () => useAuthStore.getState().user,
         setUser,

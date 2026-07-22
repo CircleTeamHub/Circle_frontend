@@ -12,14 +12,15 @@
  * 这里用 inFlightRef + sending 双重把关，确保同一时刻只有一次发码请求在途。
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { requestEmailCode } from '@/services/api/auth';
+import { requestEmailCode, requestPasswordReset } from '@/services/api/auth';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useCountdown } from '@/hooks/use-countdown';
 import { normalizeEmail } from '@/utils/email';
 import { validateEmail } from '@/features/auth/validation';
 import i18n from '@/i18n';
 
-type Purpose = 'login' | 'register';
+// 'reset-password' 走独立端点（FE#92），其余两个走通用 email/request-code。
+type Purpose = 'login' | 'register' | 'reset-password';
 
 const RESEND_SECONDS = 60;
 
@@ -69,7 +70,11 @@ export function useSendEmailCode(purpose: Purpose): SendEmailCode {
       inFlightRef.current = true;
       setSending(true);
       try {
-        await requestEmailCode({ email: normalized, purpose });
+        if (purpose === 'reset-password') {
+          await requestPasswordReset(normalized);
+        } else {
+          await requestEmailCode({ email: normalized, purpose });
+        }
         if (mountedRef.current) countdown.start(RESEND_SECONDS);
       } catch (e) {
         if (mountedRef.current) {

@@ -128,6 +128,10 @@ import {
   useChatPreferencesStore,
 } from '@/features/chat/store/use-chat-preferences-store';
 import { createDirectCall, createGroupCall } from '@/services/api/calls';
+import {
+  enqueueGiftCardAck,
+  flushPendingGiftCardAcks,
+} from '@/features/chat/utils/gift-card-ack';
 import { resolveDirectCalleeID } from '@/features/call/resolve-direct-callee';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
@@ -493,6 +497,10 @@ export default function ChatDetailScreen() {
   useEffect(() => {
     isRecordingRef.current = voiceRecorderState.isRecording;
   }, [voiceRecorderState.isRecording]);
+  useEffect(() => {
+    // 冲销上次可能丢失的卡片回执挂账（幂等，无账时零成本）
+    void flushPendingGiftCardAcks();
+  }, []);
   useEffect(() => {
     return () => {
       mountedRef.current = false;
@@ -2352,7 +2360,11 @@ export default function ChatDetailScreen() {
   );
 
   const handleSendTransferCard = useCallback(
-    async (payload: { amount: number; message: string | null }) => {
+    async (payload: {
+      amount: number;
+      message: string | null;
+      idempotencyKey?: string | null;
+    }) => {
       if (!sourceID || isPreviewMode) return;
       if (inFlightRef.current) return;
       inFlightRef.current = true;
@@ -2360,9 +2372,17 @@ export default function ChatDetailScreen() {
         const sent = await sendTransferCardMessage({
           sourceID,
           sessionType: conversationType,
-          payload,
+          payload: { amount: payload.amount, message: payload.message },
         });
         appendMessages(conversationID, [sent]);
+        // #100：告知后端卡片已由客户端送达，补偿 cron 不再重发。
+        // round 2 review：回执是防重发的唯一信号，不能 fire-and-forget ——
+        // 先持久化挂账再冲销：回执丢失（超时/退后台）时下次进聊天页续冲，
+        // app 被杀也不丢账；后端按 key 幂等，重复回执无害。
+        if (payload.idempotencyKey) {
+          enqueueGiftCardAck(payload.idempotencyKey);
+          void flushPendingGiftCardAcks();
+        }
       } catch (error) {
         if (mountedRef.current) {
           setSendError(

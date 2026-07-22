@@ -7,6 +7,8 @@ import { create } from 'zustand';
 export interface TransferPendingPayload {
   amount: number;
   message: string | null;
+  /** #100：转账的 Idempotency-Key —— 卡片发出后凭它向后端回执，阻止服务端补偿重发。 */
+  idempotencyKey: string | null;
 }
 
 interface TransferComposerState {
