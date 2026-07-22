@@ -20,9 +20,13 @@ function loadCacheModule(rnfsMock) {
     module: { exports: {} },
     exports: {},
     require: (request) => {
-      if (request === 'expo-file-system/legacy') {
+      if (request === 'expo-file-system') {
         return {
-          cacheDirectory: 'file:///app/cache/',
+          Paths: {
+            get cache() {
+              return { uri: 'file:///app/cache/' };
+            },
+          },
         };
       }
 
