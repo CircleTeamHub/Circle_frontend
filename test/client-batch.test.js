@@ -139,6 +139,14 @@ test('卡片回执持久挂账：失败保留、成功销账、app 重启不丢 
   let markShouldFail = true;
   const mod = loadTsModule('src/features/chat/utils/gift-card-ack.ts', {
     requireShim: (specifier) => {
+      if (specifier === 'react-native') {
+        return { AppState: { addEventListener: () => ({ remove: () => {} }) } };
+      }
+      if (specifier === '@/stores/authStore') {
+        return {
+          useAuthStore: { getState: () => ({ user: { id: 'user-1' } }) },
+        };
+      }
       if (specifier === '@/storage') {
         return {
           storage: {
@@ -157,6 +165,7 @@ test('卡片回执持久挂账：失败保留、成功销账、app 重启不丢 
       }
       throw new Error(`unexpected import in gift-card-ack: ${specifier}`);
     },
+    context: { setTimeout, clearTimeout, console },
   });
 
   // 发卡成功 → 入账；回执失败 → 挂账保留（持久化在 storage 里）
@@ -173,6 +182,17 @@ test('卡片回执持久挂账：失败保留、成功销账、app 重启不丢 
     String(stored.get('circle-im-gift-card-pending-acks')),
     /key-1/,
   );
+  // round 3：挂账按用户隔离持久化（{key, userId}），换号不误冲
+  mod.enqueueGiftCardAck('key-2');
+  assert.match(
+    String(stored.get('circle-im-gift-card-pending-acks')),
+    /"userId":"user-1"/,
+  );
+  // round 3：失败自动安排延时重试 + 回前台补冲（源码断言）
+  const src = read('src/features/chat/utils/gift-card-ack.ts');
+  assert.match(src, /scheduleRetry\(\)/);
+  assert.match(src, /AppState\.addEventListener/);
+  assert.match(src, /item\.userId === userId/);
 });
 
 test('回收站：恢复成功与刷新失败分离；刷新失败可感知 (round 2)', () => {

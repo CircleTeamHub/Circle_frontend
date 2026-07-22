@@ -2410,6 +2410,7 @@
     "FRIEND_REQUEST_MESSAGE_INVALID": "Message can't be empty and must be 500 characters or fewer",
     "FRIEND_REQUEST_MESSAGE_LIMIT": "You can send up to 5 messages before they reply",
     "NOTE_NOT_FOUND": "Note not found",
+    "NOTE_RESTORE_DUPLICATE": "Another active copy of this collected note already exists.",
     "NOTE_GROUP_NOT_FOUND": "Note group not found",
     "NOTE_IMAGE_TOO_LARGE": "The image is too large to embed",
     "NOTE_SHARE_LINK_INVALID": "This share link is not valid",

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -76,6 +76,15 @@ export function ForgotPasswordScreen() {
   // 验证码双发 /auth/password/reset（第一发消费一次性码 + 全端下线，
   // 第二发只会带回一个费解的失败）。ref 同步生效。
   const submitInFlightRef = useRef(false);
+  // round 3 review：提交后离开本页时，成功继续段的 Alert/router.back 会
+  // 弹在别的页面上、pop 掉用户新去的屏 —— unmount 后跳过 UI 副作用。
+  const mountedRef = useRef(true);
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
   const sendCode = useSendEmailCode('reset-password');
 
   const canSubmit =
@@ -104,6 +113,7 @@ export function ForgotPasswordScreen() {
     setSubmitting(true);
     try {
       await resetPassword({ email, code, newPassword });
+      if (!mountedRef.current) return;
       Alert.alert(
         t('auth.resetPassword.successTitle', { defaultValue: '密码已重置' }),
         t('auth.resetPassword.successBody', {
@@ -119,6 +129,7 @@ export function ForgotPasswordScreen() {
         router.replace('/(auth)/login');
       }
     } catch (e) {
+      if (!mountedRef.current) return;
       setError(
         getApiErrorMessage(
           e,
@@ -129,7 +140,7 @@ export function ForgotPasswordScreen() {
       );
     } finally {
       submitInFlightRef.current = false;
-      setSubmitting(false);
+      if (mountedRef.current) setSubmitting(false);
     }
   }, [canSubmit, email, code, newPassword, router, t]);
 
@@ -150,7 +161,11 @@ export function ForgotPasswordScreen() {
 
   return (
     <View style={[d.page, { paddingTop: insets.top }]}>
-      <NavHeader title={t('auth.forgotPassword', { defaultValue: '忘记密码' })} />
+      {/* round 3 review：深链直达时无导航历史，返回键要有登录页兜底 */}
+      <NavHeader
+        title={t('auth.forgotPassword', { defaultValue: '忘记密码' })}
+        fallbackHref="/(auth)/login"
+      />
       <ScrollView
         contentContainerStyle={s.container}
         {...keyboardDismissOnDragProps}

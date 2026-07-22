@@ -2407,6 +2407,7 @@
     "FRIEND_REQUEST_MESSAGE_INVALID": "留言内容不能为空，且不能超过 500 字",
     "FRIEND_REQUEST_MESSAGE_LIMIT": "对方回复前最多发送 5 条留言",
     "NOTE_NOT_FOUND": "笔记不存在",
+    "NOTE_RESTORE_DUPLICATE": "该笔记的另一份收藏副本已存在，无需恢复",
     "NOTE_GROUP_NOT_FOUND": "笔记分组不存在",
     "NOTE_IMAGE_TOO_LARGE": "图片过大，无法嵌入",
     "NOTE_SHARE_LINK_INVALID": "分享链接无效",

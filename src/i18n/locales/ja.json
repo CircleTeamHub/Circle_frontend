@@ -2407,6 +2407,7 @@
     "FRIEND_REQUEST_MESSAGE_INVALID": "メッセージは空にできず、500文字以内で入力してください",
     "FRIEND_REQUEST_MESSAGE_LIMIT": "相手が返信するまでに送れるメッセージは最大5件です",
     "NOTE_NOT_FOUND": "ノートが見つかりません",
+    "NOTE_RESTORE_DUPLICATE": "このノートの別の収蔵コピーが既に存在します。",
     "NOTE_GROUP_NOT_FOUND": "ノートグループが見つかりません",
     "NOTE_IMAGE_TOO_LARGE": "画像が大きすぎて埋め込めません",
     "NOTE_SHARE_LINK_INVALID": "この共有リンクは無効です",

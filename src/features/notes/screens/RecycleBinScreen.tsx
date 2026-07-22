@@ -50,9 +50,14 @@ export default function RecycleBinScreen() {
     [],
   );
 
+  // round 3 review：加载代际 —— restore 成功会推进代际，仍在飞的旧刷新
+  // 响应落地时代际不匹配即丢弃，不再把刚恢复的笔记写回回收站列表。
+  const loadGenerationRef = useRef(0);
   const load = useCallback(async () => {
+    const generation = loadGenerationRef.current;
     const notesData = await fetchDeletedNotes();
     if (!mountedRef.current) return;
+    if (generation !== loadGenerationRef.current) return;
     setNotes(notesData);
     setLoadError(false);
     setLoading(false);
@@ -113,6 +118,8 @@ export default function RecycleBinScreen() {
     // 「恢复失败」（用户会对着已恢复的笔记反复重试）。本地先把这行移出
     // 列表（乐观且真实：服务端已恢复），刷新失败只静默保留现状。
     if (!mountedRef.current) return;
+    // 作废在飞的旧刷新（其响应包含恢复前的这行）
+    loadGenerationRef.current += 1;
     setNotes((prev) => prev.filter((item) => item.id !== note.id));
     try {
       await load();
