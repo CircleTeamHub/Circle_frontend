@@ -1,8 +1,13 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect } from 'react';
 import { AppState } from 'react-native';
 import { fetchCurrentUser } from '@/services/api/auth';
 import { isDefinitiveAuthFailure } from '@/services/api/client';
 import { loginToOpenIM, logoutFromOpenIM } from '@/im/client';
+import {
+  clearIMLoginRetryPending,
+  isIMLoginRetryPending,
+  markIMLoginRetryPending,
+} from '@/im/login-retry-pending';
 import {
   connectRealtime,
   disconnectRealtime,
@@ -45,20 +50,20 @@ export function SessionBootstrap() {
   // OpenIM 全局事件由 ensureOpenIMInitialized() 在 initSDK 之前主动绑定，
   // 这里不再额外绑定 —— 否则 SessionBootstrap 卸载时会意外解绑全部 listener。
 
-  // 是否还欠着一次 OpenIM 登录。用 ref 而非 state：它只驱动副作用，
-  // 而 SessionBootstrap 返回 null，为它重渲染纯属浪费。
-  const openIMLoginPendingRef = useRef(false);
-
+  // 是否还欠着一次 OpenIM 登录：round 2 review 后提升为模块级标记
+  //（src/im/login-retry-pending.ts）—— 欠账的生产者不止 bootstrap 自己，
+  // 降级切号（use-auth）也会在 IM 登录失败时 mark，一处消费统一重试。
+  //
   // 幂等的 OpenIM 登录。loginToOpenIM 内部会先查 getLoginStatus、并把 10102
   // 「重复登录」当作成功，所以重复调用是安全的 —— 这正是「补登」能成立的前提。
   // 失败只记欠账、不外抛：IM 掉线不该阻断 app 主流程。
   const ensureOpenIMLogin = useCallback(async (userId: string, token: string) => {
     try {
       await loginToOpenIM(userId, token);
-      openIMLoginPendingRef.current = false;
+      clearIMLoginRetryPending();
     } catch (error) {
       // 留着欠账，等下次回前台重试 —— 那时网络多半已经恢复。
-      openIMLoginPendingRef.current = true;
+      markIMLoginRetryPending();
       console.warn(
         '[openim] login failed; will retry on next foreground',
         error instanceof Error ? error.message : error
@@ -136,7 +141,7 @@ export function SessionBootstrap() {
       // 冷启动欠下的 IM 登录在这里补。回前台是个现成的信号（网络多半已恢复），
       // 既不用轮询、也不用额外的退避循环 —— 重试次数天然被用户的前台次数兜住。
       // 健康会话 pending 恒为 false，这里是零成本 no-op。
-      if (openIMLoginPendingRef.current) {
+      if (isIMLoginRetryPending()) {
         void recoverOpenIMLogin();
       }
     });

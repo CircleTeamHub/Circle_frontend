@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { loadTsModule } = require("./helpers/load-ts-module");
 
 function read(relativePath) {
   return fs.readFileSync(path.join(process.cwd(), relativePath), "utf8");
@@ -94,6 +95,30 @@ test("degraded switch (transient /auth/me failure) keeps rotated tokens and retr
   //    也要尽力 IM 重连 + 拉会话分组
   assert.match(elseBranch, /loginToOpenIM\(account\.user\.id, imToken\)/);
   assert.match(elseBranch, /useMessageGroupsStore\.getState\(\)\.load\(\)/);
+  // ③ round 2：这次 IM 登录也失败时挂共享补登欠账（bootstrap 回前台消费）
+  assert.match(elseBranch, /markIMLoginRetryPending\(\)/);
+});
+
+test('IM 补登欠账为模块级共享：use-auth 生产、bootstrap 消费 (round 2)', () => {
+  const pendingMod = read('src/im/login-retry-pending.ts');
+  assert.match(pendingMod, /markIMLoginRetryPending/);
+  assert.match(pendingMod, /isIMLoginRetryPending/);
+  assert.match(pendingMod, /clearIMLoginRetryPending/);
+
+  const bootstrap = read('src/components/app/session-bootstrap.tsx');
+  // bootstrap 不再持组件私有 ref，改用共享标记：成功清、失败记、回前台查
+  assert.doesNotMatch(bootstrap, /openIMLoginPendingRef/);
+  assert.match(bootstrap, /clearIMLoginRetryPending\(\)/);
+  assert.match(bootstrap, /markIMLoginRetryPending\(\)/);
+  assert.match(bootstrap, /if \(isIMLoginRetryPending\(\)\)/);
+
+  // 行为：mark → is=true → clear → is=false
+  const mod = loadTsModule('src/im/login-retry-pending.ts');
+  assert.equal(mod.isIMLoginRetryPending(), false);
+  mod.markIMLoginRetryPending();
+  assert.equal(mod.isIMLoginRetryPending(), true);
+  mod.clearIMLoginRetryPending();
+  assert.equal(mod.isIMLoginRetryPending(), false);
 });
 
 test("account switcher sheet lists accounts and offers an add-account entry", () => {

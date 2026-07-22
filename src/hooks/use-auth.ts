@@ -27,6 +27,7 @@ import {
 import { clearLocalSession } from '@/services/auth/session';
 import { isDefinitiveAuthFailure } from '@/services/api/client';
 import { loginToOpenIM, logoutFromOpenIM } from '@/im/client';
+import { markIMLoginRetryPending } from '@/im/login-retry-pending';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useMessageGroupsStore } from '@/features/messages/store/use-message-groups-store';
 import { retry } from '@/utils/retry';
@@ -376,6 +377,11 @@ export function useAuth() {
                 '[openim] degraded-switch login failed',
                 imError instanceof Error ? imError.message : imError,
               );
+              // round 2 review：降级进入时 /auth/me 在瞬断，这次 IM 登录多半
+              // 也会挂 —— 只 warn 的话 bootstrap 已被 setSession 短路、没人
+              // 再补登，IM 断连到重启。挂进与 bootstrap 共享的补登欠账，
+              // 回前台时由它的前台监听自动重试。
+              markIMLoginRetryPending();
             }
             void useMessageGroupsStore.getState().load();
           }

@@ -95,6 +95,11 @@ function loadUseAuth(fixtures = {}) {
     '@/utils/retry': {
       retry: async (fn) => fn(),
     },
+    '@/im/login-retry-pending': {
+      markIMLoginRetryPending: () => {},
+      clearIMLoginRetryPending: () => {},
+      isIMLoginRetryPending: () => false,
+    },
     '@/features/auth/validation': {
       validateLoginForm: () => null,
       validateLoginCodeForm: () => null,
