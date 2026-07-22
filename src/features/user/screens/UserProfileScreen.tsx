@@ -547,9 +547,20 @@ export default function UserProfileScreen() {
   }, [displayName, openingChat, profile.avatarUrl, profileId, router, scope, t]);
 
   const [startingCall, setStartingCall] = useState(false);
+  // review 修复：state 版守卫要等 React 提交才生效，快速双击都会以
+  // startingCall===false 进入，双发非幂等的 POST /calls/direct。ref 同步生效
+  //（与聊天页 callStartingRef 同模式）；state 仅保留给按钮 UI。
+  const callStartingRef = useRef(false);
   const setActiveCall = useCallStore((state) => state.setActiveCall);
   const handleStartVoiceCall = useCallback(async () => {
-    if (startingCall || isCurrentUser || profileId === 'unknown') return;
+    if (
+      callStartingRef.current ||
+      startingCall ||
+      isCurrentUser ||
+      profileId === 'unknown'
+    )
+      return;
+    callStartingRef.current = true;
     setStartingCall(true);
     try {
       const response = await createDirectCall({
@@ -566,6 +577,7 @@ export default function UserProfileScreen() {
         getApiErrorMessage(error, t('common.networkError')),
       );
     } finally {
+      callStartingRef.current = false;
       if (mountedRef.current) setStartingCall(false);
     }
   }, [isCurrentUser, profileId, router, setActiveCall, startingCall, t]);

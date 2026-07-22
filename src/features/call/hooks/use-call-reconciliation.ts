@@ -31,6 +31,12 @@ export function useCallReconciliation(): void {
       if (!activeCall && !incomingCall) {
         return;
       }
+      // review 修复：先捕获「本次对账针对的那通电话」。请求在飞期间可能来了
+      // 新电话 B —— 若回调时再读 store，null/A 的响应会把合法的 B 清掉。
+      const reconcilingCallId = activeCall?.id ?? incomingCall?.callId ?? null;
+      if (!reconcilingCallId) {
+        return;
+      }
 
       inFlightRef.current = true;
       void fetchCurrentCall()
@@ -38,7 +44,8 @@ export function useCallReconciliation(): void {
           const state = useCallStore.getState();
           const localCallId =
             state.activeCall?.id ?? state.incomingCall?.callId ?? null;
-          if (!localCallId) {
+          // store 里已换成别的电话：这份响应是过期问题的过期答案，丢弃。
+          if (!localCallId || localCallId !== reconcilingCallId) {
             return;
           }
           if (!current || current.call.id !== localCallId) {

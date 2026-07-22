@@ -69,7 +69,14 @@ function formatDuration(totalSeconds: number): string {
 function useCallRecordLabel(record: CallRecordData, outgoing: boolean) {
   const { t } = useTranslation();
   return useMemo(() => {
-    if (record.durationSeconds != null && record.endReason === 'NORMAL') {
+    // review 修复：接通过的通话不止 NORMAL 一种收尾 —— 双方都挂断走
+    // ALL_LEFT，同样有真实时长。凡「接通过」的终局（带非空时长且不属于
+    // 未接/取消/失败语义）都显示时长。
+    const connectedEndReasons = new Set(['NORMAL', 'ALL_LEFT']);
+    if (
+      record.durationSeconds != null &&
+      connectedEndReasons.has(record.endReason)
+    ) {
       return t('chat.callRecord.duration', {
         duration: formatDuration(record.durationSeconds),
         defaultValue: '通话时长 {{duration}}',
@@ -142,7 +149,10 @@ export function CallRecordBubble({
         <Pressable
           onPress={onCallBack}
           onLongPress={onLongPress}
-          disabled={!onCallBack}
+          // review 修复：群聊传 onCallBack=undefined，disabled 整体禁用会连
+          // onLongPress（消息操作菜单：删除/转发）一起杀掉。只有两个回调都
+          // 缺席才禁用；tap 行为由 onPress 本身是否存在决定。
+          disabled={!onCallBack && !onLongPress}
           style={[sCallRecord.bubble, { backgroundColor: bubbleColor }]}
         >
           <Ionicons name={icon} size={18} color={textColor} />

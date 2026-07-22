@@ -194,3 +194,34 @@ test('回前台通话对账：本地残留在服务端已消失时被清掉 (#93
   const host = read('src/features/call/components/CallInviteHost.tsx');
   assert.match(host, /useCallReconciliation\(\)/);
 });
+
+test('对账在请求前捕获目标 callId，在飞期间来的新电话不被误清 (review)', () => {
+  const hook = read('src/features/call/hooks/use-call-reconciliation.ts');
+  // 捕获发生在 fetchCurrentCall 之前
+  const captureAt = hook.indexOf('const reconcilingCallId');
+  const fetchAt = hook.indexOf('void fetchCurrentCall()');
+  assert.ok(captureAt >= 0 && fetchAt >= 0 && captureAt < fetchAt,
+    'reconcilingCallId must be captured before the request');
+  // 回调里比对：store 已换电话（B）→ 丢弃这份过期响应，不 reset
+  assert.match(hook, /localCallId !== reconcilingCallId/);
+});
+
+test('主页拨打用同步 ref 守卫，快速双击不双发 POST /calls/direct (review)', () => {
+  const screen = read('src/features/user/screens/UserProfileScreen.tsx');
+  assert.match(screen, /const callStartingRef = useRef\(false\)/);
+  // 进入即置位、finally 清理（state 版只留给按钮 UI）
+  assert.match(screen, /callStartingRef\.current \|\|/);
+  assert.match(screen, /callStartingRef\.current = true;/);
+  assert.match(screen, /callStartingRef\.current = false;/);
+});
+
+test('通话记录气泡：群聊无回拨仍可长按；ALL_LEFT 显示时长 (review)', () => {
+  const bubble = read(
+    'src/features/chat/components/bubbles/call-record-bubble.tsx',
+  );
+  // 只有 tap 与长按都缺席才禁用 —— 群聊 onCallBack=undefined 时操作菜单仍可用
+  assert.match(bubble, /disabled=\{!onCallBack && !onLongPress\}/);
+  // 接通过的终局（NORMAL/ALL_LEFT）带时长都渲染时长文案
+  assert.match(bubble, /connectedEndReasons = new Set\(\['NORMAL', 'ALL_LEFT'\]\)/);
+  assert.match(bubble, /connectedEndReasons\.has\(record\.endReason\)/);
+});
