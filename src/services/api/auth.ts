@@ -172,6 +172,21 @@ export async function register(payload: {
   return ensureAuthTokens(raw);
 }
 
+/**
+ * 用当前业务凭证换一枚新 IM token（GET /auth/im-token）。
+ * 后端 JWT 保护、10 次/分限流；OpenIM 不可用时给 503 而不是空串，
+ * 所以空响应按数据损坏抛错，避免下游缓存一枚空 token。
+ */
+export async function fetchImToken(): Promise<string> {
+  const raw = await apiClient<{ imToken: string }>(
+    `/auth/im-token?platform=${getOpenIMPlatformID()}`,
+  );
+  if (!raw || typeof raw.imToken !== "string" || raw.imToken.length === 0) {
+    throw new Error("IM 凭证返回数据格式异常，请重试");
+  }
+  return raw.imToken;
+}
+
 export async function fetchCurrentUser() {
   const user = await apiClient<BackendAuthUser>("/auth/me");
   return normalizeUser(user);

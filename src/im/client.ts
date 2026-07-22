@@ -37,12 +37,17 @@ import {
   OPENIM_WS_URL,
 } from '@/constants/config';
 import { bindOpenIMListeners, unbindOpenIMListeners } from '@/im/listeners';
+import {
+  registerIMLoginExecutor,
+  registerIMLogoutExecutor,
+} from '@/im/token-recovery';
 import { IMClientError, IM_ERROR_CODES } from '@/im/error-codes';
 import { getOpenIMDataDirPath } from '@/im/data-dir';
 import { stripFileScheme } from '@/im/media-uri';
 import { resolveVoiceSendStrategy } from '@/features/chat/utils/voice-forward';
 import { toImUserId } from '@/im/user-id';
 import { registerLogoutHandler } from '@/services/auth/session';
+import { storage } from '@/storage';
 import { useIMStore } from '@/stores/imStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { reportError } from '@/observability/sentry';
@@ -76,10 +81,20 @@ async function reportSend(
 }
 
 // 注册到 session 的登出 teardown，由 clearLocalSession 统一调度。
-// 函数声明会被 hoisting，所以这里在模块顶层引用 logoutFromOpenIM 是安全的。
-// 直接传函数引用而不是包一层箭头：session.ts 按引用去重，箭头每次模块求值都是新引用，
-// HMR 时会让同一个 teardown 累积多次（已经被 Batch 01 的 dedup 暴露过）。
-registerLogoutHandler(logoutFromOpenIM);
+// 模块级 const 保证按引用去重仍成立（HMR 语义与函数引用一致）；包一层是
+// 因为 logoutFromOpenIM 现在的第一参是 forceNative 选项，不能直接吃
+// session 传来的 LogoutContext。
+const sessionIMLogoutHandler = () => logoutFromOpenIM();
+registerLogoutHandler(sessionIMLogoutHandler);
+
+// token-recovery 不 import 本模块（避免 client → listeners → token-recovery → client
+// 模块环），真正的 OpenIM 登录函数在这里注入。同样按引用注册，幂等。
+// 恢复路径必须强制真登录（review 修复 P1）：token 过期时 getLoginStatus 很可能
+// 仍报 Logged，普通路径的复用快捷会让新 token 永远交不到 SDK 手里。
+registerIMLoginExecutor((userId, imToken) =>
+  loginToOpenIM(userId, imToken, { forceRelogin: true }),
+);
+registerIMLogoutExecutor((options) => logoutFromOpenIM(options));
 
 function isNativeIMSupported() {
   return Platform.OS === 'ios' || Platform.OS === 'android';
@@ -186,6 +201,104 @@ export async function ensureOpenIMInitialized() {
   return true;
 }
 
+// 上一次成功发起 OpenIM 登录的 IM userID（设备级 MMKV，不随登出清除）。
+const OPENIM_DATA_OWNER_KEY = 'circle-im-openim-data-owner';
+
+/**
+ * 换号即清上一账号的 OpenIM 本地库（#96）。
+ *
+ * 消息 SQLite 落在 ${Documents}/openim，登出**有意不删** —— 同账号重登可秒开
+ * 且离线可读历史。共享设备的泄漏点在「下一个人登自己的号」：此时上一账号的库
+ * 还躺在磁盘上。中间路线：只在检测到**不同账号**登录时整目录删除，重新全量同步
+ * 的代价由真正需要隔离的场景付。
+ *
+ * 时序约束：必须发生在 initSDK 之前（SDK 未持文件句柄）。in-process 切号时
+ * logout 已把 initPromise 置空，正好满足；若 SDK 意外仍在运行则**中止本次
+ * 登录**且不转移 owner 登记（review 修复：带着别人库继续登录正是要堵的洞）。
+ * 首次升级（无登记）只登记不删。
+ *
+ * 返回值 = 是否可以安全继续登录。review 修复（P1）：删库失败（DB 被锁 /
+ * 文件系统错误）时旧账号的聊天库还在磁盘上 —— 继续登录会让新账号打开上一个
+ * 账号的本地库，把「清理失败」直接变成隐私泄漏。此时中止登录、不转移 owner，
+ * 下次登录重试清理。
+ */
+/**
+ * owner 标记的非可逆哈希（FNV-1a 32bit ×2 轮，十六进制）。round 2 review：
+ * MMKV 里存裸 IM userID 会让「退出并移除账号」之后仍留下一个可读的账号
+ * 标识符；哈希后仅可做同号比对，不可反推。仅用于相等判断，无需抗碰撞强度。
+ */
+function hashOwnerKey(imUserID: string): string {
+  let h1 = 0x811c9dc5;
+  let h2 = 0x811c9dc5;
+  for (let i = 0; i < imUserID.length; i += 1) {
+    const c = imUserID.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
+    h2 = Math.imul(h2 ^ ((c << 1) | 1), 0x01000193) >>> 0;
+  }
+  return `v1:${h1.toString(16)}${h2.toString(16)}`;
+}
+
+async function wipeStaleOpenIMDataOnAccountChange(
+  imUserID: string,
+): Promise<boolean> {
+  try {
+    const stored = storage.getString(OPENIM_DATA_OWNER_KEY);
+    const hashed = hashOwnerKey(imUserID);
+    // 兼容早期构建写过的裸 id：视为同号并就地升级成哈希格式。
+    if (stored === hashed || stored === imUserID) {
+      if (stored !== hashed) storage.set(OPENIM_DATA_OWNER_KEY, hashed);
+      return true;
+    }
+    const RNFS = loadNativeFS();
+    const dataDir = await getOpenIMDataDir();
+    const dataDirExists = await RNFS.exists(dataDir);
+    // round 2 review（P1）：无登记但目录已存在 = 升级安装前留下的**无主库**。
+    // 上一位用户可能在升级前已登出 —— 共享设备上第一个登录的人不该继承
+    // 别人的聊天库。无主 + 有库同样走清除；只有「无登记且无库」（全新安装）
+    // 才纯登记。
+    // 走到这里 = 登记不属于当前账号（别人的 / 无主）。目录存在即为陈旧数据。
+    const staleDataPresent = dataDirExists;
+    if (staleDataPresent && initPromise) {
+      if (isDev) {
+        console.warn(
+          '[openim] stale chat data present but SDK is initialized; aborting login until clean teardown',
+        );
+      }
+      return false;
+    }
+    if (staleDataPresent) {
+      // unlink 前先 unInitSDK —— logout 曾被拒绝时 native 侧可能仍持有 DB
+      // 句柄，在活 SDK 下删库正是会造成损坏的场景。round 2：只有「本就未
+      // 初始化」类报错可以放行；真实拆除失败必须中止（句柄可能还被握着）。
+      try {
+        await OpenIMSDK.unInitSDK();
+      } catch (uninitError) {
+        const message =
+          uninitError instanceof Error
+            ? uninitError.message
+            : String(uninitError ?? '');
+        const benign =
+          isOpenIMResourceNotLoadedError(uninitError) ||
+          /not\s*init/i.test(message);
+        if (!benign) {
+          reportError(uninitError, { operation: 'openim', kind: 'unInit' });
+          return false;
+        }
+      }
+      initPromise = null;
+      await RNFS.unlink(dataDir);
+    }
+    storage.set(OPENIM_DATA_OWNER_KEY, hashed);
+    return true;
+  } catch (error) {
+    if (isDev) {
+      console.warn('[openim] stale data wipe on account change failed', error);
+    }
+    reportError(error, { operation: 'openim', kind: 'accountDataWipe' });
+    return false;
+  }
+}
+
 /** 是否为 OpenIM 的 10004「资源未加载」错误 —— 僵尸登录态的特征。 */
 function isOpenIMResourceNotLoadedError(error: unknown): boolean {
   const code = (error as { code?: number })?.code;
@@ -219,7 +332,11 @@ async function isOpenIMSessionResourceLoaded(): Promise<boolean> {
  * 登录 OpenIM。
  * 登录前先确保 SDK 已初始化；失败时重置 connecting 状态，防止 store 卡死。
  */
-export async function loginToOpenIM(userID: string, imToken: string) {
+export async function loginToOpenIM(
+  userID: string,
+  imToken: string,
+  options: { forceRelogin?: boolean } = {},
+) {
   if (!imToken || !isNativeIMSupported()) {
     if (!isNativeIMSupported()) {
       useIMStore.getState().setError(getUnsupportedPlatformMessage());
@@ -231,15 +348,38 @@ export async function loginToOpenIM(userID: string, imToken: string) {
     if (logoutPromise) {
       await logoutPromise;
     }
-    await ensureOpenIMInitialized();
     const imUserID = toImUserId(userID);
+    // 换号检测必须在 initSDK 之前（#96）：SDK 还没持有本地库句柄时删目录才安全。
+    const wipeSafe = await wipeStaleOpenIMDataOnAccountChange(imUserID);
+    if (!wipeSafe) {
+      // review 修复（P1）：上一账号的库没清掉就不给新账号开门。
+      // round 2：抛错而不是 return false —— SessionBootstrap / token-recovery
+      // 只对异常记「回前台重试」欠账；静默 false 会被当成功清掉欠账，
+      // IM 从此断连到重启。
+      useIMStore.getState().setConnecting(false);
+      useIMStore
+        .getState()
+        .setError('本地聊天数据清理失败，请重启应用后重试');
+      throw new Error('openim stale-data wipe failed; login aborted');
+    }
+    await ensureOpenIMInitialized();
     useIMStore.getState().setCurrentUserID(imUserID);
     useIMStore.getState().setError(null);
 
     // Hot reload / 重装后 native SDK 进程通常还活着，重复 login 会被 OpenIM 拒成
     // 10102 "User has logged in repeatedly"。先查状态，已登录就复用。
     const status = await OpenIMSDK.getLoginStatus().catch(() => LoginStatus.Logout);
-    if (status === LoginStatus.Logged) {
+    if (status === LoginStatus.Logged && options.forceRelogin) {
+      // token 恢复路径（review 修复 P1）：SDK 仍自报 Logged，但手里的 token 已被
+      // 服务端拒绝 —— 复用快捷会「成功返回」却让 SDK 继续拿着死 token 收发全断。
+      // 先 logout 拆干净（失败不阻断：僵尸态下 login 自会失败并走恢复重试），
+      // 落到下面用新 token 干净重登。
+      try {
+        await OpenIMSDK.logout();
+      } catch (error) {
+        reportError(error, { operation: 'openim', kind: 'forceReloginLogout' });
+      }
+    } else if (status === LoginStatus.Logged) {
       // 但「自报 Logged」不等于资源还在：hot-reload / devicectl 覆盖重装后，SDK 常
       // 停在「已登录但资源已卸载」的僵尸态 —— getLoginStatus 仍回 Logged，可任何真实
       // 调用都抛 10004，会话列表被拉空。探针确认资源是否真的可用。
@@ -294,10 +434,19 @@ export async function loginToOpenIM(userID: string, imToken: string) {
   } catch (error) {
     // 10102 = 重复登录。代表 native SDK 已经持有有效会话（hot reload 常见），
     // 直接当作登录成功，避免 SessionBootstrap 把它当真正的失败丢出来。
+    // round 2 review：forceRelogin（token 恢复）模式例外 —— 此时「已持有的
+    // 会话」正拿着一枚被服务端拒绝的死 token（强制 logout 刚刚失败过），
+    // 把 10102 当成功会清掉恢复欠账、消息保持全断。按失败抛出，恢复层
+    // 记欠账、回前台重试（届时僵尸自愈路径可再拆一次）。
     const code = (error as { code?: number })?.code;
     const msg =
       error instanceof Error ? error.message : String(error ?? '');
     if (code === 10102 || msg.includes('User has logged in repeatedly')) {
+      if (options.forceRelogin) {
+        useIMStore.getState().setConnecting(false);
+        reportError(error, { operation: 'openim', kind: 'forceReloginDup' });
+        throw error;
+      }
       useIMStore.getState().setConnecting(false);
       useIMStore.getState().setConnected(true);
       return true;
@@ -328,7 +477,9 @@ function finalizeIMTeardown() {
   useIMStore.getState().reset();
 }
 
-async function performLogoutFromOpenIM() {
+async function performLogoutFromOpenIM(
+  options: { forceNative?: boolean } = {},
+) {
   if (!isNativeIMSupported() || !initPromise) {
     finalizeIMTeardown();
     return;
@@ -337,7 +488,10 @@ async function performLogoutFromOpenIM() {
   // SDK 已初始化但未连接（登录还在进行 / 登录失败 / 已断开）时，没有可登出的会话，
   // 直接 OpenIMSDK.logout() 会报 10004「Resource initialization incomplete」。
   // 此时跳过 SDK logout、只清本地状态并重置 initPromise（下次登录会重新 initSDK）。
-  if (!useIMStore.getState().connected) {
+  // round 3 review：forceNative 例外 —— token 恢复的陈旧登录拆除发生在
+  // login 刚返回、onConnectSuccess 还没翻 connected 的窗口里，跳过
+  // SDK.logout 会把 native 侧留在旧用户的登录态上（10004 之类报错无害，吞）。
+  if (!useIMStore.getState().connected && !options.forceNative) {
     finalizeIMTeardown();
     return;
   }
@@ -351,17 +505,27 @@ async function performLogoutFromOpenIM() {
       console.warn('[openim] SDK logout failed (local state still reset)', err);
     }
     reportError(err, { operation: 'openim', kind: 'logout' });
+    // review 修复：logout 被拒 ≠ native 已释放 DB 句柄。unInit 强制拆除后再
+    // 清本地单例 —— 否则 initPromise 置空会让下次换号 wipe 误判「无活 SDK」，
+    // 在句柄仍被持有时删库（正是要避免的损坏场景）。
+    try {
+      await OpenIMSDK.unInitSDK();
+    } catch (uninitErr) {
+      reportError(uninitErr, { operation: 'openim', kind: 'unInit' });
+    }
   } finally {
     finalizeIMTeardown();
   }
 }
 
-export function logoutFromOpenIM(): Promise<void> {
+export function logoutFromOpenIM(
+  options: { forceNative?: boolean } = {},
+): Promise<void> {
   if (logoutPromise) {
     return logoutPromise;
   }
 
-  const operation = performLogoutFromOpenIM();
+  const operation = performLogoutFromOpenIM(options);
   let trackedOperation: Promise<void>;
   trackedOperation = operation.finally(() => {
     if (logoutPromise === trackedOperation) {
@@ -1308,6 +1472,8 @@ export async function sendNoteCardToConversation(params: {
  * Used by the "share post to chat" entry and the signup → chat auto flow.
  */
 export const PLAZA_POST_CARD_EXTENSION = 'plaza-post-card-v1';
+// 通话留痕卡片：由 circle_be 服务端在通话终局时下发（#115），客户端只读不发。
+export const CALL_RECORD_EXTENSION = 'call-record-v1';
 
 function plazaPostCardPreview(payload: PlazaPostCardData) {
   return `[活动] ${payload.title}`;

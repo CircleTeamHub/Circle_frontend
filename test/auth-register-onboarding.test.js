@@ -140,8 +140,11 @@ test('session bootstrap reconciles stale onboarding state before starting app se
   // 必须自带一道等价的 —— 否则 onboarding 未完成的用户会被补登进 IM。
   assert.match(
     source,
-    /if \(onboardingPending \|\| !cachedUser \|\| !cachedImToken\) \{\s*return;/,
+    /if \(onboardingPending \|\| !cachedUser\) \{\s*return;/,
   );
+  // 无 imToken 时改走 GET /auth/im-token 换新补登（#85）；
+  // recoverIMSession 内部有同样的 onboarding 门禁，因此门禁语义不变。
+  assert.match(source, /if \(!cachedImToken\) \{\s*await recoverIMSession\(\);/);
   // 且补登只能读快照：拿一份可能过期的 user 回写路由输入，正是「onboarding 被弹回」的老根因。
   const recoverBody = source.slice(
     source.indexOf('const recoverOpenIMLogin'),

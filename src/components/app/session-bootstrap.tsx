@@ -3,6 +3,8 @@ import { AppState } from 'react-native';
 import { fetchCurrentUser } from '@/services/api/auth';
 import { isDefinitiveAuthFailure } from '@/services/api/client';
 import { loginToOpenIM, logoutFromOpenIM } from '@/im/client';
+import { isOpenIMTokenRejectedError } from '@/im/token-errors';
+import { isIMReloginPending, recoverIMSession } from '@/im/token-recovery';
 import {
   clearIMLoginRetryPending,
   isIMLoginRetryPending,
@@ -62,6 +64,14 @@ export function SessionBootstrap() {
       await loginToOpenIM(userId, token);
       clearIMLoginRetryPending();
     } catch (error) {
+      if (isOpenIMTokenRejectedError(error)) {
+        // 缓存的 imToken 已被服务端拒绝（1501-1506）——重试同一枚没有意义，
+        // 改走 GET /auth/im-token 换新 token 原地重登（#83）。欠账由
+        // token-recovery 模块自己记（isIMReloginPending），这里不再重复记。
+        clearIMLoginRetryPending();
+        void recoverIMSession();
+        return;
+      }
       // 留着欠账，等下次回前台重试 —— 那时网络多半已经恢复。
       markIMLoginRetryPending();
       console.warn(
@@ -90,7 +100,14 @@ export function SessionBootstrap() {
     } = useAuthStore.getState();
 
     // onboarding 未完成时成功路径本就不登录 IM，降级路径保持同样的门禁。
-    if (onboardingPending || !cachedUser || !cachedImToken) {
+    if (onboardingPending || !cachedUser) {
+      return;
+    }
+
+    // 快照里根本没有 imToken（#85）：重试缓存路径永远无货可用，
+    // 直接向后端换一枚新 IM token 补登。
+    if (!cachedImToken) {
+      await recoverIMSession();
       return;
     }
 
@@ -140,9 +157,14 @@ export function SessionBootstrap() {
 
       // 冷启动欠下的 IM 登录在这里补。回前台是个现成的信号（网络多半已恢复），
       // 既不用轮询、也不用额外的退避循环 —— 重试次数天然被用户的前台次数兜住。
-      // 健康会话 pending 恒为 false，这里是零成本 no-op。
+      // 健康会话两个 pending 恒为 false，这里是零成本 no-op。
+      // union：补登欠账走 #121 的模块级标记；token-recovery 欠账走 #120 的
+      // isIMReloginPending —— 两套欠账互补（普通登录失败 vs 换 token 失败）。
       if (isIMLoginRetryPending()) {
         void recoverOpenIMLogin();
+      } else if (isIMReloginPending()) {
+        // token-recovery 模块欠的那次（换新 token 失败 / 新 token 登录失败）在这里补。
+        void recoverIMSession();
       }
     });
 
@@ -196,8 +218,11 @@ export function SessionBootstrap() {
           // 降级一整个会话，回前台时会补。
           await ensureOpenIMLogin(user.id, imToken);
         } else {
-          // 没有 imToken，确保 IM 状态已清空
+          // 没有 imToken：先确保 IM 状态干净，再向后端换一枚新 IM token 原地补登
+          // （#85 —— 旧行为是整个会话生命周期都放弃 IM）。不 await：
+          // 换 token 走网络，失败也只是记欠账回前台再补，不该拖慢启动。
           await logoutFromOpenIM();
+          void recoverIMSession();
         }
 
         // 用户面板已就绪后再拉自定义会话分组；失败不阻断主流程（store 内部已 dev-warn）。
