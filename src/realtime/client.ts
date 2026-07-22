@@ -498,6 +498,12 @@ function openRealtimeSocket(normalizedToken: string) {
     }
     useTabBadgeStore.getState().setRealtimeConnected(true);
     void recoverTabBadgeSnapshot({ force: shouldForceRecovery });
+    // review P2：断线重连的空窗里错过的 moments.feed.updated 补不回来 ——
+    // 重连成功后 bump 一次信号，让 feed 组件自查新帖数（app 全程前台、
+    // 无 AppState 变化的场景就靠这条兜住）。
+    if (shouldForceRecovery) {
+      useMomentsFeedSignalStore.getState().bump();
+    }
   };
 
   nextSocket.onmessage = (event) => {

@@ -2221,9 +2221,11 @@
     "accept": "Aceptar",
     "invite": {
       "initiatedBy": "{{name}} inició una llamada de voz grupal",
+      "initiatedByVideo": "{{name}} inició una videollamada grupal",
       "inviteeCount": "{{count}} invitados",
       "groupMember": "Miembro del grupo",
       "initiatedBySingle": "{{name}} te invita a una llamada de voz",
+      "initiatedBySingleVideo": "{{name}} te invita a una videollamada",
       "friend": "Amigo",
       "singleSubtitle": "Llamada de voz"
     },

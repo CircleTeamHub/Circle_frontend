@@ -22,6 +22,15 @@ test('realtime client dispatches moments.feed.updated into the signal store', ()
   );
 });
 
+test('reconnect recovery bumps the signal to cover missed broadcasts (review P2)', () => {
+  const source = read('src/realtime/client.ts');
+  assert.match(
+    source,
+    /if \(shouldForceRecovery\) \{\s*useMomentsFeedSignalStore\.getState\(\)\.bump\(\);/,
+    '重连成功后必须补 bump，一直前台的断连空窗才有兜底',
+  );
+});
+
 test('signal store is a plain in-memory monotonic counter', () => {
   const source = read(
     'src/features/discover/store/use-moments-feed-signal-store.ts',

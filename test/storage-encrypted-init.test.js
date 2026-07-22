@@ -49,11 +49,14 @@ function makeMMKVInstance(calls, { failRecrypt = false } = {}) {
 
 function loadEncryptedInit({
   storedKey = null,
+  markerValue = null,
+  failRecrypt = false,
   openBehavior = () => undefined, // 返回 undefined = 正常；抛错 = 打不开
 } = {}) {
   const calls = [];
   const secure = new Map();
   if (storedKey) secure.set('circle-im-mmkv-encryption-key', storedKey);
+  if (markerValue) secure.set('circle-im-mmkv-active-store', markerValue);
 
   const instances = [];
   const requireShim = (request) => {
@@ -63,10 +66,11 @@ function loadEncryptedInit({
           calls.push(['secure:get', key]);
           return secure.has(key) ? secure.get(key) : null;
         },
-        setItemAsync: async (key, value) => {
-          calls.push(['secure:set', key]);
+        setItemAsync: async (key, value, options) => {
+          calls.push(['secure:set', key, options]);
           secure.set(key, value);
         },
+        AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 'AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY',
       };
     }
     if (request === 'expo-crypto') {
@@ -82,7 +86,7 @@ function loadEncryptedInit({
         createMMKV: (config) => {
           calls.push(['createMMKV', config]);
           openBehavior(config);
-          const instance = makeMMKVInstance(calls);
+          const instance = makeMMKVInstance(calls, { failRecrypt });
           instances.push(instance);
           return instance;
         },
@@ -146,8 +150,10 @@ test('key survives but store will not open: wipes and re-encrypts instead of cra
     storedKey: key,
     openBehavior: (config) => {
       attempts += 1;
-      // 第一次（带密钥）打不开；恢复路径的明文打开放行
-      if (config.encryptionKey) throw new Error('cannot decrypt');
+      // 第一次（主库带密钥）打不开；恢复路径的明文打开放行
+      if (config.id === 'circle-im' && config.encryptionKey) {
+        throw new Error('cannot decrypt');
+      }
     },
   });
 
@@ -162,6 +168,76 @@ test('key survives but store will not open: wipes and re-encrypts instead of cra
   assert.ok(mod.getEncryptedInstance());
 });
 
+test('recrypt failure never leaks a plaintext instance — falls to encrypted recovery store (review P1)', async () => {
+  const key = 'aa'.repeat(32);
+  const { mod, calls, secure } = loadEncryptedInit({
+    storedKey: key,
+    openBehavior: (config) => {
+      // 主库无论带不带密钥都打不开
+      if (config.id === 'circle-im' && config.encryptionKey) {
+        throw new Error('cannot decrypt');
+      }
+    },
+    failRecrypt: true, // 明文重建路径的 recrypt 抛错
+  });
+
+  await mod.initEncryptedStorage();
+
+  // 最终打开的是换 id 的加密恢复库，且落了标记
+  const creates = calls.filter(([op]) => op === 'createMMKV');
+  const last = creates[creates.length - 1][1];
+  assert.equal(last.id, 'circle-im-r1');
+  assert.equal(last.encryptionKey, key);
+  assert.equal(secure.get('circle-im-mmkv-active-store'), 'circle-im-r1');
+  assert.ok(mod.getEncryptedInstance());
+});
+
+test('plaintext rebuild open failure also lands on the recovery store (review P1)', async () => {
+  const key = 'bb'.repeat(32);
+  const { mod, calls } = loadEncryptedInit({
+    storedKey: key,
+    openBehavior: (config) => {
+      // 主库两种打开方式全挂；恢复 id 放行
+      if (config.id === 'circle-im') throw new Error('file corrupted');
+    },
+  });
+
+  await mod.initEncryptedStorage();
+
+  const creates = calls.filter(([op]) => op === 'createMMKV');
+  assert.equal(creates[creates.length - 1][1].id, 'circle-im-r1');
+  assert.ok(mod.getEncryptedInstance());
+});
+
+test('a persisted recovery marker routes straight to the recovery store', async () => {
+  const key = 'cc'.repeat(32);
+  const { mod, calls } = loadEncryptedInit({
+    storedKey: key,
+    markerValue: 'circle-im-r1',
+  });
+
+  await mod.initEncryptedStorage();
+
+  const creates = calls.filter(([op]) => op === 'createMMKV');
+  assert.equal(creates.length, 1);
+  assert.equal(creates[0][1].id, 'circle-im-r1');
+  assert.equal(creates[0][1].encryptionKey, key);
+});
+
+test('encryption key writes pin AFTER_FIRST_UNLOCK accessibility (review P2)', async () => {
+  const { mod, calls } = loadEncryptedInit();
+  await mod.initEncryptedStorage();
+
+  const keySet = calls.find(
+    ([op, key]) => op === 'secure:set' && key === 'circle-im-mmkv-encryption-key',
+  );
+  assert.ok(keySet, 'key must be written');
+  assert.equal(
+    keySet[2]?.keychainAccessible,
+    'AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY',
+  );
+});
+
 test('init is idempotent: concurrent calls share one initialization', async () => {
   const { mod, calls } = loadEncryptedInit({ storedKey: 'ef'.repeat(32) });
 
@@ -172,7 +248,14 @@ test('init is idempotent: concurrent calls share one initialization', async () =
   await mod.initEncryptedStorage();
 
   assert.equal(a, b);
-  assert.equal(calls.filter(([op]) => op === 'secure:get').length, 1);
+  // 每次真实初始化读两个键（密钥 + 恢复标记）；幂等下密钥只读一次
+  assert.equal(
+    calls.filter(
+      ([op, key]) =>
+        op === 'secure:get' && key === 'circle-im-mmkv-encryption-key',
+    ).length,
+    1,
+  );
   assert.equal(calls.filter(([op]) => op === 'createMMKV').length, 1);
 });
 

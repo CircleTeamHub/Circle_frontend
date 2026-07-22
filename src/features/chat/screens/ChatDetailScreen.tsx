@@ -1258,23 +1258,39 @@ export default function ChatDetailScreen() {
   ]);
 
   // #119：通话入口先选类型（语音 / 视频），再走原发起流程。
+  // review P2：选择器打开期间快速连点会叠开多个原生对话框，滞留的选项在首次
+  // 呼叫完成后还能再发一次非幂等 POST —— 弹出前置 ref 门，选择/取消时解除。
+  const callChooserOpenRef = useRef(false);
   const handleStartCall = useCallback(() => {
-    if (callStartingRef.current) return;
-    Alert.alert(t('call.chooseType', { defaultValue: '发起通话' }), undefined, [
-      {
-        text: t('call.typeVoice', { defaultValue: '语音通话' }),
-        onPress: () => {
-          void startCallWithType('AUDIO');
+    if (callStartingRef.current || callChooserOpenRef.current) return;
+    callChooserOpenRef.current = true;
+    const choose = (callType: CallType) => {
+      callChooserOpenRef.current = false;
+      void startCallWithType(callType);
+    };
+    const dismiss = () => {
+      callChooserOpenRef.current = false;
+    };
+    Alert.alert(
+      t('call.chooseType', { defaultValue: '发起通话' }),
+      undefined,
+      [
+        {
+          text: t('call.typeVoice', { defaultValue: '语音通话' }),
+          onPress: () => choose('AUDIO'),
         },
-      },
-      {
-        text: t('call.typeVideo', { defaultValue: '视频通话' }),
-        onPress: () => {
-          void startCallWithType('VIDEO');
+        {
+          text: t('call.typeVideo', { defaultValue: '视频通话' }),
+          onPress: () => choose('VIDEO'),
         },
-      },
-      { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
-    ]);
+        {
+          text: t('common.cancel', { defaultValue: '取消' }),
+          style: 'cancel',
+          onPress: dismiss,
+        },
+      ],
+      { cancelable: true, onDismiss: dismiss },
+    );
   }, [startCallWithType, t]);
 
   const renderItem = useCallback(({ item }: { item: ChatMessage }) => {

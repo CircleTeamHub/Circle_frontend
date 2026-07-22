@@ -2218,9 +2218,11 @@
     "accept": "応答",
     "invite": {
       "initiatedBy": "{{name}} がグループ音声通話を開始しました",
+      "initiatedByVideo": "{{name}} さんがグループビデオ通話を開始",
       "inviteeCount": "{{count}} 人を招待",
       "groupMember": "グループメンバー",
       "initiatedBySingle": "{{name}}さんから音声通話の招待",
+      "initiatedBySingleVideo": "{{name}} さんからビデオ通話の招待",
       "friend": "友だち",
       "singleSubtitle": "音声通話"
     },

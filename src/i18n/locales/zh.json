@@ -2258,9 +2258,11 @@
     "accept": "接听",
     "invite": {
       "initiatedBy": "{{name}} 发起群语音",
+      "initiatedByVideo": "{{name}} 发起群视频",
       "inviteeCount": "{{count}} 人被邀请",
       "groupMember": "群成员",
       "initiatedBySingle": "{{name}} 邀请你语音通话",
+      "initiatedBySingleVideo": "{{name}} 邀请你视频通话",
       "friend": "好友",
       "singleSubtitle": "语音通话"
     },

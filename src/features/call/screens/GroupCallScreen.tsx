@@ -217,6 +217,10 @@ const s = StyleSheet.create({
   },
 });
 
+// 同屏最多渲染的视频瓦片数（本地优先）。9 宫格再往上就该做分页/焦点视图，
+// 当前产品形态（小群）先钉住资源上界。
+const MAX_VIDEO_TILES = 9;
+
 function initials(name: string) {
   const trimmed = name.trim();
   return trimmed.slice(0, 2).toUpperCase() || '?';
@@ -247,13 +251,22 @@ function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
   // 'camera' = livekit-client Track.Source.Camera 的枚举字符串值。
   const cameraTracks = useTracks(['camera']);
   const videoTrackByIdentity = useMemo(() => {
+    // review P2：大群里无上限渲染视频轨会吃满带宽/内存。本地画面优先，
+    // 之后按轨道顺序取到上限；超出者回退头像瓦片（音频不受影响）。
     const map = new Map<string, LiveKitTrackReference>();
-    for (const trackRef of cameraTracks) {
+    const localIdentity = localParticipant.identity;
+    const ordered = [...cameraTracks].sort((a, b) => {
+      if (a.participant.identity === localIdentity) return -1;
+      if (b.participant.identity === localIdentity) return 1;
+      return 0;
+    });
+    for (const trackRef of ordered) {
+      if (map.size >= MAX_VIDEO_TILES) break;
       if (trackRef.publication?.isMuted) continue;
       map.set(trackRef.participant.identity, trackRef);
     }
     return map;
-  }, [cameraTracks]);
+  }, [cameraTracks, localParticipant.identity]);
 
   const participantRows = useMemo(
     () =>

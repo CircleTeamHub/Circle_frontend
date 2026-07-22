@@ -587,23 +587,39 @@ export default function UserProfileScreen() {
   }, [isCurrentUser, profileId, router, setActiveCall, startingCall, t]);
 
   // #119：按钮文案本就是「音视频通话」—— 点击先选语音还是视频。
+  // review P2：与聊天页同款 —— 弹出前置 ref 门防连点叠开选择器。
+  const callChooserOpenRef = useRef(false);
   const handleStartVoiceCall = useCallback(() => {
-    if (callStartingRef.current || startingCall) return;
-    Alert.alert(t('call.chooseType', { defaultValue: '发起通话' }), undefined, [
-      {
-        text: t('call.typeVoice', { defaultValue: '语音通话' }),
-        onPress: () => {
-          void startCallWithType('AUDIO');
+    if (callStartingRef.current || startingCall || callChooserOpenRef.current)
+      return;
+    callChooserOpenRef.current = true;
+    const choose = (callType: CallType) => {
+      callChooserOpenRef.current = false;
+      void startCallWithType(callType);
+    };
+    const dismiss = () => {
+      callChooserOpenRef.current = false;
+    };
+    Alert.alert(
+      t('call.chooseType', { defaultValue: '发起通话' }),
+      undefined,
+      [
+        {
+          text: t('call.typeVoice', { defaultValue: '语音通话' }),
+          onPress: () => choose('AUDIO'),
         },
-      },
-      {
-        text: t('call.typeVideo', { defaultValue: '视频通话' }),
-        onPress: () => {
-          void startCallWithType('VIDEO');
+        {
+          text: t('call.typeVideo', { defaultValue: '视频通话' }),
+          onPress: () => choose('VIDEO'),
         },
-      },
-      { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
-    ]);
+        {
+          text: t('common.cancel', { defaultValue: '取消' }),
+          style: 'cancel',
+          onPress: dismiss,
+        },
+      ],
+      { cancelable: true, onDismiss: dismiss },
+    );
   }, [startCallWithType, startingCall, t]);
 
   const handleOpenChatInfo = useCallback(() => {

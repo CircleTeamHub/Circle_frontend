@@ -83,6 +83,9 @@ export function CallInviteHost() {
   const resetCallState = useCallStore((state) => state.resetCallState);
   const [busyAction, setBusyAction] = useState<'accept' | 'reject' | null>(null);
   const visible = Boolean(incomingCall);
+  // review P1：VIDEO 邀请必须如实标示 —— 接听即发布摄像头，套着语音来电的
+  // 皮会让用户在不知情下开摄像头。
+  const isVideoInvite = incomingCall?.callType === 'VIDEO';
 
   const handleAccept = useCallback(async () => {
     if (!incomingCall || busyAction) return;
@@ -135,31 +138,51 @@ export function CallInviteHost() {
         <View style={[s.sheet, { backgroundColor: colors.surface }]}>
           <View style={s.row}>
             <View style={[s.iconShell, { backgroundColor: colors.primaryLight }]}>
-              <Ionicons name="call" size={24} color={colors.primary} />
+              <Ionicons
+                name={isVideoInvite ? 'videocam' : 'call'}
+                size={24}
+                color={colors.primary}
+              />
             </View>
             <View style={s.copy}>
               {/* round 3 review：1:1 邀请（sessionType='single'）不能顶着
                   「发起群语音 / N 人被邀请」的文案 —— 按会话类型分支。 */}
               <Text style={[s.title, { color: colors.text }]}>
                 {incomingCall?.sessionType === 'single'
-                  ? t('call.invite.initiatedBySingle', {
-                      defaultValue: '{{name}} 邀请你语音通话',
-                      name:
-                        incomingCall?.initiator.nickname ??
-                        t('call.invite.friend', { defaultValue: '好友' }),
-                    })
-                  : t('call.invite.initiatedBy', {
-                      defaultValue: '{{name}} 发起群语音',
-                      name:
-                        incomingCall?.initiator.nickname ??
-                        t('call.invite.groupMember', { defaultValue: '群成员' }),
-                    })}
+                  ? t(
+                      isVideoInvite
+                        ? 'call.invite.initiatedBySingleVideo'
+                        : 'call.invite.initiatedBySingle',
+                      {
+                        defaultValue: isVideoInvite
+                          ? '{{name}} 邀请你视频通话'
+                          : '{{name}} 邀请你语音通话',
+                        name:
+                          incomingCall?.initiator.nickname ??
+                          t('call.invite.friend', { defaultValue: '好友' }),
+                      },
+                    )
+                  : t(
+                      isVideoInvite
+                        ? 'call.invite.initiatedByVideo'
+                        : 'call.invite.initiatedBy',
+                      {
+                        defaultValue: isVideoInvite
+                          ? '{{name}} 发起群视频'
+                          : '{{name}} 发起群语音',
+                        name:
+                          incomingCall?.initiator.nickname ??
+                          t('call.invite.groupMember', { defaultValue: '群成员' }),
+                      },
+                    )}
               </Text>
               <Text style={[s.subtitle, { color: colors.textSecondary }]}>
                 {incomingCall?.sessionType === 'single'
-                  ? t('call.invite.singleSubtitle', {
-                      defaultValue: '语音通话',
-                    })
+                  ? isVideoInvite
+                    ? t('call.typeVideo', { defaultValue: '视频通话' })
+                    : t('call.invite.singleSubtitle', {
+                        defaultValue: '语音通话',
+                      })
                   : t('call.invite.inviteeCount', {
                       defaultValue: '{{count}} 人被邀请',
                       count: incomingCall?.invitees.length ?? 0,
@@ -194,7 +217,11 @@ export function CallInviteHost() {
                 <ActivityIndicator color={colors.white} />
               ) : (
                 <>
-                  <Ionicons name="call" size={18} color={colors.white} />
+                  <Ionicons
+                    name={isVideoInvite ? 'videocam' : 'call'}
+                    size={18}
+                    color={colors.white}
+                  />
                   <Text style={[s.actionText, { color: colors.white }]}>
                     {t('call.accept', { defaultValue: '接听' })}
                   </Text>

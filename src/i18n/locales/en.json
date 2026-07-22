@@ -2261,9 +2261,11 @@
     "accept": "Accept",
     "invite": {
       "initiatedBy": "{{name}} started a group voice call",
+      "initiatedByVideo": "{{name}} started a group video call",
       "inviteeCount": "{{count}} invited",
       "groupMember": "Group member",
       "initiatedBySingle": "{{name}} invites you to a voice call",
+      "initiatedBySingleVideo": "{{name}} invites you to a video call",
       "friend": "Friend",
       "singleSubtitle": "Voice call"
     },

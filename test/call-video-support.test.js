@@ -43,8 +43,9 @@ test('both call entry points offer a voice/video chooser', () => {
     'src/features/user/screens/UserProfileScreen.tsx',
   ]) {
     const source = read(relPath);
-    assert.match(source, /startCallWithType\('AUDIO'\)/, relPath);
-    assert.match(source, /startCallWithType\('VIDEO'\)/, relPath);
+    assert.match(source, /choose\('AUDIO'\)/, relPath);
+    assert.match(source, /choose\('VIDEO'\)/, relPath);
+    assert.match(source, /startCallWithType\(callType\)/, relPath);
     assert.match(source, /call\.chooseType/, relPath);
     assert.doesNotMatch(
       source,
@@ -52,6 +53,57 @@ test('both call entry points offer a voice/video chooser', () => {
       `${relPath} 不允许再写死 AUDIO`,
     );
   }
+});
+
+test('incoming VIDEO invites are labeled as video before the callee accepts (review P1)', () => {
+  const source = read('src/features/call/components/CallInviteHost.tsx');
+
+  assert.match(source, /isVideoInvite = incomingCall\?\.callType === 'VIDEO'/);
+  // 图标与文案都按 callType 分支（接听即发布摄像头，必须先如实标示）
+  assert.match(source, /isVideoInvite \? 'videocam' : 'call'/);
+  assert.match(source, /initiatedBySingleVideo/);
+  assert.match(source, /initiatedByVideo/);
+
+  for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
+    const dict = JSON.parse(read(`src/i18n/locales/${locale}.json`));
+    for (const key of ['initiatedBySingleVideo', 'initiatedByVideo']) {
+      assert.ok(
+        typeof dict.call?.invite?.[key] === 'string' &&
+          dict.call.invite[key].includes('{{name}}'),
+        `${locale}.json call.invite.${key}`,
+      );
+    }
+  }
+});
+
+test('video tile rendering is bounded and local-first (review P2)', () => {
+  const source = read('src/features/call/screens/GroupCallScreen.tsx');
+
+  assert.match(source, /const MAX_VIDEO_TILES = \d+/);
+  assert.match(source, /map\.size >= MAX_VIDEO_TILES/);
+  // 本地画面优先占位
+  assert.match(source, /a\.participant\.identity === localIdentity/);
+});
+
+test('call chooser cannot be stacked by rapid taps (review P2)', () => {
+  for (const relPath of [
+    'src/features/chat/screens/ChatDetailScreen.tsx',
+    'src/features/user/screens/UserProfileScreen.tsx',
+  ]) {
+    const source = read(relPath);
+    assert.match(source, /callChooserOpenRef\.current\) return|callChooserOpenRef\.current\)\n      return/, relPath);
+    assert.match(source, /callChooserOpenRef\.current = true/, relPath);
+    assert.match(source, /onDismiss: dismiss/, relPath);
+  }
+});
+
+test('camera permission copy discloses video calls (review P2)', () => {
+  const appConfig = JSON.parse(read('app.json'));
+  const camera = appConfig.expo.ios.infoPlist.NSCameraUsageDescription;
+  assert.ok(
+    camera.includes('视频通话'),
+    'NSCameraUsageDescription 必须披露视频通话用途',
+  );
 });
 
 test('call type chooser copy exists in all five locales', () => {
