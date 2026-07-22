@@ -41,6 +41,15 @@ function loadCacheModule(rnfsMock) {
         };
       }
 
+      if (request === '@/im/data-dir') {
+        // 与真实实现同构：OpenIM 目录路径的唯一权威（#114）。
+        return {
+          OPENIM_DATA_DIR_NAME: 'openim',
+          getOpenIMDataDirPath: (documentDirectoryPath) =>
+            `${documentDirectoryPath}/openim`,
+        };
+      }
+
       throw new Error(`Unexpected import: ${request}`);
     },
   };

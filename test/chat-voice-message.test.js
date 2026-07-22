@@ -9,6 +9,12 @@ const DEFAULT_CLIENT_STUBS = {
   '@/im/listeners': {
     bindOpenIMListeners: () => () => {},
   },
+  '@/im/token-recovery': {
+    registerIMLoginExecutor: () => {},
+    registerIMLogoutExecutor: () => {},
+    recoverIMSession: async () => false,
+    isIMReloginPending: () => false,
+  },
   '@/services/auth/session': {
     registerLogoutHandler: () => () => {},
   },
@@ -53,6 +59,8 @@ function normalize(value) {
 }
 
 DEFAULT_CLIENT_STUBS['@/im/user-id'] = loadTsModule('src/im/user-id.ts');
+DEFAULT_CLIENT_STUBS['@/im/error-codes'] = loadTsModule('src/im/error-codes.ts');
+DEFAULT_CLIENT_STUBS['@/im/data-dir'] = loadTsModule('src/im/data-dir.ts');
 DEFAULT_CLIENT_STUBS['@/storage'] = {
   storage: { getString: () => undefined, set: () => {}, remove: () => {} },
 };

@@ -1,12 +1,15 @@
 import { create } from 'zustand';
 
+// 注意：这里没有 systemUnread。它曾是「写不读」的死状态，且两条写入路径对语义
+// 各执一词（realtime 推 profile-only 计数，恢复路径写 discover+profile 总和），
+// 谁先渲染它谁踩雷 —— 已整体删除（#103）。tab 徽标读 profileUnread，
+// 发现页铃铛读 discoverUnread。
 type TabBadgeSnapshot = {
   messagesUnread?: number;
   contactsUnread?: number;
   discoverUnread?: number;
   signupUnread?: number;
   profileUnread?: number;
-  systemUnread?: number;
 };
 
 type TabBadgeState = {
@@ -17,7 +20,6 @@ type TabBadgeState = {
   /** 报名管理 unread (signups on my posts). */
   signupUnread: number;
   profileUnread: number;
-  systemUnread: number;
   isRealtimeConnected: boolean;
   lastSyncedAt: number | null;
   setMessagesUnread: (count: number) => void;
@@ -25,7 +27,6 @@ type TabBadgeState = {
   setDiscoverUnread: (count: number) => void;
   setSignupUnread: (count: number) => void;
   setProfileUnread: (count: number) => void;
-  setSystemUnread: (count: number) => void;
   applySnapshot: (snapshot: TabBadgeSnapshot) => void;
   setRealtimeConnected: (connected: boolean) => void;
   reset: () => void;
@@ -37,7 +38,6 @@ const initialState = {
   discoverUnread: 0,
   signupUnread: 0,
   profileUnread: 0,
-  systemUnread: 0,
   isRealtimeConnected: false,
   lastSyncedAt: null,
 };
@@ -49,7 +49,6 @@ export const useTabBadgeStore = create<TabBadgeState>((set) => ({
   setDiscoverUnread: (discoverUnread) => set({ discoverUnread }),
   setSignupUnread: (signupUnread) => set({ signupUnread }),
   setProfileUnread: (profileUnread) => set({ profileUnread }),
-  setSystemUnread: (systemUnread) => set({ systemUnread }),
   applySnapshot: (snapshot) =>
     set((state) => ({
       messagesUnread: snapshot.messagesUnread ?? state.messagesUnread,
@@ -57,7 +56,6 @@ export const useTabBadgeStore = create<TabBadgeState>((set) => ({
       discoverUnread: snapshot.discoverUnread ?? state.discoverUnread,
       signupUnread: snapshot.signupUnread ?? state.signupUnread,
       profileUnread: snapshot.profileUnread ?? state.profileUnread,
-      systemUnread: snapshot.systemUnread ?? state.systemUnread,
       lastSyncedAt: Date.now(),
     })),
   setRealtimeConnected: (isRealtimeConnected) => set({ isRealtimeConnected }),

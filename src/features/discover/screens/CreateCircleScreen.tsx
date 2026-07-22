@@ -127,7 +127,9 @@ export default function CreateCircleScreen() {
         joinFancyRestriction: form.joinFancyRestriction || undefined,
         memberCanPost: form.memberCanPost,
       });
-      await fetchMyCircles();
+      // review 修复：force 绕过在飞合并 —— 否则可能 await 到建圈前出发的
+      // 快照，返回列表页看不到刚建的圈子。
+      await fetchMyCircles({ force: true });
       resetCreateCircleForm();
       router.back();
     } catch (error: unknown) {

@@ -72,6 +72,12 @@ function loadUseAuth(fixtures = {}) {
     '@/services/auth/session': {
       clearLocalSession: fixtures.clearLocalSession ?? (async () => {}),
     },
+    '@/services/api/client': {
+      isDefinitiveAuthFailure:
+        fixtures.isDefinitiveAuthFailure ??
+        ((error) =>
+          Boolean(error) && (error.status === 401 || error.status === 403)),
+    },
     '@/im/client': {
       loginToOpenIM: fixtures.loginToOpenIM ?? (async () => {}),
       logoutFromOpenIM: fixtures.logoutFromOpenIM ?? (async () => {}),
@@ -88,6 +94,11 @@ function loadUseAuth(fixtures = {}) {
     },
     '@/utils/retry': {
       retry: async (fn) => fn(),
+    },
+    '@/im/login-retry-pending': {
+      markIMLoginRetryPending: () => {},
+      clearIMLoginRetryPending: () => {},
+      isIMLoginRetryPending: () => false,
     },
     '@/features/auth/validation': {
       validateLoginForm: () => null,

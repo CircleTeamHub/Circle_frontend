@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
   FlatList,
@@ -106,9 +107,14 @@ export const PlazaFeed: React.FC = () => {
     [myPlazaCircles, shortcutOrderIds],
   );
 
-  useEffect(() => {
-    fetchMyCircles();
-  }, [fetchMyCircles]);
+  // 圈子快捷入口随页面获得焦点刷新（#107）：在别处加入/退出圈子后回到广场，
+  // 不再要等组件重挂载才更新。fetchMyCircles 自带单飞（#106），焦点抖动不会
+  // 放大成并发请求风暴。
+  useFocusEffect(
+    useCallback(() => {
+      void fetchMyCircles();
+    }, [fetchMyCircles]),
+  );
 
   useEffect(() => {
     fetchPlazaPosts(true);
@@ -173,7 +179,7 @@ export const PlazaFeed: React.FC = () => {
             <Text style={{ color: colors.textSecondary, ...Typography.caption }}>
               {myCirclesError}
             </Text>
-            <Pressable onPress={fetchMyCircles}>
+            <Pressable onPress={() => fetchMyCircles()}>
               <Text style={{ color: colors.primary, ...Typography.caption }}>
                 {t('common.retry')}
               </Text>

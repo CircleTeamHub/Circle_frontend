@@ -56,13 +56,10 @@ test('notification center keeps the bell badge in sync when interactive items ar
   const source = readScreen();
 
   assert.match(source, /const previousDiscoverUnread = useTabBadgeStore\.getState\(\)\.discoverUnread/);
-  assert.match(source, /const previousSystemUnread = useTabBadgeStore\.getState\(\)\.systemUnread/);
-  assert.match(source, /const unreadInteractiveCount = previousInteractive\.filter\(\(item\) => !item\.read\)\.length/);
   assert.match(source, /setDiscoverUnread\(0\)/);
-  assert.match(source, /setSystemUnread\(\s*Math\.max\(0, previousSystemUnread - unreadInteractiveCount\),\s*\)/);
   assert.match(source, /setDiscoverUnread\(previousDiscoverUnread\)/);
-  assert.match(source, /setSystemUnread\(previousSystemUnread\)/);
   assert.match(source, /if \(!raw\.read\)/);
   assert.match(source, /Math\.max\(0, badgeStore\.discoverUnread - 1\)/);
-  assert.match(source, /Math\.max\(0, badgeStore\.systemUnread - 1\)/);
+  // systemUnread 已整体删除（#103）——这里不允许再出现对它的读写。
+  assert.doesNotMatch(source, /systemUnread/i);
 });
