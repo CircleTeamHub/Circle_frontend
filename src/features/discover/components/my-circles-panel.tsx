@@ -195,7 +195,7 @@ export const MyCirclesPanel: React.FC = () => {
       ) : myCirclesError && circles.length === 0 ? (
         <View style={s.emptyContainer}>
           <Text style={d.emptyText}>{myCirclesError}</Text>
-          <Pressable style={d.retryButton} onPress={fetchMyCircles}>
+          <Pressable style={d.retryButton} onPress={() => fetchMyCircles()}>
             <Text style={d.retryText}>{t('common.retry')}</Text>
           </Pressable>
         </View>
@@ -208,7 +208,7 @@ export const MyCirclesPanel: React.FC = () => {
           {myCirclesError ? (
             <View style={s.emptyContainer}>
               <Text style={d.emptyText}>{myCirclesError}</Text>
-              <Pressable style={d.retryButton} onPress={fetchMyCircles}>
+              <Pressable style={d.retryButton} onPress={() => fetchMyCircles()}>
                 <Text style={d.retryText}>{t('common.retry')}</Text>
               </Pressable>
             </View>

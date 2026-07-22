@@ -128,29 +128,28 @@ export default function CreateMomentScreen() {
   const canSubmit = content.trim().length > 0;
 
   const handlePickImages = useCallback(async () => {
-    // 显式请求相册权限 + 拒绝态提示（#109）。iOS PHPicker / Android 13+ photo
-    // picker 本身无需权限，requestMediaLibraryPermissionsAsync 在这些平台直接
-    // granted，不多弹窗；老 Android 才真正走系统授权。与 use-change-cover 同模式。
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
+    // review 修复：先开 picker、失败才引导（#109 的门禁反了）。iOS PHPicker /
+    // Android 13+ 系统 photo picker 无需相册权限即可返回所选图片 —— 前置的
+    // 相册权限请求会把「曾拒绝过广义相册权限」的用户挡在一个本不需要权限的
+    // 入口外。仅当 launch 本身失败（老系统真的要权限）时再提示去设置。
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: true,
+        selectionLimit: 9 - images.length,
+        quality: 0.8,
+      });
+      if (result.canceled) return;
+      setImages((prev) => [
+        ...prev,
+        ...result.assets.map((a) => a.uri).slice(0, 9 - prev.length),
+      ]);
+    } catch {
       Alert.alert(
         t('validation.cannotSelectImage'),
         t('validation.albumPermission'),
       );
-      return;
     }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsMultipleSelection: true,
-      selectionLimit: 9 - images.length,
-      quality: 0.8,
-    });
-    if (result.canceled) return;
-    setImages((prev) => [
-      ...prev,
-      ...result.assets.map((a) => a.uri).slice(0, 9 - prev.length),
-    ]);
   }, [images.length, t]);
 
   const handleRemoveImage = useCallback((index: number) => {

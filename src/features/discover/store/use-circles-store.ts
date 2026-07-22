@@ -22,8 +22,10 @@ interface CirclesState {
   myCirclesError: string | null;
   allCirclesError: string | null;
 
-  fetchMyCircles: () => Promise<void>;
-  fetchAllCircles: () => Promise<void>;
+  // force：变更后（建圈/退圈等）绕过在飞合并强制重拉 —— 否则可能 await 到
+  // 变更前就出发的快照。
+  fetchMyCircles: (options?: { force?: boolean }) => Promise<void>;
+  fetchAllCircles: (options?: { force?: boolean }) => Promise<void>;
   // Patch one circle across every cached list (avatar/cover changes from the
   // detail screen, etc.) so lists don't show stale data until the next refetch.
   patchCircle: (id: string, patch: Partial<Circle>) => void;
@@ -35,8 +37,14 @@ interface CirclesState {
 // 拉取，旧实现无防重入（并发 last-write-wins），且 fetchMyCircles 会在 await 前
 // 先清空四个列表 —— 第二个并发调用让已渲染的列表闪空。改为：并发调用合并进同一个
 // Promise；列表不预清，旧数据保留到新响应落地。
+// review 修复（P1）：句柄+代际双守卫。reset()（登出/切号）与 force（变更后
+// 重拉）都推进代际 —— 陈旧在飞请求的响应落地时代际不匹配、写入被丢弃；
+// 否则 A 号的在飞 /circle/my 会把 A 的圈子写进 B 号的 store，建圈后的
+// await 也可能等到建圈前的快照。
 let myCirclesInFlight: Promise<void> | null = null;
 let allCirclesInFlight: Promise<void> | null = null;
+let myCirclesRunSeq = 0;
+let allCirclesRunSeq = 0;
 
 export const useCirclesStore = create<CirclesState>((set) => ({
   joinedCircles: [],
@@ -50,12 +58,17 @@ export const useCirclesStore = create<CirclesState>((set) => ({
   myCirclesError: null,
   allCirclesError: null,
 
-  fetchMyCircles: () => {
-    if (myCirclesInFlight) {
+  fetchMyCircles: (options = {}) => {
+    if (myCirclesInFlight && !options.force) {
       return myCirclesInFlight;
     }
+    const runId = ++myCirclesRunSeq;
+    // 只有最新代际的运行可写 store；reset()/force 之后陈旧响应静默丢弃。
+    const guardedSet: typeof set = (partial) => {
+      if (runId === myCirclesRunSeq) set(partial);
+    };
     const run = (async () => {
-      set({ myCirclesLoading: true, myCirclesError: null });
+      guardedSet({ myCirclesLoading: true, myCirclesError: null });
       try {
         const [joined, created, applied] = await Promise.all([
           fetchMyCircles('joined'),
@@ -72,7 +85,7 @@ export const useCirclesStore = create<CirclesState>((set) => ({
           joinedCircles: joinedCandidates,
         });
 
-        set({
+        guardedSet({
           joinedCircles: joined,
           createdCircles: created,
           managedCircles,
@@ -80,14 +93,14 @@ export const useCirclesStore = create<CirclesState>((set) => ({
           myCirclesError: null,
         });
       } catch (error) {
-        set({
+        guardedSet({
           myCirclesError: getApiErrorMessage(
             error,
             '加载圈子列表失败，请稍后重试',
           ),
         });
       } finally {
-        set({ myCirclesLoading: false });
+        guardedSet({ myCirclesLoading: false });
       }
     })().finally(() => {
       if (myCirclesInFlight === run) {
@@ -98,12 +111,16 @@ export const useCirclesStore = create<CirclesState>((set) => ({
     return run;
   },
 
-  fetchAllCircles: () => {
-    if (allCirclesInFlight) {
+  fetchAllCircles: (options = {}) => {
+    if (allCirclesInFlight && !options.force) {
       return allCirclesInFlight;
     }
+    const runId = ++allCirclesRunSeq;
+    const guardedSet: typeof set = (partial) => {
+      if (runId === allCirclesRunSeq) set(partial);
+    };
     const run = (async () => {
-      set({ allCirclesLoading: true, allCirclesError: null });
+      guardedSet({ allCirclesLoading: true, allCirclesError: null });
       try {
         const result = await fetchCircles({ limit: ALL_CIRCLES_LIMIT });
         if (result.total > result.items.length) {
@@ -113,20 +130,20 @@ export const useCirclesStore = create<CirclesState>((set) => ({
             limit: ALL_CIRCLES_LIMIT,
           });
         }
-        set({
+        guardedSet({
           allCircles: result.items,
           allCirclesTotal: result.total,
           allCirclesError: null,
         });
       } catch (error) {
-        set({
+        guardedSet({
           allCirclesError: getApiErrorMessage(
             error,
             '加载圈子筛选失败，请稍后重试',
           ),
         });
       } finally {
-        set({ allCirclesLoading: false });
+        guardedSet({ allCirclesLoading: false });
       }
     })().finally(() => {
       if (allCirclesInFlight === run) {
@@ -165,7 +182,14 @@ export const useCirclesStore = create<CirclesState>((set) => ({
       };
     }),
 
-  reset: () =>
+  reset: () => {
+    // review 修复（P1）：登出/切号必须让在飞请求整体失效 —— 推进代际使其
+    // 落地写入被丢弃，并清句柄让下一个会话的 fetch 重新起飞（而不是复用
+    // 上一个账号的在飞请求）。
+    myCirclesRunSeq += 1;
+    allCirclesRunSeq += 1;
+    myCirclesInFlight = null;
+    allCirclesInFlight = null;
     set({
       joinedCircles: [],
       createdCircles: [],
@@ -177,5 +201,6 @@ export const useCirclesStore = create<CirclesState>((set) => ({
       allCirclesLoading: false,
       myCirclesError: null,
       allCirclesError: null,
-    }),
+    });
+  },
 }));

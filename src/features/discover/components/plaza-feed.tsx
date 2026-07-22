@@ -179,7 +179,7 @@ export const PlazaFeed: React.FC = () => {
             <Text style={{ color: colors.textSecondary, ...Typography.caption }}>
               {myCirclesError}
             </Text>
-            <Pressable onPress={fetchMyCircles}>
+            <Pressable onPress={() => fetchMyCircles()}>
               <Text style={{ color: colors.primary, ...Typography.caption }}>
                 {t('common.retry')}
               </Text>

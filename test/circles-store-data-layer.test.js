@@ -145,12 +145,99 @@ test('广场圈子快捷入口随焦点刷新 (#107)', () => {
   assert.doesNotMatch(feed, /useEffect\(\(\) => \{\s*fetchMyCircles\(\);\s*\}, \[fetchMyCircles\]\)/);
 });
 
-test('发朋友圈：九图并发上传 cap=3 且显式请求相册权限 (#108 #109)', () => {
+test('发朋友圈：九图并发上传 cap=3；picker 先开、失败才引导 (#108, review 修复)', () => {
   const screen = read('src/features/discover/screens/CreateMomentScreen.tsx');
   assert.match(screen, /mapWithConcurrency\(images, 3,/);
   assert.doesNotMatch(screen, /for \(const uri of images\)/);
-  assert.match(screen, /requestMediaLibraryPermissionsAsync\(\)/);
-  assert.match(screen, /validation\.albumPermission/);
+  // review 修复：iOS PHPicker / Android 13+ 系统 picker 无需相册权限 ——
+  // 前置权限门禁会把「拒绝过广义相册权限」的用户挡在不需要权限的入口外。
+  // 直接 launch；仅 launch 失败（老系统真需要权限）才提示。
+  assert.doesNotMatch(screen, /requestMediaLibraryPermissionsAsync/);
+  const picker = screen.slice(
+    screen.indexOf('const handlePickImages'),
+    screen.indexOf('const handleRemoveImage'),
+  );
+  assert.match(picker, /launchImageLibraryAsync/);
+  // 失败路径仍引导权限设置文案
+  assert.match(picker, /catch[\s\S]*validation\.albumPermission/);
   // 上传结果保序：uploadedUrls 从 outcomes 过滤而来
   assert.match(screen, /outcomes\.filter\(/);
+});
+
+test('圈子单飞按会话/变更作用域失效 (review P1)', async () => {
+  const gate = deferred();
+  let sessionUser = 'A';
+  const { mod, calls } = loadCirclesStore({
+    fetchMyCirclesImpl: async (kind) => {
+      const owner = sessionUser; // 请求发起时归属的会话
+      await gate.promise;
+      if (kind === 'joined' && owner === 'A')
+        return [{ id: 'stale-a', name: 'A 的圈子', myRole: 'MEMBER' }];
+      return [];
+    },
+  });
+  const store = mod.useCirclesStore;
+
+  // A 会话拉取在飞
+  const staleRun = store.getState().fetchMyCircles();
+  assert.equal(calls.my.length, 3);
+
+  // 登出/切号：reset 必须清句柄 + 使在飞写入失效
+  store.getState().reset();
+  sessionUser = 'B';
+
+  // B 会话的拉取不能复用 A 的在飞请求（句柄已清 → 重新起飞）
+  const freshRun = store.getState().fetchMyCircles();
+  assert.equal(calls.my.length, 6);
+
+  // 双方响应都落地后：A 的写入被代际守卫丢弃，B 的 store 不含 A 的圈子
+  gate.resolve();
+  await staleRun;
+  await freshRun;
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(store.getState().joinedCircles)),
+    [],
+  );
+});
+
+test('force 拉取绕过在飞合并（建圈后强制重拉）(review P1)', async () => {
+  const gate = deferred();
+  let batch = 0;
+  const { mod, calls } = loadCirclesStore({
+    fetchMyCirclesImpl: async (kind) => {
+      const myBatch = batch;
+      await gate.promise;
+      if (kind === 'joined') {
+        return myBatch === 0
+          ? [{ id: 'pre-create', name: '旧快照', myRole: 'MEMBER' }]
+          : [{ id: 'post-create', name: '含新圈子', myRole: 'MEMBER' }];
+      }
+      return [];
+    },
+  });
+  const store = mod.useCirclesStore;
+
+  // 变更前出发的普通拉取在飞
+  const staleRun = store.getState().fetchMyCircles();
+  assert.equal(calls.my.length, 3);
+
+  // 建圈成功后 force 重拉：不合并进旧在飞
+  batch = 1;
+  const forcedRun = store.getState().fetchMyCircles({ force: true });
+  assert.equal(calls.my.length, 6);
+
+  gate.resolve();
+  await Promise.all([staleRun, forcedRun]);
+  // 最终以 force 批次为准（旧快照写入被代际守卫压掉；即便旧响应后落地也一样）
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(store.getState().joinedCircles)).map(
+      (c) => c.id,
+    ),
+    ['post-create'],
+  );
+  // CreateCircleScreen 的建圈后调用已带 force
+  const createScreen = read(
+    'src/features/discover/screens/CreateCircleScreen.tsx',
+  );
+  assert.match(createScreen, /fetchMyCircles\(\{ force: true \}\)/);
 });
