@@ -350,6 +350,35 @@ export function useAuth() {
         } else {
           // 瞬时失败：目标账号 token 已乐观激活（上面 setSession），与冷启动
           // 同哲学 —— 带着快照进 app，后续请求自然重试；账号列表保持完整。
+          // review 修复①：/auth/me 的 401 前置续期可能已轮换 token —— 降级
+          // 进入前把 auth store 里的最新值写回账号列表，否则切走再切回会拿
+          // 旧 refreshToken 撞 401，把一个好账号误判成死账号移除。
+          const { accessToken, refreshToken, imToken } =
+            useAuthStore.getState();
+          if (accessToken && refreshToken) {
+            useKnownAccountsStore.getState().upsertAccount({
+              user: account.user,
+              accessToken,
+              refreshToken,
+              imToken: imToken ?? null,
+              updatedAt: Date.now(),
+            });
+          }
+          // review 修复②：clearLocalSession 已把 OpenIM 登出，而 setSession
+          // 置 isLoading=false 后 SessionBootstrap 不再补 IM 登录 —— 降级进入
+          // 也要用快照 imToken 尽力重连 + 拉会话分组；失败走 token-recovery
+          // 的回前台欠账路径，不阻塞导航。
+          if (imToken) {
+            try {
+              await loginToOpenIM(account.user.id, imToken);
+            } catch (imError) {
+              console.warn(
+                '[openim] degraded-switch login failed',
+                imError instanceof Error ? imError.message : imError,
+              );
+            }
+            void useMessageGroupsStore.getState().load();
+          }
           useAccountSwitcherStore.getState().close();
           if (isDev) {
             console.warn('[auth] switch account degraded (transient)', switchError);

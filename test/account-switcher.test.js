@@ -77,6 +77,25 @@ test("switch-to-account validates the session and falls back to login on expiry"
   );
 });
 
+test("degraded switch (transient /auth/me failure) keeps rotated tokens and retries IM (review)", () => {
+  const useAuth = read("src/hooks/use-auth.ts");
+
+  // 降级分支（isDefinitiveAuthFailure 为 false 的 else 段）
+  const elseBranch = useAuth.slice(
+    useAuth.indexOf("账号列表保持完整"),
+    useAuth.indexOf("router.replace('/(tabs)/messages');", useAuth.indexOf("账号列表保持完整")),
+  );
+  assert.ok(elseBranch.length > 0, "degraded branch exists");
+  // ① 401 前置续期轮换过的 token 必须写回账号列表 —— 否则回切用旧
+  //    refreshToken 撞 401，好账号被误删
+  assert.match(elseBranch, /upsertAccount\(\{[\s\S]*user: account\.user/);
+  assert.match(elseBranch, /updatedAt: Date\.now\(\)/);
+  // ② clearLocalSession 已登出 OpenIM 且 bootstrap 不会再补登 —— 降级进入
+  //    也要尽力 IM 重连 + 拉会话分组
+  assert.match(elseBranch, /loginToOpenIM\(account\.user\.id, imToken\)/);
+  assert.match(elseBranch, /useMessageGroupsStore\.getState\(\)\.load\(\)/);
+});
+
 test("account switcher sheet lists accounts and offers an add-account entry", () => {
   const sheet = read("src/features/profile/components/account-switcher-sheet.tsx");
 
