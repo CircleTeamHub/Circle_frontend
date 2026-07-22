@@ -49,6 +49,66 @@ async function loadCirclesStore() {
   return useCirclesStore;
 }
 
+type PersistedResettableStore = {
+  getState: () => { resetForLogout: () => void };
+  persist?: {
+    clearStorage?: () => Promise<void> | void;
+  };
+};
+
+/**
+ * 账号级持久化 store 的显式清理清单（#97）。
+ *
+ * 决策规则：引用账号数据（conversationID / 圈子 id）的 store 随账号走，登出必清；
+ * 纯设备偏好随设备走，跨账号幸存。当前幸存者及理由：
+ * - circle-im-app-settings          —— 语言/主题等设备设置
+ * - circle-im-notification-feedback —— 设备级通知反馈
+ * - circle-im-circle-notification   —— 只有两个横幅/应用内开关，无账号数据
+ * - circle-im-known-accounts        —— 账号切换器本体，语义就是跨会话
+ * - circle-im-auth                  —— 由上方 persist.clearStorage 单独处理
+ *
+ * 新增持久化 store 时必须把它加进这里或上面的幸存名单 —— 让「随账号还是随设备」
+ * 成为一次显式决定，而不是默认幸存。
+ */
+const ACCOUNT_SCOPED_STORE_LOADERS: (() => Promise<PersistedResettableStore>)[] = [
+  async () =>
+    (await import('@/features/messages/store/use-local-unread-store'))
+      .useLocalUnreadStore,
+  async () =>
+    (await import('@/features/chat/store/use-chat-preferences-store'))
+      .useChatPreferencesStore,
+  async () =>
+    (await import('@/features/discover/store/use-discover-filter-store'))
+      .useDiscoverFilterStore,
+  async () => {
+    const { useCircleShortcutOrderStore } = await import(
+      '@/features/discover/store/use-circle-shortcut-order-store'
+    );
+    // 该 store 已有语义相同的 resetOrder，适配成统一形状而不是改它的公共 API。
+    return {
+      getState: () => ({
+        resetForLogout: () => useCircleShortcutOrderStore.getState().resetOrder(),
+      }),
+      persist: useCircleShortcutOrderStore.persist,
+    };
+  },
+];
+
+async function clearAccountScopedPersistedStores(): Promise<void> {
+  for (const load of ACCOUNT_SCOPED_STORE_LOADERS) {
+    try {
+      const store = await load();
+      // 先重置内存（已水合的状态同样会泄漏），再删持久化 key。
+      store.getState().resetForLogout();
+      await Promise.resolve(store.persist?.clearStorage?.());
+    } catch (err) {
+      if (isDev) {
+        console.warn('[session] account-scoped store clear failed', err);
+      }
+    }
+  }
+}
+
 /**
  * 注册登出 teardown 钩子，返回反注册函数。HMR / 测试场景下可避免 handler 累积。
  * 同一个 handler 重复注册时只会保留一份。
@@ -105,6 +165,10 @@ async function performClearLocalSession(sessionEpoch: number) {
   // 诊断面包屑是进程级内存缓冲，而切换账号不重启 app。不清的话，上一个账号的
   // circleId / conversationID 会搭下一个账号的错误上报离开设备。
   resetDiagnosticBreadcrumbs();
+
+  // 账号级持久化 store（#97）：内存重置 + 删除 MMKV key，防止上一账号的
+  // conversationID / 圈子引用渗进下一个会话的 UI。
+  await clearAccountScopedPersistedStores();
 
   let persistCleared = false;
   try {

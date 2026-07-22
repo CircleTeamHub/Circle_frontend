@@ -301,7 +301,7 @@ export default function SelectFilterCirclesScreen() {
       ) : myCirclesError && myFilterCircles.length === 0 ? (
         <View style={s.emptyContainer}>
           <Text style={d.emptyText}>{myCirclesError}</Text>
-          <Pressable style={d.retryButton} onPress={fetchMyCircles}>
+          <Pressable style={d.retryButton} onPress={() => fetchMyCircles()}>
             <Text style={d.retryText}>{t('common.retry')}</Text>
           </Pressable>
         </View>
