@@ -211,6 +211,10 @@ jobs:
       # 仓库变量注入，校验逻辑与文档同源（validate-android-release.js）。
       - name: Enforce distribution evidence gate
         env:
+          # round 2 review：校验器同时要求 ANDROID_PUBLIC_RELEASE_ENABLED
+          # === 'true'，而 GitHub 的 vars 上下文不会自动注入 runner 环境 ——
+          # 不传的话即使正当启用发布，门禁也会在下载产物前误拦。
+          ANDROID_PUBLIC_RELEASE_ENABLED: ${{ vars.ANDROID_PUBLIC_RELEASE_ENABLED }}
           ANDROID_DISTRIBUTION_APPROVED: ${{ vars.ANDROID_DISTRIBUTION_APPROVED }}
           ANDROID_DISTRIBUTION_EVIDENCE_URL: ${{ vars.ANDROID_DISTRIBUTION_EVIDENCE_URL }}
         run: node .github/scripts/validate-android-release.js distribution

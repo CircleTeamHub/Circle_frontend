@@ -299,9 +299,21 @@ test('Android release workflow publishes the verified APK and reports observable
     /if: \$\{\{ vars\.ANDROID_PUBLIC_RELEASE_ENABLED == 'true' \}\}/,
   );
   // review 修复：公开发布前强制分发证据门禁 —— 单个 ENABLED 变量误设不再
-  // 足以在无证据校验下发出公网 APK。
-  assert.match(publish, /ANDROID_DISTRIBUTION_APPROVED/);
-  assert.match(publish, /ANDROID_DISTRIBUTION_EVIDENCE_URL/);
+  // 足以在无证据校验下发出公网 APK。round 2：三个变量都必须显式映射进
+  // 门禁步骤的 env（vars 上下文不自动注入 runner 环境）。
+  const gateStep = workflowStep(publish, 'Enforce distribution evidence gate');
+  assert.match(
+    gateStep,
+    /ANDROID_PUBLIC_RELEASE_ENABLED: \$\{\{ vars\.ANDROID_PUBLIC_RELEASE_ENABLED \}\}/,
+  );
+  assert.match(
+    gateStep,
+    /ANDROID_DISTRIBUTION_APPROVED: \$\{\{ vars\.ANDROID_DISTRIBUTION_APPROVED \}\}/,
+  );
+  assert.match(
+    gateStep,
+    /ANDROID_DISTRIBUTION_EVIDENCE_URL: \$\{\{ vars\.ANDROID_DISTRIBUTION_EVIDENCE_URL \}\}/,
+  );
   // Free plan 没有 protected environment，环境保护缺位记录在
   // docs/android-release.md「Workflow enforcement status」。
   assert.doesNotMatch(publish, /environment:/);
