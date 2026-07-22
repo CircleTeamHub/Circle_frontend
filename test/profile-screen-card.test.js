@@ -2,19 +2,34 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
+const { pathToFileURL } = require('node:url');
 
 const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
-test('ProfileScreen shows VIP level and credit score in the gold member card', () => {
+test('ProfileScreen shows effective membership label and credit score in the gold member card', async () => {
   const src = read('src/features/profile/screens/ProfileScreen.tsx');
   const memberCardBlock = src.match(/\{\/\* Member card \*\/\}[\s\S]*?<Divider \/>/)?.[0] ?? '';
+  const { getMembershipTierForVipLevel } = await import(
+    pathToFileURL(
+      path.join(__dirname, '..', 'src/features/profile/membership-plans.ts'),
+    ).href
+  );
 
   assert.match(memberCardBlock, /profile\.vipLevel/);
   assert.match(memberCardBlock, /profile\.reputationValue/);
   assert.match(src, /user\?\.vipLevel/);
   assert.match(src, /user\?\.creditScore/);
-  assert.match(memberCardBlock, /VIP \{vipLevel\}/);
+  assert.match(src, /getMembershipTierForVipLevel\(vipLevel\)/);
+  assert.match(src, /const membershipLabel = membershipTier/);
+  assert.match(src, /defaultValue: '普通用户'/);
+  assert.match(src, /super: ["']超级会员["']/);
+  assert.match(memberCardBlock, /\{membershipLabel\}/);
+  assert.doesNotMatch(memberCardBlock, /VIP \{vipLevel\}/);
   assert.match(memberCardBlock, /\{creditScore\}/);
+  assert.equal(getMembershipTierForVipLevel(0), null);
+  assert.equal(getMembershipTierForVipLevel(4), 'super');
+  assert.equal(getMembershipTierForVipLevel(5), 'super');
+  assert.equal(getMembershipTierForVipLevel(99), 'super');
 });
 
 test('ProfileScreen gives VIP and reputation stats independent value-based backgrounds', () => {
