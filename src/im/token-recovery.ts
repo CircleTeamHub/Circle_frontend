@@ -30,7 +30,7 @@ import { toImUserId } from '@/im/user-id';
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 
 type IMLoginExecutor = (userId: string, imToken: string) => Promise<boolean>;
-type IMLogoutExecutor = () => Promise<void>;
+type IMLogoutExecutor = (options?: { forceNative?: boolean }) => Promise<void>;
 
 let imLoginExecutor: IMLoginExecutor | null = null;
 let imLogoutExecutor: IMLogoutExecutor | null = null;
@@ -118,8 +118,9 @@ async function performRecovery(): Promise<boolean> {
   }
 
   // 恢复期间用户登出 / 切号：这枚 token 属于旧会话，丢弃。
+  // round 3 review：不动 reloginPending —— 它此刻可能是 B 会话刚记下的
+  // 欠账（B 的瞬时失败），A 的迟到收尾清掉它会让 B 的前台重试被跳过。
   if (useAuthStore.getState().sessionEpoch !== startEpoch) {
-    reloginPending = false;
     return false;
   }
 
@@ -161,9 +162,12 @@ async function performRecovery(): Promise<boolean> {
       const currentImUser = useIMStore.getState().currentUserID;
       const staleImUser = toImUserId(user.id);
       if (loggedIn && imLogoutExecutor && currentImUser === staleImUser) {
-        await imLogoutExecutor().catch(() => undefined);
+        // round 3：强制原生登出 —— 普通 logout 在 connected 尚未翻真时会
+        // 跳过 SDK.logout 只清本地态，native 侧仍以旧用户登录着，B 随后
+        // 会撞上 Logged 状态复用错误会话。
+        await imLogoutExecutor({ forceNative: true }).catch(() => undefined);
       }
-      reloginPending = false;
+      // round 3：欠账不动（可能属于 B 会话）。
       return false;
     }
     reloginPending = !loggedIn;

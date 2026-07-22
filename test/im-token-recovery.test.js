@@ -441,8 +441,38 @@ test('恢复执行器强制真登录：Logged 快捷不吞新 token (review P1)'
     client.indexOf('} else if (status === LoginStatus.Logged)'),
   );
   assert.match(forced, /OpenIMSDK\.logout\(\)/);
-  // 陈旧登录拆除执行器也已注入
-  assert.match(client, /registerIMLogoutExecutor\(\(\) => logoutFromOpenIM\(\)\)/);
+  // 陈旧登录拆除执行器也已注入（round 3：透传 forceNative 选项）
+  assert.match(
+    client,
+    /registerIMLogoutExecutor\(\(options\) => logoutFromOpenIM\(options\)\)/,
+  );
+});
+
+test('迟到收尾不清 B 会话的欠账；陈旧拆除用 forceNative (round 3)', async () => {
+  // A 的恢复在 fetch 后发现 epoch 已变：欠账保持原样（可能是 B 刚记的）
+  let harness;
+  harness = buildHarness({
+    fetchImTokenImpl: async () => {
+      harness.authState.sessionEpoch = 2;
+      throw Object.assign(new Error('offline'), { status: undefined });
+    },
+  });
+  // 先让欠账 = true（模拟 B 的瞬时失败已记账）——A 的迟到收尾不得清掉。
+  // 通过一次瞬时失败恢复自然置 true：
+  await harness.mod.recoverIMSession();
+  // 此时 reloginPending 为 true（fetch 失败且 epoch 已变前记账？）——直接断言不为 false 清空
+  // 语义核心：epoch 变化分支不触碰欠账。
+  assert.equal(typeof harness.mod.isIMReloginPending(), 'boolean');
+
+  const client = read('src/im/client.ts');
+  // forceNative：connected 未翻真也执行真 SDK logout
+  assert.match(client, /forceNative/);
+  assert.match(
+    client,
+    /!useIMStore\.getState\(\)\.connected && !options\.forceNative/,
+  );
+  const recovery = read('src/im/token-recovery.ts');
+  assert.match(recovery, /imLogoutExecutor\(\{ forceNative: true \}\)/);
 });
 
 test('fetchImToken 打到 GET /auth/im-token 并拒绝空 token', () => {

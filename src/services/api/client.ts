@@ -560,6 +560,11 @@ export async function apiClient<T>(
         // 带 failureKind 的「请重新登录」，让用户落在干净的登录页而不是报错弹窗。
         assertSessionEpoch(requestSessionEpoch);
         await clearLocalSession(requestSessionEpoch);
+        // round 3 review：clearLocalSession 的 await 期间用户可能已登入新会话
+        //（epoch 前进，clear 对它是 no-op）。此时再抛 auth-retry-failed 会被
+        // 调用方当「当前会话已死」处理（登录路由/清理），伤到新会话 ——
+        // 改抛 sessionChanged，语义是「这只是旧会话的过期回声」。
+        assertSessionEpoch(requestSessionEpoch);
         throw new ApiError(
           i18n.t('common.errors.sessionExpired', {
             defaultValue: '登录已过期，请重新登录',
