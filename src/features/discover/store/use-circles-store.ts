@@ -169,7 +169,12 @@ export const useCirclesStore = create<CirclesState>((set) => ({
       };
     }),
 
-  removeCircle: (id) =>
+  removeCircle: (id) => {
+    // round 2 review：成员关系已变更 —— 变更**前**出发的在飞 /circle/my
+    // 快照必须作废（推进代际 + 清句柄）。否则退圈后返回广场，focus 刷新
+    // 合并进旧在飞请求，把刚退掉的圈子又写回列表。
+    myCirclesRunSeq += 1;
+    myCirclesInFlight = null;
     set((state) => {
       const remove = (list: Circle[]) =>
         list.filter((circle) => circle.id !== id);
@@ -180,7 +185,8 @@ export const useCirclesStore = create<CirclesState>((set) => ({
         appliedCircles: remove(state.appliedCircles),
         allCircles: remove(state.allCircles),
       };
-    }),
+    });
+  },
 
   reset: () => {
     // review 修复（P1）：登出/切号必须让在飞请求整体失效 —— 推进代际使其

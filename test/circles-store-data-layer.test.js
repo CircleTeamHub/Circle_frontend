@@ -200,6 +200,44 @@ test('圈子单飞按会话/变更作用域失效 (review P1)', async () => {
   );
 });
 
+test('removeCircle 使在飞快照作废：退圈后 focus 刷新不再复活旧圈子 (round 2)', async () => {
+  const gate = deferred();
+  let batch = 0;
+  const { mod, calls } = loadCirclesStore({
+    fetchMyCirclesImpl: async (kind) => {
+      const myBatch = batch;
+      await gate.promise;
+      if (kind === 'joined') {
+        return myBatch === 0
+          ? [{ id: 'circle-x', name: '退圈前快照', myRole: 'MEMBER' }]
+          : [];
+      }
+      return [];
+    },
+  });
+  const store = mod.useCirclesStore;
+
+  // 退圈前出发的拉取在飞
+  const staleRun = store.getState().fetchMyCircles();
+  assert.equal(calls.my.length, 3);
+
+  // 用户退圈（CircleDetail 调 removeCircle 后 router.back()）
+  store.getState().removeCircle('circle-x');
+  batch = 1;
+
+  // 返回广场：focus 刷新走默认拉取 —— 句柄已被 removeCircle 清掉，重新起飞
+  const focusRun = store.getState().fetchMyCircles();
+  assert.equal(calls.my.length, 6);
+
+  gate.resolve();
+  await Promise.all([staleRun, focusRun]);
+  // 旧快照写入被代际守卫压掉：刚退的圈子不会复活
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(store.getState().joinedCircles)),
+    [],
+  );
+});
+
 test('force 拉取绕过在飞合并（建圈后强制重拉）(review P1)', async () => {
   const gate = deferred();
   let batch = 0;
