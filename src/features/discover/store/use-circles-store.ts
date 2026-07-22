@@ -184,6 +184,9 @@ export const useCirclesStore = create<CirclesState>((set) => ({
         managedCircles: remove(state.managedCircles),
         appliedCircles: remove(state.appliedCircles),
         allCircles: remove(state.allCircles),
+        // round 3 review：被作废的在飞请求再也走不到它的 guardedSet finally
+        // —— loading 不清会让没有后续 focus 刷新的面板永远转圈。
+        myCirclesLoading: false,
       };
     });
   },

@@ -238,6 +238,32 @@ test('removeCircle 使在飞快照作废：退圈后 focus 刷新不再复活旧
   );
 });
 
+test('退圈失效同时清 loading；join/edit 也走强刷 (round 3)', async () => {
+  const gate = deferred();
+  const { mod } = loadCirclesStore({
+    fetchMyCirclesImpl: async () => {
+      await gate.promise;
+      return [];
+    },
+  });
+  const store = mod.useCirclesStore;
+
+  const run = store.getState().fetchMyCircles();
+  assert.equal(store.getState().myCirclesLoading, true);
+  // 退圈作废在飞：loading 必须立刻清掉（被作废的 run 走不到 finally）
+  store.getState().removeCircle('c-x');
+  assert.equal(store.getState().myCirclesLoading, false);
+  gate.resolve();
+  await run;
+  assert.equal(store.getState().myCirclesLoading, false);
+
+  // join/edit 的调用点带 force
+  const detail = read('src/features/discover/screens/CircleDetailScreen.tsx');
+  assert.match(detail, /fetchMyCircles\(\{ force: true \}\)/);
+  const edit = read('src/features/discover/screens/EditCircleScreen.tsx');
+  assert.match(edit, /fetchMyCircles\(\{ force: true \}\)/);
+});
+
 test('force 拉取绕过在飞合并（建圈后强制重拉）(review P1)', async () => {
   const gate = deferred();
   let batch = 0;
