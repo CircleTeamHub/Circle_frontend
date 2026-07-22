@@ -118,6 +118,8 @@ test('sendVoiceMessage creates an OpenIM sound message from a local recording pa
       default: {
         DocumentDirectoryPath: '/tmp',
         mkdir: async () => undefined,
+          exists: async () => false,
+          unlink: async () => undefined,
       },
     },
     'react-native': {
@@ -212,6 +214,8 @@ test('sendVoiceMessageByUrl creates an OpenIM sound message from a remote URL', 
       default: {
         DocumentDirectoryPath: '/tmp',
         mkdir: async () => undefined,
+          exists: async () => false,
+          unlink: async () => undefined,
       },
     },
     'react-native': {
@@ -313,7 +317,12 @@ function loadClientWithSoundStubs(sdkCalls) {
     },
     'react-native-fs': {
       __esModule: true,
-      default: { DocumentDirectoryPath: '/tmp', mkdir: async () => undefined },
+      default: {
+        DocumentDirectoryPath: '/tmp',
+        mkdir: async () => undefined,
+        exists: async () => false,
+        unlink: async () => undefined,
+      },
     },
     'react-native': { Platform: { OS: 'ios' } },
     '@/constants/config': {

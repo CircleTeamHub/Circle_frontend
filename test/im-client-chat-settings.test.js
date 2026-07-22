@@ -106,6 +106,8 @@ function loadChatSettingsClient(sdkCalls, storeCalls) {
       default: {
         DocumentDirectoryPath: '/tmp',
         mkdir: async () => undefined,
+          exists: async () => false,
+          unlink: async () => undefined,
       },
     },
     'react-native': {
@@ -190,6 +192,8 @@ function loadSearchClient(sdkCalls, searchResult = { totalCount: 0, searchResult
       default: {
         DocumentDirectoryPath: '/tmp',
         mkdir: async () => undefined,
+          exists: async () => false,
+          unlink: async () => undefined,
       },
     },
     'react-native': {
@@ -342,6 +346,8 @@ test('sendFriendCardMessage creates and sends a friend card message to the targe
       default: {
         DocumentDirectoryPath: '/tmp',
         mkdir: async () => undefined,
+          exists: async () => false,
+          unlink: async () => undefined,
       },
     },
     'react-native': {
@@ -449,6 +455,8 @@ test('sendCircleCardMessage stores the circle avatar in card extension as a fall
       default: {
         DocumentDirectoryPath: '/tmp',
         mkdir: async () => undefined,
+          exists: async () => false,
+          unlink: async () => undefined,
       },
     },
     'react-native': {

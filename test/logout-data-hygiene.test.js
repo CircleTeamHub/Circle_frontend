@@ -133,10 +133,15 @@ test('OpenIM 本地聊天库在换号登录时被清除，同号重登保留 (#9
 
   assert.match(client, /OPENIM_DATA_OWNER_KEY = 'circle-im-openim-data-owner'/);
   assert.match(client, /wipeStaleOpenIMDataOnAccountChange/);
-  // 同账号早退：不删库（review 后返回布尔，true = 可继续登录）
-  assert.match(client, /previousOwner === imUserID\) \{\s*return true;/);
+  // round 2：owner 标记存哈希（含裸 id 兼容升级），不在 MMKV 留可读账号标识
+  assert.match(client, /hashOwnerKey\(imUserID\)/);
+  assert.match(client, /stored === hashed \|\| stored === imUserID/);
+  // 同账号早退：不删库（哈希/裸 id 任一命中都算同号）
+  assert.match(client, /if \(stored !== hashed\) storage\.set\(OPENIM_DATA_OWNER_KEY, hashed\)/);
+  // round 2 P1：无主但目录已存在（升级安装）同样按陈旧数据清除
+  assert.match(client, /staleDataPresent = dataDirExists/);
   // SDK 已初始化时不转移 owner 且中止登录（review 修复：带别人库继续登录即泄漏）
-  assert.match(client, /previousOwner && initPromise/);
+  assert.match(client, /staleDataPresent && initPromise/);
   // 真正的删除路径；unlink 前先 unInitSDK 释放句柄（review 修复）
   assert.match(client, /RNFS\.unlink\(dataDir\)/);
   const wipeBody = client.slice(
@@ -149,9 +154,13 @@ test('OpenIM 本地聊天库在换号登录时被清除，同号重登保留 (#9
     'unInitSDK must run before unlink');
   // 清理失败 → 返回 false（调用方中止登录，owner 不转移）
   assert.match(wipeBody, /kind: 'accountDataWipe' \}\);\s*return false;/);
-  // 调用方：false 时设错误并 return false（绝不 ensureOpenIMInitialized）
+  // round 2：unInitSDK 非良性失败（句柄可能仍被握着）也中止，绝不带伤 unlink
+  assert.match(wipeBody, /isOpenIMResourceNotLoadedError\(uninitError\)/);
+  assert.match(wipeBody, /if \(!benign\) \{[\s\S]*?return false;/);
+  // 调用方：清库失败必须**抛错**（bootstrap/token-recovery 只对异常记
+  // 回前台重试欠账；静默 false 会被当成功，IM 断连到重启）
   assert.match(client, /const wipeSafe = await wipeStaleOpenIMDataOnAccountChange/);
-  assert.match(client, /if \(!wipeSafe\)/);
+  assert.match(client, /throw new Error\('openim stale-data wipe failed; login aborted'\)/);
   // logout 被拒后必须 unInit 验证拆除，才轮到 finalizeIMTeardown 清单例
   const logoutBody = client.slice(
     client.indexOf('async function performLogoutFromOpenIM'),
