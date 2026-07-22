@@ -18,6 +18,7 @@ import Animated, {
 import { ActivityIndicator, NativeModules, View } from 'react-native';
 import { rehydrateLanguageFromStorage } from '@/i18n';
 import { migrateFromAsyncStorage } from '@/storage';
+import { excludeMmkvDirFromIOSBackup } from '@/storage/ios-backup-exclusion';
 import { silenceDomBridgeRejection } from '@/utils/silence-dom-bridge-rejection';
 import { ensureLiveKitGlobals } from '@/utils/livekit-globals';
 import { useAuthStore } from '@/stores/authStore';
@@ -131,6 +132,8 @@ function ensureStartupBootstrap(): Promise<void> {
       rehydratePersistedStore('circle notification', useCircleNotificationStore),
     ]);
     rehydrateLanguageFromStorage();
+    // 尽力而为，不 await：MMKV 目录的 iOS 备份排除（#88），失败不影响启动。
+    void excludeMmkvDirFromIOSBackup();
   })();
   return startupBootstrapPromise;
 }
