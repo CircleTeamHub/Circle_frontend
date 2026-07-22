@@ -109,17 +109,7 @@
       "sendCodeFailed": "Failed to send, please try again"
     },
     "hidePassword": "Hide password",
-    "showPassword": "Show password",
-    "resendIn": "Resend in {{seconds}}s",
-    "resetPassword": {
-      "intro": "Enter your registered email and we will send a verification code to reset your password.",
-      "newPasswordPlaceholder": "New password (min 6 chars)",
-      "submit": "Reset password",
-      "submitting": "Resetting…",
-      "successTitle": "Password reset",
-      "successBody": "All devices have been signed out. Please log in with your new password.",
-      "failed": "Reset failed — check the code and try again"
-    }
+    "showPassword": "Show password"
   },
   "onboarding": {
     "profileTitle": "Complete your profile",
@@ -597,15 +587,6 @@
       "signupCount": "{{count}} going",
       "signupEmpty": "Be the first to join",
       "cta": "Join"
-    },
-    "callRecord": {
-      "duration": "Call duration {{duration}}",
-      "canceledBySelf": "Canceled",
-      "canceledByPeer": "Canceled by the other side",
-      "noAnswer": "No answer",
-      "missed": "Missed call",
-      "failed": "Call failed",
-      "ended": "Call ended"
     }
   },
   "contacts": {
@@ -1216,13 +1197,14 @@
     "memberCenter": "Membership",
     "viewMember": "View",
     "wallet": {
-      "purchaseUnavailable": "Points purchases are not available yet. This page currently shows your balance only.",
+      "purchaseUnavailable": "Point purchases are not available yet. This page currently shows your balance only.",
       "title": "My Wallet",
       "confirmRecharge": "Confirm Recharge",
       "balance": "Points Balance",
       "recharge": "Recharge Points",
       "memberAgreement": "《Membership Service Agreement》",
       "loadError": "Failed to load points balance. Please try again later.",
+      "purchaseUnavailable": "Points purchases are not available yet. This page currently shows your balance only.",
       "rechargeSuccess": "Recharged {{points}} points",
       "rechargeError": "Recharge failed. Please try again later.",
       "confirmRechargeMessage": "Recharge {{points}} points ({{price}})?",
@@ -1469,8 +1451,7 @@
       "empty": "No tags yet. Create one before saving."
     },
     "avCallComingSoon": "Voice and video calls are coming soon. Stay tuned.",
-    "unknownUser": "Unnamed user",
-    "callStarting": "Calling…"
+    "unknownUser": "Unnamed user"
   },
   "profileFields": {
     "avatar": "Avatar",
@@ -1942,8 +1923,7 @@
       "edit": "Edit",
       "unlist": "Unlist",
       "relist": "Relist",
-      "more": "More",
-      "restore": "Restore"
+      "more": "More"
     },
     "alerts": {
       "deleteFailedTitle": "Failed to delete",
@@ -1964,9 +1944,7 @@
       "relistFailedTitle": "Failed to relist",
       "unlistFailedTitle": "Failed to unlist",
       "unlistTitle": "Unlist note",
-      "unlistConfirm": "You can view it in Unlisted. Unlisted notes are automatically deleted after one month.",
-      "restoreFailedTitle": "Restore failed",
-      "refreshFailedTitle": "Refresh failed"
+      "unlistConfirm": "You can view it in Unlisted. Unlisted notes are automatically deleted after one month."
     },
     "detail": {
       "loadFailed": "Failed to load note, please try again",
@@ -2039,8 +2017,7 @@
     "empty": {
       "noMatch": "No matching notes",
       "noNotes": "No notes yet",
-      "noUnlisted": "No unlisted notes",
-      "noDeleted": "The recycle bin is empty"
+      "noUnlisted": "No unlisted notes"
     },
     "manageGroups": {
       "cancelEdit": "Cancel editing",
@@ -2135,10 +2112,7 @@
       "empty": "No chats to send to yet",
       "groupHint": "Group",
       "friendHint": "Friend"
-    },
-    "recycleBin": "Recycle bin",
-    "recycleBinTitle": "Recycle bin",
-    "recycleBinHint": "Deleted notes can be restored here."
+    }
   },
   "search": {
     "loadFriendsFailed": "Failed to load friends, please try again",
@@ -2253,9 +2227,7 @@
       "note": "[Note] {{title}}",
       "verification": "[Verify] {{name}} asked you to vouch",
       "default": "[Message]",
-      "plazaPost": "[Event] {{title}}",
-      "voiceCall": "[Voice call]",
-      "videoCall": "[Video call]"
+      "plazaPost": "[Event] {{title}}"
     }
   },
   "permissions": {
@@ -2267,8 +2239,7 @@
   },
   "call": {
     "livekit": {
-      "connected": "LiveKit connected. Audio only for now.",
-      "connectedVideo": "LiveKit connected. Video call in progress."
+      "connected": "LiveKit connected. Audio only for now."
     },
     "status": {
       "reconnecting": "Reconnecting the call…",
@@ -2276,7 +2247,6 @@
       "disconnected": "Call disconnected."
     },
     "groupCallTitle": "Group voice call",
-    "videoCallTitle": "Video call",
     "participantsOnline": "{{count}} online",
     "self": "Me",
     "ended": "The call has ended or the connection info has expired",
@@ -2289,17 +2259,9 @@
     "accept": "Accept",
     "invite": {
       "initiatedBy": "{{name}} started a group voice call",
-      "initiatedByVideo": "{{name}} started a group video call",
       "inviteeCount": "{{count}} invited",
-      "groupMember": "Group member",
-      "initiatedBySingle": "{{name}} invites you to a voice call",
-      "initiatedBySingleVideo": "{{name}} invites you to a video call",
-      "friend": "Friend",
-      "singleSubtitle": "Voice call"
-    },
-    "chooseType": "Start a call",
-    "typeVoice": "Voice call",
-    "typeVideo": "Video call"
+      "groupMember": "Group member"
+    }
   },
   "emojis": {
     "face": "Smileys",
@@ -2334,9 +2296,11 @@
     "COIN_INSUFFICIENT": "Insufficient coins",
     "COIN_AMOUNT_INVALID": "The amount must be greater than zero",
     "MEMBERSHIP_INVALID_LEVEL": "Invalid membership level",
+    "MEMBERSHIP_IDEMPOTENCY_CONFLICT": "This membership request conflicts with an earlier request. Refresh and try again.",
+    "MEMBERSHIP_GROUP_MEMBER_CAPACITY_EXCEEDED": "This group has reached your membership tier's member limit",
+    "MEMBERSHIP_JOINED_CIRCLE_QUOTA_REACHED": "You've reached your membership tier's joined-group limit",
     "MEMBERSHIP_LEVEL_NOT_HIGHER": "Choose a level higher than your current one",
     "MEMBERSHIP_INSUFFICIENT_POINTS": "Not enough points",
-    "MEMBERSHIP_IDEMPOTENCY_KEY_REUSED": "This request ID was already used for a different purchase. Please try again.",
     "CIRCLE_MEMBER_LIMIT": "This circle is full",
     "CIRCLE_ALREADY_MEMBER": "You're already a member",
     "CIRCLE_REQUEST_PENDING": "Your request is already pending",
@@ -2371,6 +2335,7 @@
     "CIRCLE_JOIN_VIP_REQUIRED": "A higher VIP level is required to join this circle",
     "CIRCLE_JOIN_CREDIT_REQUIRED": "A higher credit score is required to join this circle",
     "CIRCLE_JOIN_FANCY_NUMBER_REQUIRED": "A fancy number is required to join this circle",
+    "CIRCLE_JOIN_VIP_RESTRICTION_EXCEEDS_CREATOR": "The join requirement can't exceed the creator's membership tier",
     "CIRCLE_LIST_ITEM_BLANK": "Entries can't be blank",
     "CIRCLE_LIST_ITEM_DUPLICATE": "Entries must be unique",
     "GROUP_NOT_FOUND": "Group not found",
@@ -2394,13 +2359,14 @@
     "TEMP_CHAT_ENDED": "This temporary chat has ended",
     "TEMP_CHAT_FULL": "This chat is full",
     "TEMP_CHAT_CREATOR_ONLY": "Only the creator can end this chat",
-    "TEMP_CHAT_JOIN_FAILED": "Failed to join, please try again",
     "PLAZA_NOT_ACTIVE_MEMBER": "Only active circle members can post",
     "PLAZA_ADMIN_ONLY_POST": "Only admins can post in this circle",
     "PLAZA_NOTE_INVALID": "That note is unavailable or not yours",
     "PLAZA_POST_NOT_FOUND": "Post not found",
     "PLAZA_DELETE_AUTHOR_ONLY": "Only the author can delete this post",
     "PLAZA_INVALID_CURSOR": "This plaza page expired. Please refresh and try again.",
+    "CITY_FILTER_QUOTA_REACHED": "You've reached your membership tier's city filter limit",
+    "PLAZA_VIP_RESTRICTION_EXCEEDS_AUTHOR": "The signup requirement can't exceed the author's membership tier",
     "PLAZA_SIGNUP_SELF": "You can't sign up for your own post",
     "PLAZA_SIGNUP_INELIGIBLE": "You don't meet this post's signup requirements",
     "PLAZA_RECOGNIZE_MIN_ONE": "Select at least one collaborator",
@@ -2439,6 +2405,7 @@
     "FRIEND_TAG_LIMIT_REACHED": "You've reached the friend tag limit",
     "FRIEND_LIMIT_REACHED": "You've reached your friend limit — upgrade for more",
     "NOTE_GROUP_EXISTS": "A group with that name already exists",
+    "NOTE_STORAGE_QUOTA_REACHED": "You've reached your membership tier's note storage limit",
     "NOTE_GROUP_LIMIT": "You've reached the note group limit",
     "NOTE_EXPORT_NO_MEDIA": "No exportable media found",
     "NOTE_EXPORT_MEDIA_TOO_LARGE": "A media file is too large to export",
@@ -2461,21 +2428,17 @@
     "FRIEND_REQUEST_MESSAGE_INVALID": "Message can't be empty and must be 500 characters or fewer",
     "FRIEND_REQUEST_MESSAGE_LIMIT": "You can send up to 5 messages before they reply",
     "NOTE_NOT_FOUND": "Note not found",
-    "NOTE_RESTORE_DUPLICATE": "Another active copy of this collected note already exists.",
     "NOTE_GROUP_NOT_FOUND": "Note group not found",
     "NOTE_IMAGE_TOO_LARGE": "The image is too large to embed",
     "NOTE_SHARE_LINK_INVALID": "This share link is not valid",
-    "NOTE_SHARE_LINK_LIMIT": "Share link limit reached — revoke unused links first",
     "CALL_NOT_INVITED": "You haven't been invited to this call",
     "CALL_NOT_FOUND": "Call not found",
     "CALL_NOT_ALLOWED": "You can't perform this call action",
     "CALL_ALREADY_ACTIVE": "You're already in an active call",
-    "UPLOAD_PAYLOAD_TOO_LARGE": "File is too large to upload",
-    "CALL_NOT_FRIEND": "You can only call friends",
+    "CALL_NOT_FRIEND": "Calls are only available between friends",
     "CONVGROUP_NOT_FOUND": "Group not found",
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "Conversation not found",
     "COLLECTION_NOT_FOUND": "Collection not found",
-    "COLLECTION_LIMIT": "Collection limit reached — remove items you no longer need",
     "ICON_DISPLAY_LIMIT": "You can display at most 5 icons",
     "ICON_INVALID_SYSTEM_SELECTION": "Invalid icon selection",
     "ICON_INVALID_CIRCLE_SELECTION": "Invalid circle icon selection",

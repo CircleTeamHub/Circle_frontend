@@ -557,15 +557,6 @@
       "signupCount": "{{count}}명 참가",
       "signupEmpty": "아직 신청자가 없어요",
       "cta": "신청하기"
-    },
-    "callRecord": {
-      "duration": "통화 시간 {{duration}}",
-      "canceledBySelf": "취소됨",
-      "canceledByPeer": "상대방이 취소했습니다",
-      "noAnswer": "응답 없음",
-      "missed": "부재중 전화",
-      "failed": "통화 연결 실패",
-      "ended": "통화 종료"
     }
   },
   "messages": {
@@ -655,8 +646,7 @@
       "edit": "편집",
       "unlist": "내리기",
       "relist": "올리기",
-      "more": "더보기",
-      "restore": "복원"
+      "more": "더보기"
     },
     "alerts": {
       "deleteFailedTitle": "삭제 실패",
@@ -677,9 +667,7 @@
       "relistFailedTitle": "올리기 실패",
       "unlistFailedTitle": "내리기 실패",
       "unlistTitle": "노트 내리기",
-      "unlistConfirm": "내린 노트는 내림 목록에서 볼 수 있으며 한 달 후 자동 삭제됩니다.",
-      "restoreFailedTitle": "복원 실패",
-      "refreshFailedTitle": "새로고침 실패"
+      "unlistConfirm": "내린 노트는 내림 목록에서 볼 수 있으며 한 달 후 자동 삭제됩니다."
     },
     "detail": {
       "loadFailed": "노트를 불러오지 못했습니다. 다시 시도해 주세요",
@@ -752,8 +740,7 @@
     "empty": {
       "noMatch": "일치하는 노트가 없습니다",
       "noNotes": "아직 노트가 없습니다",
-      "noUnlisted": "내린 노트가 없습니다",
-      "noDeleted": "휴지통이 비어 있습니다"
+      "noUnlisted": "내린 노트가 없습니다"
     },
     "manageGroups": {
       "cancelEdit": "편집 취소",
@@ -848,10 +835,7 @@
       "empty": "보낼 수 있는 채팅이 없어요",
       "groupHint": "그룹",
       "friendHint": "친구"
-    },
-    "recycleBin": "휴지통",
-    "recycleBinTitle": "휴지통",
-    "recycleBinHint": "삭제한 노트를 여기에서 복원할 수 있습니다."
+    }
   },
   "tempChats": {
     "title": "좌석 관리",
@@ -1646,21 +1630,21 @@
       "empty": "아직 태그가 없습니다. 저장하기 전에 하나 만드세요."
     },
     "avCallComingSoon": "음성・영상 통화 기능이 곧 출시됩니다. 기대해 주세요.",
-    "unknownUser": "이름 없는 사용자",
-    "callStarting": "전화 거는 중…"
+    "unknownUser": "이름 없는 사용자"
   },
   "profile": {
     "creditScore": "신용 점수",
     "memberCenter": "멤버십",
     "viewMember": "보기",
     "wallet": {
-      "purchaseUnavailable": "포인트 구매는 아직 지원되지 않습니다. 현재 이 페이지에는 잔액만 표시됩니다.",
+      "purchaseUnavailable": "크레딧 구매는 아직 이용할 수 없습니다. 현재 이 페이지에는 잔액만 표시됩니다.",
       "title": "내 지갑",
       "confirmRecharge": "충전 확인",
       "balance": "크레딧 잔액",
       "recharge": "크레딧 충전",
       "memberAgreement": "회원 서비스 약관",
       "loadError": "크레딧 잔액을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      "purchaseUnavailable": "포인트 구매는 아직 지원되지 않습니다. 현재 이 페이지에는 잔액만 표시됩니다.",
       "rechargeSuccess": "{{points}} 크레딧을 충전했습니다",
       "rechargeError": "충전에 실패했습니다. 잠시 후 다시 시도해 주세요.",
       "confirmRechargeMessage": "{{points}} 크레딧({{price}})을 충전하시겠어요?",
@@ -2029,17 +2013,7 @@
       "sendCodeFailed": "발송에 실패했습니다. 다시 시도해 주세요"
     },
     "hidePassword": "비밀번호 숨기기",
-    "showPassword": "비밀번호 표시",
-    "resendIn": "{{seconds}}초 후 재전송",
-    "resetPassword": {
-      "intro": "가입한 이메일을 입력하면 비밀번호 재설정용 인증 코드를 보내드립니다.",
-      "newPasswordPlaceholder": "새 비밀번호(6자 이상)",
-      "submit": "비밀번호 재설정",
-      "submitting": "재설정 중…",
-      "successTitle": "비밀번호가 재설정되었습니다",
-      "successBody": "모든 기기에서 로그아웃되었습니다. 새 비밀번호로 다시 로그인해 주세요.",
-      "failed": "재설정에 실패했습니다. 코드를 확인하고 다시 시도해 주세요"
-    }
+    "showPassword": "비밀번호 표시"
   },
   "common": {
     "save": "저장",
@@ -2224,8 +2198,7 @@
   },
   "call": {
     "livekit": {
-      "connected": "LiveKit에 연결되었습니다. 현재는 음성만 지원합니다.",
-      "connectedVideo": "LiveKit에 연결되었습니다. 영상 통화 중입니다."
+      "connected": "LiveKit에 연결되었습니다. 현재는 음성만 지원합니다."
     },
     "status": {
       "reconnecting": "통화를 다시 연결하는 중…",
@@ -2233,7 +2206,6 @@
       "disconnected": "통화가 끊겼습니다."
     },
     "groupCallTitle": "그룹 음성 통화",
-    "videoCallTitle": "영상 통화",
     "participantsOnline": "{{count}}명 접속 중",
     "self": "나",
     "ended": "통화가 종료되었거나 연결 정보가 만료되었습니다",
@@ -2246,17 +2218,9 @@
     "accept": "수락",
     "invite": {
       "initiatedBy": "{{name}}님이 그룹 음성 통화를 시작했습니다",
-      "initiatedByVideo": "{{name}} 님이 그룹 영상 통화를 시작했습니다",
       "inviteeCount": "{{count}}명 초대됨",
-      "groupMember": "그룹 멤버",
-      "initiatedBySingle": "{{name}}님이 음성 통화에 초대했습니다",
-      "initiatedBySingleVideo": "{{name}} 님이 영상 통화에 초대했습니다",
-      "friend": "친구",
-      "singleSubtitle": "음성 통화"
-    },
-    "chooseType": "통화 시작",
-    "typeVoice": "음성 통화",
-    "typeVideo": "영상 통화"
+      "groupMember": "그룹 멤버"
+    }
   },
   "im": {
     "time": {
@@ -2286,9 +2250,7 @@
       "note": "[노트] {{title}}",
       "verification": "[인증] {{name}}님이 보증을 요청했습니다",
       "default": "[메시지]",
-      "plazaPost": "[활동] {{title}}",
-      "voiceCall": "[음성 통화]",
-      "videoCall": "[영상 통화]"
+      "plazaPost": "[활동] {{title}}"
     }
   },
   "permissions": {
@@ -2331,9 +2293,11 @@
     "COIN_INSUFFICIENT": "포인트가 부족합니다",
     "COIN_AMOUNT_INVALID": "금액은 0보다 커야 합니다",
     "MEMBERSHIP_INVALID_LEVEL": "잘못된 회원 등급입니다",
+    "MEMBERSHIP_IDEMPOTENCY_CONFLICT": "이 회원 요청이 이전 요청과 충돌합니다. 새로고침 후 다시 시도하세요.",
+    "MEMBERSHIP_GROUP_MEMBER_CAPACITY_EXCEEDED": "이 그룹은 현재 회원 등급의 인원 한도에 도달했습니다",
+    "MEMBERSHIP_JOINED_CIRCLE_QUOTA_REACHED": "현재 회원 등급의 가입 그룹 한도에 도달했습니다",
     "MEMBERSHIP_LEVEL_NOT_HIGHER": "현재보다 높은 등급을 선택하세요",
     "MEMBERSHIP_INSUFFICIENT_POINTS": "포인트가 부족합니다",
-    "MEMBERSHIP_IDEMPOTENCY_KEY_REUSED": "이 요청 ID는 이미 다른 구매에 사용되었습니다. 다시 시도해 주세요.",
     "CIRCLE_MEMBER_LIMIT": "서클 인원이 가득 찼습니다",
     "CIRCLE_ALREADY_MEMBER": "이미 멤버입니다",
     "CIRCLE_REQUEST_PENDING": "이미 신청이 대기 중입니다",
@@ -2368,6 +2332,7 @@
     "CIRCLE_JOIN_VIP_REQUIRED": "이 서클에 가입하려면 더 높은 VIP 등급이 필요합니다",
     "CIRCLE_JOIN_CREDIT_REQUIRED": "이 서클에 가입하려면 더 높은 신용 점수가 필요합니다",
     "CIRCLE_JOIN_FANCY_NUMBER_REQUIRED": "이 서클에 가입하려면 특별 번호가 필요합니다",
+    "CIRCLE_JOIN_VIP_RESTRICTION_EXCEEDS_CREATOR": "가입 조건은 생성자의 회원 등급보다 높게 설정할 수 없습니다",
     "CIRCLE_LIST_ITEM_BLANK": "항목은 비워 둘 수 없습니다",
     "CIRCLE_LIST_ITEM_DUPLICATE": "항목은 중복될 수 없습니다",
     "GROUP_NOT_FOUND": "그룹을 찾을 수 없습니다",
@@ -2391,13 +2356,14 @@
     "TEMP_CHAT_ENDED": "임시 채팅이 종료되었습니다",
     "TEMP_CHAT_FULL": "인원이 가득 찼습니다",
     "TEMP_CHAT_CREATOR_ONLY": "생성자만 종료할 수 있습니다",
-    "TEMP_CHAT_JOIN_FAILED": "참여하지 못했습니다. 다시 시도해 주세요",
     "PLAZA_NOT_ACTIVE_MEMBER": "서클의 활성 멤버만 게시할 수 있습니다",
     "PLAZA_ADMIN_ONLY_POST": "이 서클에서는 관리자만 게시할 수 있습니다",
     "PLAZA_NOTE_INVALID": "해당 노트를 사용할 수 없거나 본인의 것이 아닙니다",
     "PLAZA_POST_NOT_FOUND": "게시물을 찾을 수 없습니다",
     "PLAZA_DELETE_AUTHOR_ONLY": "작성자만 이 게시물을 삭제할 수 있습니다",
     "PLAZA_INVALID_CURSOR": "이 광장 페이지가 만료되었습니다. 새로고침 후 다시 시도하세요.",
+    "CITY_FILTER_QUOTA_REACHED": "현재 회원 등급의 도시 필터 한도에 도달했습니다",
+    "PLAZA_VIP_RESTRICTION_EXCEEDS_AUTHOR": "신청 조건은 작성자의 회원 등급보다 높게 설정할 수 없습니다",
     "PLAZA_SIGNUP_SELF": "자신의 게시물에는 신청할 수 없습니다",
     "PLAZA_SIGNUP_INELIGIBLE": "이 게시물의 신청 요건을 충족하지 않습니다",
     "PLAZA_RECOGNIZE_MIN_ONE": "협업자를 한 명 이상 선택하세요",
@@ -2436,6 +2402,7 @@
     "FRIEND_TAG_LIMIT_REACHED": "친구 태그 개수가 한도에 도달했습니다",
     "FRIEND_LIMIT_REACHED": "친구 수가 한도에 도달했습니다. 멤버십을 업그레이드하면 늘릴 수 있습니다",
     "NOTE_GROUP_EXISTS": "같은 이름의 그룹이 이미 있습니다",
+    "NOTE_STORAGE_QUOTA_REACHED": "현재 회원 등급의 노트 저장 한도에 도달했습니다",
     "NOTE_GROUP_LIMIT": "노트 그룹 개수가 한도에 도달했습니다",
     "NOTE_EXPORT_NO_MEDIA": "내보낼 수 있는 미디어가 없습니다",
     "NOTE_EXPORT_MEDIA_TOO_LARGE": "미디어 파일이 너무 커서 내보낼 수 없습니다",
@@ -2458,21 +2425,17 @@
     "FRIEND_REQUEST_MESSAGE_INVALID": "메시지는 비워 둘 수 없으며 500자 이내여야 합니다",
     "FRIEND_REQUEST_MESSAGE_LIMIT": "상대가 답장하기 전에는 최대 5개의 메시지만 보낼 수 있습니다",
     "NOTE_NOT_FOUND": "노트를 찾을 수 없습니다",
-    "NOTE_RESTORE_DUPLICATE": "이 노트의 다른 소장 사본이 이미 존재합니다.",
     "NOTE_GROUP_NOT_FOUND": "노트 그룹을 찾을 수 없습니다",
     "NOTE_IMAGE_TOO_LARGE": "이미지가 너무 커서 삽입할 수 없습니다",
     "NOTE_SHARE_LINK_INVALID": "유효하지 않은 공유 링크입니다",
-    "NOTE_SHARE_LINK_LIMIT": "공유 링크 한도에 도달했습니다. 사용하지 않는 링크를 먼저 취소해 주세요",
     "CALL_NOT_INVITED": "이 통화에 초대되지 않았습니다",
     "CALL_NOT_FOUND": "통화를 찾을 수 없습니다",
     "CALL_NOT_ALLOWED": "이 통화 작업을 수행할 수 없습니다",
     "CALL_ALREADY_ACTIVE": "이미 진행 중인 통화가 있습니다",
-    "UPLOAD_PAYLOAD_TOO_LARGE": "파일이 너무 커서 업로드할 수 없습니다",
-    "CALL_NOT_FRIEND": "친구와만 통화할 수 있습니다",
+    "CALL_NOT_FRIEND": "통화는 친구 사이에서만 사용할 수 있습니다",
     "CONVGROUP_NOT_FOUND": "그룹을 찾을 수 없습니다",
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "대화를 찾을 수 없습니다",
     "COLLECTION_NOT_FOUND": "컬렉션을 찾을 수 없습니다",
-    "COLLECTION_LIMIT": "컬렉션 한도에 도달했습니다. 필요 없는 항목을 정리해 주세요",
     "ICON_DISPLAY_LIMIT": "아이콘은 최대 5개까지 표시할 수 있습니다",
     "ICON_INVALID_SYSTEM_SELECTION": "잘못된 아이콘 선택입니다",
     "ICON_INVALID_CIRCLE_SELECTION": "잘못된 서클 아이콘 선택입니다",

@@ -109,17 +109,7 @@
       "sendCodeFailed": "发送失败，请重试"
     },
     "hidePassword": "隐藏密码",
-    "showPassword": "显示密码",
-    "resendIn": "{{seconds}}s 后重发",
-    "resetPassword": {
-      "intro": "输入注册邮箱，我们会发送验证码用于重置密码。",
-      "newPasswordPlaceholder": "新密码（至少 6 位）",
-      "submit": "重置密码",
-      "submitting": "重置中…",
-      "successTitle": "密码已重置",
-      "successBody": "所有设备已退出登录，请用新密码重新登录。",
-      "failed": "重置失败，请检查验证码后重试"
-    }
+    "showPassword": "显示密码"
   },
   "onboarding": {
     "profileTitle": "完善个人资料",
@@ -596,15 +586,6 @@
       "signupCount": "{{count}} 人已报名",
       "signupEmpty": "还没有人报名，来当第一个",
       "cta": "去报名"
-    },
-    "callRecord": {
-      "duration": "通话时长 {{duration}}",
-      "canceledBySelf": "已取消",
-      "canceledByPeer": "对方已取消",
-      "noAnswer": "对方未接听",
-      "missed": "未接听",
-      "failed": "通话未接通",
-      "ended": "通话已结束"
     }
   },
   "contacts": {
@@ -1220,6 +1201,7 @@
       "recharge": "积分充值",
       "memberAgreement": "《会员服务协议》",
       "loadError": "积分余额加载失败，请稍后重试",
+      "purchaseUnavailable": "积分购买暂未开放。当前页面仅显示余额。",
       "rechargeSuccess": "已充值 {{points}} 积分",
       "rechargeError": "充值失败，请稍后重试",
       "confirmRechargeMessage": "确定要充值 {{points}} 积分（{{price}}）吗？",
@@ -1466,8 +1448,7 @@
       "empty": "还没有标签，先创建一个再保存。"
     },
     "avCallComingSoon": "音视频通话功能即将上线，敬请期待。",
-    "unknownUser": "未命名用户",
-    "callStarting": "拨打中…"
+    "unknownUser": "未命名用户"
   },
   "profileFields": {
     "avatar": "头像",
@@ -1939,8 +1920,7 @@
       "edit": "编辑",
       "unlist": "下架",
       "relist": "上架",
-      "more": "更多",
-      "restore": "恢复"
+      "more": "更多"
     },
     "alerts": {
       "deleteFailedTitle": "删除失败",
@@ -1961,9 +1941,7 @@
       "relistFailedTitle": "上架失败",
       "unlistFailedTitle": "下架失败",
       "unlistTitle": "下架笔记",
-      "unlistConfirm": "下架后可在已下架列表查看，已下架笔记会在一个月后自动删除。",
-      "restoreFailedTitle": "恢复失败",
-      "refreshFailedTitle": "刷新失败"
+      "unlistConfirm": "下架后可在已下架列表查看，已下架笔记会在一个月后自动删除。"
     },
     "detail": {
       "loadFailed": "笔记加载失败，请稍后重试",
@@ -2036,8 +2014,7 @@
     "empty": {
       "noMatch": "没有匹配的笔记",
       "noNotes": "暂无笔记",
-      "noUnlisted": "暂无已下架笔记",
-      "noDeleted": "回收站是空的"
+      "noUnlisted": "暂无已下架笔记"
     },
     "manageGroups": {
       "cancelEdit": "取消编辑",
@@ -2132,10 +2109,7 @@
       "empty": "暂无可发送的聊天对象",
       "groupHint": "群聊",
       "friendHint": "好友"
-    },
-    "recycleBin": "回收站",
-    "recycleBinTitle": "回收站",
-    "recycleBinHint": "已删除的笔记可在这里恢复。"
+    }
   },
   "search": {
     "loadFriendsFailed": "好友列表加载失败，请稍后重试",
@@ -2250,9 +2224,7 @@
       "note": "[笔记] {{title}}",
       "verification": "[验证] {{name}} 邀请你担保",
       "default": "[消息]",
-      "plazaPost": "[活动] {{title}}",
-      "voiceCall": "[语音通话]",
-      "videoCall": "[视频通话]"
+      "plazaPost": "[活动] {{title}}"
     }
   },
   "permissions": {
@@ -2264,8 +2236,7 @@
   },
   "call": {
     "livekit": {
-      "connected": "LiveKit 已连接，当前仅开放音频。",
-      "connectedVideo": "LiveKit 已连接，视频通话进行中。"
+      "connected": "LiveKit 已连接，当前仅开放音频。"
     },
     "status": {
       "reconnecting": "正在恢复通话连接...",
@@ -2273,7 +2244,6 @@
       "disconnected": "通话连接已断开。"
     },
     "groupCallTitle": "群语音通话",
-    "videoCallTitle": "视频通话",
     "participantsOnline": "{{count}} 人在线",
     "self": "我",
     "ended": "通话已结束或连接信息已失效",
@@ -2286,17 +2256,9 @@
     "accept": "接听",
     "invite": {
       "initiatedBy": "{{name}} 发起群语音",
-      "initiatedByVideo": "{{name}} 发起群视频",
       "inviteeCount": "{{count}} 人被邀请",
-      "groupMember": "群成员",
-      "initiatedBySingle": "{{name}} 邀请你语音通话",
-      "initiatedBySingleVideo": "{{name}} 邀请你视频通话",
-      "friend": "好友",
-      "singleSubtitle": "语音通话"
-    },
-    "chooseType": "发起通话",
-    "typeVoice": "语音通话",
-    "typeVideo": "视频通话"
+      "groupMember": "群成员"
+    }
   },
   "emojis": {
     "face": "表情",
@@ -2331,9 +2293,11 @@
     "COIN_INSUFFICIENT": "积分余额不足",
     "COIN_AMOUNT_INVALID": "转账数量必须大于 0",
     "MEMBERSHIP_INVALID_LEVEL": "会员等级无效",
+    "MEMBERSHIP_IDEMPOTENCY_CONFLICT": "本次会员操作与已有请求冲突，请刷新后重试",
+    "MEMBERSHIP_GROUP_MEMBER_CAPACITY_EXCEEDED": "该群已达到当前会员等级的人数上限",
+    "MEMBERSHIP_JOINED_CIRCLE_QUOTA_REACHED": "已达到当前会员等级可加入的群聊上限",
     "MEMBERSHIP_LEVEL_NOT_HIGHER": "请选择高于当前等级的会员",
     "MEMBERSHIP_INSUFFICIENT_POINTS": "积分不足",
-    "MEMBERSHIP_IDEMPOTENCY_KEY_REUSED": "该请求编号已被其他兑换使用，请重试",
     "CIRCLE_MEMBER_LIMIT": "圈子成员已满",
     "CIRCLE_ALREADY_MEMBER": "你已是该圈子成员",
     "CIRCLE_REQUEST_PENDING": "申请已提交，等待处理",
@@ -2368,6 +2332,7 @@
     "CIRCLE_JOIN_VIP_REQUIRED": "加入该圈子需要更高的 VIP 等级",
     "CIRCLE_JOIN_CREDIT_REQUIRED": "加入该圈子需要更高的信用分",
     "CIRCLE_JOIN_FANCY_NUMBER_REQUIRED": "加入该圈子需要靓号",
+    "CIRCLE_JOIN_VIP_RESTRICTION_EXCEEDS_CREATOR": "入圈会员要求不能高于创建者的会员等级",
     "CIRCLE_LIST_ITEM_BLANK": "内容不能为空",
     "CIRCLE_LIST_ITEM_DUPLICATE": "内容不能重复",
     "GROUP_NOT_FOUND": "群不存在",
@@ -2391,13 +2356,14 @@
     "TEMP_CHAT_ENDED": "临时聊天已结束",
     "TEMP_CHAT_FULL": "人数已满",
     "TEMP_CHAT_CREATOR_ONLY": "只有创建者可以结束",
-    "TEMP_CHAT_JOIN_FAILED": "加入失败，请重试",
     "PLAZA_NOT_ACTIVE_MEMBER": "只有圈子活跃成员才能发帖",
     "PLAZA_ADMIN_ONLY_POST": "该圈子仅管理员可以发帖",
     "PLAZA_NOTE_INVALID": "笔记不存在、不可用或不属于你",
     "PLAZA_POST_NOT_FOUND": "帖子不存在",
     "PLAZA_DELETE_AUTHOR_ONLY": "只有作者可以删除该帖子",
     "PLAZA_INVALID_CURSOR": "广场分页已过期，请刷新后重试",
+    "CITY_FILTER_QUOTA_REACHED": "已达到当前会员等级可筛选的城市数量上限",
+    "PLAZA_VIP_RESTRICTION_EXCEEDS_AUTHOR": "报名会员要求不能高于发布者的会员等级",
     "PLAZA_SIGNUP_SELF": "不能给自己发布的帖子报名",
     "PLAZA_SIGNUP_INELIGIBLE": "你的等级不满足该帖子的报名要求",
     "PLAZA_RECOGNIZE_MIN_ONE": "请至少选择一位协作者",
@@ -2436,6 +2402,7 @@
     "FRIEND_TAG_LIMIT_REACHED": "好友标签数量已达上限",
     "FRIEND_LIMIT_REACHED": "好友数量已达上限，升级会员可提升",
     "NOTE_GROUP_EXISTS": "同名分组已存在",
+    "NOTE_STORAGE_QUOTA_REACHED": "已达到当前会员等级的笔记存储上限",
     "NOTE_GROUP_LIMIT": "笔记分组数量已达上限",
     "NOTE_EXPORT_NO_MEDIA": "没有可导出的媒体文件",
     "NOTE_EXPORT_MEDIA_TOO_LARGE": "媒体文件过大，无法导出",
@@ -2458,21 +2425,17 @@
     "FRIEND_REQUEST_MESSAGE_INVALID": "留言内容不能为空，且不能超过 500 字",
     "FRIEND_REQUEST_MESSAGE_LIMIT": "对方回复前最多发送 5 条留言",
     "NOTE_NOT_FOUND": "笔记不存在",
-    "NOTE_RESTORE_DUPLICATE": "该笔记的另一份收藏副本已存在，无需恢复",
     "NOTE_GROUP_NOT_FOUND": "笔记分组不存在",
     "NOTE_IMAGE_TOO_LARGE": "图片过大，无法嵌入",
     "NOTE_SHARE_LINK_INVALID": "分享链接无效",
-    "NOTE_SHARE_LINK_LIMIT": "分享链接数量已达上限，请先撤销不再使用的链接",
     "CALL_NOT_INVITED": "你未被邀请加入该通话",
     "CALL_NOT_FOUND": "通话不存在",
     "CALL_NOT_ALLOWED": "你无权进行此通话操作",
     "CALL_ALREADY_ACTIVE": "你已在一个进行中的通话中",
-    "UPLOAD_PAYLOAD_TOO_LARGE": "文件太大，超出上传上限",
-    "CALL_NOT_FRIEND": "只能与好友通话",
+    "CALL_NOT_FRIEND": "仅好友之间可以发起通话",
     "CONVGROUP_NOT_FOUND": "分组不存在",
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "会话不存在",
     "COLLECTION_NOT_FOUND": "收藏不存在",
-    "COLLECTION_LIMIT": "收藏数量已达上限，请先清理不再需要的收藏",
     "ICON_DISPLAY_LIMIT": "最多只能展示 5 个图标",
     "ICON_INVALID_SYSTEM_SELECTION": "图标选择无效",
     "ICON_INVALID_CIRCLE_SELECTION": "圈子图标选择无效",

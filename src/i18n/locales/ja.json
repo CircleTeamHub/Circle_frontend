@@ -557,15 +557,6 @@
       "signupCount": "{{count}}人が参加",
       "signupEmpty": "まだ誰も参加していません",
       "cta": "参加する"
-    },
-    "callRecord": {
-      "duration": "通話時間 {{duration}}",
-      "canceledBySelf": "キャンセルしました",
-      "canceledByPeer": "相手がキャンセルしました",
-      "noAnswer": "応答なし",
-      "missed": "不在着信",
-      "failed": "通話に失敗しました",
-      "ended": "通話が終了しました"
     }
   },
   "messages": {
@@ -655,8 +646,7 @@
       "edit": "編集",
       "unlist": "非公開にする",
       "relist": "公開に戻す",
-      "more": "その他",
-      "restore": "復元"
+      "more": "その他"
     },
     "alerts": {
       "deleteFailedTitle": "削除に失敗しました",
@@ -677,9 +667,7 @@
       "relistFailedTitle": "公開に戻せませんでした",
       "unlistFailedTitle": "非公開にできませんでした",
       "unlistTitle": "ノートを非公開にする",
-      "unlistConfirm": "非公開にしたノートは非公開リストで確認できます。1か月後に自動削除されます。",
-      "restoreFailedTitle": "復元に失敗しました",
-      "refreshFailedTitle": "更新に失敗しました"
+      "unlistConfirm": "非公開にしたノートは非公開リストで確認できます。1か月後に自動削除されます。"
     },
     "detail": {
       "loadFailed": "ノートを読み込めませんでした。もう一度お試しください",
@@ -752,8 +740,7 @@
     "empty": {
       "noMatch": "一致するノートがありません",
       "noNotes": "まだノートがありません",
-      "noUnlisted": "非公開のノートはありません",
-      "noDeleted": "ごみ箱は空です"
+      "noUnlisted": "非公開のノートはありません"
     },
     "manageGroups": {
       "cancelEdit": "編集をキャンセル",
@@ -848,10 +835,7 @@
       "empty": "送信できるチャットがありません",
       "groupHint": "グループ",
       "friendHint": "友だち"
-    },
-    "recycleBin": "ごみ箱",
-    "recycleBinTitle": "ごみ箱",
-    "recycleBinHint": "削除したノートはここから復元できます。"
+    }
   },
   "tempChats": {
     "title": "枠の管理",
@@ -1646,21 +1630,21 @@
       "empty": "タグがありません。保存する前に作成してください。"
     },
     "avCallComingSoon": "音声・ビデオ通話機能は近日公開予定です。お楽しみに。",
-    "unknownUser": "名前未設定のユーザー",
-    "callStarting": "発信中…"
+    "unknownUser": "名前未設定のユーザー"
   },
   "profile": {
     "creditScore": "信用スコア",
     "memberCenter": "会員",
     "viewMember": "見る",
     "wallet": {
-      "purchaseUnavailable": "ポイント購入はまだご利用いただけません。現在、このページには残高のみが表示されます。",
+      "purchaseUnavailable": "クレジットの購入はまだ利用できません。現在、このページには残高のみが表示されます。",
       "title": "マイウォレット",
       "confirmRecharge": "チャージを確認",
       "balance": "クレジット残高",
       "recharge": "クレジットをチャージ",
       "memberAgreement": "会員サービス規約",
       "loadError": "クレジット残高の読み込みに失敗しました。しばらくしてから再試行してください。",
+      "purchaseUnavailable": "ポイント購入はまだご利用いただけません。現在、このページには残高のみが表示されます。",
       "rechargeSuccess": "{{points}} クレジットをチャージしました",
       "rechargeError": "チャージに失敗しました。しばらくしてから再試行してください。",
       "confirmRechargeMessage": "{{points}} クレジット（{{price}}）をチャージしますか？",
@@ -2029,17 +2013,7 @@
       "sendCodeFailed": "送信に失敗しました。もう一度お試しください"
     },
     "hidePassword": "パスワードを非表示",
-    "showPassword": "パスワードを表示",
-    "resendIn": "{{seconds}}秒後に再送",
-    "resetPassword": {
-      "intro": "登録済みメールアドレスを入力すると、パスワード再設定用の認証コードを送信します。",
-      "newPasswordPlaceholder": "新しいパスワード（6文字以上）",
-      "submit": "パスワードを再設定",
-      "submitting": "再設定中…",
-      "successTitle": "パスワードを再設定しました",
-      "successBody": "すべての端末からログアウトしました。新しいパスワードでログインしてください。",
-      "failed": "再設定に失敗しました。コードを確認してもう一度お試しください"
-    }
+    "showPassword": "パスワードを表示"
   },
   "common": {
     "save": "保存",
@@ -2224,8 +2198,7 @@
   },
   "call": {
     "livekit": {
-      "connected": "LiveKit に接続しました。現在は音声のみです。",
-      "connectedVideo": "LiveKit に接続しました。ビデオ通話中です。"
+      "connected": "LiveKit に接続しました。現在は音声のみです。"
     },
     "status": {
       "reconnecting": "通話を再接続しています…",
@@ -2233,7 +2206,6 @@
       "disconnected": "通話が切断されました。"
     },
     "groupCallTitle": "グループ音声通話",
-    "videoCallTitle": "ビデオ通話",
     "participantsOnline": "{{count}} 人がオンライン",
     "self": "自分",
     "ended": "通話が終了したか、接続情報の有効期限が切れています",
@@ -2246,17 +2218,9 @@
     "accept": "応答",
     "invite": {
       "initiatedBy": "{{name}} がグループ音声通話を開始しました",
-      "initiatedByVideo": "{{name}} さんがグループビデオ通話を開始",
       "inviteeCount": "{{count}} 人を招待",
-      "groupMember": "グループメンバー",
-      "initiatedBySingle": "{{name}}さんから音声通話の招待",
-      "initiatedBySingleVideo": "{{name}} さんからビデオ通話の招待",
-      "friend": "友だち",
-      "singleSubtitle": "音声通話"
-    },
-    "chooseType": "通話を開始",
-    "typeVoice": "音声通話",
-    "typeVideo": "ビデオ通話"
+      "groupMember": "グループメンバー"
+    }
   },
   "im": {
     "time": {
@@ -2286,9 +2250,7 @@
       "note": "[ノート] {{title}}",
       "verification": "[認証] {{name}} から保証の依頼があります",
       "default": "[メッセージ]",
-      "plazaPost": "[イベント] {{title}}",
-      "voiceCall": "[音声通話]",
-      "videoCall": "[ビデオ通話]"
+      "plazaPost": "[イベント] {{title}}"
     }
   },
   "permissions": {
@@ -2331,9 +2293,11 @@
     "COIN_INSUFFICIENT": "ポイントが不足しています",
     "COIN_AMOUNT_INVALID": "金額は0より大きくしてください",
     "MEMBERSHIP_INVALID_LEVEL": "会員レベルが無効です",
+    "MEMBERSHIP_IDEMPOTENCY_CONFLICT": "この会員操作は以前のリクエストと競合しています。更新してもう一度お試しください。",
+    "MEMBERSHIP_GROUP_MEMBER_CAPACITY_EXCEEDED": "このグループは現在の会員レベルの人数上限に達しています",
+    "MEMBERSHIP_JOINED_CIRCLE_QUOTA_REACHED": "現在の会員レベルで参加できるグループ数の上限に達しました",
     "MEMBERSHIP_LEVEL_NOT_HIGHER": "現在より上のレベルを選んでください",
     "MEMBERSHIP_INSUFFICIENT_POINTS": "ポイントが足りません",
-    "MEMBERSHIP_IDEMPOTENCY_KEY_REUSED": "このリクエストIDは別の購入に使用済みです。もう一度お試しください。",
     "CIRCLE_MEMBER_LIMIT": "サークルが満員です",
     "CIRCLE_ALREADY_MEMBER": "すでにメンバーです",
     "CIRCLE_REQUEST_PENDING": "申請はすでに承認待ちです",
@@ -2368,6 +2332,7 @@
     "CIRCLE_JOIN_VIP_REQUIRED": "このサークルに参加するにはより高いVIPレベルが必要です",
     "CIRCLE_JOIN_CREDIT_REQUIRED": "このサークルに参加するにはより高い信用スコアが必要です",
     "CIRCLE_JOIN_FANCY_NUMBER_REQUIRED": "このサークルに参加するにはファンシーナンバーが必要です",
+    "CIRCLE_JOIN_VIP_RESTRICTION_EXCEEDS_CREATOR": "参加条件は作成者の会員レベルを超えて設定できません",
     "CIRCLE_LIST_ITEM_BLANK": "項目を空にすることはできません",
     "CIRCLE_LIST_ITEM_DUPLICATE": "項目は重複できません",
     "GROUP_NOT_FOUND": "グループが見つかりません",
@@ -2391,13 +2356,14 @@
     "TEMP_CHAT_ENDED": "一時チャットは終了しました",
     "TEMP_CHAT_FULL": "参加人数が上限に達しています",
     "TEMP_CHAT_CREATOR_ONLY": "作成者のみが終了できます",
-    "TEMP_CHAT_JOIN_FAILED": "参加に失敗しました。もう一度お試しください",
     "PLAZA_NOT_ACTIVE_MEMBER": "サークルのアクティブメンバーのみが投稿できます",
     "PLAZA_ADMIN_ONLY_POST": "このサークルでは管理者のみが投稿できます",
     "PLAZA_NOTE_INVALID": "そのノートは利用できないか、あなたのものではありません",
     "PLAZA_POST_NOT_FOUND": "投稿が見つかりません",
     "PLAZA_DELETE_AUTHOR_ONLY": "投稿者のみが削除できます",
     "PLAZA_INVALID_CURSOR": "この広場ページは期限切れです。更新してもう一度お試しください。",
+    "CITY_FILTER_QUOTA_REACHED": "現在の会員レベルで選択できる都市数の上限に達しました",
+    "PLAZA_VIP_RESTRICTION_EXCEEDS_AUTHOR": "申込条件は投稿者の会員レベルを超えて設定できません",
     "PLAZA_SIGNUP_SELF": "自分の投稿には応募できません",
     "PLAZA_SIGNUP_INELIGIBLE": "この投稿の応募条件を満たしていません",
     "PLAZA_RECOGNIZE_MIN_ONE": "コラボレーターを少なくとも1人選択してください",
@@ -2436,6 +2402,7 @@
     "FRIEND_TAG_LIMIT_REACHED": "友だちタグの数が上限に達しました",
     "FRIEND_LIMIT_REACHED": "友だちの数が上限に達しました。会員登録で上限を増やせます",
     "NOTE_GROUP_EXISTS": "同じ名前のグループが既に存在します",
+    "NOTE_STORAGE_QUOTA_REACHED": "現在の会員レベルのノート保存上限に達しました",
     "NOTE_GROUP_LIMIT": "ノートグループの数が上限に達しました",
     "NOTE_EXPORT_NO_MEDIA": "エクスポートできるメディアがありません",
     "NOTE_EXPORT_MEDIA_TOO_LARGE": "メディアファイルが大きすぎてエクスポートできません",
@@ -2458,21 +2425,17 @@
     "FRIEND_REQUEST_MESSAGE_INVALID": "メッセージは空にできず、500文字以内で入力してください",
     "FRIEND_REQUEST_MESSAGE_LIMIT": "相手が返信するまでに送れるメッセージは最大5件です",
     "NOTE_NOT_FOUND": "ノートが見つかりません",
-    "NOTE_RESTORE_DUPLICATE": "このノートの別の収蔵コピーが既に存在します。",
     "NOTE_GROUP_NOT_FOUND": "ノートグループが見つかりません",
     "NOTE_IMAGE_TOO_LARGE": "画像が大きすぎて埋め込めません",
     "NOTE_SHARE_LINK_INVALID": "この共有リンクは無効です",
-    "NOTE_SHARE_LINK_LIMIT": "共有リンクの上限に達しました。不要なリンクを取り消してください",
     "CALL_NOT_INVITED": "この通話に招待されていません",
     "CALL_NOT_FOUND": "通話が見つかりません",
     "CALL_NOT_ALLOWED": "この通話操作は許可されていません",
     "CALL_ALREADY_ACTIVE": "すでに通話中です",
-    "UPLOAD_PAYLOAD_TOO_LARGE": "ファイルが大きすぎてアップロードできません",
-    "CALL_NOT_FRIEND": "通話できるのは友達のみです",
+    "CALL_NOT_FRIEND": "通話は友達同士のみ利用できます",
     "CONVGROUP_NOT_FOUND": "グループが見つかりません",
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "会話が見つかりません",
     "COLLECTION_NOT_FOUND": "コレクションが見つかりません",
-    "COLLECTION_LIMIT": "コレクションの上限に達しました。不要なものを削除してください",
     "ICON_DISPLAY_LIMIT": "表示できるアイコンは最大5個です",
     "ICON_INVALID_SYSTEM_SELECTION": "アイコンの選択が無効です",
     "ICON_INVALID_CIRCLE_SELECTION": "サークルアイコンの選択が無効です",
