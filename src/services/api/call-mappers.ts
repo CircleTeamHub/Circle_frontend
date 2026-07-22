@@ -67,7 +67,7 @@ function normalizeUser(value: unknown): CallUserLite {
   };
 }
 
-function normalizeParticipant(value: unknown): CallParticipant {
+export function normalizeParticipant(value: unknown): CallParticipant {
   if (!isRecord(value)) {
     throw new Error('无效通话数据: participant');
   }
@@ -80,7 +80,7 @@ function normalizeParticipant(value: unknown): CallParticipant {
   };
 }
 
-function normalizeCall(value: unknown): CallSession {
+export function normalizeCall(value: unknown): CallSession {
   if (!isRecord(value)) {
     throw new Error('无效通话数据: call');
   }

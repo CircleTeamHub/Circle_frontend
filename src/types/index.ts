@@ -90,6 +90,23 @@ export interface PlazaPostCardData {
   authorNickname: string;
 }
 
+/** 通话留痕卡片（circle_be #115，customElem extension=call-record-v1）。 */
+export interface CallRecordData {
+  callId: string;
+  callType: 'AUDIO' | 'VIDEO';
+  sessionType: 'single' | 'group';
+  endReason:
+    | 'NORMAL'
+    | 'CANCELED'
+    | 'ALL_LEFT'
+    | 'NO_ANSWER'
+    | 'TIMEOUT'
+    | 'NETWORK'
+    | 'ERROR';
+  durationSeconds: number | null;
+  initiatorID: string;
+}
+
 export interface TransferCardData {
   amount: number;
   message: string | null;
@@ -110,7 +127,8 @@ export interface ChatMessage {
     | 'circle-card'
     | 'transfer-card'
     | 'verification-card'
-    | 'plaza-post-card';
+    | 'plaza-post-card'
+    | 'call-record';
   text?: string;
   systemNoticeKind?: 'friend-added';
   systemNoticeSource?: 'native' | 'local';
@@ -151,6 +169,8 @@ export interface ChatMessage {
   verificationCard?: VerificationCardData;
   // For plaza-post-card messages: parsed circle-post share payload
   plazaPostCard?: PlazaPostCardData;
+  // For call-record messages (#115): parsed call summary payload
+  callRecord?: CallRecordData;
   // OpenIM 发送状态：1=发送中, 2=已送达, 3=失败。仅自己发出的消息有意义。
   sendStatus?: 1 | 2 | 3;
   // 对方是否已读，由 onRecvC2CReadReceipt 维护。仅自己发出的消息有意义。

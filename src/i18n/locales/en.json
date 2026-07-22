@@ -109,7 +109,17 @@
       "sendCodeFailed": "Failed to send, please try again"
     },
     "hidePassword": "Hide password",
-    "showPassword": "Show password"
+    "showPassword": "Show password",
+    "resendIn": "Resend in {{seconds}}s",
+    "resetPassword": {
+      "intro": "Enter your registered email and we will send a verification code to reset your password.",
+      "newPasswordPlaceholder": "New password (min 6 chars)",
+      "submit": "Reset password",
+      "submitting": "Resetting…",
+      "successTitle": "Password reset",
+      "successBody": "All devices have been signed out. Please log in with your new password.",
+      "failed": "Reset failed — check the code and try again"
+    }
   },
   "onboarding": {
     "profileTitle": "Complete your profile",
@@ -587,6 +597,15 @@
       "signupCount": "{{count}} going",
       "signupEmpty": "Be the first to join",
       "cta": "Join"
+    },
+    "callRecord": {
+      "duration": "Call duration {{duration}}",
+      "canceledBySelf": "Canceled",
+      "canceledByPeer": "Canceled by the other side",
+      "noAnswer": "No answer",
+      "missed": "Missed call",
+      "failed": "Call failed",
+      "ended": "Call ended"
     }
   },
   "contacts": {
@@ -1422,7 +1441,8 @@
       "empty": "No tags yet. Create one before saving."
     },
     "avCallComingSoon": "Voice and video calls are coming soon. Stay tuned.",
-    "unknownUser": "Unnamed user"
+    "unknownUser": "Unnamed user",
+    "callStarting": "Calling…"
   },
   "profileFields": {
     "avatar": "Avatar",
@@ -1894,7 +1914,8 @@
       "edit": "Edit",
       "unlist": "Unlist",
       "relist": "Relist",
-      "more": "More"
+      "more": "More",
+      "restore": "Restore"
     },
     "alerts": {
       "deleteFailedTitle": "Failed to delete",
@@ -1915,7 +1936,9 @@
       "relistFailedTitle": "Failed to relist",
       "unlistFailedTitle": "Failed to unlist",
       "unlistTitle": "Unlist note",
-      "unlistConfirm": "You can view it in Unlisted. Unlisted notes are automatically deleted after one month."
+      "unlistConfirm": "You can view it in Unlisted. Unlisted notes are automatically deleted after one month.",
+      "restoreFailedTitle": "Restore failed",
+      "refreshFailedTitle": "Refresh failed"
     },
     "detail": {
       "loadFailed": "Failed to load note, please try again",
@@ -1988,7 +2011,8 @@
     "empty": {
       "noMatch": "No matching notes",
       "noNotes": "No notes yet",
-      "noUnlisted": "No unlisted notes"
+      "noUnlisted": "No unlisted notes",
+      "noDeleted": "The recycle bin is empty"
     },
     "manageGroups": {
       "cancelEdit": "Cancel editing",
@@ -2083,7 +2107,10 @@
       "empty": "No chats to send to yet",
       "groupHint": "Group",
       "friendHint": "Friend"
-    }
+    },
+    "recycleBin": "Recycle bin",
+    "recycleBinTitle": "Recycle bin",
+    "recycleBinHint": "Deleted notes can be restored here."
   },
   "search": {
     "loadFriendsFailed": "Failed to load friends, please try again",
@@ -2198,7 +2225,9 @@
       "note": "[Note] {{title}}",
       "verification": "[Verify] {{name}} asked you to vouch",
       "default": "[Message]",
-      "plazaPost": "[Event] {{title}}"
+      "plazaPost": "[Event] {{title}}",
+      "voiceCall": "[Voice call]",
+      "videoCall": "[Video call]"
     }
   },
   "permissions": {
@@ -2231,7 +2260,10 @@
     "invite": {
       "initiatedBy": "{{name}} started a group voice call",
       "inviteeCount": "{{count}} invited",
-      "groupMember": "Group member"
+      "groupMember": "Group member",
+      "initiatedBySingle": "{{name}} invites you to a voice call",
+      "friend": "Friend",
+      "singleSubtitle": "Voice call"
     }
   },
   "emojis": {
@@ -2269,6 +2301,7 @@
     "MEMBERSHIP_INVALID_LEVEL": "Invalid membership level",
     "MEMBERSHIP_LEVEL_NOT_HIGHER": "Choose a level higher than your current one",
     "MEMBERSHIP_INSUFFICIENT_POINTS": "Not enough points",
+    "MEMBERSHIP_IDEMPOTENCY_KEY_REUSED": "This request ID was already used for a different purchase. Please try again.",
     "CIRCLE_MEMBER_LIMIT": "This circle is full",
     "CIRCLE_ALREADY_MEMBER": "You're already a member",
     "CIRCLE_REQUEST_PENDING": "Your request is already pending",
@@ -2393,6 +2426,7 @@
     "FRIEND_REQUEST_MESSAGE_INVALID": "Message can't be empty and must be 500 characters or fewer",
     "FRIEND_REQUEST_MESSAGE_LIMIT": "You can send up to 5 messages before they reply",
     "NOTE_NOT_FOUND": "Note not found",
+    "NOTE_RESTORE_DUPLICATE": "Another active copy of this collected note already exists.",
     "NOTE_GROUP_NOT_FOUND": "Note group not found",
     "NOTE_IMAGE_TOO_LARGE": "The image is too large to embed",
     "NOTE_SHARE_LINK_INVALID": "This share link is not valid",
@@ -2402,9 +2436,11 @@
     "CALL_NOT_ALLOWED": "You can't perform this call action",
     "CALL_ALREADY_ACTIVE": "You're already in an active call",
     "UPLOAD_PAYLOAD_TOO_LARGE": "File is too large to upload",
+    "CALL_NOT_FRIEND": "You can only call friends",
     "CONVGROUP_NOT_FOUND": "Group not found",
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "Conversation not found",
     "COLLECTION_NOT_FOUND": "Collection not found",
+    "COLLECTION_LIMIT": "Collection limit reached — remove items you no longer need",
     "ICON_DISPLAY_LIMIT": "You can display at most 5 icons",
     "ICON_INVALID_SYSTEM_SELECTION": "Invalid icon selection",
     "ICON_INVALID_CIRCLE_SELECTION": "Invalid circle icon selection",

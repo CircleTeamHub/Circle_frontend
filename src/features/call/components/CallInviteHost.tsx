@@ -16,6 +16,7 @@ import { acceptCall, rejectCall } from '@/services/api/calls';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useCallStore } from '@/features/call/store/use-call-store';
 import { useIncomingCallExpiry } from '@/features/call/hooks/use-incoming-call-expiry';
+import { useCallReconciliation } from '@/features/call/hooks/use-call-reconciliation';
 import '@/features/call/call-session-teardown';
 
 const s = StyleSheet.create({
@@ -75,6 +76,8 @@ const s = StyleSheet.create({
 export function CallInviteHost() {
   const { colors } = useTheme();
   const { t } = useTranslation();
+  // 回前台时与服务端对账（#93）：清掉断线期间已在服务端结束的本地通话残留。
+  useCallReconciliation();
   const incomingCall = useCallStore((state) => state.incomingCall);
   const setActiveCall = useCallStore((state) => state.setActiveCall);
   const resetCallState = useCallStore((state) => state.resetCallState);
@@ -135,19 +138,32 @@ export function CallInviteHost() {
               <Ionicons name="call" size={24} color={colors.primary} />
             </View>
             <View style={s.copy}>
+              {/* round 3 review：1:1 邀请（sessionType='single'）不能顶着
+                  「发起群语音 / N 人被邀请」的文案 —— 按会话类型分支。 */}
               <Text style={[s.title, { color: colors.text }]}>
-                {t('call.invite.initiatedBy', {
-                  defaultValue: '{{name}} 发起群语音',
-                  name:
-                    incomingCall?.initiator.nickname ??
-                    t('call.invite.groupMember', { defaultValue: '群成员' }),
-                })}
+                {incomingCall?.sessionType === 'single'
+                  ? t('call.invite.initiatedBySingle', {
+                      defaultValue: '{{name}} 邀请你语音通话',
+                      name:
+                        incomingCall?.initiator.nickname ??
+                        t('call.invite.friend', { defaultValue: '好友' }),
+                    })
+                  : t('call.invite.initiatedBy', {
+                      defaultValue: '{{name}} 发起群语音',
+                      name:
+                        incomingCall?.initiator.nickname ??
+                        t('call.invite.groupMember', { defaultValue: '群成员' }),
+                    })}
               </Text>
               <Text style={[s.subtitle, { color: colors.textSecondary }]}>
-                {t('call.invite.inviteeCount', {
-                  defaultValue: '{{count}} 人被邀请',
-                  count: incomingCall?.invitees.length ?? 0,
-                })}
+                {incomingCall?.sessionType === 'single'
+                  ? t('call.invite.singleSubtitle', {
+                      defaultValue: '语音通话',
+                    })
+                  : t('call.invite.inviteeCount', {
+                      defaultValue: '{{count}} 人被邀请',
+                      count: incomingCall?.invitees.length ?? 0,
+                    })}
               </Text>
             </View>
           </View>
