@@ -22,6 +22,10 @@ export const darkColors: ThemeColors = {
   blue: '#3B82F6',
   purple: '#A855F7',
   deepPurple: '#8B5CF6',
+  // 圈子加入门槛徽章（restriction-badge）：实心底 + 白字，两个主题同值。
+  badgeVip: '#F59E0B',
+  badgeCredit: '#3B82F6',
+  badgeFancy: '#A855F7',
   sentBubble: '#6366F1',
   receivedBubble: '#252630',
   inputBg: '#252630',
@@ -63,6 +67,10 @@ export const lightColors: ThemeColors = {
   blue: '#3B82F6',
   purple: '#A855F7',
   deepPurple: '#8B5CF6',
+  // 圈子加入门槛徽章（restriction-badge）：实心底 + 白字，两个主题同值。
+  badgeVip: '#F59E0B',
+  badgeCredit: '#3B82F6',
+  badgeFancy: '#A855F7',
   sentBubble: '#6366F1',
   receivedBubble: '#FFFFFF',
   inputBg: '#FFFFFF',

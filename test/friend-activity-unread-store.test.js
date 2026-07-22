@@ -86,3 +86,40 @@ test('friend activity unread store keeps the last known count when refresh fails
 
   assert.equal(useFriendActivityUnreadStore.getState().count, 4);
 });
+
+test('friend activity markRead dedupes by activity id — repeat taps do not double-decrement (#105)', async () => {
+  const { useFriendActivityUnreadStore } = loadTsModule(
+    'src/stores/friendActivityUnreadStore.ts',
+    {
+      '@/services/api/friends': {
+        fetchUnreadFriendActivityCount: async () => 5,
+      },
+      '@/stores/tabBadgeStore': {
+        useTabBadgeStore: {
+          getState: () => ({
+            setContactsUnread: () => {},
+          }),
+        },
+      },
+    },
+  );
+
+  await useFriendActivityUnreadStore.getState().refresh();
+  assert.equal(useFriendActivityUnreadStore.getState().count, 5);
+
+  // 同一行连点两次：只扣一次
+  useFriendActivityUnreadStore.getState().markRead(['a-1', 'a-2']);
+  useFriendActivityUnreadStore.getState().markRead(['a-1', 'a-2']);
+  assert.equal(useFriendActivityUnreadStore.getState().count, 3);
+
+  // 传入自带重复 id 也只按唯一 id 扣
+  useFriendActivityUnreadStore.getState().markRead(['a-3', 'a-3']);
+  assert.equal(useFriendActivityUnreadStore.getState().count, 2);
+
+  // refresh 拿到服务端权威计数后，本地身份表清空：同一 id 可再次扣
+  //（覆盖 mark-read 请求失败、服务端仍算未读的场景）
+  await useFriendActivityUnreadStore.getState().refresh();
+  assert.equal(useFriendActivityUnreadStore.getState().count, 5);
+  useFriendActivityUnreadStore.getState().markRead(['a-1']);
+  assert.equal(useFriendActivityUnreadStore.getState().count, 4);
+});

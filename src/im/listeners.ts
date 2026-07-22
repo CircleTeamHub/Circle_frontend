@@ -15,9 +15,8 @@ import OpenIMSDK, {
   type MessageItem,
   type UserOnlineState,
 } from '@openim/rn-client-sdk';
-import { router } from 'expo-router';
 import i18n from '@/i18n';
-import { clearLocalSession } from '@/services/auth/session';
+import { recoverIMSession } from '@/im/token-recovery';
 import { buildChatSnackbar } from '@/im/snackbar';
 import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
 import { useIMStore } from '@/stores/imStore';
@@ -101,10 +100,20 @@ export function bindOpenIMListeners() {
   OpenIMSDK.on('onConnectFailed', handleConnectFailed);
 
   const handleTokenExpired = async () => {
+    useIMStore.getState().setConnecting(false);
     useIMStore.getState().setConnected(false);
-    useIMStore.getState().setError('登录已过期，请重新登录');
-    await clearLocalSession();
-    router.replace('/(auth)/login');
+    // IM token 失效 ≠ 业务会话失效（#83）：先用业务凭证向 GET /auth/im-token 换新
+    // IM token 原地重登，用户无感。只有业务凭证也被服务端明确拒绝时，
+    // recoverIMSession 内部才会清 session 跳登录页；瞬时失败（网络 / 503 / 限流）
+    // 会记欠账，由 SessionBootstrap 回前台时补登。
+    const recovered = await recoverIMSession();
+    if (!recovered) {
+      // 不写「登录已过期」——业务会话可能还活着，错误文案会误导用户去重登。
+      // connected=false 已让 UI 呈现断连态；恢复由前台补登接手。
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn('[openim] token expired; in-place recovery deferred');
+      }
+    }
   };
   OpenIMSDK.on('onUserTokenExpired', handleTokenExpired);
   // SDK 也可能发 onUserTokenInvalid（token 不被服务器接受），统一按 expired 处理

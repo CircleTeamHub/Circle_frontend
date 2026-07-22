@@ -11,6 +11,12 @@ const DEFAULT_TS_MODULE_STUBS = {
   '@/im/listeners': {
     bindOpenIMListeners: () => () => {},
   },
+  '@/im/token-recovery': {
+    registerIMLoginExecutor: () => {},
+    registerIMLogoutExecutor: () => {},
+    recoverIMSession: async () => false,
+    isIMReloginPending: () => false,
+  },
   '@/services/auth/session': {
     registerLogoutHandler: () => () => {},
   },
@@ -53,6 +59,8 @@ function loadTsModule(relativePath, stubs = {}) {
 // client.ts 顶层现在还会 import @/im/media-uri（本地路径 scheme 处理）；注入真实实现以便 require 解析。
 DEFAULT_TS_MODULE_STUBS['@/im/media-uri'] = loadTsModule('src/im/media-uri.ts');
 DEFAULT_TS_MODULE_STUBS['@/im/user-id'] = loadTsModule('src/im/user-id.ts');
+DEFAULT_TS_MODULE_STUBS['@/im/error-codes'] = loadTsModule('src/im/error-codes.ts');
+DEFAULT_TS_MODULE_STUBS['@/im/data-dir'] = loadTsModule('src/im/data-dir.ts');
 DEFAULT_TS_MODULE_STUBS['@/observability/sentry'] = { reportError: () => {} };
 DEFAULT_TS_MODULE_STUBS['@/services/api/credit-policy'] = {
   assertCanSendMessage: async () => undefined,
