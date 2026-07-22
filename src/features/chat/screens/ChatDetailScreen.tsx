@@ -133,6 +133,7 @@ import {
   flushPendingGiftCardAcks,
 } from '@/features/chat/utils/gift-card-ack';
 import { resolveDirectCalleeID } from '@/features/call/resolve-direct-callee';
+import type { CallType } from '@/features/call/types';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
@@ -1169,7 +1170,7 @@ export default function ChatDetailScreen() {
     ],
   );
 
-  const handleStartCall = useCallback(async () => {
+  const startCallWithType = useCallback(async (callType: CallType) => {
     if (callStartingRef.current) return;
 
     if (isPreviewMode || !conversationID || !sourceID) {
@@ -1198,7 +1199,7 @@ export default function ChatDetailScreen() {
         }
         const response = await createDirectCall({
           calleeID,
-          callType: 'AUDIO',
+          callType,
         });
         // round 3 review：呼叫已在服务端创建、对端在响铃 —— 即使本页已
         // unmount（用户先行离开）也要落全局通话态并进通话页（store/router
@@ -1224,7 +1225,7 @@ export default function ChatDetailScreen() {
 
       const response = await createGroupCall({
         conversationID,
-        callType: 'AUDIO',
+        callType,
         inviteeIDs,
       });
       // 同上：成功创建的群呼即使页面已 unmount 也要进入通话 UI
@@ -1238,7 +1239,7 @@ export default function ChatDetailScreen() {
         );
       }
       if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[chat] start group audio call failed', error);
+        console.warn('[chat] start call failed', error);
       }
     } finally {
       callStartingRef.current = false;
@@ -1255,6 +1256,42 @@ export default function ChatDetailScreen() {
     sourceID,
     t,
   ]);
+
+  // #119：通话入口先选类型（语音 / 视频），再走原发起流程。
+  // review P2：选择器打开期间快速连点会叠开多个原生对话框，滞留的选项在首次
+  // 呼叫完成后还能再发一次非幂等 POST —— 弹出前置 ref 门，选择/取消时解除。
+  const callChooserOpenRef = useRef(false);
+  const handleStartCall = useCallback(() => {
+    if (callStartingRef.current || callChooserOpenRef.current) return;
+    callChooserOpenRef.current = true;
+    const choose = (callType: CallType) => {
+      callChooserOpenRef.current = false;
+      void startCallWithType(callType);
+    };
+    const dismiss = () => {
+      callChooserOpenRef.current = false;
+    };
+    Alert.alert(
+      t('call.chooseType', { defaultValue: '发起通话' }),
+      undefined,
+      [
+        {
+          text: t('call.typeVoice', { defaultValue: '语音通话' }),
+          onPress: () => choose('AUDIO'),
+        },
+        {
+          text: t('call.typeVideo', { defaultValue: '视频通话' }),
+          onPress: () => choose('VIDEO'),
+        },
+        {
+          text: t('common.cancel', { defaultValue: '取消' }),
+          style: 'cancel',
+          onPress: dismiss,
+        },
+      ],
+      { cancelable: true, onDismiss: dismiss },
+    );
+  }, [startCallWithType, t]);
 
   const renderItem = useCallback(({ item }: { item: ChatMessage }) => {
     switch (item.type) {

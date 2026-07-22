@@ -9,6 +9,7 @@ import {
 import { useNotificationCenterStore } from '@/features/notifications/store/use-notification-center-store';
 import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
 import { useCircleNotificationStore } from '@/features/discover/store/use-circle-notification-store';
+import { useMomentsFeedSignalStore } from '@/features/discover/store/use-moments-feed-signal-store';
 import { useCallStore } from '@/features/call/store/use-call-store';
 import { clearLocalSession, registerLogoutHandler } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
@@ -86,6 +87,10 @@ type RealtimeEvent =
   | {
       type: 'system.notification.created';
       payload?: { content?: string };
+    }
+  | {
+      type: 'moments.feed.updated';
+      payload?: { authorId?: string; changedAt?: string };
     }
   | {
       type: 'call.invite';
@@ -363,6 +368,11 @@ function handleRealtimeEvent(message: RealtimeEvent) {
       return;
     case 'system.notification.created':
       return;
+    case 'moments.feed.updated':
+      // 轻量 poke（#89）：不带内容，只表示「你的朋友圈 feed 变了」。bump 后由
+      // feed 组件自行决定拉不拉（权限判定始终在 GET /trace/feed 服务端）。
+      useMomentsFeedSignalStore.getState().bump();
+      return;
     case 'call.invite':
       if (isCallInvitePayload(message.payload)) {
         callStore.handleCallInvite(message.payload);
@@ -488,6 +498,12 @@ function openRealtimeSocket(normalizedToken: string) {
     }
     useTabBadgeStore.getState().setRealtimeConnected(true);
     void recoverTabBadgeSnapshot({ force: shouldForceRecovery });
+    // review P2：断线重连的空窗里错过的 moments.feed.updated 补不回来 ——
+    // 重连成功后 bump 一次信号，让 feed 组件自查新帖数（app 全程前台、
+    // 无 AppState 变化的场景就靠这条兜住）。
+    if (shouldForceRecovery) {
+      useMomentsFeedSignalStore.getState().bump();
+    }
   };
 
   nextSocket.onmessage = (event) => {

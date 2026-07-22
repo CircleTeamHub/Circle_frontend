@@ -2239,7 +2239,8 @@
   },
   "call": {
     "livekit": {
-      "connected": "LiveKit connected. Audio only for now."
+      "connected": "LiveKit connected. Audio only for now.",
+      "connectedVideo": "LiveKit connected. Video call in progress."
     },
     "status": {
       "reconnecting": "Reconnecting the call…",
@@ -2247,6 +2248,7 @@
       "disconnected": "Call disconnected."
     },
     "groupCallTitle": "Group voice call",
+    "videoCallTitle": "Video call",
     "participantsOnline": "{{count}} online",
     "self": "Me",
     "ended": "The call has ended or the connection info has expired",
@@ -2259,12 +2261,17 @@
     "accept": "Accept",
     "invite": {
       "initiatedBy": "{{name}} started a group voice call",
+      "initiatedByVideo": "{{name}} started a group video call",
       "inviteeCount": "{{count}} invited",
       "groupMember": "Group member",
       "initiatedBySingle": "{{name}} invites you to a voice call",
+      "initiatedBySingleVideo": "{{name}} invites you to a video call",
       "friend": "Friend",
       "singleSubtitle": "Voice call"
-    }
+    },
+    "chooseType": "Start a call",
+    "typeVoice": "Voice call",
+    "typeVideo": "Video call"
   },
   "emojis": {
     "face": "Smileys",

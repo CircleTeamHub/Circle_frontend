@@ -17,7 +17,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { ActivityIndicator, NativeModules, View } from 'react-native';
 import { rehydrateLanguageFromStorage } from '@/i18n';
-import { migrateFromAsyncStorage } from '@/storage';
+import { initEncryptedStorage, migrateFromAsyncStorage } from '@/storage';
 import { excludeMmkvDirFromIOSBackup } from '@/storage/ios-backup-exclusion';
 import { silenceDomBridgeRejection } from '@/utils/silence-dom-bridge-rejection';
 import { ensureLiveKitGlobals } from '@/utils/livekit-globals';
@@ -115,6 +115,9 @@ let startupBootstrapPromise: Promise<void> | null = null;
 function ensureStartupBootstrap(): Promise<void> {
   startupBootstrapPromise ??= (async () => {
     try {
+      // FE#87：先建好加密 MMKV（密钥在 SecureStore），storage 壳才可用；
+      // AsyncStorage 迁移与所有 zustand 水合都在它之后。
+      await initEncryptedStorage();
       await migrateFromAsyncStorage();
     } catch (err) {
       if (typeof __DEV__ !== 'undefined' && __DEV__) {

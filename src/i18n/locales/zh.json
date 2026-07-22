@@ -2236,7 +2236,8 @@
   },
   "call": {
     "livekit": {
-      "connected": "LiveKit 已连接，当前仅开放音频。"
+      "connected": "LiveKit 已连接，当前仅开放音频。",
+      "connectedVideo": "LiveKit 已连接，视频通话进行中。"
     },
     "status": {
       "reconnecting": "正在恢复通话连接...",
@@ -2244,6 +2245,7 @@
       "disconnected": "通话连接已断开。"
     },
     "groupCallTitle": "群语音通话",
+    "videoCallTitle": "视频通话",
     "participantsOnline": "{{count}} 人在线",
     "self": "我",
     "ended": "通话已结束或连接信息已失效",
@@ -2256,12 +2258,17 @@
     "accept": "接听",
     "invite": {
       "initiatedBy": "{{name}} 发起群语音",
+      "initiatedByVideo": "{{name}} 发起群视频",
       "inviteeCount": "{{count}} 人被邀请",
       "groupMember": "群成员",
       "initiatedBySingle": "{{name}} 邀请你语音通话",
+      "initiatedBySingleVideo": "{{name}} 邀请你视频通话",
       "friend": "好友",
       "singleSubtitle": "语音通话"
-    }
+    },
+    "chooseType": "发起通话",
+    "typeVoice": "语音通话",
+    "typeVideo": "视频通话"
   },
   "emojis": {
     "face": "表情",

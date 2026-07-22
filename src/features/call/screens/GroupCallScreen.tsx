@@ -8,6 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import type { StyleProp, ViewStyle } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -17,6 +18,13 @@ import { useCallStore } from '@/features/call/store/use-call-store';
 import { leaveActiveCall } from '@/features/call/call-session-teardown';
 import { ensureLiveKitGlobals } from '@/utils/livekit-globals';
 
+// useTracks 返回的相机轨引用（只声明用到的字段）。直接透传给同模块的
+// VideoTrack，运行时是 @livekit/components-react 的真实 TrackReference。
+type LiveKitTrackReference = {
+  participant: { identity: string };
+  publication?: { isMuted?: boolean };
+};
+
 type LiveKitModule = {
   LiveKitRoom: ComponentType<
     PropsWithChildren<{
@@ -25,17 +33,30 @@ type LiveKitModule = {
       connect?: boolean;
       audio?: boolean;
       video?: boolean;
+      // livekit-client RoomOptions 的子集（只声明用到的字段）
+      options?: { adaptiveStream?: boolean; dynacast?: boolean };
       onError?: (error: Error) => void;
     }>
   >;
+  VideoTrack: ComponentType<{
+    trackRef: LiveKitTrackReference | undefined;
+    style?: StyleProp<ViewStyle>;
+    objectFit?: 'cover' | 'contain';
+    mirror?: boolean;
+  }>;
   useConnectionState: () => string;
   useLocalParticipant: () => {
     localParticipant: {
       identity: string;
       setMicrophoneEnabled: (enabled: boolean) => Promise<void>;
+      setCameraEnabled: (enabled: boolean) => Promise<void>;
     };
     isMicrophoneEnabled: boolean;
+    isCameraEnabled: boolean;
   };
+  // sources 传 Track.Source 的字符串值（'camera'），避免为拿枚举而静态
+  // import livekit-client（本文件靠动态 import 保持 LiveKit 可缺席）。
+  useTracks: (sources: string[]) => LiveKitTrackReference[];
   useParticipants: () => {
     identity: string;
     name?: string;
@@ -130,6 +151,22 @@ const s = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
   },
+  participantVideoTile: {
+    overflow: 'hidden',
+    padding: 0,
+  },
+  participantVideo: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  participantVideoNameBar: {
+    position: 'absolute',
+    left: Spacing.xs,
+    right: Spacing.xs,
+    bottom: Spacing.xs,
+    borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.xs,
+    paddingVertical: 2,
+  },
   controls: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -182,6 +219,10 @@ const s = StyleSheet.create({
   },
 });
 
+// 同屏最多渲染的视频瓦片数（本地优先）。9 宫格再往上就该做分页/焦点视图，
+// 当前产品形态（小群）先钉住资源上界。
+const MAX_VIDEO_TILES = 9;
+
 function initials(name: string) {
   const trimmed = name.trim();
   return trimmed.slice(0, 2).toUpperCase() || '?';
@@ -193,16 +234,44 @@ function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
     useLocalParticipant,
     useParticipants,
     useRoomContext,
+    useTracks,
+    VideoTrack,
   } = liveKitModule;
   const { colors } = useTheme();
   const { t } = useTranslation();
   const room = useRoomContext();
   const connectionState = useConnectionState();
   const participants = useParticipants();
-  const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
+  const { localParticipant, isMicrophoneEnabled, isCameraEnabled } =
+    useLocalParticipant();
   const activeCall = useCallStore((state) => state.activeCall);
+  const isVideoCall = activeCall?.callType === 'VIDEO';
   const [muting, setMuting] = useState(false);
+  const [cameraBusy, setCameraBusy] = useState(false);
   const [leaving, setLeaving] = useState(false);
+
+  // 'camera' = livekit-client Track.Source.Camera 的枚举字符串值。
+  const cameraTracks = useTracks(['camera']);
+  const videoTrackByIdentity = useMemo(() => {
+    // review P2：大群里无上限渲染视频轨会吃满带宽/内存。本地画面优先，
+    // 之后按轨道顺序取到上限；超出者回退头像瓦片（音频不受影响）。
+    const map = new Map<string, LiveKitTrackReference>();
+    // review P2：语音通话不渲染任何相机轨 —— 异常端在 AUDIO 房间里发布摄像
+    // 头也不能把视频塞进语音 UI（adaptiveStream 会因不渲染而暂停其下行）。
+    if (!isVideoCall) return map;
+    const localIdentity = localParticipant.identity;
+    const ordered = [...cameraTracks].sort((a, b) => {
+      if (a.participant.identity === localIdentity) return -1;
+      if (b.participant.identity === localIdentity) return 1;
+      return 0;
+    });
+    for (const trackRef of ordered) {
+      if (map.size >= MAX_VIDEO_TILES) break;
+      if (trackRef.publication?.isMuted) continue;
+      map.set(trackRef.participant.identity, trackRef);
+    }
+    return map;
+  }, [cameraTracks, isVideoCall, localParticipant.identity]);
 
   const participantRows = useMemo(
     () =>
@@ -216,7 +285,11 @@ function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
   const connectionLabel = useMemo(() => {
     switch (connectionState) {
       case 'connected':
-        return t('call.livekit.connected', { defaultValue: 'LiveKit 已连接，当前仅开放音频。' });
+        return isVideoCall
+          ? t('call.livekit.connectedVideo', {
+              defaultValue: 'LiveKit 已连接，视频通话进行中。',
+            })
+          : t('call.livekit.connected', { defaultValue: 'LiveKit 已连接，当前仅开放音频。' });
       case 'reconnecting':
       case 'signalReconnecting':
         return t('call.status.reconnecting', { defaultValue: '正在恢复通话连接...' });
@@ -225,7 +298,7 @@ function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
       default:
         return t('call.status.disconnected', { defaultValue: '通话连接已断开。' });
     }
-  }, [connectionState, t]);
+  }, [connectionState, isVideoCall, t]);
 
   const handleToggleMic = useCallback(async () => {
     if (muting) return;
@@ -240,6 +313,20 @@ function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
       setMuting(false);
     }
   }, [isMicrophoneEnabled, localParticipant, muting]);
+
+  const handleToggleCamera = useCallback(async () => {
+    if (cameraBusy) return;
+    setCameraBusy(true);
+    try {
+      await localParticipant.setCameraEnabled(!isCameraEnabled);
+    } catch (error) {
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn('[call] toggle camera failed', error);
+      }
+    } finally {
+      setCameraBusy(false);
+    }
+  }, [cameraBusy, isCameraEnabled, localParticipant]);
 
   const handleLeave = useCallback(async () => {
     if (!activeCall || leaving) return;
@@ -271,7 +358,9 @@ function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
     <>
       <View style={s.header}>
         <Text style={[s.eyebrow, { color: colors.primary }]}>
-          {t('call.groupCallTitle', { defaultValue: '群语音通话' })}
+          {isVideoCall
+            ? t('call.videoCallTitle', { defaultValue: '视频通话' })
+            : t('call.groupCallTitle', { defaultValue: '群语音通话' })}
         </Text>
         <Text style={[s.title, { color: colors.text }]}>
           {t('call.participantsOnline', {
@@ -285,26 +374,64 @@ function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
       </View>
 
       <View style={s.participantGrid}>
-        {participantRows.map((participant) => (
-          <View
-            key={participant.id}
-            style={[s.participant, { backgroundColor: colors.surface }]}
-          >
-            <View style={[s.avatar, { backgroundColor: colors.primaryLight }]}>
-              <Text style={[s.participantName, { color: colors.primary }]}>
-                {initials(participant.name)}
+        {participantRows.map((participant) => {
+          const videoTrackRef = videoTrackByIdentity.get(participant.id);
+          const displayName = participant.isLocal
+            ? t('call.self', { defaultValue: '我' })
+            : participant.name;
+
+          if (videoTrackRef) {
+            return (
+              <View
+                key={participant.id}
+                style={[
+                  s.participant,
+                  s.participantVideoTile,
+                  { backgroundColor: colors.surface },
+                ]}
+              >
+                <VideoTrack
+                  trackRef={videoTrackRef}
+                  style={s.participantVideo}
+                  objectFit="cover"
+                  mirror={participant.isLocal}
+                />
+                <View
+                  style={[
+                    s.participantVideoNameBar,
+                    { backgroundColor: colors.overlay },
+                  ]}
+                >
+                  <Text
+                    numberOfLines={1}
+                    style={[s.participantName, { color: colors.white }]}
+                  >
+                    {displayName}
+                  </Text>
+                </View>
+              </View>
+            );
+          }
+
+          return (
+            <View
+              key={participant.id}
+              style={[s.participant, { backgroundColor: colors.surface }]}
+            >
+              <View style={[s.avatar, { backgroundColor: colors.primaryLight }]}>
+                <Text style={[s.participantName, { color: colors.primary }]}>
+                  {initials(participant.name)}
+                </Text>
+              </View>
+              <Text
+                numberOfLines={1}
+                style={[s.participantName, { color: colors.text }]}
+              >
+                {displayName}
               </Text>
             </View>
-            <Text
-              numberOfLines={1}
-              style={[s.participantName, { color: colors.text }]}
-            >
-              {participant.isLocal
-                ? t('call.self', { defaultValue: '我' })
-                : participant.name}
-            </Text>
-          </View>
-        ))}
+          );
+        })}
       </View>
 
       <View style={s.controls}>
@@ -330,6 +457,30 @@ function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
             />
           )}
         </Pressable>
+        {isVideoCall ? (
+          <Pressable
+            style={[
+              s.control,
+              {
+                backgroundColor: isCameraEnabled
+                  ? colors.surface
+                  : colors.surfaceBorder,
+              },
+            ]}
+            onPress={handleToggleCamera}
+            disabled={cameraBusy || leaving}
+          >
+            {cameraBusy ? (
+              <ActivityIndicator color={colors.text} />
+            ) : (
+              <Ionicons
+                name={isCameraEnabled ? 'videocam' : 'videocam-off'}
+                size={24}
+                color={colors.text}
+              />
+            )}
+          </Pressable>
+        ) : null}
         <Pressable
           style={[s.control, { backgroundColor: colors.error }]}
           onPress={handleLeave}
@@ -468,7 +619,11 @@ export default function GroupCallScreen() {
         token={livekit.token}
         connect
         audio
-        video={false}
+        video={activeCall.callType === 'VIDEO'}
+        // review P2：订阅侧裁剪 —— adaptiveStream 让未渲染/不可见的视频轨
+        // 自动暂停下行，dynacast 让发布端按需暂停无人看的层；渲染上限
+        // MAX_VIDEO_TILES 是第二道闸。
+        options={{ adaptiveStream: true, dynacast: true }}
         onError={(error) => {
           if (typeof __DEV__ !== 'undefined' && __DEV__) {
             console.warn('[call] LiveKit room error', error);

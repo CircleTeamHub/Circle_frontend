@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system/legacy';
+import { Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 import {
   OPENIM_DATA_DIR_NAME,
@@ -54,6 +54,16 @@ type NativeFS = typeof import('react-native-fs');
 type NativeFSModule = NativeFS & { default?: NativeFS };
 let rnfsPromise: Promise<NativeFS> | null = null;
 
+// #112：新 API 的 Paths.cache 是 getter，个别环境（web / 测试）可能抛；
+// 缓存大小拿不到就当 0，不能让「清理缓存」页面整个崩掉。
+function getExpoCacheDirUri(): string | null {
+  try {
+    return Paths.cache.uri;
+  } catch {
+    return null;
+  }
+}
+
 function canUseNativeFS() {
   return Platform.OS === 'ios' || Platform.OS === 'android';
 }
@@ -88,12 +98,12 @@ function getUniquePaths(candidatePaths: (string | null | undefined)[]) {
 
 async function getCacheDirectories() {
   if (!canUseNativeFS()) {
-    return getUniquePaths([FileSystem.cacheDirectory]);
+    return getUniquePaths([getExpoCacheDirUri()]);
   }
 
   const RNFS = await loadNativeFS();
   return getUniquePaths([
-    FileSystem.cacheDirectory,
+    getExpoCacheDirUri(),
     RNFS.CachesDirectoryPath,
     RNFS.TemporaryDirectoryPath,
   ]);
@@ -101,11 +111,11 @@ async function getCacheDirectories() {
 
 async function getPrimaryCacheDirectories() {
   if (!canUseNativeFS()) {
-    return getUniquePaths([FileSystem.cacheDirectory]);
+    return getUniquePaths([getExpoCacheDirUri()]);
   }
 
   const RNFS = await loadNativeFS();
-  return getUniquePaths([FileSystem.cacheDirectory, RNFS.CachesDirectoryPath]);
+  return getUniquePaths([getExpoCacheDirUri(), RNFS.CachesDirectoryPath]);
 }
 
 async function getTemporaryDirectories() {

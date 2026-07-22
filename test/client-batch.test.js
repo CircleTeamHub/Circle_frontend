@@ -225,10 +225,12 @@ test('忘记密码提交前校验密码长度（round 2）', () => {
 // #89 / #116
 // ---------------------------------------------------------------------------
 
-test('朋友圈轮询已有前台门控，后台不空转 (#89 现状钉死)', () => {
+test('朋友圈新帖检测已是广播驱动，无常驻定时器 (#89 终态钉死)', () => {
   const feed = read('src/features/discover/components/moments-feed.tsx');
-  assert.match(feed, /AppState\.currentState === 'active'/);
-  assert.match(feed, /stopInterval\(\)/);
+  // 广播信号订阅 + 回前台补查兜底；30s 轮询（setInterval）不允许回归
+  assert.match(feed, /useMomentsFeedSignalStore/);
+  assert.match(feed, /AppState\.addEventListener\('change'/);
+  assert.doesNotMatch(feed, /setInterval/);
 });
 
 test('空 cities = 未设置 = 不匹配任何城市筛选 (#116 语义钉死)', () => {

@@ -2199,7 +2199,8 @@
   },
   "call": {
     "livekit": {
-      "connected": "LiveKit conectado. Por ahora solo audio."
+      "connected": "LiveKit conectado. Por ahora solo audio.",
+      "connectedVideo": "LiveKit conectado. Videollamada en curso."
     },
     "status": {
       "reconnecting": "Reconectando la llamada…",
@@ -2207,6 +2208,7 @@
       "disconnected": "Llamada desconectada."
     },
     "groupCallTitle": "Llamada de voz grupal",
+    "videoCallTitle": "Videollamada",
     "participantsOnline": "{{count}} en línea",
     "self": "Yo",
     "ended": "La llamada ha terminado o la información de conexión ha caducado",
@@ -2219,12 +2221,17 @@
     "accept": "Aceptar",
     "invite": {
       "initiatedBy": "{{name}} inició una llamada de voz grupal",
+      "initiatedByVideo": "{{name}} inició una videollamada grupal",
       "inviteeCount": "{{count}} invitados",
       "groupMember": "Miembro del grupo",
       "initiatedBySingle": "{{name}} te invita a una llamada de voz",
+      "initiatedBySingleVideo": "{{name}} te invita a una videollamada",
       "friend": "Amigo",
       "singleSubtitle": "Llamada de voz"
-    }
+    },
+    "chooseType": "Iniciar llamada",
+    "typeVoice": "Llamada de voz",
+    "typeVideo": "Videollamada"
   },
   "im": {
     "time": {

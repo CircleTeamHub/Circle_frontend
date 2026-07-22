@@ -1,6 +1,9 @@
 import { apiClient } from '@/services/api/client';
 import { API_URL } from '@/constants/config';
 import { Platform } from 'react-native';
+// #112（有意保留 legacy）：仅剩 uploadAsync 一个用途。SDK 55 的新版
+// expo-file-system 没有对等的原生流式上传 —— File.bytes() 会把整个视频读进
+// JS 内存，expo/fetch 也尚不支持请求体流式。等上游补齐后随 SDK 升级迁移。
 import * as FileSystem from 'expo-file-system/legacy';
 import type * as NativeFS from 'react-native-fs';
 import {
