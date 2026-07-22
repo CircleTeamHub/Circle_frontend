@@ -179,7 +179,6 @@ export function NotificationSnackbarHost() {
         badgeStore.setDiscoverUnread(
           Math.max(0, badgeStore.discoverUnread - 1),
         );
-        badgeStore.setSystemUnread(Math.max(0, badgeStore.systemUnread - 1));
       }
       void markNotificationRead(shown.id).catch((error) => {
         if (isDev) {

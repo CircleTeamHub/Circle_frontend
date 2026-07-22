@@ -161,11 +161,16 @@ const s = StyleSheet.create({
   },
 });
 
-function resolveFallbackIcon(name: string | null | undefined) {
+// 导出给其它 icon 渲染点复用（如 friend-card-bubble）：裸 as-cast 只挡得住
+// null/undefined，挡不住「存在但不合法」的 glyph 名——那会渲染成空白。
+export function resolveFallbackIcon(
+  name: string | null | undefined,
+  fallback: keyof typeof Ionicons.glyphMap = 'sparkles-outline',
+) {
   if (name && name in Ionicons.glyphMap) {
     return name as keyof typeof Ionicons.glyphMap;
   }
-  return 'sparkles-outline';
+  return fallback;
 }
 
 function isRenderableIcon(

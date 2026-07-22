@@ -59,6 +59,8 @@ function normalize(value) {
 }
 
 DEFAULT_CLIENT_STUBS['@/im/user-id'] = loadTsModule('src/im/user-id.ts');
+DEFAULT_CLIENT_STUBS['@/im/error-codes'] = loadTsModule('src/im/error-codes.ts');
+DEFAULT_CLIENT_STUBS['@/im/data-dir'] = loadTsModule('src/im/data-dir.ts');
 DEFAULT_CLIENT_STUBS['@/observability/sentry'] = { reportError: () => {} };
 DEFAULT_CLIENT_STUBS['@/services/api/credit-policy'] = {
   assertCanSendMessage: async () => undefined,

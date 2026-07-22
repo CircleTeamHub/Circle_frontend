@@ -41,10 +41,13 @@ import {
   registerIMLoginExecutor,
   registerIMLogoutExecutor,
 } from '@/im/token-recovery';
+import { IMClientError, IM_ERROR_CODES } from '@/im/error-codes';
+import { getOpenIMDataDirPath } from '@/im/data-dir';
 import { stripFileScheme } from '@/im/media-uri';
 import { resolveVoiceSendStrategy } from '@/features/chat/utils/voice-forward';
 import { toImUserId } from '@/im/user-id';
 import { registerLogoutHandler } from '@/services/auth/session';
+import { storage } from '@/storage';
 import { useIMStore } from '@/stores/imStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { reportError } from '@/observability/sentry';
@@ -110,11 +113,20 @@ function loadNativeFS() {
 
 async function getOpenIMDataDir() {
   const RNFS = loadNativeFS();
-  return `${RNFS.DocumentDirectoryPath}/openim`;
+  return getOpenIMDataDirPath(RNFS.DocumentDirectoryPath);
 }
 
 function getUnsupportedPlatformMessage() {
   return 'OpenIM 仅支持 iOS/Android development build';
+}
+
+// 统一带 code 抛错：chat-preview 等按 IM_ERROR_CODES 判定，不再匹配 message 文本
+// —— 这两条文案是 i18n 清扫的遗留目标，谁动了文案都不该悄悄杀死预览模式（#99）。
+function unsupportedPlatformError() {
+  return new IMClientError(
+    IM_ERROR_CODES.UNSUPPORTED_PLATFORM,
+    getUnsupportedPlatformMessage(),
+  );
 }
 
 async function waitForOpenIMConnectionReady(timeoutMs = 5000, intervalMs = 50) {
@@ -128,7 +140,10 @@ async function waitForOpenIMConnectionReady(timeoutMs = 5000, intervalMs = 50) {
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
 
-  throw new Error('IM 连接尚未完成，请稍后重试');
+  throw new IMClientError(
+    IM_ERROR_CODES.CONNECTION_NOT_READY,
+    'IM 连接尚未完成，请稍后重试',
+  );
 }
 
 /**
@@ -186,6 +201,104 @@ export async function ensureOpenIMInitialized() {
   return true;
 }
 
+// 上一次成功发起 OpenIM 登录的 IM userID（设备级 MMKV，不随登出清除）。
+const OPENIM_DATA_OWNER_KEY = 'circle-im-openim-data-owner';
+
+/**
+ * 换号即清上一账号的 OpenIM 本地库（#96）。
+ *
+ * 消息 SQLite 落在 ${Documents}/openim，登出**有意不删** —— 同账号重登可秒开
+ * 且离线可读历史。共享设备的泄漏点在「下一个人登自己的号」：此时上一账号的库
+ * 还躺在磁盘上。中间路线：只在检测到**不同账号**登录时整目录删除，重新全量同步
+ * 的代价由真正需要隔离的场景付。
+ *
+ * 时序约束：必须发生在 initSDK 之前（SDK 未持文件句柄）。in-process 切号时
+ * logout 已把 initPromise 置空，正好满足；若 SDK 意外仍在运行则**中止本次
+ * 登录**且不转移 owner 登记（review 修复：带着别人库继续登录正是要堵的洞）。
+ * 首次升级（无登记）只登记不删。
+ *
+ * 返回值 = 是否可以安全继续登录。review 修复（P1）：删库失败（DB 被锁 /
+ * 文件系统错误）时旧账号的聊天库还在磁盘上 —— 继续登录会让新账号打开上一个
+ * 账号的本地库，把「清理失败」直接变成隐私泄漏。此时中止登录、不转移 owner，
+ * 下次登录重试清理。
+ */
+/**
+ * owner 标记的非可逆哈希（FNV-1a 32bit ×2 轮，十六进制）。round 2 review：
+ * MMKV 里存裸 IM userID 会让「退出并移除账号」之后仍留下一个可读的账号
+ * 标识符；哈希后仅可做同号比对，不可反推。仅用于相等判断，无需抗碰撞强度。
+ */
+function hashOwnerKey(imUserID: string): string {
+  let h1 = 0x811c9dc5;
+  let h2 = 0x811c9dc5;
+  for (let i = 0; i < imUserID.length; i += 1) {
+    const c = imUserID.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
+    h2 = Math.imul(h2 ^ ((c << 1) | 1), 0x01000193) >>> 0;
+  }
+  return `v1:${h1.toString(16)}${h2.toString(16)}`;
+}
+
+async function wipeStaleOpenIMDataOnAccountChange(
+  imUserID: string,
+): Promise<boolean> {
+  try {
+    const stored = storage.getString(OPENIM_DATA_OWNER_KEY);
+    const hashed = hashOwnerKey(imUserID);
+    // 兼容早期构建写过的裸 id：视为同号并就地升级成哈希格式。
+    if (stored === hashed || stored === imUserID) {
+      if (stored !== hashed) storage.set(OPENIM_DATA_OWNER_KEY, hashed);
+      return true;
+    }
+    const RNFS = loadNativeFS();
+    const dataDir = await getOpenIMDataDir();
+    const dataDirExists = await RNFS.exists(dataDir);
+    // round 2 review（P1）：无登记但目录已存在 = 升级安装前留下的**无主库**。
+    // 上一位用户可能在升级前已登出 —— 共享设备上第一个登录的人不该继承
+    // 别人的聊天库。无主 + 有库同样走清除；只有「无登记且无库」（全新安装）
+    // 才纯登记。
+    // 走到这里 = 登记不属于当前账号（别人的 / 无主）。目录存在即为陈旧数据。
+    const staleDataPresent = dataDirExists;
+    if (staleDataPresent && initPromise) {
+      if (isDev) {
+        console.warn(
+          '[openim] stale chat data present but SDK is initialized; aborting login until clean teardown',
+        );
+      }
+      return false;
+    }
+    if (staleDataPresent) {
+      // unlink 前先 unInitSDK —— logout 曾被拒绝时 native 侧可能仍持有 DB
+      // 句柄，在活 SDK 下删库正是会造成损坏的场景。round 2：只有「本就未
+      // 初始化」类报错可以放行；真实拆除失败必须中止（句柄可能还被握着）。
+      try {
+        await OpenIMSDK.unInitSDK();
+      } catch (uninitError) {
+        const message =
+          uninitError instanceof Error
+            ? uninitError.message
+            : String(uninitError ?? '');
+        const benign =
+          isOpenIMResourceNotLoadedError(uninitError) ||
+          /not\s*init/i.test(message);
+        if (!benign) {
+          reportError(uninitError, { operation: 'openim', kind: 'unInit' });
+          return false;
+        }
+      }
+      initPromise = null;
+      await RNFS.unlink(dataDir);
+    }
+    storage.set(OPENIM_DATA_OWNER_KEY, hashed);
+    return true;
+  } catch (error) {
+    if (isDev) {
+      console.warn('[openim] stale data wipe on account change failed', error);
+    }
+    reportError(error, { operation: 'openim', kind: 'accountDataWipe' });
+    return false;
+  }
+}
+
 /** 是否为 OpenIM 的 10004「资源未加载」错误 —— 僵尸登录态的特征。 */
 function isOpenIMResourceNotLoadedError(error: unknown): boolean {
   const code = (error as { code?: number })?.code;
@@ -235,8 +348,21 @@ export async function loginToOpenIM(
     if (logoutPromise) {
       await logoutPromise;
     }
-    await ensureOpenIMInitialized();
     const imUserID = toImUserId(userID);
+    // 换号检测必须在 initSDK 之前（#96）：SDK 还没持有本地库句柄时删目录才安全。
+    const wipeSafe = await wipeStaleOpenIMDataOnAccountChange(imUserID);
+    if (!wipeSafe) {
+      // review 修复（P1）：上一账号的库没清掉就不给新账号开门。
+      // round 2：抛错而不是 return false —— SessionBootstrap / token-recovery
+      // 只对异常记「回前台重试」欠账；静默 false 会被当成功清掉欠账，
+      // IM 从此断连到重启。
+      useIMStore.getState().setConnecting(false);
+      useIMStore
+        .getState()
+        .setError('本地聊天数据清理失败，请重启应用后重试');
+      throw new Error('openim stale-data wipe failed; login aborted');
+    }
+    await ensureOpenIMInitialized();
     useIMStore.getState().setCurrentUserID(imUserID);
     useIMStore.getState().setError(null);
 
@@ -379,6 +505,14 @@ async function performLogoutFromOpenIM(
       console.warn('[openim] SDK logout failed (local state still reset)', err);
     }
     reportError(err, { operation: 'openim', kind: 'logout' });
+    // review 修复：logout 被拒 ≠ native 已释放 DB 句柄。unInit 强制拆除后再
+    // 清本地单例 —— 否则 initPromise 置空会让下次换号 wipe 误判「无活 SDK」，
+    // 在句柄仍被持有时删库（正是要避免的损坏场景）。
+    try {
+      await OpenIMSDK.unInitSDK();
+    } catch (uninitErr) {
+      reportError(uninitErr, { operation: 'openim', kind: 'unInit' });
+    }
   } finally {
     finalizeIMTeardown();
   }
@@ -436,7 +570,7 @@ export async function getOrCreateSingleConversation(sourceID: string) {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -455,7 +589,7 @@ export async function getOrCreateGroupConversation(groupID: string) {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -483,7 +617,7 @@ export async function createGroupChat(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -541,7 +675,7 @@ export async function inviteUsersToGroup(groupID: string, userIDList: string[]) 
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.inviteUserToGroup({
@@ -555,7 +689,7 @@ export async function leaveGroupChat(groupID: string) {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.quitGroup(groupID);
@@ -568,7 +702,7 @@ export async function updateGroupName(groupID: string, groupName: string) {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.setGroupInfo({ groupID, groupName });
@@ -581,7 +715,7 @@ export async function updateGroupNotice(groupID: string, notification: string) {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.setGroupInfo({ groupID, notification });
@@ -595,7 +729,7 @@ export async function updateGroupMemberAlias(
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.setGroupMemberInfo({ groupID, userID, nickname });
@@ -609,7 +743,7 @@ export async function kickGroupMembers(
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.kickGroupMember({ groupID, userIDList, reason });
@@ -619,7 +753,7 @@ export async function hideConversation(conversationID: string) {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.hideConversation(conversationID);
@@ -632,7 +766,7 @@ export async function resetConversationGroupAtType(conversationID: string) {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.resetConversationGroupAtType(conversationID);
@@ -649,7 +783,7 @@ export async function setConversationExtension(
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   let current: Record<string, unknown> = {};
@@ -688,7 +822,7 @@ export async function setConversationExtension(
 export async function getJoinedGroups(): Promise<GroupItem[]> {
   const initialized = await ensureOpenIMInitialized();
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
   await waitForOpenIMConnectionReady();
   return OpenIMSDK.getJoinedGroupList();
@@ -784,7 +918,7 @@ export async function sendTextMessage(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -818,7 +952,7 @@ export async function sendTextAtMessage(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -855,7 +989,7 @@ export async function sendQuoteMessage(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -899,7 +1033,7 @@ export async function sendImageMessage(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -958,7 +1092,7 @@ export async function sendLocationMessage(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -993,7 +1127,7 @@ export async function sendVoiceMessage(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -1033,7 +1167,7 @@ export async function sendVoiceMessageByUrl(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -1118,7 +1252,7 @@ export async function forwardMessage(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -1201,7 +1335,7 @@ export async function sendTransferCardMessage(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -1257,7 +1391,7 @@ export async function sendNoteCardMessage(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -1295,7 +1429,7 @@ export async function sendNoteCardToConversation(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -1338,6 +1472,8 @@ export async function sendNoteCardToConversation(params: {
  * Used by the "share post to chat" entry and the signup → chat auto flow.
  */
 export const PLAZA_POST_CARD_EXTENSION = 'plaza-post-card-v1';
+// 通话留痕卡片：由 circle_be 服务端在通话终局时下发（#115），客户端只读不发。
+export const CALL_RECORD_EXTENSION = 'call-record-v1';
 
 function plazaPostCardPreview(payload: PlazaPostCardData) {
   return `[活动] ${payload.title}`;
@@ -1351,7 +1487,7 @@ export async function sendPlazaPostCardMessage(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -1398,7 +1534,7 @@ export async function sendVerificationCardMessage(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -1449,7 +1585,7 @@ export async function sendFriendCardMessage(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -1513,7 +1649,7 @@ export async function sendCircleCardMessage(params: {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await waitForOpenIMConnectionReady();
@@ -1565,7 +1701,7 @@ export async function toggleConversationPinned(
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.pinConversation({ conversationID, isPinned });
@@ -1578,7 +1714,7 @@ export async function setConversationMute(
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.setConversationRecvMessageOpt({
@@ -1594,7 +1730,7 @@ export async function setConversationBurnDuration(
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.setConversationBurnDuration({ conversationID, burnDuration });
@@ -1604,7 +1740,7 @@ export async function clearConversationMessages(conversationID: string) {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.clearConversationAndDeleteAllMsg(conversationID);
@@ -1615,7 +1751,7 @@ export async function deleteConversation(conversationID: string) {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.deleteConversationAndDeleteAllMsg(conversationID);
@@ -1629,7 +1765,7 @@ export async function deleteLocalMessage(conversationID: string, clientMsgID: st
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.deleteMessageFromLocalStorage({ conversationID, clientMsgID });
@@ -1650,7 +1786,7 @@ export async function clearAllLocalMessages() {
   const initialized = await ensureOpenIMInitialized();
 
   if (!initialized) {
-    throw new Error(getUnsupportedPlatformMessage());
+    throw unsupportedPlatformError();
   }
 
   await OpenIMSDK.deleteAllMsgFromLocal();

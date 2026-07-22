@@ -32,7 +32,6 @@ type BadgeSnapshotPayload = {
   discoverUnread?: number;
   signupUnread?: number;
   profileUnread?: number;
-  systemUnread?: number;
 };
 
 type RealtimeEvent =
@@ -217,7 +216,6 @@ function applyBadgeSnapshot(snapshot: BadgeSnapshotPayload) {
     discoverUnread: snapshot.discoverUnread,
     signupUnread: snapshot.signupUnread,
     profileUnread: snapshot.profileUnread,
-    systemUnread: snapshot.systemUnread,
   });
 }
 
@@ -344,11 +342,14 @@ function handleRealtimeEvent(message: RealtimeEvent) {
       return;
     case 'system.notification.unread.changed':
       badgeStore.setProfileUnread(message.payload?.count ?? 0);
-      badgeStore.setSystemUnread(message.payload?.count ?? 0);
       return;
     case 'user.profile.summary.changed':
       refreshCurrentUserSummaryBestEffort();
       return;
+    // 下面三个事件后端都在真实路径上发，这里「有意不处理」而不是「已处理」（#104）：
+    // 每个都与一个客户端已消费的事件同批到达（interaction-unread / notification.created），
+    // 徽标与通知列表不受影响。丢掉的是增强 payload —— traceId/commentId 可深链到评论、
+    // invitationId+status 可原地更新邀请页。要做时请对着 #104 的清单接。
     case 'circle.post.interaction.created':
       return;
     case 'circle.invitation.reviewed':
@@ -427,7 +428,6 @@ export async function recoverTabBadgeSnapshot(options?: { force?: boolean }) {
       discoverUnread: notificationSummary.discoverUnread,
       signupUnread,
       profileUnread: notificationSummary.profileUnread,
-      systemUnread: notificationSummary.totalUnread,
     });
   } catch (err) {
     // Recovery is best-effort; keep the latest known badge state on failure.

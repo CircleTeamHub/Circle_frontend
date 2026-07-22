@@ -25,7 +25,9 @@ import {
   type AuthTokens,
 } from '@/services/api/auth';
 import { clearLocalSession } from '@/services/auth/session';
+import { isDefinitiveAuthFailure } from '@/services/api/client';
 import { loginToOpenIM, logoutFromOpenIM } from '@/im/client';
+import { markIMLoginRetryPending } from '@/im/login-retry-pending';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useMessageGroupsStore } from '@/features/messages/store/use-message-groups-store';
 import { retry } from '@/utils/retry';
@@ -332,17 +334,63 @@ export function useAuth() {
         useAccountSwitcherStore.getState().close();
         router.replace('/(tabs)/messages');
       } catch (switchError) {
-        // session 已过期：移除死账号，跳登录页并预填账号 id。
-        useKnownAccountsStore.getState().removeAccount(account.user.id);
-        await clearLocalSession();
-        useAccountSwitcherStore.getState().close();
-        if (isDev) {
-          console.warn('[auth] switch account failed (session expired)', switchError);
+        // 只有服务端明确否认凭证（401/403，含刷新失败）才算「session 已过期」——
+        // 移除死账号，跳登录页并预填账号 id。后端重启 / 掉网 / 5xx 时删账号
+        // 等于把一个好账号连同当前会话一起炸掉（#101）。
+        if (isDefinitiveAuthFailure(switchError)) {
+          useKnownAccountsStore.getState().removeAccount(account.user.id);
+          await clearLocalSession();
+          useAccountSwitcherStore.getState().close();
+          if (isDev) {
+            console.warn('[auth] switch account failed (session expired)', switchError);
+          }
+          router.replace({
+            pathname: '/(auth)/login',
+            params: { email: account.user.email ?? '' },
+          });
+        } else {
+          // 瞬时失败：目标账号 token 已乐观激活（上面 setSession），与冷启动
+          // 同哲学 —— 带着快照进 app，后续请求自然重试；账号列表保持完整。
+          // review 修复①：/auth/me 的 401 前置续期可能已轮换 token —— 降级
+          // 进入前把 auth store 里的最新值写回账号列表，否则切走再切回会拿
+          // 旧 refreshToken 撞 401，把一个好账号误判成死账号移除。
+          const { accessToken, refreshToken, imToken } =
+            useAuthStore.getState();
+          if (accessToken && refreshToken) {
+            useKnownAccountsStore.getState().upsertAccount({
+              user: account.user,
+              accessToken,
+              refreshToken,
+              imToken: imToken ?? null,
+              updatedAt: Date.now(),
+            });
+          }
+          // review 修复②：clearLocalSession 已把 OpenIM 登出，而 setSession
+          // 置 isLoading=false 后 SessionBootstrap 不再补 IM 登录 —— 降级进入
+          // 也要用快照 imToken 尽力重连 + 拉会话分组；失败走 token-recovery
+          // 的回前台欠账路径，不阻塞导航。
+          if (imToken) {
+            try {
+              await loginToOpenIM(account.user.id, imToken);
+            } catch (imError) {
+              console.warn(
+                '[openim] degraded-switch login failed',
+                imError instanceof Error ? imError.message : imError,
+              );
+              // round 2 review：降级进入时 /auth/me 在瞬断，这次 IM 登录多半
+              // 也会挂 —— 只 warn 的话 bootstrap 已被 setSession 短路、没人
+              // 再补登，IM 断连到重启。挂进与 bootstrap 共享的补登欠账，
+              // 回前台时由它的前台监听自动重试。
+              markIMLoginRetryPending();
+            }
+            void useMessageGroupsStore.getState().load();
+          }
+          useAccountSwitcherStore.getState().close();
+          if (isDev) {
+            console.warn('[auth] switch account degraded (transient)', switchError);
+          }
+          router.replace('/(tabs)/messages');
         }
-        router.replace({
-          pathname: '/(auth)/login',
-          params: { email: account.user.email ?? '' },
-        });
       } finally {
         inFlightRef.current = false;
         safeSetSubmitting(false);

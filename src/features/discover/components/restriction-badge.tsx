@@ -40,13 +40,6 @@ const s = StyleSheet.create({
   },
 });
 
-// Brand colors not yet mapped into the theme palette. Tracked in REVIEW_PROGRESS #45.
-const BADGE_COLOR = {
-  vip: '#F59E0B',
-  credit: '#3B82F6',
-  fancyNumber: '#A855F7',
-} as const;
-
 export const RestrictionBadge: React.FC<RestrictionBadgeProps> = ({
   restrictions,
 }) => {
@@ -62,7 +55,7 @@ export const RestrictionBadge: React.FC<RestrictionBadgeProps> = ({
           level: restrictions.vipLevel,
           defaultValue: `VIP${restrictions.vipLevel}+`,
         }),
-        color: BADGE_COLOR.vip,
+        color: colors.badgeVip,
       });
     }
     if (restrictions.creditScore != null) {
@@ -72,7 +65,7 @@ export const RestrictionBadge: React.FC<RestrictionBadgeProps> = ({
           score: restrictions.creditScore,
           defaultValue: `信用${restrictions.creditScore}+`,
         }),
-        color: BADGE_COLOR.credit,
+        color: colors.badgeCredit,
       });
     }
     if (restrictions.fancyNumber) {
@@ -81,11 +74,11 @@ export const RestrictionBadge: React.FC<RestrictionBadgeProps> = ({
         label: t('discover.restrictionBadge.fancyNumber', {
           defaultValue: '靓号',
         }),
-        color: BADGE_COLOR.fancyNumber,
+        color: colors.badgeFancy,
       });
     }
     return items;
-  }, [restrictions, t]);
+  }, [restrictions, t, colors]);
 
   if (badges.length === 0) return null;
 
