@@ -2282,6 +2282,7 @@
     "MEMBERSHIP_INVALID_LEVEL": "会员等级无效",
     "MEMBERSHIP_LEVEL_NOT_HIGHER": "请选择高于当前等级的会员",
     "MEMBERSHIP_INSUFFICIENT_POINTS": "积分不足",
+    "MEMBERSHIP_IDEMPOTENCY_KEY_REUSED": "该请求编号已被其他兑换使用，请重试",
     "CIRCLE_MEMBER_LIMIT": "圈子成员已满",
     "CIRCLE_ALREADY_MEMBER": "你已是该圈子成员",
     "CIRCLE_REQUEST_PENDING": "申请已提交，等待处理",

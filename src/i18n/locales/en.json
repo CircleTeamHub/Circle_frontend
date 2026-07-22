@@ -2285,6 +2285,7 @@
     "MEMBERSHIP_INVALID_LEVEL": "Invalid membership level",
     "MEMBERSHIP_LEVEL_NOT_HIGHER": "Choose a level higher than your current one",
     "MEMBERSHIP_INSUFFICIENT_POINTS": "Not enough points",
+    "MEMBERSHIP_IDEMPOTENCY_KEY_REUSED": "This request ID was already used for a different purchase. Please try again.",
     "CIRCLE_MEMBER_LIMIT": "This circle is full",
     "CIRCLE_ALREADY_MEMBER": "You're already a member",
     "CIRCLE_REQUEST_PENDING": "Your request is already pending",

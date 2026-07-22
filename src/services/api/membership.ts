@@ -97,13 +97,18 @@ export async function fetchMembershipPlans(): Promise<MembershipPlan[]> {
 
 export async function upgradeMembership(
   level: number,
+  idempotencyKey?: string,
 ): Promise<UpgradeMembershipResponse> {
   const raw = await apiClient<UpgradeMembershipResponseDTO>('/membership/upgrade', {
     method: 'POST',
     body: { level },
     // #91：与 coin 转账同款幂等头。响应丢失后的盲重试回放当前状态，不重复扣费
     //（后端 circle_be#120 起接受该头；旧后端忽略之，向后兼容）。
-    headers: { 'Idempotency-Key': generateIdempotencyKey() },
+    // review 修复（P1）：键由调用方按「升级意图」持有并在重试间复用 ——
+    // 每次现造新键会让『响应丢了 → 用户再点一次』的场景完全绕开后端去重。
+    headers: {
+      'Idempotency-Key': idempotencyKey ?? generateIdempotencyKey(),
+    },
   });
   // 后端 upgrade 也回同构的 plan（perks 显示串）。映射后再交给上层保持类型诚实；
   // plan 缺失 / 异常时回落本地配置，避免读 undefined 崩掉整个升级流程。

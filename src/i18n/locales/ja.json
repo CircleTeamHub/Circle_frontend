@@ -2282,6 +2282,7 @@
     "MEMBERSHIP_INVALID_LEVEL": "会員レベルが無効です",
     "MEMBERSHIP_LEVEL_NOT_HIGHER": "現在より上のレベルを選んでください",
     "MEMBERSHIP_INSUFFICIENT_POINTS": "ポイントが足りません",
+    "MEMBERSHIP_IDEMPOTENCY_KEY_REUSED": "このリクエストIDは別の購入に使用済みです。もう一度お試しください。",
     "CIRCLE_MEMBER_LIMIT": "サークルが満員です",
     "CIRCLE_ALREADY_MEMBER": "すでにメンバーです",
     "CIRCLE_REQUEST_PENDING": "申請はすでに承認待ちです",

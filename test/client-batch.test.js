@@ -34,6 +34,32 @@ test('忘记密码：登录页入口 → 独立页面 → 后端重置端点 (FE
   assert.ok(fs.existsSync(path.join(process.cwd(), 'app/(auth)/forgot-password.tsx')));
 });
 
+test('忘记密码 review 修复：6 位码校验 + 同步在飞守卫 + 直达回退 (review)', () => {
+  const screen = read('src/features/auth/screens/ForgotPasswordScreen.tsx');
+  // 提交前走共享校验契约（6 位码）——4/5 位残码不再打到后端烧限流配额
+  assert.match(screen, /validateEmail\(email\) \?\? validateCode\(code\)/);
+  // 快速双击不双发（state disabled 等重渲染，ref 同步生效）
+  assert.match(screen, /const submitInFlightRef = useRef\(false\)/);
+  assert.match(screen, /submitInFlightRef\.current = true;/);
+  assert.match(screen, /submitInFlightRef\.current = false;/);
+  // 深链直达（栈里没有登录页）时 back() 是 no-op → 回退 replace 到登录页
+  assert.match(screen, /router\.canGoBack\(\)/);
+  assert.match(screen, /router\.replace\('\/\(auth\)\/login'\)/);
+});
+
+test('重置凭据在 dev 日志中被脱敏（code / newPassword）(review)', () => {
+  const { redactSensitiveFields } = loadTsModule('src/utils/redact.ts');
+  const redacted = redactSensitiveFields({
+    email: 'a@b.com',
+    code: '123456',
+    newPassword: 'hunter2-new',
+  });
+  const plain = JSON.parse(JSON.stringify(redacted));
+  assert.equal(plain.code, '[REDACTED]');
+  assert.equal(plain.newPassword, '[REDACTED]');
+  assert.equal(plain.email, 'a@b.com');
+});
+
 test('回收站：列表 + 恢复接线 (FE#92)', () => {
   const api = read('src/services/api/notes.ts');
   assert.match(api, /\/note\/recycle-bin/);
@@ -56,10 +82,39 @@ test('回收站：列表 + 恢复接线 (FE#92)', () => {
 // #91 幂等头 / #100 卡片回执
 // ---------------------------------------------------------------------------
 
-test('membership upgrade 携带 Idempotency-Key (#91)', () => {
+test('membership upgrade 幂等键跟随升级意图存活（review P1）', () => {
   const api = read('src/services/api/membership.ts');
   const upgradeBlock = api.slice(api.indexOf('export async function upgradeMembership'));
-  assert.match(upgradeBlock, /'Idempotency-Key': generateIdempotencyKey\(\)/);
+  // 键由调用方传入（重试间复用）；缺省才现造（向后兼容）
+  assert.match(upgradeBlock, /idempotencyKey\?: string/);
+  assert.match(
+    upgradeBlock,
+    /'Idempotency-Key': idempotencyKey \?\? generateIdempotencyKey\(\)/,
+  );
+
+  // 意图级持键：同一等级重试复用同一枚键，换等级/成功后换新键
+  const mod = loadTsModule('src/features/profile/membership-idempotency.ts', {
+    requireShim: (specifier) => {
+      if (specifier === '@/utils/idempotency-key') {
+        let seq = 0;
+        return { generateIdempotencyKey: () => `key-${(seq += 1)}` };
+      }
+      throw new Error(`unexpected import: ${specifier}`);
+    },
+  });
+  const first = mod.resolveMembershipUpgradeIdempotency(null, { level: 2 });
+  // 响应丢失后的重试：同意图 → 同键（后端去重的前提）
+  const retry = mod.resolveMembershipUpgradeIdempotency(first, { level: 2 });
+  assert.equal(retry.key, first.key);
+  // 换等级 → 新键
+  const other = mod.resolveMembershipUpgradeIdempotency(first, { level: 3 });
+  assert.notEqual(other.key, first.key);
+
+  // 屏幕接线：ref 持键、传入 API、成功后失效
+  const screen = read('src/features/profile/screens/MemberCenterScreen.tsx');
+  assert.match(screen, /resolveMembershipUpgradeIdempotency\(/);
+  assert.match(screen, /upgradeMembership\(level, idempotency\.key\)/);
+  assert.match(screen, /upgradeIdempotencyRef\.current = null;/);
 });
 
 test('转账卡片发出后向后端回执，key 贯穿 pending store (#100)', () => {
@@ -95,21 +150,26 @@ test('空 cities = 未设置 = 不匹配任何城市筛选 (#116 语义钉死)',
       throw new Error(`unexpected import: ${specifier}`);
     },
   });
-  const filterFn =
-    mod.filterCircles ?? mod.matchesCircleFilter ?? mod.default ?? null;
-  // 行为验证：空 cities 圈子在城市筛选下不可见（导出面不确定时跳过行为断言，
-  // 源码注释断言已钉住意图）
-  if (typeof filterFn === 'function') {
-    const circles = [
-      { id: 'a', cities: ['上海'] },
-      { id: 'b', cities: [] },
-    ];
-    const result = filterFn(circles, { circleIds: [], cities: ['上海'] });
-    if (Array.isArray(result)) {
-      assert.deepEqual(
-        JSON.parse(JSON.stringify(result.map((c) => c.id))),
-        ['a'],
-      );
-    }
-  }
+  // review 修复：直接调用真实导出 applyCircleFilter，断言强制执行 ——
+  // 旧的回退名单一个都不匹配，行为断言整段被静默跳过，
+  // 「空 cities 匹配上选中城市」的回归照样能过 CI。
+  assert.equal(typeof mod.applyCircleFilter, 'function');
+  const circles = [
+    { id: 'a', cities: ['上海'] },
+    { id: 'b', cities: [] },
+  ];
+  const result = mod.applyCircleFilter(circles, {
+    circleIds: [],
+    cities: ['上海'],
+  });
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(result.map((c) => c.id))),
+    ['a'],
+  );
+  // 无筛选时全量放行（回归护栏）
+  const unfiltered = mod.applyCircleFilter(circles, {
+    circleIds: [],
+    cities: [],
+  });
+  assert.equal(unfiltered.length, 2);
 });

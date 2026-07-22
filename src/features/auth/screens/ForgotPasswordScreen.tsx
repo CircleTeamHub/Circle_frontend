@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -16,7 +16,7 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { useSendEmailCode } from '@/hooks/use-send-email-code';
 import { resetPassword } from '@/services/api/auth';
 import { getApiErrorMessage } from '@/services/api/errors';
-import { validateEmail } from '@/features/auth/validation';
+import { validateCode, validateEmail } from '@/features/auth/validation';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
@@ -68,6 +68,10 @@ export function ForgotPasswordScreen() {
   const [newPassword, setNewPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // review 修复：state 版 disabled 要等重渲染才生效，快速双击会用同一枚
+  // 验证码双发 /auth/password/reset（第一发消费一次性码 + 全端下线，
+  // 第二发只会带回一个费解的失败）。ref 同步生效。
+  const submitInFlightRef = useRef(false);
   const sendCode = useSendEmailCode('reset-password');
 
   const canSubmit =
@@ -81,13 +85,16 @@ export function ForgotPasswordScreen() {
   }, [sendCode, email]);
 
   const onSubmit = useCallback(async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || submitInFlightRef.current) return;
     setError(null);
-    const invalidEmail = validateEmail(email);
-    if (invalidEmail) {
-      setError(t(invalidEmail));
+    // review 修复：与共享校验契约对齐（6 位验证码）—— 4/5 位残码不再打到
+    // 后端变成格式错误的重置尝试，白白消耗敏感限流配额。
+    const invalidField = validateEmail(email) ?? validateCode(code);
+    if (invalidField) {
+      setError(t(invalidField));
       return;
     }
+    submitInFlightRef.current = true;
     setSubmitting(true);
     try {
       await resetPassword({ email, code, newPassword });
@@ -98,7 +105,13 @@ export function ForgotPasswordScreen() {
         }),
         [{ text: t('common.ok', { defaultValue: '好的' }) }],
       );
-      router.back();
+      // review 修复：深链/网页刷新直达本页时栈里没有登录页，back() 是
+      // no-op，会把用户留在还带着验证码/新密码的表单上。
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/(auth)/login');
+      }
     } catch (e) {
       setError(
         getApiErrorMessage(
@@ -109,6 +122,7 @@ export function ForgotPasswordScreen() {
         ),
       );
     } finally {
+      submitInFlightRef.current = false;
       setSubmitting(false);
     }
   }, [canSubmit, email, code, newPassword, router, t]);

@@ -2285,6 +2285,7 @@
     "MEMBERSHIP_INVALID_LEVEL": "Nivel de membresía no válido",
     "MEMBERSHIP_LEVEL_NOT_HIGHER": "Elige un nivel superior al actual",
     "MEMBERSHIP_INSUFFICIENT_POINTS": "Puntos insuficientes",
+    "MEMBERSHIP_IDEMPOTENCY_KEY_REUSED": "Este ID de solicitud ya se usó para otra compra. Inténtalo de nuevo.",
     "CIRCLE_MEMBER_LIMIT": "Este círculo está lleno",
     "CIRCLE_ALREADY_MEMBER": "Ya eres miembro",
     "CIRCLE_REQUEST_PENDING": "Tu solicitud ya está pendiente",

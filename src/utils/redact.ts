@@ -10,6 +10,10 @@
 // 防止 password/token/Authorization/cookie 等通过控制台、Metro 日志、屏幕录制泄漏。
 const SENSITIVE_KEYS = new Set([
   'password',
+  // review 修复：忘记密码流新增的两个敏感字段 —— 一次性重置码与新密码，
+  // dev 日志里出现等于把接管账号的凭据吐给 Metro/设备日志。
+  'newpassword',
+  'code',
   'token',
   'accesstoken',
   'refreshtoken',
