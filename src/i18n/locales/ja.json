@@ -655,7 +655,8 @@
       "edit": "編集",
       "unlist": "非公開にする",
       "relist": "公開に戻す",
-      "more": "その他"
+      "more": "その他",
+      "restore": "復元"
     },
     "alerts": {
       "deleteFailedTitle": "削除に失敗しました",
@@ -676,7 +677,9 @@
       "relistFailedTitle": "公開に戻せませんでした",
       "unlistFailedTitle": "非公開にできませんでした",
       "unlistTitle": "ノートを非公開にする",
-      "unlistConfirm": "非公開にしたノートは非公開リストで確認できます。1か月後に自動削除されます。"
+      "unlistConfirm": "非公開にしたノートは非公開リストで確認できます。1か月後に自動削除されます。",
+      "restoreFailedTitle": "復元に失敗しました",
+      "refreshFailedTitle": "更新に失敗しました"
     },
     "detail": {
       "loadFailed": "ノートを読み込めませんでした。もう一度お試しください",
@@ -749,7 +752,8 @@
     "empty": {
       "noMatch": "一致するノートがありません",
       "noNotes": "まだノートがありません",
-      "noUnlisted": "非公開のノートはありません"
+      "noUnlisted": "非公開のノートはありません",
+      "noDeleted": "ごみ箱は空です"
     },
     "manageGroups": {
       "cancelEdit": "編集をキャンセル",
@@ -844,7 +848,10 @@
       "empty": "送信できるチャットがありません",
       "groupHint": "グループ",
       "friendHint": "友だち"
-    }
+    },
+    "recycleBin": "ごみ箱",
+    "recycleBinTitle": "ごみ箱",
+    "recycleBinHint": "削除したノートはここから復元できます。"
   },
   "tempChats": {
     "title": "枠の管理",
@@ -1994,7 +2001,17 @@
       "sendCodeFailed": "送信に失敗しました。もう一度お試しください"
     },
     "hidePassword": "パスワードを非表示",
-    "showPassword": "パスワードを表示"
+    "showPassword": "パスワードを表示",
+    "resendIn": "{{seconds}}秒後に再送",
+    "resetPassword": {
+      "intro": "登録済みメールアドレスを入力すると、パスワード再設定用の認証コードを送信します。",
+      "newPasswordPlaceholder": "新しいパスワード（6文字以上）",
+      "submit": "パスワードを再設定",
+      "submitting": "再設定中…",
+      "successTitle": "パスワードを再設定しました",
+      "successBody": "すべての端末からログアウトしました。新しいパスワードでログインしてください。",
+      "failed": "再設定に失敗しました。コードを確認してもう一度お試しください"
+    }
   },
   "common": {
     "save": "保存",
@@ -2281,6 +2298,7 @@
     "MEMBERSHIP_INVALID_LEVEL": "会員レベルが無効です",
     "MEMBERSHIP_LEVEL_NOT_HIGHER": "現在より上のレベルを選んでください",
     "MEMBERSHIP_INSUFFICIENT_POINTS": "ポイントが足りません",
+    "MEMBERSHIP_IDEMPOTENCY_KEY_REUSED": "このリクエストIDは別の購入に使用済みです。もう一度お試しください。",
     "CIRCLE_MEMBER_LIMIT": "サークルが満員です",
     "CIRCLE_ALREADY_MEMBER": "すでにメンバーです",
     "CIRCLE_REQUEST_PENDING": "申請はすでに承認待ちです",
@@ -2338,6 +2356,7 @@
     "TEMP_CHAT_ENDED": "一時チャットは終了しました",
     "TEMP_CHAT_FULL": "参加人数が上限に達しています",
     "TEMP_CHAT_CREATOR_ONLY": "作成者のみが終了できます",
+    "TEMP_CHAT_JOIN_FAILED": "参加に失敗しました。もう一度お試しください",
     "PLAZA_NOT_ACTIVE_MEMBER": "サークルのアクティブメンバーのみが投稿できます",
     "PLAZA_ADMIN_ONLY_POST": "このサークルでは管理者のみが投稿できます",
     "PLAZA_NOTE_INVALID": "そのノートは利用できないか、あなたのものではありません",
@@ -2404,17 +2423,21 @@
     "FRIEND_REQUEST_MESSAGE_INVALID": "メッセージは空にできず、500文字以内で入力してください",
     "FRIEND_REQUEST_MESSAGE_LIMIT": "相手が返信するまでに送れるメッセージは最大5件です",
     "NOTE_NOT_FOUND": "ノートが見つかりません",
+    "NOTE_RESTORE_DUPLICATE": "このノートの別の収蔵コピーが既に存在します。",
     "NOTE_GROUP_NOT_FOUND": "ノートグループが見つかりません",
     "NOTE_IMAGE_TOO_LARGE": "画像が大きすぎて埋め込めません",
     "NOTE_SHARE_LINK_INVALID": "この共有リンクは無効です",
+    "NOTE_SHARE_LINK_LIMIT": "共有リンクの上限に達しました。不要なリンクを取り消してください",
     "CALL_NOT_INVITED": "この通話に招待されていません",
     "CALL_NOT_FOUND": "通話が見つかりません",
     "CALL_NOT_ALLOWED": "この通話操作は許可されていません",
     "CALL_ALREADY_ACTIVE": "すでに通話中です",
+    "UPLOAD_PAYLOAD_TOO_LARGE": "ファイルが大きすぎてアップロードできません",
     "CALL_NOT_FRIEND": "通話できるのは友達のみです",
     "CONVGROUP_NOT_FOUND": "グループが見つかりません",
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "会話が見つかりません",
     "COLLECTION_NOT_FOUND": "コレクションが見つかりません",
+    "COLLECTION_LIMIT": "コレクションの上限に達しました。不要なものを削除してください",
     "ICON_DISPLAY_LIMIT": "表示できるアイコンは最大5個です",
     "ICON_INVALID_SYSTEM_SELECTION": "アイコンの選択が無効です",
     "ICON_INVALID_CIRCLE_SELECTION": "サークルアイコンの選択が無効です",

@@ -79,6 +79,8 @@ interface AuthState {
     refreshToken: string;
     imToken?: string | null;
   }) => void;
+  // 只换 IM 凭证（GET /auth/im-token 自愈路径），不动业务 token 与会话身份。
+  setImToken: (imToken: string) => void;
   setUser: (user: AuthUser) => void;
   setOnboardingRequired: (required: boolean) => void;
   clearSession: () => void;
@@ -143,6 +145,14 @@ export const useAuthStore = create<AuthState>()(
               ? imToken
               : state.imToken,
           isAuthenticated: true,
+        })),
+
+      setImToken: (imToken) =>
+        set((state) => ({
+          imToken:
+            typeof imToken === 'string' && imToken.length > 0
+              ? imToken
+              : state.imToken,
         })),
 
       setUser: (user) => set({ user }),

@@ -55,3 +55,28 @@ test('dynamic app config omits unset optional push build values', () => {
   assert.equal(config.extra?.eas?.projectId, undefined);
   assert.equal(config.android.googleServicesFile, undefined);
 });
+
+test('iOS 声明 audio 后台模式让通话在退后台后存活，且不带 voip (#118)', () => {
+  const modes = appJson.expo.ios.infoPlist.UIBackgroundModes;
+  assert.deepEqual(modes, ['audio']);
+  // "voip" 只有配齐 PushKit + CallKit 才合法，裸声明是 App Review 拒审项。
+  assert.ok(!modes.includes('voip'));
+});
+
+test('MMKV 目录在 iOS 上排除出设备备份 (#88)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const util = fs.readFileSync(
+    path.join(process.cwd(), 'src/storage/ios-backup-exclusion.ts'),
+    'utf8',
+  );
+  assert.match(util, /NSURLIsExcludedFromBackupKey: true/);
+  assert.match(util, /DocumentDirectoryPath\}\/mmkv/);
+  assert.match(util, /Platform\.OS !== 'ios'/);
+
+  const layout = fs.readFileSync(
+    path.join(process.cwd(), 'app/_layout.tsx'),
+    'utf8',
+  );
+  assert.match(layout, /excludeMmkvDirFromIOSBackup\(\)/);
+});

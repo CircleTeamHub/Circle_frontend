@@ -12,6 +12,9 @@ interface LocalUnreadState {
   markUnread: (conversationID: string) => void;
   clearUnread: (conversationID: string) => void;
   clearMany: (conversationIDs: string[]) => void;
+  // 登出 teardown 用（#97）：overrides 按 conversationID 记账号私有数据，
+  // 换号后残留会把上一账号的幻影未读点带进下一账号的会话列表。
+  resetForLogout: () => void;
 }
 
 export const useLocalUnreadStore = create<LocalUnreadState>()(
@@ -40,6 +43,7 @@ export const useLocalUnreadStore = create<LocalUnreadState>()(
           }
           return changed ? { overrides: next } : state;
         }),
+      resetForLogout: () => set({ overrides: {} }),
     }),
     {
       name: 'circle-im-local-unread-overrides',

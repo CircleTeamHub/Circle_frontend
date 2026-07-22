@@ -448,6 +448,10 @@ export default function CircleDetailScreen() {
     setJoining(true);
     try {
       await joinCircle(id);
+      // round 3 review：成员关系已变 —— 变更前出发的 /circle/my 在飞快照
+      // 必须作废（force 绕过在飞合并），否则返回广场的 focus 刷新会 await
+      // 到入圈前的列表。fire-and-forget，不阻塞本页刷新。
+      void useCirclesStore.getState().fetchMyCircles({ force: true });
       await loadCircle();
     } catch (error) {
       Alert.alert(

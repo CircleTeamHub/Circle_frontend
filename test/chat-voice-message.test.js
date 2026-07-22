@@ -9,6 +9,12 @@ const DEFAULT_CLIENT_STUBS = {
   '@/im/listeners': {
     bindOpenIMListeners: () => () => {},
   },
+  '@/im/token-recovery': {
+    registerIMLoginExecutor: () => {},
+    registerIMLogoutExecutor: () => {},
+    recoverIMSession: async () => false,
+    isIMReloginPending: () => false,
+  },
   '@/services/auth/session': {
     registerLogoutHandler: () => () => {},
   },
@@ -53,6 +59,11 @@ function normalize(value) {
 }
 
 DEFAULT_CLIENT_STUBS['@/im/user-id'] = loadTsModule('src/im/user-id.ts');
+DEFAULT_CLIENT_STUBS['@/im/error-codes'] = loadTsModule('src/im/error-codes.ts');
+DEFAULT_CLIENT_STUBS['@/im/data-dir'] = loadTsModule('src/im/data-dir.ts');
+DEFAULT_CLIENT_STUBS['@/storage'] = {
+  storage: { getString: () => undefined, set: () => {}, remove: () => {} },
+};
 DEFAULT_CLIENT_STUBS['@/observability/sentry'] = { reportError: () => {} };
 DEFAULT_CLIENT_STUBS['@/services/api/credit-policy'] = {
   assertCanSendMessage: async () => undefined,
@@ -115,6 +126,8 @@ test('sendVoiceMessage creates an OpenIM sound message from a local recording pa
       default: {
         DocumentDirectoryPath: '/tmp',
         mkdir: async () => undefined,
+          exists: async () => false,
+          unlink: async () => undefined,
       },
     },
     'react-native': {
@@ -209,6 +222,8 @@ test('sendVoiceMessageByUrl creates an OpenIM sound message from a remote URL', 
       default: {
         DocumentDirectoryPath: '/tmp',
         mkdir: async () => undefined,
+          exists: async () => false,
+          unlink: async () => undefined,
       },
     },
     'react-native': {
@@ -310,7 +325,12 @@ function loadClientWithSoundStubs(sdkCalls) {
     },
     'react-native-fs': {
       __esModule: true,
-      default: { DocumentDirectoryPath: '/tmp', mkdir: async () => undefined },
+      default: {
+        DocumentDirectoryPath: '/tmp',
+        mkdir: async () => undefined,
+        exists: async () => false,
+        unlink: async () => undefined,
+      },
     },
     'react-native': { Platform: { OS: 'ios' } },
     '@/constants/config': {

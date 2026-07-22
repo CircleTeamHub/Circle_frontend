@@ -109,7 +109,17 @@
       "sendCodeFailed": "发送失败，请重试"
     },
     "hidePassword": "隐藏密码",
-    "showPassword": "显示密码"
+    "showPassword": "显示密码",
+    "resendIn": "{{seconds}}s 后重发",
+    "resetPassword": {
+      "intro": "输入注册邮箱，我们会发送验证码用于重置密码。",
+      "newPasswordPlaceholder": "新密码（至少 6 位）",
+      "submit": "重置密码",
+      "submitting": "重置中…",
+      "successTitle": "密码已重置",
+      "successBody": "所有设备已退出登录，请用新密码重新登录。",
+      "failed": "重置失败，请检查验证码后重试"
+    }
   },
   "onboarding": {
     "profileTitle": "完善个人资料",
@@ -1901,7 +1911,8 @@
       "edit": "编辑",
       "unlist": "下架",
       "relist": "上架",
-      "more": "更多"
+      "more": "更多",
+      "restore": "恢复"
     },
     "alerts": {
       "deleteFailedTitle": "删除失败",
@@ -1922,7 +1933,9 @@
       "relistFailedTitle": "上架失败",
       "unlistFailedTitle": "下架失败",
       "unlistTitle": "下架笔记",
-      "unlistConfirm": "下架后可在已下架列表查看，已下架笔记会在一个月后自动删除。"
+      "unlistConfirm": "下架后可在已下架列表查看，已下架笔记会在一个月后自动删除。",
+      "restoreFailedTitle": "恢复失败",
+      "refreshFailedTitle": "刷新失败"
     },
     "detail": {
       "loadFailed": "笔记加载失败，请稍后重试",
@@ -1995,7 +2008,8 @@
     "empty": {
       "noMatch": "没有匹配的笔记",
       "noNotes": "暂无笔记",
-      "noUnlisted": "暂无已下架笔记"
+      "noUnlisted": "暂无已下架笔记",
+      "noDeleted": "回收站是空的"
     },
     "manageGroups": {
       "cancelEdit": "取消编辑",
@@ -2090,7 +2104,10 @@
       "empty": "暂无可发送的聊天对象",
       "groupHint": "群聊",
       "friendHint": "好友"
-    }
+    },
+    "recycleBin": "回收站",
+    "recycleBinTitle": "回收站",
+    "recycleBinHint": "已删除的笔记可在这里恢复。"
   },
   "search": {
     "loadFriendsFailed": "好友列表加载失败，请稍后重试",
@@ -2281,6 +2298,7 @@
     "MEMBERSHIP_INVALID_LEVEL": "会员等级无效",
     "MEMBERSHIP_LEVEL_NOT_HIGHER": "请选择高于当前等级的会员",
     "MEMBERSHIP_INSUFFICIENT_POINTS": "积分不足",
+    "MEMBERSHIP_IDEMPOTENCY_KEY_REUSED": "该请求编号已被其他兑换使用，请重试",
     "CIRCLE_MEMBER_LIMIT": "圈子成员已满",
     "CIRCLE_ALREADY_MEMBER": "你已是该圈子成员",
     "CIRCLE_REQUEST_PENDING": "申请已提交，等待处理",
@@ -2338,6 +2356,7 @@
     "TEMP_CHAT_ENDED": "临时聊天已结束",
     "TEMP_CHAT_FULL": "人数已满",
     "TEMP_CHAT_CREATOR_ONLY": "只有创建者可以结束",
+    "TEMP_CHAT_JOIN_FAILED": "加入失败，请重试",
     "PLAZA_NOT_ACTIVE_MEMBER": "只有圈子活跃成员才能发帖",
     "PLAZA_ADMIN_ONLY_POST": "该圈子仅管理员可以发帖",
     "PLAZA_NOTE_INVALID": "笔记不存在、不可用或不属于你",
@@ -2404,17 +2423,21 @@
     "FRIEND_REQUEST_MESSAGE_INVALID": "留言内容不能为空，且不能超过 500 字",
     "FRIEND_REQUEST_MESSAGE_LIMIT": "对方回复前最多发送 5 条留言",
     "NOTE_NOT_FOUND": "笔记不存在",
+    "NOTE_RESTORE_DUPLICATE": "该笔记的另一份收藏副本已存在，无需恢复",
     "NOTE_GROUP_NOT_FOUND": "笔记分组不存在",
     "NOTE_IMAGE_TOO_LARGE": "图片过大，无法嵌入",
     "NOTE_SHARE_LINK_INVALID": "分享链接无效",
+    "NOTE_SHARE_LINK_LIMIT": "分享链接数量已达上限，请先撤销不再使用的链接",
     "CALL_NOT_INVITED": "你未被邀请加入该通话",
     "CALL_NOT_FOUND": "通话不存在",
     "CALL_NOT_ALLOWED": "你无权进行此通话操作",
     "CALL_ALREADY_ACTIVE": "你已在一个进行中的通话中",
+    "UPLOAD_PAYLOAD_TOO_LARGE": "文件太大，超出上传上限",
     "CALL_NOT_FRIEND": "只能与好友通话",
     "CONVGROUP_NOT_FOUND": "分组不存在",
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "会话不存在",
     "COLLECTION_NOT_FOUND": "收藏不存在",
+    "COLLECTION_LIMIT": "收藏数量已达上限，请先清理不再需要的收藏",
     "ICON_DISPLAY_LIMIT": "最多只能展示 5 个图标",
     "ICON_INVALID_SYSTEM_SELECTION": "图标选择无效",
     "ICON_INVALID_CIRCLE_SELECTION": "圈子图标选择无效",

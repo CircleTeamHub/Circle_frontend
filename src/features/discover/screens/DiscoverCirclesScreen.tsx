@@ -265,7 +265,7 @@ export default function DiscoverCirclesScreen() {
       ) : allCirclesError && allCircles.length === 0 ? (
         <View style={s.emptyContainer}>
           <Text style={d.emptyText}>{allCirclesError}</Text>
-          <Pressable style={d.retryButton} onPress={fetchAllCircles}>
+          <Pressable style={d.retryButton} onPress={() => fetchAllCircles()}>
             <Text style={d.retryText}>{t('common.retry')}</Text>
           </Pressable>
         </View>

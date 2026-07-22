@@ -656,7 +656,8 @@
       "edit": "Editar",
       "unlist": "Retirar",
       "relist": "Volver a publicar",
-      "more": "Más"
+      "more": "Más",
+      "restore": "Restaurar"
     },
     "alerts": {
       "deleteFailedTitle": "Error al eliminar",
@@ -677,7 +678,9 @@
       "relistFailedTitle": "No se pudo volver a publicar",
       "unlistFailedTitle": "No se pudo retirar",
       "unlistTitle": "Retirar nota",
-      "unlistConfirm": "Podrás verla en Retiradas. Las notas retiradas se eliminan automáticamente después de un mes."
+      "unlistConfirm": "Podrás verla en Retiradas. Las notas retiradas se eliminan automáticamente después de un mes.",
+      "restoreFailedTitle": "No se pudo restaurar",
+      "refreshFailedTitle": "Error al actualizar"
     },
     "detail": {
       "loadFailed": "No se pudo cargar la nota, inténtalo de nuevo",
@@ -750,7 +753,8 @@
     "empty": {
       "noMatch": "No hay notas coincidentes",
       "noNotes": "Aún no hay notas",
-      "noUnlisted": "No hay notas retiradas"
+      "noUnlisted": "No hay notas retiradas",
+      "noDeleted": "La papelera está vacía"
     },
     "manageGroups": {
       "cancelEdit": "Cancelar edición",
@@ -845,7 +849,10 @@
       "empty": "No hay chats para enviar",
       "groupHint": "Grupo",
       "friendHint": "Amigo"
-    }
+    },
+    "recycleBin": "Papelera",
+    "recycleBinTitle": "Papelera",
+    "recycleBinHint": "Las notas eliminadas se pueden restaurar aquí."
   },
   "tempChats": {
     "title": "Gestión de plazas",
@@ -1997,7 +2004,17 @@
       "sendCodeFailed": "Error al enviar, inténtalo de nuevo"
     },
     "hidePassword": "Ocultar contraseña",
-    "showPassword": "Mostrar contraseña"
+    "showPassword": "Mostrar contraseña",
+    "resendIn": "Reenviar en {{seconds}}s",
+    "resetPassword": {
+      "intro": "Introduce tu correo registrado y te enviaremos un código para restablecer la contraseña.",
+      "newPasswordPlaceholder": "Nueva contraseña (mín. 6 caracteres)",
+      "submit": "Restablecer contraseña",
+      "submitting": "Restableciendo…",
+      "successTitle": "Contraseña restablecida",
+      "successBody": "Se cerró la sesión en todos los dispositivos. Inicia sesión con tu nueva contraseña.",
+      "failed": "No se pudo restablecer; verifica el código e inténtalo de nuevo"
+    }
   },
   "common": {
     "save": "Guardar",
@@ -2284,6 +2301,7 @@
     "MEMBERSHIP_INVALID_LEVEL": "Nivel de membresía no válido",
     "MEMBERSHIP_LEVEL_NOT_HIGHER": "Elige un nivel superior al actual",
     "MEMBERSHIP_INSUFFICIENT_POINTS": "Puntos insuficientes",
+    "MEMBERSHIP_IDEMPOTENCY_KEY_REUSED": "Este ID de solicitud ya se usó para otra compra. Inténtalo de nuevo.",
     "CIRCLE_MEMBER_LIMIT": "Este círculo está lleno",
     "CIRCLE_ALREADY_MEMBER": "Ya eres miembro",
     "CIRCLE_REQUEST_PENDING": "Tu solicitud ya está pendiente",
@@ -2341,6 +2359,7 @@
     "TEMP_CHAT_ENDED": "Este chat temporal ha finalizado",
     "TEMP_CHAT_FULL": "Este chat está lleno",
     "TEMP_CHAT_CREATOR_ONLY": "Solo el creador puede finalizar este chat",
+    "TEMP_CHAT_JOIN_FAILED": "No se pudo unir, inténtalo de nuevo",
     "PLAZA_NOT_ACTIVE_MEMBER": "Solo los miembros activos del círculo pueden publicar",
     "PLAZA_ADMIN_ONLY_POST": "Solo los administradores pueden publicar en este círculo",
     "PLAZA_NOTE_INVALID": "Esa nota no está disponible o no es tuya",
@@ -2407,17 +2426,21 @@
     "FRIEND_REQUEST_MESSAGE_INVALID": "El mensaje no puede estar vacío y debe tener 500 caracteres o menos",
     "FRIEND_REQUEST_MESSAGE_LIMIT": "Puedes enviar hasta 5 mensajes antes de que respondan",
     "NOTE_NOT_FOUND": "Nota no encontrada",
+    "NOTE_RESTORE_DUPLICATE": "Ya existe otra copia activa de esta nota guardada.",
     "NOTE_GROUP_NOT_FOUND": "Grupo de notas no encontrado",
     "NOTE_IMAGE_TOO_LARGE": "La imagen es demasiado grande para insertarla",
     "NOTE_SHARE_LINK_INVALID": "Este enlace para compartir no es válido",
+    "NOTE_SHARE_LINK_LIMIT": "Límite de enlaces compartidos alcanzado; revoca los que no uses",
     "CALL_NOT_INVITED": "No has sido invitado a esta llamada",
     "CALL_NOT_FOUND": "Llamada no encontrada",
     "CALL_NOT_ALLOWED": "No puedes realizar esta acción de llamada",
     "CALL_ALREADY_ACTIVE": "Ya estás en una llamada activa",
+    "UPLOAD_PAYLOAD_TOO_LARGE": "El archivo es demasiado grande para subirlo",
     "CALL_NOT_FRIEND": "Solo puedes llamar a tus amigos",
     "CONVGROUP_NOT_FOUND": "Grupo no encontrado",
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "Conversación no encontrada",
     "COLLECTION_NOT_FOUND": "Colección no encontrada",
+    "COLLECTION_LIMIT": "Límite de colecciones alcanzado; elimina las que no necesites",
     "ICON_DISPLAY_LIMIT": "Puedes mostrar como máximo 5 iconos",
     "ICON_INVALID_SYSTEM_SELECTION": "Selección de icono no válida",
     "ICON_INVALID_CIRCLE_SELECTION": "Selección de icono de círculo no válida",
