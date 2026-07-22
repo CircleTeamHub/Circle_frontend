@@ -28,17 +28,27 @@ import { useIMStore } from '@/stores/imStore';
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 
 type IMLoginExecutor = (userId: string, imToken: string) => Promise<boolean>;
+type IMLogoutExecutor = () => Promise<void>;
 
 let imLoginExecutor: IMLoginExecutor | null = null;
+let imLogoutExecutor: IMLogoutExecutor | null = null;
 
 /** 由 im/client.ts 在模块求值时注入 loginToOpenIM，避免模块环。 */
 export function registerIMLoginExecutor(executor: IMLoginExecutor): void {
   imLoginExecutor = executor;
 }
 
+/** 同上：注入 logoutFromOpenIM，供「恢复期间会话已切换」的陈旧登录拆除。 */
+export function registerIMLogoutExecutor(executor: IMLogoutExecutor): void {
+  imLogoutExecutor = executor;
+}
+
 // 单飞：SDK 可能连发 onUserTokenExpired / onUserTokenInvalid，服务端限流 10 次/分，
 // 并发恢复既浪费配额也可能触发重复登录。
+// review 修复：单飞按 sessionEpoch 记账 —— A 会话的在飞恢复不能被 B 会话
+// 复用（A 的 epoch 守卫会让它 no-op 返回 false，B 将永远拿不到自己的恢复）。
 let recoveryPromise: Promise<boolean> | null = null;
+let recoveryEpoch: number | null = null;
 // 「欠一次恢复」标记：瞬时失败（网络 / 503 / 限流）后置 true，
 // SessionBootstrap 的回前台监听会消费它再试一次。
 let reloginPending = false;
@@ -75,14 +85,22 @@ async function performRecovery(): Promise<boolean> {
     if (isDefinitiveAuthFailure(error)) {
       // 业务凭证也被服务端明确否认（401 且 refresh 已在 api 层失败）——
       // 这才是真正的「请重新登录」。clearLocalSession 幂等，api 层可能已清过。
+      // review 修复：清理与跳转都锚定 startEpoch —— 请求 unwinding 期间用户
+      // 已重新登录/切号时，无作用域的 clear 会把新会话也抹掉再踢回登录页。
       reloginPending = false;
-      useIMStore.getState().setError(
-        i18n.t('common.errors.sessionExpired', {
-          defaultValue: '登录已过期，请重新登录',
-        }),
-      );
-      await clearLocalSession();
-      router.replace('/(auth)/login');
+      const epochStillCurrent =
+        useAuthStore.getState().sessionEpoch === startEpoch;
+      if (epochStillCurrent) {
+        useIMStore.getState().setError(
+          i18n.t('common.errors.sessionExpired', {
+            defaultValue: '登录已过期，请重新登录',
+          }),
+        );
+      }
+      await clearLocalSession(startEpoch);
+      if (epochStillCurrent) {
+        router.replace('/(auth)/login');
+      }
       return false;
     }
     // 网络不可达 / 503 / 限流：会话保住，记欠账，回前台再试。
@@ -112,6 +130,16 @@ async function performRecovery(): Promise<boolean> {
 
   try {
     const loggedIn = await imLoginExecutor(user.id, imToken);
+    // review 修复：executor await 期间用户可能已登出/切号 —— 此时刚完成的是
+    // 「旧用户」的 OpenIM 登录，放着不管消息会路由到错误身份下。拆掉并按
+    // 失败返回（新会话的 IM 登录由它自己的启动流程负责）。
+    if (useAuthStore.getState().sessionEpoch !== startEpoch) {
+      if (loggedIn && imLogoutExecutor) {
+        await imLogoutExecutor().catch(() => undefined);
+      }
+      reloginPending = false;
+      return false;
+    }
     reloginPending = !loggedIn;
     return loggedIn;
   } catch (error) {
@@ -132,14 +160,18 @@ async function performRecovery(): Promise<boolean> {
  * 瞬时失败记欠账），调用方无需 catch。
  */
 export function recoverIMSession(): Promise<boolean> {
-  if (recoveryPromise) {
+  const currentEpoch = useAuthStore.getState().sessionEpoch;
+  if (recoveryPromise && recoveryEpoch === currentEpoch) {
     return recoveryPromise;
   }
+  // 换会话后旧在飞恢复照旧收尾（其 epoch 守卫会让它 no-op），当前会话另起一次。
   const active = performRecovery().finally(() => {
     if (recoveryPromise === active) {
       recoveryPromise = null;
+      recoveryEpoch = null;
     }
   });
   recoveryPromise = active;
+  recoveryEpoch = currentEpoch;
   return active;
 }

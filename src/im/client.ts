@@ -37,7 +37,10 @@ import {
   OPENIM_WS_URL,
 } from '@/constants/config';
 import { bindOpenIMListeners, unbindOpenIMListeners } from '@/im/listeners';
-import { registerIMLoginExecutor } from '@/im/token-recovery';
+import {
+  registerIMLoginExecutor,
+  registerIMLogoutExecutor,
+} from '@/im/token-recovery';
 import { stripFileScheme } from '@/im/media-uri';
 import { resolveVoiceSendStrategy } from '@/features/chat/utils/voice-forward';
 import { toImUserId } from '@/im/user-id';
@@ -82,7 +85,12 @@ registerLogoutHandler(logoutFromOpenIM);
 
 // token-recovery 不 import 本模块（避免 client → listeners → token-recovery → client
 // 模块环），真正的 OpenIM 登录函数在这里注入。同样按引用注册，幂等。
-registerIMLoginExecutor(loginToOpenIM);
+// 恢复路径必须强制真登录（review 修复 P1）：token 过期时 getLoginStatus 很可能
+// 仍报 Logged，普通路径的复用快捷会让新 token 永远交不到 SDK 手里。
+registerIMLoginExecutor((userId, imToken) =>
+  loginToOpenIM(userId, imToken, { forceRelogin: true }),
+);
+registerIMLogoutExecutor(() => logoutFromOpenIM());
 
 function isNativeIMSupported() {
   return Platform.OS === 'ios' || Platform.OS === 'android';
@@ -210,7 +218,11 @@ async function isOpenIMSessionResourceLoaded(): Promise<boolean> {
  * 登录 OpenIM。
  * 登录前先确保 SDK 已初始化；失败时重置 connecting 状态，防止 store 卡死。
  */
-export async function loginToOpenIM(userID: string, imToken: string) {
+export async function loginToOpenIM(
+  userID: string,
+  imToken: string,
+  options: { forceRelogin?: boolean } = {},
+) {
   if (!imToken || !isNativeIMSupported()) {
     if (!isNativeIMSupported()) {
       useIMStore.getState().setError(getUnsupportedPlatformMessage());
@@ -230,7 +242,17 @@ export async function loginToOpenIM(userID: string, imToken: string) {
     // Hot reload / 重装后 native SDK 进程通常还活着，重复 login 会被 OpenIM 拒成
     // 10102 "User has logged in repeatedly"。先查状态，已登录就复用。
     const status = await OpenIMSDK.getLoginStatus().catch(() => LoginStatus.Logout);
-    if (status === LoginStatus.Logged) {
+    if (status === LoginStatus.Logged && options.forceRelogin) {
+      // token 恢复路径（review 修复 P1）：SDK 仍自报 Logged，但手里的 token 已被
+      // 服务端拒绝 —— 复用快捷会「成功返回」却让 SDK 继续拿着死 token 收发全断。
+      // 先 logout 拆干净（失败不阻断：僵尸态下 login 自会失败并走恢复重试），
+      // 落到下面用新 token 干净重登。
+      try {
+        await OpenIMSDK.logout();
+      } catch (error) {
+        reportError(error, { operation: 'openim', kind: 'forceReloginLogout' });
+      }
+    } else if (status === LoginStatus.Logged) {
       // 但「自报 Logged」不等于资源还在：hot-reload / devicectl 覆盖重装后，SDK 常
       // 停在「已登录但资源已卸载」的僵尸态 —— getLoginStatus 仍回 Logged，可任何真实
       // 调用都抛 10004，会话列表被拉空。探针确认资源是否真的可用。

@@ -21,6 +21,7 @@ function buildHarness({
     fetchImToken: 0,
     setImToken: [],
     clearLocalSession: 0,
+    clearEpochs: [],
     routerReplace: [],
     imSetError: [],
     executor: [],
@@ -68,8 +69,9 @@ function buildHarness({
         error && (error.status === 401 || error.status === 403),
     },
     '@/services/auth/session': {
-      clearLocalSession: async () => {
+      clearLocalSession: async (expectedEpoch) => {
         calls.clearLocalSession += 1;
+        calls.clearEpochs.push(expectedEpoch);
       },
     },
     '@/stores/authStore': {
@@ -232,6 +234,17 @@ test('isOpenIMTokenRejectedError 识别 1501-1506 与 token 文案，放过网�
 
   assert.equal(isOpenIMTokenRejectedError({ code: 1501 }), true);
   assert.equal(isOpenIMTokenRejectedError({ code: 1506 }), true);
+  // RN 原生层的 errCode/errMsg 形状（review 修复：此前 String() 成
+  // '[object Object]' 后被当瞬时失败反复重试同一枚死 token）
+  assert.equal(
+    isOpenIMTokenRejectedError({ errCode: 1502, errMsg: 'token invalid' }),
+    true,
+  );
+  assert.equal(isOpenIMTokenRejectedError({ errCode: 1501 }), true);
+  assert.equal(
+    isOpenIMTokenRejectedError({ errCode: 10008, errMsg: 'network down' }),
+    false,
+  );
   assert.equal(
     isOpenIMTokenRejectedError(new Error('errCode 1502: token invalid')),
     true,
@@ -274,6 +287,93 @@ test('bootstrap: 空 imToken 会话可通过 GET /auth/im-token 恢复 (#85)', (
   assert.match(bootstrap, /isIMReloginPending\(\)/);
   // 缓存 token 被服务端拒绝时改走换新 token 路径
   assert.match(bootstrap, /isOpenIMTokenRejectedError\(error\)/);
+});
+
+test('终局失败但会话已切换：clear 锚定旧 epoch，不跳登录页不写错误态 (review)', async () => {
+  const authError = Object.assign(new Error('unauthorized'), { status: 401 });
+  let harness;
+  harness = buildHarness({
+    fetchImTokenImpl: async () => {
+      // 请求 unwinding 期间用户已重新登录：epoch 前进
+      harness.authState.sessionEpoch = 2;
+      throw authError;
+    },
+  });
+
+  const recovered = await harness.mod.recoverIMSession();
+
+  assert.equal(recovered, false);
+  // clear 仍会调用，但带着 startEpoch=1 —— 真实实现里对新会话是 no-op
+  assert.deepEqual(harness.calls.clearEpochs, [1]);
+  // 新会话绝不能被踢回登录页 / 写「登录已过期」
+  assert.deepEqual(harness.calls.routerReplace, []);
+  assert.deepEqual(harness.calls.imSetError, []);
+});
+
+test('单飞按 sessionEpoch 记账：切号后当前会话另起恢复，不复用旧在飞 (review)', async () => {
+  let releaseFirst;
+  const firstGate = new Promise((resolve) => {
+    releaseFirst = resolve;
+  });
+  const { mod, calls, authState } = buildHarness({
+    executor: async () => {
+      await firstGate;
+      return true;
+    },
+  });
+
+  const first = mod.recoverIMSession();
+  // 换会话
+  authState.sessionEpoch = 2;
+  const second = mod.recoverIMSession();
+  releaseFirst();
+
+  const [firstResult, secondResult] = await Promise.all([first, second]);
+  // 旧会话恢复：executor await 后发现 epoch 已变 → false
+  assert.equal(firstResult, false);
+  // 新会话的恢复独立起飞（第二次 fetchImToken）
+  assert.equal(calls.fetchImToken, 2);
+  assert.equal(typeof secondResult, 'boolean');
+});
+
+test('executor await 期间切号：拆除陈旧 IM 登录并按失败返回 (review)', async () => {
+  let logoutCalls = 0;
+  let harness;
+  harness = buildHarness({
+    executor: async () => {
+      // 登录成功返回前用户已切号
+      harness.authState.sessionEpoch = 99;
+      return true;
+    },
+  });
+  harness.mod.registerIMLogoutExecutor(async () => {
+    logoutCalls += 1;
+  });
+
+  const recovered = await harness.mod.recoverIMSession();
+
+  assert.equal(recovered, false);
+  // 刚完成的是旧用户的 OpenIM 登录 —— 必须拆除，防消息路由到错误身份
+  assert.equal(logoutCalls, 1);
+  assert.equal(harness.mod.isIMReloginPending(), false);
+});
+
+test('恢复执行器强制真登录：Logged 快捷不吞新 token (review P1)', () => {
+  const client = read('src/im/client.ts');
+
+  // 注册给 token-recovery 的执行器必须带 forceRelogin
+  assert.match(
+    client,
+    /registerIMLoginExecutor\(\(userId, imToken\) =>\s*loginToOpenIM\(userId, imToken, \{ forceRelogin: true \}\)/,
+  );
+  // forceRelogin 分支：Logged 状态下先 logout 再干净重登（不能走复用快捷）
+  const forced = client.slice(
+    client.indexOf('options.forceRelogin'),
+    client.indexOf('} else if (status === LoginStatus.Logged)'),
+  );
+  assert.match(forced, /OpenIMSDK\.logout\(\)/);
+  // 陈旧登录拆除执行器也已注入
+  assert.match(client, /registerIMLogoutExecutor\(\(\) => logoutFromOpenIM\(\)\)/);
 });
 
 test('fetchImToken 打到 GET /auth/im-token 并拒绝空 token', () => {

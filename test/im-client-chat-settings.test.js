@@ -13,6 +13,7 @@ const DEFAULT_TS_MODULE_STUBS = {
   },
   '@/im/token-recovery': {
     registerIMLoginExecutor: () => {},
+    registerIMLogoutExecutor: () => {},
     recoverIMSession: async () => false,
     isIMReloginPending: () => false,
   },

@@ -11,6 +11,7 @@ const DEFAULT_CLIENT_STUBS = {
   },
   '@/im/token-recovery': {
     registerIMLoginExecutor: () => {},
+    registerIMLogoutExecutor: () => {},
     recoverIMSession: async () => false,
     isIMReloginPending: () => false,
   },

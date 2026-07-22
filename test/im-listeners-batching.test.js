@@ -87,6 +87,7 @@ function loadListenersHarness() {
       if (request === '@/im/token-recovery') {
         return {
           registerIMLoginExecutor: () => {},
+    registerIMLogoutExecutor: () => {},
           recoverIMSession: async () => false,
           isIMReloginPending: () => false,
         };
