@@ -94,12 +94,17 @@ const ACCOUNT_SCOPED_STORE_LOADERS: (() => Promise<PersistedResettableStore>)[] 
   },
 ];
 
-async function clearAccountScopedPersistedStores(): Promise<void> {
+async function clearAccountScopedPersistedStores(
+  clearedSessionEpoch: number,
+): Promise<void> {
   for (const load of ACCOUNT_SCOPED_STORE_LOADERS) {
+    if (useAuthStore.getState().sessionEpoch !== clearedSessionEpoch) return;
     try {
       const store = await load();
+      if (useAuthStore.getState().sessionEpoch !== clearedSessionEpoch) return;
       // 先重置内存（已水合的状态同样会泄漏），再删持久化 key。
       store.getState().resetForLogout();
+      if (useAuthStore.getState().sessionEpoch !== clearedSessionEpoch) return;
       await Promise.resolve(store.persist?.clearStorage?.());
     } catch (err) {
       if (isDev) {
@@ -168,7 +173,7 @@ async function performClearLocalSession(sessionEpoch: number) {
 
   // 账号级持久化 store（#97）：内存重置 + 删除 MMKV key，防止上一账号的
   // conversationID / 圈子引用渗进下一个会话的 UI。
-  await clearAccountScopedPersistedStores();
+  await clearAccountScopedPersistedStores(clearedSessionEpoch);
 
   let persistCleared = false;
   try {

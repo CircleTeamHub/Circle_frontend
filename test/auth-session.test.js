@@ -421,6 +421,35 @@ test('clearLocalSession re-persists a newer session after Zustand void clearStor
   );
 });
 
+test('account-scoped cleanup stops when a newer session starts while a store is loading', async () => {
+  const { mocks, calls, authState } = makeBaseMocks();
+  mocks['@/features/messages/store/use-local-unread-store'] = {
+    useLocalUnreadStore: {
+      getState: () => ({
+        resetForLogout: () => calls.push('resetLocalUnread'),
+      }),
+      persist: {
+        clearStorage: () => calls.push('clearLocalUnreadStorage'),
+      },
+    },
+  };
+  mocks.__onRequire = (request) => {
+    if (request === '@/features/messages/store/use-local-unread-store') {
+      authState.accessToken = 'access-b';
+      authState.refreshToken = 'refresh-b';
+      authState.sessionEpoch += 1;
+      calls.push('sessionB');
+    }
+  };
+  const { clearLocalSession } = loadSessionModule(mocks);
+
+  await clearLocalSession(1);
+
+  assert.ok(calls.includes('sessionB'));
+  assert.equal(calls.includes('resetLocalUnread'), false);
+  assert.equal(calls.includes('clearLocalUnreadStorage'), false);
+});
+
 test('clearLocalSession falls back to secure auth removeItem when persist.clearStorage rejects (defense in depth: tokens must not remain on disk)', async () => {
   const { mocks, calls, secureAuthRemovals, authStore } = makeBaseMocks();
   authStore.persist.clearStorage = async () => {
