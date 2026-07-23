@@ -62,6 +62,7 @@ let initPromise: Promise<void> | null = null;
 // 模块级 —— 每个 JS 生命周期（含每次 hot-reload）最多自愈一次，避免登录环路。
 let staleLoginSelfHealAttempted = false;
 let logoutPromise: Promise<void> | null = null;
+const inFlightLoginPromises = new Set<Promise<void>>();
 type NativeFSModule = typeof NativeFS & { default?: typeof NativeFS };
 let rnfsModule: typeof NativeFS | null = null;
 
@@ -311,6 +312,14 @@ function isOpenIMResourceNotLoadedError(error: unknown): boolean {
   );
 }
 
+function isBenignOpenIMUninitError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return (
+    isOpenIMResourceNotLoadedError(error) ||
+    /\bnot\s+init(?:ialized)?\b/i.test(message)
+  );
+}
+
 /**
  * 轻量只读探针：native SDK 自报 Logged 后，用 getSelfUserInfo 同时确认资源和身份。
  * 10004 表示资源已卸载；其它读取失败也不会返回可复用身份。
@@ -345,6 +354,12 @@ export async function loginToOpenIM(
     }
     return false;
   }
+
+  let resolveLoginSettled!: () => void;
+  const loginSettled = new Promise<void>((resolve) => {
+    resolveLoginSettled = resolve;
+  });
+  inFlightLoginPromises.add(loginSettled);
 
   try {
     if (logoutPromise) {
@@ -415,8 +430,10 @@ export async function loginToOpenIM(
       try {
         await OpenIMSDK.unInitSDK();
       } catch (error) {
-        // 拆除失败不阻断：下面 ensureOpenIMInitialized 仍会尝试重建。
-        reportError(error, { operation: 'openim', kind: 'unInit' });
+        if (!isBenignOpenIMUninitError(error)) {
+          reportError(error, { operation: 'openim', kind: 'unInit' });
+          throw error;
+        }
       }
       initPromise = null;
       useIMStore.getState().reset();
@@ -466,6 +483,9 @@ export async function loginToOpenIM(
     useIMStore.getState().setCurrentUserID(null);
     reportError(error, { operation: 'openim', kind: 'login' });
     throw error;
+  } finally {
+    inFlightLoginPromises.delete(loginSettled);
+    resolveLoginSettled();
   }
 }
 
@@ -489,6 +509,11 @@ function finalizeIMTeardown() {
 async function performLogoutFromOpenIM(
   options: { forceNative?: boolean } = {},
 ) {
+  const pendingLogins = [...inFlightLoginPromises];
+  if (pendingLogins.length > 0) {
+    await Promise.allSettled(pendingLogins);
+  }
+
   if (!isNativeIMSupported()) {
     finalizeIMTeardown();
     return;
