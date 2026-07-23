@@ -111,7 +111,9 @@ function createIMSessionHarness({
       __esModule: true,
       default: {
         DocumentDirectoryPath: '/tmp',
+        exists: async () => false,
         mkdir: async () => undefined,
+        unlink: async () => undefined,
       },
     },
     'react-native': { Platform: { OS: 'android' } },
