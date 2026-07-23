@@ -62,7 +62,13 @@ let initPromise: Promise<void> | null = null;
 // 模块级 —— 每个 JS 生命周期（含每次 hot-reload）最多自愈一次，避免登录环路。
 let staleLoginSelfHealAttempted = false;
 let logoutPromise: Promise<void> | null = null;
-const inFlightLoginPromises = new Set<Promise<void>>();
+const LOGOUT_IN_FLIGHT_LOGIN_WAIT_MS = 1000;
+type InFlightLogin = {
+  userID: string;
+  settled: Promise<void>;
+  teardownOnSettle: boolean;
+};
+const inFlightLogins = new Set<InFlightLogin>();
 type NativeFSModule = typeof NativeFS & { default?: typeof NativeFS };
 let rnfsModule: typeof NativeFS | null = null;
 
@@ -320,6 +326,32 @@ function isBenignOpenIMUninitError(error: unknown): boolean {
   );
 }
 
+async function waitForInFlightLoginsBeforeLogout() {
+  const pendingLogins = [...inFlightLogins];
+  if (pendingLogins.length === 0) {
+    return;
+  }
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = await Promise.race([
+    Promise.allSettled(pendingLogins.map((login) => login.settled)).then(
+      () => false,
+    ),
+    new Promise<true>((resolve) => {
+      timeoutId = setTimeout(resolve, LOGOUT_IN_FLIGHT_LOGIN_WAIT_MS, true);
+    }),
+  ]);
+  if (timeoutId) {
+    clearTimeout(timeoutId);
+  }
+
+  if (timedOut) {
+    pendingLogins.forEach((login) => {
+      login.teardownOnSettle = true;
+    });
+  }
+}
+
 /**
  * 轻量只读探针：native SDK 自报 Logged 后，用 getSelfUserInfo 同时确认资源和身份。
  * 10004 表示资源已卸载；其它读取失败也不会返回可复用身份。
@@ -336,6 +368,22 @@ async function getOpenIMSessionProbe(): Promise<{
       resourceLoaded: !isOpenIMResourceNotLoadedError(error),
       userID: null,
     };
+  }
+}
+
+async function teardownLateLoginSession(inFlightLogin: InFlightLogin) {
+  useIMStore.getState().setConnecting(false);
+  const nativeSession = await getOpenIMSessionProbe();
+  if (nativeSession.userID !== inFlightLogin.userID) {
+    return;
+  }
+
+  try {
+    await OpenIMSDK.logout();
+  } catch (error) {
+    if (!isOpenIMResourceNotLoadedError(error)) {
+      reportError(error, { operation: 'openim', kind: 'lateLoginLogout' });
+    }
   }
 }
 
@@ -359,13 +407,18 @@ export async function loginToOpenIM(
   const loginSettled = new Promise<void>((resolve) => {
     resolveLoginSettled = resolve;
   });
-  inFlightLoginPromises.add(loginSettled);
+  const imUserID = toImUserId(userID);
+  const inFlightLogin: InFlightLogin = {
+    userID: imUserID,
+    settled: loginSettled,
+    teardownOnSettle: false,
+  };
+  inFlightLogins.add(inFlightLogin);
 
   try {
     if (logoutPromise) {
       await logoutPromise;
     }
-    const imUserID = toImUserId(userID);
     // 换号检测必须在 initSDK 之前（#96）：SDK 还没持有本地库句柄时删目录才安全。
     const wipeSafe = await wipeStaleOpenIMDataOnAccountChange(imUserID);
     if (!wipeSafe) {
@@ -448,6 +501,10 @@ export async function loginToOpenIM(
       userID: imUserID,
       token: imToken,
     });
+    if (inFlightLogin.teardownOnSettle) {
+      await teardownLateLoginSession(inFlightLogin);
+      throw new Error('OpenIM login completed after logout began');
+    }
     // 干净登录成功：允许后续（下次 reload 的新僵尸态）再次自愈。
     staleLoginSelfHealAttempted = false;
 
@@ -463,6 +520,10 @@ export async function loginToOpenIM(
     const msg =
       error instanceof Error ? error.message : String(error ?? '');
     if (code === 10102 || msg.includes('User has logged in repeatedly')) {
+      if (inFlightLogin.teardownOnSettle) {
+        await teardownLateLoginSession(inFlightLogin);
+        throw new Error('OpenIM login completed after logout began');
+      }
       if (options.forceRelogin) {
         useIMStore.getState().setConnecting(false);
         reportError(error, { operation: 'openim', kind: 'forceReloginDup' });
@@ -484,7 +545,7 @@ export async function loginToOpenIM(
     reportError(error, { operation: 'openim', kind: 'login' });
     throw error;
   } finally {
-    inFlightLoginPromises.delete(loginSettled);
+    inFlightLogins.delete(inFlightLogin);
     resolveLoginSettled();
   }
 }
@@ -509,10 +570,7 @@ function finalizeIMTeardown() {
 async function performLogoutFromOpenIM(
   options: { forceNative?: boolean } = {},
 ) {
-  const pendingLogins = [...inFlightLoginPromises];
-  if (pendingLogins.length > 0) {
-    await Promise.allSettled(pendingLogins);
-  }
+  await waitForInFlightLoginsBeforeLogout();
 
   if (!isNativeIMSupported()) {
     finalizeIMTeardown();
@@ -525,7 +583,9 @@ async function performLogoutFromOpenIM(
   // round 3 review：forceNative 例外 —— token 恢复的陈旧登录拆除发生在
   // login 刚返回、onConnectSuccess 还没翻 connected 的窗口里，跳过
   // SDK.logout 会把 native 侧留在旧用户的登录态上（10004 之类报错无害，吞）。
-  const nativeStatus = await OpenIMSDK.getLoginStatus().catch(() => null);
+  const nativeStatus = await OpenIMSDK.getLoginStatus().catch(
+    () => LoginStatus.Logout,
+  );
   if (
     nativeStatus === LoginStatus.Logout &&
     !useIMStore.getState().connected &&
