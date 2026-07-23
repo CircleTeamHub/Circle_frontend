@@ -94,12 +94,25 @@ const ACCOUNT_SCOPED_STORE_LOADERS: (() => Promise<PersistedResettableStore>)[] 
   },
 ];
 
-async function clearAccountScopedPersistedStores(): Promise<void> {
+async function clearAccountScopedPersistedStores(
+  clearedSessionEpoch: number,
+): Promise<void> {
+  // 内存重置与磁盘清除必须分开对待（PR #129 review P1）：
+  //
+  // - 内存 resetForLogout()：若登出的异步过程被一个更新的会话抢占（fire-and-forget
+  //   的 401/撤销登出 + 期间重新登录），重置会擦掉新会话的实时 UI 状态 —— 因此
+  //   只在会话未变时执行。
+  // - 磁盘 clearStorage()：承载的是**刚登出账号**的持久化足迹。跳过它会把上一个
+  //   账号的 conversationID / 圈子引用留在共享 MMKV key 上，下次水合（冷启动）就
+  //   渗进新会话的 UI。所以无论会话是否被抢占都要清，且要清完清单里**每一个** key
+  //   （不能因中途会话变化就 return 掉后面的 store）。新会话若已写过同一个共享 key，
+  //   其内存态仍在，persist 会在下次状态变更时把自己的数据重新落盘。
   for (const load of ACCOUNT_SCOPED_STORE_LOADERS) {
     try {
       const store = await load();
-      // 先重置内存（已水合的状态同样会泄漏），再删持久化 key。
-      store.getState().resetForLogout();
+      if (useAuthStore.getState().sessionEpoch === clearedSessionEpoch) {
+        store.getState().resetForLogout();
+      }
       await Promise.resolve(store.persist?.clearStorage?.());
     } catch (err) {
       if (isDev) {
@@ -168,7 +181,7 @@ async function performClearLocalSession(sessionEpoch: number) {
 
   // 账号级持久化 store（#97）：内存重置 + 删除 MMKV key，防止上一账号的
   // conversationID / 圈子引用渗进下一个会话的 UI。
-  await clearAccountScopedPersistedStores();
+  await clearAccountScopedPersistedStores(clearedSessionEpoch);
 
   let persistCleared = false;
   try {
