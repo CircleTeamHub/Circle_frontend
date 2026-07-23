@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { ApiError } from '@/services/api/client';
 import { fetchPlazaFeed } from '@/services/api/plaza';
 import type { CirclePlazaPost } from '@/types';
 import {
@@ -16,6 +17,7 @@ interface DiscoverState {
   plazaHasMore: boolean;
   plazaLoading: boolean;
   plazaRefreshing: boolean;
+  plazaMembershipRequired: boolean;
   plazaQueryVersion: number;
   plazaLatestRequestId: number;
   selectedCircleId: string | null;
@@ -34,6 +36,7 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
   plazaHasMore: true,
   plazaLoading: false,
   plazaRefreshing: false,
+  plazaMembershipRequired: false,
   plazaQueryVersion: 0,
   plazaLatestRequestId: 0,
   selectedCircleId: null,
@@ -51,6 +54,7 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
 
     set({
       plazaLatestRequestId: requestId,
+      plazaMembershipRequired: false,
       ...(reset
         ? state.plazaPosts.length === 0
           ? { plazaLoading: true, plazaRefreshing: false }
@@ -91,13 +95,16 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
           requestId,
         }),
       );
-    } catch {
-      set((current) =>
-        applyPlazaFetchFailure(current, {
+    } catch (error) {
+      set((current) => ({
+        ...applyPlazaFetchFailure(current, {
           requestQueryVersion,
           requestId,
         }),
-      );
+        plazaMembershipRequired:
+          error instanceof ApiError &&
+          error.errorCode === 'PLAZA_MEMBERSHIP_REQUIRED',
+      }));
     }
   },
 
@@ -110,6 +117,7 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
       plazaHasMore: true,
       plazaLoading: false,
       plazaRefreshing: false,
+      plazaMembershipRequired: false,
       plazaQueryVersion: current.plazaQueryVersion + 1,
     }));
   },
@@ -127,6 +135,7 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
       plazaHasMore: true,
       plazaLoading: false,
       plazaRefreshing: false,
+      plazaMembershipRequired: false,
       plazaQueryVersion: 0,
       plazaLatestRequestId: 0,
       selectedCircleId: null,

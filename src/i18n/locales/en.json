@@ -2359,6 +2359,7 @@
     "TEMP_CHAT_ENDED": "This temporary chat has ended",
     "TEMP_CHAT_FULL": "This chat is full",
     "TEMP_CHAT_CREATOR_ONLY": "Only the creator can end this chat",
+    "PLAZA_MEMBERSHIP_REQUIRED": "Upgrade your membership to view circle posts",
     "PLAZA_NOT_ACTIVE_MEMBER": "Only active circle members can post",
     "PLAZA_ADMIN_ONLY_POST": "Only admins can post in this circle",
     "PLAZA_NOTE_INVALID": "That note is unavailable or not yours",

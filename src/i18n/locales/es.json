@@ -2359,6 +2359,7 @@
     "TEMP_CHAT_ENDED": "Este chat temporal ha finalizado",
     "TEMP_CHAT_FULL": "Este chat está lleno",
     "TEMP_CHAT_CREATOR_ONLY": "Solo el creador puede finalizar este chat",
+    "PLAZA_MEMBERSHIP_REQUIRED": "Mejora tu membresía para ver publicaciones del círculo",
     "PLAZA_NOT_ACTIVE_MEMBER": "Solo los miembros activos del círculo pueden publicar",
     "PLAZA_ADMIN_ONLY_POST": "Solo los administradores pueden publicar en este círculo",
     "PLAZA_NOTE_INVALID": "Esa nota no está disponible o no es tuya",

@@ -51,6 +51,18 @@ test('plaza feed empty state never tells joined users to join a circle', () => {
   assert.doesNotMatch(emptyStateBlock, /discover\.joinCircleHint/);
 });
 
+test('plaza feed hides all posts behind the membership gate when enforcement is enabled', () => {
+  const feed = read('src/features/discover/components/plaza-feed.tsx');
+  const store = read('src/features/discover/store/use-discover-store.ts');
+
+  assert.match(feed, /fetchMembershipProgramStatus/);
+  assert.match(feed, /programEnabled === true && vipLevel <= 0/);
+  assert.match(feed, /升级会员查看圈子动态/);
+  assert.match(feed, /if \(membershipBlocked\)/);
+  assert.match(store, /PLAZA_MEMBERSHIP_REQUIRED/);
+  assert.match(store, /plazaMembershipRequired/);
+});
+
 test('plaza feed keeps circle shortcuts independent from the global filter', () => {
   const source = read('src/features/discover/components/plaza-feed.tsx');
 

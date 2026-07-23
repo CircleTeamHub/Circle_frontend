@@ -10,6 +10,7 @@ import { Alert, StyleSheet } from 'react-native';
 import MemberCenterScreen from './MemberCenterScreen';
 import MemberRulesScreen from './MemberRulesScreen';
 import { fetchCurrentUser } from '@/services/api/auth';
+import { fetchMembershipProgramStatus } from '@/services/api/membership';
 import type { AuthUser } from '@/stores/authStore';
 
 const mockRouter = { push: jest.fn(), back: jest.fn() };
@@ -116,10 +117,17 @@ jest.mock('@/stores/authStore', () => ({
 }));
 
 jest.mock('@/services/api/auth', () => ({ fetchCurrentUser: jest.fn() }));
+jest.mock('@/services/api/membership', () => ({
+  fetchMembershipProgramStatus: jest.fn(),
+}));
 
 const mockFetchCurrentUser = fetchCurrentUser as jest.MockedFunction<
   typeof fetchCurrentUser
 >;
+const mockFetchMembershipProgramStatus =
+  fetchMembershipProgramStatus as jest.MockedFunction<
+    typeof fetchMembershipProgramStatus
+  >;
 
 function user(vipLevel: number, id = 'user-a'): AuthUser {
   return {
@@ -166,6 +174,11 @@ beforeEach(() => {
   mockFocusCallback = null;
   setAuth(user(0));
   mockFetchCurrentUser.mockResolvedValue(user(0));
+  mockFetchMembershipProgramStatus.mockResolvedValue({
+    enabled: true,
+    enabledAt: '2026-08-01T00:00:00.000Z',
+    entitlementFloorLevel: 0,
+  });
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 });
 
@@ -188,6 +201,25 @@ test('regular user selects tiers and receives an activation contact state', asyn
 
   expect(screen.getByText('联系客服开通 白银会员')).toBeTruthy();
   expect(screen.getByText('200 人')).toBeTruthy();
+});
+
+test('marketing phase hides recharge actions and shows the new gold limits', async () => {
+  mockFetchMembershipProgramStatus.mockResolvedValue({
+    enabled: false,
+    enabledAt: null,
+    entitlementFloorLevel: 2,
+  });
+
+  render(<MemberCenterScreen />);
+
+  expect(await screen.findByText('会员功能暂未开放')).toBeTruthy();
+  expect(
+    screen.getByText('当前所有用户免费享有黄金额度'),
+  ).toBeTruthy();
+  expect(screen.getByText('单群 400 人 · 可加入 300 个群')).toBeTruthy();
+  expect(screen.getByText('笔记 500 条 · 城市筛选 10 个')).toBeTruthy();
+  expect(screen.queryByText(/联系客服开通/)).toBeNull();
+  expect(screen.queryByText('¥')).toBeNull();
 });
 
 test('member tier selection distinguishes current, upgrade, and lower states', async () => {

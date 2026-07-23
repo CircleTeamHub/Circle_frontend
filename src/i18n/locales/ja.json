@@ -2356,6 +2356,7 @@
     "TEMP_CHAT_ENDED": "一時チャットは終了しました",
     "TEMP_CHAT_FULL": "参加人数が上限に達しています",
     "TEMP_CHAT_CREATOR_ONLY": "作成者のみが終了できます",
+    "PLAZA_MEMBERSHIP_REQUIRED": "会員にアップグレードしてサークル投稿を見る",
     "PLAZA_NOT_ACTIVE_MEMBER": "サークルのアクティブメンバーのみが投稿できます",
     "PLAZA_ADMIN_ONLY_POST": "このサークルでは管理者のみが投稿できます",
     "PLAZA_NOTE_INVALID": "そのノートは利用できないか、あなたのものではありません",

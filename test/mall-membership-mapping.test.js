@@ -176,3 +176,20 @@ test('fetchMembershipPlans rejects malformed payloads', async () => {
   ]);
   await assert.rejects(fetchMembershipPlans());
 });
+
+test('fetchMembershipProgramStatus accepts the marketing rollout contract', async () => {
+  const backend = {
+    enabled: false,
+    enabledAt: null,
+    entitlementFloorLevel: 2,
+  };
+  const { fetchMembershipProgramStatus } = loadWithApi(
+    'src/services/api/membership.ts',
+    backend,
+  );
+
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(await fetchMembershipProgramStatus())),
+    backend,
+  );
+});

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -23,6 +24,7 @@ import {
 } from '@/features/profile/membership-plans';
 import { getUserProfileHref } from '@/features/user/utils/routes';
 import { fetchCurrentUser } from '@/services/api/auth';
+import { fetchMembershipProgramStatus } from '@/services/api/membership';
 import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
@@ -90,6 +92,11 @@ const s = StyleSheet.create({
   content: {
     paddingHorizontal: Spacing.lg,
     gap: Spacing.lg,
+  },
+  loading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   hero: {
     borderRadius: Radius.sm,
@@ -159,6 +166,12 @@ const s = StyleSheet.create({
   contactSection: {
     gap: Spacing.sm,
   },
+  marketingPanel: {
+    borderRadius: Radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Spacing.lg,
+    gap: Spacing.md,
+  },
   cta: {
     minHeight: 52,
     borderRadius: Radius.sm,
@@ -182,6 +195,7 @@ export default function MemberCenterScreen() {
   const [selectedTier, setSelectedTier] = useState<MembershipTier>(
     currentTier ?? 'diamond',
   );
+  const [programEnabled, setProgramEnabled] = useState<boolean | null>(null);
 
   useEffect(() => {
     setSelectedTier(currentTier ?? 'diamond');
@@ -194,6 +208,14 @@ export default function MemberCenterScreen() {
       const ownerUserId = owner.user?.id;
       const ownerAccountId = owner.user?.accountId;
       const ownerSessionEpoch = owner.sessionEpoch;
+
+      void fetchMembershipProgramStatus()
+        .then((status) => {
+          if (active) setProgramEnabled(status.enabled);
+        })
+        .catch(() => {
+          if (active) setProgramEnabled(false);
+        });
 
       if (ownerUserId && ownerAccountId) {
         void fetchCurrentUser()
@@ -402,6 +424,18 @@ export default function MemberCenterScreen() {
         ...TIER_ACCENTS,
         super: colors.text,
       },
+      marketingPanel: {
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
+      },
+      marketingTitle: {
+        color: colors.text,
+        ...Typography.h2,
+      },
+      marketingText: {
+        color: colors.textSecondary,
+        ...Typography.bodyRegular,
+      },
     }),
     [colors, insets.bottom, insets.top],
   );
@@ -416,6 +450,31 @@ export default function MemberCenterScreen() {
         })}
         onRightPress={() => router.push('/(tabs)/profile/member-rules' as never)}
       />
+      {programEnabled === null ? (
+        <View style={s.loading}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      ) : !programEnabled ? (
+        <ScrollView
+          contentContainerStyle={[s.content, d.content]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={[s.marketingPanel, d.marketingPanel]}>
+            <Text style={d.marketingTitle}>
+              {t('profile.membership.marketing.title', {
+                defaultValue: '会员功能暂未开放',
+              })}
+            </Text>
+            <Text style={d.marketingText}>
+              {t('profile.membership.marketing.goldAccess', {
+                defaultValue: '当前所有用户免费享有黄金额度',
+              })}
+            </Text>
+            <Text style={d.marketingText}>单群 400 人 · 可加入 300 个群</Text>
+            <Text style={d.marketingText}>笔记 500 条 · 城市筛选 10 个</Text>
+          </View>
+        </ScrollView>
+      ) : (
       <ScrollView
         contentContainerStyle={[s.content, d.content]}
         showsVerticalScrollIndicator={false}
@@ -589,6 +648,7 @@ export default function MemberCenterScreen() {
           </Pressable>
         </View>
       </ScrollView>
+      )}
     </View>
   );
 }

@@ -2356,6 +2356,7 @@
     "TEMP_CHAT_ENDED": "임시 채팅이 종료되었습니다",
     "TEMP_CHAT_FULL": "인원이 가득 찼습니다",
     "TEMP_CHAT_CREATOR_ONLY": "생성자만 종료할 수 있습니다",
+    "PLAZA_MEMBERSHIP_REQUIRED": "멤버십을 업그레이드하여 서클 게시물 보기",
     "PLAZA_NOT_ACTIVE_MEMBER": "서클의 활성 멤버만 게시할 수 있습니다",
     "PLAZA_ADMIN_ONLY_POST": "이 서클에서는 관리자만 게시할 수 있습니다",
     "PLAZA_NOTE_INVALID": "해당 노트를 사용할 수 없거나 본인의 것이 아닙니다",

@@ -18,6 +18,12 @@ export type MembershipPlan = {
   recommended: boolean;
 };
 
+export type MembershipProgramStatus = {
+  enabled: boolean;
+  enabledAt: string | null;
+  entitlementFloorLevel: 0 | 2;
+};
+
 const MEMBERSHIP_KEYS = new Set<MembershipTierKey>([
   'silver',
   'gold',
@@ -46,11 +52,34 @@ function isMembershipPlanArray(value: unknown): value is MembershipPlan[] {
   return Array.isArray(value) && value.every(isMembershipPlan);
 }
 
+function isMembershipProgramStatus(
+  value: unknown,
+): value is MembershipProgramStatus {
+  if (!isPlainObject(value)) return false;
+
+  return (
+    typeof value.enabled === 'boolean' &&
+    (value.enabledAt === null || isNonEmptyString(value.enabledAt)) &&
+    (value.entitlementFloorLevel === 0 || value.entitlementFloorLevel === 2)
+  );
+}
+
 export async function fetchMembershipPlans(): Promise<MembershipPlan[]> {
   const raw = await apiClient<unknown>('/membership/plans');
   return expectShape(
     raw,
     isMembershipPlanArray,
+    i18n.t('common.errors.invalidServerResponse', {
+      defaultValue: '服务返回了无效数据',
+    }),
+  );
+}
+
+export async function fetchMembershipProgramStatus(): Promise<MembershipProgramStatus> {
+  const raw = await apiClient<unknown>('/membership/program');
+  return expectShape(
+    raw,
+    isMembershipProgramStatus,
     i18n.t('common.errors.invalidServerResponse', {
       defaultValue: '服务返回了无效数据',
     }),

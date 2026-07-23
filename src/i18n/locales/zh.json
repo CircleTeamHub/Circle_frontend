@@ -2356,6 +2356,7 @@
     "TEMP_CHAT_ENDED": "临时聊天已结束",
     "TEMP_CHAT_FULL": "人数已满",
     "TEMP_CHAT_CREATOR_ONLY": "只有创建者可以结束",
+    "PLAZA_MEMBERSHIP_REQUIRED": "升级会员查看圈子动态",
     "PLAZA_NOT_ACTIVE_MEMBER": "只有圈子活跃成员才能发帖",
     "PLAZA_ADMIN_ONLY_POST": "该圈子仅管理员可以发帖",
     "PLAZA_NOTE_INVALID": "笔记不存在、不可用或不属于你",

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import {
   ActivityIndicator,
   FlatList,
@@ -12,6 +12,8 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 import { Spacing, Typography, useTheme } from '@/theme';
+import { fetchMembershipProgramStatus } from '@/services/api/membership';
+import { useAuthStore } from '@/stores/authStore';
 import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-filter-store';
@@ -28,6 +30,7 @@ const s = StyleSheet.create({
     gap: Spacing.md,
   },
   emptyContainer: {
+    flex: 1,
     alignItems: 'center',
     paddingTop: 80,
     gap: Spacing.md,
@@ -51,12 +54,16 @@ const s = StyleSheet.create({
 
 export const PlazaFeed: React.FC = () => {
   const { t } = useTranslation();
+  const router = useRouter();
   const { colors } = useTheme();
+  const vipLevel = useAuthStore((state) => state.user?.vipLevel ?? 0);
+  const [programEnabled, setProgramEnabled] = useState<boolean | null>(null);
   const [isOrderSheetVisible, setIsOrderSheetVisible] = useState(false);
   const {
     plazaPosts,
     plazaLoading,
     plazaRefreshing,
+    plazaMembershipRequired,
     plazaHasMore,
     selectedCircleId,
     selectedCity,
@@ -67,6 +74,7 @@ export const PlazaFeed: React.FC = () => {
       plazaPosts: s.plazaPosts,
       plazaLoading: s.plazaLoading,
       plazaRefreshing: s.plazaRefreshing,
+      plazaMembershipRequired: s.plazaMembershipRequired,
       plazaHasMore: s.plazaHasMore,
       selectedCircleId: s.selectedCircleId,
       selectedCity: s.selectedCity,
@@ -93,6 +101,25 @@ export const PlazaFeed: React.FC = () => {
   const shortcutOrderIds = useCircleShortcutOrderStore((st) => st.orderIds);
   const setShortcutOrderIds = useCircleShortcutOrderStore((st) => st.setOrderIds);
   const resetShortcutOrder = useCircleShortcutOrderStore((st) => st.resetOrder);
+  const membershipBlocked =
+    plazaMembershipRequired || (programEnabled === true && vipLevel <= 0);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      setProgramEnabled(null);
+      void fetchMembershipProgramStatus()
+        .then((status) => {
+          if (active) setProgramEnabled(status.enabled);
+        })
+        .catch(() => {
+          if (active) setProgramEnabled(true);
+        });
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
 
   const myPlazaCircles = useMemo(() => {
     const byId = new Map(joinedCircles.map((circle) => [circle.id, circle]));
@@ -112,11 +139,13 @@ export const PlazaFeed: React.FC = () => {
   // 放大成并发请求风暴。
   useFocusEffect(
     useCallback(() => {
+      if (programEnabled === null || membershipBlocked) return;
       void fetchMyCircles();
-    }, [fetchMyCircles]),
+    }, [fetchMyCircles, membershipBlocked, programEnabled]),
   );
 
   useEffect(() => {
+    if (programEnabled === null || membershipBlocked) return;
     fetchPlazaPosts(true);
   }, [
     fetchPlazaPosts,
@@ -124,6 +153,8 @@ export const PlazaFeed: React.FC = () => {
     filterCities,
     selectedCircleId,
     selectedCity,
+    membershipBlocked,
+    programEnabled,
   ]);
 
   const handleRefresh = useCallback(() => {
@@ -210,6 +241,31 @@ export const PlazaFeed: React.FC = () => {
         <ActivityIndicator color={colors.primary} />
       </View>
     ) : null;
+
+  if (programEnabled === null) {
+    return (
+      <View style={s.emptyContainer}>
+        <ActivityIndicator color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (membershipBlocked) {
+    return (
+      <View style={s.emptyContainer}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/(tabs)/profile/member-center' as never)}
+        >
+          <Text style={{ color: colors.primary, ...Typography.body }}>
+            {t('serverErrors.PLAZA_MEMBERSHIP_REQUIRED', {
+              defaultValue: '升级会员查看圈子动态',
+            })}
+          </Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   return (
     <>
