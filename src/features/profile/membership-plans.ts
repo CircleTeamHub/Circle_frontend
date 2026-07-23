@@ -81,6 +81,37 @@ export type MembershipBenefit = {
 
 export const MEMBERSHIP_BENEFITS = [
   {
+    id: 'group-member-limit',
+    labelKey: 'profile.membership.benefits.groupMemberLimit',
+    values: { silver: 200, gold: 400, diamond: 1000, super: 'unlimited' },
+  },
+  {
+    id: 'joined-groups',
+    labelKey: 'profile.membership.benefits.joinedGroups',
+    values: { silver: 200, gold: 300, diamond: 1000, super: 'unlimited' },
+  },
+  {
+    id: 'note-storage',
+    labelKey: 'profile.membership.benefits.noteStorage',
+    values: { silver: 100, gold: 500, diamond: 1000, super: 'unlimited' },
+  },
+  {
+    id: 'city-filters',
+    labelKey: 'profile.membership.benefits.cityFilters',
+    values: { silver: 2, gold: 10, diamond: 50, super: 'unlimited' },
+  },
+  {
+    id: 'fancy-number',
+    labelKey: 'profile.membership.benefits.fancyNumber',
+    values: {
+      silver: 'none',
+      gold: 'none',
+      diamond: 'one-gift',
+      super: 'one-premium-gift',
+    },
+  },
+  // 名字颜色、会员徽章是次要展示项，放到权益列表最下面。
+  {
     id: 'name-color',
     labelKey: 'profile.membership.benefits.nameColor',
     values: {
@@ -98,36 +129,6 @@ export const MEMBERSHIP_BENEFITS = [
       gold: 'gold',
       diamond: 'diamond',
       super: 'super-lifetime',
-    },
-  },
-  {
-    id: 'group-member-limit',
-    labelKey: 'profile.membership.benefits.groupMemberLimit',
-    values: { silver: 200, gold: 400, diamond: 1000, super: 3000 },
-  },
-  {
-    id: 'joined-groups',
-    labelKey: 'profile.membership.benefits.joinedGroups',
-    values: { silver: 200, gold: 300, diamond: 1000, super: 2000 },
-  },
-  {
-    id: 'note-storage',
-    labelKey: 'profile.membership.benefits.noteStorage',
-    values: { silver: 100, gold: 500, diamond: 1000, super: 3000 },
-  },
-  {
-    id: 'city-filters',
-    labelKey: 'profile.membership.benefits.cityFilters',
-    values: { silver: 2, gold: 10, diamond: 50, super: 'unlimited' },
-  },
-  {
-    id: 'fancy-number',
-    labelKey: 'profile.membership.benefits.fancyNumber',
-    values: {
-      silver: 'none',
-      gold: 'none',
-      diamond: 'one-gift',
-      super: 'one-premium-gift',
     },
   },
 ] as const satisfies readonly MembershipBenefit[];

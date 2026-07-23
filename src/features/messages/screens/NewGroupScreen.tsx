@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
+import { MemberName } from '@/components/ui/member-name';
 import { NavHeader } from '@/components/ui/nav-header';
 import {
   createGroupChat,
@@ -263,9 +264,13 @@ export default function NewGroupScreen() {
             uri={item.avatarUrl ?? undefined}
           />
           <View style={s.rowText}>
-            <Text style={d.rowName} numberOfLines={1}>
-              {item.nickname}
-            </Text>
+            <MemberName
+              name={item.nickname}
+              userId={item.id}
+              style={d.rowName}
+              numberOfLines={1}
+              animated={false}
+            />
             <Text style={d.rowSubtitle} numberOfLines={1}>
               {item.accountId}
             </Text>

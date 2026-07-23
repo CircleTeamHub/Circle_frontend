@@ -6,6 +6,12 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { NavHeader } from '@/components/ui/nav-header';
+import { MemberName } from '@/components/ui/member-name';
+import {
+  AVATAR_FRAME_SCALE,
+  getMembershipFrameAsset,
+} from '@/features/profile/membership-frames';
+import { useUserVipLevel } from '@/stores/userVipStore';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
 import { getOrCreateSingleConversation } from '@/im/client';
@@ -125,6 +131,18 @@ const s = StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // 有会员框时隐藏默认描边,由框素材接管外圈。
+  avatarRingFramed: {
+    borderColor: 'transparent',
+  },
+  membershipFrameOverlay: {
+    position: 'absolute',
+    width: AVATAR_SIZE * AVATAR_FRAME_SCALE,
+    height: AVATAR_SIZE * AVATAR_FRAME_SCALE,
+    top: (AVATAR_SIZE + 10 - AVATAR_SIZE * AVATAR_FRAME_SCALE) / 2,
+    left: (AVATAR_SIZE + 10 - AVATAR_SIZE * AVATAR_FRAME_SCALE) / 2,
+    pointerEvents: 'none',
   },
   avatarImage: {
     width: '100%',
@@ -446,6 +464,11 @@ export default function UserProfileScreen() {
 
   const profile = remoteProfile ?? fallbackProfile;
   const profileMetaItems = getProfileMetaItems(profile);
+  // 会员头像框:按 vipLevel 缓存查档位(与名字特效同一数据链路)。
+  const profileVipLevel = useUserVipLevel(
+    profileId !== 'unknown' ? profileId : null,
+  );
+  const membershipFrame = getMembershipFrameAsset(profileVipLevel);
   const displayName =
     remarkOverride === undefined
       ? friendSettings?.remark?.trim() || profile.remarkHint || profile.name
@@ -831,7 +854,13 @@ export default function UserProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={s.hero}>
-          <View style={[s.avatarRing, d.avatarRing]}>
+          <View
+            style={[
+              s.avatarRing,
+              d.avatarRing,
+              membershipFrame ? s.avatarRingFramed : null,
+            ]}
+          >
             <View style={[s.avatarFrame, d.avatarFrame]}>
               {profile.avatarUrl ? (
                 <Image source={{ uri: profile.avatarUrl }} style={s.avatarImage} />
@@ -839,11 +868,14 @@ export default function UserProfileScreen() {
                 <Text style={d.avatarFallback}>{profile.name.charAt(0)}</Text>
               )}
             </View>
+            {membershipFrame ? (
+              <Image source={membershipFrame} style={s.membershipFrameOverlay} />
+            ) : null}
           </View>
 
           <View style={s.identity}>
             <View style={s.nameRow}>
-              <Text style={d.name}>{displayName}</Text>
+              <MemberName name={displayName} userId={profileId} style={d.name} />
               <View style={[s.badge, d.badge]}>
                 <Text style={d.badgeText}>{profile.memberLabel}</Text>
               </View>

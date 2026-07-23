@@ -1770,6 +1770,31 @@
     "viewAnnouncements": "최신 보기",
     "addIcon": "배지 추가",
     "myIcons": "배지 컬렉션",
+    "customerService": {
+      "menuLabel": "고객센터",
+      "menuHint": "온라인 상담",
+      "title": "고객센터",
+      "subtitle": "문의할 상담 유형을 선택하세요",
+      "openFailed": "고객센터 대화를 열지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      "categories": {
+        "recharge": {
+          "label": "충전 상담",
+          "description": "충전, 포인트, 결제 관련 문의"
+        },
+        "issue": {
+          "label": "일반 상담",
+          "description": "오류 및 이용 관련 문의"
+        },
+        "dispute": {
+          "label": "분쟁 상담",
+          "description": "거래 분쟁, 불만 및 이의 제기 처리"
+        },
+        "account": {
+          "label": "계정 상담",
+          "description": "로그인, 보안 및 계정 복구"
+        }
+      }
+    },
     "membership": {
       "title": "회원 센터",
       "regularUser": "일반 사용자",

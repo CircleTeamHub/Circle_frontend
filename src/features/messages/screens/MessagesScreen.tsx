@@ -1,4 +1,5 @@
 import { Avatar } from "@/components/ui/avatar";
+import { MemberName } from "@/components/ui/member-name";
 import { Badge } from "@/components/ui/badge";
 import { Divider } from "@/components/ui/divider";
 import { FilterTabs } from "@/components/ui/filter-tabs";
@@ -451,9 +452,17 @@ function ConversationRowImpl({
           <Pressable style={s.rowContent} onPress={() => onOpenConversation(item)}>
             <View style={s.rowTop}>
               <View style={s.nameRow}>
-                <Text style={nameStyle} numberOfLines={1}>
-                  {item.name}
-                </Text>
+                <MemberName
+                  name={item.name}
+                  userId={
+                    item.conversationType === 'private'
+                      ? item.sourceID
+                      : undefined
+                  }
+                  style={nameStyle}
+                  numberOfLines={1}
+                  animated={false}
+                />
               </View>
               <View style={s.rowMeta}>
                 <Text style={timeStyle}>{item.time}</Text>

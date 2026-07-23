@@ -1770,6 +1770,31 @@
     "viewAnnouncements": "最新を見る",
     "addIcon": "バッジを追加",
     "myIcons": "バッジコレクション",
+    "customerService": {
+      "menuLabel": "サポートセンター",
+      "menuHint": "オンライン相談",
+      "title": "サポートセンター",
+      "subtitle": "お問い合わせのサポート種別を選択してください",
+      "openFailed": "サポートチャットを開けませんでした。しばらくしてからもう一度お試しください。",
+      "categories": {
+        "recharge": {
+          "label": "チャージサポート",
+          "description": "チャージ・ポイント・支払いに関するお問い合わせ"
+        },
+        "issue": {
+          "label": "一般サポート",
+          "description": "不具合や利用方法に関するお問い合わせ"
+        },
+        "dispute": {
+          "label": "紛争サポート",
+          "description": "取引トラブル・苦情・申し立ての対応"
+        },
+        "account": {
+          "label": "アカウントサポート",
+          "description": "ログイン・セキュリティ・アカウント復旧"
+        }
+      }
+    },
     "membership": {
       "title": "会員センター",
       "regularUser": "一般ユーザー",

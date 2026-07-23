@@ -185,6 +185,18 @@ export const OPENIM_LOG_LEVEL =
 
 export const APP_NAME = APP_DISPLAY_NAME;
 
+/**
+ * 客服账号：点「客服中心」某个客服类型时，发起单聊的默认目标 OpenIM userID。
+ *
+ * 测试期默认用 OpenIM 系统管理账号 `imAdmin`——它在每套部署里都存在（后端也用它换
+ * admin token），保证「客服中心」开箱即用。生产环境应在 EAS Build / .env.production
+ * 里把 EXPO_PUBLIC_SUPPORT_ACCOUNT_ID 显式指向一个专用客服账号，由真人客服登录接待。
+ *
+ * 这里存的是「原始 userID」，真正发起会话时由 im/client 的 toImUserId 统一去连字符。
+ */
+export const SUPPORT_ACCOUNT_ID =
+  process.env.EXPO_PUBLIC_SUPPORT_ACCOUNT_ID?.trim() || 'imAdmin';
+
 export const LIMITS = {
   POST_MAX_LENGTH: 5000,
   POST_MAX_IMAGES: 9,

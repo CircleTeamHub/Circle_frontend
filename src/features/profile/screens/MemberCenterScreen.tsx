@@ -9,11 +9,14 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  type ImageSourcePropType,
   type TextStyle,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
+import { GradientCover } from '@/components/ui/gradient-cover';
 import {
   MEMBERSHIP_BENEFITS,
   MEMBERSHIP_PLANS,
@@ -65,11 +68,35 @@ const DEFAULT_NAMED_BENEFIT_VALUES: Record<
   'one-premium-gift': '赠送高级靓号 1 次',
 };
 
-const TIER_ACCENTS: Omit<Record<MembershipTier, string>, 'super'> = {
-  silver: '#64748B',
-  gold: '#B7791F',
-  diamond: '#2563EB',
+// 每个 VIP 等级一套「贵金属」视觉：档位渐变 + 强调色 + 徽章。银 → 金 → 钻 → 曜黑（超级）。
+const TIER_VISUALS: Record<
+  MembershipTier,
+  { gradient: readonly string[]; accent: string; badge: ImageSourcePropType }
+> = {
+  silver: {
+    gradient: ['#8E96A6', '#C4CAD6', '#6B7383'],
+    accent: '#5B6472',
+    badge: require('../../../../assets/badges/vip1.png'),
+  },
+  gold: {
+    gradient: ['#E7B34D', '#F8E09A', '#BB811A'],
+    accent: '#A9741A',
+    badge: require('../../../../assets/badges/vip2.png'),
+  },
+  diamond: {
+    gradient: ['#57ADF6', '#9DD8FF', '#2E6DE0'],
+    accent: '#2563EB',
+    badge: require('../../../../assets/badges/vip3.png'),
+  },
+  super: {
+    gradient: ['#4C3C74', '#241D3E', '#0B0912'],
+    accent: '#C9A24B',
+    badge: require('../../../../assets/badges/vip4.png'),
+  },
 };
+
+// 未开通（普通用户）时的中性 hero 渐变（品牌紫）。
+const NEUTRAL_HERO_GRADIENT = ['#5B4BE6', '#7C5CF0', '#A86BF0'] as const;
 
 function formatCountBenefit(
   benefitId: MembershipBenefitId,
@@ -91,6 +118,7 @@ function formatCountBenefit(
 const s = StyleSheet.create({
   content: {
     paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
     gap: Spacing.lg,
   },
   loading: {
@@ -98,14 +126,45 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // ── Hero（当前身份，随档位换渐变）──
   hero: {
-    borderRadius: Radius.sm,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.lg,
     padding: Spacing.lg,
-    gap: Spacing.xs,
+    gap: Spacing.md,
+    minHeight: 132,
+    overflow: 'hidden',
+    justifyContent: 'space-between',
   },
-  currentLabel: {
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  heroBadgeRing: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  heroBadge: {
+    width: 40,
+    height: 40,
+  },
+  heroTextCol: {
+    flex: 1,
+    gap: 4,
+  },
+  heroEyebrow: {
     textTransform: 'uppercase',
+    letterSpacing: 1.5,
+  },
+  heroNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
   },
   sectionHeader: {
     minHeight: 32,
@@ -115,21 +174,42 @@ const s = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Spacing.md,
   },
-  tierList: {
+  // ── 档位纵向列表（四档全展示）──
+  tierStack: {
     gap: Spacing.sm,
-    paddingRight: Spacing.lg,
   },
   tierCard: {
-    width: 172,
-    minHeight: 184,
-    borderRadius: Radius.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    borderRadius: Radius.md,
     borderWidth: 1.5,
     padding: Spacing.md,
-    justifyContent: 'space-between',
-    gap: Spacing.sm,
+    minHeight: 76,
   },
-  tierMarkerRow: {
-    minHeight: 22,
+  tierMedallion: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  tierMedallionBadge: {
+    width: 34,
+    height: 34,
+  },
+  tierInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  tierNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+  },
+  tierMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
@@ -137,17 +217,21 @@ const s = StyleSheet.create({
   },
   tierMarker: {
     borderRadius: Radius.xs,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 3,
+    paddingHorizontal: Spacing.sm - 2,
+    paddingVertical: 2,
+  },
+  tierPriceCol: {
+    alignItems: 'flex-end',
+    gap: 4,
+    minWidth: 58,
   },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    flexWrap: 'wrap',
-    gap: 2,
+    gap: 1,
   },
   benefitsPanel: {
-    borderRadius: Radius.sm,
+    borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
@@ -174,7 +258,7 @@ const s = StyleSheet.create({
   },
   cta: {
     minHeight: 52,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing.md,
@@ -196,6 +280,11 @@ export default function MemberCenterScreen() {
     currentTier ?? 'diamond',
   );
   const [programEnabled, setProgramEnabled] = useState<boolean | null>(null);
+  // 测试期绕过灰度：dev 构建直接展示会员中心正文（当前身份 + 档位 + 权益），方便本地核对；
+  // jest（JEST_WORKER_ID 存在）与生产仍遵循后端 programEnabled（保留 staged rollout 行为，
+  // 也让 marketing 态可测）。
+  const showMembershipProgram =
+    __DEV__ && !process.env.JEST_WORKER_ID ? true : programEnabled;
 
   useEffect(() => {
     setSelectedTier(currentTier ?? 'diamond');
@@ -319,20 +408,17 @@ export default function MemberCenterScreen() {
       content: {
         paddingBottom: insets.bottom + Spacing.xl,
       },
-      hero: {
-        backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
-      },
-      currentLabel: {
-        color: colors.textSecondary,
+      heroEyebrow: {
+        color: 'rgba(255,255,255,0.75)',
         ...Typography.tiny,
+        fontWeight: '700' as const,
       },
-      currentMembership: {
-        color: colors.text,
+      heroName: {
+        color: '#FFFFFF',
         ...Typography.h1,
       },
-      heroText: {
-        color: colors.textSecondary,
+      heroHint: {
+        color: 'rgba(255,255,255,0.82)',
         ...Typography.bodyRegular,
       },
       sectionTitle: {
@@ -349,9 +435,6 @@ export default function MemberCenterScreen() {
       tierCard: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
-      },
-      tierCardSelected: {
-        backgroundColor: colors.primaryLight,
       },
       tierMarker: {
         backgroundColor: colors.primary,
@@ -375,19 +458,14 @@ export default function MemberCenterScreen() {
       },
       currency: {
         color: colors.text,
-        ...Typography.body,
+        ...Typography.caption,
         fontWeight: '700' as const,
       },
       price: {
         color: colors.text,
-        fontSize: 28,
+        fontSize: 20,
         fontWeight: '800' as const,
         fontVariant: ['tabular-nums'] as TextStyle['fontVariant'],
-      },
-      selectedHint: {
-        color: colors.primary,
-        ...Typography.small,
-        fontWeight: '700' as const,
       },
       benefitsPanel: {
         backgroundColor: colors.surface,
@@ -420,10 +498,6 @@ export default function MemberCenterScreen() {
         textAlign: 'center' as const,
         flexShrink: 1,
       },
-      tierAccents: {
-        ...TIER_ACCENTS,
-        super: colors.text,
-      },
       marketingPanel: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
@@ -450,11 +524,11 @@ export default function MemberCenterScreen() {
         })}
         onRightPress={() => router.push('/(tabs)/profile/member-rules' as never)}
       />
-      {programEnabled === null ? (
+      {showMembershipProgram === null ? (
         <View style={s.loading}>
           <ActivityIndicator color={colors.primary} />
         </View>
-      ) : !programEnabled ? (
+      ) : !showMembershipProgram ? (
         <ScrollView
           contentContainerStyle={[s.content, d.content]}
           showsVerticalScrollIndicator={false}
@@ -479,12 +553,44 @@ export default function MemberCenterScreen() {
         contentContainerStyle={[s.content, d.content]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[s.hero, d.hero]}>
-          <Text style={[s.currentLabel, d.currentLabel]}>
-            {t('profile.membership.currentIdentity', { defaultValue: '当前身份' })}
-          </Text>
-          <Text style={d.currentMembership}>{currentMembershipName}</Text>
-          <Text style={d.heroText}>
+        {/* Hero：随当前档位换「贵金属」渐变；普通用户用品牌紫中性渐变 */}
+        <View style={s.hero}>
+          <GradientCover
+            colors={
+              currentTier
+                ? TIER_VISUALS[currentTier].gradient
+                : NEUTRAL_HERO_GRADIENT
+            }
+          />
+          <View style={s.heroTopRow}>
+            <View
+              style={[
+                s.heroBadgeRing,
+                { backgroundColor: 'rgba(255,255,255,0.18)' },
+              ]}
+            >
+              {currentTier ? (
+                <Image
+                  source={TIER_VISUALS[currentTier].badge}
+                  style={s.heroBadge}
+                  contentFit="contain"
+                />
+              ) : (
+                <Ionicons name="sparkles" size={26} color="#FFFFFF" />
+              )}
+            </View>
+            <View style={s.heroTextCol}>
+              <Text style={[s.heroEyebrow, d.heroEyebrow]}>
+                {t('profile.membership.currentIdentity', {
+                  defaultValue: '当前身份',
+                })}
+              </Text>
+              <View style={s.heroNameRow}>
+                <Text style={d.heroName}>{currentMembershipName}</Text>
+              </View>
+            </View>
+          </View>
+          <Text style={d.heroHint}>
             {t('profile.membership.catalogHint', {
               defaultValue: '选择会员档位查看对应权益，开通和升级由客服协助处理。',
             })}
@@ -509,13 +615,12 @@ export default function MemberCenterScreen() {
           </Pressable>
         </View>
 
-        <ScrollView
-          horizontal
-          contentContainerStyle={s.tierList}
-          showsHorizontalScrollIndicator={false}
-        >
+        {/* 四档纵向全展示；每档一枚随材质换渐变的奖章 + 强调色 */}
+        <View style={s.tierStack}>
           {MEMBERSHIP_PLANS.map((plan) => {
             const selected = plan.tier === selectedPlan.tier;
+            const isCurrentTier = plan.tier === currentTier;
+            const visual = TIER_VISUALS[plan.tier];
             const planName = t(plan.nameKey, {
               defaultValue: DEFAULT_TIER_NAMES[plan.tier],
             });
@@ -541,17 +646,42 @@ export default function MemberCenterScreen() {
                 style={[
                   s.tierCard,
                   d.tierCard,
-                  selected && d.tierCardSelected,
-                  selected && { borderColor: d.tierAccents[plan.tier] },
+                  selected && { borderColor: visual.accent, borderWidth: 2 },
                 ]}
                 onPress={() => setSelectedTier(plan.tier)}
               >
-                <View>
-                  <View style={s.tierMarkerRow}>
+                <View style={s.tierMedallion}>
+                  <GradientCover colors={visual.gradient} />
+                  <Image
+                    source={visual.badge}
+                    style={s.tierMedallionBadge}
+                    contentFit="contain"
+                  />
+                </View>
+                <View style={s.tierInfo}>
+                  <View style={s.tierNameRow}>
+                    <Text style={d.tierName} numberOfLines={2}>
+                      {planName}
+                    </Text>
+                    {isCurrentTier ? (
+                      <View
+                        style={[s.tierMarker, { backgroundColor: visual.accent }]}
+                      >
+                        <Text style={d.tierMarkerText}>
+                          {t('profile.membership.currentTierBadge', {
+                            defaultValue: '当前',
+                          })}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <View style={s.tierMetaRow}>
                     {plan.recommended ? (
                       <View style={[s.tierMarker, d.tierMarker]}>
                         <Text style={d.tierMarkerText}>
-                          {t('profile.membership.recommended', { defaultValue: '推荐' })}
+                          {t('profile.membership.recommended', {
+                            defaultValue: '推荐',
+                          })}
                         </Text>
                       </View>
                     ) : null}
@@ -562,29 +692,28 @@ export default function MemberCenterScreen() {
                         </Text>
                       </View>
                     ) : null}
+                    <Text style={d.duration}>{duration}</Text>
                   </View>
-                  <Text style={d.tierName} numberOfLines={2}>
-                    {planName}
-                  </Text>
-                  <Text style={d.duration}>{duration}</Text>
                 </View>
-                <View>
+                <View style={s.tierPriceCol}>
                   <View style={s.priceRow}>
                     <Text style={d.currency}>¥</Text>
                     <Text style={d.price} selectable>
                       {plan.price.amount}
                     </Text>
                   </View>
-                  <Text style={d.selectedHint}>
-                    {selected
-                      ? t('profile.membership.selected', { defaultValue: '已选择' })
-                      : ' '}
-                  </Text>
+                  {selected ? (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={20}
+                      color={visual.accent}
+                    />
+                  ) : null}
                 </View>
               </Pressable>
             );
           })}
-        </ScrollView>
+        </View>
 
         <Text style={d.sectionTitle}>
           {t('profile.membership.benefitsTitle', { defaultValue: '会员权益' })}
@@ -615,7 +744,7 @@ export default function MemberCenterScreen() {
                 <Ionicons
                   name="checkmark-circle"
                   size={20}
-                  color={d.tierAccents[selectedPlan.tier]}
+                  color={TIER_VISUALS[selectedPlan.tier].accent}
                 />
                 <View style={s.benefitText}>
                   <Text style={d.benefitLabel}>

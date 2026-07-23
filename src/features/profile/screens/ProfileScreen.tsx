@@ -1,6 +1,7 @@
 import { Avatar } from "@/components/ui/avatar";
 import { Divider } from "@/components/ui/divider";
 import { GradientCover } from "@/components/ui/gradient-cover";
+import { MemberName } from "@/components/ui/member-name";
 import { MenuRow } from "@/components/ui/menu-row";
 import { UserIconRow } from "@/components/ui/user-icon-row";
 import {
@@ -13,6 +14,7 @@ import {
   getMembershipTierForVipLevel,
   type MembershipTier,
 } from "@/features/profile/membership-plans";
+import { getMembershipFrameAsset } from "@/features/profile/membership-frames";
 import { getUserProfileHref } from "@/features/user/utils/routes";
 import { fetchCurrentUser } from "@/services/api/auth";
 import { fetchIconOptions } from "@/services/api/icons";
@@ -33,6 +35,7 @@ const MENU_ID = {
   MALL: "mall",
   COLLECTIONS: "collections",
   NOTES: "notes",
+  CUSTOMER_SERVICE: "customer-service",
   APP_SETTINGS: "app-settings",
 } as const;
 
@@ -52,6 +55,7 @@ const MENU_ROUTE: Record<MenuId, string> = {
   [MENU_ID.MALL]: "/(tabs)/profile/mall",
   [MENU_ID.COLLECTIONS]: "/(tabs)/profile/collections",
   [MENU_ID.NOTES]: "/(tabs)/profile/notes",
+  [MENU_ID.CUSTOMER_SERVICE]: "/(tabs)/profile/customer-service",
   [MENU_ID.APP_SETTINGS]: "/(tabs)/profile/app-settings",
 };
 
@@ -67,6 +71,7 @@ const MENU_ITEM_KEYS: {
   { id: MENU_ID.MALL, icon: "hand-left-outline", labelKey: "profile.mall.menuLabel", rightTextKey: "profile.viewProducts" },
   { id: MENU_ID.COLLECTIONS, icon: "bookmark-outline", labelKey: "profile.collections.menuLabel", rightTextKey: "profile.viewCollections" },
   { id: MENU_ID.NOTES, icon: "document-text-outline", labelKey: "profile.notes", rightTextKey: "profile.viewNotes" },
+  { id: MENU_ID.CUSTOMER_SERVICE, icon: "headset-outline", labelKey: "profile.customerService.menuLabel", rightTextKey: "profile.customerService.menuHint" },
   { id: MENU_ID.APP_SETTINGS, icon: "settings-outline", labelKey: "profile.settings" },
 ];
 
@@ -109,12 +114,13 @@ const s = StyleSheet.create({
   },
   memberStatsPanel: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "stretch",
     gap: 8,
   },
   memberStatCell: {
     flex: 1,
     alignItems: "center",
+    justifyContent: "center",
     gap: 3,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
@@ -365,10 +371,15 @@ export default function ProfileScreen() {
               name={displayName}
               uri={user?.avatarUrl ?? undefined}
               bgColor={colors.surface}
+              frameSource={getMembershipFrameAsset(vipLevel) ?? undefined}
             />
           </Pressable>
           <View style={s.profileInfo}>
-            <Text style={d.profileName}>{displayName}</Text>
+            <MemberName
+              name={displayName}
+              vipLevel={vipLevel}
+              style={d.profileName}
+            />
             <Text style={d.profileAccount}>{t('contacts.accountId', { id: displayAccount })}</Text>
           </View>
         </View>

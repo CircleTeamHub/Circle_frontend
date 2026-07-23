@@ -1773,6 +1773,31 @@
     "viewAnnouncements": "Novedades",
     "addIcon": "Añadir insignia",
     "myIcons": "Mis insignias",
+    "customerService": {
+      "menuLabel": "Centro de ayuda",
+      "menuHint": "Chatea ahora",
+      "title": "Centro de ayuda",
+      "subtitle": "Elige el tipo de soporte que necesitas",
+      "openFailed": "No se pudo abrir el chat de soporte. Inténtalo de nuevo.",
+      "categories": {
+        "recharge": {
+          "label": "Soporte de recargas",
+          "description": "Recargas, puntos y problemas de pago"
+        },
+        "issue": {
+          "label": "Soporte general",
+          "description": "Errores y dudas sobre el uso de la app"
+        },
+        "dispute": {
+          "label": "Soporte de disputas",
+          "description": "Disputas de transacciones, quejas y apelaciones"
+        },
+        "account": {
+          "label": "Soporte de cuenta",
+          "description": "Inicio de sesión, seguridad y recuperación de cuenta"
+        }
+      }
+    },
     "membership": {
       "title": "Centro de membresía",
       "regularUser": "Usuario regular",

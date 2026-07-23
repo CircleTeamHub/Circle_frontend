@@ -21,7 +21,7 @@ test('ProfileScreen removes the credit score row and links profile commerce page
   assert.match(src, /profile\/collections/);
 });
 
-test('ProfileScreen places system announcements before membership and settings after notes', () => {
+test('ProfileScreen places system announcements first, customer service after notes, settings last', () => {
   const src = read('src/features/profile/screens/ProfileScreen.tsx');
   const match = src.match(/const MENU_ITEM_KEYS:[\s\S]*?\[] = \[([\s\S]*?)\];/);
 
@@ -39,8 +39,37 @@ test('ProfileScreen places system announcements before membership and settings a
     'MALL',
     'COLLECTIONS',
     'NOTES',
+    'CUSTOMER_SERVICE',
     'APP_SETTINGS',
   ]);
+});
+
+test('ProfileScreen customer service row routes to the support-center screen', () => {
+  const src = read('src/features/profile/screens/ProfileScreen.tsx');
+
+  assert.match(src, /id: MENU_ID\.CUSTOMER_SERVICE[\s\S]*?icon: "headset-outline"/);
+  assert.match(src, /profile\.customerService\.menuLabel/);
+  assert.match(
+    src,
+    /\[MENU_ID\.CUSTOMER_SERVICE\]:\s*["']\/\(tabs\)\/profile\/customer-service["']/,
+  );
+});
+
+test('customer service exposes recharge/issue/dispute/account with env override + SUPPORT_ACCOUNT_ID fallback', () => {
+  const cats = read('src/features/profile/support-categories.ts');
+  const cfg = read('src/constants/config.ts');
+  const screen = read('src/features/profile/screens/CustomerServiceScreen.tsx');
+
+  const ids = Array.from(cats.matchAll(/id:\s*'([a-z]+)'/g), ([, v]) => v);
+  assert.deepEqual(ids, ['recharge', 'issue', 'dispute', 'account']);
+  assert.match(cats, /raw\?\.trim\(\)\s*\|\|\s*SUPPORT_ACCOUNT_ID/);
+
+  assert.match(cfg, /export const SUPPORT_ACCOUNT_ID\s*=/);
+  assert.match(cfg, /\|\|\s*['"]imAdmin['"]/);
+
+  // Each category opens a 1:1 chat with its own account, titled by the category label.
+  assert.match(screen, /getOrCreateSingleConversation\(\s*category\.accountId/);
+  assert.match(screen, /getChatDetailHref\(\s*['"]profile['"],\s*category\.accountId/);
 });
 
 test('profile commerce routes export their screens', () => {
@@ -51,6 +80,7 @@ test('profile commerce routes export their screens', () => {
   assert.match(read('app/(tabs)/profile/wallet.tsx'), /WalletScreen/);
   assert.match(read('app/(tabs)/profile/mall.tsx'), /MallScreen/);
   assert.match(read('app/(tabs)/profile/collections.tsx'), /CollectionsScreen/);
+  assert.match(read('app/(tabs)/profile/customer-service.tsx'), /CustomerServiceScreen/);
   assert.match(read('app/(tabs)/profile/app-settings.tsx'), /AppSettingsScreen/);
 });
 
@@ -69,17 +99,20 @@ test('MemberCenterScreen renders the four-tier catalog without legacy commerce A
 
   assert.match(src, /MEMBERSHIP_PLANS\.map/);
   assert.match(src, /MEMBERSHIP_BENEFITS\.map/);
-  assert.doesNotMatch(src, /@\/services\/api\/membership/);
+  // 允许 staged rollout 的 fetchMembershipProgramStatus（会员中心正文是否放开的灰度开关，
+  // 与 MemberCenterScreen.spec.tsx 的行为契约一致），但仍禁止旧的「积分兑换/直购升级」商业化 API。
   assert.doesNotMatch(src, /fetchMembershipPlans|upgradeMembership|performMembershipUpgradeFlow/);
   assert.doesNotMatch(src, /积分|兑换会员|确认兑换/);
 });
 
-test('MemberCenterScreen provides horizontal selection, tier markers, and selected benefits', () => {
+test('MemberCenterScreen provides a vertical four-tier selection with per-tier visuals, markers, and selected benefits', () => {
   const src = read('src/features/profile/screens/MemberCenterScreen.tsx');
   const catalog = read('src/features/profile/membership-plans.ts');
 
-  assert.match(src, /horizontal/);
-  assert.match(src, /showsHorizontalScrollIndicator/);
+  // 四档纵向全展示（tierStack，不再横滑把钻石/超级截在屏外），每档一套「贵金属」视觉。
+  assert.match(src, /tierStack/);
+  assert.match(src, /TIER_VISUALS/);
+  assert.match(src, /accessibilityState=\{\{ selected \}\}/);
   assert.match(src, /plan\.recommended/);
   assert.match(src, /defaultValue: '推荐'/);
   assert.match(src, /duration\.type === 'lifetime'/);

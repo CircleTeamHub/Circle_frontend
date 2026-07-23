@@ -24,6 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import { Avatar } from '@/components/ui/avatar';
+import { MemberName } from '@/components/ui/member-name';
 import { Divider } from '@/components/ui/divider';
 import {
   DatePill,
@@ -1138,9 +1139,12 @@ export default function ChatDetailScreen() {
       }
       return (
         <View>
-          <Text style={[s.senderLabel, { color: colors.textSecondary }]}>
-            {receivedDisplayName(message)}
-          </Text>
+          <MemberName
+            name={receivedDisplayName(message)}
+            userId={message.senderID}
+            style={[s.senderLabel, { color: colors.textSecondary }]}
+            animated={false}
+          />
           {node}
         </View>
       );

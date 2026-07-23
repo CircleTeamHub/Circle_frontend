@@ -1,4 +1,5 @@
 import { Avatar } from '@/components/ui/avatar';
+import { MemberName } from '@/components/ui/member-name';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
 import {
@@ -201,7 +202,12 @@ export default function FriendTagDetailScreen() {
             uri={item.avatarUrl ?? undefined}
           />
           <View style={s.rowMeta}>
-            <Text style={d.name}>{getFriendDisplayName(item)}</Text>
+            <MemberName
+              name={getFriendDisplayName(item)}
+              userId={item.id}
+              style={d.name}
+              animated={false}
+            />
             <Text style={d.account}>{t('contacts.accountId', { id: item.accountId })}</Text>
           </View>
         </Pressable>

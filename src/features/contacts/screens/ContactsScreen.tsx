@@ -1,4 +1,5 @@
 import { Avatar } from '@/components/ui/avatar';
+import { MemberName } from '@/components/ui/member-name';
 import { Divider } from '@/components/ui/divider';
 import { MenuRow } from '@/components/ui/menu-row';
 import { SearchBar } from '@/components/ui/search-bar';
@@ -274,7 +275,12 @@ export default function ContactsScreen() {
             uri={item.avatarUrl ?? undefined}
           />
           <View style={s.contactMeta}>
-            <Text style={d.contactName}>{getFriendDisplayName(item)}</Text>
+            <MemberName
+              name={getFriendDisplayName(item)}
+              userId={item.id}
+              style={d.contactName}
+              animated={false}
+            />
             <Text style={d.contactAccountId}>{t('contacts.accountId', { id: item.accountId })}</Text>
           </View>
         </Pressable>

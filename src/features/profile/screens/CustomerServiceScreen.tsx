@@ -1,0 +1,117 @@
+import { useCallback, useMemo, useRef } from 'react';
+import { Alert, FlatList, StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { NavHeader } from '@/components/ui/nav-header';
+import { MenuRow } from '@/components/ui/menu-row';
+import { Divider } from '@/components/ui/divider';
+import { Spacing, Typography, useTheme } from '@/theme';
+import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
+import { getChatDetailHref } from '@/features/user/utils/routes';
+import { getOrCreateSingleConversation } from '@/im/client';
+import {
+  SUPPORT_CATEGORIES,
+  type SupportCategory,
+} from '@/features/profile/support-categories';
+
+const s = StyleSheet.create({
+  container: { flex: 1 },
+  content: { paddingHorizontal: Spacing.lg },
+  intro: { paddingVertical: Spacing.md },
+});
+
+export default function CustomerServiceScreen() {
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { colors } = useTheme();
+  const { t } = useTranslation();
+
+  // ref 守卫同步生效，避免连点两类客服触发两次会话解析 / 两次入栈。
+  const openingRef = useRef(false);
+
+  const handleOpenCategory = useCallback(
+    async (category: SupportCategory) => {
+      if (openingRef.current) return;
+      openingRef.current = true;
+      // 会话标题用该类客服名（如「充值客服」），客服侧一眼看清用户走的是哪个入口。
+      const title = t(category.labelKey);
+      try {
+        const conversation = await getOrCreateSingleConversation(
+          category.accountId,
+        );
+        router.push(
+          getChatDetailHref(
+            'profile',
+            category.accountId,
+            title,
+            undefined,
+            conversation.conversationID,
+          ),
+        );
+      } catch (error) {
+        // IM 未接通 / 客服账号尚未建立好友关系等：仍以预览模式进入，保证入口始终可点开。
+        if (shouldOpenChatPreview(error)) {
+          router.push(getChatDetailHref('profile', category.accountId, title));
+          return;
+        }
+        Alert.alert(
+          t('profile.customerService.openFailed'),
+          error instanceof Error ? error.message : t('common.networkError'),
+        );
+      } finally {
+        openingRef.current = false;
+      }
+    },
+    [router, t],
+  );
+
+  const d = useMemo(
+    () => ({
+      container: { backgroundColor: colors.background },
+      intro: {
+        color: colors.textSecondary,
+        ...Typography.bodyRegular,
+        lineHeight: 21,
+      },
+    }),
+    [colors],
+  );
+
+  const renderCategory = useCallback(
+    ({ item, index }: { item: SupportCategory; index: number }) => (
+      <View>
+        <MenuRow
+          icon={item.icon as keyof typeof Ionicons.glyphMap}
+          label={t(item.labelKey)}
+          subtitle={t(item.descriptionKey)}
+          onPress={() => handleOpenCategory(item)}
+        />
+        {index < SUPPORT_CATEGORIES.length - 1 ? <Divider /> : null}
+      </View>
+    ),
+    [handleOpenCategory, t],
+  );
+
+  return (
+    <View style={[s.container, d.container, { paddingTop: insets.top }]}>
+      <NavHeader title={t('profile.customerService.title')} />
+      <FlatList
+        data={SUPPORT_CATEGORIES}
+        keyExtractor={(item) => item.id}
+        renderItem={renderCategory}
+        ListHeaderComponent={
+          <Text style={[s.intro, d.intro]}>
+            {t('profile.customerService.subtitle')}
+          </Text>
+        }
+        contentContainerStyle={[
+          s.content,
+          { paddingBottom: insets.bottom + Spacing.xl },
+        ]}
+        showsVerticalScrollIndicator={false}
+      />
+    </View>
+  );
+}

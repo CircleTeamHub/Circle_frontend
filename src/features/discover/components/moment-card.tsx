@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
+import { MemberName } from '@/components/ui/member-name';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { getUserProfileHref } from '@/features/user/utils/routes';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
@@ -162,7 +163,12 @@ export const MomentCard: React.FC<MomentCardProps> = ({
         {/* Author + Time */}
         <View style={s.headerRow}>
           <Pressable onPress={handleAvatarPress}>
-            <Text style={d.authorName}>{post.author.nickname}</Text>
+            <MemberName
+              name={post.author.nickname}
+              userId={post.author.id}
+              style={d.authorName}
+              animated={false}
+            />
           </Pressable>
         </View>
 
@@ -221,7 +227,17 @@ export const MomentCard: React.FC<MomentCardProps> = ({
               <View style={s.likesRow}>
                 <Ionicons name="heart" size={13} color={colors.warning} />
                 <Text style={[d.likeText, { flex: 1 }]} numberOfLines={2}>
-                  {likedFriendsPreview.namesText}
+                  {likedFriendsPreview.friends.map((friend, index) => (
+                    <Text key={friend.id}>
+                      {index > 0 ? likedFriendsPreview.separator : ''}
+                      <MemberName
+                        name={friend.nickname}
+                        userId={friend.id}
+                        style={d.likeText}
+                        animated={false}
+                      />
+                    </Text>
+                  ))}
                   {likedFriendsPreview.hiddenCount > 0
                     ? `${moreLikedFriendsPrefix}${t('moment.moreLikedFriends', {
                         count: likedFriendsPreview.hiddenCount,
@@ -244,17 +260,23 @@ export const MomentCard: React.FC<MomentCardProps> = ({
                       : onPress(post.id)
                   }
                 >
-                  <Text style={d.commentUser}>
-                    {thread.comment.user.nickname}
-                  </Text>
+                  <MemberName
+                    name={thread.comment.user.nickname}
+                    userId={thread.comment.user.id}
+                    style={d.commentUser}
+                    animated={false}
+                  />
                   {thread.comment.replyTo ? (
                     <>
                       <Text style={d.commentText}>
                         {' '}{t('moment.reply')}{' '}
                       </Text>
-                      <Text style={d.commentUser}>
-                        {thread.comment.replyTo.nickname}
-                      </Text>
+                      <MemberName
+                        name={thread.comment.replyTo.nickname}
+                        userId={thread.comment.replyTo.id}
+                        style={d.commentUser}
+                        animated={false}
+                      />
                     </>
                   ) : null}
                   <Text style={d.commentText}>
@@ -278,15 +300,23 @@ export const MomentCard: React.FC<MomentCardProps> = ({
                         : onPress(post.id)
                     }
                   >
-                    <Text style={d.commentUser}>{reply.user.nickname}</Text>
+                    <MemberName
+                      name={reply.user.nickname}
+                      userId={reply.user.id}
+                      style={d.commentUser}
+                      animated={false}
+                    />
                     {reply.replyTo ? (
                       <>
                         <Text style={d.commentText}>
                           {' '}{t('moment.reply')}{' '}
                         </Text>
-                        <Text style={d.commentUser}>
-                          {reply.replyTo.nickname}
-                        </Text>
+                        <MemberName
+                          name={reply.replyTo.nickname}
+                          userId={reply.replyTo.id}
+                          style={d.commentUser}
+                          animated={false}
+                        />
                       </>
                     ) : null}
                     <Text style={d.commentText}>

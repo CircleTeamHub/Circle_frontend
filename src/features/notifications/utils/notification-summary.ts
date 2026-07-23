@@ -8,6 +8,8 @@ export interface NotificationRowData {
   avatarName: string;
   avatarUrl: string | null;
   title: string;
+  // 发送者 userId（名字特效上色用）；SYSTEM 通知无发送者时为 null。
+  fromUserId: string | null;
   summary: string;
   icon: keyof typeof Ionicons.glyphMap;
   previewImage: string | null;
@@ -67,6 +69,7 @@ export function mapNotificationToRow(
     avatarName: name,
     avatarUrl: n.fromUser?.avatarUrl ?? null,
     title: name,
+    fromUserId: n.fromUser?.id ?? null,
     summary,
     icon: iconFor(n.type),
     previewImage: n.fromTrace?.firstImage ?? null,

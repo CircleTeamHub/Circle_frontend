@@ -1327,6 +1327,31 @@
     "viewAnnouncements": "查看最新",
     "addIcon": "添加徽章",
     "myIcons": "我的徽章",
+    "customerService": {
+      "menuLabel": "客服中心",
+      "menuHint": "在线咨询",
+      "title": "客服中心",
+      "subtitle": "请选择需要咨询的客服类型",
+      "openFailed": "打开客服会话失败，请稍后重试",
+      "categories": {
+        "recharge": {
+          "label": "充值客服",
+          "description": "充值、积分、支付相关问题"
+        },
+        "issue": {
+          "label": "问题客服",
+          "description": "功能异常、使用疑问反馈"
+        },
+        "dispute": {
+          "label": "纠纷客服",
+          "description": "交易纠纷、投诉与申诉处理"
+        },
+        "account": {
+          "label": "账号客服",
+          "description": "登录、安全与账号找回"
+        }
+      }
+    },
     "membership": {
       "title": "会员中心",
       "regularUser": "普通用户",

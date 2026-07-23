@@ -1330,6 +1330,31 @@
     "viewAnnouncements": "Latest",
     "addIcon": "Add badge",
     "myIcons": "Badge Collection",
+    "customerService": {
+      "menuLabel": "Support Center",
+      "menuHint": "Chat now",
+      "title": "Support Center",
+      "subtitle": "Choose the type of support you need",
+      "openFailed": "Couldn't open the support chat. Please try again.",
+      "categories": {
+        "recharge": {
+          "label": "Top-up Support",
+          "description": "Recharge, points, and payment issues"
+        },
+        "issue": {
+          "label": "General Support",
+          "description": "Bugs and questions about using the app"
+        },
+        "dispute": {
+          "label": "Dispute Support",
+          "description": "Transaction disputes, complaints, and appeals"
+        },
+        "account": {
+          "label": "Account Support",
+          "description": "Login, security, and account recovery"
+        }
+      }
+    },
     "membership": {
       "title": "Membership Center",
       "regularUser": "Regular user",

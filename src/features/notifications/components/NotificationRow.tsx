@@ -10,6 +10,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { Avatar } from '@/components/ui/avatar';
+import { MemberName } from '@/components/ui/member-name';
 import { Radius, Spacing, useTheme } from '@/theme';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
 import type { NotificationRowData } from '@/features/notifications/utils/notification-summary';
@@ -62,9 +63,13 @@ export const NotificationRow = memo(function NotificationRow({
       </View>
       <View style={s.body}>
         <View style={s.topRow}>
-          <Text numberOfLines={1} style={{ flex: 1, marginRight: 6, fontSize: 16, fontWeight: '700', color: colors.text }}>
-            {data.title}
-          </Text>
+          <MemberName
+            name={data.title}
+            userId={data.fromUserId}
+            numberOfLines={1}
+            style={{ flex: 1, marginRight: 6, fontSize: 16, fontWeight: '700', color: colors.text }}
+            animated={false}
+          />
           <Text style={{ fontSize: 12, color: colors.textSecondary }}>{formatRelativeTime(data.createdAt, t)}</Text>
         </View>
         <View style={s.summaryRow}>
