@@ -421,7 +421,11 @@ test('clearLocalSession re-persists a newer session after Zustand void clearStor
   );
 });
 
-test('account-scoped cleanup stops when a newer session starts while a store is loading', async () => {
+test('relogin during store load: skips in-memory reset but still clears the old account disk key (review P1)', async () => {
+  // 新会话在旧会话登出的 store 异步加载期间抢占进来时：
+  // - 内存 resetForLogout 必须跳过（否则擦掉新会话的实时 UI 状态）；
+  // - 磁盘 clearStorage 仍要执行（否则上一账号的持久化足迹留在共享 MMKV key
+  //   上，下次冷启动水合会渗进新会话 —— 正是本 review 指出的泄漏）。
   const { mocks, calls, authState } = makeBaseMocks();
   mocks['@/features/messages/store/use-local-unread-store'] = {
     useLocalUnreadStore: {
@@ -446,8 +450,53 @@ test('account-scoped cleanup stops when a newer session starts while a store is 
   await clearLocalSession(1);
 
   assert.ok(calls.includes('sessionB'));
+  // 新会话已抢占 —— 不能擦它的内存状态
   assert.equal(calls.includes('resetLocalUnread'), false);
-  assert.equal(calls.includes('clearLocalUnreadStorage'), false);
+  // 但旧账号的磁盘 key 仍被清掉，杜绝下次水合泄漏
+  assert.ok(calls.includes('clearLocalUnreadStorage'));
+});
+
+test('relogin mid-load still disk-clears the REMAINING account-scoped stores, not just the one being loaded (review P1)', async () => {
+  // 会话在清单中途变化不得 return 掉后面的 store —— 每一个共享 key 都要清。
+  const { mocks, calls, authState } = makeBaseMocks();
+  mocks['@/features/messages/store/use-local-unread-store'] = {
+    useLocalUnreadStore: {
+      getState: () => ({
+        resetForLogout: () => calls.push('resetLocalUnread'),
+      }),
+      persist: {
+        clearStorage: () => calls.push('clearLocalUnreadStorage'),
+      },
+    },
+  };
+  mocks['@/features/chat/store/use-chat-preferences-store'] = {
+    useChatPreferencesStore: {
+      getState: () => ({
+        resetForLogout: () => calls.push('resetChatPreferences'),
+      }),
+      persist: {
+        clearStorage: () => calls.push('clearChatPreferencesStorage'),
+      },
+    },
+  };
+  // 在加载第一个账号级 store 时抢占会话
+  mocks.__onRequire = (request) => {
+    if (request === '@/features/messages/store/use-local-unread-store') {
+      authState.sessionEpoch += 1;
+      calls.push('sessionB');
+    }
+  };
+  const { clearLocalSession } = loadSessionModule(mocks);
+
+  await clearLocalSession(1);
+
+  assert.ok(calls.includes('sessionB'));
+  // 会话已变：两个 store 都不做内存重置
+  assert.equal(calls.includes('resetLocalUnread'), false);
+  assert.equal(calls.includes('resetChatPreferences'), false);
+  // 但两个 store 的磁盘 key 都被清 —— 循环没有在会话变化时提前退出
+  assert.ok(calls.includes('clearLocalUnreadStorage'));
+  assert.ok(calls.includes('clearChatPreferencesStorage'));
 });
 
 test('clearLocalSession falls back to secure auth removeItem when persist.clearStorage rejects (defense in depth: tokens must not remain on disk)', async () => {
