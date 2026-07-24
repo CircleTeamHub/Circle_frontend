@@ -3,7 +3,6 @@ import { AppState } from 'react-native';
 import { fetchCurrentUser } from '@/services/api/auth';
 import { isDefinitiveAuthFailure } from '@/services/api/client';
 import { loginToOpenIM, logoutFromOpenIM } from '@/im/client';
-import { getIMErrorCode, IM_ERROR_CODES } from '@/im/error-codes';
 import { isOpenIMTokenRejectedError } from '@/im/token-errors';
 import { isIMReloginPending, recoverIMSession } from '@/im/token-recovery';
 import {
@@ -65,10 +64,7 @@ export function SessionBootstrap() {
       await loginToOpenIM(userId, token);
       clearIMLoginRetryPending();
     } catch (error) {
-      if (
-        isOpenIMTokenRejectedError(error) ||
-        getIMErrorCode(error) === IM_ERROR_CODES.CONNECTION_NOT_READY
-      ) {
+      if (isOpenIMTokenRejectedError(error)) {
         // 缓存的 imToken 已被服务端拒绝（1501-1506）——重试同一枚没有意义，
         // 改走 GET /auth/im-token 换新 token 原地重登（#83）。欠账由
         // token-recovery 模块自己记（isIMReloginPending），这里不再重复记。
@@ -76,7 +72,9 @@ export function SessionBootstrap() {
         void recoverIMSession();
         return;
       }
-      // 留着欠账，等下次回前台重试 —— 那时网络多半已经恢复。
+      // 含连接就绪超时(CONNECTION_NOT_READY)在内的其它失败：token 仍有效，换 token
+      // 反而会强制登出还在连接中的 SDK、弱网下空转成环。留着欠账，回前台用同一枚
+      // token 重试 —— 那时网络多半已经恢复。
       markIMLoginRetryPending();
       console.warn(
         '[openim] login failed; will retry on next foreground',

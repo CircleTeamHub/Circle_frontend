@@ -118,9 +118,17 @@ export function bindOpenIMListeners() {
   OpenIMSDK.on('onUserTokenExpired', handleTokenExpired);
   // SDK 也可能发 onUserTokenInvalid（token 不被服务器接受），统一按 expired 处理
   OpenIMSDK.on('onUserTokenInvalid', handleTokenExpired);
-  // 同账号同 platform 在另一端重新登录，OpenIM 会把当前长连接踢下线。
-  // 这和 token invalid/expired 一样：业务会话不一定失效，先换 IM token 原地恢复。
-  OpenIMSDK.on('onKickedOffline', handleTokenExpired);
+
+  // 同账号在另一端以相同 platform 登录时，OpenIM 把本端长连接踢下线——这是对端「有意」
+  // 顶替，不是 token 失效。若像 expired 那样换 token 原地重登，本端会立刻把新端再踢下线，
+  // 两端来回抢登陷入风暴。故按终态断连处理、给用户可读解释、不自动恢复；用户如需可自行
+  // 重新进入以重新登录（届时轮到对端被踢，是用户的显式选择）。
+  const handleKickedOffline = () => {
+    useIMStore.getState().setConnecting(false);
+    useIMStore.getState().setConnected(false);
+    useIMStore.getState().setError('您的账号已在其他设备登录');
+  };
+  OpenIMSDK.on('onKickedOffline', handleKickedOffline);
 
   // onConversationChanged 与 onNewConversation 共享同一个 handler 引用：
   // 行为相同 + 共享 ref 便于 off 时一一对应、也少一份闭包。
@@ -279,7 +287,7 @@ export function bindOpenIMListeners() {
     OpenIMSDK.off('onConnectFailed', handleConnectFailed);
     OpenIMSDK.off('onUserTokenExpired', handleTokenExpired);
     OpenIMSDK.off('onUserTokenInvalid', handleTokenExpired);
-    OpenIMSDK.off('onKickedOffline', handleTokenExpired);
+    OpenIMSDK.off('onKickedOffline', handleKickedOffline);
     OpenIMSDK.off('onConversationChanged', handleConversationsBatched);
     OpenIMSDK.off('onNewConversation', handleConversationsBatched);
     OpenIMSDK.off('onTotalUnreadMessageCountChanged', handleUnreadChanged);

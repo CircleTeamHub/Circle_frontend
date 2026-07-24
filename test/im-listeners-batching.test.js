@@ -23,6 +23,9 @@ function loadListenersHarness() {
   const timers = [];
   const appendCalls = [];
   const markReadCalls = [];
+  const setConnectedCalls = [];
+  const setErrorCalls = [];
+  const recoverCalls = [];
   const state = {
     activeConversation: {
       conversationID: 'conv-1',
@@ -35,8 +38,8 @@ function loadListenersHarness() {
       appendCalls.push([conversationID, messages]);
     },
     setConnecting: () => {},
-    setConnected: () => {},
-    setError: () => {},
+    setConnected: (value) => setConnectedCalls.push(value),
+    setError: (value) => setErrorCalls.push(value),
     setConversations: () => {},
     mergeConversations: () => {},
     setTotalUnread: () => {},
@@ -88,7 +91,10 @@ function loadListenersHarness() {
         return {
           registerIMLoginExecutor: () => {},
     registerIMLogoutExecutor: () => {},
-          recoverIMSession: async () => false,
+          recoverIMSession: async () => {
+            recoverCalls.push(1);
+            return false;
+          },
           isIMReloginPending: () => false,
         };
       }
@@ -129,6 +135,9 @@ function loadListenersHarness() {
     markReadCalls,
     offCalls,
     state,
+    setConnectedCalls,
+    setErrorCalls,
+    recoverCalls,
   };
 }
 
@@ -192,4 +201,19 @@ test('does not mark read when the user left the conversation before flush', () =
   // 消息仍落库（避免丢消息），但不再标记已读——用户已经不在看了。
   assert.equal(harness.appendCalls.length, 1);
   assert.deepEqual(harness.markReadCalls, []);
+});
+
+test('onKickedOffline is a terminal disconnect, not a token refresh (no relogin storm)', () => {
+  const harness = loadListenersHarness();
+  harness.bindOpenIMListeners();
+  const handleKicked = harness.handlers.get('onKickedOffline');
+  assert.equal(typeof handleKicked, 'function');
+
+  handleKicked();
+
+  // 同账号在另一端顶替登录把本端踢下线：进入断连终态 + 给用户可读解释，
+  // 但绝不换 token 原地重登（否则会把新设备再踢下线，两端互踢成风暴）。
+  assert.deepEqual(harness.setConnectedCalls, [false]);
+  assert.equal(harness.setErrorCalls.length, 1);
+  assert.equal(harness.recoverCalls.length, 0);
 });

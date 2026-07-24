@@ -70,6 +70,12 @@ test('customer service exposes recharge/issue/dispute/account with env override 
   // Each category opens a 1:1 chat with its own account, titled by the category label.
   assert.match(screen, /getOrCreateSingleConversation\(\s*category\.accountId/);
   assert.match(screen, /getChatDetailHref\(\s*['"]profile['"],\s*category\.accountId/);
+
+  // 会话解析较慢时用户可能已离场：解析/兜底完成后先查焦点守卫再跳转，
+  // 避免从非活跃屏幕把聊天页推入栈。
+  assert.match(screen, /useFocusEffect/);
+  assert.match(screen, /focusedRef/);
+  assert.match(screen, /if \(!focusedRef\.current\) return;/);
 });
 
 test('profile commerce routes export their screens', () => {

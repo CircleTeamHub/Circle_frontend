@@ -21,11 +21,21 @@ export const useUserVipStore = create<UserVipState>(() => ({ levels: {} }));
 
 const BATCH_DELAY_MS = 60;
 const MAX_IDS_PER_REQUEST = 200;
+// 缓存新鲜期：过期后同一 userId 允许再次拉取。否则一个被客服升级的用户会一直停在
+// 旧档名字特效、直到 app 冷启动（评审 P2）。5 分钟够久到不刷屏、又够短到升级可感知。
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
-// 已请求过的 id（在途或已回）——避免重复请求；请求失败会从中移除以便后续重试。
+// 正在请求中的 id——避免同一批重复请求；成功回来后移出，交由 TTL 决定是否再拉。
 const requested = new Set<string>();
+// userId → 上次成功拉取的时间戳，用于 TTL 判新鲜。
+const fetchedAt = new Map<string, number>();
 let pending = new Set<string>();
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+function isVipLevelFresh(userId: string): boolean {
+  const at = fetchedAt.get(userId);
+  return at !== undefined && Date.now() - at < CACHE_TTL_MS;
+}
 
 async function flush(): Promise<void> {
   flushTimer = null;
@@ -36,6 +46,13 @@ async function flush(): Promise<void> {
     const chunk = ids.slice(i, i + MAX_IDS_PER_REQUEST);
     try {
       const result = await fetchVipLevels(chunk);
+      const now = Date.now();
+      // 记录拉取时间（含未返回档位=非会员的 id），TTL 内不再重复请求；并移出 requested，
+      // 让 TTL 过期后能重新入队、拉到升级后的档位。
+      chunk.forEach((id) => {
+        requested.delete(id);
+        fetchedAt.set(id, now);
+      });
       if (Object.keys(result).length > 0) {
         useUserVipStore.setState((state) => ({
           levels: { ...state.levels, ...result },
@@ -53,7 +70,8 @@ export function requestVipLevel(userId: string): void {
   if (!userId) {
     return;
   }
-  if (userId in useUserVipStore.getState().levels || requested.has(userId)) {
+  // 命中且仍新鲜、或正在请求中，跳过；TTL 过期后允许重新拉取升级后的档位。
+  if (isVipLevelFresh(userId) || requested.has(userId)) {
     return;
   }
   requested.add(userId);
@@ -63,6 +81,16 @@ export function requestVipLevel(userId: string): void {
       void flush();
     }, BATCH_DELAY_MS);
   }
+}
+
+/**
+ * 显式失效缓存（会员/会话数据刷新、回前台重连等重大事件后可调），强制下次按 userId
+ * 重新拉取。TTL 是兜底，此函数用于「已知发生变更」时立即重建，无需等 TTL 过期。
+ */
+export function invalidateVipLevels(): void {
+  requested.clear();
+  fetchedAt.clear();
+  useUserVipStore.setState({ levels: {} });
 }
 
 /**

@@ -113,7 +113,10 @@ export const PlazaFeed: React.FC = () => {
           if (active) setProgramEnabled(status.enabled);
         })
         .catch(() => {
-          if (active) setProgramEnabled(true);
+          // rollout 状态查询瞬时失败（超时 / 5xx）时 fail-open：不要预设「已开放」而把
+          // 非会员挡在升级墙外、藏掉已缓存的帖子、也不再拉取。交给 feed 用后端权威的
+          // PLAZA_MEMBERSHIP_REQUIRED 响应来决定是否拦截。
+          if (active) setProgramEnabled(false);
         });
       return () => {
         active = false;

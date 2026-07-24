@@ -27,7 +27,6 @@ import {
 import { clearLocalSession } from '@/services/auth/session';
 import { isDefinitiveAuthFailure } from '@/services/api/client';
 import { loginToOpenIM, logoutFromOpenIM } from '@/im/client';
-import { getIMErrorCode, IM_ERROR_CODES } from '@/im/error-codes';
 import { markIMLoginRetryPending } from '@/im/login-retry-pending';
 import { recoverIMSession } from '@/im/token-recovery';
 import { isOpenIMTokenRejectedError } from '@/im/token-errors';
@@ -112,16 +111,18 @@ export function useAuth() {
               '[openim] login failed',
               imError instanceof Error ? imError.message : imError,
             );
-            if (
-              isOpenIMTokenRejectedError(imError) ||
-              getIMErrorCode(imError) === IM_ERROR_CODES.CONNECTION_NOT_READY
-            ) {
+            if (isOpenIMTokenRejectedError(imError)) {
+              // token 被服务端明确拒绝：换新 IM token 原地恢复。
               void recoverIMSession();
-              return;
+            } else {
+              // 含连接就绪超时(CONNECTION_NOT_READY)在内的其它失败：token 仍有效，
+              // 换 token 反而会强制登出还在连接中的会话、弱网下空转成环。热登录已把
+              // auth loading 置 false、bootstrap 不会再补登，故挂共享欠账，回前台用
+              // 同一枚 token 重试。
+              markIMLoginRetryPending();
             }
-            // 但不能只 warn：热登录已把 auth loading 置 false，bootstrap 不会再跑
-            // 冷启动补登。挂到共享欠账，回前台时统一重试。
-            markIMLoginRetryPending();
+            // 关键：不在此 return —— 否则会跳过下方 message groups 加载，
+            // MessagesScreen 顶部自定义会话 filter tab 整个会话都是空的。
           }
         } else {
           // 后端未返回 imToken，确保 IM 状态已清空

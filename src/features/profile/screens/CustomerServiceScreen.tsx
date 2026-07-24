@@ -3,7 +3,7 @@ import { Alert, FlatList, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { NavHeader } from '@/components/ui/nav-header';
 import { MenuRow } from '@/components/ui/menu-row';
 import { Divider } from '@/components/ui/divider';
@@ -31,6 +31,18 @@ export default function CustomerServiceScreen() {
   // ref 守卫同步生效，避免连点两类客服触发两次会话解析 / 两次入栈。
   const openingRef = useRef(false);
 
+  // 屏幕失焦/离场后丢弃迟到的会话解析结果：会话解析可能较慢，若用户在解析完成前退出
+  // 客服中心或跳去别处，不应再把聊天页推入栈（成功与预览兜底两条路径都要挡）。
+  const focusedRef = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      focusedRef.current = true;
+      return () => {
+        focusedRef.current = false;
+      };
+    }, []),
+  );
+
   const handleOpenCategory = useCallback(
     async (category: SupportCategory) => {
       if (openingRef.current) return;
@@ -41,6 +53,8 @@ export default function CustomerServiceScreen() {
         const conversation = await getOrCreateSingleConversation(
           category.accountId,
         );
+        // 解析期间用户已离场：丢弃结果，不再跳转。
+        if (!focusedRef.current) return;
         router.push(
           getChatDetailHref(
             'profile',
@@ -51,6 +65,8 @@ export default function CustomerServiceScreen() {
           ),
         );
       } catch (error) {
+        // 解析期间用户已离场：不再弹窗、不再跳转。
+        if (!focusedRef.current) return;
         // IM 未接通 / 客服账号尚未建立好友关系等：仍以预览模式进入，保证入口始终可点开。
         if (shouldOpenChatPreview(error)) {
           router.push(getChatDetailHref('profile', category.accountId, title));
