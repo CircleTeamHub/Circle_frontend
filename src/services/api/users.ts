@@ -37,6 +37,35 @@ function normalizePublicUser(user: PublicUser): PublicUser {
   };
 }
 
+/**
+ * 批量查 userId → vipLevel（会员名字特效的 IM/列表回退路径用）。POST /user/vip-levels。
+ * 能内联返回 vipLevel 的场景（广场/朋友圈/资料）不走这里；只有仅有 userId 的聊天发送者 /
+ * 会话列表 / 通讯录 / 通知才批量补查。空数组直接短路；非对象 / 非数字项一律过滤，
+ * 兜底成 {}，永不把异常抛给渲染层。
+ */
+export async function fetchVipLevels(
+  ids: string[],
+): Promise<Record<string, number>> {
+  const cleanedIds = ids.filter((id) => typeof id === 'string' && id.length > 0);
+  if (cleanedIds.length === 0) {
+    return {};
+  }
+  const raw = await apiClient<unknown>('/user/vip-levels', {
+    method: 'POST',
+    body: { ids: cleanedIds },
+  });
+  if (!raw || typeof raw !== 'object') {
+    return {};
+  }
+  const out: Record<string, number> = {};
+  for (const [id, level] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof level === 'number' && Number.isFinite(level)) {
+      out[id] = level;
+    }
+  }
+  return out;
+}
+
 export function pickExactAccountMatch<T extends Pick<PublicUser, 'accountId'>>(
   keyword: string,
   users: T[] | null | undefined,

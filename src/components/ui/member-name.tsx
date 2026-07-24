@@ -13,6 +13,7 @@ import {
   getMembershipTierForVipLevel,
   type MembershipTier,
 } from '@/features/profile/membership-plans';
+import { useUserVipLevel } from '@/stores/userVipStore';
 
 interface MemberNameProps {
   name: string;
@@ -21,7 +22,9 @@ interface MemberNameProps {
    */
   vipLevel?: number | null;
   /**
-   * 兼容旧调用签名。会员展示必须随用户/作者信息返回 vipLevel,组件不再按 userId 补查。
+   * 拿不到 vipLevel、只有 userId 的场景（聊天发送者 / 会话列表 / 通讯录 / 通知等 IM/列表）
+   * 传它，组件按 userId 从客户端缓存补查 vipLevel（未知触发批量拉取，回来自动重渲染名字亮起）。
+   * 能内联提供 vipLevel 时优先传 vipLevel，可省掉这次补查。
    */
   userId?: string | null;
   /** 复用调用处的文字样式(字号/字重/默认色)。特效只覆盖颜色。 */
@@ -109,12 +112,15 @@ const FlowChar = memo(function FlowChar({
 export const MemberName = memo(function MemberName({
   name,
   vipLevel,
+  userId,
   style,
   numberOfLines,
   animated = true,
 }: MemberNameProps) {
-  // vipLevel 是公开展示字段,应由父级用户/作者对象直接提供。
-  const effectiveVipLevel = vipLevel;
+  // 内联优先：显式传入的 vipLevel 直接用，不触发补查。只有拿不到 vipLevel、只有 userId
+  // 的场景（聊天/会话/通讯录/通知）才按 userId 从缓存补查（未知触发批量拉取，回来自动亮起）。
+  const cachedVipLevel = useUserVipLevel(vipLevel == null ? userId : null);
+  const effectiveVipLevel = vipLevel ?? cachedVipLevel;
   const tier =
     effectiveVipLevel != null
       ? getMembershipTierForVipLevel(effectiveVipLevel)

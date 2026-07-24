@@ -41,8 +41,6 @@ test('MemberName keeps diamond gradient static while super uses a looping flow',
 
 test('MemberName degrades to a plain name for non-members / missing vipLevel', () => {
   assert.match(src, /if \(!tier\)/);
-  assert.doesNotMatch(src, /useUserVipLevel/);
-  assert.doesNotMatch(src, /vipLevel \?\? cachedVipLevel/);
   // Multi-byte safe splitting so emoji / surrogate pairs are not mis-colored.
   assert.match(src, /Array\.from\(name\)/);
 });
