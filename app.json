@@ -55,7 +55,9 @@
         "expo-build-properties",
         {
           "android": {
-            "usesCleartextTraffic": false
+            "usesCleartextTraffic": false,
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
           }
         }
       ],
@@ -102,7 +104,8 @@
       "@sentry/react-native",
       "./plugins/with-local-sentry-auto-upload-disabled",
       "./plugins/with-android-allow-backup-disabled",
-      "./plugins/with-android-release-signing"
+      "./plugins/with-android-release-signing",
+      "./plugins/with-android-abi-filter"
     ],
     "experiments": {
       "typedRoutes": true
