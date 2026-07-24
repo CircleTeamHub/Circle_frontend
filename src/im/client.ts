@@ -427,6 +427,11 @@ export async function loginToOpenIM(
       userID: imUserID,
       token: imToken,
     });
+    // login() 返回只代表请求已提交；长连接成功仍由 onConnectSuccess 异步通知。
+    // TokenKicked / native 事件丢失时可能永久停在 connecting，调用方会误以为
+    // IM 已登录成功。这里等到真正 connected，否则抛给 bootstrap / use-auth
+    // 的补登欠账与 token-recovery 兜底。
+    await waitForOpenIMConnectionReady();
     // 干净登录成功：允许后续（下次 reload 的新僵尸态）再次自愈。
     staleLoginSelfHealAttempted = false;
 

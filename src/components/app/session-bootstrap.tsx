@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import { fetchCurrentUser } from '@/services/api/auth';
 import { isDefinitiveAuthFailure } from '@/services/api/client';
 import { loginToOpenIM, logoutFromOpenIM } from '@/im/client';
+import { getIMErrorCode, IM_ERROR_CODES } from '@/im/error-codes';
 import { isOpenIMTokenRejectedError } from '@/im/token-errors';
 import { isIMReloginPending, recoverIMSession } from '@/im/token-recovery';
 import {
@@ -64,7 +65,10 @@ export function SessionBootstrap() {
       await loginToOpenIM(userId, token);
       clearIMLoginRetryPending();
     } catch (error) {
-      if (isOpenIMTokenRejectedError(error)) {
+      if (
+        isOpenIMTokenRejectedError(error) ||
+        getIMErrorCode(error) === IM_ERROR_CODES.CONNECTION_NOT_READY
+      ) {
         // 缓存的 imToken 已被服务端拒绝（1501-1506）——重试同一枚没有意义，
         // 改走 GET /auth/im-token 换新 token 原地重登（#83）。欠账由
         // token-recovery 模块自己记（isIMReloginPending），这里不再重复记。

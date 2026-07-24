@@ -27,7 +27,10 @@ import {
 import { clearLocalSession } from '@/services/auth/session';
 import { isDefinitiveAuthFailure } from '@/services/api/client';
 import { loginToOpenIM, logoutFromOpenIM } from '@/im/client';
+import { getIMErrorCode, IM_ERROR_CODES } from '@/im/error-codes';
 import { markIMLoginRetryPending } from '@/im/login-retry-pending';
+import { recoverIMSession } from '@/im/token-recovery';
+import { isOpenIMTokenRejectedError } from '@/im/token-errors';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useMessageGroupsStore } from '@/features/messages/store/use-message-groups-store';
 import { retry } from '@/utils/retry';
@@ -109,6 +112,16 @@ export function useAuth() {
               '[openim] login failed',
               imError instanceof Error ? imError.message : imError,
             );
+            if (
+              isOpenIMTokenRejectedError(imError) ||
+              getIMErrorCode(imError) === IM_ERROR_CODES.CONNECTION_NOT_READY
+            ) {
+              void recoverIMSession();
+              return;
+            }
+            // 但不能只 warn：热登录已把 auth loading 置 false，bootstrap 不会再跑
+            // 冷启动补登。挂到共享欠账，回前台时统一重试。
+            markIMLoginRetryPending();
           }
         } else {
           // 后端未返回 imToken，确保 IM 状态已清空

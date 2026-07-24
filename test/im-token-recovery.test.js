@@ -286,6 +286,8 @@ test('IM token 过期事件走原地恢复，不再直接清 session 跳登录�
   );
 
   assert.match(handler, /recoverIMSession\(\)/);
+  assert.match(listeners, /OpenIMSDK\.on\('onKickedOffline', handleTokenExpired\)/);
+  assert.match(listeners, /OpenIMSDK\.off\('onKickedOffline', handleTokenExpired\)/);
   assert.doesNotMatch(handler, /clearLocalSession/);
   assert.doesNotMatch(handler, /router\.replace/);
   // 不再把「登录已过期」文案写进 IM 错误态——业务会话可能还活着

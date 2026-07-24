@@ -226,6 +226,7 @@ test('login waits for an in-flight OpenIM logout before starting the next sessio
     },
     login: async ({ userID }) => {
       calls.push(`login:${userID}`);
+      storeState.connected = true;
     },
   };
   const { ensureOpenIMInitialized, loginToOpenIM, logoutFromOpenIM } =
