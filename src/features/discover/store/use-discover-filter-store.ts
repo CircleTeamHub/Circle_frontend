@@ -6,12 +6,18 @@ import { clampCircleFilterIds } from '@/features/discover/utils/circle-filter-se
 interface DiscoverFilterState {
   appliedCircleIds: string[];
   appliedCities: string[];
+  // 「全国」= 不限地区、展示全部（筛选行为与「未选择」一致，cities 保持为空、不参与筛选）。
+  // 单独用布尔标记记住用户「显式选了全国」，仅用于筛选页回显，避免把哨兵城市塞进 cities 数组
+  // 后每个下游消费者都要记得剔除。
+  appliedNationwide: boolean;
   draftCircleIds: string[];
   draftCities: string[];
+  draftNationwide: boolean;
 
   loadDraftFromApplied: () => void;
   setDraftCircleIds: (ids: string[]) => void;
   setDraftCities: (cities: string[]) => void;
+  setDraftNationwide: (value: boolean) => void;
   removeDraftCircle: (id: string) => void;
   removeDraftCity: (city: string) => void;
   clearDraft: () => void;
@@ -25,20 +31,31 @@ export const useDiscoverFilterStore = create<DiscoverFilterState>()(
     (set, get) => ({
       appliedCircleIds: [],
       appliedCities: [],
+      appliedNationwide: false,
       draftCircleIds: [],
       draftCities: [],
+      draftNationwide: false,
 
       loadDraftFromApplied: () => {
-        const { appliedCircleIds, appliedCities } = get();
+        const { appliedCircleIds, appliedCities, appliedNationwide } = get();
         set({
           draftCircleIds: clampCircleFilterIds(appliedCircleIds),
           draftCities: [...appliedCities],
+          draftNationwide: appliedNationwide,
         });
       },
 
       setDraftCircleIds: (ids) =>
         set({ draftCircleIds: clampCircleFilterIds(ids) }),
-      setDraftCities: (cities) => set({ draftCities: cities }),
+      // 选了具体城市 = 退出「全国」，二者互斥。
+      setDraftCities: (cities) =>
+        set({ draftCities: cities, draftNationwide: false }),
+      // 选「全国」= 不限地区，清掉已选城市。
+      setDraftNationwide: (value) =>
+        set((state) => ({
+          draftNationwide: value,
+          draftCities: value ? [] : state.draftCities,
+        })),
 
       removeDraftCircle: (id) =>
         set((state) => ({
@@ -50,13 +67,15 @@ export const useDiscoverFilterStore = create<DiscoverFilterState>()(
           draftCities: state.draftCities.filter((value) => value !== city),
         })),
 
-      clearDraft: () => set({ draftCircleIds: [], draftCities: [] }),
+      clearDraft: () =>
+        set({ draftCircleIds: [], draftCities: [], draftNationwide: false }),
 
       saveFilter: () => {
-        const { draftCircleIds, draftCities } = get();
+        const { draftCircleIds, draftCities, draftNationwide } = get();
         set({
           appliedCircleIds: clampCircleFilterIds(draftCircleIds),
           appliedCities: [...draftCities],
+          appliedNationwide: draftNationwide,
         });
       },
 
@@ -64,8 +83,10 @@ export const useDiscoverFilterStore = create<DiscoverFilterState>()(
         set({
           appliedCircleIds: [],
           appliedCities: [],
+          appliedNationwide: false,
           draftCircleIds: [],
           draftCities: [],
+          draftNationwide: false,
         }),
     }),
     {
@@ -74,6 +95,7 @@ export const useDiscoverFilterStore = create<DiscoverFilterState>()(
       partialize: (state) => ({
         appliedCircleIds: state.appliedCircleIds,
         appliedCities: state.appliedCities,
+        appliedNationwide: state.appliedNationwide,
       }),
     },
   ),

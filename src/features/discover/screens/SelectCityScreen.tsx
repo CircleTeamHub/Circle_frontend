@@ -144,6 +144,10 @@ export default function SelectCityScreen() {
   const setCircleCities = useCreateCircleFormStore((st) => st.setSelectedCities);
   const filterCities = useDiscoverFilterStore((st) => st.draftCities);
   const setFilterCities = useDiscoverFilterStore((st) => st.setDraftCities);
+  const filterNationwide = useDiscoverFilterStore((st) => st.draftNationwide);
+  const setFilterNationwide = useDiscoverFilterStore(
+    (st) => st.setDraftNationwide,
+  );
 
   const isVip = (user?.vipLevel ?? 0) >= 1;
 
@@ -167,8 +171,18 @@ export default function SelectCityScreen() {
     });
 
     setSelected(nextState.selected);
-    setIsNationwide(nextState.isNationwide);
-  }, [circleCities, filterCities, formCities, isMultiSelect, target]);
+    // 筛选的「全国」态由独立标记驱动（cities 为空时不代表全国）；建圈/发帖仍按 cities 推断。
+    setIsNationwide(
+      target === 'filter' ? filterNationwide : nextState.isNationwide,
+    );
+  }, [
+    circleCities,
+    filterCities,
+    filterNationwide,
+    formCities,
+    isMultiSelect,
+    target,
+  ]);
 
   const sections: CitySection[] = useMemo(() => {
     if (!search.trim()) {
@@ -220,7 +234,10 @@ export default function SelectCityScreen() {
   const handleConfirm = useCallback(() => {
     const resolved = resolveMultiCitySelection(selected, isNationwide);
     if (target === 'filter') {
+      // 「全国」= 不限地区、展示全部，不塞进 cities（保持为空、不参与筛选），改用独立标记记住，
+      // 仅用于筛选页回显。这样才能区分「全国」与「未选择」，且不用每个下游都剔除哨兵城市。
       setFilterCities(resolved);
+      setFilterNationwide(isNationwide);
     } else if (target === 'circle') {
       setCircleCities(resolved);
     } else {
@@ -233,6 +250,7 @@ export default function SelectCityScreen() {
     selected,
     setCircleCities,
     setFilterCities,
+    setFilterNationwide,
     setFormCities,
     target,
   ]);

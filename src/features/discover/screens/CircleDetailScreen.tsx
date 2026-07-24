@@ -769,8 +769,6 @@ export default function CircleDetailScreen() {
           </View>
         </View>
 
-        <Divider />
-
         {/* ── 圈子描述 ── */}
         <View style={s.section}>
           <Text style={[s.sectionTitle, d.sectionTitle]}>{t('circle.description')}</Text>
