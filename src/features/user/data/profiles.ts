@@ -13,6 +13,7 @@ export interface UserProfileData {
   accountId: string;
   avatarUrl?: string;
   memberLabel: string;
+  vipLevel?: number | null;
   badges: string[];
   displayIcons?: import('@/types').DisplayIcon[];
   likeCount?: number;

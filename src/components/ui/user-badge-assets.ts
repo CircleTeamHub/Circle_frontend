@@ -8,6 +8,10 @@ const VIP_BADGE_ASSETS = {
   5: require('../../../assets/badges/vip5.png'),
 } as const;
 
+// 超级会员专属徽章:与会员中心档位奖章同一张橙色皇冠(assets/badges/super.png)。
+// 超级档不用分级盾徽,凡 vipLevel 映射到 super 的都换这张。
+const SUPER_BADGE_ASSET = require('../../../assets/badges/super.png');
+
 const TOP_COLLABORATOR_BADGE_ASSETS = {
   1: require('../../../assets/badges/good1.png'),
   2: require('../../../assets/badges/good2.png'),
@@ -48,6 +52,14 @@ export function getTopCollaboratorLevel(
 export function getSystemBadgeAsset(icon: DisplayIcon) {
   if (icon.systemKey === 'VIP') {
     const level = clampLevel(readLevel(icon), 5) as BadgeLevel;
+    // 镜像 membership-plans 的 vipLevel→档位(1银 2金 3钻 ≥4超级)。内联而非 import,
+    // 保持本模块只依赖 png+类型(测试用 VM 加载,禁止非 png import)。
+    if (level >= 4) {
+      return SUPER_BADGE_ASSET; // 超级 = 橙色皇冠
+    }
+    if (level === 3) {
+      return VIP_BADGE_ASSETS[5]; // 钻石 = 真钻石徽章(vip5,而非 level 对应的 vip3 银徽)
+    }
     return VIP_BADGE_ASSETS[level];
   }
 
@@ -86,8 +98,32 @@ export function getSystemBadgeVisualScale(icon: DisplayIcon) {
   }
 
   if (icon.systemKey === 'VIP') {
-    return clampLevel(readLevel(icon), 5) === 5 ? 1 : 1.16;
+    const level = clampLevel(readLevel(icon), 5);
+    // super.png(超级,≥4)内容填满方形画布;竖版 VIP 素材有更多透明边,需要放大。
+    return level >= 4 ? 0.8 : 1.16;
   }
 
   return 1;
+}
+
+export function getSystemBadgeVisualTranslateY(icon: DisplayIcon) {
+  if (icon.systemKey === 'TOP_COLLABORATOR') {
+    return 0;
+  }
+
+  if (icon.systemKey === 'VERIFIED_PROFILE') {
+    return 3;
+  }
+
+  if (icon.systemKey === 'NEW_USER' || icon.systemKey === 'CIRCLE_BUILDER') {
+    return 1;
+  }
+
+  if (icon.systemKey === 'VIP') {
+    const level = clampLevel(readLevel(icon), 5);
+    if (level >= 4) return -8;
+    return level === 3 ? 2 : 1;
+  }
+
+  return 0;
 }

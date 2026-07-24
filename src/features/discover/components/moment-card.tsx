@@ -166,6 +166,7 @@ export const MomentCard: React.FC<MomentCardProps> = ({
             <MemberName
               name={post.author.nickname}
               userId={post.author.id}
+              vipLevel={post.author.vipLevel}
               style={d.authorName}
               animated={false}
             />

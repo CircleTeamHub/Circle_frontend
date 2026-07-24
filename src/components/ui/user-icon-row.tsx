@@ -4,7 +4,11 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing, useTheme } from '@/theme';
 import type { DisplayIcon } from '@/types';
-import { getSystemBadgeAsset, getSystemBadgeVisualScale } from './user-badge-assets';
+import {
+  getSystemBadgeAsset,
+  getSystemBadgeVisualScale,
+  getSystemBadgeVisualTranslateY,
+} from './user-badge-assets';
 
 type CompactSize = 'default' | 'small';
 
@@ -49,8 +53,8 @@ const s = StyleSheet.create({
     gap: 2,
   },
   circle: {
-    width: 40,
-    height: 40,
+    width: 34,
+    height: 34,
     borderRadius: Radius.full,
     borderWidth: 1,
     alignItems: 'center',
@@ -79,8 +83,8 @@ const s = StyleSheet.create({
     transform: [{ translateY: -4 }],
   },
   circleOrnament: {
-    width: 46,
-    height: 46,
+    width: 40,
+    height: 40,
     borderRadius: Radius.full,
     borderWidth: 1,
     alignItems: 'center',
@@ -267,6 +271,7 @@ export function UserIconBadge({
   const { colors } = useTheme();
   const systemBadgeAsset = icon.type === 'SYSTEM' ? getSystemBadgeAsset(icon) : null;
   const systemBadgeScale = icon.type === 'SYSTEM' ? getSystemBadgeVisualScale(icon) : 1;
+  const systemBadgeTranslateY = icon.type === 'SYSTEM' ? getSystemBadgeVisualTranslateY(icon) : 0;
   const label = icon.type === 'SYSTEM' ? formatIconLabel(icon) : CIRCLE_BADGE_LABEL;
   const labelColor = tone === 'member' ? colors.white : colors.text;
   const isSmallCompact = compact && compactSize === 'small';
@@ -275,6 +280,13 @@ export function UserIconBadge({
   const shellSizeStyle = resolveShellSizeStyle(compact, isSmallCompact, Boolean(systemBadgeAsset));
   const circleSizeStyle = resolveCircleSizeStyle(compact, isSmallCompact);
   const circleOrnamentSizeStyle = resolveCircleOrnamentSizeStyle(compact, isSmallCompact);
+  const transformSizeRatio = compact ? (isSmallCompact ? 30 / 52 : 38 / 52) : 1;
+  const systemBadgeTransform = [
+    ...(systemBadgeScale !== 1 ? [{ scale: systemBadgeScale }] : []),
+    ...(systemBadgeTranslateY !== 0
+      ? [{ translateY: systemBadgeTranslateY * transformSizeRatio }]
+      : []),
+  ];
 
   return (
     <View style={[s.item, dense ? s.denseItem : null]}>
@@ -289,7 +301,7 @@ export function UserIconBadge({
             source={systemBadgeAsset}
             style={[
               s.systemBadgeImage,
-              systemBadgeScale !== 1 ? { transform: [{ scale: systemBadgeScale }] } : null,
+              systemBadgeTransform.length > 0 ? { transform: systemBadgeTransform } : null,
             ]}
             contentFit="contain"
           />
@@ -306,7 +318,9 @@ export function UserIconBadge({
                 style={[
                   s.circle,
                   circleSizeStyle,
-                  { backgroundColor: colors.surface, borderColor: colors.surfaceBorder },
+                  // 徽章内盘固定浅底：深色模式下 surface 是深色，会把圈子图标（多为深色线稿/
+                  // 透明底）吞成黑块。用 white 保持奖章质感，两种模式都有对比。
+                  { backgroundColor: colors.white, borderColor: colors.surfaceBorder },
                 ]}
               >
                 <View style={s.imageWrap}>

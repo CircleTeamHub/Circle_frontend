@@ -71,27 +71,37 @@ const DEFAULT_NAMED_BENEFIT_VALUES: Record<
 // 每个 VIP 等级一套「贵金属」视觉：档位渐变 + 强调色 + 徽章。银 → 金 → 钻 → 曜黑（超级）。
 const TIER_VISUALS: Record<
   MembershipTier,
-  { gradient: readonly string[]; accent: string; badge: ImageSourcePropType }
+  {
+    gradient: readonly string[];
+    accent: string;
+    badge: ImageSourcePropType;
+    // 各档徽章内容占比不一(super.png 正方填满、盾徽竖版偏窄),按此系数缩放到视觉齐平。
+    badgeScale: number;
+  }
 > = {
   silver: {
     gradient: ['#8E96A6', '#C4CAD6', '#6B7383'],
     accent: '#5B6472',
     badge: require('../../../../assets/badges/vip1.png'),
+    badgeScale: 1.3,
   },
   gold: {
     gradient: ['#E7B34D', '#F8E09A', '#BB811A'],
     accent: '#A9741A',
     badge: require('../../../../assets/badges/vip2.png'),
+    badgeScale: 1.3,
   },
   diamond: {
     gradient: ['#57ADF6', '#9DD8FF', '#2E6DE0'],
     accent: '#2563EB',
-    badge: require('../../../../assets/badges/vip3.png'),
+    badge: require('../../../../assets/badges/vip5.png'),
+    badgeScale: 1.18,
   },
   super: {
     gradient: ['#4C3C74', '#241D3E', '#0B0912'],
     accent: '#C9A24B',
-    badge: require('../../../../assets/badges/vip4.png'),
+    badge: require('../../../../assets/badges/super.png'),
+    badgeScale: 0.92,
   },
 };
 
@@ -572,7 +582,10 @@ export default function MemberCenterScreen() {
               {currentTier ? (
                 <Image
                   source={TIER_VISUALS[currentTier].badge}
-                  style={s.heroBadge}
+                  style={[
+                    s.heroBadge,
+                    { transform: [{ scale: TIER_VISUALS[currentTier].badgeScale }] },
+                  ]}
                   contentFit="contain"
                 />
               ) : (
@@ -654,7 +667,10 @@ export default function MemberCenterScreen() {
                   <GradientCover colors={visual.gradient} />
                   <Image
                     source={visual.badge}
-                    style={s.tierMedallionBadge}
+                    style={[
+                      s.tierMedallionBadge,
+                      { transform: [{ scale: visual.badgeScale }] },
+                    ]}
                     contentFit="contain"
                   />
                 </View>

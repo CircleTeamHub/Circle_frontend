@@ -38,8 +38,9 @@ test('ProfileScreen and UserProfileScreen wear the membership frame', () => {
   assert.match(own, /frameSource=\{getMembershipFrameAsset\(vipLevel\)/);
 
   const other = read('src/features/user/screens/UserProfileScreen.tsx');
-  // 他人资料页经 vip 缓存取档位,并用框素材替代默认描边。
-  assert.match(other, /useUserVipLevel\(/);
+  // 他人资料页直接使用公开 profile.vipLevel,并用框素材替代默认描边。
+  assert.match(other, /profile\.vipLevel \?\? 0/);
+  assert.doesNotMatch(other, /useUserVipLevel\(/);
   assert.match(other, /getMembershipFrameAsset\(profileVipLevel\)/);
   assert.match(other, /membershipFrameOverlay/);
   assert.match(other, /avatarRingFramed/);

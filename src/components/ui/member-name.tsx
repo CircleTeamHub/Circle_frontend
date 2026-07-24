@@ -13,18 +13,15 @@ import {
   getMembershipTierForVipLevel,
   type MembershipTier,
 } from '@/features/profile/membership-plans';
-import { useUserVipLevel } from '@/stores/userVipStore';
 
 interface MemberNameProps {
   name: string;
   /**
    * 该用户的 vipLevel;0 / null / undefined = 非会员,不加特效。
-   * 显式传入时优先;拿不到时可改传 userId 让组件自己从缓存查。
    */
   vipLevel?: number | null;
   /**
-   * 该用户的 userId。列表里通常拿不到 vipLevel,只有 userId——传它,组件按 userId 从
-   * 客户端缓存查 vipLevel(未知会触发批量拉取,回来自动重渲染名字亮起)。
+   * 兼容旧调用签名。会员展示必须随用户/作者信息返回 vipLevel,组件不再按 userId 补查。
    */
   userId?: string | null;
   /** 复用调用处的文字样式(字号/字重/默认色)。特效只覆盖颜色。 */
@@ -43,18 +40,15 @@ const SOLID_COLOR: Partial<Record<MembershipTier, string>> = {
   gold: '#E7B34D',
 };
 
-// 钻石 = 标准七彩流光;超级 = 暖调玫瑰金流光(香槟金→玫瑰金→玫瑰粉→藕紫,回文循环无缝,
+// 钻石 = 静态冷调渐变;超级 = 暖调玫瑰金流光(香槟金→玫瑰金→玫瑰粉→藕紫,回文循环无缝,
 // 中等饱和度确保浅色卡片上可读,暖调贵气)。
 const FLOW_COLORS: Record<'diamond' | 'super', readonly string[]> = {
   diamond: [
-    '#FF3B30',
-    '#FF9500',
-    '#FFCC00',
-    '#34C759',
-    '#00A9E0',
-    '#007AFF',
-    '#AF52DE',
-    '#FF3B30',
+    '#7CCBFF',
+    '#3FA7F5',
+    '#5B7CFA',
+    '#8B6CF6',
+    '#B7A8FF',
   ],
   super: [
     '#D9A85E',
@@ -66,6 +60,8 @@ const FLOW_COLORS: Record<'diamond' | 'super', readonly string[]> = {
     '#D9A85E',
   ],
 };
+
+const STATIC_GRADIENT_TIERS = new Set<MembershipTier>(['diamond']);
 
 // 静态渐变(animated=false):把色带沿名字长度均匀铺开,第 index 个字取对应位置的颜色。
 function staticColorAt(
@@ -107,20 +103,18 @@ const FlowChar = memo(function FlowChar({
  * 按会员档位给用户名加特效的文字组件。非会员 / 拿不到 vipLevel 时退化为普通 <Text>,
  * 可无脑替换现有的 `<Text style={...}>{name}</Text>`(额外传 vipLevel 即可)。
  *
- * 银/金为纯色;钻石(七彩)、超级(金白流光)为逐字流动渐变,基于已装的 reanimated,
+ * 银/金为纯色;钻石为静态冷调渐变;超级(金白流光)为逐字流动渐变,基于已装的 reanimated,
  * 无需 masked-view / linear-gradient 原生依赖,dev client 免重建。
  */
 export const MemberName = memo(function MemberName({
   name,
   vipLevel,
-  userId,
   style,
   numberOfLines,
   animated = true,
 }: MemberNameProps) {
-  // 显式 vipLevel 优先;否则按 userId 从缓存查(未知触发批量拉取,回来自动重渲染)。
-  const cachedVipLevel = useUserVipLevel(userId);
-  const effectiveVipLevel = vipLevel ?? cachedVipLevel;
+  // vipLevel 是公开展示字段,应由父级用户/作者对象直接提供。
+  const effectiveVipLevel = vipLevel;
   const tier =
     effectiveVipLevel != null
       ? getMembershipTierForVipLevel(effectiveVipLevel)
@@ -129,7 +123,7 @@ export const MemberName = memo(function MemberName({
   const chars = useMemo(() => Array.from(name), [name]);
   const progress = useSharedValue(0);
 
-  const isFlow = tier === 'diamond' || tier === 'super';
+  const isFlow = tier === 'super';
   useEffect(() => {
     if (isFlow && animated) {
       progress.value = 0;
@@ -162,9 +156,9 @@ export const MemberName = memo(function MemberName({
 
   const colors = FLOW_COLORS[tier as 'diamond' | 'super'];
 
-  // 列表里 animated={false}:静态渐变,普通 <Text> 逐字上色,不挂 reanimated,
+  // 钻石始终是静态渐变。列表里 animated={false}:静态渐变,普通 <Text> 逐字上色,不挂 reanimated,
   // 避免同屏几十上百个名字都用 useAnimatedStyle 拖垮列表。
-  if (!animated) {
+  if (STATIC_GRADIENT_TIERS.has(tier) || !animated) {
     return (
       <Text style={style} numberOfLines={numberOfLines}>
         {chars.map((ch, index) => (

@@ -11,7 +11,6 @@ import {
   AVATAR_FRAME_SCALE,
   getMembershipFrameAsset,
 } from '@/features/profile/membership-frames';
-import { useUserVipLevel } from '@/stores/userVipStore';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
 import { getOrCreateSingleConversation } from '@/im/client';
@@ -297,6 +296,7 @@ export default function UserProfileScreen() {
       name: fallbackName,
       accountId: '',
       memberLabel: t('profile.normalUser'),
+      vipLevel: 0,
       badges: [],
       displayIcons: [],
       gender: null,
@@ -331,6 +331,7 @@ export default function UserProfileScreen() {
           accountId: currentUser.accountId,
           avatarUrl: currentUser.avatarUrl ?? undefined,
           memberLabel: currentUser.role === 'ADMIN' ? t('profile.admin') : t('profile.normalUser'),
+          vipLevel: currentUser.vipLevel,
           badges: [currentUser.role === 'ADMIN' ? t('profile.admin') : t('profile.normalUser')],
           gender: currentUser.gender,
           city: currentUser.city,
@@ -362,6 +363,7 @@ export default function UserProfileScreen() {
             accountId: profile.accountId,
             avatarUrl: profile.avatarUrl ?? undefined,
             memberLabel: profile.role === 'ADMIN' ? t('profile.admin') : t('profile.normalUser'),
+            vipLevel: profile.vipLevel,
             badges: [profile.role === 'ADMIN' ? t('profile.admin') : t('profile.normalUser')],
             displayIcons: profile.displayIcons ?? [],
             likeCount: profile.likeCount ?? 0,
@@ -464,10 +466,8 @@ export default function UserProfileScreen() {
 
   const profile = remoteProfile ?? fallbackProfile;
   const profileMetaItems = getProfileMetaItems(profile);
-  // 会员头像框:按 vipLevel 缓存查档位(与名字特效同一数据链路)。
-  const profileVipLevel = useUserVipLevel(
-    profileId !== 'unknown' ? profileId : null,
-  );
+  // 会员头像框来自用户资料里的公开 vipLevel,不再额外补查。
+  const profileVipLevel = profile.vipLevel ?? 0;
   const membershipFrame = getMembershipFrameAsset(profileVipLevel);
   const displayName =
     remarkOverride === undefined

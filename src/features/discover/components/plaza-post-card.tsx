@@ -455,6 +455,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
               <MemberName
                 name={post.author.nickname}
                 userId={post.author.id}
+                vipLevel={post.author.vipLevel}
                 style={d.authorName}
                 numberOfLines={1}
                 animated={false}

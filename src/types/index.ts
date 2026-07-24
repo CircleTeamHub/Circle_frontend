@@ -319,6 +319,7 @@ export interface CirclePlazaPost {
     avatarUrl: string | null;
     avatarFrame: string | null;
     accountId: string;
+    vipLevel?: number | null;
     displayIcons: DisplayIcon[];
   };
   circle: {
@@ -425,7 +426,12 @@ export interface MomentPost {
   content: string;
   images: string[];
   visibility: 'PUBLIC' | 'FRIENDS_ONLY' | 'PRIVATE';
-  author: { id: string; nickname: string; avatarUrl: string | null };
+  author: {
+    id: string;
+    nickname: string;
+    avatarUrl: string | null;
+    vipLevel?: number | null;
+  };
   likeCount: number;
   commentCount: number;
   isLikedByMe: boolean;
