@@ -14,14 +14,14 @@ const src = fs.readFileSync(
   'utf8',
 );
 
-test('a read-only probe verifies resources are actually loaded (not just Logged)', () => {
-  assert.match(src, /async function isOpenIMSessionResourceLoaded\(/);
+test('a read-only probe verifies resources and native identity (not just Logged)', () => {
+  assert.match(src, /async function getOpenIMSessionProbe\(/);
   // The probe is a cheap resource-bound read.
-  assert.match(src, /isOpenIMSessionResourceLoaded[\s\S]*OpenIMSDK\.getSelfUserInfo\(/);
+  assert.match(src, /getOpenIMSessionProbe[\s\S]*OpenIMSDK\.getSelfUserInfo\(/);
   // The Logged branch consults the probe before reporting connected.
   assert.match(
     src,
-    /LoginStatus\.Logged[\s\S]*if \(await isOpenIMSessionResourceLoaded\(\)\)/,
+    /LoginStatus\.Logged[\s\S]*getOpenIMSessionProbe\(\)[\s\S]*nativeSession\.userID === imUserID/,
   );
 });
 

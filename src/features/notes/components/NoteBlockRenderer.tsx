@@ -1,3 +1,4 @@
+import { useEventListener } from 'expo';
 import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useMemo } from 'react';
@@ -27,17 +28,24 @@ function VideoBlock({
   captionColor,
   aspectRatio,
   backgroundColor,
+  onMediaError,
 }: {
   url: string;
   caption: string;
   captionColor: string;
   aspectRatio: number;
   backgroundColor: string;
+  onMediaError?: () => void;
 }) {
   // useVideoPlayer is called unconditionally — the empty-url guard lives in the
   // caller (BlockView), so this component always receives a valid source.
   const player = useVideoPlayer(url, (p) => {
     p.loop = false;
+  });
+  useEventListener(player, 'statusChange', ({ status }) => {
+    if (status === 'error') {
+      onMediaError?.();
+    }
   });
   return (
     <View>
@@ -186,6 +194,7 @@ function BlockView({
           captionColor={d.secondary}
           aspectRatio={resolveMediaAspectRatio(props, 16 / 9)}
           backgroundColor={colors.black}
+          onMediaError={onMediaError}
         />
       );
     }

@@ -39,6 +39,20 @@ test('note block renderer forwards image load failures to its caller', () => {
   assert.match(src, /onError=\{onMediaError\}/);
 });
 
+test('note block renderer forwards video player errors to its caller', () => {
+  const src = read('src/features/notes/components/NoteBlockRenderer.tsx');
+
+  assert.match(src, /import \{ useEventListener \} from 'expo'/);
+  assert.match(
+    src,
+    /useEventListener\(player, 'statusChange',[\s\S]*status === 'error'[\s\S]*onMediaError\?\.\(\)/,
+  );
+  assert.match(
+    src,
+    /<VideoBlock[\s\S]*onMediaError=\{onMediaError\}/,
+  );
+});
+
 test('note card reports cover load failures so TTL can be observed', () => {
   const src = read('src/features/notes/components/NoteCard.tsx');
 

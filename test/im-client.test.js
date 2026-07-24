@@ -67,6 +67,94 @@ function loadTsModule(relativePath, stubs = {}) {
   return context.module.exports;
 }
 
+function createIMSessionHarness({
+  connected = false,
+  loginStatus = 0,
+  nativeUserID = null,
+  loginError = null,
+  unInitError = null,
+} = {}) {
+  const calls = [];
+  const storeState = { connected };
+  const sdk = {
+    initSDK: async () => {
+      calls.push('init');
+    },
+    unInitSDK: async () => {
+      calls.push('unInit');
+      if (unInitError) throw unInitError;
+    },
+    getLoginStatus: async () => {
+      calls.push('getLoginStatus');
+      return loginStatus;
+    },
+    getSelfUserInfo: async () => {
+      calls.push('getSelfUserInfo');
+      return { userID: nativeUserID };
+    },
+    login: async ({ userID }) => {
+      calls.push(`login:${userID}`);
+      if (loginError) throw loginError;
+      // 模拟真实 onConnectSuccess：登录成功后长连接就绪，client.ts 的
+      // waitForOpenIMConnectionReady 据此返回。
+      storeState.connected = true;
+    },
+    logout: async () => {
+      calls.push('logout');
+    },
+  };
+  const client = loadTsModule('src/im/client.ts', {
+    '@openim/rn-client-sdk': {
+      __esModule: true,
+      default: sdk,
+      LoginStatus: { Logout: 0, Logged: 3 },
+      LogLevel: { Info: 0 },
+      SessionType: { Single: 1, Group: 2 },
+      ViewType: { History: 0 },
+    },
+    'react-native-fs': {
+      __esModule: true,
+      default: {
+        DocumentDirectoryPath: '/tmp',
+        exists: async () => false,
+        mkdir: async () => undefined,
+        unlink: async () => undefined,
+      },
+    },
+    'react-native': { Platform: { OS: 'android' } },
+    '@/constants/config': {
+      OPENIM_API_URL: 'https://im.example.com',
+      OPENIM_WS_URL: 'wss://im.example.com',
+      OPENIM_LOG_LEVEL: 0,
+    },
+    '@/stores/imStore': {
+      useIMStore: {
+        getState: () => ({
+          connected: storeState.connected,
+          setError: () => undefined,
+          setInitialized: () => undefined,
+          setCurrentUserID: () => undefined,
+          setConnecting: () => undefined,
+          setConnected: (value) => {
+            storeState.connected = value;
+          },
+          reset: () => {
+            calls.push('reset');
+            storeState.connected = false;
+          },
+        }),
+      },
+    },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: {
+        getState: () => ({ setMessagesUnread: () => undefined }),
+      },
+    },
+  });
+
+  return { calls, client };
+}
+
 // client.ts 顶层现在还会 import @/im/media-uri（本地路径 scheme 处理）；注入真实实现以便 require 解析。
 DEFAULT_TS_MODULE_STUBS['@/im/media-uri'] = loadTsModule('src/im/media-uri.ts');
 DEFAULT_TS_MODULE_STUBS['@/im/user-id'] = loadTsModule('src/im/user-id.ts');
@@ -284,14 +372,574 @@ test('login waits for an in-flight OpenIM logout before starting the next sessio
   const login = loginToOpenIM('user-b', 'im-token-b');
   await Promise.resolve();
 
-  assert.equal(calls.includes('getLoginStatus'), false);
+  assert.equal(
+    calls.filter((call) => call === 'getLoginStatus').length,
+    1,
+    'only the in-flight logout may inspect native status before teardown finishes',
+  );
   assert.equal(calls.some((call) => call.startsWith('login:')), false);
 
   logoutGate.resolve();
   await Promise.all([logout, login]);
 
-  assert.ok(calls.indexOf('getLoginStatus') > calls.indexOf('logout:done'));
+  assert.ok(calls.lastIndexOf('getLoginStatus') > calls.indexOf('logout:done'));
   assert.ok(calls.indexOf('login:userb') > calls.indexOf('logout:done'));
+});
+
+test('logout clears a native Logged session even when the JS store says disconnected', async () => {
+  const { calls, client } = createIMSessionHarness({
+    connected: false,
+    loginStatus: 3,
+    nativeUserID: 'usera',
+  });
+
+  await client.logoutFromOpenIM();
+
+  assert.ok(calls.includes('getLoginStatus'));
+  assert.ok(calls.includes('logout'));
+  assert.ok(calls.indexOf('logout') < calls.indexOf('reset'));
+});
+
+test('login rebuilds a Logged native session that belongs to another user', async () => {
+  const { calls, client } = createIMSessionHarness({
+    connected: true,
+    loginStatus: 3,
+    nativeUserID: 'usera',
+  });
+
+  const loggedIn = await client.loginToOpenIM('user-b', 'token-b');
+
+  assert.equal(loggedIn, true);
+  assert.deepEqual(
+    calls.filter((call) =>
+      [
+        'init',
+        'getLoginStatus',
+        'getSelfUserInfo',
+        'unInit',
+        'reset',
+        'login:userb',
+      ].includes(call),
+    ),
+    ['init', 'getLoginStatus', 'getSelfUserInfo', 'unInit', 'reset', 'init', 'login:userb'],
+  );
+});
+
+test('login aborts when a different native identity cannot be torn down safely', async () => {
+  const unInitError = new Error('native database handle is still busy');
+  const { calls, client } = createIMSessionHarness({
+    connected: true,
+    loginStatus: 3,
+    nativeUserID: 'usera',
+    unInitError,
+  });
+
+  await assert.rejects(
+    client.loginToOpenIM('user-b', 'token-b'),
+    /native database handle is still busy/,
+  );
+
+  assert.deepEqual(
+    calls.filter((call) =>
+      ['init', 'getLoginStatus', 'getSelfUserInfo', 'unInit', 'reset', 'login:userb'].includes(
+        call,
+      ),
+    ),
+    ['init', 'getLoginStatus', 'getSelfUserInfo', 'unInit'],
+  );
+});
+
+test('login does not treat a database initialization failure as benign teardown', async () => {
+  const unInitError = new Error(
+    'could not initialize database during teardown',
+  );
+  const { calls, client } = createIMSessionHarness({
+    connected: true,
+    loginStatus: 3,
+    nativeUserID: 'usera',
+    unInitError,
+  });
+
+  await assert.rejects(
+    client.loginToOpenIM('user-b', 'token-b'),
+    /could not initialize database during teardown/,
+  );
+  assert.equal(calls.includes('reset'), false);
+  assert.equal(calls.includes('login:userb'), false);
+});
+
+test('logout waits for an in-flight login and tears down its late native success', async () => {
+  const loginGate = deferred();
+  const calls = [];
+  let nativeStatus = 0;
+  const storeState = { connected: false };
+  const sdk = {
+    initSDK: async () => {
+      calls.push('init');
+    },
+    unInitSDK: async () => {
+      calls.push('unInit');
+    },
+    getLoginStatus: async () => {
+      calls.push(`getLoginStatus:${nativeStatus}`);
+      return nativeStatus;
+    },
+    getSelfUserInfo: async () => {
+      calls.push('getSelfUserInfo:usera');
+      return { userID: 'usera' };
+    },
+    login: async ({ userID }) => {
+      calls.push(`login:${userID}:start`);
+      await loginGate.promise;
+      nativeStatus = 3;
+      // 登录成功 → onConnectSuccess → 长连接就绪。
+      storeState.connected = true;
+      calls.push(`login:${userID}:done`);
+    },
+    logout: async () => {
+      calls.push('logout');
+      nativeStatus = 0;
+    },
+  };
+  const { loginToOpenIM, logoutFromOpenIM } = loadTsModule('src/im/client.ts', {
+    '@openim/rn-client-sdk': {
+      __esModule: true,
+      default: sdk,
+      LoginStatus: { Logout: 0, Logged: 3 },
+      LogLevel: { Info: 0 },
+      SessionType: { Single: 1, Group: 2 },
+      ViewType: { History: 0 },
+    },
+    'react-native-fs': {
+      __esModule: true,
+      default: {
+        DocumentDirectoryPath: '/tmp',
+        mkdir: async () => undefined,
+        exists: async () => false,
+        unlink: async () => undefined,
+      },
+    },
+    'react-native': { Platform: { OS: 'ios' } },
+    '@/constants/config': {
+      OPENIM_API_URL: 'https://im.example.com',
+      OPENIM_WS_URL: 'wss://im.example.com',
+      OPENIM_LOG_LEVEL: 0,
+    },
+    '@/stores/imStore': {
+      useIMStore: {
+        getState: () => ({
+          connected: storeState.connected,
+          setError: () => undefined,
+          setInitialized: () => undefined,
+          setCurrentUserID: () => undefined,
+          setConnecting: () => undefined,
+          setConnected: (connected) => {
+            storeState.connected = connected;
+          },
+          reset: () => {
+            storeState.connected = false;
+            calls.push('reset');
+          },
+        }),
+      },
+    },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: {
+        getState: () => ({ setMessagesUnread: () => undefined }),
+      },
+    },
+  });
+
+  const login = loginToOpenIM('user-a', 'token-a');
+  while (!calls.includes('login:usera:start')) {
+    await Promise.resolve();
+  }
+
+  const logout = logoutFromOpenIM();
+  await Promise.resolve();
+  assert.equal(calls.includes('logout'), false);
+
+  loginGate.resolve();
+  await Promise.all([login, logout]);
+
+  assert.ok(calls.indexOf('logout') > calls.indexOf('login:usera:done'));
+  assert.equal(nativeStatus, 0);
+});
+
+test('logout does not wait forever for a native login that never settles', async () => {
+  const calls = [];
+  const storeState = { connected: false };
+  const sdk = {
+    initSDK: async () => {
+      calls.push('init');
+    },
+    unInitSDK: async () => {
+      calls.push('unInit');
+    },
+    getLoginStatus: async () => {
+      calls.push('getLoginStatus');
+      return 0;
+    },
+    login: async ({ userID }) => {
+      calls.push(`login:${userID}:start`);
+      await new Promise(() => {});
+    },
+    logout: async () => {
+      calls.push('logout');
+    },
+  };
+  const { loginToOpenIM, logoutFromOpenIM } = loadTsModule('src/im/client.ts', {
+    '@openim/rn-client-sdk': {
+      __esModule: true,
+      default: sdk,
+      LoginStatus: { Logout: 0, Logged: 3 },
+      LogLevel: { Info: 0 },
+      SessionType: { Single: 1, Group: 2 },
+      ViewType: { History: 0 },
+    },
+    'react-native-fs': {
+      __esModule: true,
+      default: {
+        DocumentDirectoryPath: '/tmp',
+        mkdir: async () => undefined,
+        exists: async () => false,
+        unlink: async () => undefined,
+      },
+    },
+    'react-native': { Platform: { OS: 'ios' } },
+    '@/constants/config': {
+      OPENIM_API_URL: 'https://im.example.com',
+      OPENIM_WS_URL: 'wss://im.example.com',
+      OPENIM_LOG_LEVEL: 0,
+    },
+    '@/stores/imStore': {
+      useIMStore: {
+        getState: () => ({
+          connected: storeState.connected,
+          setError: () => undefined,
+          setInitialized: () => undefined,
+          setCurrentUserID: () => undefined,
+          setConnecting: () => undefined,
+          setConnected: (connected) => {
+            storeState.connected = connected;
+          },
+          reset: () => {
+            storeState.connected = false;
+            calls.push('reset');
+          },
+        }),
+      },
+    },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: {
+        getState: () => ({ setMessagesUnread: () => undefined }),
+      },
+    },
+  });
+
+  void loginToOpenIM('user-a', 'token-a').catch(() => undefined);
+  while (!calls.includes('login:usera:start')) {
+    await Promise.resolve();
+  }
+
+  const startedAt = Date.now();
+  await logoutFromOpenIM();
+
+  assert.ok(Date.now() - startedAt < 1500);
+  assert.ok(calls.includes('reset'));
+});
+
+test('late login cleanup does not logout a newer native identity', async () => {
+  const loginGate = deferred();
+  const calls = [];
+  let nativeStatus = 0;
+  let nativeUserID = null;
+  const storeState = { connected: false };
+  const sdk = {
+    initSDK: async () => {
+      calls.push('init');
+    },
+    unInitSDK: async () => {
+      calls.push('unInit');
+    },
+    getLoginStatus: async () => {
+      calls.push(`getLoginStatus:${nativeStatus}`);
+      return nativeStatus;
+    },
+    getSelfUserInfo: async () => {
+      calls.push(`getSelfUserInfo:${nativeUserID}`);
+      return { userID: nativeUserID };
+    },
+    login: async ({ userID }) => {
+      calls.push(`login:${userID}:start`);
+      if (userID === 'usera') {
+        await loginGate.promise;
+        calls.push(`login:${userID}:late-done`);
+        return;
+      }
+      nativeStatus = 3;
+      nativeUserID = userID;
+      // 新身份登录成功 → 长连接就绪。
+      storeState.connected = true;
+      calls.push(`login:${userID}:done`);
+    },
+    logout: async () => {
+      calls.push(`logout:${nativeUserID}`);
+      nativeStatus = 0;
+      nativeUserID = null;
+    },
+  };
+  const { loginToOpenIM, logoutFromOpenIM } = loadTsModule('src/im/client.ts', {
+    '@openim/rn-client-sdk': {
+      __esModule: true,
+      default: sdk,
+      LoginStatus: { Logout: 0, Logged: 3 },
+      LogLevel: { Info: 0 },
+      SessionType: { Single: 1, Group: 2 },
+      ViewType: { History: 0 },
+    },
+    'react-native-fs': {
+      __esModule: true,
+      default: {
+        DocumentDirectoryPath: '/tmp',
+        mkdir: async () => undefined,
+        exists: async () => false,
+        unlink: async () => undefined,
+      },
+    },
+    'react-native': { Platform: { OS: 'ios' } },
+    '@/constants/config': {
+      OPENIM_API_URL: 'https://im.example.com',
+      OPENIM_WS_URL: 'wss://im.example.com',
+      OPENIM_LOG_LEVEL: 0,
+    },
+    '@/stores/imStore': {
+      useIMStore: {
+        getState: () => ({
+          connected: storeState.connected,
+          setError: () => undefined,
+          setInitialized: () => undefined,
+          setCurrentUserID: () => undefined,
+          setConnecting: () => undefined,
+          setConnected: (connected) => {
+            storeState.connected = connected;
+          },
+          reset: () => {
+            storeState.connected = false;
+            calls.push('reset');
+          },
+        }),
+      },
+    },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: {
+        getState: () => ({ setMessagesUnread: () => undefined }),
+      },
+    },
+  });
+
+  const staleLogin = loginToOpenIM('user-a', 'token-a');
+  while (!calls.includes('login:usera:start')) {
+    await Promise.resolve();
+  }
+  await logoutFromOpenIM();
+  await loginToOpenIM('user-b', 'token-b');
+
+  loginGate.resolve();
+  await assert.rejects(staleLogin, /completed after logout began/);
+
+  assert.equal(nativeUserID, 'userb');
+  assert.equal(calls.includes('logout:userb'), false);
+});
+
+test('late duplicate-login success is torn down after logout starts', async () => {
+  const loginGate = deferred();
+  const duplicateLogin = Object.assign(new Error('User has logged in repeatedly'), {
+    code: 10102,
+  });
+  const calls = [];
+  let nativeStatus = 0;
+  let nativeUserID = 'usera';
+  const storeState = { connected: false };
+  const sdk = {
+    initSDK: async () => {
+      calls.push('init');
+    },
+    unInitSDK: async () => {
+      calls.push('unInit');
+    },
+    getLoginStatus: async () => {
+      calls.push(`getLoginStatus:${nativeStatus}`);
+      return nativeStatus;
+    },
+    getSelfUserInfo: async () => {
+      calls.push(`getSelfUserInfo:${nativeUserID}`);
+      return { userID: nativeUserID };
+    },
+    login: async ({ userID }) => {
+      calls.push(`login:${userID}:start`);
+      await loginGate.promise;
+      nativeStatus = 3;
+      nativeUserID = userID;
+      throw duplicateLogin;
+    },
+    logout: async () => {
+      calls.push(`logout:${nativeUserID}`);
+      nativeStatus = 0;
+      nativeUserID = null;
+    },
+  };
+  const { loginToOpenIM, logoutFromOpenIM } = loadTsModule('src/im/client.ts', {
+    '@openim/rn-client-sdk': {
+      __esModule: true,
+      default: sdk,
+      LoginStatus: { Logout: 0, Logged: 3 },
+      LogLevel: { Info: 0 },
+      SessionType: { Single: 1, Group: 2 },
+      ViewType: { History: 0 },
+    },
+    'react-native-fs': {
+      __esModule: true,
+      default: {
+        DocumentDirectoryPath: '/tmp',
+        mkdir: async () => undefined,
+        exists: async () => false,
+        unlink: async () => undefined,
+      },
+    },
+    'react-native': { Platform: { OS: 'ios' } },
+    '@/constants/config': {
+      OPENIM_API_URL: 'https://im.example.com',
+      OPENIM_WS_URL: 'wss://im.example.com',
+      OPENIM_LOG_LEVEL: 0,
+    },
+    '@/stores/imStore': {
+      useIMStore: {
+        getState: () => ({
+          connected: storeState.connected,
+          setError: () => undefined,
+          setInitialized: () => undefined,
+          setCurrentUserID: () => undefined,
+          setConnecting: () => undefined,
+          setConnected: (connected) => {
+            storeState.connected = connected;
+          },
+          reset: () => {
+            storeState.connected = false;
+            calls.push('reset');
+          },
+        }),
+      },
+    },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: {
+        getState: () => ({ setMessagesUnread: () => undefined }),
+      },
+    },
+  });
+
+  const staleLogin = loginToOpenIM('user-a', 'token-a');
+  while (!calls.includes('login:usera:start')) {
+    await Promise.resolve();
+  }
+  await logoutFromOpenIM();
+
+  loginGate.resolve();
+  await assert.rejects(staleLogin, /completed after logout began/);
+
+  assert.equal(nativeUserID, null);
+  assert.ok(calls.includes('logout:usera'));
+  assert.equal(storeState.connected, false);
+});
+
+test('logout treats a failed status probe before native init as logged out', async () => {
+  const calls = [];
+  const reportCalls = [];
+  const { logoutFromOpenIM } = loadTsModule('src/im/client.ts', {
+    '@openim/rn-client-sdk': {
+      __esModule: true,
+      default: {
+        getLoginStatus: async () => {
+          calls.push('getLoginStatus');
+          throw new Error('Resource initialization incomplete');
+        },
+        logout: async () => {
+          calls.push('logout');
+        },
+      },
+      LoginStatus: { Logout: 0, Logged: 3 },
+      LogLevel: { Info: 0 },
+      SessionType: { Single: 1, Group: 2 },
+      ViewType: { History: 0 },
+    },
+    'react-native-fs': {
+      __esModule: true,
+      default: {
+        DocumentDirectoryPath: '/tmp',
+        mkdir: async () => undefined,
+        exists: async () => false,
+        unlink: async () => undefined,
+      },
+    },
+    'react-native': { Platform: { OS: 'ios' } },
+    '@/constants/config': {
+      OPENIM_API_URL: 'https://im.example.com',
+      OPENIM_WS_URL: 'wss://im.example.com',
+      OPENIM_LOG_LEVEL: 0,
+    },
+    '@/observability/sentry': {
+      reportError: (...args) => reportCalls.push(args),
+    },
+    '@/stores/imStore': {
+      useIMStore: {
+        getState: () => ({
+          connected: false,
+          setError: () => undefined,
+          setInitialized: () => undefined,
+          setCurrentUserID: () => undefined,
+          setConnecting: () => undefined,
+          reset: () => {
+            calls.push('reset');
+          },
+        }),
+      },
+    },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: {
+        getState: () => ({ setMessagesUnread: () => undefined }),
+      },
+    },
+  });
+
+  await logoutFromOpenIM();
+
+  assert.deepEqual(calls, ['getLoginStatus', 'reset']);
+  assert.equal(reportCalls.length, 0);
+});
+
+test('duplicate login is successful only when the native identity matches', async () => {
+  const duplicateLogin = Object.assign(new Error('User has logged in repeatedly'), {
+    code: 10102,
+  });
+  const matching = createIMSessionHarness({
+    loginStatus: 0,
+    nativeUserID: 'userb',
+    loginError: duplicateLogin,
+  });
+  const mismatched = createIMSessionHarness({
+    loginStatus: 0,
+    nativeUserID: 'usera',
+    loginError: duplicateLogin,
+  });
+
+  assert.equal(
+    await matching.client.loginToOpenIM('user-b', 'token-b'),
+    true,
+  );
+  await assert.rejects(
+    mismatched.client.loginToOpenIM('user-b', 'token-b'),
+    /logged in repeatedly/,
+  );
 });
 
 test('getOrCreateSingleConversation fetches a private conversation and merges it into store', async () => {
