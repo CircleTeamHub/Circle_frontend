@@ -276,6 +276,21 @@ test('Android release workflow builds and verifies a private signed artifact', (
     build,
     /EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: \$\{\{ vars\.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID \}\}/,
   );
+  // 客服中心各入口的专属账号必须注入构建环境，否则 support-categories.ts 编译期
+  // 回落到 imAdmin，生产用户被导去系统管理员而非对应真人客服（评审 P2）。
+  for (const supportVar of [
+    'EXPO_PUBLIC_SUPPORT_ACCOUNT_ID',
+    'EXPO_PUBLIC_SUPPORT_RECHARGE_ID',
+    'EXPO_PUBLIC_SUPPORT_ISSUE_ID',
+    'EXPO_PUBLIC_SUPPORT_DISPUTE_ID',
+    'EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID',
+  ]) {
+    assert.match(
+      build,
+      new RegExp(`${supportVar}: \\$\\{\\{ vars\\.${supportVar} \\}\\}`),
+      `${supportVar} must be injected into the release build`,
+    );
+  }
   assert.match(build, /SENTRY_DISABLE_AUTO_UPLOAD: ["']true["']/);
   assert.match(build, /apksigner.*verify --verbose --print-certs/);
   assert.match(apkVerification, /certificate SHA-256 digest/);
