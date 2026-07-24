@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   MEMBERSHIP_BENEFITS,
   MEMBERSHIP_PLANS,
+  getCityFilterLimit,
   getMembershipTierForVipLevel,
 } from './membership-plans.ts';
 
@@ -121,4 +122,22 @@ test('legacy VIP levels map to the four membership tiers', () => {
   assert.equal(getMembershipTierForVipLevel(4), 'super');
   assert.equal(getMembershipTierForVipLevel(5), 'super');
   assert.equal(getMembershipTierForVipLevel(99), 'super');
+});
+
+test('city filter limit follows the per-tier city-filters entitlement', () => {
+  // 与权益目录逐档对齐（silver 2 / gold 10 / diamond 50 / super 无限）。
+  assert.equal(getCityFilterLimit(1), 2); // silver
+  assert.equal(getCityFilterLimit(2), 10); // gold
+  assert.equal(getCityFilterLimit(3), 50); // diamond
+  assert.equal(getCityFilterLimit(4), 'unlimited'); // super
+  assert.equal(getCityFilterLimit(99), 'unlimited'); // 顶档封顶仍是 super
+  // 非会员返回 null → 调用方用通用默认，不在此收紧免费用户。
+  assert.equal(getCityFilterLimit(0), null);
+  assert.equal(getCityFilterLimit(-1), null);
+
+  // helper 的返回必须与目录里的 city-filters 值一致（防止两处漂移）。
+  const cityFilters = MEMBERSHIP_BENEFITS.find((b) => b.id === 'city-filters');
+  assert.equal(cityFilters?.values.silver, 2);
+  assert.equal(cityFilters?.values.diamond, 50);
+  assert.equal(cityFilters?.values.super, 'unlimited');
 });

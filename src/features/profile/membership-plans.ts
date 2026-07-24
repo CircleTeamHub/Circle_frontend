@@ -146,3 +146,24 @@ export function getMembershipTierForVipLevel(
 
   return MEMBERSHIP_PLANS[vipLevel - 1]?.tier ?? null;
 }
+
+/**
+ * 发现页「城市筛选」可选城市数上限，映射自权益目录的 `city-filters`：
+ * silver 2 / gold 10 / diamond 50 / super `'unlimited'`（无限）。
+ * 非会员返回 `null`，由调用方用通用默认（不在此收紧免费用户）。
+ * 调用方把 `'unlimited'` 视为不设上限（Infinity）。
+ */
+export function getCityFilterLimit(
+  vipLevel: number,
+): number | 'unlimited' | null {
+  const tier = getMembershipTierForVipLevel(vipLevel);
+  if (!tier) {
+    return null;
+  }
+  const benefit = MEMBERSHIP_BENEFITS.find((b) => b.id === 'city-filters');
+  const value = benefit?.values[tier];
+  if (value === 'unlimited') {
+    return 'unlimited';
+  }
+  return typeof value === 'number' ? value : null;
+}
