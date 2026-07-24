@@ -558,6 +558,15 @@
       "signupCount": "{{count}} apuntados",
       "signupEmpty": "Sé el primero en apuntarte",
       "cta": "Apuntarme"
+    },
+    "callRecord": {
+      "canceledByPeer": "Cancelada por la otra parte",
+      "canceledBySelf": "Cancelada",
+      "duration": "Duración {{duration}}",
+      "ended": "Llamada finalizada",
+      "failed": "Llamada fallida",
+      "missed": "Llamada perdida",
+      "noAnswer": "Sin respuesta"
     }
   },
   "messages": {
@@ -647,7 +656,8 @@
       "edit": "Editar",
       "unlist": "Retirar",
       "relist": "Volver a publicar",
-      "more": "Más"
+      "more": "Más",
+      "restore": "Restaurar"
     },
     "alerts": {
       "deleteFailedTitle": "Error al eliminar",
@@ -668,7 +678,9 @@
       "relistFailedTitle": "No se pudo volver a publicar",
       "unlistFailedTitle": "No se pudo retirar",
       "unlistTitle": "Retirar nota",
-      "unlistConfirm": "Podrás verla en Retiradas. Las notas retiradas se eliminan automáticamente después de un mes."
+      "unlistConfirm": "Podrás verla en Retiradas. Las notas retiradas se eliminan automáticamente después de un mes.",
+      "refreshFailedTitle": "Error al actualizar",
+      "restoreFailedTitle": "No se pudo restaurar"
     },
     "detail": {
       "loadFailed": "No se pudo cargar la nota, inténtalo de nuevo",
@@ -741,7 +753,8 @@
     "empty": {
       "noMatch": "No hay notas coincidentes",
       "noNotes": "Aún no hay notas",
-      "noUnlisted": "No hay notas retiradas"
+      "noUnlisted": "No hay notas retiradas",
+      "noDeleted": "La papelera está vacía"
     },
     "manageGroups": {
       "cancelEdit": "Cancelar edición",
@@ -836,7 +849,10 @@
       "empty": "No hay chats para enviar",
       "groupHint": "Grupo",
       "friendHint": "Amigo"
-    }
+    },
+    "recycleBin": "Papelera",
+    "recycleBinHint": "Las notas eliminadas se pueden restaurar aquí.",
+    "recycleBinTitle": "Papelera"
   },
   "tempChats": {
     "title": "Gestión de plazas",
@@ -1640,14 +1656,13 @@
     "memberCenter": "Membresía",
     "viewMember": "Ver",
     "wallet": {
-      "purchaseUnavailable": "La compra de créditos aún no está disponible. Esta página solo muestra tu saldo.",
+      "purchaseUnavailable": "La compra de puntos aún no está disponible. Por ahora, esta página solo muestra tu saldo.",
       "title": "Mi cartera",
       "confirmRecharge": "Confirmar recarga",
       "balance": "Saldo de créditos",
       "recharge": "Recargar créditos",
       "memberAgreement": "Acuerdo de servicio de membresía",
       "loadError": "Error al cargar el saldo de créditos. Inténtalo de nuevo más tarde.",
-      "purchaseUnavailable": "La compra de puntos aún no está disponible. Por ahora, esta página solo muestra tu saldo.",
       "rechargeSuccess": "Recargaste {{points}} créditos",
       "rechargeError": "Error en la recarga. Inténtalo de nuevo más tarde.",
       "confirmRechargeMessage": "¿Recargar {{points}} créditos ({{price}})?",
@@ -1825,10 +1840,18 @@
       "exchangeSuccess": "Nivel de membresía actualizado a {{level}}",
       "exchangeError": "No se pudo actualizar la membresía. Inténtalo de nuevo más tarde.",
       "tiers": {
-        "silver": { "name": "Membresía Plata" },
-        "gold": { "name": "Membresía Oro" },
-        "diamond": { "name": "Membresía Diamante" },
-        "super": { "name": "Membresía Súper" }
+        "silver": {
+          "name": "Membresía Plata"
+        },
+        "gold": {
+          "name": "Membresía Oro"
+        },
+        "diamond": {
+          "name": "Membresía Diamante"
+        },
+        "super": {
+          "name": "Membresía Súper"
+        }
       },
       "benefits": {
         "nameColor": "Color del nombre",
@@ -1854,6 +1877,11 @@
         "none": "Ninguno",
         "one-gift": "Un regalo",
         "one-premium-gift": "Un número premium de regalo"
+      },
+      "currentTierBadge": "Actual",
+      "marketing": {
+        "goldAccess": "Todos los usuarios disfrutan actualmente de los límites de nivel Oro de forma gratuita",
+        "title": "Las funciones de membresía aún no están disponibles"
       }
     },
     "memberRules": {
@@ -2041,7 +2069,17 @@
       "sendCodeFailed": "Error al enviar, inténtalo de nuevo"
     },
     "hidePassword": "Ocultar contraseña",
-    "showPassword": "Mostrar contraseña"
+    "showPassword": "Mostrar contraseña",
+    "resendIn": "Reenviar en {{seconds}}s",
+    "resetPassword": {
+      "failed": "No se pudo restablecer; verifica el código e inténtalo de nuevo",
+      "intro": "Introduce tu correo registrado y te enviaremos un código para restablecer la contraseña.",
+      "newPasswordPlaceholder": "Nueva contraseña (mín. 6 caracteres)",
+      "submit": "Restablecer contraseña",
+      "submitting": "Restableciendo…",
+      "successBody": "Se cerró la sesión en todos los dispositivos. Inicia sesión con tu nueva contraseña.",
+      "successTitle": "Contraseña restablecida"
+    }
   },
   "common": {
     "save": "Guardar",
@@ -2226,7 +2264,8 @@
   },
   "call": {
     "livekit": {
-      "connected": "LiveKit conectado. Por ahora solo audio."
+      "connected": "LiveKit conectado. Por ahora solo audio.",
+      "connectedVideo": "LiveKit conectado. Videollamada en curso."
     },
     "status": {
       "reconnecting": "Reconectando la llamada…",
@@ -2247,8 +2286,14 @@
     "invite": {
       "initiatedBy": "{{name}} inició una llamada de voz grupal",
       "inviteeCount": "{{count}} invitados",
-      "groupMember": "Miembro del grupo"
-    }
+      "groupMember": "Miembro del grupo",
+      "friend": "Amigo",
+      "singleSubtitle": "Llamada de voz"
+    },
+    "chooseType": "Iniciar llamada",
+    "typeVideo": "Videollamada",
+    "typeVoice": "Llamada de voz",
+    "videoCallTitle": "Videollamada"
   },
   "im": {
     "time": {

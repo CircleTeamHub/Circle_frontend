@@ -557,6 +557,15 @@
       "signupCount": "{{count}}명 참가",
       "signupEmpty": "아직 신청자가 없어요",
       "cta": "신청하기"
+    },
+    "callRecord": {
+      "canceledByPeer": "상대방이 취소했습니다",
+      "canceledBySelf": "취소됨",
+      "duration": "통화 시간 {{duration}}",
+      "ended": "통화 종료",
+      "failed": "통화 연결 실패",
+      "missed": "부재중 전화",
+      "noAnswer": "응답 없음"
     }
   },
   "messages": {
@@ -646,7 +655,8 @@
       "edit": "편집",
       "unlist": "내리기",
       "relist": "올리기",
-      "more": "더보기"
+      "more": "더보기",
+      "restore": "복원"
     },
     "alerts": {
       "deleteFailedTitle": "삭제 실패",
@@ -667,7 +677,9 @@
       "relistFailedTitle": "올리기 실패",
       "unlistFailedTitle": "내리기 실패",
       "unlistTitle": "노트 내리기",
-      "unlistConfirm": "내린 노트는 내림 목록에서 볼 수 있으며 한 달 후 자동 삭제됩니다."
+      "unlistConfirm": "내린 노트는 내림 목록에서 볼 수 있으며 한 달 후 자동 삭제됩니다.",
+      "refreshFailedTitle": "새로고침 실패",
+      "restoreFailedTitle": "복원 실패"
     },
     "detail": {
       "loadFailed": "노트를 불러오지 못했습니다. 다시 시도해 주세요",
@@ -740,7 +752,8 @@
     "empty": {
       "noMatch": "일치하는 노트가 없습니다",
       "noNotes": "아직 노트가 없습니다",
-      "noUnlisted": "내린 노트가 없습니다"
+      "noUnlisted": "내린 노트가 없습니다",
+      "noDeleted": "휴지통이 비어 있습니다"
     },
     "manageGroups": {
       "cancelEdit": "편집 취소",
@@ -835,7 +848,10 @@
       "empty": "보낼 수 있는 채팅이 없어요",
       "groupHint": "그룹",
       "friendHint": "친구"
-    }
+    },
+    "recycleBin": "휴지통",
+    "recycleBinHint": "삭제한 노트를 여기에서 복원할 수 있습니다.",
+    "recycleBinTitle": "휴지통"
   },
   "tempChats": {
     "title": "좌석 관리",
@@ -1637,14 +1653,13 @@
     "memberCenter": "멤버십",
     "viewMember": "보기",
     "wallet": {
-      "purchaseUnavailable": "크레딧 구매는 아직 이용할 수 없습니다. 현재 이 페이지에는 잔액만 표시됩니다.",
+      "purchaseUnavailable": "포인트 구매는 아직 지원되지 않습니다. 현재 이 페이지에는 잔액만 표시됩니다.",
       "title": "내 지갑",
       "confirmRecharge": "충전 확인",
       "balance": "크레딧 잔액",
       "recharge": "크레딧 충전",
       "memberAgreement": "회원 서비스 약관",
       "loadError": "크레딧 잔액을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
-      "purchaseUnavailable": "포인트 구매는 아직 지원되지 않습니다. 현재 이 페이지에는 잔액만 표시됩니다.",
       "rechargeSuccess": "{{points}} 크레딧을 충전했습니다",
       "rechargeError": "충전에 실패했습니다. 잠시 후 다시 시도해 주세요.",
       "confirmRechargeMessage": "{{points}} 크레딧({{price}})을 충전하시겠어요?",
@@ -1822,10 +1837,18 @@
       "exchangeSuccess": "회원 등급이 {{level}}(으)로 업데이트되었습니다",
       "exchangeError": "회원 등급을 업데이트하지 못했습니다. 나중에 다시 시도해 주세요.",
       "tiers": {
-        "silver": { "name": "실버 회원" },
-        "gold": { "name": "골드 회원" },
-        "diamond": { "name": "다이아몬드 회원" },
-        "super": { "name": "슈퍼 회원" }
+        "silver": {
+          "name": "실버 회원"
+        },
+        "gold": {
+          "name": "골드 회원"
+        },
+        "diamond": {
+          "name": "다이아몬드 회원"
+        },
+        "super": {
+          "name": "슈퍼 회원"
+        }
       },
       "benefits": {
         "nameColor": "이름 색상",
@@ -1851,6 +1874,11 @@
         "none": "없음",
         "one-gift": "1회 증정",
         "one-premium-gift": "프리미엄 번호 1회 증정"
+      },
+      "currentTierBadge": "현재",
+      "marketing": {
+        "goldAccess": "현재 모든 사용자가 골드 등급 한도를 무료로 이용할 수 있습니다",
+        "title": "멤버십 기능은 아직 오픈되지 않았습니다"
       }
     },
     "memberRules": {
@@ -2038,7 +2066,17 @@
       "sendCodeFailed": "발송에 실패했습니다. 다시 시도해 주세요"
     },
     "hidePassword": "비밀번호 숨기기",
-    "showPassword": "비밀번호 표시"
+    "showPassword": "비밀번호 표시",
+    "resendIn": "{{seconds}}초 후 재전송",
+    "resetPassword": {
+      "failed": "재설정에 실패했습니다. 코드를 확인하고 다시 시도해 주세요",
+      "intro": "가입한 이메일을 입력하면 비밀번호 재설정용 인증 코드를 보내드립니다.",
+      "newPasswordPlaceholder": "새 비밀번호(6자 이상)",
+      "submit": "비밀번호 재설정",
+      "submitting": "재설정 중…",
+      "successBody": "모든 기기에서 로그아웃되었습니다. 새 비밀번호로 다시 로그인해 주세요.",
+      "successTitle": "비밀번호가 재설정되었습니다"
+    }
   },
   "common": {
     "save": "저장",
@@ -2223,7 +2261,8 @@
   },
   "call": {
     "livekit": {
-      "connected": "LiveKit에 연결되었습니다. 현재는 음성만 지원합니다."
+      "connected": "LiveKit에 연결되었습니다. 현재는 음성만 지원합니다.",
+      "connectedVideo": "LiveKit에 연결되었습니다. 영상 통화 중입니다."
     },
     "status": {
       "reconnecting": "통화를 다시 연결하는 중…",
@@ -2244,8 +2283,14 @@
     "invite": {
       "initiatedBy": "{{name}}님이 그룹 음성 통화를 시작했습니다",
       "inviteeCount": "{{count}}명 초대됨",
-      "groupMember": "그룹 멤버"
-    }
+      "groupMember": "그룹 멤버",
+      "friend": "친구",
+      "singleSubtitle": "음성 통화"
+    },
+    "chooseType": "통화 시작",
+    "typeVideo": "영상 통화",
+    "typeVoice": "음성 통화",
+    "videoCallTitle": "영상 통화"
   },
   "im": {
     "time": {

@@ -109,7 +109,17 @@
       "sendCodeFailed": "Failed to send, please try again"
     },
     "hidePassword": "Hide password",
-    "showPassword": "Show password"
+    "showPassword": "Show password",
+    "resendIn": "Resend in {{seconds}}s",
+    "resetPassword": {
+      "failed": "Reset failed — check the code and try again",
+      "intro": "Enter your registered email and we will send a verification code to reset your password.",
+      "newPasswordPlaceholder": "New password (min 6 chars)",
+      "submit": "Reset password",
+      "submitting": "Resetting…",
+      "successBody": "All devices have been signed out. Please log in with your new password.",
+      "successTitle": "Password reset"
+    }
   },
   "onboarding": {
     "profileTitle": "Complete your profile",
@@ -587,6 +597,15 @@
       "signupCount": "{{count}} going",
       "signupEmpty": "Be the first to join",
       "cta": "Join"
+    },
+    "callRecord": {
+      "canceledByPeer": "Canceled by the other side",
+      "canceledBySelf": "Canceled",
+      "duration": "Call duration {{duration}}",
+      "ended": "Call ended",
+      "failed": "Call failed",
+      "missed": "Missed call",
+      "noAnswer": "No answer"
     }
   },
   "contacts": {
@@ -1197,14 +1216,13 @@
     "memberCenter": "Membership",
     "viewMember": "View",
     "wallet": {
-      "purchaseUnavailable": "Point purchases are not available yet. This page currently shows your balance only.",
+      "purchaseUnavailable": "Points purchases are not available yet. This page currently shows your balance only.",
       "title": "My Wallet",
       "confirmRecharge": "Confirm Recharge",
       "balance": "Points Balance",
       "recharge": "Recharge Points",
       "memberAgreement": "《Membership Service Agreement》",
       "loadError": "Failed to load points balance. Please try again later.",
-      "purchaseUnavailable": "Points purchases are not available yet. This page currently shows your balance only.",
       "rechargeSuccess": "Recharged {{points}} points",
       "rechargeError": "Recharge failed. Please try again later.",
       "confirmRechargeMessage": "Recharge {{points}} points ({{price}})?",
@@ -1382,10 +1400,18 @@
       "exchangeSuccess": "Membership level updated to {{level}}",
       "exchangeError": "Unable to update membership. Please try again later.",
       "tiers": {
-        "silver": { "name": "Silver membership" },
-        "gold": { "name": "Gold membership" },
-        "diamond": { "name": "Diamond membership" },
-        "super": { "name": "Super membership" }
+        "silver": {
+          "name": "Silver membership"
+        },
+        "gold": {
+          "name": "Gold membership"
+        },
+        "diamond": {
+          "name": "Diamond membership"
+        },
+        "super": {
+          "name": "Super membership"
+        }
       },
       "benefits": {
         "nameColor": "Name color",
@@ -1411,6 +1437,11 @@
         "none": "None",
         "one-gift": "One gift",
         "one-premium-gift": "One premium number gift"
+      },
+      "currentTierBadge": "Current",
+      "marketing": {
+        "goldAccess": "All users currently enjoy Gold-tier limits for free",
+        "title": "Membership features are not open yet"
       }
     },
     "memberRules": {
@@ -1948,7 +1979,8 @@
       "edit": "Edit",
       "unlist": "Unlist",
       "relist": "Relist",
-      "more": "More"
+      "more": "More",
+      "restore": "Restore"
     },
     "alerts": {
       "deleteFailedTitle": "Failed to delete",
@@ -1969,7 +2001,9 @@
       "relistFailedTitle": "Failed to relist",
       "unlistFailedTitle": "Failed to unlist",
       "unlistTitle": "Unlist note",
-      "unlistConfirm": "You can view it in Unlisted. Unlisted notes are automatically deleted after one month."
+      "unlistConfirm": "You can view it in Unlisted. Unlisted notes are automatically deleted after one month.",
+      "refreshFailedTitle": "Refresh failed",
+      "restoreFailedTitle": "Restore failed"
     },
     "detail": {
       "loadFailed": "Failed to load note, please try again",
@@ -2042,7 +2076,8 @@
     "empty": {
       "noMatch": "No matching notes",
       "noNotes": "No notes yet",
-      "noUnlisted": "No unlisted notes"
+      "noUnlisted": "No unlisted notes",
+      "noDeleted": "The recycle bin is empty"
     },
     "manageGroups": {
       "cancelEdit": "Cancel editing",
@@ -2137,7 +2172,10 @@
       "empty": "No chats to send to yet",
       "groupHint": "Group",
       "friendHint": "Friend"
-    }
+    },
+    "recycleBin": "Recycle bin",
+    "recycleBinHint": "Deleted notes can be restored here.",
+    "recycleBinTitle": "Recycle bin"
   },
   "search": {
     "loadFriendsFailed": "Failed to load friends, please try again",
@@ -2264,7 +2302,8 @@
   },
   "call": {
     "livekit": {
-      "connected": "LiveKit connected. Audio only for now."
+      "connected": "LiveKit connected. Audio only for now.",
+      "connectedVideo": "LiveKit connected. Video call in progress."
     },
     "status": {
       "reconnecting": "Reconnecting the call…",
@@ -2285,8 +2324,14 @@
     "invite": {
       "initiatedBy": "{{name}} started a group voice call",
       "inviteeCount": "{{count}} invited",
-      "groupMember": "Group member"
-    }
+      "groupMember": "Group member",
+      "friend": "Friend",
+      "singleSubtitle": "Voice call"
+    },
+    "chooseType": "Start a call",
+    "typeVideo": "Video call",
+    "typeVoice": "Voice call",
+    "videoCallTitle": "Video call"
   },
   "emojis": {
     "face": "Smileys",

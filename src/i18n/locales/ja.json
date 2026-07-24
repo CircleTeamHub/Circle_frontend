@@ -557,6 +557,15 @@
       "signupCount": "{{count}}人が参加",
       "signupEmpty": "まだ誰も参加していません",
       "cta": "参加する"
+    },
+    "callRecord": {
+      "canceledByPeer": "相手がキャンセルしました",
+      "canceledBySelf": "キャンセルしました",
+      "duration": "通話時間 {{duration}}",
+      "ended": "通話が終了しました",
+      "failed": "通話に失敗しました",
+      "missed": "不在着信",
+      "noAnswer": "応答なし"
     }
   },
   "messages": {
@@ -646,7 +655,8 @@
       "edit": "編集",
       "unlist": "非公開にする",
       "relist": "公開に戻す",
-      "more": "その他"
+      "more": "その他",
+      "restore": "復元"
     },
     "alerts": {
       "deleteFailedTitle": "削除に失敗しました",
@@ -667,7 +677,9 @@
       "relistFailedTitle": "公開に戻せませんでした",
       "unlistFailedTitle": "非公開にできませんでした",
       "unlistTitle": "ノートを非公開にする",
-      "unlistConfirm": "非公開にしたノートは非公開リストで確認できます。1か月後に自動削除されます。"
+      "unlistConfirm": "非公開にしたノートは非公開リストで確認できます。1か月後に自動削除されます。",
+      "refreshFailedTitle": "更新に失敗しました",
+      "restoreFailedTitle": "復元に失敗しました"
     },
     "detail": {
       "loadFailed": "ノートを読み込めませんでした。もう一度お試しください",
@@ -740,7 +752,8 @@
     "empty": {
       "noMatch": "一致するノートがありません",
       "noNotes": "まだノートがありません",
-      "noUnlisted": "非公開のノートはありません"
+      "noUnlisted": "非公開のノートはありません",
+      "noDeleted": "ごみ箱は空です"
     },
     "manageGroups": {
       "cancelEdit": "編集をキャンセル",
@@ -835,7 +848,10 @@
       "empty": "送信できるチャットがありません",
       "groupHint": "グループ",
       "friendHint": "友だち"
-    }
+    },
+    "recycleBin": "ごみ箱",
+    "recycleBinHint": "削除したノートはここから復元できます。",
+    "recycleBinTitle": "ごみ箱"
   },
   "tempChats": {
     "title": "枠の管理",
@@ -1637,14 +1653,13 @@
     "memberCenter": "会員",
     "viewMember": "見る",
     "wallet": {
-      "purchaseUnavailable": "クレジットの購入はまだ利用できません。現在、このページには残高のみが表示されます。",
+      "purchaseUnavailable": "ポイント購入はまだご利用いただけません。現在、このページには残高のみが表示されます。",
       "title": "マイウォレット",
       "confirmRecharge": "チャージを確認",
       "balance": "クレジット残高",
       "recharge": "クレジットをチャージ",
       "memberAgreement": "会員サービス規約",
       "loadError": "クレジット残高の読み込みに失敗しました。しばらくしてから再試行してください。",
-      "purchaseUnavailable": "ポイント購入はまだご利用いただけません。現在、このページには残高のみが表示されます。",
       "rechargeSuccess": "{{points}} クレジットをチャージしました",
       "rechargeError": "チャージに失敗しました。しばらくしてから再試行してください。",
       "confirmRechargeMessage": "{{points}} クレジット（{{price}}）をチャージしますか？",
@@ -1822,10 +1837,18 @@
       "exchangeSuccess": "会員レベルを {{level}} に更新しました",
       "exchangeError": "会員レベルを更新できませんでした。後でもう一度お試しください。",
       "tiers": {
-        "silver": { "name": "シルバー会員" },
-        "gold": { "name": "ゴールド会員" },
-        "diamond": { "name": "ダイヤモンド会員" },
-        "super": { "name": "スーパー会員" }
+        "silver": {
+          "name": "シルバー会員"
+        },
+        "gold": {
+          "name": "ゴールド会員"
+        },
+        "diamond": {
+          "name": "ダイヤモンド会員"
+        },
+        "super": {
+          "name": "スーパー会員"
+        }
       },
       "benefits": {
         "nameColor": "名前の色",
@@ -1851,6 +1874,11 @@
         "none": "なし",
         "one-gift": "1回贈呈",
         "one-premium-gift": "プレミアム番号を1回贈呈"
+      },
+      "currentTierBadge": "現在",
+      "marketing": {
+        "goldAccess": "現在、すべてのユーザーがゴールド会員の枠を無料でご利用いただけます",
+        "title": "会員機能はまだ公開されていません"
       }
     },
     "memberRules": {
@@ -2038,7 +2066,17 @@
       "sendCodeFailed": "送信に失敗しました。もう一度お試しください"
     },
     "hidePassword": "パスワードを非表示",
-    "showPassword": "パスワードを表示"
+    "showPassword": "パスワードを表示",
+    "resendIn": "{{seconds}}秒後に再送",
+    "resetPassword": {
+      "failed": "再設定に失敗しました。コードを確認してもう一度お試しください",
+      "intro": "登録済みメールアドレスを入力すると、パスワード再設定用の認証コードを送信します。",
+      "newPasswordPlaceholder": "新しいパスワード（6文字以上）",
+      "submit": "パスワードを再設定",
+      "submitting": "再設定中…",
+      "successBody": "すべての端末からログアウトしました。新しいパスワードでログインしてください。",
+      "successTitle": "パスワードを再設定しました"
+    }
   },
   "common": {
     "save": "保存",
@@ -2223,7 +2261,8 @@
   },
   "call": {
     "livekit": {
-      "connected": "LiveKit に接続しました。現在は音声のみです。"
+      "connected": "LiveKit に接続しました。現在は音声のみです。",
+      "connectedVideo": "LiveKit に接続しました。ビデオ通話中です。"
     },
     "status": {
       "reconnecting": "通話を再接続しています…",
@@ -2244,8 +2283,14 @@
     "invite": {
       "initiatedBy": "{{name}} がグループ音声通話を開始しました",
       "inviteeCount": "{{count}} 人を招待",
-      "groupMember": "グループメンバー"
-    }
+      "groupMember": "グループメンバー",
+      "friend": "友だち",
+      "singleSubtitle": "音声通話"
+    },
+    "chooseType": "通話を開始",
+    "typeVideo": "ビデオ通話",
+    "typeVoice": "音声通話",
+    "videoCallTitle": "ビデオ通話"
   },
   "im": {
     "time": {

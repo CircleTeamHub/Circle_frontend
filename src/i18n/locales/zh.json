@@ -109,7 +109,17 @@
       "sendCodeFailed": "发送失败，请重试"
     },
     "hidePassword": "隐藏密码",
-    "showPassword": "显示密码"
+    "showPassword": "显示密码",
+    "resendIn": "{{seconds}}s 后重发",
+    "resetPassword": {
+      "failed": "重置失败，请检查验证码后重试",
+      "intro": "输入注册邮箱，我们会发送验证码用于重置密码。",
+      "newPasswordPlaceholder": "新密码（至少 6 位）",
+      "submit": "重置密码",
+      "submitting": "重置中…",
+      "successBody": "所有设备已退出登录，请用新密码重新登录。",
+      "successTitle": "密码已重置"
+    }
   },
   "onboarding": {
     "profileTitle": "完善个人资料",
@@ -586,6 +596,15 @@
       "signupCount": "{{count}} 人已报名",
       "signupEmpty": "还没有人报名，来当第一个",
       "cta": "去报名"
+    },
+    "callRecord": {
+      "canceledByPeer": "对方已取消",
+      "canceledBySelf": "已取消",
+      "duration": "通话时长 {{duration}}",
+      "ended": "通话已结束",
+      "failed": "通话未接通",
+      "missed": "未接听",
+      "noAnswer": "对方未接听"
     }
   },
   "contacts": {
@@ -1201,7 +1220,6 @@
       "recharge": "积分充值",
       "memberAgreement": "《会员服务协议》",
       "loadError": "积分余额加载失败，请稍后重试",
-      "purchaseUnavailable": "积分购买暂未开放。当前页面仅显示余额。",
       "rechargeSuccess": "已充值 {{points}} 积分",
       "rechargeError": "充值失败，请稍后重试",
       "confirmRechargeMessage": "确定要充值 {{points}} 积分（{{price}}）吗？",
@@ -1379,10 +1397,18 @@
       "exchangeSuccess": "会员等级已更新为 {{level}}",
       "exchangeError": "会员等级更新失败，请稍后重试",
       "tiers": {
-        "silver": { "name": "白银会员" },
-        "gold": { "name": "黄金会员" },
-        "diamond": { "name": "钻石会员" },
-        "super": { "name": "超级会员" }
+        "silver": {
+          "name": "白银会员"
+        },
+        "gold": {
+          "name": "黄金会员"
+        },
+        "diamond": {
+          "name": "钻石会员"
+        },
+        "super": {
+          "name": "超级会员"
+        }
       },
       "benefits": {
         "nameColor": "名字颜色",
@@ -1408,6 +1434,11 @@
         "none": "无",
         "one-gift": "赠送 1 次",
         "one-premium-gift": "赠送高级靓号 1 次"
+      },
+      "currentTierBadge": "当前",
+      "marketing": {
+        "goldAccess": "当前所有用户免费享有黄金额度",
+        "title": "会员功能暂未开放"
       }
     },
     "memberRules": {
@@ -1945,7 +1976,8 @@
       "edit": "编辑",
       "unlist": "下架",
       "relist": "上架",
-      "more": "更多"
+      "more": "更多",
+      "restore": "恢复"
     },
     "alerts": {
       "deleteFailedTitle": "删除失败",
@@ -1966,7 +1998,9 @@
       "relistFailedTitle": "上架失败",
       "unlistFailedTitle": "下架失败",
       "unlistTitle": "下架笔记",
-      "unlistConfirm": "下架后可在已下架列表查看，已下架笔记会在一个月后自动删除。"
+      "unlistConfirm": "下架后可在已下架列表查看，已下架笔记会在一个月后自动删除。",
+      "refreshFailedTitle": "刷新失败",
+      "restoreFailedTitle": "恢复失败"
     },
     "detail": {
       "loadFailed": "笔记加载失败，请稍后重试",
@@ -2039,7 +2073,8 @@
     "empty": {
       "noMatch": "没有匹配的笔记",
       "noNotes": "暂无笔记",
-      "noUnlisted": "暂无已下架笔记"
+      "noUnlisted": "暂无已下架笔记",
+      "noDeleted": "回收站是空的"
     },
     "manageGroups": {
       "cancelEdit": "取消编辑",
@@ -2134,7 +2169,10 @@
       "empty": "暂无可发送的聊天对象",
       "groupHint": "群聊",
       "friendHint": "好友"
-    }
+    },
+    "recycleBin": "回收站",
+    "recycleBinHint": "已删除的笔记可在这里恢复。",
+    "recycleBinTitle": "回收站"
   },
   "search": {
     "loadFriendsFailed": "好友列表加载失败，请稍后重试",
@@ -2261,7 +2299,8 @@
   },
   "call": {
     "livekit": {
-      "connected": "LiveKit 已连接，当前仅开放音频。"
+      "connected": "LiveKit 已连接，当前仅开放音频。",
+      "connectedVideo": "LiveKit 已连接，视频通话进行中。"
     },
     "status": {
       "reconnecting": "正在恢复通话连接...",
@@ -2282,8 +2321,14 @@
     "invite": {
       "initiatedBy": "{{name}} 发起群语音",
       "inviteeCount": "{{count}} 人被邀请",
-      "groupMember": "群成员"
-    }
+      "groupMember": "群成员",
+      "friend": "好友",
+      "singleSubtitle": "语音通话"
+    },
+    "chooseType": "发起通话",
+    "typeVideo": "视频通话",
+    "typeVoice": "语音通话",
+    "videoCallTitle": "视频通话"
   },
   "emojis": {
     "face": "表情",
