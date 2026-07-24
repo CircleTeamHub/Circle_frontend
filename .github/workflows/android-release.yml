@@ -230,6 +230,7 @@ jobs:
         run: sha256sum -c windnote.apk.sha256
 
       - name: Publish public GitHub release
+        id: publish_release
         env:
           GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
           RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
@@ -277,6 +278,7 @@ jobs:
           test "$uploaded_sha" = "$apk_sha"
 
       - name: Promote APK to Cloudflare R2 latest
+        if: ${{ steps.publish_release.outputs.promote_latest == 'true' }}
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}

@@ -403,6 +403,10 @@ test('Android releases publish versioned and latest APKs to Cloudflare R2', () =
     publish,
     'Promote APK to Cloudflare R2 latest',
   );
+  const githubRelease = workflowStep(
+    publish,
+    'Publish public GitHub release',
+  );
 
   for (const step of [versionedUpload, latestUpload]) {
     assert.match(step, /AWS_ACCESS_KEY_ID: \$\{\{ secrets\.R2_ACCESS_KEY_ID \}\}/);
@@ -421,6 +425,11 @@ test('Android releases publish versioned and latest APKs to Cloudflare R2', () =
   assert.match(latestUpload, /head-object/);
   assert.match(latestUpload, /R2_PUBLIC_APK_URL/);
   assert.match(latestUpload, /curl --fail.*--head/);
+  assert.match(githubRelease, /id: publish_release/);
+  assert.match(
+    latestUpload,
+    /if: \$\{\{ steps\.publish_release\.outputs\.promote_latest == 'true' \}\}/,
+  );
 
   const versionedIndex = publish.indexOf(
     '- name: Upload versioned APK to Cloudflare R2',
@@ -716,7 +725,10 @@ test('release validation CLI supports scoped and legacy validation', () => {
 });
 
 test('release publishing is immutable and only advances a newer stable version', () => {
-  const { publishRelease } = require('../.github/scripts/publish-android-release');
+  const {
+    publishRelease,
+    shouldPromoteLatest,
+  } = require('../.github/scripts/publish-android-release');
   const apkPath = path.join(process.cwd(), 'test', 'fixture-windnote.apk');
   const apkContents = Buffer.from('signed apk fixture');
   const digest = `sha256:${crypto.createHash('sha256').update(apkContents).digest('hex')}`;
@@ -724,7 +736,7 @@ test('release publishing is immutable and only advances a newer stable version',
 
   try {
     const createCalls = [];
-    publishRelease({
+    const createResult = publishRelease({
       releaseTag: 'v1.0.0',
       repository: 'CircleTeamHub/windnote-releases',
       apkPath,
@@ -739,9 +751,10 @@ test('release publishing is immutable and only advances a newer stable version',
     assert.ok(createCalls.some((args) => args.includes('--latest=false')));
     assert.ok(createCalls.some((args) => args[0] === 'release' && args[1] === 'edit' && args.includes('--latest')));
     assert.ok(createCalls.some((args) => args.includes(`${apkPath}#windnote.apk`)));
+    assert.deepEqual(createResult, { promoteLatest: true });
 
     const rerunCalls = [];
-    publishRelease({
+    const rerunResult = publishRelease({
       releaseTag: 'v1.0.0',
       repository: 'CircleTeamHub/windnote-releases',
       apkPath,
@@ -759,6 +772,12 @@ test('release publishing is immutable and only advances a newer stable version',
     });
     assert.equal(rerunCalls.some((args) => args[0] === 'release' && args[1] === 'upload'), false);
     assert.equal(rerunCalls.some((args) => args.includes('--latest')), false);
+    assert.deepEqual(rerunResult, { promoteLatest: false });
+
+    assert.equal(shouldPromoteLatest('v2.0.0', ''), true);
+    assert.equal(shouldPromoteLatest('v2.0.0', 'v2.0.0'), true);
+    assert.equal(shouldPromoteLatest('v2.0.1', 'v2.0.0'), true);
+    assert.equal(shouldPromoteLatest('v1.9.9', 'v2.0.0'), false);
 
     let failedLookupCalls = 0;
     assert.throws(
@@ -798,5 +817,21 @@ test('release publishing is immutable and only advances a newer stable version',
     assert.equal(failedLookupCalls, 1, 'publishing must stop after a failed lookup');
   } finally {
     fs.rmSync(apkPath, { force: true });
+  }
+});
+
+test('release helper writes the latest-promotion decision to GitHub Actions output', () => {
+  const { writePromoteLatestOutput } = require('../.github/scripts/publish-android-release');
+  const outputPath = path.join(process.cwd(), 'test', 'fixture-github-output.txt');
+
+  try {
+    writePromoteLatestOutput(true, outputPath);
+    writePromoteLatestOutput(false, outputPath);
+    assert.equal(
+      fs.readFileSync(outputPath, 'utf8'),
+      'promote_latest=true\npromote_latest=false\n',
+    );
+  } finally {
+    fs.rmSync(outputPath, { force: true });
   }
 });

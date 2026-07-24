@@ -469,7 +469,7 @@ test('迟到收尾不清 B 会话的欠账；陈旧拆除用 forceNative (round 
   assert.match(client, /forceNative/);
   assert.match(
     client,
-    /!useIMStore\.getState\(\)\.connected && !options\.forceNative/,
+    /nativeStatus === LoginStatus\.Logout[\s\S]*!useIMStore\.getState\(\)\.connected[\s\S]*!options\.forceNative/,
   );
   const recovery = read('src/im/token-recovery.ts');
   assert.match(recovery, /imLogoutExecutor\(\{ forceNative: true \}\)/);
