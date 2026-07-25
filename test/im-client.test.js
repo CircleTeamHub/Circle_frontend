@@ -752,6 +752,114 @@ test('late login cleanup does not logout a newer native identity', async () => {
   assert.equal(calls.includes('logout:userb'), false);
 });
 
+test('same-user relogin fails closed while a timed-out native login is still pending', async () => {
+  const loginGate = deferred();
+  const calls = [];
+  let nativeStatus = 0;
+  let nativeUserID = null;
+  const storeState = { connected: false };
+  const sdk = {
+    initSDK: async () => {
+      calls.push('init');
+    },
+    unInitSDK: async () => {
+      calls.push('unInit');
+    },
+    getLoginStatus: async () => {
+      calls.push(`getLoginStatus:${nativeStatus}`);
+      return nativeStatus;
+    },
+    getSelfUserInfo: async () => {
+      calls.push(`getSelfUserInfo:${nativeUserID}`);
+      return { userID: nativeUserID };
+    },
+    login: async ({ userID }) => {
+      calls.push(`login:${userID}:start`);
+      if (calls.filter((entry) => entry === `login:${userID}:start`).length === 1) {
+        await loginGate.promise;
+        nativeStatus = 3;
+        nativeUserID = userID;
+        return;
+      }
+      nativeStatus = 3;
+      nativeUserID = userID;
+    },
+    logout: async () => {
+      calls.push(`logout:${nativeUserID}`);
+      nativeStatus = 0;
+      nativeUserID = null;
+    },
+  };
+  const { loginToOpenIM, logoutFromOpenIM } = loadTsModule('src/im/client.ts', {
+    '@openim/rn-client-sdk': {
+      __esModule: true,
+      default: sdk,
+      LoginStatus: { Logout: 0, Logged: 3 },
+      LogLevel: { Info: 0 },
+      SessionType: { Single: 1, Group: 2 },
+      ViewType: { History: 0 },
+    },
+    'react-native-fs': {
+      __esModule: true,
+      default: {
+        DocumentDirectoryPath: '/tmp',
+        mkdir: async () => undefined,
+        exists: async () => false,
+        unlink: async () => undefined,
+      },
+    },
+    'react-native': { Platform: { OS: 'ios' } },
+    '@/constants/config': {
+      OPENIM_API_URL: 'https://im.example.com',
+      OPENIM_WS_URL: 'wss://im.example.com',
+      OPENIM_LOG_LEVEL: 0,
+    },
+    '@/stores/imStore': {
+      useIMStore: {
+        getState: () => ({
+          connected: storeState.connected,
+          setError: () => undefined,
+          setInitialized: () => undefined,
+          setCurrentUserID: () => undefined,
+          setConnecting: () => undefined,
+          setConnected: (connected) => {
+            storeState.connected = connected;
+          },
+          reset: () => {
+            storeState.connected = false;
+            calls.push('reset');
+          },
+        }),
+      },
+    },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: {
+        getState: () => ({ setMessagesUnread: () => undefined }),
+      },
+    },
+  });
+
+  const staleLogin = loginToOpenIM('user-a', 'token-a');
+  while (!calls.includes('login:usera:start')) {
+    await Promise.resolve();
+  }
+
+  const logout = logoutFromOpenIM();
+  const reloginRejected = assert.rejects(
+    loginToOpenIM('user-a', 'token-new'),
+    /previous OpenIM login is still pending/i,
+  );
+  await logout;
+  await reloginRejected;
+  assert.equal(
+    calls.filter((entry) => entry === 'login:usera:start').length,
+    1,
+  );
+
+  loginGate.resolve();
+  await assert.rejects(staleLogin, /completed after logout began/);
+});
+
 test('late duplicate-login success is torn down after logout starts', async () => {
   const loginGate = deferred();
   const duplicateLogin = Object.assign(new Error('User has logged in repeatedly'), {

@@ -72,6 +72,17 @@ const inFlightLogins = new Set<InFlightLogin>();
 type NativeFSModule = typeof NativeFS & { default?: typeof NativeFS };
 let rnfsModule: typeof NativeFS | null = null;
 
+function assertNoTimedOutSameUserLogin(userID: string) {
+  const timedOutSameUserLogin = [...inFlightLogins].some(
+    (login) => login.userID === userID && login.teardownOnSettle,
+  );
+  if (timedOutSameUserLogin) {
+    throw new Error(
+      'A previous OpenIM login is still pending; restart the app before retrying',
+    );
+  }
+}
+
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 
 // 所有发送变体最终都走 OpenIMSDK.sendMessage —— 在此统一上报发送失败（用户可见的
@@ -403,11 +414,13 @@ export async function loginToOpenIM(
     return false;
   }
 
+  const imUserID = toImUserId(userID);
+  assertNoTimedOutSameUserLogin(imUserID);
+
   let resolveLoginSettled!: () => void;
   const loginSettled = new Promise<void>((resolve) => {
     resolveLoginSettled = resolve;
   });
-  const imUserID = toImUserId(userID);
   const inFlightLogin: InFlightLogin = {
     userID: imUserID,
     settled: loginSettled,
@@ -418,6 +431,7 @@ export async function loginToOpenIM(
   try {
     if (logoutPromise) {
       await logoutPromise;
+      assertNoTimedOutSameUserLogin(imUserID);
     }
     // 换号检测必须在 initSDK 之前（#96）：SDK 还没持有本地库句柄时删目录才安全。
     const wipeSafe = await wipeStaleOpenIMDataOnAccountChange(imUserID);
