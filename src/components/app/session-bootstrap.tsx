@@ -4,7 +4,11 @@ import { fetchCurrentUser } from '@/services/api/auth';
 import { isDefinitiveAuthFailure } from '@/services/api/client';
 import { loginToOpenIM, logoutFromOpenIM } from '@/im/client';
 import { isOpenIMTokenRejectedError } from '@/im/token-errors';
-import { isIMReloginPending, recoverIMSession } from '@/im/token-recovery';
+import {
+  isIMReloginPending,
+  recoverIMSession,
+  getIMRecoveryGeneration,
+} from '@/im/token-recovery';
 import {
   clearIMLoginRetryPending,
   isIMLoginRetryPending,
@@ -60,6 +64,7 @@ export function SessionBootstrap() {
   // 「重复登录」当作成功，所以重复调用是安全的 —— 这正是「补登」能成立的前提。
   // 失败只记欠账、不外抛：IM 掉线不该阻断 app 主流程。
   const ensureOpenIMLogin = useCallback(async (userId: string, token: string) => {
+    const recoveryGenerationBefore = getIMRecoveryGeneration();
     try {
       await loginToOpenIM(userId, token);
       clearIMLoginRetryPending();
@@ -70,6 +75,11 @@ export function SessionBootstrap() {
         // token-recovery 模块自己记（isIMReloginPending），这里不再重复记。
         clearIMLoginRetryPending();
         void recoverIMSession();
+        return;
+      }
+      // 登录期间被踢下线(多端顶替,代次已变)：handleKickedOffline 已清欠账+取消恢复,
+      // 这里绝不能再挂,否则回前台又重登、把顶替本端的新设备再踢下线,重演互踢风暴。
+      if (getIMRecoveryGeneration() !== recoveryGenerationBefore) {
         return;
       }
       // 含连接就绪超时(CONNECTION_NOT_READY)在内的其它失败：token 仍有效，换 token

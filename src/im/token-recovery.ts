@@ -63,6 +63,15 @@ export function isIMReloginPending(): boolean {
 }
 
 /**
+ * 当前恢复代次。cancelIMSessionRecovery（多端顶替被踢下线时调用）会 bump 它。
+ * 登录补登点在发起登录前捕获它、失败后比对：若期间被踢过，就**不要**再挂补登欠账，
+ * 否则回前台会又把本端登回去、把顶替本端的新设备再踢下线，重演互踢风暴。
+ */
+export function getIMRecoveryGeneration(): number {
+  return recoveryGeneration;
+}
+
+/**
  * 取消当前会话的 IM 恢复：清「欠一次恢复」标记 + 作废在飞的 recoverIMSession（bump 代次）。
  * 用于同账号在另一端顶替登录把本端踢下线——绝不能自动换 token 重登，否则会把顶替的新设备
  * 再踢下线，两端互踢成风暴。之后用户如需可自行重新进入触发一次全新的登录。
@@ -84,7 +93,13 @@ async function performRecovery(): Promise<boolean> {
   // 否则回前台又会重登、把顶替的新设备踢下线。置 false 永远安全（取消本就想清欠账）。
   const startGeneration = recoveryGeneration;
   const armReloginDebt = (value: boolean) => {
-    reloginPending = recoveryGeneration === startGeneration ? value : false;
+    // 只有本次恢复仍属当前会话(epoch 未变)且未被取消(代次未变)时才记欠账；否则一律置
+    // false——避免 A 会话的掉队失败给已切入的 B 会话记上莫须有的欠账（epoch 变），
+    // 或被踢下线后又把欠账记回来（代次变）。与成功/epoch 守卫（下方）保持一致。
+    const stillCurrent =
+      useAuthStore.getState().sessionEpoch === startEpoch &&
+      recoveryGeneration === startGeneration;
+    reloginPending = stillCurrent ? value : false;
   };
 
   // 没有业务会话 / onboarding 未完成：成功路径本就不登录 IM，这里保持同一门禁。

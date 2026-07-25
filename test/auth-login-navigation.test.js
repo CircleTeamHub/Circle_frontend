@@ -84,6 +84,7 @@ function loadUseAuth(fixtures = {}) {
     },
     '@/im/token-recovery': {
       recoverIMSession: fixtures.recoverIMSession ?? (async () => false),
+      getIMRecoveryGeneration: fixtures.getIMRecoveryGeneration ?? (() => 0),
     },
     '@/im/token-errors': {
       isOpenIMTokenRejectedError:
