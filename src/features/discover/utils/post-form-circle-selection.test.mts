@@ -1,35 +1,69 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  arePostFormCircleIdsValid,
   filterAvailablePostFormCircles,
+  findUnavailablePostFormCircles,
+  selectablePostFormCircles,
 } from './post-form-circle-selection.ts';
 
-test('filters stale selected circles that are no longer in the available circle list', () => {
+test('filterAvailablePostFormCircles keeps only circles present in the authoritative list and syncs names', () => {
   const filtered = filterAvailablePostFormCircles(
     [
-      { id: '07b8cd30-afdf-3b74-5dfe-6dd5b422364b', name: 'old shanghai' },
-      { id: '07b8cd30-afdf-5b74-9dfe-6dd5b422364b', name: '上海同城交友' },
+      { id: 'c1', name: 'old name' },
+      { id: 'gone', name: 'left circle' },
     ],
-    [{ id: '07b8cd30-afdf-5b74-9dfe-6dd5b422364b', name: '上海同城交友' }],
+    [{ id: 'c1', name: 'new name' }],
   );
-
-  assert.deepEqual(filtered, [
-    { id: '07b8cd30-afdf-5b74-9dfe-6dd5b422364b', name: '上海同城交友' },
-  ]);
+  assert.deepEqual(filtered, [{ id: 'c1', name: 'new name' }]);
 });
 
-test('rejects selected circle ids that only look uuid-shaped but fail RFC UUID variant bits', () => {
-  assert.equal(
-    arePostFormCircleIdsValid([
-      { id: '07b8cd30-afdf-3b74-5dfe-6dd5b422364b', name: 'old shanghai' },
-    ]),
-    false,
+test('filterAvailablePostFormCircles trusts opaque / non-RFC backend ids in the list (no UUID format filtering)', () => {
+  // v7 UUID 与 legacy 短 id：只要后端成员列表返回了就是可用的，绝不能被格式规则
+  // 丢弃（与 plaza-feed-scope「不得静默丢弃后端 circle id」不变量一致）。
+  const available = [
+    { id: '018f1234-5678-7abc-8def-0123456789ab', name: 'v7 circle' },
+    { id: 'legacy-42', name: 'legacy circle' },
+  ];
+  const filtered = filterAvailablePostFormCircles(
+    available.map((c) => ({ ...c })),
+    available,
   );
-  assert.equal(
-    arePostFormCircleIdsValid([
-      { id: '07b8cd30-afdf-5b74-9dfe-6dd5b422364b', name: '上海同城交友' },
-    ]),
-    true,
+  assert.deepEqual(filtered, available);
+});
+
+test('findUnavailablePostFormCircles returns selections missing from the authoritative list', () => {
+  const unavailable = findUnavailablePostFormCircles(
+    [
+      { id: 'c1', name: 'A' },
+      { id: 'gone', name: 'B' },
+    ],
+    [{ id: 'c1', name: 'A' }],
   );
+  assert.deepEqual(unavailable, [{ id: 'gone', name: 'B' }]);
+});
+
+test('findUnavailablePostFormCircles never flags an opaque id that is present in the list', () => {
+  const unavailable = findUnavailablePostFormCircles(
+    [
+      { id: '018f1234-5678-7abc-8def-0123456789ab', name: 'v7' },
+      { id: 'legacy-42', name: 'legacy' },
+    ],
+    [
+      { id: '018f1234-5678-7abc-8def-0123456789ab', name: 'v7' },
+      { id: 'legacy-42', name: 'legacy' },
+    ],
+  );
+  assert.deepEqual(unavailable, []);
+});
+
+test('selectablePostFormCircles merges created and joined, deduping by id', () => {
+  const merged = selectablePostFormCircles(
+    [{ id: 'x', name: 'created x' }],
+    [
+      { id: 'y', name: 'joined y' },
+      { id: 'x', name: 'joined x dup' },
+    ],
+  );
+  assert.equal(merged.length, 2);
+  assert.deepEqual(new Set(merged.map((c) => c.id)), new Set(['x', 'y']));
 });

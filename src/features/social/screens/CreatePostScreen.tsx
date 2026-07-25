@@ -28,9 +28,13 @@ import {
   sanitizeUploadFilename,
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
+import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
 import { usePostFormStore } from '@/features/discover/store/use-post-form-store';
-import { arePostFormCircleIdsValid } from '@/features/discover/utils/post-form-circle-selection';
+import {
+  findUnavailablePostFormCircles,
+  selectablePostFormCircles,
+} from '@/features/discover/utils/post-form-circle-selection';
 import { useTranslation } from 'react-i18next';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
@@ -139,6 +143,7 @@ export default function CreatePostScreen() {
   const router = useRouter();
 
   const prependPlazaPost = useDiscoverStore((s) => s.prependPlazaPost);
+  const fetchMyCircles = useCirclesStore((s) => s.fetchMyCircles);
   const selectedCircles = usePostFormStore((s) => s.selectedCircles);
   const selectedCities = usePostFormStore((s) => s.selectedCities);
   const selectedNote = usePostFormStore((s) => s.selectedNote);
@@ -280,20 +285,43 @@ export default function CreatePostScreen() {
   const handleSubmit = useCallback(async () => {
     if (inFlightRef.current || !canSubmit || submitting) return;
     if (selectedCircles.length === 0) return;
-    if (!arePostFormCircleIdsValid(selectedCircles)) {
-      setSelectedCircles([]);
-      Alert.alert(
-        t('plaza.create.invalidCircleTitle', { defaultValue: '请重新选择圈子' }),
-        t('plaza.create.invalidCircleMessage', {
-          defaultValue: '圈子信息已更新，请重新选择后再发布。',
-        }),
-      );
-      return;
-    }
 
     inFlightRef.current = true;
     setSubmitting(true);
     try {
+      // 发帖前用权威成员列表校验所选圈子仍可用：强制刷新一次，剔除已删除/退出的
+      // 圈子。这是唯一防线，覆盖「离开圈子后未经选择页、直接在已有草稿上发帖」。
+      // 判据只有「是否在成员列表里」，不做 UUID 格式假设 —— 避免误伤后端合法的
+      // 非 RFC-4122 id。刷新失败时不阻断（退回后端最终校验），避免网络抖动误伤。
+      await fetchMyCircles({ force: true });
+      const { myCirclesError, joinedCircles, createdCircles } =
+        useCirclesStore.getState();
+      if (!myCirclesError) {
+        const available = selectablePostFormCircles(
+          createdCircles,
+          joinedCircles,
+        );
+        const unavailable = findUnavailablePostFormCircles(
+          selectedCircles,
+          available,
+        );
+        if (unavailable.length > 0) {
+          const unavailableIds = new Set(unavailable.map((c) => c.id));
+          setSelectedCircles(
+            selectedCircles.filter((c) => !unavailableIds.has(c.id)),
+          );
+          Alert.alert(
+            t('plaza.create.invalidCircleTitle', {
+              defaultValue: '请重新选择圈子',
+            }),
+            t('plaza.create.invalidCircleMessage', {
+              defaultValue: '所选圈子已更新，请重新选择后再发布。',
+            }),
+          );
+          return;
+        }
+      }
+
       const uploadedUrls: string[] = [];
       let failedUploads = 0;
 
@@ -376,6 +404,7 @@ export default function CreatePostScreen() {
     submitting,
     selectedCircles,
     setSelectedCircles,
+    fetchMyCircles,
     images,
     content,
     postTags,

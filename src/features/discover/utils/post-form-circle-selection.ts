@@ -3,17 +3,16 @@ export type PostFormCircleSelection = {
   name: string;
 };
 
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-export function isValidPostFormCircleId(id: string): boolean {
-  return UUID_PATTERN.test(id);
-}
-
-export function arePostFormCircleIdsValid(
-  circles: PostFormCircleSelection[],
-): boolean {
-  return circles.every((circle) => isValidPostFormCircleId(circle.id));
+// 合并「我创建的 + 我加入的」圈子为去重列表，作为发帖时「当前可用圈子」的权威来源。
+// 与 SelectCircleScreen 的合并顺序一致（created 先入，joined 覆盖同 id）。
+export function selectablePostFormCircles<T extends PostFormCircleSelection>(
+  createdCircles: readonly T[],
+  joinedCircles: readonly T[],
+): T[] {
+  const byId = new Map<string, T>();
+  for (const circle of createdCircles) byId.set(circle.id, circle);
+  for (const circle of joinedCircles) byId.set(circle.id, circle);
+  return Array.from(byId.values());
 }
 
 export function arePostFormCircleSelectionsEqual(
@@ -27,14 +26,18 @@ export function arePostFormCircleSelectionsEqual(
   );
 }
 
+// 保留 selected 中「仍在权威成员列表 available 里」的圈子，同步最新名称并去重。
+//
+// available 是 fetchMyCircles 的结果 —— 后端权威列表，其 id 一律信任，绝不做 UUID
+// 之类的格式校验：否则会误删后端合法但非 RFC-4122 的 id（legacy / v6 / v7 等），
+// 与 plaza-feed-scope「不得静默丢弃后端 circle id」的不变量冲突。可用性的唯一判据
+// 就是「是否出现在 available 里」。
 export function filterAvailablePostFormCircles(
   selected: PostFormCircleSelection[],
   available: PostFormCircleSelection[],
 ): PostFormCircleSelection[] {
   const availableById = new Map(
-    available
-      .filter((circle) => isValidPostFormCircleId(circle.id))
-      .map((circle) => [circle.id, circle]),
+    available.map((circle) => [circle.id, circle] as const),
   );
   const seen = new Set<string>();
   const filtered: PostFormCircleSelection[] = [];
@@ -47,4 +50,14 @@ export function filterAvailablePostFormCircles(
   }
 
   return filtered;
+}
+
+// 返回 selected 中「不在权威成员列表 available 里」的圈子（发帖提交前校验用）。
+// 只看 id 是否存在，不比较名称 —— 圈子改名不算失效。
+export function findUnavailablePostFormCircles(
+  selected: PostFormCircleSelection[],
+  available: PostFormCircleSelection[],
+): PostFormCircleSelection[] {
+  const availableIds = new Set(available.map((circle) => circle.id));
+  return selected.filter((circle) => !availableIds.has(circle.id));
 }
