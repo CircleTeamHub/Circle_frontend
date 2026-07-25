@@ -12,8 +12,11 @@ test('CreatePostScreen reconciles selected circles against a freshly refreshed m
   const src = read('src/features/social/screens/CreatePostScreen.tsx');
 
   // 提交前强制刷新权威成员列表再校验（覆盖「离开圈子后不经选择页、直接发帖」）。
+  // 提交前强制刷新，并用「本次 run 的快照」判断（不回读 store，避免并发 force/reset
+  // 代际竞争把别的 run/reset 结果误当成本次提交的权威依据）。
   assert.match(src, /await fetchMyCircles\(\{\s*force:\s*true\s*\}\)/);
-  assert.match(src, /useCirclesStore\.getState\(\)/);
+  assert.match(src, /membership\.ok/);
+  assert.doesNotMatch(src, /useCirclesStore\.getState\(\)/);
   assert.match(src, /selectablePostFormCircles\(/);
   assert.match(src, /findUnavailablePostFormCircles\(/);
 

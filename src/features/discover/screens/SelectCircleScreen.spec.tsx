@@ -19,8 +19,8 @@ const mockCircles = [
 ];
 // 稳定引用：生产中 useShallow 保证 joined/created 引用稳定；若这里每次新建数组，
 // circles useMemo 会不断重算、draft focus effect 反复重置，冲掉用户的勾选。
-const mockJoinedCircles = [mockCircles[1]];
-const mockCreatedCircles = [mockCircles[0]];
+let mockJoinedCircles = [mockCircles[1]];
+let mockCreatedCircles = [mockCircles[0]];
 
 jest.mock('expo-router', () => {
   const ReactModule = jest.requireActual<typeof import('react')>('react');
@@ -103,6 +103,8 @@ jest.mock('@/features/discover/store/use-circles-store', () => ({
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockJoinedCircles = [mockCircles[1]];
+  mockCreatedCircles = [mockCircles[0]];
   mockFocusCallback = null;
   mockCommittedAtBack = null;
   usePostFormStore.setState({
@@ -193,4 +195,23 @@ test('unavailable circle ids are dropped from the draft on focus (display only; 
   expect(usePostFormStore.getState().selectedCircles).toEqual([
     { id: MISSING_CIRCLE_ID, name: 'Deleted Circle' },
   ]);
+});
+
+test('staged toggles survive a circle-list refresh (not reset to committed)', () => {
+  const { rerender } = render(<SelectCircleScreen />);
+
+  // 用户勾上 Circle B（draft 变，committed 仍是 [A]，未按确定）。
+  fireEvent.press(screen.getByText('Circle B'));
+  expect(screen.getByText('selected:2')).toBeTruthy();
+
+  // 模拟 fetchMyCircles 完成：store 用新数组引用替换 joined/created（内容仍含 A、B）。
+  mockJoinedCircles = [{ ...mockCircles[1] }];
+  mockCreatedCircles = [{ ...mockCircles[0] }];
+  act(() => {
+    rerender(<SelectCircleScreen />);
+  });
+
+  // staged 的 B 必须保留，而不是被 committed（[A]）快照重置冲掉。
+  expect(screen.getByText('selected:2')).toBeTruthy();
+  expect(screen.getAllByLabelText('icon:checkmark-circle')).toHaveLength(2);
 });

@@ -293,13 +293,11 @@ export default function CreatePostScreen() {
       // 圈子。这是唯一防线，覆盖「离开圈子后未经选择页、直接在已有草稿上发帖」。
       // 判据只有「是否在成员列表里」，不做 UUID 格式假设 —— 避免误伤后端合法的
       // 非 RFC-4122 id。刷新失败时不阻断（退回后端最终校验），避免网络抖动误伤。
-      await fetchMyCircles({ force: true });
-      const { myCirclesError, joinedCircles, createdCircles } =
-        useCirclesStore.getState();
-      if (!myCirclesError) {
+      const membership = await fetchMyCircles({ force: true });
+      if (membership.ok) {
         const available = selectablePostFormCircles(
-          createdCircles,
-          joinedCircles,
+          membership.created,
+          membership.joined,
         );
         const unavailable = findUnavailablePostFormCircles(
           selectedCircles,
