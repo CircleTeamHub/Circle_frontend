@@ -2287,7 +2287,9 @@
       "inviteeCount": "{{count}}명 초대됨",
       "groupMember": "그룹 멤버",
       "friend": "친구",
-      "singleSubtitle": "음성 통화"
+      "singleSubtitle": "음성 통화",
+      "initiatedByVideo": "{{name}}님이 그룹 영상 통화를 시작했습니다",
+      "initiatedBySingleVideo": "{{name}}님이 영상 통화를 시작했습니다"
     },
     "chooseType": "통화 시작",
     "typeVideo": "영상 통화",

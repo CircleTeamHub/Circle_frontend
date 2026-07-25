@@ -2287,7 +2287,9 @@
       "inviteeCount": "{{count}} 人を招待",
       "groupMember": "グループメンバー",
       "friend": "友だち",
-      "singleSubtitle": "音声通話"
+      "singleSubtitle": "音声通話",
+      "initiatedByVideo": "{{name}} がグループビデオ通話を開始しました",
+      "initiatedBySingleVideo": "{{name}} がビデオ通話を開始しました"
     },
     "chooseType": "通話を開始",
     "typeVideo": "ビデオ通話",

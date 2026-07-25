@@ -2328,7 +2328,9 @@
       "inviteeCount": "{{count}} invited",
       "groupMember": "Group member",
       "friend": "Friend",
-      "singleSubtitle": "Voice call"
+      "singleSubtitle": "Voice call",
+      "initiatedByVideo": "{{name}} started a group video call",
+      "initiatedBySingleVideo": "{{name}} started a video call"
     },
     "chooseType": "Start a call",
     "typeVideo": "Video call",

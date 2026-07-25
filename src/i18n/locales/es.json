@@ -2290,7 +2290,9 @@
       "inviteeCount": "{{count}} invitados",
       "groupMember": "Miembro del grupo",
       "friend": "Amigo",
-      "singleSubtitle": "Llamada de voz"
+      "singleSubtitle": "Llamada de voz",
+      "initiatedByVideo": "{{name}} inició una videollamada grupal",
+      "initiatedBySingleVideo": "{{name}} inició una videollamada"
     },
     "chooseType": "Iniciar llamada",
     "typeVideo": "Videollamada",

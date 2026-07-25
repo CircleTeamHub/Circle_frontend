@@ -2325,7 +2325,9 @@
       "inviteeCount": "{{count}} 人被邀请",
       "groupMember": "群成员",
       "friend": "好友",
-      "singleSubtitle": "语音通话"
+      "singleSubtitle": "语音通话",
+      "initiatedByVideo": "{{name}} 发起群视频",
+      "initiatedBySingleVideo": "{{name}} 发起视频通话"
     },
     "chooseType": "发起通话",
     "typeVideo": "视频通话",
