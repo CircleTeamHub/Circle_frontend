@@ -8,6 +8,7 @@ import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
 import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
+import { invalidateVipLevels } from '@/stores/userVipStore';
 import { resetDiagnosticBreadcrumbs } from '@/utils/client-diagnostics';
 
 type PersistCapableAuthStore = {
@@ -179,6 +180,9 @@ async function performClearLocalSession(sessionEpoch: number) {
   // 发现页 feed 含 plazaMembershipRequired 升级墙标记：不随登出重置的话，切到会员账号
   // 后仍可能停在上一个非会员账号的升级墙，直到手动刷新或重启 app。
   useDiscoverStore.getState().reset();
+  // 清 userId→vipLevel 缓存：否则切到 B 账号后，通讯录/会话里 A 账号见过的用户仍带
+  // A 会话缓存的会员档位（虽同源，但语义上应随会话重建）。
+  invalidateVipLevels();
   // 诊断面包屑是进程级内存缓冲，而切换账号不重启 app。不清的话，上一个账号的
   // circleId / conversationID 会搭下一个账号的错误上报离开设备。
   resetDiagnosticBreadcrumbs();

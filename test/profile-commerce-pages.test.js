@@ -74,8 +74,10 @@ test('customer service exposes recharge/issue/dispute/account with env override 
   // 会话解析较慢时用户可能已离场：解析/兜底完成后先查焦点守卫再跳转，
   // 避免从非活跃屏幕把聊天页推入栈。
   assert.match(screen, /useFocusEffect/);
-  assert.match(screen, /focusedRef/);
-  assert.match(screen, /if \(!focusedRef\.current\) return;/);
+  // 用单调 focus 代次守卫（而非会在重新聚焦后重置的布尔），挡住「离开→回来」期间的迟到解析。
+  assert.match(screen, /focusGenerationRef/);
+  assert.match(screen, /if \(isStale\(\)\) return;/);
+  assert.doesNotMatch(screen, /focusedRef/);
 
   // 失败弹窗不再把原始 SDK/OpenIM 错误文案(可能含未本地化实现细节)展示给用户;
   // 改通用本地化提示 + reportError 上报结构化上下文。

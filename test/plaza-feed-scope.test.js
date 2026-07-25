@@ -36,8 +36,11 @@ test('plaza membership gate recovers across account switch and same-account upgr
   assert.match(store, /plazaQueryVersion: state\.plazaQueryVersion \+ 1/);
   assert.match(store, /plazaLatestRequestId: state\.plazaLatestRequestId \+ 1/);
 
-  // 同账号升级（vipLevel 变会员）后清掉上次留下的会员门并重拉，不用等切号 / 重启。
-  assert.match(feed, /vipLevel > 0 && plazaMembershipRequired/);
+  // 同账号升级（vipLevel 由非会员变会员）后清掉上次留下的会员门并重拉，不用等切号 / 重启。
+  // 必须判升级**跃迁**（prev<=0 && now>0），而不是只判「有门」——否则客户端 vipLevel 陈旧
+  // 为正、服务端权威判定 MEMBERSHIP_REQUIRED 时会无限重试。
+  assert.match(feed, /prevVipLevelRef/);
+  assert.match(feed, /prev <= 0 && vipLevel > 0 && plazaMembershipRequired/);
 });
 
 test('plaza feed does not paginate while the first page is still empty', () => {

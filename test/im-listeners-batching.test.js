@@ -26,6 +26,8 @@ function loadListenersHarness() {
   const setConnectedCalls = [];
   const setErrorCalls = [];
   const recoverCalls = [];
+  const cancelRecoveryCalls = [];
+  const clearRetryCalls = [];
   const state = {
     activeConversation: {
       conversationID: 'conv-1',
@@ -95,7 +97,15 @@ function loadListenersHarness() {
             recoverCalls.push(1);
             return false;
           },
+          cancelIMSessionRecovery: () => cancelRecoveryCalls.push(1),
           isIMReloginPending: () => false,
+        };
+      }
+      if (request === '@/im/login-retry-pending') {
+        return {
+          clearIMLoginRetryPending: () => clearRetryCalls.push(1),
+          markIMLoginRetryPending: () => {},
+          isIMLoginRetryPending: () => false,
         };
       }
       if (request === '@/im/snackbar') {
@@ -138,6 +148,8 @@ function loadListenersHarness() {
     setConnectedCalls,
     setErrorCalls,
     recoverCalls,
+    cancelRecoveryCalls,
+    clearRetryCalls,
   };
 }
 
@@ -216,4 +228,7 @@ test('onKickedOffline is a terminal disconnect, not a token refresh (no relogin 
   assert.deepEqual(harness.setConnectedCalls, [false]);
   assert.equal(harness.setErrorCalls.length, 1);
   assert.equal(harness.recoverCalls.length, 0);
+  // 且必须取消所有补登 / 恢复欠账，否则回前台又会重登、重演互踢风暴。
+  assert.equal(harness.clearRetryCalls.length, 1);
+  assert.equal(harness.cancelRecoveryCalls.length, 1);
 });

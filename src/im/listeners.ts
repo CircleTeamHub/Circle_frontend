@@ -16,7 +16,8 @@ import OpenIMSDK, {
   type UserOnlineState,
 } from '@openim/rn-client-sdk';
 import i18n from '@/i18n';
-import { recoverIMSession } from '@/im/token-recovery';
+import { cancelIMSessionRecovery, recoverIMSession } from '@/im/token-recovery';
+import { clearIMLoginRetryPending } from '@/im/login-retry-pending';
 import { buildChatSnackbar } from '@/im/snackbar';
 import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
 import { useIMStore } from '@/stores/imStore';
@@ -127,6 +128,11 @@ export function bindOpenIMListeners() {
     useIMStore.getState().setConnecting(false);
     useIMStore.getState().setConnected(false);
     useIMStore.getState().setError('您的账号已在其他设备登录');
+    // 关键：取消所有补登 / 恢复欠账。否则回前台时排队的欠账
+    // (isIMLoginRetryPending / reloginPending)或在飞的 recoverIMSession 会把本端又登
+    // 回去、把顶替本端的新设备再踢下线，重演本应避免的互踢风暴。
+    clearIMLoginRetryPending();
+    cancelIMSessionRecovery();
   };
   OpenIMSDK.on('onKickedOffline', handleKickedOffline);
 

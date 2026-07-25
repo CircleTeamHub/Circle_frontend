@@ -32,15 +32,14 @@ export default function CustomerServiceScreen() {
   // ref 守卫同步生效，避免连点两类客服触发两次会话解析 / 两次入栈。
   const openingRef = useRef(false);
 
-  // 屏幕失焦/离场后丢弃迟到的会话解析结果：会话解析可能较慢，若用户在解析完成前退出
-  // 客服中心或跳去别处，不应再把聊天页推入栈（成功与预览兜底两条路径都要挡）。
-  const focusedRef = useRef(true);
+  // 屏幕失焦/离场后丢弃迟到的会话解析结果：会话解析可能较慢，若用户在解析完成前退出客服
+  // 中心或跳去别处（甚至离开又回来），不应再把聊天页推入栈。用**单调递增的 focus 代次**而非
+  // 布尔守卫——布尔在重新聚焦后又变回 true，会让「离开→回来」期间的迟到解析误判为仍在当次。
+  const focusGenerationRef = useRef(0);
   useFocusEffect(
     useCallback(() => {
-      focusedRef.current = true;
-      return () => {
-        focusedRef.current = false;
-      };
+      focusGenerationRef.current += 1;
+      return () => {};
     }, []),
   );
 
@@ -48,14 +47,17 @@ export default function CustomerServiceScreen() {
     async (category: SupportCategory) => {
       if (openingRef.current) return;
       openingRef.current = true;
+      // 捕获本次请求发起时的 focus 代次；完成时精确比对，离场（哪怕又回来）都算过期、丢弃。
+      const requestGeneration = focusGenerationRef.current;
+      const isStale = () => focusGenerationRef.current !== requestGeneration;
       // 会话标题用该类客服名（如「充值客服」），客服侧一眼看清用户走的是哪个入口。
       const title = t(category.labelKey);
       try {
         const conversation = await getOrCreateSingleConversation(
           category.accountId,
         );
-        // 解析期间用户已离场：丢弃结果，不再跳转。
-        if (!focusedRef.current) return;
+        // 解析期间用户已离场（或离开又回来）：丢弃结果，不再跳转。
+        if (isStale()) return;
         router.push(
           getChatDetailHref(
             'profile',
@@ -66,8 +68,8 @@ export default function CustomerServiceScreen() {
           ),
         );
       } catch (error) {
-        // 解析期间用户已离场：不再弹窗、不再跳转。
-        if (!focusedRef.current) return;
+        // 解析期间用户已离场（或离开又回来）：不再弹窗、不再跳转。
+        if (isStale()) return;
         // IM 未接通 / 客服账号尚未建立好友关系等：仍以预览模式进入，保证入口始终可点开。
         if (shouldOpenChatPreview(error)) {
           router.push(getChatDetailHref('profile', category.accountId, title));

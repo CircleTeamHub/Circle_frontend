@@ -54,9 +54,22 @@ let recoveryEpoch: number | null = null;
 // 「欠一次恢复」标记：瞬时失败（网络 / 503 / 限流）后置 true，
 // SessionBootstrap 的回前台监听会消费它再试一次。
 let reloginPending = false;
+// 恢复代次：多端顶替被踢下线时 bump，让在飞的 performRecovery 收尾时自我作废、
+// 不再重登。踢下线**不改** sessionEpoch（业务会话仍有效），故 epoch 守卫拦不住，单列此代次。
+let recoveryGeneration = 0;
 
 export function isIMReloginPending(): boolean {
   return reloginPending;
+}
+
+/**
+ * 取消当前会话的 IM 恢复：清「欠一次恢复」标记 + 作废在飞的 recoverIMSession（bump 代次）。
+ * 用于同账号在另一端顶替登录把本端踢下线——绝不能自动换 token 重登，否则会把顶替的新设备
+ * 再踢下线，两端互踢成风暴。之后用户如需可自行重新进入触发一次全新的登录。
+ */
+export function cancelIMSessionRecovery(): void {
+  reloginPending = false;
+  recoveryGeneration += 1;
 }
 
 async function performRecovery(): Promise<boolean> {
@@ -66,6 +79,13 @@ async function performRecovery(): Promise<boolean> {
     onboardingRequired,
     sessionEpoch: startEpoch,
   } = useAuthStore.getState();
+
+  // 恢复期间若被踢下线（cancelIMSessionRecovery 会 bump 代次），一律不再 re-arm 欠账——
+  // 否则回前台又会重登、把顶替的新设备踢下线。置 false 永远安全（取消本就想清欠账）。
+  const startGeneration = recoveryGeneration;
+  const armReloginDebt = (value: boolean) => {
+    reloginPending = recoveryGeneration === startGeneration ? value : false;
+  };
 
   // 没有业务会话 / onboarding 未完成：成功路径本就不登录 IM，这里保持同一门禁。
   if (!accessToken || !user || onboardingRequired) {
@@ -107,7 +127,7 @@ async function performRecovery(): Promise<boolean> {
       return false;
     }
     // 网络不可达 / 503 / 限流：会话保住，记欠账，回前台再试。
-    reloginPending = true;
+    armReloginDebt(true);
     if (isDev) {
       console.warn(
         '[openim] im-token refresh failed; will retry on next foreground',
@@ -146,7 +166,13 @@ async function performRecovery(): Promise<boolean> {
 
   if (!imLoginExecutor) {
     // client.ts 未被求值（理论上不可能：listeners 由它绑定）。记欠账兜底。
-    reloginPending = true;
+    armReloginDebt(true);
+    return false;
+  }
+
+  // 恢复期间被踢下线（cancelIMSessionRecovery bump 了代次）：到这一步就别再重登了，
+  // 否则会把顶替本端的新设备再踢下线。
+  if (recoveryGeneration !== startGeneration) {
     return false;
   }
 
@@ -170,10 +196,10 @@ async function performRecovery(): Promise<boolean> {
       // round 3：欠账不动（可能属于 B 会话）。
       return false;
     }
-    reloginPending = !loggedIn;
+    armReloginDebt(!loggedIn);
     return loggedIn;
   } catch (error) {
-    reloginPending = true;
+    armReloginDebt(true);
     if (isDev) {
       console.warn(
         '[openim] re-login with fresh im-token failed; will retry on next foreground',

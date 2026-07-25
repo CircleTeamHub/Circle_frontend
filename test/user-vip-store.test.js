@@ -52,6 +52,16 @@ test('userVipStore drops a cached member when a later batch omits their id (down
   assert.match(store, /delete levels\[id\]/);
 });
 
+test('userVipStore refreshes long-lived mounted names on foreground, not only on new requests', () => {
+  const store = read('src/stores/userVipStore.ts');
+  // 回前台清新鲜度 + bump refreshTick;hook 订阅 tick,即便 userId 没变也重新请求一次,
+  // 让长期挂载的通讯录/会话/通知行在 TTL 过期后也能刷新到升级/降级后的档位。
+  assert.match(store, /AppState\.addEventListener\('change'/);
+  assert.match(store, /status === 'active'/);
+  assert.match(store, /refreshTick/);
+  assert.match(store, /\[userId, refreshTick\]/);
+});
+
 test('fetchVipLevels posts ids and defends the response shape', () => {
   const users = read('src/services/api/users.ts');
   assert.match(users, /export async function fetchVipLevels/);

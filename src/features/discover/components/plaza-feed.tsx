@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
   ActivityIndicator,
@@ -160,11 +160,18 @@ export const PlazaFeed: React.FC = () => {
     programEnabled,
   ]);
 
-  // 同账号升级(如客服升级)后 vipLevel 变会员:上次留下的 plazaMembershipRequired 会让
-  // membershipBlocked 一直为真、上面的拉取 effect 不再发请求去清它。这里显式重拉一次
-  // (fetchPlazaPosts 开头把门置 false),让已升级的用户立刻能看 feed、无需切号或重启。
+  // 同账号升级(如客服升级)后 vipLevel 由非会员变会员:上次留下的 plazaMembershipRequired
+  // 会让 membershipBlocked 一直为真、上面的拉取 effect 不再发请求去清它。这里在「实际发生
+  // 升级」的那一次显式重拉(fetchPlazaPosts 开头把门置 false),让已升级用户立刻能看 feed。
+  //
+  // 关键:必须判「vipLevel 的升级跃迁」而不是只判 `vipLevel>0 && 有门`——否则当客户端
+  // vipLevel 陈旧为正、但会员已到期/降级、服务端权威返回 PLAZA_MEMBERSHIP_REQUIRED 时,
+  // 重拉→门清→再被拒→门起→再重拉,会无限循环打服务端。
+  const prevVipLevelRef = useRef(vipLevel);
   useEffect(() => {
-    if (vipLevel > 0 && plazaMembershipRequired) {
+    const prev = prevVipLevelRef.current;
+    prevVipLevelRef.current = vipLevel;
+    if (prev <= 0 && vipLevel > 0 && plazaMembershipRequired) {
       fetchPlazaPosts(true);
     }
   }, [vipLevel, plazaMembershipRequired, fetchPlazaPosts]);

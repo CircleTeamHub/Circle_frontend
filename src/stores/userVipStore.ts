@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { AppState } from 'react-native';
 import { create } from 'zustand';
 import { fetchVipLevels } from '@/services/api/users';
 
@@ -15,9 +16,15 @@ import { fetchVipLevels } from '@/services/api/users';
  */
 interface UserVipState {
   levels: Record<string, number>;
+  // 回前台时递增：订阅它的 useUserVipLevel 会重新按 userId 请求一次，让长期挂载的行
+  // （通讯录 / 会话 / 通知）在 TTL 过期后也刷新到升级 / 降级后的档位，而不必等组件重挂。
+  refreshTick: number;
 }
 
-export const useUserVipStore = create<UserVipState>(() => ({ levels: {} }));
+export const useUserVipStore = create<UserVipState>(() => ({
+  levels: {},
+  refreshTick: 0,
+}));
 
 const BATCH_DELAY_MS = 60;
 const MAX_IDS_PER_REQUEST = 200;
@@ -58,6 +65,17 @@ function isVipLevelFresh(userId: string): boolean {
   const at = fetchedAt.get(userId);
   return at !== undefined && Date.now() - at < CACHE_TTL_MS;
 }
+
+// 回前台刷新：清新鲜度标记 + 在途簿记并 bump refreshTick，让所有已挂载的 useUserVipLevel
+// 重新请求一次（拉到离开期间发生的升级 / 降级）。只清 fetchedAt / requested、不动 levels——
+// 重拉回来前先按旧值显示，避免闪烁。回前台是拿到最新会员态最自然的时机。
+AppState.addEventListener('change', (status) => {
+  if (status === 'active') {
+    fetchedAt.clear();
+    requested.clear();
+    useUserVipStore.setState((s) => ({ refreshTick: s.refreshTick + 1 }));
+  }
+});
 
 async function flush(): Promise<void> {
   flushTimer = null;
@@ -124,7 +142,8 @@ export function requestVipLevel(userId: string): void {
 export function invalidateVipLevels(): void {
   requested.clear();
   fetchedAt.clear();
-  useUserVipStore.setState({ levels: {} });
+  // bump refreshTick：已挂载的 useUserVipLevel 会重新请求（清空后按新会话重新拉取）。
+  useUserVipStore.setState((s) => ({ levels: {}, refreshTick: s.refreshTick + 1 }));
 }
 
 /**
@@ -135,10 +154,13 @@ export function useUserVipLevel(userId?: string | null): number | undefined {
   const level = useUserVipStore((state) =>
     userId ? state.levels[userId] : undefined,
   );
+  // 订阅 refreshTick：回前台 bump 后，即便 userId 没变也会重新请求一次（TTL 已在
+  // 回前台时清空，故会真正重新拉取升级 / 降级后的档位）。
+  const refreshTick = useUserVipStore((state) => state.refreshTick);
   useEffect(() => {
     if (userId) {
       requestVipLevel(userId);
     }
-  }, [userId]);
+  }, [userId, refreshTick]);
   return level;
 }
