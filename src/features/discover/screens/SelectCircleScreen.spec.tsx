@@ -1,10 +1,17 @@
 import React from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react-native';
 import SelectCircleScreen from './SelectCircleScreen';
 import { usePostFormStore } from '@/features/discover/store/use-post-form-store';
 
 const mockRouter = { back: jest.fn() };
-const mockFetchMyCircles = jest.fn();
+// 组件用 fetchMyCircles().finally(...) 标记「拉取完成」，故必须返回 Promise。
+const mockFetchMyCircles = jest.fn(() => Promise.resolve());
 let mockFocusCallback: (() => void) | null = null;
 let mockCommittedAtBack: { id: string; name: string }[] | null = null;
 
@@ -19,6 +26,10 @@ const mockCircles = [
   { id: CIRCLE_A_ID, name: 'Circle A', description: '', avatarUrl: null },
   { id: CIRCLE_B_ID, name: 'Circle B', description: '', avatarUrl: null },
 ];
+
+// 可变的 my-circles 快照；测试可切成空列表来模拟「退出最后一个圈子后成功返回空」。
+let mockJoinedCircles: typeof mockCircles = [mockCircles[1]];
+let mockCreatedCircles: typeof mockCircles = [mockCircles[0]];
 
 jest.mock('expo-router', () => {
   const ReactModule = jest.requireActual<typeof import('react')>('react');
@@ -91,8 +102,8 @@ jest.mock('@/components/ui/divider', () => ({ Divider: () => null }));
 jest.mock('@/features/discover/store/use-circles-store', () => ({
   useCirclesStore: (selector: (state: unknown) => unknown) =>
     selector({
-      joinedCircles: [mockCircles[1]],
-      createdCircles: [mockCircles[0]],
+      joinedCircles: mockJoinedCircles,
+      createdCircles: mockCreatedCircles,
       myCirclesLoading: false,
       myCirclesError: null,
       fetchMyCircles: mockFetchMyCircles,
@@ -101,6 +112,9 @@ jest.mock('@/features/discover/store/use-circles-store', () => ({
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockFetchMyCircles.mockImplementation(() => Promise.resolve());
+  mockJoinedCircles = [mockCircles[1]];
+  mockCreatedCircles = [mockCircles[0]];
   mockFocusCallback = null;
   mockCommittedAtBack = null;
   usePostFormStore.setState({
@@ -111,8 +125,9 @@ beforeEach(() => {
   });
 });
 
-test('ordinary back abandons staged circle edits', () => {
+test('ordinary back abandons staged circle edits', async () => {
   render(<SelectCircleScreen />);
+  await act(async () => {}); // flush fetchMyCircles().finally → setMyCirclesFetched
 
   fireEvent.press(screen.getByText('Circle B'));
   expect(screen.getByText('selected:2')).toBeTruthy();
@@ -128,8 +143,9 @@ test('ordinary back abandons staged circle edits', () => {
   ]);
 });
 
-test('empty draft disables confirmation without changing the committed selection', () => {
+test('empty draft disables confirmation without changing the committed selection', async () => {
   render(<SelectCircleScreen />);
+  await act(async () => {});
 
   fireEvent.press(screen.getByText('Circle A'));
 
@@ -150,8 +166,9 @@ test('empty draft disables confirmation without changing the committed selection
   ]);
 });
 
-test('refocus resets an abandoned draft and confirm commits only the fresh draft', () => {
+test('refocus resets an abandoned draft and confirm commits only the fresh draft', async () => {
   render(<SelectCircleScreen />);
+  await act(async () => {});
 
   expect(screen.getAllByLabelText('icon:checkmark-circle')).toHaveLength(1);
   fireEvent.press(screen.getByText('Circle B'));
@@ -177,18 +194,19 @@ test('refocus resets an abandoned draft and confirm commits only the fresh draft
   expect(mockRouter.back).toHaveBeenCalledTimes(1);
 });
 
-test('stale uuid-shaped circle ids are dropped from the draft on focus', () => {
+test('stale uuid-shaped circle ids are dropped from the draft on focus', async () => {
   usePostFormStore.setState({
     selectedCircles: [{ id: LEGACY_CIRCLE_A_ID, name: 'Old Circle A' }],
   });
 
   render(<SelectCircleScreen />);
+  await act(async () => {});
 
   expect(screen.getByText('selected:0')).toBeTruthy();
   expect(screen.queryAllByLabelText('icon:checkmark-circle')).toHaveLength(0);
 });
 
-test('committed selection drops well-formed but unavailable circles on focus (plain back keeps the reconciled set)', () => {
+test('committed selection drops well-formed but unavailable circles after a successful fetch (plain back keeps the reconciled set)', async () => {
   usePostFormStore.setState({
     selectedCircles: [
       { id: CIRCLE_A_ID, name: 'Circle A' },
@@ -198,27 +216,49 @@ test('committed selection drops well-formed but unavailable circles on focus (pl
 
   render(<SelectCircleScreen />);
 
-  // 已删除/退出的圈子（格式合法但不在 myCircles）从 committed 中剔除，
-  // 不再依赖用户按「确定」。
-  expect(usePostFormStore.getState().selectedCircles).toEqual([
-    { id: CIRCLE_A_ID, name: 'Circle A' },
-  ]);
+  // 拉取成功后，已删除/退出的圈子（格式合法但不在 myCircles）从 committed 剔除，
+  // 不依赖用户按「确定」。
+  await waitFor(() => {
+    expect(usePostFormStore.getState().selectedCircles).toEqual([
+      { id: CIRCLE_A_ID, name: 'Circle A' },
+    ]);
+  });
 
   // 直接返回（未按确定），committed 仍是调和后的集合。
   fireEvent.press(screen.getByLabelText('back'));
   expect(mockCommittedAtBack).toEqual([{ id: CIRCLE_A_ID, name: 'Circle A' }]);
 });
 
-test('committed selection is cleared when the only selected circle is unavailable', () => {
+test('committed selection is cleared when the only selected circle is unavailable', async () => {
   usePostFormStore.setState({
     selectedCircles: [{ id: MISSING_CIRCLE_ID, name: 'Deleted Circle' }],
   });
 
   render(<SelectCircleScreen />);
 
-  // 唯一选择失效 → 调和为空。确定键被禁用，但 committed 已在 focus 时清空，
-  // 回到发帖页时 selectedCircles 为空，不会提交失效的 circleId。
-  expect(usePostFormStore.getState().selectedCircles).toEqual([]);
+  // 唯一选择失效 → 调和为空。回到发帖页时 selectedCircles 为空，不会提交失效 ID。
+  await waitFor(() => {
+    expect(usePostFormStore.getState().selectedCircles).toEqual([]);
+  });
+
+  fireEvent.press(screen.getByLabelText('back'));
+  expect(mockCommittedAtBack).toEqual([]);
+});
+
+test('committed selection is cleared after a successful empty circle fetch (loading → empty → back)', async () => {
+  // 用户退出了最后一个圈子：fetchMyCircles 成功返回空 joined/created。
+  mockJoinedCircles = [];
+  mockCreatedCircles = [];
+  usePostFormStore.setState({
+    selectedCircles: [{ id: MISSING_CIRCLE_ID, name: 'Deleted Circle' }],
+  });
+
+  render(<SelectCircleScreen />);
+
+  // Codex P2：权威结果为空也要清掉失效旧选择 —— 不再被「列表非空」守卫挡住。
+  await waitFor(() => {
+    expect(usePostFormStore.getState().selectedCircles).toEqual([]);
+  });
 
   fireEvent.press(screen.getByLabelText('back'));
   expect(mockCommittedAtBack).toEqual([]);

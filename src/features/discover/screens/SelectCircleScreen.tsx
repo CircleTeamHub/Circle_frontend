@@ -83,8 +83,18 @@ export default function SelectCircleScreen() {
     })),
   );
 
+  // 记录「已完成一次拉取」（成功或失败都算完成）。fetchMyCircles 内部 catch 了
+  // 错误、总是 resolve，故用 store 的 myCirclesError 区分成败；单独跟踪完成状态，
+  // 是为了让「成功但返回空列表」也能触发一次 committed 调和（见下方 effect）。
+  const [myCirclesFetched, setMyCirclesFetched] = useState(false);
   useEffect(() => {
-    fetchMyCircles();
+    let active = true;
+    void fetchMyCircles().finally(() => {
+      if (active) setMyCirclesFetched(true);
+    });
+    return () => {
+      active = false;
+    };
   }, [fetchMyCircles]);
 
   const circles = useMemo(() => {
@@ -127,23 +137,35 @@ export default function SelectCircleScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      const available = circlesRef.current;
-      const next = filterAvailablePostFormCircles(selectedCircles, available);
-      setDraftCircles((current) =>
-        arePostFormCircleSelectionsEqual(current, next) ? current : next,
-      );
-      // 已加载到可用圈子时，把 committed 选择也一起调和：剔除已删除/退出（不在
-      // myCircles 里）的圈子并同步最新名称。这样即便用户直接返回（未按确定）、或
-      // 失效圈子是唯一选择、确定键被禁用，也不会把失效的 circleId 带回发帖页。
-      // available 为空（加载中/尚未加载）时跳过，避免误清空已选择的圈子。
-      if (
-        available.length > 0 &&
-        !arePostFormCircleSelectionsEqual(next, selectedCircles)
-      ) {
-        setSelectedCircles(next);
-      }
-    }, [circleSelectionKey, selectedCircles, setSelectedCircles]),
+      setDraftCircles((current) => {
+        const next = filterAvailablePostFormCircles(
+          selectedCircles,
+          circlesRef.current,
+        );
+        return arePostFormCircleSelectionsEqual(current, next) ? current : next;
+      });
+    }, [circleSelectionKey, selectedCircles]),
   );
+
+  // 拉取成功完成后（含「成功返回空列表」——用户退出了最后一个圈子），把 committed
+  // 选择与最新可用圈子调和一次：剔除已删除/退出的圈子并同步名称，避免把失效的
+  // circleId 带回发帖页（CreatePostScreen 的 arePostFormCircleIdsValid 只校验
+  // UUID 格式拦不住）。门槛用「已完成拉取且无错误」而非「列表非空」——否则最后一个
+  // 圈子退出、成功返回空列表时永远调和不了；加载中/未完成或失败时跳过，避免用
+  // 空/陈旧列表误清空已选择的圈子。
+  useEffect(() => {
+    if (!myCirclesFetched || myCirclesError) return;
+    const reconciled = filterAvailablePostFormCircles(selectedCircles, circles);
+    if (!arePostFormCircleSelectionsEqual(reconciled, selectedCircles)) {
+      setSelectedCircles(reconciled);
+    }
+  }, [
+    myCirclesFetched,
+    myCirclesError,
+    circles,
+    selectedCircles,
+    setSelectedCircles,
+  ]);
 
   const selectedIds = useMemo(
     () => new Set(draftCircles.map((c) => c.id)),
