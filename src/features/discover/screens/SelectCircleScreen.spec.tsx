@@ -11,6 +11,9 @@ let mockCommittedAtBack: { id: string; name: string }[] | null = null;
 const CIRCLE_A_ID = '07b8cd30-afdf-5b74-9dfe-6dd5b422364b';
 const CIRCLE_B_ID = 'cb62ccd9-303f-550c-a5ab-ff9193bdbbd0';
 const LEGACY_CIRCLE_A_ID = '07b8cd30-afdf-3b74-5dfe-6dd5b422364b';
+// 格式合法的 UUID，但不在 mockCircles 里 —— 模拟「圈子被删除/退出」（区别于
+// LEGACY_CIRCLE_A_ID 的「UUID 格式失效」）。
+const MISSING_CIRCLE_ID = '11111111-1111-4111-8111-111111111111';
 
 const mockCircles = [
   { id: CIRCLE_A_ID, name: 'Circle A', description: '', avatarUrl: null },
@@ -183,4 +186,40 @@ test('stale uuid-shaped circle ids are dropped from the draft on focus', () => {
 
   expect(screen.getByText('selected:0')).toBeTruthy();
   expect(screen.queryAllByLabelText('icon:checkmark-circle')).toHaveLength(0);
+});
+
+test('committed selection drops well-formed but unavailable circles on focus (plain back keeps the reconciled set)', () => {
+  usePostFormStore.setState({
+    selectedCircles: [
+      { id: CIRCLE_A_ID, name: 'Circle A' },
+      { id: MISSING_CIRCLE_ID, name: 'Deleted Circle' },
+    ],
+  });
+
+  render(<SelectCircleScreen />);
+
+  // 已删除/退出的圈子（格式合法但不在 myCircles）从 committed 中剔除，
+  // 不再依赖用户按「确定」。
+  expect(usePostFormStore.getState().selectedCircles).toEqual([
+    { id: CIRCLE_A_ID, name: 'Circle A' },
+  ]);
+
+  // 直接返回（未按确定），committed 仍是调和后的集合。
+  fireEvent.press(screen.getByLabelText('back'));
+  expect(mockCommittedAtBack).toEqual([{ id: CIRCLE_A_ID, name: 'Circle A' }]);
+});
+
+test('committed selection is cleared when the only selected circle is unavailable', () => {
+  usePostFormStore.setState({
+    selectedCircles: [{ id: MISSING_CIRCLE_ID, name: 'Deleted Circle' }],
+  });
+
+  render(<SelectCircleScreen />);
+
+  // 唯一选择失效 → 调和为空。确定键被禁用，但 committed 已在 focus 时清空，
+  // 回到发帖页时 selectedCircles 为空，不会提交失效的 circleId。
+  expect(usePostFormStore.getState().selectedCircles).toEqual([]);
+
+  fireEvent.press(screen.getByLabelText('back'));
+  expect(mockCommittedAtBack).toEqual([]);
 });

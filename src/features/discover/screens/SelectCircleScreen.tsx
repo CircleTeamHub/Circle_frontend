@@ -127,14 +127,22 @@ export default function SelectCircleScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      setDraftCircles((current) => {
-        const next = filterAvailablePostFormCircles(
-          selectedCircles,
-          circlesRef.current,
-        );
-        return arePostFormCircleSelectionsEqual(current, next) ? current : next;
-      });
-    }, [circleSelectionKey, selectedCircles]),
+      const available = circlesRef.current;
+      const next = filterAvailablePostFormCircles(selectedCircles, available);
+      setDraftCircles((current) =>
+        arePostFormCircleSelectionsEqual(current, next) ? current : next,
+      );
+      // 已加载到可用圈子时，把 committed 选择也一起调和：剔除已删除/退出（不在
+      // myCircles 里）的圈子并同步最新名称。这样即便用户直接返回（未按确定）、或
+      // 失效圈子是唯一选择、确定键被禁用，也不会把失效的 circleId 带回发帖页。
+      // available 为空（加载中/尚未加载）时跳过，避免误清空已选择的圈子。
+      if (
+        available.length > 0 &&
+        !arePostFormCircleSelectionsEqual(next, selectedCircles)
+      ) {
+        setSelectedCircles(next);
+      }
+    }, [circleSelectionKey, selectedCircles, setSelectedCircles]),
   );
 
   const selectedIds = useMemo(
