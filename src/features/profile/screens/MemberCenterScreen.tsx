@@ -557,8 +557,16 @@ export default function MemberCenterScreen() {
                 defaultValue: '当前所有用户免费享有黄金额度',
               })}
             </Text>
-            <Text style={d.marketingText}>单群 400 人 · 可加入 300 个群</Text>
-            <Text style={d.marketingText}>笔记 500 条 · 城市筛选 10 个</Text>
+            <Text style={d.marketingText}>
+              {t('profile.membership.marketing.groupQuota', {
+                defaultValue: '单群 400 人 · 可加入 300 个群',
+              })}
+            </Text>
+            <Text style={d.marketingText}>
+              {t('profile.membership.marketing.noteQuota', {
+                defaultValue: '笔记 500 条 · 城市筛选 10 个',
+              })}
+            </Text>
           </View>
         </ScrollView>
       ) : (

@@ -76,11 +76,20 @@ async function flush(): Promise<void> {
         fetchedAt.set(id, now);
         retryCount.delete(id);
       });
-      if (Object.keys(result).length > 0) {
-        useUserVipStore.setState((state) => ({
-          levels: { ...state.levels, ...result },
-        }));
-      }
+      // 用本批响应重建档位：返回了的写入；请求了但**未返回**的（= 非会员 / 已降级）从
+      // 缓存删除——否则一个到期降级的用户会一直保留会员名字特效。只动本批 id，不碰其他缓存；
+      // 无实际变化时返回原 state，避免无谓重渲染。
+      useUserVipStore.setState((state) => {
+        const levels = { ...state.levels, ...result };
+        let changed = Object.keys(result).length > 0;
+        for (const id of chunk) {
+          if (!(id in result) && id in levels) {
+            delete levels[id];
+            changed = true;
+          }
+        }
+        return changed ? { levels } : state;
+      });
     } catch {
       // 尽力而为：失败就让这些名字先按普通样式显示；从 requested 移除，并主动排一次
       // 有界重试（连通性恢复后名字自动亮起，无需等组件重挂）。

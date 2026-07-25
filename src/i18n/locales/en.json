@@ -1441,7 +1441,9 @@
       "currentTierBadge": "Current",
       "marketing": {
         "goldAccess": "All users currently enjoy Gold-tier limits for free",
-        "title": "Membership features are not open yet"
+        "title": "Membership features are not open yet",
+        "groupQuota": "Up to 400 members per group · join 300 groups",
+        "noteQuota": "500 notes · 10 city filters"
       }
     },
     "memberRules": {

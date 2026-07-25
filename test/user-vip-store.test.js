@@ -44,6 +44,14 @@ test('userVipStore retries a transiently failed batch without needing a remount'
   assert.match(store, /retryCount\.delete\(id\)/);
 });
 
+test('userVipStore drops a cached member when a later batch omits their id (downgrade/expiry)', () => {
+  const store = read('src/stores/userVipStore.ts');
+  // 请求了但响应未返回的 id（= 非会员/已降级）要从 levels 删除，而不是只合并 result、
+  // 让旧正值一直留着导致名字特效不消。
+  assert.match(store, /!\(id in result\)/);
+  assert.match(store, /delete levels\[id\]/);
+});
+
 test('fetchVipLevels posts ids and defends the response shape', () => {
   const users = read('src/services/api/users.ts');
   assert.match(users, /export async function fetchVipLevels/);

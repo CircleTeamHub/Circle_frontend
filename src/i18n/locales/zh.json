@@ -1438,7 +1438,9 @@
       "currentTierBadge": "当前",
       "marketing": {
         "goldAccess": "当前所有用户免费享有黄金额度",
-        "title": "会员功能暂未开放"
+        "title": "会员功能暂未开放",
+        "groupQuota": "单群 400 人 · 可加入 300 个群",
+        "noteQuota": "笔记 500 条 · 城市筛选 10 个"
       }
     },
     "memberRules": {

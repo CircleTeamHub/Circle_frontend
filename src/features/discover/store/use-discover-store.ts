@@ -131,16 +131,18 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
     set((s) => ({ plazaPosts: s.plazaPosts.filter((p) => p.id !== id) })),
 
   reset: () =>
-    set({
+    set((state) => ({
       plazaPosts: [],
       plazaCursor: null,
       plazaHasMore: true,
       plazaLoading: false,
       plazaRefreshing: false,
       plazaMembershipRequired: false,
-      plazaQueryVersion: 0,
-      plazaLatestRequestId: 0,
+      // 请求代次单调递增、不清零：否则登出重置后新账号的请求（version 0 / id 1）会和上个
+      // 账号仍在途的请求撞号，A 的迟到成功 / 门错误会通过时新守卫覆盖 B 的 feed / 门。
+      plazaQueryVersion: state.plazaQueryVersion + 1,
+      plazaLatestRequestId: state.plazaLatestRequestId + 1,
       selectedCircleId: null,
       selectedCity: null,
-    }),
+    })),
 }));

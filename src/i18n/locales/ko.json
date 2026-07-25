@@ -1878,7 +1878,9 @@
       "currentTierBadge": "현재",
       "marketing": {
         "goldAccess": "현재 모든 사용자가 골드 등급 한도를 무료로 이용할 수 있습니다",
-        "title": "멤버십 기능은 아직 오픈되지 않았습니다"
+        "title": "멤버십 기능은 아직 오픈되지 않았습니다",
+        "groupQuota": "그룹당 400명 · 300개 그룹 가입 가능",
+        "noteQuota": "노트 500개 · 도시 필터 10개"
       }
     },
     "memberRules": {

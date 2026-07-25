@@ -27,6 +27,19 @@ test('plaza feed preserves backend circle ids instead of silently dropping them'
   assert.match(store, /selectedCircleId: circleId,/);
 });
 
+test('plaza membership gate recovers across account switch and same-account upgrade', () => {
+  const feed = read('src/features/discover/components/plaza-feed.tsx');
+  const store = read('src/features/discover/store/use-discover-store.ts');
+
+  // 登出重置(reset)让请求代次单调递增、不清零——否则新账号的请求会与旧账号仍在途的
+  // 请求撞号，迟到响应通过时新守卫覆盖新账号的 feed / 门。
+  assert.match(store, /plazaQueryVersion: state\.plazaQueryVersion \+ 1/);
+  assert.match(store, /plazaLatestRequestId: state\.plazaLatestRequestId \+ 1/);
+
+  // 同账号升级（vipLevel 变会员）后清掉上次留下的会员门并重拉，不用等切号 / 重启。
+  assert.match(feed, /vipLevel > 0 && plazaMembershipRequired/);
+});
+
 test('plaza feed does not paginate while the first page is still empty', () => {
   const source = read('src/features/discover/components/plaza-feed.tsx');
 

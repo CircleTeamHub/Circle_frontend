@@ -160,6 +160,15 @@ export const PlazaFeed: React.FC = () => {
     programEnabled,
   ]);
 
+  // 同账号升级(如客服升级)后 vipLevel 变会员:上次留下的 plazaMembershipRequired 会让
+  // membershipBlocked 一直为真、上面的拉取 effect 不再发请求去清它。这里显式重拉一次
+  // (fetchPlazaPosts 开头把门置 false),让已升级的用户立刻能看 feed、无需切号或重启。
+  useEffect(() => {
+    if (vipLevel > 0 && plazaMembershipRequired) {
+      fetchPlazaPosts(true);
+    }
+  }, [vipLevel, plazaMembershipRequired, fetchPlazaPosts]);
+
   const handleRefresh = useCallback(() => {
     fetchPlazaPosts(true);
   }, [fetchPlazaPosts]);
