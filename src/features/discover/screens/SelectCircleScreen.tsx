@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -103,14 +103,6 @@ export default function SelectCircleScreen() {
     for (const c of joinedCircles) map.set(c.id, c);
     return Array.from(map.values());
   }, [joinedCircles, createdCircles]);
-  const circleSelectionKey = useMemo(
-    () => circles.map((c) => `${c.id}:${c.name}`).join('|'),
-    [circles],
-  );
-  const circlesRef = useRef(circles);
-  useEffect(() => {
-    circlesRef.current = circles;
-  }, [circles]);
 
   const d = useMemo(
     () => ({
@@ -138,13 +130,10 @@ export default function SelectCircleScreen() {
   useFocusEffect(
     useCallback(() => {
       setDraftCircles((current) => {
-        const next = filterAvailablePostFormCircles(
-          selectedCircles,
-          circlesRef.current,
-        );
+        const next = filterAvailablePostFormCircles(selectedCircles, circles);
         return arePostFormCircleSelectionsEqual(current, next) ? current : next;
       });
-    }, [circleSelectionKey, selectedCircles]),
+    }, [circles, selectedCircles]),
   );
 
   // 拉取成功完成后（含「成功返回空列表」——用户退出了最后一个圈子），把 committed
