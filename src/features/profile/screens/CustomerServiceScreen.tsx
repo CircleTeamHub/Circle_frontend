@@ -39,7 +39,11 @@ export default function CustomerServiceScreen() {
   useFocusEffect(
     useCallback(() => {
       focusGenerationRef.current += 1;
-      return () => {};
+      return () => {
+        // 失焦（离场）也 bump：否则「离开后不再回来」、而会话解析刚好在离开后 resolve 时，
+        // 代次没变、isStale() 仍为 false，会从非活跃屏幕误把聊天页推入栈。
+        focusGenerationRef.current += 1;
+      };
     }, []),
   );
 

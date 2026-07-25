@@ -62,6 +62,15 @@ test('userVipStore refreshes long-lived mounted names on foreground, not only on
   assert.match(store, /\[userId, refreshTick\]/);
 });
 
+test('userVipStore drops superseded batch responses (no out-of-order stale overwrite)', () => {
+  const store = read('src/stores/userVipStore.ts');
+  // 回前台/失效会触发对同一批 id 的第二次请求;若较新的先返回,旧响应到达时必须丢弃,
+  // 否则会用可能已过期的档位覆盖回去。flush 捕获起始代次,代次变了就丢弃本响应。
+  assert.match(store, /batchGeneration/);
+  assert.match(store, /const startGeneration = batchGeneration/);
+  assert.match(store, /if \(batchGeneration !== startGeneration\)/);
+});
+
 test('fetchVipLevels posts ids and defends the response shape', () => {
   const users = read('src/services/api/users.ts');
   assert.match(users, /export async function fetchVipLevels/);

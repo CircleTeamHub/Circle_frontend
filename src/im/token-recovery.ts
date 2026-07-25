@@ -178,10 +178,13 @@ async function performRecovery(): Promise<boolean> {
 
   try {
     const loggedIn = await imLoginExecutor(user.id, imToken);
-    // review 修复：executor await 期间用户可能已登出/切号 —— 此时刚完成的是
-    // 「旧用户」的 OpenIM 登录，放着不管消息会路由到错误身份下。拆掉并按
-    // 失败返回（新会话的 IM 登录由它自己的启动流程负责）。
-    if (useAuthStore.getState().sessionEpoch !== startEpoch) {
+    // review 修复：executor await 期间用户可能已登出/切号，或**被踢下线**（多端顶替，
+    // cancelIMSessionRecovery bump 了代次但**不改** sessionEpoch）—— 此时刚完成的登录不该
+    // 保留（切号=旧用户身份会串消息;踢下线=会把顶替本端的新设备再踢下线）。拆掉并按失败返回。
+    if (
+      useAuthStore.getState().sessionEpoch !== startEpoch ||
+      recoveryGeneration !== startGeneration
+    ) {
       // round 2 review：拆除范围限定「SDK 仍连着旧用户」——B 会话若已完成
       // 自己的 IM 登录，无差别 logout 会把刚建好的新会话一并拆掉。
       // currentUserID 是 IM 侧 id（toImUserId 归一），与旧用户比对后再动手。

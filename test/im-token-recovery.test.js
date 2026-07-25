@@ -492,3 +492,14 @@ test('刷新后重试仍 401 → 清 session 并抛 auth-retry-failed (#111)', (
   assert.match(retryBlock, /retryRequest\.res\.status === 401/);
   assert.match(retryBlock, /clearLocalSession\(requestSessionEpoch\)/);
 });
+
+test('recovery rechecks kick-cancellation after IM login settles, not only before the await', () => {
+  const src = read('src/im/token-recovery.ts');
+  // 踢下线在登录 await 期间到达:cancelIMSessionRecovery bump 代次但不改 sessionEpoch。
+  // 登录返回后的拆除守卫必须同时判 sessionEpoch 和代次,否则会接受这次迟到登录、重连互踢。
+  assert.match(src, /export function cancelIMSessionRecovery/);
+  assert.match(
+    src,
+    /sessionEpoch !== startEpoch \|\|\s*recoveryGeneration !== startGeneration/,
+  );
+});

@@ -78,6 +78,12 @@ test('customer service exposes recharge/issue/dispute/account with env override 
   assert.match(screen, /focusGenerationRef/);
   assert.match(screen, /if \(isStale\(\)\) return;/);
   assert.doesNotMatch(screen, /focusedRef/);
+  // 失焦(离场)的 cleanup 也 bump 代次:挡住「离开后不再回来」而解析刚好在离开后 resolve
+  // 时的误跳转(否则代次没变、isStale 仍为 false)。
+  assert.match(
+    screen,
+    /return \(\) => \{[\s\S]*?focusGenerationRef\.current \+= 1;[\s\S]*?\};/,
+  );
 
   // 失败弹窗不再把原始 SDK/OpenIM 错误文案(可能含未本地化实现细节)展示给用户;
   // 改通用本地化提示 + reportError 上报结构化上下文。

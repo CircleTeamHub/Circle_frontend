@@ -38,6 +38,9 @@ const requested = new Set<string>();
 const fetchedAt = new Map<string, number>();
 let pending = new Set<string>();
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
+// 批次代次：回前台 / 显式失效会 bump。在飞的 flush 捕获起始代次,响应回来时若代次已变,
+// 说明本批已被更新的请求取代——丢弃,避免旧响应乱序到达覆盖回陈旧档位。
+let batchGeneration = 0;
 
 // 瞬时失败后的有界重试：已挂载的 useUserVipLevel 只依赖 userId、不会自己重新触发，
 // 不主动重排的话这些名字会一直不亮、直到相关组件重挂或别处再请求同一 id。
@@ -73,12 +76,14 @@ AppState.addEventListener('change', (status) => {
   if (status === 'active') {
     fetchedAt.clear();
     requested.clear();
+    batchGeneration += 1;
     useUserVipStore.setState((s) => ({ refreshTick: s.refreshTick + 1 }));
   }
 });
 
 async function flush(): Promise<void> {
   flushTimer = null;
+  const startGeneration = batchGeneration;
   const ids = [...pending];
   pending = new Set();
 
@@ -86,6 +91,11 @@ async function flush(): Promise<void> {
     const chunk = ids.slice(i, i + MAX_IDS_PER_REQUEST);
     try {
       const result = await fetchVipLevels(chunk);
+      // 期间发生了回前台 / 失效（代次已变）：本批已被更新的请求取代,丢弃本响应,
+      // 避免旧的、可能已过期的档位乱序覆盖新值。这些 id 由更新的那一批负责。
+      if (batchGeneration !== startGeneration) {
+        return;
+      }
       const now = Date.now();
       // 记录拉取时间（含未返回档位=非会员的 id），TTL 内不再重复请求；并移出 requested，
       // 让 TTL 过期后能重新入队、拉到升级后的档位。
@@ -142,6 +152,7 @@ export function requestVipLevel(userId: string): void {
 export function invalidateVipLevels(): void {
   requested.clear();
   fetchedAt.clear();
+  batchGeneration += 1;
   // bump refreshTick：已挂载的 useUserVipLevel 会重新请求（清空后按新会话重新拉取）。
   useUserVipStore.setState((s) => ({ levels: {}, refreshTick: s.refreshTick + 1 }));
 }
