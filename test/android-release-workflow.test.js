@@ -269,6 +269,10 @@ test('Android release workflow builds and verifies a private signed artifact', (
     build,
     /\.\/gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a/,
   );
+  // ABI 收窄只作用于 release 打包(靠上面的 gradlew flag)。不再用 config plugin 往
+  // 生成的 gradle.properties 全局写死 arm64——否则 Intel 主机上的 x86_64 模拟器 debug
+  // 构建会缺 native 库、装上跑不起来。
+  assert.doesNotMatch(read('app.json'), /with-android-abi-filter/);
   assert.match(build, /EXPO_PUBLIC_API_URL:/);
   assert.match(build, /EXPO_PUBLIC_OPENIM_API_URL:/);
   assert.match(build, /EXPO_PUBLIC_OPENIM_WS_URL:/);

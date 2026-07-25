@@ -29,8 +29,10 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   frameWrap: {
-    // 子元素绝对定位的锚点;本身不裁剪,让框的外圈溢出可见。
+    // 锚点 + 居中头像。已按框尺寸预留占位,框铺满容器、不再溢出压到相邻内容。
     position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 
@@ -86,17 +88,18 @@ export const Avatar: React.FC<AvatarProps> = ({
     return core;
   }
 
+  // 预留缩放后的占位:容器按框尺寸(size × AVATAR_FRAME_SCALE)排布、头像居中,框铺满
+  // 容器。否则框绝对定位溢出 size×size 容器,钻石/超级用户的框会压到相邻的名字/会员卡片。
   const frameSize = size * AVATAR_FRAME_SCALE;
-  const frameOffset = -(frameSize - size) / 2;
   return (
-    <View style={[s.frameWrap, { width: size, height: size }]}>
+    <View style={[s.frameWrap, { width: frameSize, height: frameSize }]}>
       {core}
       <View
         pointerEvents="none"
         style={{
           position: 'absolute',
-          top: frameOffset,
-          left: frameOffset,
+          top: 0,
+          left: 0,
           width: frameSize,
           height: frameSize,
         }}

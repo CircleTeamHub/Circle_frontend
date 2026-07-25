@@ -32,6 +32,18 @@ test('cached VIP levels expire via a TTL so a server-side upgrade is picked up w
   assert.match(store, /export function invalidateVipLevels/);
 });
 
+test('userVipStore retries a transiently failed batch without needing a remount', () => {
+  const store = read('src/stores/userVipStore.ts');
+
+  // 有界重试：失败分支主动重排，而不是只从 requested 移除后干等组件重挂。
+  assert.match(store, /function scheduleRetry/);
+  assert.match(store, /MAX_FETCH_RETRIES/);
+  assert.match(store, /retryCount/);
+  assert.match(store, /scheduleRetry\(chunk\)/);
+  // 成功后清零该 id 的重试计数。
+  assert.match(store, /retryCount\.delete\(id\)/);
+});
+
 test('fetchVipLevels posts ids and defends the response shape', () => {
   const users = read('src/services/api/users.ts');
   assert.match(users, /export async function fetchVipLevels/);

@@ -76,6 +76,11 @@ test('customer service exposes recharge/issue/dispute/account with env override 
   assert.match(screen, /useFocusEffect/);
   assert.match(screen, /focusedRef/);
   assert.match(screen, /if \(!focusedRef\.current\) return;/);
+
+  // 失败弹窗不再把原始 SDK/OpenIM 错误文案(可能含未本地化实现细节)展示给用户;
+  // 改通用本地化提示 + reportError 上报结构化上下文。
+  assert.match(screen, /reportError\(/);
+  assert.doesNotMatch(screen, /error instanceof Error \? error\.message/);
 });
 
 test('profile commerce routes export their screens', () => {

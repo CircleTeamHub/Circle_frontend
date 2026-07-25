@@ -8,6 +8,7 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { MenuRow } from '@/components/ui/menu-row';
 import { Divider } from '@/components/ui/divider';
 import { Spacing, Typography, useTheme } from '@/theme';
+import { reportError } from '@/observability/sentry';
 import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
 import { getChatDetailHref } from '@/features/user/utils/routes';
 import { getOrCreateSingleConversation } from '@/im/client';
@@ -72,9 +73,16 @@ export default function CustomerServiceScreen() {
           router.push(getChatDetailHref('profile', category.accountId, title));
           return;
         }
+        // 不把原始 SDK/OpenIM 错误文案直接展示给用户——可能含未本地化的实现/端点细节。
+        // 只给通用可读提示;结构化上下文另经 reportError 上报(Sentry 侧已脱敏)。
+        reportError(error, {
+          operation: 'customerService',
+          kind: 'openConversation',
+          category: category.id,
+        });
         Alert.alert(
           t('profile.customerService.openFailed'),
-          error instanceof Error ? error.message : t('common.networkError'),
+          t('common.networkError'),
         );
       } finally {
         openingRef.current = false;

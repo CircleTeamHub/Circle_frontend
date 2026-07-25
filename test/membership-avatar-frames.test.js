@@ -24,13 +24,17 @@ test('membership-frames maps only diamond/super tiers to a frame', () => {
   assert.match(src, /export const AVATAR_FRAME_SCALE/);
 });
 
-test('Avatar overlays frameSource for circle avatars without changing layout size', () => {
+test('Avatar reserves the scaled frame footprint so it does not overlap adjacent content', () => {
   const src = read('src/components/ui/avatar.tsx');
   assert.match(src, /frameSource\?: ImageSourcePropType/);
   // 方形头像(聊天列表)不套圆形框。
   assert.match(src, /shape !== 'circle'/);
   assert.match(src, /AVATAR_FRAME_SCALE/);
   assert.match(src, /pointerEvents="none"/);
+  // 容器按框尺寸预留占位(钻石/超级框比头像大 1.6×),头像居中,框铺满——
+  // 不再用负偏移把框溢出到 size×size 容器外、压住相邻的名字/会员卡片。
+  assert.match(src, /width: frameSize, height: frameSize/);
+  assert.doesNotMatch(src, /frameOffset/);
 });
 
 test('ProfileScreen and UserProfileScreen wear the membership frame', () => {

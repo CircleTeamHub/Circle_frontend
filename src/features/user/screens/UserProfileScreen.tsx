@@ -875,7 +875,12 @@ export default function UserProfileScreen() {
 
           <View style={s.identity}>
             <View style={s.nameRow}>
-              <MemberName name={displayName} userId={profileId} style={d.name} />
+              <MemberName
+                name={displayName}
+                vipLevel={profileVipLevel}
+                userId={profileId}
+                style={d.name}
+              />
               <View style={[s.badge, d.badge]}>
                 <Text style={d.badgeText}>{profile.memberLabel}</Text>
               </View>

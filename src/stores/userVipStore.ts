@@ -32,6 +32,28 @@ const fetchedAt = new Map<string, number>();
 let pending = new Set<string>();
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
+// 瞬时失败后的有界重试：已挂载的 useUserVipLevel 只依赖 userId、不会自己重新触发，
+// 不主动重排的话这些名字会一直不亮、直到相关组件重挂或别处再请求同一 id。
+const MAX_FETCH_RETRIES = 3;
+const RETRY_DELAY_MS = 3000;
+const retryCount = new Map<string, number>();
+
+function scheduleRetry(ids: string[]): void {
+  const retriable = ids.filter(
+    (id) => (retryCount.get(id) ?? 0) < MAX_FETCH_RETRIES,
+  );
+  if (retriable.length === 0) {
+    return;
+  }
+  setTimeout(() => {
+    for (const id of retriable) {
+      retryCount.set(id, (retryCount.get(id) ?? 0) + 1);
+      // 失败的 id 已从 requested 移除、也未记 fetchedAt，requestVipLevel 会重新入队。
+      requestVipLevel(id);
+    }
+  }, RETRY_DELAY_MS);
+}
+
 function isVipLevelFresh(userId: string): boolean {
   const at = fetchedAt.get(userId);
   return at !== undefined && Date.now() - at < CACHE_TTL_MS;
@@ -52,6 +74,7 @@ async function flush(): Promise<void> {
       chunk.forEach((id) => {
         requested.delete(id);
         fetchedAt.set(id, now);
+        retryCount.delete(id);
       });
       if (Object.keys(result).length > 0) {
         useUserVipStore.setState((state) => ({
@@ -59,8 +82,10 @@ async function flush(): Promise<void> {
         }));
       }
     } catch {
-      // 尽力而为：失败就让这些名字先按普通样式显示；从 requested 移除以便下次重试。
+      // 尽力而为：失败就让这些名字先按普通样式显示；从 requested 移除，并主动排一次
+      // 有界重试（连通性恢复后名字自动亮起，无需等组件重挂）。
       chunk.forEach((id) => requested.delete(id));
+      scheduleRetry(chunk);
     }
   }
 }

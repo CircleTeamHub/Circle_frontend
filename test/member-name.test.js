@@ -55,3 +55,43 @@ test('Plaza author names pass vipLevel from the author payload', () => {
   const card = read('src/features/discover/components/plaza-post-card.tsx');
   assert.match(card, /<MemberName[\s\S]*?vipLevel=\{post\.author\.vipLevel\}/);
 });
+
+test('MemberName solid tier colors stay readable on both theme surfaces', () => {
+  // WCAG 相对亮度 + 对比度。名字是常文本，目标 ≥4.5:1。
+  const lum = (hex) => {
+    const c = hex.replace('#', '');
+    const ch = (i) => parseInt(c.slice(i, i + 2), 16) / 255;
+    const f = (x) => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4);
+    return 0.2126 * f(ch(0)) + 0.7152 * f(ch(2)) + 0.0722 * f(ch(4));
+  };
+  const ratio = (a, b) => {
+    const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+  const grab = (theme, tier) => {
+    const block = src.slice(src.indexOf(`${theme}: {`));
+    return block.match(new RegExp(`${tier}: '(#[0-9A-Fa-f]{6})'`))?.[1];
+  };
+
+  for (const tier of ['silver', 'gold']) {
+    const light = grab('light', tier);
+    const dark = grab('dark', tier);
+    assert.ok(
+      light && ratio(light, '#FFFFFF') >= 4.5,
+      `${tier} 浅色变体 ${light} 白底对比度 ${light && ratio(light, '#FFFFFF').toFixed(2)} < 4.5`,
+    );
+    assert.ok(
+      dark && ratio(dark, '#1C1C1E') >= 4.5,
+      `${tier} 深色变体 ${dark} 深底对比度 ${dark && ratio(dark, '#1C1C1E').toFixed(2)} < 4.5`,
+    );
+  }
+  // 组件按当前主题取纯色变体。
+  assert.match(src, /useColorScheme\(\)/);
+  assert.match(src, /SOLID_COLOR\[scheme\]/);
+});
+
+test('UserProfileScreen passes the loaded vipLevel to MemberName (no redundant batch lookup)', () => {
+  // 资料响应已带 vipLevel(同一屏用来选头像框),名字也应直接内联，避免先渲染无特效再补查。
+  const screen = read('src/features/user/screens/UserProfileScreen.tsx');
+  assert.match(screen, /<MemberName[\s\S]*?vipLevel=\{profileVipLevel\}/);
+});

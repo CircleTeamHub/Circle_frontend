@@ -313,7 +313,10 @@ export default function MemberCenterScreen() {
           if (active) setProgramEnabled(status.enabled);
         })
         .catch(() => {
-          if (active) setProgramEnabled(false);
+          // 状态查询瞬时失败(超时/5xx)不代表会员功能未开放。保留上次已知状态,而不是
+          // 翻成"未开放"营销态——否则已是会员的用户会被误导看到升级墙、也点不到会员客服。
+          // 首次加载(prev=null)则维持加载态,随重新聚焦自动重试。
+          if (active) setProgramEnabled((prev) => prev);
         });
 
       if (ownerUserId && ownerAccountId) {

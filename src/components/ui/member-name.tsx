@@ -1,5 +1,10 @@
 import { memo, useEffect, useMemo } from 'react';
-import { Text, type StyleProp, type TextStyle } from 'react-native';
+import {
+  Text,
+  useColorScheme,
+  type StyleProp,
+  type TextStyle,
+} from 'react-native';
 import Animated, {
   Easing,
   interpolateColor,
@@ -37,10 +42,15 @@ interface MemberNameProps {
   animated?: boolean;
 }
 
-// 银色 / 金色 = 纯色。
-const SOLID_COLOR: Partial<Record<MembershipTier, string>> = {
-  silver: '#AEB6C2',
-  gold: '#E7B34D',
+// 银色 / 金色 = 纯色。按主题取变体保证可读:原来的 #AEB6C2 / #E7B34D 在浅色主题的
+// 白底上只有 ~2:1 对比度(联系人 / 消息 / 通知里的名字几乎看不清)。浅色用深变体
+// (白底 ≥4.8:1),深色沿用原亮色(深底 ≥8:1)。
+const SOLID_COLOR: Record<
+  'light' | 'dark',
+  Partial<Record<MembershipTier, string>>
+> = {
+  light: { silver: '#5F6B7A', gold: '#946A00' },
+  dark: { silver: '#AEB6C2', gold: '#E7B34D' },
 };
 
 // 钻石 = 静态冷调渐变;超级 = 暖调玫瑰金流光(香槟金→玫瑰金→玫瑰粉→藕紫,回文循环无缝,
@@ -121,6 +131,7 @@ export const MemberName = memo(function MemberName({
   // 的场景（聊天/会话/通讯录/通知）才按 userId 从缓存补查（未知触发批量拉取，回来自动亮起）。
   const cachedVipLevel = useUserVipLevel(vipLevel == null ? userId : null);
   const effectiveVipLevel = vipLevel ?? cachedVipLevel;
+  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const tier =
     effectiveVipLevel != null
       ? getMembershipTierForVipLevel(effectiveVipLevel)
@@ -151,7 +162,7 @@ export const MemberName = memo(function MemberName({
     );
   }
 
-  const solid = SOLID_COLOR[tier];
+  const solid = SOLID_COLOR[scheme][tier];
   if (solid) {
     return (
       <Text style={[style, { color: solid }]} numberOfLines={numberOfLines}>

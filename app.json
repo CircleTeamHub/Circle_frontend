@@ -104,8 +104,7 @@
       "@sentry/react-native",
       "./plugins/with-local-sentry-auto-upload-disabled",
       "./plugins/with-android-allow-backup-disabled",
-      "./plugins/with-android-release-signing",
-      "./plugins/with-android-abi-filter"
+      "./plugins/with-android-release-signing"
     ],
     "experiments": {
       "typedRoutes": true

@@ -96,15 +96,17 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
         }),
       );
     } catch (error) {
-      set((current) => ({
-        ...applyPlazaFetchFailure(current, {
+      // plazaMembershipRequired 交由 applyPlazaFetchFailure 在「请求仍是最新」时才写，
+      // 避免陈旧的 MEMBERSHIP_REQUIRED 覆盖已到达的新成功态。
+      set((current) =>
+        applyPlazaFetchFailure(current, {
           requestQueryVersion,
           requestId,
+          membershipRequired:
+            error instanceof ApiError &&
+            error.errorCode === 'PLAZA_MEMBERSHIP_REQUIRED',
         }),
-        plazaMembershipRequired:
-          error instanceof ApiError &&
-          error.errorCode === 'PLAZA_MEMBERSHIP_REQUIRED',
-      }));
+      );
     }
   },
 
