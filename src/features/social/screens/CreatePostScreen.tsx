@@ -30,6 +30,7 @@ import {
 } from '@/services/api/upload';
 import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
 import { usePostFormStore } from '@/features/discover/store/use-post-form-store';
+import { arePostFormCircleIdsValid } from '@/features/discover/utils/post-form-circle-selection';
 import { useTranslation } from 'react-i18next';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
@@ -141,6 +142,7 @@ export default function CreatePostScreen() {
   const selectedCircles = usePostFormStore((s) => s.selectedCircles);
   const selectedCities = usePostFormStore((s) => s.selectedCities);
   const selectedNote = usePostFormStore((s) => s.selectedNote);
+  const setSelectedCircles = usePostFormStore((s) => s.setSelectedCircles);
   const resetForm = usePostFormStore((s) => s.reset);
 
   const [content, setContent] = useState('');
@@ -278,6 +280,16 @@ export default function CreatePostScreen() {
   const handleSubmit = useCallback(async () => {
     if (inFlightRef.current || !canSubmit || submitting) return;
     if (selectedCircles.length === 0) return;
+    if (!arePostFormCircleIdsValid(selectedCircles)) {
+      setSelectedCircles([]);
+      Alert.alert(
+        t('plaza.create.invalidCircleTitle', { defaultValue: '请重新选择圈子' }),
+        t('plaza.create.invalidCircleMessage', {
+          defaultValue: '圈子信息已更新，请重新选择后再发布。',
+        }),
+      );
+      return;
+    }
 
     inFlightRef.current = true;
     setSubmitting(true);
@@ -363,6 +375,7 @@ export default function CreatePostScreen() {
     canSubmit,
     submitting,
     selectedCircles,
+    setSelectedCircles,
     images,
     content,
     postTags,

@@ -8,9 +8,13 @@ const mockFetchMyCircles = jest.fn();
 let mockFocusCallback: (() => void) | null = null;
 let mockCommittedAtBack: { id: string; name: string }[] | null = null;
 
+const CIRCLE_A_ID = '07b8cd30-afdf-5b74-9dfe-6dd5b422364b';
+const CIRCLE_B_ID = 'cb62ccd9-303f-550c-a5ab-ff9193bdbbd0';
+const LEGACY_CIRCLE_A_ID = '07b8cd30-afdf-3b74-5dfe-6dd5b422364b';
+
 const mockCircles = [
-  { id: 'circle-a', name: 'Circle A', description: '', avatarUrl: null },
-  { id: 'circle-b', name: 'Circle B', description: '', avatarUrl: null },
+  { id: CIRCLE_A_ID, name: 'Circle A', description: '', avatarUrl: null },
+  { id: CIRCLE_B_ID, name: 'Circle B', description: '', avatarUrl: null },
 ];
 
 jest.mock('expo-router', () => {
@@ -97,7 +101,7 @@ beforeEach(() => {
   mockFocusCallback = null;
   mockCommittedAtBack = null;
   usePostFormStore.setState({
-    selectedCircles: [{ id: 'circle-a', name: 'Circle A' }],
+    selectedCircles: [{ id: CIRCLE_A_ID, name: 'Circle A' }],
   });
   mockRouter.back.mockImplementation(() => {
     mockCommittedAtBack = usePostFormStore.getState().selectedCircles;
@@ -110,14 +114,14 @@ test('ordinary back abandons staged circle edits', () => {
   fireEvent.press(screen.getByText('Circle B'));
   expect(screen.getByText('selected:2')).toBeTruthy();
   expect(usePostFormStore.getState().selectedCircles).toEqual([
-    { id: 'circle-a', name: 'Circle A' },
+    { id: CIRCLE_A_ID, name: 'Circle A' },
   ]);
 
   fireEvent.press(screen.getByLabelText('back'));
 
   expect(mockRouter.back).toHaveBeenCalledTimes(1);
   expect(usePostFormStore.getState().selectedCircles).toEqual([
-    { id: 'circle-a', name: 'Circle A' },
+    { id: CIRCLE_A_ID, name: 'Circle A' },
   ]);
 });
 
@@ -139,7 +143,7 @@ test('empty draft disables confirmation without changing the committed selection
   fireEvent.press(confirmButton!);
   expect(mockRouter.back).not.toHaveBeenCalled();
   expect(usePostFormStore.getState().selectedCircles).toEqual([
-    { id: 'circle-a', name: 'Circle A' },
+    { id: CIRCLE_A_ID, name: 'Circle A' },
   ]);
 });
 
@@ -160,12 +164,23 @@ test('refocus resets an abandoned draft and confirm commits only the fresh draft
   fireEvent.press(screen.getByText('确定'));
 
   expect(usePostFormStore.getState().selectedCircles).toEqual([
-    { id: 'circle-a', name: 'Circle A' },
-    { id: 'circle-b', name: 'Circle B' },
+    { id: CIRCLE_A_ID, name: 'Circle A' },
+    { id: CIRCLE_B_ID, name: 'Circle B' },
   ]);
   expect(mockCommittedAtBack).toEqual([
-    { id: 'circle-a', name: 'Circle A' },
-    { id: 'circle-b', name: 'Circle B' },
+    { id: CIRCLE_A_ID, name: 'Circle A' },
+    { id: CIRCLE_B_ID, name: 'Circle B' },
   ]);
   expect(mockRouter.back).toHaveBeenCalledTimes(1);
+});
+
+test('stale uuid-shaped circle ids are dropped from the draft on focus', () => {
+  usePostFormStore.setState({
+    selectedCircles: [{ id: LEGACY_CIRCLE_A_ID, name: 'Old Circle A' }],
+  });
+
+  render(<SelectCircleScreen />);
+
+  expect(screen.getByText('selected:0')).toBeTruthy();
+  expect(screen.queryAllByLabelText('icon:checkmark-circle')).toHaveLength(0);
 });

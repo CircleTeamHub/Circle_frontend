@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -18,6 +18,10 @@ import { Divider } from '@/components/ui/divider';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import { usePostFormStore } from '@/features/discover/store/use-post-form-store';
+import {
+  arePostFormCircleSelectionsEqual,
+  filterAvailablePostFormCircles,
+} from '@/features/discover/utils/post-form-circle-selection';
 import type { Circle } from '@/types';
 
 const s = StyleSheet.create({
@@ -89,6 +93,14 @@ export default function SelectCircleScreen() {
     for (const c of joinedCircles) map.set(c.id, c);
     return Array.from(map.values());
   }, [joinedCircles, createdCircles]);
+  const circleSelectionKey = useMemo(
+    () => circles.map((c) => `${c.id}:${c.name}`).join('|'),
+    [circles],
+  );
+  const circlesRef = useRef(circles);
+  useEffect(() => {
+    circlesRef.current = circles;
+  }, [circles]);
 
   const d = useMemo(
     () => ({
@@ -115,8 +127,14 @@ export default function SelectCircleScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      setDraftCircles(selectedCircles);
-    }, [selectedCircles]),
+      setDraftCircles((current) => {
+        const next = filterAvailablePostFormCircles(
+          selectedCircles,
+          circlesRef.current,
+        );
+        return arePostFormCircleSelectionsEqual(current, next) ? current : next;
+      });
+    }, [circleSelectionKey, selectedCircles]),
   );
 
   const selectedIds = useMemo(
