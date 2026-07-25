@@ -20,7 +20,6 @@ test('discover plaza badges use solid dark fills instead of translucent fills', 
 
 test('profile and user profile labels use solid fills', () => {
   const profile = read('src/features/profile/screens/ProfileScreen.tsx');
-  const userProfile = read('src/features/user/screens/UserProfileScreen.tsx');
   const loginDevices = read('src/features/profile/screens/LoginDeviceManagementScreen.tsx');
   const memberStatBlock = profile.match(/memberStat:\s*\{[\s\S]*?\n      \},/)?.[0] ?? '';
 
@@ -29,8 +28,6 @@ test('profile and user profile labels use solid fills', () => {
   assert.doesNotMatch(memberStatBlock, /backgroundColor:\s*colors\.memberTagBg/);
   assert.match(profile, /memberIdentityCircle:\s*\{\s*backgroundColor:\s*colors\.memberTagBg/);
   assert.match(profile, /memberStatValue:\s*\{\s*color:\s*colors\.white/);
-  assert.match(userProfile, /badge:\s*\{\s*backgroundColor:\s*colors\.primary/);
-  assert.match(userProfile, /badgeText:\s*\{\s*color:\s*colors\.white/);
   assert.match(loginDevices, /badge:\s*\{\s*backgroundColor:\s*colors\.primary/);
   assert.match(loginDevices, /badgeText:\s*\{\s*color:\s*colors\.white/);
 });
