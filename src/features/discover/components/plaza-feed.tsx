@@ -107,7 +107,8 @@ export const PlazaFeed: React.FC = () => {
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      setProgramEnabled(null);
+      // 不在每次聚焦时把 programEnabled 重置为 null——那会让整屏闪一下 spinner、丢滚动位置。
+      // 首次加载本就是 null(显示 spinner);重新聚焦时保留上次已知值、原地刷新,避免闪烁。
       void fetchMembershipProgramStatus()
         .then((status) => {
           if (active) setProgramEnabled(status.enabled);
@@ -181,10 +182,21 @@ export const PlazaFeed: React.FC = () => {
   }, [fetchPlazaPosts]);
 
   const handleEndReached = useCallback(() => {
-    if (plazaPosts.length > 0 && !plazaLoading && plazaHasMore) {
+    if (
+      plazaPosts.length > 0 &&
+      !plazaLoading &&
+      !plazaRefreshing &&
+      plazaHasMore
+    ) {
       fetchPlazaPosts(false);
     }
-  }, [plazaPosts.length, plazaLoading, plazaHasMore, fetchPlazaPosts]);
+  }, [
+    plazaPosts.length,
+    plazaLoading,
+    plazaRefreshing,
+    plazaHasMore,
+    fetchPlazaPosts,
+  ]);
 
   const handleCircleSelect = useCallback(
     (id: string | null) => {

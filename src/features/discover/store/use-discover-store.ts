@@ -44,7 +44,10 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
 
   fetchPlazaPosts: async (reset = false) => {
     const state = get();
-    if (!reset && state.plazaLoading) return;
+    // 刷新(reset)进行中也不分页：refresh 用 plazaRefreshing 标记(而非 plazaLoading),
+    // 漏判会让一个并发的 end-reached 分页(requestId 更高)把先返回的 refresh 结果当陈旧
+    // 请求丢弃、再把旧游标的一页并到过期列表上,用户的下拉刷新就丢了。
+    if (!reset && (state.plazaLoading || state.plazaRefreshing)) return;
     if (!reset && !state.plazaHasMore) return;
 
     // reset starts from the newest (no cursor); paginate follows nextCursor.

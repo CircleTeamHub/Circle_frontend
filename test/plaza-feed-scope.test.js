@@ -47,7 +47,42 @@ test('plaza feed does not paginate while the first page is still empty', () => {
   const source = read('src/features/discover/components/plaza-feed.tsx');
 
   assert.match(source, /plazaPosts\.length > 0/);
-  assert.match(source, /plazaPosts\.length,\s*plazaLoading,\s*plazaHasMore,\s*fetchPlazaPosts/);
+  assert.match(
+    source,
+    /plazaPosts\.length,\s*plazaLoading,\s*plazaRefreshing,\s*plazaHasMore,\s*fetchPlazaPosts/,
+  );
+});
+
+test('plaza feed does not paginate on top of an in-flight pull-to-refresh', () => {
+  const feed = read('src/features/discover/components/plaza-feed.tsx');
+  const store = read('src/features/discover/store/use-discover-store.ts');
+
+  // end-reached 分页必须同时避让 plazaLoading 和 plazaRefreshing——否则并发的下拉刷新会被
+  // 更高 requestId 的分页当成陈旧请求丢弃,用户的刷新结果丢失(#127 review)。守卫在组件
+  // handler 和 store fetch 两处都要有(store 是权威闸门,handler 只是省一次空转)。
+  const handler = feed.slice(
+    feed.indexOf('const handleEndReached = useCallback'),
+    feed.indexOf('const handleCircleSelect'),
+  );
+  assert.match(handler, /!plazaLoading/);
+  assert.match(handler, /!plazaRefreshing/);
+  assert.match(
+    store,
+    /!reset && \(state\.plazaLoading \|\| state\.plazaRefreshing\)/,
+  );
+});
+
+test('plaza feed does not blank to a spinner on every refocus', () => {
+  const source = read('src/features/discover/components/plaza-feed.tsx');
+
+  // 每次聚焦都 setProgramEnabled(null) 会把整屏刷成 spinner、丢滚动位置。首次加载本就是
+  // null(显示 spinner);重新聚焦时保留上次已知值原地刷新,避免闪烁(#127 review)。
+  const firstFocus = source.slice(
+    source.indexOf('useFocusEffect'),
+    source.indexOf('const myPlazaCircles'),
+  );
+  assert.match(firstFocus, /fetchMembershipProgramStatus/);
+  assert.doesNotMatch(firstFocus, /setProgramEnabled\(null\)/);
 });
 
 test('plaza feed selected-circle empty state explains ended posts are hidden', () => {
