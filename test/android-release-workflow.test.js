@@ -507,6 +507,7 @@ test('release validation metadata requires matching app versions and secure publ
     EXPO_PUBLIC_OPENIM_API_URL: 'https://im.windnote.test',
     EXPO_PUBLIC_OPENIM_WS_URL: 'wss://im.windnote.test/ws',
     EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: 'official-support',
+    EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: 'cs-support',
   };
   const app = { version: '1.0.0', android: { versionCode: 1_000_000 } };
 
@@ -696,6 +697,7 @@ test('release validation CLI supports scoped and legacy validation', () => {
     EXPO_PUBLIC_OPENIM_API_URL: 'https://im.windnote.test',
     EXPO_PUBLIC_OPENIM_WS_URL: 'wss://im.windnote.test/ws',
     EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: 'official-support',
+    EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: 'cs-support',
   };
   const signingEnv = {
     ANDROID_KEYSTORE_BASE64: 'a2V5c3RvcmU=',
@@ -864,4 +866,46 @@ test('release helper writes the latest-promotion decision to GitHub Actions outp
   } finally {
     fs.rmSync(outputPath, { force: true });
   }
+});
+
+test('release preflight fails closed when support routing would fall back to imAdmin', () => {
+  const {
+    validateSupportAccounts,
+  } = require('../.github/scripts/validate-android-release');
+
+  // 全空:通用与四类专属都没配 → 充值 / 纠纷 / 账号客服会静默落到系统账号 imAdmin,必须报错。
+  const blank = [];
+  validateSupportAccounts(blank, {});
+  assert.equal(blank.length, 1);
+  assert.match(blank[0], /imAdmin/);
+
+  // 只配通用客服账号 EXPO_PUBLIC_SUPPORT_ACCOUNT_ID → 通过(有可信兜底)。
+  const generic = [];
+  validateSupportAccounts(generic, {
+    EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: 'cs-generic',
+  });
+  assert.deepEqual(generic, []);
+
+  // 通用为空但四类专属全配齐 → 通过。
+  const perCategory = [];
+  validateSupportAccounts(perCategory, {
+    EXPO_PUBLIC_SUPPORT_RECHARGE_ID: 'cs-r',
+    EXPO_PUBLIC_SUPPORT_ISSUE_ID: 'cs-i',
+    EXPO_PUBLIC_SUPPORT_DISPUTE_ID: 'cs-d',
+    EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID: 'cs-a',
+  });
+  assert.deepEqual(perCategory, []);
+
+  // 专属只配了一部分、通用又为空 → 仍报错,并点名缺失的那一类。
+  const partial = [];
+  validateSupportAccounts(partial, {
+    EXPO_PUBLIC_SUPPORT_RECHARGE_ID: 'cs-r',
+  });
+  assert.equal(partial.length, 1);
+  assert.match(partial[0], /EXPO_PUBLIC_SUPPORT_ISSUE_ID/);
+
+  // 空白字符不算已配(trim 后为空) → 报错。
+  const whitespace = [];
+  validateSupportAccounts(whitespace, { EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: '   ' });
+  assert.equal(whitespace.length, 1);
 });
