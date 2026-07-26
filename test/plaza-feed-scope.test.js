@@ -234,3 +234,16 @@ test('discover header filter button does not show an applied-filter dot', () => 
   assert.doesNotMatch(source, /hasActiveFilter/);
   assert.doesNotMatch(source, /useDiscoverFilterStore/);
 });
+
+test('plaza feed clears a stale membership gate when rollout enforcement turns off', () => {
+  const source = read('src/features/discover/components/plaza-feed.tsx');
+
+  // rollout 从「开放/未知」翻成「关闭」而上次留着 plazaMembershipRequired:membershipBlocked
+  // 因陈旧门恒真、两个拉取 effect 短路,免费开放对该用户永不生效直到登出/重启。跃迁那一次
+  // 显式重拉一次清门;判跃迁(prev !== false)避免后端仍权威返回门时空转打服务端(#131 review)。
+  assert.match(source, /prevProgramEnabledRef/);
+  assert.match(
+    source,
+    /prev !== false && programEnabled === false && plazaMembershipRequired/,
+  );
+});

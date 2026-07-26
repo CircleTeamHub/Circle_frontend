@@ -28,6 +28,7 @@ import {
 import { getUserProfileHref } from '@/features/user/utils/routes';
 import { fetchCurrentUser } from '@/services/api/auth';
 import { fetchMembershipProgramStatus } from '@/services/api/membership';
+import { retry } from '@/utils/retry';
 import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
@@ -308,15 +309,16 @@ export default function MemberCenterScreen() {
       const ownerAccountId = owner.user?.accountId;
       const ownerSessionEpoch = owner.sessionEpoch;
 
-      void fetchMembershipProgramStatus()
+      // 有界重试(retry 默认试 2 次、跳过确定性 4xx):吸收一次瞬时抖动。
+      void retry(() => fetchMembershipProgramStatus())
         .then((status) => {
           if (active) setProgramEnabled(status.enabled);
         })
         .catch(() => {
-          // 状态查询瞬时失败(超时/5xx)不代表会员功能未开放。保留上次已知状态,而不是
-          // 翻成"未开放"营销态——否则已是会员的用户会被误导看到升级墙、也点不到会员客服。
-          // 首次加载(prev=null)则维持加载态,随重新聚焦自动重试。
-          if (active) setProgramEnabled((prev) => prev);
+          // 重试后仍失败:保留上次已知状态,而不是翻成"未开放"营销态——否则已是会员的用户
+          // 会被误导看到升级墙、也点不到会员客服。但首次加载(prev=null)不能一直停在无限
+          // spinner——落到"暂未开放"这个可用态退出加载,重新聚焦时再拉一次纠正。
+          if (active) setProgramEnabled((prev) => prev ?? false);
         });
 
       if (ownerUserId && ownerAccountId) {

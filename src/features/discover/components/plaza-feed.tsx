@@ -177,6 +177,21 @@ export const PlazaFeed: React.FC = () => {
     }
   }, [vipLevel, plazaMembershipRequired, fetchPlazaPosts]);
 
+  // rollout 从「开放/未知」翻成「关闭」而上次还留着会员门:membershipBlocked 会因陈旧的
+  // plazaMembershipRequired 恒为真(programEnabled===false 让第二个从句失效,但 OR 的第一
+  // 从句仍真),上面两个拉取 effect 都因 membershipBlocked 短路、免费开放对该用户永不生效,
+  // 直到登出/重启。这里在「enabled/unknown → disabled」这一次跃迁显式重拉一次清掉门。
+  // 判跃迁(prev !== false)而非只判「disabled 且有门」:否则后端若仍权威返回门,会重拉→
+  // 门清→再被拒→门起→再重拉地空转打服务端(与上面的 vipLevel 跃迁守卫同理)。
+  const prevProgramEnabledRef = useRef(programEnabled);
+  useEffect(() => {
+    const prev = prevProgramEnabledRef.current;
+    prevProgramEnabledRef.current = programEnabled;
+    if (prev !== false && programEnabled === false && plazaMembershipRequired) {
+      fetchPlazaPosts(true);
+    }
+  }, [programEnabled, plazaMembershipRequired, fetchPlazaPosts]);
+
   const handleRefresh = useCallback(() => {
     fetchPlazaPosts(true);
   }, [fetchPlazaPosts]);
