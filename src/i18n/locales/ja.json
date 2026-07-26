@@ -559,13 +559,13 @@
       "cta": "参加する"
     },
     "callRecord": {
-      "duration": "通話時間 {{duration}}",
-      "canceledBySelf": "キャンセルしました",
       "canceledByPeer": "相手がキャンセルしました",
-      "noAnswer": "応答なし",
-      "missed": "不在着信",
+      "canceledBySelf": "キャンセルしました",
+      "duration": "通話時間 {{duration}}",
+      "ended": "通話が終了しました",
       "failed": "通話に失敗しました",
-      "ended": "通話が終了しました"
+      "missed": "不在着信",
+      "noAnswer": "応答なし"
     }
   },
   "messages": {
@@ -678,8 +678,8 @@
       "unlistFailedTitle": "非公開にできませんでした",
       "unlistTitle": "ノートを非公開にする",
       "unlistConfirm": "非公開にしたノートは非公開リストで確認できます。1か月後に自動削除されます。",
-      "restoreFailedTitle": "復元に失敗しました",
-      "refreshFailedTitle": "更新に失敗しました"
+      "refreshFailedTitle": "更新に失敗しました",
+      "restoreFailedTitle": "復元に失敗しました"
     },
     "detail": {
       "loadFailed": "ノートを読み込めませんでした。もう一度お試しください",
@@ -850,8 +850,8 @@
       "friendHint": "友だち"
     },
     "recycleBin": "ごみ箱",
-    "recycleBinTitle": "ごみ箱",
-    "recycleBinHint": "削除したノートはここから復元できます。"
+    "recycleBinHint": "削除したノートはここから復元できます。",
+    "recycleBinTitle": "ごみ箱"
   },
   "tempChats": {
     "title": "枠の管理",
@@ -1648,8 +1648,7 @@
       "empty": "タグがありません。保存する前に作成してください。"
     },
     "avCallComingSoon": "音声・ビデオ通話機能は近日公開予定です。お楽しみに。",
-    "unknownUser": "名前未設定のユーザー",
-    "callStarting": "発信中…"
+    "unknownUser": "名前未設定のユーザー"
   },
   "profile": {
     "creditScore": "信用スコア",
@@ -1786,49 +1785,117 @@
     "viewAnnouncements": "最新を見る",
     "addIcon": "バッジを追加",
     "myIcons": "バッジコレクション",
+    "customerService": {
+      "menuLabel": "サポートセンター",
+      "menuHint": "オンライン相談",
+      "title": "サポートセンター",
+      "subtitle": "お問い合わせのサポート種別を選択してください",
+      "openFailed": "サポートチャットを開けませんでした。しばらくしてからもう一度お試しください。",
+      "categories": {
+        "recharge": {
+          "label": "チャージサポート",
+          "description": "チャージ・ポイント・支払いに関するお問い合わせ"
+        },
+        "issue": {
+          "label": "一般サポート",
+          "description": "不具合や利用方法に関するお問い合わせ"
+        },
+        "dispute": {
+          "label": "紛争サポート",
+          "description": "取引トラブル・苦情・申し立ての対応"
+        },
+        "account": {
+          "label": "アカウントサポート",
+          "description": "ログイン・セキュリティ・アカウント復旧"
+        }
+      }
+    },
     "membership": {
       "title": "会員センター",
-      "confirmExchange": "交換を確認",
-      "activateVip": "VIPを開始",
-      "currentLevel": "現在のレベル：VIP{{level}}",
-      "benefitsHint": "会員限定特典をお楽しみください。レベルが高いほど特典が増えます。",
-      "exchange": "会員を交換",
-      "currentBadge": "現在のレベル",
-      "loadError": "VIPランクの読み込みに失敗しました。ローカルのランク設定を表示しています。",
-      "exchangeSuccess": "VIP{{level}} と交換しました",
-      "exchangeError": "交換に失敗しました。クレジット残高が十分かご確認のうえ再試行してください。",
-      "confirmExchangeMessage": "{{points}} クレジットを使って {{plan}} と交換しますか？",
-      "loadingPlans": "VIPランクを読み込み中",
-      "confirmExchangePlan": "{{plan}} との交換を確認",
-      "selectHigher": "より上位のVIPランクを選択してください",
+      "regularUser": "一般ユーザー",
+      "currentIdentity": "現在のステータス",
+      "catalogHint": "会員ランクを選択して特典を確認できます。開通とアップグレードはカスタマーサービスが対応します。",
+      "chooseTier": "会員ランクを選択",
+      "recommended": "おすすめ",
+      "lifetime": "永久",
+      "selected": "選択中",
+      "benefitsTitle": "会員特典",
+      "contactToActivate": "カスタマーサービスに連絡して {{plan}} を開通",
+      "contactToUpgrade": "カスタマーサービスに連絡して {{plan}} にアップグレード",
+      "contactForCurrent": "現在 {{plan}} です。カスタマーサービスに相談",
+      "contactForLowerTier": "現在の会員ランクの方が上位です。カスタマーサービスに相談",
+      "contactSupport": "カスタマーサービスに連絡",
+      "upgradeDifferenceNote": "開通済みの会員は、カスタマーサービスに連絡して差額を支払うことでアップグレードできます。すぐに有効になり、残存価値はカスタマーサービスが算定して充当します。",
+      "supportName": "公式カスタマーサービス",
+      "supportUnavailableTitle": "カスタマーサービスアカウントが未設定です",
+      "supportUnavailableMessage": "会員の開通またはアップグレードについて、プラットフォームの公式カスタマーサービスにお問い合わせください。",
+      "planAccessibilityLabel": "{{plan}}、{{duration}}、CNY {{price}}",
+      "duration": {
+        "months": "{{count}}か月",
+        "lifetime": "永久"
+      },
+      "exchangeSuccess": "会員レベルを {{level}} に更新しました",
+      "exchangeError": "会員レベルを更新できませんでした。後でもう一度お試しください。",
       "tiers": {
-        "vip1": {
-          "perks": "基本のVIP特典"
+        "silver": {
+          "name": "シルバー会員"
         },
-        "vip2": {
-          "perks": "グループ容量の拡大と基本割引"
+        "gold": {
+          "name": "ゴールド会員"
         },
-        "vip3": {
-          "perks": "上位の識別バッジとクレジット加算"
+        "diamond": {
+          "name": "ダイヤモンド会員"
         },
-        "vip4": {
-          "perks": "ゴロ番号の限定割引と優先利用"
-        },
-        "vip5": {
-          "perks": "最高のVIP特典と最大割引"
+        "super": {
+          "name": "スーパー会員"
         }
+      },
+      "benefits": {
+        "nameColor": "名前の色",
+        "badge": "会員バッジ",
+        "groupMemberLimit": "1グループの人数上限",
+        "joinedGroups": "参加可能なグループ",
+        "noteStorage": "ノート保存数",
+        "cityFilters": "都市フィルター",
+        "fancyNumber": "プレミアム番号特典"
+      },
+      "benefitValues": {
+        "group-member-limit": "{{value}}人",
+        "joined-groups": "{{value}}グループ",
+        "note-storage": "{{value}}件",
+        "city-filters": "{{value}}都市",
+        "unlimited": "無制限",
+        "silver": "シルバー",
+        "gold": "ゴールド",
+        "rainbow": "レインボー",
+        "exclusive-shimmer": "限定シマー",
+        "diamond": "ダイヤモンド",
+        "super-lifetime": "スーパー永久",
+        "none": "なし",
+        "one-gift": "1回贈呈",
+        "one-premium-gift": "プレミアム番号を1回贈呈"
+      },
+      "currentTierBadge": "現在",
+      "marketing": {
+        "goldAccess": "現在、すべてのユーザーがゴールド会員の枠を無料でご利用いただけます",
+        "title": "会員機能はまだ公開されていません",
+        "groupQuota": "1グループ400人 · 300グループまで参加可能",
+        "noteQuota": "ノート500件 · 都市フィルター10個"
       }
     },
     "memberRules": {
       "link": "会員ルール",
       "title": "ルールと権限の説明",
       "heading": "会員ルール",
-      "description": "以下のルールはVIPランク、クレジット交換、権限範囲について説明します。支払い・注文・有効期間は今後、実際のバックエンドに接続されます。",
+      "description": "会員資格はカスタマーサービスが手動で確認して付与します。このページは特典カタログを表示し、実際の権限はバックエンドを正とします。",
       "rules": {
-        "levels": "VIP1〜5はランクごとに特典が段階的に解放されます。このページではランクと特典の説明のみを表示します。",
-        "highTier": "上位ランクのVIPは、より大きなグループ容量、ゴロ番号割引、クレジット加算、優先利用の資格を得られます。",
-        "consume": "VIP交換はクレジットを消費し、交換後すぐに有効になります。正確な有効期間はバックエンドの注文に準じます。",
-        "irreversible": "VIP・ゴロ番号・グループ拡張カードなどのバーチャル商品は、一度使用すると取り消せません。"
+        "catalog": "シルバー会員 CNY 298 / 1か月、ゴールド会員 CNY 1,288 / 6か月、ダイヤモンド会員 CNY 1,998 / 1年、スーパー会員 CNY 3,998 / 永久。",
+        "supportActivation": "会員資格はアプリ内でポイント交換または直接購入できません。連絡後、カスタマーサービスが手動で確認して付与します。",
+        "upgrade": "開通済みの会員は、カスタマーサービスに連絡して差額を支払うことでアップグレードできます。すぐに有効になり、残存価値はカスタマーサービスが充当します。",
+        "expiry": "会員期限が切れた場合、会員特典のみ停止します。アカウント、チャット、ノートなどのユーザーコンテンツは削除されません。",
+        "fairUse": "会員ルールは会員センターに記載された特典にのみ適用されます。そのうち「無制限」と表示される特典にも、バックエンドの高い水準の公正利用・不正利用防止上限が適用されます。実際の権限はバックエンドを正とします。",
+        "voiceToText": "音声テキスト変換は全ユーザー向けの無料基本機能で、会員ランクによる制限はありません。",
+        "excludedVisualBenefits": "現在の会員特典には、アバターフレームや動くアバターの提供保証は含まれません。"
       }
     }
   },
@@ -2004,13 +2071,13 @@
     "showPassword": "パスワードを表示",
     "resendIn": "{{seconds}}秒後に再送",
     "resetPassword": {
+      "failed": "再設定に失敗しました。コードを確認してもう一度お試しください",
       "intro": "登録済みメールアドレスを入力すると、パスワード再設定用の認証コードを送信します。",
       "newPasswordPlaceholder": "新しいパスワード（6文字以上）",
       "submit": "パスワードを再設定",
       "submitting": "再設定中…",
-      "successTitle": "パスワードを再設定しました",
       "successBody": "すべての端末からログアウトしました。新しいパスワードでログインしてください。",
-      "failed": "再設定に失敗しました。コードを確認してもう一度お試しください"
+      "successTitle": "パスワードを再設定しました"
     }
   },
   "common": {
@@ -2205,7 +2272,6 @@
       "disconnected": "通話が切断されました。"
     },
     "groupCallTitle": "グループ音声通話",
-    "videoCallTitle": "ビデオ通話",
     "participantsOnline": "{{count}} 人がオンライン",
     "self": "自分",
     "ended": "通話が終了したか、接続情報の有効期限が切れています",
@@ -2218,17 +2284,17 @@
     "accept": "応答",
     "invite": {
       "initiatedBy": "{{name}} がグループ音声通話を開始しました",
-      "initiatedByVideo": "{{name}} さんがグループビデオ通話を開始",
       "inviteeCount": "{{count}} 人を招待",
       "groupMember": "グループメンバー",
-      "initiatedBySingle": "{{name}}さんから音声通話の招待",
-      "initiatedBySingleVideo": "{{name}} さんからビデオ通話の招待",
       "friend": "友だち",
-      "singleSubtitle": "音声通話"
+      "singleSubtitle": "音声通話",
+      "initiatedByVideo": "{{name}} がグループビデオ通話を開始しました",
+      "initiatedBySingleVideo": "{{name}} がビデオ通話を開始しました"
     },
     "chooseType": "通話を開始",
+    "typeVideo": "ビデオ通話",
     "typeVoice": "音声通話",
-    "typeVideo": "ビデオ通話"
+    "videoCallTitle": "ビデオ通話"
   },
   "im": {
     "time": {
@@ -2258,9 +2324,7 @@
       "note": "[ノート] {{title}}",
       "verification": "[認証] {{name}} から保証の依頼があります",
       "default": "[メッセージ]",
-      "plazaPost": "[イベント] {{title}}",
-      "voiceCall": "[音声通話]",
-      "videoCall": "[ビデオ通話]"
+      "plazaPost": "[イベント] {{title}}"
     }
   },
   "permissions": {
@@ -2291,6 +2355,11 @@
     }
   },
   "serverErrors": {
+    "TEMP_CHAT_JOIN_FAILED": "参加に失敗しました。もう一度お試しください",
+    "NOTE_RESTORE_DUPLICATE": "このノートの別の収蔵コピーが既に存在します。",
+    "NOTE_SHARE_LINK_LIMIT": "共有リンクの上限に達しました。不要なリンクを取り消してください",
+    "UPLOAD_PAYLOAD_TOO_LARGE": "ファイルが大きすぎてアップロードできません",
+    "COLLECTION_LIMIT": "コレクションの上限に達しました。不要なものを削除してください",
     "ADMIN_USER_NOT_FOUND": "ユーザーが存在しません",
     "ADMIN_USER_SELF_STATUS_CHANGE": "現在の管理者アカウントを停止または削除することはできません",
     "ADMIN_USER_INVALID_STATUS_TRANSITION": "このアカウントのステータス変更は許可されていません",
@@ -2313,9 +2382,11 @@
     "COIN_INSUFFICIENT": "ポイントが不足しています",
     "COIN_AMOUNT_INVALID": "金額は0より大きくしてください",
     "MEMBERSHIP_INVALID_LEVEL": "会員レベルが無効です",
+    "MEMBERSHIP_IDEMPOTENCY_CONFLICT": "この会員操作は以前のリクエストと競合しています。更新してもう一度お試しください。",
+    "MEMBERSHIP_GROUP_MEMBER_CAPACITY_EXCEEDED": "このグループは現在の会員レベルの人数上限に達しています",
+    "MEMBERSHIP_JOINED_CIRCLE_QUOTA_REACHED": "現在の会員レベルで参加できるグループ数の上限に達しました",
     "MEMBERSHIP_LEVEL_NOT_HIGHER": "現在より上のレベルを選んでください",
     "MEMBERSHIP_INSUFFICIENT_POINTS": "ポイントが足りません",
-    "MEMBERSHIP_IDEMPOTENCY_KEY_REUSED": "このリクエストIDは別の購入に使用済みです。もう一度お試しください。",
     "CIRCLE_MEMBER_LIMIT": "サークルが満員です",
     "CIRCLE_ALREADY_MEMBER": "すでにメンバーです",
     "CIRCLE_REQUEST_PENDING": "申請はすでに承認待ちです",
@@ -2350,6 +2421,7 @@
     "CIRCLE_JOIN_VIP_REQUIRED": "このサークルに参加するにはより高いVIPレベルが必要です",
     "CIRCLE_JOIN_CREDIT_REQUIRED": "このサークルに参加するにはより高い信用スコアが必要です",
     "CIRCLE_JOIN_FANCY_NUMBER_REQUIRED": "このサークルに参加するにはファンシーナンバーが必要です",
+    "CIRCLE_JOIN_VIP_RESTRICTION_EXCEEDS_CREATOR": "参加条件は作成者の会員レベルを超えて設定できません",
     "CIRCLE_LIST_ITEM_BLANK": "項目を空にすることはできません",
     "CIRCLE_LIST_ITEM_DUPLICATE": "項目は重複できません",
     "GROUP_NOT_FOUND": "グループが見つかりません",
@@ -2373,13 +2445,15 @@
     "TEMP_CHAT_ENDED": "一時チャットは終了しました",
     "TEMP_CHAT_FULL": "参加人数が上限に達しています",
     "TEMP_CHAT_CREATOR_ONLY": "作成者のみが終了できます",
-    "TEMP_CHAT_JOIN_FAILED": "参加に失敗しました。もう一度お試しください",
+    "PLAZA_MEMBERSHIP_REQUIRED": "会員にアップグレードしてサークル投稿を見る",
     "PLAZA_NOT_ACTIVE_MEMBER": "サークルのアクティブメンバーのみが投稿できます",
     "PLAZA_ADMIN_ONLY_POST": "このサークルでは管理者のみが投稿できます",
     "PLAZA_NOTE_INVALID": "そのノートは利用できないか、あなたのものではありません",
     "PLAZA_POST_NOT_FOUND": "投稿が見つかりません",
     "PLAZA_DELETE_AUTHOR_ONLY": "投稿者のみが削除できます",
     "PLAZA_INVALID_CURSOR": "この広場ページは期限切れです。更新してもう一度お試しください。",
+    "CITY_FILTER_QUOTA_REACHED": "現在の会員レベルで選択できる都市数の上限に達しました",
+    "PLAZA_VIP_RESTRICTION_EXCEEDS_AUTHOR": "申込条件は投稿者の会員レベルを超えて設定できません",
     "PLAZA_SIGNUP_SELF": "自分の投稿には応募できません",
     "PLAZA_SIGNUP_INELIGIBLE": "この投稿の応募条件を満たしていません",
     "PLAZA_RECOGNIZE_MIN_ONE": "コラボレーターを少なくとも1人選択してください",
@@ -2418,6 +2492,7 @@
     "FRIEND_TAG_LIMIT_REACHED": "友だちタグの数が上限に達しました",
     "FRIEND_LIMIT_REACHED": "友だちの数が上限に達しました。会員登録で上限を増やせます",
     "NOTE_GROUP_EXISTS": "同じ名前のグループが既に存在します",
+    "NOTE_STORAGE_QUOTA_REACHED": "現在の会員レベルのノート保存上限に達しました",
     "NOTE_GROUP_LIMIT": "ノートグループの数が上限に達しました",
     "NOTE_EXPORT_NO_MEDIA": "エクスポートできるメディアがありません",
     "NOTE_EXPORT_MEDIA_TOO_LARGE": "メディアファイルが大きすぎてエクスポートできません",
@@ -2440,21 +2515,17 @@
     "FRIEND_REQUEST_MESSAGE_INVALID": "メッセージは空にできず、500文字以内で入力してください",
     "FRIEND_REQUEST_MESSAGE_LIMIT": "相手が返信するまでに送れるメッセージは最大5件です",
     "NOTE_NOT_FOUND": "ノートが見つかりません",
-    "NOTE_RESTORE_DUPLICATE": "このノートの別の収蔵コピーが既に存在します。",
     "NOTE_GROUP_NOT_FOUND": "ノートグループが見つかりません",
     "NOTE_IMAGE_TOO_LARGE": "画像が大きすぎて埋め込めません",
     "NOTE_SHARE_LINK_INVALID": "この共有リンクは無効です",
-    "NOTE_SHARE_LINK_LIMIT": "共有リンクの上限に達しました。不要なリンクを取り消してください",
     "CALL_NOT_INVITED": "この通話に招待されていません",
     "CALL_NOT_FOUND": "通話が見つかりません",
     "CALL_NOT_ALLOWED": "この通話操作は許可されていません",
     "CALL_ALREADY_ACTIVE": "すでに通話中です",
-    "UPLOAD_PAYLOAD_TOO_LARGE": "ファイルが大きすぎてアップロードできません",
-    "CALL_NOT_FRIEND": "通話できるのは友達のみです",
+    "CALL_NOT_FRIEND": "通話は友達同士のみ利用できます",
     "CONVGROUP_NOT_FOUND": "グループが見つかりません",
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "会話が見つかりません",
     "COLLECTION_NOT_FOUND": "コレクションが見つかりません",
-    "COLLECTION_LIMIT": "コレクションの上限に達しました。不要なものを削除してください",
     "ICON_DISPLAY_LIMIT": "表示できるアイコンは最大5個です",
     "ICON_INVALID_SYSTEM_SELECTION": "アイコンの選択が無効です",
     "ICON_INVALID_CIRCLE_SELECTION": "サークルアイコンの選択が無効です",

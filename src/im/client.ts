@@ -501,6 +501,19 @@ export async function loginToOpenIM(
       userID: imUserID,
       token: imToken,
     });
+    // 登录在途时若已开始登出（in-flight 等待超时会置位 teardownOnSettle），结算即拆掉这个
+    // 迟到会话——登出把「拆除」委托给登录结算路径，这里必须先兜住，否则会话泄漏。
+    if (inFlightLogin.teardownOnSettle) {
+      await teardownLateLoginSession(inFlightLogin);
+      throw new Error('OpenIM login completed after logout began');
+    }
+    // login() 返回只代表请求已提交；长连接成功仍由 onConnectSuccess 异步通知。
+    // TokenKicked / native 事件丢失时可能永久停在 connecting，调用方会误以为
+    // IM 已登录成功。这里等到真正 connected，否则抛给 bootstrap / use-auth
+    // 的补登欠账与 token-recovery 兜底。
+    await waitForOpenIMConnectionReady();
+    // 等待连接期间可能刚好开始登出（上面的 in-flight 等待此刻才超时置位）——连上后再复检
+    // 一次，避免把用户已登出的会话当成登录成功返回。
     if (inFlightLogin.teardownOnSettle) {
       await teardownLateLoginSession(inFlightLogin);
       throw new Error('OpenIM login completed after logout began');

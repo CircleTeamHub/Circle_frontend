@@ -14,6 +14,7 @@ import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
+import { MemberName } from '@/components/ui/member-name';
 import { Divider } from '@/components/ui/divider';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { Spacing, useTheme } from '@/theme';
@@ -451,12 +452,13 @@ export default function PostSignupsScreen() {
               </Pressable>
               <View style={s.body}>
                 <View style={s.nameRow}>
-                  <Text
+                  <MemberName
+                    name={item.nickname}
+                    userId={item.userId}
                     numberOfLines={1}
                     style={{ fontSize: 16, fontWeight: '600', color: colors.text }}
-                  >
-                    {item.nickname}
-                  </Text>
+                    animated={false}
+                  />
                   {item.recognized ? (
                     <Text style={[s.recognizedTag, { color: colors.primary }]}>
                       {t('notifications.signupMgmt.recognizedTag', {

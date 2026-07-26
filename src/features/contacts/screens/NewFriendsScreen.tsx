@@ -1,4 +1,5 @@
 import { Avatar } from '@/components/ui/avatar';
+import { MemberName } from '@/components/ui/member-name';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
 import {
@@ -229,9 +230,12 @@ export default function NewFriendsScreen() {
             uri={item.activity.counterparty.avatarUrl ?? undefined}
           />
           <View style={s.rowMeta}>
-            <Text style={d.title}>
-              {getFriendActivityDisplayName(item.activity)}
-            </Text>
+            <MemberName
+              name={getFriendActivityDisplayName(item.activity)}
+              userId={item.activity.counterparty.id}
+              style={d.title}
+              animated={false}
+            />
             <Text style={d.subtitle}>{getFriendActivityCopy(item.activity)}</Text>
             <Text style={d.time}>
               {new Date(item.activity.createdAt).toLocaleString(

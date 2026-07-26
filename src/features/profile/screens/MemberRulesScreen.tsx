@@ -5,12 +5,42 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
-const RULE_KEYS = [
-  'profile.memberRules.rules.levels',
-  'profile.memberRules.rules.highTier',
-  'profile.memberRules.rules.consume',
-  'profile.memberRules.rules.irreversible',
-];
+const RULES = [
+  {
+    key: 'profile.memberRules.rules.catalog',
+    defaultValue:
+      '白银会员 ¥298 / 1 个月；黄金会员 ¥1288 / 6 个月；钻石会员 ¥1998 / 1 年；超级会员 ¥3998 / 永久。',
+  },
+  {
+    key: 'profile.memberRules.rules.supportActivation',
+    defaultValue:
+      '会员不在 App 内使用积分兑换或直接购买。联系客服后，由客服人工核实并开通会员。',
+  },
+  {
+    key: 'profile.memberRules.rules.upgrade',
+    defaultValue:
+      '已开通会员可联系客服补差价升级；升级后立即生效，原会员剩余价值由客服核算抵扣。',
+  },
+  {
+    key: 'profile.memberRules.rules.expiry',
+    defaultValue:
+      '会员到期后仅停止会员权益，不删除账号、聊天、笔记或其他用户内容。',
+  },
+  {
+    key: 'profile.memberRules.rules.fairUse',
+    defaultValue:
+      '会员规则仅适用于会员中心列出的权益；其中展示的“不限”仍受后端较高的合理使用与防滥用上限约束，实际权限以后端为准。',
+  },
+  {
+    key: 'profile.memberRules.rules.voiceToText',
+    defaultValue:
+      '语音转文字是所有用户可用的免费基础功能，不受会员等级限制。',
+  },
+  {
+    key: 'profile.memberRules.rules.excludedVisualBenefits',
+    defaultValue: '当前会员权益不包含头像框或动态头像承诺。',
+  },
+] as const;
 
 const s = StyleSheet.create({
   content: {
@@ -18,7 +48,7 @@ const s = StyleSheet.create({
     gap: Spacing.md,
   },
   card: {
-    borderRadius: Radius.lg,
+    borderRadius: Radius.sm,
     padding: Spacing.lg,
     gap: Spacing.md,
   },
@@ -34,6 +64,7 @@ const s = StyleSheet.create({
   },
   ruleText: {
     flex: 1,
+    flexShrink: 1,
   },
 });
 
@@ -88,14 +119,16 @@ export default function MemberRulesScreen() {
         <Text style={d.desc}>
           {t('profile.memberRules.description', {
             defaultValue:
-              '以下规则用于说明会员等级、积分兑换和权限范围。支付、订单和有效期将在后续接入真实后端。',
+              '会员由客服人工核实并开通，页面展示权益目录，实际权限以后端为准。',
           })}
         </Text>
         <View style={[s.card, d.card]}>
-          {RULE_KEYS.map((ruleKey) => (
-            <View key={ruleKey} style={s.rule}>
+          {RULES.map((rule) => (
+            <View key={rule.key} style={s.rule}>
               <View style={[s.dot, d.dot]} />
-              <Text style={[s.ruleText, d.ruleText]}>{t(ruleKey)}</Text>
+              <Text style={[s.ruleText, d.ruleText]}>
+                {t(rule.key, { defaultValue: rule.defaultValue })}
+              </Text>
             </View>
           ))}
         </View>

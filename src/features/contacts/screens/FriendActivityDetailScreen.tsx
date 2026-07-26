@@ -1,4 +1,5 @@
 import { Avatar } from '@/components/ui/avatar';
+import { MemberName } from '@/components/ui/member-name';
 import { NavHeader } from '@/components/ui/nav-header';
 import {
   canHandleFriendActivity,
@@ -502,7 +503,11 @@ export default function FriendActivityDetailScreen() {
           uri={activity.counterparty.avatarUrl ?? undefined}
         />
         <View style={s.profileMeta}>
-          <Text style={d.title}>{getFriendActivityDisplayName(activity)}</Text>
+          <MemberName
+            name={getFriendActivityDisplayName(activity)}
+            userId={activity.counterparty.id}
+            style={d.title}
+          />
           <Text style={d.subtitle}>{getFriendActivityCopy(activity)}</Text>
           <Text style={d.time}>
             {new Date(activity.createdAt).toLocaleString(

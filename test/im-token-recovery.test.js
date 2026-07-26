@@ -286,6 +286,7 @@ test('IM token 过期事件走原地恢复，不再直接清 session 跳登录�
   );
 
   assert.match(handler, /recoverIMSession\(\)/);
+  // onKickedOffline 不再走 token 恢复（多端顶替是终态断连，见 im-listeners-batching 测试）。
   assert.doesNotMatch(handler, /clearLocalSession/);
   assert.doesNotMatch(handler, /router\.replace/);
   // 不再把「登录已过期」文案写进 IM 错误态——业务会话可能还活着
@@ -490,4 +491,72 @@ test('刷新后重试仍 401 → 清 session 并抛 auth-retry-failed (#111)', (
   );
   assert.match(retryBlock, /retryRequest\.res\.status === 401/);
   assert.match(retryBlock, /clearLocalSession\(requestSessionEpoch\)/);
+});
+
+test('recovery rechecks kick-cancellation after IM login settles, not only before the await', () => {
+  const src = read('src/im/token-recovery.ts');
+  // 踢下线在登录 await 期间到达:cancelIMSessionRecovery bump 代次但不改 sessionEpoch。
+  // 登录返回后的拆除守卫必须同时判 sessionEpoch 和代次,否则会接受这次迟到登录、重连互踢。
+  assert.match(src, /export function cancelIMSessionRecovery/);
+  assert.match(
+    src,
+    /sessionEpoch !== startEpoch \|\|\s*recoveryGeneration !== startGeneration/,
+  );
+});
+
+test('armReloginDebt gates on both sessionEpoch and recoveryGeneration', () => {
+  const src = read('src/im/token-recovery.ts');
+  // 记欠账前必须两条都还成立:epoch 未变(没切号)且代次未变(没被踢下线)。只判 epoch
+  // 会漏掉「踢下线不改 epoch」这条路径,把欠账记回来、回前台又重登互踢(#127 review)。
+  const armFn = src.slice(
+    src.indexOf('const armReloginDebt'),
+    src.indexOf('};', src.indexOf('const armReloginDebt')),
+  );
+  assert.match(armFn, /sessionEpoch === startEpoch/);
+  assert.match(armFn, /recoveryGeneration === startGeneration/);
+  // 非当前会话时**不动** reloginPending:用 if 守卫写入,不是三元强制 false。旧写法
+  // `stillCurrent ? value : false` 会在 A 会话掉队收尾时清掉 B 会话刚记下的欠账,B 的回前台
+  // 重试被跳过、IM 断连到冷启动(#131 P1)。
+  assert.match(armFn, /if \(stillCurrent\) \{\s*reloginPending = value;\s*\}/);
+  assert.doesNotMatch(armFn, /reloginPending = stillCurrent \? value : false/);
+});
+
+test('getIMRecoveryGeneration is exported for login sites to detect mid-await kicks', () => {
+  const recovery = read('src/im/token-recovery.ts');
+  assert.match(recovery, /export function getIMRecoveryGeneration\(\)/);
+
+  // 三个补登点都要在 await loginToOpenIM 前捕获代次、之后比对:被踢下线(代次已变)时
+  // 绝不再挂补登欠账,否则回前台把顶替本端的新设备再踢下线,重演互踢风暴(#127 review)。
+  for (const rel of [
+    'src/hooks/use-auth.ts',
+    'src/components/app/session-bootstrap.tsx',
+  ]) {
+    const mod = read(rel);
+    assert.match(mod, /getIMRecoveryGeneration/, `${rel} imports the generation getter`);
+    assert.match(
+      mod,
+      /recoveryGenerationBefore/,
+      `${rel} captures the generation before login`,
+    );
+  }
+});
+
+test('login sites tear down a late IM session when kicked during a SUCCESSFUL login (not only in catch)', () => {
+  const bootstrap = read('src/components/app/session-bootstrap.tsx');
+  const useAuth = read('src/hooks/use-auth.ts');
+
+  // 弱网下 login() 已返回、onConnectSuccess 迟到:若期间被踢(代次变但 epoch 未变),这次迟到
+  // 的成功会把本端连回去、再踢掉顶替的新设备。成功 await 之后必须复检代次并强制原生登出拆掉
+  // 迟到会话——此前守卫只在 catch 里,成功路径漏了(#131 P1)。
+  const teardown =
+    /getIMRecoveryGeneration\(\) !== recoveryGenerationBefore\)\s*\{\s*await logoutFromOpenIM\(\{ forceNative: true \}\)/;
+  assert.match(bootstrap, teardown, 'bootstrap tears down on post-success kick');
+  assert.match(useAuth, teardown, 'use-auth tears down on post-success kick');
+
+  // use-auth 两个登录点(onAuthSuccess + 降级切号)都要有强制原生登出的拆除。
+  const tears = useAuth.match(/logoutFromOpenIM\(\{ forceNative: true \}\)/g) || [];
+  assert.ok(
+    tears.length >= 2,
+    'both use-auth login sites tear down a late session on kick',
+  );
 });

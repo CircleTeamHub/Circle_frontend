@@ -49,6 +49,22 @@ async function loadCirclesStore() {
   return useCirclesStore;
 }
 
+// 与上面两个 loader 同理惰性加载:静态 import 这两个会形成
+// session.ts → use-discover-store/userVipStore → services/api/* → api/client.ts → session.ts
+// 的模块环。api/client.ts 求值时会 registerLogoutHandler,而彼时 session.ts 还没初始化完、
+// 它的 logoutHandlers 绑定尚未就绪,可能在冷启动阶段崩。改为登出流程里按需 import 破环。
+async function loadDiscoverStore() {
+  const { useDiscoverStore } = await import(
+    '@/features/discover/store/use-discover-store'
+  );
+  return useDiscoverStore;
+}
+
+async function loadVipLevelsInvalidator() {
+  const { invalidateVipLevels } = await import('@/stores/userVipStore');
+  return invalidateVipLevels;
+}
+
 type PersistedResettableStore = {
   getState: () => { resetForLogout: () => void };
   persist?: {
@@ -160,6 +176,8 @@ async function performClearLocalSession(sessionEpoch: number) {
 
   const useMessageGroupsStore = await loadMessageGroupsStore();
   const useCirclesStore = await loadCirclesStore();
+  const useDiscoverStore = await loadDiscoverStore();
+  const invalidateVipLevels = await loadVipLevelsInvalidator();
 
   // 先清 auth，让订阅 useAuthStore 的组件立刻看到"未登录"，
   // 避免 dependent store 被清空后触发"重新拉取"再被丢弃的请求。
@@ -175,6 +193,12 @@ async function performClearLocalSession(sessionEpoch: number) {
   useFriendRemarkStore.getState().reset();
   useTabBadgeStore.getState().reset();
   useWalletRealtimeStore.getState().reset();
+  // 发现页 feed 含 plazaMembershipRequired 升级墙标记：不随登出重置的话，切到会员账号
+  // 后仍可能停在上一个非会员账号的升级墙，直到手动刷新或重启 app。
+  useDiscoverStore.getState().reset();
+  // 清 userId→vipLevel 缓存：否则切到 B 账号后，通讯录/会话里 A 账号见过的用户仍带
+  // A 会话缓存的会员档位（虽同源，但语义上应随会话重建）。
+  invalidateVipLevels();
   // 诊断面包屑是进程级内存缓冲，而切换账号不重启 app。不清的话，上一个账号的
   // circleId / conversationID 会搭下一个账号的错误上报离开设备。
   resetDiagnosticBreadcrumbs();

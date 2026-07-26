@@ -141,7 +141,14 @@ test('mapWithConcurrency 保序、限并发、冒泡 mapper 异常', async () =>
 
 test('广场圈子快捷入口随焦点刷新 (#107)', () => {
   const feed = read('src/features/discover/components/plaza-feed.tsx');
-  assert.match(feed, /useFocusEffect\(\s*useCallback\(\(\) => \{\s*void fetchMyCircles\(\)/);
+  // 圈子快捷入口随焦点刷新：用 useFocusEffect 调 fetchMyCircles，而非普通 useEffect。
+  // 该焦点 effect 允许在 fetchMyCircles 前带会员门守卫（被会员墙拦时跳过拉取），
+  // deps 含 membershipBlocked/programEnabled 是它的标识（普通 useEffect 版本没有）。
+  assert.match(feed, /useFocusEffect\(/);
+  assert.match(
+    feed,
+    /void fetchMyCircles\(\);\s*\},\s*\[fetchMyCircles, membershipBlocked, programEnabled\]/,
+  );
   assert.doesNotMatch(feed, /useEffect\(\(\) => \{\s*fetchMyCircles\(\);\s*\}, \[fetchMyCircles\]\)/);
 });
 

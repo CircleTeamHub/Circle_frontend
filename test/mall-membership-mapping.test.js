@@ -5,17 +5,16 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
-// Regression guard for the DTO→domain mapping in mall.ts / membership.ts.
+// Regression guards for the mall DTO mapping and membership API contract.
 //
-// The backend (circle_be) sends display strings under `title` / `name` / `perks`.
-// The screens render t(section.titleKey) / t(product.nameKey) / t(item.perksKey).
+// The mall backend sends display strings under `title` / `name`.
+// The mall screen renders t(section.titleKey) / t(product.nameKey).
 // Before the mapper existed, fetch* cast the raw payload straight to the domain type,
 // so titleKey/nameKey/perksKey were `undefined` and t(undefined) → "" → blank UI —
 // but ONLY on the online path (offline used the static fallback), so it shipped green.
 //
-// This loads the real modules (incl. the real @/utils/validate) with a stubbed
-// apiClient returning BACKEND-shaped data, and asserts the mapping fills keys and
-// preserves the backend string as the t() defaultValue (passthrough for unknown ids).
+// This loads the real modules (including @/utils/validate) with a stubbed
+// apiClient and checks their backend-facing response contracts.
 
 const I18N_STUB = {
   __esModule: true,
@@ -139,34 +138,58 @@ test('FALLBACK_SECTIONS carry both a key and a non-empty default for every entry
   }
 });
 
-test('fetchMembershipPlans maps backend perks → i18n key + keeps backend string as default', async () => {
+test('fetchMembershipPlans accepts the four-tier customer-service catalog', async () => {
   const backend = [
-    { level: 1, name: 'VIP1', price: 780, perks: '后端权益一' },
-    { level: 9, name: 'VIP9', price: 99999, perks: '未知等级权益' },
+    {
+      level: 1,
+      key: 'silver',
+      durationMonths: 1,
+      lifetime: false,
+      priceCny: 298,
+      recommended: false,
+    },
+    {
+      level: 4,
+      key: 'super',
+      durationMonths: null,
+      lifetime: true,
+      priceCny: 3998,
+      recommended: false,
+    },
   ];
   const { fetchMembershipPlans } = loadWithApi('src/services/api/membership.ts', backend);
   const plans = await fetchMembershipPlans();
 
-  assert.equal(plans[0].perksKey, 'profile.membership.tiers.vip1.perks');
-  assert.equal(plans[0].defaultPerks, '后端权益一');
-
-  // Unknown level → empty key, backend string passes through (no blank).
-  assert.equal(plans[1].perksKey, '');
-  assert.equal(plans[1].defaultPerks, '未知等级权益');
+  assert.deepEqual(JSON.parse(JSON.stringify(plans)), backend);
 });
 
 test('fetchMembershipPlans rejects malformed payloads', async () => {
   const { fetchMembershipPlans } = loadWithApi('src/services/api/membership.ts', [
-    { level: 1, name: 'VIP1' },
+    {
+      level: 5,
+      key: 'vip5',
+      durationMonths: 1,
+      lifetime: false,
+      priceCny: 9999,
+      recommended: false,
+    },
   ]);
   await assert.rejects(fetchMembershipPlans());
 });
 
-test('FALLBACK_MEMBERSHIP_PLANS carry key + non-empty default for every tier', () => {
-  const { FALLBACK_MEMBERSHIP_PLANS } = loadWithApi('src/services/api/membership.ts', []);
-  assert.equal(FALLBACK_MEMBERSHIP_PLANS.length, 5);
-  for (const plan of FALLBACK_MEMBERSHIP_PLANS) {
-    assert.ok(plan.perksKey, `VIP${plan.level} missing perksKey`);
-    assert.ok(plan.defaultPerks, `VIP${plan.level} missing defaultPerks`);
-  }
+test('fetchMembershipProgramStatus accepts the marketing rollout contract', async () => {
+  const backend = {
+    enabled: false,
+    enabledAt: null,
+    entitlementFloorLevel: 2,
+  };
+  const { fetchMembershipProgramStatus } = loadWithApi(
+    'src/services/api/membership.ts',
+    backend,
+  );
+
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(await fetchMembershipProgramStatus())),
+    backend,
+  );
 });

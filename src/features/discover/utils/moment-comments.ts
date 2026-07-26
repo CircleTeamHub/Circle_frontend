@@ -18,6 +18,8 @@ export interface MomentCommentPreviewState {
 
 export interface LikedFriendsPreview {
   namesText: string;
+  // 逐个可上色的点赞好友（截断后的可见部分）；namesText 保留作纯文本兜底。
+  friends: { id: string; nickname: string }[];
   hiddenCount: number;
   separator: string;
 }
@@ -179,6 +181,7 @@ export function buildLikedFriendsPreview(
 
   return {
     namesText: visibleFriends.map((friend) => friend.nickname).join(separator),
+    friends: visibleFriends,
     hiddenCount: Math.max(0, likedFriends.length - visibleFriends.length),
     separator,
   };

@@ -95,6 +95,9 @@ function createIMSessionHarness({
     login: async ({ userID }) => {
       calls.push(`login:${userID}`);
       if (loginError) throw loginError;
+      // 模拟真实 onConnectSuccess：登录成功后长连接就绪，client.ts 的
+      // waitForOpenIMConnectionReady 据此返回。
+      storeState.connected = true;
     },
     logout: async () => {
       calls.push('logout');
@@ -311,6 +314,7 @@ test('login waits for an in-flight OpenIM logout before starting the next sessio
     },
     login: async ({ userID }) => {
       calls.push(`login:${userID}`);
+      storeState.connected = true;
     },
   };
   const { ensureOpenIMInitialized, loginToOpenIM, logoutFromOpenIM } =
@@ -488,6 +492,8 @@ test('logout waits for an in-flight login and tears down its late native success
       calls.push(`login:${userID}:start`);
       await loginGate.promise;
       nativeStatus = 3;
+      // 登录成功 → onConnectSuccess → 长连接就绪。
+      storeState.connected = true;
       calls.push(`login:${userID}:done`);
     },
     logout: async () => {
@@ -673,6 +679,8 @@ test('late login cleanup does not logout a newer native identity', async () => {
       }
       nativeStatus = 3;
       nativeUserID = userID;
+      // 新身份登录成功 → 长连接就绪。
+      storeState.connected = true;
       calls.push(`login:${userID}:done`);
     },
     logout: async () => {

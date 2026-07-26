@@ -108,11 +108,15 @@ export default function FilterScreen() {
 
   const draftCircleIds = useDiscoverFilterStore((st) => st.draftCircleIds);
   const draftCities = useDiscoverFilterStore((st) => st.draftCities);
+  const draftNationwide = useDiscoverFilterStore((st) => st.draftNationwide);
   const loadDraftFromApplied = useDiscoverFilterStore(
     (st) => st.loadDraftFromApplied,
   );
   const removeDraftCircle = useDiscoverFilterStore((st) => st.removeDraftCircle);
   const removeDraftCity = useDiscoverFilterStore((st) => st.removeDraftCity);
+  const setDraftNationwide = useDiscoverFilterStore(
+    (st) => st.setDraftNationwide,
+  );
   const clearDraft = useDiscoverFilterStore((st) => st.clearDraft);
   const saveFilter = useDiscoverFilterStore((st) => st.saveFilter);
 
@@ -282,7 +286,23 @@ export default function FilterScreen() {
             />
           </Pressable>
 
-          {draftCities.length > 0 ? (
+          {draftNationwide ? (
+            <View style={s.chipsWrap}>
+              <View style={[s.chip, d.chip]}>
+                <Ionicons name="globe-outline" size={12} color={colors.white} />
+                <Text style={d.chipText} numberOfLines={1}>
+                  {t('city.nationwide')}
+                </Text>
+                <Pressable
+                  style={[s.chipRemove, d.chipRemove]}
+                  onPress={() => setDraftNationwide(false)}
+                  hitSlop={6}
+                >
+                  <Ionicons name="close" size={13} color={colors.primary} />
+                </Pressable>
+              </View>
+            </View>
+          ) : draftCities.length > 0 ? (
             <View style={s.chipsWrap}>
               {draftCities.map((city) => (
                 <View key={city} style={[s.chip, d.chip]}>

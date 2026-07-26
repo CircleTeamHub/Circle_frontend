@@ -16,7 +16,8 @@ import OpenIMSDK, {
   type UserOnlineState,
 } from '@openim/rn-client-sdk';
 import i18n from '@/i18n';
-import { recoverIMSession } from '@/im/token-recovery';
+import { cancelIMSessionRecovery, recoverIMSession } from '@/im/token-recovery';
+import { clearIMLoginRetryPending } from '@/im/login-retry-pending';
 import { buildChatSnackbar } from '@/im/snackbar';
 import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
 import { useIMStore } from '@/stores/imStore';
@@ -74,6 +75,14 @@ export function bindOpenIMListeners() {
   OpenIMSDK.on('onConnecting', handleConnecting);
 
   const handleConnected = async () => {
+    // 迟到的连接成功:此刻没有当前身份(登录已因就绪超时/失败放弃、currentUserID 被清为
+    // null)时,别把 connected 翻真、也别拉会话——否则会留下「已连接但身份为 null」的僵尸
+    // 会话,读回执 / 消息归属会错到下次前台重登才纠正。正常登录在 login() 前就乐观写入
+    // currentUserID(client.ts),真正的登录 / 重连都带得着身份,不受此守卫影响。
+    if (!useIMStore.getState().currentUserID) {
+      useIMStore.getState().setConnecting(false);
+      return;
+    }
     useIMStore.getState().setConnecting(false);
     useIMStore.getState().setConnected(true);
     useIMStore.getState().setError(null);
@@ -118,6 +127,22 @@ export function bindOpenIMListeners() {
   OpenIMSDK.on('onUserTokenExpired', handleTokenExpired);
   // SDK 也可能发 onUserTokenInvalid（token 不被服务器接受），统一按 expired 处理
   OpenIMSDK.on('onUserTokenInvalid', handleTokenExpired);
+
+  // 同账号在另一端以相同 platform 登录时，OpenIM 把本端长连接踢下线——这是对端「有意」
+  // 顶替，不是 token 失效。若像 expired 那样换 token 原地重登，本端会立刻把新端再踢下线，
+  // 两端来回抢登陷入风暴。故按终态断连处理、给用户可读解释、不自动恢复；用户如需可自行
+  // 重新进入以重新登录（届时轮到对端被踢，是用户的显式选择）。
+  const handleKickedOffline = () => {
+    useIMStore.getState().setConnecting(false);
+    useIMStore.getState().setConnected(false);
+    useIMStore.getState().setError('您的账号已在其他设备登录');
+    // 关键：取消所有补登 / 恢复欠账。否则回前台时排队的欠账
+    // (isIMLoginRetryPending / reloginPending)或在飞的 recoverIMSession 会把本端又登
+    // 回去、把顶替本端的新设备再踢下线，重演本应避免的互踢风暴。
+    clearIMLoginRetryPending();
+    cancelIMSessionRecovery();
+  };
+  OpenIMSDK.on('onKickedOffline', handleKickedOffline);
 
   // onConversationChanged 与 onNewConversation 共享同一个 handler 引用：
   // 行为相同 + 共享 ref 便于 off 时一一对应、也少一份闭包。
@@ -276,6 +301,7 @@ export function bindOpenIMListeners() {
     OpenIMSDK.off('onConnectFailed', handleConnectFailed);
     OpenIMSDK.off('onUserTokenExpired', handleTokenExpired);
     OpenIMSDK.off('onUserTokenInvalid', handleTokenExpired);
+    OpenIMSDK.off('onKickedOffline', handleKickedOffline);
     OpenIMSDK.off('onConversationChanged', handleConversationsBatched);
     OpenIMSDK.off('onNewConversation', handleConversationsBatched);
     OpenIMSDK.off('onTotalUnreadMessageCountChanged', handleUnreadChanged);

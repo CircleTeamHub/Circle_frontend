@@ -10,6 +10,7 @@ export type DiscoverFeedState = {
   plazaRefreshing: boolean;
   plazaQueryVersion: number;
   plazaLatestRequestId: number;
+  plazaMembershipRequired: boolean;
 };
 
 type ApplyPlazaFetchSuccessArgs = {
@@ -46,12 +47,19 @@ export function applyPlazaFetchSuccess(
 
 export function applyPlazaFetchFailure(
   state: DiscoverFeedState,
-  args: { requestQueryVersion: number; requestId: number },
+  args: {
+    requestQueryVersion: number;
+    requestId: number;
+    membershipRequired: boolean;
+  },
 ): DiscoverFeedState {
   if (
     state.plazaQueryVersion !== args.requestQueryVersion ||
     state.plazaLatestRequestId !== args.requestId
   ) {
+    // 陈旧请求（被更新的 reset / filter 变更取代）：不改任何 live 态，包括
+    // plazaMembershipRequired —— 否则一个迟到的 PLAZA_MEMBERSHIP_REQUIRED 会盖掉更新
+    // 的成功态，把已在展示的 feed 换成持久升级墙。
     return state;
   }
 
@@ -59,6 +67,7 @@ export function applyPlazaFetchFailure(
     ...state,
     plazaLoading: false,
     plazaRefreshing: false,
+    plazaMembershipRequired: args.membershipRequired,
   };
 }
 

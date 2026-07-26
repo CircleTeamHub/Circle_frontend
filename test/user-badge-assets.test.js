@@ -71,6 +71,8 @@ test('UserIconBadge renders system badges from local artwork', () => {
   assert.match(row, /getSystemBadgeAsset/);
   assert.match(row, /systemBadgeImage/);
   assert.match(row, /contentFit="contain"/);
+  assert.match(row, /getSystemBadgeVisualTranslateY/);
+  assert.match(row, /translateY/);
 });
 
 test('top collaborator badges are mapped from collaboration recognition thresholds', () => {
@@ -129,7 +131,7 @@ test('verified profile and circle builder badges use their dedicated local artwo
 });
 
 test('system badge visual scales compensate for uneven transparent artwork padding', () => {
-  const { getSystemBadgeVisualScale } = loadBadgeAssets();
+  const { getSystemBadgeVisualScale, getSystemBadgeVisualTranslateY } = loadBadgeAssets();
   const makeIcon = (systemKey, title = systemKey, recognitionCount) => ({
     id: `system-${systemKey}`,
     type: 'SYSTEM',
@@ -141,12 +143,22 @@ test('system badge visual scales compensate for uneven transparent artwork paddi
     recognitionCount,
   });
 
-  assert.equal(getSystemBadgeVisualScale(makeIcon('VIP', 'VIP5')), 1);
+  // 超级(≥VIP4)= super.png 橙色皇冠。该素材内容填满方形画布,需要略微缩小,
+  // 否则在“我的徽章”里会比银/金/钻等竖版透明画布素材大一圈。
+  assert.equal(getSystemBadgeVisualScale(makeIcon('VIP', 'VIP5')), 0.8);
+  assert.equal(getSystemBadgeVisualScale(makeIcon('VIP', 'VIP4')), 0.8);
+  assert.equal(getSystemBadgeVisualScale(makeIcon('VIP', 'VIP3')), 1.16);
   assert.equal(getSystemBadgeVisualScale(makeIcon('VIP', 'VIP1')), 1.16);
   assert.equal(getSystemBadgeVisualScale(makeIcon('NEW_USER')), 1.16);
   assert.equal(getSystemBadgeVisualScale(makeIcon('CIRCLE_BUILDER')), 1.16);
   assert.equal(getSystemBadgeVisualScale(makeIcon('VERIFIED_PROFILE')), 1);
   assert.equal(getSystemBadgeVisualScale(makeIcon('TOP_COLLABORATOR', 'Top', 1000)), 1.04);
+
+  assert.equal(getSystemBadgeVisualTranslateY(makeIcon('VIP', 'VIP5')), -8);
+  assert.equal(getSystemBadgeVisualTranslateY(makeIcon('VIP', 'VIP3')), 2);
+  assert.equal(getSystemBadgeVisualTranslateY(makeIcon('CIRCLE_BUILDER')), 1);
+  assert.equal(getSystemBadgeVisualTranslateY(makeIcon('VERIFIED_PROFILE')), 3);
+  assert.equal(getSystemBadgeVisualTranslateY(makeIcon('TOP_COLLABORATOR', 'Top', 1000)), 0);
 });
 
 test('first release system badge keys are modeled on the client', () => {

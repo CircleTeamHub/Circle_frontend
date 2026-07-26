@@ -82,39 +82,17 @@ test('回收站：列表 + 恢复接线 (FE#92)', () => {
 // #91 幂等头 / #100 卡片回执
 // ---------------------------------------------------------------------------
 
-test('membership upgrade 幂等键跟随升级意图存活（review P1）', () => {
+test('membership upgrade 走客服协助流程，不再在 app 内直接升级（review 二轮）', () => {
+  // app 内直接 POST /membership/upgrade（含幂等键）的流程已下线，改为「联系客服开通/升级」。
+  // 旧测试仍要求已删除的 upgradeMembership + 屏幕接线，会确定性失败——重写为覆盖新流程。
   const api = read('src/services/api/membership.ts');
-  const upgradeBlock = api.slice(api.indexOf('export async function upgradeMembership'));
-  // 键由调用方传入（重试间复用）；缺省才现造（向后兼容）
-  assert.match(upgradeBlock, /idempotencyKey\?: string/);
-  assert.match(
-    upgradeBlock,
-    /'Idempotency-Key': idempotencyKey \?\? generateIdempotencyKey\(\)/,
-  );
+  assert.doesNotMatch(api, /export async function upgradeMembership/);
 
-  // 意图级持键：同一等级重试复用同一枚键，换等级/成功后换新键
-  const mod = loadTsModule('src/features/profile/membership-idempotency.ts', {
-    requireShim: (specifier) => {
-      if (specifier === '@/utils/idempotency-key') {
-        let seq = 0;
-        return { generateIdempotencyKey: () => `key-${(seq += 1)}` };
-      }
-      throw new Error(`unexpected import: ${specifier}`);
-    },
-  });
-  const first = mod.resolveMembershipUpgradeIdempotency(null, { level: 2 });
-  // 响应丢失后的重试：同意图 → 同键（后端去重的前提）
-  const retry = mod.resolveMembershipUpgradeIdempotency(first, { level: 2 });
-  assert.equal(retry.key, first.key);
-  // 换等级 → 新键
-  const other = mod.resolveMembershipUpgradeIdempotency(first, { level: 3 });
-  assert.notEqual(other.key, first.key);
-
-  // 屏幕接线：ref 持键、传入 API、成功后失效
   const screen = read('src/features/profile/screens/MemberCenterScreen.tsx');
-  assert.match(screen, /resolveMembershipUpgradeIdempotency\(/);
-  assert.match(screen, /upgradeMembership\(level, idempotency\.key\)/);
-  assert.match(screen, /upgradeIdempotencyRef\.current = null;/);
+  // 升级动作 = 打开与会员客服的会话，而不是直接调用升级接口 / 造幂等键。
+  assert.match(screen, /getMembershipSupportUserId\(\)/);
+  assert.doesNotMatch(screen, /upgradeMembership\(/);
+  assert.doesNotMatch(screen, /resolveMembershipUpgradeIdempotency\(/);
 });
 
 test('转账卡片发出后向后端回执，key 贯穿 pending store (#100)', () => {

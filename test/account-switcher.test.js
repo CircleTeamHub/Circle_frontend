@@ -99,6 +99,17 @@ test("degraded switch (transient /auth/me failure) keeps rotated tokens and retr
   assert.match(elseBranch, /markIMLoginRetryPending\(\)/);
 });
 
+test('hot login IM failure records a shared retry debt', () => {
+  const useAuth = read('src/hooks/use-auth.ts');
+  const authSuccess = useAuth.slice(
+    useAuth.indexOf('const onAuthSuccess'),
+    useAuth.indexOf('const login = useCallback'),
+  );
+
+  assert.match(authSuccess, /catch \(imError\)/);
+  assert.match(authSuccess, /markIMLoginRetryPending\(\)/);
+});
+
 test('IM 补登欠账为模块级共享：use-auth 生产、bootstrap 消费 (round 2)', () => {
   const pendingMod = read('src/im/login-retry-pending.ts');
   assert.match(pendingMod, /markIMLoginRetryPending/);

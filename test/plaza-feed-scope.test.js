@@ -27,11 +27,62 @@ test('plaza feed preserves backend circle ids instead of silently dropping them'
   assert.match(store, /selectedCircleId: circleId,/);
 });
 
+test('plaza membership gate recovers across account switch and same-account upgrade', () => {
+  const feed = read('src/features/discover/components/plaza-feed.tsx');
+  const store = read('src/features/discover/store/use-discover-store.ts');
+
+  // 登出重置(reset)让请求代次单调递增、不清零——否则新账号的请求会与旧账号仍在途的
+  // 请求撞号，迟到响应通过时新守卫覆盖新账号的 feed / 门。
+  assert.match(store, /plazaQueryVersion: state\.plazaQueryVersion \+ 1/);
+  assert.match(store, /plazaLatestRequestId: state\.plazaLatestRequestId \+ 1/);
+
+  // 同账号升级（vipLevel 由非会员变会员）后清掉上次留下的会员门并重拉，不用等切号 / 重启。
+  // 必须判升级**跃迁**（prev<=0 && now>0），而不是只判「有门」——否则客户端 vipLevel 陈旧
+  // 为正、服务端权威判定 MEMBERSHIP_REQUIRED 时会无限重试。
+  assert.match(feed, /prevVipLevelRef/);
+  assert.match(feed, /prev <= 0 && vipLevel > 0 && plazaMembershipRequired/);
+});
+
 test('plaza feed does not paginate while the first page is still empty', () => {
   const source = read('src/features/discover/components/plaza-feed.tsx');
 
   assert.match(source, /plazaPosts\.length > 0/);
-  assert.match(source, /plazaPosts\.length,\s*plazaLoading,\s*plazaHasMore,\s*fetchPlazaPosts/);
+  assert.match(
+    source,
+    /plazaPosts\.length,\s*plazaLoading,\s*plazaRefreshing,\s*plazaHasMore,\s*fetchPlazaPosts/,
+  );
+});
+
+test('plaza feed does not paginate on top of an in-flight pull-to-refresh', () => {
+  const feed = read('src/features/discover/components/plaza-feed.tsx');
+  const store = read('src/features/discover/store/use-discover-store.ts');
+
+  // end-reached 分页必须同时避让 plazaLoading 和 plazaRefreshing——否则并发的下拉刷新会被
+  // 更高 requestId 的分页当成陈旧请求丢弃,用户的刷新结果丢失(#127 review)。守卫在组件
+  // handler 和 store fetch 两处都要有(store 是权威闸门,handler 只是省一次空转)。
+  const handler = feed.slice(
+    feed.indexOf('const handleEndReached = useCallback'),
+    feed.indexOf('const handleCircleSelect'),
+  );
+  assert.match(handler, /!plazaLoading/);
+  assert.match(handler, /!plazaRefreshing/);
+  assert.match(
+    store,
+    /!reset && \(state\.plazaLoading \|\| state\.plazaRefreshing\)/,
+  );
+});
+
+test('plaza feed does not blank to a spinner on every refocus', () => {
+  const source = read('src/features/discover/components/plaza-feed.tsx');
+
+  // 每次聚焦都 setProgramEnabled(null) 会把整屏刷成 spinner、丢滚动位置。首次加载本就是
+  // null(显示 spinner);重新聚焦时保留上次已知值原地刷新,避免闪烁(#127 review)。
+  const firstFocus = source.slice(
+    source.indexOf('useFocusEffect'),
+    source.indexOf('const myPlazaCircles'),
+  );
+  assert.match(firstFocus, /fetchMembershipProgramStatus/);
+  assert.doesNotMatch(firstFocus, /setProgramEnabled\(null\)/);
 });
 
 test('plaza feed selected-circle empty state explains ended posts are hidden', () => {
@@ -49,6 +100,18 @@ test('plaza feed empty state never tells joined users to join a circle', () => {
   assert.match(emptyStateBlock, /discover\.noActiveActivity/);
   assert.match(emptyStateBlock, /discover\.endedActivityHiddenHint/);
   assert.doesNotMatch(emptyStateBlock, /discover\.joinCircleHint/);
+});
+
+test('plaza feed hides all posts behind the membership gate when enforcement is enabled', () => {
+  const feed = read('src/features/discover/components/plaza-feed.tsx');
+  const store = read('src/features/discover/store/use-discover-store.ts');
+
+  assert.match(feed, /fetchMembershipProgramStatus/);
+  assert.match(feed, /programEnabled === true && vipLevel <= 0/);
+  assert.match(feed, /升级会员查看圈子动态/);
+  assert.match(feed, /if \(membershipBlocked\)/);
+  assert.match(store, /PLAZA_MEMBERSHIP_REQUIRED/);
+  assert.match(store, /plazaMembershipRequired/);
 });
 
 test('plaza feed keeps circle shortcuts independent from the global filter', () => {
@@ -170,4 +233,17 @@ test('discover header filter button does not show an applied-filter dot', () => 
   assert.doesNotMatch(source, /filterDot/);
   assert.doesNotMatch(source, /hasActiveFilter/);
   assert.doesNotMatch(source, /useDiscoverFilterStore/);
+});
+
+test('plaza feed clears a stale membership gate when rollout enforcement turns off', () => {
+  const source = read('src/features/discover/components/plaza-feed.tsx');
+
+  // rollout 从「开放/未知」翻成「关闭」而上次留着 plazaMembershipRequired:membershipBlocked
+  // 因陈旧门恒真、两个拉取 effect 短路,免费开放对该用户永不生效直到登出/重启。跃迁那一次
+  // 显式重拉一次清门;判跃迁(prev !== false)避免后端仍权威返回门时空转打服务端(#131 review)。
+  assert.match(source, /prevProgramEnabledRef/);
+  assert.match(
+    source,
+    /prev !== false && programEnabled === false && plazaMembershipRequired/,
+  );
 });

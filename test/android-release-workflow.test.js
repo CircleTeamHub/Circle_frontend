@@ -199,6 +199,10 @@ test('Android release workflow preflight validates the exact public tag without 
   assert.match(preflight, /fetch-depth: 0/);
   assert.match(preflight, /persist-credentials: false/);
   assert.match(preflight, /validate-android-release\.js metadata/);
+  assert.match(
+    preflight,
+    /EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: \$\{\{ vars\.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID \}\}/,
+  );
   assert.match(preflight, /git rev-parse "refs\/tags\/\$RELEASE_TAG\^\{commit\}"/);
   assert.match(preflight, /test "\$\(git rev-parse HEAD\)" = "\$tag_commit"/);
   assert.match(preflight, /git merge-base --is-ancestor HEAD origin\/main/);
@@ -265,9 +269,32 @@ test('Android release workflow builds and verifies a private signed artifact', (
     build,
     /\.\/gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a/,
   );
+  // ABI 收窄只作用于 release 打包(靠上面的 gradlew flag)。不再用 config plugin 往
+  // 生成的 gradle.properties 全局写死 arm64——否则 Intel 主机上的 x86_64 模拟器 debug
+  // 构建会缺 native 库、装上跑不起来。
+  assert.doesNotMatch(read('app.json'), /with-android-abi-filter/);
   assert.match(build, /EXPO_PUBLIC_API_URL:/);
   assert.match(build, /EXPO_PUBLIC_OPENIM_API_URL:/);
   assert.match(build, /EXPO_PUBLIC_OPENIM_WS_URL:/);
+  assert.match(
+    build,
+    /EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: \$\{\{ vars\.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID \}\}/,
+  );
+  // 客服中心各入口的专属账号必须注入构建环境，否则 support-categories.ts 编译期
+  // 回落到 imAdmin，生产用户被导去系统管理员而非对应真人客服（评审 P2）。
+  for (const supportVar of [
+    'EXPO_PUBLIC_SUPPORT_ACCOUNT_ID',
+    'EXPO_PUBLIC_SUPPORT_RECHARGE_ID',
+    'EXPO_PUBLIC_SUPPORT_ISSUE_ID',
+    'EXPO_PUBLIC_SUPPORT_DISPUTE_ID',
+    'EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID',
+  ]) {
+    assert.match(
+      build,
+      new RegExp(`${supportVar}: \\$\\{\\{ vars\\.${supportVar} \\}\\}`),
+      `${supportVar} must be injected into the release build`,
+    );
+  }
   assert.match(build, /SENTRY_DISABLE_AUTO_UPLOAD: ["']true["']/);
   assert.match(build, /apksigner.*verify --verbose --print-certs/);
   assert.match(apkVerification, /certificate SHA-256 digest/);
@@ -479,6 +506,8 @@ test('release validation metadata requires matching app versions and secure publ
     EXPO_PUBLIC_API_URL: 'https://api.windnote.test',
     EXPO_PUBLIC_OPENIM_API_URL: 'https://im.windnote.test',
     EXPO_PUBLIC_OPENIM_WS_URL: 'wss://im.windnote.test/ws',
+    EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: 'official-support',
+    EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: 'cs-support',
   };
   const app = { version: '1.0.0', android: { versionCode: 1_000_000 } };
 
@@ -488,6 +517,7 @@ test('release validation metadata requires matching app versions and secure publ
     'EXPO_PUBLIC_API_URL',
     'EXPO_PUBLIC_OPENIM_API_URL',
     'EXPO_PUBLIC_OPENIM_WS_URL',
+    'EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID',
   ]) {
     assert.match(
       validateReleaseMetadata({ env: { ...env, [name]: '' }, app }).join('\n'),
@@ -666,6 +696,8 @@ test('release validation CLI supports scoped and legacy validation', () => {
     EXPO_PUBLIC_API_URL: 'https://api.windnote.test',
     EXPO_PUBLIC_OPENIM_API_URL: 'https://im.windnote.test',
     EXPO_PUBLIC_OPENIM_WS_URL: 'wss://im.windnote.test/ws',
+    EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: 'official-support',
+    EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: 'cs-support',
   };
   const signingEnv = {
     ANDROID_KEYSTORE_BASE64: 'a2V5c3RvcmU=',
@@ -833,5 +865,73 @@ test('release helper writes the latest-promotion decision to GitHub Actions outp
     );
   } finally {
     fs.rmSync(outputPath, { force: true });
+  }
+});
+
+test('release preflight fails closed when support routing would fall back to imAdmin', () => {
+  const {
+    validateSupportAccounts,
+  } = require('../.github/scripts/validate-android-release');
+
+  // 全空:通用与四类专属都没配 → 充值 / 纠纷 / 账号客服会静默落到系统账号 imAdmin,必须报错。
+  const blank = [];
+  validateSupportAccounts(blank, {});
+  assert.equal(blank.length, 1);
+  assert.match(blank[0], /imAdmin/);
+
+  // 只配通用客服账号 EXPO_PUBLIC_SUPPORT_ACCOUNT_ID → 通过(有可信兜底)。
+  const generic = [];
+  validateSupportAccounts(generic, {
+    EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: 'cs-generic',
+  });
+  assert.deepEqual(generic, []);
+
+  // 通用为空但四类专属全配齐 → 通过。
+  const perCategory = [];
+  validateSupportAccounts(perCategory, {
+    EXPO_PUBLIC_SUPPORT_RECHARGE_ID: 'cs-r',
+    EXPO_PUBLIC_SUPPORT_ISSUE_ID: 'cs-i',
+    EXPO_PUBLIC_SUPPORT_DISPUTE_ID: 'cs-d',
+    EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID: 'cs-a',
+  });
+  assert.deepEqual(perCategory, []);
+
+  // 专属只配了一部分、通用又为空 → 仍报错,并点名缺失的那一类。
+  const partial = [];
+  validateSupportAccounts(partial, {
+    EXPO_PUBLIC_SUPPORT_RECHARGE_ID: 'cs-r',
+  });
+  assert.equal(partial.length, 1);
+  assert.match(partial[0], /EXPO_PUBLIC_SUPPORT_ISSUE_ID/);
+
+  // 空白字符不算已配(trim 后为空) → 报错。
+  const whitespace = [];
+  validateSupportAccounts(whitespace, { EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: '   ' });
+  assert.equal(whitespace.length, 1);
+});
+
+test('release preflight forwards support-account variables so the validator can see them', () => {
+  const workflow = read('.github/workflows/android-release.yml');
+
+  // GitHub repository variables 不会自动进 process.env。preflight 步若不显式转发这些客服
+  // 变量,validateSupportAccounts 每次都看到全空、打 tag 就在测试/构建之前 fail——即便仓库
+  // 其实配好了(#131 P1)。这些必须和 build 步一致地转发。
+  const preflight = workflow.slice(
+    workflow.indexOf('Validate release metadata and ancestry'),
+    workflow.indexOf('Install dependencies'),
+  );
+  assert.ok(preflight.length > 0, 'preflight step block located');
+  for (const name of [
+    'EXPO_PUBLIC_SUPPORT_ACCOUNT_ID',
+    'EXPO_PUBLIC_SUPPORT_RECHARGE_ID',
+    'EXPO_PUBLIC_SUPPORT_ISSUE_ID',
+    'EXPO_PUBLIC_SUPPORT_DISPUTE_ID',
+    'EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID',
+  ]) {
+    assert.match(
+      preflight,
+      new RegExp(`${name}: \\$\\{\\{ vars\\.${name} \\}\\}`),
+      `preflight forwards ${name}`,
+    );
   }
 });

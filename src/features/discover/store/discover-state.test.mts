@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  applyPlazaFetchFailure,
   applyPlazaFetchSuccess,
   type DiscoverFeedState,
 } from './discover-state.ts';
@@ -46,6 +47,7 @@ function makeState(overrides: Partial<DiscoverFeedState> = {}): DiscoverFeedStat
     plazaRefreshing: false,
     plazaQueryVersion: 3,
     plazaLatestRequestId: 5,
+    plazaMembershipRequired: false,
     ...overrides,
   };
 }
@@ -93,4 +95,37 @@ test('appends plaza results onto the latest state, preserving locally prepended 
   );
   // The next page follows the server's cursor, not a page counter.
   assert.equal(nextState.plazaCursor, 'cursor-2');
+});
+
+test('a stale membership-required failure does not overwrite the live feed gate', () => {
+  // 已展示新 feed(版本/请求号更新)时，一个迟到的 MEMBERSHIP_REQUIRED 失败到达——
+  // 不应把 feed 换成持久升级墙。
+  const currentState = makeState({
+    plazaPosts: [makePost('live-post')],
+    plazaMembershipRequired: false,
+    plazaQueryVersion: 7,
+    plazaLatestRequestId: 10,
+  });
+
+  const nextState = applyPlazaFetchFailure(currentState, {
+    requestQueryVersion: 6,
+    requestId: 9,
+    membershipRequired: true,
+  });
+
+  assert.deepEqual(nextState, currentState);
+  assert.equal(nextState.plazaMembershipRequired, false);
+});
+
+test('a current membership-required failure raises the gate and stops loading', () => {
+  const currentState = makeState({ plazaMembershipRequired: false });
+
+  const nextState = applyPlazaFetchFailure(currentState, {
+    requestQueryVersion: 3,
+    requestId: 5,
+    membershipRequired: true,
+  });
+
+  assert.equal(nextState.plazaMembershipRequired, true);
+  assert.equal(nextState.plazaLoading, false);
 });

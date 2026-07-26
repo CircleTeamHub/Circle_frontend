@@ -1,6 +1,7 @@
 import { Avatar } from "@/components/ui/avatar";
 import { Divider } from "@/components/ui/divider";
 import { GradientCover } from "@/components/ui/gradient-cover";
+import { MemberName } from "@/components/ui/member-name";
 import { MenuRow } from "@/components/ui/menu-row";
 import { UserIconRow } from "@/components/ui/user-icon-row";
 import {
@@ -9,6 +10,11 @@ import {
   getVipStatBackground,
   getVipStatTextColor,
 } from "@/features/profile/member-stat-colors";
+import {
+  getMembershipTierForVipLevel,
+  type MembershipTier,
+} from "@/features/profile/membership-plans";
+import { getMembershipFrameAsset } from "@/features/profile/membership-frames";
 import { getUserProfileHref } from "@/features/user/utils/routes";
 import { fetchCurrentUser } from "@/services/api/auth";
 import { fetchIconOptions } from "@/services/api/icons";
@@ -29,10 +35,18 @@ const MENU_ID = {
   MALL: "mall",
   COLLECTIONS: "collections",
   NOTES: "notes",
+  CUSTOMER_SERVICE: "customer-service",
   APP_SETTINGS: "app-settings",
 } as const;
 
 type MenuId = (typeof MENU_ID)[keyof typeof MENU_ID];
+
+const DEFAULT_MEMBERSHIP_NAMES: Record<MembershipTier, string> = {
+  silver: "白银会员",
+  gold: "黄金会员",
+  diamond: "钻石会员",
+  super: "超级会员",
+};
 
 const MENU_ROUTE: Record<MenuId, string> = {
   [MENU_ID.SYSTEM_ANNOUNCEMENTS]: "/(tabs)/profile/system-announcements",
@@ -41,6 +55,7 @@ const MENU_ROUTE: Record<MenuId, string> = {
   [MENU_ID.MALL]: "/(tabs)/profile/mall",
   [MENU_ID.COLLECTIONS]: "/(tabs)/profile/collections",
   [MENU_ID.NOTES]: "/(tabs)/profile/notes",
+  [MENU_ID.CUSTOMER_SERVICE]: "/(tabs)/profile/customer-service",
   [MENU_ID.APP_SETTINGS]: "/(tabs)/profile/app-settings",
 };
 
@@ -56,6 +71,7 @@ const MENU_ITEM_KEYS: {
   { id: MENU_ID.MALL, icon: "hand-left-outline", labelKey: "profile.mall.menuLabel", rightTextKey: "profile.viewProducts" },
   { id: MENU_ID.COLLECTIONS, icon: "bookmark-outline", labelKey: "profile.collections.menuLabel", rightTextKey: "profile.viewCollections" },
   { id: MENU_ID.NOTES, icon: "document-text-outline", labelKey: "profile.notes", rightTextKey: "profile.viewNotes" },
+  { id: MENU_ID.CUSTOMER_SERVICE, icon: "headset-outline", labelKey: "profile.customerService.menuLabel", rightTextKey: "profile.customerService.menuHint" },
   { id: MENU_ID.APP_SETTINGS, icon: "settings-outline", labelKey: "profile.settings" },
 ];
 
@@ -98,12 +114,13 @@ const s = StyleSheet.create({
   },
   memberStatsPanel: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "stretch",
     gap: 8,
   },
   memberStatCell: {
     flex: 1,
     alignItems: "center",
+    justifyContent: "center",
     gap: 3,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
@@ -207,6 +224,12 @@ export default function ProfileScreen() {
   const displayName = user?.nickname || user?.accountId || t('profile.notLoggedIn');
   const displayAccount = user?.accountId || t('profile.notBound');
   const vipLevel = user?.vipLevel ?? 0;
+  const membershipTier = getMembershipTierForVipLevel(vipLevel);
+  const membershipLabel = membershipTier
+    ? t(`profile.membership.tiers.${membershipTier}.name`, {
+        defaultValue: DEFAULT_MEMBERSHIP_NAMES[membershipTier],
+      })
+    : t('profile.membership.regularUser', { defaultValue: '普通用户' });
   const creditScore = user?.creditScore ?? 0;
   const vipStatBackground = getVipStatBackground(vipLevel);
   const creditStatBackground = getCreditStatBackground(creditScore);
@@ -348,10 +371,15 @@ export default function ProfileScreen() {
               name={displayName}
               uri={user?.avatarUrl ?? undefined}
               bgColor={colors.surface}
+              frameSource={getMembershipFrameAsset(vipLevel) ?? undefined}
             />
           </Pressable>
           <View style={s.profileInfo}>
-            <Text style={d.profileName}>{displayName}</Text>
+            <MemberName
+              name={displayName}
+              vipLevel={vipLevel}
+              style={d.profileName}
+            />
             <Text style={d.profileAccount}>{t('contacts.accountId', { id: displayAccount })}</Text>
           </View>
         </View>
@@ -395,7 +423,14 @@ export default function ProfileScreen() {
             style={[s.memberStatCell, d.memberStat, { backgroundColor: vipStatBackground }]}
           >
             <Text style={[d.memberStatLabel, { color: vipStatTextColor }]}>{t('profile.vipLevel')}</Text>
-            <Text style={[d.memberStatValue, { color: vipStatTextColor }]}>VIP {vipLevel}</Text>
+            <Text
+              style={[d.memberStatValue, { color: vipStatTextColor }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.72}
+            >
+              {membershipLabel}
+            </Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"

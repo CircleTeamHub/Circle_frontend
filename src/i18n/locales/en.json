@@ -112,13 +112,13 @@
     "showPassword": "Show password",
     "resendIn": "Resend in {{seconds}}s",
     "resetPassword": {
+      "failed": "Reset failed — check the code and try again",
       "intro": "Enter your registered email and we will send a verification code to reset your password.",
       "newPasswordPlaceholder": "New password (min 6 chars)",
       "submit": "Reset password",
       "submitting": "Resetting…",
-      "successTitle": "Password reset",
       "successBody": "All devices have been signed out. Please log in with your new password.",
-      "failed": "Reset failed — check the code and try again"
+      "successTitle": "Password reset"
     }
   },
   "onboarding": {
@@ -599,13 +599,13 @@
       "cta": "Join"
     },
     "callRecord": {
-      "duration": "Call duration {{duration}}",
-      "canceledBySelf": "Canceled",
       "canceledByPeer": "Canceled by the other side",
-      "noAnswer": "No answer",
-      "missed": "Missed call",
+      "canceledBySelf": "Canceled",
+      "duration": "Call duration {{duration}}",
+      "ended": "Call ended",
       "failed": "Call failed",
-      "ended": "Call ended"
+      "missed": "Missed call",
+      "noAnswer": "No answer"
     }
   },
   "contacts": {
@@ -1348,49 +1348,117 @@
     "viewAnnouncements": "Latest",
     "addIcon": "Add badge",
     "myIcons": "Badge Collection",
+    "customerService": {
+      "menuLabel": "Support Center",
+      "menuHint": "Chat now",
+      "title": "Support Center",
+      "subtitle": "Choose the type of support you need",
+      "openFailed": "Couldn't open the support chat. Please try again.",
+      "categories": {
+        "recharge": {
+          "label": "Top-up Support",
+          "description": "Recharge, points, and payment issues"
+        },
+        "issue": {
+          "label": "General Support",
+          "description": "Bugs and questions about using the app"
+        },
+        "dispute": {
+          "label": "Dispute Support",
+          "description": "Transaction disputes, complaints, and appeals"
+        },
+        "account": {
+          "label": "Account Support",
+          "description": "Login, security, and account recovery"
+        }
+      }
+    },
     "membership": {
       "title": "Membership Center",
-      "confirmExchange": "Confirm Exchange",
-      "activateVip": "Activate VIP",
-      "currentLevel": "Current level: VIP{{level}}",
-      "benefitsHint": "Enjoy exclusive member benefits; the higher the level, the more benefits.",
-      "exchange": "Exchange Membership",
-      "currentBadge": "Current Level",
-      "loadError": "Failed to load membership tiers; showing local tier config.",
-      "exchangeSuccess": "Successfully exchanged VIP{{level}}",
-      "exchangeError": "Exchange failed. Please make sure you have enough points and try again.",
-      "confirmExchangeMessage": "Spend {{points}} points to exchange for {{plan}}?",
-      "loadingPlans": "Loading membership tiers",
-      "confirmExchangePlan": "Confirm exchange for {{plan}}",
-      "selectHigher": "Please select a higher membership tier",
+      "regularUser": "Regular user",
+      "currentIdentity": "Current status",
+      "catalogHint": "Select a tier to view its benefits. Customer service assists with activation and upgrades.",
+      "chooseTier": "Choose a membership tier",
+      "recommended": "Recommended",
+      "lifetime": "Lifetime",
+      "selected": "Selected",
+      "benefitsTitle": "Membership benefits",
+      "contactToActivate": "Contact customer service to activate {{plan}}",
+      "contactToUpgrade": "Contact customer service to upgrade to {{plan}}",
+      "contactForCurrent": "You already have {{plan}}; contact customer service",
+      "contactForLowerTier": "Your current tier is higher; contact customer service",
+      "contactSupport": "Contact customer service",
+      "upgradeDifferenceNote": "Current members can contact customer service to pay the difference for an upgrade. The upgrade takes effect immediately, and customer service applies the remaining membership value.",
+      "supportName": "Official customer service",
+      "supportUnavailableTitle": "Customer service account unavailable",
+      "supportUnavailableMessage": "Please contact the platform's official customer service about membership activation or upgrades.",
+      "planAccessibilityLabel": "{{plan}}, {{duration}}, CNY {{price}}",
+      "duration": {
+        "months": "{{count}} months",
+        "lifetime": "Lifetime"
+      },
+      "exchangeSuccess": "Membership level updated to {{level}}",
+      "exchangeError": "Unable to update membership. Please try again later.",
       "tiers": {
-        "vip1": {
-          "perks": "Basic member benefits"
+        "silver": {
+          "name": "Silver membership"
         },
-        "vip2": {
-          "perks": "More group capacity and basic discounts"
+        "gold": {
+          "name": "Gold membership"
         },
-        "vip3": {
-          "perks": "Advanced identity badge and points bonus"
+        "diamond": {
+          "name": "Diamond membership"
         },
-        "vip4": {
-          "perks": "Exclusive fancy-number discounts and priority access"
-        },
-        "vip5": {
-          "perks": "Supreme member benefits and highest discounts"
+        "super": {
+          "name": "Super membership"
         }
+      },
+      "benefits": {
+        "nameColor": "Name color",
+        "badge": "Membership badge",
+        "groupMemberLimit": "Members per group",
+        "joinedGroups": "Groups you can join",
+        "noteStorage": "Note storage",
+        "cityFilters": "City filters",
+        "fancyNumber": "Premium number gift"
+      },
+      "benefitValues": {
+        "group-member-limit": "{{value}} people",
+        "joined-groups": "{{value}} groups",
+        "note-storage": "{{value}} notes",
+        "city-filters": "{{value}} cities",
+        "unlimited": "Unlimited",
+        "silver": "Silver",
+        "gold": "Gold",
+        "rainbow": "Rainbow",
+        "exclusive-shimmer": "Exclusive shimmer",
+        "diamond": "Diamond",
+        "super-lifetime": "Super lifetime",
+        "none": "None",
+        "one-gift": "One gift",
+        "one-premium-gift": "One premium number gift"
+      },
+      "currentTierBadge": "Current",
+      "marketing": {
+        "goldAccess": "All users currently enjoy Gold-tier limits for free",
+        "title": "Membership features are not open yet",
+        "groupQuota": "Up to 400 members per group · join 300 groups",
+        "noteQuota": "500 notes · 10 city filters"
       }
     },
     "memberRules": {
       "link": "Membership Rules",
       "title": "Rules & Permissions",
       "heading": "Membership Rules",
-      "description": "These rules explain membership tiers, points redemption, and permission scope. Payments, orders, and validity periods will be connected to the real backend later.",
+      "description": "Customer service manually verifies and grants membership. This page shows the benefit catalog; backend permissions remain authoritative.",
       "rules": {
-        "levels": "VIP1-5 unlock benefits tier by tier; this page only shows tier and benefit descriptions.",
-        "highTier": "Higher-tier members get more group capacity, fancy-number discounts, points bonuses, and priority access.",
-        "consume": "Membership exchange consumes points and takes effect immediately; the exact validity period is subject to the backend order.",
-        "irreversible": "Virtual goods such as memberships, fancy numbers, and group expansion cards cannot be revoked once used."
+        "catalog": "Silver membership: CNY 298 / 1 month; Gold: CNY 1,288 / 6 months; Diamond: CNY 1,998 / 1 year; Super: CNY 3,998 / lifetime.",
+        "supportActivation": "Membership cannot be redeemed with points or purchased in the app. After contact, customer service manually verifies and grants membership.",
+        "upgrade": "Current members may contact customer service to pay the difference for an upgrade. It takes effect immediately, with remaining membership value applied by customer service.",
+        "expiry": "When membership expires, only membership benefits stop. Accounts, chats, notes, and other user content are not deleted.",
+        "fairUse": "Membership rules apply only to benefits listed in the Membership Center. Any listed unlimited benefit remains subject to high backend fair-use and abuse-prevention limits. Actual permissions are determined by the backend.",
+        "voiceToText": "Voice-to-text is a free basic feature for every user and is not restricted by membership tier.",
+        "excludedVisualBenefits": "Current membership benefits do not promise avatar frames or animated avatars."
       }
     }
   },
@@ -1441,8 +1509,7 @@
       "empty": "No tags yet. Create one before saving."
     },
     "avCallComingSoon": "Voice and video calls are coming soon. Stay tuned.",
-    "unknownUser": "Unnamed user",
-    "callStarting": "Calling…"
+    "unknownUser": "Unnamed user"
   },
   "profileFields": {
     "avatar": "Avatar",
@@ -1937,8 +2004,8 @@
       "unlistFailedTitle": "Failed to unlist",
       "unlistTitle": "Unlist note",
       "unlistConfirm": "You can view it in Unlisted. Unlisted notes are automatically deleted after one month.",
-      "restoreFailedTitle": "Restore failed",
-      "refreshFailedTitle": "Refresh failed"
+      "refreshFailedTitle": "Refresh failed",
+      "restoreFailedTitle": "Restore failed"
     },
     "detail": {
       "loadFailed": "Failed to load note, please try again",
@@ -2109,8 +2176,8 @@
       "friendHint": "Friend"
     },
     "recycleBin": "Recycle bin",
-    "recycleBinTitle": "Recycle bin",
-    "recycleBinHint": "Deleted notes can be restored here."
+    "recycleBinHint": "Deleted notes can be restored here.",
+    "recycleBinTitle": "Recycle bin"
   },
   "search": {
     "loadFriendsFailed": "Failed to load friends, please try again",
@@ -2225,9 +2292,7 @@
       "note": "[Note] {{title}}",
       "verification": "[Verify] {{name}} asked you to vouch",
       "default": "[Message]",
-      "plazaPost": "[Event] {{title}}",
-      "voiceCall": "[Voice call]",
-      "videoCall": "[Video call]"
+      "plazaPost": "[Event] {{title}}"
     }
   },
   "permissions": {
@@ -2248,7 +2313,6 @@
       "disconnected": "Call disconnected."
     },
     "groupCallTitle": "Group voice call",
-    "videoCallTitle": "Video call",
     "participantsOnline": "{{count}} online",
     "self": "Me",
     "ended": "The call has ended or the connection info has expired",
@@ -2261,17 +2325,17 @@
     "accept": "Accept",
     "invite": {
       "initiatedBy": "{{name}} started a group voice call",
-      "initiatedByVideo": "{{name}} started a group video call",
       "inviteeCount": "{{count}} invited",
       "groupMember": "Group member",
-      "initiatedBySingle": "{{name}} invites you to a voice call",
-      "initiatedBySingleVideo": "{{name}} invites you to a video call",
       "friend": "Friend",
-      "singleSubtitle": "Voice call"
+      "singleSubtitle": "Voice call",
+      "initiatedByVideo": "{{name}} started a group video call",
+      "initiatedBySingleVideo": "{{name}} started a video call"
     },
     "chooseType": "Start a call",
+    "typeVideo": "Video call",
     "typeVoice": "Voice call",
-    "typeVideo": "Video call"
+    "videoCallTitle": "Video call"
   },
   "emojis": {
     "face": "Smileys",
@@ -2294,6 +2358,11 @@
     }
   },
   "serverErrors": {
+    "TEMP_CHAT_JOIN_FAILED": "Failed to join, please try again",
+    "NOTE_RESTORE_DUPLICATE": "Another active copy of this collected note already exists.",
+    "NOTE_SHARE_LINK_LIMIT": "Share link limit reached — revoke unused links first",
+    "UPLOAD_PAYLOAD_TOO_LARGE": "File is too large to upload",
+    "COLLECTION_LIMIT": "Collection limit reached — remove items you no longer need",
     "ADMIN_USER_NOT_FOUND": "User not found.",
     "ADMIN_USER_SELF_STATUS_CHANGE": "You can't ban or delete your own admin account.",
     "ADMIN_USER_INVALID_STATUS_TRANSITION": "This account status change isn't allowed.",
@@ -2316,9 +2385,11 @@
     "COIN_INSUFFICIENT": "Insufficient coins",
     "COIN_AMOUNT_INVALID": "The amount must be greater than zero",
     "MEMBERSHIP_INVALID_LEVEL": "Invalid membership level",
+    "MEMBERSHIP_IDEMPOTENCY_CONFLICT": "This membership request conflicts with an earlier request. Refresh and try again.",
+    "MEMBERSHIP_GROUP_MEMBER_CAPACITY_EXCEEDED": "This group has reached your membership tier's member limit",
+    "MEMBERSHIP_JOINED_CIRCLE_QUOTA_REACHED": "You've reached your membership tier's joined-group limit",
     "MEMBERSHIP_LEVEL_NOT_HIGHER": "Choose a level higher than your current one",
     "MEMBERSHIP_INSUFFICIENT_POINTS": "Not enough points",
-    "MEMBERSHIP_IDEMPOTENCY_KEY_REUSED": "This request ID was already used for a different purchase. Please try again.",
     "CIRCLE_MEMBER_LIMIT": "This circle is full",
     "CIRCLE_ALREADY_MEMBER": "You're already a member",
     "CIRCLE_REQUEST_PENDING": "Your request is already pending",
@@ -2353,6 +2424,7 @@
     "CIRCLE_JOIN_VIP_REQUIRED": "A higher VIP level is required to join this circle",
     "CIRCLE_JOIN_CREDIT_REQUIRED": "A higher credit score is required to join this circle",
     "CIRCLE_JOIN_FANCY_NUMBER_REQUIRED": "A fancy number is required to join this circle",
+    "CIRCLE_JOIN_VIP_RESTRICTION_EXCEEDS_CREATOR": "The join requirement can't exceed the creator's membership tier",
     "CIRCLE_LIST_ITEM_BLANK": "Entries can't be blank",
     "CIRCLE_LIST_ITEM_DUPLICATE": "Entries must be unique",
     "GROUP_NOT_FOUND": "Group not found",
@@ -2376,13 +2448,15 @@
     "TEMP_CHAT_ENDED": "This temporary chat has ended",
     "TEMP_CHAT_FULL": "This chat is full",
     "TEMP_CHAT_CREATOR_ONLY": "Only the creator can end this chat",
-    "TEMP_CHAT_JOIN_FAILED": "Failed to join, please try again",
+    "PLAZA_MEMBERSHIP_REQUIRED": "Upgrade your membership to view circle posts",
     "PLAZA_NOT_ACTIVE_MEMBER": "Only active circle members can post",
     "PLAZA_ADMIN_ONLY_POST": "Only admins can post in this circle",
     "PLAZA_NOTE_INVALID": "That note is unavailable or not yours",
     "PLAZA_POST_NOT_FOUND": "Post not found",
     "PLAZA_DELETE_AUTHOR_ONLY": "Only the author can delete this post",
     "PLAZA_INVALID_CURSOR": "This plaza page expired. Please refresh and try again.",
+    "CITY_FILTER_QUOTA_REACHED": "You've reached your membership tier's city filter limit",
+    "PLAZA_VIP_RESTRICTION_EXCEEDS_AUTHOR": "The signup requirement can't exceed the author's membership tier",
     "PLAZA_SIGNUP_SELF": "You can't sign up for your own post",
     "PLAZA_SIGNUP_INELIGIBLE": "You don't meet this post's signup requirements",
     "PLAZA_RECOGNIZE_MIN_ONE": "Select at least one collaborator",
@@ -2421,6 +2495,7 @@
     "FRIEND_TAG_LIMIT_REACHED": "You've reached the friend tag limit",
     "FRIEND_LIMIT_REACHED": "You've reached your friend limit — upgrade for more",
     "NOTE_GROUP_EXISTS": "A group with that name already exists",
+    "NOTE_STORAGE_QUOTA_REACHED": "You've reached your membership tier's note storage limit",
     "NOTE_GROUP_LIMIT": "You've reached the note group limit",
     "NOTE_EXPORT_NO_MEDIA": "No exportable media found",
     "NOTE_EXPORT_MEDIA_TOO_LARGE": "A media file is too large to export",
@@ -2443,21 +2518,17 @@
     "FRIEND_REQUEST_MESSAGE_INVALID": "Message can't be empty and must be 500 characters or fewer",
     "FRIEND_REQUEST_MESSAGE_LIMIT": "You can send up to 5 messages before they reply",
     "NOTE_NOT_FOUND": "Note not found",
-    "NOTE_RESTORE_DUPLICATE": "Another active copy of this collected note already exists.",
     "NOTE_GROUP_NOT_FOUND": "Note group not found",
     "NOTE_IMAGE_TOO_LARGE": "The image is too large to embed",
     "NOTE_SHARE_LINK_INVALID": "This share link is not valid",
-    "NOTE_SHARE_LINK_LIMIT": "Share link limit reached — revoke unused links first",
     "CALL_NOT_INVITED": "You haven't been invited to this call",
     "CALL_NOT_FOUND": "Call not found",
     "CALL_NOT_ALLOWED": "You can't perform this call action",
     "CALL_ALREADY_ACTIVE": "You're already in an active call",
-    "UPLOAD_PAYLOAD_TOO_LARGE": "File is too large to upload",
-    "CALL_NOT_FRIEND": "You can only call friends",
+    "CALL_NOT_FRIEND": "Calls are only available between friends",
     "CONVGROUP_NOT_FOUND": "Group not found",
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "Conversation not found",
     "COLLECTION_NOT_FOUND": "Collection not found",
-    "COLLECTION_LIMIT": "Collection limit reached — remove items you no longer need",
     "ICON_DISPLAY_LIMIT": "You can display at most 5 icons",
     "ICON_INVALID_SYSTEM_SELECTION": "Invalid icon selection",
     "ICON_INVALID_CIRCLE_SELECTION": "Invalid circle icon selection",

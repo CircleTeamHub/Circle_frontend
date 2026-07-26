@@ -23,6 +23,11 @@ function loadListenersHarness() {
   const timers = [];
   const appendCalls = [];
   const markReadCalls = [];
+  const setConnectedCalls = [];
+  const setErrorCalls = [];
+  const recoverCalls = [];
+  const cancelRecoveryCalls = [];
+  const clearRetryCalls = [];
   const state = {
     activeConversation: {
       conversationID: 'conv-1',
@@ -35,8 +40,8 @@ function loadListenersHarness() {
       appendCalls.push([conversationID, messages]);
     },
     setConnecting: () => {},
-    setConnected: () => {},
-    setError: () => {},
+    setConnected: (value) => setConnectedCalls.push(value),
+    setError: (value) => setErrorCalls.push(value),
     setConversations: () => {},
     mergeConversations: () => {},
     setTotalUnread: () => {},
@@ -88,8 +93,19 @@ function loadListenersHarness() {
         return {
           registerIMLoginExecutor: () => {},
     registerIMLogoutExecutor: () => {},
-          recoverIMSession: async () => false,
+          recoverIMSession: async () => {
+            recoverCalls.push(1);
+            return false;
+          },
+          cancelIMSessionRecovery: () => cancelRecoveryCalls.push(1),
           isIMReloginPending: () => false,
+        };
+      }
+      if (request === '@/im/login-retry-pending') {
+        return {
+          clearIMLoginRetryPending: () => clearRetryCalls.push(1),
+          markIMLoginRetryPending: () => {},
+          isIMLoginRetryPending: () => false,
         };
       }
       if (request === '@/im/snackbar') {
@@ -129,6 +145,11 @@ function loadListenersHarness() {
     markReadCalls,
     offCalls,
     state,
+    setConnectedCalls,
+    setErrorCalls,
+    recoverCalls,
+    cancelRecoveryCalls,
+    clearRetryCalls,
   };
 }
 
@@ -192,4 +213,54 @@ test('does not mark read when the user left the conversation before flush', () =
   // 消息仍落库（避免丢消息），但不再标记已读——用户已经不在看了。
   assert.equal(harness.appendCalls.length, 1);
   assert.deepEqual(harness.markReadCalls, []);
+});
+
+test('onKickedOffline is a terminal disconnect, not a token refresh (no relogin storm)', () => {
+  const harness = loadListenersHarness();
+  harness.bindOpenIMListeners();
+  const handleKicked = harness.handlers.get('onKickedOffline');
+  assert.equal(typeof handleKicked, 'function');
+
+  handleKicked();
+
+  // 同账号在另一端顶替登录把本端踢下线：进入断连终态 + 给用户可读解释，
+  // 但绝不换 token 原地重登（否则会把新设备再踢下线，两端互踢成风暴）。
+  assert.deepEqual(harness.setConnectedCalls, [false]);
+  assert.equal(harness.setErrorCalls.length, 1);
+  assert.equal(harness.recoverCalls.length, 0);
+  // 且必须取消所有补登 / 恢复欠账，否则回前台又会重登、重演互踢风暴。
+  assert.equal(harness.clearRetryCalls.length, 1);
+  assert.equal(harness.cancelRecoveryCalls.length, 1);
+});
+
+test('onConnectSuccess ignores a late connect when the login was abandoned (currentUserID cleared)', async () => {
+  const harness = loadListenersHarness();
+  harness.bindOpenIMListeners();
+  const handleConnected = harness.handlers.get('onConnectSuccess');
+
+  // 登录因就绪超时 / 失败放弃后 currentUserID 被清为 null。此时迟到的连接成功事件绝不能把
+  // connected 翻真——否则留下「已连接但身份为 null」的僵尸会话,读回执 / 消息归属会错到下次
+  // 前台重登才纠正。
+  harness.state.currentUserID = null;
+  await handleConnected();
+
+  assert.ok(
+    !harness.setConnectedCalls.includes(true),
+    'late connect with a null identity must not mark the session connected',
+  );
+});
+
+test('onConnectSuccess marks connected for a normal connect that still has a live identity', async () => {
+  const harness = loadListenersHarness();
+  harness.bindOpenIMListeners();
+  const handleConnected = harness.handlers.get('onConnectSuccess');
+
+  // 正常登录 / 重连:currentUserID 在 login() 前就乐观写入,连接成功照常建立会话。
+  harness.state.currentUserID = 'self';
+  await handleConnected();
+
+  assert.ok(
+    harness.setConnectedCalls.includes(true),
+    'a connect with a current identity must mark the session connected',
+  );
 });

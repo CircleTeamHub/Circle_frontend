@@ -560,13 +560,13 @@
       "cta": "Apuntarme"
     },
     "callRecord": {
-      "duration": "Duración {{duration}}",
-      "canceledBySelf": "Cancelada",
       "canceledByPeer": "Cancelada por la otra parte",
-      "noAnswer": "Sin respuesta",
-      "missed": "Llamada perdida",
+      "canceledBySelf": "Cancelada",
+      "duration": "Duración {{duration}}",
+      "ended": "Llamada finalizada",
       "failed": "Llamada fallida",
-      "ended": "Llamada finalizada"
+      "missed": "Llamada perdida",
+      "noAnswer": "Sin respuesta"
     }
   },
   "messages": {
@@ -679,8 +679,8 @@
       "unlistFailedTitle": "No se pudo retirar",
       "unlistTitle": "Retirar nota",
       "unlistConfirm": "Podrás verla en Retiradas. Las notas retiradas se eliminan automáticamente después de un mes.",
-      "restoreFailedTitle": "No se pudo restaurar",
-      "refreshFailedTitle": "Error al actualizar"
+      "refreshFailedTitle": "Error al actualizar",
+      "restoreFailedTitle": "No se pudo restaurar"
     },
     "detail": {
       "loadFailed": "No se pudo cargar la nota, inténtalo de nuevo",
@@ -851,8 +851,8 @@
       "friendHint": "Amigo"
     },
     "recycleBin": "Papelera",
-    "recycleBinTitle": "Papelera",
-    "recycleBinHint": "Las notas eliminadas se pueden restaurar aquí."
+    "recycleBinHint": "Las notas eliminadas se pueden restaurar aquí.",
+    "recycleBinTitle": "Papelera"
   },
   "tempChats": {
     "title": "Gestión de plazas",
@@ -1651,8 +1651,7 @@
       "empty": "Aún no hay etiquetas. Crea una antes de guardar."
     },
     "avCallComingSoon": "Las llamadas de voz y video llegarán pronto. No te lo pierdas.",
-    "unknownUser": "Usuario sin nombre",
-    "callStarting": "Llamando…"
+    "unknownUser": "Usuario sin nombre"
   },
   "profile": {
     "creditScore": "Puntuación de crédito",
@@ -1789,49 +1788,117 @@
     "viewAnnouncements": "Novedades",
     "addIcon": "Añadir insignia",
     "myIcons": "Mis insignias",
+    "customerService": {
+      "menuLabel": "Centro de ayuda",
+      "menuHint": "Chatea ahora",
+      "title": "Centro de ayuda",
+      "subtitle": "Elige el tipo de soporte que necesitas",
+      "openFailed": "No se pudo abrir el chat de soporte. Inténtalo de nuevo.",
+      "categories": {
+        "recharge": {
+          "label": "Soporte de recargas",
+          "description": "Recargas, puntos y problemas de pago"
+        },
+        "issue": {
+          "label": "Soporte general",
+          "description": "Errores y dudas sobre el uso de la app"
+        },
+        "dispute": {
+          "label": "Soporte de disputas",
+          "description": "Disputas de transacciones, quejas y apelaciones"
+        },
+        "account": {
+          "label": "Soporte de cuenta",
+          "description": "Inicio de sesión, seguridad y recuperación de cuenta"
+        }
+      }
+    },
     "membership": {
       "title": "Centro de membresía",
-      "confirmExchange": "Confirmar canje",
-      "activateVip": "Activar VIP",
-      "currentLevel": "Nivel actual: VIP{{level}}",
-      "benefitsHint": "Disfruta de beneficios exclusivos de miembro; cuanto mayor sea el nivel, más beneficios.",
-      "exchange": "Canjear membresía",
-      "currentBadge": "Nivel actual",
-      "loadError": "Error al cargar los niveles VIP; mostrando la configuración local de niveles.",
-      "exchangeSuccess": "Canjeaste VIP{{level}} correctamente",
-      "exchangeError": "Error en el canje. Asegúrate de tener suficientes créditos e inténtalo de nuevo.",
-      "confirmExchangeMessage": "¿Gastar {{points}} créditos para canjear {{plan}}?",
-      "loadingPlans": "Cargando niveles VIP",
-      "confirmExchangePlan": "Confirmar canje de {{plan}}",
-      "selectHigher": "Selecciona un nivel VIP superior",
+      "regularUser": "Usuario regular",
+      "currentIdentity": "Estado actual",
+      "catalogHint": "Selecciona un nivel para ver sus beneficios. Atención al cliente gestiona la activación y las mejoras.",
+      "chooseTier": "Elige un nivel de membresía",
+      "recommended": "Recomendado",
+      "lifetime": "De por vida",
+      "selected": "Seleccionado",
+      "benefitsTitle": "Beneficios de membresía",
+      "contactToActivate": "Contactar con atención al cliente para activar {{plan}}",
+      "contactToUpgrade": "Contactar con atención al cliente para mejorar a {{plan}}",
+      "contactForCurrent": "Ya tienes {{plan}}; contactar con atención al cliente",
+      "contactForLowerTier": "Tu nivel actual es superior; contactar con atención al cliente",
+      "contactSupport": "Contactar con atención al cliente",
+      "upgradeDifferenceNote": "Los miembros actuales pueden contactar con atención al cliente para pagar la diferencia de una mejora. Se activa de inmediato y atención al cliente aplica el valor restante de la membresía.",
+      "supportName": "Atención al cliente oficial",
+      "supportUnavailableTitle": "Cuenta de atención al cliente no disponible",
+      "supportUnavailableMessage": "Contacta con la atención al cliente oficial de la plataforma para activar o mejorar la membresía.",
+      "planAccessibilityLabel": "{{plan}}, {{duration}}, CNY {{price}}",
+      "duration": {
+        "months": "{{count}} meses",
+        "lifetime": "De por vida"
+      },
+      "exchangeSuccess": "Nivel de membresía actualizado a {{level}}",
+      "exchangeError": "No se pudo actualizar la membresía. Inténtalo de nuevo más tarde.",
       "tiers": {
-        "vip1": {
-          "perks": "Beneficios básicos de miembro"
+        "silver": {
+          "name": "Membresía Plata"
         },
-        "vip2": {
-          "perks": "Más capacidad de grupo y descuentos básicos"
+        "gold": {
+          "name": "Membresía Oro"
         },
-        "vip3": {
-          "perks": "Insignia de identidad avanzada y créditos extra"
+        "diamond": {
+          "name": "Membresía Diamante"
         },
-        "vip4": {
-          "perks": "Descuentos exclusivos en números premium y acceso prioritario"
-        },
-        "vip5": {
-          "perks": "Beneficios supremos de miembro y los mayores descuentos"
+        "super": {
+          "name": "Membresía Súper"
         }
+      },
+      "benefits": {
+        "nameColor": "Color del nombre",
+        "badge": "Insignia de membresía",
+        "groupMemberLimit": "Miembros por grupo",
+        "joinedGroups": "Grupos a los que puedes unirte",
+        "noteStorage": "Almacenamiento de notas",
+        "cityFilters": "Filtros de ciudad",
+        "fancyNumber": "Número premium de regalo"
+      },
+      "benefitValues": {
+        "group-member-limit": "{{value}} personas",
+        "joined-groups": "{{value}} grupos",
+        "note-storage": "{{value}} notas",
+        "city-filters": "{{value}} ciudades",
+        "unlimited": "Ilimitado",
+        "silver": "Plata",
+        "gold": "Oro",
+        "rainbow": "Arcoíris",
+        "exclusive-shimmer": "Brillo exclusivo",
+        "diamond": "Diamante",
+        "super-lifetime": "Súper de por vida",
+        "none": "Ninguno",
+        "one-gift": "Un regalo",
+        "one-premium-gift": "Un número premium de regalo"
+      },
+      "currentTierBadge": "Actual",
+      "marketing": {
+        "goldAccess": "Todos los usuarios disfrutan actualmente de los límites de nivel Oro de forma gratuita",
+        "title": "Las funciones de membresía aún no están disponibles",
+        "groupQuota": "Hasta 400 miembros por grupo · únete a 300 grupos",
+        "noteQuota": "500 notas · 10 filtros de ciudad"
       }
     },
     "memberRules": {
       "link": "Reglas de membresía",
       "title": "Reglas y permisos",
       "heading": "Reglas de membresía",
-      "description": "Estas reglas explican los niveles VIP, el canje de créditos y el alcance de los permisos. Los pagos, pedidos y periodos de validez se conectarán al backend real más adelante.",
+      "description": "Atención al cliente verifica y concede manualmente la membresía. Esta pantalla muestra el catálogo de beneficios; los permisos del backend son la fuente de autoridad.",
       "rules": {
-        "levels": "VIP1-5 desbloquean beneficios nivel por nivel; esta página solo muestra la descripción de niveles y beneficios.",
-        "highTier": "Los miembros de nivel superior obtienen más capacidad de grupo, descuentos en números premium, créditos extra y acceso prioritario.",
-        "consume": "El canje VIP consume créditos y se activa de inmediato; el periodo de validez exacto depende del pedido del backend.",
-        "irreversible": "Los productos virtuales como VIP, números premium y tarjetas de ampliación de grupo no se pueden revocar una vez usados."
+        "catalog": "Membresía Plata: CNY 298 / 1 mes; Oro: CNY 1.288 / 6 meses; Diamante: CNY 1.998 / 1 año; Súper: CNY 3.998 / de por vida.",
+        "supportActivation": "La membresía no se puede canjear con puntos ni comprar en la aplicación. Tras el contacto, atención al cliente la verifica y concede manualmente.",
+        "upgrade": "Los miembros actuales pueden contactar con atención al cliente para pagar la diferencia de una mejora. Se activa de inmediato y se aplica el valor restante de la membresía.",
+        "expiry": "Cuando vence la membresía, solo se detienen sus beneficios. No se eliminan cuentas, chats, notas ni otro contenido del usuario.",
+        "fairUse": "Las reglas de membresía solo se aplican a los beneficios indicados en el Centro de membresía. Los beneficios indicados como ilimitados siguen sujetos a límites elevados de uso razonable y prevención de abusos del backend. Los permisos reales los determina el backend.",
+        "voiceToText": "La conversión de voz a texto es una función básica gratuita para todos y no está limitada por el nivel de membresía.",
+        "excludedVisualBenefits": "Los beneficios actuales no prometen marcos de avatar ni avatares animados."
       }
     }
   },
@@ -2007,13 +2074,13 @@
     "showPassword": "Mostrar contraseña",
     "resendIn": "Reenviar en {{seconds}}s",
     "resetPassword": {
+      "failed": "No se pudo restablecer; verifica el código e inténtalo de nuevo",
       "intro": "Introduce tu correo registrado y te enviaremos un código para restablecer la contraseña.",
       "newPasswordPlaceholder": "Nueva contraseña (mín. 6 caracteres)",
       "submit": "Restablecer contraseña",
       "submitting": "Restableciendo…",
-      "successTitle": "Contraseña restablecida",
       "successBody": "Se cerró la sesión en todos los dispositivos. Inicia sesión con tu nueva contraseña.",
-      "failed": "No se pudo restablecer; verifica el código e inténtalo de nuevo"
+      "successTitle": "Contraseña restablecida"
     }
   },
   "common": {
@@ -2208,7 +2275,6 @@
       "disconnected": "Llamada desconectada."
     },
     "groupCallTitle": "Llamada de voz grupal",
-    "videoCallTitle": "Videollamada",
     "participantsOnline": "{{count}} en línea",
     "self": "Yo",
     "ended": "La llamada ha terminado o la información de conexión ha caducado",
@@ -2221,17 +2287,17 @@
     "accept": "Aceptar",
     "invite": {
       "initiatedBy": "{{name}} inició una llamada de voz grupal",
-      "initiatedByVideo": "{{name}} inició una videollamada grupal",
       "inviteeCount": "{{count}} invitados",
       "groupMember": "Miembro del grupo",
-      "initiatedBySingle": "{{name}} te invita a una llamada de voz",
-      "initiatedBySingleVideo": "{{name}} te invita a una videollamada",
       "friend": "Amigo",
-      "singleSubtitle": "Llamada de voz"
+      "singleSubtitle": "Llamada de voz",
+      "initiatedByVideo": "{{name}} inició una videollamada grupal",
+      "initiatedBySingleVideo": "{{name}} inició una videollamada"
     },
     "chooseType": "Iniciar llamada",
+    "typeVideo": "Videollamada",
     "typeVoice": "Llamada de voz",
-    "typeVideo": "Videollamada"
+    "videoCallTitle": "Videollamada"
   },
   "im": {
     "time": {
@@ -2261,9 +2327,7 @@
       "note": "[Nota] {{title}}",
       "verification": "[Verificar] {{name}} te pidió que avales",
       "default": "[Mensaje]",
-      "plazaPost": "[Evento] {{title}}",
-      "voiceCall": "[Llamada de voz]",
-      "videoCall": "[Videollamada]"
+      "plazaPost": "[Evento] {{title}}"
     }
   },
   "permissions": {
@@ -2294,6 +2358,11 @@
     }
   },
   "serverErrors": {
+    "TEMP_CHAT_JOIN_FAILED": "No se pudo unir, inténtalo de nuevo",
+    "NOTE_RESTORE_DUPLICATE": "Ya existe otra copia activa de esta nota guardada.",
+    "NOTE_SHARE_LINK_LIMIT": "Límite de enlaces compartidos alcanzado; revoca los que no uses",
+    "UPLOAD_PAYLOAD_TOO_LARGE": "El archivo es demasiado grande para subirlo",
+    "COLLECTION_LIMIT": "Límite de colecciones alcanzado; elimina las que no necesites",
     "ADMIN_USER_NOT_FOUND": "El usuario no existe.",
     "ADMIN_USER_SELF_STATUS_CHANGE": "No puedes bloquear ni eliminar tu propia cuenta de administrador.",
     "ADMIN_USER_INVALID_STATUS_TRANSITION": "Este cambio de estado de la cuenta no está permitido.",
@@ -2316,9 +2385,11 @@
     "COIN_INSUFFICIENT": "Monedas insuficientes",
     "COIN_AMOUNT_INVALID": "El importe debe ser mayor que cero",
     "MEMBERSHIP_INVALID_LEVEL": "Nivel de membresía no válido",
+    "MEMBERSHIP_IDEMPOTENCY_CONFLICT": "Esta solicitud de membresía entra en conflicto con una anterior. Actualiza e inténtalo de nuevo.",
+    "MEMBERSHIP_GROUP_MEMBER_CAPACITY_EXCEEDED": "Este grupo alcanzó el límite de miembros de tu nivel",
+    "MEMBERSHIP_JOINED_CIRCLE_QUOTA_REACHED": "Alcanzaste el límite de grupos de tu nivel",
     "MEMBERSHIP_LEVEL_NOT_HIGHER": "Elige un nivel superior al actual",
     "MEMBERSHIP_INSUFFICIENT_POINTS": "Puntos insuficientes",
-    "MEMBERSHIP_IDEMPOTENCY_KEY_REUSED": "Este ID de solicitud ya se usó para otra compra. Inténtalo de nuevo.",
     "CIRCLE_MEMBER_LIMIT": "Este círculo está lleno",
     "CIRCLE_ALREADY_MEMBER": "Ya eres miembro",
     "CIRCLE_REQUEST_PENDING": "Tu solicitud ya está pendiente",
@@ -2353,6 +2424,7 @@
     "CIRCLE_JOIN_VIP_REQUIRED": "Se requiere un nivel VIP más alto para unirse a este círculo",
     "CIRCLE_JOIN_CREDIT_REQUIRED": "Se requiere una puntuación de crédito más alta para unirse a este círculo",
     "CIRCLE_JOIN_FANCY_NUMBER_REQUIRED": "Se requiere un número especial para unirse a este círculo",
+    "CIRCLE_JOIN_VIP_RESTRICTION_EXCEEDS_CREATOR": "El requisito de acceso no puede superar el nivel del creador",
     "CIRCLE_LIST_ITEM_BLANK": "Las entradas no pueden estar vacías",
     "CIRCLE_LIST_ITEM_DUPLICATE": "Las entradas no pueden repetirse",
     "GROUP_NOT_FOUND": "Grupo no encontrado",
@@ -2376,13 +2448,15 @@
     "TEMP_CHAT_ENDED": "Este chat temporal ha finalizado",
     "TEMP_CHAT_FULL": "Este chat está lleno",
     "TEMP_CHAT_CREATOR_ONLY": "Solo el creador puede finalizar este chat",
-    "TEMP_CHAT_JOIN_FAILED": "No se pudo unir, inténtalo de nuevo",
+    "PLAZA_MEMBERSHIP_REQUIRED": "Mejora tu membresía para ver publicaciones del círculo",
     "PLAZA_NOT_ACTIVE_MEMBER": "Solo los miembros activos del círculo pueden publicar",
     "PLAZA_ADMIN_ONLY_POST": "Solo los administradores pueden publicar en este círculo",
     "PLAZA_NOTE_INVALID": "Esa nota no está disponible o no es tuya",
     "PLAZA_POST_NOT_FOUND": "Publicación no encontrada",
     "PLAZA_DELETE_AUTHOR_ONLY": "Solo el autor puede eliminar esta publicación",
     "PLAZA_INVALID_CURSOR": "Esta página de la plaza caducó. Actualiza e inténtalo de nuevo.",
+    "CITY_FILTER_QUOTA_REACHED": "Alcanzaste el límite de filtros de ciudad de tu nivel",
+    "PLAZA_VIP_RESTRICTION_EXCEEDS_AUTHOR": "El requisito de inscripción no puede superar el nivel del autor",
     "PLAZA_SIGNUP_SELF": "No puedes inscribirte en tu propia publicación",
     "PLAZA_SIGNUP_INELIGIBLE": "No cumples los requisitos de inscripción de esta publicación",
     "PLAZA_RECOGNIZE_MIN_ONE": "Selecciona al menos un colaborador",
@@ -2421,6 +2495,7 @@
     "FRIEND_TAG_LIMIT_REACHED": "Has alcanzado el límite de etiquetas de amigos",
     "FRIEND_LIMIT_REACHED": "Has alcanzado tu límite de amigos; mejora tu membresía para ampliarlo",
     "NOTE_GROUP_EXISTS": "Ya existe un grupo con ese nombre",
+    "NOTE_STORAGE_QUOTA_REACHED": "Alcanzaste el límite de notas de tu nivel",
     "NOTE_GROUP_LIMIT": "Has alcanzado el límite de grupos de notas",
     "NOTE_EXPORT_NO_MEDIA": "No se encontraron medios exportables",
     "NOTE_EXPORT_MEDIA_TOO_LARGE": "Un archivo multimedia es demasiado grande para exportar",
@@ -2443,21 +2518,17 @@
     "FRIEND_REQUEST_MESSAGE_INVALID": "El mensaje no puede estar vacío y debe tener 500 caracteres o menos",
     "FRIEND_REQUEST_MESSAGE_LIMIT": "Puedes enviar hasta 5 mensajes antes de que respondan",
     "NOTE_NOT_FOUND": "Nota no encontrada",
-    "NOTE_RESTORE_DUPLICATE": "Ya existe otra copia activa de esta nota guardada.",
     "NOTE_GROUP_NOT_FOUND": "Grupo de notas no encontrado",
     "NOTE_IMAGE_TOO_LARGE": "La imagen es demasiado grande para insertarla",
     "NOTE_SHARE_LINK_INVALID": "Este enlace para compartir no es válido",
-    "NOTE_SHARE_LINK_LIMIT": "Límite de enlaces compartidos alcanzado; revoca los que no uses",
     "CALL_NOT_INVITED": "No has sido invitado a esta llamada",
     "CALL_NOT_FOUND": "Llamada no encontrada",
     "CALL_NOT_ALLOWED": "No puedes realizar esta acción de llamada",
     "CALL_ALREADY_ACTIVE": "Ya estás en una llamada activa",
-    "UPLOAD_PAYLOAD_TOO_LARGE": "El archivo es demasiado grande para subirlo",
-    "CALL_NOT_FRIEND": "Solo puedes llamar a tus amigos",
+    "CALL_NOT_FRIEND": "Las llamadas solo están disponibles entre amigos",
     "CONVGROUP_NOT_FOUND": "Grupo no encontrado",
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "Conversación no encontrada",
     "COLLECTION_NOT_FOUND": "Colección no encontrada",
-    "COLLECTION_LIMIT": "Límite de colecciones alcanzado; elimina las que no necesites",
     "ICON_DISPLAY_LIMIT": "Puedes mostrar como máximo 5 iconos",
     "ICON_INVALID_SYSTEM_SELECTION": "Selección de icono no válida",
     "ICON_INVALID_CIRCLE_SELECTION": "Selección de icono de círculo no válida",

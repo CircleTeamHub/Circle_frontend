@@ -5,6 +5,17 @@ const METADATA_ENV = [
   'EXPO_PUBLIC_API_URL',
   'EXPO_PUBLIC_OPENIM_API_URL',
   'EXPO_PUBLIC_OPENIM_WS_URL',
+  'EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID',
+];
+
+// support-categories.ts 里每类客服（充值 / 纠纷 / 账号申诉 / 账号客服）的专属账号环境变量。
+// 任一为空会回退到通用 EXPO_PUBLIC_SUPPORT_ACCOUNT_ID；后者也空时最终回退到系统管理账号
+// imAdmin —— 把敏感客服会话路由到非客服的意外身份。发布须保证有兜底：见 validateSupportAccounts。
+const CATEGORY_SUPPORT_ENV = [
+  'EXPO_PUBLIC_SUPPORT_RECHARGE_ID',
+  'EXPO_PUBLIC_SUPPORT_ISSUE_ID',
+  'EXPO_PUBLIC_SUPPORT_DISPUTE_ID',
+  'EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID',
 ];
 
 const SIGNING_ENV = [
@@ -48,10 +59,27 @@ function expectedVersionCode(version) {
   return parts[0] * 1_000_000 + parts[1] * 1000 + parts[2];
 }
 
+// 客服路由必须有可信兜底：要么配了通用客服账号 EXPO_PUBLIC_SUPPORT_ACCOUNT_ID，要么四类
+// 专属账号全配齐。两者都缺时，充值 / 纠纷 / 账号类客服会静默落到系统账号 imAdmin —— 绝不能
+// 带着这种配置发正式包。
+function validateSupportAccounts(errors, env) {
+  if (env.EXPO_PUBLIC_SUPPORT_ACCOUNT_ID?.trim()) return;
+
+  const missing = CATEGORY_SUPPORT_ENV.filter((name) => !env[name]?.trim());
+  if (missing.length > 0) {
+    errors.push(
+      `Support routing would fall back to the system account (imAdmin): set EXPO_PUBLIC_SUPPORT_ACCOUNT_ID, or all of ${CATEGORY_SUPPORT_ENV.join(
+        ', ',
+      )} (missing: ${missing.join(', ')}).`,
+    );
+  }
+}
+
 function validateReleaseMetadata({ env, app }) {
   const errors = [];
 
   requireValues(errors, env, METADATA_ENV);
+  validateSupportAccounts(errors, env);
 
   const match = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(
     env.RELEASE_TAG ?? '',
@@ -192,4 +220,5 @@ module.exports = {
   validateDistributionApproval,
   validateReleaseMetadata,
   validateSigningConfig,
+  validateSupportAccounts,
 };

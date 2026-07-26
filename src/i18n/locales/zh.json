@@ -112,13 +112,13 @@
     "showPassword": "显示密码",
     "resendIn": "{{seconds}}s 后重发",
     "resetPassword": {
+      "failed": "重置失败，请检查验证码后重试",
       "intro": "输入注册邮箱，我们会发送验证码用于重置密码。",
       "newPasswordPlaceholder": "新密码（至少 6 位）",
       "submit": "重置密码",
       "submitting": "重置中…",
-      "successTitle": "密码已重置",
       "successBody": "所有设备已退出登录，请用新密码重新登录。",
-      "failed": "重置失败，请检查验证码后重试"
+      "successTitle": "密码已重置"
     }
   },
   "onboarding": {
@@ -598,13 +598,13 @@
       "cta": "去报名"
     },
     "callRecord": {
-      "duration": "通话时长 {{duration}}",
-      "canceledBySelf": "已取消",
       "canceledByPeer": "对方已取消",
-      "noAnswer": "对方未接听",
-      "missed": "未接听",
+      "canceledBySelf": "已取消",
+      "duration": "通话时长 {{duration}}",
+      "ended": "通话已结束",
       "failed": "通话未接通",
-      "ended": "通话已结束"
+      "missed": "未接听",
+      "noAnswer": "对方未接听"
     }
   },
   "contacts": {
@@ -1345,49 +1345,117 @@
     "viewAnnouncements": "查看最新",
     "addIcon": "添加徽章",
     "myIcons": "我的徽章",
+    "customerService": {
+      "menuLabel": "客服中心",
+      "menuHint": "在线咨询",
+      "title": "客服中心",
+      "subtitle": "请选择需要咨询的客服类型",
+      "openFailed": "打开客服会话失败，请稍后重试",
+      "categories": {
+        "recharge": {
+          "label": "充值客服",
+          "description": "充值、积分、支付相关问题"
+        },
+        "issue": {
+          "label": "问题客服",
+          "description": "功能异常、使用疑问反馈"
+        },
+        "dispute": {
+          "label": "纠纷客服",
+          "description": "交易纠纷、投诉与申诉处理"
+        },
+        "account": {
+          "label": "账号客服",
+          "description": "登录、安全与账号找回"
+        }
+      }
+    },
     "membership": {
       "title": "会员中心",
-      "confirmExchange": "确认兑换",
-      "activateVip": "开通VIP会员",
-      "currentLevel": "当前等级：VIP{{level}}",
-      "benefitsHint": "尊享会员权益，等级越高权益越多。",
-      "exchange": "兑换会员",
-      "currentBadge": "当前等级",
-      "loadError": "会员等级加载失败，已显示本地等级配置",
-      "exchangeSuccess": "已成功兑换 VIP{{level}}",
-      "exchangeError": "兑换失败，请确认积分余额足够后重试",
-      "confirmExchangeMessage": "确定要消耗 {{points}} 积分兑换 {{plan}} 吗？",
-      "loadingPlans": "正在加载会员等级",
-      "confirmExchangePlan": "确认兑换 {{plan}}",
-      "selectHigher": "请选择更高会员等级",
+      "regularUser": "普通用户",
+      "currentIdentity": "当前身份",
+      "catalogHint": "选择会员档位查看对应权益，开通和升级由客服协助处理。",
+      "chooseTier": "选择会员档位",
+      "recommended": "推荐",
+      "lifetime": "永久",
+      "selected": "已选择",
+      "benefitsTitle": "会员权益",
+      "contactToActivate": "联系客服开通 {{plan}}",
+      "contactToUpgrade": "联系客服升级至 {{plan}}",
+      "contactForCurrent": "当前已是 {{plan}}，联系客服咨询",
+      "contactForLowerTier": "当前会员等级更高，联系客服咨询",
+      "contactSupport": "联系客服咨询",
+      "upgradeDifferenceNote": "已开通会员可联系客服补差价升级，升级后立即生效，原会员剩余价值由客服核算抵扣。",
+      "supportName": "官方客服",
+      "supportUnavailableTitle": "客服账号暂未配置",
+      "supportUnavailableMessage": "请联系平台官方客服咨询会员开通或升级。",
+      "planAccessibilityLabel": "{{plan}}，{{duration}}，¥{{price}}",
+      "duration": {
+        "months": "{{count}} 个月",
+        "lifetime": "永久"
+      },
+      "exchangeSuccess": "会员等级已更新为 {{level}}",
+      "exchangeError": "会员等级更新失败，请稍后重试",
       "tiers": {
-        "vip1": {
-          "perks": "基础会员权益"
+        "silver": {
+          "name": "白银会员"
         },
-        "vip2": {
-          "perks": "更多群容量与基础折扣"
+        "gold": {
+          "name": "黄金会员"
         },
-        "vip3": {
-          "perks": "高级身份标识与积分加成"
+        "diamond": {
+          "name": "钻石会员"
         },
-        "vip4": {
-          "perks": "专属靓号折扣与优先体验"
-        },
-        "vip5": {
-          "perks": "至尊会员权益与最高折扣"
+        "super": {
+          "name": "超级会员"
         }
+      },
+      "benefits": {
+        "nameColor": "名字颜色",
+        "badge": "会员徽章",
+        "groupMemberLimit": "单群人数上限",
+        "joinedGroups": "可加入群聊",
+        "noteStorage": "笔记存储",
+        "cityFilters": "城市筛选",
+        "fancyNumber": "靓号赠送"
+      },
+      "benefitValues": {
+        "group-member-limit": "{{value}} 人",
+        "joined-groups": "{{value}} 个",
+        "note-storage": "{{value}} 条",
+        "city-filters": "{{value}} 个",
+        "unlimited": "不限",
+        "silver": "银色",
+        "gold": "金色",
+        "rainbow": "七彩",
+        "exclusive-shimmer": "专属流光",
+        "diamond": "钻石",
+        "super-lifetime": "超级永久",
+        "none": "无",
+        "one-gift": "赠送 1 次",
+        "one-premium-gift": "赠送高级靓号 1 次"
+      },
+      "currentTierBadge": "当前",
+      "marketing": {
+        "goldAccess": "当前所有用户免费享有黄金额度",
+        "title": "会员功能暂未开放",
+        "groupQuota": "单群 400 人 · 可加入 300 个群",
+        "noteQuota": "笔记 500 条 · 城市筛选 10 个"
       }
     },
     "memberRules": {
       "link": "会员规则",
       "title": "规则和权限说明",
       "heading": "会员规则",
-      "description": "以下规则用于说明会员等级、积分兑换和权限范围。支付、订单和有效期将在后续接入真实后端。",
+      "description": "会员由客服人工核实并开通，页面展示权益目录，实际权限以后端为准。",
       "rules": {
-        "levels": "VIP1-5 按会员等级逐级解锁权益，当前页面仅展示等级与权益说明。",
-        "highTier": "高等级会员可获得更多群容量、靓号折扣、积分加成和优先体验资格。",
-        "consume": "会员兑换消耗积分，兑换后立即生效；具体有效期以后端订单为准。",
-        "irreversible": "会员、靓号、群扩容卡等虚拟商品一经使用不可撤销。"
+        "catalog": "白银会员 ¥298 / 1 个月；黄金会员 ¥1288 / 6 个月；钻石会员 ¥1998 / 1 年；超级会员 ¥3998 / 永久。",
+        "supportActivation": "会员不在 App 内使用积分兑换或直接购买。联系客服后，由客服人工核实并开通会员。",
+        "upgrade": "已开通会员可联系客服补差价升级；升级后立即生效，原会员剩余价值由客服核算抵扣。",
+        "expiry": "会员到期后仅停止会员权益，不删除账号、聊天、笔记或其他用户内容。",
+        "fairUse": "会员规则仅适用于会员中心列出的权益；其中展示的“不限”仍受后端较高的合理使用与防滥用上限约束，实际权限以后端为准。",
+        "voiceToText": "语音转文字是所有用户可用的免费基础功能，不受会员等级限制。",
+        "excludedVisualBenefits": "当前会员权益不包含头像框或动态头像承诺。"
       }
     }
   },
@@ -1438,8 +1506,7 @@
       "empty": "还没有标签，先创建一个再保存。"
     },
     "avCallComingSoon": "音视频通话功能即将上线，敬请期待。",
-    "unknownUser": "未命名用户",
-    "callStarting": "拨打中…"
+    "unknownUser": "未命名用户"
   },
   "profileFields": {
     "avatar": "头像",
@@ -1934,8 +2001,8 @@
       "unlistFailedTitle": "下架失败",
       "unlistTitle": "下架笔记",
       "unlistConfirm": "下架后可在已下架列表查看，已下架笔记会在一个月后自动删除。",
-      "restoreFailedTitle": "恢复失败",
-      "refreshFailedTitle": "刷新失败"
+      "refreshFailedTitle": "刷新失败",
+      "restoreFailedTitle": "恢复失败"
     },
     "detail": {
       "loadFailed": "笔记加载失败，请稍后重试",
@@ -2106,8 +2173,8 @@
       "friendHint": "好友"
     },
     "recycleBin": "回收站",
-    "recycleBinTitle": "回收站",
-    "recycleBinHint": "已删除的笔记可在这里恢复。"
+    "recycleBinHint": "已删除的笔记可在这里恢复。",
+    "recycleBinTitle": "回收站"
   },
   "search": {
     "loadFriendsFailed": "好友列表加载失败，请稍后重试",
@@ -2222,9 +2289,7 @@
       "note": "[笔记] {{title}}",
       "verification": "[验证] {{name}} 邀请你担保",
       "default": "[消息]",
-      "plazaPost": "[活动] {{title}}",
-      "voiceCall": "[语音通话]",
-      "videoCall": "[视频通话]"
+      "plazaPost": "[活动] {{title}}"
     }
   },
   "permissions": {
@@ -2245,7 +2310,6 @@
       "disconnected": "通话连接已断开。"
     },
     "groupCallTitle": "群语音通话",
-    "videoCallTitle": "视频通话",
     "participantsOnline": "{{count}} 人在线",
     "self": "我",
     "ended": "通话已结束或连接信息已失效",
@@ -2258,17 +2322,17 @@
     "accept": "接听",
     "invite": {
       "initiatedBy": "{{name}} 发起群语音",
-      "initiatedByVideo": "{{name}} 发起群视频",
       "inviteeCount": "{{count}} 人被邀请",
       "groupMember": "群成员",
-      "initiatedBySingle": "{{name}} 邀请你语音通话",
-      "initiatedBySingleVideo": "{{name}} 邀请你视频通话",
       "friend": "好友",
-      "singleSubtitle": "语音通话"
+      "singleSubtitle": "语音通话",
+      "initiatedByVideo": "{{name}} 发起群视频",
+      "initiatedBySingleVideo": "{{name}} 发起视频通话"
     },
     "chooseType": "发起通话",
+    "typeVideo": "视频通话",
     "typeVoice": "语音通话",
-    "typeVideo": "视频通话"
+    "videoCallTitle": "视频通话"
   },
   "emojis": {
     "face": "表情",
@@ -2291,6 +2355,11 @@
     }
   },
   "serverErrors": {
+    "TEMP_CHAT_JOIN_FAILED": "加入失败，请重试",
+    "NOTE_RESTORE_DUPLICATE": "该笔记的另一份收藏副本已存在，无需恢复",
+    "NOTE_SHARE_LINK_LIMIT": "分享链接数量已达上限，请先撤销不再使用的链接",
+    "UPLOAD_PAYLOAD_TOO_LARGE": "文件太大，超出上传上限",
+    "COLLECTION_LIMIT": "收藏数量已达上限，请先清理不再需要的收藏",
     "ADMIN_USER_NOT_FOUND": "用户不存在",
     "ADMIN_USER_SELF_STATUS_CHANGE": "不能封禁或删除当前管理员账号",
     "ADMIN_USER_INVALID_STATUS_TRANSITION": "不允许执行该账号状态变更",
@@ -2313,9 +2382,11 @@
     "COIN_INSUFFICIENT": "积分余额不足",
     "COIN_AMOUNT_INVALID": "转账数量必须大于 0",
     "MEMBERSHIP_INVALID_LEVEL": "会员等级无效",
+    "MEMBERSHIP_IDEMPOTENCY_CONFLICT": "本次会员操作与已有请求冲突，请刷新后重试",
+    "MEMBERSHIP_GROUP_MEMBER_CAPACITY_EXCEEDED": "该群已达到当前会员等级的人数上限",
+    "MEMBERSHIP_JOINED_CIRCLE_QUOTA_REACHED": "已达到当前会员等级可加入的群聊上限",
     "MEMBERSHIP_LEVEL_NOT_HIGHER": "请选择高于当前等级的会员",
     "MEMBERSHIP_INSUFFICIENT_POINTS": "积分不足",
-    "MEMBERSHIP_IDEMPOTENCY_KEY_REUSED": "该请求编号已被其他兑换使用，请重试",
     "CIRCLE_MEMBER_LIMIT": "圈子成员已满",
     "CIRCLE_ALREADY_MEMBER": "你已是该圈子成员",
     "CIRCLE_REQUEST_PENDING": "申请已提交，等待处理",
@@ -2350,6 +2421,7 @@
     "CIRCLE_JOIN_VIP_REQUIRED": "加入该圈子需要更高的 VIP 等级",
     "CIRCLE_JOIN_CREDIT_REQUIRED": "加入该圈子需要更高的信用分",
     "CIRCLE_JOIN_FANCY_NUMBER_REQUIRED": "加入该圈子需要靓号",
+    "CIRCLE_JOIN_VIP_RESTRICTION_EXCEEDS_CREATOR": "入圈会员要求不能高于创建者的会员等级",
     "CIRCLE_LIST_ITEM_BLANK": "内容不能为空",
     "CIRCLE_LIST_ITEM_DUPLICATE": "内容不能重复",
     "GROUP_NOT_FOUND": "群不存在",
@@ -2373,13 +2445,15 @@
     "TEMP_CHAT_ENDED": "临时聊天已结束",
     "TEMP_CHAT_FULL": "人数已满",
     "TEMP_CHAT_CREATOR_ONLY": "只有创建者可以结束",
-    "TEMP_CHAT_JOIN_FAILED": "加入失败，请重试",
+    "PLAZA_MEMBERSHIP_REQUIRED": "升级会员查看圈子动态",
     "PLAZA_NOT_ACTIVE_MEMBER": "只有圈子活跃成员才能发帖",
     "PLAZA_ADMIN_ONLY_POST": "该圈子仅管理员可以发帖",
     "PLAZA_NOTE_INVALID": "笔记不存在、不可用或不属于你",
     "PLAZA_POST_NOT_FOUND": "帖子不存在",
     "PLAZA_DELETE_AUTHOR_ONLY": "只有作者可以删除该帖子",
     "PLAZA_INVALID_CURSOR": "广场分页已过期，请刷新后重试",
+    "CITY_FILTER_QUOTA_REACHED": "已达到当前会员等级可筛选的城市数量上限",
+    "PLAZA_VIP_RESTRICTION_EXCEEDS_AUTHOR": "报名会员要求不能高于发布者的会员等级",
     "PLAZA_SIGNUP_SELF": "不能给自己发布的帖子报名",
     "PLAZA_SIGNUP_INELIGIBLE": "你的等级不满足该帖子的报名要求",
     "PLAZA_RECOGNIZE_MIN_ONE": "请至少选择一位协作者",
@@ -2418,6 +2492,7 @@
     "FRIEND_TAG_LIMIT_REACHED": "好友标签数量已达上限",
     "FRIEND_LIMIT_REACHED": "好友数量已达上限，升级会员可提升",
     "NOTE_GROUP_EXISTS": "同名分组已存在",
+    "NOTE_STORAGE_QUOTA_REACHED": "已达到当前会员等级的笔记存储上限",
     "NOTE_GROUP_LIMIT": "笔记分组数量已达上限",
     "NOTE_EXPORT_NO_MEDIA": "没有可导出的媒体文件",
     "NOTE_EXPORT_MEDIA_TOO_LARGE": "媒体文件过大，无法导出",
@@ -2440,21 +2515,17 @@
     "FRIEND_REQUEST_MESSAGE_INVALID": "留言内容不能为空，且不能超过 500 字",
     "FRIEND_REQUEST_MESSAGE_LIMIT": "对方回复前最多发送 5 条留言",
     "NOTE_NOT_FOUND": "笔记不存在",
-    "NOTE_RESTORE_DUPLICATE": "该笔记的另一份收藏副本已存在，无需恢复",
     "NOTE_GROUP_NOT_FOUND": "笔记分组不存在",
     "NOTE_IMAGE_TOO_LARGE": "图片过大，无法嵌入",
     "NOTE_SHARE_LINK_INVALID": "分享链接无效",
-    "NOTE_SHARE_LINK_LIMIT": "分享链接数量已达上限，请先撤销不再使用的链接",
     "CALL_NOT_INVITED": "你未被邀请加入该通话",
     "CALL_NOT_FOUND": "通话不存在",
     "CALL_NOT_ALLOWED": "你无权进行此通话操作",
     "CALL_ALREADY_ACTIVE": "你已在一个进行中的通话中",
-    "UPLOAD_PAYLOAD_TOO_LARGE": "文件太大，超出上传上限",
-    "CALL_NOT_FRIEND": "只能与好友通话",
+    "CALL_NOT_FRIEND": "仅好友之间可以发起通话",
     "CONVGROUP_NOT_FOUND": "分组不存在",
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "会话不存在",
     "COLLECTION_NOT_FOUND": "收藏不存在",
-    "COLLECTION_LIMIT": "收藏数量已达上限，请先清理不再需要的收藏",
     "ICON_DISPLAY_LIMIT": "最多只能展示 5 个图标",
     "ICON_INVALID_SYSTEM_SELECTION": "图标选择无效",
     "ICON_INVALID_CIRCLE_SELECTION": "圈子图标选择无效",

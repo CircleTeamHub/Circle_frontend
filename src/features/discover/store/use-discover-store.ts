@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { ApiError } from '@/services/api/client';
 import { fetchPlazaFeed } from '@/services/api/plaza';
 import type { CirclePlazaPost } from '@/types';
 import {
@@ -16,6 +17,7 @@ interface DiscoverState {
   plazaHasMore: boolean;
   plazaLoading: boolean;
   plazaRefreshing: boolean;
+  plazaMembershipRequired: boolean;
   plazaQueryVersion: number;
   plazaLatestRequestId: number;
   selectedCircleId: string | null;
@@ -34,6 +36,7 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
   plazaHasMore: true,
   plazaLoading: false,
   plazaRefreshing: false,
+  plazaMembershipRequired: false,
   plazaQueryVersion: 0,
   plazaLatestRequestId: 0,
   selectedCircleId: null,
@@ -41,7 +44,10 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
 
   fetchPlazaPosts: async (reset = false) => {
     const state = get();
-    if (!reset && state.plazaLoading) return;
+    // 刷新(reset)进行中也不分页：refresh 用 plazaRefreshing 标记(而非 plazaLoading),
+    // 漏判会让一个并发的 end-reached 分页(requestId 更高)把先返回的 refresh 结果当陈旧
+    // 请求丢弃、再把旧游标的一页并到过期列表上,用户的下拉刷新就丢了。
+    if (!reset && (state.plazaLoading || state.plazaRefreshing)) return;
     if (!reset && !state.plazaHasMore) return;
 
     // reset starts from the newest (no cursor); paginate follows nextCursor.
@@ -51,6 +57,7 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
 
     set({
       plazaLatestRequestId: requestId,
+      plazaMembershipRequired: false,
       ...(reset
         ? state.plazaPosts.length === 0
           ? { plazaLoading: true, plazaRefreshing: false }
@@ -91,11 +98,16 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
           requestId,
         }),
       );
-    } catch {
+    } catch (error) {
+      // plazaMembershipRequired 交由 applyPlazaFetchFailure 在「请求仍是最新」时才写，
+      // 避免陈旧的 MEMBERSHIP_REQUIRED 覆盖已到达的新成功态。
       set((current) =>
         applyPlazaFetchFailure(current, {
           requestQueryVersion,
           requestId,
+          membershipRequired:
+            error instanceof ApiError &&
+            error.errorCode === 'PLAZA_MEMBERSHIP_REQUIRED',
         }),
       );
     }
@@ -110,6 +122,7 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
       plazaHasMore: true,
       plazaLoading: false,
       plazaRefreshing: false,
+      plazaMembershipRequired: false,
       plazaQueryVersion: current.plazaQueryVersion + 1,
     }));
   },
@@ -121,15 +134,18 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
     set((s) => ({ plazaPosts: s.plazaPosts.filter((p) => p.id !== id) })),
 
   reset: () =>
-    set({
+    set((state) => ({
       plazaPosts: [],
       plazaCursor: null,
       plazaHasMore: true,
       plazaLoading: false,
       plazaRefreshing: false,
-      plazaQueryVersion: 0,
-      plazaLatestRequestId: 0,
+      plazaMembershipRequired: false,
+      // 请求代次单调递增、不清零：否则登出重置后新账号的请求（version 0 / id 1）会和上个
+      // 账号仍在途的请求撞号，A 的迟到成功 / 门错误会通过时新守卫覆盖 B 的 feed / 门。
+      plazaQueryVersion: state.plazaQueryVersion + 1,
+      plazaLatestRequestId: state.plazaLatestRequestId + 1,
       selectedCircleId: null,
       selectedCity: null,
-    }),
+    })),
 }));

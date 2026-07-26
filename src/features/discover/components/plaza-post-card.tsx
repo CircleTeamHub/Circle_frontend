@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
+import { MemberName } from '@/components/ui/member-name';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { getUserProfileHref } from '@/features/user/utils/routes';
@@ -451,9 +452,14 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
         <View style={s.headerText}>
           <View style={s.nameRow}>
             <Pressable onPress={handleAvatarPress} style={s.nameShrink}>
-              <Text style={d.authorName} numberOfLines={1}>
-                {post.author.nickname}
-              </Text>
+              <MemberName
+                name={post.author.nickname}
+                userId={post.author.id}
+                vipLevel={post.author.vipLevel}
+                style={d.authorName}
+                numberOfLines={1}
+                animated={false}
+              />
             </Pressable>
             {authorDisplayIcons.length > 0 ? (
               <View style={s.authorBadgeRow}>

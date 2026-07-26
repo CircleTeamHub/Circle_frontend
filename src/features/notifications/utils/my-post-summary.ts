@@ -18,6 +18,8 @@ export function mapMyPostToRow(p: MyCirclePost, t: TFunc): NotificationRowData {
     avatarName: title,
     avatarUrl: p.firstImage,
     title,
+    // 我方帖子汇总通知，无外部发送者，名字特效不适用。
+    fromUserId: null,
     summary,
     icon: 'megaphone-outline',
     previewImage: null,

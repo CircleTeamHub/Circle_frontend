@@ -26,6 +26,7 @@ import {
   resolveMultiCitySelection,
   toggleCitySelection,
 } from '@/features/discover/utils/city-selection';
+import { getCityFilterLimit } from '@/features/profile/membership-plans';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 interface CitySection {
@@ -144,8 +145,24 @@ export default function SelectCityScreen() {
   const setCircleCities = useCreateCircleFormStore((st) => st.setSelectedCities);
   const filterCities = useDiscoverFilterStore((st) => st.draftCities);
   const setFilterCities = useDiscoverFilterStore((st) => st.setDraftCities);
+  const filterNationwide = useDiscoverFilterStore((st) => st.draftNationwide);
+  const setFilterNationwide = useDiscoverFilterStore(
+    (st) => st.setDraftNationwide,
+  );
 
   const isVip = (user?.vipLevel ?? 0) >= 1;
+
+  // 城市筛选可选数上限按会员档位（评审 P1：钻石 50 / 超级无限，此前被全局 10 误封顶）。
+  // 仅作用于发现页筛选（city-filters 权益）；建圈/发帖沿用通用上限。非会员用通用默认。
+  const cityLimitEntitlement = getCityFilterLimit(user?.vipLevel ?? 0);
+  const maxCities =
+    target === 'filter'
+      ? cityLimitEntitlement === 'unlimited'
+        ? Number.POSITIVE_INFINITY
+        : (cityLimitEntitlement ?? MAX_CITY_SELECTION)
+      : MAX_CITY_SELECTION;
+  const maxCitiesLabel =
+    maxCities === Number.POSITIVE_INFINITY ? '∞' : String(maxCities);
 
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
@@ -167,8 +184,18 @@ export default function SelectCityScreen() {
     });
 
     setSelected(nextState.selected);
-    setIsNationwide(nextState.isNationwide);
-  }, [circleCities, filterCities, formCities, isMultiSelect, target]);
+    // 筛选的「全国」态由独立标记驱动（cities 为空时不代表全国）；建圈/发帖仍按 cities 推断。
+    setIsNationwide(
+      target === 'filter' ? filterNationwide : nextState.isNationwide,
+    );
+  }, [
+    circleCities,
+    filterCities,
+    filterNationwide,
+    formCities,
+    isMultiSelect,
+    target,
+  ]);
 
   const sections: CitySection[] = useMemo(() => {
     if (!search.trim()) {
@@ -194,16 +221,17 @@ export default function SelectCityScreen() {
           current: prev,
           city,
           isMultiSelect,
+          maxCities,
         });
 
         if (result.reachedLimit) {
-          Alert.alert(t('city.hint'), t('city.maxCities', { max: MAX_CITY_SELECTION }));
+          Alert.alert(t('city.hint'), t('city.maxCities', { max: maxCities }));
         }
 
         return result.nextSelected;
       });
     },
-    [isMultiSelect, isNationwide, t],
+    [isMultiSelect, isNationwide, maxCities, t],
   );
 
   const toggleNationwide = useCallback(() => {
@@ -220,7 +248,10 @@ export default function SelectCityScreen() {
   const handleConfirm = useCallback(() => {
     const resolved = resolveMultiCitySelection(selected, isNationwide);
     if (target === 'filter') {
+      // 「全国」= 不限地区、展示全部，不塞进 cities（保持为空、不参与筛选），改用独立标记记住，
+      // 仅用于筛选页回显。这样才能区分「全国」与「未选择」，且不用每个下游都剔除哨兵城市。
       setFilterCities(resolved);
+      setFilterNationwide(isNationwide);
     } else if (target === 'circle') {
       setCircleCities(resolved);
     } else {
@@ -233,6 +264,7 @@ export default function SelectCityScreen() {
     selected,
     setCircleCities,
     setFilterCities,
+    setFilterNationwide,
     setFormCities,
     target,
   ]);
@@ -265,7 +297,7 @@ export default function SelectCityScreen() {
           {isNationwide
             ? t('city.selectedNationwide')
             : isMultiSelect
-              ? t('city.selectedCount', { count: selected.length, max: MAX_CITY_SELECTION })
+              ? t('city.selectedCount', { count: selected.length, max: maxCitiesLabel })
               : selected[0] ? t('city.selectedSingle', { city: selected[0] }) : t('city.notSelected')}
         </Text>
       </View>

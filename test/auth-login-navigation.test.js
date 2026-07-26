@@ -82,6 +82,14 @@ function loadUseAuth(fixtures = {}) {
       loginToOpenIM: fixtures.loginToOpenIM ?? (async () => {}),
       logoutFromOpenIM: fixtures.logoutFromOpenIM ?? (async () => {}),
     },
+    '@/im/token-recovery': {
+      recoverIMSession: fixtures.recoverIMSession ?? (async () => false),
+      getIMRecoveryGeneration: fixtures.getIMRecoveryGeneration ?? (() => 0),
+    },
+    '@/im/token-errors': {
+      isOpenIMTokenRejectedError:
+        fixtures.isOpenIMTokenRejectedError ?? (() => false),
+    },
     '@/services/api/errors': {
       getApiErrorMessage: () => 'request failed',
     },

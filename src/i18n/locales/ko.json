@@ -559,13 +559,13 @@
       "cta": "신청하기"
     },
     "callRecord": {
-      "duration": "통화 시간 {{duration}}",
-      "canceledBySelf": "취소됨",
       "canceledByPeer": "상대방이 취소했습니다",
-      "noAnswer": "응답 없음",
-      "missed": "부재중 전화",
+      "canceledBySelf": "취소됨",
+      "duration": "통화 시간 {{duration}}",
+      "ended": "통화 종료",
       "failed": "통화 연결 실패",
-      "ended": "통화 종료"
+      "missed": "부재중 전화",
+      "noAnswer": "응답 없음"
     }
   },
   "messages": {
@@ -678,8 +678,8 @@
       "unlistFailedTitle": "내리기 실패",
       "unlistTitle": "노트 내리기",
       "unlistConfirm": "내린 노트는 내림 목록에서 볼 수 있으며 한 달 후 자동 삭제됩니다.",
-      "restoreFailedTitle": "복원 실패",
-      "refreshFailedTitle": "새로고침 실패"
+      "refreshFailedTitle": "새로고침 실패",
+      "restoreFailedTitle": "복원 실패"
     },
     "detail": {
       "loadFailed": "노트를 불러오지 못했습니다. 다시 시도해 주세요",
@@ -850,8 +850,8 @@
       "friendHint": "친구"
     },
     "recycleBin": "휴지통",
-    "recycleBinTitle": "휴지통",
-    "recycleBinHint": "삭제한 노트를 여기에서 복원할 수 있습니다."
+    "recycleBinHint": "삭제한 노트를 여기에서 복원할 수 있습니다.",
+    "recycleBinTitle": "휴지통"
   },
   "tempChats": {
     "title": "좌석 관리",
@@ -1648,8 +1648,7 @@
       "empty": "아직 태그가 없습니다. 저장하기 전에 하나 만드세요."
     },
     "avCallComingSoon": "음성・영상 통화 기능이 곧 출시됩니다. 기대해 주세요.",
-    "unknownUser": "이름 없는 사용자",
-    "callStarting": "전화 거는 중…"
+    "unknownUser": "이름 없는 사용자"
   },
   "profile": {
     "creditScore": "신용 점수",
@@ -1786,49 +1785,117 @@
     "viewAnnouncements": "최신 보기",
     "addIcon": "배지 추가",
     "myIcons": "배지 컬렉션",
+    "customerService": {
+      "menuLabel": "고객센터",
+      "menuHint": "온라인 상담",
+      "title": "고객센터",
+      "subtitle": "문의할 상담 유형을 선택하세요",
+      "openFailed": "고객센터 대화를 열지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      "categories": {
+        "recharge": {
+          "label": "충전 상담",
+          "description": "충전, 포인트, 결제 관련 문의"
+        },
+        "issue": {
+          "label": "일반 상담",
+          "description": "오류 및 이용 관련 문의"
+        },
+        "dispute": {
+          "label": "분쟁 상담",
+          "description": "거래 분쟁, 불만 및 이의 제기 처리"
+        },
+        "account": {
+          "label": "계정 상담",
+          "description": "로그인, 보안 및 계정 복구"
+        }
+      }
+    },
     "membership": {
       "title": "회원 센터",
-      "confirmExchange": "교환 확인",
-      "activateVip": "VIP 시작하기",
-      "currentLevel": "현재 등급: VIP{{level}}",
-      "benefitsHint": "회원 전용 혜택을 누리세요. 등급이 높을수록 혜택이 많아집니다.",
-      "exchange": "회원 교환",
-      "currentBadge": "현재 등급",
-      "loadError": "VIP 등급을 불러오지 못했습니다. 로컬 등급 설정을 표시합니다.",
-      "exchangeSuccess": "VIP{{level}}(으)로 교환했습니다",
-      "exchangeError": "교환에 실패했습니다. 크레딧 잔액이 충분한지 확인 후 다시 시도해 주세요.",
-      "confirmExchangeMessage": "{{points}} 크레딧을 사용해 {{plan}}(으)로 교환하시겠어요?",
-      "loadingPlans": "VIP 등급을 불러오는 중",
-      "confirmExchangePlan": "{{plan}} 교환 확인",
-      "selectHigher": "더 높은 VIP 등급을 선택해 주세요",
+      "regularUser": "일반 사용자",
+      "currentIdentity": "현재 상태",
+      "catalogHint": "회원 등급을 선택해 혜택을 확인하세요. 가입과 업그레이드는 고객센터에서 지원합니다.",
+      "chooseTier": "회원 등급 선택",
+      "recommended": "추천",
+      "lifetime": "평생",
+      "selected": "선택됨",
+      "benefitsTitle": "회원 혜택",
+      "contactToActivate": "고객센터에 문의해 {{plan}} 가입",
+      "contactToUpgrade": "고객센터에 문의해 {{plan}}(으)로 업그레이드",
+      "contactForCurrent": "현재 {{plan}}입니다. 고객센터에 문의",
+      "contactForLowerTier": "현재 회원 등급이 더 높습니다. 고객센터에 문의",
+      "contactSupport": "고객센터 문의",
+      "upgradeDifferenceNote": "기존 회원은 고객센터에 문의해 차액을 지불하고 업그레이드할 수 있습니다. 업그레이드는 즉시 적용되며 남은 회원 가치는 고객센터가 산정해 반영합니다.",
+      "supportName": "공식 고객센터",
+      "supportUnavailableTitle": "고객센터 계정이 설정되지 않았습니다",
+      "supportUnavailableMessage": "회원 가입 또는 업그레이드는 플랫폼 공식 고객센터에 문의해 주세요.",
+      "planAccessibilityLabel": "{{plan}}, {{duration}}, CNY {{price}}",
+      "duration": {
+        "months": "{{count}}개월",
+        "lifetime": "평생"
+      },
+      "exchangeSuccess": "회원 등급이 {{level}}(으)로 업데이트되었습니다",
+      "exchangeError": "회원 등급을 업데이트하지 못했습니다. 나중에 다시 시도해 주세요.",
       "tiers": {
-        "vip1": {
-          "perks": "기본 VIP 혜택"
+        "silver": {
+          "name": "실버 회원"
         },
-        "vip2": {
-          "perks": "더 큰 그룹 용량과 기본 할인"
+        "gold": {
+          "name": "골드 회원"
         },
-        "vip3": {
-          "perks": "상위 신분 배지와 크레딧 추가 적립"
+        "diamond": {
+          "name": "다이아몬드 회원"
         },
-        "vip4": {
-          "perks": "특별 번호 전용 할인과 우선 이용"
-        },
-        "vip5": {
-          "perks": "최고 VIP 혜택과 최대 할인"
+        "super": {
+          "name": "슈퍼 회원"
         }
+      },
+      "benefits": {
+        "nameColor": "이름 색상",
+        "badge": "회원 배지",
+        "groupMemberLimit": "그룹당 인원 한도",
+        "joinedGroups": "가입 가능한 그룹",
+        "noteStorage": "노트 저장 공간",
+        "cityFilters": "도시 필터",
+        "fancyNumber": "프리미엄 번호 증정"
+      },
+      "benefitValues": {
+        "group-member-limit": "{{value}}명",
+        "joined-groups": "{{value}}개 그룹",
+        "note-storage": "{{value}}개 노트",
+        "city-filters": "{{value}}개 도시",
+        "unlimited": "무제한",
+        "silver": "실버",
+        "gold": "골드",
+        "rainbow": "무지개",
+        "exclusive-shimmer": "전용 쉬머",
+        "diamond": "다이아몬드",
+        "super-lifetime": "슈퍼 평생",
+        "none": "없음",
+        "one-gift": "1회 증정",
+        "one-premium-gift": "프리미엄 번호 1회 증정"
+      },
+      "currentTierBadge": "현재",
+      "marketing": {
+        "goldAccess": "현재 모든 사용자가 골드 등급 한도를 무료로 이용할 수 있습니다",
+        "title": "멤버십 기능은 아직 오픈되지 않았습니다",
+        "groupQuota": "그룹당 400명 · 300개 그룹 가입 가능",
+        "noteQuota": "노트 500개 · 도시 필터 10개"
       }
     },
     "memberRules": {
       "link": "회원 규칙",
       "title": "규칙 및 권한 안내",
       "heading": "회원 규칙",
-      "description": "다음 규칙은 VIP 등급, 크레딧 교환, 권한 범위를 설명합니다. 결제, 주문, 유효 기간은 이후 실제 백엔드에 연동됩니다.",
+      "description": "고객센터가 회원 자격을 수동으로 확인하고 부여합니다. 이 화면은 혜택 목록을 표시하며 실제 권한은 백엔드를 기준으로 합니다.",
       "rules": {
-        "levels": "VIP1~5는 등급별로 혜택이 단계적으로 열립니다. 이 페이지에서는 등급과 혜택 설명만 표시합니다.",
-        "highTier": "상위 등급 VIP는 더 큰 그룹 용량, 특별 번호 할인, 크레딧 추가 적립, 우선 이용 자격을 받습니다.",
-        "consume": "VIP 교환은 크레딧을 소모하며 교환 즉시 적용됩니다. 정확한 유효 기간은 백엔드 주문을 기준으로 합니다.",
-        "irreversible": "VIP, 특별 번호, 그룹 확장 카드 등 가상 상품은 한 번 사용하면 취소할 수 없습니다."
+        "catalog": "실버 회원 CNY 298 / 1개월, 골드 회원 CNY 1,288 / 6개월, 다이아몬드 회원 CNY 1,998 / 1년, 슈퍼 회원 CNY 3,998 / 평생.",
+        "supportActivation": "회원 자격은 앱에서 포인트로 교환하거나 직접 구매할 수 없습니다. 문의 후 고객센터가 수동으로 확인하고 부여합니다.",
+        "upgrade": "기존 회원은 고객센터에 문의해 차액을 지불하고 업그레이드할 수 있습니다. 즉시 적용되며 남은 회원 가치는 고객센터가 반영합니다.",
+        "expiry": "회원 기간이 만료되면 회원 혜택만 중지됩니다. 계정, 채팅, 노트 및 기타 사용자 콘텐츠는 삭제되지 않습니다.",
+        "fairUse": "회원 규칙은 회원 센터에 표시된 혜택에만 적용됩니다. 그중 무제한으로 표시된 혜택에도 백엔드의 높은 수준의 공정 사용 및 남용 방지 한도가 적용됩니다. 실제 권한은 백엔드를 기준으로 합니다.",
+        "voiceToText": "음성 텍스트 변환은 모든 사용자를 위한 무료 기본 기능이며 회원 등급의 제한을 받지 않습니다.",
+        "excludedVisualBenefits": "현재 회원 혜택에는 아바타 프레임이나 움직이는 아바타 제공 약속이 포함되지 않습니다."
       }
     }
   },
@@ -2004,13 +2071,13 @@
     "showPassword": "비밀번호 표시",
     "resendIn": "{{seconds}}초 후 재전송",
     "resetPassword": {
+      "failed": "재설정에 실패했습니다. 코드를 확인하고 다시 시도해 주세요",
       "intro": "가입한 이메일을 입력하면 비밀번호 재설정용 인증 코드를 보내드립니다.",
       "newPasswordPlaceholder": "새 비밀번호(6자 이상)",
       "submit": "비밀번호 재설정",
       "submitting": "재설정 중…",
-      "successTitle": "비밀번호가 재설정되었습니다",
       "successBody": "모든 기기에서 로그아웃되었습니다. 새 비밀번호로 다시 로그인해 주세요.",
-      "failed": "재설정에 실패했습니다. 코드를 확인하고 다시 시도해 주세요"
+      "successTitle": "비밀번호가 재설정되었습니다"
     }
   },
   "common": {
@@ -2205,7 +2272,6 @@
       "disconnected": "통화가 끊겼습니다."
     },
     "groupCallTitle": "그룹 음성 통화",
-    "videoCallTitle": "영상 통화",
     "participantsOnline": "{{count}}명 접속 중",
     "self": "나",
     "ended": "통화가 종료되었거나 연결 정보가 만료되었습니다",
@@ -2218,17 +2284,17 @@
     "accept": "수락",
     "invite": {
       "initiatedBy": "{{name}}님이 그룹 음성 통화를 시작했습니다",
-      "initiatedByVideo": "{{name}} 님이 그룹 영상 통화를 시작했습니다",
       "inviteeCount": "{{count}}명 초대됨",
       "groupMember": "그룹 멤버",
-      "initiatedBySingle": "{{name}}님이 음성 통화에 초대했습니다",
-      "initiatedBySingleVideo": "{{name}} 님이 영상 통화에 초대했습니다",
       "friend": "친구",
-      "singleSubtitle": "음성 통화"
+      "singleSubtitle": "음성 통화",
+      "initiatedByVideo": "{{name}}님이 그룹 영상 통화를 시작했습니다",
+      "initiatedBySingleVideo": "{{name}}님이 영상 통화를 시작했습니다"
     },
     "chooseType": "통화 시작",
+    "typeVideo": "영상 통화",
     "typeVoice": "음성 통화",
-    "typeVideo": "영상 통화"
+    "videoCallTitle": "영상 통화"
   },
   "im": {
     "time": {
@@ -2258,9 +2324,7 @@
       "note": "[노트] {{title}}",
       "verification": "[인증] {{name}}님이 보증을 요청했습니다",
       "default": "[메시지]",
-      "plazaPost": "[활동] {{title}}",
-      "voiceCall": "[음성 통화]",
-      "videoCall": "[영상 통화]"
+      "plazaPost": "[활동] {{title}}"
     }
   },
   "permissions": {
@@ -2291,6 +2355,11 @@
     }
   },
   "serverErrors": {
+    "TEMP_CHAT_JOIN_FAILED": "참여하지 못했습니다. 다시 시도해 주세요",
+    "NOTE_RESTORE_DUPLICATE": "이 노트의 다른 소장 사본이 이미 존재합니다.",
+    "NOTE_SHARE_LINK_LIMIT": "공유 링크 한도에 도달했습니다. 사용하지 않는 링크를 먼저 취소해 주세요",
+    "UPLOAD_PAYLOAD_TOO_LARGE": "파일이 너무 커서 업로드할 수 없습니다",
+    "COLLECTION_LIMIT": "컬렉션 한도에 도달했습니다. 필요 없는 항목을 정리해 주세요",
     "ADMIN_USER_NOT_FOUND": "사용자를 찾을 수 없습니다",
     "ADMIN_USER_SELF_STATUS_CHANGE": "현재 관리자 계정은 정지하거나 삭제할 수 없습니다",
     "ADMIN_USER_INVALID_STATUS_TRANSITION": "해당 계정 상태 변경은 허용되지 않습니다",
@@ -2313,9 +2382,11 @@
     "COIN_INSUFFICIENT": "포인트가 부족합니다",
     "COIN_AMOUNT_INVALID": "금액은 0보다 커야 합니다",
     "MEMBERSHIP_INVALID_LEVEL": "잘못된 회원 등급입니다",
+    "MEMBERSHIP_IDEMPOTENCY_CONFLICT": "이 회원 요청이 이전 요청과 충돌합니다. 새로고침 후 다시 시도하세요.",
+    "MEMBERSHIP_GROUP_MEMBER_CAPACITY_EXCEEDED": "이 그룹은 현재 회원 등급의 인원 한도에 도달했습니다",
+    "MEMBERSHIP_JOINED_CIRCLE_QUOTA_REACHED": "현재 회원 등급의 가입 그룹 한도에 도달했습니다",
     "MEMBERSHIP_LEVEL_NOT_HIGHER": "현재보다 높은 등급을 선택하세요",
     "MEMBERSHIP_INSUFFICIENT_POINTS": "포인트가 부족합니다",
-    "MEMBERSHIP_IDEMPOTENCY_KEY_REUSED": "이 요청 ID는 이미 다른 구매에 사용되었습니다. 다시 시도해 주세요.",
     "CIRCLE_MEMBER_LIMIT": "서클 인원이 가득 찼습니다",
     "CIRCLE_ALREADY_MEMBER": "이미 멤버입니다",
     "CIRCLE_REQUEST_PENDING": "이미 신청이 대기 중입니다",
@@ -2350,6 +2421,7 @@
     "CIRCLE_JOIN_VIP_REQUIRED": "이 서클에 가입하려면 더 높은 VIP 등급이 필요합니다",
     "CIRCLE_JOIN_CREDIT_REQUIRED": "이 서클에 가입하려면 더 높은 신용 점수가 필요합니다",
     "CIRCLE_JOIN_FANCY_NUMBER_REQUIRED": "이 서클에 가입하려면 특별 번호가 필요합니다",
+    "CIRCLE_JOIN_VIP_RESTRICTION_EXCEEDS_CREATOR": "가입 조건은 생성자의 회원 등급보다 높게 설정할 수 없습니다",
     "CIRCLE_LIST_ITEM_BLANK": "항목은 비워 둘 수 없습니다",
     "CIRCLE_LIST_ITEM_DUPLICATE": "항목은 중복될 수 없습니다",
     "GROUP_NOT_FOUND": "그룹을 찾을 수 없습니다",
@@ -2373,13 +2445,15 @@
     "TEMP_CHAT_ENDED": "임시 채팅이 종료되었습니다",
     "TEMP_CHAT_FULL": "인원이 가득 찼습니다",
     "TEMP_CHAT_CREATOR_ONLY": "생성자만 종료할 수 있습니다",
-    "TEMP_CHAT_JOIN_FAILED": "참여하지 못했습니다. 다시 시도해 주세요",
+    "PLAZA_MEMBERSHIP_REQUIRED": "멤버십을 업그레이드하여 서클 게시물 보기",
     "PLAZA_NOT_ACTIVE_MEMBER": "서클의 활성 멤버만 게시할 수 있습니다",
     "PLAZA_ADMIN_ONLY_POST": "이 서클에서는 관리자만 게시할 수 있습니다",
     "PLAZA_NOTE_INVALID": "해당 노트를 사용할 수 없거나 본인의 것이 아닙니다",
     "PLAZA_POST_NOT_FOUND": "게시물을 찾을 수 없습니다",
     "PLAZA_DELETE_AUTHOR_ONLY": "작성자만 이 게시물을 삭제할 수 있습니다",
     "PLAZA_INVALID_CURSOR": "이 광장 페이지가 만료되었습니다. 새로고침 후 다시 시도하세요.",
+    "CITY_FILTER_QUOTA_REACHED": "현재 회원 등급의 도시 필터 한도에 도달했습니다",
+    "PLAZA_VIP_RESTRICTION_EXCEEDS_AUTHOR": "신청 조건은 작성자의 회원 등급보다 높게 설정할 수 없습니다",
     "PLAZA_SIGNUP_SELF": "자신의 게시물에는 신청할 수 없습니다",
     "PLAZA_SIGNUP_INELIGIBLE": "이 게시물의 신청 요건을 충족하지 않습니다",
     "PLAZA_RECOGNIZE_MIN_ONE": "협업자를 한 명 이상 선택하세요",
@@ -2418,6 +2492,7 @@
     "FRIEND_TAG_LIMIT_REACHED": "친구 태그 개수가 한도에 도달했습니다",
     "FRIEND_LIMIT_REACHED": "친구 수가 한도에 도달했습니다. 멤버십을 업그레이드하면 늘릴 수 있습니다",
     "NOTE_GROUP_EXISTS": "같은 이름의 그룹이 이미 있습니다",
+    "NOTE_STORAGE_QUOTA_REACHED": "현재 회원 등급의 노트 저장 한도에 도달했습니다",
     "NOTE_GROUP_LIMIT": "노트 그룹 개수가 한도에 도달했습니다",
     "NOTE_EXPORT_NO_MEDIA": "내보낼 수 있는 미디어가 없습니다",
     "NOTE_EXPORT_MEDIA_TOO_LARGE": "미디어 파일이 너무 커서 내보낼 수 없습니다",
@@ -2440,21 +2515,17 @@
     "FRIEND_REQUEST_MESSAGE_INVALID": "메시지는 비워 둘 수 없으며 500자 이내여야 합니다",
     "FRIEND_REQUEST_MESSAGE_LIMIT": "상대가 답장하기 전에는 최대 5개의 메시지만 보낼 수 있습니다",
     "NOTE_NOT_FOUND": "노트를 찾을 수 없습니다",
-    "NOTE_RESTORE_DUPLICATE": "이 노트의 다른 소장 사본이 이미 존재합니다.",
     "NOTE_GROUP_NOT_FOUND": "노트 그룹을 찾을 수 없습니다",
     "NOTE_IMAGE_TOO_LARGE": "이미지가 너무 커서 삽입할 수 없습니다",
     "NOTE_SHARE_LINK_INVALID": "유효하지 않은 공유 링크입니다",
-    "NOTE_SHARE_LINK_LIMIT": "공유 링크 한도에 도달했습니다. 사용하지 않는 링크를 먼저 취소해 주세요",
     "CALL_NOT_INVITED": "이 통화에 초대되지 않았습니다",
     "CALL_NOT_FOUND": "통화를 찾을 수 없습니다",
     "CALL_NOT_ALLOWED": "이 통화 작업을 수행할 수 없습니다",
     "CALL_ALREADY_ACTIVE": "이미 진행 중인 통화가 있습니다",
-    "UPLOAD_PAYLOAD_TOO_LARGE": "파일이 너무 커서 업로드할 수 없습니다",
-    "CALL_NOT_FRIEND": "친구와만 통화할 수 있습니다",
+    "CALL_NOT_FRIEND": "통화는 친구 사이에서만 사용할 수 있습니다",
     "CONVGROUP_NOT_FOUND": "그룹을 찾을 수 없습니다",
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "대화를 찾을 수 없습니다",
     "COLLECTION_NOT_FOUND": "컬렉션을 찾을 수 없습니다",
-    "COLLECTION_LIMIT": "컬렉션 한도에 도달했습니다. 필요 없는 항목을 정리해 주세요",
     "ICON_DISPLAY_LIMIT": "아이콘은 최대 5개까지 표시할 수 있습니다",
     "ICON_INVALID_SYSTEM_SELECTION": "잘못된 아이콘 선택입니다",
     "ICON_INVALID_CIRCLE_SELECTION": "잘못된 서클 아이콘 선택입니다",
