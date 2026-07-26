@@ -2358,6 +2358,11 @@
     }
   },
   "serverErrors": {
+    "TEMP_CHAT_JOIN_FAILED": "Failed to join, please try again",
+    "NOTE_RESTORE_DUPLICATE": "Another active copy of this collected note already exists.",
+    "NOTE_SHARE_LINK_LIMIT": "Share link limit reached — revoke unused links first",
+    "UPLOAD_PAYLOAD_TOO_LARGE": "File is too large to upload",
+    "COLLECTION_LIMIT": "Collection limit reached — remove items you no longer need",
     "ADMIN_USER_NOT_FOUND": "User not found.",
     "ADMIN_USER_SELF_STATUS_CHANGE": "You can't ban or delete your own admin account.",
     "ADMIN_USER_INVALID_STATUS_TRANSITION": "This account status change isn't allowed.",

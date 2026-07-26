@@ -2358,6 +2358,11 @@
     }
   },
   "serverErrors": {
+    "TEMP_CHAT_JOIN_FAILED": "No se pudo unir, inténtalo de nuevo",
+    "NOTE_RESTORE_DUPLICATE": "Ya existe otra copia activa de esta nota guardada.",
+    "NOTE_SHARE_LINK_LIMIT": "Límite de enlaces compartidos alcanzado; revoca los que no uses",
+    "UPLOAD_PAYLOAD_TOO_LARGE": "El archivo es demasiado grande para subirlo",
+    "COLLECTION_LIMIT": "Límite de colecciones alcanzado; elimina las que no necesites",
     "ADMIN_USER_NOT_FOUND": "El usuario no existe.",
     "ADMIN_USER_SELF_STATUS_CHANGE": "No puedes bloquear ni eliminar tu propia cuenta de administrador.",
     "ADMIN_USER_INVALID_STATUS_TRANSITION": "Este cambio de estado de la cuenta no está permitido.",

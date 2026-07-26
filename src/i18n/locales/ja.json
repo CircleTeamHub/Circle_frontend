@@ -2355,6 +2355,11 @@
     }
   },
   "serverErrors": {
+    "TEMP_CHAT_JOIN_FAILED": "参加に失敗しました。もう一度お試しください",
+    "NOTE_RESTORE_DUPLICATE": "このノートの別の収蔵コピーが既に存在します。",
+    "NOTE_SHARE_LINK_LIMIT": "共有リンクの上限に達しました。不要なリンクを取り消してください",
+    "UPLOAD_PAYLOAD_TOO_LARGE": "ファイルが大きすぎてアップロードできません",
+    "COLLECTION_LIMIT": "コレクションの上限に達しました。不要なものを削除してください",
     "ADMIN_USER_NOT_FOUND": "ユーザーが存在しません",
     "ADMIN_USER_SELF_STATUS_CHANGE": "現在の管理者アカウントを停止または削除することはできません",
     "ADMIN_USER_INVALID_STATUS_TRANSITION": "このアカウントのステータス変更は許可されていません",
