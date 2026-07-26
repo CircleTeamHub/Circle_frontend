@@ -909,3 +909,29 @@ test('release preflight fails closed when support routing would fall back to imA
   validateSupportAccounts(whitespace, { EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: '   ' });
   assert.equal(whitespace.length, 1);
 });
+
+test('release preflight forwards support-account variables so the validator can see them', () => {
+  const workflow = read('.github/workflows/android-release.yml');
+
+  // GitHub repository variables 不会自动进 process.env。preflight 步若不显式转发这些客服
+  // 变量,validateSupportAccounts 每次都看到全空、打 tag 就在测试/构建之前 fail——即便仓库
+  // 其实配好了(#131 P1)。这些必须和 build 步一致地转发。
+  const preflight = workflow.slice(
+    workflow.indexOf('Validate release metadata and ancestry'),
+    workflow.indexOf('Install dependencies'),
+  );
+  assert.ok(preflight.length > 0, 'preflight step block located');
+  for (const name of [
+    'EXPO_PUBLIC_SUPPORT_ACCOUNT_ID',
+    'EXPO_PUBLIC_SUPPORT_RECHARGE_ID',
+    'EXPO_PUBLIC_SUPPORT_ISSUE_ID',
+    'EXPO_PUBLIC_SUPPORT_DISPUTE_ID',
+    'EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID',
+  ]) {
+    assert.match(
+      preflight,
+      new RegExp(`${name}: \\$\\{\\{ vars\\.${name} \\}\\}`),
+      `preflight forwards ${name}`,
+    );
+  }
+});
