@@ -134,18 +134,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: 2,
   },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-  },
-  badge: {
-    borderRadius: Radius.full,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
   metaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -278,8 +266,6 @@ export default function UserProfileScreen() {
       id: profileId,
       name: fallbackName,
       accountId: '',
-      memberLabel: t('profile.normalUser'),
-      badges: [],
       displayIcons: [],
       gender: null,
       city: null,
@@ -288,7 +274,7 @@ export default function UserProfileScreen() {
       likeCount: 0,
       recognitionCount: 0,
     }),
-    [fallbackName, profileId, t],
+    [fallbackName, profileId],
   );
 
   useFocusEffect(
@@ -312,8 +298,6 @@ export default function UserProfileScreen() {
           name: currentUser.nickname || currentUser.accountId,
           accountId: currentUser.accountId,
           avatarUrl: currentUser.avatarUrl ?? undefined,
-          memberLabel: currentUser.role === 'ADMIN' ? t('profile.admin') : t('profile.normalUser'),
-          badges: [currentUser.role === 'ADMIN' ? t('profile.admin') : t('profile.normalUser')],
           gender: currentUser.gender,
           city: currentUser.city,
           signature: getProfileSignature(
@@ -343,8 +327,6 @@ export default function UserProfileScreen() {
             name: profile.nickname || profile.accountId,
             accountId: profile.accountId,
             avatarUrl: profile.avatarUrl ?? undefined,
-            memberLabel: profile.role === 'ADMIN' ? t('profile.admin') : t('profile.normalUser'),
-            badges: [profile.role === 'ADMIN' ? t('profile.admin') : t('profile.normalUser')],
             displayIcons: profile.displayIcons ?? [],
             likeCount: profile.likeCount ?? 0,
             recognitionCount: profile.recognitionCount ?? 0,
@@ -725,14 +707,6 @@ export default function UserProfileScreen() {
         color: colors.text,
         ...Typography.h1,
       },
-      badge: {
-        backgroundColor: colors.primary,
-      },
-      badgeText: {
-        color: colors.white,
-        ...Typography.tiny,
-        fontWeight: '700' as const,
-      },
       account: {
         color: colors.textSecondary,
         ...Typography.caption,
@@ -842,12 +816,7 @@ export default function UserProfileScreen() {
           </View>
 
           <View style={s.identity}>
-            <View style={s.nameRow}>
-              <Text style={d.name}>{displayName}</Text>
-              <View style={[s.badge, d.badge]}>
-                <Text style={d.badgeText}>{profile.memberLabel}</Text>
-              </View>
-            </View>
+            <Text style={d.name}>{displayName}</Text>
             <Text style={d.account}>{t('contacts.accountId', { id: profile.accountId })}</Text>
           </View>
 

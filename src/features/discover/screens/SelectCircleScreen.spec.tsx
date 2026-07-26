@@ -8,10 +8,19 @@ const mockFetchMyCircles = jest.fn();
 let mockFocusCallback: (() => void) | null = null;
 let mockCommittedAtBack: { id: string; name: string }[] | null = null;
 
+const CIRCLE_A_ID = '07b8cd30-afdf-5b74-9dfe-6dd5b422364b';
+const CIRCLE_B_ID = 'cb62ccd9-303f-550c-a5ab-ff9193bdbbd0';
+// 格式合法的 UUID，但不在 mockCircles 里 —— 模拟「圈子被删除/退出」。
+const MISSING_CIRCLE_ID = '11111111-1111-4111-8111-111111111111';
+
 const mockCircles = [
-  { id: 'circle-a', name: 'Circle A', description: '', avatarUrl: null },
-  { id: 'circle-b', name: 'Circle B', description: '', avatarUrl: null },
+  { id: CIRCLE_A_ID, name: 'Circle A', description: '', avatarUrl: null },
+  { id: CIRCLE_B_ID, name: 'Circle B', description: '', avatarUrl: null },
 ];
+// 稳定引用：生产中 useShallow 保证 joined/created 引用稳定；若这里每次新建数组，
+// circles useMemo 会不断重算、draft focus effect 反复重置，冲掉用户的勾选。
+let mockJoinedCircles = [mockCircles[1]];
+let mockCreatedCircles = [mockCircles[0]];
 
 jest.mock('expo-router', () => {
   const ReactModule = jest.requireActual<typeof import('react')>('react');
@@ -84,8 +93,8 @@ jest.mock('@/components/ui/divider', () => ({ Divider: () => null }));
 jest.mock('@/features/discover/store/use-circles-store', () => ({
   useCirclesStore: (selector: (state: unknown) => unknown) =>
     selector({
-      joinedCircles: [mockCircles[1]],
-      createdCircles: [mockCircles[0]],
+      joinedCircles: mockJoinedCircles,
+      createdCircles: mockCreatedCircles,
       myCirclesLoading: false,
       myCirclesError: null,
       fetchMyCircles: mockFetchMyCircles,
@@ -94,10 +103,12 @@ jest.mock('@/features/discover/store/use-circles-store', () => ({
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockJoinedCircles = [mockCircles[1]];
+  mockCreatedCircles = [mockCircles[0]];
   mockFocusCallback = null;
   mockCommittedAtBack = null;
   usePostFormStore.setState({
-    selectedCircles: [{ id: 'circle-a', name: 'Circle A' }],
+    selectedCircles: [{ id: CIRCLE_A_ID, name: 'Circle A' }],
   });
   mockRouter.back.mockImplementation(() => {
     mockCommittedAtBack = usePostFormStore.getState().selectedCircles;
@@ -110,14 +121,14 @@ test('ordinary back abandons staged circle edits', () => {
   fireEvent.press(screen.getByText('Circle B'));
   expect(screen.getByText('selected:2')).toBeTruthy();
   expect(usePostFormStore.getState().selectedCircles).toEqual([
-    { id: 'circle-a', name: 'Circle A' },
+    { id: CIRCLE_A_ID, name: 'Circle A' },
   ]);
 
   fireEvent.press(screen.getByLabelText('back'));
 
   expect(mockRouter.back).toHaveBeenCalledTimes(1);
   expect(usePostFormStore.getState().selectedCircles).toEqual([
-    { id: 'circle-a', name: 'Circle A' },
+    { id: CIRCLE_A_ID, name: 'Circle A' },
   ]);
 });
 
@@ -139,7 +150,7 @@ test('empty draft disables confirmation without changing the committed selection
   fireEvent.press(confirmButton!);
   expect(mockRouter.back).not.toHaveBeenCalled();
   expect(usePostFormStore.getState().selectedCircles).toEqual([
-    { id: 'circle-a', name: 'Circle A' },
+    { id: CIRCLE_A_ID, name: 'Circle A' },
   ]);
 });
 
@@ -160,12 +171,47 @@ test('refocus resets an abandoned draft and confirm commits only the fresh draft
   fireEvent.press(screen.getByText('确定'));
 
   expect(usePostFormStore.getState().selectedCircles).toEqual([
-    { id: 'circle-a', name: 'Circle A' },
-    { id: 'circle-b', name: 'Circle B' },
+    { id: CIRCLE_A_ID, name: 'Circle A' },
+    { id: CIRCLE_B_ID, name: 'Circle B' },
   ]);
   expect(mockCommittedAtBack).toEqual([
-    { id: 'circle-a', name: 'Circle A' },
-    { id: 'circle-b', name: 'Circle B' },
+    { id: CIRCLE_A_ID, name: 'Circle A' },
+    { id: CIRCLE_B_ID, name: 'Circle B' },
   ]);
   expect(mockRouter.back).toHaveBeenCalledTimes(1);
+});
+
+test('unavailable circle ids are dropped from the draft on focus (display only; committed untouched)', () => {
+  usePostFormStore.setState({
+    selectedCircles: [{ id: MISSING_CIRCLE_ID, name: 'Deleted Circle' }],
+  });
+
+  render(<SelectCircleScreen />);
+
+  // 不在成员列表里的圈子从 draft（显示）剔除；但选择页不再改动 committed —— committed
+  // 的可用性由发帖提交时对权威列表的最终校验负责（唯一防线）。
+  expect(screen.getByText('selected:0')).toBeTruthy();
+  expect(screen.queryAllByLabelText('icon:checkmark-circle')).toHaveLength(0);
+  expect(usePostFormStore.getState().selectedCircles).toEqual([
+    { id: MISSING_CIRCLE_ID, name: 'Deleted Circle' },
+  ]);
+});
+
+test('staged toggles survive a circle-list refresh (not reset to committed)', () => {
+  const { rerender } = render(<SelectCircleScreen />);
+
+  // 用户勾上 Circle B（draft 变，committed 仍是 [A]，未按确定）。
+  fireEvent.press(screen.getByText('Circle B'));
+  expect(screen.getByText('selected:2')).toBeTruthy();
+
+  // 模拟 fetchMyCircles 完成：store 用新数组引用替换 joined/created（内容仍含 A、B）。
+  mockJoinedCircles = [{ ...mockCircles[1] }];
+  mockCreatedCircles = [{ ...mockCircles[0] }];
+  act(() => {
+    rerender(<SelectCircleScreen />);
+  });
+
+  // staged 的 B 必须保留，而不是被 committed（[A]）快照重置冲掉。
+  expect(screen.getByText('selected:2')).toBeTruthy();
+  expect(screen.getAllByLabelText('icon:checkmark-circle')).toHaveLength(2);
 });

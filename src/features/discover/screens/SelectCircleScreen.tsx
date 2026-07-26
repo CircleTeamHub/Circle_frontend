@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -18,6 +18,10 @@ import { Divider } from '@/components/ui/divider';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import { usePostFormStore } from '@/features/discover/store/use-post-form-store';
+import {
+  arePostFormCircleSelectionsEqual,
+  filterAvailablePostFormCircles,
+} from '@/features/discover/utils/post-form-circle-selection';
 import type { Circle } from '@/types';
 
 const s = StyleSheet.create({
@@ -113,11 +117,31 @@ export default function SelectCircleScreen() {
   const setSelectedCircles = usePostFormStore((s) => s.setSelectedCircles);
   const [draftCircles, setDraftCircles] = useState(selectedCircles);
 
+  // focus 回调要读「最新 circles」但不把 circles 列为依赖（否则列表刷新会触发它、用
+  // committed 重置 draft，冲掉用户已勾的 toggle），故用 ref 读值。
+  const circlesRef = useRef(circles);
+  useEffect(() => {
+    circlesRef.current = circles;
+  }, [circles]);
+
+  // focus 进入（或 committed 变化）：用 committed 初始化 draft，放弃上次未确定的编辑，
+  // 并按当前可用圈子过滤。
   useFocusEffect(
     useCallback(() => {
-      setDraftCircles(selectedCircles);
+      setDraftCircles(
+        filterAvailablePostFormCircles(selectedCircles, circlesRef.current),
+      );
     }, [selectedCircles]),
   );
+
+  // 圈子列表刷新（fetchMyCircles 完成）：只从「当前 draft」剔除已不可用的，保留用户
+  // 自 focus 以来勾选的 toggle —— 不用 committed 快照重置，否则会冲掉未确定的编辑。
+  useEffect(() => {
+    setDraftCircles((current) => {
+      const next = filterAvailablePostFormCircles(current, circles);
+      return arePostFormCircleSelectionsEqual(current, next) ? current : next;
+    });
+  }, [circles]);
 
   const selectedIds = useMemo(
     () => new Set(draftCircles.map((c) => c.id)),

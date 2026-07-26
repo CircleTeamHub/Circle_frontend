@@ -12,8 +12,6 @@ export interface UserProfileData {
   name: string;
   accountId: string;
   avatarUrl?: string;
-  memberLabel: string;
-  badges: string[];
   displayIcons?: import('@/types').DisplayIcon[];
   likeCount?: number;
   recognitionCount?: number;

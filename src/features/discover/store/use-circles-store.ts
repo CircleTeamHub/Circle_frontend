@@ -9,6 +9,14 @@ import { deriveManagedCircles } from './managed-circles';
 // total 超过它时记一条诊断并由 UI 提示，避免「搜了真实存在的圈子却查无结果」的静默错误。
 const ALL_CIRCLES_LIMIT = 100;
 
+// fetchMyCircles 的「本次 run 快照」——即便随后被更新代际（force/reset）取代、
+// guardedSet 写入被丢弃，调用方拿到的仍是这次请求自己的权威结果。
+export type MyCirclesFetchResult = {
+  ok: boolean;
+  joined: Circle[];
+  created: Circle[];
+};
+
 interface CirclesState {
   joinedCircles: Circle[];
   createdCircles: Circle[];
@@ -24,7 +32,9 @@ interface CirclesState {
 
   // force：变更后（建圈/退圈等）绕过在飞合并强制重拉 —— 否则可能 await 到
   // 变更前就出发的快照。
-  fetchMyCircles: (options?: { force?: boolean }) => Promise<void>;
+  fetchMyCircles: (options?: {
+    force?: boolean;
+  }) => Promise<MyCirclesFetchResult>;
   fetchAllCircles: (options?: { force?: boolean }) => Promise<void>;
   // Patch one circle across every cached list (avatar/cover changes from the
   // detail screen, etc.) so lists don't show stale data until the next refetch.
@@ -41,7 +51,7 @@ interface CirclesState {
 // 重拉）都推进代际 —— 陈旧在飞请求的响应落地时代际不匹配、写入被丢弃；
 // 否则 A 号的在飞 /circle/my 会把 A 的圈子写进 B 号的 store，建圈后的
 // await 也可能等到建圈前的快照。
-let myCirclesInFlight: Promise<void> | null = null;
+let myCirclesInFlight: Promise<MyCirclesFetchResult> | null = null;
 let allCirclesInFlight: Promise<void> | null = null;
 let myCirclesRunSeq = 0;
 let allCirclesRunSeq = 0;
@@ -67,7 +77,7 @@ export const useCirclesStore = create<CirclesState>((set) => ({
     const guardedSet: typeof set = (partial) => {
       if (runId === myCirclesRunSeq) set(partial);
     };
-    const run = (async () => {
+    const run = (async (): Promise<MyCirclesFetchResult> => {
       guardedSet({ myCirclesLoading: true, myCirclesError: null });
       try {
         const [joined, created, applied] = await Promise.all([
@@ -92,6 +102,9 @@ export const useCirclesStore = create<CirclesState>((set) => ({
           appliedCircles: applied,
           myCirclesError: null,
         });
+        // 返回本次 run 的快照 —— 调用方（如发帖提交前校验）据此判断，不必回读 store，
+        // 从而不受并发 force/reset 代际覆盖的影响。
+        return { ok: true, joined, created };
       } catch (error) {
         guardedSet({
           myCirclesError: getApiErrorMessage(
@@ -99,6 +112,7 @@ export const useCirclesStore = create<CirclesState>((set) => ({
             '加载圈子列表失败，请稍后重试',
           ),
         });
+        return { ok: false, joined: [], created: [] };
       } finally {
         guardedSet({ myCirclesLoading: false });
       }
