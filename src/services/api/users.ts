@@ -40,8 +40,12 @@ function normalizePublicUser(user: PublicUser): PublicUser {
 /**
  * 批量查 userId → vipLevel（会员名字特效的 IM/列表回退路径用）。POST /user/vip-levels。
  * 能内联返回 vipLevel 的场景（广场/朋友圈/资料）不走这里；只有仅有 userId 的聊天发送者 /
- * 会话列表 / 通讯录 / 通知才批量补查。空数组直接短路；非对象 / 非数字项一律过滤，
- * 兜底成 {}，永不把异常抛给渲染层。
+ * 会话列表 / 通讯录 / 通知才批量补查。空数组直接短路；合法的空对象（{} = 这批确实无人是
+ * 会员）照常返回，是正常的权威降级。但**畸形响应**（非对象 / 数组 / 值非有限数字，多半是
+ * 5xx 的 HTML、网关错误体或 schema 漂移）必须**抛出**——由 userVipStore.flush 的 catch
+ * 接住走有界重试、保住缓存里的会员正档；绝不能兜底成 {}，否则会被 flush 当成「这批都不是
+ * 会员」的权威成功，清掉缓存正档 + 标记 5 分钟新鲜，把一次瞬时故障变成会员特效熄灭。抛出的
+ * 异常止于 flush 的 catch，不会到达渲染层。
  */
 export async function fetchVipLevels(
   ids: string[],
@@ -54,14 +58,19 @@ export async function fetchVipLevels(
     method: 'POST',
     body: { ids: cleanedIds },
   });
-  if (!raw || typeof raw !== 'object') {
-    return {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error(
+      'Malformed /user/vip-levels response: expected a JSON object',
+    );
   }
   const out: Record<string, number> = {};
   for (const [id, level] of Object.entries(raw as Record<string, unknown>)) {
-    if (typeof level === 'number' && Number.isFinite(level)) {
-      out[id] = level;
+    if (typeof level !== 'number' || !Number.isFinite(level)) {
+      throw new Error(
+        `Malformed /user/vip-levels response: non-numeric level for "${id}"`,
+      );
     }
+    out[id] = level;
   }
   return out;
 }

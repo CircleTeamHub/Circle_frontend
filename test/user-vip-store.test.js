@@ -71,13 +71,22 @@ test('userVipStore drops superseded batch responses (no out-of-order stale overw
   assert.match(store, /if \(batchGeneration !== startGeneration\)/);
 });
 
-test('fetchVipLevels posts ids and defends the response shape', () => {
+test('fetchVipLevels throws on a malformed response instead of caching a downgrade', () => {
   const users = read('src/services/api/users.ts');
   assert.match(users, /export async function fetchVipLevels/);
   assert.match(users, /\/user\/vip-levels/);
   assert.match(users, /method: 'POST'/);
-  // Filters non-number levels so a malformed payload can't poison the cache.
-  assert.match(users, /Number\.isFinite\(level\)/);
+  // 畸形响应(非对象 / 数组 / 值非有限数字)必须 THROW,让 userVipStore.flush 的 catch 走
+  // 重试、保住缓存正档——绝不能兜底成 {} 被 flush 当成「这批都不是会员」的权威成功清缓存。
+  assert.match(users, /typeof raw !== 'object' \|\| Array\.isArray\(raw\)/);
+  assert.match(
+    users,
+    /throw new Error\(\s*'Malformed \/user\/vip-levels response: expected a JSON object'/,
+  );
+  assert.match(users, /typeof level !== 'number' \|\| !Number\.isFinite\(level\)/);
+  assert.match(users, /non-numeric level for/);
+  // 旧的「兜底成 {}」分支必须彻底消失。
+  assert.doesNotMatch(users, /typeof raw !== 'object'\) \{\s*return \{\};/);
 });
 
 test('MemberName resolves tier from a userId via the vip cache', () => {

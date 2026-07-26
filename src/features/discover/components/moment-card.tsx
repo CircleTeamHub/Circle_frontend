@@ -134,6 +134,14 @@ export const MomentCard: React.FC<MomentCardProps> = ({
     () => buildMomentCommentThreads(comments),
     [comments],
   );
+  // 回复目标的会员特效要按「被回复用户」的 id 补查:replyTo.id 是父**评论** id(后端
+  // replyToID 引用另一条评论),不是用户 id。拿它当 userId 会去 /user/vip-levels 查评论
+  // UUID——永远查不到、回复名字永不亮、还每条多一次废请求。这里映射到父评论作者的
+  // user.id;父评论不在已加载列表里时回落 null(不查也不错发)。
+  const replyTargetUserIdByCommentId = useMemo(
+    () => new Map(comments.map((c) => [c.id, c.user.id])),
+    [comments],
+  );
   const commentPreview = useMemo(
     () => getMomentCommentPreviewState(commentThreads, post.commentCount),
     [commentThreads, post.commentCount],
@@ -274,7 +282,11 @@ export const MomentCard: React.FC<MomentCardProps> = ({
                       </Text>
                       <MemberName
                         name={thread.comment.replyTo.nickname}
-                        userId={thread.comment.replyTo.id}
+                        userId={
+                          replyTargetUserIdByCommentId.get(
+                            thread.comment.replyTo.id,
+                          ) ?? null
+                        }
                         style={d.commentUser}
                         animated={false}
                       />
@@ -314,7 +326,11 @@ export const MomentCard: React.FC<MomentCardProps> = ({
                         </Text>
                         <MemberName
                           name={reply.replyTo.nickname}
-                          userId={reply.replyTo.id}
+                          userId={
+                            replyTargetUserIdByCommentId.get(
+                              reply.replyTo.id,
+                            ) ?? null
+                          }
                           style={d.commentUser}
                           animated={false}
                         />
