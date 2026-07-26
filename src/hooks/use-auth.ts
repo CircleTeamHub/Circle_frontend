@@ -109,6 +109,12 @@ export function useAuth() {
           const recoveryGenerationBefore = getIMRecoveryGeneration();
           try {
             await loginToOpenIM(user.id, tokens.imToken);
+            // 登录 await 期间被踢下线(多端顶替,代次已变但 epoch 未变):拆掉这次迟到的成功,
+            // 否则把本端又连回去、再踢掉顶替的新设备,重演互踢。代次守卫此前只在 catch 里,
+            // 成功路径漏了。message groups 是 REST 资源,拆完照常加载无害。
+            if (getIMRecoveryGeneration() !== recoveryGenerationBefore) {
+              await logoutFromOpenIM({ forceNative: true }).catch(() => undefined);
+            }
           } catch (imError) {
             // IM 登录失败不阻断主流程，仅打印警告；用户仍可正常使用 app
             console.warn(
@@ -393,6 +399,13 @@ export function useAuth() {
             const recoveryGenerationBefore = getIMRecoveryGeneration();
             try {
               await loginToOpenIM(account.user.id, imToken);
+              // 登录 await 期间被踢下线(代次已变):拆掉这次迟到的成功,别把本端连回去再踢掉
+              // 顶替的新设备。成功路径此前漏了代次守卫(只在 catch 里),补上。
+              if (getIMRecoveryGeneration() !== recoveryGenerationBefore) {
+                await logoutFromOpenIM({ forceNative: true }).catch(
+                  () => undefined,
+                );
+              }
             } catch (imError) {
               console.warn(
                 '[openim] degraded-switch login failed',

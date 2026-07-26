@@ -514,6 +514,11 @@ test('armReloginDebt gates on both sessionEpoch and recoveryGeneration', () => {
   );
   assert.match(armFn, /sessionEpoch === startEpoch/);
   assert.match(armFn, /recoveryGeneration === startGeneration/);
+  // 非当前会话时**不动** reloginPending:用 if 守卫写入,不是三元强制 false。旧写法
+  // `stillCurrent ? value : false` 会在 A 会话掉队收尾时清掉 B 会话刚记下的欠账,B 的回前台
+  // 重试被跳过、IM 断连到冷启动(#131 P1)。
+  assert.match(armFn, /if \(stillCurrent\) \{\s*reloginPending = value;\s*\}/);
+  assert.doesNotMatch(armFn, /reloginPending = stillCurrent \? value : false/);
 });
 
 test('getIMRecoveryGeneration is exported for login sites to detect mid-await kicks', () => {
@@ -534,4 +539,24 @@ test('getIMRecoveryGeneration is exported for login sites to detect mid-await ki
       `${rel} captures the generation before login`,
     );
   }
+});
+
+test('login sites tear down a late IM session when kicked during a SUCCESSFUL login (not only in catch)', () => {
+  const bootstrap = read('src/components/app/session-bootstrap.tsx');
+  const useAuth = read('src/hooks/use-auth.ts');
+
+  // 弱网下 login() 已返回、onConnectSuccess 迟到:若期间被踢(代次变但 epoch 未变),这次迟到
+  // 的成功会把本端连回去、再踢掉顶替的新设备。成功 await 之后必须复检代次并强制原生登出拆掉
+  // 迟到会话——此前守卫只在 catch 里,成功路径漏了(#131 P1)。
+  const teardown =
+    /getIMRecoveryGeneration\(\) !== recoveryGenerationBefore\)\s*\{\s*await logoutFromOpenIM\(\{ forceNative: true \}\)/;
+  assert.match(bootstrap, teardown, 'bootstrap tears down on post-success kick');
+  assert.match(useAuth, teardown, 'use-auth tears down on post-success kick');
+
+  // use-auth 两个登录点(onAuthSuccess + 降级切号)都要有强制原生登出的拆除。
+  const tears = useAuth.match(/logoutFromOpenIM\(\{ forceNative: true \}\)/g) || [];
+  assert.ok(
+    tears.length >= 2,
+    'both use-auth login sites tear down a late session on kick',
+  );
 });

@@ -93,13 +93,16 @@ async function performRecovery(): Promise<boolean> {
   // 否则回前台又会重登、把顶替的新设备踢下线。置 false 永远安全（取消本就想清欠账）。
   const startGeneration = recoveryGeneration;
   const armReloginDebt = (value: boolean) => {
-    // 只有本次恢复仍属当前会话(epoch 未变)且未被取消(代次未变)时才记欠账；否则一律置
-    // false——避免 A 会话的掉队失败给已切入的 B 会话记上莫须有的欠账（epoch 变），
-    // 或被踢下线后又把欠账记回来（代次变）。与成功/epoch 守卫（下方）保持一致。
+    // 只有本次恢复仍属当前会话(epoch 未变)且未被取消(代次未变)时才写欠账。否则**不动**
+    // reloginPending —— 它此刻可能是已切入的 B 会话刚记下的欠账(B 自己的瞬时失败);A 会话
+    // 的掉队收尾若把它清成 false,会让 B 的回前台重试被跳过、IM 一直断连到冷启动。这与下方
+    // epoch 守卫处 round 3 的「不动 reloginPending」一致——A 的迟到不该替 B 改欠账。
     const stillCurrent =
       useAuthStore.getState().sessionEpoch === startEpoch &&
       recoveryGeneration === startGeneration;
-    reloginPending = stillCurrent ? value : false;
+    if (stillCurrent) {
+      reloginPending = value;
+    }
   };
 
   // 没有业务会话 / onboarding 未完成：成功路径本就不登录 IM，这里保持同一门禁。

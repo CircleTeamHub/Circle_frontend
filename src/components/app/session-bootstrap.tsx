@@ -67,6 +67,14 @@ export function SessionBootstrap() {
     const recoveryGenerationBefore = getIMRecoveryGeneration();
     try {
       await loginToOpenIM(userId, token);
+      // 登录 await 期间被踢下线(多端顶替,cancelIMSessionRecovery bump 了代次但不改 epoch):
+      // 这次迟到的成功把本端又连了回去,会把顶替本端的新设备再踢下线。强制原生登出拆掉它、
+      // 不清欠账直接返回——handleKickedOffline 已把欠账清成终态,这里不能再当成功接受。
+      // (代次守卫此前只在 catch 里,成功路径漏了,故补上;与 performRecovery 的 await 后守卫一致。)
+      if (getIMRecoveryGeneration() !== recoveryGenerationBefore) {
+        await logoutFromOpenIM({ forceNative: true }).catch(() => undefined);
+        return;
+      }
       clearIMLoginRetryPending();
     } catch (error) {
       if (isOpenIMTokenRejectedError(error)) {
