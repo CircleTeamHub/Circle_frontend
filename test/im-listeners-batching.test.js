@@ -232,3 +232,35 @@ test('onKickedOffline is a terminal disconnect, not a token refresh (no relogin 
   assert.equal(harness.clearRetryCalls.length, 1);
   assert.equal(harness.cancelRecoveryCalls.length, 1);
 });
+
+test('onConnectSuccess ignores a late connect when the login was abandoned (currentUserID cleared)', async () => {
+  const harness = loadListenersHarness();
+  harness.bindOpenIMListeners();
+  const handleConnected = harness.handlers.get('onConnectSuccess');
+
+  // 登录因就绪超时 / 失败放弃后 currentUserID 被清为 null。此时迟到的连接成功事件绝不能把
+  // connected 翻真——否则留下「已连接但身份为 null」的僵尸会话,读回执 / 消息归属会错到下次
+  // 前台重登才纠正。
+  harness.state.currentUserID = null;
+  await handleConnected();
+
+  assert.ok(
+    !harness.setConnectedCalls.includes(true),
+    'late connect with a null identity must not mark the session connected',
+  );
+});
+
+test('onConnectSuccess marks connected for a normal connect that still has a live identity', async () => {
+  const harness = loadListenersHarness();
+  harness.bindOpenIMListeners();
+  const handleConnected = harness.handlers.get('onConnectSuccess');
+
+  // 正常登录 / 重连:currentUserID 在 login() 前就乐观写入,连接成功照常建立会话。
+  harness.state.currentUserID = 'self';
+  await handleConnected();
+
+  assert.ok(
+    harness.setConnectedCalls.includes(true),
+    'a connect with a current identity must mark the session connected',
+  );
+});

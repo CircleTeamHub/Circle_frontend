@@ -75,6 +75,14 @@ export function bindOpenIMListeners() {
   OpenIMSDK.on('onConnecting', handleConnecting);
 
   const handleConnected = async () => {
+    // 迟到的连接成功:此刻没有当前身份(登录已因就绪超时/失败放弃、currentUserID 被清为
+    // null)时,别把 connected 翻真、也别拉会话——否则会留下「已连接但身份为 null」的僵尸
+    // 会话,读回执 / 消息归属会错到下次前台重登才纠正。正常登录在 login() 前就乐观写入
+    // currentUserID(client.ts),真正的登录 / 重连都带得着身份,不受此守卫影响。
+    if (!useIMStore.getState().currentUserID) {
+      useIMStore.getState().setConnecting(false);
+      return;
+    }
     useIMStore.getState().setConnecting(false);
     useIMStore.getState().setConnected(true);
     useIMStore.getState().setError(null);
