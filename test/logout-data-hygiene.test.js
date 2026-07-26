@@ -127,6 +127,36 @@ test('登出清理清单点名四个账号级持久化 store，幸存者留有�
   assert.match(session, /clearStorage\?\.\(\)/);
 });
 
+test('session.ts 惰性加载 discover / vip store，避免与 api client 的模块环 (#131 P1)', () => {
+  const session = read('src/services/auth/session.ts');
+
+  // 静态 import 这两个会成环:session.ts → use-discover-store/userVipStore → services/api/*
+  // → api/client.ts → session.ts。api/client 求值时 registerLogoutHandler,而 session.ts 尚未
+  // 初始化完、logoutHandlers 未就绪,冷启动可能崩。改为登出流程里按需 import() 破环(与
+  // loadMessageGroupsStore / loadCirclesStore 同一模式)。
+  assert.doesNotMatch(
+    session,
+    /^import\s*\{[^}]*useDiscoverStore[^}]*\}\s*from/m,
+    'use-discover-store 不能再静态 import',
+  );
+  assert.doesNotMatch(
+    session,
+    /^import\s*\{[^}]*invalidateVipLevels[^}]*\}\s*from/m,
+    'invalidateVipLevels 不能再静态 import',
+  );
+  // 改为惰性 loader
+  assert.match(
+    session,
+    /await import\(\s*'@\/features\/discover\/store\/use-discover-store'\s*\)/,
+  );
+  assert.match(session, /await import\('@\/stores\/userVipStore'\)/);
+  assert.match(session, /const useDiscoverStore = await loadDiscoverStore\(\)/);
+  assert.match(
+    session,
+    /const invalidateVipLevels = await loadVipLevelsInvalidator\(\)/,
+  );
+});
+
 // ---------------------------------------------------------------------------
 // im/client.ts：换号即清上一账号的 OpenIM 本地库
 // ---------------------------------------------------------------------------

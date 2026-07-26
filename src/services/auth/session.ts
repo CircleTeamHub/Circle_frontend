@@ -7,8 +7,6 @@ import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
-import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
-import { invalidateVipLevels } from '@/stores/userVipStore';
 import { resetDiagnosticBreadcrumbs } from '@/utils/client-diagnostics';
 
 type PersistCapableAuthStore = {
@@ -49,6 +47,22 @@ async function loadCirclesStore() {
     '@/features/discover/store/use-circles-store'
   );
   return useCirclesStore;
+}
+
+// 与上面两个 loader 同理惰性加载:静态 import 这两个会形成
+// session.ts → use-discover-store/userVipStore → services/api/* → api/client.ts → session.ts
+// 的模块环。api/client.ts 求值时会 registerLogoutHandler,而彼时 session.ts 还没初始化完、
+// 它的 logoutHandlers 绑定尚未就绪,可能在冷启动阶段崩。改为登出流程里按需 import 破环。
+async function loadDiscoverStore() {
+  const { useDiscoverStore } = await import(
+    '@/features/discover/store/use-discover-store'
+  );
+  return useDiscoverStore;
+}
+
+async function loadVipLevelsInvalidator() {
+  const { invalidateVipLevels } = await import('@/stores/userVipStore');
+  return invalidateVipLevels;
 }
 
 type PersistedResettableStore = {
@@ -162,6 +176,8 @@ async function performClearLocalSession(sessionEpoch: number) {
 
   const useMessageGroupsStore = await loadMessageGroupsStore();
   const useCirclesStore = await loadCirclesStore();
+  const useDiscoverStore = await loadDiscoverStore();
+  const invalidateVipLevels = await loadVipLevelsInvalidator();
 
   // 先清 auth，让订阅 useAuthStore 的组件立刻看到"未登录"，
   // 避免 dependent store 被清空后触发"重新拉取"再被丢弃的请求。
