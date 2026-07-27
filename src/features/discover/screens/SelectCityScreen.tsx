@@ -29,6 +29,8 @@ import {
   buildInitialCityPickerState,
   resolveMultiCitySelection,
   toggleCitySelection,
+  resolveFilterCityLimit,
+  clampCitiesToLimit,
 } from '@/features/discover/utils/city-selection';
 import {
   getCityFilterLimit,
@@ -177,12 +179,12 @@ export default function SelectCityScreen() {
   // 城市筛选可选数上限按会员档位（评审 P1：钻石 50 / 超级无限，此前被全局 10 误封顶）。
   // 仅作用于发现页筛选（city-filters 权益）；建圈/发帖沿用通用上限。
   const cityLimitEntitlement = getCityFilterLimit(entitlementLevel);
-  const maxCities =
-    target === 'filter'
-      ? cityLimitEntitlement === 'unlimited'
-        ? Number.POSITIVE_INFINITY
-        : cityLimitEntitlement
-      : MAX_CITY_SELECTION;
+  // status 为 null = 计划状态未知（冷启动首拉失败且无缓存），此时不按 floor 0 收紧。
+  const filterCityLimit = resolveFilterCityLimit(
+    cityLimitEntitlement,
+    status !== null,
+  );
+  const maxCities = target === 'filter' ? filterCityLimit : MAX_CITY_SELECTION;
   const maxCitiesLabel =
     maxCities === Number.POSITIVE_INFINITY ? '∞' : String(maxCities);
 
@@ -272,7 +274,11 @@ export default function SelectCityScreen() {
     if (target === 'filter') {
       // 「全国」= 不限地区、展示全部，不塞进 cities（保持为空、不参与筛选），改用独立标记记住，
       // 仅用于筛选页回显。这样才能区分「全国」与「未选择」，且不用每个下游都剔除哨兵城市。
-      setFilterCities(resolved);
+      //
+      // selected 是进页时按当时的上限初始化的，而 useFocusEffect 会强制重拉计划状态：
+      // 若期间 floor 下调（如程序正式启用，floor 从 2 回落到 0），maxCities 会变小而
+      // selected 不会自动缩短，故写回前按当前上限收敛。
+      setFilterCities(clampCitiesToLimit(resolved, maxCities));
       setFilterNationwide(isNationwide);
     } else if (target === 'circle') {
       setCircleCities(resolved);
@@ -282,6 +288,7 @@ export default function SelectCityScreen() {
     router.back();
   }, [
     isNationwide,
+    maxCities,
     router,
     selected,
     setCircleCities,

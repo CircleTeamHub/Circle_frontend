@@ -55,3 +55,20 @@ test('collectCursorPages rejects incomplete and non-progressing pagination', asy
     /cursor did not advance/,
   );
 });
+
+test('collectCursorPages rejects a multi-step cursor cycle (A -> B -> A)', async () => {
+  // 每页都是满页，且游标在 A / B 之间来回：只比较「与上一个游标是否相同」永远不会
+  // 命中，旧实现会无限请求下去。
+  let calls = 0;
+  await assert.rejects(
+    collectCursorPages<Item>(async (cursor) => {
+      calls += 1;
+      if (calls > 10) throw new Error('looped without terminating');
+      return cursor === 'circle-a'
+        ? [{ id: 'circle-x' }, { id: 'circle-b' }]
+        : [{ id: 'circle-y' }, { id: 'circle-a' }];
+    }, 2),
+    /cursor did not advance/,
+  );
+  assert.ok(calls <= 10, 'should stop well before the loop guard');
+});
