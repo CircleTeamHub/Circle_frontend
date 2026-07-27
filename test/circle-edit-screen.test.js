@@ -29,7 +29,14 @@ function loadCirclesApi(deps) {
       }
 
       if (request === '@/services/api/utils') {
-        return { normalizeMediaUrl: deps.normalizeMediaUrl };
+        return {
+          buildQuery: () => '',
+          normalizeMediaUrl: deps.normalizeMediaUrl,
+        };
+      }
+
+      if (request === './collect-cursor-pages') {
+        return { collectCursorPages: async () => [] };
       }
 
       throw new Error(`Unexpected import: ${request}`);

@@ -278,6 +278,38 @@ test('every locale defines all serverErrors codes', () => {
   }
 });
 
+test('joined-circle hard limit uses the stable backend contract in every locale', () => {
+  const { SERVER_ERROR_CODES } = loadServerErrorCodes();
+  assert.ok(SERVER_ERROR_CODES.includes('CIRCLE_JOIN_LIMIT_REACHED'));
+
+  const expectedChinese = '最多可加入 100 个圈子，请先退出其他圈子后再试';
+  for (const lng of ['en', 'zh', 'ja', 'ko', 'es']) {
+    const bundle = JSON.parse(
+      fs.readFileSync(
+        path.join(process.cwd(), `src/i18n/locales/${lng}.json`),
+        'utf8',
+      ),
+    );
+    assert.equal(
+      typeof bundle.serverErrors.CIRCLE_JOIN_LIMIT_REACHED,
+      'string',
+    );
+    assert.ok(
+      bundle.serverErrors.CIRCLE_JOIN_LIMIT_REACHED.trim().length > 0,
+    );
+  }
+  const zhBundle = JSON.parse(
+    fs.readFileSync(
+      path.join(process.cwd(), 'src/i18n/locales/zh.json'),
+      'utf8',
+    ),
+  );
+  assert.equal(
+    zhBundle.serverErrors.CIRCLE_JOIN_LIMIT_REACHED,
+    expectedChinese,
+  );
+});
+
 test('empty moment comments use the backend error contract in every locale', () => {
   const { SERVER_ERROR_CODES } = loadServerErrorCodes();
   assert.ok(SERVER_ERROR_CODES.includes('TRACE_EMPTY_COMMENT'));

@@ -7,6 +7,9 @@ import type {
   CreateCircleInput,
   MyCircle,
 } from '@/types';
+import { collectCursorPages } from './collect-cursor-pages';
+
+const MY_CIRCLES_PAGE_SIZE = 100;
 
 // 泛型：保留调用方的具体类型（如 MyCircle 的 myRole），不要窄化成 Circle。
 function normalizeCircle<T extends Circle>(circle: T): T {
@@ -44,8 +47,19 @@ export async function fetchMyCircles(
   tab: 'joined' | 'created' | 'applied',
 ): Promise<MyCircle[]> {
   // myRole 随列表下发 —— 调用方不必再为角色逐个拉 /circle/:id。
-  const circles = await apiClient<MyCircle[]>(`/circle/my?tab=${tab}`);
-  return circles.map(normalizeCircle);
+  return collectCursorPages(
+    async (cursor) => {
+      const circles = await apiClient<MyCircle[]>(
+        `/circle/my${buildQuery({
+          tab,
+          limit: MY_CIRCLES_PAGE_SIZE,
+          ...(cursor ? { cursor } : {}),
+        })}`,
+      );
+      return circles.map(normalizeCircle);
+    },
+    MY_CIRCLES_PAGE_SIZE,
+  );
 }
 
 export async function fetchCircleDetail(id: string): Promise<CircleDetail> {
@@ -198,4 +212,3 @@ export async function fetchPendingInvitationsForCircle(
     `/circle-invitation/circle/${circleId}/pending`,
   );
 }
-

@@ -212,6 +212,19 @@ test('discover city filter starts with no city filter instead of nationwide', ()
   assert.match(source, /emptyMultiSelectIsNationwide:\s*target === 'circle'/);
 });
 
+test('discover city filter applies the shared membership rollout floor', () => {
+  const source = read('src/features/discover/screens/SelectCityScreen.tsx');
+
+  assert.match(source, /useMembershipProgramStore/);
+  assert.match(source, /resolveMembershipEntitlementLevel/);
+  assert.match(source, /status\?\.entitlementFloorLevel \?\? 0/);
+  assert.match(source, /getCityFilterLimit\(entitlementLevel\)/);
+  assert.doesNotMatch(
+    source,
+    /getCityFilterLimit\(user\?\.vipLevel \?\? 0\)/,
+  );
+});
+
 test('discover filter screen does not reset draft selections when returning from child pickers', () => {
   const source = read('src/features/discover/screens/FilterScreen.tsx');
 

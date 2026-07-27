@@ -1879,7 +1879,7 @@
       "marketing": {
         "goldAccess": "現在、すべてのユーザーがゴールド会員の枠を無料でご利用いただけます",
         "title": "会員機能はまだ公開されていません",
-        "groupQuota": "1グループ400人 · 300グループまで参加可能",
+        "groupQuota": "1グループ400人 · 100グループまで参加可能",
         "noteQuota": "ノート500件 · 都市フィルター10個"
       }
     },
@@ -2383,8 +2383,10 @@
     "COIN_AMOUNT_INVALID": "金額は0より大きくしてください",
     "MEMBERSHIP_INVALID_LEVEL": "会員レベルが無効です",
     "MEMBERSHIP_IDEMPOTENCY_CONFLICT": "この会員操作は以前のリクエストと競合しています。更新してもう一度お試しください。",
+    "MEMBERSHIP_IDEMPOTENCY_KEY_REUSED": "このリクエスト識別子は別の会員操作で使用済みです。更新して再試行してください。",
     "MEMBERSHIP_GROUP_MEMBER_CAPACITY_EXCEEDED": "このグループは現在の会員レベルの人数上限に達しています",
     "MEMBERSHIP_JOINED_CIRCLE_QUOTA_REACHED": "現在の会員レベルで参加できるグループ数の上限に達しました",
+    "CIRCLE_JOIN_LIMIT_REACHED": "参加できるサークルは最大100個です。別のサークルを退出してから再試行してください。",
     "MEMBERSHIP_LEVEL_NOT_HIGHER": "現在より上のレベルを選んでください",
     "MEMBERSHIP_INSUFFICIENT_POINTS": "ポイントが足りません",
     "CIRCLE_MEMBER_LIMIT": "サークルが満員です",

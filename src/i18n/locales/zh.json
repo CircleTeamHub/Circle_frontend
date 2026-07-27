@@ -1439,7 +1439,7 @@
       "marketing": {
         "goldAccess": "当前所有用户免费享有黄金额度",
         "title": "会员功能暂未开放",
-        "groupQuota": "单群 400 人 · 可加入 300 个群",
+        "groupQuota": "单群 400 人 · 最多加入 100 个群",
         "noteQuota": "笔记 500 条 · 城市筛选 10 个"
       }
     },
@@ -2383,8 +2383,10 @@
     "COIN_AMOUNT_INVALID": "转账数量必须大于 0",
     "MEMBERSHIP_INVALID_LEVEL": "会员等级无效",
     "MEMBERSHIP_IDEMPOTENCY_CONFLICT": "本次会员操作与已有请求冲突，请刷新后重试",
+    "MEMBERSHIP_IDEMPOTENCY_KEY_REUSED": "该请求标识已用于其他会员操作，请刷新后重试",
     "MEMBERSHIP_GROUP_MEMBER_CAPACITY_EXCEEDED": "该群已达到当前会员等级的人数上限",
     "MEMBERSHIP_JOINED_CIRCLE_QUOTA_REACHED": "已达到当前会员等级可加入的群聊上限",
+    "CIRCLE_JOIN_LIMIT_REACHED": "最多可加入 100 个圈子，请先退出其他圈子后再试",
     "MEMBERSHIP_LEVEL_NOT_HIGHER": "请选择高于当前等级的会员",
     "MEMBERSHIP_INSUFFICIENT_POINTS": "积分不足",
     "CIRCLE_MEMBER_LIMIT": "圈子成员已满",
