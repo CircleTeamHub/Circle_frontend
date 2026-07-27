@@ -44,7 +44,7 @@ test('UserIconRow renders system badges from local artwork and circle icons in c
   assert.match(row, /smallCompactCircleOrnament/);
   assert.match(row, /s\.circleOrnament/);
   assert.match(row, /circleSlotRaised/);
-  assert.match(row, /<View style=\{\[s\.circleSlot,\s*!compact \? s\.circleSlotRaised : null\]\}>/);
+  assert.match(row, /<View style=\{\[s\.circleSlot,\s*!compact && !hasExplicitSize \? s\.circleSlotRaised : null\]\}>/);
   assert.match(row, /width:\s*40,\s*\n\s*height:\s*40,/);
 });
 

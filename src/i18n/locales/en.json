@@ -2215,6 +2215,21 @@
   },
   "myIcons": {
     "title": "My badges",
+    "ownedGroup": "Owned",
+    "lockedGroup": "Locked",
+    "collectionHint": "Tap any badge to see what it means and how to earn it.",
+    "displaying": "On profile",
+    "addToDisplay": "Show on profile",
+    "removeFromDisplay": "Remove from profile",
+    "close": "Close",
+    "emptyOwned": "No badges yet — meet the conditions below to earn them.",
+    "lockedName": {
+      "vip": "Membership",
+      "newUser": "New Joiner",
+      "topCollaborator": "Top Collaborator",
+      "verifiedProfile": "Verified",
+      "circleBuilder": "Circle Builder"
+    },
     "currentDisplay": "Currently shown",
     "loading": "Loading...",
     "selectedCount": "{{count}}/{{max}} selected",
@@ -2222,7 +2237,7 @@
     "explainIntroLabel": "About",
     "explainConditionLabel": "How to earn",
     "systemGroup": "System badges",
-    "circleGroup": "My circles",
+    "circleGroup": "Circle badges",
     "save": "Save badges",
     "saving": "Saving...",
     "maxIcons": "You can show up to {{count}} badges",
@@ -2239,8 +2254,26 @@
         "condition": "Earned from your circle identity, admin role, or circle configuration; the circle must remain in good standing."
       },
       "vip": {
-        "description": "A paid-membership badge that shows your current VIP level.",
-        "condition": "Earned by subscribing to or upgrading VIP; the level follows your membership tier 1-5."
+        "description": "A paid-membership badge showing your current membership tier.",
+        "condition": "Lights up once you subscribe; four tiers — Silver, Gold, Diamond and Super — and the badge follows your current tier.",
+        "tiers": {
+          "silver": {
+            "description": "Silver membership badge — the entry-level member status.",
+            "condition": "Lights up when you subscribe to Silver."
+          },
+          "gold": {
+            "description": "Gold membership badge — an advanced tier with higher group and note limits.",
+            "condition": "Lights up when you subscribe to Gold."
+          },
+          "diamond": {
+            "description": "Diamond membership badge — a high tier with an exclusive fancy ID and higher limits across the board.",
+            "condition": "Lights up when you subscribe to Diamond."
+          },
+          "super": {
+            "description": "Super membership badge — the top tier: lifetime, unlimited perks, and an exclusive shimmering name.",
+            "condition": "Lights up when you get the lifetime Super membership."
+          }
+        }
       },
       "newUser": {
         "description": "A new-member badge that helps newcomers be recognized early on.",

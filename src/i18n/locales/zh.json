@@ -2211,52 +2211,85 @@
     "emptySignature": "完善资料后会在这里展示你的介绍。"
   },
   "myIcons": {
-    "title": "我的图标",
+    "title": "我的徽章",
+    "ownedGroup": "已拥有",
+    "lockedGroup": "未拥有",
+    "collectionHint": "点击任意徽章，查看它代表什么、如何获得。",
+    "displaying": "展示中",
+    "addToDisplay": "在资料展示",
+    "removeFromDisplay": "取消展示",
+    "close": "关闭",
+    "emptyOwned": "还没有点亮的徽章，完成下方条件即可获得。",
+    "lockedName": {
+      "vip": "会员徽章",
+      "newUser": "新手",
+      "topCollaborator": "合作达人",
+      "verifiedProfile": "资料可信",
+      "circleBuilder": "圈子建设者"
+    },
     "currentDisplay": "当前展示",
     "loading": "加载中...",
     "selectedCount": "已选择 {{count}}/{{max}}",
-    "explainTitle": "Badge 说明",
+    "explainTitle": "徽章说明",
     "explainIntroLabel": "介绍",
     "explainConditionLabel": "获得条件",
     "systemGroup": "系统图标",
-    "circleGroup": "我的圈子",
-    "save": "保存图标",
+    "circleGroup": "圈子徽章",
+    "save": "保存",
     "saving": "保存中...",
-    "maxIcons": "最多展示 {{count}} 个图标",
-    "loadFailedTitle": "图标加载失败",
+    "maxIcons": "最多展示 {{count}} 个徽章",
+    "loadFailedTitle": "徽章加载失败",
     "saveFailedTitle": "保存失败",
     "retryLater": "请稍后重试",
     "explain": {
       "empty": {
-        "description": "点选一个 Badge，查看它代表什么。",
-        "condition": "不同 Badge 会根据会员、注册、合作认可、资料可信度或圈子建设贡献获得。"
+        "description": "点选一个徽章，查看它代表什么。",
+        "condition": "不同徽章会根据会员、注册、合作认可、资料可信度或圈子建设贡献获得。"
       },
       "circle": {
-        "description": "圈子专属 Badge，代表你和这个圈子的身份关系或建设贡献。",
+        "description": "圈子专属徽章，代表你和这个圈子的身份关系或建设贡献。",
         "condition": "根据圈子身份、管理权限或圈子配置获得；圈子需保持正常状态。"
       },
       "vip": {
-        "description": "付费会员身份 Badge，展示当前 VIP 等级。",
-        "condition": "开通或升级 VIP 后获得，等级随会员等级 1-5 展示。"
+        "description": "付费会员身份徽章，展示你当前的会员档位。",
+        "condition": "开通会员后点亮，共白银 / 黄金 / 钻石 / 超级四档，徽章随当前档位变化。",
+        "tiers": {
+          "silver": {
+            "description": "白银会员徽章，入门会员身份的象征。",
+            "condition": "开通白银会员后点亮。"
+          },
+          "gold": {
+            "description": "黄金会员徽章，进阶会员身份，享更高的群与笔记额度。",
+            "condition": "开通黄金会员后点亮。"
+          },
+          "diamond": {
+            "description": "钻石会员徽章，高阶会员身份，含专属靓号与更高各项额度。",
+            "condition": "开通钻石会员后点亮。"
+          },
+          "super": {
+            "description": "超级会员徽章，最高会员身份，终身有效、各项权益无限、名字专属流光。",
+            "condition": "开通超级会员（终身）后点亮。"
+          }
+        }
       },
       "newUser": {
-        "description": "新人身份 Badge，帮助新用户在早期更容易被识别。",
+        "description": "新人身份徽章，帮助新用户在早期更容易被识别。",
         "condition": "注册后在新人展示期内获得，账号需保持正常状态。"
       },
       "topCollaborator": {
-        "description": "活动合作认可 Badge，展示你在圈子活动中被认可的合作质量。",
+        "description": "活动合作认可徽章，展示你在圈子活动中被认可的合作质量。",
         "condition": "报名圈子活动并在活动结束后被发帖者认可；累计 100/1000/10000 次升级。"
       },
       "verifiedProfile": {
-        "description": "资料可信 Badge，表示用户愿意公开可联系资料，账号更可信。",
+        "description": "资料可信徽章，表示用户愿意公开可联系资料，账号更可信。",
         "condition": "公开展示 QQ、微信或手机号之一；手机号作为条件时需要完成验证，且账号无严重违规。"
       },
       "circleBuilder": {
-        "description": "圈子建设贡献 Badge，表彰对圈子成长有贡献的圈主或管理员。",
+        "description": "圈子建设贡献徽章，表彰对圈子成长有贡献的圈主或管理员。",
         "condition": "作为圈主或管理员，圈子创建满 7 天、人数超过 100，且未被封禁或标记违规。"
       },
       "systemDefault": {
-        "description": "系统 Badge，用于展示你在平台内的身份或荣誉。",
+        "description": "系统徽章，用于展示你在平台内的身份或荣誉。",
         "condition": "满足对应系统规则后获得，并在账号状态正常时展示。"
       }
     }

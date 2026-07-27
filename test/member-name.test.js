@@ -11,31 +11,28 @@ const src = read('src/components/ui/member-name.tsx');
 test('MemberName colors names by membership tier (name-color benefit)', () => {
   // Tier resolved from vipLevel via the shared single-source mapping.
   assert.match(src, /getMembershipTierForVipLevel/);
-  // silver / gold = solid color; diamond = static cool gradient; super = animated flow.
+  // silver / gold / diamond = solid color; super = animated flow.
   assert.match(src, /silver: '#[0-9A-Fa-f]{6}'/);
   assert.match(src, /gold: '#[0-9A-Fa-f]{6}'/);
+  assert.match(src, /diamond: '#[0-9A-Fa-f]{6}'/);
   assert.match(src, /const FLOW_COLORS/);
-  assert.match(src, /diamond:/);
   assert.match(src, /super:/);
 });
 
-test('MemberName keeps diamond gradient static while super uses a looping flow', () => {
-  assert.match(src, /const STATIC_GRADIENT_TIERS/);
-  assert.match(src, /STATIC_GRADIENT_TIERS\.has\(tier\)/);
+test('MemberName renders diamond as a solid purple while super uses a looping flow', () => {
+  // 钻石 = 纯紫色（在 SOLID_COLOR），不再走渐变 / STATIC_GRADIENT_TIERS。
+  assert.match(src, /diamond: '#[0-9A-Fa-f]{6}'/);
+  assert.doesNotMatch(src, /const STATIC_GRADIENT_TIERS/);
+  assert.doesNotMatch(src, /diamond:\s*\[/); // diamond 不再是渐变色带数组
+  // 仅顶档 super 逐字流动。
   assert.match(src, /const isFlow = tier === 'super'/);
-  assert.doesNotMatch(src, /const isFlow = tier === 'diamond' \|\| tier === 'super'/);
-  assert.match(src, /diamond:\s*\[\s*'#7CCBFF'/);
-  assert.match(src, /'#5B7CFA'/);
-  assert.match(src, /'#B7A8FF'/);
-  assert.doesNotMatch(src, /diamond:\s*\[[\s\S]*?'#FF3B30'/);
-  assert.doesNotMatch(src, /diamond:\s*\[[\s\S]*?'#FFCC00'/);
-  assert.doesNotMatch(src, /diamond:\s*\[[\s\S]*?'#34C759'/);
+  assert.doesNotMatch(src, /tier === 'diamond'/);
 
   // Super still uses real animation: looping shared value + per-char interpolateColor.
   assert.match(src, /from 'react-native-reanimated'/);
   assert.match(src, /withRepeat\(/);
   assert.match(src, /interpolateColor\(/);
-  // Animation can be disabled for dense lists; diamond is static regardless.
+  // Animation can be disabled for dense lists; solid tiers are unaffected.
   assert.match(src, /animated = true/);
 });
 
@@ -73,7 +70,7 @@ test('MemberName solid tier colors stay readable on both theme surfaces', () => 
     return block.match(new RegExp(`${tier}: '(#[0-9A-Fa-f]{6})'`))?.[1];
   };
 
-  for (const tier of ['silver', 'gold']) {
+  for (const tier of ['silver', 'gold', 'diamond']) {
     const light = grab('light', tier);
     const dark = grab('dark', tier);
     assert.ok(

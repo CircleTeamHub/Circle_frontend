@@ -31,6 +31,9 @@ type BadgeProps = {
   compactSize?: CompactSize;
   dense?: boolean;
   tone?: 'default' | 'member';
+  // 显式像素尺寸（如徽章详情大图）。给定时按该尺寸原生渲染，不走 compact/default 档，
+  // 也不靠 transform 放大 —— 避免把小尺寸位图上采样糊掉。
+  size?: number;
 };
 
 const CIRCLE_BADGE_LABEL = '圈子徽章';
@@ -267,6 +270,7 @@ export function UserIconBadge({
   compactSize = 'default',
   dense = false,
   tone = 'default',
+  size,
 }: BadgeProps) {
   const { colors } = useTheme();
   const systemBadgeAsset = icon.type === 'SYSTEM' ? getSystemBadgeAsset(icon) : null;
@@ -275,12 +279,31 @@ export function UserIconBadge({
   const label = icon.type === 'SYSTEM' ? formatIconLabel(icon) : CIRCLE_BADGE_LABEL;
   const labelColor = tone === 'member' ? colors.white : colors.text;
   const isSmallCompact = compact && compactSize === 'small';
+  // 显式 size（详情大图）优先：按该尺寸原生定尺寸、不做 transform 放大 —— 小图上采样才是糊的根因。
+  const hasExplicitSize = size !== undefined;
+  const showLabel = !compact && !hasExplicitSize;
   // 四态尺寸（default / compact / smallCompact × system-badge / circle）用查表替代
-  // 深层嵌套三元，可读且易扩展。
-  const shellSizeStyle = resolveShellSizeStyle(compact, isSmallCompact, Boolean(systemBadgeAsset));
-  const circleSizeStyle = resolveCircleSizeStyle(compact, isSmallCompact);
-  const circleOrnamentSizeStyle = resolveCircleOrnamentSizeStyle(compact, isSmallCompact);
-  const transformSizeRatio = compact ? (isSmallCompact ? 30 / 52 : 38 / 52) : 1;
+  // 深层嵌套三元，可读且易扩展。显式 size 分支直接用 size（此处已收窄为 number）。
+  const shellSizeStyle =
+    size !== undefined
+      ? { width: size, height: size }
+      : resolveShellSizeStyle(compact, isSmallCompact, Boolean(systemBadgeAsset));
+  const circleSizeStyle =
+    size !== undefined
+      ? { width: Math.round((size * 34) / 52), height: Math.round((size * 34) / 52) }
+      : resolveCircleSizeStyle(compact, isSmallCompact);
+  const circleOrnamentSizeStyle =
+    size !== undefined
+      ? { width: Math.round((size * 40) / 52), height: Math.round((size * 40) / 52) }
+      : resolveCircleOrnamentSizeStyle(compact, isSmallCompact);
+  const transformSizeRatio =
+    size !== undefined
+      ? size / 52
+      : compact
+        ? isSmallCompact
+          ? 30 / 52
+          : 38 / 52
+        : 1;
   const systemBadgeTransform = [
     ...(systemBadgeScale !== 1 ? [{ scale: systemBadgeScale }] : []),
     ...(systemBadgeTranslateY !== 0
@@ -306,7 +329,7 @@ export function UserIconBadge({
             contentFit="contain"
           />
         ) : (
-          <View style={[s.circleSlot, !compact ? s.circleSlotRaised : null]}>
+          <View style={[s.circleSlot, !compact && !hasExplicitSize ? s.circleSlotRaised : null]}>
             <View
               style={[
                 s.circleOrnament,
@@ -334,7 +357,15 @@ export function UserIconBadge({
                   ) : (
                     <Ionicons
                       name={resolveFallbackIcon(icon.fallbackIconName)}
-                      size={compact ? (isSmallCompact ? 10 : 12) : 14}
+                      size={
+                        size !== undefined
+                          ? Math.round((size * 14) / 52)
+                          : compact
+                            ? isSmallCompact
+                              ? 10
+                              : 12
+                            : 14
+                      }
                       color={colors.textSecondary}
                     />
                   )}
@@ -344,7 +375,7 @@ export function UserIconBadge({
           </View>
         )}
       </View>
-      {!compact ? (
+      {showLabel ? (
         <Text
           style={[s.label, dense ? s.denseLabel : null, { color: labelColor }]}
           numberOfLines={1}

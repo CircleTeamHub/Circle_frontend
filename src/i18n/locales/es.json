@@ -1061,7 +1061,22 @@
     "leaveTitle": "Salir del círculo"
   },
   "myIcons": {
-    "title": "Mis iconos",
+    "title": "Mis insignias",
+    "ownedGroup": "Obtenidas",
+    "lockedGroup": "Bloqueadas",
+    "collectionHint": "Toca cualquier insignia para ver qué significa y cómo conseguirla.",
+    "displaying": "En el perfil",
+    "addToDisplay": "Mostrar en el perfil",
+    "removeFromDisplay": "Quitar del perfil",
+    "close": "Cerrar",
+    "emptyOwned": "Aún no tienes insignias; cumple las condiciones de abajo para conseguirlas.",
+    "lockedName": {
+      "vip": "Membresía",
+      "newUser": "Nuevo",
+      "topCollaborator": "Colaborador",
+      "verifiedProfile": "Verificado",
+      "circleBuilder": "Constructor de círculos"
+    },
     "currentDisplay": "En pantalla ahora",
     "loading": "Cargando...",
     "selectedCount": "{{count}}/{{max}} seleccionados",
@@ -1069,7 +1084,7 @@
     "explainIntroLabel": "Acerca de",
     "explainConditionLabel": "Cómo obtenerlo",
     "systemGroup": "Iconos del sistema",
-    "circleGroup": "Mis círculos",
+    "circleGroup": "Insignias de círculo",
     "save": "Guardar iconos",
     "saving": "Guardando...",
     "maxIcons": "Puedes mostrar hasta {{count}} iconos",
@@ -1086,8 +1101,26 @@
         "condition": "Se obtiene por tu identidad en el círculo, rol de administrador o configuración del círculo; el círculo debe estar en regla."
       },
       "vip": {
-        "description": "Un icono de membresía de pago que muestra tu nivel VIP actual.",
-        "condition": "Se obtiene al suscribirte o mejorar tu VIP; el nivel sigue tu plan de 1 a 5."
+        "description": "Una insignia de membresía de pago que muestra tu nivel de membresía actual.",
+        "condition": "Se enciende al suscribirte; cuatro niveles — Plata, Oro, Diamante y Súper — y la insignia sigue tu nivel actual.",
+        "tiers": {
+          "silver": {
+            "description": "Insignia de membresía Plata: el nivel de acceso inicial.",
+            "condition": "Se enciende al suscribirte a Plata."
+          },
+          "gold": {
+            "description": "Insignia de membresía Oro: un nivel avanzado con mayores límites de grupos y notas.",
+            "condition": "Se enciende al suscribirte a Oro."
+          },
+          "diamond": {
+            "description": "Insignia de membresía Diamante: un nivel alto con número exclusivo y mayores límites en general.",
+            "condition": "Se enciende al suscribirte a Diamante."
+          },
+          "super": {
+            "description": "Insignia de membresía Súper: el nivel máximo, de por vida, con beneficios ilimitados y un nombre con brillo exclusivo.",
+            "condition": "Se enciende al obtener la membresía Súper (de por vida)."
+          }
+        }
       },
       "newUser": {
         "description": "Un icono de miembro nuevo que ayuda a que los recién llegados destaquen al principio.",
