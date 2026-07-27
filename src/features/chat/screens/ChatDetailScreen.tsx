@@ -1143,7 +1143,6 @@ export default function ChatDetailScreen() {
             name={receivedDisplayName(message)}
             userId={message.senderID}
             style={[s.senderLabel, { color: colors.textSecondary }]}
-            animated={false}
           />
           {node}
         </View>

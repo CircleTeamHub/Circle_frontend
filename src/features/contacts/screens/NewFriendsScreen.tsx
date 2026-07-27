@@ -234,7 +234,6 @@ export default function NewFriendsScreen() {
               name={getFriendActivityDisplayName(item.activity)}
               userId={item.activity.counterparty.id}
               style={d.title}
-              animated={false}
             />
             <Text style={d.subtitle}>{getFriendActivityCopy(item.activity)}</Text>
             <Text style={d.time}>

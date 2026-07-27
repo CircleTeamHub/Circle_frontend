@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
 import { MemberName } from '@/components/ui/member-name';
+import { getMembershipFrameAsset } from '@/features/profile/membership-frames';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { getUserProfileHref } from '@/features/user/utils/routes';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
@@ -163,6 +164,8 @@ export const MomentCard: React.FC<MomentCardProps> = ({
           size={40}
           name={post.author.nickname}
           uri={post.author.avatarUrl ?? undefined}
+          frameSource={getMembershipFrameAsset(post.author.vipLevel) ?? undefined}
+          compactFrame
         />
       </Pressable>
 
@@ -176,7 +179,6 @@ export const MomentCard: React.FC<MomentCardProps> = ({
               userId={post.author.id}
               vipLevel={post.author.vipLevel}
               style={d.authorName}
-              animated={false}
             />
           </Pressable>
         </View>
@@ -243,7 +245,6 @@ export const MomentCard: React.FC<MomentCardProps> = ({
                         name={friend.nickname}
                         userId={friend.id}
                         style={d.likeText}
-                        animated={false}
                       />
                     </Text>
                   ))}
@@ -273,7 +274,6 @@ export const MomentCard: React.FC<MomentCardProps> = ({
                     name={thread.comment.user.nickname}
                     userId={thread.comment.user.id}
                     style={d.commentUser}
-                    animated={false}
                   />
                   {thread.comment.replyTo ? (
                     <>
@@ -288,7 +288,6 @@ export const MomentCard: React.FC<MomentCardProps> = ({
                           ) ?? null
                         }
                         style={d.commentUser}
-                        animated={false}
                       />
                     </>
                   ) : null}
@@ -317,7 +316,6 @@ export const MomentCard: React.FC<MomentCardProps> = ({
                       name={reply.user.nickname}
                       userId={reply.user.id}
                       style={d.commentUser}
-                      animated={false}
                     />
                     {reply.replyTo ? (
                       <>
@@ -332,7 +330,6 @@ export const MomentCard: React.FC<MomentCardProps> = ({
                             ) ?? null
                           }
                           style={d.commentUser}
-                          animated={false}
                         />
                       </>
                     ) : null}

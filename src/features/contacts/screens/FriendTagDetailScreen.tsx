@@ -206,7 +206,6 @@ export default function FriendTagDetailScreen() {
               name={getFriendDisplayName(item)}
               userId={item.id}
               style={d.name}
-              animated={false}
             />
             <Text style={d.account}>{t('contacts.accountId', { id: item.accountId })}</Text>
           </View>

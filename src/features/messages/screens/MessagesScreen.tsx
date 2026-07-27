@@ -461,7 +461,6 @@ function ConversationRowImpl({
                   }
                   style={nameStyle}
                   numberOfLines={1}
-                  animated={false}
                 />
               </View>
               <View style={s.rowMeta}>

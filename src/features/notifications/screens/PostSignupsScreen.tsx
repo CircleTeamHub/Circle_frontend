@@ -457,7 +457,6 @@ export default function PostSignupsScreen() {
                     userId={item.userId}
                     numberOfLines={1}
                     style={{ fontSize: 16, fontWeight: '600', color: colors.text }}
-                    animated={false}
                   />
                   {item.recognized ? (
                     <Text style={[s.recognizedTag, { color: colors.primary }]}>
