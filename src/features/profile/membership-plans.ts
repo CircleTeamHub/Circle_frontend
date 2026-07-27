@@ -1,4 +1,6 @@
 export type MembershipTier = 'silver' | 'gold' | 'diamond' | 'super';
+export type MembershipLevel = 0 | 1 | 2 | 3 | 4;
+export type MembershipEntitlementFloorLevel = 0 | 2;
 
 export type MembershipDuration =
   | { type: 'months'; months: 1 | 6 | 12 }
@@ -88,7 +90,7 @@ export const MEMBERSHIP_BENEFITS = [
   {
     id: 'joined-groups',
     labelKey: 'profile.membership.benefits.joinedGroups',
-    values: { silver: 200, gold: 300, diamond: 1000, super: 'unlimited' },
+    values: { silver: 100, gold: 100, diamond: 100, super: 100 },
   },
   {
     id: 'note-storage',
@@ -147,23 +149,32 @@ export function getMembershipTierForVipLevel(
   return MEMBERSHIP_PLANS[vipLevel - 1]?.tier ?? null;
 }
 
+export function resolveMembershipEntitlementLevel(
+  vipLevel: number,
+  entitlementFloorLevel: MembershipEntitlementFloorLevel,
+): MembershipLevel {
+  const actualLevel =
+    Number.isInteger(vipLevel) && vipLevel > 0
+      ? (Math.min(vipLevel, 4) as MembershipLevel)
+      : 0;
+  return Math.max(actualLevel, entitlementFloorLevel) as MembershipLevel;
+}
+
 /**
  * 发现页「城市筛选」可选城市数上限，映射自权益目录的 `city-filters`：
  * silver 2 / gold 10 / diamond 50 / super `'unlimited'`（无限）。
- * 非会员返回 `null`，由调用方用通用默认（不在此收紧免费用户）。
+ * 非会员返回 0，与后端会员目录的 regular 档一致。
  * 调用方把 `'unlimited'` 视为不设上限（Infinity）。
  */
-export function getCityFilterLimit(
-  vipLevel: number,
-): number | 'unlimited' | null {
+export function getCityFilterLimit(vipLevel: number): number | 'unlimited' {
   const tier = getMembershipTierForVipLevel(vipLevel);
   if (!tier) {
-    return null;
+    return 0;
   }
   const benefit = MEMBERSHIP_BENEFITS.find((b) => b.id === 'city-filters');
   const value = benefit?.values[tier];
   if (value === 'unlimited') {
     return 'unlimited';
   }
-  return typeof value === 'number' ? value : null;
+  return typeof value === 'number' ? value : 0;
 }

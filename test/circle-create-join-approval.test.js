@@ -40,6 +40,21 @@ test('circle avatar picker stays on the fast PHPicker path (no allowsEditing)', 
   assert.match(hook, /launchImageLibraryAsync/);
 });
 
+test('circle creation gate applies the shared membership rollout floor', () => {
+  const create = read('src/features/discover/screens/CreateCircleScreen.tsx');
+  const plans = read('src/features/profile/membership-plans.ts');
+
+  assert.match(create, /useMembershipProgramStore/);
+  assert.match(create, /resolveMembershipEntitlementLevel/);
+  assert.match(create, /status\?\.entitlementFloorLevel \?\? 0/);
+  assert.match(create, /entitlementLevel < 1/);
+  assert.doesNotMatch(create, /user\.vipLevel < 1/);
+
+  // The effective level must admit a regular user under the Gold rollout floor,
+  // while still rejecting the same user when no floor applies.
+  assert.match(plans, /Math\.max\(actualLevel, entitlementFloorLevel\)/);
+});
+
 test('vip/credit restrictions pick via bottom sheet with >= semantics', () => {
   const body = read('src/features/discover/components/circle-form-body.tsx');
   const hook = read('src/features/discover/hooks/use-circle-form.ts');

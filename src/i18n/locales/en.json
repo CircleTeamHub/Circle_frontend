@@ -1442,7 +1442,7 @@
       "marketing": {
         "goldAccess": "All users currently enjoy Gold-tier limits for free",
         "title": "Membership features are not open yet",
-        "groupQuota": "Up to 400 members per group · join 300 groups",
+        "groupQuota": "Up to 400 members per group · join up to 100 groups",
         "noteQuota": "500 notes · 10 city filters"
       }
     },
@@ -2386,8 +2386,10 @@
     "COIN_AMOUNT_INVALID": "The amount must be greater than zero",
     "MEMBERSHIP_INVALID_LEVEL": "Invalid membership level",
     "MEMBERSHIP_IDEMPOTENCY_CONFLICT": "This membership request conflicts with an earlier request. Refresh and try again.",
+    "MEMBERSHIP_IDEMPOTENCY_KEY_REUSED": "This request identifier was already used for another membership operation. Refresh and try again.",
     "MEMBERSHIP_GROUP_MEMBER_CAPACITY_EXCEEDED": "This group has reached your membership tier's member limit",
     "MEMBERSHIP_JOINED_CIRCLE_QUOTA_REACHED": "You've reached your membership tier's joined-group limit",
+    "CIRCLE_JOIN_LIMIT_REACHED": "You can join up to 100 circles. Leave another circle before trying again.",
     "MEMBERSHIP_LEVEL_NOT_HIGHER": "Choose a level higher than your current one",
     "MEMBERSHIP_INSUFFICIENT_POINTS": "Not enough points",
     "CIRCLE_MEMBER_LIMIT": "This circle is full",

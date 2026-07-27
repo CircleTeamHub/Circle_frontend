@@ -371,9 +371,12 @@ test('CollectionsScreen no longer lists NOTE collections (notes go to My Notes)'
 
 test('MemberCenterScreen bounds retries and exits the initial loading state on failure', () => {
   const src = read('src/features/profile/screens/MemberCenterScreen.tsx');
+  const store = read('src/stores/membershipProgramStore.ts');
 
-  // 初次 /membership/program 失败不能永远停在 spinner:有界重试(retry)吸收一次瞬断,仍失败
-  // 则保留上次已知态、但首次(prev=null)落到 false 退出加载,重新聚焦再纠正(#131 review)。
-  assert.match(src, /retry\(\(\) => fetchMembershipProgramStatus\(\)\)/);
-  assert.match(src, /setProgramEnabled\(\(prev\) => prev \?\? false\)/);
+  assert.match(store, /retry\(\(\) => fetchMembershipProgramStatus\(\)\)/);
+  assert.match(store, /return previousStatus/);
+  assert.match(
+    src,
+    /programStatus\?\.enabled \?\? \(programError \? false : null\)/,
+  );
 });

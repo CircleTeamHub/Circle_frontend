@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {
   MAX_CITY_SELECTION,
   buildInitialCityPickerState,
+  clampCitiesToLimit,
+  resolveFilterCityLimit,
   resolveMultiCitySelection,
   resolveSingleCitySelection,
   toggleCitySelection,
@@ -99,4 +101,37 @@ test('selection resolvers return API-safe values', () => {
     '深圳',
   ]);
   assert.deepEqual(resolveMultiCitySelection(['广州'], true), []);
+});
+
+test('filter city limit falls back to the generic default when program status is unknown', () => {
+  // 计划状态未拉到（冷启动首拉失败且无缓存）：即便按 vipLevel 算出的权益是 0，
+  // 也不能把用户封成一个城市都选不了 —— 那是把一次瞬时接口失败放大成功能不可用。
+  assert.equal(resolveFilterCityLimit(0, false), MAX_CITY_SELECTION);
+  assert.equal(resolveFilterCityLimit('unlimited', false), MAX_CITY_SELECTION);
+});
+
+test('filter city limit follows the entitlement once program status is known', () => {
+  assert.equal(resolveFilterCityLimit(0, true), 0);
+  assert.equal(resolveFilterCityLimit(10, true), 10);
+  assert.equal(resolveFilterCityLimit(50, true), 50);
+  assert.equal(
+    resolveFilterCityLimit('unlimited', true),
+    Number.POSITIVE_INFINITY,
+  );
+});
+
+test('cities are clamped to the current limit before being written back', () => {
+  // floor 由 2 回落到 0（计划正式启用）后重新确认：旧的已选城市必须被收敛掉，
+  // 否则会写回超出权益的城市，信息流被后端整体拒绝。
+  assert.deepEqual(clampCitiesToLimit(['广州', '深圳', '北京'], 0), []);
+  assert.deepEqual(clampCitiesToLimit(['广州', '深圳', '北京'], 2), [
+    '广州',
+    '深圳',
+  ]);
+  // 上限未收紧时原样保留，'unlimited' 映射来的 Infinity 也不应截断。
+  assert.deepEqual(clampCitiesToLimit(['广州', '深圳'], 10), ['广州', '深圳']);
+  assert.deepEqual(
+    clampCitiesToLimit(['广州', '深圳'], Number.POSITIVE_INFINITY),
+    ['广州', '深圳'],
+  );
 });

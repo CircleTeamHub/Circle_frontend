@@ -11,7 +11,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { NavHeader } from '@/components/ui/nav-header';
 import { createCircle } from '@/services/api/circles';
@@ -27,6 +27,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { useCircleForm } from '@/features/discover/hooks/use-circle-form';
 import { CircleFormBody } from '@/features/discover/components/circle-form-body';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import { resolveMembershipEntitlementLevel } from '@/features/profile/membership-plans';
+import { useMembershipProgramStore } from '@/stores/membershipProgramStore';
 
 const s = StyleSheet.create({
   scroll: { flex: 1, paddingHorizontal: Spacing.lg },
@@ -54,6 +56,14 @@ export default function CreateCircleScreen() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const fetchMyCircles = useCirclesStore((state) => state.fetchMyCircles);
+  const status = useMembershipProgramStore((state) => state.status);
+  const fetchProgramStatus = useMembershipProgramStore(
+    (state) => state.fetchStatus,
+  );
+  const entitlementLevel = resolveMembershipEntitlementLevel(
+    user?.vipLevel ?? 0,
+    status?.entitlementFloorLevel ?? 0,
+  );
   const selectedCities = useCreateCircleFormStore(
     (state) => state.selectedCities,
   );
@@ -63,6 +73,12 @@ export default function CreateCircleScreen() {
 
   const form = useCircleForm();
   const [submitting, setSubmitting] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      void fetchProgramStatus({ force: true });
+    }, [fetchProgramStatus]),
+  );
 
   const d = useMemo(
     () => ({
@@ -151,7 +167,9 @@ export default function CreateCircleScreen() {
   ]);
 
   // VIP gate
-  if (!user || user.vipLevel < 1) {
+  // When rollout status is not available yet, let the backend remain
+  // authoritative instead of incorrectly blocking users entitled by the floor.
+  if (!user || (status !== null && entitlementLevel < 1)) {
     return (
       <View style={[d.container, { paddingTop: insets.top }]}>
         <NavHeader title={t('circle.create.title')} />

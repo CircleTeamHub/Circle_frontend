@@ -10,7 +10,11 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import {
+  useFocusEffect,
+  useLocalSearchParams,
+  useRouter,
+} from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Divider } from '@/components/ui/divider';
@@ -25,9 +29,15 @@ import {
   buildInitialCityPickerState,
   resolveMultiCitySelection,
   toggleCitySelection,
+  resolveFilterCityLimit,
+  clampCitiesToLimit,
 } from '@/features/discover/utils/city-selection';
-import { getCityFilterLimit } from '@/features/profile/membership-plans';
+import {
+  getCityFilterLimit,
+  resolveMembershipEntitlementLevel,
+} from '@/features/profile/membership-plans';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import { useMembershipProgramStore } from '@/stores/membershipProgramStore';
 
 interface CitySection {
   title: string;
@@ -150,17 +160,31 @@ export default function SelectCityScreen() {
     (st) => st.setDraftNationwide,
   );
 
-  const isVip = (user?.vipLevel ?? 0) >= 1;
+  const status = useMembershipProgramStore((state) => state.status);
+  const fetchProgramStatus = useMembershipProgramStore(
+    (state) => state.fetchStatus,
+  );
+  const entitlementLevel = resolveMembershipEntitlementLevel(
+    user?.vipLevel ?? 0,
+    status?.entitlementFloorLevel ?? 0,
+  );
+  const isVip = entitlementLevel >= 1;
+
+  useFocusEffect(
+    useCallback(() => {
+      void fetchProgramStatus({ force: true });
+    }, [fetchProgramStatus]),
+  );
 
   // 城市筛选可选数上限按会员档位（评审 P1：钻石 50 / 超级无限，此前被全局 10 误封顶）。
-  // 仅作用于发现页筛选（city-filters 权益）；建圈/发帖沿用通用上限。非会员用通用默认。
-  const cityLimitEntitlement = getCityFilterLimit(user?.vipLevel ?? 0);
-  const maxCities =
-    target === 'filter'
-      ? cityLimitEntitlement === 'unlimited'
-        ? Number.POSITIVE_INFINITY
-        : (cityLimitEntitlement ?? MAX_CITY_SELECTION)
-      : MAX_CITY_SELECTION;
+  // 仅作用于发现页筛选（city-filters 权益）；建圈/发帖沿用通用上限。
+  const cityLimitEntitlement = getCityFilterLimit(entitlementLevel);
+  // status 为 null = 计划状态未知（冷启动首拉失败且无缓存），此时不按 floor 0 收紧。
+  const filterCityLimit = resolveFilterCityLimit(
+    cityLimitEntitlement,
+    status !== null,
+  );
+  const maxCities = target === 'filter' ? filterCityLimit : MAX_CITY_SELECTION;
   const maxCitiesLabel =
     maxCities === Number.POSITIVE_INFINITY ? '∞' : String(maxCities);
 
@@ -250,7 +274,11 @@ export default function SelectCityScreen() {
     if (target === 'filter') {
       // 「全国」= 不限地区、展示全部，不塞进 cities（保持为空、不参与筛选），改用独立标记记住，
       // 仅用于筛选页回显。这样才能区分「全国」与「未选择」，且不用每个下游都剔除哨兵城市。
-      setFilterCities(resolved);
+      //
+      // selected 是进页时按当时的上限初始化的，而 useFocusEffect 会强制重拉计划状态：
+      // 若期间 floor 下调（如程序正式启用，floor 从 2 回落到 0），maxCities 会变小而
+      // selected 不会自动缩短，故写回前按当前上限收敛。
+      setFilterCities(clampCitiesToLimit(resolved, maxCities));
       setFilterNationwide(isNationwide);
     } else if (target === 'circle') {
       setCircleCities(resolved);
@@ -260,6 +288,7 @@ export default function SelectCityScreen() {
     router.back();
   }, [
     isNationwide,
+    maxCities,
     router,
     selected,
     setCircleCities,

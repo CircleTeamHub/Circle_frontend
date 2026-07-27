@@ -27,9 +27,8 @@ import {
 } from '@/features/profile/membership-plans';
 import { getUserProfileHref } from '@/features/user/utils/routes';
 import { fetchCurrentUser } from '@/services/api/auth';
-import { fetchMembershipProgramStatus } from '@/services/api/membership';
-import { retry } from '@/utils/retry';
 import { useAuthStore } from '@/stores/authStore';
+import { useMembershipProgramStore } from '@/stores/membershipProgramStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 function getMembershipSupportUserId(): string | undefined {
@@ -290,7 +289,13 @@ export default function MemberCenterScreen() {
   const [selectedTier, setSelectedTier] = useState<MembershipTier>(
     currentTier ?? 'diamond',
   );
-  const [programEnabled, setProgramEnabled] = useState<boolean | null>(null);
+  const programStatus = useMembershipProgramStore((state) => state.status);
+  const programError = useMembershipProgramStore((state) => state.error);
+  const fetchProgramStatus = useMembershipProgramStore(
+    (state) => state.fetchStatus,
+  );
+  const programEnabled =
+    programStatus?.enabled ?? (programError ? false : null);
   // 测试期绕过灰度：dev 构建直接展示会员中心正文（当前身份 + 档位 + 权益），方便本地核对；
   // jest（JEST_WORKER_ID 存在）与生产仍遵循后端 programEnabled（保留 staged rollout 行为，
   // 也让 marketing 态可测）。
@@ -309,17 +314,7 @@ export default function MemberCenterScreen() {
       const ownerAccountId = owner.user?.accountId;
       const ownerSessionEpoch = owner.sessionEpoch;
 
-      // 有界重试(retry 默认试 2 次、跳过确定性 4xx):吸收一次瞬时抖动。
-      void retry(() => fetchMembershipProgramStatus())
-        .then((status) => {
-          if (active) setProgramEnabled(status.enabled);
-        })
-        .catch(() => {
-          // 重试后仍失败:保留上次已知状态,而不是翻成"未开放"营销态——否则已是会员的用户
-          // 会被误导看到升级墙、也点不到会员客服。但首次加载(prev=null)不能一直停在无限
-          // spinner——落到"暂未开放"这个可用态退出加载,重新聚焦时再拉一次纠正。
-          if (active) setProgramEnabled((prev) => prev ?? false);
-        });
+      void fetchProgramStatus({ force: true });
 
       if (ownerUserId && ownerAccountId) {
         void fetchCurrentUser()
@@ -351,7 +346,7 @@ export default function MemberCenterScreen() {
       return () => {
         active = false;
       };
-    }, []),
+    }, [fetchProgramStatus]),
   );
 
   const selectedPlan =
@@ -561,7 +556,7 @@ export default function MemberCenterScreen() {
             </Text>
             <Text style={d.marketingText}>
               {t('profile.membership.marketing.groupQuota', {
-                defaultValue: '单群 400 人 · 可加入 300 个群',
+                defaultValue: '单群 400 人 · 最多加入 100 个群',
               })}
             </Text>
             <Text style={d.marketingText}>

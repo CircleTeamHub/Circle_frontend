@@ -5,6 +5,7 @@ import {
   MEMBERSHIP_PLANS,
   getCityFilterLimit,
   getMembershipTierForVipLevel,
+  resolveMembershipEntitlementLevel,
 } from './membership-plans.ts';
 
 test('catalog defines the four exact membership plans', () => {
@@ -54,7 +55,7 @@ test('catalog defines every value in the seven benefit rows', () => {
     {
       id: 'joined-groups',
       labelKey: 'profile.membership.benefits.joinedGroups',
-      values: { silver: 200, gold: 300, diamond: 1000, super: 'unlimited' },
+      values: { silver: 100, gold: 100, diamond: 100, super: 100 },
     },
     {
       id: 'note-storage',
@@ -132,12 +133,22 @@ test('city filter limit follows the per-tier city-filters entitlement', () => {
   assert.equal(getCityFilterLimit(4), 'unlimited'); // super
   assert.equal(getCityFilterLimit(99), 'unlimited'); // 顶档封顶仍是 super
   // 非会员返回 null → 调用方用通用默认，不在此收紧免费用户。
-  assert.equal(getCityFilterLimit(0), null);
-  assert.equal(getCityFilterLimit(-1), null);
+  assert.equal(getCityFilterLimit(0), 0);
+  assert.equal(getCityFilterLimit(-1), 0);
 
   // helper 的返回必须与目录里的 city-filters 值一致（防止两处漂移）。
   const cityFilters = MEMBERSHIP_BENEFITS.find((b) => b.id === 'city-filters');
   assert.equal(cityFilters?.values.silver, 2);
   assert.equal(cityFilters?.values.diamond, 50);
   assert.equal(cityFilters?.values.super, 'unlimited');
+});
+
+test('rollout floor raises entitlements without lowering higher tiers', () => {
+  assert.equal(resolveMembershipEntitlementLevel(0, 2), 2);
+  assert.equal(resolveMembershipEntitlementLevel(1, 2), 2);
+  assert.equal(resolveMembershipEntitlementLevel(2, 2), 2);
+  assert.equal(resolveMembershipEntitlementLevel(3, 2), 3);
+  assert.equal(resolveMembershipEntitlementLevel(4, 0), 4);
+  assert.equal(resolveMembershipEntitlementLevel(99, 0), 4);
+  assert.equal(resolveMembershipEntitlementLevel(Number.NaN, 0), 0);
 });

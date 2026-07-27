@@ -37,6 +37,11 @@ jest.mock('@/im/client', () => ({
   loginToOpenIM: jest.fn(async () => true),
   logoutFromOpenIM: jest.fn(async () => undefined),
 }));
+jest.mock('@/im/token-recovery', () => ({
+  getIMRecoveryGeneration: jest.fn(() => 0),
+  isIMReloginPending: jest.fn(() => false),
+  recoverIMSession: jest.fn(async () => undefined),
+}));
 jest.mock('@/realtime/client', () => ({
   connectRealtime: jest.fn(),
   disconnectRealtime: jest.fn(),
