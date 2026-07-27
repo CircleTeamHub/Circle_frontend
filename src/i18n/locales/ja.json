@@ -1058,7 +1058,22 @@
     "leaveTitle": "サークルを退会"
   },
   "myIcons": {
-    "title": "マイアイコン",
+    "title": "マイバッジ",
+    "ownedGroup": "獲得済み",
+    "lockedGroup": "未獲得",
+    "collectionHint": "バッジをタップすると、意味と獲得方法を確認できます。",
+    "displaying": "表示中",
+    "addToDisplay": "プロフィールに表示",
+    "removeFromDisplay": "表示を解除",
+    "close": "閉じる",
+    "emptyOwned": "まだバッジがありません。下の条件を満たすと獲得できます。",
+    "lockedName": {
+      "vip": "会員バッジ",
+      "newUser": "新規メンバー",
+      "topCollaborator": "協力達人",
+      "verifiedProfile": "認証済み",
+      "circleBuilder": "サークル貢献者"
+    },
     "currentDisplay": "現在表示中",
     "loading": "読み込み中...",
     "selectedCount": "{{count}}/{{max}}選択中",
@@ -1066,7 +1081,7 @@
     "explainIntroLabel": "紹介",
     "explainConditionLabel": "獲得条件",
     "systemGroup": "システムアイコン",
-    "circleGroup": "マイサークル",
+    "circleGroup": "サークルバッジ",
     "save": "アイコンを保存",
     "saving": "保存中...",
     "maxIcons": "最大{{count}}個のアイコンを表示できます",
@@ -1083,8 +1098,26 @@
         "condition": "サークルでの立場、管理者権限、サークル設定に応じて獲得。サークルは正常な状態である必要があります。"
       },
       "vip": {
-        "description": "有料会員アイコンで、現在のVIPレベルを表示します。",
-        "condition": "VIPに加入またはアップグレードで獲得。レベルは会員ランク1〜5に連動します。"
+        "description": "有料会員バッジで、現在の会員ランクを表示します。",
+        "condition": "会員登録で点灯。シルバー / ゴールド / ダイヤモンド / スーパーの4段階で、バッジは現在のランクに連動します。",
+        "tiers": {
+          "silver": {
+            "description": "シルバー会員バッジ。入門会員ランクの証です。",
+            "condition": "シルバー会員に加入すると点灯します。"
+          },
+          "gold": {
+            "description": "ゴールド会員バッジ。上位ランクで、グループとノートの上限が増えます。",
+            "condition": "ゴールド会員に加入すると点灯します。"
+          },
+          "diamond": {
+            "description": "ダイヤモンド会員バッジ。高位ランクで、専用の特別番号や各種上限の拡大が付きます。",
+            "condition": "ダイヤモンド会員に加入すると点灯します。"
+          },
+          "super": {
+            "description": "スーパー会員バッジ。最上位ランクで、無期限・各種特典無制限・名前は専用の流光エフェクト。",
+            "condition": "スーパー会員（無期限）に加入すると点灯します。"
+          }
+        }
       },
       "newUser": {
         "description": "新規メンバーアイコンで、初期に見つけてもらいやすくなります。",

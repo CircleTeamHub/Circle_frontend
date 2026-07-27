@@ -260,7 +260,6 @@ export default function InviteGroupMembersScreen() {
               userId={item.id}
               style={d.rowName}
               numberOfLines={1}
-              animated={false}
             />
             <Text style={d.rowSubtitle} numberOfLines={1}>
               {item.accountId}

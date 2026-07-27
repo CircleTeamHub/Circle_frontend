@@ -46,7 +46,7 @@ test('selected tag and chip controls use solid primary fills', () => {
     'src/features/user/screens/EditFriendTagsScreen.tsx',
     'src/features/social/screens/SendFriendRequestScreen.tsx',
     'src/features/profile/screens/CollectionsScreen.tsx',
-    'src/features/profile/screens/MyIconsScreen.tsx',
+    'src/features/profile/components/badge-grid-item.tsx',
   ];
 
   for (const file of files) {

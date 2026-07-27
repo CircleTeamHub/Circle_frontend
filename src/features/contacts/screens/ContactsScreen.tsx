@@ -279,7 +279,6 @@ export default function ContactsScreen() {
               name={getFriendDisplayName(item)}
               userId={item.id}
               style={d.contactName}
-              animated={false}
             />
             <Text style={d.contactAccountId}>{t('contacts.accountId', { id: item.accountId })}</Text>
           </View>

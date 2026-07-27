@@ -38,10 +38,26 @@ export function buildRecentFriends(friends: FriendProfile[]) {
   );
 }
 
+/**
+ * 按 id 去重(保留首次出现)。后端 `/friend` 偶发返回重复好友行(同一 id 多次),不去重会让
+ * SectionList 出现两个同 key 子节点(React 报 "two children with the same key" 并可能重复/漏渲染)。
+ * 不信任外部数据,在组装列表层兜底 —— 真正的重复行仍需后端排查。
+ */
+export function dedupeFriendsById(friends: FriendProfile[]): FriendProfile[] {
+  const seen = new Set<string>();
+  return friends.filter((friend) => {
+    if (seen.has(friend.id)) {
+      return false;
+    }
+    seen.add(friend.id);
+    return true;
+  });
+}
+
 export function buildContactSections(friends: FriendProfile[]): ContactFriendSection[] {
   const grouped = new Map<string, FriendProfile[]>();
 
-  for (const friend of [...friends].sort(compareFriends)) {
+  for (const friend of dedupeFriendsById(friends).sort(compareFriends)) {
     const title = getFriendSectionTitle(friend);
     const bucket = grouped.get(title);
 

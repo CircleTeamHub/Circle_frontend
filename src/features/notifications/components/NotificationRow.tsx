@@ -68,7 +68,6 @@ export const NotificationRow = memo(function NotificationRow({
             userId={data.fromUserId}
             numberOfLines={1}
             style={{ flex: 1, marginRight: 6, fontSize: 16, fontWeight: '700', color: colors.text }}
-            animated={false}
           />
           <Text style={{ fontSize: 12, color: colors.textSecondary }}>{formatRelativeTime(data.createdAt, t)}</Text>
         </View>

@@ -2,6 +2,8 @@ import { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTheme, Spacing, Typography } from '@/theme';
 import { Avatar } from '@/components/ui/avatar';
+import { getMembershipFrameAsset } from '@/features/profile/membership-frames';
+import { useAuthStore } from '@/stores/authStore';
 import type { ChatMessage } from '@/types';
 import { AVATAR_SIZE, BubbleStatusText } from './shared';
 
@@ -60,6 +62,7 @@ export const SentBubble: React.FC<SentBubbleProps> = ({
   hideStatus,
 }) => {
   const { colors } = useTheme();
+  const selfVipLevel = useAuthStore((state) => state.user?.vipLevel ?? 0);
 
   const d = useMemo(
     () => ({
@@ -108,9 +111,10 @@ export const SentBubble: React.FC<SentBubbleProps> = ({
       <View style={sSent.sentAvatarSlot}>
         <Avatar
           size={AVATAR_SIZE}
-          shape="square"
           name={selfName}
           uri={selfAvatarUri}
+          frameSource={getMembershipFrameAsset(selfVipLevel) ?? undefined}
+          compactFrame
         />
       </View>
     </View>

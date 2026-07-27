@@ -1058,7 +1058,22 @@
     "leaveTitle": "서클 나가기"
   },
   "myIcons": {
-    "title": "내 아이콘",
+    "title": "내 배지",
+    "ownedGroup": "획득함",
+    "lockedGroup": "미획득",
+    "collectionHint": "배지를 탭하면 의미와 획득 방법을 확인할 수 있어요.",
+    "displaying": "표시 중",
+    "addToDisplay": "프로필에 표시",
+    "removeFromDisplay": "표시 해제",
+    "close": "닫기",
+    "emptyOwned": "아직 배지가 없어요. 아래 조건을 달성하면 획득할 수 있어요.",
+    "lockedName": {
+      "vip": "멤버십 배지",
+      "newUser": "새 멤버",
+      "topCollaborator": "협업 달인",
+      "verifiedProfile": "인증됨",
+      "circleBuilder": "서클 빌더"
+    },
     "currentDisplay": "현재 표시 중",
     "loading": "로딩 중...",
     "selectedCount": "{{count}}/{{max}} 선택됨",
@@ -1066,7 +1081,7 @@
     "explainIntroLabel": "소개",
     "explainConditionLabel": "획득 조건",
     "systemGroup": "시스템 아이콘",
-    "circleGroup": "내 서클",
+    "circleGroup": "서클 배지",
     "save": "아이콘 저장",
     "saving": "저장 중...",
     "maxIcons": "최대 {{count}}개의 아이콘을 표시할 수 있습니다",
@@ -1083,8 +1098,26 @@
         "condition": "서클 정체성, 관리자 권한, 서클 설정에 따라 획득하며, 서클이 정상 상태여야 합니다."
       },
       "vip": {
-        "description": "유료 회원 아이콘으로, 현재 VIP 등급을 표시합니다.",
-        "condition": "VIP 가입 또는 업그레이드로 획득하며, 등급은 회원 등급 1~5를 따릅니다."
+        "description": "유료 회원 배지로, 현재 회원 등급을 표시합니다.",
+        "condition": "회원 가입 시 점등되며 실버 / 골드 / 다이아몬드 / 슈퍼 4단계로, 배지는 현재 등급을 따릅니다.",
+        "tiers": {
+          "silver": {
+            "description": "실버 회원 배지. 입문 회원 등급의 상징이에요.",
+            "condition": "실버 회원에 가입하면 점등돼요."
+          },
+          "gold": {
+            "description": "골드 회원 배지. 상위 등급으로 그룹·노트 한도가 늘어나요.",
+            "condition": "골드 회원에 가입하면 점등돼요."
+          },
+          "diamond": {
+            "description": "다이아몬드 회원 배지. 고급 등급으로 전용 명번호와 각종 한도 상향이 포함돼요.",
+            "condition": "다이아몬드 회원에 가입하면 점등돼요."
+          },
+          "super": {
+            "description": "슈퍼 회원 배지. 최상위 등급으로 평생 이용·모든 혜택 무제한·이름 전용 흐르는 효과.",
+            "condition": "슈퍼 회원(평생)에 가입하면 점등돼요."
+          }
+        }
       },
       "newUser": {
         "description": "신규 멤버 아이콘으로, 초기에 쉽게 알아볼 수 있게 돕습니다.",

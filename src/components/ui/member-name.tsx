@@ -42,27 +42,19 @@ interface MemberNameProps {
   animated?: boolean;
 }
 
-// 银色 / 金色 = 纯色。按主题取变体保证可读:原来的 #AEB6C2 / #E7B34D 在浅色主题的
-// 白底上只有 ~2:1 对比度(联系人 / 消息 / 通知里的名字几乎看不清)。浅色用深变体
-// (白底 ≥4.8:1),深色沿用原亮色(深底 ≥8:1)。
+// 银色 / 金色 / 钻石 = 纯色。按主题取变体保证可读:浅色主题白底上用深变体(≥4.8:1),
+// 深色主题用亮变体(深底可读)。钻石取纯紫(violet-600 / violet-400),不再走渐变。
 const SOLID_COLOR: Record<
   'light' | 'dark',
   Partial<Record<MembershipTier, string>>
 > = {
-  light: { silver: '#5F6B7A', gold: '#946A00' },
-  dark: { silver: '#AEB6C2', gold: '#E7B34D' },
+  light: { silver: '#5F6B7A', gold: '#946A00', diamond: '#7C3AED' },
+  dark: { silver: '#AEB6C2', gold: '#E7B34D', diamond: '#A78BFA' },
 };
 
-// 钻石 = 静态冷调渐变;超级 = 暖调玫瑰金流光(香槟金→玫瑰金→玫瑰粉→藕紫,回文循环无缝,
-// 中等饱和度确保浅色卡片上可读,暖调贵气)。
-const FLOW_COLORS: Record<'diamond' | 'super', readonly string[]> = {
-  diamond: [
-    '#7CCBFF',
-    '#3FA7F5',
-    '#5B7CFA',
-    '#8B6CF6',
-    '#B7A8FF',
-  ],
+// 超级 = 暖调玫瑰金流光(香槟金→玫瑰金→玫瑰粉→藕紫,回文循环无缝,中等饱和度确保浅色
+// 卡片上可读,暖调贵气)。仅顶档 super 走逐字流动渐变;银 / 金 / 钻石均为纯色。
+const FLOW_COLORS: Record<'super', readonly string[]> = {
   super: [
     '#D9A85E',
     '#DD9576',
@@ -73,8 +65,6 @@ const FLOW_COLORS: Record<'diamond' | 'super', readonly string[]> = {
     '#D9A85E',
   ],
 };
-
-const STATIC_GRADIENT_TIERS = new Set<MembershipTier>(['diamond']);
 
 // 静态渐变(animated=false):把色带沿名字长度均匀铺开,第 index 个字取对应位置的颜色。
 function staticColorAt(
@@ -116,7 +106,7 @@ const FlowChar = memo(function FlowChar({
  * 按会员档位给用户名加特效的文字组件。非会员 / 拿不到 vipLevel 时退化为普通 <Text>,
  * 可无脑替换现有的 `<Text style={...}>{name}</Text>`(额外传 vipLevel 即可)。
  *
- * 银/金为纯色;钻石为静态冷调渐变;超级(金白流光)为逐字流动渐变,基于已装的 reanimated,
+ * 银/金/钻石为纯色;超级(玫瑰金流光)为逐字流动渐变,基于已装的 reanimated,
  * 无需 masked-view / linear-gradient 原生依赖,dev client 免重建。
  */
 export const MemberName = memo(function MemberName({
@@ -171,11 +161,12 @@ export const MemberName = memo(function MemberName({
     );
   }
 
-  const colors = FLOW_COLORS[tier as 'diamond' | 'super'];
+  const colors = FLOW_COLORS.super;
 
-  // 钻石始终是静态渐变。列表里 animated={false}:静态渐变,普通 <Text> 逐字上色,不挂 reanimated,
-  // 避免同屏几十上百个名字都用 useAnimatedStyle 拖垮列表。
-  if (STATIC_GRADIENT_TIERS.has(tier) || !animated) {
+  // super 顶档流光是会员核心视觉,默认在所有页面(资料/会话/通讯录/朋友圈/通知)都流动 ——
+  // super 稀有,不会同屏几十个,无性能顾虑。animated={false} 保留为极端密集列表的可选降级开关
+  // (逐字静态上色不挂 reanimated),当前无调用处使用。
+  if (!animated) {
     return (
       <Text style={style} numberOfLines={numberOfLines}>
         {chars.map((ch, index) => (

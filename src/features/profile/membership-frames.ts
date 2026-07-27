@@ -12,6 +12,10 @@ const FRAME_ASSETS = {
 
 export const AVATAR_FRAME_SCALE = 1.6;
 
+// 列表 / 聊天等密集场景的紧凑占位系数:带框头像总尺寸 = size × 此值(而非默认 1.6),
+// 让带框头像只比普通头像略大、不喧宾夺主(照片相应 = size × 此值 / 1.6)。想再调大/小改这一个数即可。
+export const AVATAR_FRAME_COMPACT_SCALE = 1.2;
+
 /** 按 vipLevel 取会员头像框;仅钻石/超级有框,其余档位与非会员返回 null。 */
 export function getMembershipFrameAsset(
   vipLevel: number | null | undefined,
