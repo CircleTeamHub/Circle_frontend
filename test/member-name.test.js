@@ -7,6 +7,8 @@ const read = (rel) =>
   fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
 const src = read('src/components/ui/member-name.tsx');
+const rootLayout = read('app/_layout.tsx');
+const animationSrc = read('src/components/ui/member-name-animation.tsx');
 
 test('MemberName colors names by membership tier (name-color benefit)', () => {
   // Tier resolved from vipLevel via the shared single-source mapping.
@@ -30,7 +32,7 @@ test('MemberName renders diamond as a solid purple while super uses a looping fl
 
   // Super still uses real animation: looping shared value + per-char interpolateColor.
   assert.match(src, /from 'react-native-reanimated'/);
-  assert.match(src, /withRepeat\(/);
+  assert.match(animationSrc, /withRepeat\(/);
   assert.match(src, /interpolateColor\(/);
   // Animation can be disabled for dense lists; solid tiers are unaffected.
   assert.match(src, /animated = true/);
@@ -91,4 +93,44 @@ test('UserProfileScreen passes the loaded vipLevel to MemberName (no redundant b
   // 资料响应已带 vipLevel(同一屏用来选头像框),名字也应直接内联，避免先渲染无特效再补查。
   const screen = read('src/features/user/screens/UserProfileScreen.tsx');
   assert.match(screen, /<MemberName[\s\S]*?vipLevel=\{profileVipLevel\}/);
+});
+
+test('MemberName shares one app-scoped animation clock', () => {
+  const animationPath = path.join(
+    __dirname,
+    '..',
+    'src/components/ui/member-name-animation.tsx',
+  );
+  assert.ok(
+    fs.existsSync(animationPath),
+    'expected a shared MemberName animation provider',
+  );
+
+  const animation = fs.readFileSync(animationPath, 'utf8');
+  assert.match(animation, /export function MemberNameAnimationProvider/);
+  assert.match(rootLayout, /<MemberNameAnimationProvider>/);
+  assert.match(src, /useMemberNameAnimation\(/);
+  assert.doesNotMatch(src, /useSharedValue\(/);
+});
+
+test('shared MemberName animation pauses outside the active app and for Reduce Motion', () => {
+  const animationPath = path.join(
+    __dirname,
+    '..',
+    'src/components/ui/member-name-animation.tsx',
+  );
+  assert.ok(
+    fs.existsSync(animationPath),
+    'expected a shared MemberName animation provider',
+  );
+
+  const animation = fs.readFileSync(animationPath, 'utf8');
+  assert.match(animation, /AppState\.addEventListener\('change'/);
+  assert.match(animation, /AccessibilityInfo\.isReduceMotionEnabled\(\)/);
+  assert.match(
+    animation,
+    /AccessibilityInfo\.addEventListener\(\s*'reduceMotionChanged'/,
+  );
+  assert.match(animation, /cancelAnimation\(/);
+  assert.match(animation, /withRepeat\(/);
 });
