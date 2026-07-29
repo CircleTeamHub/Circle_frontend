@@ -61,6 +61,32 @@ test('sanitizeUserForPersist keeps non-sensitive display fields', () => {
   assert.equal(sanitized.creditScore, 100);
 });
 
+test('sanitizeUserForPersist strips signed avatar-frame URLs but keeps stable identity', () => {
+  const user = {
+    ...fullUser,
+    avatarFrameAppearance: {
+      id: 'frame-1',
+      key: 'vip-gold',
+      name: 'VIP Gold',
+      imageUrl:
+        'https://cdn.example.com/frame.png?X-Amz-Signature=secret-signature',
+    },
+  };
+
+  const sanitized = sanitizeUserForPersist(user);
+
+  assert.deepEqual(sanitized.avatarFrameAppearance, {
+    id: 'frame-1',
+    key: 'vip-gold',
+    name: 'VIP Gold',
+    imageUrl: null,
+  });
+  assert.equal(
+    user.avatarFrameAppearance.imageUrl,
+    'https://cdn.example.com/frame.png?X-Amz-Signature=secret-signature',
+  );
+});
+
 test('sanitizeUserForPersist returns null unchanged', () => {
   assert.equal(sanitizeUserForPersist(null), null);
 });

@@ -30,7 +30,13 @@ import {
   type FancyNumberPurchaseResult,
   type MyFancyNumber,
 } from '@/services/api/fancy-number';
+import {
+  captureAuthSessionIdentity,
+  isAuthSessionIdentityCurrent,
+  type AuthSessionIdentity,
+} from '@/stores/auth-session-identity';
 import { useAuthStore } from '@/stores/authStore';
+import { useKnownAccountsStore } from '@/stores/knownAccountsStore';
 import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { generateIdempotencyKey } from '@/utils/idempotency-key';
@@ -192,12 +198,20 @@ export default function FancyNumberScreen() {
   const pendingIntentRef = useRef<{ signature: string; key: string } | null>(null);
 
   const loadInitial = useCallback(
-    async (generation = focusGenerationRef.current) => {
+    async (
+      generation = focusGenerationRef.current,
+      owner?: AuthSessionIdentity,
+    ) => {
+      const canCommit = () =>
+        generation === focusGenerationRef.current &&
+        (!owner ||
+          isAuthSessionIdentityCurrent(owner, useAuthStore.getState()));
+      if (!canCommit()) return;
       setLoading(true);
       setErrorText(null);
       try {
         const [nextMine, nextCatalog] = await Promise.all([fetchMyFancyNumber(), fetchFancyNumbers({ limit: PAGE_SIZE })]);
-        if (generation !== focusGenerationRef.current) return;
+        if (!canCommit()) return;
         setMine(nextMine);
         setCatalog(nextCatalog);
         setItems(
@@ -207,7 +221,7 @@ export default function FancyNumberScreen() {
         );
         setMonths((current) => Math.min(nextCatalog.maxMonths, Math.max(nextCatalog.minMonths, current)));
       } catch (error) {
-        if (generation !== focusGenerationRef.current) return;
+        if (!canCommit()) return;
         setErrorText(
           getApiErrorMessage(
             error,
@@ -217,7 +231,7 @@ export default function FancyNumberScreen() {
           ),
         );
       } finally {
-        if (generation === focusGenerationRef.current) setLoading(false);
+        if (canCommit()) setLoading(false);
       }
     },
     [t],
@@ -288,17 +302,29 @@ export default function FancyNumberScreen() {
     }, [loadInitial]),
   );
 
-  const refreshAuthUser = useCallback(async () => {
-    const before = useAuthStore.getState();
-    const expectedUserId = before.user?.id;
-    const expectedSessionEpoch = before.sessionEpoch;
-    if (!expectedUserId) return;
-
+  const refreshAuthUser = useCallback(async (owner: AuthSessionIdentity) => {
+    if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
     const refreshed = await fetchCurrentUser();
     const latest = useAuthStore.getState();
-    if (latest.sessionEpoch === expectedSessionEpoch && latest.user?.id === expectedUserId && refreshed.id === expectedUserId) {
-      latest.setUser(refreshed);
-    }
+    if (
+      !isAuthSessionIdentityCurrent(owner, latest) ||
+      refreshed.id !== owner.userId
+    ) return;
+
+    latest.setUser(refreshed);
+    const current = useAuthStore.getState();
+    if (
+      !isAuthSessionIdentityCurrent(owner, current) ||
+      !current.accessToken ||
+      !current.refreshToken
+    ) return;
+    useKnownAccountsStore.getState().upsertAccount({
+      user: refreshed,
+      accessToken: current.accessToken,
+      refreshToken: current.refreshToken,
+      imToken: current.imToken,
+      updatedAt: Date.now(),
+    });
   }, []);
 
   const intentKey = useCallback((signature: string) => {
@@ -312,19 +338,23 @@ export default function FancyNumberScreen() {
 
   const finishPurchase = useCallback(
     async (
+      owner: AuthSessionIdentity,
       result: FancyNumberPurchaseResult,
       action: 'purchase' | 'renewal' | 'switch' = 'purchase',
       previousAccountId?: string | null,
     ) => {
+      if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
       pendingIntentRef.current = null;
       useWalletRealtimeStore.getState().setRealtimeBalance(result.walletBalanceAfter);
       setMine(mineFromResult(result));
       setItems((current) => current.filter((item) => item.value !== result.accountId));
       setCustomValue('');
       setAvailability({ status: 'idle' });
-      await refreshAuthUser().catch(() => undefined);
+      await refreshAuthUser(owner).catch(() => undefined);
+      if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
       if (action === 'switch') {
-        await loadInitial();
+        await loadInitial(focusGenerationRef.current, owner);
+        if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
       }
       Alert.alert(
         t('profile.fancyNumber.successTitle', { defaultValue: '操作成功' }),
@@ -360,6 +390,8 @@ export default function FancyNumberScreen() {
     }
 
     const isPermanent = catalog.purchaseMode === 'PERMANENT_FREE';
+    const owner = captureAuthSessionIdentity(useAuthStore.getState());
+    if (!owner) return;
     const signature = `custom-purchase:${customValue}:${isPermanent ? 'permanent' : months}`;
     setSubmitting(true);
     try {
@@ -367,8 +399,9 @@ export default function FancyNumberScreen() {
         isPermanent ? { value: customValue } : { value: customValue, months },
         { idempotencyKey: intentKey(signature) },
       );
-      await finishPurchase(result);
+      await finishPurchase(owner, result);
     } catch (error) {
+      if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
       Alert.alert(
         t('common.errorOccurred', { defaultValue: '操作失败' }),
         getApiErrorMessage(
@@ -378,7 +411,7 @@ export default function FancyNumberScreen() {
           }),
         ),
       );
-      void loadInitial();
+      void loadInitial(focusGenerationRef.current, owner);
     } finally {
       setSubmitting(false);
     }
@@ -436,12 +469,15 @@ export default function FancyNumberScreen() {
 
   const performRenewal = useCallback(async () => {
     if (!mine?.renewable || submitting) return;
+    const owner = captureAuthSessionIdentity(useAuthStore.getState());
+    if (!owner) return;
     const signature = `renew:${mine.accountId}:${months}`;
     setSubmitting(true);
     try {
       const result = await renewFancyNumber({ months }, { idempotencyKey: intentKey(signature) });
-      await finishPurchase(result, 'renewal');
+      await finishPurchase(owner, result, 'renewal');
     } catch (error) {
+      if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
       Alert.alert(
         t('common.errorOccurred', { defaultValue: '操作失败' }),
         getApiErrorMessage(
@@ -451,7 +487,7 @@ export default function FancyNumberScreen() {
           }),
         ),
       );
-      void loadInitial();
+      void loadInitial(focusGenerationRef.current, owner);
     } finally {
       setSubmitting(false);
     }
@@ -489,6 +525,8 @@ export default function FancyNumberScreen() {
       return;
     }
     const previousAccountId = mine.accountId;
+    const owner = captureAuthSessionIdentity(useAuthStore.getState());
+    if (!owner) return;
     const signature = `custom-switch:${previousAccountId}:${customValue}`;
     setSubmitting(true);
     try {
@@ -496,8 +534,9 @@ export default function FancyNumberScreen() {
         { value: customValue },
         { idempotencyKey: intentKey(signature) },
       );
-      await finishPurchase(result, 'switch', previousAccountId);
+      await finishPurchase(owner, result, 'switch', previousAccountId);
     } catch (error) {
+      if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
       Alert.alert(
         t('common.errorOccurred', { defaultValue: '操作失败' }),
         getApiErrorMessage(
@@ -507,7 +546,7 @@ export default function FancyNumberScreen() {
           }),
         ),
       );
-      void loadInitial();
+      void loadInitial(focusGenerationRef.current, owner);
     } finally {
       setSubmitting(false);
     }

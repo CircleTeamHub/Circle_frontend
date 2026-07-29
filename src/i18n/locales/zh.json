@@ -1541,7 +1541,7 @@
         "joinedGroups": "可加入群聊",
         "noteStorage": "笔记存储",
         "cityFilters": "城市筛选",
-        "fancyNumber": "靓号赠送"
+        "fancyNumber": "靓号权益"
       },
       "benefitValues": {
         "group-member-limit": "{{value}} 人",
@@ -1557,7 +1557,8 @@
         "super-lifetime": "超级永久",
         "none": "无",
         "one-gift": "赠送 1 次",
-        "one-premium-gift": "赠送高级靓号 1 次"
+        "one-premium-gift": "赠送高级靓号 1 次",
+        "permanent": "永久靓号"
       },
       "currentTierBadge": "当前",
       "marketing": {

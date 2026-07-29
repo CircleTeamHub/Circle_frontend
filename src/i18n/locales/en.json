@@ -1544,7 +1544,7 @@
         "joinedGroups": "Groups you can join",
         "noteStorage": "Note storage",
         "cityFilters": "City filters",
-        "fancyNumber": "Premium number gift"
+        "fancyNumber": "Fancy number benefit"
       },
       "benefitValues": {
         "group-member-limit": "{{value}} people",
@@ -1560,7 +1560,8 @@
         "super-lifetime": "Super lifetime",
         "none": "None",
         "one-gift": "One gift",
-        "one-premium-gift": "One premium number gift"
+        "one-premium-gift": "One premium number gift",
+        "permanent": "Permanent fancy number"
       },
       "currentTierBadge": "Current",
       "marketing": {

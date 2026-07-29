@@ -55,6 +55,18 @@ function isPositiveInteger(value: unknown): value is number {
   return Number.isInteger(value) && typeof value === 'number' && value > 0;
 }
 
+function isValidDateString(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.trim().length > 0 &&
+    Number.isFinite(Date.parse(value))
+  );
+}
+
+function isNullableValidDateString(value: unknown): value is string | null {
+  return value === null || isValidDateString(value);
+}
+
 function isFancyNumberItem(value: unknown): value is FancyNumberItem {
   return isPlainObject(value) && isNonEmptyString(value.id) && isNonEmptyString(value.value);
 }
@@ -79,11 +91,16 @@ function isMyFancyNumber(value: unknown): value is MyFancyNumber {
     typeof value.active === 'boolean' &&
     isNullableString(value.accountId) &&
     isNullableString(value.restoreAccountId) &&
-    isNullableString(value.startedAt) &&
-    isNullableString(value.expiresAt) &&
+    isNullableValidDateString(value.startedAt) &&
+    isNullableValidDateString(value.expiresAt) &&
     typeof value.permanent === 'boolean' &&
     typeof value.renewable === 'boolean' &&
-    isFiniteNonNegativeNumber(value.unitPrice)
+    isFiniteNonNegativeNumber(value.unitPrice) &&
+    (!value.active ||
+      (isNonEmptyString(value.accountId) &&
+        (value.permanent
+          ? value.expiresAt === null
+          : isValidDateString(value.expiresAt))))
   );
 }
 
@@ -92,9 +109,12 @@ function isPurchaseResult(value: unknown): value is FancyNumberPurchaseResult {
     isPlainObject(value) &&
     isNonEmptyString(value.orderId) &&
     isNonEmptyString(value.accountId) &&
-    isNullableString(value.expiresAt) &&
+    isNullableValidDateString(value.expiresAt) &&
     typeof value.permanent === 'boolean' &&
     (value.months === null || isPositiveInteger(value.months)) &&
+    (value.permanent
+      ? value.expiresAt === null && value.months === null
+      : isValidDateString(value.expiresAt) && isPositiveInteger(value.months)) &&
     isFiniteNonNegativeNumber(value.unitPrice) &&
     isFiniteNonNegativeNumber(value.totalPrice) &&
     isFiniteNonNegativeNumber(value.walletBalanceAfter)

@@ -8,6 +8,14 @@
  */
 export function sanitizeUserForPersist<T extends object | null>(user: T): T {
   if (!user) return user;
+  const record = user as Record<string, unknown>;
+  const appearance = record.avatarFrameAppearance;
+  const sanitizedAppearance =
+    appearance !== null &&
+    typeof appearance === 'object' &&
+    !Array.isArray(appearance)
+      ? { ...appearance, imageUrl: null }
+      : appearance;
   return {
     ...user,
     email: null,
@@ -19,5 +27,8 @@ export function sanitizeUserForPersist<T extends object | null>(user: T): T {
     helloWords: null,
     birthday: null,
     city: null,
+    ...('avatarFrameAppearance' in record
+      ? { avatarFrameAppearance: sanitizedAppearance }
+      : {}),
   } as T;
 }

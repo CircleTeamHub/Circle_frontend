@@ -49,7 +49,7 @@ const DEFAULT_BENEFIT_LABELS: Record<MembershipBenefitId, string> = {
   'joined-groups': '可加入群聊',
   'note-storage': '笔记存储',
   'city-filters': '城市筛选',
-  'fancy-number': '靓号赠送',
+  'fancy-number': '靓号权益',
 };
 
 const DEFAULT_NAMED_BENEFIT_VALUES: Record<
@@ -64,8 +64,7 @@ const DEFAULT_NAMED_BENEFIT_VALUES: Record<
   diamond: '钻石',
   'super-lifetime': '超级永久',
   none: '无',
-  'one-gift': '赠送 1 次',
-  'one-premium-gift': '赠送高级靓号 1 次',
+  permanent: '永久靓号',
 };
 
 // 每个 VIP 等级一套「贵金属」视觉：档位渐变 + 强调色 + 徽章。银 → 金 → 钻 → 曜黑（超级）。

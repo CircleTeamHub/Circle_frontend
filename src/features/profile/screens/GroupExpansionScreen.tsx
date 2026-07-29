@@ -23,6 +23,12 @@ import {
   type GroupExpansionProductsResult,
 } from '@/services/api/group-expansion';
 import { GroupExpansionCirclePickerSheet } from '@/features/profile/components/group-expansion-circle-picker-sheet';
+import {
+  captureAuthSessionIdentity,
+  isAuthSessionIdentityCurrent,
+  type AuthSessionIdentity,
+} from '@/stores/auth-session-identity';
+import { useAuthStore } from '@/stores/authStore';
 import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { MyCircle } from '@/types';
@@ -173,16 +179,29 @@ export default function GroupExpansionScreen() {
   );
 
   const loadProducts = useCallback(
-    async (circleId: string, generation = focusGenerationRef.current) => {
+    async (
+      circleId: string,
+      generation = focusGenerationRef.current,
+      owner?: AuthSessionIdentity,
+    ) => {
+      if (
+        owner &&
+        !isAuthSessionIdentityCurrent(owner, useAuthStore.getState())
+      ) return;
       const request = catalogRequestRef.current + 1;
       catalogRequestRef.current = request;
+      const canCommit = () =>
+        generation === focusGenerationRef.current &&
+        request === catalogRequestRef.current &&
+        (!owner ||
+          isAuthSessionIdentityCurrent(owner, useAuthStore.getState()));
+      if (!canCommit()) return;
       setCatalogLoading(true);
       setCatalogError(null);
       try {
         const result = await fetchGroupExpansionProducts(circleId);
         if (
-          generation !== focusGenerationRef.current ||
-          request !== catalogRequestRef.current ||
+          !canCommit() ||
           selectedCircleIdRef.current !== circleId
         ) {
           return;
@@ -190,8 +209,7 @@ export default function GroupExpansionScreen() {
         setCatalog(result);
       } catch (error) {
         if (
-          generation !== focusGenerationRef.current ||
-          request !== catalogRequestRef.current
+          !canCommit()
         ) {
           return;
         }
@@ -206,8 +224,7 @@ export default function GroupExpansionScreen() {
         );
       } finally {
         if (
-          generation === focusGenerationRef.current &&
-          request === catalogRequestRef.current
+          canCommit()
         ) {
           setCatalogLoading(false);
         }
@@ -312,16 +329,20 @@ export default function GroupExpansionScreen() {
       }
 
       const signature = `${circleId}:${product.id}`;
+      const owner = captureAuthSessionIdentity(useAuthStore.getState());
+      if (!owner) return;
       setSubmittingProductId(product.id);
       try {
         const result = await purchaseGroupExpansion(circleId, product.id, {
           idempotencyKey: getIntentKey(signature),
         });
+        if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
         pendingIntentRef.current = null;
         useWalletRealtimeStore
           .getState()
           .setRealtimeBalance(result.walletBalanceAfter);
-        await loadProducts(circleId);
+        await loadProducts(circleId, focusGenerationRef.current, owner);
+        if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
         Alert.alert(
           t('profile.groupExpansion.successTitle', {
             defaultValue: '扩容成功',
@@ -335,6 +356,7 @@ export default function GroupExpansionScreen() {
           }),
         );
       } catch (error) {
+        if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
         Alert.alert(
           t('common.errorOccurred', { defaultValue: '操作失败' }),
           getApiErrorMessage(
@@ -344,7 +366,7 @@ export default function GroupExpansionScreen() {
             }),
           ),
         );
-        void loadProducts(circleId);
+        void loadProducts(circleId, focusGenerationRef.current, owner);
       } finally {
         setSubmittingProductId(null);
       }

@@ -32,11 +32,18 @@ function loadFancyNumberModule(apiClientSpy, generatedKey = 'generated-key') {
           generateIdempotencyKey: () => generatedKey,
         },
         '@/utils/validate': {
-          expectShape: (value) => value,
-          isFiniteNonNegativeNumber: () => true,
-          isFiniteNumber: () => true,
-          isNonEmptyString: () => true,
-          isPlainObject: () => true,
+          expectShape: (value, predicate, message) => {
+            if (!predicate(value)) throw new Error(message);
+            return value;
+          },
+          isFiniteNonNegativeNumber: (value) =>
+            typeof value === 'number' && Number.isFinite(value) && value >= 0,
+          isFiniteNumber: (value) =>
+            typeof value === 'number' && Number.isFinite(value),
+          isNonEmptyString: (value) =>
+            typeof value === 'string' && value.trim().length > 0,
+          isPlainObject: (value) =>
+            value !== null && typeof value === 'object' && !Array.isArray(value),
         },
       };
       return specifier in stubs ? stubs[specifier] : require(specifier);
@@ -47,11 +54,31 @@ function loadFancyNumberModule(apiClientSpy, generatedKey = 'generated-key') {
   return context.module.exports;
 }
 
+const listResponse = {
+  items: [],
+  nextCursor: null,
+  unitPrice: 100,
+  minMonths: 1,
+  maxMonths: 12,
+  purchaseMode: 'PAID_MONTHLY',
+};
+
+const purchaseResponse = {
+  orderId: 'order-1',
+  accountId: 'AB12C3',
+  expiresAt: '2026-08-29T00:00:00.000Z',
+  permanent: false,
+  months: 1,
+  unitPrice: 100,
+  totalPrice: 100,
+  walletBalanceAfter: 900,
+};
+
 test('fancy-number listing safely encodes cursor pagination', async () => {
   const calls = [];
   const api = loadFancyNumberModule(async (endpoint, options) => {
     calls.push({ endpoint, options });
-    return {};
+    return listResponse;
   });
 
   await api.fetchFancyNumbers({ cursor: 'next/cursor + 1', limit: 20 });
@@ -63,7 +90,7 @@ test('custom fancy-number availability normalizes input and safely encodes it', 
   const calls = [];
   const api = loadFancyNumberModule(async (endpoint, options) => {
     calls.push({ endpoint, options });
-    return {};
+    return { value: 'AB12C3', available: true, reason: null };
   });
 
   await api.checkFancyNumberAvailability(' ab12c3 ');
@@ -75,7 +102,7 @@ test('fancy-number purchase, renewal, and permanent switching attach idempotency
   const calls = [];
   const api = loadFancyNumberModule(async (endpoint, options) => {
     calls.push({ endpoint, options });
-    return {};
+    return purchaseResponse;
   });
 
   await api.purchaseFancyNumber('number-id', { months: 3 });
@@ -107,4 +134,55 @@ test('fancy-number purchase, renewal, and permanent switching attach idempotency
   assert.equal(calls[3].options.body.value, 'AB12C3');
   assert.equal(calls[4].endpoint, '/mall/fancy-numbers/custom/switch');
   assert.equal(calls[4].options.body.value, 'XY98Z7');
+});
+
+test('fancy-number API rejects malformed expiry timestamps', async () => {
+  const api = loadFancyNumberModule(async () => ({
+    active: true,
+    accountId: 'AB12C3',
+    restoreAccountId: 'USER01',
+    startedAt: '2026-07-29T00:00:00.000Z',
+    expiresAt: 'not-a-date',
+    permanent: false,
+    renewable: true,
+    unitPrice: 100,
+  }));
+
+  await assert.rejects(
+    api.fetchMyFancyNumber(),
+    /服务返回了无效数据/,
+  );
+});
+
+test('fancy-number API requires an expiry for a paid active lease', async () => {
+  const api = loadFancyNumberModule(async () => ({
+    ...purchaseResponse,
+    expiresAt: null,
+  }));
+
+  await assert.rejects(
+    api.purchaseCustomFancyNumber(
+      { value: 'AB12C3', months: 1 },
+      { idempotencyKey: 'paid-purchase' },
+    ),
+    /服务返回了无效数据/,
+  );
+});
+
+test('fancy-number API accepts a null expiry only for permanent results', async () => {
+  const api = loadFancyNumberModule(async () => ({
+    ...purchaseResponse,
+    expiresAt: null,
+    permanent: true,
+    months: null,
+    totalPrice: 0,
+  }));
+
+  const result = await api.purchaseCustomFancyNumber(
+    { value: 'AB12C3' },
+    { idempotencyKey: 'permanent-purchase' },
+  );
+
+  assert.equal(result.permanent, true);
+  assert.equal(result.expiresAt, null);
 });

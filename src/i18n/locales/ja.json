@@ -2014,7 +2014,7 @@
         "joinedGroups": "参加可能なグループ",
         "noteStorage": "ノート保存数",
         "cityFilters": "都市フィルター",
-        "fancyNumber": "プレミアム番号特典"
+        "fancyNumber": "ゴロ番号特典"
       },
       "benefitValues": {
         "group-member-limit": "{{value}}人",
@@ -2030,7 +2030,8 @@
         "super-lifetime": "スーパー永久",
         "none": "なし",
         "one-gift": "1回贈呈",
-        "one-premium-gift": "プレミアム番号を1回贈呈"
+        "one-premium-gift": "プレミアム番号を1回贈呈",
+        "permanent": "永久ゴロ番号"
       },
       "currentTierBadge": "現在",
       "marketing": {

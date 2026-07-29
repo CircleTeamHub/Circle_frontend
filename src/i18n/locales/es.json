@@ -2017,7 +2017,7 @@
         "joinedGroups": "Grupos a los que puedes unirte",
         "noteStorage": "Almacenamiento de notas",
         "cityFilters": "Filtros de ciudad",
-        "fancyNumber": "Número premium de regalo"
+        "fancyNumber": "Beneficio de número premium"
       },
       "benefitValues": {
         "group-member-limit": "{{value}} personas",
@@ -2033,7 +2033,8 @@
         "super-lifetime": "Súper de por vida",
         "none": "Ninguno",
         "one-gift": "Un regalo",
-        "one-premium-gift": "Un número premium de regalo"
+        "one-premium-gift": "Un número premium de regalo",
+        "permanent": "Número premium permanente"
       },
       "currentTierBadge": "Actual",
       "marketing": {
