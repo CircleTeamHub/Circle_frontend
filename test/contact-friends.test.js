@@ -111,7 +111,10 @@ test('contact friend helpers group and sort friends by normalized display key', 
 test('pickExactAccountMatch prefers case-insensitive exact account matches over partial matches', () => {
   const { pickExactAccountMatch } = loadTsModule('src/services/api/users.ts', {
     '@/services/api/client': { apiClient: async () => [] },
-    '@/services/api/utils': { normalizeUser: (value) => value },
+    '@/services/api/utils': {
+      normalizeAvatarFrameAppearance: (value) => value ?? null,
+      normalizeUser: (value) => value,
+    },
   });
 
   const match = pickExactAccountMatch('AB100C', [
@@ -138,11 +141,117 @@ test('searchUsersByAccountId calls the dedicated account search endpoint', async
         };
       },
     },
-    '@/services/api/utils': { normalizeMediaUrl: (value) => value },
+    '@/services/api/utils': {
+      normalizeAvatarFrameAppearance: (value) => value ?? null,
+      normalizeMediaUrl: (value) => value,
+    },
   });
 
   const user = await searchUsersByAccountId('jimmy');
 
   assert.equal(calls[0], '/user/search/account?accountId=jimmy');
   assert.equal(user.accountId, 'jimmy');
+});
+
+test('fetchFriends drops malformed rows before contacts render them', async () => {
+  const { fetchFriends } = loadTsModule('src/services/api/friends.ts', {
+    '@/services/api/client': {
+      apiClient: async () => [
+        null,
+        { id: '', accountId: 'missing-id' },
+        { id: 'missing-account', accountId: '' },
+        {
+          id: 'friend-1',
+          accountId: 'alice_001',
+          nickname: null,
+          avatarUrl: 42,
+          avatarFrame: undefined,
+          gender: undefined,
+          lastOnline: undefined,
+          friendsSince: undefined,
+        },
+      ],
+    },
+    '@/services/api/utils': {
+      fetchCountEndpoint: async () => 0,
+      normalizeAvatarFrameAppearance: (value) => value ?? null,
+      normalizeMediaUrl: (value) => value,
+    },
+  });
+
+  const friends = await fetchFriends();
+
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(friends)),
+    [
+      {
+        id: 'friend-1',
+        accountId: 'alice_001',
+        nickname: 'alice_001',
+        avatarUrl: null,
+        avatarFrame: null,
+        avatarFrameAppearance: null,
+        gender: '',
+        lastOnline: null,
+        friendsSince: '',
+        remark: null,
+      },
+    ],
+  );
+});
+
+test('fetchFriends deduplicates repeated friend ids before SectionList sees them', async () => {
+  const { fetchFriends } = loadTsModule('src/services/api/friends.ts', {
+    '@/services/api/client': {
+      apiClient: async () => [
+        {
+          id: 'friend-1',
+          accountId: 'alice_001',
+          nickname: 'Alice',
+          avatarUrl: null,
+          avatarFrame: null,
+          gender: 'unset',
+          lastOnline: null,
+          friendsSince: '2026-07-24T07:59:51.066Z',
+          remark: 'new remark',
+        },
+        {
+          id: 'friend-1',
+          accountId: 'alice_001',
+          nickname: 'Alice old',
+          avatarUrl: null,
+          avatarFrame: null,
+          gender: 'unset',
+          lastOnline: null,
+          friendsSince: '2026-06-26T08:06:52.906Z',
+          remark: 'old remark',
+        },
+      ],
+    },
+    '@/services/api/utils': {
+      fetchCountEndpoint: async () => 0,
+      normalizeAvatarFrameAppearance: (value) => value ?? null,
+      normalizeMediaUrl: (value) => value,
+    },
+  });
+
+  const friends = await fetchFriends();
+
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(friends)),
+    [
+      {
+        id: 'friend-1',
+        accountId: 'alice_001',
+        nickname: 'Alice',
+        avatarUrl: null,
+        avatarFrame: null,
+        avatarFrameAppearance: null,
+        gender: 'unset',
+        lastOnline: null,
+        friendsSince: '2026-07-24T07:59:51.066Z',
+        remark: 'new remark',
+      },
+    ],
+  );
 });

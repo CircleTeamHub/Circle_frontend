@@ -14,7 +14,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { secureAuthStorage } from '@/storage/secure-auth-storage';
-import type { DisplayIcon } from '@/types';
+import type { AvatarFrameAppearance, DisplayIcon } from '@/types';
 import { migrateAuthPersist, AUTH_PERSIST_VERSION } from './authPersist';
 import { sanitizeUserForPersist } from './persisted-user';
 
@@ -28,6 +28,7 @@ export interface AuthUser {
   nickname: string;
   avatarUrl: string | null;
   avatarFrame: string | null;
+  avatarFrameAppearance: AvatarFrameAppearance | null;
   cover: string | null;
   email: string | null;
   phoneNumber: string | null;

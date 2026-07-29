@@ -27,6 +27,7 @@ function makePost(id: string): CirclePlazaPost {
       nickname: `author-${id}`,
       avatarUrl: null,
       avatarFrame: null,
+      avatarFrameAppearance: null,
       accountId: `account-${id}`,
     },
     circle: {

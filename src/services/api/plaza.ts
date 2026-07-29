@@ -1,5 +1,9 @@
 import { apiClient } from '@/services/api/client';
-import { buildQuery, normalizeMediaUrl } from '@/services/api/utils';
+import {
+  buildQuery,
+  normalizeAvatarFrameAppearance,
+  normalizeMediaUrl,
+} from '@/services/api/utils';
 import type {
   CirclePlazaPost,
   CreatePlazaPostInput,
@@ -9,7 +13,18 @@ import type {
   PostSignupItem,
   PostSignupsResult,
   DisplayIcon,
+  AvatarFrameAppearance,
 } from '@/types';
+
+type BackendCirclePlazaPost = Omit<CirclePlazaPost, 'author'> & {
+  author: Omit<
+    CirclePlazaPost['author'],
+    'avatarFrame' | 'avatarFrameAppearance'
+  > & {
+    avatarFrame?: string | null;
+    avatarFrameAppearance?: AvatarFrameAppearance | null;
+  };
+};
 
 function normalizeDisplayIcons(icons: unknown): DisplayIcon[] {
   if (!Array.isArray(icons)) return [];
@@ -23,7 +38,7 @@ function normalizeDisplayIcons(icons: unknown): DisplayIcon[] {
   });
 }
 
-function normalizePlazaPost(post: CirclePlazaPost): CirclePlazaPost {
+function normalizePlazaPost(post: BackendCirclePlazaPost): CirclePlazaPost {
   return {
     ...post,
     // 同 moments.ts 注释：normalizeMediaUrl 是 nullable，?? 接住 fallback；as string 是骗 TS。
@@ -39,6 +54,9 @@ function normalizePlazaPost(post: CirclePlazaPost): CirclePlazaPost {
       avatarFrame: post.author.avatarFrame
         ? normalizeMediaUrl(post.author.avatarFrame)
         : null,
+      avatarFrameAppearance: normalizeAvatarFrameAppearance(
+        post.author.avatarFrameAppearance,
+      ),
       displayIcons: normalizeDisplayIcons(post.author.displayIcons),
     },
   };
@@ -53,7 +71,7 @@ export async function fetchPlazaFeed(params?: {
   limit?: number;
   cursor?: string;
 }): Promise<PaginatedResponse<CirclePlazaPost>> {
-  const result = await apiClient<PaginatedResponse<CirclePlazaPost>>(
+  const result = await apiClient<PaginatedResponse<BackendCirclePlazaPost>>(
     `/circle-plaza/feed${buildQuery(params ?? {})}`,
   );
 
@@ -64,14 +82,16 @@ export async function fetchPlazaFeed(params?: {
 }
 
 export async function fetchPlazaPost(id: string): Promise<CirclePlazaPost> {
-  const post = await apiClient<CirclePlazaPost>(`/circle-plaza/posts/${id}`);
+  const post = await apiClient<BackendCirclePlazaPost>(
+    `/circle-plaza/posts/${id}`,
+  );
   return normalizePlazaPost(post);
 }
 
 export async function createPlazaPost(
   input: CreatePlazaPostInput,
 ): Promise<CirclePlazaPost> {
-  const post = await apiClient<CirclePlazaPost>('/circle-plaza/posts', {
+  const post = await apiClient<BackendCirclePlazaPost>('/circle-plaza/posts', {
     method: 'POST',
     body: input,
   });

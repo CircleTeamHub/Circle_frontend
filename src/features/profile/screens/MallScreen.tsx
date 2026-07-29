@@ -92,6 +92,21 @@ export default function MallScreen() {
   }, [t]);
 
   function handleProductPress(product: MallProduct) {
+    if (product.action === 'fancy-number') {
+      router.push('/(tabs)/profile/fancy-number' as never);
+      return;
+    }
+    if (product.action === 'fancy-number-renew') {
+      router.push({
+        pathname: '/(tabs)/profile/fancy-number',
+        params: { mode: 'renew' },
+      } as never);
+      return;
+    }
+    if (product.action === 'group-expansion') {
+      router.push('/(tabs)/profile/group-expansion' as never);
+      return;
+    }
     if (product.action === 'membership') {
       router.push('/(tabs)/profile/member-center' as never);
       return;
@@ -137,7 +152,7 @@ export default function MallScreen() {
 
   return (
     <View style={d.container}>
-      <NavHeader title={t('profile.mall.title', { defaultValue: '管家商城' })} />
+      <NavHeader title={t('profile.mall.title', { defaultValue: '商城' })} />
       <ScrollView contentContainerStyle={[s.content, d.content]}>
         {isOffline ? (
           <Text style={d.status}>

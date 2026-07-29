@@ -54,7 +54,7 @@ test('OpenIM iOS bridge guards native events before sending them to React Native
   assert.equal(supportedOpenIMEventsMethods.length, 1);
   assert.match(pushEvent, /isKindOfClass:\[NSString class\]/);
   assert.match(pushEvent, /supportedOpenIMEvents/);
-  assert.match(pushEvent, /if \(!hasListeners\)/);
+  assert.match(pushEvent, /if \(!self\.openIMHasListeners\)/);
   assert.match(pushEvent, /dispatch_get_main_queue\(\)/);
   assert.match(pushEvent, /@try/);
   assert.match(pushEvent, /@catch \(NSException \*exception\)/);
@@ -70,4 +70,38 @@ test('OpenIM native event patch script is repeatable and preserves the hardening
   assert.match(src, /NSJSONReadingFragmentsAllowed/);
   assert.match(src, /@try/);
   assert.match(src, /@catch \(NSException \*exception\)/);
+});
+
+test('OpenIM iOS bridge releases stale emitters across React Native reloads', () => {
+  applyOpenIMNativeEventPatch();
+
+  const src = fs.readFileSync(openIMBridgePath, 'utf8');
+  const initSDK = extractBetween(
+    src,
+    'RCT_EXPORT_METHOD(initSDK:',
+    'RCT_EXPORT_METHOD(setBatchMsgListener)',
+  );
+  const unInitSDK = extractBetween(
+    src,
+    'RCT_EXPORT_METHOD(unInitSDK:',
+    'RCT_EXPORT_METHOD(updateFcmToken:',
+  );
+  const invalidate = extractBetween(
+    src,
+    '- (void)invalidate {',
+    '- (NSSet<NSString *> *)supportedOpenIMEvents',
+  );
+
+  assert.match(src, /@property\(atomic, assign\) BOOL openIMHasListeners/);
+  assert.doesNotMatch(src, /\bbool hasListeners\b/);
+  assert.match(src, /self\.openIMHasListeners = YES/);
+  assert.match(src, /self\.openIMHasListeners = NO/);
+  assert.match(invalidate, /Open_im_sdkUnInitSDK/);
+  assert.match(invalidate, /\[super invalidate\]/);
+  assert.ok(
+    initSDK.indexOf('Open_im_sdkUnInitSDK') <
+      initSDK.indexOf('Open_im_sdkInitSDK'),
+    'initSDK must release the stale native core before rebinding the current emitter',
+  );
+  assert.match(unInitSDK, /resolver\(nil\)/);
 });

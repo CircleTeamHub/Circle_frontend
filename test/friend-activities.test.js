@@ -185,6 +185,7 @@ test('friend activity API helpers use activity endpoints', async () => {
     '@/services/api/client': { apiClient: apiClientStub },
     '@/services/api/utils': {
       normalizeMediaUrl: (value) => value,
+      normalizeAvatarFrameAppearance: (value) => value ?? null,
       // `fetchCountEndpoint` 是 batch 6 extract 的小辅助函数 —— 这里复用同一个
       // apiClientStub 让测试断言依然能 push 到 calls。
       fetchCountEndpoint: async (endpoint) => {

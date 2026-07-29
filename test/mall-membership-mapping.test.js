@@ -138,6 +138,28 @@ test('FALLBACK_SECTIONS carry both a key and a non-empty default for every entry
   }
 });
 
+test('mall removes membership and points sections from fallback and backend responses', async () => {
+  const backend = [
+    { id: 'cards', title: '我的卡券', products: [] },
+    { id: 'membership', title: '会员专区', products: [] },
+    { id: 'points', title: '积分专区', products: [] },
+    { id: 'decoration', title: '装扮专区', products: [] },
+  ];
+  const { FALLBACK_SECTIONS, fetchMallSections } = loadWithApi(
+    'src/services/api/mall.ts',
+    backend,
+  );
+
+  assert.deepEqual(
+    Array.from(FALLBACK_SECTIONS, (section) => section.id),
+    ['cards', 'fancy-number', 'decoration'],
+  );
+  assert.deepEqual(
+    Array.from(await fetchMallSections(), (section) => section.id),
+    ['cards', 'decoration'],
+  );
+});
+
 test('fetchMembershipPlans accepts the four-tier customer-service catalog', async () => {
   const backend = [
     {

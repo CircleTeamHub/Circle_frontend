@@ -37,15 +37,22 @@ test('Avatar reserves the scaled frame footprint so it does not overlap adjacent
   assert.doesNotMatch(src, /frameOffset/);
 });
 
-test('ProfileScreen and UserProfileScreen wear the membership frame', () => {
+test('ProfileScreen and UserProfileScreen wear the backend effective frame', () => {
   const own = read('src/features/profile/screens/ProfileScreen.tsx');
-  assert.match(own, /frameSource=\{getMembershipFrameAsset\(vipLevel\)/);
+  assert.match(
+    own,
+    /frameSource=\{getAvatarFrameSource\(user\?\.avatarFrameAppearance\) \?\? undefined\}/,
+  );
+  assert.doesNotMatch(own, /getMembershipFrameAsset/);
 
   const other = read('src/features/user/screens/UserProfileScreen.tsx');
-  // 他人资料页直接使用公开 profile.vipLevel,并用框素材替代默认描边。
-  assert.match(other, /profile\.vipLevel \?\? 0/);
+  // 他人资料页直接使用公开 profile.avatarFrameAppearance,不从 VIP 派生。
   assert.doesNotMatch(other, /useUserVipLevel\(/);
-  assert.match(other, /getMembershipFrameAsset\(profileVipLevel\)/);
+  assert.match(
+    other,
+    /getAvatarFrameSource\(profile\.avatarFrameAppearance\)/,
+  );
+  assert.doesNotMatch(other, /getMembershipFrameAsset/);
   assert.match(other, /membershipFrameOverlay/);
   assert.match(other, /avatarRingFramed/);
 });

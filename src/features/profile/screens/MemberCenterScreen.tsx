@@ -556,7 +556,7 @@ export default function MemberCenterScreen() {
             </Text>
             <Text style={d.marketingText}>
               {t('profile.membership.marketing.groupQuota', {
-                defaultValue: '单群 400 人 · 最多加入 100 个群',
+                defaultValue: '单群 400 人 · 最多加入 300 个群',
               })}
             </Text>
             <Text style={d.marketingText}>

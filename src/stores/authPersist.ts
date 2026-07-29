@@ -16,6 +16,7 @@
  *   做的是「原样向前迁移」：保留 token / user，让会话平滑跨过版本号。
  */
 import type { AuthUser } from './authStore';
+import type { AvatarFrameAppearance } from '@/types';
 
 /** persist 实际落盘的字段子集（必须与 authStore 的 partialize 保持一致） */
 export interface PersistedAuthState {
@@ -27,7 +28,7 @@ export interface PersistedAuthState {
 }
 
 /** 当前持久化数据的版本号。改这个值时务必同步更新 migrateAuthPersist。 */
-export const AUTH_PERSIST_VERSION = 1;
+export const AUTH_PERSIST_VERSION = 2;
 
 /**
  * 把任意历史版本的持久化数据迁移到当前版本。
@@ -46,5 +47,32 @@ export function migrateAuthPersist(
   if (typeof persistedState !== 'object' || persistedState === null) {
     return {};
   }
-  return persistedState as Partial<PersistedAuthState>;
+  const state = persistedState as Partial<PersistedAuthState>;
+  if (!state.user || typeof state.user !== 'object') {
+    return state;
+  }
+  const rawUser = state.user as unknown as Record<string, unknown>;
+  const rawAppearance = rawUser.avatarFrameAppearance;
+  const appearanceRecord =
+    rawAppearance && typeof rawAppearance === 'object' && !Array.isArray(rawAppearance)
+      ? (rawAppearance as Record<string, unknown>)
+      : null;
+  const avatarFrameAppearance =
+    appearanceRecord &&
+    typeof appearanceRecord.id === 'string' &&
+    typeof appearanceRecord.key === 'string' &&
+    typeof appearanceRecord.name === 'string' &&
+    (appearanceRecord.imageUrl === null ||
+      typeof appearanceRecord.imageUrl === 'string')
+      ? (appearanceRecord as unknown as AvatarFrameAppearance)
+      : null;
+  return {
+    ...state,
+    user: {
+      ...rawUser,
+      avatarFrame:
+        typeof rawUser.avatarFrame === 'string' ? rawUser.avatarFrame : null,
+      avatarFrameAppearance,
+    } as AuthUser,
+  };
 }

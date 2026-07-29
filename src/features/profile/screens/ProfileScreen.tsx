@@ -14,13 +14,14 @@ import {
   getMembershipTierForVipLevel,
   type MembershipTier,
 } from "@/features/profile/membership-plans";
-import { getMembershipFrameAsset } from "@/features/profile/membership-frames";
+import { getAvatarFrameSource } from "@/features/profile/membership-frames";
 import { getUserProfileHref } from "@/features/user/utils/routes";
 import { fetchCurrentUser } from "@/services/api/auth";
 import { fetchIconOptions } from "@/services/api/icons";
 import { Gradients, Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { DisplayIcon, MenuItem } from "@/types";
 import { useAuthStore } from "@/stores/authStore";
+import { useTabBadgeStore } from "@/stores/tabBadgeStore";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -159,6 +160,7 @@ export default function ProfileScreen() {
   const { t } = useTranslation();
   const user = useAuthStore((state) => state.user);
   const setUser = useAuthStore((state) => state.setUser);
+  const profileUnread = useTabBadgeStore((state) => state.profileUnread);
   const [profileDisplayIcons, setProfileDisplayIcons] = useState<DisplayIcon[]>(
     user?.displayIcons ?? [],
   );
@@ -221,8 +223,13 @@ export default function ProfileScreen() {
   );
 
   const isDark = resolvedMode === "dark";
-  const displayName = user?.nickname || user?.accountId || t('profile.notLoggedIn');
-  const displayAccount = user?.accountId || t('profile.notBound');
+  const displayAccountId =
+    user?.fancyNumber && user.accountId
+      ? user.accountId.toUpperCase()
+      : user?.accountId;
+  const displayName =
+    user?.nickname || displayAccountId || t('profile.notLoggedIn');
+  const displayAccount = displayAccountId || t('profile.notBound');
   const vipLevel = user?.vipLevel ?? 0;
   const membershipTier = getMembershipTierForVipLevel(vipLevel);
   const membershipLabel = membershipTier
@@ -323,8 +330,8 @@ export default function ProfileScreen() {
     router.push("/(tabs)/profile/credit-score" as never);
   }, [router]);
 
-  const handleOpenIcons = useCallback(() => {
-    router.push('/(tabs)/profile/icons' as never);
+  const handleOpenDecorations = useCallback(() => {
+    router.push('/(tabs)/profile/decorations' as never);
   }, [router]);
 
   const handleMenuPress = useCallback(
@@ -344,12 +351,15 @@ export default function ProfileScreen() {
           icon={item.icon as keyof typeof Ionicons.glyphMap}
           label={item.label}
           rightText={item.rightText}
+          showIndicatorDot={
+            item.id === MENU_ID.SYSTEM_ANNOUNCEMENTS && profileUnread > 0
+          }
           onPress={() => handleMenuPress(item)}
         />
         {index < MENU_ITEMS.length - 1 ? <Divider /> : null}
       </View>
     ),
-    [handleMenuPress, MENU_ITEMS.length],
+    [handleMenuPress, MENU_ITEMS.length, profileUnread],
   );
 
   const keyExtractor = useCallback((item: MenuItem) => item.id, []);
@@ -371,7 +381,8 @@ export default function ProfileScreen() {
               name={displayName}
               uri={user?.avatarUrl ?? undefined}
               bgColor={colors.surface}
-              frameSource={getMembershipFrameAsset(vipLevel) ?? undefined}
+              compactFrame
+              frameSource={getAvatarFrameSource(user?.avatarFrameAppearance) ?? undefined}
             />
           </Pressable>
           <View style={s.profileInfo}>
@@ -441,11 +452,17 @@ export default function ProfileScreen() {
             <Text style={[d.memberStatValue, { color: creditStatTextColor }]}>{creditScore}</Text>
           </Pressable>
         </View>
-        <Pressable style={s.memberCardHeader} onPress={handleOpenIcons}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('profile.myDecorations')}
+          accessibilityHint={t('profile.decorations.openHint')}
+          style={s.memberCardHeader}
+          onPress={handleOpenDecorations}
+        >
           <View style={s.memberHeaderLeft}>
             <Ionicons name="sparkles" size={15} color={colors.white} />
             <Text style={d.memberCardAction}>
-              {t('profile.myIcons', { defaultValue: '我的徽章' })}
+              {t('profile.myDecorations', { defaultValue: '我的装扮' })}
             </Text>
           </View>
           <Ionicons
@@ -454,7 +471,13 @@ export default function ProfileScreen() {
             color="rgba(255, 255, 255, 0.85)"
           />
         </Pressable>
-        <Pressable style={s.memberIdentityRow} onPress={handleOpenIcons}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('profile.myDecorations')}
+          accessibilityHint={t('profile.decorations.openHint')}
+          style={s.memberIdentityRow}
+          onPress={handleOpenDecorations}
+        >
           {displayIcons.length > 0 ? (
             <View style={s.memberIdentityItem}>
               <UserIconRow icons={displayIcons} tone="member" />

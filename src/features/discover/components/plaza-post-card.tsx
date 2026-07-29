@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
 import { MemberName } from '@/components/ui/member-name';
-import { getMembershipFrameAsset } from '@/features/profile/membership-frames';
+import { getAvatarFrameSource } from '@/features/profile/membership-frames';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { getUserProfileHref } from '@/features/user/utils/routes';
@@ -448,7 +448,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
             size={40}
             name={post.author.nickname}
             uri={post.author.avatarUrl ?? undefined}
-            frameSource={getMembershipFrameAsset(post.author.vipLevel) ?? undefined}
+            frameSource={getAvatarFrameSource(post.author.avatarFrameAppearance) ?? undefined}
             compactFrame
           />
         </Pressable>

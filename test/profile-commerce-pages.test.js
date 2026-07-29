@@ -98,9 +98,85 @@ test('profile commerce routes export their screens', () => {
   assert.match(read('app/(tabs)/profile/credit-score.tsx'), /CreditScoreScreen/);
   assert.match(read('app/(tabs)/profile/wallet.tsx'), /WalletScreen/);
   assert.match(read('app/(tabs)/profile/mall.tsx'), /MallScreen/);
+  assert.match(read('app/(tabs)/profile/fancy-number.tsx'), /FancyNumberScreen/);
+  assert.match(read('app/(tabs)/profile/group-expansion.tsx'), /GroupExpansionScreen/);
   assert.match(read('app/(tabs)/profile/collections.tsx'), /CollectionsScreen/);
   assert.match(read('app/(tabs)/profile/customer-service.tsx'), /CustomerServiceScreen/);
   assert.match(read('app/(tabs)/profile/app-settings.tsx'), /AppSettingsScreen/);
+});
+
+test('MallScreen routes fancy-number purchase and renewal actions', () => {
+  const src = read('src/features/profile/screens/MallScreen.tsx');
+
+  assert.match(src, /product\.action === 'fancy-number'[\s\S]*?profile\/fancy-number/);
+  assert.match(src, /product\.action === 'fancy-number-renew'[\s\S]*?mode:\s*'renew'/);
+  assert.match(src, /product\.action === 'group-expansion'[\s\S]*?profile\/group-expansion/);
+});
+
+test('GroupExpansionScreen loads owner circles and supports idempotent point purchases', () => {
+  const src = read('src/features/profile/screens/GroupExpansionScreen.tsx');
+
+  assert.match(src, /fetchMyCircles\(['"]created['"]\)/);
+  assert.match(src, /fetchGroupExpansionProducts/);
+  assert.match(src, /purchaseGroupExpansion/);
+  assert.match(src, /generateIdempotencyKey/);
+  assert.match(src, /setRealtimeBalance/);
+  assert.match(src, /product\.purchasable/);
+  assert.match(src, /isOffline/);
+  assert.match(src, /GroupExpansionCirclePickerSheet/);
+  assert.match(src, /setCirclePickerVisible\(true\)/);
+  assert.match(src, /selectedCircle\.memberCount/);
+  assert.doesNotMatch(src, /circles\.map/);
+});
+
+test('group expansion circle picker uses a searchable virtualized bottom-sheet list', () => {
+  const rel =
+    'src/features/profile/components/group-expansion-circle-picker-sheet.tsx';
+
+  assert.ok(
+    fs.existsSync(path.join(__dirname, '..', rel)),
+    'group expansion circle picker sheet should exist',
+  );
+  const src = read(rel);
+
+  assert.match(src, /BottomSheetModal/);
+  assert.match(src, /FlatList/);
+  assert.match(src, /TextInput/);
+  assert.match(src, /circle\.name\.toLocaleLowerCase/);
+  assert.match(src, /keyboardShouldPersistTaps=["']handled["']/);
+  assert.match(src, /height:\s*['"]90%['"]/);
+  assert.doesNotMatch(src, /maxHeight:\s*['"]82%['"]/);
+  assert.match(src, /onSelect\(item\.id\)/);
+  assert.match(src, /onClose\(\)/);
+});
+
+test('FancyNumberScreen supports listing, purchase, renewal, permanent switching, and account refresh', () => {
+  const src = read('src/features/profile/screens/FancyNumberScreen.tsx');
+
+  assert.match(src, /fetchFancyNumbers/);
+  assert.match(src, /fetchMyFancyNumber/);
+  assert.match(src, /renewFancyNumber/);
+  assert.match(src, /checkFancyNumberAvailability/);
+  assert.match(src, /purchaseCustomFancyNumber/);
+  assert.match(src, /switchPermanentToCustomFancyNumber/);
+  assert.match(src, /TextInput/);
+  assert.match(src, /setTimeout/);
+  assert.match(src, /350/);
+  assert.match(src, /mine\?\.permanent/);
+  assert.match(src, /confirmSwitch/);
+  assert.match(src, /generateIdempotencyKey/);
+  assert.match(src, /setRealtimeBalance/);
+  assert.match(src, /fetchCurrentUser/);
+  assert.match(src, /purchaseMode === ["']PERMANENT_FREE["']/);
+});
+
+test('ProfileScreen shows a red dot on system announcements when profile notifications are unread', () => {
+  const src = read('src/features/profile/screens/ProfileScreen.tsx');
+
+  assert.match(src, /useTabBadgeStore/);
+  assert.match(src, /profileUnread/);
+  assert.match(src, /item\.id === MENU_ID\.SYSTEM_ANNOUNCEMENTS/);
+  assert.match(src, /showIndicatorDot=\{/);
 });
 
 test('MemberCenterScreen renders the four-tier catalog without legacy commerce APIs', () => {
@@ -317,7 +393,7 @@ test('WalletScreen shows the balance without an unsupported recharge action', ()
   assert.doesNotMatch(src, /帮积分/);
 });
 
-test('MallScreen shows requested product areas', () => {
+test('MallScreen shows the remaining product areas without membership or points sections', () => {
   const src = read('src/features/profile/screens/MallScreen.tsx');
   const api = read('src/services/api/mall.ts');
   // Backend sends title/name; the api module maps id → i18n key and keeps the backend
@@ -328,8 +404,19 @@ test('MallScreen shows requested product areas', () => {
   assert.match(api, /\/mall\/sections/);
   assert.match(zh, /群扩容/);
   assert.match(zh, /靓号/);
-  assert.match(zh, /会员充值/);
-  assert.match(zh, /积分充值/);
+  assert.match(zh, /装扮专区/);
+  assert.doesNotMatch(api, /defaultTitle: '会员专区'/);
+  assert.doesNotMatch(api, /defaultTitle: '积分专区'/);
+});
+
+test('MallScreen uses 商城 as the page title', () => {
+  const src = read('src/features/profile/screens/MallScreen.tsx');
+  const zh = read('src/i18n/locales/zh.json');
+
+  assert.match(src, /profile\.mall\.title[\s\S]*?defaultValue: '商城'/);
+  assert.match(zh, /"mall":\s*\{[\s\S]*?"title": "商城"/);
+  assert.doesNotMatch(src, /管家商城/);
+  assert.doesNotMatch(zh, /管家商城/);
 });
 
 test('CollectionsScreen shows collectible content types', () => {

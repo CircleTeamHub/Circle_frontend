@@ -10,6 +10,7 @@ const fullUser: AuthUser = {
   nickname: 'Alice',
   avatarUrl: 'https://example.com/a.png',
   avatarFrame: null,
+  avatarFrameAppearance: null,
   cover: null,
   email: 'alice@example.com',
   phoneNumber: '13800000000',

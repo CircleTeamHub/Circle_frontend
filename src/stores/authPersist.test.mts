@@ -23,7 +23,12 @@ test('carries a v0 (pre-version) session forward instead of dropping it', () => 
   assert.equal(migrated.refreshToken, 'refresh-def');
   assert.equal(migrated.imToken, 'im-ghi');
   assert.equal(migrated.isAuthenticated, true);
-  assert.deepEqual(migrated.user, { id: 'u1', nickname: 'tester' });
+  assert.deepEqual(migrated.user, {
+    id: 'u1',
+    nickname: 'tester',
+    avatarFrame: null,
+    avatarFrameAppearance: null,
+  });
 });
 
 test('returns an empty object for corrupted (non-object) persisted state', () => {
@@ -31,4 +36,20 @@ test('returns an empty object for corrupted (non-object) persisted state', () =>
   assert.deepEqual(migrateAuthPersist(null, 0), {});
   assert.deepEqual(migrateAuthPersist('garbage', 0), {});
   assert.deepEqual(migrateAuthPersist(42, 0), {});
+});
+
+test('hydrates older users with explicit null avatar frame fields', () => {
+  const migrated = migrateAuthPersist(
+    {
+      accessToken: 'access-abc',
+      refreshToken: 'refresh-def',
+      imToken: 'im-ghi',
+      user: { id: 'u1', nickname: 'tester' },
+      isAuthenticated: true,
+    },
+    1,
+  );
+
+  assert.equal(migrated.user?.avatarFrame, null);
+  assert.equal(migrated.user?.avatarFrameAppearance, null);
 });

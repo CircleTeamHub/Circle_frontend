@@ -1,5 +1,10 @@
 import { apiClient } from '@/services/api/client';
-import { fetchCountEndpoint, normalizeMediaUrl } from '@/services/api/utils';
+import {
+  fetchCountEndpoint,
+  normalizeAvatarFrameAppearance,
+  normalizeMediaUrl,
+} from '@/services/api/utils';
+import type { AvatarFrameAppearance } from '@/types';
 
 export type FriendProfile = {
   id: string;
@@ -7,6 +12,7 @@ export type FriendProfile = {
   nickname: string;
   avatarUrl: string | null;
   avatarFrame: string | null;
+  avatarFrameAppearance: AvatarFrameAppearance | null;
   gender: string;
   lastOnline: string | null;
   friendsSince: string;
@@ -61,6 +67,7 @@ export type FriendActivityCounterparty = {
   accountId: string;
   nickname: string;
   avatarUrl: string | null;
+  avatarFrameAppearance: AvatarFrameAppearance | null;
 };
 
 export type FriendActivity = {
@@ -72,6 +79,15 @@ export type FriendActivity = {
   readAt: string | null;
   createdAt: string;
   counterparty: FriendActivityCounterparty;
+};
+
+type BackendFriendActivity = Omit<FriendActivity, 'counterparty'> & {
+  counterparty: Omit<
+    FriendActivityCounterparty,
+    'avatarFrameAppearance'
+  > & {
+    avatarFrameAppearance?: AvatarFrameAppearance | null;
+  };
 };
 
 export type BlockedUser = FriendActivityCounterparty & {
@@ -103,22 +119,83 @@ type CreateFriendRequestBody = {
   permission?: FriendPermission;
 };
 
-function normalizeFriendProfile(friend: FriendProfile): FriendProfile {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
+}
+
+function normalizeNullableString(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
+}
+
+function normalizeFriendProfile(friend: unknown): FriendProfile | null {
+  if (!isRecord(friend)) {
+    return null;
+  }
+
+  const id = stringValue(friend.id)?.trim();
+  const accountId = stringValue(friend.accountId)?.trim();
+  if (!id || !accountId) {
+    return null;
+  }
+
+  const nickname = stringValue(friend.nickname)?.trim() || accountId;
+
   return {
-    ...friend,
-    avatarUrl: normalizeMediaUrl(friend.avatarUrl),
-    avatarFrame: normalizeMediaUrl(friend.avatarFrame),
+    id,
+    accountId,
+    nickname,
+    avatarUrl: normalizeMediaUrl(normalizeNullableString(friend.avatarUrl)),
+    avatarFrame: normalizeMediaUrl(normalizeNullableString(friend.avatarFrame)),
+    avatarFrameAppearance: normalizeAvatarFrameAppearance(
+      friend.avatarFrameAppearance,
+    ),
+    gender: stringValue(friend.gender) ?? '',
+    lastOnline: normalizeNullableString(friend.lastOnline),
+    friendsSince: stringValue(friend.friendsSince) ?? '',
     // 兼容尚未部署新后端的响应：缺 remark 时归一为 null。
-    remark: friend.remark ?? null,
+    remark: normalizeNullableString(friend.remark),
   };
 }
 
-function normalizeFriendActivity(activity: FriendActivity): FriendActivity {
+function compareFriendFreshness(left: FriendProfile, right: FriendProfile) {
+  return (
+    Date.parse(right.friendsSince || '') - Date.parse(left.friendsSince || '')
+  );
+}
+
+function normalizeFriendProfiles(friends: unknown[]): FriendProfile[] {
+  const byId = new Map<string, FriendProfile>();
+
+  for (const friend of friends) {
+    const normalized = normalizeFriendProfile(friend);
+    if (!normalized) {
+      continue;
+    }
+
+    const previous = byId.get(normalized.id);
+    if (!previous || compareFriendFreshness(previous, normalized) > 0) {
+      byId.set(normalized.id, normalized);
+    }
+  }
+
+  return Array.from(byId.values());
+}
+
+function normalizeFriendActivity(
+  activity: BackendFriendActivity,
+): FriendActivity {
   return {
     ...activity,
     counterparty: {
       ...activity.counterparty,
       avatarUrl: normalizeMediaUrl(activity.counterparty.avatarUrl),
+      avatarFrameAppearance: normalizeAvatarFrameAppearance(
+        activity.counterparty.avatarFrameAppearance,
+      ),
     },
   };
 }
@@ -155,8 +232,8 @@ function buildCreateFriendRequestBody(
 }
 
 export async function fetchFriends() {
-  const friends = await apiClient<FriendProfile[]>('/friend');
-  return friends.map(normalizeFriendProfile);
+  const friends = await apiClient<unknown[]>('/friend');
+  return normalizeFriendProfiles(friends);
 }
 
 export async function fetchFriendTags() {
@@ -174,8 +251,8 @@ export async function createFriendTag(name: string, color?: string | null) {
 }
 
 export async function fetchFriendsByTag(tagId: string) {
-  const friends = await apiClient<FriendProfile[]>(`/friend/tags/${tagId}/friends`);
-  return friends.map(normalizeFriendProfile);
+  const friends = await apiClient<unknown[]>(`/friend/tags/${tagId}/friends`);
+  return normalizeFriendProfiles(friends);
 }
 
 export async function fetchFriendStatus(targetId: string) {
@@ -269,7 +346,8 @@ export async function createFriendRequest(
 }
 
 export async function fetchFriendActivities() {
-  const activities = await apiClient<FriendActivity[]>('/friend/activities');
+  const activities =
+    await apiClient<BackendFriendActivity[]>('/friend/activities');
   return activities.map(normalizeFriendActivity);
 }
 
@@ -278,7 +356,7 @@ export async function fetchUnreadFriendActivityCount() {
 }
 
 export async function fetchFriendActivityDetail(activityId: string) {
-  const activity = await apiClient<FriendActivity>(
+  const activity = await apiClient<BackendFriendActivity>(
     `/friend/activities/${activityId}`,
   );
   return normalizeFriendActivity(activity);

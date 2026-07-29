@@ -1,12 +1,17 @@
 import { apiClient } from '@/services/api/client';
-import { normalizeMediaUrl } from '@/services/api/utils';
+import {
+  normalizeAvatarFrameAppearance,
+  normalizeMediaUrl,
+} from '@/services/api/utils';
+import type { AvatarFrameAppearance } from '@/types';
 
 export type PublicUser = {
   id: string;
   accountId: string;
   nickname: string | null;
   avatarUrl: string | null;
-  avatarFrame?: string | null;
+  avatarFrame: string | null;
+  avatarFrameAppearance: AvatarFrameAppearance | null;
   cover?: string | null;
   email?: string | null;
   phoneNumber?: string | null;
@@ -28,11 +33,22 @@ export type PublicUser = {
   updatedAt?: string;
 };
 
-function normalizePublicUser(user: PublicUser): PublicUser {
+type BackendPublicUser = Omit<
+  PublicUser,
+  'avatarFrame' | 'avatarFrameAppearance'
+> & {
+  avatarFrame?: string | null;
+  avatarFrameAppearance?: AvatarFrameAppearance | null;
+};
+
+function normalizePublicUser(user: BackendPublicUser): PublicUser {
   return {
     ...user,
     avatarUrl: normalizeMediaUrl(user.avatarUrl),
     avatarFrame: normalizeMediaUrl(user.avatarFrame),
+    avatarFrameAppearance: normalizeAvatarFrameAppearance(
+      user.avatarFrameAppearance,
+    ),
     cover: normalizeMediaUrl(user.cover),
   };
 }
@@ -99,7 +115,7 @@ export async function searchUsersByAccountId(accountId: string) {
     return null;
   }
 
-  const user = await apiClient<PublicUser | null>(
+  const user = await apiClient<BackendPublicUser | null>(
     `/user/search/account?accountId=${encodeURIComponent(keyword)}`,
   );
 

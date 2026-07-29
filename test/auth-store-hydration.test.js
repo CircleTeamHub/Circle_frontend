@@ -146,6 +146,7 @@ test('authStore advances sessionEpoch on session identity changes', () => {
     nickname: 'Alice',
     avatarUrl: null,
     avatarFrame: null,
+    avatarFrameAppearance: null,
     cover: null,
     email: null,
     phoneNumber: null,
