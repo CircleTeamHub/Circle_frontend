@@ -92,6 +92,10 @@ export default function MallScreen() {
   }, [t]);
 
   function handleProductPress(product: MallProduct) {
+    if (product.action === 'avatar-frame') {
+      router.push('/(tabs)/profile/avatar-frames' as never);
+      return;
+    }
     if (product.action === 'fancy-number') {
       router.push('/(tabs)/profile/fancy-number' as never);
       return;

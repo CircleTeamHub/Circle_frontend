@@ -21,6 +21,26 @@ function apiUtilsShim() {
     normalizeMediaUrl: (value) =>
       typeof value === 'string' ? `media:${value}` : value ?? null,
     normalizeAvatarFrameAppearance,
+    normalizeUserAvatarFrameAppearance: (value, vipLevel) => {
+      if (value !== undefined) return normalizeAvatarFrameAppearance(value);
+      if (vipLevel === 3) {
+        return {
+          id: 'legacy-membership-diamond',
+          key: 'membership-diamond',
+          name: 'Diamond membership frame',
+          imageUrl: null,
+        };
+      }
+      if (typeof vipLevel === 'number' && vipLevel >= 4) {
+        return {
+          id: 'legacy-membership-super',
+          key: 'membership-super',
+          name: 'Super membership frame',
+          imageUrl: null,
+        };
+      }
+      return null;
+    },
   };
 }
 
@@ -146,6 +166,58 @@ test('plaza feed author preserves normalized avatarFrameAppearance', async () =>
     result.author.avatarFrameAppearance.imageUrl,
     `frame:${rawFrame.imageUrl}`,
   );
+});
+
+test('legacy author payloads fall back to membership frames but explicit null stays unequipped', async () => {
+  const responses = [
+    {
+      id: 'moment-legacy',
+      content: '',
+      images: [],
+      author: {
+        id: 'user-legacy',
+        nickname: 'Legacy Diamond',
+        avatarUrl: null,
+        vipLevel: 3,
+      },
+      comments: [],
+    },
+    {
+      id: 'moment-unequipped',
+      content: '',
+      images: [],
+      author: {
+        id: 'user-unequipped',
+        nickname: 'Unequipped Super',
+        avatarUrl: null,
+        vipLevel: 4,
+        avatarFrameAppearance: null,
+      },
+      comments: [],
+    },
+  ];
+  const moments = loadTsModule('src/services/api/moments.ts', {
+    requireShim: (request) => {
+      if (request === '@/services/api/client') {
+        return {
+          apiClient: async () => ({
+            items: responses,
+            nextCursor: null,
+          }),
+        };
+      }
+      if (request === '@/services/api/utils') return apiUtilsShim();
+      throw new Error(`Unexpected import: ${request}`);
+    },
+  });
+
+  const result = await moments.fetchMomentsFeed();
+
+  assert.equal(
+    result.items[0].author.avatarFrameAppearance.key,
+    'membership-diamond',
+  );
+  assert.equal(result.items[1].author.avatarFrameAppearance, null);
 });
 
 test('normalized app-facing user and feed types require explicit frame appearance nullability', () => {

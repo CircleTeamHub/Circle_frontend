@@ -1,7 +1,7 @@
 import { apiClient } from '@/services/api/client';
 import {
   buildQuery,
-  normalizeAvatarFrameAppearance,
+  normalizeUserAvatarFrameAppearance,
   normalizeMediaUrl,
 } from '@/services/api/utils';
 import type {
@@ -41,8 +41,9 @@ function normalizeMoment(post: BackendMomentPost): MomentPost {
       avatarUrl: post.author.avatarUrl
         ? normalizeMediaUrl(post.author.avatarUrl)
         : null,
-      avatarFrameAppearance: normalizeAvatarFrameAppearance(
+      avatarFrameAppearance: normalizeUserAvatarFrameAppearance(
         post.author.avatarFrameAppearance,
+        post.author.vipLevel,
       ),
     },
     comments: post.comments.map(normalizeMomentComment),

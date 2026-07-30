@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
+import { RetryIntentKeyStore } from '@/features/profile/retry-intent-key';
 import { useNetworkStatus } from '@/hooks/use-network-status';
 import { fetchCurrentUser } from '@/services/api/auth';
 import { getApiErrorMessage } from '@/services/api/errors';
@@ -200,7 +201,12 @@ export default function FancyNumberScreen() {
   const focusGenerationRef = useRef(0);
   const catalogCursorRef = useRef<string | null>(null);
   const availabilityGenerationRef = useRef(0);
-  const pendingIntentRef = useRef<{ signature: string; key: string } | null>(null);
+  const pendingIntentRef = useRef<RetryIntentKeyStore | null>(null);
+  if (!pendingIntentRef.current) {
+    pendingIntentRef.current = new RetryIntentKeyStore(
+      generateIdempotencyKey,
+    );
+  }
 
   const loadInitial = useCallback(
     async (
@@ -248,7 +254,6 @@ export default function FancyNumberScreen() {
   useEffect(() => {
     const generation = availabilityGenerationRef.current + 1;
     availabilityGenerationRef.current = generation;
-    pendingIntentRef.current = null;
 
     if (!customValue) {
       setAvailability({ status: 'idle' });
@@ -340,12 +345,7 @@ export default function FancyNumberScreen() {
   }, []);
 
   const intentKey = useCallback((signature: string) => {
-    if (pendingIntentRef.current?.signature === signature) {
-      return pendingIntentRef.current.key;
-    }
-    const key = generateIdempotencyKey();
-    pendingIntentRef.current = { signature, key };
-    return key;
+    return pendingIntentRef.current!.get(signature);
   }, []);
 
   const finishPurchase = useCallback(
@@ -357,7 +357,7 @@ export default function FancyNumberScreen() {
       previousAccountId?: string | null,
     ) => {
       if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
-      pendingIntentRef.current = null;
+      pendingIntentRef.current!.complete();
       useWalletRealtimeStore
         .getState()
         .setRealtimeBalanceIfVersion(
@@ -411,9 +411,10 @@ export default function FancyNumberScreen() {
     const isPermanent = catalog.purchaseMode === 'PERMANENT_FREE';
     const owner = captureAuthSessionIdentity(useAuthStore.getState());
     if (!owner) return;
+    const sessionIntent = `${owner.sessionEpoch}:${owner.userId}`;
     const signature = selectedRecommendation?.id
-      ? `catalog-purchase:${selectedRecommendation.id}:${isPermanent ? 'permanent' : months}`
-      : `custom-purchase:${customValue}:${isPermanent ? 'permanent' : months}`;
+      ? `${sessionIntent}:catalog-purchase:${selectedRecommendation.id}:${isPermanent ? 'permanent' : months}`
+      : `${sessionIntent}:custom-purchase:${customValue}:${isPermanent ? 'permanent' : months}`;
     const walletVersion = useWalletRealtimeStore.getState().version;
     setSubmitting(true);
     try {
@@ -513,7 +514,7 @@ export default function FancyNumberScreen() {
     if (!mine?.renewable || submitting) return;
     const owner = captureAuthSessionIdentity(useAuthStore.getState());
     if (!owner) return;
-    const signature = `renew:${mine.accountId}:${months}`;
+    const signature = `${owner.sessionEpoch}:${owner.userId}:renew:${mine.accountId}:${mine.expiresAt}:${months}`;
     const walletVersion = useWalletRealtimeStore.getState().version;
     setSubmitting(true);
     try {
@@ -577,9 +578,10 @@ export default function FancyNumberScreen() {
     const previousAccountId = mine.accountId;
     const owner = captureAuthSessionIdentity(useAuthStore.getState());
     if (!owner) return;
+    const sessionIntent = `${owner.sessionEpoch}:${owner.userId}`;
     const signature = selectedRecommendation?.id
-      ? `catalog-switch:${previousAccountId}:${selectedRecommendation.id}`
-      : `custom-switch:${previousAccountId}:${customValue}`;
+      ? `${sessionIntent}:catalog-switch:${previousAccountId}:${selectedRecommendation.id}`
+      : `${sessionIntent}:custom-switch:${previousAccountId}:${customValue}`;
     const walletVersion = useWalletRealtimeStore.getState().version;
     setSubmitting(true);
     try {

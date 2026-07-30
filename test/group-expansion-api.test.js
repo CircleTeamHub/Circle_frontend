@@ -155,6 +155,24 @@ test('group-expansion catalog rejects contradictory product availability', async
         resultingMaxMembers: productResponse.hardLimit + 1,
       },
     ],
+    [
+      'unavailable product with the wrong resulting capacity',
+      {
+        ...productResponse.products[0],
+        purchasable: false,
+        unavailableReason: 'MAX_CAPACITY_EXCEEDED',
+        resultingMaxMembers: 250,
+      },
+    ],
+    [
+      'unavailable product that does not exceed the hard limit',
+      {
+        ...productResponse.products[0],
+        purchasable: false,
+        unavailableReason: 'MAX_CAPACITY_EXCEEDED',
+        resultingMaxMembers: 200,
+      },
+    ],
   ]) {
     await t.test(name, async () => {
       const api = loadGroupExpansionModule(async () => ({

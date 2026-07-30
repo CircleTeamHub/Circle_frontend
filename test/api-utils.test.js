@@ -180,6 +180,35 @@ test('embedded avatar frame appearance safely becomes null when absent or malfor
   );
 });
 
+test('legacy membership frame fallback applies only when the field is absent', () => {
+  const { normalizeUserAvatarFrameAppearance } = loadApiUtils();
+
+  assert.deepEqual(
+    JSON.parse(
+      JSON.stringify(normalizeUserAvatarFrameAppearance(undefined, 3)),
+    ),
+    {
+      id: 'legacy-membership-diamond',
+      key: 'membership-diamond',
+      name: 'Diamond membership frame',
+      imageUrl: null,
+    },
+  );
+  assert.deepEqual(
+    JSON.parse(
+      JSON.stringify(normalizeUserAvatarFrameAppearance(undefined, 4)),
+    ),
+    {
+      id: 'legacy-membership-super',
+      key: 'membership-super',
+      name: 'Super membership frame',
+      imageUrl: null,
+    },
+  );
+  assert.equal(normalizeUserAvatarFrameAppearance(null, 4), null);
+  assert.equal(normalizeUserAvatarFrameAppearance(undefined, 2), null);
+});
+
 test('normalizeMediaUrl rewrites localhost media host without clobbering service port', () => {
   const { normalizeMediaUrl } = loadApiUtils();
 

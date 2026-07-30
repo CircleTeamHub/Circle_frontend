@@ -1,6 +1,6 @@
 import { apiClient } from '@/services/api/client';
 import {
-  normalizeAvatarFrameAppearance,
+  normalizeUserAvatarFrameAppearance,
   normalizeMediaUrl,
 } from '@/services/api/utils';
 import type { AvatarFrameAppearance } from '@/types';
@@ -46,8 +46,9 @@ function normalizePublicUser(user: BackendPublicUser): PublicUser {
     ...user,
     avatarUrl: normalizeMediaUrl(user.avatarUrl),
     avatarFrame: normalizeMediaUrl(user.avatarFrame),
-    avatarFrameAppearance: normalizeAvatarFrameAppearance(
+    avatarFrameAppearance: normalizeUserAvatarFrameAppearance(
       user.avatarFrameAppearance,
+      user.vipLevel,
     ),
     cover: normalizeMediaUrl(user.cover),
   };

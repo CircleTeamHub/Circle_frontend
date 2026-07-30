@@ -113,6 +113,7 @@ test('pickExactAccountMatch prefers case-insensitive exact account matches over 
     '@/services/api/client': { apiClient: async () => [] },
     '@/services/api/utils': {
       normalizeAvatarFrameAppearance: (value) => value ?? null,
+      normalizeUserAvatarFrameAppearance: (value) => value ?? null,
       normalizeUser: (value) => value,
     },
   });
@@ -143,6 +144,7 @@ test('searchUsersByAccountId calls the dedicated account search endpoint', async
     },
     '@/services/api/utils': {
       normalizeAvatarFrameAppearance: (value) => value ?? null,
+      normalizeUserAvatarFrameAppearance: (value) => value ?? null,
       normalizeMediaUrl: (value) => value,
     },
   });

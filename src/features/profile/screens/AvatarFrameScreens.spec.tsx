@@ -513,6 +513,54 @@ test('equip completion from an older login cannot mutate the same user after rel
   expect(mockRouter.back).not.toHaveBeenCalled();
 });
 
+test('an older equip completion cannot overwrite a newer detail operation', async () => {
+  const firstSave = deferred<AvatarFrameInventory>();
+  const secondSave = deferred<AvatarFrameInventory>();
+  const user = makeUser();
+  const setUser = setAuth(user);
+  mockFetchInventory.mockResolvedValue(makeInventory());
+  mockEquipFrame
+    .mockReturnValueOnce(firstSave.promise)
+    .mockReturnValueOnce(secondSave.promise);
+
+  mockRouteId = 'frame-a';
+  const firstView = render(<AvatarFrameDetailScreen />);
+  fireEvent.press(
+    await screen.findByLabelText('en:profile.avatarFrames.equip'),
+  );
+  firstView.unmount();
+
+  mockRouteId = 'frame-b';
+  render(<AvatarFrameDetailScreen />);
+  fireEvent.press(
+    await screen.findByLabelText('en:profile.avatarFrames.equip'),
+  );
+
+  await act(async () => {
+    secondSave.resolve(makeInventory('frame-b'));
+    await secondSave.promise;
+  });
+  await act(async () => {
+    firstSave.resolve(makeInventory('frame-a'));
+    await firstSave.promise;
+  });
+
+  const frameB = makeInventory('frame-b').items[1];
+  expect(setUser).toHaveBeenCalledTimes(1);
+  expect(setUser).toHaveBeenCalledWith({
+    ...user,
+    avatarFrame: frameB.imageUrl,
+    avatarFrameAppearance: {
+      id: frameB.id,
+      key: frameB.key,
+      name: frameB.name,
+      imageUrl: frameB.imageUrl,
+    },
+  });
+  expect(mockReconcileUserAppearance).toHaveBeenCalledTimes(1);
+  expect(mockKnownAccountUpsert).toHaveBeenCalledTimes(1);
+});
+
 test('locale rerender ignores the old detail load and applies the replacement result', async () => {
   const oldRequest = deferred<AvatarFrameInventory>();
   const newRequest = deferred<AvatarFrameInventory>();

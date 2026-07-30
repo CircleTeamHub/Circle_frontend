@@ -1,7 +1,7 @@
 import { apiClient } from '@/services/api/client';
 import {
   buildQuery,
-  normalizeAvatarFrameAppearance,
+  normalizeUserAvatarFrameAppearance,
   normalizeMediaUrl,
 } from '@/services/api/utils';
 import type {
@@ -54,8 +54,9 @@ function normalizePlazaPost(post: BackendCirclePlazaPost): CirclePlazaPost {
       avatarFrame: post.author.avatarFrame
         ? normalizeMediaUrl(post.author.avatarFrame)
         : null,
-      avatarFrameAppearance: normalizeAvatarFrameAppearance(
+      avatarFrameAppearance: normalizeUserAvatarFrameAppearance(
         post.author.avatarFrameAppearance,
+        post.author.vipLevel,
       ),
       displayIcons: normalizeDisplayIcons(post.author.displayIcons),
     },

@@ -163,6 +163,32 @@ export function normalizeAvatarFrameAppearance(
   };
 }
 
+export function normalizeUserAvatarFrameAppearance(
+  value: unknown,
+  vipLevel: number | null | undefined,
+): AvatarFrameAppearance | null {
+  if (value !== undefined) {
+    return normalizeAvatarFrameAppearance(value);
+  }
+  if (vipLevel === 3) {
+    return {
+      id: 'legacy-membership-diamond',
+      key: 'membership-diamond',
+      name: 'Diamond membership frame',
+      imageUrl: null,
+    };
+  }
+  if (typeof vipLevel === 'number' && vipLevel >= 4) {
+    return {
+      id: 'legacy-membership-super',
+      key: 'membership-super',
+      name: 'Super membership frame',
+      imageUrl: null,
+    };
+  }
+  return null;
+}
+
 /**
  * 将后端用户对象规范化为前端 AuthUser 格式。
  * uid 取 accountId（OpenIM 用户 ID）。
@@ -180,8 +206,9 @@ export function normalizeUser(user: BackendAuthUser): AuthUser {
     nickname: user.nickname,
     avatarUrl: normalizeMediaUrl(user.avatarUrl),
     avatarFrame: normalizeMediaUrl(user.avatarFrame),
-    avatarFrameAppearance: normalizeAvatarFrameAppearance(
+    avatarFrameAppearance: normalizeUserAvatarFrameAppearance(
       user.avatarFrameAppearance,
+      user.vipLevel,
     ),
     cover: normalizeMediaUrl(user.cover),
     email: user.email,

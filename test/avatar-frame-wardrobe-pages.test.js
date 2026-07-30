@@ -118,6 +118,16 @@ test('avatar-frame detail route supports none, unowned IDs, and guarded server-a
   assert.doesNotMatch(screen, /Dimensions/);
 });
 
+test('mall routes the avatar-frame product into the wardrobe', () => {
+  const screen = read('src/features/profile/screens/MallScreen.tsx');
+
+  assert.match(screen, /product\.action === ['"]avatar-frame['"]/);
+  assert.match(
+    screen,
+    /router\.push\(['"]\/\(tabs\)\/profile\/avatar-frames['"]/,
+  );
+});
+
 test('avatar-frame pages expose complete detail content and localize all five locales with parity', () => {
   const collection = read(
     'src/features/profile/screens/AvatarFramesScreen.tsx',

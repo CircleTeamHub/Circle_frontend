@@ -246,6 +246,24 @@ test('fancy-number API rejects malformed expiry timestamps', async () => {
   );
 });
 
+test('fancy-number API rejects a renewable permanent-number state', async () => {
+  const api = loadFancyNumberModule(async () => ({
+    active: true,
+    accountId: 'AB12C3',
+    restoreAccountId: 'USER01',
+    startedAt: '2026-07-29T00:00:00.000Z',
+    expiresAt: null,
+    permanent: true,
+    renewable: true,
+    unitPrice: 100,
+  }));
+
+  await assert.rejects(
+    api.fetchMyFancyNumber(),
+    /服务返回了无效数据/,
+  );
+});
+
 test('fancy-number API requires an expiry for a paid active lease', async () => {
   const api = loadFancyNumberModule(async () => ({
     ...purchaseResponse,

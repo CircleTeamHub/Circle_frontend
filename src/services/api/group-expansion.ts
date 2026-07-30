@@ -70,7 +70,9 @@ function isProduct(
       ? value.unavailableReason === null &&
         value.resultingMaxMembers === currentMaxMembers + value.seats &&
         value.resultingMaxMembers <= hardLimit
-      : value.unavailableReason === 'MAX_CAPACITY_EXCEEDED')
+      : value.unavailableReason === 'MAX_CAPACITY_EXCEEDED' &&
+        value.resultingMaxMembers === currentMaxMembers + value.seats &&
+        value.resultingMaxMembers > hardLimit)
   );
 }
 

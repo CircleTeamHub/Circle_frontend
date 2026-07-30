@@ -14,6 +14,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
+import {
+  beginAvatarFrameEquip,
+  isLatestAvatarFrameEquip,
+} from '@/features/profile/avatar-frame-equip-operation';
 import { getAvatarFrameSource } from '@/features/profile/membership-frames';
 import {
   equipAvatarFrame,
@@ -248,6 +252,7 @@ export default function AvatarFrameDetailScreen() {
     }
     const owner = captureAuthSessionIdentity(useAuthStore.getState());
     if (!owner) return;
+    const equipOperation = beginAvatarFrameEquip(owner);
     const targetFrameId = isNone || equipped ? null : item?.id ?? null;
 
     pendingRef.current = true;
@@ -255,7 +260,10 @@ export default function AvatarFrameDetailScreen() {
     setSaveError(null);
     try {
       const nextInventory = await equipAvatarFrame(targetFrameId);
-      if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) {
+      if (
+        !isAuthSessionIdentityCurrent(owner, useAuthStore.getState()) ||
+        !isLatestAvatarFrameEquip(equipOperation)
+      ) {
         return;
       }
       const nextEquippedItem = nextInventory.items.find(
@@ -297,14 +305,16 @@ export default function AvatarFrameDetailScreen() {
 
       if (
         mountedRef.current &&
-        isAuthSessionIdentityCurrent(owner, useAuthStore.getState())
+        isAuthSessionIdentityCurrent(owner, useAuthStore.getState()) &&
+        isLatestAvatarFrameEquip(equipOperation)
       ) {
         router.back();
       }
     } catch (error) {
       if (
         mountedRef.current &&
-        isAuthSessionIdentityCurrent(owner, useAuthStore.getState())
+        isAuthSessionIdentityCurrent(owner, useAuthStore.getState()) &&
+        isLatestAvatarFrameEquip(equipOperation)
       ) {
         setSaveError(
           getApiErrorMessage(

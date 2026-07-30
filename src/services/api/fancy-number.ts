@@ -98,6 +98,7 @@ function isMyFancyNumber(value: unknown): value is MyFancyNumber {
     typeof value.permanent === 'boolean' &&
     typeof value.renewable === 'boolean' &&
     isFiniteNonNegativeNumber(value.unitPrice) &&
+    (!value.permanent || value.renewable === false) &&
     (!value.active ||
       (isNonEmptyString(value.accountId) &&
         (value.permanent
