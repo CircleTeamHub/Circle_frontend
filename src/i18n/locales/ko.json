@@ -1794,6 +1794,8 @@
       "heroTitle": "그룹 인원 한도를 영구 확장",
       "heroSubtitle": "포인트로 즉시 인원을 추가할 수 있으며 여러 번 구매할 수 있습니다.",
       "walletBalance": "현재 포인트: {{balance}}",
+      "walletLoading": "포인트 잔액을 불러오는 중…",
+      "loadWalletError": "포인트 잔액을 불러오지 못했습니다. 다시 시도해 주세요.",
       "chooseCircle": "확장할 그룹 선택",
       "changeCircle": "그룹 변경",
       "searchCirclePlaceholder": "그룹 이름 검색",

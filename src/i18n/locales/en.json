@@ -1324,6 +1324,8 @@
       "heroTitle": "Permanently increase your group limit",
       "heroSubtitle": "Use points to add seats instantly. Purchases can be stacked.",
       "walletBalance": "Points balance: {{balance}}",
+      "walletLoading": "Loading points balance…",
+      "loadWalletError": "Failed to load the points balance. Please try again.",
       "chooseCircle": "Choose a group to expand",
       "changeCircle": "Change group",
       "searchCirclePlaceholder": "Search group names",

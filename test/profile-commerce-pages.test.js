@@ -157,9 +157,15 @@ test('GroupExpansionScreen loads owner circles and supports idempotent point pur
 
   assert.match(src, /fetchMyCircles\(['"]created['"]\)/);
   assert.match(src, /fetchGroupExpansionProducts/);
+  assert.match(src, /fetchWallet/);
   assert.match(src, /purchaseGroupExpansion/);
   assert.match(src, /generateIdempotencyKey/);
   assert.match(src, /setRealtimeBalance/);
+  assert.match(src, /setRealtimeBalanceIfVersion/);
+  assert.match(src, /isAuthSessionIdentityCurrent/);
+  assert.match(src, /wallet\.userID !== owner\.userId/);
+  assert.match(src, /walletLoading/);
+  assert.match(src, /walletError/);
   assert.match(src, /product\.purchasable/);
   assert.match(src, /isOffline/);
   assert.match(src, /GroupExpansionCirclePickerSheet/);

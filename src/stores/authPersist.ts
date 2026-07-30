@@ -52,12 +52,16 @@ export function migrateAuthPersist(
     return state;
   }
   const rawUser = state.user as unknown as Record<string, unknown>;
+  const hasAppearance = Object.prototype.hasOwnProperty.call(
+    rawUser,
+    'avatarFrameAppearance',
+  );
   const rawAppearance = rawUser.avatarFrameAppearance;
   const appearanceRecord =
     rawAppearance && typeof rawAppearance === 'object' && !Array.isArray(rawAppearance)
       ? (rawAppearance as Record<string, unknown>)
       : null;
-  const avatarFrameAppearance =
+  const parsedAppearance =
     appearanceRecord &&
     typeof appearanceRecord.id === 'string' &&
     typeof appearanceRecord.key === 'string' &&
@@ -66,6 +70,25 @@ export function migrateAuthPersist(
       typeof appearanceRecord.imageUrl === 'string')
       ? (appearanceRecord as unknown as AvatarFrameAppearance)
       : null;
+  const vipLevel =
+    typeof rawUser.vipLevel === 'number' ? rawUser.vipLevel : null;
+  const avatarFrameAppearance = hasAppearance
+    ? parsedAppearance
+    : vipLevel === 3
+      ? {
+          id: 'legacy-membership-diamond',
+          key: 'membership-diamond',
+          name: 'Diamond membership frame',
+          imageUrl: null,
+        }
+      : vipLevel !== null && vipLevel >= 4
+        ? {
+            id: 'legacy-membership-super',
+            key: 'membership-super',
+            name: 'Super membership frame',
+            imageUrl: null,
+          }
+        : null;
   return {
     ...state,
     user: {

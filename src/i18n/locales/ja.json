@@ -1794,6 +1794,8 @@
       "heroTitle": "グループ人数上限を永久に拡張",
       "heroSubtitle": "ポイントで枠をすぐに追加でき、複数回購入できます。",
       "walletBalance": "現在のポイント：{{balance}}",
+      "walletLoading": "ポイント残高を読み込み中…",
+      "loadWalletError": "ポイント残高を読み込めませんでした。もう一度お試しください。",
       "chooseCircle": "拡張するグループを選択",
       "changeCircle": "グループを変更",
       "searchCirclePlaceholder": "グループ名を検索",

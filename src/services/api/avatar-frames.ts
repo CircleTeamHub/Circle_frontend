@@ -215,6 +215,10 @@ function parseInventory(value: unknown): AvatarFrameInventory {
   const items = value.items.map((item, index) =>
     parseInventoryItem(item, endpoint, index),
   );
+  const itemIds = new Set(items.map((item) => item.id));
+  if (itemIds.size !== items.length) {
+    malformed(endpoint, 'items must have unique ids');
+  }
   const equippedItems = items.filter((item) => item.equipped);
   if (
     (equippedFrameId === null && equippedItems.length !== 0) ||

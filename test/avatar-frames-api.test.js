@@ -216,6 +216,21 @@ test('avatar-frame APIs reject malformed authoritative responses', async (t) => 
       },
       'inventory',
     ],
+    [
+      'duplicate inventory ids',
+      {
+        equippedFrameId: 'frame-diamond',
+        items: [
+          inventoryResponse.items[0],
+          {
+            ...inventoryResponse.items[0],
+            key: 'duplicate-frame',
+            equipped: false,
+          },
+        ],
+      },
+      'inventory',
+    ],
   ];
 
   for (const [name, response, kind] of malformedCases) {

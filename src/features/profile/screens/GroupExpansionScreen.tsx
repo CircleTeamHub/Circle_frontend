@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
 import { useNetworkStatus } from '@/hooks/use-network-status';
 import { fetchMyCircles } from '@/services/api/circles';
+import { fetchWallet } from '@/services/api/coin';
 import { getApiErrorMessage } from '@/services/api/errors';
 import {
   fetchGroupExpansionProducts,
@@ -169,6 +170,8 @@ export default function GroupExpansionScreen() {
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [circlesError, setCirclesError] = useState<string | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [walletLoading, setWalletLoading] = useState(false);
+  const [walletError, setWalletError] = useState<string | null>(null);
   const [submittingProductId, setSubmittingProductId] = useState<string | null>(
     null,
   );
@@ -273,16 +276,59 @@ export default function GroupExpansionScreen() {
     [loadProducts, t],
   );
 
+  const loadWallet = useCallback(
+    async (generation: number, owner: AuthSessionIdentity) => {
+      const walletVersion = useWalletRealtimeStore.getState().version;
+      const canCommit = () =>
+        generation === focusGenerationRef.current &&
+        isAuthSessionIdentityCurrent(owner, useAuthStore.getState());
+      if (!canCommit()) return;
+      setWalletLoading(true);
+      setWalletError(null);
+      try {
+        const wallet = await fetchWallet();
+        if (!canCommit()) return;
+        if (wallet.userID !== owner.userId) {
+          throw new Error(
+            t('common.errors.invalidServerResponse', {
+              defaultValue: '服务返回了无效数据',
+            }),
+          );
+        }
+        useWalletRealtimeStore
+          .getState()
+          .setRealtimeBalanceIfVersion(walletVersion, wallet.balance);
+      } catch (error) {
+        if (!canCommit()) return;
+        setWalletError(
+          getApiErrorMessage(
+            error,
+            t('profile.groupExpansion.loadWalletError', {
+              defaultValue: '积分余额加载失败，请稍后重试',
+            }),
+          ),
+        );
+      } finally {
+        if (generation === focusGenerationRef.current) {
+          setWalletLoading(false);
+        }
+      }
+    },
+    [t],
+  );
+
   useFocusEffect(
     useCallback(() => {
       const generation = focusGenerationRef.current + 1;
       focusGenerationRef.current = generation;
+      const owner = captureAuthSessionIdentity(useAuthStore.getState());
       void loadOwnerCircles(generation);
+      if (owner) void loadWallet(generation, owner);
       return () => {
         focusGenerationRef.current += 1;
         catalogRequestRef.current += 1;
       };
-    }, [loadOwnerCircles]),
+    }, [loadOwnerCircles, loadWallet]),
   );
 
   const selectCircle = useCallback(
@@ -496,8 +542,38 @@ export default function GroupExpansionScreen() {
                 balance: walletBalance,
               })}
             </Text>
+          ) : walletLoading ? (
+            <Text style={[Typography.caption, d.whiteText]}>
+              {t('profile.groupExpansion.walletLoading', {
+                defaultValue: '积分余额加载中…',
+              })}
+            </Text>
           ) : null}
         </View>
+
+        {walletError ? (
+          <View>
+            <Text style={[Typography.caption, d.errorText]}>
+              {walletError}
+            </Text>
+            <Pressable
+              style={s.retryButton}
+              accessibilityRole="button"
+              onPress={() => {
+                const owner = captureAuthSessionIdentity(
+                  useAuthStore.getState(),
+                );
+                if (owner) {
+                  void loadWallet(focusGenerationRef.current, owner);
+                }
+              }}
+            >
+              <Text style={[Typography.body, { color: colors.primary }]}>
+                {t('common.retry', { defaultValue: '重试' })}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         {isOffline ? (
           <Text style={[Typography.caption, d.errorText]}>

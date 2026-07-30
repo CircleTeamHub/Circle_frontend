@@ -1321,6 +1321,8 @@
       "heroTitle": "永久扩充群人数上限",
       "heroSubtitle": "使用积分购买，名额立即生效，可多次叠加。",
       "walletBalance": "当前积分：{{balance}}",
+      "walletLoading": "积分余额加载中…",
+      "loadWalletError": "积分余额加载失败，请稍后重试",
       "chooseCircle": "选择要扩容的群",
       "changeCircle": "更换群",
       "searchCirclePlaceholder": "搜索群名称",

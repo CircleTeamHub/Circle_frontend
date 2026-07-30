@@ -1797,6 +1797,8 @@
       "heroTitle": "Aumenta permanentemente el límite del grupo",
       "heroSubtitle": "Usa puntos para añadir plazas al instante. Las compras son acumulables.",
       "walletBalance": "Saldo de puntos: {{balance}}",
+      "walletLoading": "Cargando saldo de puntos…",
+      "loadWalletError": "No se pudo cargar el saldo de puntos. Inténtalo de nuevo.",
       "chooseCircle": "Elige el grupo que quieres ampliar",
       "changeCircle": "Cambiar grupo",
       "searchCirclePlaceholder": "Buscar por nombre",
