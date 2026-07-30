@@ -295,10 +295,13 @@ export default function AvatarFramesScreen() {
   );
 
   const openDetail = useCallback(
-    (id: string) => {
+    (id: string | null) => {
       router.push({
         pathname: '/(tabs)/profile/avatar-frame/[id]',
-        params: { id },
+        params:
+          id === null
+            ? { id: 'none', unequipped: '1' }
+            : { id },
       } as never);
     },
     [router],
@@ -424,7 +427,7 @@ export default function AvatarFramesScreen() {
             <WardrobeRow
               item={null}
               equipped={inventory.equippedFrameId === null}
-              onPress={() => openDetail('none')}
+              onPress={() => openDetail(null)}
             />
           </View>
         ) : null}

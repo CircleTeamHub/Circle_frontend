@@ -86,7 +86,7 @@ test('avatar-frame collection route renders wardrobe states, preview, and detail
     screen,
     /pathname:\s*['"]\/\(tabs\)\/profile\/avatar-frame\/\[id\]['"]/,
   );
-  assert.match(screen, /openDetail\(['"]none['"]\)/);
+  assert.match(screen, /openDetail\(null\)/);
   assert.doesNotMatch(screen, /Dimensions/);
 });
 
@@ -103,7 +103,7 @@ test('avatar-frame detail route supports none, unowned IDs, and guarded server-a
   assert.match(screen, /getAvatarFrameSource/);
   assert.match(screen, /<NavHeader/);
   assert.match(screen, /contentInsetAdjustmentBehavior="automatic"/);
-  assert.match(screen, /id === ['"]none['"]/);
+  assert.match(screen, /unequipped === ['"]1['"]/);
   assert.match(screen, /avatarFrames\.notFound/);
   assert.match(screen, /pendingRef\.current/);
   assert.match(screen, /disabled=\{submitting/);

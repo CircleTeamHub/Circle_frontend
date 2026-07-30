@@ -32,6 +32,7 @@ const mockAppearance = {
   },
 };
 let mockRouteId: string | undefined = 'frame-a';
+let mockRouteUnequipped: string | undefined;
 let mockLanguage = 'en';
 let mockTranslate = makeTranslator(mockLanguage);
 
@@ -39,7 +40,10 @@ jest.mock('expo-router', () => {
   const ReactModule = jest.requireActual<typeof import('react')>('react');
   return {
     useRouter: () => mockRouter,
-    useLocalSearchParams: () => ({ id: mockRouteId }),
+    useLocalSearchParams: () => ({
+      id: mockRouteId,
+      unequipped: mockRouteUnequipped,
+    }),
     useFocusEffect: (callback: () => void | (() => void)) => {
       ReactModule.useEffect(() => callback(), [callback]);
     },
@@ -286,6 +290,7 @@ function setAuth(user: AuthUser, sessionEpoch = 1) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockRouteId = 'frame-a';
+  mockRouteUnequipped = undefined;
   mockLanguage = 'en';
   mockTranslate = makeTranslator(mockLanguage);
   setAuth(makeUser());
@@ -328,6 +333,40 @@ test('collection retries an initial load error and renders the recovered invento
 
   expect(await screen.findByText('frame-a-name')).toBeTruthy();
   expect(mockFetchInventory).toHaveBeenCalledTimes(2);
+});
+
+test('a real frame whose id is none does not collide with the unequipped route', async () => {
+  const noneFrame = makeItem('none');
+  mockFetchInventory.mockResolvedValueOnce(
+    makeInventory(null, [noneFrame]),
+  );
+
+  const collection = render(<AvatarFramesScreen />);
+  fireEvent.press(await screen.findByLabelText('none-name'));
+  expect(mockRouter.push).toHaveBeenCalledWith({
+    pathname: '/(tabs)/profile/avatar-frame/[id]',
+    params: { id: 'none' },
+  });
+  await act(async () => {
+    collection.unmount();
+  });
+
+  mockRouteId = 'none';
+  mockRouteUnequipped = undefined;
+  mockFetchInventory.mockResolvedValueOnce(
+    makeInventory(null, [noneFrame]),
+  );
+  mockEquipFrame.mockResolvedValueOnce(
+    makeInventory('none', [noneFrame]),
+  );
+
+  render(<AvatarFrameDetailScreen />);
+  fireEvent.press(
+    await screen.findByLabelText('en:profile.avatarFrames.equip'),
+  );
+
+  await waitFor(() => expect(mockRouter.back).toHaveBeenCalledTimes(1));
+  expect(mockEquipFrame).toHaveBeenCalledWith('none');
 });
 
 test.each([undefined, 'not-owned'])(

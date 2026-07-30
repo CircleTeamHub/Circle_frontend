@@ -12,7 +12,14 @@ export class RetryIntentKeyStore {
     return key;
   }
 
-  complete(): void {
+  complete(signature: string, key: string): boolean {
+    if (
+      this.pending?.signature !== signature ||
+      this.pending.key !== key
+    ) {
+      return false;
+    }
     this.pending = null;
+    return true;
   }
 }

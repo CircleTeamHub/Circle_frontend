@@ -237,6 +237,62 @@ test('FancyNumberScreen fences load-more results by focus generation and cursor'
   assert.match(src, /catalogCursorRef\.current !== cursor/);
 });
 
+test('FancyNumberScreen keeps lease state unknown after a failed lease lookup', () => {
+  const src = read('src/features/profile/screens/FancyNumberScreen.tsx');
+
+  assert.match(src, /type LeaseLoadStatus = 'loading' \| 'ready' \| 'error'/);
+  assert.match(
+    src,
+    /mineResult\.status === 'fulfilled'[\s\S]*?setLeaseStatus\('ready'\)[\s\S]*?setLeaseStatus\('error'\)/,
+  );
+  assert.match(
+    src,
+    /leaseStatus === 'ready' && \(!mine\?\.active \|\| isSwitching\)/,
+  );
+  assert.match(
+    src,
+    /leaseStatus === 'ready' && mine\?\.active && mine\.renewable/,
+  );
+  assert.match(src, /leaseStatus === 'ready' &&/);
+});
+
+test('FancyNumberScreen reconciles a selected recommendation on catalog refresh', () => {
+  const src = read('src/features/profile/screens/FancyNumberScreen.tsx');
+
+  assert.match(src, /selectedRecommendationRef/);
+  assert.match(
+    src,
+    /nextItems\.find\(\(item\) => item\.id === currentSelection\.id\)/,
+  );
+  assert.match(src, /updateSelectedRecommendation\(refreshedSelection\)/);
+  assert.match(src, /setAvailabilityRefresh\(\(current\) => current \+ 1\)/);
+  assert.match(
+    src,
+    /\[availabilityRefresh, customValue, isOffline, t\]/,
+  );
+});
+
+test('FancyNumberScreen retains its cross-focus purchase fence until settlement', () => {
+  const src = read('src/features/profile/screens/FancyNumberScreen.tsx');
+
+  assert.match(src, /const purchaseInFlightRef = useRef\(false\)/);
+  assert.match(src, /focusedRef\.current = true/);
+  assert.match(src, /focusedRef\.current = false/);
+  assert.match(src, /setSubmitting\(purchaseInFlightRef\.current\)/);
+  assert.match(
+    src,
+    /purchaseInFlightRef\.current = true;[\s\S]*?try \{/,
+  );
+  assert.match(
+    src,
+    /finally \{[\s\S]*?purchaseInFlightRef\.current = false;[\s\S]*?focusedRef\.current/,
+  );
+  assert.match(
+    src,
+    /complete\(intent\.signature, intent\.key\)/,
+  );
+});
+
 test('GroupExpansionScreen retains an ambiguous purchase key across focus reloads', () => {
   const src = read('src/features/profile/screens/GroupExpansionScreen.tsx');
   const loadOwnerCircles = src.match(

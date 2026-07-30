@@ -52,6 +52,8 @@ type AvailabilityState =
   | { status: 'unavailable'; reason: 'TAKEN' | 'RESERVED' }
   | { status: 'error'; message: string };
 
+type LeaseLoadStatus = 'loading' | 'ready' | 'error';
+
 const s = StyleSheet.create({
   content: {
     paddingHorizontal: Spacing.lg,
@@ -185,6 +187,8 @@ export default function FancyNumberScreen() {
   const { colors } = useTheme();
   const { isOffline } = useNetworkStatus();
   const [mine, setMine] = useState<MyFancyNumber | null>(null);
+  const [leaseStatus, setLeaseStatus] =
+    useState<LeaseLoadStatus>('loading');
   const [catalog, setCatalog] = useState<FancyNumberList | null>(null);
   const [items, setItems] = useState<FancyNumberItem[]>([]);
   const [customValue, setCustomValue] = useState('');
@@ -201,10 +205,22 @@ export default function FancyNumberScreen() {
   const focusGenerationRef = useRef(0);
   const catalogCursorRef = useRef<string | null>(null);
   const availabilityGenerationRef = useRef(0);
+  const [availabilityRefresh, setAvailabilityRefresh] = useState(0);
+  const selectedRecommendationRef = useRef<FancyNumberItem | null>(null);
+  const focusedRef = useRef(false);
+  const purchaseInFlightRef = useRef(false);
   const pendingIntentRef = useRef<RetryIntentKeyStore | null>(null);
   if (!pendingIntentRef.current) {
     pendingIntentRef.current = new RetryIntentKeyStore(generateIdempotencyKey);
   }
+
+  const updateSelectedRecommendation = useCallback(
+    (item: FancyNumberItem | null) => {
+      selectedRecommendationRef.current = item;
+      setSelectedRecommendation(item);
+    },
+    [],
+  );
 
   const loadInitial = useCallback(
     async (
@@ -219,6 +235,7 @@ export default function FancyNumberScreen() {
       catalogCursorRef.current = null;
       setLoadingMore(false);
       setLoading(true);
+      setLeaseStatus('loading');
       setErrorText(null);
       try {
         const [mineResult, catalogResult] = await Promise.allSettled([
@@ -229,20 +246,34 @@ export default function FancyNumberScreen() {
         let loadError: unknown = null;
         if (mineResult.status === 'fulfilled') {
           setMine(mineResult.value);
+          setLeaseStatus('ready');
         } else {
+          setLeaseStatus('error');
           loadError = mineResult.reason;
         }
         if (catalogResult.status === 'fulfilled') {
           const nextCatalog = catalogResult.value;
+          const nextItems = nextCatalog.items
+            .filter((item) =>
+              CUSTOM_VALUE_PATTERN.test(item.value.toUpperCase()),
+            )
+            .map((item) => ({ ...item, value: item.value.toUpperCase() }));
           catalogCursorRef.current = nextCatalog.nextCursor;
           setCatalog(nextCatalog);
-          setItems(
-            nextCatalog.items
-              .filter((item) =>
-                CUSTOM_VALUE_PATTERN.test(item.value.toUpperCase()),
-              )
-              .map((item) => ({ ...item, value: item.value.toUpperCase() })),
-          );
+          setItems(nextItems);
+          const currentSelection = selectedRecommendationRef.current;
+          if (currentSelection) {
+            const refreshedSelection =
+              nextItems.find((item) => item.id === currentSelection.id) ??
+              null;
+            updateSelectedRecommendation(refreshedSelection);
+            if (refreshedSelection) {
+              setCustomValue(refreshedSelection.value);
+            } else {
+              setAvailability({ status: 'checking' });
+              setAvailabilityRefresh((current) => current + 1);
+            }
+          }
           setMonths((current) =>
             Math.min(
               nextCatalog.maxMonths,
@@ -265,7 +296,7 @@ export default function FancyNumberScreen() {
         if (canCommit()) setLoading(false);
       }
     },
-    [t],
+    [t, updateSelectedRecommendation],
   );
 
   useEffect(() => {
@@ -319,17 +350,19 @@ export default function FancyNumberScreen() {
     }, 350);
 
     return () => clearTimeout(timer);
-  }, [customValue, isOffline, t]);
+  }, [availabilityRefresh, customValue, isOffline, t]);
 
   useFocusEffect(
     useCallback(() => {
       const generation = focusGenerationRef.current + 1;
       focusGenerationRef.current = generation;
-      setSubmitting(false);
+      focusedRef.current = true;
+      setSubmitting(purchaseInFlightRef.current);
       catalogCursorRef.current = null;
       setLoadingMore(false);
       void loadInitial(generation);
       return () => {
+        focusedRef.current = false;
         focusGenerationRef.current += 1;
         catalogCursorRef.current = null;
         setLoadingMore(false);
@@ -374,11 +407,12 @@ export default function FancyNumberScreen() {
       result: FancyNumberPurchaseResult,
       walletVersion: number,
       generation: number,
+      intent: { signature: string; key: string },
       action: 'purchase' | 'renewal' | 'switch' = 'purchase',
       previousAccountId?: string | null,
     ) => {
       if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
-      pendingIntentRef.current!.complete();
+      pendingIntentRef.current!.complete(intent.signature, intent.key);
       useWalletRealtimeStore
         .getState()
         .setRealtimeBalanceIfVersion(walletVersion, result.walletBalanceAfter);
@@ -413,7 +447,7 @@ export default function FancyNumberScreen() {
       setItems((current) =>
         current.filter((item) => item.value !== result.accountId),
       );
-      setSelectedRecommendation(null);
+      updateSelectedRecommendation(null);
       setCustomValue('');
       setAvailability({ status: 'idle' });
       await refreshAuthUser(owner).catch(() => undefined);
@@ -445,13 +479,15 @@ export default function FancyNumberScreen() {
               }),
       );
     },
-    [loadInitial, refreshAuthUser, t],
+    [loadInitial, refreshAuthUser, t, updateSelectedRecommendation],
   );
 
   const performPurchase = useCallback(async () => {
     if (
       !catalog ||
       submitting ||
+      purchaseInFlightRef.current ||
+      leaseStatus !== 'ready' ||
       availability.status !== 'available' ||
       !CUSTOM_VALUE_PATTERN.test(customValue)
     ) {
@@ -467,9 +503,11 @@ export default function FancyNumberScreen() {
       ? `${sessionIntent}:catalog-purchase:${selectedRecommendation.id}:${isPermanent ? 'permanent' : months}:${catalog.unitPrice}`
       : `${sessionIntent}:custom-purchase:${customValue}:${isPermanent ? 'permanent' : months}:${catalog.unitPrice}`;
     const walletVersion = useWalletRealtimeStore.getState().version;
+    const idempotencyKey = intentKey(signature);
+    purchaseInFlightRef.current = true;
     setSubmitting(true);
     try {
-      const options = { idempotencyKey: intentKey(signature) };
+      const options = { idempotencyKey };
       const result = selectedRecommendation?.id
         ? await purchaseFancyNumber(
             selectedRecommendation.id,
@@ -498,7 +536,10 @@ export default function FancyNumberScreen() {
           }),
         );
       }
-      await finishPurchase(owner, result, walletVersion, generation);
+      await finishPurchase(owner, result, walletVersion, generation, {
+        signature,
+        key: idempotencyKey,
+      });
     } catch (error) {
       if (
         generation !== focusGenerationRef.current ||
@@ -516,7 +557,11 @@ export default function FancyNumberScreen() {
       );
       void loadInitial(generation, owner);
     } finally {
-      if (generation === focusGenerationRef.current) {
+      purchaseInFlightRef.current = false;
+      if (
+        focusedRef.current &&
+        isAuthSessionIdentityCurrent(owner, useAuthStore.getState())
+      ) {
         setSubmitting(false);
       }
     }
@@ -526,6 +571,7 @@ export default function FancyNumberScreen() {
     customValue,
     finishPurchase,
     intentKey,
+    leaseStatus,
     loadInitial,
     months,
     selectedRecommendation,
@@ -536,6 +582,7 @@ export default function FancyNumberScreen() {
   const confirmPurchase = useCallback(() => {
     if (
       !catalog ||
+      leaseStatus !== 'ready' ||
       availability.status !== 'available' ||
       !CUSTOM_VALUE_PATTERN.test(customValue)
     ) {
@@ -566,20 +613,36 @@ export default function FancyNumberScreen() {
         },
       ],
     );
-  }, [availability.status, catalog, customValue, months, performPurchase, t]);
+  }, [
+    availability.status,
+    catalog,
+    customValue,
+    leaseStatus,
+    months,
+    performPurchase,
+    t,
+  ]);
 
   const performRenewal = useCallback(async () => {
-    if (!mine?.renewable || submitting) return;
+    if (
+      leaseStatus !== 'ready' ||
+      !mine?.renewable ||
+      submitting ||
+      purchaseInFlightRef.current
+    )
+      return;
     const owner = captureAuthSessionIdentity(useAuthStore.getState());
     if (!owner) return;
     const generation = focusGenerationRef.current;
     const signature = `${owner.sessionEpoch}:${owner.userId}:renew:${mine.accountId}:${mine.expiresAt}:${months}:${mine.unitPrice}`;
     const walletVersion = useWalletRealtimeStore.getState().version;
+    const idempotencyKey = intentKey(signature);
+    purchaseInFlightRef.current = true;
     setSubmitting(true);
     try {
       const result = await renewFancyNumber(
         { months, expectedUnitPrice: mine.unitPrice },
-        { idempotencyKey: intentKey(signature) },
+        { idempotencyKey },
       );
       if (result.accountId !== mine.accountId) {
         throw new Error(
@@ -588,7 +651,14 @@ export default function FancyNumberScreen() {
           }),
         );
       }
-      await finishPurchase(owner, result, walletVersion, generation, 'renewal');
+      await finishPurchase(
+        owner,
+        result,
+        walletVersion,
+        generation,
+        { signature, key: idempotencyKey },
+        'renewal',
+      );
     } catch (error) {
       if (
         generation !== focusGenerationRef.current ||
@@ -606,14 +676,27 @@ export default function FancyNumberScreen() {
       );
       void loadInitial(generation, owner);
     } finally {
-      if (generation === focusGenerationRef.current) {
+      purchaseInFlightRef.current = false;
+      if (
+        focusedRef.current &&
+        isAuthSessionIdentityCurrent(owner, useAuthStore.getState())
+      ) {
         setSubmitting(false);
       }
     }
-  }, [finishPurchase, intentKey, loadInitial, mine, months, submitting, t]);
+  }, [
+    finishPurchase,
+    intentKey,
+    leaseStatus,
+    loadInitial,
+    mine,
+    months,
+    submitting,
+    t,
+  ]);
 
   const confirmRenewal = useCallback(() => {
-    if (!mine?.renewable) return;
+    if (leaseStatus !== 'ready' || !mine?.renewable) return;
     Alert.alert(
       t('profile.fancyNumber.confirmRenewTitle', {
         defaultValue: '确认续费靓号',
@@ -633,12 +716,14 @@ export default function FancyNumberScreen() {
         },
       ],
     );
-  }, [mine, months, performRenewal, t]);
+  }, [leaseStatus, mine, months, performRenewal, t]);
 
   const performSwitch = useCallback(async () => {
     if (
       !mine?.permanent ||
       submitting ||
+      purchaseInFlightRef.current ||
+      leaseStatus !== 'ready' ||
       availability.status !== 'available' ||
       !CUSTOM_VALUE_PATTERN.test(customValue)
     ) {
@@ -654,9 +739,11 @@ export default function FancyNumberScreen() {
       ? `${sessionIntent}:catalog-switch:${previousAccountId}:${selectedRecommendation.id}:${expectedUnitPrice}`
       : `${sessionIntent}:custom-switch:${previousAccountId}:${customValue}:${expectedUnitPrice}`;
     const walletVersion = useWalletRealtimeStore.getState().version;
+    const idempotencyKey = intentKey(signature);
+    purchaseInFlightRef.current = true;
     setSubmitting(true);
     try {
-      const options = { idempotencyKey: intentKey(signature) };
+      const options = { idempotencyKey };
       const result = selectedRecommendation?.id
         ? await switchPermanentFancyNumber(
             selectedRecommendation.id,
@@ -685,6 +772,7 @@ export default function FancyNumberScreen() {
         result,
         walletVersion,
         generation,
+        { signature, key: idempotencyKey },
         'switch',
         previousAccountId,
       );
@@ -705,7 +793,11 @@ export default function FancyNumberScreen() {
       );
       void loadInitial(generation, owner);
     } finally {
-      if (generation === focusGenerationRef.current) {
+      purchaseInFlightRef.current = false;
+      if (
+        focusedRef.current &&
+        isAuthSessionIdentityCurrent(owner, useAuthStore.getState())
+      ) {
         setSubmitting(false);
       }
     }
@@ -715,6 +807,7 @@ export default function FancyNumberScreen() {
     customValue,
     finishPurchase,
     intentKey,
+    leaseStatus,
     loadInitial,
     mine,
     selectedRecommendation,
@@ -725,6 +818,7 @@ export default function FancyNumberScreen() {
   const confirmSwitch = useCallback(() => {
     if (
       !mine?.permanent ||
+      leaseStatus !== 'ready' ||
       availability.status !== 'available' ||
       !CUSTOM_VALUE_PATTERN.test(customValue)
     ) {
@@ -753,6 +847,7 @@ export default function FancyNumberScreen() {
     availability.status,
     catalog?.unitPrice,
     customValue,
+    leaseStatus,
     mine,
     performSwitch,
     t,
@@ -811,14 +906,14 @@ export default function FancyNumberScreen() {
   }, [catalog?.nextCursor, loadingMore, t]);
 
   const handleCustomValueChange = useCallback((value: string) => {
-    setSelectedRecommendation(null);
+    updateSelectedRecommendation(null);
     setCustomValue(
       value
         .replace(/[^a-zA-Z0-9]/g, '')
         .slice(0, 6)
         .toUpperCase(),
     );
-  }, []);
+  }, [updateSelectedRecommendation]);
 
   const permanentLabel = t('profile.fancyNumber.permanent', {
     defaultValue: '永久',
@@ -830,10 +925,13 @@ export default function FancyNumberScreen() {
   }, [catalog?.maxMonths, catalog?.minMonths]);
   const paidTotal = months * (catalog?.unitPrice ?? mine?.unitPrice ?? 100);
   const switchPrice = catalog?.unitPrice ?? mine?.unitPrice ?? 100;
-  const isSwitching = Boolean(mine?.active && mine.permanent);
+  const isSwitching = Boolean(
+    leaseStatus === 'ready' && mine?.active && mine.permanent,
+  );
   const disabled = submitting || isOffline;
   const canSubmit =
     !disabled &&
+    leaseStatus === 'ready' &&
     availability.status === 'available' &&
     CUSTOM_VALUE_PATTERN.test(customValue);
 
@@ -987,7 +1085,7 @@ export default function FancyNumberScreen() {
             </Text>
           </View>
 
-          {mine?.active ? (
+          {leaseStatus === 'ready' && mine?.active ? (
             <View style={[s.card, d.card]}>
               <View style={s.titleRow}>
                 <Ionicons name="ribbon" size={22} color={colors.deepPurple} />
@@ -1018,7 +1116,7 @@ export default function FancyNumberScreen() {
                     })}
               </Text>
             </View>
-          ) : mode === 'renew' ? (
+          ) : leaseStatus === 'ready' && mode === 'renew' ? (
             <View style={[s.card, d.card]}>
               <Text style={d.body}>
                 {t('profile.fancyNumber.nothingToRenew', {
@@ -1029,7 +1127,7 @@ export default function FancyNumberScreen() {
             </View>
           ) : null}
 
-          {mine?.active && mine.renewable ? (
+          {leaseStatus === 'ready' && mine?.active && mine.renewable ? (
             <View style={[s.card, d.card]}>
               <Text style={d.title}>
                 {t('profile.fancyNumber.renewMonths', {
@@ -1094,7 +1192,7 @@ export default function FancyNumberScreen() {
             </View>
           ) : null}
 
-          {!mine?.active || isSwitching ? (
+          {leaseStatus === 'ready' && (!mine?.active || isSwitching) ? (
             <>
               {!mine?.active && catalog?.purchaseMode === 'PAID_MONTHLY' ? (
                 <View style={[s.card, d.card]}>
@@ -1224,7 +1322,7 @@ export default function FancyNumberScreen() {
                             selected ? d.selectedNumber : d.normalNumber,
                           ]}
                           onPress={() => {
-                            setSelectedRecommendation(item);
+                            updateSelectedRecommendation(item);
                             setCustomValue(item.value);
                           }}
                         >

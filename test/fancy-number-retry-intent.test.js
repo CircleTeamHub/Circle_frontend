@@ -16,7 +16,13 @@ test('retry intent keeps its key until the semantic operation changes or succeed
   assert.equal(store.get(renewal), 'key-1');
   assert.equal(store.get(renewal), 'key-1');
 
-  assert.equal(store.get('renew:AB12C3:2'), 'key-2');
-  store.complete();
-  assert.equal(store.get('renew:AB12C3:2'), 'key-3');
+  const newerRenewal = 'renew:AB12C3:2';
+  assert.equal(store.get(newerRenewal), 'key-2');
+
+  // A stale completion must not clear the newer operation's retry key.
+  assert.equal(store.complete(renewal, 'key-1'), false);
+  assert.equal(store.get(newerRenewal), 'key-2');
+
+  assert.equal(store.complete(newerRenewal, 'key-2'), true);
+  assert.equal(store.get(newerRenewal), 'key-3');
 });

@@ -160,9 +160,17 @@ function toAppearance(
 }
 
 export default function AvatarFrameDetailScreen() {
-  const rawId = useLocalSearchParams<{ id?: string | string[] }>().id;
+  const routeParams = useLocalSearchParams<{
+    id?: string | string[];
+    unequipped?: string | string[];
+  }>();
+  const rawId = routeParams.id;
   const id = Array.isArray(rawId) ? rawId[0] : rawId;
-  const isNone = id === 'none';
+  const rawUnequipped = routeParams.unequipped;
+  const unequipped = Array.isArray(rawUnequipped)
+    ? rawUnequipped[0]
+    : rawUnequipped;
+  const isNone = unequipped === '1';
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { t, i18n } = useTranslation();
