@@ -107,6 +107,7 @@ function parseAppearance(
   }
   if (
     typeof value.id !== 'string' ||
+    value.id.trim().length === 0 ||
     typeof value.key !== 'string' ||
     typeof value.name !== 'string'
   ) {

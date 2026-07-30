@@ -18,6 +18,7 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { RetryIntentKeyStore } from '@/features/profile/retry-intent-key';
 import {
   beginFancyNumberOperation,
+  hasConflictingFancyNumberRecommendations,
   hasMatchingFancyNumberCatalogQuote,
   isLatestFancyNumberOperation,
 } from '@/features/profile/fancy-number-operation-fence';
@@ -208,6 +209,7 @@ export default function FancyNumberScreen() {
   const [errorText, setErrorText] = useState<string | null>(null);
   const focusGenerationRef = useRef(0);
   const catalogCursorRef = useRef<string | null>(null);
+  const itemsRef = useRef<FancyNumberItem[]>([]);
   const availabilityGenerationRef = useRef(0);
   const [availabilityRefresh, setAvailabilityRefresh] = useState(0);
   const selectedRecommendationRef = useRef<FancyNumberItem | null>(null);
@@ -217,6 +219,10 @@ export default function FancyNumberScreen() {
   if (!pendingIntentRef.current) {
     pendingIntentRef.current = new RetryIntentKeyStore(generateIdempotencyKey);
   }
+
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
 
   const updateSelectedRecommendation = useCallback(
     (item: FancyNumberItem | null) => {
@@ -443,12 +449,25 @@ export default function FancyNumberScreen() {
           });
         }
       }
+      const completionGeneration =
+        generation === focusGenerationRef.current
+          ? generation
+          : focusedRef.current
+            ? focusGenerationRef.current + 1
+            : null;
+      if (completionGeneration === null) return;
+      if (completionGeneration !== generation) {
+        focusGenerationRef.current = completionGeneration;
+        await loadInitial(completionGeneration, owner);
+      }
       const canCommit = () =>
-        generation === focusGenerationRef.current &&
+        completionGeneration === focusGenerationRef.current &&
+        focusedRef.current &&
         isLatestFancyNumberOperation(operation) &&
         isAuthSessionIdentityCurrent(owner, useAuthStore.getState());
       if (!canCommit()) return;
       setMine(mineFromResult(result));
+      setLeaseStatus('ready');
       setItems((current) =>
         current.filter((item) => item.value !== result.accountId),
       );
@@ -458,7 +477,7 @@ export default function FancyNumberScreen() {
       await refreshAuthUser(owner, operation).catch(() => undefined);
       if (!canCommit()) return;
       if (action === 'switch') {
-        await loadInitial(generation, owner);
+        await loadInitial(completionGeneration, owner);
         if (!canCommit()) return;
       }
       Alert.alert(
@@ -909,6 +928,13 @@ export default function FancyNumberScreen() {
       const suggestions = next.items
         .filter((item) => CUSTOM_VALUE_PATTERN.test(item.value.toUpperCase()))
         .map((item) => ({ ...item, value: item.value.toUpperCase() }));
+      if (
+        hasConflictingFancyNumberRecommendations(itemsRef.current, suggestions)
+      ) {
+        catalogCursorRef.current = null;
+        await loadInitial(generation);
+        return;
+      }
       setItems((current) => [
         ...current,
         ...suggestions.filter(

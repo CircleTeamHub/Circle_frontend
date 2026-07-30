@@ -292,6 +292,14 @@ test('FancyNumberScreen retains its cross-focus purchase fence until settlement'
   assert.match(src, /complete\(intent\.signature, intent\.key\)/);
   assert.match(src, /beginFancyNumberOperation/);
   assert.match(src, /isLatestFancyNumberOperation\(operation\)/);
+  assert.match(
+    src,
+    /const completionGeneration =[\s\S]*?focusedRef\.current[\s\S]*?focusGenerationRef\.current/,
+  );
+  assert.match(
+    src,
+    /completionGeneration === focusGenerationRef\.current/,
+  );
 });
 
 test('FancyNumberScreen invalidates and rechecks custom availability on refocus', () => {

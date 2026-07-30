@@ -231,6 +231,14 @@ test('avatar-frame APIs reject malformed authoritative responses', async (t) => 
       },
       'inventory',
     ],
+    [
+      'empty inventory id',
+      {
+        equippedFrameId: null,
+        items: [{ ...inventoryResponse.items[0], id: '', equipped: false }],
+      },
+      'inventory',
+    ],
   ];
 
   for (const [name, response, kind] of malformedCases) {

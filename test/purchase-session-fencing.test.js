@@ -169,3 +169,31 @@ test('fancy-number pagination accepts only pages from the same catalog quote', (
     false,
   );
 });
+
+test('fancy-number pagination rejects conflicting id and value mappings', () => {
+  const fence = loadFancyNumberFence();
+  const current = [
+    { id: 'fancy-1', value: '888888' },
+    { id: 'fancy-2', value: '999999' },
+  ];
+
+  assert.equal(
+    fence.hasConflictingFancyNumberRecommendations(current, [
+      { id: 'fancy-1', value: '666666' },
+    ]),
+    true,
+  );
+  assert.equal(
+    fence.hasConflictingFancyNumberRecommendations(current, [
+      { id: 'fancy-3', value: '888888' },
+    ]),
+    true,
+  );
+  assert.equal(
+    fence.hasConflictingFancyNumberRecommendations(current, [
+      { id: 'fancy-1', value: '888888' },
+      { id: 'fancy-3', value: '666666' },
+    ]),
+    false,
+  );
+});
