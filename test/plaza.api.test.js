@@ -50,6 +50,8 @@ function loadPlazaApi(apiResponses) {
           },
           normalizeMediaUrl: (value) =>
             value ? value.replace('http://localhost', 'http://192.168.1.65') : value ?? null,
+          normalizeAvatarFrameAppearance: (value) => value ?? null,
+          normalizeUserAvatarFrameAppearance: (value) => value ?? null,
         };
       }
       return require(specifier);

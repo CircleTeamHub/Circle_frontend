@@ -2,8 +2,8 @@ import { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useTheme, Spacing, Typography } from '@/theme';
 import { Avatar } from '@/components/ui/avatar';
-import { getMembershipFrameAsset } from '@/features/profile/membership-frames';
-import { useUserVipLevel } from '@/stores/userVipStore';
+import { getAvatarFrameSource } from '@/features/profile/membership-frames';
+import { useUserAppearance } from '@/stores/userAppearanceStore';
 import type { ChatMessage } from '@/types';
 import { AVATAR_SIZE } from './shared';
 
@@ -53,8 +53,8 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
   onAvatarPress,
 }) => {
   const { colors } = useTheme();
-  // 发送者只有 senderID,vipLevel 按 userId 从客户端缓存补查(未知触发批量拉取,回来自动补上框)。
-  const senderVipLevel = useUserVipLevel(message.senderID);
+  // 接收消息只有 senderID；外观缓存会批量补查并在权威结果返回后刷新头像框。
+  const senderAppearance = useUserAppearance(message.senderID);
 
   const d = useMemo(
     () => ({
@@ -87,7 +87,7 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
       size={AVATAR_SIZE}
       name={senderName}
       uri={senderAvatarUri}
-      frameSource={getMembershipFrameAsset(senderVipLevel) ?? undefined}
+      frameSource={getAvatarFrameSource(senderAppearance?.avatarFrame) ?? undefined}
       compactFrame
     />
   );

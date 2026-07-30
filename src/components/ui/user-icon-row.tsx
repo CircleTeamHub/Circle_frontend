@@ -200,9 +200,34 @@ function isRenderableIcon(
 function buildIconKey(icon: Partial<DisplayIcon>, index: number) {
   return [
     icon.type ?? 'UNKNOWN',
-    icon.systemVariant ?? icon.systemKey ?? icon.circleId ?? icon.id ?? icon.title ?? 'icon',
+    icon.systemVariant ??
+      icon.systemKey ??
+      icon.circleId ??
+      icon.id ??
+      icon.title ??
+      'icon',
     index,
   ].join('-');
+}
+
+function dedupeIcons(icons: DisplayIcon[]): DisplayIcon[] {
+  const seen = new Set<string>();
+
+  return icons.filter((icon) => {
+    const identity = [
+      icon.type,
+      icon.systemVariant ??
+        icon.systemKey ??
+        icon.circleId ??
+        icon.id ??
+        icon.title,
+    ].join(':');
+    if (seen.has(identity)) {
+      return false;
+    }
+    seen.add(identity);
+    return true;
+  });
 }
 
 function getVipLevel(icon: DisplayIcon) {
@@ -243,15 +268,14 @@ function resolveShellSizeStyle(
 ) {
   if (!compact) return null;
   if (hasSystemAsset) {
-    return isSmallCompact ? s.smallCompactSystemBadgeShell : s.compactSystemBadgeShell;
+    return isSmallCompact
+      ? s.smallCompactSystemBadgeShell
+      : s.compactSystemBadgeShell;
   }
   return isSmallCompact ? s.smallCompactBadgeFrame : s.compactBadgeFrame;
 }
 
-function resolveCircleSizeStyle(
-  compact: boolean,
-  isSmallCompact: boolean,
-) {
+function resolveCircleSizeStyle(compact: boolean, isSmallCompact: boolean) {
   if (!compact) return null;
   return isSmallCompact ? s.smallCompactCircle : s.compactCircle;
 }
@@ -261,7 +285,9 @@ function resolveCircleOrnamentSizeStyle(
   isSmallCompact: boolean,
 ) {
   if (!compact) return null;
-  return isSmallCompact ? s.smallCompactCircleOrnament : s.compactCircleOrnament;
+  return isSmallCompact
+    ? s.smallCompactCircleOrnament
+    : s.compactCircleOrnament;
 }
 
 export function UserIconBadge({
@@ -273,10 +299,14 @@ export function UserIconBadge({
   size,
 }: BadgeProps) {
   const { colors } = useTheme();
-  const systemBadgeAsset = icon.type === 'SYSTEM' ? getSystemBadgeAsset(icon) : null;
-  const systemBadgeScale = icon.type === 'SYSTEM' ? getSystemBadgeVisualScale(icon) : 1;
-  const systemBadgeTranslateY = icon.type === 'SYSTEM' ? getSystemBadgeVisualTranslateY(icon) : 0;
-  const label = icon.type === 'SYSTEM' ? formatIconLabel(icon) : CIRCLE_BADGE_LABEL;
+  const systemBadgeAsset =
+    icon.type === 'SYSTEM' ? getSystemBadgeAsset(icon) : null;
+  const systemBadgeScale =
+    icon.type === 'SYSTEM' ? getSystemBadgeVisualScale(icon) : 1;
+  const systemBadgeTranslateY =
+    icon.type === 'SYSTEM' ? getSystemBadgeVisualTranslateY(icon) : 0;
+  const label =
+    icon.type === 'SYSTEM' ? formatIconLabel(icon) : CIRCLE_BADGE_LABEL;
   const labelColor = tone === 'member' ? colors.white : colors.text;
   const isSmallCompact = compact && compactSize === 'small';
   // 显式 size（详情大图）优先：按该尺寸原生定尺寸、不做 transform 放大 —— 小图上采样才是糊的根因。
@@ -287,14 +317,24 @@ export function UserIconBadge({
   const shellSizeStyle =
     size !== undefined
       ? { width: size, height: size }
-      : resolveShellSizeStyle(compact, isSmallCompact, Boolean(systemBadgeAsset));
+      : resolveShellSizeStyle(
+          compact,
+          isSmallCompact,
+          Boolean(systemBadgeAsset),
+        );
   const circleSizeStyle =
     size !== undefined
-      ? { width: Math.round((size * 34) / 52), height: Math.round((size * 34) / 52) }
+      ? {
+          width: Math.round((size * 34) / 52),
+          height: Math.round((size * 34) / 52),
+        }
       : resolveCircleSizeStyle(compact, isSmallCompact);
   const circleOrnamentSizeStyle =
     size !== undefined
-      ? { width: Math.round((size * 40) / 52), height: Math.round((size * 40) / 52) }
+      ? {
+          width: Math.round((size * 40) / 52),
+          height: Math.round((size * 40) / 52),
+        }
       : resolveCircleOrnamentSizeStyle(compact, isSmallCompact);
   const transformSizeRatio =
     size !== undefined
@@ -324,7 +364,9 @@ export function UserIconBadge({
             source={systemBadgeAsset}
             style={[
               s.systemBadgeImage,
-              systemBadgeTransform.length > 0 ? { transform: systemBadgeTransform } : null,
+              systemBadgeTransform.length > 0
+                ? { transform: systemBadgeTransform }
+                : null,
             ]}
             contentFit="contain"
           />
@@ -334,7 +376,10 @@ export function UserIconBadge({
               style={[
                 s.circleOrnament,
                 circleOrnamentSizeStyle,
-                { backgroundColor: colors.white, borderColor: colors.surfaceBorder },
+                {
+                  backgroundColor: colors.white,
+                  borderColor: colors.surfaceBorder,
+                },
               ]}
             >
               <View
@@ -343,7 +388,10 @@ export function UserIconBadge({
                   circleSizeStyle,
                   // 徽章内盘固定浅底：深色模式下 surface 是深色，会把圈子图标（多为深色线稿/
                   // 透明底）吞成黑块。用 white 保持奖章质感，两种模式都有对比。
-                  { backgroundColor: colors.white, borderColor: colors.surfaceBorder },
+                  {
+                    backgroundColor: colors.white,
+                    borderColor: colors.surfaceBorder,
+                  },
                 ]}
               >
                 <View style={s.imageWrap}>
@@ -396,7 +444,7 @@ function UserIconRowComponent({
   showOverflowCount = true,
 }: Props) {
   const { colors } = useTheme();
-  const safeIcons = icons.filter((icon) => isRenderableIcon(icon));
+  const safeIcons = dedupeIcons(icons.filter((icon) => isRenderableIcon(icon)));
   const compactLimit = Math.max(1, maxVisible);
   const visibleIcons = compact ? safeIcons.slice(0, compactLimit) : safeIcons;
   const hiddenCount =
@@ -431,7 +479,9 @@ function UserIconRowComponent({
             },
           ]}
         >
-          <Text style={[s.label, { color: colors.textSecondary }]}>{`+${hiddenCount}`}</Text>
+          <Text
+            style={[s.label, { color: colors.textSecondary }]}
+          >{`+${hiddenCount}`}</Text>
         </View>
       ) : null}
     </View>

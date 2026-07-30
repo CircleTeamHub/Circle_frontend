@@ -4,6 +4,10 @@ type WalletRealtimeState = {
   balance: number | null;
   version: number;
   setRealtimeBalance: (balance: number) => void;
+  setRealtimeBalanceIfVersion: (
+    expectedVersion: number,
+    balance: number,
+  ) => boolean;
   reset: () => void;
 };
 
@@ -26,5 +30,23 @@ export const useWalletRealtimeStore = create<WalletRealtimeState>((set) => ({
         version: state.version + 1,
       };
     }),
+  setRealtimeBalanceIfVersion: (expectedVersion, balance) => {
+    let applied = false;
+    set((state) => {
+      if (
+        state.version !== expectedVersion ||
+        !Number.isFinite(balance) ||
+        balance < 0
+      ) {
+        return state;
+      }
+      applied = true;
+      return {
+        balance,
+        version: state.version + 1,
+      };
+    });
+    return applied;
+  },
   reset: () => set(initialState),
 }));

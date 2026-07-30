@@ -5,6 +5,7 @@ import { apiClient } from '@/services/api/client';
 import { API_URL } from '@/constants/config';
 import type { AuthUser } from '@/stores/authStore';
 import type { BackendAuthUser } from '@/services/api/auth';
+import type { AvatarFrameAppearance } from '@/types';
 
 const LOCALHOST_HOSTS = new Set(['localhost', '127.0.0.1']);
 
@@ -88,6 +89,107 @@ export function normalizeMediaUrl(value: string | null | undefined) {
 }
 
 /**
+ * Avatar frames render outside the normal media pipeline, so only explicit
+ * network URLs are allowed. Production accepts HTTPS. Development may also
+ * use HTTP on the configured private/local API host (with a different media
+ * port), after normalizeMediaUrl rewrites localhost to the reachable host.
+ */
+export function normalizeAvatarFrameImageUrl(
+  value: string | null | undefined,
+): string | null {
+  if (!value) {
+    return null;
+  }
+  try {
+    const originalUrl = new URL(value);
+    const isDev =
+      typeof __DEV__ !== 'undefined' && Boolean(__DEV__);
+    if (
+      originalUrl.username ||
+      originalUrl.password ||
+      (originalUrl.protocol !== 'https:' &&
+        originalUrl.protocol !== 'http:') ||
+      (originalUrl.protocol === 'http:' && !isDev)
+    ) {
+      return null;
+    }
+    const normalized = normalizeMediaUrl(value);
+    if (typeof normalized !== 'string') {
+      return null;
+    }
+    const mediaUrl = new URL(normalized);
+    if (mediaUrl.username || mediaUrl.password) {
+      return null;
+    }
+    if (mediaUrl.protocol === 'https:') {
+      return mediaUrl.toString();
+    }
+    const apiUrl = new URL(API_URL);
+    if (
+      isDev &&
+      mediaUrl.protocol === 'http:' &&
+      apiUrl.protocol === 'http:' &&
+      isDevReachabilityHost(apiUrl.hostname) &&
+      mediaUrl.hostname === apiUrl.hostname
+    ) {
+      return mediaUrl.toString();
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+export function normalizeAvatarFrameAppearance(
+  value: unknown,
+): AvatarFrameAppearance | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  const frame = value as Record<string, unknown>;
+  if (
+    typeof frame.id !== 'string' ||
+    typeof frame.key !== 'string' ||
+    typeof frame.name !== 'string' ||
+    (frame.imageUrl !== null && typeof frame.imageUrl !== 'string')
+  ) {
+    return null;
+  }
+  return {
+    id: frame.id,
+    key: frame.key,
+    name: frame.name,
+    imageUrl: normalizeAvatarFrameImageUrl(frame.imageUrl),
+  };
+}
+
+export function normalizeUserAvatarFrameAppearance(
+  value: unknown,
+  vipLevel: number | null | undefined,
+): AvatarFrameAppearance | null {
+  if (value !== undefined) {
+    return normalizeAvatarFrameAppearance(value);
+  }
+  if (vipLevel === 3) {
+    return {
+      id: 'legacy-membership-diamond',
+      key: 'membership-diamond',
+      name: 'Diamond membership frame',
+      imageUrl: null,
+    };
+  }
+  if (typeof vipLevel === 'number' && vipLevel >= 4) {
+    return {
+      id: 'legacy-membership-super',
+      key: 'membership-super',
+      name: 'Super membership frame',
+      imageUrl: null,
+    };
+  }
+  return null;
+}
+
+/**
  * 将后端用户对象规范化为前端 AuthUser 格式。
  * uid 取 accountId（OpenIM 用户 ID）。
  *
@@ -104,6 +206,10 @@ export function normalizeUser(user: BackendAuthUser): AuthUser {
     nickname: user.nickname,
     avatarUrl: normalizeMediaUrl(user.avatarUrl),
     avatarFrame: normalizeMediaUrl(user.avatarFrame),
+    avatarFrameAppearance: normalizeUserAvatarFrameAppearance(
+      user.avatarFrameAppearance,
+      user.vipLevel,
+    ),
     cover: normalizeMediaUrl(user.cover),
     email: user.email,
     phoneNumber: user.phoneNumber,

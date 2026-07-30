@@ -47,7 +47,10 @@ test('ProfileScreen places system announcements first, customer service after no
 test('ProfileScreen customer service row routes to the support-center screen', () => {
   const src = read('src/features/profile/screens/ProfileScreen.tsx');
 
-  assert.match(src, /id: MENU_ID\.CUSTOMER_SERVICE[\s\S]*?icon: "headset-outline"/);
+  assert.match(
+    src,
+    /id: MENU_ID\.CUSTOMER_SERVICE[\s\S]*?icon: "headset-outline"/,
+  );
   assert.match(src, /profile\.customerService\.menuLabel/);
   assert.match(
     src,
@@ -69,7 +72,10 @@ test('customer service exposes recharge/issue/dispute/account with env override 
 
   // Each category opens a 1:1 chat with its own account, titled by the category label.
   assert.match(screen, /getOrCreateSingleConversation\(\s*category\.accountId/);
-  assert.match(screen, /getChatDetailHref\(\s*['"]profile['"],\s*category\.accountId/);
+  assert.match(
+    screen,
+    /getChatDetailHref\(\s*['"]profile['"],\s*category\.accountId/,
+  );
 
   // 会话解析较慢时用户可能已离场：解析/兜底完成后先查焦点守卫再跳转，
   // 避免从非活跃屏幕把聊天页推入栈。
@@ -92,15 +98,238 @@ test('customer service exposes recharge/issue/dispute/account with env override 
 });
 
 test('profile commerce routes export their screens', () => {
-  assert.match(read('app/(tabs)/profile/system-announcements.tsx'), /SystemAnnouncementsScreen/);
-  assert.match(read('app/(tabs)/profile/member-center.tsx'), /MemberCenterScreen/);
-  assert.match(read('app/(tabs)/profile/member-rules.tsx'), /MemberRulesScreen/);
-  assert.match(read('app/(tabs)/profile/credit-score.tsx'), /CreditScoreScreen/);
+  assert.match(
+    read('app/(tabs)/profile/system-announcements.tsx'),
+    /SystemAnnouncementsScreen/,
+  );
+  assert.match(
+    read('app/(tabs)/profile/member-center.tsx'),
+    /MemberCenterScreen/,
+  );
+  assert.match(
+    read('app/(tabs)/profile/member-rules.tsx'),
+    /MemberRulesScreen/,
+  );
+  assert.match(
+    read('app/(tabs)/profile/credit-score.tsx'),
+    /CreditScoreScreen/,
+  );
   assert.match(read('app/(tabs)/profile/wallet.tsx'), /WalletScreen/);
   assert.match(read('app/(tabs)/profile/mall.tsx'), /MallScreen/);
+  assert.match(
+    read('app/(tabs)/profile/fancy-number.tsx'),
+    /FancyNumberScreen/,
+  );
+  assert.match(
+    read('app/(tabs)/profile/group-expansion.tsx'),
+    /GroupExpansionScreen/,
+  );
   assert.match(read('app/(tabs)/profile/collections.tsx'), /CollectionsScreen/);
-  assert.match(read('app/(tabs)/profile/customer-service.tsx'), /CustomerServiceScreen/);
-  assert.match(read('app/(tabs)/profile/app-settings.tsx'), /AppSettingsScreen/);
+  assert.match(
+    read('app/(tabs)/profile/customer-service.tsx'),
+    /CustomerServiceScreen/,
+  );
+  assert.match(
+    read('app/(tabs)/profile/app-settings.tsx'),
+    /AppSettingsScreen/,
+  );
+});
+
+test('MallScreen routes fancy-number purchase and renewal actions', () => {
+  const src = read('src/features/profile/screens/MallScreen.tsx');
+
+  assert.match(
+    src,
+    /product\.action === 'fancy-number'[\s\S]*?profile\/fancy-number/,
+  );
+  assert.match(
+    src,
+    /product\.action === 'fancy-number-renew'[\s\S]*?mode:\s*'renew'/,
+  );
+  assert.match(
+    src,
+    /product\.action === 'group-expansion'[\s\S]*?profile\/group-expansion/,
+  );
+});
+
+test('GroupExpansionScreen loads owner circles and supports idempotent point purchases', () => {
+  const src = read('src/features/profile/screens/GroupExpansionScreen.tsx');
+
+  assert.match(src, /fetchMyCircles\(['"]created['"]\)/);
+  assert.match(src, /fetchGroupExpansionProducts/);
+  assert.match(src, /fetchWallet/);
+  assert.match(src, /purchaseGroupExpansion/);
+  assert.match(src, /generateIdempotencyKey/);
+  assert.match(src, /setRealtimeBalance/);
+  assert.match(src, /setRealtimeBalanceIfVersion/);
+  assert.match(src, /isAuthSessionIdentityCurrent/);
+  assert.match(src, /wallet\.userID !== owner\.userId/);
+  assert.match(src, /walletLoading/);
+  assert.match(src, /walletError/);
+  assert.match(src, /product\.purchasable/);
+  assert.match(src, /isOffline/);
+  assert.match(src, /GroupExpansionCirclePickerSheet/);
+  assert.match(src, /setCirclePickerVisible\(true\)/);
+  assert.match(src, /selectedCircle\.memberCount/);
+  assert.doesNotMatch(src, /circles\.map/);
+});
+
+test('group expansion circle picker uses a searchable virtualized bottom-sheet list', () => {
+  const rel =
+    'src/features/profile/components/group-expansion-circle-picker-sheet.tsx';
+
+  assert.ok(
+    fs.existsSync(path.join(__dirname, '..', rel)),
+    'group expansion circle picker sheet should exist',
+  );
+  const src = read(rel);
+
+  assert.match(src, /BottomSheetModal/);
+  assert.match(src, /FlatList/);
+  assert.match(src, /TextInput/);
+  assert.match(src, /circle\.name\.toLocaleLowerCase/);
+  assert.match(src, /keyboardShouldPersistTaps=["']handled["']/);
+  assert.match(src, /height:\s*['"]90%['"]/);
+  assert.doesNotMatch(src, /maxHeight:\s*['"]82%['"]/);
+  assert.match(src, /onSelect\(item\.id\)/);
+  assert.match(src, /onClose\(\)/);
+});
+
+test('FancyNumberScreen supports listing, purchase, renewal, permanent switching, and account refresh', () => {
+  const src = read('src/features/profile/screens/FancyNumberScreen.tsx');
+
+  assert.match(src, /fetchFancyNumbers/);
+  assert.match(src, /fetchMyFancyNumber/);
+  assert.match(src, /renewFancyNumber/);
+  assert.match(src, /checkFancyNumberAvailability/);
+  assert.match(src, /purchaseCustomFancyNumber/);
+  assert.match(src, /switchPermanentToCustomFancyNumber/);
+  assert.match(src, /purchaseFancyNumber/);
+  assert.match(src, /switchPermanentFancyNumber/);
+  assert.match(src, /selectedRecommendation/);
+  assert.match(src, /selectedRecommendation\?\.id[\s\S]*?purchaseFancyNumber/);
+  assert.match(
+    src,
+    /selectedRecommendation\?\.id[\s\S]*?switchPermanentFancyNumber/,
+  );
+  assert.match(src, /result\.accountId !== selectedRecommendation\.value/);
+  assert.match(src, /result\.accountId !== mine\.accountId/);
+  assert.match(src, /TextInput/);
+  assert.match(src, /setTimeout/);
+  assert.match(src, /350/);
+  assert.match(src, /mine\?\.permanent/);
+  assert.match(src, /confirmSwitch/);
+  assert.match(src, /generateIdempotencyKey/);
+  assert.match(src, /setRealtimeBalance/);
+  assert.match(src, /fetchCurrentUser/);
+  assert.match(src, /purchaseMode === ["']PERMANENT_FREE["']/);
+  assert.match(src, /expectedUnitPrice:\s*catalog\.unitPrice/);
+  assert.match(src, /expectedUnitPrice:\s*mine\.unitPrice/);
+  assert.match(src, /Promise\.allSettled/);
+  assert.match(src, /errorText && !catalog && !mine/);
+});
+
+test('FancyNumberScreen fences load-more results by focus generation and cursor', () => {
+  const src = read('src/features/profile/screens/FancyNumberScreen.tsx');
+
+  assert.match(src, /catalogCursorRef/);
+  assert.match(src, /focusGenerationRef\.current !== generation/);
+  assert.match(src, /catalogCursorRef\.current !== cursor/);
+  assert.match(src, /hasMatchingFancyNumberCatalogQuote\(catalog, next\)/);
+  assert.match(
+    src,
+    /catalogCursorRef\.current = null;[\s\S]*?await loadInitial\(generation\)/,
+  );
+});
+
+test('FancyNumberScreen keeps lease state unknown after a failed lease lookup', () => {
+  const src = read('src/features/profile/screens/FancyNumberScreen.tsx');
+
+  assert.match(
+    src,
+    /type LeaseLoadStatus = ["']loading["'] \| ["']ready["'] \| ["']error["']/,
+  );
+  assert.match(
+    src,
+    /mineResult\.status === 'fulfilled'[\s\S]*?setLeaseStatus\('ready'\)[\s\S]*?setLeaseStatus\('error'\)/,
+  );
+  assert.match(
+    src,
+    /leaseStatus === 'ready' && \(!mine\?\.active \|\| isSwitching\)/,
+  );
+  assert.match(
+    src,
+    /leaseStatus === 'ready' && mine\?\.active && mine\.renewable/,
+  );
+  assert.match(src, /leaseStatus === 'ready' &&/);
+});
+
+test('FancyNumberScreen reconciles a selected recommendation on catalog refresh', () => {
+  const src = read('src/features/profile/screens/FancyNumberScreen.tsx');
+
+  assert.match(src, /selectedRecommendationRef/);
+  assert.match(
+    src,
+    /nextItems\.find\(\(item\) => item\.id === currentSelection\.id\)/,
+  );
+  assert.match(src, /updateSelectedRecommendation\(refreshedSelection\)/);
+  assert.match(src, /setAvailabilityRefresh\(\(current\) => current \+ 1\)/);
+  assert.match(src, /\[availabilityRefresh, customValue, isOffline, t\]/);
+});
+
+test('FancyNumberScreen retains its cross-focus purchase fence until settlement', () => {
+  const src = read('src/features/profile/screens/FancyNumberScreen.tsx');
+
+  assert.match(src, /const purchaseInFlightRef = useRef\(false\)/);
+  assert.match(src, /focusedRef\.current = true/);
+  assert.match(src, /focusedRef\.current = false/);
+  assert.match(src, /setSubmitting\(purchaseInFlightRef\.current\)/);
+  assert.match(src, /purchaseInFlightRef\.current = true;[\s\S]*?try \{/);
+  assert.match(
+    src,
+    /finally \{[\s\S]*?purchaseInFlightRef\.current = false;[\s\S]*?focusedRef\.current/,
+  );
+  assert.match(src, /complete\(intent\.signature, intent\.key\)/);
+  assert.match(src, /beginFancyNumberOperation/);
+  assert.match(src, /isLatestFancyNumberOperation\(operation\)/);
+  assert.match(
+    src,
+    /const completionGeneration =[\s\S]*?focusedRef\.current[\s\S]*?focusGenerationRef\.current/,
+  );
+  assert.match(src, /completionGeneration === focusGenerationRef\.current/);
+});
+
+test('FancyNumberScreen invalidates and rechecks custom availability on refocus', () => {
+  const src = read('src/features/profile/screens/FancyNumberScreen.tsx');
+
+  assert.match(
+    src,
+    /focusedRef\.current = true;[\s\S]*?setAvailabilityRefresh\(\(current\) => current \+ 1\)/,
+  );
+  assert.match(
+    src,
+    /focusedRef\.current = false;[\s\S]*?availabilityGenerationRef\.current \+= 1/,
+  );
+});
+
+test('GroupExpansionScreen retains an ambiguous purchase key across focus reloads', () => {
+  const src = read('src/features/profile/screens/GroupExpansionScreen.tsx');
+  const loadOwnerCircles = src.match(
+    /const loadOwnerCircles[\s\S]*?const loadWallet/,
+  )?.[0];
+
+  assert.ok(loadOwnerCircles, 'loadOwnerCircles implementation should exist');
+  assert.doesNotMatch(loadOwnerCircles, /pendingIntentRef\.current\s*=\s*null/);
+  assert.match(src, /pendingIntentRef\.current\s*=\s*null/);
+});
+
+test('ProfileScreen shows a red dot on system announcements when profile notifications are unread', () => {
+  const src = read('src/features/profile/screens/ProfileScreen.tsx');
+
+  assert.match(src, /useTabBadgeStore/);
+  assert.match(src, /profileUnread/);
+  assert.match(src, /item\.id === MENU_ID\.SYSTEM_ANNOUNCEMENTS/);
+  assert.match(src, /showIndicatorDot=\{/);
 });
 
 test('MemberCenterScreen renders the four-tier catalog without legacy commerce APIs', () => {
@@ -113,14 +342,20 @@ test('MemberCenterScreen renders the four-tier catalog without legacy commerce A
     ['diamond', 1998],
     ['super', 3998],
   ]) {
-    assert.match(catalog, new RegExp(`tier: '${tier}'[\\s\\S]*?amount: ${price}`));
+    assert.match(
+      catalog,
+      new RegExp(`tier: '${tier}'[\\s\\S]*?amount: ${price}`),
+    );
   }
 
   assert.match(src, /MEMBERSHIP_PLANS\.map/);
   assert.match(src, /MEMBERSHIP_BENEFITS\.map/);
   // 允许 staged rollout 的 fetchMembershipProgramStatus（会员中心正文是否放开的灰度开关，
   // 与 MemberCenterScreen.spec.tsx 的行为契约一致），但仍禁止旧的「积分兑换/直购升级」商业化 API。
-  assert.doesNotMatch(src, /fetchMembershipPlans|upgradeMembership|performMembershipUpgradeFlow/);
+  assert.doesNotMatch(
+    src,
+    /fetchMembershipPlans|upgradeMembership|performMembershipUpgradeFlow/,
+  );
   assert.doesNotMatch(src, /积分|兑换会员|确认兑换/);
 });
 
@@ -142,8 +377,14 @@ test('MemberCenterScreen provides a vertical four-tier selection with per-tier v
   assert.match(src, /flexWrap:\s*'wrap'/);
   assert.match(src, /flexShrink:\s*1/);
   assert.match(src, /numberOfLines=\{2\}/);
-  assert.doesNotMatch(src, /created-groups|premium-circle|silver-circle|gold-circle|diamond-circle|super-member-circle/);
-  assert.doesNotMatch(catalog, /created-groups|premium-circle|silver-circle|gold-circle|diamond-circle|super-member-circle/);
+  assert.doesNotMatch(
+    src,
+    /created-groups|premium-circle|silver-circle|gold-circle|diamond-circle|super-member-circle/,
+  );
+  assert.doesNotMatch(
+    catalog,
+    /created-groups|premium-circle|silver-circle|gold-circle|diamond-circle|super-member-circle/,
+  );
 });
 
 test('MemberCenterScreen routes configured support and otherwise shows a clear fallback', () => {
@@ -151,7 +392,10 @@ test('MemberCenterScreen routes configured support and otherwise shows a clear f
   const env = read('.env.example');
 
   assert.match(src, /process\.env\.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID/);
-  assert.match(src, /getUserProfileHref\([\s\S]*'profile',[\s\S]*membershipSupportUserId/);
+  assert.match(
+    src,
+    /getUserProfileHref\([\s\S]*'profile',[\s\S]*membershipSupportUserId/,
+  );
   assert.match(src, /router\.push/);
   assert.match(src, /Alert\.alert/);
   assert.match(src, /defaultValue: '客服账号暂未配置'/);
@@ -239,11 +483,13 @@ test('MemberRulesScreen and every locale use the four-tier support-assisted cont
     const membership = bundle.profile?.membership;
     const memberRules = bundle.profile?.memberRules;
 
-    for (const key of requiredMembershipKeys) assert.ok(membership?.[key], `${locale}: ${key}`);
+    for (const key of requiredMembershipKeys)
+      assert.ok(membership?.[key], `${locale}: ${key}`);
     for (const tier of ['silver', 'gold', 'diamond', 'super']) {
       assert.ok(membership?.tiers?.[tier]?.name, `${locale}: tier ${tier}`);
     }
-    for (const key of requiredRuleKeys) assert.ok(memberRules?.rules?.[key], `${locale}: rule ${key}`);
+    for (const key of requiredRuleKeys)
+      assert.ok(memberRules?.rules?.[key], `${locale}: rule ${key}`);
     for (const obsolete of [
       'confirmExchange',
       'activateVip',
@@ -253,10 +499,22 @@ test('MemberRulesScreen and every locale use the four-tier support-assisted cont
       'confirmExchangePlan',
       'selectHigher',
     ]) {
-      assert.equal(membership?.[obsolete], undefined, `${locale}: obsolete ${obsolete}`);
+      assert.equal(
+        membership?.[obsolete],
+        undefined,
+        `${locale}: obsolete ${obsolete}`,
+      );
     }
-    assert.equal(membership?.benefits?.createdGroups, undefined, `${locale}: createdGroups`);
-    assert.equal(membership?.benefits?.premiumCircle, undefined, `${locale}: premiumCircle`);
+    assert.equal(
+      membership?.benefits?.createdGroups,
+      undefined,
+      `${locale}: createdGroups`,
+    );
+    assert.equal(
+      membership?.benefits?.premiumCircle,
+      undefined,
+      `${locale}: premiumCircle`,
+    );
     for (const removedValue of [
       'created-groups',
       'silver-circle',
@@ -317,7 +575,7 @@ test('WalletScreen shows the balance without an unsupported recharge action', ()
   assert.doesNotMatch(src, /帮积分/);
 });
 
-test('MallScreen shows requested product areas', () => {
+test('MallScreen shows the remaining product areas without membership or points sections', () => {
   const src = read('src/features/profile/screens/MallScreen.tsx');
   const api = read('src/services/api/mall.ts');
   // Backend sends title/name; the api module maps id → i18n key and keeps the backend
@@ -328,8 +586,19 @@ test('MallScreen shows requested product areas', () => {
   assert.match(api, /\/mall\/sections/);
   assert.match(zh, /群扩容/);
   assert.match(zh, /靓号/);
-  assert.match(zh, /会员充值/);
-  assert.match(zh, /积分充值/);
+  assert.match(zh, /装扮专区/);
+  assert.doesNotMatch(api, /defaultTitle: '会员专区'/);
+  assert.doesNotMatch(api, /defaultTitle: '积分专区'/);
+});
+
+test('MallScreen uses 商城 as the page title', () => {
+  const src = read('src/features/profile/screens/MallScreen.tsx');
+  const zh = read('src/i18n/locales/zh.json');
+
+  assert.match(src, /profile\.mall\.title[\s\S]*?defaultValue: '商城'/);
+  assert.match(zh, /"mall":\s*\{[\s\S]*?"title": "商城"/);
+  assert.doesNotMatch(src, /管家商城/);
+  assert.doesNotMatch(zh, /管家商城/);
 });
 
 test('CollectionsScreen shows collectible content types', () => {
@@ -378,5 +647,104 @@ test('MemberCenterScreen bounds retries and exits the initial loading state on f
   assert.match(
     src,
     /programStatus\?\.enabled \?\? \(programError \? false : null\)/,
+  );
+});
+
+test('GroupExpansionScreen blocks purchases during wallet load and fences completion to its focus cycle', () => {
+  const src = read('src/features/profile/screens/GroupExpansionScreen.tsx');
+
+  assert.match(
+    src,
+    /submittingProductId \|\|\s*walletLoadingRef\.current \|\|/,
+  );
+  assert.match(src, /walletLoadingRef\.current = true;[\s\S]*?fetchWallet\(\)/);
+  assert.match(
+    src,
+    /const generation = focusGenerationRef\.current;[\s\S]*?const canCommit = \(\) =>[\s\S]*?generation === focusGenerationRef\.current/,
+  );
+  assert.match(src, /loadProducts\(circleId,\s*generation,\s*owner\)/);
+  assert.match(
+    src,
+    /const disabled =[\s\S]*?!product\.purchasable[\s\S]*?walletLoading/,
+  );
+});
+
+test('GroupExpansionScreen reconciles an in-flight purchase into the current same-session focus', () => {
+  const src = read('src/features/profile/screens/GroupExpansionScreen.tsx');
+
+  assert.match(src, /purchaseInFlightProductIdRef/);
+  assert.match(
+    src,
+    /focusedRef\.current = true;[\s\S]*?setSubmittingProductId\(purchaseInFlightProductIdRef\.current\)/,
+  );
+  assert.match(
+    src,
+    /const completionGeneration =[\s\S]*?focusedRef\.current[\s\S]*?focusGenerationRef\.current/,
+  );
+  assert.match(
+    src,
+    /loadProducts\(circleId,\s*completionGeneration,\s*owner\)/,
+  );
+});
+
+test('FancyNumberScreen displays renewal totals from the lease quote', () => {
+  const src = read('src/features/profile/screens/FancyNumberScreen.tsx');
+
+  assert.match(
+    src,
+    /const renewalTotal = months \* \(mine\?\.unitPrice \?\? 100\)/,
+  );
+  assert.match(src, /profile\.fancyNumber\.total[\s\S]*?points: renewalTotal/);
+});
+
+test('commerce copy interpolates authoritative fancy-number prices and group limits', () => {
+  const fancy = read('src/features/profile/screens/FancyNumberScreen.tsx');
+  const expansion = read(
+    'src/features/profile/screens/GroupExpansionScreen.tsx',
+  );
+
+  assert.doesNotMatch(fancy, /(?:更换|支付|使用|收取)\s*100\s*积分/);
+  assert.doesNotMatch(fancy, /100\s*积分\s*\/\s*月/);
+  assert.match(
+    fancy,
+    /profile\.fancyNumber\.monthlyOffer[\s\S]*?points:\s*catalog\?\.unitPrice/,
+  );
+  assert.match(
+    fancy,
+    /profile\.fancyNumber\.switchOffer[\s\S]*?points:\s*switchPrice/,
+  );
+  assert.match(
+    expansion,
+    /profile\.groupExpansion\.limitReached[\s\S]*?limit:\s*catalog\.hardLimit/,
+  );
+
+  for (const locale of ['en', 'es', 'ja', 'ko', 'zh']) {
+    const messages = JSON.parse(read(`src/i18n/locales/${locale}.json`));
+    const fancyNumber = messages.profile.fancyNumber;
+    for (const key of [
+      'monthlyOffer',
+      'switchOffer',
+      'switchHint',
+      'permanentDescription',
+      'confirmPermanent',
+    ]) {
+      assert.match(fancyNumber[key], /\{\{points\}\}/);
+    }
+    assert.match(messages.profile.groupExpansion.limitReached, /\{\{limit\}\}/);
+  }
+});
+
+test('FancyNumberScreen applies a successful number locally before best-effort profile refresh', () => {
+  const src = read('src/features/profile/screens/FancyNumberScreen.tsx');
+  const setUserIndex = src.indexOf('authState.setUser(nextUser)');
+  const refreshIndex = src.indexOf('await refreshAuthUser(owner, operation)');
+
+  assert.match(src, /accountId:\s*result\.accountId/);
+  assert.match(src, /useKnownAccountsStore\.getState\(\)\.upsertAccount/);
+  assert.ok(setUserIndex >= 0);
+  assert.ok(refreshIndex > setUserIndex);
+  assert.match(
+    src,
+    /operation === undefined \|\|[\s\S]*?isLatestFancyNumberOperation\(operation\)/,
   );
 });

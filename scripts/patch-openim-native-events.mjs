@@ -100,6 +100,24 @@ static id RCTOpenIMSafeEventBodyWithDepth(id value, NSUInteger depth) {
     return [value description] ?: @"";
 }`;
 
+const listenerStateExtension = `@interface OpenIMSDKRN ()
+@property(atomic, assign) BOOL openIMHasListeners;
+@end`;
+
+const listenerLifecycle = `-(void)startObserving {
+    self.openIMHasListeners = YES;
+}
+
+-(void)stopObserving {
+    self.openIMHasListeners = NO;
+}
+
+- (void)invalidate {
+    self.openIMHasListeners = NO;
+    Open_im_sdkUnInitSDK(@"react-native-bridge-invalidate");
+    [super invalidate];
+}`;
+
 const pushEvent = `- (NSSet<NSString *> *)supportedOpenIMEvents {
     static NSSet<NSString *> *supportedOpenIMEvents = nil;
     static dispatch_once_t onceToken;
@@ -121,13 +139,13 @@ const pushEvent = `- (NSSet<NSString *> *)supportedOpenIMEvents {
         return;
     }
 
-    if (!hasListeners) {
+    if (!self.openIMHasListeners) {
         return;
     }
 
     id safeBody = RCTOpenIMSafeEventBody(data);
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (!hasListeners) {
+        if (!self.openIMHasListeners) {
             return;
         }
 
@@ -192,6 +210,23 @@ function insertHelper(src) {
   return src.replace(marker, `${helper}\n\n${marker}`);
 }
 
+function ensureInstanceListenerState(src) {
+  let next = src;
+  const implementationMarker = '@implementation OpenIMSDKRN';
+
+  if (!next.includes(listenerStateExtension)) {
+    if (!next.includes(implementationMarker)) {
+      throw new Error('OpenIM bridge implementation marker not found');
+    }
+    next = next.replace(
+      implementationMarker,
+      `${listenerStateExtension}\n\n${implementationMarker}`,
+    );
+  }
+
+  return next.replace(/\n\s*bool hasListeners;\s*\n/, '\n');
+}
+
 function ensureSupportedEvents(src) {
   const supportedStart = src.indexOf('supportedEvents');
   const supportedEnd = src.indexOf('startObserving', supportedStart);
@@ -226,6 +261,68 @@ function ensureSupportedEvents(src) {
     marker,
     `${marker}  @"onUserCommandAdd",\n  @"onUserCommandDelete",\n  @"onUserCommandUpdate",\n`,
   );
+}
+
+function ensureListenerLifecycle(src) {
+  return replaceBetween(
+    src,
+    '-(void)startObserving {',
+    '- (void)pushEvent:(NSString *)eventName data:(id)data {',
+    listenerLifecycle,
+  );
+}
+
+function ensureInitRebindsCurrentEmitter(src) {
+  const start = 'RCT_EXPORT_METHOD(initSDK:';
+  const end = 'RCT_EXPORT_METHOD(setBatchMsgListener)';
+  const startIndex = src.indexOf(start);
+  const endIndex = src.indexOf(end, startIndex + start.length);
+  if (startIndex === -1 || endIndex === -1) {
+    throw new Error('OpenIM initSDK block not found');
+  }
+
+  const block = src.slice(startIndex, endIndex);
+  if (block.includes('react-native-bridge-rebind')) {
+    return src;
+  }
+
+  const initCall =
+    '    BOOL flag = Open_im_sdkInitSDK(self,operationID,[newConfig json]);';
+  if (!block.includes(initCall)) {
+    throw new Error('OpenIM initSDK call marker not found');
+  }
+
+  const nextBlock = block.replace(
+    initCall,
+    '    Open_im_sdkUnInitSDK(@"react-native-bridge-rebind");\n' + initCall,
+  );
+  return `${src.slice(0, startIndex)}${nextBlock}${src.slice(endIndex)}`;
+}
+
+function ensureUnInitSDKSettles(src) {
+  const start = 'RCT_EXPORT_METHOD(unInitSDK:';
+  const end = 'RCT_EXPORT_METHOD(updateFcmToken:';
+  const startIndex = src.indexOf(start);
+  const endIndex = src.indexOf(end, startIndex + start.length);
+  if (startIndex === -1 || endIndex === -1) {
+    throw new Error('OpenIM unInitSDK block not found');
+  }
+
+  const block = src.slice(startIndex, endIndex);
+  if (block.includes('resolver(nil);')) {
+    return src;
+  }
+
+  const unInitCall = '    Open_im_sdkUnInitSDK(operationID);';
+  if (!block.includes(unInitCall)) {
+    throw new Error('OpenIM unInitSDK call marker not found');
+  }
+
+  const nextBlock = block.replace(
+    unInitCall,
+    `${unInitCall}\n    resolver(nil);`,
+  );
+  return `${src.slice(0, startIndex)}${nextBlock}${src.slice(endIndex)}`;
 }
 
 function replaceBetween(src, start, end, replacement) {
@@ -269,8 +366,10 @@ function removeExistingSupportedOpenIMEventMethods(src) {
 try {
   const source = fs.readFileSync(bridgePath, 'utf8');
   let next = insertHelper(source);
+  next = ensureInstanceListenerState(next);
   next = ensureSupportedEvents(next);
   next = removeExistingSupportedOpenIMEventMethods(next);
+  next = ensureListenerLifecycle(next);
   next = replaceBetween(
     next,
     '- (void)pushEvent:(NSString *)eventName data:(id)data {',
@@ -289,6 +388,8 @@ try {
     'RCT_EXPORT_METHOD(initSDK:',
     parseJsonStr2Array,
   );
+  next = ensureInitRebindsCurrentEmitter(next);
+  next = ensureUnInitSDKSettles(next);
 
   if (next === source) {
     console.log('[patch-openim] OpenIM native event hardening already applied');

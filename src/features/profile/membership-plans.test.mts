@@ -50,17 +50,17 @@ test('catalog defines every value in the seven benefit rows', () => {
     {
       id: 'group-member-limit',
       labelKey: 'profile.membership.benefits.groupMemberLimit',
-      values: { silver: 200, gold: 400, diamond: 1000, super: 'unlimited' },
+      values: { silver: 200, gold: 400, diamond: 1000, super: 3000 },
     },
     {
       id: 'joined-groups',
       labelKey: 'profile.membership.benefits.joinedGroups',
-      values: { silver: 100, gold: 100, diamond: 100, super: 100 },
+      values: { silver: 200, gold: 300, diamond: 1000, super: 'unlimited' },
     },
     {
       id: 'note-storage',
       labelKey: 'profile.membership.benefits.noteStorage',
-      values: { silver: 100, gold: 500, diamond: 1000, super: 'unlimited' },
+      values: { silver: 100, gold: 500, diamond: 1000, super: 3000 },
     },
     {
       id: 'city-filters',
@@ -73,8 +73,8 @@ test('catalog defines every value in the seven benefit rows', () => {
       values: {
         silver: 'none',
         gold: 'none',
-        diamond: 'one-gift',
-        super: 'one-premium-gift',
+        diamond: 'none',
+        super: 'permanent',
       },
     },
     {

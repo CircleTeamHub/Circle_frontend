@@ -11,7 +11,9 @@ export interface UserProfileData {
   id: string;
   name: string;
   accountId: string;
+  fancyNumber?: boolean;
   avatarUrl?: string;
+  avatarFrameAppearance: import('@/types').AvatarFrameAppearance | null;
   vipLevel?: number | null;
   displayIcons?: import('@/types').DisplayIcon[];
   likeCount?: number;

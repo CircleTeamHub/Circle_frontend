@@ -9,7 +9,7 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { MemberName } from '@/components/ui/member-name';
 import {
   AVATAR_FRAME_SCALE,
-  getMembershipFrameAsset,
+  getAvatarFrameSource,
 } from '@/features/profile/membership-frames';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
@@ -103,7 +103,9 @@ const ROW_COLOR: Record<InfoRowId, keyof ThemeColors> = {
   moreInfo: 'purple',
 };
 
-const AVATAR_SIZE = 72;
+const AVATAR_SIZE = 68;
+const AVATAR_RING_SIZE = AVATAR_SIZE + 10;
+const AVATAR_FRAME_SIZE = AVATAR_SIZE * AVATAR_FRAME_SCALE;
 const CARD_GAP = 12; // 分组卡片之间的垂直留白
 const RECOGNITION_COUNT_ICON_SOURCE = require('../../../../assets/images/like-outline.png');
 
@@ -115,10 +117,17 @@ const s = StyleSheet.create({
     paddingBottom: Spacing.md,
     gap: Spacing.sm,
   },
+  avatarStage: {
+    position: 'relative',
+    width: AVATAR_FRAME_SIZE,
+    height: AVATAR_FRAME_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   avatarRing: {
-    width: AVATAR_SIZE + 10,
-    height: AVATAR_SIZE + 10,
-    borderRadius: Radius.xxl + 5,
+    width: AVATAR_RING_SIZE,
+    height: AVATAR_RING_SIZE,
+    borderRadius: AVATAR_RING_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
@@ -126,7 +135,7 @@ const s = StyleSheet.create({
   avatarFrame: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
-    borderRadius: Radius.xxl,
+    borderRadius: AVATAR_SIZE / 2,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
@@ -137,10 +146,10 @@ const s = StyleSheet.create({
   },
   membershipFrameOverlay: {
     position: 'absolute',
-    width: AVATAR_SIZE * AVATAR_FRAME_SCALE,
-    height: AVATAR_SIZE * AVATAR_FRAME_SCALE,
-    top: (AVATAR_SIZE + 10 - AVATAR_SIZE * AVATAR_FRAME_SCALE) / 2,
-    left: (AVATAR_SIZE + 10 - AVATAR_SIZE * AVATAR_FRAME_SCALE) / 2,
+    width: AVATAR_FRAME_SIZE,
+    height: AVATAR_FRAME_SIZE,
+    top: 0,
+    left: 0,
     pointerEvents: 'none',
   },
   avatarImage: {
@@ -283,6 +292,7 @@ export default function UserProfileScreen() {
       id: profileId,
       name: fallbackName,
       accountId: '',
+      avatarFrameAppearance: null,
       vipLevel: 0,
       displayIcons: [],
       gender: null,
@@ -313,9 +323,15 @@ export default function UserProfileScreen() {
         setFriendStatus(null);
         setRemoteProfile({
           id: currentUser.id,
-          name: currentUser.nickname || currentUser.accountId,
+          name:
+            currentUser.nickname ||
+            (currentUser.fancyNumber
+              ? currentUser.accountId.toUpperCase()
+              : currentUser.accountId),
           accountId: currentUser.accountId,
+          fancyNumber: currentUser.fancyNumber,
           avatarUrl: currentUser.avatarUrl ?? undefined,
+          avatarFrameAppearance: currentUser.avatarFrameAppearance,
           vipLevel: currentUser.vipLevel,
           gender: currentUser.gender,
           city: currentUser.city,
@@ -343,9 +359,15 @@ export default function UserProfileScreen() {
 
           setRemoteProfile({
             id: profile.id,
-            name: profile.nickname || profile.accountId,
+            name:
+              profile.nickname ||
+              (profile.fancyNumber
+                ? profile.accountId.toUpperCase()
+                : profile.accountId),
             accountId: profile.accountId,
+            fancyNumber: profile.fancyNumber,
             avatarUrl: profile.avatarUrl ?? undefined,
+            avatarFrameAppearance: profile.avatarFrameAppearance,
             vipLevel: profile.vipLevel,
             displayIcons: profile.displayIcons ?? [],
             likeCount: profile.likeCount ?? 0,
@@ -446,11 +468,14 @@ export default function UserProfileScreen() {
     }, [friendStatus, isCurrentUser, profileId]),
   );
 
-  const profile = remoteProfile ?? fallbackProfile;
+  const rawProfile = remoteProfile ?? fallbackProfile;
+  const profile =
+    rawProfile.fancyNumber && rawProfile.accountId
+      ? { ...rawProfile, accountId: rawProfile.accountId.toUpperCase() }
+      : rawProfile;
   const profileMetaItems = getProfileMetaItems(profile);
-  // 会员头像框来自用户资料里的公开 vipLevel,不再额外补查。
   const profileVipLevel = profile.vipLevel ?? 0;
-  const membershipFrame = getMembershipFrameAsset(profileVipLevel);
+  const membershipFrame = getAvatarFrameSource(profile.avatarFrameAppearance);
   const displayName =
     remarkOverride === undefined
       ? friendSettings?.remark?.trim() || profile.remarkHint || profile.name
@@ -828,22 +853,28 @@ export default function UserProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={s.hero}>
-          <View
-            style={[
-              s.avatarRing,
-              d.avatarRing,
-              membershipFrame ? s.avatarRingFramed : null,
-            ]}
-          >
-            <View style={[s.avatarFrame, d.avatarFrame]}>
-              {profile.avatarUrl ? (
-                <Image source={{ uri: profile.avatarUrl }} style={s.avatarImage} />
-              ) : (
-                <Text style={d.avatarFallback}>{profile.name.charAt(0)}</Text>
-              )}
+          <View style={s.avatarStage}>
+            <View
+              style={[
+                s.avatarRing,
+                d.avatarRing,
+                membershipFrame ? s.avatarRingFramed : null,
+              ]}
+            >
+              <View style={[s.avatarFrame, d.avatarFrame]}>
+                {profile.avatarUrl ? (
+                  <Image source={{ uri: profile.avatarUrl }} style={s.avatarImage} />
+                ) : (
+                  <Text style={d.avatarFallback}>{profile.name.charAt(0)}</Text>
+                )}
+              </View>
             </View>
             {membershipFrame ? (
-              <Image source={membershipFrame} style={s.membershipFrameOverlay} />
+              <Image
+                source={membershipFrame}
+                style={s.membershipFrameOverlay}
+                contentFit="contain"
+              />
             ) : null}
           </View>
 

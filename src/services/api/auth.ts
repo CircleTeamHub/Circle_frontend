@@ -11,7 +11,7 @@ import * as Device from "expo-device";
 import { Platform } from "react-native";
 import { apiClient } from "@/services/api/client";
 import { normalizeUser } from "@/services/api/utils";
-import type { DisplayIcon } from "@/types";
+import type { AvatarFrameAppearance, DisplayIcon } from "@/types";
 
 // OpenIM platformID: 1=iOS, 2=Android, 5=Web. Backend signs imToken bound to
 // this platform; mismatched platform → onUserTokenInvalid on SDK login.
@@ -68,7 +68,8 @@ export type BackendAuthUser = {
   inviteCode: string;
   nickname: string;
   avatarUrl: string | null;
-  avatarFrame: string | null;
+  avatarFrame?: string | null;
+  avatarFrameAppearance?: AvatarFrameAppearance | null;
   cover: string | null;
   email: string | null;
   phoneNumber: string | null;

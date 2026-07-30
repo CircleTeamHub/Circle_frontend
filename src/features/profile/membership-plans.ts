@@ -72,8 +72,7 @@ export type MembershipBenefitValue =
   | 'diamond'
   | 'super-lifetime'
   | 'none'
-  | 'one-gift'
-  | 'one-premium-gift';
+  | 'permanent';
 
 export type MembershipBenefit = {
   id: MembershipBenefitId;
@@ -85,17 +84,17 @@ export const MEMBERSHIP_BENEFITS = [
   {
     id: 'group-member-limit',
     labelKey: 'profile.membership.benefits.groupMemberLimit',
-    values: { silver: 200, gold: 400, diamond: 1000, super: 'unlimited' },
+    values: { silver: 200, gold: 400, diamond: 1000, super: 3000 },
   },
   {
     id: 'joined-groups',
     labelKey: 'profile.membership.benefits.joinedGroups',
-    values: { silver: 100, gold: 100, diamond: 100, super: 100 },
+    values: { silver: 200, gold: 300, diamond: 1000, super: 'unlimited' },
   },
   {
     id: 'note-storage',
     labelKey: 'profile.membership.benefits.noteStorage',
-    values: { silver: 100, gold: 500, diamond: 1000, super: 'unlimited' },
+    values: { silver: 100, gold: 500, diamond: 1000, super: 3000 },
   },
   {
     id: 'city-filters',
@@ -108,8 +107,8 @@ export const MEMBERSHIP_BENEFITS = [
     values: {
       silver: 'none',
       gold: 'none',
-      diamond: 'one-gift',
-      super: 'one-premium-gift',
+      diamond: 'none',
+      super: 'permanent',
     },
   },
   // 名字颜色、会员徽章是次要展示项，放到权益列表最下面。

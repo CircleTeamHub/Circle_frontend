@@ -211,6 +211,43 @@ export interface DisplayIcon {
   sortOrder: number;
 }
 
+export interface AvatarFrameAppearance {
+  id: string;
+  key: string;
+  name: string;
+  imageUrl: string | null;
+}
+
+export type AvatarFrameOwnedSource =
+  | {
+      type: 'MEMBERSHIP';
+      minimumVipLevel: number;
+      expiresAt: string | null;
+    }
+  | {
+      type: 'ADMIN';
+      grantId: string;
+      expiresAt: string | null;
+    };
+
+export interface AvatarFrameInventoryItem extends AvatarFrameAppearance {
+  description: string;
+  minimumVipLevel: number | null;
+  ownedSources: AvatarFrameOwnedSource[];
+  availableUntil: string | null;
+  equipped: boolean;
+}
+
+export interface AvatarFrameInventory {
+  equippedFrameId: string | null;
+  items: AvatarFrameInventoryItem[];
+}
+
+export interface UserAppearance {
+  vipLevel: number;
+  avatarFrame: AvatarFrameAppearance | null;
+}
+
 export interface IconOption {
   type: DisplayIconType;
   title: string;
@@ -318,6 +355,7 @@ export interface CirclePlazaPost {
     nickname: string;
     avatarUrl: string | null;
     avatarFrame: string | null;
+    avatarFrameAppearance: AvatarFrameAppearance | null;
     accountId: string;
     vipLevel?: number | null;
     displayIcons: DisplayIcon[];
@@ -430,6 +468,7 @@ export interface MomentPost {
     id: string;
     nickname: string;
     avatarUrl: string | null;
+    avatarFrameAppearance: AvatarFrameAppearance | null;
     vipLevel?: number | null;
   };
   likeCount: number;

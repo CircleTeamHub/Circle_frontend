@@ -24,6 +24,7 @@ jest.mock('@/storage', () => ({
   storage: { getString: jest.fn(), set: jest.fn() },
 }));
 jest.mock('react-i18next', () => ({
+  initReactI18next: { type: '3rdParty', init: jest.fn() },
   useTranslation: () => ({
     t: (key: string, options?: { defaultValue?: string }) =>
       options?.defaultValue ?? key,
@@ -53,6 +54,7 @@ const alice = {
   nickname: 'Alice',
   avatarUrl: null,
   avatarFrame: null,
+  avatarFrameAppearance: null,
   gender: 'UNKNOWN',
   lastOnline: null,
   friendsSince: '2026-01-01',

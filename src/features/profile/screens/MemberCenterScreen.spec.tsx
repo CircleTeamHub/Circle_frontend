@@ -134,6 +134,7 @@ function user(vipLevel: number, id = 'user-a'): AuthUser {
     nickname: id,
     avatarUrl: null,
     avatarFrame: null,
+    avatarFrameAppearance: null,
     cover: null,
     email: null,
     phoneNumber: null,
@@ -224,7 +225,7 @@ test('marketing phase hides recharge actions and shows the new gold limits', asy
   expect(
     screen.getByText('当前所有用户免费享有黄金额度'),
   ).toBeTruthy();
-  expect(screen.getByText('单群 400 人 · 最多加入 100 个群')).toBeTruthy();
+  expect(screen.getByText('单群 400 人 · 最多加入 300 个群')).toBeTruthy();
   expect(screen.getByText('笔记 500 条 · 城市筛选 10 个')).toBeTruthy();
   expect(screen.queryByText(/联系客服开通/)).toBeNull();
   expect(screen.queryByText('¥')).toBeNull();

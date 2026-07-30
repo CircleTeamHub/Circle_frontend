@@ -50,6 +50,8 @@ export type MallSection = {
   products: MallProduct[];
 };
 
+const REMOVED_SECTION_IDS = new Set(['membership', 'points']);
+
 // 本地静态目录 = 单一事实源：既是离线 / 请求失败时的 FALLBACK_SECTIONS，也用来派生
 // id → i18n key 的映射表。后端目录与此同构（仅 name/title 是显示串）。
 export const FALLBACK_SECTIONS: MallSection[] = [
@@ -65,31 +67,12 @@ export const FALLBACK_SECTIONS: MallSection[] = [
     ],
   },
   {
-    id: 'membership',
-    titleKey: 'profile.mall.sections.membership',
-    defaultTitle: '会员专区',
-    products: [
-      { id: 'membership-upgrade', nameKey: 'profile.mall.items.membershipRecharge', defaultName: '会员充值', icon: 'diamond-outline', color: '#F59E0B', action: 'membership' },
-      { id: 'experience-exchange', nameKey: 'profile.mall.items.exchangeExperience', defaultName: '兑换经验', icon: 'trending-up-outline', color: '#F59E0B', action: 'experience' },
-      { id: 'points-recharge', nameKey: 'profile.mall.items.pointsRecharge', defaultName: '积分充值', icon: 'wallet-outline', color: '#F59E0B', action: 'wallet' },
-    ],
-  },
-  {
     id: 'fancy-number',
     titleKey: 'profile.mall.sections.fancyNumber',
     defaultTitle: '靓号专区',
     products: [
       { id: 'choose-fancy-number', nameKey: 'profile.mall.items.chooseFancyNumber', defaultName: '自选靓号', icon: 'ribbon-outline', color: '#E11D48', action: 'fancy-number' },
       { id: 'renew-fancy-number', nameKey: 'profile.mall.items.renewFancyNumber', defaultName: '续费靓号', icon: 'bookmark-outline', color: '#E11D48', action: 'fancy-number-renew' },
-    ],
-  },
-  {
-    id: 'points',
-    titleKey: 'profile.mall.sections.points',
-    defaultTitle: '积分专区',
-    products: [
-      { id: 'redeem-code', nameKey: 'profile.mall.items.redeemCode', defaultName: '查询&兑换卡密', icon: 'server-outline', color: '#2563EB', action: 'redeem-code' },
-      { id: 'buy-code', nameKey: 'profile.mall.items.buyCode', defaultName: '购买卡密', icon: 'bag-handle-outline', color: '#2563EB', action: 'buy-code' },
     ],
   },
   {
@@ -159,5 +142,7 @@ export async function fetchMallSections(): Promise<MallSection[]> {
       defaultValue: '服务返回了无效数据',
     }),
   );
-  return sections.map(toMallSection);
+  return sections
+    .filter((section) => !REMOVED_SECTION_IDS.has(section.id))
+    .map(toMallSection);
 }

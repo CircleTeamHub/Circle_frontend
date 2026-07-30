@@ -1,11 +1,22 @@
 import { apiClient } from '@/services/api/client';
-import { buildQuery, normalizeMediaUrl } from '@/services/api/utils';
+import {
+  buildQuery,
+  normalizeUserAvatarFrameAppearance,
+  normalizeMediaUrl,
+} from '@/services/api/utils';
 import type {
   CreateMomentInput,
   MomentComment,
   MomentPost,
   PaginatedResponse,
+  AvatarFrameAppearance,
 } from '@/types';
+
+type BackendMomentPost = Omit<MomentPost, 'author'> & {
+  author: Omit<MomentPost['author'], 'avatarFrameAppearance'> & {
+    avatarFrameAppearance?: AvatarFrameAppearance | null;
+  };
+};
 
 export function normalizeMomentComment(comment: MomentComment): MomentComment {
   return {
@@ -19,7 +30,7 @@ export function normalizeMomentComment(comment: MomentComment): MomentComment {
   };
 }
 
-function normalizeMoment(post: MomentPost): MomentPost {
+function normalizeMoment(post: BackendMomentPost): MomentPost {
   return {
     ...post,
     // normalizeMediaUrl 返回 `string | null | undefined`；之前 `as string ?? url` 是骗类型系统，
@@ -30,6 +41,10 @@ function normalizeMoment(post: MomentPost): MomentPost {
       avatarUrl: post.author.avatarUrl
         ? normalizeMediaUrl(post.author.avatarUrl)
         : null,
+      avatarFrameAppearance: normalizeUserAvatarFrameAppearance(
+        post.author.avatarFrameAppearance,
+        post.author.vipLevel,
+      ),
     },
     comments: post.comments.map(normalizeMomentComment),
   };
@@ -40,7 +55,7 @@ export async function fetchMomentsFeed(params?: {
   limit?: number;
   cursor?: string;
 }): Promise<PaginatedResponse<MomentPost>> {
-  const result = await apiClient<PaginatedResponse<MomentPost>>(
+  const result = await apiClient<PaginatedResponse<BackendMomentPost>>(
     `/trace/feed${buildQuery(params ?? {})}`,
   );
 
@@ -54,7 +69,7 @@ export async function fetchUserMoments(
   userId: string,
   params?: { page?: number; limit?: number; cursor?: string },
 ): Promise<PaginatedResponse<MomentPost>> {
-  const result = await apiClient<PaginatedResponse<MomentPost>>(
+  const result = await apiClient<PaginatedResponse<BackendMomentPost>>(
     `/trace/feed${buildQuery({ ...(params ?? {}), authorId: userId })}`,
   );
 
@@ -72,14 +87,14 @@ export async function fetchNewMomentsCount(since: string): Promise<number> {
 }
 
 export async function fetchMomentById(id: string): Promise<MomentPost> {
-  const result = await apiClient<MomentPost>(`/trace/${id}`);
+  const result = await apiClient<BackendMomentPost>(`/trace/${id}`);
   return normalizeMoment(result);
 }
 
 export async function createMoment(
   input: CreateMomentInput,
 ): Promise<MomentPost> {
-  const post = await apiClient<MomentPost>('/trace', {
+  const post = await apiClient<BackendMomentPost>('/trace', {
     method: 'POST',
     body: input,
   });

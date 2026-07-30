@@ -1,177 +1,38 @@
-import { useEffect } from 'react';
-import { AppState } from 'react-native';
-import { create } from 'zustand';
-import { fetchVipLevels } from '@/services/api/users';
+import {
+  invalidateUserAppearances,
+  requestUserAppearance,
+  useRequestUserAppearance,
+  useUserAppearance,
+  useUserAppearanceStore,
+} from '@/stores/userAppearanceStore';
 
-/**
- * userId → vipLevel 的客户端缓存（会员名字特效用）。
- *
- * 内联优先：能随用户/作者/资料返回 vipLevel 的地方（广场 / 朋友圈 / 资料）直接传 prop，
- * 不进本缓存。只有拿不到 vipLevel、只有 userId 的场景（聊天发送者 / 会话列表 / 通讯录 /
- * 通知等 IM/列表）才按 userId 请求：本 store 合并去重、防抖后一次批量拉取
- * `POST /user/vip-levels`，回来后订阅的组件自动重渲染、名字亮起。
- *
- * 只有 `levels` 需要响应式；pending / requested 是内部批处理簿记，放模块级可变集合，
- * 不进 store 状态，避免无谓的重渲染。
- */
-interface UserVipState {
-  levels: Record<string, number>;
-  // 回前台时递增：订阅它的 useUserVipLevel 会重新按 userId 请求一次，让长期挂载的行
-  // （通讯录 / 会话 / 通知）在 TTL 过期后也刷新到升级 / 降级后的档位，而不必等组件重挂。
-  refreshTick: number;
-}
+/** Compatibility alias; new code should subscribe to useUserAppearanceStore. */
+export const useUserVipStore = useUserAppearanceStore;
 
-export const useUserVipStore = create<UserVipState>(() => ({
-  levels: {},
-  refreshTick: 0,
-}));
-
-const BATCH_DELAY_MS = 60;
-const MAX_IDS_PER_REQUEST = 200;
-// 缓存新鲜期：过期后同一 userId 允许再次拉取。否则一个被客服升级的用户会一直停在
-// 旧档名字特效、直到 app 冷启动（评审 P2）。5 分钟够久到不刷屏、又够短到升级可感知。
-const CACHE_TTL_MS = 5 * 60 * 1000;
-
-// 正在请求中的 id——避免同一批重复请求；成功回来后移出，交由 TTL 决定是否再拉。
-const requested = new Set<string>();
-// userId → 上次成功拉取的时间戳，用于 TTL 判新鲜。
-const fetchedAt = new Map<string, number>();
-let pending = new Set<string>();
-let flushTimer: ReturnType<typeof setTimeout> | null = null;
-// 批次代次：回前台 / 显式失效会 bump。在飞的 flush 捕获起始代次,响应回来时若代次已变,
-// 说明本批已被更新的请求取代——丢弃,避免旧响应乱序到达覆盖回陈旧档位。
-let batchGeneration = 0;
-
-// 瞬时失败后的有界重试：已挂载的 useUserVipLevel 只依赖 userId、不会自己重新触发，
-// 不主动重排的话这些名字会一直不亮、直到相关组件重挂或别处再请求同一 id。
-const MAX_FETCH_RETRIES = 3;
-const RETRY_DELAY_MS = 3000;
-const retryCount = new Map<string, number>();
-
-function scheduleRetry(ids: string[]): void {
-  const retriable = ids.filter(
-    (id) => (retryCount.get(id) ?? 0) < MAX_FETCH_RETRIES,
-  );
-  if (retriable.length === 0) {
-    return;
-  }
-  setTimeout(() => {
-    for (const id of retriable) {
-      retryCount.set(id, (retryCount.get(id) ?? 0) + 1);
-      // 失败的 id 已从 requested 移除、也未记 fetchedAt，requestVipLevel 会重新入队。
-      requestVipLevel(id);
-    }
-  }, RETRY_DELAY_MS);
-}
-
-function isVipLevelFresh(userId: string): boolean {
-  const at = fetchedAt.get(userId);
-  return at !== undefined && Date.now() - at < CACHE_TTL_MS;
-}
-
-// 回前台刷新：清新鲜度标记 + 在途簿记并 bump refreshTick，让所有已挂载的 useUserVipLevel
-// 重新请求一次（拉到离开期间发生的升级 / 降级）。只清 fetchedAt / requested、不动 levels——
-// 重拉回来前先按旧值显示，避免闪烁。回前台是拿到最新会员态最自然的时机。
-AppState.addEventListener('change', (status) => {
-  if (status === 'active') {
-    fetchedAt.clear();
-    requested.clear();
-    batchGeneration += 1;
-    useUserVipStore.setState((s) => ({ refreshTick: s.refreshTick + 1 }));
-  }
-});
-
-async function flush(): Promise<void> {
-  flushTimer = null;
-  const startGeneration = batchGeneration;
-  const ids = [...pending];
-  pending = new Set();
-
-  for (let i = 0; i < ids.length; i += MAX_IDS_PER_REQUEST) {
-    const chunk = ids.slice(i, i + MAX_IDS_PER_REQUEST);
-    try {
-      const result = await fetchVipLevels(chunk);
-      // 期间发生了回前台 / 失效（代次已变）：本批已被更新的请求取代,丢弃本响应,
-      // 避免旧的、可能已过期的档位乱序覆盖新值。这些 id 由更新的那一批负责。
-      if (batchGeneration !== startGeneration) {
-        return;
-      }
-      const now = Date.now();
-      // 记录拉取时间（含未返回档位=非会员的 id），TTL 内不再重复请求；并移出 requested，
-      // 让 TTL 过期后能重新入队、拉到升级后的档位。
-      chunk.forEach((id) => {
-        requested.delete(id);
-        fetchedAt.set(id, now);
-        retryCount.delete(id);
-      });
-      // 用本批响应重建档位：返回了的写入；请求了但**未返回**的（= 非会员 / 已降级）从
-      // 缓存删除——否则一个到期降级的用户会一直保留会员名字特效。只动本批 id，不碰其他缓存；
-      // 无实际变化时返回原 state，避免无谓重渲染。
-      useUserVipStore.setState((state) => {
-        const levels = { ...state.levels, ...result };
-        let changed = Object.keys(result).length > 0;
-        for (const id of chunk) {
-          if (!(id in result) && id in levels) {
-            delete levels[id];
-            changed = true;
-          }
-        }
-        return changed ? { levels } : state;
-      });
-    } catch {
-      // 尽力而为：失败就让这些名字先按普通样式显示；从 requested 移除，并主动排一次
-      // 有界重试（连通性恢复后名字自动亮起，无需等组件重挂）。
-      chunk.forEach((id) => requested.delete(id));
-      scheduleRetry(chunk);
-    }
-  }
-}
-
-/** 请求某个 userId 的 vipLevel（已知 / 在途则跳过）；合并防抖后批量拉取。 */
+/** Compatibility delegate for existing callers. */
 export function requestVipLevel(userId: string): void {
-  if (!userId) {
-    return;
-  }
-  // 命中且仍新鲜、或正在请求中，跳过；TTL 过期后允许重新拉取升级后的档位。
-  if (isVipLevelFresh(userId) || requested.has(userId)) {
-    return;
-  }
-  requested.add(userId);
-  pending.add(userId);
-  if (!flushTimer) {
-    flushTimer = setTimeout(() => {
-      void flush();
-    }, BATCH_DELAY_MS);
-  }
+  requestUserAppearance(userId);
 }
 
-/**
- * 显式失效缓存（会员/会话数据刷新、回前台重连等重大事件后可调），强制下次按 userId
- * 重新拉取。TTL 是兜底，此函数用于「已知发生变更」时立即重建，无需等 TTL 过期。
- */
+/** Clears the shared appearance/VIP cache on logout or explicit invalidation. */
 export function invalidateVipLevels(): void {
-  requested.clear();
-  fetchedAt.clear();
-  batchGeneration += 1;
-  // bump refreshTick：已挂载的 useUserVipLevel 会重新请求（清空后按新会话重新拉取）。
-  useUserVipStore.setState((s) => ({ levels: {}, refreshTick: s.refreshTick + 1 }));
+  invalidateUserAppearances();
 }
 
-/**
- * 读取某用户的 vipLevel（会员名字特效用）。未知时返回 undefined 并触发一次批量拉取，
- * 数据回来后自动重渲染。userId 为空则不查（内联已提供 vipLevel 的调用处传 null 即可跳过）。
- */
+/** Existing VIP-only hook projected from the shared appearance cache. */
 export function useUserVipLevel(userId?: string | null): number | undefined {
-  const level = useUserVipStore((state) =>
-    userId ? state.levels[userId] : undefined,
+  const normalizedId = userId?.trim();
+  const level = useUserAppearanceStore((state) =>
+    normalizedId ? state.levels[normalizedId] : undefined,
   );
-  // 订阅 refreshTick：回前台 bump 后，即便 userId 没变也会重新请求一次（TTL 已在
-  // 回前台时清空，故会真正重新拉取升级 / 降级后的档位）。
-  const refreshTick = useUserVipStore((state) => state.refreshTick);
-  useEffect(() => {
-    if (userId) {
-      requestVipLevel(userId);
-    }
-  }, [userId, refreshTick]);
+  useRequestUserAppearance(normalizedId);
   return level;
 }
+
+export {
+  invalidateUserAppearances,
+  requestUserAppearance,
+  useRequestUserAppearance,
+  useUserAppearance,
+  useUserAppearanceStore,
+};
