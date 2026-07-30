@@ -235,12 +235,20 @@ test('FancyNumberScreen fences load-more results by focus generation and cursor'
   assert.match(src, /catalogCursorRef/);
   assert.match(src, /focusGenerationRef\.current !== generation/);
   assert.match(src, /catalogCursorRef\.current !== cursor/);
+  assert.match(src, /hasMatchingFancyNumberCatalogQuote\(catalog, next\)/);
+  assert.match(
+    src,
+    /catalogCursorRef\.current = null;[\s\S]*?await loadInitial\(generation\)/,
+  );
 });
 
 test('FancyNumberScreen keeps lease state unknown after a failed lease lookup', () => {
   const src = read('src/features/profile/screens/FancyNumberScreen.tsx');
 
-  assert.match(src, /type LeaseLoadStatus = 'loading' \| 'ready' \| 'error'/);
+  assert.match(
+    src,
+    /type LeaseLoadStatus = ["']loading["'] \| ["']ready["'] \| ["']error["']/,
+  );
   assert.match(
     src,
     /mineResult\.status === 'fulfilled'[\s\S]*?setLeaseStatus\('ready'\)[\s\S]*?setLeaseStatus\('error'\)/,
@@ -266,10 +274,7 @@ test('FancyNumberScreen reconciles a selected recommendation on catalog refresh'
   );
   assert.match(src, /updateSelectedRecommendation\(refreshedSelection\)/);
   assert.match(src, /setAvailabilityRefresh\(\(current\) => current \+ 1\)/);
-  assert.match(
-    src,
-    /\[availabilityRefresh, customValue, isOffline, t\]/,
-  );
+  assert.match(src, /\[availabilityRefresh, customValue, isOffline, t\]/);
 });
 
 test('FancyNumberScreen retains its cross-focus purchase fence until settlement', () => {
@@ -279,17 +284,26 @@ test('FancyNumberScreen retains its cross-focus purchase fence until settlement'
   assert.match(src, /focusedRef\.current = true/);
   assert.match(src, /focusedRef\.current = false/);
   assert.match(src, /setSubmitting\(purchaseInFlightRef\.current\)/);
-  assert.match(
-    src,
-    /purchaseInFlightRef\.current = true;[\s\S]*?try \{/,
-  );
+  assert.match(src, /purchaseInFlightRef\.current = true;[\s\S]*?try \{/);
   assert.match(
     src,
     /finally \{[\s\S]*?purchaseInFlightRef\.current = false;[\s\S]*?focusedRef\.current/,
   );
+  assert.match(src, /complete\(intent\.signature, intent\.key\)/);
+  assert.match(src, /beginFancyNumberOperation/);
+  assert.match(src, /isLatestFancyNumberOperation\(operation\)/);
+});
+
+test('FancyNumberScreen invalidates and rechecks custom availability on refocus', () => {
+  const src = read('src/features/profile/screens/FancyNumberScreen.tsx');
+
   assert.match(
     src,
-    /complete\(intent\.signature, intent\.key\)/,
+    /focusedRef\.current = true;[\s\S]*?setAvailabilityRefresh\(\(current\) => current \+ 1\)/,
+  );
+  assert.match(
+    src,
+    /focusedRef\.current = false;[\s\S]*?availabilityGenerationRef\.current \+= 1/,
   );
 });
 
@@ -634,7 +648,10 @@ test('MemberCenterScreen bounds retries and exits the initial loading state on f
 test('GroupExpansionScreen blocks purchases during wallet load and fences completion to its focus cycle', () => {
   const src = read('src/features/profile/screens/GroupExpansionScreen.tsx');
 
-  assert.match(src, /submittingProductId \|\|\s*walletLoadingRef\.current \|\|/);
+  assert.match(
+    src,
+    /submittingProductId \|\|\s*walletLoadingRef\.current \|\|/,
+  );
   assert.match(src, /walletLoadingRef\.current = true;[\s\S]*?fetchWallet\(\)/);
   assert.match(
     src,
@@ -650,10 +667,14 @@ test('GroupExpansionScreen blocks purchases during wallet load and fences comple
 test('FancyNumberScreen applies a successful number locally before best-effort profile refresh', () => {
   const src = read('src/features/profile/screens/FancyNumberScreen.tsx');
   const setUserIndex = src.indexOf('authState.setUser(nextUser)');
-  const refreshIndex = src.indexOf('await refreshAuthUser(owner)');
+  const refreshIndex = src.indexOf('await refreshAuthUser(owner, operation)');
 
   assert.match(src, /accountId:\s*result\.accountId/);
   assert.match(src, /useKnownAccountsStore\.getState\(\)\.upsertAccount/);
   assert.ok(setUserIndex >= 0);
   assert.ok(refreshIndex > setUserIndex);
+  assert.match(
+    src,
+    /operation === undefined \|\|[\s\S]*?isLatestFancyNumberOperation\(operation\)/,
+  );
 });
