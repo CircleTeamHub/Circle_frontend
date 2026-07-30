@@ -47,7 +47,10 @@ test('ProfileScreen places system announcements first, customer service after no
 test('ProfileScreen customer service row routes to the support-center screen', () => {
   const src = read('src/features/profile/screens/ProfileScreen.tsx');
 
-  assert.match(src, /id: MENU_ID\.CUSTOMER_SERVICE[\s\S]*?icon: "headset-outline"/);
+  assert.match(
+    src,
+    /id: MENU_ID\.CUSTOMER_SERVICE[\s\S]*?icon: "headset-outline"/,
+  );
   assert.match(src, /profile\.customerService\.menuLabel/);
   assert.match(
     src,
@@ -69,7 +72,10 @@ test('customer service exposes recharge/issue/dispute/account with env override 
 
   // Each category opens a 1:1 chat with its own account, titled by the category label.
   assert.match(screen, /getOrCreateSingleConversation\(\s*category\.accountId/);
-  assert.match(screen, /getChatDetailHref\(\s*['"]profile['"],\s*category\.accountId/);
+  assert.match(
+    screen,
+    /getChatDetailHref\(\s*['"]profile['"],\s*category\.accountId/,
+  );
 
   // 会话解析较慢时用户可能已离场：解析/兜底完成后先查焦点守卫再跳转，
   // 避免从非活跃屏幕把聊天页推入栈。
@@ -92,25 +98,58 @@ test('customer service exposes recharge/issue/dispute/account with env override 
 });
 
 test('profile commerce routes export their screens', () => {
-  assert.match(read('app/(tabs)/profile/system-announcements.tsx'), /SystemAnnouncementsScreen/);
-  assert.match(read('app/(tabs)/profile/member-center.tsx'), /MemberCenterScreen/);
-  assert.match(read('app/(tabs)/profile/member-rules.tsx'), /MemberRulesScreen/);
-  assert.match(read('app/(tabs)/profile/credit-score.tsx'), /CreditScoreScreen/);
+  assert.match(
+    read('app/(tabs)/profile/system-announcements.tsx'),
+    /SystemAnnouncementsScreen/,
+  );
+  assert.match(
+    read('app/(tabs)/profile/member-center.tsx'),
+    /MemberCenterScreen/,
+  );
+  assert.match(
+    read('app/(tabs)/profile/member-rules.tsx'),
+    /MemberRulesScreen/,
+  );
+  assert.match(
+    read('app/(tabs)/profile/credit-score.tsx'),
+    /CreditScoreScreen/,
+  );
   assert.match(read('app/(tabs)/profile/wallet.tsx'), /WalletScreen/);
   assert.match(read('app/(tabs)/profile/mall.tsx'), /MallScreen/);
-  assert.match(read('app/(tabs)/profile/fancy-number.tsx'), /FancyNumberScreen/);
-  assert.match(read('app/(tabs)/profile/group-expansion.tsx'), /GroupExpansionScreen/);
+  assert.match(
+    read('app/(tabs)/profile/fancy-number.tsx'),
+    /FancyNumberScreen/,
+  );
+  assert.match(
+    read('app/(tabs)/profile/group-expansion.tsx'),
+    /GroupExpansionScreen/,
+  );
   assert.match(read('app/(tabs)/profile/collections.tsx'), /CollectionsScreen/);
-  assert.match(read('app/(tabs)/profile/customer-service.tsx'), /CustomerServiceScreen/);
-  assert.match(read('app/(tabs)/profile/app-settings.tsx'), /AppSettingsScreen/);
+  assert.match(
+    read('app/(tabs)/profile/customer-service.tsx'),
+    /CustomerServiceScreen/,
+  );
+  assert.match(
+    read('app/(tabs)/profile/app-settings.tsx'),
+    /AppSettingsScreen/,
+  );
 });
 
 test('MallScreen routes fancy-number purchase and renewal actions', () => {
   const src = read('src/features/profile/screens/MallScreen.tsx');
 
-  assert.match(src, /product\.action === 'fancy-number'[\s\S]*?profile\/fancy-number/);
-  assert.match(src, /product\.action === 'fancy-number-renew'[\s\S]*?mode:\s*'renew'/);
-  assert.match(src, /product\.action === 'group-expansion'[\s\S]*?profile\/group-expansion/);
+  assert.match(
+    src,
+    /product\.action === 'fancy-number'[\s\S]*?profile\/fancy-number/,
+  );
+  assert.match(
+    src,
+    /product\.action === 'fancy-number-renew'[\s\S]*?mode:\s*'renew'/,
+  );
+  assert.match(
+    src,
+    /product\.action === 'group-expansion'[\s\S]*?profile\/group-expansion/,
+  );
 });
 
 test('GroupExpansionScreen loads owner circles and supports idempotent point purchases', () => {
@@ -162,18 +201,12 @@ test('FancyNumberScreen supports listing, purchase, renewal, permanent switching
   assert.match(src, /purchaseFancyNumber/);
   assert.match(src, /switchPermanentFancyNumber/);
   assert.match(src, /selectedRecommendation/);
-  assert.match(
-    src,
-    /selectedRecommendation\?\.id[\s\S]*?purchaseFancyNumber/,
-  );
+  assert.match(src, /selectedRecommendation\?\.id[\s\S]*?purchaseFancyNumber/);
   assert.match(
     src,
     /selectedRecommendation\?\.id[\s\S]*?switchPermanentFancyNumber/,
   );
-  assert.match(
-    src,
-    /result\.accountId !== selectedRecommendation\.value/,
-  );
+  assert.match(src, /result\.accountId !== selectedRecommendation\.value/);
   assert.match(src, /result\.accountId !== mine\.accountId/);
   assert.match(src, /TextInput/);
   assert.match(src, /setTimeout/);
@@ -184,6 +217,8 @@ test('FancyNumberScreen supports listing, purchase, renewal, permanent switching
   assert.match(src, /setRealtimeBalance/);
   assert.match(src, /fetchCurrentUser/);
   assert.match(src, /purchaseMode === ["']PERMANENT_FREE["']/);
+  assert.match(src, /Promise\.allSettled/);
+  assert.match(src, /errorText && !catalog && !mine/);
 });
 
 test('FancyNumberScreen fences load-more results by focus generation and cursor', () => {
@@ -213,14 +248,20 @@ test('MemberCenterScreen renders the four-tier catalog without legacy commerce A
     ['diamond', 1998],
     ['super', 3998],
   ]) {
-    assert.match(catalog, new RegExp(`tier: '${tier}'[\\s\\S]*?amount: ${price}`));
+    assert.match(
+      catalog,
+      new RegExp(`tier: '${tier}'[\\s\\S]*?amount: ${price}`),
+    );
   }
 
   assert.match(src, /MEMBERSHIP_PLANS\.map/);
   assert.match(src, /MEMBERSHIP_BENEFITS\.map/);
   // 允许 staged rollout 的 fetchMembershipProgramStatus（会员中心正文是否放开的灰度开关，
   // 与 MemberCenterScreen.spec.tsx 的行为契约一致），但仍禁止旧的「积分兑换/直购升级」商业化 API。
-  assert.doesNotMatch(src, /fetchMembershipPlans|upgradeMembership|performMembershipUpgradeFlow/);
+  assert.doesNotMatch(
+    src,
+    /fetchMembershipPlans|upgradeMembership|performMembershipUpgradeFlow/,
+  );
   assert.doesNotMatch(src, /积分|兑换会员|确认兑换/);
 });
 
@@ -242,8 +283,14 @@ test('MemberCenterScreen provides a vertical four-tier selection with per-tier v
   assert.match(src, /flexWrap:\s*'wrap'/);
   assert.match(src, /flexShrink:\s*1/);
   assert.match(src, /numberOfLines=\{2\}/);
-  assert.doesNotMatch(src, /created-groups|premium-circle|silver-circle|gold-circle|diamond-circle|super-member-circle/);
-  assert.doesNotMatch(catalog, /created-groups|premium-circle|silver-circle|gold-circle|diamond-circle|super-member-circle/);
+  assert.doesNotMatch(
+    src,
+    /created-groups|premium-circle|silver-circle|gold-circle|diamond-circle|super-member-circle/,
+  );
+  assert.doesNotMatch(
+    catalog,
+    /created-groups|premium-circle|silver-circle|gold-circle|diamond-circle|super-member-circle/,
+  );
 });
 
 test('MemberCenterScreen routes configured support and otherwise shows a clear fallback', () => {
@@ -251,7 +298,10 @@ test('MemberCenterScreen routes configured support and otherwise shows a clear f
   const env = read('.env.example');
 
   assert.match(src, /process\.env\.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID/);
-  assert.match(src, /getUserProfileHref\([\s\S]*'profile',[\s\S]*membershipSupportUserId/);
+  assert.match(
+    src,
+    /getUserProfileHref\([\s\S]*'profile',[\s\S]*membershipSupportUserId/,
+  );
   assert.match(src, /router\.push/);
   assert.match(src, /Alert\.alert/);
   assert.match(src, /defaultValue: '客服账号暂未配置'/);
@@ -339,11 +389,13 @@ test('MemberRulesScreen and every locale use the four-tier support-assisted cont
     const membership = bundle.profile?.membership;
     const memberRules = bundle.profile?.memberRules;
 
-    for (const key of requiredMembershipKeys) assert.ok(membership?.[key], `${locale}: ${key}`);
+    for (const key of requiredMembershipKeys)
+      assert.ok(membership?.[key], `${locale}: ${key}`);
     for (const tier of ['silver', 'gold', 'diamond', 'super']) {
       assert.ok(membership?.tiers?.[tier]?.name, `${locale}: tier ${tier}`);
     }
-    for (const key of requiredRuleKeys) assert.ok(memberRules?.rules?.[key], `${locale}: rule ${key}`);
+    for (const key of requiredRuleKeys)
+      assert.ok(memberRules?.rules?.[key], `${locale}: rule ${key}`);
     for (const obsolete of [
       'confirmExchange',
       'activateVip',
@@ -353,10 +405,22 @@ test('MemberRulesScreen and every locale use the four-tier support-assisted cont
       'confirmExchangePlan',
       'selectHigher',
     ]) {
-      assert.equal(membership?.[obsolete], undefined, `${locale}: obsolete ${obsolete}`);
+      assert.equal(
+        membership?.[obsolete],
+        undefined,
+        `${locale}: obsolete ${obsolete}`,
+      );
     }
-    assert.equal(membership?.benefits?.createdGroups, undefined, `${locale}: createdGroups`);
-    assert.equal(membership?.benefits?.premiumCircle, undefined, `${locale}: premiumCircle`);
+    assert.equal(
+      membership?.benefits?.createdGroups,
+      undefined,
+      `${locale}: createdGroups`,
+    );
+    assert.equal(
+      membership?.benefits?.premiumCircle,
+      undefined,
+      `${locale}: premiumCircle`,
+    );
     for (const removedValue of [
       'created-groups',
       'silver-circle',

@@ -162,8 +162,9 @@ export default function GroupExpansionScreen() {
   const [circles, setCircles] = useState<MyCircle[]>([]);
   const [selectedCircleId, setSelectedCircleId] = useState<string | null>(null);
   const [circlePickerVisible, setCirclePickerVisible] = useState(false);
-  const [catalog, setCatalog] =
-    useState<GroupExpansionProductsResult | null>(null);
+  const [catalog, setCatalog] = useState<GroupExpansionProductsResult | null>(
+    null,
+  );
   const [circlesLoading, setCirclesLoading] = useState(true);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [circlesError, setCirclesError] = useState<string | null>(null);
@@ -187,7 +188,8 @@ export default function GroupExpansionScreen() {
       if (
         owner &&
         !isAuthSessionIdentityCurrent(owner, useAuthStore.getState())
-      ) return;
+      )
+        return;
       const request = catalogRequestRef.current + 1;
       catalogRequestRef.current = request;
       const canCommit = () =>
@@ -200,17 +202,12 @@ export default function GroupExpansionScreen() {
       setCatalogError(null);
       try {
         const result = await fetchGroupExpansionProducts(circleId);
-        if (
-          !canCommit() ||
-          selectedCircleIdRef.current !== circleId
-        ) {
+        if (!canCommit() || selectedCircleIdRef.current !== circleId) {
           return;
         }
         setCatalog(result);
       } catch (error) {
-        if (
-          !canCommit()
-        ) {
+        if (!canCommit()) {
           return;
         }
         setCatalog(null);
@@ -223,9 +220,7 @@ export default function GroupExpansionScreen() {
           ),
         );
       } finally {
-        if (
-          canCommit()
-        ) {
+        if (canCommit()) {
           setCatalogLoading(false);
         }
       }
@@ -328,16 +323,22 @@ export default function GroupExpansionScreen() {
         return;
       }
 
-      const signature = `${circleId}:${product.id}`;
+      const signature = `${circleId}:${product.id}:${product.price}:${product.seats}`;
       const owner = captureAuthSessionIdentity(useAuthStore.getState());
       if (!owner) return;
       const walletVersion = useWalletRealtimeStore.getState().version;
       setSubmittingProductId(product.id);
       try {
-        const result = await purchaseGroupExpansion(circleId, product.id, {
-          idempotencyKey: getIntentKey(signature),
-        });
-        if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
+        const result = await purchaseGroupExpansion(
+          circleId,
+          product.id,
+          { price: product.price, seats: product.seats },
+          {
+            idempotencyKey: getIntentKey(signature),
+          },
+        );
+        if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState()))
+          return;
         pendingIntentRef.current = null;
         useWalletRealtimeStore
           .getState()
@@ -346,7 +347,8 @@ export default function GroupExpansionScreen() {
             result.walletBalanceAfter,
           );
         await loadProducts(circleId, focusGenerationRef.current, owner);
-        if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
+        if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState()))
+          return;
         Alert.alert(
           t('profile.groupExpansion.successTitle', {
             defaultValue: '扩容成功',
@@ -360,7 +362,8 @@ export default function GroupExpansionScreen() {
           }),
         );
       } catch (error) {
-        if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
+        if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState()))
+          return;
         Alert.alert(
           t('common.errorOccurred', { defaultValue: '操作失败' }),
           getApiErrorMessage(

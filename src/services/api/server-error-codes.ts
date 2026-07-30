@@ -50,6 +50,7 @@ export const SERVER_ERROR_CODES = [
   'GROUP_EXPANSION_PRODUCT_NOT_FOUND',
   'GROUP_EXPANSION_CIRCLE_NOT_FOUND',
   'GROUP_EXPANSION_CAPACITY_EXCEEDED',
+  'GROUP_EXPANSION_QUOTE_CHANGED',
   'GROUP_EXPANSION_INSUFFICIENT_POINTS',
   'GROUP_EXPANSION_INVALID_IDEMPOTENCY_KEY',
   'GROUP_EXPANSION_IDEMPOTENCY_CONFLICT',
@@ -233,7 +234,7 @@ export type ServerErrorCode = (typeof SERVER_ERROR_CODES)[number];
 const SERVER_ERROR_CODE_SET = new Set<string>(SERVER_ERROR_CODES);
 
 export function isKnownServerErrorCode(
-  value: string
+  value: string,
 ): value is ServerErrorCode {
   return SERVER_ERROR_CODE_SET.has(value);
 }

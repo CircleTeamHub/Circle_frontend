@@ -15,7 +15,9 @@ jest.mock('@expo/vector-icons', () => {
   return {
     Ionicons: Object.assign(
       ({ name }: { name: string }) => <Text>{name}</Text>,
-      { glyphMap: { 'sparkles-outline': 1 } },
+      {
+        glyphMap: { 'sparkles-outline': 1 },
+      },
     ),
   };
 });

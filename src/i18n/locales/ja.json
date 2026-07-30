@@ -2577,6 +2577,7 @@
     "GROUP_EXPANSION_PRODUCT_NOT_FOUND": "この拡張プランは利用できません。更新して再試行してください",
     "GROUP_EXPANSION_CIRCLE_NOT_FOUND": "グループが見つからないか、オーナーではなくなっています",
     "GROUP_EXPANSION_CAPACITY_EXCEEDED": "購入後に3000人の上限を超えます。別のプランを選んでください",
+    "GROUP_EXPANSION_QUOTE_CHANGED": "拡張の価格または人数が変更されました。更新して再確認してください",
     "GROUP_EXPANSION_INSUFFICIENT_POINTS": "この拡張カードを購入するポイントが不足しています",
     "GROUP_EXPANSION_INVALID_IDEMPOTENCY_KEY": "リクエスト識別子が無効です。もう一度お試しください",
     "GROUP_EXPANSION_IDEMPOTENCY_CONFLICT": "この識別子は別の拡張操作で使用済みです。更新して再試行してください",

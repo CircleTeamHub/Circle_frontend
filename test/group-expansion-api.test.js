@@ -5,8 +5,14 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
-function loadGroupExpansionModule(apiClientSpy, generatedKey = 'generated-key') {
-  const filePath = path.join(process.cwd(), 'src/services/api/group-expansion.ts');
+function loadGroupExpansionModule(
+  apiClientSpy,
+  generatedKey = 'generated-key',
+) {
+  const filePath = path.join(
+    process.cwd(),
+    'src/services/api/group-expansion.ts',
+  );
   const transpiled = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
@@ -40,7 +46,9 @@ function loadGroupExpansionModule(apiClientSpy, generatedKey = 'generated-key') 
           isNonEmptyString: (value) =>
             typeof value === 'string' && value.trim().length > 0,
           isPlainObject: (value) =>
-            value !== null && typeof value === 'object' && !Array.isArray(value),
+            value !== null &&
+            typeof value === 'object' &&
+            !Array.isArray(value),
         },
       };
       return specifier in stubs ? stubs[specifier] : require(specifier);
@@ -104,19 +112,48 @@ test('group-expansion purchase sends the selected server product and an idempote
     return response;
   });
 
-  const result = await api.purchaseGroupExpansion('circle-1', 'light', {
-    idempotencyKey: 'retry-same-request',
-  });
+  const result = await api.purchaseGroupExpansion(
+    'circle-1',
+    'light',
+    { price: 600, seats: 100 },
+    {
+      idempotencyKey: 'retry-same-request',
+    },
+  );
 
   assert.equal(calls[0].endpoint, '/group-expansions/purchases');
   assert.equal(calls[0].options.method, 'POST');
   assert.equal(calls[0].options.body.circleId, 'circle-1');
   assert.equal(calls[0].options.body.productId, 'light');
+  assert.equal(calls[0].options.body.expectedPrice, 600);
+  assert.equal(calls[0].options.body.expectedSeats, 100);
   assert.equal(
     calls[0].options.headers['Idempotency-Key'],
     'retry-same-request',
   );
   assert.equal(result.walletBalanceAfter, 2400);
+});
+
+test('group-expansion purchase rejects a response that differs from the displayed quote', async () => {
+  const api = loadGroupExpansionModule(async () => ({
+    orderId: 'order-1',
+    circleId: 'circle-1',
+    productId: 'light',
+    productName: '轻量扩容卡',
+    seats: 200,
+    price: 900,
+    previousMaxMembers: 100,
+    newMaxMembers: 300,
+    walletBalanceAfter: 2100,
+  }));
+
+  await assert.rejects(
+    api.purchaseGroupExpansion('circle-1', 'light', {
+      price: 600,
+      seats: 100,
+    }),
+    /服务返回了无效数据/,
+  );
 });
 
 test('group-expansion API rejects malformed server payloads', async () => {
@@ -189,10 +226,7 @@ test('group-expansion catalog rejects contradictory product availability', async
 
 test('group-expansion catalog rejects another circle and invalid capacity arithmetic', async (t) => {
   for (const [name, response] of [
-    [
-      'different circle',
-      { ...productResponse, circleId: 'circle-2' },
-    ],
+    ['different circle', { ...productResponse, circleId: 'circle-2' }],
     [
       'purchasable product with the wrong resulting capacity',
       {
@@ -237,7 +271,10 @@ test('group-expansion purchase rejects identifiers from another request', async 
     await t.test(name, async () => {
       const api = loadGroupExpansionModule(async () => response);
       await assert.rejects(
-        api.purchaseGroupExpansion('circle-1', 'light'),
+        api.purchaseGroupExpansion('circle-1', 'light', {
+          price: 600,
+          seats: 100,
+        }),
         /服务返回了无效数据/,
       );
     });

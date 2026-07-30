@@ -2580,6 +2580,7 @@
     "GROUP_EXPANSION_PRODUCT_NOT_FOUND": "This expansion option is unavailable. Refresh and try again",
     "GROUP_EXPANSION_CIRCLE_NOT_FOUND": "This group was not found, or you are no longer its owner",
     "GROUP_EXPANSION_CAPACITY_EXCEEDED": "This purchase would exceed the 3,000-member limit. Choose another option",
+    "GROUP_EXPANSION_QUOTE_CHANGED": "The expansion price or seat count changed. Refresh and confirm again",
     "GROUP_EXPANSION_INSUFFICIENT_POINTS": "You do not have enough points for this expansion card",
     "GROUP_EXPANSION_INVALID_IDEMPOTENCY_KEY": "The request identifier is invalid. Please try again",
     "GROUP_EXPANSION_IDEMPOTENCY_CONFLICT": "This request identifier was used for another expansion. Refresh and try again",

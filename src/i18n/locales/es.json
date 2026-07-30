@@ -2580,6 +2580,7 @@
     "GROUP_EXPANSION_PRODUCT_NOT_FOUND": "Esta opción de ampliación no está disponible. Actualiza e inténtalo de nuevo",
     "GROUP_EXPANSION_CIRCLE_NOT_FOUND": "No se encontró el grupo o ya no eres su propietario",
     "GROUP_EXPANSION_CAPACITY_EXCEEDED": "La compra superaría el límite de 3000 miembros. Elige otra opción",
+    "GROUP_EXPANSION_QUOTE_CHANGED": "El precio o los cupos de ampliación cambiaron. Actualiza y confirma de nuevo",
     "GROUP_EXPANSION_INSUFFICIENT_POINTS": "No tienes puntos suficientes para esta tarjeta de ampliación",
     "GROUP_EXPANSION_INVALID_IDEMPOTENCY_KEY": "El identificador de solicitud no es válido. Inténtalo de nuevo",
     "GROUP_EXPANSION_IDEMPOTENCY_CONFLICT": "Este identificador ya se usó para otra ampliación. Actualiza e inténtalo de nuevo",

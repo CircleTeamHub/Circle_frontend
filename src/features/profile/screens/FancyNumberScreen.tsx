@@ -203,9 +203,7 @@ export default function FancyNumberScreen() {
   const availabilityGenerationRef = useRef(0);
   const pendingIntentRef = useRef<RetryIntentKeyStore | null>(null);
   if (!pendingIntentRef.current) {
-    pendingIntentRef.current = new RetryIntentKeyStore(
-      generateIdempotencyKey,
-    );
+    pendingIntentRef.current = new RetryIntentKeyStore(generateIdempotencyKey);
   }
 
   const loadInitial = useCallback(
@@ -223,22 +221,41 @@ export default function FancyNumberScreen() {
       setLoading(true);
       setErrorText(null);
       try {
-        const [nextMine, nextCatalog] = await Promise.all([fetchMyFancyNumber(), fetchFancyNumbers({ limit: PAGE_SIZE })]);
+        const [mineResult, catalogResult] = await Promise.allSettled([
+          fetchMyFancyNumber(),
+          fetchFancyNumbers({ limit: PAGE_SIZE }),
+        ]);
         if (!canCommit()) return;
-        setMine(nextMine);
-        catalogCursorRef.current = nextCatalog.nextCursor;
-        setCatalog(nextCatalog);
-        setItems(
-          nextCatalog.items
-            .filter((item) => CUSTOM_VALUE_PATTERN.test(item.value.toUpperCase()))
-            .map((item) => ({ ...item, value: item.value.toUpperCase() })),
-        );
-        setMonths((current) => Math.min(nextCatalog.maxMonths, Math.max(nextCatalog.minMonths, current)));
-      } catch (error) {
-        if (!canCommit()) return;
+        let loadError: unknown = null;
+        if (mineResult.status === 'fulfilled') {
+          setMine(mineResult.value);
+        } else {
+          loadError = mineResult.reason;
+        }
+        if (catalogResult.status === 'fulfilled') {
+          const nextCatalog = catalogResult.value;
+          catalogCursorRef.current = nextCatalog.nextCursor;
+          setCatalog(nextCatalog);
+          setItems(
+            nextCatalog.items
+              .filter((item) =>
+                CUSTOM_VALUE_PATTERN.test(item.value.toUpperCase()),
+              )
+              .map((item) => ({ ...item, value: item.value.toUpperCase() })),
+          );
+          setMonths((current) =>
+            Math.min(
+              nextCatalog.maxMonths,
+              Math.max(nextCatalog.minMonths, current),
+            ),
+          );
+        } else {
+          loadError ??= catalogResult.reason;
+        }
+        if (!loadError) return;
         setErrorText(
           getApiErrorMessage(
-            error,
+            loadError,
             t('profile.fancyNumber.loadError', {
               defaultValue: '靓号信息加载失败，请稍后重试',
             }),
@@ -326,7 +343,8 @@ export default function FancyNumberScreen() {
     if (
       !isAuthSessionIdentityCurrent(owner, latest) ||
       refreshed.id !== owner.userId
-    ) return;
+    )
+      return;
 
     latest.setUser(refreshed);
     const current = useAuthStore.getState();
@@ -334,7 +352,8 @@ export default function FancyNumberScreen() {
       !isAuthSessionIdentityCurrent(owner, current) ||
       !current.accessToken ||
       !current.refreshToken
-    ) return;
+    )
+      return;
     useKnownAccountsStore.getState().upsertAccount({
       user: refreshed,
       accessToken: current.accessToken,
@@ -360,12 +379,11 @@ export default function FancyNumberScreen() {
       pendingIntentRef.current!.complete();
       useWalletRealtimeStore
         .getState()
-        .setRealtimeBalanceIfVersion(
-          walletVersion,
-          result.walletBalanceAfter,
-        );
+        .setRealtimeBalanceIfVersion(walletVersion, result.walletBalanceAfter);
       setMine(mineFromResult(result));
-      setItems((current) => current.filter((item) => item.value !== result.accountId));
+      setItems((current) =>
+        current.filter((item) => item.value !== result.accountId),
+      );
       setSelectedRecommendation(null);
       setCustomValue('');
       setAvailability({ status: 'idle' });
@@ -373,7 +391,8 @@ export default function FancyNumberScreen() {
       if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
       if (action === 'switch') {
         await loadInitial(focusGenerationRef.current, owner);
-        if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
+        if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState()))
+          return;
       }
       Alert.alert(
         t('profile.fancyNumber.successTitle', { defaultValue: '操作成功' }),
@@ -391,7 +410,10 @@ export default function FancyNumberScreen() {
             : t('profile.fancyNumber.paidSuccess', {
                 defaultValue: '靓号 {{accountId}} 已生效，有效期至 {{date}}',
                 accountId: result.accountId,
-                date: formatExpiry(result.expiresAt, t('profile.fancyNumber.permanent', { defaultValue: '永久' })),
+                date: formatExpiry(
+                  result.expiresAt,
+                  t('profile.fancyNumber.permanent', { defaultValue: '永久' }),
+                ),
               }),
       );
     },
@@ -484,11 +506,13 @@ export default function FancyNumberScreen() {
       t('profile.fancyNumber.confirmTitle', { defaultValue: '确认购买靓号' }),
       permanent
         ? t('profile.fancyNumber.confirmPermanent', {
-            defaultValue: '超级会员可免费领取永久靓号 {{accountId}}，以后可使用 100 积分更换。',
+            defaultValue:
+              '超级会员可免费领取永久靓号 {{accountId}}，以后可使用 100 积分更换。',
             accountId: customValue,
           })
         : t('profile.fancyNumber.confirmPaid', {
-            defaultValue: '确认使用 {{points}} 积分购买靓号 {{accountId}}，有效期 {{months}} 个月？',
+            defaultValue:
+              '确认使用 {{points}} 积分购买靓号 {{accountId}}，有效期 {{months}} 个月？',
             points: total,
             accountId: customValue,
             months,
@@ -501,14 +525,7 @@ export default function FancyNumberScreen() {
         },
       ],
     );
-  }, [
-    availability.status,
-    catalog,
-    customValue,
-    months,
-    performPurchase,
-    t,
-  ]);
+  }, [availability.status, catalog, customValue, months, performPurchase, t]);
 
   const performRenewal = useCallback(async () => {
     if (!mine?.renewable || submitting) return;
@@ -518,7 +535,10 @@ export default function FancyNumberScreen() {
     const walletVersion = useWalletRealtimeStore.getState().version;
     setSubmitting(true);
     try {
-      const result = await renewFancyNumber({ months }, { idempotencyKey: intentKey(signature) });
+      const result = await renewFancyNumber(
+        { months },
+        { idempotencyKey: intentKey(signature) },
+      );
       if (result.accountId !== mine.accountId) {
         throw new Error(
           t('common.errors.invalidServerResponse', {
@@ -551,7 +571,8 @@ export default function FancyNumberScreen() {
         defaultValue: '确认续费靓号',
       }),
       t('profile.fancyNumber.confirmRenew', {
-        defaultValue: '确认使用 {{points}} 积分为 {{accountId}} 续费 {{months}} 个月？',
+        defaultValue:
+          '确认使用 {{points}} 积分为 {{accountId}} 续费 {{months}} 个月？',
         points: months * mine.unitPrice,
         accountId: mine.accountId,
         months,
@@ -649,7 +670,8 @@ export default function FancyNumberScreen() {
         defaultValue: '确认更换靓号',
       }),
       t('profile.fancyNumber.confirmSwitch', {
-        defaultValue: '确认使用 {{points}} 积分将 {{current}} 更换为 {{accountId}}？永久权益会保留，原靓号将重新开放。',
+        defaultValue:
+          '确认使用 {{points}} 积分将 {{current}} 更换为 {{accountId}}？永久权益会保留，原靓号将重新开放。',
         points: catalog?.unitPrice ?? mine.unitPrice,
         current: mine.accountId,
         accountId: customValue,
@@ -692,10 +714,14 @@ export default function FancyNumberScreen() {
         .map((item) => ({ ...item, value: item.value.toUpperCase() }));
       setItems((current) => [
         ...current,
-        ...suggestions.filter((item) => !current.some((existing) => existing.id === item.id)),
+        ...suggestions.filter(
+          (item) => !current.some((existing) => existing.id === item.id),
+        ),
       ]);
       catalogCursorRef.current = next.nextCursor;
-      setCatalog((current) => (current ? { ...current, nextCursor: next.nextCursor } : next));
+      setCatalog((current) =>
+        current ? { ...current, nextCursor: next.nextCursor } : next,
+      );
     } catch (error) {
       if (
         focusGenerationRef.current !== generation ||
@@ -824,23 +850,46 @@ export default function FancyNumberScreen() {
       {loading ? (
         <View style={s.centered}>
           <ActivityIndicator color={colors.primary} />
-          <Text style={d.body}>{t('common.loading', { defaultValue: '加载中…' })}</Text>
+          <Text style={d.body}>
+            {t('common.loading', { defaultValue: '加载中…' })}
+          </Text>
         </View>
-      ) : errorText && !catalog ? (
+      ) : errorText && !catalog && !mine ? (
         <View style={[s.centered, { paddingHorizontal: Spacing.lg }]}>
           <Text style={d.error}>{errorText}</Text>
-          <Pressable style={s.secondaryButton} onPress={() => void loadInitial()}>
-            <Text style={d.link}>{t('common.retry', { defaultValue: '重试' })}</Text>
+          <Pressable
+            style={s.secondaryButton}
+            onPress={() => void loadInitial()}
+          >
+            <Text style={d.link}>
+              {t('common.retry', { defaultValue: '重试' })}
+            </Text>
           </Pressable>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={[s.content, d.content]} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={[s.content, d.content]}
+          showsVerticalScrollIndicator={false}
+        >
           {isOffline ? (
             <Text style={d.error}>
               {t('common.offline', {
                 defaultValue: '当前无网络连接，部分功能可能不可用',
               })}
             </Text>
+          ) : null}
+          {errorText ? (
+            <View>
+              <Text style={d.error}>{errorText}</Text>
+              <Pressable
+                style={s.secondaryButton}
+                onPress={() => void loadInitial()}
+              >
+                <Text style={d.link}>
+                  {t('common.retry', { defaultValue: '重试' })}
+                </Text>
+              </Pressable>
+            </View>
           ) : null}
 
           <View style={[s.hero, d.hero]}>
@@ -877,7 +926,9 @@ export default function FancyNumberScreen() {
             <View style={[s.card, d.card]}>
               <View style={s.titleRow}>
                 <Ionicons name="ribbon" size={22} color={colors.deepPurple} />
-                <Text style={d.title}>{t('profile.fancyNumber.mine', { defaultValue: '我的靓号' })}</Text>
+                <Text style={d.title}>
+                  {t('profile.fancyNumber.mine', { defaultValue: '我的靓号' })}
+                </Text>
               </View>
               <View style={s.statusRow}>
                 <Text style={[s.numberValue, d.number]}>{mine.accountId}</Text>
@@ -906,7 +957,8 @@ export default function FancyNumberScreen() {
             <View style={[s.card, d.card]}>
               <Text style={d.body}>
                 {t('profile.fancyNumber.nothingToRenew', {
-                  defaultValue: '当前没有可续费的靓号，可在下方选择一个靓号购买。',
+                  defaultValue:
+                    '当前没有可续费的靓号，可在下方选择一个靓号购买。',
                 })}
               </Text>
             </View>
@@ -927,10 +979,18 @@ export default function FancyNumberScreen() {
                       key={value}
                       accessibilityRole="button"
                       accessibilityState={{ selected }}
-                      style={[s.monthButton, selected ? d.selectedMonth : d.normalMonth]}
+                      style={[
+                        s.monthButton,
+                        selected ? d.selectedMonth : d.normalMonth,
+                      ]}
                       onPress={() => setMonths(value)}
                     >
-                      <Text style={[Typography.caption, { color: selected ? colors.white : colors.text }]}>
+                      <Text
+                        style={[
+                          Typography.caption,
+                          { color: selected ? colors.white : colors.text },
+                        ]}
+                      >
                         {t('profile.fancyNumber.monthCount', {
                           defaultValue: '{{count}}个月',
                           count: value,
@@ -948,7 +1008,11 @@ export default function FancyNumberScreen() {
               </Text>
               <Pressable
                 accessibilityRole="button"
-                style={[s.primaryButton, d.button, disabled ? s.disabled : null]}
+                style={[
+                  s.primaryButton,
+                  d.button,
+                  disabled ? s.disabled : null,
+                ]}
                 disabled={disabled}
                 onPress={confirmRenewal}
               >
@@ -982,10 +1046,18 @@ export default function FancyNumberScreen() {
                           key={value}
                           accessibilityRole="button"
                           accessibilityState={{ selected }}
-                          style={[s.monthButton, selected ? d.selectedMonth : d.normalMonth]}
+                          style={[
+                            s.monthButton,
+                            selected ? d.selectedMonth : d.normalMonth,
+                          ]}
                           onPress={() => setMonths(value)}
                         >
-                          <Text style={[Typography.caption, { color: selected ? colors.white : colors.text }]}>
+                          <Text
+                            style={[
+                              Typography.caption,
+                              { color: selected ? colors.white : colors.text },
+                            ]}
+                          >
                             {t('profile.fancyNumber.monthCount', {
                               defaultValue: '{{count}}个月',
                               count: value,
@@ -1014,9 +1086,12 @@ export default function FancyNumberScreen() {
                   })}
                 </Text>
                 <TextInput
-                  accessibilityLabel={t('profile.fancyNumber.customInputLabel', {
-                    defaultValue: '自定义靓号',
-                  })}
+                  accessibilityLabel={t(
+                    'profile.fancyNumber.customInputLabel',
+                    {
+                      defaultValue: '自定义靓号',
+                    },
+                  )}
                   autoCapitalize="characters"
                   autoCorrect={false}
                   maxLength={6}
@@ -1073,14 +1148,16 @@ export default function FancyNumberScreen() {
                 {items.length > 0 ? (
                   <View style={s.numberGrid}>
                     {items.map((item) => {
-                      const selected =
-                        item.id === selectedRecommendation?.id;
+                      const selected = item.id === selectedRecommendation?.id;
                       return (
                         <Pressable
                           key={item.id}
                           accessibilityRole="button"
                           accessibilityState={{ selected }}
-                          style={[s.numberButton, selected ? d.selectedNumber : d.normalNumber]}
+                          style={[
+                            s.numberButton,
+                            selected ? d.selectedNumber : d.normalNumber,
+                          ]}
                           onPress={() => {
                             setSelectedRecommendation(item);
                             setCustomValue(item.value);
@@ -1109,7 +1186,11 @@ export default function FancyNumberScreen() {
                   </Text>
                 )}
                 {catalog?.nextCursor ? (
-                  <Pressable style={s.secondaryButton} disabled={loadingMore} onPress={() => void loadMore()}>
+                  <Pressable
+                    style={s.secondaryButton}
+                    disabled={loadingMore}
+                    onPress={() => void loadMore()}
+                  >
                     {loadingMore ? (
                       <ActivityIndicator color={colors.primary} />
                     ) : (
@@ -1138,7 +1219,11 @@ export default function FancyNumberScreen() {
                 </Text>
                 <Pressable
                   accessibilityRole="button"
-                  style={[s.primaryButton, d.button, !canSubmit ? s.disabled : null]}
+                  style={[
+                    s.primaryButton,
+                    d.button,
+                    !canSubmit ? s.disabled : null,
+                  ]}
                   disabled={!canSubmit}
                   onPress={isSwitching ? confirmSwitch : confirmPurchase}
                 >

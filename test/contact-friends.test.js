@@ -39,11 +39,8 @@ function loadTsModule(relativePath, stubs = {}) {
 }
 
 test('contact friend helpers group and sort friends by normalized display key', () => {
-  const {
-    buildContactSections,
-    buildRecentFriends,
-    getFriendDisplayName,
-  } = loadTsModule('src/features/contacts/contact-friends.ts');
+  const { buildContactSections, buildRecentFriends, getFriendDisplayName } =
+    loadTsModule('src/features/contacts/contact-friends.ts');
 
   const friends = [
     {
@@ -183,23 +180,20 @@ test('fetchFriends drops malformed rows before contacts render them', async () =
 
   const friends = await fetchFriends();
 
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(friends)),
-    [
-      {
-        id: 'friend-1',
-        accountId: 'alice_001',
-        nickname: 'alice_001',
-        avatarUrl: null,
-        avatarFrame: null,
-        avatarFrameAppearance: null,
-        gender: '',
-        lastOnline: null,
-        friendsSince: '',
-        remark: null,
-      },
-    ],
-  );
+  assert.deepEqual(JSON.parse(JSON.stringify(friends)), [
+    {
+      id: 'friend-1',
+      accountId: 'alice_001',
+      nickname: 'alice_001',
+      avatarUrl: null,
+      avatarFrame: null,
+      avatarFrameAppearance: null,
+      gender: '',
+      lastOnline: null,
+      friendsSince: '',
+      remark: null,
+    },
+  ]);
 });
 
 test('fetchFriends deduplicates repeated friend ids before SectionList sees them', async () => {
@@ -239,21 +233,68 @@ test('fetchFriends deduplicates repeated friend ids before SectionList sees them
 
   const friends = await fetchFriends();
 
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(friends)),
-    [
-      {
-        id: 'friend-1',
-        accountId: 'alice_001',
-        nickname: 'Alice',
-        avatarUrl: null,
-        avatarFrame: null,
-        avatarFrameAppearance: null,
-        gender: 'unset',
-        lastOnline: null,
-        friendsSince: '2026-07-24T07:59:51.066Z',
-        remark: 'new remark',
+  assert.deepEqual(JSON.parse(JSON.stringify(friends)), [
+    {
+      id: 'friend-1',
+      accountId: 'alice_001',
+      nickname: 'Alice',
+      avatarUrl: null,
+      avatarFrame: null,
+      avatarFrameAppearance: null,
+      gender: 'unset',
+      lastOnline: null,
+      friendsSince: '2026-07-24T07:59:51.066Z',
+      remark: 'new remark',
+    },
+  ]);
+});
+
+test('friend endpoints prefer a valid timestamp over an invalid duplicate', async () => {
+  const rows = [
+    {
+      id: 'friend-1',
+      accountId: 'alice_001',
+      nickname: 'Stale malformed',
+      avatarUrl: null,
+      avatarFrame: null,
+      gender: 'unset',
+      lastOnline: null,
+      friendsSince: 'not-a-date',
+      remark: 'stale',
+    },
+    {
+      id: 'friend-1',
+      accountId: 'alice_001',
+      nickname: 'Fresh valid',
+      avatarUrl: null,
+      avatarFrame: null,
+      gender: 'unset',
+      lastOnline: null,
+      friendsSince: '2026-07-30T00:00:00.000Z',
+      remark: 'fresh',
+    },
+  ];
+  const { fetchFriends, fetchFriendsByTag } = loadTsModule(
+    'src/services/api/friends.ts',
+    {
+      '@/services/api/client': {
+        apiClient: async () => rows,
       },
-    ],
+      '@/services/api/utils': {
+        fetchCountEndpoint: async () => 0,
+        normalizeAvatarFrameAppearance: (value) => value ?? null,
+        normalizeMediaUrl: (value) => value,
+      },
+    },
   );
+
+  for (const fetcher of [
+    () => fetchFriends(),
+    () => fetchFriendsByTag('tag-1'),
+  ]) {
+    const friends = await fetcher();
+    assert.equal(friends.length, 1);
+    assert.equal(friends[0].nickname, 'Fresh valid');
+    assert.equal(friends[0].remark, 'fresh');
+  }
 });

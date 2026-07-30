@@ -41,17 +41,10 @@ export type FriendSettings = {
 };
 
 export type FriendStatus =
-  | 'NONE'
-  | 'PENDING_SENT'
-  | 'PENDING_RECEIVED'
-  | 'ACCEPTED'
-  | 'BLOCKED';
+  'NONE' | 'PENDING_SENT' | 'PENDING_RECEIVED' | 'ACCEPTED' | 'BLOCKED';
 
 export type FriendRequestState =
-  | 'PENDING'
-  | 'ACCEPTED'
-  | 'REJECTED'
-  | 'WITHDRAWN';
+  'PENDING' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN';
 
 export type FriendActivityType =
   | 'REQUEST_RECEIVED'
@@ -82,10 +75,7 @@ export type FriendActivity = {
 };
 
 type BackendFriendActivity = Omit<FriendActivity, 'counterparty'> & {
-  counterparty: Omit<
-    FriendActivityCounterparty,
-    'avatarFrameAppearance'
-  > & {
+  counterparty: Omit<FriendActivityCounterparty, 'avatarFrameAppearance'> & {
     avatarFrameAppearance?: AvatarFrameAppearance | null;
   };
 };
@@ -162,9 +152,14 @@ function normalizeFriendProfile(friend: unknown): FriendProfile | null {
 }
 
 function compareFriendFreshness(left: FriendProfile, right: FriendProfile) {
-  return (
-    Date.parse(right.friendsSince || '') - Date.parse(left.friendsSince || '')
-  );
+  const leftTime = Date.parse(left.friendsSince || '');
+  const rightTime = Date.parse(right.friendsSince || '');
+  const leftValid = Number.isFinite(leftTime);
+  const rightValid = Number.isFinite(rightTime);
+  if (leftValid && rightValid) return rightTime - leftTime;
+  if (rightValid) return 1;
+  if (leftValid) return -1;
+  return 0;
 }
 
 function normalizeFriendProfiles(friends: unknown[]): FriendProfile[] {
@@ -325,7 +320,9 @@ export async function removeFriendTag(friendUserId: string, tagId: string) {
   });
 }
 
-export function createFriendRequest(input: CreateFriendRequestInput): Promise<void>;
+export function createFriendRequest(
+  input: CreateFriendRequestInput,
+): Promise<void>;
 export function createFriendRequest(
   targetId: string,
   message?: string,

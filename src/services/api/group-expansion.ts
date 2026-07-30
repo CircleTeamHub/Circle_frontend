@@ -39,6 +39,11 @@ export type GroupExpansionPurchaseResult = {
   walletBalanceAfter: number;
 };
 
+export type GroupExpansionQuote = {
+  price: number;
+  seats: number;
+};
+
 function isPositiveInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0;
 }
@@ -141,20 +146,27 @@ export async function fetchGroupExpansionProducts(
 export async function purchaseGroupExpansion(
   circleId: string,
   productId: string,
+  quote: GroupExpansionQuote,
   options?: { idempotencyKey?: string },
 ): Promise<GroupExpansionPurchaseResult> {
   const raw = await apiClient<unknown>('/group-expansions/purchases', {
     method: 'POST',
-    body: { circleId, productId },
+    body: {
+      circleId,
+      productId,
+      expectedPrice: quote.price,
+      expectedSeats: quote.seats,
+    },
     headers: {
-      'Idempotency-Key':
-        options?.idempotencyKey ?? generateIdempotencyKey(),
+      'Idempotency-Key': options?.idempotencyKey ?? generateIdempotencyKey(),
     },
   });
   const result = expectShape(raw, isPurchaseResult, invalidResponseMessage());
   if (
     result.circleId !== circleId ||
     result.productId !== productId ||
+    result.price !== quote.price ||
+    result.seats !== quote.seats ||
     result.newMaxMembers !== result.previousMaxMembers + result.seats
   ) {
     throw new Error(invalidResponseMessage());

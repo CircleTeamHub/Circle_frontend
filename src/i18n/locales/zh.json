@@ -2577,6 +2577,7 @@
     "GROUP_EXPANSION_PRODUCT_NOT_FOUND": "该扩容档位不存在，请刷新后重试",
     "GROUP_EXPANSION_CIRCLE_NOT_FOUND": "未找到该群，或你已不是群主",
     "GROUP_EXPANSION_CAPACITY_EXCEEDED": "购买后会超过 3000 人上限，请选择其他档位",
+    "GROUP_EXPANSION_QUOTE_CHANGED": "扩容价格或名额已更新，请刷新后重新确认",
     "GROUP_EXPANSION_INSUFFICIENT_POINTS": "积分不足，无法购买扩容卡",
     "GROUP_EXPANSION_INVALID_IDEMPOTENCY_KEY": "请求标识无效，请重新操作",
     "GROUP_EXPANSION_IDEMPOTENCY_CONFLICT": "该请求标识已用于其他扩容操作，请刷新后重试",
