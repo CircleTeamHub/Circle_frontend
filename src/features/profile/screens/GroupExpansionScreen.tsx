@@ -177,8 +177,10 @@ export default function GroupExpansionScreen() {
   );
   const focusGenerationRef = useRef(0);
   const catalogRequestRef = useRef(0);
+  const focusedRef = useRef(false);
   const selectedCircleIdRef = useRef<string | null>(null);
   const walletLoadingRef = useRef(false);
+  const purchaseInFlightProductIdRef = useRef<string | null>(null);
   const pendingIntentRef = useRef<{ signature: string; key: string } | null>(
     null,
   );
@@ -323,11 +325,15 @@ export default function GroupExpansionScreen() {
     useCallback(() => {
       const generation = focusGenerationRef.current + 1;
       focusGenerationRef.current = generation;
-      setSubmittingProductId(null);
+      focusedRef.current = true;
+      setSubmittingProductId(purchaseInFlightProductIdRef.current);
       const owner = captureAuthSessionIdentity(useAuthStore.getState());
       void loadOwnerCircles(generation);
-      if (owner) void loadWallet(generation, owner);
+      if (owner && purchaseInFlightProductIdRef.current === null) {
+        void loadWallet(generation, owner);
+      }
       return () => {
+        focusedRef.current = false;
         focusGenerationRef.current += 1;
         catalogRequestRef.current += 1;
       };
@@ -338,6 +344,7 @@ export default function GroupExpansionScreen() {
     (circleId: string) => {
       if (
         submittingProductId !== null ||
+        purchaseInFlightProductIdRef.current !== null ||
         circleId === selectedCircleIdRef.current
       ) {
         return;
@@ -366,6 +373,7 @@ export default function GroupExpansionScreen() {
       if (
         !circleId ||
         !product.purchasable ||
+        purchaseInFlightProductIdRef.current !== null ||
         submittingProductId ||
         walletLoadingRef.current ||
         isOffline
@@ -378,10 +386,12 @@ export default function GroupExpansionScreen() {
       const generation = focusGenerationRef.current;
       const canCommit = () =>
         generation === focusGenerationRef.current &&
+        focusedRef.current &&
         selectedCircleIdRef.current === circleId &&
         isAuthSessionIdentityCurrent(owner, useAuthStore.getState());
       const signature = `${circleId}:${product.id}:${product.price}:${product.seats}`;
       const walletVersion = useWalletRealtimeStore.getState().version;
+      purchaseInFlightProductIdRef.current = product.id;
       setSubmittingProductId(product.id);
       try {
         const result = await purchaseGroupExpansion(
@@ -392,7 +402,9 @@ export default function GroupExpansionScreen() {
             idempotencyKey: getIntentKey(signature),
           },
         );
-        if (!canCommit()) return;
+        if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) {
+          return;
+        }
         pendingIntentRef.current = null;
         useWalletRealtimeStore
           .getState()
@@ -400,9 +412,19 @@ export default function GroupExpansionScreen() {
             walletVersion,
             result.walletBalanceAfter,
           );
-        if (!canCommit()) return;
-        await loadProducts(circleId, generation, owner);
-        if (!canCommit()) return;
+        const completionGeneration =
+          focusedRef.current && selectedCircleIdRef.current === circleId
+            ? focusGenerationRef.current
+            : null;
+        if (completionGeneration === null) return;
+        const canCommitCompletion = () =>
+          completionGeneration === focusGenerationRef.current &&
+          focusedRef.current &&
+          selectedCircleIdRef.current === circleId &&
+          isAuthSessionIdentityCurrent(owner, useAuthStore.getState());
+        if (!canCommitCompletion()) return;
+        await loadProducts(circleId, completionGeneration, owner);
+        if (!canCommitCompletion()) return;
         Alert.alert(
           t('profile.groupExpansion.successTitle', {
             defaultValue: '扩容成功',
@@ -428,18 +450,16 @@ export default function GroupExpansionScreen() {
         );
         void loadProducts(circleId, generation, owner);
       } finally {
-        if (canCommit()) {
+        purchaseInFlightProductIdRef.current = null;
+        if (
+          focusedRef.current &&
+          isAuthSessionIdentityCurrent(owner, useAuthStore.getState())
+        ) {
           setSubmittingProductId(null);
         }
       }
     },
-    [
-      getIntentKey,
-      isOffline,
-      loadProducts,
-      submittingProductId,
-      t,
-    ],
+    [getIntentKey, isOffline, loadProducts, submittingProductId, t],
   );
 
   const confirmPurchase = useCallback(

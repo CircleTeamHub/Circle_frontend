@@ -47,11 +47,7 @@ function nullableString(
   return value;
 }
 
-function finiteNumber(
-  value: unknown,
-  endpoint: string,
-  field: string,
-): number {
+function finiteNumber(value: unknown, endpoint: string, field: string): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     malformed(endpoint, `${field} must be a finite number`);
   }
@@ -192,7 +188,11 @@ function parseInventoryItem(
     description: item.description,
     minimumVipLevel,
     ownedSources: item.ownedSources.map((source, sourceIndex) =>
-      parseOwnedSource(source, endpoint, `${field}.ownedSources[${sourceIndex}]`),
+      parseOwnedSource(
+        source,
+        endpoint,
+        `${field}.ownedSources[${sourceIndex}]`,
+      ),
     ),
     availableUntil: nullableIsoDateTime(
       item.availableUntil,
@@ -224,10 +224,12 @@ function parseInventory(value: unknown): AvatarFrameInventory {
   if (
     (equippedFrameId === null && equippedItems.length !== 0) ||
     (equippedFrameId !== null &&
-      (equippedItems.length !== 1 ||
-        equippedItems[0].id !== equippedFrameId))
+      (equippedItems.length !== 1 || equippedItems[0].id !== equippedFrameId))
   ) {
-    malformed(endpoint, 'equippedFrameId and items[].equipped are inconsistent');
+    malformed(
+      endpoint,
+      'equippedFrameId and items[].equipped are inconsistent',
+    );
   }
   return {
     equippedFrameId,
@@ -256,11 +258,7 @@ function parseUserAppearances(value: unknown): Record<string, UserAppearance> {
               `${id}.avatarFrame`,
             );
       result[id] = {
-        vipLevel: vipLevel(
-          rawAppearance.vipLevel,
-          endpoint,
-          `${id}.vipLevel`,
-        ),
+        vipLevel: vipLevel(rawAppearance.vipLevel, endpoint, `${id}.vipLevel`),
         avatarFrame,
       };
     } catch (error) {
@@ -292,7 +290,14 @@ export async function equipAvatarFrame(
     method: 'PUT',
     body: { frameId },
   });
-  return parseInventory(raw);
+  const inventory = parseInventory(raw);
+  if (inventory.equippedFrameId !== frameId) {
+    malformed(
+      '/avatar-frames/me/equipped',
+      'equippedFrameId does not match the requested frame',
+    );
+  }
+  return inventory;
 }
 
 export async function fetchUserAppearances(

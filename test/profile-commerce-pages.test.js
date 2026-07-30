@@ -296,10 +296,7 @@ test('FancyNumberScreen retains its cross-focus purchase fence until settlement'
     src,
     /const completionGeneration =[\s\S]*?focusedRef\.current[\s\S]*?focusGenerationRef\.current/,
   );
-  assert.match(
-    src,
-    /completionGeneration === focusGenerationRef\.current/,
-  );
+  assert.match(src, /completionGeneration === focusGenerationRef\.current/);
 });
 
 test('FancyNumberScreen invalidates and rechecks custom availability on refocus', () => {
@@ -670,6 +667,34 @@ test('GroupExpansionScreen blocks purchases during wallet load and fences comple
     src,
     /const disabled =[\s\S]*?!product\.purchasable[\s\S]*?walletLoading/,
   );
+});
+
+test('GroupExpansionScreen reconciles an in-flight purchase into the current same-session focus', () => {
+  const src = read('src/features/profile/screens/GroupExpansionScreen.tsx');
+
+  assert.match(src, /purchaseInFlightProductIdRef/);
+  assert.match(
+    src,
+    /focusedRef\.current = true;[\s\S]*?setSubmittingProductId\(purchaseInFlightProductIdRef\.current\)/,
+  );
+  assert.match(
+    src,
+    /const completionGeneration =[\s\S]*?focusedRef\.current[\s\S]*?focusGenerationRef\.current/,
+  );
+  assert.match(
+    src,
+    /loadProducts\(circleId,\s*completionGeneration,\s*owner\)/,
+  );
+});
+
+test('FancyNumberScreen displays renewal totals from the lease quote', () => {
+  const src = read('src/features/profile/screens/FancyNumberScreen.tsx');
+
+  assert.match(
+    src,
+    /const renewalTotal = months \* \(mine\?\.unitPrice \?\? 100\)/,
+  );
+  assert.match(src, /profile\.fancyNumber\.total[\s\S]*?points: renewalTotal/);
 });
 
 test('FancyNumberScreen applies a successful number locally before best-effort profile refresh', () => {

@@ -989,7 +989,8 @@ export default function FancyNumberScreen() {
     const max = catalog?.maxMonths ?? 12;
     return Array.from({ length: max - min + 1 }, (_, index) => min + index);
   }, [catalog?.maxMonths, catalog?.minMonths]);
-  const paidTotal = months * (catalog?.unitPrice ?? mine?.unitPrice ?? 100);
+  const purchaseTotal = months * (catalog?.unitPrice ?? mine?.unitPrice ?? 100);
+  const renewalTotal = months * (mine?.unitPrice ?? 100);
   const switchPrice = catalog?.unitPrice ?? mine?.unitPrice ?? 100;
   const isSwitching = Boolean(
     leaseStatus === 'ready' && mine?.active && mine.permanent,
@@ -1232,7 +1233,7 @@ export default function FancyNumberScreen() {
               <Text style={d.body}>
                 {t('profile.fancyNumber.total', {
                   defaultValue: '合计：{{points}} 积分',
-                  points: paidTotal,
+                  points: renewalTotal,
                 })}
               </Text>
               <Pressable
@@ -1443,7 +1444,7 @@ export default function FancyNumberScreen() {
                         })
                       : t('profile.fancyNumber.total', {
                           defaultValue: '合计：{{points}} 积分',
-                          points: paidTotal,
+                          points: purchaseTotal,
                         })}
                 </Text>
                 <Pressable

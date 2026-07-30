@@ -68,7 +68,10 @@ test('avatar-frame inventory maps remote image URLs and preserves nullable field
     'normalized:http://localhost:9000/frames/diamond.png',
   );
   assert.equal(result.items[0].availableUntil, '2026-08-01T00:00:00.000Z');
-  assert.equal(result.items[0].ownedSources[0].expiresAt, '2026-08-01T00:00:00.000Z');
+  assert.equal(
+    result.items[0].ownedSources[0].expiresAt,
+    '2026-08-01T00:00:00.000Z',
+  );
 });
 
 test('equipAvatarFrame sends null unchanged to unequip and validates the returned inventory', async () => {
@@ -87,6 +90,32 @@ test('equipAvatarFrame sends null unchanged to unequip and validates the returne
     },
   ]);
   assert.equal(result.equippedFrameId, null);
+});
+
+test('equipAvatarFrame rejects responses that contradict the requested target', async () => {
+  const equippedOtherFrame = {
+    equippedFrameId: 'frame-other',
+    items: [
+      {
+        ...inventoryResponse.items[0],
+        id: 'frame-other',
+        equipped: true,
+      },
+    ],
+  };
+
+  for (const [requestedFrameId, response] of [
+    ['frame-diamond', equippedOtherFrame],
+    [null, equippedOtherFrame],
+  ]) {
+    const api = loadAvatarFramesApi(async () => response);
+    await assert.rejects(
+      () => api.equipAvatarFrame(requestedFrameId),
+      (error) =>
+        error.name === 'AvatarFrameResponseValidationError' &&
+        /requested frame/.test(error.detail),
+    );
+  }
 });
 
 test('fetchUserAppearances maps frame URLs and preserves explicit null appearances', async () => {
@@ -127,7 +156,10 @@ test('avatar-frame APIs reject malformed authoritative responses', async (t) => 
     ['inventory root', null, 'inventory'],
     [
       'inventory item',
-      { equippedFrameId: null, items: [{ ...inventoryResponse.items[0], equipped: 'yes' }] },
+      {
+        equippedFrameId: null,
+        items: [{ ...inventoryResponse.items[0], equipped: 'yes' }],
+      },
       'inventory',
     ],
     [
@@ -262,10 +294,9 @@ test('malformed appearance entries are isolated while valid siblings survive', a
 
   const result = await api.fetchUserAppearances(['alice', 'bob']);
 
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(result)),
-    { alice: { vipLevel: 3, avatarFrame: null } },
-  );
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), {
+    alice: { vipLevel: 3, avatarFrame: null },
+  });
   assert.deepEqual(
     JSON.parse(JSON.stringify(api.getInvalidUserAppearanceIds(result))),
     ['bob'],
