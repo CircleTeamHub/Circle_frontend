@@ -205,6 +205,26 @@ function buildIconKey(icon: Partial<DisplayIcon>, index: number) {
   ].join('-');
 }
 
+function dedupeIcons(icons: DisplayIcon[]): DisplayIcon[] {
+  const seen = new Set<string>();
+
+  return icons.filter((icon) => {
+    const identity = [
+      icon.type,
+      icon.systemVariant ??
+        icon.systemKey ??
+        icon.circleId ??
+        icon.id ??
+        icon.title,
+    ].join(':');
+    if (seen.has(identity)) {
+      return false;
+    }
+    seen.add(identity);
+    return true;
+  });
+}
+
 function getVipLevel(icon: DisplayIcon) {
   return icon.title.match(/\d+/)?.[0] ?? null;
 }
@@ -396,7 +416,7 @@ function UserIconRowComponent({
   showOverflowCount = true,
 }: Props) {
   const { colors } = useTheme();
-  const safeIcons = icons.filter((icon) => isRenderableIcon(icon));
+  const safeIcons = dedupeIcons(icons.filter((icon) => isRenderableIcon(icon)));
   const compactLimit = Math.max(1, maxVisible);
   const visibleIcons = compact ? safeIcons.slice(0, compactLimit) : safeIcons;
   const hiddenCount =
