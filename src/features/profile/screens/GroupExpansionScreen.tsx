@@ -178,6 +178,7 @@ export default function GroupExpansionScreen() {
   const focusGenerationRef = useRef(0);
   const catalogRequestRef = useRef(0);
   const selectedCircleIdRef = useRef<string | null>(null);
+  const walletLoadingRef = useRef(false);
   const pendingIntentRef = useRef<{ signature: string; key: string } | null>(
     null,
   );
@@ -282,6 +283,7 @@ export default function GroupExpansionScreen() {
         generation === focusGenerationRef.current &&
         isAuthSessionIdentityCurrent(owner, useAuthStore.getState());
       if (!canCommit()) return;
+      walletLoadingRef.current = true;
       setWalletLoading(true);
       setWalletError(null);
       try {
@@ -309,6 +311,7 @@ export default function GroupExpansionScreen() {
         );
       } finally {
         if (generation === focusGenerationRef.current) {
+          walletLoadingRef.current = false;
           setWalletLoading(false);
         }
       }
@@ -364,7 +367,7 @@ export default function GroupExpansionScreen() {
         !circleId ||
         !product.purchasable ||
         submittingProductId ||
-        walletLoading ||
+        walletLoadingRef.current ||
         isOffline
       ) {
         return;
@@ -397,6 +400,7 @@ export default function GroupExpansionScreen() {
             walletVersion,
             result.walletBalanceAfter,
           );
+        if (!canCommit()) return;
         await loadProducts(circleId, generation, owner);
         if (!canCommit()) return;
         Alert.alert(
@@ -435,7 +439,6 @@ export default function GroupExpansionScreen() {
       loadProducts,
       submittingProductId,
       t,
-      walletLoading,
     ],
   );
 
@@ -444,7 +447,13 @@ export default function GroupExpansionScreen() {
       const circle = circles.find(
         (item) => item.id === selectedCircleIdRef.current,
       );
-      if (!circle || !product.purchasable || isOffline || walletLoading) return;
+      if (
+        !circle ||
+        !product.purchasable ||
+        isOffline ||
+        walletLoadingRef.current
+      )
+        return;
       Alert.alert(
         t('profile.groupExpansion.confirmTitle', {
           defaultValue: '确认购买扩容卡',
@@ -470,7 +479,7 @@ export default function GroupExpansionScreen() {
         ],
       );
     },
-    [circles, isOffline, performPurchase, t, walletLoading],
+    [circles, isOffline, performPurchase, t],
   );
 
   const selectedCircle = circles.find(
