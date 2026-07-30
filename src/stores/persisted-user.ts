@@ -27,6 +27,7 @@ export function sanitizeUserForPersist<T extends object | null>(user: T): T {
     helloWords: null,
     birthday: null,
     city: null,
+    ...('avatarFrame' in record ? { avatarFrame: null } : {}),
     ...('avatarFrameAppearance' in record
       ? { avatarFrameAppearance: sanitizedAppearance }
       : {}),

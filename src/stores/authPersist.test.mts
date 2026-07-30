@@ -95,3 +95,27 @@ test('preserves an explicit unequipped legacy membership frame', () => {
 
   assert.equal(migrated.user?.avatarFrameAppearance, null);
 });
+
+test('clears legacy signed avatar-frame URLs during persisted-state migration', () => {
+  const migrated = migrateAuthPersist(
+    {
+      user: {
+        id: 'signed-frame',
+        avatarFrame:
+          'https://cdn.example.com/frame.png?X-Amz-Signature=legacy-secret',
+        avatarFrameAppearance: {
+          id: 'frame-1',
+          key: 'vip-gold',
+          name: 'VIP Gold',
+          imageUrl:
+            'https://cdn.example.com/frame.png?X-Amz-Signature=nested-secret',
+        },
+      },
+      isAuthenticated: true,
+    },
+    2,
+  );
+
+  assert.equal(migrated.user?.avatarFrame, null);
+  assert.equal(migrated.user?.avatarFrameAppearance?.imageUrl, null);
+});

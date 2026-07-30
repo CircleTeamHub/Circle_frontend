@@ -223,6 +223,8 @@ test('FancyNumberScreen supports listing, purchase, renewal, permanent switching
   assert.match(src, /setRealtimeBalance/);
   assert.match(src, /fetchCurrentUser/);
   assert.match(src, /purchaseMode === ["']PERMANENT_FREE["']/);
+  assert.match(src, /expectedUnitPrice:\s*catalog\.unitPrice/);
+  assert.match(src, /expectedUnitPrice:\s*mine\.unitPrice/);
   assert.match(src, /Promise\.allSettled/);
   assert.match(src, /errorText && !catalog && !mine/);
 });
@@ -233,6 +235,17 @@ test('FancyNumberScreen fences load-more results by focus generation and cursor'
   assert.match(src, /catalogCursorRef/);
   assert.match(src, /focusGenerationRef\.current !== generation/);
   assert.match(src, /catalogCursorRef\.current !== cursor/);
+});
+
+test('GroupExpansionScreen retains an ambiguous purchase key across focus reloads', () => {
+  const src = read('src/features/profile/screens/GroupExpansionScreen.tsx');
+  const loadOwnerCircles = src.match(
+    /const loadOwnerCircles[\s\S]*?const loadWallet/,
+  )?.[0];
+
+  assert.ok(loadOwnerCircles, 'loadOwnerCircles implementation should exist');
+  assert.doesNotMatch(loadOwnerCircles, /pendingIntentRef\.current\s*=\s*null/);
+  assert.match(src, /pendingIntentRef\.current\s*=\s*null/);
 });
 
 test('ProfileScreen shows a red dot on system announcements when profile notifications are unread', () => {

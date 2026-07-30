@@ -435,8 +435,8 @@ export default function FancyNumberScreen() {
     if (!owner) return;
     const sessionIntent = `${owner.sessionEpoch}:${owner.userId}`;
     const signature = selectedRecommendation?.id
-      ? `${sessionIntent}:catalog-purchase:${selectedRecommendation.id}:${isPermanent ? 'permanent' : months}`
-      : `${sessionIntent}:custom-purchase:${customValue}:${isPermanent ? 'permanent' : months}`;
+      ? `${sessionIntent}:catalog-purchase:${selectedRecommendation.id}:${isPermanent ? 'permanent' : months}:${catalog.unitPrice}`
+      : `${sessionIntent}:custom-purchase:${customValue}:${isPermanent ? 'permanent' : months}:${catalog.unitPrice}`;
     const walletVersion = useWalletRealtimeStore.getState().version;
     setSubmitting(true);
     try {
@@ -444,13 +444,19 @@ export default function FancyNumberScreen() {
       const result = selectedRecommendation?.id
         ? await purchaseFancyNumber(
             selectedRecommendation.id,
-            isPermanent ? {} : { months },
+            isPermanent
+              ? { expectedUnitPrice: catalog.unitPrice }
+              : { months, expectedUnitPrice: catalog.unitPrice },
             options,
           )
         : await purchaseCustomFancyNumber(
             isPermanent
-              ? { value: customValue }
-              : { value: customValue, months },
+              ? { value: customValue, expectedUnitPrice: catalog.unitPrice }
+              : {
+                  value: customValue,
+                  months,
+                  expectedUnitPrice: catalog.unitPrice,
+                },
             options,
           );
       if (
@@ -531,12 +537,12 @@ export default function FancyNumberScreen() {
     if (!mine?.renewable || submitting) return;
     const owner = captureAuthSessionIdentity(useAuthStore.getState());
     if (!owner) return;
-    const signature = `${owner.sessionEpoch}:${owner.userId}:renew:${mine.accountId}:${mine.expiresAt}:${months}`;
+    const signature = `${owner.sessionEpoch}:${owner.userId}:renew:${mine.accountId}:${mine.expiresAt}:${months}:${mine.unitPrice}`;
     const walletVersion = useWalletRealtimeStore.getState().version;
     setSubmitting(true);
     try {
       const result = await renewFancyNumber(
-        { months },
+        { months, expectedUnitPrice: mine.unitPrice },
         { idempotencyKey: intentKey(signature) },
       );
       if (result.accountId !== mine.accountId) {
@@ -600,17 +606,25 @@ export default function FancyNumberScreen() {
     const owner = captureAuthSessionIdentity(useAuthStore.getState());
     if (!owner) return;
     const sessionIntent = `${owner.sessionEpoch}:${owner.userId}`;
+    const expectedUnitPrice = catalog?.unitPrice ?? mine.unitPrice;
     const signature = selectedRecommendation?.id
-      ? `${sessionIntent}:catalog-switch:${previousAccountId}:${selectedRecommendation.id}`
-      : `${sessionIntent}:custom-switch:${previousAccountId}:${customValue}`;
+      ? `${sessionIntent}:catalog-switch:${previousAccountId}:${selectedRecommendation.id}:${expectedUnitPrice}`
+      : `${sessionIntent}:custom-switch:${previousAccountId}:${customValue}:${expectedUnitPrice}`;
     const walletVersion = useWalletRealtimeStore.getState().version;
     setSubmitting(true);
     try {
       const options = { idempotencyKey: intentKey(signature) };
       const result = selectedRecommendation?.id
-        ? await switchPermanentFancyNumber(selectedRecommendation.id, options)
+        ? await switchPermanentFancyNumber(
+            selectedRecommendation.id,
+            { expectedUnitPrice },
+            options,
+          )
         : await switchPermanentToCustomFancyNumber(
-            { value: customValue },
+            {
+              value: customValue,
+              expectedUnitPrice,
+            },
             options,
           );
       if (
@@ -647,6 +661,7 @@ export default function FancyNumberScreen() {
     }
   }, [
     availability.status,
+    catalog?.unitPrice,
     customValue,
     finishPurchase,
     intentKey,

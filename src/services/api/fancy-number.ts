@@ -152,12 +152,16 @@ function expectPurchaseIntent(
     permanent: boolean;
     months: number | null;
     accountId?: string;
+    unitPrice: number;
+    totalPrice: number;
   },
 ): FancyNumberPurchaseResult {
   const result = expectShape(raw, isPurchaseResult, invalidResponseMessage());
   if (
     result.permanent !== expected.permanent ||
     result.months !== expected.months ||
+    result.unitPrice !== expected.unitPrice ||
+    result.totalPrice !== expected.totalPrice ||
     (expected.accountId !== undefined &&
       result.accountId !== expected.accountId)
   ) {
@@ -173,6 +177,12 @@ function assertMonths(months: number): void {
         defaultValue: '购买时长必须为 1 到 12 个月',
       }),
     );
+  }
+}
+
+function assertExpectedUnitPrice(unitPrice: number): void {
+  if (!Number.isFinite(unitPrice) || !Number.isInteger(unitPrice) || unitPrice < 0) {
+    throw new Error(invalidResponseMessage());
   }
 }
 
@@ -222,10 +232,11 @@ export async function checkFancyNumberAvailability(
 
 export async function purchaseFancyNumber(
   id: string,
-  payload: { months?: number },
+  payload: { months?: number; expectedUnitPrice: number },
   options?: { idempotencyKey?: string },
 ): Promise<FancyNumberPurchaseResult> {
   if (payload.months !== undefined) assertMonths(payload.months);
+  assertExpectedUnitPrice(payload.expectedUnitPrice);
   const raw = await apiClient<unknown>(`/mall/fancy-numbers/${encodeURIComponent(id)}/purchase`, {
     method: 'POST',
     body: payload,
@@ -236,14 +247,18 @@ export async function purchaseFancyNumber(
   return expectPurchaseIntent(raw, {
     permanent: payload.months === undefined,
     months: payload.months ?? null,
+    unitPrice: payload.expectedUnitPrice,
+    totalPrice:
+      payload.months === undefined ? 0 : payload.months * payload.expectedUnitPrice,
   });
 }
 
 export async function renewFancyNumber(
-  payload: { months: number },
+  payload: { months: number; expectedUnitPrice: number },
   options?: { idempotencyKey?: string },
 ): Promise<FancyNumberPurchaseResult> {
   assertMonths(payload.months);
+  assertExpectedUnitPrice(payload.expectedUnitPrice);
   const raw = await apiClient<unknown>('/mall/fancy-numbers/renew', {
     method: 'POST',
     body: payload,
@@ -254,24 +269,38 @@ export async function renewFancyNumber(
   return expectPurchaseIntent(raw, {
     permanent: false,
     months: payload.months,
+    unitPrice: payload.expectedUnitPrice,
+    totalPrice: payload.months * payload.expectedUnitPrice,
   });
 }
 
-export async function switchPermanentFancyNumber(id: string, options?: { idempotencyKey?: string }): Promise<FancyNumberPurchaseResult> {
+export async function switchPermanentFancyNumber(
+  id: string,
+  payload: { expectedUnitPrice: number },
+  options?: { idempotencyKey?: string },
+): Promise<FancyNumberPurchaseResult> {
+  assertExpectedUnitPrice(payload.expectedUnitPrice);
   const raw = await apiClient<unknown>(`/mall/fancy-numbers/${encodeURIComponent(id)}/switch`, {
     method: 'POST',
+    body: payload,
     headers: {
       'Idempotency-Key': options?.idempotencyKey ?? generateIdempotencyKey(),
     },
   });
-  return expectPurchaseIntent(raw, { permanent: true, months: null });
+  return expectPurchaseIntent(raw, {
+    permanent: true,
+    months: null,
+    unitPrice: payload.expectedUnitPrice,
+    totalPrice: payload.expectedUnitPrice,
+  });
 }
 
 export async function purchaseCustomFancyNumber(
-  payload: { value: string; months?: number },
+  payload: { value: string; months?: number; expectedUnitPrice: number },
   options?: { idempotencyKey?: string },
 ): Promise<FancyNumberPurchaseResult> {
   if (payload.months !== undefined) assertMonths(payload.months);
+  assertExpectedUnitPrice(payload.expectedUnitPrice);
   const normalized = normalizeCustomValue(payload.value);
   const raw = await apiClient<unknown>('/mall/fancy-numbers/custom/purchase', {
     method: 'POST',
@@ -288,17 +317,21 @@ export async function purchaseCustomFancyNumber(
     permanent: payload.months === undefined,
     months: payload.months ?? null,
     accountId: normalized,
+    unitPrice: payload.expectedUnitPrice,
+    totalPrice:
+      payload.months === undefined ? 0 : payload.months * payload.expectedUnitPrice,
   });
 }
 
 export async function switchPermanentToCustomFancyNumber(
-  payload: { value: string },
+  payload: { value: string; expectedUnitPrice: number },
   options?: { idempotencyKey?: string },
 ): Promise<FancyNumberPurchaseResult> {
+  assertExpectedUnitPrice(payload.expectedUnitPrice);
   const normalized = normalizeCustomValue(payload.value);
   const raw = await apiClient<unknown>('/mall/fancy-numbers/custom/switch', {
     method: 'POST',
-    body: { value: normalized },
+    body: { value: normalized, expectedUnitPrice: payload.expectedUnitPrice },
     headers: {
       'Idempotency-Key':
         options?.idempotencyKey ?? generateIdempotencyKey(),
@@ -308,5 +341,7 @@ export async function switchPermanentToCustomFancyNumber(
     permanent: true,
     months: null,
     accountId: normalized,
+    unitPrice: payload.expectedUnitPrice,
+    totalPrice: payload.expectedUnitPrice,
   });
 }

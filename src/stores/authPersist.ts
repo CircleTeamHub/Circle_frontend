@@ -28,7 +28,7 @@ export interface PersistedAuthState {
 }
 
 /** 当前持久化数据的版本号。改这个值时务必同步更新 migrateAuthPersist。 */
-export const AUTH_PERSIST_VERSION = 2;
+export const AUTH_PERSIST_VERSION = 3;
 
 /**
  * 把任意历史版本的持久化数据迁移到当前版本。
@@ -68,7 +68,12 @@ export function migrateAuthPersist(
     typeof appearanceRecord.name === 'string' &&
     (appearanceRecord.imageUrl === null ||
       typeof appearanceRecord.imageUrl === 'string')
-      ? (appearanceRecord as unknown as AvatarFrameAppearance)
+      ? ({
+          id: appearanceRecord.id,
+          key: appearanceRecord.key,
+          name: appearanceRecord.name,
+          imageUrl: null,
+        } as AvatarFrameAppearance)
       : null;
   const vipLevel =
     typeof rawUser.vipLevel === 'number' ? rawUser.vipLevel : null;
@@ -93,8 +98,7 @@ export function migrateAuthPersist(
     ...state,
     user: {
       ...rawUser,
-      avatarFrame:
-        typeof rawUser.avatarFrame === 'string' ? rawUser.avatarFrame : null,
+      avatarFrame: null,
       avatarFrameAppearance,
     } as AuthUser,
   };

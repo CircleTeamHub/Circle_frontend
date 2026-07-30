@@ -2573,6 +2573,7 @@
     "FANCY_NUMBER_PERMANENT_CANNOT_RENEW": "A permanent fancy number does not need renewal",
     "FANCY_NUMBER_SWITCH_REQUIRES_PERMANENT": "Only a permanent fancy number can use paid switching",
     "FANCY_NUMBER_INSUFFICIENT_POINTS": "You do not have enough points",
+    "FANCY_NUMBER_QUOTE_CHANGED": "The fancy number price changed. Refresh and confirm again",
     "FANCY_NUMBER_INVENTORY_CONFLICT": "The inventory changed. Refresh and try again",
     "FANCY_NUMBER_RECOMMENDATION_LIMIT": "You can configure up to 100 featured fancy IDs",
     "FANCY_NUMBER_RECOMMENDATION_CONFLICT": "The featured fancy ID list changed. Refresh and try again",

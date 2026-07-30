@@ -2570,6 +2570,7 @@
     "FANCY_NUMBER_PERMANENT_CANNOT_RENEW": "永久靓号无需续费",
     "FANCY_NUMBER_SWITCH_REQUIRES_PERMANENT": "只有永久靓号可以使用付费更换功能",
     "FANCY_NUMBER_INSUFFICIENT_POINTS": "积分不足，无法购买或续费靓号",
+    "FANCY_NUMBER_QUOTE_CHANGED": "靓号价格已更新，请刷新后重新确认",
     "FANCY_NUMBER_INVENTORY_CONFLICT": "靓号库存状态发生变化，请刷新后重试",
     "FANCY_NUMBER_RECOMMENDATION_LIMIT": "热门靓号最多设置 100 个",
     "FANCY_NUMBER_RECOMMENDATION_CONFLICT": "热门靓号列表已更新，请刷新后重试",

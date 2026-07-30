@@ -146,12 +146,21 @@ test('fancy-number mutations reject results for a different intent', async (t) =
   const cases = [
     [
       'custom purchase returns another number',
-      (api) => api.purchaseCustomFancyNumber({ value: 'AB12C3', months: 1 }),
+      (api) =>
+        api.purchaseCustomFancyNumber({
+          value: 'AB12C3',
+          months: 1,
+          expectedUnitPrice: 100,
+        }),
       { ...purchaseResponse, accountId: 'ZZ99Z9' },
     ],
     [
       'paid purchase returns a permanent result',
-      (api) => api.purchaseFancyNumber('number-id', { months: 1 }),
+      (api) =>
+        api.purchaseFancyNumber('number-id', {
+          months: 1,
+          expectedUnitPrice: 100,
+        }),
       {
         ...purchaseResponse,
         expiresAt: null,
@@ -162,12 +171,16 @@ test('fancy-number mutations reject results for a different intent', async (t) =
     ],
     [
       'renewal returns a different month count',
-      (api) => api.renewFancyNumber({ months: 2 }),
+      (api) =>
+        api.renewFancyNumber({ months: 2, expectedUnitPrice: 100 }),
       { ...purchaseResponse, months: 1 },
     ],
     [
       'permanent switch returns a paid lease',
-      (api) => api.switchPermanentFancyNumber('number-id'),
+      (api) =>
+        api.switchPermanentFancyNumber('number-id', {
+          expectedUnitPrice: 100,
+        }),
       purchaseResponse,
     ],
   ];
@@ -194,38 +207,124 @@ test('fancy-number purchase, renewal, and permanent switching attach idempotency
       };
     }
     const requestedMonths = options.body.months;
-    return { ...purchaseResponse, months: requestedMonths };
+    return {
+      ...purchaseResponse,
+      months: requestedMonths,
+      totalPrice: requestedMonths * options.body.expectedUnitPrice,
+    };
   });
 
-  await api.purchaseFancyNumber('number-id', { months: 3 });
-  await api.renewFancyNumber({ months: 2 }, { idempotencyKey: 'retry-same-request' });
-  await api.switchPermanentFancyNumber('replacement-id', {
-    idempotencyKey: 'switch-same-request',
+  await api.purchaseFancyNumber('number-id', {
+    months: 3,
+    expectedUnitPrice: 100,
   });
+  await api.renewFancyNumber(
+    { months: 2, expectedUnitPrice: 100 },
+    { idempotencyKey: 'retry-same-request' },
+  );
+  await api.switchPermanentFancyNumber(
+    'replacement-id',
+    { expectedUnitPrice: 100 },
+    { idempotencyKey: 'switch-same-request' },
+  );
   await api.purchaseCustomFancyNumber(
-    { value: 'AB12C3', months: 1 },
+    { value: 'AB12C3', months: 1, expectedUnitPrice: 100 },
     { idempotencyKey: 'custom-purchase' },
   );
   await api.switchPermanentToCustomFancyNumber(
-    { value: 'XY98Z7' },
+    { value: 'XY98Z7', expectedUnitPrice: 100 },
     { idempotencyKey: 'custom-switch' },
   );
 
   assert.equal(calls[0].endpoint, '/mall/fancy-numbers/number-id/purchase');
   assert.equal(calls[0].options.method, 'POST');
   assert.equal(calls[0].options.body.months, 3);
+  assert.equal(calls[0].options.body.expectedUnitPrice, 100);
   assert.equal(calls[0].options.headers['Idempotency-Key'], 'generated-key');
   assert.equal(calls[1].endpoint, '/mall/fancy-numbers/renew');
   assert.equal(calls[1].options.method, 'POST');
   assert.equal(calls[1].options.body.months, 2);
+  assert.equal(calls[1].options.body.expectedUnitPrice, 100);
   assert.equal(calls[1].options.headers['Idempotency-Key'], 'retry-same-request');
   assert.equal(calls[2].endpoint, '/mall/fancy-numbers/replacement-id/switch');
   assert.equal(calls[2].options.method, 'POST');
+  assert.equal(calls[2].options.body.expectedUnitPrice, 100);
   assert.equal(calls[2].options.headers['Idempotency-Key'], 'switch-same-request');
   assert.equal(calls[3].endpoint, '/mall/fancy-numbers/custom/purchase');
   assert.equal(calls[3].options.body.value, 'AB12C3');
+  assert.equal(calls[3].options.body.expectedUnitPrice, 100);
   assert.equal(calls[4].endpoint, '/mall/fancy-numbers/custom/switch');
   assert.equal(calls[4].options.body.value, 'XY98Z7');
+  assert.equal(calls[4].options.body.expectedUnitPrice, 100);
+});
+
+test('fancy-number mutations reject charges that differ from the displayed quote', async (t) => {
+  for (const [name, invoke] of [
+    [
+      'purchase',
+      (api) =>
+        api.purchaseFancyNumber('number-id', {
+          months: 1,
+          expectedUnitPrice: 100,
+        }),
+    ],
+    [
+      'custom purchase',
+      (api) =>
+        api.purchaseCustomFancyNumber({
+          value: 'AB12C3',
+          months: 1,
+          expectedUnitPrice: 100,
+        }),
+    ],
+    [
+      'renewal',
+      (api) =>
+        api.renewFancyNumber({ months: 1, expectedUnitPrice: 100 }),
+    ],
+    [
+      'inventory switch',
+      (api) =>
+        api.switchPermanentFancyNumber('number-id', {
+          expectedUnitPrice: 100,
+        }),
+    ],
+    [
+      'custom switch',
+      (api) =>
+        api.switchPermanentToCustomFancyNumber({
+          value: 'AB12C3',
+          expectedUnitPrice: 100,
+        }),
+    ],
+  ]) {
+    await t.test(name, async () => {
+      const api = loadFancyNumberModule(async () => ({
+        ...purchaseResponse,
+        expiresAt:
+          name.includes('switch') ? null : purchaseResponse.expiresAt,
+        permanent: name.includes('switch'),
+        months: name.includes('switch') ? null : purchaseResponse.months,
+        unitPrice: 200,
+        totalPrice: 200,
+      }));
+      await assert.rejects(invoke(api), /服务返回了无效数据/);
+    });
+  }
+});
+
+test('fancy-number mutations reject a missing displayed quote before sending', async () => {
+  let calls = 0;
+  const api = loadFancyNumberModule(async () => {
+    calls += 1;
+    return purchaseResponse;
+  });
+
+  await assert.rejects(
+    api.purchaseFancyNumber('number-id', { months: 1 }),
+    /服务返回了无效数据/,
+  );
+  assert.equal(calls, 0);
 });
 
 test('fancy-number API rejects malformed expiry timestamps', async () => {
@@ -272,7 +371,7 @@ test('fancy-number API requires an expiry for a paid active lease', async () => 
 
   await assert.rejects(
     api.purchaseCustomFancyNumber(
-      { value: 'AB12C3', months: 1 },
+      { value: 'AB12C3', months: 1, expectedUnitPrice: 100 },
       { idempotencyKey: 'paid-purchase' },
     ),
     /服务返回了无效数据/,
@@ -289,7 +388,7 @@ test('fancy-number API accepts a null expiry only for permanent results', async 
   }));
 
   const result = await api.purchaseCustomFancyNumber(
-    { value: 'AB12C3' },
+    { value: 'AB12C3', expectedUnitPrice: 100 },
     { idempotencyKey: 'permanent-purchase' },
   );
 

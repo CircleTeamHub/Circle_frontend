@@ -2573,6 +2573,7 @@
     "FANCY_NUMBER_PERMANENT_CANNOT_RENEW": "Un número premium permanente no necesita renovación",
     "FANCY_NUMBER_SWITCH_REQUIRES_PERMANENT": "Solo un número premium permanente puede usar el cambio de pago",
     "FANCY_NUMBER_INSUFFICIENT_POINTS": "No tienes suficientes puntos",
+    "FANCY_NUMBER_QUOTE_CHANGED": "El precio del número premium cambió. Actualiza y confirma de nuevo",
     "FANCY_NUMBER_INVENTORY_CONFLICT": "El inventario cambió. Actualiza e inténtalo de nuevo",
     "FANCY_NUMBER_RECOMMENDATION_LIMIT": "Puedes configurar hasta 100 ID premium destacados",
     "FANCY_NUMBER_RECOMMENDATION_CONFLICT": "La lista de ID premium destacados cambió. Actualiza e inténtalo de nuevo",

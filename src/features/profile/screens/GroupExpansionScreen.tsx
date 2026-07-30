@@ -247,7 +247,6 @@ export default function GroupExpansionScreen() {
             : nextCircles[0]?.id) ?? null;
         selectedCircleIdRef.current = nextSelectedId;
         setSelectedCircleId(nextSelectedId);
-        pendingIntentRef.current = null;
 
         if (nextSelectedId) {
           await loadProducts(nextSelectedId, generation);

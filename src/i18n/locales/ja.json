@@ -2570,6 +2570,7 @@
     "FANCY_NUMBER_PERMANENT_CANNOT_RENEW": "永久ゴロ番号は更新不要です",
     "FANCY_NUMBER_SWITCH_REQUIRES_PERMANENT": "有料変更は永久ゴロ番号のみ利用できます",
     "FANCY_NUMBER_INSUFFICIENT_POINTS": "ポイントが不足しています",
+    "FANCY_NUMBER_QUOTE_CHANGED": "ゴロ番号の価格が更新されました。更新後にもう一度確認してください",
     "FANCY_NUMBER_INVENTORY_CONFLICT": "在庫状況が変わりました。更新して再試行してください",
     "FANCY_NUMBER_RECOMMENDATION_LIMIT": "おすすめゴロ番号は最大100件まで設定できます",
     "FANCY_NUMBER_RECOMMENDATION_CONFLICT": "おすすめ一覧が更新されました。更新してもう一度お試しください",

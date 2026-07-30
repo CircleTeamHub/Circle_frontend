@@ -64,6 +64,8 @@ test('sanitizeUserForPersist keeps non-sensitive display fields', () => {
 test('sanitizeUserForPersist strips signed avatar-frame URLs but keeps stable identity', () => {
   const user = {
     ...fullUser,
+    avatarFrame:
+      'https://cdn.example.com/frame.png?X-Amz-Signature=legacy-secret',
     avatarFrameAppearance: {
       id: 'frame-1',
       key: 'vip-gold',
@@ -81,6 +83,7 @@ test('sanitizeUserForPersist strips signed avatar-frame URLs but keeps stable id
     name: 'VIP Gold',
     imageUrl: null,
   });
+  assert.equal(sanitized.avatarFrame, null);
   assert.equal(
     user.avatarFrameAppearance.imageUrl,
     'https://cdn.example.com/frame.png?X-Amz-Signature=secret-signature',

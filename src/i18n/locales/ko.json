@@ -2570,6 +2570,7 @@
     "FANCY_NUMBER_PERMANENT_CANNOT_RENEW": "영구 특별 번호는 갱신할 필요가 없습니다",
     "FANCY_NUMBER_SWITCH_REQUIRES_PERMANENT": "유료 변경은 영구 특별 번호만 사용할 수 있습니다",
     "FANCY_NUMBER_INSUFFICIENT_POINTS": "포인트가 부족합니다",
+    "FANCY_NUMBER_QUOTE_CHANGED": "특별 번호 가격이 변경되었습니다. 새로고침 후 다시 확인해 주세요",
     "FANCY_NUMBER_INVENTORY_CONFLICT": "재고 상태가 변경되었습니다. 새로고침 후 다시 시도해 주세요",
     "FANCY_NUMBER_RECOMMENDATION_LIMIT": "인기 특별 번호는 최대 100개까지 설정할 수 있습니다",
     "FANCY_NUMBER_RECOMMENDATION_CONFLICT": "인기 특별 번호 목록이 변경되었습니다. 새로고침 후 다시 시도해 주세요",
