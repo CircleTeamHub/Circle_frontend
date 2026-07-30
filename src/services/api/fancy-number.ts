@@ -132,7 +132,10 @@ function isFancyNumberAvailability(
     typeof value.available === 'boolean' &&
     (value.reason === null ||
       value.reason === 'TAKEN' ||
-      value.reason === 'RESERVED')
+      value.reason === 'RESERVED') &&
+    (value.available
+      ? value.reason === null
+      : value.reason === 'TAKEN' || value.reason === 'RESERVED')
   );
 }
 
@@ -140,6 +143,26 @@ function invalidResponseMessage() {
   return i18n.t('common.errors.invalidServerResponse', {
     defaultValue: '服务返回了无效数据',
   });
+}
+
+function expectPurchaseIntent(
+  raw: unknown,
+  expected: {
+    permanent: boolean;
+    months: number | null;
+    accountId?: string;
+  },
+): FancyNumberPurchaseResult {
+  const result = expectShape(raw, isPurchaseResult, invalidResponseMessage());
+  if (
+    result.permanent !== expected.permanent ||
+    result.months !== expected.months ||
+    (expected.accountId !== undefined &&
+      result.accountId !== expected.accountId)
+  ) {
+    throw new Error(invalidResponseMessage());
+  }
+  return result;
 }
 
 function assertMonths(months: number): void {
@@ -185,11 +208,15 @@ export async function checkFancyNumberAvailability(
   const raw = await apiClient<unknown>(
     `/mall/fancy-numbers/availability?value=${encodeURIComponent(normalized)}`,
   );
-  return expectShape(
+  const result = expectShape(
     raw,
     isFancyNumberAvailability,
     invalidResponseMessage(),
   );
+  if (result.value !== normalized) {
+    throw new Error(invalidResponseMessage());
+  }
+  return result;
 }
 
 export async function purchaseFancyNumber(
@@ -205,7 +232,10 @@ export async function purchaseFancyNumber(
       'Idempotency-Key': options?.idempotencyKey ?? generateIdempotencyKey(),
     },
   });
-  return expectShape(raw, isPurchaseResult, invalidResponseMessage());
+  return expectPurchaseIntent(raw, {
+    permanent: payload.months === undefined,
+    months: payload.months ?? null,
+  });
 }
 
 export async function renewFancyNumber(
@@ -220,7 +250,10 @@ export async function renewFancyNumber(
       'Idempotency-Key': options?.idempotencyKey ?? generateIdempotencyKey(),
     },
   });
-  return expectShape(raw, isPurchaseResult, invalidResponseMessage());
+  return expectPurchaseIntent(raw, {
+    permanent: false,
+    months: payload.months,
+  });
 }
 
 export async function switchPermanentFancyNumber(id: string, options?: { idempotencyKey?: string }): Promise<FancyNumberPurchaseResult> {
@@ -230,7 +263,7 @@ export async function switchPermanentFancyNumber(id: string, options?: { idempot
       'Idempotency-Key': options?.idempotencyKey ?? generateIdempotencyKey(),
     },
   });
-  return expectShape(raw, isPurchaseResult, invalidResponseMessage());
+  return expectPurchaseIntent(raw, { permanent: true, months: null });
 }
 
 export async function purchaseCustomFancyNumber(
@@ -238,31 +271,41 @@ export async function purchaseCustomFancyNumber(
   options?: { idempotencyKey?: string },
 ): Promise<FancyNumberPurchaseResult> {
   if (payload.months !== undefined) assertMonths(payload.months);
+  const normalized = normalizeCustomValue(payload.value);
   const raw = await apiClient<unknown>('/mall/fancy-numbers/custom/purchase', {
     method: 'POST',
     body: {
       ...payload,
-      value: normalizeCustomValue(payload.value),
+      value: normalized,
     },
     headers: {
       'Idempotency-Key':
         options?.idempotencyKey ?? generateIdempotencyKey(),
     },
   });
-  return expectShape(raw, isPurchaseResult, invalidResponseMessage());
+  return expectPurchaseIntent(raw, {
+    permanent: payload.months === undefined,
+    months: payload.months ?? null,
+    accountId: normalized,
+  });
 }
 
 export async function switchPermanentToCustomFancyNumber(
   payload: { value: string },
   options?: { idempotencyKey?: string },
 ): Promise<FancyNumberPurchaseResult> {
+  const normalized = normalizeCustomValue(payload.value);
   const raw = await apiClient<unknown>('/mall/fancy-numbers/custom/switch', {
     method: 'POST',
-    body: { value: normalizeCustomValue(payload.value) },
+    body: { value: normalized },
     headers: {
       'Idempotency-Key':
         options?.idempotencyKey ?? generateIdempotencyKey(),
     },
   });
-  return expectShape(raw, isPurchaseResult, invalidResponseMessage());
+  return expectPurchaseIntent(raw, {
+    permanent: true,
+    months: null,
+    accountId: normalized,
+  });
 }

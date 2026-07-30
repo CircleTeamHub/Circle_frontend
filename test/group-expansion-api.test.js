@@ -126,7 +126,102 @@ test('group-expansion API rejects malformed server payloads', async () => {
   }));
 
   await assert.rejects(
-    api.fetchGroupExpansionProducts('circle-1'),
+    api.fetchGroupExpansionProducts(productResponse.circleId),
     /服务返回了无效数据/,
   );
+});
+
+test('group-expansion catalog rejects contradictory product availability', async (t) => {
+  for (const [name, product] of [
+    [
+      'purchasable product with an unavailable reason',
+      {
+        ...productResponse.products[0],
+        unavailableReason: 'MAX_CAPACITY_EXCEEDED',
+      },
+    ],
+    [
+      'unavailable product without a reason',
+      {
+        ...productResponse.products[0],
+        purchasable: false,
+        unavailableReason: null,
+      },
+    ],
+    [
+      'purchasable product exceeding the hard limit',
+      {
+        ...productResponse.products[0],
+        resultingMaxMembers: productResponse.hardLimit + 1,
+      },
+    ],
+  ]) {
+    await t.test(name, async () => {
+      const api = loadGroupExpansionModule(async () => ({
+        ...productResponse,
+        products: [product],
+      }));
+      await assert.rejects(
+        api.fetchGroupExpansionProducts(productResponse.circleId),
+        /服务返回了无效数据/,
+      );
+    });
+  }
+});
+
+test('group-expansion catalog rejects another circle and invalid capacity arithmetic', async (t) => {
+  for (const [name, response] of [
+    [
+      'different circle',
+      { ...productResponse, circleId: 'circle-2' },
+    ],
+    [
+      'purchasable product with the wrong resulting capacity',
+      {
+        ...productResponse,
+        products: [
+          {
+            ...productResponse.products[0],
+            resultingMaxMembers: 250,
+          },
+        ],
+      },
+    ],
+  ]) {
+    await t.test(name, async () => {
+      const api = loadGroupExpansionModule(async () => response);
+      await assert.rejects(
+        api.fetchGroupExpansionProducts(productResponse.circleId),
+        /服务返回了无效数据/,
+      );
+    });
+  }
+});
+
+test('group-expansion purchase rejects identifiers from another request', async (t) => {
+  const baseResponse = {
+    orderId: 'order-1',
+    circleId: 'circle-1',
+    productId: 'light',
+    productName: '轻量扩容卡',
+    seats: 100,
+    price: 600,
+    previousMaxMembers: 100,
+    newMaxMembers: 200,
+    walletBalanceAfter: 2400,
+  };
+
+  for (const [name, response] of [
+    ['different circle', { ...baseResponse, circleId: 'circle-2' }],
+    ['different product', { ...baseResponse, productId: 'heavy' }],
+    ['invalid capacity arithmetic', { ...baseResponse, newMaxMembers: 250 }],
+  ]) {
+    await t.test(name, async () => {
+      const api = loadGroupExpansionModule(async () => response);
+      await assert.rejects(
+        api.purchaseGroupExpansion('circle-1', 'light'),
+        /服务返回了无效数据/,
+      );
+    });
+  }
 });

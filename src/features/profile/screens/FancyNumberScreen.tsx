@@ -23,7 +23,9 @@ import {
   fetchFancyNumbers,
   fetchMyFancyNumber,
   purchaseCustomFancyNumber,
+  purchaseFancyNumber,
   renewFancyNumber,
+  switchPermanentFancyNumber,
   switchPermanentToCustomFancyNumber,
   type FancyNumberItem,
   type FancyNumberList,
@@ -185,6 +187,8 @@ export default function FancyNumberScreen() {
   const [catalog, setCatalog] = useState<FancyNumberList | null>(null);
   const [items, setItems] = useState<FancyNumberItem[]>([]);
   const [customValue, setCustomValue] = useState('');
+  const [selectedRecommendation, setSelectedRecommendation] =
+    useState<FancyNumberItem | null>(null);
   const [availability, setAvailability] = useState<AvailabilityState>({
     status: 'idle',
   });
@@ -194,6 +198,7 @@ export default function FancyNumberScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const focusGenerationRef = useRef(0);
+  const catalogCursorRef = useRef<string | null>(null);
   const availabilityGenerationRef = useRef(0);
   const pendingIntentRef = useRef<{ signature: string; key: string } | null>(null);
 
@@ -207,12 +212,15 @@ export default function FancyNumberScreen() {
         (!owner ||
           isAuthSessionIdentityCurrent(owner, useAuthStore.getState()));
       if (!canCommit()) return;
+      catalogCursorRef.current = null;
+      setLoadingMore(false);
       setLoading(true);
       setErrorText(null);
       try {
         const [nextMine, nextCatalog] = await Promise.all([fetchMyFancyNumber(), fetchFancyNumbers({ limit: PAGE_SIZE })]);
         if (!canCommit()) return;
         setMine(nextMine);
+        catalogCursorRef.current = nextCatalog.nextCursor;
         setCatalog(nextCatalog);
         setItems(
           nextCatalog.items
@@ -295,9 +303,13 @@ export default function FancyNumberScreen() {
     useCallback(() => {
       const generation = focusGenerationRef.current + 1;
       focusGenerationRef.current = generation;
+      catalogCursorRef.current = null;
+      setLoadingMore(false);
       void loadInitial(generation);
       return () => {
         focusGenerationRef.current += 1;
+        catalogCursorRef.current = null;
+        setLoadingMore(false);
       };
     }, [loadInitial]),
   );
@@ -354,6 +366,7 @@ export default function FancyNumberScreen() {
         );
       setMine(mineFromResult(result));
       setItems((current) => current.filter((item) => item.value !== result.accountId));
+      setSelectedRecommendation(null);
       setCustomValue('');
       setAvailability({ status: 'idle' });
       await refreshAuthUser(owner).catch(() => undefined);
@@ -398,14 +411,35 @@ export default function FancyNumberScreen() {
     const isPermanent = catalog.purchaseMode === 'PERMANENT_FREE';
     const owner = captureAuthSessionIdentity(useAuthStore.getState());
     if (!owner) return;
-    const signature = `custom-purchase:${customValue}:${isPermanent ? 'permanent' : months}`;
+    const signature = selectedRecommendation?.id
+      ? `catalog-purchase:${selectedRecommendation.id}:${isPermanent ? 'permanent' : months}`
+      : `custom-purchase:${customValue}:${isPermanent ? 'permanent' : months}`;
     const walletVersion = useWalletRealtimeStore.getState().version;
     setSubmitting(true);
     try {
-      const result = await purchaseCustomFancyNumber(
-        isPermanent ? { value: customValue } : { value: customValue, months },
-        { idempotencyKey: intentKey(signature) },
-      );
+      const options = { idempotencyKey: intentKey(signature) };
+      const result = selectedRecommendation?.id
+        ? await purchaseFancyNumber(
+            selectedRecommendation.id,
+            isPermanent ? {} : { months },
+            options,
+          )
+        : await purchaseCustomFancyNumber(
+            isPermanent
+              ? { value: customValue }
+              : { value: customValue, months },
+            options,
+          );
+      if (
+        selectedRecommendation?.id &&
+        result.accountId !== selectedRecommendation.value
+      ) {
+        throw new Error(
+          t('common.errors.invalidServerResponse', {
+            defaultValue: '服务返回了无效数据',
+          }),
+        );
+      }
       await finishPurchase(owner, result, walletVersion);
     } catch (error) {
       if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
@@ -430,6 +464,7 @@ export default function FancyNumberScreen() {
     intentKey,
     loadInitial,
     months,
+    selectedRecommendation,
     submitting,
     t,
   ]);
@@ -483,6 +518,13 @@ export default function FancyNumberScreen() {
     setSubmitting(true);
     try {
       const result = await renewFancyNumber({ months }, { idempotencyKey: intentKey(signature) });
+      if (result.accountId !== mine.accountId) {
+        throw new Error(
+          t('common.errors.invalidServerResponse', {
+            defaultValue: '服务返回了无效数据',
+          }),
+        );
+      }
       await finishPurchase(owner, result, walletVersion, 'renewal');
     } catch (error) {
       if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
@@ -535,14 +577,29 @@ export default function FancyNumberScreen() {
     const previousAccountId = mine.accountId;
     const owner = captureAuthSessionIdentity(useAuthStore.getState());
     if (!owner) return;
-    const signature = `custom-switch:${previousAccountId}:${customValue}`;
+    const signature = selectedRecommendation?.id
+      ? `catalog-switch:${previousAccountId}:${selectedRecommendation.id}`
+      : `custom-switch:${previousAccountId}:${customValue}`;
     const walletVersion = useWalletRealtimeStore.getState().version;
     setSubmitting(true);
     try {
-      const result = await switchPermanentToCustomFancyNumber(
-        { value: customValue },
-        { idempotencyKey: intentKey(signature) },
-      );
+      const options = { idempotencyKey: intentKey(signature) };
+      const result = selectedRecommendation?.id
+        ? await switchPermanentFancyNumber(selectedRecommendation.id, options)
+        : await switchPermanentToCustomFancyNumber(
+            { value: customValue },
+            options,
+          );
+      if (
+        selectedRecommendation?.id &&
+        result.accountId !== selectedRecommendation.value
+      ) {
+        throw new Error(
+          t('common.errors.invalidServerResponse', {
+            defaultValue: '服务返回了无效数据',
+          }),
+        );
+      }
       await finishPurchase(
         owner,
         result,
@@ -572,6 +629,7 @@ export default function FancyNumberScreen() {
     intentKey,
     loadInitial,
     mine,
+    selectedRecommendation,
     submitting,
     t,
   ]);
@@ -612,13 +670,21 @@ export default function FancyNumberScreen() {
   ]);
 
   const loadMore = useCallback(async () => {
-    if (!catalog?.nextCursor || loadingMore) return;
+    const cursor = catalog?.nextCursor;
+    if (!cursor || loadingMore || catalogCursorRef.current !== cursor) return;
+    const generation = focusGenerationRef.current;
     setLoadingMore(true);
     try {
       const next = await fetchFancyNumbers({
-        cursor: catalog.nextCursor,
+        cursor,
         limit: PAGE_SIZE,
       });
+      if (
+        focusGenerationRef.current !== generation ||
+        catalogCursorRef.current !== cursor
+      ) {
+        return;
+      }
       const suggestions = next.items
         .filter((item) => CUSTOM_VALUE_PATTERN.test(item.value.toUpperCase()))
         .map((item) => ({ ...item, value: item.value.toUpperCase() }));
@@ -626,8 +692,15 @@ export default function FancyNumberScreen() {
         ...current,
         ...suggestions.filter((item) => !current.some((existing) => existing.id === item.id)),
       ]);
+      catalogCursorRef.current = next.nextCursor;
       setCatalog((current) => (current ? { ...current, nextCursor: next.nextCursor } : next));
     } catch (error) {
+      if (
+        focusGenerationRef.current !== generation ||
+        catalogCursorRef.current !== cursor
+      ) {
+        return;
+      }
       Alert.alert(
         t('common.errorOccurred', { defaultValue: '操作失败' }),
         getApiErrorMessage(
@@ -638,11 +711,14 @@ export default function FancyNumberScreen() {
         ),
       );
     } finally {
-      setLoadingMore(false);
+      if (focusGenerationRef.current === generation) {
+        setLoadingMore(false);
+      }
     }
   }, [catalog?.nextCursor, loadingMore, t]);
 
   const handleCustomValueChange = useCallback((value: string) => {
+    setSelectedRecommendation(null);
     setCustomValue(
       value
         .replace(/[^a-zA-Z0-9]/g, '')
@@ -995,14 +1071,18 @@ export default function FancyNumberScreen() {
                 {items.length > 0 ? (
                   <View style={s.numberGrid}>
                     {items.map((item) => {
-                      const selected = item.value === customValue;
+                      const selected =
+                        item.id === selectedRecommendation?.id;
                       return (
                         <Pressable
                           key={item.id}
                           accessibilityRole="button"
                           accessibilityState={{ selected }}
                           style={[s.numberButton, selected ? d.selectedNumber : d.normalNumber]}
-                          onPress={() => setCustomValue(item.value)}
+                          onPress={() => {
+                            setSelectedRecommendation(item);
+                            setCustomValue(item.value);
+                          }}
                         >
                           <Text
                             numberOfLines={1}

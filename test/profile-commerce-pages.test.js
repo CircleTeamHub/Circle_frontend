@@ -159,6 +159,22 @@ test('FancyNumberScreen supports listing, purchase, renewal, permanent switching
   assert.match(src, /checkFancyNumberAvailability/);
   assert.match(src, /purchaseCustomFancyNumber/);
   assert.match(src, /switchPermanentToCustomFancyNumber/);
+  assert.match(src, /purchaseFancyNumber/);
+  assert.match(src, /switchPermanentFancyNumber/);
+  assert.match(src, /selectedRecommendation/);
+  assert.match(
+    src,
+    /selectedRecommendation\?\.id[\s\S]*?purchaseFancyNumber/,
+  );
+  assert.match(
+    src,
+    /selectedRecommendation\?\.id[\s\S]*?switchPermanentFancyNumber/,
+  );
+  assert.match(
+    src,
+    /result\.accountId !== selectedRecommendation\.value/,
+  );
+  assert.match(src, /result\.accountId !== mine\.accountId/);
   assert.match(src, /TextInput/);
   assert.match(src, /setTimeout/);
   assert.match(src, /350/);
@@ -168,6 +184,14 @@ test('FancyNumberScreen supports listing, purchase, renewal, permanent switching
   assert.match(src, /setRealtimeBalance/);
   assert.match(src, /fetchCurrentUser/);
   assert.match(src, /purchaseMode === ["']PERMANENT_FREE["']/);
+});
+
+test('FancyNumberScreen fences load-more results by focus generation and cursor', () => {
+  const src = read('src/features/profile/screens/FancyNumberScreen.tsx');
+
+  assert.match(src, /catalogCursorRef/);
+  assert.match(src, /focusGenerationRef\.current !== generation/);
+  assert.match(src, /catalogCursorRef\.current !== cursor/);
 });
 
 test('ProfileScreen shows a red dot on system announcements when profile notifications are unread', () => {

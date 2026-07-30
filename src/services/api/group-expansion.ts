@@ -51,7 +51,11 @@ function isNonNegativeInteger(value: unknown): value is number {
   );
 }
 
-function isProduct(value: unknown): value is GroupExpansionProduct {
+function isProduct(
+  value: unknown,
+  currentMaxMembers: number,
+  hardLimit: number,
+): value is GroupExpansionProduct {
   return (
     isPlainObject(value) &&
     isNonEmptyString(value.id) &&
@@ -61,23 +65,37 @@ function isProduct(value: unknown): value is GroupExpansionProduct {
     typeof value.purchasable === 'boolean' &&
     (value.unavailableReason === null ||
       value.unavailableReason === 'MAX_CAPACITY_EXCEEDED') &&
-    isPositiveInteger(value.resultingMaxMembers)
+    isPositiveInteger(value.resultingMaxMembers) &&
+    (value.purchasable
+      ? value.unavailableReason === null &&
+        value.resultingMaxMembers === currentMaxMembers + value.seats &&
+        value.resultingMaxMembers <= hardLimit
+      : value.unavailableReason === 'MAX_CAPACITY_EXCEEDED')
   );
 }
 
 function isProductsResult(
   value: unknown,
 ): value is GroupExpansionProductsResult {
+  if (
+    !isPlainObject(value) ||
+    !isNonEmptyString(value.circleId) ||
+    !isNonNegativeInteger(value.memberCount) ||
+    !isPositiveInteger(value.currentMaxMembers) ||
+    !isNonNegativeInteger(value.expansionSeats) ||
+    !isPositiveInteger(value.hardLimit) ||
+    !Array.isArray(value.products)
+  ) {
+    return false;
+  }
+
+  const hardLimit = value.hardLimit;
+  const currentMaxMembers = value.currentMaxMembers;
   return (
-    isPlainObject(value) &&
-    isNonEmptyString(value.circleId) &&
-    isNonNegativeInteger(value.memberCount) &&
-    isPositiveInteger(value.currentMaxMembers) &&
-    isNonNegativeInteger(value.expansionSeats) &&
-    isPositiveInteger(value.hardLimit) &&
-    value.currentMaxMembers <= value.hardLimit &&
-    Array.isArray(value.products) &&
-    value.products.every(isProduct)
+    currentMaxMembers <= hardLimit &&
+    value.products.every((product) =>
+      isProduct(product, currentMaxMembers, hardLimit),
+    )
   );
 }
 
@@ -111,7 +129,11 @@ export async function fetchGroupExpansionProducts(
   const raw = await apiClient<unknown>(
     `/group-expansions/products?circleId=${encodeURIComponent(circleId)}`,
   );
-  return expectShape(raw, isProductsResult, invalidResponseMessage());
+  const result = expectShape(raw, isProductsResult, invalidResponseMessage());
+  if (result.circleId !== circleId) {
+    throw new Error(invalidResponseMessage());
+  }
+  return result;
 }
 
 export async function purchaseGroupExpansion(
@@ -127,5 +149,13 @@ export async function purchaseGroupExpansion(
         options?.idempotencyKey ?? generateIdempotencyKey(),
     },
   });
-  return expectShape(raw, isPurchaseResult, invalidResponseMessage());
+  const result = expectShape(raw, isPurchaseResult, invalidResponseMessage());
+  if (
+    result.circleId !== circleId ||
+    result.productId !== productId ||
+    result.newMaxMembers !== result.previousMaxMembers + result.seats
+  ) {
+    throw new Error(invalidResponseMessage());
+  }
+  return result;
 }

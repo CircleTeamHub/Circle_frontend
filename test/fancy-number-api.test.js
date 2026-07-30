@@ -117,11 +117,84 @@ test('custom fancy-number availability normalizes input and safely encodes it', 
   assert.equal(calls[0].endpoint, '/mall/fancy-numbers/availability?value=AB12C3');
 });
 
+test('custom fancy-number availability rejects contradictory result metadata', async (t) => {
+  for (const [name, response] of [
+    [
+      'available result with a rejection reason',
+      { value: 'AB12C3', available: true, reason: 'TAKEN' },
+    ],
+    [
+      'unavailable result without a rejection reason',
+      { value: 'AB12C3', available: false, reason: null },
+    ],
+    [
+      'result for a different requested value',
+      { value: 'ZZ99Z9', available: true, reason: null },
+    ],
+  ]) {
+    await t.test(name, async () => {
+      const api = loadFancyNumberModule(async () => response);
+      await assert.rejects(
+        api.checkFancyNumberAvailability('AB12C3'),
+        /服务返回了无效数据/,
+      );
+    });
+  }
+});
+
+test('fancy-number mutations reject results for a different intent', async (t) => {
+  const cases = [
+    [
+      'custom purchase returns another number',
+      (api) => api.purchaseCustomFancyNumber({ value: 'AB12C3', months: 1 }),
+      { ...purchaseResponse, accountId: 'ZZ99Z9' },
+    ],
+    [
+      'paid purchase returns a permanent result',
+      (api) => api.purchaseFancyNumber('number-id', { months: 1 }),
+      {
+        ...purchaseResponse,
+        expiresAt: null,
+        permanent: true,
+        months: null,
+        totalPrice: 0,
+      },
+    ],
+    [
+      'renewal returns a different month count',
+      (api) => api.renewFancyNumber({ months: 2 }),
+      { ...purchaseResponse, months: 1 },
+    ],
+    [
+      'permanent switch returns a paid lease',
+      (api) => api.switchPermanentFancyNumber('number-id'),
+      purchaseResponse,
+    ],
+  ];
+
+  for (const [name, invoke, response] of cases) {
+    await t.test(name, async () => {
+      const api = loadFancyNumberModule(async () => response);
+      await assert.rejects(invoke(api), /服务返回了无效数据/);
+    });
+  }
+});
+
 test('fancy-number purchase, renewal, and permanent switching attach idempotency keys', async () => {
   const calls = [];
   const api = loadFancyNumberModule(async (endpoint, options) => {
     calls.push({ endpoint, options });
-    return purchaseResponse;
+    if (endpoint.endsWith('/switch')) {
+      return {
+        ...purchaseResponse,
+        accountId: endpoint.includes('/custom/') ? 'XY98Z7' : 'AB12C3',
+        expiresAt: null,
+        permanent: true,
+        months: null,
+      };
+    }
+    const requestedMonths = options.body.months;
+    return { ...purchaseResponse, months: requestedMonths };
   });
 
   await api.purchaseFancyNumber('number-id', { months: 3 });
