@@ -23,6 +23,7 @@ import type {
 
 const mockRouter = { push: jest.fn(), back: jest.fn() };
 const mockAuth = { state: {} as Record<string, unknown> };
+const mockKnownAccountUpsert = jest.fn();
 const mockAppearance = {
   state: {
     appearances: {} as Record<string, UserAppearance>,
@@ -120,6 +121,12 @@ jest.mock('@/stores/authStore', () => ({
     (selector: (state: unknown) => unknown) => selector(mockAuth.state),
     { getState: () => mockAuth.state },
   ),
+}));
+
+jest.mock('@/stores/knownAccountsStore', () => ({
+  useKnownAccountsStore: {
+    getState: () => ({ upsertAccount: mockKnownAccountUpsert }),
+  },
 }));
 
 jest.mock('@/stores/userAppearanceStore', () => ({
@@ -261,11 +268,18 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-function setAuth(user: AuthUser) {
+function setAuth(user: AuthUser, sessionEpoch = 1) {
   const setUser = jest.fn((nextUser: AuthUser) => {
     mockAuth.state = { ...mockAuth.state, user: nextUser };
   });
-  mockAuth.state = { user, setUser };
+  mockAuth.state = {
+    user,
+    setUser,
+    sessionEpoch,
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+    imToken: 'im-token',
+  };
   return setUser;
 }
 
@@ -460,6 +474,43 @@ test('successful equip updates auth and the user appearance cache', async () => 
     levels: { [priorUser.id]: priorUser.vipLevel, untouched: 4 },
     refreshTick: 3,
   });
+  expect(mockKnownAccountUpsert).toHaveBeenCalledWith({
+    user: {
+      ...priorUser,
+      avatarFrame: equippedItem.imageUrl,
+      avatarFrameAppearance: expectedAppearance,
+    },
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+    imToken: 'im-token',
+    updatedAt: expect.any(Number),
+  });
+});
+
+test('equip completion from an older login cannot mutate the same user after relogin', async () => {
+  const save = deferred<AvatarFrameInventory>();
+  const originalUser = makeUser();
+  const originalSetUser = setAuth(originalUser, 1);
+  mockFetchInventory.mockResolvedValueOnce(makeInventory());
+  mockEquipFrame.mockReturnValueOnce(save.promise);
+
+  render(<AvatarFrameDetailScreen />);
+  fireEvent.press(
+    await screen.findByLabelText('en:profile.avatarFrames.equip'),
+  );
+
+  const reloggedUser = makeUser({ nickname: 'Relogged User' });
+  const reloggedSetUser = setAuth(reloggedUser, 2);
+  await act(async () => {
+    save.resolve(makeInventory('frame-a'));
+    await save.promise;
+  });
+
+  expect(originalSetUser).not.toHaveBeenCalled();
+  expect(reloggedSetUser).not.toHaveBeenCalled();
+  expect(mockReconcileUserAppearance).not.toHaveBeenCalled();
+  expect(mockKnownAccountUpsert).not.toHaveBeenCalled();
+  expect(mockRouter.back).not.toHaveBeenCalled();
 });
 
 test('locale rerender ignores the old detail load and applies the replacement result', async () => {

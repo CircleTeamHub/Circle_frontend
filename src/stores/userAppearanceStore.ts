@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import {
   AvatarFrameResponseValidationError,
   fetchUserAppearances,
+  getInvalidUserAppearanceIds,
 } from '@/services/api/avatar-frames';
 import type { UserAppearance } from '@/types';
 
@@ -215,10 +216,18 @@ async function flush(): Promise<void> {
       const queuedIds = currentIds.filter((id) =>
         refreshAfterSettlement.delete(id),
       );
+      const invalidIds = new Set(getInvalidUserAppearanceIds(result));
       const authoritativeIds = currentIds.filter(
-        (id) => !queuedIds.includes(id),
+        (id) => !queuedIds.includes(id) && !invalidIds.has(id),
       );
       applyAuthoritativeResult(authoritativeIds, result);
+      const failedAt = Date.now();
+      for (const id of currentIds) {
+        if (invalidIds.has(id)) {
+          requested.delete(id);
+          validationFailedAt.set(id, failedAt);
+        }
+      }
       requestQueuedForegroundRefresh(queuedIds);
     } catch (error) {
       if (batchGeneration !== startGeneration) {

@@ -69,6 +69,8 @@ function loadStore(fetchUserAppearances) {
           AvatarFrameResponseValidationError:
             TestAvatarFrameResponseValidationError,
           fetchUserAppearances,
+          getInvalidUserAppearanceIds: (result) =>
+            result.__invalidIds ?? [],
         };
       }
       throw new Error(`Unexpected import: ${request}`);
@@ -225,6 +227,32 @@ test('appearance cache honors TTL and authoritative omission downgrades to vip0/
     { vipLevel: 0, avatarFrame: null },
   );
   assert.equal(store.useUserAppearanceStore.getState().levels.alice, 0);
+});
+
+test('a malformed appearance entry retains only its own cache while valid siblings update', async () => {
+  const responses = [
+    {
+      alice: { vipLevel: 1, avatarFrame: null },
+      bob: { vipLevel: 2, avatarFrame: null },
+    },
+    {
+      alice: { vipLevel: 4, avatarFrame: null },
+      __invalidIds: ['bob'],
+    },
+  ];
+  const store = loadStore(async () => responses.shift());
+
+  store.requestUserAppearance('alice');
+  store.requestUserAppearance('bob');
+  await store.advance(60);
+  await store.advance(5 * 60 * 1000);
+  store.requestUserAppearance('alice');
+  store.requestUserAppearance('bob');
+  await store.advance(60);
+
+  const state = store.useUserAppearanceStore.getState();
+  assert.equal(state.appearances.alice.vipLevel, 4);
+  assert.equal(state.appearances.bob.vipLevel, 2);
 });
 
 test('a rejected batch retains cached appearance and retries without remounting', async () => {

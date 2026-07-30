@@ -80,6 +80,8 @@ function isFancyNumberList(value: unknown): value is FancyNumberList {
     isFiniteNonNegativeNumber(value.unitPrice) &&
     isPositiveInteger(value.minMonths) &&
     isPositiveInteger(value.maxMonths) &&
+    value.minMonths <= 12 &&
+    value.maxMonths <= 12 &&
     value.maxMonths >= value.minMonths &&
     (value.purchaseMode === 'PAID_MONTHLY' || value.purchaseMode === 'PERMANENT_FREE')
   );

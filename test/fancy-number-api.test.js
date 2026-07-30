@@ -86,6 +86,25 @@ test('fancy-number listing safely encodes cursor pagination', async () => {
   assert.equal(calls[0].endpoint, '/mall/fancy-numbers?cursor=next%2Fcursor+%2B+1&limit=20');
 });
 
+test('fancy-number listing rejects month ranges outside the supported 1 to 12 months', async (t) => {
+  for (const [name, range] of [
+    ['minimum below one', { minMonths: 0 }],
+    ['minimum above twelve', { minMonths: 13, maxMonths: 13 }],
+    ['maximum above twelve', { maxMonths: 13 }],
+  ]) {
+    await t.test(name, async () => {
+      const api = loadFancyNumberModule(async () => ({
+        ...listResponse,
+        ...range,
+      }));
+      await assert.rejects(
+        api.fetchFancyNumbers(),
+        /服务返回了无效数据/,
+      );
+    });
+  }
+});
+
 test('custom fancy-number availability normalizes input and safely encodes it', async () => {
   const calls = [];
   const api = loadFancyNumberModule(async (endpoint, options) => {

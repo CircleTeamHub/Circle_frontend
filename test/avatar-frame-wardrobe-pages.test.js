@@ -110,7 +110,9 @@ test('avatar-frame detail route supports none, unowned IDs, and guarded server-a
   assert.match(screen, /avatarFrames\.saveError/);
   assert.match(screen, /setInventory\(nextInventory\)/);
   assert.match(screen, /avatarFrameAppearance/);
-  assert.match(screen, /useAuthStore\.getState\(\)\.setUser/);
+  assert.match(screen, /captureAuthSessionIdentity/);
+  assert.match(screen, /isAuthSessionIdentityCurrent/);
+  assert.match(screen, /authState\.setUser/);
   assert.match(screen, /reconcileUserAppearance/);
   assert.doesNotMatch(screen, /useUserAppearanceStore\.setState/);
   assert.doesNotMatch(screen, /Dimensions/);

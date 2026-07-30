@@ -113,6 +113,15 @@ test('non-ApiError falls through to Error.message, then the fallback', () => {
   assert.equal(getApiErrorMessage('weird', 'fallback'), 'fallback');
 });
 
+test('avatar-frame response diagnostics are never exposed to users', () => {
+  const error = new Error(
+    'Malformed /avatar-frames/me response: equippedFrameId is inconsistent',
+  );
+  error.name = 'AvatarFrameResponseValidationError';
+
+  assert.equal(getApiErrorMessage(error, 'fallback'), 'fallback');
+});
+
 test('client.ts threads errorCode onto ApiError', () => {
   const clientPath = path.join(process.cwd(), 'src/services/api/client.ts');
   const transpiled = ts.transpileModule(fs.readFileSync(clientPath, 'utf8'), {

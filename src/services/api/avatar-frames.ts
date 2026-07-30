@@ -9,11 +9,21 @@ import type {
 } from '@/types';
 
 export class AvatarFrameResponseValidationError extends Error {
+  readonly endpoint: string;
+  readonly detail: string;
+
   constructor(endpoint: string, detail: string) {
     super(`Malformed ${endpoint} response: ${detail}`);
     this.name = 'AvatarFrameResponseValidationError';
+    this.endpoint = endpoint;
+    this.detail = detail;
   }
 }
+
+const invalidAppearanceIds = new WeakMap<
+  Record<string, UserAppearance>,
+  readonly string[]
+>();
 
 function malformed(endpoint: string, detail: string): never {
   throw new AvatarFrameResponseValidationError(endpoint, detail);
@@ -202,11 +212,21 @@ function parseInventory(value: unknown): AvatarFrameInventory {
     endpoint,
     'equippedFrameId',
   );
+  const items = value.items.map((item, index) =>
+    parseInventoryItem(item, endpoint, index),
+  );
+  const equippedItems = items.filter((item) => item.equipped);
+  if (
+    (equippedFrameId === null && equippedItems.length !== 0) ||
+    (equippedFrameId !== null &&
+      (equippedItems.length !== 1 ||
+        equippedItems[0].id !== equippedFrameId))
+  ) {
+    malformed(endpoint, 'equippedFrameId and items[].equipped are inconsistent');
+  }
   return {
     equippedFrameId,
-    items: value.items.map((item, index) =>
-      parseInventoryItem(item, endpoint, index),
-    ),
+    items,
   };
 }
 
@@ -216,28 +236,43 @@ function parseUserAppearances(value: unknown): Record<string, UserAppearance> {
     malformed(endpoint, 'expected an object');
   }
   const result: Record<string, UserAppearance> = {};
+  const invalidIds: string[] = [];
   for (const [id, rawAppearance] of Object.entries(value)) {
-    if (!isRecord(rawAppearance)) {
-      malformed(endpoint, `appearance for "${id}" must be an object`);
+    try {
+      if (!isRecord(rawAppearance)) {
+        malformed(endpoint, `appearance for "${id}" must be an object`);
+      }
+      const avatarFrame =
+        rawAppearance.avatarFrame === null
+          ? null
+          : parseAppearance(
+              rawAppearance.avatarFrame,
+              endpoint,
+              `${id}.avatarFrame`,
+            );
+      result[id] = {
+        vipLevel: vipLevel(
+          rawAppearance.vipLevel,
+          endpoint,
+          `${id}.vipLevel`,
+        ),
+        avatarFrame,
+      };
+    } catch (error) {
+      if (!(error instanceof AvatarFrameResponseValidationError)) {
+        throw error;
+      }
+      invalidIds.push(id);
     }
-    const avatarFrame =
-      rawAppearance.avatarFrame === null
-        ? null
-        : parseAppearance(
-            rawAppearance.avatarFrame,
-            endpoint,
-            `${id}.avatarFrame`,
-          );
-    result[id] = {
-      vipLevel: vipLevel(
-        rawAppearance.vipLevel,
-        endpoint,
-        `${id}.vipLevel`,
-      ),
-      avatarFrame,
-    };
   }
+  invalidAppearanceIds.set(result, invalidIds);
   return result;
+}
+
+export function getInvalidUserAppearanceIds(
+  result: Record<string, UserAppearance>,
+): readonly string[] {
+  return invalidAppearanceIds.get(result) ?? [];
 }
 
 export async function fetchAvatarFrameInventory(): Promise<AvatarFrameInventory> {

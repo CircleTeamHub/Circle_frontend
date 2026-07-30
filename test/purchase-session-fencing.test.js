@@ -99,3 +99,17 @@ test('fancy-number refresh updates the guarded known-account snapshot', () => {
     /latest\.setUser\(refreshed\)[\s\S]*?upsertAccount\(\{[\s\S]*?user:\s*refreshed/,
   );
 });
+
+test('both points-purchase screens preserve a newer realtime wallet balance', () => {
+  const fancy = read(
+    'src/features/profile/screens/FancyNumberScreen.tsx',
+  );
+  const expansion = read(
+    'src/features/profile/screens/GroupExpansionScreen.tsx',
+  );
+
+  for (const source of [fancy, expansion]) {
+    assert.match(source, /\.version/);
+    assert.match(source, /setRealtimeBalanceIfVersion/);
+  }
+});

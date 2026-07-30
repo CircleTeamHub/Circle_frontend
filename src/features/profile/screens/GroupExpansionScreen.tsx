@@ -331,6 +331,7 @@ export default function GroupExpansionScreen() {
       const signature = `${circleId}:${product.id}`;
       const owner = captureAuthSessionIdentity(useAuthStore.getState());
       if (!owner) return;
+      const walletVersion = useWalletRealtimeStore.getState().version;
       setSubmittingProductId(product.id);
       try {
         const result = await purchaseGroupExpansion(circleId, product.id, {
@@ -340,7 +341,10 @@ export default function GroupExpansionScreen() {
         pendingIntentRef.current = null;
         useWalletRealtimeStore
           .getState()
-          .setRealtimeBalance(result.walletBalanceAfter);
+          .setRealtimeBalanceIfVersion(
+            walletVersion,
+            result.walletBalanceAfter,
+          );
         await loadProducts(circleId, focusGenerationRef.current, owner);
         if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
         Alert.alert(

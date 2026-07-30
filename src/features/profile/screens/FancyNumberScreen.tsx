@@ -340,12 +340,18 @@ export default function FancyNumberScreen() {
     async (
       owner: AuthSessionIdentity,
       result: FancyNumberPurchaseResult,
+      walletVersion: number,
       action: 'purchase' | 'renewal' | 'switch' = 'purchase',
       previousAccountId?: string | null,
     ) => {
       if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
       pendingIntentRef.current = null;
-      useWalletRealtimeStore.getState().setRealtimeBalance(result.walletBalanceAfter);
+      useWalletRealtimeStore
+        .getState()
+        .setRealtimeBalanceIfVersion(
+          walletVersion,
+          result.walletBalanceAfter,
+        );
       setMine(mineFromResult(result));
       setItems((current) => current.filter((item) => item.value !== result.accountId));
       setCustomValue('');
@@ -393,13 +399,14 @@ export default function FancyNumberScreen() {
     const owner = captureAuthSessionIdentity(useAuthStore.getState());
     if (!owner) return;
     const signature = `custom-purchase:${customValue}:${isPermanent ? 'permanent' : months}`;
+    const walletVersion = useWalletRealtimeStore.getState().version;
     setSubmitting(true);
     try {
       const result = await purchaseCustomFancyNumber(
         isPermanent ? { value: customValue } : { value: customValue, months },
         { idempotencyKey: intentKey(signature) },
       );
-      await finishPurchase(owner, result);
+      await finishPurchase(owner, result, walletVersion);
     } catch (error) {
       if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
       Alert.alert(
@@ -472,10 +479,11 @@ export default function FancyNumberScreen() {
     const owner = captureAuthSessionIdentity(useAuthStore.getState());
     if (!owner) return;
     const signature = `renew:${mine.accountId}:${months}`;
+    const walletVersion = useWalletRealtimeStore.getState().version;
     setSubmitting(true);
     try {
       const result = await renewFancyNumber({ months }, { idempotencyKey: intentKey(signature) });
-      await finishPurchase(owner, result, 'renewal');
+      await finishPurchase(owner, result, walletVersion, 'renewal');
     } catch (error) {
       if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
       Alert.alert(
@@ -528,13 +536,20 @@ export default function FancyNumberScreen() {
     const owner = captureAuthSessionIdentity(useAuthStore.getState());
     if (!owner) return;
     const signature = `custom-switch:${previousAccountId}:${customValue}`;
+    const walletVersion = useWalletRealtimeStore.getState().version;
     setSubmitting(true);
     try {
       const result = await switchPermanentToCustomFancyNumber(
         { value: customValue },
         { idempotencyKey: intentKey(signature) },
       );
-      await finishPurchase(owner, result, 'switch', previousAccountId);
+      await finishPurchase(
+        owner,
+        result,
+        walletVersion,
+        'switch',
+        previousAccountId,
+      );
     } catch (error) {
       if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
       Alert.alert(

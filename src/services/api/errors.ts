@@ -23,6 +23,13 @@ export function getApiErrorMessage(error: unknown, fallback: string): string {
     return fallback;
   }
 
+  if (
+    error instanceof Error &&
+    error.name === 'AvatarFrameResponseValidationError'
+  ) {
+    return fallback;
+  }
+
   if (error instanceof Error && error.message) {
     return error.message;
   }

@@ -20,7 +20,12 @@ import {
   fetchAvatarFrameInventory,
 } from '@/services/api/avatar-frames';
 import { getApiErrorMessage } from '@/services/api/errors';
+import {
+  captureAuthSessionIdentity,
+  isAuthSessionIdentityCurrent,
+} from '@/stores/auth-session-identity';
 import { useAuthStore } from '@/stores/authStore';
+import { useKnownAccountsStore } from '@/stores/knownAccountsStore';
 import { reconcileUserAppearance } from '@/stores/userAppearanceStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type {
@@ -241,7 +246,8 @@ export default function AvatarFrameDetailScreen() {
     ) {
       return;
     }
-    const authAtStart = useAuthStore.getState().user;
+    const owner = captureAuthSessionIdentity(useAuthStore.getState());
+    if (!owner) return;
     const targetFrameId = isNone || equipped ? null : item?.id ?? null;
 
     pendingRef.current = true;
@@ -249,6 +255,9 @@ export default function AvatarFrameDetailScreen() {
     setSaveError(null);
     try {
       const nextInventory = await equipAvatarFrame(targetFrameId);
+      if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) {
+        return;
+      }
       const nextEquippedItem = nextInventory.items.find(
         (candidate) => candidate.id === nextInventory.equippedFrameId,
       );
@@ -259,28 +268,44 @@ export default function AvatarFrameDetailScreen() {
       }
 
       const authState = useAuthStore.getState();
-      if (
-        authAtStart &&
-        authState.user &&
-        authState.user.id === authAtStart.id
-      ) {
+      if (isAuthSessionIdentityCurrent(owner, authState) && authState.user) {
         const nextUser = {
           ...authState.user,
           avatarFrame: nextAppearance?.imageUrl ?? null,
           avatarFrameAppearance: nextAppearance,
         };
-        useAuthStore.getState().setUser(nextUser);
+        authState.setUser(nextUser);
         reconcileUserAppearance(nextUser.id, {
           vipLevel: nextUser.vipLevel,
           avatarFrame: nextAppearance,
         });
+        const current = useAuthStore.getState();
+        if (
+          isAuthSessionIdentityCurrent(owner, current) &&
+          current.accessToken &&
+          current.refreshToken
+        ) {
+          useKnownAccountsStore.getState().upsertAccount({
+            user: nextUser,
+            accessToken: current.accessToken,
+            refreshToken: current.refreshToken,
+            imToken: current.imToken,
+            updatedAt: Date.now(),
+          });
+        }
       }
 
-      if (mountedRef.current) {
+      if (
+        mountedRef.current &&
+        isAuthSessionIdentityCurrent(owner, useAuthStore.getState())
+      ) {
         router.back();
       }
     } catch (error) {
-      if (mountedRef.current) {
+      if (
+        mountedRef.current &&
+        isAuthSessionIdentityCurrent(owner, useAuthStore.getState())
+      ) {
         setSaveError(
           getApiErrorMessage(
             error,

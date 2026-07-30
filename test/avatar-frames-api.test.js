@@ -144,32 +144,6 @@ test('avatar-frame APIs reject malformed authoritative responses', async (t) => 
       'inventory',
     ],
     ['batch root', [], 'batch'],
-    ['batch vip level', { alice: { vipLevel: '3', avatarFrame: null } }, 'batch'],
-    [
-      'batch frame',
-      {
-        alice: {
-          vipLevel: 3,
-          avatarFrame: { id: 'frame', key: 'key', name: 'name', imageUrl: 42 },
-        },
-      },
-      'batch',
-    ],
-    [
-      'negative vip level',
-      { alice: { vipLevel: -1, avatarFrame: null } },
-      'batch',
-    ],
-    [
-      'fractional vip level',
-      { alice: { vipLevel: 1.5, avatarFrame: null } },
-      'batch',
-    ],
-    [
-      'out-of-range vip level',
-      { alice: { vipLevel: 5, avatarFrame: null } },
-      'batch',
-    ],
     [
       'out-of-range minimum vip level',
       {
@@ -218,6 +192,30 @@ test('avatar-frame APIs reject malformed authoritative responses', async (t) => 
       },
       'inventory',
     ],
+    [
+      'equipped id missing from inventory',
+      {
+        equippedFrameId: 'missing',
+        items: [{ ...inventoryResponse.items[0], equipped: false }],
+      },
+      'inventory',
+    ],
+    [
+      'equipped id not marked equipped',
+      {
+        equippedFrameId: 'frame-diamond',
+        items: [{ ...inventoryResponse.items[0], equipped: false }],
+      },
+      'inventory',
+    ],
+    [
+      'item marked equipped while equipped id is null',
+      {
+        equippedFrameId: null,
+        items: [{ ...inventoryResponse.items[0], equipped: true }],
+      },
+      'inventory',
+    ],
   ];
 
   for (const [name, response, kind] of malformedCases) {
@@ -233,17 +231,22 @@ test('avatar-frame APIs reject malformed authoritative responses', async (t) => 
   }
 });
 
-test('malformed responses throw the typed validation error atomically', async () => {
+test('malformed appearance entries are isolated while valid siblings survive', async () => {
   const api = loadAvatarFramesApi(async () => ({
     alice: { vipLevel: 3, avatarFrame: null },
     bob: { vipLevel: 'bad', avatarFrame: null },
   }));
 
-  await assert.rejects(api.fetchUserAppearances(['alice', 'bob']), (error) => {
-    assert.equal(error.name, 'AvatarFrameResponseValidationError');
-    assert.equal(error instanceof api.AvatarFrameResponseValidationError, true);
-    return true;
-  });
+  const result = await api.fetchUserAppearances(['alice', 'bob']);
+
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(result)),
+    { alice: { vipLevel: 3, avatarFrame: null } },
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(api.getInvalidUserAppearanceIds(result))),
+    ['bob'],
+  );
 });
 
 test('fetchUserAppearances short-circuits an empty request', async () => {
