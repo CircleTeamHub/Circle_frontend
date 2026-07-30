@@ -325,6 +325,7 @@ export default function FancyNumberScreen() {
     useCallback(() => {
       const generation = focusGenerationRef.current + 1;
       focusGenerationRef.current = generation;
+      setSubmitting(false);
       catalogCursorRef.current = null;
       setLoadingMore(false);
       void loadInitial(generation);
@@ -372,6 +373,7 @@ export default function FancyNumberScreen() {
       owner: AuthSessionIdentity,
       result: FancyNumberPurchaseResult,
       walletVersion: number,
+      generation: number,
       action: 'purchase' | 'renewal' | 'switch' = 'purchase',
       previousAccountId?: string | null,
     ) => {
@@ -380,13 +382,6 @@ export default function FancyNumberScreen() {
       useWalletRealtimeStore
         .getState()
         .setRealtimeBalanceIfVersion(walletVersion, result.walletBalanceAfter);
-      setMine(mineFromResult(result));
-      setItems((current) =>
-        current.filter((item) => item.value !== result.accountId),
-      );
-      setSelectedRecommendation(null);
-      setCustomValue('');
-      setAvailability({ status: 'idle' });
       const authState = useAuthStore.getState();
       if (isAuthSessionIdentityCurrent(owner, authState) && authState.user) {
         const nextUser = {
@@ -410,12 +405,22 @@ export default function FancyNumberScreen() {
           });
         }
       }
+      const canCommit = () =>
+        generation === focusGenerationRef.current &&
+        isAuthSessionIdentityCurrent(owner, useAuthStore.getState());
+      if (!canCommit()) return;
+      setMine(mineFromResult(result));
+      setItems((current) =>
+        current.filter((item) => item.value !== result.accountId),
+      );
+      setSelectedRecommendation(null);
+      setCustomValue('');
+      setAvailability({ status: 'idle' });
       await refreshAuthUser(owner).catch(() => undefined);
-      if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
+      if (!canCommit()) return;
       if (action === 'switch') {
-        await loadInitial(focusGenerationRef.current, owner);
-        if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState()))
-          return;
+        await loadInitial(generation, owner);
+        if (!canCommit()) return;
       }
       Alert.alert(
         t('profile.fancyNumber.successTitle', { defaultValue: '操作成功' }),
@@ -456,6 +461,7 @@ export default function FancyNumberScreen() {
     const isPermanent = catalog.purchaseMode === 'PERMANENT_FREE';
     const owner = captureAuthSessionIdentity(useAuthStore.getState());
     if (!owner) return;
+    const generation = focusGenerationRef.current;
     const sessionIntent = `${owner.sessionEpoch}:${owner.userId}`;
     const signature = selectedRecommendation?.id
       ? `${sessionIntent}:catalog-purchase:${selectedRecommendation.id}:${isPermanent ? 'permanent' : months}:${catalog.unitPrice}`
@@ -492,9 +498,13 @@ export default function FancyNumberScreen() {
           }),
         );
       }
-      await finishPurchase(owner, result, walletVersion);
+      await finishPurchase(owner, result, walletVersion, generation);
     } catch (error) {
-      if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
+      if (
+        generation !== focusGenerationRef.current ||
+        !isAuthSessionIdentityCurrent(owner, useAuthStore.getState())
+      )
+        return;
       Alert.alert(
         t('common.errorOccurred', { defaultValue: '操作失败' }),
         getApiErrorMessage(
@@ -504,9 +514,11 @@ export default function FancyNumberScreen() {
           }),
         ),
       );
-      void loadInitial(focusGenerationRef.current, owner);
+      void loadInitial(generation, owner);
     } finally {
-      setSubmitting(false);
+      if (generation === focusGenerationRef.current) {
+        setSubmitting(false);
+      }
     }
   }, [
     availability.status,
@@ -560,6 +572,7 @@ export default function FancyNumberScreen() {
     if (!mine?.renewable || submitting) return;
     const owner = captureAuthSessionIdentity(useAuthStore.getState());
     if (!owner) return;
+    const generation = focusGenerationRef.current;
     const signature = `${owner.sessionEpoch}:${owner.userId}:renew:${mine.accountId}:${mine.expiresAt}:${months}:${mine.unitPrice}`;
     const walletVersion = useWalletRealtimeStore.getState().version;
     setSubmitting(true);
@@ -575,9 +588,13 @@ export default function FancyNumberScreen() {
           }),
         );
       }
-      await finishPurchase(owner, result, walletVersion, 'renewal');
+      await finishPurchase(owner, result, walletVersion, generation, 'renewal');
     } catch (error) {
-      if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
+      if (
+        generation !== focusGenerationRef.current ||
+        !isAuthSessionIdentityCurrent(owner, useAuthStore.getState())
+      )
+        return;
       Alert.alert(
         t('common.errorOccurred', { defaultValue: '操作失败' }),
         getApiErrorMessage(
@@ -587,9 +604,11 @@ export default function FancyNumberScreen() {
           }),
         ),
       );
-      void loadInitial(focusGenerationRef.current, owner);
+      void loadInitial(generation, owner);
     } finally {
-      setSubmitting(false);
+      if (generation === focusGenerationRef.current) {
+        setSubmitting(false);
+      }
     }
   }, [finishPurchase, intentKey, loadInitial, mine, months, submitting, t]);
 
@@ -628,6 +647,7 @@ export default function FancyNumberScreen() {
     const previousAccountId = mine.accountId;
     const owner = captureAuthSessionIdentity(useAuthStore.getState());
     if (!owner) return;
+    const generation = focusGenerationRef.current;
     const sessionIntent = `${owner.sessionEpoch}:${owner.userId}`;
     const expectedUnitPrice = catalog?.unitPrice ?? mine.unitPrice;
     const signature = selectedRecommendation?.id
@@ -664,11 +684,16 @@ export default function FancyNumberScreen() {
         owner,
         result,
         walletVersion,
+        generation,
         'switch',
         previousAccountId,
       );
     } catch (error) {
-      if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
+      if (
+        generation !== focusGenerationRef.current ||
+        !isAuthSessionIdentityCurrent(owner, useAuthStore.getState())
+      )
+        return;
       Alert.alert(
         t('common.errorOccurred', { defaultValue: '操作失败' }),
         getApiErrorMessage(
@@ -678,9 +703,11 @@ export default function FancyNumberScreen() {
           }),
         ),
       );
-      void loadInitial(focusGenerationRef.current, owner);
+      void loadInitial(generation, owner);
     } finally {
-      setSubmitting(false);
+      if (generation === focusGenerationRef.current) {
+        setSubmitting(false);
+      }
     }
   }, [
     availability.status,
