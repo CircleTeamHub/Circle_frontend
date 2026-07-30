@@ -569,8 +569,10 @@ export default function FancyNumberScreen() {
           }),
         ),
       );
-      void loadInitial(generation, owner);
-      void refreshAuthUser(owner, operation).catch(() => undefined);
+      await Promise.allSettled([
+        loadInitial(generation, owner),
+        refreshAuthUser(owner, operation),
+      ]);
     } finally {
       purchaseInFlightRef.current = false;
       if (
@@ -693,8 +695,10 @@ export default function FancyNumberScreen() {
           }),
         ),
       );
-      void loadInitial(generation, owner);
-      void refreshAuthUser(owner, operation).catch(() => undefined);
+      await Promise.allSettled([
+        loadInitial(generation, owner),
+        refreshAuthUser(owner, operation),
+      ]);
     } finally {
       purchaseInFlightRef.current = false;
       if (
@@ -815,8 +819,10 @@ export default function FancyNumberScreen() {
           }),
         ),
       );
-      void loadInitial(generation, owner);
-      void refreshAuthUser(owner, operation).catch(() => undefined);
+      await Promise.allSettled([
+        loadInitial(generation, owner),
+        refreshAuthUser(owner, operation),
+      ]);
     } finally {
       purchaseInFlightRef.current = false;
       if (
