@@ -1,8 +1,8 @@
-import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
-import { useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
+import { useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
@@ -12,13 +12,13 @@ import {
   Text,
   TextInput,
   View,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { NavHeader } from '@/components/ui/nav-header';
-import { RetryIntentKeyStore } from '@/features/profile/retry-intent-key';
-import { useNetworkStatus } from '@/hooks/use-network-status';
-import { fetchCurrentUser } from '@/services/api/auth';
-import { getApiErrorMessage } from '@/services/api/errors';
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { NavHeader } from "@/components/ui/nav-header";
+import { RetryIntentKeyStore } from "@/features/profile/retry-intent-key";
+import { useNetworkStatus } from "@/hooks/use-network-status";
+import { fetchCurrentUser } from "@/services/api/auth";
+import { getApiErrorMessage } from "@/services/api/errors";
 import {
   checkFancyNumberAvailability,
   fetchFancyNumbers,
@@ -32,25 +32,25 @@ import {
   type FancyNumberList,
   type FancyNumberPurchaseResult,
   type MyFancyNumber,
-} from '@/services/api/fancy-number';
+} from "@/services/api/fancy-number";
 import {
   captureAuthSessionIdentity,
   isAuthSessionIdentityCurrent,
   type AuthSessionIdentity,
-} from '@/stores/auth-session-identity';
-import { useAuthStore } from '@/stores/authStore';
-import { useKnownAccountsStore } from '@/stores/knownAccountsStore';
-import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
-import { Radius, Spacing, Typography, useTheme } from '@/theme';
-import { generateIdempotencyKey } from '@/utils/idempotency-key';
+} from "@/stores/auth-session-identity";
+import { useAuthStore } from "@/stores/authStore";
+import { useKnownAccountsStore } from "@/stores/knownAccountsStore";
+import { useWalletRealtimeStore } from "@/stores/walletRealtimeStore";
+import { Radius, Spacing, Typography, useTheme } from "@/theme";
+import { generateIdempotencyKey } from "@/utils/idempotency-key";
 
 const PAGE_SIZE = 20;
 const CUSTOM_VALUE_PATTERN = /^[A-Z0-9]{6}$/;
 
 type AvailabilityState =
-  | { status: 'idle' | 'invalid' | 'checking' | 'available' }
-  | { status: 'unavailable'; reason: 'TAKEN' | 'RESERVED' }
-  | { status: 'error'; message: string };
+  | { status: "idle" | "invalid" | "checking" | "available" }
+  | { status: "unavailable"; reason: "TAKEN" | "RESERVED" }
+  | { status: "error"; message: string };
 
 const s = StyleSheet.create({
   content: {
@@ -59,17 +59,17 @@ const s = StyleSheet.create({
   },
   centered: {
     paddingVertical: Spacing.xxl,
-    alignItems: 'center',
+    alignItems: "center",
     gap: Spacing.md,
   },
   hero: {
     borderRadius: Radius.xl,
     padding: Spacing.xl,
     gap: Spacing.sm,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   heroOrb: {
-    position: 'absolute',
+    position: "absolute",
     width: 180,
     height: 180,
     borderRadius: Radius.full,
@@ -83,19 +83,19 @@ const s = StyleSheet.create({
     gap: Spacing.md,
   },
   titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: Spacing.sm,
   },
   statusRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     gap: Spacing.md,
   },
   numberValue: {
     fontSize: 30,
-    fontWeight: '800',
+    fontWeight: "800",
     letterSpacing: 1,
   },
   badge: {
@@ -104,8 +104,8 @@ const s = StyleSheet.create({
     paddingVertical: Spacing.xs,
   },
   monthGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: Spacing.sm,
   },
   monthButton: {
@@ -113,22 +113,22 @@ const s = StyleSheet.create({
     height: 38,
     borderRadius: Radius.md,
     borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: Spacing.sm,
   },
   numberGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: Spacing.sm,
   },
   numberButton: {
-    width: '48%',
+    width: "48%",
     minHeight: 58,
     borderRadius: Radius.md,
     borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: Spacing.sm,
   },
   customInput: {
@@ -137,19 +137,19 @@ const s = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: Spacing.lg,
     fontSize: 28,
-    fontWeight: '800',
+    fontWeight: "800",
     letterSpacing: 3,
-    textAlign: 'center',
+    textAlign: "center",
   },
   primaryButton: {
     height: 50,
     borderRadius: Radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: Spacing.md,
   },
   secondaryButton: {
-    alignSelf: 'center',
+    alignSelf: "center",
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.sm,
   },
@@ -187,11 +187,11 @@ export default function FancyNumberScreen() {
   const [mine, setMine] = useState<MyFancyNumber | null>(null);
   const [catalog, setCatalog] = useState<FancyNumberList | null>(null);
   const [items, setItems] = useState<FancyNumberItem[]>([]);
-  const [customValue, setCustomValue] = useState('');
+  const [customValue, setCustomValue] = useState("");
   const [selectedRecommendation, setSelectedRecommendation] =
     useState<FancyNumberItem | null>(null);
   const [availability, setAvailability] = useState<AvailabilityState>({
-    status: 'idle',
+    status: "idle",
   });
   const [months, setMonths] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -227,12 +227,12 @@ export default function FancyNumberScreen() {
         ]);
         if (!canCommit()) return;
         let loadError: unknown = null;
-        if (mineResult.status === 'fulfilled') {
+        if (mineResult.status === "fulfilled") {
           setMine(mineResult.value);
         } else {
           loadError = mineResult.reason;
         }
-        if (catalogResult.status === 'fulfilled') {
+        if (catalogResult.status === "fulfilled") {
           const nextCatalog = catalogResult.value;
           catalogCursorRef.current = nextCatalog.nextCursor;
           setCatalog(nextCatalog);
@@ -256,8 +256,8 @@ export default function FancyNumberScreen() {
         setErrorText(
           getApiErrorMessage(
             loadError,
-            t('profile.fancyNumber.loadError', {
-              defaultValue: '靓号信息加载失败，请稍后重试',
+            t("profile.fancyNumber.loadError", {
+              defaultValue: "靓号信息加载失败，请稍后重试",
             }),
           ),
         );
@@ -273,45 +273,45 @@ export default function FancyNumberScreen() {
     availabilityGenerationRef.current = generation;
 
     if (!customValue) {
-      setAvailability({ status: 'idle' });
+      setAvailability({ status: "idle" });
       return;
     }
     if (!CUSTOM_VALUE_PATTERN.test(customValue)) {
-      setAvailability({ status: 'invalid' });
+      setAvailability({ status: "invalid" });
       return;
     }
     if (isOffline) {
       setAvailability({
-        status: 'error',
-        message: t('common.offline', {
-          defaultValue: '当前无网络连接',
+        status: "error",
+        message: t("common.offline", {
+          defaultValue: "当前无网络连接",
         }),
       });
       return;
     }
 
-    setAvailability({ status: 'checking' });
+    setAvailability({ status: "checking" });
     const timer = setTimeout(() => {
       void checkFancyNumberAvailability(customValue)
         .then((result) => {
           if (generation !== availabilityGenerationRef.current) return;
           setAvailability(
             result.available
-              ? { status: 'available' }
+              ? { status: "available" }
               : {
-                  status: 'unavailable',
-                  reason: result.reason ?? 'TAKEN',
+                  status: "unavailable",
+                  reason: result.reason ?? "TAKEN",
                 },
           );
         })
         .catch((error) => {
           if (generation !== availabilityGenerationRef.current) return;
           setAvailability({
-            status: 'error',
+            status: "error",
             message: getApiErrorMessage(
               error,
-              t('profile.fancyNumber.availabilityError', {
-                defaultValue: '暂时无法查询，请稍后重试',
+              t("profile.fancyNumber.availabilityError", {
+                defaultValue: "暂时无法查询，请稍后重试",
               }),
             ),
           });
@@ -325,6 +325,7 @@ export default function FancyNumberScreen() {
     useCallback(() => {
       const generation = focusGenerationRef.current + 1;
       focusGenerationRef.current = generation;
+      setSubmitting(false);
       catalogCursorRef.current = null;
       setLoadingMore(false);
       void loadInitial(generation);
@@ -372,7 +373,8 @@ export default function FancyNumberScreen() {
       owner: AuthSessionIdentity,
       result: FancyNumberPurchaseResult,
       walletVersion: number,
-      action: 'purchase' | 'renewal' | 'switch' = 'purchase',
+      generation: number,
+      action: "purchase" | "renewal" | "switch" = "purchase",
       previousAccountId?: string | null,
     ) => {
       if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
@@ -380,13 +382,6 @@ export default function FancyNumberScreen() {
       useWalletRealtimeStore
         .getState()
         .setRealtimeBalanceIfVersion(walletVersion, result.walletBalanceAfter);
-      setMine(mineFromResult(result));
-      setItems((current) =>
-        current.filter((item) => item.value !== result.accountId),
-      );
-      setSelectedRecommendation(null);
-      setCustomValue('');
-      setAvailability({ status: 'idle' });
       const authState = useAuthStore.getState();
       if (isAuthSessionIdentityCurrent(owner, authState) && authState.user) {
         const nextUser = {
@@ -410,32 +405,42 @@ export default function FancyNumberScreen() {
           });
         }
       }
+      const canCommit = () =>
+        generation === focusGenerationRef.current &&
+        isAuthSessionIdentityCurrent(owner, useAuthStore.getState());
+      if (!canCommit()) return;
+      setMine(mineFromResult(result));
+      setItems((current) =>
+        current.filter((item) => item.value !== result.accountId),
+      );
+      setSelectedRecommendation(null);
+      setCustomValue("");
+      setAvailability({ status: "idle" });
       await refreshAuthUser(owner).catch(() => undefined);
-      if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
-      if (action === 'switch') {
-        await loadInitial(focusGenerationRef.current, owner);
-        if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState()))
-          return;
+      if (!canCommit()) return;
+      if (action === "switch") {
+        await loadInitial(generation, owner);
+        if (!canCommit()) return;
       }
       Alert.alert(
-        t('profile.fancyNumber.successTitle', { defaultValue: '操作成功' }),
-        action === 'switch'
-          ? t('profile.fancyNumber.switchSuccess', {
-              defaultValue: '已将永久靓号从 {{previous}} 更换为 {{accountId}}',
+        t("profile.fancyNumber.successTitle", { defaultValue: "操作成功" }),
+        action === "switch"
+          ? t("profile.fancyNumber.switchSuccess", {
+              defaultValue: "已将永久靓号从 {{previous}} 更换为 {{accountId}}",
               previous: previousAccountId,
               accountId: result.accountId,
             })
           : result.permanent
-            ? t('profile.fancyNumber.permanentSuccess', {
-                defaultValue: '已领取永久靓号 {{accountId}}',
+            ? t("profile.fancyNumber.permanentSuccess", {
+                defaultValue: "已领取永久靓号 {{accountId}}",
                 accountId: result.accountId,
               })
-            : t('profile.fancyNumber.paidSuccess', {
-                defaultValue: '靓号 {{accountId}} 已生效，有效期至 {{date}}',
+            : t("profile.fancyNumber.paidSuccess", {
+                defaultValue: "靓号 {{accountId}} 已生效，有效期至 {{date}}",
                 accountId: result.accountId,
                 date: formatExpiry(
                   result.expiresAt,
-                  t('profile.fancyNumber.permanent', { defaultValue: '永久' }),
+                  t("profile.fancyNumber.permanent", { defaultValue: "永久" }),
                 ),
               }),
       );
@@ -447,19 +452,20 @@ export default function FancyNumberScreen() {
     if (
       !catalog ||
       submitting ||
-      availability.status !== 'available' ||
+      availability.status !== "available" ||
       !CUSTOM_VALUE_PATTERN.test(customValue)
     ) {
       return;
     }
 
-    const isPermanent = catalog.purchaseMode === 'PERMANENT_FREE';
+    const isPermanent = catalog.purchaseMode === "PERMANENT_FREE";
     const owner = captureAuthSessionIdentity(useAuthStore.getState());
     if (!owner) return;
+    const generation = focusGenerationRef.current;
     const sessionIntent = `${owner.sessionEpoch}:${owner.userId}`;
     const signature = selectedRecommendation?.id
-      ? `${sessionIntent}:catalog-purchase:${selectedRecommendation.id}:${isPermanent ? 'permanent' : months}:${catalog.unitPrice}`
-      : `${sessionIntent}:custom-purchase:${customValue}:${isPermanent ? 'permanent' : months}:${catalog.unitPrice}`;
+      ? `${sessionIntent}:catalog-purchase:${selectedRecommendation.id}:${isPermanent ? "permanent" : months}:${catalog.unitPrice}`
+      : `${sessionIntent}:custom-purchase:${customValue}:${isPermanent ? "permanent" : months}:${catalog.unitPrice}`;
     const walletVersion = useWalletRealtimeStore.getState().version;
     setSubmitting(true);
     try {
@@ -487,26 +493,32 @@ export default function FancyNumberScreen() {
         result.accountId !== selectedRecommendation.value
       ) {
         throw new Error(
-          t('common.errors.invalidServerResponse', {
-            defaultValue: '服务返回了无效数据',
+          t("common.errors.invalidServerResponse", {
+            defaultValue: "服务返回了无效数据",
           }),
         );
       }
-      await finishPurchase(owner, result, walletVersion);
+      await finishPurchase(owner, result, walletVersion, generation);
     } catch (error) {
-      if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
+      if (
+        generation !== focusGenerationRef.current ||
+        !isAuthSessionIdentityCurrent(owner, useAuthStore.getState())
+      )
+        return;
       Alert.alert(
-        t('common.errorOccurred', { defaultValue: '操作失败' }),
+        t("common.errorOccurred", { defaultValue: "操作失败" }),
         getApiErrorMessage(
           error,
-          t('profile.fancyNumber.purchaseError', {
-            defaultValue: '购买失败，请稍后重试',
+          t("profile.fancyNumber.purchaseError", {
+            defaultValue: "购买失败，请稍后重试",
           }),
         ),
       );
-      void loadInitial(focusGenerationRef.current, owner);
+      void loadInitial(generation, owner);
     } finally {
-      setSubmitting(false);
+      if (generation === focusGenerationRef.current) {
+        setSubmitting(false);
+      }
     }
   }, [
     availability.status,
@@ -524,32 +536,32 @@ export default function FancyNumberScreen() {
   const confirmPurchase = useCallback(() => {
     if (
       !catalog ||
-      availability.status !== 'available' ||
+      availability.status !== "available" ||
       !CUSTOM_VALUE_PATTERN.test(customValue)
     ) {
       return;
     }
-    const permanent = catalog.purchaseMode === 'PERMANENT_FREE';
+    const permanent = catalog.purchaseMode === "PERMANENT_FREE";
     const total = permanent ? 0 : months * catalog.unitPrice;
     Alert.alert(
-      t('profile.fancyNumber.confirmTitle', { defaultValue: '确认购买靓号' }),
+      t("profile.fancyNumber.confirmTitle", { defaultValue: "确认购买靓号" }),
       permanent
-        ? t('profile.fancyNumber.confirmPermanent', {
+        ? t("profile.fancyNumber.confirmPermanent", {
             defaultValue:
-              '超级会员可免费领取永久靓号 {{accountId}}，以后可使用 100 积分更换。',
+              "超级会员可免费领取永久靓号 {{accountId}}，以后可使用 100 积分更换。",
             accountId: customValue,
           })
-        : t('profile.fancyNumber.confirmPaid', {
+        : t("profile.fancyNumber.confirmPaid", {
             defaultValue:
-              '确认使用 {{points}} 积分购买靓号 {{accountId}}，有效期 {{months}} 个月？',
+              "确认使用 {{points}} 积分购买靓号 {{accountId}}，有效期 {{months}} 个月？",
             points: total,
             accountId: customValue,
             months,
           }),
       [
-        { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+        { text: t("common.cancel", { defaultValue: "取消" }), style: "cancel" },
         {
-          text: t('common.confirm', { defaultValue: '确认' }),
+          text: t("common.confirm", { defaultValue: "确认" }),
           onPress: () => void performPurchase(),
         },
       ],
@@ -560,6 +572,7 @@ export default function FancyNumberScreen() {
     if (!mine?.renewable || submitting) return;
     const owner = captureAuthSessionIdentity(useAuthStore.getState());
     if (!owner) return;
+    const generation = focusGenerationRef.current;
     const signature = `${owner.sessionEpoch}:${owner.userId}:renew:${mine.accountId}:${mine.expiresAt}:${months}:${mine.unitPrice}`;
     const walletVersion = useWalletRealtimeStore.getState().version;
     setSubmitting(true);
@@ -570,46 +583,52 @@ export default function FancyNumberScreen() {
       );
       if (result.accountId !== mine.accountId) {
         throw new Error(
-          t('common.errors.invalidServerResponse', {
-            defaultValue: '服务返回了无效数据',
+          t("common.errors.invalidServerResponse", {
+            defaultValue: "服务返回了无效数据",
           }),
         );
       }
-      await finishPurchase(owner, result, walletVersion, 'renewal');
+      await finishPurchase(owner, result, walletVersion, generation, "renewal");
     } catch (error) {
-      if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
+      if (
+        generation !== focusGenerationRef.current ||
+        !isAuthSessionIdentityCurrent(owner, useAuthStore.getState())
+      )
+        return;
       Alert.alert(
-        t('common.errorOccurred', { defaultValue: '操作失败' }),
+        t("common.errorOccurred", { defaultValue: "操作失败" }),
         getApiErrorMessage(
           error,
-          t('profile.fancyNumber.renewError', {
-            defaultValue: '续费失败，请稍后重试',
+          t("profile.fancyNumber.renewError", {
+            defaultValue: "续费失败，请稍后重试",
           }),
         ),
       );
-      void loadInitial(focusGenerationRef.current, owner);
+      void loadInitial(generation, owner);
     } finally {
-      setSubmitting(false);
+      if (generation === focusGenerationRef.current) {
+        setSubmitting(false);
+      }
     }
   }, [finishPurchase, intentKey, loadInitial, mine, months, submitting, t]);
 
   const confirmRenewal = useCallback(() => {
     if (!mine?.renewable) return;
     Alert.alert(
-      t('profile.fancyNumber.confirmRenewTitle', {
-        defaultValue: '确认续费靓号',
+      t("profile.fancyNumber.confirmRenewTitle", {
+        defaultValue: "确认续费靓号",
       }),
-      t('profile.fancyNumber.confirmRenew', {
+      t("profile.fancyNumber.confirmRenew", {
         defaultValue:
-          '确认使用 {{points}} 积分为 {{accountId}} 续费 {{months}} 个月？',
+          "确认使用 {{points}} 积分为 {{accountId}} 续费 {{months}} 个月？",
         points: months * mine.unitPrice,
         accountId: mine.accountId,
         months,
       }),
       [
-        { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+        { text: t("common.cancel", { defaultValue: "取消" }), style: "cancel" },
         {
-          text: t('common.confirm', { defaultValue: '确认' }),
+          text: t("common.confirm", { defaultValue: "确认" }),
           onPress: () => void performRenewal(),
         },
       ],
@@ -620,7 +639,7 @@ export default function FancyNumberScreen() {
     if (
       !mine?.permanent ||
       submitting ||
-      availability.status !== 'available' ||
+      availability.status !== "available" ||
       !CUSTOM_VALUE_PATTERN.test(customValue)
     ) {
       return;
@@ -628,6 +647,7 @@ export default function FancyNumberScreen() {
     const previousAccountId = mine.accountId;
     const owner = captureAuthSessionIdentity(useAuthStore.getState());
     if (!owner) return;
+    const generation = focusGenerationRef.current;
     const sessionIntent = `${owner.sessionEpoch}:${owner.userId}`;
     const expectedUnitPrice = catalog?.unitPrice ?? mine.unitPrice;
     const signature = selectedRecommendation?.id
@@ -655,8 +675,8 @@ export default function FancyNumberScreen() {
         result.accountId !== selectedRecommendation.value
       ) {
         throw new Error(
-          t('common.errors.invalidServerResponse', {
-            defaultValue: '服务返回了无效数据',
+          t("common.errors.invalidServerResponse", {
+            defaultValue: "服务返回了无效数据",
           }),
         );
       }
@@ -664,23 +684,30 @@ export default function FancyNumberScreen() {
         owner,
         result,
         walletVersion,
-        'switch',
+        generation,
+        "switch",
         previousAccountId,
       );
     } catch (error) {
-      if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
+      if (
+        generation !== focusGenerationRef.current ||
+        !isAuthSessionIdentityCurrent(owner, useAuthStore.getState())
+      )
+        return;
       Alert.alert(
-        t('common.errorOccurred', { defaultValue: '操作失败' }),
+        t("common.errorOccurred", { defaultValue: "操作失败" }),
         getApiErrorMessage(
           error,
-          t('profile.fancyNumber.switchError', {
-            defaultValue: '更换失败，请稍后重试',
+          t("profile.fancyNumber.switchError", {
+            defaultValue: "更换失败，请稍后重试",
           }),
         ),
       );
-      void loadInitial(focusGenerationRef.current, owner);
+      void loadInitial(generation, owner);
     } finally {
-      setSubmitting(false);
+      if (generation === focusGenerationRef.current) {
+        setSubmitting(false);
+      }
     }
   }, [
     availability.status,
@@ -698,26 +725,26 @@ export default function FancyNumberScreen() {
   const confirmSwitch = useCallback(() => {
     if (
       !mine?.permanent ||
-      availability.status !== 'available' ||
+      availability.status !== "available" ||
       !CUSTOM_VALUE_PATTERN.test(customValue)
     ) {
       return;
     }
     Alert.alert(
-      t('profile.fancyNumber.confirmSwitchTitle', {
-        defaultValue: '确认更换靓号',
+      t("profile.fancyNumber.confirmSwitchTitle", {
+        defaultValue: "确认更换靓号",
       }),
-      t('profile.fancyNumber.confirmSwitch', {
+      t("profile.fancyNumber.confirmSwitch", {
         defaultValue:
-          '确认使用 {{points}} 积分将 {{current}} 更换为 {{accountId}}？永久权益会保留，原靓号将重新开放。',
+          "确认使用 {{points}} 积分将 {{current}} 更换为 {{accountId}}？永久权益会保留，原靓号将重新开放。",
         points: catalog?.unitPrice ?? mine.unitPrice,
         current: mine.accountId,
         accountId: customValue,
       }),
       [
-        { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+        { text: t("common.cancel", { defaultValue: "取消" }), style: "cancel" },
         {
-          text: t('common.confirm', { defaultValue: '确认' }),
+          text: t("common.confirm", { defaultValue: "确认" }),
           onPress: () => void performSwitch(),
         },
       ],
@@ -768,11 +795,11 @@ export default function FancyNumberScreen() {
         return;
       }
       Alert.alert(
-        t('common.errorOccurred', { defaultValue: '操作失败' }),
+        t("common.errorOccurred", { defaultValue: "操作失败" }),
         getApiErrorMessage(
           error,
-          t('profile.fancyNumber.loadMoreError', {
-            defaultValue: '加载更多靓号失败，请稍后重试',
+          t("profile.fancyNumber.loadMoreError", {
+            defaultValue: "加载更多靓号失败，请稍后重试",
           }),
         ),
       );
@@ -787,14 +814,14 @@ export default function FancyNumberScreen() {
     setSelectedRecommendation(null);
     setCustomValue(
       value
-        .replace(/[^a-zA-Z0-9]/g, '')
+        .replace(/[^a-zA-Z0-9]/g, "")
         .slice(0, 6)
         .toUpperCase(),
     );
   }, []);
 
-  const permanentLabel = t('profile.fancyNumber.permanent', {
-    defaultValue: '永久',
+  const permanentLabel = t("profile.fancyNumber.permanent", {
+    defaultValue: "永久",
   });
   const monthOptions = useMemo(() => {
     const min = catalog?.minMonths ?? 1;
@@ -807,7 +834,7 @@ export default function FancyNumberScreen() {
   const disabled = submitting || isOffline;
   const canSubmit =
     !disabled &&
-    availability.status === 'available' &&
+    availability.status === "available" &&
     CUSTOM_VALUE_PATTERN.test(customValue);
 
   const d = useMemo(
@@ -819,9 +846,9 @@ export default function FancyNumberScreen() {
       },
       content: { paddingBottom: insets.bottom + Spacing.xl },
       hero: { backgroundColor: colors.deepPurple },
-      heroOrb: { backgroundColor: 'rgba(255,255,255,0.18)' },
+      heroOrb: { backgroundColor: "rgba(255,255,255,0.18)" },
       heroTitle: { ...Typography.h1, color: colors.white },
-      heroText: { ...Typography.bodyRegular, color: 'rgba(255,255,255,0.85)' },
+      heroText: { ...Typography.bodyRegular, color: "rgba(255,255,255,0.85)" },
       card: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
@@ -850,10 +877,10 @@ export default function FancyNumberScreen() {
       input: {
         backgroundColor: colors.background,
         borderColor:
-          availability.status === 'available'
+          availability.status === "available"
             ? colors.success
-            : availability.status === 'unavailable' ||
-                availability.status === 'error'
+            : availability.status === "unavailable" ||
+                availability.status === "error"
               ? colors.error
               : colors.surfaceBorder,
         color: colors.text,
@@ -862,8 +889,8 @@ export default function FancyNumberScreen() {
       availabilityHint: {
         ...Typography.bodyRegular,
         color:
-          availability.status === 'unavailable' ||
-          availability.status === 'error'
+          availability.status === "unavailable" ||
+          availability.status === "error"
             ? colors.error
             : colors.textSecondary,
       },
@@ -879,9 +906,9 @@ export default function FancyNumberScreen() {
     <View style={d.container}>
       <NavHeader
         title={
-          mode === 'renew' && !mine?.permanent
-            ? t('profile.fancyNumber.renewTitle', { defaultValue: '续费靓号' })
-            : t('profile.fancyNumber.title', { defaultValue: '靓号专区' })
+          mode === "renew" && !mine?.permanent
+            ? t("profile.fancyNumber.renewTitle", { defaultValue: "续费靓号" })
+            : t("profile.fancyNumber.title", { defaultValue: "靓号专区" })
         }
         rightIcon="sparkles-outline"
       />
@@ -889,7 +916,7 @@ export default function FancyNumberScreen() {
         <View style={s.centered}>
           <ActivityIndicator color={colors.primary} />
           <Text style={d.body}>
-            {t('common.loading', { defaultValue: '加载中…' })}
+            {t("common.loading", { defaultValue: "加载中…" })}
           </Text>
         </View>
       ) : errorText && !catalog && !mine ? (
@@ -900,7 +927,7 @@ export default function FancyNumberScreen() {
             onPress={() => void loadInitial()}
           >
             <Text style={d.link}>
-              {t('common.retry', { defaultValue: '重试' })}
+              {t("common.retry", { defaultValue: "重试" })}
             </Text>
           </Pressable>
         </View>
@@ -911,8 +938,8 @@ export default function FancyNumberScreen() {
         >
           {isOffline ? (
             <Text style={d.error}>
-              {t('common.offline', {
-                defaultValue: '当前无网络连接，部分功能可能不可用',
+              {t("common.offline", {
+                defaultValue: "当前无网络连接，部分功能可能不可用",
               })}
             </Text>
           ) : null}
@@ -924,7 +951,7 @@ export default function FancyNumberScreen() {
                 onPress={() => void loadInitial()}
               >
                 <Text style={d.link}>
-                  {t('common.retry', { defaultValue: '重试' })}
+                  {t("common.retry", { defaultValue: "重试" })}
                 </Text>
               </Pressable>
             </View>
@@ -934,28 +961,28 @@ export default function FancyNumberScreen() {
             <View style={[s.heroOrb, d.heroOrb]} />
             <Text style={d.heroTitle}>
               {isSwitching
-                ? t('profile.fancyNumber.switchOffer', {
-                    defaultValue: '永久靓号 · 更换 100 积分',
+                ? t("profile.fancyNumber.switchOffer", {
+                    defaultValue: "永久靓号 · 更换 100 积分",
                   })
-                : catalog?.purchaseMode === 'PERMANENT_FREE'
-                  ? t('profile.fancyNumber.superOffer', {
-                      defaultValue: '超级会员 · 永久靓号',
+                : catalog?.purchaseMode === "PERMANENT_FREE"
+                  ? t("profile.fancyNumber.superOffer", {
+                      defaultValue: "超级会员 · 永久靓号",
                     })
-                  : t('profile.fancyNumber.monthlyOffer', {
-                      defaultValue: '100 积分 / 月',
+                  : t("profile.fancyNumber.monthlyOffer", {
+                      defaultValue: "100 积分 / 月",
                     })}
             </Text>
             <Text style={d.heroText}>
               {isSwitching
-                ? t('profile.fancyNumber.switchHint', {
-                    defaultValue: '永久权益保留，每次更换仅收取 100 积分',
+                ? t("profile.fancyNumber.switchHint", {
+                    defaultValue: "永久权益保留，每次更换仅收取 100 积分",
                   })
-                : catalog?.purchaseMode === 'PERMANENT_FREE'
-                  ? t('profile.fancyNumber.superHint', {
-                      defaultValue: '超级会员可免费领取一个永久靓号',
+                : catalog?.purchaseMode === "PERMANENT_FREE"
+                  ? t("profile.fancyNumber.superHint", {
+                      defaultValue: "超级会员可免费领取一个永久靓号",
                     })
-                  : t('profile.fancyNumber.monthlyHint', {
-                      defaultValue: '按月购买，单次可选择 1–12 个月',
+                  : t("profile.fancyNumber.monthlyHint", {
+                      defaultValue: "按月购买，单次可选择 1–12 个月",
                     })}
             </Text>
           </View>
@@ -965,7 +992,7 @@ export default function FancyNumberScreen() {
               <View style={s.titleRow}>
                 <Ionicons name="ribbon" size={22} color={colors.deepPurple} />
                 <Text style={d.title}>
-                  {t('profile.fancyNumber.mine', { defaultValue: '我的靓号' })}
+                  {t("profile.fancyNumber.mine", { defaultValue: "我的靓号" })}
                 </Text>
               </View>
               <View style={s.statusRow}>
@@ -974,29 +1001,29 @@ export default function FancyNumberScreen() {
                   <Text style={d.badgeText}>
                     {mine.permanent
                       ? permanentLabel
-                      : t('profile.fancyNumber.active', {
-                          defaultValue: '使用中',
+                      : t("profile.fancyNumber.active", {
+                          defaultValue: "使用中",
                         })}
                   </Text>
                 </View>
               </View>
               <Text style={d.body}>
                 {mine.permanent
-                  ? t('profile.fancyNumber.permanentDescription', {
-                      defaultValue: '该靓号永久有效；可支付 100 积分更换',
+                  ? t("profile.fancyNumber.permanentDescription", {
+                      defaultValue: "该靓号永久有效；可支付 100 积分更换",
                     })
-                  : t('profile.fancyNumber.expiresAt', {
-                      defaultValue: '到期时间：{{date}}',
+                  : t("profile.fancyNumber.expiresAt", {
+                      defaultValue: "到期时间：{{date}}",
                       date: formatExpiry(mine.expiresAt, permanentLabel),
                     })}
               </Text>
             </View>
-          ) : mode === 'renew' ? (
+          ) : mode === "renew" ? (
             <View style={[s.card, d.card]}>
               <Text style={d.body}>
-                {t('profile.fancyNumber.nothingToRenew', {
+                {t("profile.fancyNumber.nothingToRenew", {
                   defaultValue:
-                    '当前没有可续费的靓号，可在下方选择一个靓号购买。',
+                    "当前没有可续费的靓号，可在下方选择一个靓号购买。",
                 })}
               </Text>
             </View>
@@ -1005,8 +1032,8 @@ export default function FancyNumberScreen() {
           {mine?.active && mine.renewable ? (
             <View style={[s.card, d.card]}>
               <Text style={d.title}>
-                {t('profile.fancyNumber.renewMonths', {
-                  defaultValue: '选择续费时长',
+                {t("profile.fancyNumber.renewMonths", {
+                  defaultValue: "选择续费时长",
                 })}
               </Text>
               <View style={s.monthGrid}>
@@ -1029,8 +1056,8 @@ export default function FancyNumberScreen() {
                           { color: selected ? colors.white : colors.text },
                         ]}
                       >
-                        {t('profile.fancyNumber.monthCount', {
-                          defaultValue: '{{count}}个月',
+                        {t("profile.fancyNumber.monthCount", {
+                          defaultValue: "{{count}}个月",
                           count: value,
                         })}
                       </Text>
@@ -1039,8 +1066,8 @@ export default function FancyNumberScreen() {
                 })}
               </View>
               <Text style={d.body}>
-                {t('profile.fancyNumber.total', {
-                  defaultValue: '合计：{{points}} 积分',
+                {t("profile.fancyNumber.total", {
+                  defaultValue: "合计：{{points}} 积分",
                   points: paidTotal,
                 })}
               </Text>
@@ -1058,8 +1085,8 @@ export default function FancyNumberScreen() {
                   <ActivityIndicator color={colors.white} />
                 ) : (
                   <Text style={d.buttonText}>
-                    {t('profile.fancyNumber.renewNow', {
-                      defaultValue: '立即续费',
+                    {t("profile.fancyNumber.renewNow", {
+                      defaultValue: "立即续费",
                     })}
                   </Text>
                 )}
@@ -1069,11 +1096,11 @@ export default function FancyNumberScreen() {
 
           {!mine?.active || isSwitching ? (
             <>
-              {!mine?.active && catalog?.purchaseMode === 'PAID_MONTHLY' ? (
+              {!mine?.active && catalog?.purchaseMode === "PAID_MONTHLY" ? (
                 <View style={[s.card, d.card]}>
                   <Text style={d.title}>
-                    {t('profile.fancyNumber.chooseMonths', {
-                      defaultValue: '选择购买时长',
+                    {t("profile.fancyNumber.chooseMonths", {
+                      defaultValue: "选择购买时长",
                     })}
                   </Text>
                   <View style={s.monthGrid}>
@@ -1096,8 +1123,8 @@ export default function FancyNumberScreen() {
                               { color: selected ? colors.white : colors.text },
                             ]}
                           >
-                            {t('profile.fancyNumber.monthCount', {
-                              defaultValue: '{{count}}个月',
+                            {t("profile.fancyNumber.monthCount", {
+                              defaultValue: "{{count}}个月",
                               count: value,
                             })}
                           </Text>
@@ -1111,23 +1138,23 @@ export default function FancyNumberScreen() {
               <View style={[s.card, d.card]}>
                 <Text style={d.title}>
                   {isSwitching
-                    ? t('profile.fancyNumber.chooseReplacement', {
-                        defaultValue: '输入新靓号',
+                    ? t("profile.fancyNumber.chooseReplacement", {
+                        defaultValue: "输入新靓号",
                       })
-                    : t('profile.fancyNumber.chooseNumber', {
-                        defaultValue: '输入自定义靓号',
+                    : t("profile.fancyNumber.chooseNumber", {
+                        defaultValue: "输入自定义靓号",
                       })}
                 </Text>
                 <Text style={d.body}>
-                  {t('profile.fancyNumber.customHint', {
-                    defaultValue: '输入 6 位英文字母或数字，字母将自动转为大写',
+                  {t("profile.fancyNumber.customHint", {
+                    defaultValue: "输入 6 位英文字母或数字，字母将自动转为大写",
                   })}
                 </Text>
                 <TextInput
                   accessibilityLabel={t(
-                    'profile.fancyNumber.customInputLabel',
+                    "profile.fancyNumber.customInputLabel",
                     {
-                      defaultValue: '自定义靓号',
+                      defaultValue: "自定义靓号",
                     },
                   )}
                   autoCapitalize="characters"
@@ -1139,48 +1166,48 @@ export default function FancyNumberScreen() {
                   value={customValue}
                   onChangeText={handleCustomValueChange}
                 />
-                {availability.status === 'checking' ? (
+                {availability.status === "checking" ? (
                   <View style={s.titleRow}>
                     <ActivityIndicator size="small" color={colors.primary} />
                     <Text style={d.availabilityHint}>
-                      {t('profile.fancyNumber.checking', {
-                        defaultValue: '正在查询是否可用…',
+                      {t("profile.fancyNumber.checking", {
+                        defaultValue: "正在查询是否可用…",
                       })}
                     </Text>
                   </View>
-                ) : availability.status === 'available' ? (
+                ) : availability.status === "available" ? (
                   <Text style={d.success}>
-                    {t('profile.fancyNumber.available', {
-                      defaultValue: '该靓号可以使用',
+                    {t("profile.fancyNumber.available", {
+                      defaultValue: "该靓号可以使用",
                     })}
                   </Text>
-                ) : availability.status === 'unavailable' ? (
+                ) : availability.status === "unavailable" ? (
                   <Text style={d.availabilityHint}>
-                    {availability.reason === 'RESERVED'
-                      ? t('profile.fancyNumber.reserved', {
-                          defaultValue: '该组合属于保留词，不能使用',
+                    {availability.reason === "RESERVED"
+                      ? t("profile.fancyNumber.reserved", {
+                          defaultValue: "该组合属于保留词，不能使用",
                         })
-                      : t('profile.fancyNumber.taken', {
-                          defaultValue: '该靓号已被占用，请换一个',
+                      : t("profile.fancyNumber.taken", {
+                          defaultValue: "该靓号已被占用，请换一个",
                         })}
                   </Text>
-                ) : availability.status === 'error' ? (
+                ) : availability.status === "error" ? (
                   <Text style={d.availabilityHint}>{availability.message}</Text>
                 ) : (
                   <Text style={d.availabilityHint}>
-                    {availability.status === 'invalid'
-                      ? t('profile.fancyNumber.sixCharactersRequired', {
-                          defaultValue: '请输入完整的 6 位靓号',
+                    {availability.status === "invalid"
+                      ? t("profile.fancyNumber.sixCharactersRequired", {
+                          defaultValue: "请输入完整的 6 位靓号",
                         })
-                      : t('profile.fancyNumber.enterToCheck', {
-                          defaultValue: '输入后将自动查询是否可用',
+                      : t("profile.fancyNumber.enterToCheck", {
+                          defaultValue: "输入后将自动查询是否可用",
                         })}
                   </Text>
                 )}
 
                 <Text style={d.title}>
-                  {t('profile.fancyNumber.recommendations', {
-                    defaultValue: '热门推荐',
+                  {t("profile.fancyNumber.recommendations", {
+                    defaultValue: "热门推荐",
                   })}
                 </Text>
                 {items.length > 0 ? (
@@ -1218,8 +1245,8 @@ export default function FancyNumberScreen() {
                   </View>
                 ) : (
                   <Text style={d.body}>
-                    {t('profile.fancyNumber.noRecommendations', {
-                      defaultValue: '暂无推荐号码，可直接输入喜欢的组合',
+                    {t("profile.fancyNumber.noRecommendations", {
+                      defaultValue: "暂无推荐号码，可直接输入喜欢的组合",
                     })}
                   </Text>
                 )}
@@ -1233,8 +1260,8 @@ export default function FancyNumberScreen() {
                       <ActivityIndicator color={colors.primary} />
                     ) : (
                       <Text style={d.link}>
-                        {t('profile.fancyNumber.loadMore', {
-                          defaultValue: '加载更多',
+                        {t("profile.fancyNumber.loadMore", {
+                          defaultValue: "加载更多",
                         })}
                       </Text>
                     )}
@@ -1242,16 +1269,16 @@ export default function FancyNumberScreen() {
                 ) : null}
                 <Text style={d.body}>
                   {isSwitching
-                    ? t('profile.fancyNumber.switchTotal', {
-                        defaultValue: '更换费用：{{points}} 积分',
+                    ? t("profile.fancyNumber.switchTotal", {
+                        defaultValue: "更换费用：{{points}} 积分",
                         points: switchPrice,
                       })
-                    : catalog?.purchaseMode === 'PERMANENT_FREE'
-                      ? t('profile.fancyNumber.freeTotal', {
-                          defaultValue: '超级会员专享：0 积分永久领取',
+                    : catalog?.purchaseMode === "PERMANENT_FREE"
+                      ? t("profile.fancyNumber.freeTotal", {
+                          defaultValue: "超级会员专享：0 积分永久领取",
                         })
-                      : t('profile.fancyNumber.total', {
-                          defaultValue: '合计：{{points}} 积分',
+                      : t("profile.fancyNumber.total", {
+                          defaultValue: "合计：{{points}} 积分",
                           points: paidTotal,
                         })}
                 </Text>
@@ -1270,15 +1297,15 @@ export default function FancyNumberScreen() {
                   ) : (
                     <Text style={d.buttonText}>
                       {isSwitching
-                        ? t('profile.fancyNumber.switchNow', {
-                            defaultValue: '更换靓号',
+                        ? t("profile.fancyNumber.switchNow", {
+                            defaultValue: "更换靓号",
                           })
-                        : catalog?.purchaseMode === 'PERMANENT_FREE'
-                          ? t('profile.fancyNumber.claimNow', {
-                              defaultValue: '免费领取',
+                        : catalog?.purchaseMode === "PERMANENT_FREE"
+                          ? t("profile.fancyNumber.claimNow", {
+                              defaultValue: "免费领取",
                             })
-                          : t('profile.fancyNumber.buyNow', {
-                              defaultValue: '立即购买',
+                          : t("profile.fancyNumber.buyNow", {
+                              defaultValue: "立即购买",
                             })}
                     </Text>
                   )}

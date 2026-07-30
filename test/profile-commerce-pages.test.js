@@ -1,12 +1,12 @@
-const { test } = require('node:test');
-const assert = require('node:assert/strict');
-const path = require('node:path');
-const fs = require('node:fs');
+const { test } = require("node:test");
+const assert = require("node:assert/strict");
+const path = require("node:path");
+const fs = require("node:fs");
 
-const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
+const read = (rel) => fs.readFileSync(path.join(__dirname, "..", rel), "utf8");
 
-test('ProfileScreen removes the credit score row and links profile commerce pages', () => {
-  const src = read('src/features/profile/screens/ProfileScreen.tsx');
+test("ProfileScreen removes the credit score row and links profile commerce pages", () => {
+  const src = read("src/features/profile/screens/ProfileScreen.tsx");
 
   assert.doesNotMatch(src, /profile\.creditScore/);
   assert.match(src, /profile\.systemAnnouncements/);
@@ -21,11 +21,11 @@ test('ProfileScreen removes the credit score row and links profile commerce page
   assert.match(src, /profile\/collections/);
 });
 
-test('ProfileScreen places system announcements first, customer service after notes, settings last', () => {
-  const src = read('src/features/profile/screens/ProfileScreen.tsx');
+test("ProfileScreen places system announcements first, customer service after notes, settings last", () => {
+  const src = read("src/features/profile/screens/ProfileScreen.tsx");
   const match = src.match(/const MENU_ITEM_KEYS:[\s\S]*?\[] = \[([\s\S]*?)\];/);
 
-  assert.ok(match, 'MENU_ITEM_KEYS should exist');
+  assert.ok(match, "MENU_ITEM_KEYS should exist");
 
   const ids = Array.from(
     match[1].matchAll(/id: MENU_ID\.([A-Z_]+)/g),
@@ -33,19 +33,19 @@ test('ProfileScreen places system announcements first, customer service after no
   );
 
   assert.deepEqual(ids, [
-    'SYSTEM_ANNOUNCEMENTS',
-    'MEMBER_CENTER',
-    'WALLET',
-    'MALL',
-    'COLLECTIONS',
-    'NOTES',
-    'CUSTOMER_SERVICE',
-    'APP_SETTINGS',
+    "SYSTEM_ANNOUNCEMENTS",
+    "MEMBER_CENTER",
+    "WALLET",
+    "MALL",
+    "COLLECTIONS",
+    "NOTES",
+    "CUSTOMER_SERVICE",
+    "APP_SETTINGS",
   ]);
 });
 
-test('ProfileScreen customer service row routes to the support-center screen', () => {
-  const src = read('src/features/profile/screens/ProfileScreen.tsx');
+test("ProfileScreen customer service row routes to the support-center screen", () => {
+  const src = read("src/features/profile/screens/ProfileScreen.tsx");
 
   assert.match(
     src,
@@ -58,13 +58,13 @@ test('ProfileScreen customer service row routes to the support-center screen', (
   );
 });
 
-test('customer service exposes recharge/issue/dispute/account with env override + SUPPORT_ACCOUNT_ID fallback', () => {
-  const cats = read('src/features/profile/support-categories.ts');
-  const cfg = read('src/constants/config.ts');
-  const screen = read('src/features/profile/screens/CustomerServiceScreen.tsx');
+test("customer service exposes recharge/issue/dispute/account with env override + SUPPORT_ACCOUNT_ID fallback", () => {
+  const cats = read("src/features/profile/support-categories.ts");
+  const cfg = read("src/constants/config.ts");
+  const screen = read("src/features/profile/screens/CustomerServiceScreen.tsx");
 
   const ids = Array.from(cats.matchAll(/id:\s*'([a-z]+)'/g), ([, v]) => v);
-  assert.deepEqual(ids, ['recharge', 'issue', 'dispute', 'account']);
+  assert.deepEqual(ids, ["recharge", "issue", "dispute", "account"]);
   assert.match(cats, /raw\?\.trim\(\)\s*\|\|\s*SUPPORT_ACCOUNT_ID/);
 
   assert.match(cfg, /export const SUPPORT_ACCOUNT_ID\s*=/);
@@ -97,46 +97,46 @@ test('customer service exposes recharge/issue/dispute/account with env override 
   assert.doesNotMatch(screen, /error instanceof Error \? error\.message/);
 });
 
-test('profile commerce routes export their screens', () => {
+test("profile commerce routes export their screens", () => {
   assert.match(
-    read('app/(tabs)/profile/system-announcements.tsx'),
+    read("app/(tabs)/profile/system-announcements.tsx"),
     /SystemAnnouncementsScreen/,
   );
   assert.match(
-    read('app/(tabs)/profile/member-center.tsx'),
+    read("app/(tabs)/profile/member-center.tsx"),
     /MemberCenterScreen/,
   );
   assert.match(
-    read('app/(tabs)/profile/member-rules.tsx'),
+    read("app/(tabs)/profile/member-rules.tsx"),
     /MemberRulesScreen/,
   );
   assert.match(
-    read('app/(tabs)/profile/credit-score.tsx'),
+    read("app/(tabs)/profile/credit-score.tsx"),
     /CreditScoreScreen/,
   );
-  assert.match(read('app/(tabs)/profile/wallet.tsx'), /WalletScreen/);
-  assert.match(read('app/(tabs)/profile/mall.tsx'), /MallScreen/);
+  assert.match(read("app/(tabs)/profile/wallet.tsx"), /WalletScreen/);
+  assert.match(read("app/(tabs)/profile/mall.tsx"), /MallScreen/);
   assert.match(
-    read('app/(tabs)/profile/fancy-number.tsx'),
+    read("app/(tabs)/profile/fancy-number.tsx"),
     /FancyNumberScreen/,
   );
   assert.match(
-    read('app/(tabs)/profile/group-expansion.tsx'),
+    read("app/(tabs)/profile/group-expansion.tsx"),
     /GroupExpansionScreen/,
   );
-  assert.match(read('app/(tabs)/profile/collections.tsx'), /CollectionsScreen/);
+  assert.match(read("app/(tabs)/profile/collections.tsx"), /CollectionsScreen/);
   assert.match(
-    read('app/(tabs)/profile/customer-service.tsx'),
+    read("app/(tabs)/profile/customer-service.tsx"),
     /CustomerServiceScreen/,
   );
   assert.match(
-    read('app/(tabs)/profile/app-settings.tsx'),
+    read("app/(tabs)/profile/app-settings.tsx"),
     /AppSettingsScreen/,
   );
 });
 
-test('MallScreen routes fancy-number purchase and renewal actions', () => {
-  const src = read('src/features/profile/screens/MallScreen.tsx');
+test("MallScreen routes fancy-number purchase and renewal actions", () => {
+  const src = read("src/features/profile/screens/MallScreen.tsx");
 
   assert.match(
     src,
@@ -152,8 +152,8 @@ test('MallScreen routes fancy-number purchase and renewal actions', () => {
   );
 });
 
-test('GroupExpansionScreen loads owner circles and supports idempotent point purchases', () => {
-  const src = read('src/features/profile/screens/GroupExpansionScreen.tsx');
+test("GroupExpansionScreen loads owner circles and supports idempotent point purchases", () => {
+  const src = read("src/features/profile/screens/GroupExpansionScreen.tsx");
 
   assert.match(src, /fetchMyCircles\(['"]created['"]\)/);
   assert.match(src, /fetchGroupExpansionProducts/);
@@ -165,7 +165,10 @@ test('GroupExpansionScreen loads owner circles and supports idempotent point pur
   assert.match(src, /isAuthSessionIdentityCurrent/);
   assert.match(src, /wallet\.userID !== owner\.userId/);
   assert.match(src, /walletLoading/);
+  assert.match(src, /walletLoadingRef\.current/);
   assert.match(src, /walletError/);
+  assert.match(src, /const generation = focusGenerationRef\.current/);
+  assert.match(src, /if \(!canCommit\(\)\) return;/);
   assert.match(src, /product\.purchasable/);
   assert.match(src, /isOffline/);
   assert.match(src, /GroupExpansionCirclePickerSheet/);
@@ -174,13 +177,13 @@ test('GroupExpansionScreen loads owner circles and supports idempotent point pur
   assert.doesNotMatch(src, /circles\.map/);
 });
 
-test('group expansion circle picker uses a searchable virtualized bottom-sheet list', () => {
+test("group expansion circle picker uses a searchable virtualized bottom-sheet list", () => {
   const rel =
-    'src/features/profile/components/group-expansion-circle-picker-sheet.tsx';
+    "src/features/profile/components/group-expansion-circle-picker-sheet.tsx";
 
   assert.ok(
-    fs.existsSync(path.join(__dirname, '..', rel)),
-    'group expansion circle picker sheet should exist',
+    fs.existsSync(path.join(__dirname, "..", rel)),
+    "group expansion circle picker sheet should exist",
   );
   const src = read(rel);
 
@@ -195,8 +198,8 @@ test('group expansion circle picker uses a searchable virtualized bottom-sheet l
   assert.match(src, /onClose\(\)/);
 });
 
-test('FancyNumberScreen supports listing, purchase, renewal, permanent switching, and account refresh', () => {
-  const src = read('src/features/profile/screens/FancyNumberScreen.tsx');
+test("FancyNumberScreen supports listing, purchase, renewal, permanent switching, and account refresh", () => {
+  const src = read("src/features/profile/screens/FancyNumberScreen.tsx");
 
   assert.match(src, /fetchFancyNumbers/);
   assert.match(src, /fetchMyFancyNumber/);
@@ -227,29 +230,32 @@ test('FancyNumberScreen supports listing, purchase, renewal, permanent switching
   assert.match(src, /expectedUnitPrice:\s*mine\.unitPrice/);
   assert.match(src, /Promise\.allSettled/);
   assert.match(src, /errorText && !catalog && !mine/);
+  assert.match(src, /generation !== focusGenerationRef\.current/);
+  assert.match(src, /if \(!canCommit\(\)\) return;/);
+  assert.match(src, /accountId: result\.accountId/);
 });
 
-test('FancyNumberScreen fences load-more results by focus generation and cursor', () => {
-  const src = read('src/features/profile/screens/FancyNumberScreen.tsx');
+test("FancyNumberScreen fences load-more results by focus generation and cursor", () => {
+  const src = read("src/features/profile/screens/FancyNumberScreen.tsx");
 
   assert.match(src, /catalogCursorRef/);
   assert.match(src, /focusGenerationRef\.current !== generation/);
   assert.match(src, /catalogCursorRef\.current !== cursor/);
 });
 
-test('GroupExpansionScreen retains an ambiguous purchase key across focus reloads', () => {
-  const src = read('src/features/profile/screens/GroupExpansionScreen.tsx');
+test("GroupExpansionScreen retains an ambiguous purchase key across focus reloads", () => {
+  const src = read("src/features/profile/screens/GroupExpansionScreen.tsx");
   const loadOwnerCircles = src.match(
     /const loadOwnerCircles[\s\S]*?const loadWallet/,
   )?.[0];
 
-  assert.ok(loadOwnerCircles, 'loadOwnerCircles implementation should exist');
+  assert.ok(loadOwnerCircles, "loadOwnerCircles implementation should exist");
   assert.doesNotMatch(loadOwnerCircles, /pendingIntentRef\.current\s*=\s*null/);
   assert.match(src, /pendingIntentRef\.current\s*=\s*null/);
 });
 
-test('ProfileScreen shows a red dot on system announcements when profile notifications are unread', () => {
-  const src = read('src/features/profile/screens/ProfileScreen.tsx');
+test("ProfileScreen shows a red dot on system announcements when profile notifications are unread", () => {
+  const src = read("src/features/profile/screens/ProfileScreen.tsx");
 
   assert.match(src, /useTabBadgeStore/);
   assert.match(src, /profileUnread/);
@@ -257,15 +263,15 @@ test('ProfileScreen shows a red dot on system announcements when profile notific
   assert.match(src, /showIndicatorDot=\{/);
 });
 
-test('MemberCenterScreen renders the four-tier catalog without legacy commerce APIs', () => {
-  const src = read('src/features/profile/screens/MemberCenterScreen.tsx');
-  const catalog = read('src/features/profile/membership-plans.ts');
+test("MemberCenterScreen renders the four-tier catalog without legacy commerce APIs", () => {
+  const src = read("src/features/profile/screens/MemberCenterScreen.tsx");
+  const catalog = read("src/features/profile/membership-plans.ts");
 
   for (const [tier, price] of [
-    ['silver', 298],
-    ['gold', 1288],
-    ['diamond', 1998],
-    ['super', 3998],
+    ["silver", 298],
+    ["gold", 1288],
+    ["diamond", 1998],
+    ["super", 3998],
   ]) {
     assert.match(
       catalog,
@@ -284,9 +290,9 @@ test('MemberCenterScreen renders the four-tier catalog without legacy commerce A
   assert.doesNotMatch(src, /积分|兑换会员|确认兑换/);
 });
 
-test('MemberCenterScreen provides a vertical four-tier selection with per-tier visuals, markers, and selected benefits', () => {
-  const src = read('src/features/profile/screens/MemberCenterScreen.tsx');
-  const catalog = read('src/features/profile/membership-plans.ts');
+test("MemberCenterScreen provides a vertical four-tier selection with per-tier visuals, markers, and selected benefits", () => {
+  const src = read("src/features/profile/screens/MemberCenterScreen.tsx");
+  const catalog = read("src/features/profile/membership-plans.ts");
 
   // 四档纵向全展示（tierStack，不再横滑把钻石/超级截在屏外），每档一套「贵金属」视觉。
   assert.match(src, /tierStack/);
@@ -312,9 +318,9 @@ test('MemberCenterScreen provides a vertical four-tier selection with per-tier v
   );
 });
 
-test('MemberCenterScreen routes configured support and otherwise shows a clear fallback', () => {
-  const src = read('src/features/profile/screens/MemberCenterScreen.tsx');
-  const env = read('.env.example');
+test("MemberCenterScreen routes configured support and otherwise shows a clear fallback", () => {
+  const src = read("src/features/profile/screens/MemberCenterScreen.tsx");
+  const env = read(".env.example");
 
   assert.match(src, /process\.env\.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID/);
   assert.match(
@@ -329,8 +335,8 @@ test('MemberCenterScreen routes configured support and otherwise shows a clear f
   assert.doesNotMatch(src, /微信|WeChat|支付宝|Alipay/);
 });
 
-test('MemberCenterScreen refreshes the owning account on focus without stale overwrite', () => {
-  const src = read('src/features/profile/screens/MemberCenterScreen.tsx');
+test("MemberCenterScreen refreshes the owning account on focus without stale overwrite", () => {
+  const src = read("src/features/profile/screens/MemberCenterScreen.tsx");
 
   assert.match(src, /useFocusEffect/);
   assert.match(src, /fetchCurrentUser/);
@@ -339,8 +345,8 @@ test('MemberCenterScreen refreshes the owning account on focus without stale ove
   assert.match(src, /active = false/);
 });
 
-test('MemberCenterScreen distinguishes activation, upgrade, current, and lower-tier contact states', () => {
-  const src = read('src/features/profile/screens/MemberCenterScreen.tsx');
+test("MemberCenterScreen distinguishes activation, upgrade, current, and lower-tier contact states", () => {
+  const src = read("src/features/profile/screens/MemberCenterScreen.tsx");
 
   assert.match(src, /selectedPlan\.level > currentPlanLevel/);
   assert.match(src, /selectedPlan\.level === currentPlanLevel/);
@@ -353,8 +359,8 @@ test('MemberCenterScreen distinguishes activation, upgrade, current, and lower-t
   assert.match(src, /defaultValue: '已开通会员可联系客服补差价升级/);
 });
 
-test('ProfileScreen displays effective four-tier membership labels', () => {
-  const src = read('src/features/profile/screens/ProfileScreen.tsx');
+test("ProfileScreen displays effective four-tier membership labels", () => {
+  const src = read("src/features/profile/screens/ProfileScreen.tsx");
 
   assert.match(src, /getMembershipTierForVipLevel/);
   assert.match(src, /getMembershipTierForVipLevel\(vipLevel\)/);
@@ -363,34 +369,34 @@ test('ProfileScreen displays effective four-tier membership labels', () => {
   assert.doesNotMatch(src, />VIP \{vipLevel\}</);
 });
 
-test('MemberRulesScreen and every locale use the four-tier support-assisted contract', () => {
-  const rules = read('src/features/profile/screens/MemberRulesScreen.tsx');
-  const locales = ['zh', 'en', 'ja', 'ko', 'es'];
+test("MemberRulesScreen and every locale use the four-tier support-assisted contract", () => {
+  const rules = read("src/features/profile/screens/MemberRulesScreen.tsx");
+  const locales = ["zh", "en", "ja", "ko", "es"];
   const requiredMembershipKeys = [
-    'regularUser',
-    'currentIdentity',
-    'catalogHint',
-    'chooseTier',
-    'recommended',
-    'lifetime',
-    'selected',
-    'benefitsTitle',
-    'contactToActivate',
-    'contactToUpgrade',
-    'contactForCurrent',
-    'contactForLowerTier',
-    'upgradeDifferenceNote',
-    'supportUnavailableTitle',
-    'supportUnavailableMessage',
+    "regularUser",
+    "currentIdentity",
+    "catalogHint",
+    "chooseTier",
+    "recommended",
+    "lifetime",
+    "selected",
+    "benefitsTitle",
+    "contactToActivate",
+    "contactToUpgrade",
+    "contactForCurrent",
+    "contactForLowerTier",
+    "upgradeDifferenceNote",
+    "supportUnavailableTitle",
+    "supportUnavailableMessage",
   ];
   const requiredRuleKeys = [
-    'catalog',
-    'supportActivation',
-    'upgrade',
-    'expiry',
-    'fairUse',
-    'voiceToText',
-    'excludedVisualBenefits',
+    "catalog",
+    "supportActivation",
+    "upgrade",
+    "expiry",
+    "fairUse",
+    "voiceToText",
+    "excludedVisualBenefits",
   ];
 
   assert.match(rules, /profile\.memberRules\.rules\.catalog/);
@@ -410,19 +416,19 @@ test('MemberRulesScreen and every locale use the four-tier support-assisted cont
 
     for (const key of requiredMembershipKeys)
       assert.ok(membership?.[key], `${locale}: ${key}`);
-    for (const tier of ['silver', 'gold', 'diamond', 'super']) {
+    for (const tier of ["silver", "gold", "diamond", "super"]) {
       assert.ok(membership?.tiers?.[tier]?.name, `${locale}: tier ${tier}`);
     }
     for (const key of requiredRuleKeys)
       assert.ok(memberRules?.rules?.[key], `${locale}: rule ${key}`);
     for (const obsolete of [
-      'confirmExchange',
-      'activateVip',
-      'currentLevel',
-      'exchange',
-      'confirmExchangeMessage',
-      'confirmExchangePlan',
-      'selectHigher',
+      "confirmExchange",
+      "activateVip",
+      "currentLevel",
+      "exchange",
+      "confirmExchangeMessage",
+      "confirmExchangePlan",
+      "selectHigher",
     ]) {
       assert.equal(
         membership?.[obsolete],
@@ -441,11 +447,11 @@ test('MemberRulesScreen and every locale use the four-tier support-assisted cont
       `${locale}: premiumCircle`,
     );
     for (const removedValue of [
-      'created-groups',
-      'silver-circle',
-      'gold-circle',
-      'diamond-circle',
-      'super-member-circle',
+      "created-groups",
+      "silver-circle",
+      "gold-circle",
+      "diamond-circle",
+      "super-member-circle",
     ]) {
       assert.equal(
         membership?.benefitValues?.[removedValue],
@@ -463,8 +469,8 @@ test('MemberRulesScreen and every locale use the four-tier support-assisted cont
   }
 });
 
-test('CreditScoreScreen explains score status and change rules via i18n', () => {
-  const src = read('src/features/profile/screens/CreditScoreScreen.tsx');
+test("CreditScoreScreen explains score status and change rules via i18n", () => {
+  const src = read("src/features/profile/screens/CreditScoreScreen.tsx");
 
   assert.match(src, /useAuthStore/);
   assert.match(src, /creditScore/);
@@ -476,20 +482,20 @@ test('CreditScoreScreen explains score status and change rules via i18n', () => 
   assert.doesNotMatch(src, /信誉值详情/);
 
   // 两个语言包都必须提供 credit 段的关键 key，避免缺 key 露出裸键名。
-  const zh = JSON.parse(read('src/i18n/locales/zh.json'));
-  const en = JSON.parse(read('src/i18n/locales/en.json'));
+  const zh = JSON.parse(read("src/i18n/locales/zh.json"));
+  const en = JSON.parse(read("src/i18n/locales/en.json"));
   for (const bundle of [zh, en]) {
     assert.ok(bundle.credit?.title);
     assert.ok(bundle.credit?.tier?.excellent?.title);
     assert.ok(Array.isArray(bundle.credit?.improveRules));
     assert.ok(bundle.credit?.sections?.recent);
   }
-  assert.equal(zh.credit.title, '信誉值详情');
+  assert.equal(zh.credit.title, "信誉值详情");
 });
 
-test('WalletScreen shows the balance without an unsupported recharge action', () => {
-  const src = read('src/features/profile/screens/WalletScreen.tsx');
-  const api = read('src/services/api/coin.ts');
+test("WalletScreen shows the balance without an unsupported recharge action", () => {
+  const src = read("src/features/profile/screens/WalletScreen.tsx");
+  const api = read("src/services/api/coin.ts");
 
   assert.match(src, /fetchWallet/);
   assert.match(api, /\/coin\/wallet/);
@@ -500,12 +506,12 @@ test('WalletScreen shows the balance without an unsupported recharge action', ()
   assert.doesNotMatch(src, /帮积分/);
 });
 
-test('MallScreen shows the remaining product areas without membership or points sections', () => {
-  const src = read('src/features/profile/screens/MallScreen.tsx');
-  const api = read('src/services/api/mall.ts');
+test("MallScreen shows the remaining product areas without membership or points sections", () => {
+  const src = read("src/features/profile/screens/MallScreen.tsx");
+  const api = read("src/services/api/mall.ts");
   // Backend sends title/name; the api module maps id → i18n key and keeps the backend
   // string as t()'s defaultValue. Runtime mapping is covered in mall-membership-mapping.test.js.
-  const zh = read('src/i18n/locales/zh.json');
+  const zh = read("src/i18n/locales/zh.json");
 
   assert.match(src, /fetchMallSections/);
   assert.match(api, /\/mall\/sections/);
@@ -516,9 +522,9 @@ test('MallScreen shows the remaining product areas without membership or points 
   assert.doesNotMatch(api, /defaultTitle: '积分专区'/);
 });
 
-test('MallScreen uses 商城 as the page title', () => {
-  const src = read('src/features/profile/screens/MallScreen.tsx');
-  const zh = read('src/i18n/locales/zh.json');
+test("MallScreen uses 商城 as the page title", () => {
+  const src = read("src/features/profile/screens/MallScreen.tsx");
+  const zh = read("src/i18n/locales/zh.json");
 
   assert.match(src, /profile\.mall\.title[\s\S]*?defaultValue: '商城'/);
   assert.match(zh, /"mall":\s*\{[\s\S]*?"title": "商城"/);
@@ -526,12 +532,12 @@ test('MallScreen uses 商城 as the page title', () => {
   assert.doesNotMatch(zh, /管家商城/);
 });
 
-test('CollectionsScreen shows collectible content types', () => {
-  const src = read('src/features/profile/screens/CollectionsScreen.tsx');
-  const api = read('src/services/api/collections.ts');
+test("CollectionsScreen shows collectible content types", () => {
+  const src = read("src/features/profile/screens/CollectionsScreen.tsx");
+  const api = read("src/services/api/collections.ts");
   // Content-type labels and row copy are i18n'd (COLLECTION_TYPES holds labelKeys); the
   // Chinese display strings now live in the locale bundle rather than the component.
-  const zh = read('src/i18n/locales/zh.json');
+  const zh = read("src/i18n/locales/zh.json");
 
   assert.match(src, /horizontal/);
   assert.match(src, /fetchCollections/);
@@ -551,8 +557,8 @@ test('CollectionsScreen shows collectible content types', () => {
   assert.match(zh, /来自/);
 });
 
-test('CollectionsScreen no longer lists NOTE collections (notes go to My Notes)', () => {
-  const src = read('src/features/profile/screens/CollectionsScreen.tsx');
+test("CollectionsScreen no longer lists NOTE collections (notes go to My Notes)", () => {
+  const src = read("src/features/profile/screens/CollectionsScreen.tsx");
 
   // 收藏笔记已改为 collectNote 直接复制进「我的笔记」：
   // 收藏页不再有 NOTE 标签页，也过滤掉历史遗留的 NOTE 收藏项。
@@ -563,9 +569,9 @@ test('CollectionsScreen no longer lists NOTE collections (notes go to My Notes)'
   assert.match(src, /item\.type !== 'NOTE'/);
 });
 
-test('MemberCenterScreen bounds retries and exits the initial loading state on failure', () => {
-  const src = read('src/features/profile/screens/MemberCenterScreen.tsx');
-  const store = read('src/stores/membershipProgramStore.ts');
+test("MemberCenterScreen bounds retries and exits the initial loading state on failure", () => {
+  const src = read("src/features/profile/screens/MemberCenterScreen.tsx");
+  const store = read("src/stores/membershipProgramStore.ts");
 
   assert.match(store, /retry\(\(\) => fetchMembershipProgramStatus\(\)\)/);
   assert.match(store, /return previousStatus/);
@@ -575,10 +581,13 @@ test('MemberCenterScreen bounds retries and exits the initial loading state on f
   );
 });
 
-test('GroupExpansionScreen blocks purchases during wallet load and fences completion to its focus cycle', () => {
-  const src = read('src/features/profile/screens/GroupExpansionScreen.tsx');
+test("GroupExpansionScreen blocks purchases during wallet load and fences completion to its focus cycle", () => {
+  const src = read("src/features/profile/screens/GroupExpansionScreen.tsx");
 
-  assert.match(src, /submittingProductId \|\|\s*walletLoadingRef\.current \|\|/);
+  assert.match(
+    src,
+    /submittingProductId \|\|\s*walletLoadingRef\.current \|\|/,
+  );
   assert.match(src, /walletLoadingRef\.current = true;[\s\S]*?fetchWallet\(\)/);
   assert.match(
     src,
@@ -591,10 +600,10 @@ test('GroupExpansionScreen blocks purchases during wallet load and fences comple
   );
 });
 
-test('FancyNumberScreen applies a successful number locally before best-effort profile refresh', () => {
-  const src = read('src/features/profile/screens/FancyNumberScreen.tsx');
-  const setUserIndex = src.indexOf('authState.setUser(nextUser)');
-  const refreshIndex = src.indexOf('await refreshAuthUser(owner)');
+test("FancyNumberScreen applies a successful number locally before best-effort profile refresh", () => {
+  const src = read("src/features/profile/screens/FancyNumberScreen.tsx");
+  const setUserIndex = src.indexOf("authState.setUser(nextUser)");
+  const refreshIndex = src.indexOf("await refreshAuthUser(owner)");
 
   assert.match(src, /accountId:\s*result\.accountId/);
   assert.match(src, /useKnownAccountsStore\.getState\(\)\.upsertAccount/);
