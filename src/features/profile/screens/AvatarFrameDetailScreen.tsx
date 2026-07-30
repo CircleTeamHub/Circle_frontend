@@ -17,6 +17,7 @@ import { NavHeader } from '@/components/ui/nav-header';
 import {
   beginAvatarFrameEquip,
   isLatestAvatarFrameEquip,
+  serializeAvatarFrameEquip,
 } from '@/features/profile/avatar-frame-equip-operation';
 import { getAvatarFrameSource } from '@/features/profile/membership-frames';
 import {
@@ -267,7 +268,9 @@ export default function AvatarFrameDetailScreen() {
     setSubmitting(true);
     setSaveError(null);
     try {
-      const nextInventory = await equipAvatarFrame(targetFrameId);
+      const nextInventory = await serializeAvatarFrameEquip(() =>
+        equipAvatarFrame(targetFrameId),
+      );
       if (
         !isAuthSessionIdentityCurrent(owner, useAuthStore.getState()) ||
         !isLatestAvatarFrameEquip(equipOperation)

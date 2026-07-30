@@ -1,7 +1,12 @@
 import i18n from '@/i18n';
 import { apiClient } from '@/services/api/client';
 import { generateIdempotencyKey } from '@/utils/idempotency-key';
-import { expectShape, isFiniteNonNegativeNumber, isNonEmptyString, isPlainObject } from '@/utils/validate';
+import {
+  expectShape,
+  isFiniteNonNegativeNumber,
+  isNonEmptyString,
+  isPlainObject,
+} from '@/utils/validate';
 
 export type FancyNumberItem = {
   id: string;
@@ -76,11 +81,12 @@ function isFancyNumberList(value: unknown): value is FancyNumberList {
   const itemIds = new Set<string>();
   const itemValues = new Set<string>();
   const validItems = value.items.every((item) => {
-    if (!isFancyNumberItem(item) || itemIds.has(item.id) || itemValues.has(item.value)) {
+    const canonicalValue = isFancyNumberItem(item) ? item.value.toUpperCase() : '';
+    if (!isFancyNumberItem(item) || itemIds.has(item.id) || itemValues.has(canonicalValue)) {
       return false;
     }
     itemIds.add(item.id);
-    itemValues.add(item.value);
+    itemValues.add(canonicalValue);
     return true;
   });
   return (
@@ -137,7 +143,9 @@ function isFancyNumberAvailability(value: unknown): value is FancyNumberAvailabi
     isNonEmptyString(value.value) &&
     typeof value.available === 'boolean' &&
     (value.reason === null || value.reason === 'TAKEN' || value.reason === 'RESERVED') &&
-    (value.available ? value.reason === null : value.reason === 'TAKEN' || value.reason === 'RESERVED')
+    (value.available
+      ? value.reason === null
+      : value.reason === 'TAKEN' || value.reason === 'RESERVED')
   );
 }
 
@@ -198,13 +206,23 @@ function normalizeCustomValue(value: string): string {
   return normalized;
 }
 
-export async function fetchFancyNumbers(options?: { cursor?: string; limit?: number }): Promise<FancyNumberList> {
+export async function fetchFancyNumbers(options?: {
+  cursor?: string;
+  limit?: number;
+}): Promise<FancyNumberList> {
   const params = new URLSearchParams();
   if (options?.cursor) params.set('cursor', options.cursor);
   if (options?.limit) params.set('limit', String(options.limit));
   const query = params.toString();
   const raw = await apiClient<unknown>(`/mall/fancy-numbers${query ? `?${query}` : ''}`);
-  return expectShape(raw, isFancyNumberList, invalidResponseMessage());
+  const result = expectShape(raw, isFancyNumberList, invalidResponseMessage());
+  return {
+    ...result,
+    items: result.items.map((item) => ({
+      ...item,
+      value: item.value.toUpperCase(),
+    })),
+  };
 }
 
 export async function fetchMyFancyNumber(): Promise<MyFancyNumber> {
@@ -212,9 +230,13 @@ export async function fetchMyFancyNumber(): Promise<MyFancyNumber> {
   return expectShape(raw, isMyFancyNumber, invalidResponseMessage());
 }
 
-export async function checkFancyNumberAvailability(value: string): Promise<FancyNumberAvailability> {
+export async function checkFancyNumberAvailability(
+  value: string,
+): Promise<FancyNumberAvailability> {
   const normalized = normalizeCustomValue(value);
-  const raw = await apiClient<unknown>(`/mall/fancy-numbers/availability?value=${encodeURIComponent(normalized)}`);
+  const raw = await apiClient<unknown>(
+    `/mall/fancy-numbers/availability?value=${encodeURIComponent(normalized)}`,
+  );
   const result = expectShape(raw, isFancyNumberAvailability, invalidResponseMessage());
   if (result.value !== normalized) {
     throw new Error(invalidResponseMessage());

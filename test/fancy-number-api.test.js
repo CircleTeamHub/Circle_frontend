@@ -36,10 +36,12 @@ function loadFancyNumberModule(apiClientSpy, generatedKey = 'generated-key') {
             if (!predicate(value)) throw new Error(message);
             return value;
           },
-          isFiniteNonNegativeNumber: (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0,
+          isFiniteNonNegativeNumber: (value) =>
+            typeof value === 'number' && Number.isFinite(value) && value >= 0,
           isFiniteNumber: (value) => typeof value === 'number' && Number.isFinite(value),
           isNonEmptyString: (value) => typeof value === 'string' && value.trim().length > 0,
-          isPlainObject: (value) => value !== null && typeof value === 'object' && !Array.isArray(value),
+          isPlainObject: (value) =>
+            value !== null && typeof value === 'object' && !Array.isArray(value),
         },
       };
       return specifier in stubs ? stubs[specifier] : require(specifier);
@@ -98,6 +100,18 @@ test('fancy-number listing rejects month ranges outside the supported 1 to 12 mo
   }
 });
 
+test('fancy-number listing rejects recommendation values duplicated after normalization', async () => {
+  const api = loadFancyNumberModule(async () => ({
+    ...listResponse,
+    items: [
+      { id: 'fancy-lower', value: 'abc123' },
+      { id: 'fancy-upper', value: 'ABC123' },
+    ],
+  }));
+
+  await assert.rejects(api.fetchFancyNumbers(), /服务返回了无效数据/);
+});
+
 test('fancy-number reads reject fractional unit prices that mutations cannot submit', async () => {
   const catalogApi = loadFancyNumberModule(async () => ({
     ...listResponse,
@@ -132,8 +146,14 @@ test('custom fancy-number availability normalizes input and safely encodes it', 
 
 test('custom fancy-number availability rejects contradictory result metadata', async (t) => {
   for (const [name, response] of [
-    ['available result with a rejection reason', { value: 'AB12C3', available: true, reason: 'TAKEN' }],
-    ['unavailable result without a rejection reason', { value: 'AB12C3', available: false, reason: null }],
+    [
+      'available result with a rejection reason',
+      { value: 'AB12C3', available: true, reason: 'TAKEN' },
+    ],
+    [
+      'unavailable result without a rejection reason',
+      { value: 'AB12C3', available: false, reason: null },
+    ],
     ['result for a different requested value', { value: 'ZZ99Z9', available: true, reason: null }],
   ]) {
     await t.test(name, async () => {
@@ -218,7 +238,10 @@ test('fancy-number purchase, renewal, and permanent switching attach idempotency
     months: 3,
     expectedUnitPrice: 100,
   });
-  await api.renewFancyNumber({ months: 2, expectedUnitPrice: 100 }, { idempotencyKey: 'retry-same-request' });
+  await api.renewFancyNumber(
+    { months: 2, expectedUnitPrice: 100 },
+    { idempotencyKey: 'retry-same-request' },
+  );
   await api.switchPermanentFancyNumber(
     'replacement-id',
     { expectedUnitPrice: 100 },

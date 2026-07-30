@@ -632,8 +632,9 @@ export default function FancyNumberScreen() {
       permanent
         ? t('profile.fancyNumber.confirmPermanent', {
             defaultValue:
-              '超级会员可免费领取永久靓号 {{accountId}}，以后可使用 100 积分更换。',
+              '超级会员可免费领取永久靓号 {{accountId}}，以后可使用 {{points}} 积分更换。',
             accountId: customValue,
+            points: catalog.unitPrice,
           })
         : t('profile.fancyNumber.confirmPaid', {
             defaultValue:
@@ -1127,20 +1128,24 @@ export default function FancyNumberScreen() {
             <Text style={d.heroTitle}>
               {isSwitching
                 ? t('profile.fancyNumber.switchOffer', {
-                    defaultValue: '永久靓号 · 更换 100 积分',
+                    defaultValue: '永久靓号 · 更换 {{points}} 积分',
+                    points: switchPrice,
                   })
                 : catalog?.purchaseMode === 'PERMANENT_FREE'
                   ? t('profile.fancyNumber.superOffer', {
                       defaultValue: '超级会员 · 永久靓号',
                     })
                   : t('profile.fancyNumber.monthlyOffer', {
-                      defaultValue: '100 积分 / 月',
+                      defaultValue: '{{points}} 积分 / 月',
+                      points: catalog?.unitPrice ?? 100,
                     })}
             </Text>
             <Text style={d.heroText}>
               {isSwitching
                 ? t('profile.fancyNumber.switchHint', {
-                    defaultValue: '永久权益保留，每次更换仅收取 100 积分',
+                    defaultValue:
+                      '永久权益保留，每次更换仅收取 {{points}} 积分',
+                    points: switchPrice,
                   })
                 : catalog?.purchaseMode === 'PERMANENT_FREE'
                   ? t('profile.fancyNumber.superHint', {
@@ -1175,7 +1180,9 @@ export default function FancyNumberScreen() {
               <Text style={d.body}>
                 {mine.permanent
                   ? t('profile.fancyNumber.permanentDescription', {
-                      defaultValue: '该靓号永久有效；可支付 100 积分更换',
+                      defaultValue:
+                        '该靓号永久有效；可支付 {{points}} 积分更换',
+                      points: switchPrice,
                     })
                   : t('profile.fancyNumber.expiresAt', {
                       defaultValue: '到期时间：{{date}}',

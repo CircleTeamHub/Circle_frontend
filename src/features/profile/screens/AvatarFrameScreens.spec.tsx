@@ -552,7 +552,7 @@ test('equip completion from an older login cannot mutate the same user after rel
   expect(mockRouter.back).not.toHaveBeenCalled();
 });
 
-test('an older equip completion cannot overwrite a newer detail operation', async () => {
+test('equip mutations from separate detail screens are serialized in request order', async () => {
   const firstSave = deferred<AvatarFrameInventory>();
   const secondSave = deferred<AvatarFrameInventory>();
   const user = makeUser();
@@ -575,18 +575,19 @@ test('an older equip completion cannot overwrite a newer detail operation', asyn
     await screen.findByLabelText('en:profile.avatarFrames.equip'),
   );
 
-  await act(async () => {
-    secondSave.resolve(makeInventory('frame-b'));
-    await secondSave.promise;
-  });
+  expect(mockEquipFrame).toHaveBeenCalledTimes(1);
   await act(async () => {
     firstSave.resolve(makeInventory('frame-a'));
     await firstSave.promise;
   });
+  await waitFor(() => expect(mockEquipFrame).toHaveBeenCalledTimes(2));
+  await act(async () => {
+    secondSave.resolve(makeInventory('frame-b'));
+    await secondSave.promise;
+  });
 
   const frameB = makeInventory('frame-b').items[1];
-  expect(setUser).toHaveBeenCalledTimes(1);
-  expect(setUser).toHaveBeenCalledWith({
+  expect(setUser).toHaveBeenLastCalledWith({
     ...user,
     avatarFrame: frameB.imageUrl,
     avatarFrameAppearance: {

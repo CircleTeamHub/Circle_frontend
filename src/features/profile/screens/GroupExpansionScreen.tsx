@@ -862,7 +862,8 @@ export default function GroupExpansionScreen() {
                                   defaultValue: '立即购买',
                                 })
                               : t('profile.groupExpansion.limitReached', {
-                                  defaultValue: '超过 3000 人上限',
+                                  defaultValue: '超过 {{limit}} 人上限',
+                                  limit: catalog.hardLimit,
                                 })}
                           </Text>
                         )}

@@ -697,6 +697,43 @@ test('FancyNumberScreen displays renewal totals from the lease quote', () => {
   assert.match(src, /profile\.fancyNumber\.total[\s\S]*?points: renewalTotal/);
 });
 
+test('commerce copy interpolates authoritative fancy-number prices and group limits', () => {
+  const fancy = read('src/features/profile/screens/FancyNumberScreen.tsx');
+  const expansion = read(
+    'src/features/profile/screens/GroupExpansionScreen.tsx',
+  );
+
+  assert.doesNotMatch(fancy, /(?:更换|支付|使用|收取)\s*100\s*积分/);
+  assert.doesNotMatch(fancy, /100\s*积分\s*\/\s*月/);
+  assert.match(
+    fancy,
+    /profile\.fancyNumber\.monthlyOffer[\s\S]*?points:\s*catalog\?\.unitPrice/,
+  );
+  assert.match(
+    fancy,
+    /profile\.fancyNumber\.switchOffer[\s\S]*?points:\s*switchPrice/,
+  );
+  assert.match(
+    expansion,
+    /profile\.groupExpansion\.limitReached[\s\S]*?limit:\s*catalog\.hardLimit/,
+  );
+
+  for (const locale of ['en', 'es', 'ja', 'ko', 'zh']) {
+    const messages = JSON.parse(read(`src/i18n/locales/${locale}.json`));
+    const fancyNumber = messages.profile.fancyNumber;
+    for (const key of [
+      'monthlyOffer',
+      'switchOffer',
+      'switchHint',
+      'permanentDescription',
+      'confirmPermanent',
+    ]) {
+      assert.match(fancyNumber[key], /\{\{points\}\}/);
+    }
+    assert.match(messages.profile.groupExpansion.limitReached, /\{\{limit\}\}/);
+  }
+});
+
 test('FancyNumberScreen applies a successful number locally before best-effort profile refresh', () => {
   const src = read('src/features/profile/screens/FancyNumberScreen.tsx');
   const setUserIndex = src.indexOf('authState.setUser(nextUser)');
