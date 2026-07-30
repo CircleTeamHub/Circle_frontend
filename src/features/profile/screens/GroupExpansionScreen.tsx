@@ -320,6 +320,7 @@ export default function GroupExpansionScreen() {
     useCallback(() => {
       const generation = focusGenerationRef.current + 1;
       focusGenerationRef.current = generation;
+      setSubmittingProductId(null);
       const owner = captureAuthSessionIdentity(useAuthStore.getState());
       void loadOwnerCircles(generation);
       if (owner) void loadWallet(generation, owner);
@@ -363,14 +364,20 @@ export default function GroupExpansionScreen() {
         !circleId ||
         !product.purchasable ||
         submittingProductId ||
+        walletLoading ||
         isOffline
       ) {
         return;
       }
 
-      const signature = `${circleId}:${product.id}:${product.price}:${product.seats}`;
       const owner = captureAuthSessionIdentity(useAuthStore.getState());
       if (!owner) return;
+      const generation = focusGenerationRef.current;
+      const canCommit = () =>
+        generation === focusGenerationRef.current &&
+        selectedCircleIdRef.current === circleId &&
+        isAuthSessionIdentityCurrent(owner, useAuthStore.getState());
+      const signature = `${circleId}:${product.id}:${product.price}:${product.seats}`;
       const walletVersion = useWalletRealtimeStore.getState().version;
       setSubmittingProductId(product.id);
       try {
@@ -382,8 +389,7 @@ export default function GroupExpansionScreen() {
             idempotencyKey: getIntentKey(signature),
           },
         );
-        if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState()))
-          return;
+        if (!canCommit()) return;
         pendingIntentRef.current = null;
         useWalletRealtimeStore
           .getState()
@@ -391,9 +397,8 @@ export default function GroupExpansionScreen() {
             walletVersion,
             result.walletBalanceAfter,
           );
-        await loadProducts(circleId, focusGenerationRef.current, owner);
-        if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState()))
-          return;
+        await loadProducts(circleId, generation, owner);
+        if (!canCommit()) return;
         Alert.alert(
           t('profile.groupExpansion.successTitle', {
             defaultValue: '扩容成功',
@@ -407,8 +412,7 @@ export default function GroupExpansionScreen() {
           }),
         );
       } catch (error) {
-        if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState()))
-          return;
+        if (!canCommit()) return;
         Alert.alert(
           t('common.errorOccurred', { defaultValue: '操作失败' }),
           getApiErrorMessage(
@@ -418,12 +422,21 @@ export default function GroupExpansionScreen() {
             }),
           ),
         );
-        void loadProducts(circleId, focusGenerationRef.current, owner);
+        void loadProducts(circleId, generation, owner);
       } finally {
-        setSubmittingProductId(null);
+        if (canCommit()) {
+          setSubmittingProductId(null);
+        }
       }
     },
-    [getIntentKey, isOffline, loadProducts, submittingProductId, t],
+    [
+      getIntentKey,
+      isOffline,
+      loadProducts,
+      submittingProductId,
+      t,
+      walletLoading,
+    ],
   );
 
   const confirmPurchase = useCallback(
@@ -431,7 +444,7 @@ export default function GroupExpansionScreen() {
       const circle = circles.find(
         (item) => item.id === selectedCircleIdRef.current,
       );
-      if (!circle || !product.purchasable || isOffline) return;
+      if (!circle || !product.purchasable || isOffline || walletLoading) return;
       Alert.alert(
         t('profile.groupExpansion.confirmTitle', {
           defaultValue: '确认购买扩容卡',
@@ -457,7 +470,7 @@ export default function GroupExpansionScreen() {
         ],
       );
     },
-    [circles, isOffline, performPurchase, t],
+    [circles, isOffline, performPurchase, t, walletLoading],
   );
 
   const selectedCircle = circles.find(
@@ -552,9 +565,7 @@ export default function GroupExpansionScreen() {
 
         {walletError ? (
           <View>
-            <Text style={[Typography.caption, d.errorText]}>
-              {walletError}
-            </Text>
+            <Text style={[Typography.caption, d.errorText]}>{walletError}</Text>
             <Pressable
               style={s.retryButton}
               accessibilityRole="button"
@@ -759,6 +770,7 @@ export default function GroupExpansionScreen() {
                   const disabled =
                     !product.purchasable ||
                     isOffline ||
+                    walletLoading ||
                     submittingProductId !== null;
                   return (
                     <View key={product.id} style={[s.productCard, d.surface]}>

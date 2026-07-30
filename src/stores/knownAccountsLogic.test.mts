@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   upsertKnownAccount,
   removeKnownAccount,
+  migrateKnownAccountsPersist,
   type KnownAccount,
 } from './knownAccountsLogic.ts';
 
@@ -66,4 +67,53 @@ test('remove is a no-op when the userId is absent', () => {
     result.map((item) => item.user.id),
     ['a'],
   );
+});
+
+test('migrates legacy membership frame snapshots for offline account switching', () => {
+  const migrated = migrateKnownAccountsPersist({
+    accounts: [
+      {
+        ...makeAccount('diamond'),
+        user: {
+          ...makeAccount('diamond').user,
+          vipLevel: 3,
+          avatarFrame:
+            'https://cdn.example.com/frame.png?X-Amz-Signature=secret',
+        },
+      },
+      {
+        ...makeAccount('super'),
+        user: {
+          ...makeAccount('super').user,
+          vipLevel: 4,
+        },
+      },
+    ],
+  });
+  const accounts = migrated.accounts as KnownAccount[];
+
+  assert.equal(
+    accounts[0].user.avatarFrameAppearance?.key,
+    'membership-diamond',
+  );
+  assert.equal(accounts[1].user.avatarFrameAppearance?.key, 'membership-super');
+  assert.equal(accounts[0].user.avatarFrame, null);
+});
+
+test('preserves an explicit unequipped frame in known-account snapshots', () => {
+  const migrated = migrateKnownAccountsPersist({
+    accounts: [
+      {
+        ...makeAccount('diamond'),
+        user: {
+          ...makeAccount('diamond').user,
+          vipLevel: 3,
+          avatarFrameAppearance: null,
+        },
+      },
+    ],
+  });
+  const accounts = migrated.accounts as KnownAccount[];
+
+  assert.equal(accounts[0].user.avatarFrameAppearance, null);
 });

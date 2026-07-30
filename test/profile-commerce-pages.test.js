@@ -574,3 +574,29 @@ test('MemberCenterScreen bounds retries and exits the initial loading state on f
     /programStatus\?\.enabled \?\? \(programError \? false : null\)/,
   );
 });
+
+test('GroupExpansionScreen blocks purchases during wallet load and fences completion to its focus cycle', () => {
+  const src = read('src/features/profile/screens/GroupExpansionScreen.tsx');
+
+  assert.match(src, /submittingProductId \|\|\s*walletLoading \|\|/);
+  assert.match(
+    src,
+    /const generation = focusGenerationRef\.current;[\s\S]*?const canCommit = \(\) =>[\s\S]*?generation === focusGenerationRef\.current/,
+  );
+  assert.match(src, /loadProducts\(circleId,\s*generation,\s*owner\)/);
+  assert.match(
+    src,
+    /const disabled =[\s\S]*?!product\.purchasable[\s\S]*?walletLoading/,
+  );
+});
+
+test('FancyNumberScreen applies a successful number locally before best-effort profile refresh', () => {
+  const src = read('src/features/profile/screens/FancyNumberScreen.tsx');
+  const setUserIndex = src.indexOf('authState.setUser(nextUser)');
+  const refreshIndex = src.indexOf('await refreshAuthUser(owner)');
+
+  assert.match(src, /accountId:\s*result\.accountId/);
+  assert.match(src, /useKnownAccountsStore\.getState\(\)\.upsertAccount/);
+  assert.ok(setUserIndex >= 0);
+  assert.ok(refreshIndex > setUserIndex);
+});

@@ -55,12 +55,12 @@ function isPositiveInteger(value: unknown): value is number {
   return Number.isInteger(value) && typeof value === 'number' && value > 0;
 }
 
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && isFiniteNonNegativeNumber(value);
+}
+
 function isValidDateString(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    value.trim().length > 0 &&
-    Number.isFinite(Date.parse(value))
-  );
+  return typeof value === 'string' && value.trim().length > 0 && Number.isFinite(Date.parse(value));
 }
 
 function isNullableValidDateString(value: unknown): value is string | null {
@@ -72,12 +72,21 @@ function isFancyNumberItem(value: unknown): value is FancyNumberItem {
 }
 
 function isFancyNumberList(value: unknown): value is FancyNumberList {
+  if (!isPlainObject(value) || !Array.isArray(value.items)) return false;
+  const itemIds = new Set<string>();
+  const itemValues = new Set<string>();
+  const validItems = value.items.every((item) => {
+    if (!isFancyNumberItem(item) || itemIds.has(item.id) || itemValues.has(item.value)) {
+      return false;
+    }
+    itemIds.add(item.id);
+    itemValues.add(item.value);
+    return true;
+  });
   return (
-    isPlainObject(value) &&
-    Array.isArray(value.items) &&
-    value.items.every(isFancyNumberItem) &&
+    validItems &&
     isNullableString(value.nextCursor) &&
-    isFiniteNonNegativeNumber(value.unitPrice) &&
+    isNonNegativeInteger(value.unitPrice) &&
     isPositiveInteger(value.minMonths) &&
     isPositiveInteger(value.maxMonths) &&
     value.minMonths <= 12 &&
@@ -97,13 +106,11 @@ function isMyFancyNumber(value: unknown): value is MyFancyNumber {
     isNullableValidDateString(value.expiresAt) &&
     typeof value.permanent === 'boolean' &&
     typeof value.renewable === 'boolean' &&
-    isFiniteNonNegativeNumber(value.unitPrice) &&
+    isNonNegativeInteger(value.unitPrice) &&
     (!value.permanent || value.renewable === false) &&
     (!value.active ||
       (isNonEmptyString(value.accountId) &&
-        (value.permanent
-          ? value.expiresAt === null
-          : isValidDateString(value.expiresAt))))
+        (value.permanent ? value.expiresAt === null : isValidDateString(value.expiresAt))))
   );
 }
 
@@ -118,25 +125,19 @@ function isPurchaseResult(value: unknown): value is FancyNumberPurchaseResult {
     (value.permanent
       ? value.expiresAt === null && value.months === null
       : isValidDateString(value.expiresAt) && isPositiveInteger(value.months)) &&
-    isFiniteNonNegativeNumber(value.unitPrice) &&
-    isFiniteNonNegativeNumber(value.totalPrice) &&
-    isFiniteNonNegativeNumber(value.walletBalanceAfter)
+    isNonNegativeInteger(value.unitPrice) &&
+    isNonNegativeInteger(value.totalPrice) &&
+    isNonNegativeInteger(value.walletBalanceAfter)
   );
 }
 
-function isFancyNumberAvailability(
-  value: unknown,
-): value is FancyNumberAvailability {
+function isFancyNumberAvailability(value: unknown): value is FancyNumberAvailability {
   return (
     isPlainObject(value) &&
     isNonEmptyString(value.value) &&
     typeof value.available === 'boolean' &&
-    (value.reason === null ||
-      value.reason === 'TAKEN' ||
-      value.reason === 'RESERVED') &&
-    (value.available
-      ? value.reason === null
-      : value.reason === 'TAKEN' || value.reason === 'RESERVED')
+    (value.reason === null || value.reason === 'TAKEN' || value.reason === 'RESERVED') &&
+    (value.available ? value.reason === null : value.reason === 'TAKEN' || value.reason === 'RESERVED')
   );
 }
 
@@ -162,8 +163,7 @@ function expectPurchaseIntent(
     result.months !== expected.months ||
     result.unitPrice !== expected.unitPrice ||
     result.totalPrice !== expected.totalPrice ||
-    (expected.accountId !== undefined &&
-      result.accountId !== expected.accountId)
+    (expected.accountId !== undefined && result.accountId !== expected.accountId)
   ) {
     throw new Error(invalidResponseMessage());
   }
@@ -212,18 +212,10 @@ export async function fetchMyFancyNumber(): Promise<MyFancyNumber> {
   return expectShape(raw, isMyFancyNumber, invalidResponseMessage());
 }
 
-export async function checkFancyNumberAvailability(
-  value: string,
-): Promise<FancyNumberAvailability> {
+export async function checkFancyNumberAvailability(value: string): Promise<FancyNumberAvailability> {
   const normalized = normalizeCustomValue(value);
-  const raw = await apiClient<unknown>(
-    `/mall/fancy-numbers/availability?value=${encodeURIComponent(normalized)}`,
-  );
-  const result = expectShape(
-    raw,
-    isFancyNumberAvailability,
-    invalidResponseMessage(),
-  );
+  const raw = await apiClient<unknown>(`/mall/fancy-numbers/availability?value=${encodeURIComponent(normalized)}`);
+  const result = expectShape(raw, isFancyNumberAvailability, invalidResponseMessage());
   if (result.value !== normalized) {
     throw new Error(invalidResponseMessage());
   }
@@ -248,8 +240,7 @@ export async function purchaseFancyNumber(
     permanent: payload.months === undefined,
     months: payload.months ?? null,
     unitPrice: payload.expectedUnitPrice,
-    totalPrice:
-      payload.months === undefined ? 0 : payload.months * payload.expectedUnitPrice,
+    totalPrice: payload.months === undefined ? 0 : payload.months * payload.expectedUnitPrice,
   });
 }
 
@@ -309,8 +300,7 @@ export async function purchaseCustomFancyNumber(
       value: normalized,
     },
     headers: {
-      'Idempotency-Key':
-        options?.idempotencyKey ?? generateIdempotencyKey(),
+      'Idempotency-Key': options?.idempotencyKey ?? generateIdempotencyKey(),
     },
   });
   return expectPurchaseIntent(raw, {
@@ -318,8 +308,7 @@ export async function purchaseCustomFancyNumber(
     months: payload.months ?? null,
     accountId: normalized,
     unitPrice: payload.expectedUnitPrice,
-    totalPrice:
-      payload.months === undefined ? 0 : payload.months * payload.expectedUnitPrice,
+    totalPrice: payload.months === undefined ? 0 : payload.months * payload.expectedUnitPrice,
   });
 }
 
@@ -333,8 +322,7 @@ export async function switchPermanentToCustomFancyNumber(
     method: 'POST',
     body: { value: normalized, expectedUnitPrice: payload.expectedUnitPrice },
     headers: {
-      'Idempotency-Key':
-        options?.idempotencyKey ?? generateIdempotencyKey(),
+      'Idempotency-Key': options?.idempotencyKey ?? generateIdempotencyKey(),
     },
   });
   return expectPurchaseIntent(raw, {

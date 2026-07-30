@@ -387,6 +387,29 @@ export default function FancyNumberScreen() {
       setSelectedRecommendation(null);
       setCustomValue('');
       setAvailability({ status: 'idle' });
+      const authState = useAuthStore.getState();
+      if (isAuthSessionIdentityCurrent(owner, authState) && authState.user) {
+        const nextUser = {
+          ...authState.user,
+          accountId: result.accountId,
+          fancyNumber: true,
+        };
+        authState.setUser(nextUser);
+        const current = useAuthStore.getState();
+        if (
+          isAuthSessionIdentityCurrent(owner, current) &&
+          current.accessToken &&
+          current.refreshToken
+        ) {
+          useKnownAccountsStore.getState().upsertAccount({
+            user: nextUser,
+            accessToken: current.accessToken,
+            refreshToken: current.refreshToken,
+            imToken: current.imToken,
+            updatedAt: Date.now(),
+          });
+        }
+      }
       await refreshAuthUser(owner).catch(() => undefined);
       if (!isAuthSessionIdentityCurrent(owner, useAuthStore.getState())) return;
       if (action === 'switch') {

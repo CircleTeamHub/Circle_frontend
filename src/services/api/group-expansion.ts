@@ -1,12 +1,7 @@
 import i18n from '@/i18n';
 import { apiClient } from '@/services/api/client';
 import { generateIdempotencyKey } from '@/utils/idempotency-key';
-import {
-  expectShape,
-  isFiniteNonNegativeNumber,
-  isNonEmptyString,
-  isPlainObject,
-} from '@/utils/validate';
+import { expectShape, isFiniteNonNegativeNumber, isNonEmptyString, isPlainObject } from '@/utils/validate';
 
 export type GroupExpansionProduct = {
   id: string;
@@ -49,18 +44,10 @@ function isPositiveInteger(value: unknown): value is number {
 }
 
 function isNonNegativeInteger(value: unknown): value is number {
-  return (
-    typeof value === 'number' &&
-    Number.isInteger(value) &&
-    isFiniteNonNegativeNumber(value)
-  );
+  return typeof value === 'number' && Number.isInteger(value) && isFiniteNonNegativeNumber(value);
 }
 
-function isProduct(
-  value: unknown,
-  currentMaxMembers: number,
-  hardLimit: number,
-): value is GroupExpansionProduct {
+function isProduct(value: unknown, currentMaxMembers: number, hardLimit: number): value is GroupExpansionProduct {
   return (
     isPlainObject(value) &&
     isNonEmptyString(value.id) &&
@@ -68,8 +55,7 @@ function isProduct(
     isPositiveInteger(value.seats) &&
     isPositiveInteger(value.price) &&
     typeof value.purchasable === 'boolean' &&
-    (value.unavailableReason === null ||
-      value.unavailableReason === 'MAX_CAPACITY_EXCEEDED') &&
+    (value.unavailableReason === null || value.unavailableReason === 'MAX_CAPACITY_EXCEEDED') &&
     isPositiveInteger(value.resultingMaxMembers) &&
     (value.purchasable
       ? value.unavailableReason === null &&
@@ -81,9 +67,7 @@ function isProduct(
   );
 }
 
-function isProductsResult(
-  value: unknown,
-): value is GroupExpansionProductsResult {
+function isProductsResult(value: unknown): value is GroupExpansionProductsResult {
   if (
     !isPlainObject(value) ||
     !isNonEmptyString(value.circleId) ||
@@ -98,17 +82,20 @@ function isProductsResult(
 
   const hardLimit = value.hardLimit;
   const currentMaxMembers = value.currentMaxMembers;
+  const productIds = new Set<string>();
   return (
     currentMaxMembers <= hardLimit &&
-    value.products.every((product) =>
-      isProduct(product, currentMaxMembers, hardLimit),
-    )
+    value.products.every((product) => {
+      if (!isProduct(product, currentMaxMembers, hardLimit) || productIds.has(product.id)) {
+        return false;
+      }
+      productIds.add(product.id);
+      return true;
+    })
   );
 }
 
-function isPurchaseResult(
-  value: unknown,
-): value is GroupExpansionPurchaseResult {
+function isPurchaseResult(value: unknown): value is GroupExpansionPurchaseResult {
   return (
     isPlainObject(value) &&
     isNonEmptyString(value.orderId) &&
@@ -130,12 +117,8 @@ function invalidResponseMessage(): string {
   });
 }
 
-export async function fetchGroupExpansionProducts(
-  circleId: string,
-): Promise<GroupExpansionProductsResult> {
-  const raw = await apiClient<unknown>(
-    `/group-expansions/products?circleId=${encodeURIComponent(circleId)}`,
-  );
+export async function fetchGroupExpansionProducts(circleId: string): Promise<GroupExpansionProductsResult> {
+  const raw = await apiClient<unknown>(`/group-expansions/products?circleId=${encodeURIComponent(circleId)}`);
   const result = expectShape(raw, isProductsResult, invalidResponseMessage());
   if (result.circleId !== circleId) {
     throw new Error(invalidResponseMessage());

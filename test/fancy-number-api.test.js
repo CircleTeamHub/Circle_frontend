@@ -36,14 +36,10 @@ function loadFancyNumberModule(apiClientSpy, generatedKey = 'generated-key') {
             if (!predicate(value)) throw new Error(message);
             return value;
           },
-          isFiniteNonNegativeNumber: (value) =>
-            typeof value === 'number' && Number.isFinite(value) && value >= 0,
-          isFiniteNumber: (value) =>
-            typeof value === 'number' && Number.isFinite(value),
-          isNonEmptyString: (value) =>
-            typeof value === 'string' && value.trim().length > 0,
-          isPlainObject: (value) =>
-            value !== null && typeof value === 'object' && !Array.isArray(value),
+          isFiniteNonNegativeNumber: (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0,
+          isFiniteNumber: (value) => typeof value === 'number' && Number.isFinite(value),
+          isNonEmptyString: (value) => typeof value === 'string' && value.trim().length > 0,
+          isPlainObject: (value) => value !== null && typeof value === 'object' && !Array.isArray(value),
         },
       };
       return specifier in stubs ? stubs[specifier] : require(specifier);
@@ -97,12 +93,29 @@ test('fancy-number listing rejects month ranges outside the supported 1 to 12 mo
         ...listResponse,
         ...range,
       }));
-      await assert.rejects(
-        api.fetchFancyNumbers(),
-        /服务返回了无效数据/,
-      );
+      await assert.rejects(api.fetchFancyNumbers(), /服务返回了无效数据/);
     });
   }
+});
+
+test('fancy-number reads reject fractional unit prices that mutations cannot submit', async () => {
+  const catalogApi = loadFancyNumberModule(async () => ({
+    ...listResponse,
+    unitPrice: 100.5,
+  }));
+  await assert.rejects(catalogApi.fetchFancyNumbers(), /服务返回了无效数据/);
+
+  const mineApi = loadFancyNumberModule(async () => ({
+    active: true,
+    accountId: 'AB12C3',
+    restoreAccountId: 'USER01',
+    startedAt: '2026-07-29T00:00:00.000Z',
+    expiresAt: '2026-08-29T00:00:00.000Z',
+    permanent: false,
+    renewable: true,
+    unitPrice: 100.5,
+  }));
+  await assert.rejects(mineApi.fetchMyFancyNumber(), /服务返回了无效数据/);
 });
 
 test('custom fancy-number availability normalizes input and safely encodes it', async () => {
@@ -119,25 +132,13 @@ test('custom fancy-number availability normalizes input and safely encodes it', 
 
 test('custom fancy-number availability rejects contradictory result metadata', async (t) => {
   for (const [name, response] of [
-    [
-      'available result with a rejection reason',
-      { value: 'AB12C3', available: true, reason: 'TAKEN' },
-    ],
-    [
-      'unavailable result without a rejection reason',
-      { value: 'AB12C3', available: false, reason: null },
-    ],
-    [
-      'result for a different requested value',
-      { value: 'ZZ99Z9', available: true, reason: null },
-    ],
+    ['available result with a rejection reason', { value: 'AB12C3', available: true, reason: 'TAKEN' }],
+    ['unavailable result without a rejection reason', { value: 'AB12C3', available: false, reason: null }],
+    ['result for a different requested value', { value: 'ZZ99Z9', available: true, reason: null }],
   ]) {
     await t.test(name, async () => {
       const api = loadFancyNumberModule(async () => response);
-      await assert.rejects(
-        api.checkFancyNumberAvailability('AB12C3'),
-        /服务返回了无效数据/,
-      );
+      await assert.rejects(api.checkFancyNumberAvailability('AB12C3'), /服务返回了无效数据/);
     });
   }
 });
@@ -171,8 +172,7 @@ test('fancy-number mutations reject results for a different intent', async (t) =
     ],
     [
       'renewal returns a different month count',
-      (api) =>
-        api.renewFancyNumber({ months: 2, expectedUnitPrice: 100 }),
+      (api) => api.renewFancyNumber({ months: 2, expectedUnitPrice: 100 }),
       { ...purchaseResponse, months: 1 },
     ],
     [
@@ -218,10 +218,7 @@ test('fancy-number purchase, renewal, and permanent switching attach idempotency
     months: 3,
     expectedUnitPrice: 100,
   });
-  await api.renewFancyNumber(
-    { months: 2, expectedUnitPrice: 100 },
-    { idempotencyKey: 'retry-same-request' },
-  );
+  await api.renewFancyNumber({ months: 2, expectedUnitPrice: 100 }, { idempotencyKey: 'retry-same-request' });
   await api.switchPermanentFancyNumber(
     'replacement-id',
     { expectedUnitPrice: 100 },
@@ -277,11 +274,7 @@ test('fancy-number mutations reject charges that differ from the displayed quote
           expectedUnitPrice: 100,
         }),
     ],
-    [
-      'renewal',
-      (api) =>
-        api.renewFancyNumber({ months: 1, expectedUnitPrice: 100 }),
-    ],
+    ['renewal', (api) => api.renewFancyNumber({ months: 1, expectedUnitPrice: 100 })],
     [
       'inventory switch',
       (api) =>
@@ -301,8 +294,7 @@ test('fancy-number mutations reject charges that differ from the displayed quote
     await t.test(name, async () => {
       const api = loadFancyNumberModule(async () => ({
         ...purchaseResponse,
-        expiresAt:
-          name.includes('switch') ? null : purchaseResponse.expiresAt,
+        expiresAt: name.includes('switch') ? null : purchaseResponse.expiresAt,
         permanent: name.includes('switch'),
         months: name.includes('switch') ? null : purchaseResponse.months,
         unitPrice: 200,
@@ -320,10 +312,7 @@ test('fancy-number mutations reject a missing displayed quote before sending', a
     return purchaseResponse;
   });
 
-  await assert.rejects(
-    api.purchaseFancyNumber('number-id', { months: 1 }),
-    /服务返回了无效数据/,
-  );
+  await assert.rejects(api.purchaseFancyNumber('number-id', { months: 1 }), /服务返回了无效数据/);
   assert.equal(calls, 0);
 });
 
@@ -339,10 +328,7 @@ test('fancy-number API rejects malformed expiry timestamps', async () => {
     unitPrice: 100,
   }));
 
-  await assert.rejects(
-    api.fetchMyFancyNumber(),
-    /服务返回了无效数据/,
-  );
+  await assert.rejects(api.fetchMyFancyNumber(), /服务返回了无效数据/);
 });
 
 test('fancy-number API rejects a renewable permanent-number state', async () => {
@@ -357,10 +343,7 @@ test('fancy-number API rejects a renewable permanent-number state', async () => 
     unitPrice: 100,
   }));
 
-  await assert.rejects(
-    api.fetchMyFancyNumber(),
-    /服务返回了无效数据/,
-  );
+  await assert.rejects(api.fetchMyFancyNumber(), /服务返回了无效数据/);
 });
 
 test('fancy-number API requires an expiry for a paid active lease', async () => {

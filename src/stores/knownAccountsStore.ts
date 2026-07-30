@@ -18,6 +18,8 @@ import {
 import {
   upsertKnownAccount,
   removeKnownAccount,
+  migrateKnownAccountsPersist,
+  KNOWN_ACCOUNTS_PERSIST_VERSION,
   type KnownAccount,
 } from '@/stores/knownAccountsLogic';
 import { sanitizeUserForPersist } from '@/stores/persisted-user';
@@ -54,6 +56,11 @@ export const useKnownAccountsStore = create<KnownAccountsState>()(
     }),
     {
       name: 'circle-im-known-accounts',
+      version: KNOWN_ACCOUNTS_PERSIST_VERSION,
+      migrate: (persistedState) =>
+        migrateKnownAccountsPersist(
+          persistedState,
+        ) as unknown as KnownAccountsState,
       storage: createJSONStorage(() => secureAuthStorage),
       partialize: (state) => ({
         accounts: state.accounts.map((account) => ({

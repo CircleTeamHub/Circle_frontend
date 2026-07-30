@@ -168,6 +168,27 @@ test('group-expansion API rejects malformed server payloads', async () => {
   );
 });
 
+test('group-expansion catalog rejects duplicate product ids', async () => {
+  const api = loadGroupExpansionModule(async () => ({
+    ...productResponse,
+    products: [
+      productResponse.products[0],
+      {
+        ...productResponse.products[0],
+        name: '冲突扩容卡',
+        seats: 200,
+        price: 200,
+        resultingMaxMembers: 300,
+      },
+    ],
+  }));
+
+  await assert.rejects(
+    api.fetchGroupExpansionProducts(productResponse.circleId),
+    /服务返回了无效数据/,
+  );
+});
+
 test('group-expansion catalog rejects contradictory product availability', async (t) => {
   for (const [name, product] of [
     [
