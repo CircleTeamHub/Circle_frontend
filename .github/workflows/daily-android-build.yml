@@ -1,0 +1,229 @@
+# Daily release-like Android build.
+#
+# `ci.yml` stops at typecheck / lint / test / `expo export --platform web` and
+# never touches the native Android project. The APK path — `expo prebuild`
+# regenerating android/ from app.config.js and its config plugins, then R8
+# minify plus resource shrinking inside `assembleRelease` — runs for the first
+# time when somebody pushes a `v*` tag. Because /android is gitignored there is
+# no committed native project to review either, so a bumped native dependency,
+# a broken config plugin, or an AGP/Gradle incompatibility stays invisible
+# until release day, when the only remedy is to yank the tag.
+#
+# This workflow runs that exact path against main every night. It publishes
+# nothing: no artifact upload, no GitHub release, no R2 object.
+#
+# Signing: plugins/with-android-release-signing.js fails the Gradle
+# configuration phase whenever a "release" task runs without signing material,
+# so a genuinely unsigned validation build is not possible without weakening
+# that gate. Instead the APK is signed with a throwaway key generated on the
+# runner and discarded with it — production signing material is never decoded
+# here. Drift in the real credentials is covered separately by the
+# `signing_config` job, which only reads their presence and fingerprint shape.
+
+name: Daily Android Build
+
+on:
+  schedule:
+    # 02:00 Asia/Shanghai.
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: daily-android-build
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  native_build:
+    name: Release-like Android build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5.5.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Android project
+        run: npx expo prebuild --platform android --clean --no-install
+
+      # 一次性签名密钥：生成在 runner 上、随 runner 一起消失，只为满足
+      # with-android-release-signing.js 的 fail-closed 门禁，好让 assembleRelease
+      # 能真正跑到 R8 / resource shrinking / 打包签名这几步。生产 keystore 不在
+      # 这条流水线里解码——每日构建的产物任何情况下都不该是可分发的。
+      - name: Create throwaway signing key
+        run: |
+          set -euo pipefail
+          signing_dir="$RUNNER_TEMP/daily-signing"
+          mkdir -p "$signing_dir"
+          keystore_path="$signing_dir/daily-validation.p12"
+          keystore_password="$(openssl rand -hex 32)"
+          echo "::add-mask::$keystore_password"
+          keytool -genkeypair -noprompt \
+            -keystore "$keystore_path" \
+            -storetype PKCS12 \
+            -storepass "$keystore_password" \
+            -keypass "$keystore_password" \
+            -alias daily-validation \
+            -keyalg RSA -keysize 2048 -validity 30 \
+            -dname "CN=WindNote Daily Validation, OU=CI, O=CircleTeamHub, C=CN"
+          chmod 600 "$keystore_path"
+          {
+            echo "ANDROID_KEYSTORE_PATH=$keystore_path"
+            echo "ANDROID_KEYSTORE_PASSWORD=$keystore_password"
+            echo "ANDROID_KEY_ALIAS=daily-validation"
+            echo "ANDROID_KEY_PASSWORD=$keystore_password"
+          } >> "$GITHUB_ENV"
+
+      - name: Build release-like APK
+        working-directory: android
+        env:
+          EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
+          EXPO_PUBLIC_OPENIM_API_URL: ${{ vars.EXPO_PUBLIC_OPENIM_API_URL }}
+          EXPO_PUBLIC_OPENIM_WS_URL: ${{ vars.EXPO_PUBLIC_OPENIM_WS_URL }}
+          EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: ${{ vars.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID }}
+          # 和 android-release.yml 转发同一组客服账号变量：support-categories.ts 在
+          # 编译期读取它们，缺了就走 imAdmin 回落分支。每日构建要跑的是发布那条
+          # 代码路径，不是一条只有 CI 才会走的分支。
+          EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_ACCOUNT_ID }}
+          EXPO_PUBLIC_SUPPORT_RECHARGE_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_RECHARGE_ID }}
+          EXPO_PUBLIC_SUPPORT_ISSUE_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_ISSUE_ID }}
+          EXPO_PUBLIC_SUPPORT_DISPUTE_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_DISPUTE_ID }}
+          EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID }}
+          SENTRY_DISABLE_AUTO_UPLOAD: "true"
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
+
+      # app.json 里 enableMinifyInReleaseBuilds / enableShrinkResourcesInReleaseBuilds
+      # 都是 true，所以 release 构建必须产出 R8 mapping。缺了它说明 minify 没跑：
+      # 包会变大、代码不再被混淆，而 assembleRelease 依然是绿的——这正是「静默失效」，
+      # 不显式断言就永远不会有人发现。
+      - name: Verify release-like output
+        run: |
+          set -euo pipefail
+          apk_path="android/app/build/outputs/apk/release/app-release.apk"
+          mapping_path="android/app/build/outputs/mapping/release/mapping.txt"
+
+          if [ ! -f "$apk_path" ]; then
+            echo "::error::$apk_path not found — assembleRelease produced no APK"
+            exit 1
+          fi
+          if [ ! -s "$mapping_path" ]; then
+            echo "::error::$mapping_path missing or empty — R8 minify did not run despite enableMinifyInReleaseBuilds"
+            exit 1
+          fi
+
+          apk_bytes="$(wc -c < "$apk_path" | tr -d '[:space:]')"
+          {
+            echo "## Daily release-like Android build"
+            echo
+            echo "| Output | Value |"
+            echo "| --- | ---: |"
+            echo "| APK size | $((apk_bytes / 1024 / 1024)) MiB ($apk_bytes bytes) |"
+            echo "| R8 mapping | $(wc -l < "$mapping_path" | tr -d '[:space:]') lines |"
+            echo
+            echo "Validation-only build signed with a throwaway key. Not distributable."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Discard throwaway signing key
+        if: ${{ always() }}
+        run: rm -rf "$RUNNER_TEMP/daily-signing"
+
+  # 独立 job：密钥漂移（secret 被轮换掉、被删、指纹改了）和构建失败是两类问题，
+  # 串在一条 job 里会互相掩盖——签名校验先挂就永远看不到构建结果。
+  signing_config:
+    name: Production signing configuration
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+
+      # validate-android-release.js signing 只看环境变量是否非空、指纹是否是合法的
+      # SHA-256——不解码 keystore、不落盘。与 android-release.yml 同源，所以「tag 当天
+      # 才发现 secret 没了」这种情况会提前一天以上暴露。
+      - name: Validate production signing configuration
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_CERT_SHA256: ${{ vars.ANDROID_CERT_SHA256 }}
+        run: node .github/scripts/validate-android-release.js signing
+
+  # 只在失败时响，和 ci.yml 的通知契约一致：定时任务每天报一次成功，很快就会被当成
+  # 背景噪音划掉，真出事那条也一起被划掉。
+  notify:
+    name: Notify Discord
+    runs-on: ubuntu-latest
+    needs:
+      - native_build
+      - signing_config
+    if: ${{ always() && (contains(join(needs.*.result, ','), 'failure') || contains(join(needs.*.result, ','), 'cancelled')) }}
+    timeout-minutes: 5
+    env:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+    steps:
+      - name: Send Discord Notification
+        if: ${{ env.DISCORD_WEBHOOK_URL != '' }}
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          node <<'NODE' > payload.json
+          const needs = JSON.parse(process.env.NEEDS_JSON);
+          const failedJobs = Object.entries(needs)
+            .filter(([, job]) => ['failure', 'cancelled'].includes(job.result))
+            .map(([name, job]) => `${name}: ${job.result}`);
+
+          const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+          const shortSha = process.env.GITHUB_SHA.slice(0, 7);
+
+          const payload = {
+            username: 'GitHub Actions',
+            content: [
+              `:rotating_light: **Daily Android build ${failedJobs.some((job) => job.endsWith('cancelled')) ? 'cancelled' : 'failed'}**`,
+              `**Repository:** ${process.env.GITHUB_REPOSITORY}`,
+              `**Ref:** ${process.env.GITHUB_REF_NAME}`,
+              `**Commit:** ${shortSha}`,
+              `**Jobs:** ${failedJobs.join(', ')}`,
+              `**Run:** ${runUrl}`,
+              'The release-only Android path broke before anyone tagged. Fix on main, do not push a `v*` tag until this is green.',
+            ].join('\n'),
+          };
+
+          process.stdout.write(JSON.stringify(payload));
+          NODE
+
+          curl --fail-with-body \
+            -H 'Content-Type: application/json' \
+            -d @payload.json \
+            "$DISCORD_WEBHOOK_URL"
