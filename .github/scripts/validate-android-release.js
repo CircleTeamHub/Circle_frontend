@@ -75,11 +75,34 @@ function validateSupportAccounts(errors, env) {
   }
 }
 
-function validateReleaseMetadata({ env, app }) {
+// 会被编译进 APK 的那组变量 —— 与 tag / 版本号无关，所以不需要 RELEASE_TAG 就能校验。
+// 单独拆出来是为了让每日构建复用同一份合同：它转发的是同一组 repository variables，
+// 却没有 tag。少了这道校验，删掉或写错一个变量只会让构建静默编译 imAdmin 回落分支，
+// 而 assembleRelease 依然是绿的。
+function validateBuildEnv({ env }) {
   const errors = [];
 
   requireValues(errors, env, METADATA_ENV);
   validateSupportAccounts(errors, env);
+  validateUrl(errors, 'EXPO_PUBLIC_API_URL', env.EXPO_PUBLIC_API_URL, 'https:');
+  validateUrl(
+    errors,
+    'EXPO_PUBLIC_OPENIM_API_URL',
+    env.EXPO_PUBLIC_OPENIM_API_URL,
+    'https:',
+  );
+  validateUrl(
+    errors,
+    'EXPO_PUBLIC_OPENIM_WS_URL',
+    env.EXPO_PUBLIC_OPENIM_WS_URL,
+    'wss:',
+  );
+
+  return errors;
+}
+
+function validateReleaseMetadata({ env, app }) {
+  const errors = validateBuildEnv({ env });
 
   const match = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(
     env.RELEASE_TAG ?? '',
@@ -101,20 +124,6 @@ function validateReleaseMetadata({ env, app }) {
       );
     }
   }
-
-  validateUrl(errors, 'EXPO_PUBLIC_API_URL', env.EXPO_PUBLIC_API_URL, 'https:');
-  validateUrl(
-    errors,
-    'EXPO_PUBLIC_OPENIM_API_URL',
-    env.EXPO_PUBLIC_OPENIM_API_URL,
-    'https:',
-  );
-  validateUrl(
-    errors,
-    'EXPO_PUBLIC_OPENIM_WS_URL',
-    env.EXPO_PUBLIC_OPENIM_WS_URL,
-    'wss:',
-  );
 
   return errors;
 }
@@ -187,6 +196,10 @@ function main() {
       case 'metadata':
         errors = validateReleaseMetadata({ env: process.env, app: readApp() });
         break;
+      // 每日构建用：只校验会编译进包的变量，不要求 RELEASE_TAG。
+      case 'build-env':
+        errors = validateBuildEnv({ env: process.env });
+        break;
       case 'signing':
         errors = validateSigningConfig({ env: process.env });
         break;
@@ -217,6 +230,7 @@ if (require.main === module) main();
 
 module.exports = {
   expectedVersionCode,
+  validateBuildEnv,
   validateDistributionApproval,
   validateReleaseMetadata,
   validateSigningConfig,

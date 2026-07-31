@@ -75,11 +75,13 @@ The decision must address notice, source-offer, attribution, modification-disclo
 
 ## Daily pre-release validation
 
-`.github/workflows/daily-android-build.yml` runs the native release path against `main` every night at 02:00 Asia/Shanghai, and on demand via `workflow_dispatch`.
+`.github/workflows/daily-android-build.yml` runs the native release path against `main` every night at 02:00 Asia/Shanghai, and on demand via `workflow_dispatch` — a manual run builds whichever ref you select, so a branch can be validated before it lands.
 
 It exists because nothing else exercises that path before a tag. `ci.yml` stops at typecheck, lint, tests, and `expo export --platform web`; `/android` is gitignored, so the native project only comes into existence when `expo prebuild` regenerates it from `app.config.js` and its config plugins. Without this workflow, a bumped native dependency, a broken config plugin, or an AGP/Gradle incompatibility first surfaces during a release, when the only remedy is to abandon the tag.
 
 The daily build publishes nothing. It uploads no artifact, creates no release, and writes nothing to R2. Its APK is signed with a throwaway key generated on the runner and deleted with it, because `plugins/with-android-release-signing.js` fails the Gradle configuration phase when signing material is absent — production signing material is never decoded by this workflow. A separate `signing_config` job runs `validate-android-release.js signing` so a rotated, deleted, or malformed signing credential surfaces here rather than during a release.
+
+Before building, it runs `validate-android-release.js build-env` — the same env contract the tag-time preflight enforces via `metadata`, minus the `RELEASE_TAG` checks. Without it a deleted or malformed repository variable would let the build compile the `imAdmin` support fallback with empty API URLs and still report success.
 
 The build fails when `assembleRelease` produces no APK, and when it produces no R8 mapping despite `enableMinifyInReleaseBuilds`; a release build that silently stops minifying would otherwise still report success. Failures and cancellations notify Discord; successes are silent by design, so the daily signal stays worth reading.
 

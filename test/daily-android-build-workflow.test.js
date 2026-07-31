@@ -78,7 +78,24 @@ test('daily Android build never decodes production signing material', () => {
   assert.match(keyStep, /openssl rand -hex 32/);
   assert.match(keyStep, /::add-mask::/);
   assert.match(keyStep, /ANDROID_KEYSTORE_PATH=\$keystore_path/);
-  assert.match(keyStep, /ANDROID_KEY_ALIAS=daily-validation/);
+
+  // 口令只走 step output、只注入构建那一步（和 android-release.yml 的作用域一致）。
+  // 写进 $GITHUB_ENV 会让它出现在后续每一步的环境里，没有任何必要。
+  assert.match(keyStep, /keystore_password=\$keystore_password" >> "\$GITHUB_OUTPUT/);
+  assert.doesNotMatch(keyStep, /ANDROID_KEYSTORE_PASSWORD=.*GITHUB_ENV/);
+  assert.doesNotMatch(keyStep, /ANDROID_KEY_PASSWORD/);
+
+  const buildStep = workflowStep(build, 'Build release-like APK');
+  for (const name of ['ANDROID_KEYSTORE_PASSWORD', 'ANDROID_KEY_PASSWORD']) {
+    assert.match(
+      buildStep,
+      new RegExp(
+        `${name}: \\$\\{\\{ steps\\.signing\\.outputs\\.keystore_password \\}\\}`,
+      ),
+      `${name} must be scoped to the build step`,
+    );
+  }
+  assert.match(buildStep, /ANDROID_KEY_ALIAS: daily-validation/);
 
   const cleanup = workflowStep(build, 'Discard throwaway signing key');
   assert.match(cleanup, /if: \$\{\{ always\(\) \}\}/);
@@ -131,11 +148,91 @@ test('daily Android build fails loudly instead of silently passing', () => {
 
   // 缺 APK 或缺 R8 mapping 都必须 exit 1。app.json 开着 minify/shrinkResources，
   // 没有 mapping 就意味着 minify 静默没跑——只看 gradle 退出码是发现不了的。
+  //
+  // 断言的是「这两个守卫各自 fail-closed」，不是 exit 1 的条数：后者会让新增第三个
+  // 守卫（明明是加强）把测试打红，测的是实现而不是契约。
+  for (const [what, guard] of [
+    ['missing APK', /if \[ ! -f "\$apk_path" \][\s\S]{0,200}?exit 1/],
+    ['missing R8 mapping', /if \[ ! -s "\$mapping_path" \][\s\S]{0,200}?exit 1/],
+  ]) {
+    assert.match(verify, guard, `${what} must fail the job`);
+  }
   assert.match(verify, /app-release\.apk/);
   assert.match(verify, /mapping\/release\/mapping\.txt/);
   assert.match(verify, /enableMinifyInReleaseBuilds/);
-  assert.equal((verify.match(/exit 1/g) || []).length, 2);
   assert.match(verify, /GITHUB_STEP_SUMMARY/);
+});
+
+test('daily Android build refuses to compile the support fallback branch', () => {
+  const workflow = read(WORKFLOW_PATH);
+  const build = workflowJob(workflow, 'native_build');
+  const validate = workflowStep(build, 'Validate build environment');
+
+  // 只转发变量而不校验，等于允许「变量被删/写错 → 编译 imAdmin 回落分支 → 构建全绿」。
+  // 这跟缺 R8 mapping 是同一类静默失效，只是更容易发生。
+  assert.match(validate, /validate-android-release\.js build-env/);
+  for (const name of [
+    'EXPO_PUBLIC_API_URL',
+    'EXPO_PUBLIC_OPENIM_API_URL',
+    'EXPO_PUBLIC_OPENIM_WS_URL',
+    'EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID',
+    'EXPO_PUBLIC_SUPPORT_ACCOUNT_ID',
+    'EXPO_PUBLIC_SUPPORT_RECHARGE_ID',
+    'EXPO_PUBLIC_SUPPORT_ISSUE_ID',
+    'EXPO_PUBLIC_SUPPORT_DISPUTE_ID',
+    'EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID',
+  ]) {
+    assert.match(
+      validate,
+      new RegExp(`${name}: \\$\\{\\{ vars\\.${name} \\}\\}`),
+      `${name} must reach the validator, not just Gradle`,
+    );
+  }
+
+  // 必须先于昂贵步骤：变量缺失应该 30 秒暴露，而不是 40 分钟后。
+  assert.ok(
+    build.indexOf('- name: Validate build environment') <
+      build.indexOf('- name: Build release-like APK'),
+    'env validation must run before the Gradle build',
+  );
+});
+
+test('build-env validation shares the tag-time env contract', () => {
+  const {
+    validateBuildEnv,
+    validateReleaseMetadata,
+  } = require('../.github/scripts/validate-android-release');
+  const env = {
+    EXPO_PUBLIC_API_URL: 'https://api.windnote.test',
+    EXPO_PUBLIC_OPENIM_API_URL: 'https://im.windnote.test',
+    EXPO_PUBLIC_OPENIM_WS_URL: 'wss://im.windnote.test/ws',
+    EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: 'official-support',
+    EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: 'cs-support',
+  };
+
+  // 没有 RELEASE_TAG 也能通过 —— 每日构建本来就没有 tag。
+  assert.deepEqual(validateBuildEnv({ env }), []);
+
+  // 但发布路径的 tag 校验一条不少：build-env 是子集，不是替代品。
+  assert.match(
+    validateReleaseMetadata({ env, app: { version: '1.0.0' } }).join('\n'),
+    /RELEASE_TAG/,
+  );
+
+  // 每一项 env 失效都必须被 build-env 抓到，否则等于没校验。
+  for (const name of Object.keys(env)) {
+    const broken = { ...env, [name]: '' };
+    assert.ok(
+      validateBuildEnv({ env: broken }).length > 0,
+      `build-env must reject a blank ${name}`,
+    );
+  }
+  assert.match(
+    validateBuildEnv({ env: { ...env, EXPO_PUBLIC_API_URL: 'http://a.test' } }).join(
+      '\n',
+    ),
+    /EXPO_PUBLIC_API_URL.*https/,
+  );
 });
 
 test('daily Android build checks production signing config in an isolated job', () => {

@@ -9,8 +9,10 @@
 # a broken config plugin, or an AGP/Gradle incompatibility stays invisible
 # until release day, when the only remedy is to yank the tag.
 #
-# This workflow runs that exact path against main every night. It publishes
-# nothing: no artifact upload, no GitHub release, no R2 object.
+# This workflow runs that exact path every night against the default branch
+# (workflow_dispatch builds whichever ref you pick, so a branch can be checked
+# before it lands). It publishes nothing: no artifact upload, no GitHub release,
+# no R2 object.
 #
 # Signing: plugins/with-android-release-signing.js fails the Gradle
 # configuration phase whenever a "release" task runs without signing material,
@@ -42,7 +44,9 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - name: Checkout main
+      # 定时触发解析到默认分支（main）；workflow_dispatch 则构建手动选中的 ref，
+      # 这样打 tag 前也能先单独验一条分支。
+      - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
@@ -52,6 +56,22 @@ jobs:
         with:
           node-version: "22"
           cache: npm
+
+      # 和 android-release.yml 的 preflight 同源（validate-android-release.js）：只是不
+      # 校验 RELEASE_TAG，因为每日构建没有 tag。放在最前面是为了 fail fast —— 变量缺失
+      # 要在 30 秒内暴露，而不是让一次 40 分钟的构建绿着编译出 imAdmin 回落分支。
+      - name: Validate build environment
+        env:
+          EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
+          EXPO_PUBLIC_OPENIM_API_URL: ${{ vars.EXPO_PUBLIC_OPENIM_API_URL }}
+          EXPO_PUBLIC_OPENIM_WS_URL: ${{ vars.EXPO_PUBLIC_OPENIM_WS_URL }}
+          EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: ${{ vars.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID }}
+          EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_ACCOUNT_ID }}
+          EXPO_PUBLIC_SUPPORT_RECHARGE_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_RECHARGE_ID }}
+          EXPO_PUBLIC_SUPPORT_ISSUE_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_ISSUE_ID }}
+          EXPO_PUBLIC_SUPPORT_DISPUTE_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_DISPUTE_ID }}
+          EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID }}
+        run: node .github/scripts/validate-android-release.js build-env
 
       - name: Setup Java
         uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5.5.0
@@ -73,6 +93,7 @@ jobs:
       # 能真正跑到 R8 / resource shrinking / 打包签名这几步。生产 keystore 不在
       # 这条流水线里解码——每日构建的产物任何情况下都不该是可分发的。
       - name: Create throwaway signing key
+        id: signing
         run: |
           set -euo pipefail
           signing_dir="$RUNNER_TEMP/daily-signing"
@@ -89,16 +110,18 @@ jobs:
             -keyalg RSA -keysize 2048 -validity 30 \
             -dname "CN=WindNote Daily Validation, OU=CI, O=CircleTeamHub, C=CN"
           chmod 600 "$keystore_path"
-          {
-            echo "ANDROID_KEYSTORE_PATH=$keystore_path"
-            echo "ANDROID_KEYSTORE_PASSWORD=$keystore_password"
-            echo "ANDROID_KEY_ALIAS=daily-validation"
-            echo "ANDROID_KEY_PASSWORD=$keystore_password"
-          } >> "$GITHUB_ENV"
+          # 只有 keystore 路径进 job 级环境（Gradle 配置阶段要读），口令走 step output
+          # 并只注入构建那一步 —— 与 android-release.yml 的作用域一致，密码不会出现在
+          # 后续每一步的环境里。
+          echo "ANDROID_KEYSTORE_PATH=$keystore_path" >> "$GITHUB_ENV"
+          echo "keystore_password=$keystore_password" >> "$GITHUB_OUTPUT"
 
       - name: Build release-like APK
         working-directory: android
         env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ steps.signing.outputs.keystore_password }}
+          ANDROID_KEY_ALIAS: daily-validation
+          ANDROID_KEY_PASSWORD: ${{ steps.signing.outputs.keystore_password }}
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
           EXPO_PUBLIC_OPENIM_API_URL: ${{ vars.EXPO_PUBLIC_OPENIM_API_URL }}
           EXPO_PUBLIC_OPENIM_WS_URL: ${{ vars.EXPO_PUBLIC_OPENIM_WS_URL }}
@@ -157,7 +180,9 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - name: Checkout main
+      # 定时触发解析到默认分支（main）；workflow_dispatch 则构建手动选中的 ref，
+      # 这样打 tag 前也能先单独验一条分支。
+      - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
