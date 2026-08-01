@@ -550,11 +550,13 @@ export default function MessagesScreen() {
     [],
   );
 
-  // 每次回到消息页都重置到"全部"，并重新拉 OpenIM 会话列表。
+  // 每次回到消息页都重新拉 OpenIM 会话列表。
   // 群聊可能从群列表、圈子、临时群等入口创建/恢复；只在首次 mount 拉取会漏掉这些更新。
+  // 注意：这里不再重置筛选标签。点会话进聊天详情会 push 新页、让本页失焦；返回时
+  // 本页重新聚焦会再次触发本 effect——若在此重置 activeFilterId，用户从"私聊/群聊/未读"
+  // 点进去再返回就会被强行拽回"全部"，丢失上一级筛选（见 messages-screen.test.js 回归）。
   useFocusEffect(
     useCallback(() => {
-      setActiveFilterId("all");
       loadConversationList().catch((err) => {
         // 列表加载失败时 imStore.error 会被 IM listener 更新，UI 的 empty state 会显示。
         // dev 下额外打印，便于排查"为啥列表是空的"。
