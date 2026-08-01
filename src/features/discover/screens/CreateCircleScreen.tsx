@@ -15,6 +15,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { NavHeader } from '@/components/ui/nav-header';
 import { createCircle } from '@/services/api/circles';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { useCreateCircleFormStore } from '@/features/discover/store/use-create-circle-form-store';
 import {
   requestUploadPresign,
@@ -149,8 +150,7 @@ export default function CreateCircleScreen() {
       resetCreateCircleForm();
       router.back();
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : t('circle.create.failed');
+      const message = getApiErrorMessage(error, t('circle.create.failed'));
       Alert.alert(t('circle.create.failed'), message);
     } finally {
       setSubmitting(false);
