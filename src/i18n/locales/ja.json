@@ -2013,14 +2013,14 @@
         "nameColor": "名前の色",
         "badge": "会員バッジ",
         "groupMemberLimit": "1グループの人数上限",
-        "joinedGroups": "参加可能なグループ",
+        "joinedCircles": "参加可能なサークル",
         "noteStorage": "ノート保存数",
         "cityFilters": "都市フィルター",
         "fancyNumber": "ゴロ番号特典"
       },
       "benefitValues": {
         "group-member-limit": "{{value}}人",
-        "joined-groups": "{{value}}グループ",
+        "joined-groups": "{{value}}サークル",
         "note-storage": "{{value}}件",
         "city-filters": "{{value}}都市",
         "unlimited": "無制限",

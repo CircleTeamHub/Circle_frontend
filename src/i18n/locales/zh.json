@@ -1540,14 +1540,14 @@
         "nameColor": "名字颜色",
         "badge": "会员徽章",
         "groupMemberLimit": "单群人数上限",
-        "joinedGroups": "可加入群聊",
+        "joinedCircles": "可加入圈子",
         "noteStorage": "笔记存储",
         "cityFilters": "城市筛选",
         "fancyNumber": "靓号权益"
       },
       "benefitValues": {
         "group-member-limit": "{{value}} 人",
-        "joined-groups": "{{value}} 个",
+        "joined-groups": "{{value}} 个圈子",
         "note-storage": "{{value}} 条",
         "city-filters": "{{value}} 个",
         "unlimited": "不限",

@@ -1543,14 +1543,14 @@
         "nameColor": "Name color",
         "badge": "Membership badge",
         "groupMemberLimit": "Members per group",
-        "joinedGroups": "Groups you can join",
+        "joinedCircles": "Circles you can join",
         "noteStorage": "Note storage",
         "cityFilters": "City filters",
         "fancyNumber": "Fancy number benefit"
       },
       "benefitValues": {
         "group-member-limit": "{{value}} people",
-        "joined-groups": "{{value}} groups",
+        "joined-groups": "{{value}} circles",
         "note-storage": "{{value}} notes",
         "city-filters": "{{value}} cities",
         "unlimited": "Unlimited",

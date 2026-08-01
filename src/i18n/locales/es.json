@@ -2016,14 +2016,14 @@
         "nameColor": "Color del nombre",
         "badge": "Insignia de membresía",
         "groupMemberLimit": "Miembros por grupo",
-        "joinedGroups": "Grupos a los que puedes unirte",
+        "joinedCircles": "Círculos a los que puedes unirte",
         "noteStorage": "Almacenamiento de notas",
         "cityFilters": "Filtros de ciudad",
         "fancyNumber": "Beneficio de número premium"
       },
       "benefitValues": {
         "group-member-limit": "{{value}} personas",
-        "joined-groups": "{{value}} grupos",
+        "joined-groups": "{{value}} círculos",
         "note-storage": "{{value}} notas",
         "city-filters": "{{value}} ciudades",
         "unlimited": "Ilimitado",

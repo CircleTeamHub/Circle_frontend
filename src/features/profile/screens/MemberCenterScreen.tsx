@@ -46,7 +46,7 @@ const DEFAULT_BENEFIT_LABELS: Record<MembershipBenefitId, string> = {
   'name-color': '名字颜色',
   badge: '会员徽章',
   'group-member-limit': '单群人数上限',
-  'joined-groups': '可加入群聊',
+  'joined-groups': '可加入圈子',
   'note-storage': '笔记存储',
   'city-filters': '城市筛选',
   'fancy-number': '靓号权益',

@@ -2013,14 +2013,14 @@
         "nameColor": "이름 색상",
         "badge": "회원 배지",
         "groupMemberLimit": "그룹당 인원 한도",
-        "joinedGroups": "가입 가능한 그룹",
+        "joinedCircles": "가입 가능한 서클",
         "noteStorage": "노트 저장 공간",
         "cityFilters": "도시 필터",
         "fancyNumber": "특별 번호 혜택"
       },
       "benefitValues": {
         "group-member-limit": "{{value}}명",
-        "joined-groups": "{{value}}개 그룹",
+        "joined-groups": "{{value}}개 서클",
         "note-storage": "{{value}}개 노트",
         "city-filters": "{{value}}개 도시",
         "unlimited": "무제한",
