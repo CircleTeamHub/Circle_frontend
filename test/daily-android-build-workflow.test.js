@@ -71,7 +71,7 @@ test('daily Android build never decodes production signing material', () => {
 
   // 构建 job 完全不碰生产签名 secret：一次性密钥就地生成，生产 keystore 不落盘。
   assert.doesNotMatch(build, /secrets\./);
-  assert.doesNotMatch(workflow, /base64 --decode|base64 -d/);
+  assert.doesNotMatch(build, /base64 --decode|base64 -d/);
 
   const keyStep = workflowStep(build, 'Create throwaway signing key');
   assert.match(keyStep, /keytool -genkeypair/);
@@ -256,6 +256,24 @@ test('daily Android build checks production signing config in an isolated job', 
   // 校验器只读环境变量，不需要装依赖也不需要写文件。
   assert.doesNotMatch(signing, /npm ci/);
   assert.doesNotMatch(signing, /gradlew/);
+});
+
+test('daily signing check proves the production keystore and credentials agree', () => {
+  const workflow = read(WORKFLOW_PATH);
+  const signing = workflowJob(workflow, 'signing_config');
+
+  // 非空字符串和一个格式正确的指纹不能证明 keystore 可解码、口令/alias 可用，
+  // 也不能证明仓库变量里的证书指纹仍对应当前密钥。每日门禁必须实际打开密钥。
+  assert.match(signing, /base64 --decode/);
+  assert.match(signing, /keytool -list -v/);
+  assert.match(signing, /jarsigner/);
+  assert.match(signing, /ANDROID_KEYSTORE_PASSWORD/);
+  assert.match(signing, /ANDROID_KEY_ALIAS/);
+  assert.match(signing, /ANDROID_CERT_SHA256/);
+  assert.match(signing, /actual_cert/);
+  assert.match(signing, /expected_cert/);
+  assert.match(signing, /actual_cert.*!=.*expected_cert/);
+  assert.match(signing, /if: \$\{\{ always\(\) \}\}/);
 });
 
 test('daily Android build alerts Discord when the release path breaks', () => {
