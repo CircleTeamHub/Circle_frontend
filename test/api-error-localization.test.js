@@ -19,6 +19,8 @@ const I18N = {
       const table = {
         'serverErrors.AUTH_INVALID_CREDENTIALS': 'Incorrect email or password',
         'serverErrors.TRACE_EMPTY_COMMENT': 'Comment cannot be empty',
+        'serverErrors.MEMBERSHIP_JOINED_CIRCLE_QUOTA_REACHED':
+          "You've reached your membership tier's joined-circle limit",
       };
       if (table[key]) return table[key];
       return opts && 'defaultValue' in opts ? opts.defaultValue : key;
@@ -267,13 +269,21 @@ test('ApiError accepts an options object for optional fields', () => {
 });
 
 test('every locale defines all serverErrors codes', () => {
-  const contractCodes = [...loadServerErrorCodes().SERVER_ERROR_CODES].sort();
+  const { SERVER_ERROR_CODES, LEGACY_SERVER_ERROR_CODES } = loadServerErrorCodes();
+  const localizedCodes = [
+    ...SERVER_ERROR_CODES,
+    ...LEGACY_SERVER_ERROR_CODES,
+  ].sort();
 
   const readBundle = (lng) =>
     JSON.parse(fs.readFileSync(path.join(process.cwd(), `src/i18n/locales/${lng}.json`), 'utf8'));
   const expectedCodes = Object.keys(readBundle('en').serverErrors ?? {}).sort();
   assert.ok(expectedCodes.length > 0, 'en.json must define serverErrors');
-  assert.deepEqual(expectedCodes, contractCodes, 'en.json serverErrors keys must match SERVER_ERROR_CODES');
+  assert.deepEqual(
+    expectedCodes,
+    localizedCodes,
+    'en.json serverErrors keys must match current and legacy client error codes',
+  );
 
   for (const lng of ['zh', 'ja', 'ko', 'es']) {
     const bundle = JSON.parse(
@@ -287,11 +297,17 @@ test('every locale defines all serverErrors codes', () => {
   }
 });
 
-test('joined-circle hard limit uses the stable backend contract in every locale', () => {
-  const { SERVER_ERROR_CODES } = loadServerErrorCodes();
+test('joined-circle tier limit uses current and legacy contracts in every locale', () => {
+  const { SERVER_ERROR_CODES, LEGACY_SERVER_ERROR_CODES } = loadServerErrorCodes();
   assert.ok(SERVER_ERROR_CODES.includes('CIRCLE_JOIN_LIMIT_REACHED'));
+  assert.equal(
+    SERVER_ERROR_CODES.includes('MEMBERSHIP_JOINED_CIRCLE_QUOTA_REACHED'),
+    false,
+  );
+  assert.deepEqual(LEGACY_SERVER_ERROR_CODES, [
+    'MEMBERSHIP_JOINED_CIRCLE_QUOTA_REACHED',
+  ]);
 
-  const expectedChinese = '最多可加入 100 个圈子，请先退出其他圈子后再试';
   for (const lng of ['en', 'zh', 'ja', 'ko', 'es']) {
     const bundle = JSON.parse(
       fs.readFileSync(
@@ -306,16 +322,30 @@ test('joined-circle hard limit uses the stable backend contract in every locale'
     assert.ok(
       bundle.serverErrors.CIRCLE_JOIN_LIMIT_REACHED.trim().length > 0,
     );
+    assert.equal(
+      typeof bundle.serverErrors.MEMBERSHIP_JOINED_CIRCLE_QUOTA_REACHED,
+      'string',
+    );
+    assert.ok(
+      bundle.serverErrors.MEMBERSHIP_JOINED_CIRCLE_QUOTA_REACHED.trim().length >
+        0,
+    );
+    assert.equal(
+      bundle.serverErrors.CIRCLE_JOIN_LIMIT_REACHED.includes('100'),
+      false,
+      `${lng} must not hard-code the former joined-circle limit`,
+    );
   }
-  const zhBundle = JSON.parse(
-    fs.readFileSync(
-      path.join(process.cwd(), 'src/i18n/locales/zh.json'),
-      'utf8',
-    ),
+});
+
+test('maps the retired joined-circle quota code during rolling deploys', () => {
+  const err = new FakeApiError(
+    'legacy backend message',
+    'MEMBERSHIP_JOINED_CIRCLE_QUOTA_REACHED',
   );
   assert.equal(
-    zhBundle.serverErrors.CIRCLE_JOIN_LIMIT_REACHED,
-    expectedChinese,
+    getApiErrorMessage(err, 'fallback'),
+    "You've reached your membership tier's joined-circle limit",
   );
 });
 

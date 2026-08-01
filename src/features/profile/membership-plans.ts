@@ -89,7 +89,7 @@ export const MEMBERSHIP_BENEFITS = [
   {
     id: 'joined-groups',
     labelKey: 'profile.membership.benefits.joinedCircles',
-    values: { silver: 100, gold: 100, diamond: 100, super: 100 },
+    values: { silver: 200, gold: 300, diamond: 1000, super: 2000 },
   },
   {
     id: 'note-storage',

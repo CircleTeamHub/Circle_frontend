@@ -233,10 +233,22 @@ export const SERVER_ERROR_CODES = [
 
 export type ServerErrorCode = (typeof SERVER_ERROR_CODES)[number];
 
-const SERVER_ERROR_CODE_SET = new Set<string>(SERVER_ERROR_CODES);
+// Keep retired codes separate so SERVER_ERROR_CODES remains an exact mirror of
+// the current backend contract while rolling deploys and rollbacks stay usable.
+export const LEGACY_SERVER_ERROR_CODES = [
+  'MEMBERSHIP_JOINED_CIRCLE_QUOTA_REACHED',
+] as const;
+
+export type LegacyServerErrorCode =
+  (typeof LEGACY_SERVER_ERROR_CODES)[number];
+
+const KNOWN_SERVER_ERROR_CODE_SET = new Set<string>([
+  ...SERVER_ERROR_CODES,
+  ...LEGACY_SERVER_ERROR_CODES,
+]);
 
 export function isKnownServerErrorCode(
   value: string,
-): value is ServerErrorCode {
-  return SERVER_ERROR_CODE_SET.has(value);
+): value is ServerErrorCode | LegacyServerErrorCode {
+  return KNOWN_SERVER_ERROR_CODE_SET.has(value);
 }
