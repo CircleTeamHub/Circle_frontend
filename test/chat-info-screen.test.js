@@ -82,8 +82,8 @@ test('chat info screen renders a dedicated group info layout for group conversat
   assert.match(source, /t\('chat\.groupNotice'\)/);
   assert.match(source, /t\('chat\.searchHistory'\)/);
   assert.match(source, /t\('chat\.moreGroupMembers'/);
-  assert.match(source, /rightIcon="search-outline"/);
-  assert.match(source, /onRightPress=\{handleOpenSearchGroupMembers\}/);
+  assert.match(source, /rightIcon=\{canViewMemberDirectory \? 'search-outline' : undefined\}/);
+  assert.match(source, /onRightPress=\{canViewMemberDirectory \? handleOpenSearchGroupMembers : undefined\}/);
   assert.match(source, /getGroupMemberSearchHref/);
 });
 
@@ -97,10 +97,10 @@ test('chat info screen refreshes group member names and avatars from user profil
   assert.match(source, /fetchUserProfile\(fromImUserId\(member\.userID\)\)/);
   assert.match(source, /nickname: profile\.nickname \|\| member\.nickname/);
   assert.match(source, /faceURL: profile\.avatarUrl \?\? member\.faceURL/);
-  assert.match(
-    source,
-    /useFocusEffect\([\s\S]*loadGroupMemberList\(groupID,\s*10_000\)[\s\S]*refreshGroupMemberProfiles\(members\)/,
-  );
+  assert.match(source, /loadAuthorizedGroupMembers\(\{/);
+  assert.match(source, /loadMembers: \(\) => loadGroupMemberList\(groupID, 10_000\)/);
+  assert.match(source, /if \(!result\.authorized\) return;/);
+  assert.match(source, /refreshGroupMemberProfiles\(result\.members\)/);
 });
 
 test('chat info screen lets the current user open their own profile from the group member grid', () => {
@@ -232,7 +232,7 @@ test('chat info screen right search opens group member search instead of chat hi
 
   assert.match(infoSource, /const handleOpenSearchGroupMembers = useCallback/);
   assert.match(infoSource, /router\.push\(\s*getGroupMemberSearchHref\(scope,/);
-  assert.match(infoSource, /onRightPress=\{handleOpenSearchGroupMembers\}/);
+  assert.match(infoSource, /onRightPress=\{canViewMemberDirectory \? handleOpenSearchGroupMembers : undefined\}/);
   assert.doesNotMatch(infoSource, /onRightPress=\{handleOpenSearchHistory\}/);
   assert.match(routeSource, /function getGroupMemberSearchHref/);
   assert.match(routeSource, /search-group-members/);

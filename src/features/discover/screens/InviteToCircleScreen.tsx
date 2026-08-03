@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
 import { loadGroupMemberList } from '@/im/client';
+import { canViewCircleMembers } from '@/features/chat/group-member-permissions';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { fetchCircleDetail, inviteToCircle } from '@/services/api/circles';
 import {
@@ -97,6 +98,7 @@ export default function InviteToCircleScreen() {
   const [selected, setSelected] = useState<Record<string, true>>({});
   const [submitting, setSubmitting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [authorized, setAuthorized] = useState(false);
   const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
 
@@ -113,12 +115,26 @@ export default function InviteToCircleScreen() {
   ) => {
     const showInitialLoading = options?.showInitialLoading ?? true;
     if (showInitialLoading) setLoading(true);
+    setAuthorized(false);
+    const [detailResult] = await Promise.allSettled([
+      circleId ? fetchCircleDetail(circleId) : Promise.resolve(null),
+    ]);
+    const detail = detailResult.status === 'fulfilled' ? detailResult.value : null;
+    const canViewMembers =
+      detail?.myStatus === 'ACTIVE' && canViewCircleMembers(detail.myRole);
+    if (signal?.cancelled || !mountedRef.current) return;
+    setAuthorized(canViewMembers);
+    if (!canViewMembers) {
+      setFriends([]);
+      setExistingMemberIDs(new Set());
+      if (showInitialLoading) setLoading(false);
+      return;
+    }
+
     const [friendsResult, membersResult] = await Promise.allSettled([
       fetchFriends(),
-      circleId
-        ? fetchCircleDetail(circleId).then((detail) =>
-            detail.groupID ? loadGroupMemberList(detail.groupID, 10_000) : [],
-          )
+      detail?.groupID
+        ? loadGroupMemberList(detail.groupID, 10_000)
         : Promise.resolve([]),
     ]);
     if (signal?.cancelled || !mountedRef.current) return;
@@ -382,6 +398,10 @@ export default function InviteToCircleScreen() {
         <View style={s.empty}>
           <ActivityIndicator color={colors.primary} />
         </View>
+      ) : !authorized ? (
+        <View style={s.empty}>
+          <Text style={d.emptyText}>{t('chat.groupMembersRestricted')}</Text>
+        </View>
       ) : filteredFriends.length === 0 ? (
         <View style={s.empty}>
           <Text style={d.emptyText}>
@@ -398,13 +418,14 @@ export default function InviteToCircleScreen() {
           renderItem={renderItem}
           ItemSeparatorComponent={Sep}
           contentContainerStyle={s.listContent}
-        {...keyboardDismissOnDragProps}
+          {...keyboardDismissOnDragProps}
           refreshing={refreshing}
           onRefresh={handleRefreshInvitees}
         />
       )}
 
-      <View
+      {authorized ? (
+        <View
         style={[
           s.footer,
           d.surfaceBorder,
@@ -431,7 +452,8 @@ export default function InviteToCircleScreen() {
             </Text>
           )}
         </Pressable>
-      </View>
+        </View>
+      ) : null}
     </View>
   );
 }

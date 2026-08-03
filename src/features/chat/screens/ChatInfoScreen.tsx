@@ -12,13 +12,20 @@ import { Avatar } from '@/components/ui/avatar';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { buildChatInfoState } from '@/features/chat/chat-info';
 import {
+  canChangeGroupMemberRole,
+  canViewGroupMembers,
+  loadAuthorizedGroupMembers,
+} from '@/features/chat/group-member-permissions';
+import {
   clearConversationMessages,
+  enforceGroupMemberPrivacy,
   fromImUserId,
   getGroupInfo,
   getOrCreateSingleConversation,
   kickGroupMembers,
   leaveGroupChat,
   loadGroupMemberList,
+  loadSpecifiedGroupMembers,
   setConversationBurnDuration,
   setConversationMute,
   toggleConversationPinned,
@@ -43,7 +50,7 @@ import {
   removeFriendFromBlacklist,
 } from '@/services/api/friends';
 import { fetchUserProfile } from '@/services/api/profile';
-import { leaveGroup, removeGroupMember } from '@/services/api/groups';
+import { leaveGroup, removeGroupMember, updateGroupMemberRole } from '@/services/api/groups';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useIMStore } from '@/stores/imStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -283,8 +290,10 @@ export default function ChatInfoScreen() {
   const [deletePending, setDeletePending] = useState(false);
   const [groupInfo, setGroupInfo] = useState<GroupItem | null>(null);
   const [groupMembers, setGroupMembers] = useState<GroupMemberItem[]>([]);
+  const [currentGroupMember, setCurrentGroupMember] = useState<GroupMemberItem | null>(null);
   const [groupMembersExpanded, setGroupMembersExpanded] = useState(false);
   const [kickPendingUserID, setKickPendingUserID] = useState<string | null>(null);
+  const [rolePendingUserID, setRolePendingUserID] = useState<string | null>(null);
   // friend-scoped 动作（拉黑 / 删除）不走 runConversationAction（那个绑会话）；
   // 用 ref 做 fast double-tap 单飞行守，跟其他屏的 Pattern D 二道闸保持一致。
   const blacklistInFlightRef = useRef(false);
@@ -343,15 +352,12 @@ export default function ChatInfoScreen() {
   const groupNotice = groupInfo?.notification?.trim() ?? '';
   const memberCount = groupInfo?.memberCount ?? groupMembers.length;
   const currentUserID = useIMStore((state) => state.currentUserID);
-  const myGroupAlias = groupMembers.find((member) => member.userID === currentUserID)?.nickname ?? '';
-  const currentMember = useMemo(
-    () => groupMembers.find((member) => member.userID === currentUserID) ?? null,
-    [currentUserID, groupMembers],
-  );
-  const currentRole = currentMember?.roleLevel ?? GroupMemberRole.Normal;
+  const myGroupAlias = currentGroupMember?.nickname ?? '';
+  const currentRole = currentGroupMember?.roleLevel ?? GroupMemberRole.Normal;
   const isOwner = currentRole === GroupMemberRole.Owner;
   const isAdmin = currentRole === GroupMemberRole.Admin;
   const canManageGroup = isOwner || isAdmin;
+  const canViewMemberDirectory = canViewGroupMembers(currentRole);
   const collapsedGroupMemberLimit = GROUP_MEMBER_COLUMNS * COLLAPSED_GROUP_MEMBER_ROWS - (canManageGroup ? 1 : 0);
   const visibleGroupMembers = useMemo(
     () => (groupMembersExpanded ? groupMembers : groupMembers.slice(0, collapsedGroupMemberLimit)),
@@ -459,10 +465,14 @@ export default function ChatInfoScreen() {
       if (!isGroupConversation || !groupID) {
         setGroupInfo(null);
         setGroupMembers([]);
+        setCurrentGroupMember(null);
         return () => {
           cancelled = true;
         };
       }
+
+      setCurrentGroupMember(null);
+      setGroupMembers([]);
 
       getGroupInfo(groupID)
         .then((nextGroupInfo) => {
@@ -476,26 +486,46 @@ export default function ChatInfoScreen() {
           }
         });
 
-      loadGroupMemberList(groupID, 10_000)
-        .then(async (members) => {
-          if (!cancelled) {
-            setGroupMembers(members);
-          }
-          const refreshedMembers = await refreshGroupMemberProfiles(members);
+      const loadAuthorizedMembers = async () => {
+        if (!currentUserID) {
+          setCurrentGroupMember(null);
+          setGroupMembers([]);
+          return;
+        }
+
+        try {
+          const result = await loadAuthorizedGroupMembers({
+            loadCurrentMember: async () => {
+              const [selfMember] = await loadSpecifiedGroupMembers(groupID, [currentUserID]);
+              return selfMember ?? null;
+            },
+            loadMembers: () => loadGroupMemberList(groupID, 10_000),
+          });
+          if (cancelled) return;
+          setCurrentGroupMember(result.currentMember);
+          setGroupMembers(result.members);
+          if (!result.authorized) return;
+          void enforceGroupMemberPrivacy(groupID).catch(() => {
+            // App-side authorization remains fail-closed; retry the OpenIM
+            // privacy backfill the next time a manager opens group info.
+          });
+          const refreshedMembers = await refreshGroupMemberProfiles(result.members);
           if (!cancelled) {
             setGroupMembers(refreshedMembers);
           }
-        })
-        .catch(() => {
+        } catch {
           if (!cancelled) {
+            setCurrentGroupMember(null);
             setGroupMembers([]);
           }
-        });
+        }
+      };
+      void loadAuthorizedMembers();
 
       return () => {
         cancelled = true;
       };
-    }, [groupID, isGroupConversation]),
+    }, [currentUserID, groupID, isGroupConversation]),
   );
 
   useEffect(() => {
@@ -685,7 +715,7 @@ export default function ChatInfoScreen() {
   }, [friendName, resolveConversationIDForNavigation, routeSourceID]);
 
   const handleOpenSearchGroupMembers = useCallback(() => {
-    if (!groupID) {
+    if (!groupID || !canViewMemberDirectory) {
       return;
     }
 
@@ -695,7 +725,7 @@ export default function ChatInfoScreen() {
         groupTitle,
       }),
     );
-  }, [groupID, groupTitle, scope]);
+  }, [canViewMemberDirectory, groupID, groupTitle, scope]);
 
   const promptForText = useCallback(
     (title: string, defaultValue: string, onSubmit: (value: string) => void, options?: { multiline?: boolean }) => {
@@ -767,6 +797,7 @@ export default function ChatInfoScreen() {
 
       updateGroupMemberAlias(groupID, currentUserID, trimmed)
         .then(() => {
+          setCurrentGroupMember((member) => (member ? { ...member, nickname: trimmed } : member));
           setGroupMembers((members) =>
             members.map((member) => (member.userID === currentUserID ? { ...member, nickname: trimmed } : member)),
           );
@@ -798,6 +829,35 @@ export default function ChatInfoScreen() {
       router.push(getUserProfileHref(scope, fromImUserId(member.userID), member.nickname || undefined));
     },
     [scope],
+  );
+
+  const handleChangeMemberRole = useCallback(
+    (member: GroupMemberItem) => {
+      if (!groupID || rolePendingUserID || !canChangeGroupMemberRole(currentRole, member.roleLevel)) {
+        return;
+      }
+
+      const nextRole = member.roleLevel === GroupMemberRole.Admin ? 'MEMBER' : 'ADMIN';
+      setRolePendingUserID(member.userID);
+      updateGroupMemberRole(groupID, member.userID, nextRole)
+        .then(() => {
+          const nextRoleLevel = nextRole === 'ADMIN' ? GroupMemberRole.Admin : GroupMemberRole.Normal;
+          setGroupMembers((members) =>
+            members.map((item) =>
+              item.userID === member.userID ? { ...item, roleLevel: nextRoleLevel } : item,
+            ),
+          );
+          Alert.alert(
+            t('common.done'),
+            nextRole === 'ADMIN'
+              ? t('chat.adminGranted', { name: member.nickname || member.userID })
+              : t('chat.adminRevoked', { name: member.nickname || member.userID }),
+          );
+        })
+        .catch(openActionError)
+        .finally(() => setRolePendingUserID(null));
+    },
+    [currentRole, groupID, openActionError, rolePendingUserID, t],
   );
 
   const handleKickMember = useCallback(
@@ -841,6 +901,38 @@ export default function ChatInfoScreen() {
       ]);
     },
     [canManageGroup, currentUserID, groupID, isOwner, openActionError, t],
+  );
+
+  const handleMemberActions = useCallback(
+    (member: GroupMemberItem) => {
+      const canChangeRole = canChangeGroupMemberRole(currentRole, member.roleLevel);
+      const canKick =
+        canManageGroup &&
+        member.userID !== currentUserID &&
+        (isOwner || member.roleLevel === GroupMemberRole.Normal);
+      if (!canChangeRole && !canKick) return;
+
+      const actions: NonNullable<Parameters<typeof Alert.alert>[2]> = [];
+      if (canChangeRole) {
+        actions.push({
+          text:
+            member.roleLevel === GroupMemberRole.Admin
+              ? t('chat.revokeGroupAdmin')
+              : t('chat.grantGroupAdmin'),
+          onPress: () => handleChangeMemberRole(member),
+        });
+      }
+      if (canKick) {
+        actions.push({
+          text: t('chat.removeMember'),
+          style: 'destructive',
+          onPress: () => handleKickMember(member),
+        });
+      }
+      actions.push({ text: t('common.cancel'), style: 'cancel' });
+      Alert.alert(member.nickname || member.userID, undefined, actions);
+    },
+    [canManageGroup, currentRole, currentUserID, handleChangeMemberRole, handleKickMember, isOwner, t],
   );
 
   const handleOpenGroupReport = useCallback(() => {
@@ -1102,15 +1194,16 @@ export default function ChatInfoScreen() {
         <NavHeader
           title={t('chat.groupInfoWithCount', { count: memberCount })}
           fallbackHref={backHref}
-          rightIcon="search-outline"
-          onRightPress={handleOpenSearchGroupMembers}
+          rightIcon={canViewMemberDirectory ? 'search-outline' : undefined}
+          onRightPress={canViewMemberDirectory ? handleOpenSearchGroupMembers : undefined}
         />
         <ScrollView
           style={s.scroll}
           contentContainerStyle={[s.groupContent, { paddingBottom: insets.bottom + Spacing.xl }]}
           showsVerticalScrollIndicator={false}
         >
-          <View style={s.groupMemberSection}>
+          {canViewMemberDirectory ? (
+            <View style={s.groupMemberSection}>
             <View style={s.groupMemberGrid}>
               {visibleGroupMembers.map((member) => {
                 const memberName = member.nickname || member.userID;
@@ -1120,18 +1213,19 @@ export default function ChatInfoScreen() {
                     : member.roleLevel === GroupMemberRole.Admin
                       ? t('chat.groupAdmin')
                       : null;
-                const canKickMember =
-                  canManageGroup &&
-                  member.userID !== currentUserID &&
-                  (isOwner || member.roleLevel === GroupMemberRole.Normal);
+                const hasMemberActions =
+                  canChangeGroupMemberRole(currentRole, member.roleLevel) ||
+                  (canManageGroup &&
+                    member.userID !== currentUserID &&
+                    (isOwner || member.roleLevel === GroupMemberRole.Normal));
 
                 return (
                   <Pressable
                     key={member.userID}
                     style={s.groupMemberCell}
                     onPress={() => handleOpenMemberProfile(member)}
-                    onLongPress={canKickMember ? () => handleKickMember(member) : undefined}
-                    disabled={kickPendingUserID === member.userID}
+                    onLongPress={hasMemberActions ? () => handleMemberActions(member) : undefined}
+                    disabled={kickPendingUserID === member.userID || rolePendingUserID === member.userID}
                   >
                     <Avatar size={56} shape="square" name={memberName} uri={member.faceURL} />
                     <Text style={[s.groupMemberName, d.groupMemberName]} numberOfLines={1}>
@@ -1163,7 +1257,8 @@ export default function ChatInfoScreen() {
                 />
               </Pressable>
             ) : null}
-          </View>
+            </View>
+          ) : null}
 
           <View style={[s.groupSection, d.groupSection]}>
             <GroupInfoRow

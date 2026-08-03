@@ -17,12 +17,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
 import { MemberName } from '@/components/ui/member-name';
 import { NavHeader } from '@/components/ui/nav-header';
-import { inviteUsersToGroup, loadGroupMemberList, toImUserId } from '@/im/client';
+import {
+  inviteUsersToGroup,
+  loadGroupMemberList,
+  loadSpecifiedGroupMembers,
+  toImUserId,
+} from '@/im/client';
+import { loadAuthorizedGroupMembers } from '@/features/chat/group-member-permissions';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { inviteGroupMembers } from '@/services/api/groups';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import { useIMStore } from '@/stores/imStore';
 
 const s = StyleSheet.create({
   container: { flex: 1 },
@@ -87,6 +94,7 @@ export default function InviteGroupMembersScreen() {
   }>();
   const groupID = typeof params.groupID === 'string' ? params.groupID : '';
   const groupName = typeof params.groupName === 'string' ? params.groupName : t('chat.groupChat');
+  const currentUserID = useIMStore((state) => state.currentUserID);
 
   const [query, setQuery] = useState('');
   const [friends, setFriends] = useState<FriendProfile[]>([]);
@@ -94,28 +102,49 @@ export default function InviteGroupMembersScreen() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Record<string, true>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [authorized, setAuthorized] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    Promise.all([fetchFriends(), groupID ? loadGroupMemberList(groupID, 10_000) : Promise.resolve([])])
-      .then(([list, members]) => {
-        const nextExistingMemberIDs = new Set(members.map((member) => toImUserId(member.userID)));
-        if (!cancelled) setFriends(list);
-        if (!cancelled) setExistingMemberIDs(nextExistingMemberIDs);
-      })
-      .catch(() => {
-        if (!cancelled) setFriends([]);
-        if (!cancelled) setExistingMemberIDs(new Set());
-      })
-      .finally(() => {
+    setAuthorized(false);
+    const load = async () => {
+      try {
+        if (!groupID || !currentUserID) throw new Error('Missing group or current user');
+        const result = await loadAuthorizedGroupMembers({
+          loadCurrentMember: async () => {
+            const [selfMember] = await loadSpecifiedGroupMembers(groupID, [currentUserID]);
+            return selfMember ?? null;
+          },
+          loadMembers: () => loadGroupMemberList(groupID, 10_000),
+        });
+        if (cancelled) return;
+        setAuthorized(result.authorized);
+        if (!result.authorized) {
+          setFriends([]);
+          setExistingMemberIDs(new Set());
+          return;
+        }
+        const list = await fetchFriends();
+        if (cancelled) return;
+        setFriends(list);
+        setExistingMemberIDs(new Set(result.members.map((member) => toImUserId(member.userID))));
+      } catch {
+        if (!cancelled) {
+          setFriends([]);
+          setExistingMemberIDs(new Set());
+          setAuthorized(false);
+        }
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    };
+    void load();
 
     return () => {
       cancelled = true;
     };
-  }, [groupID]);
+  }, [currentUserID, groupID]);
 
   useEffect(() => {
     if (existingMemberIDs.size < 1) {
@@ -309,6 +338,10 @@ export default function InviteGroupMembersScreen() {
         <View style={s.empty}>
           <ActivityIndicator color={colors.primary} />
         </View>
+      ) : !authorized ? (
+        <View style={s.empty}>
+          <Text style={d.emptyText}>{t('chat.groupMembersRestricted')}</Text>
+        </View>
       ) : filteredFriends.length === 0 ? (
         <View style={s.empty}>
           <Text style={d.emptyText}>
@@ -323,11 +356,12 @@ export default function InviteGroupMembersScreen() {
           renderItem={renderItem}
           ItemSeparatorComponent={Sep}
           contentContainerStyle={s.listContent}
-        {...keyboardDismissOnDragProps}
+          {...keyboardDismissOnDragProps}
         />
       )}
 
-      <View style={[s.footer, d.surfaceBorder, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]}>
+      {authorized ? (
+        <View style={[s.footer, d.surfaceBorder, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]}>
         <Pressable
           style={[
             s.submitButton,
@@ -348,7 +382,8 @@ export default function InviteGroupMembersScreen() {
             </Text>
           )}
         </Pressable>
-      </View>
+        </View>
+      ) : null}
     </View>
   );
 }

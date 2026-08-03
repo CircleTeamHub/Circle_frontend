@@ -921,7 +921,7 @@ export default function CircleDetailScreen() {
           ) : null}
 
           {/* 邀请好友 (active members) — same primary style as 进入群聊 */}
-          {isActiveMember ? (
+          {isOwnerOrAdmin ? (
             <Pressable
               style={[s.actionBtn, d.chatBtn]}
               onPress={() =>

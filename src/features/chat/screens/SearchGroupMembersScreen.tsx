@@ -16,13 +16,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { GroupMemberItem } from '@openim/rn-client-sdk';
 import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
-import { fromImUserId, loadGroupMemberList } from '@/im/client';
+import {
+  fromImUserId,
+  loadGroupMemberList,
+  loadSpecifiedGroupMembers,
+} from '@/im/client';
+import { loadAuthorizedGroupMembers } from '@/features/chat/group-member-permissions';
 import {
   getUserProfileHref,
   getUserProfileScopeFromSegments,
 } from '@/features/user/utils/routes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import { useIMStore } from '@/stores/imStore';
 
 const s = StyleSheet.create({
   container: { flex: 1 },
@@ -72,31 +78,44 @@ export default function SearchGroupMembersScreen() {
     groupTitle?: string;
   }>();
   const groupID = typeof params.groupID === 'string' ? params.groupID : '';
+  const currentUserID = useIMStore((state) => state.currentUserID);
   const [query, setQuery] = useState('');
   const [members, setMembers] = useState<GroupMemberItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [authorized, setAuthorized] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setAuthorized(false);
 
-    if (!groupID) {
+    if (!groupID || !currentUserID) {
       setMembers([]);
+      setAuthorized(false);
       setLoading(false);
       return () => {
         cancelled = true;
       };
     }
 
-    loadGroupMemberList(groupID, 10_000)
+    loadAuthorizedGroupMembers({
+      loadCurrentMember: async () => {
+        const [selfMember] = await loadSpecifiedGroupMembers(groupID, [currentUserID]);
+        return selfMember ?? null;
+      },
+      loadMembers: () => loadGroupMemberList(groupID, 10_000),
+    })
+      .then((result) => {
+        if (!cancelled) setAuthorized(result.authorized);
+        return result.members;
+      })
       .then((nextMembers) => {
-        if (!cancelled) {
-          setMembers(nextMembers);
-        }
+        if (!cancelled) setMembers(nextMembers);
       })
       .catch(() => {
         if (!cancelled) {
           setMembers([]);
+          setAuthorized(false);
         }
       })
       .finally(() => {
@@ -108,7 +127,7 @@ export default function SearchGroupMembersScreen() {
     return () => {
       cancelled = true;
     };
-  }, [groupID]);
+  }, [currentUserID, groupID]);
 
   const trimmedQuery = query.trim().toLowerCase();
   const filteredMembers = useMemo(() => {
@@ -209,6 +228,10 @@ export default function SearchGroupMembersScreen() {
         <View style={s.empty}>
           <ActivityIndicator color={colors.primary} />
         </View>
+      ) : !authorized ? (
+        <View style={s.empty}>
+          <Text style={d.emptyText}>{t('chat.groupMembersRestricted')}</Text>
+        </View>
       ) : filteredMembers.length === 0 ? (
         <View style={s.empty}>
           <Text style={d.emptyText}>
@@ -228,7 +251,7 @@ export default function SearchGroupMembersScreen() {
             s.listContent,
             { paddingBottom: insets.bottom + Spacing.xl },
           ]}
-        {...keyboardDismissOnDragProps}
+          {...keyboardDismissOnDragProps}
         />
       )}
     </View>

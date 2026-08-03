@@ -72,6 +72,7 @@ import {
   getOrCreateGroupConversation,
   fromImUserId,
   loadGroupMemberList,
+  loadSpecifiedGroupMembers,
   loadConversationMessages,
   markConversationAsRead,
   deleteLocalMessage,
@@ -90,6 +91,7 @@ import {
   toImUserId,
   unsubscribeUserOnlineStatus,
 } from '@/im/client';
+import { canViewGroupMembers } from '@/features/chat/group-member-permissions';
 import { restoreConversationMessages } from '@/im/history-restore';
 import {
   createMessageMapCache,
@@ -453,6 +455,7 @@ export default function ChatDetailScreen() {
   const [groupMemberNames, setGroupMemberNames] = useState<
     Record<string, string>
   >({});
+  const [canViewGroupMemberProfiles, setCanViewGroupMemberProfiles] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
@@ -537,6 +540,29 @@ export default function ChatDetailScreen() {
   const conversationType =
     params.conversationType === 'group' ? SessionType.Group : SessionType.Single;
   const isGroupChat = conversationType === SessionType.Group;
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!isGroupChat || !sourceID || !currentUserID) {
+      setCanViewGroupMemberProfiles(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setCanViewGroupMemberProfiles(false);
+    loadSpecifiedGroupMembers(sourceID, [currentUserID])
+      .then(([selfMember]) => {
+        if (!cancelled) setCanViewGroupMemberProfiles(canViewGroupMembers(selfMember?.roleLevel));
+      })
+      .catch(() => {
+        if (!cancelled) setCanViewGroupMemberProfiles(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUserID, isGroupChat, sourceID]);
   // 单聊标题响应式吃备注覆盖：用户在资料页改备注后即时刷新（参数仅作初始快照）。
   // 非空覆盖 → 用备注；空串（备注被清除）→ 回退到参数快照；未改过 → 用参数快照。
   // 群聊标题不是好友备注，保持参数原值。
@@ -636,13 +662,35 @@ export default function ChatDetailScreen() {
       if (isGroupChat) {
         // 群聊：跳该消息发送者本人的资料（senderID 已还原成 UUID 形式）。
         if (!msg.senderID) return;
+        if (
+          msg.senderID !== fromImUserId(currentUserID ?? '') &&
+          !canViewGroupMemberProfiles
+        ) {
+          Alert.alert(t('chat.groupMembersRestricted'));
+          return;
+        }
         router.push(getUserProfileHref(scope, msg.senderID, msg.senderName));
         return;
       }
       // 单聊：对方即会话 sourceID。
       router.push(getUserProfileHref(scope, sourceID, conversationTitle));
     },
-    [conversationTitle, sourceID, isGroupChat, scope],
+    [canViewGroupMemberProfiles, conversationTitle, currentUserID, sourceID, isGroupChat, scope, t],
+  );
+
+  const handleOpenUserCard = useCallback(
+    (userID: string, nickname?: string) => {
+      if (
+        isGroupChat &&
+        userID !== fromImUserId(currentUserID ?? '') &&
+        !canViewGroupMemberProfiles
+      ) {
+        Alert.alert(t('chat.groupMembersRestricted'));
+        return;
+      }
+      router.push(getUserProfileHref(scope, userID, nickname));
+    },
+    [canViewGroupMemberProfiles, currentUserID, isGroupChat, scope, t],
   );
 
   const handleOpenHeaderTarget = useCallback(() => {
@@ -1212,6 +1260,11 @@ export default function ChatDetailScreen() {
         return;
       }
 
+      if (!canViewGroupMemberProfiles) {
+        Alert.alert(t('chat.call.title'), t('chat.groupMembersRestricted'));
+        return;
+      }
+
       const members = await loadGroupMemberList(sourceID, 10_000);
       const inviteeIDs = Array.from(
         new Set(
@@ -1252,6 +1305,7 @@ export default function ChatDetailScreen() {
     }
   }, [
     authUser?.id,
+    canViewGroupMemberProfiles,
     conversationID,
     isGroupChat,
     isPreviewMode,
@@ -1390,9 +1444,7 @@ export default function ChatDetailScreen() {
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
             onLongPress={getMessageLongPressHandler(item)}
-            onPress={(card) =>
-              router.push(getUserProfileHref(scope, card.userID, card.nickname))
-            }
+            onPress={(card) => handleOpenUserCard(card.userID, card.nickname)}
             hideStatus={isGroupChat}
           />
         ));
@@ -1499,6 +1551,7 @@ export default function ChatDetailScreen() {
     receivedDisplayName,
     withGroupSenderLabel,
     handleOpenMessageSender,
+    handleOpenUserCard,
     isGroupChat,
     selfAvatarUri,
     selfName,
@@ -1577,7 +1630,7 @@ export default function ChatDetailScreen() {
     (event: { nativeEvent: { selection: { start: number; end: number } } }) => {
       const nextSelection = event.nativeEvent.selection;
       selectionRef.current = nextSelection;
-      if (isGroupChat) {
+      if (isGroupChat && canViewGroupMemberProfiles) {
         const activeQuery = getActiveMentionQuery(draft, nextSelection.start);
         setMentionQuery(activeQuery);
         if (activeQuery === null) {
@@ -1589,11 +1642,11 @@ export default function ChatDetailScreen() {
       // 插入后短暂受控把光标移到表情之后；用户再次移动光标时释放受控，交还输入法。
       setSelection((current) => (current ? undefined : current));
     },
-    [draft, isGroupChat],
+    [canViewGroupMemberProfiles, draft, isGroupChat],
   );
 
   const loadMentionCandidates = useCallback(async () => {
-    if (!isGroupChat || !sourceID) return;
+    if (!isGroupChat || !sourceID || !canViewGroupMemberProfiles) return;
     const cached = mentionCandidatesCacheRef.current.get(sourceID);
     if (cached) {
       setMentionCandidates([allMentionTarget, ...cached]);
@@ -1631,12 +1684,12 @@ export default function ChatDetailScreen() {
       }
       if (mountedRef.current) setMentionCandidates([]);
     }
-  }, [allMentionTarget, currentUserID, isGroupChat, sourceID]);
+  }, [allMentionTarget, canViewGroupMemberProfiles, currentUserID, isGroupChat, sourceID]);
 
   // 群聊打开时拉一次成员表，建 senderID→昵称映射给发送者名字标签兜底。
   // 单聊不需要（气泡不显示发送者名字）。
   useEffect(() => {
-    if (!isGroupChat || !sourceID) {
+    if (!isGroupChat || !sourceID || !canViewGroupMemberProfiles) {
       setGroupMemberNames({});
       return;
     }
@@ -1661,13 +1714,13 @@ export default function ChatDetailScreen() {
     return () => {
       cancelled = true;
     };
-  }, [isGroupChat, sourceID]);
+  }, [canViewGroupMemberProfiles, isGroupChat, sourceID]);
 
   const handleDraftChange = useCallback(
     (next: string) => {
       setDraft(next);
       setMentionTargets((current) => getMentionsPresentInText(next, current));
-      if (!isGroupChat) {
+      if (!isGroupChat || !canViewGroupMemberProfiles) {
         setMentionQuery(null);
         setMentionPickerVisible(false);
         return;
@@ -1686,7 +1739,7 @@ export default function ChatDetailScreen() {
         setMentionPickerVisible(false);
       }
     },
-    [draft, isGroupChat, loadMentionCandidates],
+    [canViewGroupMemberProfiles, draft, isGroupChat, loadMentionCandidates],
   );
 
   const handlePickMention = useCallback((target: MentionTarget) => {

@@ -49,13 +49,14 @@ test('InviteToCircleScreen stays open when every invite fails', () => {
   assert.match(src, /return;\s*\n\s*\}/);
 });
 
-test('CircleDetailScreen exposes the invite entry to active members', () => {
+test('CircleDetailScreen exposes the member-reading invite entry only to owners and admins', () => {
   const src = read(
     'src/features/discover/screens/CircleDetailScreen.tsx',
   );
 
   assert.match(src, /const isActiveMember = circle\?\.myStatus === 'ACTIVE'/);
-  assert.match(src, /\{isActiveMember \? \(/);
+  assert.match(src, /const isOwnerOrAdmin = isOwner \|\| circle\?\.myRole === 'ADMIN'/);
+  assert.match(src, /\{isOwnerOrAdmin \? \(/);
   assert.match(src, /getCircleInviteHref\(\s*circleScope/);
 });
 
