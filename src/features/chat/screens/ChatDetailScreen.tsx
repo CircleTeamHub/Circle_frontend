@@ -91,7 +91,7 @@ import {
   toImUserId,
   unsubscribeUserOnlineStatus,
 } from '@/im/client';
-import { canViewGroupMembers } from '@/features/chat/group-member-permissions';
+import { useGroupMemberViewAccess } from '@/features/chat/hooks/use-group-member-view-access';
 import { restoreConversationMessages } from '@/im/history-restore';
 import {
   createMessageMapCache,
@@ -455,7 +455,6 @@ export default function ChatDetailScreen() {
   const [groupMemberNames, setGroupMemberNames] = useState<
     Record<string, string>
   >({});
-  const [canViewGroupMemberProfiles, setCanViewGroupMemberProfiles] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
@@ -541,28 +540,12 @@ export default function ChatDetailScreen() {
     params.conversationType === 'group' ? SessionType.Group : SessionType.Single;
   const isGroupChat = conversationType === SessionType.Group;
 
-  useEffect(() => {
-    let cancelled = false;
-    if (!isGroupChat || !sourceID || !currentUserID) {
-      setCanViewGroupMemberProfiles(false);
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    setCanViewGroupMemberProfiles(false);
-    loadSpecifiedGroupMembers(sourceID, [currentUserID])
-      .then(([selfMember]) => {
-        if (!cancelled) setCanViewGroupMemberProfiles(canViewGroupMembers(selfMember?.roleLevel));
-      })
-      .catch(() => {
-        if (!cancelled) setCanViewGroupMemberProfiles(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentUserID, isGroupChat, sourceID]);
+  const { canViewMembers: canViewGroupMemberProfiles, revalidate: revalidateMemberViewAccess } =
+    useGroupMemberViewAccess({
+      enabled: isGroupChat,
+      groupID: sourceID,
+      currentUserID,
+    });
   // 单聊标题响应式吃备注覆盖：用户在资料页改备注后即时刷新（参数仅作初始快照）。
   // 非空覆盖 → 用备注；空串（备注被清除）→ 回退到参数快照；未改过 → 用参数快照。
   // 群聊标题不是好友备注，保持参数原值。
@@ -658,13 +641,14 @@ export default function ChatDetailScreen() {
   }, [scope, conversationID, sourceID, conversationTitle]);
 
   const handleOpenMessageSender = useCallback(
-    (msg: ChatMessage) => {
+    async (msg: ChatMessage) => {
       if (isGroupChat) {
         // 群聊：跳该消息发送者本人的资料（senderID 已还原成 UUID 形式）。
         if (!msg.senderID) return;
+        // review P1：点击瞬间 fail-closed 重查角色，不信挂载期的旧快照。
         if (
           msg.senderID !== fromImUserId(currentUserID ?? '') &&
-          !canViewGroupMemberProfiles
+          !(await revalidateMemberViewAccess())
         ) {
           Alert.alert(t('chat.groupMembersRestricted'));
           return;
@@ -675,22 +659,35 @@ export default function ChatDetailScreen() {
       // 单聊：对方即会话 sourceID。
       router.push(getUserProfileHref(scope, sourceID, conversationTitle));
     },
-    [canViewGroupMemberProfiles, conversationTitle, currentUserID, sourceID, isGroupChat, scope, t],
+    [conversationTitle, currentUserID, sourceID, isGroupChat, revalidateMemberViewAccess, scope, t],
   );
 
   const handleOpenUserCard = useCallback(
-    (userID: string, nickname?: string) => {
-      if (
-        isGroupChat &&
-        userID !== fromImUserId(currentUserID ?? '') &&
-        !canViewGroupMemberProfiles
-      ) {
-        Alert.alert(t('chat.groupMembersRestricted'));
-        return;
+    async (userID: string, nickname?: string) => {
+      if (isGroupChat && userID !== fromImUserId(currentUserID ?? '')) {
+        const allowed = await revalidateMemberViewAccess();
+        if (!allowed) {
+          // review P2：名片可能是分享进群的外部用户——只拦"确认是本群成员"
+          // 的目标；查不到成员记录（含查询失败）按分享意图放行，名片本身
+          // 已对全群可见，不构成成员目录泄露。
+          let targetIsGroupMember = false;
+          try {
+            const [targetMember] = await loadSpecifiedGroupMembers(sourceID, [
+              toImUserId(userID),
+            ]);
+            targetIsGroupMember = Boolean(targetMember);
+          } catch {
+            targetIsGroupMember = false;
+          }
+          if (targetIsGroupMember) {
+            Alert.alert(t('chat.groupMembersRestricted'));
+            return;
+          }
+        }
       }
       router.push(getUserProfileHref(scope, userID, nickname));
     },
-    [canViewGroupMemberProfiles, currentUserID, isGroupChat, scope, t],
+    [currentUserID, isGroupChat, revalidateMemberViewAccess, scope, sourceID, t],
   );
 
   const handleOpenHeaderTarget = useCallback(() => {
@@ -1260,7 +1257,8 @@ export default function ChatDetailScreen() {
         return;
       }
 
-      if (!canViewGroupMemberProfiles) {
+      // review P1：发起群呼要拉全量成员表，执行前 fail-closed 重查角色。
+      if (!(await revalidateMemberViewAccess())) {
         Alert.alert(t('chat.call.title'), t('chat.groupMembersRestricted'));
         return;
       }
@@ -1305,10 +1303,10 @@ export default function ChatDetailScreen() {
     }
   }, [
     authUser?.id,
-    canViewGroupMemberProfiles,
     conversationID,
     isGroupChat,
     isPreviewMode,
+    revalidateMemberViewAccess,
     setActiveCall,
     sourceID,
     t,

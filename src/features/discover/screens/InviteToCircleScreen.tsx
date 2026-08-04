@@ -66,6 +66,14 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     paddingTop: Spacing.xxl,
   },
+  retryButton: {
+    marginTop: Spacing.md,
+    height: 40,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   footer: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
@@ -99,6 +107,9 @@ export default function InviteToCircleScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [authorized, setAuthorized] = useState(false);
+  // review P2：断网/瞬时错误 ≠ 无权限。详情拉取失败单独记态，走"加载失败+重试"，
+  // 只有确认拿到详情且角色不足时才显示受限文案。
+  const [loadError, setLoadError] = useState(false);
   const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
 
@@ -119,10 +130,25 @@ export default function InviteToCircleScreen() {
     const [detailResult] = await Promise.allSettled([
       circleId ? fetchCircleDetail(circleId) : Promise.resolve(null),
     ]);
-    const detail = detailResult.status === 'fulfilled' ? detailResult.value : null;
+    if (signal?.cancelled || !mountedRef.current) return;
+    if (detailResult.status === 'rejected') {
+      setLoadError(true);
+      setFriends([]);
+      setExistingMemberIDs(new Set());
+      logClientDiagnostic('circle_invite_detail_load_failed', {
+        circleId,
+        message:
+          detailResult.reason instanceof Error
+            ? detailResult.reason.message
+            : String(detailResult.reason),
+      });
+      if (showInitialLoading) setLoading(false);
+      return;
+    }
+    setLoadError(false);
+    const detail = detailResult.value;
     const canViewMembers =
       detail?.myStatus === 'ACTIVE' && canViewCircleMembers(detail.myRole);
-    if (signal?.cancelled || !mountedRef.current) return;
     setAuthorized(canViewMembers);
     if (!canViewMembers) {
       setFriends([]);
@@ -397,6 +423,22 @@ export default function InviteToCircleScreen() {
       {loading ? (
         <View style={s.empty}>
           <ActivityIndicator color={colors.primary} />
+        </View>
+      ) : loadError ? (
+        <View style={s.empty}>
+          <Text style={d.emptyText}>
+            {t('circle.invite.loadFailed', {
+              defaultValue: '圈子信息加载失败，请重试',
+            })}
+          </Text>
+          <Pressable
+            style={[s.retryButton, { backgroundColor: colors.primary }]}
+            onPress={() => void loadInvitees()}
+          >
+            <Text style={d.submitText}>
+              {t('common.retry', { defaultValue: '重试' })}
+            </Text>
+          </Pressable>
         </View>
       ) : !authorized ? (
         <View style={s.empty}>

@@ -14,6 +14,22 @@ export function canChangeGroupMemberRole(actorRoleLevel?: number | null, targetR
   return actorRoleLevel === OWNER_ROLE && (targetRoleLevel === NORMAL_ROLE || targetRoleLevel === ADMIN_ROLE);
 }
 
+/**
+ * 受保护操作（打开成员资料 / 群目录发起通话）执行前的 fail-closed 重校验：
+ * 不信任挂载时的权限快照，现场重查自己的角色。查询抛错、SDK 未就绪、
+ * 已不在群里（selfMember 为空）一律按无权处理。
+ */
+export async function revalidateGroupMemberView(params: {
+  loadSelfMember: () => Promise<{ roleLevel?: number | null } | null | undefined>;
+}): Promise<boolean> {
+  try {
+    const selfMember = await params.loadSelfMember();
+    return canViewGroupMembers(selfMember?.roleLevel);
+  } catch {
+    return false;
+  }
+}
+
 export async function loadAuthorizedGroupMembers<T extends { roleLevel?: number | null }>(params: {
   loadCurrentMember: () => Promise<T | null>;
   loadMembers: () => Promise<T[]>;

@@ -859,6 +859,7 @@
       "entry": "邀请好友",
       "title": "邀请好友入圈",
       "failed": "邀请失败",
+      "loadFailed": "圈子信息加载失败，请重试",
       "alreadyMembers": "所选好友已在圈子中",
       "noneSent": "所选好友均未邀请成功，请检查条件后重试",
       "sentAll": "已邀请 {{count}} 位好友，等待验证通过",

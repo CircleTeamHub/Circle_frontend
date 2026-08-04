@@ -813,6 +813,35 @@ export async function loadSpecifiedGroupMembers(
   return OpenIMSDK.getSpecifiedGroupMembersInfo({ groupID, userIDList });
 }
 
+/**
+ * 订阅"我在某个群里的成员身份"变化：角色被改（onGroupMemberInfoChanged）、
+ * 被移出群（onGroupMemberDeleted）、整群从已加入列表消失（onJoinedGroupDeleted，
+ * 覆盖自己退群/被踢/群解散）。挂载中的页面靠它感知撤权，`null` 表示已不在群里。
+ */
+export function subscribeGroupMemberSelfChanges(
+  groupID: string,
+  userID: string,
+  onChange: (member: GroupMemberItem | null) => void,
+): () => void {
+  const handleMemberChanged = (member: GroupMemberItem) => {
+    if (member.groupID === groupID && member.userID === userID) onChange(member);
+  };
+  const handleMemberDeleted = (member: GroupMemberItem) => {
+    if (member.groupID === groupID && member.userID === userID) onChange(null);
+  };
+  const handleJoinedGroupDeleted = (group: GroupItem) => {
+    if (group.groupID === groupID) onChange(null);
+  };
+  OpenIMSDK.on('onGroupMemberInfoChanged', handleMemberChanged);
+  OpenIMSDK.on('onGroupMemberDeleted', handleMemberDeleted);
+  OpenIMSDK.on('onJoinedGroupDeleted', handleJoinedGroupDeleted);
+  return () => {
+    OpenIMSDK.off('onGroupMemberInfoChanged', handleMemberChanged);
+    OpenIMSDK.off('onGroupMemberDeleted', handleMemberDeleted);
+    OpenIMSDK.off('onJoinedGroupDeleted', handleJoinedGroupDeleted);
+  };
+}
+
 export async function inviteUsersToGroup(groupID: string, userIDList: string[]) {
   const initialized = await ensureOpenIMInitialized();
 

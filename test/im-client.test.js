@@ -1590,3 +1590,59 @@ test('sendImageMessage falls back to the original when no thumbnail is provided 
   assert.equal(capture.args.snapshotPicture.url, 'https://cdn.example.com/big.jpg');
   assert.equal(capture.args.bigPicture.url, 'https://cdn.example.com/big.jpg');
 });
+
+test('subscribeGroupMemberSelfChanges forwards own membership changes and unbinds on cleanup', () => {
+  const handlers = new Map();
+  const on = (event, cb) => {
+    if (!handlers.has(event)) handlers.set(event, new Set());
+    handlers.get(event).add(cb);
+  };
+  const off = (event, cb) => {
+    handlers.get(event)?.delete(cb);
+  };
+  const { subscribeGroupMemberSelfChanges } = loadTsModule('src/im/client.ts', {
+    '@openim/rn-client-sdk': {
+      __esModule: true,
+      default: { on, off },
+      LoginStatus: { Logout: 0, Logged: 3 },
+      LogLevel: { Info: 0 },
+      SessionType: { Single: 1, Group: 2 },
+      ViewType: { History: 0 },
+    },
+    'react-native-fs': { __esModule: true, default: {} },
+    'react-native': { Platform: { OS: 'android' } },
+    '@/constants/config': {
+      OPENIM_API_URL: 'https://im.example.com',
+      OPENIM_WS_URL: 'wss://im.example.com',
+      OPENIM_LOG_LEVEL: 0,
+    },
+    '@/stores/imStore': { useIMStore: { getState: () => ({}) } },
+    '@/stores/tabBadgeStore': {
+      useTabBadgeStore: { getState: () => ({ setMessagesUnread: () => undefined }) },
+    },
+  });
+
+  const events = [];
+  const unsubscribe = subscribeGroupMemberSelfChanges('g1', 'u1', (member) => {
+    events.push(member);
+  });
+  const emit = (event, payload) => handlers.get(event)?.forEach((cb) => cb(payload));
+
+  // 别的群 / 别人的变更不透传。
+  emit('onGroupMemberInfoChanged', { groupID: 'g2', userID: 'u1', roleLevel: 60 });
+  emit('onGroupMemberInfoChanged', { groupID: 'g1', userID: 'u2', roleLevel: 60 });
+  assert.equal(events.length, 0);
+
+  // 群主撤掉自己的管理员 → 推送带新 roleLevel 的成员记录。
+  emit('onGroupMemberInfoChanged', { groupID: 'g1', userID: 'u1', roleLevel: 20 });
+  assert.deepEqual(events, [{ groupID: 'g1', userID: 'u1', roleLevel: 20 }]);
+
+  // 被移出群 / 整群从已加入列表消失 → null（权限清零）。
+  emit('onGroupMemberDeleted', { groupID: 'g1', userID: 'u1' });
+  emit('onJoinedGroupDeleted', { groupID: 'g1' });
+  assert.deepEqual(events.slice(1), [null, null]);
+
+  unsubscribe();
+  const remaining = [...handlers.values()].reduce((sum, set) => sum + set.size, 0);
+  assert.equal(remaining, 0);
+});

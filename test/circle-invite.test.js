@@ -89,3 +89,23 @@ test('invite-friends route renders the friend picker', () => {
   );
   assert.match(route, /InviteToCircleScreen/);
 });
+
+test('InviteToCircleScreen distinguishes load failures from denied access', () => {
+  const src = read(
+    'src/features/discover/screens/InviteToCircleScreen.tsx',
+  );
+
+  // 详情拉取失败 ≠ 无权限：单独记错误态、打诊断日志。
+  assert.match(src, /const \[loadError, setLoadError\] = useState\(false\)/);
+  assert.match(src, /detailResult\.status === 'rejected'/);
+  assert.match(src, /setLoadError\(true\)/);
+  assert.match(src, /circle_invite_detail_load_failed/);
+  // 只有确认拿到详情后才评估授权。
+  assert.match(src, /setLoadError\(false\);\s*\n\s*const detail = detailResult\.value/);
+  // 错误态提供页内重试入口，受限文案只在授权判定后出现。
+  assert.match(src, /circle\.invite\.loadFailed/);
+  assert.match(src, /common\.retry/);
+  assert.match(src, /onPress=\{\(\) => void loadInvitees\(\)\}/);
+  assert.match(src, /\) : loadError \? \(/);
+  assert.match(src, /\) : !authorized \? \(/);
+});

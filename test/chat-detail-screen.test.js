@@ -474,3 +474,52 @@ test('note detail routes exist in every tab stack so back returns to the source 
     assert.match(fs.readFileSync(filePath, 'utf8'), /NoteDetailScreen/);
   }
 });
+
+test('group member access stays live while the chat screen is mounted', () => {
+  const screen = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+  const hook = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/hooks/use-group-member-view-access.ts'),
+    'utf8',
+  );
+
+  // 屏幕不再自持一次性快照，统一走活体权限 hook。
+  assert.match(screen, /useGroupMemberViewAccess\(\{/);
+  assert.doesNotMatch(screen, /setCanViewGroupMemberProfiles/);
+  // hook 订阅自己的成员身份变化（降权/被移出/退群），卸载时解绑。
+  assert.match(hook, /subscribeGroupMemberSelfChanges\(groupID, currentUserID/);
+  assert.match(hook, /unsubscribe\(\);/);
+  assert.match(hook, /revalidateGroupMemberView\(\{/);
+});
+
+test('protected member actions revalidate fail-closed at tap time', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+
+  // 打开消息发送者资料 / 发起群呼前都现场重查角色，不吃旧快照。
+  const revalidations = source.match(/await revalidateMemberViewAccess\(\)/g) ?? [];
+  assert.ok(
+    revalidations.length >= 3,
+    `expected sender/card/call paths to revalidate, got ${revalidations.length}`,
+  );
+  assert.match(
+    source,
+    /if \(!\(await revalidateMemberViewAccess\(\)\)\) \{\s*\n\s*Alert\.alert\(t\('chat\.call\.title'\), t\('chat\.groupMembersRestricted'\)\);/,
+  );
+});
+
+test('shared friend cards of non-members stay openable for ordinary members', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+
+  // 名片只拦"确认是本群成员"的目标；外部用户名片按分享意图放行。
+  assert.match(source, /const \[targetMember\] = await loadSpecifiedGroupMembers\(sourceID, \[\s*toImUserId\(userID\),\s*\]\);/);
+  assert.match(source, /targetIsGroupMember = Boolean\(targetMember\);/);
+  assert.match(source, /if \(targetIsGroupMember\) \{\s*\n\s*Alert\.alert\(t\('chat\.groupMembersRestricted'\)\);/);
+});

@@ -977,6 +977,7 @@
       "entry": "Invitar amigos",
       "title": "Invitar amigos",
       "failed": "Invitación fallida",
+      "loadFailed": "No se pudo cargar la información del círculo. Inténtalo de nuevo.",
       "alreadyMembers": "Los amigos seleccionados ya están en este círculo.",
       "noneSent": "No se pudo invitar a ninguno. Revisa los requisitos e inténtalo de nuevo.",
       "sentAll": "Invitaste a {{count}} amigos. Esperando verificación.",

@@ -43,6 +43,42 @@ test('only the owner can change a non-owner member role', async () => {
   assert.equal(canChangeGroupMemberRole(100, 100), false);
 });
 
+test('revalidation grants access only for live owner/admin roles', async () => {
+  const { revalidateGroupMemberView } = await import('./group-member-permissions.ts');
+
+  assert.equal(
+    await revalidateGroupMemberView({ loadSelfMember: async () => ({ roleLevel: 100 }) }),
+    true,
+  );
+  assert.equal(
+    await revalidateGroupMemberView({ loadSelfMember: async () => ({ roleLevel: 60 }) }),
+    true,
+  );
+  assert.equal(
+    await revalidateGroupMemberView({ loadSelfMember: async () => ({ roleLevel: 20 }) }),
+    false,
+  );
+});
+
+test('revalidation fails closed when the membership lookup breaks', async () => {
+  const { revalidateGroupMemberView } = await import('./group-member-permissions.ts');
+
+  // 已不在群里（查无成员记录）→ 无权。
+  assert.equal(
+    await revalidateGroupMemberView({ loadSelfMember: async () => null }),
+    false,
+  );
+  // 查询抛错（断网 / SDK 未就绪）→ 无权，绝不放行。
+  assert.equal(
+    await revalidateGroupMemberView({
+      loadSelfMember: async () => {
+        throw new Error('sdk offline');
+      },
+    }),
+    false,
+  );
+});
+
 test('ordinary members never trigger the full member-directory loader', async () => {
   const policy = await import('./group-member-permissions.ts');
   assert.equal(typeof (policy as any).loadAuthorizedGroupMembers, 'function');

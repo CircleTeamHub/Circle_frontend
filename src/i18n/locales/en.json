@@ -860,6 +860,7 @@
       "entry": "Invite Friends",
       "title": "Invite Friends",
       "failed": "Invite Failed",
+      "loadFailed": "Failed to load circle info. Please retry.",
       "alreadyMembers": "The selected friends are already in this circle.",
       "noneSent": "None of the selected friends could be invited. Please check the requirements and try again.",
       "sentAll": "Invited {{count}} friends. Waiting for verification.",
