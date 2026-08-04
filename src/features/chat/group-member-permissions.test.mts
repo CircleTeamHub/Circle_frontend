@@ -97,7 +97,26 @@ test('ordinary members never trigger the full member-directory loader', async ()
     currentMember: { userID: 'self', roleLevel: 20 },
     members: [],
     authorized: false,
+    membersError: null,
   });
+});
+
+test('member-list load failures stay separate from authorization', async () => {
+  const policy = await import('./group-member-permissions.ts');
+  const failure = new Error('openim disconnected');
+
+  const result = await (policy as any).loadAuthorizedGroupMembers({
+    loadCurrentMember: async () => ({ userID: 'self', roleLevel: 60 }),
+    loadMembers: async () => {
+      throw failure;
+    },
+  });
+
+  // review R2：管理员身份已确认时成员表加载失败 ≠ 无权限——调用方应显示
+  // 加载错误而不是受限文案。
+  assert.equal(result.authorized, true);
+  assert.deepEqual(result.members, []);
+  assert.equal(result.membersError, failure);
 });
 
 test('owners and administrators load the full member directory', async () => {

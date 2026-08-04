@@ -109,3 +109,14 @@ test('InviteToCircleScreen distinguishes load failures from denied access', () =
   assert.match(src, /\) : loadError \? \(/);
   assert.match(src, /\) : !authorized \? \(/);
 });
+
+test('InviteToCircleScreen keeps prior authorization during pull-to-refresh', () => {
+  const src = read(
+    'src/features/discover/screens/InviteToCircleScreen.tsx',
+  );
+
+  // review R2：下拉刷新期间不预清 authorized——否则 loading=false 时列表会
+  // 被受限文案顶掉闪一下；授权状态等刷新结果落定再更新。
+  assert.match(src, /if \(showInitialLoading\) setAuthorized\(false\);/);
+  assert.doesNotMatch(src, /^\s*setAuthorized\(false\);$/m);
+});

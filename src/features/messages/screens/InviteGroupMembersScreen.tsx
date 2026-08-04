@@ -23,7 +23,11 @@ import {
   loadSpecifiedGroupMembers,
   toImUserId,
 } from '@/im/client';
-import { loadAuthorizedGroupMembers } from '@/features/chat/group-member-permissions';
+import {
+  loadAuthorizedGroupMembers,
+  revalidateGroupMemberView,
+} from '@/features/chat/group-member-permissions';
+import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { inviteGroupMembers } from '@/services/api/groups';
 import { getApiErrorMessage } from '@/services/api/errors';
@@ -125,6 +129,17 @@ export default function InviteGroupMembersScreen() {
           setExistingMemberIDs(new Set());
           return;
         }
+        // review R2：成员表加载失败 ≠ 无权限——管理员身份已确认时继续放行
+        // 邀请（已在群的好友交给服务端拒绝），只记诊断。
+        if (result.membersError) {
+          logClientDiagnostic('invite_group_members_list_load_failed', {
+            groupID,
+            message:
+              result.membersError instanceof Error
+                ? result.membersError.message
+                : String(result.membersError),
+          });
+        }
         const list = await fetchFriends();
         if (cancelled) return;
         setFriends(list);
@@ -211,6 +226,21 @@ export default function InviteGroupMembersScreen() {
       return;
     }
 
+    // review R2：提交前 fail-closed 重查角色——管理员选好人后被撤权，
+    // 缓存的邀请名单不能再发出去。
+    const stillAuthorized = await revalidateGroupMemberView({
+      loadSelfMember: async () => {
+        if (!currentUserID) return null;
+        const [selfMember] = await loadSpecifiedGroupMembers(groupID, [currentUserID]);
+        return selfMember ?? null;
+      },
+    });
+    if (!stillAuthorized) {
+      setAuthorized(false);
+      Alert.alert(t('chat.groupMembersRestricted'));
+      return;
+    }
+
     setSubmitting(true);
     try {
       const result = await inviteGroupMembers(groupID, inviteUserIDs);
@@ -234,7 +264,7 @@ export default function InviteGroupMembersScreen() {
     } finally {
       setSubmitting(false);
     }
-  }, [existingMemberIDs, groupID, router, selectedCount, selectedIds, submitting, t]);
+  }, [currentUserID, existingMemberIDs, groupID, router, selectedCount, selectedIds, submitting, t]);
 
   const d = useMemo(
     () => ({

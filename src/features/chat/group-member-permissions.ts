@@ -37,12 +37,29 @@ export async function loadAuthorizedGroupMembers<T extends { roleLevel?: number 
   currentMember: T | null;
   members: T[];
   authorized: boolean;
+  /** review R2：成员表加载失败 ≠ 无权限。authorized 已确认时把加载错误单独
+   * 暴露，调用方应显示"加载失败"而不是受限文案（那会误导管理员且没有恢复
+   * 入口）。null 表示成员表加载成功或根本无权加载。 */
+  membersError: unknown;
 }> {
   const currentMember = await params.loadCurrentMember();
   const authorized = canViewGroupMembers(currentMember?.roleLevel);
-  return {
-    currentMember,
-    members: authorized ? await params.loadMembers() : [],
-    authorized,
-  };
+  if (!authorized) {
+    return { currentMember, members: [], authorized, membersError: null };
+  }
+  try {
+    return {
+      currentMember,
+      members: await params.loadMembers(),
+      authorized,
+      membersError: null,
+    };
+  } catch (error) {
+    return {
+      currentMember,
+      members: [],
+      authorized,
+      membersError: error ?? new Error('group member list load failed'),
+    };
+  }
 }

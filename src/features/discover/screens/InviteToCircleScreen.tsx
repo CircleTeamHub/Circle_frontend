@@ -126,7 +126,10 @@ export default function InviteToCircleScreen() {
   ) => {
     const showInitialLoading = options?.showInitialLoading ?? true;
     if (showInitialLoading) setLoading(true);
-    setAuthorized(false);
+    // review R2：下拉刷新（showInitialLoading=false）期间不预清 authorized——
+    // loading 为 false 时清了会立刻把列表替换成受限文案闪一下；授权状态等
+    // 刷新后的详情结果落定再更新。
+    if (showInitialLoading) setAuthorized(false);
     const [detailResult] = await Promise.allSettled([
       circleId ? fetchCircleDetail(circleId) : Promise.resolve(null),
     ]);

@@ -546,6 +546,17 @@ export default function ChatDetailScreen() {
       groupID: sourceID,
       currentUserID,
     });
+
+  // review R2：失去目录权限的瞬间清空已选 @ 目标与候选缓存——否则降权后
+  // handleSend 仍会把滞留的 mention（含 @所有人）当作有效目标发出去。
+  useEffect(() => {
+    if (!isGroupChat || canViewGroupMemberProfiles) return;
+    setMentionTargets([]);
+    setMentionCandidates([]);
+    setMentionQuery(null);
+    setMentionPickerVisible(false);
+    mentionCandidatesCacheRef.current.clear();
+  }, [canViewGroupMemberProfiles, isGroupChat]);
   // 单聊标题响应式吃备注覆盖：用户在资料页改备注后即时刷新（参数仅作初始快照）。
   // 非空覆盖 → 用备注；空串（备注被清除）→ 回退到参数快照；未改过 → 用参数快照。
   // 群聊标题不是好友备注，保持参数原值。
@@ -667,19 +678,19 @@ export default function ChatDetailScreen() {
       if (isGroupChat && userID !== fromImUserId(currentUserID ?? '')) {
         const allowed = await revalidateMemberViewAccess();
         if (!allowed) {
-          // review P2：名片可能是分享进群的外部用户——只拦"确认是本群成员"
-          // 的目标；查不到成员记录（含查询失败）按分享意图放行，名片本身
-          // 已对全群可见，不构成成员目录泄露。
-          let targetIsGroupMember = false;
+          // review P2：名片可能是分享进群的外部用户——确认不是本群成员才放行。
+          // review R2：身份查不清（查询失败）时 fail-closed 拦截，否则断网就
+          // 成了绕过成员目录限制的口子；只有明确查到"不在群里"才按分享意图放行。
+          let blockTarget = true;
           try {
             const [targetMember] = await loadSpecifiedGroupMembers(sourceID, [
               toImUserId(userID),
             ]);
-            targetIsGroupMember = Boolean(targetMember);
+            blockTarget = Boolean(targetMember);
           } catch {
-            targetIsGroupMember = false;
+            blockTarget = true;
           }
-          if (targetIsGroupMember) {
+          if (blockTarget) {
             Alert.alert(t('chat.groupMembersRestricted'));
             return;
           }

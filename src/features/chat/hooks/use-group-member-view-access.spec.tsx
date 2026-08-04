@@ -127,6 +127,27 @@ describe('useGroupMemberViewAccess', () => {
     );
 
     expect(result.current.canViewMembers).toBe(false);
+    // disabled 场景没有查询要等，直接视为已落定，调用方不至于卡在加载态。
+    expect(result.current.resolved).toBe(true);
     expect(mockSubscribe).not.toHaveBeenCalled();
+  });
+
+  it('exposes the live self member and resolves after the initial lookup', async () => {
+    mockLoadSpecifiedGroupMembers.mockResolvedValue([memberWithRole(60)]);
+
+    const { result } = renderAccessHook();
+    // 首查未落定前 resolved=false——调用方显示加载态而不是受限文案。
+    expect(result.current.resolved).toBe(false);
+    expect(result.current.selfMember).toBeNull();
+
+    await waitFor(() => expect(result.current.resolved).toBe(true));
+    expect(result.current.selfMember).toEqual(memberWithRole(60));
+
+    // 订阅推送角色变化 → selfMember 同步更新（群昵称/角色徽标都吃它）。
+    act(() => {
+      subscribedCallback?.(memberWithRole(20));
+    });
+    expect(result.current.selfMember).toEqual(memberWithRole(20));
+    expect(result.current.canViewMembers).toBe(false);
   });
 });

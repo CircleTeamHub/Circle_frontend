@@ -16,12 +16,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { GroupMemberItem } from '@openim/rn-client-sdk';
 import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
-import {
-  fromImUserId,
-  loadGroupMemberList,
-  loadSpecifiedGroupMembers,
-} from '@/im/client';
-import { loadAuthorizedGroupMembers } from '@/features/chat/group-member-permissions';
+import { fromImUserId, loadGroupMemberList } from '@/im/client';
+import { useGroupMemberViewAccess } from '@/features/chat/hooks/use-group-member-view-access';
 import {
   getUserProfileHref,
   getUserProfileScopeFromSegments,
@@ -81,53 +77,48 @@ export default function SearchGroupMembersScreen() {
   const currentUserID = useIMStore((state) => state.currentUserID);
   const [query, setQuery] = useState('');
   const [members, setMembers] = useState<GroupMemberItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [authorized, setAuthorized] = useState(false);
+  const [membersLoading, setMembersLoading] = useState(false);
+
+  // review R2 P1：权限走活体 hook——挂载期间被撤权时订阅立即翻转
+  // authorized，下面的目录数据也同步清空，不再是一次性快照。
+  const {
+    canViewMembers: authorized,
+    resolved: accessResolved,
+    revalidate,
+  } = useGroupMemberViewAccess({
+    enabled: Boolean(groupID && currentUserID),
+    groupID,
+    currentUserID,
+  });
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setAuthorized(false);
-
-    if (!groupID || !currentUserID) {
+    if (!authorized) {
       setMembers([]);
-      setAuthorized(false);
-      setLoading(false);
+      setMembersLoading(false);
       return () => {
         cancelled = true;
       };
     }
 
-    loadAuthorizedGroupMembers({
-      loadCurrentMember: async () => {
-        const [selfMember] = await loadSpecifiedGroupMembers(groupID, [currentUserID]);
-        return selfMember ?? null;
-      },
-      loadMembers: () => loadGroupMemberList(groupID, 10_000),
-    })
-      .then((result) => {
-        if (!cancelled) setAuthorized(result.authorized);
-        return result.members;
-      })
+    setMembersLoading(true);
+    loadGroupMemberList(groupID, 10_000)
       .then((nextMembers) => {
         if (!cancelled) setMembers(nextMembers);
       })
       .catch(() => {
-        if (!cancelled) {
-          setMembers([]);
-          setAuthorized(false);
-        }
+        if (!cancelled) setMembers([]);
       })
       .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setMembersLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [currentUserID, groupID]);
+  }, [authorized, groupID]);
+
+  const loading = !accessResolved || membersLoading;
 
   const trimmedQuery = query.trim().toLowerCase();
   const filteredMembers = useMemo(() => {
@@ -165,8 +156,14 @@ export default function SearchGroupMembersScreen() {
   );
 
   const handleOpenMember = useCallback(
-    (member: GroupMemberItem) => {
+    async (member: GroupMemberItem) => {
       if (!member.userID) {
+        return;
+      }
+
+      // review R2 P1：打开成员资料前 fail-closed 现场重查——降权后即便
+      // 结果列表还挂在屏上，也不能再跳成员资料（hook 状态翻转会顺带清列表）。
+      if (!(await revalidate())) {
         return;
       }
 
@@ -174,7 +171,7 @@ export default function SearchGroupMembersScreen() {
         getUserProfileHref(scope, fromImUserId(member.userID), member.nickname || undefined),
       );
     },
-    [scope],
+    [revalidate, scope],
   );
 
   const renderItem = useCallback(

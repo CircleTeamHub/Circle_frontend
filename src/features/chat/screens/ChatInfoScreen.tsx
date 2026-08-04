@@ -11,11 +11,8 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { Avatar } from '@/components/ui/avatar';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { buildChatInfoState } from '@/features/chat/chat-info';
-import {
-  canChangeGroupMemberRole,
-  canViewGroupMembers,
-  loadAuthorizedGroupMembers,
-} from '@/features/chat/group-member-permissions';
+import { canChangeGroupMemberRole } from '@/features/chat/group-member-permissions';
+import { useGroupMemberViewAccess } from '@/features/chat/hooks/use-group-member-view-access';
 import {
   clearConversationMessages,
   enforceGroupMemberPrivacy,
@@ -25,7 +22,6 @@ import {
   kickGroupMembers,
   leaveGroupChat,
   loadGroupMemberList,
-  loadSpecifiedGroupMembers,
   setConversationBurnDuration,
   setConversationMute,
   toggleConversationPinned,
@@ -290,7 +286,8 @@ export default function ChatInfoScreen() {
   const [deletePending, setDeletePending] = useState(false);
   const [groupInfo, setGroupInfo] = useState<GroupItem | null>(null);
   const [groupMembers, setGroupMembers] = useState<GroupMemberItem[]>([]);
-  const [currentGroupMember, setCurrentGroupMember] = useState<GroupMemberItem | null>(null);
+  // 群昵称编辑成功后的本地覆盖（活体 selfMember 是订阅数据，不能直接改写）。
+  const [myAliasOverride, setMyAliasOverride] = useState<string | null>(null);
   const [groupMembersExpanded, setGroupMembersExpanded] = useState(false);
   const [kickPendingUserID, setKickPendingUserID] = useState<string | null>(null);
   const [rolePendingUserID, setRolePendingUserID] = useState<string | null>(null);
@@ -352,12 +349,22 @@ export default function ChatInfoScreen() {
   const groupNotice = groupInfo?.notification?.trim() ?? '';
   const memberCount = groupInfo?.memberCount ?? groupMembers.length;
   const currentUserID = useIMStore((state) => state.currentUserID);
-  const myGroupAlias = currentGroupMember?.nickname ?? '';
+  // review R2 P1：自己的群成员身份走活体 hook——群主在本页存活期间撤掉管理员
+  // 时，订阅推送立即收紧目录/搜索/管理入口，不再等重新聚焦。
+  const {
+    selfMember: currentGroupMember,
+    canViewMembers: canViewMemberDirectory,
+    revalidate: revalidateMemberAccess,
+  } = useGroupMemberViewAccess({
+    enabled: Boolean(isGroupConversation && groupID && currentUserID),
+    groupID,
+    currentUserID,
+  });
+  const myGroupAlias = myAliasOverride ?? currentGroupMember?.nickname ?? '';
   const currentRole = currentGroupMember?.roleLevel ?? GroupMemberRole.Normal;
   const isOwner = currentRole === GroupMemberRole.Owner;
   const isAdmin = currentRole === GroupMemberRole.Admin;
   const canManageGroup = isOwner || isAdmin;
-  const canViewMemberDirectory = canViewGroupMembers(currentRole);
   const collapsedGroupMemberLimit = GROUP_MEMBER_COLUMNS * COLLAPSED_GROUP_MEMBER_ROWS - (canManageGroup ? 1 : 0);
   const visibleGroupMembers = useMemo(
     () => (groupMembersExpanded ? groupMembers : groupMembers.slice(0, collapsedGroupMemberLimit)),
@@ -465,13 +472,11 @@ export default function ChatInfoScreen() {
       if (!isGroupConversation || !groupID) {
         setGroupInfo(null);
         setGroupMembers([]);
-        setCurrentGroupMember(null);
         return () => {
           cancelled = true;
         };
       }
 
-      setCurrentGroupMember(null);
       setGroupMembers([]);
 
       getGroupInfo(groupID)
@@ -486,46 +491,38 @@ export default function ChatInfoScreen() {
           }
         });
 
-      const loadAuthorizedMembers = async () => {
-        if (!currentUserID) {
-          setCurrentGroupMember(null);
+      // 成员目录只有确认了目录权限才拉取；canViewMemberDirectory 由活体 hook
+      // 驱动——挂载中被撤权时它翻 false，本回调重跑并把目录清空。
+      const loadMemberDirectory = async () => {
+        if (!canViewMemberDirectory) {
           setGroupMembers([]);
           return;
         }
 
         try {
-          const result = await loadAuthorizedGroupMembers({
-            loadCurrentMember: async () => {
-              const [selfMember] = await loadSpecifiedGroupMembers(groupID, [currentUserID]);
-              return selfMember ?? null;
-            },
-            loadMembers: () => loadGroupMemberList(groupID, 10_000),
-          });
+          const members = await loadGroupMemberList(groupID, 10_000);
           if (cancelled) return;
-          setCurrentGroupMember(result.currentMember);
-          setGroupMembers(result.members);
-          if (!result.authorized) return;
+          setGroupMembers(members);
           void enforceGroupMemberPrivacy(groupID).catch(() => {
             // App-side authorization remains fail-closed; retry the OpenIM
             // privacy backfill the next time a manager opens group info.
           });
-          const refreshedMembers = await refreshGroupMemberProfiles(result.members);
+          const refreshedMembers = await refreshGroupMemberProfiles(members);
           if (!cancelled) {
             setGroupMembers(refreshedMembers);
           }
         } catch {
           if (!cancelled) {
-            setCurrentGroupMember(null);
             setGroupMembers([]);
           }
         }
       };
-      void loadAuthorizedMembers();
+      void loadMemberDirectory();
 
       return () => {
         cancelled = true;
       };
-    }, [currentUserID, groupID, isGroupConversation]),
+    }, [canViewMemberDirectory, groupID, isGroupConversation]),
   );
 
   useEffect(() => {
@@ -797,7 +794,7 @@ export default function ChatInfoScreen() {
 
       updateGroupMemberAlias(groupID, currentUserID, trimmed)
         .then(() => {
-          setCurrentGroupMember((member) => (member ? { ...member, nickname: trimmed } : member));
+          setMyAliasOverride(trimmed);
           setGroupMembers((members) =>
             members.map((member) => (member.userID === currentUserID ? { ...member, nickname: trimmed } : member)),
           );
@@ -821,14 +818,20 @@ export default function ChatInfoScreen() {
   }, [groupID, groupTitle]);
 
   const handleOpenMemberProfile = useCallback(
-    (member: GroupMemberItem) => {
+    async (member: GroupMemberItem) => {
       if (!member.userID) {
+        return;
+      }
+
+      // review R2 P1：打开成员资料前 fail-closed 现场重查，网格还没来得及
+      // 收起时也拦得住降权后的点击。
+      if (!(await revalidateMemberAccess())) {
         return;
       }
 
       router.push(getUserProfileHref(scope, fromImUserId(member.userID), member.nickname || undefined));
     },
-    [scope],
+    [revalidateMemberAccess, scope],
   );
 
   const handleChangeMemberRole = useCallback(
