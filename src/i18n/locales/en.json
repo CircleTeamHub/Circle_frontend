@@ -1488,6 +1488,11 @@
       "title": "Support Center",
       "subtitle": "Choose the type of support you need",
       "openFailed": "Couldn't open the support chat. Please try again.",
+      "agentsSubtitle": "Tap a support agent to start chatting",
+      "agentTapHint": "Tap to start chatting",
+      "agentFallbackName": "Support agent",
+      "agentIndexedName": "Support agent {{index}}",
+      "empty": "No agents are available for this category yet. Please try again later.",
       "categories": {
         "recharge": {
           "label": "Top-up Support",

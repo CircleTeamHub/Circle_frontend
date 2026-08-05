@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef } from 'react';
-import { Alert, FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,10 +8,6 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { MenuRow } from '@/components/ui/menu-row';
 import { Divider } from '@/components/ui/divider';
 import { Spacing, Typography, useTheme } from '@/theme';
-import { reportError } from '@/observability/sentry';
-import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
-import { getChatDetailHref } from '@/features/user/utils/routes';
-import { getOrCreateSingleConversation } from '@/im/client';
 import {
   SUPPORT_CATEGORIES,
   type SupportCategory,
@@ -29,72 +25,25 @@ export default function CustomerServiceScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
 
-  // ref 守卫同步生效，避免连点两类客服触发两次会话解析 / 两次入栈。
-  const openingRef = useRef(false);
-
-  // 屏幕失焦/离场后丢弃迟到的会话解析结果：会话解析可能较慢，若用户在解析完成前退出客服
-  // 中心或跳去别处（甚至离开又回来），不应再把聊天页推入栈。用**单调递增的 focus 代次**而非
-  // 布尔守卫——布尔在重新聚焦后又变回 true，会让「离开→回来」期间的迟到解析误判为仍在当次。
-  const focusGenerationRef = useRef(0);
+  // 同步守卫防连点：跳转是同步的，双击同一行不应压两次栈。返回本页（重新聚焦）时解锁。
+  const navigatingRef = useRef(false);
   useFocusEffect(
     useCallback(() => {
-      focusGenerationRef.current += 1;
-      return () => {
-        // 失焦（离场）也 bump：否则「离开后不再回来」、而会话解析刚好在离开后 resolve 时，
-        // 代次没变、isStale() 仍为 false，会从非活跃屏幕误把聊天页推入栈。
-        focusGenerationRef.current += 1;
-      };
+      navigatingRef.current = false;
     }, []),
   );
 
   const handleOpenCategory = useCallback(
-    async (category: SupportCategory) => {
-      if (openingRef.current) return;
-      openingRef.current = true;
-      // 捕获本次请求发起时的 focus 代次；完成时精确比对，离场（哪怕又回来）都算过期、丢弃。
-      const requestGeneration = focusGenerationRef.current;
-      const isStale = () => focusGenerationRef.current !== requestGeneration;
-      // 会话标题用该类客服名（如「充值客服」），客服侧一眼看清用户走的是哪个入口。
-      const title = t(category.labelKey);
-      try {
-        const conversation = await getOrCreateSingleConversation(
-          category.accountId,
-        );
-        // 解析期间用户已离场（或离开又回来）：丢弃结果，不再跳转。
-        if (isStale()) return;
-        router.push(
-          getChatDetailHref(
-            'profile',
-            category.accountId,
-            title,
-            undefined,
-            conversation.conversationID,
-          ),
-        );
-      } catch (error) {
-        // 解析期间用户已离场（或离开又回来）：不再弹窗、不再跳转。
-        if (isStale()) return;
-        // IM 未接通 / 客服账号尚未建立好友关系等：仍以预览模式进入，保证入口始终可点开。
-        if (shouldOpenChatPreview(error)) {
-          router.push(getChatDetailHref('profile', category.accountId, title));
-          return;
-        }
-        // 不把原始 SDK/OpenIM 错误文案直接展示给用户——可能含未本地化的实现/端点细节。
-        // 只给通用可读提示;结构化上下文另经 reportError 上报(Sentry 侧已脱敏)。
-        reportError(error, {
-          operation: 'customerService',
-          kind: 'openConversation',
-          category: category.id,
-        });
-        Alert.alert(
-          t('profile.customerService.openFailed'),
-          t('common.networkError'),
-        );
-      } finally {
-        openingRef.current = false;
-      }
+    (category: SupportCategory) => {
+      if (navigatingRef.current) return;
+      navigatingRef.current = true;
+      // 点类型进入「客服头像页」：展示该类型下的客服（头像+会员框），点头像再发起会话。
+      router.push({
+        pathname: '/(tabs)/profile/support-agents',
+        params: { category: category.id },
+      });
     },
-    [router, t],
+    [router],
   );
 
   const d = useMemo(
