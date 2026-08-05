@@ -58,41 +58,59 @@ test('ProfileScreen customer service row routes to the support-center screen', (
   );
 });
 
-test('customer service exposes recharge/issue/dispute/account with env override + SUPPORT_ACCOUNT_ID fallback', () => {
+test('customer service exposes recharge/issue/dispute/account with env override + SUPPORT_ACCOUNT_ID fallback, and routes to the agent picker', () => {
   const cats = read('src/features/profile/support-categories.ts');
   const cfg = read('src/constants/config.ts');
   const screen = read('src/features/profile/screens/CustomerServiceScreen.tsx');
 
   const ids = Array.from(cats.matchAll(/id:\s*'([a-z]+)'/g), ([, v]) => v);
   assert.deepEqual(ids, ['recharge', 'issue', 'dispute', 'account']);
-  assert.match(cats, /raw\?\.trim\(\)\s*\|\|\s*SUPPORT_ACCOUNT_ID/);
+
+  // 一类可配多个客服：逗号分隔、去重；全部留空回退到通用客服账号 SUPPORT_ACCOUNT_ID。
+  assert.match(cats, /accountIds:\s*resolveAccounts\(/);
+  assert.match(cats, /\.split\(','\)/);
+  assert.match(cats, /deduped\.length > 0 \? deduped : \[SUPPORT_ACCOUNT_ID\]/);
 
   assert.match(cfg, /export const SUPPORT_ACCOUNT_ID\s*=/);
   assert.match(cfg, /\|\|\s*['"]imAdmin['"]/);
 
-  // Each category opens a 1:1 chat with its own account, titled by the category label.
-  assert.match(screen, /getOrCreateSingleConversation\(\s*category\.accountId/);
+  // 点类型不再直接开会话，而是进「客服头像页」，带上 category 参数（会话解析下沉到头像页）。
   assert.match(
     screen,
-    /getChatDetailHref\(\s*['"]profile['"],\s*category\.accountId/,
+    /pathname:\s*['"]\/\(tabs\)\/profile\/support-agents['"]/,
   );
+  assert.match(screen, /params:\s*\{\s*category:\s*category\.id\s*\}/);
+  assert.doesNotMatch(screen, /getOrCreateSingleConversation/);
+});
 
-  // 会话解析较慢时用户可能已离场：解析/兜底完成后先查焦点守卫再跳转，
-  // 避免从非活跃屏幕把聊天页推入栈。
+test('support-agents route + screen use one unified support avatar and open a fenced 1:1 chat', () => {
+  const route = read('app/(tabs)/profile/support-agents.tsx');
+  const screen = read('src/features/profile/screens/SupportAgentsScreen.tsx');
+
+  assert.match(route, /SupportAgentsScreen/);
+
+  // 客服统一头像：不逐个拉账号真实头像/昵称/会员框，用同一个 headset 徽章。
+  assert.match(screen, /name="headset"/);
+  assert.doesNotMatch(screen, /fetchUserProfile|useSupportAgents/);
+  assert.doesNotMatch(screen, /getAvatarFrameSource|<Avatar|MemberName/);
+
+  // 一类可有多个客服账号，逐行路由到各自 OpenIM 账号；点头像开 1:1 会话。
+  assert.match(screen, /accountIds/);
+  assert.match(screen, /getOrCreateSingleConversation\(\s*agent\.id/);
+  assert.match(screen, /getChatDetailHref\(\s*['"]profile['"],\s*agent\.id/);
+
+  // 会话解析较慢时用户可能已离场：用单调 focus 代次守卫（而非会在重新聚焦后重置的布尔），
+  // 挡住「离开→回来」期间的迟到解析，避免从非活跃屏幕把聊天页推入栈。
   assert.match(screen, /useFocusEffect/);
-  // 用单调 focus 代次守卫（而非会在重新聚焦后重置的布尔），挡住「离开→回来」期间的迟到解析。
   assert.match(screen, /focusGenerationRef/);
   assert.match(screen, /if \(isStale\(\)\) return;/);
-  assert.doesNotMatch(screen, /focusedRef/);
-  // 失焦(离场)的 cleanup 也 bump 代次:挡住「离开后不再回来」而解析刚好在离开后 resolve
-  // 时的误跳转(否则代次没变、isStale 仍为 false)。
+  // 失焦(离场)的 cleanup 也 bump 代次：挡住「离开后不再回来」而解析刚好在离开后 resolve 时的误跳转。
   assert.match(
     screen,
     /return \(\) => \{[\s\S]*?focusGenerationRef\.current \+= 1;[\s\S]*?\};/,
   );
 
-  // 失败弹窗不再把原始 SDK/OpenIM 错误文案(可能含未本地化实现细节)展示给用户;
-  // 改通用本地化提示 + reportError 上报结构化上下文。
+  // 失败弹窗不把原始 SDK/OpenIM 错误文案展示给用户；改通用本地化提示 + reportError 上报结构化上下文。
   assert.match(screen, /reportError\(/);
   assert.doesNotMatch(screen, /error instanceof Error \? error\.message/);
 });

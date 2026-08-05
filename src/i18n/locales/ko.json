@@ -1951,6 +1951,11 @@
       "title": "고객센터",
       "subtitle": "문의할 상담 유형을 선택하세요",
       "openFailed": "고객센터 대화를 열지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      "agentsSubtitle": "상담원 아이콘을 눌러 상담을 시작하세요",
+      "agentTapHint": "눌러서 상담 시작",
+      "agentFallbackName": "상담원",
+      "agentIndexedName": "상담원 {{index}}",
+      "empty": "이 유형에는 아직 상담 가능한 상담원이 없습니다. 잠시 후 다시 시도해 주세요.",
       "categories": {
         "recharge": {
           "label": "충전 상담",

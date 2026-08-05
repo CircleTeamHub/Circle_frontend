@@ -1951,6 +1951,11 @@
       "title": "サポートセンター",
       "subtitle": "お問い合わせのサポート種別を選択してください",
       "openFailed": "サポートチャットを開けませんでした。しばらくしてからもう一度お試しください。",
+      "agentsSubtitle": "サポート担当のアイコンをタップして相談を開始します",
+      "agentTapHint": "タップして相談を開始",
+      "agentFallbackName": "サポート担当",
+      "agentIndexedName": "サポート担当 {{index}}",
+      "empty": "この種別には対応可能な担当者がまだいません。しばらくしてからお試しください。",
       "categories": {
         "recharge": {
           "label": "チャージサポート",

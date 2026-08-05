@@ -1478,6 +1478,11 @@
       "title": "客服中心",
       "subtitle": "请选择需要咨询的客服类型",
       "openFailed": "打开客服会话失败，请稍后重试",
+      "agentsSubtitle": "点击客服头像，开始在线咨询",
+      "agentTapHint": "点击发起咨询",
+      "agentFallbackName": "在线客服",
+      "agentIndexedName": "在线客服 {{index}}",
+      "empty": "该类型暂无在线客服，请稍后再试",
       "categories": {
         "recharge": {
           "label": "充值客服",
