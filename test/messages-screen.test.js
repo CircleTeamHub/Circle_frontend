@@ -61,17 +61,24 @@ test('messages screen shows a muted indicator for conversations with notificatio
   assert.doesNotMatch(screenSource, /name="volume-mute-outline"/);
 });
 
-test('messages screen refreshes OpenIM conversations whenever it receives focus', () => {
+test('messages screen reloads conversations on focus without resetting the active filter', () => {
   const filePath = path.join(
     process.cwd(),
     'src/features/messages/screens/MessagesScreen.tsx',
   );
   const source = fs.readFileSync(filePath, 'utf8');
 
+  // Reload-on-focus stays: groups created from群列表/圈子/临时群 must show up.
   assert.match(source, /useFocusEffect\(\s*useCallback\(\(\)\s*=>\s*\{/);
-  assert.match(source, /setActiveFilterId\("all"\)/);
   assert.match(source, /loadConversationList\(\)\.catch/);
   assert.doesNotMatch(source, /hasFetchedRef/);
+
+  // Regression（返回丢失筛选）: 点私聊里的会话 → push chat-detail → 返回 refocus 列表，
+  // 这个 focus effect 曾经把筛选强制重置回"全部"。焦点回来时不得再重置筛选。
+  assert.doesNotMatch(source, /setActiveFilterId\("all"\)/);
+
+  // 筛选仍由 Tab 栏驱动——只是去掉了 on-focus 的强制重置。
+  assert.match(source, /setActiveFilterId\(filterItems\[index\]/);
 });
 
 test('messages screen supports pull-to-refresh for the conversation list', () => {
