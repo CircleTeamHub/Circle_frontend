@@ -163,6 +163,27 @@ function sanitizeDisplayIcons(value: unknown): SanitizedDisplayIcon[] {
   return icons;
 }
 
+/**
+ * 渲染文本的长度上限。
+ *
+ * 消息正文、位置描述、群通知里的成员昵称都由对端控制，且不经过 circle_be
+ * （客户端 SDK 直发 OpenIM），服务端没有任何校验。气泡也没有设 numberOfLines，
+ * 于是一条几 MB 的单行文本会在 UI 线程上做一次同等规模的文字排版 —— 期间整个
+ * 界面不响应，而消息是持久化的，重进会话再来一次。
+ *
+ * 8000 远高于任何真实聊天消息（微信一条上限 5000 字），只用来兜住失控的那种。
+ * 在映射层截断而不是在输入框加 maxLength：攻击者根本不走我们的输入框，
+ * maxLength 只是自家客户端的礼貌，不是防线。
+ */
+const MAX_RENDERED_TEXT_LENGTH = 8000;
+
+function clampRenderedText<T extends string | null | undefined>(value: T): T {
+  if (typeof value !== 'string' || value.length <= MAX_RENDERED_TEXT_LENGTH) {
+    return value;
+  }
+  return `${value.slice(0, MAX_RENDERED_TEXT_LENGTH)}…` as T;
+}
+
 function parseNoteCardPayload(data: string): NoteCardData | null {
   try {
     const raw = JSON.parse(data) as Partial<NoteCardData>;
@@ -486,7 +507,7 @@ export function mapMessageItemToChatMessage(
     return {
       id: item.clientMsgID,
       type: 'system-notice',
-      text: groupNoticeText,
+      text: clampRenderedText(groupNoticeText),
       time: formatTimestamp(item.sendTime),
     };
   }
@@ -520,8 +541,8 @@ export function mapMessageItemToChatMessage(
       ...base,
       type: 'location',
       outgoing: isSent,
-      locationTitle: item.locationElem?.description ?? '位置消息',
-      locationAddress: item.locationElem?.description ?? '未知位置',
+      locationTitle: clampRenderedText(item.locationElem?.description) ?? '位置消息',
+      locationAddress: clampRenderedText(item.locationElem?.description) ?? '未知位置',
       senderName: isSent ? undefined : (item.senderNickname || item.sendID),
     };
   }
@@ -530,7 +551,7 @@ export function mapMessageItemToChatMessage(
     return {
       ...base,
       type: isSent ? 'sent' : 'received',
-      text: item.atTextElem?.text ?? item.content,
+      text: clampRenderedText(item.atTextElem?.text ?? item.content),
       senderName: isSent ? undefined : (item.senderNickname || item.sendID),
     };
   }
@@ -539,7 +560,7 @@ export function mapMessageItemToChatMessage(
     return {
       ...base,
       type: isSent ? 'sent' : 'received',
-      text: item.quoteElem?.text ?? item.content,
+      text: clampRenderedText(item.quoteElem?.text ?? item.content),
       quotedText: getMessagePreview(item.quoteElem?.quoteMessage ?? null, ''),
       senderName: isSent ? undefined : (item.senderNickname || item.sendID),
     };
@@ -754,7 +775,7 @@ export function mapMessageItemToChatMessage(
   return {
     ...base,
     type: isSent ? 'sent' : 'received',
-    text: getMessagePreview(item, item.content),
+    text: clampRenderedText(getMessagePreview(item, item.content)),
     // 仅接收到的消息携带 senderName，优先用昵称，没有则 fallback 到 sendID
     senderName: isSent ? undefined : (item.senderNickname || item.sendID),
   };

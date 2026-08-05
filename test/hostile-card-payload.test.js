@@ -192,3 +192,69 @@ test('displayIcons is always an array downstream, whatever the peer sent', () =>
     );
   }
 });
+
+test('peer-controlled text is clamped before it reaches a bubble', () => {
+  const { createMessageMapCache, mapMessageItemsToChatMessages } = loadTsModule(
+    'src/im/mappers.ts',
+    MAPPER_STUBS,
+  );
+
+  // 气泡没有设 numberOfLines，一条几 MB 的单行文本会在 UI 线程上做一次同等规模的
+  // 文字排版 —— 期间整个界面不响应；而消息是持久化的，重进会话再来一次。
+  const huge = 'a'.repeat(2_000_000);
+  const cache = createMessageMapCache('self');
+  const [mapped] = mapMessageItemsToChatMessages(
+    [
+      {
+        clientMsgID: 'm-huge',
+        sendID: 'peer',
+        recvID: 'self',
+        sessionType: 1,
+        contentType: 101,
+        sendTime: Date.now(),
+        status: 2,
+        isRead: false,
+        textElem: { content: huge },
+        content: huge,
+      },
+    ],
+    'self',
+    cache,
+  );
+
+  assert.ok(
+    (mapped.text?.length ?? 0) < 10_000,
+    `text must be clamped, got ${mapped.text?.length}`,
+  );
+});
+
+test('normal-length text is never truncated', () => {
+  const { createMessageMapCache, mapMessageItemsToChatMessages } = loadTsModule(
+    'src/im/mappers.ts',
+    MAPPER_STUBS,
+  );
+
+  // 截断只该兜住失控的那种；正常长消息（远超一屏但仍是真人会发的）必须原样保留。
+  const normal = '很长的一段话。'.repeat(200);
+  const cache = createMessageMapCache('self');
+  const [mapped] = mapMessageItemsToChatMessages(
+    [
+      {
+        clientMsgID: 'm-normal',
+        sendID: 'peer',
+        recvID: 'self',
+        sessionType: 1,
+        contentType: 101,
+        sendTime: Date.now(),
+        status: 2,
+        isRead: false,
+        textElem: { content: normal },
+        content: normal,
+      },
+    ],
+    'self',
+    cache,
+  );
+
+  assert.equal(mapped.text, normal);
+});
