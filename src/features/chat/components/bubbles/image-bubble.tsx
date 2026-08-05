@@ -99,6 +99,12 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
             contentFit="cover"
             transition={150}
             cachePolicy="memory-disk"
+            // 图片尺寸由对端决定，本地无从预判。Android 走 Glide 会读图片头、按目标
+            // 尺寸挑 inSampleSize，超大图只是多下载一些字节；iOS 不会——不开这个开关
+            // 时 expo-image 会把整张位图解进内存，一张 20000x20000 就是 ~1.6GB，直接
+            // OOM 崩溃。这是 iOS-only 的 prop，在 Android 上是无害的空操作，所以现在
+            // 就加上，而不是等真正出 iOS 包时再补（那时容易漏）。
+            enforceEarlyResizing
             onError={(event) => {
               if (__DEV__) {
                 console.warn('[chat] image load failed', {

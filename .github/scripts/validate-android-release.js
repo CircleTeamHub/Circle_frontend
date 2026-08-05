@@ -59,6 +59,59 @@ function expectedVersionCode(version) {
   return parts[0] * 1_000_000 + parts[1] * 1000 + parts[2];
 }
 
+// Sentry DSN 是「软要求」，与上面这些不同：src/observability/sentry.ts 在没有 DSN 时
+// 整体 no-op，app 功能完全正常，所以缺它不该 fail 构建。但「release 包完全没有崩溃上报」
+// 是个安静到没人会发现的状态——偶发卡死 / ANR 事后全靠它定位，而构建依旧全绿。故缺失时
+// 每次构建都出一条 ::warning::。
+//
+// 反过来，DSN 配了但格式不对必须 fail：Sentry.init 会静默抛错被 catch 掉（sentry.ts
+// 的 try/catch），结果和没配一模一样，却让人误以为上报已经接好——比缺失更危险。
+function validateSentryDsn(errors, env) {
+  const dsn = env.EXPO_PUBLIC_SENTRY_DSN?.trim();
+  if (!dsn) return;
+
+  let parsed;
+  try {
+    parsed = new URL(dsn);
+  } catch {
+    errors.push(
+      'EXPO_PUBLIC_SENTRY_DSN must be a Sentry DSN URL such as https://<publicKey>@<host>/<projectId>.',
+    );
+    return;
+  }
+
+  if (parsed.protocol !== 'https:') {
+    errors.push('EXPO_PUBLIC_SENTRY_DSN must use https.');
+  }
+  if (!parsed.username) {
+    errors.push(
+      'EXPO_PUBLIC_SENTRY_DSN is missing its public key (expected https://<publicKey>@<host>/<projectId>).',
+    );
+  }
+  // DSN 的 secret key 段在 2016 年就废弃了。它出现通常意味着贴进来的是一份旧的、
+  // 或者是本不该进客户端包的凭证——客户端 DSN 会随 APK 分发给所有人。
+  if (parsed.password) {
+    errors.push(
+      'EXPO_PUBLIC_SENTRY_DSN must not contain a secret key — client DSNs ship inside the APK.',
+    );
+  }
+  if (!/\/\d+$/.test(parsed.pathname)) {
+    errors.push(
+      'EXPO_PUBLIC_SENTRY_DSN must end with a numeric project id (e.g. https://<publicKey>@<host>/4507).',
+    );
+  }
+}
+
+function collectBuildEnvWarnings({ env }) {
+  const warnings = [];
+  if (!env.EXPO_PUBLIC_SENTRY_DSN?.trim()) {
+    warnings.push(
+      'EXPO_PUBLIC_SENTRY_DSN is not set — this build ships with Sentry dormant, so crashes, ANRs and handled errors are reported nowhere. Set the repository variable to enable crash reporting.',
+    );
+  }
+  return warnings;
+}
+
 // 客服路由必须有可信兜底：要么配了通用客服账号 EXPO_PUBLIC_SUPPORT_ACCOUNT_ID，要么四类
 // 专属账号全配齐。两者都缺时，充值 / 纠纷 / 账号类客服会静默落到系统账号 imAdmin —— 绝不能
 // 带着这种配置发正式包。
@@ -97,6 +150,7 @@ function validateBuildEnv({ env }) {
     env.EXPO_PUBLIC_OPENIM_WS_URL,
     'wss:',
   );
+  validateSentryDsn(errors, env);
 
   return errors;
 }
@@ -181,9 +235,19 @@ function validateLegacyReleaseConfig({ env, app }) {
   return errors;
 }
 
+// 哪些 scope 会编译出一个真正的包 —— 只有这些需要提醒「这个包没有崩溃上报」。
+// signing / distribution 只读凭证与审批位，跟包内可观测性无关。
+const BUILD_ENV_SCOPES = new Set([undefined, 'metadata', 'build-env', 'all']);
+
 function main() {
   const scope = process.argv[2];
   let errors;
+
+  if (BUILD_ENV_SCOPES.has(scope)) {
+    for (const warning of collectBuildEnvWarnings({ env: process.env })) {
+      console.warn(`::warning::${warning}`);
+    }
+  }
 
   try {
     switch (scope) {
@@ -229,6 +293,7 @@ function main() {
 if (require.main === module) main();
 
 module.exports = {
+  collectBuildEnvWarnings,
   expectedVersionCode,
   validateBuildEnv,
   validateDistributionApproval,

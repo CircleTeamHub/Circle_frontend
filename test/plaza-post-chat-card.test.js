@@ -25,7 +25,11 @@ function loadPlazaCardParser() {
     console,
     require: (specifier) => {
       if (specifier === '@openim/rn-client-sdk') return { MessageType: {}, SessionType: {} };
-      if (specifier === '@/services/api/utils') return { normalizeMediaUrl: (value) => value };
+      if (specifier === '@/services/api/utils')
+        return {
+          normalizeMediaUrl: (value) => value,
+          allowPeerMediaUrl: (value) => value ?? null,
+        };
       if (specifier === '@/i18n') return { __esModule: true, default: { t: (_key, options) => options.defaultValue, language: 'en' } };
       if (specifier === '@/utils/locale') return { getLocalizedDateTimeLocale: () => 'en' };
       return {};
@@ -50,8 +54,10 @@ test('mappers parse + preview + map the plaza-post card', () => {
   assert.match(mappers, /function parsePlazaPostCardData/);
   assert.match(mappers, /ext === PLAZA_POST_CARD_EXTENSION/);
   assert.match(mappers, /type: 'plaza-post-card'/);
-  // 卡片封面走媒体地址归一化。
-  assert.match(mappers, /coverUrl: normalizeMediaUrl\(payload\.coverUrl\)/);
+  // 卡片封面必须走来源白名单，而不是直通的 normalizeMediaUrl：payload 由对端完全
+  // 控制，指向任意主机时每个看到这条消息的人都会静默 GET 一次，等于把 IP 和已读
+  // 时刻送出去。
+  assert.match(mappers, /coverUrl: allowPeerMediaUrl\(payload\.coverUrl\)/);
 });
 
 test('plaza-post card parser rejects malformed identifiers and titles', () => {

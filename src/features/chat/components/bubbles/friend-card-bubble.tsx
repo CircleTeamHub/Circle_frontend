@@ -101,6 +101,10 @@ export const FriendCardBubble: React.FC<FriendCardBubbleProps> = ({
                       source={{ uri: icon.imageUrl }}
                       style={sFriendCard.iconImage}
                       contentFit="cover"
+                      // 对端可控图片：iOS 不降采样，整张位图会解进内存（见
+                      // image-bubble.tsx 的详细说明）。图标容器只有几十 px，
+                      // 早期降采样收益最大。Android 上是空操作。
+                      enforceEarlyResizing
                     />
                   ) : (
                     <Ionicons

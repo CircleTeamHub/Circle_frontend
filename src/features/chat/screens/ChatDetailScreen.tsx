@@ -26,6 +26,7 @@ import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import { Avatar } from '@/components/ui/avatar';
 import { MemberName } from '@/components/ui/member-name';
 import { Divider } from '@/components/ui/divider';
+import { useElapsedSeconds } from '@/hooks/use-elapsed-seconds';
 import {
   DatePill,
   SystemNoticePill,
@@ -65,7 +66,6 @@ import {
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
   useAudioRecorder,
-  useAudioRecorderState,
 } from 'expo-audio';
 import {
   getOrCreateSingleConversation,
@@ -211,6 +211,9 @@ const ATTACHMENT_ITEMS: readonly {
 // 工具面板每页最多 8 个（4 列 × 2 行），超出的横向翻页
 const ATTACHMENT_PAGE_SIZE = 8;
 const MENTION_CANDIDATE_LIMIT = 200;
+// scrollToIndex 定位失败后最多重试几次（每次间隔 250ms）。够覆盖「再渲染一两批就能
+// 测到目标行」的正常情况，又不至于在测不到时无限跳动。
+const MAX_SCROLL_TO_INDEX_RETRIES = 4;
 const ATTACHMENT_PAGES: (typeof ATTACHMENT_ITEMS)[number][][] = Array.from(
   { length: Math.ceil(ATTACHMENT_ITEMS.length / ATTACHMENT_PAGE_SIZE) },
   (_, page) =>
@@ -437,6 +440,14 @@ export default function ChatDetailScreen() {
   const authUser = useAuthStore((state) => state.user);
   const flatListRef = useRef<FlatListType<ChatMessage>>(null);
   const scrolledToSearchRef = useRef(false);
+  // scrollToIndex 失败重试的次数与在飞的定时器。没有上限时，一次失败的定位会
+  // 每 250ms 重试同一个 index，而每次重试又可能再次触发 onScrollToIndexFailed —— 在
+  // 变高气泡 + 虚拟化回收下能连续跳动好几秒，看起来就像进聊天页就卡住。
+  const scrollRetryCountRef = useRef(0);
+  const scrollRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 供延时重试读取的「当前列表长度」。定时器闭包捕获的是排定那一刻的 messages，
+  // 用它判断边界会漏掉这 250ms 内发生的删除 / 清空。
+  const messagesLengthRef = useRef(0);
   // Pattern D 双层防抖：disabled={sending} 在 fast double-tap 下可能晚一帧才生效；
   // inFlightRef 在 hook 入口处再判断一次，保证同一时刻只有一条消息在飞。文本 / 图片 /
   // 位置 / 笔记 / 名片 / 转账 6 条发送路径共享同一道闸。
@@ -478,7 +489,6 @@ export default function ChatDetailScreen() {
   const [pendingCard, setPendingCard] = useState<PlazaPostCardData | null>(null);
   const setActiveCall = useCallStore((state) => state.setActiveCall);
   const voiceRecorder = useAudioRecorder(RecordingPresets.LOW_QUALITY);
-  const voiceRecorderState = useAudioRecorderState(voiceRecorder, 250);
   const [voiceRecordingStartedAt, setVoiceRecordingStartedAt] = useState<number | null>(null);
   const [voiceActionBusy, setVoiceActionBusy] = useState(false);
   // 语音输入模式：点话筒后输入框变「按住说话」；按住时滑到左侧取消、松手发送。
@@ -499,8 +509,8 @@ export default function ChatDetailScreen() {
   const isRecordingRef = useRef(false);
   const recordingAudioModeEnabledRef = useRef(false);
   useEffect(() => {
-    isRecordingRef.current = voiceRecorderState.isRecording;
-  }, [voiceRecorderState.isRecording]);
+    isRecordingRef.current = voiceRecordingStartedAt != null;
+  }, [voiceRecordingStartedAt]);
   useEffect(() => {
     // 冲销上次可能丢失的卡片回执挂账（幂等，无账时零成本）
     void flushPendingGiftCardAcks();
@@ -508,6 +518,10 @@ export default function ChatDetailScreen() {
   useEffect(() => {
     return () => {
       mountedRef.current = false;
+      if (scrollRetryTimerRef.current) {
+        clearTimeout(scrollRetryTimerRef.current);
+        scrollRetryTimerRef.current = null;
+      }
     };
   }, []);
   const restoreRecordingAudioMode = useCallback(() => {
@@ -755,16 +769,10 @@ export default function ChatDetailScreen() {
     },
     targetMessageHighlight: { backgroundColor: colors.primaryLight },
   }), [backgroundStyle.backgroundColor, colors, statusColor]);
-  const isVoiceRecording =
-    voiceRecorderState.isRecording || voiceRecordingStartedAt != null;
-  const voiceElapsedSeconds = Math.max(
-    1,
-    Math.round(
-      (voiceRecorderState.durationMillis ||
-        (voiceRecordingStartedAt ? Date.now() - voiceRecordingStartedAt : 0)) /
-        1000,
-    ),
-  );
+  // 录音状态完全由 JS 侧的 voiceRecordingStartedAt 决定：录音是纯按住/松手驱动的
+  // （没有配 maxDuration，不存在原生自动停止），所以不需要轮询 native 来发现状态变化。
+  const isVoiceRecording = voiceRecordingStartedAt != null;
+  const voiceElapsedSeconds = useElapsedSeconds(voiceRecordingStartedAt);
 
   useEffect(() => {
     if (!conversationID || !sourceID) {
@@ -878,6 +886,7 @@ export default function ChatDetailScreen() {
     );
     return collapseDuplicateFriendAddedNotices(mapped);
   }, [currentUserID, conversationMessages]);
+  messagesLengthRef.current = messages.length;
 
   // 搜索定位：在 inverted 列表里 scrollToIndex 仍然按 index 计数，找到就跳。
   useEffect(() => {
@@ -888,6 +897,9 @@ export default function ChatDetailScreen() {
     const idx = messages.findIndex((m) => m.id === searchedMsgID);
     if (idx !== -1) {
       scrolledToSearchRef.current = true;
+      // 每次新的定位都是一轮全新的重试预算，否则上一次搜索用尽后，后续定位会
+      // 一次重试都不做。
+      scrollRetryCountRef.current = 0;
       flatListRef.current?.scrollToIndex({
         index: idx,
         animated: true,
@@ -2733,16 +2745,46 @@ export default function ChatDetailScreen() {
           // scrollToIndex 在 inverted + 没设 getItemLayout 时，目标 index 超出已渲染窗口
           // 就会抛 "scrollToIndex out of range"。fallback：先滚到能测到的最远 index，
           // 等下一帧布局完再精确跳到目标位置，避免搜索定位时整页崩。
+          //
+          // 重试必须有上限：每次重试都可能再次失败并再排一次重试，构成自维持的循环。
+          // 消息高度可变（无法提供 getItemLayout）、虚拟化又会回收已测量的行，所以
+          // "多试几次总能测到" 并不成立。试满 MAX 次就退化为滚到能测到的最远处收手 ——
+          // 定位不到最多是位置不准，而卡住数秒是功能故障。
           onScrollToIndexFailed={(info) => {
-            const fallbackIndex = Math.min(
-              info.highestMeasuredFrameIndex ?? info.index,
-              info.index,
+            const fallbackIndex = Math.max(
+              0,
+              Math.min(info.highestMeasuredFrameIndex ?? info.index, info.index),
             );
             flatListRef.current?.scrollToIndex({
               index: fallbackIndex,
               animated: false,
             });
-            setTimeout(() => {
+
+            // 目标已经不在当前列表里（消息被 200 条上限截掉、或会话已切换）：
+            // 再重试也只会反复失败。
+            if (info.index >= messages.length) {
+              scrollRetryCountRef.current = 0;
+              return;
+            }
+            if (scrollRetryCountRef.current >= MAX_SCROLL_TO_INDEX_RETRIES) {
+              scrollRetryCountRef.current = 0;
+              return;
+            }
+
+            scrollRetryCountRef.current += 1;
+            if (scrollRetryTimerRef.current) {
+              clearTimeout(scrollRetryTimerRef.current);
+            }
+            scrollRetryTimerRef.current = setTimeout(() => {
+              scrollRetryTimerRef.current = null;
+              if (!mountedRef.current) return;
+              // 必须在开火时重新校验边界，而不是只在排定时校验：这 250ms 里列表可能
+              // 缩短（删除消息、清空聊天记录、切换会话）。scrollToIndex 对越界是
+              // 同步抛 invariant、不会走 onScrollToIndexFailed —— 在 setTimeout 里
+              // 抛出去就是 release 包的崩溃。读 ref 而非闭包里的 messages，
+              // 闭包捕获的是排定那一刻的旧数组。
+              const currentLength = messagesLengthRef.current;
+              if (currentLength === 0 || info.index >= currentLength) return;
               flatListRef.current?.scrollToIndex({
                 index: info.index,
                 animated: true,

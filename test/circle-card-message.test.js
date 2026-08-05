@@ -144,6 +144,7 @@ test('circle card mapper recovers avatar from card extension when OpenIM faceURL
       fromImUserId: (userID) => userID,
     },
     '@/services/api/utils': {
+      allowPeerMediaUrl: (value) => value ?? null,
       normalizeMediaUrl: (url) => url,
     },
     '@/i18n': {

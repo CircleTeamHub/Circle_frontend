@@ -144,17 +144,87 @@ export function bindOpenIMListeners() {
   };
   OpenIMSDK.on('onKickedOffline', handleKickedOffline);
 
+  // ——— 入站事件合并缓冲 ———
+  //
+  // 活跃群刷屏 / 登录后同步爆发时，onRecvNewMessages、onConversationChanged、
+  // onTotalUnreadMessageCountChanged 都可能每秒触发几十上百次，逐条落 store 就是
+  // 逐条重渲染。三者共用同一个定时器：同一 tick 内的多次 setState 会被 React 合成
+  // 一次渲染，而三个各自错开的定时器就是三次。
+  //
+  // 折叠是语义等价的，不是近似：
+  // - 会话按 conversationID 存进 Map，mergeConversationList 本来就是「按 ID 整体替换」，
+  //   所以同一会话的 N 次更新只保留最后一次，与逐条 merge 结果完全一致。
+  // - 未读是服务端下发的绝对总数（不是增量），后值覆盖前值同样无损。
+  const FLUSH_INTERVAL_MS = 120;
+  let pendingByConversation = new Map<string, MessageItem[]>();
+  let pendingConversations = new Map<string, ConversationItem>();
+  // null = 本轮没有未读事件。不能用 0 当哨兵：0 本身就是合法的未读数（全部已读）。
+  let pendingTotalUnread: number | null = null;
+  let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const flushPendingConversations = () => {
+    if (pendingConversations.size === 0) return;
+    const conversations = [...pendingConversations.values()];
+    pendingConversations = new Map();
+    useIMStore.getState().mergeConversations(conversations);
+  };
+
+  const flushPendingUnread = () => {
+    if (pendingTotalUnread === null) return;
+    const totalUnread = pendingTotalUnread;
+    pendingTotalUnread = null;
+    useIMStore.getState().setTotalUnread(totalUnread);
+    useTabBadgeStore.getState().setMessagesUnread(totalUnread);
+  };
+
+  const flushPending = () => {
+    flushTimer = null;
+    flushPendingConversations();
+    flushPendingMessages();
+    flushPendingUnread();
+  };
+
+  const scheduleFlush = () => {
+    if (!flushTimer) {
+      flushTimer = setTimeout(flushPending, FLUSH_INTERVAL_MS);
+    }
+  };
+
+  // 会话现在最多延迟 FLUSH_INTERVAL_MS 才进 store，但消息横幅和 C2C 读回执都要靠
+  // 「按 groupID / userID 查得到会话」才能路由，查不到时它们不是降级而是**直接丢弃**
+  // （群横幅 buildChatSnackbar 返回 null；读回执打个 warn 就 continue）。只读 store
+  // 的话，新会话在缓冲窗口内到达的首条消息会静默没有横幅 —— 批处理前是同步 merge，
+  // 不存在这个窗口。所以路由用的列表必须把缓冲中的会话叠上去。
+  //
+  // 每次事件调用一次（不是每条消息一次），且缓冲为空时零成本直接返回原数组 ——
+  // 下游本来就是 O(n) 的 .find()，这里不会让热路径变得更差。
+  const readConversationsWithPending = (): ConversationItem[] => {
+    const { conversations } = useIMStore.getState();
+    if (pendingConversations.size === 0) return conversations;
+    const merged = new Map(
+      conversations.map((item) => [item.conversationID, item]),
+    );
+    for (const [conversationID, item] of pendingConversations) {
+      merged.set(conversationID, item);
+    }
+    return [...merged.values()];
+  };
+
   // onConversationChanged 与 onNewConversation 共享同一个 handler 引用：
   // 行为相同 + 共享 ref 便于 off 时一一对应、也少一份闭包。
   const handleConversationsBatched = (conversations: ConversationItem[]) => {
-    useIMStore.getState().mergeConversations(conversations);
+    for (const conversation of conversations) {
+      if (!conversation?.conversationID) continue;
+      pendingConversations.set(conversation.conversationID, conversation);
+    }
+    if (pendingConversations.size > 0) scheduleFlush();
   };
   OpenIMSDK.on('onConversationChanged', handleConversationsBatched);
   OpenIMSDK.on('onNewConversation', handleConversationsBatched);
 
   const handleUnreadChanged = (totalUnread: number) => {
-    useIMStore.getState().setTotalUnread(totalUnread);
-    useTabBadgeStore.getState().setMessagesUnread(totalUnread);
+    pendingTotalUnread = totalUnread;
+    scheduleFlush();
   };
   OpenIMSDK.on('onTotalUnreadMessageCountChanged', handleUnreadChanged);
 
@@ -171,7 +241,7 @@ export function bindOpenIMListeners() {
     }[],
   ) => {
     if (!Array.isArray(receipts)) return;
-    const { conversations } = useIMStore.getState();
+    const conversations = readConversationsWithPending();
     for (const receipt of receipts) {
       const ids =
         receipt.msgIDList ??
@@ -200,15 +270,8 @@ export function bindOpenIMListeners() {
   };
   OpenIMSDK.on('onRecvC2CReadReceipt', handleC2CReadReceipt);
 
-  // 入站消息合并缓冲：活跃群里 onRecvNewMessages 可能高频触发，攒
-  // MESSAGE_FLUSH_INTERVAL_MS 合并成一次 appendMessages，把每秒 N 次 setState
-  // 压到 ~8 次，避免刷屏时聊天页逐条重渲染。按会话分桶，unbind 时会 flush 不丢消息。
-  const MESSAGE_FLUSH_INTERVAL_MS = 120;
-  let pendingByConversation = new Map<string, MessageItem[]>();
-  let messageFlushTimer: ReturnType<typeof setTimeout> | null = null;
-
-  const flushPendingMessages = () => {
-    messageFlushTimer = null;
+  // 按会话分桶攒消息，随共用的 flush 定时器一起落库（unbind 时也会 flush，不丢消息）。
+  function flushPendingMessages() {
     if (pendingByConversation.size === 0) return;
     const batches = pendingByConversation;
     pendingByConversation = new Map();
@@ -230,7 +293,7 @@ export function bindOpenIMListeners() {
         );
       }
     });
-  };
+  }
 
   const bufferMessages = (conversationID: string, msgs: MessageItem[]) => {
     const existing = pendingByConversation.get(conversationID);
@@ -238,17 +301,12 @@ export function bindOpenIMListeners() {
       conversationID,
       existing ? [...existing, ...msgs] : msgs,
     );
-    if (!messageFlushTimer) {
-      messageFlushTimer = setTimeout(
-        flushPendingMessages,
-        MESSAGE_FLUSH_INTERVAL_MS,
-      );
-    }
+    scheduleFlush();
   };
 
   const handleNewMessages = (messages: MessageItem[]) => {
-    const { activeConversation, currentUserID, conversations } =
-      useIMStore.getState();
+    const { activeConversation, currentUserID } = useIMStore.getState();
+    const conversations = readConversationsWithPending();
 
     if (!activeConversation) {
       messages.forEach((message) =>
@@ -290,12 +348,12 @@ export function bindOpenIMListeners() {
   OpenIMSDK.on('onUserStatusChanged', handleUserStatusChanged);
 
   unbindAll = () => {
-    // 卸载前 flush 缓冲，避免丢失最后一批还没落 store 的消息。
-    if (messageFlushTimer) {
-      clearTimeout(messageFlushTimer);
-      messageFlushTimer = null;
+    // 卸载前 flush 缓冲，避免丢失最后一批还没落 store 的消息 / 会话 / 未读数。
+    if (flushTimer) {
+      clearTimeout(flushTimer);
+      flushTimer = null;
     }
-    flushPendingMessages();
+    flushPending();
     OpenIMSDK.off('onConnecting', handleConnecting);
     OpenIMSDK.off('onConnectSuccess', handleConnected);
     OpenIMSDK.off('onConnectFailed', handleConnectFailed);

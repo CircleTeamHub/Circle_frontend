@@ -17,7 +17,12 @@ test('group notification messages render as centered system notices in chat', ()
     mappers,
     /const groupNoticeText = getGroupNoticeText\(item\)/,
   );
-  assert.match(mappers, /type: 'system-notice',\s*text: groupNoticeText/);
+  // 灰条文案里会拼进对端昵称（getJoinedMemberNames），所以和其它对端可控文本一样
+  // 过一次长度收口 —— 否则一个超长昵称就能让这条灰条在 UI 线程上做巨量文字排版。
+  assert.match(
+    mappers,
+    /type: 'system-notice',\s*text: clampRenderedText\(groupNoticeText\)/,
+  );
   // 会话列表预览与聊天流共用同一套文案。
   assert.match(mappers, /return getGroupNoticeText\(message\) \?\? '';/);
   // MemberEnter（扫码/搜索进群）也算“新成员加入”。

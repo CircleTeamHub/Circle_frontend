@@ -159,6 +159,7 @@ test('fetchFriendSettings normalizes photo urls and passes through other fields'
       }),
     },
     '@/services/api/utils': {
+      allowPeerMediaUrl: (value) => value ?? null,
       normalizeMediaUrl: (value) => (value ? `https://cdn/${value}` : null),
     },
   });
