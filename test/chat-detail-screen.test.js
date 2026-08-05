@@ -286,8 +286,15 @@ test('chat detail voice cleanup reads a JS snapshot, never the native recorder o
 
   // 崩溃根因表达式必须消失：cleanup 不能在 native 对象上链式取 isRecording。
   assert.doesNotMatch(source, /voiceRecorder\.getStatus\(\)\.isRecording/);
-  // 改用纯 JS 快照 ref。
-  assert.match(source, /isRecordingRef\.current\s*=\s*voiceRecorderState\.isRecording/);
+  // 改用纯 JS 快照 ref，且快照本身也必须来自 JS 状态 —— 断言的是「这个 ref 的赋值
+  // 右侧不含任何 recorder 调用」，而不是某一种具体写法，这样换实现不会误伤。
+  const snapshotAssignment = /isRecordingRef\.current\s*=\s*([^;]+);/.exec(source);
+  assert.ok(snapshotAssignment, 'isRecordingRef must be assigned from somewhere');
+  assert.doesNotMatch(
+    snapshotAssignment[1],
+    /voiceRecorder|getStatus/,
+    'the JS snapshot must not be derived from a native recorder call',
+  );
   assert.match(source, /if \(isRecordingRef\.current\)/);
 });
 
