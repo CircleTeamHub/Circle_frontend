@@ -132,6 +132,37 @@ function getGroupNoticeText(message: MessageItem): string | null {
   }
 }
 
+/**
+ * 净化对方可控的 displayIcons。
+ *
+ * 名片消息的 cardElem.ex 是一段对端完全可控的 JSON，且**不经过 circle_be**
+ * （客户端 SDK 直发 OpenIM），所以服务端没有任何 DTO 能拦。这里是唯一的收口点。
+ *
+ * 只保留气泡真正会渲染的那几个字段并强制类型：id 用作 key、imageUrl 决定分支、
+ * title 直接进 <Text>。任一为异常类型都会在渲染期抛异常 —— 而聊天页没有
+ * error boundary、消息又是持久化的，一条构造过的名片就能永久打不开这个会话。
+ */
+type SanitizedDisplayIcon = NonNullable<
+  FriendCardData['displayIcons']
+>[number];
+
+function sanitizeDisplayIcons(value: unknown): SanitizedDisplayIcon[] {
+  if (!Array.isArray(value)) return [];
+  const icons: SanitizedDisplayIcon[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const icon = raw as Record<string, unknown>;
+    if (typeof icon.id !== 'string' || typeof icon.title !== 'string') continue;
+    icons.push({
+      ...(icon as unknown as SanitizedDisplayIcon),
+      id: icon.id,
+      title: icon.title,
+      imageUrl: typeof icon.imageUrl === 'string' ? icon.imageUrl : null,
+    });
+  }
+  return icons;
+}
+
 function parseNoteCardPayload(data: string): NoteCardData | null {
   try {
     const raw = JSON.parse(data) as Partial<NoteCardData>;
@@ -615,7 +646,16 @@ export function mapMessageItemToChatMessage(
       } = {};
       if (card.ex) {
         try {
-          ext = JSON.parse(card.ex);
+          const parsed: unknown = JSON.parse(card.ex);
+          // 必须校验解析结果是普通对象，不能直接赋值：JSON.parse('null') 不抛异常，
+          // 它**成功**并返回 null，于是下面 try 之外的 ext.kind 解引用 null 抛
+          // TypeError —— 异常逃出这个 catch，冒泡到 ChatDetailScreen 的 messages
+          // useMemo，整个聊天页渲染失败。而消息是持久化的，重进会话会再次触发，
+          // 等于对方一条构造过的名片消息就能永久搞坏这个会话。
+          // 同理 '"abc"' / '123' 解析出原始值，属性访问虽不抛，但后续字段全是脏数据。
+          if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            ext = parsed as typeof ext;
+          }
         } catch {
           // 旧版本或非法 JSON，忽略，只保留基础字段
         }
@@ -644,8 +684,14 @@ export function mapMessageItemToChatMessage(
         userID: card.userID,
         nickname: card.nickname,
         faceURL: card.faceURL,
-        persona: ext.persona ?? null,
-        displayIcons: ext.displayIcons ?? [],
+        // 必须 typeof 校验：气泡里是 card.persona?.trim()，`?.` 只挡 null/undefined，
+        // 挡不住数字/对象 —— {"persona":123} 会抛 persona?.trim is not a function。
+        persona: typeof ext.persona === 'string' ? ext.persona : null,
+        // 光校验容器不够：数组本身合法，元素却可以是 null 或带对象字段的假图标，
+        // 于是 icon.imageUrl 解引用 null、或 <Text>{icon.title}</Text> 收到对象
+        // （React 直接抛 "Objects are not valid as a React child"）。
+        // 逐个净化到「气泡真正会渲染的那几个字段都是安全类型」为止。
+        displayIcons: sanitizeDisplayIcons(ext.displayIcons),
       };
       return {
         ...base,
