@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,12 +17,23 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
 import { MemberName } from '@/components/ui/member-name';
 import { NavHeader } from '@/components/ui/nav-header';
-import { inviteUsersToGroup, loadGroupMemberList, toImUserId } from '@/im/client';
+import {
+  inviteUsersToGroup,
+  loadGroupMemberList,
+  loadSpecifiedGroupMembers,
+  toImUserId,
+} from '@/im/client';
+import {
+  loadAuthorizedGroupMembers,
+  revalidateGroupMemberView,
+} from '@/features/chat/group-member-permissions';
+import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { inviteGroupMembers } from '@/services/api/groups';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import { useIMStore } from '@/stores/imStore';
 
 const s = StyleSheet.create({
   container: { flex: 1 },
@@ -61,6 +72,19 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     paddingTop: Spacing.xxl,
   },
+  retryButton: {
+    marginTop: Spacing.md,
+    height: 40,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  retryText: {
+    color: '#fff',
+    ...Typography.body,
+    fontWeight: '600' as const,
+  },
   footer: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
@@ -87,6 +111,7 @@ export default function InviteGroupMembersScreen() {
   }>();
   const groupID = typeof params.groupID === 'string' ? params.groupID : '';
   const groupName = typeof params.groupName === 'string' ? params.groupName : t('chat.groupChat');
+  const currentUserID = useIMStore((state) => state.currentUserID);
 
   const [query, setQuery] = useState('');
   const [friends, setFriends] = useState<FriendProfile[]>([]);
@@ -94,28 +119,83 @@ export default function InviteGroupMembersScreen() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Record<string, true>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [authorized, setAuthorized] = useState(false);
+  // review R3：好友表加载失败 ≠ 无权限——管理员身份已确认但 fetchFriends 因
+  // 断网/瞬时错误失败时，走"加载失败+重试"而不是受限文案。
+  const [friendsError, setFriendsError] = useState(false);
+  const mountedRef = useRef(true);
+  // review R3：提交单飞行守（Pattern D 二道闸）——ref 在首个 await 前置位，
+  // 同一 tick 的双击都会被挡下，避免并发发出非幂等群邀请。
+  const submitInFlightRef = useRef(false);
+
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
+
+  const loadScreen = useCallback(async () => {
+    setLoading(true);
+    setAuthorized(false);
+    setFriendsError(false);
+    try {
+      if (!groupID || !currentUserID) throw new Error('Missing group or current user');
+      const result = await loadAuthorizedGroupMembers({
+        loadCurrentMember: async () => {
+          const [selfMember] = await loadSpecifiedGroupMembers(groupID, [currentUserID]);
+          return selfMember ?? null;
+        },
+        loadMembers: () => loadGroupMemberList(groupID, 10_000),
+      });
+      if (!mountedRef.current) return;
+      setAuthorized(result.authorized);
+      if (!result.authorized) {
+        setFriends([]);
+        setExistingMemberIDs(new Set());
+        return;
+      }
+      // review R2：成员表加载失败 ≠ 无权限——管理员身份已确认时继续放行
+      // 邀请（已在群的好友交给服务端拒绝），只记诊断。
+      if (result.membersError) {
+        logClientDiagnostic('invite_group_members_list_load_failed', {
+          groupID,
+          message:
+            result.membersError instanceof Error
+              ? result.membersError.message
+              : String(result.membersError),
+        });
+      }
+      setExistingMemberIDs(new Set(result.members.map((member) => toImUserId(member.userID))));
+      // review R3：好友表加载单独 try——失败保留已确认的授权，走可重试的
+      // 加载错误态，不误显示受限文案。
+      try {
+        const list = await fetchFriends();
+        if (!mountedRef.current) return;
+        setFriends(list);
+      } catch (error) {
+        if (!mountedRef.current) return;
+        setFriends([]);
+        setFriendsError(true);
+        logClientDiagnostic('invite_group_members_friends_load_failed', {
+          groupID,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    } catch {
+      if (mountedRef.current) {
+        setFriends([]);
+        setExistingMemberIDs(new Set());
+        setAuthorized(false);
+      }
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
+  }, [currentUserID, groupID]);
 
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    Promise.all([fetchFriends(), groupID ? loadGroupMemberList(groupID, 10_000) : Promise.resolve([])])
-      .then(([list, members]) => {
-        const nextExistingMemberIDs = new Set(members.map((member) => toImUserId(member.userID)));
-        if (!cancelled) setFriends(list);
-        if (!cancelled) setExistingMemberIDs(nextExistingMemberIDs);
-      })
-      .catch(() => {
-        if (!cancelled) setFriends([]);
-        if (!cancelled) setExistingMemberIDs(new Set());
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [groupID]);
+    void loadScreen();
+  }, [loadScreen]);
 
   useEffect(() => {
     if (existingMemberIDs.size < 1) {
@@ -164,7 +244,9 @@ export default function InviteGroupMembersScreen() {
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    if (submitting) return;
+    // review R3：单飞行守放在任何 await 之前——同一 tick 的双击都会命中这里，
+    // 不会各自通过 submitting 状态判断后并发提交同一份非幂等邀请。
+    if (submitInFlightRef.current || submitting) return;
     if (!groupID) {
       Alert.alert(t('messages.inviteGroupMembersMissingGroup'));
       return;
@@ -182,8 +264,24 @@ export default function InviteGroupMembersScreen() {
       return;
     }
 
+    submitInFlightRef.current = true;
     setSubmitting(true);
     try {
+      // review R2：提交前 fail-closed 重查角色——管理员选好人后被撤权，
+      // 缓存的邀请名单不能再发出去。
+      const stillAuthorized = await revalidateGroupMemberView({
+        loadSelfMember: async () => {
+          if (!currentUserID) return null;
+          const [selfMember] = await loadSpecifiedGroupMembers(groupID, [currentUserID]);
+          return selfMember ?? null;
+        },
+      });
+      if (!stillAuthorized) {
+        setAuthorized(false);
+        Alert.alert(t('chat.groupMembersRestricted'));
+        return;
+      }
+
       const result = await inviteGroupMembers(groupID, inviteUserIDs);
       if (!result.handled) {
         await inviteUsersToGroup(groupID, inviteUserIDs);
@@ -203,9 +301,10 @@ export default function InviteGroupMembersScreen() {
         }),
       );
     } finally {
+      submitInFlightRef.current = false;
       setSubmitting(false);
     }
-  }, [existingMemberIDs, groupID, router, selectedCount, selectedIds, submitting, t]);
+  }, [currentUserID, existingMemberIDs, groupID, router, selectedCount, selectedIds, submitting, t]);
 
   const d = useMemo(
     () => ({
@@ -309,6 +408,26 @@ export default function InviteGroupMembersScreen() {
         <View style={s.empty}>
           <ActivityIndicator color={colors.primary} />
         </View>
+      ) : !authorized ? (
+        <View style={s.empty}>
+          <Text style={d.emptyText}>{t('chat.groupMembersRestricted')}</Text>
+        </View>
+      ) : friendsError ? (
+        <View style={s.empty}>
+          <Text style={d.emptyText}>
+            {t('messages.inviteGroupMembersLoadFailed', {
+              defaultValue: '好友列表加载失败，请重试',
+            })}
+          </Text>
+          <Pressable
+            style={[s.retryButton, { backgroundColor: colors.primary }]}
+            onPress={() => void loadScreen()}
+          >
+            <Text style={s.retryText}>
+              {t('common.retry', { defaultValue: '重试' })}
+            </Text>
+          </Pressable>
+        </View>
       ) : filteredFriends.length === 0 ? (
         <View style={s.empty}>
           <Text style={d.emptyText}>
@@ -323,11 +442,12 @@ export default function InviteGroupMembersScreen() {
           renderItem={renderItem}
           ItemSeparatorComponent={Sep}
           contentContainerStyle={s.listContent}
-        {...keyboardDismissOnDragProps}
+          {...keyboardDismissOnDragProps}
         />
       )}
 
-      <View style={[s.footer, d.surfaceBorder, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]}>
+      {authorized && !friendsError ? (
+        <View style={[s.footer, d.surfaceBorder, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]}>
         <Pressable
           style={[
             s.submitButton,
@@ -348,7 +468,8 @@ export default function InviteGroupMembersScreen() {
             </Text>
           )}
         </Pressable>
-      </View>
+        </View>
+      ) : null}
     </View>
   );
 }

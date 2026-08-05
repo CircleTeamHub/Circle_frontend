@@ -49,14 +49,35 @@ test('InviteToCircleScreen stays open when every invite fails', () => {
   assert.match(src, /return;\s*\n\s*\}/);
 });
 
-test('CircleDetailScreen exposes the invite entry to active members', () => {
+test('CircleDetailScreen opens the invite menu to active members and passes myRole', () => {
   const src = read(
     'src/features/discover/screens/CircleDetailScreen.tsx',
   );
 
   assert.match(src, /const isActiveMember = circle\?\.myStatus === 'ACTIVE'/);
-  assert.match(src, /\{isActiveMember \? \(/);
-  assert.match(src, /getCircleInviteHref\(\s*circleScope/);
+  assert.match(src, /const isOwnerOrAdmin = isOwner \|\| circle\?\.myRole === 'ADMIN'/);
+  // review R3：邀请入口回到 isActiveMember——菜单里的"发送圈子名片"不读目录，
+  // 不能被锁死；myRole 透传给菜单区分"邀请通讯录好友"。
+  assert.match(
+    src,
+    /\{isActiveMember \? \([\s\S]{0,400}getCircleInviteHref\(\s*circleScope,[\s\S]{0,160}circle\.myRole,/,
+  );
+});
+
+test('invite menu gates the contact-invite option but keeps card sharing for active members', () => {
+  const menu = read(
+    'src/features/discover/screens/InviteCircleMenuScreen.tsx',
+  );
+
+  // 名片分享对全体活跃成员开放；只有 owner/admin 能进读目录的通讯录邀请。
+  assert.match(menu, /canViewCircleMembers/);
+  assert.match(menu, /const canInviteContacts = canViewCircleMembers\(myRole\)/);
+  assert.match(menu, /\{canInviteContacts \? \(/);
+  // 名片分享行在 canInviteContacts 门控之外（始终渲染）。
+  assert.match(
+    menu,
+    /handleSendCard\}\s*\/>\s*\n\s*\{canInviteContacts \? \(/,
+  );
 });
 
 test('CircleDetailScreen only exposes group chat to active members', () => {
@@ -87,4 +108,45 @@ test('invite-friends route renders the friend picker', () => {
     'app/(tabs)/discover/circle/[id]/invite-friends.tsx',
   );
   assert.match(route, /InviteToCircleScreen/);
+});
+
+test('InviteToCircleScreen distinguishes load failures from denied access', () => {
+  const src = read(
+    'src/features/discover/screens/InviteToCircleScreen.tsx',
+  );
+
+  // 详情拉取失败 ≠ 无权限：单独记错误态、打诊断日志。
+  assert.match(src, /const \[loadError, setLoadError\] = useState\(false\)/);
+  assert.match(src, /detailResult\.status === 'rejected'/);
+  assert.match(src, /setLoadError\(true\)/);
+  assert.match(src, /circle_invite_detail_load_failed/);
+  // 只有确认拿到详情后才评估授权。
+  assert.match(src, /setLoadError\(false\);\s*\n\s*const detail = detailResult\.value/);
+  // 错误态提供页内重试入口，受限文案只在授权判定后出现。
+  assert.match(src, /circle\.invite\.loadFailed/);
+  assert.match(src, /common\.retry/);
+  assert.match(src, /onPress=\{\(\) => void loadInvitees\(\)\}/);
+  assert.match(src, /\) : loadError \? \(/);
+  assert.match(src, /\) : !authorized \? \(/);
+});
+
+test('InviteToCircleScreen keeps prior authorization during pull-to-refresh', () => {
+  const src = read(
+    'src/features/discover/screens/InviteToCircleScreen.tsx',
+  );
+
+  // review R2：下拉刷新期间不预清 authorized——否则 loading=false 时列表会
+  // 被受限文案顶掉闪一下；授权状态等刷新结果落定再更新。
+  assert.match(src, /if \(showInitialLoading\) setAuthorized\(false\);/);
+  assert.doesNotMatch(src, /^\s*setAuthorized\(false\);$/m);
+});
+
+test('InviteToCircleScreen hides the submit footer when detail verification failed', () => {
+  const src = read(
+    'src/features/discover/screens/InviteToCircleScreen.tsx',
+  );
+
+  // review R3：刷新失败(loadError) 时即使 authorized 仍 true 也不渲染 footer，
+  // 避免在"圈子信息无法核实"时提交陈旧选择。
+  assert.match(src, /\{authorized && !loadError \? \(/);
 });

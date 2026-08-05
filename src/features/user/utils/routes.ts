@@ -491,13 +491,16 @@ export function getCircleInviteHref(
   circleId: string,
   title: string,
   avatar: string,
+  // 圈内角色透传给邀请菜单：菜单据此只对 owner/admin 放行"邀请通讯录好友"
+  // （读成员目录），"发送圈子名片"对全体活跃成员开放。
+  myRole?: 'OWNER' | 'ADMIN' | 'MEMBER' | null,
 ): Href {
   return {
     pathname:
       scope === 'messages'
         ? '/(tabs)/messages/circle/[id]/invite'
         : '/(tabs)/discover/circle/[id]/invite',
-    params: { id: circleId, title, avatar },
+    params: { id: circleId, title, avatar, ...(myRole ? { myRole } : {}) },
   };
 }
 

@@ -17,12 +17,14 @@ import type { GroupMemberItem } from '@openim/rn-client-sdk';
 import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
 import { fromImUserId, loadGroupMemberList } from '@/im/client';
+import { useGroupMemberViewAccess } from '@/features/chat/hooks/use-group-member-view-access';
 import {
   getUserProfileHref,
   getUserProfileScopeFromSegments,
 } from '@/features/user/utils/routes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import { useIMStore } from '@/stores/imStore';
 
 const s = StyleSheet.create({
   container: { flex: 1 },
@@ -72,43 +74,51 @@ export default function SearchGroupMembersScreen() {
     groupTitle?: string;
   }>();
   const groupID = typeof params.groupID === 'string' ? params.groupID : '';
+  const currentUserID = useIMStore((state) => state.currentUserID);
   const [query, setQuery] = useState('');
   const [members, setMembers] = useState<GroupMemberItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [membersLoading, setMembersLoading] = useState(false);
+
+  // review R2 P1：权限走活体 hook——挂载期间被撤权时订阅立即翻转
+  // authorized，下面的目录数据也同步清空，不再是一次性快照。
+  const {
+    canViewMembers: authorized,
+    resolved: accessResolved,
+    revalidate,
+  } = useGroupMemberViewAccess({
+    enabled: Boolean(groupID && currentUserID),
+    groupID,
+    currentUserID,
+  });
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-
-    if (!groupID) {
+    if (!authorized) {
       setMembers([]);
-      setLoading(false);
+      setMembersLoading(false);
       return () => {
         cancelled = true;
       };
     }
 
+    setMembersLoading(true);
     loadGroupMemberList(groupID, 10_000)
       .then((nextMembers) => {
-        if (!cancelled) {
-          setMembers(nextMembers);
-        }
+        if (!cancelled) setMembers(nextMembers);
       })
       .catch(() => {
-        if (!cancelled) {
-          setMembers([]);
-        }
+        if (!cancelled) setMembers([]);
       })
       .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setMembersLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [groupID]);
+  }, [authorized, groupID]);
+
+  const loading = !accessResolved || membersLoading;
 
   const trimmedQuery = query.trim().toLowerCase();
   const filteredMembers = useMemo(() => {
@@ -146,8 +156,14 @@ export default function SearchGroupMembersScreen() {
   );
 
   const handleOpenMember = useCallback(
-    (member: GroupMemberItem) => {
+    async (member: GroupMemberItem) => {
       if (!member.userID) {
+        return;
+      }
+
+      // review R2 P1：打开成员资料前 fail-closed 现场重查——降权后即便
+      // 结果列表还挂在屏上，也不能再跳成员资料（hook 状态翻转会顺带清列表）。
+      if (!(await revalidate())) {
         return;
       }
 
@@ -155,7 +171,7 @@ export default function SearchGroupMembersScreen() {
         getUserProfileHref(scope, fromImUserId(member.userID), member.nickname || undefined),
       );
     },
-    [scope],
+    [revalidate, scope],
   );
 
   const renderItem = useCallback(
@@ -209,6 +225,10 @@ export default function SearchGroupMembersScreen() {
         <View style={s.empty}>
           <ActivityIndicator color={colors.primary} />
         </View>
+      ) : !authorized ? (
+        <View style={s.empty}>
+          <Text style={d.emptyText}>{t('chat.groupMembersRestricted')}</Text>
+        </View>
       ) : filteredMembers.length === 0 ? (
         <View style={s.empty}>
           <Text style={d.emptyText}>
@@ -228,7 +248,7 @@ export default function SearchGroupMembersScreen() {
             s.listContent,
             { paddingBottom: insets.bottom + Spacing.xl },
           ]}
-        {...keyboardDismissOnDragProps}
+          {...keyboardDismissOnDragProps}
         />
       )}
     </View>

@@ -82,8 +82,8 @@ test('chat info screen renders a dedicated group info layout for group conversat
   assert.match(source, /t\('chat\.groupNotice'\)/);
   assert.match(source, /t\('chat\.searchHistory'\)/);
   assert.match(source, /t\('chat\.moreGroupMembers'/);
-  assert.match(source, /rightIcon="search-outline"/);
-  assert.match(source, /onRightPress=\{handleOpenSearchGroupMembers\}/);
+  assert.match(source, /rightIcon=\{canViewMemberDirectory \? 'search-outline' : undefined\}/);
+  assert.match(source, /onRightPress=\{canViewMemberDirectory \? handleOpenSearchGroupMembers : undefined\}/);
   assert.match(source, /getGroupMemberSearchHref/);
 });
 
@@ -97,10 +97,26 @@ test('chat info screen refreshes group member names and avatars from user profil
   assert.match(source, /fetchUserProfile\(fromImUserId\(member\.userID\)\)/);
   assert.match(source, /nickname: profile\.nickname \|\| member\.nickname/);
   assert.match(source, /faceURL: profile\.avatarUrl \?\? member\.faceURL/);
-  assert.match(
-    source,
-    /useFocusEffect\([\s\S]*loadGroupMemberList\(groupID,\s*10_000\)[\s\S]*refreshGroupMemberProfiles\(members\)/,
-  );
+  // review R2：权限走活体 hook；目录只有 canViewMemberDirectory=true 才拉，
+  // 撤权时 focus 回调重跑并清空目录。
+  assert.match(source, /useGroupMemberViewAccess\(\{/);
+  assert.match(source, /if \(!canViewMemberDirectory\) \{\s*\n\s*setGroupMembers\(\[\]\);\s*\n\s*return;/);
+  assert.match(source, /await loadGroupMemberList\(groupID, 10_000\)/);
+  assert.match(source, /refreshGroupMemberProfiles\(members\)/);
+});
+
+test('chat info screen keeps member access live while mounted', () => {
+  const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  // 自己的角色来自订阅驱动的 selfMember——群主撤权时 canManageGroup /
+  // canViewMemberDirectory 立即翻转，不等重新聚焦。
+  assert.match(source, /selfMember: currentGroupMember,/);
+  assert.match(source, /canViewMembers: canViewMemberDirectory,/);
+  assert.match(source, /revalidate: revalidateMemberAccess,/);
+  assert.doesNotMatch(source, /setCurrentGroupMember/);
+  // 打开成员资料前 fail-closed 现场重查。
+  assert.match(source, /if \(!\(await revalidateMemberAccess\(\)\)\) \{\s*\n\s*return;/);
 });
 
 test('chat info screen lets the current user open their own profile from the group member grid', () => {
@@ -232,7 +248,7 @@ test('chat info screen right search opens group member search instead of chat hi
 
   assert.match(infoSource, /const handleOpenSearchGroupMembers = useCallback/);
   assert.match(infoSource, /router\.push\(\s*getGroupMemberSearchHref\(scope,/);
-  assert.match(infoSource, /onRightPress=\{handleOpenSearchGroupMembers\}/);
+  assert.match(infoSource, /onRightPress=\{canViewMemberDirectory \? handleOpenSearchGroupMembers : undefined\}/);
   assert.doesNotMatch(infoSource, /onRightPress=\{handleOpenSearchHistory\}/);
   assert.match(routeSource, /function getGroupMemberSearchHref/);
   assert.match(routeSource, /search-group-members/);
@@ -253,6 +269,54 @@ test('group member search screen loads and filters group members', () => {
   assert.doesNotMatch(source, /fromImUserId\(item\.userID\)/);
   assert.doesNotMatch(source, /rowSubtitle/);
   assert.match(source, /t\('chat\.searchGroupMembers'\)/);
+});
+
+test('group member search keeps authorization live and revalidates before opening profiles', () => {
+  const screenPath = path.join(process.cwd(), 'src/features/chat/screens/SearchGroupMembersScreen.tsx');
+  const source = fs.readFileSync(screenPath, 'utf8');
+
+  // review R2 P1：authorized 来自活体 hook（订阅角色变化），撤权即清结果；
+  // 点开成员资料前还要 fail-closed 现场重查。
+  assert.match(source, /useGroupMemberViewAccess\(\{/);
+  assert.match(source, /canViewMembers: authorized,/);
+  assert.match(source, /if \(!authorized\) \{\s*\n\s*setMembers\(\[\]\);/);
+  assert.match(source, /if \(!\(await revalidate\(\)\)\) \{\s*\n\s*return;/);
+});
+
+test('invite group members revalidates the role at submit time', () => {
+  const filePath = path.join(process.cwd(), 'src/features/messages/screens/InviteGroupMembersScreen.tsx');
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  // review R2：选好人后被撤权，缓存名单不能再发；成员表加载失败也不再
+  // 冒充"无权限"（authorized 保留，只记诊断）。
+  assert.match(source, /const stillAuthorized = await revalidateGroupMemberView\(\{/);
+  assert.match(source, /if \(!stillAuthorized\) \{\s*\n\s*setAuthorized\(false\);\s*\n\s*Alert\.alert\(t\('chat\.groupMembersRestricted'\)\);\s*\n\s*return;/);
+  assert.match(source, /invite_group_members_list_load_failed/);
+  assert.match(source, /if \(result\.membersError\) \{/);
+
+  // review R3：单飞行守放在任何 await 之前——双击不会并发提交非幂等邀请。
+  assert.match(source, /if \(submitInFlightRef\.current \|\| submitting\) return;/);
+  assert.match(source, /submitInFlightRef\.current = true;\s*\n\s*setSubmitting\(true\);/);
+  assert.match(source, /submitInFlightRef\.current = false;/);
+  // revalidation 现在在 submitting 守卫之后（守卫先于首个 await）。
+  assert.match(
+    source,
+    /submitInFlightRef\.current = true;[\s\S]{0,80}try \{[\s\S]{0,160}await revalidateGroupMemberView/,
+  );
+});
+
+test('invite group members keeps friend-load failure separate from authorization', () => {
+  const filePath = path.join(process.cwd(), 'src/features/messages/screens/InviteGroupMembersScreen.tsx');
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  // review R3：好友表加载失败 ≠ 无权限——授权保留、单独错误态 + 页内重试。
+  assert.match(source, /const \[friendsError, setFriendsError\] = useState\(false\)/);
+  assert.match(source, /setFriendsError\(true\)/);
+  assert.match(source, /invite_group_members_friends_load_failed/);
+  assert.match(source, /\) : friendsError \? \(/);
+  assert.match(source, /onPress=\{\(\) => void loadScreen\(\)\}/);
+  // 好友加载失败时隐藏提交 footer（没有可提交内容）。
+  assert.match(source, /\{authorized && !friendsError \? \(/);
 });
 
 test('invite group members screen filters users who are already in the group', () => {
@@ -678,4 +742,27 @@ test('chat history media grid normalizes urls and falls back across image candid
   assert.match(mediaSource, /bigPicture\?\.url/);
   assert.match(mediaSource, /handleImageError/);
   assert.match(mediaSource, /onError=\{handleImageError\}/);
+});
+
+test('chat info revalidates ownership before mutating a member role', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx'),
+    'utf8',
+  );
+
+  // review R3：action sheet 打开到点确认之间可能失去群主身份，PATCH 前
+  // 现场重查自己的角色（不吃创建 alert 时捕获的 currentRole），fail-closed。
+  assert.match(
+    source,
+    /const \[freshSelf\] = await loadSpecifiedGroupMembers\(groupID, \[currentUserID\]\);/,
+  );
+  assert.match(
+    source,
+    /if \(!canChangeGroupMemberRole\(freshSelf\?\.roleLevel, member\.roleLevel\)\) \{\s*\n\s*Alert\.alert\(t\('chat\.groupMembersRestricted'\)\);/,
+  );
+  // 重查通过后才发 PATCH。
+  assert.match(
+    source,
+    /canChangeGroupMemberRole\(freshSelf\?\.roleLevel[\s\S]{0,220}await updateGroupMemberRole\(groupID, member\.userID, nextRole\)/,
+  );
 });

@@ -14,6 +14,7 @@
  * - 所有 IM 状态写入 useIMStore，UI 层通过 store 订阅变化
  */
 import OpenIMSDK, {
+  AllowType,
   GroupType,
   GroupMemberFilter,
   LogLevel,
@@ -754,6 +755,8 @@ export async function createGroupChat(params: {
       groupName: params.groupName,
       faceURL: params.faceURL ?? '',
       groupType: GroupType.Group,
+      lookMemberInfo: AllowType.NotAllowed,
+      applyMemberFriend: AllowType.NotAllowed,
     },
   });
 
@@ -797,6 +800,48 @@ export async function loadGroupMemberList(
   });
 }
 
+export async function loadSpecifiedGroupMembers(
+  groupID: string,
+  userIDList: string[],
+): Promise<GroupMemberItem[]> {
+  const initialized = await ensureOpenIMInitialized();
+
+  if (!initialized || userIDList.length === 0) {
+    return [];
+  }
+
+  return OpenIMSDK.getSpecifiedGroupMembersInfo({ groupID, userIDList });
+}
+
+/**
+ * 订阅"我在某个群里的成员身份"变化：角色被改（onGroupMemberInfoChanged）、
+ * 被移出群（onGroupMemberDeleted）、整群从已加入列表消失（onJoinedGroupDeleted，
+ * 覆盖自己退群/被踢/群解散）。挂载中的页面靠它感知撤权，`null` 表示已不在群里。
+ */
+export function subscribeGroupMemberSelfChanges(
+  groupID: string,
+  userID: string,
+  onChange: (member: GroupMemberItem | null) => void,
+): () => void {
+  const handleMemberChanged = (member: GroupMemberItem) => {
+    if (member.groupID === groupID && member.userID === userID) onChange(member);
+  };
+  const handleMemberDeleted = (member: GroupMemberItem) => {
+    if (member.groupID === groupID && member.userID === userID) onChange(null);
+  };
+  const handleJoinedGroupDeleted = (group: GroupItem) => {
+    if (group.groupID === groupID) onChange(null);
+  };
+  OpenIMSDK.on('onGroupMemberInfoChanged', handleMemberChanged);
+  OpenIMSDK.on('onGroupMemberDeleted', handleMemberDeleted);
+  OpenIMSDK.on('onJoinedGroupDeleted', handleJoinedGroupDeleted);
+  return () => {
+    OpenIMSDK.off('onGroupMemberInfoChanged', handleMemberChanged);
+    OpenIMSDK.off('onGroupMemberDeleted', handleMemberDeleted);
+    OpenIMSDK.off('onJoinedGroupDeleted', handleJoinedGroupDeleted);
+  };
+}
+
 export async function inviteUsersToGroup(groupID: string, userIDList: string[]) {
   const initialized = await ensureOpenIMInitialized();
 
@@ -834,6 +879,19 @@ export async function updateGroupName(groupID: string, groupName: string) {
   await OpenIMSDK.setGroupInfo({ groupID, groupName });
   await loadConversationList().catch(() => {
     // 群资料已更新，列表刷新失败时等待 SDK 推送同步。
+  });
+}
+
+export async function enforceGroupMemberPrivacy(groupID: string) {
+  const initialized = await ensureOpenIMInitialized();
+  if (!initialized) {
+    throw unsupportedPlatformError();
+  }
+
+  await OpenIMSDK.setGroupInfo({
+    groupID,
+    lookMemberInfo: AllowType.NotAllowed,
+    applyMemberFriend: AllowType.NotAllowed,
   });
 }
 

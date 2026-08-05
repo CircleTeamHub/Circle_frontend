@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
 import { loadGroupMemberList } from '@/im/client';
+import { canViewCircleMembers } from '@/features/chat/group-member-permissions';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { fetchCircleDetail, inviteToCircle } from '@/services/api/circles';
 import {
@@ -65,6 +66,14 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     paddingTop: Spacing.xxl,
   },
+  retryButton: {
+    marginTop: Spacing.md,
+    height: 40,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   footer: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
@@ -97,6 +106,10 @@ export default function InviteToCircleScreen() {
   const [selected, setSelected] = useState<Record<string, true>>({});
   const [submitting, setSubmitting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [authorized, setAuthorized] = useState(false);
+  // review P2：断网/瞬时错误 ≠ 无权限。详情拉取失败单独记态，走"加载失败+重试"，
+  // 只有确认拿到详情且角色不足时才显示受限文案。
+  const [loadError, setLoadError] = useState(false);
   const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
 
@@ -113,12 +126,44 @@ export default function InviteToCircleScreen() {
   ) => {
     const showInitialLoading = options?.showInitialLoading ?? true;
     if (showInitialLoading) setLoading(true);
+    // review R2：下拉刷新（showInitialLoading=false）期间不预清 authorized——
+    // loading 为 false 时清了会立刻把列表替换成受限文案闪一下；授权状态等
+    // 刷新后的详情结果落定再更新。
+    if (showInitialLoading) setAuthorized(false);
+    const [detailResult] = await Promise.allSettled([
+      circleId ? fetchCircleDetail(circleId) : Promise.resolve(null),
+    ]);
+    if (signal?.cancelled || !mountedRef.current) return;
+    if (detailResult.status === 'rejected') {
+      setLoadError(true);
+      setFriends([]);
+      setExistingMemberIDs(new Set());
+      logClientDiagnostic('circle_invite_detail_load_failed', {
+        circleId,
+        message:
+          detailResult.reason instanceof Error
+            ? detailResult.reason.message
+            : String(detailResult.reason),
+      });
+      if (showInitialLoading) setLoading(false);
+      return;
+    }
+    setLoadError(false);
+    const detail = detailResult.value;
+    const canViewMembers =
+      detail?.myStatus === 'ACTIVE' && canViewCircleMembers(detail.myRole);
+    setAuthorized(canViewMembers);
+    if (!canViewMembers) {
+      setFriends([]);
+      setExistingMemberIDs(new Set());
+      if (showInitialLoading) setLoading(false);
+      return;
+    }
+
     const [friendsResult, membersResult] = await Promise.allSettled([
       fetchFriends(),
-      circleId
-        ? fetchCircleDetail(circleId).then((detail) =>
-            detail.groupID ? loadGroupMemberList(detail.groupID, 10_000) : [],
-          )
+      detail?.groupID
+        ? loadGroupMemberList(detail.groupID, 10_000)
         : Promise.resolve([]),
     ]);
     if (signal?.cancelled || !mountedRef.current) return;
@@ -382,6 +427,26 @@ export default function InviteToCircleScreen() {
         <View style={s.empty}>
           <ActivityIndicator color={colors.primary} />
         </View>
+      ) : loadError ? (
+        <View style={s.empty}>
+          <Text style={d.emptyText}>
+            {t('circle.invite.loadFailed', {
+              defaultValue: '圈子信息加载失败，请重试',
+            })}
+          </Text>
+          <Pressable
+            style={[s.retryButton, { backgroundColor: colors.primary }]}
+            onPress={() => void loadInvitees()}
+          >
+            <Text style={d.submitText}>
+              {t('common.retry', { defaultValue: '重试' })}
+            </Text>
+          </Pressable>
+        </View>
+      ) : !authorized ? (
+        <View style={s.empty}>
+          <Text style={d.emptyText}>{t('chat.groupMembersRestricted')}</Text>
+        </View>
       ) : filteredFriends.length === 0 ? (
         <View style={s.empty}>
           <Text style={d.emptyText}>
@@ -398,13 +463,14 @@ export default function InviteToCircleScreen() {
           renderItem={renderItem}
           ItemSeparatorComponent={Sep}
           contentContainerStyle={s.listContent}
-        {...keyboardDismissOnDragProps}
+          {...keyboardDismissOnDragProps}
           refreshing={refreshing}
           onRefresh={handleRefreshInvitees}
         />
       )}
 
-      <View
+      {authorized && !loadError ? (
+        <View
         style={[
           s.footer,
           d.surfaceBorder,
@@ -431,7 +497,8 @@ export default function InviteToCircleScreen() {
             </Text>
           )}
         </Pressable>
-      </View>
+        </View>
+      ) : null}
     </View>
   );
 }

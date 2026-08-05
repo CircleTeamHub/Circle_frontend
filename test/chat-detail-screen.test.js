@@ -474,3 +474,75 @@ test('note detail routes exist in every tab stack so back returns to the source 
     assert.match(fs.readFileSync(filePath, 'utf8'), /NoteDetailScreen/);
   }
 });
+
+test('group member access stays live while the chat screen is mounted', () => {
+  const screen = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+  const hook = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/hooks/use-group-member-view-access.ts'),
+    'utf8',
+  );
+
+  // 屏幕不再自持一次性快照，统一走活体权限 hook。
+  assert.match(screen, /useGroupMemberViewAccess\(\{/);
+  assert.doesNotMatch(screen, /setCanViewGroupMemberProfiles/);
+  // hook 订阅自己的成员身份变化（降权/被移出/退群），卸载时解绑。
+  assert.match(hook, /subscribeGroupMemberSelfChanges\(\s*groupID,\s*currentUserID/);
+  assert.match(hook, /unsubscribe\(\);/);
+  // revalidate 现场重查 fail-closed：查询失败/查无记录一律无权。
+  assert.match(hook, /return canViewGroupMembers\(next\?\.roleLevel\);/);
+  assert.match(hook, /catch \{[\s\S]{0,400}return false;/);
+  // review R3：事件代际守——在途查询被角色事件超车时丢弃陈旧结果、按事件判定。
+  assert.match(hook, /const eventGenRef = useRef\(0\)/);
+  assert.match(hook, /if \(cancelled \|\| eventGenRef\.current !== genAtStart\) return;/);
+  assert.match(hook, /return canViewGroupMembers\(lastEventMemberRef\.current\?\.roleLevel\);/);
+});
+
+test('protected member actions revalidate fail-closed at tap time', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+
+  // 打开消息发送者资料 / 发起群呼前都现场重查角色，不吃旧快照。
+  const revalidations = source.match(/await revalidateMemberViewAccess\(\)/g) ?? [];
+  assert.ok(
+    revalidations.length >= 3,
+    `expected sender/card/call paths to revalidate, got ${revalidations.length}`,
+  );
+  assert.match(
+    source,
+    /if \(!\(await revalidateMemberViewAccess\(\)\)\) \{\s*\n\s*Alert\.alert\(t\('chat\.call\.title'\), t\('chat\.groupMembersRestricted'\)\);/,
+  );
+});
+
+test('shared friend cards of non-members stay openable for ordinary members', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+
+  // 名片只放行"确认不在本群"的目标；review R2：身份查不清（查询失败）一律
+  // fail-closed 拦截，断网不能成为绕过成员目录限制的口子。
+  assert.match(source, /const \[targetMember\] = await loadSpecifiedGroupMembers\(sourceID, \[\s*toImUserId\(userID\),\s*\]\);/);
+  assert.match(source, /let blockTarget = true;/);
+  assert.match(source, /blockTarget = Boolean\(targetMember\);/);
+  assert.match(source, /catch \{\s*\n\s*blockTarget = true;/);
+  assert.match(source, /if \(blockTarget\) \{\s*\n\s*Alert\.alert\(t\('chat\.groupMembersRestricted'\)\);/);
+});
+
+test('losing member access clears stale mention state before the next send', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+
+  // review R2：降权瞬间清空已选 @ 目标/候选/缓存——handleSend 不再把滞留的
+  // mention（含 @所有人）发出去。
+  assert.match(
+    source,
+    /if \(!isGroupChat \|\| canViewGroupMemberProfiles\) return;\s*\n\s*setMentionTargets\(\[\]\);\s*\n\s*setMentionCandidates\(\[\]\);\s*\n\s*setMentionQuery\(null\);\s*\n\s*setMentionPickerVisible\(false\);\s*\n\s*mentionCandidatesCacheRef\.current\.clear\(\);/,
+  );
+});
