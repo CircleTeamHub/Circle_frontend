@@ -258,3 +258,31 @@ test('normal-length text is never truncated', () => {
 
   assert.equal(mapped.text, normal);
 });
+
+test('every peer-controlled image render forces early resizing', () => {
+  // 图片尺寸由对端决定。Android 走 Glide 会读图片头按目标尺寸降采样，超大图只是
+  // 多下载些字节；iOS 不会 —— 不开这个开关就把整张位图解进内存，20000x20000
+  // 约 1.6GB，直接 OOM。这是 iOS-only prop，Android 上是空操作，所以现在就该加上，
+  // 而不是等出 iOS 包时再补（那时最容易漏）。
+  //
+  // 注意：来源白名单只保证图片来自我们自己的 MinIO，保证不了尺寸 —— 用户能往
+  // 自己的存储里传高压缩比的大分辨率图，所以 OOM 依然可达。
+  const bubbles = [
+    'src/features/chat/components/bubbles/image-bubble.tsx',
+    'src/features/chat/components/bubbles/friend-card-bubble.tsx',
+    'src/features/chat/components/bubbles/note-card-bubble.tsx',
+    'src/features/chat/components/bubbles/plaza-post-card-bubble.tsx',
+  ];
+
+  for (const relativePath of bubbles) {
+    const source = fs.readFileSync(
+      path.join(process.cwd(), relativePath),
+      'utf8',
+    );
+    assert.match(
+      source,
+      /enforceEarlyResizing/,
+      `${relativePath} renders peer-controlled images and must force early resizing`,
+    );
+  }
+});
