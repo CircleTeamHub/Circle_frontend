@@ -1,6 +1,8 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 import CreateCircleScreen from './CreateCircleScreen';
+import { createCircle } from '@/services/api/circles';
 
 const mockRouter = { back: jest.fn() };
 const mockFetchProgramStatus = jest.fn();
@@ -14,6 +16,18 @@ const mockProgram = {
     entitlementFloorLevel: 0 | 2;
   } | null,
 };
+const mockForm = {
+  name: '',
+  description: '',
+  pickedAvatarUri: null as string | null,
+  selectedCategories: [] as string[],
+  rules: '',
+  joinVipRestriction: null as number | null,
+  joinCreditRestriction: null as number | null,
+  joinFancyRestriction: false,
+  memberCanPost: false,
+};
+const mockGetApiErrorMessage = jest.fn();
 
 jest.mock('expo-router', () => {
   const ReactModule = jest.requireActual<typeof import('react')>('react');
@@ -73,17 +87,7 @@ jest.mock('@/features/discover/components/circle-form-body', () => {
 });
 
 jest.mock('@/features/discover/hooks/use-circle-form', () => ({
-  useCircleForm: () => ({
-    name: '',
-    description: '',
-    pickedAvatarUri: null,
-    selectedCategories: [],
-    rules: '',
-    joinVipRestriction: null,
-    joinCreditRestriction: null,
-    joinFancyRestriction: false,
-    memberCanPost: false,
-  }),
+  useCircleForm: () => mockForm,
 }));
 
 jest.mock('@/features/discover/store/use-create-circle-form-store', () => ({
@@ -113,6 +117,10 @@ jest.mock('@/services/api/circles', () => ({
   createCircle: jest.fn(),
 }));
 
+jest.mock('@/services/api/errors', () => ({
+  getApiErrorMessage: (...args: unknown[]) => mockGetApiErrorMessage(...args),
+}));
+
 jest.mock('@/services/api/upload', () => ({
   requestUploadPresign: jest.fn(),
   resolveUploadContentType: jest.fn(),
@@ -125,6 +133,18 @@ beforeEach(() => {
   mockAuth.user = { vipLevel: 0 };
   mockProgram.status = null;
   mockFetchProgramStatus.mockResolvedValue(null);
+  Object.assign(mockForm, {
+    name: '',
+    description: '',
+    pickedAvatarUri: null,
+    selectedCategories: [],
+    rules: '',
+    joinVipRestriction: null,
+    joinCreditRestriction: null,
+    joinFancyRestriction: false,
+    memberCanPost: false,
+  });
+  mockGetApiErrorMessage.mockReturnValue('localized-create-limit');
 });
 
 test('unknown program status defers the creation decision to the backend', () => {
@@ -158,4 +178,29 @@ test('known zero floor keeps the VIP creation gate for a regular user', () => {
 
   expect(screen.getByText('circle.create.vipRequired')).toBeTruthy();
   expect(screen.queryByText('circle-form')).toBeNull();
+});
+
+test('create-limit failures use the localized server-error mapping', async () => {
+  mockAuth.user = { vipLevel: 1 };
+  Object.assign(mockForm, {
+    name: 'Circle name',
+    description: 'A sufficiently long circle description',
+  });
+  const backendError = new Error('Created circle limit reached');
+  jest.mocked(createCircle).mockRejectedValueOnce(backendError);
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+
+  render(<CreateCircleScreen />);
+  fireEvent.press(screen.getByText('circle.create.submitButton'));
+
+  await waitFor(() => {
+    expect(mockGetApiErrorMessage).toHaveBeenCalledWith(
+      backendError,
+      'circle.create.failed',
+    );
+    expect(alert).toHaveBeenCalledWith(
+      'circle.create.failed',
+      'localized-create-limit',
+    );
+  });
 });

@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   MEMBERSHIP_BENEFITS,
   MEMBERSHIP_PLANS,
@@ -54,8 +56,8 @@ test('catalog defines every value in the seven benefit rows', () => {
     },
     {
       id: 'joined-groups',
-      labelKey: 'profile.membership.benefits.joinedGroups',
-      values: { silver: 100, gold: 100, diamond: 100, super: 100 },
+      labelKey: 'profile.membership.benefits.joinedCircles',
+      values: { silver: 200, gold: 300, diamond: 1000, super: 2000 },
     },
     {
       id: 'note-storage',
@@ -98,6 +100,33 @@ test('catalog defines every value in the seven benefit rows', () => {
       },
     },
   ]);
+});
+
+test('joined-circle quota copy names circles in every supported locale', () => {
+  const expected = {
+    en: ['Circles you can join', '{{value}} circles'],
+    es: ['Círculos a los que puedes unirte', '{{value}} círculos'],
+    ja: ['参加可能なサークル', '{{value}}サークル'],
+    ko: ['가입 가능한 서클', '{{value}}개 서클'],
+    zh: ['可加入圈子', '{{value}} 个圈子'],
+  } as const;
+
+  for (const [locale, copy] of Object.entries(expected)) {
+    const messages = JSON.parse(
+      fs.readFileSync(
+        path.join(process.cwd(), `src/i18n/locales/${locale}.json`),
+        'utf8',
+      ),
+    );
+    assert.deepEqual(
+      [
+        messages.profile.membership.benefits.joinedCircles,
+        messages.profile.membership.benefitValues['joined-groups'],
+      ],
+      copy,
+      `${locale} must describe the hard limit as circles`,
+    );
+  }
 });
 
 test('catalog excludes benefits reserved for the base product or later releases', () => {

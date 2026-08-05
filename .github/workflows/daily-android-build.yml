@@ -192,17 +192,55 @@ jobs:
         with:
           node-version: "22"
 
-      # validate-android-release.js signing 只看环境变量是否非空、指纹是否是合法的
-      # SHA-256——不解码 keystore、不落盘。与 android-release.yml 同源，所以「tag 当天
-      # 才发现 secret 没了」这种情况会提前一天以上暴露。
-      - name: Validate production signing configuration
+      - name: Setup Java
+        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5.5.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # 不只检查 secret 非空：实际解码并打开生产 keystore，核对证书指纹，再用
+      # key password 签一个临时 jar。这样 keystore 损坏、store/key 密码、alias 或
+      # ANDROID_CERT_SHA256 任一漂移，都会在每日任务暴露，而不是等到 tag 构建。
+      - name: Verify production signing key
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           ANDROID_CERT_SHA256: ${{ vars.ANDROID_CERT_SHA256 }}
-        run: node .github/scripts/validate-android-release.js signing
+        run: |
+          set -euo pipefail
+          node .github/scripts/validate-android-release.js signing
+
+          signing_dir="$RUNNER_TEMP/daily-production-signing"
+          mkdir -p "$signing_dir"
+          keystore_path="$signing_dir/windnote-release.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
+          chmod 600 "$keystore_path"
+
+          key_output="$(keytool -list -v -J-Duser.language=en \
+            -keystore "$keystore_path" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS")"
+          actual_cert="$(printf '%s\n' "$key_output" | sed -nE 's/^[[:space:]]*SHA256:[[:space:]]*([[:xdigit:]:]+)[[:space:]]*$/\1/p' | head -n 1 | tr -d '[:space:]:' | tr '[:lower:]' '[:upper:]')"
+          expected_cert="$(printf '%s' "$ANDROID_CERT_SHA256" | tr -d '[:space:]:' | tr '[:lower:]' '[:upper:]')"
+          if [[ -z "$actual_cert" || "$actual_cert" != "$expected_cert" ]]; then
+            echo "::error::Production signing certificate does not match ANDROID_CERT_SHA256. Actual: $actual_cert Expected: $expected_cert"
+            exit 1
+          fi
+
+          printf 'daily signing probe\n' > "$signing_dir/probe.txt"
+          jar --create --file "$signing_dir/probe.jar" -C "$signing_dir" probe.txt
+          jarsigner \
+            -keystore "$keystore_path" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -keypass "$ANDROID_KEY_PASSWORD" \
+            "$signing_dir/probe.jar" \
+            "$ANDROID_KEY_ALIAS"
+
+      - name: Discard production signing probe
+        if: ${{ always() }}
+        run: rm -rf "$RUNNER_TEMP/daily-production-signing"
 
   # 只在失败时响，和 ci.yml 的通知契约一致：定时任务每天报一次成功，很快就会被当成
   # 背景噪音划掉，真出事那条也一起被划掉。
