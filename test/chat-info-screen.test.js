@@ -293,6 +293,30 @@ test('invite group members revalidates the role at submit time', () => {
   assert.match(source, /if \(!stillAuthorized\) \{\s*\n\s*setAuthorized\(false\);\s*\n\s*Alert\.alert\(t\('chat\.groupMembersRestricted'\)\);\s*\n\s*return;/);
   assert.match(source, /invite_group_members_list_load_failed/);
   assert.match(source, /if \(result\.membersError\) \{/);
+
+  // review R3：单飞行守放在任何 await 之前——双击不会并发提交非幂等邀请。
+  assert.match(source, /if \(submitInFlightRef\.current \|\| submitting\) return;/);
+  assert.match(source, /submitInFlightRef\.current = true;\s*\n\s*setSubmitting\(true\);/);
+  assert.match(source, /submitInFlightRef\.current = false;/);
+  // revalidation 现在在 submitting 守卫之后（守卫先于首个 await）。
+  assert.match(
+    source,
+    /submitInFlightRef\.current = true;[\s\S]{0,80}try \{[\s\S]{0,160}await revalidateGroupMemberView/,
+  );
+});
+
+test('invite group members keeps friend-load failure separate from authorization', () => {
+  const filePath = path.join(process.cwd(), 'src/features/messages/screens/InviteGroupMembersScreen.tsx');
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  // review R3：好友表加载失败 ≠ 无权限——授权保留、单独错误态 + 页内重试。
+  assert.match(source, /const \[friendsError, setFriendsError\] = useState\(false\)/);
+  assert.match(source, /setFriendsError\(true\)/);
+  assert.match(source, /invite_group_members_friends_load_failed/);
+  assert.match(source, /\) : friendsError \? \(/);
+  assert.match(source, /onPress=\{\(\) => void loadScreen\(\)\}/);
+  // 好友加载失败时隐藏提交 footer（没有可提交内容）。
+  assert.match(source, /\{authorized && !friendsError \? \(/);
 });
 
 test('invite group members screen filters users who are already in the group', () => {
@@ -718,4 +742,27 @@ test('chat history media grid normalizes urls and falls back across image candid
   assert.match(mediaSource, /bigPicture\?\.url/);
   assert.match(mediaSource, /handleImageError/);
   assert.match(mediaSource, /onError=\{handleImageError\}/);
+});
+
+test('chat info revalidates ownership before mutating a member role', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx'),
+    'utf8',
+  );
+
+  // review R3：action sheet 打开到点确认之间可能失去群主身份，PATCH 前
+  // 现场重查自己的角色（不吃创建 alert 时捕获的 currentRole），fail-closed。
+  assert.match(
+    source,
+    /const \[freshSelf\] = await loadSpecifiedGroupMembers\(groupID, \[currentUserID\]\);/,
+  );
+  assert.match(
+    source,
+    /if \(!canChangeGroupMemberRole\(freshSelf\?\.roleLevel, member\.roleLevel\)\) \{\s*\n\s*Alert\.alert\(t\('chat\.groupMembersRestricted'\)\);/,
+  );
+  // 重查通过后才发 PATCH。
+  assert.match(
+    source,
+    /canChangeGroupMemberRole\(freshSelf\?\.roleLevel[\s\S]{0,220}await updateGroupMemberRole\(groupID, member\.userID, nextRole\)/,
+  );
 });

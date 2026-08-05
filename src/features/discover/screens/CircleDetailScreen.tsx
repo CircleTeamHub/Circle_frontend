@@ -920,8 +920,10 @@ export default function CircleDetailScreen() {
             </Pressable>
           ) : null}
 
-          {/* 邀请好友 (active members) — same primary style as 进入群聊 */}
-          {isOwnerOrAdmin ? (
+          {/* 邀请好友 (active members) — 菜单里"发送圈子名片"对活跃成员开放、
+              "邀请通讯录好友"只对 owner/admin；myRole 透传给菜单做区分。
+              review R3：入口回到 isActiveMember，别把不读目录的名片分享也锁死。 */}
+          {isActiveMember ? (
             <Pressable
               style={[s.actionBtn, d.chatBtn]}
               onPress={() =>
@@ -931,6 +933,7 @@ export default function CircleDetailScreen() {
                     circle.id,
                     circle.name,
                     circle.avatarUrl ?? '',
+                    circle.myRole,
                   ),
                 )
               }

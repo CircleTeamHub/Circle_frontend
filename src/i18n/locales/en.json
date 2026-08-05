@@ -185,6 +185,7 @@
     "inviteGroupMembersFailed": "Failed to send invite: {{error}}",
     "inviteGroupMembersAlreadyMembers": "Selected friends are already in this group",
     "inviteGroupMembersNoInvitableFriends": "No friends available to invite",
+    "inviteGroupMembersLoadFailed": "Failed to load friends. Please retry.",
     "groups": {
       "title": "Custom Groups",
       "createSection": "Create Group",

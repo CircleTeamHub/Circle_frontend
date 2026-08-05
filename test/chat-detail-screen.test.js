@@ -493,7 +493,11 @@ test('group member access stays live while the chat screen is mounted', () => {
   assert.match(hook, /unsubscribe\(\);/);
   // revalidate 现场重查 fail-closed：查询失败/查无记录一律无权。
   assert.match(hook, /return canViewGroupMembers\(next\?\.roleLevel\);/);
-  assert.match(hook, /catch \{[\s\S]{0,200}return false;/);
+  assert.match(hook, /catch \{[\s\S]{0,400}return false;/);
+  // review R3：事件代际守——在途查询被角色事件超车时丢弃陈旧结果、按事件判定。
+  assert.match(hook, /const eventGenRef = useRef\(0\)/);
+  assert.match(hook, /if \(cancelled \|\| eventGenRef\.current !== genAtStart\) return;/);
+  assert.match(hook, /return canViewGroupMembers\(lastEventMemberRef\.current\?\.roleLevel\);/);
 });
 
 test('protected member actions revalidate fail-closed at tap time', () => {

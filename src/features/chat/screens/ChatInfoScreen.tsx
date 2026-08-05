@@ -22,6 +22,7 @@ import {
   kickGroupMembers,
   leaveGroupChat,
   loadGroupMemberList,
+  loadSpecifiedGroupMembers,
   setConversationBurnDuration,
   setConversationMute,
   toggleConversationPinned,
@@ -836,14 +837,22 @@ export default function ChatInfoScreen() {
 
   const handleChangeMemberRole = useCallback(
     (member: GroupMemberItem) => {
-      if (!groupID || rolePendingUserID || !canChangeGroupMemberRole(currentRole, member.roleLevel)) {
+      if (!groupID || !currentUserID || rolePendingUserID || !canChangeGroupMemberRole(currentRole, member.roleLevel)) {
         return;
       }
 
       const nextRole = member.roleLevel === GroupMemberRole.Admin ? 'MEMBER' : 'ADMIN';
       setRolePendingUserID(member.userID);
-      updateGroupMemberRole(groupID, member.userID, nextRole)
-        .then(() => {
+      // review R3：action sheet 打开到点确认之间可能已失去群主身份，PATCH 前
+      // 现场重查自己的角色（不吃创建 alert 时捕获的 currentRole），fail-closed。
+      void (async () => {
+        try {
+          const [freshSelf] = await loadSpecifiedGroupMembers(groupID, [currentUserID]);
+          if (!canChangeGroupMemberRole(freshSelf?.roleLevel, member.roleLevel)) {
+            Alert.alert(t('chat.groupMembersRestricted'));
+            return;
+          }
+          await updateGroupMemberRole(groupID, member.userID, nextRole);
           const nextRoleLevel = nextRole === 'ADMIN' ? GroupMemberRole.Admin : GroupMemberRole.Normal;
           setGroupMembers((members) =>
             members.map((item) =>
@@ -856,11 +865,14 @@ export default function ChatInfoScreen() {
               ? t('chat.adminGranted', { name: member.nickname || member.userID })
               : t('chat.adminRevoked', { name: member.nickname || member.userID }),
           );
-        })
-        .catch(openActionError)
-        .finally(() => setRolePendingUserID(null));
+        } catch (error) {
+          openActionError(error);
+        } finally {
+          setRolePendingUserID(null);
+        }
+      })();
     },
-    [currentRole, groupID, openActionError, rolePendingUserID, t],
+    [currentRole, currentUserID, groupID, openActionError, rolePendingUserID, t],
   );
 
   const handleKickMember = useCallback(

@@ -185,6 +185,7 @@
     "inviteGroupMembersFailed": "发送邀请失败：{{error}}",
     "inviteGroupMembersAlreadyMembers": "所选好友已经在群聊中",
     "inviteGroupMembersNoInvitableFriends": "没有可邀请的好友",
+    "inviteGroupMembersLoadFailed": "好友列表加载失败，请重试",
     "groups": {
       "title": "自定义分组",
       "createSection": "创建分组",

@@ -8,6 +8,7 @@ import {
   getCircleScopeFromSegments,
   getCircleShareHref,
 } from '@/features/user/utils/routes';
+import { canViewCircleMembers } from '@/features/chat/group-member-permissions';
 import { NavHeader } from '@/components/ui/nav-header';
 import { MenuRow } from '@/components/ui/menu-row';
 import { Divider } from '@/components/ui/divider';
@@ -34,10 +35,18 @@ export default function InviteCircleMenuScreen() {
     id?: string;
     title?: string;
     avatar?: string;
+    myRole?: string;
   }>();
   const circleId = typeof params.id === 'string' ? params.id : '';
   const circleName = typeof params.title === 'string' ? params.title : '';
   const circleAvatar = typeof params.avatar === 'string' ? params.avatar : '';
+  // review R3：只有 owner/admin 能进"邀请通讯录好友"（读成员目录）；发送圈子
+  // 名片不读目录，对全体活跃成员开放。myRole 缺省时保守只显示名片分享。
+  const myRole =
+    params.myRole === 'OWNER' || params.myRole === 'ADMIN' || params.myRole === 'MEMBER'
+      ? params.myRole
+      : null;
+  const canInviteContacts = canViewCircleMembers(myRole);
   // 留在当前栈（messages/discover 均有本页镜像），返回链路不跨 tab。
   const segments = useSegments();
   const circleScope = getCircleScopeFromSegments(segments);
@@ -66,14 +75,18 @@ export default function InviteCircleMenuScreen() {
           label={t('circle.invite.sendCard', { defaultValue: '发送圈子名片' })}
           onPress={handleSendCard}
         />
-        <Divider />
-        <MenuRow
-          icon="people-outline"
-          label={t('circle.invite.fromContacts', {
-            defaultValue: '邀请通讯录好友',
-          })}
-          onPress={handleInviteContacts}
-        />
+        {canInviteContacts ? (
+          <>
+            <Divider />
+            <MenuRow
+              icon="people-outline"
+              label={t('circle.invite.fromContacts', {
+                defaultValue: '邀请通讯录好友',
+              })}
+              onPress={handleInviteContacts}
+            />
+          </>
+        ) : null}
       </View>
     </View>
   );

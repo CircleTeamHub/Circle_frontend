@@ -469,7 +469,7 @@ export default function InviteToCircleScreen() {
         />
       )}
 
-      {authorized ? (
+      {authorized && !loadError ? (
         <View
         style={[
           s.footer,

@@ -627,6 +627,7 @@
     "inviteGroupMembersFailed": "No se pudo enviar la invitación: {{error}}",
     "inviteGroupMembersAlreadyMembers": "Los amigos seleccionados ya están en este grupo",
     "inviteGroupMembersNoInvitableFriends": "No hay amigos disponibles para invitar",
+    "inviteGroupMembersLoadFailed": "No se pudieron cargar los amigos. Inténtalo de nuevo.",
     "groups": {
       "title": "Grupos personalizados",
       "createSection": "Crear grupo",

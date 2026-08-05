@@ -626,6 +626,7 @@
     "inviteGroupMembersFailed": "招待の送信に失敗しました：{{error}}",
     "inviteGroupMembersAlreadyMembers": "選択した友だちはすでにこのグループに参加しています",
     "inviteGroupMembersNoInvitableFriends": "招待できる友だちがいません",
+    "inviteGroupMembersLoadFailed": "友だちリストの読み込みに失敗しました。再試行してください。",
     "groups": {
       "title": "カスタムグループ",
       "createSection": "グループを作成",
