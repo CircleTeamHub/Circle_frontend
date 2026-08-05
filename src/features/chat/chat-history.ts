@@ -43,6 +43,19 @@ export function formatChatHistoryTime(sendTime: number) {
   });
 }
 
+// 「当天聊天记录」结果页的标题：把 'YYYY-MM-DD' 渲染成本地化长日期（如 2026年7月4日）。
+export function formatChatHistoryDateTitle(date: string) {
+  const parsed = new Date(`${date}T00:00:00`);
+  if (!Number.isFinite(parsed.getTime())) {
+    return i18n.t('chat.history.dateTitle');
+  }
+  return parsed.toLocaleDateString(chatHistoryDateLocale(), {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
 export function formatChatHistoryMonth(sendTime: number) {
   if (!sendTime) {
     return '';

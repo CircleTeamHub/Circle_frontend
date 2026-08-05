@@ -2056,11 +2056,67 @@ export async function searchConversationMessagesByDate(params: {
     conversationID: params.conversationID,
     keywordList: [''],
     messageTypeList: getChatHistoryDateMessageTypes(),
-    searchTimePosition: startOfDay,
+    // OpenIM 的 searchTimePosition / searchTimePeriod 单位是【秒】（period 写成
+    // 24*60*60 即为证）。startOfDay 是 getTime() 返回的毫秒，直接传会被当成秒 ——
+    // 时间窗落到 5 万年后，当天记录永远搜不到。必须先 ÷1000 换算成秒。
+    searchTimePosition: Math.floor(startOfDay / 1000),
     searchTimePeriod: 24 * 60 * 60,
     pageIndex: params.pageIndex ?? 1,
     count: params.count ?? 50,
   });
+}
+
+// 返回某个月内「有聊天记录」的本地日期集合（'YYYY-MM-DD'），供按日期日历给有记录的
+// 天上色。按整月时间窗批量搜、翻页去重成天。翻页设安全上限：极活跃的月份（消息成千
+// 上万）几乎每天都有记录，前几页即可覆盖绝大多数日子，命中上限时不再继续翻。
+export async function getConversationMessageDays(params: {
+  conversationID: string;
+  year: number;
+  month: number; // 0-based，与 JS Date 一致
+}): Promise<string[]> {
+  const monthStart = new Date(params.year, params.month, 1);
+  const monthEnd = new Date(params.year, params.month + 1, 1);
+  const startSec = Math.floor(monthStart.getTime() / 1000);
+  const periodSec = Math.floor((monthEnd.getTime() - monthStart.getTime()) / 1000);
+
+  if (!params.conversationID || !Number.isFinite(startSec) || periodSec <= 0) {
+    return [];
+  }
+
+  const PAGE_SIZE = 500;
+  const MAX_PAGES = 10; // ~5000 条上限，避免极端会话把这个索引查询拖垮
+  const days = new Set<string>();
+
+  for (let pageIndex = 1; pageIndex <= MAX_PAGES; pageIndex += 1) {
+    const items = await searchConversationMessages({
+      conversationID: params.conversationID,
+      keywordList: [''],
+      messageTypeList: getChatHistoryDateMessageTypes(),
+      searchTimePosition: startSec,
+      searchTimePeriod: periodSec,
+      pageIndex,
+      count: PAGE_SIZE,
+    });
+
+    for (const item of items) {
+      // sendTime 是毫秒；按【本地日期】分桶，与日历 formatDateInput 的口径保持一致。
+      const sendTime = Number(item.sendTime);
+      if (!Number.isFinite(sendTime) || sendTime <= 0) continue;
+      const date = new Date(sendTime);
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      days.add(`${date.getFullYear()}-${month}-${day}`);
+    }
+
+    if (items.length < PAGE_SIZE) break;
+    if (isDev && pageIndex === MAX_PAGES) {
+      console.warn(
+        '[chat-history-date] month record-day scan hit page cap; some sparse days may be unmarked',
+      );
+    }
+  }
+
+  return [...days];
 }
 
 export function isMessageForConversation(

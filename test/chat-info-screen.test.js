@@ -615,7 +615,8 @@ test('chat history search screens exist with dedicated titles and empty states',
   assert.match(filesSource, /searchConversationFileMessages/);
   assert.match(filesSource, /暂无文件记录/);
 
-  assert.match(dateSource, /searchConversationMessagesByDate/);
+  // 日历页现在是纯选择器：点日期跳「当天记录」结果页，搜索逻辑搬去结果页了。
+  assert.match(dateSource, /getChatHistoryDateResultsHref/);
   assert.match(dateSource, /t\('chat\.history\.pickDate'\)/);
 });
 
@@ -643,7 +644,8 @@ test('chat history date screen uses an inline calendar grid instead of typed dat
   assert.match(dateSource, /calendarGrid/);
   assert.match(dateSource, /handleMonthOffset/);
   assert.match(dateSource, /handleSelectDate/);
-  assert.match(dateSource, /selectedDate/);
+  // 有记录的日子上色所需的当月记录集合（取代旧的 selectedDate 内联选中态）。
+  assert.match(dateSource, /recordDays/);
   assert.match(dateSource, /formatCalendarMonthTitle/);
   assert.doesNotMatch(dateSource, /placeholder="YYYY-MM-DD"/);
   assert.doesNotMatch(dateSource, /keyboardType="numbers-and-punctuation"/);

@@ -295,6 +295,7 @@
       "noRecordsForDate": "이 날짜의 채팅 기록이 없습니다",
       "noMatches": "일치하는 메시지가 없습니다",
       "pickDate": "날짜 선택",
+      "hasRecordsA11y": "채팅 기록 있음",
       "video": "동영상",
       "image": "이미지",
       "unknownMonth": "알 수 없는 월",

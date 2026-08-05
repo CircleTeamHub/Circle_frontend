@@ -1,30 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import type { MessageItem } from '@openim/rn-client-sdk';
 import i18n from '@/i18n';
 import { NavHeader } from '@/components/ui/nav-header';
-import {
-  formatChatHistoryTime,
-  getChatHistoryMessageTitle,
-  resolveChatHistoryRouteParams,
-} from '@/features/chat/chat-history';
+import { resolveChatHistoryRouteParams } from '@/features/chat/chat-history';
 import { getLocalizedDateTimeLocale } from '@/utils/locale';
-import { searchConversationMessagesByDate } from '@/im/client';
-import { getChatDetailHref } from '@/features/user/utils/routes';
+import { getConversationMessageDays } from '@/im/client';
+import {
+  getChatDetailHref,
+  getChatHistoryDateResultsHref,
+} from '@/features/user/utils/routes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
-const PAGE_SIZE = 50;
 const CALENDAR_COLUMNS = 7;
+const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+
 // Localized single-letter weekday headers (2023-01-01 is a Sunday).
 function getWeekdayLabels(locale: string) {
   return Array.from({ length: 7 }, (_, i) =>
@@ -80,6 +73,15 @@ function buildCalendarDays(monthDate: Date): CalendarDay[] {
   });
 }
 
+// 把 42 天切成 6 周（每周 7 天），供「每周一行」渲染。
+function chunkWeeks(days: CalendarDay[]): CalendarDay[][] {
+  const weeks: CalendarDay[][] = [];
+  for (let i = 0; i < days.length; i += CALENDAR_COLUMNS) {
+    weeks.push(days.slice(i, i + CALENDAR_COLUMNS));
+  }
+  return weeks;
+}
+
 const s = StyleSheet.create({
   container: { flex: 1 },
   content: {
@@ -108,16 +110,19 @@ const s = StyleSheet.create({
     flexDirection: 'row',
   },
   weekdayCell: {
-    width: `${100 / CALENDAR_COLUMNS}%`,
+    flex: 1,
     alignItems: 'center',
     paddingVertical: Spacing.xs,
   },
-  calendarGrid: {
+  // 按周分行：容器纵向堆叠 6 个 weekRow。不用 flexWrap + 百分比宽度——RN 亚像素
+  // 取整会让 7 个百分比格子累计略超 100%，第 7 格（周六）被挤到下一行，结果每行
+  // 只剩 6 格、周六列全空、当月日期整体错位到左边一列。
+  calendarGrid: {},
+  weekRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
   },
   calendarCell: {
-    width: `${100 / CALENDAR_COLUMNS}%`,
+    flex: 1,
     aspectRatio: 1,
     padding: 3,
   },
@@ -127,18 +132,22 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  card: {
-    borderRadius: Radius.xl,
-    padding: Spacing.md,
-    gap: Spacing.xs,
+  // 「这天有聊天记录」的圆点：绝对定位在日期数字下方居中，不挤动数字。
+  recordDotWrap: {
+    position: 'absolute',
+    bottom: 4,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
   },
-  listContent: {
-    paddingBottom: Spacing.xl,
-    gap: Spacing.sm,
+  recordDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
   },
-  centeredText: {
+  hint: {
     textAlign: 'center',
-    marginTop: Spacing.xl,
+    marginTop: Spacing.sm,
   },
 });
 
@@ -154,16 +163,10 @@ export default function ChatHistoryDateScreen() {
   }>();
   const { conversationID, sourceID, title } = resolveChatHistoryRouteParams(params);
   const [visibleMonth, setVisibleMonth] = useState(() => getMonthStart(new Date()));
-  const [selectedDate, setSelectedDate] = useState('');
-  const [searched, setSearched] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
-  const [results, setResults] = useState<MessageItem[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  // 当前可见月份里「有聊天记录」的日期集合（'YYYY-MM-DD'），用于给这些天上色。
+  const [recordDays, setRecordDays] = useState<Set<string>>(() => new Set());
   const mountedRef = useRef(true);
-  const pageRef = useRef(1);
-  const activeDateRef = useRef('');
+  const recordsRequestRef = useRef('');
 
   useEffect(() => {
     return () => {
@@ -175,6 +178,30 @@ export default function ChatHistoryDateScreen() {
     () => buildCalendarDays(visibleMonth),
     [visibleMonth],
   );
+  const calendarWeeks = useMemo(() => chunkWeeks(calendarDays), [calendarDays]);
+
+  // 翻到某月就拉取该月有记录的日子。recordsRequestRef 做竞态防护：快速翻月时
+  // 只让最新一次请求的结果落地，避免旧月覆盖新月的圆点。
+  useEffect(() => {
+    if (!conversationID) {
+      setRecordDays(new Set());
+      return;
+    }
+    const year = visibleMonth.getFullYear();
+    const month = visibleMonth.getMonth();
+    const monthKey = `${year}-${month}`;
+    recordsRequestRef.current = monthKey;
+    void getConversationMessageDays({ conversationID, year, month })
+      .then((days) => {
+        if (!mountedRef.current || recordsRequestRef.current !== monthKey) return;
+        setRecordDays(new Set(days));
+      })
+      .catch((err) => {
+        if (isDev) {
+          console.warn('[chat-history-date] load month records failed', err);
+        }
+      });
+  }, [conversationID, visibleMonth]);
 
   const d = useMemo(
     () => ({
@@ -191,82 +218,14 @@ export default function ChatHistoryDateScreen() {
       weekdayText: { color: colors.textSecondary, ...Typography.small },
       dayText: { color: colors.text, ...Typography.bodyRegular },
       fadedDayText: { color: colors.textSecondary, ...Typography.bodyRegular },
-      selectedDayButton: { backgroundColor: colors.primary },
       todayDayButton: {
         borderWidth: 1,
         borderColor: colors.primary,
       },
-      selectedDayText: { color: colors.white, ...Typography.body },
-      card: {
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.surfaceBorder,
-      },
-      title: { color: colors.text, ...Typography.body },
-      meta: { color: colors.textSecondary, ...Typography.small },
+      recordDot: { backgroundColor: colors.primary },
       centeredText: { color: colors.textSecondary, ...Typography.bodyRegular },
-      errorText: { color: colors.error, ...Typography.bodyRegular },
-      retryButton: {
-        marginTop: Spacing.md,
-        alignSelf: 'center' as const,
-        paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.sm,
-        borderRadius: Radius.lg,
-        backgroundColor: colors.primary,
-      },
-      retryText: { color: colors.white, ...Typography.body },
     }),
     [colors],
-  );
-
-  const searchDate = useCallback(
-    async (nextDate: string, nextPage = 1) => {
-      if (!conversationID || loading || (nextPage > 1 && loadingMore)) {
-        return;
-      }
-
-      if (nextPage === 1) {
-        setSearched(true);
-        activeDateRef.current = nextDate;
-        pageRef.current = 1;
-        setLoading(true);
-        setError(null);
-      } else {
-        setLoadingMore(true);
-      }
-
-      try {
-        const page = await searchConversationMessagesByDate({
-          conversationID,
-          date: nextDate,
-          pageIndex: nextPage,
-          count: PAGE_SIZE,
-        });
-
-        if (mountedRef.current) {
-          pageRef.current = nextPage;
-          setResults((prev) => (nextPage === 1 ? page : [...prev, ...page]));
-          setHasMore(page.length === PAGE_SIZE);
-        }
-      } catch (err) {
-        if (mountedRef.current) {
-          if (nextPage === 1) {
-            setResults([]);
-            setError(t('chat.history.loadFailed'));
-          }
-          setHasMore(false);
-        }
-        if (typeof __DEV__ !== 'undefined' && __DEV__) {
-          console.warn('[chat-history-date] search failed', err);
-        }
-      } finally {
-        if (mountedRef.current) {
-          setLoading(false);
-          setLoadingMore(false);
-        }
-      }
-    },
-    [conversationID, loading, loadingMore, t],
   );
 
   const handleMonthOffset = useCallback((offset: number) => {
@@ -280,29 +239,18 @@ export default function ChatHistoryDateScreen() {
   const handleSelectDate = useCallback(
     (day: CalendarDay) => {
       if (!day.isCurrentMonth) {
+        // 点相邻月份的日子：先把日历翻到那个月，再让用户点当月的它。
         setVisibleMonth(getMonthStart(new Date(`${day.date}T00:00:00`)));
+        return;
       }
-      setSelectedDate(day.date);
-      void searchDate(day.date);
+      // 点当月某天 → 进入「当天聊天记录」结果页（结果页自己做精确的当日搜索，
+      // 因此即便圆点索引偶有遗漏，点进去仍能查到当天记录）。
+      router.push(
+        getChatHistoryDateResultsHref(conversationID, sourceID, title, day.date),
+      );
     },
-    [searchDate],
+    [conversationID, sourceID, title],
   );
-
-  const handleLoadMore = useCallback(() => {
-    if (!hasMore || !activeDateRef.current) {
-      return;
-    }
-    void searchDate(activeDateRef.current, pageRef.current + 1);
-  }, [hasMore, searchDate]);
-
-  const openMessage = useCallback((clientMsgID: string) => {
-    if (!sourceID) {
-      router.back();
-      return;
-    }
-
-    router.push(getChatDetailHref('messages', sourceID, title, undefined, conversationID, clientMsgID));
-  }, [conversationID, sourceID, title]);
 
   return (
     <View style={[s.container, d.container, { paddingTop: insets.top }]}>
@@ -339,75 +287,45 @@ export default function ChatHistoryDateScreen() {
             ))}
           </View>
           <View style={s.calendarGrid}>
-            {calendarDays.map((day) => {
-              const selected = day.date === selectedDate;
-              return (
-                <View key={day.key} style={s.calendarCell}>
-                  <Pressable
-                    style={[
-                      s.calendarDayButton,
-                      day.isToday && !selected ? d.todayDayButton : null,
-                      selected ? d.selectedDayButton : null,
-                    ]}
-                    onPress={() => handleSelectDate(day)}
-                  >
-                    <Text
-                      style={[
-                        day.isCurrentMonth ? d.dayText : d.fadedDayText,
-                        selected ? d.selectedDayText : null,
-                      ]}
-                    >
-                      {day.label}
-                    </Text>
-                  </Pressable>
-                </View>
-              );
-            })}
+            {calendarWeeks.map((week, weekIndex) => (
+              <View key={weekIndex} style={s.weekRow}>
+                {week.map((day) => {
+                  const hasRecords =
+                    day.isCurrentMonth && recordDays.has(day.date);
+                  return (
+                    <View key={day.key} style={s.calendarCell}>
+                      <Pressable
+                        style={[
+                          s.calendarDayButton,
+                          day.isToday ? d.todayDayButton : null,
+                        ]}
+                        onPress={() => handleSelectDate(day)}
+                        accessibilityLabel={
+                          hasRecords
+                            ? `${day.label}, ${t('chat.history.hasRecordsA11y')}`
+                            : undefined
+                        }
+                      >
+                        <Text
+                          style={day.isCurrentMonth ? d.dayText : d.fadedDayText}
+                        >
+                          {day.label}
+                        </Text>
+                        {hasRecords ? (
+                          <View style={s.recordDotWrap} pointerEvents="none">
+                            <View style={[s.recordDot, d.recordDot]} />
+                          </View>
+                        ) : null}
+                      </Pressable>
+                    </View>
+                  );
+                })}
+              </View>
+            ))}
           </View>
         </View>
 
-        <FlatList
-          data={results}
-          keyExtractor={(item) => item.clientMsgID}
-          contentContainerStyle={s.listContent}
-          keyboardShouldPersistTaps="handled"
-          onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.3}
-          renderItem={({ item }) => (
-            <Pressable style={[s.card, d.card]} onPress={() => openMessage(item.clientMsgID)}>
-              <Text style={d.title}>{getChatHistoryMessageTitle(item)}</Text>
-              <Text style={d.meta}>{formatChatHistoryTime(item.sendTime)}</Text>
-            </Pressable>
-          )}
-          ListEmptyComponent={
-            error ? (
-              <View>
-                <Text style={[s.centeredText, d.errorText]}>{error}</Text>
-                <Pressable
-                  style={d.retryButton}
-                  onPress={() => activeDateRef.current && void searchDate(activeDateRef.current)}
-                >
-                  <Text style={d.retryText}>{t('chat.history.retry')}</Text>
-                </Pressable>
-              </View>
-            ) : (
-              <Text style={[s.centeredText, d.centeredText]}>
-                {searched
-                  ? loading
-                    ? t('chat.history.searching')
-                    : t('chat.history.noRecordsForDate')
-                  : t('chat.history.pickDate')}
-              </Text>
-            )
-          }
-          ListFooterComponent={
-            loadingMore ? (
-              <Text style={[s.centeredText, d.centeredText]}>
-                {t('chat.history.loading')}
-              </Text>
-            ) : null
-          }
-        />
+        <Text style={[s.hint, d.centeredText]}>{t('chat.history.pickDate')}</Text>
       </View>
     </View>
   );

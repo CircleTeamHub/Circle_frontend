@@ -295,6 +295,7 @@
       "noRecordsForDate": "No hay historial de chat para esta fecha",
       "noMatches": "No hay mensajes coincidentes",
       "pickDate": "Elige una fecha",
+      "hasRecordsA11y": "tiene registros de chat",
       "video": "Video",
       "image": "Imagen",
       "unknownMonth": "Mes desconocido",

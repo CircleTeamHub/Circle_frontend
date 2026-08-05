@@ -334,6 +334,7 @@
       "noRecordsForDate": "No chat history for this date",
       "noMatches": "No matching messages",
       "pickDate": "Pick a date",
+      "hasRecordsA11y": "has chat records",
       "video": "Video",
       "image": "Image",
       "unknownMonth": "Unknown month",
