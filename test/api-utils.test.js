@@ -323,3 +323,63 @@ test('embedded appearances safely null unsafe remote frame URLs', () => {
     },
   );
 });
+
+// ── allowPeerMediaUrl：对端可控媒体地址的来源白名单 ─────────────────────────
+//
+// 聊天图片/语音/卡片封面的 URL 来自 OpenIM 消息体，不经过 circle_be，服务端一个字
+// 都没校验过。放任它指向任意主机的后果不是流量，而是隐私：每个滑过这条消息的人都会
+// 静默发起一次 GET（无需点击），把 IP、User-Agent 和精确的已读时刻交给对方。
+test('allowPeerMediaUrl accepts the app own media origins', () => {
+  const { allowPeerMediaUrl } = loadApiUtils({
+    apiUrl: 'https://api.example.com/api/v1',
+    isDev: false,
+  });
+
+  assert.equal(
+    allowPeerMediaUrl('https://api.example.com/circle/chat/a.jpg'),
+    'https://api.example.com/circle/chat/a.jpg',
+  );
+});
+
+test('allowPeerMediaUrl rejects any third-party host (the tracking beacon)', () => {
+  const { allowPeerMediaUrl } = loadApiUtils({
+    apiUrl: 'https://api.example.com/api/v1',
+    isDev: false,
+  });
+
+  for (const hostile of [
+    'https://attacker.example/track.png',
+    // 只挡 http 是不够的：信标用 https 一样能拿到 IP 和已读时刻。
+    'https://evil.test/1x1.gif?who=victim',
+    // 前缀相似但不同主机，不能因为 startsWith 之类的松散比较而放行。
+    'https://api.example.com.evil.test/x.jpg',
+  ]) {
+    assert.equal(allowPeerMediaUrl(hostile), null, `must reject ${hostile}`);
+  }
+});
+
+test('allowPeerMediaUrl rejects embedded credentials and plain http in production', () => {
+  const { allowPeerMediaUrl } = loadApiUtils({
+    apiUrl: 'https://api.example.com/api/v1',
+    isDev: false,
+  });
+
+  // 内嵌凭证会随请求一起发出去。
+  assert.equal(
+    allowPeerMediaUrl('https://user:pass@api.example.com/circle/a.jpg'),
+    null,
+  );
+  assert.equal(allowPeerMediaUrl('http://api.example.com/circle/a.jpg'), null);
+});
+
+test('allowPeerMediaUrl tolerates junk without throwing', () => {
+  const { allowPeerMediaUrl } = loadApiUtils({
+    apiUrl: 'https://api.example.com/api/v1',
+    isDev: false,
+  });
+
+  // 映射层在渲染路径上，这里抛异常等于一条消息打挂整个聊天页。
+  for (const junk of [null, undefined, '', 'not a url', 'javascript:alert(1)']) {
+    assert.equal(allowPeerMediaUrl(junk), null);
+  }
+});

@@ -30,7 +30,7 @@ import {
   FRIEND_ADDED_NOTICE_EXTENSION,
   fromImUserId,
 } from '@/im/client';
-import { normalizeMediaUrl } from '@/services/api/utils';
+import { allowPeerMediaUrl, normalizeMediaUrl } from '@/services/api/utils';
 import i18n from '@/i18n';
 import { getLocalizedDateTimeLocale } from '@/utils/locale';
 
@@ -582,7 +582,8 @@ export function mapMessageItemToChatMessage(
           outgoing: isSent,
           plazaPostCard: {
             ...payload,
-            coverUrl: normalizeMediaUrl(payload.coverUrl) ?? null,
+            // 封面同样来自对端可控的卡片 payload。
+            coverUrl: allowPeerMediaUrl(payload.coverUrl),
           },
           senderName: isSent ? undefined : (item.senderNickname || item.sendID),
         };
@@ -720,11 +721,12 @@ export function mapMessageItemToChatMessage(
         ...base,
         type: 'image',
         outgoing: isSent,
-        imageUrl: normalizeMediaUrl(rawUrl) ?? rawUrl,
-        imageThumbUrl:
-          thumbUrl && thumbUrl.length > 0
-            ? normalizeMediaUrl(thumbUrl) ?? thumbUrl
-            : undefined,
+        // 走来源白名单而不是直通的 normalizeMediaUrl：这两个 URL 由对端完全控制、
+        // 且不经过 circle_be。指向任意主机时，每个滑过这条消息的人都会静默 GET 一次
+        // （无需点击），等于把 IP、User-Agent 和精确的已读时刻送给对方。
+        // 不可信时给 null，让气泡退化成占位符而不是照常发请求。
+        imageUrl: allowPeerMediaUrl(rawUrl) ?? '',
+        imageThumbUrl: allowPeerMediaUrl(thumbUrl) ?? undefined,
         imageWidth: pic?.width ?? undefined,
         imageHeight: pic?.height ?? undefined,
         senderName: isSent ? undefined : (item.senderNickname || item.sendID),
@@ -735,7 +737,8 @@ export function mapMessageItemToChatMessage(
   }
 
   if (item.contentType === MessageType.VoiceMessage) {
-    const voiceUrl = normalizeMediaUrl(item.soundElem?.sourceUrl ?? '') ?? item.soundElem?.sourceUrl;
+    // 同上：语音条渲染时就会建播放器指向这个地址，同样是对端可控的对外请求。
+    const voiceUrl = allowPeerMediaUrl(item.soundElem?.sourceUrl);
     return {
       ...base,
       type: 'voice',
