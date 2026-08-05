@@ -295,6 +295,7 @@
       "noRecordsForDate": "この日のチャット履歴はありません",
       "noMatches": "一致するメッセージはありません",
       "pickDate": "日付を選択",
+      "hasRecordsA11y": "チャット履歴あり",
       "video": "動画",
       "image": "画像",
       "unknownMonth": "不明な月",

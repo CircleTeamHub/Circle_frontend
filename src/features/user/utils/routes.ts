@@ -409,6 +409,22 @@ export function getChatHistoryDateHref(
   };
 }
 
+// 按日期日历里点某天 → 进入「当天聊天记录」结果页（date = 'YYYY-MM-DD'）。
+export function getChatHistoryDateResultsHref(
+  conversationID: string,
+  sourceID: string | undefined,
+  title: string | undefined,
+  date: string,
+): Href {
+  return {
+    pathname: '/(tabs)/messages/chat-history-date-results',
+    params: {
+      ...buildChatHistoryParams(conversationID, sourceID, title),
+      date,
+    },
+  };
+}
+
 export function getUserProfileScopeFromSegments(
   segments: readonly string[] | undefined,
 ): UserProfileScope {

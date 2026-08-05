@@ -335,6 +335,7 @@
       "noRecordsForDate": "暂无该日期的聊天记录",
       "noMatches": "暂无匹配的聊天记录",
       "pickDate": "请选择日期",
+      "hasRecordsA11y": "有聊天记录",
       "video": "视频",
       "image": "图片",
       "unknownMonth": "未知月份",

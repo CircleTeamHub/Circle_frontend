@@ -31,6 +31,7 @@ export default function MessagesLayout() {
       <Stack.Screen name="chat-history-media" />
       <Stack.Screen name="chat-history-files" />
       <Stack.Screen name="chat-history-date" />
+      <Stack.Screen name="chat-history-date-results" />
       {/* `title` 在 headerShown:false 下不显示，但 expo-router 会用它做无障碍提示 + 标签页历史。
          头屏内部各自有自己的 NavHeader，所以这里只配 a11y 用途的 title。 */}
       <Stack.Screen

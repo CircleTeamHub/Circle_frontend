@@ -625,6 +625,9 @@ test('searchConversationMessagesByDate constrains the time window to the selecte
     date: '2026-04-16',
   });
 
+  // OpenIM 的 searchTimePosition / searchTimePeriod 单位都是【秒】——period 写成
+  // 24*60*60 就是明证。position 必须由毫秒时间戳 ÷1000 换算成秒，否则时间窗落到
+  // 几万年后、当天记录永远搜不到（旧实现直接传 getTime() 毫秒，是个静默失效的 bug）。
   assert.deepEqual(normalize(sdkCalls), [
     [
       'searchLocalMessages',
@@ -632,11 +635,65 @@ test('searchConversationMessagesByDate constrains the time window to the selecte
         conversationID: 'conversation-1',
         keywordList: [''],
         messageTypeList: [101, 102, 103, 104, 105, 109, 108, 110],
-        searchTimePosition: new Date('2026-04-16T00:00:00').getTime(),
+        searchTimePosition: Math.floor(
+          new Date('2026-04-16T00:00:00').getTime() / 1000,
+        ),
         searchTimePeriod: 24 * 60 * 60,
         pageIndex: 1,
         count: 50,
       },
     ],
   ]);
+});
+
+test('getConversationMessageDays scans the month window in seconds and returns distinct local days', async () => {
+  const sdkCalls = [];
+  // 同一天两条 + 另一天一条，验证「去重成天」。sendTime 是毫秒。
+  const searchResult = {
+    totalCount: 3,
+    searchResultItems: [
+      {
+        messageList: [
+          {
+            clientMsgID: 'a',
+            contentType: 101,
+            sendTime: new Date('2026-07-04T10:00:00').getTime(),
+          },
+          {
+            clientMsgID: 'b',
+            contentType: 101,
+            sendTime: new Date('2026-07-04T18:30:00').getTime(),
+          },
+          {
+            clientMsgID: 'c',
+            contentType: 101,
+            sendTime: new Date('2026-07-15T09:00:00').getTime(),
+          },
+        ],
+      },
+    ],
+  };
+  const { getConversationMessageDays } = loadSearchClient(sdkCalls, searchResult);
+
+  // month 是 0-based：6 = 七月。
+  const days = await getConversationMessageDays({
+    conversationID: 'conversation-1',
+    year: 2026,
+    month: 6,
+  });
+
+  // 整月时间窗，单位【秒】
+  const [call] = sdkCalls;
+  assert.equal(call[0], 'searchLocalMessages');
+  assert.equal(
+    call[1].searchTimePosition,
+    Math.floor(new Date(2026, 6, 1).getTime() / 1000),
+  );
+  assert.equal(
+    call[1].searchTimePeriod,
+    Math.floor((new Date(2026, 7, 1).getTime() - new Date(2026, 6, 1).getTime()) / 1000),
+  );
+
+  // 去重成不同的本地日期
+  assert.deepEqual([...days].sort(), ['2026-07-04', '2026-07-15']);
 });
