@@ -10,7 +10,7 @@ import { Spacing, Typography, useTheme } from '@/theme';
 import { reportError } from '@/observability/sentry';
 import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
 import { getChatDetailHref } from '@/features/user/utils/routes';
-import { getOrCreateSingleConversation } from '@/im/client';
+import { ensureDirectConversation } from '@/chat-core/client';
 import { getSupportCategory } from '@/features/profile/support-categories';
 
 const AVATAR_SIZE = 48;
@@ -101,7 +101,7 @@ export default function SupportAgentsScreen() {
       const isStale = () => focusGenerationRef.current !== requestGeneration;
       const chatTitle = agentName(agent);
       try {
-        const conversation = await getOrCreateSingleConversation(agent.id);
+        const conversation = await ensureDirectConversation(agent.id);
         if (isStale()) return;
         router.push(
           getChatDetailHref(

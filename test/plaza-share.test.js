@@ -20,7 +20,7 @@ test('SharePlazaPostScreen sends the post as a chat card to the picked friend', 
   assert.match(src, /toPlazaPostCardData/);
   assert.match(src, /setPendingChatCard\(/);
   assert.match(src, /conversationKey: friend\.id/);
-  assert.match(src, /getOrCreateSingleConversation\(friend\.id\)/);
+  assert.match(src, /ensureDirectConversation\(friend\.id\)/);
   assert.match(src, /getChatDetailHref\(/);
 });
 
@@ -35,7 +35,7 @@ test('plaza post card share opens the friend picker, not the OS share sheet', ()
 test('share plaza post only stages the card after resolving a destination', () => {
   const src = read('src/features/discover/screens/SharePlazaPostScreen.tsx');
   const handler = src.slice(src.indexOf('const handleSelect'), src.indexOf('const renderFriend'));
-  const resolution = handler.indexOf('await getOrCreateSingleConversation');
+  const resolution = handler.indexOf('await ensureDirectConversation');
   const normalStage = handler.indexOf('setPendingChatCard', resolution);
   const normalNavigation = handler.indexOf('router.push', normalStage);
   const fallback = handler.indexOf('if (shouldOpenChatPreview');

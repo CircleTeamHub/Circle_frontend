@@ -73,9 +73,11 @@ test('ChatDetailScreen 把敏感词拦截映射到专属文案', () => {
     ),
     'utf8',
   );
+  // 自研聊天栈:判定函数换成 chat-core 的字符串码版本(73001 数字契约随
+  // OpenIM 下线;isSensitiveWordBlockedError 仍在 src/im 供双轨期旧路径使用)。
   assert.match(
     source,
-    /isSensitiveWordBlockedError\(error\)/,
+    /isChatSendBlockedBySensitiveWord\(error\)/,
     'getChatSendErrorMessage 必须先判敏感词拦截',
   );
   assert.match(

@@ -80,7 +80,7 @@ test('customer service exposes recharge/issue/dispute/account with env override 
     /pathname:\s*['"]\/\(tabs\)\/profile\/support-agents['"]/,
   );
   assert.match(screen, /params:\s*\{\s*category:\s*category\.id\s*\}/);
-  assert.doesNotMatch(screen, /getOrCreateSingleConversation/);
+  assert.doesNotMatch(screen, /ensureDirectConversation\(/);
 });
 
 test('support-agents route + screen use one unified support avatar and open a fenced 1:1 chat', () => {
@@ -96,7 +96,7 @@ test('support-agents route + screen use one unified support avatar and open a fe
 
   // 一类可有多个客服账号，逐行路由到各自 OpenIM 账号；点头像开 1:1 会话。
   assert.match(screen, /accountIds/);
-  assert.match(screen, /getOrCreateSingleConversation\(\s*agent\.id/);
+  assert.match(screen, /ensureDirectConversation\(agent\.id/);
   assert.match(screen, /getChatDetailHref\(\s*['"]profile['"],\s*agent\.id/);
 
   // 会话解析较慢时用户可能已离场：用单调 focus 代次守卫（而非会在重新聚焦后重置的布尔），

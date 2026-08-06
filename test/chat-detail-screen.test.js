@@ -216,7 +216,7 @@ test('chat detail sends friend cards without fetching profile during send', () =
 
   assert.doesNotMatch(source, /import \{ fetchUserProfile \}/);
   assert.doesNotMatch(handlerBlock, /fetchUserProfile/);
-  assert.match(handlerBlock, /sendFriendCardMessage/);
+  assert.match(handlerBlock, /type: 'friend-card'/);
 });
 
 test('chat detail guards async send UI state after unmount', () => {
@@ -258,21 +258,20 @@ test('chat detail guards async send UI state after unmount', () => {
   assert.match(source, /if \(mountedRef\.current\) setSending\(false\)/);
 });
 
-test('chat detail attempts non-blocking history restore after initial message load', () => {
+test('chat detail loads history then reports the read watermark', () => {
   const filePath = path.join(
     process.cwd(),
     'src/features/chat/screens/ChatDetailScreen.tsx',
   );
   const source = fs.readFileSync(filePath, 'utf8');
 
-  assert.match(source, /restoreConversationMessages/);
+  // 自研栈:历史落库后才上报已读(先报会拿 0 水位白跑);进出页面维护活跃会话标记。
   assert.match(
     source,
-    /loadConversationMessages\(conversationID\)[\s\S]*restoreConversationMessages/,
+    /loadConversationMessages\(conversationID\)[\s\S]*markConversationAsRead\(conversationID\)/,
   );
-  assert.match(source, /conversationID/);
-  assert.match(source, /sourceID/);
-  assert.match(source, /sessionType:\s*conversationType/);
+  assert.match(source, /setActiveConversationId\(conversationID\)/);
+  assert.match(source, /setActiveConversationId\(null\)/);
 });
 
 test('chat detail voice cleanup reads a JS snapshot, never the native recorder on unmount', () => {

@@ -421,7 +421,7 @@ test('user profile screen uses account label, meta chips, badge row, and conditi
   assert.match(source, /useRouter/);
   assert.match(source, /fetchFriendStatus/);
   assert.match(source, /fetchFriendSettings/);
-  assert.match(source, /getOrCreateSingleConversation/);
+  assert.match(source, /ensureDirectConversation/);
   assert.match(source, /const \[friendStatus, setFriendStatus\]/);
   assert.match(source, /const \[friendSettings, setFriendSettings\]/);
   assert.match(source, /const showAddFriendButton = canSendFriendRequest/);
@@ -444,10 +444,10 @@ test('user profile screen uses account label, meta chips, badge row, and conditi
   assert.match(source, /showProfileActions \? \(/);
   assert.match(source, /t\('userProfile\.addFriendRequest'\)/);
   assert.match(source, /const handleOpenChat = useCallback/);
-  assert.match(source, /const conversation = await getOrCreateSingleConversation\(profileId\)/);
+  assert.match(source, /const conversation = await ensureDirectConversation\(profileId\)/);
   assert.match(source, /const mountedRef = useRef\(true\)/);
   assert.match(source, /mountedRef\.current = false/);
-  assert.match(source, /const conversation = await getOrCreateSingleConversation\(profileId\);[\s\S]*if \(!mountedRef\.current\) return;[\s\S]*router\.push/);
+  assert.match(source, /const conversation = await ensureDirectConversation\(profileId\);[\s\S]*if \(!mountedRef\.current\) return;[\s\S]*router\.push/);
   assert.match(source, /if \(mountedRef\.current\) setOpeningChat\(false\)/);
   assert.match(source, /shouldOpenChatPreview/);
   assert.match(source, /if \(shouldOpenChatPreview\(error\)\)/);

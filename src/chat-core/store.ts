@@ -4,6 +4,12 @@ import type { ChatConversationDto, ChatMessageDto } from './protocol';
 /** 每会话内存消息上限（与旧 imStore 一致）：更早的历史走 REST 翻页。 */
 export const MESSAGES_CAP = 200;
 
+/**
+ * store 里的消息 = 线上 DTO + 客户端本地态:
+ * failed 只在乐观消息(height=0)发送失败时置位,永不上行。
+ */
+export type StoredChatMessage = ChatMessageDto & { failed?: boolean };
+
 interface ChatStoreState {
   connected: boolean;
   connecting: boolean;
@@ -29,6 +35,10 @@ interface ChatStoreState {
   applyIncomingMessage: (message: ChatMessageDto) => void;
   /** 本端已读的乐观归零(socket 上报之外的即时 UI 反馈)。 */
   markConversationReadLocal: (conversationId: string) => void;
+  /** 乐观消息发送失败:按 d 标记,气泡转失败态。 */
+  markMessageFailed: (conversationId: string, d: string) => void;
+  /** 本地删除一条消息(仅本端视图;服务端删除随后续批次)。 */
+  removeMessage: (conversationId: string, messageId: string) => void;
   setActiveConversationId: (conversationId: string | null) => void;
   /**
    * 消息入库（历史页 / 广播 / 本地乐观消息共用）：
@@ -137,6 +147,39 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       ]),
     });
   },
+  markMessageFailed: (conversationId, d) => {
+    const { messagesByConversation } = get();
+    const existing = messagesByConversation[conversationId] ?? [];
+    const index = existing.findIndex(
+      (m) => m.d === d && m.height === 0 && !(m as StoredChatMessage).failed,
+    );
+    if (index < 0) return;
+    const next: StoredChatMessage = { ...existing[index], failed: true };
+    set({
+      messagesByConversation: {
+        ...messagesByConversation,
+        [conversationId]: [
+          ...existing.slice(0, index),
+          next,
+          ...existing.slice(index + 1),
+        ],
+      },
+    });
+  },
+
+  removeMessage: (conversationId, messageId) => {
+    const { messagesByConversation } = get();
+    const existing = messagesByConversation[conversationId] ?? [];
+    const filtered = existing.filter((m) => m.id !== messageId);
+    if (filtered.length === existing.length) return;
+    set({
+      messagesByConversation: {
+        ...messagesByConversation,
+        [conversationId]: filtered,
+      },
+    });
+  },
+
   markConversationReadLocal: (conversationId) => {
     const { conversations } = get();
     const index = conversations.findIndex((c) => c.id === conversationId);

@@ -108,7 +108,7 @@ test('pending-card store + chat consume + send card-then-text', () => {
   assert.match(screen, /consumePendingChatCard\(sourceID\)/);
   assert.match(screen, /setDraft\(\(prev\) => prev \|\| cardPending\.draftText\)/);
   // 发送时先卡片后文字，空文字也能只发卡片。
-  assert.match(screen, /sendPlazaPostCardMessage\(/);
+  assert.match(screen, /type: 'plaza-post-card'/);
   assert.match(screen, /\(!nextText && !pendingCard\)/);
 });
 
@@ -133,7 +133,7 @@ test('card has no general share entry — only the signup list creates it', () =
 test('signup chat stages only for a resolved conversation or preview fallback', () => {
   const screen = read('src/features/notifications/screens/PostSignupsScreen.tsx');
   const handler = screen.slice(screen.indexOf('const openChat'), screen.indexOf('const openSignerProfile'));
-  const resolution = handler.indexOf('await getOrCreateSingleConversation');
+  const resolution = handler.indexOf('await ensureDirectConversation');
   const normalStage = handler.indexOf('setPendingChatCard', resolution);
   const normalNavigation = handler.indexOf('router.push', normalStage);
   const fallback = handler.indexOf('if (shouldOpenChatPreview');
