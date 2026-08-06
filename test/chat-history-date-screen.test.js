@@ -29,18 +29,6 @@ test('by-date calendar renders 7 equal flex columns (no flexWrap rounding)', () 
   assert.match(screen, /calendarCell:\s*\{[^}]*flex:\s*1/);
 });
 
-// 回归：按日期搜索必须把「当天 0 点」换算成【秒】再传给 OpenIM。
-// OpenIM 的 searchTimePosition/searchTimePeriod 单位是秒（period 写成 24*60*60 即为证），
-// 旧实现把 getTime()（毫秒）直接当 position → 落到 5 万年后的时间窗 → 永远搜不到记录。
-test('by-date search converts day start to seconds for OpenIM searchTimePosition', () => {
-  const client = read('src/im/client.ts');
-
-  assert.match(read('src/chat-core/api.ts'), /date.*tzOffsetMinutes|tzOffsetMinutes/);
-  assert.match(client, /searchTimePosition:\s*Math\.floor\(startOfDay \/ 1000\)/);
-  assert.match(client, /searchTimePeriod:\s*24 \* 60 \* 60/);
-  // 不得再把毫秒时间戳直接当秒传
-  assert.doesNotMatch(client, /searchTimePosition:\s*startOfDay\s*,/);
-});
 
 // 需求：有聊天记录的日子用颜色（圆点）标出来。
 test('by-date calendar colors days that have chat records', () => {

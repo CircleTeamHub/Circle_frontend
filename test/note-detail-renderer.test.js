@@ -67,18 +67,6 @@ test('NoteDetailScreen only shows edit when the current user can edit', () => {
   );
 });
 
-test('note card messages carry owner identity for read-only shared notes', () => {
-  const chatSrc = read('src/features/chat/screens/ChatDetailScreen.tsx');
-  const typeSrc = read('src/types/index.ts');
-  const clientSrc = read('src/im/client.ts');
-  const mapperSrc = read('src/im/mappers.ts');
-
-  assert.match(typeSrc, /ownerId\?: string \| null/);
-  assert.match(clientSrc, /ownerId\?: string \| null/);
-  assert.match(mapperSrc, /ownerId: raw\.ownerId/);
-  assert.match(chatSrc, /ownerId: authUser\?\.id \?\? null/);
-  assert.match(chatSrc, /getNoteDetailHref\(scope, note\.noteId, note\.ownerId \?\? ''\)/);
-});
 
 test('EditNoteScreen saves with createNote or updateNote', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');

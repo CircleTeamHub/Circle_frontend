@@ -18,8 +18,8 @@ import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useMessageGroupsStore } from '@/features/messages/store/use-message-groups-store';
-import { useIMStore } from '@/stores/imStore';
-import { mapConversationItemToUI } from '@/im/mappers';
+import { useChatStore } from '@/chat-core/store';
+import { mapChatConversationToUI } from '@/chat-core/mappers';
 import { getApiErrorMessage } from '@/services/api/errors';
 import type { Conversation } from '@/types';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
@@ -116,11 +116,11 @@ export default function GroupManagementScreen() {
   const removeGroup = useMessageGroupsStore((state) => state.remove);
   const setMembers = useMessageGroupsStore((state) => state.setMembers);
   const setPinnedToTabs = useMessageGroupsStore((state) => state.setPinnedToTabs);
-  const rawConversations = useIMStore((state) => state.conversations);
+  const rawConversations = useChatStore((state) => state.conversations);
 
-  // 真理源是 IM SDK 的会话列表；之前的 store 里的 conversations 是空数组，整个屏幕跑不通。
+  // 真理源是 chat-core 的会话列表(MessagesScreen 已加载进 store)。
   const conversations = useMemo(
-    () => rawConversations.map(mapConversationItemToUI),
+    () => rawConversations.map(mapChatConversationToUI),
     [rawConversations],
   );
 

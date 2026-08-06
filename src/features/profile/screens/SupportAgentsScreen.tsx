@@ -8,7 +8,6 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { Divider } from '@/components/ui/divider';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { reportError } from '@/observability/sentry';
-import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
 import { getChatDetailHref } from '@/features/user/utils/routes';
 import { ensureDirectConversation } from '@/chat-core/client';
 import { getSupportCategory } from '@/features/profile/support-categories';
@@ -113,13 +112,7 @@ export default function SupportAgentsScreen() {
           ),
         );
       } catch (error) {
-        if (isStale()) return;
-        // IM 未接通 / 尚未建立好友关系等：仍以预览模式进入，保证入口始终可点开。
-        if (shouldOpenChatPreview(error)) {
-          router.push(getChatDetailHref('profile', agent.id, chatTitle));
-          return;
-        }
-        // 不把原始 SDK/OpenIM 错误文案直接展示给用户；结构化上下文经 reportError 上报。
+        if (isStale()) return;        // 不把原始 SDK/OpenIM 错误文案直接展示给用户；结构化上下文经 reportError 上报。
         reportError(error, {
           operation: 'customerService',
           kind: 'openAgentConversation',

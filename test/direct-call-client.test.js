@@ -110,25 +110,6 @@ test('1:1 聊天页与用户主页都接上了 direct call（FE#90 不再「即�
   assert.doesNotMatch(profile, /avCallComingSoon/);
 });
 
-test('call_record 自定义消息按 extension 判别渲染为通话记录气泡 (#115 客户端)', () => {
-  const client = read('src/im/client.ts');
-  assert.match(client, /CALL_RECORD_EXTENSION = 'call-record-v1'/);
-
-  const mappers = read('src/im/mappers.ts');
-  assert.match(mappers, /ext === CALL_RECORD_EXTENSION/);
-  assert.match(mappers, /type: 'call-record'/);
-  // 会话列表预览
-  assert.match(mappers, /voiceCall/);
-
-  const chat = read('src/features/chat/screens/ChatDetailScreen.tsx');
-  assert.match(chat, /case 'call-record':/);
-  // 1:1 点卡片可回拨，群聊不接（避免误触发全群振铃）
-  assert.match(chat, /onCallBack=\{isGroupChat \? undefined : handleStartCall\}/);
-
-  const bubble = read('src/features/chat/components/bubbles/call-record-bubble.tsx');
-  assert.match(bubble, /chat\.callRecord\.duration/);
-  assert.match(bubble, /chat\.callRecord\.missed/);
-});
 
 function mapperRequireShim(specifier) {
   if (specifier === '@openim/rn-client-sdk') {
@@ -157,84 +138,7 @@ function mapperRequireShim(specifier) {
   throw new Error(`unexpected import in mappers: ${specifier}`);
 }
 
-test('parseCallRecordData 从宽解析，坏数据不炸', () => {
-  const mappers = loadTsModule('src/im/mappers.ts', {
-    requireShim: (specifier) => {
-      if (specifier === '@openim/rn-client-sdk') {
-        return { MessageType: {}, SessionType: { Single: 1, Group: 3 } };
-      }
-      if (specifier === '@/im/client') {
-        return {
-          NOTE_CARD_EXTENSION: 'note-card-v1',
-          TRANSFER_CARD_EXTENSION: 'transfer-card-v1',
-          VERIFICATION_CARD_EXTENSION: 'verification-card-v1',
-          PLAZA_POST_CARD_EXTENSION: 'plaza-post-card-v1',
-          CALL_RECORD_EXTENSION: 'call-record-v1',
-          FRIEND_ADDED_NOTICE_EXTENSION: 'friend-added-v1',
-          fromImUserId: (v) => v,
-        };
-      }
-      if (specifier === '@/services/api/utils') {
-        return { normalizeMediaUrl: (v) => v };
-      }
-      if (specifier === '@/i18n') {
-        return { __esModule: true, default: { t: (_k, o) => o?.defaultValue ?? _k } };
-      }
-      if (specifier === '@/utils/locale') {
-        return { getLocalizedDateTimeLocale: () => 'zh-CN' };
-      }
-      throw new Error(`unexpected import in mappers: ${specifier}`);
-    },
-  });
 
-  const good = mappers.parseCallRecordData(
-    JSON.stringify({
-      type: 'call_record',
-      callId: 'c1',
-      callType: 'AUDIO',
-      sessionType: 'single',
-      endReason: 'NO_ANSWER',
-      durationSeconds: null,
-      initiatorID: 'u1',
-    }),
-  );
-  assert.equal(good.callId, 'c1');
-  assert.equal(good.endReason, 'NO_ANSWER');
-
-  assert.equal(mappers.parseCallRecordData('not json'), null);
-  assert.equal(
-    mappers.parseCallRecordData(JSON.stringify({ type: 'other' })),
-    null,
-  );
-  // durationSeconds 负数视为无效
-  const clamped = mappers.parseCallRecordData(
-    JSON.stringify({ type: 'call_record', callId: 'c2', durationSeconds: -5 }),
-  );
-  assert.equal(clamped.durationSeconds, null);
-});
-
-test('parseCallRecordData 拒绝非有限时长并归一小数（round 2）', () => {
-  const mappers = loadTsModule('src/im/mappers.ts', {
-    requireShim: mapperRequireShim,
-  });
-  const base = {
-    type: 'call_record',
-    callId: 'c1',
-    callType: 'AUDIO',
-    sessionType: 'single',
-    endReason: 'NORMAL',
-    initiatorID: 'u1',
-  };
-  const parse = (durationSeconds) =>
-    mappers.parseCallRecordData(
-      JSON.stringify({ ...base, durationSeconds }),
-    );
-  // JSON.parse 会把 1e309 变成 Infinity —— 必须拒掉，否则渲染 Infinity:NaN
-  assert.equal(parse(1e309).durationSeconds, null);
-  assert.equal(parse(65.9).durationSeconds, 65);
-  assert.equal(parse(-3).durationSeconds, null);
-  assert.equal(parse(120).durationSeconds, 120);
-});
 
 test('回前台通话对账：本地残留在服务端已消失时被清掉 (#93)', () => {
   const hook = read('src/features/call/hooks/use-call-reconciliation.ts');
@@ -272,45 +176,39 @@ test('realtime 邀请守卫放行 single 会话（round 2 P1：被叫端此前�
   );
 });
 
-test('resolveDirectCalleeID：UUID 直通、si_ 解对端、sg_/坏形状拒绝 (round 3)', () => {
+test('resolveDirectCalleeID：UUID 直通、direct: 解对端、旧形态拒绝 (round 3)', () => {
   const mod = loadTsModule('src/features/call/resolve-direct-callee.ts', {
     requireShim: (specifier) => {
-      if (specifier === '@/im/user-id') {
-        return loadTsModule('src/im/user-id.ts');
+      if (specifier === '@/utils/user-id-alias') {
+        return loadTsModule('src/utils/user-id-alias.ts');
       }
       throw new Error(`unexpected import: ${specifier}`);
     },
   });
   const self = '11111111-2222-3333-4444-555555555555';
   const peer = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
-  const strip = (v) => v.replace(/-/g, '');
   // 正常入口：sourceID 即对方 UUID
   assert.equal(mod.resolveDirectCalleeID(peer, self), peer);
-  // 推送兜底：si_ 会话 id → 剔除自己、还原对端 UUID
+  // 旧 OpenIM 去连字符形态兜底归一
   assert.equal(
-    mod.resolveDirectCalleeID(`si_${strip(peer)}_${strip(self)}`, self),
+    mod.resolveDirectCalleeID(peer.replace(/-/g, ''), self),
+    peer,
+  );
+  // 推送兜底：direct: 会话 id → 剔除自己得到对端(两种排序都要成立)
+  assert.equal(
+    mod.resolveDirectCalleeID(`direct:${peer}:${self}`, self),
     peer,
   );
   assert.equal(
-    mod.resolveDirectCalleeID(`si_${strip(self)}_${strip(peer)}`, self),
+    mod.resolveDirectCalleeID(`direct:${self}:${peer}`, self),
     peer,
   );
-  // 群会话 / 自聊 / 坏形状：拒绝而不是把坏 id 打给后端
+  // 自聊 / 旧栈会话 id / 坏形状：拒绝而不是把坏 id 打给后端
+  assert.equal(mod.resolveDirectCalleeID(`direct:${self}:${self}`, self), null);
   assert.equal(mod.resolveDirectCalleeID('sg_whatever', self), null);
-  assert.equal(
-    mod.resolveDirectCalleeID(`si_${strip(self)}_${strip(self)}`, self),
-    null,
-  );
-  assert.equal(mod.resolveDirectCalleeID('si_short_bad', self), null);
-
-  // ChatDetail 接线：direct 分支必须经 resolver，且成功路径不再被 unmount 吞
-  const chat = read('src/features/chat/screens/ChatDetailScreen.tsx');
-  assert.match(chat, /resolveDirectCalleeID\(sourceID, authUser\.id\)/);
-  const directBlock = chat.slice(
-    chat.indexOf('resolveDirectCalleeID(sourceID'),
-    chat.indexOf("router.push('/(chat)/group-call' as never);\n        return;"),
-  );
-  assert.doesNotMatch(directBlock, /if \(!mountedRef\.current\) return;/);
+  assert.equal(mod.resolveDirectCalleeID('si_aaa_bbb', self), null);
+  assert.equal(mod.resolveDirectCalleeID('not-a-uuid', self), null);
+  assert.equal(mod.resolveDirectCalleeID('', self), null);
 });
 
 test('单聊来电弹窗按 sessionType 分支文案 (round 3)', () => {

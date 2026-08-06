@@ -282,14 +282,15 @@
       "done": "Reenviado",
       "failed": "No se pudo reenviar",
       "failedRetry": "Inténtalo de nuevo más tarde",
-      "locationWithDetail": "[Ubicación] {{detail}}"
+      "locationWithDetail": "[Ubicación] {{detail}}",
+      "unsupported": "Este tipo de mensaje aún no se puede reenviar"
     },
     "snackbarNewMessage": "Mensaje nuevo",
     "snackbarPreviewFallback": "[Mensaje]",
     "history": {
       "title": "Historial de chat",
       "unknownSender": "Miembro",
-        "loadFailed": "Error al cargar",
+      "loadFailed": "Error al cargar",
       "loading": "Cargando...",
       "retry": "Reintentar",
       "searching": "Buscando...",

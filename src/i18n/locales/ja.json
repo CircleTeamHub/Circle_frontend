@@ -282,14 +282,15 @@
       "done": "転送しました",
       "failed": "転送に失敗しました",
       "failedRetry": "後でもう一度お試しください",
-      "locationWithDetail": "[位置情報] {{detail}}"
+      "locationWithDetail": "[位置情報] {{detail}}",
+      "unsupported": "このメッセージはまだ転送できません"
     },
     "snackbarNewMessage": "新着メッセージ",
     "snackbarPreviewFallback": "[メッセージ]",
     "history": {
       "title": "チャット履歴",
       "unknownSender": "メンバー",
-        "loadFailed": "読み込みに失敗しました",
+      "loadFailed": "読み込みに失敗しました",
       "loading": "読み込み中...",
       "retry": "再試行",
       "searching": "検索中...",

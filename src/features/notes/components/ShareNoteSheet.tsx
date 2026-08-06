@@ -12,9 +12,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Avatar } from '@/components/ui/avatar';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
-import { loadConversationList, sendNoteCardToConversation } from '@/im/client';
-import { mapConversationItemToUI } from '@/im/mappers';
-import { useIMStore } from '@/stores/imStore';
+import { loadChatConversations } from '@/chat-core/api';
+import { sendCardMessage } from '@/chat-core/client';
+import { mapChatConversationToUI } from '@/chat-core/mappers';
+import { useChatStore } from '@/chat-core/store';
 import type { Conversation, NoteCardData } from '@/types';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
@@ -40,7 +41,7 @@ export function ShareNoteSheet({ payload, onClose }: ShareNoteSheetProps) {
   const { t } = useTranslation();
   const visible = payload != null;
 
-  const rawConversations = useIMStore((state) => state.conversations);
+  const rawConversations = useChatStore((state) => state.conversations);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
   const [sendingId, setSendingId] = useState('');
@@ -66,7 +67,7 @@ export function ShareNoteSheet({ payload, onClose }: ShareNoteSheetProps) {
     let cancelled = false;
     setLoading(true);
     setFailed(false);
-    loadConversationList()
+    loadChatConversations()
       .catch(() => {
         if (!cancelled) setFailed(true);
       })
@@ -79,7 +80,7 @@ export function ShareNoteSheet({ payload, onClose }: ShareNoteSheetProps) {
   }, [attempt, rawConversations.length, visible]);
 
   const conversations = useMemo(
-    () => rawConversations.map(mapConversationItemToUI),
+    () => rawConversations.map(mapChatConversationToUI),
     [rawConversations],
   );
 
@@ -114,8 +115,9 @@ export function ShareNoteSheet({ payload, onClose }: ShareNoteSheetProps) {
               if (inFlightRef.current) return;
               inFlightRef.current = true;
               setSendingId(conversation.id);
-              void sendNoteCardToConversation({
-                targetConversationID: conversation.id,
+              void sendCardMessage({
+                conversationId: conversation.id,
+                type: 'note-card',
                 payload,
               })
                 .then(() => {

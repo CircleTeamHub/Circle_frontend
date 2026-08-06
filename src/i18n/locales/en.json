@@ -322,14 +322,15 @@
       "done": "Forwarded",
       "failed": "Forward failed",
       "failedRetry": "Please try again later",
-      "locationWithDetail": "[Location] {{detail}}"
+      "locationWithDetail": "[Location] {{detail}}",
+      "unsupported": "This message type cannot be forwarded yet"
     },
     "snackbarNewMessage": "New message",
     "snackbarPreviewFallback": "[Message]",
     "history": {
       "title": "Chat History",
       "unknownSender": "Member",
-        "loadFailed": "Failed to load",
+      "loadFailed": "Failed to load",
       "loading": "Loading...",
       "retry": "Retry",
       "searching": "Searching...",

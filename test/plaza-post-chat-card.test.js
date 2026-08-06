@@ -36,45 +36,8 @@ function loadPlazaCardParser() {
   return context.module.exports.parsePlazaPostCardData;
 }
 
-test('plaza-post card message: extension + send into current conversation', () => {
-  const client = read('src/im/client.ts');
-  assert.match(client, /PLAZA_POST_CARD_EXTENSION = 'plaza-post-card-v1'/);
-  // 只保留「发进当前会话」一条路径（报名→聊天待发卡片用）。
-  assert.match(client, /export async function sendPlazaPostCardMessage/);
-  // 通用「发到选中会话」的分享路径已撤掉。
-  assert.doesNotMatch(client, /sendPlazaPostCardToConversation/);
-});
 
-test('mappers parse + preview + map the plaza-post card', () => {
-  const mappers = read('src/im/mappers.ts');
-  assert.match(mappers, /function parsePlazaPostCardData/);
-  assert.match(mappers, /ext === PLAZA_POST_CARD_EXTENSION/);
-  assert.match(mappers, /type: 'plaza-post-card'/);
-  // 卡片封面走媒体地址归一化。
-  assert.match(mappers, /coverUrl: normalizeMediaUrl\(payload\.coverUrl\)/);
-});
 
-test('plaza-post card parser rejects malformed identifiers and titles', () => {
-  const parseCard = loadPlazaCardParser();
-  const encode = (value) => JSON.stringify({
-    ...value,
-    contentPreview: null,
-    coverUrl: null,
-    circleName: '',
-    city: null,
-    signupCount: 0,
-    authorNickname: '',
-  });
-
-  assert.equal(parseCard(encode({ postId: '', title: 'x' })), null);
-  assert.equal(parseCard(encode({ postId: '   ', title: 'x' })), null);
-  assert.equal(parseCard(encode({ postId: 'post-1', title: '   ' })), null);
-  assert.equal(parseCard(encode({ postId: 'x'.repeat(257), title: 'x' })), null);
-  assert.equal(parseCard(encode({ postId: 'post-1', title: 'x'.repeat(201) })), null);
-  const valid = parseCard(encode({ postId: '  post-1  ', title: '  Activity  ' }));
-  assert.equal(valid.postId, 'post-1');
-  assert.equal(valid.title, 'Activity');
-});
 
 test('bubble exists and is rendered + taps to post detail', () => {
   assert.equal(

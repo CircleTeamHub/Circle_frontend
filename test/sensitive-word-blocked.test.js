@@ -2,65 +2,40 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { loadTsModule } = require('./helpers/load-ts-module');
-
-// 服务端敏感词拦截（circle_be OpenIM before-send 回调）通过一个跨仓数字
-// errCode 透传到 sendMessage 失败；前端据此弹「包含敏感词」而非笼统的
-// 「发送失败」。本测试钉死三件事：
-// 1) im/error-codes 的判定函数语义；
-// 2) 与 circle_be 常量的跨仓数字契约（sibling checkout 时校验）；
+// 服务端敏感词拦截(circle_be 发送链路进程内检查)通过字符串错误码
+// CHAT_SENSITIVE_WORD_BLOCKED 透传到 chat:send ack;前端据此弹「包含敏感词」
+// 而非笼统的「发送失败」。契约随自研栈迁移更新(意图不变):
+// 1) chat-core 判定函数引用同一字符串码;
+// 2) 与 circle_be 注册表的跨仓字符串契约(sibling checkout 时校验);
 // 3) ChatDetailScreen 的错误映射与 5 语言文案接线。
 
-const errorCodes = loadTsModule('src/im/error-codes.ts');
-
-test('OPENIM_SENSITIVE_WORD_BLOCKED_CODE 固定为 73001', () => {
-  assert.equal(errorCodes.OPENIM_SENSITIVE_WORD_BLOCKED_CODE, 73001);
+test('chat-core 判定函数钉在 CHAT_SENSITIVE_WORD_BLOCKED 字符串码上', () => {
+  const client = fs.readFileSync(
+    path.join(process.cwd(), 'src/chat-core/client.ts'),
+    'utf8',
+  );
+  assert.match(client, /isChatSendBlockedBySensitiveWord/);
+  assert.match(client, /CHAT_SENSITIVE_WORD_BLOCKED/);
 });
 
-test('isSensitiveWordBlockedError 仅认 code 恰为契约值的对象错误', () => {
-  const { isSensitiveWordBlockedError, OPENIM_SENSITIVE_WORD_BLOCKED_CODE } =
-    errorCodes;
-  const hit = new Error('blocked');
-  hit.code = OPENIM_SENSITIVE_WORD_BLOCKED_CODE;
-  assert.equal(isSensitiveWordBlockedError(hit), true);
-  // 纯对象（SDK reject 出来的不一定是 Error 实例）也认
-  assert.equal(
-    isSensitiveWordBlockedError({ code: OPENIM_SENSITIVE_WORD_BLOCKED_CODE }),
-    true,
-  );
-  assert.equal(isSensitiveWordBlockedError({ code: 500 }), false);
-  assert.equal(
-    isSensitiveWordBlockedError({ code: String(OPENIM_SENSITIVE_WORD_BLOCKED_CODE) }),
-    false,
-    '字符串 code 不应通过 —— 契约是数字',
-  );
-  assert.equal(isSensitiveWordBlockedError(null), false);
-  assert.equal(isSensitiveWordBlockedError('blocked'), false);
-  assert.equal(isSensitiveWordBlockedError(undefined), false);
-});
-
-// 跨仓数字契约：与 circle_be 的 SENSITIVE_WORD_BLOCKED_ERR_CODE 保持一致。
-// 仅在 circle_be 与 circle-im 并排 checkout 时运行（同 api-error-localization）。
-const BACKEND_CONSTANTS_PATH = path.join(
+// 跨仓字符串契约:与 circle_be 的 ChatErrorCode 注册表保持一致。
+// 仅在 circle_be 与 circle-im 并排 checkout 时运行(同 api-error-localization)。
+const BACKEND_ERROR_CODES_PATH = path.join(
   process.cwd(),
   '..',
   'circle_be',
-  'src/sensitive-word/sensitive-word.constants.ts',
+  'src/common/app-error-codes.ts',
 );
 
 test(
-  '前后端敏感词 errCode 数字契约一致',
-  { skip: !fs.existsSync(BACKEND_CONSTANTS_PATH) },
+  '前后端敏感词错误码字符串契约一致',
+  { skip: !fs.existsSync(BACKEND_ERROR_CODES_PATH) },
   () => {
-    const source = fs.readFileSync(BACKEND_CONSTANTS_PATH, 'utf8');
-    const match = source.match(
-      /SENSITIVE_WORD_BLOCKED_ERR_CODE\s*=\s*(\d+)/,
-    );
-    assert.ok(match, '后端必须导出 SENSITIVE_WORD_BLOCKED_ERR_CODE 数字常量');
-    assert.equal(
-      Number(match[1]),
-      errorCodes.OPENIM_SENSITIVE_WORD_BLOCKED_CODE,
-      '前后端敏感词拦截 errCode 必须同步修改',
+    const source = fs.readFileSync(BACKEND_ERROR_CODES_PATH, 'utf8');
+    assert.match(
+      source,
+      /CHAT_SENSITIVE_WORD_BLOCKED/,
+      '后端注册表必须包含 CHAT_SENSITIVE_WORD_BLOCKED,与 chat-core 判定同名',
     );
   },
 );

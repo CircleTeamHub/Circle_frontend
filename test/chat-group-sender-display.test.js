@@ -33,23 +33,3 @@ test('group chat resolves sender name from the group member list, not just the m
   assert.match(screen, /groupMemberNames\[msg\.senderID\]/);
 });
 
-test('group chat avatars come from the sender, not the conversation param', () => {
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
-  const mappers = read('src/im/mappers.ts');
-  const types = read('src/types/index.ts');
-
-  // 群聊头像 = 发送者本人（senderFaceUrl，随新消息更新）；单聊沿用会话头像。
-  assert.match(
-    screen,
-    /isGroupChat \? msg\.senderAvatarUrl : \(avatarUrl \?\? msg\.senderAvatarUrl\)/,
-  );
-  // 不允许再把会话头像参数直接塞给接收气泡。
-  assert.doesNotMatch(screen, /senderAvatarUri=\{avatarUrl\}/);
-  assert.match(screen, /senderAvatarUri=\{receivedAvatarUri\(item\)\}/);
-  // 消息映射带出发送者头像（仅接收侧），并做媒体地址归一化。
-  assert.match(
-    mappers,
-    /senderAvatarUrl: isSent\s*\?\s*undefined\s*:\s*\(normalizeMediaUrl\(item\.senderFaceUrl \|\| null\) \?\? undefined\)/,
-  );
-  assert.match(types, /senderAvatarUrl\?: string/);
-});

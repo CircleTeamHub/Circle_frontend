@@ -282,14 +282,15 @@
       "done": "전달됨",
       "failed": "전달 실패",
       "failedRetry": "나중에 다시 시도해 주세요",
-      "locationWithDetail": "[위치] {{detail}}"
+      "locationWithDetail": "[위치] {{detail}}",
+      "unsupported": "이 메시지 유형은 아직 전달할 수 없습니다"
     },
     "snackbarNewMessage": "새 메시지",
     "snackbarPreviewFallback": "[메시지]",
     "history": {
       "title": "채팅 기록",
       "unknownSender": "멤버",
-        "loadFailed": "불러오기 실패",
+      "loadFailed": "불러오기 실패",
       "loading": "로딩 중...",
       "retry": "다시 시도",
       "searching": "검색 중...",

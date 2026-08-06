@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { NavHeader } from '@/components/ui/nav-header';
-import { updateGroupNotice } from '@/im/client';
+import { updateCircle } from '@/services/api/circles';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 const s = StyleSheet.create({
@@ -95,7 +95,8 @@ export default function EditGroupNoticeScreen() {
 
     setSubmitting(true);
     try {
-      await updateGroupNotice(groupID, nextNotice);
+      // 自研栈下「群=圈子」:群公告即圈子简介,读写统一走 circle.description。
+      await updateCircle(groupID, { description: nextNotice });
       router.back();
     } catch (error) {
       if (__DEV__) {

@@ -438,7 +438,7 @@ test('root layout registers LiveKit only after the native WebRTC module exists',
   assert.match(source, /NativeModules\.WebRTCModule/);
 });
 
-test('message forward picker route sends pending text and voice messages via OpenIM', () => {
+test('message forward picker route re-sends pending messages via chat-core', () => {
   const route = fs.readFileSync(
     path.join(process.cwd(), 'app/(tabs)/messages/forward-picker.tsx'),
     'utf8',
@@ -453,13 +453,15 @@ test('message forward picker route sends pending text and voice messages via Ope
   );
 
   assert.match(route, /ForwardPickerScreen/);
+  // 契约随自研栈迁移更新(意图不变):转发 = 以源消息 DTO 的 content 重发,
+  // 媒体只搬 object key 不重新上传;卡片按类型白名单原样重发。
   assert.match(store, /pending/);
+  assert.match(store, /dto\?: ChatMessageDto/);
   assert.match(screen, /sendTextMessage/);
-  // Voice forwarding now delegates to one shared helper instead of branching
-  // over sendVoiceMessageByUrl / sendVoiceMessage inline.
-  assert.match(screen, /sendVoiceMessageFromSource/);
-  assert.match(screen, /sendNoteCardMessage/);
-  assert.match(screen, /sendFriendCardMessage/);
+  assert.match(screen, /sendVoiceMessage/);
+  assert.match(screen, /sendImageMessage/);
+  assert.match(screen, /sendCardMessage/);
+  assert.match(screen, /FORWARDABLE_CARD_TYPES/);
 });
 
 test('note detail routes exist in every tab stack so back returns to the source tab', () => {

@@ -13,9 +13,10 @@ import { useTranslation } from 'react-i18next';
 import { Avatar } from '@/components/ui/avatar';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
-import { loadConversationList, sendFriendCardMessage } from '@/im/client';
-import { mapConversationItemToUI } from '@/im/mappers';
-import { useIMStore } from '@/stores/imStore';
+import { loadChatConversations } from '@/chat-core/api';
+import { sendCardMessage } from '@/chat-core/client';
+import { mapChatConversationToUI } from '@/chat-core/mappers';
+import { useChatStore } from '@/chat-core/store';
 import type { Conversation } from '@/types';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
@@ -62,7 +63,7 @@ export default function RecommendFriendScreen() {
     friendId?: string;
     friendName?: string;
   }>();
-  const rawConversations = useIMStore((state) => state.conversations);
+  const rawConversations = useChatStore((state) => state.conversations);
   const [sendingConversationID, setSendingConversationID] = useState('');
   // Pattern D 第二道：sendingConversationID 是 state，fast double-tap 下可能晚一帧；
   // 用 ref 在入口处兜底，避免给同一个会话连发两张名片。
@@ -81,10 +82,10 @@ export default function RecommendFriendScreen() {
       return;
     }
 
-    loadConversationList().catch((err) => {
+    loadChatConversations().catch((err) => {
       // 失败时保留已有的会话（即便为空），dev 下让我们知道这里失败过。
       if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[recommend-friend] loadConversationList failed', err);
+        console.warn('[recommend-friend] loadChatConversations failed', err);
       }
     });
   }, [rawConversations.length]);
@@ -92,8 +93,8 @@ export default function RecommendFriendScreen() {
   const conversations = useMemo(
     () =>
       rawConversations
-        .filter((conversation) => conversation.conversationID !== currentConversationID)
-        .map(mapConversationItemToUI),
+        .filter((conversation) => conversation.id !== currentConversationID)
+        .map(mapChatConversationToUI),
     [currentConversationID, rawConversations],
   );
 
@@ -118,11 +119,10 @@ export default function RecommendFriendScreen() {
               if (inFlightRef.current) return;
               inFlightRef.current = true;
               setSendingConversationID(conversation.id);
-              void sendFriendCardMessage({
-                targetConversationID: conversation.id,
-                userID: friendId,
-                nickname: friendName,
-                faceURL: '',
+              void sendCardMessage({
+                conversationId: conversation.id,
+                type: 'friend-card',
+                payload: { userID: friendId, nickname: friendName, faceURL: '' },
               })
                 .then(() => {
                   Alert.alert(

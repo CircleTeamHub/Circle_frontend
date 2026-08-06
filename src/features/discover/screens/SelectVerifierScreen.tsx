@@ -15,11 +15,10 @@ import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Divider } from '@/components/ui/divider';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
-import { SessionType } from '@openim/rn-client-sdk';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { addVerifierToInvitation } from '@/services/api/circles';
 import { getApiErrorMessage } from '@/services/api/errors';
-import { sendVerificationCardMessage } from '@/im/client';
+import { ensureDirectConversation, sendCardMessage } from '@/chat-core/client';
 import { useAuthStore } from '@/stores/authStore';
 
 const s = StyleSheet.create({
@@ -121,9 +120,10 @@ export default function SelectVerifierScreen() {
         // 同时给对方发一条验证邀请名片消息，点击可直达验证页。
         // best-effort：发消息失败不影响「已添加验证人」这件事本身。
         try {
-          await sendVerificationCardMessage({
-            sourceID: friend.id,
-            sessionType: SessionType.Single,
+          const conversation = await ensureDirectConversation(friend.id);
+          await sendCardMessage({
+            conversationId: conversation.conversationID,
+            type: 'verification-card',
             payload: {
               invitationId,
               circleName: circleName ?? '',

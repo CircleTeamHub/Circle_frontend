@@ -544,16 +544,14 @@ test('GroupManagerSheet name input is a visible shadowed pill', () => {
 
 test('ShareNoteSheet sends the note as a card to a chosen friend/group', () => {
   const sheet = read('src/features/notes/components/ShareNoteSheet.tsx');
-  const client = read('src/im/client.ts');
 
-  // 会话选择器：列出会话（好友/群聊），点选把笔记以卡片消息发过去。
-  assert.match(sheet, /loadConversationList/);
-  assert.match(sheet, /sendNoteCardToConversation/);
+  // 契约随自研栈迁移更新(意图不变):会话选择器列出 chat-core 会话,
+  // 点选把笔记以 note-card 发进所选会话。
+  assert.match(sheet, /loadChatConversations/);
+  assert.match(sheet, /sendCardMessage/);
+  assert.match(sheet, /type: 'note-card'/);
   assert.match(sheet, /BottomSheetModal/);
   assert.match(sheet, /notes\.shareToChat\.title/);
-  // 后端发送按会话解析 recvID/groupID（与 friend/circle 名片一致）。
-  assert.match(client, /export async function sendNoteCardToConversation/);
-  assert.match(client, /targetConversation\.conversationType === SessionType\.Group/);
 });
 
 test('ShareNoteSheet maps send failures to stable user-facing copy', () => {
