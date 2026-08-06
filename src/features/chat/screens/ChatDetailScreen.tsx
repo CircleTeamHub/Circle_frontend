@@ -711,7 +711,7 @@ export default function ChatDetailScreen() {
       }
       router.push(getUserProfileHref(scope, userID, nickname));
     },
-    [conversationID, currentUserID, isGroupChat, revalidateMemberViewAccess, scope, sourceID, t],
+    [conversationID, currentUserID, isGroupChat, revalidateMemberViewAccess, scope, t],
   );
 
   const handleOpenHeaderTarget = useCallback(() => {
