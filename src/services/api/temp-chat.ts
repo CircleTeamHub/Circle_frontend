@@ -5,6 +5,8 @@ export type TempChatStatus = 'ACTIVE' | 'ENDED' | 'EXPIRED';
 export type TempChatListRow = {
   id: string;
   groupId: string;
+  /** 自研会话 id;旧 OpenIM 时代房间为 null(不可再进入)。 */
+  conversationId: string | null;
   title: string;
   status: TempChatStatus;
   guestCount: number;
@@ -30,6 +32,7 @@ export type CreateTempChatInput = {
 export type CreateTempChatResult = {
   id: string;
   groupId: string;
+  conversationId: string;
   title: string;
   maxMembers: number;
   expiresAt: string;
