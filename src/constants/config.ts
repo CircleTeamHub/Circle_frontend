@@ -209,6 +209,26 @@ export const REALTIME_WS_URL = assertSecureTransport(
   'REALTIME_WS_URL',
 );
 
+/**
+ * 自研聊天网关的 origin（socket.io 客户端要的是 http(s) origin，路径经
+ * `path` 选项传 /chat-ws，ws 升级由 socket.io 自己处理）。
+ * 从 API_URL 剥掉 /api/v1 路径取 origin；解析失败退回 dev 默认值。
+ */
+function deriveChatOriginFromApi(apiUrl: string): string {
+  try {
+    return new URL(apiUrl).origin;
+  } catch {
+    return `http://${getDefaultHost()}:${API_PORT}`;
+  }
+}
+
+export const CHAT_WS_URL = assertSecureTransport(
+  trimTrailingSlash(
+    process.env.EXPO_PUBLIC_CHAT_WS_URL ?? deriveChatOriginFromApi(API_URL),
+  ),
+  'CHAT_WS_URL',
+);
+
 // OpenIM SDK 日志级别：0=关闭 1=fatal 2=error 3=warn 4=info 5=debug
 // 默认 3（warn），开发时可在 .env.local 中设置 EXPO_PUBLIC_OPENIM_LOG_LEVEL=5 开启详细日志。
 // 校验 finite + 范围：若环境变量被设置成非数字（"verbose" 等），Number(...) 会得到 NaN，
