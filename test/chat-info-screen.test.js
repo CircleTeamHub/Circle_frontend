@@ -261,11 +261,12 @@ test('group member search screen loads and filters group members', () => {
   const screenPath = path.join(process.cwd(), 'src/features/chat/screens/SearchGroupMembersScreen.tsx');
   const source = fs.readFileSync(screenPath, 'utf8');
 
-  assert.match(source, /loadGroupMemberList\(groupID,\s*10_000\)/);
+  assert.match(source, /createCircleChatConversation\(groupID\)/);
+  assert.match(source, /fetchChatMembers\(conversation\.id\)/);
   assert.match(source, /member\.nickname\.toLowerCase\(\)\.includes\(trimmedQuery\)/);
-  assert.match(source, /member\.userID\.toLowerCase\(\)\.includes\(trimmedQuery\)/);
+  assert.match(source, /member\.userId\.toLowerCase\(\)\.includes\(trimmedQuery\)/);
   assert.match(source, /getUserProfileHref\(scope,/);
-  assert.match(source, /fromImUserId\(member\.userID\)/);
+  assert.match(source, /member\.userId, member\.nickname/);
   assert.doesNotMatch(source, /fromImUserId\(item\.userID\)/);
   assert.doesNotMatch(source, /rowSubtitle/);
   assert.match(source, /t\('chat\.searchGroupMembers'\)/);
