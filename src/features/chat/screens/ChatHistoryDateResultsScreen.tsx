@@ -3,15 +3,15 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import type { MessageItem } from '@openim/rn-client-sdk';
 import { NavHeader } from '@/components/ui/nav-header';
 import {
   formatChatHistoryDateTitle,
-  formatChatHistoryTime,
-  getChatHistoryMessageTitle,
+  formatChatHistoryTimeIso,
+  getChatMessageDtoTitle,
   resolveChatHistoryRouteParams,
 } from '@/features/chat/chat-history';
-import { searchConversationMessagesByDate } from '@/im/client';
+import { searchChatMessages } from '@/chat-core/api';
+import type { ChatMessageDto } from '@/chat-core/protocol';
 import {
   getChatDetailHref,
   getChatHistoryDateHref,
@@ -58,10 +58,11 @@ export default function ChatHistoryDateResultsScreen() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
-  const [results, setResults] = useState<MessageItem[]>([]);
+  const [results, setResults] = useState<ChatMessageDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
-  const pageRef = useRef(1);
+  // height 键集游标:null = 没有更早的了。
+  const cursorRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {
@@ -95,13 +96,13 @@ export default function ChatHistoryDateResultsScreen() {
   );
 
   const search = useCallback(
-    async (nextPage = 1) => {
-      if (!conversationID || !date || (nextPage > 1 && loadingMore)) {
-        if (nextPage === 1) setLoading(false);
+    async (reset: boolean) => {
+      if (!conversationID || !date || (!reset && loadingMore)) {
+        if (reset) setLoading(false);
         return;
       }
 
-      if (nextPage === 1) {
+      if (reset) {
         setLoading(true);
         setError(null);
       } else {
@@ -109,21 +110,24 @@ export default function ChatHistoryDateResultsScreen() {
       }
 
       try {
-        const page = await searchConversationMessagesByDate({
-          conversationID,
+        const page = await searchChatMessages(conversationID, {
           date,
-          pageIndex: nextPage,
-          count: PAGE_SIZE,
+          limit: PAGE_SIZE,
+          ...(reset || cursorRef.current === null
+            ? {}
+            : { beforeHeight: cursorRef.current }),
         });
 
         if (mountedRef.current) {
-          pageRef.current = nextPage;
-          setResults((prev) => (nextPage === 1 ? page : [...prev, ...page]));
-          setHasMore(page.length === PAGE_SIZE);
+          cursorRef.current = page.nextBeforeHeight;
+          // 页内升序 → 反转为最新在前(与旧检索展示一致);翻页追加更早的。
+          const descending = [...page.messages].reverse();
+          setResults((prev) => (reset ? descending : [...prev, ...descending]));
+          setHasMore(page.nextBeforeHeight !== null);
         }
       } catch (err) {
         if (mountedRef.current) {
-          if (nextPage === 1) {
+          if (reset) {
             setResults([]);
             setError(t('chat.history.loadFailed'));
           }
@@ -143,7 +147,8 @@ export default function ChatHistoryDateResultsScreen() {
   );
 
   useEffect(() => {
-    void search(1);
+    cursorRef.current = null;
+    void search(true);
     // 仅在会话 / 日期变化时重新拉取；search 的其它依赖不该触发重查。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationID, date]);
@@ -152,7 +157,7 @@ export default function ChatHistoryDateResultsScreen() {
     if (!hasMore || loading || loadingMore) {
       return;
     }
-    void search(pageRef.current + 1);
+    void search(false);
   }, [hasMore, loading, loadingMore, search]);
 
   const openMessage = useCallback(
@@ -177,22 +182,22 @@ export default function ChatHistoryDateResultsScreen() {
       <View style={s.content}>
         <FlatList
           data={results}
-          keyExtractor={(item) => item.clientMsgID}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={s.listContent}
           keyboardShouldPersistTaps="handled"
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.3}
           renderItem={({ item }) => (
-            <Pressable style={[s.card, d.card]} onPress={() => openMessage(item.clientMsgID)}>
-              <Text style={d.title}>{getChatHistoryMessageTitle(item)}</Text>
-              <Text style={d.meta}>{formatChatHistoryTime(item.sendTime)}</Text>
+            <Pressable style={[s.card, d.card]} onPress={() => openMessage(item.id)}>
+              <Text style={d.title}>{getChatMessageDtoTitle(item)}</Text>
+              <Text style={d.meta}>{formatChatHistoryTimeIso(item.createdAt)}</Text>
             </Pressable>
           )}
           ListEmptyComponent={
             error ? (
               <View>
                 <Text style={[s.centeredText, d.errorText]}>{error}</Text>
-                <Pressable style={d.retryButton} onPress={() => void search(1)}>
+                <Pressable style={d.retryButton} onPress={() => void search(true)}>
                   <Text style={d.retryText}>{t('chat.history.retry')}</Text>
                 </Pressable>
               </View>

@@ -9,14 +9,14 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import type { MessageItem } from '@openim/rn-client-sdk';
 import { NavHeader } from '@/components/ui/nav-header';
 import {
-  formatChatHistoryTime,
-  getChatHistoryMessageTitle,
+  formatChatHistoryTimeIso,
+  getChatMessageDtoTitle,
   resolveChatHistoryRouteParams,
 } from '@/features/chat/chat-history';
-import { searchConversationFileMessages } from '@/im/client';
+import { searchChatMessages } from '@/chat-core/api';
+import type { ChatMessageDto } from '@/chat-core/protocol';
 import { getChatDetailHref } from '@/features/user/utils/routes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
@@ -53,12 +53,12 @@ export default function ChatHistoryFilesScreen() {
     title?: string;
   }>();
   const { conversationID, sourceID, title } = resolveChatHistoryRouteParams(params);
-  const [results, setResults] = useState<MessageItem[]>([]);
+  const [results, setResults] = useState<ChatMessageDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const pageRef = useRef(1);
+  const cursorRef = useRef<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,14 +71,15 @@ export default function ChatHistoryFilesScreen() {
       };
     }
 
-    pageRef.current = 1;
+    cursorRef.current = null;
     setLoading(true);
     setError(null);
-    searchConversationFileMessages({ conversationID, pageIndex: 1, count: PAGE_SIZE })
-      .then((messages) => {
+    searchChatMessages(conversationID, { types: ['file'], limit: PAGE_SIZE })
+      .then((page) => {
         if (!cancelled) {
-          setResults(messages);
-          setHasMore(messages.length === PAGE_SIZE);
+          cursorRef.current = page.nextBeforeHeight;
+          setResults([...page.messages].reverse());
+          setHasMore(page.nextBeforeHeight !== null);
         }
       })
       .catch((e: unknown) => {
@@ -106,18 +107,19 @@ export default function ChatHistoryFilesScreen() {
       return;
     }
 
-    const nextPage = pageRef.current + 1;
     setLoadingMore(true);
 
     try {
-      const page = await searchConversationFileMessages({
-        conversationID,
-        pageIndex: nextPage,
-        count: PAGE_SIZE,
+      const page = await searchChatMessages(conversationID, {
+        types: ['file'],
+        limit: PAGE_SIZE,
+        ...(cursorRef.current !== null
+          ? { beforeHeight: cursorRef.current }
+          : {}),
       });
-      pageRef.current = nextPage;
-      setResults((prev) => [...prev, ...page]);
-      setHasMore(page.length === PAGE_SIZE);
+      cursorRef.current = page.nextBeforeHeight;
+      setResults((prev) => [...prev, ...[...page.messages].reverse()]);
+      setHasMore(page.nextBeforeHeight !== null);
     } catch (err) {
       // 翻页失败时停止继续翻；初始加载已有 error state 路径，这里不重置以保留已加载部分。
       setHasMore(false);
@@ -134,13 +136,14 @@ export default function ChatHistoryFilesScreen() {
       return;
     }
 
-    pageRef.current = 1;
+    cursorRef.current = null;
     setLoading(true);
     setError(null);
-    searchConversationFileMessages({ conversationID, pageIndex: 1, count: PAGE_SIZE })
-      .then((messages) => {
-        setResults(messages);
-        setHasMore(messages.length === PAGE_SIZE);
+    searchChatMessages(conversationID, { types: ['file'], limit: PAGE_SIZE })
+      .then((page) => {
+        cursorRef.current = page.nextBeforeHeight;
+        setResults([...page.messages].reverse());
+        setHasMore(page.nextBeforeHeight !== null);
       })
       .catch((e: unknown) => {
         setError(
@@ -197,16 +200,16 @@ export default function ChatHistoryFilesScreen() {
       <View style={s.content}>
         <FlatList
           data={results}
-          keyExtractor={(item) => item.clientMsgID}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={s.listContent}
           onEndReached={() => void handleLoadMore()}
           onEndReachedThreshold={0.3}
           renderItem={({ item }) => (
-            <Pressable style={[s.card, d.card]} onPress={() => openMessage(item.clientMsgID)}>
-              <Text style={d.title}>{getChatHistoryMessageTitle(item)}</Text>
+            <Pressable style={[s.card, d.card]} onPress={() => openMessage(item.id)}>
+              <Text style={d.title}>{getChatMessageDtoTitle(item)}</Text>
               <Text style={d.meta}>
-                {(item.fileElem?.fileSize ?? 0).toLocaleString('zh-CN')} B ·{' '}
-                {formatChatHistoryTime(item.sendTime)}
+                {Number(item.content['size'] ?? 0).toLocaleString('zh-CN')} B ·{' '}
+                {formatChatHistoryTimeIso(item.createdAt)}
               </Text>
             </Pressable>
           )}

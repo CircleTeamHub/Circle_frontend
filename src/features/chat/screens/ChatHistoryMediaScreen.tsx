@@ -12,15 +12,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { MessageType, type MessageItem } from '@openim/rn-client-sdk';
 import i18n from '@/i18n';
 import { NavHeader } from '@/components/ui/nav-header';
 import {
   formatChatHistoryMonth,
-  isChatHistoryMediaMessage,
   resolveChatHistoryRouteParams,
 } from '@/features/chat/chat-history';
-import { searchConversationMediaMessages } from '@/im/client';
+import { searchChatMessages } from '@/chat-core/api';
+import type { ChatMessageDto } from '@/chat-core/protocol';
 import { normalizeMediaUrl } from '@/services/api/utils';
 import { getChatDetailHref } from '@/features/user/utils/routes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -28,13 +27,13 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 const PAGE_SIZE = 30;
 const MEDIA_GRID_COLUMNS = 3;
 
-type MediaRow = MessageItem[];
+type MediaRow = ChatMessageDto[];
 type MediaMonthSection = {
   title: string;
   data: MediaRow[];
 };
 
-function chunkMediaRows(items: MessageItem[]) {
+function chunkMediaRows(items: ChatMessageDto[]) {
   const rows: MediaRow[] = [];
   for (let index = 0; index < items.length; index += MEDIA_GRID_COLUMNS) {
     rows.push(items.slice(index, index + MEDIA_GRID_COLUMNS));
@@ -42,12 +41,12 @@ function chunkMediaRows(items: MessageItem[]) {
   return rows;
 }
 
-function groupMediaMessagesByMonth(messages: MessageItem[]): MediaMonthSection[] {
-  const groups = new Map<string, MessageItem[]>();
+function groupMediaMessagesByMonth(messages: ChatMessageDto[]): MediaMonthSection[] {
+  const groups = new Map<string, ChatMessageDto[]>();
 
   for (const message of messages) {
     const title =
-      formatChatHistoryMonth(message.sendTime) || i18n.t('chat.history.unknownMonth');
+      formatChatHistoryMonth(Date.parse(message.createdAt)) || i18n.t('chat.history.unknownMonth');
     const current = groups.get(title) ?? [];
     current.push(message);
     groups.set(title, current);
@@ -63,18 +62,13 @@ function normalizeCandidateUrl(value: string | null | undefined) {
   return value ? normalizeMediaUrl(value) ?? value : null;
 }
 
-function getMediaThumbnailUris(item: MessageItem) {
-  const candidates =
-    item.contentType === MessageType.PictureMessage
-      ? [
-          item.pictureElem?.snapshotPicture?.url,
-          item.pictureElem?.sourcePicture?.url,
-          item.pictureElem?.bigPicture?.url,
-        ]
-      : [
-          item.videoElem?.snapshotUrl,
-          item.videoElem?.videoUrl,
-        ];
+function getMediaThumbnailUris(item: ChatMessageDto) {
+  const content = item.content ?? {};
+  const candidates = [
+    typeof content['thumbUrl'] === 'string' ? content['thumbUrl'] : null,
+    typeof content['url'] === 'string' ? content['url'] : null,
+    typeof content['localUri'] === 'string' ? content['localUri'] : null,
+  ];
 
   return Array.from(
     new Set(
@@ -140,7 +134,7 @@ const s = StyleSheet.create({
 type MediaTileProps = {
   colors: ReturnType<typeof useTheme>['colors'];
   fallbackTextStyle: object;
-  item: MessageItem;
+  item: ChatMessageDto;
   onOpen: (clientMsgID: string) => void;
   tileStyle: object;
   videoBadgeStyle: object;
@@ -158,7 +152,7 @@ function MediaTile({
   const thumbnailUris = useMemo(() => getMediaThumbnailUris(item), [item]);
   const [failedCount, setFailedCount] = useState(0);
   const thumbnailUri = thumbnailUris[failedCount] ?? null;
-  const isVideo = item.contentType === MessageType.VideoMessage;
+  const isVideo = item.type === 'video';
 
   const handleImageError = useCallback(() => {
     setFailedCount((current) => current + 1);
@@ -166,13 +160,13 @@ function MediaTile({
 
   useEffect(() => {
     setFailedCount(0);
-  }, [item.clientMsgID]);
+  }, [item.id]);
 
   return (
     <Pressable
-      key={item.clientMsgID}
+      key={item.id}
       style={[s.mediaTile, tileStyle]}
-      onPress={() => onOpen(item.clientMsgID)}
+      onPress={() => onOpen(item.id)}
     >
       {thumbnailUri ? (
         <Image
@@ -207,12 +201,12 @@ export default function ChatHistoryMediaScreen() {
     title?: string;
   }>();
   const { conversationID, sourceID, title } = resolveChatHistoryRouteParams(params);
-  const [results, setResults] = useState<MessageItem[]>([]);
+  const [results, setResults] = useState<ChatMessageDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const pageRef = useRef(1);
+  const cursorRef = useRef<number | null>(null);
 
   // Guards async setState on the retry path (the initial-load effect has its
   // own per-run `cancelled` flag).
@@ -231,14 +225,15 @@ export default function ChatHistoryMediaScreen() {
       return;
     }
 
-    pageRef.current = 1;
+    cursorRef.current = null;
     setLoading(true);
     setError(null);
-    searchConversationMediaMessages({ conversationID, pageIndex: 1, count: PAGE_SIZE })
-      .then((messages) => {
+    searchChatMessages(conversationID, { types: ['image'], limit: PAGE_SIZE })
+      .then((page) => {
         if (!mountedRef.current) return;
-        setResults(messages.filter(isChatHistoryMediaMessage));
-        setHasMore(messages.length === PAGE_SIZE);
+        cursorRef.current = page.nextBeforeHeight;
+        setResults([...page.messages].reverse());
+        setHasMore(page.nextBeforeHeight !== null);
       })
       .catch((e: unknown) => {
         if (__DEV__) console.warn('[chat-history-media] load failed', e);
@@ -263,14 +258,15 @@ export default function ChatHistoryMediaScreen() {
       };
     }
 
-    pageRef.current = 1;
+    cursorRef.current = null;
     setLoading(true);
     setError(null);
-    searchConversationMediaMessages({ conversationID, pageIndex: 1, count: PAGE_SIZE })
-      .then((messages) => {
+    searchChatMessages(conversationID, { types: ['image'], limit: PAGE_SIZE })
+      .then((page) => {
         if (!cancelled) {
-          setResults(messages.filter(isChatHistoryMediaMessage));
-          setHasMore(messages.length === PAGE_SIZE);
+          cursorRef.current = page.nextBeforeHeight;
+          setResults([...page.messages].reverse());
+          setHasMore(page.nextBeforeHeight !== null);
         }
       })
       .catch((e: unknown) => {
@@ -297,18 +293,19 @@ export default function ChatHistoryMediaScreen() {
       return;
     }
 
-    const nextPage = pageRef.current + 1;
     setLoadingMore(true);
 
     try {
-      const page = await searchConversationMediaMessages({
-        conversationID,
-        pageIndex: nextPage,
-        count: PAGE_SIZE,
+      const page = await searchChatMessages(conversationID, {
+        types: ['image'],
+        limit: PAGE_SIZE,
+        ...(cursorRef.current !== null
+          ? { beforeHeight: cursorRef.current }
+          : {}),
       });
-      pageRef.current = nextPage;
-      setResults((prev) => [...prev, ...page.filter(isChatHistoryMediaMessage)]);
-      setHasMore(page.length === PAGE_SIZE);
+      cursorRef.current = page.nextBeforeHeight;
+      setResults((prev) => [...prev, ...[...page.messages].reverse()]);
+      setHasMore(page.nextBeforeHeight !== null);
     } catch (err) {
       setHasMore(false);
       if (typeof __DEV__ !== 'undefined' && __DEV__) {
@@ -375,7 +372,7 @@ export default function ChatHistoryMediaScreen() {
       <View style={s.content}>
         <SectionList
           sections={sections}
-          keyExtractor={(item, index) => `${item[0]?.clientMsgID ?? 'row'}-${index}`}
+          keyExtractor={(item, index) => `${item[0]?.id ?? 'row'}-${index}`}
           contentContainerStyle={s.listContent}
           onEndReached={() => void handleLoadMore()}
           onEndReachedThreshold={0.3}
@@ -385,7 +382,7 @@ export default function ChatHistoryMediaScreen() {
             <View style={s.mediaGrid}>
               {item.map((mediaItem) => (
                 <MediaTile
-                  key={mediaItem.clientMsgID}
+                  key={mediaItem.id}
                   colors={colors}
                   fallbackTextStyle={d.fallbackText}
                   item={mediaItem}

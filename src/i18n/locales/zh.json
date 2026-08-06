@@ -328,7 +328,8 @@
     "snackbarPreviewFallback": "[消息]",
     "history": {
       "title": "聊天记录",
-      "loadFailed": "加载失败",
+      "unknownSender": "成员",
+        "loadFailed": "加载失败",
       "loading": "加载中...",
       "retry": "重试",
       "searching": "查询中...",

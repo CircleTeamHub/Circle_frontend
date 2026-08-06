@@ -288,7 +288,8 @@
     "snackbarPreviewFallback": "[Mensaje]",
     "history": {
       "title": "Historial de chat",
-      "loadFailed": "Error al cargar",
+      "unknownSender": "Miembro",
+        "loadFailed": "Error al cargar",
       "loading": "Cargando...",
       "retry": "Reintentar",
       "searching": "Buscando...",
