@@ -26,7 +26,7 @@ import {
   submitPostCollaborationRecognitions,
 } from '@/services/api/plaza';
 import { getApiErrorMessage } from '@/services/api/errors';
-import { getOrCreateSingleConversation } from '@/im/client';
+import { ensureDirectConversation } from '@/chat-core/client';
 import { usePendingChatCardStore } from '@/features/chat/store/use-pending-chat-card-store';
 import { toPlazaPostCardData } from '@/features/discover/utils/plaza-post-card';
 import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
@@ -251,7 +251,7 @@ export default function PostSignupsScreen() {
       try {
         setOpeningChatFor(signer.userId);
         // 先解析单聊会话拿到 conversationID，否则聊天页只会停在预览模式。
-        const conversation = await getOrCreateSingleConversation(signer.userId);
+        const conversation = await ensureDirectConversation(signer.userId);
         if (pendingChatCard) setPendingChatCard(pendingChatCard);
         router.push(
           getChatDetailHref(

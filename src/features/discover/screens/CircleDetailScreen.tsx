@@ -50,7 +50,7 @@ import {
   sanitizeUploadFilename,
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
-import { getOrCreateGroupConversation } from '@/im/client';
+import { ensureCircleConversation } from '@/chat-core/client';
 import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
 import type { CircleDetail, CircleInvitation } from '@/types';
 import { reduceCircleLoadFailure } from '@/features/discover/utils/circle-detail-load-state';
@@ -288,7 +288,7 @@ export default function CircleDetailScreen() {
     if (!groupID || enteringGroupChat) return;
     try {
       setEnteringGroupChat(true);
-      const conversation = await getOrCreateGroupConversation(groupID);
+      const conversation = await ensureCircleConversation(groupID);
       router.push({
         pathname:
           circleScope === 'messages'

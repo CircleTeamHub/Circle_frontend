@@ -13,7 +13,7 @@ import {
 } from '@/features/profile/membership-frames';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
-import { getOrCreateSingleConversation } from '@/im/client';
+import { ensureDirectConversation } from '@/chat-core/client';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { createDirectCall } from '@/services/api/calls';
 import { useCallStore } from '@/features/call/store/use-call-store';
@@ -548,7 +548,7 @@ export default function UserProfileScreen() {
 
     try {
       setOpeningChat(true);
-      const conversation = await getOrCreateSingleConversation(profileId);
+      const conversation = await ensureDirectConversation(profileId);
       if (!mountedRef.current) return;
       router.push(
         getChatDetailHref(

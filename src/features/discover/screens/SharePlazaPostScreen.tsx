@@ -21,7 +21,7 @@ import { fetchPlazaPost } from '@/services/api/plaza';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { toPlazaPostCardData } from '@/features/discover/utils/plaza-post-card';
 import { usePendingChatCardStore } from '@/features/chat/store/use-pending-chat-card-store';
-import { getOrCreateSingleConversation } from '@/im/client';
+import { ensureDirectConversation } from '@/chat-core/client';
 import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
 import { getChatDetailHref } from '@/features/user/utils/routes';
 import type { CirclePlazaPost } from '@/types';
@@ -116,7 +116,7 @@ export default function SharePlazaPostScreen() {
         }),
       };
       try {
-        const conversation = await getOrCreateSingleConversation(friend.id);
+        const conversation = await ensureDirectConversation(friend.id);
         setPendingChatCard(pendingChatCard);
         router.push(
           getChatDetailHref(
