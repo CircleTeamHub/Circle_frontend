@@ -2,6 +2,7 @@ import type { Socket } from 'socket.io-client';
 import {
   CHAT_EVENTS,
   type ChatMessageDto,
+  type ChatPresenceBroadcast,
   type ChatReadBroadcast,
 } from './protocol';
 import { useChatStore } from './store';
@@ -52,6 +53,22 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         .applyRead(payload.conversationId, payload.userId, payload.height);
     } catch (err) {
       console.warn('[chat] read handler failed', err);
+    }
+  });
+
+  socket.on(CHAT_EVENTS.presence, (payload: ChatPresenceBroadcast) => {
+    if (!isLive()) return;
+    try {
+      if (
+        !payload ||
+        typeof payload.userId !== 'string' ||
+        typeof payload.online !== 'boolean'
+      ) {
+        return;
+      }
+      useChatStore.getState().applyPresence(payload.userId, payload.online);
+    } catch (err) {
+      console.warn('[chat] presence handler failed', err);
     }
   });
 }

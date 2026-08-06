@@ -220,6 +220,25 @@ function emitReadWithAck(
   });
 }
 
+/** 批量查询在线状态并写入 store(ack 一次性;后续变化靠服务端广播)。 */
+export function queryChatPresence(userIds: string[]): void {
+  const current = socket;
+  if (!current?.connected || userIds.length === 0) return;
+  current
+    .timeout(READ_ACK_TIMEOUT_MS)
+    .emit(
+      CHAT_EVENTS.presence,
+      { userIds },
+      (err: Error | null, result: Record<string, boolean>) => {
+        if (err || !result) return;
+        const store = useChatStore.getState();
+        for (const [userId, online] of Object.entries(result)) {
+          if (typeof online === 'boolean') store.applyPresence(userId, online);
+        }
+      },
+    );
+}
+
 /** 会话级已读：上报最新水位 + 本地未读乐观归零(消息页点入/滑动动作用)。 */
 export function markConversationRead(
   conversationId: string,

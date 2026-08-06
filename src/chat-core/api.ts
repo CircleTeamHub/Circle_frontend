@@ -2,6 +2,7 @@ import { apiClient } from '@/services/api/client';
 import type {
   ChatConversationDto,
   ChatHistoryPageDto,
+  ChatMemberDto,
   ChatMessageDto,
 } from './protocol';
 import { useChatStore } from './store';
@@ -101,6 +102,15 @@ export function fetchChatMessageDays(
   });
   return apiClient<string[]>(
     `/chat/conversations/${conversationId}/message-days?${params.toString()}`,
+  );
+}
+
+/** 会话成员目录(GROUP 附圈子角色):@ 候选/群昵称表/目录权限共用。 */
+export function fetchChatMembers(
+  conversationId: string,
+): Promise<ChatMemberDto[]> {
+  return apiClient<ChatMemberDto[]>(
+    `/chat/conversations/${conversationId}/members`,
   );
 }
 
