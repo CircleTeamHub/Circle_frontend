@@ -3,6 +3,8 @@ import {
   type MessageItem,
 } from '@openim/rn-client-sdk';
 import i18n from '@/i18n';
+import { getChatMessagePreview } from '@/chat-core/mappers';
+import type { ChatMessageDto } from '@/chat-core/protocol';
 import { getLocalizedDateTimeLocale } from '@/utils/locale';
 import { getMessagePreview } from '@/im/mappers';
 
@@ -65,6 +67,17 @@ export function formatChatHistoryMonth(sendTime: number) {
     year: 'numeric',
     month: 'long',
   });
+}
+
+/** chat-core DTO 版标题(预览文案复用 chat-core mappers,与列表页同源)。 */
+export function getChatMessageDtoTitle(message: ChatMessageDto): string {
+  return getChatMessagePreview(message);
+}
+
+/** chat-core DTO 版时间(ISO 字符串 → 与旧版同格式)。 */
+export function formatChatHistoryTimeIso(iso: string): string {
+  const ms = Date.parse(iso);
+  return Number.isFinite(ms) ? formatChatHistoryTime(ms) : '';
 }
 
 export function getChatHistoryMessageTitle(message: MessageItem) {

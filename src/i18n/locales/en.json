@@ -328,7 +328,8 @@
     "snackbarPreviewFallback": "[Message]",
     "history": {
       "title": "Chat History",
-      "loadFailed": "Failed to load",
+      "unknownSender": "Member",
+        "loadFailed": "Failed to load",
       "loading": "Loading...",
       "retry": "Retry",
       "searching": "Searching...",

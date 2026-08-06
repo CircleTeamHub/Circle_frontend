@@ -29,20 +29,21 @@ test('by-date calendar renders 7 equal flex columns (no flexWrap rounding)', () 
   assert.match(screen, /calendarCell:\s*\{[^}]*flex:\s*1/);
 });
 
-// 回归：按日期搜索必须把「当天 0 点」换算成【秒】再传给 OpenIM。
-// OpenIM 的 searchTimePosition/searchTimePeriod 单位是秒（period 写成 24*60*60 即为证），
-// 旧实现把 getTime()（毫秒）直接当 position → 落到 5 万年后的时间窗 → 永远搜不到记录。
-test('by-date search uses a DST-safe local-midnight window in OpenIM seconds', () => {
-  const client = read('src/im/client.ts');
+// 回归：按日期搜索的「当天窗口」在自研栈里由服务端计算 —— 客户端只传
+// date + 客户端时区偏移，不再自己拼时间戳。#147 在 OpenIM 侧修的
+// 「固定 24 小时会在 DST 切换日漏消息/串入次日」由服务端按本地午夜边界承担
+// (circle_be buildHistoryFilterWhere)，客户端这侧要钉住的是「确实把时区带上去了」。
+test('by-date search sends the date plus the client timezone offset', () => {
+  const api = read('src/chat-core/api.ts');
 
-  assert.match(client, /searchConversationMessagesByDate/);
-  assert.match(client, /resolveLocalDaySearchWindow\(params\.date\)/);
-  assert.match(client, /searchTimePosition:\s*window\.positionSeconds/);
-  assert.match(client, /searchTimePeriod:\s*window\.periodSeconds/);
-  // 不得再把毫秒时间戳直接当秒传
-  assert.doesNotMatch(client, /searchTimePosition:\s*startOfDay\s*,/);
-  // 固定 24 小时会在 DST 切换日漏消息或串入次日消息。
-  assert.doesNotMatch(client, /searchTimePeriod:\s*24 \* 60 \* 60/);
+  assert.match(api, /params\.set\('date', options\.date\)/);
+  assert.match(
+    api,
+    /params\.set\(\s*'tzOffsetMinutes',\s*String\(new Date\(\)\.getTimezoneOffset\(\)\)/,
+  );
+  // 不带时区的话服务端只能按 UTC 切天，用户在本地 0 点前后看到的是错的一天。
+  assert.doesNotMatch(api, /searchTimePosition/);
+  assert.doesNotMatch(api, /searchTimePeriod/);
 });
 
 // 需求：有聊天记录的日子用颜色（圆点）标出来。
@@ -50,7 +51,7 @@ test('by-date calendar colors days that have chat records', () => {
   const screen = read('src/features/chat/screens/ChatHistoryDateScreen.tsx');
 
   // 翻到某月即拉取该月「有记录的日子」
-  assert.match(screen, /getConversationMessageDays/);
+  assert.match(screen, /fetchChatMessageDays/);
   assert.match(screen, /recordDays/);
   // 有记录 → 该格渲染圆点
   assert.match(
@@ -75,7 +76,7 @@ test('by-date calendar navigates into the day results page on tap', () => {
   // 相邻月份的日子：先翻月，不直接进结果页
   assert.match(screen, /if \(!day\.isCurrentMonth\)/);
   // 日历页本身不再内联搜索 / 渲染结果列表
-  assert.doesNotMatch(screen, /searchConversationMessagesByDate/);
+  assert.doesNotMatch(screen, /searchChatMessages\(/);
   assert.doesNotMatch(screen, /FlatList/);
 });
 
@@ -84,7 +85,7 @@ test('day results screen searches the picked date and opens the message in chat'
     'src/features/chat/screens/ChatHistoryDateResultsScreen.tsx',
   );
 
-  assert.match(screen, /searchConversationMessagesByDate/);
+  assert.match(screen, /searchChatMessages\(conversationID, \{\s*date,/);
   assert.match(screen, /formatChatHistoryDateTitle\(date\)/);
   assert.match(
     screen,

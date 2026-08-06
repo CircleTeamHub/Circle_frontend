@@ -1,5 +1,9 @@
 import { apiClient } from '@/services/api/client';
-import type { ChatConversationDto, ChatHistoryPageDto } from './protocol';
+import type {
+  ChatConversationDto,
+  ChatHistoryPageDto,
+  ChatMessageDto,
+} from './protocol';
 import { useChatStore } from './store';
 
 /**
@@ -51,6 +55,65 @@ export async function loadChatHistory(
   );
   useChatStore.getState().ingestMessages(conversationId, page.messages);
   return page;
+}
+
+/**
+ * 聊天记录检索(文本搜/媒体格/按日期)。与 loadChatHistory 的关键区别:
+ * 结果**不写入** store —— 过滤后的片段灌进会话时间线会造成"消息缺页"假象。
+ */
+export function searchChatMessages(
+  conversationId: string,
+  options: {
+    keyword?: string;
+    types?: string[];
+    date?: string;
+    beforeHeight?: number;
+    limit?: number;
+  } = {},
+): Promise<ChatHistoryPageDto> {
+  const params = new URLSearchParams();
+  if (options.keyword) params.set('keyword', options.keyword);
+  if (options.types?.length) params.set('types', options.types.join(','));
+  if (options.date) {
+    params.set('date', options.date);
+    params.set('tzOffsetMinutes', String(new Date().getTimezoneOffset()));
+  }
+  if (options.beforeHeight !== undefined) {
+    params.set('beforeHeight', String(options.beforeHeight));
+  }
+  if (options.limit !== undefined) params.set('limit', String(options.limit));
+  const query = params.toString();
+  return apiClient<ChatHistoryPageDto>(
+    `/chat/conversations/${conversationId}/messages${query ? `?${query}` : ''}`,
+  );
+}
+
+/** 某月内有聊天记录的日期集合(按日期日历上色;客户端时区)。 */
+export function fetchChatMessageDays(
+  conversationId: string,
+  year: number,
+  month: number,
+): Promise<string[]> {
+  const params = new URLSearchParams({
+    year: String(year),
+    month: String(month),
+    tzOffsetMinutes: String(new Date().getTimezoneOffset()),
+  });
+  return apiClient<string[]>(
+    `/chat/conversations/${conversationId}/message-days?${params.toString()}`,
+  );
+}
+
+/** 全局搜索:跨本人全部会话搜文本(最新在前,扁平;会话展示由调用方补齐)。 */
+export function searchAllChatMessages(
+  keyword: string,
+  limit?: number,
+): Promise<ChatMessageDto[]> {
+  const params = new URLSearchParams({ keyword });
+  if (limit !== undefined) params.set('limit', String(limit));
+  return apiClient<ChatMessageDto[]>(
+    `/chat/messages/search?${params.toString()}`,
+  );
 }
 
 /** 会话偏好:置顶/免打扰/隐藏。返回最新 DTO 并回写 store。 */

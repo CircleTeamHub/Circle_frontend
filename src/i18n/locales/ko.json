@@ -288,7 +288,8 @@
     "snackbarPreviewFallback": "[메시지]",
     "history": {
       "title": "채팅 기록",
-      "loadFailed": "불러오기 실패",
+      "unknownSender": "멤버",
+        "loadFailed": "불러오기 실패",
       "loading": "로딩 중...",
       "retry": "다시 시도",
       "searching": "검색 중...",

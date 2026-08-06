@@ -670,13 +670,13 @@ test('chat history search screens exist with dedicated titles and empty states',
   assert.match(hubSource, /t\('chat\.history\.files'\)/);
   assert.match(hubSource, /t\('chat\.history\.dateTitle'\)/);
 
-  assert.match(textSource, /searchConversationTextMessages/);
+  assert.match(textSource, /searchChatMessages\(conversationID, \{\s*keyword/);
   assert.match(textSource, /t\('chat\.history\.noMatches'\)/);
 
-  assert.match(mediaSource, /searchConversationMediaMessages/);
+  assert.match(mediaSource, /searchChatMessages\(conversationID, \{ types: \['image'\]/);
   assert.match(mediaSource, /t\('chat\.history\.noMedia'\)/);
 
-  assert.match(filesSource, /searchConversationFileMessages/);
+  assert.match(filesSource, /searchChatMessages\(conversationID, \{ types: \['file'\]/);
   assert.match(filesSource, /暂无文件记录/);
 
   // 日历页现在是纯选择器：点日期跳「当天记录」结果页，搜索逻辑搬去结果页了。
@@ -739,9 +739,10 @@ test('chat history media grid normalizes urls and falls back across image candid
 
   assert.match(mediaSource, /normalizeMediaUrl/);
   assert.match(mediaSource, /getMediaThumbnailUris/);
-  assert.match(mediaSource, /snapshotPicture\?\.url/);
-  assert.match(mediaSource, /sourcePicture\?\.url/);
-  assert.match(mediaSource, /bigPicture\?\.url/);
+  // chat-core:缩略 → 原图 → 乐观期本地 uri 的降级链。
+  assert.match(mediaSource, /content\['thumbUrl'\]/);
+  assert.match(mediaSource, /content\['url'\]/);
+  assert.match(mediaSource, /content\['localUri'\]/);
   assert.match(mediaSource, /handleImageError/);
   assert.match(mediaSource, /onError=\{handleImageError\}/);
 });
