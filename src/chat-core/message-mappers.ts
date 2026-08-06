@@ -1,3 +1,4 @@
+import i18n from '@/i18n';
 import { normalizeMediaUrl } from '@/services/api/utils';
 import type {
   ChatMessage,
@@ -134,6 +135,13 @@ export function mapChatMessageDtoToUI(
         type: 'plaza-post-card',
         plazaPostCard: content as unknown as PlazaPostCardData,
       };
+    case 'system':
+      return {
+        id: dto.id,
+        type: 'system-notice',
+        time: formatChatTimestamp(dto.createdAt),
+        text: systemNoticeText(content),
+      };
     default:
       // text 与未知类型都落文本气泡(未知类型显示其 text 字段或空串,不渲染破位)。
       return {
@@ -173,4 +181,27 @@ export function mapChatMessageDtosToUI(
     result.push(mapped);
   }
   return result;
+}
+
+/** 结构化系统消息 → 本地化文案(im.notification.* 词表;未知 kind 兜底空串隐藏)。 */
+function systemNoticeText(content: Record<string, unknown>): string {
+  const kind = typeof content['kind'] === 'string' ? content['kind'] : '';
+  switch (kind) {
+    case 'member-joined': {
+      const names = Array.isArray(content['names'])
+        ? (content['names'] as unknown[]).filter(
+            (n): n is string => typeof n === 'string',
+          )
+        : [];
+      return i18n.t('im.notification.memberJoined', {
+        names: names.join('、'),
+      });
+    }
+    case 'member-left':
+      return i18n.t('im.notification.memberQuit');
+    case 'group-created':
+      return i18n.t('im.notification.groupCreated');
+    default:
+      return '';
+  }
 }

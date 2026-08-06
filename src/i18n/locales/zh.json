@@ -2750,6 +2750,7 @@
     "CHAT_SENSITIVE_WORD_BLOCKED": "消息包含敏感词",
     "CHAT_INVALID_PAYLOAD": "消息发送失败",
     "CHAT_RATE_LIMITED": "发送太频繁，请稍后再试",
+    "CHAT_CONVERSATION_MUTED": "该群已被管理员禁言",
     "COLLECTION_NOT_FOUND": "收藏不存在",
     "ICON_DISPLAY_LIMIT": "最多只能展示 5 个图标",
     "ICON_INVALID_SYSTEM_SELECTION": "图标选择无效",
