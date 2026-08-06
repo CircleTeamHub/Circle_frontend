@@ -73,11 +73,8 @@ import {
   fromImUserId,
   loadGroupMemberList,
   loadSpecifiedGroupMembers,
-  subscribeUserOnlineStatus,
   toImUserId,
-  unsubscribeUserOnlineStatus,
 } from '@/im/client';
-import { useIMStore } from '@/stores/imStore';
 import { useGroupMemberViewAccess } from '@/features/chat/hooks/use-group-member-view-access';
 import {
   ensureCircleConversation,
@@ -96,6 +93,7 @@ import {
   createChatMessageMapCache,
   mapChatMessageDtosToUI,
 } from '@/chat-core/message-mappers';
+import { queryChatPresence } from '@/chat-core/socket-manager';
 import { useChatStore } from '@/chat-core/store';
 import { useAuthStore } from '@/stores/authStore';
 import { type FriendProfile } from '@/services/api/friends';
@@ -139,7 +137,7 @@ import {
   assertLocalCanSendMessage,
   CreditPolicyError,
 } from '@/services/api/credit-policy';
-import { OnlineState, SessionType } from '@openim/rn-client-sdk';
+import { SessionType } from '@openim/rn-client-sdk';
 import { useTranslation } from 'react-i18next';
 import type { ChatMessage, PlazaPostCardData } from '@/types';
 import {
@@ -722,17 +720,15 @@ export default function ChatDetailScreen() {
   // 之后由全局 onUserStatusChanged 维护增量。
   const peerImId = useMemo(
     () =>
-      conversationType === SessionType.Single && sourceID
-        ? toImUserId(sourceID)
-        : null,
+      conversationType === SessionType.Single && sourceID ? sourceID : null,
     [conversationType, sourceID],
   );
-  // 只订阅对方这一个用户的在线状态切片，而非整个 onlineStatusByUser map——
-  // 其他用户上下线不再触发本页重渲染。
-  const peerOnlineStatus = useIMStore((state) =>
-    peerImId != null ? state.onlineStatusByUser[peerImId] : undefined,
+  // 只订阅对方这一个用户的在线状态切片(chat-core presence),
+  // 其他用户上下线不触发本页重渲染。
+  const peerOnlineStatus = useChatStore((state) =>
+    peerImId != null ? state.onlineByUser[peerImId] : undefined,
   );
-  const peerOnline = peerOnlineStatus === OnlineState.Online;
+  const peerOnline = peerOnlineStatus === true;
   const statusColor =
     conversationType !== SessionType.Single || authUser?.accountId === sourceID
       ? colors.online
@@ -807,21 +803,10 @@ export default function ChatDetailScreen() {
     });
   }, [conversationID, searchedMsgID, sourceID]);
 
+  // 进页查询一次初始在线状态;后续变化由服务端上下线广播直接驱动 store。
   useEffect(() => {
     if (!peerImId) return;
-    void subscribeUserOnlineStatus([peerImId]).catch((err) => {
-      // 拿不到状态时 UI 回落显示离线；dev 下记录，避免长期静默掉订阅。
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[chat] subscribeUserOnlineStatus failed', err);
-      }
-    });
-    return () => {
-      void unsubscribeUserOnlineStatus([peerImId]).catch((err) => {
-        if (typeof __DEV__ !== 'undefined' && __DEV__) {
-          console.warn('[chat] unsubscribeUserOnlineStatus failed', err);
-        }
-      });
-    };
+    queryChatPresence([peerImId]);
   }, [peerImId]);
 
   // FlatList 用 inverted 渲染：index 0 = 最新消息，自然停在底部。
@@ -986,20 +971,12 @@ export default function ChatDetailScreen() {
 
   const handleForwardMessage = useCallback(
     (message: ChatMessage) => {
-      // Read the raw OpenIM item lazily (at tap time) so the message list
-      // doesn't re-render on every incoming message. Lets the picker use
-      // native forwarding, which preserves images/media.
-      const raw = conversationID
-        ? useIMStore
-            .getState()
-            .messagesByConversation[conversationID]?.find(
-              (m) => m.clientMsgID === message.id,
-            )
-        : undefined;
-      setPendingForward({ message, raw });
+      // chat-core 阶段:转发选择器尚未迁移,raw(OpenIM 原始项)不复存在,
+      // 统一走其文本降级路径;原生媒体转发随转发选择器批次恢复。
+      setPendingForward({ message, raw: undefined });
       router.push({ pathname: '/(tabs)/messages/forward-picker' });
     },
-    [conversationID, setPendingForward],
+    [setPendingForward],
   );
 
   const handleQuoteMessage = useCallback((message: ChatMessage) => {

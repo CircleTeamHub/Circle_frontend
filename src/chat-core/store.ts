@@ -19,6 +19,8 @@ interface ChatStoreState {
   conversations: ChatConversationDto[];
   messagesByConversation: Record<string, ChatMessageDto[]>;
   activeConversationId: string | null;
+  /** 在线状态表(chat:presence 查询与广播共同维护)。 */
+  onlineByUser: Record<string, boolean>;
 
   setConnected: (connected: boolean) => void;
   setConnecting: (connecting: boolean) => void;
@@ -40,6 +42,7 @@ interface ChatStoreState {
   /** 本地删除一条消息(仅本端视图;服务端删除随后续批次)。 */
   removeMessage: (conversationId: string, messageId: string) => void;
   setActiveConversationId: (conversationId: string | null) => void;
+  applyPresence: (userId: string, online: boolean) => void;
   /**
    * 消息入库（历史页 / 广播 / 本地乐观消息共用）：
    * 按 d 对账替换乐观消息 → 按 id 去重 → height 升序（乐观消息 height=0 按
@@ -106,6 +109,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   conversations: [],
   messagesByConversation: {},
   activeConversationId: null,
+  onlineByUser: {},
   readWatermarks: {},
 
   setConnected: (connected) => set({ connected }),
@@ -195,6 +199,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   },
   setActiveConversationId: (conversationId) =>
     set({ activeConversationId: conversationId }),
+  applyPresence: (userId, online) => {
+    const { onlineByUser } = get();
+    if (onlineByUser[userId] === online) return;
+    set({ onlineByUser: { ...onlineByUser, [userId]: online } });
+  },
 
   ingestMessages: (conversationId, incoming) => {
     if (incoming.length === 0) return;
@@ -232,6 +241,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       conversations: [],
       messagesByConversation: {},
       activeConversationId: null,
+      onlineByUser: {},
       readWatermarks: {},
     }),
 }));

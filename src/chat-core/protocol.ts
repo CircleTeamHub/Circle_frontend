@@ -15,6 +15,8 @@ export const CHAT_EVENTS = {
   typing: 'chat:typing',
   /** 服务端 → 客户端：新消息 */
   message: 'chat:msg',
+  /** 双向：在线状态（客户端带 ack 查询；服务端上下线广播） */
+  presence: 'chat:presence',
 } as const;
 
 export interface ChatSendPayload {
@@ -84,6 +86,20 @@ export interface ChatHistoryPageDto {
   messages: ChatMessageDto[];
   /** 继续向前翻页的 beforeHeight;没有更早消息时为 null。 */
   nextBeforeHeight: number | null;
+}
+
+/** chat:presence 服务端广播。 */
+export interface ChatPresenceBroadcast {
+  userId: string;
+  online: boolean;
+}
+
+/** 会话成员(GET /chat/conversations/:id/members);role 仅 GROUP 有值。 */
+export interface ChatMemberDto {
+  userId: string;
+  nickname: string;
+  avatarUrl: string | null;
+  role: 'OWNER' | 'ADMIN' | 'MEMBER' | null;
 }
 
 export type ChatConversationType = 'DIRECT' | 'GROUP' | 'TEMP' | 'SUPPORT';
