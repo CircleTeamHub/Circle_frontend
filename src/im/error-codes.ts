@@ -35,3 +35,21 @@ export function getIMErrorCode(error: unknown): IMErrorCode | null {
     ? code
     : null;
 }
+
+/**
+ * ⚠️ 跨仓数字契约：circle_be 的 OpenIM before-send 回调用这个 errCode 拒绝
+ * 含敏感词的消息（circle_be src/sensitive-word/sensitive-word.constants.ts 的
+ * SENSITIVE_WORD_BLOCKED_ERR_CODE），OpenIM 原样透传为 sendMessage 失败
+ * （OpenIMApiError.code）。两边必须同步改。
+ */
+export const OPENIM_SENSITIVE_WORD_BLOCKED_CODE = 73001;
+
+/** 发送失败是否因服务端敏感词拦截（duck-type，不 import SDK 错误类）。 */
+export function isSensitiveWordBlockedError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  return (
+    (error as { code?: unknown }).code === OPENIM_SENSITIVE_WORD_BLOCKED_CODE
+  );
+}
