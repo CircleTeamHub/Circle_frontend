@@ -28,6 +28,11 @@ function loadMappers() {
       if (request === '@/services/api/utils') {
         return { normalizeMediaUrl: (u) => u ?? null };
       }
+      if (request === '@/i18n') {
+        return {
+          default: { t: (key, params) => (params?.names ? `${params.names} joined` : key) },
+        };
+      }
       if (request === './mappers') {
         return { formatChatTimestamp: () => '12:00' };
       }
@@ -158,4 +163,35 @@ test('list mapper renders newest-first and caches confirmed rows by reference', 
   // 对端水位变化 → 整体失效重建(isRead 依赖水位)。
   const third = mapChatMessageDtosToUI([a, b], 'u1', 2, box);
   assert.notEqual(third[0], second[0]);
+});
+
+test('system messages render as localized system notices', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const joined = mapChatMessageDtoToUI(
+    dto({
+      type: 'system',
+      sender: null,
+      content: { kind: 'member-joined', names: ['小明', '小红'] },
+    }),
+    'u1',
+    0,
+  );
+  assert.equal(joined.type, 'system-notice');
+  assert.match(joined.text, /小明、小红/);
+
+  const left = mapChatMessageDtoToUI(
+    dto({ type: 'system', sender: null, content: { kind: 'member-left' } }),
+    'u1',
+    0,
+  );
+  assert.equal(left.type, 'system-notice');
+  assert.equal(left.text, 'im.notification.memberQuit');
+
+  // 未知 kind:空文案隐藏,不渲染破位。
+  const unknown = mapChatMessageDtoToUI(
+    dto({ type: 'system', sender: null, content: { kind: 'future-kind' } }),
+    'u1',
+    0,
+  );
+  assert.equal(unknown.text, '');
 });

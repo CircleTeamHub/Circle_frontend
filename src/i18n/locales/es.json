@@ -2753,6 +2753,7 @@
     "CHAT_SENSITIVE_WORD_BLOCKED": "El mensaje contiene palabras bloqueadas",
     "CHAT_INVALID_PAYLOAD": "No se pudo enviar el mensaje",
     "CHAT_RATE_LIMITED": "Estás enviando demasiado rápido, espera un momento",
+    "CHAT_CONVERSATION_MUTED": "Un administrador ha silenciado este grupo",
     "COLLECTION_NOT_FOUND": "Colección no encontrada",
     "ICON_DISPLAY_LIMIT": "Puedes mostrar como máximo 5 iconos",
     "ICON_INVALID_SYSTEM_SELECTION": "Selección de icono no válida",
