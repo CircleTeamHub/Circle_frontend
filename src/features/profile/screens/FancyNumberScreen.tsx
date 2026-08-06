@@ -398,7 +398,6 @@ export default function FancyNumberScreen() {
         user: refreshed,
         accessToken: current.accessToken,
         refreshToken: current.refreshToken,
-        imToken: current.imToken,
         updatedAt: Date.now(),
       });
     },
@@ -444,7 +443,6 @@ export default function FancyNumberScreen() {
             user: nextUser,
             accessToken: current.accessToken,
             refreshToken: current.refreshToken,
-            imToken: current.imToken,
             updatedAt: Date.now(),
           });
         }

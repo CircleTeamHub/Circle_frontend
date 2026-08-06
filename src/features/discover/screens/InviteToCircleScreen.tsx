@@ -16,7 +16,10 @@ import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
-import { loadGroupMemberList } from '@/im/client';
+import {
+  createCircleChatConversation,
+  fetchChatMembers,
+} from '@/chat-core/api';
 import { canViewCircleMembers } from '@/features/chat/group-member-permissions';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { fetchCircleDetail, inviteToCircle } from '@/services/api/circles';
@@ -162,9 +165,9 @@ export default function InviteToCircleScreen() {
 
     const [friendsResult, membersResult] = await Promise.allSettled([
       fetchFriends(),
-      detail?.groupID
-        ? loadGroupMemberList(detail.groupID, 10_000)
-        : Promise.resolve([]),
+      createCircleChatConversation(circleId).then((conversation) =>
+        fetchChatMembers(conversation.id),
+      ),
     ]);
     if (signal?.cancelled || !mountedRef.current) return;
 

@@ -4,8 +4,8 @@
  * 封装 login / register / logout 三个操作，每个操作会：
  * 1. 调用后端 API
  * 2. 同步更新 authStore（token + user）
- * 3. 登录/登出 OpenIM
- * 4. 成功后由全局 AuthRouteGuard 根据 session 状态跳转目标页面
+ * 3. 成功后由全局 AuthRouteGuard 根据 session 状态跳转目标页面
+ *（chat 长连接由 SessionBootstrap 按 accessToken 变化自动建立/拆除）
  *
  * 对外暴露 submitting（loading 状态）和 error（错误文本）供 UI 展示。
  */
@@ -26,13 +26,6 @@ import {
 } from '@/services/api/auth';
 import { clearLocalSession } from '@/services/auth/session';
 import { isDefinitiveAuthFailure } from '@/services/api/client';
-import { loginToOpenIM, logoutFromOpenIM } from '@/im/client';
-import { markIMLoginRetryPending } from '@/im/login-retry-pending';
-import {
-  recoverIMSession,
-  getIMRecoveryGeneration,
-} from '@/im/token-recovery';
-import { isOpenIMTokenRejectedError } from '@/im/token-errors';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useMessageGroupsStore } from '@/features/messages/store/use-message-groups-store';
 import { retry } from '@/utils/retry';
@@ -100,47 +93,10 @@ export function useAuth() {
         user,
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
-        imToken: tokens.imToken,
         updatedAt: Date.now(),
       });
 
       if (options.startAppServices !== false) {
-        if (tokens.imToken) {
-          const recoveryGenerationBefore = getIMRecoveryGeneration();
-          try {
-            await loginToOpenIM(user.id, tokens.imToken);
-            // 登录 await 期间被踢下线(多端顶替,代次已变但 epoch 未变):拆掉这次迟到的成功,
-            // 否则把本端又连回去、再踢掉顶替的新设备,重演互踢。代次守卫此前只在 catch 里,
-            // 成功路径漏了。message groups 是 REST 资源,拆完照常加载无害。
-            if (getIMRecoveryGeneration() !== recoveryGenerationBefore) {
-              await logoutFromOpenIM({ forceNative: true }).catch(() => undefined);
-            }
-          } catch (imError) {
-            // IM 登录失败不阻断主流程，仅打印警告；用户仍可正常使用 app
-            console.warn(
-              '[openim] login failed',
-              imError instanceof Error ? imError.message : imError,
-            );
-            if (isOpenIMTokenRejectedError(imError)) {
-              // token 被服务端明确拒绝：换新 IM token 原地恢复。
-              void recoverIMSession();
-            } else if (getIMRecoveryGeneration() === recoveryGenerationBefore) {
-              // 含连接就绪超时(CONNECTION_NOT_READY)在内的其它失败：token 仍有效，
-              // 换 token 反而会强制登出还在连接中的会话、弱网下空转成环。热登录已把
-              // auth loading 置 false、bootstrap 不会再补登，故挂共享欠账，回前台用
-              // 同一枚 token 重试。
-              // 但若登录期间被踢下线(多端顶替,代次已变),handleKickedOffline 已清欠账+
-              // 取消恢复,这里绝不能再挂——否则回前台又重登、把顶替本端的新设备再踢下线。
-              markIMLoginRetryPending();
-            }
-            // 关键：不在此 return —— 否则会跳过下方 message groups 加载，
-            // MessagesScreen 顶部自定义会话 filter tab 整个会话都是空的。
-          }
-        } else {
-          // 后端未返回 imToken，确保 IM 状态已清空
-          await logoutFromOpenIM();
-        }
-
         // 拉用户自定义会话分组（MessagesScreen 顶部 filter tab 需要）。
         // 失败不阻断登录跳转；store 内部已 dev-warn。
         void useMessageGroupsStore.getState().load();
@@ -320,7 +276,6 @@ export function useAuth() {
           {
             accessToken: account.accessToken,
             refreshToken: account.refreshToken,
-            imToken: account.imToken,
           },
           account.user,
         );
@@ -331,28 +286,14 @@ export function useAuth() {
         useAuthStore.getState().setUser(user);
 
         // 续期可能换了新 token，把最新值写回账号列表。
-        const { accessToken, refreshToken, imToken } = useAuthStore.getState();
+        const { accessToken, refreshToken } = useAuthStore.getState();
         if (accessToken && refreshToken) {
           useKnownAccountsStore.getState().upsertAccount({
             user,
             accessToken,
             refreshToken,
-            imToken: imToken ?? null,
             updatedAt: Date.now(),
           });
-        }
-
-        if (imToken) {
-          try {
-            await loginToOpenIM(user.id, imToken);
-          } catch (imError) {
-            console.warn(
-              '[openim] login failed',
-              imError instanceof Error ? imError.message : imError,
-            );
-          }
-        } else {
-          await logoutFromOpenIM();
         }
 
         void useMessageGroupsStore.getState().load();
@@ -380,48 +321,18 @@ export function useAuth() {
           // review 修复①：/auth/me 的 401 前置续期可能已轮换 token —— 降级
           // 进入前把 auth store 里的最新值写回账号列表，否则切走再切回会拿
           // 旧 refreshToken 撞 401，把一个好账号误判成死账号移除。
-          const { accessToken, refreshToken, imToken } =
-            useAuthStore.getState();
+          const { accessToken, refreshToken } = useAuthStore.getState();
           if (accessToken && refreshToken) {
             useKnownAccountsStore.getState().upsertAccount({
               user: account.user,
               accessToken,
               refreshToken,
-              imToken: imToken ?? null,
               updatedAt: Date.now(),
             });
           }
-          // review 修复②：clearLocalSession 已把 OpenIM 登出，而 setSession
-          // 置 isLoading=false 后 SessionBootstrap 不再补 IM 登录 —— 降级进入
-          // 也要用快照 imToken 尽力重连 + 拉会话分组；失败走 token-recovery
-          // 的回前台欠账路径，不阻塞导航。
-          if (imToken) {
-            const recoveryGenerationBefore = getIMRecoveryGeneration();
-            try {
-              await loginToOpenIM(account.user.id, imToken);
-              // 登录 await 期间被踢下线(代次已变):拆掉这次迟到的成功,别把本端连回去再踢掉
-              // 顶替的新设备。成功路径此前漏了代次守卫(只在 catch 里),补上。
-              if (getIMRecoveryGeneration() !== recoveryGenerationBefore) {
-                await logoutFromOpenIM({ forceNative: true }).catch(
-                  () => undefined,
-                );
-              }
-            } catch (imError) {
-              console.warn(
-                '[openim] degraded-switch login failed',
-                imError instanceof Error ? imError.message : imError,
-              );
-              // round 2 review：降级进入时 /auth/me 在瞬断，这次 IM 登录多半
-              // 也会挂 —— 只 warn 的话 bootstrap 已被 setSession 短路、没人
-              // 再补登，IM 断连到重启。挂进与 bootstrap 共享的补登欠账，
-              // 回前台时由它的前台监听自动重试。
-              // 但登录期间被踢下线(多端顶替,代次已变)时不能再挂欠账,否则回前台又重登互踢。
-              if (getIMRecoveryGeneration() === recoveryGenerationBefore) {
-                markIMLoginRetryPending();
-              }
-            }
-            void useMessageGroupsStore.getState().load();
-          }
+          // chat 长连接由 SessionBootstrap 按 accessToken 变化自动重建，
+          // 这里只补拉会话分组，不阻塞导航。
+          void useMessageGroupsStore.getState().load();
           useAccountSwitcherStore.getState().close();
           if (isDev) {
             console.warn('[auth] switch account degraded (transient)', switchError);

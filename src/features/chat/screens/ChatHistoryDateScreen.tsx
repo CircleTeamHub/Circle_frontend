@@ -8,7 +8,7 @@ import i18n from '@/i18n';
 import { NavHeader } from '@/components/ui/nav-header';
 import { resolveChatHistoryRouteParams } from '@/features/chat/chat-history';
 import { getLocalizedDateTimeLocale } from '@/utils/locale';
-import { getConversationMessageDays } from '@/im/client';
+import { fetchChatMessageDays } from '@/chat-core/api';
 import {
   getChatDetailHref,
   getChatHistoryDateResultsHref,
@@ -191,7 +191,7 @@ export default function ChatHistoryDateScreen() {
     const month = visibleMonth.getMonth();
     const monthKey = `${year}-${month}`;
     recordsRequestRef.current = monthKey;
-    void getConversationMessageDays({ conversationID, year, month })
+    void fetchChatMessageDays(conversationID, year, month)
       .then((days) => {
         if (!mountedRef.current || recordsRequestRef.current !== monthKey) return;
         setRecordDays(new Set(days));

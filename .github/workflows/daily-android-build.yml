@@ -63,8 +63,6 @@ jobs:
       - name: Validate build environment
         env:
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
-          EXPO_PUBLIC_OPENIM_API_URL: ${{ vars.EXPO_PUBLIC_OPENIM_API_URL }}
-          EXPO_PUBLIC_OPENIM_WS_URL: ${{ vars.EXPO_PUBLIC_OPENIM_WS_URL }}
           EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: ${{ vars.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID }}
           EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_ACCOUNT_ID }}
           EXPO_PUBLIC_SUPPORT_RECHARGE_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_RECHARGE_ID }}
@@ -123,8 +121,6 @@ jobs:
           ANDROID_KEY_ALIAS: daily-validation
           ANDROID_KEY_PASSWORD: ${{ steps.signing.outputs.keystore_password }}
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
-          EXPO_PUBLIC_OPENIM_API_URL: ${{ vars.EXPO_PUBLIC_OPENIM_API_URL }}
-          EXPO_PUBLIC_OPENIM_WS_URL: ${{ vars.EXPO_PUBLIC_OPENIM_WS_URL }}
           EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: ${{ vars.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID }}
           # 和 android-release.yml 转发同一组客服账号变量：support-categories.ts 在
           # 编译期读取它们，缺了就走 imAdmin 回落分支。每日构建要跑的是发布那条

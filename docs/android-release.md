@@ -13,8 +13,6 @@ PR #57 does not by itself authorize public distribution. A successful private bu
 Configure metadata and signing for the private build without putting secret values in documentation, logs, issues, or pull requests.
 
 - Repository variable `EXPO_PUBLIC_API_URL`: production HTTPS API base URL, without embedded credentials.
-- Repository variable `EXPO_PUBLIC_OPENIM_API_URL`: production HTTPS OpenIM API URL, without embedded credentials.
-- Repository variable `EXPO_PUBLIC_OPENIM_WS_URL`: production WSS OpenIM WebSocket URL, without embedded credentials.
 - Repository variable `ANDROID_CERT_SHA256`: expected signing certificate SHA-256 fingerprint.
 - Repository secret `ANDROID_KEYSTORE_BASE64`: base64-encoded release keystore.
 - Repository secret `ANDROID_KEYSTORE_PASSWORD`: release keystore password.

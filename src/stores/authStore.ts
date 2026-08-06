@@ -1,7 +1,7 @@
 /**
  * authStore.ts — 用户认证状态（token 持久化到系统 SecureStore）
  *
- * 持久化字段：accessToken、refreshToken、imToken、user、isAuthenticated
+ * 持久化字段：accessToken、refreshToken、user、isAuthenticated
  *   - token 由 secureAuthStorage 拆分写入 SecureStore
  *   - user/isAuthenticated 作为非敏感 metadata 留在 MMKV，避免 SecureStore 大 payload 失败
  * 不持久化字段：isLoading、hasHydrated（运行时状态）
@@ -56,7 +56,6 @@ export interface AuthUser {
 interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
-  imToken: string | null;
   user: AuthUser | null;
   isAuthenticated: boolean;
   onboardingRequired: boolean;
@@ -67,21 +66,11 @@ interface AuthState {
   hasHydrated: boolean;
 
   setSession: (
-    tokens: {
-      accessToken: string;
-      refreshToken: string;
-      imToken?: string | null;
-    },
+    tokens: { accessToken: string; refreshToken: string },
     user: AuthUser,
     options?: { onboardingRequired?: boolean }
   ) => void;
-  setTokens: (tokens: {
-    accessToken: string;
-    refreshToken: string;
-    imToken?: string | null;
-  }) => void;
-  // 只换 IM 凭证（GET /auth/im-token 自愈路径），不动业务 token 与会话身份。
-  setImToken: (imToken: string) => void;
+  setTokens: (tokens: { accessToken: string; refreshToken: string }) => void;
   setUser: (user: AuthUser) => void;
   setOnboardingRequired: (required: boolean) => void;
   clearSession: () => void;
@@ -95,7 +84,6 @@ function partializeAuthState(state: AuthState) {
   return {
     accessToken: state.accessToken,
     refreshToken: state.refreshToken,
-    imToken: state.imToken,
     user: sanitizeUserForPersist(state.user),
     isAuthenticated: state.isAuthenticated,
     onboardingRequired: state.onboardingRequired,
@@ -117,7 +105,6 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       accessToken: null,
       refreshToken: null,
-      imToken: null,
       user: null,
       isAuthenticated: false,
       onboardingRequired: false,
@@ -125,11 +112,10 @@ export const useAuthStore = create<AuthState>()(
       isLoading: true,
       hasHydrated: false,
 
-      setSession: ({ accessToken, refreshToken, imToken }, user, options) =>
+      setSession: ({ accessToken, refreshToken }, user, options) =>
         set((state) => ({
           accessToken,
           refreshToken,
-          imToken: imToken || null,
           user,
           isAuthenticated: true,
           onboardingRequired: options?.onboardingRequired ?? false,
@@ -137,23 +123,11 @@ export const useAuthStore = create<AuthState>()(
           sessionEpoch: state.sessionEpoch + 1,
         })),
 
-      setTokens: ({ accessToken, refreshToken, imToken }) =>
-        set((state) => ({
+      setTokens: ({ accessToken, refreshToken }) =>
+        set(() => ({
           accessToken,
           refreshToken,
-          imToken:
-            typeof imToken === 'string' && imToken.length > 0
-              ? imToken
-              : state.imToken,
           isAuthenticated: true,
-        })),
-
-      setImToken: (imToken) =>
-        set((state) => ({
-          imToken:
-            typeof imToken === 'string' && imToken.length > 0
-              ? imToken
-              : state.imToken,
         })),
 
       setUser: (user) => set({ user }),
@@ -165,7 +139,6 @@ export const useAuthStore = create<AuthState>()(
         set((state) => ({
           accessToken: null,
           refreshToken: null,
-          imToken: null,
           user: null,
           isAuthenticated: false,
           onboardingRequired: false,

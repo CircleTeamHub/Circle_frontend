@@ -1,13 +1,12 @@
 import { create } from 'zustand';
-import type { MessageItem } from '@openim/rn-client-sdk';
+import type { ChatMessageDto } from '@/chat-core/protocol';
 import type { ChatMessage } from '@/types';
 
 type PendingForward = {
   message: ChatMessage;
-  // Raw OpenIM payload when available, so forwarding can use the native
-  // createForwardMessage primitive (preserves images / media). Optimistic or
-  // collected messages may lack it; the picker falls back to reconstruction.
-  raw?: MessageItem;
+  // 源消息的 chat-core DTO(content 里有媒体 object key / 卡片 payload 本体)。
+  // 有它就能原样重发媒体与卡片;缺失(极端竞态)时选择器退化为文本转发。
+  dto?: ChatMessageDto;
 };
 
 interface MessageForwardState {

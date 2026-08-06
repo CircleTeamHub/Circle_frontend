@@ -21,7 +21,7 @@ import {
   resolveTransferIdempotency,
   type TransferIdempotency,
 } from '@/features/chat/utils/transfer-idempotency';
-import { fromImUserId } from '@/im/client';
+import { normalizeUserIdAlias } from '@/utils/user-id-alias';
 import { fetchWallet, sendCoinGift } from '@/services/api/coin';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -121,7 +121,7 @@ export default function TransferComposerScreen() {
     inFlightRef.current = true;
     setSubmitting(true);
     try {
-      const normalizedRecipientId = fromImUserId(recipientId);
+      const normalizedRecipientId = normalizeUserIdAlias(recipientId);
       const normalizedMessage = message.trim() || null;
       const idempotency = resolveTransferIdempotency(idempotencyRef.current, {
         recipientId: normalizedRecipientId,

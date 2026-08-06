@@ -12,7 +12,8 @@ test('InviteToCircleScreen invites selected friends via inviteToCircle', () => {
 
   assert.match(src, /fetchFriends/);
   assert.match(src, /fetchCircleDetail\(circleId\)/);
-  assert.match(src, /loadGroupMemberList\(detail\.groupID, 10_000\)/);
+  assert.match(src, /createCircleChatConversation\(circleId\)/);
+  assert.match(src, /fetchChatMembers\(conversation\.id\)/);
   assert.match(src, /filterInvitableCircleFriends/);
   assert.match(src, /inviteToCircle\(circleId, friendId\)/);
   // Fan-out tolerates per-friend rejection (already member / restriction / privacy).

@@ -55,7 +55,6 @@ test('onboarding route and screen save profile then enter the app', () => {
   assert.match(screen, /router\.replace\('\/\(tabs\)\/messages'\)/);
   assert.doesNotMatch(screen, /router\.replace\('\/'\)/);
   assert.doesNotMatch(screen, /<Redirect href="\/" \/>/);
-  assert.match(screen, /loginToOpenIM/);
   assert.match(screen, /useMessageGroupsStore\.getState\(\)\.load\(\)/);
   assert.ok(
     screen.indexOf('setOnboardingRequired(false)') <
@@ -64,7 +63,7 @@ test('onboarding route and screen save profile then enter the app', () => {
   );
   assert.ok(
     screen.indexOf("router.replace('/(tabs)/messages')") <
-      screen.indexOf('startAppServicesAfterOnboarding(nextUser.id, imToken ?? null)'),
+      screen.lastIndexOf('startAppServicesAfterOnboarding()'),
     'profile save must leave onboarding before starting app services',
   );
   assert.ok(
@@ -122,37 +121,20 @@ test('session bootstrap reconciles stale onboarding state before starting app se
     /if \(onboardingRequired && !hasCompletedOnboardingProfile\(user\)\) \{[\s\S]*return;/,
   );
   assert.match(source, /if \(onboardingRequired\) \{[\s\S]*setOnboardingRequired\(false\)/);
+  // 契约随自研栈迁移更新(意图不变):realtime 与 chat 长连接都被 onboarding 门禁住。
   assert.ok(
     source.indexOf('onboardingRequired') < source.indexOf('connectRealtime(accessToken)'),
     'realtime connect must be gated by onboardingRequired',
   );
   assert.ok(
-    source.indexOf('hasCompletedOnboardingProfile(user)') <
-      source.indexOf('ensureOpenIMLogin(user.id, imToken)'),
-    'OpenIM bootstrap login must wait until onboarding profile is complete',
+    source.indexOf('onboardingRequired') < source.indexOf('connectChat(accessToken, user.id)'),
+    'chat connect must be gated by onboardingRequired',
   );
   assert.ok(
     source.indexOf('hasCompletedOnboardingProfile(user)') <
       source.indexOf('useMessageGroupsStore.getState().load()'),
     'conversation groups load must wait until onboarding profile is complete',
   );
-  // /auth/me 瞬时失败后的降级补登走 recoverOpenIMLogin，它绕开了上面那道门禁，
-  // 必须自带一道等价的 —— 否则 onboarding 未完成的用户会被补登进 IM。
-  assert.match(
-    source,
-    /if \(onboardingPending \|\| !cachedUser\) \{\s*return;/,
-  );
-  // 无 imToken 时改走 GET /auth/im-token 换新补登（#85）；
-  // recoverIMSession 内部有同样的 onboarding 门禁，因此门禁语义不变。
-  assert.match(source, /if \(!cachedImToken\) \{\s*await recoverIMSession\(\);/);
-  // 且补登只能读快照：拿一份可能过期的 user 回写路由输入，正是「onboarding 被弹回」的老根因。
-  const recoverBody = source.slice(
-    source.indexOf('const recoverOpenIMLogin'),
-    source.indexOf('useEffect(() => {', source.indexOf('const recoverOpenIMLogin')),
-  );
-  assert.ok(recoverBody.length > 0, 'recoverOpenIMLogin must exist');
-  assert.doesNotMatch(recoverBody, /setOnboardingRequired\(/);
-  assert.doesNotMatch(recoverBody, /setUser\(/);
 });
 
 test('root layout waits for persisted auth hydration before rendering routes', () => {

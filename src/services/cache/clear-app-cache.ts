@@ -1,9 +1,8 @@
 import { Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
-import {
-  OPENIM_DATA_DIR_NAME,
-  getOpenIMDataDirPath,
-} from '@/im/data-dir';
+// 旧 OpenIM SDK 的本地数据目录(自研 chat 无本地消息库)。升级用户的磁盘上
+// 可能还留着这份历史数据,统计照旧计入「聊天占用」,并由「清空聊天记录」删除。
+const LEGACY_IM_DATA_DIR_NAME = 'openim';
 
 export interface ClearAppCacheResult {
   clearedEntries: number;
@@ -36,8 +35,8 @@ const MAX_DIRECTORY_DEPTH = 16;
 // 在 DocumentDirectory，两者今天都不受清理影响，这份清单是纵深防御）。如果未来有
 // 关键状态嵌进缓存根的子目录，要么把它挪出来，要么把 isDenylisted 改成递归检查。
 const CACHE_CLEAR_DENYLIST = new Set([
-  // OpenIM SDK state (defensive — currently lives under DocumentDirectory)
-  OPENIM_DATA_DIR_NAME,
+  // 旧 OpenIM SDK 数据(防御 —— 只由「清空聊天记录」显式删除)
+  LEGACY_IM_DATA_DIR_NAME,
   // Persistent stores accidentally placed under cache by some libs
   'mmkv',
   'RCTAsyncLocalStorage_V1',
@@ -133,7 +132,22 @@ async function getOpenIMDirectory() {
   }
 
   const RNFS = await loadNativeFS();
-  return getOpenIMDataDirPath(RNFS.DocumentDirectoryPath);
+  return `${RNFS.DocumentDirectoryPath}/${LEGACY_IM_DATA_DIR_NAME}`;
+}
+
+/**
+ * 删除旧 OpenIM SDK 遗留的本地聊天数据目录(自研 chat 的消息在服务端,
+ * 本地无库)。目录不存在时是 no-op;失败抛错交由调用方提示。
+ */
+export async function clearLegacyImData(): Promise<void> {
+  const directory = await getOpenIMDirectory();
+  if (!directory) {
+    return;
+  }
+  const RNFS = await loadNativeFS();
+  if (await RNFS.exists(directory)) {
+    await RNFS.unlink(directory);
+  }
 }
 
 async function getDirectorySize(

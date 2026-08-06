@@ -308,7 +308,6 @@ export default function AvatarFrameDetailScreen() {
             user: nextUser,
             accessToken: current.accessToken,
             refreshToken: current.refreshToken,
-            imToken: current.imToken,
             updatedAt: Date.now(),
           });
         }

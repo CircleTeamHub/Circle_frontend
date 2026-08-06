@@ -26,10 +26,9 @@ import {
   submitPostCollaborationRecognitions,
 } from '@/services/api/plaza';
 import { getApiErrorMessage } from '@/services/api/errors';
-import { getOrCreateSingleConversation } from '@/im/client';
+import { ensureDirectConversation } from '@/chat-core/client';
 import { usePendingChatCardStore } from '@/features/chat/store/use-pending-chat-card-store';
 import { toPlazaPostCardData } from '@/features/discover/utils/plaza-post-card';
-import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
 import {
   getChatDetailHref,
   getUserProfileHref,
@@ -251,7 +250,7 @@ export default function PostSignupsScreen() {
       try {
         setOpeningChatFor(signer.userId);
         // 先解析单聊会话拿到 conversationID，否则聊天页只会停在预览模式。
-        const conversation = await getOrCreateSingleConversation(signer.userId);
+        const conversation = await ensureDirectConversation(signer.userId);
         if (pendingChatCard) setPendingChatCard(pendingChatCard);
         router.push(
           getChatDetailHref(
@@ -262,21 +261,7 @@ export default function PostSignupsScreen() {
             conversation.conversationID,
           ),
         );
-      } catch (error) {
-        if (shouldOpenChatPreview(error)) {
-          if (pendingChatCard) setPendingChatCard(pendingChatCard);
-          // IM 未接通：退化成预览模式（无 conversationID）。
-          router.push(
-            getChatDetailHref(
-              scope,
-              signer.userId,
-              signer.nickname,
-              signer.avatarUrl ?? undefined,
-            ),
-          );
-          return;
-        }
-        Alert.alert(
+      } catch (error) {        Alert.alert(
           t('userProfile.openChatFailedTitle', { defaultValue: '打开聊天失败' }),
           error instanceof Error
             ? error.message

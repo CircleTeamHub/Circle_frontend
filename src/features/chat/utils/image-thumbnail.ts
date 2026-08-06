@@ -40,7 +40,7 @@ export async function uploadChatImageThumbnail(
   uri: string,
   originalWidth: number | undefined,
   filename: string,
-): Promise<{ url: string; width: number; height: number } | null> {
+): Promise<{ url: string; key: string; width: number; height: number } | null> {
   try {
     const thumbnail = await generateChatImageThumbnail(uri, originalWidth);
     if (!thumbnail) return null;
@@ -57,6 +57,8 @@ export async function uploadChatImageThumbnail(
     );
     return {
       url: presign.fileUrl,
+      // 自研聊天消息体只存 object key(读时签 URL);url 留给仍在用直链的调用方。
+      key: presign.key,
       width: thumbnail.width,
       height: thumbnail.height,
     };

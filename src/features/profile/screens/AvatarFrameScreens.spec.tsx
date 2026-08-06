@@ -282,7 +282,6 @@ function setAuth(user: AuthUser, sessionEpoch = 1) {
     sessionEpoch,
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
-    imToken: 'im-token',
   };
   return setUser;
 }
@@ -521,7 +520,6 @@ test('successful equip updates auth and the user appearance cache', async () => 
     },
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
-    imToken: 'im-token',
     updatedAt: expect.any(Number),
   });
 });

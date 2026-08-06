@@ -26,30 +26,10 @@ test('group chat resolves sender name from the group member list, not just the m
 
   // 群聊打开时拉一次成员表，建 senderID(UUID 形式)→昵称映射。
   assert.match(screen, /groupMemberNames/);
-  assert.match(screen, /loadGroupMemberList\(sourceID/);
-  // 成员表键必须用 fromImUserId(IM id → UUID)，才能和接收消息的 senderID 对上。
-  assert.match(screen, /map\[fromImUserId\(member\.userID\)\] = nickname/);
+  assert.match(screen, /fetchChatMembers\(conversationID\)/);
+  // chat-core:成员 userId 本就是 UUID,直接作键即可与 senderID 对上。
+  assert.match(screen, /map\[member\.userId\] = nickname/);
   // 显示名从成员表取用同样的 senderID 作键。
   assert.match(screen, /groupMemberNames\[msg\.senderID\]/);
 });
 
-test('group chat avatars come from the sender, not the conversation param', () => {
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
-  const mappers = read('src/im/mappers.ts');
-  const types = read('src/types/index.ts');
-
-  // 群聊头像 = 发送者本人（senderFaceUrl，随新消息更新）；单聊沿用会话头像。
-  assert.match(
-    screen,
-    /isGroupChat \? msg\.senderAvatarUrl : \(avatarUrl \?\? msg\.senderAvatarUrl\)/,
-  );
-  // 不允许再把会话头像参数直接塞给接收气泡。
-  assert.doesNotMatch(screen, /senderAvatarUri=\{avatarUrl\}/);
-  assert.match(screen, /senderAvatarUri=\{receivedAvatarUri\(item\)\}/);
-  // 消息映射带出发送者头像（仅接收侧），并做媒体地址归一化。
-  assert.match(
-    mappers,
-    /senderAvatarUrl: isSent\s*\?\s*undefined\s*:\s*\(normalizeMediaUrl\(item\.senderFaceUrl \|\| null\) \?\? undefined\)/,
-  );
-  assert.match(types, /senderAvatarUrl\?: string/);
-});

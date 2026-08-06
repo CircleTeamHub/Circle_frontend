@@ -14,7 +14,6 @@ const MESSAGE_ROUTE_MAP = {
   'add-friend': '/(tabs)/messages/add-friend',
   find: '/(tabs)/messages/find',
   groups: '/(tabs)/messages/groups',
-  'new-group': '/(tabs)/messages/new-group',
   'temp-chats': '/(tabs)/messages/temp-chats',
 } as const satisfies Record<string, Href>;
 

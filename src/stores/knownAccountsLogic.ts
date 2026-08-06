@@ -9,7 +9,6 @@ export interface KnownAccount {
   user: AuthUser;
   accessToken: string;
   refreshToken: string;
-  imToken: string | null;
   updatedAt: number;
 }
 

@@ -2,12 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { clearAllLocalMessages } from '@/im/client';
 import {
   clearAppCache,
+  clearLegacyImData,
   formatCacheSize,
   getAppCacheSize,
 } from '@/services/cache/clear-app-cache';
+import { useChatStore } from '@/chat-core/store';
 
 export interface UseStorageActionsResult {
   cacheSizeLabel: string;
@@ -113,7 +114,9 @@ export function useStorageActions(): UseStorageActionsResult {
             if (mountedRef.current) setClearingChats(true);
 
             try {
-              await clearAllLocalMessages();
+              // 自研 chat 无本地消息库:清掉内存态 + 旧 OpenIM 遗留数据目录。
+              useChatStore.getState().reset();
+              await clearLegacyImData();
               if (!mountedRef.current) return;
               Alert.alert(
                 t('settingsDetails.storage.clearAllChatsDone'),

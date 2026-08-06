@@ -955,7 +955,9 @@ test("storage settings screen opens storage usage and clears local chat history"
   assert.match(screenSource, /confirmClearCache/);
   assert.match(screenSource, /confirmClearChats/);
 
-  assert.match(hookSource, /clearAllLocalMessages/);
+  // 契约随自研栈迁移更新(意图不变):清聊天 = 清内存态 + 旧 OpenIM 遗留目录。
+  assert.match(hookSource, /useChatStore\.getState\(\)\.reset\(\)/);
+  assert.match(hookSource, /clearLegacyImData/);
   assert.match(hookSource, /settingsDetails\.storage\.clearAllChatsWarning/);
   assert.match(hookSource, /mountedRef/);
   assert.match(hookSource, /clearingCacheRef/);

@@ -1,16 +1,16 @@
-import { toImUserId } from '@/im/client';
 import type { FriendProfile } from '@/services/api/friends';
 
 export type CircleInviteSelection = Record<string, true>;
 
+// chat-core 成员 userId 与好友 id 同为 UUID 形式,集合可直接比较,
+// 不再需要 OpenIM 的去连字符转换。
 export function buildExistingCircleMemberIds(
-  members: readonly { userID?: string | null }[],
+  members: readonly { userId?: string | null }[],
 ) {
   return new Set(
     members
-      .map((member) => member.userID)
-      .filter((userID): userID is string => Boolean(userID))
-      .map(toImUserId),
+      .map((member) => member.userId)
+      .filter((userId): userId is string => Boolean(userId)),
   );
 }
 
@@ -22,7 +22,7 @@ export function filterInvitableCircleFriends(
     return [...friends];
   }
 
-  return friends.filter((friend) => !existingMemberIDs.has(toImUserId(friend.id)));
+  return friends.filter((friend) => !existingMemberIDs.has(friend.id));
 }
 
 export function pruneSelectedCircleInvitees(
@@ -37,7 +37,7 @@ export function pruneSelectedCircleInvitees(
   const nextSelected: CircleInviteSelection = {};
 
   for (const [friendId, value] of Object.entries(selected)) {
-    if (existingMemberIDs.has(toImUserId(friendId))) {
+    if (existingMemberIDs.has(friendId)) {
       changed = true;
       continue;
     }

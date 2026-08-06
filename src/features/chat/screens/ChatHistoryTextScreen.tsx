@@ -10,14 +10,14 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import type { MessageItem } from '@openim/rn-client-sdk';
 import { NavHeader } from '@/components/ui/nav-header';
 import {
-  formatChatHistoryTime,
-  getChatHistoryMessageTitle,
+  formatChatHistoryTimeIso,
+  getChatMessageDtoTitle,
   resolveChatHistoryRouteParams,
 } from '@/features/chat/chat-history';
-import { searchConversationTextMessages } from '@/im/client';
+import { searchChatMessages } from '@/chat-core/api';
+import type { ChatMessageDto } from '@/chat-core/protocol';
 import { getChatDetailHref } from '@/features/user/utils/routes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
@@ -83,9 +83,9 @@ export default function ChatHistoryTextScreen() {
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
-  const [results, setResults] = useState<MessageItem[]>([]);
+  const [results, setResults] = useState<ChatMessageDto[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const pageRef = useRef(1);
+  const cursorRef = useRef<number | null>(null);
   const activeKeywordRef = useRef('');
 
   const d = useMemo(
@@ -136,19 +136,19 @@ export default function ChatHistoryTextScreen() {
     }
 
     activeKeywordRef.current = nextKeyword;
-    pageRef.current = 1;
+    cursorRef.current = null;
     setLoading(true);
     setError(null);
 
     try {
-      const page = await searchConversationTextMessages({
-        conversationID,
+      const page = await searchChatMessages(conversationID, {
         keyword: nextKeyword,
-        pageIndex: 1,
-        count: PAGE_SIZE,
+        types: ['text', 'quote'],
+        limit: PAGE_SIZE,
       });
-      setResults(page);
-      setHasMore(page.length === PAGE_SIZE);
+      cursorRef.current = page.nextBeforeHeight;
+      setResults([...page.messages].reverse());
+      setHasMore(page.nextBeforeHeight !== null);
     } catch (err) {
       setResults([]);
       setHasMore(false);
@@ -174,19 +174,20 @@ export default function ChatHistoryTextScreen() {
       return;
     }
 
-    const nextPage = pageRef.current + 1;
     setLoadingMore(true);
 
     try {
-      const page = await searchConversationTextMessages({
-        conversationID,
+      const page = await searchChatMessages(conversationID, {
         keyword: activeKeywordRef.current,
-        pageIndex: nextPage,
-        count: PAGE_SIZE,
+        types: ['text', 'quote'],
+        limit: PAGE_SIZE,
+        ...(cursorRef.current !== null
+          ? { beforeHeight: cursorRef.current }
+          : {}),
       });
-      pageRef.current = nextPage;
-      setResults((prev) => [...prev, ...page]);
-      setHasMore(page.length === PAGE_SIZE);
+      cursorRef.current = page.nextBeforeHeight;
+      setResults((prev) => [...prev, ...[...page.messages].reverse()]);
+      setHasMore(page.nextBeforeHeight !== null);
     } catch (err) {
       // 翻页失败：停止继续翻，留住已加载部分。
       setHasMore(false);
@@ -237,16 +238,16 @@ export default function ChatHistoryTextScreen() {
 
         <FlatList
           data={results}
-          keyExtractor={(item) => item.clientMsgID}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={s.listContent}
         {...keyboardDismissOnDragProps}
           onEndReached={() => void handleLoadMore()}
           onEndReachedThreshold={0.3}
           renderItem={({ item }) => (
-            <Pressable style={[s.resultCard, d.resultCard]} onPress={() => openMessage(item.clientMsgID)}>
-              <Text style={d.title}>{getChatHistoryMessageTitle(item)}</Text>
+            <Pressable style={[s.resultCard, d.resultCard]} onPress={() => openMessage(item.id)}>
+              <Text style={d.title}>{getChatMessageDtoTitle(item)}</Text>
               <Text style={d.meta}>
-                {item.senderNickname || item.sendID} · {formatChatHistoryTime(item.sendTime)}
+                {item.sender?.nickname || t('chat.history.unknownSender', { defaultValue: '成员' })} · {formatChatHistoryTimeIso(item.createdAt)}
               </Text>
             </Pressable>
           )}

@@ -40,8 +40,6 @@ test('release rollout documentation records the fail-closed operating contract',
 
   for (const repositoryVariable of [
     'EXPO_PUBLIC_API_URL',
-    'EXPO_PUBLIC_OPENIM_API_URL',
-    'EXPO_PUBLIC_OPENIM_WS_URL',
     'ANDROID_CERT_SHA256',
   ]) {
     assert.match(
@@ -274,8 +272,7 @@ test('Android release workflow builds and verifies a private signed artifact', (
   // 构建会缺 native 库、装上跑不起来。
   assert.doesNotMatch(read('app.json'), /with-android-abi-filter/);
   assert.match(build, /EXPO_PUBLIC_API_URL:/);
-  assert.match(build, /EXPO_PUBLIC_OPENIM_API_URL:/);
-  assert.match(build, /EXPO_PUBLIC_OPENIM_WS_URL:/);
+
   assert.match(
     build,
     /EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: \$\{\{ vars\.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID \}\}/,
@@ -504,8 +501,6 @@ test('release validation metadata requires matching app versions and secure publ
   const env = {
     RELEASE_TAG: 'v1.0.0',
     EXPO_PUBLIC_API_URL: 'https://api.windnote.test',
-    EXPO_PUBLIC_OPENIM_API_URL: 'https://im.windnote.test',
-    EXPO_PUBLIC_OPENIM_WS_URL: 'wss://im.windnote.test/ws',
     EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: 'official-support',
     EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: 'cs-support',
   };
@@ -515,8 +510,6 @@ test('release validation metadata requires matching app versions and secure publ
 
   for (const name of [
     'EXPO_PUBLIC_API_URL',
-    'EXPO_PUBLIC_OPENIM_API_URL',
-    'EXPO_PUBLIC_OPENIM_WS_URL',
     'EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID',
   ]) {
     assert.match(
@@ -531,16 +524,6 @@ test('release validation metadata requires matching app versions and secure publ
       app,
     }).join('\n'),
     /EXPO_PUBLIC_API_URL.*https/,
-  );
-  assert.match(
-    validateReleaseMetadata({
-      env: {
-        ...env,
-        EXPO_PUBLIC_OPENIM_WS_URL: 'wss://user:password@im.windnote.test/ws',
-      },
-      app,
-    }).join('\n'),
-    /EXPO_PUBLIC_OPENIM_WS_URL.*wss.*without embedded credentials/,
   );
   assert.match(
     validateReleaseMetadata({ env: { ...env, RELEASE_TAG: 'v1.0.1' }, app }).join(
@@ -694,8 +677,6 @@ test('release validation CLI supports scoped and legacy validation', () => {
   const metadataEnv = {
     RELEASE_TAG: 'v1.0.0',
     EXPO_PUBLIC_API_URL: 'https://api.windnote.test',
-    EXPO_PUBLIC_OPENIM_API_URL: 'https://im.windnote.test',
-    EXPO_PUBLIC_OPENIM_WS_URL: 'wss://im.windnote.test/ws',
     EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: 'official-support',
     EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: 'cs-support',
   };

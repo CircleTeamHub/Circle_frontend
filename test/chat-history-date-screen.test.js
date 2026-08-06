@@ -29,25 +29,13 @@ test('by-date calendar renders 7 equal flex columns (no flexWrap rounding)', () 
   assert.match(screen, /calendarCell:\s*\{[^}]*flex:\s*1/);
 });
 
-// 回归：按日期搜索必须把「当天 0 点」换算成【秒】再传给 OpenIM。
-// OpenIM 的 searchTimePosition/searchTimePeriod 单位是秒（period 写成 24*60*60 即为证），
-// 旧实现把 getTime()（毫秒）直接当 position → 落到 5 万年后的时间窗 → 永远搜不到记录。
-test('by-date search converts day start to seconds for OpenIM searchTimePosition', () => {
-  const client = read('src/im/client.ts');
-
-  assert.match(client, /searchConversationMessagesByDate/);
-  assert.match(client, /searchTimePosition:\s*Math\.floor\(startOfDay \/ 1000\)/);
-  assert.match(client, /searchTimePeriod:\s*24 \* 60 \* 60/);
-  // 不得再把毫秒时间戳直接当秒传
-  assert.doesNotMatch(client, /searchTimePosition:\s*startOfDay\s*,/);
-});
 
 // 需求：有聊天记录的日子用颜色（圆点）标出来。
 test('by-date calendar colors days that have chat records', () => {
   const screen = read('src/features/chat/screens/ChatHistoryDateScreen.tsx');
 
   // 翻到某月即拉取该月「有记录的日子」
-  assert.match(screen, /getConversationMessageDays/);
+  assert.match(screen, /fetchChatMessageDays/);
   assert.match(screen, /recordDays/);
   // 有记录 → 该格渲染圆点
   assert.match(
@@ -72,7 +60,7 @@ test('by-date calendar navigates into the day results page on tap', () => {
   // 相邻月份的日子：先翻月，不直接进结果页
   assert.match(screen, /if \(!day\.isCurrentMonth\)/);
   // 日历页本身不再内联搜索 / 渲染结果列表
-  assert.doesNotMatch(screen, /searchConversationMessagesByDate/);
+  assert.doesNotMatch(screen, /searchChatMessages\(/);
   assert.doesNotMatch(screen, /FlatList/);
 });
 
@@ -81,7 +69,7 @@ test('day results screen searches the picked date and opens the message in chat'
     'src/features/chat/screens/ChatHistoryDateResultsScreen.tsx',
   );
 
-  assert.match(screen, /searchConversationMessagesByDate/);
+  assert.match(screen, /searchChatMessages\(conversationID, \{\s*date,/);
   assert.match(screen, /formatChatHistoryDateTitle\(date\)/);
   assert.match(
     screen,
