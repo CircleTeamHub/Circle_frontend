@@ -277,6 +277,7 @@
       "previewPlaceholder": "连接尚未完成",
       "inputPlaceholder": "输入消息...",
       "sendFailedText": "消息发送失败，请重试",
+      "sensitiveWordBlocked": "消息包含敏感词，已被屏蔽",
       "recordStartFailed": "录音启动失败，请重试",
       "voiceSendFailed": "语音发送失败，请重试",
       "locationSendFailed": "位置发送失败，请重试",

@@ -237,6 +237,7 @@
       "previewPlaceholder": "接続がまだ完了していません",
       "inputPlaceholder": "メッセージを入力…",
       "sendFailedText": "メッセージを送信できませんでした。もう一度お試しください",
+      "sensitiveWordBlocked": "禁止ワードが含まれているため、メッセージはブロックされました",
       "recordStartFailed": "録音を開始できませんでした。もう一度お試しください",
       "voiceSendFailed": "音声メッセージを送信できませんでした。もう一度お試しください",
       "locationSendFailed": "位置情報を送信できませんでした。もう一度お試しください",

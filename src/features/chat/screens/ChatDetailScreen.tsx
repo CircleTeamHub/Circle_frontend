@@ -138,6 +138,8 @@ import {
 import { resolveDirectCalleeID } from '@/features/call/resolve-direct-callee';
 import type { CallType } from '@/features/call/types';
 import { getApiErrorMessage } from '@/services/api/errors';
+import i18n from '@/i18n';
+import { isSensitiveWordBlockedError } from '@/im/error-codes';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import {
@@ -177,7 +179,15 @@ function logChatSendFailure(
 }
 
 function getChatSendErrorMessage(error: unknown, fallback: string) {
-  return error instanceof CreditPolicyError ? error.message : fallback;
+  if (error instanceof CreditPolicyError) return error.message;
+  // 服务端敏感词拦截（OpenIM 回调拒绝）：给明确原因而非笼统的「发送失败」。
+  // 用全局 i18n.t 而非组件 t —— 本函数在 catch 回调里按调用时机取当前语言。
+  if (isSensitiveWordBlockedError(error)) {
+    return i18n.t('chat.detail.sensitiveWordBlocked', {
+      defaultValue: '消息包含敏感词，已被屏蔽',
+    });
+  }
+  return fallback;
 }
 
 type AttachmentId =

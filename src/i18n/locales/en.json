@@ -277,6 +277,7 @@
       "previewPlaceholder": "Connection not ready",
       "inputPlaceholder": "Type a message…",
       "sendFailedText": "Failed to send message, please try again",
+      "sensitiveWordBlocked": "Message blocked: it contains prohibited words",
       "recordStartFailed": "Failed to start recording, please try again",
       "voiceSendFailed": "Failed to send voice message, please try again",
       "locationSendFailed": "Failed to send location, please try again",

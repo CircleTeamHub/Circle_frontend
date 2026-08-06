@@ -237,6 +237,7 @@
       "previewPlaceholder": "La conexión no está lista",
       "inputPlaceholder": "Escribe un mensaje…",
       "sendFailedText": "No se pudo enviar el mensaje, inténtalo de nuevo",
+      "sensitiveWordBlocked": "Mensaje bloqueado: contiene palabras prohibidas",
       "recordStartFailed": "No se pudo iniciar la grabación, inténtalo de nuevo",
       "voiceSendFailed": "No se pudo enviar el mensaje de voz, inténtalo de nuevo",
       "locationSendFailed": "No se pudo enviar la ubicación, inténtalo de nuevo",
