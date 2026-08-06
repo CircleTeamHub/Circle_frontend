@@ -172,7 +172,8 @@ test('chat detail virtualizes and caps group mention candidates', () => {
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /const MENTION_CANDIDATE_LIMIT = 200/);
-  assert.match(source, /loadGroupMemberList\(sourceID, MENTION_CANDIDATE_LIMIT\)/);
+  assert.match(source, /fetchChatMembers\(conversationID\)/);
+  assert.match(source, /slice\(0, MENTION_CANDIDATE_LIMIT\)/);
   assert.match(source, /<FlatList[\s\S]*data=\{visibleMentionCandidates\}/);
   assert.doesNotMatch(source, /visibleMentionCandidates\.map\(\(member\)/);
 });
@@ -495,15 +496,15 @@ test('group member access stays live while the chat screen is mounted', () => {
   assert.match(screen, /useGroupMemberViewAccess\(\{/);
   assert.doesNotMatch(screen, /setCanViewGroupMemberProfiles/);
   // hook 订阅自己的成员身份变化（降权/被移出/退群），卸载时解绑。
-  assert.match(hook, /subscribeGroupMemberSelfChanges\(\s*groupID,\s*currentUserID/);
-  assert.match(hook, /unsubscribe\(\);/);
-  // revalidate 现场重查 fail-closed：查询失败/查无记录一律无权。
-  assert.match(hook, /return canViewGroupMembers\(next\?\.roleLevel\);/);
+  // chat-core:角色事实源换成圈子角色,受保护操作靠 revalidate 现场重查兜底。
+  assert.match(hook, /fetchCircleDetail\(groupID\)/);
+  assert.match(hook, /fail-closed/);
+  // revalidate 现场重查 fail-closed：查询失败/查无身份一律无权。
+  assert.match(hook, /return canViewCircleMembers\(member\?\.role \?\? null\);/);
   assert.match(hook, /catch \{[\s\S]{0,400}return false;/);
-  // review R3：事件代际守——在途查询被角色事件超车时丢弃陈旧结果、按事件判定。
-  assert.match(hook, /const eventGenRef = useRef\(0\)/);
-  assert.match(hook, /if \(cancelled \|\| eventGenRef\.current !== genAtStart\) return;/);
-  assert.match(hook, /return canViewGroupMembers\(lastEventMemberRef\.current\?\.roleLevel\);/);
+  // 换群/卸载后的在途查询结果按代际丢弃。
+  assert.match(hook, /const queryGenRef = useRef\(0\)/);
+  assert.match(hook, /if \(queryGenRef\.current !== gen\) return;/);
 });
 
 test('protected member actions revalidate fail-closed at tap time', () => {
@@ -532,9 +533,9 @@ test('shared friend cards of non-members stay openable for ordinary members', ()
 
   // 名片只放行"确认不在本群"的目标；review R2：身份查不清（查询失败）一律
   // fail-closed 拦截，断网不能成为绕过成员目录限制的口子。
-  assert.match(source, /const \[targetMember\] = await loadSpecifiedGroupMembers\(sourceID, \[\s*toImUserId\(userID\),\s*\]\);/);
+  assert.match(source, /const members = await fetchChatMembers\(conversationID\);/);
+  assert.match(source, /members\.some\(\(member\) => member\.userId === userID\)/);
   assert.match(source, /let blockTarget = true;/);
-  assert.match(source, /blockTarget = Boolean\(targetMember\);/);
   assert.match(source, /catch \{\s*\n\s*blockTarget = true;/);
   assert.match(source, /if \(blockTarget\) \{\s*\n\s*Alert\.alert\(t\('chat\.groupMembersRestricted'\)\);/);
 });

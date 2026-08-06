@@ -69,12 +69,6 @@ import {
 } from 'expo-audio';
 // 消息数据面已切到 chat-core;成员目录 / @ 候选 / 在线状态仍走 OpenIM 双轨
 // (OpenIM groupID === circle.id,ID 同值,Phase 3 随成员子系统一起迁)。
-import {
-  fromImUserId,
-  loadGroupMemberList,
-  loadSpecifiedGroupMembers,
-  toImUserId,
-} from '@/im/client';
 import { useGroupMemberViewAccess } from '@/features/chat/hooks/use-group-member-view-access';
 import {
   ensureCircleConversation,
@@ -93,6 +87,7 @@ import {
   createChatMessageMapCache,
   mapChatMessageDtosToUI,
 } from '@/chat-core/message-mappers';
+import { fetchChatMembers } from '@/chat-core/api';
 import { queryChatPresence } from '@/chat-core/socket-manager';
 import { useChatStore } from '@/chat-core/store';
 import { useAuthStore } from '@/stores/authStore';
@@ -678,7 +673,7 @@ export default function ChatDetailScreen() {
         if (!msg.senderID) return;
         // review P1：点击瞬间 fail-closed 重查角色，不信挂载期的旧快照。
         if (
-          msg.senderID !== fromImUserId(currentUserID ?? '') &&
+          msg.senderID !== currentUserID &&
           !(await revalidateMemberViewAccess())
         ) {
           Alert.alert(t('chat.groupMembersRestricted'));
@@ -695,7 +690,7 @@ export default function ChatDetailScreen() {
 
   const handleOpenUserCard = useCallback(
     async (userID: string, nickname?: string) => {
-      if (isGroupChat && userID !== fromImUserId(currentUserID ?? '')) {
+      if (isGroupChat && userID !== currentUserID) {
         const allowed = await revalidateMemberViewAccess();
         if (!allowed) {
           // review P2：名片可能是分享进群的外部用户——确认不是本群成员才放行。
@@ -703,10 +698,8 @@ export default function ChatDetailScreen() {
           // 成了绕过成员目录限制的口子；只有明确查到"不在群里"才按分享意图放行。
           let blockTarget = true;
           try {
-            const [targetMember] = await loadSpecifiedGroupMembers(sourceID, [
-              toImUserId(userID),
-            ]);
-            blockTarget = Boolean(targetMember);
+            const members = await fetchChatMembers(conversationID);
+            blockTarget = members.some((member) => member.userId === userID);
           } catch {
             blockTarget = true;
           }
@@ -718,7 +711,7 @@ export default function ChatDetailScreen() {
       }
       router.push(getUserProfileHref(scope, userID, nickname));
     },
-    [currentUserID, isGroupChat, revalidateMemberViewAccess, scope, sourceID, t],
+    [conversationID, currentUserID, isGroupChat, revalidateMemberViewAccess, scope, sourceID, t],
   );
 
   const handleOpenHeaderTarget = useCallback(() => {
@@ -1225,11 +1218,11 @@ export default function ChatDetailScreen() {
         return;
       }
 
-      const members = await loadGroupMemberList(sourceID, 10_000);
+      const members = await fetchChatMembers(conversationID);
       const inviteeIDs = Array.from(
         new Set(
           members
-            .map((member) => fromImUserId(member.userID))
+            .map((member) => member.userId)
             .filter((userID) => userID && userID !== authUser.id),
         ),
       );
@@ -1615,13 +1608,14 @@ export default function ChatDetailScreen() {
 
     let request = mentionCandidatesInflightRef.current.get(sourceID);
     if (!request) {
-      request = loadGroupMemberList(sourceID, MENTION_CANDIDATE_LIMIT)
+      request = fetchChatMembers(conversationID)
         .then((members) =>
           members
-            .filter((member) => member.userID && member.userID !== currentUserID)
+            .filter((member) => member.userId !== currentUserID)
+            .slice(0, MENTION_CANDIDATE_LIMIT)
             .map((member) => ({
-              userID: member.userID,
-              nickname: member.nickname || member.userID,
+              userID: member.userId,
+              nickname: member.nickname || member.userId,
             })),
         )
         .then((candidates) => {
@@ -1644,7 +1638,7 @@ export default function ChatDetailScreen() {
       }
       if (mountedRef.current) setMentionCandidates([]);
     }
-  }, [allMentionTarget, canViewGroupMemberProfiles, currentUserID, isGroupChat, sourceID]);
+  }, [allMentionTarget, canViewGroupMemberProfiles, conversationID, currentUserID, isGroupChat, sourceID]);
 
   // 群聊打开时拉一次成员表，建 senderID→昵称映射给发送者名字标签兜底。
   // 单聊不需要（气泡不显示发送者名字）。
@@ -1654,15 +1648,13 @@ export default function ChatDetailScreen() {
       return;
     }
     let cancelled = false;
-    loadGroupMemberList(sourceID, 500)
+    fetchChatMembers(conversationID)
       .then((members) => {
         if (cancelled) return;
         const map: Record<string, string> = {};
         for (const member of members) {
           const nickname = member.nickname?.trim();
-          if (member.userID && nickname) {
-            map[fromImUserId(member.userID)] = nickname;
-          }
+          if (nickname) map[member.userId] = nickname;
         }
         setGroupMemberNames(map);
       })
@@ -1674,7 +1666,7 @@ export default function ChatDetailScreen() {
     return () => {
       cancelled = true;
     };
-  }, [canViewGroupMemberProfiles, isGroupChat, sourceID]);
+  }, [canViewGroupMemberProfiles, conversationID, isGroupChat, sourceID]);
 
   const handleDraftChange = useCallback(
     (next: string) => {

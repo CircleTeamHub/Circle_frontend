@@ -13,10 +13,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { GroupMemberItem } from '@openim/rn-client-sdk';
 import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
-import { fromImUserId, loadGroupMemberList } from '@/im/client';
+import { createCircleChatConversation, fetchChatMembers } from '@/chat-core/api';
+import type { ChatMemberDto } from '@/chat-core/protocol';
 import { useGroupMemberViewAccess } from '@/features/chat/hooks/use-group-member-view-access';
 import {
   getUserProfileHref,
@@ -24,7 +24,7 @@ import {
 } from '@/features/user/utils/routes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
-import { useIMStore } from '@/stores/imStore';
+import { useChatStore } from '@/chat-core/store';
 
 const s = StyleSheet.create({
   container: { flex: 1 },
@@ -74,9 +74,9 @@ export default function SearchGroupMembersScreen() {
     groupTitle?: string;
   }>();
   const groupID = typeof params.groupID === 'string' ? params.groupID : '';
-  const currentUserID = useIMStore((state) => state.currentUserID);
+  const currentUserID = useChatStore((state) => state.currentUserId);
   const [query, setQuery] = useState('');
-  const [members, setMembers] = useState<GroupMemberItem[]>([]);
+  const [members, setMembers] = useState<ChatMemberDto[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
 
   // review R2 P1：权限走活体 hook——挂载期间被撤权时订阅立即翻转
@@ -102,7 +102,9 @@ export default function SearchGroupMembersScreen() {
     }
 
     setMembersLoading(true);
-    loadGroupMemberList(groupID, 10_000)
+    // groupID = 圈子 id:先解析(取或建)会话,再拉座位成员表。
+    createCircleChatConversation(groupID)
+      .then((conversation) => fetchChatMembers(conversation.id))
       .then((nextMembers) => {
         if (!cancelled) setMembers(nextMembers);
       })
@@ -126,7 +128,7 @@ export default function SearchGroupMembersScreen() {
     return members.filter(
       (member) =>
         member.nickname.toLowerCase().includes(trimmedQuery) ||
-        member.userID.toLowerCase().includes(trimmedQuery),
+        member.userId.toLowerCase().includes(trimmedQuery),
     );
   }, [members, trimmedQuery]);
 
@@ -156,8 +158,8 @@ export default function SearchGroupMembersScreen() {
   );
 
   const handleOpenMember = useCallback(
-    async (member: GroupMemberItem) => {
-      if (!member.userID) {
+    async (member: ChatMemberDto) => {
+      if (!member.userId) {
         return;
       }
 
@@ -168,15 +170,15 @@ export default function SearchGroupMembersScreen() {
       }
 
       router.push(
-        getUserProfileHref(scope, fromImUserId(member.userID), member.nickname || undefined),
+        getUserProfileHref(scope, member.userId, member.nickname || undefined),
       );
     },
     [revalidate, scope],
   );
 
   const renderItem = useCallback(
-    ({ item }: ListRenderItemInfo<GroupMemberItem>) => {
-      const memberName = item.nickname || item.userID;
+    ({ item }: ListRenderItemInfo<ChatMemberDto>) => {
+      const memberName = item.nickname || item.userId;
       return (
         <Pressable
           style={[s.row, d.surface]}
@@ -186,7 +188,7 @@ export default function SearchGroupMembersScreen() {
             size={40}
             shape="square"
             name={memberName}
-            uri={item.faceURL}
+            uri={item.avatarUrl ?? undefined}
           />
           <View style={s.rowText}>
             <Text style={d.rowName} numberOfLines={1}>
@@ -241,7 +243,7 @@ export default function SearchGroupMembersScreen() {
         <FlatList
           style={s.list}
           data={filteredMembers}
-          keyExtractor={(item) => item.userID}
+          keyExtractor={(item) => item.userId}
           renderItem={renderItem}
           ItemSeparatorComponent={Sep}
           contentContainerStyle={[

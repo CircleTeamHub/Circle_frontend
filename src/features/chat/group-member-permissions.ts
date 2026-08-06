@@ -10,6 +10,15 @@ export function canViewCircleMembers(role?: 'OWNER' | 'ADMIN' | 'MEMBER' | null)
   return role === 'OWNER' || role === 'ADMIN';
 }
 
+/** 圈子角色 → OpenIM roleLevel 兼容数字(ChatInfo 迁移完成后可删)。 */
+export function roleLevelFromCircleRole(
+  role: 'OWNER' | 'ADMIN' | 'MEMBER',
+): number {
+  if (role === 'OWNER') return OWNER_ROLE;
+  if (role === 'ADMIN') return ADMIN_ROLE;
+  return NORMAL_ROLE;
+}
+
 export function canChangeGroupMemberRole(actorRoleLevel?: number | null, targetRoleLevel?: number | null): boolean {
   return actorRoleLevel === OWNER_ROLE && (targetRoleLevel === NORMAL_ROLE || targetRoleLevel === ADMIN_ROLE);
 }

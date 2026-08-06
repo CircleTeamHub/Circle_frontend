@@ -26,9 +26,9 @@ test('group chat resolves sender name from the group member list, not just the m
 
   // 群聊打开时拉一次成员表，建 senderID(UUID 形式)→昵称映射。
   assert.match(screen, /groupMemberNames/);
-  assert.match(screen, /loadGroupMemberList\(sourceID/);
-  // 成员表键必须用 fromImUserId(IM id → UUID)，才能和接收消息的 senderID 对上。
-  assert.match(screen, /map\[fromImUserId\(member\.userID\)\] = nickname/);
+  assert.match(screen, /fetchChatMembers\(conversationID\)/);
+  // chat-core:成员 userId 本就是 UUID,直接作键即可与 senderID 对上。
+  assert.match(screen, /map\[member\.userId\] = nickname/);
   // 显示名从成员表取用同样的 senderID 作键。
   assert.match(screen, /groupMemberNames\[msg\.senderID\]/);
 });
