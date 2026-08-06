@@ -99,6 +99,9 @@ function loadManager() {
       setCurrentUserId(v) {
         state.currentUserId = v;
       },
+      setError(v) {
+        state.error = v;
+      },
       reset() {
         state.calls.push(['reset']);
         state.connected = false;

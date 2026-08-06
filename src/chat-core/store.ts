@@ -7,6 +7,8 @@ export const MESSAGES_CAP = 200;
 interface ChatStoreState {
   connected: boolean;
   connecting: boolean;
+  /** 最近一次连接失败的原因文案(消息页空态提示用)。 */
+  error: string | null;
   currentUserId: string | null;
   conversations: ChatConversationDto[];
   messagesByConversation: Record<string, ChatMessageDto[]>;
@@ -14,8 +16,19 @@ interface ChatStoreState {
 
   setConnected: (connected: boolean) => void;
   setConnecting: (connecting: boolean) => void;
+  setError: (error: string | null) => void;
   setCurrentUserId: (userId: string | null) => void;
   setConversations: (conversations: ChatConversationDto[]) => void;
+  /** 单会话回写(偏好变更/新建后),保持排序不变量。 */
+  upsertConversation: (conversation: ChatConversationDto) => void;
+  removeConversation: (conversationId: string) => void;
+  /**
+   * 新消息驱动会话列表:末条预览/时间前移、他人消息未读 +1、重排序。
+   * 列表里没有的会话(如刚被建的单聊)由消息页 focus 重拉兜底。
+   */
+  applyIncomingMessage: (message: ChatMessageDto) => void;
+  /** 本端已读的乐观归零(socket 上报之外的即时 UI 反馈)。 */
+  markConversationReadLocal: (conversationId: string) => void;
   setActiveConversationId: (conversationId: string | null) => void;
   /**
    * 消息入库（历史页 / 广播 / 本地乐观消息共用）：
@@ -61,9 +74,24 @@ export function mergeMessages(
   return merged.length > MESSAGES_CAP ? merged.slice(merged.length - MESSAGES_CAP) : merged;
 }
 
+/** 会话排序不变量:置顶在前 → lastMessageAt 降序 → id 兜底稳定。 */
+export function sortConversations(
+  conversations: ChatConversationDto[],
+): ChatConversationDto[] {
+  return [...conversations].sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    const ta = a.lastMessageAt ? Date.parse(a.lastMessageAt) : 0;
+    const tb = b.lastMessageAt ? Date.parse(b.lastMessageAt) : 0;
+    if (ta !== tb) return tb - ta;
+    if (a.id === b.id) return 0;
+    return a.id < b.id ? -1 : 1;
+  });
+}
+
 export const useChatStore = create<ChatStoreState>((set, get) => ({
   connected: false,
   connecting: false,
+  error: null,
   currentUserId: null,
   conversations: [],
   messagesByConversation: {},
@@ -72,8 +100,56 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
 
   setConnected: (connected) => set({ connected }),
   setConnecting: (connecting) => set({ connecting }),
+  setError: (error) => set({ error }),
   setCurrentUserId: (userId) => set({ currentUserId: userId }),
-  setConversations: (conversations) => set({ conversations }),
+  setConversations: (conversations) =>
+    set({ conversations: sortConversations(conversations) }),
+  upsertConversation: (conversation) => {
+    const { conversations } = get();
+    const rest = conversations.filter((c) => c.id !== conversation.id);
+    set({ conversations: sortConversations([...rest, conversation]) });
+  },
+  removeConversation: (conversationId) =>
+    set({
+      conversations: get().conversations.filter((c) => c.id !== conversationId),
+    }),
+  applyIncomingMessage: (message) => {
+    const { conversations, currentUserId, activeConversationId } = get();
+    const index = conversations.findIndex((c) => c.id === message.conversationId);
+    if (index < 0) return;
+    const target = conversations[index];
+    const fromSelf =
+      currentUserId !== null && message.sender?.id === currentUserId;
+    // 正在看的会话不累计未读(进入会话即视为已读,读水位由屏幕上报)。
+    const countsUnread =
+      !fromSelf && activeConversationId !== message.conversationId;
+    const next: ChatConversationDto = {
+      ...target,
+      lastMessage: message,
+      lastMessageAt: message.createdAt,
+      unreadCount: countsUnread ? target.unreadCount + 1 : target.unreadCount,
+    };
+    set({
+      conversations: sortConversations([
+        ...conversations.slice(0, index),
+        next,
+        ...conversations.slice(index + 1),
+      ]),
+    });
+  },
+  markConversationReadLocal: (conversationId) => {
+    const { conversations } = get();
+    const index = conversations.findIndex((c) => c.id === conversationId);
+    if (index < 0 || conversations[index].unreadCount === 0) return;
+    const next = { ...conversations[index], unreadCount: 0 };
+    set({
+      conversations: [
+        ...conversations.slice(0, index),
+        next,
+        ...conversations.slice(index + 1),
+      ],
+    });
+  },
   setActiveConversationId: (conversationId) =>
     set({ activeConversationId: conversationId }),
 
@@ -108,6 +184,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     set({
       connected: false,
       connecting: false,
+      error: null,
       currentUserId: null,
       conversations: [],
       messagesByConversation: {},
@@ -115,3 +192,13 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       readWatermarks: {},
     }),
 }));
+
+/** 消息 tab 角标 = 非免打扰会话的未读合计(免打扰只显红点由 UI 层处理)。 */
+export function selectTotalUnread(state: {
+  conversations: ChatConversationDto[];
+}): number {
+  return state.conversations.reduce(
+    (sum, c) => (c.muted ? sum : sum + c.unreadCount),
+    0,
+  );
+}

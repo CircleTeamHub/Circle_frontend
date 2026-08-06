@@ -51,7 +51,10 @@ export function createDeliveryId(): string {
 export function connectChat(token: string, userId: string): void {
   const store = useChatStore.getState();
   if (socket?.connected) return;
-  disconnectChat();
+  // 同账号重连:只重建 socket,不清 store —— 列表/消息/pending 已读都保留,
+  // 断线期间 UI 不闪空。清 store 是登出语义,归 disconnectChat。
+  teardownSocket();
+  sessionGen += 1;
 
   const gen = sessionGen;
   store.setConnecting(true);
@@ -69,6 +72,7 @@ export function connectChat(token: string, userId: string): void {
     const state = useChatStore.getState();
     state.setConnecting(false);
     state.setConnected(true);
+    state.setError(null);
     void flushPendingReads();
   });
   next.on('disconnect', () => {
@@ -78,7 +82,9 @@ export function connectChat(token: string, userId: string): void {
   next.on('connect_error', (err) => {
     if (gen !== sessionGen) return;
     console.warn('[chat] connect error', err?.message ?? err);
-    useChatStore.getState().setConnecting(false);
+    const state = useChatStore.getState();
+    state.setConnecting(false);
+    state.setError(err?.message ?? 'connect_error');
   });
 
   bindChatEvents(next, () => gen === sessionGen);
@@ -91,12 +97,15 @@ export function disconnectChat(): void {
   typingSentAt.clear();
   flushingReads = false;
   readFlushRequested = false;
-  if (socket) {
-    socket.removeAllListeners();
-    socket.disconnect();
-    socket = null;
-  }
+  teardownSocket();
   useChatStore.getState().reset();
+}
+
+function teardownSocket(): void {
+  if (!socket) return;
+  socket.removeAllListeners();
+  socket.disconnect();
+  socket = null;
 }
 
 export function isChatConnected(): boolean {
@@ -209,6 +218,15 @@ function emitReadWithAck(
         },
       );
   });
+}
+
+/** 会话级已读：上报最新水位 + 本地未读乐观归零(消息页点入/滑动动作用)。 */
+export function markConversationRead(
+  conversationId: string,
+  height: number,
+): void {
+  markChatRead(conversationId, height);
+  useChatStore.getState().markConversationReadLocal(conversationId);
 }
 
 /** 正在输入：本地节流,无 ack 尽力而为。 */

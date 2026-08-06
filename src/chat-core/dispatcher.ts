@@ -26,7 +26,10 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         console.warn('[chat] dropped malformed message payload');
         return;
       }
-      useChatStore.getState().ingestMessages(payload.conversationId, [payload]);
+      const store = useChatStore.getState();
+      store.ingestMessages(payload.conversationId, [payload]);
+      // 会话列表联动:末条前移 + 未读累计 + 重排序。
+      store.applyIncomingMessage(payload);
     } catch (err) {
       console.warn('[chat] message handler failed', err);
     }
