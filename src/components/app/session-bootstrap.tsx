@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import { fetchCurrentUser } from '@/services/api/auth';
 import { isDefinitiveAuthFailure } from '@/services/api/client';
 import { loginToOpenIM, logoutFromOpenIM } from '@/im/client';
+import { connectChat, disconnectChat } from '@/chat-core/socket-manager';
 import { isOpenIMTokenRejectedError } from '@/im/token-errors';
 import {
   isIMReloginPending,
@@ -137,18 +138,26 @@ export function SessionBootstrap() {
   useEffect(() => {
     if (!hasHydrated || onboardingRequired) {
       disconnectRealtime();
+      disconnectChat();
       return;
     }
 
     if (!accessToken) {
       disconnectRealtime();
+      disconnectChat();
       return;
     }
 
     connectRealtime(accessToken);
+    // 自研聊天通道:与 OpenIM 双轨并行(迁移期),复用 app JWT,无独立 IM token。
+    const { user } = useAuthStore.getState();
+    if (user?.id) {
+      connectChat(accessToken, user.id);
+    }
 
     return () => {
       disconnectRealtime();
+      disconnectChat();
     };
   }, [accessToken, hasHydrated, onboardingRequired]);
 
@@ -169,10 +178,16 @@ export function SessionBootstrap() {
       }
       if (!nextAccessToken) {
         disconnectRealtime();
+        disconnectChat();
         return;
       }
 
       connectRealtime(nextAccessToken);
+      // 回前台补一次 chat 连接:connectChat 对已连接是 no-op,断线时触发重连。
+      const { user: nextUser } = useAuthStore.getState();
+      if (nextUser?.id) {
+        connectChat(nextAccessToken, nextUser.id);
+      }
       void recoverTabBadgeSnapshot();
 
       // 冷启动欠下的 IM 登录在这里补。回前台是个现成的信号（网络多半已恢复），

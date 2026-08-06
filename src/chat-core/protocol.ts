@@ -79,13 +79,28 @@ export interface ChatTypingBroadcast {
   userId: string;
 }
 
+/** 历史分页(REST GET /chat/conversations/:id/messages)。 */
+export interface ChatHistoryPageDto {
+  messages: ChatMessageDto[];
+  /** 继续向前翻页的 beforeHeight;没有更早消息时为 null。 */
+  nextBeforeHeight: number | null;
+}
+
 export type ChatConversationType = 'DIRECT' | 'GROUP' | 'TEMP' | 'SUPPORT';
+
+export interface ChatCircleInfo {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+}
 
 export interface ChatConversationDto {
   id: string;
   type: ChatConversationType;
   peer: ChatSenderInfo | null;
   circleId: string | null;
+  /** GROUP 会话的圈子展示信息(群名/群头像);其余类型为 null。 */
+  circle: ChatCircleInfo | null;
   lastMessage: ChatMessageDto | null;
   unreadCount: number;
   pinned: boolean;
