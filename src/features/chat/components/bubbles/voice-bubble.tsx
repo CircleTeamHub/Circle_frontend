@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { setAudioModeAsync, useAudioPlayer, type AudioStatus } from 'expo-audio';
 import { useTheme, Spacing, Typography } from '@/theme';
 import { Avatar } from '@/components/ui/avatar';
-import { toPlayableUri } from '@/im/media-uri';
+import { toPlayableUri } from '@/features/chat/utils/media-uri';
 import type { ChatMessage } from '@/types';
 import { AVATAR_SIZE, BubbleStatusText } from './shared';
 

@@ -59,22 +59,6 @@ test('credit policy is local-only: no abandoned server-check surface', () => {
   assert.doesNotMatch(source, /apiClient/);
 });
 
-test('OpenIM send funnel uses only local credit state before native sendMessage', () => {
-  const source = read('src/im/client.ts');
-  const reportSendBlock = source.match(
-    /function reportSend\([\s\S]*?\n}\n\nexport async function sendTextMessage/,
-  )?.[0] ?? '';
-
-  assert.match(source, /assertLocalCanSendMessage/);
-  assert.match(reportSendBlock, /assertLocalCanSendMessage/);
-  assert.doesNotMatch(reportSendBlock, /await assertCanSendMessage/);
-  assert.match(reportSendBlock, /OpenIMSDK\['sendMessage'\]/);
-  assert.ok(
-    reportSendBlock.indexOf('assertLocalCanSendMessage') <
-      reportSendBlock.indexOf("OpenIMSDK['sendMessage']"),
-    'local credit state must be checked before native OpenIM sendMessage',
-  );
-});
 
 test('chat detail surfaces low-credit policy errors as the send error text', () => {
   const source = read('src/features/chat/screens/ChatDetailScreen.tsx');
@@ -139,13 +123,3 @@ test('credit gate telemetry reports each event at most once per session', () => 
   assert.equal(reported.length, 2);
 });
 
-test('patch-openim script is fail-soft: never hard-fails a normal install', () => {
-  const src = read('scripts/patch-openim-native-events.mjs');
-
-  // catch 分支必须走 skip（exit 0），不能 process.exit(1) 打挂 npm ci / Android / web。
-  assert.match(src, /function skip\(/);
-  assert.match(src, /process\.exit\(strict \? 1 : 0\)/);
-  assert.doesNotMatch(src, /catch \(error\) \{\s*console\.error[\s\S]*?process\.exit\(1\)/);
-  // 提供严格模式给 iOS CI 显式启用。
-  assert.match(src, /--strict|PATCH_OPENIM_STRICT/);
-});

@@ -280,7 +280,6 @@ test("login posts normalized email and password", async () => {
     return {
       accessToken: "a-token",
       refreshToken: "r-token",
-      imToken: "i-token",
     };
   };
   const { login } = loadAuthApi(apiClientMock);
@@ -292,32 +291,11 @@ test("login posts normalized email and password", async () => {
   assert.equal(calls[0].options.body.password, "pw");
 });
 
-test("login normalizes missing/empty imToken to null", async () => {
-  const apiClientMock = async () => ({
-    accessToken: "a-token",
-    refreshToken: "r-token",
-    // backend can legitimately omit imToken for some account types
-  });
-  const { login } = loadAuthApi(apiClientMock);
-
-  const tokens = await login({ email: "a@b.com", password: "p" });
-  assert.equal(tokens.imToken, null, "missing imToken should become null");
-
-  const apiClientMock2 = async () => ({
-    accessToken: "a-token",
-    refreshToken: "r-token",
-    imToken: "",
-  });
-  const { login: login2 } = loadAuthApi(apiClientMock2);
-  const tokens2 = await login2({ email: "a@b.com", password: "p" });
-  assert.equal(tokens2.imToken, null, "empty imToken should become null");
-});
 
 test("login throws when accessToken or refreshToken missing (response shape drift guard)", async () => {
   // missing accessToken
   const { login: loginA } = loadAuthApi(async () => ({
     refreshToken: "r-token",
-    imToken: "i-token",
   }));
   await assert.rejects(
     () => loginA({ email: "a@b.com", password: "p" }),
@@ -350,7 +328,7 @@ test("register posts email/code/password/nickname", async () => {
   const calls = [];
   const apiClientMock = async (endpoint, options) => {
     calls.push(options.body);
-    return { accessToken: "a", refreshToken: "r", imToken: null };
+    return { accessToken: "a", refreshToken: "r" };
   };
   const { register } = loadAuthApi(apiClientMock);
 
@@ -365,14 +343,13 @@ test("register posts email/code/password/nickname", async () => {
   assert.equal(calls[0].code, "123456");
   assert.equal(calls[0].nickname, "Hi");
   assert.equal(calls[0].inviteCode, undefined);
-  assert.equal(tokens.imToken, null);
 });
 
 test("register normalizes and posts a populated invite code", async () => {
   const calls = [];
   const { register } = loadAuthApi(async (_endpoint, options) => {
     calls.push(options.body);
-    return { accessToken: "a", refreshToken: "r", imToken: null };
+    return { accessToken: "a", refreshToken: "r" };
   });
 
   await register({
@@ -390,7 +367,7 @@ test("register omits a whitespace-only invite code", async () => {
   const calls = [];
   const { register } = loadAuthApi(async (_endpoint, options) => {
     calls.push(options.body);
-    return { accessToken: "a", refreshToken: "r", imToken: null };
+    return { accessToken: "a", refreshToken: "r" };
   });
 
   await register({
@@ -424,7 +401,7 @@ test("loginWithCode posts normalized email and code", async () => {
   const calls = [];
   const apiClientMock = async (endpoint, options) => {
     calls.push({ endpoint, options });
-    return { accessToken: "a", refreshToken: "r", imToken: "i" };
+    return { accessToken: "a", refreshToken: "r" };
   };
   const { loginWithCode } = loadAuthApi(apiClientMock);
 

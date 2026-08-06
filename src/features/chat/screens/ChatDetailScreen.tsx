@@ -132,7 +132,6 @@ import {
   assertLocalCanSendMessage,
   CreditPolicyError,
 } from '@/services/api/credit-policy';
-import { SessionType } from '@openim/rn-client-sdk';
 import { useTranslation } from 'react-i18next';
 import type { ChatMessage, PlazaPostCardData } from '@/types';
 import {
@@ -152,7 +151,7 @@ import { uploadChatImageThumbnail } from '@/features/chat/utils/image-thumbnail'
 // only the error and conversation kind — to avoid leaking content into logs.
 function logChatSendFailure(
   error: unknown,
-  context: { sessionType: SessionType; isGroupChat: boolean },
+  context: { sessionType: ConversationKind; isGroupChat: boolean },
 ) {
   if (!__DEV__) return;
   const base =
@@ -239,6 +238,9 @@ const PANEL_LAYOUT_ANIM = {
     property: LayoutAnimation.Properties.opacity,
   },
 };
+
+/** 会话形态判别(旧 OpenIM SessionType 枚举的最小替代)。 */
+type ConversationKind = 'single' | 'group';
 
 const s = StyleSheet.create({
   // 群聊接收气泡上方的发送者名字（缩进对齐气泡起点 = 头像宽 + 间距）。
@@ -552,8 +554,8 @@ export default function ChatDetailScreen() {
       ? params.title
       : t('chat.detail.title', { defaultValue: '聊天详情' });
   const conversationType =
-    params.conversationType === 'group' ? SessionType.Group : SessionType.Single;
-  const isGroupChat = conversationType === SessionType.Group;
+    params.conversationType === 'group' ? 'group' : 'single';
+  const isGroupChat = conversationType === 'group';
 
   const { canViewMembers: canViewGroupMemberProfiles, revalidate: revalidateMemberViewAccess } =
     useGroupMemberViewAccess({
@@ -727,7 +729,7 @@ export default function ChatDetailScreen() {
   // 之后由全局 onUserStatusChanged 维护增量。
   const peerImId = useMemo(
     () =>
-      conversationType === SessionType.Single && sourceID ? sourceID : null,
+      conversationType === 'single' && sourceID ? sourceID : null,
     [conversationType, sourceID],
   );
   // 只订阅对方这一个用户的在线状态切片(chat-core presence),
@@ -737,7 +739,7 @@ export default function ChatDetailScreen() {
   );
   const peerOnline = peerOnlineStatus === true;
   const statusColor =
-    conversationType !== SessionType.Single || authUser?.accountId === sourceID
+    conversationType !== 'single' || authUser?.accountId === sourceID
       ? colors.online
       : peerOnline
         ? colors.online
@@ -976,12 +978,17 @@ export default function ChatDetailScreen() {
 
   const handleForwardMessage = useCallback(
     (message: ChatMessage) => {
-      // chat-core 阶段:转发选择器尚未迁移,raw(OpenIM 原始项)不复存在,
-      // 统一走其文本降级路径;原生媒体转发随转发选择器批次恢复。
-      setPendingForward({ message, raw: undefined });
+      // 带上源消息 DTO:content 里有媒体 object key / 卡片 payload,
+      // 选择器可原样重发;找不到(极端竞态)则退化为文本转发。
+      const dto = useChatStore
+        .getState()
+        .messagesByConversation[conversationID]?.find(
+          (item) => item.id === message.id,
+        );
+      setPendingForward({ message, dto });
       router.push({ pathname: '/(tabs)/messages/forward-picker' });
     },
-    [setPendingForward],
+    [conversationID, setPendingForward],
   );
 
   const handleQuoteMessage = useCallback((message: ChatMessage) => {
@@ -1189,11 +1196,10 @@ export default function ChatDetailScreen() {
     callStartingRef.current = true;
     setCallStarting(true);
     try {
-      // 1:1（circle_be#113）：正常入口 sourceID 即对方 UUID（见
-      // mapConversationItemToUI）。round 3 review：推送路由的兜底是
-      // sourceID || conversationID —— 这里可能拿到 'si_...' 会话 id，直接
-      // 当 calleeID 必失败。统一走 resolveDirectCalleeID：si_ 形式从会话
-      // id 里解出对端（剔除自己 + 还原 UUID），解不出来给可控提示。
+      // 1:1（circle_be#113）：正常入口 sourceID 即对方 UUID。推送路由的
+      // 兜底是 sourceID || conversationID —— 可能拿到 'direct:a:b' 会话 id，
+      // 直接当 calleeID 必失败。统一走 resolveDirectCalleeID：从会话 id 里
+      // 剔除自己解出对端，解不出来给可控提示。
       if (!isGroupChat) {
         const calleeID = resolveDirectCalleeID(sourceID, authUser.id);
         if (!calleeID) {
@@ -2191,7 +2197,7 @@ export default function ChatDetailScreen() {
           void handleStartCall();
           return;
         case 'transfer':
-          if (conversationType !== SessionType.Single) {
+          if (conversationType !== 'single') {
             Alert.alert(t('chat.transferTitle'), t('chat.transferGroupNotSupported'));
             return;
           }
@@ -2551,7 +2557,7 @@ export default function ChatDetailScreen() {
               <Text style={[s.headerStatusText, d.headerStatusText]}>
                 {authUser?.accountId === sourceID
                   ? t('chat.detail.statusSelf', { defaultValue: '自己' })
-                  : conversationType !== SessionType.Single
+                  : conversationType !== 'single'
                     ? t('chat.detail.statusGroup', { defaultValue: '群聊' })
                     : peerOnline
                       ? t('chat.detail.statusOnline', { defaultValue: '在线' })

@@ -38,28 +38,6 @@ test('messages screen darkens pinned conversation surfaces in light mode', () =>
   assert.match(source, /resolvedMode === "light" \? colors\.surfaceBorder : colors\.surface/);
 });
 
-test('messages screen shows a muted indicator for conversations with notifications disabled', () => {
-  const screenPath = path.join(
-    process.cwd(),
-    'src/features/messages/screens/MessagesScreen.tsx',
-  );
-  const mapperPath = path.join(process.cwd(), 'src/im/mappers.ts');
-  const typePath = path.join(process.cwd(), 'src/types/index.ts');
-  const screenSource = fs.readFileSync(screenPath, 'utf8');
-  const mapperSource = fs.readFileSync(mapperPath, 'utf8');
-  const typeSource = fs.readFileSync(typePath, 'utf8');
-
-  assert.match(typeSource, /muted: boolean/);
-  assert.match(mapperSource, /muted: item\.recvMsgOpt !== 0/);
-  assert.match(screenSource, /rowMeta:\s*\{[\s\S]{0,120}alignItems: "flex-end"[\s\S]{0,120}position: "relative"/);
-  assert.match(screenSource, /mutedIndicator:\s*\{[\s\S]{0,160}position: "absolute"[\s\S]{0,160}top: 20[\s\S]{0,160}right: 0/);
-  assert.match(screenSource, /item\.muted \? \(/);
-  assert.match(screenSource, /<Text style=\{timeStyle\}>\{item\.time\}<\/Text>[\s\S]{0,240}name="notifications-off-outline"/);
-  // The muted a11y label is now i18n'd; the Chinese survives as the defaultValue.
-  assert.match(screenSource, /accessibilityLabel=\{t\("messages\.mutedA11y"/);
-  assert.match(screenSource, /defaultValue: "消息免打扰"/);
-  assert.doesNotMatch(screenSource, /name="volume-mute-outline"/);
-});
 
 test('messages screen reloads conversations on focus without resetting the active filter', () => {
   const filePath = path.join(

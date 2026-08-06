@@ -36,8 +36,7 @@ const INPUT_SCROLL_FILES = [
   'src/features/chat/screens/SharePickerScreen.tsx',
   'src/features/chat/screens/TransferComposerScreen.tsx',
   'src/features/messages/components/CreateTempChatModal.tsx',
-  'src/features/messages/screens/NewGroupScreen.tsx',
-  'src/features/messages/screens/InviteGroupMembersScreen.tsx',
+  // 契约随自研栈迁移更新(意图不变):临时建群两屏已删(建群=建圈子)。
   'src/features/messages/screens/GroupManagementScreen.tsx',
   'src/features/discover/screens/CreateMomentScreen.tsx',
   'src/features/discover/screens/CreateCircleScreen.tsx',

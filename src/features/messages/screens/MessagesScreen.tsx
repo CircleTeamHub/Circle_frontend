@@ -553,7 +553,7 @@ export default function MessagesScreen() {
   useFocusEffect(
     useCallback(() => {
       loadChatConversations().catch((err) => {
-        // 列表加载失败时 imStore.error 会被 IM listener 更新，UI 的 empty state 会显示。
+        // 列表加载失败时保留已有会话,empty state 兜底显示。
         // dev 下额外打印，便于排查"为啥列表是空的"。
         if (isDev) {
           console.warn("[messages] focus loadConversationList failed", err);
@@ -817,7 +817,8 @@ export default function MessagesScreen() {
   const handleMenuAction = useCallback(
     (id: MenuActionId) => {
       setMenuVisible(false);
-      if (id === "newGroup") router.push("/(tabs)/messages/new-group");
+      // 自研栈无临时建群:建群=建圈子,直接进创建圈子页(挂在 discover 栈)。
+      if (id === "newGroup") router.push("/(tabs)/discover/create-circle");
       else if (id === "addFriend") router.push("/(tabs)/messages/add-friend");
       else if (id === "seatManagement") router.push("/(tabs)/messages/temp-chats");
       else if (id === "scan") router.push("/(tabs)/messages/scan" as Href);

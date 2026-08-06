@@ -22,7 +22,6 @@ import type { AvatarFrameAppearance } from '@/types';
 export interface PersistedAuthState {
   accessToken: string | null;
   refreshToken: string | null;
-  imToken: string | null;
   user: AuthUser | null;
   isAuthenticated: boolean;
 }

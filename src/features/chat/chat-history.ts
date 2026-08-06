@@ -1,12 +1,7 @@
-import {
-  MessageType,
-  type MessageItem,
-} from '@openim/rn-client-sdk';
 import i18n from '@/i18n';
 import { getChatMessagePreview } from '@/chat-core/mappers';
 import type { ChatMessageDto } from '@/chat-core/protocol';
 import { getLocalizedDateTimeLocale } from '@/utils/locale';
-import { getMessagePreview } from '@/im/mappers';
 
 function chatHistoryDateLocale() {
   return getLocalizedDateTimeLocale(i18n.language);
@@ -80,28 +75,7 @@ export function formatChatHistoryTimeIso(iso: string): string {
   return Number.isFinite(ms) ? formatChatHistoryTime(ms) : '';
 }
 
-export function getChatHistoryMessageTitle(message: MessageItem) {
-  switch (message.contentType) {
-    case MessageType.PictureMessage:
-      return i18n.t('chat.media.image', { defaultValue: '图片' });
-    case MessageType.VideoMessage:
-      return i18n.t('chat.media.video', { defaultValue: '视频' });
-    case MessageType.FileMessage:
-      return (
-        message.fileElem?.fileName ||
-        i18n.t('im.preview.file', { defaultValue: '[文件]' })
-      );
-    default:
-      return getMessagePreview(message, message.content);
-  }
-}
 
-export function isChatHistoryMediaMessage(message: MessageItem) {
-  return (
-    message.contentType === MessageType.PictureMessage ||
-    message.contentType === MessageType.VideoMessage
-  );
-}
 
 export function isValidDateInput(value: string) {
   const trimmed = value.trim();

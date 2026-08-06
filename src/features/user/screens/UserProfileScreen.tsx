@@ -12,7 +12,6 @@ import {
   getAvatarFrameSource,
 } from '@/features/profile/membership-frames';
 import { UserIconRow } from '@/components/ui/user-icon-row';
-import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
 import { ensureDirectConversation } from '@/chat-core/client';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { createDirectCall } from '@/services/api/calls';
@@ -561,13 +560,6 @@ export default function UserProfileScreen() {
       );
     } catch (error) {
       if (!mountedRef.current) return;
-      if (shouldOpenChatPreview(error)) {
-        router.push(
-          getChatDetailHref(scope, profileId, displayName, profile.avatarUrl),
-        );
-        return;
-      }
-
       Alert.alert(
         t('userProfile.openChatFailedTitle'),
         error instanceof Error ? error.message : t('common.networkError'),

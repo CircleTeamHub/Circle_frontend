@@ -3,8 +3,6 @@ const path = require('node:path');
 
 const METADATA_ENV = [
   'EXPO_PUBLIC_API_URL',
-  'EXPO_PUBLIC_OPENIM_API_URL',
-  'EXPO_PUBLIC_OPENIM_WS_URL',
   'EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID',
 ];
 
@@ -138,18 +136,6 @@ function validateBuildEnv({ env }) {
   requireValues(errors, env, METADATA_ENV);
   validateSupportAccounts(errors, env);
   validateUrl(errors, 'EXPO_PUBLIC_API_URL', env.EXPO_PUBLIC_API_URL, 'https:');
-  validateUrl(
-    errors,
-    'EXPO_PUBLIC_OPENIM_API_URL',
-    env.EXPO_PUBLIC_OPENIM_API_URL,
-    'https:',
-  );
-  validateUrl(
-    errors,
-    'EXPO_PUBLIC_OPENIM_WS_URL',
-    env.EXPO_PUBLIC_OPENIM_WS_URL,
-    'wss:',
-  );
   validateSentryDsn(errors, env);
 
   return errors;

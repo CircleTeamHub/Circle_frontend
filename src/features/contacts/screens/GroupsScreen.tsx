@@ -11,13 +11,34 @@ import {
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { GroupItem } from '@openim/rn-client-sdk';
 import { Avatar } from '@/components/ui/avatar';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
-import { getJoinedGroups, toImUserId } from '@/im/client';
+import { fetchMyCircles } from '@/services/api/circles';
+import type { MyCircle } from '@/types';
 import { useAuthStore } from '@/stores/authStore';
+
+/** 自研栈下「群聊」= 圈子;沿用旧字段名以少动渲染层。 */
+interface GroupItem {
+  groupID: string;
+  groupName: string;
+  faceURL: string | null;
+  memberCount: number;
+  introduction: string | null;
+  ownerUserID: string;
+}
+
+function circleToGroupItem(circle: MyCircle): GroupItem {
+  return {
+    groupID: circle.id,
+    groupName: circle.name,
+    faceURL: circle.avatarUrl,
+    memberCount: circle.memberCount,
+    introduction: circle.description || null,
+    ownerUserID: circle.ownerID,
+  };
+}
 
 interface GroupSection {
   title: string;
@@ -67,11 +88,8 @@ export default function GroupsScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
 
-  // 当前账号 ID 决定哪些群是"我创建的"（ownerUserID === 我）。authStore.user.id 是后端
-  // userID（带连字符）；OpenIM 的 ownerUserID 是去连字符版本，所以比较前要走 toImUserId。
-  const currentUserID = useAuthStore((state) =>
-    state.user?.id ? toImUserId(state.user.id) : null,
-  );
+  // 当前账号 ID 决定哪些群是"我创建的"（ownerUserID === 我）。
+  const currentUserID = useAuthStore((state) => state.user?.id ?? null);
 
   const [groups, setGroups] = useState<GroupItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,15 +103,23 @@ export default function GroupsScreen() {
       const isCancelled = () => Boolean(signal?.cancelled) || !mountedRef.current;
       setLoading(true);
       try {
-        const result = await getJoinedGroups();
+        // created/joined 两个 tab 并发拉全量,按 id 去重(自研栈 群=圈子)。
+        const [created, joined] = await Promise.all([
+          fetchMyCircles('created'),
+          fetchMyCircles('joined'),
+        ]);
         if (isCancelled()) return;
-        setGroups(result);
+        const byId = new Map<string, MyCircle>();
+        for (const circle of [...created, ...joined]) {
+          byId.set(circle.id, circle);
+        }
+        setGroups([...byId.values()].map(circleToGroupItem));
         setError(null);
       } catch (caughtError) {
         if (isCancelled()) return;
         setError(t('contacts.groupsScreen.loadFailed'));
         if (__DEV__) {
-          console.warn('[GroupsScreen] getJoinedGroups failed', caughtError);
+          console.warn('[GroupsScreen] fetchMyCircles failed', caughtError);
         }
       } finally {
         if (!isCancelled()) {
@@ -143,9 +169,7 @@ export default function GroupsScreen() {
       return [{ title: t('contacts.groupsScreen.myJoined'), data: groups }];
     }
 
-    // 拆"我创建"与"我加入"两段。原设计里有"我管理"段（admin 但非 owner），
-    // 但 OpenIM `GroupItem` 不带当前用户的群内角色，要拿到必须对每个群单独 fetch 成员信息
-    // —— 典型 N+1。暂时省略这一段，等后端或 SDK 暴露 `myRoleLevel` 再补（与 #41 同源）。
+    // 拆"我创建"与"我加入"两段。
     const created: GroupItem[] = [];
     const joined: GroupItem[] = [];
     for (const group of groups) {

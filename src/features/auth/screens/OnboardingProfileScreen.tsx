@@ -34,7 +34,6 @@ import {
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
 import { useMessageGroupsStore } from '@/features/messages/store/use-message-groups-store';
-import { loginToOpenIM, logoutFromOpenIM } from '@/im/client';
 import { useAuthStore } from '@/stores/authStore';
 import { useKnownAccountsStore } from '@/stores/knownAccountsStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -135,19 +134,9 @@ const GENDER_OPTIONS: GenderOption[] = [
   { value: 'unset', labelKey: 'profileFields.genderNotSet' },
 ];
 
-async function startAppServicesAfterOnboarding(userId: string, imToken: string | null) {
-  if (imToken) {
-    try {
-      await loginToOpenIM(userId, imToken);
-    } catch (imError) {
-      console.warn(
-        '[openim] onboarding login failed',
-        imError instanceof Error ? imError.message : imError,
-      );
-    }
-  } else {
-    await logoutFromOpenIM();
-  }
+function startAppServicesAfterOnboarding() {
+  // chat 长连接由 SessionBootstrap 在 onboardingRequired 翻 false 后自动建立；
+  // 这里只补拉会话分组（MessagesScreen 顶部 filter tab 需要）。
   void useMessageGroupsStore.getState().load();
 }
 
@@ -293,20 +282,19 @@ export default function OnboardingProfileScreen() {
 
       const nextUser = await updateUserProfile(user.id, payload, user);
       setUser(nextUser);
-      const { accessToken, refreshToken, imToken } = useAuthStore.getState();
+      const { accessToken, refreshToken } = useAuthStore.getState();
       if (accessToken && refreshToken) {
         useKnownAccountsStore.getState().upsertAccount({
           user: nextUser,
           accessToken,
           refreshToken,
-          imToken: imToken ?? null,
           updatedAt: Date.now(),
         });
       }
       setOnboardingRequired(false);
       // 命令式直接跳到最终目的地，和登录成功后的 onAuthSuccess 走同一条路径。
       router.replace('/(tabs)/messages');
-      void startAppServicesAfterOnboarding(nextUser.id, imToken ?? null);
+      startAppServicesAfterOnboarding();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : t('validation.saveFailed');

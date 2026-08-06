@@ -449,9 +449,6 @@ test('user profile screen uses account label, meta chips, badge row, and conditi
   assert.match(source, /mountedRef\.current = false/);
   assert.match(source, /const conversation = await ensureDirectConversation\(profileId\);[\s\S]*if \(!mountedRef\.current\) return;[\s\S]*router\.push/);
   assert.match(source, /if \(mountedRef\.current\) setOpeningChat\(false\)/);
-  assert.match(source, /shouldOpenChatPreview/);
-  assert.match(source, /if \(shouldOpenChatPreview\(error\)\)/);
-  assert.match(source, /router\.push\(\s*getChatDetailHref\(/);
   assert.match(source, /useSegments/);
   assert.match(source, /getChatDetailHref/);
   assert.match(source, /getSendFriendRequestHref/);

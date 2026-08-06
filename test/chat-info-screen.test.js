@@ -3,44 +3,55 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
+// 契约随自研栈迁移更新(意图不变):会话事实源从 OpenIM imStore 换成 chat-core
+// store(ChatConversationDto),置顶/免打扰走 updateChatConversationPreferences;
+// 阅后即焚与清空聊天记录在自研栈无后端支持,UI 整块删除(不留假开关)。
 test('chat info screen uses real conversation state instead of local placeholder toggles', () => {
   const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
   const source = fs.readFileSync(filePath, 'utf8');
 
-  assert.match(source, /useIMStore\(\(state\) => state\.conversations\)/);
+  assert.match(source, /useChatStore\(\(state\) => state\.conversations\)/);
+  assert.doesNotMatch(source, /useIMStore/);
+  assert.doesNotMatch(source, /@\/im\//);
+  assert.doesNotMatch(source, /@openim\/rn-client-sdk/);
   assert.match(
     source,
-    /conversations?\.find\(\s*\(\s*conversation\s*\)\s*=>\s*conversation\.conversationID\s*===\s*conversationID\s*\)/,
+    /conversations?\.find\(\s*\(\s*conversation\s*\)\s*=>\s*conversation\.id\s*===\s*conversationID\s*\)/,
   );
   assert.match(source, /const routeSourceID = friendId;/);
   assert.match(
     source,
-    /conversations?\.find\(\s*\(\s*conversation\s*\)\s*=>[\s\S]{0,120}conversation\.userID\s*===\s*routeSourceID\s*\|\|\s*conversation\.groupID\s*===\s*routeSourceID[\s\S]{0,40}\)/,
+    /conversations?\.find\(\s*\(\s*conversation\s*\)\s*=>[\s\S]{0,120}conversation\.peer\?\.id\s*===\s*routeSourceID\s*\|\|\s*conversation\.circleId\s*===\s*routeSourceID[\s\S]{0,40}\)/,
   );
   assert.doesNotMatch(source, /conversation\.sourceID\s*===\s*routeSourceID/);
-  assert.match(source, /const resolvedConversationID = conversation\?\.conversationID \?\? '';/);
-  assert.doesNotMatch(source, /const resolvedConversationID = conversation\?\.conversationID \?\? conversationID;/);
+  // 群聊从圈子详情等入口进来时 store 可能还没有该会话:get-or-create 结果兜底。
+  assert.match(source, /const activeConversation = conversation \?\? groupConversation;/);
+  assert.match(source, /const resolvedConversationID = activeConversation\?\.id \?\? '';/);
   assert.match(source, /conversationID/);
-  assert.match(source, /buildChatInfoState\(\s*conversation\s*\)/);
+  assert.match(source, /const basePinned = activeConversation\?\.pinned \?\? false;/);
+  assert.match(source, /const baseMuted = activeConversation\?\.muted \?\? false;/);
   assert.match(source, /toggleValue={[^}]*pinned[^}]*}/);
   assert.match(source, /toggleValue={[^}]*muted[^}]*}/);
-  assert.match(source, /burnLabel/);
   assert.match(source, /const handleTogglePinned = useCallback/);
-  assert.match(source, /toggleConversationPinned\(resolvedConversationID,\s*nextPinned\)/);
+  assert.match(
+    source,
+    /updateChatConversationPreferences\(resolvedConversationID,\s*\{\s*pinned:\s*nextPinned\s*\}\)/,
+  );
   assert.match(source, /const handleToggleMuted = useCallback/);
-  assert.match(source, /setConversationMute\(resolvedConversationID,\s*nextMuted\)/);
+  assert.match(
+    source,
+    /updateChatConversationPreferences\(resolvedConversationID,\s*\{\s*muted:\s*nextMuted\s*\}\)/,
+  );
   assert.match(
     source,
     /if \(nextMuted\) \{\s*Alert\.alert\(t\('chat\.messagesThatNotify'\),\s*t\('chat\.messagesThatNotifyHint'\)\);/s,
   );
-  assert.match(source, /const applyBurnDuration = useCallback/);
-  assert.match(source, /setConversationBurnDuration\(resolvedConversationID,\s*nextBurnDuration\)/);
-  assert.match(source, /const handleConfirmClearHistory = useCallback/);
-  assert.match(source, /clearConversationMessages\(resolvedConversationID\)/);
-  assert.doesNotMatch(source, /toggleConversationPinned\(conversationID,/);
-  assert.doesNotMatch(source, /setConversationMute\(conversationID,/);
-  assert.doesNotMatch(source, /setConversationBurnDuration\(conversationID,/);
-  assert.doesNotMatch(source, /clearConversationMessages\(conversationID\)/);
+  assert.doesNotMatch(source, /buildChatInfoState/);
+  assert.doesNotMatch(source, /toggleConversationPinned/);
+  assert.doesNotMatch(source, /setConversationMute/);
+  assert.doesNotMatch(source, /setConversationBurnDuration/);
+  assert.doesNotMatch(source, /clearConversationMessages/);
+  assert.doesNotMatch(source, /burnDuration/);
   assert.doesNotMatch(source, /const \[pinChat, setPinChat\] = useState\(false\)/);
   assert.doesNotMatch(source, /const \[muteNotifications, setMuteNotifications\] = useState\(false\)/);
   assert.doesNotMatch(source, /toggleValue={pinChat}/);
@@ -61,8 +72,10 @@ test('chat info screen renders a dedicated group info layout for group conversat
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /isGroupConversation/);
-  assert.match(source, /loadGroupMemberList/);
-  assert.match(source, /getGroupInfo/);
+  // 契约随自研栈迁移更新(意图不变):群信息=圈子详情,成员目录=会话成员表。
+  assert.match(source, /createCircleChatConversation\(groupID\)/);
+  assert.match(source, /fetchChatMembers\(conversationDto\.id\)/);
+  assert.match(source, /fetchCircleDetail\(groupID\)/);
   assert.match(source, /const GROUP_MEMBER_COLUMNS = 5/);
   assert.match(source, /const COLLAPSED_GROUP_MEMBER_ROWS = 4/);
   assert.match(
@@ -87,22 +100,21 @@ test('chat info screen renders a dedicated group info layout for group conversat
   assert.match(source, /getGroupMemberSearchHref/);
 });
 
-test('chat info screen refreshes group member names and avatars from user profiles on focus', () => {
+// 契约随自研栈迁移更新(意图不变):成员昵称/头像以 fetchChatMembers 返回为准
+// (后端即事实源),不再需要 OpenIM 时代的逐成员 profile 二次刷新。
+test('chat info screen serves the member directory straight from chat-core members', () => {
   const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
   const source = fs.readFileSync(filePath, 'utf8');
 
-  assert.match(source, /import \{ fetchUserProfile \} from '@\/services\/api\/profile'/);
-  assert.match(source, /const GROUP_MEMBER_PROFILE_REFRESH_LIMIT = 200/);
-  assert.match(source, /async function refreshGroupMemberProfiles/);
-  assert.match(source, /fetchUserProfile\(fromImUserId\(member\.userID\)\)/);
-  assert.match(source, /nickname: profile\.nickname \|\| member\.nickname/);
-  assert.match(source, /faceURL: profile\.avatarUrl \?\? member\.faceURL/);
+  assert.doesNotMatch(source, /fetchUserProfile/);
+  assert.doesNotMatch(source, /refreshGroupMemberProfiles/);
+  assert.doesNotMatch(source, /fromImUserId/);
   // review R2：权限走活体 hook；目录只有 canViewMemberDirectory=true 才拉，
   // 撤权时 focus 回调重跑并清空目录。
   assert.match(source, /useGroupMemberViewAccess\(\{/);
   assert.match(source, /if \(!canViewMemberDirectory\) \{\s*\n\s*setGroupMembers\(\[\]\);\s*\n\s*return;/);
-  assert.match(source, /await loadGroupMemberList\(groupID, 10_000\)/);
-  assert.match(source, /refreshGroupMemberProfiles\(members\)/);
+  assert.match(source, /const members = await fetchChatMembers\(conversationDto\.id\);/);
+  assert.match(source, /uri=\{member\.avatarUrl \?\? undefined\}/);
 });
 
 test('chat info screen keeps member access live while mounted', () => {
@@ -127,11 +139,12 @@ test('chat info screen lets the current user open their own profile from the gro
   // 群成员 → profile 必须按本屏所在 tab 栈(originScope=scope)推断，chat-info 在
   // messages/contacts/discover/profile 都有 re-export；写死 'messages' 会把 profile
   // 推进 messages 栈、串栈污染(与 AddFriend 同类 bug)。
-  assert.match(source, /router\.push\(getUserProfileHref\(scope,\s*fromImUserId\(member\.userID\)/);
-  assert.doesNotMatch(source, /getUserProfileHref\(\s*['"]messages['"],\s*fromImUserId/);
+  // 契约随自研栈迁移更新(意图不变):id 已是后端 UUID,无需 fromImUserId 转换。
+  assert.match(source, /router\.push\(getUserProfileHref\(scope,\s*member\.userId/);
+  assert.doesNotMatch(source, /getUserProfileHref\(\s*['"]messages['"]/);
   assert.doesNotMatch(
     source,
-    /handleOpenMemberProfile[\s\S]{0,160}member\.userID === currentUserID/,
+    /handleOpenMemberProfile[\s\S]{0,160}member\.userId === currentUserID/,
   );
 });
 
@@ -141,12 +154,15 @@ test('chat info screen gives group rows real actions instead of unsupported plac
 
   assert.match(source, /title=\{t\('chat\.groupInfoWithCount',\s*\{\s*count: memberCount\s*\}\)\}/);
   assert.match(source, /handleEditGroupName/);
-  assert.match(source, /updateGroupName\(groupID,\s*trimmed\)/);
+  // 契约随自研栈迁移更新(意图不变):群名即圈子名,改名走 updateCircle。
+  assert.match(source, /updateCircle\(groupID,\s*\{\s*name:\s*trimmed\s*\}\)/);
   assert.match(source, /handleEditGroupNotice/);
   assert.match(source, /getEditGroupNoticeHref/);
   assert.doesNotMatch(source, /updateGroupNotice\(groupID,\s*trimmed\)/);
-  assert.match(source, /handleEditMyGroupAlias/);
-  assert.match(source, /updateGroupMemberAlias\(groupID,\s*currentUserID,\s*trimmed\)/);
+  // 「我的群内昵称」在自研栈无后端支持:整块 UI 已删除,不留假开关。
+  assert.doesNotMatch(source, /handleEditMyGroupAlias/);
+  assert.doesNotMatch(source, /updateGroupMemberAlias/);
+  assert.doesNotMatch(source, /chat\.myAliasInGroup/);
   assert.doesNotMatch(source, /handleMinimizeGroupChat/);
   assert.doesNotMatch(source, /hideConversation\(resolvedConversationID\)/);
   assert.doesNotMatch(source, /label=\{t\('chat\.minimizeChat'\)\}/);
@@ -204,34 +220,44 @@ test('chat info screen uses the shared primary switch color for group toggles', 
   assert.doesNotMatch(source, /trackColor=\{\{ false: colors\.surfaceBorder, true: colors\.success \}\}/);
 });
 
-test('group notice editor screen updates the OpenIM group notice and returns', () => {
+// 契约随自研栈迁移更新(意图不变):群公告即圈子简介,保存走 updateCircle。
+test('group notice editor screen updates the circle description and returns', () => {
   const screenPath = path.join(process.cwd(), 'src/features/chat/screens/EditGroupNoticeScreen.tsx');
   const source = fs.readFileSync(screenPath, 'utf8');
 
   assert.match(source, /useLocalSearchParams/);
   assert.match(source, /TextInput/);
   assert.match(source, /multiline/);
-  assert.match(source, /updateGroupNotice\(groupID,\s*nextNotice\)/);
+  assert.match(source, /updateCircle\(groupID,\s*\{\s*description:\s*nextNotice\s*\}\)/);
+  assert.doesNotMatch(source, /@\/im\//);
   assert.match(source, /router\.back\(\)/);
   assert.match(source, /NavHeader/);
 });
 
-test('chat info screen opens a contact picker when adding group members', () => {
+// 契约随自研栈迁移更新(意图不变):自研栈无临时建群/临时邀请——「加群成员」
+// = 邀请好友进圈(担保邀请流程),两张临时屏与其路由注册已删除。
+test('chat info screen routes the add-member entry to the circle invite flow', () => {
   const infoPath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
   const routePath = path.join(process.cwd(), 'app/(tabs)/messages/invite-group-members.tsx');
+  const newGroupRoutePath = path.join(process.cwd(), 'app/(tabs)/messages/new-group.tsx');
   const layoutPath = path.join(process.cwd(), 'app/(tabs)/messages/_layout.tsx');
   const screenPath = path.join(process.cwd(), 'src/features/messages/screens/InviteGroupMembersScreen.tsx');
+  const newGroupScreenPath = path.join(process.cwd(), 'src/features/messages/screens/NewGroupScreen.tsx');
   const infoSource = fs.readFileSync(infoPath, 'utf8');
   const layoutSource = fs.readFileSync(layoutPath, 'utf8');
 
   assert.match(infoSource, /handleOpenInviteGroupMembers/);
-  assert.match(infoSource, /pathname: '\/\(tabs\)\/messages\/invite-group-members'/);
+  assert.match(infoSource, /getCircleInviteFriendsHref\(/);
+  assert.doesNotMatch(infoSource, /invite-group-members/);
   assert.match(infoSource, /groupID/);
   assert.match(infoSource, /groupTitle/);
   assert.doesNotMatch(infoSource, /promptForText\(t\('chat\.addGroupMember'\)/);
-  assert.match(layoutSource, /<Stack\.Screen name="invite-group-members" \/>/);
-  assert.equal(fs.existsSync(routePath), true);
-  assert.equal(fs.existsSync(screenPath), true);
+  assert.doesNotMatch(layoutSource, /invite-group-members/);
+  assert.doesNotMatch(layoutSource, /"new-group"/);
+  assert.equal(fs.existsSync(routePath), false);
+  assert.equal(fs.existsSync(newGroupRoutePath), false);
+  assert.equal(fs.existsSync(screenPath), false);
+  assert.equal(fs.existsSync(newGroupScreenPath), false);
 });
 
 test('chat info screen right search opens group member search instead of chat history', () => {
@@ -284,86 +310,26 @@ test('group member search keeps authorization live and revalidates before openin
   assert.match(source, /if \(!\(await revalidate\(\)\)\) \{\s*\n\s*return;/);
 });
 
-test('invite group members revalidates the role at submit time', () => {
-  const filePath = path.join(process.cwd(), 'src/features/messages/screens/InviteGroupMembersScreen.tsx');
-  const source = fs.readFileSync(filePath, 'utf8');
-
-  // review R2：选好人后被撤权，缓存名单不能再发；成员表加载失败也不再
-  // 冒充"无权限"（authorized 保留，只记诊断）。
-  assert.match(source, /const stillAuthorized = await revalidateGroupMemberView\(\{/);
-  assert.match(source, /if \(!stillAuthorized\) \{\s*\n\s*setAuthorized\(false\);\s*\n\s*Alert\.alert\(t\('chat\.groupMembersRestricted'\)\);\s*\n\s*return;/);
-  assert.match(source, /invite_group_members_list_load_failed/);
-  assert.match(source, /if \(result\.membersError\) \{/);
-
-  // review R3：单飞行守放在任何 await 之前——双击不会并发提交非幂等邀请。
-  assert.match(source, /if \(submitInFlightRef\.current \|\| submitting\) return;/);
-  assert.match(source, /submitInFlightRef\.current = true;\s*\n\s*setSubmitting\(true\);/);
-  assert.match(source, /submitInFlightRef\.current = false;/);
-  // revalidation 现在在 submitting 守卫之后（守卫先于首个 await）。
-  assert.match(
-    source,
-    /submitInFlightRef\.current = true;[\s\S]{0,80}try \{[\s\S]{0,160}await revalidateGroupMemberView/,
-  );
-});
-
-test('invite group members keeps friend-load failure separate from authorization', () => {
-  const filePath = path.join(process.cwd(), 'src/features/messages/screens/InviteGroupMembersScreen.tsx');
-  const source = fs.readFileSync(filePath, 'utf8');
-
-  // review R3：好友表加载失败 ≠ 无权限——授权保留、单独错误态 + 页内重试。
-  assert.match(source, /const \[friendsError, setFriendsError\] = useState\(false\)/);
-  assert.match(source, /setFriendsError\(true\)/);
-  assert.match(source, /invite_group_members_friends_load_failed/);
-  assert.match(source, /\) : friendsError \? \(/);
-  assert.match(source, /onPress=\{\(\) => void loadScreen\(\)\}/);
-  // 好友加载失败时隐藏提交 footer（没有可提交内容）。
-  assert.match(source, /\{authorized && !friendsError \? \(/);
-});
-
-test('invite group members screen filters users who are already in the group', () => {
-  const filePath = path.join(process.cwd(), 'src/features/messages/screens/InviteGroupMembersScreen.tsx');
-  const source = fs.readFileSync(filePath, 'utf8');
-
-  assert.match(source, /loadGroupMemberList\(groupID,\s*10_000\)/);
-  assert.match(source, /const \[existingMemberIDs, setExistingMemberIDs\]/);
-  assert.match(source, /members\.map\(\(member\) => toImUserId\(member\.userID\)\)/);
-  assert.match(source, /friends\.filter\([\s\S]{0,120}!existingMemberIDs\.has\(toImUserId\(friend\.id\)\)/);
-  assert.match(source, /filter\(\(userID\) => !existingMemberIDs\.has\(userID\)\)/);
-  assert.match(source, /inviteGroupMembersAlreadyMembers/);
-  assert.match(source, /inviteGroupMembersNoInvitableFriends/);
-  assert.doesNotMatch(source, /inviteUsersToGroup\(groupID,\s*selectedIds\.map\(toImUserId\)\)/);
-});
-
-test('group member mutations sync backend state before falling back to OpenIM', () => {
+// 契约随自研栈迁移更新(意图不变):踢人/退群的事实源就是业务后端本身,
+// OpenIM 双写与 result.handled 回落链路已删——单一调用成功即生效。
+test('group member mutations go straight to the backend without an OpenIM fallback', () => {
   const infoPath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
-  const invitePath = path.join(process.cwd(), 'src/features/messages/screens/InviteGroupMembersScreen.tsx');
   const apiPath = path.join(process.cwd(), 'src/services/api/groups.ts');
   const infoSource = fs.readFileSync(infoPath, 'utf8');
-  const inviteSource = fs.readFileSync(invitePath, 'utf8');
   const apiSource = fs.readFileSync(apiPath, 'utf8');
 
   assert.match(apiSource, /function leaveGroup/);
   assert.match(apiSource, /`\/group\/\$\{groupID\}\/leave`/);
-  assert.match(apiSource, /function inviteGroupMembers/);
-  assert.match(apiSource, /`\/group\/\$\{groupID\}\/members\/invite`/);
   assert.match(apiSource, /function removeGroupMember/);
   assert.match(apiSource, /`\/group\/\$\{groupID\}\/members\/\$\{userID\}`/);
 
-  assert.match(infoSource, /leaveGroupChat\(groupID\)[\s\S]{0,160}leaveGroup\(groupID\)/);
-  assert.match(infoSource, /removeGroupMember\(groupID,\s*member\.userID\)/);
-  assert.match(infoSource, /if \(!result\.handled\) \{[\s\S]{0,80}kickGroupMembers\(groupID,\s*\[member\.userID\]\)/);
-  assert.match(inviteSource, /inviteGroupMembers\(groupID,\s*inviteUserIDs\)/);
-  assert.match(inviteSource, /if \(!result\.handled\) \{[\s\S]{0,80}inviteUsersToGroup\(groupID,\s*inviteUserIDs\)/);
+  assert.match(infoSource, /leaveGroup\(groupID\)/);
+  assert.doesNotMatch(infoSource, /leaveGroupChat/);
+  assert.match(infoSource, /removeGroupMember\(groupID,\s*member\.userId\)/);
+  assert.doesNotMatch(infoSource, /kickGroupMembers/);
+  assert.doesNotMatch(infoSource, /result\.handled/);
 });
 
-test('OpenIM client bundles native filesystem with the main native bundle', () => {
-  const source = fs.readFileSync(path.join(process.cwd(), 'src/im/client.ts'), 'utf8');
-
-  assert.doesNotMatch(source, /import\s+RNFS\s+from\s+['"]react-native-fs['"]/);
-  assert.doesNotMatch(source, /import\('react-native-fs'\)/);
-  assert.match(source, /require\('react-native-fs'\)/);
-  assert.match(source, /loadNativeFS/);
-});
 
 test('non-chat filesystem features keep deferring native filesystem loading', () => {
   const uploadSource = fs.readFileSync(
@@ -434,27 +400,26 @@ test('note block editor defers DOM editor imports during web server rendering', 
   assert.match(source, /if \(!canLoadDOMEditor\(\)\) \{\s*return <View style=\{s\.container\} \/>;\s*\}/s);
 });
 
-test('chat info screen constrains conversation actions with burn selection, clear confirmation, and pending guards', () => {
+// 契约随自研栈迁移更新(意图不变):pin/mute 仍走 pending 守卫;阅后即焚与
+// 清空聊天记录在自研栈无后端支持,相关词条/开关必须整块消失(不留假开关)。
+test('chat info screen constrains conversation actions with pending guards', () => {
   const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
   const source = fs.readFileSync(filePath, 'utf8');
 
-  assert.match(source, /const burnDurationOptions = useMemo\(/);
-  assert.match(source, /label: t\('chat\.burnOff'\), duration: 0/);
-  assert.match(source, /label: t\('chat\.burn10s'\), duration: 10/);
-  assert.match(source, /label: t\('chat\.burn1m'\), duration: 60/);
-  assert.match(source, /label: t\('chat\.burn5m'\), duration: 300/);
   assert.match(source, /t\('chat\.pending'\)/);
-  assert.match(source, /pin: false,\s*mute: false,\s*burn: false,\s*clear: false/s);
-  assert.match(source, /Alert\.alert\(\s*t\('chat\.burnMessage'\),\s*t\('chat\.selectBurnTime'\)/s);
-  assert.match(source, /Alert\.alert\(\s*t\('chat\.clearHistory'\),\s*t\('chat\.clearHistoryWarning'\)/s);
+  assert.match(source, /pin: false,\s*mute: false,\s*\}/s);
   assert.match(source, /actionPending\.pin \? undefined : handleTogglePinned/);
   assert.match(source, /actionPending\.mute \? undefined : handleToggleMuted/);
-  assert.match(source, /actionPending\.burn \? undefined : handleOpenBurnDurationPicker/);
-  assert.match(source, /actionPending\.clear \? undefined : handleConfirmClearHistory/);
   assert.match(source, /hasToggle={!actionPending\.pin}/);
   assert.match(source, /hasToggle={!actionPending\.mute}/);
-  assert.match(source, /rightText={actionPending\.burn \? t\('chat\.pending'\) : burnLabel}/);
-  assert.match(source, /rightText={actionPending\.clear \? t\('chat\.pending'\) : undefined}/);
+  assert.doesNotMatch(source, /burnDurationOptions/);
+  assert.doesNotMatch(source, /chat\.burnMessage/);
+  assert.doesNotMatch(source, /chat\.selectBurnTime/);
+  assert.doesNotMatch(source, /handleOpenBurnDurationPicker/);
+  assert.doesNotMatch(source, /handleConfirmClearHistory/);
+  assert.doesNotMatch(source, /chat\.clearHistoryWarning/);
+  assert.doesNotMatch(source, /actionPending\.burn/);
+  assert.doesNotMatch(source, /actionPending\.clear/);
 });
 
 test('chat info screen reconciles optimistic conversation state after live updates catch up', () => {
@@ -465,15 +430,12 @@ test('chat info screen reconciles optimistic conversation state after live updat
   assert.match(source, /useEffect\(\(\) => \{/);
   assert.match(source, /if \(!hasOptimisticConversationState\) \{/);
   assert.match(source, /const nextState = \{ \.\.\.current \};/);
-  assert.match(source, /if \(current\.pinned !== undefined && current\.pinned === baseState\.pinned\) \{/);
+  // 契约随自研栈迁移更新(意图不变):基线值来自 chat-core 会话 dto 的
+  // pinned/muted 布尔,不再经 buildChatInfoState 换算。
+  assert.match(source, /if \(current\.pinned !== undefined && current\.pinned === basePinned\) \{/);
   assert.match(source, /delete nextState\.pinned;/);
-  assert.match(source, /if \(current\.muted !== undefined && current\.muted === baseState\.muted\) \{/);
+  assert.match(source, /if \(current\.muted !== undefined && current\.muted === baseMuted\) \{/);
   assert.match(source, /delete nextState\.muted;/);
-  assert.match(
-    source,
-    /if \([\s\S]{0,120}current\.burnDuration !== undefined &&[\s\S]{0,120}current\.burnDuration === \(conversation\?\.burnDuration \?\? 0\)/,
-  );
-  assert.match(source, /delete nextState\.burnDuration;/);
   assert.match(source, /return nextState;/);
 });
 
@@ -483,13 +445,15 @@ test('chat info screen applies optimistic pin and mute updates only after the re
 
   assert.match(source, /const runConversationAction = useCallback/);
   assert.match(source, /setConversationActionPending\(action, true\);[\s\S]{0,120}await task\(\);/);
+  // 契约随自研栈迁移更新(意图不变):task 换成 updateChatConversationPreferences
+  // 后正文更长,窗口放宽,守卫顺序断言不变。
   assert.match(
     source,
-    /void runConversationAction\(\s*'pin',[\s\S]{0,120}setOptimisticConversationState\(\(current\) => \(\{/,
+    /void runConversationAction\(\s*'pin',[\s\S]{0,240}setOptimisticConversationState\(\(current\) => \(\{/,
   );
   assert.match(
     source,
-    /void runConversationAction\(\s*'mute',[\s\S]{0,320}setOptimisticConversationState\(\(current\) => \(\{/,
+    /void runConversationAction\(\s*'mute',[\s\S]{0,400}setOptimisticConversationState\(\(current\) => \(\{/,
   );
   assert.doesNotMatch(
     source,
@@ -514,15 +478,10 @@ test('chat info screen rollback drops optimistic overrides instead of restoring 
   );
   assert.match(
     source,
-    /void runConversationAction\(\s*'mute',[\s\S]{0,400}dropOptimisticConversationStateKey\('muted'\)/,
-  );
-  assert.match(
-    source,
-    /void runConversationAction\(\s*'burn',[\s\S]{0,400}dropOptimisticConversationStateKey\('burnDuration'\)/,
+    /void runConversationAction\(\s*'mute',[\s\S]{0,600}dropOptimisticConversationStateKey\('muted'\)/,
   );
   assert.doesNotMatch(source, /pinned: previousPinned/);
   assert.doesNotMatch(source, /muted: previousMuted/);
-  assert.doesNotMatch(source, /burnDuration: previousBurnDuration/);
 });
 
 test('chat info screen ignores stale async completions after the conversation changes', () => {
@@ -530,9 +489,10 @@ test('chat info screen ignores stale async completions after the conversation ch
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /const currentConversationIDRef = useRef\(''\);/);
+  // 契约随自研栈迁移更新(意图不变):会话 id 字段由 conversationID 换成 dto.id。
   assert.match(
     source,
-    /const resolvedConversationID = conversation\?\.conversationID \?\? '';\s*currentConversationIDRef\.current = resolvedConversationID;/s,
+    /const resolvedConversationID = activeConversation\?\.id \?\? '';\s*currentConversationIDRef\.current = resolvedConversationID;/s,
   );
   assert.match(source, /currentConversationIDRef\.current = resolvedConversationID;/);
   assert.match(source, /const isActionConversationCurrent = useCallback/);
@@ -553,7 +513,8 @@ test('chat info screen only lets the latest request for an action finish cleanup
   const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
   const source = fs.readFileSync(filePath, 'utf8');
 
-  assert.match(source, /const actionRequestTokenRef = useRef\(\{\s*pin: 0,\s*mute: 0,\s*burn: 0,\s*clear: 0,\s*\}\);/s);
+  // 契约随自研栈迁移更新(意图不变):burn/clear 动作已随功能删除,只剩 pin/mute。
+  assert.match(source, /const actionRequestTokenRef = useRef\(\{\s*pin: 0,\s*mute: 0,\s*\}\);/s);
   assert.match(source, /const startActionRequest = useCallback/);
   assert.match(source, /const nextToken = actionRequestTokenRef\.current\[action\] \+ 1;/);
   assert.match(
@@ -603,10 +564,12 @@ test('chat info screen wires search-history navigation from the new row', () => 
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /getChatHistorySearchHubHref/);
-  assert.match(source, /getOrCreateSingleConversation/);
+  // 契约随自研栈迁移更新(意图不变):单聊 get-or-create 走 chat-core 的
+  // ensureDirectConversation。
+  assert.match(source, /ensureDirectConversation/);
   assert.match(source, /const resolveConversationIDForNavigation = useCallback/);
   assert.match(source, /const existingConversationID = resolvedConversationID\.trim\(\);/);
-  assert.match(source, /const conversation = await getOrCreateSingleConversation\(friendId\);/);
+  assert.match(source, /const conversation = await ensureDirectConversation\(friendId\);/);
   assert.match(source, /return conversation\.conversationID;/);
   assert.match(source, /const handleOpenSearchHistory = useCallback/);
   assert.match(source, /const nextConversationID = await resolveConversationIDForNavigation\(\);/);
@@ -756,17 +719,20 @@ test('chat info revalidates ownership before mutating a member role', () => {
 
   // review R3：action sheet 打开到点确认之间可能失去群主身份，PATCH 前
   // 现场重查自己的角色（不吃创建 alert 时捕获的 currentRole），fail-closed。
+  // 契约随自研栈迁移更新(意图不变):现场重查改走 fetchCircleDetail 的
+  // myRole/myStatus(圈子角色即群角色事实源)。
+  assert.match(source, /const freshDetail = await fetchCircleDetail\(groupID\);/);
   assert.match(
     source,
-    /const \[freshSelf\] = await loadSpecifiedGroupMembers\(groupID, \[currentUserID\]\);/,
+    /const freshRole = freshDetail\.myStatus === 'ACTIVE' \? freshDetail\.myRole : null;/,
   );
   assert.match(
     source,
-    /if \(!canChangeGroupMemberRole\(freshSelf\?\.roleLevel, member\.roleLevel\)\) \{\s*\n\s*Alert\.alert\(t\('chat\.groupMembersRestricted'\)\);/,
+    /if \(!canChangeGroupMemberRole\(freshSelfRoleLevel, memberRoleLevel\(member\)\)\) \{\s*\n\s*Alert\.alert\(t\('chat\.groupMembersRestricted'\)\);/,
   );
   // 重查通过后才发 PATCH。
   assert.match(
     source,
-    /canChangeGroupMemberRole\(freshSelf\?\.roleLevel[\s\S]{0,220}await updateGroupMemberRole\(groupID, member\.userID, nextRole\)/,
+    /canChangeGroupMemberRole\(freshSelfRoleLevel[\s\S]{0,220}await updateGroupMemberRole\(groupID, member\.userId, nextRole\)/,
   );
 });
