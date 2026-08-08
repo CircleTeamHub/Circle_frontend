@@ -1,4 +1,5 @@
 import { apiClient } from '@/services/api/client';
+import { useAuthStore } from '@/stores/authStore';
 import type {
   ChatConversationDto,
   ChatHistoryPageDto,
@@ -12,11 +13,28 @@ import { useChatStore } from './store';
  * 实时收发走 socket-manager;这里承担打开 App/进页面时的全量拉取与翻页。
  */
 
+/**
+ * 会话世代闸:发请求前记下 sessionEpoch,写 store 前再比一次。
+ *
+ * apiClient 只在 401 刷新路径上校验 epoch —— 一个正常成功的响应会无条件返回。
+ * 于是账号 A 的在途请求可以在用户切到 B 之后落地,把 A 的会话名/对端/预览/
+ * 未读写进 B 的 store,直到下一次刷新为止(跨账号隐私泄漏)。
+ * sessionEpoch 在登录/切号(setSession)与登出(clearSession)时自增,
+ * token 轮换(setTokens)不动它 —— 正是这里需要的判据。
+ */
+function sessionGate(): () => boolean {
+  const epoch = useAuthStore.getState().sessionEpoch;
+  return () => useAuthStore.getState().sessionEpoch === epoch;
+}
+
 /** 拉全量会话列表并写入 store(消息页 focus / 下拉刷新用)。 */
 export async function loadChatConversations(): Promise<ChatConversationDto[]> {
+  const sameSession = sessionGate();
   const conversations =
     await apiClient<ChatConversationDto[]>('/chat/conversations');
-  useChatStore.getState().setConversations(conversations);
+  if (sameSession()) {
+    useChatStore.getState().setConversations(conversations);
+  }
   return conversations;
 }
 
@@ -51,10 +69,13 @@ export async function loadChatHistory(
   }
   if (options.limit !== undefined) params.set('limit', String(options.limit));
   const query = params.toString();
+  const sameSession = sessionGate();
   const page = await apiClient<ChatHistoryPageDto>(
     `/chat/conversations/${conversationId}/messages${query ? `?${query}` : ''}`,
   );
-  useChatStore.getState().ingestMessages(conversationId, page.messages);
+  if (sameSession()) {
+    useChatStore.getState().ingestMessages(conversationId, page.messages);
+  }
   return page;
 }
 
@@ -131,10 +152,12 @@ export async function updateChatConversationPreferences(
   conversationId: string,
   prefs: { pinned?: boolean; muted?: boolean; hidden?: boolean },
 ): Promise<ChatConversationDto> {
+  const sameSession = sessionGate();
   const dto = await apiClient<ChatConversationDto>(
     `/chat/conversations/${conversationId}/preferences`,
     { method: 'PATCH', body: prefs },
   );
+  if (!sameSession()) return dto;
   const store = useChatStore.getState();
   if (prefs.hidden) {
     store.removeConversation(conversationId);

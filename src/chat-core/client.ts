@@ -26,8 +26,12 @@ export interface EnsuredConversation {
 export async function ensureDirectConversation(
   peerUserId: string,
 ): Promise<EnsuredConversation> {
+  const epoch = useAuthStore.getState().sessionEpoch;
   const dto = await createDirectChatConversation(peerUserId);
-  useChatStore.getState().upsertConversation(dto);
+  // 切号后落地的在途响应不写进新账号的 store。
+  if (useAuthStore.getState().sessionEpoch === epoch) {
+    useChatStore.getState().upsertConversation(dto);
+  }
   return { conversationID: dto.id };
 }
 
@@ -35,16 +39,68 @@ export async function ensureDirectConversation(
 export async function ensureCircleConversation(
   circleId: string,
 ): Promise<EnsuredConversation> {
+  const epoch = useAuthStore.getState().sessionEpoch;
   const dto = await createCircleChatConversation(circleId);
-  useChatStore.getState().upsertConversation(dto);
+  if (useAuthStore.getState().sessionEpoch === epoch) {
+    useChatStore.getState().upsertConversation(dto);
+  }
   return { conversationID: dto.id };
 }
 
-/** 进入会话时的历史拉取(最新一页;更早的由列表滚动翻页)。 */
+/**
+ * 历史翻页游标:会话 id → 下一页的 beforeHeight。
+ * null = 已到头(没有更早的了);缺键 = 还没拉过首页。
+ * 原来首页的 nextBeforeHeight 被直接丢掉,超过一页的会话就再也翻不到
+ * 更早的消息,搜索也跳不到首页之外的目标。
+ */
+const historyCursors = new Map<string, number | null>();
+/** 同一会话的翻页请求串行化,避免连续触底打出重复的一页。 */
+const inFlightPages = new Map<string, Promise<void>>();
+
+/** 进入会话时的历史拉取(最新一页),并记下继续向前翻的游标。 */
 export async function loadConversationMessages(
   conversationId: string,
 ): Promise<void> {
-  await loadChatHistory(conversationId);
+  const page = await loadChatHistory(conversationId);
+  historyCursors.set(conversationId, page.nextBeforeHeight);
+}
+
+/** 是否还有更早的消息可翻(UI 据此决定是否显示加载指示)。 */
+export function hasMoreHistory(conversationId: string): boolean {
+  return historyCursors.get(conversationId) != null;
+}
+
+/**
+ * 继续向前翻一页(inverted 列表触底时调用)。
+ * 已到头 / 首页还没拉 / 同会话已有在途请求时都是安全的 no-op。
+ */
+export function loadOlderConversationMessages(
+  conversationId: string,
+): Promise<void> {
+  const cursor = historyCursors.get(conversationId);
+  if (cursor == null) return Promise.resolve();
+  const inFlight = inFlightPages.get(conversationId);
+  if (inFlight) return inFlight;
+  const request = loadChatHistory(conversationId, { beforeHeight: cursor })
+    .then((page) => {
+      historyCursors.set(conversationId, page.nextBeforeHeight);
+    })
+    .finally(() => {
+      inFlightPages.delete(conversationId);
+    });
+  inFlightPages.set(conversationId, request);
+  return request;
+}
+
+/** 退出会话 / 登出时丢掉游标,下次进入重新从最新一页开始。 */
+export function resetHistoryCursor(conversationId?: string): void {
+  if (conversationId === undefined) {
+    historyCursors.clear();
+    inFlightPages.clear();
+    return;
+  }
+  historyCursors.delete(conversationId);
+  inFlightPages.delete(conversationId);
 }
 
 /** 已读:以本地已知的最大 height 上报水位 + 本地未读归零。 */
@@ -121,7 +177,11 @@ export async function sendWithOptimism(
     next.applyIncomingMessage(confirmed);
     return confirmed;
   } catch (error) {
-    useChatStore.getState().markMessageFailed(options.conversationId, d);
+    const failed = useChatStore.getState();
+    failed.markMessageFailed(options.conversationId, d);
+    // 乐观写入已经把会话预览换成了这条消息;发送失败后只标时间线是不够的,
+    // 会话列表会一直把「服务端可能根本没有」的内容当作最新消息展示。
+    failed.revertConversationPreview(options.conversationId);
     throw error;
   }
 }

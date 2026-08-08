@@ -1,6 +1,6 @@
 import { io, type Socket } from 'socket.io-client';
 import { CHAT_WS_URL } from '@/constants/config';
-import { bindChatEvents } from './dispatcher';
+import { bindChatEvents, cancelConversationBackfill } from './dispatcher';
 import {
   CHAT_EVENTS,
   CHAT_WS_PATH,
@@ -51,8 +51,12 @@ export function createDeliveryId(): string {
 export function connectChat(token: string, userId: string): void {
   const store = useChatStore.getState();
   if (socket?.connected) return;
-  // 同账号重连:只重建 socket,不清 store —— 列表/消息/pending 已读都保留,
-  // 断线期间 UI 不闪空。清 store 是登出语义,归 disconnectChat。
+  // 换账号才清 store。放在这里而不是调用方,是为了让「挂起 → 重连」这条
+  // 路径天然安全:同一账号轮换 token 时列表/消息/pending 已读原样保留,
+  // 而切到另一个账号时上一个账号的数据一定先被清掉(跨账号不串数据)。
+  if (store.currentUserId !== null && store.currentUserId !== userId) {
+    store.reset();
+  }
   teardownSocket();
   sessionGen += 1;
 
@@ -91,14 +95,34 @@ export function connectChat(token: string, userId: string): void {
   socket = next;
 }
 
+/**
+ * 登出语义:断连 + 清空 store(含 currentUserId)。
+ * 只在真的没有会话时用 —— 见 suspendChat 的说明。
+ */
 export function disconnectChat(): void {
+  suspendChat();
+  useChatStore.getState().reset();
+}
+
+/**
+ * 挂起语义:断连但保留 store。
+ *
+ * access token 轮换会让 session-bootstrap 的 effect 重跑,cleanup 若走
+ * disconnectChat 就会连带清掉全部会话/消息/未读/待发已读 —— 正在看的
+ * ChatDetailScreen 的历史加载 effect 不依赖 token,不会重拉,于是屏幕
+ * 空到用户手动退出重进为止,pending 已读也一并丢了。
+ * 重连由 connectChat 负责,它自己会在换账号时清 store。
+ */
+export function suspendChat(): void {
   sessionGen += 1;
+  cancelConversationBackfill();
   pendingReads.clear();
   typingSentAt.clear();
   flushingReads = false;
   readFlushRequested = false;
   teardownSocket();
-  useChatStore.getState().reset();
+  useChatStore.getState().setConnected(false);
+  useChatStore.getState().setConnecting(false);
 }
 
 function teardownSocket(): void {

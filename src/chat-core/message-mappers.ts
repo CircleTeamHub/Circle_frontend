@@ -1,6 +1,7 @@
 import i18n from '@/i18n';
 import { normalizeMediaUrl } from '@/services/api/utils';
 import type {
+  CallRecordData,
   ChatMessage,
   CircleCardData,
   FriendCardData,
@@ -135,6 +136,14 @@ export function mapChatMessageDtoToUI(
         type: 'plaza-post-card',
         plazaPostCard: content as unknown as PlazaPostCardData,
       };
+    case 'call-record': {
+      // 服务端在通话结束时下发的留痕消息。缺这一支的话它会掉进 default,
+      // 渲染成一条空文本气泡 —— 拆栈后通话记录在会话里整体消失了
+      // (CallRecordBubble / CallRecordData / 词条都还在,只是没人喂数据)。
+      const callRecord = parseCallRecord(content);
+      if (!callRecord) break;
+      return { ...base, type: 'call-record', callRecord };
+    }
     case 'system':
       return {
         id: dto.id,
@@ -143,13 +152,56 @@ export function mapChatMessageDtoToUI(
         text: systemNoticeText(content),
       };
     default:
-      // text 与未知类型都落文本气泡(未知类型显示其 text 字段或空串,不渲染破位)。
-      return {
-        ...base,
-        type: isSent ? 'sent' : 'received',
-        text: str(content['text']) ?? '',
-      };
+      break;
   }
+  // text 与未知/畸形类型都落文本气泡(显示其 text 字段或空串,不渲染破位)。
+  return {
+    ...base,
+    type: isSent ? 'sent' : 'received',
+    text: str(content['text']) ?? '',
+  };
+}
+
+const CALL_END_REASONS = new Set([
+  'NORMAL',
+  'CANCELED',
+  'ALL_LEFT',
+  'NO_ANSWER',
+  'TIMEOUT',
+  'NETWORK',
+  'ERROR',
+]);
+
+/**
+ * call-record content → CallRecordData。对端可控载荷,逐字段校验:
+ * 任一必填字段缺失或取值不在枚举内就整条判废(调用方回落文本气泡),
+ * 不把半个对象塞给只认完整形状的 CallRecordBubble。
+ */
+function parseCallRecord(
+  content: Record<string, unknown>,
+): CallRecordData | null {
+  const callId = str(content['callId']);
+  const callType = str(content['callType']);
+  const sessionType = str(content['sessionType']);
+  const endReason = str(content['endReason']);
+  const initiatorID = str(content['initiatorID']);
+  if (!callId || !initiatorID) return null;
+  if (callType !== 'AUDIO' && callType !== 'VIDEO') return null;
+  if (sessionType !== 'single' && sessionType !== 'group') return null;
+  if (!endReason || !CALL_END_REASONS.has(endReason)) return null;
+  const rawDuration = content['durationSeconds'];
+  const durationSeconds =
+    typeof rawDuration === 'number' && Number.isFinite(rawDuration)
+      ? rawDuration
+      : null;
+  return {
+    callId,
+    callType,
+    sessionType,
+    endReason: endReason as CallRecordData['endReason'],
+    durationSeconds,
+    initiatorID,
+  };
 }
 
 /**

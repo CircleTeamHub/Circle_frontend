@@ -32,9 +32,11 @@ interface ChatStoreState {
   removeConversation: (conversationId: string) => void;
   /**
    * 新消息驱动会话列表:末条预览/时间前移、他人消息未读 +1、重排序。
-   * 列表里没有的会话(如刚被建的单聊)由消息页 focus 重拉兜底。
+   * 返回 false 表示该会话不在列表里(调用方应去补拉会话元信息)。
    */
-  applyIncomingMessage: (message: ChatMessageDto) => void;
+  applyIncomingMessage: (message: ChatMessageDto) => boolean;
+  /** 发送失败后把会话预览退回上一条真实消息(乐观写入的回滚)。 */
+  revertConversationPreview: (conversationId: string) => void;
   /** 本端已读的乐观归零(socket 上报之外的即时 UI 反馈)。 */
   markConversationReadLocal: (conversationId: string) => void;
   /** 乐观消息发送失败:按 d 标记,气泡转失败态。 */
@@ -54,6 +56,14 @@ interface ChatStoreState {
   applyRead: (conversationId: string, userId: string, height: number) => void;
   readWatermarks: Record<string, Record<string, number>>;
   reset: () => void;
+  /**
+   * 只清缓存(会话/消息/未读/已读水位),保留连接与身份。
+   * 「清空聊天记录」用它而不是 reset:socket 还连着的时候 reset 会把
+   * currentUserId 清掉并标记 disconnected,而 connectChat 对已连接的 socket
+   * 直接 return —— 之后所有收到的消息(含自己发的)都判不出收发方向,
+   * 未读也算错,要真的重连或重启才恢复。
+   */
+  clearCachedChats: () => void;
 }
 
 function sortKey(message: ChatMessageDto): number {
@@ -128,20 +138,69 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       conversations: get().conversations.filter((c) => c.id !== conversationId),
     }),
   applyIncomingMessage: (message) => {
-    const { conversations, currentUserId, activeConversationId } = get();
+    const {
+      conversations,
+      currentUserId,
+      activeConversationId,
+      messagesByConversation,
+    } = get();
     const index = conversations.findIndex((c) => c.id === message.conversationId);
-    if (index < 0) return;
+    // 列表里没有这个会话(例如对方刚建的单聊):调用方据此去补拉元信息,
+    // 否则消息进了时间线但会话行与角标一直不出现,要手动刷新才看得到。
+    if (index < 0) return false;
     const target = conversations[index];
     const fromSelf =
       currentUserId !== null && message.sender?.id === currentUserId;
+    // 幂等:同一条消息重复投递不再累计未读。时间线本来就按 id 去重,
+    // 不挡这里的话角标会被灌大,而列表里根本找不到对应的新消息。
+    const alreadyIngested = (
+      messagesByConversation[message.conversationId] ?? []
+    ).some((m) => m.id === message.id);
     // 正在看的会话不累计未读(进入会话即视为已读,读水位由屏幕上报)。
     const countsUnread =
-      !fromSelf && activeConversationId !== message.conversationId;
+      !alreadyIngested &&
+      !fromSelf &&
+      activeConversationId !== message.conversationId;
+    // 单调:预览只随更高的 height 前进。迟到的旧消息不该把会话拉回去、
+    // 把预览和时间显示成过期的那一条。乐观消息 height=0,恒可覆盖。
+    const isNewerPreview =
+      message.height === 0 ||
+      target.lastMessage == null ||
+      message.height >= target.lastMessage.height;
     const next: ChatConversationDto = {
       ...target,
-      lastMessage: message,
-      lastMessageAt: message.createdAt,
+      lastMessage: isNewerPreview ? message : target.lastMessage,
+      lastMessageAt: isNewerPreview ? message.createdAt : target.lastMessageAt,
       unreadCount: countsUnread ? target.unreadCount + 1 : target.unreadCount,
+    };
+    set({
+      conversations: sortConversations([
+        ...conversations.slice(0, index),
+        next,
+        ...conversations.slice(index + 1),
+      ]),
+    });
+    return true;
+  },
+
+  revertConversationPreview: (conversationId) => {
+    const { conversations, messagesByConversation } = get();
+    const index = conversations.findIndex((c) => c.id === conversationId);
+    if (index < 0) return;
+    // 时间线里最后一条「非失败、非乐观」的消息才是权威预览。
+    const timeline = messagesByConversation[conversationId] ?? [];
+    let authoritative: ChatMessageDto | null = null;
+    for (const message of timeline) {
+      if (message.height > 0 && !(message as StoredChatMessage).failed) {
+        authoritative = message;
+      }
+    }
+    const target = conversations[index];
+    if (target.lastMessage?.id === authoritative?.id) return;
+    const next: ChatConversationDto = {
+      ...target,
+      lastMessage: authoritative,
+      lastMessageAt: authoritative?.createdAt ?? target.lastMessageAt,
     };
     set({
       conversations: sortConversations([
@@ -231,6 +290,14 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       },
     });
   },
+
+  clearCachedChats: () =>
+    set({
+      conversations: [],
+      messagesByConversation: {},
+      activeConversationId: null,
+      readWatermarks: {},
+    }),
 
   reset: () =>
     set({

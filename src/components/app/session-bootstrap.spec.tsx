@@ -36,6 +36,7 @@ jest.mock('@/services/auth/session', () => ({
 jest.mock('@/chat-core/socket-manager', () => ({
   connectChat: jest.fn(),
   disconnectChat: jest.fn(),
+  suspendChat: jest.fn(),
 }));
 jest.mock('@/realtime/client', () => ({
   connectRealtime: jest.fn(),

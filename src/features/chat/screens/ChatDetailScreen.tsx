@@ -75,6 +75,8 @@ import {
   ensureDirectConversation,
   isChatSendBlockedBySensitiveWord,
   loadConversationMessages,
+  loadOlderConversationMessages,
+  resetHistoryCursor,
   markConversationAsRead,
   sendCardMessage,
   sendImageMessage,
@@ -794,8 +796,21 @@ export default function ChatDetailScreen() {
 
     return () => {
       setActiveConversationId(null);
+      // 离开会话丢掉翻页游标:下次进入重新从最新一页开始。
+      resetHistoryCursor(conversationID);
     };
   }, [conversationID, setActiveConversationId, sourceID]);
+
+  // inverted 列表触底 = 时间上更早:继续向前翻页。没有它的话超过一页的
+  // 会话根本滚不到更早的消息,搜索也跳不到首页之外的目标。
+  const handleLoadOlder = useCallback(() => {
+    if (!conversationID) return;
+    void loadOlderConversationMessages(conversationID).catch((err) => {
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn('[chat] load older messages failed', err);
+      }
+    });
+  }, [conversationID]);
 
   useEffect(() => {
     if (!conversationID && !sourceID) return;
@@ -2610,6 +2625,9 @@ export default function ChatDetailScreen() {
           // removeClippedSubviews 仅在 Android 开启（iOS 上 inverted 列表可能出现空白格）。
           initialNumToRender={15}
           maxToRenderPerBatch={10}
+          // inverted:列表"末端"是最旧的一头,触底即向前翻页。
+          onEndReached={handleLoadOlder}
+          onEndReachedThreshold={0.4}
           windowSize={11}
           removeClippedSubviews={Platform.OS === 'android'}
           contentContainerStyle={[s.messageList, s.messageListContent, s.messageListInset]}

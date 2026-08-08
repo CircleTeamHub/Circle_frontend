@@ -195,3 +195,39 @@ test('system messages render as localized system notices', () => {
   );
   assert.equal(unknown.text, '');
 });
+
+test('maps server call-record messages onto the call-record bubble', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const ui = mapChatMessageDtoToUI(
+    dto({
+      type: 'call-record',
+      content: {
+        callId: 'call-1',
+        callType: 'VIDEO',
+        sessionType: 'single',
+        endReason: 'NORMAL',
+        durationSeconds: 42,
+        initiatorID: 'u1',
+      },
+    }),
+    'u1',
+    0,
+  );
+  // 缺这一支的话会掉进 default,渲染成一条空文本气泡 —— 通话记录整体消失。
+  assert.equal(ui.type, 'call-record');
+  assert.equal(ui.callRecord.callType, 'VIDEO');
+  assert.equal(ui.callRecord.durationSeconds, 42);
+});
+
+test('falls back to a text bubble for a malformed call-record payload', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  for (const content of [
+    { callId: 'c', callType: 'HOLOGRAM', sessionType: 'single', endReason: 'NORMAL', initiatorID: 'u1' },
+    { callId: 'c', callType: 'AUDIO', sessionType: 'single', endReason: 'NOPE', initiatorID: 'u1' },
+    { callType: 'AUDIO', sessionType: 'single', endReason: 'NORMAL', initiatorID: 'u1' },
+  ]) {
+    const ui = mapChatMessageDtoToUI(dto({ type: 'call-record', content }), 'u1', 0);
+    // 半个对象不能塞给只认完整形状的 CallRecordBubble。
+    assert.notEqual(ui.type, 'call-record');
+  }
+});

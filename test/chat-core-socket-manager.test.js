@@ -117,6 +117,7 @@ function loadManager() {
     '@/constants/config': { CHAT_WS_URL: 'http://api.test' },
     './dispatcher': {
       bindChatEvents: (sock, isLive) => bound.push({ sock, isLive }),
+      cancelConversationBackfill: () => {},
     },
     './protocol': protocol,
     './store': storeModule,

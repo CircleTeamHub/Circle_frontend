@@ -2,7 +2,11 @@ import { useEffect } from 'react';
 import { AppState } from 'react-native';
 import { fetchCurrentUser } from '@/services/api/auth';
 import { isDefinitiveAuthFailure } from '@/services/api/client';
-import { connectChat, disconnectChat } from '@/chat-core/socket-manager';
+import {
+  connectChat,
+  disconnectChat,
+  suspendChat,
+} from '@/chat-core/socket-manager';
 import {
   connectRealtime,
   disconnectRealtime,
@@ -60,7 +64,11 @@ export function SessionBootstrap() {
 
     return () => {
       disconnectRealtime();
-      disconnectChat();
+      // 这里必须是「挂起」而不是「登出」:access token 轮换也会让本 effect 重跑,
+      // 清 store 的话正在看的会话会当场变空 —— 它的历史加载 effect 不依赖 token,
+      // 不会重拉,要退出重进才恢复,pending 已读也一并丢了。
+      // 换账号由 connectChat 自己识别并清 store。
+      suspendChat();
     };
   }, [accessToken, hasHydrated, onboardingRequired]);
 

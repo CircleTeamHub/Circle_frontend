@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import { fetchCircleDetail } from '@/services/api/circles';
 import {
   canViewCircleMembers,
@@ -15,15 +16,20 @@ export interface GroupSelfMember {
   nickname?: string;
 }
 
+/** 停留在受保护屏幕上时的兜底重校验周期。 */
+const REVALIDATE_INTERVAL_MS = 60_000;
+
 /**
  * 群成员目录访问权（群主/管理员可看）的活体视图 —— chat-core 版。
  * 事实源从 OpenIM 群成员换成圈子角色(fetchCircleDetail().myRole)。
  *
- * review P1 的两道防线在新栈下的形态:
- * 1. 实时角色事件:自研栈暂无成员角色推送(随系统消息批次落地),
- *    首查快照 + 受保护操作前的 revalidate() 现场重查是当前的全部防线;
- * 2. `revalidate()` fail-closed:查询失败/查无身份一律按无权处理。
- * 事件代际逻辑随订阅一起移除 —— 没有事件源时它只是死代码。
+ * review P1 的防线在新栈下的形态:
+ * 1. 自研栈暂无成员角色推送,所以靠「App 回前台 + 定时」重新校验 ——
+ *    被撤职的管理员留在 ChatInfoScreen 上不动时,只靠首查快照会让已经
+ *    加载出来的成员名单(昵称/头像)一直可见;
+ * 2. `revalidate()` fail-closed:查询失败/查无身份一律按无权处理;
+ * 3. 一旦判定失权,立刻把 selfMember 置空 —— canViewMembers 随之为 false,
+ *    调用方据此清掉目录数据,而不是留在屏幕上等下一次交互。
  */
 export function useGroupMemberViewAccess(params: {
   enabled: boolean;
@@ -41,6 +47,7 @@ export function useGroupMemberViewAccess(params: {
   const [resolved, setResolved] = useState(false);
   // 换群/卸载后丢弃在途查询结果。
   const queryGenRef = useRef(0);
+  const revalidateRef = useRef<(() => Promise<boolean>) | null>(null);
 
   const fetchSelf = useCallback(async (): Promise<GroupSelfMember | null> => {
     if (!enabled || !groupID || !currentUserID) return null;
@@ -81,6 +88,23 @@ export function useGroupMemberViewAccess(params: {
     };
   }, [currentUserID, enabled, fetchSelf, groupID]);
 
+  // 回前台 + 定时重校验:用户一直停在本屏不做任何操作时,撤职也要能生效。
+  // 刻意不用 useFocusEffect —— 那会把这个 hook 绑死在 navigator 上,
+  // 而它需要能在任何宿主(含单元测试)里独立工作。
+  useEffect(() => {
+    if (!enabled || !groupID || !currentUserID) return;
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next === 'active') void revalidateRef.current?.();
+    });
+    const timer = setInterval(() => {
+      void revalidateRef.current?.();
+    }, REVALIDATE_INTERVAL_MS);
+    return () => {
+      subscription.remove();
+      clearInterval(timer);
+    };
+  }, [currentUserID, enabled, groupID]);
+
   const revalidate = useCallback(async () => {
     if (!enabled || !groupID || !currentUserID) return false;
     const gen = queryGenRef.current;
@@ -100,6 +124,9 @@ export function useGroupMemberViewAccess(params: {
       return false;
     }
   }, [currentUserID, enabled, fetchSelf, groupID]);
+
+  // 定时/焦点回调里引用 revalidate 会形成声明顺序上的循环,用 ref 转一手。
+  revalidateRef.current = revalidate;
 
   const canViewMembers = useMemo(
     () => canViewCircleMembers(selfMember?.role ?? null),
