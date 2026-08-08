@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import {
   Text,
   useColorScheme,
@@ -6,14 +6,11 @@ import {
   type TextStyle,
 } from 'react-native';
 import Animated, {
-  Easing,
   interpolateColor,
   useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
+import { useMemberNameAnimation } from '@/components/ui/member-name-animation';
 import {
   getMembershipTierForVipLevel,
   type MembershipTier,
@@ -128,21 +125,10 @@ export const MemberName = memo(function MemberName({
       : null;
   // Array.from 而非 split(''),正确切分 emoji / 代理对,避免半个字符染错色。
   const chars = useMemo(() => Array.from(name), [name]);
-  const progress = useSharedValue(0);
-
   const isFlow = tier === 'super';
-  useEffect(() => {
-    if (isFlow && animated) {
-      progress.value = 0;
-      progress.value = withRepeat(
-        withTiming(1, { duration: 2600, easing: Easing.linear }),
-        -1,
-        false,
-      );
-    } else {
-      progress.value = 0;
-    }
-  }, [isFlow, animated, progress]);
+  const { progress, reduceMotionEnabled } = useMemberNameAnimation(
+    isFlow && animated,
+  );
 
   if (!tier) {
     return (
@@ -163,10 +149,9 @@ export const MemberName = memo(function MemberName({
 
   const colors = FLOW_COLORS.super;
 
-  // super 顶档流光是会员核心视觉,默认在所有页面(资料/会话/通讯录/朋友圈/通知)都流动 ——
-  // super 稀有,不会同屏几十个,无性能顾虑。animated={false} 保留为极端密集列表的可选降级开关
-  // (逐字静态上色不挂 reanimated),当前无调用处使用。
-  if (!animated) {
+  // super 顶档流光是会员核心视觉,默认在所有页面(资料/会话/通讯录/朋友圈/通知)都流动。
+  // 所有实例共享根节点的动画时钟；animated={false} 仍保留为极端密集列表的可选静态降级。
+  if (!animated || reduceMotionEnabled) {
     return (
       <Text style={style} numberOfLines={numberOfLines}>
         {chars.map((ch, index) => (
