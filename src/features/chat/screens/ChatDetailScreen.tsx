@@ -1046,6 +1046,8 @@ export default function ChatDetailScreen() {
             style: 'destructive',
             onPress: () => {
               // 本端视图删除(服务端保留;跨端删除随后续批次)。
+              // store 会同时落一条本地墓碑 —— 只摘数组的话重进会话再拉一次
+              // 历史就把它接回来了,「删除」等于刷新一次就撤销。
               useChatStore.getState().removeMessage(conversationID, message.id);
             },
           },

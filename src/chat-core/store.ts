@@ -1,4 +1,8 @@
 import { create } from 'zustand';
+import {
+  isMessageDeletedLocally,
+  markMessageDeletedLocally,
+} from './deleted-messages';
 import type { ChatConversationDto, ChatMessageDto } from './protocol';
 
 /**
@@ -106,6 +110,27 @@ export function mergeMessages(
   return merged.length > cap ? merged.slice(merged.length - cap) : merged;
 }
 
+/**
+ * 会话预览与本地墓碑对账。服务端不知道本端删过什么,REST 快照里的 lastMessage
+ * 完全可能正是刚删掉的那条 —— 不换掉的话下拉刷新一次,删掉的内容又回到消息列表上。
+ * 退回本地时间线里还留着的最新一条;时间线里也没有(窗口外/刚清过缓存)就只留
+ * lastMessageAt,预览留空 —— 排序与时间不受影响,只是不再展示已删内容。
+ */
+function reconcileDeletedPreview(
+  conversation: ChatConversationDto,
+  timeline: ChatMessageDto[] | undefined,
+): ChatConversationDto {
+  const last = conversation.lastMessage;
+  if (!last || !isMessageDeletedLocally(last.id)) return conversation;
+  let fallback: ChatMessageDto | null = null;
+  for (const message of timeline ?? []) {
+    if (message.height > 0 && !isMessageDeletedLocally(message.id)) {
+      fallback = message;
+    }
+  }
+  return { ...conversation, lastMessage: fallback };
+}
+
 /** 会话排序不变量:置顶在前 → lastMessageAt 降序 → id 兜底稳定。 */
 export function sortConversations(
   conversations: ChatConversationDto[],
@@ -136,12 +161,24 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   setConnecting: (connecting) => set({ connecting }),
   setError: (error) => set({ error }),
   setCurrentUserId: (userId) => set({ currentUserId: userId }),
-  setConversations: (conversations) =>
-    set({ conversations: sortConversations(conversations) }),
+  setConversations: (conversations) => {
+    const { messagesByConversation } = get();
+    set({
+      conversations: sortConversations(
+        conversations.map((c) =>
+          reconcileDeletedPreview(c, messagesByConversation[c.id]),
+        ),
+      ),
+    });
+  },
   upsertConversation: (conversation) => {
-    const { conversations } = get();
+    const { conversations, messagesByConversation } = get();
     const rest = conversations.filter((c) => c.id !== conversation.id);
-    set({ conversations: sortConversations([...rest, conversation]) });
+    const reconciled = reconcileDeletedPreview(
+      conversation,
+      messagesByConversation[conversation.id],
+    );
+    set({ conversations: sortConversations([...rest, reconciled]) });
   },
   removeConversation: (conversationId) =>
     set({
@@ -158,6 +195,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     // 列表里没有这个会话(例如对方刚建的单聊):调用方据此去补拉元信息,
     // 否则消息进了时间线但会话行与角标一直不出现,要手动刷新才看得到。
     if (index < 0) return false;
+    // 本地已删的消息被重投时既不该回到预览、也不该再算一次未读。
+    if (isMessageDeletedLocally(message.id)) return true;
     const target = conversations[index];
     const fromSelf =
       currentUserId !== null && message.sender?.id === currentUserId;
@@ -241,16 +280,25 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   },
 
   removeMessage: (conversationId, messageId) => {
+    // 墓碑先落盘,再动内存:只改数组的话下次拉历史就把它接回来了。
+    markMessageDeletedLocally(messageId);
     const { messagesByConversation } = get();
     const existing = messagesByConversation[conversationId] ?? [];
     const filtered = existing.filter((m) => m.id !== messageId);
-    if (filtered.length === existing.length) return;
-    set({
-      messagesByConversation: {
-        ...messagesByConversation,
-        [conversationId]: filtered,
-      },
-    });
+    if (filtered.length !== existing.length) {
+      set({
+        messagesByConversation: {
+          ...messagesByConversation,
+          [conversationId]: filtered,
+        },
+      });
+    }
+    // 删的正好是会话预览那条:预览得跟着退回时间线里还留着的最新一条,
+    // 否则消息页继续把已经删掉的内容当最新消息展示。
+    const conversation = get().conversations.find((c) => c.id === conversationId);
+    if (conversation?.lastMessage?.id === messageId) {
+      get().revertConversationPreview(conversationId);
+    }
   },
 
   markConversationReadLocal: (conversationId) => {
@@ -274,7 +322,10 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     set({ onlineByUser: { ...onlineByUser, [userId]: online } });
   },
 
-  ingestMessages: (conversationId, incoming) => {
+  ingestMessages: (conversationId, rawIncoming) => {
+    // 本地删过的消息在这里一次性挡掉:历史页、翻页、广播、补拉都走这条路,
+    // 少挡一条「删除」就会在下一次拉取时复活。
+    const incoming = rawIncoming.filter((m) => !isMessageDeletedLocally(m.id));
     if (incoming.length === 0) return;
     const { messagesByConversation, messageWindowByConversation } = get();
     const existing = messagesByConversation[conversationId] ?? [];
