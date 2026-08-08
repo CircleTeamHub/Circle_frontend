@@ -61,6 +61,9 @@ DEFAULT_TS_MODULE_STUBS['@/im/media-uri'] = loadTsModule('src/im/media-uri.ts');
 DEFAULT_TS_MODULE_STUBS['@/im/user-id'] = loadTsModule('src/im/user-id.ts');
 DEFAULT_TS_MODULE_STUBS['@/im/error-codes'] = loadTsModule('src/im/error-codes.ts');
 DEFAULT_TS_MODULE_STUBS['@/im/data-dir'] = loadTsModule('src/im/data-dir.ts');
+DEFAULT_TS_MODULE_STUBS['@/features/chat/chat-history-date-window'] = loadTsModule(
+  'src/features/chat/chat-history-date-window.ts',
+);
 DEFAULT_TS_MODULE_STUBS['@/storage'] = {
   storage: { getString: () => undefined, set: () => {}, remove: () => {} },
 };
