@@ -113,7 +113,11 @@ test('MemberName shares one app-scoped animation clock', () => {
   assert.doesNotMatch(src, /useSharedValue\(/);
 });
 
-test('shared MemberName animation pauses outside the active app and for Reduce Motion', () => {
+// 注意:这里只钉「文件在、行为用例在」。共享时钟的实际生命周期
+// (后台暂停/恢复、Reduce Motion 开关、最后一个消费者才停、监听清理)
+// 由 src/components/ui/member-name-animation.spec.tsx 用真实挂载/卸载验证 ——
+// 读源码的断言在回调空转、引用计数写错、监听不清理时照样绿,不能算覆盖。
+test('the shared MemberName animation clock has behavioral coverage', () => {
   const animationPath = path.join(
     __dirname,
     '..',
@@ -124,13 +128,13 @@ test('shared MemberName animation pauses outside the active app and for Reduce M
     'expected a shared MemberName animation provider',
   );
 
-  const animation = fs.readFileSync(animationPath, 'utf8');
-  assert.match(animation, /AppState\.addEventListener\('change'/);
-  assert.match(animation, /AccessibilityInfo\.isReduceMotionEnabled\(\)/);
-  assert.match(
-    animation,
-    /AccessibilityInfo\.addEventListener\(\s*'reduceMotionChanged'/,
+  const specPath = path.join(
+    __dirname,
+    '..',
+    'src/components/ui/member-name-animation.spec.tsx',
   );
-  assert.match(animation, /cancelAnimation\(/);
-  assert.match(animation, /withRepeat\(/);
+  assert.ok(
+    fs.existsSync(specPath),
+    'lifecycle behavior must be covered by a mounted-component spec, not source greps',
+  );
 });
