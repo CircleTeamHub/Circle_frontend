@@ -954,11 +954,28 @@ export default function ChatDetailScreen() {
         return;
       }
 
+      // 语音要把源 DTO 的 object key 一起收下来:UI 层的 voiceUrl 是服务端
+      // 现签的临时地址,过期即失效,推不回 key —— 不存 key 的话这条收藏
+      // 以后永远重发不出去(旧收藏正是卡在这里)。
+      const sourceContent =
+        message.type === 'voice'
+          ? useChatStore
+              .getState()
+              .messagesByConversation[conversationID]?.find(
+                (item) => item.id === message.id,
+              )?.content
+          : undefined;
+      const voiceKey =
+        typeof sourceContent?.['key'] === 'string'
+          ? (sourceContent['key'] as string)
+          : undefined;
+
       const input = buildCollectionInputFromMessage(message, {
         conversationID,
         conversationTitle,
         sourceID,
         conversationType: isGroupChat ? 'group' : 'private',
+        voiceKey,
       });
       if (!input) return;
 
@@ -2349,15 +2366,34 @@ export default function ChatDetailScreen() {
         return;
       }
 
+      // 旧语音收藏(只存了会过期的播放地址、推不回 object key)是永久不可发的。
+      // 这里必须在进入发送流程之前就拦下:抛异常的话会被下面的 catch 统一
+      // 渲染成「发送失败,请重试」—— 而重试多少次都不可能成功。
+      // 选择器那侧同样按 canResendCollection 把这类行禁用掉,双保险。
+      if (plan.kind === 'unsupported') {
+        if (mountedRef.current) {
+          setSendError(
+            t('chat.detail.favoriteLegacyVoiceUnsupported', {
+              defaultValue: '这条旧版语音收藏无法重新发送',
+            }),
+          );
+        }
+        return;
+      }
+
       if (inFlightRef.current) return;
       inFlightRef.current = true;
       try {
         switch (plan.kind) {
           case 'voice':
-            // 旧收藏的语音只存了 OpenIM 时代的 URL,新栈消息体只收 object key,
-            // 无法可靠反推 —— 明确报错优于静默发一条播不出的语音。
-            // 收藏体系迁到新栈(存 key)后此分支恢复。
-            throw new Error('voice favorite resend not yet supported on chat-core');
+            // 收藏时存下的 object key 直接重发,不重新上传音频。
+            await sendVoiceMessage({
+              conversationId: conversationID,
+              key: plan.key,
+              duration: plan.duration,
+              ...(plan.dataSize ? { size: plan.dataSize } : {}),
+            });
+            break;
           case 'note':
             await sendCardMessage({
               conversationId: conversationID,

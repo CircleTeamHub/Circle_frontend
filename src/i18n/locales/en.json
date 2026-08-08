@@ -285,7 +285,8 @@
       "noteSendFailed": "Failed to send note, please try again",
       "cardSendFailed": "Failed to send contact card, please try again",
       "favoriteSendFailed": "Failed to send favorite, please try again",
-      "transferCardSendFailed": "Failed to send the transfer card, but the credits were already deducted"
+      "transferCardSendFailed": "Failed to send the transfer card, but the credits were already deducted",
+      "favoriteLegacyVoiceUnsupported": "This legacy voice favorite can no longer be sent"
     },
     "messageActions": {
       "title": "Message actions",
@@ -2351,7 +2352,8 @@
     },
     "loadFailed": "Failed to load",
     "noMatch": "No matches",
-    "empty": "No content yet"
+    "empty": "No content yet",
+    "favoriteLegacyVoiceUnsupported": "Legacy voice favorite — cannot be resent"
   },
   "profileDisplay": {
     "emptySignature": "Your bio will appear here once you complete your profile."
