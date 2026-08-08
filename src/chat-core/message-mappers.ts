@@ -43,13 +43,23 @@ function num(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
-/** 本机文件 uri(乐观消息用):只认没有 host 的本地 scheme,绝不放行网络地址。 */
-function localPreviewUri(content: Record<string, unknown>): string | undefined {
-  const local = str(content['localUri']);
+/**
+ * 本机文件 uri(乐观消息用):只认没有 host 的本地 scheme,绝不放行网络地址。
+ * 导出给聊天记录·媒体页复用 —— 那边也要从同一份 content 里取缩略图,
+ * 两处判定必须是同一条规则,否则挡住的信标换个入口照样打得出去。
+ */
+export function allowLocalMediaUri(
+  value: string | null | undefined,
+): string | undefined {
+  const local = str(value);
   if (!local) return undefined;
   return /^(file:|content:|ph:|assets-library:|data:image\/)/i.test(local)
     ? local
     : undefined;
+}
+
+function localPreviewUri(content: Record<string, unknown>): string | undefined {
+  return allowLocalMediaUri(str(content['localUri']));
 }
 
 /**

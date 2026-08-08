@@ -637,7 +637,12 @@ test('chat history search screens exist with dedicated titles and empty states',
   assert.match(textSource, /searchChatMessages\(conversationID, \{\s*keyword/);
   assert.match(textSource, /t\('chat\.history\.noMatches'\)/);
 
-  assert.match(mediaSource, /searchChatMessages\(conversationID, \{ types: \['image'\]/);
+  // 三条请求路径共用 MEDIA_HISTORY_TYPES(= ['image']);见该常量上方注释:
+  // 自研栈没有 'video' 类型,混进去会被 DTO 的 @IsIn 判 400。
+  assert.match(
+    mediaSource,
+    /searchChatMessages\(conversationID, \{ types: MEDIA_HISTORY_TYPES/,
+  );
   assert.match(mediaSource, /t\('chat\.history\.noMedia'\)/);
 
   assert.match(filesSource, /searchChatMessages\(conversationID, \{ types: \['file'\]/);
@@ -695,18 +700,26 @@ test('chat history media screen groups media by month in a three-column grid', (
   assert.match(mediaSource, /formatChatHistoryMonth/);
 });
 
-test('chat history media grid normalizes urls and falls back across image candidates', () => {
+test('chat history media grid sanitizes urls and falls back across image candidates', () => {
   const mediaSource = fs.readFileSync(
     path.join(process.cwd(), 'src/features/chat/screens/ChatHistoryMediaScreen.tsx'),
     'utf8',
   );
+  const helper = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/chat-history.ts'),
+    'utf8',
+  );
 
-  assert.match(mediaSource, /normalizeMediaUrl/);
-  assert.match(mediaSource, /getMediaThumbnailUris/);
+  assert.match(mediaSource, /getChatMediaThumbnailUris/);
+  // 候选解析搬去 chat-history.ts 才测得动行为(见 chat-history-media-thumbnails)。
+  // 关键是它过的是白名单而不是 normalizeMediaUrl —— 后者对外部 https 原样放行。
+  assert.match(helper, /allowPeerMediaUrl/);
+  assert.match(helper, /allowLocalMediaUri/);
+  assert.doesNotMatch(mediaSource, /normalizeMediaUrl/);
   // chat-core:缩略 → 原图 → 乐观期本地 uri 的降级链。
-  assert.match(mediaSource, /content\['thumbUrl'\]/);
-  assert.match(mediaSource, /content\['url'\]/);
-  assert.match(mediaSource, /content\['localUri'\]/);
+  assert.match(helper, /content\['thumbUrl'\]/);
+  assert.match(helper, /content\['url'\]/);
+  assert.match(helper, /content\['localUri'\]/);
   assert.match(mediaSource, /handleImageError/);
   assert.match(mediaSource, /onError=\{handleImageError\}/);
 });
