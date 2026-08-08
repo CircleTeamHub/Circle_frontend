@@ -1,3 +1,4 @@
+import { assertLocalCanSendMessage } from '@/services/api/credit-policy';
 import { useAuthStore } from '@/stores/authStore';
 import {
   createCircleChatConversation,
@@ -149,6 +150,12 @@ function selfSenderInfo() {
 export async function sendWithOptimism(
   options: SendOptions,
 ): Promise<ChatMessageDto> {
+  // 信用分门禁:所有发送都从这里过,所以闸放在这一层才是完整的。
+  // 拆栈前它挂在 reportSend 包装器上,迁移后只剩发图路径单独调了一次 ——
+  // 于是低于阈值的用户仍然能正常发文本/引用/语音/位置/各类卡片。
+  // 后端刻意不做这道校验(策略在端上),漏了就是真的漏了。
+  // 抛在插入乐观消息之前:失败的发送不该在时间线里留下痕迹。
+  assertLocalCanSendMessage();
   const d = createDeliveryId();
   const store = useChatStore.getState();
   const optimistic: StoredChatMessage = {
