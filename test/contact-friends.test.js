@@ -109,6 +109,7 @@ test('pickExactAccountMatch prefers case-insensitive exact account matches over 
   const { pickExactAccountMatch } = loadTsModule('src/services/api/users.ts', {
     '@/services/api/client': { apiClient: async () => [] },
     '@/services/api/utils': {
+      allowPeerMediaUrl: (value) => value ?? null,
       normalizeAvatarFrameAppearance: (value) => value ?? null,
       normalizeUserAvatarFrameAppearance: (value) => value ?? null,
       normalizeUser: (value) => value,
@@ -140,6 +141,7 @@ test('searchUsersByAccountId calls the dedicated account search endpoint', async
       },
     },
     '@/services/api/utils': {
+      allowPeerMediaUrl: (value) => value ?? null,
       normalizeAvatarFrameAppearance: (value) => value ?? null,
       normalizeUserAvatarFrameAppearance: (value) => value ?? null,
       normalizeMediaUrl: (value) => value,
@@ -172,6 +174,7 @@ test('fetchFriends drops malformed rows before contacts render them', async () =
       ],
     },
     '@/services/api/utils': {
+      allowPeerMediaUrl: (value) => value ?? null,
       fetchCountEndpoint: async () => 0,
       normalizeAvatarFrameAppearance: (value) => value ?? null,
       normalizeMediaUrl: (value) => value,
@@ -225,6 +228,7 @@ test('fetchFriends deduplicates repeated friend ids before SectionList sees them
       ],
     },
     '@/services/api/utils': {
+      allowPeerMediaUrl: (value) => value ?? null,
       fetchCountEndpoint: async () => 0,
       normalizeAvatarFrameAppearance: (value) => value ?? null,
       normalizeMediaUrl: (value) => value,
@@ -281,6 +285,7 @@ test('friend endpoints prefer a valid timestamp over an invalid duplicate', asyn
         apiClient: async () => rows,
       },
       '@/services/api/utils': {
+        allowPeerMediaUrl: (value) => value ?? null,
         fetchCountEndpoint: async () => 0,
         normalizeAvatarFrameAppearance: (value) => value ?? null,
         normalizeMediaUrl: (value) => value,

@@ -184,6 +184,7 @@ test('friend activity API helpers use activity endpoints', async () => {
   } = loadTsModule('src/services/api/friends.ts', {
     '@/services/api/client': { apiClient: apiClientStub },
     '@/services/api/utils': {
+      allowPeerMediaUrl: (value) => value ?? null,
       normalizeMediaUrl: (value) => value,
       normalizeAvatarFrameAppearance: (value) => value ?? null,
       // `fetchCountEndpoint` 是 batch 6 extract 的小辅助函数 —— 这里复用同一个

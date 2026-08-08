@@ -124,6 +124,7 @@ test('daily Android build exercises the tag-time native release path', () => {
     'EXPO_PUBLIC_API_URL',
     'EXPO_PUBLIC_OPENIM_API_URL',
     'EXPO_PUBLIC_OPENIM_WS_URL',
+    'EXPO_PUBLIC_MEDIA_ORIGINS',
     'EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID',
     'EXPO_PUBLIC_SUPPORT_ACCOUNT_ID',
     'EXPO_PUBLIC_SUPPORT_RECHARGE_ID',
@@ -175,6 +176,7 @@ test('daily Android build refuses to compile the support fallback branch', () =>
     'EXPO_PUBLIC_API_URL',
     'EXPO_PUBLIC_OPENIM_API_URL',
     'EXPO_PUBLIC_OPENIM_WS_URL',
+    'EXPO_PUBLIC_MEDIA_ORIGINS',
     'EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID',
     'EXPO_PUBLIC_SUPPORT_ACCOUNT_ID',
     'EXPO_PUBLIC_SUPPORT_RECHARGE_ID',
@@ -233,6 +235,63 @@ test('build-env validation shares the tag-time env contract', () => {
     ),
     /EXPO_PUBLIC_API_URL.*https/,
   );
+});
+
+test('Sentry DSN reaches both the validator and the compiled package', () => {
+  const workflow = read(WORKFLOW_PATH);
+  const build = workflowJob(workflow, 'native_build');
+  const release = read('.github/workflows/android-release.yml');
+
+  // 这条断言存在的原因：DSN 曾经完全没被转发，于是每个 release 包里的 Sentry 都是
+  // 静默 no-op —— 崩溃/卡死一条都没上报，而构建全绿。变量必须同时到达
+  // ①校验器（好在缺失时告警）和 ②Gradle（否则编译进包的是空 DSN）。
+  const dsn = /EXPO_PUBLIC_SENTRY_DSN: \$\{\{ vars\.EXPO_PUBLIC_SENTRY_DSN \}\}/;
+  assert.match(workflowStep(build, 'Validate build environment'), dsn);
+  assert.match(workflowStep(build, 'Build release-like APK'), dsn);
+
+  // tag 发布那条线同样要有，否则每日构建有上报、真正发出去的包没有。
+  assert.match(release, dsn);
+  assert.ok(
+    release.match(new RegExp(dsn.source, 'g')).length >= 2,
+    'release workflow must forward the DSN to both its validator and its build step',
+  );
+});
+
+test('Sentry DSN is warned about when missing and rejected when malformed', () => {
+  const {
+    collectBuildEnvWarnings,
+    validateBuildEnv,
+  } = require('../.github/scripts/validate-android-release');
+  const env = {
+    EXPO_PUBLIC_API_URL: 'https://api.windnote.test',
+    EXPO_PUBLIC_OPENIM_API_URL: 'https://im.windnote.test',
+    EXPO_PUBLIC_OPENIM_WS_URL: 'wss://im.windnote.test/ws',
+    EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: 'official-support',
+    EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: 'cs-support',
+  };
+
+  // 缺失 = 告警，不是错误：没有 DSN 时 app 完全正常，只是不上报。硬 fail 会把
+  // 「还没接 Sentry」变成「不能发版」。
+  assert.deepEqual(validateBuildEnv({ env }), []);
+  assert.match(collectBuildEnvWarnings({ env }).join('\n'), /EXPO_PUBLIC_SENTRY_DSN/);
+
+  const valid = { ...env, EXPO_PUBLIC_SENTRY_DSN: 'https://abc123@o42.ingest.sentry.io/4507' };
+  assert.deepEqual(validateBuildEnv({ env: valid }), []);
+  assert.deepEqual(collectBuildEnvWarnings({ env: valid }), []);
+
+  // 配了但配错 = 错误：Sentry.init 会静默失败，看起来「已接好」实则和没配一样。
+  for (const [what, dsn] of [
+    ['not a URL', 'nope'],
+    ['http instead of https', 'http://abc123@o42.ingest.sentry.io/4507'],
+    ['missing public key', 'https://o42.ingest.sentry.io/4507'],
+    ['carries a secret key', 'https://abc123:secret@o42.ingest.sentry.io/4507'],
+    ['no numeric project id', 'https://abc123@o42.ingest.sentry.io/'],
+  ]) {
+    assert.ok(
+      validateBuildEnv({ env: { ...env, EXPO_PUBLIC_SENTRY_DSN: dsn } }).length > 0,
+      `build-env must reject a DSN that is ${what}`,
+    );
+  }
 });
 
 test('daily Android build checks production signing config in an isolated job', () => {

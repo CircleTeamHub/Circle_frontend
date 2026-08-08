@@ -50,7 +50,10 @@ const MAPPER_STUBS = {
     VERIFICATION_CARD_EXTENSION: 'circle-verify-v1',
     fromImUserId: (userID) => userID,
   },
-  '@/services/api/utils': { normalizeMediaUrl: (url) => url },
+  '@/services/api/utils': {
+    normalizeMediaUrl: (url) => url,
+    allowPeerMediaUrl: (url) => url ?? null,
+  },
   '@/i18n': {
     __esModule: true,
     default: { language: 'zh', t: (_key, options) => options.defaultValue },

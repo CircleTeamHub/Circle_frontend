@@ -42,6 +42,7 @@ test('release rollout documentation records the fail-closed operating contract',
     'EXPO_PUBLIC_API_URL',
     'EXPO_PUBLIC_OPENIM_API_URL',
     'EXPO_PUBLIC_OPENIM_WS_URL',
+    'EXPO_PUBLIC_MEDIA_ORIGINS',
     'ANDROID_CERT_SHA256',
   ]) {
     assert.match(
@@ -276,6 +277,12 @@ test('Android release workflow builds and verifies a private signed artifact', (
   assert.match(build, /EXPO_PUBLIC_API_URL:/);
   assert.match(build, /EXPO_PUBLIC_OPENIM_API_URL:/);
   assert.match(build, /EXPO_PUBLIC_OPENIM_WS_URL:/);
+  // 仓库变量不会自动进 process.env:不显式转发的话 MEDIA_ORIGINS 编译成空数组,
+  // 独立对象存储/CDN 域名的媒体在 release 包里依旧全被白名单拒掉。
+  assert.match(
+    build,
+    /EXPO_PUBLIC_MEDIA_ORIGINS: \$\{\{ vars\.EXPO_PUBLIC_MEDIA_ORIGINS \}\}/,
+  );
   assert.match(
     build,
     /EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: \$\{\{ vars\.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID \}\}/,

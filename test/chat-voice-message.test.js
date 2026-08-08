@@ -413,6 +413,7 @@ test('OpenIM voice messages map to a dedicated ChatMessage voice bubble model', 
       fromImUserId: (userID) => userID,
     },
     '@/services/api/utils': {
+      allowPeerMediaUrl: (value) => value ?? null,
       normalizeMediaUrl: (url) => url,
     },
     '@/i18n': {

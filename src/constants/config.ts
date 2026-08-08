@@ -130,6 +130,46 @@ export const OPENIM_API_URL = assertSecureTransport(
   'OPENIM_API_URL',
 );
 
+/**
+ * 额外的媒体来源白名单(逗号分隔的 origin 列表)。
+ *
+ * 上传契约返回的是独立的 fileUrl —— 对象存储/CDN 完全可以挂在自己的域名下,
+ * 与 API 主机名无关。allowPeerMediaUrl 若只比 API 主机名,这种部署下每一个
+ * 合法媒体地址都会被拒:发出和收到的图片全空、语音放不了、分享封面消失。
+ * 所以把「媒体来源」做成显式配置,而不是假设存储和 API 同域。
+ *
+ * 仍然只放行明确列出的 origin —— 白名单的意义(挡对端塞进来的追踪信标)不变。
+ * 非法条目在这里被丢弃并告警,不会让整份配置失效。
+ */
+function parseMediaOrigins(raw: string | undefined): string[] {
+  if (!raw) return [];
+  // 不写类型标注:config 的测试 harness 用正则剥类型,只认得函数签名上的。
+  const origins = [];
+  for (const entry of raw.split(',')) {
+    const candidate = trimTrailingSlash(entry.trim());
+    if (!candidate) continue;
+    try {
+      const parsed = new URL(candidate);
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        throw new Error('unsupported protocol');
+      }
+      if (parsed.username || parsed.password) {
+        throw new Error('credentials are not allowed');
+      }
+      origins.push(parsed.origin);
+    } catch {
+      console.warn(
+        `[config] EXPO_PUBLIC_MEDIA_ORIGINS 忽略非法条目: ${candidate}`,
+      );
+    }
+  }
+  return origins;
+}
+
+export const MEDIA_ORIGINS = parseMediaOrigins(
+  process.env.EXPO_PUBLIC_MEDIA_ORIGINS,
+);
+
 export const OPENIM_WS_URL = assertSecureTransport(
   trimTrailingSlash(
     getRequiredTransportValue(

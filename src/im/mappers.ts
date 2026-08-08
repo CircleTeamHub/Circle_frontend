@@ -30,7 +30,7 @@ import {
   FRIEND_ADDED_NOTICE_EXTENSION,
   fromImUserId,
 } from '@/im/client';
-import { normalizeMediaUrl } from '@/services/api/utils';
+import { allowPeerMediaUrl, normalizeMediaUrl } from '@/services/api/utils';
 import i18n from '@/i18n';
 import { getLocalizedDateTimeLocale } from '@/utils/locale';
 
@@ -130,6 +130,58 @@ function getGroupNoticeText(message: MessageItem): string | null {
     default:
       return null;
   }
+}
+
+/**
+ * 净化对方可控的 displayIcons。
+ *
+ * 名片消息的 cardElem.ex 是一段对端完全可控的 JSON，且**不经过 circle_be**
+ * （客户端 SDK 直发 OpenIM），所以服务端没有任何 DTO 能拦。这里是唯一的收口点。
+ *
+ * 只保留气泡真正会渲染的那几个字段并强制类型：id 用作 key、imageUrl 决定分支、
+ * title 直接进 <Text>。任一为异常类型都会在渲染期抛异常 —— 而聊天页没有
+ * error boundary、消息又是持久化的，一条构造过的名片就能永久打不开这个会话。
+ */
+type SanitizedDisplayIcon = NonNullable<
+  FriendCardData['displayIcons']
+>[number];
+
+function sanitizeDisplayIcons(value: unknown): SanitizedDisplayIcon[] {
+  if (!Array.isArray(value)) return [];
+  const icons: SanitizedDisplayIcon[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const icon = raw as Record<string, unknown>;
+    if (typeof icon.id !== 'string' || typeof icon.title !== 'string') continue;
+    icons.push({
+      ...(icon as unknown as SanitizedDisplayIcon),
+      id: icon.id,
+      title: icon.title,
+      imageUrl: typeof icon.imageUrl === 'string' ? icon.imageUrl : null,
+    });
+  }
+  return icons;
+}
+
+/**
+ * 渲染文本的长度上限。
+ *
+ * 消息正文、位置描述、群通知里的成员昵称都由对端控制，且不经过 circle_be
+ * （客户端 SDK 直发 OpenIM），服务端没有任何校验。气泡也没有设 numberOfLines，
+ * 于是一条几 MB 的单行文本会在 UI 线程上做一次同等规模的文字排版 —— 期间整个
+ * 界面不响应，而消息是持久化的，重进会话再来一次。
+ *
+ * 8000 远高于任何真实聊天消息（微信一条上限 5000 字），只用来兜住失控的那种。
+ * 在映射层截断而不是在输入框加 maxLength：攻击者根本不走我们的输入框，
+ * maxLength 只是自家客户端的礼貌，不是防线。
+ */
+const MAX_RENDERED_TEXT_LENGTH = 8000;
+
+function clampRenderedText<T extends string | null | undefined>(value: T): T {
+  if (typeof value !== 'string' || value.length <= MAX_RENDERED_TEXT_LENGTH) {
+    return value;
+  }
+  return `${value.slice(0, MAX_RENDERED_TEXT_LENGTH)}…` as T;
 }
 
 function parseNoteCardPayload(data: string): NoteCardData | null {
@@ -455,7 +507,7 @@ export function mapMessageItemToChatMessage(
     return {
       id: item.clientMsgID,
       type: 'system-notice',
-      text: groupNoticeText,
+      text: clampRenderedText(groupNoticeText),
       time: formatTimestamp(item.sendTime),
     };
   }
@@ -489,8 +541,8 @@ export function mapMessageItemToChatMessage(
       ...base,
       type: 'location',
       outgoing: isSent,
-      locationTitle: item.locationElem?.description ?? '位置消息',
-      locationAddress: item.locationElem?.description ?? '未知位置',
+      locationTitle: clampRenderedText(item.locationElem?.description) ?? '位置消息',
+      locationAddress: clampRenderedText(item.locationElem?.description) ?? '未知位置',
       senderName: isSent ? undefined : (item.senderNickname || item.sendID),
     };
   }
@@ -499,7 +551,7 @@ export function mapMessageItemToChatMessage(
     return {
       ...base,
       type: isSent ? 'sent' : 'received',
-      text: item.atTextElem?.text ?? item.content,
+      text: clampRenderedText(item.atTextElem?.text ?? item.content),
       senderName: isSent ? undefined : (item.senderNickname || item.sendID),
     };
   }
@@ -508,7 +560,7 @@ export function mapMessageItemToChatMessage(
     return {
       ...base,
       type: isSent ? 'sent' : 'received',
-      text: item.quoteElem?.text ?? item.content,
+      text: clampRenderedText(item.quoteElem?.text ?? item.content),
       quotedText: getMessagePreview(item.quoteElem?.quoteMessage ?? null, ''),
       senderName: isSent ? undefined : (item.senderNickname || item.sendID),
     };
@@ -551,7 +603,8 @@ export function mapMessageItemToChatMessage(
           outgoing: isSent,
           plazaPostCard: {
             ...payload,
-            coverUrl: normalizeMediaUrl(payload.coverUrl) ?? null,
+            // 封面同样来自对端可控的卡片 payload。
+            coverUrl: allowPeerMediaUrl(payload.coverUrl),
           },
           senderName: isSent ? undefined : (item.senderNickname || item.sendID),
         };
@@ -615,7 +668,16 @@ export function mapMessageItemToChatMessage(
       } = {};
       if (card.ex) {
         try {
-          ext = JSON.parse(card.ex);
+          const parsed: unknown = JSON.parse(card.ex);
+          // 必须校验解析结果是普通对象，不能直接赋值：JSON.parse('null') 不抛异常，
+          // 它**成功**并返回 null，于是下面 try 之外的 ext.kind 解引用 null 抛
+          // TypeError —— 异常逃出这个 catch，冒泡到 ChatDetailScreen 的 messages
+          // useMemo，整个聊天页渲染失败。而消息是持久化的，重进会话会再次触发，
+          // 等于对方一条构造过的名片消息就能永久搞坏这个会话。
+          // 同理 '"abc"' / '123' 解析出原始值，属性访问虽不抛，但后续字段全是脏数据。
+          if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            ext = parsed as typeof ext;
+          }
         } catch {
           // 旧版本或非法 JSON，忽略，只保留基础字段
         }
@@ -644,8 +706,14 @@ export function mapMessageItemToChatMessage(
         userID: card.userID,
         nickname: card.nickname,
         faceURL: card.faceURL,
-        persona: ext.persona ?? null,
-        displayIcons: ext.displayIcons ?? [],
+        // 必须 typeof 校验：气泡里是 card.persona?.trim()，`?.` 只挡 null/undefined，
+        // 挡不住数字/对象 —— {"persona":123} 会抛 persona?.trim is not a function。
+        persona: typeof ext.persona === 'string' ? ext.persona : null,
+        // 光校验容器不够：数组本身合法，元素却可以是 null 或带对象字段的假图标，
+        // 于是 icon.imageUrl 解引用 null、或 <Text>{icon.title}</Text> 收到对象
+        // （React 直接抛 "Objects are not valid as a React child"）。
+        // 逐个净化到「气泡真正会渲染的那几个字段都是安全类型」为止。
+        displayIcons: sanitizeDisplayIcons(ext.displayIcons),
       };
       return {
         ...base,
@@ -674,11 +742,12 @@ export function mapMessageItemToChatMessage(
         ...base,
         type: 'image',
         outgoing: isSent,
-        imageUrl: normalizeMediaUrl(rawUrl) ?? rawUrl,
-        imageThumbUrl:
-          thumbUrl && thumbUrl.length > 0
-            ? normalizeMediaUrl(thumbUrl) ?? thumbUrl
-            : undefined,
+        // 走来源白名单而不是直通的 normalizeMediaUrl：这两个 URL 由对端完全控制、
+        // 且不经过 circle_be。指向任意主机时，每个滑过这条消息的人都会静默 GET 一次
+        // （无需点击），等于把 IP、User-Agent 和精确的已读时刻送给对方。
+        // 不可信时给 null，让气泡退化成占位符而不是照常发请求。
+        imageUrl: allowPeerMediaUrl(rawUrl) ?? '',
+        imageThumbUrl: allowPeerMediaUrl(thumbUrl) ?? undefined,
         imageWidth: pic?.width ?? undefined,
         imageHeight: pic?.height ?? undefined,
         senderName: isSent ? undefined : (item.senderNickname || item.sendID),
@@ -689,7 +758,8 @@ export function mapMessageItemToChatMessage(
   }
 
   if (item.contentType === MessageType.VoiceMessage) {
-    const voiceUrl = normalizeMediaUrl(item.soundElem?.sourceUrl ?? '') ?? item.soundElem?.sourceUrl;
+    // 同上：语音条渲染时就会建播放器指向这个地址，同样是对端可控的对外请求。
+    const voiceUrl = allowPeerMediaUrl(item.soundElem?.sourceUrl);
     return {
       ...base,
       type: 'voice',
@@ -705,7 +775,7 @@ export function mapMessageItemToChatMessage(
   return {
     ...base,
     type: isSent ? 'sent' : 'received',
-    text: getMessagePreview(item, item.content),
+    text: clampRenderedText(getMessagePreview(item, item.content)),
     // 仅接收到的消息携带 senderName，优先用昵称，没有则 fallback 到 sendID
     senderName: isSent ? undefined : (item.senderNickname || item.sendID),
   };

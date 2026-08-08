@@ -30,6 +30,7 @@ function loadApiUtils(options = {}) {
           API_URL:
             options.apiUrl ?? 'http://192.168.1.65:3000/api/v1',
           OPENIM_API_URL: 'http://192.168.1.65:10002',
+          MEDIA_ORIGINS: options.mediaOrigins ?? [],
         };
       }
 
@@ -322,4 +323,123 @@ test('embedded appearances safely null unsafe remote frame URLs', () => {
       imageUrl: null,
     },
   );
+});
+
+// ── allowPeerMediaUrl：对端可控媒体地址的来源白名单 ─────────────────────────
+//
+// 聊天图片/语音/卡片封面的 URL 来自 OpenIM 消息体，不经过 circle_be，服务端一个字
+// 都没校验过。放任它指向任意主机的后果不是流量，而是隐私：每个滑过这条消息的人都会
+// 静默发起一次 GET（无需点击），把 IP、User-Agent 和精确的已读时刻交给对方。
+test('allowPeerMediaUrl accepts the app own media origins', () => {
+  const { allowPeerMediaUrl } = loadApiUtils({
+    apiUrl: 'https://api.example.com/api/v1',
+    isDev: false,
+  });
+
+  assert.equal(
+    allowPeerMediaUrl('https://api.example.com/circle/chat/a.jpg'),
+    'https://api.example.com/circle/chat/a.jpg',
+  );
+});
+
+test('allowPeerMediaUrl accepts a configured object-storage / CDN origin', () => {
+  // 上传契约返回的是独立 fileUrl:存储挂在自己的域名下是正常部署形态。
+  // 只比 API 主机名的话,这种部署里每一个合法媒体都会被拒 ——
+  // 图片全空、语音放不了、分享封面消失,而 REST 一切正常,极难排查。
+  const { allowPeerMediaUrl } = loadApiUtils({
+    apiUrl: 'https://api.example.com/api/v1',
+    isDev: false,
+    mediaOrigins: ['https://cdn.example.net'],
+  });
+
+  assert.equal(
+    allowPeerMediaUrl('https://cdn.example.net/chat/a.jpg'),
+    'https://cdn.example.net/chat/a.jpg',
+  );
+  // 配了 CDN 也不等于放开白名单:其它主机照拒。
+  assert.equal(allowPeerMediaUrl('https://evil.example/beacon.gif'), null);
+});
+
+test('allowPeerMediaUrl still rejects a CDN host that was not configured', () => {
+  const { allowPeerMediaUrl } = loadApiUtils({
+    apiUrl: 'https://api.example.com/api/v1',
+    isDev: false,
+    mediaOrigins: [],
+  });
+
+  assert.equal(allowPeerMediaUrl('https://cdn.example.net/chat/a.jpg'), null);
+});
+
+test('allowPeerMediaUrl matches the exact origin, not just the hostname', () => {
+  // 配了 :8443 不等于授权同主机的 :9443 —— 那是另一个服务,操作者没点过头。
+  const { allowPeerMediaUrl } = loadApiUtils({
+    apiUrl: 'https://api.example.com/api/v1',
+    isDev: false,
+    mediaOrigins: ['https://cdn.example.com:8443'],
+  });
+
+  assert.equal(
+    allowPeerMediaUrl('https://cdn.example.com:8443/chat/a.jpg'),
+    'https://cdn.example.com:8443/chat/a.jpg',
+  );
+  assert.equal(allowPeerMediaUrl('https://cdn.example.com:9443/chat/a.jpg'), null);
+});
+
+test('allowPeerMediaUrl still allows other dev ports on the local host', () => {
+  // 开发机上 MinIO(9000)/OpenIM object(10002) 与 API(3000) 同主机不同端口,
+  // normalizeMediaUrl 刻意保留媒体端口。这里若也严比 origin,本机开发图片全挂。
+  const { allowPeerMediaUrl } = loadApiUtils({
+    apiUrl: 'http://192.168.1.65:3000/api/v1',
+    isDev: true,
+  });
+
+  assert.equal(
+    allowPeerMediaUrl('http://192.168.1.65:9000/circle/chat/a.jpg'),
+    'http://192.168.1.65:9000/circle/chat/a.jpg',
+  );
+  // 放宽只对私网地址生效,公网主机照拒。
+  assert.equal(allowPeerMediaUrl('http://attacker.example:9000/x.jpg'), null);
+});
+
+test('allowPeerMediaUrl rejects any third-party host (the tracking beacon)', () => {
+  const { allowPeerMediaUrl } = loadApiUtils({
+    apiUrl: 'https://api.example.com/api/v1',
+    isDev: false,
+  });
+
+  for (const hostile of [
+    'https://attacker.example/track.png',
+    // 只挡 http 是不够的：信标用 https 一样能拿到 IP 和已读时刻。
+    'https://evil.test/1x1.gif?who=victim',
+    // 前缀相似但不同主机，不能因为 startsWith 之类的松散比较而放行。
+    'https://api.example.com.evil.test/x.jpg',
+  ]) {
+    assert.equal(allowPeerMediaUrl(hostile), null, `must reject ${hostile}`);
+  }
+});
+
+test('allowPeerMediaUrl rejects embedded credentials and plain http in production', () => {
+  const { allowPeerMediaUrl } = loadApiUtils({
+    apiUrl: 'https://api.example.com/api/v1',
+    isDev: false,
+  });
+
+  // 内嵌凭证会随请求一起发出去。
+  assert.equal(
+    allowPeerMediaUrl('https://user:pass@api.example.com/circle/a.jpg'),
+    null,
+  );
+  assert.equal(allowPeerMediaUrl('http://api.example.com/circle/a.jpg'), null);
+});
+
+test('allowPeerMediaUrl tolerates junk without throwing', () => {
+  const { allowPeerMediaUrl } = loadApiUtils({
+    apiUrl: 'https://api.example.com/api/v1',
+    isDev: false,
+  });
+
+  // 映射层在渲染路径上，这里抛异常等于一条消息打挂整个聊天页。
+  for (const junk of [null, undefined, '', 'not a url', 'javascript:alert(1)']) {
+    assert.equal(allowPeerMediaUrl(junk), null);
+  }
 });
