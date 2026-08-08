@@ -131,6 +131,24 @@ function sanitizeFriendCard(content: Record<string, unknown>): FriendCardData {
   };
 }
 
+/**
+ * 卡片 payload 里的图片字段统一过白名单。这些字段最终交给 <Image>/<Avatar>,
+ * 而 payload 完全由发送方构造 —— 指向攻击者主机时,收件方一打开会话就自动
+ * 发起请求,泄漏网络元数据与查看时刻(与 localUri 信标同一形态)。
+ * 被拒的值回落 null,由渲染侧显示占位图,而不是照常请求。
+ */
+function sanitizeCardMedia<T>(
+  content: Record<string, unknown>,
+  urlFields: readonly string[],
+): T {
+  const cleaned: Record<string, unknown> = { ...content };
+  for (const field of urlFields) {
+    if (cleaned[field] === undefined) continue;
+    cleaned[field] = allowPeerMediaUrl(str(cleaned[field]));
+  }
+  return cleaned as unknown as T;
+}
+
 export function mapChatMessageDtoToUI(
   dto: StoredChatMessage,
   currentUserId: string | null,
@@ -187,7 +205,11 @@ export function mapChatMessageDtoToUI(
         locationAddress: str(content['description']) ?? '未知位置',
       };
     case 'note-card':
-      return { ...base, type: 'note-card', noteCard: content as unknown as NoteCardData };
+      return {
+        ...base,
+        type: 'note-card',
+        noteCard: sanitizeCardMedia<NoteCardData>(content, ['coverUrl']),
+      };
     case 'friend-card':
       return {
         ...base,
@@ -198,25 +220,33 @@ export function mapChatMessageDtoToUI(
       return {
         ...base,
         type: 'circle-card',
-        circleCard: content as unknown as CircleCardData,
+        circleCard: sanitizeCardMedia<CircleCardData>(content, ['avatarUrl']),
       };
     case 'transfer-card':
       return {
         ...base,
         type: 'transfer-card',
-        transferCard: content as unknown as TransferCardData,
+        transferCard: sanitizeCardMedia<TransferCardData>(content, [
+          'avatarUrl',
+          'coverUrl',
+        ]),
       };
     case 'verification-card':
       return {
         ...base,
         type: 'verification-card',
-        verificationCard: content as unknown as VerificationCardData,
+        verificationCard: sanitizeCardMedia<VerificationCardData>(content, [
+          'avatarUrl',
+          'coverUrl',
+        ]),
       };
     case 'plaza-post-card':
       return {
         ...base,
         type: 'plaza-post-card',
-        plazaPostCard: content as unknown as PlazaPostCardData,
+        plazaPostCard: sanitizeCardMedia<PlazaPostCardData>(content, [
+          'coverUrl',
+        ]),
       };
     case 'call-record': {
       // 服务端在通话结束时下发的留痕消息。缺这一支的话它会掉进 default,

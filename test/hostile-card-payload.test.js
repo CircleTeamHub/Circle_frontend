@@ -170,3 +170,57 @@ test('card avatars go through the media allowlist', () => {
   );
   assert.equal(trusted.friendCard.faceURL, 'https://cdn.trusted/a.jpg');
 });
+
+test('every card type routes its image fields through the allowlist', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const beacon = 'https://attacker.example/1x1.gif';
+  const good = 'https://cdn.trusted/a.jpg';
+
+  const cases = [
+    ['note-card', 'noteCard', { coverUrl: beacon }, { coverUrl: good }, 'coverUrl'],
+    ['circle-card', 'circleCard', { avatarUrl: beacon }, { avatarUrl: good }, 'avatarUrl'],
+    ['plaza-post-card', 'plazaPostCard', { coverUrl: beacon }, { coverUrl: good }, 'coverUrl'],
+    ['transfer-card', 'transferCard', { avatarUrl: beacon }, { avatarUrl: good }, 'avatarUrl'],
+    ['verification-card', 'verificationCard', { avatarUrl: beacon }, { avatarUrl: good }, 'avatarUrl'],
+  ];
+
+  for (const [type, key, hostile, trusted, field] of cases) {
+    const bad = mapChatMessageDtoToUI(
+      { ...friendCardDto(hostile), type },
+      'me',
+      0,
+    );
+    // 收件方一打开会话就会自动请求这个地址,泄漏 IP 与查看时刻。
+    assert.equal(bad[key][field], null, `${type} must reject the beacon`);
+
+    const ok = mapChatMessageDtoToUI(
+      { ...friendCardDto(trusted), type },
+      'me',
+      0,
+    );
+    assert.equal(ok[key][field], good, `${type} must keep trusted media`);
+  }
+});
+
+test('card sanitization leaves non-URL fields untouched', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const ui = mapChatMessageDtoToUI(
+    {
+      ...friendCardDto({
+        noteId: 'n1',
+        title: '标题',
+        imageCount: 3,
+        groupNames: ['a', 'b'],
+        coverUrl: 'https://attacker.example/x.gif',
+      }),
+      type: 'note-card',
+    },
+    'me',
+    0,
+  );
+  assert.equal(ui.noteCard.noteId, 'n1');
+  assert.equal(ui.noteCard.title, '标题');
+  assert.equal(ui.noteCard.imageCount, 3);
+  assert.deepEqual([...ui.noteCard.groupNames], ['a', 'b']);
+  assert.equal(ui.noteCard.coverUrl, null);
+});
