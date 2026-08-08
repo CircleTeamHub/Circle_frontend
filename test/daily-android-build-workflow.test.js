@@ -122,6 +122,7 @@ test('daily Android build exercises the tag-time native release path', () => {
   // 编译的是 imAdmin 回落分支，而不是生产真正会走的分支。
   for (const name of [
     'EXPO_PUBLIC_API_URL',
+    'EXPO_PUBLIC_MEDIA_ORIGINS',
     'EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID',
     'EXPO_PUBLIC_SUPPORT_ACCOUNT_ID',
     'EXPO_PUBLIC_SUPPORT_RECHARGE_ID',
@@ -171,6 +172,7 @@ test('daily Android build refuses to compile the support fallback branch', () =>
   assert.match(validate, /validate-android-release\.js build-env/);
   for (const name of [
     'EXPO_PUBLIC_API_URL',
+    'EXPO_PUBLIC_MEDIA_ORIGINS',
     'EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID',
     'EXPO_PUBLIC_SUPPORT_ACCOUNT_ID',
     'EXPO_PUBLIC_SUPPORT_RECHARGE_ID',

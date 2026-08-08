@@ -13,6 +13,12 @@ PR #57 does not by itself authorize public distribution. A successful private bu
 Configure metadata and signing for the private build without putting secret values in documentation, logs, issues, or pull requests.
 
 - Repository variable `EXPO_PUBLIC_API_URL`: production HTTPS API base URL, without embedded credentials.
+- Repository variable `EXPO_PUBLIC_MEDIA_ORIGINS` (optional, comma-separated): extra
+  object-storage / CDN origins that serve chat media. The upload contract returns an
+  independent `fileUrl`, so when storage lives on its own hostname it must be listed here —
+  otherwise the peer-media allowlist rejects every legitimate URL and images, voice notes,
+  and share covers all come back blank while REST keeps working. Only the listed origins are
+  trusted; the allowlist still blocks arbitrary third-party hosts (tracking beacons).
 - Repository variable `ANDROID_CERT_SHA256`: expected signing certificate SHA-256 fingerprint.
 - Repository secret `ANDROID_KEYSTORE_BASE64`: base64-encoded release keystore.
 - Repository secret `ANDROID_KEYSTORE_PASSWORD`: release keystore password.

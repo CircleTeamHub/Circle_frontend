@@ -49,6 +49,7 @@ jobs:
         id: release
         env:
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
+          EXPO_PUBLIC_MEDIA_ORIGINS: ${{ vars.EXPO_PUBLIC_MEDIA_ORIGINS }}
           EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: ${{ vars.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID }}
           # 客服账号兜底变量必须和 build 步一致地转发进来 —— GitHub repository variables 不会自动
           # 进 process.env,不转发的话 validateSupportAccounts 会看到五个全空、每次打 tag 都在
@@ -154,6 +155,7 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
+          EXPO_PUBLIC_MEDIA_ORIGINS: ${{ vars.EXPO_PUBLIC_MEDIA_ORIGINS }}
           EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: ${{ vars.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID }}
           # 客服中心各入口的专属账号：不注入则 support-categories.ts 编译期回落到 imAdmin，
           # 生产用户点「充值/纠纷/账号客服」会被导去系统管理员会话而非对应真人客服。

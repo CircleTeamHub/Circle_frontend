@@ -40,6 +40,7 @@ test('release rollout documentation records the fail-closed operating contract',
 
   for (const repositoryVariable of [
     'EXPO_PUBLIC_API_URL',
+    'EXPO_PUBLIC_MEDIA_ORIGINS',
     'ANDROID_CERT_SHA256',
   ]) {
     assert.match(
@@ -272,6 +273,12 @@ test('Android release workflow builds and verifies a private signed artifact', (
   // 构建会缺 native 库、装上跑不起来。
   assert.doesNotMatch(read('app.json'), /with-android-abi-filter/);
   assert.match(build, /EXPO_PUBLIC_API_URL:/);
+  // 仓库变量不会自动进 process.env:不显式转发的话 MEDIA_ORIGINS 编译成空数组,
+  // 独立对象存储/CDN 域名的媒体在 release 包里依旧全被白名单拒掉。
+  assert.match(
+    build,
+    /EXPO_PUBLIC_MEDIA_ORIGINS: \$\{\{ vars\.EXPO_PUBLIC_MEDIA_ORIGINS \}\}/,
+  );
 
   assert.match(
     build,
