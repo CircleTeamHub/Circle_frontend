@@ -1,7 +1,3 @@
-// 对方可控的 cardElem.ex 是一段 JSON。它一旦能让映射或渲染抛异常，就不只是「这条
-// 消息显示不出来」——异常会冒泡到 ChatDetailScreen 的 messages useMemo，整个聊天页
-// 渲染失败；而消息是持久化的，重进会话会再次触发，等于一条构造过的消息永久搞坏这个
-// 会话。这些用例锁住映射层的收口。
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -9,280 +5,168 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
-function loadTsModule(relativePath, stubs = {}) {
-  const filePath = path.join(process.cwd(), relativePath);
-  const source = fs.readFileSync(filePath, 'utf8');
-  const transpiled = ts.transpileModule(source, {
+// 名片 payload 完全由对端构造 —— 服务端只管 content 的总字节数,不认识里面的形状。
+// 拆栈前这层加固在 src/im/mappers.ts,自研栈把它挪到了 chat-core 的映射层;
+// 这份用例跟着搬过来,保证「一条恶意消息不能把会话页永久搞坏」的保证不随迁移丢掉。
+function loadMappers() {
+  const filePath = path.join(process.cwd(), 'src/chat-core/message-mappers.ts');
+  const transpiled = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
       target: ts.ScriptTarget.ES2020,
-      baseUrl: process.cwd(),
-      paths: { '@/*': ['src/*'] },
     },
     fileName: filePath,
   }).outputText;
 
   const context = {
+    Date,
+    Number,
     module: { exports: {} },
     exports: {},
-    require: (specifier) =>
-      specifier in stubs ? stubs[specifier] : require(specifier),
+    require: (request) => {
+      if (request === '@/services/api/utils') {
+        return {
+          normalizeMediaUrl: (u) => u ?? null,
+          // 白名单替身:只放行本站来源。
+          allowPeerMediaUrl: (u) =>
+            typeof u === 'string' && u.startsWith('https://cdn.trusted/') ? u : null,
+        };
+      }
+      if (request === '@/i18n') return { default: { t: (key) => key } };
+      if (request === './mappers') return { formatChatTimestamp: () => '12:00' };
+      if (request === './store') return {};
+      if (request === '@/types') return {};
+      throw new Error(`unexpected require: ${request}`);
+    },
   };
   context.exports = context.module.exports;
-  vm.runInNewContext(transpiled, context, { filename: filePath });
+  vm.runInNewContext(transpiled, context);
   return context.module.exports;
 }
 
-const MAPPER_STUBS = {
-  '@openim/rn-client-sdk': {
-    MessageType: {
-      TextMessage: 101,
-      PictureMessage: 102,
-      VoiceMessage: 103,
-      VideoMessage: 104,
-      FileMessage: 105,
-      CardMessage: 108,
-      LocationMessage: 109,
-      CustomMessage: 110,
-      TypingMessage: 113,
-    },
-    SessionType: { Single: 1, Group: 2 },
-  },
-  '@/im/client': {
-    NOTE_CARD_EXTENSION: 'note-card-v1',
-    TRANSFER_CARD_EXTENSION: 'transfer-card-v1',
-    VERIFICATION_CARD_EXTENSION: 'circle-verify-v1',
-    fromImUserId: (userID) => userID,
-  },
-  '@/services/api/utils': { normalizeMediaUrl: (url) => url },
-  '@/i18n': {
-    __esModule: true,
-    default: { language: 'zh', t: (_key, options) => options.defaultValue },
-  },
-  '@/utils/locale': { getLocalizedDateTimeLocale: () => 'zh-CN' },
-};
-
-function cardMessage(ex) {
+function friendCardDto(content) {
   return {
-    clientMsgID: 'msg-hostile',
-    sendID: 'peer',
-    recvID: 'self',
-    sessionType: 1,
-    contentType: 108,
-    sendTime: Date.now(),
-    status: 2,
-    isRead: false,
-    cardElem: { userID: 'peer', nickname: 'peer', faceURL: '', ex },
+    id: 'm1',
+    conversationId: 'c1',
+    height: 1,
+    type: 'friend-card',
+    content,
+    sender: { id: 'peer', nickname: '对方', avatarUrl: null },
+    replyToId: null,
+    d: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
   };
 }
 
-test('hostile card ex payloads never throw during mapping', () => {
-  const { createMessageMapCache, mapMessageItemsToChatMessages } = loadTsModule(
-    'src/im/mappers.ts',
-    MAPPER_STUBS,
-  );
-
-  // 'null' 是最刁的一个：JSON.parse('null') **不抛异常**，它成功并返回 null，
-  // 于是 try 之外的 ext.kind 解引用 null 才抛 —— catch 根本拦不到。
-  const payloads = [
-    'null',
-    'false',
-    '0',
-    '"a string"',
-    '[]',
-    '[1,2,3]',
-    '{"displayIcons":"not-an-array"}',
-    '{"displayIcons":{"length":3}}',
-    '{"displayIcons":null}',
-    '{"kind":null}',
-    'not json at all',
-    '',
-  ];
-
-  for (const ex of payloads) {
-    const cache = createMessageMapCache('self');
-    assert.doesNotThrow(
-      () => mapMessageItemsToChatMessages([cardMessage(ex)], 'self', cache),
-      `mapping must survive cardElem.ex = ${JSON.stringify(ex)}`,
-    );
-  }
-});
-
-test('persona is only ever a string or null', () => {
-  const { createMessageMapCache, mapMessageItemsToChatMessages } = loadTsModule(
-    'src/im/mappers.ts',
-    MAPPER_STUBS,
-  );
-
-  // 气泡里是 card.persona?.trim() —— `?.` 只挡 null/undefined，挡不住数字/对象。
-  for (const hostile of [
-    '{"persona":123}',
-    '{"persona":{"a":1}}',
-    '{"persona":[1,2]}',
-    '{"persona":true}',
+test('hostile card payloads never throw during mapping', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  for (const content of [
+    {},
+    { displayIcons: 'not-an-array' },
+    { displayIcons: 42 },
+    { displayIcons: null },
+    { displayIcons: [null, 1, 'x', {}] },
+    { persona: { nested: true } },
+    { nickname: [] },
   ]) {
-    const cache = createMessageMapCache('self');
-    const [mapped] = mapMessageItemsToChatMessages(
-      [cardMessage(hostile)],
-      'self',
-      cache,
-    );
-    const persona = mapped.friendCard?.persona;
-    assert.ok(
-      persona === null || typeof persona === 'string',
-      `persona must be string|null for ex = ${hostile}, got ${typeof persona}`,
+    assert.doesNotThrow(() =>
+      mapChatMessageDtoToUI(friendCardDto(content), 'me', 0),
     );
   }
-});
-
-test('every surviving displayIcon is safe to render', () => {
-  const { createMessageMapCache, mapMessageItemsToChatMessages } = loadTsModule(
-    'src/im/mappers.ts',
-    MAPPER_STUBS,
-  );
-
-  // 只校验容器不够：数组合法、元素却能是 null 或带对象字段的假图标。
-  // 气泡会 icon.imageUrl 解引用、把 icon.title 塞进 <Text>（对象会让 React 直接抛）。
-  const hostile =
-    '{"displayIcons":[null,{"id":"a","title":{"evil":1}},{"id":{"x":1},"title":"t"},' +
-    '{"id":"ok","title":"good","imageUrl":{"nope":1}},"a string",[1,2],' +
-    '{"id":"ok2","title":"good2","imageUrl":"https://x/y.png"}]}';
-  const cache = createMessageMapCache('self');
-  const [mapped] = mapMessageItemsToChatMessages(
-    [cardMessage(hostile)],
-    'self',
-    cache,
-  );
-
-  const icons = mapped.friendCard?.displayIcons ?? [];
-  for (const icon of icons) {
-    assert.equal(typeof icon.id, 'string');
-    assert.equal(typeof icon.title, 'string');
-    assert.ok(icon.imageUrl === null || typeof icon.imageUrl === 'string');
-  }
-  // 合法的那两个必须留下来 —— 净化不能顺手把好数据也丢了。
-  // 用 join 而不是 deepStrictEqual：mappers 跑在 vm 沙箱里，它造的数组原型链与本
-  // realm 不同，deepStrictEqual 会因为原型不同而判不等（值其实一样）。
-  assert.equal([...icons].map((i) => i.id).join(','), 'ok,ok2');
 });
 
 test('displayIcons is always an array downstream, whatever the peer sent', () => {
-  const { createMessageMapCache, mapMessageItemsToChatMessages } = loadTsModule(
-    'src/im/mappers.ts',
-    MAPPER_STUBS,
-  );
+  const { mapChatMessageDtoToUI } = loadMappers();
+  // 塞成字符串时 bubble 的 `.length > 0` 会通过,而 `.slice(0,4).map` 在字符串上
+  // 没有 map —— 一条消息就能把会话页打崩,且它已落库,每次进来都会再崩一次。
+  for (const hostile of ['haha', 42, null, undefined, { 0: 'x' }]) {
+    const ui = mapChatMessageDtoToUI(
+      friendCardDto({ displayIcons: hostile }),
+      'me',
+      0,
+    );
+    assert.ok(Array.isArray(ui.friendCard.displayIcons));
+  }
+});
 
-  // 气泡里是 `displayIcons.length > 0 && displayIcons.slice(0,4).map(...)`。
-  // 传字符串能过 length 判断，然后 .map 不存在 → 渲染抛错。所以收口必须在映射层，
-  // 让下游拿到的永远是数组。
-  for (const hostile of [
-    '{"displayIcons":"xxxxx"}',
-    '{"displayIcons":{"length":9}}',
-    '{"displayIcons":123}',
-  ]) {
-    const cache = createMessageMapCache('self');
-    const [mapped] = mapMessageItemsToChatMessages(
-      [cardMessage(hostile)],
-      'self',
-      cache,
-    );
-    assert.ok(
-      Array.isArray(mapped.friendCard?.displayIcons),
-      `displayIcons must be an array for ex = ${hostile}`,
-    );
+test('displayIcons is bounded no matter how many the peer sent', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const many = Array.from({ length: 5000 }, (_, i) => ({
+    id: `icon-${i}`,
+    title: 'x',
+  }));
+  const ui = mapChatMessageDtoToUI(
+    friendCardDto({ displayIcons: many }),
+    'me',
+    0,
+  );
+  // bubble 只渲染 4 个,映射层就不该把 5000 个整份带进渲染路径。
+  assert.equal(ui.friendCard.displayIcons.length, 4);
+});
+
+test('only the fields consumers read survive sanitization', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const ui = mapChatMessageDtoToUI(
+    friendCardDto({
+      displayIcons: [
+        { id: 'i1', title: 't', junk: 'x'.repeat(1000), nested: { a: 1 } },
+      ],
+    }),
+    'me',
+    0,
+  );
+  const icon = ui.friendCard.displayIcons[0];
+  assert.equal(icon.id, 'i1');
+  // 不整份 spread 对端对象:没人读的字段不进内存。
+  assert.equal(icon.junk, undefined);
+  assert.equal(icon.nested, undefined);
+});
+
+test('persona is only ever a string or null', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  for (const persona of [{ nested: true }, [], 42, undefined]) {
+    const ui = mapChatMessageDtoToUI(friendCardDto({ persona }), 'me', 0);
+    const value = ui.friendCard.persona;
+    assert.ok(value === null || typeof value === 'string');
   }
 });
 
 test('peer-controlled text is clamped before it reaches a bubble', () => {
-  const { createMessageMapCache, mapMessageItemsToChatMessages } = loadTsModule(
-    'src/im/mappers.ts',
-    MAPPER_STUBS,
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const ui = mapChatMessageDtoToUI(
+    friendCardDto({ nickname: 'x'.repeat(5000), persona: 'y'.repeat(5000) }),
+    'me',
+    0,
   );
-
-  // 气泡没有设 numberOfLines，一条几 MB 的单行文本会在 UI 线程上做一次同等规模的
-  // 文字排版 —— 期间整个界面不响应；而消息是持久化的，重进会话再来一次。
-  const huge = 'a'.repeat(2_000_000);
-  const cache = createMessageMapCache('self');
-  const [mapped] = mapMessageItemsToChatMessages(
-    [
-      {
-        clientMsgID: 'm-huge',
-        sendID: 'peer',
-        recvID: 'self',
-        sessionType: 1,
-        contentType: 101,
-        sendTime: Date.now(),
-        status: 2,
-        isRead: false,
-        textElem: { content: huge },
-        content: huge,
-      },
-    ],
-    'self',
-    cache,
-  );
-
-  assert.ok(
-    (mapped.text?.length ?? 0) < 10_000,
-    `text must be clamped, got ${mapped.text?.length}`,
-  );
+  assert.ok(ui.friendCard.nickname.length <= 60);
+  assert.ok((ui.friendCard.persona ?? '').length <= 120);
 });
 
 test('normal-length text is never truncated', () => {
-  const { createMessageMapCache, mapMessageItemsToChatMessages } = loadTsModule(
-    'src/im/mappers.ts',
-    MAPPER_STUBS,
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const ui = mapChatMessageDtoToUI(
+    friendCardDto({ nickname: '一波', persona: '在路上' }),
+    'me',
+    0,
   );
-
-  // 截断只该兜住失控的那种；正常长消息（远超一屏但仍是真人会发的）必须原样保留。
-  const normal = '很长的一段话。'.repeat(200);
-  const cache = createMessageMapCache('self');
-  const [mapped] = mapMessageItemsToChatMessages(
-    [
-      {
-        clientMsgID: 'm-normal',
-        sendID: 'peer',
-        recvID: 'self',
-        sessionType: 1,
-        contentType: 101,
-        sendTime: Date.now(),
-        status: 2,
-        isRead: false,
-        textElem: { content: normal },
-        content: normal,
-      },
-    ],
-    'self',
-    cache,
-  );
-
-  assert.equal(mapped.text, normal);
+  assert.equal(ui.friendCard.nickname, '一波');
+  assert.equal(ui.friendCard.persona, '在路上');
 });
 
-test('every peer-controlled image render forces early resizing', () => {
-  // 图片尺寸由对端决定。Android 走 Glide 会读图片头按目标尺寸降采样，超大图只是
-  // 多下载些字节；iOS 不会 —— 不开这个开关就把整张位图解进内存，20000x20000
-  // 约 1.6GB，直接 OOM。这是 iOS-only prop，Android 上是空操作，所以现在就该加上，
-  // 而不是等出 iOS 包时再补（那时最容易漏）。
-  //
-  // 注意：来源白名单只保证图片来自我们自己的 MinIO，保证不了尺寸 —— 用户能往
-  // 自己的存储里传高压缩比的大分辨率图，所以 OOM 依然可达。
-  const bubbles = [
-    'src/features/chat/components/bubbles/image-bubble.tsx',
-    'src/features/chat/components/bubbles/friend-card-bubble.tsx',
-    'src/features/chat/components/bubbles/note-card-bubble.tsx',
-    'src/features/chat/components/bubbles/plaza-post-card-bubble.tsx',
-  ];
+test('card avatars go through the media allowlist', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const hostile = mapChatMessageDtoToUI(
+    friendCardDto({ faceURL: 'https://attacker.example/beacon.gif' }),
+    'me',
+    0,
+  );
+  // 名片头像同样是对端可控的静默 GET 载体。
+  assert.equal(hostile.friendCard.faceURL, '');
 
-  for (const relativePath of bubbles) {
-    const source = fs.readFileSync(
-      path.join(process.cwd(), relativePath),
-      'utf8',
-    );
-    assert.match(
-      source,
-      /enforceEarlyResizing/,
-      `${relativePath} renders peer-controlled images and must force early resizing`,
-    );
-  }
+  const trusted = mapChatMessageDtoToUI(
+    friendCardDto({ faceURL: 'https://cdn.trusted/a.jpg' }),
+    'me',
+    0,
+  );
+  assert.equal(trusted.friendCard.faceURL, 'https://cdn.trusted/a.jpg');
 });

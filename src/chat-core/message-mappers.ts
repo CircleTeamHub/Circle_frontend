@@ -3,6 +3,7 @@ import { allowPeerMediaUrl } from '@/services/api/utils';
 import type {
   CallRecordData,
   ChatMessage,
+  DisplayIcon,
   CircleCardData,
   FriendCardData,
   NoteCardData,
@@ -74,6 +75,62 @@ function mediaUrl(content: Record<string, unknown>, field: string): string | und
   return localPreviewUri(content);
 }
 
+/** 名片上最多展示的图标数(与 FriendCardBubble 的 slice(0,4) 对齐)。 */
+const FRIEND_CARD_ICON_CAP = 4;
+/** 对端可控文本进气泡前的长度上限(服务端另有 4000 字上限,这里是渲染侧兜底)。 */
+const PEER_TEXT_CAP = 500;
+
+function clampText(value: unknown, cap = PEER_TEXT_CAP): string {
+  const text = str(value);
+  if (!text) return '';
+  return text.length > cap ? text.slice(0, cap) : text;
+}
+
+/**
+ * 名片 payload 完全由对端构造 —— 服务端只管 content 的总字节数,不认识里面的形状。
+ * 这里必须逐字段收口,不能像以前那样直接 cast:
+ *
+ * - displayIcons 若被塞成字符串,FriendCardBubble 的 `.length > 0` 会通过,
+ *   而 `.slice(0,4).map` 在字符串上没有 map —— 一条消息就能把整个会话页打崩,
+ *   且因为它已落库,每次进这个会话都会再崩一次(修不好的坏消息);
+ * - 图标数组本身不设上限的话,超大数组会被整份带进渲染路径;
+ * - persona / nickname 等文本不封顶,一条超长文本能把气泡撑到卡顿。
+ */
+function sanitizeDisplayIcon(value: unknown): DisplayIcon | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  const id = str(raw['id']);
+  if (!id) return null;
+  // 只构造消费方真正会读的字段,不整份 spread 对端对象。
+  return {
+    id,
+    type: (str(raw['type']) ?? 'SYSTEM') as DisplayIcon['type'],
+    title: clampText(raw['title'], 40),
+    imageUrl: allowPeerMediaUrl(str(raw['imageUrl'])),
+    fallbackIconName: str(raw['fallbackIconName']) ?? null,
+    sortOrder: num(raw['sortOrder']) ?? 0,
+  };
+}
+
+function sanitizeFriendCard(content: Record<string, unknown>): FriendCardData {
+  const rawIcons = content['displayIcons'];
+  const icons: DisplayIcon[] = [];
+  if (Array.isArray(rawIcons)) {
+    for (const entry of rawIcons) {
+      if (icons.length >= FRIEND_CARD_ICON_CAP) break;
+      const icon = sanitizeDisplayIcon(entry);
+      if (icon) icons.push(icon);
+    }
+  }
+  return {
+    userID: str(content['userID']) ?? '',
+    nickname: clampText(content['nickname'], 60),
+    faceURL: allowPeerMediaUrl(str(content['faceURL'])) ?? '',
+    persona: str(content['persona']) ? clampText(content['persona'], 120) : null,
+    displayIcons: icons,
+  };
+}
+
 export function mapChatMessageDtoToUI(
   dto: StoredChatMessage,
   currentUserId: string | null,
@@ -135,7 +192,7 @@ export function mapChatMessageDtoToUI(
       return {
         ...base,
         type: 'friend-card',
-        friendCard: content as unknown as FriendCardData,
+        friendCard: sanitizeFriendCard(content),
       };
     case 'circle-card':
       return {
