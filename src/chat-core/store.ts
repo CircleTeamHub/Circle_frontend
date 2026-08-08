@@ -1,8 +1,14 @@
 import { create } from 'zustand';
 import type { ChatConversationDto, ChatMessageDto } from './protocol';
 
-/** 每会话内存消息上限（与旧 imStore 一致）：更早的历史走 REST 翻页。 */
+/**
+ * 每会话的初始内存窗口。翻页会把窗口按页扩大 —— 固定 200 的话,已经有 200 条
+ * 新消息之后再拉一页更早的历史,合并后排序把这页排在窗口之前,截断当场把它全部
+ * 丢掉;而翻页游标照常前进,于是「越滚越请求、永远看不到第 201 条以前」。
+ */
 export const MESSAGES_CAP = 200;
+/** 窗口扩张的硬上限,防止一路翻到底把整个会话读进内存。 */
+export const MESSAGES_WINDOW_MAX = 2000;
 
 /**
  * store 里的消息 = 线上 DTO + 客户端本地态:
@@ -52,6 +58,8 @@ interface ChatStoreState {
    * 未涉及的会话保持原数组引用（聊天页依赖引用稳定避免全量重渲染）。
    */
   ingestMessages: (conversationId: string, incoming: ChatMessageDto[]) => void;
+  /** 每会话当前的内存窗口大小(翻页时扩张)。 */
+  messageWindowByConversation: Record<string, number>;
   /** 成员已读推进（服务端广播）；对端已读用于单聊「已读」标记。 */
   applyRead: (conversationId: string, userId: string, height: number) => void;
   readWatermarks: Record<string, Record<string, number>>;
@@ -75,6 +83,7 @@ function sortKey(message: ChatMessageDto): number {
 export function mergeMessages(
   existing: ChatMessageDto[],
   incoming: ChatMessageDto[],
+  cap: number = MESSAGES_CAP,
 ): ChatMessageDto[] {
   const byId = new Map<string, ChatMessageDto>();
   const byDelivery = new Map<string, string>();
@@ -94,7 +103,7 @@ export function mergeMessages(
     byId.set(message.id, message);
   }
   const merged = [...byId.values()].sort((a, b) => sortKey(a) - sortKey(b));
-  return merged.length > MESSAGES_CAP ? merged.slice(merged.length - MESSAGES_CAP) : merged;
+  return merged.length > cap ? merged.slice(merged.length - cap) : merged;
 }
 
 /** 会话排序不变量:置顶在前 → lastMessageAt 降序 → id 兜底稳定。 */
@@ -118,6 +127,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   currentUserId: null,
   conversations: [],
   messagesByConversation: {},
+  messageWindowByConversation: {},
   activeConversationId: null,
   onlineByUser: {},
   readWatermarks: {},
@@ -266,15 +276,34 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
 
   ingestMessages: (conversationId, incoming) => {
     if (incoming.length === 0) return;
-    const { messagesByConversation } = get();
+    const { messagesByConversation, messageWindowByConversation } = get();
     const existing = messagesByConversation[conversationId] ?? [];
-    const merged = mergeMessages(existing, incoming);
+    const currentCap = messageWindowByConversation[conversationId] ?? MESSAGES_CAP;
+    // 这批是不是「更早的一页」:全部低于当前窗口里最旧的那条 height。
+    // 是的话把窗口按这页的量扩大,否则截断会把刚拉回来的历史当场丢掉。
+    const oldestHeight = existing.find((m) => m.height > 0)?.height ?? 0;
+    const isOlderPage =
+      oldestHeight > 0 &&
+      incoming.length > 0 &&
+      incoming.every((m) => m.height > 0 && m.height < oldestHeight);
+    const nextCap = isOlderPage
+      ? Math.min(currentCap + incoming.length, MESSAGES_WINDOW_MAX)
+      : currentCap;
+    const merged = mergeMessages(existing, incoming, nextCap);
     set({
       // 只替换本会话的键：其它会话数组引用保持不变（引用稳定契约）。
       messagesByConversation: {
         ...messagesByConversation,
         [conversationId]: merged,
       },
+      ...(nextCap !== currentCap
+        ? {
+            messageWindowByConversation: {
+              ...messageWindowByConversation,
+              [conversationId]: nextCap,
+            },
+          }
+        : {}),
     });
   },
 
@@ -295,6 +324,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     set({
       conversations: [],
       messagesByConversation: {},
+      messageWindowByConversation: {},
       activeConversationId: null,
       readWatermarks: {},
     }),
@@ -307,6 +337,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       currentUserId: null,
       conversations: [],
       messagesByConversation: {},
+      messageWindowByConversation: {},
       activeConversationId: null,
       onlineByUser: {},
       readWatermarks: {},

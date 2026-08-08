@@ -101,6 +101,8 @@ export function connectChat(token: string, userId: string): void {
  */
 export function disconnectChat(): void {
   suspendChat();
+  // 只有真登出/换账号才丢待发已读:那些水位属于上一个会话身份。
+  pendingReads.clear();
   useChatStore.getState().reset();
 }
 
@@ -116,7 +118,9 @@ export function disconnectChat(): void {
 export function suspendChat(): void {
   sessionGen += 1;
   cancelConversationBackfill();
-  pendingReads.clear();
+  // 刻意不清 pendingReads:token 轮换会走这条路,清掉的话那些还没拿到 ack 的
+  // 已读水位就永远发不出去了 —— 服务端那边消息一直是未读,直到会话又有新消息
+  // 或用户重新进一次。挂起的语义是「连接没了」,不是「这些事没发生过」。
   typingSentAt.clear();
   flushingReads = false;
   readFlushRequested = false;

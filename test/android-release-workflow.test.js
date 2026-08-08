@@ -41,6 +41,7 @@ test('release rollout documentation records the fail-closed operating contract',
   for (const repositoryVariable of [
     'EXPO_PUBLIC_API_URL',
     'EXPO_PUBLIC_MEDIA_ORIGINS',
+    'EXPO_PUBLIC_CHAT_WS_URL',
     'ANDROID_CERT_SHA256',
   ]) {
     assert.match(
@@ -278,6 +279,11 @@ test('Android release workflow builds and verifies a private signed artifact', (
   assert.match(
     build,
     /EXPO_PUBLIC_MEDIA_ORIGINS: \$\{\{ vars\.EXPO_PUBLIC_MEDIA_ORIGINS \}\}/,
+  );
+  // 不转发的话构建期静默回落到 API origin:REST 全通,聊天 socket 连不上。
+  assert.match(
+    build,
+    /EXPO_PUBLIC_CHAT_WS_URL: \$\{\{ vars\.EXPO_PUBLIC_CHAT_WS_URL \}\}/,
   );
 
   assert.match(

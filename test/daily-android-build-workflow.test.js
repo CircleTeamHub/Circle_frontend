@@ -123,6 +123,7 @@ test('daily Android build exercises the tag-time native release path', () => {
   for (const name of [
     'EXPO_PUBLIC_API_URL',
     'EXPO_PUBLIC_MEDIA_ORIGINS',
+    'EXPO_PUBLIC_CHAT_WS_URL',
     'EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID',
     'EXPO_PUBLIC_SUPPORT_ACCOUNT_ID',
     'EXPO_PUBLIC_SUPPORT_RECHARGE_ID',
@@ -173,6 +174,7 @@ test('daily Android build refuses to compile the support fallback branch', () =>
   for (const name of [
     'EXPO_PUBLIC_API_URL',
     'EXPO_PUBLIC_MEDIA_ORIGINS',
+    'EXPO_PUBLIC_CHAT_WS_URL',
     'EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID',
     'EXPO_PUBLIC_SUPPORT_ACCOUNT_ID',
     'EXPO_PUBLIC_SUPPORT_RECHARGE_ID',

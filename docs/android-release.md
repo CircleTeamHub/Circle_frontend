@@ -13,6 +13,10 @@ PR #57 does not by itself authorize public distribution. A successful private bu
 Configure metadata and signing for the private build without putting secret values in documentation, logs, issues, or pull requests.
 
 - Repository variable `EXPO_PUBLIC_API_URL`: production HTTPS API base URL, without embedded credentials.
+- Repository variable `EXPO_PUBLIC_CHAT_WS_URL` (optional): WSS origin of the chat gateway
+  when it is not served from the API origin. Repository variables are not injected into
+  `process.env` automatically — without this the build silently compiles the API-origin
+  fallback and ships with REST working but the chat socket unable to connect at all.
 - Repository variable `EXPO_PUBLIC_MEDIA_ORIGINS` (optional, comma-separated): extra
   object-storage / CDN origins that serve chat media. The upload contract returns an
   independent `fileUrl`, so when storage lives on its own hostname it must be listed here —

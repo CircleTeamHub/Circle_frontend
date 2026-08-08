@@ -77,24 +77,48 @@ export function getChatMessagePreview(message: ChatMessageDto | null): string {
   }
 }
 
+/**
+ * 会话 DTO → 列表项。四种会话类型要分开对待,不能拿 `type !== 'DIRECT'` 一刀切:
+ * circle 只在 GROUP 上有值,TEMP / SUPPORT 都是 null。当成圈子群处理的话它们会
+ * 拿到空名字空头像、sourceID 退化成 conversation id、混进群聊筛选,
+ * 点进去还按「圈子群」的语义走(查圈子详情、成员目录),整条路都是错的。
+ */
 export function mapChatConversationToUI(dto: ChatConversationDto): Conversation {
-  const isGroup = dto.type !== 'DIRECT';
-  const name = isGroup
-    ? (dto.circle?.name ?? '')
-    : (dto.peer?.nickname ?? '');
-  const avatarRaw = isGroup
-    ? (dto.circle?.avatarUrl ?? null)
-    : (dto.peer?.avatarUrl ?? null);
+  const isCircleGroup = dto.type === 'GROUP';
+  const isDirectLike = dto.type === 'DIRECT' || dto.type === 'SUPPORT';
+
+  let name: string;
+  let avatarRaw: string | null;
+  let sourceID: string;
+  if (isCircleGroup) {
+    name = dto.circle?.name ?? '';
+    avatarRaw = dto.circle?.avatarUrl ?? null;
+    // 圈子群的 sourceID = 圈子 id(圈子详情/成员目录都按它取)。
+    sourceID = dto.circleId ?? dto.id;
+  } else if (isDirectLike) {
+    // SUPPORT 也是一对一:对端就是客服账号,展示与跳转都按单聊走。
+    name = dto.peer?.nickname ?? '';
+    avatarRaw = dto.peer?.avatarUrl ?? null;
+    sourceID = dto.peer?.id ?? '';
+  } else {
+    // TEMP:临时房没有圈子也没有固定对端,名字回落到末条消息的发送者,
+    // sourceID 用 conversation id —— 它本来就只在自己这条会话里有意义。
+    name = dto.lastMessage?.sender?.nickname ?? '';
+    avatarRaw = dto.lastMessage?.sender?.avatarUrl ?? null;
+    sourceID = dto.id;
+  }
+
   return {
     id: dto.id,
-    // DIRECT 的 sourceID = 对端 userID(个人资料跳转用);GROUP = 圈子 id。
-    sourceID: isGroup ? (dto.circleId ?? dto.id) : (dto.peer?.id ?? ''),
+    sourceID,
     name,
     message: getChatMessagePreview(dto.lastMessage),
     time: formatChatTimestamp(dto.lastMessageAt),
     avatarUrl: normalizeMediaUrl(avatarRaw) ?? undefined,
     unreadCount: dto.unreadCount,
-    conversationType: isGroup ? 'group' : 'private',
+    // 群语义(成员目录、@提及、群设置)只属于圈子群与临时房这种多人会话;
+    // SUPPORT 走单聊 UI。
+    conversationType: isCircleGroup || dto.type === 'TEMP' ? 'group' : 'private',
     pinned: dto.pinned,
     muted: dto.muted,
   };

@@ -258,3 +258,55 @@ test('clearCachedChats keeps the session identity that reset would destroy', () 
   assert.equal(state.currentUserId, 'me');
   assert.equal(state.connected, true);
 });
+
+test('older history pages survive the message cap (pagination actually works)', () => {
+  const { useChatStore, MESSAGES_CAP } = loadChatStore();
+  const store = useChatStore.getState();
+
+  // 先灌满窗口:200 条最新消息。
+  const newest = Array.from({ length: MESSAGES_CAP }, (_, i) =>
+    msg({ id: `new-${i}`, height: 1000 + i }),
+  );
+  store.ingestMessages('conv-1', newest);
+  assert.equal(useChatStore.getState().messagesByConversation['conv-1'].length, MESSAGES_CAP);
+
+  // 再翻一页更早的:排序后它们在窗口之前,固定 200 的截断会把整页当场丢掉,
+  // 而游标照常前进 —— 表现就是「越滚越请求、永远看不到第 201 条以前」。
+  const older = Array.from({ length: 50 }, (_, i) =>
+    msg({ id: `old-${i}`, height: 100 + i }),
+  );
+  store.ingestMessages('conv-1', older);
+
+  const merged = useChatStore.getState().messagesByConversation['conv-1'];
+  assert.equal(merged.length, MESSAGES_CAP + 50);
+  assert.equal(merged[0].id, 'old-0');
+});
+
+test('the window stops growing at the hard ceiling', () => {
+  const { useChatStore, MESSAGES_WINDOW_MAX } = loadChatStore();
+  const store = useChatStore.getState();
+  store.ingestMessages('conv-1', [msg({ id: 'anchor', height: 999999 })]);
+  // 一路往前翻,窗口不能无限长大到把整个会话读进内存。
+  for (let page = 0; page < 30; page += 1) {
+    const older = Array.from({ length: 200 }, (_, i) =>
+      msg({ id: `p${page}-${i}`, height: 500000 - page * 1000 + i }),
+    );
+    store.ingestMessages('conv-1', older);
+  }
+  const merged = useChatStore.getState().messagesByConversation['conv-1'];
+  assert.ok(merged.length <= MESSAGES_WINDOW_MAX, `window ${merged.length}`);
+});
+
+test('realtime messages do not grow the window', () => {
+  const { useChatStore, MESSAGES_CAP } = loadChatStore();
+  const store = useChatStore.getState();
+  store.ingestMessages(
+    'conv-1',
+    Array.from({ length: MESSAGES_CAP }, (_, i) => msg({ id: `n-${i}`, height: 100 + i })),
+  );
+  // 新消息是「更新」不是「翻页」:窗口保持不变,最旧的滚出去。
+  store.ingestMessages('conv-1', [msg({ id: 'live', height: 99999 })]);
+  const merged = useChatStore.getState().messagesByConversation['conv-1'];
+  assert.equal(merged.length, MESSAGES_CAP);
+  assert.equal(merged[merged.length - 1].id, 'live');
+});
