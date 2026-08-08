@@ -128,7 +128,22 @@ export function allowPeerMediaUrl(
     for (const origin of [API_URL, OPENIM_API_URL, ...MEDIA_ORIGINS]) {
       if (!origin) continue;
       try {
-        if (new URL(origin).hostname === mediaUrl.hostname) {
+        const allowed = new URL(origin);
+        // 生产按 origin 精确比对（协议 + 主机 + 端口）。只比主机名的话，
+        // 配了 https://cdn.example.com:8443 会连带放行同主机的 :9443 ——
+        // 那是操作者没有授权的另一个服务，等于把隐私边界悄悄放宽。
+        if (allowed.origin === mediaUrl.origin) {
+          return mediaUrl.toString();
+        }
+        // dev 例外：MinIO(9000) / OpenIM object(10002) 跑在同一台开发机的
+        // 其它端口上，normalizeMediaUrl 只改主机名、刻意保留媒体端口。
+        // 这里若也按 origin 严比，本机开发的图片/语音会全部加载不出来。
+        // 只对私网/本机地址放宽，公网 origin 一律精确匹配。
+        if (
+          isDev &&
+          isDevReachabilityHost(allowed.hostname) &&
+          allowed.hostname === mediaUrl.hostname
+        ) {
           return mediaUrl.toString();
         }
       } catch {

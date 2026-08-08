@@ -370,6 +370,37 @@ test('allowPeerMediaUrl still rejects a CDN host that was not configured', () =>
   assert.equal(allowPeerMediaUrl('https://cdn.example.net/chat/a.jpg'), null);
 });
 
+test('allowPeerMediaUrl matches the exact origin, not just the hostname', () => {
+  // 配了 :8443 不等于授权同主机的 :9443 —— 那是另一个服务,操作者没点过头。
+  const { allowPeerMediaUrl } = loadApiUtils({
+    apiUrl: 'https://api.example.com/api/v1',
+    isDev: false,
+    mediaOrigins: ['https://cdn.example.com:8443'],
+  });
+
+  assert.equal(
+    allowPeerMediaUrl('https://cdn.example.com:8443/chat/a.jpg'),
+    'https://cdn.example.com:8443/chat/a.jpg',
+  );
+  assert.equal(allowPeerMediaUrl('https://cdn.example.com:9443/chat/a.jpg'), null);
+});
+
+test('allowPeerMediaUrl still allows other dev ports on the local host', () => {
+  // 开发机上 MinIO(9000)/OpenIM object(10002) 与 API(3000) 同主机不同端口,
+  // normalizeMediaUrl 刻意保留媒体端口。这里若也严比 origin,本机开发图片全挂。
+  const { allowPeerMediaUrl } = loadApiUtils({
+    apiUrl: 'http://192.168.1.65:3000/api/v1',
+    isDev: true,
+  });
+
+  assert.equal(
+    allowPeerMediaUrl('http://192.168.1.65:9000/circle/chat/a.jpg'),
+    'http://192.168.1.65:9000/circle/chat/a.jpg',
+  );
+  // 放宽只对私网地址生效,公网主机照拒。
+  assert.equal(allowPeerMediaUrl('http://attacker.example:9000/x.jpg'), null);
+});
+
 test('allowPeerMediaUrl rejects any third-party host (the tracking beacon)', () => {
   const { allowPeerMediaUrl } = loadApiUtils({
     apiUrl: 'https://api.example.com/api/v1',

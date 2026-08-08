@@ -50,6 +50,7 @@ jobs:
         env:
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
           EXPO_PUBLIC_OPENIM_API_URL: ${{ vars.EXPO_PUBLIC_OPENIM_API_URL }}
+          EXPO_PUBLIC_MEDIA_ORIGINS: ${{ vars.EXPO_PUBLIC_MEDIA_ORIGINS }}
           EXPO_PUBLIC_OPENIM_WS_URL: ${{ vars.EXPO_PUBLIC_OPENIM_WS_URL }}
           EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: ${{ vars.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID }}
           # 客服账号兜底变量必须和 build 步一致地转发进来 —— GitHub repository variables 不会自动
@@ -157,6 +158,7 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
           EXPO_PUBLIC_OPENIM_API_URL: ${{ vars.EXPO_PUBLIC_OPENIM_API_URL }}
+          EXPO_PUBLIC_MEDIA_ORIGINS: ${{ vars.EXPO_PUBLIC_MEDIA_ORIGINS }}
           EXPO_PUBLIC_OPENIM_WS_URL: ${{ vars.EXPO_PUBLIC_OPENIM_WS_URL }}
           EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: ${{ vars.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID }}
           # 客服中心各入口的专属账号：不注入则 support-categories.ts 编译期回落到 imAdmin，
