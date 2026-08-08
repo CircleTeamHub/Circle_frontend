@@ -29,6 +29,7 @@ import OpenIMSDK, {
   type ConversationItem,
   type MessageItem,
 } from '@openim/rn-client-sdk';
+import { resolveLocalDaySearchWindow } from '@/features/chat/chat-history-date-window';
 import type * as NativeFS from 'react-native-fs';
 import { Platform } from 'react-native';
 import {
@@ -2104,21 +2105,16 @@ export async function searchConversationMessagesByDate(params: {
   pageIndex?: number;
   count?: number;
 }) {
-  const startOfDay = new Date(`${params.date}T00:00:00`).getTime();
-
-  if (!Number.isFinite(startOfDay)) {
-    return [];
-  }
+  const window = resolveLocalDaySearchWindow(params.date);
+  if (!window) return [];
 
   return searchConversationMessages({
     conversationID: params.conversationID,
     keywordList: [''],
     messageTypeList: getChatHistoryDateMessageTypes(),
-    // OpenIM 的 searchTimePosition / searchTimePeriod 单位是【秒】（period 写成
-    // 24*60*60 即为证）。startOfDay 是 getTime() 返回的毫秒，直接传会被当成秒 ——
-    // 时间窗落到 5 万年后，当天记录永远搜不到。必须先 ÷1000 换算成秒。
-    searchTimePosition: Math.floor(startOfDay / 1000),
-    searchTimePeriod: 24 * 60 * 60,
+    // OpenIM 使用秒。窗口以相邻两个本地午夜计算，兼容 23/25 小时的 DST 切换日。
+    searchTimePosition: window.positionSeconds,
+    searchTimePeriod: window.periodSeconds,
     pageIndex: params.pageIndex ?? 1,
     count: params.count ?? 50,
   });
