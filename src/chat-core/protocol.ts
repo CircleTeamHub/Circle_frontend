@@ -70,6 +70,65 @@ export interface ChatMessageDto {
   createdAt: string;
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isNonEmptyString(value: unknown): boolean {
+  return typeof value === 'string' && value.length > 0;
+}
+
+function isValidSender(value: unknown): boolean {
+  if (value === null || value === undefined) return true;
+  if (!isPlainObject(value)) return false;
+  return (
+    isNonEmptyString(value['id']) &&
+    typeof value['nickname'] === 'string' &&
+    (value['avatarUrl'] === null ||
+      value['avatarUrl'] === undefined ||
+      typeof value['avatarUrl'] === 'string')
+  );
+}
+
+/**
+ * chat:msg 载荷的运行时校验。
+ *
+ * 分发器原来只看两个 id 就往 store 里写,于是 content 为 null、height 非法、
+ * sender 形状错、createdAt 不可解析的载荷都会被原样落库。最典型的一条:
+ * 一个 content=null 的文本消息进了 store,之后 MessagesScreen 渲染时
+ * getChatMessagePreview 里 `message.content['text']` 抛异常 —— 那已经在
+ * 分发器的 try/catch 之外了,一条畸形广播就能让消息页每次进都白屏。
+ *
+ * 校验的严格程度按「渲染路径会不会因此炸」来定:
+ * - id/conversationId/type/content/height/createdAt 必须可用,缺一不可;
+ * - sender 允许为 null(系统消息),但给了就必须是完整形状;
+ * - replyToId/d 允许缺省(服务端可能省略 null),类型错才拒。
+ */
+export function isChatMessageDto(value: unknown): value is ChatMessageDto {
+  if (!isPlainObject(value)) return false;
+  if (!isNonEmptyString(value['id'])) return false;
+  if (!isNonEmptyString(value['conversationId'])) return false;
+  if (!isNonEmptyString(value['type'])) return false;
+  if (!isPlainObject(value['content'])) return false;
+  const height = value['height'];
+  if (typeof height !== 'number' || !Number.isInteger(height) || height < 0) {
+    return false;
+  }
+  // 时间参与排序与分组;不可解析的话日期分隔线与「昨天」判定会算出 NaN。
+  const createdAt = value['createdAt'];
+  if (typeof createdAt !== 'string' || !Number.isFinite(Date.parse(createdAt))) {
+    return false;
+  }
+  if (!isValidSender(value['sender'])) return false;
+  const replyToId = value['replyToId'];
+  if (replyToId !== null && replyToId !== undefined && typeof replyToId !== 'string') {
+    return false;
+  }
+  const d = value['d'];
+  if (d !== null && d !== undefined && typeof d !== 'string') return false;
+  return true;
+}
+
 export interface ChatReadBroadcast {
   conversationId: string;
   userId: string;

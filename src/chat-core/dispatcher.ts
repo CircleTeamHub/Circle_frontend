@@ -1,6 +1,7 @@
 import type { Socket } from 'socket.io-client';
 import {
   CHAT_EVENTS,
+  isChatMessageDto,
   type ChatMessageDto,
   type ChatPresenceBroadcast,
   type ChatReadBroadcast,
@@ -44,11 +45,11 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
   socket.on(CHAT_EVENTS.message, (payload: ChatMessageDto) => {
     if (!isLive()) return;
     try {
-      if (
-        !payload ||
-        typeof payload.id !== 'string' ||
-        typeof payload.conversationId !== 'string'
-      ) {
+      // 整份 DTO 都要校验,不能只看两个 id:content=null / height 非法 /
+      // sender 形状错的载荷落进 store 之后,炸的是 MessagesScreen 的渲染路径
+      // (getChatMessagePreview 读 content['text']),那已经在这个 try/catch
+      // 之外了 —— 一条畸形广播就能让消息页每次进都白屏,且它还落了库。
+      if (!isChatMessageDto(payload)) {
         console.warn('[chat] dropped malformed message payload');
         return;
       }
