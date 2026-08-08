@@ -27,6 +27,22 @@ test('friend search result shows remark as primary name with nickname subtitle',
 });
 
 
+test('global search loads the conversation snapshot it needs to group hits', () => {
+  const screen = read('src/features/search/screens/SearchScreen.tsx');
+
+  // 这个屏幕从联系人 tab 也能直接进,而会话快照只在消息页 focus 时拉。
+  // 不自己补一次的话,冷启动搜聊天记录时 conversationById 是空的,
+  // 服务端返回的每一条正文命中都会被 `if (!conversation) continue` 丢掉,
+  // 界面上表现为「什么都搜不到」。
+  assert.match(screen, /loadChatConversations/);
+  assert.match(
+    screen,
+    /if \(rawConversations\.length > 0\) return;\s*\n\s*loadChatConversations\(\)/,
+  );
+  // 从消息页进来时已经有数据,不重复请求。
+  assert.match(screen, /\}, \[rawConversations\.length\]\);/);
+});
+
 test('tapping a chat-record hit jumps to that message via searchedMsgID', () => {
   const screen = read('src/features/search/screens/SearchScreen.tsx');
 

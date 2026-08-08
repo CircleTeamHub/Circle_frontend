@@ -16,7 +16,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { Divider } from '@/components/ui/divider';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { NavHeader } from '@/components/ui/nav-header';
-import { searchAllChatMessages } from '@/chat-core/api';
+import { loadChatConversations, searchAllChatMessages } from '@/chat-core/api';
 import { getChatMessagePreview, mapChatConversationToUI } from '@/chat-core/mappers';
 import { useChatStore } from '@/chat-core/store';
 import type { ChatMessageDto } from '@/chat-core/protocol';
@@ -105,6 +105,22 @@ export default function SearchScreen() {
     () => rawConversations.map(mapChatConversationToUI),
     [rawConversations],
   );
+
+  /**
+   * 会话快照只在消息页 focus 时拉,但这个屏幕从联系人 tab(和全局 /search)
+   * 也能直接进 —— 冷启动就搜的话 conversations 是空的,而下面归组时
+   * 「本地找不到会话」的命中会被整条丢掉:服务端明明返回了正文命中,
+   * 界面上却是彻底的「无结果」。这里先把快照补上,拉回来后 sections
+   * 重算,命中自然显现。已有数据(从消息页进来)则不重复请求。
+   */
+  useEffect(() => {
+    if (rawConversations.length > 0) return;
+    loadChatConversations().catch((error: unknown) => {
+      if (__DEV__) {
+        console.warn('[SearchScreen] loadChatConversations failed', error);
+      }
+    });
+  }, [rawConversations.length]);
 
   const currentScope: UserProfileScope = useMemo(() => {
     const scope = segments.find(
