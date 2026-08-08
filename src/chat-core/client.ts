@@ -183,12 +183,22 @@ export async function sendWithOptimism(
       d,
       replyToId: options.replyToId,
     });
+    const next = useChatStore.getState();
+    // 服务端的 chat:msg 回声可能跑在 ack 前面。那条广播是权威版本(服务端
+    // 规范化过的 content、服务端时间戳);下面这个 confirmed 只是拿本地乐观
+    // 对象换了个 id/height 拼出来的合成品,还带着只该留在本机的 localUri。
+    // mergeMessages 按 id 覆盖 —— 不让路的话权威那条会被合成品盖掉,
+    // 时间线和会话预览一起退回客户端的时间与本地地址。
+    const echoed = (
+      next.messagesByConversation[options.conversationId] ?? []
+    ).find((m) => m.id === ack.messageId);
+    if (echoed) return echoed;
+
     const confirmed: ChatMessageDto = {
       ...optimistic,
       id: ack.messageId,
       height: ack.height,
     };
-    const next = useChatStore.getState();
     next.ingestMessages(options.conversationId, [confirmed]);
     next.applyIncomingMessage(confirmed);
     return confirmed;
