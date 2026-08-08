@@ -275,6 +275,28 @@ test('chat detail loads history then reports the read watermark', () => {
   assert.match(source, /setActiveConversationId\(null\)/);
 });
 
+test('the active-conversation marker and read acks follow focus, not mount', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ChatDetailScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  // 推开聊天信息 / 聊天记录 / 选择器时 React Navigation 把本屏留在栈里继续挂载,
+  // 用 useEffect cleanup 撤标记的话它根本不会撤 —— 人在别的页面,新到的消息
+  // 却被算作「正在看」:不计未读还顺手把已读水位推上去,红点消了但消息没人看过。
+  assert.match(
+    source,
+    /useFocusEffect\(\s*useCallback\(\(\) => \{\s*if \(!conversationID \|\| !sourceID\) return;\s*setActiveConversationId\(conversationID\)/,
+  );
+  // 已读上报同样要按焦点门控:store 订阅在失焦时照常触发。
+  assert.match(source, /const isFocused = useIsFocused\(\)/);
+  assert.match(
+    source,
+    /if \(!isFocused \|\| !conversationID \|\| !conversationMessages\?\.length\) return;\s*markConversationAsRead\(conversationID\)/,
+  );
+});
+
 test('chat detail voice cleanup reads a JS snapshot, never the native recorder on unmount', () => {
   // 卸载时 recorder 的 native shared object 可能已释放，调 getStatus() 会抛
   // NativeSharedObjectNotFoundException。cleanup 必须用 ref 快照，且 stop() 兜底。

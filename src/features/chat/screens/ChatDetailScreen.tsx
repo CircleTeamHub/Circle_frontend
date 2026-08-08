@@ -20,6 +20,7 @@ import {
   type GestureResponderEvent,
 } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams, useNavigation, useSegments } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
@@ -764,13 +765,28 @@ export default function ChatDetailScreen() {
   const isVoiceRecording = voiceRecordingStartedAt != null;
   const voiceElapsedSeconds = useElapsedSeconds(voiceRecordingStartedAt);
 
+  /**
+   * 活跃会话标记按「焦点」而不是「挂载」来管。
+   *
+   * 推开聊天信息 / 聊天记录 / 选择器等页面时 React Navigation 会把本屏留在
+   * 栈里继续挂载着,靠 useEffect cleanup 的话标记不会撤 —— 于是用户人在别的
+   * 页面,新到的消息仍被算作「正在看」:不计未读、还顺手把已读水位推上去。
+   * 消息实际上没被看到,红点却已经消了。
+   */
+  useFocusEffect(
+    useCallback(() => {
+      if (!conversationID || !sourceID) return;
+      setActiveConversationId(conversationID);
+      return () => {
+        setActiveConversationId(null);
+      };
+    }, [conversationID, setActiveConversationId, sourceID]),
+  );
+
   useEffect(() => {
     if (!conversationID || !sourceID) {
       return;
     }
-
-    // 活跃会话标记:分发器据此不给本会话累计未读。
-    setActiveConversationId(conversationID);
 
     loadConversationMessages(conversationID)
       .then(() => {
@@ -784,11 +800,10 @@ export default function ChatDetailScreen() {
       });
 
     return () => {
-      setActiveConversationId(null);
       // 离开会话丢掉翻页游标:下次进入重新从最新一页开始。
       resetHistoryCursor(conversationID);
     };
-  }, [conversationID, setActiveConversationId, sourceID]);
+  }, [conversationID, sourceID]);
 
   // inverted 列表触底 = 时间上更早:继续向前翻页。没有它的话超过一页的
   // 会话根本滚不到更早的消息,搜索也跳不到首页之外的目标。
@@ -840,10 +855,13 @@ export default function ChatDetailScreen() {
   messagesLengthRef.current = messages.length;
 
   // 在此会话页时来新消息 → 即时推进已读水位(socket pending 队列自带去重合并)。
+  // 必须带 isFocused:本屏被压在聊天信息/记录页下面时仍然挂载着、store 订阅
+  // 照常触发,不挡的话「人没在看」的消息会被直接标成已读。
+  const isFocused = useIsFocused();
   useEffect(() => {
-    if (!conversationID || !conversationMessages?.length) return;
+    if (!isFocused || !conversationID || !conversationMessages?.length) return;
     markConversationAsRead(conversationID);
-  }, [conversationID, conversationMessages]);
+  }, [conversationID, conversationMessages, isFocused]);
 
   // 搜索定位：在 inverted 列表里 scrollToIndex 仍然按 index 计数，找到就跳。
   useEffect(() => {
