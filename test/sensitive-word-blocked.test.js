@@ -10,12 +10,14 @@ const path = require('node:path');
 // 3) ChatDetailScreen 的错误映射与 5 语言文案接线。
 
 test('chat-core 判定函数钉在 CHAT_SENSITIVE_WORD_BLOCKED 字符串码上', () => {
-  const client = fs.readFileSync(
-    path.join(process.cwd(), 'src/chat-core/client.ts'),
+  // 发送错误码的判定与文案映射统一收在 chat-core/send-errors.ts
+  // (client.ts 会 import 它做生产上报,判定留在 client.ts 会成环)。
+  const sendErrors = fs.readFileSync(
+    path.join(process.cwd(), 'src/chat-core/send-errors.ts'),
     'utf8',
   );
-  assert.match(client, /isChatSendBlockedBySensitiveWord/);
-  assert.match(client, /CHAT_SENSITIVE_WORD_BLOCKED/);
+  assert.match(sendErrors, /isChatSendBlockedBySensitiveWord/);
+  assert.match(sendErrors, /CHAT_SENSITIVE_WORD_BLOCKED/);
 });
 
 // 跨仓字符串契约:与 circle_be 的 ChatErrorCode 注册表保持一致。
@@ -40,12 +42,9 @@ test(
   },
 );
 
-test('ChatDetailScreen 把敏感词拦截映射到专属文案', () => {
+test('发送错误映射把敏感词拦截映射到专属文案', () => {
   const source = fs.readFileSync(
-    path.join(
-      process.cwd(),
-      'src/features/chat/screens/ChatDetailScreen.tsx',
-    ),
+    path.join(process.cwd(), 'src/chat-core/send-errors.ts'),
     'utf8',
   );
   // 自研聊天栈:判定函数换成 chat-core 的字符串码版本(73001 数字契约随

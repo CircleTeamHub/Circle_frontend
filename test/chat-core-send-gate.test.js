@@ -18,7 +18,7 @@ function loadClient({ blocked }) {
     fileName: filePath,
   }).outputText;
 
-  const calls = { ingest: 0, applied: 0, sent: 0, gate: 0 };
+  const calls = { ingest: 0, applied: 0, sent: 0, gate: 0, reported: [] };
   class CreditPolicyError extends Error {}
   const storeState = {
     ingestMessages: () => {
@@ -79,6 +79,13 @@ function loadClient({ blocked }) {
       }
       if (request === './store') {
         return { useChatStore: { getState: () => storeState } };
+      }
+      if (request === './send-errors') {
+        return {
+          reportChatSendFailure: (type, error) => {
+            calls.reported.push({ type, code: error?.code ?? null });
+          },
+        };
       }
       if (request === './protocol') return {};
       throw new Error(`unexpected require: ${request}`);

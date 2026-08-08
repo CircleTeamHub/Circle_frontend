@@ -5,8 +5,8 @@ import {
   createDirectChatConversation,
   loadChatHistory,
 } from './api';
+import { reportChatSendFailure } from './send-errors';
 import {
-  ChatSendError,
   createDeliveryId,
   markConversationRead,
   sendChatMessage,
@@ -198,6 +198,11 @@ export async function sendWithOptimism(
     // 乐观写入已经把会话预览换成了这条消息;发送失败后只标时间线是不够的,
     // 会话列表会一直把「服务端可能根本没有」的内容当作最新消息展示。
     failed.revertConversationPreview(options.conversationId);
+    // 生产上报。拆栈前 reportSend 包装器会报每一次发送拒绝,迁移后这条最关键的
+    // 链路只剩屏幕里 __DEV__ 的 console.warn —— release 包里 ack 超时和服务端
+    // 持续拒绝没有任何信号,「全网发不出消息」和「某个用户网不好」长得一模一样。
+    // 只带消息类型与白名单错误码,不带正文/d/conversationId(见 send-errors)。
+    reportChatSendFailure(options.type, error);
     throw error;
   }
 }
@@ -322,12 +327,4 @@ export function sendCardMessage(options: {
     content: options.payload as Record<string, unknown>,
     onCreate: options.onCreate,
   });
-}
-
-/** 敏感词命中判定(替代 OpenIM 73001 的 isSensitiveWordBlockedError)。 */
-export function isChatSendBlockedBySensitiveWord(error: unknown): boolean {
-  return (
-    error instanceof ChatSendError &&
-    error.code === 'CHAT_SENSITIVE_WORD_BLOCKED'
-  );
 }

@@ -73,7 +73,6 @@ import { useGroupMemberViewAccess } from '@/features/chat/hooks/use-group-member
 import {
   ensureCircleConversation,
   ensureDirectConversation,
-  isChatSendBlockedBySensitiveWord,
   hasMoreHistory,
   loadConversationMessages,
   loadOlderConversationMessages,
@@ -86,6 +85,7 @@ import {
   sendTextMessage,
   sendVoiceMessage,
 } from '@/chat-core/client';
+import { getChatSendErrorMessage } from '@/chat-core/send-errors';
 import {
   createChatMessageMapCache,
   mapChatMessageDtosToUI,
@@ -130,12 +130,8 @@ import {
 import { resolveDirectCalleeID } from '@/features/call/resolve-direct-callee';
 import type { CallType } from '@/features/call/types';
 import { getApiErrorMessage } from '@/services/api/errors';
-import i18n from '@/i18n';
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
-import {
-  assertLocalCanSendMessage,
-  CreditPolicyError,
-} from '@/services/api/credit-policy';
+import { assertLocalCanSendMessage } from '@/services/api/credit-policy';
 import { useTranslation } from 'react-i18next';
 import type { ChatMessage, PlazaPostCardData } from '@/types';
 import {
@@ -163,18 +159,6 @@ function logChatSendFailure(
       ? { name: error.name, message: error.message }
       : { message: String(error) };
   console.warn('[chat] text send failed', { ...base, ...context });
-}
-
-function getChatSendErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof CreditPolicyError) return error.message;
-  // 服务端敏感词拦截（chat-core 发送 ack 拒绝）：给明确原因而非笼统的「发送失败」。
-  // 用全局 i18n.t 而非组件 t —— 本函数在 catch 回调里按调用时机取当前语言。
-  if (isChatSendBlockedBySensitiveWord(error)) {
-    return i18n.t('chat.detail.sensitiveWordBlocked', {
-      defaultValue: '消息包含敏感词，已被屏蔽',
-    });
-  }
-  return fallback;
 }
 
 type AttachmentId =

@@ -61,11 +61,13 @@ test('credit policy is local-only: no abandoned server-check surface', () => {
 
 
 test('chat detail surfaces low-credit policy errors as the send error text', () => {
+  // 映射本身住在 chat-core/send-errors.ts(屏幕只负责调用并显示)。
   const source = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const mapper = read('src/chat-core/send-errors.ts');
 
-  assert.match(source, /CreditPolicyError/);
   assert.match(source, /getChatSendErrorMessage/);
-  assert.match(source, /error instanceof CreditPolicyError/);
+  assert.match(mapper, /CreditPolicyError/);
+  assert.match(mapper, /error instanceof CreditPolicyError/);
 });
 
 test('chat detail checks only local credit state before uploading image messages', () => {
