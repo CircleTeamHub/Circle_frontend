@@ -121,7 +121,14 @@ export function markConversationAsRead(conversationId: string): void {
 interface SendOptions {
   conversationId: string;
   type: string;
+  /** 线上载荷。媒体消息只放 object key,任何本地/展示用地址都不进这里。 */
   content: Record<string, unknown>;
+  /**
+   * 只叠加到本地乐观消息上、绝不上行的字段(发图/发语音的 localUri)。
+   * 上行了的话它会被服务端原样持久化并广播给所有人,而收件方的映射层
+   * 会把它当成可渲染地址 —— 对端就能借此投放一个静默追踪信标。
+   */
+  localContent?: Record<string, unknown>;
   replyToId?: string;
   /** 乐观消息上屏回调(旧 sendTextMessage onCreate 对应物)。 */
   onCreate?: (message: ChatMessageDto) => void;
@@ -149,7 +156,9 @@ export async function sendWithOptimism(
     conversationId: options.conversationId,
     height: 0,
     type: options.type,
-    content: options.content,
+    content: options.localContent
+      ? { ...options.content, ...options.localContent }
+      : options.content,
     sender: selfSenderInfo(),
     replyToId: options.replyToId ?? null,
     d,
@@ -239,8 +248,9 @@ export function sendImageMessage(options: {
       ...(options.thumbKey ? { thumbKey: options.thumbKey } : {}),
       ...(options.width ? { width: options.width } : {}),
       ...(options.height ? { height: options.height } : {}),
-      ...(options.localUri ? { localUri: options.localUri } : {}),
     },
+    // 本机文件 uri 只喂自己的气泡,不上行。
+    localContent: options.localUri ? { localUri: options.localUri } : undefined,
     onCreate: options.onCreate,
   });
 }
@@ -260,8 +270,8 @@ export function sendVoiceMessage(options: {
       key: options.key,
       duration: options.duration,
       ...(options.size ? { size: options.size } : {}),
-      ...(options.localUri ? { localUri: options.localUri } : {}),
     },
+    localContent: options.localUri ? { localUri: options.localUri } : undefined,
     onCreate: options.onCreate,
   });
 }

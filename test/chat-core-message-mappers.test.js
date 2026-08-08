@@ -18,7 +18,15 @@ function transpile(rel) {
   }).outputText;
 }
 
-function loadMappers() {
+function loadMappers(options = {}) {
+  // 白名单替身:只放行「本站自己的媒体来源」,其余(含对端塞的任意主机)一律拒。
+  const TRUSTED = ['https://cdn.trusted/', 'https://signed/'];
+  const allow =
+    options.allowPeerMediaUrl ??
+    ((u) =>
+      typeof u === 'string' && TRUSTED.some((prefix) => u.startsWith(prefix))
+        ? u
+        : null);
   const context = {
     Date,
     Number,
@@ -26,7 +34,7 @@ function loadMappers() {
     exports: {},
     require: (request) => {
       if (request === '@/services/api/utils') {
-        return { normalizeMediaUrl: (u) => u ?? null };
+        return { normalizeMediaUrl: (u) => u ?? null, allowPeerMediaUrl: allow };
       }
       if (request === '@/i18n') {
         return {
@@ -230,4 +238,70 @@ test('falls back to a text bubble for a malformed call-record payload', () => {
     // 半个对象不能塞给只认完整形状的 CallRecordBubble。
     assert.notEqual(ui.type, 'call-record');
   }
+});
+
+// ── 对端可控媒体地址:整个 content 由发送方构造,服务端只校验 object key ──────
+test('image messages only render URLs that pass the media allowlist', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+
+  const trusted = mapChatMessageDtoToUI(
+    dto({ type: 'image', content: { key: 'k', url: 'https://cdn.trusted/a.jpg' } }),
+    'u1',
+    0,
+  );
+  assert.equal(trusted.imageUrl, 'https://cdn.trusted/a.jpg');
+
+  // 签名失败时客户端塞的 url 会存活到这里,不能照单全收。
+  const hostile = mapChatMessageDtoToUI(
+    dto({ type: 'image', content: { key: 'k', url: 'https://attacker.example/1x1.gif' } }),
+    'u1',
+    0,
+  );
+  assert.equal(hostile.imageUrl, undefined);
+});
+
+test('localUri fallback only accepts host-less local schemes', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+
+  // 自己发的那条:本机文件路径先顶上,这是这个回退存在的唯一理由。
+  const local = mapChatMessageDtoToUI(
+    dto({ type: 'image', content: { key: 'k', localUri: 'file:///tmp/a.jpg' } }),
+    'u1',
+    0,
+  );
+  assert.equal(local.imageUrl, 'file:///tmp/a.jpg');
+
+  // 被塞成网络地址就是个静默追踪信标:每个滑过这条消息的人都会 GET 一次,
+  // 把 IP、User-Agent 和精确到秒的已读时刻交给对方(不需要点击)。
+  for (const beacon of [
+    'https://attacker.example/beacon.gif',
+    'http://attacker.example/beacon.gif',
+    '//attacker.example/beacon.gif',
+  ]) {
+    const hostile = mapChatMessageDtoToUI(
+      dto({ type: 'image', content: { key: 'k', localUri: beacon } }),
+      'u1',
+      0,
+    );
+    assert.equal(hostile.imageUrl, undefined, `must reject ${beacon}`);
+  }
+});
+
+test('voice messages apply the same allowlist to both url and localUri', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const hostile = mapChatMessageDtoToUI(
+    dto({
+      type: 'voice',
+      content: {
+        key: 'k',
+        duration: 3,
+        url: 'https://attacker.example/a.m4a',
+        localUri: 'https://attacker.example/b.m4a',
+      },
+    }),
+    'u1',
+    0,
+  );
+  // 主地址被拒之后不能从 localUri 溜出去 —— 那正是绕过白名单的形态。
+  assert.equal(hostile.voiceUrl ?? hostile.audioUrl ?? undefined, undefined);
 });

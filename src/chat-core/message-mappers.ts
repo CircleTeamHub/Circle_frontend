@@ -1,5 +1,5 @@
 import i18n from '@/i18n';
-import { normalizeMediaUrl } from '@/services/api/utils';
+import { allowPeerMediaUrl } from '@/services/api/utils';
 import type {
   CallRecordData,
   ChatMessage,
@@ -42,11 +42,36 @@ function num(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+/** 本机文件 uri(乐观消息用):只认没有 host 的本地 scheme,绝不放行网络地址。 */
+function localPreviewUri(content: Record<string, unknown>): string | undefined {
+  const local = str(content['localUri']);
+  if (!local) return undefined;
+  return /^(file:|content:|ph:|assets-library:|data:image\/)/i.test(local)
+    ? local
+    : undefined;
+}
+
+/**
+ * 媒体地址解析。content 是对端可控的(整个 content 由发送方构造、服务端只校验
+ * object key),所以这里的每一个候选都必须过来源白名单:
+ *
+ * - 正常情况下 url/thumbUrl 由服务端 presign-on-read 当场签出,天然在白名单内;
+ *   但客户端也能把这两个字段塞进 content,而签名失败(存储不可用)时服务端不会
+ *   覆盖它 —— 那份客户端值就会原样渲染出来。
+ * - localUri 更直接:它本该只是发送方自己的本机文件路径,一旦被塞成
+ *   https://attacker/1x1.gif,每个滑过这条消息的人都会静默发起一次 GET,
+ *   把 IP、User-Agent 和精确到秒的已读时刻交给对方(不需要点击)。
+ *
+ * 所以:远端地址过 allowPeerMediaUrl,本地回退只接受无 host 的本地 scheme。
+ */
 function mediaUrl(content: Record<string, unknown>, field: string): string | undefined {
   const remote = str(content[field]);
-  if (remote) return normalizeMediaUrl(remote) ?? remote;
-  // 乐观消息还没有签名 URL:用本地文件 uri 先渲染,服务端回执后被替换。
-  return str(content['localUri']);
+  if (remote) {
+    const allowed = allowPeerMediaUrl(remote);
+    if (allowed) return allowed;
+    // 远端地址不可信:退回本地预览(自己发的那条),而不是照常请求。
+  }
+  return localPreviewUri(content);
 }
 
 export function mapChatMessageDtoToUI(
@@ -64,7 +89,7 @@ export function mapChatMessageDtoToUI(
     senderName: isSent ? undefined : (dto.sender?.nickname ?? undefined),
     senderAvatarUrl: isSent
       ? undefined
-      : (normalizeMediaUrl(dto.sender?.avatarUrl ?? null) ?? undefined),
+      : (allowPeerMediaUrl(dto.sender?.avatarUrl ?? null) ?? undefined),
     outgoing: isSent,
     sendStatus: isSent ? sendStatus : undefined,
     isRead: isSent && dto.height > 0 ? dto.height <= peerReadHeight : undefined,
@@ -84,7 +109,7 @@ export function mapChatMessageDtoToUI(
         type: 'image',
         imageUrl: mediaUrl(content, 'url'),
         imageThumbUrl: str(content['thumbUrl'])
-          ? (normalizeMediaUrl(str(content['thumbUrl']) ?? null) ?? undefined)
+          ? (allowPeerMediaUrl(str(content['thumbUrl']) ?? null) ?? undefined)
           : undefined,
         imageWidth: num(content['width']),
         imageHeight: num(content['height']),
