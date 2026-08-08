@@ -61,6 +61,9 @@ function normalize(value) {
 DEFAULT_CLIENT_STUBS['@/im/user-id'] = loadTsModule('src/im/user-id.ts');
 DEFAULT_CLIENT_STUBS['@/im/error-codes'] = loadTsModule('src/im/error-codes.ts');
 DEFAULT_CLIENT_STUBS['@/im/data-dir'] = loadTsModule('src/im/data-dir.ts');
+DEFAULT_CLIENT_STUBS['@/features/chat/chat-history-date-window'] = loadTsModule(
+  'src/features/chat/chat-history-date-window.ts',
+);
 DEFAULT_CLIENT_STUBS['@/storage'] = {
   storage: { getString: () => undefined, set: () => {}, remove: () => {} },
 };

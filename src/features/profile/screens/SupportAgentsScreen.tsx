@@ -124,7 +124,7 @@ export default function SupportAgentsScreen() {
           operation: 'customerService',
           kind: 'openAgentConversation',
           category: category?.id,
-          agent: agent.id,
+          agentIndex: agent.index,
         });
         Alert.alert(
           t('profile.customerService.openFailed'),

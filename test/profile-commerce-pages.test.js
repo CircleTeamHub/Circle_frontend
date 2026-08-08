@@ -113,6 +113,9 @@ test('support-agents route + screen use one unified support avatar and open a fe
   // 失败弹窗不把原始 SDK/OpenIM 错误文案展示给用户；改通用本地化提示 + reportError 上报结构化上下文。
   assert.match(screen, /reportError\(/);
   assert.doesNotMatch(screen, /error instanceof Error \? error\.message/);
+  // OpenIM 客服账号也是用户标识，不得进入 Sentry extra；序号足够定位配置项。
+  assert.doesNotMatch(screen, /agent:\s*agent\.id/);
+  assert.match(screen, /agentIndex:\s*agent\.index/);
 });
 
 test('profile commerce routes export their screens', () => {
