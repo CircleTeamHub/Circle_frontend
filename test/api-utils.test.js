@@ -30,6 +30,7 @@ function loadApiUtils(options = {}) {
           API_URL:
             options.apiUrl ?? 'http://192.168.1.65:3000/api/v1',
           OPENIM_API_URL: 'http://192.168.1.65:10002',
+          MEDIA_ORIGINS: options.mediaOrigins ?? [],
         };
       }
 
@@ -339,6 +340,34 @@ test('allowPeerMediaUrl accepts the app own media origins', () => {
     allowPeerMediaUrl('https://api.example.com/circle/chat/a.jpg'),
     'https://api.example.com/circle/chat/a.jpg',
   );
+});
+
+test('allowPeerMediaUrl accepts a configured object-storage / CDN origin', () => {
+  // 上传契约返回的是独立 fileUrl:存储挂在自己的域名下是正常部署形态。
+  // 只比 API 主机名的话,这种部署里每一个合法媒体都会被拒 ——
+  // 图片全空、语音放不了、分享封面消失,而 REST 一切正常,极难排查。
+  const { allowPeerMediaUrl } = loadApiUtils({
+    apiUrl: 'https://api.example.com/api/v1',
+    isDev: false,
+    mediaOrigins: ['https://cdn.example.net'],
+  });
+
+  assert.equal(
+    allowPeerMediaUrl('https://cdn.example.net/chat/a.jpg'),
+    'https://cdn.example.net/chat/a.jpg',
+  );
+  // 配了 CDN 也不等于放开白名单:其它主机照拒。
+  assert.equal(allowPeerMediaUrl('https://evil.example/beacon.gif'), null);
+});
+
+test('allowPeerMediaUrl still rejects a CDN host that was not configured', () => {
+  const { allowPeerMediaUrl } = loadApiUtils({
+    apiUrl: 'https://api.example.com/api/v1',
+    isDev: false,
+    mediaOrigins: [],
+  });
+
+  assert.equal(allowPeerMediaUrl('https://cdn.example.net/chat/a.jpg'), null);
 });
 
 test('allowPeerMediaUrl rejects any third-party host (the tracking beacon)', () => {

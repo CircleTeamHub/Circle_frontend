@@ -2,7 +2,7 @@
  * api/utils.ts — API 层共享工具函数
  */
 import { apiClient } from '@/services/api/client';
-import { API_URL, OPENIM_API_URL } from '@/constants/config';
+import { API_URL, MEDIA_ORIGINS, OPENIM_API_URL } from '@/constants/config';
 import type { AuthUser } from '@/stores/authStore';
 import type { BackendAuthUser } from '@/services/api/auth';
 import type { AvatarFrameAppearance } from '@/types';
@@ -98,8 +98,12 @@ export function normalizeMediaUrl(value: string | null | undefined) {
  * 这是隐私泄露，不只是流量问题。
  *
  * 与 normalizeAvatarFrameImageUrl 的区别：那个在生产只要求 https，任何主机都放行，
- * 挡不住信标。这里要求主机必须等于本 app 自己的媒体来源（API_URL 是经 Caddy 的
- * MinIO，OPENIM_API_URL 是 OpenIM 自带对象存储），其余一律拒绝。
+ * 挡不住信标。这里要求主机必须属于本 app 自己的媒体来源，其余一律拒绝。
+ *
+ * 来源有三类：API_URL（经 Caddy 的 MinIO）、OPENIM_API_URL（OpenIM 自带对象存储），
+ * 以及 EXPO_PUBLIC_MEDIA_ORIGINS 显式配置的对象存储/CDN 域名 —— 上传契约返回的
+ * fileUrl 本来就可以挂在独立域名下，只比前两个的话那种部署会把每一个合法媒体
+ * 都拒掉（图片全空、语音放不了、封面消失）。
  *
  * 返回 null 表示「不可信，别加载」，调用方应退化成占位符而不是照常请求。
  */
@@ -121,7 +125,7 @@ export function allowPeerMediaUrl(
       return null;
     }
 
-    for (const origin of [API_URL, OPENIM_API_URL]) {
+    for (const origin of [API_URL, OPENIM_API_URL, ...MEDIA_ORIGINS]) {
       if (!origin) continue;
       try {
         if (new URL(origin).hostname === mediaUrl.hostname) {
