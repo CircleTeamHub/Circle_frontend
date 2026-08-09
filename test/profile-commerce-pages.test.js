@@ -69,7 +69,13 @@ test('customer service exposes recharge/issue/dispute/account with env override 
   // 一类可配多个客服：逗号分隔、去重；全部留空回退到通用客服账号 SUPPORT_ACCOUNT_ID。
   assert.match(cats, /accountIds:\s*resolveAccounts\(/);
   assert.match(cats, /\.split\(','\)/);
-  assert.match(cats, /deduped\.length > 0 \? deduped : \[SUPPORT_ACCOUNT_ID\]/);
+  // 回退到通用客服账号的语义不变;外面多包了一层 ID 归一化 ——
+  // 旧配置里是 OpenIM 的 32 位十六进制,而 chat-core 的建单聊接口只收 UUID。
+  assert.match(
+    cats,
+    /deduped\.length > 0\s*\?\s*deduped\s*:\s*\[normalizeSupportAccountId\(SUPPORT_ACCOUNT_ID\)\]/,
+  );
+  assert.match(cats, /export function normalizeSupportAccountId/);
 
   assert.match(cfg, /export const SUPPORT_ACCOUNT_ID\s*=/);
   assert.match(cfg, /\|\|\s*['"]imAdmin['"]/);

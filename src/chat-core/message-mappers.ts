@@ -132,21 +132,118 @@ function sanitizeFriendCard(content: Record<string, unknown>): FriendCardData {
 }
 
 /**
- * 卡片 payload 里的图片字段统一过白名单。这些字段最终交给 <Image>/<Avatar>,
- * 而 payload 完全由发送方构造 —— 指向攻击者主机时,收件方一打开会话就自动
- * 发起请求,泄漏网络元数据与查看时刻(与 localUri 信标同一形态)。
- * 被拒的值回落 null,由渲染侧显示占位图,而不是照常请求。
+ * 卡片 payload 完全由发送方构造,服务端只管 content 的总字节数、不认识里面的形状。
+ * 所以每种卡片都必须逐字段解析,不能只过一遍 URL 就整体 cast:
+ *
+ * - 字符串字段被塞成对象时,NoteCardBubble 的 `note.contentPreview.trim()` 直接抛 ——
+ *   一条消息就能把这个会话打崩,而且它已落库,之后每次进来都会再崩一次;
+ * - 非字符串值还会被当成 React 文本子节点渲染,同样炸在渲染路径上;
+ * - 数字/数组字段错型会让计数与列表渲染跟着出错。
+ *
+ * 缺字段一律给安全默认值(空串 / null / 0 / 空数组),不让半个对象进渲染层。
  */
-function sanitizeCardMedia<T>(
+function textField(content: Record<string, unknown>, key: string, cap = 200): string {
+  const value = str(content[key]);
+  if (!value) return '';
+  return value.length > cap ? value.slice(0, cap) : value;
+}
+
+function optionalTextField(
   content: Record<string, unknown>,
-  urlFields: readonly string[],
-): T {
-  const cleaned: Record<string, unknown> = { ...content };
-  for (const field of urlFields) {
-    if (cleaned[field] === undefined) continue;
-    cleaned[field] = allowPeerMediaUrl(str(cleaned[field]));
+  key: string,
+  cap = 200,
+): string | null {
+  return textField(content, key, cap) || null;
+}
+
+function countField(content: Record<string, unknown>, key: string): number {
+  const value = num(content[key]);
+  if (value === undefined || value < 0) return 0;
+  return Math.floor(value);
+}
+
+function stringArrayField(
+  content: Record<string, unknown>,
+  key: string,
+  cap = 20,
+): string[] {
+  const raw = content[key];
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const entry of raw) {
+    if (out.length >= cap) break;
+    const value = str(entry);
+    if (value) out.push(value.length > 40 ? value.slice(0, 40) : value);
   }
-  return cleaned as unknown as T;
+  return out;
+}
+
+/** 图片字段单独走来源白名单(对端可控地址 = 静默追踪信标)。 */
+function mediaField(
+  content: Record<string, unknown>,
+  key: string,
+): string | null {
+  return allowPeerMediaUrl(str(content[key]));
+}
+
+function sanitizeNoteCard(content: Record<string, unknown>): NoteCardData {
+  return {
+    noteId: textField(content, 'noteId', 64),
+    ownerId: optionalTextField(content, 'ownerId', 64),
+    title: textField(content, 'title', 80),
+    contentPreview: optionalTextField(content, 'contentPreview', 200),
+    coverUrl: mediaField(content, 'coverUrl'),
+    imageCount: countField(content, 'imageCount'),
+    videoCount: countField(content, 'videoCount'),
+    groupNames: stringArrayField(content, 'groupNames'),
+    hasText: content['hasText'] === true,
+    showcaseCount: countField(content, 'showcaseCount'),
+    hasLocation: content['hasLocation'] === true,
+  };
+}
+
+function sanitizeCircleCard(content: Record<string, unknown>): CircleCardData {
+  return {
+    circleId: textField(content, 'circleId', 64),
+    name: textField(content, 'name', 60),
+    avatarUrl: mediaField(content, 'avatarUrl'),
+  };
+}
+
+function sanitizePlazaPostCard(
+  content: Record<string, unknown>,
+): PlazaPostCardData {
+  return {
+    postId: textField(content, 'postId', 64),
+    title: textField(content, 'title', 80),
+    contentPreview: optionalTextField(content, 'contentPreview', 200),
+    coverUrl: mediaField(content, 'coverUrl'),
+    circleName: textField(content, 'circleName', 60),
+    city: optionalTextField(content, 'city', 40),
+    signupCount: countField(content, 'signupCount'),
+    authorNickname: textField(content, 'authorNickname', 60),
+  };
+}
+
+function sanitizeTransferCard(
+  content: Record<string, unknown>,
+): TransferCardData {
+  const amount = num(content['amount']);
+  return {
+    // 金额错型/负数一律归零,总比把 NaN 或对象渲染成金额好。
+    amount: amount !== undefined && amount >= 0 ? amount : 0,
+    message: optionalTextField(content, 'message', 120),
+  };
+}
+
+function sanitizeVerificationCard(
+  content: Record<string, unknown>,
+): VerificationCardData {
+  return {
+    invitationId: textField(content, 'invitationId', 64),
+    circleName: textField(content, 'circleName', 60),
+    applicantName: textField(content, 'applicantName', 60),
+  };
 }
 
 export function mapChatMessageDtoToUI(
@@ -208,7 +305,7 @@ export function mapChatMessageDtoToUI(
       return {
         ...base,
         type: 'note-card',
-        noteCard: sanitizeCardMedia<NoteCardData>(content, ['coverUrl']),
+        noteCard: sanitizeNoteCard(content),
       };
     case 'friend-card':
       return {
@@ -220,33 +317,25 @@ export function mapChatMessageDtoToUI(
       return {
         ...base,
         type: 'circle-card',
-        circleCard: sanitizeCardMedia<CircleCardData>(content, ['avatarUrl']),
+        circleCard: sanitizeCircleCard(content),
       };
     case 'transfer-card':
       return {
         ...base,
         type: 'transfer-card',
-        transferCard: sanitizeCardMedia<TransferCardData>(content, [
-          'avatarUrl',
-          'coverUrl',
-        ]),
+        transferCard: sanitizeTransferCard(content),
       };
     case 'verification-card':
       return {
         ...base,
         type: 'verification-card',
-        verificationCard: sanitizeCardMedia<VerificationCardData>(content, [
-          'avatarUrl',
-          'coverUrl',
-        ]),
+        verificationCard: sanitizeVerificationCard(content),
       };
     case 'plaza-post-card':
       return {
         ...base,
         type: 'plaza-post-card',
-        plazaPostCard: sanitizeCardMedia<PlazaPostCardData>(content, [
-          'coverUrl',
-        ]),
+        plazaPostCard: sanitizePlazaPostCard(content),
       };
     case 'call-record': {
       // 服务端在通话结束时下发的留痕消息。缺这一支的话它会掉进 default,

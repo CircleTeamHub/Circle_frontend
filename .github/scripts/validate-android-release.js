@@ -126,6 +126,30 @@ function validateSupportAccounts(errors, env) {
   }
 }
 
+const UUID_RE =
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+const LEGACY_OPENIM_ID_RE = /^[0-9a-fA-F]{32}$/;
+
+// 自研聊天栈的建单聊接口收后端 UUID。旧配置里这些是 OpenIM userID(去连字符的
+// 32 位十六进制),而迁移把那层转换删掉了 —— 沿用旧值的部署四类客服都能渲染出来,
+// 但一点就失败,而「非空」校验完全看不出来。
+// 32 位十六进制可无损还原成 UUID,运行时会自动补连字符;其余形态在这里拦下,
+// 不让它带着一个点不开的客服中心发正式包。
+function validateSupportAccountShapes(errors, env) {
+  for (const name of ['EXPO_PUBLIC_SUPPORT_ACCOUNT_ID', ...CATEGORY_SUPPORT_ENV]) {
+    const raw = env[name]?.trim();
+    if (!raw) continue;
+    for (const id of raw.split(',').map((value) => value.trim()).filter(Boolean)) {
+      if (UUID_RE.test(id) || LEGACY_OPENIM_ID_RE.test(id)) continue;
+      errors.push(
+        `${name} contains "${id}", which is neither a backend UUID nor a convertible 32-hex OpenIM id. ` +
+          'The chat-core direct-conversation endpoint requires the UUID form; this row would render but fail on tap. ' +
+          'Migrate the value to the account UUID.',
+      );
+    }
+  }
+}
+
 // 会被编译进 APK 的那组变量 —— 与 tag / 版本号无关，所以不需要 RELEASE_TAG 就能校验。
 // 单独拆出来是为了让每日构建复用同一份合同：它转发的是同一组 repository variables，
 // 却没有 tag。少了这道校验，删掉或写错一个变量只会让构建静默编译 imAdmin 回落分支，
@@ -135,6 +159,7 @@ function validateBuildEnv({ env }) {
 
   requireValues(errors, env, METADATA_ENV);
   validateSupportAccounts(errors, env);
+  validateSupportAccountShapes(errors, env);
   validateUrl(errors, 'EXPO_PUBLIC_API_URL', env.EXPO_PUBLIC_API_URL, 'https:');
   validateSentryDsn(errors, env);
 

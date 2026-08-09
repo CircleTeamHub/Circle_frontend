@@ -24,10 +24,32 @@ export interface SupportCategory {
   labelKey: string;
   descriptionKey: string;
   /**
-   * 该类型的客服账号列表（原始 OpenIM userID；发起时由 im/client 的 toImUserId 去连字符）。
+   * 该类型的客服账号列表（后端 UUID；历史配置里的 32 位十六进制 OpenIM ID 会被还原成 UUID）。
    * 一类可有多个客服，用户在客服头像页选择其一发起单聊。至少含一个（回退到通用客服账号）。
    */
   accountIds: string[];
+}
+
+/**
+ * 历史配置里这些是 OpenIM userID —— 去了连字符的 32 位十六进制。
+ * 自研栈的建单聊接口收的是后端 UUID(带连字符),而迁移把那一层转换删掉了:
+ * 沿用旧值的部署里,四类客服都能正常渲染出来,但**一点就失败**。
+ * 32 位十六进制是可无损还原的(它本来就是 UUID 去掉连字符),这里补回来;
+ * 其它形态原样透传,由发布校验在打包前拦下。
+ */
+const LEGACY_OPENIM_ID = /^[0-9a-fA-F]{32}$/;
+
+export function normalizeSupportAccountId(id: string): string {
+  if (!LEGACY_OPENIM_ID.test(id)) return id;
+  return [
+    id.slice(0, 8),
+    id.slice(8, 12),
+    id.slice(12, 16),
+    id.slice(16, 20),
+    id.slice(20),
+  ]
+    .join('-')
+    .toLowerCase();
 }
 
 // 解析单个环境变量为账号列表：支持逗号分隔配多个客服；去重、去空白。
@@ -36,9 +58,10 @@ const resolveAccounts = (raw: string | undefined): string[] => {
   const ids = (raw ?? '')
     .split(',')
     .map((id) => id.trim())
-    .filter((id) => id.length > 0);
+    .filter((id) => id.length > 0)
+    .map(normalizeSupportAccountId);
   const deduped = [...new Set(ids)];
-  return deduped.length > 0 ? deduped : [SUPPORT_ACCOUNT_ID];
+  return deduped.length > 0 ? deduped : [normalizeSupportAccountId(SUPPORT_ACCOUNT_ID)];
 };
 
 export const SUPPORT_CATEGORIES: readonly SupportCategory[] = [

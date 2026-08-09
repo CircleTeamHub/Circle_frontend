@@ -177,16 +177,14 @@ test('every card type routes its image fields through the allowlist', () => {
   const good = 'https://cdn.trusted/a.jpg';
 
   const cases = [
-    ['note-card', 'noteCard', { coverUrl: beacon }, { coverUrl: good }, 'coverUrl'],
-    ['circle-card', 'circleCard', { avatarUrl: beacon }, { avatarUrl: good }, 'avatarUrl'],
-    ['plaza-post-card', 'plazaPostCard', { coverUrl: beacon }, { coverUrl: good }, 'coverUrl'],
-    ['transfer-card', 'transferCard', { avatarUrl: beacon }, { avatarUrl: good }, 'avatarUrl'],
-    ['verification-card', 'verificationCard', { avatarUrl: beacon }, { avatarUrl: good }, 'avatarUrl'],
+    ['note-card', 'noteCard', 'coverUrl'],
+    ['circle-card', 'circleCard', 'avatarUrl'],
+    ['plaza-post-card', 'plazaPostCard', 'coverUrl'],
   ];
 
-  for (const [type, key, hostile, trusted, field] of cases) {
+  for (const [type, key, field] of cases) {
     const bad = mapChatMessageDtoToUI(
-      { ...friendCardDto(hostile), type },
+      { ...friendCardDto({ [field]: beacon }), type },
       'me',
       0,
     );
@@ -194,7 +192,7 @@ test('every card type routes its image fields through the allowlist', () => {
     assert.equal(bad[key][field], null, `${type} must reject the beacon`);
 
     const ok = mapChatMessageDtoToUI(
-      { ...friendCardDto(trusted), type },
+      { ...friendCardDto({ [field]: good }), type },
       'me',
       0,
     );
@@ -202,16 +200,102 @@ test('every card type routes its image fields through the allowlist', () => {
   }
 });
 
-test('card sanitization leaves non-URL fields untouched', () => {
+// 卡片 payload 由发送方构造,服务端只管总字节数、不认识里面的形状。
+// 字符串字段被塞成对象时 NoteCardBubble 的 `contentPreview.trim()` 直接抛 ——
+// 一条消息打崩这个会话,而且它已落库,之后每次进来都会再崩一次。
+test('every card type survives wrong-typed fields without throwing', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const hostileValues = [{ nested: true }, [], 42, null, undefined, () => {}];
+
+  for (const type of [
+    'note-card',
+    'circle-card',
+    'plaza-post-card',
+    'transfer-card',
+    'verification-card',
+  ]) {
+    for (const value of hostileValues) {
+      const content = {
+        noteId: value,
+        title: value,
+        contentPreview: value,
+        coverUrl: value,
+        imageCount: value,
+        videoCount: value,
+        groupNames: value,
+        circleId: value,
+        name: value,
+        avatarUrl: value,
+        postId: value,
+        circleName: value,
+        city: value,
+        signupCount: value,
+        authorNickname: value,
+        amount: value,
+        message: value,
+        invitationId: value,
+        applicantName: value,
+      };
+      assert.doesNotThrow(
+        () =>
+          mapChatMessageDtoToUI({ ...friendCardDto(content), type }, 'me', 0),
+        `${type} threw on ${String(value)}`,
+      );
+    }
+  }
+});
+
+test('text fields are always strings, never objects handed to React', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const ui = mapChatMessageDtoToUI(
+    {
+      ...friendCardDto({
+        noteId: {},
+        title: [],
+        contentPreview: { toString: 1 },
+        groupNames: 'not-an-array',
+        imageCount: 'three',
+      }),
+      type: 'note-card',
+    },
+    'me',
+    0,
+  );
+  const card = ui.noteCard;
+  assert.equal(typeof card.noteId, 'string');
+  assert.equal(typeof card.title, 'string');
+  // NoteCardBubble 会对它调 .trim(),必须是 string 或 null。
+  assert.ok(card.contentPreview === null || typeof card.contentPreview === 'string');
+  assert.ok(Array.isArray(card.groupNames));
+  assert.equal(typeof card.imageCount, 'number');
+  assert.equal(Number.isFinite(card.imageCount), true);
+});
+
+test('transfer amounts never render as NaN or a negative number', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  for (const amount of [{}, 'free', NaN, Infinity, -5, undefined]) {
+    const ui = mapChatMessageDtoToUI(
+      { ...friendCardDto({ amount }), type: 'transfer-card' },
+      'me',
+      0,
+    );
+    assert.equal(typeof ui.transferCard.amount, 'number');
+    assert.equal(Number.isFinite(ui.transferCard.amount), true);
+    assert.ok(ui.transferCard.amount >= 0);
+  }
+});
+
+test('card sanitization keeps well-formed values intact', () => {
   const { mapChatMessageDtoToUI } = loadMappers();
   const ui = mapChatMessageDtoToUI(
     {
       ...friendCardDto({
         noteId: 'n1',
         title: '标题',
+        contentPreview: '正文预览',
         imageCount: 3,
         groupNames: ['a', 'b'],
-        coverUrl: 'https://attacker.example/x.gif',
+        coverUrl: 'https://cdn.trusted/c.jpg',
       }),
       type: 'note-card',
     },
@@ -220,7 +304,8 @@ test('card sanitization leaves non-URL fields untouched', () => {
   );
   assert.equal(ui.noteCard.noteId, 'n1');
   assert.equal(ui.noteCard.title, '标题');
+  assert.equal(ui.noteCard.contentPreview, '正文预览');
   assert.equal(ui.noteCard.imageCount, 3);
   assert.deepEqual([...ui.noteCard.groupNames], ['a', 'b']);
-  assert.equal(ui.noteCard.coverUrl, null);
+  assert.equal(ui.noteCard.coverUrl, 'https://cdn.trusted/c.jpg');
 });

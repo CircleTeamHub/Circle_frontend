@@ -515,7 +515,7 @@ test('release validation metadata requires matching app versions and secure publ
     RELEASE_TAG: 'v1.0.0',
     EXPO_PUBLIC_API_URL: 'https://api.windnote.test',
     EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: 'official-support',
-    EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: 'cs-support',
+    EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: '33333333-3333-4333-8333-333333333333',
   };
   const app = { version: '1.0.0', android: { versionCode: 1_000_000 } };
 
@@ -691,7 +691,7 @@ test('release validation CLI supports scoped and legacy validation', () => {
     RELEASE_TAG: 'v1.0.0',
     EXPO_PUBLIC_API_URL: 'https://api.windnote.test',
     EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: 'official-support',
-    EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: 'cs-support',
+    EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: '33333333-3333-4333-8333-333333333333',
   };
   const signingEnv = {
     ANDROID_KEYSTORE_BASE64: 'a2V5c3RvcmU=',
@@ -928,4 +928,51 @@ test('release preflight forwards support-account variables so the validator can 
       `preflight forwards ${name}`,
     );
   }
+});
+
+// 迁移把 OpenIM ID → 后端 UUID 的转换删掉了,而建单聊接口只收 UUID。
+// 沿用旧配置的部署里四类客服全都能渲染出来,但一点就失败 —— 而原来的
+// 「非空」校验完全看不出来,正式包会带着一个点不开的客服中心发出去。
+test('release validation rejects support ids that are not usable by chat-core', () => {
+  const { validateBuildEnv } = require('../.github/scripts/validate-android-release');
+  const base = {
+    EXPO_PUBLIC_API_URL: 'https://api.example.com/api/v1',
+    EXPO_PUBLIC_APP_DISPLAY_NAME: 'x',
+    EXPO_PUBLIC_ANDROID_PACKAGE: 'com.example.app',
+    EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID:
+      '11111111-1111-4111-8111-111111111111',
+  };
+
+  const bad = validateBuildEnv({
+    env: { ...base, EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: 'imAdmin' },
+  });
+  assert.ok(
+    (bad.errors ?? bad).some?.((e) => /imAdmin/.test(String(e))) ??
+      JSON.stringify(bad).includes('imAdmin'),
+    `expected a shape error, got ${JSON.stringify(bad)}`,
+  );
+
+  // 后端 UUID 直接放行。
+  const uuid = validateBuildEnv({
+    env: {
+      ...base,
+      EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: '22222222-2222-4222-8222-222222222222',
+    },
+  });
+  assert.ok(
+    !JSON.stringify(uuid).includes('neither a backend UUID'),
+    `uuid form must pass, got ${JSON.stringify(uuid)}`,
+  );
+
+  // 32 位十六进制是旧 OpenIM ID,可无损还原成 UUID,运行时会自动补连字符 —— 放行。
+  const legacy = validateBuildEnv({
+    env: {
+      ...base,
+      EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: '22222222222242228222222222222222',
+    },
+  });
+  assert.ok(
+    !JSON.stringify(legacy).includes('neither a backend UUID'),
+    `convertible legacy id must pass, got ${JSON.stringify(legacy)}`,
+  );
 });
