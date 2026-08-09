@@ -10,6 +10,7 @@ import {
 import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
 import { allowPeerMediaUrl } from '@/services/api/utils';
 import { loadChatConversations } from './api';
+import { isMessageDeletedLocally } from './deleted-messages';
 import { getChatMessagePreview } from './mappers';
 import { useChatStore } from './store';
 
@@ -55,6 +56,12 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         console.warn('[chat] dropped malformed message payload');
         return;
       }
+      // 本端删过的消息重复投递时,整条都要在这里丢掉。
+      // 只靠 store 里的过滤是不够的:applyIncomingMessage 对墓碑消息返回
+      // 「已处理」,而下面的横幅与补拉是无条件跑的 —— 用户离开会话后,
+      // 一条自己刚删掉的消息会以前台通知的形式重新弹出来。
+      if (isMessageDeletedLocally(payload.id, payload.d)) return;
+
       const store = useChatStore.getState();
       // 顺序要紧:先联动会话列表再入时间线。applyIncomingMessage 靠
       // 「这条消息是否已在时间线里」判重复投递,先 ingest 的话它每次都会

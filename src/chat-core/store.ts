@@ -121,10 +121,10 @@ function reconcileDeletedPreview(
   timeline: ChatMessageDto[] | undefined,
 ): ChatConversationDto {
   const last = conversation.lastMessage;
-  if (!last || !isMessageDeletedLocally(last.id)) return conversation;
+  if (!last || !isMessageDeletedLocally(last.id, last.d)) return conversation;
   let fallback: ChatMessageDto | null = null;
   for (const message of timeline ?? []) {
-    if (message.height > 0 && !isMessageDeletedLocally(message.id)) {
+    if (message.height > 0 && !isMessageDeletedLocally(message.id, message.d)) {
       fallback = message;
     }
   }
@@ -196,7 +196,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     // 否则消息进了时间线但会话行与角标一直不出现,要手动刷新才看得到。
     if (index < 0) return false;
     // 本地已删的消息被重投时既不该回到预览、也不该再算一次未读。
-    if (isMessageDeletedLocally(message.id)) return true;
+    if (isMessageDeletedLocally(message.id, message.d)) return true;
     const target = conversations[index];
     const fromSelf =
       currentUserId !== null && message.sender?.id === currentUserId;
@@ -281,9 +281,13 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
 
   removeMessage: (conversationId, messageId) => {
     // 墓碑先落盘,再动内存:只改数组的话下次拉历史就把它接回来了。
-    markMessageDeletedLocally(messageId);
+    // 连 d 一起记:删的若是还没拿到 ack 的气泡,手上只有 local:<d> 这个临时 id,
+    // 而确认/回声回来时带的是全新的服务端 id —— 只按 id 记的话,
+    // 删除会在慢网下当着用户的面自己撤销。
     const { messagesByConversation } = get();
     const existing = messagesByConversation[conversationId] ?? [];
+    const target = existing.find((m) => m.id === messageId);
+    markMessageDeletedLocally(messageId, target?.d ?? null);
     const filtered = existing.filter((m) => m.id !== messageId);
     if (filtered.length !== existing.length) {
       set({
@@ -325,7 +329,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   ingestMessages: (conversationId, rawIncoming) => {
     // 本地删过的消息在这里一次性挡掉:历史页、翻页、广播、补拉都走这条路,
     // 少挡一条「删除」就会在下一次拉取时复活。
-    const incoming = rawIncoming.filter((m) => !isMessageDeletedLocally(m.id));
+    const incoming = rawIncoming.filter((m) => !isMessageDeletedLocally(m.id, m.d));
     if (incoming.length === 0) return;
     const { messagesByConversation, messageWindowByConversation } = get();
     const existing = messagesByConversation[conversationId] ?? [];

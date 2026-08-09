@@ -429,3 +429,41 @@ test('realtime messages do not grow the window', () => {
   assert.equal(merged.length, MESSAGES_CAP);
   assert.equal(merged[merged.length - 1].id, 'live');
 });
+
+test('deleting an unconfirmed bubble survives its ack replacing the id', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.setConversations([conversation()]);
+
+  // 乐观消息:id 是临时的 local:<d>,服务端还没给真 id。
+  const optimistic = msg({ id: 'local:d-1', height: 0, d: 'd-1', sender: { id: 'me' } });
+  store.ingestMessages('conv-1', [optimistic]);
+  store.removeMessage('conv-1', 'local:d-1');
+  assert.equal(useChatStore.getState().messagesByConversation['conv-1'].length, 0);
+
+  // ack 回来了,带的是一个全新的服务端 id —— 只按 id 记墓碑的话它会溜回来,
+  // 删除在慢网下当着用户的面自己撤销。
+  const confirmed = msg({ id: 'server-1', height: 7, d: 'd-1', sender: { id: 'me' } });
+  store.ingestMessages('conv-1', [confirmed]);
+  assert.equal(useChatStore.getState().messagesByConversation['conv-1'].length, 0);
+});
+
+test('the same holds when the server echo beats the ack', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.setConversations([conversation()]);
+
+  store.ingestMessages('conv-1', [
+    msg({ id: 'local:d-2', height: 0, d: 'd-2', sender: { id: 'me' } }),
+  ]);
+  store.removeMessage('conv-1', 'local:d-2');
+
+  // 回声先到(广播),同样带着 d 和新的服务端 id。
+  store.applyIncomingMessage(msg({ id: 'echo-1', height: 8, d: 'd-2', sender: { id: 'me' } }));
+  store.ingestMessages('conv-1', [
+    msg({ id: 'echo-1', height: 8, d: 'd-2', sender: { id: 'me' } }),
+  ]);
+  assert.equal(useChatStore.getState().messagesByConversation['conv-1'].length, 0);
+});

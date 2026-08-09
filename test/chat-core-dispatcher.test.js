@@ -44,6 +44,8 @@ function fakeSocket() {
   };
 }
 
+const deletedIds = new Set();
+
 function loadDispatcher(storeOverrides = {}) {
   const state = {
     currentUserId: 'me',
@@ -96,6 +98,12 @@ function loadDispatcher(storeOverrides = {}) {
       return {
         allowPeerMediaUrl: (u) =>
           typeof u === 'string' && u.startsWith('https://cdn.trusted/') ? u : null,
+      };
+    }
+    if (request === './deleted-messages') {
+      // 本端删除的消息要在进横幅/补拉之前就被丢掉,所以分发器也依赖它。
+      return {
+        isMessageDeletedLocally: (id) => deletedIds.has(id),
       };
     }
     if (request === '@/features/notifications/store/use-notification-snackbar-store') {
@@ -262,4 +270,18 @@ test('self messages and the open conversation never raise a banner', () => {
     }),
   );
   assert.equal(other.state.banners.length, 0);
+});
+
+test('a redelivered locally-deleted message never reaches the banner', () => {
+  // applyIncomingMessage 对墓碑消息返回「已处理」,而横幅与补拉是无条件跑的 ——
+  // 用户离开会话后,一条自己刚删掉的消息会以前台通知的形式重新弹出来。
+  const { socket, state } = loadDispatcher();
+  deletedIds.add('deleted-1');
+  try {
+    socket.emit('chat:msg', dto({ id: 'deleted-1' }));
+    assert.equal(state.banners.length, 0);
+    assert.equal(state.ingested.length, 0);
+  } finally {
+    deletedIds.delete('deleted-1');
+  }
 });

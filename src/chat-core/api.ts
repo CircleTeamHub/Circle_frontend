@@ -6,6 +6,7 @@ import type {
   ChatMemberDto,
   ChatMessageDto,
 } from './protocol';
+import { withoutLocallyDeleted } from './deleted-messages';
 import { useChatStore } from './store';
 
 /**
@@ -83,6 +84,16 @@ export async function loadChatHistory(
  * 聊天记录检索(文本搜/媒体格/按日期)。与 loadChatHistory 的关键区别:
  * 结果**不写入** store —— 过滤后的片段灌进会话时间线会造成"消息缺页"假象。
  */
+/**
+ * 检索类响应统一过一遍本地删除墓碑。
+ *
+ * 收口在这一层而不是各个屏幕:聊天记录的文本/媒体/文件/日期四屏加全局搜索都是
+ * 直接渲染这些响应、根本不进 store,逐个补容易漏,以后新加的屏还会再漏一次。
+ * 漏掉的后果是用户删过的消息在搜索结果里原样重现,点进去还会跳向一条
+ * 时间线里根本不存在的目标。
+ *
+ * 分页不受影响:nextBeforeHeight 由服务端按未过滤的结果给出,过滤只减少本页条数。
+ */
 export function searchChatMessages(
   conversationId: string,
   options: {
@@ -107,7 +118,10 @@ export function searchChatMessages(
   const query = params.toString();
   return apiClient<ChatHistoryPageDto>(
     `/chat/conversations/${conversationId}/messages${query ? `?${query}` : ''}`,
-  );
+  ).then((page) => ({
+    ...page,
+    messages: withoutLocallyDeleted(page.messages),
+  }));
 }
 
 /** 某月内有聊天记录的日期集合(按日期日历上色;客户端时区)。 */
@@ -144,7 +158,7 @@ export function searchAllChatMessages(
   if (limit !== undefined) params.set('limit', String(limit));
   return apiClient<ChatMessageDto[]>(
     `/chat/messages/search?${params.toString()}`,
-  );
+  ).then(withoutLocallyDeleted);
 }
 
 /** 会话偏好:置顶/免打扰/隐藏。返回最新 DTO 并回写 store。 */
