@@ -26,28 +26,12 @@ test('friend search result shows remark as primary name with nickname subtitle',
   assert.match(screen, /friend\.remark\?\.trim\(\) \|\| friend\.nickname/);
 });
 
-test('global chat-record search hits message content, not just conversation name', () => {
-  const client = read('src/im/client.ts');
-  const screen = read('src/features/search/screens/SearchScreen.tsx');
-
-  // 全局搜索走 OpenIM 本地全文检索，空 conversationID = 跨所有会话。
-  assert.match(client, /export async function searchAllTextMessages/);
-  assert.match(client, /conversationID: '',/);
-
-  // 搜索页防抖调用全局搜索，并把命中按会话并入「聊天记录」段。
-  assert.match(screen, /searchAllTextMessages\(\{ keyword/);
-  assert.match(screen, /setMessageMatches/);
-  assert.match(screen, /for \(const match of messageMatches\)/);
-  // 多条命中显示「N 条相关聊天记录」，单条显示命中消息预览。
-  assert.match(screen, /search\.messageMatchCount/);
-  assert.match(screen, /item\.snippet \|\| conversation\.message/);
-});
 
 test('tapping a chat-record hit jumps to that message via searchedMsgID', () => {
   const screen = read('src/features/search/screens/SearchScreen.tsx');
 
   // 命中消息带上 clientMsgID，点击时作为 searchedMsgID 传给聊天页定位。
-  assert.match(screen, /targetMsgID: firstHit\?\.clientMsgID/);
+  assert.match(screen, /targetMsgID: match\.id/);
   assert.match(screen, /params\.searchedMsgID = targetMsgID/);
   assert.match(screen, /handlePressChat\(conversation, item\.targetMsgID\)/);
 });

@@ -41,23 +41,6 @@ function normalize(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-test('circle card: type, send, and decode are wired through the IM layer', () => {
-  const types = read('src/types/index.ts');
-  assert.match(types, /interface CircleCardData/);
-  assert.match(types, /'circle-card'/);
-  assert.match(types, /circleCard\?: CircleCardData/);
-
-  const client = read('src/im/client.ts');
-  assert.match(client, /sendCircleCardMessage/);
-  assert.match(client, /createCardMessage/);
-  assert.match(client, /kind: 'circle'/);
-
-  // mappers disambiguate circle vs friend card via ex.kind
-  const mappers = read('src/im/mappers.ts');
-  assert.match(mappers, /ext\.kind === 'circle'/);
-  assert.match(mappers, /type: 'circle-card'/);
-  assert.match(mappers, /circleId: card\.userID/);
-});
 
 test('circle card: bubble renders and taps through to the circle detail', () => {
   const bubble = read(
@@ -101,8 +84,10 @@ test('ShareCircleCardScreen sends the card to a chosen conversation', () => {
   );
   assert.match(share, /useTranslation/);
   assert.doesNotMatch(share, /Alert\.alert\(\s*'发送圈子名片'/);
-  assert.match(share, /sendCircleCardMessage/);
-  assert.match(share, /targetConversationID: conversation\.id/);
+  // 契约随自研栈迁移更新(意图不变):卡片经 chat-core 发进所选会话。
+  assert.match(share, /sendCardMessage/);
+  assert.match(share, /conversationId: conversation\.id/);
+  assert.match(share, /type: 'circle-card'/);
 });
 
 test('ShareCircleCardScreen does not leave a row stuck in sending state when SDK send hangs', () => {
@@ -122,69 +107,3 @@ test('ShareCircleCardScreen does not leave a row stuck in sending state when SDK
   assert.match(share, /clearTimeout/);
 });
 
-test('circle card mapper recovers avatar from card extension when OpenIM faceURL is empty', () => {
-  const { mapMessageItemToChatMessage } = loadTsModule('src/im/mappers.ts', {
-    '@openim/rn-client-sdk': {
-      MessageType: {
-        TextMessage: 101,
-        PictureMessage: 102,
-        VoiceMessage: 103,
-        VideoMessage: 104,
-        FileMessage: 105,
-        CardMessage: 108,
-        LocationMessage: 109,
-        CustomMessage: 110,
-        TypingMessage: 113,
-      },
-      SessionType: { Single: 1, Group: 2 },
-    },
-    '@/im/client': {
-      NOTE_CARD_EXTENSION: 'note-card-v1',
-      TRANSFER_CARD_EXTENSION: 'transfer-card-v1',
-      fromImUserId: (userID) => userID,
-    },
-    '@/services/api/utils': {
-      allowPeerMediaUrl: (value) => value ?? null,
-      normalizeMediaUrl: (url) => url,
-    },
-    '@/i18n': {
-      __esModule: true,
-      default: {
-        language: 'zh',
-        t: (_key, options) => options.defaultValue,
-      },
-    },
-    '@/utils/locale': {
-      getLocalizedDateTimeLocale: (lng) =>
-        lng && lng.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US',
-    },
-  });
-
-  const mapped = mapMessageItemToChatMessage(
-    {
-      clientMsgID: 'circle-card-1',
-      sendID: 'peer-1',
-      senderNickname: 'Peer',
-      contentType: 108,
-      sendTime: new Date(2024, 0, 2, 12, 0, 0).getTime(),
-      status: 2,
-      isRead: false,
-      cardElem: {
-        userID: 'circle-1',
-        nickname: '上海同城交友',
-        faceURL: '',
-        ex: JSON.stringify({
-          v: 'circle-card-v1',
-          kind: 'circle',
-          avatarUrl: 'https://cdn.example.com/circle.png',
-        }),
-      },
-    },
-    'me',
-  );
-
-  assert.equal(
-    normalize(mapped).circleCard.avatarUrl,
-    'https://cdn.example.com/circle.png',
-  );
-});

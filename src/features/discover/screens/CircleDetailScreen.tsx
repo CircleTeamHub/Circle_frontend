@@ -50,8 +50,7 @@ import {
   sanitizeUploadFilename,
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
-import { getOrCreateGroupConversation } from '@/im/client';
-import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
+import { ensureCircleConversation } from '@/chat-core/client';
 import type { CircleDetail, CircleInvitation } from '@/types';
 import { reduceCircleLoadFailure } from '@/features/discover/utils/circle-detail-load-state';
 
@@ -288,7 +287,7 @@ export default function CircleDetailScreen() {
     if (!groupID || enteringGroupChat) return;
     try {
       setEnteringGroupChat(true);
-      const conversation = await getOrCreateGroupConversation(groupID);
+      const conversation = await ensureCircleConversation(groupID);
       router.push({
         pathname:
           circleScope === 'messages'
@@ -301,22 +300,7 @@ export default function CircleDetailScreen() {
           title: circle?.name ?? '',
         },
       });
-    } catch (error) {
-      if (shouldOpenChatPreview(error)) {
-        // IM 未接通：退化成预览模式（无 conversationID）。
-        router.push({
-          pathname:
-          circleScope === 'messages'
-            ? '/(tabs)/messages/chat-detail'
-            : '/(tabs)/discover/chat-detail',
-          params: {
-            sourceID: groupID,
-            conversationType: 'group',
-            title: circle?.name ?? '',
-          },
-        });
-        return;
-      }
+    } catch {
       Alert.alert(t('circle.error'), t('common.networkError'));
     } finally {
       if (mountedRef.current) setEnteringGroupChat(false);

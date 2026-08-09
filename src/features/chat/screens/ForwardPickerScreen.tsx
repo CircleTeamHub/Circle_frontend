@@ -17,27 +17,24 @@ import i18n from '@/i18n';
 import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
 import { useMessageForwardStore } from '@/features/chat/store/use-message-forward-store';
+import { loadChatConversations } from '@/chat-core/api';
 import {
-  forwardMessage,
-  fromImUserId,
-  sendFriendCardMessage,
-  sendNoteCardMessage,
+  sendCardMessage,
+  sendImageMessage,
+  sendLocationMessage,
   sendTextMessage,
-  sendVoiceMessageFromSource,
-} from '@/im/client';
-import { useIMStore } from '@/stores/imStore';
+  sendVoiceMessage,
+  type ChatCardType,
+} from '@/chat-core/client';
+import { useChatStore } from '@/chat-core/store';
+import type { ChatConversationDto, ChatMessageDto } from '@/chat-core/protocol';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
-import {
-  SessionType,
-  type ConversationItem,
-  type MessageItem,
-} from '@openim/rn-client-sdk';
 import type { ChatMessage } from '@/types';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 type PendingForward = {
   message: ChatMessage;
-  raw?: MessageItem;
+  dto?: ChatMessageDto;
 };
 
 const s = StyleSheet.create({
@@ -76,18 +73,50 @@ const s = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.sm },
 });
 
-function getConversationSource(conversation: ConversationItem) {
-  if (conversation.conversationType === SessionType.Group) {
-    return {
-      sourceID: conversation.groupID,
-      sessionType: SessionType.Group,
-    };
-  }
+// 可直接按原 payload 重发的卡片类型。transfer-card 故意排除:转账卡是
+// 服务端结算回执,原样转发等于伪造一笔转账,只允许其文本降级形态。
+// 广场报名卡同样排除:它只由报名列表定向创建,不提供二次扩散入口。
+const FORWARDABLE_CARD_TYPES: ChatCardType[] = [
+  'note-card',
+  'friend-card',
+  'circle-card',
+  'verification-card',
+];
 
-  return {
-    sourceID: fromImUserId(conversation.userID),
-    sessionType: SessionType.Single,
-  };
+function str(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function num(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function conversationDisplayName(conversation: ChatConversationDto): string {
+  return (
+    conversation.circle?.name ??
+    conversation.peer?.nickname ??
+    i18n.t('chat.forward.single', { defaultValue: '单聊' })
+  );
+}
+
+function conversationAvatarUrl(conversation: ChatConversationDto): string | undefined {
+  return (
+    str(conversation.circle?.avatarUrl ?? undefined) ??
+    str(conversation.peer?.avatarUrl ?? undefined)
+  );
+}
+
+/**
+ * 这条消息能不能转发 —— 菜单和转发页共用同一个判定,不能各判各的。
+ *
+ * 之前长按任何消息都提供「转发」,而 call-record 在转发页既没有分支也没有兜底文案,
+ * 必走到最后那个 throw;catch 提示「请重试」,可重试永远不会成功。
+ * 通话记录本身也没有转发语义(它是一次通话在本会话里的留痕),所以直接不提供入口。
+ */
+export function canForwardMessage(message: ChatMessage): boolean {
+  if (message.type === 'call-record') return false;
+  if (message.type === 'system-notice') return false;
+  return true;
 }
 
 function getForwardFallbackText(message: ChatMessage) {
@@ -113,57 +142,74 @@ function getForwardFallbackText(message: ChatMessage) {
   return '';
 }
 
-async function sendForwardedMessage(
-  pending: PendingForward,
-  conversation: ConversationItem,
-) {
-  const { sourceID, sessionType } = getConversationSource(conversation);
+/**
+ * 转发 = 以源消息的 content 重发一条新消息(自研栈无「原生转发」原语)。
+ * 媒体只搬 object key,不重新上传;拿不到 DTO 时退化成文本转发。
+ */
+async function sendForwardedMessage(pending: PendingForward, conversationId: string) {
+  const { dto, message } = pending;
+  const content = dto?.content ?? {};
 
-  // Preferred path: forward the original OpenIM message natively. Preserves
-  // images / video / files / custom cards without re-uploading. Only when the
-  // raw item is unavailable (optimistic/local message) do we reconstruct below.
-  if (pending.raw) {
-    return forwardMessage({ sourceID, sessionType, message: pending.raw });
-  }
-
-  const { message } = pending;
-
-  if (message.type === 'voice') {
-    return sendVoiceMessageFromSource({
-      sourceID,
-      sessionType,
-      sourceUrl: message.voiceUrl,
-      soundPath: message.voicePath,
-      duration: message.voiceDuration ?? 1,
-      dataSize: message.voiceSize,
-    });
-  }
-
-  if (message.type === 'note-card' && message.noteCard) {
-    return sendNoteCardMessage({
-      sourceID,
-      sessionType,
-      payload: message.noteCard,
-    });
-  }
-
-  if (message.type === 'friend-card' && message.friendCard) {
-    return sendFriendCardMessage({
-      targetConversationID: conversation.conversationID,
-      userID: message.friendCard.userID,
-      nickname: message.friendCard.nickname,
-      faceURL: message.friendCard.faceURL,
-      persona: message.friendCard.persona,
-      displayIcons: message.friendCard.displayIcons,
-    });
+  if (dto) {
+    if (dto.type === 'image') {
+      const key = str(content['key']);
+      if (key) {
+        return sendImageMessage({
+          conversationId,
+          key,
+          thumbKey: str(content['thumbKey']),
+          width: num(content['width']),
+          height: num(content['height']),
+        });
+      }
+    }
+    if (dto.type === 'voice') {
+      const key = str(content['key']);
+      const duration = num(content['duration']);
+      if (key && duration) {
+        return sendVoiceMessage({
+          conversationId,
+          key,
+          duration,
+          size: num(content['size']),
+        });
+      }
+    }
+    if (dto.type === 'location') {
+      const latitude = num(content['latitude']);
+      const longitude = num(content['longitude']);
+      if (latitude !== undefined && longitude !== undefined) {
+        return sendLocationMessage({
+          conversationId,
+          latitude,
+          longitude,
+          description: str(content['description']) ?? '',
+        });
+      }
+    }
+    if ((FORWARDABLE_CARD_TYPES as string[]).includes(dto.type)) {
+      return sendCardMessage({
+        conversationId,
+        type: dto.type as ChatCardType,
+        payload: content,
+      });
+    }
+    if (dto.type === 'text' || dto.type === 'quote') {
+      const text = str(content['text'])?.trim();
+      if (text) {
+        return sendTextMessage({ conversationId, text });
+      }
+    }
   }
 
   const text = getForwardFallbackText(message);
   if (text) {
-    return sendTextMessage({ sourceID, sessionType, text });
+    return sendTextMessage({ conversationId, text });
   }
 
-  throw new Error('该消息类型暂不支持转发');
+  throw new Error(
+    i18n.t('chat.forward.unsupported', { defaultValue: '该消息类型暂不支持转发' }),
+  );
 }
 
 export default function ForwardPickerScreen() {
@@ -173,8 +219,7 @@ export default function ForwardPickerScreen() {
   const { t } = useTranslation();
   const pending = useMessageForwardStore((state) => state.pending);
   const clearPending = useMessageForwardStore((state) => state.clear);
-  const conversations = useIMStore((state) => state.conversations);
-  const appendMessages = useIMStore((state) => state.appendMessages);
+  const conversations = useChatStore((state) => state.conversations);
   const [query, setQuery] = useState('');
   const [sendingID, setSendingID] = useState<string | null>(null);
   const mountedRef = useRef(true);
@@ -186,21 +231,29 @@ export default function ForwardPickerScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    if (conversations.length > 0) return;
+    loadChatConversations().catch((err) => {
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn('[ForwardPicker] loadChatConversations failed', err);
+      }
+    });
+  }, [conversations.length]);
+
   const filtered = useMemo(() => {
     const keyword = query.trim().toLowerCase();
     if (!keyword) return conversations;
-    return conversations.filter((conversation) => {
-      const name = conversation.showName?.toLowerCase() ?? '';
-      return name.includes(keyword);
-    });
+    return conversations.filter((conversation) =>
+      conversationDisplayName(conversation).toLowerCase().includes(keyword),
+    );
   }, [conversations, query]);
 
-  async function handleForward(conversation: ConversationItem) {
+  async function handleForward(conversation: ChatConversationDto) {
     if (!pending || sendingID) return;
-    setSendingID(conversation.conversationID);
+    setSendingID(conversation.id);
     try {
-      const sent = await sendForwardedMessage(pending, conversation);
-      appendMessages(conversation.conversationID, [sent]);
+      // sendWithOptimism 已把发出的消息写进 chat-core store,无需手动 append。
+      await sendForwardedMessage(pending, conversation.id);
       clearPending();
       if (!mountedRef.current) return;
       Alert.alert(t('chat.forward.done'), undefined, [
@@ -273,11 +326,12 @@ export default function ForwardPickerScreen() {
       </View>
       <FlatList
         data={filtered}
-        keyExtractor={(item) => item.conversationID}
+        keyExtractor={(item) => item.id}
         contentContainerStyle={[s.listContent, { paddingBottom: insets.bottom + Spacing.xl }]}
         {...keyboardDismissOnDragProps}
         renderItem={({ item }) => {
-          const busy = sendingID === item.conversationID;
+          const busy = sendingID === item.id;
+          const name = conversationDisplayName(item);
           return (
             <Pressable
               style={[s.row, d.row]}
@@ -289,15 +343,15 @@ export default function ForwardPickerScreen() {
               <Avatar
                 size={42}
                 shape="square"
-                name={item.showName}
-                uri={item.faceURL || undefined}
+                name={name}
+                uri={conversationAvatarUrl(item)}
               />
               <View style={s.rowText}>
                 <Text style={d.title} numberOfLines={1}>
-                  {item.showName}
+                  {name}
                 </Text>
                 <Text style={d.subtitle} numberOfLines={1}>
-                  {item.conversationType === SessionType.Group
+                  {item.type === 'GROUP'
                     ? t('chat.forward.group')
                     : t('chat.forward.single')}
                 </Text>

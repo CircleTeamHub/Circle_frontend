@@ -1,12 +1,15 @@
-import { fromImUserId, toImUserId } from '@/im/user-id';
+import { normalizeUserIdAlias } from '@/utils/user-id-alias';
+
+const UUID_SHAPE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * 解析 1:1 呼叫的被叫 UUID（round 3 review）。
+ * 解析 1:1 呼叫的被叫 UUID。
  *
- * 正常入口 sourceID 就是对方 UUID；但推送路由的兜底是
- * `sourceID || conversationID`，会漏进 `si_<a>_<b>`（OpenIM 单聊会话 id，
- * a/b 为去连字符的双方 IM id 升序）。这种形式从会话 id 剔除自己、还原
- * UUID 得到对端；群会话（sg_）与解析失败返回 null，调用方给可控提示。
+ * 正常入口 sourceID 就是对方 UUID;但推送路由的兜底是
+ * `sourceID || conversationID`,可能漏进 `direct:<low>:<high>`(自研 1:1
+ * 会话 id,双方 UUID 码点升序)。这种形式从会话 id 剔除自己得到对端;
+ * 群会话与解析失败返回 null,调用方给可控提示。
  */
 export function resolveDirectCalleeID(
   rawSourceID: string,
@@ -14,15 +17,13 @@ export function resolveDirectCalleeID(
 ): string | null {
   const source = rawSourceID?.trim();
   if (!source) return null;
-  if (source.startsWith('sg_')) return null;
-  if (source.startsWith('si_')) {
-    const selfImID = toImUserId(selfUserID);
-    const parts = source.slice(3).split('_').filter(Boolean);
-    const peer = parts.find((part) => part !== selfImID);
-    if (!peer || peer === selfImID) return null;
-    const restored = fromImUserId(peer);
-    // 还原失败（长度不对等）时返回 null 而不是把坏 id 打给后端
-    return restored.includes('-') ? restored : null;
+  if (source.startsWith('direct:')) {
+    const parts = source.slice('direct:'.length).split(':').filter(Boolean);
+    const peer = parts.find((part) => part !== selfUserID);
+    return peer && peer !== selfUserID ? peer : null;
   }
-  return fromImUserId(source);
+  // 旧栈会话 id(si_/sg_)已不再产生,无法可靠还原,一律判失败。
+  if (source.startsWith('si_') || source.startsWith('sg_')) return null;
+  const normalized = normalizeUserIdAlias(source);
+  return UUID_SHAPE.test(normalized) ? normalized : null;
 }

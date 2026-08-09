@@ -16,11 +16,11 @@ import { Avatar } from '@/components/ui/avatar';
 import { Divider } from '@/components/ui/divider';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { NavHeader } from '@/components/ui/nav-header';
-import { getMessagePreview, mapConversationItemToUI } from '@/im/mappers';
-import { searchAllTextMessages } from '@/im/client';
-import type { SearchMessageResultItem } from '@openim/rn-client-sdk';
+import { searchAllChatMessages } from '@/chat-core/api';
+import { getChatMessagePreview, mapChatConversationToUI } from '@/chat-core/mappers';
+import { useChatStore } from '@/chat-core/store';
+import type { ChatMessageDto } from '@/chat-core/protocol';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
-import { useIMStore } from '@/stores/imStore';
 import { getUserProfileHref, type UserProfileScope } from '@/features/user/utils/routes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { Conversation } from '@/types';
@@ -98,13 +98,11 @@ export default function SearchScreen() {
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [friendsLoading, setFriendsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [messageMatches, setMessageMatches] = useState<
-    SearchMessageResultItem[]
-  >([]);
+  const [messageMatches, setMessageMatches] = useState<ChatMessageDto[]>([]);
 
-  const rawConversations = useIMStore((state) => state.conversations);
+  const rawConversations = useChatStore((state) => state.conversations);
   const conversations = useMemo(
-    () => rawConversations.map(mapConversationItemToUI),
+    () => rawConversations.map(mapChatConversationToUI),
     [rawConversations],
   );
 
@@ -157,7 +155,7 @@ export default function SearchScreen() {
   const keyword = query.trim();
 
   // 全局搜聊天记录（消息正文）：防抖 250ms，避免每次按键都打本地检索。
-  // 走 OpenIM 本地全文检索，返回按会话分组的命中；空词即时清空。
+  // 服务端全局检索(跨本人在座会话),扁平命中;空词即时清空。
   useEffect(() => {
     if (!keyword) {
       setMessageMatches([]);
@@ -165,7 +163,7 @@ export default function SearchScreen() {
     }
     let cancelled = false;
     const timer = setTimeout(() => {
-      searchAllTextMessages({ keyword, count: 50 })
+      searchAllChatMessages(keyword, 50)
         .then((items) => {
           if (!cancelled) setMessageMatches(items);
         })
@@ -173,7 +171,7 @@ export default function SearchScreen() {
           if (cancelled) return;
           setMessageMatches([]);
           if (__DEV__) {
-            console.warn('[SearchScreen] searchAllTextMessages failed', error);
+            console.warn('[SearchScreen] searchAllChatMessages failed', error);
           }
         });
     }, 250);
@@ -193,16 +191,21 @@ export default function SearchScreen() {
     const conversationById = new Map(conversations.map((c) => [c.id, c]));
     const chatById = new Map<string, ChatResult>();
 
+    // 扁平命中按会话归组:首条(最新)作摘要与定位目标,计数为该会话命中数。
     for (const match of messageMatches) {
-      const conversation = conversationById.get(match.conversationID);
+      const conversation = conversationById.get(match.conversationId);
       if (!conversation) continue;
-      const firstHit = match.messageList?.[0];
+      const existing = chatById.get(conversation.id);
+      if (existing) {
+        existing.matchCount = (existing.matchCount ?? 1) + 1;
+        continue;
+      }
       chatById.set(conversation.id, {
         kind: 'chat',
         data: conversation,
-        matchCount: match.messageCount,
-        snippet: firstHit ? getMessagePreview(firstHit) : undefined,
-        targetMsgID: firstHit?.clientMsgID || undefined,
+        matchCount: 1,
+        snippet: getChatMessagePreview(match),
+        targetMsgID: match.id,
       });
     }
 

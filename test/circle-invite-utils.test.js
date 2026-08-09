@@ -38,9 +38,10 @@ test('circle invite utils filter out friends already present in the backing grou
     filterInvitableCircleFriends,
   } = load('src/features/discover/utils/circle-invite.ts');
 
+  // chat-core:成员 userId 与好友 id 同形(UUID),直接同值比较。
   const existing = buildExistingCircleMemberIds([
-    { userID: 'user-one' },
-    { userID: 'usertwo' },
+    { userId: 'user-one' },
+    { userId: 'user-two' },
   ]);
   const friends = [
     { id: 'user-one', nickname: 'One', accountId: 'one' },
@@ -64,7 +65,7 @@ test('circle invite utils prune selected users who become known existing members
     'user-one': true,
     'user-two': true,
   };
-  const existing = buildExistingCircleMemberIds([{ userID: 'userone' }]);
+  const existing = buildExistingCircleMemberIds([{ userId: 'user-one' }]);
 
   assert.deepEqual({ ...pruneSelectedCircleInvitees(selected, existing) }, {
     'user-two': true,

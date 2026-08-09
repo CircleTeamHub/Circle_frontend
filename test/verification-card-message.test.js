@@ -64,22 +64,6 @@ const MAPPER_STUBS = {
   },
 };
 
-test('verification card: type, send, and decode are wired through the IM layer', () => {
-  const types = read('src/types/index.ts');
-  assert.match(types, /interface VerificationCardData/);
-  assert.match(types, /'verification-card'/);
-  assert.match(types, /verificationCard\?: VerificationCardData/);
-
-  const client = read('src/im/client.ts');
-  assert.match(client, /VERIFICATION_CARD_EXTENSION = 'circle-verify-v1'/);
-  assert.match(client, /sendVerificationCardMessage/);
-  assert.match(client, /createCustomMessage/);
-
-  const mappers = read('src/im/mappers.ts');
-  assert.match(mappers, /VERIFICATION_CARD_EXTENSION/);
-  assert.match(mappers, /type: 'verification-card'/);
-  assert.match(mappers, /parseVerificationCardPayload/);
-});
 
 test('verification card: bubble renders and taps through to the verify screen', () => {
   const bubble = read(
@@ -107,90 +91,5 @@ test('adding a verifier also sends a verification card to that friend', () => {
   assert.match(detail, /circleName: invitation\.circleName/);
 });
 
-test('verification card mapper decodes a custom message into a tappable card', () => {
-  const { mapMessageItemToChatMessage } = loadTsModule(
-    'src/im/mappers.ts',
-    MAPPER_STUBS,
-  );
 
-  const mapped = mapMessageItemToChatMessage(
-    {
-      clientMsgID: 'verify-1',
-      sendID: 'applicant-1',
-      senderNickname: 'meiguici',
-      contentType: 110,
-      sendTime: new Date(2024, 0, 2, 12, 0, 0).getTime(),
-      status: 2,
-      isRead: false,
-      customElem: {
-        extension: 'circle-verify-v1',
-        data: JSON.stringify({
-          invitationId: 'inv-9',
-          circleName: '申请测试圈·成都',
-          applicantName: 'meiguici',
-        }),
-      },
-    },
-    'me',
-  );
 
-  const n = normalize(mapped);
-  assert.equal(n.type, 'verification-card');
-  assert.equal(n.verificationCard.invitationId, 'inv-9');
-  assert.equal(n.verificationCard.circleName, '申请测试圈·成都');
-  assert.equal(n.verificationCard.applicantName, 'meiguici');
-});
-
-test('verification card mapper rejects a custom message missing invitationId', () => {
-  const { mapMessageItemToChatMessage } = loadTsModule(
-    'src/im/mappers.ts',
-    MAPPER_STUBS,
-  );
-
-  const mapped = mapMessageItemToChatMessage(
-    {
-      clientMsgID: 'verify-bad',
-      sendID: 'applicant-1',
-      senderNickname: 'meiguici',
-      contentType: 110,
-      sendTime: new Date(2024, 0, 2, 12, 0, 0).getTime(),
-      status: 2,
-      isRead: false,
-      customElem: {
-        extension: 'circle-verify-v1',
-        data: JSON.stringify({ circleName: 'x' }),
-      },
-    },
-    'me',
-  );
-
-  // Falls through to a non-card type instead of a broken verification card.
-  assert.notEqual(normalize(mapped).type, 'verification-card');
-});
-
-test('verification card mapper rejects an empty-string invitationId', () => {
-  const { mapMessageItemToChatMessage } = loadTsModule(
-    'src/im/mappers.ts',
-    MAPPER_STUBS,
-  );
-
-  const mapped = mapMessageItemToChatMessage(
-    {
-      clientMsgID: 'verify-empty',
-      sendID: 'applicant-1',
-      senderNickname: 'meiguici',
-      contentType: 110,
-      sendTime: new Date(2024, 0, 2, 12, 0, 0).getTime(),
-      status: 2,
-      isRead: false,
-      customElem: {
-        extension: 'circle-verify-v1',
-        // Empty id would otherwise route taps to /verification/ with no id.
-        data: JSON.stringify({ invitationId: '', circleName: 'x' }),
-      },
-    },
-    'me',
-  );
-
-  assert.notEqual(normalize(mapped).type, 'verification-card');
-});

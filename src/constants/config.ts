@@ -5,7 +5,7 @@
  * 未设置时使用开发环境默认值（自动探测 Expo Dev Server 的 host）。
  *
  * 生产环境必须在 .env.production 或 EAS Build 环境变量中显式设置：
- *   EXPO_PUBLIC_API_URL、EXPO_PUBLIC_OPENIM_API_URL、EXPO_PUBLIC_OPENIM_WS_URL
+ *   EXPO_PUBLIC_API_URL
  */
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
@@ -61,8 +61,6 @@ function getRequiredTransportValue(
 }
 
 const API_PORT = '3000';
-const OPENIM_API_PORT = '10002';
-const OPENIM_WS_PORT = '10001';
 
 function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, '');
@@ -100,48 +98,18 @@ function getDefaultApiUrl() {
   return `http://${getDefaultHost()}:${API_PORT}`;
 }
 
-function getDefaultOpenIMApiUrl() {
-  return `http://${getDefaultHost()}:${OPENIM_API_PORT}`;
-}
-
-function getDefaultOpenIMWsUrl() {
-  return `ws://${getDefaultHost()}:${OPENIM_WS_PORT}`;
-}
-
-export const API_URL = assertSecureTransport(
-  ensureVersionedApiUrl(
-    getRequiredTransportValue(
-      process.env.EXPO_PUBLIC_API_URL,
-      'EXPO_PUBLIC_API_URL',
-      getDefaultApiUrl(),
-    ),
-  ),
-  'API_URL',
-);
-
-export const OPENIM_API_URL = assertSecureTransport(
-  trimTrailingSlash(
-    getRequiredTransportValue(
-      process.env.EXPO_PUBLIC_OPENIM_API_URL,
-      'EXPO_PUBLIC_OPENIM_API_URL',
-      getDefaultOpenIMApiUrl(),
-    ),
-  ),
-  'OPENIM_API_URL',
-);
-
 /**
  * 额外的媒体来源白名单(逗号分隔的 origin 列表)。
  *
  * 上传契约返回的是独立的 fileUrl —— 对象存储/CDN 完全可以挂在自己的域名下,
- * 与 API 主机名无关。allowPeerMediaUrl 若只比 API 主机名,这种部署下每一个
- * 合法媒体地址都会被拒:发出和收到的图片全空、语音放不了、分享封面消失。
+ * 与 API 主机名无关。allowPeerMediaUrl 若只认 API 来源,这种部署下每一个
+ * 合法媒体地址都会被拒:图片全空、语音放不了、封面消失。
  * 所以把「媒体来源」做成显式配置,而不是假设存储和 API 同域。
  *
  * 仍然只放行明确列出的 origin —— 白名单的意义(挡对端塞进来的追踪信标)不变。
  * 非法条目在这里被丢弃并告警,不会让整份配置失效。
  */
-function parseMediaOrigins(raw: string | undefined): string[] {
+function parseMediaOrigins(raw: string | undefined) {
   if (!raw) return [];
   // 不写类型标注:config 的测试 harness 用正则剥类型,只认得函数签名上的。
   const origins = [];
@@ -170,15 +138,15 @@ export const MEDIA_ORIGINS = parseMediaOrigins(
   process.env.EXPO_PUBLIC_MEDIA_ORIGINS,
 );
 
-export const OPENIM_WS_URL = assertSecureTransport(
-  trimTrailingSlash(
+export const API_URL = assertSecureTransport(
+  ensureVersionedApiUrl(
     getRequiredTransportValue(
-      process.env.EXPO_PUBLIC_OPENIM_WS_URL,
-      'EXPO_PUBLIC_OPENIM_WS_URL',
-      getDefaultOpenIMWsUrl(),
+      process.env.EXPO_PUBLIC_API_URL,
+      'EXPO_PUBLIC_API_URL',
+      getDefaultApiUrl(),
     ),
   ),
-  'OPENIM_WS_URL',
+  'API_URL',
 );
 
 /**
@@ -209,30 +177,35 @@ export const REALTIME_WS_URL = assertSecureTransport(
   'REALTIME_WS_URL',
 );
 
-// OpenIM SDK 日志级别：0=关闭 1=fatal 2=error 3=warn 4=info 5=debug
-// 默认 3（warn），开发时可在 .env.local 中设置 EXPO_PUBLIC_OPENIM_LOG_LEVEL=5 开启详细日志。
-// 校验 finite + 范围：若环境变量被设置成非数字（"verbose" 等），Number(...) 会得到 NaN，
-// 直接传给 initSDK 是 undefined behavior。fallback 到 3 比让 SDK 静默异常更安全。
-const RAW_OPENIM_LOG_LEVEL = Number(
-  process.env.EXPO_PUBLIC_OPENIM_LOG_LEVEL ?? 3,
+/**
+ * 自研聊天网关的 origin（socket.io 客户端要的是 http(s) origin，路径经
+ * `path` 选项传 /chat-ws，ws 升级由 socket.io 自己处理）。
+ * 从 API_URL 剥掉 /api/v1 路径取 origin；解析失败退回 dev 默认值。
+ */
+function deriveChatOriginFromApi(apiUrl: string): string {
+  try {
+    return new URL(apiUrl).origin;
+  } catch {
+    return `http://${getDefaultHost()}:${API_PORT}`;
+  }
+}
+
+export const CHAT_WS_URL = assertSecureTransport(
+  trimTrailingSlash(
+    process.env.EXPO_PUBLIC_CHAT_WS_URL ?? deriveChatOriginFromApi(API_URL),
+  ),
+  'CHAT_WS_URL',
 );
-export const OPENIM_LOG_LEVEL =
-  Number.isFinite(RAW_OPENIM_LOG_LEVEL) &&
-  RAW_OPENIM_LOG_LEVEL >= 0 &&
-  RAW_OPENIM_LOG_LEVEL <= 5
-    ? RAW_OPENIM_LOG_LEVEL
-    : 3;
 
 export const APP_NAME = APP_DISPLAY_NAME;
 
 /**
- * 客服账号：点「客服中心」某个客服类型时，发起单聊的默认目标 OpenIM userID。
+ * 客服账号：点「客服中心」某个客服类型时，发起单聊的目标 userID(标准 UUID)。
  *
- * 测试期默认用 OpenIM 系统管理账号 `imAdmin`——它在每套部署里都存在（后端也用它换
- * admin token），保证「客服中心」开箱即用。生产环境应在 EAS Build / .env.production
- * 里把 EXPO_PUBLIC_SUPPORT_ACCOUNT_ID 显式指向一个专用客服账号，由真人客服登录接待。
- *
- * 这里存的是「原始 userID」，真正发起会话时由 im/client 的 toImUserId 统一去连字符。
+ * 必须在 EAS Build / .env.production 里把 EXPO_PUBLIC_SUPPORT_ACCOUNT_ID 指向一个
+ * 真实客服账号,由真人登录接待。历史默认值 `imAdmin` 是 OpenIM 时代的系统账号,
+ * 自研栈里不存在 —— 未配置时发起会话会被后端以「用户不存在」拒绝(可控失败,
+ * 保留默认值只为让入口在配置前不至于崩溃)。
  */
 export const SUPPORT_ACCOUNT_ID =
   process.env.EXPO_PUBLIC_SUPPORT_ACCOUNT_ID?.trim() || 'imAdmin';

@@ -172,7 +172,8 @@ test('chat detail virtualizes and caps group mention candidates', () => {
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /const MENTION_CANDIDATE_LIMIT = 200/);
-  assert.match(source, /loadGroupMemberList\(sourceID, MENTION_CANDIDATE_LIMIT\)/);
+  assert.match(source, /fetchChatMembers\(conversationID\)/);
+  assert.match(source, /slice\(0, MENTION_CANDIDATE_LIMIT\)/);
   assert.match(source, /<FlatList[\s\S]*data=\{visibleMentionCandidates\}/);
   assert.doesNotMatch(source, /visibleMentionCandidates\.map\(\(member\)/);
 });
@@ -216,7 +217,7 @@ test('chat detail sends friend cards without fetching profile during send', () =
 
   assert.doesNotMatch(source, /import \{ fetchUserProfile \}/);
   assert.doesNotMatch(handlerBlock, /fetchUserProfile/);
-  assert.match(handlerBlock, /sendFriendCardMessage/);
+  assert.match(handlerBlock, /type: 'friend-card'/);
 });
 
 test('chat detail guards async send UI state after unmount', () => {
@@ -258,21 +259,20 @@ test('chat detail guards async send UI state after unmount', () => {
   assert.match(source, /if \(mountedRef\.current\) setSending\(false\)/);
 });
 
-test('chat detail attempts non-blocking history restore after initial message load', () => {
+test('chat detail loads history then reports the read watermark', () => {
   const filePath = path.join(
     process.cwd(),
     'src/features/chat/screens/ChatDetailScreen.tsx',
   );
   const source = fs.readFileSync(filePath, 'utf8');
 
-  assert.match(source, /restoreConversationMessages/);
+  // 自研栈:历史落库后才上报已读(先报会拿 0 水位白跑);进出页面维护活跃会话标记。
   assert.match(
     source,
-    /loadConversationMessages\(conversationID\)[\s\S]*restoreConversationMessages/,
+    /loadConversationMessages\(conversationID\)[\s\S]*markConversationAsRead\(conversationID\)/,
   );
-  assert.match(source, /conversationID/);
-  assert.match(source, /sourceID/);
-  assert.match(source, /sessionType:\s*conversationType/);
+  assert.match(source, /setActiveConversationId\(conversationID\)/);
+  assert.match(source, /setActiveConversationId\(null\)/);
 });
 
 test('chat detail voice cleanup reads a JS snapshot, never the native recorder on unmount', () => {
@@ -445,7 +445,7 @@ test('root layout registers LiveKit only after the native WebRTC module exists',
   assert.match(source, /NativeModules\.WebRTCModule/);
 });
 
-test('message forward picker route sends pending text and voice messages via OpenIM', () => {
+test('message forward picker route re-sends pending messages via chat-core', () => {
   const route = fs.readFileSync(
     path.join(process.cwd(), 'app/(tabs)/messages/forward-picker.tsx'),
     'utf8',
@@ -460,13 +460,15 @@ test('message forward picker route sends pending text and voice messages via Ope
   );
 
   assert.match(route, /ForwardPickerScreen/);
+  // 契约随自研栈迁移更新(意图不变):转发 = 以源消息 DTO 的 content 重发,
+  // 媒体只搬 object key 不重新上传;卡片按类型白名单原样重发。
   assert.match(store, /pending/);
+  assert.match(store, /dto\?: ChatMessageDto/);
   assert.match(screen, /sendTextMessage/);
-  // Voice forwarding now delegates to one shared helper instead of branching
-  // over sendVoiceMessageByUrl / sendVoiceMessage inline.
-  assert.match(screen, /sendVoiceMessageFromSource/);
-  assert.match(screen, /sendNoteCardMessage/);
-  assert.match(screen, /sendFriendCardMessage/);
+  assert.match(screen, /sendVoiceMessage/);
+  assert.match(screen, /sendImageMessage/);
+  assert.match(screen, /sendCardMessage/);
+  assert.match(screen, /FORWARDABLE_CARD_TYPES/);
 });
 
 test('note detail routes exist in every tab stack so back returns to the source tab', () => {
@@ -496,15 +498,15 @@ test('group member access stays live while the chat screen is mounted', () => {
   assert.match(screen, /useGroupMemberViewAccess\(\{/);
   assert.doesNotMatch(screen, /setCanViewGroupMemberProfiles/);
   // hook 订阅自己的成员身份变化（降权/被移出/退群），卸载时解绑。
-  assert.match(hook, /subscribeGroupMemberSelfChanges\(\s*groupID,\s*currentUserID/);
-  assert.match(hook, /unsubscribe\(\);/);
-  // revalidate 现场重查 fail-closed：查询失败/查无记录一律无权。
-  assert.match(hook, /return canViewGroupMembers\(next\?\.roleLevel\);/);
+  // chat-core:角色事实源换成圈子角色,受保护操作靠 revalidate 现场重查兜底。
+  assert.match(hook, /fetchCircleDetail\(groupID\)/);
+  assert.match(hook, /fail-closed/);
+  // revalidate 现场重查 fail-closed：查询失败/查无身份一律无权。
+  assert.match(hook, /return canViewCircleMembers\(member\?\.role \?\? null\);/);
   assert.match(hook, /catch \{[\s\S]{0,400}return false;/);
-  // review R3：事件代际守——在途查询被角色事件超车时丢弃陈旧结果、按事件判定。
-  assert.match(hook, /const eventGenRef = useRef\(0\)/);
-  assert.match(hook, /if \(cancelled \|\| eventGenRef\.current !== genAtStart\) return;/);
-  assert.match(hook, /return canViewGroupMembers\(lastEventMemberRef\.current\?\.roleLevel\);/);
+  // 换群/卸载后的在途查询结果按代际丢弃。
+  assert.match(hook, /const queryGenRef = useRef\(0\)/);
+  assert.match(hook, /if \(queryGenRef\.current !== gen\) return;/);
 });
 
 test('protected member actions revalidate fail-closed at tap time', () => {
@@ -533,9 +535,9 @@ test('shared friend cards of non-members stay openable for ordinary members', ()
 
   // 名片只放行"确认不在本群"的目标；review R2：身份查不清（查询失败）一律
   // fail-closed 拦截，断网不能成为绕过成员目录限制的口子。
-  assert.match(source, /const \[targetMember\] = await loadSpecifiedGroupMembers\(sourceID, \[\s*toImUserId\(userID\),\s*\]\);/);
+  assert.match(source, /const members = await fetchChatMembers\(conversationID\);/);
+  assert.match(source, /members\.some\(\(member\) => member\.userId === userID\)/);
   assert.match(source, /let blockTarget = true;/);
-  assert.match(source, /blockTarget = Boolean\(targetMember\);/);
   assert.match(source, /catch \{\s*\n\s*blockTarget = true;/);
   assert.match(source, /if \(blockTarget\) \{\s*\n\s*Alert\.alert\(t\('chat\.groupMembersRestricted'\)\);/);
 });

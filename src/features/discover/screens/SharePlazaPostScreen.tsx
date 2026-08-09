@@ -21,8 +21,7 @@ import { fetchPlazaPost } from '@/services/api/plaza';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { toPlazaPostCardData } from '@/features/discover/utils/plaza-post-card';
 import { usePendingChatCardStore } from '@/features/chat/store/use-pending-chat-card-store';
-import { getOrCreateSingleConversation } from '@/im/client';
-import { shouldOpenChatPreview } from '@/features/chat/chat-preview';
+import { ensureDirectConversation } from '@/chat-core/client';
 import { getChatDetailHref } from '@/features/user/utils/routes';
 import type { CirclePlazaPost } from '@/types';
 
@@ -116,7 +115,7 @@ export default function SharePlazaPostScreen() {
         }),
       };
       try {
-        const conversation = await getOrCreateSingleConversation(friend.id);
+        const conversation = await ensureDirectConversation(friend.id);
         setPendingChatCard(pendingChatCard);
         router.push(
           getChatDetailHref(
@@ -127,20 +126,7 @@ export default function SharePlazaPostScreen() {
             conversation.conversationID,
           ),
         );
-      } catch (err) {
-        if (shouldOpenChatPreview(err)) {
-          setPendingChatCard(pendingChatCard);
-          router.push(
-            getChatDetailHref(
-              SCOPE,
-              friend.id,
-              friend.nickname,
-              friend.avatarUrl ?? undefined,
-            ),
-          );
-          return;
-        }
-        Alert.alert(
+      } catch (err) {        Alert.alert(
           t('userProfile.openChatFailedTitle', { defaultValue: '打开聊天失败' }),
           err instanceof Error
             ? err.message

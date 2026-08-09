@@ -69,7 +69,13 @@ test('customer service exposes recharge/issue/dispute/account with env override 
   // 一类可配多个客服：逗号分隔、去重；全部留空回退到通用客服账号 SUPPORT_ACCOUNT_ID。
   assert.match(cats, /accountIds:\s*resolveAccounts\(/);
   assert.match(cats, /\.split\(','\)/);
-  assert.match(cats, /deduped\.length > 0 \? deduped : \[SUPPORT_ACCOUNT_ID\]/);
+  // 回退到通用客服账号的语义不变;外面多包了一层 ID 归一化 ——
+  // 旧配置里是 OpenIM 的 32 位十六进制,而 chat-core 的建单聊接口只收 UUID。
+  assert.match(
+    cats,
+    /deduped\.length > 0\s*\?\s*deduped\s*:\s*\[normalizeSupportAccountId\(SUPPORT_ACCOUNT_ID\)\]/,
+  );
+  assert.match(cats, /export function normalizeSupportAccountId/);
 
   assert.match(cfg, /export const SUPPORT_ACCOUNT_ID\s*=/);
   assert.match(cfg, /\|\|\s*['"]imAdmin['"]/);
@@ -80,7 +86,7 @@ test('customer service exposes recharge/issue/dispute/account with env override 
     /pathname:\s*['"]\/\(tabs\)\/profile\/support-agents['"]/,
   );
   assert.match(screen, /params:\s*\{\s*category:\s*category\.id\s*\}/);
-  assert.doesNotMatch(screen, /getOrCreateSingleConversation/);
+  assert.doesNotMatch(screen, /ensureDirectConversation\(/);
 });
 
 test('support-agents route + screen use one unified support avatar and open a fenced 1:1 chat', () => {
@@ -96,7 +102,7 @@ test('support-agents route + screen use one unified support avatar and open a fe
 
   // 一类可有多个客服账号，逐行路由到各自 OpenIM 账号；点头像开 1:1 会话。
   assert.match(screen, /accountIds/);
-  assert.match(screen, /getOrCreateSingleConversation\(\s*agent\.id/);
+  assert.match(screen, /ensureDirectConversation\(agent\.id/);
   assert.match(screen, /getChatDetailHref\(\s*['"]profile['"],\s*agent\.id/);
 
   // 会话解析较慢时用户可能已离场：用单调 focus 代次守卫（而非会在重新聚焦后重置的布尔），

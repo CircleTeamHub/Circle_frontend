@@ -11,7 +11,6 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
-import { getOrCreateGroupConversation } from '@/im/client';
 import { getApiErrorMessage } from '@/services/api/errors';
 import {
   createTempChat,
@@ -235,24 +234,23 @@ export default function TempChatsScreen() {
         }
         return;
       }
+      // 自研栈:列表已带会话 id,直接进;旧 OpenIM 时代房间(null)不可再进入。
+      if (!room.conversationId) {
+        setError(t('tempChats.expiredNow'));
+        return;
+      }
       openingGroupRef.current = room.groupId;
       setOpeningGroupId(room.groupId);
       try {
-        const conversation = await getOrCreateGroupConversation(room.groupId);
         router.push({
           pathname: '/(tabs)/messages/chat-detail',
           params: {
-            conversationID: conversation.conversationID,
+            conversationID: room.conversationId,
             sourceID: room.groupId,
             title: room.title,
             conversationType: 'group',
           },
         });
-      } catch (caughtError) {
-        setError(getApiErrorMessage(caughtError, t('tempChats.openFailed')));
-        if (__DEV__) {
-          console.warn('[TempChatsScreen] open temp chat failed', caughtError);
-        }
       } finally {
         openingGroupRef.current = null;
         setOpeningGroupId(null);

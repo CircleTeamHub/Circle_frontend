@@ -955,7 +955,12 @@ test("storage settings screen opens storage usage and clears local chat history"
   assert.match(screenSource, /confirmClearCache/);
   assert.match(screenSource, /confirmClearChats/);
 
-  assert.match(hookSource, /clearAllLocalMessages/);
+  // 契约随自研栈迁移更新(意图不变):清聊天 = 清内存缓存 + 旧 OpenIM 遗留目录。
+  // 必须是 clearCachedChats 而不是 reset:socket 还连着时 reset 会清掉
+  // currentUserId，之后收到的消息判不出收发方向、未读也算错。
+  assert.match(hookSource, /useChatStore\.getState\(\)\.clearCachedChats\(\)/);
+  assert.doesNotMatch(hookSource, /useChatStore\.getState\(\)\.reset\(\)/);
+  assert.match(hookSource, /clearLegacyImData/);
   assert.match(hookSource, /settingsDetails\.storage\.clearAllChatsWarning/);
   assert.match(hookSource, /mountedRef/);
   assert.match(hookSource, /clearingCacheRef/);

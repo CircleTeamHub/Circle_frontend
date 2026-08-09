@@ -4,12 +4,12 @@ import { Badge } from "@/components/ui/badge";
 import { Divider } from "@/components/ui/divider";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import {
-  deleteConversation,
-  hideConversation,
-  loadConversationList,
-  markConversationAsRead,
-} from "@/im/client";
-import { mapConversationItemToUI } from "@/im/mappers";
+  loadChatConversations,
+  updateChatConversationPreferences,
+} from "@/chat-core/api";
+import { mapChatConversationToUI } from "@/chat-core/mappers";
+import { markConversationRead } from "@/chat-core/socket-manager";
+import { selectTotalUnread, useChatStore } from "@/chat-core/store";
 import { useMessageGroupsStore } from "@/features/messages/store/use-message-groups-store";
 import { useLocalUnreadStore } from "@/features/messages/store/use-local-unread-store";
 import {
@@ -18,9 +18,7 @@ import {
   type ConversationWithLocalUnread,
 } from "@/features/messages/utils/local-unread";
 import { getUserProfileHref } from "@/features/user/utils/routes";
-import { useIMStore } from "@/stores/imStore";
 import { useTabBadgeStore } from "@/stores/tabBadgeStore";
-import { useAuthStore } from "@/stores/authStore";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { Conversation } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
@@ -525,13 +523,10 @@ export default function MessagesScreen() {
     [t],
   );
 
-  const rawConversations = useIMStore((state) => state.conversations);
-  const connectionError = useIMStore((state) => state.error);
-  const imConnected = useIMStore((state) => state.connected);
-  const imConnecting = useIMStore((state) => state.connecting);
-  // 空 imToken = 登录时 OpenIM token 没签出来（OpenIM 抽风等），IM 登录被静默跳过。
-  // 这种状态下"暂无会话"是误导——明确提示 IM 未接入，引导重新登录。
-  const imLoginSkipped = useAuthStore((state) => !state.imToken);
+  const rawConversations = useChatStore((state) => state.conversations);
+  const connectionError = useChatStore((state) => state.error);
+  const imConnected = useChatStore((state) => state.connected);
+  const imConnecting = useChatStore((state) => state.connecting);
   const conversationGroups = useMessageGroupsStore((state) => state.groups);
   const localUnreadOverrides = useLocalUnreadStore((state) => state.overrides);
   const markLocalUnread = useLocalUnreadStore((state) => state.markUnread);
@@ -557,8 +552,8 @@ export default function MessagesScreen() {
   // 点进去再返回就会被强行拽回"全部"，丢失上一级筛选（见 messages-screen.test.js 回归）。
   useFocusEffect(
     useCallback(() => {
-      loadConversationList().catch((err) => {
-        // 列表加载失败时 imStore.error 会被 IM listener 更新，UI 的 empty state 会显示。
+      loadChatConversations().catch((err) => {
+        // 列表加载失败时保留已有会话,empty state 兜底显示。
         // dev 下额外打印，便于排查"为啥列表是空的"。
         if (isDev) {
           console.warn("[messages] focus loadConversationList failed", err);
@@ -572,7 +567,7 @@ export default function MessagesScreen() {
     refreshInFlightRef.current = true;
     setRefreshing(true);
     try {
-      await loadConversationList();
+      await loadChatConversations();
     } catch (err) {
       if (isDev) {
         console.warn("[messages] pull refresh loadConversationList failed", err);
@@ -583,7 +578,7 @@ export default function MessagesScreen() {
     }
   }, []);
 
-  const totalUnread = useIMStore((state) => state.totalUnread);
+  const totalUnread = useChatStore(selectTotalUnread);
   const setMessagesUnread = useTabBadgeStore((state) => state.setMessagesUnread);
 
   // 依赖主题色的动态样式，colors 变化时重新计算
@@ -647,14 +642,14 @@ export default function MessagesScreen() {
   // 配合 applyLocalUnreadOverrides 对未覆盖项的引用透传 + memo 化的 ConversationRow，
   // 新消息到达时只有变化的那几行重渲染，而非整列表。
   const convMapCacheRef = useRef<
-    WeakMap<object, ReturnType<typeof mapConversationItemToUI>>
+    WeakMap<object, ReturnType<typeof mapChatConversationToUI>>
   >(new WeakMap());
   const rawMappedConversations = useMemo(() => {
     const cache = convMapCacheRef.current;
     return rawConversations.map((raw) => {
       let mapped = cache.get(raw);
       if (!mapped) {
-        mapped = mapConversationItemToUI(raw);
+        mapped = mapChatConversationToUI(raw);
         cache.set(raw, mapped);
       }
       return mapped;
@@ -724,15 +719,12 @@ export default function MessagesScreen() {
   const handleConversationPress = useCallback(
     (conversation: Conversation) => {
       clearLocalUnread(conversation.id);
-      // Fire-and-forget：之前 await 两个服务端调用，慢网下用户会感觉点了无反应。
-      // 详情页有自己的拉取逻辑，这里只是优化列表 unread 与排序，不需要阻塞导航。
-      void markConversationAsRead(conversation.id)
-        .then(() => loadConversationList())
-        .catch((err) => {
-          if (isDev) {
-            console.warn("[messages] mark-read / refresh failed", err);
-          }
-        });
+      // Fire-and-forget：本地未读立即归零 + socket 上报已读水位（末条 height），
+      // 不阻塞导航；详情页有自己的拉取逻辑。
+      const dto = useChatStore
+        .getState()
+        .conversations.find((c) => c.id === conversation.id);
+      markConversationRead(conversation.id, dto?.lastMessage?.height ?? 0);
 
       router.push({
         pathname: "/(tabs)/messages/chat-detail",
@@ -766,11 +758,13 @@ export default function MessagesScreen() {
 
   const handleHideConversation = useCallback((conversation: Conversation) => {
     clearLocalUnread(conversation.id);
-    void hideConversation(conversation.id).catch((err) => {
-      if (isDev) {
-        console.warn("[messages] swipe hide conversation failed", err);
-      }
-    });
+    void updateChatConversationPreferences(conversation.id, { hidden: true }).catch(
+      (err) => {
+        if (isDev) {
+          console.warn("[messages] swipe hide conversation failed", err);
+        }
+      },
+    );
   }, [clearLocalUnread]);
 
   const handleConfirmDeleteConversation = useCallback(
@@ -785,7 +779,11 @@ export default function MessagesScreen() {
             style: "destructive",
             onPress: () => {
               clearLocalUnread(conversation.id);
-              void deleteConversation(conversation.id).catch((err) => {
+              // 自研栈的「删除」当前等价于隐藏（服务端消息保留，新消息会重新浮出）；
+              // 带本地记录清除的完整删除语义随聊天详情页批次实现。
+              void updateChatConversationPreferences(conversation.id, {
+                hidden: true,
+              }).catch((err) => {
                 if (isDev) {
                   console.warn("[messages] swipe delete conversation failed", err);
                 }
@@ -804,36 +802,23 @@ export default function MessagesScreen() {
   }, [router]);
 
   // 点击已读图标 → 将当前筛选标签下所有会话标记为已读
+  // 自研栈:逐会话上报末条 height(pending 队列有断线重试),本地未读即时归零。
   const handleClearUnread = useCallback(() => {
-    // Promise.all 一旦有一个 reject 就短路，其余 mark-read 的 resolve 被忽略，
-    // 列表里还会留着"读不到的未读"。allSettled 改成尽力执行 + 末尾汇总警告。
-    void (async () => {
-      const results = await Promise.allSettled(
-        visibleConversations.map((c) => markConversationAsRead(c.id)),
-      );
-      clearManyLocalUnread(visibleConversations.map((c) => c.id));
-      const failed = results.filter((r) => r.status === "rejected");
-      if (isDev && failed.length > 0) {
-        console.warn(
-          `[messages] handleClearUnread: ${failed.length}/${results.length} mark-read failed`,
-          failed,
-        );
-      }
-      try {
-        await loadConversationList();
-      } catch (err) {
-        if (isDev) {
-          console.warn("[messages] loadConversationList after clear-unread failed", err);
-        }
-      }
-    })();
+    const dtoById = new Map(
+      useChatStore.getState().conversations.map((c) => [c.id, c]),
+    );
+    for (const c of visibleConversations) {
+      markConversationRead(c.id, dtoById.get(c.id)?.lastMessage?.height ?? 0);
+    }
+    clearManyLocalUnread(visibleConversations.map((c) => c.id));
   }, [clearManyLocalUnread, visibleConversations]);
 
   // 菜单项点击处理：关闭菜单并按 id 路由跳转
   const handleMenuAction = useCallback(
     (id: MenuActionId) => {
       setMenuVisible(false);
-      if (id === "newGroup") router.push("/(tabs)/messages/new-group");
+      // 自研栈无临时建群:建群=建圈子,直接进创建圈子页(挂在 discover 栈)。
+      if (id === "newGroup") router.push("/(tabs)/discover/create-circle");
       else if (id === "addFriend") router.push("/(tabs)/messages/add-friend");
       else if (id === "seatManagement") router.push("/(tabs)/messages/temp-chats");
       else if (id === "scan") router.push("/(tabs)/messages/scan" as Href);
@@ -955,9 +940,7 @@ export default function MessagesScreen() {
           <Text style={d.emptyText}>
             {connectionError
               ? t('messages.loadFailed', { error: connectionError })
-              : imLoginSkipped
-                ? t('messages.imNotConnected')
-                : t('messages.noConversations')}
+              : t('messages.noConversations')}
           </Text>
         }
         contentContainerStyle={s.listContent}

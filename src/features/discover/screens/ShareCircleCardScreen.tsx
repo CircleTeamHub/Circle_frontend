@@ -14,9 +14,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
-import { loadConversationList, sendCircleCardMessage } from '@/im/client';
-import { mapConversationItemToUI } from '@/im/mappers';
-import { useIMStore } from '@/stores/imStore';
+import { loadChatConversations } from '@/chat-core/api';
+import { sendCardMessage } from '@/chat-core/client';
+import { mapChatConversationToUI } from '@/chat-core/mappers';
+import { useChatStore } from '@/chat-core/store';
 import { getShareCircleCardListState } from '@/features/discover/utils/share-circle-card';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import type { Conversation } from '@/types';
@@ -84,7 +85,7 @@ export default function ShareCircleCardScreen() {
   const circleAvatar =
     typeof params.avatar === 'string' && params.avatar ? params.avatar : null;
 
-  const rawConversations = useIMStore((state) => state.conversations);
+  const rawConversations = useChatStore((state) => state.conversations);
   const [sendingConversationID, setSendingConversationID] = useState('');
   const [loadingConversations, setLoadingConversations] = useState(
     rawConversations.length === 0,
@@ -126,7 +127,7 @@ export default function ShareCircleCardScreen() {
     let cancelled = false;
     setLoadingConversations(true);
     setLoadFailed(false);
-    loadConversationList()
+    loadChatConversations()
       .catch((error) => {
         if (!cancelled) {
           setLoadFailed(true);
@@ -147,7 +148,7 @@ export default function ShareCircleCardScreen() {
   }, [loadAttempt, rawConversations.length]);
 
   const conversations = useMemo(
-    () => rawConversations.map(mapConversationItemToUI),
+    () => rawConversations.map(mapChatConversationToUI),
     [rawConversations],
   );
   const listState = getShareCircleCardListState({
@@ -196,11 +197,10 @@ export default function ShareCircleCardScreen() {
                   t('common.retryLater', { defaultValue: '请稍后重试' }),
                 );
               }, SENDING_STATE_FALLBACK_MS);
-              void sendCircleCardMessage({
-                targetConversationID: conversation.id,
-                circleId,
-                name: circleName,
-                avatarUrl: circleAvatar,
+              void sendCardMessage({
+                conversationId: conversation.id,
+                type: 'circle-card',
+                payload: { circleId, name: circleName, avatarUrl: circleAvatar },
               })
                 .then(() => {
                   if (!mountedRef.current) return;

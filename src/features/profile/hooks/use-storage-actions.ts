@@ -2,12 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { clearAllLocalMessages } from '@/im/client';
 import {
   clearAppCache,
+  clearLegacyImData,
   formatCacheSize,
   getAppCacheSize,
 } from '@/services/cache/clear-app-cache';
+import { loadChatConversations } from '@/chat-core/api';
+import { useChatStore } from '@/chat-core/store';
 
 export interface UseStorageActionsResult {
   cacheSizeLabel: string;
@@ -113,7 +115,14 @@ export function useStorageActions(): UseStorageActionsResult {
             if (mountedRef.current) setClearingChats(true);
 
             try {
-              await clearAllLocalMessages();
+              // 自研 chat 无本地消息库:清掉内存缓存 + 旧 OpenIM 遗留数据目录。
+              // 用 clearCachedChats 而非 reset:socket 还连着,reset 会清掉
+              // currentUserId 并标记 disconnected,而 connectChat 对已连接的
+              // socket 直接 return —— 之后的消息判不出收发方向、未读也算错。
+              useChatStore.getState().clearCachedChats();
+              await clearLegacyImData();
+              // 缓存清空后重拉一次会话快照,列表不停在空态。
+              void loadChatConversations().catch(() => undefined);
               if (!mountedRef.current) return;
               Alert.alert(
                 t('settingsDetails.storage.clearAllChatsDone'),

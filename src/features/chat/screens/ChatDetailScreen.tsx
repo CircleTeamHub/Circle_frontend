@@ -67,38 +67,33 @@ import {
   setAudioModeAsync,
   useAudioRecorder,
 } from 'expo-audio';
+// 消息数据面已切到 chat-core;成员目录 / @ 候选 / 在线状态仍走 OpenIM 双轨
+// (OpenIM groupID === circle.id,ID 同值,Phase 3 随成员子系统一起迁)。
+import { useGroupMemberViewAccess } from '@/features/chat/hooks/use-group-member-view-access';
 import {
-  getOrCreateSingleConversation,
-  getOrCreateGroupConversation,
-  fromImUserId,
-  loadGroupMemberList,
-  loadSpecifiedGroupMembers,
+  ensureCircleConversation,
+  ensureDirectConversation,
+  isChatSendBlockedBySensitiveWord,
+  hasMoreHistory,
   loadConversationMessages,
+  loadOlderConversationMessages,
+  resetHistoryCursor,
   markConversationAsRead,
-  deleteLocalMessage,
-  sendFriendCardMessage,
+  sendCardMessage,
   sendImageMessage,
   sendLocationMessage,
-  sendNoteCardMessage,
   sendQuoteMessage,
-  sendTextAtMessage,
   sendTextMessage,
-  sendTransferCardMessage,
-  sendPlazaPostCardMessage,
   sendVoiceMessage,
-  sendVoiceMessageFromSource,
-  subscribeUserOnlineStatus,
-  toImUserId,
-  unsubscribeUserOnlineStatus,
-} from '@/im/client';
-import { useGroupMemberViewAccess } from '@/features/chat/hooks/use-group-member-view-access';
-import { restoreConversationMessages } from '@/im/history-restore';
+} from '@/chat-core/client';
 import {
-  createMessageMapCache,
-  mapMessageItemsToChatMessages,
-} from '@/im/mappers';
+  createChatMessageMapCache,
+  mapChatMessageDtosToUI,
+} from '@/chat-core/message-mappers';
+import { fetchChatMembers } from '@/chat-core/api';
+import { queryChatPresence } from '@/chat-core/socket-manager';
+import { useChatStore } from '@/chat-core/store';
 import { useAuthStore } from '@/stores/authStore';
-import { useIMStore } from '@/stores/imStore';
 import { type FriendProfile } from '@/services/api/friends';
 import type { NoteSummary } from '@/features/notes/types';
 import { collectNote } from '@/services/api/notes';
@@ -109,10 +104,6 @@ import {
   resolveCollectionSendPlan,
 } from '@/features/chat/utils/message-collection';
 import {
-  getNotificationRestoreMaxMessages,
-  hasMessageWithClientID,
-} from '@/features/chat/utils/notification-scroll';
-import {
   requestUploadPresign,
   resolveUploadContentType,
   sanitizeUploadFilename,
@@ -121,6 +112,7 @@ import {
 import { useSharePickerStore } from '@/features/chat/store/use-share-picker-store';
 import { usePendingChatCardStore } from '@/features/chat/store/use-pending-chat-card-store';
 import { useMessageForwardStore } from '@/features/chat/store/use-message-forward-store';
+import { canForwardMessage } from '@/features/chat/screens/ForwardPickerScreen';
 import { useTransferComposerStore } from '@/features/chat/store/use-transfer-composer-store';
 import { useCallStore } from '@/features/call/store/use-call-store';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
@@ -138,18 +130,16 @@ import {
 import { resolveDirectCalleeID } from '@/features/call/resolve-direct-callee';
 import type { CallType } from '@/features/call/types';
 import { getApiErrorMessage } from '@/services/api/errors';
-import { logClientDiagnostic } from '@/utils/client-diagnostics';
+import i18n from '@/i18n';
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import {
   assertLocalCanSendMessage,
   CreditPolicyError,
 } from '@/services/api/credit-policy';
-import { OnlineState, SessionType } from '@openim/rn-client-sdk';
 import { useTranslation } from 'react-i18next';
 import type { ChatMessage, PlazaPostCardData } from '@/types';
 import {
   AT_ALL_USER_ID,
-  buildAtMessagePayload,
   buildQuotePreviewText,
   filterMentionCandidates,
   getActiveMentionQuery,
@@ -157,7 +147,6 @@ import {
   type MentionTarget,
 } from '@/features/chat/utils/chat-send-payloads';
 import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
-import { stampOptimisticMessage } from '@/features/chat/utils/optimistic-message';
 import { collapseDuplicateFriendAddedNotices } from '@/features/chat/utils/system-notice-dedupe';
 import { isChatImageTooLarge } from '@/features/chat/utils/chat-media-policy';
 import { uploadChatImageThumbnail } from '@/features/chat/utils/image-thumbnail';
@@ -166,7 +155,7 @@ import { uploadChatImageThumbnail } from '@/features/chat/utils/image-thumbnail'
 // only the error and conversation kind — to avoid leaking content into logs.
 function logChatSendFailure(
   error: unknown,
-  context: { sessionType: SessionType; isGroupChat: boolean },
+  context: { sessionType: ConversationKind; isGroupChat: boolean },
 ) {
   if (!__DEV__) return;
   const base =
@@ -177,7 +166,15 @@ function logChatSendFailure(
 }
 
 function getChatSendErrorMessage(error: unknown, fallback: string) {
-  return error instanceof CreditPolicyError ? error.message : fallback;
+  if (error instanceof CreditPolicyError) return error.message;
+  // 服务端敏感词拦截（chat-core 发送 ack 拒绝）：给明确原因而非笼统的「发送失败」。
+  // 用全局 i18n.t 而非组件 t —— 本函数在 catch 回调里按调用时机取当前语言。
+  if (isChatSendBlockedBySensitiveWord(error)) {
+    return i18n.t('chat.detail.sensitiveWordBlocked', {
+      defaultValue: '消息包含敏感词，已被屏蔽',
+    });
+  }
+  return fallback;
 }
 
 type AttachmentId =
@@ -245,6 +242,9 @@ const PANEL_LAYOUT_ANIM = {
     property: LayoutAnimation.Properties.opacity,
   },
 };
+
+/** 会话形态判别(旧 OpenIM SessionType 枚举的最小替代)。 */
+type ConversationKind = 'single' | 'group';
 
 const s = StyleSheet.create({
   // 群聊接收气泡上方的发送者名字（缩进对齐气泡起点 = 头像宽 + 间距）。
@@ -434,12 +434,16 @@ export default function ChatDetailScreen() {
   // 聊天页在哪个 tab 栈打开（messages/discover/...），决定返回兜底与子页面跳转的 scope。
   const segments = useSegments();
   const scope = getUserProfileScopeFromSegments(segments);
-  const currentUserID = useIMStore((state) => state.currentUserID);
-  const setActiveConversation = useIMStore((state) => state.setActiveConversation);
-  const appendMessages = useIMStore((state) => state.appendMessages);
+  const currentUserID = useChatStore((state) => state.currentUserId);
+  const setActiveConversationId = useChatStore(
+    (state) => state.setActiveConversationId,
+  );
   const authUser = useAuthStore((state) => state.user);
   const flatListRef = useRef<FlatListType<ChatMessage>>(null);
   const scrolledToSearchRef = useRef(false);
+  // 为定位搜索目标而翻页时的在途标记:effect 会随 messages 变化重跑,
+  // 不挡住的话每一页返回都会再打一次请求。
+  const searchPagingRef = useRef(false);
   // scrollToIndex 失败重试的次数与在飞的定时器。没有上限时，一次失败的定位会
   // 每 250ms 重试同一个 index，而每次重试又可能再次触发 onScrollToIndexFailed —— 在
   // 变高气泡 + 虚拟化回收下能连续跳动好几秒，看起来就像进聊天页就卡住。
@@ -541,18 +545,24 @@ export default function ChatDetailScreen() {
     useState(paramConversationID);
   const conversationID = paramConversationID || resolvedConversationID;
   // 只订阅当前会话的消息切片，而非整个 messagesByConversation map。
-  // 其他会话来消息时 appendMessages 会新建顶层对象，但本会话的数组引用不变，
+  // 其他会话来消息时 ingestMessages 会新建顶层对象，但本会话的数组引用不变，
   // zustand 的 Object.is 相等判断因此不会触发本页重渲染——这是聊天页最大的流畅提升。
-  const conversationMessages = useIMStore(
+  const conversationMessages = useChatStore(
     (state) => state.messagesByConversation[conversationID],
+  );
+  // 对端已读水位(单聊「已读」标记):服务端 chat:read 广播驱动。
+  const peerReadHeight = useChatStore((state) =>
+    params.conversationType !== 'group' && sourceID
+      ? (state.readWatermarks[conversationID]?.[sourceID] ?? 0)
+      : 0,
   );
   const paramTitle =
     typeof params.title === 'string'
       ? params.title
       : t('chat.detail.title', { defaultValue: '聊天详情' });
   const conversationType =
-    params.conversationType === 'group' ? SessionType.Group : SessionType.Single;
-  const isGroupChat = conversationType === SessionType.Group;
+    params.conversationType === 'group' ? 'group' : 'single';
+  const isGroupChat = conversationType === 'group';
 
   const { canViewMembers: canViewGroupMemberProfiles, revalidate: revalidateMemberViewAccess } =
     useGroupMemberViewAccess({
@@ -594,18 +604,18 @@ export default function ChatDetailScreen() {
     [],
   );
 
-  // 入口只给了 sourceID 时，就地把会话解析出来（单聊/群聊各走对应方法）。
+  // 入口只给了 sourceID 时，就地把会话解析出来（单聊按对端 userID、群聊按圈子 id）。
   useEffect(() => {
     if (paramConversationID || !sourceID) return;
     let cancelled = false;
     (async () => {
       try {
         const conv = isGroupChat
-          ? await getOrCreateGroupConversation(sourceID)
-          : await getOrCreateSingleConversation(sourceID);
+          ? await ensureCircleConversation(sourceID)
+          : await ensureDirectConversation(sourceID);
         if (!cancelled) setResolvedConversationID(conv.conversationID);
       } catch (error) {
-        // IM 未接通等：保持预览模式，不阻断页面。
+        // 未连通等：保持预览模式，不阻断页面。
         if (__DEV__) {
           console.warn('[ChatDetailScreen] resolve conversation failed', error);
         }
@@ -672,7 +682,7 @@ export default function ChatDetailScreen() {
         if (!msg.senderID) return;
         // review P1：点击瞬间 fail-closed 重查角色，不信挂载期的旧快照。
         if (
-          msg.senderID !== fromImUserId(currentUserID ?? '') &&
+          msg.senderID !== currentUserID &&
           !(await revalidateMemberViewAccess())
         ) {
           Alert.alert(t('chat.groupMembersRestricted'));
@@ -689,7 +699,7 @@ export default function ChatDetailScreen() {
 
   const handleOpenUserCard = useCallback(
     async (userID: string, nickname?: string) => {
-      if (isGroupChat && userID !== fromImUserId(currentUserID ?? '')) {
+      if (isGroupChat && userID !== currentUserID) {
         const allowed = await revalidateMemberViewAccess();
         if (!allowed) {
           // review P2：名片可能是分享进群的外部用户——确认不是本群成员才放行。
@@ -697,10 +707,8 @@ export default function ChatDetailScreen() {
           // 成了绕过成员目录限制的口子；只有明确查到"不在群里"才按分享意图放行。
           let blockTarget = true;
           try {
-            const [targetMember] = await loadSpecifiedGroupMembers(sourceID, [
-              toImUserId(userID),
-            ]);
-            blockTarget = Boolean(targetMember);
+            const members = await fetchChatMembers(conversationID);
+            blockTarget = members.some((member) => member.userId === userID);
           } catch {
             blockTarget = true;
           }
@@ -712,7 +720,7 @@ export default function ChatDetailScreen() {
       }
       router.push(getUserProfileHref(scope, userID, nickname));
     },
-    [currentUserID, isGroupChat, revalidateMemberViewAccess, scope, sourceID, t],
+    [conversationID, currentUserID, isGroupChat, revalidateMemberViewAccess, scope, t],
   );
 
   const handleOpenHeaderTarget = useCallback(() => {
@@ -728,19 +736,17 @@ export default function ChatDetailScreen() {
   // 之后由全局 onUserStatusChanged 维护增量。
   const peerImId = useMemo(
     () =>
-      conversationType === SessionType.Single && sourceID
-        ? toImUserId(sourceID)
-        : null,
+      conversationType === 'single' && sourceID ? sourceID : null,
     [conversationType, sourceID],
   );
-  // 只订阅对方这一个用户的在线状态切片，而非整个 onlineStatusByUser map——
-  // 其他用户上下线不再触发本页重渲染。
-  const peerOnlineStatus = useIMStore((state) =>
-    peerImId != null ? state.onlineStatusByUser[peerImId] : undefined,
+  // 只订阅对方这一个用户的在线状态切片(chat-core presence),
+  // 其他用户上下线不触发本页重渲染。
+  const peerOnlineStatus = useChatStore((state) =>
+    peerImId != null ? state.onlineByUser[peerImId] : undefined,
   );
-  const peerOnline = peerOnlineStatus === OnlineState.Online;
+  const peerOnline = peerOnlineStatus === true;
   const statusColor =
-    conversationType !== SessionType.Single || authUser?.accountId === sourceID
+    conversationType !== 'single' || authUser?.accountId === sourceID
       ? colors.online
       : peerOnline
         ? colors.online
@@ -779,65 +785,37 @@ export default function ChatDetailScreen() {
       return;
     }
 
-    setActiveConversation({
-      conversationID,
-      // SDK 推过来的 sendID/recvID 都是去连字符的 IM 形式，
-      // activeConversation.sourceID 用同样形式才能匹配
-      sourceID:
-        conversationType === SessionType.Single ? toImUserId(sourceID) : sourceID,
-      sessionType: conversationType,
-    });
+    // 活跃会话标记:分发器据此不给本会话累计未读。
+    setActiveConversationId(conversationID);
 
-    markConversationAsRead(conversationID).catch((err) => {
-      // 已读上报失败不阻断 UI；dev 下打印，避免长期静默把未读 badge 卡住没人发现。
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[chat] markConversationAsRead failed', err);
-      }
-    });
     loadConversationMessages(conversationID)
-      .then(() =>
-        restoreConversationMessages({
-          conversationID,
-          sourceID:
-            conversationType === SessionType.Single
-              ? toImUserId(sourceID)
-              : sourceID,
-          sessionType: conversationType,
-          maxMessages: getNotificationRestoreMaxMessages(searchedMsgID),
-        }),
-      )
-      .then((restoreResult) => {
-        if (!searchedMsgID) {
-          return;
-        }
-        const localMessages =
-          useIMStore.getState().messagesByConversation[conversationID] ?? [];
-        if (hasMessageWithClientID(localMessages, searchedMsgID)) {
-          return;
-        }
-        logClientDiagnostic('chat_notification_target_not_found', {
-          conversationID,
-          targetMsgID: searchedMsgID,
-          fetched: restoreResult.fetched,
-          inserted: restoreResult.inserted,
-        });
+      .then(() => {
+        // 历史落库后按最新水位上报已读(拉取前上报会拿到 0 水位白跑一趟)。
+        markConversationAsRead(conversationID);
       })
       .catch((err) => {
         if (typeof __DEV__ !== 'undefined' && __DEV__) {
-          console.warn('[chat] load/restore conversation messages failed', err);
+          console.warn('[chat] load conversation messages failed', err);
         }
       });
 
     return () => {
-      setActiveConversation(null);
+      setActiveConversationId(null);
+      // 离开会话丢掉翻页游标:下次进入重新从最新一页开始。
+      resetHistoryCursor(conversationID);
     };
-  }, [
-    conversationID,
-    conversationType,
-    searchedMsgID,
-    setActiveConversation,
-    sourceID,
-  ]);
+  }, [conversationID, setActiveConversationId, sourceID]);
+
+  // inverted 列表触底 = 时间上更早:继续向前翻页。没有它的话超过一页的
+  // 会话根本滚不到更早的消息,搜索也跳不到首页之外的目标。
+  const handleLoadOlder = useCallback(() => {
+    if (!conversationID) return;
+    void loadOlderConversationMessages(conversationID).catch((err) => {
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn('[chat] load older messages failed', err);
+      }
+    });
+  }, [conversationID]);
 
   useEffect(() => {
     if (!conversationID && !sourceID) return;
@@ -848,45 +826,40 @@ export default function ChatDetailScreen() {
     });
   }, [conversationID, searchedMsgID, sourceID]);
 
+  // 进页查询一次初始在线状态;后续变化由服务端上下线广播直接驱动 store。
   useEffect(() => {
     if (!peerImId) return;
-    void subscribeUserOnlineStatus([peerImId]).catch((err) => {
-      // 拿不到状态时 UI 回落显示离线；dev 下记录，避免长期静默掉订阅。
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[chat] subscribeUserOnlineStatus failed', err);
-      }
-    });
-    return () => {
-      void unsubscribeUserOnlineStatus([peerImId]).catch((err) => {
-        if (typeof __DEV__ !== 'undefined' && __DEV__) {
-          console.warn('[chat] unsubscribeUserOnlineStatus failed', err);
-        }
-      });
-    };
+    queryChatPresence([peerImId]);
   }, [peerImId]);
 
   // FlatList 用 inverted 渲染：index 0 = 最新消息，自然停在底部。
-  // 因此把按时间升序的 messages 反转一次，新到旧排列。
-  // 按 MessageItem 引用缓存映射结果：未变化的消息保持同一 ChatMessage 引用，
+  // 因此把按 height 升序的 messages 反转一次，新到旧排列。
+  // 按 DTO 引用缓存映射结果：未变化的消息保持同一 ChatMessage 引用，
   // FlatList 的 CellRenderer 因此跳过未变行的重渲染（无需给气泡加 memo）。
-  // 某条消息被更新时（读回执/状态变化）会得到新的 MessageItem 引用 → 缓存未命中
-  // → 只有那一行重渲染。currentUserID 变化时整体失效重建。
-  const messageMapCacheRef = useRef<ReturnType<typeof createMessageMapCache> | null>(
-    null,
-  );
+  // 乐观消息确认/失败时对象被替换 → 缓存未命中 → 只有那一行重渲染。
+  const messageMapCacheRef = useRef<ReturnType<
+    typeof createChatMessageMapCache
+  > | null>(null);
 
   const messages = useMemo(() => {
     const box =
-      messageMapCacheRef.current ?? createMessageMapCache(currentUserID);
+      messageMapCacheRef.current ?? createChatMessageMapCache(currentUserID);
     messageMapCacheRef.current = box;
-    const mapped = mapMessageItemsToChatMessages(
+    const mapped = mapChatMessageDtosToUI(
       conversationMessages ?? [],
       currentUserID,
+      peerReadHeight,
       box,
     );
     return collapseDuplicateFriendAddedNotices(mapped);
-  }, [currentUserID, conversationMessages]);
+  }, [currentUserID, conversationMessages, peerReadHeight]);
   messagesLengthRef.current = messages.length;
+
+  // 在此会话页时来新消息 → 即时推进已读水位(socket pending 队列自带去重合并)。
+  useEffect(() => {
+    if (!conversationID || !conversationMessages?.length) return;
+    markConversationAsRead(conversationID);
+  }, [conversationID, conversationMessages]);
 
   // 搜索定位：在 inverted 列表里 scrollToIndex 仍然按 index 计数，找到就跳。
   useEffect(() => {
@@ -913,7 +886,23 @@ export default function ChatDetailScreen() {
       }, 2200);
       return () => clearTimeout(timer);
     }
-  }, [messages, searchedMsgID]);
+
+    // 目标不在当前窗口里:从全局搜索或一条陈旧通知跳进来时,目标往往比最新一页
+    // 更早。原来只在已加载的 messages 里找,找不到就什么都不做 —— 用户落在最新
+    // 一条上,除非自己手动往回翻够远。这里继续向前翻页,直到找到或到头。
+    if (!conversationID || searchPagingRef.current) return;
+    if (!hasMoreHistory(conversationID)) return;
+    searchPagingRef.current = true;
+    void loadOlderConversationMessages(conversationID)
+      .catch((err) => {
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          console.warn('[chat] paging to searched message failed', err);
+        }
+      })
+      .finally(() => {
+        searchPagingRef.current = false;
+      });
+  }, [messages, searchedMsgID, conversationID]);
 
   const selfAvatarUri = authUser?.avatarUrl ?? undefined;
   const selfName = authUser?.nickname ?? authUser?.accountId;
@@ -1025,17 +1014,14 @@ export default function ChatDetailScreen() {
 
   const handleForwardMessage = useCallback(
     (message: ChatMessage) => {
-      // Read the raw OpenIM item lazily (at tap time) so the message list
-      // doesn't re-render on every incoming message. Lets the picker use
-      // native forwarding, which preserves images/media.
-      const raw = conversationID
-        ? useIMStore
-            .getState()
-            .messagesByConversation[conversationID]?.find(
-              (m) => m.clientMsgID === message.id,
-            )
-        : undefined;
-      setPendingForward({ message, raw });
+      // 带上源消息 DTO:content 里有媒体 object key / 卡片 payload,
+      // 选择器可原样重发;找不到(极端竞态)则退化为文本转发。
+      const dto = useChatStore
+        .getState()
+        .messagesByConversation[conversationID]?.find(
+          (item) => item.id === message.id,
+        );
+      setPendingForward({ message, dto });
       router.push({ pathname: '/(tabs)/messages/forward-picker' });
     },
     [conversationID, setPendingForward],
@@ -1059,19 +1045,8 @@ export default function ChatDetailScreen() {
             text: t('common.delete'),
             style: 'destructive',
             onPress: () => {
-              void deleteLocalMessage(conversationID, message.id).catch((error) => {
-                if (__DEV__) {
-                  console.warn('[ChatDetail] delete local message failed', error);
-                }
-                Alert.alert(
-                  t('chat.messageActions.deleteFailed', {
-                    defaultValue: '删除失败',
-                  }),
-                  t('chat.messageActions.deleteFailedHint', {
-                    defaultValue: '请稍后重试',
-                  }),
-                );
-              });
+              // 本端视图删除(服务端保留;跨端删除随后续批次)。
+              useChatStore.getState().removeMessage(conversationID, message.id);
             },
           },
         ],
@@ -1130,12 +1105,16 @@ export default function ChatDetailScreen() {
       label: t('chat.messageActions.quote', { defaultValue: '引用' }),
       onPress: () => handleQuoteMessage(message),
     });
-    actions.push({
-      key: 'forward',
-      icon: 'arrow-redo-outline',
-      label: t('chat.messageActions.forward'),
-      onPress: () => handleForwardMessage(message),
-    });
+    // 只在真能转发时给入口:通话记录走到转发页只会抛「不支持」,
+    // 而 catch 提示的是「请重试」—— 一个永远不会成功的重试。
+    if (canForwardMessage(message)) {
+      actions.push({
+        key: 'forward',
+        icon: 'arrow-redo-outline',
+        label: t('chat.messageActions.forward'),
+        onPress: () => handleForwardMessage(message),
+      });
+    }
     actions.push({
       key: 'collect',
       icon: 'star-outline',
@@ -1257,11 +1236,10 @@ export default function ChatDetailScreen() {
     callStartingRef.current = true;
     setCallStarting(true);
     try {
-      // 1:1（circle_be#113）：正常入口 sourceID 即对方 UUID（见
-      // mapConversationItemToUI）。round 3 review：推送路由的兜底是
-      // sourceID || conversationID —— 这里可能拿到 'si_...' 会话 id，直接
-      // 当 calleeID 必失败。统一走 resolveDirectCalleeID：si_ 形式从会话
-      // id 里解出对端（剔除自己 + 还原 UUID），解不出来给可控提示。
+      // 1:1（circle_be#113）：正常入口 sourceID 即对方 UUID。推送路由的
+      // 兜底是 sourceID || conversationID —— 可能拿到 'direct:a:b' 会话 id，
+      // 直接当 calleeID 必失败。统一走 resolveDirectCalleeID：从会话 id 里
+      // 剔除自己解出对端，解不出来给可控提示。
       if (!isGroupChat) {
         const calleeID = resolveDirectCalleeID(sourceID, authUser.id);
         if (!calleeID) {
@@ -1286,11 +1264,11 @@ export default function ChatDetailScreen() {
         return;
       }
 
-      const members = await loadGroupMemberList(sourceID, 10_000);
+      const members = await fetchChatMembers(conversationID);
       const inviteeIDs = Array.from(
         new Set(
           members
-            .map((member) => fromImUserId(member.userID))
+            .map((member) => member.userId)
             .filter((userID) => userID && userID !== authUser.id),
         ),
       );
@@ -1676,13 +1654,14 @@ export default function ChatDetailScreen() {
 
     let request = mentionCandidatesInflightRef.current.get(sourceID);
     if (!request) {
-      request = loadGroupMemberList(sourceID, MENTION_CANDIDATE_LIMIT)
+      request = fetchChatMembers(conversationID)
         .then((members) =>
           members
-            .filter((member) => member.userID && member.userID !== currentUserID)
+            .filter((member) => member.userId !== currentUserID)
+            .slice(0, MENTION_CANDIDATE_LIMIT)
             .map((member) => ({
-              userID: member.userID,
-              nickname: member.nickname || member.userID,
+              userID: member.userId,
+              nickname: member.nickname || member.userId,
             })),
         )
         .then((candidates) => {
@@ -1705,7 +1684,7 @@ export default function ChatDetailScreen() {
       }
       if (mountedRef.current) setMentionCandidates([]);
     }
-  }, [allMentionTarget, canViewGroupMemberProfiles, currentUserID, isGroupChat, sourceID]);
+  }, [allMentionTarget, canViewGroupMemberProfiles, conversationID, currentUserID, isGroupChat, sourceID]);
 
   // 群聊打开时拉一次成员表，建 senderID→昵称映射给发送者名字标签兜底。
   // 单聊不需要（气泡不显示发送者名字）。
@@ -1715,15 +1694,13 @@ export default function ChatDetailScreen() {
       return;
     }
     let cancelled = false;
-    loadGroupMemberList(sourceID, 500)
+    fetchChatMembers(conversationID)
       .then((members) => {
         if (cancelled) return;
         const map: Record<string, string> = {};
         for (const member of members) {
           const nickname = member.nickname?.trim();
-          if (member.userID && nickname) {
-            map[fromImUserId(member.userID)] = nickname;
-          }
+          if (nickname) map[member.userId] = nickname;
         }
         setGroupMemberNames(map);
       })
@@ -1735,7 +1712,7 @@ export default function ChatDetailScreen() {
     return () => {
       cancelled = true;
     };
-  }, [canViewGroupMemberProfiles, isGroupChat, sourceID]);
+  }, [canViewGroupMemberProfiles, conversationID, isGroupChat, sourceID]);
 
   const handleDraftChange = useCallback(
     (next: string) => {
@@ -1794,29 +1771,11 @@ export default function ChatDetailScreen() {
       }
       if (inFlightRef.current) return;
       inFlightRef.current = true;
-      // 乐观发送：创建即上屏（发送中态）；成功后同 clientMsgID 覆盖，失败标记失败态。
-      let optimisticClientMsgID: string | null = null;
+      // 乐观发送在 chat-core 内完成:创建即上屏(height=0 发送中态),
+      // ack 后同 d 替换,失败自动标失败态 —— 屏幕只负责错误展示。
       try {
-        const sentMessage = await sendTextMessage({
-          sourceID,
-          sessionType: conversationType,
-          text,
-          onCreate: (message) => {
-            optimisticClientMsgID = message.clientMsgID;
-            // createTextMessage 未必带 sendTime；缺失时补客户端时间戳，
-            // 否则 mergeMessageList 会按 sendTime=0 把「发送中」气泡排到最旧位置
-            // （inverted 列表顶部）而非输入框上方。成功回调用真实 sentMessage 覆盖后归位。
-            const stamped = stampOptimisticMessage(message, Date.now());
-            appendMessages(conversationID, [stamped]);
-          },
-        });
-        appendMessages(conversationID, [sentMessage]);
+        await sendTextMessage({ conversationId: conversationID, text });
       } catch (error) {
-        if (optimisticClientMsgID) {
-          useIMStore
-            .getState()
-            .markMessageSendFailed(conversationID, optimisticClientMsgID);
-        }
         logChatSendFailure(error, {
           sessionType: conversationType,
           isGroupChat,
@@ -1836,7 +1795,6 @@ export default function ChatDetailScreen() {
       }
     },
     [
-      appendMessages,
       conversationID,
       conversationType,
       isGroupChat,
@@ -1958,13 +1916,26 @@ export default function ChatDetailScreen() {
         if (cancel || elapsedMs < 800) return; // 取消 / 误触：丢弃不发
         if (!soundPath) throw new Error('录音文件生成失败');
 
-        const sent = await sendVoiceMessage({
-          sourceID,
-          sessionType: conversationType,
-          soundPath,
-          duration,
+        // 自研栈:录音文件先经 presign 上传,消息体只带 object key(读时签 URL)。
+        const voiceFilename = soundPath.split('/').pop() || 'voice.m4a';
+        const voiceContentType =
+          resolveUploadContentType({ fileName: voiceFilename }) ?? 'audio/mp4';
+        const presign = await requestUploadPresign({
+          filename: sanitizeUploadFilename(voiceFilename),
+          contentType: voiceContentType,
+          folder: 'chat',
         });
-        appendMessages(conversationID, [sent]);
+        await uploadLocalFileToPresignedUrl(
+          presign.uploadUrl,
+          voiceContentType,
+          soundPath,
+        );
+        await sendVoiceMessage({
+          conversationId: conversationID,
+          key: presign.key,
+          duration,
+          localUri: soundPath,
+        });
       } catch (error) {
         if (__DEV__) {
           console.warn(
@@ -1996,11 +1967,8 @@ export default function ChatDetailScreen() {
       }
     },
     [
-      appendMessages,
       conversationID,
-      conversationType,
       restoreRecordingAudioMode,
-      sourceID,
       t,
       voiceRecorder,
       voiceRecordingStartedAt,
@@ -2093,14 +2061,12 @@ export default function ChatDetailScreen() {
       } catch {
         // ignore — fallback to coords
       }
-      const sent = await sendLocationMessage({
-        sourceID,
-        sessionType: conversationType,
+      await sendLocationMessage({
+        conversationId: conversationID,
         longitude: position.coords.longitude,
         latitude: position.coords.latitude,
         description,
       });
-      appendMessages(conversationID, [sent]);
     } catch (error) {
       if (mountedRef.current) {
         setSendError(
@@ -2115,14 +2081,7 @@ export default function ChatDetailScreen() {
     } finally {
       inFlightRef.current = false;
     }
-  }, [
-    appendMessages,
-    conversationID,
-    conversationType,
-    isPreviewMode,
-    sourceID,
-    t,
-  ]);
+  }, [conversationID, isPreviewMode, sourceID, t]);
 
   // 相册选择与拍照共用同一套「上传→发送」流程，只有获取 asset 的来源不同。
   const uploadAndSendImageAsset = useCallback(
@@ -2168,20 +2127,14 @@ export default function ChatDetailScreen() {
           filename,
         );
 
-        const sentMessage = await sendImageMessage({
-          sourceID,
-          sessionType: conversationType,
-          url: presign.fileUrl,
-          sourcePath: asset.uri,
+        await sendImageMessage({
+          conversationId: conversationID,
+          key: presign.key,
+          localUri: asset.uri,
           width: asset.width ?? undefined,
           height: asset.height ?? undefined,
-          size: asset.fileSize ?? undefined,
-          mimeType: contentType,
-          thumbUrl: thumbnail?.url,
-          thumbWidth: thumbnail?.width,
-          thumbHeight: thumbnail?.height,
+          thumbKey: thumbnail?.key,
         });
-        appendMessages(conversationID, [sentMessage]);
       } catch (error) {
         if (__DEV__) {
           console.warn(
@@ -2205,7 +2158,7 @@ export default function ChatDetailScreen() {
         inFlightRef.current = false;
       }
     },
-    [appendMessages, conversationID, conversationType, sourceID, t],
+    [conversationID, t],
   );
 
   const handlePickMedia = useCallback(async () => {
@@ -2284,7 +2237,7 @@ export default function ChatDetailScreen() {
           void handleStartCall();
           return;
         case 'transfer':
-          if (conversationType !== SessionType.Single) {
+          if (conversationType !== 'single') {
             Alert.alert(t('chat.transferTitle'), t('chat.transferGroupNotSupported'));
             return;
           }
@@ -2324,12 +2277,11 @@ export default function ChatDetailScreen() {
           ...buildNoteCardPayloadFromSummary(note, authUser?.id ?? null),
           ownerId: authUser?.id ?? null,
         };
-        const sent = await sendNoteCardMessage({
-          sourceID,
-          sessionType: conversationType,
+        await sendCardMessage({
+          conversationId: conversationID,
+          type: 'note-card',
           payload: noteCardPayload,
         });
-        appendMessages(conversationID, [sent]);
       } catch (error) {
         if (mountedRef.current) {
           setSendError(
@@ -2345,15 +2297,7 @@ export default function ChatDetailScreen() {
         inFlightRef.current = false;
       }
     },
-    [
-      appendMessages,
-      authUser?.id,
-      conversationID,
-      conversationType,
-      isPreviewMode,
-      sourceID,
-      t,
-    ],
+    [authUser?.id, conversationID, isPreviewMode, sourceID, t],
   );
 
   const handlePickFriend = useCallback(
@@ -2362,13 +2306,15 @@ export default function ChatDetailScreen() {
       if (inFlightRef.current) return;
       inFlightRef.current = true;
       try {
-        const sent = await sendFriendCardMessage({
-          targetConversationID: conversationID,
-          userID: friend.id,
-          nickname: friend.nickname,
-          faceURL: friend.avatarUrl ?? '',
+        await sendCardMessage({
+          conversationId: conversationID,
+          type: 'friend-card',
+          payload: {
+            userID: friend.id,
+            nickname: friend.nickname,
+            faceURL: friend.avatarUrl ?? '',
+          },
         });
-        appendMessages(conversationID, [sent]);
       } catch (error) {
         if (mountedRef.current) {
           setSendError(
@@ -2384,7 +2330,7 @@ export default function ChatDetailScreen() {
         inFlightRef.current = false;
       }
     },
-    [appendMessages, conversationID, t],
+    [conversationID, t],
   );
 
   const handlePickFavorite = useCallback(
@@ -2404,38 +2350,32 @@ export default function ChatDetailScreen() {
       if (inFlightRef.current) return;
       inFlightRef.current = true;
       try {
-        let sent;
         switch (plan.kind) {
           case 'voice':
-            sent = await sendVoiceMessageFromSource({
-              sourceID,
-              sessionType: conversationType,
-              sourceUrl: plan.sourceUrl,
-              soundPath: plan.soundPath,
-              duration: plan.duration,
-              dataSize: plan.dataSize,
-            });
-            break;
+            // 旧收藏的语音只存了 OpenIM 时代的 URL,新栈消息体只收 object key,
+            // 无法可靠反推 —— 明确报错优于静默发一条播不出的语音。
+            // 收藏体系迁到新栈(存 key)后此分支恢复。
+            throw new Error('voice favorite resend not yet supported on chat-core');
           case 'note':
-            sent = await sendNoteCardMessage({
-              sourceID,
-              sessionType: conversationType,
+            await sendCardMessage({
+              conversationId: conversationID,
+              type: 'note-card',
               payload: plan.noteCard,
             });
             break;
           case 'friend':
-            sent = await sendFriendCardMessage({
-              targetConversationID: conversationID,
-              userID: plan.friendCard.userID,
-              nickname: plan.friendCard.nickname,
-              faceURL: plan.friendCard.faceURL,
-              persona: plan.friendCard.persona,
-              displayIcons: plan.friendCard.displayIcons,
+            await sendCardMessage({
+              conversationId: conversationID,
+              type: 'friend-card',
+              payload: {
+                userID: plan.friendCard.userID,
+                nickname: plan.friendCard.nickname,
+                faceURL: plan.friendCard.faceURL,
+                persona: plan.friendCard.persona,
+                displayIcons: plan.friendCard.displayIcons,
+              },
             });
             break;
-        }
-        if (sent) {
-          appendMessages(conversationID, [sent]);
         }
       } catch (error) {
         if (__DEV__) {
@@ -2455,15 +2395,7 @@ export default function ChatDetailScreen() {
         inFlightRef.current = false;
       }
     },
-    [
-      appendMessages,
-      conversationID,
-      conversationType,
-      isPreviewMode,
-      sendDraftAsText,
-      sourceID,
-      t,
-    ],
+    [conversationID, isPreviewMode, sendDraftAsText, sourceID, t],
   );
 
   const handlePickQuickReply = useCallback(
@@ -2483,12 +2415,11 @@ export default function ChatDetailScreen() {
       if (inFlightRef.current) return;
       inFlightRef.current = true;
       try {
-        const sent = await sendTransferCardMessage({
-          sourceID,
-          sessionType: conversationType,
+        await sendCardMessage({
+          conversationId: conversationID,
+          type: 'transfer-card',
           payload: { amount: payload.amount, message: payload.message },
         });
-        appendMessages(conversationID, [sent]);
         // #100：告知后端卡片已由客户端送达，补偿 cron 不再重发。
         // round 2 review：回执是防重发的唯一信号，不能 fire-and-forget ——
         // 先持久化挂账再冲销：回执丢失（超时/退后台）时下次进聊天页续冲，
@@ -2512,14 +2443,7 @@ export default function ChatDetailScreen() {
         inFlightRef.current = false;
       }
     },
-    [
-      appendMessages,
-      conversationID,
-      conversationType,
-      isPreviewMode,
-      sourceID,
-      t,
-    ],
+    [conversationID, isPreviewMode, sourceID, t],
   );
 
   // 从 SharePickerScreen / TransferComposerScreen 返回时消费 pending 项
@@ -2580,44 +2504,37 @@ export default function ChatDetailScreen() {
       setSendError(null);
       // 1) 先发帖子卡片（报名→聊天带上下文）。成功后清空待发卡片。
       if (pendingCard) {
-        const cardMessage = await sendPlazaPostCardMessage({
-          sourceID,
-          sessionType: conversationType,
-          payload: pendingCard,
+        await sendCardMessage({
+          conversationId: conversationID,
+          type: 'plaza-post-card',
+          payload: pendingCard as unknown as Record<string, unknown>,
         });
-        appendMessages(conversationID, [cardMessage]);
         if (mountedRef.current) setPendingCard(null);
       }
-      // 2) 再发文字（非空才发）。
+      // 2) 再发文字（非空才发）。引用 > @提及 > 普通文本。
       if (nextText) {
-        const rawQuote = quoteTarget
-          ? useIMStore
-              .getState()
-              .messagesByConversation[conversationID]?.find(
-                (m) => m.clientMsgID === quoteTarget.id,
-              )
-          : undefined;
         const activeMentionTargets = getMentionsPresentInText(nextText, mentionTargets);
-        const sentMessage =
-          quoteTarget && rawQuote
-            ? await sendQuoteMessage({
-                sourceID,
-                sessionType: conversationType,
-                text: nextText,
-                message: rawQuote,
-              })
-            : isGroupChat && activeMentionTargets.length > 0
-              ? await sendTextAtMessage({
-                  sourceID,
-                  sessionType: conversationType,
-                  ...buildAtMessagePayload(nextText, activeMentionTargets),
-                })
-            : await sendTextMessage({
-                sourceID,
-                sessionType: conversationType,
-                text: nextText,
-              });
-        appendMessages(conversationID, [sentMessage]);
+        if (quoteTarget) {
+          await sendQuoteMessage({
+            conversationId: conversationID,
+            text: nextText,
+            quotedText: buildQuotePreviewText(quoteTarget, t),
+            replyToId: quoteTarget.id.startsWith('local:')
+              ? undefined
+              : quoteTarget.id,
+          });
+        } else if (isGroupChat && activeMentionTargets.length > 0) {
+          await sendTextMessage({
+            conversationId: conversationID,
+            text: nextText,
+            mentions: activeMentionTargets
+              .filter((m) => !m.isAll)
+              .map((m) => ({ userId: m.userID, nickname: m.nickname })),
+            atAll: activeMentionTargets.some((m) => m.isAll),
+          });
+        } else {
+          await sendTextMessage({ conversationId: conversationID, text: nextText });
+        }
       }
       if (mountedRef.current) setDraft('');
       if (mountedRef.current) setQuoteTarget(null);
@@ -2644,7 +2561,6 @@ export default function ChatDetailScreen() {
       if (mountedRef.current) setSending(false);
     }
   }, [
-    appendMessages,
     conversationID,
     conversationType,
     draft,
@@ -2681,7 +2597,7 @@ export default function ChatDetailScreen() {
               <Text style={[s.headerStatusText, d.headerStatusText]}>
                 {authUser?.accountId === sourceID
                   ? t('chat.detail.statusSelf', { defaultValue: '自己' })
-                  : conversationType !== SessionType.Single
+                  : conversationType !== 'single'
                     ? t('chat.detail.statusGroup', { defaultValue: '群聊' })
                     : peerOnline
                       ? t('chat.detail.statusOnline', { defaultValue: '在线' })
@@ -2734,6 +2650,9 @@ export default function ChatDetailScreen() {
           // removeClippedSubviews 仅在 Android 开启（iOS 上 inverted 列表可能出现空白格）。
           initialNumToRender={15}
           maxToRenderPerBatch={10}
+          // inverted:列表"末端"是最旧的一头,触底即向前翻页。
+          onEndReached={handleLoadOlder}
+          onEndReachedThreshold={0.4}
           windowSize={11}
           removeClippedSubviews={Platform.OS === 'android'}
           contentContainerStyle={[s.messageList, s.messageListContent, s.messageListInset]}

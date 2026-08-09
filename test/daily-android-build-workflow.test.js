@@ -122,9 +122,8 @@ test('daily Android build exercises the tag-time native release path', () => {
   // 编译的是 imAdmin 回落分支，而不是生产真正会走的分支。
   for (const name of [
     'EXPO_PUBLIC_API_URL',
-    'EXPO_PUBLIC_OPENIM_API_URL',
-    'EXPO_PUBLIC_OPENIM_WS_URL',
     'EXPO_PUBLIC_MEDIA_ORIGINS',
+    'EXPO_PUBLIC_CHAT_WS_URL',
     'EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID',
     'EXPO_PUBLIC_SUPPORT_ACCOUNT_ID',
     'EXPO_PUBLIC_SUPPORT_RECHARGE_ID',
@@ -174,9 +173,8 @@ test('daily Android build refuses to compile the support fallback branch', () =>
   assert.match(validate, /validate-android-release\.js build-env/);
   for (const name of [
     'EXPO_PUBLIC_API_URL',
-    'EXPO_PUBLIC_OPENIM_API_URL',
-    'EXPO_PUBLIC_OPENIM_WS_URL',
     'EXPO_PUBLIC_MEDIA_ORIGINS',
+    'EXPO_PUBLIC_CHAT_WS_URL',
     'EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID',
     'EXPO_PUBLIC_SUPPORT_ACCOUNT_ID',
     'EXPO_PUBLIC_SUPPORT_RECHARGE_ID',
@@ -206,10 +204,8 @@ test('build-env validation shares the tag-time env contract', () => {
   } = require('../.github/scripts/validate-android-release');
   const env = {
     EXPO_PUBLIC_API_URL: 'https://api.windnote.test',
-    EXPO_PUBLIC_OPENIM_API_URL: 'https://im.windnote.test',
-    EXPO_PUBLIC_OPENIM_WS_URL: 'wss://im.windnote.test/ws',
     EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: 'official-support',
-    EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: 'cs-support',
+    EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: '33333333-3333-4333-8333-333333333333',
   };
 
   // 没有 RELEASE_TAG 也能通过 —— 每日构建本来就没有 tag。
@@ -267,7 +263,7 @@ test('Sentry DSN is warned about when missing and rejected when malformed', () =
     EXPO_PUBLIC_OPENIM_API_URL: 'https://im.windnote.test',
     EXPO_PUBLIC_OPENIM_WS_URL: 'wss://im.windnote.test/ws',
     EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: 'official-support',
-    EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: 'cs-support',
+    EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: '33333333-3333-4333-8333-333333333333',
   };
 
   // 缺失 = 告警，不是错误：没有 DSN 时 app 完全正常，只是不上报。硬 fail 会把
