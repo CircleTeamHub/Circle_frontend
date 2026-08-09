@@ -174,10 +174,18 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       // 「已处理」,而下面的横幅与补拉是无条件跑的 —— 用户离开会话后,
       // 一条自己刚删掉的消息会以前台通知的形式重新弹出来。
       if (isMessageDeletedLocally(payload.id, payload.d)) return;
-      // 被移出的会话:迟到的广播不入库也不补拉,否则刚收走的会话立刻复活。
-      if (removedConversations.has(payload.conversationId)) return;
 
       const store = useChatStore.getState();
+      // 被移出的会话:迟到的广播不入库也不补拉,否则刚收走的会话立刻复活。
+      // 自愈:会话又出现在快照里(重连 resync / 手动刷新)说明已重新入群,
+      // 只是 joined 事件在离线窗口丢了 —— 解除标记照常入库。
+      if (removedConversations.has(payload.conversationId)) {
+        const restored = store.conversations.some(
+          (c) => c.id === payload.conversationId,
+        );
+        if (!restored) return;
+        removedConversations.delete(payload.conversationId);
+      }
       // 顺序要紧:先联动会话列表再入时间线。applyIncomingMessage 靠
       // 「这条消息是否已在时间线里」判重复投递,先 ingest 的话它每次都会
       // 看到自己、未读永远加不上。

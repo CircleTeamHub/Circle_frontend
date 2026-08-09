@@ -572,6 +572,23 @@ test('chat:conversation left removes silently and joined lifts the guard', () =>
   assert.equal(state.ingested.length, 1);
 });
 
+test('a conversation restored by a snapshot lifts the removed guard (missed joined event)', () => {
+  const { socket, state } = loadDispatcher();
+  state.conversations = [{ id: 'c1', type: 'GROUP' }];
+  socket.emit('chat:conversation', {
+    kind: 'removed',
+    conversationId: 'c1',
+    userId: 'me',
+  });
+  assert.deepEqual(state.removed, ['c1']);
+
+  // 离线期间被重新拉回群,joined 事件错过了;重连 resync 把会话快照带回列表。
+  // 防复活标记必须自愈解除,否则实时消息被静默丢弃、只有翻历史才看得到。
+  state.conversations = [{ id: 'c1', type: 'GROUP' }];
+  socket.emit('chat:msg', dto({ conversationId: 'c1', id: 'after-rejoin' }));
+  assert.equal(state.ingested.length, 1);
+});
+
 test('chat:conversation for another user or malformed payloads is ignored', () => {
   const { socket, state } = loadDispatcher();
   state.conversations = [{ id: 'c1', type: 'GROUP' }];
