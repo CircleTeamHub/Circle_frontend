@@ -106,6 +106,19 @@ function conversationAvatarUrl(conversation: ChatConversationDto): string | unde
   );
 }
 
+/**
+ * 这条消息能不能转发 —— 菜单和转发页共用同一个判定,不能各判各的。
+ *
+ * 之前长按任何消息都提供「转发」,而 call-record 在转发页既没有分支也没有兜底文案,
+ * 必走到最后那个 throw;catch 提示「请重试」,可重试永远不会成功。
+ * 通话记录本身也没有转发语义(它是一次通话在本会话里的留痕),所以直接不提供入口。
+ */
+export function canForwardMessage(message: ChatMessage): boolean {
+  if (message.type === 'call-record') return false;
+  if (message.type === 'system-notice') return false;
+  return true;
+}
+
 function getForwardFallbackText(message: ChatMessage) {
   if (message.type === 'sent' || message.type === 'received') {
     return message.text?.trim() ?? '';

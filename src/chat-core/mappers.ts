@@ -61,6 +61,18 @@ export function getChatMessagePreview(message: ChatMessageDto | null): string {
       return tPreview('voice', '[语音]');
     case 'location':
       return tPreview('location', '[位置]');
+    case 'file': {
+      // 文件历史页整列都靠这个标题区分条目 —— 没有 file 分支的话每一行都是
+      // 通用的「[消息]」,同一个会话里的多个文件在列表里完全无法辨认
+      // (被替换掉的 OpenIM 映射是显示文件名的)。
+      const name = message.content['fileName'];
+      if (typeof name !== 'string' || name.trim().length === 0) {
+        return tPreview('file', '[文件]');
+      }
+      const trimmed = name.trim();
+      // 文件名是对端可控文本,列表里截断,别让一条超长名字撑坏整行。
+      return trimmed.length > 60 ? `${trimmed.slice(0, 60)}…` : trimmed;
+    }
     case 'transfer-card':
       return tPreview('transfer', '[转账]');
     case 'note-card':

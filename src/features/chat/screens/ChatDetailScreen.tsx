@@ -74,6 +74,7 @@ import {
   ensureCircleConversation,
   ensureDirectConversation,
   isChatSendBlockedBySensitiveWord,
+  hasMoreHistory,
   loadConversationMessages,
   loadOlderConversationMessages,
   resetHistoryCursor,
@@ -111,6 +112,7 @@ import {
 import { useSharePickerStore } from '@/features/chat/store/use-share-picker-store';
 import { usePendingChatCardStore } from '@/features/chat/store/use-pending-chat-card-store';
 import { useMessageForwardStore } from '@/features/chat/store/use-message-forward-store';
+import { canForwardMessage } from '@/features/chat/screens/ForwardPickerScreen';
 import { useTransferComposerStore } from '@/features/chat/store/use-transfer-composer-store';
 import { useCallStore } from '@/features/call/store/use-call-store';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
@@ -439,6 +441,9 @@ export default function ChatDetailScreen() {
   const authUser = useAuthStore((state) => state.user);
   const flatListRef = useRef<FlatListType<ChatMessage>>(null);
   const scrolledToSearchRef = useRef(false);
+  // 为定位搜索目标而翻页时的在途标记:effect 会随 messages 变化重跑,
+  // 不挡住的话每一页返回都会再打一次请求。
+  const searchPagingRef = useRef(false);
   // scrollToIndex 失败重试的次数与在飞的定时器。没有上限时，一次失败的定位会
   // 每 250ms 重试同一个 index，而每次重试又可能再次触发 onScrollToIndexFailed —— 在
   // 变高气泡 + 虚拟化回收下能连续跳动好几秒，看起来就像进聊天页就卡住。
@@ -881,7 +886,23 @@ export default function ChatDetailScreen() {
       }, 2200);
       return () => clearTimeout(timer);
     }
-  }, [messages, searchedMsgID]);
+
+    // 目标不在当前窗口里:从全局搜索或一条陈旧通知跳进来时,目标往往比最新一页
+    // 更早。原来只在已加载的 messages 里找,找不到就什么都不做 —— 用户落在最新
+    // 一条上,除非自己手动往回翻够远。这里继续向前翻页,直到找到或到头。
+    if (!conversationID || searchPagingRef.current) return;
+    if (!hasMoreHistory(conversationID)) return;
+    searchPagingRef.current = true;
+    void loadOlderConversationMessages(conversationID)
+      .catch((err) => {
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          console.warn('[chat] paging to searched message failed', err);
+        }
+      })
+      .finally(() => {
+        searchPagingRef.current = false;
+      });
+  }, [messages, searchedMsgID, conversationID]);
 
   const selfAvatarUri = authUser?.avatarUrl ?? undefined;
   const selfName = authUser?.nickname ?? authUser?.accountId;
@@ -1084,12 +1105,16 @@ export default function ChatDetailScreen() {
       label: t('chat.messageActions.quote', { defaultValue: '引用' }),
       onPress: () => handleQuoteMessage(message),
     });
-    actions.push({
-      key: 'forward',
-      icon: 'arrow-redo-outline',
-      label: t('chat.messageActions.forward'),
-      onPress: () => handleForwardMessage(message),
-    });
+    // 只在真能转发时给入口:通话记录走到转发页只会抛「不支持」,
+    // 而 catch 提示的是「请重试」—— 一个永远不会成功的重试。
+    if (canForwardMessage(message)) {
+      actions.push({
+        key: 'forward',
+        icon: 'arrow-redo-outline',
+        label: t('chat.messageActions.forward'),
+        onPress: () => handleForwardMessage(message),
+      });
+    }
     actions.push({
       key: 'collect',
       icon: 'star-outline',
