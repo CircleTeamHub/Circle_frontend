@@ -225,4 +225,39 @@ describe('MemberNameAnimationProvider', () => {
     });
     expect(reanimated.__state.running).toBe(true);
   });
+
+  test('a late initial preference read never overrides a newer event', async () => {
+    // 初次读取是异步的,事件可能先到:用户刚打开 Reduce Motion,随后那个
+    // 「开关还没打开时」的 false 才 resolve。只按 mounted 守卫的话它会把用户的
+    // 新偏好覆盖回去 —— 所有会员名字重新开始流光,而用户明确要求过不要动画。
+    let resolveInitial: (value: boolean) => void = () => {};
+    reduceMotionInitial = new Promise<boolean>((resolve) => {
+      resolveInitial = resolve;
+    });
+
+    render(<Harness count={1} />);
+    // 初次读取还没落地,首屏默认禁用 → 不跑。
+    expect(reanimated.__state.running).toBe(false);
+
+    // 事件先到:用户打开了 Reduce Motion。
+    await act(async () => {
+      reduceMotionListeners.forEach((listener) => listener(true));
+    });
+    expect(reanimated.__state.running).toBe(false);
+
+    // 迟到的初次读取带着过期的 false —— 必须被丢弃。
+    await act(async () => {
+      resolveInitial(false);
+      await reduceMotionInitial;
+    });
+    expect(reanimated.__state.running).toBe(false);
+  });
+
+  test('the initial read still applies when no event has arrived', async () => {
+    // 丢弃过期读取不能把正常路径一起丢掉:没有事件时初次读取仍然生效。
+    reduceMotionInitial = Promise.resolve(false);
+    render(<Harness count={1} />);
+    await flushEffects();
+    expect(reanimated.__state.running).toBe(true);
+  });
 });

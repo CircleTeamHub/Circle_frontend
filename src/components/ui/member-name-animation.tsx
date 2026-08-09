@@ -69,21 +69,29 @@ export function MemberNameAnimationProvider({
 
   useEffect(() => {
     let mounted = true;
+    // 初次读取是异步的,而 reduceMotionChanged 事件可能先到:用户刚打开
+    // Reduce Motion,随后那个「开关还没打开时」的 false 才 resolve —— 只有
+    // mounted 守卫的话它会把用户的新偏好覆盖回去,所有名字重新开始流光。
+    // 一旦收到过事件,初次读取的结果就已经过期,直接丢弃。
+    let sawEvent = false;
+    const applyInitial = (enabled: boolean) => {
+      if (!mounted || sawEvent) return;
+      setReduceMotionEnabled(enabled);
+    };
+    const applyEvent = (enabled: boolean) => {
+      sawEvent = true;
+      if (mounted) setReduceMotionEnabled(enabled);
+    };
+
     void AccessibilityInfo.isReduceMotionEnabled()
-      .then((enabled) => {
-        if (mounted) {
-          setReduceMotionEnabled(enabled);
-        }
-      })
-      .catch(() => {
-        if (mounted) {
-          setReduceMotionEnabled(false);
-        }
-      });
+      .then(applyInitial)
+      // 读不到系统偏好时按「不限制动画」处理,与首屏默认禁用配对:
+      // 默认禁用只是为了不让 Reduce Motion 用户在启动瞬间看到流光。
+      .catch(() => applyInitial(false));
 
     const subscription = AccessibilityInfo.addEventListener(
       'reduceMotionChanged',
-      setReduceMotionEnabled,
+      applyEvent,
     );
     return () => {
       mounted = false;
