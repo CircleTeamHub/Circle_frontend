@@ -36,10 +36,14 @@ let backfillTimer: ReturnType<typeof setTimeout> | null = null;
 type PendingBanner = {
   message: ChatMessageDto;
   /**
-   * 到达时已经发出过多少次补拉。第 n 次补拉只服务 arrivedAfter < n 的候选 ——
-   * 请求在途时才到的会话,元信息不可能在这一次的响应里。
+   * 认领它的那次补拉的序号;还没被认领时为 null。
+   *
+   * 必须是**精确归属**,不能写成「arrivedAfter < 本次序号」那种累积判定:
+   * 累积判定下第 2 次补拉同时占有第 0、1 代的候选,于是「第 2 次先失败、
+   * 第 1 次后成功」这个顺序里,第 2 次的 catch 会顺手删掉第 1 次本来能服务的
+   * 那条 —— 元信息随后到了,横幅却已经没了。一个候选只能属于一次请求。
    */
-  arrivedAfter: number;
+  owner: number | null;
 };
 
 const pendingBanners = new Map<string, PendingBanner>();
@@ -47,12 +51,12 @@ const pendingBanners = new Map<string, PendingBanner>();
 const PENDING_BANNER_CONVERSATIONS_MAX = 20;
 
 /**
- * 已发出的补拉次数。
+ * 已发出的补拉次数,用作候选的归属编号。
  *
  * 需要它是因为 backfillTimer 在请求**发出之前**就被置空了:一次补拉在途时,
  * 另一个陌生会话来消息会再排一次补拉,并把自己的候选加进同一个 map。
- * 不分批的话,第一次请求失败时的 catch 会把后来攒的候选一起清掉 ——
- * 而第二次请求明明能拿到它的元信息,那条横幅却再也不会弹。
+ * 两次请求的完成顺序是任意的(后发的可能先失败),所以每个候选必须精确地
+ * 只归属一次请求 —— 谁认领谁负责,失败也只丢自己那份。
  */
 let issuedBackfills = 0;
 
@@ -60,10 +64,7 @@ function rememberPendingBanner(message: ChatMessageDto): void {
   // 同一会话只留最新一条:补拉回来弹一条「有新消息」就够,
   // 不该把窗口期内攒的每一条都排进横幅队列。
   pendingBanners.delete(message.conversationId);
-  pendingBanners.set(message.conversationId, {
-    message,
-    arrivedAfter: issuedBackfills,
-  });
+  pendingBanners.set(message.conversationId, { message, owner: null });
   while (pendingBanners.size > PENDING_BANNER_CONVERSATIONS_MAX) {
     const oldest = pendingBanners.keys().next().value;
     if (oldest === undefined) break;
@@ -71,11 +72,18 @@ function rememberPendingBanner(message: ChatMessageDto): void {
   }
 }
 
-/** 取出并移除第 `issued` 次补拉负责的那批候选;更晚到的留给下一次。 */
+/** 请求发出的瞬间把当前还没人认领的候选全部划归它。 */
+function claimPendingBanners(issued: number): void {
+  for (const entry of pendingBanners.values()) {
+    if (entry.owner === null) entry.owner = issued;
+  }
+}
+
+/** 取出并移除归第 `issued` 次补拉的那批候选;别人的一概不碰。 */
 function takePendingBannersFor(issued: number): ChatMessageDto[] {
   const owned: ChatMessageDto[] = [];
   for (const [conversationId, entry] of pendingBanners) {
-    if (entry.arrivedAfter >= issued) continue;
+    if (entry.owner !== issued) continue;
     owned.push(entry.message);
     pendingBanners.delete(conversationId);
   }
@@ -91,6 +99,7 @@ function scheduleConversationBackfill(isLive: () => boolean): void {
       return;
     }
     const issued = (issuedBackfills += 1);
+    claimPendingBanners(issued);
     void loadChatConversations()
       .then(() => {
         const owned = takePendingBannersFor(issued);

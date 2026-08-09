@@ -37,6 +37,16 @@ interface ChatStoreState {
   setError: (error: string | null) => void;
   setCurrentUserId: (userId: string | null) => void;
   setConversations: (conversations: ChatConversationDto[]) => void;
+  /**
+   * 是否已经拿到过**完整**会话快照(loadChatConversations 成功过一次)。
+   *
+   * 不能用 `conversations.length > 0` 代替:从联系人/资料页点「发消息」会先走
+   * ensureDirectConversation,它只 upsert 那一个会话 —— 数组非空,内容却是残缺的。
+   * 全局搜索据此判断「不用拉了」的话,归组时会把所有「本地没有这个会话」的
+   * 服务端命中整条丢掉,界面上是彻底的「无结果」。
+   * reset / clearCachedChats 会把它复位。
+   */
+  conversationsSnapshotLoaded: boolean;
   /** 单会话回写(偏好变更/新建后),保持排序不变量。 */
   upsertConversation: (conversation: ChatConversationDto) => void;
   removeConversation: (conversationId: string) => void;
@@ -151,6 +161,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   error: null,
   currentUserId: null,
   conversations: [],
+  conversationsSnapshotLoaded: false,
   messagesByConversation: {},
   messageWindowByConversation: {},
   activeConversationId: null,
@@ -169,6 +180,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           reconcileDeletedPreview(c, messagesByConversation[c.id]),
         ),
       ),
+      // 只有全量拉取会走到这里(upsertConversation 不置位)。
+      conversationsSnapshotLoaded: true,
     });
   },
   upsertConversation: (conversation) => {
@@ -378,6 +391,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   clearCachedChats: () =>
     set({
       conversations: [],
+  conversationsSnapshotLoaded: false,
       messagesByConversation: {},
       messageWindowByConversation: {},
       activeConversationId: null,
@@ -391,6 +405,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       error: null,
       currentUserId: null,
       conversations: [],
+  conversationsSnapshotLoaded: false,
       messagesByConversation: {},
       messageWindowByConversation: {},
       activeConversationId: null,

@@ -32,10 +32,13 @@ export function resolveChatDetailIdentity(params: {
   sourceID: unknown;
   currentUserID: string | null;
 }): ChatDetailIdentity {
+  // 先归一再校验再返回,三步用同一个值。之前 isChatConversationId 内部 trim 过、
+  // 这里却把原串交出去 —— 深链带上编码空格(%20)时它被判成合法会话 id,
+  // 拿去请求历史和进房间全都对不上,又是一个「页面正常、时间线空、发送必败」。
   const rawConversationID =
-    typeof params.conversationID === 'string' ? params.conversationID : '';
+    typeof params.conversationID === 'string' ? params.conversationID.trim() : '';
   const rawSourceID =
-    typeof params.sourceID === 'string' ? params.sourceID : '';
+    typeof params.sourceID === 'string' ? params.sourceID.trim() : '';
 
   const legacyPeerID = rawSourceID.startsWith('si_')
     ? resolveDirectCalleeID(rawSourceID, params.currentUserID ?? '')

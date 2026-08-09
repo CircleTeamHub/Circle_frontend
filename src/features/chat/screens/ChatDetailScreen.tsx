@@ -133,7 +133,11 @@ import { resolveChatDetailIdentity } from '@/features/chat/chat-detail-identity'
 import type { CallType } from '@/features/call/types';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
-import { assertLocalCanSendMessage } from '@/services/api/credit-policy';
+import {
+  assertLocalCanSendMessage,
+  getCreditPolicyMessage,
+  getLocalLowCreditDecision,
+} from '@/services/api/credit-policy';
 import { useTranslation } from 'react-i18next';
 import type { ChatMessage, PlazaPostCardData } from '@/types';
 import {
@@ -2069,6 +2073,14 @@ export default function ChatDetailScreen() {
   const handleSendCurrentLocation = useCallback(async () => {
     if (!sourceID || isPreviewMode) return;
     if (inFlightRef.current) return;
+    // 信用分门禁提到取位置之前。sendLocationMessage 里那道是共享路径的兜底,
+    // 但它要等到「已经申请过定位权限、读完当前坐标、还做了一次反地理编码」
+    // 之后才拒 —— 一次注定失败的发送,不该先把用户的精确位置读出来。
+    const creditDenied = getLocalLowCreditDecision();
+    if (creditDenied) {
+      setSendError(getCreditPolicyMessage(creditDenied));
+      return;
+    }
     const permission = await Location.requestForegroundPermissionsAsync();
     if (!permission.granted) {
       Alert.alert(t('permissions.insufficientTitle'), t('permissions.location'));

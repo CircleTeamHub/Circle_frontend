@@ -78,8 +78,21 @@ function isNonEmptyString(value: unknown): boolean {
   return typeof value === 'string' && value.length > 0;
 }
 
+/**
+ * sender 可以是 null,但**不能缺**。
+ *
+ * null 是后端的正常输出:系统消息没有发送者,普通消息的发送者也可能已注销
+ * (`senders.get(id) ?? null`)—— 所以不能按「非系统消息必须有 sender」去卡,
+ * 那会把注销用户发过的历史消息整条丢掉。
+ *
+ * 缺字段则一定是畸形载荷:后端 toMessageDto 永远显式写 sender 这个键。
+ * 原来把 undefined 也放行了,而一条没有 sender 的普通消息进 store 之后,
+ * 「这是不是我自己发的回声」判不出来 —— 自己发的会被当成对方来的,
+ * 多加一次未读、还弹一条前台横幅。
+ */
 function isValidSender(value: unknown): boolean {
-  if (value === null || value === undefined) return true;
+  if (value === null) return true;
+  if (value === undefined) return false;
   if (!isPlainObject(value)) return false;
   return (
     isNonEmptyString(value['id']) &&

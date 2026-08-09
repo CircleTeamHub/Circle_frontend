@@ -469,3 +469,29 @@ test('the same holds when the server echo beats the ack', () => {
   ]);
   assert.equal(useChatStore.getState().messagesByConversation['conv-1'].length, 0);
 });
+
+test('a partial store is not mistaken for a loaded snapshot', () => {
+  // 全局搜索靠这个标记决定「要不要拉全量」。用 conversations.length > 0 代替
+  // 会漏:从联系人/资料页点「发消息」先走 ensureDirectConversation,它只
+  // upsert 一个会话 —— 数组非空但内容残缺,搜索归组时会把其余会话的命中
+  // 整条丢掉,界面上是彻底的「无结果」。
+  const { useChatStore } = loadChatStore();
+  assert.equal(useChatStore.getState().conversationsSnapshotLoaded, false);
+
+  useChatStore.getState().upsertConversation(conversation({ id: 'c-1' }));
+  assert.equal(useChatStore.getState().conversations.length, 1);
+  assert.equal(
+    useChatStore.getState().conversationsSnapshotLoaded,
+    false,
+    'upsert 单个会话不等于拿到了完整快照',
+  );
+
+  useChatStore
+    .getState()
+    .setConversations([conversation({ id: 'c-1' }), conversation({ id: 'c-2' })]);
+  assert.equal(useChatStore.getState().conversationsSnapshotLoaded, true);
+
+  // 切号/清缓存要复位,否则下一个账号会以为快照已就绪。
+  useChatStore.getState().reset();
+  assert.equal(useChatStore.getState().conversationsSnapshotLoaded, false);
+});

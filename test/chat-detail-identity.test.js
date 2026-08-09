@@ -160,3 +160,17 @@ test('conversation ids are UUIDs — no other shape is accepted', () => {
   assert.equal(isChatConversationId(''), false);
   assert.equal(isChatConversationId(null), false);
 });
+
+test('a whitespace-padded conversation id is normalized, not passed through raw', () => {
+  // isChatConversationId 内部 trim 过,于是带编码空格(%20)的深链被判成合法;
+  // 但归一器原来返回的是**原串**,拿去请求历史和进房间全对不上 ——
+  // 又是一个「页面看着正常、时间线空、发送必败」。
+  const { resolveChatDetailIdentity } = loadIdentity();
+  const resolved = resolveChatDetailIdentity({
+    conversationID: `  ${CONV}\n`,
+    sourceID: `  ${PEER}  `,
+    currentUserID: SELF,
+  });
+  assert.equal(resolved.conversationID, CONV);
+  assert.equal(resolved.sourceID, PEER);
+});

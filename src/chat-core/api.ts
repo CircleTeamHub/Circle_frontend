@@ -105,15 +105,6 @@ type ChatHistorySearchOptions = {
   limit?: number;
 };
 
-/**
- * 整页皆墓碑时最多再往前追几页。
- *
- * 有上限是因为极端情况下(某段历史被整体删过)可能连着几十页都是空的,
- * 一次用户操作不该变成几十个串行请求。追满仍然空就把空页连同游标交回去,
- * 由列表的触底/重试继续 —— 会慢,但不会卡住,也不会静默截断结果。
- */
-const MAX_EMPTY_PAGE_CHASES = 5;
-
 function fetchChatHistoryPage(
   conversationId: string,
   options: ChatHistorySearchOptions,
@@ -141,21 +132,24 @@ export async function searchChatMessages(
 ): Promise<ChatHistoryPageDto> {
   let beforeHeight = options.beforeHeight;
 
-  for (let chased = 0; ; chased += 1) {
+  // 一直追到「有可见结果」或「到头」为止,**不设次数上限**。
+  // 上限只是把死路推远:追满 N 页仍全是墓碑时,返回的还是「空列表 + 活游标」,
+  // 屏幕照样渲染空态、照样等一个不会来的触底事件。
+  // 真正的死循环风险不是页数多,而是服务端返回一个不前进的游标 —— 下面直接拦它。
+  for (;;) {
     const page = await fetchChatHistoryPage(conversationId, {
       ...options,
       ...(beforeHeight !== undefined ? { beforeHeight } : {}),
     });
     const messages = withoutLocallyDeleted(page.messages);
-    if (
-      messages.length > 0 ||
-      page.nextBeforeHeight === null ||
-      chased >= MAX_EMPTY_PAGE_CHASES
-    ) {
-      // 游标始终用**最后一次**请求返回的那个,否则下一次翻页会退回已经看过的区间。
+    const next = page.nextBeforeHeight;
+    // 游标始终用**最后一次**请求返回的那个,否则下一次翻页会退回已经看过的区间。
+    if (messages.length > 0 || next === null) return { ...page, messages };
+    // 游标必须严格向更早推进,否则就是原地打转 —— 宁可返回空页也不能挂死。
+    if (beforeHeight !== undefined && next >= beforeHeight) {
       return { ...page, messages };
     }
-    beforeHeight = page.nextBeforeHeight;
+    beforeHeight = next;
   }
 }
 

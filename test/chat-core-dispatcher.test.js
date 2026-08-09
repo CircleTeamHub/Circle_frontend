@@ -460,3 +460,53 @@ test('a backfill only serves candidates that predate it', async () => {
     ['early', 'late'],
   );
 });
+
+test('a newer failed backfill does not steal the older one\'s candidate', async () => {
+  // 完成顺序是任意的:后发的那次可能先失败。累积归属(arrivedAfter < 本次序号)下,
+  // 第 2 次同时占有第 0、1 代候选,它的 catch 会顺手删掉第 1 次本来能服务的那条 ——
+  // 元信息随后到了,横幅却已经没了。一个候选只能属于一次请求。
+  const { socket, state } = loadDispatcher({ conversations: [] });
+  state.deferBackfill = true;
+
+  socket.emit('chat:msg', dto({ id: 'a', conversationId: 'conv-a' }));
+  state.fireBackfill(); // 第 1 次发出,在途
+  const first = state.settleBackfill;
+  state.settleBackfill = null;
+
+  socket.emit('chat:msg', dto({ id: 'b', conversationId: 'conv-b' }));
+  state.fireBackfill(); // 第 2 次发出,也在途
+
+  // 第 2 次先失败 —— 它只该丢掉自己那份(conv-b)。
+  await state.settle('reject', new Error('network down'));
+
+  // 第 1 次随后成功,conv-a 的元信息到了,它的横幅必须还在。
+  state.conversations = [directConversation({ id: 'conv-a' })];
+  first.resolve(state.conversations);
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.deepEqual(
+    state.banners.map((b) => b.id),
+    ['a'],
+  );
+});
+
+test('a payload without a sender never reaches the store', () => {
+  // sender 可以是 null(系统消息 / 已注销用户),但**缺字段**是畸形载荷:
+  // 判不出「这是不是我自己发的回声」,自己发的会被当成对方来的,
+  // 多加一次未读、还弹一条前台横幅。
+  const { socket, state } = loadDispatcher({
+    conversations: [directConversation()],
+  });
+  const missing = dto({ conversationId: DIRECT_ID });
+  delete missing.sender;
+  socket.emit('chat:msg', missing);
+
+  assert.equal(state.ingested.length, 0);
+  assert.equal(state.banners.length, 0);
+
+  // null 仍然放行 —— 否则注销用户发过的历史消息会被整条丢掉。
+  socket.emit('chat:msg', dto({ conversationId: DIRECT_ID, sender: null }));
+  assert.equal(state.ingested.length, 1);
+});

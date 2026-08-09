@@ -35,12 +35,15 @@ test('global search loads the conversation snapshot it needs to group hits', () 
   // 服务端返回的每一条正文命中都会被 `if (!conversation) continue` 丢掉,
   // 界面上表现为「什么都搜不到」。
   assert.match(screen, /loadChatConversations/);
-  assert.match(
-    screen,
-    /if \(rawConversations\.length > 0\) return;\s*\n\s*loadChatConversations\(\)/,
-  );
-  // 从消息页进来时已经有数据,不重复请求。
-  assert.match(screen, /\}, \[rawConversations\.length\]\);/);
+
+  // 判据必须是「拉过全量没有」,不能是 `conversations.length > 0`:
+  // 从联系人/资料页点「发消息」会先走 ensureDirectConversation,它只 upsert
+  // 那一个会话 —— 数组非空但内容残缺,按长度判就跳过了拉取,于是除那一个
+  // 会话之外的所有命中照样被丢掉,还是「无结果」。
+  // (这条断言原来锁的正是那个有 bug 的写法。)
+  assert.match(screen, /if \(snapshotLoaded\) return;\s*\n\s*loadChatConversations\(\)/);
+  assert.match(screen, /\}, \[snapshotLoaded\]\);/);
+  assert.doesNotMatch(screen, /if \(rawConversations\.length > 0\) return;/);
 });
 
 test('tapping a chat-record hit jumps to that message via searchedMsgID', () => {

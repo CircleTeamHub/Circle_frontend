@@ -210,21 +210,45 @@ test('the empty-page chase stops at the end of history', async () => {
   assert.equal(calls, 1);
 });
 
-test('the chase is bounded so one tap cannot become dozens of requests', async () => {
-  // 某段历史被整体删过时可能连着几十页都空。追有上限:追满仍空就把空页连同
-  // 游标交回去,由列表的触底/重试继续 —— 会慢,但不会卡住,也不静默截断。
+test('a long tombstoned run still reaches the live hit behind it', async () => {
+  // 之前这里设了 5 页上限,但上限只是把死路推远:追满仍空时返回的还是
+  // 「空列表 + 活游标」,屏幕照样渲染空态、照样等一个不会来的触底事件。
   const deleted = loadDeleted();
-  for (let i = 0; i < 50; i += 1) deleted.markMessageDeletedLocally(`gone-${i}`);
+  for (let i = 0; i < 12; i += 1) deleted.markMessageDeletedLocally(`gone-${i}`);
   let calls = 0;
   const api = loadApi(deleted, () => {
-    const id = `gone-${calls}`;
+    const index = calls;
     calls += 1;
-    return { messages: [dto({ id })], nextBeforeHeight: 100 - calls };
+    // 连着 12 页全是墓碑,第 13 页才有活的。
+    if (index < 12) {
+      return {
+        messages: [dto({ id: `gone-${index}` })],
+        nextBeforeHeight: 1000 - index,
+      };
+    }
+    return { messages: [dto({ id: 'alive' })], nextBeforeHeight: 500 };
   });
 
   const page = await api.searchChatMessages('c1', { keyword: 'x' });
+  assert.deepEqual(
+    page.messages.map((m) => m.id),
+    ['alive'],
+  );
+  assert.equal(calls, 13);
+});
+
+test('a cursor that stops advancing ends the chase instead of hanging', async () => {
+  // 真正的死循环风险不是页数多,而是服务端返回一个不前进的游标。
+  const deleted = loadDeleted();
+  deleted.markMessageDeletedLocally('gone');
+  let calls = 0;
+  const api = loadApi(deleted, () => {
+    calls += 1;
+    // 永远回同一个游标 —— 不拦的话这里就是无限循环。
+    return { messages: [dto({ id: 'gone' })], nextBeforeHeight: 900 };
+  });
+
+  const page = await api.searchChatMessages('c1', { beforeHeight: 900 });
   assert.deepEqual(page.messages, []);
-  assert.equal(calls, 6, '首次 + 最多 5 次追页');
-  // 游标仍在,列表还能靠触底继续 —— 结果没有被悄悄丢掉。
-  assert.notEqual(page.nextBeforeHeight, null);
+  assert.equal(calls, 1);
 });

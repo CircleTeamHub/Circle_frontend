@@ -170,3 +170,21 @@ test('the bypass is opt-in only — every other card still hits the gate', async
   assert.equal(calls.gate, 1);
   assert.equal(calls.sent, 0);
 });
+
+test('a low-credit user never gets asked for their location', () => {
+  // sendLocationMessage 里那道门禁是共享路径的兜底,但它要等到「已经申请过
+  // 定位权限、读完当前坐标、还做了一次反地理编码」之后才拒 —— 一次注定失败的
+  // 发送,不该先把用户的精确位置读出来。门禁必须在取位置之前也有一道。
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+  const handler = source.slice(
+    source.indexOf('const handleSendCurrentLocation'),
+    source.indexOf('const permission = await Location.requestForegroundPermissionsAsync'),
+  );
+  assert.ok(
+    handler.includes('getLocalLowCreditDecision()'),
+    '取定位权限之前没有信用分门禁',
+  );
+});
