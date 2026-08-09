@@ -220,6 +220,19 @@ export function searchAllChatMessages(
 }
 
 /** 会话偏好:置顶/免打扰/隐藏。返回最新 DTO 并回写 store。 */
+/** G-07 逐条已读回执:读者=已读水位覆盖该消息的成员(排除发送者,上限 200)。 */
+export function fetchMessageReaders(
+  conversationId: string,
+  messageId: string,
+): Promise<{
+  readers: Array<{ id: string; nickname: string; avatarUrl: string | null }>;
+  total: number;
+}> {
+  return apiClient(
+    `/chat/conversations/${conversationId}/messages/${messageId}/readers`,
+  );
+}
+
 /** S-01 会话级阅后即焚:任一方设置双方生效(GROUP 限圈主/管理员);0=关。 */
 export async function setChatBurnDuration(
   conversationId: string,

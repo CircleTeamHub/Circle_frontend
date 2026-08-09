@@ -311,7 +311,12 @@
       "noteAlreadyCollected": "已在我的笔记中",
       "noteCollectedHint": "可在「我的笔记」中查看",
       "revoke": "撤回",
-      "revokeFailed": "撤回失败"
+      "revokeFailed": "撤回失败",
+      "react": "回应",
+      "edit": "编辑",
+      "readers": "已读成员",
+      "readersNone": "还没有人读到这条消息",
+      "editing": "编辑消息"
     },
     "mentions": {
       "empty": "暂无可 @ 的成员"
@@ -580,7 +585,9 @@
       "sending": "发送中",
       "sendFailed": "发送失败",
       "read": "已读",
-      "unread": "未读"
+      "unread": "未读",
+      "delivered": "已送达",
+      "edited": "(已编辑)"
     },
     "friendCard": {
       "noPersona": "这个人很懒，什么都没留下",
@@ -2803,6 +2810,8 @@
     "USER_INVALID_BIRTHDAY": "生日格式不正确",
     "CHAT_MESSAGE_NOT_FOUND": "消息不存在",
     "CHAT_REVOKE_WINDOW_EXPIRED": "超过可撤回时间",
-    "CHAT_REVOKE_FORBIDDEN": "无权撤回该消息"
+    "CHAT_REVOKE_FORBIDDEN": "无权撤回该消息",
+    "CHAT_EDIT_WINDOW_EXPIRED": "超出可编辑时间",
+    "CHAT_EDIT_FORBIDDEN": "无法编辑该消息"
   }
 }

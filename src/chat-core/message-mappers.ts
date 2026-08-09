@@ -26,13 +26,19 @@ import type { StoredChatMessage } from './store';
 export interface ChatMessageMapCache {
   userID: string | null;
   peerReadHeight: number;
+  peerDeliveredHeight: number;
   cache: WeakMap<object, ChatMessage>;
 }
 
 export function createChatMessageMapCache(
   userID: string | null,
 ): ChatMessageMapCache {
-  return { userID, peerReadHeight: 0, cache: new WeakMap() };
+  return {
+    userID,
+    peerReadHeight: 0,
+    peerDeliveredHeight: 0,
+    cache: new WeakMap(),
+  };
 }
 
 function str(value: unknown): string | undefined {
@@ -260,6 +266,7 @@ export function mapChatMessageDtoToUI(
   dto: StoredChatMessage,
   currentUserId: string | null,
   peerReadHeight: number,
+  peerDeliveredHeight = 0,
 ): ChatMessage {
   const isSent = dto.sender !== null && dto.sender.id === currentUserId;
   const content = dto.content ?? {};
@@ -301,6 +308,21 @@ export function mapChatMessageDtoToUI(
     outgoing: isSent,
     sendStatus: isSent ? sendStatus : undefined,
     isRead: isSent && dto.height > 0 ? dto.height <= peerReadHeight : undefined,
+    isDelivered:
+      isSent && dto.height > 0
+        ? dto.height <= peerDeliveredHeight
+        : undefined,
+    // G-07:回应聚合翻成 UI 形状;编辑标记驱动「(已编辑)」后缀。
+    reactions:
+      dto.reactions && dto.reactions.length > 0
+        ? dto.reactions.map((r) => ({
+            emoji: r.emoji,
+            count: r.userIds.length,
+            mine:
+              currentUserId !== null && r.userIds.includes(currentUserId),
+          }))
+        : undefined,
+    edited: dto.editedAt ? true : undefined,
   } satisfies Partial<ChatMessage>;
 
   switch (dto.type) {
@@ -464,10 +486,16 @@ export function mapChatMessageDtosToUI(
   currentUserId: string | null,
   peerReadHeight: number,
   box: ChatMessageMapCache,
+  peerDeliveredHeight = 0,
 ): ChatMessage[] {
-  if (box.userID !== currentUserId || box.peerReadHeight !== peerReadHeight) {
+  if (
+    box.userID !== currentUserId ||
+    box.peerReadHeight !== peerReadHeight ||
+    box.peerDeliveredHeight !== peerDeliveredHeight
+  ) {
     box.userID = currentUserId;
     box.peerReadHeight = peerReadHeight;
+    box.peerDeliveredHeight = peerDeliveredHeight;
     box.cache = new WeakMap();
   }
   const result: ChatMessage[] = [];
@@ -476,7 +504,12 @@ export function mapChatMessageDtosToUI(
     const cacheable = raw.height > 0;
     let mapped = cacheable ? box.cache.get(raw) : undefined;
     if (!mapped) {
-      mapped = mapChatMessageDtoToUI(raw, currentUserId, peerReadHeight);
+      mapped = mapChatMessageDtoToUI(
+        raw,
+        currentUserId,
+        peerReadHeight,
+        peerDeliveredHeight,
+      );
       if (cacheable) box.cache.set(raw, mapped);
     }
     result.push(mapped);

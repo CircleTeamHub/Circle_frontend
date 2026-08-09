@@ -179,6 +179,38 @@ test('burn words exist in every locale', () => {
   }
 });
 
+// ---- 批5:送达/回应/编辑/逐条已读(G-07) ----
+
+test('protocol declares the delivered/reaction/edit events and reaction whitelist', () => {
+  const protocol = read('src/chat-core/protocol.ts');
+  for (const ev of ["'chat:delivered'", "'chat:reaction'", "'chat:edit'"]) {
+    assert.match(protocol, new RegExp(ev));
+  }
+  assert.match(protocol, /CHAT_REACTION_EMOJIS/);
+});
+
+test('receiving a foreign message reports the delivered watermark', () => {
+  const dispatcher = read('src/chat-core/dispatcher.ts');
+  assert.match(dispatcher, /reportChatDelivered/);
+});
+
+test('store lands delivered/reaction/edit updates', () => {
+  const store = read('src/chat-core/store.ts');
+  assert.match(store, /applyDelivered/);
+  assert.match(store, /applyReaction/);
+  assert.match(store, /applyEdit/);
+});
+
+test('batch-5 words exist in every locale', () => {
+  for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
+    const dict = JSON.parse(read(`src/i18n/locales/${locale}.json`));
+    assert.ok(dict?.chat?.message?.delivered, `${locale} delivered`);
+    assert.ok(dict?.chat?.messageActions?.react, `${locale} react`);
+    assert.ok(dict?.serverErrors?.CHAT_EDIT_WINDOW_EXPIRED, `${locale} edit window`);
+    assert.ok(dict?.serverErrors?.CHAT_EDIT_FORBIDDEN, `${locale} edit forbidden`);
+  }
+});
+
 // ---- G-18:图标角标轻方案 ----
 
 test('app icon badge follows the muted-aware total unread', () => {

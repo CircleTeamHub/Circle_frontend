@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
+import i18n from '@/i18n';
 import { useTheme, Spacing, Typography } from '@/theme';
 import { Avatar } from '@/components/ui/avatar';
 import { getAvatarFrameSource } from '@/features/profile/membership-frames';
@@ -8,6 +9,8 @@ import type { ChatMessage } from '@/types';
 import { AVATAR_SIZE } from './shared';
 
 interface ReceivedBubbleProps {
+  /** G-07:点按某个回应 pill 切换自己的回应。 */
+  onReactionPress?: (emoji: string) => void;
   message: ChatMessage;
   senderName?: string;
   senderAvatarUri?: string;
@@ -54,6 +57,7 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
   senderAvatarUri,
   onAvatarPress,
   onQuotePress,
+  onReactionPress,
 }) => {
   const { colors } = useTheme();
   // 接收消息只有 senderID；外观缓存会批量补查并在权威结果返回后刷新头像框。
@@ -120,7 +124,34 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
               </View>
             )
           ) : null}
-          <Text style={d.bubbleText}>{message.text}</Text>
+          <Text style={d.bubbleText}>
+            {message.text}
+            {message.edited
+              ? ` ${i18n.t('chat.message.edited', { defaultValue: '(已编辑)' })}`
+              : ''}
+          </Text>
+          {message.reactions?.length ? (
+            <View style={sReactions.row}>
+              {message.reactions.map((reaction) => (
+                <Pressable
+                  key={reaction.emoji}
+                  style={[
+                    sReactions.pill,
+                    reaction.mine ? sReactions.pillMine : null,
+                  ]}
+                  onPress={
+                    onReactionPress
+                      ? () => onReactionPress(reaction.emoji)
+                      : undefined
+                  }
+                >
+                  <Text style={sReactions.pillText}>
+                    {reaction.emoji} {reaction.count}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
         </View>
         {message.time ? (
           <Text style={d.timeText}>{message.time}</Text>
@@ -129,3 +160,18 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
     </View>
   );
 };
+
+
+/** G-07 表情回应 pills(两种气泡共用样式,mine 高亮边框)。 */
+const sReactions = StyleSheet.create({
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 },
+  pill: {
+    flexDirection: 'row',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: 'rgba(127,127,127,0.15)',
+  },
+  pillMine: { borderWidth: 1, borderColor: 'rgba(127,127,127,0.6)' },
+  pillText: { fontSize: 12 },
+});

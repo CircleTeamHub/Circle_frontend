@@ -311,7 +311,12 @@
       "noteAlreadyCollected": "Already in My Notes",
       "noteCollectedHint": "You can view it in My Notes",
       "revoke": "Revoke",
-      "revokeFailed": "Revoke failed"
+      "revokeFailed": "Revoke failed",
+      "react": "React",
+      "edit": "Edit",
+      "readers": "Read by",
+      "readersNone": "No one has read this yet",
+      "editing": "Editing message"
     },
     "mentions": {
       "empty": "No members available to mention"
@@ -581,7 +586,9 @@
       "sending": "Sending",
       "sendFailed": "Failed",
       "read": "Read",
-      "unread": "Unread"
+      "unread": "Unread",
+      "delivered": "Delivered",
+      "edited": "(edited)"
     },
     "friendCard": {
       "noPersona": "This person is too lazy to leave anything",
@@ -2806,6 +2813,8 @@
     "USER_INVALID_BIRTHDAY": "Invalid birthday",
     "CHAT_MESSAGE_NOT_FOUND": "Message not found",
     "CHAT_REVOKE_WINDOW_EXPIRED": "The revoke window has expired",
-    "CHAT_REVOKE_FORBIDDEN": "You cannot revoke this message"
+    "CHAT_REVOKE_FORBIDDEN": "You cannot revoke this message",
+    "CHAT_EDIT_WINDOW_EXPIRED": "The edit window has expired",
+    "CHAT_EDIT_FORBIDDEN": "This message cannot be edited"
   }
 }

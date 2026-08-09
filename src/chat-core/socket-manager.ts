@@ -136,6 +136,7 @@ export function suspendChat(): void {
   // 已读水位就永远发不出去了 —— 服务端那边消息一直是未读,直到会话又有新消息
   // 或用户重新进一次。挂起的语义是「连接没了」,不是「这些事没发生过」。
   typingSentAt.clear();
+  deliveredReportedAt.clear();
   flushingReads = false;
   readFlushRequested = false;
   teardownSocket();
@@ -332,6 +333,111 @@ export function revokeChatMessage(
       .emit(
         CHAT_EVENTS.revoke,
         { conversationId, messageId },
+        (err: Error | null, ack: ChatReadAck) => {
+          if (err) {
+            reject(new ChatSendError('CHAT_ACK_TIMEOUT', err.message));
+            return;
+          }
+          if (!ack || ack.ok !== true) {
+            reject(
+              new ChatSendError(
+                ack?.code ?? 'CHAT_INVALID_PAYLOAD',
+                ack && 'message' in ack ? ack.message : undefined,
+              ),
+            );
+            return;
+          }
+          resolve();
+        },
+      );
+  });
+}
+
+/**
+ * G-07 送达上报:无 ack 尽力而为(丢了下一条消息会报更高水位),
+ * 本地只增不减 + 短节流,避免消息洪峰逐条打点。
+ */
+const deliveredReportedAt = new Map<string, { height: number; at: number }>();
+const DELIVERED_THROTTLE_MS = 1_000;
+
+export function reportChatDelivered(
+  conversationId: string,
+  height: number,
+): void {
+  if (!Number.isInteger(height) || height <= 0) return;
+  const current = socket;
+  if (!current?.connected) return;
+  const prior = deliveredReportedAt.get(conversationId);
+  const now = Date.now();
+  if (
+    prior &&
+    prior.height >= height &&
+    now - prior.at < DELIVERED_THROTTLE_MS
+  ) {
+    return;
+  }
+  if (prior && prior.height >= height) return;
+  deliveredReportedAt.set(conversationId, { height, at: now });
+  current.emit(CHAT_EVENTS.delivered, { conversationId, height });
+}
+
+/** G-07 表情回应:带 ack;失败抛 ChatSendError(code)。 */
+export function sendChatReaction(
+  conversationId: string,
+  messageId: string,
+  emoji: string,
+  op: 'add' | 'remove',
+): Promise<void> {
+  const current = socket;
+  if (!current?.connected) {
+    return Promise.reject(
+      new ChatSendError('CHAT_NOT_CONNECTED', 'socket 未连接'),
+    );
+  }
+  return new Promise<void>((resolve, reject) => {
+    current
+      .timeout(READ_ACK_TIMEOUT_MS)
+      .emit(
+        CHAT_EVENTS.reaction,
+        { conversationId, messageId, emoji, op },
+        (err: Error | null, ack: ChatReadAck) => {
+          if (err) {
+            reject(new ChatSendError('CHAT_ACK_TIMEOUT', err.message));
+            return;
+          }
+          if (!ack || ack.ok !== true) {
+            reject(
+              new ChatSendError(
+                ack?.code ?? 'CHAT_INVALID_PAYLOAD',
+                ack && 'message' in ack ? ack.message : undefined,
+              ),
+            );
+            return;
+          }
+          resolve();
+        },
+      );
+  });
+}
+
+/** G-07 消息编辑:带 ack;权限/窗口/敏感词由服务端判。 */
+export function sendChatEditMessage(
+  conversationId: string,
+  messageId: string,
+  text: string,
+): Promise<void> {
+  const current = socket;
+  if (!current?.connected) {
+    return Promise.reject(
+      new ChatSendError('CHAT_NOT_CONNECTED', 'socket 未连接'),
+    );
+  }
+  return new Promise<void>((resolve, reject) => {
+    current
+      .timeout(READ_ACK_TIMEOUT_MS)
+      .emit(
+        CHAT_EVENTS.edit,
+        { conversationId, messageId, content: { text } },
         (err: Error | null, ack: ChatReadAck) => {
           if (err) {
             reject(new ChatSendError('CHAT_ACK_TIMEOUT', err.message));

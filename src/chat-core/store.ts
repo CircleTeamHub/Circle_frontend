@@ -85,6 +85,28 @@ interface ChatStoreState {
     messageId: string,
     revokedBy: string,
   ) => void;
+  /** G-07 送达水位(conversationId → userId → height,只前进)。 */
+  deliveredWatermarks: Record<string, Record<string, number>>;
+  applyDelivered: (
+    conversationId: string,
+    userId: string,
+    height: number,
+  ) => void;
+  /** G-07 表情回应落地(广播与本端乐观共用,幂等)。 */
+  applyReaction: (
+    conversationId: string,
+    messageId: string,
+    emoji: string,
+    userId: string,
+    op: 'add' | 'remove',
+  ) => void;
+  /** G-07 消息编辑落地(content 替换 + editedAt;height 不变)。 */
+  applyEdit: (
+    conversationId: string,
+    messageId: string,
+    content: Record<string, unknown>,
+    editedAt: string,
+  ) => void;
   /** S-01:会话级焚毁档位变更(REST 回执/系统消息驱动)。 */
   applyBurnDuration: (
     conversationId: string,
@@ -183,6 +205,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   activeConversationId: null,
   onlineByUser: {},
   readWatermarks: {},
+  deliveredWatermarks: {},
 
   setConnected: (connected) => set({ connected }),
   setConnecting: (connecting) => set({ connecting }),
@@ -391,6 +414,99 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     });
   },
 
+  applyDelivered: (conversationId, userId, height) => {
+    const { deliveredWatermarks } = get();
+    const conversation = deliveredWatermarks[conversationId] ?? {};
+    const prior = conversation[userId] ?? 0;
+    if (height <= prior) return;
+    set({
+      deliveredWatermarks: {
+        ...deliveredWatermarks,
+        [conversationId]: { ...conversation, [userId]: height },
+      },
+    });
+  },
+
+  applyReaction: (conversationId, messageId, emoji, userId, op) => {
+    const { messagesByConversation } = get();
+    const timeline = messagesByConversation[conversationId];
+    if (!timeline) return;
+    let changed = false;
+    const next = timeline.map((message) => {
+      if (message.id !== messageId) return message;
+      const reactions = message.reactions ?? [];
+      const entry = reactions.find((r) => r.emoji === emoji);
+      if (op === 'add') {
+        if (entry?.userIds.includes(userId)) return message;
+        changed = true;
+        return {
+          ...message,
+          reactions: entry
+            ? reactions.map((r) =>
+                r.emoji === emoji
+                  ? { ...r, userIds: [...r.userIds, userId] }
+                  : r,
+              )
+            : [...reactions, { emoji, userIds: [userId] }],
+        };
+      }
+      if (!entry?.userIds.includes(userId)) return message;
+      changed = true;
+      const shrunk = entry.userIds.filter((id) => id !== userId);
+      return {
+        ...message,
+        reactions:
+          shrunk.length > 0
+            ? reactions.map((r) =>
+                r.emoji === emoji ? { ...r, userIds: shrunk } : r,
+              )
+            : reactions.filter((r) => r.emoji !== emoji),
+      };
+    });
+    if (!changed) return;
+    set({
+      messagesByConversation: {
+        ...messagesByConversation,
+        [conversationId]: next,
+      },
+    });
+  },
+
+  applyEdit: (conversationId, messageId, content, editedAt) => {
+    const { messagesByConversation, conversations } = get();
+    const timeline = messagesByConversation[conversationId];
+    const next = (timeline ?? []).map((message) =>
+      message.id === messageId && !message.revokedAt
+        ? { ...message, content, editedAt }
+        : message,
+    );
+    const index = conversations.findIndex((c) => c.id === conversationId);
+    const target = index >= 0 ? conversations[index] : null;
+    const previewNeedsUpdate = target?.lastMessage?.id === messageId;
+    set({
+      ...(timeline
+        ? {
+            messagesByConversation: {
+              ...messagesByConversation,
+              [conversationId]: next,
+            },
+          }
+        : {}),
+      ...(previewNeedsUpdate && target
+        ? {
+            conversations: [
+              ...conversations.slice(0, index),
+              {
+                ...target,
+                lastMessage: { ...target.lastMessage!, content, editedAt },
+              },
+              ...conversations.slice(index + 1),
+            ],
+          }
+        : {}),
+    });
+  },
+
   applyBurnDuration: (conversationId, burnDurationSec) => {
     const { conversations } = get();
     const index = conversations.findIndex((c) => c.id === conversationId);
@@ -528,6 +644,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       messageWindowByConversation: {},
       activeConversationId: null,
       readWatermarks: {},
+      deliveredWatermarks: {},
     }),
 
   reset: () =>
@@ -543,6 +660,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       activeConversationId: null,
       onlineByUser: {},
       readWatermarks: {},
+      deliveredWatermarks: {},
     }),
 }));
 

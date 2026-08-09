@@ -60,6 +60,7 @@ function loadDispatcher(storeOverrides = {}) {
     removed: [],
     alerts: [],
     revokes: [],
+    deliveredReports: [],
     backfills: 0,
     ...storeOverrides,
   };
@@ -122,6 +123,9 @@ function loadDispatcher(storeOverrides = {}) {
     applyRevoke: (conversationId, messageId, revokedBy) => {
       state.revokes.push({ conversationId, messageId, revokedBy });
     },
+    applyDelivered: () => {},
+    applyReaction: () => {},
+    applyEdit: () => {},
   };
 
   const dispatcher = runModule('src/chat-core/dispatcher.ts', (request) => {
@@ -172,6 +176,9 @@ function loadDispatcher(storeOverrides = {}) {
           }),
         },
       };
+    }
+    if (request === './socket-manager') {
+      return { reportChatDelivered: (cid, h) => state.deliveredReports.push({ cid, h }) };
     }
     if (request === 'react-native') {
       return { Alert: { alert: (text) => state.alerts.push(text) } };

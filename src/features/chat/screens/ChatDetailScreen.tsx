@@ -95,7 +95,11 @@ import { fetchChatMembers } from '@/chat-core/api';
 import {
   queryChatPresence,
   revokeChatMessage,
+  sendChatEditMessage,
+  sendChatReaction,
 } from '@/chat-core/socket-manager';
+import { CHAT_REACTION_EMOJIS } from '@/chat-core/protocol';
+import { fetchMessageReaders } from '@/chat-core/api';
 import { useChatStore } from '@/chat-core/store';
 import { useAuthStore } from '@/stores/authStore';
 import { type FriendProfile } from '@/services/api/friends';
@@ -557,6 +561,12 @@ export default function ChatDetailScreen() {
       ? (state.readWatermarks[conversationID]?.[sourceID] ?? 0)
       : 0,
   );
+  // 对端送达水位(单聊「已送达」标记,G-07):chat:delivered 广播驱动。
+  const peerDeliveredHeight = useChatStore((state) =>
+    params.conversationType !== 'group' && sourceID
+      ? (state.deliveredWatermarks[conversationID]?.[sourceID] ?? 0)
+      : 0,
+  );
   const paramTitle =
     typeof params.title === 'string'
       ? params.title
@@ -865,9 +875,10 @@ export default function ChatDetailScreen() {
       currentUserID,
       peerReadHeight,
       box,
+      peerDeliveredHeight,
     );
     return collapseDuplicateFriendAddedNotices(mapped);
-  }, [currentUserID, conversationMessages, peerReadHeight]);
+  }, [currentUserID, conversationMessages, peerReadHeight, peerDeliveredHeight]);
   messagesLengthRef.current = messages.length;
 
   // 在此会话页时来新消息 → 即时推进已读水位(socket pending 队列自带去重合并)。
@@ -1040,6 +1051,8 @@ export default function ChatDetailScreen() {
     y: number;
   } | null>(null);
   const [quoteTarget, setQuoteTarget] = useState<ChatMessage | null>(null);
+  // G-07 编辑态:非空时发送按钮改走 chat:edit,输入框上方出现编辑横条。
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [highlightedMessageID, setHighlightedMessageID] = useState<string | null>(
     null,
   );
@@ -1175,10 +1188,123 @@ export default function ChatDetailScreen() {
     [conversationID, t],
   );
 
+  // G-07 表情回应:mine 则 remove,否则 add;失败静默(下一次点按可重试)。
+  const handleToggleReaction = useCallback(
+    (message: ChatMessage, emoji: string) => {
+      const mine = message.reactions?.some(
+        (r) => r.emoji === emoji && r.mine,
+      );
+      void sendChatReaction(
+        conversationID,
+        message.id,
+        emoji,
+        mine ? 'remove' : 'add',
+      ).catch(() => undefined);
+    },
+    [conversationID],
+  );
+
+  const handleOpenReactionPicker = useCallback(
+    (message: ChatMessage) => {
+      Alert.alert(
+        t('chat.messageActions.react', { defaultValue: '回应' }),
+        undefined,
+        [
+          ...CHAT_REACTION_EMOJIS.map((emoji) => ({
+            text: emoji,
+            onPress: () => handleToggleReaction(message, emoji),
+          })),
+          { text: t('common.cancel'), style: 'cancel' as const },
+        ],
+      );
+    },
+    [handleToggleReaction, t],
+  );
+
+  // G-07 编辑入口:自己已送达的 text/quote,2 分钟内。
+  const canEditMessage = useCallback(
+    (message: ChatMessage) => {
+      if (!message.outgoing || message.sendStatus !== 2) return false;
+      const dto = useChatStore
+        .getState()
+        .messagesByConversation[conversationID]?.find(
+          (m) => m.id === message.id,
+        );
+      if (!dto || dto.height <= 0 || dto.revokedAt) return false;
+      if (dto.type !== 'text' && dto.type !== 'quote') return false;
+      return Date.now() - Date.parse(dto.createdAt) <= 2 * 60_000;
+    },
+    [conversationID],
+  );
+
+  const handleStartEditMessage = useCallback(
+    (message: ChatMessage) => {
+      const dto = useChatStore
+        .getState()
+        .messagesByConversation[conversationID]?.find(
+          (m) => m.id === message.id,
+        );
+      const text =
+        typeof dto?.content['text'] === 'string'
+          ? (dto.content['text'] as string)
+          : '';
+      setEditingMessageId(message.id);
+      setQuoteTarget(null);
+      setDraft(text);
+    },
+    [conversationID],
+  );
+
+  // G-07 逐条已读(群聊自己的消息):读者列表来自已读水位,无回执表。
+  const handleShowReaders = useCallback(
+    (message: ChatMessage) => {
+      void fetchMessageReaders(conversationID, message.id)
+        .then((result) => {
+          const names = result.readers
+            .map((reader) => reader.nickname)
+            .filter(Boolean);
+          Alert.alert(
+            t('chat.messageActions.readers', { defaultValue: '已读成员' }),
+            names.length > 0
+              ? names.join('、')
+              : t('chat.messageActions.readersNone', {
+                  defaultValue: '还没有人读到这条消息',
+                }),
+          );
+        })
+        .catch(() => undefined);
+    },
+    [conversationID, t],
+  );
+
   const messageActions = useMemo<MessageAction[]>(() => {
     const message = actionMenu?.message;
     if (!message) return [];
     const actions: MessageAction[] = [];
+    if (message.sendStatus === undefined || message.sendStatus === 2) {
+      actions.push({
+        key: 'react',
+        icon: 'happy-outline',
+        label: t('chat.messageActions.react', { defaultValue: '回应' }),
+        onPress: () => handleOpenReactionPicker(message),
+      });
+    }
+    if (canEditMessage(message)) {
+      actions.push({
+        key: 'edit',
+        icon: 'create-outline',
+        label: t('chat.messageActions.edit', { defaultValue: '编辑' }),
+        onPress: () => handleStartEditMessage(message),
+      });
+    }
+    if (isGroupChat && message.outgoing && message.sendStatus === 2) {
+      actions.push({
+        key: 'readers',
+        icon: 'checkmark-done-outline',
+        label: t('chat.messageActions.readers', { defaultValue: '已读成员' }),
+        onPress: () => handleShowReaders(message),
+      });
+    }
     if (canRevokeMessage(message)) {
       actions.push({
         key: 'revoke',
@@ -1232,7 +1358,12 @@ export default function ChatDetailScreen() {
     return actions;
   }, [
     actionMenu,
+    canEditMessage,
     canRevokeMessage,
+    handleOpenReactionPicker,
+    handleShowReaders,
+    handleStartEditMessage,
+    isGroupChat,
     handleCollectMessage,
     handleCopyMessage,
     handleDeleteMessage,
@@ -1479,6 +1610,7 @@ export default function ChatDetailScreen() {
                 ? () => handleQuotePress(item)
                 : undefined
             }
+            onReactionPress={(emoji) => handleToggleReaction(item, emoji)}
           />
         ));
       case 'sent':
@@ -1493,6 +1625,7 @@ export default function ChatDetailScreen() {
                 ? () => handleQuotePress(item)
                 : undefined
             }
+            onReactionPress={(emoji) => handleToggleReaction(item, emoji)}
           />
         ));
       case 'location':
@@ -1676,6 +1809,7 @@ export default function ChatDetailScreen() {
     handleOpenMessageSender,
     handleOpenUserCard,
     handleQuotePress,
+    handleToggleReaction,
     isGroupChat,
     selfAvatarUri,
     selfName,
@@ -2649,6 +2783,39 @@ export default function ChatDetailScreen() {
   const handleSend = useCallback(async () => {
     const nextText = draft.trim();
 
+    // G-07 编辑态:改走 chat:edit,不新建消息。
+    if (editingMessageId) {
+      if (!nextText || sending) return;
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
+      setSending(true);
+      try {
+        setSendError(null);
+        await sendChatEditMessage(conversationID, editingMessageId, nextText);
+        useChatStore
+          .getState()
+          .applyEdit(
+            conversationID,
+            editingMessageId,
+            { text: nextText },
+            new Date().toISOString(),
+          );
+        setEditingMessageId(null);
+        setDraft('');
+      } catch (error) {
+        setSendError(
+          getChatSendErrorMessage(
+            error,
+            t('chat.detail.sendFailedText', { defaultValue: '发送失败' }),
+          ),
+        );
+      } finally {
+        inFlightRef.current = false;
+        setSending(false);
+      }
+      return;
+    }
+
     // 有待发送卡片时，即使文字为空也允许发送（只发卡片）。
     if ((!nextText && !pendingCard) || sending || !sourceID || isPreviewMode) {
       return;
@@ -2922,6 +3089,25 @@ export default function ChatDetailScreen() {
               </View>
             }
           />
+        </View>
+      ) : null}
+      {editingMessageId ? (
+        <View style={[s.quoteComposerBar, d.composerShell]}>
+          <Text
+            style={[s.quoteComposerText, { color: colors.textSecondary }]}
+            numberOfLines={1}
+          >
+            {t('chat.messageActions.editing', { defaultValue: '编辑消息' })}
+          </Text>
+          <Pressable
+            onPress={() => {
+              setEditingMessageId(null);
+              setDraft('');
+            }}
+            hitSlop={8}
+          >
+            <Ionicons name="close" size={18} color={colors.textSecondary} />
+          </Pressable>
         </View>
       ) : null}
       {quoteTarget ? (

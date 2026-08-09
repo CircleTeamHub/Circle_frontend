@@ -271,7 +271,12 @@
       "noteAlreadyCollected": "すでにマイノートにあります",
       "noteCollectedHint": "「マイノート」で確認できます",
       "revoke": "取り消し",
-      "revokeFailed": "取り消しに失敗しました"
+      "revokeFailed": "取り消しに失敗しました",
+      "react": "リアクション",
+      "edit": "編集",
+      "readers": "既読メンバー",
+      "readersNone": "まだ誰も読んでいません",
+      "editing": "メッセージを編集"
     },
     "mentions": {
       "empty": "メンションできるメンバーがいません"
@@ -540,7 +545,9 @@
       "sending": "送信中",
       "sendFailed": "送信失敗",
       "read": "既読",
-      "unread": "未読"
+      "unread": "未読",
+      "delivered": "配信済み",
+      "edited": "(編集済み)"
     },
     "friendCard": {
       "noPersona": "この人はまだ何も残していません",
@@ -2803,6 +2810,8 @@
     "USER_INVALID_BIRTHDAY": "誕生日が正しくありません",
     "CHAT_MESSAGE_NOT_FOUND": "メッセージが見つかりません",
     "CHAT_REVOKE_WINDOW_EXPIRED": "取り消せる時間を過ぎました",
-    "CHAT_REVOKE_FORBIDDEN": "このメッセージを取り消す権限がありません"
+    "CHAT_REVOKE_FORBIDDEN": "このメッセージを取り消す権限がありません",
+    "CHAT_EDIT_WINDOW_EXPIRED": "編集できる時間を過ぎました",
+    "CHAT_EDIT_FORBIDDEN": "このメッセージは編集できません"
   }
 }

@@ -138,6 +138,11 @@ export interface ChatMessage {
   quoteMessageId?: string;
   quoteHeight?: number;
   quoteRevoked?: boolean;
+  // G-07:表情回应聚合(mine=本人是否已回应,点按切换)与编辑标记。
+  reactions?: Array<{ emoji: string; count: number; mine: boolean }>;
+  edited?: boolean;
+  // 单聊自己消息的送达态(已读优先于送达展示)。
+  isDelivered?: boolean;
   time?: string;
   senderName?: string;
   // 发送者用户 id（UUID 形式），仅接收消息携带；群聊点头像跳对方资料用。

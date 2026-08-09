@@ -21,7 +21,23 @@ export const CHAT_EVENTS = {
   conversation: 'chat:conversation',
   /** 双向：消息撤回（客户端带 ack 发起；服务端广播到会话房） */
   revoke: 'chat:revoke',
+  /** 双向：送达水位（客户端收到 chat:msg 后上报，无 ack；服务端广播推进） */
+  delivered: 'chat:delivered',
+  /** 双向：表情回应（客户端带 ack；服务端广播到会话房） */
+  reaction: 'chat:reaction',
+  /** 双向：消息编辑（客户端带 ack；服务端广播到会话房） */
+  edit: 'chat:edit',
 } as const;
+
+/** 表情回应白名单（与服务端镜像；越界服务端直接拒）。 */
+export const CHAT_REACTION_EMOJIS: readonly string[] = [
+  '👍',
+  '❤️',
+  '😂',
+  '😮',
+  '😢',
+  '🙏',
+];
 
 export interface ChatSendPayload {
   conversationId: string;
@@ -84,6 +100,36 @@ export interface ChatRevokeBroadcast {
   revokedBy: string;
 }
 
+/** chat:delivered 服务端广播（C→S 上报为 {conversationId, height}）。 */
+export interface ChatDeliveredBroadcast {
+  conversationId: string;
+  userId: string;
+  height: number;
+}
+
+/** chat:reaction 双向载荷（广播多带 userId）。 */
+export interface ChatReactionBroadcast {
+  conversationId: string;
+  messageId: string;
+  emoji: string;
+  op: 'add' | 'remove';
+  userId: string;
+}
+
+/** chat:edit 服务端广播。 */
+export interface ChatEditBroadcast {
+  conversationId: string;
+  messageId: string;
+  content: Record<string, unknown>;
+  editedAt: string;
+}
+
+/** 消息上的表情回应聚合（服务端读路径批量附带）。 */
+export interface ChatReactionSummary {
+  emoji: string;
+  userIds: string[];
+}
+
 export interface ChatMessageDto {
   id: string;
   conversationId: string;
@@ -98,6 +144,10 @@ export interface ChatMessageDto {
   /** 撤回时间（ISO）；未撤回为 null/缺省。撤回消息仍占 height，content 为空对象。 */
   revokedAt?: string | null;
   revokedBy?: string | null;
+  /** 编辑时间（ISO）；未编辑缺省。height 不变。 */
+  editedAt?: string | null;
+  /** 表情回应聚合；无回应缺省。 */
+  reactions?: ChatReactionSummary[];
   /** 幂等键：本地乐观消息靠它与服务端回执/广播对账替换。 */
   d: string | null;
   createdAt: string;

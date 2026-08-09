@@ -271,7 +271,12 @@
       "noteAlreadyCollected": "Ya está en mis notas",
       "noteCollectedHint": "Puedes verla en Mis notas",
       "revoke": "Retirar",
-      "revokeFailed": "No se pudo retirar"
+      "revokeFailed": "No se pudo retirar",
+      "react": "Reaccionar",
+      "edit": "Editar",
+      "readers": "Leído por",
+      "readersNone": "Nadie lo ha leído todavía",
+      "editing": "Editando mensaje"
     },
     "mentions": {
       "empty": "No hay miembros para mencionar"
@@ -541,7 +546,9 @@
       "sending": "Enviando",
       "sendFailed": "Fallido",
       "read": "Leído",
-      "unread": "No leído"
+      "unread": "No leído",
+      "delivered": "Entregado",
+      "edited": "(editado)"
     },
     "friendCard": {
       "noPersona": "Esta persona es muy perezosa y no dejó nada",
@@ -2806,6 +2813,8 @@
     "USER_INVALID_BIRTHDAY": "Fecha de nacimiento no válida",
     "CHAT_MESSAGE_NOT_FOUND": "No se encontró el mensaje",
     "CHAT_REVOKE_WINDOW_EXPIRED": "Ya no se puede retirar el mensaje",
-    "CHAT_REVOKE_FORBIDDEN": "No puedes retirar este mensaje"
+    "CHAT_REVOKE_FORBIDDEN": "No puedes retirar este mensaje",
+    "CHAT_EDIT_WINDOW_EXPIRED": "Ya no se puede editar",
+    "CHAT_EDIT_FORBIDDEN": "No se puede editar este mensaje"
   }
 }

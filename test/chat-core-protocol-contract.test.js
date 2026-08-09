@@ -27,6 +27,9 @@ const FE_EVENTS = {
   message: 'chat:msg',
   conversation: 'chat:conversation',
   revoke: 'chat:revoke',
+  delivered: 'chat:delivered',
+  reaction: 'chat:reaction',
+  edit: 'chat:edit',
 };
 
 test('frontend protocol declares the canonical event names and path', () => {
@@ -82,6 +85,8 @@ test(
       'CHAT_MESSAGE_NOT_FOUND',
       'CHAT_REVOKE_WINDOW_EXPIRED',
       'CHAT_REVOKE_FORBIDDEN',
+      'CHAT_EDIT_WINDOW_EXPIRED',
+      'CHAT_EDIT_FORBIDDEN',
     ]) {
       assert.match(registry, new RegExp(`'${code}'`), `backend missing ${code}`);
     }

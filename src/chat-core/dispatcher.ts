@@ -7,6 +7,9 @@ import {
   type ChatMessageDto,
   type ChatPresenceBroadcast,
   type ChatReadBroadcast,
+  type ChatDeliveredBroadcast,
+  type ChatEditBroadcast,
+  type ChatReactionBroadcast,
   type ChatRevokeBroadcast,
 } from './protocol';
 import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
@@ -14,6 +17,7 @@ import { allowPeerMediaUrl } from '@/services/api/utils';
 import i18n from '@/i18n';
 import { loadChatConversations } from './api';
 import { isMessageDeletedLocally } from './deleted-messages';
+import { reportChatDelivered } from './socket-manager';
 import { getChatMessagePreview } from './mappers';
 import { useChatStore } from './store';
 
@@ -192,6 +196,14 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       // 看到自己、未读永远加不上。
       const applied = store.applyIncomingMessage(payload);
       store.ingestMessages(payload.conversationId, [payload]);
+      // G-07 送达回执:收到别人的消息即回报水位(节流在 socket-manager)。
+      if (
+        payload.height > 0 &&
+        payload.sender !== null &&
+        payload.sender.id !== store.currentUserId
+      ) {
+        reportChatDelivered(payload.conversationId, payload.height);
+      }
       // 攒下的候选必须有一次补拉去认领它,否则它永远等不到元信息。
       // 这两个条件目前同源(会话不在快照里),但依赖这种巧合太脆,写明。
       const needsConversation =
@@ -241,6 +253,80 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       useChatStore.getState().applyPresence(payload.userId, payload.online);
     } catch (err) {
       console.warn('[chat] presence handler failed', err);
+    }
+  });
+
+  socket.on(CHAT_EVENTS.delivered, (payload: ChatDeliveredBroadcast) => {
+    if (!isLive()) return;
+    try {
+      if (
+        !payload ||
+        typeof payload.conversationId !== 'string' ||
+        typeof payload.userId !== 'string' ||
+        typeof payload.height !== 'number'
+      ) {
+        return;
+      }
+      useChatStore
+        .getState()
+        .applyDelivered(payload.conversationId, payload.userId, payload.height);
+    } catch (err) {
+      console.warn('[chat] delivered handler failed', err);
+    }
+  });
+
+  socket.on(CHAT_EVENTS.reaction, (payload: ChatReactionBroadcast) => {
+    if (!isLive()) return;
+    try {
+      if (
+        !payload ||
+        typeof payload.conversationId !== 'string' ||
+        typeof payload.messageId !== 'string' ||
+        typeof payload.emoji !== 'string' ||
+        typeof payload.userId !== 'string' ||
+        (payload.op !== 'add' && payload.op !== 'remove')
+      ) {
+        console.warn('[chat] dropped malformed reaction payload');
+        return;
+      }
+      useChatStore
+        .getState()
+        .applyReaction(
+          payload.conversationId,
+          payload.messageId,
+          payload.emoji,
+          payload.userId,
+          payload.op,
+        );
+    } catch (err) {
+      console.warn('[chat] reaction handler failed', err);
+    }
+  });
+
+  socket.on(CHAT_EVENTS.edit, (payload: ChatEditBroadcast) => {
+    if (!isLive()) return;
+    try {
+      if (
+        !payload ||
+        typeof payload.conversationId !== 'string' ||
+        typeof payload.messageId !== 'string' ||
+        typeof payload.editedAt !== 'string' ||
+        typeof payload.content !== 'object' ||
+        payload.content === null
+      ) {
+        console.warn('[chat] dropped malformed edit payload');
+        return;
+      }
+      useChatStore
+        .getState()
+        .applyEdit(
+          payload.conversationId,
+          payload.messageId,
+          payload.content as Record<string, unknown>,
+          payload.editedAt,
+        );
+    } catch (err) {
+      console.warn('[chat] edit handler failed', err);
     }
   });
 

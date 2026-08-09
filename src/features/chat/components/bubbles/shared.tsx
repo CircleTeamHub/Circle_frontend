@@ -28,7 +28,7 @@ interface BubbleStatusTextProps {
 export const BubbleStatusText: React.FC<BubbleStatusTextProps> = ({ message }) => {
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const { sendStatus, isRead } = message;
+  const { sendStatus, isRead, isDelivered } = message;
   let text: string;
   let color = colors.textSecondary;
   if (sendStatus === 1) {
@@ -38,6 +38,9 @@ export const BubbleStatusText: React.FC<BubbleStatusTextProps> = ({ message }) =
     color = colors.error;
   } else if (isRead) {
     text = t('chat.message.read', { defaultValue: '已读' });
+  } else if (isDelivered) {
+    // G-07 送达回执:对端设备收到了但还没读。
+    text = t('chat.message.delivered', { defaultValue: '已送达' });
   } else {
     text = t('chat.message.unread', { defaultValue: '未读' });
   }
