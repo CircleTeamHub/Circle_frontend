@@ -6,6 +6,7 @@ import type {
   ChatMemberDto,
   ChatMessageDto,
 } from './protocol';
+import { withoutLocallyDeleted } from './deleted-messages';
 import { useChatStore } from './store';
 
 /**
@@ -83,15 +84,30 @@ export async function loadChatHistory(
  * 聊天记录检索(文本搜/媒体格/按日期)。与 loadChatHistory 的关键区别:
  * 结果**不写入** store —— 过滤后的片段灌进会话时间线会造成"消息缺页"假象。
  */
-export function searchChatMessages(
+/**
+ * 检索类响应统一过一遍本地删除墓碑。
+ *
+ * 收口在这一层而不是各个屏幕:聊天记录的文本/媒体/文件/日期四屏加全局搜索都是
+ * 直接渲染这些响应、根本不进 store,逐个补容易漏,以后新加的屏还会再漏一次。
+ * 漏掉的后果是用户删过的消息在搜索结果里原样重现,点进去还会跳向一条
+ * 时间线里根本不存在的目标。
+ *
+ * 整页被过滤空时要继续翻:nextBeforeHeight 是服务端按**未过滤**的结果给的,
+ * 所以「本页 0 条 + 游标非空」完全可能。直接把空页返回去的话,四个历史屏渲染的是
+ * 空状态,而继续翻页要靠 onEndReached —— 一个没有内容的列表不会触底,
+ * 更早的可见结果就永远够不着了。
+ */
+type ChatHistorySearchOptions = {
+  keyword?: string;
+  types?: string[];
+  date?: string;
+  beforeHeight?: number;
+  limit?: number;
+};
+
+function fetchChatHistoryPage(
   conversationId: string,
-  options: {
-    keyword?: string;
-    types?: string[];
-    date?: string;
-    beforeHeight?: number;
-    limit?: number;
-  } = {},
+  options: ChatHistorySearchOptions,
 ): Promise<ChatHistoryPageDto> {
   const params = new URLSearchParams();
   if (options.keyword) params.set('keyword', options.keyword);
@@ -108,6 +124,33 @@ export function searchChatMessages(
   return apiClient<ChatHistoryPageDto>(
     `/chat/conversations/${conversationId}/messages${query ? `?${query}` : ''}`,
   );
+}
+
+export async function searchChatMessages(
+  conversationId: string,
+  options: ChatHistorySearchOptions = {},
+): Promise<ChatHistoryPageDto> {
+  let beforeHeight = options.beforeHeight;
+
+  // 一直追到「有可见结果」或「到头」为止,**不设次数上限**。
+  // 上限只是把死路推远:追满 N 页仍全是墓碑时,返回的还是「空列表 + 活游标」,
+  // 屏幕照样渲染空态、照样等一个不会来的触底事件。
+  // 真正的死循环风险不是页数多,而是服务端返回一个不前进的游标 —— 下面直接拦它。
+  for (;;) {
+    const page = await fetchChatHistoryPage(conversationId, {
+      ...options,
+      ...(beforeHeight !== undefined ? { beforeHeight } : {}),
+    });
+    const messages = withoutLocallyDeleted(page.messages);
+    const next = page.nextBeforeHeight;
+    // 游标始终用**最后一次**请求返回的那个,否则下一次翻页会退回已经看过的区间。
+    if (messages.length > 0 || next === null) return { ...page, messages };
+    // 游标必须严格向更早推进,否则就是原地打转 —— 宁可返回空页也不能挂死。
+    if (beforeHeight !== undefined && next >= beforeHeight) {
+      return { ...page, messages };
+    }
+    beforeHeight = next;
+  }
 }
 
 /** 某月内有聊天记录的日期集合(按日期日历上色;客户端时区)。 */
@@ -144,7 +187,7 @@ export function searchAllChatMessages(
   if (limit !== undefined) params.set('limit', String(limit));
   return apiClient<ChatMessageDto[]>(
     `/chat/messages/search?${params.toString()}`,
-  );
+  ).then(withoutLocallyDeleted);
 }
 
 /** 会话偏好:置顶/免打扰/隐藏。返回最新 DTO 并回写 store。 */

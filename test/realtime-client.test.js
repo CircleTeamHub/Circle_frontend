@@ -155,6 +155,32 @@ test('session bootstrap and logout wire realtime connection lifecycle to auth st
   assert.match(friendUnreadStore, /setContactsUnread/);
 });
 
+test('chat connection rebinds when the authoritative user arrives', () => {
+  const bootstrap = read('src/components/app/session-bootstrap.tsx');
+
+  // 冷启动可能是「安全存储里的 token 还在、单独持久化的 user 快照丢了或是旧的」。
+  // 用 getState() 读一次 user 的话:快照缺失 → 压根不连,而 /auth/me 成功后
+  // 只调 setUser、本 effect 不重跑,要等一次切前后台才补上;快照是上一个账号 →
+  // 用错身份连上,收发方向与未读全按错的 currentUserId 算。
+  assert.match(bootstrap, /const userId = useAuthStore\(\(state\) => state\.user\?\.id \?\? null\)/);
+  assert.match(
+    bootstrap,
+    /connectChat\(accessToken, userId\);[\s\S]*?\}, \[accessToken, hasHydrated, onboardingRequired, userId\]\);/,
+  );
+  // chat 与 realtime 拆成两个 effect:userId 变化不该连带把 realtime 断开重连。
+  assert.match(
+    bootstrap,
+    /connectRealtime\(accessToken\);[\s\S]*?\}, \[accessToken, hasHydrated, onboardingRequired\]\);/,
+  );
+
+  // 而且 connectChat 本身要认身份:已连着但连的是别人时必须重连。
+  const socketManager = read('src/chat-core/socket-manager.ts');
+  assert.match(
+    socketManager,
+    /if \(socket\?\.connected && store\.currentUserId === userId\) return;/,
+  );
+});
+
 test('realtime profile refresh events handle rejected auth refreshes', () => {
   const client = read('src/realtime/client.ts');
 

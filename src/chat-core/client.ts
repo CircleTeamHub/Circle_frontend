@@ -1,11 +1,12 @@
+import { assertLocalCanSendMessage } from '@/services/api/credit-policy';
 import { useAuthStore } from '@/stores/authStore';
 import {
   createCircleChatConversation,
   createDirectChatConversation,
   loadChatHistory,
 } from './api';
+import { reportChatSendFailure } from './send-errors';
 import {
-  ChatSendError,
   createDeliveryId,
   markConversationRead,
   sendChatMessage,
@@ -132,6 +133,17 @@ interface SendOptions {
   replyToId?: string;
   /** 乐观消息上屏回调(旧 sendTextMessage onCreate 对应物)。 */
   onCreate?: (message: ChatMessageDto) => void;
+  /**
+   * 跳过信用分门禁。**只给「钱已经动了、这条消息是回执」的场景用。**
+   *
+   * 目前唯一的合法用法是转账卡片:积分在 TransferComposerScreen 里就已经
+   * 通过 sendCoinGift 真扣真到账了,这张卡只是事后的凭据。在这里拦掉它并不
+   * 能阻止任何事 —— 只会让付款方看不到卡片、以为没发出去,再从转账页重试一次
+   * (那会生成新的幂等键)就是第二次真实扣款。
+   *
+   * 真正该拦的位置是扣款之前,见 TransferComposerScreen 的 handleSubmit。
+   */
+  bypassCreditGate?: boolean;
 }
 
 function selfSenderInfo() {
@@ -149,6 +161,15 @@ function selfSenderInfo() {
 export async function sendWithOptimism(
   options: SendOptions,
 ): Promise<ChatMessageDto> {
+  // 信用分门禁:所有发送都从这里过,所以闸放在这一层才是完整的。
+  // 拆栈前它挂在 reportSend 包装器上,迁移后只剩发图路径单独调了一次 ——
+  // 于是低于阈值的用户仍然能正常发文本/引用/语音/位置/各类卡片。
+  // 后端刻意不做这道校验(策略在端上),漏了就是真的漏了。
+  // 抛在插入乐观消息之前:失败的发送不该在时间线里留下痕迹。
+  //
+  // 唯一的豁免是「钱已经动了」的回执(转账卡片):拦在这里既阻止不了扣款,
+  // 又会让付款方以为没发出去而重试 —— 那是第二次真实扣款。详见 bypassCreditGate。
+  if (!options.bypassCreditGate) assertLocalCanSendMessage();
   const d = createDeliveryId();
   const store = useChatStore.getState();
   const optimistic: StoredChatMessage = {
@@ -176,12 +197,22 @@ export async function sendWithOptimism(
       d,
       replyToId: options.replyToId,
     });
+    const next = useChatStore.getState();
+    // 服务端的 chat:msg 回声可能跑在 ack 前面。那条广播是权威版本(服务端
+    // 规范化过的 content、服务端时间戳);下面这个 confirmed 只是拿本地乐观
+    // 对象换了个 id/height 拼出来的合成品,还带着只该留在本机的 localUri。
+    // mergeMessages 按 id 覆盖 —— 不让路的话权威那条会被合成品盖掉,
+    // 时间线和会话预览一起退回客户端的时间与本地地址。
+    const echoed = (
+      next.messagesByConversation[options.conversationId] ?? []
+    ).find((m) => m.id === ack.messageId);
+    if (echoed) return echoed;
+
     const confirmed: ChatMessageDto = {
       ...optimistic,
       id: ack.messageId,
       height: ack.height,
     };
-    const next = useChatStore.getState();
     next.ingestMessages(options.conversationId, [confirmed]);
     next.applyIncomingMessage(confirmed);
     return confirmed;
@@ -191,6 +222,11 @@ export async function sendWithOptimism(
     // 乐观写入已经把会话预览换成了这条消息;发送失败后只标时间线是不够的,
     // 会话列表会一直把「服务端可能根本没有」的内容当作最新消息展示。
     failed.revertConversationPreview(options.conversationId);
+    // 生产上报。拆栈前 reportSend 包装器会报每一次发送拒绝,迁移后这条最关键的
+    // 链路只剩屏幕里 __DEV__ 的 console.warn —— release 包里 ack 超时和服务端
+    // 持续拒绝没有任何信号,「全网发不出消息」和「某个用户网不好」长得一模一样。
+    // 只带消息类型与白名单错误码,不带正文/d/conversationId(见 send-errors)。
+    reportChatSendFailure(options.type, error);
     throw error;
   }
 }
@@ -308,19 +344,14 @@ export function sendCardMessage(options: {
   /** 卡片 payload 本体(NoteCardData 等接口类型无索引签名,收 object 再收窄)。 */
   payload: object;
   onCreate?: (message: ChatMessageDto) => void;
+  /** 见 SendOptions.bypassCreditGate —— 只有转账卡片这种「钱已经动了」的回执能用。 */
+  bypassCreditGate?: boolean;
 }): Promise<ChatMessageDto> {
   return sendWithOptimism({
     conversationId: options.conversationId,
     type: options.type,
     content: options.payload as Record<string, unknown>,
     onCreate: options.onCreate,
+    bypassCreditGate: options.bypassCreditGate,
   });
-}
-
-/** 敏感词命中判定(替代 OpenIM 73001 的 isSensitiveWordBlockedError)。 */
-export function isChatSendBlockedBySensitiveWord(error: unknown): boolean {
-  return (
-    error instanceof ChatSendError &&
-    error.code === 'CHAT_SENSITIVE_WORD_BLOCKED'
-  );
 }

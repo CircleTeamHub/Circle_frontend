@@ -23,6 +23,10 @@ import {
 } from '@/features/chat/utils/transfer-idempotency';
 import { normalizeUserIdAlias } from '@/utils/user-id-alias';
 import { fetchWallet, sendCoinGift } from '@/services/api/coin';
+import {
+  getCreditPolicyMessage,
+  getLocalLowCreditDecision,
+} from '@/services/api/credit-policy';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
@@ -114,6 +118,18 @@ export default function TransferComposerScreen() {
           defaultValue: '当前积分余额：{{balance}}',
           balance,
         }),
+      );
+      return;
+    }
+
+    // 信用分门禁必须拦在扣款之前。转账是「先真扣款、再发卡片回执」两段式,
+    // 只在发卡片那一步拦的话积分已经到对方账上了 —— 付款方看不到卡片、
+    // 以为没发出去,回来重试会生成新的幂等键,变成第二次真实扣款。
+    const creditDenied = getLocalLowCreditDecision();
+    if (creditDenied) {
+      Alert.alert(
+        t('chat.transfer.failedTitle', { defaultValue: '转账失败' }),
+        getCreditPolicyMessage(creditDenied),
       );
       return;
     }

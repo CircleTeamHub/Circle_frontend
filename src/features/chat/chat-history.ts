@@ -1,6 +1,8 @@
 import i18n from '@/i18n';
 import { getChatMessagePreview } from '@/chat-core/mappers';
+import { allowLocalMediaUri } from '@/chat-core/message-mappers';
 import type { ChatMessageDto } from '@/chat-core/protocol';
+import { allowPeerMediaUrl } from '@/services/api/utils';
 import { getLocalizedDateTimeLocale } from '@/utils/locale';
 
 function chatHistoryDateLocale() {
@@ -73,6 +75,32 @@ export function getChatMessageDtoTitle(message: ChatMessageDto): string {
 export function formatChatHistoryTimeIso(iso: string): string {
   const ms = Date.parse(iso);
   return Number.isFinite(ms) ? formatChatHistoryTime(ms) : '';
+}
+
+function nonEmptyString(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+/**
+ * 聊天记录·媒体页的缩略图候选(按优先级降级:缩略图 → 原图 → 本机预览)。
+ *
+ * 每个候选都必须过和气泡同一份白名单。原来这里只走 normalizeMediaUrl,
+ * 而它对「已经能直连的外部 https 地址」是原样返回的(只重写 dev 的 localhost)——
+ * 于是对端在 content 里塞一个 https://attacker/1x1.gif 当 thumbUrl/localUri,
+ * 气泡侧被 allowPeerMediaUrl 挡住了,打开媒体页却会整屏格子一次性请求出去,
+ * IP、User-Agent 和精确到秒的查看时刻照样送到对方手上。
+ */
+export function getChatMediaThumbnailUris(message: ChatMessageDto): string[] {
+  const content = message.content ?? {};
+  const candidates = [
+    allowPeerMediaUrl(nonEmptyString(content['thumbUrl'])),
+    allowPeerMediaUrl(nonEmptyString(content['url'])),
+    // localUri 只接受无 host 的本地 scheme —— 它本该只是发送方自己的文件路径。
+    allowLocalMediaUri(nonEmptyString(content['localUri'])) ?? null,
+  ];
+  return Array.from(
+    new Set(candidates.filter((value): value is string => Boolean(value))),
+  );
 }
 
 

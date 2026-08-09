@@ -245,7 +245,8 @@
       "noteSendFailed": "노트를 보내지 못했습니다. 다시 시도해 주세요",
       "cardSendFailed": "프로필 카드를 보내지 못했습니다. 다시 시도해 주세요",
       "favoriteSendFailed": "즐겨찾기를 보내지 못했습니다. 다시 시도해 주세요",
-      "transferCardSendFailed": "송금 카드를 보내지 못했지만 크레딧은 이미 차감되었습니다"
+      "transferCardSendFailed": "송금 카드를 보내지 못했지만 크레딧은 이미 차감되었습니다",
+      "favoriteLegacyVoiceUnsupported": "이 이전 버전 음성 즐겨찾기는 다시 보낼 수 없습니다"
     },
     "messageActions": {
       "title": "메시지 작업",
@@ -575,7 +576,8 @@
       "failed": "통화 연결 실패",
       "missed": "부재중 전화",
       "noAnswer": "응답 없음"
-    }
+    },
+    "lowCreditScore": "신용 점수가 {{minScore}} 미만이어서 지금은 메시지를 보낼 수 없습니다"
   },
   "messages": {
     "title": "메시지",
@@ -2175,7 +2177,8 @@
     },
     "loadFailed": "불러오기 실패",
     "noMatch": "일치하는 항목 없음",
-    "empty": "아직 콘텐츠가 없습니다"
+    "empty": "아직 콘텐츠가 없습니다",
+    "favoriteLegacyVoiceUnsupported": "이전 버전 음성 즐겨찾기 — 다시 보낼 수 없음"
   },
   "accountSwitcher": {
     "title": "계정 전환",

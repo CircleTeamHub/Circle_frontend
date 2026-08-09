@@ -20,45 +20,65 @@ function transpile(rel) {
 }
 
 function zustandStub() {
+  const makeStore = (initializer) => {
+    const state = {};
+    const set = (partial) => {
+      const next = typeof partial === 'function' ? partial(state) : partial;
+      Object.assign(state, next);
+    };
+    const get = () => state;
+    Object.assign(state, initializer(set, get));
+    return { getState: get, setState: set };
+  };
   return {
-    create: (initializer) => {
-      const state = {};
-      const set = (partial) => {
-        const next = typeof partial === 'function' ? partial(state) : partial;
-        Object.assign(state, next);
-      };
-      const get = () => state;
-      Object.assign(state, initializer(set, get));
-      return { getState: get, setState: set };
-    },
+    // create(initializer) 与 create<T>()(initializer) 两种写法都要吃下。
+    create: (initializer) =>
+      initializer === undefined ? makeStore : makeStore(initializer),
   };
 }
 
-function loadChatStore() {
+/** persist 中间件在 vm 里退化成直通:只测行为,不测 MMKV 落盘。 */
+function zustandMiddlewareStub() {
+  return {
+    persist: (initializer) => initializer,
+    createJSONStorage: () => ({}),
+  };
+}
+
+function runModule(rel, requireImpl) {
   const context = {
+    Date,
     module: { exports: {} },
     exports: {},
-    require: (request) => {
-      if (request === 'zustand') return zustandStub();
-      if (request === './protocol') {
-        // protocol.ts 零依赖,直接同环境执行。
-        const sub = {
-          module: { exports: {} },
-          exports: {},
-          require: () => {
-            throw new Error('protocol should have no runtime deps');
-          },
-        };
-        sub.exports = sub.module.exports;
-        vm.runInNewContext(transpile('src/chat-core/protocol.ts'), sub);
-        return sub.module.exports;
-      }
-      throw new Error(`unexpected require: ${request}`);
-    },
+    require: requireImpl,
   };
   context.exports = context.module.exports;
-  vm.runInNewContext(transpile('src/chat-core/store.ts'), context);
+  vm.runInNewContext(transpile(rel), context);
   return context.module.exports;
+}
+
+function loadChatStore() {
+  // 墓碑模块跑真实实现（同一个 vm 实例内共享），删除行为才是真被断言的。
+  const deletedMessages = runModule('src/chat-core/deleted-messages.ts', (request) => {
+    if (request === 'zustand') return zustandStub();
+    if (request === 'zustand/middleware') return zustandMiddlewareStub();
+    if (request === '@/storage') return { mmkvJsonStorage: {} };
+    // 墓碑超上限时会报一次(淘汰=消息复活,必须可观测)。
+    if (request === '@/observability/sentry') return { reportError: () => {} };
+    throw new Error(`unexpected require: ${request}`);
+  });
+  const store = runModule('src/chat-core/store.ts', (request) => {
+    if (request === 'zustand') return zustandStub();
+    if (request === './deleted-messages') return deletedMessages;
+    if (request === './protocol') {
+      // protocol.ts 零依赖,直接同环境执行。
+      return runModule('src/chat-core/protocol.ts', () => {
+        throw new Error('protocol should have no runtime deps');
+      });
+    }
+    throw new Error(`unexpected require: ${request}`);
+  });
+  return { ...store, ...deletedMessages };
 }
 
 function msg(overrides = {}) {
@@ -259,6 +279,107 @@ test('clearCachedChats keeps the session identity that reset would destroy', () 
   assert.equal(state.connected, true);
 });
 
+test('a locally deleted message stays hidden when history is reloaded', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setConversations([conversation()]);
+  store.ingestMessages('conv-1', [
+    msg({ id: 'keep', height: 1 }),
+    msg({ id: 'gone', height: 2 }),
+  ]);
+
+  store.removeMessage('conv-1', 'gone');
+  assert.deepEqual(
+    Array.from(useChatStore.getState().messagesByConversation['conv-1'], (m) => m.id),
+    ['keep'],
+  );
+
+  // 重进会话 = 再拉一次同样的历史。只从数组里摘掉的话它当场复活。
+  store.ingestMessages('conv-1', [
+    msg({ id: 'keep', height: 1 }),
+    msg({ id: 'gone', height: 2 }),
+  ]);
+  assert.deepEqual(
+    Array.from(useChatStore.getState().messagesByConversation['conv-1'], (m) => m.id),
+    ['keep'],
+  );
+});
+
+test('deleting the previewed message rolls the conversation preview back', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setConversations([conversation()]);
+  const older = msg({ id: 'older', height: 1 });
+  const newest = msg({ id: 'newest', height: 2 });
+  store.ingestMessages('conv-1', [older, newest]);
+  store.applyIncomingMessage(newest);
+  assert.equal(useChatStore.getState().conversations[0].lastMessage.id, 'newest');
+
+  store.removeMessage('conv-1', 'newest');
+  // 不退预览的话消息页继续把已经删掉的内容当最新消息展示。
+  assert.equal(useChatStore.getState().conversations[0].lastMessage.id, 'older');
+});
+
+test('a REST snapshot cannot resurrect a deleted message as the preview', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setConversations([conversation()]);
+  const older = msg({ id: 'older', height: 1 });
+  const deleted = msg({ id: 'deleted', height: 2 });
+  store.ingestMessages('conv-1', [older, deleted]);
+  store.removeMessage('conv-1', 'deleted');
+
+  // 下拉刷新:服务端并不知道本端删过什么,快照里 lastMessage 还是那条。
+  store.setConversations([
+    conversation({ lastMessage: deleted, lastMessageAt: deleted.createdAt }),
+  ]);
+  assert.equal(useChatStore.getState().conversations[0].lastMessage.id, 'older');
+
+  // 时间线里也没有可退的了:只留时间,预览留空,不再展示已删内容。
+  store.clearCachedChats();
+  store.setConversations([
+    conversation({ lastMessage: deleted, lastMessageAt: deleted.createdAt }),
+  ]);
+  assert.equal(useChatStore.getState().conversations[0].lastMessage, null);
+  assert.equal(
+    useChatStore.getState().conversations[0].lastMessageAt,
+    deleted.createdAt,
+  );
+});
+
+test('a redelivered deleted message neither returns nor inflates unread', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.setConversations([conversation()]);
+  const incoming = msg({ id: 'gone', height: 3, sender: { id: 'other' } });
+  store.applyIncomingMessage(incoming);
+  store.ingestMessages('conv-1', [incoming]);
+  store.markConversationReadLocal('conv-1');
+  store.removeMessage('conv-1', 'gone');
+
+  store.applyIncomingMessage(incoming);
+  store.ingestMessages('conv-1', [incoming]);
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 0);
+  assert.equal(
+    (useChatStore.getState().messagesByConversation['conv-1'] ?? []).length,
+    0,
+  );
+});
+
+test('tombstones stay bounded so long-lived installs cannot grow unbounded', () => {
+  const { useChatStore, DELETED_MESSAGES_CAP, useDeletedMessagesStore } =
+    loadChatStore();
+  const store = useChatStore.getState();
+  for (let i = 0; i < DELETED_MESSAGES_CAP + 25; i += 1) {
+    store.removeMessage('conv-1', `m-${i}`);
+  }
+  const kept = Object.keys(useDeletedMessagesStore.getState().deletedAtById);
+  assert.equal(kept.length, DELETED_MESSAGES_CAP);
+  // 淘汰最旧的那批,最近删的一定还在。
+  assert.ok(kept.includes(`m-${DELETED_MESSAGES_CAP + 24}`));
+});
+
 test('older history pages survive the message cap (pagination actually works)', () => {
   const { useChatStore, MESSAGES_CAP } = loadChatStore();
   const store = useChatStore.getState();
@@ -309,4 +430,68 @@ test('realtime messages do not grow the window', () => {
   const merged = useChatStore.getState().messagesByConversation['conv-1'];
   assert.equal(merged.length, MESSAGES_CAP);
   assert.equal(merged[merged.length - 1].id, 'live');
+});
+
+test('deleting an unconfirmed bubble survives its ack replacing the id', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.setConversations([conversation()]);
+
+  // 乐观消息:id 是临时的 local:<d>,服务端还没给真 id。
+  const optimistic = msg({ id: 'local:d-1', height: 0, d: 'd-1', sender: { id: 'me' } });
+  store.ingestMessages('conv-1', [optimistic]);
+  store.removeMessage('conv-1', 'local:d-1');
+  assert.equal(useChatStore.getState().messagesByConversation['conv-1'].length, 0);
+
+  // ack 回来了,带的是一个全新的服务端 id —— 只按 id 记墓碑的话它会溜回来,
+  // 删除在慢网下当着用户的面自己撤销。
+  const confirmed = msg({ id: 'server-1', height: 7, d: 'd-1', sender: { id: 'me' } });
+  store.ingestMessages('conv-1', [confirmed]);
+  assert.equal(useChatStore.getState().messagesByConversation['conv-1'].length, 0);
+});
+
+test('the same holds when the server echo beats the ack', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.setConversations([conversation()]);
+
+  store.ingestMessages('conv-1', [
+    msg({ id: 'local:d-2', height: 0, d: 'd-2', sender: { id: 'me' } }),
+  ]);
+  store.removeMessage('conv-1', 'local:d-2');
+
+  // 回声先到(广播),同样带着 d 和新的服务端 id。
+  store.applyIncomingMessage(msg({ id: 'echo-1', height: 8, d: 'd-2', sender: { id: 'me' } }));
+  store.ingestMessages('conv-1', [
+    msg({ id: 'echo-1', height: 8, d: 'd-2', sender: { id: 'me' } }),
+  ]);
+  assert.equal(useChatStore.getState().messagesByConversation['conv-1'].length, 0);
+});
+
+test('a partial store is not mistaken for a loaded snapshot', () => {
+  // 全局搜索靠这个标记决定「要不要拉全量」。用 conversations.length > 0 代替
+  // 会漏:从联系人/资料页点「发消息」先走 ensureDirectConversation,它只
+  // upsert 一个会话 —— 数组非空但内容残缺,搜索归组时会把其余会话的命中
+  // 整条丢掉,界面上是彻底的「无结果」。
+  const { useChatStore } = loadChatStore();
+  assert.equal(useChatStore.getState().conversationsSnapshotLoaded, false);
+
+  useChatStore.getState().upsertConversation(conversation({ id: 'c-1' }));
+  assert.equal(useChatStore.getState().conversations.length, 1);
+  assert.equal(
+    useChatStore.getState().conversationsSnapshotLoaded,
+    false,
+    'upsert 单个会话不等于拿到了完整快照',
+  );
+
+  useChatStore
+    .getState()
+    .setConversations([conversation({ id: 'c-1' }), conversation({ id: 'c-2' })]);
+  assert.equal(useChatStore.getState().conversationsSnapshotLoaded, true);
+
+  // 切号/清缓存要复位,否则下一个账号会以为快照已就绪。
+  useChatStore.getState().reset();
+  assert.equal(useChatStore.getState().conversationsSnapshotLoaded, false);
 });

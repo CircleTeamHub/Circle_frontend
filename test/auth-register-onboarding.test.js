@@ -126,8 +126,10 @@ test('session bootstrap reconciles stale onboarding state before starting app se
     source.indexOf('onboardingRequired') < source.indexOf('connectRealtime(accessToken)'),
     'realtime connect must be gated by onboardingRequired',
   );
+  // chat 连接自成一个 effect 并订阅 userId(权威用户落地后才重连),
+  // 但 onboarding 门禁不变。
   assert.ok(
-    source.indexOf('onboardingRequired') < source.indexOf('connectChat(accessToken, user.id)'),
+    source.indexOf('onboardingRequired') < source.indexOf('connectChat(accessToken, userId)'),
     'chat connect must be gated by onboardingRequired',
   );
   assert.ok(

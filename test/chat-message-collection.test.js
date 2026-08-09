@@ -312,34 +312,96 @@ test('re-sending a collected text message sends the original body once, not titl
   assert.equal(plan.text, '你好呀');
 });
 
-test('re-sending a collected voice rebuilds a voice message from its source url', () => {
-  const { buildCollectionInputFromMessage, resolveCollectionSendPlan } =
+test('re-sending a collected voice rebuilds it from the stored object key', () => {
+  const { buildCollectionInputFromMessage, resolveCollectionSendPlan, canResendCollection } =
     loadTsModule('src/features/chat/utils/message-collection.ts');
 
+  // 自研栈重发语音只认 object key:voiceUrl 是服务端现签的临时地址,
+  // 过期即失效、也推不回 key,所以收藏时必须把 key 一起存下来。
   const input = buildCollectionInputFromMessage(
     {
       id: 'msg-voice-3',
       type: 'voice',
       outgoing: false,
-      voiceUrl: 'https://cdn.example.com/voice.m4a',
+      voiceUrl: 'https://cdn.example.com/voice.m4a?sig=expiring',
       voicePath: '',
       voiceDuration: 4,
       voiceSize: 20480,
     },
-    { conversationID: 'si_me_peer', conversationTitle: 'Peer Chat' },
+    {
+      conversationID: 'si_me_peer',
+      conversationTitle: 'Peer Chat',
+      voiceKey: 'chat/u-1/voice.m4a',
+    },
   );
 
-  const plan = resolveCollectionSendPlan({
+  const collection = {
     id: 'c-voice',
     title: input.title,
     summary: input.summary ?? null,
     payload: JSON.parse(JSON.stringify(input.payload)),
-  });
+  };
+  const plan = resolveCollectionSendPlan(collection);
 
   assert.equal(plan.kind, 'voice');
-  assert.equal(plan.sourceUrl, 'https://cdn.example.com/voice.m4a');
+  assert.equal(plan.key, 'chat/u-1/voice.m4a');
   assert.equal(plan.duration, 4);
   assert.equal(plan.dataSize, 20480);
+  assert.equal(canResendCollection(collection), true);
+});
+
+test('a legacy voice favorite is an explicit unsupported plan, not a retryable failure', () => {
+  const { buildCollectionInputFromMessage, resolveCollectionSendPlan, canResendCollection } =
+    loadTsModule('src/features/chat/utils/message-collection.ts');
+
+  // OpenIM 时代(以及本次修复之前)的语音收藏没有 key。之前这里会走进发送流程
+  // 再 throw,被统一渲染成「发送失败,请重试」—— 而重试多少次都不可能成功。
+  const input = buildCollectionInputFromMessage(
+    {
+      id: 'msg-voice-legacy',
+      type: 'voice',
+      outgoing: false,
+      voiceUrl: 'https://openim.gone.example/voice.m4a',
+      voicePath: '',
+      voiceDuration: 4,
+    },
+    { conversationID: 'si_me_peer', conversationTitle: 'Peer Chat' },
+  );
+  assert.equal(input.payload.voice.key, undefined);
+
+  const collection = {
+    id: 'c-voice-legacy',
+    title: input.title,
+    summary: input.summary ?? null,
+    payload: JSON.parse(JSON.stringify(input.payload)),
+  };
+  const plan = resolveCollectionSendPlan(collection);
+  assert.equal(plan.kind, 'unsupported');
+  assert.equal(plan.reason, 'legacy-voice');
+  // 选择器据此禁用该行,不把一个必然失败的入口先亮出来。
+  assert.equal(canResendCollection(collection), false);
+});
+
+test('the favorites picker disables rows that can never be re-sent', () => {
+  const picker = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/SharePickerScreen.tsx'),
+    'utf8',
+  );
+  assert.match(picker, /canResendCollection\(item\)/);
+  assert.match(picker, /disabled=\{!resendable\}/);
+  assert.match(picker, /share\.favoriteLegacyVoiceUnsupported/);
+
+  const chat = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+  // 屏幕侧双保险:unsupported 在进入 try/catch 之前就被拦下,
+  // 不会被 getChatSendErrorMessage 包成一句「请重试」。
+  assert.match(chat, /if \(plan\.kind === 'unsupported'\)/);
+  assert.match(chat, /chat\.detail\.favoriteLegacyVoiceUnsupported/);
+  assert.doesNotMatch(chat, /voice favorite resend not yet supported/);
+  // 有 key 的语音收藏真的能重发。
+  assert.match(chat, /key: plan\.key/);
 });
 
 test('re-sending a LEGACY collected note card still rebuilds the note card (old rows in DB)', () => {

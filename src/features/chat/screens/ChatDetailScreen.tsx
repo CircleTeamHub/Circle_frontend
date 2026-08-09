@@ -20,6 +20,7 @@ import {
   type GestureResponderEvent,
 } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams, useNavigation, useSegments } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
@@ -73,7 +74,6 @@ import { useGroupMemberViewAccess } from '@/features/chat/hooks/use-group-member
 import {
   ensureCircleConversation,
   ensureDirectConversation,
-  isChatSendBlockedBySensitiveWord,
   hasMoreHistory,
   loadConversationMessages,
   loadOlderConversationMessages,
@@ -86,6 +86,7 @@ import {
   sendTextMessage,
   sendVoiceMessage,
 } from '@/chat-core/client';
+import { getChatSendErrorMessage } from '@/chat-core/send-errors';
 import {
   createChatMessageMapCache,
   mapChatMessageDtosToUI,
@@ -128,13 +129,14 @@ import {
   flushPendingGiftCardAcks,
 } from '@/features/chat/utils/gift-card-ack';
 import { resolveDirectCalleeID } from '@/features/call/resolve-direct-callee';
+import { resolveChatDetailIdentity } from '@/features/chat/chat-detail-identity';
 import type { CallType } from '@/features/call/types';
 import { getApiErrorMessage } from '@/services/api/errors';
-import i18n from '@/i18n';
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import {
   assertLocalCanSendMessage,
-  CreditPolicyError,
+  getCreditPolicyMessage,
+  getLocalLowCreditDecision,
 } from '@/services/api/credit-policy';
 import { useTranslation } from 'react-i18next';
 import type { ChatMessage, PlazaPostCardData } from '@/types';
@@ -163,18 +165,6 @@ function logChatSendFailure(
       ? { name: error.name, message: error.message }
       : { message: String(error) };
   console.warn('[chat] text send failed', { ...base, ...context });
-}
-
-function getChatSendErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof CreditPolicyError) return error.message;
-  // 服务端敏感词拦截（chat-core 发送 ack 拒绝）：给明确原因而非笼统的「发送失败」。
-  // 用全局 i18n.t 而非组件 t —— 本函数在 catch 回调里按调用时机取当前语言。
-  if (isChatSendBlockedBySensitiveWord(error)) {
-    return i18n.t('chat.detail.sensitiveWordBlocked', {
-      defaultValue: '消息包含敏感词，已被屏蔽',
-    });
-  }
-  return fallback;
 }
 
 type AttachmentId =
@@ -536,9 +526,17 @@ export default function ChatDetailScreen() {
     }
   }, []);
 
-  const paramConversationID =
-    typeof params.conversationID === 'string' ? params.conversationID : '';
-  const sourceID = typeof params.sourceID === 'string' ? params.sourceID : '';
+  // 迁移窗口的旧 OpenIM 推送(si_/sg_ 会话 id)会被路由原样带进来,直接拿去
+  // 订阅只会得到一个空会话 —— 归一规则连同理由都在 resolveChatDetailIdentity。
+  const { conversationID: paramConversationID, sourceID } = useMemo(
+    () =>
+      resolveChatDetailIdentity({
+        conversationID: params.conversationID,
+        sourceID: params.sourceID,
+        currentUserID,
+      }),
+    [params.conversationID, params.sourceID, currentUserID],
+  );
   // 有些入口（联系人/群聊列表/报名管理等）只传了 sourceID 没传 conversationID，
   // 这里就地解析会话，避免聊天页停在预览占位。IM 未接通时解析失败 → 保持预览。
   const [resolvedConversationID, setResolvedConversationID] =
@@ -780,13 +778,28 @@ export default function ChatDetailScreen() {
   const isVoiceRecording = voiceRecordingStartedAt != null;
   const voiceElapsedSeconds = useElapsedSeconds(voiceRecordingStartedAt);
 
+  /**
+   * 活跃会话标记按「焦点」而不是「挂载」来管。
+   *
+   * 推开聊天信息 / 聊天记录 / 选择器等页面时 React Navigation 会把本屏留在
+   * 栈里继续挂载着,靠 useEffect cleanup 的话标记不会撤 —— 于是用户人在别的
+   * 页面,新到的消息仍被算作「正在看」:不计未读、还顺手把已读水位推上去。
+   * 消息实际上没被看到,红点却已经消了。
+   */
+  useFocusEffect(
+    useCallback(() => {
+      if (!conversationID || !sourceID) return;
+      setActiveConversationId(conversationID);
+      return () => {
+        setActiveConversationId(null);
+      };
+    }, [conversationID, setActiveConversationId, sourceID]),
+  );
+
   useEffect(() => {
     if (!conversationID || !sourceID) {
       return;
     }
-
-    // 活跃会话标记:分发器据此不给本会话累计未读。
-    setActiveConversationId(conversationID);
 
     loadConversationMessages(conversationID)
       .then(() => {
@@ -800,11 +813,10 @@ export default function ChatDetailScreen() {
       });
 
     return () => {
-      setActiveConversationId(null);
       // 离开会话丢掉翻页游标:下次进入重新从最新一页开始。
       resetHistoryCursor(conversationID);
     };
-  }, [conversationID, setActiveConversationId, sourceID]);
+  }, [conversationID, sourceID]);
 
   // inverted 列表触底 = 时间上更早:继续向前翻页。没有它的话超过一页的
   // 会话根本滚不到更早的消息,搜索也跳不到首页之外的目标。
@@ -856,10 +868,13 @@ export default function ChatDetailScreen() {
   messagesLengthRef.current = messages.length;
 
   // 在此会话页时来新消息 → 即时推进已读水位(socket pending 队列自带去重合并)。
+  // 必须带 isFocused:本屏被压在聊天信息/记录页下面时仍然挂载着、store 订阅
+  // 照常触发,不挡的话「人没在看」的消息会被直接标成已读。
+  const isFocused = useIsFocused();
   useEffect(() => {
-    if (!conversationID || !conversationMessages?.length) return;
+    if (!isFocused || !conversationID || !conversationMessages?.length) return;
     markConversationAsRead(conversationID);
-  }, [conversationID, conversationMessages]);
+  }, [conversationID, conversationMessages, isFocused]);
 
   // 搜索定位：在 inverted 列表里 scrollToIndex 仍然按 index 计数，找到就跳。
   useEffect(() => {
@@ -954,11 +969,36 @@ export default function ChatDetailScreen() {
         return;
       }
 
+      // 语音要把源 DTO 的 object key 一起收下来:UI 层的 voiceUrl 是服务端
+      // 现签的临时地址,过期即失效,推不回 key —— 不存 key 的话这条收藏
+      // 以后永远重发不出去(旧收藏正是卡在这里)。
+      //
+      // 但只收**自己发的**:key 是发送方的对象路径(chat/{senderId}/…),
+      // 后端发送校验按 chat/{当前用户}/ 收口。把对端的 key 也存下来的话,
+      // 收藏页会把它显示成「可重发」,而每一次重发都必然被后端拒掉 ——
+      // 一个点了就报错的按钮比一个不出现的按钮更糟。收到的语音要做成可重发,
+      // 得先把音频复制/重传到自己名下,那是另一件事。
+      const sourceMessage =
+        message.type === 'voice'
+          ? useChatStore
+              .getState()
+              .messagesByConversation[conversationID]?.find(
+                (item) => item.id === message.id,
+              )
+          : undefined;
+      const sourceKey = sourceMessage?.content?.['key'];
+      const voiceKey =
+        sourceMessage?.sender?.id === currentUserID &&
+        typeof sourceKey === 'string'
+          ? sourceKey
+          : undefined;
+
       const input = buildCollectionInputFromMessage(message, {
         conversationID,
         conversationTitle,
         sourceID,
         conversationType: isGroupChat ? 'group' : 'private',
+        voiceKey,
       });
       if (!input) return;
 
@@ -1046,6 +1086,8 @@ export default function ChatDetailScreen() {
             style: 'destructive',
             onPress: () => {
               // 本端视图删除(服务端保留;跨端删除随后续批次)。
+              // store 会同时落一条本地墓碑 —— 只摘数组的话重进会话再拉一次
+              // 历史就把它接回来了,「删除」等于刷新一次就撤销。
               useChatStore.getState().removeMessage(conversationID, message.id);
             },
           },
@@ -2031,6 +2073,14 @@ export default function ChatDetailScreen() {
   const handleSendCurrentLocation = useCallback(async () => {
     if (!sourceID || isPreviewMode) return;
     if (inFlightRef.current) return;
+    // 信用分门禁提到取位置之前。sendLocationMessage 里那道是共享路径的兜底,
+    // 但它要等到「已经申请过定位权限、读完当前坐标、还做了一次反地理编码」
+    // 之后才拒 —— 一次注定失败的发送,不该先把用户的精确位置读出来。
+    const creditDenied = getLocalLowCreditDecision();
+    if (creditDenied) {
+      setSendError(getCreditPolicyMessage(creditDenied));
+      return;
+    }
     const permission = await Location.requestForegroundPermissionsAsync();
     if (!permission.granted) {
       Alert.alert(t('permissions.insufficientTitle'), t('permissions.location'));
@@ -2347,15 +2397,34 @@ export default function ChatDetailScreen() {
         return;
       }
 
+      // 旧语音收藏(只存了会过期的播放地址、推不回 object key)是永久不可发的。
+      // 这里必须在进入发送流程之前就拦下:抛异常的话会被下面的 catch 统一
+      // 渲染成「发送失败,请重试」—— 而重试多少次都不可能成功。
+      // 选择器那侧同样按 canResendCollection 把这类行禁用掉,双保险。
+      if (plan.kind === 'unsupported') {
+        if (mountedRef.current) {
+          setSendError(
+            t('chat.detail.favoriteLegacyVoiceUnsupported', {
+              defaultValue: '这条旧版语音收藏无法重新发送',
+            }),
+          );
+        }
+        return;
+      }
+
       if (inFlightRef.current) return;
       inFlightRef.current = true;
       try {
         switch (plan.kind) {
           case 'voice':
-            // 旧收藏的语音只存了 OpenIM 时代的 URL,新栈消息体只收 object key,
-            // 无法可靠反推 —— 明确报错优于静默发一条播不出的语音。
-            // 收藏体系迁到新栈(存 key)后此分支恢复。
-            throw new Error('voice favorite resend not yet supported on chat-core');
+            // 收藏时存下的 object key 直接重发,不重新上传音频。
+            await sendVoiceMessage({
+              conversationId: conversationID,
+              key: plan.key,
+              duration: plan.duration,
+              ...(plan.dataSize ? { size: plan.dataSize } : {}),
+            });
+            break;
           case 'note':
             await sendCardMessage({
               conversationId: conversationID,
@@ -2419,6 +2488,11 @@ export default function ChatDetailScreen() {
           conversationId: conversationID,
           type: 'transfer-card',
           payload: { amount: payload.amount, message: payload.message },
+          // 积分早在 TransferComposerScreen 里就真扣真到账了,这张卡只是回执。
+          // 让信用分门禁拦在这里阻止不了任何事,只会让付款方看不到卡片、
+          // 以为没发出去 —— 从转账页重试会生成新的幂等键,那是第二次真实扣款。
+          // 门禁在扣款之前已经过了一道(handleSubmit)。
+          bypassCreditGate: true,
         });
         // #100：告知后端卡片已由客户端送达，补偿 cron 不再重发。
         // round 2 review：回执是防重发的唯一信号，不能 fire-and-forget ——

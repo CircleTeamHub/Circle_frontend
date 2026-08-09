@@ -1,4 +1,8 @@
 import { create } from 'zustand';
+import {
+  isMessageDeletedLocally,
+  markMessageDeletedLocally,
+} from './deleted-messages';
 import type { ChatConversationDto, ChatMessageDto } from './protocol';
 
 /**
@@ -33,6 +37,16 @@ interface ChatStoreState {
   setError: (error: string | null) => void;
   setCurrentUserId: (userId: string | null) => void;
   setConversations: (conversations: ChatConversationDto[]) => void;
+  /**
+   * 是否已经拿到过**完整**会话快照(loadChatConversations 成功过一次)。
+   *
+   * 不能用 `conversations.length > 0` 代替:从联系人/资料页点「发消息」会先走
+   * ensureDirectConversation,它只 upsert 那一个会话 —— 数组非空,内容却是残缺的。
+   * 全局搜索据此判断「不用拉了」的话,归组时会把所有「本地没有这个会话」的
+   * 服务端命中整条丢掉,界面上是彻底的「无结果」。
+   * reset / clearCachedChats 会把它复位。
+   */
+  conversationsSnapshotLoaded: boolean;
   /** 单会话回写(偏好变更/新建后),保持排序不变量。 */
   upsertConversation: (conversation: ChatConversationDto) => void;
   removeConversation: (conversationId: string) => void;
@@ -106,6 +120,27 @@ export function mergeMessages(
   return merged.length > cap ? merged.slice(merged.length - cap) : merged;
 }
 
+/**
+ * 会话预览与本地墓碑对账。服务端不知道本端删过什么,REST 快照里的 lastMessage
+ * 完全可能正是刚删掉的那条 —— 不换掉的话下拉刷新一次,删掉的内容又回到消息列表上。
+ * 退回本地时间线里还留着的最新一条;时间线里也没有(窗口外/刚清过缓存)就只留
+ * lastMessageAt,预览留空 —— 排序与时间不受影响,只是不再展示已删内容。
+ */
+function reconcileDeletedPreview(
+  conversation: ChatConversationDto,
+  timeline: ChatMessageDto[] | undefined,
+): ChatConversationDto {
+  const last = conversation.lastMessage;
+  if (!last || !isMessageDeletedLocally(last.id, last.d)) return conversation;
+  let fallback: ChatMessageDto | null = null;
+  for (const message of timeline ?? []) {
+    if (message.height > 0 && !isMessageDeletedLocally(message.id, message.d)) {
+      fallback = message;
+    }
+  }
+  return { ...conversation, lastMessage: fallback };
+}
+
 /** 会话排序不变量:置顶在前 → lastMessageAt 降序 → id 兜底稳定。 */
 export function sortConversations(
   conversations: ChatConversationDto[],
@@ -126,6 +161,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   error: null,
   currentUserId: null,
   conversations: [],
+  conversationsSnapshotLoaded: false,
   messagesByConversation: {},
   messageWindowByConversation: {},
   activeConversationId: null,
@@ -136,12 +172,26 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   setConnecting: (connecting) => set({ connecting }),
   setError: (error) => set({ error }),
   setCurrentUserId: (userId) => set({ currentUserId: userId }),
-  setConversations: (conversations) =>
-    set({ conversations: sortConversations(conversations) }),
+  setConversations: (conversations) => {
+    const { messagesByConversation } = get();
+    set({
+      conversations: sortConversations(
+        conversations.map((c) =>
+          reconcileDeletedPreview(c, messagesByConversation[c.id]),
+        ),
+      ),
+      // 只有全量拉取会走到这里(upsertConversation 不置位)。
+      conversationsSnapshotLoaded: true,
+    });
+  },
   upsertConversation: (conversation) => {
-    const { conversations } = get();
+    const { conversations, messagesByConversation } = get();
     const rest = conversations.filter((c) => c.id !== conversation.id);
-    set({ conversations: sortConversations([...rest, conversation]) });
+    const reconciled = reconcileDeletedPreview(
+      conversation,
+      messagesByConversation[conversation.id],
+    );
+    set({ conversations: sortConversations([...rest, reconciled]) });
   },
   removeConversation: (conversationId) =>
     set({
@@ -158,6 +208,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     // 列表里没有这个会话(例如对方刚建的单聊):调用方据此去补拉元信息,
     // 否则消息进了时间线但会话行与角标一直不出现,要手动刷新才看得到。
     if (index < 0) return false;
+    // 本地已删的消息被重投时既不该回到预览、也不该再算一次未读。
+    if (isMessageDeletedLocally(message.id, message.d)) return true;
     const target = conversations[index];
     const fromSelf =
       currentUserId !== null && message.sender?.id === currentUserId;
@@ -241,16 +293,29 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   },
 
   removeMessage: (conversationId, messageId) => {
+    // 墓碑先落盘,再动内存:只改数组的话下次拉历史就把它接回来了。
+    // 连 d 一起记:删的若是还没拿到 ack 的气泡,手上只有 local:<d> 这个临时 id,
+    // 而确认/回声回来时带的是全新的服务端 id —— 只按 id 记的话,
+    // 删除会在慢网下当着用户的面自己撤销。
     const { messagesByConversation } = get();
     const existing = messagesByConversation[conversationId] ?? [];
+    const target = existing.find((m) => m.id === messageId);
+    markMessageDeletedLocally(messageId, target?.d ?? null);
     const filtered = existing.filter((m) => m.id !== messageId);
-    if (filtered.length === existing.length) return;
-    set({
-      messagesByConversation: {
-        ...messagesByConversation,
-        [conversationId]: filtered,
-      },
-    });
+    if (filtered.length !== existing.length) {
+      set({
+        messagesByConversation: {
+          ...messagesByConversation,
+          [conversationId]: filtered,
+        },
+      });
+    }
+    // 删的正好是会话预览那条:预览得跟着退回时间线里还留着的最新一条,
+    // 否则消息页继续把已经删掉的内容当最新消息展示。
+    const conversation = get().conversations.find((c) => c.id === conversationId);
+    if (conversation?.lastMessage?.id === messageId) {
+      get().revertConversationPreview(conversationId);
+    }
   },
 
   markConversationReadLocal: (conversationId) => {
@@ -274,7 +339,10 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     set({ onlineByUser: { ...onlineByUser, [userId]: online } });
   },
 
-  ingestMessages: (conversationId, incoming) => {
+  ingestMessages: (conversationId, rawIncoming) => {
+    // 本地删过的消息在这里一次性挡掉:历史页、翻页、广播、补拉都走这条路,
+    // 少挡一条「删除」就会在下一次拉取时复活。
+    const incoming = rawIncoming.filter((m) => !isMessageDeletedLocally(m.id, m.d));
     if (incoming.length === 0) return;
     const { messagesByConversation, messageWindowByConversation } = get();
     const existing = messagesByConversation[conversationId] ?? [];
@@ -323,6 +391,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   clearCachedChats: () =>
     set({
       conversations: [],
+  conversationsSnapshotLoaded: false,
       messagesByConversation: {},
       messageWindowByConversation: {},
       activeConversationId: null,
@@ -336,6 +405,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       error: null,
       currentUserId: null,
       conversations: [],
+  conversationsSnapshotLoaded: false,
       messagesByConversation: {},
       messageWindowByConversation: {},
       activeConversationId: null,

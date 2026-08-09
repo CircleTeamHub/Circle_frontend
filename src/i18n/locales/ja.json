@@ -245,7 +245,8 @@
       "noteSendFailed": "ノートを送信できませんでした。もう一度お試しください",
       "cardSendFailed": "プロフィールカードを送信できませんでした。もう一度お試しください",
       "favoriteSendFailed": "お気に入りを送信できませんでした。もう一度お試しください",
-      "transferCardSendFailed": "送金カードを送信できませんでしたが、クレジットはすでに差し引かれています"
+      "transferCardSendFailed": "送金カードを送信できませんでしたが、クレジットはすでに差し引かれています",
+      "favoriteLegacyVoiceUnsupported": "この旧バージョンの音声お気に入りは再送信できません"
     },
     "messageActions": {
       "title": "メッセージ操作",
@@ -575,7 +576,8 @@
       "failed": "通話に失敗しました",
       "missed": "不在着信",
       "noAnswer": "応答なし"
-    }
+    },
+    "lowCreditScore": "信用スコアが {{minScore}} を下回っているため、現在メッセージを送信できません"
   },
   "messages": {
     "title": "メッセージ",
@@ -2175,7 +2177,8 @@
     },
     "loadFailed": "読み込みに失敗しました",
     "noMatch": "一致する項目がありません",
-    "empty": "コンテンツはまだありません"
+    "empty": "コンテンツはまだありません",
+    "favoriteLegacyVoiceUnsupported": "旧バージョンの音声お気に入り — 再送信できません"
   },
   "accountSwitcher": {
     "title": "アカウントを切り替え",

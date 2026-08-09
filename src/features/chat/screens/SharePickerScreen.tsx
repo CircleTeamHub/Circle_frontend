@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
 import { useSharePickerStore } from '@/features/chat/store/use-share-picker-store';
+import { canResendCollection } from '@/features/chat/utils/message-collection';
 import { NoteCard } from '@/features/notes/components/NoteCard';
 import type { NoteSummary } from '@/features/notes/types';
 import { fetchCollections, type UserCollection } from '@/services/api/collections';
@@ -202,27 +203,47 @@ export default function SharePickerScreen() {
     </Pressable>
   );
 
-  const renderFavorite = ({ item }: { item: UserCollection }) => (
-    <Pressable
-      style={[s.row, { backgroundColor: colors.surface }]}
-      onPress={() => handleSelect(item)}
-    >
-      <View style={s.rowText}>
-        <Text style={[s.rowTitle, { color: colors.text }]} numberOfLines={1}>
-          {item.title}
-        </Text>
-        {item.summary ? (
-          <Text
-            style={[s.rowSubtitle, { color: colors.textSecondary }]}
-            numberOfLines={2}
-          >
-            {item.summary}
+  /**
+   * 旧版语音收藏(OpenIM 时代只存了会过期的播放地址,推不回 object key)
+   * 永远发不出去。先把入口亮出来、点了再报一句「发送失败,请重试」是最坏的
+   * 组合 —— 用户会一直重试。这里直接禁用该行并写明原因。
+   */
+  const renderFavorite = ({ item }: { item: UserCollection }) => {
+    const resendable = canResendCollection(item);
+    const subtitle = resendable
+      ? item.summary
+      : i18n.t('share.favoriteLegacyVoiceUnsupported', {
+          defaultValue: '旧版语音收藏，无法重新发送',
+        });
+    return (
+      <Pressable
+        style={[
+          s.row,
+          { backgroundColor: colors.surface },
+          resendable ? null : s.rowDisabled,
+        ]}
+        disabled={!resendable}
+        onPress={() => handleSelect(item)}
+      >
+        <View style={s.rowText}>
+          <Text style={[s.rowTitle, { color: colors.text }]} numberOfLines={1}>
+            {item.title}
           </Text>
+          {subtitle ? (
+            <Text
+              style={[s.rowSubtitle, { color: colors.textSecondary }]}
+              numberOfLines={2}
+            >
+              {subtitle}
+            </Text>
+          ) : null}
+        </View>
+        {resendable ? (
+          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
         ) : null}
-      </View>
-      <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-    </Pressable>
-  );
+      </Pressable>
+    );
+  };
 
   const renderQuickReply = ({ item }: { item: string }) => (
     <Pressable
@@ -404,6 +425,7 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     borderRadius: Radius.md,
   },
+  rowDisabled: { opacity: 0.45 },
   rowText: { flex: 1, gap: 2 },
   rowTitle: { ...Typography.body, fontWeight: '600' },
   rowSubtitle: { ...Typography.small, lineHeight: 18 },

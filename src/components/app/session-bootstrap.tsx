@@ -37,6 +37,8 @@ export function SessionBootstrap() {
   const hasHydrated = useAuthStore((state) => state.hasHydrated);
   const isLoading = useAuthStore((state) => state.isLoading);
   const onboardingRequired = useAuthStore((state) => state.onboardingRequired);
+  // 订阅到 id 这一级:整个 user 对象每次 setUser 都是新引用,会白白重连。
+  const userId = useAuthStore((state) => state.user?.id ?? null);
   const setUser = useAuthStore((state) => state.setUser);
   const setLoading = useAuthStore((state) => state.setLoading);
   const setOnboardingRequired = useAuthStore(
@@ -44,33 +46,44 @@ export function SessionBootstrap() {
   );
 
   useEffect(() => {
-    if (!hasHydrated || onboardingRequired) {
+    if (!hasHydrated || onboardingRequired || !accessToken) {
       disconnectRealtime();
-      disconnectChat();
-      return;
-    }
-
-    if (!accessToken) {
-      disconnectRealtime();
-      disconnectChat();
       return;
     }
 
     connectRealtime(accessToken);
-    const { user } = useAuthStore.getState();
-    if (user?.id) {
-      connectChat(accessToken, user.id);
-    }
-
     return () => {
       disconnectRealtime();
+    };
+  }, [accessToken, hasHydrated, onboardingRequired]);
+
+  /**
+   * chat 连接单独一个 effect,而且**订阅** userId。
+   *
+   * 原来它和 realtime 合在一起,用 getState() 读一次 user —— 于是冷启动时
+   * 「安全存储里的 token 还在、单独持久化的 user 快照丢了或是旧的」这种状态下:
+   * 快照缺失 → 压根不连,而 /auth/me 成功后只调 setUser,本 effect 不重跑,
+   * 要等一次切前后台才补上;快照是上一个账号 → 用错身份连上,收发方向与未读
+   * 全按错的 currentUserId 算。
+   * 拆开是为了不让 userId 的变化连带把 realtime 也断开重连一次。
+   */
+  useEffect(() => {
+    if (!hasHydrated || onboardingRequired || !accessToken) {
+      disconnectChat();
+      return;
+    }
+    // 还没有权威用户:先不连。/auth/me 落地后 userId 变化会让本 effect 重跑。
+    if (!userId) return;
+
+    connectChat(accessToken, userId);
+    return () => {
       // 这里必须是「挂起」而不是「登出」:access token 轮换也会让本 effect 重跑,
       // 清 store 的话正在看的会话会当场变空 —— 它的历史加载 effect 不依赖 token,
       // 不会重拉,要退出重进才恢复,pending 已读也一并丢了。
       // 换账号由 connectChat 自己识别并清 store。
       suspendChat();
     };
-  }, [accessToken, hasHydrated, onboardingRequired]);
+  }, [accessToken, hasHydrated, onboardingRequired, userId]);
 
   useEffect(() => {
     if (!hasHydrated || onboardingRequired) {
@@ -96,7 +109,8 @@ export function SessionBootstrap() {
       }
 
       connectRealtime(nextAccessToken);
-      // 回前台补一次 chat 连接:connectChat 对已连接是 no-op,断线时触发重连。
+      // 回前台补一次 chat 连接:connectChat 对「已连着且就是这个人」是 no-op,
+      // 断线时触发重连,身份对不上时换成正确身份重连。
       const { user: nextUser } = useAuthStore.getState();
       if (nextUser?.id) {
         connectChat(nextAccessToken, nextUser.id);

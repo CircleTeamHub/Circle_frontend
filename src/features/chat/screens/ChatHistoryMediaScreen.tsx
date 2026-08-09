@@ -16,16 +16,28 @@ import i18n from '@/i18n';
 import { NavHeader } from '@/components/ui/nav-header';
 import {
   formatChatHistoryMonth,
+  getChatMediaThumbnailUris,
   resolveChatHistoryRouteParams,
 } from '@/features/chat/chat-history';
 import { searchChatMessages } from '@/chat-core/api';
 import type { ChatMessageDto } from '@/chat-core/protocol';
-import { normalizeMediaUrl } from '@/services/api/utils';
 import { getChatDetailHref } from '@/features/user/utils/routes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 const PAGE_SIZE = 30;
 const MEDIA_GRID_COLUMNS = 3;
+
+/**
+ * 首屏/重试/翻页共用一份类型过滤,免得三处再各自漂移。
+ *
+ * 这里刻意**不带** 'video':自研栈根本没有视频消息类型 —— circle_be 的
+ * CLIENT_MESSAGE_TYPES(text/quote/image/voice/file/location/*-card)不含它,
+ * 而 history-query.dto 上是 @IsIn(CLIENT_MESSAGE_TYPES, { each: true }),
+ * 混进去会让整个请求 400,媒体页直接变成永远加载失败。
+ * 下面 item.type === 'video' 那条渲染分支是 OpenIM 时代的遗留,留着无害:
+ * 真加了视频类型时,两边一起放开即可。
+ */
+const MEDIA_HISTORY_TYPES = ['image'];
 
 type MediaRow = ChatMessageDto[];
 type MediaMonthSection = {
@@ -56,27 +68,6 @@ function groupMediaMessagesByMonth(messages: ChatMessageDto[]): MediaMonthSectio
     title,
     data: chunkMediaRows(items),
   }));
-}
-
-function normalizeCandidateUrl(value: string | null | undefined) {
-  return value ? normalizeMediaUrl(value) ?? value : null;
-}
-
-function getMediaThumbnailUris(item: ChatMessageDto) {
-  const content = item.content ?? {};
-  const candidates = [
-    typeof content['thumbUrl'] === 'string' ? content['thumbUrl'] : null,
-    typeof content['url'] === 'string' ? content['url'] : null,
-    typeof content['localUri'] === 'string' ? content['localUri'] : null,
-  ];
-
-  return Array.from(
-    new Set(
-      candidates
-        .map(normalizeCandidateUrl)
-        .filter((value): value is string => Boolean(value)),
-    ),
-  );
 }
 
 const s = StyleSheet.create({
@@ -149,7 +140,7 @@ function MediaTile({
   videoBadgeStyle,
 }: MediaTileProps) {
   const { t } = useTranslation();
-  const thumbnailUris = useMemo(() => getMediaThumbnailUris(item), [item]);
+  const thumbnailUris = useMemo(() => getChatMediaThumbnailUris(item), [item]);
   const [failedCount, setFailedCount] = useState(0);
   const thumbnailUri = thumbnailUris[failedCount] ?? null;
   const isVideo = item.type === 'video';
@@ -228,7 +219,7 @@ export default function ChatHistoryMediaScreen() {
     cursorRef.current = null;
     setLoading(true);
     setError(null);
-    searchChatMessages(conversationID, { types: ['image'], limit: PAGE_SIZE })
+    searchChatMessages(conversationID, { types: MEDIA_HISTORY_TYPES, limit: PAGE_SIZE })
       .then((page) => {
         if (!mountedRef.current) return;
         cursorRef.current = page.nextBeforeHeight;
@@ -261,7 +252,7 @@ export default function ChatHistoryMediaScreen() {
     cursorRef.current = null;
     setLoading(true);
     setError(null);
-    searchChatMessages(conversationID, { types: ['image'], limit: PAGE_SIZE })
+    searchChatMessages(conversationID, { types: MEDIA_HISTORY_TYPES, limit: PAGE_SIZE })
       .then((page) => {
         if (!cancelled) {
           cursorRef.current = page.nextBeforeHeight;
@@ -297,7 +288,7 @@ export default function ChatHistoryMediaScreen() {
 
     try {
       const page = await searchChatMessages(conversationID, {
-        types: ['image'],
+        types: MEDIA_HISTORY_TYPES,
         limit: PAGE_SIZE,
         ...(cursorRef.current !== null
           ? { beforeHeight: cursorRef.current }

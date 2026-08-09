@@ -1,3 +1,4 @@
+import i18n from '@/i18n';
 import { useAuthStore } from '@/stores/authStore';
 import { reportError } from '@/observability/sentry';
 
@@ -16,8 +17,28 @@ export type CreditPolicyDecision = {
 // 需两处同步。拦截文案统一由 buildLowCreditMessage 生成。
 const SEND_MESSAGE_MIN_SCORE = 60;
 
+/**
+ * 开发者可见的兜底文案(Error.message / 日志 / Sentry)。**不要拿它上屏** ——
+ * 它是硬编码中文,英/西/日/韩用户会看到一句中文。展示一律走
+ * getCreditPolicyMessage,那里按当前语言取词条。
+ */
 function buildLowCreditMessage(minScore: number): string {
   return `信誉值低于 ${minScore}，暂时无法发送消息`;
+}
+
+/**
+ * 拒绝原因 → 当前语言的一句展示文案。
+ *
+ * 用全局 i18n.t 而非组件 t:调用点都在 catch/事件回调里,按调用时机取语言,
+ * 不在渲染期(与 send-errors 同一套)。
+ */
+export function getCreditPolicyMessage(decision: {
+  minScore: number;
+}): string {
+  return i18n.t('chat.lowCreditScore', {
+    minScore: decision.minScore,
+    defaultValue: buildLowCreditMessage(decision.minScore),
+  });
 }
 
 // 发送是高频操作：若每次被拦/每次分数缺失都上报，会淹没 Sentry。这里按「事件类型」
@@ -48,7 +69,7 @@ export class CreditPolicyError extends Error {
   }
 }
 
-function getLocalLowCreditDecision(): CreditPolicyDecision | null {
+export function getLocalLowCreditDecision(): CreditPolicyDecision | null {
   const score = useAuthStore.getState().user?.creditScore;
   // 分数未知（资料未加载 / 字段缺失）：本地放行。这是有意的 fail-open，但不再静默——
   // 上报一次，避免「门槛悄悄失效」无法在生产观测到。

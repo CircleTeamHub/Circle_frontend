@@ -176,7 +176,7 @@ test('realtime 邀请守卫放行 single 会话（round 2 P1：被叫端此前�
   );
 });
 
-test('resolveDirectCalleeID：UUID 直通、direct: 解对端、旧形态拒绝 (round 3)', () => {
+test('resolveDirectCalleeID：UUID 直通、旧 si_ 解对端、其余拒绝 (round 3)', () => {
   const mod = loadTsModule('src/features/call/resolve-direct-callee.ts', {
     requireShim: (specifier) => {
       if (specifier === '@/utils/user-id-alias') {
@@ -194,21 +194,69 @@ test('resolveDirectCalleeID：UUID 直通、direct: 解对端、旧形态拒绝 
     mod.resolveDirectCalleeID(peer.replace(/-/g, ''), self),
     peer,
   );
-  // 推送兜底：direct: 会话 id → 剔除自己得到对端(两种排序都要成立)
+  // 自研栈的会话 id 是不透明 UUID —— `direct:<a>:<b>` 这种形状后端从不下发,
+  // 原来那条分支是照着一个不存在的契约写的,已删。这里断言它现在按普通坏形状拒绝。
   assert.equal(
     mod.resolveDirectCalleeID(`direct:${peer}:${self}`, self),
-    peer,
+    null,
   );
-  assert.equal(
-    mod.resolveDirectCalleeID(`direct:${self}:${peer}`, self),
-    peer,
-  );
-  // 自聊 / 旧栈会话 id / 坏形状：拒绝而不是把坏 id 打给后端
-  assert.equal(mod.resolveDirectCalleeID(`direct:${self}:${self}`, self), null);
+  // 自聊 / 旧栈群会话 id / 坏形状：拒绝而不是把坏 id 打给后端
   assert.equal(mod.resolveDirectCalleeID('sg_whatever', self), null);
   assert.equal(mod.resolveDirectCalleeID('si_aaa_bbb', self), null);
   assert.equal(mod.resolveDirectCalleeID('not-a-uuid', self), null);
   assert.equal(mod.resolveDirectCalleeID('', self), null);
+});
+
+test('迁移窗口:托盘里遗留的旧 OpenIM 推送仍能还原被叫', () => {
+  const mod = loadTsModule('src/features/call/resolve-direct-callee.ts', {
+    requireShim: (specifier) => {
+      if (specifier === '@/utils/user-id-alias') {
+        return loadTsModule('src/utils/user-id-alias.ts');
+      }
+      throw new Error(`unexpected import: ${specifier}`);
+    },
+  });
+  const self = '11111111-2222-3333-4444-555555555555';
+  const peer = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+  const dashless = (id) => id.replace(/-/g, '');
+
+  // 升级不会清掉系统托盘里的旧推送;点开时 push-notification-route 的
+  // `sourceID || conversationID` 兜底会把 si_<a>_<b> 原样传进来。
+  // 一律拒的话「打电话」在这条入口上永远只报 initiateFailed。
+  assert.equal(
+    mod.resolveDirectCalleeID(`si_${dashless(self)}_${dashless(peer)}`, self),
+    peer,
+  );
+  // 两段顺序不定,都要成立。
+  assert.equal(
+    mod.resolveDirectCalleeID(`si_${dashless(peer)}_${dashless(self)}`, self),
+    peer,
+  );
+  // 已是标准 UUID 形态的旧 id 同样接住。
+  assert.equal(mod.resolveDirectCalleeID(`si_${self}_${peer}`, self), peer);
+
+  // 自己不在这两段里 = 这不是我的会话 id(伪造深链 / 别人的会话):
+  // 猜「另一段」等于把任意 id 当对端打给后端,必须拒。
+  const stranger = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+  assert.equal(
+    mod.resolveDirectCalleeID(`si_${dashless(stranger)}_${dashless(peer)}`, self),
+    null,
+  );
+  // 自聊 / 段数不对 / 非 UUID:一律拒。
+  assert.equal(
+    mod.resolveDirectCalleeID(`si_${dashless(self)}_${dashless(self)}`, self),
+    null,
+  );
+  assert.equal(mod.resolveDirectCalleeID(`si_${dashless(self)}`, self), null);
+  assert.equal(
+    mod.resolveDirectCalleeID(`si_${dashless(self)}_nope`, self),
+    null,
+  );
+  // 旧群会话没有这条退路:两段还原不出任何人。
+  assert.equal(
+    mod.resolveDirectCalleeID(`sg_${dashless(self)}_${dashless(peer)}`, self),
+    null,
+  );
 });
 
 test('单聊来电弹窗按 sessionType 分支文案 (round 3)', () => {

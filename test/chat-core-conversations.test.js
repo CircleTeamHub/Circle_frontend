@@ -41,6 +41,13 @@ function loadStore() {
     require: (request) => {
       if (request === 'zustand') return zustandStub();
       if (request === './protocol') return {};
+      // 本地删除墓碑在这组用例里始终为空(删除行为由 chat-core-store 覆盖)。
+      if (request === './deleted-messages') {
+        return {
+          isMessageDeletedLocally: () => false,
+          markMessageDeletedLocally: () => {},
+        };
+      }
       throw new Error(`unexpected require: ${request}`);
     },
   };

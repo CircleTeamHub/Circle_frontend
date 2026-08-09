@@ -21,6 +21,12 @@ export type CollectedOpenIMMessagePayload = {
     height?: number;
   };
   voice?: {
+    /**
+     * 自研栈的对象存储 key。重发语音只认它 —— 消息体里从来就只放 key,
+     * 读时由服务端现签 URL。sourceUrl 是那个签出来的临时地址(会过期),
+     * OpenIM 时代的收藏更是指向一台已经不存在的服务,两者都推不回 key。
+     */
+    key?: string;
     sourceUrl?: string;
     soundPath?: string;
     duration?: number;
@@ -36,6 +42,12 @@ type CollectionContext = {
   conversationTitle: string;
   sourceID?: string;
   conversationType?: ConversationType;
+  /**
+   * 源消息 DTO 上的语音 object key(调用方从 chat store 取)。
+   * UI 层的 ChatMessage 只有签好的 voiceUrl,而重发必须要 key ——
+   * 收藏时不把它一起存下来,这条收藏以后就永远发不出去。
+   */
+  voiceKey?: string;
 };
 
 function compactText(value: string | null | undefined, max = 80) {
@@ -209,6 +221,7 @@ export function buildCollectionInputFromMessage(
 
   if (message.type === 'voice') {
     payload.voice = {
+      ...(context.voiceKey ? { key: context.voiceKey } : {}),
       sourceUrl: message.voiceUrl,
       soundPath: message.voicePath,
       duration: message.voiceDuration,
@@ -239,13 +252,19 @@ export type CollectionSendPlan =
   | { kind: 'text'; text: string }
   | {
       kind: 'voice';
-      sourceUrl?: string | null;
-      soundPath?: string | null;
+      /** 对象存储 key —— 自研栈重发语音的唯一凭据。 */
+      key: string;
       duration: number;
       dataSize?: number;
     }
   | { kind: 'note'; noteCard: NoteCardData }
-  | { kind: 'friend'; friendCard: FriendCardData };
+  | { kind: 'friend'; friendCard: FriendCardData }
+  /**
+   * 拿不到 key 的旧语音收藏。必须显式表达成「这条发不了」而不是让它走进
+   * 发送流程再抛错 —— 抛出来会被当成一次普通发送失败提示「请重试」,
+   * 而重试一万次都不可能成功。调用方据此禁用入口并给迁移说明。
+   */
+  | { kind: 'unsupported'; reason: 'legacy-voice' };
 
 export function resolveCollectionSendPlan(
   item: Pick<UserCollection, 'title' | 'summary' | 'payload'>,
@@ -262,10 +281,14 @@ export function resolveCollectionSendPlan(
     }
 
     if (payload.messageType === 'voice' && payload.voice) {
+      const key = payload.voice.key;
+      if (typeof key !== 'string' || key.length === 0) {
+        // OpenIM 时代(以及本次修复之前)的语音收藏只存了会过期的播放地址。
+        return { kind: 'unsupported', reason: 'legacy-voice' };
+      }
       return {
         kind: 'voice',
-        sourceUrl: payload.voice.sourceUrl,
-        soundPath: payload.voice.soundPath,
+        key,
         duration: payload.voice.duration ?? 1,
         dataSize: payload.voice.dataSize,
       };
@@ -284,6 +307,13 @@ export function resolveCollectionSendPlan(
   const text =
     payload?.text?.trim() || item.summary?.trim() || item.title?.trim() || '';
   return { kind: 'text', text };
+}
+
+/** 这条收藏能不能重发(选择器据此禁用不可发的行,不把入口先亮出来再报错)。 */
+export function canResendCollection(
+  item: Pick<UserCollection, 'title' | 'summary' | 'payload'>,
+): boolean {
+  return resolveCollectionSendPlan(item).kind !== 'unsupported';
 }
 
 export function getCollectedOpenIMMessagePayload(
