@@ -450,7 +450,7 @@
     "burn10s": "10 seconds",
     "burn1m": "1 minute",
     "burn5m": "5 minutes",
-    "clearHistory": "Clear Chat History",
+    "clearHistory": "Clear chat history",
     "clearHistoryWarning": "This will permanently delete all messages in this conversation.",
     "clear": "Clear",
     "deleteFriend": "Remove Contact",
@@ -620,7 +620,10 @@
       "missed": "Missed call",
       "noAnswer": "No answer"
     },
-    "lowCreditScore": "Your credit score is below {{minScore}}, so you cannot send messages right now"
+    "lowCreditScore": "Your credit score is below {{minScore}}, so you cannot send messages right now",
+    "burnAfterReading": "Disappearing messages",
+    "clearHistoryConfirm": "This only clears the history on your side. Clear it?",
+    "clearHistoryDone": "Cleared"
   },
   "contacts": {
     "title": "Contacts",
@@ -2461,7 +2464,9 @@
       "groupNameUpdated": "Group name updated",
       "groupDismissed": "Group disbanded",
       "messageRevoked": "A message was recalled",
-      "friendAdded": "You're now friends — say hello!"
+      "friendAdded": "You're now friends — say hello!",
+      "burnEnabled": "Disappearing messages on ({{duration}})",
+      "burnDisabled": "Disappearing messages off"
     },
     "preview": {
       "revoked": "[Message revoked]",
@@ -2485,6 +2490,13 @@
       "revokedByModerator": "A message was revoked by an admin",
       "revokedQuote": "Message revoked",
       "revokedPreview": "[Message revoked]"
+    },
+    "burn": {
+      "s30": "30 seconds",
+      "m5": "5 minutes",
+      "h1": "1 hour",
+      "d1": "1 day",
+      "d7": "7 days"
     }
   },
   "permissions": {
@@ -2553,9 +2565,8 @@
     "TEMP_CHAT_JOIN_FAILED": "Failed to join, please try again",
     "NOTE_RESTORE_DUPLICATE": "Another active copy of this collected note already exists.",
     "NOTE_SHARE_LINK_LIMIT": "Share link limit reached — revoke unused links first",
-    "UPLOAD_INVALID_CONTENT_TYPE": "Unsupported file type",
-    "UPLOAD_PAYLOAD_TOO_LARGE": "File is too large to upload",
     "UPLOAD_INVALID_CONTENT_TYPE": "This file type is not supported",
+    "UPLOAD_PAYLOAD_TOO_LARGE": "File is too large to upload",
     "COLLECTION_LIMIT": "Collection limit reached — remove items you no longer need",
     "ADMIN_USER_NOT_FOUND": "User not found.",
     "ADMIN_USER_SELF_STATUS_CHANGE": "You can't ban or delete your own admin account.",

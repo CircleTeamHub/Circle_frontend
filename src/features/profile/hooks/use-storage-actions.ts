@@ -8,7 +8,10 @@ import {
   formatCacheSize,
   getAppCacheSize,
 } from '@/services/cache/clear-app-cache';
-import { loadChatConversations } from '@/chat-core/api';
+import {
+  clearChatConversationHistory,
+  loadChatConversations,
+} from '@/chat-core/api';
 import { useChatStore } from '@/chat-core/store';
 
 export interface UseStorageActionsResult {
@@ -115,13 +118,21 @@ export function useStorageActions(): UseStorageActionsResult {
             if (mountedRef.current) setClearingChats(true);
 
             try {
-              // 自研 chat 无本地消息库:清掉内存缓存 + 旧 OpenIM 遗留数据目录。
+              // G-14:先逐会话写服务端清空水位,再清本地缓存。原来只清内存,
+              // 随后的会话快照又把全部历史拉回来 —— 「清空」是假的。
+              // 单个会话失败不中断整批(水位是幂等的,下次再清即可)。
+              const conversations = useChatStore.getState().conversations;
+              await Promise.allSettled(
+                conversations.map((conversation) =>
+                  clearChatConversationHistory(conversation.id),
+                ),
+              );
               // 用 clearCachedChats 而非 reset:socket 还连着,reset 会清掉
               // currentUserId 并标记 disconnected,而 connectChat 对已连接的
               // socket 直接 return —— 之后的消息判不出收发方向、未读也算错。
               useChatStore.getState().clearCachedChats();
               await clearLegacyImData();
-              // 缓存清空后重拉一次会话快照,列表不停在空态。
+              // 缓存清空后重拉一次会话快照;服务端水位已写,历史不会回来。
               void loadChatConversations().catch(() => undefined);
               if (!mountedRef.current) return;
               Alert.alert(

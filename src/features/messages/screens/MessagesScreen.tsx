@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Divider } from "@/components/ui/divider";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import {
+  clearChatConversationHistory,
   loadChatConversations,
   updateChatConversationPreferences,
 } from "@/chat-core/api";
@@ -779,13 +780,19 @@ export default function MessagesScreen() {
             style: "destructive",
             onPress: () => {
               clearLocalUnread(conversation.id);
-              // 自研栈的「删除」当前等价于隐藏（服务端消息保留，新消息会重新浮出）；
-              // 带本地记录清除的完整删除语义随聊天详情页批次实现。
+              // G-14:删除会话 = 隐藏 + 清空本人历史水位(对齐旧栈
+              // deleteConversationAndDeleteAllMsg 的本人侧语义)。对端与
+              // 服务端数据不动;新消息到达时会话重新浮出,但旧历史不再可见。
               void updateChatConversationPreferences(conversation.id, {
                 hidden: true,
               }).catch((err) => {
                 if (isDev) {
                   console.warn("[messages] swipe delete conversation failed", err);
+                }
+              });
+              void clearChatConversationHistory(conversation.id).catch((err) => {
+                if (isDev) {
+                  console.warn("[messages] swipe delete clear failed", err);
                 }
               });
             },

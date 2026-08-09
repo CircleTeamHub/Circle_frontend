@@ -619,7 +619,10 @@
       "missed": "未接听",
       "noAnswer": "对方未接听"
     },
-    "lowCreditScore": "信誉值低于 {{minScore}}，暂时无法发送消息"
+    "lowCreditScore": "信誉值低于 {{minScore}}，暂时无法发送消息",
+    "burnAfterReading": "阅后即焚",
+    "clearHistoryConfirm": "清空后仅自己看不到这些消息，对方不受影响。确定清空？",
+    "clearHistoryDone": "已清空"
   },
   "contacts": {
     "title": "联系人",
@@ -2458,7 +2461,9 @@
       "groupNameUpdated": "群名称已更新",
       "groupDismissed": "群已解散",
       "messageRevoked": "一条消息被撤回",
-      "friendAdded": "你们已经是好友了，开始聊天吧"
+      "friendAdded": "你们已经是好友了，开始聊天吧",
+      "burnEnabled": "阅后即焚已开启（{{duration}}）",
+      "burnDisabled": "阅后即焚已关闭"
     },
     "preview": {
       "revoked": "[消息已撤回]",
@@ -2482,6 +2487,13 @@
       "revokedByModerator": "一条消息已被管理员撤回",
       "revokedQuote": "消息已撤回",
       "revokedPreview": "[消息已撤回]"
+    },
+    "burn": {
+      "s30": "30秒",
+      "m5": "5分钟",
+      "h1": "1小时",
+      "d1": "1天",
+      "d7": "7天"
     }
   },
   "permissions": {
@@ -2552,7 +2564,6 @@
     "NOTE_SHARE_LINK_LIMIT": "分享链接数量已达上限，请先撤销不再使用的链接",
     "UPLOAD_INVALID_CONTENT_TYPE": "不支持的文件类型",
     "UPLOAD_PAYLOAD_TOO_LARGE": "文件太大，超出上传上限",
-    "UPLOAD_INVALID_CONTENT_TYPE": "不支持的文件类型",
     "COLLECTION_LIMIT": "收藏数量已达上限，请先清理不再需要的收藏",
     "ADMIN_USER_NOT_FOUND": "用户不存在",
     "ADMIN_USER_SELF_STATUS_CHANGE": "不能封禁或删除当前管理员账号",

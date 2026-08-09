@@ -85,6 +85,13 @@ interface ChatStoreState {
     messageId: string,
     revokedBy: string,
   ) => void;
+  /** S-01:会话级焚毁档位变更(REST 回执/系统消息驱动)。 */
+  applyBurnDuration: (
+    conversationId: string,
+    burnDurationSec: number | null,
+  ) => void;
+  /** G-14:清空聊天记录的本地落地(时间线/预览/未读一次清干净)。 */
+  clearConversationLocal: (conversationId: string) => void;
   readWatermarks: Record<string, Record<string, number>>;
   reset: () => void;
   /**
@@ -379,6 +386,46 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
               ...messageWindowByConversation,
               [conversationId]: nextCap,
             },
+          }
+        : {}),
+    });
+  },
+
+  applyBurnDuration: (conversationId, burnDurationSec) => {
+    const { conversations } = get();
+    const index = conversations.findIndex((c) => c.id === conversationId);
+    if (index < 0) return;
+    if ((conversations[index].burnDurationSec ?? null) === burnDurationSec) {
+      return;
+    }
+    set({
+      conversations: [
+        ...conversations.slice(0, index),
+        { ...conversations[index], burnDurationSec },
+        ...conversations.slice(index + 1),
+      ],
+    });
+  },
+
+  clearConversationLocal: (conversationId) => {
+    const { conversations, messagesByConversation } = get();
+    const index = conversations.findIndex((c) => c.id === conversationId);
+    set({
+      messagesByConversation: {
+        ...messagesByConversation,
+        [conversationId]: [],
+      },
+      ...(index >= 0
+        ? {
+            conversations: [
+              ...conversations.slice(0, index),
+              {
+                ...conversations[index],
+                lastMessage: null,
+                unreadCount: 0,
+              },
+              ...conversations.slice(index + 1),
+            ],
           }
         : {}),
     });

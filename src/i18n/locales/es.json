@@ -406,11 +406,11 @@
     },
     "burnMessage": "Autoeliminar mensajes",
     "selectBurnTime": "Elige el tiempo de autoeliminación",
-    "burnOff": "Desactivado",
+    "burnOff": "Desactivar",
     "burn10s": "10 segundos",
     "burn1m": "1 minuto",
     "burn5m": "5 minutos",
-    "clearHistory": "Borrar historial de chat",
+    "clearHistory": "Vaciar historial de chat",
     "clearHistoryWarning": "Esto eliminará permanentemente todos los mensajes de esta conversación.",
     "clear": "Borrar",
     "deleteFriend": "Eliminar contacto",
@@ -580,7 +580,10 @@
       "missed": "Llamada perdida",
       "noAnswer": "Sin respuesta"
     },
-    "lowCreditScore": "Tu puntuación de crédito es inferior a {{minScore}}, por lo que no puedes enviar mensajes ahora"
+    "lowCreditScore": "Tu puntuación de crédito es inferior a {{minScore}}, por lo que no puedes enviar mensajes ahora",
+    "burnAfterReading": "Mensajes temporales",
+    "clearHistoryConfirm": "Solo se borra tu copia del historial. ¿Vaciar?",
+    "clearHistoryDone": "Vaciado"
   },
   "messages": {
     "title": "Mensajes",
@@ -2496,7 +2499,9 @@
       "groupNameUpdated": "Nombre del grupo actualizado",
       "groupDismissed": "Grupo disuelto",
       "messageRevoked": "Se retiró un mensaje",
-      "friendAdded": "Ahora son amigos, ¡salúdense!"
+      "friendAdded": "Ahora son amigos, ¡salúdense!",
+      "burnEnabled": "Mensajes temporales activados ({{duration}})",
+      "burnDisabled": "Mensajes temporales desactivados"
     },
     "preview": {
       "revoked": "[Mensaje retirado]",
@@ -2520,6 +2525,13 @@
       "revokedByModerator": "Un administrador retiró un mensaje",
       "revokedQuote": "Mensaje retirado",
       "revokedPreview": "[Mensaje retirado]"
+    },
+    "burn": {
+      "s30": "30 segundos",
+      "m5": "5 minutos",
+      "h1": "1 hora",
+      "d1": "1 día",
+      "d7": "7 días"
     }
   },
   "permissions": {
@@ -2553,9 +2565,8 @@
     "TEMP_CHAT_JOIN_FAILED": "No se pudo unir, inténtalo de nuevo",
     "NOTE_RESTORE_DUPLICATE": "Ya existe otra copia activa de esta nota guardada.",
     "NOTE_SHARE_LINK_LIMIT": "Límite de enlaces compartidos alcanzado; revoca los que no uses",
-    "UPLOAD_INVALID_CONTENT_TYPE": "Tipo de archivo no compatible",
-    "UPLOAD_PAYLOAD_TOO_LARGE": "El archivo es demasiado grande para subirlo",
     "UPLOAD_INVALID_CONTENT_TYPE": "Este tipo de archivo no es compatible",
+    "UPLOAD_PAYLOAD_TOO_LARGE": "El archivo es demasiado grande para subirlo",
     "COLLECTION_LIMIT": "Límite de colecciones alcanzado; elimina las que no necesites",
     "ADMIN_USER_NOT_FOUND": "El usuario no existe.",
     "ADMIN_USER_SELF_STATUS_CHANGE": "No puedes bloquear ni eliminar tu propia cuenta de administrador.",

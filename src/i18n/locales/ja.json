@@ -409,7 +409,7 @@
     "burn10s": "10秒",
     "burn1m": "1分",
     "burn5m": "5分",
-    "clearHistory": "チャット履歴を消去",
+    "clearHistory": "チャット履歴を削除",
     "clearHistoryWarning": "この会話のすべてのメッセージが完全に削除されます。",
     "clear": "消去",
     "deleteFriend": "連絡先を削除",
@@ -579,7 +579,10 @@
       "missed": "不在着信",
       "noAnswer": "応答なし"
     },
-    "lowCreditScore": "信用スコアが {{minScore}} を下回っているため、現在メッセージを送信できません"
+    "lowCreditScore": "信用スコアが {{minScore}} を下回っているため、現在メッセージを送信できません",
+    "burnAfterReading": "消えるメッセージ",
+    "clearHistoryConfirm": "自分側の履歴のみ削除されます。削除しますか？",
+    "clearHistoryDone": "削除しました"
   },
   "messages": {
     "title": "メッセージ",
@@ -2493,7 +2496,9 @@
       "groupNameUpdated": "グループ名を更新しました",
       "groupDismissed": "グループが解散しました",
       "messageRevoked": "メッセージが取り消されました",
-      "friendAdded": "友だちになりました。挨拶してみましょう"
+      "friendAdded": "友だちになりました。挨拶してみましょう",
+      "burnEnabled": "消えるメッセージがオンになりました（{{duration}}）",
+      "burnDisabled": "消えるメッセージがオフになりました"
     },
     "preview": {
       "revoked": "[メッセージ取り消し]",
@@ -2517,6 +2522,13 @@
       "revokedByModerator": "メッセージが管理者により取り消されました",
       "revokedQuote": "メッセージは取り消されました",
       "revokedPreview": "[メッセージ取り消し]"
+    },
+    "burn": {
+      "s30": "30秒",
+      "m5": "5分",
+      "h1": "1時間",
+      "d1": "1日",
+      "d7": "7日"
     }
   },
   "permissions": {
@@ -2550,9 +2562,8 @@
     "TEMP_CHAT_JOIN_FAILED": "参加に失敗しました。もう一度お試しください",
     "NOTE_RESTORE_DUPLICATE": "このノートの別の収蔵コピーが既に存在します。",
     "NOTE_SHARE_LINK_LIMIT": "共有リンクの上限に達しました。不要なリンクを取り消してください",
-    "UPLOAD_INVALID_CONTENT_TYPE": "サポートされていないファイル形式です",
-    "UPLOAD_PAYLOAD_TOO_LARGE": "ファイルが大きすぎてアップロードできません",
     "UPLOAD_INVALID_CONTENT_TYPE": "対応していないファイル形式です",
+    "UPLOAD_PAYLOAD_TOO_LARGE": "ファイルが大きすぎてアップロードできません",
     "COLLECTION_LIMIT": "コレクションの上限に達しました。不要なものを削除してください",
     "ADMIN_USER_NOT_FOUND": "ユーザーが存在しません",
     "ADMIN_USER_SELF_STATUS_CHANGE": "現在の管理者アカウントを停止または削除することはできません",

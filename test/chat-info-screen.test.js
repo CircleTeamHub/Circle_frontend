@@ -51,7 +51,14 @@ test('chat info screen uses real conversation state instead of local placeholder
   assert.doesNotMatch(source, /setConversationMute/);
   assert.doesNotMatch(source, /setConversationBurnDuration/);
   assert.doesNotMatch(source, /clearConversationMessages/);
-  assert.doesNotMatch(source, /burnDuration/);
+  // 批3 起阅后即焚回到会话级(S-01):必须走 REST 真开关,值来自会话 DTO,
+  // 依旧不允许本地 useState 假开关。
+  assert.match(source, /setChatBurnDuration/);
+  assert.match(
+    source,
+    /const burnDurationSec = activeConversation\?\.burnDurationSec \?\? null;/,
+  );
+  assert.doesNotMatch(source, /useState[^\n]*[Bb]urn/);
   assert.doesNotMatch(source, /const \[pinChat, setPinChat\] = useState\(false\)/);
   assert.doesNotMatch(source, /const \[muteNotifications, setMuteNotifications\] = useState\(false\)/);
   assert.doesNotMatch(source, /toggleValue={pinChat}/);

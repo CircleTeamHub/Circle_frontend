@@ -257,5 +257,7 @@ export interface ChatConversationDto {
   unreadCount: number;
   pinned: boolean;
   muted: boolean;
+  /** 会话级阅后即焚秒数（S-01）；null/缺省 = 关。 */
+  burnDurationSec?: number | null;
   lastMessageAt: string | null;
 }

@@ -10,10 +10,13 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { Avatar } from '@/components/ui/avatar';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import {
+  clearChatConversationHistory,
   createCircleChatConversation,
   fetchChatMembers,
+  setChatBurnDuration,
   updateChatConversationPreferences,
 } from '@/chat-core/api';
+import { formatBurnDuration } from '@/chat-core/message-mappers';
 import { ensureDirectConversation } from '@/chat-core/client';
 import type { ChatConversationDto, ChatMemberDto } from '@/chat-core/protocol';
 import { useChatStore } from '@/chat-core/store';
@@ -1007,6 +1010,52 @@ export default function ChatInfoScreen() {
     [actionPending.mute, dropOptimisticConversationStateKey, resolvedConversationID, runConversationAction, t],
   );
 
+  // S-01 会话级阅后即焚:当前档位跟随会话 DTO(REST 回执会经 store 更新)。
+  const burnDurationSec = activeConversation?.burnDurationSec ?? null;
+
+  const handleOpenBurnOptions = useCallback(() => {
+    if (!resolvedConversationID) return;
+    const choices = [0, 30, 300, 3600, 86400, 604800];
+    Alert.alert(t('chat.burnAfterReading'), undefined, [
+      ...choices.map((seconds) => ({
+        text: seconds === 0 ? t('chat.burnOff') : formatBurnDuration(seconds),
+        onPress: () => {
+          void setChatBurnDuration(resolvedConversationID, seconds).catch(
+            (error: unknown) => {
+              Alert.alert(
+                t('chat.burnAfterReading'),
+                getApiErrorMessage(error, t('common.networkError')),
+              );
+            },
+          );
+        },
+      })),
+      { text: t('common.cancel'), style: 'cancel' as const },
+    ]);
+  }, [resolvedConversationID, t]);
+
+  // G-14 清空聊天记录:服务端写本人水位,本地时间线/预览/未读一并清。
+  const handleClearHistory = useCallback(() => {
+    if (!resolvedConversationID) return;
+    Alert.alert(t('chat.clearHistory'), t('chat.clearHistoryConfirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('chat.clearHistory'),
+        style: 'destructive',
+        onPress: () => {
+          void clearChatConversationHistory(resolvedConversationID)
+            .then(() => Alert.alert(t('chat.clearHistoryDone')))
+            .catch((error: unknown) => {
+              Alert.alert(
+                t('chat.clearHistory'),
+                getApiErrorMessage(error, t('common.networkError')),
+              );
+            });
+        },
+      },
+    ]);
+  }, [resolvedConversationID, t]);
+
   const d = useMemo(
     () => ({
       container: {
@@ -1151,6 +1200,27 @@ export default function ChatInfoScreen() {
               onToggle={actionPending.pin ? undefined : handleTogglePinned}
               showArrow={false}
             />
+            {canManageGroup ? (
+              <>
+                <Divider />
+                <GroupInfoRow
+                  label={t('chat.burnAfterReading')}
+                  value={
+                    burnDurationSec
+                      ? formatBurnDuration(burnDurationSec)
+                      : t('chat.burnOff')
+                  }
+                  onPress={handleOpenBurnOptions}
+                />
+              </>
+            ) : null}
+            <Divider />
+            <GroupInfoRow
+              label={t('chat.clearHistory')}
+              onPress={handleClearHistory}
+              destructive
+              showArrow={false}
+            />
           </View>
 
           <View style={[s.groupSection, d.groupSection]}>
@@ -1207,6 +1277,23 @@ export default function ChatInfoScreen() {
             toggleValue={muted}
             rightText={actionPending.mute ? t('chat.pending') : undefined}
             showArrow={false}
+          />
+          <Divider />
+          <MenuRow
+            icon="flame-outline"
+            label={t('chat.burnAfterReading')}
+            rightText={
+              burnDurationSec
+                ? formatBurnDuration(burnDurationSec)
+                : t('chat.burnOff')
+            }
+            onPress={handleOpenBurnOptions}
+          />
+          <Divider />
+          <MenuRow
+            icon="trash-outline"
+            label={t('chat.clearHistory')}
+            onPress={handleClearHistory}
           />
         </View>
 

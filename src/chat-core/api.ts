@@ -220,6 +220,40 @@ export function searchAllChatMessages(
 }
 
 /** 会话偏好:置顶/免打扰/隐藏。返回最新 DTO 并回写 store。 */
+/** S-01 会话级阅后即焚:任一方设置双方生效(GROUP 限圈主/管理员);0=关。 */
+export async function setChatBurnDuration(
+  conversationId: string,
+  seconds: number | null,
+): Promise<number | null> {
+  const sameSession = sessionGate();
+  const result = await apiClient<{ burnDurationSec: number | null }>(
+    `/chat/conversations/${conversationId}/burn`,
+    { method: 'POST', body: { seconds: seconds ?? 0 } },
+  );
+  if (sameSession()) {
+    useChatStore
+      .getState()
+      .applyBurnDuration(conversationId, result.burnDurationSec ?? null);
+  }
+  return result.burnDurationSec ?? null;
+}
+
+/**
+ * G-14 清空聊天记录:服务端写 per-viewer 水位(对端不受影响),
+ * 本地时间线/预览/未读同步清空 —— 不再是「清内存转头又拉回来」的假清空。
+ */
+export async function clearChatConversationHistory(
+  conversationId: string,
+): Promise<void> {
+  const sameSession = sessionGate();
+  await apiClient(`/chat/conversations/${conversationId}/clear`, {
+    method: 'POST',
+  });
+  if (sameSession()) {
+    useChatStore.getState().clearConversationLocal(conversationId);
+  }
+}
+
 export async function updateChatConversationPreferences(
   conversationId: string,
   prefs: { pinned?: boolean; muted?: boolean; hidden?: boolean },

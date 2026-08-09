@@ -130,6 +130,55 @@ test('revoke words exist in every locale', () => {
   }
 });
 
+// ---- 批3:会话级阅后即焚(S-01)+ 清空聊天记录(G-14) ----
+
+test('conversation dto carries the burn duration and api exposes both endpoints', () => {
+  const protocol = read('src/chat-core/protocol.ts');
+  assert.match(protocol, /burnDurationSec/);
+  const api = read('src/chat-core/api.ts');
+  assert.match(api, /setChatBurnDuration/);
+  assert.match(api, /clearChatConversationHistory/);
+  assert.match(api, /\/burn/);
+  assert.match(api, /\/clear/);
+});
+
+test('clearing a conversation empties the local timeline, preview and unread', () => {
+  const store = read('src/chat-core/store.ts');
+  assert.match(store, /clearConversationLocal/);
+  assert.match(store, /applyBurnDuration/);
+});
+
+test('burn toggle leaves a localized system trail and the info rows exist', () => {
+  const mappers = read('src/chat-core/message-mappers.ts');
+  assert.match(mappers, /burn-changed/);
+  assert.match(mappers, /formatBurnDuration/);
+  const info = read('src/features/chat/screens/ChatInfoScreen.tsx');
+  assert.match(info, /handleOpenBurnOptions/);
+  assert.match(info, /handleClearHistory/);
+});
+
+test('swipe delete clears the personal history watermark, not just hides', () => {
+  const screen = read('src/features/messages/screens/MessagesScreen.tsx');
+  assert.match(screen, /clearChatConversationHistory/);
+});
+
+test('the settings clear-all path writes server watermarks before wiping cache', () => {
+  const hook = read('src/features/profile/hooks/use-storage-actions.ts');
+  assert.match(hook, /clearChatConversationHistory/);
+  assert.match(hook, /allSettled/);
+});
+
+test('burn words exist in every locale', () => {
+  for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
+    const dict = JSON.parse(read(`src/i18n/locales/${locale}.json`));
+    assert.ok(dict?.im?.notification?.burnEnabled, `${locale} burnEnabled`);
+    assert.ok(dict?.im?.notification?.burnDisabled, `${locale} burnDisabled`);
+    assert.ok(dict?.im?.burn?.h1, `${locale} im.burn.h1`);
+    assert.ok(dict?.chat?.burnAfterReading, `${locale} chat.burnAfterReading`);
+    assert.ok(dict?.chat?.clearHistory, `${locale} chat.clearHistory`);
+  }
+});
+
 // ---- G-18:图标角标轻方案 ----
 
 test('app icon badge follows the muted-aware total unread', () => {
