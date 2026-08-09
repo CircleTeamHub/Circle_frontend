@@ -87,6 +87,13 @@ export default function ChatHistoryTextScreen() {
   const [error, setError] = useState<string | null>(null);
   const cursorRef = useRef<number | null>(null);
   const activeKeywordRef = useRef('');
+  /**
+   * 请求世代。handleSearch 只挡了 loading、没挡 loadingMore ——
+   * 关键词 A 的翻页请求还在途时用户改搜 B 是允许的,等 A 那页回来时它会
+   * 无条件 append 进 B 的结果里,还把 B 的游标覆盖成 A 的:列表混着两次
+   * 搜索的命中,往下翻又继续翻 A。每次新搜索递增,过期的完成一律丢弃。
+   */
+  const requestGenerationRef = useRef(0);
 
   const d = useMemo(
     () => ({
@@ -128,10 +135,16 @@ export default function ChatHistoryTextScreen() {
 
     const nextKeyword = (overrideKeyword ?? keyword).trim();
     setSearched(true);
+    // 新搜索作废所有在途请求(含另一个关键词的翻页)。
+    const generation = (requestGenerationRef.current += 1);
 
     if (!conversationID || !nextKeyword) {
       setResults([]);
       setHasMore(false);
+      // 世代已经递增,在途请求的 finally 会跳过它们的 setLoading(false),
+      // 这里必须自己收尾 —— 否则 loading 永远为 true,handleSearch 开头的
+      // `if (loading) return` 会把搜索彻底锁死。
+      setLoading(false);
       return;
     }
 
@@ -146,10 +159,12 @@ export default function ChatHistoryTextScreen() {
         types: ['text', 'quote'],
         limit: PAGE_SIZE,
       });
+      if (generation !== requestGenerationRef.current) return;
       cursorRef.current = page.nextBeforeHeight;
       setResults([...page.messages].reverse());
       setHasMore(page.nextBeforeHeight !== null);
     } catch (err) {
+      if (generation !== requestGenerationRef.current) return;
       setResults([]);
       setHasMore(false);
       setError(t('chat.history.loadFailed'));
@@ -157,7 +172,8 @@ export default function ChatHistoryTextScreen() {
         console.warn('[chat-history-text] search failed', err);
       }
     } finally {
-      setLoading(false);
+      // 更新的一次搜索已经接管了 loading,别替它关掉。
+      if (generation === requestGenerationRef.current) setLoading(false);
     }
   }, [conversationID, keyword, loading, t]);
 
@@ -174,6 +190,7 @@ export default function ChatHistoryTextScreen() {
       return;
     }
 
+    const generation = requestGenerationRef.current;
     setLoadingMore(true);
 
     try {
@@ -185,16 +202,22 @@ export default function ChatHistoryTextScreen() {
           ? { beforeHeight: cursorRef.current }
           : {}),
       });
+      // 期间用户换了关键词:这页属于上一次搜索,append 进去会把两次命中混在
+      // 一起,还会用旧游标覆盖新搜索的游标。
+      if (generation !== requestGenerationRef.current) return;
       cursorRef.current = page.nextBeforeHeight;
       setResults((prev) => [...prev, ...[...page.messages].reverse()]);
       setHasMore(page.nextBeforeHeight !== null);
     } catch (err) {
+      if (generation !== requestGenerationRef.current) return;
       // 翻页失败：停止继续翻，留住已加载部分。
       setHasMore(false);
       if (typeof __DEV__ !== 'undefined' && __DEV__) {
         console.warn('[chat-history-text] load-more failed', err);
       }
     } finally {
+      // 这个开关无条件收:它只是本次翻页的进度位,不归新搜索管。
+      // 过期请求若不收,loadingMore 会卡在 true,新关键词从此翻不了页。
       setLoadingMore(false);
     }
   }, [conversationID, hasMore, loadingMore]);
