@@ -2,7 +2,6 @@ import type { Socket } from 'socket.io-client';
 import {
   CHAT_EVENTS,
   isChatMessageDto,
-  isDirectConversationId,
   type ChatMessageDto,
   type ChatPresenceBroadcast,
   type ChatReadBroadcast,
@@ -26,19 +25,63 @@ import { useChatStore } from './store';
 const CONVERSATION_BACKFILL_DEBOUNCE_MS = 800;
 let backfillTimer: ReturnType<typeof setTimeout> | null = null;
 
+/**
+ * 等会话元信息的横幅候选(conversationId → 该会话最新一条)。
+ *
+ * 陌生人的第一条消息、刚被拉进的群:会话还不在快照里,标题/头像/跳转目标
+ * 一个都拼不出来。原来的做法是从会话 id 的形状猜「这是不是 1:1」,猜中就用
+ * 发送者信息凑一条 —— 而会话 id 其实是不透明 UUID,那条分支永远走不到,
+ * 结果就是这两种情况**从来没有横幅**。改成先攒着,等补拉把元信息带回来再弹。
+ */
+const pendingBanners = new Map<string, ChatMessageDto>();
+/** 攒的是会话数不是消息数;超了丢最早的会话,免得离线洪泛把它撑成内存泄漏。 */
+const PENDING_BANNER_CONVERSATIONS_MAX = 20;
+
+function rememberPendingBanner(message: ChatMessageDto): void {
+  // 同一会话只留最新一条:补拉回来弹一条「有新消息」就够,
+  // 不该把窗口期内攒的每一条都排进横幅队列。
+  pendingBanners.delete(message.conversationId);
+  pendingBanners.set(message.conversationId, message);
+  while (pendingBanners.size > PENDING_BANNER_CONVERSATIONS_MAX) {
+    const oldest = pendingBanners.keys().next().value;
+    if (oldest === undefined) break;
+    pendingBanners.delete(oldest);
+  }
+}
+
+function flushPendingBanners(): void {
+  const pending = Array.from(pendingBanners.values());
+  pendingBanners.clear();
+  for (const message of pending) {
+    // 补拉后仍然认不出会话(已退群/已删好友/后端没返回)就放弃这一条:
+    // 继续攒下去只会无限期占着,而它的元信息永远不会来了。
+    enqueueForegroundBanner(message);
+  }
+}
+
 function scheduleConversationBackfill(isLive: () => boolean): void {
   if (backfillTimer !== null) return;
   backfillTimer = setTimeout(() => {
     backfillTimer = null;
-    if (!isLive()) return;
-    void loadChatConversations().catch((err: unknown) => {
-      console.warn('[chat] conversation backfill failed', err);
-    });
+    if (!isLive()) {
+      pendingBanners.clear();
+      return;
+    }
+    void loadChatConversations()
+      .then(() => {
+        if (isLive()) flushPendingBanners();
+      })
+      .catch((err: unknown) => {
+        console.warn('[chat] conversation backfill failed', err);
+        // 元信息没拿到,攒着的候选也就没法变成正确的横幅了。
+        pendingBanners.clear();
+      });
   }, CONVERSATION_BACKFILL_DEBOUNCE_MS);
 }
 
-/** 测试与登出用:丢掉在途的补拉计时器。 */
+/** 测试与登出用:丢掉在途的补拉计时器与攒着的横幅。 */
 export function cancelConversationBackfill(): void {
+  pendingBanners.clear();
   if (backfillTimer === null) return;
   clearTimeout(backfillTimer);
   backfillTimer = null;
@@ -68,7 +111,9 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       // 看到自己、未读永远加不上。
       const applied = store.applyIncomingMessage(payload);
       store.ingestMessages(payload.conversationId, [payload]);
-      enqueueForegroundBanner(payload);
+      if (enqueueForegroundBanner(payload) === 'needs-conversation') {
+        rememberPendingBanner(payload);
+      }
       if (!applied) {
         // 会话不在当前快照里(对方刚建的单聊、刚被拉进的群):消息已经进了
         // 时间线,但没有会话行也没有角标 —— 停在消息页的用户要手动刷新才看得到。
@@ -124,49 +169,38 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
  *
  * 抑制规则:自己发的不弹;当前正打开的那个会话不弹;系统消息不弹;
  * 元信息不足以给出正确标题与跳转目标的不弹。
+ *
+ * 返回 'needs-conversation' 表示「这条本该弹,但会话元信息还没到」——
+ * 调用方据此把它攒起来,等补拉回来再弹(见 pendingBanners)。消息 DTO 里
+ * 既没有会话类型也没有圈子名/圈子 id,拿发送者去凑群横幅会弹出错的标题、
+ * 点进去还进错房间,所以只能等,不能猜。
  */
-function enqueueForegroundBanner(message: ChatMessageDto): void {
+function enqueueForegroundBanner(
+  message: ChatMessageDto,
+): 'enqueued' | 'suppressed' | 'needs-conversation' {
   const store = useChatStore.getState();
   const selfId = store.currentUserId;
-  if (selfId !== null && message.sender?.id === selfId) return;
-  if (store.activeConversationId === message.conversationId) return;
-  if (message.type === 'system') return;
+  if (selfId !== null && message.sender?.id === selfId) return 'suppressed';
+  if (store.activeConversationId === message.conversationId) return 'suppressed';
+  if (message.type === 'system') return 'suppressed';
 
   const conversation = store.conversations.find(
     (c) => c.id === message.conversationId,
   );
+  if (!conversation) return 'needs-conversation';
 
-  let title: string;
-  let avatarRaw: string | null;
-  let sourceID: string;
-  let isGroup: boolean;
+  const isGroup = conversation.type === 'GROUP';
+  const title = isGroup
+    ? (conversation.circle?.name ?? '')
+    : (conversation.peer?.nickname ?? message.sender?.nickname ?? '');
+  const avatarRaw = isGroup
+    ? (conversation.circle?.avatarUrl ?? null)
+    : (conversation.peer?.avatarUrl ?? null);
+  const sourceID = isGroup
+    ? (conversation.circleId ?? '')
+    : (conversation.peer?.id ?? '');
 
-  if (conversation) {
-    isGroup = conversation.type === 'GROUP';
-    title = isGroup
-      ? (conversation.circle?.name ?? '')
-      : (conversation.peer?.nickname ?? message.sender?.nickname ?? '');
-    avatarRaw = isGroup
-      ? (conversation.circle?.avatarUrl ?? null)
-      : (conversation.peer?.avatarUrl ?? null);
-    sourceID = isGroup
-      ? (conversation.circleId ?? '')
-      : (conversation.peer?.id ?? '');
-  } else if (isDirectConversationId(message.conversationId)) {
-    // 陌生人的第一条消息:会话还不在快照里,补拉要等 800ms 防抖 + 一次请求,
-    // 而横幅错过这一下就再也不会补。1:1 会话的发送者就是对端(自己发的上面
-    // 已经挡掉),标题、头像、跳转要的 sourceID 消息里全都有,不必等。
-    isGroup = false;
-    title = message.sender?.nickname ?? '';
-    avatarRaw = message.sender?.avatarUrl ?? null;
-    sourceID = message.sender?.id ?? '';
-  } else {
-    // 群会话没有这条退路:标题要圈子名、跳转要圈子 id,消息里一个都没有。
-    // 拿发送者去凑会弹出一个错的标题,点进去还进错房间 —— 不如不弹。
-    return;
-  }
-
-  if (!title || !sourceID) return;
+  if (!title || !sourceID) return 'suppressed';
   const summary = isGroup
     ? `${message.sender?.nickname ?? ''}: ${getChatMessagePreview(message)}`.trim()
     : getChatMessagePreview(message);
@@ -181,4 +215,5 @@ function enqueueForegroundBanner(message: ChatMessageDto): void {
     sourceID,
     conversationType: isGroup ? 'group' : 'private',
   });
+  return 'enqueued';
 }

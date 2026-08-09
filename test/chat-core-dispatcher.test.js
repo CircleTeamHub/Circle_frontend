@@ -18,17 +18,21 @@ function transpile(rel) {
   }).outputText;
 }
 
-function runModule(rel, requireImpl) {
+function runModule(rel, requireImpl, extraContext = {}) {
   const context = {
     Date,
     Number,
     Array,
+    Map,
+    Set,
+    Promise,
     setTimeout,
     clearTimeout,
     console: { warn: () => {} },
     module: { exports: {} },
     exports: {},
     require: requireImpl,
+    ...extraContext,
   };
   context.exports = context.module.exports;
   vm.runInNewContext(transpile(rel), context);
@@ -56,6 +60,21 @@ function loadDispatcher(storeOverrides = {}) {
     backfills: 0,
     ...storeOverrides,
   };
+  // 补拉是 800ms 防抖的。测试里换成可控计时器:每条用例真等 0.8 秒既慢又脆,
+  // 而这里要断言的恰恰是「补拉回来之后」发生了什么。
+  let pendingBackfill = null;
+  let lastBackfill = Promise.resolve();
+  state.runBackfill = async () => {
+    const fire = pendingBackfill;
+    pendingBackfill = null;
+    if (!fire) return;
+    fire();
+    await lastBackfill;
+    // flushPendingBanners 挂在 loadChatConversations().then() 上,再让一拍微任务。
+    await Promise.resolve();
+    await Promise.resolve();
+  };
+
   const storeState = {
     get currentUserId() {
       return state.currentUserId;
@@ -84,9 +103,10 @@ function loadDispatcher(storeOverrides = {}) {
     if (request === './store') return { useChatStore: { getState: () => storeState } };
     if (request === './api') {
       return {
-        loadChatConversations: async () => {
+        loadChatConversations: () => {
           state.backfills += 1;
-          return [];
+          lastBackfill = Promise.resolve(state.conversations);
+          return lastBackfill;
         },
       };
     }
@@ -116,6 +136,14 @@ function loadDispatcher(storeOverrides = {}) {
       };
     }
     throw new Error(`unexpected require: ${request}`);
+  }, {
+    setTimeout: (fn) => {
+      pendingBackfill = fn;
+      return 1;
+    },
+    clearTimeout: () => {
+      pendingBackfill = null;
+    },
   });
 
   const socket = fakeSocket();
@@ -181,7 +209,10 @@ test('system messages with a null sender are still valid', () => {
   assert.equal(state.ingested.length, 1);
 });
 
-const DIRECT_ID = 'direct:0000-a:ffff-b';
+// 会话 id 是不透明 UUID —— 这个 fixture 以前写成 'direct:0000-a:ffff-b',
+// 照着一个后端从不下发的形状编的,于是「陌生人第一条消息弹横幅」那条用例
+// 走的是生产里永远走不到的分支,测过了但没有任何保护作用。
+const DIRECT_ID = '3f2a1c4e-9b7d-4e21-8a55-6c0d1e2f3a4b';
 
 function directConversation(overrides = {}) {
   return {
@@ -194,9 +225,11 @@ function directConversation(overrides = {}) {
   };
 }
 
-test('the first message from a new contact still raises a banner', () => {
-  // 会话不在快照里(对方刚建的单聊)。补拉要等 800ms 防抖 + 一次请求,
-  // 横幅错过这一下就再也不会补 —— 用户在非消息页完全收不到提示。
+test('the first message from a new contact banners once metadata lands', async () => {
+  // 会话不在快照里(对方刚建的单聊 / 刚被拉进的群):标题、头像、跳转目标
+  // 消息里一个都没有,只能等补拉。原来是从会话 id 的形状猜「这是不是 1:1」,
+  // 猜中就拿发送者凑一条 —— 而会话 id 是 UUID,那条分支永远走不到,
+  // 这两种情况实际上从来没有过横幅。
   const { socket, state } = loadDispatcher({ conversations: [] });
   socket.emit(
     'chat:msg',
@@ -206,26 +239,84 @@ test('the first message from a new contact still raises a banner', () => {
     }),
   );
 
+  // 元信息还没到,这一刻不弹(弹了就是拿发送者猜的)。
+  assert.equal(state.banners.length, 0);
+
+  // 补拉把会话带回来之后,攒着的那条才变成横幅。
+  state.conversations = [directConversation()];
+  await state.runBackfill();
+
   assert.equal(state.banners.length, 1);
   const banner = state.banners[0];
-  assert.equal(banner.title, '新朋友');
+  assert.equal(banner.title, '备注名');
   assert.equal(banner.conversationType, 'private');
   // 跳转目标必须是对端 uuid,否则点开进不去。
   assert.equal(banner.sourceID, 'peer');
   assert.equal(banner.conversationID, DIRECT_ID);
 });
 
-test('an unknown group conversation raises no banner (no title, no route)', () => {
-  // 群横幅要圈子名与圈子 id,消息里一个都没有。拿发送者去凑会弹出错的标题、
-  // 点进去还进错房间 —— 不如不弹,等补拉后由下一条消息带出来。
+test('a stranger group message also banners after backfill', async () => {
+  // 群横幅要圈子名与圈子 id。这两样只有会话元信息里有 —— 等到了就该弹,
+  // 而不是像原来那样直接 return(群会话永远没有横幅)。
   const { socket, state } = loadDispatcher({ conversations: [] });
   socket.emit('chat:msg', dto({ conversationId: 'grp-1' }));
   assert.equal(state.banners.length, 0);
-  // 但补拉照常安排,会话行与角标不会一直缺着。
-  assert.equal(state.ingested.length, 1);
+
+  state.conversations = [
+    {
+      id: 'grp-1',
+      type: 'GROUP',
+      peer: null,
+      circleId: 'circle-9',
+      circle: { id: 'circle-9', name: '圈子名', avatarUrl: null },
+    },
+  ];
+  await state.runBackfill();
+
+  assert.equal(state.banners.length, 1);
+  assert.equal(state.banners[0].title, '圈子名');
+  assert.equal(state.banners[0].sourceID, 'circle-9');
+  assert.equal(state.banners[0].conversationType, 'group');
 });
 
-test('known conversations still win over the sender fallback', () => {
+test('only the newest message per conversation is banner-deferred', async () => {
+  // 离线回来一次投递几十条:补拉后该弹一条「有新消息」,不是几十条横幅。
+  const { socket, state } = loadDispatcher({ conversations: [] });
+  for (let i = 0; i < 5; i += 1) {
+    socket.emit(
+      'chat:msg',
+      dto({ id: `m${i}`, conversationId: DIRECT_ID, content: { text: `第${i}条` } }),
+    );
+  }
+
+  state.conversations = [directConversation()];
+  await state.runBackfill();
+
+  assert.equal(state.banners.length, 1);
+  assert.equal(state.banners[0].id, 'm4');
+});
+
+test('a conversation still missing after backfill is dropped, not re-queued', async () => {
+  // 已退群 / 已删好友:元信息永远不会来了。攒着不放会一直占内存,
+  // 而且之后每一次补拉都会把这条陈旧候选翻出来重试一遍。
+  const { socket, state } = loadDispatcher({ conversations: [] });
+  socket.emit('chat:msg', dto({ id: 'stale', conversationId: 'gone-1' }));
+  await state.runBackfill();
+  assert.equal(state.banners.length, 0);
+
+  // 别的会话来消息 → 又排一次补拉。这时 'gone-1' 的元信息哪怕回来了,
+  // 那条早就过去的消息也不该突然弹出来。
+  state.conversations = [directConversation({ id: 'gone-1' })];
+  socket.emit('chat:msg', dto({ id: 'fresh', conversationId: 'other-1' }));
+  await state.runBackfill();
+
+  assert.deepEqual(
+    state.banners.map((b) => b.id),
+    [],
+  );
+});
+
+test('known conversations use their own metadata, not the sender\'s', () => {
   const { socket, state } = loadDispatcher({
     conversations: [directConversation()],
   });
@@ -241,14 +332,14 @@ test('known conversations still win over the sender fallback', () => {
 });
 
 test('banner avatars go through the media allowlist', () => {
-  const { socket, state } = loadDispatcher({ conversations: [] });
-  socket.emit(
-    'chat:msg',
-    dto({
-      conversationId: DIRECT_ID,
-      sender: { id: 'peer', nickname: '新朋友', avatarUrl: 'https://attacker/1.gif' },
-    }),
-  );
+  const { socket, state } = loadDispatcher({
+    conversations: [
+      directConversation({
+        peer: { id: 'peer', nickname: '备注名', avatarUrl: 'https://attacker/1.gif' },
+      }),
+    ],
+  });
+  socket.emit('chat:msg', dto({ conversationId: DIRECT_ID }));
   // 横幅一出现就会自动发起这次图片请求 —— 未授权来源必须落成占位。
   assert.equal(state.banners[0].avatarUrl, null);
 });

@@ -176,7 +176,7 @@ test('realtime 邀请守卫放行 single 会话（round 2 P1：被叫端此前�
   );
 });
 
-test('resolveDirectCalleeID：UUID 直通、direct: 解对端、旧形态拒绝 (round 3)', () => {
+test('resolveDirectCalleeID：UUID 直通、旧 si_ 解对端、其余拒绝 (round 3)', () => {
   const mod = loadTsModule('src/features/call/resolve-direct-callee.ts', {
     requireShim: (specifier) => {
       if (specifier === '@/utils/user-id-alias') {
@@ -194,17 +194,13 @@ test('resolveDirectCalleeID：UUID 直通、direct: 解对端、旧形态拒绝 
     mod.resolveDirectCalleeID(peer.replace(/-/g, ''), self),
     peer,
   );
-  // 推送兜底：direct: 会话 id → 剔除自己得到对端(两种排序都要成立)
+  // 自研栈的会话 id 是不透明 UUID —— `direct:<a>:<b>` 这种形状后端从不下发,
+  // 原来那条分支是照着一个不存在的契约写的,已删。这里断言它现在按普通坏形状拒绝。
   assert.equal(
     mod.resolveDirectCalleeID(`direct:${peer}:${self}`, self),
-    peer,
-  );
-  assert.equal(
-    mod.resolveDirectCalleeID(`direct:${self}:${peer}`, self),
-    peer,
+    null,
   );
   // 自聊 / 旧栈群会话 id / 坏形状：拒绝而不是把坏 id 打给后端
-  assert.equal(mod.resolveDirectCalleeID(`direct:${self}:${self}`, self), null);
   assert.equal(mod.resolveDirectCalleeID('sg_whatever', self), null);
   assert.equal(mod.resolveDirectCalleeID('si_aaa_bbb', self), null);
   assert.equal(mod.resolveDirectCalleeID('not-a-uuid', self), null);

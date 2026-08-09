@@ -163,17 +163,17 @@ export interface ChatMemberDto {
 
 export type ChatConversationType = 'DIRECT' | 'GROUP' | 'TEMP' | 'SUPPORT';
 
-/** 1:1 会话 id 形如 `direct:<uuid>:<uuid>`(双方 UUID 码点升序),跨仓约定。 */
-export const DIRECT_CONVERSATION_ID_PREFIX = 'direct:';
-
 /**
- * 只看 id 判断是不是 1:1 会话。
- * 用在「会话元信息还没到、但必须立刻决定怎么处理这条消息」的地方 ——
- * 消息 DTO 本身不带会话类型,而把群消息当单聊处理会给出错的标题和错的跳转。
+ * 会话 id 是不透明的 UUID —— **看 id 判断不出会话类型**。
+ *
+ * 这里原来有个 `isDirectConversationId()`,断言 1:1 会话 id 形如
+ * `direct:<uuid>:<uuid>`。那个断言是错的:后端 `ChatConversation.id` 是
+ * `@default(uuid())`,`直连防重键 directKey`(`<low>:<high>`)只做唯一约束、
+ * 从不出服务端。于是它对**每一个**真实会话都返回 false,依赖它的分支全是死代码。
+ *
+ * 需要知道会话类型时,只能读 `ChatConversationDto.type`(即先要有会话元信息);
+ * 元信息还没到就等补拉,别从 id 上猜。
  */
-export function isDirectConversationId(conversationId: string): boolean {
-  return conversationId.startsWith(DIRECT_CONVERSATION_ID_PREFIX);
-}
 
 export interface ChatCircleInfo {
   id: string;

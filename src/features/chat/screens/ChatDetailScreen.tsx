@@ -129,6 +129,7 @@ import {
   flushPendingGiftCardAcks,
 } from '@/features/chat/utils/gift-card-ack';
 import { resolveDirectCalleeID } from '@/features/call/resolve-direct-callee';
+import { resolveChatDetailIdentity } from '@/features/chat/chat-detail-identity';
 import type { CallType } from '@/features/call/types';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
@@ -521,9 +522,17 @@ export default function ChatDetailScreen() {
     }
   }, []);
 
-  const paramConversationID =
-    typeof params.conversationID === 'string' ? params.conversationID : '';
-  const sourceID = typeof params.sourceID === 'string' ? params.sourceID : '';
+  // 迁移窗口的旧 OpenIM 推送(si_/sg_ 会话 id)会被路由原样带进来,直接拿去
+  // 订阅只会得到一个空会话 —— 归一规则连同理由都在 resolveChatDetailIdentity。
+  const { conversationID: paramConversationID, sourceID } = useMemo(
+    () =>
+      resolveChatDetailIdentity({
+        conversationID: params.conversationID,
+        sourceID: params.sourceID,
+        currentUserID,
+      }),
+    [params.conversationID, params.sourceID, currentUserID],
+  );
   // 有些入口（联系人/群聊列表/报名管理等）只传了 sourceID 没传 conversationID，
   // 这里就地解析会话，避免聊天页停在预览占位。IM 未接通时解析失败 → 保持预览。
   const [resolvedConversationID, setResolvedConversationID] =

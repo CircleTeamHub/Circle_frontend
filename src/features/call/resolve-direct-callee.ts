@@ -7,10 +7,13 @@ const UUID_SHAPE =
  * 解析 1:1 呼叫的被叫 UUID。
  *
  * 正常入口 sourceID 就是对方 UUID;但推送路由的兜底是
- * `sourceID || conversationID`,可能漏进 `direct:<low>:<high>`(自研 1:1
- * 会话 id,双方 UUID 码点升序),或迁移窗口里旧 OpenIM 推送的 `si_<a>_<b>`。
- * 这两种形式都从会话 id 剔除自己得到对端;群会话与解析失败返回 null,
- * 调用方给可控提示。
+ * `sourceID || conversationID`,迁移窗口里旧 OpenIM 推送的 `si_<a>_<b>`
+ * 会原样漏进来 —— 它两段都是用户 id,剔掉自己就是对端。
+ * 群会话与解析失败返回 null,调用方给可控提示。
+ *
+ * 这里曾经还有一条 `direct:<low>:<high>` 分支,前提是「自研 1:1 会话 id 长这样」。
+ * 那个前提是错的:后端 `ChatConversation.id` 就是个 UUID,`直连防重键 directKey`
+ * 从不出服务端(详见 chat-core/protocol.ts 的同题说明),分支永远走不到,已删。
  */
 export function resolveDirectCalleeID(
   rawSourceID: string,
@@ -18,11 +21,6 @@ export function resolveDirectCalleeID(
 ): string | null {
   const source = rawSourceID?.trim();
   if (!source) return null;
-  if (source.startsWith('direct:')) {
-    const parts = source.slice('direct:'.length).split(':').filter(Boolean);
-    const peer = parts.find((part) => part !== selfUserID);
-    return peer && peer !== selfUserID ? peer : null;
-  }
   /**
    * 迁移窗口的兼容:升级前入队的 OpenIM 推送可能还压在系统托盘里(升级不会
    * 清掉它们),点开时 push-notification-route 的 `sourceID || conversationID`
