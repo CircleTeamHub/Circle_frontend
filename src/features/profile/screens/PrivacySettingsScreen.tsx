@@ -75,12 +75,15 @@ const PERMISSION_OPTIONS: readonly PrivacyPermission[] = [
 ];
 
 const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
-  messageSelfDestructDays: 2,
+  // 与后端 DEFAULT_PRIVACY_SETTINGS 对齐:0 = 关闭自动销毁。
+  messageSelfDestructDays: 0,
   momentsVisibility: 'ALL',
   allowStrangerMessages: true,
   showPhone: false,
   showWechat: true,
   showQQ: true,
+  // 无对应开关：whatsup 字段本身在 App 里还没有界面（见 privacy.ts 的说明）。
+  showWhatsup: true,
   addMeByAccount: true,
   addMeByPhone: false,
   addMeByQrCode: true,
@@ -404,18 +407,13 @@ function AddMeMethodsSheet({
         disabled={disabled}
         onValueChange={(value) => onChange({ addMeByAccount: value })}
       />
-      <MethodSwitch
-        label={t('settingsDetails.privacy.addMe.byPhone')}
-        value={settings.addMeByPhone}
-        disabled={disabled}
-        onValueChange={(value) => onChange({ addMeByPhone: value })}
-      />
-      <MethodSwitch
-        label={t('settingsDetails.privacy.addMe.byQrCode')}
-        value={settings.addMeByQrCode}
-        disabled={disabled}
-        onValueChange={(value) => onChange({ addMeByQrCode: value })}
-      />
+      {/*
+        byPhone / byQrCode 暂不放出：手机号搜人接口不存在，扫码器
+        (resolveMessageScanResult) 也解析不出用户 —— 这两条发现路径在产品里
+        还没有，开关拨了不通电，后端也无从 enforce。等功能落地时连同各自入口的
+        收口一起放开（账号那条的收口在 UserService.findByExactAccountId）。
+        字段本身保留在 PrivacySettings 里，不改服务端契约。
+      */}
       <MethodSwitch
         label={t('settingsDetails.privacy.addMe.byGroup')}
         value={settings.addMeByGroup}
