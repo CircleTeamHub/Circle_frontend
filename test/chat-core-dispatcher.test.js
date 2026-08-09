@@ -64,6 +64,24 @@ function loadDispatcher(storeOverrides = {}) {
   // 而这里要断言的恰恰是「补拉回来之后」发生了什么。
   let pendingBackfill = null;
   let lastBackfill = Promise.resolve();
+  state.deferBackfill = false;
+  state.settleBackfill = null;
+  /** 只触发定时器、不等请求结束(补拉留在途中)。 */
+  state.fireBackfill = () => {
+    const fire = pendingBackfill;
+    pendingBackfill = null;
+    if (fire) fire();
+  };
+  /** 让在途的那次补拉以给定结果结束,并让微任务跑完。 */
+  state.settle = async (outcome, value) => {
+    const handle = state.settleBackfill;
+    state.settleBackfill = null;
+    if (!handle) return;
+    handle[outcome](value);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  };
   state.runBackfill = async () => {
     const fire = pendingBackfill;
     pendingBackfill = null;
@@ -105,6 +123,14 @@ function loadDispatcher(storeOverrides = {}) {
       return {
         loadChatConversations: () => {
           state.backfills += 1;
+          if (state.deferBackfill) {
+            // 手动控制的在途请求:测并发补拉时要能让第一次「还没回来」。
+            lastBackfill = new Promise((resolve, reject) => {
+              state.settleBackfill = { resolve, reject };
+            });
+            // 未处理的 rejection 由被测代码的 .catch 接走,这里只暴露句柄。
+            return lastBackfill;
+          }
           lastBackfill = Promise.resolve(state.conversations);
           return lastBackfill;
         },
@@ -375,4 +401,62 @@ test('a redelivered locally-deleted message never reaches the banner', () => {
   } finally {
     deletedIds.delete('deleted-1');
   }
+});
+
+test('an older failed backfill does not discard newer banner candidates', async () => {
+  // backfillTimer 在请求发出**之前**就置空了,所以第一次补拉在途时,另一个
+  // 陌生会话来消息会再排一次补拉、并把候选加进同一个 map。原来第一次失败的
+  // catch 会把整个 map 清掉 —— 第二次请求明明能拿到它的元信息,横幅却没了。
+  const { socket, state } = loadDispatcher({ conversations: [] });
+  state.deferBackfill = true;
+
+  socket.emit('chat:msg', dto({ id: 'a', conversationId: 'conv-a' }));
+  state.fireBackfill(); // 第一次补拉发出,挂在途中
+
+  // 在途期间来了另一个陌生会话的消息 —— 它排的是第二次补拉。
+  socket.emit('chat:msg', dto({ id: 'b', conversationId: 'conv-b' }));
+
+  await state.settle('reject', new Error('network down'));
+  assert.equal(state.banners.length, 0);
+
+  // 第二次补拉把 conv-b 的元信息带回来了,它的横幅必须还在。
+  state.deferBackfill = false;
+  state.conversations = [directConversation({ id: 'conv-b' })];
+  await state.runBackfill();
+
+  assert.deepEqual(
+    state.banners.map((b) => b.id),
+    ['b'],
+  );
+});
+
+test('a backfill only serves candidates that predate it', async () => {
+  // 请求发出后才到的会话,元信息不可能在这一次的响应里。成功路径上把它
+  // 一起 flush 掉的话,它会被当成「补拉后仍认不出」而直接丢弃。
+  const { socket, state } = loadDispatcher({ conversations: [] });
+  state.deferBackfill = true;
+
+  socket.emit('chat:msg', dto({ id: 'early', conversationId: 'conv-early' }));
+  state.fireBackfill();
+  socket.emit('chat:msg', dto({ id: 'late', conversationId: 'conv-late' }));
+
+  // 第一次补拉成功,但响应里只有 conv-early。
+  state.conversations = [directConversation({ id: 'conv-early' })];
+  await state.settle('resolve', state.conversations);
+  assert.deepEqual(
+    state.banners.map((b) => b.id),
+    ['early'],
+  );
+
+  // conv-late 还留着,等第二次补拉。
+  state.deferBackfill = false;
+  state.conversations = [
+    directConversation({ id: 'conv-early' }),
+    directConversation({ id: 'conv-late' }),
+  ];
+  await state.runBackfill();
+  assert.deepEqual(
+    state.banners.map((b) => b.id),
+    ['early', 'late'],
+  );
 });

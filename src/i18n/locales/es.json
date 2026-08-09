@@ -577,7 +577,8 @@
       "failed": "Llamada fallida",
       "missed": "Llamada perdida",
       "noAnswer": "Sin respuesta"
-    }
+    },
+    "lowCreditScore": "Tu puntuación de crédito es inferior a {{minScore}}, por lo que no puedes enviar mensajes ahora"
   },
   "messages": {
     "title": "Mensajes",

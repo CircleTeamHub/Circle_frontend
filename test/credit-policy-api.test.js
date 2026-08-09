@@ -33,6 +33,15 @@ function loadTsModule(relativePath, stubs = {}) {
       if (specifier === '@/observability/sentry') {
         return { reportError: () => {} };
       }
+      // 拒绝文案要按当前语言取词条(硬编码中文只留作日志兜底),
+      // 于是源码依赖 i18n —— 桩里直接走 defaultValue。
+      if (specifier === '@/i18n') {
+        return {
+          default: {
+            t: (_key, opts) => String(opts?.defaultValue ?? ''),
+          },
+        };
+      }
       return require(specifier);
     },
     Date,

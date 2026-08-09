@@ -617,7 +617,8 @@
       "failed": "Call failed",
       "missed": "Missed call",
       "noAnswer": "No answer"
-    }
+    },
+    "lowCreditScore": "Your credit score is below {{minScore}}, so you cannot send messages right now"
   },
   "contacts": {
     "title": "Contacts",

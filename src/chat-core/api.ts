@@ -92,17 +92,31 @@ export async function loadChatHistory(
  * 漏掉的后果是用户删过的消息在搜索结果里原样重现,点进去还会跳向一条
  * 时间线里根本不存在的目标。
  *
- * 分页不受影响:nextBeforeHeight 由服务端按未过滤的结果给出,过滤只减少本页条数。
+ * 整页被过滤空时要继续翻:nextBeforeHeight 是服务端按**未过滤**的结果给的,
+ * 所以「本页 0 条 + 游标非空」完全可能。直接把空页返回去的话,四个历史屏渲染的是
+ * 空状态,而继续翻页要靠 onEndReached —— 一个没有内容的列表不会触底,
+ * 更早的可见结果就永远够不着了。
  */
-export function searchChatMessages(
+type ChatHistorySearchOptions = {
+  keyword?: string;
+  types?: string[];
+  date?: string;
+  beforeHeight?: number;
+  limit?: number;
+};
+
+/**
+ * 整页皆墓碑时最多再往前追几页。
+ *
+ * 有上限是因为极端情况下(某段历史被整体删过)可能连着几十页都是空的,
+ * 一次用户操作不该变成几十个串行请求。追满仍然空就把空页连同游标交回去,
+ * 由列表的触底/重试继续 —— 会慢,但不会卡住,也不会静默截断结果。
+ */
+const MAX_EMPTY_PAGE_CHASES = 5;
+
+function fetchChatHistoryPage(
   conversationId: string,
-  options: {
-    keyword?: string;
-    types?: string[];
-    date?: string;
-    beforeHeight?: number;
-    limit?: number;
-  } = {},
+  options: ChatHistorySearchOptions,
 ): Promise<ChatHistoryPageDto> {
   const params = new URLSearchParams();
   if (options.keyword) params.set('keyword', options.keyword);
@@ -118,10 +132,31 @@ export function searchChatMessages(
   const query = params.toString();
   return apiClient<ChatHistoryPageDto>(
     `/chat/conversations/${conversationId}/messages${query ? `?${query}` : ''}`,
-  ).then((page) => ({
-    ...page,
-    messages: withoutLocallyDeleted(page.messages),
-  }));
+  );
+}
+
+export async function searchChatMessages(
+  conversationId: string,
+  options: ChatHistorySearchOptions = {},
+): Promise<ChatHistoryPageDto> {
+  let beforeHeight = options.beforeHeight;
+
+  for (let chased = 0; ; chased += 1) {
+    const page = await fetchChatHistoryPage(conversationId, {
+      ...options,
+      ...(beforeHeight !== undefined ? { beforeHeight } : {}),
+    });
+    const messages = withoutLocallyDeleted(page.messages);
+    if (
+      messages.length > 0 ||
+      page.nextBeforeHeight === null ||
+      chased >= MAX_EMPTY_PAGE_CHASES
+    ) {
+      // 游标始终用**最后一次**请求返回的那个,否则下一次翻页会退回已经看过的区间。
+      return { ...page, messages };
+    }
+    beforeHeight = page.nextBeforeHeight;
+  }
 }
 
 /** 某月内有聊天记录的日期集合(按日期日历上色;客户端时区)。 */

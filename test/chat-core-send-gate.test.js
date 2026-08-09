@@ -137,3 +137,36 @@ test('a normal user still sends through the same path', async () => {
   assert.equal(calls.sent, 1);
   assert.ok(calls.ingest > 0);
 });
+
+test('the already-paid transfer card is the one thing the gate must let through', async () => {
+  // 转账是两段式:TransferComposerScreen 先 await sendCoinGift(积分真扣真到账),
+  // 回到聊天页才发这张卡片作为回执。在卡片这一步拦掉阻止不了任何事 ——
+  // 付款方看不到卡片、以为没发出去,回转账页重试会生成新的幂等键,
+  // 那就是第二次真实扣款。门禁的正确位置在扣款之前(handleSubmit 已补)。
+  const { api, calls } = loadClient({ blocked: true });
+
+  const sent = await api.sendCardMessage({
+    conversationId: 'c1',
+    type: 'transfer-card',
+    payload: { amount: 10, message: null },
+    bypassCreditGate: true,
+  });
+
+  assert.equal(sent.type, 'transfer-card');
+  assert.equal(calls.gate, 0, '豁免路径不该再问门禁');
+  assert.equal(calls.sent, 1);
+});
+
+test('the bypass is opt-in only — every other card still hits the gate', async () => {
+  // 豁免是逐次显式传的,不是按类型放行:漏成默认值的话整条卡片路径都没门禁了。
+  const { api, calls } = loadClient({ blocked: true });
+  await assert.rejects(
+    api.sendCardMessage({
+      conversationId: 'c1',
+      type: 'transfer-card',
+      payload: { amount: 10, message: null },
+    }),
+  );
+  assert.equal(calls.gate, 1);
+  assert.equal(calls.sent, 0);
+});

@@ -26,7 +26,16 @@ function loadSendErrors() {
       this.code = code;
     }
   }
-  class CreditPolicyError extends Error {}
+  // 真实的 CreditPolicyError 带结构化字段;message 是硬编码中文的开发者兜底,
+  // 上屏必须换成按当前语言的词条 —— 这里的桩要能验证「换了没有」。
+  class CreditPolicyError extends Error {
+    constructor(minScore) {
+      super(`信誉值低于 ${minScore}，暂时无法发送消息`);
+      this.name = 'CreditPolicyError';
+      this.code = 'LOW_CREDIT_SCORE';
+      this.minScore = minScore;
+    }
+  }
 
   const context = {
     Error,
@@ -50,7 +59,13 @@ function loadSendErrors() {
           reportError: (error, ctx) => reports.push({ message: error.message, ctx }),
         };
       }
-      if (request === '@/services/api/credit-policy') return { CreditPolicyError };
+      if (request === '@/services/api/credit-policy') {
+        return {
+          CreditPolicyError,
+          // 本地化边界的替身:返回一句可辨认的「非中文」文案。
+          getCreditPolicyMessage: (d) => `credit<${d.minScore}> [localized]`,
+        };
+      }
       if (request === '@/services/api/server-error-codes') {
         return { isKnownServerErrorCode: (v) => v.startsWith('CHAT_') };
       }
@@ -103,12 +118,13 @@ test('transient and unknown failures keep the generic retry copy', () => {
   assert.equal(api.getChatSendErrorMessage(new Error('boom'), 'RETRY'), 'RETRY');
 });
 
-test('credit gate keeps its own message', () => {
+test('the credit-gate rejection is localized, not the hard-coded Chinese', () => {
+  // error.message 是给日志/Sentry 的开发者兜底,硬编码中文。直接上屏的话
+  // 英/西/日/韩用户被信用分拦下时看到的是一句中文。
   const { api, CreditPolicyError } = loadSendErrors();
-  assert.equal(
-    api.getChatSendErrorMessage(new CreditPolicyError('信誉值不足'), 'RETRY'),
-    '信誉值不足',
-  );
+  const shown = api.getChatSendErrorMessage(new CreditPolicyError(60), 'RETRY');
+  assert.equal(shown, 'credit<60> [localized]');
+  assert.notEqual(shown, new CreditPolicyError(60).message);
 });
 
 test('send failures reach production reporting without any payload data', () => {

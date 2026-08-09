@@ -63,6 +63,8 @@ function loadChatStore() {
     if (request === 'zustand') return zustandStub();
     if (request === 'zustand/middleware') return zustandMiddlewareStub();
     if (request === '@/storage') return { mmkvJsonStorage: {} };
+    // 墓碑超上限时会报一次(淘汰=消息复活,必须可观测)。
+    if (request === '@/observability/sentry') return { reportError: () => {} };
     throw new Error(`unexpected require: ${request}`);
   });
   const store = runModule('src/chat-core/store.ts', (request) => {

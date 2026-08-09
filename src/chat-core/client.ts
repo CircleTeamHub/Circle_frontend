@@ -133,6 +133,17 @@ interface SendOptions {
   replyToId?: string;
   /** 乐观消息上屏回调(旧 sendTextMessage onCreate 对应物)。 */
   onCreate?: (message: ChatMessageDto) => void;
+  /**
+   * 跳过信用分门禁。**只给「钱已经动了、这条消息是回执」的场景用。**
+   *
+   * 目前唯一的合法用法是转账卡片:积分在 TransferComposerScreen 里就已经
+   * 通过 sendCoinGift 真扣真到账了,这张卡只是事后的凭据。在这里拦掉它并不
+   * 能阻止任何事 —— 只会让付款方看不到卡片、以为没发出去,再从转账页重试一次
+   * (那会生成新的幂等键)就是第二次真实扣款。
+   *
+   * 真正该拦的位置是扣款之前,见 TransferComposerScreen 的 handleSubmit。
+   */
+  bypassCreditGate?: boolean;
 }
 
 function selfSenderInfo() {
@@ -155,7 +166,10 @@ export async function sendWithOptimism(
   // 于是低于阈值的用户仍然能正常发文本/引用/语音/位置/各类卡片。
   // 后端刻意不做这道校验(策略在端上),漏了就是真的漏了。
   // 抛在插入乐观消息之前:失败的发送不该在时间线里留下痕迹。
-  assertLocalCanSendMessage();
+  //
+  // 唯一的豁免是「钱已经动了」的回执(转账卡片):拦在这里既阻止不了扣款,
+  // 又会让付款方以为没发出去而重试 —— 那是第二次真实扣款。详见 bypassCreditGate。
+  if (!options.bypassCreditGate) assertLocalCanSendMessage();
   const d = createDeliveryId();
   const store = useChatStore.getState();
   const optimistic: StoredChatMessage = {
@@ -330,11 +344,14 @@ export function sendCardMessage(options: {
   /** 卡片 payload 本体(NoteCardData 等接口类型无索引签名,收 object 再收窄)。 */
   payload: object;
   onCreate?: (message: ChatMessageDto) => void;
+  /** 见 SendOptions.bypassCreditGate —— 只有转账卡片这种「钱已经动了」的回执能用。 */
+  bypassCreditGate?: boolean;
 }): Promise<ChatMessageDto> {
   return sendWithOptimism({
     conversationId: options.conversationId,
     type: options.type,
     content: options.payload as Record<string, unknown>,
     onCreate: options.onCreate,
+    bypassCreditGate: options.bypassCreditGate,
   });
 }

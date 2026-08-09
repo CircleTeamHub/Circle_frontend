@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { reportError } from '@/observability/sentry';
 import { mmkvJsonStorage } from '@/storage';
 
 /**
@@ -14,8 +15,46 @@ import { mmkvJsonStorage } from '@/storage';
  * 清掉的话同一个人重新登录时删过的消息会全部复活 —— 那正是要修的毛病。
  */
 
-/** 墓碑上限。超出后按删除时间淘汰最旧的,避免长期使用把 MMKV 撑到无界。 */
-export const DELETED_MESSAGES_CAP = 500;
+/**
+ * 墓碑上限。超出后按删除时间淘汰最旧的。
+ *
+ * **淘汰会让那条消息复活** —— 服务端那份一直都在,墓碑一掉,重进会话或搜索
+ * 就把它原样带回来了。所以这个数不是随手拍的:
+ *
+ * - 原来是 500。删一条还没确认的气泡要吃掉两个键(messageId + d),
+ *   ~250 次删除就能顶到上限,一个正常用几个月的用户完全够得着。
+ * - 提到 5000 是因为代价几乎为零:一条约 55 字节 JSON,满载 ~275KB,
+ *   MMKV 无压力;而它把「够得着」推到 ~2500 次删除。
+ * - 不设上限不行:markDeleted 每次都要整份复制 + 整份序列化,
+ *   十万条就是每删一条序列化 5MB,删除会当场卡住。
+ *
+ * 真正的解法是服务端支持按用户删除消息(那样本地墓碑整个可以不要)。
+ * 那是后端功能,不在本次范围内 —— 在此之前,超限会上报一次(见 markDeleted),
+ * 好让「到底有没有真实用户撞到上限」是可观测的事实而不是猜测。
+ */
+export const DELETED_MESSAGES_CAP = 5000;
+
+/**
+ * 上限只在长期重度使用后才够得着,一旦够着就每删一条报一次 —— 与信用分门禁、
+ * 发送失败上报同一套取舍:每个 app 生命周期只报一次。
+ */
+let reportedEviction = false;
+
+function reportEvictionOnce(size: number): void {
+  if (reportedEviction) return;
+  reportedEviction = true;
+  reportError(new Error('chat tombstone cap reached'), {
+    operation: 'chatDelete',
+    kind: 'tombstoneEvicted',
+    // 只带一个规模数字:不涉及消息内容,也不涉及任何可关联到人的 id。
+    size,
+  });
+}
+
+/** 测试隔离用。 */
+export function resetTombstoneTelemetry(): void {
+  reportedEviction = false;
+}
 
 interface DeletedMessagesState {
   /**
@@ -43,6 +82,10 @@ export const useDeletedMessagesStore = create<DeletedMessagesState>()(
         const next: Record<string, number> = { ...current, [messageId]: Date.now() };
         const ids = Object.keys(next);
         if (ids.length > DELETED_MESSAGES_CAP) {
+          // 淘汰 = 那条消息在下一次历史拉取时复活。这是已知的有损行为
+          // (见 DELETED_MESSAGES_CAP 的说明),但必须是可观测的有损:
+          // 报一次,才能知道有没有真实用户走到这一步。
+          reportEvictionOnce(ids.length);
           const oldestFirst = ids.sort((a, b) => next[a] - next[b]);
           for (const id of oldestFirst.slice(0, ids.length - DELETED_MESSAGES_CAP)) {
             delete next[id];

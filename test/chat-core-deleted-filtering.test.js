@@ -61,6 +61,8 @@ function loadDeleted() {
       };
     }
     if (request === '@/storage') return { mmkvJsonStorage: {} };
+    // 超上限时会报一次(墓碑被淘汰=那条消息会复活,必须可观测)。
+    if (request === '@/observability/sentry') return { reportError: () => {} };
     throw new Error(`unexpected require: ${request}`);
   });
 }
@@ -134,4 +136,95 @@ test('tombstones also match by delivery id', () => {
       .map((m) => m.id),
     ['other'],
   );
+});
+
+function loadApi(deleted, respond) {
+  return runModule('src/chat-core/api.ts', (request) => {
+    if (request === '@/services/api/client') {
+      return { apiClient: (url) => Promise.resolve(respond(url)) };
+    }
+    if (request === '@/stores/authStore') {
+      return { useAuthStore: { getState: () => ({ sessionEpoch: 1 }) } };
+    }
+    if (request === './deleted-messages') return deleted;
+    if (request === './store') {
+      return {
+        useChatStore: {
+          getState: () => ({
+            setConversations: () => {},
+            ingestMessages: () => {},
+            upsertConversation: () => {},
+            removeConversation: () => {},
+          }),
+        },
+      };
+    }
+    if (request === './protocol') return {};
+    throw new Error(`unexpected require: ${request}`);
+  });
+}
+
+test('a fully tombstoned page keeps paging instead of showing empty', async () => {
+  // nextBeforeHeight 是服务端按**未过滤**的结果给的,所以「本页 0 条 + 游标非空」
+  // 完全可能。把空页直接交回去的话,四个历史屏渲染空状态,而继续翻页要靠
+  // onEndReached —— 没有内容的列表不会触底,更早的可见结果就永远够不着了。
+  const deleted = loadDeleted();
+  deleted.markMessageDeletedLocally('gone-1');
+  deleted.markMessageDeletedLocally('gone-2');
+
+  const requested = [];
+  const api = loadApi(deleted, (url) => {
+    requested.push(url);
+    if (!url.includes('beforeHeight')) {
+      return { messages: [dto({ id: 'gone-1', height: 30 })], nextBeforeHeight: 30 };
+    }
+    if (url.includes('beforeHeight=30')) {
+      return { messages: [dto({ id: 'gone-2', height: 20 })], nextBeforeHeight: 20 };
+    }
+    return { messages: [dto({ id: 'alive', height: 10 })], nextBeforeHeight: 10 };
+  });
+
+  const page = await api.searchChatMessages('c1', { keyword: 'x' });
+  assert.deepEqual(
+    page.messages.map((m) => m.id),
+    ['alive'],
+  );
+  // 游标必须是最后一次请求的那个,否则下一次翻页会退回已经看过的区间。
+  assert.equal(page.nextBeforeHeight, 10);
+  assert.equal(requested.length, 3);
+});
+
+test('the empty-page chase stops at the end of history', async () => {
+  // 游标为 null 就是真的没有更早的了 —— 不能继续追。
+  const deleted = loadDeleted();
+  deleted.markMessageDeletedLocally('gone-1');
+  let calls = 0;
+  const api = loadApi(deleted, () => {
+    calls += 1;
+    return { messages: [dto({ id: 'gone-1' })], nextBeforeHeight: null };
+  });
+
+  const page = await api.searchChatMessages('c1', { keyword: 'x' });
+  assert.deepEqual(page.messages, []);
+  assert.equal(page.nextBeforeHeight, null);
+  assert.equal(calls, 1);
+});
+
+test('the chase is bounded so one tap cannot become dozens of requests', async () => {
+  // 某段历史被整体删过时可能连着几十页都空。追有上限:追满仍空就把空页连同
+  // 游标交回去,由列表的触底/重试继续 —— 会慢,但不会卡住,也不静默截断。
+  const deleted = loadDeleted();
+  for (let i = 0; i < 50; i += 1) deleted.markMessageDeletedLocally(`gone-${i}`);
+  let calls = 0;
+  const api = loadApi(deleted, () => {
+    const id = `gone-${calls}`;
+    calls += 1;
+    return { messages: [dto({ id })], nextBeforeHeight: 100 - calls };
+  });
+
+  const page = await api.searchChatMessages('c1', { keyword: 'x' });
+  assert.deepEqual(page.messages, []);
+  assert.equal(calls, 6, '首次 + 最多 5 次追页');
+  // 游标仍在,列表还能靠触底继续 —— 结果没有被悄悄丢掉。
+  assert.notEqual(page.nextBeforeHeight, null);
 });

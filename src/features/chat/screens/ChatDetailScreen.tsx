@@ -968,17 +968,25 @@ export default function ChatDetailScreen() {
       // 语音要把源 DTO 的 object key 一起收下来:UI 层的 voiceUrl 是服务端
       // 现签的临时地址,过期即失效,推不回 key —— 不存 key 的话这条收藏
       // 以后永远重发不出去(旧收藏正是卡在这里)。
-      const sourceContent =
+      //
+      // 但只收**自己发的**:key 是发送方的对象路径(chat/{senderId}/…),
+      // 后端发送校验按 chat/{当前用户}/ 收口。把对端的 key 也存下来的话,
+      // 收藏页会把它显示成「可重发」,而每一次重发都必然被后端拒掉 ——
+      // 一个点了就报错的按钮比一个不出现的按钮更糟。收到的语音要做成可重发,
+      // 得先把音频复制/重传到自己名下,那是另一件事。
+      const sourceMessage =
         message.type === 'voice'
           ? useChatStore
               .getState()
               .messagesByConversation[conversationID]?.find(
                 (item) => item.id === message.id,
-              )?.content
+              )
           : undefined;
+      const sourceKey = sourceMessage?.content?.['key'];
       const voiceKey =
-        typeof sourceContent?.['key'] === 'string'
-          ? (sourceContent['key'] as string)
+        sourceMessage?.sender?.id === currentUserID &&
+        typeof sourceKey === 'string'
+          ? sourceKey
           : undefined;
 
       const input = buildCollectionInputFromMessage(message, {
@@ -2468,6 +2476,11 @@ export default function ChatDetailScreen() {
           conversationId: conversationID,
           type: 'transfer-card',
           payload: { amount: payload.amount, message: payload.message },
+          // 积分早在 TransferComposerScreen 里就真扣真到账了,这张卡只是回执。
+          // 让信用分门禁拦在这里阻止不了任何事,只会让付款方看不到卡片、
+          // 以为没发出去 —— 从转账页重试会生成新的幂等键,那是第二次真实扣款。
+          // 门禁在扣款之前已经过了一道(handleSubmit)。
+          bypassCreditGate: true,
         });
         // #100：告知后端卡片已由客户端送达，补偿 cron 不再重发。
         // round 2 review：回执是防重发的唯一信号，不能 fire-and-forget ——

@@ -576,7 +576,8 @@
       "failed": "通話に失敗しました",
       "missed": "不在着信",
       "noAnswer": "応答なし"
-    }
+    },
+    "lowCreditScore": "信用スコアが {{minScore}} を下回っているため、現在メッセージを送信できません"
   },
   "messages": {
     "title": "メッセージ",

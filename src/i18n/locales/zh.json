@@ -616,7 +616,8 @@
       "failed": "通话未接通",
       "missed": "未接听",
       "noAnswer": "对方未接听"
-    }
+    },
+    "lowCreditScore": "信誉值低于 {{minScore}}，暂时无法发送消息"
   },
   "contacts": {
     "title": "联系人",

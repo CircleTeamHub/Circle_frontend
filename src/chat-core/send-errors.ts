@@ -1,6 +1,9 @@
 import i18n from '@/i18n';
 import { reportError } from '@/observability/sentry';
-import { CreditPolicyError } from '@/services/api/credit-policy';
+import {
+  CreditPolicyError,
+  getCreditPolicyMessage,
+} from '@/services/api/credit-policy';
 import { isKnownServerErrorCode } from '@/services/api/server-error-codes';
 import { ChatSendError } from './socket-manager';
 
@@ -51,7 +54,11 @@ export function getChatSendErrorMessage(
   error: unknown,
   fallback: string,
 ): string {
-  if (error instanceof CreditPolicyError) return error.message;
+  // error.message 是硬编码中文的开发者兜底 —— 直接上屏的话,英/西/日/韩
+  // 用户被信用分拦下时看到的是一句中文。按当前语言重新取词条。
+  if (error instanceof CreditPolicyError) {
+    return getCreditPolicyMessage(error);
+  }
 
   if (error instanceof ChatSendError) {
     // 敏感词有自己的既有词条(比 serverErrors 那条更贴聊天场景)。

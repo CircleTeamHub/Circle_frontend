@@ -576,7 +576,8 @@
       "failed": "통화 연결 실패",
       "missed": "부재중 전화",
       "noAnswer": "응답 없음"
-    }
+    },
+    "lowCreditScore": "신용 점수가 {{minScore}} 미만이어서 지금은 메시지를 보낼 수 없습니다"
   },
   "messages": {
     "title": "메시지",

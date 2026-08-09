@@ -33,15 +33,37 @@ let backfillTimer: ReturnType<typeof setTimeout> | null = null;
  * 发送者信息凑一条 —— 而会话 id 其实是不透明 UUID,那条分支永远走不到,
  * 结果就是这两种情况**从来没有横幅**。改成先攒着,等补拉把元信息带回来再弹。
  */
-const pendingBanners = new Map<string, ChatMessageDto>();
+type PendingBanner = {
+  message: ChatMessageDto;
+  /**
+   * 到达时已经发出过多少次补拉。第 n 次补拉只服务 arrivedAfter < n 的候选 ——
+   * 请求在途时才到的会话,元信息不可能在这一次的响应里。
+   */
+  arrivedAfter: number;
+};
+
+const pendingBanners = new Map<string, PendingBanner>();
 /** 攒的是会话数不是消息数;超了丢最早的会话,免得离线洪泛把它撑成内存泄漏。 */
 const PENDING_BANNER_CONVERSATIONS_MAX = 20;
+
+/**
+ * 已发出的补拉次数。
+ *
+ * 需要它是因为 backfillTimer 在请求**发出之前**就被置空了:一次补拉在途时,
+ * 另一个陌生会话来消息会再排一次补拉,并把自己的候选加进同一个 map。
+ * 不分批的话,第一次请求失败时的 catch 会把后来攒的候选一起清掉 ——
+ * 而第二次请求明明能拿到它的元信息,那条横幅却再也不会弹。
+ */
+let issuedBackfills = 0;
 
 function rememberPendingBanner(message: ChatMessageDto): void {
   // 同一会话只留最新一条:补拉回来弹一条「有新消息」就够,
   // 不该把窗口期内攒的每一条都排进横幅队列。
   pendingBanners.delete(message.conversationId);
-  pendingBanners.set(message.conversationId, message);
+  pendingBanners.set(message.conversationId, {
+    message,
+    arrivedAfter: issuedBackfills,
+  });
   while (pendingBanners.size > PENDING_BANNER_CONVERSATIONS_MAX) {
     const oldest = pendingBanners.keys().next().value;
     if (oldest === undefined) break;
@@ -49,14 +71,15 @@ function rememberPendingBanner(message: ChatMessageDto): void {
   }
 }
 
-function flushPendingBanners(): void {
-  const pending = Array.from(pendingBanners.values());
-  pendingBanners.clear();
-  for (const message of pending) {
-    // 补拉后仍然认不出会话(已退群/已删好友/后端没返回)就放弃这一条:
-    // 继续攒下去只会无限期占着,而它的元信息永远不会来了。
-    enqueueForegroundBanner(message);
+/** 取出并移除第 `issued` 次补拉负责的那批候选;更晚到的留给下一次。 */
+function takePendingBannersFor(issued: number): ChatMessageDto[] {
+  const owned: ChatMessageDto[] = [];
+  for (const [conversationId, entry] of pendingBanners) {
+    if (entry.arrivedAfter >= issued) continue;
+    owned.push(entry.message);
+    pendingBanners.delete(conversationId);
   }
+  return owned;
 }
 
 function scheduleConversationBackfill(isLive: () => boolean): void {
@@ -67,14 +90,22 @@ function scheduleConversationBackfill(isLive: () => boolean): void {
       pendingBanners.clear();
       return;
     }
+    const issued = (issuedBackfills += 1);
     void loadChatConversations()
       .then(() => {
-        if (isLive()) flushPendingBanners();
+        const owned = takePendingBannersFor(issued);
+        if (!isLive()) return;
+        for (const message of owned) {
+          // 补拉后仍然认不出会话(已退群/已删好友/后端没返回)就放弃这一条:
+          // 继续攒下去只会无限期占着,而它的元信息永远不会来了。
+          enqueueForegroundBanner(message);
+        }
       })
       .catch((err: unknown) => {
         console.warn('[chat] conversation backfill failed', err);
-        // 元信息没拿到,攒着的候选也就没法变成正确的横幅了。
-        pendingBanners.clear();
+        // 只丢这一次请求负责的那批:在途期间攒下的候选归下一次补拉,
+        // 一次失败不该连累它们。
+        takePendingBannersFor(issued);
       });
   }, CONVERSATION_BACKFILL_DEBOUNCE_MS);
 }
@@ -111,10 +142,12 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       // 看到自己、未读永远加不上。
       const applied = store.applyIncomingMessage(payload);
       store.ingestMessages(payload.conversationId, [payload]);
-      if (enqueueForegroundBanner(payload) === 'needs-conversation') {
-        rememberPendingBanner(payload);
-      }
-      if (!applied) {
+      // 攒下的候选必须有一次补拉去认领它,否则它永远等不到元信息。
+      // 这两个条件目前同源(会话不在快照里),但依赖这种巧合太脆,写明。
+      const needsConversation =
+        enqueueForegroundBanner(payload) === 'needs-conversation';
+      if (needsConversation) rememberPendingBanner(payload);
+      if (!applied || needsConversation) {
         // 会话不在当前快照里(对方刚建的单聊、刚被拉进的群):消息已经进了
         // 时间线,但没有会话行也没有角标 —— 停在消息页的用户要手动刷新才看得到。
         // 补拉一次会话列表把元信息(对端/群名/头像)带回来。
