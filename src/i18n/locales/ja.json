@@ -269,7 +269,9 @@
       "saveFailedHint": "後でもう一度お試しください",
       "noteCollected": "マイノートに追加しました",
       "noteAlreadyCollected": "すでにマイノートにあります",
-      "noteCollectedHint": "「マイノート」で確認できます"
+      "noteCollectedHint": "「マイノート」で確認できます",
+      "revoke": "取り消し",
+      "revokeFailed": "取り消しに失敗しました"
     },
     "mentions": {
       "empty": "メンションできるメンバーがいません"
@@ -2494,6 +2496,7 @@
       "friendAdded": "友だちになりました。挨拶してみましょう"
     },
     "preview": {
+      "revoked": "[メッセージ取り消し]",
       "image": "[写真]",
       "video": "[動画]",
       "voice": "[音声]",
@@ -2507,6 +2510,13 @@
       "verification": "[認証] {{name}} から保証の依頼があります",
       "default": "[メッセージ]",
       "plazaPost": "[イベント] {{title}}"
+    },
+    "message": {
+      "revokedBySelf": "メッセージを取り消しました",
+      "revokedByOther": "「{{name}}」がメッセージを取り消しました",
+      "revokedByModerator": "メッセージが管理者により取り消されました",
+      "revokedQuote": "メッセージは取り消されました",
+      "revokedPreview": "[メッセージ取り消し]"
     }
   },
   "permissions": {
@@ -2779,6 +2789,9 @@
     "PRIVACY_INVITE_PERMISSION_INVALID": "サポートされていない招待権限です",
     "USER_UPDATE_OWN_ONLY": "自分のプロフィールのみ編集できます",
     "USER_DELETE_OWN_ONLY": "自分のアカウントのみ削除できます",
-    "USER_INVALID_BIRTHDAY": "誕生日が正しくありません"
+    "USER_INVALID_BIRTHDAY": "誕生日が正しくありません",
+    "CHAT_MESSAGE_NOT_FOUND": "メッセージが見つかりません",
+    "CHAT_REVOKE_WINDOW_EXPIRED": "取り消せる時間を過ぎました",
+    "CHAT_REVOKE_FORBIDDEN": "このメッセージを取り消す権限がありません"
   }
 }

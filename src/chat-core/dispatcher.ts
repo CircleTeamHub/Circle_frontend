@@ -7,6 +7,7 @@ import {
   type ChatMessageDto,
   type ChatPresenceBroadcast,
   type ChatReadBroadcast,
+  type ChatRevokeBroadcast,
 } from './protocol';
 import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
 import { allowPeerMediaUrl } from '@/services/api/utils';
@@ -240,6 +241,26 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       useChatStore.getState().applyPresence(payload.userId, payload.online);
     } catch (err) {
       console.warn('[chat] presence handler failed', err);
+    }
+  });
+
+  socket.on(CHAT_EVENTS.revoke, (payload: ChatRevokeBroadcast) => {
+    if (!isLive()) return;
+    try {
+      if (
+        !payload ||
+        typeof payload.conversationId !== 'string' ||
+        typeof payload.messageId !== 'string' ||
+        typeof payload.revokedBy !== 'string'
+      ) {
+        console.warn('[chat] dropped malformed revoke payload');
+        return;
+      }
+      useChatStore
+        .getState()
+        .applyRevoke(payload.conversationId, payload.messageId, payload.revokedBy);
+    } catch (err) {
+      console.warn('[chat] revoke handler failed', err);
     }
   });
 

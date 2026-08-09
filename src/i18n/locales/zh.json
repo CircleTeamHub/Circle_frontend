@@ -309,7 +309,9 @@
       "saveFailedHint": "请稍后重试",
       "noteCollected": "已添加到我的笔记",
       "noteAlreadyCollected": "已在我的笔记中",
-      "noteCollectedHint": "可在「我的笔记」中查看"
+      "noteCollectedHint": "可在「我的笔记」中查看",
+      "revoke": "撤回",
+      "revokeFailed": "撤回失败"
     },
     "mentions": {
       "empty": "暂无可 @ 的成员"
@@ -2459,6 +2461,7 @@
       "friendAdded": "你们已经是好友了，开始聊天吧"
     },
     "preview": {
+      "revoked": "[消息已撤回]",
       "image": "[图片]",
       "video": "[视频]",
       "voice": "[语音]",
@@ -2472,6 +2475,13 @@
       "verification": "[验证] {{name}} 邀请你担保",
       "default": "[消息]",
       "plazaPost": "[活动] {{title}}"
+    },
+    "message": {
+      "revokedBySelf": "你撤回了一条消息",
+      "revokedByOther": "\"{{name}}\"撤回了一条消息",
+      "revokedByModerator": "一条消息已被管理员撤回",
+      "revokedQuote": "消息已撤回",
+      "revokedPreview": "[消息已撤回]"
     }
   },
   "permissions": {
@@ -2779,6 +2789,9 @@
     "PRIVACY_INVITE_PERMISSION_INVALID": "不支持的邀请权限",
     "USER_UPDATE_OWN_ONLY": "只能修改自己的资料",
     "USER_DELETE_OWN_ONLY": "只能注销自己的账号",
-    "USER_INVALID_BIRTHDAY": "生日格式不正确"
+    "USER_INVALID_BIRTHDAY": "生日格式不正确",
+    "CHAT_MESSAGE_NOT_FOUND": "消息不存在",
+    "CHAT_REVOKE_WINDOW_EXPIRED": "超过可撤回时间",
+    "CHAT_REVOKE_FORBIDDEN": "无权撤回该消息"
   }
 }

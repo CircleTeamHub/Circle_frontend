@@ -26,6 +26,7 @@ const FE_EVENTS = {
   typing: 'chat:typing',
   message: 'chat:msg',
   conversation: 'chat:conversation',
+  revoke: 'chat:revoke',
 };
 
 test('frontend protocol declares the canonical event names and path', () => {
@@ -75,7 +76,13 @@ test(
     );
     // socket-manager 直接引用的服务端错误码(本地合成码 CHAT_NOT_CONNECTED /
     // CHAT_ACK_TIMEOUT 除外 —— 那两个不上行,只在客户端消费)。
-    for (const code of ['CHAT_SENSITIVE_WORD_BLOCKED', 'CHAT_INVALID_PAYLOAD']) {
+    for (const code of [
+      'CHAT_SENSITIVE_WORD_BLOCKED',
+      'CHAT_INVALID_PAYLOAD',
+      'CHAT_MESSAGE_NOT_FOUND',
+      'CHAT_REVOKE_WINDOW_EXPIRED',
+      'CHAT_REVOKE_FORBIDDEN',
+    ]) {
       assert.match(registry, new RegExp(`'${code}'`), `backend missing ${code}`);
     }
   },

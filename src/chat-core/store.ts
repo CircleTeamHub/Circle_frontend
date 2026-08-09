@@ -76,6 +76,15 @@ interface ChatStoreState {
   messageWindowByConversation: Record<string, number>;
   /** 成员已读推进（服务端广播）；对端已读用于单聊「已读」标记。 */
   applyRead: (conversationId: string, userId: string, height: number) => void;
+  /**
+   * G-02 撤回落地:时间线消息清 content 标 revoked、列表预览跟随、
+   * 同会话内引用它的消息把 replyTo 翻成已撤回。发起端与广播共用(幂等)。
+   */
+  applyRevoke: (
+    conversationId: string,
+    messageId: string,
+    revokedBy: string,
+  ) => void;
   readWatermarks: Record<string, Record<string, number>>;
   reset: () => void;
   /**
@@ -370,6 +379,60 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
               ...messageWindowByConversation,
               [conversationId]: nextCap,
             },
+          }
+        : {}),
+    });
+  },
+
+  applyRevoke: (conversationId, messageId, revokedBy) => {
+    const { messagesByConversation, conversations } = get();
+    const timeline = messagesByConversation[conversationId];
+    const revokedAt = new Date().toISOString();
+    let timelineChanged = false;
+    const nextTimeline = (timeline ?? []).map((message) => {
+      if (message.id === messageId) {
+        if (message.revokedAt) return message; // 幂等:广播+本端乐观各来一次
+        timelineChanged = true;
+        return { ...message, content: {}, revokedAt, revokedBy };
+      }
+      if (message.replyTo?.id === messageId && !message.replyTo.revoked) {
+        timelineChanged = true;
+        return {
+          ...message,
+          replyTo: { ...message.replyTo, revoked: true, preview: '' },
+        };
+      }
+      return message;
+    });
+    const index = conversations.findIndex((c) => c.id === conversationId);
+    const target = index >= 0 ? conversations[index] : null;
+    const previewNeedsUpdate =
+      target?.lastMessage?.id === messageId && !target.lastMessage.revokedAt;
+    if (!timelineChanged && !previewNeedsUpdate) return;
+    set({
+      ...(timelineChanged
+        ? {
+            messagesByConversation: {
+              ...messagesByConversation,
+              [conversationId]: nextTimeline,
+            },
+          }
+        : {}),
+      ...(previewNeedsUpdate && target
+        ? {
+            conversations: [
+              ...conversations.slice(0, index),
+              {
+                ...target,
+                lastMessage: {
+                  ...target.lastMessage!,
+                  content: {},
+                  revokedAt,
+                  revokedBy,
+                },
+              },
+              ...conversations.slice(index + 1),
+            ],
           }
         : {}),
     });

@@ -269,7 +269,9 @@
       "saveFailedHint": "Inténtalo de nuevo más tarde",
       "noteCollected": "Añadida a mis notas",
       "noteAlreadyCollected": "Ya está en mis notas",
-      "noteCollectedHint": "Puedes verla en Mis notas"
+      "noteCollectedHint": "Puedes verla en Mis notas",
+      "revoke": "Retirar",
+      "revokeFailed": "No se pudo retirar"
     },
     "mentions": {
       "empty": "No hay miembros para mencionar"
@@ -2497,6 +2499,7 @@
       "friendAdded": "Ahora son amigos, ¡salúdense!"
     },
     "preview": {
+      "revoked": "[Mensaje retirado]",
       "image": "[Foto]",
       "video": "[Vídeo]",
       "voice": "[Voz]",
@@ -2510,6 +2513,13 @@
       "verification": "[Verificar] {{name}} te pidió que avales",
       "default": "[Mensaje]",
       "plazaPost": "[Evento] {{title}}"
+    },
+    "message": {
+      "revokedBySelf": "Retiraste un mensaje",
+      "revokedByOther": "\"{{name}}\" retiró un mensaje",
+      "revokedByModerator": "Un administrador retiró un mensaje",
+      "revokedQuote": "Mensaje retirado",
+      "revokedPreview": "[Mensaje retirado]"
     }
   },
   "permissions": {
@@ -2782,6 +2792,9 @@
     "PRIVACY_INVITE_PERMISSION_INVALID": "Permiso de invitación no admitido",
     "USER_UPDATE_OWN_ONLY": "Solo puedes actualizar tu propio perfil",
     "USER_DELETE_OWN_ONLY": "Solo puedes eliminar tu propia cuenta",
-    "USER_INVALID_BIRTHDAY": "Fecha de nacimiento no válida"
+    "USER_INVALID_BIRTHDAY": "Fecha de nacimiento no válida",
+    "CHAT_MESSAGE_NOT_FOUND": "No se encontró el mensaje",
+    "CHAT_REVOKE_WINDOW_EXPIRED": "Ya no se puede retirar el mensaje",
+    "CHAT_REVOKE_FORBIDDEN": "No puedes retirar este mensaje"
   }
 }

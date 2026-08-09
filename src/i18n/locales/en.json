@@ -309,7 +309,9 @@
       "saveFailedHint": "Please try again later",
       "noteCollected": "Added to My Notes",
       "noteAlreadyCollected": "Already in My Notes",
-      "noteCollectedHint": "You can view it in My Notes"
+      "noteCollectedHint": "You can view it in My Notes",
+      "revoke": "Revoke",
+      "revokeFailed": "Revoke failed"
     },
     "mentions": {
       "empty": "No members available to mention"
@@ -2462,6 +2464,7 @@
       "friendAdded": "You're now friends — say hello!"
     },
     "preview": {
+      "revoked": "[Message revoked]",
       "image": "[Photo]",
       "video": "[Video]",
       "voice": "[Voice]",
@@ -2475,6 +2478,13 @@
       "verification": "[Verify] {{name}} asked you to vouch",
       "default": "[Message]",
       "plazaPost": "[Event] {{title}}"
+    },
+    "message": {
+      "revokedBySelf": "You revoked a message",
+      "revokedByOther": "\"{{name}}\" revoked a message",
+      "revokedByModerator": "A message was revoked by an admin",
+      "revokedQuote": "Message revoked",
+      "revokedPreview": "[Message revoked]"
     }
   },
   "permissions": {
@@ -2782,6 +2792,9 @@
     "PRIVACY_INVITE_PERMISSION_INVALID": "Unsupported invite permission",
     "USER_UPDATE_OWN_ONLY": "You can only update your own profile",
     "USER_DELETE_OWN_ONLY": "You can only delete your own account",
-    "USER_INVALID_BIRTHDAY": "Invalid birthday"
+    "USER_INVALID_BIRTHDAY": "Invalid birthday",
+    "CHAT_MESSAGE_NOT_FOUND": "Message not found",
+    "CHAT_REVOKE_WINDOW_EXPIRED": "The revoke window has expired",
+    "CHAT_REVOKE_FORBIDDEN": "You cannot revoke this message"
   }
 }

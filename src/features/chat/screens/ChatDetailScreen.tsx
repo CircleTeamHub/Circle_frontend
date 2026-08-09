@@ -92,7 +92,10 @@ import {
   mapChatMessageDtosToUI,
 } from '@/chat-core/message-mappers';
 import { fetchChatMembers } from '@/chat-core/api';
-import { queryChatPresence } from '@/chat-core/socket-manager';
+import {
+  queryChatPresence,
+  revokeChatMessage,
+} from '@/chat-core/socket-manager';
 import { useChatStore } from '@/chat-core/store';
 import { useAuthStore } from '@/stores/authStore';
 import { type FriendProfile } from '@/services/api/friends';
@@ -1129,10 +1132,61 @@ export default function ChatDetailScreen() {
   );
 
   // Build the floating menu's items for the currently long-pressed message.
+  // G-02 撤回:自己已送达的消息,2 分钟窗口内可撤(圈主/管理员由服务端另行放行,
+  // 菜单端先只做本人入口,权限判定始终以服务端 ack 为准)。
+  const canRevokeMessage = useCallback(
+    (message: ChatMessage) => {
+      if (!message.outgoing || message.sendStatus !== 2) return false;
+      const dto = useChatStore
+        .getState()
+        .messagesByConversation[conversationID]?.find(
+          (m) => m.id === message.id,
+        );
+      if (!dto || dto.height <= 0 || dto.revokedAt) return false;
+      return Date.now() - Date.parse(dto.createdAt) <= 2 * 60_000;
+    },
+    [conversationID],
+  );
+
+  const handleRevokeMessage = useCallback(
+    (message: ChatMessage) => {
+      void revokeChatMessage(conversationID, message.id)
+        .then(() => {
+          // 本端乐观翻灰条;广播回来会再走一次 applyRevoke,幂等。
+          const state = useChatStore.getState();
+          state.applyRevoke(
+            conversationID,
+            message.id,
+            state.currentUserId ?? '',
+          );
+        })
+        .catch((error: unknown) => {
+          Alert.alert(
+            t('chat.messageActions.revokeFailed', { defaultValue: '撤回失败' }),
+            getApiErrorMessage(
+              error,
+              t('chat.messageActions.revokeFailed', {
+                defaultValue: '撤回失败',
+              }),
+            ),
+          );
+        });
+    },
+    [conversationID, t],
+  );
+
   const messageActions = useMemo<MessageAction[]>(() => {
     const message = actionMenu?.message;
     if (!message) return [];
     const actions: MessageAction[] = [];
+    if (canRevokeMessage(message)) {
+      actions.push({
+        key: 'revoke',
+        icon: 'arrow-undo-outline',
+        label: t('chat.messageActions.revoke', { defaultValue: '撤回' }),
+        onPress: () => handleRevokeMessage(message),
+      });
+    }
     if (message.text?.trim()) {
       actions.push({
         key: 'copy',
@@ -1178,12 +1232,14 @@ export default function ChatDetailScreen() {
     return actions;
   }, [
     actionMenu,
+    canRevokeMessage,
     handleCollectMessage,
     handleCopyMessage,
     handleDeleteMessage,
     handleForwardMessage,
     handleQuoteMessage,
     handleReportMessage,
+    handleRevokeMessage,
     t,
   ]);
 
@@ -1391,6 +1447,22 @@ export default function ChatDetailScreen() {
     );
   }, [startCallWithType, t]);
 
+  // 真引用点击定位:原消息还在内存窗口就滚过去;不在窗口(更早的历史)先不跳,
+  // 批 1 本地库落地后升级成「按 height 拉一页再滚」。
+  const handleQuotePress = useCallback(
+    (item: ChatMessage) => {
+      if (!item.quoteMessageId) return;
+      const index = messages.findIndex((m) => m.id === item.quoteMessageId);
+      if (index < 0) return;
+      flatListRef.current?.scrollToIndex({
+        index,
+        viewPosition: 0.5,
+        animated: true,
+      });
+    },
+    [messages],
+  );
+
   const renderItem = useCallback(({ item }: { item: ChatMessage }) => {
     switch (item.type) {
       case 'date': return <DatePill text={item.text ?? ''} />;
@@ -1402,6 +1474,11 @@ export default function ChatDetailScreen() {
             senderName={receivedDisplayName(item)}
             senderAvatarUri={receivedAvatarUri(item)}
             onAvatarPress={() => handleOpenMessageSender(item)}
+            onQuotePress={
+              item.quoteMessageId && !item.quoteRevoked
+                ? () => handleQuotePress(item)
+                : undefined
+            }
           />
         ));
       case 'sent':
@@ -1411,6 +1488,11 @@ export default function ChatDetailScreen() {
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             hideStatus={isGroupChat}
+            onQuotePress={
+              item.quoteMessageId && !item.quoteRevoked
+                ? () => handleQuotePress(item)
+                : undefined
+            }
           />
         ));
       case 'location':
@@ -1593,6 +1675,7 @@ export default function ChatDetailScreen() {
     withGroupSenderLabel,
     handleOpenMessageSender,
     handleOpenUserCard,
+    handleQuotePress,
     isGroupChat,
     selfAvatarUri,
     selfName,

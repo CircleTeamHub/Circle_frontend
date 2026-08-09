@@ -264,6 +264,32 @@ export function mapChatMessageDtoToUI(
   const isSent = dto.sender !== null && dto.sender.id === currentUserId;
   const content = dto.content ?? {};
   const sendStatus: 1 | 2 | 3 = dto.height > 0 ? 2 : dto.failed ? 3 : 1;
+  // G-02 撤回:整条翻成居中灰条,原类型不再渲染(content 已被服务端清空)。
+  if (dto.revokedAt) {
+    const revokerIsSelf =
+      currentUserId !== null && dto.revokedBy === currentUserId;
+    const revokerIsSender =
+      dto.sender !== null && dto.revokedBy === dto.sender.id;
+    const text = revokerIsSelf
+      ? i18n.t('im.message.revokedBySelf', {
+          defaultValue: '你撤回了一条消息',
+        })
+      : revokerIsSender
+        ? i18n.t('im.message.revokedByOther', {
+            defaultValue: '"{{name}}"撤回了一条消息',
+            name: dto.sender?.nickname ?? '',
+          })
+        : i18n.t('im.message.revokedByModerator', {
+            defaultValue: '一条消息已被管理员撤回',
+          });
+    return {
+      id: dto.id,
+      type: 'system-notice',
+      time: formatChatTimestamp(dto.createdAt),
+      text,
+    };
+  }
+
   const base = {
     id: dto.id,
     time: formatChatTimestamp(dto.createdAt),
@@ -278,13 +304,25 @@ export function mapChatMessageDtoToUI(
   } satisfies Partial<ChatMessage>;
 
   switch (dto.type) {
-    case 'quote':
+    case 'quote': {
+      // 真引用优先:replyTo 快照给出权威预览与跳转坐标;
+      // 原消息被物理删除时快照缺省,回落发送时固化的 quotedText 文本。
+      const replyTo = dto.replyTo;
+      const quotedText = replyTo
+        ? replyTo.revoked
+          ? i18n.t('im.message.revokedQuote', { defaultValue: '消息已撤回' })
+          : `${replyTo.senderNickname}: ${replyTo.preview}`.replace(/^: /, '')
+        : str(content['quotedText']);
       return {
         ...base,
         type: isSent ? 'sent' : 'received',
         text: str(content['text']) ?? '',
-        quotedText: str(content['quotedText']),
+        quotedText,
+        quoteMessageId: replyTo?.id,
+        quoteHeight: replyTo && !replyTo.revoked ? replyTo.height : undefined,
+        quoteRevoked: replyTo?.revoked,
       };
+    }
     case 'image':
       return {
         ...base,

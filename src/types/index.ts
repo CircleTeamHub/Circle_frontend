@@ -134,6 +134,10 @@ export interface ChatMessage {
   systemNoticeSource?: 'native' | 'local';
   systemNoticeTimestamp?: number;
   quotedText?: string;
+  // 真引用(G-09):被引用消息的坐标与状态,点击引用块按 height 定位。
+  quoteMessageId?: string;
+  quoteHeight?: number;
+  quoteRevoked?: boolean;
   time?: string;
   senderName?: string;
   // 发送者用户 id（UUID 形式），仅接收消息携带；群聊点头像跳对方资料用。

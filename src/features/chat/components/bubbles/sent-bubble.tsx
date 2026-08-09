@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useTheme, Spacing, Typography } from '@/theme';
 import { Avatar } from '@/components/ui/avatar';
 import { getAvatarFrameSource } from '@/features/profile/membership-frames';
@@ -12,6 +12,8 @@ interface SentBubbleProps {
   selfName?: string;
   selfAvatarUri?: string;
   hideStatus?: boolean;
+  /** 真引用(G-09):点击引用块定位到原消息;原消息不可达时不传。 */
+  onQuotePress?: () => void;
 }
 
 const sSent = StyleSheet.create({
@@ -60,6 +62,7 @@ export const SentBubble: React.FC<SentBubbleProps> = ({
   selfName,
   selfAvatarUri,
   hideStatus,
+  onQuotePress,
 }) => {
   const { colors } = useTheme();
   const selfAvatarFrame = useAuthStore(
@@ -97,9 +100,18 @@ export const SentBubble: React.FC<SentBubbleProps> = ({
       <View style={sSent.sentContent}>
         <View style={[sSent.sentBubble, d.sentBubble]}>
           {message.quotedText ? (
-            <View style={[sSent.quoteBox, d.quoteBox]}>
-              <Text style={d.quoteText} numberOfLines={2}>{message.quotedText}</Text>
-            </View>
+            onQuotePress ? (
+              <Pressable
+                style={[sSent.quoteBox, d.quoteBox]}
+                onPress={onQuotePress}
+              >
+                <Text style={d.quoteText} numberOfLines={2}>{message.quotedText}</Text>
+              </Pressable>
+            ) : (
+              <View style={[sSent.quoteBox, d.quoteBox]}>
+                <Text style={d.quoteText} numberOfLines={2}>{message.quotedText}</Text>
+              </View>
+            )
           ) : null}
           <Text style={d.sentBubbleText}>{message.text}</Text>
         </View>

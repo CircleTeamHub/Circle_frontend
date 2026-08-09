@@ -315,6 +315,43 @@ export function markConversationRead(
   useChatStore.getState().markConversationReadLocal(conversationId);
 }
 
+/** G-02 撤回:带 ack;权限与广播由服务端收口,失败抛 ChatSendError(code)。 */
+export function revokeChatMessage(
+  conversationId: string,
+  messageId: string,
+): Promise<void> {
+  const current = socket;
+  if (!current?.connected) {
+    return Promise.reject(
+      new ChatSendError('CHAT_NOT_CONNECTED', 'socket 未连接'),
+    );
+  }
+  return new Promise<void>((resolve, reject) => {
+    current
+      .timeout(READ_ACK_TIMEOUT_MS)
+      .emit(
+        CHAT_EVENTS.revoke,
+        { conversationId, messageId },
+        (err: Error | null, ack: ChatReadAck) => {
+          if (err) {
+            reject(new ChatSendError('CHAT_ACK_TIMEOUT', err.message));
+            return;
+          }
+          if (!ack || ack.ok !== true) {
+            reject(
+              new ChatSendError(
+                ack?.code ?? 'CHAT_INVALID_PAYLOAD',
+                ack && 'message' in ack ? ack.message : undefined,
+              ),
+            );
+            return;
+          }
+          resolve();
+        },
+      );
+  });
+}
+
 /** 正在输入：本地节流,无 ack 尽力而为。 */
 export function sendChatTyping(conversationId: string): void {
   const current = socket;

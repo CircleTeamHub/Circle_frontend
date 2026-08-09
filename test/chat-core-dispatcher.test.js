@@ -59,6 +59,7 @@ function loadDispatcher(storeOverrides = {}) {
     banners: [],
     removed: [],
     alerts: [],
+    revokes: [],
     backfills: 0,
     ...storeOverrides,
   };
@@ -117,6 +118,9 @@ function loadDispatcher(storeOverrides = {}) {
       state.conversations = state.conversations.filter(
         (c) => c.id !== conversationId,
       );
+    },
+    applyRevoke: (conversationId, messageId, revokedBy) => {
+      state.revokes.push({ conversationId, messageId, revokedBy });
     },
   };
 
@@ -523,6 +527,24 @@ test('a payload without a sender never reaches the store', () => {
   // null 仍然放行 —— 否则注销用户发过的历史消息会被整条丢掉。
   socket.emit('chat:msg', dto({ conversationId: DIRECT_ID, sender: null }));
   assert.equal(state.ingested.length, 1);
+});
+
+// ---- chat:revoke(G-02):撤回广播 ----
+
+test('chat:revoke routes to applyRevoke and drops malformed payloads', () => {
+  const { socket, state } = loadDispatcher();
+  socket.emit('chat:revoke', {
+    conversationId: 'c1',
+    messageId: 'm1',
+    revokedBy: 'u2',
+  });
+  assert.deepEqual(state.revokes, [
+    { conversationId: 'c1', messageId: 'm1', revokedBy: 'u2' },
+  ]);
+
+  socket.emit('chat:revoke', { conversationId: 'c1' });
+  socket.emit('chat:revoke', null);
+  assert.equal(state.revokes.length, 1);
 });
 
 // ---- chat:conversation(G-11/S-02):本人会话成员关系变化 ----

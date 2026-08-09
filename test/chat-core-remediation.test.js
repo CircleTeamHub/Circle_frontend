@@ -83,6 +83,53 @@ test('own read watermark from another device converges the unread badge', () => 
   assert.match(store, /Math\.min\(\s*target\.unreadCount/);
 });
 
+// ---- 批2:撤回 + 真引用(G-02 / G-09) ----
+
+test('protocol declares chat:revoke, revoke fields and the replyTo snapshot', () => {
+  const protocol = read('src/chat-core/protocol.ts');
+  assert.match(protocol, /revoke: 'chat:revoke'/);
+  assert.match(protocol, /ChatRevokeBroadcast/);
+  assert.match(protocol, /ChatReplyToSnapshot/);
+  assert.match(protocol, /revokedAt\?/);
+});
+
+test('store applyRevoke clears content, keeps height slot and flips replyTo snapshots', () => {
+  const store = read('src/chat-core/store.ts');
+  assert.match(store, /applyRevoke/);
+  // 引用了被撤回消息的那些气泡要同步翻成「消息已撤回」
+  assert.match(store, /replyTo\?\.id === messageId/);
+});
+
+test('revoked messages render as a localized gray pill, not an empty bubble', () => {
+  const mappers = read('src/chat-core/message-mappers.ts');
+  assert.match(mappers, /revokedBySelf/);
+  assert.match(mappers, /revokedByOther/);
+  const preview = read('src/chat-core/mappers.ts');
+  assert.match(preview, /tPreview\('revoked'/);
+});
+
+test('quote bubbles consume the replyTo snapshot and expose jump coordinates', () => {
+  const mappers = read('src/chat-core/message-mappers.ts');
+  assert.match(mappers, /quoteMessageId/);
+  assert.match(mappers, /revokedQuote/);
+});
+
+test('revoke words exist in every locale', () => {
+  for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
+    const dict = JSON.parse(read(`src/i18n/locales/${locale}.json`));
+    assert.ok(dict?.im?.message?.revokedBySelf, `${locale} im.message.revokedBySelf`);
+    assert.ok(dict?.im?.preview?.revoked, `${locale} im.preview.revoked`);
+    assert.ok(dict?.chat?.messageActions?.revoke, `${locale} chat.messageActions.revoke`);
+    for (const code of [
+      'CHAT_MESSAGE_NOT_FOUND',
+      'CHAT_REVOKE_WINDOW_EXPIRED',
+      'CHAT_REVOKE_FORBIDDEN',
+    ]) {
+      assert.ok(dict?.serverErrors?.[code], `${locale} serverErrors.${code}`);
+    }
+  }
+});
+
 // ---- G-18:图标角标轻方案 ----
 
 test('app icon badge follows the muted-aware total unread', () => {

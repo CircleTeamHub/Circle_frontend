@@ -12,6 +12,8 @@ interface ReceivedBubbleProps {
   senderName?: string;
   senderAvatarUri?: string;
   onAvatarPress?: () => void;
+  /** 真引用(G-09):点击引用块定位到原消息;原消息不可达时不传。 */
+  onQuotePress?: () => void;
 }
 
 const sReceived = StyleSheet.create({
@@ -51,6 +53,7 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
   senderName = '',
   senderAvatarUri,
   onAvatarPress,
+  onQuotePress,
 }) => {
   const { colors } = useTheme();
   // 接收消息只有 senderID；外观缓存会批量补查并在权威结果返回后刷新头像框。
@@ -104,9 +107,18 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
       <View style={sReceived.receivedContent}>
         <View style={[sReceived.receivedBubble, d.receivedBubble]}>
           {message.quotedText ? (
-            <View style={[sReceived.quoteBox, d.quoteBox]}>
-              <Text style={d.quoteText} numberOfLines={2}>{message.quotedText}</Text>
-            </View>
+            onQuotePress ? (
+              <Pressable
+                style={[sReceived.quoteBox, d.quoteBox]}
+                onPress={onQuotePress}
+              >
+                <Text style={d.quoteText} numberOfLines={2}>{message.quotedText}</Text>
+              </Pressable>
+            ) : (
+              <View style={[sReceived.quoteBox, d.quoteBox]}>
+                <Text style={d.quoteText} numberOfLines={2}>{message.quotedText}</Text>
+              </View>
+            )
           ) : null}
           <Text style={d.bubbleText}>{message.text}</Text>
         </View>
