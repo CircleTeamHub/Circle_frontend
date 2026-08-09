@@ -1219,3 +1219,39 @@ test("every locale defines labels for all supported language picker options", ()
     );
   }
 });
+
+// 「加我为好友的方式」摘要里的计数必须只算界面上真的能拨的那几项。
+// byPhone / byQrCode 的开关已撤下（对应功能不存在），但字段仍会随服务端返回，
+// 且 addMeByQrCode 的默认值是 true —— 把它们算进去，用户会看到「已开启 3 项」，
+// 点开却只有两个开关，多出来的那一项既看不到也改不了。
+test("add-me summary counts only the methods whose switches are rendered", () => {
+  const source = fs.readFileSync(
+    path.join(
+      process.cwd(),
+      "src/features/profile/screens/PrivacySettingsScreen.tsx",
+    ),
+    "utf8",
+  );
+
+  const countBlock = source.match(/const addMeCount = \[([\s\S]*?)\]/);
+  assert.ok(countBlock, "addMeCount array literal not found");
+
+  const counted = [...countBlock[1].matchAll(/currentSettings\.(addMe\w+)/g)].map(
+    (match) => match[1],
+  );
+  assert.deepEqual(
+    counted.sort(),
+    ["addMeByAccount", "addMeByGroup"],
+    "addMeCount must exclude methods that have no switch in the sheet",
+  );
+
+  // 反向咬合：真有开关的项一个都不能漏算，否则计数会低于可见开关数。
+  const switched = [
+    ...source.matchAll(/onChange\(\{\s*(addMe\w+):/g),
+  ].map((match) => match[1]);
+  assert.deepEqual(
+    switched.sort(),
+    counted.sort(),
+    "every rendered add-me switch must be counted, and vice versa",
+  );
+});

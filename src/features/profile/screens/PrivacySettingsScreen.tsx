@@ -182,10 +182,12 @@ export default function PrivacySettingsScreen() {
     [t],
   );
 
+  // 只算界面上真的有开关的那几项。byPhone / byQrCode 的开关已撤下（对应功能
+  // 不存在，见下方 sheet 里的说明），但字段仍会随服务端返回，且 addMeByQrCode
+  // 默认为 true —— 算进来的话摘要会显示「已开启 3 项」，点开却只有两个开关，
+  // 多出来的那一项用户既看不到也改不了。放开关时把对应项加回这里。
   const addMeCount = [
     currentSettings.addMeByAccount,
-    currentSettings.addMeByPhone,
-    currentSettings.addMeByQrCode,
     currentSettings.addMeByGroup,
   ].filter(Boolean).length;
 
