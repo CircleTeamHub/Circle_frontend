@@ -91,6 +91,13 @@ function loadDispatcher(storeOverrides = {}) {
     if (request === './mappers') {
       return { getChatMessagePreview: (m) => String(m.content?.text ?? '[消息]') };
     }
+    if (request === '@/services/api/utils') {
+      // 白名单替身:只放行本站来源(与其它 chat 用例同款)。
+      return {
+        allowPeerMediaUrl: (u) =>
+          typeof u === 'string' && u.startsWith('https://cdn.trusted/') ? u : null,
+      };
+    }
     if (request === '@/features/notifications/store/use-notification-snackbar-store') {
       return {
         useNotificationSnackbarStore: {
@@ -164,4 +171,95 @@ test('system messages with a null sender are still valid', () => {
   const { socket, state } = loadDispatcher();
   socket.emit('chat:msg', dto({ type: 'system', sender: null }));
   assert.equal(state.ingested.length, 1);
+});
+
+const DIRECT_ID = 'direct:0000-a:ffff-b';
+
+function directConversation(overrides = {}) {
+  return {
+    id: DIRECT_ID,
+    type: 'DIRECT',
+    peer: { id: 'peer', nickname: '备注名', avatarUrl: 'https://cdn.trusted/p.png' },
+    circleId: null,
+    circle: null,
+    ...overrides,
+  };
+}
+
+test('the first message from a new contact still raises a banner', () => {
+  // 会话不在快照里(对方刚建的单聊)。补拉要等 800ms 防抖 + 一次请求,
+  // 横幅错过这一下就再也不会补 —— 用户在非消息页完全收不到提示。
+  const { socket, state } = loadDispatcher({ conversations: [] });
+  socket.emit(
+    'chat:msg',
+    dto({
+      conversationId: DIRECT_ID,
+      sender: { id: 'peer', nickname: '新朋友', avatarUrl: 'https://cdn.trusted/p.png' },
+    }),
+  );
+
+  assert.equal(state.banners.length, 1);
+  const banner = state.banners[0];
+  assert.equal(banner.title, '新朋友');
+  assert.equal(banner.conversationType, 'private');
+  // 跳转目标必须是对端 uuid,否则点开进不去。
+  assert.equal(banner.sourceID, 'peer');
+  assert.equal(banner.conversationID, DIRECT_ID);
+});
+
+test('an unknown group conversation raises no banner (no title, no route)', () => {
+  // 群横幅要圈子名与圈子 id,消息里一个都没有。拿发送者去凑会弹出错的标题、
+  // 点进去还进错房间 —— 不如不弹,等补拉后由下一条消息带出来。
+  const { socket, state } = loadDispatcher({ conversations: [] });
+  socket.emit('chat:msg', dto({ conversationId: 'grp-1' }));
+  assert.equal(state.banners.length, 0);
+  // 但补拉照常安排,会话行与角标不会一直缺着。
+  assert.equal(state.ingested.length, 1);
+});
+
+test('known conversations still win over the sender fallback', () => {
+  const { socket, state } = loadDispatcher({
+    conversations: [directConversation()],
+  });
+  socket.emit(
+    'chat:msg',
+    dto({
+      conversationId: DIRECT_ID,
+      sender: { id: 'peer', nickname: '原始昵称', avatarUrl: null },
+    }),
+  );
+  // 会话行上的名字(可能是本地备注)优先于消息里的昵称。
+  assert.equal(state.banners[0].title, '备注名');
+});
+
+test('banner avatars go through the media allowlist', () => {
+  const { socket, state } = loadDispatcher({ conversations: [] });
+  socket.emit(
+    'chat:msg',
+    dto({
+      conversationId: DIRECT_ID,
+      sender: { id: 'peer', nickname: '新朋友', avatarUrl: 'https://attacker/1.gif' },
+    }),
+  );
+  // 横幅一出现就会自动发起这次图片请求 —— 未授权来源必须落成占位。
+  assert.equal(state.banners[0].avatarUrl, null);
+});
+
+test('self messages and the open conversation never raise a banner', () => {
+  const { socket, state } = loadDispatcher({
+    conversations: [directConversation()],
+    activeConversationId: DIRECT_ID,
+  });
+  socket.emit('chat:msg', dto({ conversationId: DIRECT_ID }));
+  assert.equal(state.banners.length, 0);
+
+  const other = loadDispatcher({ conversations: [directConversation()] });
+  other.socket.emit(
+    'chat:msg',
+    dto({
+      conversationId: DIRECT_ID,
+      sender: { id: 'me', nickname: '我', avatarUrl: null },
+    }),
+  );
+  assert.equal(other.state.banners.length, 0);
 });

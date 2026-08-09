@@ -2,11 +2,13 @@ import type { Socket } from 'socket.io-client';
 import {
   CHAT_EVENTS,
   isChatMessageDto,
+  isDirectConversationId,
   type ChatMessageDto,
   type ChatPresenceBroadcast,
   type ChatReadBroadcast,
 } from './protocol';
 import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
+import { allowPeerMediaUrl } from '@/services/api/utils';
 import { loadChatConversations } from './api';
 import { getChatMessagePreview } from './mappers';
 import { useChatStore } from './store';
@@ -113,7 +115,8 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
  * enqueueChatMessage 至今零调用方(NotificationSnackbarHost 仍支持 chat 项),
  * 于是在非会话页收到消息完全没有提示、也没有点进去的入口。
  *
- * 抑制规则:自己发的不弹;当前正打开的那个会话不弹;系统消息不弹。
+ * 抑制规则:自己发的不弹;当前正打开的那个会话不弹;系统消息不弹;
+ * 元信息不足以给出正确标题与跳转目标的不弹。
  */
 function enqueueForegroundBanner(message: ChatMessageDto): void {
   const store = useChatStore.getState();
@@ -125,13 +128,38 @@ function enqueueForegroundBanner(message: ChatMessageDto): void {
   const conversation = store.conversations.find(
     (c) => c.id === message.conversationId,
   );
-  // 会话元信息还没补拉回来时不弹:标题会是空的,点进去也没有 sourceID。
-  if (!conversation) return;
-  const isGroup = conversation.type === 'GROUP';
-  const title = isGroup
-    ? (conversation.circle?.name ?? '')
-    : (conversation.peer?.nickname ?? message.sender?.nickname ?? '');
-  if (!title) return;
+
+  let title: string;
+  let avatarRaw: string | null;
+  let sourceID: string;
+  let isGroup: boolean;
+
+  if (conversation) {
+    isGroup = conversation.type === 'GROUP';
+    title = isGroup
+      ? (conversation.circle?.name ?? '')
+      : (conversation.peer?.nickname ?? message.sender?.nickname ?? '');
+    avatarRaw = isGroup
+      ? (conversation.circle?.avatarUrl ?? null)
+      : (conversation.peer?.avatarUrl ?? null);
+    sourceID = isGroup
+      ? (conversation.circleId ?? '')
+      : (conversation.peer?.id ?? '');
+  } else if (isDirectConversationId(message.conversationId)) {
+    // 陌生人的第一条消息:会话还不在快照里,补拉要等 800ms 防抖 + 一次请求,
+    // 而横幅错过这一下就再也不会补。1:1 会话的发送者就是对端(自己发的上面
+    // 已经挡掉),标题、头像、跳转要的 sourceID 消息里全都有,不必等。
+    isGroup = false;
+    title = message.sender?.nickname ?? '';
+    avatarRaw = message.sender?.avatarUrl ?? null;
+    sourceID = message.sender?.id ?? '';
+  } else {
+    // 群会话没有这条退路:标题要圈子名、跳转要圈子 id,消息里一个都没有。
+    // 拿发送者去凑会弹出一个错的标题,点进去还进错房间 —— 不如不弹。
+    return;
+  }
+
+  if (!title || !sourceID) return;
   const summary = isGroup
     ? `${message.sender?.nickname ?? ''}: ${getChatMessagePreview(message)}`.trim()
     : getChatMessagePreview(message);
@@ -140,13 +168,10 @@ function enqueueForegroundBanner(message: ChatMessageDto): void {
     id: message.id,
     title,
     summary,
-    avatarUrl: isGroup
-      ? (conversation.circle?.avatarUrl ?? null)
-      : (conversation.peer?.avatarUrl ?? null),
+    // 头像地址仍要过媒体白名单:横幅一出现就会自动发起这次图片请求。
+    avatarUrl: allowPeerMediaUrl(avatarRaw),
     conversationID: message.conversationId,
-    sourceID: isGroup
-      ? (conversation.circleId ?? '')
-      : (conversation.peer?.id ?? ''),
+    sourceID,
     conversationType: isGroup ? 'group' : 'private',
   });
 }
