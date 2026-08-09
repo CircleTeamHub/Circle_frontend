@@ -32,6 +32,7 @@ import { getAuthRouteDecision } from '@/components/app/auth-route-policy';
 import { LaunchReveal } from '@/components/app/launch-reveal';
 import { LoginSecurityCodeGate } from '@/components/app/login-security-code-gate';
 import { SessionBootstrap } from '@/components/app/session-bootstrap';
+import { MemberNameAnimationProvider } from '@/components/ui/member-name-animation';
 import { AccountSwitcherSheet } from '@/features/profile/components/account-switcher-sheet';
 import { NotificationSnackbarHost } from '@/features/notifications/components/NotificationSnackbarHost';
 import { PushNotificationRouteHandler } from '@/features/notifications/components/PushNotificationRouteHandler';
@@ -316,25 +317,27 @@ function RootLayout() {
   return (
     // ThemeProvider：提供全局主题上下文（颜色、深浅色模式等）
     <ThemeProvider>
-      <SessionBootstrap />
-      <AuthRouteGuard>
-        <Animated.View style={[{ flex: 1 }, appScaleStyle]}>
-          <RootStack />
-        </Animated.View>
-        <NotificationSnackbarHost />
-        <PushNotificationRouteHandler />
-        <PushNotificationTokenRegistrar />
-        <CallInviteHost />
-        <AccountSwitcherSheet />
-        <LoginSecurityCodeGate />
-      </AuthRouteGuard>
-      {!launchRevealDone ? (
-        <LaunchReveal
-          play={nativeSplashHidden}
-          onReveal={springAppOpen}
-          onFinish={handleLaunchRevealFinish}
-        />
-      ) : null}
+      <MemberNameAnimationProvider>
+        <SessionBootstrap />
+        <AuthRouteGuard>
+          <Animated.View style={[{ flex: 1 }, appScaleStyle]}>
+            <RootStack />
+          </Animated.View>
+          <NotificationSnackbarHost />
+          <PushNotificationRouteHandler />
+          <PushNotificationTokenRegistrar />
+          <CallInviteHost />
+          <AccountSwitcherSheet />
+          <LoginSecurityCodeGate />
+        </AuthRouteGuard>
+        {!launchRevealDone ? (
+          <LaunchReveal
+            play={nativeSplashHidden}
+            onReveal={springAppOpen}
+            onFinish={handleLaunchRevealFinish}
+          />
+        ) : null}
+      </MemberNameAnimationProvider>
     </ThemeProvider>
   );
 }
