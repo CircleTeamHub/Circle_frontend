@@ -267,6 +267,38 @@ test('disconnectChat resets the store and invalidates the session generation', (
   assert.equal(socket.handlers.size, 0);
 });
 
+test('a connected socket bound to a different user is replaced, not kept', () => {
+  const { manager, socket, store, bound } = loadManager();
+  // 冷启动:磁盘上的 user 快照是上一个账号的,先用它连上了。
+  manager.connectChat('jwt', 'stale-user');
+  socket.connected = true;
+  socket.fire('connect');
+  assert.equal(store.currentUserId, 'stale-user');
+  const staleIsLive = bound[0].isLive;
+
+  // /auth/me 回来,权威用户是另一个人:必须换身份重连 —— 只看 connected 的话
+  // 那条错身份的连接会一直留着,自己发的消息被判成收到的,未读也跟着错。
+  manager.connectChat('jwt', 'real-user');
+  assert.equal(store.currentUserId, 'real-user');
+  assert.ok(store.calls.some(([name]) => name === 'reset'));
+  // 旧连接的 session generation 作废,它上面到达的事件不会写进新身份的 store。
+  assert.equal(staleIsLive(), false);
+  assert.equal(bound.length, 2);
+});
+
+test('reconnecting as the same user on a live socket stays a no-op', () => {
+  const { manager, socket, store } = loadManager();
+  manager.connectChat('jwt', 'u1');
+  socket.connected = true;
+  socket.fire('connect');
+  const callsBefore = store.calls.length;
+
+  // 回前台补连 / token 轮换:同一个人,不能把连接推倒重来。
+  manager.connectChat('jwt', 'u1');
+  assert.equal(store.calls.length, callsBefore);
+  assert.ok(!store.calls.some(([name]) => name === 'reset'));
+});
+
 test('typing is throttled locally per conversation', () => {
   const { manager, socket } = loadManager();
   manager.connectChat('jwt', 'u1');

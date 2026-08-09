@@ -50,7 +50,12 @@ export function createDeliveryId(): string {
 
 export function connectChat(token: string, userId: string): void {
   const store = useChatStore.getState();
-  if (socket?.connected) return;
+  // 已连着、而且连的就是这个人:no-op(回前台补连、token 轮换都走这条)。
+  // 身份不同必须重连:冷启动时磁盘上的 user 快照可能缺失或属于上一个账号,
+  // 用它连上之后 /auth/me 才把权威用户写回来。只看 connected 的话那条错身份
+  // 的连接会一直留着 —— 收发方向按错的 currentUserId 判,自己发的消息被算成
+  // 收到的,未读也跟着错,直到真的断线重连或重启才恢复。
+  if (socket?.connected && store.currentUserId === userId) return;
   // 换账号才清 store。放在这里而不是调用方,是为了让「挂起 → 重连」这条
   // 路径天然安全:同一账号轮换 token 时列表/消息/pending 已读原样保留,
   // 而切到另一个账号时上一个账号的数据一定先被清掉(跨账号不串数据)。
