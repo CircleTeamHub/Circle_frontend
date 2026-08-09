@@ -2476,6 +2476,9 @@
     "videoCallTitle": "영상 통화"
   },
   "im": {
+    "conversation": {
+      "removedFromGroup": "그룹 채팅에서 내보내졌습니다"
+    },
     "time": {
       "yesterday": "어제"
     },
@@ -2537,6 +2540,7 @@
     "TEMP_CHAT_JOIN_FAILED": "참여하지 못했습니다. 다시 시도해 주세요",
     "NOTE_RESTORE_DUPLICATE": "이 노트의 다른 소장 사본이 이미 존재합니다.",
     "NOTE_SHARE_LINK_LIMIT": "공유 링크 한도에 도달했습니다. 사용하지 않는 링크를 먼저 취소해 주세요",
+    "UPLOAD_INVALID_CONTENT_TYPE": "지원하지 않는 파일 형식입니다",
     "UPLOAD_PAYLOAD_TOO_LARGE": "파일이 너무 커서 업로드할 수 없습니다",
     "UPLOAD_INVALID_CONTENT_TYPE": "지원하지 않는 파일 형식입니다",
     "COLLECTION_LIMIT": "컬렉션 한도에 도달했습니다. 필요 없는 항목을 정리해 주세요",

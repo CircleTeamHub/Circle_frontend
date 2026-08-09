@@ -107,14 +107,29 @@ function loadManager() {
         state.connected = false;
         state.currentUserId = null;
       },
+      activeConversationId: null,
+      messagesByConversation: {},
     };
     return { useChatStore: { getState: () => state }, state };
   })();
   const bound = [];
+  // 重连对账(G-13)的观测点:列表刷新次数与缺口补拉参数。
+  const apiCalls = { conversations: 0, backfills: [] };
   const protocol = runModule('src/chat-core/protocol.ts', {});
   const manager = runModule('src/chat-core/socket-manager.ts', {
     'socket.io-client': { io },
     '@/constants/config': { CHAT_WS_URL: 'http://api.test' },
+    './api': {
+      loadChatConversations: () => {
+        apiCalls.conversations += 1;
+        return Promise.resolve([]);
+      },
+      backfillConversationSince: (conversationId, afterHeight) => {
+        apiCalls.backfills.push({ conversationId, afterHeight });
+        return Promise.resolve();
+      },
+    },
+    './app-badge': { initChatAppBadgeSync: () => {} },
     './dispatcher': {
       bindChatEvents: (sock, isLive) => bound.push({ sock, isLive }),
       cancelConversationBackfill: () => {},
@@ -122,8 +137,36 @@ function loadManager() {
     './protocol': protocol,
     './store': storeModule,
   });
-  return { manager, socket, captured, store: storeModule.state, bound };
+  return {
+    manager,
+    socket,
+    captured,
+    store: storeModule.state,
+    bound,
+    apiCalls,
+  };
 }
+
+test('reconnect (not first connect) refreshes conversations and backfills the active gap', () => {
+  const { manager, socket, store, apiCalls } = loadManager();
+  manager.connectChat('jwt', 'u1');
+  socket.fire('connect');
+  // 首连不对账:冷启动全量拉取由页面 focus 负责。
+  assert.equal(apiCalls.conversations, 0);
+  assert.deepEqual(apiCalls.backfills, []);
+
+  socket.fire('disconnect');
+  store.activeConversationId = 'c1';
+  store.messagesByConversation = {
+    c1: [{ height: 4 }, { height: 9 }, { height: 0 }],
+  };
+  socket.fire('connect');
+  // 重连:列表刷新一次 + 当前会话从本地最高 height(乐观消息的 0 不算)追平。
+  assert.equal(apiCalls.conversations, 1);
+  assert.deepEqual(apiCalls.backfills, [
+    { conversationId: 'c1', afterHeight: 9 },
+  ]);
+});
 
 test('connects with token in the handshake auth frame, never in the URL', () => {
   const { manager, captured } = loadManager();

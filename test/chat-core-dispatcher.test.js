@@ -57,6 +57,8 @@ function loadDispatcher(storeOverrides = {}) {
     conversations: [],
     ingested: [],
     banners: [],
+    removed: [],
+    alerts: [],
     backfills: 0,
     ...storeOverrides,
   };
@@ -110,6 +112,12 @@ function loadDispatcher(storeOverrides = {}) {
     },
     applyRead: () => {},
     applyPresence: () => {},
+    removeConversation: (conversationId) => {
+      state.removed.push(conversationId);
+      state.conversations = state.conversations.filter(
+        (c) => c.id !== conversationId,
+      );
+    },
   };
 
   const dispatcher = runModule('src/chat-core/dispatcher.ts', (request) => {
@@ -160,6 +168,12 @@ function loadDispatcher(storeOverrides = {}) {
           }),
         },
       };
+    }
+    if (request === 'react-native') {
+      return { Alert: { alert: (text) => state.alerts.push(text) } };
+    }
+    if (request === '@/i18n') {
+      return { default: { t: (key) => key }, t: (key) => key };
     }
     throw new Error(`unexpected require: ${request}`);
   }, {
@@ -509,4 +523,71 @@ test('a payload without a sender never reaches the store', () => {
   // null 仍然放行 —— 否则注销用户发过的历史消息会被整条丢掉。
   socket.emit('chat:msg', dto({ conversationId: DIRECT_ID, sender: null }));
   assert.equal(state.ingested.length, 1);
+});
+
+// ---- chat:conversation(G-11/S-02):本人会话成员关系变化 ----
+
+test('chat:conversation removed collapses the conversation and alerts only when active', () => {
+  const { socket, state } = loadDispatcher();
+  state.conversations = [{ id: 'c1', type: 'GROUP' }];
+  state.activeConversationId = 'c1';
+
+  socket.emit('chat:conversation', {
+    kind: 'removed',
+    conversationId: 'c1',
+    userId: 'me',
+  });
+
+  assert.deepEqual(state.removed, ['c1']);
+  // 正看着这个群才提示,文案走 im.conversation.removedFromGroup 词条。
+  assert.deepEqual(state.alerts, ['im.conversation.removedFromGroup']);
+
+  // 防复活:被移除会话的迟到广播既不入库也不触发补拉。
+  socket.emit('chat:msg', dto({ conversationId: 'c1', id: 'late-1' }));
+  assert.equal(state.ingested.length, 0);
+});
+
+test('chat:conversation left removes silently and joined lifts the guard', () => {
+  const { socket, state } = loadDispatcher();
+  state.conversations = [{ id: 'c1', type: 'GROUP' }];
+  state.activeConversationId = null;
+
+  socket.emit('chat:conversation', {
+    kind: 'left',
+    conversationId: 'c1',
+    userId: 'me',
+  });
+  assert.deepEqual(state.removed, ['c1']);
+  // left 是本人在别处的主动动作:静默收走,不弹提示。
+  assert.deepEqual(state.alerts, []);
+
+  // 重新入群:解除防复活标记,消息恢复入库。
+  socket.emit('chat:conversation', {
+    kind: 'joined',
+    conversationId: 'c1',
+    userId: 'me',
+  });
+  state.conversations = [{ id: 'c1', type: 'GROUP' }];
+  socket.emit('chat:msg', dto({ conversationId: 'c1', id: 'back-1' }));
+  assert.equal(state.ingested.length, 1);
+});
+
+test('chat:conversation for another user or malformed payloads is ignored', () => {
+  const { socket, state } = loadDispatcher();
+  state.conversations = [{ id: 'c1', type: 'GROUP' }];
+
+  socket.emit('chat:conversation', {
+    kind: 'removed',
+    conversationId: 'c1',
+    userId: 'someone-else',
+  });
+  socket.emit('chat:conversation', {
+    kind: 'evicted',
+    conversationId: 'c1',
+    userId: 'me',
+  });
+  socket.emit('chat:conversation', { kind: 'removed', userId: 'me' });
+
+  assert.deepEqual(state.removed, []);
+  assert.deepEqual(state.alerts, []);
 });

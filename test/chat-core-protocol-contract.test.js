@@ -25,6 +25,7 @@ const FE_EVENTS = {
   read: 'chat:read',
   typing: 'chat:typing',
   message: 'chat:msg',
+  conversation: 'chat:conversation',
 };
 
 test('frontend protocol declares the canonical event names and path', () => {

@@ -2476,6 +2476,9 @@
     "videoCallTitle": "ビデオ通話"
   },
   "im": {
+    "conversation": {
+      "removedFromGroup": "このグループチャットから削除されました"
+    },
     "time": {
       "yesterday": "昨日"
     },
@@ -2537,6 +2540,7 @@
     "TEMP_CHAT_JOIN_FAILED": "参加に失敗しました。もう一度お試しください",
     "NOTE_RESTORE_DUPLICATE": "このノートの別の収蔵コピーが既に存在します。",
     "NOTE_SHARE_LINK_LIMIT": "共有リンクの上限に達しました。不要なリンクを取り消してください",
+    "UPLOAD_INVALID_CONTENT_TYPE": "サポートされていないファイル形式です",
     "UPLOAD_PAYLOAD_TOO_LARGE": "ファイルが大きすぎてアップロードできません",
     "UPLOAD_INVALID_CONTENT_TYPE": "対応していないファイル形式です",
     "COLLECTION_LIMIT": "コレクションの上限に達しました。不要なものを削除してください",

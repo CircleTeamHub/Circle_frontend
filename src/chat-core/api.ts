@@ -80,6 +80,35 @@ export async function loadChatHistory(
   return page;
 }
 
+/** 单页 100 × 10 页:一次重连最多追 1000 条,再多交给翻页/下次重连。 */
+const BACKFILL_PAGE_LIMIT = 100;
+const BACKFILL_PAGES_MAX = 10;
+
+/**
+ * G-13 断线重连对账:从 afterHeight 起升序追平缺口。
+ * 与 chat:msg 广播共用 ingestMessages 入库(按 id/d 幂等去重),
+ * 追平(nextAfterHeight=null)即停。
+ */
+export async function backfillConversationSince(
+  conversationId: string,
+  afterHeight: number,
+): Promise<void> {
+  let cursor = afterHeight;
+  for (let page = 0; page < BACKFILL_PAGES_MAX; page += 1) {
+    const params = new URLSearchParams();
+    params.set('afterHeight', String(cursor));
+    params.set('limit', String(BACKFILL_PAGE_LIMIT));
+    const sameSession = sessionGate();
+    const dto = await apiClient<ChatHistoryPageDto>(
+      `/chat/conversations/${conversationId}/messages?${params.toString()}`,
+    );
+    if (!sameSession()) return;
+    useChatStore.getState().ingestMessages(conversationId, dto.messages);
+    if (dto.nextAfterHeight == null) return;
+    cursor = dto.nextAfterHeight;
+  }
+}
+
 /**
  * 聊天记录检索(文本搜/媒体格/按日期)。与 loadChatHistory 的关键区别:
  * 结果**不写入** store —— 过滤后的片段灌进会话时间线会造成"消息缺页"假象。

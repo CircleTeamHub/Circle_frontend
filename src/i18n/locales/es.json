@@ -2479,6 +2479,9 @@
     "videoCallTitle": "Videollamada"
   },
   "im": {
+    "conversation": {
+      "removedFromGroup": "Te han eliminado de este chat de grupo"
+    },
     "time": {
       "yesterday": "Ayer"
     },
@@ -2540,6 +2543,7 @@
     "TEMP_CHAT_JOIN_FAILED": "No se pudo unir, inténtalo de nuevo",
     "NOTE_RESTORE_DUPLICATE": "Ya existe otra copia activa de esta nota guardada.",
     "NOTE_SHARE_LINK_LIMIT": "Límite de enlaces compartidos alcanzado; revoca los que no uses",
+    "UPLOAD_INVALID_CONTENT_TYPE": "Tipo de archivo no compatible",
     "UPLOAD_PAYLOAD_TOO_LARGE": "El archivo es demasiado grande para subirlo",
     "UPLOAD_INVALID_CONTENT_TYPE": "Este tipo de archivo no es compatible",
     "COLLECTION_LIMIT": "Límite de colecciones alcanzado; elimina las que no necesites",

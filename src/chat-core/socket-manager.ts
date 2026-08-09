@@ -1,5 +1,7 @@
 import { io, type Socket } from 'socket.io-client';
 import { CHAT_WS_URL } from '@/constants/config';
+import { backfillConversationSince, loadChatConversations } from './api';
+import { initChatAppBadgeSync } from './app-badge';
 import { bindChatEvents, cancelConversationBackfill } from './dispatcher';
 import {
   CHAT_EVENTS,
@@ -64,6 +66,7 @@ export function connectChat(token: string, userId: string): void {
   }
   teardownSocket();
   sessionGen += 1;
+  initChatAppBadgeSync();
 
   const gen = sessionGen;
   store.setConnecting(true);
@@ -76,13 +79,19 @@ export function connectChat(token: string, userId: string): void {
     auth: { token },
   });
 
+  // 同一 socket 生命周期内的首连/重连判据(G-13):
+  // 首连不做对账(冷启动全量拉取由页面 focus 负责),重连才补断线窗口。
+  let hadConnected = false;
   next.on('connect', () => {
     if (gen !== sessionGen) return;
+    const isReconnect = hadConnected;
+    hadConnected = true;
     const state = useChatStore.getState();
     state.setConnecting(false);
     state.setConnected(true);
     state.setError(null);
     void flushPendingReads();
+    if (isReconnect) resyncAfterReconnect();
   });
   next.on('disconnect', () => {
     if (gen !== sessionGen) return;
@@ -139,6 +148,31 @@ function teardownSocket(): void {
   socket.removeAllListeners();
   socket.disconnect();
   socket = null;
+}
+
+/**
+ * G-13 断线重连对账:断开期间的 chat:msg 不会重投,必须主动补,否则那段
+ * 消息在已打开的会话里永远不出现、列表未读也停在断线前。
+ * ① 重拉会话列表(未读/预览/新会话一次到位,服务端为准);
+ * ② 当前打开的会话按本地最高 height 升序追平(与广播同一 ingest 入口,幂等)。
+ * 其余会话不逐个补:进入时的历史加载与列表快照已覆盖。
+ */
+function resyncAfterReconnect(): void {
+  void loadChatConversations().catch((err: unknown) =>
+    console.warn('[chat] reconnect conversation refresh failed', err),
+  );
+  const state = useChatStore.getState();
+  const active = state.activeConversationId;
+  if (!active) return;
+  let maxHeight = 0;
+  for (const message of state.messagesByConversation[active] ?? []) {
+    if (message.height > maxHeight) maxHeight = message.height;
+  }
+  // 没有任何已确认消息就不补:该会话的首屏历史另有加载路径。
+  if (maxHeight <= 0) return;
+  void backfillConversationSince(active, maxHeight).catch((err: unknown) =>
+    console.warn('[chat] reconnect gap backfill failed', err),
+  );
 }
 
 export function isChatConnected(): boolean {

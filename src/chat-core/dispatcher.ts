@@ -1,13 +1,16 @@
+import { Alert } from 'react-native';
 import type { Socket } from 'socket.io-client';
 import {
   CHAT_EVENTS,
   isChatMessageDto,
+  type ChatConversationBroadcast,
   type ChatMessageDto,
   type ChatPresenceBroadcast,
   type ChatReadBroadcast,
 } from './protocol';
 import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
 import { allowPeerMediaUrl } from '@/services/api/utils';
+import i18n from '@/i18n';
 import { loadChatConversations } from './api';
 import { isMessageDeletedLocally } from './deleted-messages';
 import { getChatMessagePreview } from './mappers';
@@ -122,10 +125,37 @@ function scheduleConversationBackfill(isLive: () => boolean): void {
 /** 测试与登出用:丢掉在途的补拉计时器与攒着的横幅。 */
 export function cancelConversationBackfill(): void {
   pendingBanners.clear();
+  removedConversations.clear();
   if (backfillTimer === null) return;
   clearTimeout(backfillTimer);
   backfillTimer = null;
 }
+
+/**
+ * 被移出的会话(G-11/S-02):服务端已即时离房,但离房前一瞬广播出的消息仍可能
+ * 迟到 —— 那条 chat:msg 会因「会话不在快照里」触发补拉,把刚收走的会话又带回
+ * 列表。这里记一个有界防复活集合;重新入群(joined)时解除。
+ * 断连清空即可:重连后服务端按座位重新派生房间,不在座就收不到了。
+ */
+const removedConversations = new Set<string>();
+const REMOVED_CONVERSATIONS_MAX = 50;
+
+function rememberRemovedConversation(conversationId: string): void {
+  removedConversations.delete(conversationId);
+  removedConversations.add(conversationId);
+  while (removedConversations.size > REMOVED_CONVERSATIONS_MAX) {
+    const oldest = removedConversations.values().next().value;
+    if (oldest === undefined) break;
+    removedConversations.delete(oldest);
+  }
+}
+
+const CONVERSATION_CHANGE_KINDS: ReadonlySet<string> = new Set([
+  'joined',
+  'left',
+  'removed',
+  'updated',
+]);
 
 export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
   socket.on(CHAT_EVENTS.message, (payload: ChatMessageDto) => {
@@ -144,6 +174,8 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       // 「已处理」,而下面的横幅与补拉是无条件跑的 —— 用户离开会话后,
       // 一条自己刚删掉的消息会以前台通知的形式重新弹出来。
       if (isMessageDeletedLocally(payload.id, payload.d)) return;
+      // 被移出的会话:迟到的广播不入库也不补拉,否则刚收走的会话立刻复活。
+      if (removedConversations.has(payload.conversationId)) return;
 
       const store = useChatStore.getState();
       // 顺序要紧:先联动会话列表再入时间线。applyIncomingMessage 靠
@@ -200,6 +232,47 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       useChatStore.getState().applyPresence(payload.userId, payload.online);
     } catch (err) {
       console.warn('[chat] presence handler failed', err);
+    }
+  });
+
+  socket.on(CHAT_EVENTS.conversation, (payload: ChatConversationBroadcast) => {
+    if (!isLive()) return;
+    try {
+      if (
+        !payload ||
+        typeof payload.conversationId !== 'string' ||
+        payload.conversationId.length === 0 ||
+        typeof payload.userId !== 'string' ||
+        !CONVERSATION_CHANGE_KINDS.has(payload.kind)
+      ) {
+        console.warn('[chat] dropped malformed conversation payload');
+        return;
+      }
+      const store = useChatStore.getState();
+      // 个人房定向事件只该是本人的;万一串了宁可丢弃,不替别人操作本机列表。
+      if (
+        store.currentUserId !== null &&
+        payload.userId !== store.currentUserId
+      ) {
+        return;
+      }
+      if (payload.kind === 'removed' || payload.kind === 'left') {
+        rememberRemovedConversation(payload.conversationId);
+        pendingBanners.delete(payload.conversationId);
+        const wasActive =
+          store.activeConversationId === payload.conversationId;
+        store.removeConversation(payload.conversationId);
+        // 正看着这个群被移出才提示;left 是本人在别处的主动动作,静默收走即可。
+        if (payload.kind === 'removed' && wasActive) {
+          Alert.alert(i18n.t('im.conversation.removedFromGroup'));
+        }
+        return;
+      }
+      // joined:重新入群要解除防复活标记;updated 同样只需刷新元信息。
+      removedConversations.delete(payload.conversationId);
+      scheduleConversationBackfill(isLive);
+    } catch (err) {
+      console.warn('[chat] conversation handler failed', err);
     }
   });
 }

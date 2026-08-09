@@ -17,6 +17,8 @@ export const CHAT_EVENTS = {
   message: 'chat:msg',
   /** 双向：在线状态（客户端带 ack 查询；服务端上下线广播） */
   presence: 'chat:presence',
+  /** 服务端 → 客户端（个人房定向）：本人的会话成员关系变化 */
+  conversation: 'chat:conversation',
 } as const;
 
 export interface ChatSendPayload {
@@ -148,6 +150,23 @@ export interface ChatReadBroadcast {
   height: number;
 }
 
+/**
+ * chat:conversation 的变化种类（镜像 circle_be chat.types.ts）:
+ * joined=入座 / left=本人主动退出 / removed=被移出·解散·停用 / updated=预留。
+ */
+export type ChatConversationChangeKind =
+  | 'joined'
+  | 'left'
+  | 'removed'
+  | 'updated';
+
+/** chat:conversation 服务端定向下发:接收者本人的会话成员关系变化。 */
+export interface ChatConversationBroadcast {
+  kind: ChatConversationChangeKind;
+  conversationId: string;
+  userId: string;
+}
+
 export interface ChatTypingBroadcast {
   conversationId: string;
   userId: string;
@@ -158,6 +177,8 @@ export interface ChatHistoryPageDto {
   messages: ChatMessageDto[];
   /** 继续向前翻页的 beforeHeight;没有更早消息时为 null。 */
   nextBeforeHeight: number | null;
+  /** afterHeight 增量补拉的续拉游标;已追平为 null(仅 afterHeight 查询返回)。 */
+  nextAfterHeight?: number | null;
 }
 
 /** chat:presence 服务端广播。 */

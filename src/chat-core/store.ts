@@ -376,16 +376,38 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   },
 
   applyRead: (conversationId, userId, height) => {
-    const { readWatermarks } = get();
+    const { readWatermarks, conversations, currentUserId } = get();
     const conversation = readWatermarks[conversationId] ?? {};
     const prior = conversation[userId] ?? 0;
     if (height <= prior) return;
-    set({
+    const patch: Partial<ChatStoreState> = {
       readWatermarks: {
         ...readWatermarks,
         [conversationId]: { ...conversation, [userId]: height },
       },
-    });
+    };
+    // G-15 多端同步:自己的水位从另一台设备推进时,本机未读一并收敛。
+    // height 在会话内连续,latest - read 即未读上界;min 保证只收敛不增长
+    // (服务端口径不含自己发的消息,直接取差值可能偏大)。
+    if (currentUserId !== null && userId === currentUserId) {
+      const index = conversations.findIndex((c) => c.id === conversationId);
+      if (index >= 0) {
+        const target = conversations[index];
+        const latestHeight = target.lastMessage?.height ?? 0;
+        const converged = Math.min(
+          target.unreadCount,
+          Math.max(0, latestHeight - height),
+        );
+        if (converged !== target.unreadCount) {
+          patch.conversations = [
+            ...conversations.slice(0, index),
+            { ...target, unreadCount: converged },
+            ...conversations.slice(index + 1),
+          ];
+        }
+      }
+    }
+    set(patch);
   },
 
   clearCachedChats: () =>
