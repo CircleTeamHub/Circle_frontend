@@ -303,6 +303,20 @@ export interface ChatTypingBroadcast {
   userId: string;
 }
 
+/**
+ * 离线撤回/编辑增量(REST GET /chat/messages/mutations)。
+ * 镜像 circle_be chat.types.ts 的 ChatMutationsPageDto。
+ */
+export interface ChatMutationsPageDto {
+  messages: ChatMessageDto[];
+  /** 本次响应的服务端时刻。 */
+  serverTime: string;
+  /** 下一次请求应当传的 since(被截断时它停在本页最后一次变更上)。 */
+  nextSince: string;
+  /** 还有没追完的变更;为 true 应当立刻再拉一页。 */
+  hasMore: boolean;
+}
+
 /** 历史分页(REST GET /chat/conversations/:id/messages)。 */
 export interface ChatHistoryPageDto {
   messages: ChatMessageDto[];

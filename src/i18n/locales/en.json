@@ -270,6 +270,7 @@
       "statusOnline": "Online",
       "statusOffline": "Offline",
       "statusTyping": "Typing…",
+      "statusTypingGroup": "Someone is typing…",
       "previewNotice": "The connection isn't ready yet. Please try again shortly.",
       "recordingSeconds": "Recording {{seconds}}s",
       "voiceReleaseCancel": "Release to cancel",

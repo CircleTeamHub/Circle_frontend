@@ -230,6 +230,7 @@
       "statusOnline": "オンライン",
       "statusOffline": "オフライン",
       "statusTyping": "入力中…",
+      "statusTypingGroup": "入力中…",
       "previewNotice": "接続がまだ完了していません。しばらくしてから再試行してください。",
       "recordingSeconds": "録音中 {{seconds}}秒",
       "voiceReleaseCancel": "指を離してキャンセル",

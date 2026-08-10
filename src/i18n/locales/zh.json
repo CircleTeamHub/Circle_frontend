@@ -270,6 +270,7 @@
       "statusOnline": "在线",
       "statusOffline": "离线",
       "statusTyping": "对方正在输入…",
+      "statusTypingGroup": "有人正在输入…",
       "previewNotice": "连接尚未完成，请稍后重试",
       "recordingSeconds": "正在录音 {{seconds}} 秒",
       "voiceReleaseCancel": "松开 取消",

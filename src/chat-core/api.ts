@@ -5,6 +5,7 @@ import type {
   ChatHistoryPageDto,
   ChatMemberDto,
   ChatMessageDto,
+  ChatMutationsPageDto,
 } from './protocol';
 import { withoutLocallyDeleted } from './deleted-messages';
 import {
@@ -84,22 +85,29 @@ export async function loadChatHistory(
   // ingest 就是把上一个账号的私聊内容写进新账号的时间线。
   const sameSession = sessionGate();
   const hydratingUser = store.currentUserId;
+  const inMemory = store.messagesByConversation[conversationId] ?? [];
   let localMax = 0;
-  if (
-    options.beforeHeight === undefined &&
-    (store.messagesByConversation[conversationId] ?? []).length === 0
-  ) {
-    const local = await readRecentLocalMessages(
-      conversationId,
-      options.limit ?? 50,
-    );
-    if (
-      local.length > 0 &&
-      sameSession() &&
-      useChatStore.getState().currentUserId === hydratingUser
-    ) {
-      useChatStore.getState().ingestMessages(conversationId, local);
-      for (const message of local) {
+  if (options.beforeHeight === undefined) {
+    if (inMemory.length === 0) {
+      const local = await readRecentLocalMessages(
+        conversationId,
+        options.limit ?? 50,
+      );
+      if (
+        local.length > 0 &&
+        sameSession() &&
+        useChatStore.getState().currentUserId === hydratingUser
+      ) {
+        useChatStore.getState().ingestMessages(conversationId, local);
+        for (const message of local) {
+          if (message.height > localMax) localMax = message.height;
+        }
+      }
+    } else {
+      // 冷启动水合已经把这个会话灌进内存了 —— 原来这里只在「内存为空」时
+      // 才算 localMax,于是 localMax 恒为 0,下面那段缺口对账整个被跳过:
+      // 离线很久之后,旧缓存块和最新一页之间会留一个静默的 height 空洞。
+      for (const message of inMemory) {
         if (message.height > localMax) localMax = message.height;
       }
     }
@@ -185,17 +193,20 @@ export async function backfillConversationSince(
 /**
  * 离线期间的撤回/编辑增量。撤回不改 height,重连的 afterHeight 补拉结构上
  * 永远看不到它 —— 不追这一趟,断线时被撤回的消息在本地会一直显示原文。
- * 返回服务端时刻,调用方拿它当下一次的游标。
+ *
+ * 返回服务端给的下一次游标与「还有没有」。**必须用 nextSince 而不是
+ * serverTime**:单页有上限,被截断时服务端会把游标停在本页最后一次变更上,
+ * 拿 serverTime 前进的话没返回的那些变更就被永久跳过了。
+ * 会话已换人/已登出时返回 null(调用方据此停手)。
  */
 export async function fetchChatMutationsSince(
   since: string,
-): Promise<string | null> {
+): Promise<ChatMutationsPageDto | null> {
   const sameSession = sessionGate();
   const params = new URLSearchParams({ since });
-  const result = await apiClient<{
-    messages: ChatMessageDto[];
-    serverTime: string;
-  }>(`/chat/messages/mutations?${params.toString()}`);
+  const result = await apiClient<ChatMutationsPageDto>(
+    `/chat/messages/mutations?${params.toString()}`,
+  );
   if (!sameSession()) return null;
   const store = useChatStore.getState();
   const byConversation = new Map<string, ChatMessageDto[]>();
@@ -207,7 +218,7 @@ export async function fetchChatMutationsSince(
   for (const [conversationId, messages] of byConversation) {
     store.ingestMessages(conversationId, messages);
   }
-  return result.serverTime;
+  return result;
 }
 
 /**
@@ -327,10 +338,14 @@ export function searchAllChatMessages(
 export async function searchAllChatMessagesLocalFirst(
   keyword: string,
   limit = 50,
+  onLocalResults?: (messages: ChatMessageDto[]) => void,
 ): Promise<ChatMessageDto[]> {
   const local = withoutLocallyDeleted(
     await searchLocalChatMessages(keyword, limit),
   );
+  // 本地结果先给出去。等在服务端那趟上再渲染的话,离线时用户要盯着空列表
+  // 一直等到 apiClient 的 15 秒超时 —— 明明结果早就在手上了。
+  if (local.length > 0) onLocalResults?.(local);
   try {
     const remote = await searchAllChatMessages(keyword, limit);
     // 本地有命中就不查服务端是错的:本地库每会话只留 500 条,从没打开过的

@@ -3069,12 +3069,18 @@ export default function ChatDetailScreen() {
               <Text style={[s.headerStatusText, d.headerStatusText]}>
                 {authUser?.accountId === sourceID
                   ? t('chat.detail.statusSelf', { defaultValue: '自己' })
-                  : conversationType !== 'single'
-                    ? t('chat.detail.statusGroup', { defaultValue: '群聊' })
-                    : typingVisible
-                      ? t('chat.detail.statusTyping', {
+                  : // 群聊分支原来直接落「群聊」二字,typingVisible 根本没机会
+                    // 参与判断 —— 群成员照常上报 typing,却没有任何人看得见。
+                    typingVisible
+                    ? conversationType !== 'single'
+                      ? t('chat.detail.statusTypingGroup', {
+                          defaultValue: '有人正在输入…',
+                        })
+                      : t('chat.detail.statusTyping', {
                           defaultValue: '对方正在输入…',
                         })
+                    : conversationType !== 'single'
+                      ? t('chat.detail.statusGroup', { defaultValue: '群聊' })
                       : peerOnline
                         ? t('chat.detail.statusOnline', { defaultValue: '在线' })
                         : t('chat.detail.statusOffline', {

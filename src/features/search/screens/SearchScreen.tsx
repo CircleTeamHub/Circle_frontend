@@ -190,12 +190,19 @@ export default function SearchScreen() {
     }
     let cancelled = false;
     const timer = setTimeout(() => {
-      searchAllChatMessagesLocalFirst(keyword, 50)
+      // 本地(SQLite FTS)命中先上屏 —— 离线时服务端那趟要跑满 15 秒超时,
+      // 干等的话用户看到的一直是「无结果」,而结果其实早就在手上了。
+      searchAllChatMessagesLocalFirst(keyword, 50, (local) => {
+        if (!cancelled) setMessageMatches(local);
+      })
         .then((items) => {
           if (!cancelled) setMessageMatches(items);
         })
         .catch((error) => {
           if (cancelled) return;
+          // 本地那批已经上屏了,不要在这里清空 —— 否则离线搜索的结果会先出现
+          // 再消失。searchAllChatMessagesLocalFirst 自身已经把服务端失败
+          // 收敛成「返回本地结果」,能走到这里的只有本地检索也失败的情况。
           setMessageMatches([]);
           if (__DEV__) {
             console.warn('[SearchScreen] searchAllChatMessages failed', error);

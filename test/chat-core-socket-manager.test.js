@@ -142,7 +142,15 @@ function loadManager() {
     conversations: 0,
     backfills: [],
     mutationSyncs: [],
+    /** 依次弹出的 fetchChatMutationsSince 响应(测分页追平用)。 */
+    mutationPages: [],
     initialHistory: [],
+  };
+  const mmkvStore = new Map();
+  const mmkv = {
+    getString: (key) => mmkvStore.get(key),
+    set: (key, value) => mmkvStore.set(key, String(value)),
+    remove: (key) => mmkvStore.delete(key),
   };
   const protocol = runModule('src/chat-core/protocol.ts', {});
   const manager = runModule('src/chat-core/socket-manager.ts', {
@@ -159,7 +167,15 @@ function loadManager() {
       },
       fetchChatMutationsSince: (since) => {
         apiCalls.mutationSyncs.push(since);
-        return Promise.resolve(new Date().toISOString());
+        const next = apiCalls.mutationPages.shift();
+        return Promise.resolve(
+          next ?? {
+            messages: [],
+            serverTime: new Date().toISOString(),
+            nextSince: new Date().toISOString(),
+            hasMore: false,
+          },
+        );
       },
       loadChatHistory: (conversationId) => {
         apiCalls.initialHistory.push(conversationId);
@@ -185,6 +201,8 @@ function loadManager() {
       initChatLocalDb: async () => false,
     },
     './app-badge': { initChatAppBadgeSync: () => {} },
+    // 离线撤回增量的游标落 MMKV,按 userId 分键;测试里用一个内存替身。
+    '@/storage': { storage: mmkv },
     './dispatcher': {
       bindChatEvents: (sock, isLive) => bound.push({ sock, isLive }),
       cancelConversationBackfill: () => {},
@@ -203,6 +221,7 @@ function loadManager() {
     bound,
     apiCalls,
     reports,
+    mmkvStore,
   };
 }
 
@@ -226,7 +245,77 @@ test('reconnect (not first connect) refreshes conversations and backfills the ac
     { conversationId: 'c1', afterHeight: 9 },
   ]);
   // 撤回不改 height —— afterHeight 补拉结构上够不着,必须另追一趟。
+  // 首连已经把游标种下,这一次追的是那个游标,不是「此刻」。
   assert.equal(apiCalls.mutationSyncs.length, 1);
+});
+
+test('the very first outage is covered by a cursor seeded at first connect', async () => {
+  const { manager, socket, apiCalls } = loadManager();
+  manager.connectChat('jwt', 'u1');
+  socket.fire('connect');
+  await Promise.resolve();
+  // 首连不拉增量(没有本地历史可言),但必须把游标种下。
+  assert.deepEqual(apiCalls.mutationSyncs, []);
+
+  socket.fire('disconnect');
+  socket.fire('connect');
+  await Promise.resolve();
+
+  // 原来这里 lastMutationSyncAt 还是 null,于是「以现在为起点」问一遍 ——
+  // 断线窗口里发生的撤回被整段跳过,而 height 没变,任何补拉都够不着它。
+  assert.equal(apiCalls.mutationSyncs.length, 1);
+  const asked = Date.parse(apiCalls.mutationSyncs[0]);
+  assert.ok(Number.isFinite(asked));
+  assert.ok(asked <= Date.now(), 'cursor must predate this reconnect');
+});
+
+test('a cold start catches up from the persisted cursor', async () => {
+  const first = loadManager();
+  first.manager.connectChat('jwt', 'u1');
+  first.socket.fire('connect');
+  await Promise.resolve();
+  const seeded = first.mmkvStore.get('chat.mutationCursor.u1');
+  assert.ok(seeded, 'first connect must persist a cursor');
+  first.manager.disconnectChat();
+
+  // 新进程(内存清零),MMKV 还在:上次退出到这次启动之间的撤回必须追。
+  const next = loadManager();
+  next.mmkvStore.set('chat.mutationCursor.u1', seeded);
+  next.manager.connectChat('jwt', 'u1');
+  next.socket.fire('connect');
+  await Promise.resolve();
+
+  assert.deepEqual(next.apiCalls.mutationSyncs, [seeded]);
+});
+
+test('catch-up keeps paging while the server reports hasMore', async () => {
+  const { manager, socket, apiCalls, mmkvStore } = loadManager();
+  mmkvStore.set('chat.mutationCursor.u1', '2026-08-10T00:00:00.000Z');
+  apiCalls.mutationPages.push(
+    {
+      messages: [],
+      serverTime: '2026-08-10T05:00:00.000Z',
+      nextSince: '2026-08-10T01:00:00.000Z',
+      hasMore: true,
+    },
+    {
+      messages: [],
+      serverTime: '2026-08-10T05:00:00.000Z',
+      nextSince: '2026-08-10T05:00:00.000Z',
+      hasMore: false,
+    },
+  );
+
+  manager.connectChat('jwt', 'u1');
+  socket.fire('connect');
+  for (let i = 0; i < 8; i += 1) await Promise.resolve();
+
+  // 单页有上限:只拉一页的话,被截断的那些撤回会被游标永久跳过。
+  assert.deepEqual(apiCalls.mutationSyncs, [
+    '2026-08-10T00:00:00.000Z',
+    '2026-08-10T01:00:00.000Z',
+  ]);
+  assert.equal(mmkvStore.get('chat.mutationCursor.u1'), '2026-08-10T05:00:00.000Z');
 });
 
 test('token rotation (suspend + reconnect) still counts as a reconnect', () => {

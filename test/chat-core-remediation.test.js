@@ -472,3 +472,48 @@ test('local-first search merges the server results instead of suppressing them',
     'a local hit must not suppress the server search',
   );
 });
+
+// ---- Codex review 第二轮(PR #150) ----
+
+test('the mutation cursor is persisted and seeded before the first outage', () => {
+  // 首次重连时游标若还是 null,代码会「以现在为起点」问一遍 —— 那次断线里
+  // 发生的撤回被整段跳过,而 height 没变,任何补拉都够不着它。
+  const manager = read('src/chat-core/socket-manager.ts');
+  assert.match(manager, /MUTATION_CURSOR_KEY/);
+  assert.match(manager, /readMutationCursor/);
+  assert.match(manager, /writeMutationCursor/);
+});
+
+test('mutation catch-up follows hasMore instead of stopping at one page', () => {
+  const manager = read('src/chat-core/socket-manager.ts');
+  assert.match(manager, /result\.hasMore/);
+  assert.match(manager, /result\.nextSince/);
+  const api = read('src/chat-core/api.ts');
+  // 用 serverTime 前进会跳过被截断的那些变更。
+  assert.ok(
+    !/return result\.serverTime;/.test(api),
+    'the cursor must come from nextSince, not serverTime',
+  );
+});
+
+test('an already-hydrated timeline still reconciles the height gap', () => {
+  // 冷启动水合之后内存非空,原来的判据让 localMax 恒为 0,缺口对账整个被跳过。
+  const api = read('src/chat-core/api.ts');
+  assert.match(api, /const inMemory = store\.messagesByConversation/);
+});
+
+test('local search hits reach the screen before the server round-trip', () => {
+  const api = read('src/chat-core/api.ts');
+  assert.match(api, /onLocalResults\?\.\(local\)/);
+  const screen = read('src/features/search/screens/SearchScreen.tsx');
+  assert.match(screen, /searchAllChatMessagesLocalFirst\(keyword, 50, \(local\)/);
+});
+
+test('group typing is actually rendered, not just broadcast', () => {
+  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  assert.match(screen, /statusTypingGroup/);
+  for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
+    const dict = JSON.parse(read(`src/i18n/locales/${locale}.json`));
+    assert.ok(dict?.chat?.detail?.statusTypingGroup, `${locale} statusTypingGroup`);
+  }
+});

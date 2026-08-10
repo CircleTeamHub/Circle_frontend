@@ -230,6 +230,7 @@
       "statusOnline": "En línea",
       "statusOffline": "Desconectado",
       "statusTyping": "Escribiendo…",
+      "statusTypingGroup": "Alguien está escribiendo…",
       "previewNotice": "La conexión aún no está lista. Vuelve a intentarlo en un momento.",
       "recordingSeconds": "Grabando {{seconds}} s",
       "voiceReleaseCancel": "Suelta para cancelar",

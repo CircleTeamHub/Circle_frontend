@@ -1,5 +1,6 @@
 import { io, type Socket } from 'socket.io-client';
 import { CHAT_WS_URL } from '@/constants/config';
+import { storage } from '@/storage';
 import { reportError } from '@/observability/sentry';
 import {
   backfillConversationSince,
@@ -40,6 +41,8 @@ import { useChatStore } from './store';
 const SEND_ACK_TIMEOUT_MS = 10_000;
 const READ_ACK_TIMEOUT_MS = 8_000;
 const TYPING_THROTTLE_MS = 2_000;
+/** 一次追平最多翻几页离线变更;翻不完留给下一次连接(游标已持久化)。 */
+const MUTATION_CATCH_UP_PAGES_MAX = 20;
 const CONNECT_ERROR_REPORT_THRESHOLD = 3;
 
 let socket: Socket | null = null;
@@ -49,8 +52,36 @@ let sessionGen = 0;
  * 登出/换账号时清掉 —— 新账号的第一次连接是首连,不该触发对账。
  */
 let hadConnectedForUser: string | null = null;
-/** 上一次成功追平「离线撤回/编辑」增量的服务端时刻(ISO)。 */
+/**
+ * 上一次成功追平「离线撤回/编辑」增量的服务端时刻(ISO)。
+ *
+ * 落 MMKV 而不是只放内存:App 被杀之后本地库里那些消息还在,而这期间发生的
+ * 撤回同样够不着(撤回不改 height)。持久化之后,下次冷启动第一次连上就能
+ * 从上次的游标追平。
+ */
+const MUTATION_CURSOR_KEY = 'chat.mutationCursor';
 let lastMutationSyncAt: string | null = null;
+
+function mutationCursorKey(userId: string): string {
+  return `${MUTATION_CURSOR_KEY}.${userId}`;
+}
+
+function readMutationCursor(userId: string): string | null {
+  try {
+    return storage.getString(mutationCursorKey(userId)) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function writeMutationCursor(userId: string, iso: string): void {
+  lastMutationSyncAt = iso;
+  try {
+    storage.set(mutationCursorKey(userId), iso);
+  } catch {
+    // MMKV 还没就绪:内存里那份仍然有效,只是重启后从头再来。
+  }
+}
 const pendingReads = new Map<string, number>();
 let flushingReads = false;
 let readFlushRequested = false;
@@ -126,7 +157,14 @@ export function connectChat(token: string, userId: string): void {
     state.setConnected(true);
     state.setError(null);
     void flushPendingReads();
-    if (isReconnect) resyncAfterReconnect();
+    if (isReconnect) {
+      resyncAfterReconnect(userId);
+      return;
+    }
+    // 首连不做全量对账(冷启动拉取由页面 focus 负责),但撤回/编辑增量必须追:
+    // 上次运行到这次启动之间发生的撤回,本地缓存里还是原文,而 height 没变,
+    // 任何补拉都够不着它。
+    void catchUpMutations(userId);
   });
   next.on('disconnect', () => {
     if (gen !== sessionGen) return;
@@ -165,6 +203,8 @@ export function disconnectChat(): void {
   // 只有真登出/换账号才丢待发已读:那些水位属于上一个会话身份。
   pendingReads.clear();
   hadConnectedForUser = null;
+  // 游标只清内存那份:MMKV 里按 userId 存,下次同一账号登录还要用它追平
+  // 「上次退出之后发生的撤回」。
   lastMutationSyncAt = null;
   useChatStore.getState().reset();
 }
@@ -269,27 +309,48 @@ async function hydrateFromLocalDb(userId: string): Promise<void> {
 }
 
 /**
+ * 撤回/编辑不改 height,afterHeight 补拉结构上永远够不着:断线(或被杀)期间
+ * 被撤回的消息在本地会一直显示原文。按时间轴单独追一遍,一直追到服务端说
+ * 没有更多为止 —— 单页有上限,只拉一页会把剩下的永久跳过。
+ *
+ * 没有游标 = 这台设备上还没有任何本地历史可言(首次登录),没什么要追的,
+ * 只把游标种在「现在」。有游标就必须追,哪怕这是本次进程的第一次连接:
+ * 上一次运行结束到现在之间发生的撤回,只有这条路径看得见。
+ */
+async function catchUpMutations(userId: string): Promise<void> {
+  const stored = lastMutationSyncAt ?? readMutationCursor(userId);
+  if (!stored) {
+    writeMutationCursor(userId, new Date().toISOString());
+    return;
+  }
+  let since = stored;
+  try {
+    for (let page = 0; page < MUTATION_CATCH_UP_PAGES_MAX; page += 1) {
+      const result = await fetchChatMutationsSince(since);
+      if (!result) return; // 会话已换人/已登出
+      writeMutationCursor(userId, result.nextSince);
+      if (!result.hasMore) return;
+      // 游标不前进就是原地打转,继续追只会死循环。
+      if (result.nextSince === since) return;
+      since = result.nextSince;
+    }
+  } catch (err) {
+    console.warn('[chat] mutation catch-up failed', err);
+  }
+}
+
+/**
  * G-13 断线重连对账:断开期间的 chat:msg 不会重投,必须主动补,否则那段
  * 消息在已打开的会话里永远不出现、列表未读也停在断线前。
  * ① 重拉会话列表(未读/预览/新会话一次到位,服务端为准);
  * ② 当前打开的会话按本地最高 height 升序追平(与广播同一 ingest 入口,幂等)。
  * 其余会话不逐个补:进入时的历史加载与列表快照已覆盖。
  */
-function resyncAfterReconnect(): void {
+function resyncAfterReconnect(userId: string): void {
   void loadChatConversations().catch((err: unknown) =>
     console.warn('[chat] reconnect conversation refresh failed', err),
   );
-  // ③ 撤回/编辑不改 height,afterHeight 补拉结构上永远够不着:断线期间被撤回的
-  //    消息在本地会一直显示原文。按时间轴单独追一遍。
-  const since = lastMutationSyncAt;
-  lastMutationSyncAt = new Date().toISOString();
-  void fetchChatMutationsSince(since ?? lastMutationSyncAt)
-    .then((serverTime) => {
-      if (serverTime) lastMutationSyncAt = serverTime;
-    })
-    .catch((err: unknown) =>
-      console.warn('[chat] reconnect mutation catch-up failed', err),
-    );
+  void catchUpMutations(userId);
   const state = useChatStore.getState();
   const active = state.activeConversationId;
   if (!active) return;
