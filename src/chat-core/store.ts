@@ -4,6 +4,14 @@ import {
   markMessageDeletedLocally,
 } from './deleted-messages';
 import type { ChatConversationDto, ChatMessageDto } from './protocol';
+import {
+  clearLocalConversationMessages,
+  deleteLocalMessage,
+  persistLocalConversations,
+  persistLocalMessages,
+  removeLocalConversation,
+  upsertLocalConversation,
+} from './local-db';
 
 /**
  * 每会话的初始内存窗口。翻页会把窗口按页扩大 —— 固定 200 的话,已经有 200 条
@@ -49,6 +57,11 @@ interface ChatStoreState {
   conversationsSnapshotLoaded: boolean;
   /** 单会话回写(偏好变更/新建后),保持排序不变量。 */
   upsertConversation: (conversation: ChatConversationDto) => void;
+  /** G-01 冷启动水合:本地库快照灌回内存(仅在对应结构为空时生效)。 */
+  hydrateLocalSnapshot: (
+    conversations: ChatConversationDto[],
+    messagesByConversation: Record<string, ChatMessageDto[]>,
+  ) => void;
   removeConversation: (conversationId: string) => void;
   /**
    * 新消息驱动会话列表:末条预览/时间前移、他人消息未读 +1、重排序。
@@ -222,6 +235,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       // 只有全量拉取会走到这里(upsertConversation 不置位)。
       conversationsSnapshotLoaded: true,
     });
+    // G-01:快照落盘(fire-and-forget,本地库失败不影响主链路)。
+    void persistLocalConversations(get().conversations);
   },
   upsertConversation: (conversation) => {
     const { conversations, messagesByConversation } = get();
@@ -231,11 +246,39 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       messagesByConversation[conversation.id],
     );
     set({ conversations: sortConversations([...rest, reconciled]) });
+    void upsertLocalConversation(reconciled);
   },
-  removeConversation: (conversationId) =>
+  removeConversation: (conversationId) => {
     set({
       conversations: get().conversations.filter((c) => c.id !== conversationId),
-    }),
+    });
+    void removeLocalConversation(conversationId);
+  },
+
+  /**
+   * G-01 冷启动水合:把本地库快照灌回内存(不置 conversationsSnapshotLoaded ——
+   * 它表示「拿到过服务端全量」,本地快照只是残影,搜索归组等仍需真拉取)。
+   * 只在内存还是空的时候生效,避免覆盖已经到手的服务端数据。
+   */
+  hydrateLocalSnapshot: (conversations, messagesByConversation) => {
+    const state = get();
+    if (state.conversations.length === 0 && conversations.length > 0) {
+      set({ conversations: sortConversations(conversations) });
+    }
+    const nextTimelines: Record<string, ChatMessageDto[]> = {
+      ...state.messagesByConversation,
+    };
+    let changed = false;
+    for (const [conversationId, timeline] of Object.entries(
+      messagesByConversation,
+    )) {
+      if ((nextTimelines[conversationId] ?? []).length > 0) continue;
+      if (timeline.length === 0) continue;
+      nextTimelines[conversationId] = timeline;
+      changed = true;
+    }
+    if (changed) set({ messagesByConversation: nextTimelines });
+  },
   applyIncomingMessage: (message) => {
     const {
       conversations,
@@ -332,6 +375,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   },
 
   removeMessage: (conversationId, messageId) => {
+    void deleteLocalMessage(conversationId, messageId);
     // 墓碑先落盘,再动内存:只改数组的话下次拉历史就把它接回来了。
     // 连 d 一起记:删的若是还没拿到 ack 的气泡,手上只有 local:<d> 这个临时 id,
     // 而确认/回声回来时带的是全新的服务端 id —— 只按 id 记的话,
@@ -412,6 +456,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           }
         : {}),
     });
+    // G-01:唯一写入口顺手落盘(广播/回执/历史/补拉都汇到这里)。
+    void persistLocalMessages(conversationId, incoming);
   },
 
   applyDelivered: (conversationId, userId, height) => {
@@ -470,6 +516,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         [conversationId]: next,
       },
     });
+    const updated = next.find((m) => m.id === messageId);
+    if (updated) void persistLocalMessages(conversationId, [updated]);
   },
 
   applyEdit: (conversationId, messageId, content, editedAt) => {
@@ -505,6 +553,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           }
         : {}),
     });
+    const updated = next.find((m) => m.id === messageId);
+    if (updated) void persistLocalMessages(conversationId, [updated]);
   },
 
   applyBurnDuration: (conversationId, burnDurationSec) => {
@@ -524,6 +574,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   },
 
   clearConversationLocal: (conversationId) => {
+    void clearLocalConversationMessages(conversationId);
     const { conversations, messagesByConversation } = get();
     const index = conversations.findIndex((c) => c.id === conversationId);
     set({
@@ -599,6 +650,12 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           }
         : {}),
     });
+    const persisted = nextTimeline.filter(
+      (m) => m.id === messageId || m.replyTo?.id === messageId,
+    );
+    if (persisted.length > 0) {
+      void persistLocalMessages(conversationId, persisted);
+    }
   },
 
   applyRead: (conversationId, userId, height) => {

@@ -1,4 +1,5 @@
 import * as Notifications from 'expo-notifications';
+import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { selectTotalUnread, useChatStore } from './store';
 
 /**
@@ -14,6 +15,13 @@ let lastApplied: number | null = null;
 export function syncAppBadge(total: number): void {
   if (total === lastApplied) return;
   lastApplied = total;
+  // G-10:消息 tab 红点同源同步 —— 不再依赖 MessagesScreen 挂载,
+  // 冷启动本地水合一完成红点即准。
+  try {
+    useTabBadgeStore.getState().setMessagesUnread(total);
+  } catch {
+    // tab store 未就绪不阻塞图标角标。
+  }
   void Notifications.setBadgeCountAsync(total).catch(() => {
     // 设不上(未授权/平台差异)不算错;清掉缓存值让下次变化重试。
     lastApplied = null;

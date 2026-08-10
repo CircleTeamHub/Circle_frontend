@@ -179,6 +179,75 @@ test('burn words exist in every locale', () => {
   }
 });
 
+// ---- 批1:SQLite 本地持久化(G-01/G-03/G-10) ----
+
+test('local db module covers the five persistence surfaces with graceful degradation', () => {
+  const db = read('src/chat-core/local-db.ts');
+  for (const table of ['conversations', 'messages', 'sync_state', 'outbox', 'pending_reads']) {
+    assert.match(db, new RegExp(table));
+  }
+  assert.match(db, /fts5/);
+  assert.match(db, /PRAGMA key/);
+  // 本地库是缓存:任何失败都必须吞掉降级,绝不打断聊天主链路
+  assert.match(db, /running without local cache/);
+});
+
+test('the sqlite plugin ships with SQLCipher enabled', () => {
+  const appConfig = JSON.parse(read('app.json'));
+  const plugins = appConfig?.expo?.plugins ?? [];
+  const entry = plugins.find(
+    (p) => Array.isArray(p) && p[0] === 'expo-sqlite',
+  );
+  assert.ok(entry, 'expo-sqlite plugin missing');
+  assert.equal(entry[1]?.useSQLCipher, true);
+});
+
+test('the single ingest entry persists to the local db', () => {
+  const store = read('src/chat-core/store.ts');
+  assert.match(store, /persistLocalMessages\(conversationId, incoming\)/);
+  assert.match(store, /persistLocalConversations/);
+  assert.match(store, /hydrateLocalSnapshot/);
+});
+
+test('cold start hydrates conversations, outbox and pending reads before the network', () => {
+  const manager = read('src/chat-core/socket-manager.ts');
+  assert.match(manager, /hydrateFromLocalDb/);
+  assert.match(manager, /outboxList/);
+  assert.match(manager, /pendingReadsList/);
+  assert.match(manager, /pendingReadUpsert/);
+});
+
+test('history reads local-first and repairs holes against the newest page', () => {
+  const api = read('src/chat-core/api.ts');
+  assert.match(api, /readRecentLocalMessages/);
+  assert.match(api, /LOCAL_HOLE_BACKFILL_MAX/);
+  assert.match(api, /deleteLocalMessagesBelow/);
+});
+
+test('global search prefers local FTS with a server fallback', () => {
+  const api = read('src/chat-core/api.ts');
+  assert.match(api, /searchAllChatMessagesLocalFirst/);
+  const screen = read('src/features/search/screens/SearchScreen.tsx');
+  assert.match(screen, /searchAllChatMessagesLocalFirst/);
+});
+
+test('failed sends survive restarts via the outbox and expose a resend action', () => {
+  const client = read('src/chat-core/client.ts');
+  assert.match(client, /outboxUpsert/);
+  assert.match(client, /retryFailedChatMessage/);
+  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  assert.match(screen, /retryFailedChatMessage/);
+  for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
+    const dict = JSON.parse(read(`src/i18n/locales/${locale}.json`));
+    assert.ok(dict?.chat?.messageActions?.resend, `${locale} resend`);
+  }
+});
+
+test('the tab red dot follows the same total as the app badge (G-10)', () => {
+  const badge = read('src/chat-core/app-badge.ts');
+  assert.match(badge, /setMessagesUnread/);
+});
+
 // ---- 批5:送达/回应/编辑/逐条已读(G-07) ----
 
 test('protocol declares the delivered/reaction/edit events and reaction whitelist', () => {

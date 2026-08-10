@@ -5,6 +5,28 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+const __localDbStub = {
+  persistLocalConversations: async () => {},
+  upsertLocalConversation: async () => {},
+  removeLocalConversation: async () => {},
+  persistLocalMessages: async () => {},
+  deleteLocalMessage: async () => {},
+  clearLocalConversationMessages: async () => {},
+  deleteLocalMessagesBelow: async () => {},
+  readRecentLocalMessages: async () => [],
+  readLocalConversations: async () => [],
+  searchLocalChatMessages: async () => [],
+  outboxUpsert: async () => {},
+  outboxDelete: async () => {},
+  outboxList: async () => [],
+  pendingReadUpsert: async () => {},
+  pendingReadDelete: async () => {},
+  pendingReadsList: async () => [],
+  initChatLocalDb: async () => false,
+  wipeChatLocalDb: async () => {},
+};
+
+
 // 会话列表侧的 store 行为 + mapper:与 chat-core-store.test.js 同款 vm harness。
 function transpile(rel) {
   const filePath = path.join(process.cwd(), rel);
@@ -42,13 +64,36 @@ function loadStore() {
       if (request === 'zustand') return zustandStub();
       if (request === './protocol') return {};
       // 本地删除墓碑在这组用例里始终为空(删除行为由 chat-core-store 覆盖)。
-      if (request === './deleted-messages') {
+      if (request === './local-db') {
+      return {
+        persistLocalConversations: async () => {},
+        upsertLocalConversation: async () => {},
+        removeLocalConversation: async () => {},
+        persistLocalMessages: async () => {},
+        deleteLocalMessage: async () => {},
+        clearLocalConversationMessages: async () => {},
+        deleteLocalMessagesBelow: async () => {},
+        readRecentLocalMessages: async () => [],
+        readLocalConversations: async () => [],
+        searchLocalChatMessages: async () => [],
+        outboxUpsert: async () => {},
+        outboxDelete: async () => {},
+        outboxList: async () => [],
+        pendingReadUpsert: async () => {},
+        pendingReadDelete: async () => {},
+        pendingReadsList: async () => [],
+        initChatLocalDb: async () => false,
+        wipeChatLocalDb: async () => {},
+      };
+    }
+    if (request === './deleted-messages') {
         return {
           isMessageDeletedLocally: () => false,
           markMessageDeletedLocally: () => {},
         };
       }
-      throw new Error(`unexpected require: ${request}`);
+      if (request === './local-db') return __localDbStub;
+    throw new Error(`unexpected require: ${request}`);
     },
   };
   context.exports = context.module.exports;

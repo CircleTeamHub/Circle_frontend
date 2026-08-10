@@ -79,6 +79,7 @@ import {
   loadOlderConversationMessages,
   resetHistoryCursor,
   markConversationAsRead,
+  retryFailedChatMessage,
   sendCardMessage,
   sendImageMessage,
   sendLocationMessage,
@@ -1281,6 +1282,26 @@ export default function ChatDetailScreen() {
     const message = actionMenu?.message;
     if (!message) return [];
     const actions: MessageAction[] = [];
+    if (message.sendStatus === 3 && message.deliveryId) {
+      actions.push({
+        key: 'resend',
+        icon: 'refresh-outline',
+        label: t('chat.messageActions.resend', { defaultValue: '重发' }),
+        onPress: () => {
+          void retryFailedChatMessage(
+            conversationID,
+            message.deliveryId as string,
+          ).catch((error: unknown) => {
+            setSendError(
+              getChatSendErrorMessage(
+                error,
+                t('chat.detail.sendFailedText', { defaultValue: '发送失败' }),
+              ),
+            );
+          });
+        },
+      });
+    }
     if (message.sendStatus === undefined || message.sendStatus === 2) {
       actions.push({
         key: 'react',

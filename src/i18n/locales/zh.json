@@ -316,7 +316,8 @@
       "edit": "编辑",
       "readers": "已读成员",
       "readersNone": "还没有人读到这条消息",
-      "editing": "编辑消息"
+      "editing": "编辑消息",
+      "resend": "重发"
     },
     "mentions": {
       "empty": "暂无可 @ 的成员"

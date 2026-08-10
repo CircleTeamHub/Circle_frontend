@@ -323,6 +323,8 @@ export function mapChatMessageDtoToUI(
           }))
         : undefined,
     edited: dto.editedAt ? true : undefined,
+    // G-01:失败气泡重发要按 d 找 outbox 条目。
+    deliveryId: dto.d ?? undefined,
   } satisfies Partial<ChatMessage>;
 
   switch (dto.type) {

@@ -276,7 +276,8 @@
       "edit": "編集",
       "readers": "既読メンバー",
       "readersNone": "まだ誰も読んでいません",
-      "editing": "メッセージを編集"
+      "editing": "メッセージを編集",
+      "resend": "再送信"
     },
     "mentions": {
       "empty": "メンションできるメンバーがいません"

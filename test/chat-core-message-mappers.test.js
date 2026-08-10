@@ -5,6 +5,28 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+const __localDbStub = {
+  persistLocalConversations: async () => {},
+  upsertLocalConversation: async () => {},
+  removeLocalConversation: async () => {},
+  persistLocalMessages: async () => {},
+  deleteLocalMessage: async () => {},
+  clearLocalConversationMessages: async () => {},
+  deleteLocalMessagesBelow: async () => {},
+  readRecentLocalMessages: async () => [],
+  readLocalConversations: async () => [],
+  searchLocalChatMessages: async () => [],
+  outboxUpsert: async () => {},
+  outboxDelete: async () => {},
+  outboxList: async () => [],
+  pendingReadUpsert: async () => {},
+  pendingReadDelete: async () => {},
+  pendingReadsList: async () => [],
+  initChatLocalDb: async () => false,
+  wipeChatLocalDb: async () => {},
+};
+
+
 // 消息 DTO → UI ChatMessage 的行为测试(vm harness,桩掉 i18n/url 工具)。
 function transpile(rel) {
   const filePath = path.join(process.cwd(), rel);
@@ -46,7 +68,8 @@ function loadMappers(options = {}) {
       }
       if (request === './store') return {};
       if (request === '@/types') return {};
-      throw new Error(`unexpected require: ${request}`);
+      if (request === './local-db') return __localDbStub;
+    throw new Error(`unexpected require: ${request}`);
     },
   };
   context.exports = context.module.exports;

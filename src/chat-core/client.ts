@@ -7,12 +7,14 @@ import {
 } from './api';
 import { reportChatSendFailure } from './send-errors';
 import {
+  ChatSendError,
   createDeliveryId,
   markConversationRead,
   sendChatMessage,
 } from './socket-manager';
 import { useChatStore, type StoredChatMessage } from './store';
 import type { ChatMessageDto } from './protocol';
+import { outboxDelete, outboxList, outboxUpsert } from './local-db';
 
 /**
  * 聊天页面向的高层 API(对齐旧 src/im/client 的调用形态,屏幕换 import 即用)。
@@ -189,6 +191,20 @@ export async function sendWithOptimism(
   store.applyIncomingMessage(optimistic);
   options.onCreate?.(optimistic);
 
+  // G-01 outbox:先入队再发送 —— App 在 ack 前被杀,重启后这条会以
+  // 「发送失败」气泡还原(长按可重发,同 d 幂等);成功后出队。
+  void outboxUpsert({
+    d,
+    conversationId: options.conversationId,
+    payload: {
+      conversationId: options.conversationId,
+      type: options.type,
+      content: options.content,
+      d,
+      ...(options.replyToId ? { replyToId: options.replyToId } : {}),
+    },
+    createdAt: optimistic.createdAt,
+  });
   try {
     const ack = await sendChatMessage({
       conversationId: options.conversationId,
@@ -197,6 +213,7 @@ export async function sendWithOptimism(
       d,
       replyToId: options.replyToId,
     });
+    void outboxDelete(d);
     const next = useChatStore.getState();
     // 服务端的 chat:msg 回声可能跑在 ack 前面。那条广播是权威版本(服务端
     // 规范化过的 content、服务端时间戳);下面这个 confirmed 只是拿本地乐观
@@ -354,4 +371,22 @@ export function sendCardMessage(options: {
     onCreate: options.onCreate,
     bypassCreditGate: options.bypassCreditGate,
   });
+}
+
+
+/**
+ * G-01 重发:失败气泡长按「重发」。复用同一 d(服务端幂等兜底,绝不重复入库);
+ * 成功后服务端回声(chat:msg 同 d)会替换掉失败的乐观气泡,outbox 出队。
+ */
+export async function retryFailedChatMessage(
+  conversationId: string,
+  d: string,
+): Promise<void> {
+  const entries = await outboxList();
+  const entry = entries.find(
+    (item) => item.d === d && item.conversationId === conversationId,
+  );
+  if (!entry) throw new ChatSendError('CHAT_INVALID_PAYLOAD', '找不到待重发的消息');
+  await sendChatMessage(entry.payload);
+  void outboxDelete(d);
 }

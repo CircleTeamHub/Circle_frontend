@@ -5,6 +5,28 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+const __localDbStub = {
+  persistLocalConversations: async () => {},
+  upsertLocalConversation: async () => {},
+  removeLocalConversation: async () => {},
+  persistLocalMessages: async () => {},
+  deleteLocalMessage: async () => {},
+  clearLocalConversationMessages: async () => {},
+  deleteLocalMessagesBelow: async () => {},
+  readRecentLocalMessages: async () => [],
+  readLocalConversations: async () => [],
+  searchLocalChatMessages: async () => [],
+  outboxUpsert: async () => {},
+  outboxDelete: async () => {},
+  outboxList: async () => [],
+  pendingReadUpsert: async () => {},
+  pendingReadDelete: async () => {},
+  pendingReadsList: async () => [],
+  initChatLocalDb: async () => false,
+  wipeChatLocalDb: async () => {},
+};
+
+
 // 与 im-store-message-merge.test.js 同款 harness:真源码 + zustand 极简桩,
 // 在 vm 里执行,断言 store 行为而非源码字符串。
 function transpile(rel) {
@@ -65,6 +87,7 @@ function loadChatStore() {
     if (request === '@/storage') return { mmkvJsonStorage: {} };
     // 墓碑超上限时会报一次(淘汰=消息复活,必须可观测)。
     if (request === '@/observability/sentry') return { reportError: () => {} };
+    if (request === './local-db') return __localDbStub;
     throw new Error(`unexpected require: ${request}`);
   });
   const store = runModule('src/chat-core/store.ts', (request) => {
@@ -76,6 +99,7 @@ function loadChatStore() {
         throw new Error('protocol should have no runtime deps');
       });
     }
+    if (request === './local-db') return __localDbStub;
     throw new Error(`unexpected require: ${request}`);
   });
   return { ...store, ...deletedMessages };

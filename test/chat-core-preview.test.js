@@ -5,6 +5,28 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+const __localDbStub = {
+  persistLocalConversations: async () => {},
+  upsertLocalConversation: async () => {},
+  removeLocalConversation: async () => {},
+  persistLocalMessages: async () => {},
+  deleteLocalMessage: async () => {},
+  clearLocalConversationMessages: async () => {},
+  deleteLocalMessagesBelow: async () => {},
+  readRecentLocalMessages: async () => [],
+  readLocalConversations: async () => [],
+  searchLocalChatMessages: async () => [],
+  outboxUpsert: async () => {},
+  outboxDelete: async () => {},
+  outboxList: async () => [],
+  pendingReadUpsert: async () => {},
+  pendingReadDelete: async () => {},
+  pendingReadsList: async () => [],
+  initChatLocalDb: async () => false,
+  wipeChatLocalDb: async () => {},
+};
+
+
 function loadMappers() {
   const filePath = path.join(process.cwd(), 'src/chat-core/mappers.ts');
   const transpiled = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
@@ -32,7 +54,8 @@ function loadMappers() {
       }
       if (request === './protocol') return {};
       if (request === '@/types') return {};
-      throw new Error(`unexpected require: ${request}`);
+      if (request === './local-db') return __localDbStub;
+    throw new Error(`unexpected require: ${request}`);
     },
   };
   context.exports = context.module.exports;

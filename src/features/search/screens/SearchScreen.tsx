@@ -16,7 +16,10 @@ import { Avatar } from '@/components/ui/avatar';
 import { Divider } from '@/components/ui/divider';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { NavHeader } from '@/components/ui/nav-header';
-import { loadChatConversations, searchAllChatMessages } from '@/chat-core/api';
+import {
+  loadChatConversations,
+  searchAllChatMessagesLocalFirst,
+} from '@/chat-core/api';
 import { getChatMessagePreview, mapChatConversationToUI } from '@/chat-core/mappers';
 import { useChatStore } from '@/chat-core/store';
 import type { ChatMessageDto } from '@/chat-core/protocol';
@@ -187,7 +190,7 @@ export default function SearchScreen() {
     }
     let cancelled = false;
     const timer = setTimeout(() => {
-      searchAllChatMessages(keyword, 50)
+      searchAllChatMessagesLocalFirst(keyword, 50)
         .then((items) => {
           if (!cancelled) setMessageMatches(items);
         })

@@ -12,6 +12,7 @@ import {
   clearChatConversationHistory,
   loadChatConversations,
 } from '@/chat-core/api';
+import { wipeChatLocalDb } from '@/chat-core/local-db';
 import { useChatStore } from '@/chat-core/store';
 
 export interface UseStorageActionsResult {
@@ -131,6 +132,7 @@ export function useStorageActions(): UseStorageActionsResult {
               // currentUserId 并标记 disconnected,而 connectChat 对已连接的
               // socket 直接 return —— 之后的消息判不出收发方向、未读也算错。
               useChatStore.getState().clearCachedChats();
+              await wipeChatLocalDb();
               await clearLegacyImData();
               // 缓存清空后重拉一次会话快照;服务端水位已写,历史不会回来。
               void loadChatConversations().catch(() => undefined);

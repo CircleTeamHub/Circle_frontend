@@ -276,7 +276,8 @@
       "edit": "수정",
       "readers": "읽은 멤버",
       "readersNone": "아직 아무도 읽지 않았습니다",
-      "editing": "메시지 수정"
+      "editing": "메시지 수정",
+      "resend": "다시 보내기"
     },
     "mentions": {
       "empty": "멘션할 수 있는 멤버가 없습니다"

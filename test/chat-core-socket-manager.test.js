@@ -5,6 +5,28 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+const __localDbStub = {
+  persistLocalConversations: async () => {},
+  upsertLocalConversation: async () => {},
+  removeLocalConversation: async () => {},
+  persistLocalMessages: async () => {},
+  deleteLocalMessage: async () => {},
+  clearLocalConversationMessages: async () => {},
+  deleteLocalMessagesBelow: async () => {},
+  readRecentLocalMessages: async () => [],
+  readLocalConversations: async () => [],
+  searchLocalChatMessages: async () => [],
+  outboxUpsert: async () => {},
+  outboxDelete: async () => {},
+  outboxList: async () => [],
+  pendingReadUpsert: async () => {},
+  pendingReadDelete: async () => {},
+  pendingReadsList: async () => [],
+  initChatLocalDb: async () => false,
+  wipeChatLocalDb: async () => {},
+};
+
+
 function transpile(rel) {
   const filePath = path.join(process.cwd(), rel);
   const source = fs.readFileSync(filePath, 'utf8');
@@ -30,7 +52,8 @@ function runModule(rel, stubs) {
     exports: {},
     require: (request) => {
       if (request in stubs) return stubs[request];
-      throw new Error(`unexpected require: ${request}`);
+      if (request === './local-db') return __localDbStub;
+    throw new Error(`unexpected require: ${request}`);
     },
   };
   context.exports = context.module.exports;
@@ -128,6 +151,24 @@ function loadManager() {
         apiCalls.backfills.push({ conversationId, afterHeight });
         return Promise.resolve();
       },
+    },
+    './local-db': {
+      persistLocalConversations: async () => {},
+      upsertLocalConversation: async () => {},
+      removeLocalConversation: async () => {},
+      persistLocalMessages: async () => {},
+      deleteLocalMessage: async () => {},
+      clearLocalConversationMessages: async () => {},
+      deleteLocalMessagesBelow: async () => {},
+      readRecentLocalMessages: async () => [],
+      readLocalConversations: async () => [],
+      outboxUpsert: async () => {},
+      outboxDelete: async () => {},
+      outboxList: async () => [],
+      pendingReadUpsert: async () => {},
+      pendingReadDelete: async () => {},
+      pendingReadsList: async () => [],
+      initChatLocalDb: async () => false,
     },
     './app-badge': { initChatAppBadgeSync: () => {} },
     './dispatcher': {

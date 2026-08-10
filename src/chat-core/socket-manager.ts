@@ -1,6 +1,15 @@
 import { io, type Socket } from 'socket.io-client';
 import { CHAT_WS_URL } from '@/constants/config';
 import { backfillConversationSince, loadChatConversations } from './api';
+import {
+  initChatLocalDb,
+  outboxList,
+  pendingReadDelete,
+  pendingReadUpsert,
+  pendingReadsList,
+  readLocalConversations,
+  readRecentLocalMessages,
+} from './local-db';
 import { initChatAppBadgeSync } from './app-badge';
 import { bindChatEvents, cancelConversationBackfill } from './dispatcher';
 import {
@@ -67,6 +76,8 @@ export function connectChat(token: string, userId: string): void {
   teardownSocket();
   sessionGen += 1;
   initChatAppBadgeSync();
+  // G-01 冷启动水合:开(或切到)本账号的本地库,把快照灌回内存 —— 不等网络。
+  void hydrateFromLocalDb(userId);
 
   const gen = sessionGen;
   store.setConnecting(true);
@@ -152,6 +163,55 @@ function teardownSocket(): void {
 }
 
 /**
+ * G-01:本地库水合。会话列表 + 各会话最近消息灌回内存(仅空结构生效,
+ * 不覆盖已到手的服务端数据);outbox 里的失败消息还原成失败态乐观气泡;
+ * 未上报的已读水位种回 pending 队列。全程尽力而为。
+ */
+async function hydrateFromLocalDb(userId: string): Promise<void> {
+  try {
+    const opened = await initChatLocalDb(userId);
+    if (!opened) return;
+    const store = useChatStore.getState();
+    if (store.currentUserId !== userId) return;
+    const conversations = await readLocalConversations();
+    const timelines: Record<string, import('./protocol').ChatMessageDto[]> = {};
+    for (const conversation of conversations) {
+      timelines[conversation.id] = await readRecentLocalMessages(
+        conversation.id,
+        50,
+      );
+    }
+    useChatStore.getState().hydrateLocalSnapshot(conversations, timelines);
+    // outbox:上次没发出去的消息还原成「发送失败」气泡,可长按重发。
+    const pending = await outboxList();
+    for (const entry of pending) {
+      const optimistic = {
+        id: `outbox-${entry.d}`,
+        conversationId: entry.conversationId,
+        height: 0,
+        type: entry.payload.type,
+        content: entry.payload.content,
+        sender: null,
+        replyToId: entry.payload.replyToId ?? null,
+        d: entry.d,
+        createdAt: entry.createdAt,
+      };
+      useChatStore
+        .getState()
+        .ingestMessages(entry.conversationId, [optimistic]);
+      useChatStore.getState().markMessageFailed(entry.conversationId, entry.d);
+    }
+    // 已读水位:App 被杀前没 ack 的上报补回队列,连上即 flush。
+    for (const { conversationId, height } of await pendingReadsList()) {
+      const prior = pendingReads.get(conversationId) ?? 0;
+      if (height > prior) pendingReads.set(conversationId, height);
+    }
+  } catch (err) {
+    console.warn('[chat] local hydrate failed', err);
+  }
+}
+
+/**
  * G-13 断线重连对账:断开期间的 chat:msg 不会重投,必须主动补,否则那段
  * 消息在已打开的会话里永远不出现、列表未读也停在断线前。
  * ① 重拉会话列表(未读/预览/新会话一次到位,服务端为准);
@@ -221,7 +281,11 @@ export function sendChatMessage(input: {
 export function markChatRead(conversationId: string, height: number): void {
   if (!Number.isInteger(height) || height <= 0) return;
   const prior = pendingReads.get(conversationId) ?? 0;
-  if (height > prior) pendingReads.set(conversationId, height);
+  if (height > prior) {
+    pendingReads.set(conversationId, height);
+    // G-01:落盘,App 被杀也不丢(flush 成功后删除)。
+    void pendingReadUpsert(conversationId, height);
+  }
   void flushPendingReads();
 }
 
@@ -247,6 +311,7 @@ async function flushPendingReads(): Promise<void> {
         const afterAck = pendingReads.get(conversationId);
         if (afterAck !== undefined && afterAck <= height) {
           pendingReads.delete(conversationId);
+          void pendingReadDelete(conversationId);
         }
       } catch (err) {
         // 保留 pending,断线重连的 connect 钩子会再次 flush。

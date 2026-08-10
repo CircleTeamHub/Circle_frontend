@@ -5,6 +5,28 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+const __localDbStub = {
+  persistLocalConversations: async () => {},
+  upsertLocalConversation: async () => {},
+  removeLocalConversation: async () => {},
+  persistLocalMessages: async () => {},
+  deleteLocalMessage: async () => {},
+  clearLocalConversationMessages: async () => {},
+  deleteLocalMessagesBelow: async () => {},
+  readRecentLocalMessages: async () => [],
+  readLocalConversations: async () => [],
+  searchLocalChatMessages: async () => [],
+  outboxUpsert: async () => {},
+  outboxDelete: async () => {},
+  outboxList: async () => [],
+  pendingReadUpsert: async () => {},
+  pendingReadDelete: async () => {},
+  pendingReadsList: async () => [],
+  initChatLocalDb: async () => false,
+  wipeChatLocalDb: async () => {},
+};
+
+
 // 分发器是服务端事件进 store 的唯一入口:它放行什么,store 里就有什么。
 // 用真 protocol.ts(校验器) + store/通知 store 的桩,断言行为而非源码字符串。
 function transpile(rel) {
@@ -162,6 +184,28 @@ function loadDispatcher(storeOverrides = {}) {
           typeof u === 'string' && u.startsWith('https://cdn.trusted/') ? u : null,
       };
     }
+    if (request === './local-db') {
+      return {
+        persistLocalConversations: async () => {},
+        upsertLocalConversation: async () => {},
+        removeLocalConversation: async () => {},
+        persistLocalMessages: async () => {},
+        deleteLocalMessage: async () => {},
+        clearLocalConversationMessages: async () => {},
+        deleteLocalMessagesBelow: async () => {},
+        readRecentLocalMessages: async () => [],
+        readLocalConversations: async () => [],
+        searchLocalChatMessages: async () => [],
+        outboxUpsert: async () => {},
+        outboxDelete: async () => {},
+        outboxList: async () => [],
+        pendingReadUpsert: async () => {},
+        pendingReadDelete: async () => {},
+        pendingReadsList: async () => [],
+        initChatLocalDb: async () => false,
+        wipeChatLocalDb: async () => {},
+      };
+    }
     if (request === './deleted-messages') {
       // 本端删除的消息要在进横幅/补拉之前就被丢掉,所以分发器也依赖它。
       return {
@@ -186,6 +230,7 @@ function loadDispatcher(storeOverrides = {}) {
     if (request === '@/i18n') {
       return { default: { t: (key) => key }, t: (key) => key };
     }
+    if (request === './local-db') return __localDbStub;
     throw new Error(`unexpected require: ${request}`);
   }, {
     setTimeout: (fn) => {

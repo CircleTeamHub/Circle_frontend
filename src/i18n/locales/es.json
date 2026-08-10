@@ -276,7 +276,8 @@
       "edit": "Editar",
       "readers": "Leído por",
       "readersNone": "Nadie lo ha leído todavía",
-      "editing": "Editando mensaje"
+      "editing": "Editando mensaje",
+      "resend": "Reenviar"
     },
     "mentions": {
       "empty": "No hay miembros para mencionar"

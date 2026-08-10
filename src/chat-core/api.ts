@@ -7,6 +7,11 @@ import type {
   ChatMessageDto,
 } from './protocol';
 import { withoutLocallyDeleted } from './deleted-messages';
+import {
+  deleteLocalMessagesBelow,
+  readRecentLocalMessages,
+  searchLocalChatMessages,
+} from './local-db';
 import { useChatStore } from './store';
 
 /**
@@ -59,11 +64,37 @@ export function createCircleChatConversation(
   });
 }
 
-/** 历史翻页:height 键集向前翻,页内升序;顺手灌进 store。 */
+/**
+ * 历史翻页:height 键集向前翻,页内升序;顺手灌进 store。
+ *
+ * G-01 读路径反转:首屏(无 beforeHeight)先把本地库的最近消息灌进内存立刻
+ * 渲染,REST 回来再按 height 对账 —— 断网时首屏就是本地历史。若本地块与
+ * 最新页之间有洞(离线太久):洞 ≤1000 条走 afterHeight 补齐,否则放弃旧块
+ * (删本地 < 页首,保时间线连续,更早历史仍可 REST 翻页)。
+ */
+const LOCAL_HOLE_BACKFILL_MAX = 1000;
+
 export async function loadChatHistory(
   conversationId: string,
   options: { beforeHeight?: number; limit?: number } = {},
 ): Promise<ChatHistoryPageDto> {
+  const store = useChatStore.getState();
+  let localMax = 0;
+  if (
+    options.beforeHeight === undefined &&
+    (store.messagesByConversation[conversationId] ?? []).length === 0
+  ) {
+    const local = await readRecentLocalMessages(
+      conversationId,
+      options.limit ?? 50,
+    );
+    if (local.length > 0) {
+      useChatStore.getState().ingestMessages(conversationId, local);
+      for (const message of local) {
+        if (message.height > localMax) localMax = message.height;
+      }
+    }
+  }
   const params = new URLSearchParams();
   if (options.beforeHeight !== undefined) {
     params.set('beforeHeight', String(options.beforeHeight));
@@ -76,6 +107,34 @@ export async function loadChatHistory(
   );
   if (sameSession()) {
     useChatStore.getState().ingestMessages(conversationId, page.messages);
+    if (localMax > 0) {
+      let pageMin = Number.MAX_SAFE_INTEGER;
+      for (const message of page.messages) {
+        if (message.height > 0 && message.height < pageMin) {
+          pageMin = message.height;
+        }
+      }
+      if (pageMin !== Number.MAX_SAFE_INTEGER && pageMin > localMax + 1) {
+        const hole = pageMin - localMax - 1;
+        if (hole <= LOCAL_HOLE_BACKFILL_MAX) {
+          void backfillConversationSince(conversationId, localMax).catch(
+            () => undefined,
+          );
+        } else {
+          // 洞太大:旧块整体作废,防止时间线中间静默缺一段。
+          const stale = (
+            useChatStore.getState().messagesByConversation[conversationId] ??
+            []
+          ).filter((m) => m.height > 0 && m.height < pageMin);
+          for (const message of stale) {
+            useChatStore
+              .getState()
+              .removeMessage(conversationId, message.id);
+          }
+          void deleteLocalMessagesBelow(conversationId, pageMin);
+        }
+      }
+    }
   }
   return page;
 }
@@ -207,7 +266,7 @@ export function fetchChatMembers(
   );
 }
 
-/** 全局搜索:跨本人全部会话搜文本(最新在前,扁平;会话展示由调用方补齐)。 */
+/** 全局搜索(服务端):跨本人全部会话搜文本(最新在前,扁平)。 */
 export function searchAllChatMessages(
   keyword: string,
   limit?: number,
@@ -217,6 +276,25 @@ export function searchAllChatMessages(
   return apiClient<ChatMessageDto[]>(
     `/chat/messages/search?${params.toString()}`,
   ).then(withoutLocallyDeleted);
+}
+
+/**
+ * G-03 全局搜索(本地优先):FTS5 离线、瞬时、大小写不敏感;本地无命中
+ * (老历史不在本地窗口)才回落服务端。服务端不可达时本地结果就是全部。
+ */
+export async function searchAllChatMessagesLocalFirst(
+  keyword: string,
+  limit = 50,
+): Promise<ChatMessageDto[]> {
+  const local = withoutLocallyDeleted(
+    await searchLocalChatMessages(keyword, limit),
+  );
+  if (local.length > 0) return local;
+  try {
+    return await searchAllChatMessages(keyword, limit);
+  } catch {
+    return local;
+  }
 }
 
 /** 会话偏好:置顶/免打扰/隐藏。返回最新 DTO 并回写 store。 */

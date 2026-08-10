@@ -316,7 +316,8 @@
       "edit": "Edit",
       "readers": "Read by",
       "readersNone": "No one has read this yet",
-      "editing": "Editing message"
+      "editing": "Editing message",
+      "resend": "Resend"
     },
     "mentions": {
       "empty": "No members available to mention"

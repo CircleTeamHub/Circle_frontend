@@ -52,6 +52,12 @@
     },
     "plugins": [
       [
+        "expo-sqlite",
+        {
+          "useSQLCipher": true
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {
