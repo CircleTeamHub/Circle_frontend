@@ -33,14 +33,13 @@ test('by-date calendar renders 7 equal flex columns (no flexWrap rounding)', () 
 // date + 客户端时区偏移，不再自己拼时间戳。#147 在 OpenIM 侧修的
 // 「固定 24 小时会在 DST 切换日漏消息/串入次日」由服务端按本地午夜边界承担
 // (circle_be buildHistoryFilterWhere)，客户端这侧要钉住的是「确实把时区带上去了」。
-test('by-date search sends the date plus the client timezone offset', () => {
+test('by-date search sends both local-midnight timezone offsets', () => {
   const api = read('src/chat-core/api.ts');
 
   assert.match(api, /params\.set\('date', options\.date\)/);
-  assert.match(
-    api,
-    /params\.set\(\s*'tzOffsetMinutes',\s*String\(new Date\(\)\.getTimezoneOffset\(\)\)/,
-  );
+  assert.match(api, /resolveLocalDaySearchWindow\(options\.date\)/);
+  assert.match(api, /String\(start\.getTimezoneOffset\(\)\)/);
+  assert.match(api, /String\(end\.getTimezoneOffset\(\)\)/);
   // 不带时区的话服务端只能按 UTC 切天，用户在本地 0 点前后看到的是错的一天。
   assert.doesNotMatch(api, /searchTimePosition/);
   assert.doesNotMatch(api, /searchTimePeriod/);

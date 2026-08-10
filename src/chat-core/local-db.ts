@@ -413,26 +413,6 @@ export async function clearLocalConversationMessages(
   }
 }
 
-/**
- * 丢掉全部缓存消息,保留会话行与 outbox。
- *
- * 服务端说增量游标已超出保留窗口(resetRequired)时用:那段区间里发生的撤回
- * 服务端已经查不到了,而撤回不改 height —— 本地缓存里那些消息会永远显示原文。
- * 唯一安全的做法是让它们重新从服务端拉一遍(会话行留着,列表不至于空掉)。
- */
-export async function dropAllLocalMessages(): Promise<void> {
-  const current = requireDb();
-  if (!current) return;
-  try {
-    await current.db.withTransactionAsync(async () => {
-      await current.db.runAsync('DELETE FROM messages;');
-      await current.db.runAsync('DELETE FROM sync_state;');
-    });
-  } catch (error) {
-    warn('msg-drop', '[chat-db] drop all messages failed', error);
-  }
-}
-
 /** 中洞修剪(冷启动本地块与最新 REST 页之间隔了 >N 条时,放弃旧块保连续性)。 */
 export async function deleteLocalMessagesBelow(
   conversationId: string,

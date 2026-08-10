@@ -313,18 +313,8 @@ export interface ChatMutationsPageDto {
   serverTime: string;
   /** 下一次请求应当传的 since(被截断时它停在本页最后一次变更上)。 */
   nextSince: string;
-  /**
-   * 与 nextSince 配对的 id 游标(复合 keyset)。毫秒精度下同刻并列很常见,
-   * 只带时间戳的游标会把剩下那些同刻的行永久跳过。未截断时为空串。
-   */
-  nextSinceId: string;
   /** 还有没追完的变更;为 true 应当立刻再拉一页。 */
   hasMore: boolean;
-  /**
-   * 请求的 since 比服务端保留窗口还老,那段区间的变更已查不到 ——
-   * 必须丢掉本地消息缓存重新拉,否则那段时间被撤回的消息会永远显示原文。
-   */
-  resetRequired: boolean;
 }
 
 /** 历史分页(REST GET /chat/conversations/:id/messages)。 */

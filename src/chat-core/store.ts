@@ -93,12 +93,6 @@ interface ChatStoreState {
    * 服务端消息永久标成「用户删过」,此后翻页和搜索里再也见不到。
    */
   evictMessagesBelow: (conversationId: string, height: number) => void;
-  /**
-   * 丢掉全部缓存消息(会话行保留)。
-   * 服务端说增量游标超出保留窗口时用 —— 那段区间的撤回已经查不到了,
-   * 缓存里的消息会永远显示原文,只能整体作废重新拉。
-   */
-  dropCachedMessages: () => void;
   setActiveConversationId: (conversationId: string | null) => void;
   applyPresence: (userId: string, online: boolean) => void;
   /**
@@ -584,12 +578,6 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       },
     });
   },
-
-  dropCachedMessages: () =>
-    set({
-      messagesByConversation: {},
-      messageWindowByConversation: {},
-    }),
 
   markConversationReadLocal: (conversationId) => {
     const { conversations } = get();

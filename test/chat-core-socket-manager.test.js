@@ -133,11 +133,6 @@ function loadManager() {
       },
       activeConversationId: null,
       messagesByConversation: {},
-      droppedCachedMessages: 0,
-      dropCachedMessages() {
-        state.droppedCachedMessages += 1;
-        state.messagesByConversation = {};
-      },
     };
     return { useChatStore: { getState: () => state }, state };
   })();
@@ -149,8 +144,6 @@ function loadManager() {
     mutationSyncs: [],
     /** 依次弹出的 fetchChatMutationsSince 响应(测分页追平用)。 */
     mutationPages: [],
-    mutationCursorIds: [],
-    droppedLocalMessages: 0,
     initialHistory: [],
   };
   const mmkvStore = new Map();
@@ -172,18 +165,15 @@ function loadManager() {
         apiCalls.backfills.push({ conversationId, afterHeight });
         return Promise.resolve();
       },
-      fetchChatMutationsSince: (since, sinceId) => {
+      fetchChatMutationsSince: (since) => {
         apiCalls.mutationSyncs.push(since);
-        apiCalls.mutationCursorIds.push(sinceId ?? '');
         const next = apiCalls.mutationPages.shift();
         return Promise.resolve(
           next ?? {
             messages: [],
             serverTime: new Date().toISOString(),
             nextSince: new Date().toISOString(),
-            nextSinceId: '',
             hasMore: false,
-            resetRequired: false,
           },
         );
       },
@@ -209,9 +199,6 @@ function loadManager() {
       pendingReadDelete: async () => {},
       pendingReadsList: async () => [],
       initChatLocalDb: async () => false,
-      dropAllLocalMessages: async () => {
-        apiCalls.droppedLocalMessages += 1;
-      },
     },
     './app-badge': { initChatAppBadgeSync: () => {} },
     // 离线撤回增量的游标落 MMKV,按 userId 分键;测试里用一个内存替身。
@@ -309,17 +296,13 @@ test('catch-up keeps paging while the server reports hasMore', async () => {
       messages: [],
       serverTime: '2026-08-10T05:00:00.000Z',
       nextSince: '2026-08-10T01:00:00.000Z',
-      nextSinceId: 'm-42',
       hasMore: true,
-      resetRequired: false,
     },
     {
       messages: [],
       serverTime: '2026-08-10T05:00:00.000Z',
       nextSince: '2026-08-10T05:00:00.000Z',
-      nextSinceId: '',
       hasMore: false,
-      resetRequired: false,
     },
   );
 
@@ -332,32 +315,6 @@ test('catch-up keeps paging while the server reports hasMore', async () => {
     '2026-08-10T00:00:00.000Z',
     '2026-08-10T01:00:00.000Z',
   ]);
-  assert.equal(mmkvStore.get('chat.mutationCursor.u1'), '2026-08-10T05:00:00.000Z');
-  // 复合游标:第二页必须带上第一页最后一条的 id,否则同毫秒的其余变更被跳过。
-  assert.deepEqual(apiCalls.mutationCursorIds, ['', 'm-42']);
-});
-
-test('resetRequired drops the cached messages instead of pretending to be caught up', async () => {
-  const { manager, socket, store, apiCalls, mmkvStore } = loadManager();
-  mmkvStore.set('chat.mutationCursor.u1', '2026-06-01T00:00:00.000Z');
-  store.messagesByConversation = { c1: [{ height: 3 }] };
-  apiCalls.mutationPages.push({
-    messages: [],
-    serverTime: '2026-08-10T05:00:00.000Z',
-    nextSince: '2026-08-10T05:00:00.000Z',
-    nextSinceId: '',
-    hasMore: false,
-    resetRequired: true,
-  });
-
-  manager.connectChat('jwt', 'u1');
-  socket.fire('connect');
-  for (let i = 0; i < 8; i += 1) await Promise.resolve();
-
-  // 游标比服务端保留窗口还老:那段区间的撤回已经查不到了,缓存里的消息会
-  // 永远显示原文 —— 只能整体作废重新拉,不能装作追平了。
-  assert.equal(apiCalls.droppedLocalMessages, 1);
-  assert.equal(store.droppedCachedMessages, 1);
   assert.equal(mmkvStore.get('chat.mutationCursor.u1'), '2026-08-10T05:00:00.000Z');
 });
 
