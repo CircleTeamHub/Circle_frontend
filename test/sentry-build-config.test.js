@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-test('local Sentry upload config disables Xcode auto upload only for debug builds without an auth token', () => {
+test('local Sentry upload config disables Xcode auto upload whenever credentials are incomplete', () => {
   const {
     appendSentryDisableAutoUpload,
   } = require('../plugins/with-local-sentry-auto-upload-disabled');
@@ -10,7 +10,7 @@ test('local Sentry upload config disables Xcode auto upload only for debug build
   const output = appendSentryDisableAutoUpload(input);
 
   assert.match(output, /export NODE_BINARY=\/usr\/local\/bin\/node/);
-  assert.match(output, /"\$CONFIGURATION" = \*Debug\*/);
+  assert.doesNotMatch(output, /\$CONFIGURATION|Debug/);
   assert.match(output, /-z "\$SENTRY_AUTH_TOKEN"/);
   assert.match(output, /-z "\$SENTRY_ORG"/);
   assert.match(output, /-z "\$SENTRY_PROJECT"/);
@@ -35,6 +35,7 @@ test('local Sentry upload config adds an Android upload guard once', () => {
   assert.match(output, /System\.getenv\("SENTRY_AUTH_TOKEN"\)/);
   assert.match(output, /System\.getenv\("SENTRY_ORG"\)/);
   assert.match(output, /System\.getenv\("SENTRY_PROJECT"\)/);
+  assert.doesNotMatch(output, /isCiBuild|EAS_BUILD/);
   assert.equal(
     appendAndroidSentryUploadGuard(output),
     output,

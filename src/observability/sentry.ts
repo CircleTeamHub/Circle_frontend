@@ -6,6 +6,13 @@
 // With no DSN it is a complete no-op — nothing is sent and nothing crashes.
 import Constants from 'expo-constants';
 import * as Sentry from '@sentry/react-native';
+import type {
+  Breadcrumb,
+  Event,
+  ErrorEvent,
+  SpanJSON,
+  TransactionEvent,
+} from '@sentry/core';
 import {
   readDiagnosticBreadcrumbs,
   type DiagnosticBreadcrumb,
@@ -50,6 +57,8 @@ export interface InitSentryOptions {
   dsn?: string;
   environment?: string;
   tracesSampleRate?: number;
+  release?: string;
+  dist?: string;
 }
 
 /**
@@ -62,21 +71,48 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
   if (!dsn) return false;
 
   const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+  const release =
+    readTrimmed(options.release) ??
+    readTrimmed(process.env.EXPO_PUBLIC_SENTRY_RELEASE);
+  const dist =
+    readTrimmed(options.dist) ?? readTrimmed(process.env.EXPO_PUBLIC_SENTRY_DIST);
   try {
     client.init({
       dsn,
       environment: options.environment ?? (isDev ? 'development' : 'production'),
+      ...(release ? { release } : {}),
+      ...(dist ? { dist } : {}),
       // Native crashes + unhandled JS errors are captured by default. Keep
       // production tracing conservative; callers can override for targeted QA.
-      tracesSampleRate: options.tracesSampleRate ?? (isDev ? 1.0 : 0.05),
+      tracesSampleRate: options.tracesSampleRate ?? (isDev ? 1.0 : 0),
       // Never attach PII (IP, cookies, request bodies) by default.
       sendDefaultPii: false,
+      // Manual reportError calls already sanitize their payloads, but native /
+      // unhandled SDK events and automatic breadcrumbs bypass that helper.
+      beforeSend: sanitizeAutomaticEvent,
+      beforeBreadcrumb: sanitizeAutomaticBreadcrumb,
+      beforeSendTransaction: sanitizeAutomaticTransaction,
+      beforeSendSpan: sanitizeAutomaticSpan,
     });
     sentryInitialized = true;
     return true;
   } catch {
     sentryInitialized = false;
     return false;
+  }
+}
+
+/** Associates events with an internal account id only; clears it on logout. */
+export function setSentryUserId(
+  userId: string | null | undefined,
+  client: Pick<typeof Sentry, 'setUser'> = Sentry,
+): void {
+  if (!sentryInitialized && client === Sentry) return;
+  try {
+    const normalized = readTrimmed(userId);
+    client.setUser(normalized ? { id: normalized } : null);
+  } catch {
+    // Observability must never change auth/session behavior.
   }
 }
 
@@ -118,6 +154,9 @@ type SentryCaptureContext = {
 };
 
 const SENSITIVE_URL_PATTERN = /https?:\/\/[^\s"'<>)]*\?[^\s"'<>)]*/gi;
+const BEARER_TOKEN_PATTERN = /\bBearer\s+[A-Za-z0-9._~+/=-]+/gi;
+const JWT_PATTERN = /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g;
+const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const PRESIGNED_URL_MARKERS = [
   'X-Amz-Algorithm=',
   'X-Amz-Credential=',
@@ -142,13 +181,54 @@ const SENSITIVE_CONTEXT_KEYS = new Set([
   'secret',
   'uploadurl',
   'fileurl',
+  'email',
+  'phone',
+  'phonenumber',
+  'mobile',
+]);
+const SAFE_REPORT_CONTEXT_KEYS = new Set([
+  'endpointPath',
+  'method',
+  'status',
+  'apiCode',
+  'errorCode',
+  'failureKind',
+  'component',
+  'operation',
+  'kind',
+  'attempts',
+  'platform',
+  'contentType',
+  'code',
+  'size',
+  'category',
+  'agentIndex',
+  'source',
+  'stage',
+  'reason',
+  'page',
+]);
+const SAFE_EVENT_TAG_KEYS = new Set([
+  'endpointPath',
+  'method',
+  'status',
+  'apiCode',
+  'errorCode',
+  'failureKind',
+  'component',
+  'operation',
+  'kind',
 ]);
 
 function sanitizeStringForSentry(value: string): string {
-  const withoutUrls = value.replace(SENSITIVE_URL_PATTERN, '[REDACTED_URL]');
-  return PRESIGNED_URL_MARKERS.some((marker) => withoutUrls.includes(marker))
+  const sanitized = value
+    .replace(SENSITIVE_URL_PATTERN, '[REDACTED_URL]')
+    .replace(BEARER_TOKEN_PATTERN, 'Bearer [REDACTED]')
+    .replace(JWT_PATTERN, '[REDACTED_TOKEN]')
+    .replace(EMAIL_PATTERN, '[REDACTED_EMAIL]');
+  return PRESIGNED_URL_MARKERS.some((marker) => sanitized.includes(marker))
     ? '[REDACTED]'
-    : withoutUrls;
+    : sanitized;
 }
 
 function sanitizeContextForSentry(value: unknown, depth = 0): unknown {
@@ -169,24 +249,301 @@ function sanitizeContextForSentry(value: unknown, depth = 0): unknown {
   return out;
 }
 
-function toSafeError(error: unknown): Error {
+function sanitizeReportContext(
+  context: Record<string, unknown>,
+): Record<string, unknown> {
+  const safe: Record<string, unknown> = {};
+  for (const key of SAFE_REPORT_CONTEXT_KEYS) {
+    if (!(key in context)) continue;
+    const value = context[key];
+    if (
+      value == null ||
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    ) {
+      safe[key] = sanitizeContextForSentry(value);
+    }
+  }
+  return safe;
+}
+
+function sanitizeStacktrace(value: unknown): unknown {
+  if (!value || typeof value !== 'object') return undefined;
+  const frames = (value as Record<string, unknown>).frames;
+  if (!Array.isArray(frames)) return undefined;
+  return {
+    frames: frames.map((frame) => {
+      if (!frame || typeof frame !== 'object') return {};
+      const source = frame as Record<string, unknown>;
+      const safe: Record<string, unknown> = {};
+      for (const key of [
+        'filename',
+        'function',
+        'module',
+        'lineno',
+        'colno',
+        'in_app',
+        'instruction_addr',
+        'addr_mode',
+        'image_addr',
+        'package',
+      ]) {
+        if (key in source) safe[key] = sanitizeContextForSentry(source[key]);
+      }
+      return safe;
+    }),
+  };
+}
+
+function sanitizeException(value: unknown): unknown {
+  if (!value || typeof value !== 'object') return undefined;
+  const values = (value as Record<string, unknown>).values;
+  if (!Array.isArray(values)) return undefined;
+  return {
+    values: values.map((entry) => {
+      if (!entry || typeof entry !== 'object') return {};
+      const source = entry as Record<string, unknown>;
+      const safe: Record<string, unknown> = {
+        value: '[REDACTED_EXCEPTION]',
+      };
+      if (typeof source.type === 'string') {
+        safe.type = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(source.type)
+          ? source.type
+          : 'Error';
+      }
+      const stacktrace = sanitizeStacktrace(source.stacktrace);
+      if (stacktrace) safe.stacktrace = stacktrace;
+      if (source.mechanism && typeof source.mechanism === 'object') {
+        const mechanism = source.mechanism as Record<string, unknown>;
+        safe.mechanism = {
+          ...(typeof mechanism.type === 'string'
+            ? { type: sanitizeStringForSentry(mechanism.type) }
+            : {}),
+          ...(typeof mechanism.handled === 'boolean'
+            ? { handled: mechanism.handled }
+            : {}),
+          ...(typeof mechanism.synthetic === 'boolean'
+            ? { synthetic: mechanism.synthetic }
+            : {}),
+        };
+      }
+      return safe;
+    }),
+  };
+}
+
+function sanitizeThreads(value: unknown): unknown {
+  if (!value || typeof value !== 'object') return undefined;
+  const values = (value as Record<string, unknown>).values;
+  if (!Array.isArray(values)) return undefined;
+  return {
+    values: values.map((entry) => {
+      if (!entry || typeof entry !== 'object') return {};
+      const source = entry as Record<string, unknown>;
+      const safe: Record<string, unknown> = {};
+      for (const key of ['id', 'name', 'crashed', 'current', 'main']) {
+        if (key in source) safe[key] = sanitizeContextForSentry(source[key]);
+      }
+      const stacktrace = sanitizeStacktrace(source.stacktrace);
+      if (stacktrace) safe.stacktrace = stacktrace;
+      return safe;
+    }),
+  };
+}
+
+function sanitizeEventTags(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const safe: Record<string, unknown> = {};
+  for (const key of SAFE_EVENT_TAG_KEYS) {
+    const child = (value as Record<string, unknown>)[key];
+    if (typeof child === 'string' || typeof child === 'number') {
+      safe[key] = sanitizeContextForSentry(child);
+    }
+  }
+  return Object.keys(safe).length > 0 ? safe : undefined;
+}
+
+function sanitizeAutomaticBaseEvent(event: Event): Event {
+  if (!event || typeof event !== 'object') return event;
+  const source = event as unknown as Record<string, unknown>;
+  const safe: Record<string, unknown> = {};
+  for (const key of [
+    'event_id',
+    'timestamp',
+    'start_timestamp',
+    'platform',
+    'level',
+    'logger',
+    'release',
+    'dist',
+    'environment',
+    'server_name',
+  ]) {
+    if (key in source) safe[key] = sanitizeContextForSentry(source[key]);
+  }
+  if ('message' in source) safe.message = '[REDACTED_EVENT_MESSAGE]';
+  if ('transaction' in source) safe.transaction = '[REDACTED_TRANSACTION]';
+  const exception = sanitizeException(source.exception);
+  if (exception) safe.exception = exception;
+  const stacktrace = sanitizeStacktrace(source.stacktrace);
+  if (stacktrace) safe.stacktrace = stacktrace;
+  const threads = sanitizeThreads(source.threads);
+  if (threads) safe.threads = threads;
+  const tags = sanitizeEventTags(source.tags);
+  if (tags) safe.tags = tags;
+  if (source.user && typeof source.user === 'object') {
+    const id = (source.user as Record<string, unknown>).id;
+    if (typeof id === 'string' && id.trim()) safe.user = { id: id.trim() };
+  }
+  if (Array.isArray(source.fingerprint)) {
+    safe.fingerprint = source.fingerprint.map((part) =>
+      sanitizeStringForSentry(String(part)),
+    );
+  }
+  if (Array.isArray(source.breadcrumbs)) {
+    safe.breadcrumbs = source.breadcrumbs.map(sanitizeAutomaticBreadcrumb);
+  }
+  // Native symbolication metadata is SDK-generated, not application content.
+  for (const key of ['debug_meta', 'modules', 'sdk']) {
+    if (key in source) safe[key] = sanitizeContextForSentry(source[key]);
+  }
+  return safe as Event;
+}
+
+function sanitizeAutomaticEvent(event: ErrorEvent): ErrorEvent {
+  return {
+    ...sanitizeAutomaticBaseEvent(event),
+    type: undefined,
+  };
+}
+
+function sanitizeAutomaticBreadcrumb(breadcrumb: Breadcrumb): Breadcrumb {
+  if (!breadcrumb || typeof breadcrumb !== 'object') return breadcrumb;
+  const source = breadcrumb as Record<string, unknown>;
+  const safe: Record<string, unknown> = {};
+  for (const key of ['type', 'category', 'level', 'timestamp']) {
+    if (key in source) safe[key] = sanitizeContextForSentry(source[key]);
+  }
+  if ('message' in source) safe.message = '[REDACTED_BREADCRUMB]';
+  return safe as Breadcrumb;
+}
+
+function sanitizeAutomaticSpan(span: SpanJSON): SpanJSON {
+  const safeData: Record<string, string | number | boolean> = {};
+  for (const key of [
+    'sentry.origin',
+    'sentry.op',
+    'sentry.source',
+    'sentry.sample_rate',
+  ] as const) {
+    const value = span.data?.[key];
+    if (
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    ) {
+      safeData[key] = value;
+    }
+  }
+
+  return {
+    data: safeData as SpanJSON['data'],
+    span_id: span.span_id,
+    start_timestamp: span.start_timestamp,
+    trace_id: span.trace_id,
+    ...(span.parent_span_id ? { parent_span_id: span.parent_span_id } : {}),
+    ...(span.timestamp !== undefined ? { timestamp: span.timestamp } : {}),
+    ...(span.op ? { op: sanitizeStringForSentry(span.op) } : {}),
+    ...(span.origin ? { origin: span.origin } : {}),
+    ...(span.status ? { status: span.status } : {}),
+    ...(span.profile_id ? { profile_id: span.profile_id } : {}),
+    ...(span.exclusive_time !== undefined
+      ? { exclusive_time: span.exclusive_time }
+      : {}),
+    ...(span.is_segment !== undefined ? { is_segment: span.is_segment } : {}),
+    ...(span.segment_id ? { segment_id: span.segment_id } : {}),
+  };
+}
+
+function sanitizeTraceContext(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const source = value as Record<string, unknown>;
+  if (typeof source.trace_id !== 'string' || typeof source.span_id !== 'string') {
+    return undefined;
+  }
+  return {
+    trace_id: source.trace_id,
+    span_id: source.span_id,
+    data: {},
+    ...(typeof source.parent_span_id === 'string'
+      ? { parent_span_id: source.parent_span_id }
+      : {}),
+    ...(typeof source.op === 'string'
+      ? { op: sanitizeStringForSentry(source.op) }
+      : {}),
+    ...(typeof source.origin === 'string'
+      ? { origin: sanitizeStringForSentry(source.origin) }
+      : {}),
+    ...(typeof source.status === 'string'
+      ? { status: sanitizeStringForSentry(source.status) }
+      : {}),
+  };
+}
+
+function sanitizeAutomaticTransaction(
+  event: TransactionEvent,
+): TransactionEvent {
+  const safe: TransactionEvent = {
+    ...sanitizeAutomaticBaseEvent(event),
+    type: 'transaction',
+  };
+  safe.transaction = '[REDACTED_TRANSACTION]';
+  safe.spans = (event.spans ?? []).map(sanitizeAutomaticSpan);
+  const trace = sanitizeTraceContext(event.contexts?.trace);
+  if (trace) {
+    safe.contexts = { trace } as TransactionEvent['contexts'];
+  }
+  if (event.transaction_info?.source) {
+    safe.transaction_info = { source: event.transaction_info.source };
+  }
+  return safe;
+}
+
+function toSafeError(error: unknown, safeMessage: string): Error {
   if (error && typeof error === 'object' && 'message' in error) {
     const errorLike = error as { message?: unknown; name?: unknown; stack?: unknown };
-    const safeError = new Error(
-      sanitizeStringForSentry(
-        typeof errorLike.message === 'string' ? errorLike.message : String(error),
-      ),
-    );
-    safeError.name = sanitizeStringForSentry(
-      typeof errorLike.name === 'string' ? errorLike.name : 'Error',
-    );
+    const safeError = new Error(safeMessage);
+    const candidateName =
+      typeof errorLike.name === 'string' ? errorLike.name : 'Error';
+    safeError.name = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(candidateName)
+      ? candidateName
+      : 'Error';
     if (typeof errorLike.stack === 'string') {
-      safeError.stack = sanitizeStringForSentry(errorLike.stack);
+      const stackLines = sanitizeStringForSentry(errorLike.stack).split('\n');
+      safeError.stack = [
+        `${safeError.name}: ${safeMessage}`,
+        ...stackLines.slice(1),
+      ].join('\n');
     }
     return safeError;
   }
 
-  return new Error(sanitizeStringForSentry(String(error)));
+  return new Error(safeMessage);
+}
+
+function safeErrorMessage(context: Record<string, unknown> | undefined): string {
+  const operation = context ? readTagValue(context, 'operation') : undefined;
+  if (operation && /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(operation)) {
+    const kind = readTagValue(context ?? {}, 'kind');
+    const safeKind =
+      kind && /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(kind) ? kind : 'error';
+    return `${operation} ${safeKind} failure`;
+  }
+  if (context && readTagValue(context, 'endpointPath')) {
+    return 'api request failure';
+  }
+  return 'handled application error';
 }
 
 function readTagValue(context: Record<string, unknown>, key: string): string | undefined {
@@ -214,6 +571,7 @@ function buildCaptureContext(
     'status',
     'apiCode',
     'failureKind',
+    'component',
     'operation',
     'kind',
   ];
@@ -287,11 +645,13 @@ export function reportError(
   }
 
   try {
-    const safeContext = context
-      ? (sanitizeContextForSentry(context) as Record<string, unknown>)
-      : undefined;
+    const sanitizedContext = context ? sanitizeReportContext(context) : undefined;
+    const safeContext =
+      sanitizedContext && Object.keys(sanitizedContext).length > 0
+        ? sanitizedContext
+        : undefined;
     client.captureException(
-      toSafeError(error),
+      toSafeError(error, safeErrorMessage(safeContext)),
       buildCaptureContext(safeContext, safeReadBreadcrumbs()),
     );
   } catch {

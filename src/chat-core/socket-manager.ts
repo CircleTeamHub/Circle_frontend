@@ -1,5 +1,6 @@
 import { io, type Socket } from 'socket.io-client';
 import { CHAT_WS_URL } from '@/constants/config';
+import { reportError } from '@/observability/sentry';
 import { bindChatEvents, cancelConversationBackfill } from './dispatcher';
 import {
   CHAT_EVENTS,
@@ -23,6 +24,7 @@ import { useChatStore } from './store';
 const SEND_ACK_TIMEOUT_MS = 10_000;
 const READ_ACK_TIMEOUT_MS = 8_000;
 const TYPING_THROTTLE_MS = 2_000;
+const CONNECT_ERROR_REPORT_THRESHOLD = 3;
 
 let socket: Socket | null = null;
 let sessionGen = 0;
@@ -30,6 +32,8 @@ const pendingReads = new Map<string, number>();
 let flushingReads = false;
 let readFlushRequested = false;
 const typingSentAt = new Map<string, number>();
+let consecutiveConnectErrors = 0;
+let reportedCurrentConnectOutage = false;
 
 /** ack {ok:false} 的类型化错误：code = circle_be ChatErrorCode 字符串码。 */
 export class ChatSendError extends Error {
@@ -66,6 +70,8 @@ export function connectChat(token: string, userId: string): void {
   sessionGen += 1;
 
   const gen = sessionGen;
+  consecutiveConnectErrors = 0;
+  reportedCurrentConnectOutage = false;
   store.setConnecting(true);
   store.setCurrentUserId(userId);
 
@@ -78,6 +84,8 @@ export function connectChat(token: string, userId: string): void {
 
   next.on('connect', () => {
     if (gen !== sessionGen) return;
+    consecutiveConnectErrors = 0;
+    reportedCurrentConnectOutage = false;
     const state = useChatStore.getState();
     state.setConnecting(false);
     state.setConnected(true);
@@ -91,6 +99,18 @@ export function connectChat(token: string, userId: string): void {
   next.on('connect_error', (err) => {
     if (gen !== sessionGen) return;
     console.warn('[chat] connect error', err?.message ?? err);
+    consecutiveConnectErrors += 1;
+    if (
+      consecutiveConnectErrors >= CONNECT_ERROR_REPORT_THRESHOLD &&
+      !reportedCurrentConnectOutage
+    ) {
+      reportedCurrentConnectOutage = true;
+      reportError(new Error('chat connection failed repeatedly'), {
+        operation: 'chatConnect',
+        kind: 'consecutiveFailures',
+        attempts: consecutiveConnectErrors,
+      });
+    }
     const state = useChatStore.getState();
     state.setConnecting(false);
     state.setError(err?.message ?? 'connect_error');

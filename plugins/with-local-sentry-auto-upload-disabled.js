@@ -2,11 +2,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { withAppBuildGradle, withDangerousMod } = require('expo/config-plugins');
 
-const DISABLE_AUTO_UPLOAD_BLOCK = `if [[ "$CONFIGURATION" = *Debug* && ( -z "$SENTRY_AUTH_TOKEN" || -z "$SENTRY_ORG" || -z "$SENTRY_PROJECT" ) ]]; then
+const DISABLE_AUTO_UPLOAD_BLOCK = `if [[ -z "$SENTRY_AUTH_TOKEN" || -z "$SENTRY_ORG" || -z "$SENTRY_PROJECT" ]]; then
   export SENTRY_DISABLE_AUTO_UPLOAD=true
 fi`;
 const DISABLE_AUTO_UPLOAD_PATTERN =
-  /(?:if (?:\[\[ "\$CONFIGURATION" = \*Debug\* && [^\n]+ \]\]|\[ -z "\$SENTRY_AUTH_TOKEN" \]); then\n\s*export SENTRY_DISABLE_AUTO_UPLOAD=true\nfi|export\s+SENTRY_DISABLE_AUTO_UPLOAD=.*)/m;
+  /(?:if (?:\[\[ "\$CONFIGURATION" = \*Debug\* && [^\n]+ \]\]|\[\[ -z "\$SENTRY_AUTH_TOKEN"[^\n]+ \]\]|\[ -z "\$SENTRY_AUTH_TOKEN" \]); then\n\s*export SENTRY_DISABLE_AUTO_UPLOAD=true\nfi|export\s+SENTRY_DISABLE_AUTO_UPLOAD=.*)/m;
 
 const ANDROID_UPLOAD_GUARD_MARKER = 'circle-im-sentry-local-upload-guard';
 const ANDROID_UPLOAD_GUARD_BLOCK = `
@@ -17,8 +17,7 @@ tasks.configureEach { task ->
             def hasUploadConfig = System.getenv("SENTRY_AUTH_TOKEN")?.trim() &&
                 System.getenv("SENTRY_ORG")?.trim() &&
                 System.getenv("SENTRY_PROJECT")?.trim()
-            def isCiBuild = System.getenv("CI") == "true" || System.getenv("EAS_BUILD") == "true"
-            return hasUploadConfig || isCiBuild
+            return hasUploadConfig
         }
     }
 }

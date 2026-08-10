@@ -1,4 +1,5 @@
 import { REALTIME_WS_URL } from '@/constants/config';
+import { reportError } from '@/observability/sentry';
 import { fetchMySignupsUnreadCount } from '@/services/api/plaza';
 import { fetchUnreadFriendActivityCount } from '@/services/api/friends';
 import { fetchCurrentUser } from '@/services/api/auth';
@@ -118,6 +119,7 @@ const RECONNECT_MAX_MS = 30_000;
 // 退避指数封顶：2^5 * 1s 已经越过 RECONNECT_MAX_MS，再往上乘只会把 attempt
 // 累到 Math.pow 溢出成 Infinity。封顶后延迟稳定停在 RECONNECT_MAX_MS。
 const RECONNECT_MAX_EXPONENT = 5;
+const CONNECTION_OUTAGE_REPORT_THRESHOLD = 3;
 
 // 网关用 1008 表达三种拒绝：会话被撤销、连接数超限、10s 内没发认证帧。只有
 // 「撤销」是终态 —— token 已经作废，重连多少次都会在认证后被同样踢掉。三者
@@ -152,6 +154,32 @@ let currentToken: string | null = null;
 let manualDisconnect = false;
 let reconnectAttempt = 0;
 let reconnectRecoveryPending = false;
+let reportedCurrentConnectionOutage = false;
+const reportedRealtimeFailures = new Set<string>();
+
+function reportRealtimeFailureOnce(kind: string): void {
+  if (reportedRealtimeFailures.has(kind)) return;
+  reportedRealtimeFailures.add(kind);
+  reportError(new Error(`realtime ${kind} failure`), {
+    operation: 'realtime',
+    kind,
+  });
+}
+
+function reportRealtimeConnectionOutage(): void {
+  if (
+    reconnectAttempt < CONNECTION_OUTAGE_REPORT_THRESHOLD ||
+    reportedCurrentConnectionOutage
+  ) {
+    return;
+  }
+  reportedCurrentConnectionOutage = true;
+  reportError(new Error('realtime connection failed repeatedly'), {
+    operation: 'realtime',
+    kind: 'consecutiveConnectionFailures',
+    attempts: reconnectAttempt,
+  });
+}
 
 function clearReconnectTimer() {
   if (!reconnectTimer) {
@@ -184,6 +212,7 @@ function scheduleReconnect() {
   const delay = baseDelay + jitter;
 
   reconnectAttempt += 1;
+  reportRealtimeConnectionOutage();
 
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
@@ -414,6 +443,7 @@ function handleSocketMessage(rawData: string) {
     const message = JSON.parse(rawData) as RealtimeEvent;
     handleRealtimeEvent(message);
   } catch (err) {
+    reportRealtimeFailureOnce('malformedPayload');
     // Ignore malformed realtime messages to keep the connection alive — but dev-log
     // 出来，避免后端推一坨脏数据时本地长期静默丢消息。
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
@@ -492,6 +522,7 @@ function openRealtimeSocket(normalizedToken: string) {
     try {
       nextSocket.send(JSON.stringify({ type: 'auth', token: normalizedToken }));
     } catch (err) {
+      reportRealtimeFailureOnce('authFrameSend');
       if (typeof __DEV__ !== 'undefined' && __DEV__) {
         console.warn('[realtime] failed to send auth frame', err);
       }
@@ -514,6 +545,7 @@ function openRealtimeSocket(normalizedToken: string) {
     // 未认证的连接拿不到任何一帧，所以收到帧 = 认证已通过 = 这条连接真的可用。
     // 这是退避唯一的归零点（显式 connectRealtime 除外）。
     reconnectAttempt = 0;
+    reportedCurrentConnectionOutage = false;
     handleSocketMessage(event.data);
   };
 
@@ -561,6 +593,7 @@ export function connectRealtime(token: string) {
 
   manualDisconnect = false;
   reconnectAttempt = 0;
+  reportedCurrentConnectionOutage = false;
   clearReconnectTimer();
   openRealtimeSocket(normalizedToken);
 }
@@ -569,6 +602,7 @@ export function disconnectRealtime() {
   manualDisconnect = true;
   currentToken = null;
   reconnectRecoveryPending = false;
+  reportedRealtimeFailures.clear();
   clearReconnectTimer();
   useTabBadgeStore.getState().setRealtimeConnected(false);
   closeSocket();

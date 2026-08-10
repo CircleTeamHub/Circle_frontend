@@ -116,6 +116,27 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Prepare and validate Sentry source maps
+        env:
+          EXPO_PUBLIC_SENTRY_DSN: ${{ vars.EXPO_PUBLIC_SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+        run: |
+          set -euo pipefail
+          version_code="$(node -p "require('./app.json').expo.android.versionCode")"
+          release="windnote@$RELEASE_TAG"
+          export ANDROID_VERSION_CODE="$version_code"
+          export SENTRY_RELEASE="$release"
+          export EXPO_PUBLIC_SENTRY_RELEASE="$release"
+          export SENTRY_DIST="$version_code"
+          export EXPO_PUBLIC_SENTRY_DIST="$version_code"
+          node .github/scripts/validate-android-release.js sentry-upload
+          echo "SENTRY_RELEASE=$release" >> "$GITHUB_ENV"
+          echo "EXPO_PUBLIC_SENTRY_RELEASE=$release" >> "$GITHUB_ENV"
+          echo "SENTRY_DIST=$version_code" >> "$GITHUB_ENV"
+          echo "EXPO_PUBLIC_SENTRY_DIST=$version_code" >> "$GITHUB_ENV"
+
       - name: Generate Android project
         run: npx expo prebuild --platform android --clean --no-install
 
@@ -166,11 +187,12 @@ jobs:
           EXPO_PUBLIC_SUPPORT_ISSUE_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_ISSUE_ID }}
           EXPO_PUBLIC_SUPPORT_DISPUTE_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_DISPUTE_ID }}
           EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID }}
-          # 运行时崩溃上报的 DSN，会被编译进包（src/observability/sentry.ts 按它决定
-          # 是否 init）。与下面的 SENTRY_DISABLE_AUTO_UPLOAD 是两回事：那个管的是构建期
-          # 往 Sentry 上传 source map，这个管的是包跑起来之后往哪报错。
+          # DSN 被编译进包用于运行时上报；token/org/project 仅供构建期上传 source map。
+          # release/dist 已在前置步骤校验并写入 GITHUB_ENV，二者必须与运行时事件一致。
           EXPO_PUBLIC_SENTRY_DSN: ${{ vars.EXPO_PUBLIC_SENTRY_DSN }}
-          SENTRY_DISABLE_AUTO_UPLOAD: "true"
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
         run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
 
       - name: Verify and stage APK

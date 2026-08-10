@@ -53,6 +53,7 @@ function loadRealtimeHarness() {
 
   const realtimeConnected = [];
   const clearedSessions = [];
+  const sentryReports = [];
   const stubStore = (state) => ({ getState: () => state });
 
   const context = {
@@ -146,6 +147,11 @@ function loadRealtimeHarness() {
           return {
             useWalletRealtimeStore: stubStore({ setRealtimeBalance: () => {} }),
           };
+        case '@/observability/sentry':
+          return {
+            reportError: (error, reportContext) =>
+              sentryReports.push({ error, context: reportContext }),
+          };
         default:
           return require(request);
       }
@@ -167,6 +173,7 @@ function loadRealtimeHarness() {
     sockets,
     realtimeConnected,
     clearedSessions,
+    sentryReports,
     latestSocket: () => sockets[sockets.length - 1],
     pendingDelay: () => pendingTimer()?.[1].delay ?? null,
     hasPendingReconnect: () => pendingTimer() !== null,
@@ -181,6 +188,25 @@ function loadRealtimeHarness() {
     },
   };
 }
+
+test('malformed realtime reporting resets only when the session lifecycle ends', () => {
+  const harness = loadRealtimeHarness();
+  harness.connectRealtime('token-a');
+  openLatestSocket(harness);
+  harness.latestSocket().onmessage({ data: 'private malformed payload' });
+  harness.latestSocket().onmessage({ data: 'another malformed payload' });
+  assert.equal(harness.sentryReports.length, 1);
+
+  harness.disconnectRealtime();
+  harness.connectRealtime('token-b');
+  openLatestSocket(harness);
+  harness.latestSocket().onmessage({ data: 'new-session malformed payload' });
+  assert.equal(harness.sentryReports.length, 2);
+  assert.deepEqual(
+    { ...harness.sentryReports[1].context },
+    { operation: 'realtime', kind: 'malformedPayload' },
+  );
+});
 
 // 让最新的 socket 以「连不上」收场：网关拒绝 / 后端重启 / 断网都走 onclose。
 function failLatestSocket(harness) {
