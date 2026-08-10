@@ -544,6 +544,7 @@ export default function GroupCallScreen() {
     try {
       const response = await requestJoinToken(activeCall.id);
       if (!mountedRef.current) return;
+      reportedRoomErrorRef.current = false;
       setLiveKitCredentials(response.livekit);
       setConnectError(null);
       setRoomVersion((current) => current + 1);

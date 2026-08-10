@@ -208,6 +208,25 @@ test('malformed realtime reporting resets only when the session lifecycle ends',
   );
 });
 
+test('schema-invalid known realtime frames are reported as malformed payloads', () => {
+  const harness = loadRealtimeHarness();
+  harness.connectRealtime('token-a');
+  openLatestSocket(harness);
+
+  harness.latestSocket().onmessage({
+    data: JSON.stringify({ type: 'call.invite', payload: {} }),
+  });
+  harness.latestSocket().onmessage({
+    data: JSON.stringify({ type: 'call.invite', payload: {} }),
+  });
+
+  assert.equal(harness.sentryReports.length, 1);
+  assert.deepEqual(
+    { ...harness.sentryReports[0].context },
+    { operation: 'realtime', kind: 'malformedPayload' },
+  );
+});
+
 // 让最新的 socket 以「连不上」收场：网关拒绝 / 后端重启 / 断网都走 onclose。
 function failLatestSocket(harness) {
   const socket = harness.latestSocket();

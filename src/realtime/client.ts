@@ -304,11 +304,7 @@ const BELL_NOTIFICATION_TYPES: ReadonlySet<string> = new Set([
   'PROFILE_LIKE',
 ]);
 
-function handleNotificationCreated(payload: unknown) {
-  if (!isNotificationItem(payload)) {
-    return;
-  }
-
+function handleNotificationCreated(payload: NotificationItem) {
   // SYSTEM notifications are not part of the interactive list and have no
   // in-app landing screen, so toasting one would route nowhere. Skip them.
   if (payload.type === 'SYSTEM') {
@@ -356,6 +352,10 @@ function handleRealtimeEvent(message: RealtimeEvent) {
       applyBadgeSnapshot(message.payload ?? {});
       return;
     case 'notification.created':
+      if (!isNotificationItem(message.payload)) {
+        reportRealtimeFailureOnce('malformedPayload');
+        return;
+      }
       handleNotificationCreated(message.payload);
       return;
     case 'friend.activity.unread.changed':
@@ -403,35 +403,47 @@ function handleRealtimeEvent(message: RealtimeEvent) {
       useMomentsFeedSignalStore.getState().bump();
       return;
     case 'call.invite':
-      if (isCallInvitePayload(message.payload)) {
-        callStore.handleCallInvite(message.payload);
+      if (!isCallInvitePayload(message.payload)) {
+        reportRealtimeFailureOnce('malformedPayload');
+        return;
       }
+      callStore.handleCallInvite(message.payload);
       return;
     case 'call.participant.joined':
-      if (isCallParticipantPayload(message.payload)) {
-        callStore.handleCallParticipantJoined(message.payload);
+      if (!isCallParticipantPayload(message.payload)) {
+        reportRealtimeFailureOnce('malformedPayload');
+        return;
       }
+      callStore.handleCallParticipantJoined(message.payload);
       return;
     case 'call.participant.left':
-      if (isCallParticipantPayload(message.payload)) {
-        callStore.handleCallParticipantLeft(message.payload);
+      if (!isCallParticipantPayload(message.payload)) {
+        reportRealtimeFailureOnce('malformedPayload');
+        return;
       }
+      callStore.handleCallParticipantLeft(message.payload);
       return;
     case 'call.participant.rejected':
-      if (isCallParticipantPayload(message.payload)) {
-        callStore.handleCallParticipantRejected(message.payload);
+      if (!isCallParticipantPayload(message.payload)) {
+        reportRealtimeFailureOnce('malformedPayload');
+        return;
       }
+      callStore.handleCallParticipantRejected(message.payload);
       return;
     case 'call.participant.missed':
-      if (isCallParticipantPayload(message.payload)) {
-        callStore.handleCallParticipantMissed(message.payload);
+      if (!isCallParticipantPayload(message.payload)) {
+        reportRealtimeFailureOnce('malformedPayload');
+        return;
       }
+      callStore.handleCallParticipantMissed(message.payload);
       return;
     case 'call.ended':
     case 'call.canceled':
-      if (isCallStatePayload(message.payload)) {
-        callStore.handleCallEnded(message.payload);
+      if (!isCallStatePayload(message.payload)) {
+        reportRealtimeFailureOnce('malformedPayload');
+        return;
       }
+      callStore.handleCallEnded(message.payload);
       return;
     default:
       return;

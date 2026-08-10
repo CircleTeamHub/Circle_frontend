@@ -32,6 +32,15 @@ test('GroupCallScreen reports native module and room connection failures without
   assert.doesNotMatch(source, /reportError\([^\n]*livekit\.token/);
 });
 
+test('GroupCallScreen allows a newly credentialed retry to report its own room failure', () => {
+  const source = read('src/features/call/screens/GroupCallScreen.tsx');
+
+  assert.match(
+    source,
+    /const handleRetryConnection[\s\S]*?reportedRoomErrorRef\.current = false[\s\S]*?setRoomVersion/,
+  );
+});
+
 test('GroupCallScreen renders camera toggle and video tiles', () => {
   const source = read('src/features/call/screens/GroupCallScreen.tsx');
 

@@ -235,7 +235,7 @@ test("initSentry attaches explicit release and distribution identifiers", () => 
   assert.equal(calls[0].dist, "1002003");
 });
 
-test("setSentryUserId attaches only an internal id and clears it on logout", () => {
+test("setSentryUserId never sends the backend account id", () => {
   const { setSentryUserId } = loadSentry();
   const calls = [];
   const client = { setUser: (user) => calls.push(user) };
@@ -245,9 +245,44 @@ test("setSentryUserId attaches only an internal id and clears it on logout", () 
   setSentryUserId(null, client);
 
   assert.equal(calls.length, 2);
-  assert.equal(calls[0].id, "user-1");
-  assert.equal(Object.keys(calls[0]).length, 1);
+  assert.equal(calls[0], null);
   assert.equal(calls[1], null);
+});
+
+test("beforeSend preserves reportError allowlisted extra but removes account identity", () => {
+  const { initSentry, reportError } = loadSentry();
+  const initCalls = [];
+  initSentry({
+    dsn: "https://a@o/1",
+    client: { init: (options) => initCalls.push(options), wrap: (component) => component },
+  });
+  const captures = [];
+  reportError(new Error("boom"), { attempts: 3, platform: "ios", stage: "connect" }, {
+    captureException: (error, context) => captures.push({ error, context }),
+  });
+
+  const event = initCalls[0].beforeSend({
+    exception: { values: [{ type: "Error", value: captures[0].error.message }] },
+    extra: {
+      ...captures[0].context.extra,
+      clientDiagnostics: [{ event: "api.request", details: { stage: "connect", page: 1 } }],
+      token: "secret-token",
+    },
+    user: { id: "backend-user-1" },
+  });
+
+  assert.equal(event.extra.attempts, 3);
+  assert.equal(event.extra.platform, "ios");
+  assert.equal(event.extra.stage, "connect");
+  assert.equal(
+    JSON.stringify(event.extra.clientDiagnostics),
+    JSON.stringify([
+      { event: "api.request", details: { stage: "connect", page: 1 } },
+    ]),
+  );
+  assert.equal(event.extra.token, undefined);
+  assert.equal(event.user, undefined);
+  assert.doesNotMatch(JSON.stringify(event), /backend-user-1|secret-token/);
 });
 
 test("wrapWithSentry wraps only when enabled", () => {
@@ -269,7 +304,7 @@ test("root layout initializes and wraps with Sentry", () => {
   assert.match(layout, /export default wrapWithSentry\(\s*RootLayout\s*\)/);
 });
 
-test("root layout synchronizes the authenticated internal user id to Sentry", () => {
+test("root layout clears Sentry user context on authentication changes", () => {
   const layout = fs.readFileSync(
     path.join(process.cwd(), "app/_layout.tsx"),
     "utf8",

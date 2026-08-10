@@ -102,15 +102,17 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
   }
 }
 
-/** Associates events with an internal account id only; clears it on logout. */
+/**
+ * Sentry is a third party, so never associate an event with our backend account
+ * identifier. Clearing the SDK user also handles account switches safely.
+ */
 export function setSentryUserId(
-  userId: string | null | undefined,
+  _userId: string | null | undefined,
   client: Pick<typeof Sentry, 'setUser'> = Sentry,
 ): void {
   if (!sentryInitialized && client === Sentry) return;
   try {
-    const normalized = readTrimmed(userId);
-    client.setUser(normalized ? { id: normalized } : null);
+    client.setUser(null);
   } catch {
     // Observability must never change auth/session behavior.
   }
@@ -218,6 +220,26 @@ const SAFE_EVENT_TAG_KEYS = new Set([
   'component',
   'operation',
   'kind',
+]);
+const SAFE_DIAGNOSTIC_DETAIL_KEYS = new Set([
+  'circleId',
+  'conversationID',
+  'notificationId',
+  'targetMsgID',
+  'requestIdentifier',
+  'source',
+  'stage',
+  'reason',
+  'platform',
+  'selectedCount',
+  'succeeded',
+  'failed',
+  'total',
+  'loaded',
+  'limit',
+  'fetched',
+  'inserted',
+  'page',
 ]);
 
 function sanitizeStringForSentry(value: string): string {
@@ -364,6 +386,47 @@ function sanitizeEventTags(value: unknown): Record<string, unknown> | undefined 
   return Object.keys(safe).length > 0 ? safe : undefined;
 }
 
+function sanitizeClientDiagnostics(value: unknown): unknown[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+
+  const safe = value.slice(-20).flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return [];
+    const source = entry as Record<string, unknown>;
+    if (
+      typeof source.event !== 'string' ||
+      !/^[A-Za-z][A-Za-z0-9_.:-]{0,63}$/.test(source.event)
+    ) {
+      return [];
+    }
+
+    const details: Record<string, unknown> = {};
+    if (source.details && typeof source.details === 'object') {
+      for (const key of SAFE_DIAGNOSTIC_DETAIL_KEYS) {
+        const child = (source.details as Record<string, unknown>)[key];
+        if (
+          child == null ||
+          typeof child === 'string' ||
+          typeof child === 'number' ||
+          typeof child === 'boolean'
+        ) {
+          if (child !== undefined) details[key] = sanitizeContextForSentry(child);
+        }
+      }
+    }
+    return [{ event: source.event, details }];
+  });
+  return safe.length > 0 ? safe : undefined;
+}
+
+function sanitizeEventExtra(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const source = value as Record<string, unknown>;
+  const safe = sanitizeReportContext(source);
+  const clientDiagnostics = sanitizeClientDiagnostics(source.clientDiagnostics);
+  if (clientDiagnostics) safe.clientDiagnostics = clientDiagnostics;
+  return Object.keys(safe).length > 0 ? safe : undefined;
+}
+
 function sanitizeAutomaticBaseEvent(event: Event): Event {
   if (!event || typeof event !== 'object') return event;
   const source = event as unknown as Record<string, unknown>;
@@ -392,10 +455,8 @@ function sanitizeAutomaticBaseEvent(event: Event): Event {
   if (threads) safe.threads = threads;
   const tags = sanitizeEventTags(source.tags);
   if (tags) safe.tags = tags;
-  if (source.user && typeof source.user === 'object') {
-    const id = (source.user as Record<string, unknown>).id;
-    if (typeof id === 'string' && id.trim()) safe.user = { id: id.trim() };
-  }
+  const extra = sanitizeEventExtra(source.extra);
+  if (extra) safe.extra = extra;
   if (Array.isArray(source.fingerprint)) {
     safe.fingerprint = source.fingerprint.map((part) =>
       sanitizeStringForSentry(String(part)),
