@@ -2792,6 +2792,7 @@
     "CONVGROUP_NOT_FOUND": "Group not found",
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "Conversation not found",
     "CHAT_CONVERSATION_NOT_FOUND": "Conversation not found",
+    "CHAT_MEMBER_DIRECTORY_FORBIDDEN": "Only the circle owner and admins can view the member directory",
     "CHAT_NOT_MEMBER": "You are not a member of this conversation",
     "CHAT_PEER_NOT_FOUND": "This user is unavailable",
     "CHAT_SELF_CONVERSATION": "You cannot start a chat with yourself",

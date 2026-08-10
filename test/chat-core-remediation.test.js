@@ -517,3 +517,23 @@ test('group typing is actually rendered, not just broadcast', () => {
     assert.ok(dict?.chat?.detail?.statusTypingGroup, `${locale} statusTypingGroup`);
   }
 });
+
+test('the mutation cursor is a composite (time, id) keyset', () => {
+  // DateTime 只有毫秒精度:一批同毫秒的变更跨在页边界上时,只带时间戳的游标
+  // 配 `> from` 会把剩下那些同刻的行永久跳过。
+  const protocol = read('src/chat-core/protocol.ts');
+  assert.match(protocol, /nextSinceId/);
+  const manager = read('src/chat-core/socket-manager.ts');
+  assert.match(manager, /result\.nextSinceId/);
+});
+
+test('an expired mutation cursor drops the cache instead of faking a catch-up', () => {
+  const manager = read('src/chat-core/socket-manager.ts');
+  assert.match(manager, /resetRequired/);
+  assert.match(manager, /dropAllLocalMessages/);
+  const db = read('src/chat-core/local-db.ts');
+  assert.match(db, /export async function dropAllLocalMessages/);
+  // web 平台桩要同步导出面,否则 expo export --platform web 会红。
+  const web = read('src/chat-core/local-db.web.ts');
+  assert.match(web, /dropAllLocalMessages/);
+});
