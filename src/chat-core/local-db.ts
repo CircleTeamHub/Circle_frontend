@@ -612,7 +612,7 @@ export async function pendingReadDelete(conversationId: string): Promise<void> {
 }
 
 export async function pendingReadsList(): Promise<
-  Array<{ conversationId: string; height: number }>
+  { conversationId: string; height: number }[]
 > {
   const current = requireDb();
   if (!current) return [];

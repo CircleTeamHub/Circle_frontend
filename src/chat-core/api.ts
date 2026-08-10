@@ -303,7 +303,7 @@ export function fetchMessageReaders(
   conversationId: string,
   messageId: string,
 ): Promise<{
-  readers: Array<{ id: string; nickname: string; avatarUrl: string | null }>;
+  readers: { id: string; nickname: string; avatarUrl: string | null }[];
   total: number;
 }> {
   return apiClient(

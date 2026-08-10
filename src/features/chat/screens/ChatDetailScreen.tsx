@@ -92,7 +92,7 @@ import {
   createChatMessageMapCache,
   mapChatMessageDtosToUI,
 } from '@/chat-core/message-mappers';
-import { fetchChatMembers } from '@/chat-core/api';
+import { fetchChatMembers, fetchMessageReaders } from '@/chat-core/api';
 import {
   queryChatPresence,
   revokeChatMessage,
@@ -100,7 +100,6 @@ import {
   sendChatReaction,
 } from '@/chat-core/socket-manager';
 import { CHAT_REACTION_EMOJIS } from '@/chat-core/protocol';
-import { fetchMessageReaders } from '@/chat-core/api';
 import { useChatStore } from '@/chat-core/store';
 import { useAuthStore } from '@/stores/authStore';
 import { type FriendProfile } from '@/services/api/friends';
@@ -1381,6 +1380,7 @@ export default function ChatDetailScreen() {
     actionMenu,
     canEditMessage,
     canRevokeMessage,
+    conversationID,
     handleOpenReactionPicker,
     handleShowReaders,
     handleStartEditMessage,
@@ -2909,6 +2909,7 @@ export default function ChatDetailScreen() {
     conversationID,
     conversationType,
     draft,
+    editingMessageId,
     isGroupChat,
     isPreviewMode,
     mentionTargets,
