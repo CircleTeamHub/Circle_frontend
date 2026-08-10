@@ -535,9 +535,12 @@ function openRealtimeSocket(normalizedToken: string) {
       nextSocket.send(JSON.stringify({ type: 'auth', token: normalizedToken }));
     } catch (err) {
       reportRealtimeFailureOnce('authFrameSend');
+      useTabBadgeStore.getState().setRealtimeConnected(false);
+      nextSocket.close();
       if (typeof __DEV__ !== 'undefined' && __DEV__) {
         console.warn('[realtime] failed to send auth frame', err);
       }
+      return;
     }
     useTabBadgeStore.getState().setRealtimeConnected(true);
     void recoverTabBadgeSnapshot({ force: shouldForceRecovery });
