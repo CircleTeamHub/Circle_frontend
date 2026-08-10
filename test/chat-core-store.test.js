@@ -677,3 +677,24 @@ test('evictMessagesBelow drops the window without writing deletion tombstones', 
     2,
   );
 });
+
+test('a membership teardown clears the cache without leaving a watermark', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setConversations([conversation({ id: 'conv-1' })]);
+  store.ingestMessages('conv-1', [msg({ id: 'm1', height: 7 })]);
+
+  // 被移出会话:只清这一份缓存。留了水位的话,以后重新入群时这段历史
+  // 会被入库口一直挡在外面。
+  useChatStore.getState().clearConversationLocal('conv-1', null);
+  assert.equal(
+    useChatStore.getState().clearedBeforeHeightByConversation['conv-1'] ?? 0,
+    0,
+  );
+
+  useChatStore.getState().ingestMessages('conv-1', [msg({ id: 'm1', height: 7 })]);
+  assert.equal(
+    useChatStore.getState().messagesByConversation['conv-1'].length,
+    1,
+  );
+});

@@ -438,7 +438,9 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         // 输入框和成员入口原封不动留在屏幕上 —— 已经被移出的人还能继续翻聊天
         // 记录、继续按发送(服务端会拒,但界面上看不出自己已经不在群里)。
         if (wasActive) {
-          store.clearConversationLocal(payload.conversationId);
+          // null = 只清缓存、不留清空水位:留了的话,以后重新入群时这段
+          // 历史会被 ingestMessages 一直挡在外面。
+          store.clearConversationLocal(payload.conversationId, null);
           store.setActiveConversationId(null);
         }
         // 正看着这个群被移出才提示;left 是本人在别处的主动动作,静默收走即可。

@@ -147,11 +147,16 @@ interface ChatStoreState {
   ) => void;
   /**
    * G-14:清空聊天记录的本地落地(时间线/预览/未读一次清干净)。
-   * 传服务端回执里的 clearedBeforeHeight,水位之下的消息此后一律不再入库。
+   *
+   * clearedBeforeHeight:
+   * - number  服务端回执里的权威水位;
+   * - 省略    离线清空,退而用本地已知最高 height;
+   * - null    **不留水位**,只清当前这份缓存。被移出会话的收尾用这个 ——
+   *           留了水位的话,以后重新入群时那段历史会被入库口一直挡在外面。
    */
   clearConversationLocal: (
     conversationId: string,
-    clearedBeforeHeight?: number,
+    clearedBeforeHeight?: number | null,
   ) => void;
   /**
    * 每会话的本地清空水位。
@@ -771,14 +776,20 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       clearedBeforeHeightByConversation,
     } = get();
     // 服务端没回水位时(离线清空)退而用本地已知最高 height:总比 0 强。
-    const localMax = (messagesByConversation[conversationId] ?? []).reduce(
-      (max, m) => (m.height > max ? m.height : max),
-      0,
-    );
+    // 显式传 null = 不留水位(见类型上的说明)。
+    const localMax =
+      clearedBeforeHeight === null
+        ? 0
+        : (messagesByConversation[conversationId] ?? []).reduce(
+            (max, m) => (m.height > max ? m.height : max),
+            0,
+          );
     const floor = Math.max(
       clearedBeforeHeight ?? 0,
       localMax,
-      clearedBeforeHeightByConversation[conversationId] ?? 0,
+      clearedBeforeHeight === null
+        ? 0
+        : (clearedBeforeHeightByConversation[conversationId] ?? 0),
     );
     const index = conversations.findIndex((c) => c.id === conversationId);
     const nextConversation =
