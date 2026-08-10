@@ -39,6 +39,7 @@ function loadRealtimeHarness() {
     }
 
     send(data) {
+      if (this.sendError) throw this.sendError;
       this.sent.push(data);
     }
 
@@ -53,6 +54,7 @@ function loadRealtimeHarness() {
 
   const realtimeConnected = [];
   const clearedSessions = [];
+  const sentryReports = [];
   const stubStore = (state) => ({ getState: () => state });
 
   const context = {
@@ -146,6 +148,11 @@ function loadRealtimeHarness() {
           return {
             useWalletRealtimeStore: stubStore({ setRealtimeBalance: () => {} }),
           };
+        case '@/observability/sentry':
+          return {
+            reportError: (error, reportContext) =>
+              sentryReports.push({ error, context: reportContext }),
+          };
         default:
           return require(request);
       }
@@ -167,6 +174,7 @@ function loadRealtimeHarness() {
     sockets,
     realtimeConnected,
     clearedSessions,
+    sentryReports,
     latestSocket: () => sockets[sockets.length - 1],
     pendingDelay: () => pendingTimer()?.[1].delay ?? null,
     hasPendingReconnect: () => pendingTimer() !== null,
@@ -181,6 +189,61 @@ function loadRealtimeHarness() {
     },
   };
 }
+
+test('malformed realtime reporting resets only when the session lifecycle ends', () => {
+  const harness = loadRealtimeHarness();
+  harness.connectRealtime('token-a');
+  openLatestSocket(harness);
+  harness.latestSocket().onmessage({ data: 'private malformed payload' });
+  harness.latestSocket().onmessage({ data: 'another malformed payload' });
+  assert.equal(harness.sentryReports.length, 1);
+
+  harness.disconnectRealtime();
+  harness.connectRealtime('token-b');
+  openLatestSocket(harness);
+  harness.latestSocket().onmessage({ data: 'new-session malformed payload' });
+  assert.equal(harness.sentryReports.length, 2);
+  assert.deepEqual(
+    { ...harness.sentryReports[1].context },
+    { operation: 'realtime', kind: 'malformedPayload' },
+  );
+});
+
+test('schema-invalid known realtime frames are reported as malformed payloads', () => {
+  const harness = loadRealtimeHarness();
+  harness.connectRealtime('token-a');
+  openLatestSocket(harness);
+
+  harness.latestSocket().onmessage({
+    data: JSON.stringify({ type: 'call.invite', payload: {} }),
+  });
+  harness.latestSocket().onmessage({
+    data: JSON.stringify({ type: 'call.invite', payload: {} }),
+  });
+
+  assert.equal(harness.sentryReports.length, 1);
+  assert.deepEqual(
+    { ...harness.sentryReports[0].context },
+    { operation: 'realtime', kind: 'malformedPayload' },
+  );
+});
+
+test('an auth-frame send failure never marks the socket connected and still retries after close', () => {
+  const harness = loadRealtimeHarness();
+  harness.connectRealtime('token-a');
+  harness.latestSocket().sendError = new Error('send failed');
+
+  openLatestSocket(harness);
+
+  assert.equal(harness.realtimeConnected.includes(true), false);
+  assert.deepEqual(
+    { ...harness.sentryReports[0].context },
+    { operation: 'realtime', kind: 'authFrameSend' },
+  );
+
+  failLatestSocket(harness);
+  assert.equal(harness.hasPendingReconnect(), true);
+});
 
 // 让最新的 socket 以「连不上」收场：网关拒绝 / 后端重启 / 断网都走 onclose。
 function failLatestSocket(harness) {
@@ -227,6 +290,40 @@ test('realtime keeps rescheduling reconnects far past the old 10-attempt cap', (
     harness.runPendingReconnect();
     assert.equal(harness.sockets.length, attempt + 1);
   }
+});
+
+test('realtime reports one outage at the third consecutive failure and resets after authentication', () => {
+  const harness = loadRealtimeHarness();
+  harness.connectRealtime('token-a');
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    failLatestSocket(harness);
+    harness.runPendingReconnect();
+  }
+  assert.equal(harness.sentryReports.length, 0);
+
+  failLatestSocket(harness);
+  assert.equal(harness.sentryReports.length, 1);
+  assert.deepEqual(
+    { ...harness.sentryReports[0].context },
+    {
+      operation: 'realtime',
+      kind: 'consecutiveConnectionFailures',
+      attempts: 3,
+    },
+  );
+  harness.runPendingReconnect();
+
+  failLatestSocket(harness);
+  harness.runPendingReconnect();
+  assert.equal(harness.sentryReports.length, 1, 'one alert per outage');
+
+  deliverSnapshot(harness);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    failLatestSocket(harness);
+    if (attempt < 2) harness.runPendingReconnect();
+  }
+  assert.equal(harness.sentryReports.length, 2, 'a recovered session can alert again');
 });
 
 test('reconnect backoff escalates and then clamps at RECONNECT_MAX_MS', () => {

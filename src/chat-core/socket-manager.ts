@@ -1,5 +1,6 @@
 import { io, type Socket } from 'socket.io-client';
 import { CHAT_WS_URL } from '@/constants/config';
+import { reportError } from '@/observability/sentry';
 import {
   backfillConversationSince,
   fetchChatMutationsSince,
@@ -39,6 +40,7 @@ import { useChatStore } from './store';
 const SEND_ACK_TIMEOUT_MS = 10_000;
 const READ_ACK_TIMEOUT_MS = 8_000;
 const TYPING_THROTTLE_MS = 2_000;
+const CONNECT_ERROR_REPORT_THRESHOLD = 3;
 
 let socket: Socket | null = null;
 let sessionGen = 0;
@@ -53,6 +55,8 @@ const pendingReads = new Map<string, number>();
 let flushingReads = false;
 let readFlushRequested = false;
 const typingSentAt = new Map<string, number>();
+let consecutiveConnectErrors = 0;
+let reportedCurrentConnectOutage = false;
 
 /** ack {ok:false} 的类型化错误：code = circle_be ChatErrorCode 字符串码。 */
 export class ChatSendError extends Error {
@@ -94,6 +98,8 @@ export function connectChat(token: string, userId: string): void {
   void hydrateFromLocalDb(userId);
 
   const gen = sessionGen;
+  consecutiveConnectErrors = 0;
+  reportedCurrentConnectOutage = false;
   store.setConnecting(true);
   store.setCurrentUserId(userId);
 
@@ -106,6 +112,8 @@ export function connectChat(token: string, userId: string): void {
 
   next.on('connect', () => {
     if (gen !== sessionGen) return;
+    consecutiveConnectErrors = 0;
+    reportedCurrentConnectOutage = false;
     // 首连不对账(冷启动全量拉取由页面 focus 负责),重连才补断线窗口。
     // 判据必须跨 socket 实例:access token 轮换走的是 suspendChat + connectChat,
     // 换的是**一条新 socket**。判据挂在 socket 上的话,这条新连接永远算首连,
@@ -127,6 +135,18 @@ export function connectChat(token: string, userId: string): void {
   next.on('connect_error', (err) => {
     if (gen !== sessionGen) return;
     console.warn('[chat] connect error', err?.message ?? err);
+    consecutiveConnectErrors += 1;
+    if (
+      consecutiveConnectErrors >= CONNECT_ERROR_REPORT_THRESHOLD &&
+      !reportedCurrentConnectOutage
+    ) {
+      reportedCurrentConnectOutage = true;
+      reportError(new Error('chat connection failed repeatedly'), {
+        operation: 'chatConnect',
+        kind: 'consecutiveFailures',
+        attempts: consecutiveConnectErrors,
+      });
+    }
     const state = useChatStore.getState();
     state.setConnecting(false);
     state.setError(err?.message ?? 'connect_error');

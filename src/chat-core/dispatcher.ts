@@ -14,6 +14,7 @@ import {
   type ChatRevokeBroadcast,
 } from './protocol';
 import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
+import { reportError } from '@/observability/sentry';
 import { allowPeerMediaUrl } from '@/services/api/utils';
 import i18n from '@/i18n';
 import { loadChatConversations } from './api';
@@ -33,6 +34,18 @@ import { useChatStore } from './store';
 /** 会话补拉的合并窗口:消息洪泛时不要每条都打一次全量列表。 */
 const CONVERSATION_BACKFILL_DEBOUNCE_MS = 800;
 let backfillTimer: ReturnType<typeof setTimeout> | null = null;
+const reportedChatEventFailures = new Set<string>();
+
+function reportChatEventFailureOnce(operation: string, kind: string): void {
+  const signature = `${operation}:${kind}`;
+  if (reportedChatEventFailures.has(signature)) return;
+  reportedChatEventFailures.add(signature);
+  reportError(new Error('chat event failure'), {
+    component: 'chatDispatcher',
+    operation,
+    kind,
+  });
+}
 
 /**
  * 等会话元信息的横幅候选(conversationId → 该会话最新一条)。
@@ -132,6 +145,7 @@ function scheduleConversationBackfill(isLive: () => boolean): void {
 export function cancelConversationBackfill(): void {
   pendingBanners.clear();
   removedConversations.clear();
+  reportedChatEventFailures.clear();
   if (backfillTimer === null) return;
   clearTimeout(backfillTimer);
   backfillTimer = null;
@@ -200,6 +214,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       // 之外了 —— 一条畸形广播就能让消息页每次进都白屏,且它还落了库。
       if (!isChatMessageDto(payload)) {
         console.warn('[chat] dropped malformed message payload');
+        reportChatEventFailureOnce('incomingMessage', 'malformedPayload');
         return;
       }
       // 本端删过的消息重复投递时,整条都要在这里丢掉。
@@ -251,6 +266,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       }
     } catch (err) {
       console.warn('[chat] message handler failed', err);
+      reportChatEventFailureOnce('incomingMessage', 'handlerFailure');
     }
   });
 
@@ -267,6 +283,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         payload.height < 0
       ) {
         console.warn('[chat] dropped malformed read payload');
+        reportChatEventFailureOnce('readReceipt', 'malformedPayload');
         return;
       }
       useChatStore
@@ -274,6 +291,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         .applyRead(payload.conversationId, payload.userId, payload.height);
     } catch (err) {
       console.warn('[chat] read handler failed', err);
+      reportChatEventFailureOnce('readReceipt', 'handlerFailure');
     }
   });
 
@@ -285,11 +303,13 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         typeof payload.userId !== 'string' ||
         typeof payload.online !== 'boolean'
       ) {
+        reportChatEventFailureOnce('presence', 'malformedPayload');
         return;
       }
       useChatStore.getState().applyPresence(payload.userId, payload.online);
     } catch (err) {
       console.warn('[chat] presence handler failed', err);
+      reportChatEventFailureOnce('presence', 'handlerFailure');
     }
   });
 

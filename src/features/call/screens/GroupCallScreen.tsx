@@ -17,6 +17,7 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useCallStore } from '@/features/call/store/use-call-store';
 import { leaveActiveCall } from '@/features/call/call-session-teardown';
 import { ensureLiveKitGlobals } from '@/utils/livekit-globals';
+import { reportError } from '@/observability/sentry';
 
 // useTracks 返回的相机轨引用（只声明用到的字段）。直接透传给同模块的
 // VideoTrack，运行时是 @livekit/components-react 的真实 TrackReference。
@@ -91,6 +92,10 @@ function loadLiveKitModule() {
     })
     .catch((error) => {
       cachedLiveKitModule = null;
+      reportError(new Error('LiveKit native module failed to load'), {
+        operation: 'livekit',
+        kind: 'moduleLoad',
+      });
       if (typeof __DEV__ !== 'undefined' && __DEV__) {
         console.warn('[call] LiveKit native module unavailable', error);
       }
@@ -507,6 +512,7 @@ export default function GroupCallScreen() {
   const [retrying, setRetrying] = useState(false);
   const [roomVersion, setRoomVersion] = useState(0);
   const mountedRef = useRef(true);
+  const reportedRoomErrorRef = useRef(false);
   const [liveKitModule, setLiveKitModule] = useState<
     LiveKitModule | null | undefined
   >(() => (NativeModules.WebRTCModule ? cachedLiveKitModule : null));
@@ -538,6 +544,7 @@ export default function GroupCallScreen() {
     try {
       const response = await requestJoinToken(activeCall.id);
       if (!mountedRef.current) return;
+      reportedRoomErrorRef.current = false;
       setLiveKitCredentials(response.livekit);
       setConnectError(null);
       setRoomVersion((current) => current + 1);
@@ -625,6 +632,13 @@ export default function GroupCallScreen() {
         // MAX_VIDEO_TILES 是第二道闸。
         options={{ adaptiveStream: true, dynacast: true }}
         onError={(error) => {
+          if (!reportedRoomErrorRef.current) {
+            reportedRoomErrorRef.current = true;
+            reportError(error, {
+              operation: 'livekit',
+              kind: 'roomConnection',
+            });
+          }
           if (typeof __DEV__ !== 'undefined' && __DEV__) {
             console.warn('[call] LiveKit room error', error);
           }

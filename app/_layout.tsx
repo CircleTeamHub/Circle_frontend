@@ -43,6 +43,7 @@ import {
   initSentry,
   wrapWithSentry,
   captureSentryTestError,
+  setSentryUserId,
 } from '@/observability/sentry';
 
 // 将 expo-router 内置的 ErrorBoundary 重新导出，使其在根路由层生效（捕获页面级报错）
@@ -236,6 +237,7 @@ function AuthRouteGuard({ children }: { children: ReactNode }) {
 // RootLayout：应用真正的根组件
 // 职责：迁移旧版 AsyncStorage 数据到 MMKV → 加载字体 → 隐藏启动屏 → 挂载主题 Provider → 渲染路由结构
 function RootLayout() {
+  const sentryUserId = useAuthStore((state) => state.user?.id ?? null);
   // 加载自定义字体，loaded 为 true 时字体就绪，error 表示加载失败
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
@@ -251,6 +253,10 @@ function RootLayout() {
   const [migrated, setMigrated] = useState(false);
   const [nativeSplashHidden, setNativeSplashHidden] = useState(false);
   const [launchRevealDone, setLaunchRevealDone] = useState(false);
+  useEffect(() => {
+    setSentryUserId(sentryUserId);
+  }, [sentryUserId]);
+
   useEffect(() => {
     let cancelled = false;
 

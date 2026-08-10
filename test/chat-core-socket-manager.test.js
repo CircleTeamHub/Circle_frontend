@@ -105,6 +105,7 @@ function fakeSocketFactory() {
 
 function loadManager() {
   const { io, socket, captured } = fakeSocketFactory();
+  const reports = [];
   const storeModule = (() => {
     const state = {
       connected: false,
@@ -190,6 +191,9 @@ function loadManager() {
     },
     './protocol': protocol,
     './store': storeModule,
+    '@/observability/sentry': {
+      reportError: (error, context) => reports.push({ error, context }),
+    },
   });
   return {
     manager,
@@ -198,6 +202,7 @@ function loadManager() {
     store: storeModule.state,
     bound,
     apiCalls,
+    reports,
   };
 }
 
@@ -431,6 +436,30 @@ test('reconnecting as the same user on a live socket stays a no-op', () => {
   manager.connectChat('jwt', 'u1');
   assert.equal(store.calls.length, callsBefore);
   assert.ok(!store.calls.some(([name]) => name === 'reset'));
+});
+
+test('reports one sanitized chat connection issue after three consecutive failures', () => {
+  const { manager, socket, reports } = loadManager();
+  manager.connectChat('jwt-secret', 'u1');
+
+  socket.fire('connect_error', new Error('failed with jwt-secret'));
+  socket.fire('connect_error', new Error('failed with jwt-secret'));
+  assert.equal(reports.length, 0);
+
+  socket.fire('connect_error', new Error('failed with jwt-secret'));
+  socket.fire('connect_error', new Error('failed with jwt-secret'));
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0].error.message, 'chat connection failed repeatedly');
+  assert.equal(reports[0].context.operation, 'chatConnect');
+  assert.equal(reports[0].context.kind, 'consecutiveFailures');
+  assert.equal(reports[0].context.attempts, 3);
+  assert.doesNotMatch(JSON.stringify(reports), /jwt-secret/);
+
+  socket.fire('connect');
+  socket.fire('connect_error', new Error('new outage'));
+  socket.fire('connect_error', new Error('new outage'));
+  socket.fire('connect_error', new Error('new outage'));
+  assert.equal(reports.length, 2, 'a recovered connection starts a new outage window');
 });
 
 test('typing is throttled locally per conversation', () => {

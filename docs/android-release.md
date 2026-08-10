@@ -24,6 +24,11 @@ Configure metadata and signing for the private build without putting secret valu
   and share covers all come back blank while REST keeps working. Only the listed origins are
   trusted; the allowlist still blocks arbitrary third-party hosts (tracking beacons).
 - Repository variable `ANDROID_CERT_SHA256`: expected signing certificate SHA-256 fingerprint.
+- Repository variable `EXPO_PUBLIC_SENTRY_DSN`: production Sentry DSN compiled into the app.
+  It is not a secret, but must point to the intended production project.
+- Repository variable `SENTRY_ORG`: Sentry organization slug used only by the release build.
+- Repository variable `SENTRY_PROJECT`: Sentry project slug used only by the release build.
+- Repository secret `SENTRY_AUTH_TOKEN`: least-privilege token that can upload release source maps.
 - Repository secret `ANDROID_KEYSTORE_BASE64`: base64-encoded release keystore.
 - Repository secret `ANDROID_KEYSTORE_PASSWORD`: release keystore password.
 - Repository secret `ANDROID_KEY_ALIAS`: signing key alias.
@@ -32,6 +37,19 @@ Configure metadata and signing for the private build without putting secret valu
 `RELEASES_TOKEN` must not be repository-scoped. It is a promotion credential and, if promotion becomes supportable, belongs only to the protected `android-release-publish` environment. A Discord webhook is optional; notification is best-effort.
 
 Keep an encrypted, access-controlled, tested keystore backup separate from GitHub. Losing the signing keystore or its credentials can prevent safe upgrades; never regenerate it casually for an existing application identity.
+
+The signed release job fails closed when any Sentry value above is missing. It uses
+`windnote@<release-tag>` as both the build-time and runtime Sentry release, and the Android
+`versionCode` as both build-time and runtime `dist`. The Sentry Gradle task must complete during
+`assembleRelease`; an upload failure fails the build, so a published binary cannot silently lose
+symbolication. Do not print the auth token or copy it into Expo public variables.
+
+Source-map upload policy:
+
+- tagged signed release: required and fail-closed;
+- nightly validation build: disabled, because it is not distributable and would pollute releases;
+- local debug/release build: disabled unless a developer deliberately supplies the complete
+  Sentry upload configuration for a controlled verification.
 
 ## Current verified blocker
 
@@ -87,7 +105,7 @@ The decision must address notice, source-offer, attribution, modification-disclo
 
 It exists because nothing else exercises that path before a tag. `ci.yml` stops at typecheck, lint, tests, and `expo export --platform web`; `/android` is gitignored, so the native project only comes into existence when `expo prebuild` regenerates it from `app.config.js` and its config plugins. Without this workflow, a bumped native dependency, a broken config plugin, or an AGP/Gradle incompatibility first surfaces during a release, when the only remedy is to abandon the tag.
 
-The daily build publishes nothing. It uploads no artifact, creates no release, and writes nothing to R2. Its APK is signed with a throwaway key generated on the runner and deleted with it, because `plugins/with-android-release-signing.js` fails the Gradle configuration phase when signing material is absent — production signing material is never decoded by this workflow. A separate `signing_config` job runs `validate-android-release.js signing` so a rotated, deleted, or malformed signing credential surfaces here rather than during a release.
+The daily build publishes nothing. It uploads no artifact, creates no release, writes nothing to R2, and does not upload Sentry source maps. Its APK is signed with a throwaway key generated on the runner and deleted with it, because `plugins/with-android-release-signing.js` fails the Gradle configuration phase when signing material is absent — production signing material is never decoded by this workflow. A separate `signing_config` job runs `validate-android-release.js signing` so a rotated, deleted, or malformed signing credential surfaces here rather than during a release.
 
 Before building, it runs `validate-android-release.js build-env` — the same env contract the tag-time preflight enforces via `metadata`, minus the `RELEASE_TAG` checks. Without it a deleted or malformed repository variable would let the build compile the `imAdmin` support fallback with empty API URLs and still report success.
 
@@ -134,6 +152,9 @@ For the exact candidate:
 
 - confirm the checked-out tag and reported commit equal the intended build SHA on `main`;
 - compare the `apksigner` certificate fingerprint with repository variable `ANDROID_CERT_SHA256`;
+- confirm the build log completed the Sentry source-map upload and that Sentry shows release
+  `windnote@<release-tag>` with `dist=<android versionCode>`; do not expose the auth token while
+  collecting this evidence;
 - download the private artifact and validate the artifact checksum with `sha256sum -c windnote.apk.sha256`;
 - when legally permitted, perform an APK install on a clean supported device and verify launch, authentication, API calls, OpenIM WebSocket behavior, and backend connectivity against the intended production HTTPS/WSS endpoints;
 - if public promotion is enabled in the future, confirm the public `windnote.apk` digest equals the private artifact digest and preserve the evidence URL and reviewer decision with the release record.

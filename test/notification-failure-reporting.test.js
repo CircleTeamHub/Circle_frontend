@@ -308,7 +308,7 @@ test('the real sentry sink turns the reported context into a stable fingerprint'
   assert.equal(context.extra.platform, 'android');
 });
 
-test('the real sentry sink redacts secrets a caller puts in the context', () => {
+test('the real sentry sink drops non-allowlisted secrets from caller context', () => {
   const captured = [];
   const { reportError } = loadTsModule('src/observability/sentry.ts', {
     requireShim: (request) => {
@@ -345,8 +345,8 @@ test('the real sentry sink redacts secrets a caller puts in the context', () => 
   const serialized = JSON.stringify(captured[0].context);
   assert.doesNotMatch(serialized, /ExponentPushToken\[secret\]/);
   assert.doesNotMatch(serialized, /e1f9-SECRET-VALUE/);
-  assert.equal(captured[0].context.extra.token, '[REDACTED]');
-  assert.equal(captured[0].context.extra.revocationSecret, '[REDACTED]');
+  assert.equal(captured[0].context.extra.token, undefined);
+  assert.equal(captured[0].context.extra.revocationSecret, undefined);
 });
 
 test('dev diagnostics keep firing for failures Sentry deliberately skips', () => {
