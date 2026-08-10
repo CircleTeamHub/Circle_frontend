@@ -132,10 +132,12 @@ jobs:
           export SENTRY_DIST="$version_code"
           export EXPO_PUBLIC_SENTRY_DIST="$version_code"
           node .github/scripts/validate-android-release.js sentry-upload
-          echo "SENTRY_RELEASE=$release" >> "$GITHUB_ENV"
-          echo "EXPO_PUBLIC_SENTRY_RELEASE=$release" >> "$GITHUB_ENV"
-          echo "SENTRY_DIST=$version_code" >> "$GITHUB_ENV"
-          echo "EXPO_PUBLIC_SENTRY_DIST=$version_code" >> "$GITHUB_ENV"
+          {
+            echo "SENTRY_RELEASE=$release"
+            echo "EXPO_PUBLIC_SENTRY_RELEASE=$release"
+            echo "SENTRY_DIST=$version_code"
+            echo "EXPO_PUBLIC_SENTRY_DIST=$version_code"
+          } >> "$GITHUB_ENV"
 
       - name: Generate Android project
         run: npx expo prebuild --platform android --clean --no-install
