@@ -7,6 +7,7 @@ import {
   type ChatMessageDto,
   type ChatPresenceBroadcast,
   type ChatReadBroadcast,
+  type ChatTypingBroadcast,
   type ChatDeliveredBroadcast,
   type ChatEditBroadcast,
   type ChatReactionBroadcast,
@@ -256,6 +257,26 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
     }
   });
 
+  socket.on(CHAT_EVENTS.typing, (payload: ChatTypingBroadcast) => {
+    if (!isLive()) return;
+    try {
+      if (
+        !payload ||
+        typeof payload.conversationId !== 'string' ||
+        typeof payload.userId !== 'string'
+      ) {
+        return;
+      }
+      const store = useChatStore.getState();
+      // 服务端 except 的只是发送那只 socket:自己另一台设备的 typing
+      // 仍会广播过来,不该给自己看「对方正在输入」。
+      if (payload.userId === store.currentUserId) return;
+      store.applyTyping(payload.conversationId);
+    } catch (err) {
+      console.warn('[chat] typing handler failed', err);
+    }
+  });
+
   socket.on(CHAT_EVENTS.delivered, (payload: ChatDeliveredBroadcast) => {
     if (!isLive()) return;
     try {
@@ -418,6 +439,8 @@ function enqueueForegroundBanner(
     (c) => c.id === message.conversationId,
   );
   if (!conversation) return 'needs-conversation';
+  // 免打扰的会话不弹端内横幅(与推送静音同一语义;未读数照常累计)。
+  if (conversation.muted) return 'suppressed';
 
   const isGroup = conversation.type === 'GROUP';
   const title = isGroup

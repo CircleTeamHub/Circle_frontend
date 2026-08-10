@@ -7,7 +7,7 @@ export type MentionTarget = {
   isAll?: boolean;
 };
 
-// OpenIM uses this sentinel inside atUserIDList to represent @all.
+// 「@所有人」候选的本地哨兵 id(仅前端内部使用;上行协议是 content.atAll)。
 export const AT_ALL_USER_ID = 'AtAllTag';
 
 function escapeRegExp(value: string) {
@@ -52,27 +52,6 @@ export function filterMentionCandidates(
   });
 }
 
-export function buildAtMessagePayload(text: string, mentions: MentionTarget[]) {
-  const seen = new Set<string>();
-  const atUsersInfo = mentions.flatMap((mention) => {
-    if (!mention.userID || seen.has(mention.userID)) return [];
-    seen.add(mention.userID);
-    if (mention.isAll || mention.userID === AT_ALL_USER_ID) return [];
-    return [{ userID: mention.userID, nickname: mention.nickname }];
-  });
-
-  return {
-    text,
-    atUserList: Array.from(
-      new Set(
-        mentions.flatMap((mention) =>
-          mention.userID ? [mention.userID] : [],
-        ),
-      ),
-    ),
-    atUsersInfo,
-  };
-}
 
 // `t` is passed in (not a module-level i18n import) so this util stays pure and its
 // isolated unit test doesn't have to boot the full i18n runtime. Matches note-format.ts.

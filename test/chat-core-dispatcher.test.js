@@ -83,6 +83,7 @@ function loadDispatcher(storeOverrides = {}) {
     alerts: [],
     revokes: [],
     deliveredReports: [],
+    typings: [],
     backfills: 0,
     ...storeOverrides,
   };
@@ -146,6 +147,7 @@ function loadDispatcher(storeOverrides = {}) {
       state.revokes.push({ conversationId, messageId, revokedBy });
     },
     applyDelivered: () => {},
+    applyTyping: (conversationId) => state.typings.push(conversationId),
     applyReaction: () => {},
     applyEdit: () => {},
   };
@@ -457,6 +459,28 @@ test('self messages and the open conversation never raise a banner', () => {
     }),
   );
   assert.equal(other.state.banners.length, 0);
+});
+
+test('chat:typing routes to applyTyping, skipping self and malformed payloads', () => {
+  const { socket, state } = loadDispatcher();
+  socket.emit('chat:typing', { conversationId: 'c1', userId: 'peer' });
+  assert.deepEqual(state.typings, ['c1']);
+  // 自己另一台设备的 typing 不显示。
+  socket.emit('chat:typing', { conversationId: 'c1', userId: 'me' });
+  // 畸形载荷整条丢弃。
+  for (const bad of [null, {}, { conversationId: 'c1' }, { conversationId: 1, userId: 'peer' }]) {
+    socket.emit('chat:typing', bad);
+  }
+  assert.equal(state.typings.length, 1);
+});
+
+test('muted conversations are stored but never banner', () => {
+  const { socket, state } = loadDispatcher({
+    conversations: [directConversation({ muted: true })],
+  });
+  socket.emit('chat:msg', dto({ conversationId: DIRECT_ID }));
+  assert.equal(state.ingested.length, 1, 'muted still stores the message');
+  assert.equal(state.banners.length, 0, 'muted must not banner');
 });
 
 test('a redelivered locally-deleted message never reaches the banner', () => {

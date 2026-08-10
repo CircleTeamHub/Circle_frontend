@@ -98,9 +98,11 @@ import {
   revokeChatMessage,
   sendChatEditMessage,
   sendChatReaction,
+  sendChatTyping,
 } from '@/chat-core/socket-manager';
 import { CHAT_REACTION_EMOJIS } from '@/chat-core/protocol';
 import { useChatStore } from '@/chat-core/store';
+import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
 import { useAuthStore } from '@/stores/authStore';
 import { type FriendProfile } from '@/services/api/friends';
 import type { NoteSummary } from '@/features/notes/types';
@@ -156,7 +158,6 @@ import {
   type MentionTarget,
 } from '@/features/chat/utils/chat-send-payloads';
 import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
-import { collapseDuplicateFriendAddedNotices } from '@/features/chat/utils/system-notice-dedupe';
 import { isChatImageTooLarge } from '@/features/chat/utils/chat-media-policy';
 import { uploadChatImageThumbnail } from '@/features/chat/utils/image-thumbnail';
 
@@ -750,6 +751,25 @@ export default function ChatDetailScreen() {
       conversationType === 'single' && sourceID ? sourceID : null,
     [conversationType, sourceID],
   );
+  // 输入状态开关(设置页早就有这两项,这里真正接上:关掉就不向对方上报)。
+  const typingSingle = useAppSettingsStore((state) => state.settings.singleTyping);
+  const typingGroup = useAppSettingsStore((state) => state.settings.groupTyping);
+  // 对端「正在输入」有效期;到期自动回落在线状态。
+  const typingUntil = useChatStore(
+    (state) => state.typingUntilByConversation[conversationID] ?? 0,
+  );
+  const [typingVisible, setTypingVisible] = useState(false);
+  useEffect(() => {
+    const remaining = typingUntil - Date.now();
+    if (remaining <= 0) {
+      setTypingVisible(false);
+      return;
+    }
+    setTypingVisible(true);
+    const timer = setTimeout(() => setTypingVisible(false), remaining);
+    return () => clearTimeout(timer);
+  }, [typingUntil]);
+
   // 只订阅对方这一个用户的在线状态切片(chat-core presence),
   // 其他用户上下线不触发本页重渲染。
   const peerOnlineStatus = useChatStore((state) =>
@@ -877,7 +897,7 @@ export default function ChatDetailScreen() {
       box,
       peerDeliveredHeight,
     );
-    return collapseDuplicateFriendAddedNotices(mapped);
+    return mapped;
   }, [currentUserID, conversationMessages, peerReadHeight, peerDeliveredHeight]);
   messagesLengthRef.current = messages.length;
 
@@ -1997,6 +2017,11 @@ export default function ChatDetailScreen() {
   const handleDraftChange = useCallback(
     (next: string) => {
       setDraft(next);
+      // 「正在输入」上报:按设置开关门禁,只在有内容时发(清空不算输入);
+      // 节流(2s)在 socket-manager 里做。
+      if (next.length > 0 && (isGroupChat ? typingGroup : typingSingle)) {
+        sendChatTyping(conversationID);
+      }
       setMentionTargets((current) => getMentionsPresentInText(next, current));
       if (!isGroupChat || !canViewGroupMemberProfiles) {
         setMentionQuery(null);
@@ -2017,7 +2042,15 @@ export default function ChatDetailScreen() {
         setMentionPickerVisible(false);
       }
     },
-    [canViewGroupMemberProfiles, draft, isGroupChat, loadMentionCandidates],
+    [
+      canViewGroupMemberProfiles,
+      conversationID,
+      draft,
+      isGroupChat,
+      loadMentionCandidates,
+      typingGroup,
+      typingSingle,
+    ],
   );
 
   const handlePickMention = useCallback((target: MentionTarget) => {
@@ -2945,11 +2978,15 @@ export default function ChatDetailScreen() {
                   ? t('chat.detail.statusSelf', { defaultValue: '自己' })
                   : conversationType !== 'single'
                     ? t('chat.detail.statusGroup', { defaultValue: '群聊' })
-                    : peerOnline
-                      ? t('chat.detail.statusOnline', { defaultValue: '在线' })
-                      : t('chat.detail.statusOffline', {
-                          defaultValue: '离线',
-                        })}
+                    : typingVisible
+                      ? t('chat.detail.statusTyping', {
+                          defaultValue: '对方正在输入…',
+                        })
+                      : peerOnline
+                        ? t('chat.detail.statusOnline', { defaultValue: '在线' })
+                        : t('chat.detail.statusOffline', {
+                            defaultValue: '离线',
+                          })}
               </Text>
             </View>
           </View>

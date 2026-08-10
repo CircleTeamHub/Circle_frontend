@@ -229,6 +229,7 @@
       "statusGroup": "グループ",
       "statusOnline": "オンライン",
       "statusOffline": "オフライン",
+      "statusTyping": "入力中…",
       "previewNotice": "接続がまだ完了していません。しばらくしてから再試行してください。",
       "recordingSeconds": "録音中 {{seconds}}秒",
       "voiceReleaseCancel": "指を離してキャンセル",
@@ -2522,14 +2523,16 @@
       "note": "[ノート] {{title}}",
       "verification": "[認証] {{name}} から保証の依頼があります",
       "default": "[メッセージ]",
-      "plazaPost": "[イベント] {{title}}"
+      "plazaPost": "[イベント] {{title}}",
+      "sendFailedPrefix": "[送信失敗]"
     },
     "message": {
       "revokedBySelf": "メッセージを取り消しました",
       "revokedByOther": "「{{name}}」がメッセージを取り消しました",
       "revokedByModerator": "メッセージが管理者により取り消されました",
       "revokedQuote": "メッセージは取り消されました",
-      "revokedPreview": "[メッセージ取り消し]"
+      "revokedPreview": "[メッセージ取り消し]",
+      "unsupported": "[未対応のメッセージ]"
     },
     "burn": {
       "s30": "30秒",

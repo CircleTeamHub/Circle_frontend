@@ -2,43 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   AT_ALL_USER_ID,
-  buildAtMessagePayload,
-  buildQuotePreviewText,
+    buildQuotePreviewText,
   filterMentionCandidates,
   getActiveMentionQuery,
   getMentionsPresentInText,
   type MentionTarget,
 } from './chat-send-payloads.ts';
 
-test('buildAtMessagePayload dedupes selected mention ids and preserves text', () => {
-  const mentions: MentionTarget[] = [
-    { userID: 'u1', nickname: 'Alice' },
-    { userID: 'u1', nickname: 'Alice' },
-    { userID: 'u2', nickname: 'Bob' },
-  ];
 
-  const payload = buildAtMessagePayload('hi @Alice @Bob', mentions);
-
-  assert.equal(payload.text, 'hi @Alice @Bob');
-  assert.deepEqual(payload.atUserList, ['u1', 'u2']);
-  assert.deepEqual(payload.atUsersInfo, [
-    { userID: 'u1', nickname: 'Alice' },
-    { userID: 'u2', nickname: 'Bob' },
-  ]);
-});
-
-test('buildAtMessagePayload supports @all without normal member metadata', () => {
-  const mentions: MentionTarget[] = [
-    { userID: AT_ALL_USER_ID, nickname: '所有人', isAll: true },
-    { userID: 'u1', nickname: 'Alice' },
-  ];
-
-  const payload = buildAtMessagePayload('hi @所有人 @Alice', mentions);
-
-  assert.equal(payload.text, 'hi @所有人 @Alice');
-  assert.deepEqual(payload.atUserList, [AT_ALL_USER_ID, 'u1']);
-  assert.deepEqual(payload.atUsersInfo, [{ userID: 'u1', nickname: 'Alice' }]);
-});
 
 test('getMentionsPresentInText drops selected mentions removed from draft text', () => {
   const mentions: MentionTarget[] = [

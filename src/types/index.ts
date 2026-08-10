@@ -130,9 +130,6 @@ export interface ChatMessage {
     | 'plaza-post-card'
     | 'call-record';
   text?: string;
-  systemNoticeKind?: 'friend-added';
-  systemNoticeSource?: 'native' | 'local';
-  systemNoticeTimestamp?: number;
   quotedText?: string;
   // 真引用(G-09):被引用消息的坐标与状态,点击引用块按 height 定位。
   quoteMessageId?: string;

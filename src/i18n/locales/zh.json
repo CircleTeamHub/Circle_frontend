@@ -269,6 +269,7 @@
       "statusGroup": "群聊",
       "statusOnline": "在线",
       "statusOffline": "离线",
+      "statusTyping": "对方正在输入…",
       "previewNotice": "连接尚未完成，请稍后重试",
       "recordingSeconds": "正在录音 {{seconds}} 秒",
       "voiceReleaseCancel": "松开 取消",
@@ -2487,14 +2488,16 @@
       "note": "[笔记] {{title}}",
       "verification": "[验证] {{name}} 邀请你担保",
       "default": "[消息]",
-      "plazaPost": "[活动] {{title}}"
+      "plazaPost": "[活动] {{title}}",
+      "sendFailedPrefix": "[发送失败]"
     },
     "message": {
       "revokedBySelf": "你撤回了一条消息",
       "revokedByOther": "\"{{name}}\"撤回了一条消息",
       "revokedByModerator": "一条消息已被管理员撤回",
       "revokedQuote": "消息已撤回",
-      "revokedPreview": "[消息已撤回]"
+      "revokedPreview": "[消息已撤回]",
+      "unsupported": "[暂不支持的消息类型]"
     },
     "burn": {
       "s30": "30秒",

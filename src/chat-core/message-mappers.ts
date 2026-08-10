@@ -417,6 +417,18 @@ export function mapChatMessageDtoToUI(
       if (!callRecord) break;
       return { ...base, type: 'call-record', callRecord };
     }
+    case 'file': {
+      // 旧 OpenIM 栈遗留的文件消息(自研栈没有发送入口):渲染成带文件名的
+      // 文本气泡,别让历史记录里出现一排空白。
+      const fileName = str(content['fileName']) ?? str(content['name']);
+      return {
+        ...base,
+        type: isSent ? 'sent' : 'received',
+        text: fileName
+          ? `\u{1F4C4} ${fileName}`
+          : i18n.t('im.preview.file', { defaultValue: '[文件]' }),
+      };
+    }
     case 'system':
       return {
         id: dto.id,
@@ -427,11 +439,19 @@ export function mapChatMessageDtoToUI(
     default:
       break;
   }
-  // text 与未知/畸形类型都落文本气泡(显示其 text 字段或空串,不渲染破位)。
+  // text 落文本气泡;未知类型优先显示其 text 字段,连 text 都没有的
+  // (畸形 call-record、未来新增的类型)给占位词条,不渲染空白气泡。
+  const fallbackText = str(content['text']);
   return {
     ...base,
     type: isSent ? 'sent' : 'received',
-    text: str(content['text']) ?? '',
+    text:
+      fallbackText ??
+      (dto.type === 'text'
+        ? ''
+        : i18n.t('im.message.unsupported', {
+            defaultValue: '[暂不支持的消息类型]',
+          })),
   };
 }
 

@@ -10,7 +10,7 @@ import {
 } from "@/chat-core/api";
 import { mapChatConversationToUI } from "@/chat-core/mappers";
 import { markConversationRead } from "@/chat-core/socket-manager";
-import { selectTotalUnread, useChatStore } from "@/chat-core/store";
+import { selectTotalUnread, type StoredChatMessage, useChatStore } from "@/chat-core/store";
 import { useMessageGroupsStore } from "@/features/messages/store/use-message-groups-store";
 import { useLocalUnreadStore } from "@/features/messages/store/use-local-unread-store";
 import {
@@ -657,10 +657,35 @@ export default function MessagesScreen() {
     });
   }, [rawConversations]);
 
-  const conversations = useMemo(
+  const baseConversations = useMemo(
     () => applyLocalUnreadOverrides(rawMappedConversations, localUnreadOverrides),
     [localUnreadOverrides, rawMappedConversations],
   );
+
+  // 有发送失败消息的会话 id 集合,拼成排序串让引用比较退化成值比较:
+  // 只在失败集合真变了才触发下游 useMemo,消息洪泛不抖动列表。
+  const failedConversationKey = useChatStore((state) => {
+    const ids: string[] = [];
+    for (const [id, messages] of Object.entries(state.messagesByConversation)) {
+      if (messages.some((m) => (m as StoredChatMessage).failed)) ids.push(id);
+    }
+    return ids.sort().join('\n');
+  });
+
+  // 会话预览的失败标记:该会话还挂着没发出去的消息时,预览前缀提示,
+  // 不然列表页只看得到最新一条的文案,失败气泡埋在会话里没人知道。
+  const conversations = useMemo(() => {
+    if (!failedConversationKey) return baseConversations;
+    const failedIds = new Set(failedConversationKey.split('\n'));
+    const prefix = t('im.preview.sendFailedPrefix', {
+      defaultValue: '[发送失败]',
+    });
+    return baseConversations.map((conversation) =>
+      failedIds.has(conversation.id)
+        ? { ...conversation, message: `${prefix} ${conversation.message}` }
+        : conversation,
+    );
+  }, [baseConversations, failedConversationKey, t]);
 
   useEffect(() => {
     setMessagesUnread(

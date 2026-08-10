@@ -269,6 +269,7 @@
       "statusGroup": "Group chat",
       "statusOnline": "Online",
       "statusOffline": "Offline",
+      "statusTyping": "Typing…",
       "previewNotice": "The connection isn't ready yet. Please try again shortly.",
       "recordingSeconds": "Recording {{seconds}}s",
       "voiceReleaseCancel": "Release to cancel",
@@ -2490,14 +2491,16 @@
       "note": "[Note] {{title}}",
       "verification": "[Verify] {{name}} asked you to vouch",
       "default": "[Message]",
-      "plazaPost": "[Event] {{title}}"
+      "plazaPost": "[Event] {{title}}",
+      "sendFailedPrefix": "[Failed]"
     },
     "message": {
       "revokedBySelf": "You revoked a message",
       "revokedByOther": "\"{{name}}\" revoked a message",
       "revokedByModerator": "A message was revoked by an admin",
       "revokedQuote": "Message revoked",
-      "revokedPreview": "[Message revoked]"
+      "revokedPreview": "[Message revoked]",
+      "unsupported": "[Unsupported message type]"
     },
     "burn": {
       "s30": "30 seconds",

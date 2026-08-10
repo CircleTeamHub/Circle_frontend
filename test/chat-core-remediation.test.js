@@ -294,3 +294,61 @@ test('badge sync is wired into the chat connect path', () => {
   const manager = read('src/chat-core/socket-manager.ts');
   assert.match(manager, /initChatAppBadgeSync\(\)/);
 });
+
+// ---- §9 清理批:typing 接线 / 静音横幅 / file 与未知类型渲染 / 失败预览 ----
+
+test('typing flows end to end: throttle-send behind settings, store expiry, header display', () => {
+  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  // 发送侧:草稿变化按设置开关门禁上报(单聊/群聊各自的开关)。
+  assert.match(screen, /isGroupChat \? typingGroup : typingSingle/);
+  assert.match(screen, /sendChatTyping\(conversationID\)/);
+  assert.match(screen, /singleTyping/);
+  assert.match(screen, /groupTyping/);
+  // 显示侧:头部状态优先显示「对方正在输入…」,到期回落在线状态。
+  assert.match(screen, /chat\.detail\.statusTyping/);
+  const store = read('src/chat-core/store.ts');
+  assert.match(store, /typingUntilByConversation/);
+  assert.match(store, /applyTyping/);
+  assert.match(store, /TYPING_DISPLAY_MS/);
+  const dispatcher = read('src/chat-core/dispatcher.ts');
+  assert.match(dispatcher, /CHAT_EVENTS\.typing/);
+});
+
+test('muted conversations suppress the in-app banner', () => {
+  const dispatcher = read('src/chat-core/dispatcher.ts');
+  assert.match(dispatcher, /conversation\.muted\) return 'suppressed'/);
+});
+
+test('file and unknown message types render placeholders, never blank bubbles', () => {
+  const mappers = read('src/chat-core/message-mappers.ts');
+  assert.match(mappers, /case 'file'/);
+  assert.match(mappers, /im\.preview\.file/);
+  assert.match(mappers, /im\.message\.unsupported/);
+});
+
+test('conversations with a failed send carry a localized preview prefix', () => {
+  const screen = read('src/features/messages/screens/MessagesScreen.tsx');
+  assert.match(screen, /im\.preview\.sendFailedPrefix/);
+  assert.match(screen, /failedConversationKey/);
+});
+
+test('section-9 words exist in every locale', () => {
+  for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
+    const dict = JSON.parse(read(`src/i18n/locales/${locale}.json`));
+    assert.ok(dict?.chat?.detail?.statusTyping, `${locale} statusTyping`);
+    assert.ok(dict?.im?.message?.unsupported, `${locale} unsupported`);
+    assert.ok(dict?.im?.preview?.sendFailedPrefix, `${locale} sendFailedPrefix`);
+  }
+});
+
+test('the legacy system-notice dedupe layer is fully gone', () => {
+  // 自研栈同好友事件只产生一条系统消息,去重层连同死字段一起删净。
+  assert.ok(
+    !fs.existsSync(path.join(root, 'src/features/chat/utils/system-notice-dedupe.ts')),
+    'system-notice-dedupe.ts should be deleted',
+  );
+  const types = read('src/types/index.ts');
+  assert.ok(!types.includes('systemNoticeKind'), 'dead field systemNoticeKind');
+  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  assert.ok(!screen.includes('collapseDuplicateFriendAddedNotices'));
+});

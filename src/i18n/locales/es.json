@@ -229,6 +229,7 @@
       "statusGroup": "Grupo",
       "statusOnline": "En línea",
       "statusOffline": "Desconectado",
+      "statusTyping": "Escribiendo…",
       "previewNotice": "La conexión aún no está lista. Vuelve a intentarlo en un momento.",
       "recordingSeconds": "Grabando {{seconds}} s",
       "voiceReleaseCancel": "Suelta para cancelar",
@@ -2525,14 +2526,16 @@
       "note": "[Nota] {{title}}",
       "verification": "[Verificar] {{name}} te pidió que avales",
       "default": "[Mensaje]",
-      "plazaPost": "[Evento] {{title}}"
+      "plazaPost": "[Evento] {{title}}",
+      "sendFailedPrefix": "[Error de envío]"
     },
     "message": {
       "revokedBySelf": "Retiraste un mensaje",
       "revokedByOther": "\"{{name}}\" retiró un mensaje",
       "revokedByModerator": "Un administrador retiró un mensaje",
       "revokedQuote": "Mensaje retirado",
-      "revokedPreview": "[Mensaje retirado]"
+      "revokedPreview": "[Mensaje retirado]",
+      "unsupported": "[Tipo de mensaje no compatible]"
     },
     "burn": {
       "s30": "30 segundos",

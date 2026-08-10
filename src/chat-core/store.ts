@@ -21,6 +21,8 @@ import {
 export const MESSAGES_CAP = 200;
 /** 窗口扩张的硬上限,防止一路翻到底把整个会话读进内存。 */
 export const MESSAGES_WINDOW_MAX = 2000;
+/** 对端 typing 显示时长:超过它没有新 typing 事件就回落在线状态。 */
+export const TYPING_DISPLAY_MS = 4_000;
 
 /**
  * store 里的消息 = 线上 DTO + 客户端本地态:
@@ -98,6 +100,9 @@ interface ChatStoreState {
     messageId: string,
     revokedBy: string,
   ) => void;
+  /** 对端「正在输入」有效期(conversationId → epoch ms;过期即不显示)。 */
+  typingUntilByConversation: Record<string, number>;
+  applyTyping: (conversationId: string) => void;
   /** G-07 送达水位(conversationId → userId → height,只前进)。 */
   deliveredWatermarks: Record<string, Record<string, number>>;
   applyDelivered: (
@@ -219,6 +224,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   onlineByUser: {},
   readWatermarks: {},
   deliveredWatermarks: {},
+  typingUntilByConversation: {},
 
   setConnected: (connected) => set({ connected }),
   setConnecting: (connecting) => set({ connecting }),
@@ -458,6 +464,16 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     });
     // G-01:唯一写入口顺手落盘(广播/回执/历史/补拉都汇到这里)。
     void persistLocalMessages(conversationId, incoming);
+  },
+
+  applyTyping: (conversationId) => {
+    const { typingUntilByConversation } = get();
+    set({
+      typingUntilByConversation: {
+        ...typingUntilByConversation,
+        [conversationId]: Date.now() + TYPING_DISPLAY_MS,
+      },
+    });
   },
 
   applyDelivered: (conversationId, userId, height) => {
@@ -702,6 +718,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       activeConversationId: null,
       readWatermarks: {},
       deliveredWatermarks: {},
+      typingUntilByConversation: {},
     }),
 
   reset: () =>
@@ -718,6 +735,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       onlineByUser: {},
       readWatermarks: {},
       deliveredWatermarks: {},
+      typingUntilByConversation: {},
     }),
 }));
 
