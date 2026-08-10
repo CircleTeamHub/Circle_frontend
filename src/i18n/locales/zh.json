@@ -2003,6 +2003,8 @@
       "clearAllChatsWarning": "将清空本机聊天记录，不会删除服务器历史记录，重新同步后可能恢复部分历史。",
       "clearAllChatsDone": "聊天记录已清空",
       "clearAllChatsDoneMessage": "本机聊天记录已清空。",
+      "clearAllChatsPartialTitle": "部分会话未清空",
+      "clearAllChatsPartialMessage": "有 {{count}} 个会话没能清空(可能是网络问题)。再点一次「清空全部聊天」即可补上。",
       "clearAllChatsFailed": "清空失败",
       "clearAllChatsFailedMessage": "暂时无法清空本机聊天记录，请稍后重试。",
       "switchAccount": "切换账号",

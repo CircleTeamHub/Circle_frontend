@@ -403,6 +403,15 @@ export async function clearLocalConversationMessages(
         'DELETE FROM messages WHERE conversation_id = ?;',
         conversationId,
       );
+      // outbox 里那些没发出去/发失败的消息也要一起删。
+      //
+      // 只删 messages 的话:那条私信正文原样留在库里,而且下次冷启动
+      // hydrateFromLocalDb 会把它当「发送失败」气泡还原出来 —— 用户刚清空的
+      // 会话里凭空多出一条他以为已经删掉的消息,清空既没清干净也没清住。
+      await current.db.runAsync(
+        'DELETE FROM outbox WHERE conversation_id = ?;',
+        conversationId,
+      );
       await current.db.runAsync(
         'DELETE FROM sync_state WHERE conversation_id = ?;',
         conversationId,
@@ -410,6 +419,35 @@ export async function clearLocalConversationMessages(
     });
   } catch (error) {
     warn('msg-clear', '[chat-db] clear conversation failed', error);
+  }
+}
+
+/**
+ * 焚毁到期的本地清理。
+ *
+ * 服务端 sweeper 把过期消息物删了,但本地缓存不会自己知道:没有到期元数据、
+ * 没有删除事件,后续 REST 页「少了哪些行」也无从对账。于是
+ * readRecentLocalMessages 和 FTS 搜索仍然能把「本该烧掉」的正文端出来,
+ * 冷启动之后更是原样恢复 —— 阅后即焚在本地这一侧等于没生效。
+ *
+ * 这里按会话的焚毁时长直接删本地行(DELETE 会触发 messages_fts_ad,
+ * FTS 影子表跟着一起清)。判据用消息自己的 createdAt,与服务端 sweeper
+ * 和读路径过滤同一把尺子。
+ */
+export async function purgeExpiredLocalMessages(
+  conversationId: string,
+  cutoff: Date,
+): Promise<void> {
+  const current = requireDb();
+  if (!current) return;
+  try {
+    await current.db.runAsync(
+      'DELETE FROM messages WHERE conversation_id = ? AND created_at < ?;',
+      conversationId,
+      cutoff.toISOString(),
+    );
+  } catch (error) {
+    warn('msg-burn', '[chat-db] purge expired messages failed', error);
   }
 }
 

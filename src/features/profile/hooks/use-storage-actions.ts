@@ -136,11 +136,19 @@ export function useStorageActions(): UseStorageActionsResult {
               } catch {
                 // 离线:用手上这份,能清多少清多少(水位幂等,下次再清补齐)。
               }
-              await Promise.allSettled(
+              // 单个会话失败不中断整批(水位是幂等的,下次再清即可)——
+              // 但**不能因此谎报成功**。原来 allSettled 把 rejection 全吞了,
+              // 接着照样清本地、照样弹「已全部清空」:那些没清成的会话服务端
+              // 历史还在,下次加载或来一条新消息就整段回来,而用户被告知
+              // 已经删干净了。
+              const outcomes = await Promise.allSettled(
                 conversations.map((conversation) =>
                   clearChatConversationHistory(conversation.id),
                 ),
               );
+              const failed = outcomes.filter(
+                (o) => o.status === 'rejected',
+              ).length;
               // 「标记为未读」的本地覆盖也要一起清:只清 chat store 的话,
               // 那些会话在列表和 tab 上仍然顶着一个红点,而里面已经空了。
               useLocalUnreadStore.getState().resetForLogout();
@@ -153,6 +161,17 @@ export function useStorageActions(): UseStorageActionsResult {
               // 缓存清空后重拉一次会话快照;服务端水位已写,历史不会回来。
               void loadChatConversations().catch(() => undefined);
               if (!mountedRef.current) return;
+              if (failed > 0) {
+                // 部分失败:如实说清楚哪几个没成,并提示重试(水位幂等,
+                // 再点一次只会补上没写成的那些)。
+                Alert.alert(
+                  t('settingsDetails.storage.clearAllChatsPartialTitle'),
+                  t('settingsDetails.storage.clearAllChatsPartialMessage', {
+                    count: failed,
+                  }),
+                );
+                return;
+              }
               Alert.alert(
                 t('settingsDetails.storage.clearAllChatsDone'),
                 t('settingsDetails.storage.clearAllChatsDoneMessage'),

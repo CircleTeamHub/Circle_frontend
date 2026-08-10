@@ -181,6 +181,8 @@
       "clearAllChatsWarning": "この端末のローカルなチャット履歴のみを削除します。サーバーの履歴は削除されず、同期後に一部の履歴が戻る場合があります。",
       "clearAllChatsDone": "チャット履歴を削除しました",
       "clearAllChatsDoneMessage": "この端末のローカルなチャット履歴を削除しました。",
+      "clearAllChatsPartialTitle": "一部のチャットを消去できませんでした",
+      "clearAllChatsPartialMessage": "{{count}} 件のチャットを消去できませんでした（通信の問題の可能性があります）。もう一度「すべてのチャットを消去」を実行してください。",
       "clearAllChatsFailed": "削除に失敗しました",
       "clearAllChatsFailedMessage": "現在この端末のローカルなチャット履歴を削除できません。後でもう一度お試しください。",
       "switchAccount": "アカウントを切り替え",

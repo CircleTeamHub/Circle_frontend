@@ -2006,6 +2006,8 @@
       "clearAllChatsWarning": "This clears local chat records on this device only. Server history is not deleted, and some history may return after sync.",
       "clearAllChatsDone": "Chat Records Cleared",
       "clearAllChatsDoneMessage": "Local chat records on this device have been cleared.",
+      "clearAllChatsPartialTitle": "Some chats were not cleared",
+      "clearAllChatsPartialMessage": "{{count}} chat(s) could not be cleared, likely a network issue. Tap Clear All Chats again to finish.",
       "clearAllChatsFailed": "Clear Failed",
       "clearAllChatsFailedMessage": "Unable to clear local chat records right now. Please try again later.",
       "switchAccount": "Switch Account",

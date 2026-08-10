@@ -181,6 +181,8 @@
       "clearAllChatsWarning": "Esto borra el historial local solo en este dispositivo. El historial del servidor no se elimina y parte podría volver tras la sincronización.",
       "clearAllChatsDone": "Historial de chats borrado",
       "clearAllChatsDoneMessage": "Se borró el historial local de chats en este dispositivo.",
+      "clearAllChatsPartialTitle": "Algunos chats no se borraron",
+      "clearAllChatsPartialMessage": "No se pudieron borrar {{count}} chat(s), probablemente por un problema de red. Vuelve a tocar Borrar todos los chats.",
       "clearAllChatsFailed": "Error al borrar",
       "clearAllChatsFailedMessage": "Ahora no se puede borrar el historial local de chats. Inténtalo más tarde.",
       "switchAccount": "Cambiar de cuenta",

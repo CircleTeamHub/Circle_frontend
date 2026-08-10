@@ -537,3 +537,50 @@ test('an expired mutation cursor drops the cache instead of faking a catch-up', 
   const web = read('src/chat-core/local-db.web.ts');
   assert.match(web, /dropAllLocalMessages/);
 });
+
+// ---- Codex review 第四轮(PR #153):只修 P1(§12.5 收口规则) ----
+
+test('clearing a conversation also drops its queued sends', () => {
+  // 只删 messages 的话,那条私信正文原样留在 outbox 里,而且下次冷启动
+  // hydrateFromLocalDb 会把它当「发送失败」气泡还原出来 —— 清空既没清干净
+  // 也没清住。
+  const db = read('src/chat-core/local-db.ts');
+  const clearFn = db.slice(
+    db.indexOf('export async function clearLocalConversationMessages'),
+    db.indexOf('export async function purgeExpiredLocalMessages'),
+  );
+  assert.match(clearFn, /DELETE FROM outbox WHERE conversation_id = \?/);
+});
+
+test('burn-expired messages are purged from the local cache', () => {
+  // 服务端 sweeper 物删之后本地无从得知(没有到期元数据、没有删除事件),
+  // 不主动清的话冷启动水合与本地 FTS 仍然能把本该烧掉的正文端出来。
+  const db = read('src/chat-core/local-db.ts');
+  assert.match(db, /export async function purgeExpiredLocalMessages/);
+  const web = read('src/chat-core/local-db.web.ts');
+  assert.match(web, /purgeExpiredLocalMessages/);
+  const store = read('src/chat-core/store.ts');
+  assert.match(store, /purgeExpiredBurnMessages/);
+  // 三个触发点:拿到会话快照、档位变更、冷启动水合。
+  const calls = store.match(/get\(\)\.purgeExpiredBurnMessages\(\)/g) ?? [];
+  assert.ok(calls.length >= 3, `expected >=3 purge triggers, got ${calls.length}`);
+});
+
+test('clear-all reports partial failure instead of claiming success', () => {
+  // allSettled 把 rejection 全吞了、照样弹「已全部清空」:那些没清成的会话
+  // 服务端历史还在,下次加载就整段回来。
+  const actions = read('src/features/profile/hooks/use-storage-actions.ts');
+  assert.match(actions, /o\.status === 'rejected'/);
+  assert.match(actions, /clearAllChatsPartialTitle/);
+  for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
+    const dict = JSON.parse(read(`src/i18n/locales/${locale}.json`));
+    assert.ok(
+      dict?.settingsDetails?.storage?.clearAllChatsPartialTitle,
+      `${locale} clearAllChatsPartialTitle`,
+    );
+    assert.ok(
+      dict?.settingsDetails?.storage?.clearAllChatsPartialMessage,
+      `${locale} clearAllChatsPartialMessage`,
+    );
+  }
+});

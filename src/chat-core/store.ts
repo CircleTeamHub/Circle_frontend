@@ -8,6 +8,7 @@ import {
   clearLocalConversationMessages,
   deleteLocalMessage,
   outboxDelete,
+  purgeExpiredLocalMessages,
   persistLocalConversations,
   persistLocalMessages,
   removeLocalConversation,
@@ -93,6 +94,15 @@ interface ChatStoreState {
    * 服务端消息永久标成「用户删过」,此后翻页和搜索里再也见不到。
    */
   evictMessagesBelow: (conversationId: string, height: number) => void;
+  /**
+   * 焚毁到期的本地清理。
+   *
+   * 服务端 sweeper 把过期消息物删了,本地缓存却无从得知:既没有到期元数据,
+   * 也没有删除事件,后续 REST 页「少了哪些行」同样对不出来。不主动清的话,
+   * 冷启动水合与本地 FTS 搜索仍然能把本该烧掉的正文端出来 —— 阅后即焚在
+   * 本地这一侧等于没生效。拿到会话快照与档位变更时各清一次。
+   */
+  purgeExpiredBurnMessages: () => void;
   /**
    * 丢掉全部缓存消息(会话行保留)。
    * 服务端说增量游标超出保留窗口时用 —— 那段区间的撤回已经查不到了,
@@ -398,6 +408,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       conversationsSnapshotLoaded: true,
       conversationsSnapshotSeq: get().conversationsSnapshotSeq + 1,
     });
+    // 快照带着每个会话当前的焚毁档位 —— 顺手把已到期的本地缓存清掉。
+    get().purgeExpiredBurnMessages();
     // G-01:快照落盘(fire-and-forget,本地库失败不影响主链路)。
     void persistLocalConversations(get().conversations);
   },
@@ -441,6 +453,9 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       changed = true;
     }
     if (changed) set({ messagesByConversation: nextTimelines });
+    // 冷启动这一刻最要紧:离线期间服务端 sweeper 早把过期消息物删了,
+    // 而本地库原样留着 —— 不清的话开 App 第一眼看到的就是本该烧掉的内容。
+    get().purgeExpiredBurnMessages();
   },
   applyIncomingMessage: (message) => {
     const {
@@ -778,6 +793,28 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         ...conversations.slice(index + 1),
       ],
     });
+    get().purgeExpiredBurnMessages();
+  },
+
+  purgeExpiredBurnMessages: () => {
+    const { conversations, messagesByConversation } = get();
+    let nextTimelines: Record<string, ChatMessageDto[]> | null = null;
+    for (const conversation of conversations) {
+      const seconds = conversation.burnDurationSec;
+      if (!seconds || seconds <= 0) continue;
+      const cutoff = new Date(Date.now() - seconds * 1000);
+      // 本地库先删(DELETE 会触发 FTS 的删除触发器,影子表跟着清)。
+      void purgeExpiredLocalMessages(conversation.id, cutoff);
+      const timeline = messagesByConversation[conversation.id];
+      if (!timeline?.length) continue;
+      const kept = timeline.filter(
+        (m) => Date.parse(m.createdAt) >= cutoff.getTime(),
+      );
+      if (kept.length === timeline.length) continue;
+      nextTimelines ??= { ...messagesByConversation };
+      nextTimelines[conversation.id] = kept;
+    }
+    if (nextTimelines) set({ messagesByConversation: nextTimelines });
   },
 
   clearConversationLocal: (conversationId, clearedBeforeHeight) => {
