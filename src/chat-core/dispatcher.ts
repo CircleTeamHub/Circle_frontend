@@ -1,16 +1,25 @@
+import { Alert } from 'react-native';
 import type { Socket } from 'socket.io-client';
 import {
   CHAT_EVENTS,
   isChatMessageDto,
+  type ChatConversationBroadcast,
   type ChatMessageDto,
   type ChatPresenceBroadcast,
   type ChatReadBroadcast,
+  type ChatTypingBroadcast,
+  type ChatDeliveredBroadcast,
+  type ChatEditBroadcast,
+  type ChatReactionBroadcast,
+  type ChatRevokeBroadcast,
 } from './protocol';
 import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
 import { reportError } from '@/observability/sentry';
 import { allowPeerMediaUrl } from '@/services/api/utils';
+import i18n from '@/i18n';
 import { loadChatConversations } from './api';
 import { isMessageDeletedLocally } from './deleted-messages';
+import { reportChatDelivered } from './socket-manager';
 import { getChatMessagePreview } from './mappers';
 import { useChatStore } from './store';
 
@@ -135,10 +144,64 @@ function scheduleConversationBackfill(isLive: () => boolean): void {
 /** 测试与登出用:丢掉在途的补拉计时器与攒着的横幅。 */
 export function cancelConversationBackfill(): void {
   pendingBanners.clear();
+  removedConversations.clear();
   reportedChatEventFailures.clear();
   if (backfillTimer === null) return;
   clearTimeout(backfillTimer);
   backfillTimer = null;
+}
+
+/**
+ * 被移出的会话(G-11/S-02):服务端已即时离房,但离房前一瞬广播出的消息仍可能
+ * 迟到 —— 那条 chat:msg 会因「会话不在快照里」触发补拉,把刚收走的会话又带回
+ * 列表。这里记一个有界防复活集合;重新入群(joined)时解除。
+ * 断连清空即可:重连后服务端按座位重新派生房间,不在座就收不到了。
+ */
+const removedConversations = new Map<string, number>();
+const REMOVED_CONVERSATIONS_MAX = 50;
+
+function rememberRemovedConversation(conversationId: string): void {
+  removedConversations.delete(conversationId);
+  // 记下移除那一刻的会话快照序号:自愈判据要拿它区分「移除之后新拉回来的
+  // 快照」和「移除之前就已经在途、之后才落地的旧快照」。
+  removedConversations.set(
+    conversationId,
+    useChatStore.getState().conversationsSnapshotSeq,
+  );
+  while (removedConversations.size > REMOVED_CONVERSATIONS_MAX) {
+    const oldest = removedConversations.keys().next().value;
+    if (oldest === undefined) break;
+    removedConversations.delete(oldest);
+  }
+}
+
+const CONVERSATION_CHANGE_KINDS: ReadonlySet<string> = new Set([
+  'joined',
+  'left',
+  'removed',
+  'updated',
+]);
+
+/**
+ * 对端(或另一位管理员)改了阅后即焚时长时,把新档位落进会话状态。
+ *
+ * applyBurnDuration 此前只有本机那次 REST 调用会触发,所以远端改动只是渲染成
+ * 一条系统提示 —— ChatInfoScreen 上的档位一直显示旧值,直到某次无关的会话刷新
+ * 才对上。对「消息会不会自动销毁」这件事来说,显示错的档位是危险的。
+ */
+function applyRemoteBurnChange(
+  store: ReturnType<typeof useChatStore.getState>,
+  message: ChatMessageDto,
+): void {
+  if (message.type !== 'system') return;
+  const content = message.content;
+  if (content['kind'] !== 'burn-changed') return;
+  const seconds = content['seconds'];
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds)) return;
+  store.applyBurnDuration(
+    message.conversationId,
+    seconds > 0 ? Math.floor(seconds) : null,
+  );
 }
 
 export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
@@ -161,11 +224,35 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       if (isMessageDeletedLocally(payload.id, payload.d)) return;
 
       const store = useChatStore.getState();
+      // 被移出的会话:迟到的广播不入库也不补拉,否则刚收走的会话立刻复活。
+      // 防复活标记的解除有两条路:权威的 joined 事件,或者**移除之后新拉回来的**
+      // 会话快照里仍然有它(离线期间被重新拉回群、joined 事件丢了)。
+      //
+      // 只看「会话在不在列表里」是不牢的:一个在移除事件之前发出、在
+      // removeConversation 之后才落地的旧快照会把刚收走的会话原样装回来,
+      // 那不是重新入群。所以比快照序号 —— 必须是移除之后又拉过至少一次。
+      const removedAtSeq = removedConversations.get(payload.conversationId);
+      if (removedAtSeq !== undefined) {
+        const restored =
+          store.conversationsSnapshotSeq > removedAtSeq &&
+          store.conversations.some((c) => c.id === payload.conversationId);
+        if (!restored) return;
+        removedConversations.delete(payload.conversationId);
+      }
       // 顺序要紧:先联动会话列表再入时间线。applyIncomingMessage 靠
       // 「这条消息是否已在时间线里」判重复投递,先 ingest 的话它每次都会
       // 看到自己、未读永远加不上。
       const applied = store.applyIncomingMessage(payload);
       store.ingestMessages(payload.conversationId, [payload]);
+      applyRemoteBurnChange(store, payload);
+      // G-07 送达回执:收到别人的消息即回报水位(节流在 socket-manager)。
+      if (
+        payload.height > 0 &&
+        payload.sender !== null &&
+        payload.sender.id !== store.currentUserId
+      ) {
+        reportChatDelivered(payload.conversationId, payload.height);
+      }
       // 攒下的候选必须有一次补拉去认领它,否则它永远等不到元信息。
       // 这两个条件目前同源(会话不在快照里),但依赖这种巧合太脆,写明。
       const needsConversation =
@@ -190,7 +277,10 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         !payload ||
         typeof payload.conversationId !== 'string' ||
         typeof payload.userId !== 'string' ||
-        typeof payload.height !== 'number'
+        // 只看 typeof 的话 1.5 / Infinity / NaN 都能过,而这个数会被写进
+        // unreadCount,一路传到 tab 与原生角标 API,还会污染已读水位。
+        !Number.isSafeInteger(payload.height) ||
+        payload.height < 0
       ) {
         console.warn('[chat] dropped malformed read payload');
         reportChatEventFailureOnce('readReceipt', 'malformedPayload');
@@ -222,6 +312,170 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       reportChatEventFailureOnce('presence', 'handlerFailure');
     }
   });
+
+  socket.on(CHAT_EVENTS.typing, (payload: ChatTypingBroadcast) => {
+    if (!isLive()) return;
+    try {
+      if (
+        !payload ||
+        typeof payload.conversationId !== 'string' ||
+        typeof payload.userId !== 'string'
+      ) {
+        return;
+      }
+      const store = useChatStore.getState();
+      // 服务端 except 的只是发送那只 socket:自己另一台设备的 typing
+      // 仍会广播过来,不该给自己看「对方正在输入」。
+      if (payload.userId === store.currentUserId) return;
+      store.applyTyping(payload.conversationId);
+    } catch (err) {
+      console.warn('[chat] typing handler failed', err);
+    }
+  });
+
+  socket.on(CHAT_EVENTS.delivered, (payload: ChatDeliveredBroadcast) => {
+    if (!isLive()) return;
+    try {
+      if (
+        !payload ||
+        typeof payload.conversationId !== 'string' ||
+        typeof payload.userId !== 'string' ||
+        typeof payload.height !== 'number'
+      ) {
+        return;
+      }
+      useChatStore
+        .getState()
+        .applyDelivered(payload.conversationId, payload.userId, payload.height);
+    } catch (err) {
+      console.warn('[chat] delivered handler failed', err);
+    }
+  });
+
+  socket.on(CHAT_EVENTS.reaction, (payload: ChatReactionBroadcast) => {
+    if (!isLive()) return;
+    try {
+      if (
+        !payload ||
+        typeof payload.conversationId !== 'string' ||
+        typeof payload.messageId !== 'string' ||
+        typeof payload.emoji !== 'string' ||
+        typeof payload.userId !== 'string' ||
+        (payload.op !== 'add' && payload.op !== 'remove')
+      ) {
+        console.warn('[chat] dropped malformed reaction payload');
+        return;
+      }
+      useChatStore
+        .getState()
+        .applyReaction(
+          payload.conversationId,
+          payload.messageId,
+          payload.emoji,
+          payload.userId,
+          payload.op,
+        );
+    } catch (err) {
+      console.warn('[chat] reaction handler failed', err);
+    }
+  });
+
+  socket.on(CHAT_EVENTS.edit, (payload: ChatEditBroadcast) => {
+    if (!isLive()) return;
+    try {
+      if (
+        !payload ||
+        typeof payload.conversationId !== 'string' ||
+        typeof payload.messageId !== 'string' ||
+        typeof payload.editedAt !== 'string' ||
+        typeof payload.content !== 'object' ||
+        payload.content === null
+      ) {
+        console.warn('[chat] dropped malformed edit payload');
+        return;
+      }
+      useChatStore
+        .getState()
+        .applyEdit(
+          payload.conversationId,
+          payload.messageId,
+          payload.content as Record<string, unknown>,
+          payload.editedAt,
+        );
+    } catch (err) {
+      console.warn('[chat] edit handler failed', err);
+    }
+  });
+
+  socket.on(CHAT_EVENTS.revoke, (payload: ChatRevokeBroadcast) => {
+    if (!isLive()) return;
+    try {
+      if (
+        !payload ||
+        typeof payload.conversationId !== 'string' ||
+        typeof payload.messageId !== 'string' ||
+        typeof payload.revokedBy !== 'string'
+      ) {
+        console.warn('[chat] dropped malformed revoke payload');
+        return;
+      }
+      useChatStore
+        .getState()
+        .applyRevoke(payload.conversationId, payload.messageId, payload.revokedBy);
+    } catch (err) {
+      console.warn('[chat] revoke handler failed', err);
+    }
+  });
+
+  socket.on(CHAT_EVENTS.conversation, (payload: ChatConversationBroadcast) => {
+    if (!isLive()) return;
+    try {
+      if (
+        !payload ||
+        typeof payload.conversationId !== 'string' ||
+        payload.conversationId.length === 0 ||
+        typeof payload.userId !== 'string' ||
+        !CONVERSATION_CHANGE_KINDS.has(payload.kind)
+      ) {
+        console.warn('[chat] dropped malformed conversation payload');
+        return;
+      }
+      const store = useChatStore.getState();
+      // 个人房定向事件只该是本人的;万一串了宁可丢弃,不替别人操作本机列表。
+      if (
+        store.currentUserId !== null &&
+        payload.userId !== store.currentUserId
+      ) {
+        return;
+      }
+      if (payload.kind === 'removed' || payload.kind === 'left') {
+        rememberRemovedConversation(payload.conversationId);
+        pendingBanners.delete(payload.conversationId);
+        const wasActive =
+          store.activeConversationId === payload.conversationId;
+        store.removeConversation(payload.conversationId);
+        // 正开着的那个会话要连时间线一起收走。只摘列表行的话,详情页的消息、
+        // 输入框和成员入口原封不动留在屏幕上 —— 已经被移出的人还能继续翻聊天
+        // 记录、继续按发送(服务端会拒,但界面上看不出自己已经不在群里)。
+        if (wasActive) {
+          // null = 只清缓存、不留清空水位:留了的话,以后重新入群时这段
+          // 历史会被 ingestMessages 一直挡在外面。
+          store.clearConversationLocal(payload.conversationId, null);
+          store.setActiveConversationId(null);
+        }
+        // 正看着这个群被移出才提示;left 是本人在别处的主动动作,静默收走即可。
+        if (payload.kind === 'removed' && wasActive) {
+          Alert.alert(i18n.t('im.conversation.removedFromGroup'));
+        }
+        return;
+      }
+      // joined:重新入群要解除防复活标记;updated 同样只需刷新元信息。
+      removedConversations.delete(payload.conversationId);
+      scheduleConversationBackfill(isLive);
+    } catch (err) {
+      console.warn('[chat] conversation handler failed', err);
+    }
+  });
 }
 
 /**
@@ -250,6 +504,8 @@ function enqueueForegroundBanner(
     (c) => c.id === message.conversationId,
   );
   if (!conversation) return 'needs-conversation';
+  // 免打扰的会话不弹端内横幅(与推送静音同一语义;未读数照常累计)。
+  if (conversation.muted) return 'suppressed';
 
   const isGroup = conversation.type === 'GROUP';
   const title = isGroup

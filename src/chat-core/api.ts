@@ -5,8 +5,14 @@ import type {
   ChatHistoryPageDto,
   ChatMemberDto,
   ChatMessageDto,
+  ChatMutationsPageDto,
 } from './protocol';
 import { withoutLocallyDeleted } from './deleted-messages';
+import {
+  deleteLocalMessagesBelow,
+  readRecentLocalMessages,
+  searchLocalChatMessages,
+} from './local-db';
 import { useChatStore } from './store';
 
 /**
@@ -59,25 +65,160 @@ export function createCircleChatConversation(
   });
 }
 
-/** 历史翻页:height 键集向前翻,页内升序;顺手灌进 store。 */
+/**
+ * 历史翻页:height 键集向前翻,页内升序;顺手灌进 store。
+ *
+ * G-01 读路径反转:首屏(无 beforeHeight)先把本地库的最近消息灌进内存立刻
+ * 渲染,REST 回来再按 height 对账 —— 断网时首屏就是本地历史。若本地块与
+ * 最新页之间有洞(离线太久):洞 ≤1000 条走 afterHeight 补齐,否则放弃旧块
+ * (删本地 < 页首,保时间线连续,更早历史仍可 REST 翻页)。
+ */
+const LOCAL_HOLE_BACKFILL_MAX = 1000;
+
 export async function loadChatHistory(
   conversationId: string,
   options: { beforeHeight?: number; limit?: number } = {},
 ): Promise<ChatHistoryPageDto> {
+  const store = useChatStore.getState();
+  // 本地库读也要过世代闸,而且必须**在读之前**记下 epoch 与用户:SQLite 查询
+  // 可能在登出/切号之后才 resolve,那时 store 已经属于下一个账号 —— 无条件
+  // ingest 就是把上一个账号的私聊内容写进新账号的时间线。
+  const sameSession = sessionGate();
+  const hydratingUser = store.currentUserId;
+  const inMemory = store.messagesByConversation[conversationId] ?? [];
+  let localMax = 0;
+  if (options.beforeHeight === undefined) {
+    if (inMemory.length === 0) {
+      const local = await readRecentLocalMessages(
+        conversationId,
+        options.limit ?? 50,
+      );
+      if (
+        local.length > 0 &&
+        sameSession() &&
+        useChatStore.getState().currentUserId === hydratingUser
+      ) {
+        useChatStore.getState().ingestMessages(conversationId, local);
+        for (const message of local) {
+          if (message.height > localMax) localMax = message.height;
+        }
+      }
+    } else {
+      // 冷启动水合已经把这个会话灌进内存了 —— 原来这里只在「内存为空」时
+      // 才算 localMax,于是 localMax 恒为 0,下面那段缺口对账整个被跳过:
+      // 离线很久之后,旧缓存块和最新一页之间会留一个静默的 height 空洞。
+      for (const message of inMemory) {
+        if (message.height > localMax) localMax = message.height;
+      }
+    }
+  }
   const params = new URLSearchParams();
   if (options.beforeHeight !== undefined) {
     params.set('beforeHeight', String(options.beforeHeight));
   }
   if (options.limit !== undefined) params.set('limit', String(options.limit));
   const query = params.toString();
-  const sameSession = sessionGate();
   const page = await apiClient<ChatHistoryPageDto>(
     `/chat/conversations/${conversationId}/messages${query ? `?${query}` : ''}`,
   );
   if (sameSession()) {
     useChatStore.getState().ingestMessages(conversationId, page.messages);
+    if (localMax > 0) {
+      let pageMin = Number.MAX_SAFE_INTEGER;
+      for (const message of page.messages) {
+        if (message.height > 0 && message.height < pageMin) {
+          pageMin = message.height;
+        }
+      }
+      if (pageMin !== Number.MAX_SAFE_INTEGER && pageMin > localMax + 1) {
+        const hole = pageMin - localMax - 1;
+        if (hole <= LOCAL_HOLE_BACKFILL_MAX) {
+          void backfillConversationSince(conversationId, localMax).catch(
+            () => undefined,
+          );
+        } else {
+          // 洞太大:旧块整体作废,防止时间线中间静默缺一段。
+          //
+          // 这里只能「驱逐缓存」,绝不能走 removeMessage —— 那是**用户删除**的
+          // 入口,会写一条永久墓碑,于是这些完全正常的服务端消息此后在翻页和
+          // 搜索里被永久过滤掉,而注释承诺的只是「以后重新加载」。
+          useChatStore.getState().evictMessagesBelow(conversationId, pageMin);
+          void deleteLocalMessagesBelow(conversationId, pageMin);
+        }
+      }
+    }
   }
   return page;
+}
+
+/**
+ * 单页 100。页数上限只是失控兜底 —— 达到上限时**不能**就此收手:
+ * nextAfterHeight 还活着就意味着缺口的最新那一段还没到,而普通的向旧翻页
+ * 跨不过一个向前的缺口,那段消息在已打开的会话里就永远不出现。
+ * 所以到顶之后排下一批继续追,直到游标为 null。
+ */
+const BACKFILL_PAGE_LIMIT = 100;
+const BACKFILL_PAGES_MAX = 10;
+
+/**
+ * G-13 断线重连对账:从 afterHeight 起升序追平缺口。
+ * 与 chat:msg 广播共用 ingestMessages 入库(按 id/d 幂等去重),
+ * 追平(nextAfterHeight=null)即停。
+ */
+export async function backfillConversationSince(
+  conversationId: string,
+  afterHeight: number,
+): Promise<void> {
+  let cursor = afterHeight;
+  for (let page = 0; page < BACKFILL_PAGES_MAX; page += 1) {
+    const params = new URLSearchParams();
+    params.set('afterHeight', String(cursor));
+    params.set('limit', String(BACKFILL_PAGE_LIMIT));
+    const sameSession = sessionGate();
+    const dto = await apiClient<ChatHistoryPageDto>(
+      `/chat/conversations/${conversationId}/messages?${params.toString()}`,
+    );
+    if (!sameSession()) return;
+    useChatStore.getState().ingestMessages(conversationId, dto.messages);
+    if (dto.nextAfterHeight == null) return;
+    // 游标不前进 = 服务端在原地打转,继续追只会死循环。
+    if (dto.nextAfterHeight <= cursor) return;
+    cursor = dto.nextAfterHeight;
+  }
+  // 一批 1000 条追完游标还活着:让出一轮事件循环再接着追,别把 UI 卡死。
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  await backfillConversationSince(conversationId, cursor);
+}
+
+/**
+ * 离线期间的撤回/编辑增量。撤回不改 height,重连的 afterHeight 补拉结构上
+ * 永远看不到它 —— 不追这一趟,断线时被撤回的消息在本地会一直显示原文。
+ *
+ * 返回服务端给的下一次游标与「还有没有」。**必须用 nextSince 而不是
+ * serverTime**:单页有上限,被截断时服务端会把游标停在本页最后一次变更上,
+ * 拿 serverTime 前进的话没返回的那些变更就被永久跳过了。
+ * 会话已换人/已登出时返回 null(调用方据此停手)。
+ */
+export async function fetchChatMutationsSince(
+  since: string,
+): Promise<ChatMutationsPageDto | null> {
+  const sameSession = sessionGate();
+  const params = new URLSearchParams({ since });
+  const result = await apiClient<ChatMutationsPageDto>(
+    `/chat/messages/mutations?${params.toString()}`,
+  );
+  if (!sameSession()) return null;
+  const store = useChatStore.getState();
+  const byConversation = new Map<string, ChatMessageDto[]>();
+  for (const message of result.messages) {
+    const bucket = byConversation.get(message.conversationId) ?? [];
+    bucket.push(message);
+    byConversation.set(message.conversationId, bucket);
+  }
+  for (const [conversationId, messages] of byConversation) {
+    store.ingestMessages(conversationId, messages);
+  }
+  return result;
 }
 
 /**
@@ -178,7 +319,7 @@ export function fetchChatMembers(
   );
 }
 
-/** 全局搜索:跨本人全部会话搜文本(最新在前,扁平;会话展示由调用方补齐)。 */
+/** 全局搜索(服务端):跨本人全部会话搜文本(最新在前,扁平)。 */
 export function searchAllChatMessages(
   keyword: string,
   limit?: number,
@@ -190,7 +331,100 @@ export function searchAllChatMessages(
   ).then(withoutLocallyDeleted);
 }
 
+/**
+ * G-03 全局搜索(本地优先):FTS5 离线、瞬时、大小写不敏感;本地无命中
+ * (老历史不在本地窗口)才回落服务端。服务端不可达时本地结果就是全部。
+ */
+export async function searchAllChatMessagesLocalFirst(
+  keyword: string,
+  limit = 50,
+  onLocalResults?: (messages: ChatMessageDto[]) => void,
+): Promise<ChatMessageDto[]> {
+  const local = withoutLocallyDeleted(
+    await searchLocalChatMessages(keyword, limit),
+  );
+  // 本地结果先给出去。等在服务端那趟上再渲染的话,离线时用户要盯着空列表
+  // 一直等到 apiClient 的 15 秒超时 —— 明明结果早就在手上了。
+  if (local.length > 0) onLocalResults?.(local);
+  try {
+    const remote = await searchAllChatMessages(keyword, limit);
+    // 本地有命中就不查服务端是错的:本地库每会话只留 500 条,从没打开过的
+    // 会话更是一条都没有 —— 一条恰好命中的近期消息,会让整个在线搜索被跳过,
+    // 结果缺失、每会话计数也是错的。本地只用来「先出结果」,权威仍是服务端。
+    return mergeSearchHits(local, remote, limit);
+  } catch {
+    // 离线/服务端不可达:本地结果就是全部。
+    return local;
+  }
+}
+
+/** 按 id 去重合并;服务端那份为准,顺序按 createdAt 倒序。 */
+function mergeSearchHits(
+  local: ChatMessageDto[],
+  remote: ChatMessageDto[],
+  limit: number,
+): ChatMessageDto[] {
+  const byId = new Map<string, ChatMessageDto>();
+  for (const message of local) byId.set(message.id, message);
+  for (const message of remote) byId.set(message.id, message);
+  return [...byId.values()]
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+    .slice(0, limit);
+}
+
 /** 会话偏好:置顶/免打扰/隐藏。返回最新 DTO 并回写 store。 */
+/** G-07 逐条已读回执:读者=已读水位覆盖该消息的成员(排除发送者,上限 200)。 */
+export function fetchMessageReaders(
+  conversationId: string,
+  messageId: string,
+): Promise<{
+  readers: { id: string; nickname: string; avatarUrl: string | null }[];
+  total: number;
+}> {
+  return apiClient(
+    `/chat/conversations/${conversationId}/messages/${messageId}/readers`,
+  );
+}
+
+/** S-01 会话级阅后即焚:任一方设置双方生效(GROUP 限圈主/管理员);0=关。 */
+export async function setChatBurnDuration(
+  conversationId: string,
+  seconds: number | null,
+): Promise<number | null> {
+  const sameSession = sessionGate();
+  const result = await apiClient<{ burnDurationSec: number | null }>(
+    `/chat/conversations/${conversationId}/burn`,
+    { method: 'POST', body: { seconds: seconds ?? 0 } },
+  );
+  if (sameSession()) {
+    useChatStore
+      .getState()
+      .applyBurnDuration(conversationId, result.burnDurationSec ?? null);
+  }
+  return result.burnDurationSec ?? null;
+}
+
+/**
+ * G-14 清空聊天记录:服务端写 per-viewer 水位(对端不受影响),
+ * 本地时间线/预览/未读同步清空 —— 不再是「清内存转头又拉回来」的假清空。
+ */
+export async function clearChatConversationHistory(
+  conversationId: string,
+): Promise<void> {
+  const sameSession = sessionGate();
+  const result = await apiClient<{ clearedBeforeHeight?: number }>(
+    `/chat/conversations/${conversationId}/clear`,
+    { method: 'POST' },
+  );
+  if (sameSession()) {
+    // 带上服务端的权威水位:在途的历史请求/延迟的 chat:msg 会在清空之后
+    // 落地,没有水位挡的话它们把刚清掉的时间线原样填回来。
+    useChatStore
+      .getState()
+      .clearConversationLocal(conversationId, result?.clearedBeforeHeight);
+  }
+}
+
 export async function updateChatConversationPreferences(
   conversationId: string,
   prefs: { pinned?: boolean; muted?: boolean; hidden?: boolean },

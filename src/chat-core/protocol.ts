@@ -17,7 +17,27 @@ export const CHAT_EVENTS = {
   message: 'chat:msg',
   /** 双向：在线状态（客户端带 ack 查询；服务端上下线广播） */
   presence: 'chat:presence',
+  /** 服务端 → 客户端（个人房定向）：本人的会话成员关系变化 */
+  conversation: 'chat:conversation',
+  /** 双向：消息撤回（客户端带 ack 发起；服务端广播到会话房） */
+  revoke: 'chat:revoke',
+  /** 双向：送达水位（客户端收到 chat:msg 后上报，无 ack；服务端广播推进） */
+  delivered: 'chat:delivered',
+  /** 双向：表情回应（客户端带 ack；服务端广播到会话房） */
+  reaction: 'chat:reaction',
+  /** 双向：消息编辑（客户端带 ack；服务端广播到会话房） */
+  edit: 'chat:edit',
 } as const;
+
+/** 表情回应白名单（与服务端镜像；越界服务端直接拒）。 */
+export const CHAT_REACTION_EMOJIS: readonly string[] = [
+  '👍',
+  '❤️',
+  '😂',
+  '😮',
+  '😢',
+  '🙏',
+];
 
 export interface ChatSendPayload {
   conversationId: string;
@@ -56,6 +76,60 @@ export interface ChatSenderInfo {
   avatarUrl: string | null;
 }
 
+/** 被引用消息的只读快照（G-09 真引用），服务端读路径批量附带。 */
+export interface ChatReplyToSnapshot {
+  id: string;
+  height: number;
+  senderNickname: string;
+  type: string;
+  /** 服务端生成的短摘要；原消息已撤回时为空串。 */
+  preview: string;
+  revoked: boolean;
+}
+
+/** chat:revoke 客户端载荷（带 ack）。 */
+export interface ChatRevokePayload {
+  conversationId: string;
+  messageId: string;
+}
+
+/** chat:revoke 服务端广播。 */
+export interface ChatRevokeBroadcast {
+  conversationId: string;
+  messageId: string;
+  revokedBy: string;
+}
+
+/** chat:delivered 服务端广播（C→S 上报为 {conversationId, height}）。 */
+export interface ChatDeliveredBroadcast {
+  conversationId: string;
+  userId: string;
+  height: number;
+}
+
+/** chat:reaction 双向载荷（广播多带 userId）。 */
+export interface ChatReactionBroadcast {
+  conversationId: string;
+  messageId: string;
+  emoji: string;
+  op: 'add' | 'remove';
+  userId: string;
+}
+
+/** chat:edit 服务端广播。 */
+export interface ChatEditBroadcast {
+  conversationId: string;
+  messageId: string;
+  content: Record<string, unknown>;
+  editedAt: string;
+}
+
+/** 消息上的表情回应聚合（服务端读路径批量附带）。 */
+export interface ChatReactionSummary {
+  emoji: string;
+  userIds: string[];
+}
+
 export interface ChatMessageDto {
   id: string;
   conversationId: string;
@@ -65,6 +139,15 @@ export interface ChatMessageDto {
   content: Record<string, unknown>;
   sender: ChatSenderInfo | null;
   replyToId: string | null;
+  /** 被引用消息快照（原消息被物理删除时缺省，回落 content.quotedText）。 */
+  replyTo?: ChatReplyToSnapshot;
+  /** 撤回时间（ISO）；未撤回为 null/缺省。撤回消息仍占 height，content 为空对象。 */
+  revokedAt?: string | null;
+  revokedBy?: string | null;
+  /** 编辑时间（ISO）；未编辑缺省。height 不变。 */
+  editedAt?: string | null;
+  /** 表情回应聚合；无回应缺省。 */
+  reactions?: ChatReactionSummary[];
   /** 幂等键：本地乐观消息靠它与服务端回执/广播对账替换。 */
   d: string | null;
   createdAt: string;
@@ -139,7 +222,57 @@ export function isChatMessageDto(value: unknown): value is ChatMessageDto {
   }
   const d = value['d'];
   if (d !== null && d !== undefined && typeof d !== 'string') return false;
+  if (!isValidReactions(value['reactions'])) return false;
+  if (!isValidReplySnapshot(value['replyTo'])) return false;
+  if (!isOptionalTimestamp(value['revokedAt'])) return false;
+  if (!isOptionalTimestamp(value['editedAt'])) return false;
+  const revokedBy = value['revokedBy'];
+  if (
+    revokedBy !== null &&
+    revokedBy !== undefined &&
+    typeof revokedBy !== 'string'
+  ) {
+    return false;
+  }
   return true;
+}
+
+/**
+ * 后来加的这几个可选字段一个都没校验过,而它们都在渲染路径上被直接解引用:
+ * `reactions: [{ emoji: '👍', userIds: null }]` 这样的载荷能一路存进 store,
+ * 然后在 mapChatMessageDtoToUI 读 `r.userIds.length` 时把会话页整个炸掉。
+ */
+function isValidReactions(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  if (!Array.isArray(value)) return false;
+  return value.every(
+    (entry) =>
+      isPlainObject(entry) &&
+      isNonEmptyString(entry['emoji']) &&
+      Array.isArray(entry['userIds']) &&
+      (entry['userIds'] as unknown[]).every((id) => typeof id === 'string'),
+  );
+}
+
+function isValidReplySnapshot(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  if (!isPlainObject(value)) return false;
+  const height = value['height'];
+  return (
+    isNonEmptyString(value['id']) &&
+    typeof height === 'number' &&
+    Number.isInteger(height) &&
+    height >= 0 &&
+    typeof value['senderNickname'] === 'string' &&
+    typeof value['type'] === 'string' &&
+    typeof value['preview'] === 'string' &&
+    typeof value['revoked'] === 'boolean'
+  );
+}
+
+function isOptionalTimestamp(value: unknown): boolean {
+  if (value === null || value === undefined) return true;
+  return typeof value === 'string' && Number.isFinite(Date.parse(value));
 }
 
 export interface ChatReadBroadcast {
@@ -148,9 +281,40 @@ export interface ChatReadBroadcast {
   height: number;
 }
 
+/**
+ * chat:conversation 的变化种类（镜像 circle_be chat.types.ts）:
+ * joined=入座 / left=本人主动退出 / removed=被移出·解散·停用 / updated=预留。
+ */
+export type ChatConversationChangeKind =
+  | 'joined'
+  | 'left'
+  | 'removed'
+  | 'updated';
+
+/** chat:conversation 服务端定向下发:接收者本人的会话成员关系变化。 */
+export interface ChatConversationBroadcast {
+  kind: ChatConversationChangeKind;
+  conversationId: string;
+  userId: string;
+}
+
 export interface ChatTypingBroadcast {
   conversationId: string;
   userId: string;
+}
+
+/**
+ * 离线撤回/编辑增量(REST GET /chat/messages/mutations)。
+ * 镜像 circle_be chat.types.ts 的 ChatMutationsPageDto。
+ */
+export interface ChatMutationsPageDto {
+  messages: ChatMessageDto[];
+  /** 本次响应的服务端时刻。 */
+  serverTime: string;
+  /** 下一次请求应当传的 since(被截断时它停在本页最后一次变更上)。 */
+  nextSince: string;
+  /** 还有没追完的变更;为 true 应当立刻再拉一页。 */
+  hasMore: boolean;
 }
 
 /** 历史分页(REST GET /chat/conversations/:id/messages)。 */
@@ -158,6 +322,8 @@ export interface ChatHistoryPageDto {
   messages: ChatMessageDto[];
   /** 继续向前翻页的 beforeHeight;没有更早消息时为 null。 */
   nextBeforeHeight: number | null;
+  /** afterHeight 增量补拉的续拉游标;已追平为 null(仅 afterHeight 查询返回)。 */
+  nextAfterHeight?: number | null;
 }
 
 /** chat:presence 服务端广播。 */
@@ -205,5 +371,7 @@ export interface ChatConversationDto {
   unreadCount: number;
   pinned: boolean;
   muted: boolean;
+  /** 会话级阅后即焚秒数（S-01）；null/缺省 = 关。 */
+  burnDurationSec?: number | null;
   lastMessageAt: string | null;
 }

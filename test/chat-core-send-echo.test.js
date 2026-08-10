@@ -5,6 +5,28 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+const __localDbStub = {
+  persistLocalConversations: async () => {},
+  upsertLocalConversation: async () => {},
+  removeLocalConversation: async () => {},
+  persistLocalMessages: async () => {},
+  deleteLocalMessage: async () => {},
+  clearLocalConversationMessages: async () => {},
+  deleteLocalMessagesBelow: async () => {},
+  readRecentLocalMessages: async () => [],
+  readLocalConversations: async () => [],
+  searchLocalChatMessages: async () => [],
+  outboxUpsert: async () => {},
+  outboxDelete: async () => {},
+  outboxList: async () => [],
+  pendingReadUpsert: async () => {},
+  pendingReadDelete: async () => {},
+  pendingReadsList: async () => [],
+  initChatLocalDb: async () => false,
+  wipeChatLocalDb: async () => {},
+};
+
+
 // 发送 ack 与服务端 chat:msg 回声是两条独立的路,谁先到不定。
 // 回声先到时它才是权威版本(服务端规范化过的 content、服务端时间戳);
 // ack 路径拿本地乐观对象拼出来的那份是合成品,还带着只该留在本机的 localUri。
@@ -55,12 +77,35 @@ function loadSendStack({ onSend }) {
   const store = runModule('src/chat-core/store.ts', (request) => {
     if (request === 'zustand') return zustandStub();
     if (request === './protocol') return {};
+    if (request === './local-db') {
+      return {
+        persistLocalConversations: async () => {},
+        upsertLocalConversation: async () => {},
+        removeLocalConversation: async () => {},
+        persistLocalMessages: async () => {},
+        deleteLocalMessage: async () => {},
+        clearLocalConversationMessages: async () => {},
+        deleteLocalMessagesBelow: async () => {},
+        readRecentLocalMessages: async () => [],
+        readLocalConversations: async () => [],
+        searchLocalChatMessages: async () => [],
+        outboxUpsert: async () => {},
+        outboxDelete: async () => {},
+        outboxList: async () => [],
+        pendingReadUpsert: async () => {},
+        pendingReadDelete: async () => {},
+        pendingReadsList: async () => [],
+        initChatLocalDb: async () => false,
+        wipeChatLocalDb: async () => {},
+      };
+    }
     if (request === './deleted-messages') {
       return {
         isMessageDeletedLocally: () => false,
         markMessageDeletedLocally: () => {},
       };
     }
+    if (request === './local-db') return __localDbStub;
     throw new Error(`unexpected require: ${request}`);
   });
 
@@ -95,6 +140,7 @@ function loadSendStack({ onSend }) {
     }
     if (request === './store') return store;
     if (request === './protocol') return {};
+    if (request === './local-db') return __localDbStub;
     throw new Error(`unexpected require: ${request}`);
   });
 

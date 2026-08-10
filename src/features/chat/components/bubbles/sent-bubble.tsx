@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
+import i18n from '@/i18n';
 import { useTheme, Spacing, Typography } from '@/theme';
 import { Avatar } from '@/components/ui/avatar';
 import { getAvatarFrameSource } from '@/features/profile/membership-frames';
@@ -8,10 +9,14 @@ import type { ChatMessage } from '@/types';
 import { AVATAR_SIZE, BubbleStatusText } from './shared';
 
 interface SentBubbleProps {
+  /** G-07:点按某个回应 pill 切换自己的回应。 */
+  onReactionPress?: (emoji: string) => void;
   message: ChatMessage;
   selfName?: string;
   selfAvatarUri?: string;
   hideStatus?: boolean;
+  /** 真引用(G-09):点击引用块定位到原消息;原消息不可达时不传。 */
+  onQuotePress?: () => void;
 }
 
 const sSent = StyleSheet.create({
@@ -60,6 +65,8 @@ export const SentBubble: React.FC<SentBubbleProps> = ({
   selfName,
   selfAvatarUri,
   hideStatus,
+  onQuotePress,
+  onReactionPress,
 }) => {
   const { colors } = useTheme();
   const selfAvatarFrame = useAuthStore(
@@ -97,11 +104,47 @@ export const SentBubble: React.FC<SentBubbleProps> = ({
       <View style={sSent.sentContent}>
         <View style={[sSent.sentBubble, d.sentBubble]}>
           {message.quotedText ? (
-            <View style={[sSent.quoteBox, d.quoteBox]}>
-              <Text style={d.quoteText} numberOfLines={2}>{message.quotedText}</Text>
+            onQuotePress ? (
+              <Pressable
+                style={[sSent.quoteBox, d.quoteBox]}
+                onPress={onQuotePress}
+              >
+                <Text style={d.quoteText} numberOfLines={2}>{message.quotedText}</Text>
+              </Pressable>
+            ) : (
+              <View style={[sSent.quoteBox, d.quoteBox]}>
+                <Text style={d.quoteText} numberOfLines={2}>{message.quotedText}</Text>
+              </View>
+            )
+          ) : null}
+          <Text style={d.sentBubbleText}>
+            {message.text}
+            {message.edited
+              ? ` ${i18n.t('chat.message.edited', { defaultValue: '(已编辑)' })}`
+              : ''}
+          </Text>
+          {message.reactions?.length ? (
+            <View style={sReactions.row}>
+              {message.reactions.map((reaction) => (
+                <Pressable
+                  key={reaction.emoji}
+                  style={[
+                    sReactions.pill,
+                    reaction.mine ? sReactions.pillMine : null,
+                  ]}
+                  onPress={
+                    onReactionPress
+                      ? () => onReactionPress(reaction.emoji)
+                      : undefined
+                  }
+                >
+                  <Text style={sReactions.pillText}>
+                    {reaction.emoji} {reaction.count}
+                  </Text>
+                </Pressable>
+              ))}
             </View>
           ) : null}
-          <Text style={d.sentBubbleText}>{message.text}</Text>
         </View>
         {message.time ? (
           <View style={sSent.sentTimeRow}>
@@ -122,3 +165,18 @@ export const SentBubble: React.FC<SentBubbleProps> = ({
     </View>
   );
 };
+
+
+/** G-07 表情回应 pills(两种气泡共用样式,mine 高亮边框)。 */
+const sReactions = StyleSheet.create({
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 },
+  pill: {
+    flexDirection: 'row',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: 'rgba(127,127,127,0.15)',
+  },
+  pillMine: { borderWidth: 1, borderColor: 'rgba(127,127,127,0.6)' },
+  pillText: { fontSize: 12 },
+});

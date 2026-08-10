@@ -229,6 +229,8 @@
       "statusGroup": "Grupo",
       "statusOnline": "En línea",
       "statusOffline": "Desconectado",
+      "statusTyping": "Escribiendo…",
+      "statusTypingGroup": "Alguien está escribiendo…",
       "previewNotice": "La conexión aún no está lista. Vuelve a intentarlo en un momento.",
       "recordingSeconds": "Grabando {{seconds}} s",
       "voiceReleaseCancel": "Suelta para cancelar",
@@ -269,7 +271,16 @@
       "saveFailedHint": "Inténtalo de nuevo más tarde",
       "noteCollected": "Añadida a mis notas",
       "noteAlreadyCollected": "Ya está en mis notas",
-      "noteCollectedHint": "Puedes verla en Mis notas"
+      "noteCollectedHint": "Puedes verla en Mis notas",
+      "revoke": "Retirar",
+      "revokeFailed": "No se pudo retirar",
+      "react": "Reaccionar",
+      "edit": "Editar",
+      "readers": "Leído por",
+      "readersNone": "Nadie lo ha leído todavía",
+      "readersMore": "{{names}} y {{count}} más",
+      "editing": "Editando mensaje",
+      "resend": "Reenviar"
     },
     "mentions": {
       "empty": "No hay miembros para mencionar"
@@ -404,11 +415,11 @@
     },
     "burnMessage": "Autoeliminar mensajes",
     "selectBurnTime": "Elige el tiempo de autoeliminación",
-    "burnOff": "Desactivado",
+    "burnOff": "Desactivar",
     "burn10s": "10 segundos",
     "burn1m": "1 minuto",
     "burn5m": "5 minutos",
-    "clearHistory": "Borrar historial de chat",
+    "clearHistory": "Vaciar historial de chat",
     "clearHistoryWarning": "Esto eliminará permanentemente todos los mensajes de esta conversación.",
     "clear": "Borrar",
     "deleteFriend": "Eliminar contacto",
@@ -539,7 +550,9 @@
       "sending": "Enviando",
       "sendFailed": "Fallido",
       "read": "Leído",
-      "unread": "No leído"
+      "unread": "No leído",
+      "delivered": "Entregado",
+      "edited": "(editado)"
     },
     "friendCard": {
       "noPersona": "Esta persona es muy perezosa y no dejó nada",
@@ -578,7 +591,10 @@
       "missed": "Llamada perdida",
       "noAnswer": "Sin respuesta"
     },
-    "lowCreditScore": "Tu puntuación de crédito es inferior a {{minScore}}, por lo que no puedes enviar mensajes ahora"
+    "lowCreditScore": "Tu puntuación de crédito es inferior a {{minScore}}, por lo que no puedes enviar mensajes ahora",
+    "burnAfterReading": "Mensajes temporales",
+    "clearHistoryConfirm": "Solo se borra tu copia del historial. ¿Vaciar?",
+    "clearHistoryDone": "Vaciado"
   },
   "messages": {
     "title": "Mensajes",
@@ -2479,6 +2495,9 @@
     "videoCallTitle": "Videollamada"
   },
   "im": {
+    "conversation": {
+      "removedFromGroup": "Te han eliminado de este chat de grupo"
+    },
     "time": {
       "yesterday": "Ayer"
     },
@@ -2491,9 +2510,12 @@
       "groupNameUpdated": "Nombre del grupo actualizado",
       "groupDismissed": "Grupo disuelto",
       "messageRevoked": "Se retiró un mensaje",
-      "friendAdded": "Ahora son amigos, ¡salúdense!"
+      "friendAdded": "Ahora son amigos, ¡salúdense!",
+      "burnEnabled": "Mensajes temporales activados ({{duration}})",
+      "burnDisabled": "Mensajes temporales desactivados"
     },
     "preview": {
+      "revoked": "[Mensaje retirado]",
       "image": "[Foto]",
       "video": "[Vídeo]",
       "voice": "[Voz]",
@@ -2506,7 +2528,23 @@
       "note": "[Nota] {{title}}",
       "verification": "[Verificar] {{name}} te pidió que avales",
       "default": "[Mensaje]",
-      "plazaPost": "[Evento] {{title}}"
+      "plazaPost": "[Evento] {{title}}",
+      "sendFailedPrefix": "[Error de envío]"
+    },
+    "message": {
+      "revokedBySelf": "Retiraste un mensaje",
+      "revokedByOther": "\"{{name}}\" retiró un mensaje",
+      "revokedByModerator": "Un administrador retiró un mensaje",
+      "revokedQuote": "Mensaje retirado",
+      "revokedPreview": "[Mensaje retirado]",
+      "unsupported": "[Tipo de mensaje no compatible]"
+    },
+    "burn": {
+      "s30": "30 segundos",
+      "m5": "5 minutos",
+      "h1": "1 hora",
+      "d1": "1 día",
+      "d7": "7 días"
     }
   },
   "permissions": {
@@ -2540,8 +2578,8 @@
     "TEMP_CHAT_JOIN_FAILED": "No se pudo unir, inténtalo de nuevo",
     "NOTE_RESTORE_DUPLICATE": "Ya existe otra copia activa de esta nota guardada.",
     "NOTE_SHARE_LINK_LIMIT": "Límite de enlaces compartidos alcanzado; revoca los que no uses",
-    "UPLOAD_PAYLOAD_TOO_LARGE": "El archivo es demasiado grande para subirlo",
     "UPLOAD_INVALID_CONTENT_TYPE": "Este tipo de archivo no es compatible",
+    "UPLOAD_PAYLOAD_TOO_LARGE": "El archivo es demasiado grande para subirlo",
     "COLLECTION_LIMIT": "Límite de colecciones alcanzado; elimina las que no necesites",
     "ADMIN_USER_NOT_FOUND": "El usuario no existe.",
     "ADMIN_USER_SELF_STATUS_CHANGE": "No puedes bloquear ni eliminar tu propia cuenta de administrador.",
@@ -2778,6 +2816,11 @@
     "PRIVACY_INVITE_PERMISSION_INVALID": "Permiso de invitación no admitido",
     "USER_UPDATE_OWN_ONLY": "Solo puedes actualizar tu propio perfil",
     "USER_DELETE_OWN_ONLY": "Solo puedes eliminar tu propia cuenta",
-    "USER_INVALID_BIRTHDAY": "Fecha de nacimiento no válida"
+    "USER_INVALID_BIRTHDAY": "Fecha de nacimiento no válida",
+    "CHAT_MESSAGE_NOT_FOUND": "No se encontró el mensaje",
+    "CHAT_REVOKE_WINDOW_EXPIRED": "Ya no se puede retirar el mensaje",
+    "CHAT_REVOKE_FORBIDDEN": "No puedes retirar este mensaje",
+    "CHAT_EDIT_WINDOW_EXPIRED": "Ya no se puede editar",
+    "CHAT_EDIT_FORBIDDEN": "No se puede editar este mensaje"
   }
 }

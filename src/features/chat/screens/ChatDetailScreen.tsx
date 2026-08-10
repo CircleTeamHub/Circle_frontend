@@ -79,6 +79,7 @@ import {
   loadOlderConversationMessages,
   resetHistoryCursor,
   markConversationAsRead,
+  retryFailedChatMessage,
   sendCardMessage,
   sendImageMessage,
   sendLocationMessage,
@@ -87,13 +88,22 @@ import {
   sendVoiceMessage,
 } from '@/chat-core/client';
 import { getChatSendErrorMessage } from '@/chat-core/send-errors';
+import { OptionPickerSheet } from '@/components/ui/option-picker-sheet';
 import {
   createChatMessageMapCache,
   mapChatMessageDtosToUI,
 } from '@/chat-core/message-mappers';
-import { fetchChatMembers } from '@/chat-core/api';
-import { queryChatPresence } from '@/chat-core/socket-manager';
+import { fetchChatMembers, fetchMessageReaders } from '@/chat-core/api';
+import {
+  queryChatPresence,
+  revokeChatMessage,
+  sendChatEditMessage,
+  sendChatReaction,
+  sendChatTyping,
+} from '@/chat-core/socket-manager';
+import { CHAT_REACTION_EMOJIS } from '@/chat-core/protocol';
 import { useChatStore } from '@/chat-core/store';
+import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
 import { useAuthStore } from '@/stores/authStore';
 import { type FriendProfile } from '@/services/api/friends';
 import type { NoteSummary } from '@/features/notes/types';
@@ -149,7 +159,6 @@ import {
   type MentionTarget,
 } from '@/features/chat/utils/chat-send-payloads';
 import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
-import { collapseDuplicateFriendAddedNotices } from '@/features/chat/utils/system-notice-dedupe';
 import { isChatImageTooLarge } from '@/features/chat/utils/chat-media-policy';
 import { uploadChatImageThumbnail } from '@/features/chat/utils/image-thumbnail';
 
@@ -408,6 +417,9 @@ const s = StyleSheet.create({
   },
 });
 
+/** 引用跳转最多往回翻几页(一页 50 条);翻不到就放弃,不能无界翻。 */
+const QUOTE_PAGING_MAX = 10;
+
 export default function ChatDetailScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -552,6 +564,12 @@ export default function ChatDetailScreen() {
   const peerReadHeight = useChatStore((state) =>
     params.conversationType !== 'group' && sourceID
       ? (state.readWatermarks[conversationID]?.[sourceID] ?? 0)
+      : 0,
+  );
+  // 对端送达水位(单聊「已送达」标记,G-07):chat:delivered 广播驱动。
+  const peerDeliveredHeight = useChatStore((state) =>
+    params.conversationType !== 'group' && sourceID
+      ? (state.deliveredWatermarks[conversationID]?.[sourceID] ?? 0)
       : 0,
   );
   const paramTitle =
@@ -737,6 +755,25 @@ export default function ChatDetailScreen() {
       conversationType === 'single' && sourceID ? sourceID : null,
     [conversationType, sourceID],
   );
+  // 输入状态开关(设置页早就有这两项,这里真正接上:关掉就不向对方上报)。
+  const typingSingle = useAppSettingsStore((state) => state.settings.singleTyping);
+  const typingGroup = useAppSettingsStore((state) => state.settings.groupTyping);
+  // 对端「正在输入」有效期;到期自动回落在线状态。
+  const typingUntil = useChatStore(
+    (state) => state.typingUntilByConversation[conversationID] ?? 0,
+  );
+  const [typingVisible, setTypingVisible] = useState(false);
+  useEffect(() => {
+    const remaining = typingUntil - Date.now();
+    if (remaining <= 0) {
+      setTypingVisible(false);
+      return;
+    }
+    setTypingVisible(true);
+    const timer = setTimeout(() => setTypingVisible(false), remaining);
+    return () => clearTimeout(timer);
+  }, [typingUntil]);
+
   // 只订阅对方这一个用户的在线状态切片(chat-core presence),
   // 其他用户上下线不触发本页重渲染。
   const peerOnlineStatus = useChatStore((state) =>
@@ -862,9 +899,10 @@ export default function ChatDetailScreen() {
       currentUserID,
       peerReadHeight,
       box,
+      peerDeliveredHeight,
     );
-    return collapseDuplicateFriendAddedNotices(mapped);
-  }, [currentUserID, conversationMessages, peerReadHeight]);
+    return mapped;
+  }, [currentUserID, conversationMessages, peerReadHeight, peerDeliveredHeight]);
   messagesLengthRef.current = messages.length;
 
   // 在此会话页时来新消息 → 即时推进已读水位(socket pending 队列自带去重合并)。
@@ -875,6 +913,10 @@ export default function ChatDetailScreen() {
     if (!isFocused || !conversationID || !conversationMessages?.length) return;
     markConversationAsRead(conversationID);
   }, [conversationID, conversationMessages, isFocused]);
+
+  // 异步分页回来时闭包里的 messages 已经过期,滚动要按最新那份算 index。
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
 
   // 搜索定位：在 inverted 列表里 scrollToIndex 仍然按 index 计数，找到就跳。
   useEffect(() => {
@@ -1037,6 +1079,8 @@ export default function ChatDetailScreen() {
     y: number;
   } | null>(null);
   const [quoteTarget, setQuoteTarget] = useState<ChatMessage | null>(null);
+  // G-07 编辑态:非空时发送按钮改走 chat:edit,输入框上方出现编辑横条。
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [highlightedMessageID, setHighlightedMessageID] = useState<string | null>(
     null,
   );
@@ -1129,10 +1173,225 @@ export default function ChatDetailScreen() {
   );
 
   // Build the floating menu's items for the currently long-pressed message.
+  // G-02 撤回:自己已送达的消息,2 分钟窗口内可撤(圈主/管理员由服务端另行放行,
+  // 菜单端先只做本人入口,权限判定始终以服务端 ack 为准)。
+  const canRevokeMessage = useCallback(
+    (message: ChatMessage) => {
+      if (!message.outgoing || message.sendStatus !== 2) return false;
+      const dto = useChatStore
+        .getState()
+        .messagesByConversation[conversationID]?.find(
+          (m) => m.id === message.id,
+        );
+      if (!dto || dto.height <= 0 || dto.revokedAt) return false;
+      return Date.now() - Date.parse(dto.createdAt) <= 2 * 60_000;
+    },
+    [conversationID],
+  );
+
+  const handleRevokeMessage = useCallback(
+    (message: ChatMessage) => {
+      void revokeChatMessage(conversationID, message.id)
+        .then(() => {
+          // 本端乐观翻灰条;广播回来会再走一次 applyRevoke,幂等。
+          const state = useChatStore.getState();
+          state.applyRevoke(
+            conversationID,
+            message.id,
+            state.currentUserId ?? '',
+          );
+        })
+        .catch((error: unknown) => {
+          // 撤回失败抛的是 ChatSendError(ack 通道),不是 ApiError ——
+          // getApiErrorMessage 对它只会原样返回 error.message,也就是服务端
+          // 的中文文案或者裸的 CHAT_REVOKE_WINDOW_EXPIRED 字符串。
+          Alert.alert(
+            t('chat.messageActions.revokeFailed', { defaultValue: '撤回失败' }),
+            getChatSendErrorMessage(
+              error,
+              t('chat.messageActions.revokeFailed', {
+                defaultValue: '撤回失败',
+              }),
+            ),
+          );
+        });
+    },
+    [conversationID, t],
+  );
+
+  // G-07 表情回应:mine 则 remove,否则 add;失败静默(下一次点按可重试)。
+  const handleToggleReaction = useCallback(
+    (message: ChatMessage, emoji: string) => {
+      const mine = message.reactions?.some(
+        (r) => r.emoji === emoji && r.mine,
+      );
+      void sendChatReaction(
+        conversationID,
+        message.id,
+        emoji,
+        mine ? 'remove' : 'add',
+      ).catch(() => undefined);
+    },
+    [conversationID],
+  );
+
+  // 六个表情 + 取消 = 7 个按钮,而 Android 的 Alert 最多渲染 3 个 ——
+  // 安卓用户看不到后面几个表情,也就永远选不到。改用应用内选项面板。
+  const [reactionTarget, setReactionTarget] = useState<ChatMessage | null>(null);
+  const reactionOptions = useMemo(
+    () => CHAT_REACTION_EMOJIS.map((emoji) => ({ value: emoji, label: emoji })),
+    [],
+  );
+
+  const handleOpenReactionPicker = useCallback((message: ChatMessage) => {
+    setReactionTarget(message);
+  }, []);
+
+  const handlePickReaction = useCallback(
+    (emoji: string) => {
+      const target = reactionTarget;
+      setReactionTarget(null);
+      if (target) handleToggleReaction(target, emoji);
+    },
+    [handleToggleReaction, reactionTarget],
+  );
+
+  // G-07 编辑入口:自己已送达的 text/quote,2 分钟内。
+  const canEditMessage = useCallback(
+    (message: ChatMessage) => {
+      if (!message.outgoing || message.sendStatus !== 2) return false;
+      const dto = useChatStore
+        .getState()
+        .messagesByConversation[conversationID]?.find(
+          (m) => m.id === message.id,
+        );
+      if (!dto || dto.height <= 0 || dto.revokedAt) return false;
+      if (dto.type !== 'text' && dto.type !== 'quote') return false;
+      return Date.now() - Date.parse(dto.createdAt) <= 2 * 60_000;
+    },
+    [conversationID],
+  );
+
+  const handleStartEditMessage = useCallback(
+    (message: ChatMessage) => {
+      const dto = useChatStore
+        .getState()
+        .messagesByConversation[conversationID]?.find(
+          (m) => m.id === message.id,
+        );
+      const text =
+        typeof dto?.content['text'] === 'string'
+          ? (dto.content['text'] as string)
+          : '';
+      setEditingMessageId(message.id);
+      setQuoteTarget(null);
+      setDraft(text);
+    },
+    [conversationID],
+  );
+
+  // G-07 逐条已读(群聊自己的消息):读者列表来自已读水位,无回执表。
+  const handleShowReaders = useCallback(
+    (message: ChatMessage) => {
+      const requestedFor = conversationID;
+      void fetchMessageReaders(conversationID, message.id)
+        .then((result) => {
+          // 响应回来时可能已经退出这个会话、甚至换了账号 —— 那时候弹一个装着
+          // 上一个会话成员名字的全局 Alert,是弹在一个毫不相干的页面上。
+          if (!mountedRef.current) return;
+          if (useChatStore.getState().activeConversationId !== requestedFor) {
+            return;
+          }
+          const names = result.readers
+            .map((reader) => reader.nickname)
+            .filter(Boolean);
+          // total 可能大于这一页(服务端上限 200)。只渲染 readers 的话,
+          // 3000 人的群里会显示成「正好这 200 个人读了」,看不出还有更多。
+          const hidden = Math.max(0, (result.total ?? names.length) - names.length);
+          const body =
+            names.length > 0
+              ? hidden > 0
+                ? t('chat.messageActions.readersMore', {
+                    names: names.join('、'),
+                    count: hidden,
+                    defaultValue: '{{names}} 等 {{count}} 人以上',
+                  })
+                : names.join('、')
+              : t('chat.messageActions.readersNone', {
+                  defaultValue: '还没有人读到这条消息',
+                });
+          Alert.alert(
+            t('chat.messageActions.readers', { defaultValue: '已读成员' }),
+            body,
+          );
+        })
+        .catch(() => undefined);
+    },
+    [conversationID, t],
+  );
+
   const messageActions = useMemo<MessageAction[]>(() => {
     const message = actionMenu?.message;
     if (!message) return [];
     const actions: MessageAction[] = [];
+    if (message.sendStatus === 3 && message.deliveryId) {
+      actions.push({
+        key: 'resend',
+        icon: 'refresh-outline',
+        label: t('chat.messageActions.resend', { defaultValue: '重发' }),
+        onPress: () => {
+          void retryFailedChatMessage(
+            conversationID,
+            message.deliveryId as string,
+          ).catch((error: unknown) => {
+            setSendError(
+              getChatSendErrorMessage(
+                error,
+                t('chat.detail.sendFailedText', { defaultValue: '发送失败' }),
+              ),
+            );
+          });
+        },
+      });
+    }
+    // 回应只给能渲染回应条的气泡开放。图片/语音/位置/各类卡片走的是自己的组件,
+    // 里面没有回应行 —— 点了之后服务端确实记下了,时间线上却什么都看不到,
+    // 连自己刚点的那个都消失。
+    if (
+      (message.sendStatus === undefined || message.sendStatus === 2) &&
+      (message.type === 'sent' || message.type === 'received')
+    ) {
+      actions.push({
+        key: 'react',
+        icon: 'happy-outline',
+        label: t('chat.messageActions.react', { defaultValue: '回应' }),
+        onPress: () => handleOpenReactionPicker(message),
+      });
+    }
+    if (canEditMessage(message)) {
+      actions.push({
+        key: 'edit',
+        icon: 'create-outline',
+        label: t('chat.messageActions.edit', { defaultValue: '编辑' }),
+        onPress: () => handleStartEditMessage(message),
+      });
+    }
+    if (isGroupChat && message.outgoing && message.sendStatus === 2) {
+      actions.push({
+        key: 'readers',
+        icon: 'checkmark-done-outline',
+        label: t('chat.messageActions.readers', { defaultValue: '已读成员' }),
+        onPress: () => handleShowReaders(message),
+      });
+    }
+    if (canRevokeMessage(message)) {
+      actions.push({
+        key: 'revoke',
+        icon: 'arrow-undo-outline',
+        label: t('chat.messageActions.revoke', { defaultValue: '撤回' }),
+        onPress: () => handleRevokeMessage(message),
+      });
+    }
     if (message.text?.trim()) {
       actions.push({
         key: 'copy',
@@ -1178,12 +1437,20 @@ export default function ChatDetailScreen() {
     return actions;
   }, [
     actionMenu,
+    canEditMessage,
+    canRevokeMessage,
+    conversationID,
+    handleOpenReactionPicker,
+    handleShowReaders,
+    handleStartEditMessage,
+    isGroupChat,
     handleCollectMessage,
     handleCopyMessage,
     handleDeleteMessage,
     handleForwardMessage,
     handleQuoteMessage,
     handleReportMessage,
+    handleRevokeMessage,
     t,
   ]);
 
@@ -1391,6 +1658,76 @@ export default function ChatDetailScreen() {
     );
   }, [startCallWithType, t]);
 
+  // 真引用点击定位:原消息还在内存窗口就滚过去;不在窗口(更早的历史)先不跳,
+  // 批 1 本地库落地后升级成「按 height 拉一页再滚」。
+  /**
+   * 引用块跳转:目标不在内存窗口里时,按 quoteHeight 往回翻到它出现为止。
+   * 有界(QUOTE_PAGING_MAX 页),到头或翻满就放弃 —— 宁可不动,也不能一直翻。
+   */
+  const quotePagingRef = useRef(false);
+
+  const loadUntilQuoteVisible = useCallback(
+    async (item: ChatMessage) => {
+      if (!conversationID || quotePagingRef.current) return;
+      const targetId = item.quoteMessageId;
+      if (!targetId) return;
+      quotePagingRef.current = true;
+      try {
+        for (let page = 0; page < QUOTE_PAGING_MAX; page += 1) {
+          if (!mountedRef.current) return;
+          if (!hasMoreHistory(conversationID)) return;
+          await loadOlderConversationMessages(conversationID);
+          if (!mountedRef.current) return;
+          const timeline =
+            useChatStore.getState().messagesByConversation[conversationID] ?? [];
+          if (timeline.some((m) => m.id === targetId)) {
+            // 命中之后交给 searchedMsgID 那条既有的滚动路径:它已经处理好了
+            // 「列表还没重新布局完」的重试与高亮。
+            setHighlightedMessageID(targetId);
+            const index = messagesRef.current.findIndex(
+              (m) => m.id === targetId,
+            );
+            if (index >= 0) {
+              flatListRef.current?.scrollToIndex({
+                index,
+                viewPosition: 0.5,
+                animated: true,
+              });
+            }
+            return;
+          }
+        }
+      } catch (err) {
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          console.warn('[chat] paging to quoted message failed', err);
+        }
+      } finally {
+        quotePagingRef.current = false;
+      }
+    },
+    [conversationID],
+  );
+
+  const handleQuotePress = useCallback(
+    (item: ChatMessage) => {
+      if (!item.quoteMessageId) return;
+      const index = messages.findIndex((m) => m.id === item.quoteMessageId);
+      if (index >= 0) {
+        flatListRef.current?.scrollToIndex({
+          index,
+          viewPosition: 0.5,
+          animated: true,
+        });
+        return;
+      }
+      // 原消息比当前内存窗口更早。原来直接 return —— 引用块照样是可点的,
+      // 点下去却什么都不发生,而会话稍微长一点这就是常态。按 quoteHeight
+      // 往回翻,翻到目标进窗口为止(有界),然后再滚过去。
+      void loadUntilQuoteVisible(item);
+    },
+    [loadUntilQuoteVisible, messages],
+  );
+
   const renderItem = useCallback(({ item }: { item: ChatMessage }) => {
     switch (item.type) {
       case 'date': return <DatePill text={item.text ?? ''} />;
@@ -1402,6 +1739,12 @@ export default function ChatDetailScreen() {
             senderName={receivedDisplayName(item)}
             senderAvatarUri={receivedAvatarUri(item)}
             onAvatarPress={() => handleOpenMessageSender(item)}
+            onQuotePress={
+              item.quoteMessageId && !item.quoteRevoked
+                ? () => handleQuotePress(item)
+                : undefined
+            }
+            onReactionPress={(emoji) => handleToggleReaction(item, emoji)}
           />
         ));
       case 'sent':
@@ -1411,6 +1754,12 @@ export default function ChatDetailScreen() {
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             hideStatus={isGroupChat}
+            onQuotePress={
+              item.quoteMessageId && !item.quoteRevoked
+                ? () => handleQuotePress(item)
+                : undefined
+            }
+            onReactionPress={(emoji) => handleToggleReaction(item, emoji)}
           />
         ));
       case 'location':
@@ -1593,6 +1942,8 @@ export default function ChatDetailScreen() {
     withGroupSenderLabel,
     handleOpenMessageSender,
     handleOpenUserCard,
+    handleQuotePress,
+    handleToggleReaction,
     isGroupChat,
     selfAvatarUri,
     selfName,
@@ -1759,6 +2110,11 @@ export default function ChatDetailScreen() {
   const handleDraftChange = useCallback(
     (next: string) => {
       setDraft(next);
+      // 「正在输入」上报:按设置开关门禁,只在有内容时发(清空不算输入);
+      // 节流(2s)在 socket-manager 里做。
+      if (next.length > 0 && (isGroupChat ? typingGroup : typingSingle)) {
+        sendChatTyping(conversationID);
+      }
       setMentionTargets((current) => getMentionsPresentInText(next, current));
       if (!isGroupChat || !canViewGroupMemberProfiles) {
         setMentionQuery(null);
@@ -1779,7 +2135,15 @@ export default function ChatDetailScreen() {
         setMentionPickerVisible(false);
       }
     },
-    [canViewGroupMemberProfiles, draft, isGroupChat, loadMentionCandidates],
+    [
+      canViewGroupMemberProfiles,
+      conversationID,
+      draft,
+      isGroupChat,
+      loadMentionCandidates,
+      typingGroup,
+      typingSingle,
+    ],
   );
 
   const handlePickMention = useCallback((target: MentionTarget) => {
@@ -2566,6 +2930,39 @@ export default function ChatDetailScreen() {
   const handleSend = useCallback(async () => {
     const nextText = draft.trim();
 
+    // G-07 编辑态:改走 chat:edit,不新建消息。
+    if (editingMessageId) {
+      if (!nextText || sending) return;
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
+      setSending(true);
+      try {
+        setSendError(null);
+        await sendChatEditMessage(conversationID, editingMessageId, nextText);
+        useChatStore
+          .getState()
+          .applyEdit(
+            conversationID,
+            editingMessageId,
+            { text: nextText },
+            new Date().toISOString(),
+          );
+        setEditingMessageId(null);
+        setDraft('');
+      } catch (error) {
+        setSendError(
+          getChatSendErrorMessage(
+            error,
+            t('chat.detail.sendFailedText', { defaultValue: '发送失败' }),
+          ),
+        );
+      } finally {
+        inFlightRef.current = false;
+        setSending(false);
+      }
+      return;
+    }
+
     // 有待发送卡片时，即使文字为空也允许发送（只发卡片）。
     if ((!nextText && !pendingCard) || sending || !sourceID || isPreviewMode) {
       return;
@@ -2638,6 +3035,7 @@ export default function ChatDetailScreen() {
     conversationID,
     conversationType,
     draft,
+    editingMessageId,
     isGroupChat,
     isPreviewMode,
     mentionTargets,
@@ -2671,13 +3069,23 @@ export default function ChatDetailScreen() {
               <Text style={[s.headerStatusText, d.headerStatusText]}>
                 {authUser?.accountId === sourceID
                   ? t('chat.detail.statusSelf', { defaultValue: '自己' })
-                  : conversationType !== 'single'
-                    ? t('chat.detail.statusGroup', { defaultValue: '群聊' })
-                    : peerOnline
-                      ? t('chat.detail.statusOnline', { defaultValue: '在线' })
-                      : t('chat.detail.statusOffline', {
-                          defaultValue: '离线',
-                        })}
+                  : // 群聊分支原来直接落「群聊」二字,typingVisible 根本没机会
+                    // 参与判断 —— 群成员照常上报 typing,却没有任何人看得见。
+                    typingVisible
+                    ? conversationType !== 'single'
+                      ? t('chat.detail.statusTypingGroup', {
+                          defaultValue: '有人正在输入…',
+                        })
+                      : t('chat.detail.statusTyping', {
+                          defaultValue: '对方正在输入…',
+                        })
+                    : conversationType !== 'single'
+                      ? t('chat.detail.statusGroup', { defaultValue: '群聊' })
+                      : peerOnline
+                        ? t('chat.detail.statusOnline', { defaultValue: '在线' })
+                        : t('chat.detail.statusOffline', {
+                            defaultValue: '离线',
+                          })}
               </Text>
             </View>
           </View>
@@ -2839,6 +3247,25 @@ export default function ChatDetailScreen() {
               </View>
             }
           />
+        </View>
+      ) : null}
+      {editingMessageId ? (
+        <View style={[s.quoteComposerBar, d.composerShell]}>
+          <Text
+            style={[s.quoteComposerText, { color: colors.textSecondary }]}
+            numberOfLines={1}
+          >
+            {t('chat.messageActions.editing', { defaultValue: '编辑消息' })}
+          </Text>
+          <Pressable
+            onPress={() => {
+              setEditingMessageId(null);
+              setDraft('');
+            }}
+            hitSlop={8}
+          >
+            <Ionicons name="close" size={18} color={colors.textSecondary} />
+          </Pressable>
         </View>
       ) : null}
       {quoteTarget ? (
@@ -3078,6 +3505,15 @@ export default function ChatDetailScreen() {
         anchor={actionMenu ? { x: actionMenu.x, y: actionMenu.y } : null}
         actions={messageActions}
         onDismiss={() => setActionMenu(null)}
+      />
+
+      <OptionPickerSheet
+        visible={reactionTarget !== null}
+        title={t('chat.messageActions.react', { defaultValue: '回应' })}
+        options={reactionOptions}
+        selectedValue=""
+        onSelect={handlePickReaction}
+        onClose={() => setReactionTarget(null)}
       />
 
       {/* 微信式全屏录音浮层：录音时盖在最上层，纯展示（pointerEvents none）。 */}

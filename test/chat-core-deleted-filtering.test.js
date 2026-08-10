@@ -5,6 +5,28 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+const __localDbStub = {
+  persistLocalConversations: async () => {},
+  upsertLocalConversation: async () => {},
+  removeLocalConversation: async () => {},
+  persistLocalMessages: async () => {},
+  deleteLocalMessage: async () => {},
+  clearLocalConversationMessages: async () => {},
+  deleteLocalMessagesBelow: async () => {},
+  readRecentLocalMessages: async () => [],
+  readLocalConversations: async () => [],
+  searchLocalChatMessages: async () => [],
+  outboxUpsert: async () => {},
+  outboxDelete: async () => {},
+  outboxList: async () => [],
+  pendingReadUpsert: async () => {},
+  pendingReadDelete: async () => {},
+  pendingReadsList: async () => [],
+  initChatLocalDb: async () => false,
+  wipeChatLocalDb: async () => {},
+};
+
+
 // 本端删除的消息必须在**每一条**呈现路径上都被挡住,不只是入库。
 // 聊天记录的文本/媒体/文件/日期四屏与全局搜索都是直接渲染检索响应、不进 store;
 // 前台横幅同理走的是分发器而不是 store。漏掉任何一条,删过的消息就会重现。
@@ -63,6 +85,7 @@ function loadDeleted() {
     if (request === '@/storage') return { mmkvJsonStorage: {} };
     // 超上限时会报一次(墓碑被淘汰=那条消息会复活,必须可观测)。
     if (request === '@/observability/sentry') return { reportError: () => {} };
+    if (request === './local-db') return __localDbStub;
     throw new Error(`unexpected require: ${request}`);
   });
 }
@@ -103,6 +126,7 @@ test('search responses drop locally deleted messages', () => {
       return { useChatStore: { getState: () => ({ setConversations: () => {}, ingestMessages: () => {}, upsertConversation: () => {}, removeConversation: () => {} }) } };
     }
     if (request === './protocol') return {};
+    if (request === './local-db') return __localDbStub;
     throw new Error(`unexpected require: ${request}`);
   });
 
@@ -160,6 +184,7 @@ function loadApi(deleted, respond) {
       };
     }
     if (request === './protocol') return {};
+    if (request === './local-db') return __localDbStub;
     throw new Error(`unexpected require: ${request}`);
   });
 }

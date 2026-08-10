@@ -26,13 +26,19 @@ import type { StoredChatMessage } from './store';
 export interface ChatMessageMapCache {
   userID: string | null;
   peerReadHeight: number;
+  peerDeliveredHeight: number;
   cache: WeakMap<object, ChatMessage>;
 }
 
 export function createChatMessageMapCache(
   userID: string | null,
 ): ChatMessageMapCache {
-  return { userID, peerReadHeight: 0, cache: new WeakMap() };
+  return {
+    userID,
+    peerReadHeight: 0,
+    peerDeliveredHeight: 0,
+    cache: new WeakMap(),
+  };
 }
 
 function str(value: unknown): string | undefined {
@@ -260,10 +266,37 @@ export function mapChatMessageDtoToUI(
   dto: StoredChatMessage,
   currentUserId: string | null,
   peerReadHeight: number,
+  peerDeliveredHeight = 0,
 ): ChatMessage {
   const isSent = dto.sender !== null && dto.sender.id === currentUserId;
   const content = dto.content ?? {};
   const sendStatus: 1 | 2 | 3 = dto.height > 0 ? 2 : dto.failed ? 3 : 1;
+  // G-02 撤回:整条翻成居中灰条,原类型不再渲染(content 已被服务端清空)。
+  if (dto.revokedAt) {
+    const revokerIsSelf =
+      currentUserId !== null && dto.revokedBy === currentUserId;
+    const revokerIsSender =
+      dto.sender !== null && dto.revokedBy === dto.sender.id;
+    const text = revokerIsSelf
+      ? i18n.t('im.message.revokedBySelf', {
+          defaultValue: '你撤回了一条消息',
+        })
+      : revokerIsSender
+        ? i18n.t('im.message.revokedByOther', {
+            defaultValue: '"{{name}}"撤回了一条消息',
+            name: dto.sender?.nickname ?? '',
+          })
+        : i18n.t('im.message.revokedByModerator', {
+            defaultValue: '一条消息已被管理员撤回',
+          });
+    return {
+      id: dto.id,
+      type: 'system-notice',
+      time: formatChatTimestamp(dto.createdAt),
+      text,
+    };
+  }
+
   const base = {
     id: dto.id,
     time: formatChatTimestamp(dto.createdAt),
@@ -275,16 +308,45 @@ export function mapChatMessageDtoToUI(
     outgoing: isSent,
     sendStatus: isSent ? sendStatus : undefined,
     isRead: isSent && dto.height > 0 ? dto.height <= peerReadHeight : undefined,
+    isDelivered:
+      isSent && dto.height > 0
+        ? dto.height <= peerDeliveredHeight
+        : undefined,
+    // G-07:回应聚合翻成 UI 形状;编辑标记驱动「(已编辑)」后缀。
+    reactions:
+      dto.reactions && dto.reactions.length > 0
+        ? dto.reactions.map((r) => ({
+            emoji: r.emoji,
+            count: r.userIds.length,
+            mine:
+              currentUserId !== null && r.userIds.includes(currentUserId),
+          }))
+        : undefined,
+    edited: dto.editedAt ? true : undefined,
+    // G-01:失败气泡重发要按 d 找 outbox 条目。
+    deliveryId: dto.d ?? undefined,
   } satisfies Partial<ChatMessage>;
 
   switch (dto.type) {
-    case 'quote':
+    case 'quote': {
+      // 真引用优先:replyTo 快照给出权威预览与跳转坐标;
+      // 原消息被物理删除时快照缺省,回落发送时固化的 quotedText 文本。
+      const replyTo = dto.replyTo;
+      const quotedText = replyTo
+        ? replyTo.revoked
+          ? i18n.t('im.message.revokedQuote', { defaultValue: '消息已撤回' })
+          : `${replyTo.senderNickname}: ${replyTo.preview}`.replace(/^: /, '')
+        : str(content['quotedText']);
       return {
         ...base,
         type: isSent ? 'sent' : 'received',
         text: str(content['text']) ?? '',
-        quotedText: str(content['quotedText']),
+        quotedText,
+        quoteMessageId: replyTo?.id,
+        quoteHeight: replyTo && !replyTo.revoked ? replyTo.height : undefined,
+        quoteRevoked: replyTo?.revoked,
       };
+    }
     case 'image':
       return {
         ...base,
@@ -355,6 +417,18 @@ export function mapChatMessageDtoToUI(
       if (!callRecord) break;
       return { ...base, type: 'call-record', callRecord };
     }
+    case 'file': {
+      // 旧 OpenIM 栈遗留的文件消息(自研栈没有发送入口):渲染成带文件名的
+      // 文本气泡,别让历史记录里出现一排空白。
+      const fileName = str(content['fileName']) ?? str(content['name']);
+      return {
+        ...base,
+        type: isSent ? 'sent' : 'received',
+        text: fileName
+          ? `\u{1F4C4} ${fileName}`
+          : i18n.t('im.preview.file', { defaultValue: '[文件]' }),
+      };
+    }
     case 'system':
       return {
         id: dto.id,
@@ -365,11 +439,19 @@ export function mapChatMessageDtoToUI(
     default:
       break;
   }
-  // text 与未知/畸形类型都落文本气泡(显示其 text 字段或空串,不渲染破位)。
+  // text 落文本气泡;未知类型优先显示其 text 字段,连 text 都没有的
+  // (畸形 call-record、未来新增的类型)给占位词条,不渲染空白气泡。
+  const fallbackText = str(content['text']);
   return {
     ...base,
     type: isSent ? 'sent' : 'received',
-    text: str(content['text']) ?? '',
+    text:
+      fallbackText ??
+      (dto.type === 'text'
+        ? ''
+        : i18n.t('im.message.unsupported', {
+            defaultValue: '[暂不支持的消息类型]',
+          })),
   };
 }
 
@@ -426,10 +508,16 @@ export function mapChatMessageDtosToUI(
   currentUserId: string | null,
   peerReadHeight: number,
   box: ChatMessageMapCache,
+  peerDeliveredHeight = 0,
 ): ChatMessage[] {
-  if (box.userID !== currentUserId || box.peerReadHeight !== peerReadHeight) {
+  if (
+    box.userID !== currentUserId ||
+    box.peerReadHeight !== peerReadHeight ||
+    box.peerDeliveredHeight !== peerDeliveredHeight
+  ) {
     box.userID = currentUserId;
     box.peerReadHeight = peerReadHeight;
+    box.peerDeliveredHeight = peerDeliveredHeight;
     box.cache = new WeakMap();
   }
   const result: ChatMessage[] = [];
@@ -438,7 +526,12 @@ export function mapChatMessageDtosToUI(
     const cacheable = raw.height > 0;
     let mapped = cacheable ? box.cache.get(raw) : undefined;
     if (!mapped) {
-      mapped = mapChatMessageDtoToUI(raw, currentUserId, peerReadHeight);
+      mapped = mapChatMessageDtoToUI(
+        raw,
+        currentUserId,
+        peerReadHeight,
+        peerDeliveredHeight,
+      );
       if (cacheable) box.cache.set(raw, mapped);
     }
     result.push(mapped);
@@ -464,7 +557,29 @@ function systemNoticeText(content: Record<string, unknown>): string {
       return i18n.t('im.notification.memberQuit');
     case 'group-created':
       return i18n.t('im.notification.groupCreated');
+    case 'burn-changed': {
+      // S-01 留痕:开关变化双方可见,防「对方偷偷开了焚毁」。
+      const seconds =
+        typeof content['seconds'] === 'number' ? content['seconds'] : 0;
+      if (seconds <= 0) return i18n.t('im.notification.burnDisabled');
+      return i18n.t('im.notification.burnEnabled', {
+        duration: formatBurnDuration(seconds),
+      });
+    }
     default:
       return '';
   }
+}
+
+/** 焚毁档位 → 本地化时长标签(白名单外的值回落成秒数)。 */
+export function formatBurnDuration(seconds: number): string {
+  const key: Record<number, string> = {
+    30: 'im.burn.s30',
+    300: 'im.burn.m5',
+    3600: 'im.burn.h1',
+    86400: 'im.burn.d1',
+    604800: 'im.burn.d7',
+  };
+  const found = key[seconds];
+  return found ? i18n.t(found) : `${seconds}s`;
 }

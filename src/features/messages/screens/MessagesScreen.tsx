@@ -4,12 +4,13 @@ import { Badge } from "@/components/ui/badge";
 import { Divider } from "@/components/ui/divider";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import {
+  clearChatConversationHistory,
   loadChatConversations,
   updateChatConversationPreferences,
 } from "@/chat-core/api";
 import { mapChatConversationToUI } from "@/chat-core/mappers";
 import { markConversationRead } from "@/chat-core/socket-manager";
-import { selectTotalUnread, useChatStore } from "@/chat-core/store";
+import { selectTotalUnread, type StoredChatMessage, useChatStore } from "@/chat-core/store";
 import { useMessageGroupsStore } from "@/features/messages/store/use-message-groups-store";
 import { useLocalUnreadStore } from "@/features/messages/store/use-local-unread-store";
 import {
@@ -18,6 +19,7 @@ import {
   type ConversationWithLocalUnread,
 } from "@/features/messages/utils/local-unread";
 import { getUserProfileHref } from "@/features/user/utils/routes";
+import { getApiErrorMessage } from "@/services/api/errors";
 import { useTabBadgeStore } from "@/stores/tabBadgeStore";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { Conversation } from "@/types";
@@ -656,10 +658,35 @@ export default function MessagesScreen() {
     });
   }, [rawConversations]);
 
-  const conversations = useMemo(
+  const baseConversations = useMemo(
     () => applyLocalUnreadOverrides(rawMappedConversations, localUnreadOverrides),
     [localUnreadOverrides, rawMappedConversations],
   );
+
+  // 有发送失败消息的会话 id 集合,拼成排序串让引用比较退化成值比较:
+  // 只在失败集合真变了才触发下游 useMemo,消息洪泛不抖动列表。
+  const failedConversationKey = useChatStore((state) => {
+    const ids: string[] = [];
+    for (const [id, messages] of Object.entries(state.messagesByConversation)) {
+      if (messages.some((m) => (m as StoredChatMessage).failed)) ids.push(id);
+    }
+    return ids.sort().join('\n');
+  });
+
+  // 会话预览的失败标记:该会话还挂着没发出去的消息时,预览前缀提示,
+  // 不然列表页只看得到最新一条的文案,失败气泡埋在会话里没人知道。
+  const conversations = useMemo(() => {
+    if (!failedConversationKey) return baseConversations;
+    const failedIds = new Set(failedConversationKey.split('\n'));
+    const prefix = t('im.preview.sendFailedPrefix', {
+      defaultValue: '[发送失败]',
+    });
+    return baseConversations.map((conversation) =>
+      failedIds.has(conversation.id)
+        ? { ...conversation, message: `${prefix} ${conversation.message}` }
+        : conversation,
+    );
+  }, [baseConversations, failedConversationKey, t]);
 
   useEffect(() => {
     setMessagesUnread(
@@ -779,15 +806,30 @@ export default function MessagesScreen() {
             style: "destructive",
             onPress: () => {
               clearLocalUnread(conversation.id);
-              // 自研栈的「删除」当前等价于隐藏（服务端消息保留，新消息会重新浮出）；
-              // 带本地记录清除的完整删除语义随聊天详情页批次实现。
-              void updateChatConversationPreferences(conversation.id, {
-                hidden: true,
-              }).catch((err) => {
-                if (isDev) {
-                  console.warn("[messages] swipe delete conversation failed", err);
+              // G-14:删除会话 = 隐藏 + 清空本人历史水位(对齐旧栈
+              // deleteConversationAndDeleteAllMsg 的本人侧语义)。对端与
+              // 服务端数据不动;新消息到达时会话重新浮出,但旧历史不再可见。
+              //
+              // 两个请求必须串行且失败要出声。原来是并发 + 只在 __DEV__ 里
+              // console.warn:清空失败时会话照样消失,而旧历史会随下一条新消息
+              // 整段浮回来;隐藏失败时行还在、时间线却已经空了。两种都是静默的。
+              // 先清后隐:清失败就不隐,列表保持原样,用户能看出没成功。
+              void (async () => {
+                try {
+                  await clearChatConversationHistory(conversation.id);
+                  await updateChatConversationPreferences(conversation.id, {
+                    hidden: true,
+                  });
+                } catch (err) {
+                  if (isDev) {
+                    console.warn("[messages] swipe delete failed", err);
+                  }
+                  Alert.alert(
+                    t("messages.deleteChat"),
+                    getApiErrorMessage(err, t("common.networkError")),
+                  );
                 }
-              });
+              })();
             },
           },
         ],

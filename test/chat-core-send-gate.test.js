@@ -5,6 +5,28 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+const __localDbStub = {
+  persistLocalConversations: async () => {},
+  upsertLocalConversation: async () => {},
+  removeLocalConversation: async () => {},
+  persistLocalMessages: async () => {},
+  deleteLocalMessage: async () => {},
+  clearLocalConversationMessages: async () => {},
+  deleteLocalMessagesBelow: async () => {},
+  readRecentLocalMessages: async () => [],
+  readLocalConversations: async () => [],
+  searchLocalChatMessages: async () => [],
+  outboxUpsert: async () => {},
+  outboxDelete: async () => {},
+  outboxList: async () => [],
+  pendingReadUpsert: async () => {},
+  pendingReadDelete: async () => {},
+  pendingReadsList: async () => [],
+  initChatLocalDb: async () => false,
+  wipeChatLocalDb: async () => {},
+};
+
+
 // 信用分门禁必须挂在 chat-core 的共享发送路径上。拆栈前它在 reportSend 包装器里,
 // 迁移后只剩发图路径单独调了一次 —— 低于阈值的用户仍能发文本/引用/语音/位置/卡片。
 // 后端刻意不做这道校验(策略在端上),所以端上漏了就是真的漏了。
@@ -88,7 +110,8 @@ function loadClient({ blocked }) {
         };
       }
       if (request === './protocol') return {};
-      throw new Error(`unexpected require: ${request}`);
+      if (request === './local-db') return __localDbStub;
+    throw new Error(`unexpected require: ${request}`);
     },
   };
   context.exports = context.module.exports;

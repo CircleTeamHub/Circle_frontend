@@ -5,6 +5,28 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+const __localDbStub = {
+  persistLocalConversations: async () => {},
+  upsertLocalConversation: async () => {},
+  removeLocalConversation: async () => {},
+  persistLocalMessages: async () => {},
+  deleteLocalMessage: async () => {},
+  clearLocalConversationMessages: async () => {},
+  deleteLocalMessagesBelow: async () => {},
+  readRecentLocalMessages: async () => [],
+  readLocalConversations: async () => [],
+  searchLocalChatMessages: async () => [],
+  outboxUpsert: async () => {},
+  outboxDelete: async () => {},
+  outboxList: async () => [],
+  pendingReadUpsert: async () => {},
+  pendingReadDelete: async () => {},
+  pendingReadsList: async () => [],
+  initChatLocalDb: async () => false,
+  wipeChatLocalDb: async () => {},
+};
+
+
 // 与 im-store-message-merge.test.js 同款 harness:真源码 + zustand 极简桩,
 // 在 vm 里执行,断言 store 行为而非源码字符串。
 function transpile(rel) {
@@ -65,6 +87,7 @@ function loadChatStore() {
     if (request === '@/storage') return { mmkvJsonStorage: {} };
     // 墓碑超上限时会报一次(淘汰=消息复活,必须可观测)。
     if (request === '@/observability/sentry') return { reportError: () => {} };
+    if (request === './local-db') return __localDbStub;
     throw new Error(`unexpected require: ${request}`);
   });
   const store = runModule('src/chat-core/store.ts', (request) => {
@@ -76,6 +99,7 @@ function loadChatStore() {
         throw new Error('protocol should have no runtime deps');
       });
     }
+    if (request === './local-db') return __localDbStub;
     throw new Error(`unexpected require: ${request}`);
   });
   return { ...store, ...deletedMessages };
@@ -494,4 +518,183 @@ test('a partial store is not mistaken for a loaded snapshot', () => {
   // 切号/清缓存要复位,否则下一个账号会以为快照已就绪。
   useChatStore.getState().reset();
   assert.equal(useChatStore.getState().conversationsSnapshotLoaded, false);
+});
+
+// ---- Codex review 批:陈旧快照不能盖掉更终局的状态 ----
+
+test('a stale history page cannot un-revoke a message', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.ingestMessages('conv-1', [
+    msg({ id: 'm1', height: 5, content: { text: '原文' } }),
+  ]);
+  store.applyRevoke('conv-1', 'm1', 'me');
+
+  // 撤回**之前**发出、之后才 resolve 的历史页:它带着原文回来。
+  useChatStore
+    .getState()
+    .ingestMessages('conv-1', [
+      msg({ id: 'm1', height: 5, content: { text: '原文' } }),
+    ]);
+
+  const merged = useChatStore.getState().messagesByConversation['conv-1'][0];
+  assert.equal(merged.revokedAt !== null && merged.revokedAt !== undefined, true);
+  assert.equal(JSON.stringify(merged.content), '{}');
+});
+
+test('a stale history page cannot revert an edit', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.ingestMessages('conv-1', [
+    msg({ id: 'm1', height: 5, content: { text: '旧文本' } }),
+  ]);
+  store.applyEdit('conv-1', 'm1', { text: '新文本' }, '2026-08-09T10:00:00.000Z');
+
+  useChatStore
+    .getState()
+    .ingestMessages('conv-1', [
+      msg({ id: 'm1', height: 5, content: { text: '旧文本' } }),
+    ]);
+
+  const merged = useChatStore.getState().messagesByConversation['conv-1'][0];
+  assert.equal(merged.content.text, '新文本');
+});
+
+test('clearing history blocks in-flight pages from refilling the timeline', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setConversations([conversation({ id: 'conv-1' })]);
+  store.ingestMessages('conv-1', [
+    msg({ id: 'm1', height: 4 }),
+    msg({ id: 'm2', height: 5 }),
+  ]);
+
+  useChatStore.getState().clearConversationLocal('conv-1', 5);
+
+  // 清空**之前**发出的那一页历史在清空之后才落地。
+  useChatStore
+    .getState()
+    .ingestMessages('conv-1', [msg({ id: 'm1', height: 4 })]);
+  assert.equal(
+    useChatStore.getState().messagesByConversation['conv-1'].length,
+    0,
+  );
+
+  // 水位之上的新消息照常入库 —— 清空不是「此后不再收消息」。
+  useChatStore
+    .getState()
+    .ingestMessages('conv-1', [msg({ id: 'm9', height: 9 })]);
+  assert.equal(
+    useChatStore.getState().messagesByConversation['conv-1'].length,
+    1,
+  );
+});
+
+test('unread convergence ignores messages this user sent', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.setConversations([
+    conversation({
+      id: 'conv-1',
+      unreadCount: 1,
+      lastMessage: msg({ id: 'm3', height: 3, sender: { id: 'me', nickname: 'me', avatarUrl: null } }),
+    }),
+  ]);
+  // 1 条对端未读,之后自己又发了两条。
+  useChatStore.getState().ingestMessages('conv-1', [
+    msg({ id: 'm1', height: 1, sender: { id: 'other', nickname: 'o', avatarUrl: null } }),
+    msg({ id: 'm2', height: 2, sender: { id: 'me', nickname: 'me', avatarUrl: null } }),
+    msg({ id: 'm3', height: 3, sender: { id: 'me', nickname: 'me', avatarUrl: null } }),
+  ]);
+
+  // 另一台设备读到 1:那条唯一的对端消息已读,红点应当清零。
+  useChatStore.getState().applyRead('conv-1', 'me', 1);
+
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 0);
+});
+
+test('applyRead rejects fractional and non-finite heights', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.setConversations([conversation({ id: 'conv-1', unreadCount: 3 })]);
+
+  for (const bad of [1.5, Number.NaN, Number.POSITIVE_INFINITY, -1]) {
+    useChatStore.getState().applyRead('conv-1', 'me', bad);
+  }
+
+  assert.equal(
+    Object.keys(useChatStore.getState().readWatermarks).length,
+    0,
+  );
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 3);
+});
+
+test('a read event that precedes the conversation snapshot still converges it', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  // 会话列表还在途:read 事件先到,此时 store 里根本没有这个会话。
+  store.applyRead('conv-1', 'me', 5);
+
+  // 随后那份(发请求时还是未读的)快照落地。
+  useChatStore
+    .getState()
+    .setConversations([
+      conversation({
+        id: 'conv-1',
+        unreadCount: 5,
+        lastMessage: msg({ id: 'm5', height: 5 }),
+      }),
+    ]);
+
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 0);
+});
+
+test('evictMessagesBelow drops the window without writing deletion tombstones', () => {
+  const { useChatStore, isMessageDeletedLocally } = loadChatStore();
+  const store = useChatStore.getState();
+  store.ingestMessages('conv-1', [
+    msg({ id: 'old-1', height: 1 }),
+    msg({ id: 'new-1', height: 50 }),
+  ]);
+
+  useChatStore.getState().evictMessagesBelow('conv-1', 50);
+
+  assert.equal(
+    useChatStore
+      .getState()
+      .messagesByConversation['conv-1'].map((m) => m.id)
+      .join(','),
+    'new-1',
+  );
+  // 关键:被驱逐的是缓存,不是「用户删过」—— 否则以后翻页和搜索里永远见不到。
+  assert.equal(isMessageDeletedLocally('old-1', null), false);
+  useChatStore.getState().ingestMessages('conv-1', [msg({ id: 'old-1', height: 1 })]);
+  assert.equal(
+    useChatStore.getState().messagesByConversation['conv-1'].length,
+    2,
+  );
+});
+
+test('a membership teardown clears the cache without leaving a watermark', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setConversations([conversation({ id: 'conv-1' })]);
+  store.ingestMessages('conv-1', [msg({ id: 'm1', height: 7 })]);
+
+  // 被移出会话:只清这一份缓存。留了水位的话,以后重新入群时这段历史
+  // 会被入库口一直挡在外面。
+  useChatStore.getState().clearConversationLocal('conv-1', null);
+  assert.equal(
+    useChatStore.getState().clearedBeforeHeightByConversation['conv-1'] ?? 0,
+    0,
+  );
+
+  useChatStore.getState().ingestMessages('conv-1', [msg({ id: 'm1', height: 7 })]);
+  assert.equal(
+    useChatStore.getState().messagesByConversation['conv-1'].length,
+    1,
+  );
 });

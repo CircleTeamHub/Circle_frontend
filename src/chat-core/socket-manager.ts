@@ -1,6 +1,23 @@
 import { io, type Socket } from 'socket.io-client';
 import { CHAT_WS_URL } from '@/constants/config';
+import { storage } from '@/storage';
 import { reportError } from '@/observability/sentry';
+import {
+  backfillConversationSince,
+  fetchChatMutationsSince,
+  loadChatConversations,
+  loadChatHistory,
+} from './api';
+import {
+  initChatLocalDb,
+  outboxList,
+  pendingReadDelete,
+  pendingReadUpsert,
+  pendingReadsList,
+  readLocalConversations,
+  readRecentLocalMessages,
+} from './local-db';
+import { initChatAppBadgeSync } from './app-badge';
 import { bindChatEvents, cancelConversationBackfill } from './dispatcher';
 import {
   CHAT_EVENTS,
@@ -24,10 +41,47 @@ import { useChatStore } from './store';
 const SEND_ACK_TIMEOUT_MS = 10_000;
 const READ_ACK_TIMEOUT_MS = 8_000;
 const TYPING_THROTTLE_MS = 2_000;
+/** 一次追平最多翻几页离线变更;翻不完留给下一次连接(游标已持久化)。 */
+const MUTATION_CATCH_UP_PAGES_MAX = 20;
 const CONNECT_ERROR_REPORT_THRESHOLD = 3;
 
 let socket: Socket | null = null;
 let sessionGen = 0;
+/**
+ * 本账号在本次进程里是否已经连上过一次(跨 socket 实例的重连判据)。
+ * 登出/换账号时清掉 —— 新账号的第一次连接是首连,不该触发对账。
+ */
+let hadConnectedForUser: string | null = null;
+/**
+ * 上一次成功追平「离线撤回/编辑」增量的服务端时刻(ISO)。
+ *
+ * 落 MMKV 而不是只放内存:App 被杀之后本地库里那些消息还在,而这期间发生的
+ * 撤回同样够不着(撤回不改 height)。持久化之后,下次冷启动第一次连上就能
+ * 从上次的游标追平。
+ */
+const MUTATION_CURSOR_KEY = 'chat.mutationCursor';
+let lastMutationSyncAt: string | null = null;
+
+function mutationCursorKey(userId: string): string {
+  return `${MUTATION_CURSOR_KEY}.${userId}`;
+}
+
+function readMutationCursor(userId: string): string | null {
+  try {
+    return storage.getString(mutationCursorKey(userId)) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function writeMutationCursor(userId: string, iso: string): void {
+  lastMutationSyncAt = iso;
+  try {
+    storage.set(mutationCursorKey(userId), iso);
+  } catch {
+    // MMKV 还没就绪:内存里那份仍然有效,只是重启后从头再来。
+  }
+}
 const pendingReads = new Map<string, number>();
 let flushingReads = false;
 let readFlushRequested = false;
@@ -65,9 +119,14 @@ export function connectChat(token: string, userId: string): void {
   // 而切到另一个账号时上一个账号的数据一定先被清掉(跨账号不串数据)。
   if (store.currentUserId !== null && store.currentUserId !== userId) {
     store.reset();
+    hadConnectedForUser = null;
+    lastMutationSyncAt = null;
   }
   teardownSocket();
   sessionGen += 1;
+  initChatAppBadgeSync();
+  // G-01 冷启动水合:开(或切到)本账号的本地库,把快照灌回内存 —— 不等网络。
+  void hydrateFromLocalDb(userId);
 
   const gen = sessionGen;
   consecutiveConnectErrors = 0;
@@ -86,11 +145,26 @@ export function connectChat(token: string, userId: string): void {
     if (gen !== sessionGen) return;
     consecutiveConnectErrors = 0;
     reportedCurrentConnectOutage = false;
+    // 首连不对账(冷启动全量拉取由页面 focus 负责),重连才补断线窗口。
+    // 判据必须跨 socket 实例:access token 轮换走的是 suspendChat + connectChat,
+    // 换的是**一条新 socket**。判据挂在 socket 上的话,这条新连接永远算首连,
+    // 断开到重连之间的消息一条都不补 —— 而已经打开的会话不会重拉历史,
+    // 于是那段消息在屏幕上凭空缺失,未读也停在轮换前。
+    const isReconnect = hadConnectedForUser === userId;
+    hadConnectedForUser = userId;
     const state = useChatStore.getState();
     state.setConnecting(false);
     state.setConnected(true);
     state.setError(null);
     void flushPendingReads();
+    if (isReconnect) {
+      resyncAfterReconnect(userId);
+      return;
+    }
+    // 首连不做全量对账(冷启动拉取由页面 focus 负责),但撤回/编辑增量必须追:
+    // 上次运行到这次启动之间发生的撤回,本地缓存里还是原文,而 height 没变,
+    // 任何补拉都够不着它。
+    void catchUpMutations(userId);
   });
   next.on('disconnect', () => {
     if (gen !== sessionGen) return;
@@ -128,6 +202,10 @@ export function disconnectChat(): void {
   suspendChat();
   // 只有真登出/换账号才丢待发已读:那些水位属于上一个会话身份。
   pendingReads.clear();
+  hadConnectedForUser = null;
+  // 游标只清内存那份:MMKV 里按 userId 存,下次同一账号登录还要用它追平
+  // 「上次退出之后发生的撤回」。
+  lastMutationSyncAt = null;
   useChatStore.getState().reset();
 }
 
@@ -147,6 +225,10 @@ export function suspendChat(): void {
   // 已读水位就永远发不出去了 —— 服务端那边消息一直是未读,直到会话又有新消息
   // 或用户重新进一次。挂起的语义是「连接没了」,不是「这些事没发生过」。
   typingSentAt.clear();
+  deliveredReportedAt.clear();
+  deliveredPending.clear();
+  for (const timer of deliveredTimers.values()) clearTimeout(timer);
+  deliveredTimers.clear();
   flushingReads = false;
   readFlushRequested = false;
   teardownSocket();
@@ -159,6 +241,135 @@ function teardownSocket(): void {
   socket.removeAllListeners();
   socket.disconnect();
   socket = null;
+}
+
+/**
+ * G-01:本地库水合。会话列表 + 各会话最近消息灌回内存(仅空结构生效,
+ * 不覆盖已到手的服务端数据);outbox 里的失败消息还原成失败态乐观气泡;
+ * 未上报的已读水位种回 pending 队列。全程尽力而为。
+ */
+async function hydrateFromLocalDb(userId: string): Promise<void> {
+  try {
+    const opened = await initChatLocalDb(userId);
+    if (!opened) return;
+    const store = useChatStore.getState();
+    if (store.currentUserId !== userId) return;
+    const conversations = await readLocalConversations();
+    // 会话列表先出。逐会话串行读时间线是几百次原生查询,放在 hydrate 之前的话
+    // 离线用户得盯着空列表等它跑完 —— 而列表本身早就在手上了。
+    useChatStore.getState().hydrateLocalSnapshot(conversations, {});
+    const timelines: Record<string, import('./protocol').ChatMessageDto[]> = {};
+    for (const conversation of conversations) {
+      if (useChatStore.getState().currentUserId !== userId) return;
+      timelines[conversation.id] = await readRecentLocalMessages(
+        conversation.id,
+        50,
+      );
+    }
+    if (useChatStore.getState().currentUserId !== userId) return;
+    useChatStore.getState().hydrateLocalSnapshot(conversations, timelines);
+    // outbox:上次没发出去的消息还原成「发送失败」气泡,可长按重发。
+    const pending = await outboxList();
+    for (const entry of pending) {
+      const optimistic = {
+        id: `outbox-${entry.d}`,
+        conversationId: entry.conversationId,
+        height: 0,
+        type: entry.payload.type,
+        content: entry.payload.content,
+        // sender 必须是本人。留 null 的话 mapChatMessageDtoToUI 判成「收到的」,
+        // 气泡渲染到左边、也拿不到失败态 —— 长按重发那条依赖 sendStatus=3 的
+        // 菜单项因此不出现,这条消息就再也发不出去了。
+        sender: { id: userId, nickname: '', avatarUrl: null },
+        replyToId: entry.payload.replyToId ?? null,
+        d: entry.d,
+        createdAt: entry.createdAt,
+      };
+      useChatStore
+        .getState()
+        .ingestMessages(entry.conversationId, [optimistic]);
+      useChatStore.getState().markMessageFailed(entry.conversationId, entry.d);
+    }
+    // 已读水位:App 被杀前没 ack 的上报补回队列,连上即 flush。
+    let restored = false;
+    for (const { conversationId, height } of await pendingReadsList()) {
+      const prior = pendingReads.get(conversationId) ?? 0;
+      if (height > prior) {
+        pendingReads.set(conversationId, height);
+        restored = true;
+      }
+    }
+    // 冷启动时 socket 可能已经先连上了 —— 那次 connect 钩子 flush 的是一个空
+    // 队列。种回来之后不再 flush 的话,这些水位要等到用户又读了一条消息或者
+    // 下一次重连才发得出去,服务端那边一直是未读。
+    if (restored) void flushPendingReads();
+  } catch (err) {
+    console.warn('[chat] local hydrate failed', err);
+  }
+}
+
+/**
+ * 撤回/编辑不改 height,afterHeight 补拉结构上永远够不着:断线(或被杀)期间
+ * 被撤回的消息在本地会一直显示原文。按时间轴单独追一遍,一直追到服务端说
+ * 没有更多为止 —— 单页有上限,只拉一页会把剩下的永久跳过。
+ *
+ * 没有游标 = 这台设备上还没有任何本地历史可言(首次登录),没什么要追的,
+ * 只把游标种在「现在」。有游标就必须追,哪怕这是本次进程的第一次连接:
+ * 上一次运行结束到现在之间发生的撤回,只有这条路径看得见。
+ */
+async function catchUpMutations(userId: string): Promise<void> {
+  const stored = lastMutationSyncAt ?? readMutationCursor(userId);
+  if (!stored) {
+    writeMutationCursor(userId, new Date().toISOString());
+    return;
+  }
+  let since = stored;
+  try {
+    for (let page = 0; page < MUTATION_CATCH_UP_PAGES_MAX; page += 1) {
+      const result = await fetchChatMutationsSince(since);
+      if (!result) return; // 会话已换人/已登出
+      writeMutationCursor(userId, result.nextSince);
+      if (!result.hasMore) return;
+      // 游标不前进就是原地打转,继续追只会死循环。
+      if (result.nextSince === since) return;
+      since = result.nextSince;
+    }
+  } catch (err) {
+    console.warn('[chat] mutation catch-up failed', err);
+  }
+}
+
+/**
+ * G-13 断线重连对账:断开期间的 chat:msg 不会重投,必须主动补,否则那段
+ * 消息在已打开的会话里永远不出现、列表未读也停在断线前。
+ * ① 重拉会话列表(未读/预览/新会话一次到位,服务端为准);
+ * ② 当前打开的会话按本地最高 height 升序追平(与广播同一 ingest 入口,幂等)。
+ * 其余会话不逐个补:进入时的历史加载与列表快照已覆盖。
+ */
+function resyncAfterReconnect(userId: string): void {
+  void loadChatConversations().catch((err: unknown) =>
+    console.warn('[chat] reconnect conversation refresh failed', err),
+  );
+  void catchUpMutations(userId);
+  const state = useChatStore.getState();
+  const active = state.activeConversationId;
+  if (!active) return;
+  let maxHeight = 0;
+  for (const message of state.messagesByConversation[active] ?? []) {
+    if (message.height > maxHeight) maxHeight = message.height;
+  }
+  if (maxHeight <= 0) {
+    // 打开会话时正好断网、首屏 REST 也失败 → 时间线一条确认消息都没有。
+    // 直接 return 的话这条唯一的恢复路径也放弃了,而屏幕上的历史加载 effect
+    // 不随连通性重跑:会话就这么一直空着,直到用户退出重进。
+    void loadChatHistory(active).catch((err: unknown) =>
+      console.warn('[chat] reconnect initial history failed', err),
+    );
+    return;
+  }
+  void backfillConversationSince(active, maxHeight).catch((err: unknown) =>
+    console.warn('[chat] reconnect gap backfill failed', err),
+  );
 }
 
 export function isChatConnected(): boolean {
@@ -206,7 +417,11 @@ export function sendChatMessage(input: {
 export function markChatRead(conversationId: string, height: number): void {
   if (!Number.isInteger(height) || height <= 0) return;
   const prior = pendingReads.get(conversationId) ?? 0;
-  if (height > prior) pendingReads.set(conversationId, height);
+  if (height > prior) {
+    pendingReads.set(conversationId, height);
+    // G-01:落盘,App 被杀也不丢(flush 成功后删除)。
+    void pendingReadUpsert(conversationId, height);
+  }
   void flushPendingReads();
 }
 
@@ -232,6 +447,7 @@ async function flushPendingReads(): Promise<void> {
         const afterAck = pendingReads.get(conversationId);
         if (afterAck !== undefined && afterAck <= height) {
           pendingReads.delete(conversationId);
+          void pendingReadDelete(conversationId);
         }
       } catch (err) {
         // 保留 pending,断线重连的 connect 钩子会再次 flush。
@@ -299,6 +515,179 @@ export function markConversationRead(
 ): void {
   markChatRead(conversationId, height);
   useChatStore.getState().markConversationReadLocal(conversationId);
+}
+
+/** G-02 撤回:带 ack;权限与广播由服务端收口,失败抛 ChatSendError(code)。 */
+export function revokeChatMessage(
+  conversationId: string,
+  messageId: string,
+): Promise<void> {
+  const current = socket;
+  if (!current?.connected) {
+    return Promise.reject(
+      new ChatSendError('CHAT_NOT_CONNECTED', 'socket 未连接'),
+    );
+  }
+  return new Promise<void>((resolve, reject) => {
+    current
+      .timeout(READ_ACK_TIMEOUT_MS)
+      .emit(
+        CHAT_EVENTS.revoke,
+        { conversationId, messageId },
+        (err: Error | null, ack: ChatReadAck) => {
+          if (err) {
+            reject(new ChatSendError('CHAT_ACK_TIMEOUT', err.message));
+            return;
+          }
+          if (!ack || ack.ok !== true) {
+            reject(
+              new ChatSendError(
+                ack?.code ?? 'CHAT_INVALID_PAYLOAD',
+                ack && 'message' in ack ? ack.message : undefined,
+              ),
+            );
+            return;
+          }
+          resolve();
+        },
+      );
+  });
+}
+
+/**
+ * G-07 送达上报:无 ack 尽力而为(丢了下一条消息会报更高水位),
+ * 本地只增不减 + 短节流,避免消息洪峰逐条打点。
+ */
+const deliveredReportedAt = new Map<string, { height: number; at: number }>();
+/** 窗口内攒下的最高待报水位(conversationId → height)。 */
+const deliveredPending = new Map<string, number>();
+const deliveredTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const DELIVERED_THROTTLE_MS = 1_000;
+
+export function reportChatDelivered(
+  conversationId: string,
+  height: number,
+): void {
+  if (!Number.isInteger(height) || height <= 0) return;
+  const current = socket;
+  if (!current?.connected) return;
+  const prior = deliveredReportedAt.get(conversationId);
+  // 只增不减:更低或相等的水位没有任何信息量。
+  if (prior && prior.height >= height) return;
+  const pending = deliveredPending.get(conversationId) ?? 0;
+  if (height > pending) deliveredPending.set(conversationId, height);
+  const now = Date.now();
+  if (!prior || now - prior.at >= DELIVERED_THROTTLE_MS) {
+    flushDelivered(conversationId);
+    return;
+  }
+  // 窗口内:攒着,窗口结束时只发最高的那个。
+  //
+  // 原来的「节流」只挡得住重复或更低的水位,而每条新消息的 height 都更高 ——
+  // 于是它一条都挡不住:群里一次消息洪峰,每个成员对每条消息各发一个 delivered,
+  // N 人 × M 条条条上行,自己就是一场实时事件风暴。
+  if (deliveredTimers.has(conversationId)) return;
+  const timer = setTimeout(
+    () => {
+      deliveredTimers.delete(conversationId);
+      flushDelivered(conversationId);
+    },
+    DELIVERED_THROTTLE_MS - (now - prior.at),
+  );
+  timer.unref?.();
+  deliveredTimers.set(conversationId, timer);
+}
+
+function flushDelivered(conversationId: string): void {
+  const height = deliveredPending.get(conversationId);
+  if (height === undefined) return;
+  const current = socket;
+  if (!current?.connected) return;
+  const prior = deliveredReportedAt.get(conversationId);
+  if (prior && prior.height >= height) {
+    deliveredPending.delete(conversationId);
+    return;
+  }
+  deliveredPending.delete(conversationId);
+  deliveredReportedAt.set(conversationId, { height, at: Date.now() });
+  current.emit(CHAT_EVENTS.delivered, { conversationId, height });
+}
+
+/** G-07 表情回应:带 ack;失败抛 ChatSendError(code)。 */
+export function sendChatReaction(
+  conversationId: string,
+  messageId: string,
+  emoji: string,
+  op: 'add' | 'remove',
+): Promise<void> {
+  const current = socket;
+  if (!current?.connected) {
+    return Promise.reject(
+      new ChatSendError('CHAT_NOT_CONNECTED', 'socket 未连接'),
+    );
+  }
+  return new Promise<void>((resolve, reject) => {
+    current
+      .timeout(READ_ACK_TIMEOUT_MS)
+      .emit(
+        CHAT_EVENTS.reaction,
+        { conversationId, messageId, emoji, op },
+        (err: Error | null, ack: ChatReadAck) => {
+          if (err) {
+            reject(new ChatSendError('CHAT_ACK_TIMEOUT', err.message));
+            return;
+          }
+          if (!ack || ack.ok !== true) {
+            reject(
+              new ChatSendError(
+                ack?.code ?? 'CHAT_INVALID_PAYLOAD',
+                ack && 'message' in ack ? ack.message : undefined,
+              ),
+            );
+            return;
+          }
+          resolve();
+        },
+      );
+  });
+}
+
+/** G-07 消息编辑:带 ack;权限/窗口/敏感词由服务端判。 */
+export function sendChatEditMessage(
+  conversationId: string,
+  messageId: string,
+  text: string,
+): Promise<void> {
+  const current = socket;
+  if (!current?.connected) {
+    return Promise.reject(
+      new ChatSendError('CHAT_NOT_CONNECTED', 'socket 未连接'),
+    );
+  }
+  return new Promise<void>((resolve, reject) => {
+    current
+      .timeout(READ_ACK_TIMEOUT_MS)
+      .emit(
+        CHAT_EVENTS.edit,
+        { conversationId, messageId, content: { text } },
+        (err: Error | null, ack: ChatReadAck) => {
+          if (err) {
+            reject(new ChatSendError('CHAT_ACK_TIMEOUT', err.message));
+            return;
+          }
+          if (!ack || ack.ok !== true) {
+            reject(
+              new ChatSendError(
+                ack?.code ?? 'CHAT_INVALID_PAYLOAD',
+                ack && 'message' in ack ? ack.message : undefined,
+              ),
+            );
+            return;
+          }
+          resolve();
+        },
+      );
+  });
 }
 
 /** 正在输入：本地节流,无 ack 尽力而为。 */

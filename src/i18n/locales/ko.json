@@ -229,6 +229,8 @@
       "statusGroup": "그룹 채팅",
       "statusOnline": "온라인",
       "statusOffline": "오프라인",
+      "statusTyping": "입력 중…",
+      "statusTypingGroup": "입력 중…",
       "previewNotice": "연결이 아직 완료되지 않았습니다. 잠시 후 다시 시도해 주세요.",
       "recordingSeconds": "녹음 중 {{seconds}}초",
       "voiceReleaseCancel": "손을 떼면 취소",
@@ -269,7 +271,16 @@
       "saveFailedHint": "나중에 다시 시도해 주세요",
       "noteCollected": "내 노트에 추가했어요",
       "noteAlreadyCollected": "이미 내 노트에 있어요",
-      "noteCollectedHint": "'내 노트'에서 확인할 수 있어요"
+      "noteCollectedHint": "'내 노트'에서 확인할 수 있어요",
+      "revoke": "회수",
+      "revokeFailed": "회수하지 못했습니다",
+      "react": "반응",
+      "edit": "수정",
+      "readers": "읽은 멤버",
+      "readersNone": "아직 아무도 읽지 않았습니다",
+      "readersMore": "{{names}} 외 {{count}}명",
+      "editing": "메시지 수정",
+      "resend": "다시 보내기"
     },
     "mentions": {
       "empty": "멘션할 수 있는 멤버가 없습니다"
@@ -403,7 +414,7 @@
     },
     "burnMessage": "메시지 자동 삭제",
     "selectBurnTime": "자동 삭제 시간 선택",
-    "burnOff": "끔",
+    "burnOff": "끄기",
     "burn10s": "10초",
     "burn1m": "1분",
     "burn5m": "5분",
@@ -538,7 +549,9 @@
       "sending": "전송 중",
       "sendFailed": "전송 실패",
       "read": "읽음",
-      "unread": "안 읽음"
+      "unread": "안 읽음",
+      "delivered": "전달됨",
+      "edited": "(수정됨)"
     },
     "friendCard": {
       "noPersona": "아직 아무것도 남기지 않았어요",
@@ -577,7 +590,10 @@
       "missed": "부재중 전화",
       "noAnswer": "응답 없음"
     },
-    "lowCreditScore": "신용 점수가 {{minScore}} 미만이어서 지금은 메시지를 보낼 수 없습니다"
+    "lowCreditScore": "신용 점수가 {{minScore}} 미만이어서 지금은 메시지를 보낼 수 없습니다",
+    "burnAfterReading": "사라지는 메시지",
+    "clearHistoryConfirm": "내 쪽 기록만 지워집니다. 지울까요?",
+    "clearHistoryDone": "지웠습니다"
   },
   "messages": {
     "title": "메시지",
@@ -2476,6 +2492,9 @@
     "videoCallTitle": "영상 통화"
   },
   "im": {
+    "conversation": {
+      "removedFromGroup": "그룹 채팅에서 내보내졌습니다"
+    },
     "time": {
       "yesterday": "어제"
     },
@@ -2488,9 +2507,12 @@
       "groupNameUpdated": "그룹 이름이 변경되었습니다",
       "groupDismissed": "그룹이 해산되었습니다",
       "messageRevoked": "메시지가 회수되었습니다",
-      "friendAdded": "이제 친구가 되었어요. 인사해 보세요"
+      "friendAdded": "이제 친구가 되었어요. 인사해 보세요",
+      "burnEnabled": "사라지는 메시지 켜짐({{duration}})",
+      "burnDisabled": "사라지는 메시지 꺼짐"
     },
     "preview": {
+      "revoked": "[회수된 메시지]",
       "image": "[사진]",
       "video": "[동영상]",
       "voice": "[음성]",
@@ -2503,7 +2525,23 @@
       "note": "[노트] {{title}}",
       "verification": "[인증] {{name}}님이 보증을 요청했습니다",
       "default": "[메시지]",
-      "plazaPost": "[활동] {{title}}"
+      "plazaPost": "[활동] {{title}}",
+      "sendFailedPrefix": "[전송 실패]"
+    },
+    "message": {
+      "revokedBySelf": "메시지를 회수했습니다",
+      "revokedByOther": "\"{{name}}\"님이 메시지를 회수했습니다",
+      "revokedByModerator": "관리자가 메시지를 회수했습니다",
+      "revokedQuote": "회수된 메시지입니다",
+      "revokedPreview": "[회수된 메시지]",
+      "unsupported": "[지원되지 않는 메시지]"
+    },
+    "burn": {
+      "s30": "30초",
+      "m5": "5분",
+      "h1": "1시간",
+      "d1": "1일",
+      "d7": "7일"
     }
   },
   "permissions": {
@@ -2537,8 +2575,8 @@
     "TEMP_CHAT_JOIN_FAILED": "참여하지 못했습니다. 다시 시도해 주세요",
     "NOTE_RESTORE_DUPLICATE": "이 노트의 다른 소장 사본이 이미 존재합니다.",
     "NOTE_SHARE_LINK_LIMIT": "공유 링크 한도에 도달했습니다. 사용하지 않는 링크를 먼저 취소해 주세요",
-    "UPLOAD_PAYLOAD_TOO_LARGE": "파일이 너무 커서 업로드할 수 없습니다",
     "UPLOAD_INVALID_CONTENT_TYPE": "지원하지 않는 파일 형식입니다",
+    "UPLOAD_PAYLOAD_TOO_LARGE": "파일이 너무 커서 업로드할 수 없습니다",
     "COLLECTION_LIMIT": "컬렉션 한도에 도달했습니다. 필요 없는 항목을 정리해 주세요",
     "ADMIN_USER_NOT_FOUND": "사용자를 찾을 수 없습니다",
     "ADMIN_USER_SELF_STATUS_CHANGE": "현재 관리자 계정은 정지하거나 삭제할 수 없습니다",
@@ -2775,6 +2813,11 @@
     "PRIVACY_INVITE_PERMISSION_INVALID": "지원되지 않는 초대 권한입니다",
     "USER_UPDATE_OWN_ONLY": "본인의 프로필만 수정할 수 있습니다",
     "USER_DELETE_OWN_ONLY": "본인의 계정만 삭제할 수 있습니다",
-    "USER_INVALID_BIRTHDAY": "생일이 올바르지 않습니다"
+    "USER_INVALID_BIRTHDAY": "생일이 올바르지 않습니다",
+    "CHAT_MESSAGE_NOT_FOUND": "메시지를 찾을 수 없습니다",
+    "CHAT_REVOKE_WINDOW_EXPIRED": "회수 가능 시간이 지났습니다",
+    "CHAT_REVOKE_FORBIDDEN": "이 메시지를 회수할 권한이 없습니다",
+    "CHAT_EDIT_WINDOW_EXPIRED": "수정 가능 시간이 지났습니다",
+    "CHAT_EDIT_FORBIDDEN": "이 메시지는 수정할 수 없습니다"
   }
 }

@@ -269,6 +269,8 @@
       "statusGroup": "群聊",
       "statusOnline": "在线",
       "statusOffline": "离线",
+      "statusTyping": "对方正在输入…",
+      "statusTypingGroup": "有人正在输入…",
       "previewNotice": "连接尚未完成，请稍后重试",
       "recordingSeconds": "正在录音 {{seconds}} 秒",
       "voiceReleaseCancel": "松开 取消",
@@ -309,7 +311,16 @@
       "saveFailedHint": "请稍后重试",
       "noteCollected": "已添加到我的笔记",
       "noteAlreadyCollected": "已在我的笔记中",
-      "noteCollectedHint": "可在「我的笔记」中查看"
+      "noteCollectedHint": "可在「我的笔记」中查看",
+      "revoke": "撤回",
+      "revokeFailed": "撤回失败",
+      "react": "回应",
+      "edit": "编辑",
+      "readers": "已读成员",
+      "readersNone": "还没有人读到这条消息",
+      "readersMore": "{{names}} 等,共 {{count}} 人以上已读",
+      "editing": "编辑消息",
+      "resend": "重发"
     },
     "mentions": {
       "empty": "暂无可 @ 的成员"
@@ -578,7 +589,9 @@
       "sending": "发送中",
       "sendFailed": "发送失败",
       "read": "已读",
-      "unread": "未读"
+      "unread": "未读",
+      "delivered": "已送达",
+      "edited": "(已编辑)"
     },
     "friendCard": {
       "noPersona": "这个人很懒，什么都没留下",
@@ -617,7 +630,10 @@
       "missed": "未接听",
       "noAnswer": "对方未接听"
     },
-    "lowCreditScore": "信誉值低于 {{minScore}}，暂时无法发送消息"
+    "lowCreditScore": "信誉值低于 {{minScore}}，暂时无法发送消息",
+    "burnAfterReading": "阅后即焚",
+    "clearHistoryConfirm": "清空后仅自己看不到这些消息，对方不受影响。确定清空？",
+    "clearHistoryDone": "已清空"
   },
   "contacts": {
     "title": "联系人",
@@ -2441,6 +2457,9 @@
     }
   },
   "im": {
+    "conversation": {
+      "removedFromGroup": "你已被移出该群聊"
+    },
     "time": {
       "yesterday": "昨天"
     },
@@ -2453,9 +2472,12 @@
       "groupNameUpdated": "群名称已更新",
       "groupDismissed": "群已解散",
       "messageRevoked": "一条消息被撤回",
-      "friendAdded": "你们已经是好友了，开始聊天吧"
+      "friendAdded": "你们已经是好友了，开始聊天吧",
+      "burnEnabled": "阅后即焚已开启（{{duration}}）",
+      "burnDisabled": "阅后即焚已关闭"
     },
     "preview": {
+      "revoked": "[消息已撤回]",
       "image": "[图片]",
       "video": "[视频]",
       "voice": "[语音]",
@@ -2468,7 +2490,23 @@
       "note": "[笔记] {{title}}",
       "verification": "[验证] {{name}} 邀请你担保",
       "default": "[消息]",
-      "plazaPost": "[活动] {{title}}"
+      "plazaPost": "[活动] {{title}}",
+      "sendFailedPrefix": "[发送失败]"
+    },
+    "message": {
+      "revokedBySelf": "你撤回了一条消息",
+      "revokedByOther": "\"{{name}}\"撤回了一条消息",
+      "revokedByModerator": "一条消息已被管理员撤回",
+      "revokedQuote": "消息已撤回",
+      "revokedPreview": "[消息已撤回]",
+      "unsupported": "[暂不支持的消息类型]"
+    },
+    "burn": {
+      "s30": "30秒",
+      "m5": "5分钟",
+      "h1": "1小时",
+      "d1": "1天",
+      "d7": "7天"
     }
   },
   "permissions": {
@@ -2537,8 +2575,8 @@
     "TEMP_CHAT_JOIN_FAILED": "加入失败，请重试",
     "NOTE_RESTORE_DUPLICATE": "该笔记的另一份收藏副本已存在，无需恢复",
     "NOTE_SHARE_LINK_LIMIT": "分享链接数量已达上限，请先撤销不再使用的链接",
-    "UPLOAD_PAYLOAD_TOO_LARGE": "文件太大，超出上传上限",
     "UPLOAD_INVALID_CONTENT_TYPE": "不支持的文件类型",
+    "UPLOAD_PAYLOAD_TOO_LARGE": "文件太大，超出上传上限",
     "COLLECTION_LIMIT": "收藏数量已达上限，请先清理不再需要的收藏",
     "ADMIN_USER_NOT_FOUND": "用户不存在",
     "ADMIN_USER_SELF_STATUS_CHANGE": "不能封禁或删除当前管理员账号",
@@ -2775,6 +2813,11 @@
     "PRIVACY_INVITE_PERMISSION_INVALID": "不支持的邀请权限",
     "USER_UPDATE_OWN_ONLY": "只能修改自己的资料",
     "USER_DELETE_OWN_ONLY": "只能注销自己的账号",
-    "USER_INVALID_BIRTHDAY": "生日格式不正确"
+    "USER_INVALID_BIRTHDAY": "生日格式不正确",
+    "CHAT_MESSAGE_NOT_FOUND": "消息不存在",
+    "CHAT_REVOKE_WINDOW_EXPIRED": "超过可撤回时间",
+    "CHAT_REVOKE_FORBIDDEN": "无权撤回该消息",
+    "CHAT_EDIT_WINDOW_EXPIRED": "超出可编辑时间",
+    "CHAT_EDIT_FORBIDDEN": "无法编辑该消息"
   }
 }

@@ -49,6 +49,7 @@ export function formatChatTimestamp(iso: string | null): string {
 /** 末条消息 → 列表预览文本(媒体/卡片走 im.preview.* 既有词条)。 */
 export function getChatMessagePreview(message: ChatMessageDto | null): string {
   if (!message) return '';
+  if (message.revokedAt) return tPreview('revoked', '[消息已撤回]');
   switch (message.type) {
     case 'text':
     case 'quote': {
