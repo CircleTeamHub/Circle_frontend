@@ -352,3 +352,123 @@ test('the legacy system-notice dedupe layer is fully gone', () => {
   const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
   assert.ok(!screen.includes('collapseDuplicateFriendAddedNotices'));
 });
+
+// ---- Codex review 批(PR #150):行为回归的源码级契约 ----
+
+test('the app badge retries when setBadgeCountAsync resolves false', () => {
+  // 未授权/桌面不支持时这个 API resolve(false) 而不是 reject —— 只在 catch 里
+  // 复位的话,用户之后打开权限,图标会一直停在旧值。
+  const badge = read('src/chat-core/app-badge.ts');
+  assert.match(badge, /applied === false/);
+  assert.match(badge, /lastApplied = null/);
+});
+
+test('the app badge includes the local mark-as-unread overrides', () => {
+  // 滑动「标记为未读」只改本地覆盖 store —— 不订阅它的话 tab 上有红点、
+  // 图标角标是 0,而且此后再也不会自己对上。
+  const badge = read('src/chat-core/app-badge.ts');
+  assert.match(badge, /useLocalUnreadStore\.subscribe/);
+  assert.match(badge, /countLocalUnreadOverrides/);
+});
+
+test('the delivered watermark is coalesced, not just deduped', () => {
+  // 每条新消息的 height 都更高,所以「只挡重复或更低」等于一条都挡不住:
+  // 群里一次消息洪峰会变成 N 人 × M 条的上行风暴。
+  const manager = read('src/chat-core/socket-manager.ts');
+  assert.match(manager, /deliveredPending/);
+  assert.match(manager, /flushDelivered/);
+});
+
+test('the reconnect judgement survives a token-rotation socket swap', () => {
+  const manager = read('src/chat-core/socket-manager.ts');
+  assert.match(manager, /hadConnectedForUser/);
+  // 登出/换号要复位,新账号的第一次连接是首连。
+  assert.match(manager, /hadConnectedForUser = null/);
+});
+
+test('offline revocations get their own catch-up channel', () => {
+  // 撤回不改 height —— afterHeight 补拉结构上永远看不到它。
+  const api = read('src/chat-core/api.ts');
+  assert.match(api, /\/chat\/messages\/mutations/);
+  const manager = read('src/chat-core/socket-manager.ts');
+  assert.match(manager, /fetchChatMutationsSince/);
+});
+
+test('the local cache is disabled when SQLCipher is unavailable', () => {
+  // 明文落一个装着私聊正文的库文件,之后重建也不会追溯加密。
+  const db = read('src/chat-core/local-db.ts');
+  assert.match(db, /local cache disabled/);
+  assert.match(db, /if \(!encrypted\)/);
+});
+
+test('message upserts keep the FTS index in sync (no orphan shadow rows)', () => {
+  // INSERT OR REPLACE = DELETE + INSERT,而隐式 DELETE 不触发 messages_fts_ad。
+  const db = read('src/chat-core/local-db.ts');
+  assert.match(db, /ON CONFLICT\(id\) DO UPDATE SET/);
+  assert.ok(
+    !/INSERT OR REPLACE INTO messages\b/.test(db),
+    'INSERT OR REPLACE orphans FTS rows',
+  );
+});
+
+test('revoke/edit rejections are localized instead of shown raw', () => {
+  const sendErrors = read('src/chat-core/send-errors.ts');
+  for (const code of [
+    'CHAT_REVOKE_WINDOW_EXPIRED',
+    'CHAT_REVOKE_FORBIDDEN',
+    'CHAT_EDIT_WINDOW_EXPIRED',
+    'CHAT_EDIT_FORBIDDEN',
+    'CHAT_MESSAGE_NOT_FOUND',
+  ]) {
+    assert.match(sendErrors, new RegExp(`'${code}'`), `missing ${code}`);
+  }
+  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  // 撤回失败抛的是 ChatSendError(ack 通道),getApiErrorMessage 认不出它。
+  assert.ok(
+    !/revokeFailed[\s\S]{0,120}getApiErrorMessage/.test(screen),
+    'revoke failures must not go through getApiErrorMessage',
+  );
+});
+
+test('multi-option pickers do not rely on Alert (Android caps at 3 buttons)', () => {
+  const detail = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const info = read('src/features/chat/screens/ChatInfoScreen.tsx');
+  assert.match(detail, /OptionPickerSheet/);
+  assert.match(info, /OptionPickerSheet/);
+});
+
+test('clear-all-chats loads the authoritative conversation list first', () => {
+  // store 里那份可能是空的(消息 tab 从没打开过)或缺了隐藏的会话 ——
+  // 那些会话一条水位都没写,却照样报「已清空」。
+  const actions = read('src/features/profile/hooks/use-storage-actions.ts');
+  assert.match(actions, /loadChatConversations\(\)/);
+  assert.match(actions, /resetForLogout/);
+});
+
+test('swipe delete sequences hide-after-clear and surfaces failures', () => {
+  const screen = read('src/features/messages/screens/MessagesScreen.tsx');
+  assert.match(screen, /await clearChatConversationHistory/);
+  assert.match(screen, /await updateChatConversationPreferences/);
+  // 只在 __DEV__ 里 console.warn 等于静默失败。
+  assert.match(screen, /messages\.deleteChat[\s\S]{0,200}getApiErrorMessage/);
+});
+
+test('reader receipts disclose the 200-reader cap', () => {
+  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  assert.match(screen, /readersMore/);
+  for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
+    const dict = JSON.parse(read(`src/i18n/locales/${locale}.json`));
+    assert.ok(dict?.chat?.messageActions?.readersMore, `${locale} readersMore`);
+  }
+});
+
+test('local-first search merges the server results instead of suppressing them', () => {
+  // 本地库每会话只留 500 条,没打开过的会话一条都没有:一条本地命中不该
+  // 让整个在线搜索被跳过。
+  const api = read('src/chat-core/api.ts');
+  assert.match(api, /mergeSearchHits/);
+  assert.ok(
+    !/if \(local\.length > 0\) return local;/.test(api),
+    'a local hit must not suppress the server search',
+  );
+});

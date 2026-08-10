@@ -1,6 +1,11 @@
 import { io, type Socket } from 'socket.io-client';
 import { CHAT_WS_URL } from '@/constants/config';
-import { backfillConversationSince, loadChatConversations } from './api';
+import {
+  backfillConversationSince,
+  fetchChatMutationsSince,
+  loadChatConversations,
+  loadChatHistory,
+} from './api';
 import {
   initChatLocalDb,
   outboxList,
@@ -37,6 +42,13 @@ const TYPING_THROTTLE_MS = 2_000;
 
 let socket: Socket | null = null;
 let sessionGen = 0;
+/**
+ * 本账号在本次进程里是否已经连上过一次(跨 socket 实例的重连判据)。
+ * 登出/换账号时清掉 —— 新账号的第一次连接是首连,不该触发对账。
+ */
+let hadConnectedForUser: string | null = null;
+/** 上一次成功追平「离线撤回/编辑」增量的服务端时刻(ISO)。 */
+let lastMutationSyncAt: string | null = null;
 const pendingReads = new Map<string, number>();
 let flushingReads = false;
 let readFlushRequested = false;
@@ -72,6 +84,8 @@ export function connectChat(token: string, userId: string): void {
   // 而切到另一个账号时上一个账号的数据一定先被清掉(跨账号不串数据)。
   if (store.currentUserId !== null && store.currentUserId !== userId) {
     store.reset();
+    hadConnectedForUser = null;
+    lastMutationSyncAt = null;
   }
   teardownSocket();
   sessionGen += 1;
@@ -90,13 +104,15 @@ export function connectChat(token: string, userId: string): void {
     auth: { token },
   });
 
-  // 同一 socket 生命周期内的首连/重连判据(G-13):
-  // 首连不做对账(冷启动全量拉取由页面 focus 负责),重连才补断线窗口。
-  let hadConnected = false;
   next.on('connect', () => {
     if (gen !== sessionGen) return;
-    const isReconnect = hadConnected;
-    hadConnected = true;
+    // 首连不对账(冷启动全量拉取由页面 focus 负责),重连才补断线窗口。
+    // 判据必须跨 socket 实例:access token 轮换走的是 suspendChat + connectChat,
+    // 换的是**一条新 socket**。判据挂在 socket 上的话,这条新连接永远算首连,
+    // 断开到重连之间的消息一条都不补 —— 而已经打开的会话不会重拉历史,
+    // 于是那段消息在屏幕上凭空缺失,未读也停在轮换前。
+    const isReconnect = hadConnectedForUser === userId;
+    hadConnectedForUser = userId;
     const state = useChatStore.getState();
     state.setConnecting(false);
     state.setConnected(true);
@@ -128,6 +144,8 @@ export function disconnectChat(): void {
   suspendChat();
   // 只有真登出/换账号才丢待发已读:那些水位属于上一个会话身份。
   pendingReads.clear();
+  hadConnectedForUser = null;
+  lastMutationSyncAt = null;
   useChatStore.getState().reset();
 }
 
@@ -148,6 +166,9 @@ export function suspendChat(): void {
   // 或用户重新进一次。挂起的语义是「连接没了」,不是「这些事没发生过」。
   typingSentAt.clear();
   deliveredReportedAt.clear();
+  deliveredPending.clear();
+  for (const timer of deliveredTimers.values()) clearTimeout(timer);
+  deliveredTimers.clear();
   flushingReads = false;
   readFlushRequested = false;
   teardownSocket();
@@ -174,13 +195,18 @@ async function hydrateFromLocalDb(userId: string): Promise<void> {
     const store = useChatStore.getState();
     if (store.currentUserId !== userId) return;
     const conversations = await readLocalConversations();
+    // 会话列表先出。逐会话串行读时间线是几百次原生查询,放在 hydrate 之前的话
+    // 离线用户得盯着空列表等它跑完 —— 而列表本身早就在手上了。
+    useChatStore.getState().hydrateLocalSnapshot(conversations, {});
     const timelines: Record<string, import('./protocol').ChatMessageDto[]> = {};
     for (const conversation of conversations) {
+      if (useChatStore.getState().currentUserId !== userId) return;
       timelines[conversation.id] = await readRecentLocalMessages(
         conversation.id,
         50,
       );
     }
+    if (useChatStore.getState().currentUserId !== userId) return;
     useChatStore.getState().hydrateLocalSnapshot(conversations, timelines);
     // outbox:上次没发出去的消息还原成「发送失败」气泡,可长按重发。
     const pending = await outboxList();
@@ -191,7 +217,10 @@ async function hydrateFromLocalDb(userId: string): Promise<void> {
         height: 0,
         type: entry.payload.type,
         content: entry.payload.content,
-        sender: null,
+        // sender 必须是本人。留 null 的话 mapChatMessageDtoToUI 判成「收到的」,
+        // 气泡渲染到左边、也拿不到失败态 —— 长按重发那条依赖 sendStatus=3 的
+        // 菜单项因此不出现,这条消息就再也发不出去了。
+        sender: { id: userId, nickname: '', avatarUrl: null },
         replyToId: entry.payload.replyToId ?? null,
         d: entry.d,
         createdAt: entry.createdAt,
@@ -202,10 +231,18 @@ async function hydrateFromLocalDb(userId: string): Promise<void> {
       useChatStore.getState().markMessageFailed(entry.conversationId, entry.d);
     }
     // 已读水位:App 被杀前没 ack 的上报补回队列,连上即 flush。
+    let restored = false;
     for (const { conversationId, height } of await pendingReadsList()) {
       const prior = pendingReads.get(conversationId) ?? 0;
-      if (height > prior) pendingReads.set(conversationId, height);
+      if (height > prior) {
+        pendingReads.set(conversationId, height);
+        restored = true;
+      }
     }
+    // 冷启动时 socket 可能已经先连上了 —— 那次 connect 钩子 flush 的是一个空
+    // 队列。种回来之后不再 flush 的话,这些水位要等到用户又读了一条消息或者
+    // 下一次重连才发得出去,服务端那边一直是未读。
+    if (restored) void flushPendingReads();
   } catch (err) {
     console.warn('[chat] local hydrate failed', err);
   }
@@ -222,6 +259,17 @@ function resyncAfterReconnect(): void {
   void loadChatConversations().catch((err: unknown) =>
     console.warn('[chat] reconnect conversation refresh failed', err),
   );
+  // ③ 撤回/编辑不改 height,afterHeight 补拉结构上永远够不着:断线期间被撤回的
+  //    消息在本地会一直显示原文。按时间轴单独追一遍。
+  const since = lastMutationSyncAt;
+  lastMutationSyncAt = new Date().toISOString();
+  void fetchChatMutationsSince(since ?? lastMutationSyncAt)
+    .then((serverTime) => {
+      if (serverTime) lastMutationSyncAt = serverTime;
+    })
+    .catch((err: unknown) =>
+      console.warn('[chat] reconnect mutation catch-up failed', err),
+    );
   const state = useChatStore.getState();
   const active = state.activeConversationId;
   if (!active) return;
@@ -229,8 +277,15 @@ function resyncAfterReconnect(): void {
   for (const message of state.messagesByConversation[active] ?? []) {
     if (message.height > maxHeight) maxHeight = message.height;
   }
-  // 没有任何已确认消息就不补:该会话的首屏历史另有加载路径。
-  if (maxHeight <= 0) return;
+  if (maxHeight <= 0) {
+    // 打开会话时正好断网、首屏 REST 也失败 → 时间线一条确认消息都没有。
+    // 直接 return 的话这条唯一的恢复路径也放弃了,而屏幕上的历史加载 effect
+    // 不随连通性重跑:会话就这么一直空着,直到用户退出重进。
+    void loadChatHistory(active).catch((err: unknown) =>
+      console.warn('[chat] reconnect initial history failed', err),
+    );
+    return;
+  }
   void backfillConversationSince(active, maxHeight).catch((err: unknown) =>
     console.warn('[chat] reconnect gap backfill failed', err),
   );
@@ -423,6 +478,9 @@ export function revokeChatMessage(
  * 本地只增不减 + 短节流,避免消息洪峰逐条打点。
  */
 const deliveredReportedAt = new Map<string, { height: number; at: number }>();
+/** 窗口内攒下的最高待报水位(conversationId → height)。 */
+const deliveredPending = new Map<string, number>();
+const deliveredTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const DELIVERED_THROTTLE_MS = 1_000;
 
 export function reportChatDelivered(
@@ -433,16 +491,44 @@ export function reportChatDelivered(
   const current = socket;
   if (!current?.connected) return;
   const prior = deliveredReportedAt.get(conversationId);
+  // 只增不减:更低或相等的水位没有任何信息量。
+  if (prior && prior.height >= height) return;
+  const pending = deliveredPending.get(conversationId) ?? 0;
+  if (height > pending) deliveredPending.set(conversationId, height);
   const now = Date.now();
-  if (
-    prior &&
-    prior.height >= height &&
-    now - prior.at < DELIVERED_THROTTLE_MS
-  ) {
+  if (!prior || now - prior.at >= DELIVERED_THROTTLE_MS) {
+    flushDelivered(conversationId);
     return;
   }
-  if (prior && prior.height >= height) return;
-  deliveredReportedAt.set(conversationId, { height, at: now });
+  // 窗口内:攒着,窗口结束时只发最高的那个。
+  //
+  // 原来的「节流」只挡得住重复或更低的水位,而每条新消息的 height 都更高 ——
+  // 于是它一条都挡不住:群里一次消息洪峰,每个成员对每条消息各发一个 delivered,
+  // N 人 × M 条条条上行,自己就是一场实时事件风暴。
+  if (deliveredTimers.has(conversationId)) return;
+  const timer = setTimeout(
+    () => {
+      deliveredTimers.delete(conversationId);
+      flushDelivered(conversationId);
+    },
+    DELIVERED_THROTTLE_MS - (now - prior.at),
+  );
+  timer.unref?.();
+  deliveredTimers.set(conversationId, timer);
+}
+
+function flushDelivered(conversationId: string): void {
+  const height = deliveredPending.get(conversationId);
+  if (height === undefined) return;
+  const current = socket;
+  if (!current?.connected) return;
+  const prior = deliveredReportedAt.get(conversationId);
+  if (prior && prior.height >= height) {
+    deliveredPending.delete(conversationId);
+    return;
+  }
+  deliveredPending.delete(conversationId);
+  deliveredReportedAt.set(conversationId, { height, at: Date.now() });
   current.emit(CHAT_EVENTS.delivered, { conversationId, height });
 }
 

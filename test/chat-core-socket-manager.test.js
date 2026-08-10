@@ -137,7 +137,12 @@ function loadManager() {
   })();
   const bound = [];
   // 重连对账(G-13)的观测点:列表刷新次数与缺口补拉参数。
-  const apiCalls = { conversations: 0, backfills: [] };
+  const apiCalls = {
+    conversations: 0,
+    backfills: [],
+    mutationSyncs: [],
+    initialHistory: [],
+  };
   const protocol = runModule('src/chat-core/protocol.ts', {});
   const manager = runModule('src/chat-core/socket-manager.ts', {
     'socket.io-client': { io },
@@ -150,6 +155,14 @@ function loadManager() {
       backfillConversationSince: (conversationId, afterHeight) => {
         apiCalls.backfills.push({ conversationId, afterHeight });
         return Promise.resolve();
+      },
+      fetchChatMutationsSince: (since) => {
+        apiCalls.mutationSyncs.push(since);
+        return Promise.resolve(new Date().toISOString());
+      },
+      loadChatHistory: (conversationId) => {
+        apiCalls.initialHistory.push(conversationId);
+        return Promise.resolve({ messages: [], nextBeforeHeight: null });
       },
     },
     './local-db': {
@@ -207,6 +220,43 @@ test('reconnect (not first connect) refreshes conversations and backfills the ac
   assert.deepEqual(apiCalls.backfills, [
     { conversationId: 'c1', afterHeight: 9 },
   ]);
+  // 撤回不改 height —— afterHeight 补拉结构上够不着,必须另追一趟。
+  assert.equal(apiCalls.mutationSyncs.length, 1);
+});
+
+test('token rotation (suspend + reconnect) still counts as a reconnect', () => {
+  const { manager, socket, store, apiCalls } = loadManager();
+  manager.connectChat('jwt', 'u1');
+  socket.fire('connect');
+  assert.equal(apiCalls.conversations, 0);
+
+  // access token 轮换走的是 suspendChat + connectChat:换的是一条**新 socket**。
+  // 判据挂在 socket 上的话这条新连接永远算首连,断开窗口里的消息一条都不补。
+  manager.suspendChat();
+  store.activeConversationId = 'c1';
+  store.messagesByConversation = { c1: [{ height: 7 }] };
+  manager.connectChat('jwt-rotated', 'u1');
+  socket.fire('connect');
+
+  assert.equal(apiCalls.conversations, 1);
+  assert.deepEqual(apiCalls.backfills, [
+    { conversationId: 'c1', afterHeight: 7 },
+  ]);
+});
+
+test('reconnect with an empty active timeline loads the first history page', () => {
+  const { manager, socket, store, apiCalls } = loadManager();
+  manager.connectChat('jwt', 'u1');
+  socket.fire('connect');
+  socket.fire('disconnect');
+  // 打开会话时正好断网、首屏 REST 也失败 —— 一条确认消息都没有。
+  store.activeConversationId = 'c1';
+  store.messagesByConversation = { c1: [] };
+  socket.fire('connect');
+
+  // 直接 return 的话这条唯一的恢复路径也放弃了,会话一直空着。
+  assert.deepEqual(apiCalls.backfills, []);
+  assert.deepEqual(apiCalls.initialHistory, ['c1']);
 });
 
 test('connects with token in the handshake auth frame, never in the URL', () => {

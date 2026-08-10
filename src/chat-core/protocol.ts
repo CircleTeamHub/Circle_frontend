@@ -222,7 +222,57 @@ export function isChatMessageDto(value: unknown): value is ChatMessageDto {
   }
   const d = value['d'];
   if (d !== null && d !== undefined && typeof d !== 'string') return false;
+  if (!isValidReactions(value['reactions'])) return false;
+  if (!isValidReplySnapshot(value['replyTo'])) return false;
+  if (!isOptionalTimestamp(value['revokedAt'])) return false;
+  if (!isOptionalTimestamp(value['editedAt'])) return false;
+  const revokedBy = value['revokedBy'];
+  if (
+    revokedBy !== null &&
+    revokedBy !== undefined &&
+    typeof revokedBy !== 'string'
+  ) {
+    return false;
+  }
   return true;
+}
+
+/**
+ * 后来加的这几个可选字段一个都没校验过,而它们都在渲染路径上被直接解引用:
+ * `reactions: [{ emoji: '👍', userIds: null }]` 这样的载荷能一路存进 store,
+ * 然后在 mapChatMessageDtoToUI 读 `r.userIds.length` 时把会话页整个炸掉。
+ */
+function isValidReactions(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  if (!Array.isArray(value)) return false;
+  return value.every(
+    (entry) =>
+      isPlainObject(entry) &&
+      isNonEmptyString(entry['emoji']) &&
+      Array.isArray(entry['userIds']) &&
+      (entry['userIds'] as unknown[]).every((id) => typeof id === 'string'),
+  );
+}
+
+function isValidReplySnapshot(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  if (!isPlainObject(value)) return false;
+  const height = value['height'];
+  return (
+    isNonEmptyString(value['id']) &&
+    typeof height === 'number' &&
+    Number.isInteger(height) &&
+    height >= 0 &&
+    typeof value['senderNickname'] === 'string' &&
+    typeof value['type'] === 'string' &&
+    typeof value['preview'] === 'string' &&
+    typeof value['revoked'] === 'boolean'
+  );
+}
+
+function isOptionalTimestamp(value: unknown): boolean {
+  if (value === null || value === undefined) return true;
+  return typeof value === 'string' && Number.isFinite(Date.parse(value));
 }
 
 export interface ChatReadBroadcast {

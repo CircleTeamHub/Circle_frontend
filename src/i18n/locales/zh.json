@@ -317,6 +317,7 @@
       "edit": "编辑",
       "readers": "已读成员",
       "readersNone": "还没有人读到这条消息",
+      "readersMore": "{{names}} 等,共 {{count}} 人以上已读",
       "editing": "编辑消息",
       "resend": "重发"
     },

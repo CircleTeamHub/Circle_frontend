@@ -88,6 +88,7 @@ import {
   sendVoiceMessage,
 } from '@/chat-core/client';
 import { getChatSendErrorMessage } from '@/chat-core/send-errors';
+import { OptionPickerSheet } from '@/components/ui/option-picker-sheet';
 import {
   createChatMessageMapCache,
   mapChatMessageDtosToUI,
@@ -415,6 +416,9 @@ const s = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
+/** 引用跳转最多往回翻几页(一页 50 条);翻不到就放弃,不能无界翻。 */
+const QUOTE_PAGING_MAX = 10;
 
 export default function ChatDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -910,6 +914,10 @@ export default function ChatDetailScreen() {
     markConversationAsRead(conversationID);
   }, [conversationID, conversationMessages, isFocused]);
 
+  // 异步分页回来时闭包里的 messages 已经过期,滚动要按最新那份算 index。
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
   // 搜索定位：在 inverted 列表里 scrollToIndex 仍然按 index 计数，找到就跳。
   useEffect(() => {
     if (messages.length === 0 || !searchedMsgID || scrolledToSearchRef.current) {
@@ -1194,9 +1202,12 @@ export default function ChatDetailScreen() {
           );
         })
         .catch((error: unknown) => {
+          // 撤回失败抛的是 ChatSendError(ack 通道),不是 ApiError ——
+          // getApiErrorMessage 对它只会原样返回 error.message,也就是服务端
+          // 的中文文案或者裸的 CHAT_REVOKE_WINDOW_EXPIRED 字符串。
           Alert.alert(
             t('chat.messageActions.revokeFailed', { defaultValue: '撤回失败' }),
-            getApiErrorMessage(
+            getChatSendErrorMessage(
               error,
               t('chat.messageActions.revokeFailed', {
                 defaultValue: '撤回失败',
@@ -1224,21 +1235,25 @@ export default function ChatDetailScreen() {
     [conversationID],
   );
 
-  const handleOpenReactionPicker = useCallback(
-    (message: ChatMessage) => {
-      Alert.alert(
-        t('chat.messageActions.react', { defaultValue: '回应' }),
-        undefined,
-        [
-          ...CHAT_REACTION_EMOJIS.map((emoji) => ({
-            text: emoji,
-            onPress: () => handleToggleReaction(message, emoji),
-          })),
-          { text: t('common.cancel'), style: 'cancel' as const },
-        ],
-      );
+  // 六个表情 + 取消 = 7 个按钮,而 Android 的 Alert 最多渲染 3 个 ——
+  // 安卓用户看不到后面几个表情,也就永远选不到。改用应用内选项面板。
+  const [reactionTarget, setReactionTarget] = useState<ChatMessage | null>(null);
+  const reactionOptions = useMemo(
+    () => CHAT_REACTION_EMOJIS.map((emoji) => ({ value: emoji, label: emoji })),
+    [],
+  );
+
+  const handleOpenReactionPicker = useCallback((message: ChatMessage) => {
+    setReactionTarget(message);
+  }, []);
+
+  const handlePickReaction = useCallback(
+    (emoji: string) => {
+      const target = reactionTarget;
+      setReactionTarget(null);
+      if (target) handleToggleReaction(target, emoji);
     },
-    [handleToggleReaction, t],
+    [handleToggleReaction, reactionTarget],
   );
 
   // G-07 编辑入口:自己已送达的 text/quote,2 分钟内。
@@ -1278,18 +1293,36 @@ export default function ChatDetailScreen() {
   // G-07 逐条已读(群聊自己的消息):读者列表来自已读水位,无回执表。
   const handleShowReaders = useCallback(
     (message: ChatMessage) => {
+      const requestedFor = conversationID;
       void fetchMessageReaders(conversationID, message.id)
         .then((result) => {
+          // 响应回来时可能已经退出这个会话、甚至换了账号 —— 那时候弹一个装着
+          // 上一个会话成员名字的全局 Alert,是弹在一个毫不相干的页面上。
+          if (!mountedRef.current) return;
+          if (useChatStore.getState().activeConversationId !== requestedFor) {
+            return;
+          }
           const names = result.readers
             .map((reader) => reader.nickname)
             .filter(Boolean);
-          Alert.alert(
-            t('chat.messageActions.readers', { defaultValue: '已读成员' }),
+          // total 可能大于这一页(服务端上限 200)。只渲染 readers 的话,
+          // 3000 人的群里会显示成「正好这 200 个人读了」,看不出还有更多。
+          const hidden = Math.max(0, (result.total ?? names.length) - names.length);
+          const body =
             names.length > 0
-              ? names.join('、')
+              ? hidden > 0
+                ? t('chat.messageActions.readersMore', {
+                    names: names.join('、'),
+                    count: hidden,
+                    defaultValue: '{{names}} 等 {{count}} 人以上',
+                  })
+                : names.join('、')
               : t('chat.messageActions.readersNone', {
                   defaultValue: '还没有人读到这条消息',
-                }),
+                });
+          Alert.alert(
+            t('chat.messageActions.readers', { defaultValue: '已读成员' }),
+            body,
           );
         })
         .catch(() => undefined);
@@ -1321,7 +1354,13 @@ export default function ChatDetailScreen() {
         },
       });
     }
-    if (message.sendStatus === undefined || message.sendStatus === 2) {
+    // 回应只给能渲染回应条的气泡开放。图片/语音/位置/各类卡片走的是自己的组件,
+    // 里面没有回应行 —— 点了之后服务端确实记下了,时间线上却什么都看不到,
+    // 连自己刚点的那个都消失。
+    if (
+      (message.sendStatus === undefined || message.sendStatus === 2) &&
+      (message.type === 'sent' || message.type === 'received')
+    ) {
       actions.push({
         key: 'react',
         icon: 'happy-outline',
@@ -1621,18 +1660,72 @@ export default function ChatDetailScreen() {
 
   // 真引用点击定位:原消息还在内存窗口就滚过去;不在窗口(更早的历史)先不跳,
   // 批 1 本地库落地后升级成「按 height 拉一页再滚」。
+  /**
+   * 引用块跳转:目标不在内存窗口里时,按 quoteHeight 往回翻到它出现为止。
+   * 有界(QUOTE_PAGING_MAX 页),到头或翻满就放弃 —— 宁可不动,也不能一直翻。
+   */
+  const quotePagingRef = useRef(false);
+
+  const loadUntilQuoteVisible = useCallback(
+    async (item: ChatMessage) => {
+      if (!conversationID || quotePagingRef.current) return;
+      const targetId = item.quoteMessageId;
+      if (!targetId) return;
+      quotePagingRef.current = true;
+      try {
+        for (let page = 0; page < QUOTE_PAGING_MAX; page += 1) {
+          if (!mountedRef.current) return;
+          if (!hasMoreHistory(conversationID)) return;
+          await loadOlderConversationMessages(conversationID);
+          if (!mountedRef.current) return;
+          const timeline =
+            useChatStore.getState().messagesByConversation[conversationID] ?? [];
+          if (timeline.some((m) => m.id === targetId)) {
+            // 命中之后交给 searchedMsgID 那条既有的滚动路径:它已经处理好了
+            // 「列表还没重新布局完」的重试与高亮。
+            setHighlightedMessageID(targetId);
+            const index = messagesRef.current.findIndex(
+              (m) => m.id === targetId,
+            );
+            if (index >= 0) {
+              flatListRef.current?.scrollToIndex({
+                index,
+                viewPosition: 0.5,
+                animated: true,
+              });
+            }
+            return;
+          }
+        }
+      } catch (err) {
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          console.warn('[chat] paging to quoted message failed', err);
+        }
+      } finally {
+        quotePagingRef.current = false;
+      }
+    },
+    [conversationID],
+  );
+
   const handleQuotePress = useCallback(
     (item: ChatMessage) => {
       if (!item.quoteMessageId) return;
       const index = messages.findIndex((m) => m.id === item.quoteMessageId);
-      if (index < 0) return;
-      flatListRef.current?.scrollToIndex({
-        index,
-        viewPosition: 0.5,
-        animated: true,
-      });
+      if (index >= 0) {
+        flatListRef.current?.scrollToIndex({
+          index,
+          viewPosition: 0.5,
+          animated: true,
+        });
+        return;
+      }
+      // 原消息比当前内存窗口更早。原来直接 return —— 引用块照样是可点的,
+      // 点下去却什么都不发生,而会话稍微长一点这就是常态。按 quoteHeight
+      // 往回翻,翻到目标进窗口为止(有界),然后再滚过去。
+      void loadUntilQuoteVisible(item);
     },
-    [messages],
+    [loadUntilQuoteVisible, messages],
   );
 
   const renderItem = useCallback(({ item }: { item: ChatMessage }) => {
@@ -3406,6 +3499,15 @@ export default function ChatDetailScreen() {
         anchor={actionMenu ? { x: actionMenu.x, y: actionMenu.y } : null}
         actions={messageActions}
         onDismiss={() => setActionMenu(null)}
+      />
+
+      <OptionPickerSheet
+        visible={reactionTarget !== null}
+        title={t('chat.messageActions.react', { defaultValue: '回应' })}
+        options={reactionOptions}
+        selectedValue=""
+        onSelect={handlePickReaction}
+        onClose={() => setReactionTarget(null)}
       />
 
       {/* 微信式全屏录音浮层：录音时盖在最上层，纯展示（pointerEvents none）。 */}

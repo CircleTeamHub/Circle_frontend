@@ -85,6 +85,11 @@ function loadDispatcher(storeOverrides = {}) {
     deliveredReports: [],
     typings: [],
     backfills: 0,
+    // 全量会话快照序号:防复活标记的自愈判据要拿它区分「移除之后新拉的快照」
+    // 和「移除之前就在途、之后才落地的旧快照」。
+    conversationsSnapshotSeq: 0,
+    cleared: [],
+    burnDurations: [],
     ...storeOverrides,
   };
   // 补拉是 800ms 防抖的。测试里换成可控计时器:每条用例真等 0.8 秒既慢又脆,
@@ -129,6 +134,18 @@ function loadDispatcher(storeOverrides = {}) {
     },
     get conversations() {
       return state.conversations;
+    },
+    get conversationsSnapshotSeq() {
+      return state.conversationsSnapshotSeq;
+    },
+    setActiveConversationId: (id) => {
+      state.activeConversationId = id;
+    },
+    clearConversationLocal: (conversationId) => {
+      state.cleared.push(conversationId);
+    },
+    applyBurnDuration: (conversationId, seconds) => {
+      state.burnDurations.push({ conversationId, seconds });
     },
     applyIncomingMessage: (message) =>
       state.conversations.some((c) => c.id === message.conversationId),
@@ -294,6 +311,16 @@ test('malformed payloads never reach the store', () => {
     dto({ sender: 'peer' }),
     dto({ replyToId: 7 }),
     dto({ d: {} }),
+    // 后来加的可选字段一个都没校验过,而它们都在渲染路径上被直接解引用:
+    // reactions[].userIds 为 null 时 mapChatMessageDtoToUI 读 .length 直接炸。
+    dto({ reactions: [{ emoji: '👍', userIds: null }] }),
+    dto({ reactions: [{ emoji: '', userIds: [] }] }),
+    dto({ reactions: [{ emoji: '👍', userIds: [1, 2] }] }),
+    dto({ reactions: 'many' }),
+    dto({ replyTo: { id: 'r1' } }),
+    dto({ replyTo: { id: 'r1', height: 1, senderNickname: 'a', type: 'text', preview: 'p', revoked: 'yes' } }),
+    dto({ revokedAt: 'not-a-date' }),
+    dto({ editedAt: 42 }),
   ];
   for (const payload of bad) {
     socket.emit('chat:msg', payload);
@@ -639,6 +666,10 @@ test('chat:conversation removed collapses the conversation and alerts only when 
   assert.deepEqual(state.removed, ['c1']);
   // 正看着这个群才提示,文案走 im.conversation.removedFromGroup 词条。
   assert.deepEqual(state.alerts, ['im.conversation.removedFromGroup']);
+  // 正开着的会话要连时间线一起收走:只摘列表行的话,被移出的人还能继续
+  // 翻聊天记录、继续按发送。
+  assert.deepEqual(state.cleared, ['c1']);
+  assert.equal(state.activeConversationId, null);
 
   // 防复活:被移除会话的迟到广播既不入库也不触发补拉。
   socket.emit('chat:msg', dto({ conversationId: 'c1', id: 'late-1' }));
@@ -670,7 +701,7 @@ test('chat:conversation left removes silently and joined lifts the guard', () =>
   assert.equal(state.ingested.length, 1);
 });
 
-test('a conversation restored by a snapshot lifts the removed guard (missed joined event)', () => {
+test('a snapshot fetched AFTER the removal lifts the guard (missed joined event)', () => {
   const { socket, state } = loadDispatcher();
   state.conversations = [{ id: 'c1', type: 'GROUP' }];
   socket.emit('chat:conversation', {
@@ -683,8 +714,46 @@ test('a conversation restored by a snapshot lifts the removed guard (missed join
   // 离线期间被重新拉回群,joined 事件错过了;重连 resync 把会话快照带回列表。
   // 防复活标记必须自愈解除,否则实时消息被静默丢弃、只有翻历史才看得到。
   state.conversations = [{ id: 'c1', type: 'GROUP' }];
+  state.conversationsSnapshotSeq += 1; // 移除之后新拉的一次全量快照
   socket.emit('chat:msg', dto({ conversationId: 'c1', id: 'after-rejoin' }));
   assert.equal(state.ingested.length, 1);
+});
+
+test('a STALE snapshot (in flight before the removal) keeps the guard', () => {
+  const { socket, state } = loadDispatcher();
+  state.conversations = [{ id: 'c1', type: 'GROUP' }];
+  socket.emit('chat:conversation', {
+    kind: 'removed',
+    conversationId: 'c1',
+    userId: 'me',
+  });
+
+  // 一个在移除**之前**发出、之后才落地的会话快照:它把会话原样装了回来,
+  // 但那不是重新入群 —— 序号没前进,标记必须保持,延迟消息照样丢弃。
+  state.conversations = [{ id: 'c1', type: 'GROUP' }];
+  socket.emit('chat:msg', dto({ conversationId: 'c1', id: 'late-2' }));
+  assert.equal(state.ingested.length, 0);
+});
+
+test('a remote burn-changed system message updates the conversation setting', () => {
+  const { socket, state } = loadDispatcher();
+  state.conversations = [{ id: 'c1', type: 'GROUP' }];
+
+  socket.emit(
+    'chat:msg',
+    dto({
+      conversationId: 'c1',
+      id: 'sys-1',
+      type: 'system',
+      content: { kind: 'burn-changed', seconds: 30 },
+      sender: null,
+    }),
+  );
+
+  // 只渲染成一条提示是不够的:ChatInfoScreen 上的档位会一直显示旧值。
+  assert.deepEqual(state.burnDurations, [
+    { conversationId: 'c1', seconds: 30 },
+  ]);
 });
 
 test('chat:conversation for another user or malformed payloads is ignored', () => {

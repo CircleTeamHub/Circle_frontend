@@ -277,6 +277,7 @@
       "edit": "Editar",
       "readers": "Leído por",
       "readersNone": "Nadie lo ha leído todavía",
+      "readersMore": "{{names}} y {{count}} más",
       "editing": "Editando mensaje",
       "resend": "Reenviar"
     },

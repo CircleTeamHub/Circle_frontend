@@ -155,12 +155,23 @@ export async function initChatLocalDb(userId: string): Promise<boolean> {
         } catch {
           encrypted = false;
         }
-        if (!encrypted) {
-          warn(
-            'cipher',
-            '[chat-db] SQLCipher not active (old build?); local cache is NOT encrypted until the app is rebuilt with the expo-sqlite plugin',
-          );
-        }
+      }
+      // 拿不到密钥、或 SQLCipher 没生效(OTA 跑在旧二进制上)时**不建库**。
+      //
+      // 原来只是 warn 一声就继续建:那会在磁盘上落一个明文的库文件,里面是
+      // 私聊正文、会话元信息、outbox 里还没发出去的内容和待上报的已读水位。
+      // 之后即使重新构建了带 SQLCipher 的包,已经写下的明文文件也不会被
+      // 追溯加密。本地缓存是可选的加速层,不值得拿这个换。
+      if (!encrypted) {
+        warn(
+          'cipher',
+          key
+            ? '[chat-db] SQLCipher not active (old build?); local cache disabled — rebuild the app with the expo-sqlite plugin'
+            : '[chat-db] no SecureStore key; local cache disabled',
+        );
+        await db.closeAsync().catch(() => undefined);
+        handle = null;
+        return null;
       }
       const ftsAvailable = await applySchema(db);
       const next: DbHandle = { db, userId, ftsAvailable, encrypted };
@@ -303,10 +314,22 @@ export async function persistLocalMessages(
   try {
     await current.db.withTransactionAsync(async () => {
       for (const message of rows) {
+        // ON CONFLICT DO UPDATE 而不是 INSERT OR REPLACE。后者在 SQLite 里是
+        // 「先 DELETE 再 INSERT」,而默认 recursive_triggers=off 时那次隐式
+        // DELETE **不触发** messages_fts_ad —— 每次重新落同一条消息(翻历史、
+        // 回应、编辑)都会在外置内容的 FTS 影子表里留下一行孤儿,而 500 条的
+        // 保留上限管不到它们。
         await current.db.runAsync(
-          `INSERT OR REPLACE INTO messages
+          `INSERT INTO messages
              (id, conversation_id, height, created_at, type, text, payload)
-           VALUES (?, ?, ?, ?, ?, ?, ?);`,
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             conversation_id = excluded.conversation_id,
+             height = excluded.height,
+             created_at = excluded.created_at,
+             type = excluded.type,
+             text = excluded.text,
+             payload = excluded.payload;`,
           message.id,
           conversationId,
           message.height,

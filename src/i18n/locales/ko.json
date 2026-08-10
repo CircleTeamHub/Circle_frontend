@@ -277,6 +277,7 @@
       "edit": "수정",
       "readers": "읽은 멤버",
       "readersNone": "아직 아무도 읽지 않았습니다",
+      "readersMore": "{{names}} 외 {{count}}명",
       "editing": "메시지 수정",
       "resend": "다시 보내기"
     },

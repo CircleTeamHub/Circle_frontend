@@ -9,6 +9,7 @@ import { MenuRow } from '@/components/ui/menu-row';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Avatar } from '@/components/ui/avatar';
 import { UserIconRow } from '@/components/ui/user-icon-row';
+import { OptionPickerSheet } from '@/components/ui/option-picker-sheet';
 import {
   clearChatConversationHistory,
   createCircleChatConversation,
@@ -20,6 +21,7 @@ import { formatBurnDuration } from '@/chat-core/message-mappers';
 import { ensureDirectConversation } from '@/chat-core/client';
 import type { ChatConversationDto, ChatMemberDto } from '@/chat-core/protocol';
 import { useChatStore } from '@/chat-core/store';
+import { useLocalUnreadStore } from '@/features/messages/store/use-local-unread-store';
 import {
   canChangeGroupMemberRole,
   roleLevelFromCircleRole,
@@ -1013,26 +1015,48 @@ export default function ChatInfoScreen() {
   // S-01 会话级阅后即焚:当前档位跟随会话 DTO(REST 回执会经 store 更新)。
   const burnDurationSec = activeConversation?.burnDurationSec ?? null;
 
-  const handleOpenBurnOptions = useCallback(() => {
-    if (!resolvedConversationID) return;
-    const choices = [0, 30, 300, 3600, 86400, 604800];
-    Alert.alert(t('chat.burnAfterReading'), undefined, [
-      ...choices.map((seconds) => ({
-        text: seconds === 0 ? t('chat.burnOff') : formatBurnDuration(seconds),
-        onPress: () => {
-          void setChatBurnDuration(resolvedConversationID, seconds).catch(
-            (error: unknown) => {
-              Alert.alert(
-                t('chat.burnAfterReading'),
-                getApiErrorMessage(error, t('common.networkError')),
-              );
-            },
-          );
-        },
+  // 六个档位 + 取消 = 7 个按钮,而 Android 的 Alert 最多渲染 3 个 —— 用
+  // Alert 的话安卓用户根本够不到后面几档。改用应用内的选项面板(两端一致)。
+  const [burnPickerVisible, setBurnPickerVisible] = useState(false);
+  const [burnPending, setBurnPending] = useState(false);
+  const burnRequestRef = useRef(0);
+  const burnOptions = useMemo(
+    () =>
+      [0, 30, 300, 3600, 86400, 604800].map((seconds) => ({
+        value: seconds,
+        label: seconds === 0 ? t('chat.burnOff') : formatBurnDuration(seconds),
       })),
-      { text: t('common.cancel'), style: 'cancel' as const },
-    ]);
-  }, [resolvedConversationID, t]);
+    [t],
+  );
+
+  const handleOpenBurnOptions = useCallback(() => {
+    if (!resolvedConversationID || burnPending) return;
+    setBurnPickerVisible(true);
+  }, [burnPending, resolvedConversationID]);
+
+  const handleSelectBurnDuration = useCallback(
+    (seconds: number) => {
+      if (!resolvedConversationID) return;
+      setBurnPickerVisible(false);
+      // 与相邻的置顶/免打扰一样上一道在途闸,并给请求编号:连点两个档位时
+      // 先发的那个若后落地,会把用户最后的选择覆盖掉,store 还跟着它走。
+      const request = burnRequestRef.current + 1;
+      burnRequestRef.current = request;
+      setBurnPending(true);
+      void setChatBurnDuration(resolvedConversationID, seconds)
+        .catch((error: unknown) => {
+          if (burnRequestRef.current !== request) return;
+          Alert.alert(
+            t('chat.burnAfterReading'),
+            getApiErrorMessage(error, t('common.networkError')),
+          );
+        })
+        .finally(() => {
+          if (burnRequestRef.current === request) setBurnPending(false);
+        });
+    },
+    [resolvedConversationID, t],
+  );
 
   // G-14 清空聊天记录:服务端写本人水位,本地时间线/预览/未读一并清。
   const handleClearHistory = useCallback(() => {
@@ -1044,7 +1068,15 @@ export default function ChatInfoScreen() {
         style: 'destructive',
         onPress: () => {
           void clearChatConversationHistory(resolvedConversationID)
-            .then(() => Alert.alert(t('chat.clearHistoryDone')))
+            .then(() => {
+              // 「标记为未读」的本地覆盖也要清掉:只清 chat-core 的未读数,
+              // 那条覆盖还在,消息页和 tab 上这个会话继续顶着红点 —— 而里面
+              // 已经是空的。
+              useLocalUnreadStore
+                .getState()
+                .clearUnread(resolvedConversationID);
+              Alert.alert(t('chat.clearHistoryDone'));
+            })
             .catch((error: unknown) => {
               Alert.alert(
                 t('chat.clearHistory'),
@@ -1237,6 +1269,13 @@ export default function ChatInfoScreen() {
             </Pressable>
           </View>
         </ScrollView>
+        <BurnDurationPicker
+          visible={burnPickerVisible}
+          options={burnOptions}
+          selected={burnDurationSec ?? 0}
+          onSelect={handleSelectBurnDuration}
+          onClose={() => setBurnPickerVisible(false)}
+        />
       </View>
     );
   }
@@ -1332,6 +1371,40 @@ export default function ChatInfoScreen() {
           />
         </View>
       </ScrollView>
+        <BurnDurationPicker
+          visible={burnPickerVisible}
+          options={burnOptions}
+          selected={burnDurationSec ?? 0}
+          onSelect={handleSelectBurnDuration}
+          onClose={() => setBurnPickerVisible(false)}
+        />
     </View>
+  );
+}
+
+/** 焚毁档位选择面板(六档 + 关闭:Android 的 Alert 装不下这么多按钮)。 */
+function BurnDurationPicker({
+  visible,
+  options,
+  selected,
+  onSelect,
+  onClose,
+}: {
+  visible: boolean;
+  options: { value: number; label: string }[];
+  selected: number;
+  onSelect: (seconds: number) => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <OptionPickerSheet
+      visible={visible}
+      title={t('chat.burnAfterReading')}
+      options={options}
+      selectedValue={selected}
+      onSelect={onSelect}
+      onClose={onClose}
+    />
   );
 }

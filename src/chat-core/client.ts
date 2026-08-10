@@ -191,9 +191,14 @@ export async function sendWithOptimism(
   store.applyIncomingMessage(optimistic);
   options.onCreate?.(optimistic);
 
-  // G-01 outbox:先入队再发送 —— App 在 ack 前被杀,重启后这条会以
+  // G-01 outbox:**先落盘再发送** —— App 在 ack 前被杀,重启后这条会以
   // 「发送失败」气泡还原(长按可重发,同 d 幂等);成功后出队。
-  void outboxUpsert({
+  //
+  // 这里必须 await。fire-and-forget 的话:connectChat 打开本地库也是异步的,
+  // 用户一连上就发的那条消息会撞上 requireDb() === null 直接静默丢弃;
+  // 或者原生写还挂着的时候进程被杀 —— 而「ack 前被杀」正是这个 outbox
+  // 唯一要兜的场景。落盘失败不阻断发送(缓存是可选层),但要先等它有结果。
+  await outboxUpsert({
     d,
     conversationId: options.conversationId,
     payload: {
@@ -204,7 +209,7 @@ export async function sendWithOptimism(
       ...(options.replyToId ? { replyToId: options.replyToId } : {}),
     },
     createdAt: optimistic.createdAt,
-  });
+  }).catch(() => undefined);
   try {
     const ack = await sendChatMessage({
       conversationId: options.conversationId,
@@ -387,6 +392,31 @@ export async function retryFailedChatMessage(
     (item) => item.d === d && item.conversationId === conversationId,
   );
   if (!entry) throw new ChatSendError('CHAT_INVALID_PAYLOAD', '找不到待重发的消息');
-  await sendChatMessage(entry.payload);
+  const ack = await sendChatMessage(entry.payload);
   void outboxDelete(d);
+  // 原来只出队就完事了。可首次发送其实**已经在服务端落库**、只是 ack 和回声
+  // 都丢了的情况下,重发命中幂等分支:服务端返回成功但刻意不再广播 chat:msg。
+  // 没有回声就没有东西替换那个失败气泡 —— 消息明明发出去了,本地却永远红着。
+  // ack 里有权威 id/height,照首发路径自己确认掉。
+  const store = useChatStore.getState();
+  const echoed = (store.messagesByConversation[conversationId] ?? []).find(
+    (m) => m.id === ack.messageId,
+  );
+  if (echoed) return;
+  const optimistic = (
+    store.messagesByConversation[conversationId] ?? []
+  ).find((m) => m.d === d);
+  const confirmed: ChatMessageDto = {
+    id: ack.messageId,
+    conversationId,
+    height: ack.height,
+    type: entry.payload.type,
+    content: optimistic?.content ?? entry.payload.content,
+    sender: optimistic?.sender ?? selfSenderInfo(),
+    replyToId: entry.payload.replyToId ?? null,
+    d,
+    createdAt: entry.createdAt,
+  };
+  store.ingestMessages(conversationId, [confirmed]);
+  store.applyIncomingMessage(confirmed);
 }

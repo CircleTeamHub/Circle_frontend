@@ -34,6 +34,14 @@ export const EXPECTED_CHAT_SEND_ERROR_CODES: ReadonlySet<string> = new Set([
   'CHAT_PEER_NOT_FOUND',
   'CHAT_CONVERSATION_NOT_FOUND',
   'CHAT_SELF_CONVERSATION',
+  // 撤回/编辑走的是同一条 ack 通道、同一个 ChatSendError,拒绝原因同样是
+  // 「产品预期内、重试也不会成功」(超窗、无权限、消息已不在)。少了它们,
+  // 屏幕上显示的就是原样的服务端文本或者裸的错误码字符串。
+  'CHAT_REVOKE_WINDOW_EXPIRED',
+  'CHAT_REVOKE_FORBIDDEN',
+  'CHAT_EDIT_WINDOW_EXPIRED',
+  'CHAT_EDIT_FORBIDDEN',
+  'CHAT_MESSAGE_NOT_FOUND',
 ]);
 
 /** 敏感词命中判定(替代 OpenIM 73001 的 isSensitiveWordBlockedError)。 */

@@ -19,6 +19,7 @@ import {
   type ConversationWithLocalUnread,
 } from "@/features/messages/utils/local-unread";
 import { getUserProfileHref } from "@/features/user/utils/routes";
+import { getApiErrorMessage } from "@/services/api/errors";
 import { useTabBadgeStore } from "@/stores/tabBadgeStore";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { Conversation } from "@/types";
@@ -808,18 +809,27 @@ export default function MessagesScreen() {
               // G-14:删除会话 = 隐藏 + 清空本人历史水位(对齐旧栈
               // deleteConversationAndDeleteAllMsg 的本人侧语义)。对端与
               // 服务端数据不动;新消息到达时会话重新浮出,但旧历史不再可见。
-              void updateChatConversationPreferences(conversation.id, {
-                hidden: true,
-              }).catch((err) => {
-                if (isDev) {
-                  console.warn("[messages] swipe delete conversation failed", err);
+              //
+              // 两个请求必须串行且失败要出声。原来是并发 + 只在 __DEV__ 里
+              // console.warn:清空失败时会话照样消失,而旧历史会随下一条新消息
+              // 整段浮回来;隐藏失败时行还在、时间线却已经空了。两种都是静默的。
+              // 先清后隐:清失败就不隐,列表保持原样,用户能看出没成功。
+              void (async () => {
+                try {
+                  await clearChatConversationHistory(conversation.id);
+                  await updateChatConversationPreferences(conversation.id, {
+                    hidden: true,
+                  });
+                } catch (err) {
+                  if (isDev) {
+                    console.warn("[messages] swipe delete failed", err);
+                  }
+                  Alert.alert(
+                    t("messages.deleteChat"),
+                    getApiErrorMessage(err, t("common.networkError")),
+                  );
                 }
-              });
-              void clearChatConversationHistory(conversation.id).catch((err) => {
-                if (isDev) {
-                  console.warn("[messages] swipe delete clear failed", err);
-                }
-              });
+              })();
             },
           },
         ],

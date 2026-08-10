@@ -143,14 +143,19 @@ export function cancelConversationBackfill(): void {
  * 列表。这里记一个有界防复活集合;重新入群(joined)时解除。
  * 断连清空即可:重连后服务端按座位重新派生房间,不在座就收不到了。
  */
-const removedConversations = new Set<string>();
+const removedConversations = new Map<string, number>();
 const REMOVED_CONVERSATIONS_MAX = 50;
 
 function rememberRemovedConversation(conversationId: string): void {
   removedConversations.delete(conversationId);
-  removedConversations.add(conversationId);
+  // 记下移除那一刻的会话快照序号:自愈判据要拿它区分「移除之后新拉回来的
+  // 快照」和「移除之前就已经在途、之后才落地的旧快照」。
+  removedConversations.set(
+    conversationId,
+    useChatStore.getState().conversationsSnapshotSeq,
+  );
   while (removedConversations.size > REMOVED_CONVERSATIONS_MAX) {
-    const oldest = removedConversations.values().next().value;
+    const oldest = removedConversations.keys().next().value;
     if (oldest === undefined) break;
     removedConversations.delete(oldest);
   }
@@ -162,6 +167,28 @@ const CONVERSATION_CHANGE_KINDS: ReadonlySet<string> = new Set([
   'removed',
   'updated',
 ]);
+
+/**
+ * 对端(或另一位管理员)改了阅后即焚时长时,把新档位落进会话状态。
+ *
+ * applyBurnDuration 此前只有本机那次 REST 调用会触发,所以远端改动只是渲染成
+ * 一条系统提示 —— ChatInfoScreen 上的档位一直显示旧值,直到某次无关的会话刷新
+ * 才对上。对「消息会不会自动销毁」这件事来说,显示错的档位是危险的。
+ */
+function applyRemoteBurnChange(
+  store: ReturnType<typeof useChatStore.getState>,
+  message: ChatMessageDto,
+): void {
+  if (message.type !== 'system') return;
+  const content = message.content;
+  if (content['kind'] !== 'burn-changed') return;
+  const seconds = content['seconds'];
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds)) return;
+  store.applyBurnDuration(
+    message.conversationId,
+    seconds > 0 ? Math.floor(seconds) : null,
+  );
+}
 
 export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
   socket.on(CHAT_EVENTS.message, (payload: ChatMessageDto) => {
@@ -183,12 +210,17 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
 
       const store = useChatStore.getState();
       // 被移出的会话:迟到的广播不入库也不补拉,否则刚收走的会话立刻复活。
-      // 自愈:会话又出现在快照里(重连 resync / 手动刷新)说明已重新入群,
-      // 只是 joined 事件在离线窗口丢了 —— 解除标记照常入库。
-      if (removedConversations.has(payload.conversationId)) {
-        const restored = store.conversations.some(
-          (c) => c.id === payload.conversationId,
-        );
+      // 防复活标记的解除有两条路:权威的 joined 事件,或者**移除之后新拉回来的**
+      // 会话快照里仍然有它(离线期间被重新拉回群、joined 事件丢了)。
+      //
+      // 只看「会话在不在列表里」是不牢的:一个在移除事件之前发出、在
+      // removeConversation 之后才落地的旧快照会把刚收走的会话原样装回来,
+      // 那不是重新入群。所以比快照序号 —— 必须是移除之后又拉过至少一次。
+      const removedAtSeq = removedConversations.get(payload.conversationId);
+      if (removedAtSeq !== undefined) {
+        const restored =
+          store.conversationsSnapshotSeq > removedAtSeq &&
+          store.conversations.some((c) => c.id === payload.conversationId);
         if (!restored) return;
         removedConversations.delete(payload.conversationId);
       }
@@ -197,6 +229,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       // 看到自己、未读永远加不上。
       const applied = store.applyIncomingMessage(payload);
       store.ingestMessages(payload.conversationId, [payload]);
+      applyRemoteBurnChange(store, payload);
       // G-07 送达回执:收到别人的消息即回报水位(节流在 socket-manager)。
       if (
         payload.height > 0 &&
@@ -228,7 +261,10 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         !payload ||
         typeof payload.conversationId !== 'string' ||
         typeof payload.userId !== 'string' ||
-        typeof payload.height !== 'number'
+        // 只看 typeof 的话 1.5 / Infinity / NaN 都能过,而这个数会被写进
+        // unreadCount,一路传到 tab 与原生角标 API,还会污染已读水位。
+        !Number.isSafeInteger(payload.height) ||
+        payload.height < 0
       ) {
         console.warn('[chat] dropped malformed read payload');
         return;
@@ -398,6 +434,13 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         const wasActive =
           store.activeConversationId === payload.conversationId;
         store.removeConversation(payload.conversationId);
+        // 正开着的那个会话要连时间线一起收走。只摘列表行的话,详情页的消息、
+        // 输入框和成员入口原封不动留在屏幕上 —— 已经被移出的人还能继续翻聊天
+        // 记录、继续按发送(服务端会拒,但界面上看不出自己已经不在群里)。
+        if (wasActive) {
+          store.clearConversationLocal(payload.conversationId);
+          store.setActiveConversationId(null);
+        }
         // 正看着这个群被移出才提示;left 是本人在别处的主动动作,静默收走即可。
         if (payload.kind === 'removed' && wasActive) {
           Alert.alert(i18n.t('im.conversation.removedFromGroup'));

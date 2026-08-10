@@ -317,6 +317,7 @@
       "edit": "Edit",
       "readers": "Read by",
       "readersNone": "No one has read this yet",
+      "readersMore": "{{names}} and {{count}} more",
       "editing": "Editing message",
       "resend": "Resend"
     },
