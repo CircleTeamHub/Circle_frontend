@@ -187,3 +187,17 @@ test('realtime profile refresh events handle rejected auth refreshes', () => {
   assert.match(client, /refreshCurrentUserSummary\(\)\.catch/);
   assert.doesNotMatch(client, /void refreshCurrentUserSummary\(\);/);
 });
+
+test('realtime reports bounded, content-free failures for its critical blind spots', () => {
+  const client = read('src/realtime/client.ts');
+
+  assert.match(client, /import \{ reportError \} from '@\/observability\/sentry'/);
+  assert.match(client, /reportRealtimeFailureOnce\('malformedPayload'/);
+  assert.match(client, /reportRealtimeFailureOnce\('authFrameSend'/);
+  assert.match(client, /reportRealtimeConnectionOutage\(/);
+  assert.match(client, /operation: 'realtime'/);
+  assert.doesNotMatch(
+    client,
+    /reportError\([^\n]*rawData|reportError\([^\n]*normalizedToken/,
+  );
+});

@@ -210,6 +210,58 @@ function validateSigningConfig({ env }) {
   return errors;
 }
 
+function validateSentryUploadConfig({ env }) {
+  const errors = [];
+  requireValues(errors, env, [
+    'EXPO_PUBLIC_SENTRY_DSN',
+    'SENTRY_AUTH_TOKEN',
+    'SENTRY_ORG',
+    'SENTRY_PROJECT',
+    'SENTRY_RELEASE',
+    'EXPO_PUBLIC_SENTRY_RELEASE',
+    'SENTRY_DIST',
+    'EXPO_PUBLIC_SENTRY_DIST',
+    'RELEASE_TAG',
+    'ANDROID_VERSION_CODE',
+  ]);
+  validateSentryDsn(errors, env);
+
+  if (
+    env.SENTRY_RELEASE?.trim() &&
+    env.EXPO_PUBLIC_SENTRY_RELEASE?.trim() &&
+    env.SENTRY_RELEASE.trim() !== env.EXPO_PUBLIC_SENTRY_RELEASE.trim()
+  ) {
+    errors.push('SENTRY_RELEASE must equal EXPO_PUBLIC_SENTRY_RELEASE.');
+  }
+  if (
+    env.SENTRY_DIST?.trim() &&
+    env.EXPO_PUBLIC_SENTRY_DIST?.trim() &&
+    env.SENTRY_DIST.trim() !== env.EXPO_PUBLIC_SENTRY_DIST.trim()
+  ) {
+    errors.push('SENTRY_DIST must equal EXPO_PUBLIC_SENTRY_DIST.');
+  }
+
+  const expectedRelease = env.RELEASE_TAG?.trim()
+    ? `windnote@${env.RELEASE_TAG.trim()}`
+    : undefined;
+  if (
+    expectedRelease &&
+    env.SENTRY_RELEASE?.trim() &&
+    env.SENTRY_RELEASE.trim() !== expectedRelease
+  ) {
+    errors.push(`SENTRY_RELEASE must be ${expectedRelease}.`);
+  }
+  if (
+    env.ANDROID_VERSION_CODE?.trim() &&
+    env.SENTRY_DIST?.trim() &&
+    env.SENTRY_DIST.trim() !== env.ANDROID_VERSION_CODE.trim()
+  ) {
+    errors.push('SENTRY_DIST must equal ANDROID_VERSION_CODE.');
+  }
+
+  return errors;
+}
+
 function validateDistributionApproval({ env }) {
   const errors = [];
 
@@ -278,6 +330,9 @@ function main() {
       case 'signing':
         errors = validateSigningConfig({ env: process.env });
         break;
+      case 'sentry-upload':
+        errors = validateSentryUploadConfig({ env: process.env });
+        break;
       case 'distribution':
         errors = validateDistributionApproval({ env: process.env });
         break;
@@ -310,5 +365,6 @@ module.exports = {
   validateDistributionApproval,
   validateReleaseMetadata,
   validateSigningConfig,
+  validateSentryUploadConfig,
   validateSupportAccounts,
 };

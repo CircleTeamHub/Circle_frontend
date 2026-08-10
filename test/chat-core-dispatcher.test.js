@@ -58,6 +58,7 @@ function loadDispatcher(storeOverrides = {}) {
     ingested: [],
     banners: [],
     backfills: 0,
+    sentryReports: [],
     ...storeOverrides,
   };
   // 补拉是 800ms 防抖的。测试里换成可控计时器:每条用例真等 0.8 秒既慢又脆,
@@ -152,6 +153,11 @@ function loadDispatcher(storeOverrides = {}) {
         isMessageDeletedLocally: (id) => deletedIds.has(id),
       };
     }
+    if (request === '@/observability/sentry') {
+      return {
+        reportError: (error, context) => state.sentryReports.push({ error, context }),
+      };
+    }
     if (request === '@/features/notifications/store/use-notification-snackbar-store') {
       return {
         useNotificationSnackbarStore: {
@@ -227,6 +233,27 @@ test('malformed payloads never reach the store', () => {
     socket.emit('chat:msg', payload);
   }
   assert.equal(state.ingested.length, 0, 'a malformed payload was stored');
+  assert.equal(state.sentryReports.length, 1, 'a malformed payload storm was not deduplicated');
+  assert.equal(state.sentryReports[0].error.message, 'chat event failure');
+  assert.deepEqual(
+    { ...state.sentryReports[0].context },
+    {
+      component: 'chatDispatcher',
+      operation: 'incomingMessage',
+      kind: 'malformedPayload',
+    },
+  );
+});
+
+test('cancelling the chat lifecycle resets malformed-payload reporting', () => {
+  const { socket, state, dispatcher } = loadDispatcher();
+  socket.emit('chat:msg', null);
+  socket.emit('chat:msg', null);
+  assert.equal(state.sentryReports.length, 1);
+
+  dispatcher.cancelConversationBackfill();
+  socket.emit('chat:msg', null);
+  assert.equal(state.sentryReports.length, 2);
 });
 
 test('system messages with a null sender are still valid', () => {

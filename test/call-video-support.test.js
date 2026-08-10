@@ -21,6 +21,26 @@ test('GroupCallScreen publishes video for VIDEO calls only', () => {
   assert.doesNotMatch(source, /video=\{false\}/, '写死的音频-only 已移除');
 });
 
+test('GroupCallScreen reports native module and room connection failures without call identifiers', () => {
+  const source = read('src/features/call/screens/GroupCallScreen.tsx');
+
+  assert.match(source, /import \{ reportError \} from '@\/observability\/sentry'/);
+  assert.match(source, /operation: 'livekit'/);
+  assert.match(source, /kind: 'moduleLoad'/);
+  assert.match(source, /kind: 'roomConnection'/);
+  assert.doesNotMatch(source, /reportError\([^\n]*activeCall\.id/);
+  assert.doesNotMatch(source, /reportError\([^\n]*livekit\.token/);
+});
+
+test('GroupCallScreen allows a newly credentialed retry to report its own room failure', () => {
+  const source = read('src/features/call/screens/GroupCallScreen.tsx');
+
+  assert.match(
+    source,
+    /const handleRetryConnection[\s\S]*?reportedRoomErrorRef\.current = false[\s\S]*?setRoomVersion/,
+  );
+});
+
 test('GroupCallScreen renders camera toggle and video tiles', () => {
   const source = read('src/features/call/screens/GroupCallScreen.tsx');
 

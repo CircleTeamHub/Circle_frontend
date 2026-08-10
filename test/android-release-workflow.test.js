@@ -305,7 +305,20 @@ test('Android release workflow builds and verifies a private signed artifact', (
       `${supportVar} must be injected into the release build`,
     );
   }
-  assert.match(build, /SENTRY_DISABLE_AUTO_UPLOAD: ["']true["']/);
+  assert.doesNotMatch(build, /SENTRY_DISABLE_AUTO_UPLOAD: ["']true["']/);
+  for (const sentryValue of [
+    'SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}',
+    'SENTRY_ORG: ${{ vars.SENTRY_ORG }}',
+    'SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}',
+  ]) {
+    assert.ok(build.includes(sentryValue), `release build injects ${sentryValue}`);
+  }
+  assert.match(build, /validate-android-release\.js sentry-upload/);
+  assert.match(build, /release="windnote@\$RELEASE_TAG"/);
+  assert.match(build, /EXPO_PUBLIC_SENTRY_RELEASE=\$release/);
+  assert.match(build, /EXPO_PUBLIC_SENTRY_DIST=\$version_code/);
+  assert.match(build, /SENTRY_RELEASE=\$release/);
+  assert.match(build, /SENTRY_DIST=\$version_code/);
   assert.match(build, /apksigner.*verify --verbose --print-certs/);
   assert.match(apkVerification, /certificate SHA-256 digest/);
   assert.match(apkVerification, /tr -d '\[:space:\]:'/);
@@ -637,6 +650,53 @@ test('release validation signing requires credentials and a SHA-256 fingerprint'
       /SHA-256 certificate fingerprint/,
     );
   }
+});
+
+test('release validation requires matching Sentry upload and runtime identities', () => {
+  const {
+    validateSentryUploadConfig,
+  } = require('../.github/scripts/validate-android-release');
+  const env = {
+    RELEASE_TAG: 'v1.0.0',
+    ANDROID_VERSION_CODE: '1000000',
+    EXPO_PUBLIC_SENTRY_DSN: 'https://public@example.test/4507',
+    SENTRY_AUTH_TOKEN: 'upload-token',
+    SENTRY_ORG: 'windnote',
+    SENTRY_PROJECT: 'mobile',
+    SENTRY_RELEASE: 'windnote@v1.0.0',
+    EXPO_PUBLIC_SENTRY_RELEASE: 'windnote@v1.0.0',
+    SENTRY_DIST: '1000000',
+    EXPO_PUBLIC_SENTRY_DIST: '1000000',
+  };
+
+  assert.deepEqual(validateSentryUploadConfig({ env }), []);
+  for (const name of [
+    'EXPO_PUBLIC_SENTRY_DSN',
+    'SENTRY_AUTH_TOKEN',
+    'SENTRY_ORG',
+    'SENTRY_PROJECT',
+    'SENTRY_RELEASE',
+    'EXPO_PUBLIC_SENTRY_RELEASE',
+    'SENTRY_DIST',
+    'EXPO_PUBLIC_SENTRY_DIST',
+  ]) {
+    assert.match(
+      validateSentryUploadConfig({ env: { ...env, [name]: '' } }).join('\n'),
+      new RegExp(name),
+    );
+  }
+  assert.match(
+    validateSentryUploadConfig({
+      env: { ...env, SENTRY_RELEASE: 'windnote@v9.9.9' },
+    }).join('\n'),
+    /SENTRY_RELEASE.*EXPO_PUBLIC_SENTRY_RELEASE/,
+  );
+  assert.match(
+    validateSentryUploadConfig({
+      env: { ...env, EXPO_PUBLIC_SENTRY_DIST: '42' },
+    }).join('\n'),
+    /SENTRY_DIST.*EXPO_PUBLIC_SENTRY_DIST/,
+  );
 });
 
 test('release validation distribution requires explicit approval and secure evidence', () => {
