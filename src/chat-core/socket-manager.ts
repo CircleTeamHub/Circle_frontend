@@ -9,6 +9,7 @@ import {
   loadChatHistory,
 } from './api';
 import {
+  dropAllLocalMessages,
   initChatLocalDb,
   outboxList,
   pendingReadDelete,
@@ -324,19 +325,36 @@ async function catchUpMutations(userId: string): Promise<void> {
     return;
   }
   let since = stored;
+  let sinceId = '';
   try {
     for (let page = 0; page < MUTATION_CATCH_UP_PAGES_MAX; page += 1) {
-      const result = await fetchChatMutationsSince(since);
+      const result = await fetchChatMutationsSince(since, sinceId);
       if (!result) return; // 会话已换人/已登出
+      if (result.resetRequired) {
+        // 游标比服务端的保留窗口还老:那段区间的撤回它已经查不到了。
+        // 本地缓存里那些消息会永远显示原文(撤回不改 height,补拉够不着),
+        // 唯一安全的做法是整体作废、重新从服务端拉。
+        await resetLocalMessageCache();
+        writeMutationCursor(userId, result.serverTime);
+        return;
+      }
       writeMutationCursor(userId, result.nextSince);
       if (!result.hasMore) return;
       // 游标不前进就是原地打转,继续追只会死循环。
-      if (result.nextSince === since) return;
+      if (result.nextSince === since && result.nextSinceId === sinceId) return;
       since = result.nextSince;
+      sinceId = result.nextSinceId;
     }
   } catch (err) {
     console.warn('[chat] mutation catch-up failed', err);
   }
+}
+
+/** 丢掉全部缓存消息(会话行留着,列表不至于空掉),下次进屏幕重新拉。 */
+async function resetLocalMessageCache(): Promise<void> {
+  console.warn('[chat] mutation cursor expired; dropping cached messages');
+  useChatStore.getState().dropCachedMessages();
+  await dropAllLocalMessages().catch(() => undefined);
 }
 
 /**

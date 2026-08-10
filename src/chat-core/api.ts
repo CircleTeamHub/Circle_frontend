@@ -202,9 +202,12 @@ export async function backfillConversationSince(
  */
 export async function fetchChatMutationsSince(
   since: string,
+  sinceId = '',
 ): Promise<ChatMutationsPageDto | null> {
   const sameSession = sessionGate();
   const params = new URLSearchParams({ since });
+  // 复合游标:同毫秒的多条变更跨在页边界上时,只带时间戳会漏掉其余那些。
+  if (sinceId) params.set('sinceId', sinceId);
   const result = await apiClient<ChatMutationsPageDto>(
     `/chat/messages/mutations?${params.toString()}`,
   );
