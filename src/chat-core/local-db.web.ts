@@ -44,6 +44,8 @@ export async function deleteLocalMessage(
   _messageId: string,
 ): Promise<void> {}
 
+export async function dropAllLocalMessages(): Promise<void> {}
+
 export async function clearLocalConversationMessages(
   _conversationId: string,
 ): Promise<void> {}
