@@ -7,6 +7,7 @@ import type {
   ChatMessageDto,
   ChatMutationsPageDto,
 } from './protocol';
+import { resolveLocalDaySearchWindow } from '../features/chat/chat-history-date-window';
 import { withoutLocallyDeleted } from './deleted-messages';
 import {
   deleteLocalMessagesBelow,
@@ -254,8 +255,17 @@ function fetchChatHistoryPage(
   if (options.keyword) params.set('keyword', options.keyword);
   if (options.types?.length) params.set('types', options.types.join(','));
   if (options.date) {
+    const window = resolveLocalDaySearchWindow(options.date);
+    if (!window) {
+      return Promise.resolve({ messages: [], nextBeforeHeight: null });
+    }
+    const start = new Date(window.positionSeconds * 1000);
+    const end = new Date(
+      (window.positionSeconds + window.periodSeconds) * 1000,
+    );
     params.set('date', options.date);
-    params.set('tzOffsetMinutes', String(new Date().getTimezoneOffset()));
+    params.set('tzOffsetMinutes', String(start.getTimezoneOffset()));
+    params.set('tzEndOffsetMinutes', String(end.getTimezoneOffset()));
   }
   if (options.beforeHeight !== undefined) {
     params.set('beforeHeight', String(options.beforeHeight));
@@ -305,6 +315,8 @@ export function fetchChatMessageDays(
     month: String(month),
     tzOffsetMinutes: String(new Date().getTimezoneOffset()),
   });
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (timeZone) params.set('timeZone', timeZone);
   return apiClient<string[]>(
     `/chat/conversations/${conversationId}/message-days?${params.toString()}`,
   );

@@ -90,6 +90,15 @@ function loadDeleted() {
   });
 }
 
+function loadDateWindow() {
+  return runModule(
+    'src/features/chat/chat-history-date-window.ts',
+    (request) => {
+      throw new Error(`unexpected require: ${request}`);
+    },
+  );
+}
+
 const dto = (over = {}) => ({
   id: 'm1',
   conversationId: 'c1',
@@ -122,6 +131,9 @@ test('search responses drop locally deleted messages', () => {
       return { useAuthStore: { getState: () => ({ sessionEpoch: 1 }) } };
     }
     if (request === './deleted-messages') return deleted;
+    if (request === '../features/chat/chat-history-date-window') {
+      return loadDateWindow();
+    }
     if (request === './store') {
       return { useChatStore: { getState: () => ({ setConversations: () => {}, ingestMessages: () => {}, upsertConversation: () => {}, removeConversation: () => {} }) } };
     }
@@ -171,6 +183,9 @@ function loadApi(deleted, respond) {
       return { useAuthStore: { getState: () => ({ sessionEpoch: 1 }) } };
     }
     if (request === './deleted-messages') return deleted;
+    if (request === '../features/chat/chat-history-date-window') {
+      return loadDateWindow();
+    }
     if (request === './store') {
       return {
         useChatStore: {
