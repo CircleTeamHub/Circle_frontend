@@ -389,6 +389,7 @@ export default function EditProfileFieldScreen() {
           filename,
           contentType: selectedAvatarMimeType,
           folder: 'avatars',
+          fileUri: selectedAvatarUri,
         });
 
         await uploadLocalFileToPresignedUrl(

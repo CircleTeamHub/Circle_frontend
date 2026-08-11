@@ -106,6 +106,7 @@ export default function ChatBackgroundScreen() {
         filename: sanitizeUploadFilename(fileName),
         contentType,
         folder: 'chat',
+        fileUri: asset.uri,
       });
 
       await uploadLocalFileToPresignedUrl(

@@ -9,6 +9,10 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
+import { Avatar } from '@/components/ui/avatar';
+import { getAvatarFrameSource } from '@/features/profile/membership-frames';
+import { useAuthStore } from '@/stores/authStore';
+import { useUserAppearance } from '@/stores/userAppearanceStore';
 import type { ChatMessage } from '@/types';
 
 export const AVATAR_SIZE = 36;
@@ -16,6 +20,50 @@ export const CHAT_CARD_STANDARD_WIDTH = 260;
 export const LOCATION_CARD_WIDTH = 248;
 export const CHAT_CARD_PADDING_VERTICAL = 10;
 export const CHAT_CARD_GAP = 8;
+
+interface MessageAvatarProps {
+  message: ChatMessage;
+  outgoing: boolean;
+  selfName?: string;
+  selfAvatarUri?: string;
+  senderName?: string;
+  senderAvatarUri?: string;
+}
+
+/**
+ * 消息行左/右侧的那颗头像 —— **所有气泡类型必须共用这一个**。
+ *
+ * 原来只有文字气泡(sent/received)带头像框、且是圆形,图片/语音/位置/通话记录
+ * 和六种卡片各自渲染一颗方形、不带框的头像:同一个人在同一个会话里,
+ * 发文字是「圆形+头像框」、发卡片就变成「方形无框」,看起来像两个人。
+ * 头像框还是会员付费权益,只在 12 个气泡里的 2 个上生效更不能接受。
+ *
+ * 自己的框取 authStore(权威且实时),对端的走 useUserAppearance 异步补查。
+ */
+export const MessageAvatar: React.FC<MessageAvatarProps> = ({
+  message,
+  outgoing,
+  selfName,
+  selfAvatarUri,
+  senderName,
+  senderAvatarUri,
+}) => {
+  const selfFrame = useAuthStore((state) => state.user?.avatarFrameAppearance);
+  // 接收消息只有 senderID;外观缓存会批量补查并在权威结果返回后刷新头像框。
+  const senderAppearance = useUserAppearance(
+    outgoing ? undefined : message.senderID,
+  );
+  const frame = outgoing ? selfFrame : senderAppearance?.avatarFrame;
+  return (
+    <Avatar
+      size={AVATAR_SIZE}
+      name={outgoing ? selfName : senderName}
+      uri={outgoing ? selfAvatarUri : senderAvatarUri}
+      frameSource={getAvatarFrameSource(frame) ?? undefined}
+      compactFrame
+    />
+  );
+};
 
 interface BubbleStatusTextProps {
   message: ChatMessage;

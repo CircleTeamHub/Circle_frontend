@@ -249,7 +249,7 @@
       "noteSendFailed": "노트를 보내지 못했습니다. 다시 시도해 주세요",
       "cardSendFailed": "프로필 카드를 보내지 못했습니다. 다시 시도해 주세요",
       "favoriteSendFailed": "즐겨찾기를 보내지 못했습니다. 다시 시도해 주세요",
-      "transferCardSendFailed": "송금 카드를 보내지 못했지만 크레딧은 이미 차감되었습니다",
+      "transferCardSendFailed": "이체가 완료되었습니다. 카드는 곧 도착합니다",
       "favoriteLegacyVoiceUnsupported": "이 이전 버전 음성 즐겨찾기는 다시 보낼 수 없습니다"
     },
     "messageActions": {
@@ -2570,7 +2570,9 @@
   },
   "upload": {
     "errors": {
-      "presignDataInvalid": "사전 서명된 업로드 데이터 형식 오류"
+      "presignDataInvalid": "사전 서명된 업로드 데이터 형식 오류",
+      "fileUnreadable": "업로드할 파일을 찾을 수 없습니다",
+      "fileTooLarge": "파일이 {{maxMb}}MB 제한을 초과했습니다"
     }
   },
   "serverErrors": {

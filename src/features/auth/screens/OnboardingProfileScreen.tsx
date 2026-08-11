@@ -270,6 +270,7 @@ export default function OnboardingProfileScreen() {
           filename,
           contentType: selectedAvatarMimeType,
           folder: 'avatars',
+          fileUri: selectedAvatarUri,
         });
 
         await uploadLocalFileToPresignedUrl(

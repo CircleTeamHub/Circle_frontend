@@ -114,6 +114,7 @@ export default function CreateCircleScreen() {
             filename: sanitizeUploadFilename(fileName),
             contentType,
             folder: 'avatars',
+            fileUri: form.pickedAvatarUri,
           });
           await uploadLocalFileToPresignedUrl(
             presign.uploadUrl,

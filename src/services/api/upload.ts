@@ -185,14 +185,77 @@ function assertUploadUrlReachableOnCurrentPlatform(payload: UploadPresignRespons
   return rewritten;
 }
 
-export async function requestUploadPresign(payload: {
-  filename: string;
-  contentType: string;
-  folder: UploadFolder;
-}) {
+/** 后端 PresignDto 的硬上限(100MB),提前拦下来给可读的错,而不是吃一个 400。 */
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+
+/**
+ * 取本地文件的精确字节数。
+ *
+ * 后端 `PresignDto.sizeBytes` 是必填的 1..100MB 整数,并且会被写进签名的
+ * PutObject 请求、计进上传配额与指标 —— 不能猜、不能给近似值,一律从**将要
+ * 上传的那个文件**现取(所以 presign 收的是 fileUri 而不是调用方自己算的数字:
+ * 两者一旦不同步,拿到的签名就对不上真正上传的内容)。
+ */
+export async function resolveLocalFileSize(fileUri: string): Promise<number> {
+  const info = await FileSystem.getInfoAsync(fileUri);
+  if (!info.exists || info.isDirectory) {
+    throw new Error(
+      i18n.t('upload.errors.fileUnreadable', {
+        defaultValue: '找不到要上传的文件',
+      }),
+    );
+  }
+  return info.size;
+}
+
+function assertUploadSize(sizeBytes: number): number {
+  if (!Number.isSafeInteger(sizeBytes) || sizeBytes < 1) {
+    throw new Error(
+      i18n.t('upload.errors.fileUnreadable', {
+        defaultValue: '找不到要上传的文件',
+      }),
+    );
+  }
+  if (sizeBytes > MAX_UPLOAD_BYTES) {
+    throw new Error(
+      i18n.t('upload.errors.fileTooLarge', {
+        maxMb: Math.floor(MAX_UPLOAD_BYTES / 1024 / 1024),
+        defaultValue: '文件超过 {{maxMb}}MB 上限',
+      }),
+    );
+  }
+  return sizeBytes;
+}
+
+/**
+ * 尺寸来源二选一,用联合类型逼调用方必须给一个:本地文件给 uri(这里 stat),
+ * 内存里的 Blob 给它自己的 size。
+ */
+export type UploadSizeSource =
+  | { fileUri: string; sizeBytes?: never }
+  | { sizeBytes: number; fileUri?: never };
+
+export async function requestUploadPresign(
+  payload: {
+    filename: string;
+    contentType: string;
+    folder: UploadFolder;
+  } & UploadSizeSource,
+) {
+  const sizeBytes = assertUploadSize(
+    typeof payload.sizeBytes === 'number'
+      ? payload.sizeBytes
+      : await resolveLocalFileSize(payload.fileUri),
+  );
   const raw = await apiClient<UploadPresignResponse>('/upload/presign', {
     method: 'POST',
-    body: payload,
+    // 逐字段拼:fileUri 只是本地取值用的,绝不能进请求体(后端 DTO 不认)。
+    body: {
+      filename: payload.filename,
+      contentType: payload.contentType,
+      folder: payload.folder,
+      sizeBytes,
+    },
   });
   const response = expectShape(
     raw,

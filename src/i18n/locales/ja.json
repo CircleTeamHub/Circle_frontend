@@ -249,7 +249,7 @@
       "noteSendFailed": "ノートを送信できませんでした。もう一度お試しください",
       "cardSendFailed": "プロフィールカードを送信できませんでした。もう一度お試しください",
       "favoriteSendFailed": "お気に入りを送信できませんでした。もう一度お試しください",
-      "transferCardSendFailed": "送金カードを送信できませんでしたが、クレジットはすでに差し引かれています",
+      "transferCardSendFailed": "送金は完了しました。カードはまもなく届きます",
       "favoriteLegacyVoiceUnsupported": "この旧バージョンの音声お気に入りは再送信できません"
     },
     "messageActions": {
@@ -2570,7 +2570,9 @@
   },
   "upload": {
     "errors": {
-      "presignDataInvalid": "署名付きアップロードデータの形式エラー"
+      "presignDataInvalid": "署名付きアップロードデータの形式エラー",
+      "fileUnreadable": "アップロードするファイルが見つかりません",
+      "fileTooLarge": "ファイルが {{maxMb}}MB の上限を超えています"
     }
   },
   "serverErrors": {

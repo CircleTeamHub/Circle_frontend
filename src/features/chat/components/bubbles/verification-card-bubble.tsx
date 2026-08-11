@@ -2,9 +2,8 @@ import { View, type GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/theme';
-import { Avatar } from '@/components/ui/avatar';
 import type { ChatMessage, VerificationCardData } from '@/types';
-import { AVATAR_SIZE, CompactCardBubble, sCircleCard } from './shared';
+import { CompactCardBubble, MessageAvatar, sCircleCard } from './shared';
 
 interface VerificationCardBubbleProps {
   message: ChatMessage;
@@ -41,11 +40,13 @@ export const VerificationCardBubble: React.FC<VerificationCardBubbleProps> = ({
   if (!card) return null;
 
   const avatarNode = (
-    <Avatar
-      size={AVATAR_SIZE}
-      shape="square"
-      name={outgoing ? selfName : senderName}
-      uri={outgoing ? selfAvatarUri : senderAvatarUri}
+    <MessageAvatar
+      message={message}
+      outgoing={outgoing}
+      selfName={selfName}
+      selfAvatarUri={selfAvatarUri}
+      senderName={senderName}
+      senderAvatarUri={senderAvatarUri}
     />
   );
 

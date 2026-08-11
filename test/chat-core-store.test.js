@@ -210,6 +210,25 @@ test('applyRead advances per-user watermarks forward only', () => {
   assert.equal(useChatStore.getState().readWatermarks['conv-1']['u2'], 8);
 });
 
+test('自己的已读水位推进时不会把会话列表抹成 undefined', () => {
+  const { useChatStore, selectTotalUnread } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  // 未读已经是 0:收敛后没有变化,convergeUnread 按约定返回 undefined。
+  store.setConversations([conversation({ unreadCount: 0 })]);
+
+  // 另一台设备推来的 chat:read。把 undefined 塞进 patch 的话,zustand 的
+  // Object.assign 会用它覆盖掉 conversations —— 之后任何读 conversations 的
+  // 选择器都炸(TypeError: Cannot read property 'reduce' of undefined),
+  // 而且列表在下一次全量拉取前一直是空的。
+  store.applyRead('conv-1', 'me', 5);
+
+  const state = useChatStore.getState();
+  assert.ok(Array.isArray(state.conversations));
+  assert.equal(state.conversations.length, 1);
+  assert.equal(selectTotalUnread(state), 0);
+});
+
 test('reset clears everything', () => {
   const { useChatStore } = loadChatStore();
   const store = useChatStore.getState();

@@ -237,7 +237,9 @@ test('chat detail guards async send UI state after unmount', () => {
     '笔记发送失败，请重试',
     '名片发送失败，请重试',
     '收藏内容发送失败，请重试',
-    '转账卡片发送失败，但积分已扣减',
+    // 钱是强一致落库的,卡片由后端 GiftCardOutboxProcessor 补发 ——
+    // 文案不能再让用户以为积分蒸发了(会去重转 = 第二次真实扣款)。
+    '转账已完成，卡片稍后自动补上',
   ]) {
     // These error strings are now i18n'd: setSendError(t('chat.detail.x', { defaultValue: '中文' })).
     // The message survives verbatim in the defaultValue, so anchor on that (or the older

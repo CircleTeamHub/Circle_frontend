@@ -88,6 +88,7 @@ export function useChangeCircleAvatar(
           filename,
           contentType,
           folder: 'avatars',
+          fileUri: asset.uri,
         });
         await uploadLocalFileToPresignedUrl(uploadUrl, contentType, asset.uri);
         await setCircleAvatar(circleId, fileUrl);

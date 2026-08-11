@@ -2,12 +2,11 @@ import { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable, type GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Spacing, Typography } from '@/theme';
-import { Avatar } from '@/components/ui/avatar';
 import type { ChatMessage } from '@/types';
 import {
-  AVATAR_SIZE,
-  LOCATION_CARD_WIDTH,
   CHAT_CARD_PADDING_VERTICAL,
+  LOCATION_CARD_WIDTH,
+  MessageAvatar,
 } from './shared';
 
 interface LocationCardProps {
@@ -106,11 +105,13 @@ export const LocationCard: React.FC<LocationCardProps> = ({
   );
 
   const avatarNode = (
-    <Avatar
-      size={AVATAR_SIZE}
-      shape="square"
-      name={outgoing ? selfName : senderName}
-      uri={outgoing ? selfAvatarUri : senderAvatarUri}
+    <MessageAvatar
+      message={message}
+      outgoing={outgoing}
+      selfName={selfName}
+      selfAvatarUri={selfAvatarUri}
+      senderName={senderName}
+      senderAvatarUri={senderAvatarUri}
     />
   );
 

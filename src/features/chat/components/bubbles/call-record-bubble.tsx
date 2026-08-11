@@ -9,9 +9,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme, Spacing, Typography } from '@/theme';
-import { Avatar } from '@/components/ui/avatar';
 import type { CallRecordData, ChatMessage } from '@/types';
-import { AVATAR_SIZE, BubbleStatusText } from './shared';
+import { BubbleStatusText, MessageAvatar } from './shared';
 
 interface CallRecordBubbleProps {
   message: ChatMessage;
@@ -137,7 +136,12 @@ export function CallRecordBubble({
     <View style={[sCallRecord.row, outgoing && sCallRecord.rowOutgoing]}>
       {!outgoing ? (
         <Pressable onPress={onAvatarPress} disabled={!onAvatarPress}>
-          <Avatar name={senderName ?? ''} uri={senderAvatarUri} size={AVATAR_SIZE} />
+          <MessageAvatar
+            message={message}
+            outgoing={false}
+            senderName={senderName}
+            senderAvatarUri={senderAvatarUri}
+          />
         </Pressable>
       ) : null}
       <View style={[sCallRecord.body, outgoing && sCallRecord.bodyOutgoing]}>
@@ -161,7 +165,12 @@ export function CallRecordBubble({
         {outgoing && !hideStatus ? <BubbleStatusText message={message} /> : null}
       </View>
       {outgoing ? (
-        <Avatar name={selfName ?? ''} uri={selfAvatarUri} size={AVATAR_SIZE} />
+        <MessageAvatar
+          message={message}
+          outgoing
+          selfName={selfName}
+          selfAvatarUri={selfAvatarUri}
+        />
       ) : null}
     </View>
   );

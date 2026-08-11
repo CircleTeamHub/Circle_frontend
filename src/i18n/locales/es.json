@@ -249,7 +249,7 @@
       "noteSendFailed": "No se pudo enviar la nota, inténtalo de nuevo",
       "cardSendFailed": "No se pudo enviar la tarjeta de perfil, inténtalo de nuevo",
       "favoriteSendFailed": "No se pudo enviar el favorito, inténtalo de nuevo",
-      "transferCardSendFailed": "No se pudo enviar la tarjeta de transferencia, pero los créditos ya se descontaron",
+      "transferCardSendFailed": "Transferencia completada. La tarjeta llegará en breve.",
       "favoriteLegacyVoiceUnsupported": "Este favorito de voz antiguo ya no se puede enviar"
     },
     "messageActions": {
@@ -2573,7 +2573,9 @@
   },
   "upload": {
     "errors": {
-      "presignDataInvalid": "Error en el formato de los datos de subida prefirmados"
+      "presignDataInvalid": "Error en el formato de los datos de subida prefirmados",
+      "fileUnreadable": "No se encontró el archivo que se va a subir.",
+      "fileTooLarge": "El archivo supera el límite de {{maxMb}}MB."
     }
   },
   "serverErrors": {

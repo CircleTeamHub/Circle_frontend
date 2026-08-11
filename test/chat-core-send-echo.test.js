@@ -76,7 +76,11 @@ function zustandStub() {
 function loadSendStack({ onSend }) {
   const store = runModule('src/chat-core/store.ts', (request) => {
     if (request === 'zustand') return zustandStub();
-    if (request === './protocol') return {};
+    // protocol.ts 零依赖:跑真的,别桩 —— SERVER_COMPENSATED_TYPES 是生产常量。
+    if (request === './protocol')
+      return runModule('src/chat-core/protocol.ts', () => {
+        throw new Error('protocol should have no runtime deps');
+      });
     if (request === './local-db') {
       return {
         persistLocalConversations: async () => {},
@@ -139,7 +143,11 @@ function loadSendStack({ onSend }) {
       };
     }
     if (request === './store') return store;
-    if (request === './protocol') return {};
+    // protocol.ts 零依赖:跑真的,别桩 —— SERVER_COMPENSATED_TYPES 是生产常量。
+    if (request === './protocol')
+      return runModule('src/chat-core/protocol.ts', () => {
+        throw new Error('protocol should have no runtime deps');
+      });
     if (request === './local-db') return __localDbStub;
     throw new Error(`unexpected require: ${request}`);
   });

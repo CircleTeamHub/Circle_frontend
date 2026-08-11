@@ -3,14 +3,13 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
-import { Avatar } from '@/components/ui/avatar';
 import type { ChatMessage, NoteCardData } from '@/types';
 import {
-  AVATAR_SIZE,
   BubbleStatusText,
-  CHAT_CARD_STANDARD_WIDTH,
-  CHAT_CARD_PADDING_VERTICAL,
   CHAT_CARD_GAP,
+  CHAT_CARD_PADDING_VERTICAL,
+  CHAT_CARD_STANDARD_WIDTH,
+  MessageAvatar,
 } from './shared';
 
 interface NoteCardBubbleProps {
@@ -112,11 +111,13 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
   const note = message.noteCard;
 
   const avatarNode = (
-    <Avatar
-      size={AVATAR_SIZE}
-      shape="square"
-      name={outgoing ? selfName : senderName}
-      uri={outgoing ? selfAvatarUri : senderAvatarUri}
+    <MessageAvatar
+      message={message}
+      outgoing={outgoing}
+      selfName={selfName}
+      selfAvatarUri={selfAvatarUri}
+      senderName={senderName}
+      senderAvatarUri={senderAvatarUri}
     />
   );
 

@@ -11,6 +11,7 @@ import {
 import { mapChatConversationToUI } from "@/chat-core/mappers";
 import { markConversationRead } from "@/chat-core/socket-manager";
 import { selectTotalUnread, type StoredChatMessage, useChatStore } from "@/chat-core/store";
+import { hasFailedLatestMessage } from "@/features/messages/utils/failed-preview";
 import { useMessageGroupsStore } from "@/features/messages/store/use-message-groups-store";
 import { useLocalUnreadStore } from "@/features/messages/store/use-local-unread-store";
 import {
@@ -663,18 +664,19 @@ export default function MessagesScreen() {
     [localUnreadOverrides, rawMappedConversations],
   );
 
-  // 有发送失败消息的会话 id 集合,拼成排序串让引用比较退化成值比较:
+  // 最新一条发送失败的会话 id 集合,拼成排序串让引用比较退化成值比较:
   // 只在失败集合真变了才触发下游 useMemo,消息洪泛不抖动列表。
   const failedConversationKey = useChatStore((state) => {
     const ids: string[] = [];
     for (const [id, messages] of Object.entries(state.messagesByConversation)) {
-      if (messages.some((m) => (m as StoredChatMessage).failed)) ids.push(id);
+      if (hasFailedLatestMessage(messages as StoredChatMessage[])) ids.push(id);
     }
     return ids.sort().join('\n');
   });
 
-  // 会话预览的失败标记:该会话还挂着没发出去的消息时,预览前缀提示,
-  // 不然列表页只看得到最新一条的文案,失败气泡埋在会话里没人知道。
+  // 会话预览的失败标记:最新那条没发出去时前缀提示,不然列表页只看得到文案,
+  // 用户不知道刚发的那条其实没出去。判据见 hasFailedLatestMessage ——
+  // 「会话里存在失败消息」是不行的,前缀会贴到一条明明发成功的消息上。
   const conversations = useMemo(() => {
     if (!failedConversationKey) return baseConversations;
     const failedIds = new Set(failedConversationKey.split('\n'));

@@ -332,6 +332,7 @@ export default function CreatePostScreen() {
             filename: sanitizeUploadFilename(fileName),
             contentType,
             folder: 'posts',
+            fileUri: uri,
           });
           await uploadLocalFileToPresignedUrl(
             presign.uploadUrl,

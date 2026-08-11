@@ -385,3 +385,18 @@ export interface ChatConversationDto {
   burnDurationSec?: number | null;
   lastMessageAt: string | null;
 }
+
+/**
+ * 服务端负责补发的消息类型 —— 这些**不进客户端 outbox**。
+ *
+ * 转账卡片:钱在 sendCoinGift 里已强一致落库,卡片只是回执,后端
+ * GiftCardOutboxProcessor 会在 2 分钟宽限后逐分钟补发(幂等键
+ * `gift_card_<giftId>`,最多 60 次)。留在 outbox 里有两个坏处:
+ *
+ * 1. 长按「重发」用的是客户端的 d,和后端的 `gift_card_<id>` 不是同一个键 ——
+ *    幂等合并不了,收款方会看到**两张**回执。
+ * 2. 后端补发的那张卡 d 也不同,冷启动时「同 d 已确认」的自愈判据匹配不上,
+ *    于是这条失败气泡永远赖在时间线最底下(height=0 排最后),新消息都排在
+ *    它上面,会话列表还一直挂着「发送失败」前缀。
+ */
+export const SERVER_COMPENSATED_TYPES = new Set<string>(['transfer-card']);

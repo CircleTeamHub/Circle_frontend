@@ -2,11 +2,8 @@ import { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import i18n from '@/i18n';
 import { useTheme, Spacing, Typography } from '@/theme';
-import { Avatar } from '@/components/ui/avatar';
-import { getAvatarFrameSource } from '@/features/profile/membership-frames';
-import { useUserAppearance } from '@/stores/userAppearanceStore';
 import type { ChatMessage } from '@/types';
-import { AVATAR_SIZE } from './shared';
+import { MessageAvatar } from './shared';
 
 interface ReceivedBubbleProps {
   /** G-07:点按某个回应 pill 切换自己的回应。 */
@@ -60,8 +57,6 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
   onReactionPress,
 }) => {
   const { colors } = useTheme();
-  // 接收消息只有 senderID；外观缓存会批量补查并在权威结果返回后刷新头像框。
-  const senderAppearance = useUserAppearance(message.senderID);
 
   const d = useMemo(
     () => ({
@@ -90,12 +85,11 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
   );
 
   const avatarNode = (
-    <Avatar
-      size={AVATAR_SIZE}
-      name={senderName}
-      uri={senderAvatarUri}
-      frameSource={getAvatarFrameSource(senderAppearance?.avatarFrame) ?? undefined}
-      compactFrame
+    <MessageAvatar
+      message={message}
+      outgoing={false}
+      senderName={senderName}
+      senderAvatarUri={senderAvatarUri}
     />
   );
 

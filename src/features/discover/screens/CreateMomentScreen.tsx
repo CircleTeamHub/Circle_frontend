@@ -170,6 +170,7 @@ export default function CreateMomentScreen() {
             filename: sanitizeUploadFilename(fileName),
             contentType,
             folder: 'posts',
+            fileUri: uri,
           });
           await uploadLocalFileToPresignedUrl(presign.uploadUrl, contentType, uri);
           return presign.fileUrl;

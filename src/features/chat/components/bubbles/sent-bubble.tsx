@@ -2,11 +2,8 @@ import { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import i18n from '@/i18n';
 import { useTheme, Spacing, Typography } from '@/theme';
-import { Avatar } from '@/components/ui/avatar';
-import { getAvatarFrameSource } from '@/features/profile/membership-frames';
-import { useAuthStore } from '@/stores/authStore';
 import type { ChatMessage } from '@/types';
-import { AVATAR_SIZE, BubbleStatusText } from './shared';
+import { BubbleStatusText, MessageAvatar } from './shared';
 
 interface SentBubbleProps {
   /** G-07:点按某个回应 pill 切换自己的回应。 */
@@ -69,10 +66,6 @@ export const SentBubble: React.FC<SentBubbleProps> = ({
   onReactionPress,
 }) => {
   const { colors } = useTheme();
-  const selfAvatarFrame = useAuthStore(
-    (state) => state.user?.avatarFrameAppearance,
-  );
-
   const d = useMemo(
     () => ({
       sentBubble: {
@@ -154,12 +147,11 @@ export const SentBubble: React.FC<SentBubbleProps> = ({
         ) : null}
       </View>
       <View style={sSent.sentAvatarSlot}>
-        <Avatar
-          size={AVATAR_SIZE}
-          name={selfName}
-          uri={selfAvatarUri}
-          frameSource={getAvatarFrameSource(selfAvatarFrame) ?? undefined}
-          compactFrame
+        <MessageAvatar
+          message={message}
+          outgoing
+          selfName={selfName}
+          selfAvatarUri={selfAvatarUri}
         />
       </View>
     </View>

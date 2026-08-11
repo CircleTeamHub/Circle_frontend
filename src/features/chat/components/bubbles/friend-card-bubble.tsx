@@ -3,10 +3,12 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme, Typography } from '@/theme';
-import { Avatar } from '@/components/ui/avatar';
 import { resolveFallbackIcon } from '@/components/ui/user-icon-row';
 import type { ChatMessage, FriendCardData } from '@/types';
-import { AVATAR_SIZE, BubbleStatusText, sFriendCard } from './shared';
+// 卡片**内容**里那颗 48pt 的头像(被推荐的好友)仍然直接用 Avatar ——
+// 它不是消息发送者,不该套发送者的头像框。
+import { Avatar } from '@/components/ui/avatar';
+import { BubbleStatusText, MessageAvatar, sFriendCard } from './shared';
 
 interface FriendCardBubbleProps {
   message: ChatMessage;
@@ -39,11 +41,13 @@ export const FriendCardBubble: React.FC<FriendCardBubbleProps> = ({
   if (!card) return null;
 
   const avatarNode = (
-    <Avatar
-      size={AVATAR_SIZE}
-      shape="square"
-      name={outgoing ? selfName : senderName}
-      uri={outgoing ? selfAvatarUri : senderAvatarUri}
+    <MessageAvatar
+      message={message}
+      outgoing={outgoing}
+      selfName={selfName}
+      selfAvatarUri={selfAvatarUri}
+      senderName={senderName}
+      senderAvatarUri={senderAvatarUri}
     />
   );
 

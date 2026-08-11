@@ -166,6 +166,7 @@ function NoteBlockEditorImpl({
           filename: sanitizeUploadFilename(filename),
           contentType,
           folder: 'notes',
+          fileUri: asset.uri,
         });
 
         await uploadLocalFileToPresignedUrl(

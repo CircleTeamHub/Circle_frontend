@@ -951,13 +951,19 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     if (currentUserId !== null && userId === currentUserId) {
       const index = conversations.findIndex((c) => c.id === conversationId);
       if (index >= 0) {
-        patch.conversations = convergeUnread(
+        // convergeUnread 无变化时返回 undefined,而 zustand 的 set 是
+        // Object.assign 合并:带着 conversations:undefined 这个**自有键**进去
+        // 会把整份会话列表覆盖成 undefined,之后 selectTotalUnread 之类
+        // 直接 `.reduce of undefined` 抛错(抛在 set 的同步订阅里,表现为
+        // 「read handler failed」),列表也空到下一次全量拉取为止。
+        const converged = convergeUnread(
           conversations,
           index,
           get().messagesByConversation[conversationId] ?? [],
           height,
           currentUserId,
         );
+        if (converged) patch.conversations = converged;
       }
       // index < 0:会话快照还没到(列表请求在途)。水位已经记下了,
       // setConversations 落地时会拿它再收敛一次 —— 否则那份旧快照带着

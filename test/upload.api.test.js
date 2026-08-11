@@ -19,6 +19,8 @@ function loadUploadApi() {
   let rnfsUploadCalled = false;
   let stoppedUploadJobId = null;
   let rnfsShouldHang = false;
+  // 默认 localhost:另有用例专门断言「手机端拒绝 localhost 预签名地址」。
+  let presignHost = 'http://localhost:9000';
 
   const context = {
     module: { exports: {} },
@@ -30,9 +32,8 @@ function loadUploadApi() {
       if (request === '@/services/api/client') {
         return {
           apiClient: (...args) => ({
-            uploadUrl:
-              'http://localhost:9000/circle/avatars/test.jpeg?signature=123',
-            fileUrl: 'http://localhost:9000/circle/avatars/test.jpeg',
+            uploadUrl: `${presignHost}/circle/avatars/test.jpeg?signature=123`,
+            fileUrl: `${presignHost}/circle/avatars/test.jpeg`,
             key: 'avatars/test.jpeg',
             mocked: true,
             args,
@@ -72,6 +73,10 @@ function loadUploadApi() {
           FileSystemUploadType: {
             BINARY_CONTENT: 0,
           },
+          getInfoAsync: async (uri) =>
+            uri.includes('missing')
+              ? { exists: false }
+              : { exists: true, uri, size: 12345, isDirectory: false },
           uploadAsync: async (...args) => ({
             status: 200,
             headers: {},
@@ -126,6 +131,9 @@ function loadUploadApi() {
     rnfsShouldHang = value;
   };
   context.module.exports.__getStoppedUploadJobId = () => stoppedUploadJobId;
+  context.module.exports.__setPresignHost = (host) => {
+    presignHost = host;
+  };
   return context.module.exports;
 }
 
@@ -165,8 +173,65 @@ test('android rejects localhost presigned upload urls instead of rewriting the s
         filename: 'avatar.jpeg',
         contentType: 'image/jpeg',
         folder: 'avatars',
+        sizeBytes: 1024,
       }),
     /localhost.*403/,
+  );
+});
+
+test('presign 必须带 sizeBytes(后端 PresignDto 必填),且 fileUri 不进请求体', async () => {
+  // 少了 sizeBytes 后端直接 400:
+  // "sizeBytes must not be greater than 104857600; must not be less than 1;
+  //  must be an integer number"(三条一起报 = 字段压根没送到)。
+  const { requestUploadPresign, __setPresignHost } = loadUploadApi();
+  __setPresignHost('http://10.0.0.195:9000');
+
+  const response = await requestUploadPresign({
+    filename: 'photo.jpeg',
+    contentType: 'image/jpeg',
+    folder: 'chat',
+    fileUri: 'file:///tmp/ImagePicker/photo.jpeg',
+  });
+
+  const [url, init] = response.args;
+  assert.equal(url, '/upload/presign');
+  // vm realm 里的对象原型与宿主不同,deepStrictEqual 会误报 —— 走一次 JSON。
+  assert.deepEqual(JSON.parse(JSON.stringify(init.body)), {
+    filename: 'photo.jpeg',
+    contentType: 'image/jpeg',
+    folder: 'chat',
+    // 来自 getInfoAsync,不是调用方自己算的 —— 签名要的是真实字节数。
+    sizeBytes: 12345,
+  });
+});
+
+test('拿不到文件尺寸时给可读的错,而不是送一个坏 sizeBytes 上去', async () => {
+  const { requestUploadPresign } = loadUploadApi();
+
+  await assert.rejects(
+    () =>
+      requestUploadPresign({
+        filename: 'gone.jpeg',
+        contentType: 'image/jpeg',
+        folder: 'chat',
+        fileUri: 'file:///tmp/missing.jpeg',
+      }),
+    /找不到要上传的文件/,
+  );
+});
+
+test('超过后端 100MB 上限的文件在本地就拦下', async () => {
+  const { requestUploadPresign } = loadUploadApi();
+
+  await assert.rejects(
+    () =>
+      requestUploadPresign({
+        filename: 'huge.mp4',
+        contentType: 'video/mp4',
+        folder: 'chat',
+        sizeBytes: 100 * 1024 * 1024 + 1,
+      }),
+    /100MB/,
   );
 });
 

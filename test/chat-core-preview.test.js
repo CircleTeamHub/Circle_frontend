@@ -27,7 +27,7 @@ const __localDbStub = {
 };
 
 
-function loadMappers() {
+function loadMappers({ withRealLocale = false } = {}) {
   const filePath = path.join(process.cwd(), 'src/chat-core/mappers.ts');
   const transpiled = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
     compilerOptions: {
@@ -43,8 +43,35 @@ function loadMappers() {
     exports: {},
     require: (request) => {
       if (request === '@/i18n') {
-        // tPreview 在 key 缺失时回落到硬编码文案,这里模拟「词条不存在」。
-        return { default: { t: (key) => key } };
+        if (!withRealLocale) {
+          // tPreview 在 key 缺失时回落到硬编码文案,这里模拟「词条不存在」。
+          return { default: { t: (key) => key } };
+        }
+        // 真词条 + i18next 的插值语义:只替换传进来的变量,没传的原样留下
+        // `{{x}}`(这正是「[笔记] {{title}}」漏到列表上的机制)。
+        const zh = JSON.parse(
+          fs.readFileSync(
+            path.join(process.cwd(), 'src/i18n/locales/zh.json'),
+            'utf8',
+          ),
+        );
+        const lookup = (key) =>
+          key.split('.').reduce((node, part) => node?.[part], zh);
+        return {
+          default: {
+            t: (key, params) => {
+              const raw = lookup(key);
+              if (typeof raw !== 'string') return key;
+              if (!params) return raw;
+              return Object.entries(params).reduce(
+                (acc, [name, value]) =>
+                  acc.split(`{{${name}}}`).join(String(value)),
+                raw,
+              );
+            },
+            language: 'zh',
+          },
+        };
       }
       if (request === '@/services/api/utils') {
         return { normalizeMediaUrl: (u) => u ?? null };
@@ -109,4 +136,55 @@ test('an overlong peer filename is truncated for the list row', () => {
     dto({ type: 'file', content: { key: 'k', fileName: 'x'.repeat(500) } }),
   );
   assert.ok(preview.length <= 61, `got ${preview.length}`);
+});
+
+test('卡片预览不能把 {{占位符}} 漏到列表上', () => {
+  // 真词条是「[笔记] {{title}}」这种带插值的。mapper 只传了 key 不传值时,
+  // i18next 会把 `{{title}}` 原样留下 —— 列表里就显示成「[笔记] {{title}}」。
+  const { getChatMessagePreview } = loadMappers({ withRealLocale: true });
+
+  const cases = [
+    { type: 'note-card', content: { title: '我的笔记' }, expect: '我的笔记' },
+    { type: 'friend-card', content: { nickname: '小王' }, expect: '小王' },
+    { type: 'circle-card', content: { name: '摄影圈' }, expect: '摄影圈' },
+    {
+      type: 'verification-card',
+      content: { applicantName: '老李', circleName: '摄影圈' },
+      expect: '老李',
+    },
+    { type: 'plaza-post-card', content: { title: '周末爬山' }, expect: '周末爬山' },
+  ];
+
+  for (const { type, content, expect } of cases) {
+    const preview = getChatMessagePreview(dto({ type, content }));
+    assert.ok(!preview.includes('{{'), `${type} 漏了占位符: ${preview}`);
+    assert.match(preview, new RegExp(expect));
+  }
+});
+
+test('卡片没带标题/名字时退回纯标签,不留空占位', () => {
+  const { getChatMessagePreview } = loadMappers({ withRealLocale: true });
+
+  for (const type of [
+    'note-card',
+    'friend-card',
+    'circle-card',
+    'verification-card',
+    'plaza-post-card',
+  ]) {
+    for (const content of [{}, { title: '   ' }, { title: 42 }]) {
+      const preview = getChatMessagePreview(dto({ type, content }));
+      assert.ok(!preview.includes('{{'), `${type} 漏了占位符: ${preview}`);
+      assert.equal(preview, preview.trim());
+      assert.notEqual(preview, '');
+    }
+  }
+});
+
+test('超长标题在列表里被截断', () => {
+  const { getChatMessagePreview } = loadMappers({ withRealLocale: true });
+  const preview = getChatMessagePreview(
+    dto({ type: 'note-card', content: { title: 'x'.repeat(500) } }),
+  );
+  assert.ok(preview.length <= 70, `got ${preview.length}`);
 });
