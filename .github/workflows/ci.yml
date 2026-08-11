@@ -105,15 +105,30 @@ jobs:
       - name: Assert backend contract sources are present
         run: |
           set -euo pipefail
-          for f in \
-            ../circle_be/src/chat/chat.constants.ts \
-            ../circle_be/src/common/app-error-codes.ts
-          do
-            if [ ! -f "$f" ]; then
-              echo "::error::$f not found — cross-repo contract tests would silently skip"
-              exit 1
+          missing=0
+
+          require_file() {
+            if [ ! -f "$1" ]; then
+              echo "::error::$1 not found — the contract test pinning it would silently skip"
+              missing=1
             fi
-          done
+          }
+
+          # 有的跨仓测试不只看文件在不在,还看**生产者符号**在不在:后端把那个
+          # 方法删了/改名了,测试同样退化成 skip,而 CI 照旧全绿。
+          require_symbol() {
+            if ! grep -q "$2" "$1" 2>/dev/null; then
+              echo "::error::$1 no longer defines $2 — the contract test pinning it would silently skip"
+              missing=1
+            fi
+          }
+
+          require_file ../circle_be/src/chat/chat.constants.ts
+          require_file ../circle_be/src/common/app-error-codes.ts
+          require_file ../circle_be/src/realtime/realtime.service.ts
+          require_symbol ../circle_be/src/realtime/realtime.service.ts broadcastMomentsFeedUpdated
+
+          [ "$missing" -eq 0 ] || exit 1
           echo "OK: backend contract sources present"
 
       - name: Setup Node

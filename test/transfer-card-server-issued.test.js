@@ -173,4 +173,8 @@ test('CI checks out the backend so the cross-repo contracts actually run', () =>
   assert.match(verify, /cache-dependency-path: Circle_frontend\/package-lock\.json/);
   // 布局一旦变动要 fail 而不是 skip:少了这道断言,5 条契约会安静地全部消失。
   assert.match(verify, /would silently skip/);
+  // 有的跨仓测试还会因为**生产者符号消失**而退化成 skip(moments 那条:后端删掉
+  // broadcastMomentsFeedUpdated 就跳过)。只查文件在不在挡不住这种,符号也要查。
+  assert.match(verify, /require_symbol/);
+  assert.match(verify, /broadcastMomentsFeedUpdated/);
 });
