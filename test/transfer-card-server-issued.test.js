@@ -178,3 +178,53 @@ test('CI checks out the backend so the cross-repo contracts actually run', () =>
   assert.match(verify, /require_symbol/);
   assert.match(verify, /broadcastMomentsFeedUpdated/);
 });
+
+/** 递归收集后端 src 下的实现源码(排除测试文件)。 */
+function backendSources() {
+  const out = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === 'generated' || entry.name === 'node_modules') continue;
+        walk(full);
+        continue;
+      }
+      if (!entry.name.endsWith('.ts')) continue;
+      if (entry.name.endsWith('.spec.ts')) continue;
+      out.push(fs.readFileSync(full, 'utf8'));
+    }
+  };
+  walk(path.join(BACKEND_ROOT, 'src'));
+  return out.join('\n');
+}
+
+test(
+  'the backend actually issues both receipt cards',
+  { skip: !hasBackend && 'circle_be not checked out beside circle-im' },
+  () => {
+    // 「类型是服务端专属」只说明客户端不能发,不说明**服务端真的在发**。
+    // 两者都成立才是完整的契约:生产者哪天被重构掉,客户端这侧已经没有发送
+    // 路径了(本 PR 删的),转账与加验证人照样成功、卡片却永远不出现 —— 正是
+    // 这个 PR 在修的那个失效模式,而且没有任何测试会红。
+    //
+    // 按整个 src 搜而不是钉死文件路径:生产者搬家不该误报,只有**消失**才该红。
+    const backend = backendSources();
+
+    // 转账卡:结算后签发 + 补偿 cron,两条都用 gift 派生的幂等键。
+    assert.match(backend, /type: 'transfer-card'/);
+    assert.match(backend, /`gift_card_\$\{/);
+    assert.match(backend, /amount/);
+
+    // 验证卡:加验证人后签发,键取 (invitationId, verifierId)。
+    assert.match(backend, /type: 'verification-card'/);
+    assert.match(backend, /`verification_card_\$\{/);
+    for (const field of ['invitationId', 'circleName', 'applicantName']) {
+      assert.match(
+        backend,
+        new RegExp(`${field}:`),
+        `验证卡 payload 少了 ${field} —— 前端 sanitizeVerificationCard 读的就是它`,
+      );
+    }
+  },
+);
