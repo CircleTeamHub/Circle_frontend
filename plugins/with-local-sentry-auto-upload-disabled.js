@@ -24,13 +24,22 @@ const ANDROID_UPLOAD_GUARD_BLOCK = `
 tasks.configureEach { task ->
     if (task.name.contains("SentryUpload")) {
         task.onlyIf {
+            // 这道守卫抓的是「忘了配」。显式声明不上传的构建（每日校验构建：一次性
+            // 签名、产物永不分发）不是事故，把它的 debug 文件传上去反而会在 Sentry
+            // 里凭空多出一个并不存在的 release。SENTRY_DISABLE_AUTO_UPLOAD 也正是
+            // sentry.gradle 自己的 shouldSentryAutoUploadGeneral() 读的那个变量。
+            if (System.getenv("SENTRY_DISABLE_AUTO_UPLOAD")?.trim() == "true") {
+                return false
+            }
             def hasUploadConfig = System.getenv("SENTRY_AUTH_TOKEN")?.trim() &&
                 System.getenv("SENTRY_ORG")?.trim() &&
                 System.getenv("SENTRY_PROJECT")?.trim()
             def isCiOrEasBuild = System.getenv("CI")?.trim() ||
                 System.getenv("EAS_BUILD")?.trim()
             if (!hasUploadConfig && isCiOrEasBuild && task.name.contains("Release")) {
-                throw new GradleException("Sentry upload config is required for CI/EAS Release builds.")
+                throw new GradleException("Sentry upload config is required for CI/EAS Release builds. " +
+                    "Set SENTRY_AUTH_TOKEN, SENTRY_ORG and SENTRY_PROJECT, or set " +
+                    "SENTRY_DISABLE_AUTO_UPLOAD=true for builds that are never distributed.")
             }
             return hasUploadConfig
         }
