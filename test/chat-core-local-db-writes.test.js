@@ -289,3 +289,39 @@ test('closeChatLocalDb 同样先把积压写完', async () => {
   );
   assert.equal(db.state.closed, true);
 });
+
+test('burn expiry purge batches message and outbox deletion in one transaction', async () => {
+  const db = fakeDatabase();
+  const { api } = loadLocalDb(db);
+  await api.initChatLocalDb('user-1');
+  const transactionsBefore = db.state.transactions;
+
+  await api.purgeExpiredLocalMessages([
+    { conversationId: 'conv-1', cutoff: new Date('2026-08-10T00:00:00.000Z') },
+    { conversationId: 'conv-2', cutoff: new Date('2026-08-09T00:00:00.000Z') },
+  ]);
+
+  assert.equal(db.state.transactions, transactionsBefore + 1);
+  const deletes = db.state.statements.filter((statement) =>
+    statement.sql.startsWith('DELETE FROM'),
+  );
+  assert.equal(deletes.filter((statement) => statement.sql.includes('messages')).length, 2);
+  assert.equal(deletes.filter((statement) => statement.sql.includes('outbox')).length, 2);
+});
+
+test('viewer self-destruct also purges orphaned cached rows globally', async () => {
+  const db = fakeDatabase();
+  const { api } = loadLocalDb(db);
+  await api.initChatLocalDb('user-1');
+
+  await api.purgeExpiredLocalMessages([], new Date('2026-08-10T00:00:00.000Z'));
+
+  const deletes = db.state.statements.filter((statement) =>
+    statement.sql.startsWith('DELETE FROM'),
+  );
+  assert.equal(deletes.length, 2);
+  assert.ok(
+    deletes.every((statement) => !statement.sql.includes('conversation_id')),
+    'global viewer policy must not depend on the hydrated conversation list',
+  );
+});

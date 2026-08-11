@@ -103,7 +103,7 @@ function fakeSocketFactory() {
   return { io, socket, captured };
 }
 
-function loadManager(localDbOverrides = {}) {
+function loadManager(localDbOverrides = {}, options = {}) {
   const { io, socket, captured } = fakeSocketFactory();
   const reports = [];
   const storeModule = (() => {
@@ -123,15 +123,32 @@ function loadManager(localDbOverrides = {}) {
       setCurrentUserId(v) {
         state.currentUserId = v;
       },
+      viewerSelfDestructDays: 0,
+      viewerSelfDestructPolicyRevision: 0,
+      setViewerSelfDestructDays(v, writeOptions) {
+        state.viewerSelfDestructDays = v;
+        if (!writeOptions?.remoteRefresh) {
+          state.viewerSelfDestructPolicyRevision += 1;
+        }
+        state.calls.push(['setViewerSelfDestructDays', v]);
+        if (state.currentUserId) {
+          mmkvStore.set(
+            `chat.viewerSelfDestructDays.${state.currentUserId}`,
+            String(v),
+          );
+        }
+      },
       setError(v) {
         state.error = v;
       },
+      purgeExpiredBurnMessages: async () => {},
       reset() {
         state.calls.push(['reset']);
         state.connected = false;
         state.currentUserId = null;
       },
       activeConversationId: null,
+      conversations: [],
       messagesByConversation: {},
       // 冷启动水合会用到这三个;默认 initChatLocalDb=false 时根本走不到,
       // 只有显式打开本地库的用例才会触发。
@@ -139,6 +156,7 @@ function loadManager(localDbOverrides = {}) {
       failedMarks: [],
       hydrateLocalSnapshot(conversations, timelines) {
         state.hydrated.push({ conversations, timelines });
+        if (state.conversations.length === 0) state.conversations = conversations;
         state.messagesByConversation = { ...timelines };
       },
       ingestMessages(conversationId, messages) {
@@ -158,7 +176,20 @@ function loadManager(localDbOverrides = {}) {
         state.messagesByConversation = {};
       },
     };
-    return { useChatStore: { getState: () => state }, state };
+    return {
+      useChatStore: { getState: () => state },
+      sanitizeExpiredConversationPreviews: (conversations, days, now = Date.now()) =>
+        conversations.map((conversation) => {
+          const seconds = days > 0 ? days * 24 * 60 * 60 : null;
+          const createdAt = Date.parse(conversation.lastMessage?.createdAt ?? '');
+          return seconds && Number.isFinite(createdAt) && createdAt < now - seconds * 1000
+            ? { ...conversation, lastMessage: null, lastMessageAt: null, unreadCount: 0 }
+            : conversation;
+        }),
+      viewerSelfDestructDaysStorageKey: (userId) =>
+        `chat.viewerSelfDestructDays.${userId}`,
+      state,
+    };
   })();
   const bound = [];
   // 重连对账(G-13)的观测点:列表刷新次数与缺口补拉参数。
@@ -171,6 +202,8 @@ function loadManager(localDbOverrides = {}) {
     mutationCursorIds: [],
     droppedLocalMessages: 0,
     initialHistory: [],
+    privacyFetches: 0,
+    privacyResponse: { messageSelfDestructDays: 2 },
   };
   const mmkvStore = new Map();
   const mmkv = {
@@ -182,6 +215,14 @@ function loadManager(localDbOverrides = {}) {
   const manager = runModule('src/chat-core/socket-manager.ts', {
     'socket.io-client': { io },
     '@/constants/config': { CHAT_WS_URL: 'http://api.test' },
+    '@/services/api/privacy': {
+      fetchPrivacySettings: () => {
+        apiCalls.privacyFetches += 1;
+        return options.privacyFetch
+          ? options.privacyFetch()
+          : Promise.resolve(apiCalls.privacyResponse);
+      },
+    },
     './api': {
       loadChatConversations: () => {
         apiCalls.conversations += 1;
@@ -257,6 +298,265 @@ function loadManager(localDbOverrides = {}) {
     mmkvStore,
   };
 }
+
+test('viewer self-destruct uses the cached policy offline and refreshes it after connect', async () => {
+  const { manager, socket, store, apiCalls, mmkvStore } = loadManager();
+  mmkvStore.set('chat.viewerSelfDestructDays.u1', '7');
+
+  manager.connectChat('jwt', 'u1');
+  assert.equal(store.viewerSelfDestructDays, 7);
+
+  socket.fire('connect');
+  for (let i = 0; i < 4; i += 1) await Promise.resolve();
+
+  assert.equal(apiCalls.privacyFetches, 1);
+  assert.equal(store.viewerSelfDestructDays, 2);
+  assert.equal(mmkvStore.get('chat.viewerSelfDestructDays.u1'), '2');
+});
+
+test('cold hydration waits for the authoritative self-destruct policy', async () => {
+  let resolvePolicy;
+  const policy = new Promise((resolve) => {
+    resolvePolicy = resolve;
+  });
+  const { manager, socket, store, apiCalls } = loadManager(
+    {
+      initChatLocalDb: async () => true,
+      readLocalConversations: async () => [{ id: 'c1' }],
+    },
+    { privacyFetch: () => policy },
+  );
+
+  manager.connectChat('jwt', 'u1');
+  socket.fire('connect');
+  await flush();
+
+  assert.equal(apiCalls.privacyFetches, 1);
+  assert.equal(store.hydrated.length, 0);
+
+  resolvePolicy({ messageSelfDestructDays: 2 });
+  await flush();
+  await flush();
+
+  assert.equal(store.viewerSelfDestructDays, 2);
+  assert.ok(store.hydrated.length > 0);
+});
+
+test('account switch starts the local database switch before privacy resolves', async () => {
+  let resolvePolicy;
+  const policy = new Promise((resolve) => {
+    resolvePolicy = resolve;
+  });
+  const openedFor = [];
+  const { manager, store } = loadManager(
+    {
+      initChatLocalDb: async (userId) => {
+        openedFor.push(userId);
+        return true;
+      },
+    },
+    { privacyFetch: () => policy },
+  );
+  store.currentUserId = 'account-a';
+
+  manager.connectChat('jwt-b', 'account-b');
+  await Promise.resolve();
+
+  assert.deepEqual(openedFor, ['account-b']);
+  resolvePolicy({ messageSelfDestructDays: 2 });
+  await flush();
+});
+
+test('cold hydration never publishes an expired local conversation preview', async () => {
+  let releaseTimeline;
+  const timelineGate = new Promise((resolve) => {
+    releaseTimeline = resolve;
+  });
+  const expiredPreview = {
+    id: 'expired',
+    conversationId: 'c1',
+    createdAt: '2026-08-01T00:00:00.000Z',
+  };
+  const { manager, socket, store } = loadManager({
+    initChatLocalDb: async () => true,
+    readLocalConversations: async () => [{
+      id: 'c1',
+      burnDurationSec: null,
+      lastMessage: expiredPreview,
+      lastMessageAt: expiredPreview.createdAt,
+      unreadCount: 4,
+    }],
+    readRecentLocalMessages: async () => {
+      await timelineGate;
+      return [];
+    },
+  });
+
+  manager.connectChat('jwt', 'u1');
+  socket.fire('connect');
+  await flush();
+  await flush();
+
+  assert.equal(store.hydrated.length, 1);
+  assert.equal(store.hydrated[0].conversations[0].lastMessage, null);
+  assert.equal(store.hydrated[0].conversations[0].unreadCount, 0);
+
+  releaseTimeline();
+});
+
+test('cold hydration rejects expired outbox content even when durable purge did not delete it', async () => {
+  const deleted = [];
+  const expiredAt = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+  const { manager, store } = loadManager({
+    initChatLocalDb: async () => true,
+    readLocalConversations: async () => [{ id: 'c1', burnDurationSec: null }],
+    readRecentLocalMessages: async () => [],
+    outboxList: async () => [
+      {
+        d: 'expired-private',
+        conversationId: 'c1',
+        payload: {
+          conversationId: 'c1',
+          type: 'text',
+          content: { text: 'private body' },
+          d: 'expired-private',
+        },
+        createdAt: expiredAt,
+      },
+    ],
+    outboxDelete: async (d) => {
+      deleted.push(d);
+    },
+  });
+
+  manager.connectChat('jwt', 'u1');
+  await flush();
+  await flush();
+
+  assert.deepEqual(store.failedMarks, []);
+  assert.deepEqual(deleted, ['expired-private']);
+});
+
+test('outbox fallback uses the current post-purge conversation policy', async () => {
+  let releasePurge;
+  const purgeGate = new Promise((resolve) => {
+    releasePurge = resolve;
+  });
+  const deleted = [];
+  const createdAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  const { manager, store } = loadManager({
+    initChatLocalDb: async () => true,
+    readLocalConversations: async () => [{ id: 'c1', burnDurationSec: null }],
+    readRecentLocalMessages: async () => [],
+    outboxList: async () => [
+      {
+        d: 'expired-by-current-policy',
+        conversationId: 'c1',
+        payload: { conversationId: 'c1', type: 'text', content: {}, d: 'expired-by-current-policy' },
+        createdAt,
+      },
+    ],
+    outboxDelete: async (d) => {
+      deleted.push(d);
+    },
+  });
+  store.purgeExpiredBurnMessages = async () => purgeGate;
+
+  manager.connectChat('jwt', 'u1');
+  await flush();
+  store.conversations = [{ id: 'c1', burnDurationSec: 60 * 60 }];
+  releasePurge();
+  await flush();
+
+  assert.deepEqual(store.failedMarks, []);
+  assert.deepEqual(deleted, ['expired-by-current-policy']);
+});
+
+test('outbox fallback observes a policy tightened while the outbox is loading', async () => {
+  let resolveOutbox;
+  const outboxGate = new Promise((resolve) => {
+    resolveOutbox = resolve;
+  });
+  const deleted = [];
+  const createdAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  const { manager, store } = loadManager({
+    initChatLocalDb: async () => true,
+    readLocalConversations: async () => [{ id: 'c1', burnDurationSec: null }],
+    readRecentLocalMessages: async () => [],
+    outboxList: async () => outboxGate,
+    outboxDelete: async (d) => {
+      deleted.push(d);
+    },
+  });
+
+  manager.connectChat('jwt', 'u1');
+  await flush();
+  await flush();
+  store.conversations = [{ id: 'c1', burnDurationSec: 60 * 60 }];
+  resolveOutbox([
+    {
+      d: 'expired-during-outbox-read',
+      conversationId: 'c1',
+      payload: { conversationId: 'c1', type: 'text', content: {}, d: 'expired-during-outbox-read' },
+      createdAt,
+    },
+  ]);
+  await flush();
+
+  assert.deepEqual(store.failedMarks, []);
+  assert.deepEqual(deleted, ['expired-during-outbox-read']);
+});
+
+test('a stale outbox read cannot mutate the store after an A-B-A switch', async () => {
+  let resolveFirstOutbox;
+  const firstOutbox = new Promise((resolve) => {
+    resolveFirstOutbox = resolve;
+  });
+  let outboxCalls = 0;
+  const { manager, store } = loadManager({
+    initChatLocalDb: async () => true,
+    readLocalConversations: async () => [{ id: 'c1', burnDurationSec: null }],
+    readRecentLocalMessages: async () => [],
+    outboxList: async () => {
+      outboxCalls += 1;
+      return outboxCalls === 1 ? firstOutbox : [];
+    },
+  });
+
+  manager.connectChat('jwt-a1', 'account-a');
+  await flush();
+  await flush();
+  manager.connectChat('jwt-b', 'account-b');
+  manager.connectChat('jwt-a2', 'account-a');
+  resolveFirstOutbox([
+    {
+      d: 'stale-a',
+      conversationId: 'c1',
+      payload: { conversationId: 'c1', type: 'text', content: {}, d: 'stale-a' },
+      createdAt: new Date().toISOString(),
+    },
+  ]);
+  await flush();
+  await flush();
+
+  assert.ok(!store.failedMarks.some((mark) => mark.d === 'stale-a'));
+});
+
+test('a stale policy refresh cannot overwrite a newer local setting', async () => {
+  let resolvePolicy;
+  const policy = new Promise((resolve) => {
+    resolvePolicy = resolve;
+  });
+  const { manager, socket, store } = loadManager({}, { privacyFetch: () => policy });
+
+  manager.connectChat('jwt', 'u1');
+  socket.fire('connect');
+  store.setViewerSelfDestructDays(7);
+  resolvePolicy({ messageSelfDestructDays: 2 });
+  await flush();
+
+  assert.equal(store.viewerSelfDestructDays, 7);
+});
 
 test('reconnect (not first connect) refreshes conversations and backfills the active gap', () => {
   const { manager, socket, store, apiCalls } = loadManager();
@@ -488,6 +788,61 @@ test('offline reads merge to the max height and flush once on connect', async ()
   assert.equal(acked.length, 1);
   assert.equal(acked[0].conversationId, 'c1');
   assert.equal(acked[0].height, 7);
+});
+
+test('switching accounts drops the previous account pending read watermarks', async () => {
+  const { manager, socket } = loadManager();
+  manager.connectChat('jwt-a', 'account-a');
+  manager.markChatRead('a-private-conversation', 9);
+
+  manager.connectChat('jwt-b', 'account-b');
+  const acked = [];
+  socket.ackResponder = (event, payload, cb) => {
+    acked.push(payload);
+    cb(null, { ok: true });
+  };
+  socket.connected = true;
+  socket.fire('connect');
+  await flush();
+
+  assert.deepEqual(acked, []);
+});
+
+test('a stale pending-read load cannot survive an A-B-A switch', async () => {
+  let resolveFirstPendingReads;
+  const firstPendingReads = new Promise((resolve) => {
+    resolveFirstPendingReads = resolve;
+  });
+  let pendingReadCalls = 0;
+  const { manager, socket } = loadManager({
+    initChatLocalDb: async () => true,
+    readLocalConversations: async () => [],
+    outboxList: async () => [],
+    pendingReadsList: async () => {
+      pendingReadCalls += 1;
+      return pendingReadCalls === 1 ? firstPendingReads : [];
+    },
+  });
+
+  manager.connectChat('jwt-a1', 'account-a');
+  await flush();
+  await flush();
+  manager.connectChat('jwt-b', 'account-b');
+  manager.connectChat('jwt-a2', 'account-a');
+  resolveFirstPendingReads([{ conversationId: 'stale-a-read', height: 8 }]);
+  await flush();
+  await flush();
+
+  const acked = [];
+  socket.ackResponder = (event, payload, cb) => {
+    acked.push(payload);
+    cb(null, { ok: true });
+  };
+  socket.connected = true;
+  socket.fire('connect');
+  await flush();
+
+  assert.ok(!acked.some((payload) => payload.conversationId === 'stale-a-read'));
 });
 
 test('reads queued during an in-flight flush trigger a follow-up round', async () => {

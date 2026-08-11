@@ -566,6 +566,15 @@ test('burn-expired messages are purged from the local cache', () => {
   assert.ok(calls.length >= 3, `expected >=3 purge triggers, got ${calls.length}`);
 });
 
+test('burn expiry is scheduled and self-destruct images avoid disk caching', () => {
+  const store = read('src/chat-core/store.ts');
+  assert.match(store, /scheduleNextBurnPurge/);
+  assert.match(store, /BURN_PURGE_SWEEP_MS/);
+  const image = read('src/features/chat/components/bubbles/image-bubble.tsx');
+  assert.match(image, /cachePolicy=\{selfDestructEnabled \? 'memory' : 'memory-disk'\}/);
+  assert.match(image, /selfDestructCacheKey/);
+});
+
 test('clear-all reports partial failure instead of claiming success', () => {
   // allSettled 把 rejection 全吞了、照样弹「已全部清空」:那些没清成的会话
   // 服务端历史还在,下次加载就整段回来。

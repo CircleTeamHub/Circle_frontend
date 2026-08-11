@@ -20,6 +20,7 @@ const __localDbStub = {
   removeLocalConversation: async () => {},
   persistLocalMessages: async () => {},
   deleteLocalMessage: async () => {},
+  purgeExpiredLocalMessages: async () => {},
   clearLocalConversationMessages: async () => {},
   deleteLocalMessagesBelow: async () => {},
   readRecentLocalMessages: async () => [],
@@ -90,6 +91,9 @@ function loadStack({ onSend = async () => ({ messageId: 'srv-1', height: 9 }) } 
         isMessageDeletedLocally: () => false,
         markMessageDeletedLocally: () => {},
       };
+    }
+    if (request === '@/storage') {
+      return { storage: { set: () => {}, getString: () => undefined } };
     }
     throw new Error(`unexpected require: ${request}`);
   });

@@ -557,6 +557,18 @@ export default function ChatDetailScreen() {
   const [resolvedConversationID, setResolvedConversationID] =
     useState(paramConversationID);
   const conversationID = paramConversationID || resolvedConversationID;
+  const selfDestructEnabled = useChatStore((state) => {
+    const conversation = state.conversations.find(
+      (candidate) => candidate.id === conversationID,
+    );
+    return (
+      state.viewerSelfDestructDays > 0 ||
+      (conversation?.burnDurationSec ?? 0) > 0
+    );
+  });
+  const selfDestructCacheKey = useChatStore(
+    (state) => `${state.currentUserId ?? ''}:${state.selfDestructPolicyEpoch}`,
+  );
   // 只订阅当前会话的消息切片，而非整个 messagesByConversation map。
   // 其他会话来消息时 ingestMessages 会新建顶层对象，但本会话的数组引用不变，
   // zustand 的 Object.is 相等判断因此不会触发本页重渲染——这是聊天页最大的流畅提升。
@@ -1790,6 +1802,8 @@ export default function ChatDetailScreen() {
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
             onLongPress={getMessageLongPressHandler(item)}
             hideStatus={isGroupChat}
+            selfDestructEnabled={selfDestructEnabled}
+            selfDestructCacheKey={selfDestructCacheKey}
           />
         ));
       case 'voice':
@@ -1948,6 +1962,8 @@ export default function ChatDetailScreen() {
     handleQuotePress,
     handleToggleReaction,
     isGroupChat,
+    selfDestructCacheKey,
+    selfDestructEnabled,
     selfAvatarUri,
     selfName,
     scope,

@@ -11,6 +11,7 @@ const __localDbStub = {
   removeLocalConversation: async () => {},
   persistLocalMessages: async () => {},
   deleteLocalMessage: async () => {},
+  purgeExpiredLocalMessages: async () => {},
   clearLocalConversationMessages: async () => {},
   deleteLocalMessagesBelow: async () => {},
   readRecentLocalMessages: async () => [],
@@ -70,6 +71,10 @@ function zustandMiddlewareStub() {
 function runModule(rel, requireImpl) {
   const context = {
     Date,
+    // Store tests exercise expiry state transitions, not wall-clock scheduling. Do not
+    // retain real 60-second handles after a test completes.
+    setTimeout: () => 1,
+    clearTimeout: () => {},
     module: { exports: {} },
     exports: {},
     require: requireImpl,
@@ -100,6 +105,9 @@ function loadChatStore() {
       });
     }
     if (request === './local-db') return __localDbStub;
+    if (request === '@/storage') {
+      return { storage: { set: () => {}, getString: () => undefined } };
+    }
     throw new Error(`unexpected require: ${request}`);
   });
   return { ...store, ...deletedMessages };
@@ -695,6 +703,106 @@ test('evictMessagesBelow drops the window without writing deletion tombstones', 
     useChatStore.getState().messagesByConversation['conv-1'].length,
     2,
   );
+});
+
+test('burn expiry removes both cached messages and the conversation preview', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  const expired = msg({
+    id: 'expired-burn-message',
+    createdAt: new Date(Date.now() - 120_000).toISOString(),
+  });
+  store.setConversations([
+    conversation({
+      id: 'conv-1',
+      burnDurationSec: 60,
+      lastMessage: expired,
+      lastMessageAt: expired.createdAt,
+    }),
+  ]);
+  store.ingestMessages('conv-1', [expired]);
+
+  useChatStore.getState().purgeExpiredBurnMessages();
+
+  assert.equal(
+    useChatStore.getState().messagesByConversation['conv-1'].length,
+    0,
+  );
+  assert.equal(useChatStore.getState().conversations[0].lastMessage, null);
+});
+
+test('burn expiry clears the stale unread badge with its expired preview', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  const expired = msg({
+    id: 'expired-unread-message',
+    createdAt: new Date(Date.now() - 120_000).toISOString(),
+  });
+  store.setConversations([
+    conversation({
+      id: 'conv-1',
+      burnDurationSec: 60,
+      lastMessage: expired,
+      lastMessageAt: expired.createdAt,
+      unreadCount: 3,
+    }),
+  ]);
+  store.ingestMessages('conv-1', [expired]);
+
+  store.purgeExpiredBurnMessages();
+
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 0);
+});
+
+test('viewer self-destruct policy purges cached content without conversation burn', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  assert.equal(typeof store.setViewerSelfDestructDays, 'function');
+  const expired = msg({
+    id: 'expired-viewer-message',
+    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+  });
+  store.setConversations([
+    conversation({
+      id: 'conv-1',
+      burnDurationSec: null,
+      lastMessage: expired,
+      lastMessageAt: expired.createdAt,
+    }),
+  ]);
+  store.ingestMessages('conv-1', [expired]);
+
+  store.setViewerSelfDestructDays(1);
+
+  assert.equal(
+    useChatStore.getState().messagesByConversation['conv-1'].length,
+    0,
+  );
+  assert.equal(useChatStore.getState().conversations[0].lastMessage, null);
+});
+
+test('server snapshots advance the self-destruct cache epoch when a conversation policy changes', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setConversations([conversation({ burnDurationSec: 60 })]);
+  const enabledEpoch = useChatStore.getState().selfDestructPolicyEpoch;
+  store.setConversations([conversation({ burnDurationSec: null })]);
+  const disabledEpoch = useChatStore.getState().selfDestructPolicyEpoch;
+  store.setConversations([conversation({ burnDurationSec: 60 })]);
+
+  assert.ok(enabledEpoch > 0);
+  assert.ok(disabledEpoch > enabledEpoch);
+  assert.ok(useChatStore.getState().selfDestructPolicyEpoch > disabledEpoch);
+});
+
+test('invalid viewer self-destruct policy cannot weaken a cached policy', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+
+  store.setViewerSelfDestructDays(7);
+  store.setViewerSelfDestructDays(999);
+
+  assert.equal(useChatStore.getState().viewerSelfDestructDays, 7);
 });
 
 test('a membership teardown clears the cache without leaving a watermark', () => {
