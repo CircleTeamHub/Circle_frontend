@@ -16,9 +16,10 @@ interface ImageBubbleProps {
   onLongPress?: (event: GestureResponderEvent) => void;
   hideStatus?: boolean;
   selfDestructEnabled?: boolean;
+  selfDestructCacheEpoch?: number;
 }
 
-let diskCacheClearedForSelfDestruct = false;
+let diskCacheClearedForSelfDestructEpoch: number | null = null;
 
 const sImage = StyleSheet.create({
   row: {
@@ -64,6 +65,7 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
   onLongPress,
   hideStatus,
   selfDestructEnabled = false,
+  selfDestructCacheEpoch = 0,
 }) => {
   const { colors } = useTheme();
   const avatarNode = (
@@ -89,12 +91,17 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
   }, [message.imageHeight, message.imageWidth]);
 
   useEffect(() => {
-    if (!selfDestructEnabled || diskCacheClearedForSelfDestruct) return;
-    diskCacheClearedForSelfDestruct = true;
+    if (
+      !selfDestructEnabled ||
+      diskCacheClearedForSelfDestructEpoch === selfDestructCacheEpoch
+    ) {
+      return;
+    }
+    diskCacheClearedForSelfDestructEpoch = selfDestructCacheEpoch;
     // expo-image 不能按 URI 移除已落盘内容；首次启用阅后即焚时清一次磁盘缓存，
     // 确保此前的聊天图片不会绕过后续的内存缓存策略。
     void Image.clearDiskCache().catch(() => undefined);
-  }, [selfDestructEnabled]);
+  }, [selfDestructCacheEpoch, selfDestructEnabled]);
 
   // 列表气泡优先渲染缩略图；缺失时回退到原图。原图查看留给点击放大流程。
   const displayUri = message.imageThumbUrl ?? message.imageUrl;

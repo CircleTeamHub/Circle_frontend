@@ -48,6 +48,7 @@ export async function dropAllLocalMessages(): Promise<void> {}
 
 export async function purgeExpiredLocalMessages(
   _entries: readonly { conversationId: string; cutoff: Date }[],
+  _viewerCutoff?: Date,
 ): Promise<void> {}
 
 export async function clearLocalConversationMessages(

@@ -19,6 +19,7 @@ import {
   pendingReadsList,
   readLocalConversations,
   readRecentLocalMessages,
+  upsertLocalConversation,
 } from './local-db';
 import { initChatAppBadgeSync } from './app-badge';
 import { bindChatEvents, cancelConversationBackfill } from './dispatcher';
@@ -31,6 +32,7 @@ import {
   type ChatSendAckOk,
 } from './protocol';
 import {
+  sanitizeExpiredConversationPreviews,
   useChatStore,
   viewerSelfDestructDaysStorageKey,
 } from './store';
@@ -313,7 +315,16 @@ async function hydrateFromLocalDb(userId: string): Promise<void> {
     if (!opened) return;
     const store = useChatStore.getState();
     if (store.currentUserId !== userId) return;
-    const conversations = await readLocalConversations();
+    const persistedConversations = await readLocalConversations();
+    const conversations = sanitizeExpiredConversationPreviews(
+      persistedConversations,
+      useChatStore.getState().viewerSelfDestructDays,
+    );
+    for (let index = 0; index < conversations.length; index += 1) {
+      if (conversations[index] !== persistedConversations[index]) {
+        void upsertLocalConversation(conversations[index]);
+      }
+    }
     // 会话列表先出。逐会话串行读时间线是几百次原生查询,放在 hydrate 之前的话
     // 离线用户得盯着空列表等它跑完 —— 而列表本身早就在手上了。
     useChatStore.getState().hydrateLocalSnapshot(conversations, {});

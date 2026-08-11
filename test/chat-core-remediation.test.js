@@ -569,8 +569,10 @@ test('burn-expired messages are purged from the local cache', () => {
 test('burn expiry is scheduled and self-destruct images avoid disk caching', () => {
   const store = read('src/chat-core/store.ts');
   assert.match(store, /scheduleNextBurnPurge/);
+  assert.match(store, /BURN_PURGE_SWEEP_MS/);
   const image = read('src/features/chat/components/bubbles/image-bubble.tsx');
   assert.match(image, /cachePolicy=\{selfDestructEnabled \? 'memory' : 'memory-disk'\}/);
+  assert.match(image, /selfDestructCacheEpoch/);
 });
 
 test('clear-all reports partial failure instead of claiming success', () => {

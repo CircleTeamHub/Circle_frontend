@@ -523,12 +523,26 @@ export interface ExpiredLocalMessagePurge {
 
 export async function purgeExpiredLocalMessages(
   entries: readonly ExpiredLocalMessagePurge[],
+  viewerCutoff?: Date,
 ): Promise<void> {
   const current = requireDb();
-  if (!current || entries.length === 0) return;
+  if (!current || (entries.length === 0 && !viewerCutoff)) return;
   try {
     await writeTransaction(current.db, async () => {
+      if (viewerCutoff) {
+        const cutoffIso = viewerCutoff.toISOString();
+        // 全局查看者策略必须覆盖没有会话行的残留 rows，避免 FTS 继续检索正文。
+        await current.db.runAsync(
+          'DELETE FROM messages WHERE created_at < ?;',
+          cutoffIso,
+        );
+        await current.db.runAsync(
+          'DELETE FROM outbox WHERE created_at < ?;',
+          cutoffIso,
+        );
+      }
       for (const { conversationId, cutoff } of entries) {
+        if (viewerCutoff && cutoff <= viewerCutoff) continue;
         const cutoffIso = cutoff.toISOString();
         // 删除 messages 会触发 messages_fts_ad，FTS 影子表随同事务更新。
         await current.db.runAsync(

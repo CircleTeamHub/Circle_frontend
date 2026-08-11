@@ -176,6 +176,14 @@ function loadManager(localDbOverrides = {}, options = {}) {
     };
     return {
       useChatStore: { getState: () => state },
+      sanitizeExpiredConversationPreviews: (conversations, days, now = Date.now()) =>
+        conversations.map((conversation) => {
+          const seconds = days > 0 ? days * 24 * 60 * 60 : null;
+          const createdAt = Date.parse(conversation.lastMessage?.createdAt ?? '');
+          return seconds && Number.isFinite(createdAt) && createdAt < now - seconds * 1000
+            ? { ...conversation, lastMessage: null, lastMessageAt: null, unreadCount: 0 }
+            : conversation;
+        }),
       viewerSelfDestructDaysStorageKey: (userId) =>
         `chat.viewerSelfDestructDays.${userId}`,
       state,
@@ -330,6 +338,43 @@ test('cold hydration waits for the authoritative self-destruct policy', async ()
 
   assert.equal(store.viewerSelfDestructDays, 2);
   assert.ok(store.hydrated.length > 0);
+});
+
+test('cold hydration never publishes an expired local conversation preview', async () => {
+  let releaseTimeline;
+  const timelineGate = new Promise((resolve) => {
+    releaseTimeline = resolve;
+  });
+  const expiredPreview = {
+    id: 'expired',
+    conversationId: 'c1',
+    createdAt: '2026-08-01T00:00:00.000Z',
+  };
+  const { manager, socket, store } = loadManager({
+    initChatLocalDb: async () => true,
+    readLocalConversations: async () => [{
+      id: 'c1',
+      burnDurationSec: null,
+      lastMessage: expiredPreview,
+      lastMessageAt: expiredPreview.createdAt,
+      unreadCount: 4,
+    }],
+    readRecentLocalMessages: async () => {
+      await timelineGate;
+      return [];
+    },
+  });
+
+  manager.connectChat('jwt', 'u1');
+  socket.fire('connect');
+  await flush();
+  await flush();
+
+  assert.equal(store.hydrated.length, 1);
+  assert.equal(store.hydrated[0].conversations[0].lastMessage, null);
+  assert.equal(store.hydrated[0].conversations[0].unreadCount, 0);
+
+  releaseTimeline();
 });
 
 test('a stale policy refresh cannot overwrite a newer local setting', async () => {

@@ -71,6 +71,10 @@ function zustandMiddlewareStub() {
 function runModule(rel, requireImpl) {
   const context = {
     Date,
+    // Store tests exercise expiry state transitions, not wall-clock scheduling. Do not
+    // retain real 60-second handles after a test completes.
+    setTimeout: () => 1,
+    clearTimeout: () => {},
     module: { exports: {} },
     exports: {},
     require: requireImpl,

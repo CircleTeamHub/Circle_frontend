@@ -26,6 +26,8 @@ export const MESSAGES_CAP = 200;
 export const MESSAGES_WINDOW_MAX = 2000;
 /** 对端 typing 显示时长:超过它没有新 typing 事件就回落在线状态。 */
 export const TYPING_DISPLAY_MS = 4_000;
+/** Keep self-destruct purges below the browser timer clamp and cover cached rows. */
+const BURN_PURGE_SWEEP_MS = 60_000;
 
 export function viewerSelfDestructDaysStorageKey(userId: string): string {
   return `chat.viewerSelfDestructDays.${userId}`;
@@ -35,6 +37,45 @@ function normalizeViewerSelfDestructDays(days: number): number | null {
   return [0, 1, 2, 7, 30].includes(days) ? days : null;
 }
 
+/** Removes expired local previews before a cold-start snapshot reaches the UI. */
+export function sanitizeExpiredConversationPreviews(
+  conversations: ChatConversationDto[],
+  viewerSelfDestructDays: number,
+  now = Date.now(),
+): ChatConversationDto[] {
+  const viewerSeconds =
+    viewerSelfDestructDays > 0
+      ? viewerSelfDestructDays * 24 * 60 * 60
+      : null;
+  return conversations.map((conversation) => {
+    const conversationSeconds =
+      conversation.burnDurationSec && conversation.burnDurationSec > 0
+        ? conversation.burnDurationSec
+        : null;
+    const seconds =
+      conversationSeconds && viewerSeconds
+        ? Math.min(conversationSeconds, viewerSeconds)
+        : (conversationSeconds ?? viewerSeconds);
+    const previewCreatedAt = conversation.lastMessage
+      ? Date.parse(conversation.lastMessage.createdAt)
+      : NaN;
+    if (
+      !seconds ||
+      !conversation.lastMessage ||
+      !Number.isFinite(previewCreatedAt) ||
+      previewCreatedAt >= now - seconds * 1000
+    ) {
+      return conversation;
+    }
+    return {
+      ...conversation,
+      lastMessage: null,
+      lastMessageAt: null,
+      unreadCount: 0,
+    };
+  });
+}
+
 let burnPurgeTimer: ReturnType<typeof setTimeout> | null = null;
 
 function clearBurnPurgeTimer(): void {
@@ -42,10 +83,18 @@ function clearBurnPurgeTimer(): void {
   burnPurgeTimer = null;
 }
 
-function scheduleNextBurnPurge(nextExpiryAt: number | null): void {
+function scheduleNextBurnPurge(
+  nextExpiryAt: number | null,
+  hasSelfDestructPolicy: boolean,
+): void {
   clearBurnPurgeTimer();
-  if (nextExpiryAt === null) return;
-  const delay = Math.max(1, nextExpiryAt - Date.now() + 1);
+  if (!hasSelfDestructPolicy) return;
+  const delay = Math.min(
+    nextExpiryAt === null
+      ? BURN_PURGE_SWEEP_MS
+      : Math.max(1, nextExpiryAt - Date.now() + 1),
+    BURN_PURGE_SWEEP_MS,
+  );
   burnPurgeTimer = setTimeout(() => {
     burnPurgeTimer = null;
     void useChatStore.getState().purgeExpiredBurnMessages();
@@ -78,6 +127,8 @@ interface ChatStoreState {
   viewerSelfDestructDays: number;
   /** 本地权威写入递增，防止较早发出的策略 GET 覆盖设置页刚保存的值。 */
   viewerSelfDestructPolicyRevision: number;
+  /** 每次有效自毁策略切换都会前进，用于使媒体磁盘缓存失效。 */
+  selfDestructPolicyEpoch: number;
   conversations: ChatConversationDto[];
   messagesByConversation: Record<string, ChatMessageDto[]>;
   activeConversationId: string | null;
@@ -411,6 +462,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   currentUserId: null,
   viewerSelfDestructDays: 0,
   viewerSelfDestructPolicyRevision: 0,
+  selfDestructPolicyEpoch: 0,
   conversations: [],
   conversationsSnapshotLoaded: false,
   conversationsSnapshotSeq: 0,
@@ -434,6 +486,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       currentUserId,
       viewerSelfDestructDays,
       viewerSelfDestructPolicyRevision,
+      selfDestructPolicyEpoch,
     } = get();
     if (currentUserId) {
       try {
@@ -452,6 +505,10 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       viewerSelfDestructPolicyRevision: options?.remoteRefresh
         ? viewerSelfDestructPolicyRevision
         : viewerSelfDestructPolicyRevision + 1,
+      selfDestructPolicyEpoch:
+        viewerSelfDestructDays === normalized
+          ? selfDestructPolicyEpoch
+          : selfDestructPolicyEpoch + 1,
     });
     if (viewerSelfDestructDays !== normalized || !options?.remoteRefresh) {
       void get().purgeExpiredBurnMessages();
@@ -888,7 +945,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   },
 
   applyBurnDuration: (conversationId, burnDurationSec) => {
-    const { conversations } = get();
+    const { conversations, selfDestructPolicyEpoch } = get();
     const index = conversations.findIndex((c) => c.id === conversationId);
     if (index < 0) return;
     if ((conversations[index].burnDurationSec ?? null) === burnDurationSec) {
@@ -900,6 +957,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         { ...conversations[index], burnDurationSec },
         ...conversations.slice(index + 1),
       ],
+      selfDestructPolicyEpoch: selfDestructPolicyEpoch + 1,
     });
     void get().purgeExpiredBurnMessages();
   },
@@ -978,9 +1036,18 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           : {}),
       });
     }
-    scheduleNextBurnPurge(nextExpiryAt);
+    scheduleNextBurnPurge(
+      nextExpiryAt,
+      viewerSeconds !== null ||
+        conversations.some((conversation) => (conversation.burnDurationSec ?? 0) > 0),
+    );
     await Promise.all([
-      purgeExpiredLocalMessages(localPurges),
+      purgeExpiredLocalMessages(
+        localPurges,
+        viewerSeconds === null
+          ? undefined
+          : new Date(Date.now() - viewerSeconds * 1000),
+      ),
       ...durablePreviewWrites,
     ]);
   },
@@ -1162,6 +1229,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       currentUserId: null,
       viewerSelfDestructDays: 0,
       viewerSelfDestructPolicyRevision: 0,
+      selfDestructPolicyEpoch: 0,
       conversations: [],
       conversationsSnapshotLoaded: false,
       messagesByConversation: {},
