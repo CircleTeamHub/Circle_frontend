@@ -29,11 +29,10 @@ import { getUserProfileHref } from '@/features/user/utils/routes';
 import { fetchCurrentUser } from '@/services/api/auth';
 import { useAuthStore } from '@/stores/authStore';
 import { useMembershipProgramStore } from '@/stores/membershipProgramStore';
+import { useSupportConfigStore } from '@/stores/supportConfigStore';
+import { selectSupportAgents } from '@/stores/support-config-selectors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
-function getMembershipSupportUserId(): string | undefined {
-  return process.env.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID?.trim() || undefined;
-}
 
 const DEFAULT_TIER_NAMES: Record<MembershipTier, string> = {
   silver: '白银会员',
@@ -293,6 +292,10 @@ export default function MemberCenterScreen() {
   const fetchProgramStatus = useMembershipProgramStore(
     (state) => state.fetchStatus,
   );
+  const supportConfig = useSupportConfigStore((state) => state.config);
+  const fetchSupportConfigState = useSupportConfigStore(
+    (state) => state.fetchConfig,
+  );
   const programEnabled =
     programStatus?.enabled ?? (programError ? false : null);
   // 测试期绕过灰度：dev 构建直接展示会员中心正文（当前身份 + 档位 + 权益），方便本地核对；
@@ -314,6 +317,8 @@ export default function MemberCenterScreen() {
       const ownerSessionEpoch = owner.sessionEpoch;
 
       void fetchProgramStatus({ force: true });
+      // 会员客服也走后端配置:不 force,进会员中心不必每次都重拉一遍客服表。
+      void fetchSupportConfigState();
 
       if (ownerUserId && ownerAccountId) {
         void fetchCurrentUser()
@@ -345,7 +350,7 @@ export default function MemberCenterScreen() {
       return () => {
         active = false;
       };
-    }, [fetchProgramStatus]),
+    }, [fetchProgramStatus, fetchSupportConfigState]),
   );
 
   const selectedPlan =
@@ -384,14 +389,17 @@ export default function MemberCenterScreen() {
             })
           : t('profile.membership.contactSupport', { defaultValue: '联系客服咨询' });
 
+  // 会员客服 = 后端 membership 类的首个客服(管理台维护、按 sortOrder 排序)。
+  // 没配就仍然弹原来那条 Alert —— 优雅降级,不回退到任何默认账号。
   const handleContactSupport = useCallback(() => {
-    const membershipSupportUserId = getMembershipSupportUserId();
-    if (membershipSupportUserId) {
+    const [agent] = selectSupportAgents(supportConfig, 'membership');
+    if (agent) {
       router.push(
         getUserProfileHref(
           'profile',
-          membershipSupportUserId,
-          t('profile.membership.supportName', { defaultValue: '官方客服' }),
+          agent.userID,
+          agent.nickname ||
+            t('profile.membership.supportName', { defaultValue: '官方客服' }),
         ),
       );
       return;
@@ -405,7 +413,7 @@ export default function MemberCenterScreen() {
         defaultValue: '请联系平台官方客服咨询会员开通或升级。',
       }),
     );
-  }, [router, t]);
+  }, [router, supportConfig, t]);
 
   const d = useMemo(
     () => ({

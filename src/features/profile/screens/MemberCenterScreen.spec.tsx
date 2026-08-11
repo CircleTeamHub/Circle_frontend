@@ -15,6 +15,7 @@ import type { AuthUser } from '@/stores/authStore';
 const mockRouter = { push: jest.fn(), back: jest.fn() };
 const mockAuth = { state: {} as Record<string, unknown> };
 const mockProgram = { state: {} as Record<string, unknown> };
+const mockSupport = { state: {} as Record<string, unknown> };
 let mockFocusCallback: (() => void | (() => void)) | null = null;
 
 jest.mock('expo-router', () => {
@@ -121,6 +122,12 @@ jest.mock('@/stores/membershipProgramStore', () => ({
   useMembershipProgramStore: (selector: (state: unknown) => unknown) =>
     selector(mockProgram.state),
 }));
+// 只 mock store 本身;selectSupportAgents 住在 support-config-selectors(纯函数、
+// 无运行时依赖)且不被 mock —— 「没配则空数组、绝不回退默认账号」这条规则就是要验的行为。
+jest.mock('@/stores/supportConfigStore', () => ({
+  useSupportConfigStore: (selector: (state: unknown) => unknown) =>
+    selector(mockSupport.state),
+}));
 
 const mockFetchCurrentUser = fetchCurrentUser as jest.MockedFunction<
   typeof fetchCurrentUser
@@ -168,7 +175,8 @@ function setAuth(currentUser: AuthUser, sessionEpoch = 1) {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  delete process.env.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID;
+  // 默认「后端没配客服」——各用例自己按需塞。
+  mockSupport.state = { config: null, fetchConfig: jest.fn() };
   mockFocusCallback = null;
   setAuth(user(0));
   mockFetchCurrentUser.mockResolvedValue(user(0));
@@ -247,7 +255,24 @@ test('member tier selection distinguishes current, upgrade, and lower states', a
 });
 
 test('configured support opens its in-app profile and missing support shows Alert', async () => {
-  process.env.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID = 'official-support';
+  // 客服来自后端下发的 membership 类,不再是编译期变量。
+  mockSupport.state = {
+    config: {
+      recharge: [],
+      issue: [],
+      dispute: [],
+      account: [],
+      membership: [
+        {
+          userID: 'official-support',
+          nickname: '官方客服',
+          avatarUrl: null,
+          vipLevel: 0,
+        },
+      ],
+    },
+    fetchConfig: jest.fn(),
+  };
   const first = render(<MemberCenterScreen />);
   await waitFor(() => expect(mockFetchCurrentUser).toHaveBeenCalledTimes(1));
 
@@ -260,7 +285,8 @@ test('configured support opens its in-app profile and missing support shows Aler
 
   first.unmount();
   jest.clearAllMocks();
-  delete process.env.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID;
+  // 后端没配 → 空态 Alert,绝不回退到任何默认账号。
+  mockSupport.state = { config: null, fetchConfig: jest.fn() };
   render(<MemberCenterScreen />);
   await waitFor(() => expect(mockFetchCurrentUser).toHaveBeenCalledTimes(1));
 

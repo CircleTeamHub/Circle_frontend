@@ -58,7 +58,7 @@ test('ProfileScreen customer service row routes to the support-center screen', (
   );
 });
 
-test('customer service exposes recharge/issue/dispute/account with env override + SUPPORT_ACCOUNT_ID fallback, and routes to the agent picker', () => {
+test('customer service categories are pure display metadata and route to the agent picker', () => {
   const cats = read('src/features/profile/support-categories.ts');
   const cfg = read('src/constants/config.ts');
   const screen = read('src/features/profile/screens/CustomerServiceScreen.tsx');
@@ -66,19 +66,16 @@ test('customer service exposes recharge/issue/dispute/account with env override 
   const ids = Array.from(cats.matchAll(/id:\s*'([a-z]+)'/g), ([, v]) => v);
   assert.deepEqual(ids, ['recharge', 'issue', 'dispute', 'account']);
 
-  // 一类可配多个客服：逗号分隔、去重；全部留空回退到通用客服账号 SUPPORT_ACCOUNT_ID。
-  assert.match(cats, /accountIds:\s*resolveAccounts\(/);
-  assert.match(cats, /\.split\(','\)/);
-  // 回退到通用客服账号的语义不变;外面多包了一层 ID 归一化 ——
-  // 旧配置里是 OpenIM 的 32 位十六进制,而 chat-core 的建单聊接口只收 UUID。
-  assert.match(
-    cats,
-    /deduped\.length > 0\s*\?\s*deduped\s*:\s*\[normalizeSupportAccountId\(SUPPORT_ACCOUNT_ID\)\]/,
-  );
-  assert.match(cats, /export function normalizeSupportAccountId/);
+  // 客服账号已改为后端下发(GET /support/config)。这个模块只剩展示元数据 ——
+  // 一旦它又开始读 process.env,就等于把「换客服要重新出包发版」改回去了。
+  assert.doesNotMatch(cats, /process\.env/);
+  assert.doesNotMatch(cats, /accountIds/);
+  assert.doesNotMatch(cats, /normalizeSupportAccountId|resolveAccounts/);
 
-  assert.match(cfg, /export const SUPPORT_ACCOUNT_ID\s*=/);
-  assert.match(cfg, /\|\|\s*['"]imAdmin['"]/);
+  // imAdmin 是 OpenIM 时代的系统账号,自研栈里不存在 —— 回退到它会让入口渲染成功、
+  // 一点就被后端以「用户不存在」拒绝。这个默认值不能再出现。
+  assert.doesNotMatch(cfg, /export const SUPPORT_ACCOUNT_ID\s*=/);
+  assert.doesNotMatch(cfg, /['"]imAdmin['"]/);
 
   // 点类型不再直接开会话，而是进「客服头像页」，带上 category 参数（会话解析下沉到头像页）。
   assert.match(
@@ -89,21 +86,24 @@ test('customer service exposes recharge/issue/dispute/account with env override 
   assert.doesNotMatch(screen, /ensureDirectConversation\(/);
 });
 
-test('support-agents route + screen use one unified support avatar and open a fenced 1:1 chat', () => {
+test('support-agents screen reads agents from the server config and opens a fenced 1:1 chat', () => {
   const route = read('app/(tabs)/profile/support-agents.tsx');
   const screen = read('src/features/profile/screens/SupportAgentsScreen.tsx');
 
   assert.match(route, /SupportAgentsScreen/);
 
-  // 客服统一头像：不逐个拉账号真实头像/昵称/会员框，用同一个 headset 徽章。
-  assert.match(screen, /name="headset"/);
-  assert.doesNotMatch(screen, /fetchUserProfile|useSupportAgents/);
-  assert.doesNotMatch(screen, /getAvatarFrameSource|<Avatar|MemberName/);
+  // 客服账号来自后端下发,不再是编译期常量;屏幕自己不查用户,
+  // /support/config 已经带上了渲染所需的昵称与头像。
+  assert.match(screen, /useSupportConfigStore/);
+  assert.match(screen, /selectSupportAgents\(config, category\.id\)/);
+  assert.doesNotMatch(screen, /accountIds|process\.env/);
+  assert.doesNotMatch(screen, /fetchUserProfile/);
 
-  // 一类可有多个客服账号，逐行路由到各自 OpenIM 账号；点头像开 1:1 会话。
-  assert.match(screen, /accountIds/);
-  assert.match(screen, /ensureDirectConversation\(agent\.id/);
-  assert.match(screen, /getChatDetailHref\(\s*['"]profile['"],\s*agent\.id/);
+  // 没设头像的客服仍回落到 headset 徽章 —— 这一屏里「这是客服」比「这是谁」更重要。
+  assert.match(screen, /name="headset"/);
+
+  assert.match(screen, /ensureDirectConversation\(agent\.userID/);
+  assert.match(screen, /getChatDetailHref\(\s*['"]profile['"],\s*agent\.userID/);
 
   // 会话解析较慢时用户可能已离场：用单调 focus 代次守卫（而非会在重新聚焦后重置的布尔），
   // 挡住「离开→回来」期间的迟到解析，避免从非活跃屏幕把聊天页推入栈。
@@ -119,8 +119,8 @@ test('support-agents route + screen use one unified support avatar and open a fe
   // 失败弹窗不把原始 SDK/OpenIM 错误文案展示给用户；改通用本地化提示 + reportError 上报结构化上下文。
   assert.match(screen, /reportError\(/);
   assert.doesNotMatch(screen, /error instanceof Error \? error\.message/);
-  // OpenIM 客服账号也是用户标识，不得进入 Sentry extra；序号足够定位配置项。
-  assert.doesNotMatch(screen, /agent:\s*agent\.id/);
+  // 客服账号也是用户标识，不得进入 Sentry extra；序号足够定位配置项。
+  assert.doesNotMatch(screen, /agent:\s*agent\.(id|userID)/);
   assert.match(screen, /agentIndex:\s*agent\.index/);
 });
 
@@ -418,16 +418,21 @@ test('MemberCenterScreen routes configured support and otherwise shows a clear f
   const src = read('src/features/profile/screens/MemberCenterScreen.tsx');
   const env = read('.env.example');
 
-  assert.match(src, /process\.env\.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID/);
+  // 会员客服来自后端下发的 membership 类,不再是编译期变量。
+  assert.doesNotMatch(src, /process\.env\.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID/);
+  assert.match(src, /selectSupportAgents\(supportConfig, 'membership'\)/);
   assert.match(
     src,
-    /getUserProfileHref\([\s\S]*'profile',[\s\S]*membershipSupportUserId/,
+    /getUserProfileHref\([\s\S]*'profile',[\s\S]*agent\.userID/,
   );
   assert.match(src, /router\.push/);
+  // 没配仍是优雅降级的 Alert,不回退到任何默认账号。
   assert.match(src, /Alert\.alert/);
   assert.match(src, /defaultValue: '客服账号暂未配置'/);
   assert.match(src, /defaultValue: '请联系平台官方客服咨询会员开通或升级。'/);
-  assert.match(env, /EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID=/);
+  // 这组构建期变量已作废,.env.example 不该再教人去配。
+  assert.doesNotMatch(env, /EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID=/);
+  assert.doesNotMatch(env, /EXPO_PUBLIC_SUPPORT_[A-Z_]*=/);
   assert.doesNotMatch(src, /微信|WeChat|支付宝|Alipay/);
 });
 

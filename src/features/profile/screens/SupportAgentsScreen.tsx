@@ -11,15 +11,15 @@ import { reportError } from '@/observability/sentry';
 import { getChatDetailHref } from '@/features/user/utils/routes';
 import { ensureDirectConversation } from '@/chat-core/client';
 import { getSupportCategory } from '@/features/profile/support-categories';
+import { Avatar } from '@/components/ui/avatar';
+import { useSupportConfigStore } from '@/stores/supportConfigStore';
+import { selectSupportAgents } from '@/stores/support-config-selectors';
+import type { SupportAgent } from '@/services/api/support';
 
 const AVATAR_SIZE = 48;
 
-interface SupportAgent {
-  /** 原始账号 ID，用于发起单聊与列表 key。 */
-  id: string;
-  /** 在该类型中的序号（多客服时用于编号显示）。 */
-  index: number;
-}
+/** 列表项 = 后端下发的客服 + 它在本类中的序号（多客服且无昵称时用于编号显示）。 */
+type SupportAgentRow = SupportAgent & { index: number };
 
 const s = StyleSheet.create({
   container: { flex: 1 },
@@ -62,20 +62,31 @@ export default function SupportAgentsScreen() {
     ? t(category.labelKey)
     : t('profile.customerService.title');
 
-  // 客服统一头像：不逐个拉账号真实头像/昵称/框——同类里的多个客服只是路由到不同的
-  // OpenIM 账号，展示上用同一个客服头像（耳麦徽章）+ 名称（单个「在线客服」，多个则编号）。
-  const agents = useMemo<SupportAgent[]>(
-    () => (category?.accountIds ?? []).map((id, index) => ({ id, index })),
-    [category?.accountIds],
+  // 客服账号由后端下发(管理台维护),不再是编译期常量。
+  const config = useSupportConfigStore((state) => state.config);
+  const loading = useSupportConfigStore((state) => state.loading);
+  const fetchConfig = useSupportConfigStore((state) => state.fetchConfig);
+
+  const agents = useMemo<SupportAgentRow[]>(
+    () =>
+      (category
+        ? selectSupportAgents(config, category.id)
+        : []
+      ).map((agent, index) => ({ ...agent, index })),
+    [category, config],
   );
   const multiple = agents.length > 1;
+  // 后端带了真实昵称就用真实昵称;没有(理论上不会,nickname 非空)才回落到
+  // 通用名称,多客服时编号以免几行长得一模一样。
   const agentName = useCallback(
-    (agent: SupportAgent) =>
-      multiple
+    (agent: SupportAgentRow) => {
+      if (agent.nickname.trim()) return agent.nickname;
+      return multiple
         ? t('profile.customerService.agentIndexedName', {
             index: agent.index + 1,
           })
-        : t('profile.customerService.agentFallbackName'),
+        : t('profile.customerService.agentFallbackName');
+    },
     [multiple, t],
   );
 
@@ -86,26 +97,29 @@ export default function SupportAgentsScreen() {
   useFocusEffect(
     useCallback(() => {
       focusGenerationRef.current += 1;
+      // 每次进入都重拉:管理台换了客服之后,用户不该需要重启 App 才看到。
+      // store 的 inFlight 去重保证并发进入只发一次请求。
+      void fetchConfig({ force: true });
       return () => {
         focusGenerationRef.current += 1;
       };
-    }, []),
+    }, [fetchConfig]),
   );
 
   const handleOpenAgent = useCallback(
-    async (agent: SupportAgent) => {
+    async (agent: SupportAgentRow) => {
       if (openingRef.current) return;
       openingRef.current = true;
       const requestGeneration = focusGenerationRef.current;
       const isStale = () => focusGenerationRef.current !== requestGeneration;
       const chatTitle = agentName(agent);
       try {
-        const conversation = await ensureDirectConversation(agent.id);
+        const conversation = await ensureDirectConversation(agent.userID);
         if (isStale()) return;
         router.push(
           getChatDetailHref(
             'profile',
-            agent.id,
+            agent.userID,
             chatTitle,
             undefined,
             conversation.conversationID,
@@ -152,7 +166,7 @@ export default function SupportAgentsScreen() {
   );
 
   const renderAgent = useCallback(
-    ({ item, index }: { item: SupportAgent; index: number }) => (
+    ({ item, index }: { item: SupportAgentRow; index: number }) => (
       <View>
         <Pressable
           style={s.row}
@@ -160,9 +174,15 @@ export default function SupportAgentsScreen() {
             void handleOpenAgent(item);
           }}
         >
-          <View style={[s.avatar, d.avatar]}>
-            <Ionicons name="headset" size={AVATAR_SIZE * 0.5} color={colors.white} />
-          </View>
+          {item.avatarUrl ? (
+            <Avatar size={AVATAR_SIZE} uri={item.avatarUrl} name={item.nickname} />
+          ) : (
+            // 没设头像的客服账号仍用耳麦徽章,而不是昵称首字母 —— 这一屏里
+            // 「这是客服」比「这是谁」更重要。
+            <View style={[s.avatar, d.avatar]}>
+              <Ionicons name="headset" size={AVATAR_SIZE * 0.5} color={colors.white} />
+            </View>
+          )}
           <View style={s.rowText}>
             <Text style={d.name} numberOfLines={1}>
               {agentName(item)}
@@ -184,12 +204,17 @@ export default function SupportAgentsScreen() {
       <NavHeader title={title} />
       {agents.length === 0 ? (
         <View style={s.center}>
-          <Text style={d.empty}>{t('profile.customerService.empty')}</Text>
+          {/* 首次加载时先不喊「暂无客服」——那会在一次正常的网络往返里闪一下误导文案。 */}
+          <Text style={d.empty}>
+            {loading && !config
+              ? t('common.loading', { defaultValue: '加载中…' })
+              : t('profile.customerService.empty')}
+          </Text>
         </View>
       ) : (
         <FlatList
           data={agents}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.userID}
           renderItem={renderAgent}
           ListHeaderComponent={
             <Text style={[s.intro, d.intro]}>
