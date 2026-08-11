@@ -29,6 +29,12 @@ const PREVIEW_FIELD_MAX = 60;
  * i18next 会把 `{{title}}` **原样**留在结果里(defaultValue 只在 key 缺失时才
  * 用得上,而这些 key 都是存在的),列表上就显示成「[笔记] {{title}}」。
  * 值缺失/不是字符串时退回不带占位的纯标签,而不是留一个空插值。
+ *
+ * 兜底同样要过 i18n(codex review 修正)。原来是 `if (!text) return fallback`
+ * 直接吐硬编码中文,于是英/日/韩/西语用户遇到旧数据或字段残缺的卡片时,会话
+ * 列表里冒出一行中文标签。改成拿同一条词条、插一个空值再 trim ——
+ * 五种语言的模板占位符都在末尾,裁掉即得纯标签(「[Note] {{title}}」→「[Note]」)。
+ * 硬编码的 fallback 退居真正的最后一道:词条本身缺失时才用得上。
  */
 function tCardPreview(
   key: string,
@@ -37,7 +43,7 @@ function tCardPreview(
   raw: unknown,
 ): string {
   const text = typeof raw === 'string' ? raw.trim() : '';
-  if (!text) return fallback;
+  if (!text) return tPreview(key, fallback, { [name]: '' }).trim() || fallback;
   const clamped =
     text.length > PREVIEW_FIELD_MAX
       ? `${text.slice(0, PREVIEW_FIELD_MAX)}…`

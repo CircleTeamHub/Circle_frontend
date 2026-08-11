@@ -30,7 +30,17 @@ export const TYPING_DISPLAY_MS = 4_000;
  * store 里的消息 = 线上 DTO + 客户端本地态:
  * failed 只在乐观消息(height=0)发送失败时置位,永不上行。
  */
-export type StoredChatMessage = ChatMessageDto & { failed?: boolean };
+export type StoredChatMessage = ChatMessageDto & {
+  failed?: boolean;
+  /**
+   * 标红那一刻会话里的最大 height —— 「这次失败之前服务端已确认到第几条」。
+   *
+   * 会话预览的「发送失败」前缀据此判断这次失败是不是最新一次尝试。不能拿
+   * createdAt 比:失败气泡是设备时钟、已确认消息是服务端时钟,跨域比大小会
+   * 让时钟快的设备一直挂着撤不掉的前缀。详见 features/messages/utils/failed-preview。
+   */
+  failedAfterHeight?: number;
+};
 
 interface ChatStoreState {
   connected: boolean;
@@ -86,6 +96,8 @@ interface ChatStoreState {
   markConversationReadLocal: (conversationId: string) => void;
   /** 乐观消息发送失败:按 d 标记,气泡转失败态。 */
   markMessageFailed: (conversationId: string, d: string) => void;
+  /** 重发开始:失败气泡回到「发送中」(清 failed,sendStatus 3→1)。 */
+  markMessageRetrying: (conversationId: string, d: string) => void;
   /** 本地删除一条消息(仅本端视图;服务端删除随后续批次)。 */
   removeMessage: (conversationId: string, messageId: string) => void;
   /**
@@ -539,13 +551,44 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       (m) => m.d === d && m.height === 0 && !(m as StoredChatMessage).failed,
     );
     if (index < 0) return;
-    const next: StoredChatMessage = { ...existing[index], failed: true };
+    // 快照当前最大 height:会话预览据此判断这次失败是不是最新一次尝试
+    // (跨时钟域比 createdAt 会误报,见 failed-preview)。
+    let failedAfterHeight = 0;
+    for (const message of existing) {
+      if (message.height > failedAfterHeight) failedAfterHeight = message.height;
+    }
+    const next: StoredChatMessage = {
+      ...existing[index],
+      failed: true,
+      failedAfterHeight,
+    };
     set({
       messagesByConversation: {
         ...messagesByConversation,
         [conversationId]: [
           ...existing.slice(0, index),
           next,
+          ...existing.slice(index + 1),
+        ],
+      },
+    });
+  },
+
+  markMessageRetrying: (conversationId, d) => {
+    const { messagesByConversation } = get();
+    const existing = messagesByConversation[conversationId] ?? [];
+    const index = existing.findIndex(
+      (m) => m.d === d && m.height === 0 && (m as StoredChatMessage).failed,
+    );
+    if (index < 0) return;
+    const { failed: _failed, failedAfterHeight: _at, ...rest } =
+      existing[index] as StoredChatMessage;
+    set({
+      messagesByConversation: {
+        ...messagesByConversation,
+        [conversationId]: [
+          ...existing.slice(0, index),
+          rest,
           ...existing.slice(index + 1),
         ],
       },

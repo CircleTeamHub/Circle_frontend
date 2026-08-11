@@ -27,7 +27,7 @@ const __localDbStub = {
 };
 
 
-function loadMappers({ withRealLocale = false } = {}) {
+function loadMappers({ withRealLocale = false, locale = 'zh' } = {}) {
   const filePath = path.join(process.cwd(), 'src/chat-core/mappers.ts');
   const transpiled = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
     compilerOptions: {
@@ -49,14 +49,14 @@ function loadMappers({ withRealLocale = false } = {}) {
         }
         // 真词条 + i18next 的插值语义:只替换传进来的变量,没传的原样留下
         // `{{x}}`(这正是「[笔记] {{title}}」漏到列表上的机制)。
-        const zh = JSON.parse(
+        const bundle = JSON.parse(
           fs.readFileSync(
-            path.join(process.cwd(), 'src/i18n/locales/zh.json'),
+            path.join(process.cwd(), `src/i18n/locales/${locale}.json`),
             'utf8',
           ),
         );
         const lookup = (key) =>
-          key.split('.').reduce((node, part) => node?.[part], zh);
+          key.split('.').reduce((node, part) => node?.[part], bundle);
         return {
           default: {
             t: (key, params) => {
@@ -69,7 +69,7 @@ function loadMappers({ withRealLocale = false } = {}) {
                 raw,
               );
             },
-            language: 'zh',
+            language: locale,
           },
         };
       }
@@ -177,6 +177,39 @@ test('卡片没带标题/名字时退回纯标签,不留空占位', () => {
       assert.ok(!preview.includes('{{'), `${type} 漏了占位符: ${preview}`);
       assert.equal(preview, preview.trim());
       assert.notEqual(preview, '');
+    }
+  }
+});
+
+test('卡片缺字段时的兜底也要跟随语言,不能漏中文出去', () => {
+  // 回归 codex review:`if (!text) return fallback` 直接返回硬编码中文,
+  // 于是英/日/韩/西语用户在会话列表里看到中文标签。
+  const CHINESE = /[一-鿿]/;
+  const cases = [
+    { locale: 'en', type: 'note-card', expect: /\[Note\]/ },
+    { locale: 'en', type: 'friend-card', expect: /\[Card\]/ },
+    { locale: 'en', type: 'circle-card', expect: /\[Card\]/ },
+    { locale: 'ja', type: 'note-card', expect: /ノート/ },
+    { locale: 'ko', type: 'plaza-post-card', expect: /./ },
+    { locale: 'es', type: 'verification-card', expect: /./ },
+  ];
+
+  for (const { locale, type, expect } of cases) {
+    const { getChatMessagePreview } = loadMappers({
+      withRealLocale: true,
+      locale,
+    });
+    // 字段缺失 / 空白 / 类型不对,三种都要走兜底。
+    for (const content of [{}, { title: '  ', nickname: '  ', name: '  ' }]) {
+      const preview = getChatMessagePreview(dto({ type, content }));
+      assert.ok(!preview.includes('{{'), `${locale}/${type}: ${preview}`);
+      assert.equal(preview, preview.trim());
+      assert.notEqual(preview, '');
+      assert.ok(
+        !CHINESE.test(preview),
+        `${locale}/${type} 漏了中文兜底: ${preview}`,
+      );
+      assert.match(preview, expect);
     }
   }
 });

@@ -49,6 +49,7 @@ function loadClient({ blocked, sendFails = false }) {
     outboxUpserts: [],
     sentPayloads: [],
     failedMarks: [],
+    retryMarks: [],
     removed: [],
   };
   class CreditPolicyError extends Error {}
@@ -62,6 +63,9 @@ function loadClient({ blocked, sendFails = false }) {
     },
     markMessageFailed: (conversationId, d) => {
       calls.failedMarks.push({ conversationId, d });
+    },
+    markMessageRetrying: (conversationId, d) => {
+      calls.retryMarks.push({ conversationId, d });
     },
     removeMessage: (conversationId, messageId) => {
       calls.removed.push({ conversationId, messageId });

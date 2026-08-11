@@ -459,6 +459,16 @@ export function finishMediaSend(d: string): void {
 }
 
 /**
+ * 正在重发的 deliveryId。
+ *
+ * 媒体重发要重跑整条「presign + 上传 + 发送」,可能几十秒。这期间气泡还红着、
+ * mediaRetries 里的闭包也还在 —— 不挡住的话用户多按几下就是多跑几遍上传:
+ * 重复取签名、把同一份原图和缩略图再传一遍,存储里留下没人引用的对象。
+ * 复用同一个 d 只能让最后落库的那条聊天消息不重复,拦不住上传本身。
+ */
+const retriesInFlight = new Set<string>();
+
+/**
  * G-01 重发:失败气泡长按「重发」。复用同一 d(服务端幂等兜底,绝不重复入库);
  * 成功后服务端回声(chat:msg 同 d)会替换掉失败的乐观气泡,outbox 出队。
  */
@@ -466,8 +476,27 @@ export async function retryFailedChatMessage(
   conversationId: string,
   d: string,
 ): Promise<void> {
+  if (retriesInFlight.has(d)) return;
+  retriesInFlight.add(d);
+  // 气泡从红转回「发送中」(sendStatus 3→1):长按菜单里的「重发」只在
+  // sendStatus===3 时出现,连点的入口本身就消失了,用户也看得出这一下生效了。
+  useChatStore.getState().markMessageRetrying(conversationId, d);
+  try {
+    await runRetry(conversationId, d);
+  } catch (error) {
+    // 上面把失败态清掉了,这里必须补回来 —— 否则重发再失败,气泡会一直停在
+    // 「发送中」,既没有红色提示也再没有重发入口。
+    useChatStore.getState().markMessageFailed(conversationId, d);
+    throw error;
+  } finally {
+    retriesInFlight.delete(d);
+  }
+}
+
+async function runRetry(conversationId: string, d: string): Promise<void> {
   // 媒体消息优先:它压根没进过 outbox(那时候还没有 object key),
   // 重发要从上传重跑,不是把同一份 payload 再 emit 一次。
+  // (媒体那条链路自己 catch 后调 failMediaSend,不抛到这里。)
   const media = mediaRetries.get(d);
   if (media) {
     await media();

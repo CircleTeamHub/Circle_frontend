@@ -138,10 +138,7 @@ export async function initChatLocalDb(userId: string): Promise<boolean> {
   if (handle?.userId === userId) return true;
   opening = (async (): Promise<DbHandle | null> => {
     try {
-      if (handle) {
-        await handle.db.closeAsync().catch(() => undefined);
-        handle = null;
-      }
+      if (handle) await releaseHandle(handle);
       // finalizeUnusedStatementsBeforeClosing 必须关掉(默认 true)。
       //
       // 它在关库前遍历 sqlite3_next_stmt 把连接上**所有**语句 finalize 一遍,
@@ -202,9 +199,30 @@ export async function initChatLocalDb(userId: string): Promise<boolean> {
 }
 
 export async function closeChatLocalDb(): Promise<void> {
-  const current = handle;
+  if (handle) await releaseHandle(handle);
+}
+
+/**
+ * 摘句柄 → 等积压写完 → 关连接。切号与登出都走这里。
+ *
+ * 顺序是关键(codex review)。原来是直接 `closeAsync()`:写队列里排着的回调
+ * 仍握着那个刚被关掉的连接,轮到它们时一律抛错,而 outbox / 已读水位这些
+ * 写入方都是 `warn` 一声吞掉 —— 丢的是上一个账号**还没发出去的消息**和待
+ * 上报的已读位置,用户那边没有任何提示。
+ *
+ * 先把 handle 摘掉再 drain,循环才一定收敛:此后新的写入方在 requireDb() 就
+ * 拿到 null 直接返回,不会再往旧库排队(每个写入方都是 requireDb() 之后
+ * **同步**入队的,不存在跨 await 的窗口)。
+ */
+async function releaseHandle(current: DbHandle): Promise<void> {
   handle = null;
-  if (current) await current.db.closeAsync().catch(() => undefined);
+  // 队列在 await 期间还可能被追加(摘句柄那一刻已经进到队里的),等到它不再变。
+  let drained: Promise<unknown> | null = null;
+  while (drained !== writeQueue) {
+    drained = writeQueue;
+    await drained.catch(() => undefined);
+  }
+  await current.db.closeAsync().catch(() => undefined);
 }
 
 function requireDb(): DbHandle | null {

@@ -26,7 +26,12 @@ function transpile(rel) {
 
 /** 复刻真实 expo-sqlite 的关键语义:连接内不允许事务嵌套。 */
 function fakeDatabase() {
-  const state = { inTransaction: false, statements: [], transactions: 0 };
+  const state = {
+    inTransaction: false,
+    statements: [],
+    transactions: 0,
+    closed: false,
+  };
   const tick = () => new Promise((resolve) => setImmediate(resolve));
   const db = {
     state,
@@ -42,9 +47,14 @@ function fakeDatabase() {
     },
     runAsync: async (sql, ...params) => {
       await tick();
+      // 真 expo-sqlite 在关掉的连接上执行语句直接抛(NativeDatabase 已释放)。
+      if (state.closed) throw new Error('Access to closed resource');
       state.statements.push({ sql, params });
     },
-    closeAsync: async () => tick(),
+    closeAsync: async () => {
+      await tick();
+      state.closed = true;
+    },
     withTransactionAsync: async (task) => {
       if (state.inTransaction) {
         throw new Error(
@@ -64,7 +74,9 @@ function fakeDatabase() {
   return db;
 }
 
+/** `db` 可以是单个句柄,也可以是每次 open 都造一个新句柄的工厂(切号用)。 */
 function loadLocalDb(db, opened = []) {
+  const openDb = typeof db === 'function' ? db : () => db;
   const context = {
     console: { warn: (...args) => context.__warnings.push(args) },
     setTimeout,
@@ -80,7 +92,7 @@ function loadLocalDb(db, opened = []) {
         return {
           openDatabaseAsync: async (name, options) => {
             opened.push({ name, options });
-            return db;
+            return openDb();
           },
         };
       }
@@ -184,4 +196,96 @@ test('串行化不吃掉失败:一批炸了后面的照常写', async () => {
   );
   assert.equal(inserted.length, 1);
   assert.equal(inserted[0].params[0], 'ok');
+});
+
+test('切号:排队里的写入先落完,再关旧账号的库', async () => {
+  // codex review:initChatLocalDb 不等 writeQueue 就 closeAsync 旧句柄 ——
+  // 队列里的回调仍握着那个已经关掉的连接,执行时抛错,而 outbox / 已读水位
+  // 这些写入方都是 warn 一声吞掉。丢的是上一个账号还没发出去的消息和待上报
+  // 的已读位置,用户永远看不到任何提示。
+  const dbs = [];
+  const { api, warnings } = loadLocalDb(() => {
+    const db = fakeDatabase();
+    dbs.push(db);
+    return db;
+  });
+  assert.equal(await api.initChatLocalDb('user-1'), true);
+
+  // 卡住第一笔 outbox 写入,制造积压。
+  const first = dbs[0];
+  const original = first.runAsync;
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  let gated = true;
+  first.runAsync = async (sql, ...params) => {
+    if (gated && sql.includes('INSERT OR REPLACE INTO outbox')) {
+      gated = false;
+      await gate;
+    }
+    return original(sql, ...params);
+  };
+
+  const entry = (d) => ({
+    d,
+    conversationId: 'conv-1',
+    payload: { conversationId: 'conv-1', type: 'text', content: {}, d },
+    createdAt: '2026-08-11T00:00:00.000Z',
+  });
+  const writes = [api.outboxUpsert(entry('d-1')), api.outboxUpsert(entry('d-2'))];
+
+  // 积压还在的时候切号。
+  const switching = api.initChatLocalDb('user-2');
+  release();
+  await Promise.all([...writes, switching]);
+
+  const outboxWrites = first.state.statements.filter((s) =>
+    s.sql.includes('INSERT OR REPLACE INTO outbox'),
+  );
+  assert.equal(outboxWrites.length, 2, '排队中的待发消息随切号丢了');
+  assert.deepEqual(
+    warnings.filter((w) => String(w[0]).includes('outbox')),
+    [],
+  );
+  // 旧库最终仍要关掉(否则切号后两条连接一起挂着)。
+  assert.equal(first.state.closed, true);
+  assert.equal(dbs.length, 2);
+  assert.equal(dbs[1].state.closed, false);
+});
+
+test('closeChatLocalDb 同样先把积压写完', async () => {
+  const db = fakeDatabase();
+  const { api } = loadLocalDb(db);
+  await api.initChatLocalDb('user-1');
+
+  const original = db.runAsync;
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  let gated = true;
+  db.runAsync = async (sql, ...params) => {
+    if (gated && sql.includes('INSERT INTO pending_reads')) {
+      gated = false;
+      await gate;
+    }
+    return original(sql, ...params);
+  };
+
+  const writes = [
+    api.pendingReadUpsert('conv-1', 7),
+    api.pendingReadUpsert('conv-2', 9),
+  ];
+  const closing = api.closeChatLocalDb();
+  release();
+  await Promise.all([...writes, closing]);
+
+  assert.equal(
+    db.state.statements.filter((s) =>
+      s.sql.includes('INSERT INTO pending_reads'),
+    ).length,
+    2,
+  );
+  assert.equal(db.state.closed, true);
 });
