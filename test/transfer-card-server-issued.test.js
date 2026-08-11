@@ -149,3 +149,28 @@ test(
     assert.match(serverOnly[1], /'transfer-card'/);
   },
 );
+
+/**
+ * 跨仓契约测试自己的看门人。
+ *
+ * 这类测试「找不到后端就 skip」的设计对本地开发是对的,对 CI 是危险的:CI 此前
+ * 只检出本仓库,于是 5 条跨仓契约(错误码注册表、聊天协议常量、敏感词错误码、
+ * 朋友圈事件名、可发消息类型白名单)在每次 PR 上**全部静默跳过** —— 而它们要防的
+ * 正是「前后端各自自洽、只有比对才看得见」的漂移,transfer-card 那次就是这么漏过去的。
+ *
+ * 所以 CI 必须并排检出后端,而这几行断言负责让那个接线不被悄悄删掉。
+ */
+test('CI checks out the backend so the cross-repo contracts actually run', () => {
+  const ci = read('.github/workflows/ci.yml');
+  const verify = ci.slice(ci.indexOf('\n  verify:'));
+
+  // 后端与前端并排检出 —— 跨仓测试按 <cwd>/../circle_be 找源码。
+  assert.match(verify, /repository: CircleTeamHub\/circle_be/);
+  assert.match(verify, /path: circle_be/);
+  assert.match(verify, /path: Circle_frontend/);
+  assert.match(verify, /working-directory: Circle_frontend/);
+  // npm 缓存键必须跟着前端的 lockfile 走,否则 setup-node 找不到它。
+  assert.match(verify, /cache-dependency-path: Circle_frontend\/package-lock\.json/);
+  // 布局一旦变动要 fail 而不是 skip:少了这道断言,5 条契约会安静地全部消失。
+  assert.match(verify, /would silently skip/);
+});

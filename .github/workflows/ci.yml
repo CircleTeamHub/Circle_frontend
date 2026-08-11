@@ -73,15 +73,55 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
+    # 双仓并排检出。test/ 下有 5 条跨仓契约测试（错误码注册表、聊天协议常量、
+    # 敏感词错误码、朋友圈事件名、可发消息类型白名单），它们都按
+    # `<cwd>/../circle_be` 找后端源码，找不到就 **skip**。此前 CI 只检出本仓库，
+    # 于是这 5 条在每次 PR 上都静默跳过 —— 而它们要防的正是「前后端各自自洽、
+    # 只有比对才看得见」的漂移（transfer-card 那次就是这么漏过去的）。
+    # 并排放好之后 5 条全部真跑，测试代码一行不用改。
+    defaults:
+      run:
+        working-directory: Circle_frontend
+
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          path: Circle_frontend
+
+      # 对 main 校验：契约的另一端是「已合入的后端」。配套后端改动的前端 PR
+      # 会在这里红，直到后端先合 —— 那正是这类成对改动应有的合并顺序。
+      # 公开仓库，默认 GITHUB_TOKEN 即可，无需额外凭据。
+      - name: Checkout backend (cross-repo contracts)
+        uses: actions/checkout@v7
+        with:
+          repository: CircleTeamHub/circle_be
+          ref: main
+          path: circle_be
+
+      # 跨仓测试「找不到后端就跳过」的设计对本地开发是对的，对 CI 是危险的：
+      # 布局一旦变动，5 条契约会安静地全部消失，CI 照旧全绿。这里显式断言，
+      # 让它 fail 而不是 skip。
+      - name: Assert backend contract sources are present
+        run: |
+          set -euo pipefail
+          for f in \
+            ../circle_be/src/chat/chat.constants.ts \
+            ../circle_be/src/common/app-error-codes.ts
+          do
+            if [ ! -f "$f" ]; then
+              echo "::error::$f not found — cross-repo contract tests would silently skip"
+              exit 1
+            fi
+          done
+          echo "OK: backend contract sources present"
 
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: npm
+          cache-dependency-path: Circle_frontend/package-lock.json
 
       - name: Install Dependencies
         run: npm ci
