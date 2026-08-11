@@ -1,20 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const METADATA_ENV = [
-  'EXPO_PUBLIC_API_URL',
-  'EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID',
-];
-
-// support-categories.ts 里每类客服（充值 / 纠纷 / 账号申诉 / 账号客服）的专属账号环境变量。
-// 任一为空会回退到通用 EXPO_PUBLIC_SUPPORT_ACCOUNT_ID；后者也空时最终回退到系统管理账号
-// imAdmin —— 把敏感客服会话路由到非客服的意外身份。发布须保证有兜底：见 validateSupportAccounts。
-const CATEGORY_SUPPORT_ENV = [
-  'EXPO_PUBLIC_SUPPORT_RECHARGE_ID',
-  'EXPO_PUBLIC_SUPPORT_ISSUE_ID',
-  'EXPO_PUBLIC_SUPPORT_DISPUTE_ID',
-  'EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID',
-];
+const METADATA_ENV = ['EXPO_PUBLIC_API_URL'];
 
 const SIGNING_ENV = [
   'ANDROID_KEYSTORE_BASE64',
@@ -110,46 +97,6 @@ function collectBuildEnvWarnings({ env }) {
   return warnings;
 }
 
-// 客服路由必须有可信兜底：要么配了通用客服账号 EXPO_PUBLIC_SUPPORT_ACCOUNT_ID，要么四类
-// 专属账号全配齐。两者都缺时，充值 / 纠纷 / 账号类客服会静默落到系统账号 imAdmin —— 绝不能
-// 带着这种配置发正式包。
-function validateSupportAccounts(errors, env) {
-  if (env.EXPO_PUBLIC_SUPPORT_ACCOUNT_ID?.trim()) return;
-
-  const missing = CATEGORY_SUPPORT_ENV.filter((name) => !env[name]?.trim());
-  if (missing.length > 0) {
-    errors.push(
-      `Support routing would fall back to the system account (imAdmin): set EXPO_PUBLIC_SUPPORT_ACCOUNT_ID, or all of ${CATEGORY_SUPPORT_ENV.join(
-        ', ',
-      )} (missing: ${missing.join(', ')}).`,
-    );
-  }
-}
-
-const UUID_RE =
-  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-const LEGACY_OPENIM_ID_RE = /^[0-9a-fA-F]{32}$/;
-
-// 自研聊天栈的建单聊接口收后端 UUID。旧配置里这些是 OpenIM userID(去连字符的
-// 32 位十六进制),而迁移把那层转换删掉了 —— 沿用旧值的部署四类客服都能渲染出来,
-// 但一点就失败,而「非空」校验完全看不出来。
-// 32 位十六进制可无损还原成 UUID,运行时会自动补连字符;其余形态在这里拦下,
-// 不让它带着一个点不开的客服中心发正式包。
-function validateSupportAccountShapes(errors, env) {
-  for (const name of ['EXPO_PUBLIC_SUPPORT_ACCOUNT_ID', ...CATEGORY_SUPPORT_ENV]) {
-    const raw = env[name]?.trim();
-    if (!raw) continue;
-    for (const id of raw.split(',').map((value) => value.trim()).filter(Boolean)) {
-      if (UUID_RE.test(id) || LEGACY_OPENIM_ID_RE.test(id)) continue;
-      errors.push(
-        `${name} contains "${id}", which is neither a backend UUID nor a convertible 32-hex OpenIM id. ` +
-          'The chat-core direct-conversation endpoint requires the UUID form; this row would render but fail on tap. ' +
-          'Migrate the value to the account UUID.',
-      );
-    }
-  }
-}
-
 // 「发布就绪」类缺口：变量压根没配。带着它发正式包是事故（客服会话落到 imAdmin），
 // 但它跟「这份代码还能不能编译成 release 包」毫无关系 —— 每日构建签的是一次性密钥、
 // 产物按设计永不分发，对它而言这些值缺失是无害的。故按调用方分级：
@@ -158,7 +105,6 @@ function collectReleaseConfigGaps({ env }) {
   const gaps = [];
 
   requireValues(gaps, env, METADATA_ENV);
-  validateSupportAccounts(gaps, env);
 
   return gaps;
 }
@@ -168,7 +114,6 @@ function collectReleaseConfigGaps({ env }) {
 function validateBuildEnvShape({ env }) {
   const errors = [];
 
-  validateSupportAccountShapes(errors, env);
   validateUrl(errors, 'EXPO_PUBLIC_API_URL', env.EXPO_PUBLIC_API_URL, 'https:');
   validateSentryDsn(errors, env);
 
@@ -411,5 +356,4 @@ module.exports = {
   validateReleaseMetadata,
   validateSigningConfig,
   validateSentryUploadConfig,
-  validateSupportAccounts,
 };

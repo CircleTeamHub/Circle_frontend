@@ -199,10 +199,6 @@ test('Android release workflow preflight validates the exact public tag without 
   assert.match(preflight, /fetch-depth: 0/);
   assert.match(preflight, /persist-credentials: false/);
   assert.match(preflight, /validate-android-release\.js metadata/);
-  assert.match(
-    preflight,
-    /EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: \$\{\{ vars\.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID \}\}/,
-  );
   assert.match(preflight, /git rev-parse "refs\/tags\/\$RELEASE_TAG\^\{commit\}"/);
   assert.match(preflight, /test "\$\(git rev-parse HEAD\)" = "\$tag_commit"/);
   assert.match(preflight, /git merge-base --is-ancestor HEAD origin\/main/);
@@ -286,25 +282,6 @@ test('Android release workflow builds and verifies a private signed artifact', (
     /EXPO_PUBLIC_CHAT_WS_URL: \$\{\{ vars\.EXPO_PUBLIC_CHAT_WS_URL \}\}/,
   );
 
-  assert.match(
-    build,
-    /EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: \$\{\{ vars\.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID \}\}/,
-  );
-  // 客服中心各入口的专属账号必须注入构建环境，否则 support-categories.ts 编译期
-  // 回落到 imAdmin，生产用户被导去系统管理员而非对应真人客服（评审 P2）。
-  for (const supportVar of [
-    'EXPO_PUBLIC_SUPPORT_ACCOUNT_ID',
-    'EXPO_PUBLIC_SUPPORT_RECHARGE_ID',
-    'EXPO_PUBLIC_SUPPORT_ISSUE_ID',
-    'EXPO_PUBLIC_SUPPORT_DISPUTE_ID',
-    'EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID',
-  ]) {
-    assert.match(
-      build,
-      new RegExp(`${supportVar}: \\$\\{\\{ vars\\.${supportVar} \\}\\}`),
-      `${supportVar} must be injected into the release build`,
-    );
-  }
   assert.doesNotMatch(build, /SENTRY_DISABLE_AUTO_UPLOAD: ["']true["']/);
   for (const sentryValue of [
     'SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}',
@@ -527,8 +504,6 @@ test('release validation metadata requires matching app versions and secure publ
   const env = {
     RELEASE_TAG: 'v1.0.0',
     EXPO_PUBLIC_API_URL: 'https://api.windnote.test',
-    EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: 'official-support',
-    EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: '33333333-3333-4333-8333-333333333333',
   };
   const app = { version: '1.0.0', android: { versionCode: 1_000_000 } };
 
@@ -536,7 +511,6 @@ test('release validation metadata requires matching app versions and secure publ
 
   for (const name of [
     'EXPO_PUBLIC_API_URL',
-    'EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID',
   ]) {
     assert.match(
       validateReleaseMetadata({ env: { ...env, [name]: '' }, app }).join('\n'),
@@ -750,8 +724,6 @@ test('release validation CLI supports scoped and legacy validation', () => {
   const metadataEnv = {
     RELEASE_TAG: 'v1.0.0',
     EXPO_PUBLIC_API_URL: 'https://api.windnote.test',
-    EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: 'official-support',
-    EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: '33333333-3333-4333-8333-333333333333',
   };
   const signingEnv = {
     ANDROID_KEYSTORE_BASE64: 'a2V5c3RvcmU=',
@@ -922,117 +894,3 @@ test('release helper writes the latest-promotion decision to GitHub Actions outp
   }
 });
 
-test('release preflight fails closed when support routing would fall back to imAdmin', () => {
-  const {
-    validateSupportAccounts,
-  } = require('../.github/scripts/validate-android-release');
-
-  // 全空:通用与四类专属都没配 → 充值 / 纠纷 / 账号客服会静默落到系统账号 imAdmin,必须报错。
-  const blank = [];
-  validateSupportAccounts(blank, {});
-  assert.equal(blank.length, 1);
-  assert.match(blank[0], /imAdmin/);
-
-  // 只配通用客服账号 EXPO_PUBLIC_SUPPORT_ACCOUNT_ID → 通过(有可信兜底)。
-  const generic = [];
-  validateSupportAccounts(generic, {
-    EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: 'cs-generic',
-  });
-  assert.deepEqual(generic, []);
-
-  // 通用为空但四类专属全配齐 → 通过。
-  const perCategory = [];
-  validateSupportAccounts(perCategory, {
-    EXPO_PUBLIC_SUPPORT_RECHARGE_ID: 'cs-r',
-    EXPO_PUBLIC_SUPPORT_ISSUE_ID: 'cs-i',
-    EXPO_PUBLIC_SUPPORT_DISPUTE_ID: 'cs-d',
-    EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID: 'cs-a',
-  });
-  assert.deepEqual(perCategory, []);
-
-  // 专属只配了一部分、通用又为空 → 仍报错,并点名缺失的那一类。
-  const partial = [];
-  validateSupportAccounts(partial, {
-    EXPO_PUBLIC_SUPPORT_RECHARGE_ID: 'cs-r',
-  });
-  assert.equal(partial.length, 1);
-  assert.match(partial[0], /EXPO_PUBLIC_SUPPORT_ISSUE_ID/);
-
-  // 空白字符不算已配(trim 后为空) → 报错。
-  const whitespace = [];
-  validateSupportAccounts(whitespace, { EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: '   ' });
-  assert.equal(whitespace.length, 1);
-});
-
-test('release preflight forwards support-account variables so the validator can see them', () => {
-  const workflow = read('.github/workflows/android-release.yml');
-
-  // GitHub repository variables 不会自动进 process.env。preflight 步若不显式转发这些客服
-  // 变量,validateSupportAccounts 每次都看到全空、打 tag 就在测试/构建之前 fail——即便仓库
-  // 其实配好了(#131 P1)。这些必须和 build 步一致地转发。
-  const preflight = workflow.slice(
-    workflow.indexOf('Validate release metadata and ancestry'),
-    workflow.indexOf('Install dependencies'),
-  );
-  assert.ok(preflight.length > 0, 'preflight step block located');
-  for (const name of [
-    'EXPO_PUBLIC_SUPPORT_ACCOUNT_ID',
-    'EXPO_PUBLIC_SUPPORT_RECHARGE_ID',
-    'EXPO_PUBLIC_SUPPORT_ISSUE_ID',
-    'EXPO_PUBLIC_SUPPORT_DISPUTE_ID',
-    'EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID',
-  ]) {
-    assert.match(
-      preflight,
-      new RegExp(`${name}: \\$\\{\\{ vars\\.${name} \\}\\}`),
-      `preflight forwards ${name}`,
-    );
-  }
-});
-
-// 迁移把 OpenIM ID → 后端 UUID 的转换删掉了,而建单聊接口只收 UUID。
-// 沿用旧配置的部署里四类客服全都能渲染出来,但一点就失败 —— 而原来的
-// 「非空」校验完全看不出来,正式包会带着一个点不开的客服中心发出去。
-test('release validation rejects support ids that are not usable by chat-core', () => {
-  const { validateBuildEnv } = require('../.github/scripts/validate-android-release');
-  const base = {
-    EXPO_PUBLIC_API_URL: 'https://api.example.com/api/v1',
-    EXPO_PUBLIC_APP_DISPLAY_NAME: 'x',
-    EXPO_PUBLIC_ANDROID_PACKAGE: 'com.example.app',
-    EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID:
-      '11111111-1111-4111-8111-111111111111',
-  };
-
-  const bad = validateBuildEnv({
-    env: { ...base, EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: 'imAdmin' },
-  });
-  assert.ok(
-    (bad.errors ?? bad).some?.((e) => /imAdmin/.test(String(e))) ??
-      JSON.stringify(bad).includes('imAdmin'),
-    `expected a shape error, got ${JSON.stringify(bad)}`,
-  );
-
-  // 后端 UUID 直接放行。
-  const uuid = validateBuildEnv({
-    env: {
-      ...base,
-      EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: '22222222-2222-4222-8222-222222222222',
-    },
-  });
-  assert.ok(
-    !JSON.stringify(uuid).includes('neither a backend UUID'),
-    `uuid form must pass, got ${JSON.stringify(uuid)}`,
-  );
-
-  // 32 位十六进制是旧 OpenIM ID,可无损还原成 UUID,运行时会自动补连字符 —— 放行。
-  const legacy = validateBuildEnv({
-    env: {
-      ...base,
-      EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: '22222222222242228222222222222222',
-    },
-  });
-  assert.ok(
-    !JSON.stringify(legacy).includes('neither a backend UUID'),
-    `convertible legacy id must pass, got ${JSON.stringify(legacy)}`,
-  );
-});

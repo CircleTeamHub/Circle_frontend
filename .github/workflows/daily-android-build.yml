@@ -71,12 +71,6 @@ jobs:
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
           EXPO_PUBLIC_CHAT_WS_URL: ${{ vars.EXPO_PUBLIC_CHAT_WS_URL }}
           EXPO_PUBLIC_MEDIA_ORIGINS: ${{ vars.EXPO_PUBLIC_MEDIA_ORIGINS }}
-          EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: ${{ vars.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID }}
-          EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_ACCOUNT_ID }}
-          EXPO_PUBLIC_SUPPORT_RECHARGE_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_RECHARGE_ID }}
-          EXPO_PUBLIC_SUPPORT_ISSUE_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_ISSUE_ID }}
-          EXPO_PUBLIC_SUPPORT_DISPUTE_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_DISPUTE_ID }}
-          EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID }}
           EXPO_PUBLIC_SENTRY_DSN: ${{ vars.EXPO_PUBLIC_SENTRY_DSN }}
         run: node .github/scripts/validate-android-release.js build-env
 
@@ -132,15 +126,6 @@ jobs:
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
           EXPO_PUBLIC_CHAT_WS_URL: ${{ vars.EXPO_PUBLIC_CHAT_WS_URL }}
           EXPO_PUBLIC_MEDIA_ORIGINS: ${{ vars.EXPO_PUBLIC_MEDIA_ORIGINS }}
-          EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: ${{ vars.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID }}
-          # 和 android-release.yml 转发同一组客服账号变量：support-categories.ts 在
-          # 编译期读取它们，缺了就走 imAdmin 回落分支。每日构建要跑的是发布那条
-          # 代码路径，不是一条只有 CI 才会走的分支。
-          EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_ACCOUNT_ID }}
-          EXPO_PUBLIC_SUPPORT_RECHARGE_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_RECHARGE_ID }}
-          EXPO_PUBLIC_SUPPORT_ISSUE_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_ISSUE_ID }}
-          EXPO_PUBLIC_SUPPORT_DISPUTE_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_DISPUTE_ID }}
-          EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID }}
           # 运行时崩溃上报的 DSN，会被编译进包（src/observability/sentry.ts 按它决定
           # 是否 init）。与下面的 SENTRY_DISABLE_AUTO_UPLOAD 是两回事：那个管的是构建期
           # 往 Sentry 上传 source map，这个管的是包跑起来之后往哪报错。

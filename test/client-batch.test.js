@@ -90,7 +90,8 @@ test('membership upgrade 走客服协助流程，不再在 app 内直接升级�
 
   const screen = read('src/features/profile/screens/MemberCenterScreen.tsx');
   // 升级动作 = 打开与会员客服的会话，而不是直接调用升级接口 / 造幂等键。
-  assert.match(screen, /getMembershipSupportUserId\(\)/);
+  // 客服账号来自后端下发的 membership 类，不再是编译期变量。
+  assert.match(screen, /selectSupportAgents\(supportConfig, 'membership'\)/);
   assert.doesNotMatch(screen, /upgradeMembership\(/);
   assert.doesNotMatch(screen, /resolveMembershipUpgradeIdempotency\(/);
 });

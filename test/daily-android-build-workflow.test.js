@@ -118,18 +118,12 @@ test('daily Android build exercises the tag-time native release path', () => {
   assert.match(release, gradleCommand);
   assert.match(build, /working-directory: android/);
 
-  // 客服账号变量必须和 android-release.yml 的构建步一致地转发进来，否则每日构建
-  // 编译的是 imAdmin 回落分支，而不是生产真正会走的分支。
+  // 编译进包的变量必须和 android-release.yml 的构建步一致地转发进来，
+  // 否则每日构建验的不是发布那条代码路径。
   for (const name of [
     'EXPO_PUBLIC_API_URL',
     'EXPO_PUBLIC_MEDIA_ORIGINS',
     'EXPO_PUBLIC_CHAT_WS_URL',
-    'EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID',
-    'EXPO_PUBLIC_SUPPORT_ACCOUNT_ID',
-    'EXPO_PUBLIC_SUPPORT_RECHARGE_ID',
-    'EXPO_PUBLIC_SUPPORT_ISSUE_ID',
-    'EXPO_PUBLIC_SUPPORT_DISPUTE_ID',
-    'EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID',
   ]) {
     assert.match(
       build,
@@ -163,24 +157,18 @@ test('daily Android build fails loudly instead of silently passing', () => {
   assert.match(verify, /GITHUB_STEP_SUMMARY/);
 });
 
-test('daily Android build refuses to compile the support fallback branch', () => {
+test('daily Android build validates the variables it compiles in', () => {
   const workflow = read(WORKFLOW_PATH);
   const build = workflowJob(workflow, 'native_build');
   const validate = workflowStep(build, 'Validate build environment');
 
-  // 只转发变量而不校验，等于允许「变量被删/写错 → 编译 imAdmin 回落分支 → 构建全绿」。
+  // 只转发变量而不校验，等于允许「变量被写错 → 构建全绿」。
   // 这跟缺 R8 mapping 是同一类静默失效，只是更容易发生。
   assert.match(validate, /validate-android-release\.js build-env/);
   for (const name of [
     'EXPO_PUBLIC_API_URL',
     'EXPO_PUBLIC_MEDIA_ORIGINS',
     'EXPO_PUBLIC_CHAT_WS_URL',
-    'EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID',
-    'EXPO_PUBLIC_SUPPORT_ACCOUNT_ID',
-    'EXPO_PUBLIC_SUPPORT_RECHARGE_ID',
-    'EXPO_PUBLIC_SUPPORT_ISSUE_ID',
-    'EXPO_PUBLIC_SUPPORT_DISPUTE_ID',
-    'EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID',
   ]) {
     assert.match(
       validate,
@@ -202,11 +190,7 @@ test('build-env validation shares the tag-time env contract', () => {
     validateBuildEnv,
     validateReleaseMetadata,
   } = require('../.github/scripts/validate-android-release');
-  const env = {
-    EXPO_PUBLIC_API_URL: 'https://api.windnote.test',
-    EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: 'official-support',
-    EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: '33333333-3333-4333-8333-333333333333',
-  };
+  const env = { EXPO_PUBLIC_API_URL: 'https://api.windnote.test' };
 
   // 没有 RELEASE_TAG 也能通过 —— 每日构建本来就没有 tag。
   assert.deepEqual(validateBuildEnv({ env }), []);
@@ -234,7 +218,7 @@ test('build-env validation shares the tag-time env contract', () => {
 });
 
 // 每日构建签的是一次性密钥、产物按设计永远不分发（见上面两条 test）。要求它必须先配齐
-// 生产客服账号才肯编译，是把「发布就绪」当成了「能不能编译」的前置条件：变量一天没配，
+// 生产配置才肯编译，是把「发布就绪」当成了「能不能编译」的前置条件：变量一天没配，
 // assembleRelease / R8 / 打包就一天不跑，而这恰恰是每日构建唯一想守住的东西。
 // 真实后果：workflow 落地后连续 11 次全红，从没跑到过 Gradle —— 等于完全没有每日覆盖。
 // 所以「缺配置」在每日路径降级为告警，在 tag 路径保持硬失败（见下一条 test）。
@@ -252,10 +236,9 @@ test('daily build-env keeps compiling when production config is merely absent', 
     'an unset variable must not be able to dark out the daily native build',
   );
 
-  // 降级不等于消音：每一条缺失都必须仍然被报出来，否则就成了偷偷放行。
+  // 降级不等于消音：缺失必须仍然被报出来，否则就成了偷偷放行。
   const gaps = collectReleaseConfigGaps({ env: empty }).join('\n');
-  assert.match(gaps, /EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID/);
-  assert.match(gaps, /imAdmin/);
+  assert.match(gaps, /EXPO_PUBLIC_API_URL is required/);
 });
 
 // 门禁是被搬走，不是被删掉：打 tag 那条线必须原样硬失败。
@@ -266,16 +249,14 @@ test('missing production config still hard-fails the tag path', () => {
   } = require('../.github/scripts/validate-android-release');
 
   const errors = validateBuildEnv({ env: {} }).join('\n');
-  assert.match(errors, /EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID is required/);
-  assert.match(errors, /imAdmin/);
+  assert.match(errors, /EXPO_PUBLIC_API_URL is required/);
 
   // preflight 走的是 metadata scope，它必须继承同一批错误。
   const metadata = validateReleaseMetadata({
     env: { RELEASE_TAG: 'v1.0.0' },
     app: { version: '1.0.0', android: { versionCode: 1_000_000 } },
   }).join('\n');
-  assert.match(metadata, /EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID is required/);
-  assert.match(metadata, /imAdmin/);
+  assert.match(metadata, /EXPO_PUBLIC_API_URL is required/);
 });
 
 // 「配错」和「没配」是两回事：写坏的值在每日路径也必须硬失败，因为它证明的是
@@ -285,10 +266,6 @@ test('daily build-env still hard-fails on malformed values', () => {
 
   for (const [what, env] of [
     ['non-https API URL', { EXPO_PUBLIC_API_URL: 'http://a.test' }],
-    [
-      'support id that chat-core cannot open',
-      { EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: 'imAdmin' },
-    ],
     [
       'malformed Sentry DSN',
       { EXPO_PUBLIC_SENTRY_DSN: 'https://o42.ingest.sentry.io/4507' },
@@ -335,13 +312,7 @@ test('Sentry DSN is warned about when missing and rejected when malformed', () =
     collectBuildEnvWarnings,
     validateBuildEnv,
   } = require('../.github/scripts/validate-android-release');
-  const env = {
-    EXPO_PUBLIC_API_URL: 'https://api.windnote.test',
-    EXPO_PUBLIC_OPENIM_API_URL: 'https://im.windnote.test',
-    EXPO_PUBLIC_OPENIM_WS_URL: 'wss://im.windnote.test/ws',
-    EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: 'official-support',
-    EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: '33333333-3333-4333-8333-333333333333',
-  };
+  const env = { EXPO_PUBLIC_API_URL: 'https://api.windnote.test' };
 
   // 缺失 = 告警，不是错误：没有 DSN 时 app 完全正常，只是不上报。硬 fail 会把
   // 「还没接 Sentry」变成「不能发版」。
