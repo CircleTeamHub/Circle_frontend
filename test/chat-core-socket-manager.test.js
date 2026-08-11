@@ -103,7 +103,7 @@ function fakeSocketFactory() {
   return { io, socket, captured };
 }
 
-function loadManager(localDbOverrides = {}) {
+function loadManager(localDbOverrides = {}, options = {}) {
   const { io, socket, captured } = fakeSocketFactory();
   const reports = [];
   const storeModule = (() => {
@@ -124,8 +124,12 @@ function loadManager(localDbOverrides = {}) {
         state.currentUserId = v;
       },
       viewerSelfDestructDays: 0,
-      setViewerSelfDestructDays(v) {
+      viewerSelfDestructPolicyRevision: 0,
+      setViewerSelfDestructDays(v, writeOptions) {
         state.viewerSelfDestructDays = v;
+        if (!writeOptions?.remoteRefresh) {
+          state.viewerSelfDestructPolicyRevision += 1;
+        }
         state.calls.push(['setViewerSelfDestructDays', v]);
         if (state.currentUserId) {
           mmkvStore.set(
@@ -137,6 +141,7 @@ function loadManager(localDbOverrides = {}) {
       setError(v) {
         state.error = v;
       },
+      purgeExpiredBurnMessages: async () => {},
       reset() {
         state.calls.push(['reset']);
         state.connected = false;
@@ -203,7 +208,9 @@ function loadManager(localDbOverrides = {}) {
     '@/services/api/privacy': {
       fetchPrivacySettings: () => {
         apiCalls.privacyFetches += 1;
-        return Promise.resolve(apiCalls.privacyResponse);
+        return options.privacyFetch
+          ? options.privacyFetch()
+          : Promise.resolve(apiCalls.privacyResponse);
       },
     },
     './api': {
@@ -295,6 +302,50 @@ test('viewer self-destruct uses the cached policy offline and refreshes it after
   assert.equal(apiCalls.privacyFetches, 1);
   assert.equal(store.viewerSelfDestructDays, 2);
   assert.equal(mmkvStore.get('chat.viewerSelfDestructDays.u1'), '2');
+});
+
+test('cold hydration waits for the authoritative self-destruct policy', async () => {
+  let resolvePolicy;
+  const policy = new Promise((resolve) => {
+    resolvePolicy = resolve;
+  });
+  const { manager, socket, store, apiCalls } = loadManager(
+    {
+      initChatLocalDb: async () => true,
+      readLocalConversations: async () => [{ id: 'c1' }],
+    },
+    { privacyFetch: () => policy },
+  );
+
+  manager.connectChat('jwt', 'u1');
+  socket.fire('connect');
+  await flush();
+
+  assert.equal(apiCalls.privacyFetches, 1);
+  assert.equal(store.hydrated.length, 0);
+
+  resolvePolicy({ messageSelfDestructDays: 2 });
+  await flush();
+  await flush();
+
+  assert.equal(store.viewerSelfDestructDays, 2);
+  assert.ok(store.hydrated.length > 0);
+});
+
+test('a stale policy refresh cannot overwrite a newer local setting', async () => {
+  let resolvePolicy;
+  const policy = new Promise((resolve) => {
+    resolvePolicy = resolve;
+  });
+  const { manager, socket, store } = loadManager({}, { privacyFetch: () => policy });
+
+  manager.connectChat('jwt', 'u1');
+  socket.fire('connect');
+  store.setViewerSelfDestructDays(7);
+  resolvePolicy({ messageSelfDestructDays: 2 });
+  await flush();
+
+  assert.equal(store.viewerSelfDestructDays, 7);
 });
 
 test('reconnect (not first connect) refreshes conversations and backfills the active gap', () => {

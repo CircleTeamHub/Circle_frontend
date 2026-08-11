@@ -727,6 +727,29 @@ test('burn expiry removes both cached messages and the conversation preview', ()
   assert.equal(useChatStore.getState().conversations[0].lastMessage, null);
 });
 
+test('burn expiry clears the stale unread badge with its expired preview', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  const expired = msg({
+    id: 'expired-unread-message',
+    createdAt: new Date(Date.now() - 120_000).toISOString(),
+  });
+  store.setConversations([
+    conversation({
+      id: 'conv-1',
+      burnDurationSec: 60,
+      lastMessage: expired,
+      lastMessageAt: expired.createdAt,
+      unreadCount: 3,
+    }),
+  ]);
+  store.ingestMessages('conv-1', [expired]);
+
+  store.purgeExpiredBurnMessages();
+
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 0);
+});
+
 test('viewer self-destruct policy purges cached content without conversation burn', () => {
   const { useChatStore } = loadChatStore();
   const store = useChatStore.getState();

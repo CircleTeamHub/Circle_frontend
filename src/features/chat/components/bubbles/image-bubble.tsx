@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable, type GestureResponderEvent } from 'react-native';
 import { Image } from 'expo-image';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
@@ -15,7 +15,10 @@ interface ImageBubbleProps {
   onAvatarPress?: () => void;
   onLongPress?: (event: GestureResponderEvent) => void;
   hideStatus?: boolean;
+  selfDestructEnabled?: boolean;
 }
+
+let diskCacheClearedForSelfDestruct = false;
 
 const sImage = StyleSheet.create({
   row: {
@@ -60,6 +63,7 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
   onAvatarPress,
   onLongPress,
   hideStatus,
+  selfDestructEnabled = false,
 }) => {
   const { colors } = useTheme();
   const avatarNode = (
@@ -84,6 +88,14 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
       : { width: Math.round(maxSide * ratio), height: maxSide };
   }, [message.imageHeight, message.imageWidth]);
 
+  useEffect(() => {
+    if (!selfDestructEnabled || diskCacheClearedForSelfDestruct) return;
+    diskCacheClearedForSelfDestruct = true;
+    // expo-image 不能按 URI 移除已落盘内容；首次启用阅后即焚时清一次磁盘缓存，
+    // 确保此前的聊天图片不会绕过后续的内存缓存策略。
+    void Image.clearDiskCache().catch(() => undefined);
+  }, [selfDestructEnabled]);
+
   // 列表气泡优先渲染缩略图；缺失时回退到原图。原图查看留给点击放大流程。
   const displayUri = message.imageThumbUrl ?? message.imageUrl;
   const imageNode = (
@@ -99,7 +111,7 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
             style={[sImage.image, dimensions]}
             contentFit="cover"
             transition={150}
-            cachePolicy="memory-disk"
+            cachePolicy={selfDestructEnabled ? 'memory' : 'memory-disk'}
             // 图片尺寸由对端决定，本地无从预判。Android 走 Glide 会读图片头、按目标
             // 尺寸挑 inSampleSize，超大图只是多下载一些字节；iOS 不会——不开这个开关
             // 时 expo-image 会把整张位图解进内存，一张 20000x20000 就是 ~1.6GB，直接

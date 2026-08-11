@@ -63,15 +63,41 @@ function readViewerSelfDestructDays(userId: string): number {
   }
 }
 
+let viewerPolicyRefreshGeneration = 0;
+
 async function refreshViewerSelfDestructDays(userId: string): Promise<void> {
+  const request = ++viewerPolicyRefreshGeneration;
+  const revision = useChatStore.getState().viewerSelfDestructPolicyRevision;
   try {
     const settings = await fetchPrivacySettings();
     const store = useChatStore.getState();
-    if (store.currentUserId !== userId) return;
-    store.setViewerSelfDestructDays(settings.messageSelfDestructDays);
+    if (
+      request !== viewerPolicyRefreshGeneration ||
+      store.currentUserId !== userId ||
+      store.viewerSelfDestructPolicyRevision !== revision
+    ) {
+      return;
+    }
+    store.setViewerSelfDestructDays(settings.messageSelfDestructDays, {
+      remoteRefresh: true,
+    });
   } catch {
     // 离线时沿用按账号缓存的最后已知策略，不能让策略刷新阻断聊天连接。
   }
+}
+
+async function hydrateWithResolvedViewerPolicy(
+  userId: string,
+  generation: number,
+): Promise<void> {
+  await refreshViewerSelfDestructDays(userId);
+  if (
+    generation !== sessionGen ||
+    useChatStore.getState().currentUserId !== userId
+  ) {
+    return;
+  }
+  await hydrateFromLocalDb(userId);
 }
 
 let socket: Socket | null = null;
@@ -142,7 +168,10 @@ export function connectChat(token: string, userId: string): void {
   // 用它连上之后 /auth/me 才把权威用户写回来。只看 connected 的话那条错身份
   // 的连接会一直留着 —— 收发方向按错的 currentUserId 判,自己发的消息被算成
   // 收到的,未读也跟着错,直到真的断线重连或重启才恢复。
-  if (socket?.connected && store.currentUserId === userId) return;
+  if (socket?.connected && store.currentUserId === userId) {
+    void store.purgeExpiredBurnMessages();
+    return;
+  }
   // 换账号才清 store。放在这里而不是调用方,是为了让「挂起 → 重连」这条
   // 路径天然安全:同一账号轮换 token 时列表/消息/pending 已读原样保留,
   // 而切到另一个账号时上一个账号的数据一定先被清掉(跨账号不串数据)。
@@ -160,8 +189,8 @@ export function connectChat(token: string, userId: string): void {
   store.setCurrentUserId(userId);
   store.setViewerSelfDestructDays(readViewerSelfDestructDays(userId));
   initChatAppBadgeSync();
-  // G-01 冷启动水合:先应用最后已知的隐私窗口，再把本地快照灌回内存。
-  void hydrateFromLocalDb(userId);
+  // 在线时先解析服务器策略，失败才使用上面的账户缓存，避免冷启动展示已到期内容。
+  void hydrateWithResolvedViewerPolicy(userId, gen);
 
   // token 走握手 auth 帧，绝不进 URL query（与 realtime 网关同一条安全线）。
   const next = io(CHAT_WS_URL, {
@@ -185,7 +214,7 @@ export function connectChat(token: string, userId: string): void {
     state.setConnecting(false);
     state.setConnected(true);
     state.setError(null);
-    void refreshViewerSelfDestructDays(userId);
+    if (isReconnect) void refreshViewerSelfDestructDays(userId);
     void flushPendingReads();
     if (isReconnect) {
       resyncAfterReconnect(userId);
@@ -298,6 +327,10 @@ async function hydrateFromLocalDb(userId: string): Promise<void> {
     }
     if (useChatStore.getState().currentUserId !== userId) return;
     useChatStore.getState().hydrateLocalSnapshot(conversations, timelines);
+    // 等待 SQLite/FTS/outbox 的到期删除真正落盘，不能让后面的 outbox 水合把
+    // 已过期的失败发送重新插回时间线。
+    await useChatStore.getState().purgeExpiredBurnMessages();
+    if (useChatStore.getState().currentUserId !== userId) return;
     // outbox:上次没发出去的消息还原成「发送失败」气泡,可长按重发。
     const pending = await outboxList();
     for (const entry of pending) {

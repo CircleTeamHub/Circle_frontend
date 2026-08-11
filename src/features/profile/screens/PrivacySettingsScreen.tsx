@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Switch, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -102,6 +102,7 @@ export default function PrivacySettingsScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const privacyRequestSequence = useRef(0);
 
   const currentSettings = settings ?? DEFAULT_PRIVACY_SETTINGS;
 
@@ -117,10 +118,18 @@ export default function PrivacySettingsScreen() {
   );
 
   const loadSettings = useCallback(async () => {
+    const request = ++privacyRequestSequence.current;
+    const chatUserId = useChatStore.getState().currentUserId;
     setLoading(true);
     setError(null);
     try {
       const loaded = await fetchPrivacySettings();
+      if (
+        request !== privacyRequestSequence.current ||
+        useChatStore.getState().currentUserId !== chatUserId
+      ) {
+        return;
+      }
       setSettings(loaded);
       useChatStore
         .getState()
@@ -133,7 +142,7 @@ export default function PrivacySettingsScreen() {
         ),
       );
     } finally {
-      setLoading(false);
+      if (request === privacyRequestSequence.current) setLoading(false);
     }
   }, [t]);
 
@@ -142,6 +151,8 @@ export default function PrivacySettingsScreen() {
   }, [loadSettings]);
 
   async function patchSettings(payload: UpdatePrivacySettingsPayload) {
+    const request = ++privacyRequestSequence.current;
+    const chatUserId = useChatStore.getState().currentUserId;
     const previous = currentSettings;
     const next = { ...previous, ...payload };
     setSettings(next);
@@ -149,11 +160,23 @@ export default function PrivacySettingsScreen() {
     setError(null);
     try {
       const updated = await updatePrivacySettings(payload);
+      if (
+        request !== privacyRequestSequence.current ||
+        useChatStore.getState().currentUserId !== chatUserId
+      ) {
+        return;
+      }
       setSettings(updated);
       useChatStore
         .getState()
         .setViewerSelfDestructDays(updated.messageSelfDestructDays);
     } catch (requestError) {
+      if (
+        request !== privacyRequestSequence.current ||
+        useChatStore.getState().currentUserId !== chatUserId
+      ) {
+        return;
+      }
       setSettings(previous);
       setError(
         getApiErrorMessage(
@@ -162,7 +185,7 @@ export default function PrivacySettingsScreen() {
         ),
       );
     } finally {
-      setSaving(false);
+      if (request === privacyRequestSequence.current) setSaving(false);
     }
   }
 

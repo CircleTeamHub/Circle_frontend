@@ -20,6 +20,7 @@ const __localDbStub = {
   removeLocalConversation: async () => {},
   persistLocalMessages: async () => {},
   deleteLocalMessage: async () => {},
+  purgeExpiredLocalMessages: async () => {},
   clearLocalConversationMessages: async () => {},
   deleteLocalMessagesBelow: async () => {},
   readRecentLocalMessages: async () => [],

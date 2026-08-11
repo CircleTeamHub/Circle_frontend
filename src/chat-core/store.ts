@@ -35,6 +35,23 @@ function normalizeViewerSelfDestructDays(days: number): number | null {
   return [0, 1, 2, 7, 30].includes(days) ? days : null;
 }
 
+let burnPurgeTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearBurnPurgeTimer(): void {
+  if (burnPurgeTimer) clearTimeout(burnPurgeTimer);
+  burnPurgeTimer = null;
+}
+
+function scheduleNextBurnPurge(nextExpiryAt: number | null): void {
+  clearBurnPurgeTimer();
+  if (nextExpiryAt === null) return;
+  const delay = Math.max(1, nextExpiryAt - Date.now() + 1);
+  burnPurgeTimer = setTimeout(() => {
+    burnPurgeTimer = null;
+    void useChatStore.getState().purgeExpiredBurnMessages();
+  }, delay);
+}
+
 /**
  * store 里的消息 = 线上 DTO + 客户端本地态:
  * failed 只在乐观消息(height=0)发送失败时置位,永不上行。
@@ -59,6 +76,8 @@ interface ChatStoreState {
   currentUserId: string | null;
   /** 当前查看者的全局消息自毁窗口；0 表示关闭。 */
   viewerSelfDestructDays: number;
+  /** 本地权威写入递增，防止较早发出的策略 GET 覆盖设置页刚保存的值。 */
+  viewerSelfDestructPolicyRevision: number;
   conversations: ChatConversationDto[];
   messagesByConversation: Record<string, ChatMessageDto[]>;
   activeConversationId: string | null;
@@ -69,7 +88,10 @@ interface ChatStoreState {
   setConnecting: (connecting: boolean) => void;
   setError: (error: string | null) => void;
   setCurrentUserId: (userId: string | null) => void;
-  setViewerSelfDestructDays: (days: number) => void;
+  setViewerSelfDestructDays: (
+    days: number,
+    options?: { remoteRefresh?: boolean },
+  ) => void;
   setConversations: (conversations: ChatConversationDto[]) => void;
   /**
    * 是否已经拿到过**完整**会话快照(loadChatConversations 成功过一次)。
@@ -126,7 +148,7 @@ interface ChatStoreState {
    * 冷启动水合与本地 FTS 搜索仍然能把本该烧掉的正文端出来 —— 阅后即焚在
    * 本地这一侧等于没生效。拿到会话快照与档位变更时各清一次。
    */
-  purgeExpiredBurnMessages: () => void;
+  purgeExpiredBurnMessages: () => Promise<void>;
   /**
    * 丢掉全部缓存消息(会话行保留)。
    * 服务端说增量游标超出保留窗口时用 —— 那段区间的撤回已经查不到了,
@@ -388,6 +410,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   error: null,
   currentUserId: null,
   viewerSelfDestructDays: 0,
+  viewerSelfDestructPolicyRevision: 0,
   conversations: [],
   conversationsSnapshotLoaded: false,
   conversationsSnapshotSeq: 0,
@@ -404,10 +427,14 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   setConnecting: (connecting) => set({ connecting }),
   setError: (error) => set({ error }),
   setCurrentUserId: (userId) => set({ currentUserId: userId }),
-  setViewerSelfDestructDays: (days) => {
+  setViewerSelfDestructDays: (days, options) => {
     const normalized = normalizeViewerSelfDestructDays(days);
     if (normalized === null) return;
-    const { currentUserId, viewerSelfDestructDays } = get();
+    const {
+      currentUserId,
+      viewerSelfDestructDays,
+      viewerSelfDestructPolicyRevision,
+    } = get();
     if (currentUserId) {
       try {
         storage.set(
@@ -418,9 +445,17 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         // 缓存策略写失败不应影响隐私设置保存；本次进程仍立即执行清理。
       }
     }
-    if (viewerSelfDestructDays === normalized) return;
-    set({ viewerSelfDestructDays: normalized });
-    get().purgeExpiredBurnMessages();
+    // 设置页/缓存初始化是本地权威写入；远程刷新只有在 socket manager 确认
+    // 期间没有新写入时才带 remoteRefresh 标记落进来。
+    set({
+      viewerSelfDestructDays: normalized,
+      viewerSelfDestructPolicyRevision: options?.remoteRefresh
+        ? viewerSelfDestructPolicyRevision
+        : viewerSelfDestructPolicyRevision + 1,
+    });
+    if (viewerSelfDestructDays !== normalized || !options?.remoteRefresh) {
+      void get().purgeExpiredBurnMessages();
+    }
   },
   setConversations: (conversations) => {
     const {
@@ -452,7 +487,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       conversationsSnapshotSeq: get().conversationsSnapshotSeq + 1,
     });
     // 快照带着每个会话当前的焚毁档位 —— 顺手把已到期的本地缓存清掉。
-    get().purgeExpiredBurnMessages();
+    void get().purgeExpiredBurnMessages();
     // G-01:快照落盘(fire-and-forget,本地库失败不影响主链路)。
     void persistLocalConversations(get().conversations);
   },
@@ -498,7 +533,6 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     if (changed) set({ messagesByConversation: nextTimelines });
     // 冷启动这一刻最要紧:离线期间服务端 sweeper 早把过期消息物删了,
     // 而本地库原样留着 —— 不清的话开 App 第一眼看到的就是本该烧掉的内容。
-    get().purgeExpiredBurnMessages();
   },
   applyIncomingMessage: (message) => {
     const {
@@ -867,10 +901,10 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         ...conversations.slice(index + 1),
       ],
     });
-    get().purgeExpiredBurnMessages();
+    void get().purgeExpiredBurnMessages();
   },
 
-  purgeExpiredBurnMessages: () => {
+  purgeExpiredBurnMessages: async () => {
     const {
       conversations,
       messagesByConversation,
@@ -878,6 +912,9 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     } = get();
     let nextTimelines: Record<string, ChatMessageDto[]> | null = null;
     let nextConversations: ChatConversationDto[] | null = null;
+    const durablePreviewWrites: Promise<void>[] = [];
+    const localPurges: { conversationId: string; cutoff: Date }[] = [];
+    let nextExpiryAt: number | null = null;
     const viewerSeconds =
       viewerSelfDestructDays > 0
         ? viewerSelfDestructDays * 24 * 60 * 60
@@ -893,31 +930,42 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           : (conversationSeconds ?? viewerSeconds);
       if (!seconds) continue;
       const cutoff = new Date(Date.now() - seconds * 1000);
-      // 本地库先删(DELETE 会触发 FTS 的删除触发器,影子表跟着清)。
-      void purgeExpiredLocalMessages(conversation.id, cutoff);
       const timeline = messagesByConversation[conversation.id];
+      localPurges.push({ conversationId: conversation.id, cutoff });
       const kept = (timeline ?? []).filter(
         (m) => Date.parse(m.createdAt) >= cutoff.getTime(),
       );
+      const preview = conversation.lastMessage;
+      const schedulableMessages =
+        preview && !kept.some((message) => message.id === preview.id)
+          ? [...kept, preview]
+          : kept;
+      for (const message of schedulableMessages) {
+        const expiresAt = Date.parse(message.createdAt) + seconds * 1000;
+        if (expiresAt > Date.now() && (nextExpiryAt === null || expiresAt < nextExpiryAt)) {
+          nextExpiryAt = expiresAt;
+        }
+      }
       if (timeline?.length && kept.length !== timeline.length) {
         nextTimelines ??= { ...messagesByConversation };
         nextTimelines[conversation.id] = kept;
       }
 
-      const preview = conversation.lastMessage;
       if (preview && Date.parse(preview.createdAt) < cutoff.getTime()) {
         const replacement = kept.length > 0 ? kept[kept.length - 1] : null;
         const sanitized = {
           ...conversation,
           lastMessage: replacement,
           lastMessageAt: replacement?.createdAt ?? null,
+          // 在下一份服务器快照到来前，不能让已过期预览继续带着幽灵红点。
+          unreadCount: 0,
         };
         nextConversations ??= [...conversations];
         const index = nextConversations.findIndex(
           (candidate) => candidate.id === conversation.id,
         );
         if (index >= 0) nextConversations[index] = sanitized;
-        void upsertLocalConversation(sanitized);
+        durablePreviewWrites.push(upsertLocalConversation(sanitized));
       }
     }
     if (nextTimelines || nextConversations) {
@@ -930,6 +978,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           : {}),
       });
     }
+    scheduleNextBurnPurge(nextExpiryAt);
+    await Promise.all([
+      purgeExpiredLocalMessages(localPurges),
+      ...durablePreviewWrites,
+    ]);
   },
 
   clearConversationLocal: (conversationId, clearedBeforeHeight) => {
@@ -1100,13 +1153,15 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       typingUntilByConversation: {},
     }),
 
-  reset: () =>
+  reset: () => {
+    clearBurnPurgeTimer();
     set({
       connected: false,
       connecting: false,
       error: null,
       currentUserId: null,
       viewerSelfDestructDays: 0,
+      viewerSelfDestructPolicyRevision: 0,
       conversations: [],
       conversationsSnapshotLoaded: false,
       messagesByConversation: {},
@@ -1117,7 +1172,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       readWatermarks: {},
       deliveredWatermarks: {},
       typingUntilByConversation: {},
-    }),
+    });
+  },
 }));
 
 /** 消息 tab 角标 = 非免打扰会话的未读合计(免打扰只显红点由 UI 层处理)。 */

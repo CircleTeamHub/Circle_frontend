@@ -177,7 +177,7 @@ test('chat connection rebinds when the authoritative user arrives', () => {
   const socketManager = read('src/chat-core/socket-manager.ts');
   assert.match(
     socketManager,
-    /if \(socket\?\.connected && store\.currentUserId === userId\) return;/,
+    /if \(socket\?\.connected && store\.currentUserId === userId\) \{\s+void store\.purgeExpiredBurnMessages\(\);\s+return;\s+\}/,
   );
 });
 
