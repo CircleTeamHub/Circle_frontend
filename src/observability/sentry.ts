@@ -82,9 +82,13 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
       environment: options.environment ?? (isDev ? 'development' : 'production'),
       ...(release ? { release } : {}),
       ...(dist ? { dist } : {}),
-      // Native crashes + unhandled JS errors are captured by default. Keep
-      // production tracing conservative; callers can override for targeted QA.
-      tracesSampleRate: options.tracesSampleRate ?? (isDev ? 1.0 : 0),
+      // Native crashes + unhandled JS errors are captured by default.
+      //
+      // 生产采样率不能是 0：那等于移动端零性能数据。后端 Prometheus 覆盖的是
+      // 服务端视角的接口延迟，看不到弱网、TLS、客户端渲染和本地 SQLite 写入 ——
+      // 对 IM 产品，「消息发送慢」到底慢在哪一段就无法回答。5% 足够看趋势，
+      // 又把 Sentry 配额消耗控制在可预期范围内。
+      tracesSampleRate: options.tracesSampleRate ?? (isDev ? 1.0 : 0.05),
       // Never attach PII (IP, cookies, request bodies) by default.
       sendDefaultPii: false,
       // Manual reportError calls already sanitize their payloads, but native /
@@ -241,6 +245,56 @@ const SAFE_DIAGNOSTIC_DETAIL_KEYS = new Set([
   'inserted',
   'page',
 ]);
+
+const REDACTED_TRANSACTION = '[REDACTED_TRANSACTION]';
+/**
+ * 静态路由段：只允许字母和连字符。**带任何数字的段一律当作标识符** —— uuid、
+ * cuid、自增 id 全都含数字，而 setSentryUserId 是刻意恒 setUser(null) 的，
+ * 不能反过来从路由名把用户标识漏回 Sentry。
+ */
+const STATIC_ROUTE_SEGMENT = /^[a-z][a-z-]{0,30}$/i;
+/** Expo Router 的动态段字面量，如 `[conversationId]`；本身不含用户数据。 */
+const ROUTE_PARAM_SEGMENT = /^\[\.{0,3}[A-Za-z][A-Za-z0-9_]*\]$/;
+const MAX_ROUTE_SEGMENTS = 8;
+
+/**
+ * 把 transaction 名收敛成「路由形状」。
+ *
+ * 之前这里是无条件替换成常量，隐私上无懈可击，但代价是 Sentry 里每个 issue
+ * 的标题都一样、issue 列表无法按屏幕区分，没有堆栈的事件还会全部塌缩成同一个
+ * issue。折中：保留纯静态的路由段（这才是分组价值所在），把任何可能是标识符
+ * 的段换成 `:id`；整体形状不像路由就退回原来的全遮蔽。
+ *
+ * 与后端 metrics/route-normalizer 的归一化是同一个思路（UUID/数字 → :id），
+ * 目的也一样：既能按路由聚合，又不让标识符进入标签。
+ */
+export function sanitizeTransactionName(value: unknown): string {
+  if (typeof value !== 'string') return REDACTED_TRANSACTION;
+  const trimmed = value.trim();
+  // 只接受以 / 开头的路径。带 scheme 的 URL、带 query 的字符串、自由文本
+  // 全部落到这里 —— 它们的形状本来就不该出现在 transaction 名里。
+  if (!trimmed.startsWith('/') || trimmed.length > 120) {
+    return REDACTED_TRANSACTION;
+  }
+  if (/[?#\s@]/.test(trimmed)) return REDACTED_TRANSACTION;
+
+  const segments = trimmed.split('/');
+  // 前导 '/' 产生一个空首段；其余空段（`//`）不是合法路由形状。
+  if (segments[0] !== '') return REDACTED_TRANSACTION;
+  const rest = segments.slice(1);
+  if (rest.length === 0 || rest.length > MAX_ROUTE_SEGMENTS) {
+    return REDACTED_TRANSACTION;
+  }
+
+  const normalized = rest.map((segment) => {
+    if (segment === '') return '';
+    if (ROUTE_PARAM_SEGMENT.test(segment)) return '[param]';
+    return STATIC_ROUTE_SEGMENT.test(segment) ? segment : ':id';
+  });
+  if (normalized.some((segment) => segment === '')) return REDACTED_TRANSACTION;
+
+  return `/${normalized.join('/')}`;
+}
 
 function sanitizeStringForSentry(value: string): string {
   const sanitized = value
@@ -446,7 +500,9 @@ function sanitizeAutomaticBaseEvent(event: Event): Event {
     if (key in source) safe[key] = sanitizeContextForSentry(source[key]);
   }
   if ('message' in source) safe.message = '[REDACTED_EVENT_MESSAGE]';
-  if ('transaction' in source) safe.transaction = '[REDACTED_TRANSACTION]';
+  if ('transaction' in source) {
+    safe.transaction = sanitizeTransactionName(source.transaction);
+  }
   const exception = sanitizeException(source.exception);
   if (exception) safe.exception = exception;
   const stacktrace = sanitizeStacktrace(source.stacktrace);
@@ -559,7 +615,7 @@ function sanitizeAutomaticTransaction(
     ...sanitizeAutomaticBaseEvent(event),
     type: 'transaction',
   };
-  safe.transaction = '[REDACTED_TRANSACTION]';
+  safe.transaction = sanitizeTransactionName(event.transaction);
   safe.spans = (event.spans ?? []).map(sanitizeAutomaticSpan);
   const trace = sanitizeTraceContext(event.contexts?.trace);
   if (trace) {

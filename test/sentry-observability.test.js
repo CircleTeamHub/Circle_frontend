@@ -88,7 +88,10 @@ test("initSentry initializes with the resolved dsn and safe defaults", () => {
   assert.equal(calls[0].dsn, "https://a@o/1");
   assert.equal(calls[0].environment, "production");
   assert.equal(calls[0].sendDefaultPii, false);
-  assert.equal(calls[0].tracesSampleRate, 0);
+  // 采样率的具体取值由下面 "production sampling collects a small share of
+  // traces" 那条断言约束（区间而不是定值），这里只保证它被显式设置过，
+  // 免得调采样率要改两处。
+  assert.equal(typeof calls[0].tracesSampleRate, "number");
 });
 
 test("initSentry installs global event and breadcrumb privacy filters", () => {
@@ -437,4 +440,88 @@ test("shouldReportHttpFailure reports network(0)/5xx, skips 4xx", () => {
     assert.equal(shouldReportHttpFailure(s), false, `status ${s} should skip`);
   }
   assert.equal(shouldReportHttpFailure(undefined), true);
+});
+
+test("production sampling collects a small share of traces", () => {
+  // 采样率 0 = 移动端零性能数据。后端有 Prometheus 覆盖接口延迟,但那是服务端
+  // 视角:弱网、TLS、客户端渲染、本地 SQLite 写入全都看不到 —— 对 IM 产品来说
+  // 「消息发送慢」到底慢在哪一段因此无法回答。小采样足够看趋势,又不吃爆配额。
+  const { initSentry } = loadSentry();
+  const calls = [];
+  initSentry({
+    client: { init: (o) => calls.push(o), wrap: (c) => c },
+    dsn: "https://a@o/1",
+    environment: "production",
+  });
+  assert.ok(calls[0].tracesSampleRate > 0, "production must sample some traces");
+  assert.ok(calls[0].tracesSampleRate <= 0.1, "keep the quota bounded");
+});
+
+test("transaction names keep static route shape but drop anything id-like", () => {
+  const { sanitizeTransactionName } = loadSentry();
+
+  // 静态路由段保留 —— 这是这次放宽的全部目的:issue 列表能按屏幕区分。
+  assert.equal(sanitizeTransactionName("/settings"), "/settings");
+  assert.equal(sanitizeTransactionName("/note-editor"), "/note-editor");
+  assert.equal(sanitizeTransactionName("/circle/discover"), "/circle/discover");
+
+  // Expo Router 的参数占位本身不含用户数据,归一化后保留。
+  assert.equal(sanitizeTransactionName("/chat/[conversationId]"), "/chat/[param]");
+
+  // 任何带数字的段都当作标识符 —— uuid / cuid / 自增 id 全都含数字,
+  // 而 setSentryUserId 是刻意恒 setUser(null) 的,不能从路由名把 id 漏回去。
+  assert.equal(sanitizeTransactionName("/users/person-1"), "/users/:id");
+  assert.equal(
+    sanitizeTransactionName("/note/9f1c4e2a-0b77-4c31-9a3e-000000000001"),
+    "/note/:id",
+  );
+  assert.equal(sanitizeTransactionName("/u/12345"), "/u/:id");
+
+  // 形状完全不像路由的,整体退回原来的全遮蔽行为。
+  assert.equal(
+    sanitizeTransactionName("private route with spaces"),
+    "[REDACTED_TRANSACTION]",
+  );
+  assert.equal(sanitizeTransactionName(""), "[REDACTED_TRANSACTION]");
+  assert.equal(sanitizeTransactionName(undefined), "[REDACTED_TRANSACTION]");
+});
+
+test("transaction sanitizing never leaks emails, tokens or query strings", () => {
+  const { sanitizeTransactionName } = loadSentry();
+  for (const hostile of [
+    "/u/alice@example.com",
+    "/note?token=eyJhbGciOi.aaa.bbb",
+    "/x/Bearer abcdef",
+    "https://api.example.com/v1/users/42?X-Amz-Signature=deadbeef",
+  ]) {
+    const out = sanitizeTransactionName(hostile);
+    assert.doesNotMatch(out, /@|\?|Bearer|eyJ|Signature/, `leaked from ${hostile}`);
+  }
+});
+
+test("beforeSendTransaction applies the route-shape rule to the event", () => {
+  const { initSentry } = loadSentry();
+  const calls = [];
+  initSentry({
+    client: { init: (o) => calls.push(o), wrap: (c) => c },
+    dsn: "https://a@o/1",
+  });
+
+  const kept = calls[0].beforeSendTransaction({
+    type: "transaction",
+    event_id: "e1",
+    transaction: "/circle/discover",
+    start_timestamp: 1,
+    timestamp: 2,
+  });
+  assert.equal(kept.transaction, "/circle/discover");
+
+  const scrubbed = calls[0].beforeSendTransaction({
+    type: "transaction",
+    event_id: "e2",
+    transaction: "/users/person-1",
+    start_timestamp: 1,
+    timestamp: 2,
+  });
+  assert.equal(scrubbed.transaction, "/users/:id");
 });
