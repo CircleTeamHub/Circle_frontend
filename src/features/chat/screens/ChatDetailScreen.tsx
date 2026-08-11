@@ -566,8 +566,8 @@ export default function ChatDetailScreen() {
       (conversation?.burnDurationSec ?? 0) > 0
     );
   });
-  const selfDestructCacheEpoch = useChatStore(
-    (state) => state.selfDestructPolicyEpoch,
+  const selfDestructCacheKey = useChatStore(
+    (state) => `${state.currentUserId ?? ''}:${state.selfDestructPolicyEpoch}`,
   );
   // 只订阅当前会话的消息切片，而非整个 messagesByConversation map。
   // 其他会话来消息时 ingestMessages 会新建顶层对象，但本会话的数组引用不变，
@@ -1803,7 +1803,7 @@ export default function ChatDetailScreen() {
             onLongPress={getMessageLongPressHandler(item)}
             hideStatus={isGroupChat}
             selfDestructEnabled={selfDestructEnabled}
-            selfDestructCacheEpoch={selfDestructCacheEpoch}
+            selfDestructCacheKey={selfDestructCacheKey}
           />
         ));
       case 'voice':
@@ -1962,7 +1962,7 @@ export default function ChatDetailScreen() {
     handleQuotePress,
     handleToggleReaction,
     isGroupChat,
-    selfDestructCacheEpoch,
+    selfDestructCacheKey,
     selfDestructEnabled,
     selfAvatarUri,
     selfName,

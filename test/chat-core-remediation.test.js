@@ -572,7 +572,7 @@ test('burn expiry is scheduled and self-destruct images avoid disk caching', () 
   assert.match(store, /BURN_PURGE_SWEEP_MS/);
   const image = read('src/features/chat/components/bubbles/image-bubble.tsx');
   assert.match(image, /cachePolicy=\{selfDestructEnabled \? 'memory' : 'memory-disk'\}/);
-  assert.match(image, /selfDestructCacheEpoch/);
+  assert.match(image, /selfDestructCacheKey/);
 });
 
 test('clear-all reports partial failure instead of claiming success', () => {

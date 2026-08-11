@@ -76,6 +76,27 @@ export function sanitizeExpiredConversationPreviews(
   });
 }
 
+function hasBurnPolicyChanged(
+  current: ChatConversationDto[],
+  next: ChatConversationDto[],
+): boolean {
+  const duration = (conversation: ChatConversationDto | undefined): number =>
+    conversation?.burnDurationSec && conversation.burnDurationSec > 0
+      ? conversation.burnDurationSec
+      : 0;
+  const nextById = new Map(next.map((conversation) => [conversation.id, conversation]));
+  for (const conversation of current) {
+    if (duration(conversation) !== duration(nextById.get(conversation.id))) {
+      return true;
+    }
+  }
+  const currentIds = new Set(current.map((conversation) => conversation.id));
+  return next.some(
+    (conversation) =>
+      !currentIds.has(conversation.id) && duration(conversation) > 0,
+  );
+}
+
 let burnPurgeTimer: ReturnType<typeof setTimeout> | null = null;
 
 function clearBurnPurgeTimer(): void {
@@ -516,11 +537,17 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   },
   setConversations: (conversations) => {
     const {
+      conversations: currentConversations,
       messagesByConversation,
       readWatermarks,
       currentUserId,
       clearedBeforeHeightByConversation,
+      selfDestructPolicyEpoch,
     } = get();
+    const burnPolicyChanged = hasBurnPolicyChanged(
+      currentConversations,
+      conversations,
+    );
     set({
       conversations: sortConversations(
         conversations
@@ -542,6 +569,9 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       // 只有全量拉取会走到这里(upsertConversation 不置位)。
       conversationsSnapshotLoaded: true,
       conversationsSnapshotSeq: get().conversationsSnapshotSeq + 1,
+      ...(burnPolicyChanged
+        ? { selfDestructPolicyEpoch: selfDestructPolicyEpoch + 1 }
+        : {}),
     });
     // 快照带着每个会话当前的焚毁档位 —— 顺手把已到期的本地缓存清掉。
     void get().purgeExpiredBurnMessages();

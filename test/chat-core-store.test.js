@@ -781,6 +781,20 @@ test('viewer self-destruct policy purges cached content without conversation bur
   assert.equal(useChatStore.getState().conversations[0].lastMessage, null);
 });
 
+test('server snapshots advance the self-destruct cache epoch when a conversation policy changes', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setConversations([conversation({ burnDurationSec: 60 })]);
+  const enabledEpoch = useChatStore.getState().selfDestructPolicyEpoch;
+  store.setConversations([conversation({ burnDurationSec: null })]);
+  const disabledEpoch = useChatStore.getState().selfDestructPolicyEpoch;
+  store.setConversations([conversation({ burnDurationSec: 60 })]);
+
+  assert.ok(enabledEpoch > 0);
+  assert.ok(disabledEpoch > enabledEpoch);
+  assert.ok(useChatStore.getState().selfDestructPolicyEpoch > disabledEpoch);
+});
+
 test('invalid viewer self-destruct policy cannot weaken a cached policy', () => {
   const { useChatStore } = loadChatStore();
   const store = useChatStore.getState();
