@@ -132,6 +132,18 @@ const LEGACY_KEYS = [
 
 const MIGRATION_FLAG = '__migrated_from_async_storage_v1';
 
+/**
+ * 已停用功能留在 MMKV 里的孤儿键 —— 没有任何代码再读写它们,只能显式删。
+ *
+ * circle-im-gift-card-pending-acks:转账卡片送达回执的挂账队列。它在 OpenIM
+ * 时代(2026-07-21 起)真实运行过 —— 那时客户端发卡会成功,发完就把幂等键挂在
+ * 这里等回执冲销。2026-08-08 换自研聊天栈后发卡一律被服务端拒,不再有新增;
+ * 而回执**冲销失败**留下的旧条目(最多 100 条,每条含一枚支付幂等键 + userId)
+ * 从此没人再碰。卡片改由服务端签发后,队列实现与 /coin/gift/card-sent 端点
+ * 都已删除,这些条目再也不会被冲销 —— 只能在这里一次性抹掉。
+ */
+const ORPHANED_KEYS = ['circle-im-gift-card-pending-acks'] as const;
+
 let migrationPromise: Promise<void> | null = null;
 
 /**
@@ -140,10 +152,29 @@ let migrationPromise: Promise<void> | null = null;
  * Resolves once existing data is mirrored into MMKV. Failures fall back
  * to defaults (the app keeps working, just without the legacy values).
  */
+/**
+ * 抹掉已停用功能留下的 MMKV 条目。幂等,失败不阻断启动。
+ * 导出供测试直接调用(迁移主体依赖 AsyncStorage,单独测这一半更稳)。
+ */
+export function purgeOrphanedKeys(): void {
+  for (const key of ORPHANED_KEYS) {
+    try {
+      if (storage.contains(key)) storage.remove(key);
+    } catch {
+      // 存储未就绪或本次删除失败:下次启动再来,留着也只是几条死数据。
+    }
+  }
+}
+
 export function migrateFromAsyncStorage(): Promise<void> {
   if (migrationPromise) return migrationPromise;
 
   migrationPromise = (async () => {
+    // 孤儿键的清理不受 MIGRATION_FLAG 约束:那个 flag 早在这些键产生之前
+    // 就为老用户置位了,挂在它后面等于永远不执行。删除是幂等的,每次启动
+    // 跑一遍的成本就是一次 MMKV contains/remove。
+    purgeOrphanedKeys();
+
     if (storage.getBoolean(MIGRATION_FLAG)) return;
 
     try {
