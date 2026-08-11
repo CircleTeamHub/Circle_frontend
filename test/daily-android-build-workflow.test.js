@@ -233,6 +233,83 @@ test('build-env validation shares the tag-time env contract', () => {
   );
 });
 
+// 每日构建签的是一次性密钥、产物按设计永远不分发（见上面两条 test）。要求它必须先配齐
+// 生产客服账号才肯编译，是把「发布就绪」当成了「能不能编译」的前置条件：变量一天没配，
+// assembleRelease / R8 / 打包就一天不跑，而这恰恰是每日构建唯一想守住的东西。
+// 真实后果：workflow 落地后连续 11 次全红，从没跑到过 Gradle —— 等于完全没有每日覆盖。
+// 所以「缺配置」在每日路径降级为告警，在 tag 路径保持硬失败（见下一条 test）。
+test('daily build-env keeps compiling when production config is merely absent', () => {
+  const {
+    collectReleaseConfigGaps,
+    validateBuildEnvShape,
+  } = require('../.github/scripts/validate-android-release');
+
+  // 这就是 CI 里真实的那份环境：仓库从未创建过这些 repository variable。
+  const empty = {};
+  assert.deepEqual(
+    validateBuildEnvShape({ env: empty }),
+    [],
+    'an unset variable must not be able to dark out the daily native build',
+  );
+
+  // 降级不等于消音：每一条缺失都必须仍然被报出来，否则就成了偷偷放行。
+  const gaps = collectReleaseConfigGaps({ env: empty }).join('\n');
+  assert.match(gaps, /EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID/);
+  assert.match(gaps, /imAdmin/);
+});
+
+// 门禁是被搬走，不是被删掉：打 tag 那条线必须原样硬失败。
+test('missing production config still hard-fails the tag path', () => {
+  const {
+    validateBuildEnv,
+    validateReleaseMetadata,
+  } = require('../.github/scripts/validate-android-release');
+
+  const errors = validateBuildEnv({ env: {} }).join('\n');
+  assert.match(errors, /EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID is required/);
+  assert.match(errors, /imAdmin/);
+
+  // preflight 走的是 metadata scope，它必须继承同一批错误。
+  const metadata = validateReleaseMetadata({
+    env: { RELEASE_TAG: 'v1.0.0' },
+    app: { version: '1.0.0', android: { versionCode: 1_000_000 } },
+  }).join('\n');
+  assert.match(metadata, /EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID is required/);
+  assert.match(metadata, /imAdmin/);
+});
+
+// 「配错」和「没配」是两回事：写坏的值在每日路径也必须硬失败，因为它证明的是
+// 有人改错了变量，而不是还没配 —— 这正是每日构建最初想抓的漂移。
+test('daily build-env still hard-fails on malformed values', () => {
+  const { validateBuildEnvShape } = require('../.github/scripts/validate-android-release');
+
+  for (const [what, env] of [
+    ['non-https API URL', { EXPO_PUBLIC_API_URL: 'http://a.test' }],
+    [
+      'support id that chat-core cannot open',
+      { EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: 'imAdmin' },
+    ],
+    [
+      'malformed Sentry DSN',
+      { EXPO_PUBLIC_SENTRY_DSN: 'https://o42.ingest.sentry.io/4507' },
+    ],
+  ]) {
+    assert.ok(
+      validateBuildEnvShape({ env }).length > 0,
+      `daily build must reject a ${what}`,
+    );
+  }
+});
+
+// 告警在 40 分钟的构建日志里没人看得见。绿色的构建必须把缺口写进 job summary，
+// 否则「降级为告警」在实践中等同于「删掉这条检查」。
+test('daily build surfaces config gaps in the job summary', () => {
+  const script = read('.github/scripts/validate-android-release.js');
+
+  assert.match(script, /GITHUB_STEP_SUMMARY/);
+  assert.match(script, /::warning::/);
+});
+
 test('Sentry DSN reaches both the validator and the compiled package', () => {
   const workflow = read(WORKFLOW_PATH);
   const build = workflowJob(workflow, 'native_build');
