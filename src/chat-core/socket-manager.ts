@@ -2,6 +2,7 @@ import { io, type Socket } from 'socket.io-client';
 import { CHAT_WS_URL } from '@/constants/config';
 import { storage } from '@/storage';
 import { reportError } from '@/observability/sentry';
+import { fetchPrivacySettings } from '@/services/api/privacy';
 import {
   backfillConversationSince,
   fetchChatMutationsSince,
@@ -29,7 +30,10 @@ import {
   type ChatSendAck,
   type ChatSendAckOk,
 } from './protocol';
-import { useChatStore } from './store';
+import {
+  useChatStore,
+  viewerSelfDestructDaysStorageKey,
+} from './store';
 
 /**
  * 自研聊天 socket 管理器（squady SocketManager 的 TS 移植，按本仓
@@ -47,6 +51,28 @@ const TYPING_THROTTLE_MS = 2_000;
 /** 一次追平最多翻几页离线变更;翻不完留给下一次连接(游标已持久化)。 */
 const MUTATION_CATCH_UP_PAGES_MAX = 20;
 const CONNECT_ERROR_REPORT_THRESHOLD = 3;
+
+function readViewerSelfDestructDays(userId: string): number {
+  try {
+    const value = Number(
+      storage.getString(viewerSelfDestructDaysStorageKey(userId)) ?? '0',
+    );
+    return Number.isFinite(value) ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function refreshViewerSelfDestructDays(userId: string): Promise<void> {
+  try {
+    const settings = await fetchPrivacySettings();
+    const store = useChatStore.getState();
+    if (store.currentUserId !== userId) return;
+    store.setViewerSelfDestructDays(settings.messageSelfDestructDays);
+  } catch {
+    // 离线时沿用按账号缓存的最后已知策略，不能让策略刷新阻断聊天连接。
+  }
+}
 
 let socket: Socket | null = null;
 let sessionGen = 0;
@@ -127,15 +153,15 @@ export function connectChat(token: string, userId: string): void {
   }
   teardownSocket();
   sessionGen += 1;
-  initChatAppBadgeSync();
-  // G-01 冷启动水合:开(或切到)本账号的本地库,把快照灌回内存 —— 不等网络。
-  void hydrateFromLocalDb(userId);
-
   const gen = sessionGen;
   consecutiveConnectErrors = 0;
   reportedCurrentConnectOutage = false;
   store.setConnecting(true);
   store.setCurrentUserId(userId);
+  store.setViewerSelfDestructDays(readViewerSelfDestructDays(userId));
+  initChatAppBadgeSync();
+  // G-01 冷启动水合:先应用最后已知的隐私窗口，再把本地快照灌回内存。
+  void hydrateFromLocalDb(userId);
 
   // token 走握手 auth 帧，绝不进 URL query（与 realtime 网关同一条安全线）。
   const next = io(CHAT_WS_URL, {
@@ -159,6 +185,7 @@ export function connectChat(token: string, userId: string): void {
     state.setConnecting(false);
     state.setConnected(true);
     state.setError(null);
+    void refreshViewerSelfDestructDays(userId);
     void flushPendingReads();
     if (isReconnect) {
       resyncAfterReconnect(userId);

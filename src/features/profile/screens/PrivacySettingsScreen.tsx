@@ -15,6 +15,7 @@ import {
   type UpdatePrivacySettingsPayload,
 } from '@/services/api/privacy';
 import { getApiErrorMessage } from '@/services/api/errors';
+import { useChatStore } from '@/chat-core/store';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 type ActiveSheet =
@@ -119,7 +120,11 @@ export default function PrivacySettingsScreen() {
     setLoading(true);
     setError(null);
     try {
-      setSettings(await fetchPrivacySettings());
+      const loaded = await fetchPrivacySettings();
+      setSettings(loaded);
+      useChatStore
+        .getState()
+        .setViewerSelfDestructDays(loaded.messageSelfDestructDays);
     } catch (requestError) {
       setError(
         getApiErrorMessage(
@@ -143,7 +148,11 @@ export default function PrivacySettingsScreen() {
     setSaving(true);
     setError(null);
     try {
-      setSettings(await updatePrivacySettings(payload));
+      const updated = await updatePrivacySettings(payload);
+      setSettings(updated);
+      useChatStore
+        .getState()
+        .setViewerSelfDestructDays(updated.messageSelfDestructDays);
     } catch (requestError) {
       setSettings(previous);
       setError(

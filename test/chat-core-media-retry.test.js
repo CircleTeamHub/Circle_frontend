@@ -91,6 +91,9 @@ function loadStack({ onSend = async () => ({ messageId: 'srv-1', height: 9 }) } 
         markMessageDeletedLocally: () => {},
       };
     }
+    if (request === '@/storage') {
+      return { storage: { set: () => {}, getString: () => undefined } };
+    }
     throw new Error(`unexpected require: ${request}`);
   });
 

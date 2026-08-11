@@ -109,6 +109,9 @@ function loadSendStack({ onSend }) {
         markMessageDeletedLocally: () => {},
       };
     }
+    if (request === '@/storage') {
+      return { storage: { set: () => {}, getString: () => undefined } };
+    }
     if (request === './local-db') return __localDbStub;
     throw new Error(`unexpected require: ${request}`);
   });

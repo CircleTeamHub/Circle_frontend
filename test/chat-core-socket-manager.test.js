@@ -123,6 +123,17 @@ function loadManager(localDbOverrides = {}) {
       setCurrentUserId(v) {
         state.currentUserId = v;
       },
+      viewerSelfDestructDays: 0,
+      setViewerSelfDestructDays(v) {
+        state.viewerSelfDestructDays = v;
+        state.calls.push(['setViewerSelfDestructDays', v]);
+        if (state.currentUserId) {
+          mmkvStore.set(
+            `chat.viewerSelfDestructDays.${state.currentUserId}`,
+            String(v),
+          );
+        }
+      },
       setError(v) {
         state.error = v;
       },
@@ -158,7 +169,12 @@ function loadManager(localDbOverrides = {}) {
         state.messagesByConversation = {};
       },
     };
-    return { useChatStore: { getState: () => state }, state };
+    return {
+      useChatStore: { getState: () => state },
+      viewerSelfDestructDaysStorageKey: (userId) =>
+        `chat.viewerSelfDestructDays.${userId}`,
+      state,
+    };
   })();
   const bound = [];
   // 重连对账(G-13)的观测点:列表刷新次数与缺口补拉参数。
@@ -171,6 +187,8 @@ function loadManager(localDbOverrides = {}) {
     mutationCursorIds: [],
     droppedLocalMessages: 0,
     initialHistory: [],
+    privacyFetches: 0,
+    privacyResponse: { messageSelfDestructDays: 2 },
   };
   const mmkvStore = new Map();
   const mmkv = {
@@ -182,6 +200,12 @@ function loadManager(localDbOverrides = {}) {
   const manager = runModule('src/chat-core/socket-manager.ts', {
     'socket.io-client': { io },
     '@/constants/config': { CHAT_WS_URL: 'http://api.test' },
+    '@/services/api/privacy': {
+      fetchPrivacySettings: () => {
+        apiCalls.privacyFetches += 1;
+        return Promise.resolve(apiCalls.privacyResponse);
+      },
+    },
     './api': {
       loadChatConversations: () => {
         apiCalls.conversations += 1;
@@ -257,6 +281,21 @@ function loadManager(localDbOverrides = {}) {
     mmkvStore,
   };
 }
+
+test('viewer self-destruct uses the cached policy offline and refreshes it after connect', async () => {
+  const { manager, socket, store, apiCalls, mmkvStore } = loadManager();
+  mmkvStore.set('chat.viewerSelfDestructDays.u1', '7');
+
+  manager.connectChat('jwt', 'u1');
+  assert.equal(store.viewerSelfDestructDays, 7);
+
+  socket.fire('connect');
+  for (let i = 0; i < 4; i += 1) await Promise.resolve();
+
+  assert.equal(apiCalls.privacyFetches, 1);
+  assert.equal(store.viewerSelfDestructDays, 2);
+  assert.equal(mmkvStore.get('chat.viewerSelfDestructDays.u1'), '2');
+});
 
 test('reconnect (not first connect) refreshes conversations and backfills the active gap', () => {
   const { manager, socket, store, apiCalls } = loadManager();

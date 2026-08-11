@@ -1255,3 +1255,19 @@ test("add-me summary counts only the methods whose switches are rendered", () =>
     "every rendered add-me switch must be counted, and vice versa",
   );
 });
+
+test("privacy self-destruct updates the chat cache policy immediately", () => {
+  const source = fs.readFileSync(
+    path.join(
+      process.cwd(),
+      "src/features/profile/screens/PrivacySettingsScreen.tsx",
+    ),
+    "utf8",
+  );
+
+  assert.match(source, /useChatStore/);
+  assert.match(
+    source,
+    /setViewerSelfDestructDays\(updated\.messageSelfDestructDays\)/,
+  );
+});

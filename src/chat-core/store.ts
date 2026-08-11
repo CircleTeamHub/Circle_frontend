@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { storage } from '@/storage';
 import {
   isMessageDeletedLocally,
   markMessageDeletedLocally,
@@ -26,6 +27,14 @@ export const MESSAGES_WINDOW_MAX = 2000;
 /** 对端 typing 显示时长:超过它没有新 typing 事件就回落在线状态。 */
 export const TYPING_DISPLAY_MS = 4_000;
 
+export function viewerSelfDestructDaysStorageKey(userId: string): string {
+  return `chat.viewerSelfDestructDays.${userId}`;
+}
+
+function normalizeViewerSelfDestructDays(days: number): number | null {
+  return [0, 1, 2, 7, 30].includes(days) ? days : null;
+}
+
 /**
  * store 里的消息 = 线上 DTO + 客户端本地态:
  * failed 只在乐观消息(height=0)发送失败时置位,永不上行。
@@ -48,6 +57,8 @@ interface ChatStoreState {
   /** 最近一次连接失败的原因文案(消息页空态提示用)。 */
   error: string | null;
   currentUserId: string | null;
+  /** 当前查看者的全局消息自毁窗口；0 表示关闭。 */
+  viewerSelfDestructDays: number;
   conversations: ChatConversationDto[];
   messagesByConversation: Record<string, ChatMessageDto[]>;
   activeConversationId: string | null;
@@ -58,6 +69,7 @@ interface ChatStoreState {
   setConnecting: (connecting: boolean) => void;
   setError: (error: string | null) => void;
   setCurrentUserId: (userId: string | null) => void;
+  setViewerSelfDestructDays: (days: number) => void;
   setConversations: (conversations: ChatConversationDto[]) => void;
   /**
    * 是否已经拿到过**完整**会话快照(loadChatConversations 成功过一次)。
@@ -375,6 +387,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   connecting: false,
   error: null,
   currentUserId: null,
+  viewerSelfDestructDays: 0,
   conversations: [],
   conversationsSnapshotLoaded: false,
   conversationsSnapshotSeq: 0,
@@ -391,6 +404,24 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   setConnecting: (connecting) => set({ connecting }),
   setError: (error) => set({ error }),
   setCurrentUserId: (userId) => set({ currentUserId: userId }),
+  setViewerSelfDestructDays: (days) => {
+    const normalized = normalizeViewerSelfDestructDays(days);
+    if (normalized === null) return;
+    const { currentUserId, viewerSelfDestructDays } = get();
+    if (currentUserId) {
+      try {
+        storage.set(
+          viewerSelfDestructDaysStorageKey(currentUserId),
+          String(normalized),
+        );
+      } catch {
+        // 缓存策略写失败不应影响隐私设置保存；本次进程仍立即执行清理。
+      }
+    }
+    if (viewerSelfDestructDays === normalized) return;
+    set({ viewerSelfDestructDays: normalized });
+    get().purgeExpiredBurnMessages();
+  },
   setConversations: (conversations) => {
     const {
       messagesByConversation,
@@ -840,24 +871,65 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   },
 
   purgeExpiredBurnMessages: () => {
-    const { conversations, messagesByConversation } = get();
+    const {
+      conversations,
+      messagesByConversation,
+      viewerSelfDestructDays,
+    } = get();
     let nextTimelines: Record<string, ChatMessageDto[]> | null = null;
+    let nextConversations: ChatConversationDto[] | null = null;
+    const viewerSeconds =
+      viewerSelfDestructDays > 0
+        ? viewerSelfDestructDays * 24 * 60 * 60
+        : null;
     for (const conversation of conversations) {
-      const seconds = conversation.burnDurationSec;
-      if (!seconds || seconds <= 0) continue;
+      const conversationSeconds =
+        conversation.burnDurationSec && conversation.burnDurationSec > 0
+          ? conversation.burnDurationSec
+          : null;
+      const seconds =
+        conversationSeconds && viewerSeconds
+          ? Math.min(conversationSeconds, viewerSeconds)
+          : (conversationSeconds ?? viewerSeconds);
+      if (!seconds) continue;
       const cutoff = new Date(Date.now() - seconds * 1000);
       // 本地库先删(DELETE 会触发 FTS 的删除触发器,影子表跟着清)。
       void purgeExpiredLocalMessages(conversation.id, cutoff);
       const timeline = messagesByConversation[conversation.id];
-      if (!timeline?.length) continue;
-      const kept = timeline.filter(
+      const kept = (timeline ?? []).filter(
         (m) => Date.parse(m.createdAt) >= cutoff.getTime(),
       );
-      if (kept.length === timeline.length) continue;
-      nextTimelines ??= { ...messagesByConversation };
-      nextTimelines[conversation.id] = kept;
+      if (timeline?.length && kept.length !== timeline.length) {
+        nextTimelines ??= { ...messagesByConversation };
+        nextTimelines[conversation.id] = kept;
+      }
+
+      const preview = conversation.lastMessage;
+      if (preview && Date.parse(preview.createdAt) < cutoff.getTime()) {
+        const replacement = kept.length > 0 ? kept[kept.length - 1] : null;
+        const sanitized = {
+          ...conversation,
+          lastMessage: replacement,
+          lastMessageAt: replacement?.createdAt ?? null,
+        };
+        nextConversations ??= [...conversations];
+        const index = nextConversations.findIndex(
+          (candidate) => candidate.id === conversation.id,
+        );
+        if (index >= 0) nextConversations[index] = sanitized;
+        void upsertLocalConversation(sanitized);
+      }
     }
-    if (nextTimelines) set({ messagesByConversation: nextTimelines });
+    if (nextTimelines || nextConversations) {
+      set({
+        ...(nextTimelines
+          ? { messagesByConversation: nextTimelines }
+          : {}),
+        ...(nextConversations
+          ? { conversations: sortConversations(nextConversations) }
+          : {}),
+      });
+    }
   },
 
   clearConversationLocal: (conversationId, clearedBeforeHeight) => {
@@ -1034,6 +1106,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       connecting: false,
       error: null,
       currentUserId: null,
+      viewerSelfDestructDays: 0,
       conversations: [],
       conversationsSnapshotLoaded: false,
       messagesByConversation: {},
