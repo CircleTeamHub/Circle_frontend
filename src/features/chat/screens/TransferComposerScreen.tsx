@@ -16,7 +16,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Avatar } from '@/components/ui/avatar';
-import { useTransferComposerStore } from '@/features/chat/store/use-transfer-composer-store';
 import {
   resolveTransferIdempotency,
   type TransferIdempotency,
@@ -52,7 +51,6 @@ export default function TransferComposerScreen() {
       ? params.recipientAvatar
       : undefined;
 
-  const setPending = useTransferComposerStore((s) => s.setPending);
 
   const [amount, setAmount] = useState('');
   const [message, setMessage] = useState('');
@@ -122,9 +120,9 @@ export default function TransferComposerScreen() {
       return;
     }
 
-    // 信用分门禁必须拦在扣款之前。转账是「先真扣款、再发卡片回执」两段式,
-    // 只在发卡片那一步拦的话积分已经到对方账上了 —— 付款方看不到卡片、
-    // 以为没发出去,回来重试会生成新的幂等键,变成第二次真实扣款。
+    // 信用分门禁必须拦在扣款之前 —— 这是转账链路上端侧唯一的一道闸。
+    // 扣款之后已经没有可拦的东西了:钱在服务端划走,卡片也由服务端签发,
+    // 客户端从头到尾碰不到 chat-core 的发送路径(那里的门禁看不见转账)。
     const creditDenied = getLocalLowCreditDecision();
     if (creditDenied) {
       Alert.alert(
@@ -155,13 +153,10 @@ export default function TransferComposerScreen() {
         },
         { idempotencyKey: idempotency.key },
       );
-      // 转账成功后通过 store 通知 ChatDetailScreen 在重新拿到焦点时
-      // 发出对应 IM 卡片消息（不在这里发，避免 IM 失败但积分已扣）
-      setPending({
-        amount: value,
-        message: normalizedMessage,
-        idempotencyKey: idempotency.key,
-      });
+      // 卡片不用这边发:transfer-card 断言的是「钱已经划走」这个服务端事实,
+      // 由后端在结算提交后就地签发,经 chat:msg 广播回来。以前是转账成功后把
+      // payload 挂到 store、让 ChatDetailScreen 重新聚焦时补发一条 —— 而那条
+      // 发送被服务端 100% 拒收(transfer-card 是服务端专属类型)。
       idempotencyRef.current = null;
       router.back();
     } catch (error) {
@@ -176,7 +171,7 @@ export default function TransferComposerScreen() {
       inFlightRef.current = false;
       setSubmitting(false);
     }
-  }, [amount, balance, message, recipientId, router, setPending, submitting, t]);
+  }, [amount, balance, message, recipientId, router, submitting, t]);
 
   const value = Number(amount.trim());
   const submitDisabled =

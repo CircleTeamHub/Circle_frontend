@@ -73,14 +73,16 @@ const s = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.sm },
 });
 
-// 可直接按原 payload 重发的卡片类型。transfer-card 故意排除:转账卡是
-// 服务端结算回执,原样转发等于伪造一笔转账,只允许其文本降级形态。
+// 可直接按原 payload 重发的卡片类型 —— 即客户端本来就能发的那几种(ChatCardType)。
+// 回执类一律排除:transfer-card / verification-card 都是服务端签发的凭证,
+// 原样转发等于伪造一笔转账、或伪造一份验证邀请;它们在后端也只认服务端写入,
+// 客户端重发必被拒。转账卡保留文本降级形态,验证卡连长按菜单都不提供
+// (见 ChatDetailScreen 的 'verification-card' 分支:没有 withMessageActions)。
 // 广场报名卡同样排除:它只由报名列表定向创建,不提供二次扩散入口。
 const FORWARDABLE_CARD_TYPES: ChatCardType[] = [
   'note-card',
   'friend-card',
   'circle-card',
-  'verification-card',
 ];
 
 function str(value: unknown): string | undefined {

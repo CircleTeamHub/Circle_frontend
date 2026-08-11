@@ -1095,3 +1095,39 @@ test('冷启动水合:转账卡片的 outbox 脏数据直接清掉,不还原成�
     ['srv-card'],
   );
 });
+
+test('冷启动水合:验证卡片的 outbox 脏数据同样清掉', async () => {
+  // 验证卡与转账卡同源:旧版本客户端也会把它当普通消息发,发送必失败,
+  // 条目就永远留在本地队列里。它的服务端键是 verification_card_<...>,
+  // 同样对不上客户端的 d —— 装了新版本的老用户本地还躺着这些脏条目,
+  // 不清的话每次冷启动都还原出一张发不出去的幽灵卡。
+  const deleted = [];
+  const { manager, store } = loadManager({
+    initChatLocalDb: async () => true,
+    readLocalConversations: async () => [{ id: 'c1' }],
+    readRecentLocalMessages: async () => [],
+    outboxList: async () => [
+      {
+        d: 'd-verify',
+        conversationId: 'c1',
+        payload: {
+          conversationId: 'c1',
+          type: 'verification-card',
+          content: { invitationId: 'inv-1' },
+          d: 'd-verify',
+        },
+        createdAt: '2026-08-11T01:23:00.000Z',
+      },
+    ],
+    outboxDelete: async (d) => {
+      deleted.push(d);
+    },
+  });
+
+  manager.connectChat('jwt', 'u1');
+  await flush();
+
+  assert.deepEqual(store.failedMarks, []);
+  assert.deepEqual(deleted, ['d-verify']);
+  assert.deepEqual(store.messagesByConversation.c1 ?? [], []);
+});

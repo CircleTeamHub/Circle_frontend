@@ -66,16 +66,12 @@ function assertValidCoinAmount(amount: number): void {
 }
 
 /**
- * #100：IM 转账卡片送达回执。凭 sendCoinGift 用过的同一枚 Idempotency-Key
- * 定位礼物；后端置位后补偿 cron 不再服务端补发卡片。
+ * 转账。这里只负责把钱转掉 —— 转账卡片由后端在结算事务提交后就地签发并广播,
+ * 客户端既不发卡、也不需要回执。
+ *
+ * (历史:曾有一个「卡片已送达」的回执端点与配套的 MMKV 挂账重试队列,前提是
+ *  卡片由客户端发。而那条发送 100% 被服务端拒收,整套回执从未被执行过,已删。)
  */
-export async function markGiftCardSent(idempotencyKey: string) {
-  return apiClient<void>('/coin/gift/card-sent', {
-    method: 'POST',
-    headers: { 'Idempotency-Key': idempotencyKey },
-  });
-}
-
 export async function sendCoinGift(
   payload: {
     recipientId: string;

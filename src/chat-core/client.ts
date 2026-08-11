@@ -13,7 +13,7 @@ import {
   sendChatMessage,
 } from './socket-manager';
 import { useChatStore, type StoredChatMessage } from './store';
-import { SERVER_COMPENSATED_TYPES, type ChatMessageDto } from './protocol';
+import { type ChatMessageDto } from './protocol';
 import { outboxDelete, outboxList, outboxUpsert } from './local-db';
 
 /**
@@ -140,17 +140,6 @@ interface SendOptions {
   replyToId?: string;
   /** 乐观消息上屏回调(旧 sendTextMessage onCreate 对应物)。 */
   onCreate?: (message: ChatMessageDto) => void;
-  /**
-   * 跳过信用分门禁。**只给「钱已经动了、这条消息是回执」的场景用。**
-   *
-   * 目前唯一的合法用法是转账卡片:积分在 TransferComposerScreen 里就已经
-   * 通过 sendCoinGift 真扣真到账了,这张卡只是事后的凭据。在这里拦掉它并不
-   * 能阻止任何事 —— 只会让付款方看不到卡片、以为没发出去,再从转账页重试一次
-   * (那会生成新的幂等键)就是第二次真实扣款。
-   *
-   * 真正该拦的位置是扣款之前,见 TransferComposerScreen 的 handleSubmit。
-   */
-  bypassCreditGate?: boolean;
 }
 
 function selfSenderInfo() {
@@ -174,9 +163,9 @@ export async function sendWithOptimism(
   // 后端刻意不做这道校验(策略在端上),漏了就是真的漏了。
   // 抛在插入乐观消息之前:失败的发送不该在时间线里留下痕迹。
   //
-  // 唯一的豁免是「钱已经动了」的回执(转账卡片):拦在这里既阻止不了扣款,
-  // 又会让付款方以为没发出去而重试 —— 那是第二次真实扣款。详见 bypassCreditGate。
-  if (!options.bypassCreditGate) assertLocalCanSendMessage();
+  // 这里没有豁免口子。转账卡片曾经有一个(「钱已经动了、拦也白拦」),
+  // 但那张卡现在由服务端结算后自己签发,客户端根本不经过这条路径。
+  assertLocalCanSendMessage();
   const d = options.deliveryId ?? createDeliveryId();
   const store = useChatStore.getState();
   const optimistic: StoredChatMessage = {
@@ -196,8 +185,6 @@ export async function sendWithOptimism(
   store.applyIncomingMessage(optimistic);
   options.onCreate?.(optimistic);
 
-  const serverCompensated = SERVER_COMPENSATED_TYPES.has(options.type);
-
   // G-01 outbox:**先落盘再发送** —— App 在 ack 前被杀,重启后这条会以
   // 「发送失败」气泡还原(长按可重发,同 d 幂等);成功后出队。
   //
@@ -206,21 +193,21 @@ export async function sendWithOptimism(
   // 或者原生写还挂着的时候进程被杀 —— 而「ack 前被杀」正是这个 outbox
   // 唯一要兜的场景。落盘失败不阻断发送(缓存是可选层),但要先等它有结果。
   //
-  // 服务端补发的类型不入队,理由见 SERVER_COMPENSATED_TYPES。
-  if (!serverCompensated) {
-    await outboxUpsert({
-      d,
+  // 这里不再需要 SERVER_COMPENSATED_TYPES 的排除分支:回执类卡片已经完全不走
+  // 客户端发送路径,能到这里的类型没有一个是服务端补发的。该常量仍在
+  // socket-manager 的 outbox 回放里用于清理**旧版本客户端**留下的脏条目。
+  await outboxUpsert({
+    d,
+    conversationId: options.conversationId,
+    payload: {
       conversationId: options.conversationId,
-      payload: {
-        conversationId: options.conversationId,
-        type: options.type,
-        content: options.content,
-        d,
-        ...(options.replyToId ? { replyToId: options.replyToId } : {}),
-      },
-      createdAt: optimistic.createdAt,
-    }).catch(() => undefined);
-  }
+      type: options.type,
+      content: options.content,
+      d,
+      ...(options.replyToId ? { replyToId: options.replyToId } : {}),
+    },
+    createdAt: optimistic.createdAt,
+  }).catch(() => undefined);
   try {
     const ack = await sendChatMessage({
       conversationId: options.conversationId,
@@ -251,13 +238,7 @@ export async function sendWithOptimism(
     return confirmed;
   } catch (error) {
     const failed = useChatStore.getState();
-    if (serverCompensated) {
-      // 这类卡不留失败气泡:后端马上就会补发权威版本,留着只会变成一张
-      // 永远发不出去、又排在时间线最底下的幽灵卡(长按重发还会多发一张)。
-      failed.removeMessage(options.conversationId, optimistic.id);
-    } else {
-      failed.markMessageFailed(options.conversationId, d);
-    }
+    failed.markMessageFailed(options.conversationId, d);
     // 乐观写入已经把会话预览换成了这条消息;发送失败后只标时间线是不够的,
     // 会话列表会一直把「服务端可能根本没有」的内容当作最新消息展示。
     failed.revertConversationPreview(options.conversationId);
@@ -374,12 +355,23 @@ export function sendLocationMessage(options: {
   });
 }
 
+/**
+ * 客户端可发的卡片类型。
+ *
+ * 这份枚举必须是后端 CLIENT_MESSAGE_TYPES 的子集 —— 由
+ * test/transfer-card-server-issued.test.js 的跨仓契约断言看住。判据是「这条消息
+ * 断言的事实,服务端能不能替它背书」:分享类卡片(笔记/名片/圈子/广场帖)只是个
+ * 指针,收件人点开时自己去取真值,伪造顶多是发了条无效链接;而回执类卡片断言的是
+ * **已经发生过的服务端事实**(钱已划走、身份已核验、通话已结束),客户端能发就
+ * 等于能凭空捏造它。
+ *
+ * 所以 transfer-card / verification-card / call-record 一律由服务端签发,
+ * 不出现在这里 —— 前两者原本在这里、且都 100% 被服务端拒收过。
+ */
 export type ChatCardType =
   | 'note-card'
   | 'friend-card'
   | 'circle-card'
-  | 'transfer-card'
-  | 'verification-card'
   | 'plaza-post-card';
 
 /** 各类卡片:content 即卡片 payload 本体(渲染侧同一形状,零转换)。 */
@@ -389,15 +381,12 @@ export function sendCardMessage(options: {
   /** 卡片 payload 本体(NoteCardData 等接口类型无索引签名,收 object 再收窄)。 */
   payload: object;
   onCreate?: (message: ChatMessageDto) => void;
-  /** 见 SendOptions.bypassCreditGate —— 只有转账卡片这种「钱已经动了」的回执能用。 */
-  bypassCreditGate?: boolean;
 }): Promise<ChatMessageDto> {
   return sendWithOptimism({
     conversationId: options.conversationId,
     type: options.type,
     content: options.payload as Record<string, unknown>,
     onCreate: options.onCreate,
-    bypassCreditGate: options.bypassCreditGate,
   });
 }
 

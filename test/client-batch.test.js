@@ -96,82 +96,18 @@ test('membership upgrade 走客服协助流程，不再在 app 内直接升级�
   assert.doesNotMatch(screen, /resolveMembershipUpgradeIdempotency\(/);
 });
 
-test('转账卡片发出后向后端回执，key 贯穿 pending store (#100)', () => {
-  const store = read('src/features/chat/store/use-transfer-composer-store.ts');
-  assert.match(store, /idempotencyKey: string \| null/);
-
+test('转账只做扣款，卡片回执整套挂账已出清', () => {
+  // #100 那套「客户端发卡 → 回执置位 cardDeliveredAt → 阻止补偿 cron」的前提是
+  // 卡片由客户端发。自研聊天栈把 transfer-card 收成服务端专属类型后，发卡 100%
+  // 被拒 —— 回执分支从来没被执行过。卡片改由后端结算后签发，这套全部删掉。
   const composer = read('src/features/chat/screens/TransferComposerScreen.tsx');
+  // 幂等键仍然要有：它防的是「同一笔转账被重复扣款」，与卡片无关。
   assert.match(composer, /idempotencyKey: idempotency\.key/);
-
-  const chat = read('src/features/chat/screens/ChatDetailScreen.tsx');
-  // round 2：回执改为持久化挂账（enqueue → flush），不再 fire-and-forget
-  assert.match(chat, /enqueueGiftCardAck\(payload\.idempotencyKey\)/);
-  assert.match(chat, /flushPendingGiftCardAcks\(\)/);
+  assert.doesNotMatch(composer, /useTransferComposerStore/);
 
   const api = read('src/services/api/coin.ts');
-  assert.match(api, /\/coin\/gift\/card-sent/);
-});
-
-test('卡片回执持久挂账：失败保留、成功销账、app 重启不丢 (round 2)', async () => {
-  const stored = new Map();
-  let markCalls = 0;
-  let markShouldFail = true;
-  const mod = loadTsModule('src/features/chat/utils/gift-card-ack.ts', {
-    requireShim: (specifier) => {
-      if (specifier === 'react-native') {
-        return { AppState: { addEventListener: () => ({ remove: () => {} }) } };
-      }
-      if (specifier === '@/stores/authStore') {
-        return {
-          useAuthStore: { getState: () => ({ user: { id: 'user-1' } }) },
-        };
-      }
-      if (specifier === '@/storage') {
-        return {
-          storage: {
-            getString: (key) => stored.get(key),
-            set: (key, value) => stored.set(key, value),
-          },
-        };
-      }
-      if (specifier === '@/services/api/coin') {
-        return {
-          markGiftCardSent: async () => {
-            markCalls += 1;
-            if (markShouldFail) throw new Error('timeout');
-          },
-        };
-      }
-      throw new Error(`unexpected import in gift-card-ack: ${specifier}`);
-    },
-    context: { setTimeout, clearTimeout, console },
-  });
-
-  // 发卡成功 → 入账；回执失败 → 挂账保留（持久化在 storage 里）
-  mod.enqueueGiftCardAck('key-1');
-  await mod.flushPendingGiftCardAcks();
-  assert.equal(markCalls, 1);
-  assert.match(String(stored.get('circle-im-gift-card-pending-acks')), /key-1/);
-
-  // 网络恢复后再 flush → 销账
-  markShouldFail = false;
-  await mod.flushPendingGiftCardAcks();
-  assert.equal(markCalls, 2);
-  assert.doesNotMatch(
-    String(stored.get('circle-im-gift-card-pending-acks')),
-    /key-1/,
-  );
-  // round 3：挂账按用户隔离持久化（{key, userId}），换号不误冲
-  mod.enqueueGiftCardAck('key-2');
-  assert.match(
-    String(stored.get('circle-im-gift-card-pending-acks')),
-    /"userId":"user-1"/,
-  );
-  // round 3：失败自动安排延时重试 + 回前台补冲（源码断言）
-  const src = read('src/features/chat/utils/gift-card-ack.ts');
-  assert.match(src, /scheduleRetry\(\)/);
-  assert.match(src, /AppState\.addEventListener/);
-  assert.match(src, /item\.userId === userId/);
+  assert.doesNotMatch(api, /card-sent/);
+  assert.doesNotMatch(api, /markGiftCardSent/);
 });
 
 test('回收站：恢复成功与刷新失败分离；刷新失败可感知 (round 2)', () => {
