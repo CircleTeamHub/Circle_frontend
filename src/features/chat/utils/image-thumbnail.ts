@@ -49,6 +49,7 @@ export async function uploadChatImageThumbnail(
       filename: sanitizeUploadFilename(`thumb-${filename}`),
       contentType: 'image/jpeg',
       folder: 'chat',
+      fileUri: thumbnail.uri,
     });
     await uploadLocalFileToPresignedUrl(
       presign.uploadUrl,

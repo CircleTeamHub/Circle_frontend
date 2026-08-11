@@ -103,7 +103,7 @@ function fakeSocketFactory() {
   return { io, socket, captured };
 }
 
-function loadManager() {
+function loadManager(localDbOverrides = {}) {
   const { io, socket, captured } = fakeSocketFactory();
   const reports = [];
   const storeModule = (() => {
@@ -133,6 +133,25 @@ function loadManager() {
       },
       activeConversationId: null,
       messagesByConversation: {},
+      // 冷启动水合会用到这三个;默认 initChatLocalDb=false 时根本走不到,
+      // 只有显式打开本地库的用例才会触发。
+      hydrated: [],
+      failedMarks: [],
+      hydrateLocalSnapshot(conversations, timelines) {
+        state.hydrated.push({ conversations, timelines });
+        state.messagesByConversation = { ...timelines };
+      },
+      ingestMessages(conversationId, messages) {
+        const existing = state.messagesByConversation[conversationId] ?? [];
+        // 只保留被断言用到的语义:同 d 覆盖(与 mergeMessages 一致)。
+        const kept = existing.filter(
+          (m) => !messages.some((incoming) => incoming.d && incoming.d === m.d),
+        );
+        state.messagesByConversation[conversationId] = [...kept, ...messages];
+      },
+      markMessageFailed(conversationId, d) {
+        state.failedMarks.push({ conversationId, d });
+      },
       droppedCachedMessages: 0,
       dropCachedMessages() {
         state.droppedCachedMessages += 1;
@@ -212,6 +231,7 @@ function loadManager() {
       dropAllLocalMessages: async () => {
         apiCalls.droppedLocalMessages += 1;
       },
+      ...localDbOverrides,
     },
     './app-badge': { initChatAppBadgeSync: () => {} },
     // 离线撤回增量的游标落 MMKV,按 userId 分键;测试里用一个内存替身。
@@ -603,4 +623,120 @@ test('typing is throttled locally per conversation', () => {
   manager.sendChatTyping('c2');
   const typingEvents = socket.emitted.filter((e) => e.event === 'chat:typing');
   assert.equal(typingEvents.length, 2);
+});
+
+/** 等 hydrateFromLocalDb 那串 await 跑完(它是 void 出去的,没法直接 await)。 */
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+test('冷启动水合:outbox 里那条其实已经发出去了,不能再标成发送失败', async () => {
+  // 真实形态:消息发成功了,但出队那一下没落盘(裸 DELETE 撞进别人的事务被
+  // 一起回滚)。本地时间线里明明躺着同 d 的已确认消息(height>0),而 outbox
+  // 行还在 —— 每次冷启动都会拿 height=0 的占位把它顶掉再标红,
+  // 进会话拉到真历史才好,退出来又坏。
+  const deleted = [];
+  const { manager, store } = loadManager({
+    initChatLocalDb: async () => true,
+    readLocalConversations: async () => [{ id: 'c1' }],
+    readRecentLocalMessages: async () => [
+      { id: 'srv-1', conversationId: 'c1', height: 7, d: 'd-sent', type: 'text' },
+    ],
+    outboxList: async () => [
+      {
+        d: 'd-sent',
+        conversationId: 'c1',
+        payload: { conversationId: 'c1', type: 'text', content: {}, d: 'd-sent' },
+        createdAt: '2026-08-11T01:00:00.000Z',
+      },
+    ],
+    outboxDelete: async (d) => {
+      deleted.push(d);
+    },
+  });
+
+  manager.connectChat('jwt', 'u1');
+  await flush();
+
+  assert.deepEqual(store.failedMarks, []);
+  // 已确认的那条必须原样留着,不能被 height=0 的占位顶掉。
+  assert.deepEqual(
+    store.messagesByConversation.c1.map((m) => [m.id, m.height]),
+    [['srv-1', 7]],
+  );
+  // 并且这行 outbox 要就地出队,别让它每次启动都重来一遍。
+  assert.deepEqual(deleted, ['d-sent']);
+});
+
+test('冷启动水合:真没发出去的那条照旧还原成失败气泡', async () => {
+  const deleted = [];
+  const { manager, store } = loadManager({
+    initChatLocalDb: async () => true,
+    readLocalConversations: async () => [{ id: 'c1' }],
+    // 只有乐观占位(height=0),没有服务端确认过的版本。
+    readRecentLocalMessages: async () => [],
+    outboxList: async () => [
+      {
+        d: 'd-lost',
+        conversationId: 'c1',
+        payload: { conversationId: 'c1', type: 'text', content: {}, d: 'd-lost' },
+        createdAt: '2026-08-11T01:00:00.000Z',
+      },
+    ],
+    outboxDelete: async (d) => {
+      deleted.push(d);
+    },
+  });
+
+  manager.connectChat('jwt', 'u1');
+  await flush();
+
+  assert.deepEqual(store.failedMarks, [{ conversationId: 'c1', d: 'd-lost' }]);
+  assert.deepEqual(deleted, []);
+});
+
+test('冷启动水合:转账卡片的 outbox 脏数据直接清掉,不还原成失败气泡', async () => {
+  // 后端 GiftCardOutboxProcessor 补发的那张卡用的是 gift_card_<id>,
+  // 和客户端的 d 不是一个键 —— 「同 d 已确认」的判据永远匹配不上。
+  // 留着的话:height=0 排在时间线最底下(新消息都跑到它上面),
+  // 会话列表还一直给最新那条挂「[发送失败]」前缀。
+  const deleted = [];
+  const { manager, store } = loadManager({
+    initChatLocalDb: async () => true,
+    readLocalConversations: async () => [{ id: 'c1' }],
+    // 后端补发的卡在时间线里,但它的 d 与 outbox 那条不同。
+    readRecentLocalMessages: async () => [
+      {
+        id: 'srv-card',
+        conversationId: 'c1',
+        height: 9,
+        d: 'gift_card_42',
+        type: 'transfer-card',
+      },
+    ],
+    outboxList: async () => [
+      {
+        d: 'd-card',
+        conversationId: 'c1',
+        payload: {
+          conversationId: 'c1',
+          type: 'transfer-card',
+          content: { amount: 100 },
+          d: 'd-card',
+        },
+        createdAt: '2026-08-11T01:23:00.000Z',
+      },
+    ],
+    outboxDelete: async (d) => {
+      deleted.push(d);
+    },
+  });
+
+  manager.connectChat('jwt', 'u1');
+  await flush();
+
+  assert.deepEqual(store.failedMarks, []);
+  assert.deepEqual(deleted, ['d-card']);
+  assert.deepEqual(
+    store.messagesByConversation.c1.map((m) => m.id),
+    ['srv-card'],
+  );
 });

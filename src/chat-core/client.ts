@@ -13,7 +13,7 @@ import {
   sendChatMessage,
 } from './socket-manager';
 import { useChatStore, type StoredChatMessage } from './store';
-import type { ChatMessageDto } from './protocol';
+import { SERVER_COMPENSATED_TYPES, type ChatMessageDto } from './protocol';
 import { outboxDelete, outboxList, outboxUpsert } from './local-db';
 
 /**
@@ -124,6 +124,11 @@ export function markConversationAsRead(conversationId: string): void {
 interface SendOptions {
   conversationId: string;
   type: string;
+  /**
+   * 复用一个已经上屏的乐观气泡的 d(媒体消息「先上屏、后上传」用)。
+   * 省略时自己生成 —— 文本/卡片这些没有上传阶段的类型走这条。
+   */
+  deliveryId?: string;
   /** 线上载荷。媒体消息只放 object key,任何本地/展示用地址都不进这里。 */
   content: Record<string, unknown>;
   /**
@@ -172,7 +177,7 @@ export async function sendWithOptimism(
   // 唯一的豁免是「钱已经动了」的回执(转账卡片):拦在这里既阻止不了扣款,
   // 又会让付款方以为没发出去而重试 —— 那是第二次真实扣款。详见 bypassCreditGate。
   if (!options.bypassCreditGate) assertLocalCanSendMessage();
-  const d = createDeliveryId();
+  const d = options.deliveryId ?? createDeliveryId();
   const store = useChatStore.getState();
   const optimistic: StoredChatMessage = {
     id: `local:${d}`,
@@ -191,6 +196,8 @@ export async function sendWithOptimism(
   store.applyIncomingMessage(optimistic);
   options.onCreate?.(optimistic);
 
+  const serverCompensated = SERVER_COMPENSATED_TYPES.has(options.type);
+
   // G-01 outbox:**先落盘再发送** —— App 在 ack 前被杀,重启后这条会以
   // 「发送失败」气泡还原(长按可重发,同 d 幂等);成功后出队。
   //
@@ -198,18 +205,22 @@ export async function sendWithOptimism(
   // 用户一连上就发的那条消息会撞上 requireDb() === null 直接静默丢弃;
   // 或者原生写还挂着的时候进程被杀 —— 而「ack 前被杀」正是这个 outbox
   // 唯一要兜的场景。落盘失败不阻断发送(缓存是可选层),但要先等它有结果。
-  await outboxUpsert({
-    d,
-    conversationId: options.conversationId,
-    payload: {
-      conversationId: options.conversationId,
-      type: options.type,
-      content: options.content,
+  //
+  // 服务端补发的类型不入队,理由见 SERVER_COMPENSATED_TYPES。
+  if (!serverCompensated) {
+    await outboxUpsert({
       d,
-      ...(options.replyToId ? { replyToId: options.replyToId } : {}),
-    },
-    createdAt: optimistic.createdAt,
-  }).catch(() => undefined);
+      conversationId: options.conversationId,
+      payload: {
+        conversationId: options.conversationId,
+        type: options.type,
+        content: options.content,
+        d,
+        ...(options.replyToId ? { replyToId: options.replyToId } : {}),
+      },
+      createdAt: optimistic.createdAt,
+    }).catch(() => undefined);
+  }
   try {
     const ack = await sendChatMessage({
       conversationId: options.conversationId,
@@ -240,7 +251,13 @@ export async function sendWithOptimism(
     return confirmed;
   } catch (error) {
     const failed = useChatStore.getState();
-    failed.markMessageFailed(options.conversationId, d);
+    if (serverCompensated) {
+      // 这类卡不留失败气泡:后端马上就会补发权威版本,留着只会变成一张
+      // 永远发不出去、又排在时间线最底下的幽灵卡(长按重发还会多发一张)。
+      failed.removeMessage(options.conversationId, optimistic.id);
+    } else {
+      failed.markMessageFailed(options.conversationId, d);
+    }
     // 乐观写入已经把会话预览换成了这条消息;发送失败后只标时间线是不够的,
     // 会话列表会一直把「服务端可能根本没有」的内容当作最新消息展示。
     failed.revertConversationPreview(options.conversationId);
@@ -296,10 +313,13 @@ export function sendImageMessage(options: {
   width?: number;
   height?: number;
   thumbKey?: string;
+  /** 见 SendOptions.deliveryId:接管上传前就已经上屏的那个气泡。 */
+  deliveryId?: string;
   onCreate?: (message: ChatMessageDto) => void;
 }): Promise<ChatMessageDto> {
   return sendWithOptimism({
     conversationId: options.conversationId,
+    deliveryId: options.deliveryId,
     type: 'image',
     content: {
       key: options.key,
@@ -319,10 +339,13 @@ export function sendVoiceMessage(options: {
   duration: number;
   size?: number;
   localUri?: string;
+  /** 见 SendOptions.deliveryId:接管上传前就已经上屏的那个气泡。 */
+  deliveryId?: string;
   onCreate?: (message: ChatMessageDto) => void;
 }): Promise<ChatMessageDto> {
   return sendWithOptimism({
     conversationId: options.conversationId,
+    deliveryId: options.deliveryId,
     type: 'voice',
     content: {
       key: options.key,
@@ -380,6 +403,72 @@ export function sendCardMessage(options: {
 
 
 /**
+ * 媒体消息(语音/图片)的「先上屏、后上传」。
+ *
+ * 原来的顺序是 presign → 上传 → 才建乐观气泡:上传那段时间里屏幕上什么都没有,
+ * 输入栏还被 inFlightRef 锁着(最长 60s 上传超时)—— 用户看到的是「录完就消失、
+ * 再按没反应」,失败了那段录音也直接没了,连重发的入口都不存在。
+ *
+ * 现在录完/选完就先上屏一个 sendStatus=1 的气泡(content 里带 localUri,
+ * 本机直接渲染),上传在后台跑;失败就把这个气泡标红,长按「重发」重跑整条
+ * 「上传 + 发送」。
+ *
+ * 重试闭包只活在本次会话内存里:上传还没成功就意味着服务端没有这条消息,
+ * outbox 那套(payload 里只有 object key)接不住它。App 重启后红气泡随内存
+ * 一起消失 —— 比重启后留一个永远重发失败的按钮诚实。
+ */
+const mediaRetries = new Map<string, () => Promise<void>>();
+
+export function startMediaSend(options: {
+  conversationId: string;
+  type: 'image' | 'voice';
+  /** 上屏用的本地内容:localUri / duration / width / height,不上行。 */
+  localContent: Record<string, unknown>;
+  /** 重跑整条上传+发送(拿到同一个 d,失败气泡才会被替换而不是又多一条)。 */
+  retry: (deliveryId: string) => Promise<void>;
+}): string {
+  const d = createDeliveryId();
+  const optimistic: StoredChatMessage = {
+    id: `local:${d}`,
+    conversationId: options.conversationId,
+    height: 0,
+    type: options.type,
+    content: options.localContent,
+    sender: selfSenderInfo(),
+    replyToId: null,
+    d,
+    createdAt: new Date().toISOString(),
+  };
+  const store = useChatStore.getState();
+  store.ingestMessages(options.conversationId, [optimistic]);
+  store.applyIncomingMessage(optimistic);
+  mediaRetries.set(d, () => options.retry(d));
+  return d;
+}
+
+/** 上传或发送失败:气泡标红(长按可重发),会话预览退回上一条权威消息。 */
+export function failMediaSend(conversationId: string, d: string): void {
+  const store = useChatStore.getState();
+  store.markMessageFailed(conversationId, d);
+  store.revertConversationPreview(conversationId);
+}
+
+/** 发送成功:重试闭包连同它captured 的本地文件引用一起丢掉。 */
+export function finishMediaSend(d: string): void {
+  mediaRetries.delete(d);
+}
+
+/**
+ * 正在重发的 deliveryId。
+ *
+ * 媒体重发要重跑整条「presign + 上传 + 发送」,可能几十秒。这期间气泡还红着、
+ * mediaRetries 里的闭包也还在 —— 不挡住的话用户多按几下就是多跑几遍上传:
+ * 重复取签名、把同一份原图和缩略图再传一遍,存储里留下没人引用的对象。
+ * 复用同一个 d 只能让最后落库的那条聊天消息不重复,拦不住上传本身。
+ */
+const retriesInFlight = new Set<string>();
+
+/**
  * G-01 重发:失败气泡长按「重发」。复用同一 d(服务端幂等兜底,绝不重复入库);
  * 成功后服务端回声(chat:msg 同 d)会替换掉失败的乐观气泡,outbox 出队。
  */
@@ -387,6 +476,32 @@ export async function retryFailedChatMessage(
   conversationId: string,
   d: string,
 ): Promise<void> {
+  if (retriesInFlight.has(d)) return;
+  retriesInFlight.add(d);
+  // 气泡从红转回「发送中」(sendStatus 3→1):长按菜单里的「重发」只在
+  // sendStatus===3 时出现,连点的入口本身就消失了,用户也看得出这一下生效了。
+  useChatStore.getState().markMessageRetrying(conversationId, d);
+  try {
+    await runRetry(conversationId, d);
+  } catch (error) {
+    // 上面把失败态清掉了,这里必须补回来 —— 否则重发再失败,气泡会一直停在
+    // 「发送中」,既没有红色提示也再没有重发入口。
+    useChatStore.getState().markMessageFailed(conversationId, d);
+    throw error;
+  } finally {
+    retriesInFlight.delete(d);
+  }
+}
+
+async function runRetry(conversationId: string, d: string): Promise<void> {
+  // 媒体消息优先:它压根没进过 outbox(那时候还没有 object key),
+  // 重发要从上传重跑,不是把同一份 payload 再 emit 一次。
+  // (媒体那条链路自己 catch 后调 failMediaSend,不抛到这里。)
+  const media = mediaRetries.get(d);
+  if (media) {
+    await media();
+    return;
+  }
   const entries = await outboxList();
   const entry = entries.find(
     (item) => item.d === d && item.conversationId === conversationId,

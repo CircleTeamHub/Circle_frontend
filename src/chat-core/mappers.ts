@@ -9,10 +9,46 @@ import type { ChatConversationDto, ChatMessageDto } from './protocol';
  * UI `Conversation` 形状不变,聊天列表组件零改动。
  */
 
-function tPreview(key: string, fallback: string): string {
+function tPreview(
+  key: string,
+  fallback: string,
+  params?: Record<string, string>,
+): string {
   const full = `im.preview.${key}`;
-  const value = i18n.t(full);
+  const value = i18n.t(full, params);
   return value === full ? fallback : value;
+}
+
+/** 列表一行的长度上限(与 file 分支同口径)。 */
+const PREVIEW_FIELD_MAX = 60;
+
+/**
+ * 带插值的卡片预览。
+ *
+ * `im.preview.note` 这类词条本体是「[笔记] {{title}}」—— 只给 key 不给值的话
+ * i18next 会把 `{{title}}` **原样**留在结果里(defaultValue 只在 key 缺失时才
+ * 用得上,而这些 key 都是存在的),列表上就显示成「[笔记] {{title}}」。
+ * 值缺失/不是字符串时退回不带占位的纯标签,而不是留一个空插值。
+ *
+ * 兜底同样要过 i18n(codex review 修正)。原来是 `if (!text) return fallback`
+ * 直接吐硬编码中文,于是英/日/韩/西语用户遇到旧数据或字段残缺的卡片时,会话
+ * 列表里冒出一行中文标签。改成拿同一条词条、插一个空值再 trim ——
+ * 五种语言的模板占位符都在末尾,裁掉即得纯标签(「[Note] {{title}}」→「[Note]」)。
+ * 硬编码的 fallback 退居真正的最后一道:词条本身缺失时才用得上。
+ */
+function tCardPreview(
+  key: string,
+  fallback: string,
+  name: string,
+  raw: unknown,
+): string {
+  const text = typeof raw === 'string' ? raw.trim() : '';
+  if (!text) return tPreview(key, fallback, { [name]: '' }).trim() || fallback;
+  const clamped =
+    text.length > PREVIEW_FIELD_MAX
+      ? `${text.slice(0, PREVIEW_FIELD_MAX)}…`
+      : text;
+  return tPreview(key, `${fallback} ${clamped}`, { [name]: clamped }).trim();
 }
 
 function tImTime(key: string, fallback: string): string {
@@ -77,14 +113,25 @@ export function getChatMessagePreview(message: ChatMessageDto | null): string {
     case 'transfer-card':
       return tPreview('transfer', '[转账]');
     case 'note-card':
-      return tPreview('note', '[笔记]');
+      return tCardPreview('note', '[笔记]', 'title', message.content['title']);
     case 'verification-card':
-      return tPreview('verification', '[验证消息]');
+      return tCardPreview(
+        'verification',
+        '[验证消息]',
+        'name',
+        message.content['applicantName'],
+      );
     case 'plaza-post-card':
-      return tPreview('plazaPost', '[广场帖]');
+      return tCardPreview(
+        'plazaPost',
+        '[广场帖]',
+        'title',
+        message.content['title'],
+      );
     case 'friend-card':
+      return tCardPreview('card', '[卡片]', 'name', message.content['nickname']);
     case 'circle-card':
-      return tPreview('card', '[卡片]');
+      return tCardPreview('card', '[卡片]', 'name', message.content['name']);
     default:
       return tPreview('default', '[消息]');
   }

@@ -1,10 +1,9 @@
 import { useTranslation } from 'react-i18next';
 import type { GestureResponderEvent } from 'react-native';
 import { Radius } from '@/theme';
-import { Avatar } from '@/components/ui/avatar';
 import { CircleAvatar } from '@/components/ui/circle-avatar';
 import type { ChatMessage, CircleCardData } from '@/types';
-import { AVATAR_SIZE, CompactCardBubble } from './shared';
+import { CompactCardBubble, MessageAvatar } from './shared';
 
 interface CircleCardBubbleProps {
   message: ChatMessage;
@@ -42,11 +41,13 @@ export const CircleCardBubble: React.FC<CircleCardBubbleProps> = ({
   const displayAvatar = card.avatarUrl;
 
   const avatarNode = (
-    <Avatar
-      size={AVATAR_SIZE}
-      shape="square"
-      name={outgoing ? selfName : senderName}
-      uri={outgoing ? selfAvatarUri : senderAvatarUri}
+    <MessageAvatar
+      message={message}
+      outgoing={outgoing}
+      selfName={selfName}
+      selfAvatarUri={selfAvatarUri}
+      senderName={senderName}
+      senderAvatarUri={senderAvatarUri}
     />
   );
 

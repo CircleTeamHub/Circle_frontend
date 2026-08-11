@@ -9,9 +9,8 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
-import { Avatar } from '@/components/ui/avatar';
 import type { ChatMessage, PlazaPostCardData } from '@/types';
-import { AVATAR_SIZE, CardBubbleFrame } from './shared';
+import { CardBubbleFrame, MessageAvatar } from './shared';
 
 interface PlazaPostCardBubbleProps {
   message: ChatMessage;
@@ -183,11 +182,13 @@ export const PlazaPostCardBubble: React.FC<PlazaPostCardBubbleProps> = ({
   const coverUrl = card.coverUrl;
 
   const avatarNode = (
-    <Avatar
-      size={AVATAR_SIZE}
-      shape="square"
-      name={outgoing ? selfName : senderName}
-      uri={outgoing ? selfAvatarUri : senderAvatarUri}
+    <MessageAvatar
+      message={message}
+      outgoing={outgoing}
+      selfName={selfName}
+      selfAvatarUri={selfAvatarUri}
+      senderName={senderName}
+      senderAvatarUri={senderAvatarUri}
     />
   );
 

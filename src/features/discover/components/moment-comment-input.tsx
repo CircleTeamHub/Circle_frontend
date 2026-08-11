@@ -303,6 +303,7 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
             filename: sanitizeUploadFilename(fileName),
             contentType,
             folder: 'posts',
+            fileUri: imageUri,
           });
           await uploadLocalFileToPresignedUrl(
             presign.uploadUrl,

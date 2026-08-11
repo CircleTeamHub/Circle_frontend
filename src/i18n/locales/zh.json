@@ -287,7 +287,7 @@
       "noteSendFailed": "笔记发送失败，请重试",
       "cardSendFailed": "名片发送失败，请重试",
       "favoriteSendFailed": "收藏内容发送失败，请重试",
-      "transferCardSendFailed": "转账卡片发送失败，但积分已扣减",
+      "transferCardSendFailed": "转账已完成，卡片稍后自动补上",
       "favoriteLegacyVoiceUnsupported": "这条旧版语音收藏无法重新发送"
     },
     "messageActions": {
@@ -2570,7 +2570,9 @@
   },
   "upload": {
     "errors": {
-      "presignDataInvalid": "预签名上传数据格式异常"
+      "presignDataInvalid": "预签名上传数据格式异常",
+      "fileUnreadable": "找不到要上传的文件",
+      "fileTooLarge": "文件超过 {{maxMb}}MB 上限"
     }
   },
   "serverErrors": {

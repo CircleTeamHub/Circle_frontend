@@ -2,9 +2,8 @@ import { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable, type GestureResponderEvent } from 'react-native';
 import { Image } from 'expo-image';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
-import { Avatar } from '@/components/ui/avatar';
 import type { ChatMessage } from '@/types';
-import { AVATAR_SIZE, BubbleStatusText } from './shared';
+import { BubbleStatusText, MessageAvatar } from './shared';
 
 interface ImageBubbleProps {
   message: ChatMessage;
@@ -64,11 +63,13 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
 }) => {
   const { colors } = useTheme();
   const avatarNode = (
-    <Avatar
-      size={AVATAR_SIZE}
-      shape="square"
-      name={outgoing ? selfName : senderName}
-      uri={outgoing ? selfAvatarUri : senderAvatarUri}
+    <MessageAvatar
+      message={message}
+      outgoing={outgoing}
+      selfName={selfName}
+      selfAvatarUri={selfAvatarUri}
+      senderName={senderName}
+      senderAvatarUri={senderAvatarUri}
     />
   );
 

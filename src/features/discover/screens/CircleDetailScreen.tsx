@@ -516,6 +516,7 @@ export default function CircleDetailScreen() {
         filename: sanitizeUploadFilename(asset.fileName ?? 'circle-icon.jpg'),
         contentType,
         folder: 'avatars',
+        fileUri: asset.uri,
       });
       await uploadLocalFileToPresignedUrl(presign.uploadUrl, contentType, asset.uri);
       await uploadCircleIcon(id, {

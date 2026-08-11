@@ -100,6 +100,7 @@ export function useFriendPhotoNotes(): UseFriendPhotoNotesResult {
           filename,
           contentType,
           folder: 'friends',
+          fileUri: asset.uri,
         });
         await uploadLocalFileToPresignedUrl(uploadUrl, contentType, asset.uri);
         setPhotos((current) =>

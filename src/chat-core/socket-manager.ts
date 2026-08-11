@@ -11,6 +11,7 @@ import {
 import {
   dropAllLocalMessages,
   initChatLocalDb,
+  outboxDelete,
   outboxList,
   pendingReadDelete,
   pendingReadUpsert,
@@ -23,6 +24,7 @@ import { bindChatEvents, cancelConversationBackfill } from './dispatcher';
 import {
   CHAT_EVENTS,
   CHAT_WS_PATH,
+  SERVER_COMPENSATED_TYPES,
   type ChatReadAck,
   type ChatSendAck,
   type ChatSendAckOk,
@@ -272,6 +274,23 @@ async function hydrateFromLocalDb(userId: string): Promise<void> {
     // outbox:上次没发出去的消息还原成「发送失败」气泡,可长按重发。
     const pending = await outboxList();
     for (const entry of pending) {
+      // 先认账:本地时间线里已经有同 d 的**已确认**消息(height>0),说明这条
+      // 其实发出去了,只是当初出队那一下没落盘。不拦住的话 mergeMessages 按 d
+      // 去重会把那条已确认的删掉、换上下面这个 height=0 的占位,再被
+      // markMessageFailed 标红 —— 一条真发出去的消息每次冷启动都显示
+      // 「发送失败」,点进会话拉到真历史才好,退出来又坏(用户可复现)。
+      // 顺手把这行出队:它已经是脏数据,留着每次启动都要再演一遍。
+      const alreadyDelivered = (timelines[entry.conversationId] ?? []).some(
+        (message) => message.d === entry.d && message.height > 0,
+      );
+      // 服务端补发的类型(转账卡片)压根不该在队列里:后端那张卡用的是
+      // `gift_card_<id>`,和这里的 d 不是一个键,上面的同 d 判据永远匹配不上,
+      // 于是这条失败气泡会永远赖在时间线最底下。新版发送侧已经不再入队,
+      // 这一行负责把旧版留下的脏数据清掉。
+      if (alreadyDelivered || SERVER_COMPENSATED_TYPES.has(entry.payload.type)) {
+        void outboxDelete(entry.d);
+        continue;
+      }
       const optimistic = {
         id: `outbox-${entry.d}`,
         conversationId: entry.conversationId,

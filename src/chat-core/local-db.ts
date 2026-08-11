@@ -138,11 +138,21 @@ export async function initChatLocalDb(userId: string): Promise<boolean> {
   if (handle?.userId === userId) return true;
   opening = (async (): Promise<DbHandle | null> => {
     try {
-      if (handle) {
-        await handle.db.closeAsync().catch(() => undefined);
-        handle = null;
-      }
-      const db = await SQLite.openDatabaseAsync(dbFileName(userId));
+      if (handle) await releaseHandle(handle);
+      // finalizeUnusedStatementsBeforeClosing 必须关掉(默认 true)。
+      //
+      // 它在关库前遍历 sqlite3_next_stmt 把连接上**所有**语句 finalize 一遍,
+      // 其中包括 FTS5 虚表内部自己持有的那些;紧接着 sqlite3_close 走
+      // fts5DisconnectMethod → sqlite3Fts5IndexClose 又 finalize 一次 ——
+      // 二次释放,EXC_BAD_ACCESS。触发点是 app context 销毁(dev 下的 reload、
+      // 退出)时 expo-sqlite 的 OnDestroy 强制关库,表现为整个 App 闪退。
+      // 上游 issue: https://github.com/expo/expo/issues/38168
+      //
+      // 关掉它对我们无损:本模块只用 runAsync/getFirstAsync/getAllAsync/execAsync
+      // (自带 finalize),从不手工 prepareAsync,没有需要它兜底的语句。
+      const db = await SQLite.openDatabaseAsync(dbFileName(userId), {
+        finalizeUnusedStatementsBeforeClosing: false,
+      });
       let encrypted = false;
       const key = await readOrCreateDbKey();
       if (key) {
@@ -189,13 +199,81 @@ export async function initChatLocalDb(userId: string): Promise<boolean> {
 }
 
 export async function closeChatLocalDb(): Promise<void> {
-  const current = handle;
+  if (handle) await releaseHandle(handle);
+}
+
+/**
+ * 摘句柄 → 等积压写完 → 关连接。切号与登出都走这里。
+ *
+ * 顺序是关键(codex review)。原来是直接 `closeAsync()`:写队列里排着的回调
+ * 仍握着那个刚被关掉的连接,轮到它们时一律抛错,而 outbox / 已读水位这些
+ * 写入方都是 `warn` 一声吞掉 —— 丢的是上一个账号**还没发出去的消息**和待
+ * 上报的已读位置,用户那边没有任何提示。
+ *
+ * 先把 handle 摘掉再 drain,循环才一定收敛:此后新的写入方在 requireDb() 就
+ * 拿到 null 直接返回,不会再往旧库排队(每个写入方都是 requireDb() 之后
+ * **同步**入队的,不存在跨 await 的窗口)。
+ */
+async function releaseHandle(current: DbHandle): Promise<void> {
   handle = null;
-  if (current) await current.db.closeAsync().catch(() => undefined);
+  // 队列在 await 期间还可能被追加(摘句柄那一刻已经进到队里的),等到它不再变。
+  let drained: Promise<unknown> | null = null;
+  while (drained !== writeQueue) {
+    drained = writeQueue;
+    await drained.catch(() => undefined);
+  }
+  await current.db.closeAsync().catch(() => undefined);
 }
 
 function requireDb(): DbHandle | null {
   return handle;
+}
+
+/**
+ * 写事务串行化队列。
+ *
+ * expo-sqlite 的 `withTransactionAsync` 文档明写「非独占,会被其它 async
+ * 查询打断」:同一条连接上两个并发调用,第二个 BEGIN 直接撞
+ * `cannot start a transaction within a transaction`,那一整批写入被吞掉。
+ * 重连对账(多个会话的历史同时回来)就是这个形状。
+ *
+ * 不改用 `withExclusiveTransactionAsync`:它另开一条连接,只是把嵌套事务
+ * 换成 `database is locked`,而且 web 不支持。本模块是本地库的唯一入口,
+ * 在 JS 侧排队最直接。
+ *
+ * 注意:排队的任务里不能再调 writeTransaction —— 内层会等一条永远轮不到
+ * 自己的队列(死锁)。目前每个事务体只发 db 语句,没有互相调用。
+ */
+let writeQueue: Promise<unknown> = Promise.resolve();
+
+function enqueueWrite<T>(task: () => Promise<T>): Promise<T> {
+  // 前一批失败不能卡住后面的:队列本身只保序,不传播结果。
+  const run = writeQueue.then(task, task);
+  writeQueue = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+function writeTransaction(
+  db: SQLite.SQLiteDatabase,
+  task: () => Promise<void>,
+): Promise<void> {
+  return enqueueWrite(() => db.withTransactionAsync(task));
+}
+
+/**
+ * 单条写入也必须排进同一条队列。
+ *
+ * SQLite 里一条裸 `runAsync` 如果正好落在别的事务打开着的窗口里,会**被算进
+ * 那个事务** —— 那个事务回滚,这条写入跟着一起没。真实后果:消息发成功后
+ * `outboxDelete` 撞进回声的 `persistLocalMessages` 事务,该事务当时因为
+ * 嵌套 BEGIN 失败而 ROLLBACK,于是 outbox 行留了下来,那条已经发出去的消息
+ * 从此每次冷启动都显示「发送失败」。
+ */
+function writeStatement<T>(task: () => Promise<T>): Promise<T> {
+  return enqueueWrite(task);
 }
 
 /** 会话快照整体落盘(全量拉取语义:先清后写,单事务)。 */
@@ -205,7 +283,7 @@ export async function persistLocalConversations(
   const current = requireDb();
   if (!current) return;
   try {
-    await current.db.withTransactionAsync(async () => {
+    await writeTransaction(current.db, async () => {
       await current.db.runAsync('DELETE FROM conversations;');
       for (const conversation of conversations) {
         await current.db.runAsync(
@@ -227,11 +305,13 @@ export async function upsertLocalConversation(
   const current = requireDb();
   if (!current) return;
   try {
-    await current.db.runAsync(
-      'INSERT OR REPLACE INTO conversations (id, last_message_at, payload) VALUES (?, ?, ?);',
-      conversation.id,
-      conversation.lastMessageAt ?? null,
-      JSON.stringify(conversation),
+    await writeStatement(() =>
+      current.db.runAsync(
+        'INSERT OR REPLACE INTO conversations (id, last_message_at, payload) VALUES (?, ?, ?);',
+        conversation.id,
+        conversation.lastMessageAt ?? null,
+        JSON.stringify(conversation),
+      ),
     );
   } catch (error) {
     warn('conv-upsert', '[chat-db] upsert conversation failed', error);
@@ -244,7 +324,7 @@ export async function removeLocalConversation(
   const current = requireDb();
   if (!current) return;
   try {
-    await current.db.withTransactionAsync(async () => {
+    await writeTransaction(current.db, async () => {
       await current.db.runAsync(
         'DELETE FROM conversations WHERE id = ?;',
         conversationId,
@@ -312,7 +392,7 @@ export async function persistLocalMessages(
   const rows = incoming.filter((m) => m.height > 0);
   if (rows.length === 0) return;
   try {
-    await current.db.withTransactionAsync(async () => {
+    await writeTransaction(current.db, async () => {
       for (const message of rows) {
         // ON CONFLICT DO UPDATE 而不是 INSERT OR REPLACE。后者在 SQLite 里是
         // 「先 DELETE 再 INSERT」,而默认 recursive_triggers=off 时那次隐式
@@ -381,10 +461,12 @@ export async function deleteLocalMessage(
   const current = requireDb();
   if (!current) return;
   try {
-    await current.db.runAsync(
-      'DELETE FROM messages WHERE conversation_id = ? AND id = ?;',
-      conversationId,
-      messageId,
+    await writeStatement(() =>
+      current.db.runAsync(
+        'DELETE FROM messages WHERE conversation_id = ? AND id = ?;',
+        conversationId,
+        messageId,
+      ),
     );
   } catch (error) {
     warn('msg-delete', '[chat-db] delete message failed', error);
@@ -398,7 +480,7 @@ export async function clearLocalConversationMessages(
   const current = requireDb();
   if (!current) return;
   try {
-    await current.db.withTransactionAsync(async () => {
+    await writeTransaction(current.db, async () => {
       await current.db.runAsync(
         'DELETE FROM messages WHERE conversation_id = ?;',
         conversationId,
@@ -441,10 +523,12 @@ export async function purgeExpiredLocalMessages(
   const current = requireDb();
   if (!current) return;
   try {
-    await current.db.runAsync(
-      'DELETE FROM messages WHERE conversation_id = ? AND created_at < ?;',
-      conversationId,
-      cutoff.toISOString(),
+    await writeStatement(() =>
+      current.db.runAsync(
+        'DELETE FROM messages WHERE conversation_id = ? AND created_at < ?;',
+        conversationId,
+        cutoff.toISOString(),
+      ),
     );
   } catch (error) {
     warn('msg-burn', '[chat-db] purge expired messages failed', error);
@@ -462,7 +546,7 @@ export async function dropAllLocalMessages(): Promise<void> {
   const current = requireDb();
   if (!current) return;
   try {
-    await current.db.withTransactionAsync(async () => {
+    await writeTransaction(current.db, async () => {
       await current.db.runAsync('DELETE FROM messages;');
       await current.db.runAsync('DELETE FROM sync_state;');
     });
@@ -479,7 +563,7 @@ export async function deleteLocalMessagesBelow(
   const current = requireDb();
   if (!current) return;
   try {
-    await current.db.withTransactionAsync(async () => {
+    await writeTransaction(current.db, async () => {
       await current.db.runAsync(
         'DELETE FROM messages WHERE conversation_id = ? AND height < ?;',
         conversationId,
@@ -536,7 +620,9 @@ export async function getLocalSyncState(
       'SELECT min_height, max_height FROM sync_state WHERE conversation_id = ?;',
       conversationId,
     );
-    return row ? { minHeight: row.min_height, maxHeight: row.max_height } : null;
+    return row
+      ? { minHeight: row.min_height, maxHeight: row.max_height }
+      : null;
   } catch {
     return null;
   }
@@ -606,12 +692,14 @@ export async function outboxUpsert(entry: OutboxEntry): Promise<void> {
   const current = requireDb();
   if (!current) return;
   try {
-    await current.db.runAsync(
-      'INSERT OR REPLACE INTO outbox (d, conversation_id, payload, created_at) VALUES (?, ?, ?, ?);',
-      entry.d,
-      entry.conversationId,
-      JSON.stringify(entry.payload),
-      entry.createdAt,
+    await writeStatement(() =>
+      current.db.runAsync(
+        'INSERT OR REPLACE INTO outbox (d, conversation_id, payload, created_at) VALUES (?, ?, ?, ?);',
+        entry.d,
+        entry.conversationId,
+        JSON.stringify(entry.payload),
+        entry.createdAt,
+      ),
     );
   } catch (error) {
     warn('outbox-write', '[chat-db] outbox upsert failed', error);
@@ -622,7 +710,9 @@ export async function outboxDelete(d: string): Promise<void> {
   const current = requireDb();
   if (!current) return;
   try {
-    await current.db.runAsync('DELETE FROM outbox WHERE d = ?;', d);
+    await writeStatement(() =>
+      current.db.runAsync('DELETE FROM outbox WHERE d = ?;', d),
+    );
   } catch (error) {
     warn('outbox-delete', '[chat-db] outbox delete failed', error);
   }
@@ -637,7 +727,9 @@ export async function outboxList(): Promise<OutboxEntry[]> {
       conversation_id: string;
       payload: string;
       created_at: string;
-    }>('SELECT d, conversation_id, payload, created_at FROM outbox ORDER BY created_at ASC;');
+    }>(
+      'SELECT d, conversation_id, payload, created_at FROM outbox ORDER BY created_at ASC;',
+    );
     const parsed: OutboxEntry[] = [];
     for (const row of rows) {
       try {
@@ -667,12 +759,14 @@ export async function pendingReadUpsert(
   const current = requireDb();
   if (!current) return;
   try {
-    await current.db.runAsync(
-      `INSERT INTO pending_reads (conversation_id, height) VALUES (?, ?)
+    await writeStatement(() =>
+      current.db.runAsync(
+        `INSERT INTO pending_reads (conversation_id, height) VALUES (?, ?)
        ON CONFLICT(conversation_id) DO UPDATE SET
          height = MAX(height, excluded.height);`,
-      conversationId,
-      height,
+        conversationId,
+        height,
+      ),
     );
   } catch (error) {
     warn('read-write', '[chat-db] pending read upsert failed', error);
@@ -683,9 +777,11 @@ export async function pendingReadDelete(conversationId: string): Promise<void> {
   const current = requireDb();
   if (!current) return;
   try {
-    await current.db.runAsync(
-      'DELETE FROM pending_reads WHERE conversation_id = ?;',
-      conversationId,
+    await writeStatement(() =>
+      current.db.runAsync(
+        'DELETE FROM pending_reads WHERE conversation_id = ?;',
+        conversationId,
+      ),
     );
   } catch (error) {
     warn('read-delete', '[chat-db] pending read delete failed', error);
@@ -717,13 +813,15 @@ export async function wipeChatLocalDb(): Promise<void> {
   const current = requireDb();
   if (!current) return;
   try {
-    await current.db.execAsync(`
+    await writeStatement(() =>
+      current.db.execAsync(`
       DELETE FROM conversations;
       DELETE FROM messages;
       DELETE FROM sync_state;
       DELETE FROM pending_reads;
       DELETE FROM outbox;
-    `);
+    `),
+    );
   } catch (error) {
     warn('wipe', '[chat-db] wipe failed', error);
   }

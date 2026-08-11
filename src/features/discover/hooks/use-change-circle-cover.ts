@@ -90,6 +90,7 @@ export function useChangeCircleCover(
           filename,
           contentType,
           folder: 'covers',
+          fileUri: asset.uri,
         });
         await uploadLocalFileToPresignedUrl(uploadUrl, contentType, asset.uri);
         await setCircleCover(circleId, fileUrl);

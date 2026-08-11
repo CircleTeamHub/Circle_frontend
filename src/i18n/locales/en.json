@@ -287,7 +287,7 @@
       "noteSendFailed": "Failed to send note, please try again",
       "cardSendFailed": "Failed to send contact card, please try again",
       "favoriteSendFailed": "Failed to send favorite, please try again",
-      "transferCardSendFailed": "Failed to send the transfer card, but the credits were already deducted",
+      "transferCardSendFailed": "Transfer completed. The card will arrive shortly.",
       "favoriteLegacyVoiceUnsupported": "This legacy voice favorite can no longer be sent"
     },
     "messageActions": {
@@ -2573,7 +2573,9 @@
   },
   "upload": {
     "errors": {
-      "presignDataInvalid": "Invalid presigned upload data."
+      "presignDataInvalid": "Invalid presigned upload data.",
+      "fileUnreadable": "The file to upload could not be found.",
+      "fileTooLarge": "File exceeds the {{maxMb}}MB limit."
     }
   },
   "serverErrors": {

@@ -36,31 +36,48 @@ test('个人页顶部头像使用当前装备外观,管理员框与移除状态�
   assert.doesNotMatch(profile, /getMembershipFrameAsset/);
 });
 
-test('聊天页气泡:接收方订阅批量外观、发送方订阅认证用户外观,且显式无框不回退会员框', () => {
-  const received = read('src/features/chat/components/bubbles/received-bubble.tsx');
-  const sent = read('src/features/chat/components/bubbles/sent-bubble.tsx');
+test('聊天页气泡:头像统一走 shared 的 MessageAvatar,接收方批量外观、发送方认证用户外观', () => {
+  // 头像框原来只挂在 sent/received 两个文字气泡上,其余 10 种(图片/语音/位置/
+  // 通话记录 + 六种卡片)各自 `<Avatar shape="square" />` 不带框 —— 同一个人
+  // 发文字是圆形带框、发卡片就变方形无框。现在收敛成 shared 里唯一一个
+  // MessageAvatar,这条用例守住「没人再自己画发送者头像」。
+  const shared = read('src/features/chat/components/bubbles/shared.tsx');
 
-  assert.match(received, /useUserAppearance\(message\.senderID\)/);
-  assert.match(
-    received,
-    /frameSource=\{getAvatarFrameSource\(senderAppearance\?\.avatarFrame\) \?\? undefined\}/,
-  );
-  assert.match(received, /compactFrame/);
-  assert.doesNotMatch(received, /useUserVipLevel|getMembershipFrameAsset|vipLevel/);
+  assert.match(shared, /useUserAppearance\(/);
+  assert.match(shared, /useAuthStore\(\(state\) => state\.user\?\.avatarFrameAppearance\)/);
+  assert.match(shared, /frameSource=\{getAvatarFrameSource\(frame\) \?\? undefined\}/);
+  assert.match(shared, /compactFrame/);
+  assert.doesNotMatch(shared, /useUserVipLevel|getMembershipFrameAsset|vipLevel/);
+  assert.doesNotMatch(shared, /shape="square"/);
 
-  assert.match(
-    sent,
-    /useAuthStore\(\s*\(state\) => state\.user\?\.avatarFrameAppearance,\s*\)/,
-  );
-  assert.match(
-    sent,
-    /frameSource=\{getAvatarFrameSource\(selfAvatarFrame\) \?\? undefined\}/,
-  );
-  assert.match(sent, /compactFrame/);
-  assert.doesNotMatch(sent, /getMembershipFrameAsset|vipLevel/);
+  // 每个气泡都用共用组件,并且不再自己 import Avatar 画发送者头像。
+  const bubbles = [
+    'sent-bubble',
+    'received-bubble',
+    'note-card-bubble',
+    'friend-card-bubble',
+    'circle-card-bubble',
+    'transfer-card-bubble',
+    'verification-card-bubble',
+    'plaza-post-card-bubble',
+    'image-bubble',
+    'voice-bubble',
+    'location-card',
+    'call-record-bubble',
+  ];
+  for (const name of bubbles) {
+    const source = read(`src/features/chat/components/bubbles/${name}.tsx`);
+    assert.match(source, /<MessageAvatar/, `${name} 没走共用头像`);
+    assert.doesNotMatch(
+      source,
+      /frameSource=/,
+      `${name} 不该自己拼头像框,交给 MessageAvatar`,
+    );
+  }
 
-  assert.doesNotMatch(received, /shape="square"/);
-  assert.doesNotMatch(sent, /shape="square"/);
+  // 名片卡里那颗 48pt 的「被推荐好友」头像是卡片内容,不是发送者,保留直用 Avatar。
+  const friendCard = read('src/features/chat/components/bubbles/friend-card-bubble.tsx');
+  assert.match(friendCard, /size=\{48\}/);
 });
 
 test('圈子动态页:内联作者资料直接决定头像框,支持管理员远程框、会员内置框与显式无框', () => {

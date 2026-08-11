@@ -112,6 +112,7 @@ export function useChangeCover(
           filename,
           contentType,
           folder: 'covers',
+          fileUri: asset.uri,
         });
         await uploadLocalFileToPresignedUrl(uploadUrl, contentType, asset.uri);
 

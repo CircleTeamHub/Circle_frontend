@@ -74,12 +74,15 @@ import { useGroupMemberViewAccess } from '@/features/chat/hooks/use-group-member
 import {
   ensureCircleConversation,
   ensureDirectConversation,
+  failMediaSend,
+  finishMediaSend,
   hasMoreHistory,
   loadConversationMessages,
   loadOlderConversationMessages,
   resetHistoryCursor,
   markConversationAsRead,
   retryFailedChatMessage,
+  startMediaSend,
   sendCardMessage,
   sendImageMessage,
   sendLocationMessage,
@@ -2299,6 +2302,62 @@ export default function ChatDetailScreen() {
   ]);
 
   // 松手结束录音。cancel=true 丢弃；否则发送。录音过短（<800ms）按误触丢弃。
+  /**
+   * 录音文件的「上传 + 发送」。首发和长按重发共用 —— 重发必须带上同一个
+   * deliveryId,否则会在时间线里多出一条,而不是把那个红气泡换掉。
+   */
+  const uploadAndSendVoice = useCallback(
+    async (soundPath: string, duration: number, deliveryId: string) => {
+      try {
+        // 自研栈:录音文件先经 presign 上传,消息体只带 object key(读时签 URL)。
+        const voiceFilename = soundPath.split('/').pop() || 'voice.m4a';
+        const voiceContentType =
+          resolveUploadContentType({ fileName: voiceFilename }) ?? 'audio/mp4';
+        const presign = await requestUploadPresign({
+          filename: sanitizeUploadFilename(voiceFilename),
+          contentType: voiceContentType,
+          folder: 'chat',
+          fileUri: soundPath,
+        });
+        await uploadLocalFileToPresignedUrl(
+          presign.uploadUrl,
+          voiceContentType,
+          soundPath,
+        );
+        await sendVoiceMessage({
+          conversationId: conversationID,
+          key: presign.key,
+          duration,
+          localUri: soundPath,
+          deliveryId,
+        });
+        finishMediaSend(deliveryId);
+      } catch (error) {
+        if (__DEV__) {
+          console.warn(
+            '[chat] voice send failed',
+            error instanceof Error
+              ? { name: error.name, message: error.message }
+              : String(error),
+          );
+        }
+        // 气泡标红留在原地(长按可重发),而不是让那段录音凭空消失。
+        failMediaSend(conversationID, deliveryId);
+        if (mountedRef.current) {
+          setSendError(
+            getChatSendErrorMessage(
+              error,
+              t('chat.detail.voiceSendFailed', {
+                defaultValue: '语音发送失败，请重试',
+              }),
+            ),
+          );
+        }
+      }
+    },
+    [conversationID, t],
+  );
+
   const finishHoldRecording = useCallback(
     async (cancel: boolean) => {
       // 还没真正开始录音（极快松手 / 权限未过）→ 直接复位，避免空 stop。
@@ -2322,26 +2381,15 @@ export default function ChatDetailScreen() {
         if (cancel || elapsedMs < 800) return; // 取消 / 误触：丢弃不发
         if (!soundPath) throw new Error('录音文件生成失败');
 
-        // 自研栈:录音文件先经 presign 上传,消息体只带 object key(读时签 URL)。
-        const voiceFilename = soundPath.split('/').pop() || 'voice.m4a';
-        const voiceContentType =
-          resolveUploadContentType({ fileName: voiceFilename }) ?? 'audio/mp4';
-        const presign = await requestUploadPresign({
-          filename: sanitizeUploadFilename(voiceFilename),
-          contentType: voiceContentType,
-          folder: 'chat',
-        });
-        await uploadLocalFileToPresignedUrl(
-          presign.uploadUrl,
-          voiceContentType,
-          soundPath,
-        );
-        await sendVoiceMessage({
+        // 先上屏(sendStatus=1)、再后台上传:上传最长 60s,期间既不能让屏幕上
+        // 什么都没有,也不能把输入栏锁死 —— 那就是「录完就消失、再按没反应」。
+        const deliveryId = startMediaSend({
           conversationId: conversationID,
-          key: presign.key,
-          duration,
-          localUri: soundPath,
+          type: 'voice',
+          localContent: { duration, localUri: soundPath },
+          retry: (id) => uploadAndSendVoice(soundPath, duration, id),
         });
+        void uploadAndSendVoice(soundPath, duration, deliveryId);
       } catch (error) {
         if (__DEV__) {
           console.warn(
@@ -2376,6 +2424,7 @@ export default function ChatDetailScreen() {
       conversationID,
       restoreRecordingAudioMode,
       t,
+      uploadAndSendVoice,
       voiceRecorder,
       voiceRecordingStartedAt,
     ],
@@ -2497,6 +2546,71 @@ export default function ChatDetailScreen() {
     }
   }, [conversationID, isPreviewMode, sourceID, t]);
 
+  /**
+   * 图片的「上传 + 发送」。首发与长按重发共用 —— 重发必须带同一个 deliveryId,
+   * 否则时间线里会多出一条,而不是把那个红气泡换掉。
+   */
+  const uploadAndSendImage = useCallback(
+    async (
+      asset: ImagePicker.ImagePickerAsset,
+      filename: string,
+      contentType: string,
+      deliveryId: string,
+    ) => {
+      try {
+        // 不日志 presign 返回的 fileUrl / uploadUrl —— 这是带签名的临时写凭证，
+        // 任何能捕获 console 输出的渠道（adb logcat、屏幕录制、第三方 SDK 的
+        // breadcrumb）拿到 uploadUrl 就能在过期前向同一对象写入任意内容。
+        const presign = await requestUploadPresign({
+          filename: sanitizeUploadFilename(filename),
+          contentType,
+          folder: 'chat',
+          fileUri: asset.uri,
+        });
+        await uploadLocalFileToPresignedUrl(presign.uploadUrl, contentType, asset.uri);
+
+        // 生成并上传一张缩略图供列表气泡显示；失败 / 原图已够小时退化为原图（thumb* 留空）。
+        const thumbnail = await uploadChatImageThumbnail(
+          asset.uri,
+          asset.width ?? undefined,
+          filename,
+        );
+
+        await sendImageMessage({
+          conversationId: conversationID,
+          key: presign.key,
+          localUri: asset.uri,
+          width: asset.width ?? undefined,
+          height: asset.height ?? undefined,
+          thumbKey: thumbnail?.key,
+          deliveryId,
+        });
+        finishMediaSend(deliveryId);
+      } catch (error) {
+        if (__DEV__) {
+          console.warn(
+            '[chat] image send failed',
+            error instanceof Error
+              ? { name: error.name, message: error.message }
+              : String(error),
+          );
+        }
+        // 气泡标红留在原地(长按可重发),而不是让这张图凭空消失。
+        failMediaSend(conversationID, deliveryId);
+        if (mountedRef.current) {
+          setSendError(
+            getChatSendErrorMessage(
+              error,
+              t('chat.detail.imageSendFailed', {
+                defaultValue: '图片发送失败，请重试',
+              }),
+            ),
+          );
+        }
+      }
+    },
+    [conversationID, t],
+  );
   // 相册选择与拍照共用同一套「上传→发送」流程，只有获取 asset 的来源不同。
   const uploadAndSendImageAsset = useCallback(
     async (asset: ImagePicker.ImagePickerAsset) => {
@@ -2516,48 +2630,13 @@ export default function ChatDetailScreen() {
           fileName: filename,
         }) ?? 'image/jpeg';
 
-      inFlightRef.current = true;
-
+      // 提前拦一次：文本等廉价路径靠 reportSend 统一 gate 即可，但图片要先
+      // presign+上传（有成本，且会发一个带签名的临时写凭证给可能被拦的用户）。
+      // 在动手上传前就挡掉，避免无谓开销与凭证外泄面。发送本身仍会在 reportSend
+      // 再兜一层，两处同源（assertLocalCanSendMessage），不会产生口径分叉。
       try {
-        // 提前拦一次：文本等廉价路径靠 reportSend 统一 gate 即可，但图片要先
-        // presign+上传（有成本，且会发一个带签名的临时写凭证给可能被拦的用户）。
-        // 在动手上传前就挡掉，避免无谓开销与凭证外泄面。发送本身仍会在 reportSend
-        // 再兜一层，两处同源（assertLocalCanSendMessage），不会产生口径分叉。
         assertLocalCanSendMessage();
-        // 不日志 presign 返回的 fileUrl / uploadUrl —— 这是带签名的临时写凭证，
-        // 任何能捕获 console 输出的渠道（adb logcat、屏幕录制、第三方 SDK 的
-        // breadcrumb）拿到 uploadUrl 就能在过期前向同一对象写入任意内容。
-        const presign = await requestUploadPresign({
-          filename: sanitizeUploadFilename(filename),
-          contentType,
-          folder: 'chat',
-        });
-        await uploadLocalFileToPresignedUrl(presign.uploadUrl, contentType, asset.uri);
-
-        // 生成并上传一张缩略图供列表气泡显示；失败 / 原图已够小时退化为原图（thumb* 留空）。
-        const thumbnail = await uploadChatImageThumbnail(
-          asset.uri,
-          asset.width ?? undefined,
-          filename,
-        );
-
-        await sendImageMessage({
-          conversationId: conversationID,
-          key: presign.key,
-          localUri: asset.uri,
-          width: asset.width ?? undefined,
-          height: asset.height ?? undefined,
-          thumbKey: thumbnail?.key,
-        });
       } catch (error) {
-        if (__DEV__) {
-          console.warn(
-            '[chat] image send failed',
-            error instanceof Error
-              ? { name: error.name, message: error.message }
-              : String(error),
-          );
-        }
         if (mountedRef.current) {
           setSendError(
             getChatSendErrorMessage(
@@ -2568,11 +2647,24 @@ export default function ChatDetailScreen() {
             ),
           );
         }
-      } finally {
-        inFlightRef.current = false;
+        return;
       }
+
+      // 先上屏、后台上传:和语音同一套 —— 上传期间气泡是「发送中」,
+      // 输入栏不锁,失败标红可长按重发。
+      const deliveryId = startMediaSend({
+        conversationId: conversationID,
+        type: 'image',
+        localContent: {
+          localUri: asset.uri,
+          ...(asset.width ? { width: asset.width } : {}),
+          ...(asset.height ? { height: asset.height } : {}),
+        },
+        retry: (id) => uploadAndSendImage(asset, filename, contentType, id),
+      });
+      void uploadAndSendImage(asset, filename, contentType, deliveryId);
     },
-    [conversationID, t],
+    [conversationID, t, uploadAndSendImage],
   );
 
   const handlePickMedia = useCallback(async () => {
@@ -2867,12 +2959,16 @@ export default function ChatDetailScreen() {
           void flushPendingGiftCardAcks();
         }
       } catch (error) {
+        // 钱是强一致落库的,这张卡只是回执:客户端发失败不代表转账没成 ——
+        // 后端 GiftCardOutboxProcessor 宽限 2 分钟后逐分钟补发(幂等键
+        // gift_card_<id>,最多 60 次)。所以文案不能说「积分已扣减」把人吓到
+        // 去重转 —— 重转会生成新幂等键,那是第二次真实扣款。
         if (mountedRef.current) {
           setSendError(
             getChatSendErrorMessage(
               error,
               t('chat.detail.transferCardSendFailed', {
-                defaultValue: '转账卡片发送失败，但积分已扣减',
+                defaultValue: '转账已完成，卡片稍后自动补上',
               }),
             ),
           );

@@ -81,17 +81,24 @@ test('chat detail surfaces low-credit policy errors as the send error text', () 
 
 test('chat detail checks only local credit state before uploading image messages', () => {
   const source = read('src/features/chat/screens/ChatDetailScreen.tsx');
-  const uploadBlock =
+  // 上传拆成了两段:入口(体积/信用分门禁 + 先上屏)与后台的「上传+发送」。
+  // 门禁必须留在入口、且在把上传踢出去之前 —— presign 会发一个带签名的临时
+  // 写凭证,拦不住的话等于先把凭证给出去再说。
+  const entryBlock =
     source.match(/const uploadAndSendImageAsset = useCallback\([\s\S]*?\n  \);/)?.[0] ??
     '';
+  const uploadBlock =
+    source.match(/const uploadAndSendImage = useCallback\([\s\S]*?\n  \);/)?.[0] ?? '';
 
-  assert.match(uploadBlock, /assertLocalCanSendMessage/);
-  assert.doesNotMatch(uploadBlock, /await assertCanSendMessage/);
+  assert.match(entryBlock, /assertLocalCanSendMessage/);
+  assert.doesNotMatch(entryBlock, /await assertCanSendMessage/);
+  // 入口自己不 presign:那一步在后台那段里。
+  assert.doesNotMatch(entryBlock, /requestUploadPresign/);
   assert.match(uploadBlock, /requestUploadPresign/);
   assert.ok(
-    uploadBlock.indexOf('assertLocalCanSendMessage') <
-      uploadBlock.indexOf('requestUploadPresign'),
-    'local credit state must be checked before expensive image upload work',
+    entryBlock.indexOf('assertLocalCanSendMessage') <
+      entryBlock.indexOf('uploadAndSendImage('),
+    'local credit state must be checked before any upload work is kicked off',
   );
 });
 
