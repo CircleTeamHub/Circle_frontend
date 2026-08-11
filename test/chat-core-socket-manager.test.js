@@ -148,6 +148,7 @@ function loadManager(localDbOverrides = {}, options = {}) {
         state.currentUserId = null;
       },
       activeConversationId: null,
+      conversations: [],
       messagesByConversation: {},
       // 冷启动水合会用到这三个;默认 initChatLocalDb=false 时根本走不到,
       // 只有显式打开本地库的用例才会触发。
@@ -155,6 +156,7 @@ function loadManager(localDbOverrides = {}, options = {}) {
       failedMarks: [],
       hydrateLocalSnapshot(conversations, timelines) {
         state.hydrated.push({ conversations, timelines });
+        if (state.conversations.length === 0) state.conversations = conversations;
         state.messagesByConversation = { ...timelines };
       },
       ingestMessages(conversationId, messages) {
@@ -340,6 +342,31 @@ test('cold hydration waits for the authoritative self-destruct policy', async ()
   assert.ok(store.hydrated.length > 0);
 });
 
+test('account switch starts the local database switch before privacy resolves', async () => {
+  let resolvePolicy;
+  const policy = new Promise((resolve) => {
+    resolvePolicy = resolve;
+  });
+  const openedFor = [];
+  const { manager, store } = loadManager(
+    {
+      initChatLocalDb: async (userId) => {
+        openedFor.push(userId);
+        return true;
+      },
+    },
+    { privacyFetch: () => policy },
+  );
+  store.currentUserId = 'account-a';
+
+  manager.connectChat('jwt-b', 'account-b');
+  await Promise.resolve();
+
+  assert.deepEqual(openedFor, ['account-b']);
+  resolvePolicy({ messageSelfDestructDays: 2 });
+  await flush();
+});
+
 test('cold hydration never publishes an expired local conversation preview', async () => {
   let releaseTimeline;
   const timelineGate = new Promise((resolve) => {
@@ -375,6 +402,144 @@ test('cold hydration never publishes an expired local conversation preview', asy
   assert.equal(store.hydrated[0].conversations[0].unreadCount, 0);
 
   releaseTimeline();
+});
+
+test('cold hydration rejects expired outbox content even when durable purge did not delete it', async () => {
+  const deleted = [];
+  const expiredAt = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+  const { manager, store } = loadManager({
+    initChatLocalDb: async () => true,
+    readLocalConversations: async () => [{ id: 'c1', burnDurationSec: null }],
+    readRecentLocalMessages: async () => [],
+    outboxList: async () => [
+      {
+        d: 'expired-private',
+        conversationId: 'c1',
+        payload: {
+          conversationId: 'c1',
+          type: 'text',
+          content: { text: 'private body' },
+          d: 'expired-private',
+        },
+        createdAt: expiredAt,
+      },
+    ],
+    outboxDelete: async (d) => {
+      deleted.push(d);
+    },
+  });
+
+  manager.connectChat('jwt', 'u1');
+  await flush();
+  await flush();
+
+  assert.deepEqual(store.failedMarks, []);
+  assert.deepEqual(deleted, ['expired-private']);
+});
+
+test('outbox fallback uses the current post-purge conversation policy', async () => {
+  let releasePurge;
+  const purgeGate = new Promise((resolve) => {
+    releasePurge = resolve;
+  });
+  const deleted = [];
+  const createdAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  const { manager, store } = loadManager({
+    initChatLocalDb: async () => true,
+    readLocalConversations: async () => [{ id: 'c1', burnDurationSec: null }],
+    readRecentLocalMessages: async () => [],
+    outboxList: async () => [
+      {
+        d: 'expired-by-current-policy',
+        conversationId: 'c1',
+        payload: { conversationId: 'c1', type: 'text', content: {}, d: 'expired-by-current-policy' },
+        createdAt,
+      },
+    ],
+    outboxDelete: async (d) => {
+      deleted.push(d);
+    },
+  });
+  store.purgeExpiredBurnMessages = async () => purgeGate;
+
+  manager.connectChat('jwt', 'u1');
+  await flush();
+  store.conversations = [{ id: 'c1', burnDurationSec: 60 * 60 }];
+  releasePurge();
+  await flush();
+
+  assert.deepEqual(store.failedMarks, []);
+  assert.deepEqual(deleted, ['expired-by-current-policy']);
+});
+
+test('outbox fallback observes a policy tightened while the outbox is loading', async () => {
+  let resolveOutbox;
+  const outboxGate = new Promise((resolve) => {
+    resolveOutbox = resolve;
+  });
+  const deleted = [];
+  const createdAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  const { manager, store } = loadManager({
+    initChatLocalDb: async () => true,
+    readLocalConversations: async () => [{ id: 'c1', burnDurationSec: null }],
+    readRecentLocalMessages: async () => [],
+    outboxList: async () => outboxGate,
+    outboxDelete: async (d) => {
+      deleted.push(d);
+    },
+  });
+
+  manager.connectChat('jwt', 'u1');
+  await flush();
+  await flush();
+  store.conversations = [{ id: 'c1', burnDurationSec: 60 * 60 }];
+  resolveOutbox([
+    {
+      d: 'expired-during-outbox-read',
+      conversationId: 'c1',
+      payload: { conversationId: 'c1', type: 'text', content: {}, d: 'expired-during-outbox-read' },
+      createdAt,
+    },
+  ]);
+  await flush();
+
+  assert.deepEqual(store.failedMarks, []);
+  assert.deepEqual(deleted, ['expired-during-outbox-read']);
+});
+
+test('a stale outbox read cannot mutate the store after an A-B-A switch', async () => {
+  let resolveFirstOutbox;
+  const firstOutbox = new Promise((resolve) => {
+    resolveFirstOutbox = resolve;
+  });
+  let outboxCalls = 0;
+  const { manager, store } = loadManager({
+    initChatLocalDb: async () => true,
+    readLocalConversations: async () => [{ id: 'c1', burnDurationSec: null }],
+    readRecentLocalMessages: async () => [],
+    outboxList: async () => {
+      outboxCalls += 1;
+      return outboxCalls === 1 ? firstOutbox : [];
+    },
+  });
+
+  manager.connectChat('jwt-a1', 'account-a');
+  await flush();
+  await flush();
+  manager.connectChat('jwt-b', 'account-b');
+  manager.connectChat('jwt-a2', 'account-a');
+  resolveFirstOutbox([
+    {
+      d: 'stale-a',
+      conversationId: 'c1',
+      payload: { conversationId: 'c1', type: 'text', content: {}, d: 'stale-a' },
+      createdAt: new Date().toISOString(),
+    },
+  ]);
+  await flush();
+  await flush();
+
+  assert.ok(!store.failedMarks.some((mark) => mark.d === 'stale-a'));
 });
 
 test('a stale policy refresh cannot overwrite a newer local setting', async () => {
@@ -623,6 +788,61 @@ test('offline reads merge to the max height and flush once on connect', async ()
   assert.equal(acked.length, 1);
   assert.equal(acked[0].conversationId, 'c1');
   assert.equal(acked[0].height, 7);
+});
+
+test('switching accounts drops the previous account pending read watermarks', async () => {
+  const { manager, socket } = loadManager();
+  manager.connectChat('jwt-a', 'account-a');
+  manager.markChatRead('a-private-conversation', 9);
+
+  manager.connectChat('jwt-b', 'account-b');
+  const acked = [];
+  socket.ackResponder = (event, payload, cb) => {
+    acked.push(payload);
+    cb(null, { ok: true });
+  };
+  socket.connected = true;
+  socket.fire('connect');
+  await flush();
+
+  assert.deepEqual(acked, []);
+});
+
+test('a stale pending-read load cannot survive an A-B-A switch', async () => {
+  let resolveFirstPendingReads;
+  const firstPendingReads = new Promise((resolve) => {
+    resolveFirstPendingReads = resolve;
+  });
+  let pendingReadCalls = 0;
+  const { manager, socket } = loadManager({
+    initChatLocalDb: async () => true,
+    readLocalConversations: async () => [],
+    outboxList: async () => [],
+    pendingReadsList: async () => {
+      pendingReadCalls += 1;
+      return pendingReadCalls === 1 ? firstPendingReads : [];
+    },
+  });
+
+  manager.connectChat('jwt-a1', 'account-a');
+  await flush();
+  await flush();
+  manager.connectChat('jwt-b', 'account-b');
+  manager.connectChat('jwt-a2', 'account-a');
+  resolveFirstPendingReads([{ conversationId: 'stale-a-read', height: 8 }]);
+  await flush();
+  await flush();
+
+  const acked = [];
+  socket.ackResponder = (event, payload, cb) => {
+    acked.push(payload);
+    cb(null, { ok: true });
+  };
+  socket.connected = true;
+  socket.fire('connect');
+  await flush();
+
+  assert.ok(!acked.some((payload) => payload.conversationId === 'stale-a-read'));
 });
 
 test('reads queued during an in-flight flush trigger a follow-up round', async () => {
