@@ -287,7 +287,6 @@
       "noteSendFailed": "Failed to send note, please try again",
       "cardSendFailed": "Failed to send contact card, please try again",
       "favoriteSendFailed": "Failed to send favorite, please try again",
-      "transferCardSendFailed": "Transfer completed. The card will arrive shortly.",
       "favoriteLegacyVoiceUnsupported": "This legacy voice favorite can no longer be sent"
     },
     "messageActions": {

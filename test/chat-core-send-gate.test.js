@@ -208,34 +208,20 @@ test('a normal user still sends through the same path', async () => {
   assert.ok(calls.ingest > 0);
 });
 
-test('the already-paid transfer card is the one thing the gate must let through', async () => {
-  // 转账是两段式:TransferComposerScreen 先 await sendCoinGift(积分真扣真到账),
-  // 回到聊天页才发这张卡片作为回执。在卡片这一步拦掉阻止不了任何事 ——
-  // 付款方看不到卡片、以为没发出去,回转账页重试会生成新的幂等键,
-  // 那就是第二次真实扣款。门禁的正确位置在扣款之前(handleSubmit 已补)。
+test('the gate has no bypass hatch left', async () => {
+  // 曾经有一个 bypassCreditGate,唯一用途是转账卡片(「钱已经动了、拦也白拦」)。
+  // 那张卡现在由服务端结算后签发,客户端根本不走这条路径 —— 豁免口子也就没有
+  // 存在理由了。留着它的风险是下一个调用方顺手打开,把整条卡片路径的门禁绕过去。
   const { api, calls } = loadClient({ blocked: true });
 
-  const sent = await api.sendCardMessage({
-    conversationId: 'c1',
-    type: 'transfer-card',
-    payload: { amount: 10, message: null },
-    bypassCreditGate: true,
-  });
-
-  assert.equal(sent.type, 'transfer-card');
-  assert.equal(calls.gate, 0, '豁免路径不该再问门禁');
-  assert.equal(calls.sent, 1);
-});
-
-test('the bypass is opt-in only — every other card still hits the gate', async () => {
-  // 豁免是逐次显式传的,不是按类型放行:漏成默认值的话整条卡片路径都没门禁了。
-  const { api, calls } = loadClient({ blocked: true });
   await assert.rejects(
     api.sendCardMessage({
       conversationId: 'c1',
-      type: 'transfer-card',
-      payload: { amount: 10, message: null },
+      type: 'note-card',
+      payload: {},
+      bypassCreditGate: true,
     }),
+    '未知参数不该把门禁关掉',
   );
   assert.equal(calls.gate, 1);
   assert.equal(calls.sent, 0);
@@ -259,38 +245,48 @@ test('a low-credit user never gets asked for their location', () => {
   );
 });
 
-test('转账卡片不进 outbox —— 后端补发,客户端重发只会多一张回执', async () => {
+// #156 曾在发送路径上给转账卡片开两条特例(不入 outbox、失败不留气泡),
+// 用来压住「客户端发一张必然被服务端拒的卡」的症状。现在病根拆了 ——
+// 回执类卡片压根不走客户端发送路径 —— 那两条特例随之不可达,已经删除。
+// 这里改钉住「发送路径上不再有任何类型走特例」这件事本身。
+test('发送路径上没有服务端补发类型的特例分支了', async () => {
   const { api, calls } = loadClient({ blocked: false });
 
   await api.sendTextMessage({ conversationId: 'c1', text: 'hi' });
   await api.sendCardMessage({
     conversationId: 'c1',
-    type: 'transfer-card',
-    payload: { amount: 100, message: null },
-    bypassCreditGate: true,
+    type: 'note-card',
+    payload: {},
   });
 
-  // 普通消息照常入队(App 被杀后要还原成失败气泡重发),转账卡片不入。
-  assert.deepEqual(calls.outboxUpserts, ['text']);
+  // 能走到发送路径的每一种类型都照常入队(App 被杀后还原成失败气泡重发)。
+  assert.deepEqual(calls.outboxUpserts, ['text', 'note-card']);
+
+  // 客户端可发的卡片枚举里不该再出现回执类类型 —— 它们由服务端签发。
+  const client = fs.readFileSync(
+    path.join(process.cwd(), 'src/chat-core/client.ts'),
+    'utf8',
+  );
+  const union = client.match(/export type ChatCardType =([\s\S]*?);/)[1];
+  assert.doesNotMatch(union, /'transfer-card'|'verification-card'/);
+  // 发送侧也不该再引用它 —— SERVER_COMPENSATED_TYPES 现在只服务于
+  // socket-manager 里对旧版本脏 outbox 条目的清理。
+  assert.doesNotMatch(client, /SERVER_COMPENSATED_TYPES\.has/);
 });
 
-test('转账卡片发失败不留失败气泡(后端马上补发权威版本)', async () => {
+test('卡片发失败与普通消息一样标失败态(不再有 removeMessage 特例)', async () => {
   const { api, calls } = loadClient({ blocked: false, sendFails: true });
 
   await assert.rejects(() =>
     api.sendCardMessage({
       conversationId: 'c1',
-      type: 'transfer-card',
-      payload: { amount: 100, message: null },
-      bypassCreditGate: true,
+      type: 'note-card',
+      payload: {},
     }),
   );
 
-  // 不标失败:留着就是一张永远发不出去、还排在时间线最底下的幽灵卡。
-  assert.deepEqual(calls.failedMarks, []);
-  assert.deepEqual(calls.removed, [
-    { conversationId: 'c1', messageId: 'local:d-test' },
-  ]);
+  assert.deepEqual(calls.failedMarks, [{ conversationId: 'c1', d: 'd-test' }]);
+  assert.deepEqual(calls.removed, []);
 });
 
 test('普通消息发失败照旧标失败态,留着长按重发', async () => {

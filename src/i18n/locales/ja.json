@@ -249,7 +249,6 @@
       "noteSendFailed": "ノートを送信できませんでした。もう一度お試しください",
       "cardSendFailed": "プロフィールカードを送信できませんでした。もう一度お試しください",
       "favoriteSendFailed": "お気に入りを送信できませんでした。もう一度お試しください",
-      "transferCardSendFailed": "送金は完了しました。カードはまもなく届きます",
       "favoriteLegacyVoiceUnsupported": "この旧バージョンの音声お気に入りは再送信できません"
     },
     "messageActions": {

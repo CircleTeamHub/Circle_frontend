@@ -18,8 +18,6 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { addVerifierToInvitation } from '@/services/api/circles';
 import { getApiErrorMessage } from '@/services/api/errors';
-import { ensureDirectConversation, sendCardMessage } from '@/chat-core/client';
-import { useAuthStore } from '@/stores/authStore';
 
 const s = StyleSheet.create({
   listContent: {
@@ -51,7 +49,7 @@ export default function SelectVerifierScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const router = useRouter();
-  const { id: invitationId, circleName } = useLocalSearchParams<{
+  const { id: invitationId } = useLocalSearchParams<{
     id: string;
     circleId: string;
     circleName: string;
@@ -61,7 +59,6 @@ export default function SelectVerifierScreen() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
-  const myNickname = useAuthStore((state) => state.user?.nickname);
 
   const loadFriends = useCallback(async () => {
     setLoading(true);
@@ -116,28 +113,11 @@ export default function SelectVerifierScreen() {
       if (!invitationId || submittingId) return;
       setSubmittingId(friend.id);
       try {
+        // 验证邀请名片由服务端签发:addVerifier 提交席位之后,后端用
+        // ChatSystemMessageService 把卡片发给验证人(点击直达验证页)。
+        // 这里曾经自己发一条 —— 而 verification-card 是服务端专属类型,那次发送
+        // 100% 被拒,还被 best-effort 的 catch 吞掉,卡片从来没送达过。
         await addVerifierToInvitation(invitationId, friend.id);
-        // 同时给对方发一条验证邀请名片消息，点击可直达验证页。
-        // best-effort：发消息失败不影响「已添加验证人」这件事本身。
-        try {
-          const conversation = await ensureDirectConversation(friend.id);
-          await sendCardMessage({
-            conversationId: conversation.conversationID,
-            type: 'verification-card',
-            payload: {
-              invitationId,
-              circleName: circleName ?? '',
-              applicantName: myNickname ?? '',
-            },
-          });
-        } catch (sendErr) {
-          if (__DEV__) {
-            console.warn(
-              '[SelectVerifierScreen] sendVerificationCardMessage failed',
-              sendErr,
-            );
-          }
-        }
         Alert.alert(t('invitation.invited'), t('invitation.invitedMessage', { name: friend.nickname }));
         router.back();
       } catch (error: unknown) {
@@ -149,7 +129,7 @@ export default function SelectVerifierScreen() {
         setSubmittingId(null);
       }
     },
-    [invitationId, submittingId, router, t, circleName, myNickname],
+    [invitationId, submittingId, router, t],
   );
 
   const renderItem = useCallback(

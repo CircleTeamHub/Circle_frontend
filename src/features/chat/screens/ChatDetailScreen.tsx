@@ -127,7 +127,6 @@ import { useSharePickerStore } from '@/features/chat/store/use-share-picker-stor
 import { usePendingChatCardStore } from '@/features/chat/store/use-pending-chat-card-store';
 import { useMessageForwardStore } from '@/features/chat/store/use-message-forward-store';
 import { canForwardMessage } from '@/features/chat/screens/ForwardPickerScreen';
-import { useTransferComposerStore } from '@/features/chat/store/use-transfer-composer-store';
 import { useCallStore } from '@/features/call/store/use-call-store';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { AVATAR_SIZE } from '@/features/chat/components/bubbles/shared';
@@ -137,10 +136,6 @@ import {
   useChatPreferencesStore,
 } from '@/features/chat/store/use-chat-preferences-store';
 import { createDirectCall, createGroupCall } from '@/services/api/calls';
-import {
-  enqueueGiftCardAck,
-  flushPendingGiftCardAcks,
-} from '@/features/chat/utils/gift-card-ack';
 import { resolveDirectCalleeID } from '@/features/call/resolve-direct-callee';
 import { resolveChatDetailIdentity } from '@/features/chat/chat-detail-identity';
 import type { CallType } from '@/features/call/types';
@@ -492,7 +487,6 @@ export default function ChatDetailScreen() {
   >(undefined);
   const consumePendingShare = useSharePickerStore((s) => s.consume);
   const setPendingForward = useMessageForwardStore((s) => s.setPending);
-  const consumePendingTransfer = useTransferComposerStore((s) => s.consume);
   const consumePendingChatCard = usePendingChatCardStore((s) => s.consumeFor);
   // 待发送的圈子帖子卡片（报名→聊天自动挂上，贴在输入框上方，可撤掉）。
   const [pendingCard, setPendingCard] = useState<PlazaPostCardData | null>(null);
@@ -520,10 +514,6 @@ export default function ChatDetailScreen() {
   useEffect(() => {
     isRecordingRef.current = voiceRecordingStartedAt != null;
   }, [voiceRecordingStartedAt]);
-  useEffect(() => {
-    // 冲销上次可能丢失的卡片回执挂账（幂等，无账时零成本）
-    void flushPendingGiftCardAcks();
-  }, []);
   useEffect(() => {
     return () => {
       mountedRef.current = false;
@@ -2946,64 +2936,17 @@ export default function ChatDetailScreen() {
     [sendDraftAsText],
   );
 
-  const handleSendTransferCard = useCallback(
-    async (payload: {
-      amount: number;
-      message: string | null;
-      idempotencyKey?: string | null;
-    }) => {
-      if (!sourceID || isPreviewMode) return;
-      if (inFlightRef.current) return;
-      inFlightRef.current = true;
-      try {
-        await sendCardMessage({
-          conversationId: conversationID,
-          type: 'transfer-card',
-          payload: { amount: payload.amount, message: payload.message },
-          // 积分早在 TransferComposerScreen 里就真扣真到账了,这张卡只是回执。
-          // 让信用分门禁拦在这里阻止不了任何事,只会让付款方看不到卡片、
-          // 以为没发出去 —— 从转账页重试会生成新的幂等键,那是第二次真实扣款。
-          // 门禁在扣款之前已经过了一道(handleSubmit)。
-          bypassCreditGate: true,
-        });
-        // #100：告知后端卡片已由客户端送达，补偿 cron 不再重发。
-        // round 2 review：回执是防重发的唯一信号，不能 fire-and-forget ——
-        // 先持久化挂账再冲销：回执丢失（超时/退后台）时下次进聊天页续冲，
-        // app 被杀也不丢账；后端按 key 幂等，重复回执无害。
-        if (payload.idempotencyKey) {
-          enqueueGiftCardAck(payload.idempotencyKey);
-          void flushPendingGiftCardAcks();
-        }
-      } catch (error) {
-        // 钱是强一致落库的,这张卡只是回执:客户端发失败不代表转账没成 ——
-        // 后端 GiftCardOutboxProcessor 宽限 2 分钟后逐分钟补发(幂等键
-        // gift_card_<id>,最多 60 次)。所以文案不能说「积分已扣减」把人吓到
-        // 去重转 —— 重转会生成新幂等键,那是第二次真实扣款。
-        if (mountedRef.current) {
-          setSendError(
-            getChatSendErrorMessage(
-              error,
-              t('chat.detail.transferCardSendFailed', {
-                defaultValue: '转账已完成，卡片稍后自动补上',
-              }),
-            ),
-          );
-        }
-      } finally {
-        inFlightRef.current = false;
-      }
-    },
-    [conversationID, isPreviewMode, sourceID, t],
-  );
+  // 转账卡片不在这里发。它断言的是「钱已经划走」这个服务端事实,客户端能发
+  // 就等于能凭空捏造它 —— 后端已把该类型收进 SERVER_MESSAGE_TYPES,
+  // 由 CoinService.sendGift 在结算提交后就地签发,走 chat:msg 广播下来。
+  //
+  // 这里曾经有一个对应的发送 handler,而它 100% 被 validateSendPayload 拒。
+  // #156 已经把症状压住(SERVER_COMPENSATED_TYPES:不入 outbox、失败不留气泡),
+  // 这次是拆掉病根 —— 发送本身没了,连带那条永远走不到的回执挂账。
 
-  // 从 SharePickerScreen / TransferComposerScreen 返回时消费 pending 项
-  // 并触发对应发送动作。
+  // 从 SharePickerScreen 返回时消费 pending 项并触发对应发送动作。
   useFocusEffect(
     useCallback(() => {
-      const transfer = consumePendingTransfer();
-      if (transfer) {
-        void handleSendTransferCard(transfer);
-      }
       // 报名→聊天：把预挂的帖子卡片显示为待发送引用，并预填开场白（不覆盖非空草稿）。
       const cardPending = sourceID ? consumePendingChatCard(sourceID) : null;
       if (cardPending) {
@@ -3028,14 +2971,12 @@ export default function ChatDetailScreen() {
       }
     }, [
       consumePendingShare,
-      consumePendingTransfer,
       consumePendingChatCard,
       sourceID,
       handlePickFavorite,
       handlePickFriend,
       handlePickNote,
       handlePickQuickReply,
-      handleSendTransferCard,
     ]),
   );
 
