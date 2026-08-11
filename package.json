@@ -13,7 +13,8 @@
     "expo:config": "expo config --type public",
     "test": "node --test \"test/*.js\" \"src/**/*.test.mts\"",
     "test:behavior": "jest",
-    "ci": "npm run typecheck && npm run expo:config && npm run lint && npm test && npm run test:behavior"
+    "ci": "npm run typecheck && npm run expo:config && npm run lint && npm test && npm run test:behavior",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@blocknote/core": "^0.47.3",
@@ -111,6 +112,7 @@
     "eslint-config-expo": "~55.0.1",
     "jest": "~29.7.0",
     "jest-expo": "~55.0.18",
+    "patch-package": "^8.0.1",
     "pngjs": "^3.4.0",
     "react-test-renderer": "19.2.0",
     "typescript": "~5.9.2"
