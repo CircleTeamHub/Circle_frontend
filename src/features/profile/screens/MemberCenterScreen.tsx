@@ -317,8 +317,10 @@ export default function MemberCenterScreen() {
       const ownerSessionEpoch = owner.sessionEpoch;
 
       void fetchProgramStatus({ force: true });
-      // 会员客服也走后端配置:不 force,进会员中心不必每次都重拉一遍客服表。
-      void fetchSupportConfigState();
+      // 必须 force:这套配置存在的意义就是「管理台换了人立刻生效」。命中缓存的话,
+      // 首次拉取(哪怕拉到的是空列表)会被整个进程生命周期沿用,用户要么一直看到
+      // 旧客服、要么一直看到「暂未配置」,直到重启 App。
+      void fetchSupportConfigState({ force: true });
 
       if (ownerUserId && ownerAccountId) {
         void fetchCurrentUser()
@@ -391,8 +393,12 @@ export default function MemberCenterScreen() {
 
   // 会员客服 = 后端 membership 类的首个客服(管理台维护、按 sortOrder 排序)。
   // 没配就仍然弹原来那条 Alert —— 优雅降级,不回退到任何默认账号。
-  const handleContactSupport = useCallback(() => {
-    const [agent] = selectSupportAgents(supportConfig, 'membership');
+  const handleContactSupport = useCallback(async () => {
+    // 首屏 config 还是 null 时直接判空,会把一次正常的网络往返误报成「客服暂未配置」。
+    // store 的 inFlight 去重保证这里是并入同一个请求,而不是再发一次。
+    const config =
+      supportConfig ?? (await fetchSupportConfigState({ force: true }));
+    const [agent] = selectSupportAgents(config, 'membership');
     if (agent) {
       router.push(
         getUserProfileHref(
@@ -413,7 +419,7 @@ export default function MemberCenterScreen() {
         defaultValue: '请联系平台官方客服咨询会员开通或升级。',
       }),
     );
-  }, [router, supportConfig, t]);
+  }, [fetchSupportConfigState, router, supportConfig, t]);
 
   const d = useMemo(
     () => ({
@@ -802,7 +808,9 @@ export default function MemberCenterScreen() {
             accessibilityRole="button"
             accessibilityLabel={contactLabel}
             style={[s.cta, d.cta]}
-            onPress={handleContactSupport}
+            onPress={() => {
+              void handleContactSupport();
+            }}
           >
             <Text style={d.ctaText}>{contactLabel}</Text>
           </Pressable>

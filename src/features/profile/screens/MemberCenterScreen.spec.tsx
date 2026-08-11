@@ -286,16 +286,65 @@ test('configured support opens its in-app profile and missing support shows Aler
   first.unmount();
   jest.clearAllMocks();
   // 后端没配 → 空态 Alert,绝不回退到任何默认账号。
-  mockSupport.state = { config: null, fetchConfig: jest.fn() };
+  mockSupport.state = {
+    config: null,
+    fetchConfig: jest.fn().mockResolvedValue(null),
+  };
   render(<MemberCenterScreen />);
   await waitFor(() => expect(mockFetchCurrentUser).toHaveBeenCalledTimes(1));
 
   fireEvent.press(screen.getByText('联系客服开通 钻石会员'));
-  expect(Alert.alert).toHaveBeenCalledWith(
-    '客服账号暂未配置',
-    '请联系平台官方客服咨询会员开通或升级。',
+  await waitFor(() =>
+    expect(Alert.alert).toHaveBeenCalledWith(
+      '客服账号暂未配置',
+      '请联系平台官方客服咨询会员开通或升级。',
+    ),
   );
   expect(mockRouter.push).not.toHaveBeenCalled();
+});
+
+// 首屏 config 还是 null 时直接判空,会把一次正常的网络往返误报成「客服暂未配置」——
+// 用户看到的是「没有客服」,而实际上响应里有客服。
+test('tapping contact during the first load waits for the response instead of claiming support is unconfigured', async () => {
+  let resolveConfig: (value: unknown) => void = () => {};
+  const pending = new Promise((resolve) => {
+    resolveConfig = resolve;
+  });
+  mockSupport.state = {
+    config: null,
+    fetchConfig: jest.fn().mockReturnValue(pending),
+  };
+
+  render(<MemberCenterScreen />);
+  await waitFor(() => expect(mockFetchCurrentUser).toHaveBeenCalledTimes(1));
+
+  fireEvent.press(screen.getByText('联系客服开通 钻石会员'));
+  // 请求还没回来:此时既不该跳转,更不该说「暂未配置」。
+  expect(Alert.alert).not.toHaveBeenCalled();
+  expect(mockRouter.push).not.toHaveBeenCalled();
+
+  resolveConfig({
+    recharge: [],
+    issue: [],
+    dispute: [],
+    account: [],
+    membership: [
+      {
+        userID: 'late-support',
+        nickname: '迟到的客服',
+        avatarUrl: null,
+        vipLevel: 0,
+      },
+    ],
+  });
+
+  await waitFor(() =>
+    expect(mockRouter.push).toHaveBeenCalledWith({
+      pathname: '/(tabs)/profile/user/[id]',
+      params: { id: 'late-support', name: '迟到的客服' },
+    }),
+  );
+  expect(Alert.alert).not.toHaveBeenCalled();
 });
 
 test('rules actions navigate to the membership rules screen', async () => {
