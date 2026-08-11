@@ -420,7 +420,9 @@ test('MemberCenterScreen routes configured support and otherwise shows a clear f
 
   // 会员客服来自后端下发的 membership 类,不再是编译期变量。
   assert.doesNotMatch(src, /process\.env\.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID/);
-  assert.match(src, /selectSupportAgents\(supportConfig, 'membership'\)/);
+  // 首屏 config 为 null 时要等请求落定,否则一次正常往返会被误报成「暂未配置」。
+  assert.match(src, /supportConfig \?\? \(await fetchSupportConfigState/);
+  assert.match(src, /selectSupportAgents\(config, 'membership'\)/);
   assert.match(
     src,
     /getUserProfileHref\([\s\S]*'profile',[\s\S]*agent\.userID/,
