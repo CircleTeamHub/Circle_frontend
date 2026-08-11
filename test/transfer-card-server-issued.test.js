@@ -179,51 +179,140 @@ test('CI checks out the backend so the cross-repo contracts actually run', () =>
   assert.match(verify, /broadcastMomentsFeedUpdated/);
 });
 
-/** 递归收集后端 src 下的实现源码(排除测试文件)。 */
-function backendSources() {
-  const out = [];
-  const walk = (dir) => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (entry.name === 'generated' || entry.name === 'node_modules') continue;
-        walk(full);
-        continue;
-      }
-      if (!entry.name.endsWith('.ts')) continue;
-      if (entry.name.endsWith('.spec.ts')) continue;
-      out.push(fs.readFileSync(full, 'utf8'));
+/**
+ * 从 TS 源码里按大括号配平抽出某个方法体。
+ *
+ * 断言必须落在**具体生产者函数内部**,不能对着整个后端搜 token:
+ * `type: 'transfer-card'` 与 `gift_card_` 在补偿 cron 里也各有一份,
+ * 把 CoinService 的结算后签发整段删掉,全局搜法照样全绿 —— 而那正是
+ * 「转账成功、卡片再也不出现」的失效模式本身(客户端已经没有兜底发送路径了)。
+ */
+function methodBody(source, name) {
+  // 锚定到行首 + 只允许可见性/async 修饰符 —— 否则会先匹配到调用点
+  //（`this.issueTransferCard(`）而不是声明,抽出来的是错的函数体。
+  const decl = new RegExp(
+    `^\\s*(?:private\\s+|public\\s+|protected\\s+)?(?:async\\s+)?${name}\\s*\\(`,
+    'm',
+  ).exec(source);
+  assert.ok(decl, `后端源码里找不到 ${name}(`);
+
+  // 先把参数表的圆括号配平。直接找第一个 `{` 会抓到参数里的内联对象类型
+  //（`options: { message: string | null }`),那不是函数体。
+  let i = decl.index + decl[0].length - 1;
+  let parens = 0;
+  for (; i < source.length; i += 1) {
+    if (source[i] === '(') parens += 1;
+    else if (source[i] === ')') {
+      parens -= 1;
+      if (parens === 0) break;
     }
-  };
-  walk(path.join(BACKEND_ROOT, 'src'));
-  return out.join('\n');
+  }
+  const open = source.indexOf('{', i);
+  assert.notEqual(open, -1, `${name} 没有函数体`);
+
+  let depth = 0;
+  for (let j = open; j < source.length; j += 1) {
+    if (source[j] === '{') depth += 1;
+    else if (source[j] === '}') {
+      depth -= 1;
+      if (depth === 0) return source.slice(open, j + 1);
+    }
+  }
+  throw new Error(`${name} 的大括号没有配平`);
 }
+
+/**
+ * 服务端签发的生产者清单:每一项都钉住「哪个文件的哪个方法里必须出现什么」。
+ * 少任何一条,就意味着对应那张卡不再被签发。
+ */
+const PRODUCERS = [
+  {
+    label: '转账卡:结算提交后就地签发',
+    file: 'src/coin/coin.service.ts',
+    method: 'issueTransferCard',
+    requires: [/type: 'transfer-card'/, /`gift_card_\$\{/, /amount/, /message/],
+  },
+  {
+    label: '转账卡:sendGift 必须真的调用签发',
+    file: 'src/coin/coin.service.ts',
+    method: 'sendGift',
+    requires: [/issueTransferCard\(/],
+  },
+  {
+    label: '转账卡:补偿 cron 兜底',
+    file: 'src/coin/gift-card-outbox.processor.ts',
+    method: 'compensate',
+    requires: [/type: 'transfer-card'/, /`gift_card_\$\{/],
+  },
+  {
+    label: '验证卡:投递本体',
+    file: 'src/circle-invitation/circle-invitation.service.ts',
+    method: 'deliverVerificationCard',
+    requires: [
+      /type: 'verification-card'/,
+      /`verification_card_\$\{/,
+      /invitationId:/,
+      /circleName:/,
+      /applicantName:/,
+    ],
+  },
+  {
+    label: '验证卡:addVerifier 必须真的调用签发',
+    file: 'src/circle-invitation/circle-invitation.service.ts',
+    method: 'issueVerificationCard',
+    requires: [/deliverVerificationCard\(/],
+  },
+];
+
+/** 对给定的「文件 → 源码」读取器执行全部生产者断言;违反即抛。 */
+function assertProducers(readBackendFile) {
+  for (const producer of PRODUCERS) {
+    const body = methodBody(readBackendFile(producer.file), producer.method);
+    for (const pattern of producer.requires) {
+      assert.match(
+        body,
+        pattern,
+        `${producer.label} —— ${producer.method} 里少了 ${pattern}`,
+      );
+    }
+  }
+}
+
+const readBackend = (rel) =>
+  fs.readFileSync(path.join(BACKEND_ROOT, rel), 'utf8');
 
 test(
   'the backend actually issues both receipt cards',
   { skip: !hasBackend && 'circle_be not checked out beside circle-im' },
   () => {
-    // 「类型是服务端专属」只说明客户端不能发,不说明**服务端真的在发**。
-    // 两者都成立才是完整的契约:生产者哪天被重构掉,客户端这侧已经没有发送
-    // 路径了(本 PR 删的),转账与加验证人照样成功、卡片却永远不出现 —— 正是
-    // 这个 PR 在修的那个失效模式,而且没有任何测试会红。
-    //
-    // 按整个 src 搜而不是钉死文件路径:生产者搬家不该误报,只有**消失**才该红。
-    const backend = backendSources();
+    // 「类型是服务端专属」只说明客户端不能发,不说明服务端真的在发。两者都成立
+    // 才是完整契约:生产者哪天被重构掉,而客户端这侧的发送路径已经被本 PR 删了,
+    // 转账与加验证人照样成功、卡片却永远不出现,前后端测试全绿。
+    assertProducers(readBackend);
+  },
+);
 
-    // 转账卡:结算后签发 + 补偿 cron,两条都用 gift 派生的幂等键。
-    assert.match(backend, /type: 'transfer-card'/);
-    assert.match(backend, /`gift_card_\$\{/);
-    assert.match(backend, /amount/);
-
-    // 验证卡:加验证人后签发,键取 (invitationId, verifierId)。
-    assert.match(backend, /type: 'verification-card'/);
-    assert.match(backend, /`verification_card_\$\{/);
-    for (const field of ['invitationId', 'circleName', 'applicantName']) {
-      assert.match(
-        backend,
-        new RegExp(`${field}:`),
-        `验证卡 payload 少了 ${field} —— 前端 sanitizeVerificationCard 读的就是它`,
+test(
+  'removing any single producer call makes that contract fail',
+  { skip: !hasBackend && 'circle_be not checked out beside circle-im' },
+  () => {
+    // 上面那条断言本身也需要被验证 —— 一条「永远绿」的契约测试比没有更糟。
+    // 逐个把生产者里的关键调用抹掉,断言检查器确实会红。
+    for (const producer of PRODUCERS) {
+      const mutated = (rel) => {
+        const source = readBackend(rel);
+        if (rel !== producer.file) return source;
+        const body = methodBody(source, producer.method);
+        const broken = body.replace(
+          new RegExp(producer.requires[0].source, 'g'),
+          '/* removed */',
+        );
+        return source.replace(body, broken);
+      };
+      assert.throws(
+        () => assertProducers(mutated),
+        /少了/,
+        `抹掉「${producer.label}」之后契约仍然通过 —— 这条断言是假的`,
       );
     }
   },
