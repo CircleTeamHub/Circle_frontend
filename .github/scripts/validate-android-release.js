@@ -150,20 +150,35 @@ function validateSupportAccountShapes(errors, env) {
   }
 }
 
-// 会被编译进 APK 的那组变量 —— 与 tag / 版本号无关，所以不需要 RELEASE_TAG 就能校验。
-// 单独拆出来是为了让每日构建复用同一份合同：它转发的是同一组 repository variables，
-// 却没有 tag。少了这道校验，删掉或写错一个变量只会让构建静默编译 imAdmin 回落分支，
-// 而 assembleRelease 依然是绿的。
-function validateBuildEnv({ env }) {
+// 「发布就绪」类缺口：变量压根没配。带着它发正式包是事故（客服会话落到 imAdmin），
+// 但它跟「这份代码还能不能编译成 release 包」毫无关系 —— 每日构建签的是一次性密钥、
+// 产物按设计永不分发，对它而言这些值缺失是无害的。故按调用方分级：
+// tag 路径当错误（validateBuildEnv），每日路径当告警（build-env scope）。
+function collectReleaseConfigGaps({ env }) {
+  const gaps = [];
+
+  requireValues(gaps, env, METADATA_ENV);
+  validateSupportAccounts(gaps, env);
+
+  return gaps;
+}
+
+// 「值写坏了」类错误：任何路径都必须硬失败。没配和配错是两回事 —— 配错证明有人改错了
+// 变量，正是每日构建最初要抓的漂移，而且这些形态问题在 tag 那天同样拦不住。
+function validateBuildEnvShape({ env }) {
   const errors = [];
 
-  requireValues(errors, env, METADATA_ENV);
-  validateSupportAccounts(errors, env);
   validateSupportAccountShapes(errors, env);
   validateUrl(errors, 'EXPO_PUBLIC_API_URL', env.EXPO_PUBLIC_API_URL, 'https:');
   validateSentryDsn(errors, env);
 
   return errors;
+}
+
+// 会被编译进 APK 的那组变量 —— 与 tag / 版本号无关，所以不需要 RELEASE_TAG 就能校验。
+// 这是发布路径（metadata scope）的完整合同：缺口 + 形态问题全部是错误。
+function validateBuildEnv({ env }) {
+  return [...collectReleaseConfigGaps({ env }), ...validateBuildEnvShape({ env })];
 }
 
 function validateReleaseMetadata({ env, app }) {
@@ -302,6 +317,31 @@ function validateLegacyReleaseConfig({ env, app }) {
 // signing / distribution 只读凭证与审批位，跟包内可观测性无关。
 const BUILD_ENV_SCOPES = new Set([undefined, 'metadata', 'build-env', 'all']);
 
+// 降级成告警之后，缺口在 40 分钟的构建日志里等同于不存在。所以除了 ::warning::
+// 还要写进 job summary —— 每日构建绿了，但页面顶部仍然列着「这些变量没配，现在
+// 还不能打 tag」。少了这一步，「降级」在实践中就是「删掉这条检查」。
+function reportReleaseConfigGaps({ env }) {
+  const gaps = collectReleaseConfigGaps({ env });
+  if (gaps.length === 0) return;
+
+  for (const gap of gaps) console.warn(`::warning::${gap}`);
+
+  const summaryPath = env.GITHUB_STEP_SUMMARY;
+  if (!summaryPath) return;
+
+  fs.appendFileSync(
+    summaryPath,
+    [
+      '### ⚠️ 发布配置缺口（每日构建不因此失败）',
+      '',
+      '以下变量缺失。每日构建产物永不分发，所以照常编译；但**打 `v*` tag 会因同样的检查硬失败**：',
+      '',
+      ...gaps.map((gap) => `- ${gap}`),
+      '',
+    ].join('\n'),
+  );
+}
+
 function main() {
   const scope = process.argv[2];
   let errors;
@@ -324,8 +364,11 @@ function main() {
         errors = validateReleaseMetadata({ env: process.env, app: readApp() });
         break;
       // 每日构建用：只校验会编译进包的变量，不要求 RELEASE_TAG。
+      // 缺口降级为告警 —— 否则一个没配的变量会让 assembleRelease / R8 / 打包
+      // 这几步永远跑不到，而它们才是每日构建唯一要守的东西。
       case 'build-env':
-        errors = validateBuildEnv({ env: process.env });
+        reportReleaseConfigGaps({ env: process.env });
+        errors = validateBuildEnvShape({ env: process.env });
         break;
       case 'signing':
         errors = validateSigningConfig({ env: process.env });
@@ -360,8 +403,10 @@ if (require.main === module) main();
 
 module.exports = {
   collectBuildEnvWarnings,
+  collectReleaseConfigGaps,
   expectedVersionCode,
   validateBuildEnv,
+  validateBuildEnvShape,
   validateDistributionApproval,
   validateReleaseMetadata,
   validateSigningConfig,
