@@ -2822,6 +2822,7 @@
     "SUPPORT_AGENT_USER_NOT_FOUND": "Support account not found",
     "SUPPORT_AGENT_USER_INACTIVE": "Support account is disabled or deleted",
     "SUPPORT_AGENT_DUPLICATE": "The same account is configured twice in one support category",
+    "SUPPORT_AGENTS_CONFLICT": "The support configuration was changed by another admin — reload and try again",
     "USER_UPDATE_OWN_ONLY": "You can only update your own profile",
     "USER_DELETE_OWN_ONLY": "You can only delete your own account",
     "USER_INVALID_BIRTHDAY": "Invalid birthday",

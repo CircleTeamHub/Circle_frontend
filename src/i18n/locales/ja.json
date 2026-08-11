@@ -2819,6 +2819,7 @@
     "SUPPORT_AGENT_USER_NOT_FOUND": "サポートアカウントが見つかりません",
     "SUPPORT_AGENT_USER_INACTIVE": "サポートアカウントは停止または削除されています",
     "SUPPORT_AGENT_DUPLICATE": "同じカテゴリに同一アカウントが重複して設定されています",
+    "SUPPORT_AGENTS_CONFLICT": "サポート設定は他の管理者によって変更されました。再読み込みしてください",
     "USER_UPDATE_OWN_ONLY": "自分のプロフィールのみ編集できます",
     "USER_DELETE_OWN_ONLY": "自分のアカウントのみ削除できます",
     "USER_INVALID_BIRTHDAY": "誕生日が正しくありません",
