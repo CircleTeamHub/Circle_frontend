@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Divider } from '@/components/ui/divider';
-import { Spacing, Typography, useTheme } from '@/theme';
+import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportError } from '@/observability/sentry';
 import { getChatDetailHref } from '@/features/user/utils/routes';
 import { ensureDirectConversation } from '@/chat-core/client';
@@ -46,6 +46,13 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   rowText: { flex: 1, gap: 2 },
+  retry: {
+    marginTop: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
 });
 
 export default function SupportAgentsScreen() {
@@ -65,6 +72,7 @@ export default function SupportAgentsScreen() {
   // 客服账号由后端下发(管理台维护),不再是编译期常量。
   const config = useSupportConfigStore((state) => state.config);
   const loading = useSupportConfigStore((state) => state.loading);
+  const error = useSupportConfigStore((state) => state.error);
   const fetchConfig = useSupportConfigStore((state) => state.fetchConfig);
 
   const agents = useMemo<SupportAgentRow[]>(
@@ -161,6 +169,12 @@ export default function SupportAgentsScreen() {
         textAlign: 'center' as const,
         lineHeight: 21,
       },
+      retryButton: { borderColor: colors.primary },
+      retryText: {
+        color: colors.primary,
+        ...Typography.body,
+        fontWeight: '600' as const,
+      },
     }),
     [colors],
   );
@@ -205,11 +219,33 @@ export default function SupportAgentsScreen() {
       {agents.length === 0 ? (
         <View style={s.center}>
           {/* 首次加载时先不喊「暂无客服」——那会在一次正常的网络往返里闪一下误导文案。 */}
-          <Text style={d.empty}>
-            {loading && !config
-              ? t('common.loading', { defaultValue: '加载中…' })
-              : t('profile.customerService.empty')}
-          </Text>
+          {loading && !config ? (
+            <Text style={d.empty}>
+              {t('common.loading', { defaultValue: '加载中…' })}
+            </Text>
+          ) : error && !config ? (
+            // 拉取失败 ≠ 后端没配客服。前者告诉用户「没有客服」会让他直接放弃咨询,
+            // 而且他手上没有任何可操作的下一步 —— 所以这里给网络文案 + 重试按钮。
+            <>
+              <Text style={d.empty}>
+                {t('profile.customerService.loadFailed', {
+                  defaultValue: '客服信息加载失败',
+                })}
+              </Text>
+              <Text style={d.empty}>{t('common.networkError')}</Text>
+              <Pressable
+                accessibilityRole="button"
+                style={[s.retry, d.retryButton]}
+                onPress={() => {
+                  void fetchConfig({ force: true });
+                }}
+              >
+                <Text style={d.retryText}>{t('common.retry')}</Text>
+              </Pressable>
+            </>
+          ) : (
+            <Text style={d.empty}>{t('profile.customerService.empty')}</Text>
+          )}
         </View>
       ) : (
         <FlatList

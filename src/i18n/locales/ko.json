@@ -1980,6 +1980,7 @@
       "title": "고객센터",
       "subtitle": "문의할 상담 유형을 선택하세요",
       "openFailed": "고객센터 대화를 열지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      "loadFailed": "고객센터 정보를 불러오지 못했습니다",
       "agentsSubtitle": "상담원 아이콘을 눌러 상담을 시작하세요",
       "agentTapHint": "눌러서 상담 시작",
       "agentFallbackName": "상담원",
