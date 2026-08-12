@@ -2821,6 +2821,7 @@
     "SUPPORT_AGENT_USER_NOT_FOUND": "No se encontró la cuenta de soporte",
     "SUPPORT_AGENT_USER_INACTIVE": "La cuenta de soporte está desactivada o eliminada",
     "SUPPORT_AGENT_DUPLICATE": "La misma cuenta está configurada dos veces en una categoría",
+    "SUPPORT_AGENTS_CONFLICT": "Otro administrador cambió la configuración de soporte; recarga e inténtalo de nuevo",
     "USER_UPDATE_OWN_ONLY": "Solo puedes actualizar tu propio perfil",
     "USER_DELETE_OWN_ONLY": "Solo puedes eliminar tu propia cuenta",
     "USER_INVALID_BIRTHDAY": "Fecha de nacimiento no válida",

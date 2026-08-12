@@ -2818,6 +2818,7 @@
     "SUPPORT_AGENT_USER_NOT_FOUND": "고객센터 계정을 찾을 수 없습니다",
     "SUPPORT_AGENT_USER_INACTIVE": "고객센터 계정이 정지되었거나 삭제되었습니다",
     "SUPPORT_AGENT_DUPLICATE": "같은 분류에 동일한 계정이 중복 설정되었습니다",
+    "SUPPORT_AGENTS_CONFLICT": "고객센터 설정이 다른 관리자에 의해 변경되었습니다. 새로고침 후 다시 시도하세요",
     "USER_UPDATE_OWN_ONLY": "본인의 프로필만 수정할 수 있습니다",
     "USER_DELETE_OWN_ONLY": "본인의 계정만 삭제할 수 있습니다",
     "USER_INVALID_BIRTHDAY": "생일이 올바르지 않습니다",

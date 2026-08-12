@@ -270,6 +270,8 @@ test('the real sentry sink turns the reported context into a stable fingerprint'
   const { reportError } = loadTsModule('src/observability/sentry.ts', {
     requireShim: (request) => {
       switch (request) {
+        case './route-segments':
+          return loadTsModule('src/observability/route-segments.ts', {});
         case '@sentry/react-native':
           return { init() {}, wrap: (component) => component, captureException() {} };
         case 'expo-constants':
@@ -313,6 +315,8 @@ test('the real sentry sink drops non-allowlisted secrets from caller context', (
   const { reportError } = loadTsModule('src/observability/sentry.ts', {
     requireShim: (request) => {
       switch (request) {
+        case './route-segments':
+          return loadTsModule('src/observability/route-segments.ts', {});
         case '@sentry/react-native':
           return { init() {}, wrap: (component) => component, captureException() {} };
         case 'expo-constants':
