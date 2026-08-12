@@ -22,6 +22,15 @@ function load(rel, stubs = {}) {
     exports: {},
     require: (s) => {
       if (s in stubs) return stubs[s];
+      // 相对 import 按同目录的 .ts 递归加载 —— 让测试跑**真实**的依赖模块
+      // 而不是空桩。route-segments 那份白名单如果被桩成空集合，这里所有
+      // 路由归一化断言都会变成永真。
+      if (s.startsWith("./") || s.startsWith("../")) {
+        const resolved = path.join(path.dirname(filePath), `${s}.ts`);
+        if (fs.existsSync(resolved)) {
+          return load(path.relative(process.cwd(), resolved), stubs);
+        }
+      }
       if (s.startsWith("@/")) return {};
       return require(s);
     },
@@ -460,22 +469,29 @@ test("production sampling collects a small share of traces", () => {
 test("transaction names keep static route shape but drop anything id-like", () => {
   const { sanitizeTransactionName } = loadSentry();
 
-  // 静态路由段保留 —— 这是这次放宽的全部目的:issue 列表能按屏幕区分。
+  // 真实存在于 app/ 的静态段保留 —— 这是这次放宽的全部目的:issue 列表能按
+  // 屏幕区分。这里刻意用真实路由段而不是杜撰的路径,否则测的就不是真行为。
   assert.equal(sanitizeTransactionName("/settings"), "/settings");
-  assert.equal(sanitizeTransactionName("/note-editor"), "/note-editor");
-  assert.equal(sanitizeTransactionName("/circle/discover"), "/circle/discover");
+  assert.equal(sanitizeTransactionName("/app-settings"), "/app-settings");
+  assert.equal(
+    sanitizeTransactionName("/(tabs)/discover/circles"),
+    "/(tabs)/discover/circles",
+  );
 
   // Expo Router 的参数占位本身不含用户数据,归一化后保留。
-  assert.equal(sanitizeTransactionName("/chat/[conversationId]"), "/chat/[param]");
-
-  // 任何带数字的段都当作标识符 —— uuid / cuid / 自增 id 全都含数字,
-  // 而 setSentryUserId 是刻意恒 setUser(null) 的,不能从路由名把 id 漏回去。
-  assert.equal(sanitizeTransactionName("/users/person-1"), "/users/:id");
   assert.equal(
-    sanitizeTransactionName("/note/9f1c4e2a-0b77-4c31-9a3e-000000000001"),
-    "/note/:id",
+    sanitizeTransactionName("/(tabs)/messages/circle/[id]"),
+    "/(tabs)/messages/circle/[param]",
   );
-  assert.equal(sanitizeTransactionName("/u/12345"), "/u/:id");
+
+  // 不在路由表里的段一律当标识符 —— 含数字的、uuid、以及纯字母的 id
+  // （后端 id 是不透明的,靠字符类猜必然漏）。
+  assert.equal(sanitizeTransactionName("/(tabs)/discover/circle/person-1"), "/(tabs)/discover/circle/:id");
+  assert.equal(
+    sanitizeTransactionName("/(tabs)/discover/circle/9f1c4e2a-0b77-4c31-9a3e-000000000001"),
+    "/(tabs)/discover/circle/:id",
+  );
+  assert.equal(sanitizeTransactionName("/(tabs)/discover/circle/12345"), "/(tabs)/discover/circle/:id");
 
   // 形状完全不像路由的,整体退回原来的全遮蔽行为。
   assert.equal(
@@ -510,18 +526,29 @@ test("beforeSendTransaction applies the route-shape rule to the event", () => {
   const kept = calls[0].beforeSendTransaction({
     type: "transaction",
     event_id: "e1",
-    transaction: "/circle/discover",
+    transaction: "/(tabs)/discover/circles",
     start_timestamp: 1,
     timestamp: 2,
   });
-  assert.equal(kept.transaction, "/circle/discover");
+  assert.equal(kept.transaction, "/(tabs)/discover/circles");
 
   const scrubbed = calls[0].beforeSendTransaction({
     type: "transaction",
     event_id: "e2",
-    transaction: "/users/person-1",
+    transaction: "/(tabs)/discover/circle/privatecircle",
     start_timestamp: 1,
     timestamp: 2,
   });
-  assert.equal(scrubbed.transaction, "/users/:id");
+  assert.equal(scrubbed.transaction, "/(tabs)/discover/circle/:id");
+});
+
+test("alphabetic dynamic ids are redacted, not mistaken for static routes", () => {
+  // review #161：MyCirclesScreen 会 router.push(`/(tabs)/discover/circle/${id}`)，
+  // 而后端 id 是不透明的 —— 靠「id 一定含数字」来判定就是漏点本身。
+  const { sanitizeTransactionName } = loadSentry();
+  assert.equal(
+    sanitizeTransactionName("/(tabs)/discover/circle/privatecircle"),
+    "/(tabs)/discover/circle/:id",
+  );
+  assert.equal(sanitizeTransactionName("/circle/privatecircle"), "/circle/:id");
 });

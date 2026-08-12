@@ -17,6 +17,7 @@ import {
   readDiagnosticBreadcrumbs,
   type DiagnosticBreadcrumb,
 } from '@/utils/client-diagnostics';
+import { STATIC_ROUTE_SEGMENTS } from './route-segments';
 
 /** Minimal slice of the Sentry SDK we depend on — lets tests inject a fake. */
 export interface SentryLike {
@@ -247,12 +248,6 @@ const SAFE_DIAGNOSTIC_DETAIL_KEYS = new Set([
 ]);
 
 const REDACTED_TRANSACTION = '[REDACTED_TRANSACTION]';
-/**
- * 静态路由段：只允许字母和连字符。**带任何数字的段一律当作标识符** —— uuid、
- * cuid、自增 id 全都含数字，而 setSentryUserId 是刻意恒 setUser(null) 的，
- * 不能反过来从路由名把用户标识漏回 Sentry。
- */
-const STATIC_ROUTE_SEGMENT = /^[a-z][a-z-]{0,30}$/i;
 /** Expo Router 的动态段字面量，如 `[conversationId]`；本身不含用户数据。 */
 const ROUTE_PARAM_SEGMENT = /^\[\.{0,3}[A-Za-z][A-Za-z0-9_]*\]$/;
 const MAX_ROUTE_SEGMENTS = 8;
@@ -265,8 +260,14 @@ const MAX_ROUTE_SEGMENTS = 8;
  * issue。折中：保留纯静态的路由段（这才是分组价值所在），把任何可能是标识符
  * 的段换成 `:id`；整体形状不像路由就退回原来的全遮蔽。
  *
- * 与后端 metrics/route-normalizer 的归一化是同一个思路（UUID/数字 → :id），
- * 目的也一样：既能按路由聚合，又不让标识符进入标签。
+ * 判定是**白名单**而不是「看起来像不像标识符」：后端 id 是不透明的，
+ * MyCirclesScreen 会 router.push(`/(tabs)/discover/circle/${encodeURIComponent(id)}`)，
+ * 一个纯字母的 circle id（privatecircle）用任何字符类规则都无法与真正的静态段
+ * 区分开 —— 只要靠猜就一定漏。所以只有出现在真实路由模板里的段才保留
+ * （见 route-segments.ts，由 app/ 派生并由测试钉住），其余一律 :id。
+ *
+ * 与后端 metrics/route-normalizer 的归一化目的一致：既能按路由聚合，
+ * 又不让标识符进入标签。
  */
 export function sanitizeTransactionName(value: unknown): string {
   if (typeof value !== 'string') return REDACTED_TRANSACTION;
@@ -289,7 +290,7 @@ export function sanitizeTransactionName(value: unknown): string {
   const normalized = rest.map((segment) => {
     if (segment === '') return '';
     if (ROUTE_PARAM_SEGMENT.test(segment)) return '[param]';
-    return STATIC_ROUTE_SEGMENT.test(segment) ? segment : ':id';
+    return STATIC_ROUTE_SEGMENTS.has(segment) ? segment : ':id';
   });
   if (normalized.some((segment) => segment === '')) return REDACTED_TRANSACTION;
 
