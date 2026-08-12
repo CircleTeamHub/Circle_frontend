@@ -49,6 +49,8 @@ function loadDiagnosticsWithSentry({ dev = false } = {}) {
 
   const sentry = loadTsModule('src/observability/sentry.ts', {
     requireShim: (request) => {
+      if (request === './route-segments')
+        return loadTsModule('src/observability/route-segments.ts', {});
       if (request === '@/utils/client-diagnostics') return diagnostics;
       if (request === '@sentry/react-native') return sentrySdk;
       if (request === 'expo-constants') return { expoConfig: { extra: {} } };
@@ -282,6 +284,8 @@ test('session teardown actually calls resetDiagnosticBreadcrumbs', () => {
 test('a throwing breadcrumb reader still lets the error itself be reported', () => {
   const sentry = loadTsModule('src/observability/sentry.ts', {
     requireShim: (request) => {
+      if (request === './route-segments')
+        return loadTsModule('src/observability/route-segments.ts', {});
       if (request === '@/utils/client-diagnostics') {
         return {
           readDiagnosticBreadcrumbs: () => {
