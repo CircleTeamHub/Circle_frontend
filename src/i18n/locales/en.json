@@ -1508,6 +1508,7 @@
       "title": "Support Center",
       "subtitle": "Choose the type of support you need",
       "openFailed": "Couldn't open the support chat. Please try again.",
+      "loadFailed": "Couldn't load support accounts",
       "agentsSubtitle": "Tap a support agent to start chatting",
       "agentTapHint": "Tap to start chatting",
       "agentFallbackName": "Support agent",

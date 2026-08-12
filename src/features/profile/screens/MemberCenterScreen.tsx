@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
@@ -391,34 +391,57 @@ export default function MemberCenterScreen() {
             })
           : t('profile.membership.contactSupport', { defaultValue: '联系客服咨询' });
 
+  // 首屏 config 还没到时这次点击要等网络,期间用户完全可以再点一次。store 的
+  // inFlight 去重只合并请求、不合并 await 之后的续跑:两次点击都会各自 push 一次,
+  // 用户回退时要连按两下才退得出去。ref 是同步的,setState 的异步性挡不住连点。
+  const contactingRef = useRef(false);
+
   // 会员客服 = 后端 membership 类的首个客服(管理台维护、按 sortOrder 排序)。
   // 没配就仍然弹原来那条 Alert —— 优雅降级,不回退到任何默认账号。
   const handleContactSupport = useCallback(async () => {
-    // 首屏 config 还是 null 时直接判空,会把一次正常的网络往返误报成「客服暂未配置」。
-    // store 的 inFlight 去重保证这里是并入同一个请求,而不是再发一次。
-    const config =
-      supportConfig ?? (await fetchSupportConfigState({ force: true }));
-    const [agent] = selectSupportAgents(config, 'membership');
-    if (agent) {
-      router.push(
-        getUserProfileHref(
-          'profile',
-          agent.userID,
-          agent.nickname ||
-            t('profile.membership.supportName', { defaultValue: '官方客服' }),
-        ),
-      );
-      return;
-    }
+    if (contactingRef.current) return;
+    contactingRef.current = true;
+    try {
+      // 首屏 config 还是 null 时直接判空,会把一次正常的网络往返误报成「客服暂未配置」。
+      // store 的 inFlight 去重保证这里是并入同一个请求,而不是再发一次。
+      const config =
+        supportConfig ?? (await fetchSupportConfigState({ force: true }));
+      const [agent] = selectSupportAgents(config, 'membership');
+      if (agent) {
+        router.push(
+          getUserProfileHref(
+            'profile',
+            agent.userID,
+            agent.nickname ||
+              t('profile.membership.supportName', { defaultValue: '官方客服' }),
+          ),
+        );
+        return;
+      }
 
-    Alert.alert(
-      t('profile.membership.supportUnavailableTitle', {
-        defaultValue: '客服账号暂未配置',
-      }),
-      t('profile.membership.supportUnavailableMessage', {
-        defaultValue: '请联系平台官方客服咨询会员开通或升级。',
-      }),
-    );
+      // config === null 只可能是这次没拉到(成功时哪怕五类全空也是对象)。
+      // 把网络故障说成「客服暂未配置」会让用户以为平台没客服而放弃咨询。
+      if (!config) {
+        Alert.alert(
+          t('profile.customerService.loadFailed', {
+            defaultValue: '客服信息加载失败',
+          }),
+          t('common.networkError'),
+        );
+        return;
+      }
+
+      Alert.alert(
+        t('profile.membership.supportUnavailableTitle', {
+          defaultValue: '客服账号暂未配置',
+        }),
+        t('profile.membership.supportUnavailableMessage', {
+          defaultValue: '请联系平台官方客服咨询会员开通或升级。',
+        }),
+      );
+    } finally {
+      contactingRef.current = false;
+    }
   }, [fetchSupportConfigState, router, supportConfig, t]);
 
   const d = useMemo(

@@ -87,7 +87,7 @@ test('support config is single-flight and cached', async () => {
   assert.equal(calls(), 2);
 });
 
-test('a failed refresh keeps the previous config instead of blanking the screen', async () => {
+test('a failed forced refresh expires the cached roster instead of keeping a revoked agent', async () => {
   const config = { ...emptyConfig(), recharge: [agent('u1')] };
   let mode = 'ok';
   const { store } = loadStore(() =>
@@ -98,11 +98,26 @@ test('a failed refresh keeps the previous config instead of blanking the screen'
   mode = 'fail';
   const result = await store.getState().fetchConfig({ force: true });
 
-  // 一次网络抖动不该把已经拿到的客服列表清空成「暂无客服」。
-  assert.deepEqual(result, config);
-  assert.deepEqual(store.getState().config, config);
+  // fail closed:这份配置是「谁是官方客服」的唯一授权源。管理台撤掉 u1 之后如果
+  // 刷新失败还沿用缓存,被撤销的账号会继续以官方客服身份被点开,用户照样把身份、
+  // 订单、转账凭证发过去 —— 撤销就永远不生效。宁可空,屏幕据 error 显示重试。
+  assert.equal(result, null);
+  assert.equal(store.getState().config, null);
   assert.equal(store.getState().error, 'offline');
   assert.equal(store.getState().loading, false);
+});
+
+test('failure is distinguishable from an empty roster', async () => {
+  const empty = emptyConfig();
+  let mode = 'ok';
+  const { store } = loadStore(() =>
+    mode === 'ok' ? Promise.resolve(empty) : Promise.reject(new Error('offline')),
+  );
+
+  // 成功但没配 → 返回对象(五类全空);失败 → null。调用方靠这个区分两种空。
+  assert.deepEqual(await store.getState().fetchConfig(), empty);
+  mode = 'fail';
+  assert.equal(await store.getState().fetchConfig({ force: true }), null);
 });
 
 test('a stale in-flight response cannot overwrite a newer one', async () => {

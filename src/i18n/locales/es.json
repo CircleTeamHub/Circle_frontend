@@ -1983,6 +1983,7 @@
       "title": "Centro de ayuda",
       "subtitle": "Elige el tipo de soporte que necesitas",
       "openFailed": "No se pudo abrir el chat de soporte. Inténtalo de nuevo.",
+      "loadFailed": "No se pudieron cargar las cuentas de soporte",
       "agentsSubtitle": "Toca un agente de soporte para empezar a chatear",
       "agentTapHint": "Toca para empezar a chatear",
       "agentFallbackName": "Agente de soporte",

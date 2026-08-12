@@ -285,10 +285,17 @@ test('configured support opens its in-app profile and missing support shows Aler
 
   first.unmount();
   jest.clearAllMocks();
-  // 后端没配 → 空态 Alert,绝不回退到任何默认账号。
+  // 后端没配 → 空态 Alert,绝不回退到任何默认账号。拉取成功但没人时 store 返回的
+  // 仍是对象(五类全空),这才是「暂未配置」。
   mockSupport.state = {
     config: null,
-    fetchConfig: jest.fn().mockResolvedValue(null),
+    fetchConfig: jest.fn().mockResolvedValue({
+      recharge: [],
+      issue: [],
+      dispute: [],
+      account: [],
+      membership: [],
+    }),
   };
   render(<MemberCenterScreen />);
   await waitFor(() => expect(mockFetchCurrentUser).toHaveBeenCalledTimes(1));
@@ -301,6 +308,68 @@ test('configured support opens its in-app profile and missing support shows Aler
     ),
   );
   expect(mockRouter.push).not.toHaveBeenCalled();
+});
+
+// 拉不到配置时 store 返回 null。把它当成「平台没有客服」会让用户直接放弃咨询,
+// 而真相只是这一次没拉到。
+test('a failed config fetch reports a network problem instead of claiming support is unconfigured', async () => {
+  mockSupport.state = {
+    config: null,
+    fetchConfig: jest.fn().mockResolvedValue(null),
+  };
+  render(<MemberCenterScreen />);
+  await waitFor(() => expect(mockFetchCurrentUser).toHaveBeenCalledTimes(1));
+
+  fireEvent.press(screen.getByText('联系客服开通 钻石会员'));
+  await waitFor(() =>
+    expect(Alert.alert).toHaveBeenCalledWith(
+      '客服信息加载失败',
+      'common.networkError',
+    ),
+  );
+  expect(mockRouter.push).not.toHaveBeenCalled();
+});
+
+// 首屏 config 还没到时这次点击要等网络,期间用户完全可以再点一次。store 的
+// inFlight 去重只合并请求、不合并 await 之后的续跑 —— 两次点击各 push 一次,
+// 用户得连按两下返回才退得出去。
+test('pressing contact twice before the config resolves navigates exactly once', async () => {
+  let resolveConfig: (value: unknown) => void = () => {};
+  const pending = new Promise((resolve) => {
+    resolveConfig = resolve;
+  });
+  mockSupport.state = {
+    config: null,
+    fetchConfig: jest.fn().mockReturnValue(pending),
+  };
+
+  render(<MemberCenterScreen />);
+  await waitFor(() => expect(mockFetchCurrentUser).toHaveBeenCalledTimes(1));
+
+  const button = screen.getByText('联系客服开通 钻石会员');
+  fireEvent.press(button);
+  fireEvent.press(button);
+
+  await act(async () => {
+    resolveConfig({
+      recharge: [],
+      issue: [],
+      dispute: [],
+      account: [],
+      membership: [
+        {
+          userID: 'official-support',
+          nickname: '官方客服',
+          avatarUrl: null,
+          vipLevel: 0,
+        },
+      ],
+    });
+    await Promise.resolve();
+  });
+
+  await waitFor(() => expect(mockRouter.push).toHaveBeenCalledTimes(1));
+  expect(mockSupport.state.fetchConfig).toHaveBeenCalledTimes(2);
 });
 
 // 首屏 config 还是 null 时直接判空,会把一次正常的网络往返误报成「客服暂未配置」——
