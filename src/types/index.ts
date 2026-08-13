@@ -305,6 +305,10 @@ export interface Circle {
   joinFancyRestriction: boolean;
   maxMembers: number;
   memberCanPost: boolean;
+  /** 担保票数策略:建担保单时快照为 invitation.requiredCount(宣传期 1,严格期 10)。 */
+  requiredVerifierCount: number;
+  /** false = 只有圈主/管理员能邀请新成员。 */
+  memberCanInvite: boolean;
   groupID: string | null;
   memberCount: number;
   postCount: number;
@@ -437,18 +441,28 @@ export interface CreateCircleInput {
   joinFancyRestriction?: boolean;
   maxMembers?: number;
   memberCanPost?: boolean;
+  requiredVerifierCount?: number;
+  memberCanInvite?: boolean;
 }
 
 // ---------------------------------------------------------------------------
 // Circle Invitation / Verification Types
 // ---------------------------------------------------------------------------
 
+/** 邀请相关接口里反复出现的用户投影（申请人 / 邀请人 / 验证人 / 候选验证人）。 */
+export interface CircleInvitationUser {
+  id: string;
+  nickname: string;
+  avatarUrl: string | null;
+  accountId: string;
+}
+
 export interface CircleInvitation {
   id: string;
   circleId: string;
   circleName: string;
-  applicant: { id: string; nickname: string; avatarUrl: string | null; accountId: string };
-  inviter: { id: string; nickname: string; avatarUrl: string | null; accountId: string };
+  applicant: CircleInvitationUser;
+  inviter: CircleInvitationUser;
   requiredCount: number;
   approvedCount: number;
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'ADMIN_APPROVED';
@@ -458,7 +472,7 @@ export interface CircleInvitation {
 
 export interface CircleInvitationVerifier {
   id: string;
-  verifier: { id: string; nickname: string; avatarUrl: string | null; accountId: string };
+  verifier: CircleInvitationUser;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   respondedAt: string | null;
 }

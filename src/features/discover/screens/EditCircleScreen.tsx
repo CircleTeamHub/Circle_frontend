@@ -105,6 +105,7 @@ export default function EditCircleScreen() {
         joinCreditRestriction: data.joinCreditRestriction,
         joinFancyRestriction: data.joinFancyRestriction,
         memberCanPost: data.memberCanPost,
+        requiredVerifierCount: data.requiredVerifierCount ?? 1,
       });
       setSelectedCities(data.cities);
     } catch {
@@ -179,6 +180,7 @@ export default function EditCircleScreen() {
         joinCreditRestriction: form.joinCreditRestriction,
         joinFancyRestriction: form.joinFancyRestriction,
         memberCanPost: form.memberCanPost,
+        requiredVerifierCount: form.requiredVerifierCount,
       });
       // round 3 review：force —— 否则可能合并进编辑前出发的在飞快照
       await fetchMyCircles({ force: true });

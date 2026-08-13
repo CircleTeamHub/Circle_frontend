@@ -22,6 +22,9 @@ export interface CircleFormState {
   joinCreditRestriction: number | null;
   joinFancyRestriction: boolean;
   memberCanPost: boolean;
+  // 入圈验证:1 = 关闭(成员邀请即进,宣传期默认),2/5/10 = 需要的担保票数。
+  // 建担保单时由服务端快照,改这里不影响在途申请。
+  requiredVerifierCount: number;
 }
 
 const INITIAL_FORM_STATE: CircleFormState = {
@@ -37,6 +40,7 @@ const INITIAL_FORM_STATE: CircleFormState = {
   joinCreditRestriction: null,
   joinFancyRestriction: false,
   memberCanPost: true,
+  requiredVerifierCount: 1,
 };
 
 export interface CircleFormApi extends CircleFormState {
@@ -46,6 +50,7 @@ export interface CircleFormApi extends CircleFormState {
   setRules: (value: string) => void;
   setJoinFancyRestriction: (value: boolean) => void;
   setMemberCanPost: (value: boolean) => void;
+  setRequiredVerifierCount: (value: number) => void;
   // VIP/信用分限制改为 sheet 直选（语义：所选等级及以上可加入）。
   setJoinVipRestriction: (value: number | null) => void;
   setJoinCreditRestriction: (value: number | null) => void;
@@ -82,6 +87,11 @@ export function useCircleForm(): CircleFormApi {
   );
   const setMemberCanPost = useCallback(
     (value: boolean) => setState((s) => ({ ...s, memberCanPost: value })),
+    [],
+  );
+  const setRequiredVerifierCount = useCallback(
+    (value: number) =>
+      setState((s) => ({ ...s, requiredVerifierCount: value })),
     [],
   );
 
@@ -144,6 +154,7 @@ export function useCircleForm(): CircleFormApi {
     setRules,
     setJoinFancyRestriction,
     setMemberCanPost,
+    setRequiredVerifierCount,
     setJoinVipRestriction,
     setJoinCreditRestriction,
     toggleCategory,

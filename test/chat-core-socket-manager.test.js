@@ -1000,7 +1000,9 @@ test('冷启动水合:outbox 里那条其实已经发出去了,不能再标成�
         d: 'd-sent',
         conversationId: 'c1',
         payload: { conversationId: 'c1', type: 'text', content: {}, d: 'd-sent' },
-        createdAt: '2026-08-11T01:00:00.000Z',
+        // 相对时间:写死日期会在「日期 + 2 天视角自毁窗口」过点后转入过期
+        // 清除分支,测试从此不再走自己声称的路径(2026-08-13 就爆过一次)。
+        createdAt: new Date(Date.now() - 60_000).toISOString(),
       },
     ],
     outboxDelete: async (d) => {
@@ -1033,7 +1035,9 @@ test('冷启动水合:真没发出去的那条照旧还原成失败气泡', asyn
         d: 'd-lost',
         conversationId: 'c1',
         payload: { conversationId: 'c1', type: 'text', content: {}, d: 'd-lost' },
-        createdAt: '2026-08-11T01:00:00.000Z',
+        // 相对时间:写死日期会在「日期 + 2 天视角自毁窗口」过点后转入过期
+        // 清除分支,测试从此不再走自己声称的路径(2026-08-13 就爆过一次)。
+        createdAt: new Date(Date.now() - 60_000).toISOString(),
       },
     ],
     outboxDelete: async (d) => {
@@ -1077,7 +1081,7 @@ test('冷启动水合:转账卡片的 outbox 脏数据直接清掉,不还原成�
           content: { amount: 100 },
           d: 'd-card',
         },
-        createdAt: '2026-08-11T01:23:00.000Z',
+        createdAt: new Date(Date.now() - 60_000).toISOString(),
       },
     ],
     outboxDelete: async (d) => {
@@ -1116,7 +1120,7 @@ test('冷启动水合:验证卡片的 outbox 脏数据同样清掉', async () =>
           content: { invitationId: 'inv-1' },
           d: 'd-verify',
         },
-        createdAt: '2026-08-11T01:23:00.000Z',
+        createdAt: new Date(Date.now() - 60_000).toISOString(),
       },
     ],
     outboxDelete: async (d) => {
