@@ -106,10 +106,15 @@ test('选人页的候选名单钉在发起它的那张担保单上', () => {
   const src = read('src/features/discover/screens/SelectVerifierScreen.tsx');
   assert.match(src, /const loadedForRef = useRef<string \| null>\(null\)/);
   assert.match(src, /loadedForRef\.current = invitationId;/);
-  // 成功、失败、收尾三条路径都要判
-  assert.equal(
-    (src.match(/loadedForRef\.current !== invitationId/g) ?? []).length,
-    2,
+  // 成功与失败两条路径各判一次(第四轮又加了「换单先清空」那次,所以按
+  // 语义定位而不是数出现次数)。
+  assert.match(
+    src,
+    /if \(loadedForRef\.current !== invitationId\) return;\s*\n\s*setCandidates\(data\)/,
+  );
+  assert.match(
+    src,
+    /\} catch \(error\) \{\s*\n\s*if \(loadedForRef\.current !== invitationId\) return;/,
   );
   assert.match(src, /if \(loadedForRef\.current === invitationId\) setLoading\(false\)/);
 });
@@ -179,4 +184,20 @@ test('邀请结果按担保单状态分类报告,不一律说等待验证', () =
       `${locale} 缺 circle.invite.joinedAndPending`,
     );
   }
+});
+
+// 围栏只保证「不把 A 的结果装进 B」，不保证「B 失败时把 A 的旧列表撤掉」：
+// 那时 loadError 有值但 candidates 还是 A 的那批，页面照旧列人，点下去却是
+// 往 B 提交。
+test('换担保单时先清空上一张的候选人', () => {
+  const src = read('src/features/discover/screens/SelectVerifierScreen.tsx');
+  assert.match(
+    src,
+    /if \(loadedForRef\.current !== invitationId\) setCandidates\(\[\]\);/,
+  );
+  // 清空要发生在标记本次归属之前，否则永远判不成立
+  assert.ok(
+    src.indexOf('setCandidates([]);') <
+      src.indexOf('loadedForRef.current = invitationId;'),
+  );
 });

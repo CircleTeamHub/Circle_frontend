@@ -75,6 +75,10 @@ export default function SelectVerifierScreen() {
       setLoading(false);
       return;
     }
+    // 换了担保单就先把上一张的候选人清掉:围栏只保证「不装错」,不保证
+    // 「装不进就把旧的撤掉」。B 的请求失败时 loadError 有值但 candidates
+    // 还是 A 的那批,页面照旧列人,点下去却是往 B 提交。
+    if (loadedForRef.current !== invitationId) setCandidates([]);
     loadedForRef.current = invitationId;
     setLoading(true);
     setLoadError(null);
