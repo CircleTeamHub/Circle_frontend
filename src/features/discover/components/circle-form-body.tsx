@@ -140,14 +140,22 @@ const s = StyleSheet.create({
   },
   rowLabel: { ...Typography.bodyRegular },
   gateHint: { ...Typography.caption, marginBottom: Spacing.sm },
+  // 允许换行:窄屏 + 长语言(西语的「需要几人验证」比中文长得多)+ SQL 手改
+  // 出的第四个档位一起出现时,不换行的定宽行会把最后一个 chip 挤出屏幕。
+  // 标签可压缩、chip 不可压缩,压缩发生在标签上。
   verifierCountRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
     paddingBottom: Spacing.md,
   },
+  verifierCountLabel: { flexShrink: 1 },
   verifierChips: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
     gap: Spacing.sm,
   },
   verifierChip: {
@@ -530,7 +538,7 @@ export const CircleFormBody: React.FC<CircleFormBodyProps> = ({ form }) => {
         {verificationGateOn ? (
           <>
             <View style={s.verifierCountRow}>
-              <Text style={[s.rowLabel, d.rowLabel]}>
+              <Text style={[s.rowLabel, s.verifierCountLabel, d.rowLabel]}>
                 {t('circle.create.verifierCountLabel')}
               </Text>
               <View style={s.verifierChips}>

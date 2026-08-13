@@ -81,3 +81,50 @@ test('验证进度页的空位按「在用席位」补,被拒的席位会腾出�
   );
   assert.match(src, /Array\(Math\.max\(0, totalSlots - activeVerifierCount\)\)/);
 });
+
+// 窄屏 + 长语言(西语的这条标签比中文长得多)+ SQL 手改出的第四个档位一起
+// 出现时,不换行的定宽行会把最后一个 chip 挤出屏幕。
+test('验证人数那一行可以换行,标签可压缩', () => {
+  const src = read('src/features/discover/components/circle-form-body.tsx');
+  const row = src.slice(
+    src.indexOf('verifierCountRow: {'),
+    src.indexOf('verifierChip: {'),
+  );
+  assert.match(row, /flexWrap: 'wrap'/);
+  // chip 容器自己也要能折行(第四档时)
+  assert.equal((row.match(/flexWrap: 'wrap'/g) ?? []).length, 2);
+  assert.match(src, /verifierCountLabel: \{ flexShrink: 1 \}/);
+  assert.match(src, /s\.rowLabel, s\.verifierCountLabel/);
+});
+
+// 这条路由的实例可以从一张担保单换到另一张(参数变了但组件没重挂),旧请求
+// 后落地就会把上一张单的候选人装进来 —— 点其中一个提交到新的 invitationId 上,
+// 只会换来一句莫名其妙的资格失败。
+test('选人页的候选名单钉在发起它的那张担保单上', () => {
+  const src = read('src/features/discover/screens/SelectVerifierScreen.tsx');
+  assert.match(src, /const loadedForRef = useRef<string \| null>\(null\)/);
+  assert.match(src, /loadedForRef\.current = invitationId;/);
+  // 成功、失败、收尾三条路径都要判
+  assert.equal(
+    (src.match(/loadedForRef\.current !== invitationId/g) ?? []).length,
+    2,
+  );
+  assert.match(src, /if \(loadedForRef\.current === invitationId\) setLoading\(false\)/);
+});
+
+// 直接读 error.message 会把服务端原文弹给用户,serverErrors.<code> 的 5 语言
+// 文案一条都用不上 —— 包括本 PR 新增的 CIRCLE_EDIT_FORBIDDEN。
+test('编辑圈子的失败走错误码映射,不直接弹服务端原文', () => {
+  const src = read('src/features/discover/screens/EditCircleScreen.tsx');
+  assert.match(src, /import \{ getApiErrorMessage \} from '@\/services\/api\/errors'/);
+  assert.match(src, /getApiErrorMessage\(error, t\('common\.errorOccurred'\)\)/);
+  assert.doesNotMatch(src, /error instanceof Error \? error\.message : t\('common\.errorOccurred'\)/);
+  // 这条码的 5 语言文案确实存在,映射才有意义
+  for (const locale of LOCALES) {
+    const dict = JSON.parse(read(`src/i18n/locales/${locale}.json`));
+    assert.ok(
+      dict.serverErrors?.CIRCLE_EDIT_FORBIDDEN,
+      `${locale} 缺 serverErrors.CIRCLE_EDIT_FORBIDDEN`,
+    );
+  }
+});

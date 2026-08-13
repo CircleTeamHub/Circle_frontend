@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -65,17 +65,25 @@ export default function SelectVerifierScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
 
+  // 候选名单必须钉在发起它的那张担保单上。这条路由的实例可以从一张单换到
+  // 另一张(参数变了但组件没重挂),旧请求后落地就会把上一张单的候选人装进来 ——
+  // 点其中一个提交到新的 invitationId 上,只会换来一句莫名其妙的资格失败。
+  const loadedForRef = useRef<string | null>(null);
+
   const loadCandidates = useCallback(async () => {
     if (!invitationId) {
       setLoading(false);
       return;
     }
+    loadedForRef.current = invitationId;
     setLoading(true);
     setLoadError(null);
     try {
       const data = await fetchEligibleVerifiers(invitationId);
+      if (loadedForRef.current !== invitationId) return;
       setCandidates(data);
     } catch (error) {
+      if (loadedForRef.current !== invitationId) return;
       setLoadError(
         t('invitation.loadVerifiersFailed', {
           defaultValue: '加载候选人失败，请稍后重试',
@@ -88,7 +96,7 @@ export default function SelectVerifierScreen() {
         );
       }
     } finally {
-      setLoading(false);
+      if (loadedForRef.current === invitationId) setLoading(false);
     }
   }, [invitationId, t]);
 

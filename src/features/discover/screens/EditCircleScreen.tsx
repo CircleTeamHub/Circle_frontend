@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Spacing, Typography, useTheme } from '@/theme';
@@ -187,9 +188,13 @@ export default function EditCircleScreen() {
       resetCreateCircleForm();
       router.back();
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : t('common.errorOccurred');
-      Alert.alert(t('circle.error'), message);
+      // 直接读 error.message 会把服务端的原文(未翻译、可能是内部措辞)弹给用户,
+      // 本仓的 serverErrors.<code> 文案则一条都用不上 —— 包括这次新增的
+      // CIRCLE_EDIT_FORBIDDEN(编辑权限在页面打开之后被撤下时就会返回它)。
+      Alert.alert(
+        t('circle.error'),
+        getApiErrorMessage(error, t('common.errorOccurred')),
+      );
     } finally {
       setSubmitting(false);
     }
