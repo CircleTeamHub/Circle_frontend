@@ -52,3 +52,32 @@ test('四条文案五种语言齐备', () => {
     }
   }
 });
+
+// 验证进度页此前把 10 写死在需求文案、进度分母、席位格子和「还能加人」四处 ——
+// 圈子把档位调成 2 / 5 之后,申请人被告知需要十位好友验证,满席了还继续给
+// 「添加验证人」。四处都必须走这张单子自己的 requiredCount 快照。
+test('验证进度页的席位数来自 invitation.requiredCount,不写死 10', () => {
+  const src = read(
+    'src/features/discover/screens/InvitationVerificationScreen.tsx',
+  );
+  assert.doesNotMatch(src, /TOTAL_SLOTS/);
+  assert.match(src, /const totalSlots = Math\.max\(\s*MIN_SLOTS,\s*invitation\?\.requiredCount \?\? MIN_SLOTS,?\s*\)/);
+  // 需求文案与进度分母
+  assert.match(src, /invitation\.requireVerifiers', \{ count: totalSlots \}/);
+  assert.match(src, /total: totalSlots/);
+  // 还能加人的判据
+  assert.match(src, /activeVerifierCount < totalSlots/);
+});
+
+test('验证进度页的空位按「在用席位」补,被拒的席位会腾出来', () => {
+  const src = read(
+    'src/features/discover/screens/InvitationVerificationScreen.tsx',
+  );
+  // 服务端 activeSlots 同样不计 REJECTED,两边必须同口径,否则会出现
+  // 「可以再加人」与「没有空位可点」同时成立。
+  assert.match(
+    src,
+    /activeVerifierCount = invitation\s*\?\s*invitation\.verifiers\.filter\(\(v\) => v\.status !== 'REJECTED'\)\.length/,
+  );
+  assert.match(src, /Array\(Math\.max\(0, totalSlots - activeVerifierCount\)\)/);
+});

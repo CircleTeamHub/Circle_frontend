@@ -21,7 +21,10 @@ import { fetchInvitation } from '@/services/api/circles';
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import type { CircleInvitation, CircleInvitationVerifier } from '@/types';
 
-const TOTAL_SLOTS = 10;
+// 席位数是每张担保单自己的快照(建单那一刻圈子的 requiredVerifierCount),
+// 不是常量:圈子把验证人数调成 2 / 5 之后,写死 10 会让申请人被告知「需要
+// 十位好友验证」,进度条分母也是错的,还会在满席之后继续给「添加验证人」。
+const MIN_SLOTS = 1;
 
 const s = StyleSheet.create({
   content: {
@@ -149,20 +152,26 @@ export default function InvitationVerificationScreen() {
     [colors],
   );
 
+  const totalSlots = Math.max(MIN_SLOTS, invitation?.requiredCount ?? MIN_SLOTS);
+
+  // 被拒的席位会腾出来给别人(服务端的 activeSlots 同样不计 REJECTED),所以
+  // 空位按「还差多少个在用的席位」补,而不是按 totalSlots 减总行数 —— 否则
+  // 一旦有人拒过,「可以再加人」与「没有空位可点」就会同时成立。
+  const activeVerifierCount = invitation
+    ? invitation.verifiers.filter((v) => v.status !== 'REJECTED').length
+    : 0;
+
   const filledSlots: (CircleInvitationVerifier | null)[] = invitation
     ? [
         ...invitation.verifiers,
-        ...Array(Math.max(0, TOTAL_SLOTS - invitation.verifiers.length)).fill(
-          null,
-        ),
-      ].slice(0, TOTAL_SLOTS)
+        ...Array(Math.max(0, totalSlots - activeVerifierCount)).fill(null),
+      ]
     : [];
 
   const canAddMore = Boolean(
     invitation &&
       invitation.status === 'PENDING' &&
-      invitation.verifiers.filter((v) => v.status !== 'REJECTED').length <
-        TOTAL_SLOTS,
+      activeVerifierCount < totalSlots,
   );
 
   const handleAddVerifier = useCallback(() => {
@@ -221,16 +230,19 @@ export default function InvitationVerificationScreen() {
       <NavHeader title={t('invitation.joinTitle', { name: invitation.circleName })} />
       <View style={s.content}>
         <Text style={[s.subtitle, d.subtitle]}>
-          {t('invitation.requireVerifiers', { count: TOTAL_SLOTS })}
+          {t('invitation.requireVerifiers', { count: totalSlots })}
         </Text>
 
         <View style={s.progressRow}>
           <Text style={[s.progressText, d.progressText]}>
-            {t('invitation.progress', { approved: invitation.approvedCount, total: TOTAL_SLOTS })}
+            {t('invitation.progress', {
+              approved: invitation.approvedCount,
+              total: totalSlots,
+            })}
           </Text>
         </View>
 
-        {/* 10 slot grid */}
+        {/* 席位格子:数量来自这张单子的 requiredCount 快照 */}
         <View style={s.grid}>
           {filledSlots.map((slot, i) => {
             if (!slot) {
