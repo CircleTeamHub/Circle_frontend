@@ -7,7 +7,7 @@ import {
   ActivityIndicator,
   StyleSheet,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Spacing, Typography } from '@/theme';
@@ -87,11 +87,18 @@ export default function RegisterScreen() {
   const { colors } = useTheme();
   const { register, submitting, error } = useAuth();
   const { t } = useTranslation();
+  const { inviteCode: inviteCodeParam } = useLocalSearchParams<{
+    inviteCode?: string;
+  }>();
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [nickname, setNickname] = useState('');
-  const [inviteCode, setInviteCode] = useState('');
+  const [inviteCode, setInviteCode] = useState(() =>
+    typeof inviteCodeParam === 'string'
+      ? inviteCodeParam.trim().toLowerCase()
+      : '',
+  );
   const [agreed, setAgreed] = useState(false);
   const sendCode = useSendEmailCode('register');
   const { isOffline } = useNetworkStatus();

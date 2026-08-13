@@ -38,6 +38,21 @@ export type CoinTransaction = {
   createdAt: string;
 };
 
+function isCoinTransaction(value: unknown): value is CoinTransaction {
+  return (
+    isPlainObject(value) &&
+    isNonEmptyString(value.id) &&
+    isNonEmptyString(value.type) &&
+    typeof value.amount === 'number' &&
+    Number.isInteger(value.amount) &&
+    isFiniteNonNegativeNumber(value.balance) &&
+    (value.note === null || typeof value.note === 'string') &&
+    (value.relatedID === null || typeof value.relatedID === 'string') &&
+    isNonEmptyString(value.createdAt) &&
+    Number.isFinite(Date.parse(value.createdAt))
+  );
+}
+
 export async function fetchWallet() {
   const raw = await apiClient<Wallet>('/coin/wallet');
   return expectShape(
@@ -48,7 +63,15 @@ export async function fetchWallet() {
 }
 
 export async function fetchCoinTransactions() {
-  return apiClient<CoinTransaction[]>('/coin/transactions');
+  const raw = await apiClient<unknown>('/coin/transactions');
+  return expectShape(
+    raw,
+    (value): value is CoinTransaction[] =>
+      Array.isArray(value) && value.every(isCoinTransaction),
+    i18n.t('coin.errors.transactionDataInvalid', {
+      defaultValue: '积分流水数据格式异常',
+    }),
+  );
 }
 
 // 防御：积分必须为正整数。客户端 UI 已经在转账输入框约束 number-pad / replace(/[^0-9]/g)；

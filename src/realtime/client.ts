@@ -3,6 +3,7 @@ import { reportError } from '@/observability/sentry';
 import { fetchMySignupsUnreadCount } from '@/services/api/plaza';
 import { fetchUnreadFriendActivityCount } from '@/services/api/friends';
 import { fetchCurrentUser } from '@/services/api/auth';
+import { fetchWallet } from '@/services/api/coin';
 import {
   fetchNotifications,
   fetchNotificationUnreadSummary,
@@ -63,11 +64,11 @@ type RealtimeEvent =
     }
   | {
       type: 'wallet.balance.changed';
-      payload?: { balance?: number };
+      payload?: { balance?: number; delta?: number | null; reason?: string };
     }
   | {
       type: 'wallet.recharge.completed';
-      payload?: { balance?: number };
+      payload?: { balance?: number; delta?: number | null; reason?: string };
     }
   | {
       type: 'system.notification.unread.changed';
@@ -156,6 +157,22 @@ let reconnectAttempt = 0;
 let reconnectRecoveryPending = false;
 let reportedCurrentConnectionOutage = false;
 const reportedRealtimeFailures = new Set<string>();
+let walletRefreshPromise: Promise<void> | null = null;
+
+function refreshWalletBalanceBestEffort(): Promise<void> {
+  if (walletRefreshPromise) return walletRefreshPromise;
+  walletRefreshPromise = fetchWallet()
+    .then((wallet) => {
+      useWalletRealtimeStore.getState().setRealtimeBalance(wallet.balance);
+    })
+    .catch(() => {
+      reportRealtimeFailureOnce('walletRefresh');
+    })
+    .finally(() => {
+      walletRefreshPromise = null;
+    });
+  return walletRefreshPromise;
+}
 
 function reportRealtimeFailureOnce(kind: string): void {
   if (reportedRealtimeFailures.has(kind)) return;
@@ -371,14 +388,19 @@ function handleRealtimeEvent(message: RealtimeEvent) {
       refreshCurrentUserSummaryBestEffort();
       return;
     case 'wallet.balance.changed':
-      // store 内部还会再校验 NaN / Infinity / 负数；这里只过一次类型门槛。
+      // 新旧后端兼容：旧事件可能带绝对 balance；当前权威契约只带 delta/reason，
+      // 收到 poke 后去 REST 拉余额。单飞避免批量奖励/购买事件形成请求风暴。
       if (typeof message.payload?.balance === 'number') {
         useWalletRealtimeStore.getState().setRealtimeBalance(message.payload.balance);
+      } else {
+        void refreshWalletBalanceBestEffort();
       }
       return;
     case 'wallet.recharge.completed':
       if (typeof message.payload?.balance === 'number') {
         useWalletRealtimeStore.getState().setRealtimeBalance(message.payload.balance);
+      } else {
+        void refreshWalletBalanceBestEffort();
       }
       return;
     case 'system.notification.unread.changed':
