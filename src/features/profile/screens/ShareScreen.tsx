@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -136,19 +136,30 @@ export default function ShareScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 请求代:每次整页加载(首次/下拉/回到本页)自增。翻页请求带着自己出发时的
+  // 代号,落地时对不上就整页丢掉 —— 否则一页按旧游标取回来的数据会被拼到
+  // 刷新之后的新第一页上,期间新增或改过状态的记录就会重复、漏掉或复活。
+  const requestGeneration = useRef(0);
 
   const load = useCallback(async (refresh = false) => {
+    const generation = requestGeneration.current + 1;
+    requestGeneration.current = generation;
     if (refresh) setRefreshing(true);
     else setLoading(true);
-    setError(null);
     try {
-      setData(await fetchMyReferrals());
+      const next = await fetchMyReferrals();
+      if (generation !== requestGeneration.current) return;
+      setData(next);
+      setError(null);
     } catch (requestError) {
+      if (generation !== requestGeneration.current) return;
       setError(t('referral.errors.loadFailed'));
       if (__DEV__) console.warn('[ShareScreen] fetchMyReferrals failed', requestError);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (generation === requestGeneration.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [t]);
 
@@ -191,14 +202,20 @@ export default function ShareScreen() {
 
   const loadMore = useCallback(async () => {
     if (!data?.nextCursor || loadingMore) return;
+    const generation = requestGeneration.current;
     setLoadingMore(true);
     try {
       const next = await fetchMyReferrals({ cursor: data.nextCursor });
+      // 期间发生过整页刷新:这一页是按已经作废的游标取的,丢掉。
+      if (generation !== requestGeneration.current) return;
       setData((current) =>
         current
           ? {
-              ...next,
+              // 规则与统计仍以第一页那次快照为准,只往后接记录、推进游标 ——
+              // 拿翻页响应整个替换会让页面显示成「新汇总 + 旧列表」。
+              ...current,
               items: [...current.items, ...next.items],
+              nextCursor: next.nextCursor,
             }
           : next,
       );
@@ -296,6 +313,14 @@ export default function ShareScreen() {
           </Text>
         ) : null}
 
+        {/* 有旧数据时刷新失败:渲染永远走 data 分支,不单独提示的话这次失败
+            完全看不见,用户会把过期的达标状态与积分当成当前的。 */}
+        {error && data ? (
+          <Text selectable style={[Typography.caption, { color: colors.warning }]}>
+            {t('referral.errors.staleData')}
+          </Text>
+        ) : null}
+
         <View style={[s.card, s.hero, { backgroundColor: colors.primary }]}>
           <View style={[s.heroOrb, { backgroundColor: colors.white }]} />
           <Text style={[Typography.caption, { color: 'rgba(255,255,255,0.78)' }]}>
@@ -305,12 +330,17 @@ export default function ShareScreen() {
             {inviteCode ?? t('shareScreen.inviteUnavailable')}
           </Text>
           <Text style={[Typography.bodyRegular, { color: 'rgba(255,255,255,0.84)' }]}>
-            {data && !data.rules.enabled
-              ? t('referral.paused')
-              : t('referral.heroSubtitle', {
-                  inviter: data?.rules.inviterReward ?? 20,
-                  invitee: data?.rules.inviteeReward ?? 5,
-                })}
+            {/* 规则没拿到之前不能报数:20/5 是写死的默认值,一旦部署改过额度
+                或活动暂停,加载中与加载失败都会给用户看错的激励条件,失败时
+                还是永久错的。 */}
+            {!data
+              ? t('referral.heroSubtitlePending')
+              : !data.rules.enabled
+                ? t('referral.paused')
+                : t('referral.heroSubtitle', {
+                    inviter: data.rules.inviterReward,
+                    invitee: data.rules.inviteeReward,
+                  })}
           </Text>
           <View style={s.actionRow}>
             <Pressable

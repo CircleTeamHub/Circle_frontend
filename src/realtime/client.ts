@@ -158,20 +158,50 @@ let reconnectRecoveryPending = false;
 let reportedCurrentConnectionOutage = false;
 const reportedRealtimeFailures = new Set<string>();
 let walletRefreshPromise: Promise<void> | null = null;
+let walletRefreshDirty = false;
+// 会话代。登出/换号时自增,用来把在途的余额请求作废 —— 钱包 store 是全局的,
+// 上一个账号的响应落进去就是把别人的余额显示给当前账号看。
+let walletSessionEpoch = 0;
+
+function invalidateWalletRefresh(): void {
+  walletSessionEpoch += 1;
+  walletRefreshPromise = null;
+  walletRefreshDirty = false;
+}
 
 function refreshWalletBalanceBestEffort(): Promise<void> {
-  if (walletRefreshPromise) return walletRefreshPromise;
-  walletRefreshPromise = fetchWallet()
+  if (walletRefreshPromise) {
+    // 单飞窗口里又来一次余额变更事件:第一发的快照可能取在这次结算之前,
+    // 直接把第二次 poke 丢掉的话,余额会停在旧值直到下一次事件或手动刷新。
+    // 保持单飞,但记脏,落地后补一次。
+    walletRefreshDirty = true;
+    return walletRefreshPromise;
+  }
+  walletRefreshPromise = runWalletRefresh();
+  return walletRefreshPromise;
+}
+
+function runWalletRefresh(): Promise<void> {
+  const epoch = walletSessionEpoch;
+  const isStale = () => epoch !== walletSessionEpoch;
+  return fetchWallet()
     .then((wallet) => {
+      if (isStale()) return;
       useWalletRealtimeStore.getState().setRealtimeBalance(wallet.balance);
     })
     .catch(() => {
+      if (isStale()) return;
       reportRealtimeFailureOnce('walletRefresh');
     })
     .finally(() => {
+      // 会话已经换掉:这一格现在归新会话所有,别把它的在途请求清掉。
+      if (isStale()) return;
       walletRefreshPromise = null;
+      if (walletRefreshDirty) {
+        walletRefreshDirty = false;
+        void refreshWalletBalanceBestEffort();
+      }
     });
-  return walletRefreshPromise;
 }
 
 function reportRealtimeFailureOnce(kind: string): void {
@@ -628,6 +658,9 @@ export function connectRealtime(token: string) {
     return;
   }
 
+  // 换号可能不经过 disconnect(直接用新 token 再连一次),这里也要断代,
+  // 否则上一个账号的在途余额请求会写进新账号的钱包。
+  if (normalizedToken !== currentToken) invalidateWalletRefresh();
   manualDisconnect = false;
   reconnectAttempt = 0;
   reportedCurrentConnectionOutage = false;
@@ -640,6 +673,7 @@ export function disconnectRealtime() {
   currentToken = null;
   reconnectRecoveryPending = false;
   reportedRealtimeFailures.clear();
+  invalidateWalletRefresh();
   clearReconnectTimer();
   useTabBadgeStore.getState().setRealtimeConnected(false);
   closeSocket();

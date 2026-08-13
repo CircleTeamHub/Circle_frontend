@@ -67,6 +67,10 @@ export default function WalletScreen() {
   const { isOffline } = useNetworkStatus();
   const [balance, setBalance] = useState(0);
   const [loadingWallet, setLoadingWallet] = useState(true);
+  // 余额与流水分开各自的加载态:两者绑在同一个 allSettled 上时,慢一拍的流水
+  // 请求会把已经拿到的余额一直压在「...」上,最坏要等满 15s 的接口超时 ——
+  // 而余额是这个页面的主信息。
+  const [loadingHistory, setLoadingHistory] = useState(true);
   const [walletError, setWalletError] = useState<string | null>(null);
   const [transactions, setTransactions] = useState<CoinTransaction[]>([]);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -76,44 +80,49 @@ export default function WalletScreen() {
   useEffect(() => {
     let cancelled = false;
 
-    async function loadWallet() {
+    async function loadBalance() {
       setLoadingWallet(true);
       setWalletError(null);
-      setHistoryError(null);
-      const [walletResult, transactionsResult] = await Promise.allSettled([
-        fetchWallet(),
-        fetchCoinTransactions(),
-      ]);
-      if (cancelled) return;
-      if (walletResult.status === 'fulfilled') {
-        setBalance(walletResult.value.balance);
-      } else {
+      try {
+        const wallet = await fetchWallet();
+        if (cancelled) return;
+        setBalance(wallet.balance);
+      } catch (error) {
+        if (cancelled) return;
         setWalletError(
           t('profile.wallet.loadError', {
             defaultValue: '积分余额加载失败，请稍后重试',
           }),
         );
-        if (__DEV__)
-          console.warn('[WalletScreen] fetchWallet failed', walletResult.reason);
+        if (__DEV__) console.warn('[WalletScreen] fetchWallet failed', error);
+      } finally {
+        if (!cancelled) setLoadingWallet(false);
       }
-      if (transactionsResult.status === 'fulfilled') {
-        setTransactions(transactionsResult.value);
-      } else {
+    }
+
+    async function loadHistory() {
+      setLoadingHistory(true);
+      setHistoryError(null);
+      try {
+        const rows = await fetchCoinTransactions();
+        if (cancelled) return;
+        setTransactions(rows);
+      } catch (error) {
+        if (cancelled) return;
         setHistoryError(
           t('profile.wallet.historyLoadError', {
             defaultValue: '积分流水加载失败',
           }),
         );
         if (__DEV__)
-          console.warn(
-            '[WalletScreen] fetchCoinTransactions failed',
-            transactionsResult.reason,
-          );
+          console.warn('[WalletScreen] fetchCoinTransactions failed', error);
+      } finally {
+        if (!cancelled) setLoadingHistory(false);
       }
-      setLoadingWallet(false);
     }
 
-    loadWallet();
+    void loadBalance();
+    void loadHistory();
     return () => {
       cancelled = true;
     };
@@ -215,7 +224,7 @@ export default function WalletScreen() {
             <Text selectable style={[Typography.caption, { color: colors.error }]}>
               {historyError}
             </Text>
-          ) : transactions.length === 0 && !loadingWallet ? (
+          ) : transactions.length === 0 && !loadingHistory ? (
             <Text style={[Typography.bodyRegular, { color: colors.textSecondary }]}>
               {t('profile.wallet.historyEmpty', { defaultValue: '暂无积分明细' })}
             </Text>

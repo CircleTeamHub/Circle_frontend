@@ -2595,6 +2595,7 @@
   "referral": {
     "title": "Invita y gana",
     "heroSubtitle": "Gana {{inviter}} puntos cuando tu amigo cumpla los requisitos; recibirá {{invitee}}",
+    "heroSubtitlePending": "Cargando los detalles de la recompensa…",
     "paused": "Las recompensas están pausadas; las nuevas invitaciones no darán puntos",
     "copy": "Copiar código",
     "share": "Compartir invitación",
@@ -2610,7 +2611,7 @@
     "stats": { "invited": "Invitados", "rewarded": "Válidos", "points": "Puntos ganados" },
     "status": { "pending": "Pendiente", "rewarded": "Recompensado", "capped": "Límite alcanzado", "rejected": "No válido", "expired": "Caducado" },
     "item": { "rewarded": "Has ganado {{points}} puntos", "pending": "Se premia tras completar el perfil, {{days}} días y añadir un amigo", "noReward": "No se otorgaron puntos" },
-    "errors": { "loadFailed": "No se pudieron cargar las invitaciones", "loadMoreFailed": "No se pudieron cargar más invitaciones", "invalidData": "Los datos de invitación no son válidos" }
+    "errors": { "loadFailed": "No se pudieron cargar las invitaciones", "loadMoreFailed": "No se pudieron cargar más invitaciones", "invalidData": "Los datos de invitación no son válidos", "staleData": "Puede que no esté actualizado. Desliza para recargar." }
   },
   "serverErrors": {
     "TEMP_CHAT_JOIN_FAILED": "No se pudo unir, inténtalo de nuevo",

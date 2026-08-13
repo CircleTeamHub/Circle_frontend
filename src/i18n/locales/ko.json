@@ -2592,6 +2592,7 @@
   "referral": {
     "title": "친구 초대 혜택",
     "heroSubtitle": "친구가 조건을 달성하면 나에게 {{inviter}}, 친구에게 {{invitee}}포인트",
+    "heroSubtitlePending": "초대 보상 정보를 불러오는 중…",
     "paused": "초대 보상이 일시 중지되어 새 초대에는 포인트가 지급되지 않습니다",
     "copy": "초대 코드 복사",
     "share": "초대 공유",
@@ -2607,7 +2608,7 @@
     "stats": { "invited": "초대", "rewarded": "달성", "points": "누적 포인트" },
     "status": { "pending": "달성 대기", "rewarded": "지급 완료", "capped": "한도 도달", "rejected": "대상 아님", "expired": "기간 만료" },
     "item": { "rewarded": "{{points}}포인트 획득", "pending": "프로필, {{days}}일 경과, 친구 추가 후 지급", "noReward": "포인트가 지급되지 않았습니다" },
-    "errors": { "loadFailed": "초대 데이터를 불러오지 못했습니다", "loadMoreFailed": "초대 내역을 더 불러오지 못했습니다", "invalidData": "초대 데이터 형식이 올바르지 않습니다" }
+    "errors": { "loadFailed": "초대 데이터를 불러오지 못했습니다", "loadMoreFailed": "초대 내역을 더 불러오지 못했습니다", "invalidData": "초대 데이터 형식이 올바르지 않습니다", "staleData": "최신 정보가 아닐 수 있습니다. 당겨서 다시 불러오세요." }
   },
   "serverErrors": {
     "TEMP_CHAT_JOIN_FAILED": "참여하지 못했습니다. 다시 시도해 주세요",

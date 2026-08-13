@@ -2592,6 +2592,7 @@
   "referral": {
     "title": "友だち招待特典",
     "heroSubtitle": "友だちが条件達成であなたに{{inviter}}ポイント、相手に{{invitee}}ポイント",
+    "heroSubtitlePending": "招待特典の内容を読み込み中…",
     "paused": "招待特典は一時停止中です。新しい招待にポイントは付きません",
     "copy": "招待コードをコピー",
     "share": "招待を共有",
@@ -2607,7 +2608,7 @@
     "stats": { "invited": "招待数", "rewarded": "達成数", "points": "獲得ポイント" },
     "status": { "pending": "条件待ち", "rewarded": "付与済み", "capped": "上限到達", "rejected": "対象外", "expired": "期限切れ" },
     "item": { "rewarded": "{{points}}ポイント獲得", "pending": "プロフィール、{{days}}日経過、友だち追加後に付与", "noReward": "ポイントは付与されません" },
-    "errors": { "loadFailed": "招待データを読み込めませんでした", "loadMoreFailed": "招待履歴をさらに読み込めませんでした", "invalidData": "招待データの形式が正しくありません" }
+    "errors": { "loadFailed": "招待データを読み込めませんでした", "loadMoreFailed": "招待履歴をさらに読み込めませんでした", "invalidData": "招待データの形式が正しくありません", "staleData": "最新でない可能性があります。引っ張って再読み込みしてください。" }
   },
   "serverErrors": {
     "TEMP_CHAT_JOIN_FAILED": "参加に失敗しました。もう一度お試しください",
