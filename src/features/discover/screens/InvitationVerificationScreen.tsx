@@ -157,13 +157,20 @@ export default function InvitationVerificationScreen() {
   // 被拒的席位会腾出来给别人(服务端的 activeSlots 同样不计 REJECTED),所以
   // 空位按「还差多少个在用的席位」补,而不是按 totalSlots 减总行数 —— 否则
   // 一旦有人拒过,「可以再加人」与「没有空位可点」就会同时成立。
-  const activeVerifierCount = invitation
-    ? invitation.verifiers.filter((v) => v.status !== 'REJECTED').length
+  // 网格只画「还在数的席位」:已拒绝的行留在里面的话,每拒一次网格就多一格,
+  // 而这是个不可滚动的 View —— 几轮拒绝/补位之后,「添加验证人」那一格会被顶
+  // 出屏幕,申请人再也点不到,等于把自己锁死。被拒的历史另行成句提示。
+  const activeVerifiers = invitation
+    ? invitation.verifiers.filter((v) => v.status !== 'REJECTED')
+    : [];
+  const activeVerifierCount = activeVerifiers.length;
+  const rejectedCount = invitation
+    ? invitation.verifiers.length - activeVerifierCount
     : 0;
 
   const filledSlots: (CircleInvitationVerifier | null)[] = invitation
     ? [
-        ...invitation.verifiers,
+        ...activeVerifiers,
         ...Array(Math.max(0, totalSlots - activeVerifierCount)).fill(null),
       ]
     : [];
@@ -241,6 +248,12 @@ export default function InvitationVerificationScreen() {
             })}
           </Text>
         </View>
+
+        {rejectedCount > 0 ? (
+          <Text style={[s.subtitle, d.subtitle]}>
+            {t('invitation.rejectedCount', { count: rejectedCount })}
+          </Text>
+        ) : null}
 
         {/* 席位格子:数量来自这张单子的 requiredCount 快照 */}
         <View style={s.grid}>

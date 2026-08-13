@@ -75,10 +75,12 @@ test('验证进度页的空位按「在用席位」补,被拒的席位会腾出�
   );
   // 服务端 activeSlots 同样不计 REJECTED,两边必须同口径,否则会出现
   // 「可以再加人」与「没有空位可点」同时成立。
+  // 口径来自 activeVerifiers(第四轮把它抽出来同时给网格用),仍然是「不计 REJECTED」。
   assert.match(
     src,
-    /activeVerifierCount = invitation\s*\?\s*invitation\.verifiers\.filter\(\(v\) => v\.status !== 'REJECTED'\)\.length/,
+    /invitation\.verifiers\.filter\(\(v\) => v\.status !== 'REJECTED'\)/,
   );
+  assert.match(src, /const activeVerifierCount = activeVerifiers\.length/);
   assert.match(src, /Array\(Math\.max\(0, totalSlots - activeVerifierCount\)\)/);
 });
 
@@ -125,6 +127,56 @@ test('编辑圈子的失败走错误码映射,不直接弹服务端原文', () =
     assert.ok(
       dict.serverErrors?.CIRCLE_EDIT_FORBIDDEN,
       `${locale} 缺 serverErrors.CIRCLE_EDIT_FORBIDDEN`,
+    );
+  }
+});
+
+// 关闭验证 ≠ 谁都能邀请:memberCanInvite=false 的圈子里普通成员根本邀不了人,
+// 而这个表单没有水合那个字段,所以文案不能替「谁能邀请」打包票。
+test('关闭态提示不越权承诺谁可以邀请', () => {
+  for (const locale of LOCALES) {
+    const dict = JSON.parse(read(`src/i18n/locales/${locale}.json`));
+    const hint = dict.circle.create.verificationGateOffHint;
+    assert.ok(hint, `${locale} 缺 verificationGateOffHint`);
+    assert.doesNotMatch(hint, /圈内成员|members can invite|メンバーが招待|멤버가 초대|los miembros pueden/i);
+  }
+});
+
+// 拒绝过的席位若留在网格里,每拒一次网格就多一格 —— 而这是个不可滚动的 View,
+// 几轮拒绝/补位之后「添加验证人」会被顶出屏幕,申请人把自己锁死。
+test('验证进度页的网格只画还在数的席位,被拒的另行成句', () => {
+  const src = read(
+    'src/features/discover/screens/InvitationVerificationScreen.tsx',
+  );
+  assert.match(src, /const activeVerifiers = invitation\s*\n?\s*\? invitation\.verifiers\.filter\(\(v\) => v\.status !== 'REJECTED'\)/);
+  // 网格铺的是 activeVerifiers,不是全部 verifiers
+  assert.match(src, /\.\.\.activeVerifiers,\s*\n\s*\.\.\.Array\(Math\.max\(0, totalSlots - activeVerifierCount\)\)/);
+  assert.doesNotMatch(src, /\.\.\.invitation\.verifiers,/);
+  // 被拒的数量不丢,单独提示
+  assert.match(src, /rejectedCount > 0 \?/);
+  assert.match(src, /invitation\.rejectedCount/);
+
+  for (const locale of LOCALES) {
+    const dict = JSON.parse(read(`src/i18n/locales/${locale}.json`));
+    assert.ok(dict.invitation?.rejectedCount, `${locale} 缺 invitation.rejectedCount`);
+  }
+});
+
+// requiredVerifierCount=1 时服务端当场把人放进圈子并把担保单落成 APPROVED,
+// 这时再说「等待验证通过」是把已经进来的人说成还在排队。
+test('邀请结果按担保单状态分类报告,不一律说等待验证', () => {
+  const src = read('src/features/discover/screens/InviteToCircleScreen.tsx');
+  assert.match(src, /r\.value\.status === 'APPROVED'/);
+  assert.match(src, /const pending = succeeded - joinedNow/);
+  assert.match(src, /circle\.invite\.joinedAll/);
+  assert.match(src, /circle\.invite\.joinedAndPending/);
+
+  for (const locale of LOCALES) {
+    const dict = JSON.parse(read(`src/i18n/locales/${locale}.json`));
+    assert.ok(dict.circle.invite.joinedAll, `${locale} 缺 circle.invite.joinedAll`);
+    assert.ok(
+      dict.circle.invite.joinedAndPending,
+      `${locale} 缺 circle.invite.joinedAndPending`,
     );
   }
 });
