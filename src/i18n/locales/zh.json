@@ -1243,7 +1243,7 @@
     "memberCenter": "会员中心",
     "viewMember": "查看会员",
     "wallet": {
-      "purchaseUnavailable": "积分购买暂未开放。当前页面仅显示余额。",
+      "purchaseUnavailable": "积分购买暂未开放。",
       "title": "我的钱包",
       "confirmRecharge": "确认充值",
       "balance": "积分余额",
@@ -2608,7 +2608,7 @@
     "stats": { "invited": "已邀请", "rewarded": "已达标", "points": "累计积分" },
     "status": { "pending": "待达标", "rewarded": "已奖励", "capped": "已达上限", "rejected": "不符合", "expired": "已过期" },
     "item": { "rewarded": "已获得 {{points}} 积分", "pending": "完成资料、满 {{days}} 天并添加好友后发放", "noReward": "本次未发放积分" },
-    "errors": { "loadFailed": "邀请数据加载失败，请稍后重试", "loadMoreFailed": "更多邀请记录加载失败", "invalidData": "邀请数据格式异常，请稍后重试", "staleData": "内容可能不是最新的，下拉可重新加载" }
+    "errors": { "loadFailed": "邀请数据加载失败，请稍后重试", "loadMoreFailed": "更多邀请记录加载失败", "invalidData": "邀请数据格式异常，请稍后重试", "staleData": "内容可能不是最新的，下拉可重新加载", "shareFailed": "分享失败，可改用「复制邀请码」发给好友" }
   },
   "serverErrors": {
     "TEMP_CHAT_JOIN_FAILED": "加入失败，请重试",

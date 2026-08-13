@@ -242,3 +242,64 @@ test('两条新文案五种语言齐备', () => {
     );
   }
 });
+
+// hasHydrated 只说明持久化状态读回来了，不代表那份会话还有效：冷启动先恢复出
+// isAuthenticated=true，SessionBootstrap 随后才拿 /auth/me 去验。只等 hasHydrated
+// 的话，过期会话会把人先送进邀请中心、紧接着 401 登出，邀请码再也找不回来。
+test('invite link waits for session bootstrap, not just hydration', () => {
+  const screen = read('src/features/auth/screens/InviteLinkScreen.tsx');
+
+  assert.match(screen, /const isLoading = useAuthStore\(\(state\) => state\.isLoading\)/);
+  assert.match(screen, /if \(!hasHydrated \|\| isLoading\)/);
+});
+
+// 版本号触发的那几次只是对账：实时通道已经写进权威余额，再翻回「...」等一次
+// GET（最坏 15s 超时）是把已经正确的数字藏起来。
+test('realtime reconciliation does not blank the wallet balance', () => {
+  const wallet = read('src/features/profile/screens/WalletScreen.tsx');
+
+  assert.match(wallet, /const balanceSettledRef = useRef\(false\)/);
+  assert.match(wallet, /if \(!balanceSettledRef\.current\) setLoadingWallet\(true\)/);
+  assert.match(wallet, /balanceSettledRef\.current = true;/);
+});
+
+// 页面下面已经有明细卡，「当前页面仅显示余额」变成假话。
+test('wallet notice no longer claims the page shows only the balance', () => {
+  const wallet = read('src/features/profile/screens/WalletScreen.tsx');
+  assert.doesNotMatch(wallet, /当前页面仅显示余额/);
+
+  for (const locale of LOCALES) {
+    const dict = JSON.parse(read(`src/i18n/locales/${locale}.json`));
+    const notice = dict.profile?.wallet?.purchaseUnavailable ?? '';
+    assert.ok(notice, `${locale} 缺 profile.wallet.purchaseUnavailable`);
+    assert.doesNotMatch(notice, /仅显示余额|balance only|残高のみ|잔액만|solo .*saldo/i);
+  }
+});
+
+// 活动暂停时 hero 已经说了「新邀请不会产生积分」，下面再挂一排带绿勾的
+// 「你得 20 / 好友得 5」是自相矛盾的条款。
+test('reward rules card is hidden while the campaign is paused', () => {
+  const screen = read('src/features/profile/screens/ShareScreen.tsx');
+
+  assert.match(screen, /\{data\.rules\.enabled \? \(/);
+  assert.match(screen, /\) : null\}/);
+  // 邀请码本身仍然可复制可分享：停的是奖励，不是邀请。
+  assert.match(screen, /disabled=\{!inviteCode\}/);
+});
+
+// await Share.share 在 async 事件处理器里没人接，系统面板起不来时 rejection
+// 直接逃逸，用户既看不到原因也没有退路。
+test('a failed native share is reported with a fallback path', () => {
+  const screen = read('src/features/profile/screens/ShareScreen.tsx');
+
+  assert.match(screen, /catch \(shareError\)/);
+  assert.match(screen, /referral\.errors\.shareFailed/);
+
+  for (const locale of LOCALES) {
+    const dict = JSON.parse(read(`src/i18n/locales/${locale}.json`));
+    assert.ok(
+      dict.referral?.errors?.shareFailed,
+      `${locale} 缺 referral.errors.shareFailed`,
+    );
+  }
+});

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -76,12 +76,15 @@ export default function WalletScreen() {
   const [historyError, setHistoryError] = useState<string | null>(null);
   const realtimeBalance = useWalletRealtimeStore((state) => state.balance);
   const walletVersion = useWalletRealtimeStore((state) => state.version);
+  // 首屏之后由 walletVersion 触发的那几次只是对账:实时通道已经把权威余额写
+  // 进来了,再翻回「...」等一次 GET(最坏 15s 超时)是把已经正确的数字藏起来。
+  const balanceSettledRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadBalance() {
-      setLoadingWallet(true);
+      if (!balanceSettledRef.current) setLoadingWallet(true);
       setWalletError(null);
       try {
         const wallet = await fetchWallet();
@@ -96,7 +99,10 @@ export default function WalletScreen() {
         );
         if (__DEV__) console.warn('[WalletScreen] fetchWallet failed', error);
       } finally {
-        if (!cancelled) setLoadingWallet(false);
+        if (!cancelled) {
+          balanceSettledRef.current = true;
+          setLoadingWallet(false);
+        }
       }
     }
 
@@ -211,7 +217,7 @@ export default function WalletScreen() {
         <View style={[s.notice, { backgroundColor: colors.surface }]}>
           <Text style={[Typography.bodyRegular, { color: colors.textSecondary }]}>
             {t('profile.wallet.purchaseUnavailable', {
-              defaultValue: '积分购买暂未开放。当前页面仅显示余额。',
+              defaultValue: '积分购买暂未开放。',
             })}
           </Text>
         </View>

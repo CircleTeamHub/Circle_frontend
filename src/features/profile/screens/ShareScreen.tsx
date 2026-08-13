@@ -194,10 +194,21 @@ export default function ShareScreen() {
 
   const handleShareInvite = useCallback(async () => {
     if (!inviteCode || !inviteUrl) return;
-    await Share.share({
-      message: t('referral.shareMessage', { code: inviteCode, url: inviteUrl }),
-      url: inviteUrl,
-    });
+    try {
+      await Share.share({
+        message: t('referral.shareMessage', {
+          code: inviteCode,
+          url: inviteUrl,
+        }),
+        url: inviteUrl,
+      });
+    } catch (shareError) {
+      // 系统分享面板可能起不来(没有可用的分享目标、被策略挡住)。不接的话
+      // 这个 rejection 直接逃出事件处理器,用户既看不到原因也没有退路 ——
+      // 文案里指回复制按钮,那条路不依赖分享面板。
+      Alert.alert(t('referral.errors.shareFailed'));
+      if (__DEV__) console.warn('[ShareScreen] share sheet failed', shareError);
+    }
   }, [inviteCode, inviteUrl, t]);
 
   const loadMore = useCallback(async () => {
@@ -393,6 +404,10 @@ export default function ShareScreen() {
               ))}
             </View>
 
+            {/* 活动暂停时不再列具体奖励:hero 已经说了新邀请不再产生积分,
+                下面再挂一排带绿勾的「你得 20 / 好友得 5」是自相矛盾的条款。
+                复制与分享入口照旧 —— 停的是奖励,不是邀请本身。 */}
+            {data.rules.enabled ? (
             <View style={[s.card, { backgroundColor: colors.surface }]}>
               <Text style={[Typography.h3, { color: colors.text }]}>
                 {t('referral.rulesTitle')}
@@ -415,6 +430,7 @@ export default function ShareScreen() {
                 </View>
               ))}
             </View>
+            ) : null}
 
             <View style={[s.card, { backgroundColor: colors.surface }]}>
               <Text style={[Typography.h3, { color: colors.text }]}>

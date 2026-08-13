@@ -1246,7 +1246,7 @@
     "memberCenter": "Membership",
     "viewMember": "View",
     "wallet": {
-      "purchaseUnavailable": "Points purchases are not available yet. This page currently shows your balance only.",
+      "purchaseUnavailable": "Points purchases are not available yet.",
       "title": "My Wallet",
       "confirmRecharge": "Confirm Recharge",
       "balance": "Points Balance",
@@ -2611,7 +2611,7 @@
     "stats": { "invited": "Invited", "rewarded": "Qualified", "points": "Points earned" },
     "status": { "pending": "Pending", "rewarded": "Rewarded", "capped": "Limit reached", "rejected": "Ineligible", "expired": "Expired" },
     "item": { "rewarded": "Earned {{points}} points", "pending": "Rewarded after profile, {{days}} days, and a friend", "noReward": "No points awarded" },
-    "errors": { "loadFailed": "Failed to load referral data", "loadMoreFailed": "Failed to load more referrals", "invalidData": "Invalid referral data received", "staleData": "This may be out of date. Pull down to reload." }
+    "errors": { "loadFailed": "Failed to load referral data", "loadMoreFailed": "Failed to load more referrals", "invalidData": "Invalid referral data received", "staleData": "This may be out of date. Pull down to reload.", "shareFailed": "Sharing failed. Copy the invite code and send it instead." }
   },
   "serverErrors": {
     "TEMP_CHAT_JOIN_FAILED": "Failed to join, please try again",
