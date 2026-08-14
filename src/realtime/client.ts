@@ -154,11 +154,19 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let currentToken: string | null = null;
 let manualDisconnect = false;
 let reconnectAttempt = 0;
-let reconnectRecoveryPending = false;
+// 「这条连接是断线之后重建的，恢复时要补一次」——同样按会话记而不是布尔:
+// token 轮换走的是 SessionBootstrap effect 的 cleanup(disconnectRealtime)+重连,
+// 布尔会在那一步被清掉,断线期间错过的钱包/通知/朋友圈就再也补不回来了。
+// 换号或登出时 sessionEpoch 变了,标记自然作废,不会替新账号补拉。
+let reconnectRecoveryPendingSession: number | null = null;
 let reportedCurrentConnectionOutage = false;
 const reportedRealtimeFailures = new Set<string>();
 let walletRefreshPromise: Promise<void> | null = null;
-let walletRefreshDirty = false;
+// 「在途那一发的快照已经过时了」这件事按会话记，而不是一个会被 disconnect 清掉
+// 的布尔:token 轮换会调 disconnectRealtime,但在途请求仍然允许落地(见下),脏标记
+// 要是被一起清掉,那一发就会写进一个更旧的余额且没有尾随请求来纠正。换号
+// (sessionEpoch 变了)时这个脏标记自然作废,不会跨账号补一次读。
+let walletRefreshDirtySession: number | null = null;
 // 会话身份。钱包 store 是全局的,上一个账号的响应落进去就是把别人的余额显示
 // 给当前账号看,所以在途请求要按「哪一次会话发出的」来判。
 //
@@ -167,13 +175,25 @@ let walletRefreshDirty = false;
 // 的令牌刷新(同一个人、同一段会话)也会把在途的余额请求判成过期丢掉,而且不
 // 补发 —— 当前契约的 wallet.balance.changed 不带绝对余额,丢了就只能等下一次
 // 事件或重新进页面,余额一直是旧的。
-function currentWalletSession(): number {
+function currentSessionEpoch(): number {
   return useAuthStore.getState().sessionEpoch;
 }
 
+// 每发出一次余额请求就 +1,latestWalletRefreshId 记住"最新的那一发"。只有它
+// 允许写 store、允许清单飞格子。
+//
+// 为什么会有两发同时在途:token 轮换时 SessionBootstrap 会 disconnect + 重连,
+// disconnectRealtime 把单飞格子清空,但在途那一发按 sessionEpoch 判并不过期
+// (故意的,见上面),于是轮换后的一次 wallet.balance.changed 会再发一发。两发
+// 乱序返回时,先发后到的那发拿的是更旧的快照,写进去就把新余额盖回去了;它的
+// finally 还会把新一发的格子清掉,单飞也跟着失效。
+let walletRefreshSequence = 0;
+let latestWalletRefreshId = 0;
+
 function invalidateWalletRefresh(): void {
+  // 只放开单飞格子。脏标记不清:它描述的是「已经有一次结算发生在在途快照之后」,
+  // 换 token 并不会让这件事变成假。
   walletRefreshPromise = null;
-  walletRefreshDirty = false;
 }
 
 function refreshWalletBalanceBestEffort(): Promise<void> {
@@ -181,7 +201,7 @@ function refreshWalletBalanceBestEffort(): Promise<void> {
     // 单飞窗口里又来一次余额变更事件:第一发的快照可能取在这次结算之前,
     // 直接把第二次 poke 丢掉的话,余额会停在旧值直到下一次事件或手动刷新。
     // 保持单飞,但记脏,落地后补一次。
-    walletRefreshDirty = true;
+    walletRefreshDirtySession = currentSessionEpoch();
     return walletRefreshPromise;
   }
   walletRefreshPromise = runWalletRefresh();
@@ -189,8 +209,12 @@ function refreshWalletBalanceBestEffort(): Promise<void> {
 }
 
 function runWalletRefresh(): Promise<void> {
-  const epoch = currentWalletSession();
-  const isStale = () => epoch !== currentWalletSession();
+  const epoch = currentSessionEpoch();
+  walletRefreshSequence += 1;
+  const requestId = walletRefreshSequence;
+  latestWalletRefreshId = requestId;
+  const isStale = () =>
+    epoch !== currentSessionEpoch() || requestId !== latestWalletRefreshId;
   return fetchWallet()
     .then((wallet) => {
       if (isStale()) return;
@@ -201,11 +225,14 @@ function runWalletRefresh(): Promise<void> {
       reportRealtimeFailureOnce('walletRefresh');
     })
     .finally(() => {
-      // 会话已经换掉:这一格现在归新会话所有,别把它的在途请求清掉。
+      // 会话已经换掉、或后面又发了更新的一发:这一格现在归别人所有,别把它的
+      // 在途请求清掉。
       if (isStale()) return;
       walletRefreshPromise = null;
-      if (walletRefreshDirty) {
-        walletRefreshDirty = false;
+      const dirtySession = walletRefreshDirtySession;
+      walletRefreshDirtySession = null;
+      // 换号之后的脏标记直接丢弃,不给新账号补一次读。
+      if (dirtySession !== null && dirtySession === currentSessionEpoch()) {
         void refreshWalletBalanceBestEffort();
       }
     });
@@ -233,6 +260,32 @@ function reportRealtimeConnectionOutage(): void {
     kind: 'consecutiveConnectionFailures',
     attempts: reconnectAttempt,
   });
+}
+
+// 断线空窗里错过的东西在「认证真的通过」之后补一次。
+//
+// 挂在 onopen 上是不行的:网关接受握手之后仍然可能以 1008 拒掉认证(会话撤销 /
+// 连接数超限),那时 onopen 已经把 recovery 消费掉了 —— 补拉在实时通道根本没恢复
+// 的情况下照常发出,而每一轮退避都会再来一次,一次网关故障会被放大成所有客户端
+// 的轮询。收到第一帧才代表认证过了,补拉只在那时跑。
+function runPostAuthenticationRecovery(): void {
+  // 只认同一段会话里记下的断线:换号之后不替新账号补拉上一个账号错过的东西。
+  const shouldForceRecovery =
+    reconnectRecoveryPendingSession !== null &&
+    reconnectRecoveryPendingSession === currentSessionEpoch();
+  reconnectRecoveryPendingSession = null;
+  // 认证成功后网关会立刻回推一帧 badge.snapshot；这里再补一次 HTTP
+  // recovery，把断线期间错过的 notification.created 列表项拉回来。
+  void recoverTabBadgeSnapshot({ force: shouldForceRecovery });
+  if (!shouldForceRecovery) return;
+  // review P2：断线重连的空窗里错过的 moments.feed.updated 补不回来 ——
+  // 重连成功后 bump 一次信号，让 feed 组件自查新帖数（app 全程前台、
+  // 无 AppState 变化的场景就靠这条兜住）。
+  useMomentsFeedSignalStore.getState().bump();
+  // 断线空窗里结算的奖励/充值,那一帧是彻底丢掉的 —— badge 和朋友圈都在这里补,
+  // 钱包不补的话,一个全程挂着的钱包页会一直显示断线前的余额。走同一个单飞入口,
+  // 与并发的事件驱动刷新自然合并。
+  void refreshWalletBalanceBestEffort();
 }
 
 function clearReconnectTimer() {
@@ -267,6 +320,10 @@ function scheduleReconnect() {
 
   reconnectAttempt += 1;
   reportRealtimeConnectionOutage();
+  // 断线的那一刻就记账,而不是等退避回调跑起来:回到前台会直接调 connectRealtime,
+  // 令牌轮换会先 disconnectRealtime 再重连 —— 两条路都会让退避回调根本不执行,
+  // 标记留在回调里的话,这些路径就完全跳过了断线期间的补拉。
+  reconnectRecoveryPendingSession = currentSessionEpoch();
 
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
@@ -275,7 +332,6 @@ function scheduleReconnect() {
       return;
     }
 
-    reconnectRecoveryPending = true;
     // 走 openRealtimeSocket 而不是 connectRealtime：后者是「显式连接意图」的入口，
     // 会把 reconnectAttempt 归零 —— 从重连定时器里调它，退避就永远停在第一档，
     // 变成断网期间每秒锤一次后端。计数只由 onopen（连上了）归零。
@@ -581,15 +637,14 @@ function openRealtimeSocket(normalizedToken: string) {
   const nextSocket = new WebSocket(REALTIME_WS_URL);
   socket = nextSocket;
 
+  // 这条连接是否已经收到过帧 = 认证是否真的通过。补拉全部挂在它后面。
+  let authenticatedOnThisSocket = false;
+
   nextSocket.onopen = () => {
-    const shouldForceRecovery = reconnectRecoveryPending;
-    reconnectRecoveryPending = false;
     // 退避不在这里归零：握手成功只说明 WS 通了，认证还没发生。网关可能紧接着
     // 以 1008 踢掉（会话撤销 / 连接数超限），那时归零会让退避永远停在第一档，
     // 退化成每秒锤一次后端。归零挪到 onmessage —— 收到帧才代表认证真的过了。
     // 必须先发认证帧，否则网关 10s 后以 1008 踢掉连接，且期间收不到任何事件。
-    // 认证成功后网关会立刻回推一帧 badge.snapshot；这里再补一次 HTTP
-    // recovery，把断线期间错过的 notification.created 列表项拉回来。
     try {
       nextSocket.send(JSON.stringify({ type: 'auth', token: normalizedToken }));
     } catch (err) {
@@ -602,17 +657,6 @@ function openRealtimeSocket(normalizedToken: string) {
       return;
     }
     useTabBadgeStore.getState().setRealtimeConnected(true);
-    void recoverTabBadgeSnapshot({ force: shouldForceRecovery });
-    // review P2：断线重连的空窗里错过的 moments.feed.updated 补不回来 ——
-    // 重连成功后 bump 一次信号，让 feed 组件自查新帖数（app 全程前台、
-    // 无 AppState 变化的场景就靠这条兜住）。
-    if (shouldForceRecovery) {
-      useMomentsFeedSignalStore.getState().bump();
-      // 断线空窗里结算的奖励/充值,那一帧是彻底丢掉的 —— badge 和朋友圈都在
-      // 这里补,钱包不补的话,一个全程挂着的钱包页会一直显示断线前的余额。
-      // 走同一个单飞入口,与并发的事件驱动刷新自然合并。
-      void refreshWalletBalanceBestEffort();
-    }
   };
 
   nextSocket.onmessage = (event) => {
@@ -624,6 +668,10 @@ function openRealtimeSocket(normalizedToken: string) {
     // 这是退避唯一的归零点（显式 connectRealtime 除外）。
     reconnectAttempt = 0;
     reportedCurrentConnectionOutage = false;
+    if (!authenticatedOnThisSocket) {
+      authenticatedOnThisSocket = true;
+      runPostAuthenticationRecovery();
+    }
     handleSocketMessage(event.data);
   };
 
@@ -679,7 +727,8 @@ export function connectRealtime(token: string) {
 export function disconnectRealtime() {
   manualDisconnect = true;
   currentToken = null;
-  reconnectRecoveryPending = false;
+  // 断线标记不在这里清:token 轮换同样走 disconnectRealtime + 重连,清掉就等于
+  // 把断线期间错过的补拉一起丢了。它按会话记,登出/换号会让它自然失效。
   reportedRealtimeFailures.clear();
   invalidateWalletRefresh();
   clearReconnectTimer();
