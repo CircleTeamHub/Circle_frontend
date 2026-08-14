@@ -519,6 +519,9 @@
       "quickReply": "快捷语",
       "transfer": "转账"
     },
+    "location": {
+      "showPreview": "轻点显示地图"
+    },
     "locationPicker": {
       "title": "选择位置",
       "searchPlaceholder": "搜索地点",
@@ -824,6 +827,7 @@
       "selectCircles": "选择圈子",
       "selectRegions": "选择地区",
       "clear": "清空条件",
+      "activeInMyCircles": "筛选条件生效中，部分圈子已隐藏",
       "save": "保存条件",
       "saved": "已保存筛选条件",
       "savedCirclesCount": "已选{{count}}个圈子",
@@ -1081,6 +1085,7 @@
     "signUp": "报名",
     "signedUp": "已报名",
     "signupBlockedTitle": "暂不可报名",
+    "signupBlockedGeneric": "你暂不满足该动态的报名条件",
     "signupRestrictionMessage": "报名需满足：{{requirements}}",
     "circlePicker": {
       "selectedCount": "已选 {{count}} 个圈子"
@@ -2547,6 +2552,9 @@
       "d1": "1天",
       "d7": "7天"
     }
+  },
+  "location": {
+    "mapUnavailable": "地图加载失败，请检查网络后重试"
   },
   "permissions": {
     "insufficientTitle": "权限不足",

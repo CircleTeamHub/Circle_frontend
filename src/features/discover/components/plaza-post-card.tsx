@@ -347,12 +347,19 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
     if (busy) return;
     // 取消报名不校验门槛；仅当未报名且不满足资格时拦截并提示。
     if (!signed && !post.canSignup) {
+      // 后端可能因为一个前端当前不展示的门槛(例如靓号)判定不可报名,这时
+      // requirements 是空串,原来会弹出「报名需满足：」后面什么都没有。
+      const requirements = buildSignupReasonText();
       Alert.alert(
         t('plaza.signupBlockedTitle', { defaultValue: '暂不可报名' }),
-        t('plaza.signupRestrictionMessage', {
-          requirements: buildSignupReasonText(),
-          defaultValue: `报名需满足：${buildSignupReasonText()}`,
-        }),
+        requirements
+          ? t('plaza.signupRestrictionMessage', {
+              requirements,
+              defaultValue: `报名需满足：${requirements}`,
+            })
+          : t('plaza.signupBlockedGeneric', {
+              defaultValue: '你暂不满足该动态的报名条件',
+            }),
       );
       return;
     }

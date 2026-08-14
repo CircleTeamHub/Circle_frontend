@@ -16,7 +16,8 @@ import { Spacing, Typography, useTheme } from '@/theme';
 
 type MapMessage =
   | ({ type: 'location-selected' } & PickedLocation)
-  | { type: 'map-error'; message?: string };
+  | { type: 'map-error'; message?: string }
+  | { type: 'map-runtime-unavailable' };
 
 type MapLocationPickerLabels = {
   title: string;
@@ -26,6 +27,8 @@ type MapLocationPickerLabels = {
   selectedLabel: string;
   invalidTitle: string;
   invalidMessage: string;
+  unavailableMessage: string;
+  retryButton: string;
 };
 
 type MapLocationPickerScreenProps = {
@@ -143,6 +146,12 @@ function buildMapHtml(
   <script>
     const SELECTED_LABEL = ${scriptSelectedLabel};
     const post = (payload) => window.ReactNativeWebView.postMessage(JSON.stringify(payload));
+    // CDN 拿不到 leaflet 时 L 是 undefined，下面第一行就抛，确认按钮的监听根本
+    // 没注册上——而 onLoadEnd 已经把转圈收掉了，用户看到的是一个"能点但没反应"
+    // 的界面。这里显式上报，让原生侧给出可重试的失败态。
+    if (typeof L === 'undefined') {
+      post({ type: 'map-runtime-unavailable' });
+    } else {
     const map = L.map('map', { zoomControl: false }).setView([${latitude}, ${longitude}], 15);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
@@ -165,7 +174,14 @@ function buildMapHtml(
       marker.setLatLng([picked.latitude, picked.longitude]);
     }
 
+    // 每次"用户改变了选点"都推进一代。慢的那次响应回来时若已经不是最新一代，
+    // 就丢弃——否则先点 A 后点 B、A 的地址后到，B 的坐标会配上 A 的地址；搜索
+    // 结果更狠，会把整个选点挪回旧位置。
+    let pickGeneration = 0;
+
     async function reverseGeocode(lat, lon) {
+      pickGeneration += 1;
+      const generation = pickGeneration;
       updatePicked({
         latitude: lat,
         longitude: lon,
@@ -177,6 +193,7 @@ function buildMapHtml(
         const response = await fetch(url, { headers: { Accept: 'application/json' } });
         if (!response.ok) throw new Error('reverse request failed');
         const data = await response.json();
+        if (generation !== pickGeneration) return;
         updatePicked({
           title: data.name || data.display_name?.split(',')[0] || SELECTED_LABEL,
           address: data.display_name || picked.address
@@ -189,11 +206,14 @@ function buildMapHtml(
     async function searchPlace() {
       const query = document.getElementById('query').value.trim();
       if (!query) return;
+      pickGeneration += 1;
+      const generation = pickGeneration;
       try {
         const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=' + encodeURIComponent(query);
         const response = await fetch(url, { headers: { Accept: 'application/json' } });
         if (!response.ok) throw new Error('search request failed');
         const rows = await response.json();
+        if (generation !== pickGeneration) return;
         if (!rows.length) return;
         const row = rows[0];
         const lat = Number(row.lat);
@@ -225,6 +245,7 @@ function buildMapHtml(
     document.getElementById('confirm').addEventListener('click', () => {
       post({ type: 'location-selected', ...picked });
     });
+    }
   </script>
 </body>
 </html>`;
@@ -244,6 +265,9 @@ export function MapLocationPickerScreen({
     address?: string;
   }>();
   const [loading, setLoading] = useState(true);
+  // 地图运行时(leaflet)没加载出来时的失败态 + 重挂 WebView 的 key。
+  const [mapUnavailable, setMapUnavailable] = useState(false);
+  const [webViewKey, setWebViewKey] = useState(0);
 
   const initialLocation = useMemo<PickedLocation>(
     () => ({
@@ -259,6 +283,12 @@ export function MapLocationPickerScreen({
     [initialLocation, labels],
   );
 
+  const handleRetry = useCallback(() => {
+    setMapUnavailable(false);
+    setLoading(true);
+    setWebViewKey((key) => key + 1);
+  }, []);
+
   const handleMapMessage = useCallback(
     (event: WebViewMessageEvent) => {
       let payload: MapMessage;
@@ -269,6 +299,11 @@ export function MapLocationPickerScreen({
       }
       // 搜索或地址解析失败时仍保留地图上已经选择的经纬度，用户可继续确认。
       if (payload.type === 'map-error') return;
+      if (payload.type === 'map-runtime-unavailable') {
+        setMapUnavailable(true);
+        setLoading(false);
+        return;
+      }
       if (
         typeof payload.latitude !== 'number' ||
         typeof payload.longitude !== 'number' ||
@@ -319,6 +354,7 @@ export function MapLocationPickerScreen({
           </View>
         ) : null}
         <WebView
+          key={webViewKey}
           originWhitelist={['https://*']}
           source={{ html: mapHtml, baseUrl: 'https://www.openstreetmap.org' }}
           javaScriptEnabled
@@ -327,6 +363,27 @@ export function MapLocationPickerScreen({
           onMessage={handleMapMessage}
           style={s.webView}
         />
+        {mapUnavailable ? (
+          <View style={[s.unavailable, { backgroundColor: colors.background }]}>
+            <Ionicons
+              name="cloud-offline-outline"
+              size={32}
+              color={colors.textSecondary}
+            />
+            <Text style={[s.unavailableText, { color: colors.textSecondary }]}>
+              {labels.unavailableMessage}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={handleRetry}
+              style={[s.retryButton, { backgroundColor: colors.primary }]}
+            >
+              <Text style={[s.retryText, { color: colors.white }]}>
+                {labels.retryButton}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -365,4 +422,25 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   webView: { flex: 1 },
+  unavailable: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+  },
+  unavailableText: {
+    ...Typography.body,
+    textAlign: 'center',
+  },
+  retryButton: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderRadius: 999,
+  },
+  retryText: {
+    ...Typography.body,
+    fontWeight: '600',
+  },
 });

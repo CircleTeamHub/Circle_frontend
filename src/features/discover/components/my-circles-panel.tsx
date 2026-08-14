@@ -25,6 +25,15 @@ const s = StyleSheet.create({
   container: {
     gap: Spacing.lg,
   },
+  filterNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.md,
+  },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -92,6 +101,13 @@ export const MyCirclesPanel: React.FC = () => {
   const tabKey = CIRCLE_TAB_KEYS[activeTab] ?? CIRCLE_TAB_KEYS[0];
   const filterCircleIds = useDiscoverFilterStore((st) => st.appliedCircleIds);
   const filterCities = useDiscoverFilterStore((st) => st.appliedCities);
+  const clearAppliedFilter = useDiscoverFilterStore(
+    (st) => st.clearAppliedFilter,
+  );
+  // 筛选条件是在广场页设的、全局生效。这个面板挂在「圈子管理 / 我的圈子」下，
+  // 那两个页面都没有筛选入口——不给提示的话，圈子会被静默隐藏，用户只会以为
+  // 自己退圈了，而且没有任何地方可以清掉它。
+  const filterActive = filterCircleIds.length > 0 || filterCities.length > 0;
 
   const circles = useMemo(() => {
     const circlesByTab: Record<(typeof CIRCLE_TAB_KEYS)[number], Circle[]> = {
@@ -164,6 +180,19 @@ export const MyCirclesPanel: React.FC = () => {
         ...Typography.caption,
         fontWeight: "600" as const,
       },
+      filterNotice: {
+        backgroundColor: colors.surface,
+      },
+      filterNoticeText: {
+        flex: 1,
+        color: colors.textSecondary,
+        ...Typography.caption,
+      },
+      filterNoticeAction: {
+        color: colors.primary,
+        ...Typography.caption,
+        fontWeight: "600" as const,
+      },
     }),
     [colors],
   );
@@ -187,6 +216,25 @@ export const MyCirclesPanel: React.FC = () => {
         // 4 个筛选标签在西语/日语下更长，改可横向滚动避免挤压/换行。
         scrollable
       />
+
+      {filterActive ? (
+        <View style={[s.filterNotice, d.filterNotice]}>
+          <Text style={d.filterNoticeText} numberOfLines={2}>
+            {t('discover.filter.activeInMyCircles', {
+              defaultValue: '筛选条件生效中，部分圈子已隐藏',
+            })}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={clearAppliedFilter}
+            hitSlop={8}
+          >
+            <Text style={d.filterNoticeAction}>
+              {t('discover.filter.clear', { defaultValue: '清空条件' })}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {myCirclesLoading ? (
         <View style={s.emptyContainer}>

@@ -481,6 +481,9 @@
       "quickReply": "빠른 답장",
       "transfer": "송금"
     },
+    "location": {
+      "showPreview": "탭하여 지도 보기"
+    },
     "locationPicker": {
       "title": "위치 선택",
       "searchPlaceholder": "장소 검색",
@@ -1288,6 +1291,7 @@
       "selectCircles": "서클 선택",
       "selectRegions": "지역 선택",
       "clear": "지우기",
+      "activeInMyCircles": "필터가 적용 중입니다 — 일부 서클이 숨겨졌습니다",
       "save": "저장",
       "saved": "필터를 저장했어요",
       "savedCirclesCount": "{{count}}개 서클",
@@ -1419,6 +1423,7 @@
     "signUp": "신청",
     "signedUp": "신청함",
     "signupBlockedTitle": "지금은 신청할 수 없어요",
+    "signupBlockedGeneric": "아직 이 게시물의 참가 조건을 충족하지 않았습니다",
     "signupRestrictionMessage": "신청 조건: {{requirements}}",
     "circlePicker": {
       "selectedCount": "{{count}}개 서클 선택됨"
@@ -2582,6 +2587,9 @@
       "d1": "1일",
       "d7": "7일"
     }
+  },
+  "location": {
+    "mapUnavailable": "지도를 불러오지 못했습니다. 네트워크를 확인한 뒤 다시 시도해 주세요."
   },
   "permissions": {
     "insufficientTitle": "권한이 필요합니다",

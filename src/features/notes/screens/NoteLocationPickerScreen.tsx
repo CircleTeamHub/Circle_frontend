@@ -29,6 +29,10 @@ export default function NoteLocationPickerScreen() {
       invalidMessage: t('notes.location.invalidMsg', {
         defaultValue: '请重新选择位置',
       }),
+      unavailableMessage: t('location.mapUnavailable', {
+        defaultValue: '地图加载失败，请检查网络后重试',
+      }),
+      retryButton: t('common.retry', { defaultValue: '重试' }),
     }),
     [t],
   );

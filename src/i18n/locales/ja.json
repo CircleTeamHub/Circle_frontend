@@ -481,6 +481,9 @@
       "quickReply": "定型文",
       "transfer": "送金"
     },
+    "location": {
+      "showPreview": "タップして地図を表示"
+    },
     "locationPicker": {
       "title": "位置を選択",
       "searchPlaceholder": "場所を検索",
@@ -1288,6 +1291,7 @@
       "selectCircles": "サークルを選択",
       "selectRegions": "地域を選択",
       "clear": "クリア",
+      "activeInMyCircles": "フィルター適用中 — 一部のサークルは非表示です",
       "save": "保存",
       "saved": "条件を保存しました",
       "savedCirclesCount": "{{count}}サークル",
@@ -1419,6 +1423,7 @@
     "signUp": "応募",
     "signedUp": "応募済み",
     "signupBlockedTitle": "現在応募できません",
+    "signupBlockedGeneric": "この投稿の応募条件をまだ満たしていません",
     "signupRestrictionMessage": "応募条件：{{requirements}}",
     "circlePicker": {
       "selectedCount": "{{count}} 個のサークルを選択"
@@ -2582,6 +2587,9 @@
       "d1": "1日",
       "d7": "7日"
     }
+  },
+  "location": {
+    "mapUnavailable": "地図を読み込めませんでした。通信環境を確認して再試行してください。"
   },
   "permissions": {
     "insufficientTitle": "権限が必要です",

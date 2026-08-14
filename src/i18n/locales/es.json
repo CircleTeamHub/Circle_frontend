@@ -482,6 +482,9 @@
       "quickReply": "Respuesta rápida",
       "transfer": "Transferencia"
     },
+    "location": {
+      "showPreview": "Toca para ver el mapa"
+    },
     "locationPicker": {
       "title": "Seleccionar ubicación",
       "searchPlaceholder": "Buscar un lugar",
@@ -1291,6 +1294,7 @@
       "selectCircles": "Elegir círculos",
       "selectRegions": "Elegir regiones",
       "clear": "Borrar",
+      "activeInMyCircles": "Hay un filtro activo: algunos círculos están ocultos",
       "save": "Guardar",
       "saved": "Filtros guardados",
       "savedCirclesCount": "{{count}} círculos",
@@ -1422,6 +1426,7 @@
     "signUp": "Inscribirse",
     "signedUp": "Inscrito",
     "signupBlockedTitle": "Inscripción no disponible",
+    "signupBlockedGeneric": "Aún no cumples los requisitos de inscripción de esta publicación",
     "signupRestrictionMessage": "Para inscribirte: {{requirements}}",
     "circlePicker": {
       "selectedCount": "{{count}} círculo(s) seleccionado(s)"
@@ -2585,6 +2590,9 @@
       "d1": "1 día",
       "d7": "7 días"
     }
+  },
+  "location": {
+    "mapUnavailable": "No se pudo cargar el mapa. Revisa tu conexión e inténtalo de nuevo."
   },
   "permissions": {
     "insufficientTitle": "Permiso necesario",

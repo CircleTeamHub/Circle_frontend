@@ -687,7 +687,10 @@ export default function MemberCenterScreen() {
         <View style={s.tierStack}>
           {MEMBERSHIP_PLANS.map((plan) => {
             const selected = plan.id === selectedPlan.id;
-            const isCurrentTier = plan.id === currentTier;
+            // 按「等级」而不是「方案 id」判：后端只暴露 vipLevel，每日会员和月度
+            // 白银是同一档 silver/level 1，用 id 比的话客服开通一天会员后会把
+            // 月度卡片标成「当前」、每日卡片反而没标。徽章本身就是 currentTierBadge。
+            const isCurrentTier = plan.tier === currentTier;
             const visual = TIER_VISUALS[plan.tier];
             const planName = t(plan.nameKey, {
               defaultValue: DEFAULT_PLAN_NAMES[plan.id],

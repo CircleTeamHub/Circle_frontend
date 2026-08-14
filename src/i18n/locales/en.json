@@ -520,6 +520,9 @@
       "quickReply": "Quick Reply",
       "transfer": "Transfer"
     },
+    "location": {
+      "showPreview": "Tap to show map"
+    },
     "locationPicker": {
       "title": "Select Location",
       "searchPlaceholder": "Search for a place",
@@ -825,6 +828,7 @@
       "selectCircles": "Select Circles",
       "selectRegions": "Select Regions",
       "clear": "Clear",
+      "activeInMyCircles": "A filter is active — some circles are hidden",
       "save": "Save",
       "saved": "Filters saved",
       "savedCirclesCount": "{{count}} circles",
@@ -1082,6 +1086,7 @@
     "signUp": "Sign up",
     "signedUp": "Signed up",
     "signupBlockedTitle": "Sign-up unavailable",
+    "signupBlockedGeneric": "You do not meet the signup requirements for this post yet",
     "signupRestrictionMessage": "To sign up: {{requirements}}",
     "circlePicker": {
       "selectedCount": "{{count}} circle(s) selected"
@@ -2550,6 +2555,9 @@
       "d1": "1 day",
       "d7": "7 days"
     }
+  },
+  "location": {
+    "mapUnavailable": "The map failed to load. Check your connection and try again."
   },
   "permissions": {
     "insufficientTitle": "Permission needed",

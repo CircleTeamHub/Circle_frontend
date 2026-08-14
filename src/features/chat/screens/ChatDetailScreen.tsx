@@ -2539,9 +2539,19 @@ export default function ChatDetailScreen() {
       setSendError(getCreditPolicyMessage(creditDenied));
       return;
     }
+    // 选点页自己支持搜索和手动拖动，定位权限只是用来把地图中心预置到「我的
+    // 位置」。拒权就直接开图（用页面自带的默认中心），不能因此把分享公共地点
+    // 这件事整个堵死。
+    const openPickerAt = (params?: Record<string, string>) => {
+      clearPickedLocation();
+      router.push({
+        pathname: '/(chat)/location-picker',
+        ...(params ? { params } : {}),
+      } as never);
+    };
     const permission = await Location.requestForegroundPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert(t('permissions.insufficientTitle'), t('permissions.location'));
+      openPickerAt();
       return;
     }
     try {
@@ -2571,27 +2581,15 @@ export default function ChatDetailScreen() {
       } catch {
         // 地址解析失败不阻塞选点，地图仍以真实坐标为中心。
       }
-      clearPickedLocation();
-      router.push({
-        pathname: '/(chat)/location-picker',
-        params: {
-          latitude: String(latitude),
-          longitude: String(longitude),
-          title,
-          address,
-        },
-      } as never);
-    } catch (error) {
-      if (mountedRef.current) {
-        setSendError(
-          getChatSendErrorMessage(
-            error,
-            t('chat.locationPicker.loadFailed', {
-              defaultValue: '无法获取当前位置，请重试',
-            }),
-          ),
-        );
-      }
+      openPickerAt({
+        latitude: String(latitude),
+        longitude: String(longitude),
+        title,
+        address,
+      });
+    } catch {
+      // 取当前位置失败同样只影响初始中心：照常开图，让用户自己搜或拖。
+      openPickerAt();
     }
   }, [clearPickedLocation, conversationID, isPreviewMode, sourceID, t]);
 

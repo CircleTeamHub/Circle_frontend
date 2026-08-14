@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   Linking,
   View,
@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { useTranslation } from 'react-i18next';
 import { useTheme, Spacing, Typography } from '@/theme';
 import type { ChatMessage } from '@/types';
 import {
@@ -65,6 +66,12 @@ const sLocation = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: Spacing.xs,
+  },
+  revealButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
   },
   locationMapTile: {
     position: 'absolute',
@@ -116,6 +123,11 @@ export const LocationCard: React.FC<LocationCardProps> = ({
   onLongPress,
 }) => {
   const { colors } = useTheme();
+  const { t } = useTranslation();
+  // 地图瓦片来自第三方(tile.openstreetmap.org)。挂在渲染里就意味着:只要这条
+  // 位置消息进了列表,私聊里的坐标 + 收件人的网络元数据就自动交给了 OSM,收件人
+  // 没做任何操作。改成显式点开才请求 —— 未展开时只画本地占位图,不发任何请求。
+  const [previewRevealed, setPreviewRevealed] = useState(false);
 
   const d = useMemo(
     () => ({
@@ -124,6 +136,13 @@ export const LocationCard: React.FC<LocationCardProps> = ({
       },
       locationImageFallback: {
         backgroundColor: colors.surface,
+      },
+      revealButton: {
+        backgroundColor: colors.overlay,
+      },
+      revealButtonText: {
+        color: colors.textSecondary,
+        ...Typography.small,
       },
       locationMarkerDot: {
         backgroundColor: colors.primary,
@@ -163,7 +182,7 @@ export const LocationCard: React.FC<LocationCardProps> = ({
   const hasCoordinates = coordinates !== null;
   const mapPreview = useMemo(
     () =>
-      coordinates
+      coordinates && previewRevealed
         ? getOpenStreetMapPreviewTiles(
             coordinates.latitude,
             coordinates.longitude,
@@ -172,8 +191,12 @@ export const LocationCard: React.FC<LocationCardProps> = ({
             15,
           )
         : null,
-    [coordinates],
+    [coordinates, previewRevealed],
   );
+  const revealPreview = useCallback(() => {
+    setPreviewRevealed(true);
+  }, []);
+
   const openLocationInMaps = useCallback(async () => {
     if (!coordinates) return;
     const urls = buildSystemMapUrls(
@@ -182,9 +205,12 @@ export const LocationCard: React.FC<LocationCardProps> = ({
       message.locationTitle || message.locationAddress || '',
     );
     const primary = process.env.EXPO_OS === 'ios' ? urls.ios : urls.android;
+    // 直接开原生地图,失败再退网页,而不是先 canOpenURL 探测:Android 11+ 的包
+    // 可见性要求 manifest 里声明 geo: 的 <queries>,否则装了地图 app 也探测不到,
+    // 这条路径就永远退到浏览器;iOS 的 maps: 同样受 LSApplicationQueriesSchemes
+    // 限制。openURL 在没有应用能处理时会 reject,catch 里退回网页版即可。
     try {
-      const supported = await Linking.canOpenURL(primary);
-      await Linking.openURL(supported ? primary : urls.fallback);
+      await Linking.openURL(primary);
     } catch {
       await Linking.openURL(urls.fallback).catch(() => undefined);
     }
@@ -238,6 +264,20 @@ export const LocationCard: React.FC<LocationCardProps> = ({
           ) : (
             <View style={[sLocation.locationImageFallback, d.locationImageFallback]}>
               <Ionicons name="location" size={32} color={colors.textSecondary} />
+              {hasCoordinates ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={revealPreview}
+                  hitSlop={8}
+                  style={[sLocation.revealButton, d.revealButton]}
+                >
+                  <Text style={d.revealButtonText}>
+                    {t('chat.location.showPreview', {
+                      defaultValue: '轻点显示地图',
+                    })}
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           )}
         </View>
