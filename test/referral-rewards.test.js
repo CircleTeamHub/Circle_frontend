@@ -303,3 +303,19 @@ test('a failed native share is reported with a fallback path', () => {
     );
   }
 });
+
+// 不传 locale 的 toLocaleDateString 跟着设备语言走：应用内切过语言的人，钱包
+// 会一半是所选语言、一半是设备语言。仓里已有集中映射，别再各写各的。
+test('wallet ledger dates follow the app language, not the device', () => {
+  const wallet = read('src/features/profile/screens/WalletScreen.tsx');
+
+  assert.match(
+    wallet,
+    /import \{ getLocalizedDateTimeLocale \} from '@\/utils\/locale'/,
+  );
+  assert.match(
+    wallet,
+    /toLocaleDateString\(\s*(\/\/[^\n]*\n\s*)*getLocalizedDateTimeLocale\(i18n\.language\),/,
+  );
+  assert.doesNotMatch(wallet, /toLocaleDateString\(\)/);
+});

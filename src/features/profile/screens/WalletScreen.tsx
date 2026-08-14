@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { getLocalizedDateTimeLocale } from '@/utils/locale';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
@@ -61,7 +62,7 @@ const s = StyleSheet.create({
 });
 
 export default function WalletScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { isOffline } = useNetworkStatus();
@@ -242,7 +243,11 @@ export default function WalletScreen() {
                     {transactionLabel(transaction)}
                   </Text>
                   <Text style={[Typography.small, { color: colors.textSecondary }]}>
-                    {new Date(transaction.createdAt).toLocaleDateString()}
+                    {new Date(transaction.createdAt).toLocaleDateString(
+                      // 不传 locale 会跟着**设备**语言走:应用内切过语言的人,
+                      // 钱包会一半中文一半设备语言。仓里已有这个集中映射。
+                      getLocalizedDateTimeLocale(i18n.language),
+                    )}
                   </Text>
                 </View>
                 <Text
