@@ -84,7 +84,7 @@ test('adding a verifier does not send the card from the client', () => {
   // validateSendPayload 拒,还被 best-effort 的 catch 吞掉:卡片从来没送达过。
   // 现在由 CircleInvitationService.addVerifier 提交后服务端签发。
   const screen = read('src/features/discover/screens/SelectVerifierScreen.tsx');
-  assert.match(screen, /addVerifierToInvitation\(invitationId, friend\.id\)/);
+  assert.match(screen, /addVerifierToInvitation\(invitationId, candidate\.id\)/);
   assert.doesNotMatch(screen, /sendCardMessage/);
   assert.doesNotMatch(screen, /ensureDirectConversation/);
   assert.doesNotMatch(screen, /applicantName/);

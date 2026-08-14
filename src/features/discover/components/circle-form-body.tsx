@@ -139,7 +139,37 @@ const s = StyleSheet.create({
     paddingVertical: Spacing.md,
   },
   rowLabel: { ...Typography.bodyRegular },
+  gateHint: { ...Typography.caption, marginBottom: Spacing.sm },
+  // 允许换行:窄屏 + 长语言(西语的「需要几人验证」比中文长得多)+ SQL 手改
+  // 出的第四个档位一起出现时,不换行的定宽行会把最后一个 chip 挤出屏幕。
+  // 标签可压缩、chip 不可压缩,压缩发生在标签上。
+  verifierCountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    paddingBottom: Spacing.md,
+  },
+  verifierCountLabel: { flexShrink: 1 },
+  verifierChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    gap: Spacing.sm,
+  },
+  verifierChip: {
+    minWidth: 48,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
 });
+
+// 入圈验证的三档担保票数。1 = 关闭(成员邀请即进),是宣传期的默认形态。
+const VERIFIER_COUNT_OPTIONS = [2, 5, 10];
 
 export const CircleFormBody: React.FC<CircleFormBodyProps> = ({ form }) => {
   const { t } = useTranslation();
@@ -163,6 +193,19 @@ export const CircleFormBody: React.FC<CircleFormBodyProps> = ({ form }) => {
       avatarHint: { color: colors.textSecondary },
     }),
     [colors],
+  );
+
+  const verificationGateOn = form.requiredVerifierCount > 1;
+  // SQL 手改出的非 2/5/10 档位也要能显示并保持选中,保存时不被静默改掉。
+  const verifierCountOptions = useMemo(
+    () =>
+      VERIFIER_COUNT_OPTIONS.includes(form.requiredVerifierCount) ||
+      form.requiredVerifierCount <= 1
+        ? VERIFIER_COUNT_OPTIONS
+        : [...VERIFIER_COUNT_OPTIONS, form.requiredVerifierCount].sort(
+            (a, b) => a - b,
+          ),
+    [form.requiredVerifierCount],
   );
 
   const PRESET_CATEGORIES = useMemo(
@@ -477,6 +520,70 @@ export const CircleFormBody: React.FC<CircleFormBodyProps> = ({ form }) => {
             thumbColor={colors.white}
           />
         </View>
+        <Divider />
+        {/* 入圈验证:关 = requiredVerifierCount 1(拉人即进),开 = 2/5/10 档。 */}
+        <View style={s.toggleRow}>
+          <Text style={[s.rowLabel, d.rowLabel]}>
+            {t('circle.create.verificationGateLabel')}
+          </Text>
+          <Switch
+            value={verificationGateOn}
+            onValueChange={(value) =>
+              form.setRequiredVerifierCount(value ? 10 : 1)
+            }
+            trackColor={{ false: colors.surfaceBorder, true: colors.primary }}
+            thumbColor={colors.white}
+          />
+        </View>
+        {verificationGateOn ? (
+          <>
+            <View style={s.verifierCountRow}>
+              <Text style={[s.rowLabel, s.verifierCountLabel, d.rowLabel]}>
+                {t('circle.create.verifierCountLabel')}
+              </Text>
+              <View style={s.verifierChips}>
+                {verifierCountOptions.map((count) => {
+                  const selected = form.requiredVerifierCount === count;
+                  return (
+                    <Pressable
+                      key={count}
+                      onPress={() => form.setRequiredVerifierCount(count)}
+                      style={[
+                        s.verifierChip,
+                        {
+                          backgroundColor: selected
+                            ? colors.primary
+                            : colors.surface,
+                          borderColor: selected
+                            ? colors.primary
+                            : colors.surfaceBorder,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={{
+                          color: selected ? colors.white : colors.text,
+                          ...Typography.bodyRegular,
+                        }}
+                      >
+                        {count}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+            <Text style={[s.gateHint, { color: colors.textSecondary }]}>
+              {t('circle.create.verificationGateOnHint', {
+                count: form.requiredVerifierCount,
+              })}
+            </Text>
+          </>
+        ) : (
+          <Text style={[s.gateHint, { color: colors.textSecondary }]}>
+            {t('circle.create.verificationGateOffHint')}
+          </Text>
+        )}
       </View>
 
       {/* VIP / 信用分限制选择 sheet（所选等级及以上可加入） */}

@@ -4,6 +4,7 @@ import type {
   Circle,
   CircleDetail,
   CircleInvitation,
+  CircleInvitationUser,
   CreateCircleInput,
   MyCircle,
 } from '@/types';
@@ -165,6 +166,25 @@ export async function fetchInvitation(
   invitationId: string,
 ): Promise<CircleInvitation> {
   return apiClient<CircleInvitation>(`/circle-invitation/${invitationId}`);
+}
+
+/**
+ * 申请人可挑的验证人 = 本圈 ACTIVE 成员 ∩ 自己的好友 - 已占席的 - 自己。
+ *
+ * 交集由服务端算(见 BE circle-invitation.service.getEligibleVerifiers)。这里
+ * 刻意不用好友列表再做一遍过滤 —— 同一条资格规则写两份必然漂移,而漂移的表现
+ * 是「列表里点得到、点下去被打回」。
+ */
+export async function fetchEligibleVerifiers(
+  invitationId: string,
+): Promise<CircleInvitationUser[]> {
+  const list = await apiClient<CircleInvitationUser[]>(
+    `/circle-invitation/${invitationId}/eligible-verifiers`,
+  );
+  return list.map((user) => ({
+    ...user,
+    avatarUrl: normalizeMediaUrl(user.avatarUrl),
+  }));
 }
 
 export async function addVerifierToInvitation(
