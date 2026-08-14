@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,9 +15,12 @@ import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Divider } from '@/components/ui/divider';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
-import { fetchFriends, type FriendProfile } from '@/services/api/friends';
-import { addVerifierToInvitation } from '@/services/api/circles';
+import {
+  addVerifierToInvitation,
+  fetchEligibleVerifiers,
+} from '@/services/api/circles';
 import { getApiErrorMessage } from '@/services/api/errors';
+import type { CircleInvitationUser } from '@/types';
 
 const s = StyleSheet.create({
   listContent: {
@@ -55,34 +58,55 @@ export default function SelectVerifierScreen() {
     circleName: string;
   }>();
 
-  const [friends, setFriends] = useState<FriendProfile[]>([]);
+  // 候选人 = 好友 ∩ 本圈 ACTIVE 成员,交集由服务端算好(见 fetchEligibleVerifiers)。
+  // 以前这里拉的是全部好友,圈外好友照列、点了才被服务端打回。
+  const [candidates, setCandidates] = useState<CircleInvitationUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
 
-  const loadFriends = useCallback(async () => {
+  // 候选名单必须钉在发起它的那张担保单上。这条路由的实例可以从一张单换到
+  // 另一张(参数变了但组件没重挂),旧请求后落地就会把上一张单的候选人装进来 ——
+  // 点其中一个提交到新的 invitationId 上,只会换来一句莫名其妙的资格失败。
+  const loadedForRef = useRef<string | null>(null);
+
+  const loadCandidates = useCallback(async () => {
+    if (!invitationId) {
+      setLoading(false);
+      return;
+    }
+    // 换了担保单就先把上一张的候选人清掉:围栏只保证「不装错」,不保证
+    // 「装不进就把旧的撤掉」。B 的请求失败时 loadError 有值但 candidates
+    // 还是 A 的那批,页面照旧列人,点下去却是往 B 提交。
+    if (loadedForRef.current !== invitationId) setCandidates([]);
+    loadedForRef.current = invitationId;
     setLoading(true);
     setLoadError(null);
     try {
-      const data = await fetchFriends();
-      setFriends(data);
+      const data = await fetchEligibleVerifiers(invitationId);
+      if (loadedForRef.current !== invitationId) return;
+      setCandidates(data);
     } catch (error) {
+      if (loadedForRef.current !== invitationId) return;
       setLoadError(
-        t('invitation.loadFriendsFailed', {
-          defaultValue: '加载好友列表失败，请稍后重试',
+        t('invitation.loadVerifiersFailed', {
+          defaultValue: '加载候选人失败，请稍后重试',
         }),
       );
       if (__DEV__) {
-        console.warn('[SelectVerifierScreen] fetchFriends failed', error);
+        console.warn(
+          '[SelectVerifierScreen] fetchEligibleVerifiers failed',
+          error,
+        );
       }
     } finally {
-      setLoading(false);
+      if (loadedForRef.current === invitationId) setLoading(false);
     }
-  }, [t]);
+  }, [invitationId, t]);
 
   useEffect(() => {
-    loadFriends();
-  }, [loadFriends]);
+    loadCandidates();
+  }, [loadCandidates]);
 
   const d = useMemo(
     () => ({
@@ -109,16 +133,19 @@ export default function SelectVerifierScreen() {
   );
 
   const handleSelect = useCallback(
-    async (friend: FriendProfile) => {
+    async (candidate: CircleInvitationUser) => {
       if (!invitationId || submittingId) return;
-      setSubmittingId(friend.id);
+      setSubmittingId(candidate.id);
       try {
         // 验证邀请名片由服务端签发:addVerifier 提交席位之后,后端用
         // ChatSystemMessageService 把卡片发给验证人(点击直达验证页)。
         // 这里曾经自己发一条 —— 而 verification-card 是服务端专属类型,那次发送
         // 100% 被拒,还被 best-effort 的 catch 吞掉,卡片从来没送达过。
-        await addVerifierToInvitation(invitationId, friend.id);
-        Alert.alert(t('invitation.invited'), t('invitation.invitedMessage', { name: friend.nickname }));
+        await addVerifierToInvitation(invitationId, candidate.id);
+        Alert.alert(
+          t('invitation.invited'),
+          t('invitation.invitedMessage', { name: candidate.nickname }),
+        );
         router.back();
       } catch (error: unknown) {
         Alert.alert(
@@ -133,7 +160,7 @@ export default function SelectVerifierScreen() {
   );
 
   const renderItem = useCallback(
-    ({ item }: { item: FriendProfile }) => (
+    ({ item }: { item: CircleInvitationUser }) => (
       <View>
         <View style={s.row}>
           <Avatar
@@ -170,23 +197,25 @@ export default function SelectVerifierScreen() {
         <View style={s.centerLoader}>
           <ActivityIndicator color={colors.primary} />
         </View>
-      ) : loadError && friends.length === 0 ? (
+      ) : loadError && candidates.length === 0 ? (
         <View style={s.centerLoader}>
           <Text style={d.emptyText}>{loadError}</Text>
-          <Pressable style={d.retryButton} onPress={loadFriends}>
+          <Pressable style={d.retryButton} onPress={loadCandidates}>
             <Text style={d.retryText}>{t('common.retry')}</Text>
           </Pressable>
         </View>
       ) : (
         <FlatList
-          data={friends}
+          data={candidates}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={s.listContent}
           ListEmptyComponent={
             <View style={s.centerLoader}>
               <Text style={{ color: colors.textSecondary, ...Typography.body }}>
-                {t('invitation.noFriends')}
+                {t('invitation.noEligibleVerifiers', {
+                  defaultValue: '没有可选的验证人：验证人得既是你的好友，又已经在这个圈子里',
+                })}
               </Text>
             </View>
           }

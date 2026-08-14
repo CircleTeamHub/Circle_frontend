@@ -23,6 +23,7 @@ import {
 import { canViewCircleMembers } from '@/features/chat/group-member-permissions';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { fetchCircleDetail, inviteToCircle } from '@/services/api/circles';
+import type { CircleInvitation } from '@/types';
 import {
   buildExistingCircleMemberIds,
   filterInvitableCircleFriends,
@@ -278,8 +279,19 @@ export default function InviteToCircleScreen() {
       const results = await Promise.allSettled(
         inviteeIds.map((friendId) => inviteToCircle(circleId, friendId)),
       );
-      const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+      const fulfilled = results.filter(
+        (r): r is PromiseFulfilledResult<CircleInvitation> =>
+          r.status === 'fulfilled',
+      );
+      const succeeded = fulfilled.length;
       const failed = results.length - succeeded;
+      // requiredVerifierCount=1(宣传期默认)时,邀请人的首票已经满票,服务端
+      // 当场就把人放进圈子并把担保单落成 APPROVED —— 这时再说「等待验证通过」
+      // 是把已经进来的人说成还在排队。按返回的 status 分类报告。
+      const joinedNow = fulfilled.filter(
+        (r) => r.value.status === 'APPROVED',
+      ).length;
+      const pending = succeeded - joinedNow;
       if (succeeded === 0) {
         logClientDiagnostic('circle_invite_all_failed', {
           circleId,
@@ -293,12 +305,25 @@ export default function InviteToCircleScreen() {
         );
         return;
       }
+      const successCopy =
+        pending === 0
+          ? t('circle.invite.joinedAll', {
+              count: joinedNow,
+              defaultValue: `已把 ${joinedNow} 位好友拉进圈子`,
+            })
+          : joinedNow === 0
+            ? t('circle.invite.sentAll', {
+                count: pending,
+                defaultValue: `已邀请 ${pending} 位好友，等待验证通过`,
+              })
+            : t('circle.invite.joinedAndPending', {
+                joined: joinedNow,
+                pending,
+                defaultValue: `${joinedNow} 位已入圈，${pending} 位等待验证通过`,
+              });
       const message =
         failed === 0
-          ? t('circle.invite.sentAll', {
-              count: succeeded,
-              defaultValue: `已邀请 ${succeeded} 位好友，等待验证通过`,
-            })
+          ? successCopy
           : t('circle.invite.sentPartial', {
               succeeded,
               failed,
