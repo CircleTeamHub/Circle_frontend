@@ -296,3 +296,73 @@ test("重连恢复会补一次钱包对账", async () => {
     "重连成功后应该补一次权威余额读",
   );
 });
+
+// token 轮换会把单飞格子清空，但在途那一发按 sessionEpoch 判并不过期（故意的，
+// 见上一条）。于是同一段会话里可能有两发同时在途；乱序返回时，先发后到的那发
+// 拿的是更旧的快照，写进去就把新余额盖回去了，而且要等下一次事件才纠正。
+test("跨 token 轮换的两发请求乱序返回时，旧快照不能覆盖新余额", async () => {
+  const harness = loadHarness();
+  harness.connectRealtime("token-a");
+  const socketA = harness.openLatest();
+
+  harness.pokeBalance(socketA);
+  assert.equal(harness.walletCalls.length, 1);
+
+  // 同一段会话内换 token：单飞格子被清空，第一发还在飞。
+  harness.disconnectRealtime();
+  harness.connectRealtime("token-a2");
+  const socketB = harness.openLatest();
+
+  harness.pokeBalance(socketB);
+  assert.equal(
+    harness.walletCalls.length,
+    2,
+    "轮换清空了单飞格子，新事件会另起一发",
+  );
+
+  // 新的先回、旧的后回。
+  harness.walletCalls[1].resolve({ balance: 200 });
+  await harness.flush();
+  harness.walletCalls[0].resolve({ balance: 100 });
+  await harness.flush();
+
+  assert.deepEqual(
+    harness.walletWrites,
+    [200],
+    "只有最新的那一发允许写钱包 store",
+  );
+});
+
+// 旧的那一发落地时不能把新一发的单飞格子清掉——否则单飞失效，后续每个事件都
+// 会并发出一个新请求。
+test("旧的那一发落地不会清掉新一发的单飞格子", async () => {
+  const harness = loadHarness();
+  harness.connectRealtime("token-a");
+  const socketA = harness.openLatest();
+
+  harness.pokeBalance(socketA);
+  harness.disconnectRealtime();
+  harness.connectRealtime("token-a2");
+  const socketB = harness.openLatest();
+  harness.pokeBalance(socketB);
+  assert.equal(harness.walletCalls.length, 2);
+
+  // 旧的先落地：它既不能写 store，也不能腾出格子。
+  harness.walletCalls[0].resolve({ balance: 100 });
+  await harness.flush();
+  assert.deepEqual(harness.walletWrites, [], "旧快照不写 store");
+
+  harness.pokeBalance(socketB);
+  assert.equal(
+    harness.walletCalls.length,
+    2,
+    "新一发还在飞，第三个事件应该记脏而不是并发新请求",
+  );
+
+  harness.walletCalls[1].resolve({ balance: 200 });
+  await harness.flush();
+  assert.equal(harness.walletCalls.length, 3, "记脏的那次要补一发尾随请求");
+  harness.walletCalls[2].resolve({ balance: 220 });
+  await harness.flush();
+  assert.deepEqual(harness.walletWrites, [200, 220]);
+});

@@ -171,6 +171,17 @@ function currentWalletSession(): number {
   return useAuthStore.getState().sessionEpoch;
 }
 
+// 每发出一次余额请求就 +1,latestWalletRefreshId 记住"最新的那一发"。只有它
+// 允许写 store、允许清单飞格子。
+//
+// 为什么会有两发同时在途:token 轮换时 SessionBootstrap 会 disconnect + 重连,
+// disconnectRealtime 把单飞格子清空,但在途那一发按 sessionEpoch 判并不过期
+// (故意的,见上面),于是轮换后的一次 wallet.balance.changed 会再发一发。两发
+// 乱序返回时,先发后到的那发拿的是更旧的快照,写进去就把新余额盖回去了;它的
+// finally 还会把新一发的格子清掉,单飞也跟着失效。
+let walletRefreshSequence = 0;
+let latestWalletRefreshId = 0;
+
 function invalidateWalletRefresh(): void {
   walletRefreshPromise = null;
   walletRefreshDirty = false;
@@ -190,7 +201,11 @@ function refreshWalletBalanceBestEffort(): Promise<void> {
 
 function runWalletRefresh(): Promise<void> {
   const epoch = currentWalletSession();
-  const isStale = () => epoch !== currentWalletSession();
+  walletRefreshSequence += 1;
+  const requestId = walletRefreshSequence;
+  latestWalletRefreshId = requestId;
+  const isStale = () =>
+    epoch !== currentWalletSession() || requestId !== latestWalletRefreshId;
   return fetchWallet()
     .then((wallet) => {
       if (isStale()) return;
@@ -201,7 +216,8 @@ function runWalletRefresh(): Promise<void> {
       reportRealtimeFailureOnce('walletRefresh');
     })
     .finally(() => {
-      // 会话已经换掉:这一格现在归新会话所有,别把它的在途请求清掉。
+      // 会话已经换掉、或后面又发了更新的一发:这一格现在归别人所有,别把它的
+      // 在途请求清掉。
       if (isStale()) return;
       walletRefreshPromise = null;
       if (walletRefreshDirty) {
