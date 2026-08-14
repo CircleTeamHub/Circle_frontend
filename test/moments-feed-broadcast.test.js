@@ -24,10 +24,22 @@ test('realtime client dispatches moments.feed.updated into the signal store', ()
 
 test('reconnect recovery bumps the signal to cover missed broadcasts (review P2)', () => {
   const source = read('src/realtime/client.ts');
+  // 补拉整体挪到「收到第一帧 = 认证真的通过」之后（握手成功仍可能被 1008 拒），
+  // bump 仍然是断线重连时必做的一件事。
   assert.match(
     source,
-    /if \(shouldForceRecovery\) \{\s*useMomentsFeedSignalStore\.getState\(\)\.bump\(\);/,
+    /function runPostAuthenticationRecovery\(\): void \{[\s\S]*?useMomentsFeedSignalStore\.getState\(\)\.bump\(\);/,
     '重连成功后必须补 bump，一直前台的断连空窗才有兜底',
+  );
+  assert.match(
+    source,
+    /if \(!shouldForceRecovery\) return;/,
+    'bump 只在断线重连后补，正常首连不该 bump',
+  );
+  assert.match(
+    source,
+    /if \(!authenticatedOnThisSocket\) \{\s*\n\s*authenticatedOnThisSocket = true;\s*\n\s*runPostAuthenticationRecovery\(\);/,
+    '补拉必须挂在第一帧之后，而不是 onopen',
   );
 });
 

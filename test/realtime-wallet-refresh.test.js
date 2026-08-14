@@ -178,6 +178,18 @@ function loadHarness() {
       socket.onopen?.();
       return socket;
     },
+    // 收到第一帧 = 网关认证通过。补拉全部挂在它后面（握手成功还可能被 1008 拒）。
+    authenticate(socket) {
+      socket.onmessage({ data: JSON.stringify({ type: 'noop' }) });
+      return socket;
+    },
+    openAndAuthenticateLatest() {
+      const socket = sockets[sockets.length - 1];
+      socket.readyState = FakeWebSocket.OPEN;
+      socket.onopen?.();
+      socket.onmessage({ data: JSON.stringify({ type: 'noop' }) });
+      return socket;
+    },
   };
 }
 
@@ -288,8 +300,8 @@ test("重连恢复会补一次钱包对账", async () => {
   harness.runPendingReconnect?.();
 
   const before = harness.walletCalls.length;
-  // 定时器触发后会开一个新 socket,把它的 onopen 跑起来 = 认证并进入恢复。
-  harness.openLatest();
+  // 定时器触发后会开一个新 socket；补拉在收到第一帧（= 认证通过）之后才跑。
+  harness.openAndAuthenticateLatest();
 
   assert.ok(
     harness.walletCalls.length > before,
@@ -365,4 +377,109 @@ test("旧的那一发落地不会清掉新一发的单飞格子", async () => {
   harness.walletCalls[2].resolve({ balance: 220 });
   await harness.flush();
   assert.deepEqual(harness.walletWrites, [200, 220]);
+});
+
+// 单飞窗口里的第二次 poke 只记了个「脏」。如果这时 token 轮换,disconnectRealtime
+// 把脏标记也清掉,第一发就会带着更旧的快照落地,而且没有尾随请求来纠正 ——
+// wallet.balance.changed 不带绝对余额,只能一直错到下一次事件。
+test("跨 token 轮换不会丢掉单飞窗口里记下的第二次结算", async () => {
+  const harness = loadHarness();
+  harness.connectRealtime("token-a");
+  const socket = harness.openLatest();
+
+  harness.pokeBalance(socket);
+  assert.equal(harness.walletCalls.length, 1);
+  // 第一发还在飞的时候又结算了一笔 → 记脏。
+  harness.pokeBalance(socket);
+  assert.equal(harness.walletCalls.length, 1, "单飞：不并发第二个请求");
+
+  // 脏标记还没兑现，token 就轮换了（同一段会话，sessionEpoch 不动）。
+  harness.disconnectRealtime();
+  harness.connectRealtime("token-a2");
+
+  // 第一发这才落地，拿的是第二次结算之前的快照。
+  harness.walletCalls[0].resolve({ balance: 100 });
+  await harness.flush();
+
+  assert.equal(
+    harness.walletCalls.length,
+    2,
+    "记脏的那次必须在轮换之后仍然补一发",
+  );
+  harness.walletCalls[1].resolve({ balance: 160 });
+  await harness.flush();
+  assert.deepEqual(harness.walletWrites, [100, 160], "最终必须落在新余额上");
+});
+
+// 换号则相反：脏标记属于上一个账号，不能给新账号补一次读。
+test("换号之后不会替新账号兑现上一个账号的脏标记", async () => {
+  const harness = loadHarness();
+  harness.connectRealtime("token-a");
+  const socket = harness.openLatest();
+
+  harness.pokeBalance(socket);
+  harness.pokeBalance(socket);
+  assert.equal(harness.walletCalls.length, 1);
+
+  harness.disconnectRealtime();
+  harness.switchAccount();
+  harness.connectRealtime("token-b");
+
+  harness.walletCalls[0].resolve({ balance: 100 });
+  await harness.flush();
+
+  assert.equal(harness.walletCalls.length, 1, "不给新账号补读");
+  assert.deepEqual(harness.walletWrites, [], "上个账号的余额也不写进去");
+});
+
+// 回到前台 / 令牌轮换会直接调 connectRealtime，它先把退避定时器取消掉，退避回调
+// 根本不会执行。断线标记要是留在回调里，这条路径就完全跳过了断线期间的补拉。
+test("显式重连抢在退避回调之前，仍然会补一次对账", async () => {
+  const harness = loadHarness();
+  harness.connectRealtime("token-a");
+  harness.openAndAuthenticateLatest();
+
+  const before = harness.walletCalls.length;
+  const first = harness.sockets[harness.sockets.length - 1];
+  first.readyState = 3;
+  first.onclose?.({ code: 1006 });
+
+  // 退避定时器还挂着，用户切回前台 → 显式重连，取消掉那个定时器。
+  harness.connectRealtime("token-a");
+  harness.openAndAuthenticateLatest();
+
+  assert.equal(
+    harness.walletCalls.length,
+    before + 1,
+    "断线后的第一次成功连接必须补一次权威余额读",
+  );
+});
+
+// 网关接受握手之后仍然可能以 1008 拒掉认证（会话撤销 / 连接数超限）。补拉挂在
+// onopen 上的话，实时通道根本没恢复也会照发，而每一轮退避再来一次 —— 一次网关
+// 故障被放大成所有客户端的轮询。
+test("握手成功但认证被拒时不会发出补拉请求", async () => {
+  const harness = loadHarness();
+  harness.connectRealtime("token-a");
+  harness.openAndAuthenticateLatest();
+  const before = harness.walletCalls.length;
+
+  for (let round = 0; round < 3; round += 1) {
+    const socket = harness.sockets[harness.sockets.length - 1];
+    socket.readyState = 3;
+    socket.onclose?.({ code: 1006 });
+    harness.runPendingReconnect();
+    // 只握手、不给帧 = 网关随后以 1008 拒掉。
+    harness.openLatest();
+  }
+
+  assert.equal(
+    harness.walletCalls.length,
+    before,
+    "没有认证过的连接不该触发任何钱包请求",
+  );
+
+  // 真正认证通过的那一次，补拉只跑一次。
+  harness.authenticate(harness.sockets[harness.sockets.length - 1]);
+  assert.equal(harness.walletCalls.length, before + 1);
 });
