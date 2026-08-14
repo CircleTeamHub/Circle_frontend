@@ -7,7 +7,7 @@ const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 
 const SCREEN = 'src/features/discover/screens/DiscoverCirclesScreen.tsx';
 const ROUTE = 'app/(tabs)/discover/circles.tsx';
-const DISCOVER = 'src/features/discover/screens/DiscoverScreen.tsx';
+const CIRCLE_PLAZA = 'src/features/discover/screens/CirclePlazaScreen.tsx';
 
 test('DiscoverCirclesScreen lists all circles from the store and filters locally', () => {
   const src = read(SCREEN);
@@ -44,9 +44,9 @@ test('circles route re-exports the discover screen', () => {
   assert.match(src, /DiscoverCirclesScreen/);
 });
 
-test('Discover header exposes a discover-circles entry', () => {
-  const src = read(DISCOVER);
-  assert.match(src, /handleDiscoverCirclesPress/);
+test('circle plaza header exposes a discover-circles entry', () => {
+  const src = read(CIRCLE_PLAZA);
+  assert.match(src, /handleDiscoverCircles/);
   assert.match(src, /["'`]\/\(tabs\)\/discover\/circles["'`]/);
   assert.match(src, /name="search-outline"/);
 });

@@ -6,6 +6,7 @@ import {
   type ImageSourcePropType,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import { useTheme, Radius } from '@/theme';
 import {
   AVATAR_FRAME_SCALE,
@@ -56,7 +57,8 @@ export const Avatar: React.FC<AvatarProps> = ({
 }) => {
   const { colors } = useTheme();
   const resolvedBgColor = bgColor ?? colors.primary;
-  const hasFrame = Boolean(frameSource) && shape === 'circle';
+  const hasFrame =
+    FEATURE_FLAGS.avatarFrames && Boolean(frameSource) && shape === 'circle';
   // frameSize = 整体占位(框铺满它);photoSize = 里面的照片(填内孔)。紧凑模式框=size×1.2、照片=size×0.75;
   // 默认外扩框=size×1.6、照片=size。非会员无框时 photoSize=size。
   const frameSize =
@@ -100,7 +102,7 @@ export const Avatar: React.FC<AvatarProps> = ({
       </View>
     );
 
-  if (!frameSource || shape !== 'circle') {
+  if (!hasFrame) {
     return core;
   }
 

@@ -3,13 +3,14 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
+import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 const RULES = [
   {
     key: 'profile.memberRules.rules.catalog',
     defaultValue:
-      '白银会员 ¥298 / 1 个月；黄金会员 ¥1288 / 6 个月；钻石会员 ¥1998 / 1 年；超级会员 ¥3998 / 永久。',
+      '每日会员 ¥19.9 / 1 天；包月会员 ¥298 / 1 个月；半年会员 ¥1288 / 6 个月；年费会员 ¥1998 / 1 年；永久会员 ¥3998 / 永久。',
   },
   {
     key: 'profile.memberRules.rules.supportActivation',
@@ -41,6 +42,12 @@ const RULES = [
     defaultValue: '当前会员权益不包含头像框或动态头像承诺。',
   },
 ] as const;
+
+const VISIBLE_RULES = RULES.filter(
+  (rule) =>
+    FEATURE_FLAGS.avatarFrames ||
+    rule.key !== 'profile.memberRules.rules.excludedVisualBenefits',
+);
 
 const s = StyleSheet.create({
   content: {
@@ -123,7 +130,7 @@ export default function MemberRulesScreen() {
           })}
         </Text>
         <View style={[s.card, d.card]}>
-          {RULES.map((rule) => (
+          {VISIBLE_RULES.map((rule) => (
             <View key={rule.key} style={s.rule}>
               <View style={[s.dot, d.dot]} />
               <Text style={[s.ruleText, d.ruleText]}>

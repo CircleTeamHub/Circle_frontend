@@ -19,9 +19,11 @@ test('ProfileScreen removes the credit score row and links profile commerce page
   assert.match(src, /profile\/wallet/);
   assert.match(src, /profile\/mall/);
   assert.match(src, /profile\/collections/);
+  assert.doesNotMatch(src, /rightTextKey/);
+  assert.doesNotMatch(src, /rightText=\{item\.rightText\}/);
 });
 
-test('ProfileScreen places system announcements first, customer service after notes, settings last', () => {
+test('ProfileScreen places system announcements first and customer service last', () => {
   const src = read('src/features/profile/screens/ProfileScreen.tsx');
   const match = src.match(/const MENU_ITEM_KEYS:[\s\S]*?\[] = \[([\s\S]*?)\];/);
 
@@ -40,7 +42,6 @@ test('ProfileScreen places system announcements first, customer service after no
     'COLLECTIONS',
     'NOTES',
     'CUSTOMER_SERVICE',
-    'APP_SETTINGS',
   ]);
 });
 
@@ -359,11 +360,12 @@ test('ProfileScreen shows a red dot on system announcements when profile notific
   assert.match(src, /showIndicatorDot=\{/);
 });
 
-test('MemberCenterScreen renders the four-tier catalog without legacy commerce APIs', () => {
+test('MemberCenterScreen renders the daily offer and four-tier catalog without legacy commerce APIs', () => {
   const src = read('src/features/profile/screens/MemberCenterScreen.tsx');
   const catalog = read('src/features/profile/membership-plans.ts');
 
-  for (const [tier, price] of [
+  for (const [plan, price] of [
+    ['daily', 19.9],
     ['silver', 298],
     ['gold', 1288],
     ['diamond', 1998],
@@ -371,12 +373,16 @@ test('MemberCenterScreen renders the four-tier catalog without legacy commerce A
   ]) {
     assert.match(
       catalog,
-      new RegExp(`tier: '${tier}'[\\s\\S]*?amount: ${price}`),
+      new RegExp(`id: '${plan}'[\\s\\S]*?amount: ${price}`),
     );
   }
 
   assert.match(src, /MEMBERSHIP_PLANS\.map/);
-  assert.match(src, /MEMBERSHIP_BENEFITS\.map/);
+  assert.match(src, /visibleBenefits\.map/);
+  assert.match(
+    src,
+    /FEATURE_FLAGS\.fancyNumbers\s*\|\|\s*benefit\.id\s*!==\s*'fancy-number'/,
+  );
   // 允许 staged rollout 的 fetchMembershipProgramStatus（会员中心正文是否放开的灰度开关，
   // 与 MemberCenterScreen.spec.tsx 的行为契约一致），但仍禁止旧的「积分兑换/直购升级」商业化 API。
   assert.doesNotMatch(
@@ -386,17 +392,18 @@ test('MemberCenterScreen renders the four-tier catalog without legacy commerce A
   assert.doesNotMatch(src, /积分|兑换会员|确认兑换/);
 });
 
-test('MemberCenterScreen provides a vertical four-tier selection with per-tier visuals, markers, and selected benefits', () => {
+test('MemberCenterScreen provides a vertical five-offer selection with per-tier visuals, markers, and selected benefits', () => {
   const src = read('src/features/profile/screens/MemberCenterScreen.tsx');
   const catalog = read('src/features/profile/membership-plans.ts');
 
-  // 四档纵向全展示（tierStack，不再横滑把钻石/超级截在屏外），每档一套「贵金属」视觉。
+  // 五个方案纵向全展示（tierStack，不再横滑把钻石/超级截在屏外），权限档位复用贵金属视觉。
   assert.match(src, /tierStack/);
   assert.match(src, /TIER_VISUALS/);
   assert.match(src, /accessibilityState=\{\{ selected \}\}/);
   assert.match(src, /plan\.recommended/);
   assert.match(src, /defaultValue: '推荐'/);
   assert.match(src, /duration\.type === 'lifetime'/);
+  assert.match(src, /duration\.type === 'days'/);
   assert.match(src, /defaultValue: '永久'/);
   assert.match(src, /benefit\.values\[selectedPlan\.tier\]/);
   assert.match(src, /defaultValue: '会员权益'/);
@@ -452,7 +459,7 @@ test('MemberCenterScreen distinguishes activation, upgrade, current, and lower-t
   const src = read('src/features/profile/screens/MemberCenterScreen.tsx');
 
   assert.match(src, /selectedPlan\.level > currentPlanLevel/);
-  assert.match(src, /selectedPlan\.level === currentPlanLevel/);
+  assert.match(src, /selectedPlan\.id === currentTier/);
   assert.match(src, /contactToActivate/);
   assert.match(src, /defaultValue: '联系客服开通 {{plan}}'/);
   assert.match(src, /contactToUpgrade/);
@@ -468,11 +475,11 @@ test('ProfileScreen displays effective four-tier membership labels', () => {
   assert.match(src, /getMembershipTierForVipLevel/);
   assert.match(src, /getMembershipTierForVipLevel\(vipLevel\)/);
   assert.match(src, /defaultValue: '普通用户'/);
-  assert.match(src, /super: ["']超级会员["']/);
+  assert.match(src, /super: ["']永久会员["']/);
   assert.doesNotMatch(src, />VIP \{vipLevel\}</);
 });
 
-test('MemberRulesScreen and every locale use the four-tier support-assisted contract', () => {
+test('MemberRulesScreen and every locale use the daily plus four-tier support-assisted contract', () => {
   const rules = read('src/features/profile/screens/MemberRulesScreen.tsx');
   const locales = ['zh', 'en', 'ja', 'ko', 'es'];
   const requiredMembershipKeys = [
@@ -519,7 +526,7 @@ test('MemberRulesScreen and every locale use the four-tier support-assisted cont
 
     for (const key of requiredMembershipKeys)
       assert.ok(membership?.[key], `${locale}: ${key}`);
-    for (const tier of ['silver', 'gold', 'diamond', 'super']) {
+    for (const tier of ['daily', 'silver', 'gold', 'diamond', 'super']) {
       assert.ok(membership?.tiers?.[tier]?.name, `${locale}: tier ${tier}`);
     }
     for (const key of requiredRuleKeys)

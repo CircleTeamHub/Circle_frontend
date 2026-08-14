@@ -150,6 +150,8 @@ export interface ChatMessage {
   senderAvatarUrl?: string;
   locationTitle?: string;
   locationAddress?: string;
+  locationLatitude?: number;
+  locationLongitude?: number;
   // For image messages: source URL + optional intrinsic dimensions for layout
   imageUrl?: string;
   // 列表气泡优先用缩略图渲染，避免直接拉原图；点开原图查看时才用 imageUrl。

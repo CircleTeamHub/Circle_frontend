@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
+import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import { useNetworkStatus } from '@/hooks/use-network-status';
 import {
   fetchMallSections,
@@ -62,6 +63,31 @@ export default function MallScreen() {
   const { isOffline } = useNetworkStatus();
   const [sections, setSections] = useState<MallSection[]>(FALLBACK_SECTIONS);
   const [statusText, setStatusText] = useState<string | null>(null);
+  const visibleSections = useMemo(
+    () =>
+      sections
+        .map((section) => ({
+          ...section,
+          products: section.products.filter((product) => {
+            if (
+              !FEATURE_FLAGS.avatarFrames &&
+              product.action === 'avatar-frame'
+            ) {
+              return false;
+            }
+            if (
+              !FEATURE_FLAGS.fancyNumbers &&
+              (product.action === 'fancy-number' ||
+                product.action === 'fancy-number-renew')
+            ) {
+              return false;
+            }
+            return true;
+          }),
+        }))
+        .filter((section) => section.products.length > 0),
+    [sections],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -164,7 +190,7 @@ export default function MallScreen() {
           </Text>
         ) : null}
         {statusText ? <Text style={d.status}>{statusText}</Text> : null}
-        {sections.map((section) => (
+        {visibleSections.map((section) => (
           <View key={section.id} style={[s.section, d.section]}>
             <View style={s.sectionTitleRow}>
               <View style={[s.sectionMark, d.sectionMark]} />

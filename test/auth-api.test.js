@@ -360,7 +360,7 @@ test("register normalizes and posts a populated invite code", async () => {
     inviteCode: "  AbC-123  ",
   });
 
-  assert.equal(calls[0].inviteCode, "abc-123");
+  assert.equal(calls[0].inviteCode, "ABC-123");
 });
 
 test("register omits a whitespace-only invite code", async () => {

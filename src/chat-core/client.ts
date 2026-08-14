@@ -342,15 +342,21 @@ export function sendLocationMessage(options: {
   conversationId: string;
   latitude: number;
   longitude: number;
-  description: string;
+  title?: string;
+  address?: string;
+  /** 旧客户端位置消息只有 description；保留入参以兼容转发历史消息。 */
+  description?: string;
 }): Promise<ChatMessageDto> {
+  const description = options.address || options.description || options.title || '';
   return sendWithOptimism({
     conversationId: options.conversationId,
     type: 'location',
     content: {
       latitude: options.latitude,
       longitude: options.longitude,
-      description: options.description,
+      ...(options.title ? { title: options.title } : {}),
+      ...(options.address ? { address: options.address } : {}),
+      description,
     },
   });
 }

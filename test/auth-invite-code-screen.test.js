@@ -10,9 +10,9 @@ test('registration screen renders and submits an optional invite code', () => {
   );
 
   assert.match(source, /const \[inviteCode, setInviteCode\] = useState\(\(\) =>/);
-  assert.match(source, /inviteCodeParam\.trim\(\)\.toLowerCase\(\)/);
+  assert.match(source, /inviteCodeParam\.trim\(\)\.toUpperCase\(\)/);
   assert.match(source, /auth\.inviteCode/);
   assert.match(source, /auth\.inviteCodePlaceholder/);
-  assert.match(source, /onChangeText=\{setInviteCode\}/);
+  assert.match(source, /setInviteCode\(value\.toUpperCase\(\)\)/);
   assert.match(source, /register\(email, code, password, nickname, inviteCode\)/);
 });

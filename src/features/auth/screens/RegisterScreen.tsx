@@ -96,7 +96,7 @@ export default function RegisterScreen() {
   const [nickname, setNickname] = useState('');
   const [inviteCode, setInviteCode] = useState(() =>
     typeof inviteCodeParam === 'string'
-      ? inviteCodeParam.trim().toLowerCase()
+      ? inviteCodeParam.trim().toUpperCase()
       : '',
   );
   const [agreed, setAgreed] = useState(false);
@@ -237,7 +237,7 @@ export default function RegisterScreen() {
           label={t('auth.inviteCode')}
           placeholder={t('auth.inviteCodePlaceholder')}
           value={inviteCode}
-          onChangeText={setInviteCode}
+          onChangeText={(value) => setInviteCode(value.toUpperCase())}
         />
 
         {/* Agreement */}

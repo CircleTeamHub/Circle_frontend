@@ -512,13 +512,26 @@
     "attachments": {
       "photos": "Photos",
       "camera": "Camera",
-      "voiceCall": "Voice Call",
+      "voiceCall": "Audio/Video Call",
       "location": "Location",
       "notes": "Notes",
       "friendCard": "Contact Card",
       "favorites": "Favorites",
       "quickReply": "Quick Reply",
       "transfer": "Transfer"
+    },
+    "location": {
+      "showPreview": "Tap to show map"
+    },
+    "locationPicker": {
+      "title": "Select Location",
+      "searchPlaceholder": "Search for a place",
+      "send": "Send Location",
+      "selectedLabel": "Selected location",
+      "invalidTitle": "Invalid Location",
+      "invalidMessage": "Please select a location again",
+      "currentLocation": "My Location",
+      "loadFailed": "Unable to get your current location. Please try again."
     },
     "call": {
       "title": "Voice Call",
@@ -815,6 +828,7 @@
       "selectCircles": "Select Circles",
       "selectRegions": "Select Regions",
       "clear": "Clear",
+      "activeInMyCircles": "A filter is active — some circles are hidden",
       "save": "Save",
       "saved": "Filters saved",
       "savedCirclesCount": "{{count}} circles",
@@ -1072,6 +1086,8 @@
     "signUp": "Sign up",
     "signedUp": "Signed up",
     "signupBlockedTitle": "Sign-up unavailable",
+    "profileBlockedGeneric": "You do not meet the requirements to view this profile yet",
+    "signupBlockedGeneric": "You do not meet the signup requirements for this post yet",
     "signupRestrictionMessage": "To sign up: {{requirements}}",
     "circlePicker": {
       "selectedCount": "{{count}} circle(s) selected"
@@ -1574,23 +1590,27 @@
       "supportUnavailableMessage": "Please contact the platform's official customer service about membership activation or upgrades.",
       "planAccessibilityLabel": "{{plan}}, {{duration}}, CNY {{price}}",
       "duration": {
+        "days": "{{count}} day",
         "months": "{{count}} months",
         "lifetime": "Lifetime"
       },
       "exchangeSuccess": "Membership level updated to {{level}}",
       "exchangeError": "Unable to update membership. Please try again later.",
       "tiers": {
+        "daily": {
+          "name": "Daily membership"
+        },
         "silver": {
-          "name": "Silver membership"
+          "name": "Monthly membership"
         },
         "gold": {
-          "name": "Gold membership"
+          "name": "Six-month membership"
         },
         "diamond": {
-          "name": "Diamond membership"
+          "name": "Annual membership"
         },
         "super": {
-          "name": "Super membership"
+          "name": "Lifetime membership"
         }
       },
       "benefits": {
@@ -1621,7 +1641,7 @@
       },
       "currentTierBadge": "Current",
       "marketing": {
-        "goldAccess": "All users currently enjoy Gold-tier limits for free",
+        "goldAccess": "All users currently enjoy six-month membership limits for free",
         "title": "Membership features are not open yet",
         "groupQuota": "Up to 400 members per group · join up to 300 groups",
         "noteQuota": "500 notes · 10 city filters"
@@ -1633,7 +1653,7 @@
       "heading": "Membership Rules",
       "description": "Customer service manually verifies and grants membership. This page shows the benefit catalog; backend permissions remain authoritative.",
       "rules": {
-        "catalog": "Silver membership: CNY 298 / 1 month; Gold: CNY 1,288 / 6 months; Diamond: CNY 1,998 / 1 year; Super: CNY 3,998 / lifetime.",
+        "catalog": "Daily membership: CNY 19.9 / 1 day; Monthly membership: CNY 298 / 1 month; Six-month membership: CNY 1,288 / 6 months; Annual membership: CNY 1,998 / 1 year; Lifetime membership: CNY 3,998 / lifetime.",
         "supportActivation": "Membership cannot be redeemed with points or purchased in the app. After contact, customer service manually verifies and grants membership.",
         "upgrade": "Current members may contact customer service to pay the difference for an upgrade. It takes effect immediately, with remaining membership value applied by customer service.",
         "expiry": "When membership expires, only membership benefits stop. Accounts, chats, notes, and other user content are not deleted.",
@@ -1824,8 +1844,11 @@
   },
   "systemAnnouncements": {
     "title": "System Announcements",
+    "detailTitle": "Announcement Details",
+    "openAnnouncement": "View {{title}} details",
+    "unavailable": "This announcement is unavailable or has been removed",
     "subtitle": "Latest windnote.ai app information, release updates, and patch notes will appear here.",
-    "systemNotifications": "System Notifications",
+    "systemNotifications": "Account Notifications",
     "empty": "No system notifications",
     "loadFailed": "System notifications failed to load. Pull to retry",
     "latestAppInfo": {
@@ -2533,6 +2556,9 @@
       "d1": "1 day",
       "d7": "7 days"
     }
+  },
+  "location": {
+    "mapUnavailable": "The map failed to load. Check your connection and try again."
   },
   "permissions": {
     "insufficientTitle": "Permission needed",

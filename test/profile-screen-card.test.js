@@ -22,7 +22,7 @@ test('ProfileScreen shows effective membership label and credit score in the gol
   assert.match(src, /getMembershipTierForVipLevel\(vipLevel\)/);
   assert.match(src, /const membershipLabel = membershipTier/);
   assert.match(src, /defaultValue: '普通用户'/);
-  assert.match(src, /super: ["']超级会员["']/);
+  assert.match(src, /super: ["']永久会员["']/);
   assert.match(memberCardBlock, /\{membershipLabel\}/);
   assert.doesNotMatch(memberCardBlock, /VIP \{vipLevel\}/);
   assert.match(memberCardBlock, /\{creditScore\}/);

@@ -90,6 +90,7 @@ import {
   sendTextMessage,
   sendVoiceMessage,
 } from '@/chat-core/client';
+import { waitForSendSlot } from '@/features/chat/utils/send-slot';
 import { getChatSendErrorMessage } from '@/chat-core/send-errors';
 import { OptionPickerSheet } from '@/components/ui/option-picker-sheet';
 import {
@@ -126,6 +127,7 @@ import {
 import { useSharePickerStore } from '@/features/chat/store/use-share-picker-store';
 import { usePendingChatCardStore } from '@/features/chat/store/use-pending-chat-card-store';
 import { useMessageForwardStore } from '@/features/chat/store/use-message-forward-store';
+import { useChatLocationPickerStore } from '@/features/chat/store/use-chat-location-picker-store';
 import { canForwardMessage } from '@/features/chat/screens/ForwardPickerScreen';
 import { useCallStore } from '@/features/call/store/use-call-store';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
@@ -193,13 +195,13 @@ const ATTACHMENT_ITEMS: readonly {
 }[] = [
   { id: 'media', icon: 'image-outline', labelKey: 'chat.attachments.photos', label: '照片' },
   { id: 'camera', icon: 'camera-outline', labelKey: 'chat.attachments.camera', label: '拍照' },
-  { id: 'voice-call', icon: 'call-outline', labelKey: 'chat.attachments.voiceCall', label: '语音通话' },
+  { id: 'voice-call', icon: 'call-outline', labelKey: 'chat.attachments.voiceCall', label: '语/视频通话' },
   { id: 'location', icon: 'location-outline', labelKey: 'chat.attachments.location', label: '位置' },
   { id: 'notes', icon: 'create-outline', labelKey: 'chat.attachments.notes', label: '笔记' },
   { id: 'friend-card', icon: 'person-outline', labelKey: 'chat.attachments.friendCard', label: '好友名片' },
   { id: 'favorites', icon: 'star-outline', labelKey: 'chat.attachments.favorites', label: '我的收藏' },
-  { id: 'quick-reply', icon: 'rocket-outline', labelKey: 'chat.attachments.quickReply', label: '快捷语' },
   { id: 'transfer', icon: 'card-outline', labelKey: 'chat.attachments.transfer', label: '转账' },
+  { id: 'quick-reply', icon: 'rocket-outline', labelKey: 'chat.attachments.quickReply', label: '快捷语' },
 ];
 
 // 工具面板每页最多 8 个（4 列 × 2 行），超出的横向翻页
@@ -488,6 +490,12 @@ export default function ChatDetailScreen() {
   const consumePendingShare = useSharePickerStore((s) => s.consume);
   const setPendingForward = useMessageForwardStore((s) => s.setPending);
   const consumePendingChatCard = usePendingChatCardStore((s) => s.consumeFor);
+  const consumePickedLocation = useChatLocationPickerStore(
+    (state) => state.consumePickedLocation,
+  );
+  const clearPickedLocation = useChatLocationPickerStore(
+    (state) => state.clearPickedLocation,
+  );
   // 待发送的圈子帖子卡片（报名→聊天自动挂上，贴在输入框上方，可撤掉）。
   const [pendingCard, setPendingCard] = useState<PlazaPostCardData | null>(null);
   const setActiveCall = useCallStore((state) => state.setActiveCall);
@@ -2489,52 +2497,42 @@ export default function ChatDetailScreen() {
     [restoreRecordingAudioMode, voiceRecorder],
   );
 
-  const handleSendCurrentLocation = useCallback(async () => {
-    if (!sourceID || isPreviewMode) return;
+  const handleSendPickedLocation = useCallback(async (
+    picked: {
+      title: string;
+      address: string;
+      latitude: number;
+      longitude: number;
+    },
+  ) => {
+    if (!sourceID || !conversationID || isPreviewMode) return;
+    // 位置已经从 store 里消费掉了：这里直接 return 等于把用户选的点悄悄丢掉，
+    // 既不发也不报错。等当前这一发结束再补上；真等不到就明确报错。
+    if (inFlightRef.current) {
+      const slotFree = await waitForSendSlot({
+        isBusy: () => inFlightRef.current,
+        isMounted: () => mountedRef.current,
+      });
+      if (!slotFree) {
+        if (mountedRef.current) {
+          setSendError(
+            t('chat.detail.locationSendFailed', {
+              defaultValue: '位置发送失败，请重试',
+            }),
+          );
+        }
+        return;
+      }
+    }
     if (inFlightRef.current) return;
-    // 信用分门禁提到取位置之前。sendLocationMessage 里那道是共享路径的兜底,
-    // 但它要等到「已经申请过定位权限、读完当前坐标、还做了一次反地理编码」
-    // 之后才拒 —— 一次注定失败的发送,不该先把用户的精确位置读出来。
-    const creditDenied = getLocalLowCreditDecision();
-    if (creditDenied) {
-      setSendError(getCreditPolicyMessage(creditDenied));
-      return;
-    }
-    const permission = await Location.requestForegroundPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert(t('permissions.insufficientTitle'), t('permissions.location'));
-      return;
-    }
     inFlightRef.current = true;
     try {
-      const position = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      // 反向解析成可读地址；解析失败就用经纬度兜底，不阻塞主流程
-      let description = `${position.coords.latitude.toFixed(5)}, ${position.coords.longitude.toFixed(5)}`;
-      try {
-        const places = await Location.reverseGeocodeAsync({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        });
-        const place = places[0];
-        if (place) {
-          const parts = [
-            place.city ?? place.region,
-            place.district ?? place.subregion,
-            place.street,
-            place.name,
-          ].filter((s): s is string => Boolean(s));
-          if (parts.length) description = parts.join(' ');
-        }
-      } catch {
-        // ignore — fallback to coords
-      }
       await sendLocationMessage({
         conversationId: conversationID,
-        longitude: position.coords.longitude,
-        latitude: position.coords.latitude,
-        description,
+        longitude: picked.longitude,
+        latitude: picked.latitude,
+        title: picked.title,
+        address: picked.address,
       });
     } catch (error) {
       if (mountedRef.current) {
@@ -2551,6 +2549,78 @@ export default function ChatDetailScreen() {
       inFlightRef.current = false;
     }
   }, [conversationID, isPreviewMode, sourceID, t]);
+
+  const handleOpenLocationPicker = useCallback(async () => {
+    if (!sourceID || !conversationID || isPreviewMode) return;
+    // 在申请精确定位权限前先走本地发送门禁；注定不能发时不读取隐私数据。
+    const creditDenied = getLocalLowCreditDecision();
+    if (creditDenied) {
+      setSendError(getCreditPolicyMessage(creditDenied));
+      return;
+    }
+    // 选点页自己支持搜索和手动拖动，定位权限只是用来把地图中心预置到「我的
+    // 位置」。拒权就直接开图（用页面自带的默认中心），不能因此把分享公共地点
+    // 这件事整个堵死。
+    const openPickerAt = (params?: Record<string, string>) => {
+      clearPickedLocation();
+      router.push({
+        pathname: '/(chat)/location-picker',
+        // conversationID 一路带过去：确认的结果只有回到这个会话才会被消费。
+        params: { ...params, conversationID },
+      } as never);
+    };
+    const permission = await Location.requestForegroundPermissionsAsync();
+    if (!permission.granted) {
+      openPickerAt();
+      return;
+    }
+    try {
+      const position = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      const latitude = position.coords.latitude;
+      const longitude = position.coords.longitude;
+      const coordinateText = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+      let title = t('chat.locationPicker.currentLocation', {
+        defaultValue: '我的位置',
+      });
+      let address = coordinateText;
+      try {
+        const places = await Location.reverseGeocodeAsync({ latitude, longitude });
+        const place = places[0];
+        if (place) {
+          title = place.name || place.street || title;
+          const parts = [
+            place.city ?? place.region,
+            place.district ?? place.subregion,
+            place.street,
+            place.name,
+          ].filter((part): part is string => Boolean(part));
+          if (parts.length) address = parts.join(' ');
+        }
+      } catch {
+        // 地址解析失败不阻塞选点，地图仍以真实坐标为中心。
+      }
+      openPickerAt({
+        latitude: String(latitude),
+        longitude: String(longitude),
+        title,
+        address,
+      });
+    } catch {
+      // 取当前位置失败同样只影响初始中心：照常开图，让用户自己搜或拖。
+      openPickerAt();
+    }
+  }, [clearPickedLocation, conversationID, isPreviewMode, sourceID, t]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!conversationID) return;
+      const picked = consumePickedLocation(conversationID);
+      if (!picked) return;
+      void handleSendPickedLocation(picked);
+    }, [consumePickedLocation, conversationID, handleSendPickedLocation]),
+  );
 
   /**
    * 图片的「上传 + 发送」。首发与长按重发共用 —— 重发必须带同一个 deliveryId,
@@ -2743,7 +2813,7 @@ export default function ChatDetailScreen() {
           openSharePicker('quick-reply');
           return;
         case 'location':
-          void handleSendCurrentLocation();
+          void handleOpenLocationPicker();
           return;
         case 'voice-call':
           void handleStartCall();
@@ -2771,7 +2841,7 @@ export default function ChatDetailScreen() {
       conversationType,
       handlePickMedia,
       handleTakePhoto,
-      handleSendCurrentLocation,
+      handleOpenLocationPicker,
       handleStartCall,
       openSharePicker,
       sourceID,

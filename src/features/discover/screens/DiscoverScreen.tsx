@@ -1,74 +1,31 @@
-import { Badge } from "@/components/ui/badge";
-import { FilterTabs } from "@/components/ui/filter-tabs";
-import { MyCirclesPanel } from "@/features/discover/components/my-circles-panel";
-import { MomentsFeed } from "@/features/discover/components/moments-feed";
-import { PlazaFeed } from "@/features/discover/components/plaza-feed";
-import { useTabBadgeStore } from "@/stores/tabBadgeStore";
-import { Radius, Spacing, Typography, useTheme } from "@/theme";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-const DISCOVER_NOTIFICATION_CENTER_ROUTE =
-  "/(tabs)/discover/notification-center";
+import { useCallback, useMemo } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Divider } from '@/components/ui/divider';
+import { MenuRow } from '@/components/ui/menu-row';
+import { useTabBadgeStore } from '@/stores/tabBadgeStore';
+import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 const s = StyleSheet.create({
   header: {
     paddingHorizontal: Spacing.lg,
-    gap: Spacing.md,
-    paddingBottom: Spacing.sm,
+    paddingBottom: Spacing.md,
     borderBottomWidth: 1,
   },
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  headerIcons: {
-    flexDirection: "row",
-    gap: Spacing.md,
-    alignItems: "center",
-  },
   content: {
-    flex: 1,
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
+    paddingTop: Spacing.lg,
+    gap: Spacing.lg,
   },
-  managementContent: {
-    flex: 1,
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
+  section: {
+    gap: Spacing.xs,
   },
-  placeholder: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  fab: {
-    position: "absolute",
-    right: Spacing.lg,
-    bottom: 110,
-    width: 52,
-    height: 52,
-    borderRadius: Radius.pill,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  filterButton: {
-    position: "relative",
-  },
-  notificationButton: {
-    position: "relative",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  notificationBadge: {
-    position: "absolute",
-    top: -8,
-    right: -12,
+  sectionCard: {
+    paddingHorizontal: Spacing.md,
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
   },
 });
 
@@ -77,19 +34,8 @@ export default function DiscoverScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState(0);
-  // 铃铛红点 = 铃铛中心「互动」列表的未读数，由 interaction.unread.changed 实时驱动。
-  // 之前误读 systemUnread（只有系统通知/快照兜底才更新），互动通知到达时铃铛不亮。
-  const bellUnread = useTabBadgeStore((state) => state.discoverUnread);
-
-  const FILTER_TABS = useMemo(
-    () => [
-      t('discover.plaza'),
-      t('discover.management'),
-      t('discover.moments'),
-    ],
-    [t],
-  );
+  const momentsUnread = useTabBadgeStore((state) => state.discoverUnread);
+  const plazaUnread = useTabBadgeStore((state) => state.signupUnread);
 
   const d = useMemo(
     () => ({
@@ -97,130 +43,92 @@ export default function DiscoverScreen() {
         flex: 1,
         backgroundColor: colors.background,
       },
+      header: {
+        borderBottomColor: colors.divider,
+      },
       title: {
         color: colors.text,
         ...Typography.title,
       },
-      placeholderText: {
+      sectionTitle: {
         color: colors.textSecondary,
-        ...Typography.body,
+        ...Typography.caption,
+        fontWeight: '600' as const,
       },
-      fab: {
-        backgroundColor: colors.primary,
+      sectionCard: {
+        backgroundColor: colors.surface,
       },
     }),
     [colors],
   );
 
-  const handleFabPress = useCallback(() => {
-    if (activeTab === 0) {
-      router.push("/(tabs)/discover/create-post");
-    } else if (activeTab === 2) {
-      router.push("/(tabs)/discover/create-moment");
-    }
-  }, [activeTab, router]);
-
-  const handleDiscoverCirclesPress = useCallback(() => {
-    router.push("/(tabs)/discover/circles");
+  const handleOpenMoments = useCallback(() => {
+    router.push('/(tabs)/discover/moments');
   }, [router]);
 
-  const handleOpenNotifications = useCallback(() => {
-    router.push(DISCOVER_NOTIFICATION_CENTER_ROUTE);
+  const handleOpenPlaza = useCallback(() => {
+    router.push('/(tabs)/discover/plaza');
   }, [router]);
 
-  const handleFilterPress = useCallback(() => {
-    router.push("/(tabs)/discover/filter");
-  }, [router]);
-
-  const handleSettingsPress = useCallback(() => {
-    router.push("/(tabs)/discover/notifications");
+  const handleOpenManagement = useCallback(() => {
+    router.push('/(tabs)/discover/management');
   }, [router]);
 
   return (
     <View style={d.container}>
-      {/* Fixed header */}
-      <View style={[s.header, { paddingTop: insets.top + Spacing.md - 4, borderBottomColor: colors.divider }]}>
-        <View style={s.headerRow}>
-          <Text style={d.title}>{t('discover.title')}</Text>
-          <View style={s.headerIcons}>
-            <Pressable
-              onPress={handleDiscoverCirclesPress}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={t('discover.discoverCircles', {
-                defaultValue: '发现圈子',
-              })}
-            >
-              <Ionicons name="search-outline" size={22} color={colors.text} />
-            </Pressable>
-            <Pressable
-              style={s.notificationButton}
-              onPress={handleOpenNotifications}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={t('notifications.title')}
-            >
-              <Ionicons
-                name="notifications-outline"
-                size={22}
-                color={colors.text}
-              />
-              <View style={s.notificationBadge}>
-                <Badge count={bellUnread} />
-              </View>
-            </Pressable>
-            <Pressable
-              onPress={handleFilterPress}
-              hitSlop={8}
-              style={s.filterButton}
-            >
-              <Ionicons
-                name="options-outline"
-                size={22}
-                color={colors.text}
-              />
-            </Pressable>
-            <Pressable onPress={handleSettingsPress} hitSlop={8}>
-              <Ionicons
-                name="settings-outline"
-                size={22}
-                color={colors.text}
-              />
-            </Pressable>
+      <View
+        style={[
+          s.header,
+          d.header,
+          { paddingTop: insets.top + Spacing.md - 4 },
+        ]}
+      >
+        <Text style={d.title} accessibilityRole="header">
+          {t('discover.title')}
+        </Text>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={[
+          s.content,
+          { paddingBottom: insets.bottom + Spacing.xl },
+        ]}
+        contentInsetAdjustmentBehavior="automatic"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={s.section}>
+          <Text style={d.sectionTitle}>{t('discover.moments')}</Text>
+          <View style={[s.sectionCard, d.sectionCard]}>
+            <MenuRow
+              icon="people-outline"
+              iconBgColor={colors.orange}
+              label={t('discover.moments')}
+              showIndicatorDot={momentsUnread > 0}
+              onPress={handleOpenMoments}
+            />
           </View>
         </View>
 
-        <FilterTabs
-          tabs={FILTER_TABS}
-          activeIndex={activeTab}
-          onTabPress={setActiveTab}
-        />
-      </View>
-
-      {/* Tab content */}
-      {activeTab === 0 ? (
-        <View style={s.content}>
-          <PlazaFeed />
+        <View style={s.section}>
+          <Text style={d.sectionTitle}>{t('contacts.circles')}</Text>
+          <View style={[s.sectionCard, d.sectionCard]}>
+            <MenuRow
+              icon="planet-outline"
+              iconBgColor={colors.primary}
+              label={t('discover.plaza')}
+              showIndicatorDot={plazaUnread > 0}
+              onPress={handleOpenPlaza}
+            />
+            <Divider />
+            <MenuRow
+              icon="settings-outline"
+              iconBgColor={colors.blue}
+              label={t('discover.management')}
+              onPress={handleOpenManagement}
+            />
+          </View>
         </View>
-      ) : activeTab === 1 ? (
-        <ScrollView style={s.managementContent} showsVerticalScrollIndicator={false}>
-          <MyCirclesPanel />
-        </ScrollView>
-      ) : (
-        <View style={s.content}>
-          <MomentsFeed />
-        </View>
-      )}
-
-      {/* FAB — 圈子广场 and 朋友圈 */}
-      {activeTab === 0 || activeTab === 2 ? (
-        <Pressable
-          style={[s.fab, d.fab]}
-          onPress={handleFabPress}
-        >
-          <Ionicons name="add" size={24} color={colors.white} />
-        </Pressable>
-      ) : null}
+      </ScrollView>
     </View>
   );
 }

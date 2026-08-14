@@ -474,13 +474,26 @@
     "attachments": {
       "photos": "Fotos",
       "camera": "Cámara",
-      "voiceCall": "Llamada",
+      "voiceCall": "Llamada de audio/video",
       "location": "Ubicación",
       "notes": "Notas",
       "friendCard": "Tarjeta de contacto",
       "favorites": "Favoritos",
       "quickReply": "Respuesta rápida",
       "transfer": "Transferencia"
+    },
+    "location": {
+      "showPreview": "Toca para ver el mapa"
+    },
+    "locationPicker": {
+      "title": "Seleccionar ubicación",
+      "searchPlaceholder": "Buscar un lugar",
+      "send": "Enviar ubicación",
+      "selectedLabel": "Ubicación seleccionada",
+      "invalidTitle": "Ubicación no válida",
+      "invalidMessage": "Selecciona la ubicación de nuevo",
+      "currentLocation": "Mi ubicación",
+      "loadFailed": "No se pudo obtener tu ubicación actual. Inténtalo de nuevo."
     },
     "call": {
       "title": "Llamada de voz",
@@ -1281,6 +1294,7 @@
       "selectCircles": "Elegir círculos",
       "selectRegions": "Elegir regiones",
       "clear": "Borrar",
+      "activeInMyCircles": "Hay un filtro activo: algunos círculos están ocultos",
       "save": "Guardar",
       "saved": "Filtros guardados",
       "savedCirclesCount": "{{count}} círculos",
@@ -1412,6 +1426,8 @@
     "signUp": "Inscribirse",
     "signedUp": "Inscrito",
     "signupBlockedTitle": "Inscripción no disponible",
+    "profileBlockedGeneric": "Aún no cumples los requisitos para ver este perfil",
+    "signupBlockedGeneric": "Aún no cumples los requisitos de inscripción de esta publicación",
     "signupRestrictionMessage": "Para inscribirte: {{requirements}}",
     "circlePicker": {
       "selectedCount": "{{count}} círculo(s) seleccionado(s)"
@@ -2049,23 +2065,27 @@
       "supportUnavailableMessage": "Contacta con la atención al cliente oficial de la plataforma para activar o mejorar la membresía.",
       "planAccessibilityLabel": "{{plan}}, {{duration}}, CNY {{price}}",
       "duration": {
+        "days": "{{count}} día",
         "months": "{{count}} meses",
         "lifetime": "De por vida"
       },
       "exchangeSuccess": "Nivel de membresía actualizado a {{level}}",
       "exchangeError": "No se pudo actualizar la membresía. Inténtalo de nuevo más tarde.",
       "tiers": {
+        "daily": {
+          "name": "Membresía diaria"
+        },
         "silver": {
-          "name": "Membresía Plata"
+          "name": "Membresía mensual"
         },
         "gold": {
-          "name": "Membresía Oro"
+          "name": "Membresía semestral"
         },
         "diamond": {
-          "name": "Membresía Diamante"
+          "name": "Membresía anual"
         },
         "super": {
-          "name": "Membresía Súper"
+          "name": "Membresía de por vida"
         }
       },
       "benefits": {
@@ -2096,7 +2116,7 @@
       },
       "currentTierBadge": "Actual",
       "marketing": {
-        "goldAccess": "Todos los usuarios disfrutan actualmente de los límites de nivel Oro de forma gratuita",
+        "goldAccess": "Todos los usuarios disfrutan actualmente de los límites de la membresía semestral de forma gratuita",
         "title": "Las funciones de membresía aún no están disponibles",
         "groupQuota": "Hasta 400 miembros por grupo · únete a un máximo de 300 grupos",
         "noteQuota": "500 notas · 10 filtros de ciudad"
@@ -2108,7 +2128,7 @@
       "heading": "Reglas de membresía",
       "description": "Atención al cliente verifica y concede manualmente la membresía. Esta pantalla muestra el catálogo de beneficios; los permisos del backend son la fuente de autoridad.",
       "rules": {
-        "catalog": "Membresía Plata: CNY 298 / 1 mes; Oro: CNY 1.288 / 6 meses; Diamante: CNY 1.998 / 1 año; Súper: CNY 3.998 / de por vida.",
+        "catalog": "Membresía diaria: CNY 19.9 / 1 día; Membresía mensual: CNY 298 / 1 mes; Membresía semestral: CNY 1.288 / 6 meses; Membresía anual: CNY 1.998 / 1 año; Membresía de por vida: CNY 3.998 / de por vida.",
         "supportActivation": "La membresía no se puede canjear con puntos ni comprar en la aplicación. Tras el contacto, atención al cliente la verifica y concede manualmente.",
         "upgrade": "Los miembros actuales pueden contactar con atención al cliente para pagar la diferencia de una mejora. Se activa de inmediato y se aplica el valor restante de la membresía.",
         "expiry": "Cuando vence la membresía, solo se detienen sus beneficios. No se eliminan cuentas, chats, notas ni otro contenido del usuario.",
@@ -2442,8 +2462,11 @@
   },
   "systemAnnouncements": {
     "title": "Anuncios del sistema",
+    "detailTitle": "Detalles del anuncio",
+    "openAnnouncement": "Ver detalles de {{title}}",
+    "unavailable": "Este anuncio no está disponible o se ha retirado",
     "subtitle": "Aquí aparecerán la información más reciente de la app windnote.ai, las novedades de versiones y las notas de los parches.",
-    "systemNotifications": "Notificaciones del sistema",
+    "systemNotifications": "Notificaciones de la cuenta",
     "empty": "No hay notificaciones del sistema",
     "loadFailed": "No se pudieron cargar las notificaciones del sistema. Desliza para reintentar",
     "latestAppInfo": {
@@ -2568,6 +2591,9 @@
       "d1": "1 día",
       "d7": "7 días"
     }
+  },
+  "location": {
+    "mapUnavailable": "No se pudo cargar el mapa. Revisa tu conexión e inténtalo de nuevo."
   },
   "permissions": {
     "insufficientTitle": "Permiso necesario",

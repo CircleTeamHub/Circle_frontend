@@ -473,13 +473,26 @@
     "attachments": {
       "photos": "사진",
       "camera": "카메라",
-      "voiceCall": "음성 통화",
+      "voiceCall": "음성/영상 통화",
       "location": "위치",
       "notes": "노트",
       "friendCard": "연락처 카드",
       "favorites": "즐겨찾기",
       "quickReply": "빠른 답장",
       "transfer": "송금"
+    },
+    "location": {
+      "showPreview": "탭하여 지도 보기"
+    },
+    "locationPicker": {
+      "title": "위치 선택",
+      "searchPlaceholder": "장소 검색",
+      "send": "위치 보내기",
+      "selectedLabel": "선택한 위치",
+      "invalidTitle": "잘못된 위치",
+      "invalidMessage": "위치를 다시 선택해 주세요",
+      "currentLocation": "내 위치",
+      "loadFailed": "현재 위치를 가져올 수 없습니다. 다시 시도해 주세요."
     },
     "call": {
       "title": "음성 통화",
@@ -1278,6 +1291,7 @@
       "selectCircles": "서클 선택",
       "selectRegions": "지역 선택",
       "clear": "지우기",
+      "activeInMyCircles": "필터가 적용 중입니다 — 일부 서클이 숨겨졌습니다",
       "save": "저장",
       "saved": "필터를 저장했어요",
       "savedCirclesCount": "{{count}}개 서클",
@@ -1409,6 +1423,8 @@
     "signUp": "신청",
     "signedUp": "신청함",
     "signupBlockedTitle": "지금은 신청할 수 없어요",
+    "profileBlockedGeneric": "아직 상대방 프로필을 볼 수 있는 조건을 충족하지 않았습니다",
+    "signupBlockedGeneric": "아직 이 게시물의 참가 조건을 충족하지 않았습니다",
     "signupRestrictionMessage": "신청 조건: {{requirements}}",
     "circlePicker": {
       "selectedCount": "{{count}}개 서클 선택됨"
@@ -2046,23 +2062,27 @@
       "supportUnavailableMessage": "회원 가입 또는 업그레이드는 플랫폼 공식 고객센터에 문의해 주세요.",
       "planAccessibilityLabel": "{{plan}}, {{duration}}, CNY {{price}}",
       "duration": {
+        "days": "{{count}}일",
         "months": "{{count}}개월",
         "lifetime": "평생"
       },
       "exchangeSuccess": "회원 등급이 {{level}}(으)로 업데이트되었습니다",
       "exchangeError": "회원 등급을 업데이트하지 못했습니다. 나중에 다시 시도해 주세요.",
       "tiers": {
+        "daily": {
+          "name": "일일 회원"
+        },
         "silver": {
-          "name": "실버 회원"
+          "name": "월간 회원"
         },
         "gold": {
-          "name": "골드 회원"
+          "name": "반년 회원"
         },
         "diamond": {
-          "name": "다이아몬드 회원"
+          "name": "연간 회원"
         },
         "super": {
-          "name": "슈퍼 회원"
+          "name": "평생 회원"
         }
       },
       "benefits": {
@@ -2093,7 +2113,7 @@
       },
       "currentTierBadge": "현재",
       "marketing": {
-        "goldAccess": "현재 모든 사용자가 골드 등급 한도를 무료로 이용할 수 있습니다",
+        "goldAccess": "현재 모든 사용자가 반년 회원 한도를 무료로 이용할 수 있습니다",
         "title": "멤버십 기능은 아직 오픈되지 않았습니다",
         "groupQuota": "그룹당 400명 · 최대 300개 그룹 가입 가능",
         "noteQuota": "노트 500개 · 도시 필터 10개"
@@ -2105,7 +2125,7 @@
       "heading": "회원 규칙",
       "description": "고객센터가 회원 자격을 수동으로 확인하고 부여합니다. 이 화면은 혜택 목록을 표시하며 실제 권한은 백엔드를 기준으로 합니다.",
       "rules": {
-        "catalog": "실버 회원 CNY 298 / 1개월, 골드 회원 CNY 1,288 / 6개월, 다이아몬드 회원 CNY 1,998 / 1년, 슈퍼 회원 CNY 3,998 / 평생.",
+        "catalog": "일일 회원 CNY 19.9 / 1일, 월간 회원 CNY 298 / 1개월, 반년 회원 CNY 1,288 / 6개월, 연간 회원 CNY 1,998 / 1년, 평생 회원 CNY 3,998 / 평생.",
         "supportActivation": "회원 자격은 앱에서 포인트로 교환하거나 직접 구매할 수 없습니다. 문의 후 고객센터가 수동으로 확인하고 부여합니다.",
         "upgrade": "기존 회원은 고객센터에 문의해 차액을 지불하고 업그레이드할 수 있습니다. 즉시 적용되며 남은 회원 가치는 고객센터가 반영합니다.",
         "expiry": "회원 기간이 만료되면 회원 혜택만 중지됩니다. 계정, 채팅, 노트 및 기타 사용자 콘텐츠는 삭제되지 않습니다.",
@@ -2439,8 +2459,11 @@
   },
   "systemAnnouncements": {
     "title": "시스템 공지",
+    "detailTitle": "공지 상세",
+    "openAnnouncement": "{{title}} 상세 보기",
+    "unavailable": "이 공지는 존재하지 않거나 게시가 종료되었습니다",
     "subtitle": "windnote.ai 앱의 최신 정보, 버전 업데이트, 패치 안내가 여기에 표시됩니다.",
-    "systemNotifications": "시스템 알림",
+    "systemNotifications": "계정 알림",
     "empty": "시스템 알림이 없습니다",
     "loadFailed": "시스템 알림을 불러오지 못했습니다. 아래로 당겨 다시 시도하세요",
     "latestAppInfo": {
@@ -2565,6 +2588,9 @@
       "d1": "1일",
       "d7": "7일"
     }
+  },
+  "location": {
+    "mapUnavailable": "지도를 불러오지 못했습니다. 네트워크를 확인한 뒤 다시 시도해 주세요."
   },
   "permissions": {
     "insufficientTitle": "권한이 필요합니다",

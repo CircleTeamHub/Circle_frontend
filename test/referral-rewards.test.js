@@ -142,7 +142,7 @@ test('invite deep link prefills registration and authenticated users return to i
   assert.match(screen, /pathname: '\/\(auth\)\/register'/);
   assert.match(screen, /params: inviteCode \? \{ inviteCode \} : \{\}/);
   assert.match(register, /useLocalSearchParams/);
-  assert.match(register, /inviteCodeParam\.trim\(\)\.toLowerCase\(\)/);
+  assert.match(register, /inviteCodeParam\.trim\(\)\.toUpperCase\(\)/);
 });
 
 test('invite center shows rules, progress, records, copy, and share actions', () => {
@@ -154,6 +154,7 @@ test('invite center shows rules, progress, records, copy, and share actions', ()
   assert.match(screen, /items\.map\(renderReferral\)/);
   assert.match(screen, /handleCopyInviteCode/);
   assert.match(screen, /handleShareInvite/);
+  assert.match(screen, /inviteCode\)\?\.toUpperCase\(\)/);
   assert.match(screen, /EXPO_PUBLIC_INVITE_BASE_URL/);
   assert.match(screen, /Linking\.createURL\('\/invite'/);
 });

@@ -511,13 +511,26 @@
     "attachments": {
       "photos": "照片",
       "camera": "拍照",
-      "voiceCall": "语音通话",
+      "voiceCall": "语/视频通话",
       "location": "位置",
       "notes": "笔记",
       "friendCard": "好友名片",
       "favorites": "我的收藏",
       "quickReply": "快捷语",
       "transfer": "转账"
+    },
+    "location": {
+      "showPreview": "轻点显示地图"
+    },
+    "locationPicker": {
+      "title": "选择位置",
+      "searchPlaceholder": "搜索地点",
+      "send": "发送位置",
+      "selectedLabel": "已选择位置",
+      "invalidTitle": "位置无效",
+      "invalidMessage": "请重新选择位置",
+      "currentLocation": "我的位置",
+      "loadFailed": "无法获取当前位置，请重试"
     },
     "call": {
       "title": "语音通话",
@@ -814,6 +827,7 @@
       "selectCircles": "选择圈子",
       "selectRegions": "选择地区",
       "clear": "清空条件",
+      "activeInMyCircles": "筛选条件生效中，部分圈子已隐藏",
       "save": "保存条件",
       "saved": "已保存筛选条件",
       "savedCirclesCount": "已选{{count}}个圈子",
@@ -1071,6 +1085,8 @@
     "signUp": "报名",
     "signedUp": "已报名",
     "signupBlockedTitle": "暂不可报名",
+    "profileBlockedGeneric": "你暂不满足查看对方主页的条件",
+    "signupBlockedGeneric": "你暂不满足该动态的报名条件",
     "signupRestrictionMessage": "报名需满足：{{requirements}}",
     "circlePicker": {
       "selectedCount": "已选 {{count}} 个圈子"
@@ -1571,23 +1587,27 @@
       "supportUnavailableMessage": "请联系平台官方客服咨询会员开通或升级。",
       "planAccessibilityLabel": "{{plan}}，{{duration}}，¥{{price}}",
       "duration": {
+        "days": "{{count}} 天",
         "months": "{{count}} 个月",
         "lifetime": "永久"
       },
       "exchangeSuccess": "会员等级已更新为 {{level}}",
       "exchangeError": "会员等级更新失败，请稍后重试",
       "tiers": {
+        "daily": {
+          "name": "每日会员"
+        },
         "silver": {
-          "name": "白银会员"
+          "name": "包月会员"
         },
         "gold": {
-          "name": "黄金会员"
+          "name": "半年会员"
         },
         "diamond": {
-          "name": "钻石会员"
+          "name": "年费会员"
         },
         "super": {
-          "name": "超级会员"
+          "name": "永久会员"
         }
       },
       "benefits": {
@@ -1618,7 +1638,7 @@
       },
       "currentTierBadge": "当前",
       "marketing": {
-        "goldAccess": "当前所有用户免费享有黄金额度",
+        "goldAccess": "当前所有用户免费享有半年会员额度",
         "title": "会员功能暂未开放",
         "groupQuota": "单群 400 人 · 最多加入 300 个群",
         "noteQuota": "笔记 500 条 · 城市筛选 10 个"
@@ -1630,7 +1650,7 @@
       "heading": "会员规则",
       "description": "会员由客服人工核实并开通，页面展示权益目录，实际权限以后端为准。",
       "rules": {
-        "catalog": "白银会员 ¥298 / 1 个月；黄金会员 ¥1288 / 6 个月；钻石会员 ¥1998 / 1 年；超级会员 ¥3998 / 永久。",
+        "catalog": "每日会员 ¥19.9 / 1 天；包月会员 ¥298 / 1 个月；半年会员 ¥1288 / 6 个月；年费会员 ¥1998 / 1 年；永久会员 ¥3998 / 永久。",
         "supportActivation": "会员不在 App 内使用积分兑换或直接购买。联系客服后，由客服人工核实并开通会员。",
         "upgrade": "已开通会员可联系客服补差价升级；升级后立即生效，原会员剩余价值由客服核算抵扣。",
         "expiry": "会员到期后仅停止会员权益，不删除账号、聊天、笔记或其他用户内容。",
@@ -1821,8 +1841,11 @@
   },
   "systemAnnouncements": {
     "title": "系统公告",
+    "detailTitle": "公告详情",
+    "openAnnouncement": "查看{{title}}详情",
+    "unavailable": "该公告不存在或已下线",
     "subtitle": "这里会集中展示风信的最新 App 信息、版本更新和补丁说明。",
-    "systemNotifications": "系统通知",
+    "systemNotifications": "账号通知",
     "empty": "暂无系统通知",
     "loadFailed": "系统通知加载失败，请下拉重试",
     "latestAppInfo": {
@@ -2530,6 +2553,9 @@
       "d1": "1天",
       "d7": "7天"
     }
+  },
+  "location": {
+    "mapUnavailable": "地图加载失败，请检查网络后重试"
   },
   "permissions": {
     "insufficientTitle": "权限不足",

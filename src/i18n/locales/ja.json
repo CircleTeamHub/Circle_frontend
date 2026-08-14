@@ -473,13 +473,26 @@
     "attachments": {
       "photos": "写真",
       "camera": "カメラ",
-      "voiceCall": "音声通話",
+      "voiceCall": "音声/ビデオ通話",
       "location": "位置情報",
       "notes": "ノート",
       "friendCard": "連絡先カード",
       "favorites": "お気に入り",
       "quickReply": "定型文",
       "transfer": "送金"
+    },
+    "location": {
+      "showPreview": "タップして地図を表示"
+    },
+    "locationPicker": {
+      "title": "位置を選択",
+      "searchPlaceholder": "場所を検索",
+      "send": "位置情報を送信",
+      "selectedLabel": "選択した位置",
+      "invalidTitle": "位置情報が無効です",
+      "invalidMessage": "位置を選び直してください",
+      "currentLocation": "現在地",
+      "loadFailed": "現在地を取得できませんでした。もう一度お試しください。"
     },
     "call": {
       "title": "音声通話",
@@ -1278,6 +1291,7 @@
       "selectCircles": "サークルを選択",
       "selectRegions": "地域を選択",
       "clear": "クリア",
+      "activeInMyCircles": "フィルター適用中 — 一部のサークルは非表示です",
       "save": "保存",
       "saved": "条件を保存しました",
       "savedCirclesCount": "{{count}}サークル",
@@ -1409,6 +1423,8 @@
     "signUp": "応募",
     "signedUp": "応募済み",
     "signupBlockedTitle": "現在応募できません",
+    "profileBlockedGeneric": "相手のプロフィールを閲覧する条件をまだ満たしていません",
+    "signupBlockedGeneric": "この投稿の応募条件をまだ満たしていません",
     "signupRestrictionMessage": "応募条件：{{requirements}}",
     "circlePicker": {
       "selectedCount": "{{count}} 個のサークルを選択"
@@ -2046,23 +2062,27 @@
       "supportUnavailableMessage": "会員の開通またはアップグレードについて、プラットフォームの公式カスタマーサービスにお問い合わせください。",
       "planAccessibilityLabel": "{{plan}}、{{duration}}、CNY {{price}}",
       "duration": {
+        "days": "{{count}}日",
         "months": "{{count}}か月",
         "lifetime": "永久"
       },
       "exchangeSuccess": "会員レベルを {{level}} に更新しました",
       "exchangeError": "会員レベルを更新できませんでした。後でもう一度お試しください。",
       "tiers": {
+        "daily": {
+          "name": "デイリー会員"
+        },
         "silver": {
-          "name": "シルバー会員"
+          "name": "月額会員"
         },
         "gold": {
-          "name": "ゴールド会員"
+          "name": "半年会員"
         },
         "diamond": {
-          "name": "ダイヤモンド会員"
+          "name": "年額会員"
         },
         "super": {
-          "name": "スーパー会員"
+          "name": "永久会員"
         }
       },
       "benefits": {
@@ -2093,7 +2113,7 @@
       },
       "currentTierBadge": "現在",
       "marketing": {
-        "goldAccess": "現在、すべてのユーザーがゴールド会員の枠を無料でご利用いただけます",
+        "goldAccess": "現在、すべてのユーザーが半年会員の枠を無料でご利用いただけます",
         "title": "会員機能はまだ公開されていません",
         "groupQuota": "1グループ400人 · 300グループまで参加可能",
         "noteQuota": "ノート500件 · 都市フィルター10個"
@@ -2105,7 +2125,7 @@
       "heading": "会員ルール",
       "description": "会員資格はカスタマーサービスが手動で確認して付与します。このページは特典カタログを表示し、実際の権限はバックエンドを正とします。",
       "rules": {
-        "catalog": "シルバー会員 CNY 298 / 1か月、ゴールド会員 CNY 1,288 / 6か月、ダイヤモンド会員 CNY 1,998 / 1年、スーパー会員 CNY 3,998 / 永久。",
+        "catalog": "デイリー会員 CNY 19.9 / 1日、月額会員 CNY 298 / 1か月、半年会員 CNY 1,288 / 6か月、年額会員 CNY 1,998 / 1年、永久会員 CNY 3,998 / 永久。",
         "supportActivation": "会員資格はアプリ内でポイント交換または直接購入できません。連絡後、カスタマーサービスが手動で確認して付与します。",
         "upgrade": "開通済みの会員は、カスタマーサービスに連絡して差額を支払うことでアップグレードできます。すぐに有効になり、残存価値はカスタマーサービスが充当します。",
         "expiry": "会員期限が切れた場合、会員特典のみ停止します。アカウント、チャット、ノートなどのユーザーコンテンツは削除されません。",
@@ -2439,8 +2459,11 @@
   },
   "systemAnnouncements": {
     "title": "システムのお知らせ",
+    "detailTitle": "お知らせの詳細",
+    "openAnnouncement": "{{title}}の詳細を見る",
+    "unavailable": "このお知らせは存在しないか、公開を終了しました",
     "subtitle": "windnote.aiアプリの最新情報、バージョン更新、パッチ情報をここでまとめてお知らせします。",
-    "systemNotifications": "システム通知",
+    "systemNotifications": "アカウント通知",
     "empty": "システム通知はありません",
     "loadFailed": "システム通知を読み込めませんでした。下に引いて再試行してください",
     "latestAppInfo": {
@@ -2565,6 +2588,9 @@
       "d1": "1日",
       "d7": "7日"
     }
+  },
+  "location": {
+    "mapUnavailable": "地図を読み込めませんでした。通信環境を確認して再試行してください。"
   },
   "permissions": {
     "insufficientTitle": "権限が必要です",
