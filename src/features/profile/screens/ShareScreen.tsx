@@ -169,7 +169,7 @@ export default function ShareScreen() {
     }, [load]),
   );
 
-  const inviteCode = data?.inviteCode ?? user?.inviteCode;
+  const inviteCode = (data?.inviteCode ?? user?.inviteCode)?.toUpperCase();
   const inviteUrl = inviteCode
     ? PUBLIC_INVITE_BASE_URL
       ? `${PUBLIC_INVITE_BASE_URL}/invite?code=${encodeURIComponent(inviteCode)}`

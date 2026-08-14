@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
 import { MemberName } from '@/components/ui/member-name';
+import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import { getAvatarFrameSource } from '@/features/profile/membership-frames';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -201,7 +202,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
   const hasCondition =
     post.signupRestrictions.vipLevel != null ||
     post.signupRestrictions.creditScore != null ||
-    post.signupRestrictions.fancyNumber;
+    (FEATURE_FLAGS.fancyNumbers && post.signupRestrictions.fancyNumber);
 
   const handleManageSignups = useCallback(() => {
     // Stay within the discover stack so "back" returns to the plaza feed,
@@ -333,7 +334,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
         }),
       );
     }
-    if (post.signupRestrictions.fancyNumber) {
+    if (FEATURE_FLAGS.fancyNumbers && post.signupRestrictions.fancyNumber) {
       reasons.push(
         t('plaza.restriction.fancyNumber', { defaultValue: '靓号用户' }),
       );
@@ -394,7 +395,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
           }),
         );
       }
-      if (post.restrictions.fancyNumber) {
+      if (FEATURE_FLAGS.fancyNumbers && post.restrictions.fancyNumber) {
         reasons.push(
           t('plaza.restriction.fancyNumber', { defaultValue: '靓号用户' }),
         );

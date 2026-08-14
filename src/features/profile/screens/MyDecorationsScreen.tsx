@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
+import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 const s = StyleSheet.create({
@@ -78,14 +79,14 @@ export default function MyDecorationsScreen() {
       subtitle: t('profile.decorations.badgesSubtitle'),
       href: '/(tabs)/profile/icons',
     },
-    {
+    ...(FEATURE_FLAGS.avatarFrames ? [{
       key: 'avatar-frames',
       icon: 'image-outline' as const,
       color: colors.blue,
       title: t('profile.decorations.avatarFrames'),
       subtitle: t('profile.decorations.avatarFramesSubtitle'),
       href: '/(tabs)/profile/avatar-frames',
-    },
+    }] : []),
   ];
 
   return (

@@ -205,15 +205,20 @@ test('regular user selects tiers and receives an activation contact state', asyn
 
   await waitFor(() => expect(mockFetchCurrentUser).toHaveBeenCalledTimes(1));
   expect(screen.getByText('普通用户')).toBeTruthy();
-  expect(screen.getByText('联系客服开通 钻石会员')).toBeTruthy();
+  expect(screen.getByText('联系客服开通 年费会员')).toBeTruthy();
   expect(screen.getByText('1000 人')).toBeTruthy();
   expect(screen.getByText('单群人数上限')).toBeTruthy();
   expect(screen.queryByText('可创建群聊')).toBeNull();
   expect(screen.queryByText('高级圈子')).toBeNull();
 
-  fireEvent.press(screen.getByLabelText('白银会员，1 个月，¥298'));
+  fireEvent.press(screen.getByLabelText('每日会员，1 天，¥19.9'));
 
-  expect(screen.getByText('联系客服开通 白银会员')).toBeTruthy();
+  expect(screen.getByText('联系客服开通 每日会员')).toBeTruthy();
+  expect(screen.getByText('200 人')).toBeTruthy();
+
+  fireEvent.press(screen.getByLabelText('包月会员，1 个月，¥298'));
+
+  expect(screen.getByText('联系客服开通 包月会员')).toBeTruthy();
   expect(screen.getByText('200 人')).toBeTruthy();
 });
 
@@ -231,7 +236,7 @@ test('marketing phase hides recharge actions and shows the new gold limits', asy
 
   expect(await screen.findByText('会员功能暂未开放')).toBeTruthy();
   expect(
-    screen.getByText('当前所有用户免费享有黄金额度'),
+    screen.getByText('当前所有用户免费享有半年会员额度'),
   ).toBeTruthy();
   expect(screen.getByText('单群 400 人 · 最多加入 300 个群')).toBeTruthy();
   expect(screen.getByText('笔记 500 条 · 城市筛选 10 个')).toBeTruthy();
@@ -245,12 +250,12 @@ test('member tier selection distinguishes current, upgrade, and lower states', a
   render(<MemberCenterScreen />);
 
   await waitFor(() => expect(mockFetchCurrentUser).toHaveBeenCalledTimes(1));
-  expect(screen.getByText('当前已是 黄金会员，联系客服咨询')).toBeTruthy();
+  expect(screen.getByText('当前已是 半年会员，联系客服咨询')).toBeTruthy();
 
-  fireEvent.press(screen.getByLabelText('钻石会员，12 个月，¥1998'));
-  expect(screen.getByText('联系客服升级至 钻石会员')).toBeTruthy();
+  fireEvent.press(screen.getByLabelText('年费会员，12 个月，¥1998'));
+  expect(screen.getByText('联系客服升级至 年费会员')).toBeTruthy();
 
-  fireEvent.press(screen.getByLabelText('白银会员，1 个月，¥298'));
+  fireEvent.press(screen.getByLabelText('包月会员，1 个月，¥298'));
   expect(screen.getByText('当前会员等级更高，联系客服咨询')).toBeTruthy();
 });
 
@@ -276,7 +281,7 @@ test('configured support opens its in-app profile and missing support shows Aler
   const first = render(<MemberCenterScreen />);
   await waitFor(() => expect(mockFetchCurrentUser).toHaveBeenCalledTimes(1));
 
-  fireEvent.press(screen.getByText('联系客服开通 钻石会员'));
+  fireEvent.press(screen.getByText('联系客服开通 年费会员'));
   expect(mockRouter.push).toHaveBeenCalledWith({
     pathname: '/(tabs)/profile/user/[id]',
     params: { id: 'official-support', name: '官方客服' },
@@ -300,7 +305,7 @@ test('configured support opens its in-app profile and missing support shows Aler
   render(<MemberCenterScreen />);
   await waitFor(() => expect(mockFetchCurrentUser).toHaveBeenCalledTimes(1));
 
-  fireEvent.press(screen.getByText('联系客服开通 钻石会员'));
+  fireEvent.press(screen.getByText('联系客服开通 年费会员'));
   await waitFor(() =>
     expect(Alert.alert).toHaveBeenCalledWith(
       '客服账号暂未配置',
@@ -320,7 +325,7 @@ test('a failed config fetch reports a network problem instead of claiming suppor
   render(<MemberCenterScreen />);
   await waitFor(() => expect(mockFetchCurrentUser).toHaveBeenCalledTimes(1));
 
-  fireEvent.press(screen.getByText('联系客服开通 钻石会员'));
+  fireEvent.press(screen.getByText('联系客服开通 年费会员'));
   await waitFor(() =>
     expect(Alert.alert).toHaveBeenCalledWith(
       '客服信息加载失败',
@@ -346,7 +351,7 @@ test('pressing contact twice before the config resolves navigates exactly once',
   render(<MemberCenterScreen />);
   await waitFor(() => expect(mockFetchCurrentUser).toHaveBeenCalledTimes(1));
 
-  const button = screen.getByText('联系客服开通 钻石会员');
+  const button = screen.getByText('联系客服开通 年费会员');
   fireEvent.press(button);
   fireEvent.press(button);
 
@@ -387,7 +392,7 @@ test('tapping contact during the first load waits for the response instead of cl
   render(<MemberCenterScreen />);
   await waitFor(() => expect(mockFetchCurrentUser).toHaveBeenCalledTimes(1));
 
-  fireEvent.press(screen.getByText('联系客服开通 钻石会员'));
+  fireEvent.press(screen.getByText('联系客服开通 年费会员'));
   // 请求还没回来:此时既不该跳转,更不该说「暂未配置」。
   expect(Alert.alert).not.toHaveBeenCalled();
   expect(mockRouter.push).not.toHaveBeenCalled();
@@ -533,24 +538,24 @@ test('tier headers wrap long content instead of forcing a single line', async ()
   expect(StyleSheet.flatten(sectionHeader?.props.style)).toEqual(
     expect.objectContaining({ flexWrap: 'wrap' }),
   );
-  expect(screen.getByText('钻石会员').props.numberOfLines).toBe(2);
-  expect(screen.getByText('钻石会员').props.adjustsFontSizeToFit).toBeUndefined();
+  expect(screen.getByText('年费会员').props.numberOfLines).toBe(2);
+  expect(screen.getByText('年费会员').props.adjustsFontSizeToFit).toBeUndefined();
 });
 
 test('rules screen states the exact support-assisted membership contract', () => {
   render(<MemberRulesScreen />);
 
   for (const text of [
-    '白银会员 ¥298 / 1 个月；黄金会员 ¥1288 / 6 个月；钻石会员 ¥1998 / 1 年；超级会员 ¥3998 / 永久。',
+    '每日会员 ¥19.9 / 1 天；包月会员 ¥298 / 1 个月；半年会员 ¥1288 / 6 个月；年费会员 ¥1998 / 1 年；永久会员 ¥3998 / 永久。',
     '会员不在 App 内使用积分兑换或直接购买。联系客服后，由客服人工核实并开通会员。',
     '已开通会员可联系客服补差价升级；升级后立即生效，原会员剩余价值由客服核算抵扣。',
     '会员到期后仅停止会员权益，不删除账号、聊天、笔记或其他用户内容。',
     '会员规则仅适用于会员中心列出的权益；其中展示的“不限”仍受后端较高的合理使用与防滥用上限约束，实际权限以后端为准。',
     '语音转文字是所有用户可用的免费基础功能，不受会员等级限制。',
-    '当前会员权益不包含头像框或动态头像承诺。',
   ]) {
     expect(screen.getByText(text)).toBeTruthy();
   }
 
+  expect(screen.queryByText(/头像框/)).toBeNull();
   expect(screen.queryByText(/创建群.*上限|高级圈子|优先客服/)).toBeNull();
 });

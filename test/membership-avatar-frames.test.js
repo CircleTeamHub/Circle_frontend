@@ -28,7 +28,8 @@ test('Avatar reserves the scaled frame footprint so it does not overlap adjacent
   const src = read('src/components/ui/avatar.tsx');
   assert.match(src, /frameSource\?: ImageSourcePropType/);
   // 方形头像(聊天列表)不套圆形框。
-  assert.match(src, /shape !== 'circle'/);
+  assert.match(src, /shape === 'circle'/);
+  assert.match(src, /FEATURE_FLAGS\.avatarFrames/);
   assert.match(src, /AVATAR_FRAME_SCALE/);
   assert.match(src, /pointerEvents="none"/);
   // 容器按框尺寸预留占位(钻石/超级框比头像大 1.6×),头像居中,框铺满——

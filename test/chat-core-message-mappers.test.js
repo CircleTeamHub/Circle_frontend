@@ -108,6 +108,46 @@ test('text messages split sent/received by sender identity', () => {
   assert.equal(sent.sendStatus, 2);
 });
 
+test('location messages preserve separate place details and valid coordinates', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const location = mapChatMessageDtoToUI(
+    dto({
+      type: 'location',
+      content: {
+        title: '深圳湾公园',
+        address: '广东省深圳市南山区滨海大道',
+        description: '旧客户端兜底文案',
+        latitude: 22.4806,
+        longitude: 113.9464,
+      },
+    }),
+    'u1',
+    0,
+  );
+
+  assert.equal(location.locationTitle, '深圳湾公园');
+  assert.equal(location.locationAddress, '广东省深圳市南山区滨海大道');
+  assert.equal(location.locationLatitude, 22.4806);
+  assert.equal(location.locationLongitude, 113.9464);
+});
+
+test('legacy location messages keep their description without inventing coordinates', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const location = mapChatMessageDtoToUI(
+    dto({
+      type: 'location',
+      content: { description: '深圳市南山区' },
+    }),
+    'u1',
+    0,
+  );
+
+  assert.equal(location.locationTitle, '深圳市南山区');
+  assert.equal(location.locationAddress, '深圳市南山区');
+  assert.equal(location.locationLatitude, undefined);
+  assert.equal(location.locationLongitude, undefined);
+});
+
 test('optimistic lifecycle: sending → failed → confirmed statuses', () => {
   const { mapChatMessageDtoToUI } = loadMappers();
   const me = { id: 'u1', nickname: '我', avatarUrl: null };

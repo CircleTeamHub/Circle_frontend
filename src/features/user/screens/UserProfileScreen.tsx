@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { NavHeader } from '@/components/ui/nav-header';
 import { MemberName } from '@/components/ui/member-name';
+import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import {
   AVATAR_FRAME_SCALE,
   getAvatarFrameSource,
@@ -324,7 +325,7 @@ export default function UserProfileScreen() {
           id: currentUser.id,
           name:
             currentUser.nickname ||
-            (currentUser.fancyNumber
+            (FEATURE_FLAGS.fancyNumbers && currentUser.fancyNumber
               ? currentUser.accountId.toUpperCase()
               : currentUser.accountId),
           accountId: currentUser.accountId,
@@ -360,7 +361,7 @@ export default function UserProfileScreen() {
             id: profile.id,
             name:
               profile.nickname ||
-              (profile.fancyNumber
+              (FEATURE_FLAGS.fancyNumbers && profile.fancyNumber
                 ? profile.accountId.toUpperCase()
                 : profile.accountId),
             accountId: profile.accountId,
@@ -469,12 +470,15 @@ export default function UserProfileScreen() {
 
   const rawProfile = remoteProfile ?? fallbackProfile;
   const profile =
-    rawProfile.fancyNumber && rawProfile.accountId
+    FEATURE_FLAGS.fancyNumbers && rawProfile.fancyNumber && rawProfile.accountId
       ? { ...rawProfile, accountId: rawProfile.accountId.toUpperCase() }
       : rawProfile;
   const profileMetaItems = getProfileMetaItems(profile);
   const profileVipLevel = profile.vipLevel ?? 0;
   const membershipFrame = getAvatarFrameSource(profile.avatarFrameAppearance);
+  const visibleMembershipFrame = FEATURE_FLAGS.avatarFrames
+    ? membershipFrame
+    : null;
   const displayName =
     remarkOverride === undefined
       ? friendSettings?.remark?.trim() || profile.remarkHint || profile.name
@@ -850,7 +854,7 @@ export default function UserProfileScreen() {
               style={[
                 s.avatarRing,
                 d.avatarRing,
-                membershipFrame ? s.avatarRingFramed : null,
+                visibleMembershipFrame ? s.avatarRingFramed : null,
               ]}
             >
               <View style={[s.avatarFrame, d.avatarFrame]}>
@@ -861,9 +865,9 @@ export default function UserProfileScreen() {
                 )}
               </View>
             </View>
-            {membershipFrame ? (
+            {visibleMembershipFrame ? (
               <Image
-                source={membershipFrame}
+                source={visibleMembershipFrame}
                 style={s.membershipFrameOverlay}
                 contentFit="contain"
               />

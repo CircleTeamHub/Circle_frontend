@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter, useSegments } from 'expo-router';
+import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Spacing, useTheme } from '@/theme';
@@ -46,6 +46,7 @@ export default function NotificationCenterScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const segments = useSegments();
+  const { initialTab } = useLocalSearchParams<{ initialTab?: string }>();
   const { colors } = useTheme();
   const { t } = useTranslation();
   const mountedRef = useRef(true);
@@ -61,7 +62,9 @@ export default function NotificationCenterScreen() {
   const signupPosts = useNotificationCenterStore((s) => s.signupPosts);
   const store = useNotificationCenterStore.getState;
 
-  const [tab, setTab] = useState<NotificationTabKey>('interactive');
+  const [tab, setTab] = useState<NotificationTabKey>(
+    initialTab === 'circle' ? 'circle' : 'interactive',
+  );
   const [filter, setFilter] = useState<ReadFilter>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);

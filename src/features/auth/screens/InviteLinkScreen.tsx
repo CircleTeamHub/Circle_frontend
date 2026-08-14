@@ -32,7 +32,7 @@ export default function InviteLinkScreen() {
     return <Redirect href="/(tabs)/profile/share" />;
   }
 
-  const inviteCode = typeof code === 'string' ? code.trim().toLowerCase() : '';
+  const inviteCode = typeof code === 'string' ? code.trim().toUpperCase() : '';
   return (
     <Redirect
       href={{

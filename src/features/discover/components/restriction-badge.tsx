@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
@@ -68,7 +69,7 @@ export const RestrictionBadge: React.FC<RestrictionBadgeProps> = ({
         color: colors.badgeCredit,
       });
     }
-    if (restrictions.fancyNumber) {
+    if (FEATURE_FLAGS.fancyNumbers && restrictions.fancyNumber) {
       items.push({
         icon: 'sparkles-outline',
         label: t('discover.restrictionBadge.fancyNumber', {

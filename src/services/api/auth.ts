@@ -139,7 +139,7 @@ export async function register(payload: {
   inviteCode?: string;
 }) {
   const email = payload.email.trim().toLowerCase();
-  const inviteCode = payload.inviteCode?.trim().toLowerCase();
+  const inviteCode = payload.inviteCode?.trim().toUpperCase();
   const raw = await apiClient<AuthTokens>("/auth/register", {
     method: "POST",
     auth: false,

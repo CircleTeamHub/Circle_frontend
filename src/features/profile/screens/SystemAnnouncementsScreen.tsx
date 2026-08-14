@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import {
@@ -12,28 +12,8 @@ import {
 } from '@/services/api/notifications';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { reportNotificationFailure } from '@/features/notifications/utils/report-failure';
+import { SYSTEM_ANNOUNCEMENTS } from '@/features/profile/system-announcements';
 import type { NotificationItem } from '@/types';
-
-const ANNOUNCEMENTS = [
-  {
-    id: 'latestAppInfo',
-    titleKey: 'systemAnnouncements.latestAppInfo.title',
-    metaKey: 'systemAnnouncements.latestAppInfo.meta',
-    bodyKey: 'systemAnnouncements.latestAppInfo.body',
-  },
-  {
-    id: 'updates',
-    titleKey: 'systemAnnouncements.updates.title',
-    metaKey: 'systemAnnouncements.updates.meta',
-    bodyKey: 'systemAnnouncements.updates.body',
-  },
-  {
-    id: 'patches',
-    titleKey: 'systemAnnouncements.patches.title',
-    metaKey: 'systemAnnouncements.patches.meta',
-    bodyKey: 'systemAnnouncements.patches.body',
-  },
-] as const;
 const PAGE_SIZE = 20;
 
 const s = StyleSheet.create({
@@ -48,15 +28,11 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.sm,
   },
-  empty: {
-    alignItems: 'center',
-    paddingVertical: Spacing.xl,
-    gap: Spacing.sm,
-  },
 });
 
 export default function SystemAnnouncementsScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { colors } = useTheme();
   const { t } = useTranslation();
   const setProfileUnread = useTabBadgeStore((state) => state.setProfileUnread);
@@ -91,6 +67,7 @@ export default function SystemAnnouncementsScreen() {
       title: {
         color: colors.text,
         ...Typography.h3,
+        flex: 1,
       },
       meta: {
         color: colors.textSecondary,
@@ -212,21 +189,46 @@ export default function SystemAnnouncementsScreen() {
     <View style={{ gap: Spacing.md }}>
       <Text style={d.intro}>{t('systemAnnouncements.subtitle')}</Text>
 
-      {ANNOUNCEMENTS.map((item) => (
-        <View key={item.id} style={[s.card, d.card]}>
+      {SYSTEM_ANNOUNCEMENTS.map((item) => (
+        <Pressable
+          key={item.id}
+          accessibilityRole="button"
+          accessibilityLabel={t('systemAnnouncements.openAnnouncement', {
+            defaultValue: '查看{{title}}详情',
+            title: t(item.titleKey),
+          })}
+          style={[s.card, d.card]}
+          onPress={() =>
+            router.push({
+              pathname: '/(tabs)/profile/system-announcements/[id]',
+              params: { id: item.id },
+            })
+          }
+        >
           <View style={s.cardHeader}>
             <Ionicons name="megaphone-outline" size={20} color={colors.primary} />
             <Text style={d.title}>{t(item.titleKey)}</Text>
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={colors.textSecondary}
+            />
           </View>
           <Text style={d.meta}>{t(item.metaKey)}</Text>
-          <Text style={d.body}>{t(item.bodyKey)}</Text>
-        </View>
+          <Text numberOfLines={2} style={d.body}>
+            {t(item.bodyKey)}
+          </Text>
+        </Pressable>
       ))}
 
-      <Text style={d.sectionTitle}>
-        {t('systemAnnouncements.systemNotifications')}
-      </Text>
-      {loadError ? <Text style={d.emptyText}>{loadError}</Text> : null}
+      {items.length > 0 || loadError ? (
+        <>
+          <Text style={d.sectionTitle}>
+            {t('systemAnnouncements.systemNotifications')}
+          </Text>
+          {loadError ? <Text style={d.emptyText}>{loadError}</Text> : null}
+        </>
+      ) : null}
     </View>
   );
 
@@ -238,18 +240,7 @@ export default function SystemAnnouncementsScreen() {
         keyExtractor={(item) => item.id}
         renderItem={renderSystemNotification}
         ListHeaderComponent={ListHeader}
-        ListEmptyComponent={
-          loadError ? null : (
-            <View style={s.empty}>
-              <Ionicons
-                name="checkmark-circle-outline"
-                size={28}
-                color={colors.textSecondary}
-              />
-              <Text style={d.emptyText}>{t('systemAnnouncements.empty')}</Text>
-            </View>
-          )
-        }
+        ListEmptyComponent={null}
         contentContainerStyle={d.content}
         showsVerticalScrollIndicator={false}
         refreshing={refreshing}

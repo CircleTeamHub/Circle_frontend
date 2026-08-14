@@ -33,7 +33,7 @@ type TabKey = {
 const TAB_KEYS: TabKey[] = [
   { name: 'messages', icon: 'chatbubble-outline', key: 'tabs.messages' },
   { name: 'contacts', icon: 'people-outline', key: 'tabs.contacts' },
-  { name: 'discover', icon: 'play-circle-outline', key: 'tabs.discover' },
+  { name: 'discover', icon: 'aperture-outline', key: 'tabs.discover' },
   { name: 'profile', icon: 'person-outline', key: 'tabs.profile' },
 ];
 
@@ -235,11 +235,18 @@ export default function TabLayout() {
   const segments = useSegments();
   const hideTabBar = segments.length > 2;
 
-  const { messagesUnread, contactsUnread, discoverUnread, profileUnread } =
+  const {
+    messagesUnread,
+    contactsUnread,
+    discoverUnread,
+    signupUnread,
+    profileUnread,
+  } =
     useTabBadgeStore(useShallow((state) => ({
       messagesUnread: state.messagesUnread,
       contactsUnread: state.contactsUnread,
       discoverUnread: state.discoverUnread,
+      signupUnread: state.signupUnread,
       profileUnread: state.profileUnread,
     })));
 
@@ -317,9 +324,9 @@ export default function TabLayout() {
   const badgeMap: Record<string, boolean> = useMemo(() => ({
     messages: messagesUnread > 0,
     contacts: contactsUnread > 0,
-    discover: discoverUnread > 0,
+    discover: discoverUnread > 0 || signupUnread > 0,
     profile: profileUnread > 0,
-  }), [messagesUnread, contactsUnread, discoverUnread, profileUnread]);
+  }), [messagesUnread, contactsUnread, discoverUnread, signupUnread, profileUnread]);
 
   return (
     <Tabs

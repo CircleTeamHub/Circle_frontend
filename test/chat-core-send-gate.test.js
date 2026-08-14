@@ -208,6 +208,27 @@ test('a normal user still sends through the same path', async () => {
   assert.ok(calls.ingest > 0);
 });
 
+test('location sends keep the selected place title, address, and coordinates', async () => {
+  const { api, calls } = loadClient({ blocked: false });
+
+  await api.sendLocationMessage({
+    conversationId: 'c1',
+    latitude: 22.4806,
+    longitude: 113.9464,
+    title: '深圳湾公园',
+    address: '广东省深圳市南山区滨海大道',
+  });
+
+  const content = JSON.parse(JSON.stringify(calls.sentPayloads.at(-1)?.content));
+  assert.deepEqual(content, {
+    latitude: 22.4806,
+    longitude: 113.9464,
+    title: '深圳湾公园',
+    address: '广东省深圳市南山区滨海大道',
+    description: '广东省深圳市南山区滨海大道',
+  });
+});
+
 test('the gate has no bypass hatch left', async () => {
   // 曾经有一个 bypassCreditGate,唯一用途是转账卡片(「钱已经动了、拦也白拦」)。
   // 那张卡现在由服务端结算后签发,客户端根本不走这条路径 —— 豁免口子也就没有
@@ -236,7 +257,7 @@ test('a low-credit user never gets asked for their location', () => {
     'utf8',
   );
   const handler = source.slice(
-    source.indexOf('const handleSendCurrentLocation'),
+    source.indexOf('const handleOpenLocationPicker'),
     source.indexOf('const permission = await Location.requestForegroundPermissionsAsync'),
   );
   assert.ok(

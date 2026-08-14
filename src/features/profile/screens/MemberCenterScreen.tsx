@@ -17,12 +17,14 @@ import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
 import { GradientCover } from '@/components/ui/gradient-cover';
+import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import {
   MEMBERSHIP_BENEFITS,
   MEMBERSHIP_PLANS,
   getMembershipTierForVipLevel,
   type MembershipBenefitId,
   type MembershipBenefitValue,
+  type MembershipPlanId,
   type MembershipTier,
 } from '@/features/profile/membership-plans';
 import { getUserProfileHref } from '@/features/user/utils/routes';
@@ -35,10 +37,15 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 
 const DEFAULT_TIER_NAMES: Record<MembershipTier, string> = {
-  silver: '白银会员',
-  gold: '黄金会员',
-  diamond: '钻石会员',
-  super: '超级会员',
+  silver: '包月会员',
+  gold: '半年会员',
+  diamond: '年费会员',
+  super: '永久会员',
+};
+
+const DEFAULT_PLAN_NAMES: Record<MembershipPlanId, string> = {
+  daily: '每日会员',
+  ...DEFAULT_TIER_NAMES,
 };
 
 const DEFAULT_BENEFIT_LABELS: Record<MembershipBenefitId, string> = {
@@ -182,7 +189,7 @@ const s = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Spacing.md,
   },
-  // ── 档位纵向列表（四档全展示）──
+  // ── 购买方案纵向列表（每日方案 + 四档会员）──
   tierStack: {
     gap: Spacing.sm,
   },
@@ -278,13 +285,17 @@ export default function MemberCenterScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const visibleBenefits = MEMBERSHIP_BENEFITS.filter(
+    (benefit) =>
+      FEATURE_FLAGS.fancyNumbers || benefit.id !== 'fancy-number',
+  );
   const vipLevel = useAuthStore((state) => state.user?.vipLevel ?? 0);
   const currentTier = getMembershipTierForVipLevel(vipLevel);
   const currentPlan = currentTier
-    ? MEMBERSHIP_PLANS.find((plan) => plan.tier === currentTier)
+    ? MEMBERSHIP_PLANS.find((plan) => plan.id === currentTier)
     : undefined;
   const currentPlanLevel = currentPlan?.level ?? 0;
-  const [selectedTier, setSelectedTier] = useState<MembershipTier>(
+  const [selectedPlanId, setSelectedPlanId] = useState<MembershipPlanId>(
     currentTier ?? 'diamond',
   );
   const programStatus = useMembershipProgramStore((state) => state.status);
@@ -305,7 +316,7 @@ export default function MemberCenterScreen() {
     __DEV__ && !process.env.JEST_WORKER_ID ? true : programEnabled;
 
   useEffect(() => {
-    setSelectedTier(currentTier ?? 'diamond');
+    setSelectedPlanId(currentTier ?? 'diamond');
   }, [currentTier]);
 
   useFocusEffect(
@@ -356,10 +367,10 @@ export default function MemberCenterScreen() {
   );
 
   const selectedPlan =
-    MEMBERSHIP_PLANS.find((plan) => plan.tier === selectedTier) ??
-    MEMBERSHIP_PLANS[2];
+    MEMBERSHIP_PLANS.find((plan) => plan.id === selectedPlanId) ??
+    MEMBERSHIP_PLANS.find((plan) => plan.id === 'diamond')!;
   const selectedPlanName = t(selectedPlan.nameKey, {
-    defaultValue: DEFAULT_TIER_NAMES[selectedPlan.tier],
+    defaultValue: DEFAULT_PLAN_NAMES[selectedPlan.id],
   });
   const currentMembershipName = currentTier
     ? t(`profile.membership.tiers.${currentTier}.name`, {
@@ -367,7 +378,7 @@ export default function MemberCenterScreen() {
       })
     : t('profile.membership.regularUser', { defaultValue: '普通用户' });
   const isUpgrade = currentPlanLevel > 0 && selectedPlan.level > currentPlanLevel;
-  const isCurrent = currentPlanLevel > 0 && selectedPlan.level === currentPlanLevel;
+  const isCurrent = currentPlanLevel > 0 && selectedPlan.id === currentTier;
   const isLowerTier = currentPlanLevel > selectedPlan.level;
 
   const contactLabel = !currentTier
@@ -587,7 +598,7 @@ export default function MemberCenterScreen() {
             </Text>
             <Text style={d.marketingText}>
               {t('profile.membership.marketing.goldAccess', {
-                defaultValue: '当前所有用户免费享有黄金额度',
+                defaultValue: '当前所有用户免费享有半年会员额度',
               })}
             </Text>
             <Text style={d.marketingText}>
@@ -672,26 +683,31 @@ export default function MemberCenterScreen() {
           </Pressable>
         </View>
 
-        {/* 四档纵向全展示；每档一枚随材质换渐变的奖章 + 强调色 */}
+        {/* 五个购买方案纵向展示；每日会员复用白银权益与视觉，不新增后端等级。 */}
         <View style={s.tierStack}>
           {MEMBERSHIP_PLANS.map((plan) => {
-            const selected = plan.tier === selectedPlan.tier;
-            const isCurrentTier = plan.tier === currentTier;
+            const selected = plan.id === selectedPlan.id;
+            const isCurrentTier = plan.id === currentTier;
             const visual = TIER_VISUALS[plan.tier];
             const planName = t(plan.nameKey, {
-              defaultValue: DEFAULT_TIER_NAMES[plan.tier],
+              defaultValue: DEFAULT_PLAN_NAMES[plan.id],
             });
             const duration =
               plan.duration.type === 'lifetime'
                 ? t('profile.membership.duration.lifetime', { defaultValue: '永久' })
-                : t('profile.membership.duration.months', {
-                    defaultValue: '{{count}} 个月',
-                    count: plan.duration.months,
-                  });
+                : plan.duration.type === 'days'
+                  ? t('profile.membership.duration.days', {
+                      defaultValue: '{{count}} 天',
+                      count: plan.duration.days,
+                    })
+                  : t('profile.membership.duration.months', {
+                      defaultValue: '{{count}} 个月',
+                      count: plan.duration.months,
+                    });
 
             return (
               <Pressable
-                key={plan.tier}
+                key={plan.id}
                 accessibilityRole="button"
                 accessibilityLabel={t('profile.membership.planAccessibilityLabel', {
                   defaultValue: '{{plan}}，{{duration}}，¥{{price}}',
@@ -705,7 +721,7 @@ export default function MemberCenterScreen() {
                   d.tierCard,
                   selected && { borderColor: visual.accent, borderWidth: 2 },
                 ]}
-                onPress={() => setSelectedTier(plan.tier)}
+                onPress={() => setSelectedPlanId(plan.id)}
               >
                 <View style={s.tierMedallion}>
                   <GradientCover colors={visual.gradient} />
@@ -779,7 +795,7 @@ export default function MemberCenterScreen() {
           {t('profile.membership.benefitsTitle', { defaultValue: '会员权益' })}
         </Text>
         <View style={[s.benefitsPanel, d.benefitsPanel]}>
-          {MEMBERSHIP_BENEFITS.map((benefit, index) => {
+          {visibleBenefits.map((benefit, index) => {
             const value = benefit.values[selectedPlan.tier];
             const defaultValue =
               typeof value === 'number'
@@ -798,7 +814,7 @@ export default function MemberCenterScreen() {
                 key={benefit.id}
                 style={[
                   s.benefitRow,
-                  index < MEMBERSHIP_BENEFITS.length - 1 && d.benefitDivider,
+                  index < visibleBenefits.length - 1 && d.benefitDivider,
                 ]}
               >
                 <Ionicons

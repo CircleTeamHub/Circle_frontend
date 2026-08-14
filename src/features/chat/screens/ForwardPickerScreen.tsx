@@ -185,6 +185,8 @@ async function sendForwardedMessage(pending: PendingForward, conversationId: str
           conversationId,
           latitude,
           longitude,
+          title: str(content['title']),
+          address: str(content['address']),
           description: str(content['description']) ?? '',
         });
       }

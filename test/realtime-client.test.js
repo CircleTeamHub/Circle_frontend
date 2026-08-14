@@ -123,13 +123,13 @@ test('app settings search omits the removed circle offline preference', () => {
   assert.equal(appSettings.includes("'offlineReminder'"), false);
 });
 
-test('discover bell badge reads the interactive unread count, not systemUnread', () => {
-  const screen = read('src/features/discover/screens/DiscoverScreen.tsx');
+test('circle plaza bell badge reads signup unread, not the mixed interaction count', () => {
+  const screen = read('src/features/discover/screens/CirclePlazaScreen.tsx');
 
-  // 铃铛红点必须由 interaction.unread.changed 驱动的 discoverUnread 供数。
-  assert.match(screen, /useTabBadgeStore\(\(state\) => state\.discoverUnread\)/);
+  assert.match(screen, /useTabBadgeStore\(\(state\) => state\.signupUnread\)/);
+  assert.doesNotMatch(screen, /useTabBadgeStore\(\(state\) => state\.discoverUnread\)/);
   assert.doesNotMatch(screen, /useTabBadgeStore\(\(state\) => state\.systemUnread\)/);
-  assert.match(screen, /Badge count=\{bellUnread\}/);
+  assert.match(screen, /Badge count=\{signupUnread\}/);
 });
 
 test('session bootstrap and logout wire realtime connection lifecycle to auth state', () => {

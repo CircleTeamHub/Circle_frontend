@@ -18,7 +18,7 @@ import type { StoredChatMessage } from './store';
  * chat-core 消息 DTO → UI ChatMessage(替代 src/im/mappers 的消息侧)。
  * content 形状是 FE 定义、BE 透传的契约:
  *   text/quote {text, quotedText?} · image {key,url?,thumbUrl?,width?,height?,localUri?}
- *   voice {key,url?,duration,localUri?} · location {latitude,longitude,description}
+ *   voice {key,url?,duration,localUri?} · location {latitude,longitude,title?,address?,description}
  *   各卡片类型的 content = 卡片 payload 本体。
  * 乐观消息(height=0):sendStatus=1;failed=true → 3;已确认 → 2。
  */
@@ -367,11 +367,24 @@ export function mapChatMessageDtoToUI(
         voiceSize: num(content['size']),
       };
     case 'location':
+      const latitude = num(content['latitude']);
+      const longitude = num(content['longitude']);
+      const hasValidCoordinates =
+        latitude !== undefined &&
+        longitude !== undefined &&
+        latitude >= -90 &&
+        latitude <= 90 &&
+        longitude >= -180 &&
+        longitude <= 180;
       return {
         ...base,
         type: 'location',
-        locationTitle: str(content['description']) ?? '位置消息',
-        locationAddress: str(content['description']) ?? '未知位置',
+        locationTitle:
+          str(content['title']) ?? str(content['description']) ?? '位置消息',
+        locationAddress:
+          str(content['address']) ?? str(content['description']) ?? '未知位置',
+        locationLatitude: hasValidCoordinates ? latitude : undefined,
+        locationLongitude: hasValidCoordinates ? longitude : undefined,
       };
     case 'note-card':
       return {
