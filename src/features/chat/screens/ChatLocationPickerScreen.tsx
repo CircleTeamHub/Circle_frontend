@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MapLocationPickerScreen } from '@/features/location/components/map-location-picker-screen';
@@ -7,6 +7,8 @@ import { useChatLocationPickerStore } from '@/features/chat/store/use-chat-locat
 
 export default function ChatLocationPickerScreen() {
   const { t } = useTranslation();
+  // 选点结果绑定发起它的会话；深链直接进来时这里是 undefined，结果就谁也消费不了。
+  const { conversationID } = useLocalSearchParams<{ conversationID?: string }>();
   const setPickedLocation = useChatLocationPickerStore(
     (state) => state.setPickedLocation,
   );
@@ -36,10 +38,15 @@ export default function ChatLocationPickerScreen() {
   );
   const handleConfirm = useCallback(
     (location: PickedLocation) => {
-      setPickedLocation(location);
+      setPickedLocation(
+        location,
+        typeof conversationID === 'string' && conversationID
+          ? conversationID
+          : null,
+      );
       router.back();
     },
-    [setPickedLocation],
+    [conversationID, setPickedLocation],
   );
 
   return (

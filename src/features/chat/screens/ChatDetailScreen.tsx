@@ -2546,7 +2546,8 @@ export default function ChatDetailScreen() {
       clearPickedLocation();
       router.push({
         pathname: '/(chat)/location-picker',
-        ...(params ? { params } : {}),
+        // conversationID 一路带过去：确认的结果只有回到这个会话才会被消费。
+        params: { ...params, conversationID },
       } as never);
     };
     const permission = await Location.requestForegroundPermissionsAsync();
@@ -2595,10 +2596,11 @@ export default function ChatDetailScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      const picked = consumePickedLocation();
+      if (!conversationID) return;
+      const picked = consumePickedLocation(conversationID);
       if (!picked) return;
       void handleSendPickedLocation(picked);
-    }, [consumePickedLocation, handleSendPickedLocation]),
+    }, [consumePickedLocation, conversationID, handleSendPickedLocation]),
   );
 
   /**

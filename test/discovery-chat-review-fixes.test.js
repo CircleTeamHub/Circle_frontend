@@ -138,3 +138,21 @@ test('the membership badge marks the current tier, not one duration of it', () =
   // 前提：daily 与 silver 共用一个 tier/level，无法从 vipLevel 区分。
   assert.match(plans, /id: 'daily',[\s\S]{0,200}tier: 'silver',\s*\n\s*level: 1,/);
 });
+
+// 选点 store 是全局的，而 ChatDetailScreen 一获得焦点就消费它并直接把位置发出去。
+// 不绑会话的话，深链直接进选点页、或者确认之后被推送带去另一个会话，这条位置
+// 就会发给非预期的收件人。
+test('picked locations are scoped to the conversation that opened the picker', () => {
+  const store = read('src/features/chat/store/use-chat-location-picker-store.ts');
+  const chat = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const picker = read('src/features/chat/screens/ChatLocationPickerScreen.tsx');
+
+  assert.match(store, /consumePickedLocation: \(conversationID\) =>/);
+  assert.match(store, /if \(pending\.conversationID !== conversationID\) return null;/);
+  // 对不上的结果必须就地丢弃，不能留在 store 里等下一个会话。
+  assert.match(store, /set\(\{ pending: null \}\);\s*\n\s*if \(pending\.conversationID/);
+
+  assert.match(chat, /params: \{ \.\.\.params, conversationID \}/);
+  assert.match(chat, /const picked = consumePickedLocation\(conversationID\);/);
+  assert.match(picker, /useLocalSearchParams<\{ conversationID\?: string \}>/);
+});
