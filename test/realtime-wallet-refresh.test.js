@@ -20,6 +20,8 @@ function loadHarness() {
     fileName: filePath,
   }).outputText;
 
+  const sessionEpoch = { value: 0 };
+  const timers = [];
   const walletWrites = [];
   const walletCalls = [];
   const sockets = [];
@@ -68,7 +70,10 @@ function loadHarness() {
     module: { exports: {} },
     exports: {},
     console,
-    setTimeout: () => 1,
+    setTimeout: (fn) => {
+      timers.push(fn);
+      return timers.length;
+    },
     clearTimeout: () => {},
     WebSocket: FakeWebSocket,
     require: (request) => {
@@ -100,6 +105,16 @@ function loadHarness() {
             registerLogoutHandler: () => () => {},
             clearLocalSession: async () => {},
           };
+        case "@/stores/authStore": {
+          // sessionEpoch 只在登录/登出时自增,token 轮换不动 —— 围栏按它判。
+          const state = {
+            get sessionEpoch() {
+              return sessionEpoch.value;
+            },
+            setUser: () => {},
+          };
+          return { useAuthStore: stubStore(state) };
+        }
         case "@/stores/walletRealtimeStore":
           return {
             useWalletRealtimeStore: stubStore({
@@ -139,6 +154,16 @@ function loadHarness() {
     ...context.module.exports,
     walletWrites,
     walletCalls,
+    // 触发挂起的重连定时器(harness 的 setTimeout 只记不跑)。
+    runPendingReconnect() {
+      const fn = timers.shift();
+      if (!fn) throw new Error("no reconnect timer scheduled");
+      fn();
+    },
+    // 换号 = sessionEpoch 前进;token 轮换不动它。
+    switchAccount() {
+      sessionEpoch.value += 1;
+    },
     sockets,
     flush,
     // 直接投递一条余额变更帧，等价于服务端 poke。
@@ -166,6 +191,7 @@ test("换号之后落地的余额响应不会写进新账号的钱包", async ()
 
   // A 的请求还在飞，用户登出并换成 B。
   harness.disconnectRealtime();
+  harness.switchAccount();
   harness.connectRealtime("token-b");
 
   // 此时 A 的响应才落地。
@@ -222,4 +248,51 @@ test("没有后续事件时不会无限尾随", async () => {
 
   assert.equal(harness.walletCalls.length, 1);
   assert.deepEqual(harness.walletWrites, [10]);
+});
+
+// 例行的令牌刷新是同一个人、同一段会话：SessionBootstrap 会 disconnect + 用新
+// token 重连，但 authStore.sessionEpoch 不动。按 token 判的话，这次刷新会把在途
+// 的余额请求判成过期丢掉且不补发——而当前契约的 wallet.balance.changed 不带绝对
+// 余额，丢了就只能等下一次事件，余额一直是旧的。
+test("token 轮换不作废在途的余额请求", async () => {
+  const harness = loadHarness();
+  harness.connectRealtime("token-a");
+  const socket = harness.openLatest();
+
+  harness.pokeBalance(socket);
+  assert.equal(harness.walletCalls.length, 1);
+
+  // 同一段会话内换 token（sessionEpoch 不动）。
+  harness.disconnectRealtime();
+  harness.connectRealtime("token-a2");
+
+  harness.walletCalls[0].resolve({ balance: 777 });
+  await harness.flush();
+
+  assert.deepEqual(
+    harness.walletWrites,
+    [777],
+    "同一段会话的响应必须照常写进钱包",
+  );
+});
+
+// 断线空窗里结算的奖励/充值，那一帧是彻底丢掉的。badge 和朋友圈都在重连时补，
+// 钱包不补的话，一个全程挂着的钱包页会一直显示断线前的余额。
+test("重连恢复会补一次钱包对账", async () => {
+  const harness = loadHarness();
+  harness.connectRealtime("token-a");
+  const first = harness.openLatest();
+  first.readyState = 3;
+  // 掉线 → 触发重连（recoveryPending）。
+  first.onclose?.({ code: 1006 });
+  harness.runPendingReconnect?.();
+
+  const before = harness.walletCalls.length;
+  // 定时器触发后会开一个新 socket,把它的 onopen 跑起来 = 认证并进入恢复。
+  harness.openLatest();
+
+  assert.ok(
+    harness.walletCalls.length > before,
+    "重连成功后应该补一次权威余额读",
+  );
 });
