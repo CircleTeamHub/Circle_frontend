@@ -1085,6 +1085,7 @@
     "signUp": "报名",
     "signedUp": "已报名",
     "signupBlockedTitle": "暂不可报名",
+    "profileBlockedGeneric": "你暂不满足查看对方主页的条件",
     "signupBlockedGeneric": "你暂不满足该动态的报名条件",
     "signupRestrictionMessage": "报名需满足：{{requirements}}",
     "circlePicker": {

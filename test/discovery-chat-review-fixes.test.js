@@ -29,10 +29,32 @@ test('signup blocking keeps an explanation when no visible requirement is left',
 
   assert.match(card, /const requirements = buildSignupReasonText\(\)/);
   assert.match(card, /requirements\s*\?[\s\S]{0,240}signupBlockedGeneric/);
+  // 看主页那条路是**另一段**代码，同样的门槛、同样的空串问题；两处都走同一个
+  // helper，免得下次只修一边。
+  assert.match(card, /requirements\s*\?[\s\S]{0,240}profileBlockedGeneric/);
+  assert.equal(
+    (card.match(/buildRestrictionReasonText\(/g) ?? []).length,
+    2,
+    '报名与看主页都必须走共享 helper',
+  );
+  assert.doesNotMatch(card, /reasons\.push\(/);
   for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
     const messages = JSON.parse(read(`src/i18n/locales/${locale}.json`));
     assert.ok(messages.plaza.signupBlockedGeneric, `${locale} 缺 signupBlockedGeneric`);
+    assert.ok(messages.plaza.profileBlockedGeneric, `${locale} 缺 profileBlockedGeneric`);
   }
+});
+
+// 从选点页回来时位置已经被 focus effect 消费掉了。发送位被占着就直接 return，
+// 用户选的点既不发也不报错，彻底丢失。
+test('a picked location survives an in-flight send instead of vanishing', () => {
+  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+
+  assert.match(screen, /const slotFree = await waitForSendSlot\(\{/);
+  assert.match(screen, /isBusy: \(\) => inFlightRef\.current/);
+  assert.match(screen, /isMounted: \(\) => mountedRef\.current/);
+  // 等不到也要显式报错，不能换一种静默丢弃。
+  assert.match(screen, /if \(!slotFree\) \{[\s\S]{0,240}locationSendFailed/);
 });
 
 // discoverUnread = 铃铛中心「互动」列表的未读数。发现页把它画成朋友圈那一行的

@@ -1423,6 +1423,7 @@
     "signUp": "신청",
     "signedUp": "신청함",
     "signupBlockedTitle": "지금은 신청할 수 없어요",
+    "profileBlockedGeneric": "아직 상대방 프로필을 볼 수 있는 조건을 충족하지 않았습니다",
     "signupBlockedGeneric": "아직 이 게시물의 참가 조건을 충족하지 않았습니다",
     "signupRestrictionMessage": "신청 조건: {{requirements}}",
     "circlePicker": {

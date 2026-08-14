@@ -1423,6 +1423,7 @@
     "signUp": "応募",
     "signedUp": "応募済み",
     "signupBlockedTitle": "現在応募できません",
+    "profileBlockedGeneric": "相手のプロフィールを閲覧する条件をまだ満たしていません",
     "signupBlockedGeneric": "この投稿の応募条件をまだ満たしていません",
     "signupRestrictionMessage": "応募条件：{{requirements}}",
     "circlePicker": {

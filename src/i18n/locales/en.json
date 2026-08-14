@@ -1086,6 +1086,7 @@
     "signUp": "Sign up",
     "signedUp": "Signed up",
     "signupBlockedTitle": "Sign-up unavailable",
+    "profileBlockedGeneric": "You do not meet the requirements to view this profile yet",
     "signupBlockedGeneric": "You do not meet the signup requirements for this post yet",
     "signupRestrictionMessage": "To sign up: {{requirements}}",
     "circlePicker": {

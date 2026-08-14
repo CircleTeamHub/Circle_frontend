@@ -90,6 +90,7 @@ import {
   sendTextMessage,
   sendVoiceMessage,
 } from '@/chat-core/client';
+import { waitForSendSlot } from '@/features/chat/utils/send-slot';
 import { getChatSendErrorMessage } from '@/chat-core/send-errors';
 import { OptionPickerSheet } from '@/components/ui/option-picker-sheet';
 import {
@@ -2505,6 +2506,24 @@ export default function ChatDetailScreen() {
     },
   ) => {
     if (!sourceID || !conversationID || isPreviewMode) return;
+    // 位置已经从 store 里消费掉了：这里直接 return 等于把用户选的点悄悄丢掉，
+    // 既不发也不报错。等当前这一发结束再补上；真等不到就明确报错。
+    if (inFlightRef.current) {
+      const slotFree = await waitForSendSlot({
+        isBusy: () => inFlightRef.current,
+        isMounted: () => mountedRef.current,
+      });
+      if (!slotFree) {
+        if (mountedRef.current) {
+          setSendError(
+            t('chat.detail.locationSendFailed', {
+              defaultValue: '位置发送失败，请重试',
+            }),
+          );
+        }
+        return;
+      }
+    }
     if (inFlightRef.current) return;
     inFlightRef.current = true;
     try {

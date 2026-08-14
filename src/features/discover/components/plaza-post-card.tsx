@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
 import { MemberName } from '@/components/ui/member-name';
 import { FEATURE_FLAGS } from '@/constants/feature-flags';
+import { buildRestrictionReasonText } from '@/features/discover/utils/plaza-restrictions';
 import { getAvatarFrameSource } from '@/features/profile/membership-frames';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -316,32 +317,13 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
     return actions;
   }, [t, isOwnPost, handleShare, handleDeletePost, handleReport]);
 
-  const buildSignupReasonText = useCallback((): string => {
-    const reasons: string[] = [];
-    if (post.signupRestrictions.vipLevel != null) {
-      reasons.push(
-        t('plaza.restriction.vipAtLeast', {
-          level: post.signupRestrictions.vipLevel,
-          defaultValue: `VIP${post.signupRestrictions.vipLevel}以上`,
-        }),
-      );
-    }
-    if (post.signupRestrictions.creditScore != null) {
-      reasons.push(
-        t('plaza.restriction.creditAtLeast', {
-          score: post.signupRestrictions.creditScore,
-          defaultValue: `信用值${post.signupRestrictions.creditScore}以上`,
-        }),
-      );
-    }
-    if (FEATURE_FLAGS.fancyNumbers && post.signupRestrictions.fancyNumber) {
-      reasons.push(
-        t('plaza.restriction.fancyNumber', { defaultValue: '靓号用户' }),
-      );
-    }
-    const separator = t('plaza.restriction.separator', { defaultValue: '、' });
-    return reasons.join(separator);
-  }, [post.signupRestrictions, t]);
+  const buildSignupReasonText = useCallback(
+    (): string =>
+      buildRestrictionReasonText(post.signupRestrictions, t, {
+        showFancyNumber: FEATURE_FLAGS.fancyNumbers,
+      }),
+    [post.signupRestrictions, t],
+  );
 
   const handleToggleSignup = useCallback(async () => {
     if (busy) return;
@@ -385,36 +367,18 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
 
   const handleAvatarPress = useCallback(() => {
     if (!post.canInteract) {
-      const reasons: string[] = [];
-      if (post.restrictions.vipLevel != null) {
-        reasons.push(
-          t('plaza.restriction.vipAtLeast', {
-            level: post.restrictions.vipLevel,
-            defaultValue: `VIP${post.restrictions.vipLevel}以上`,
-          }),
-        );
-      }
-      if (post.restrictions.creditScore != null) {
-        reasons.push(
-          t('plaza.restriction.creditAtLeast', {
-            score: post.restrictions.creditScore,
-            defaultValue: `信用值${post.restrictions.creditScore}以上`,
-          }),
-        );
-      }
-      if (FEATURE_FLAGS.fancyNumbers && post.restrictions.fancyNumber) {
-        reasons.push(
-          t('plaza.restriction.fancyNumber', { defaultValue: '靓号用户' }),
-        );
-      }
-      const separator = t('plaza.restriction.separator', {
-        defaultValue: '、',
+      // 和报名那条路一样：门槛只剩前端隐藏项（靓号）时 requirements 是空串，
+      // 原来弹的是「需要 才能查看对方主页」这种半截话。
+      const requirements = buildRestrictionReasonText(post.restrictions, t, {
+        showFancyNumber: FEATURE_FLAGS.fancyNumbers,
       });
       Alert.alert(
         t('plaza.cannotView'),
-        t('plaza.restrictionMessage', {
-          requirements: reasons.join(separator),
-        }),
+        requirements
+          ? t('plaza.restrictionMessage', { requirements })
+          : t('plaza.profileBlockedGeneric', {
+              defaultValue: '你暂不满足查看对方主页的条件',
+            }),
       );
       return;
     }

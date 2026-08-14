@@ -1426,6 +1426,7 @@
     "signUp": "Inscribirse",
     "signedUp": "Inscrito",
     "signupBlockedTitle": "Inscripción no disponible",
+    "profileBlockedGeneric": "Aún no cumples los requisitos para ver este perfil",
     "signupBlockedGeneric": "Aún no cumples los requisitos de inscripción de esta publicación",
     "signupRestrictionMessage": "Para inscribirte: {{requirements}}",
     "circlePicker": {
