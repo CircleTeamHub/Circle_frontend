@@ -159,12 +159,19 @@ let reportedCurrentConnectionOutage = false;
 const reportedRealtimeFailures = new Set<string>();
 let walletRefreshPromise: Promise<void> | null = null;
 let walletRefreshDirty = false;
-// 会话代。登出/换号时自增,用来把在途的余额请求作废 —— 钱包 store 是全局的,
-// 上一个账号的响应落进去就是把别人的余额显示给当前账号看。
-let walletSessionEpoch = 0;
+// 会话身份。钱包 store 是全局的,上一个账号的响应落进去就是把别人的余额显示
+// 给当前账号看,所以在途请求要按「哪一次会话发出的」来判。
+//
+// 用 authStore.sessionEpoch 而不是本地计数:它只在登录/登出时自增,**token
+// 轮换不动**。本地计数是跟着 connectRealtime 的 token 变化走的,于是一次例行
+// 的令牌刷新(同一个人、同一段会话)也会把在途的余额请求判成过期丢掉,而且不
+// 补发 —— 当前契约的 wallet.balance.changed 不带绝对余额,丢了就只能等下一次
+// 事件或重新进页面,余额一直是旧的。
+function currentWalletSession(): number {
+  return useAuthStore.getState().sessionEpoch;
+}
 
 function invalidateWalletRefresh(): void {
-  walletSessionEpoch += 1;
   walletRefreshPromise = null;
   walletRefreshDirty = false;
 }
@@ -182,8 +189,8 @@ function refreshWalletBalanceBestEffort(): Promise<void> {
 }
 
 function runWalletRefresh(): Promise<void> {
-  const epoch = walletSessionEpoch;
-  const isStale = () => epoch !== walletSessionEpoch;
+  const epoch = currentWalletSession();
+  const isStale = () => epoch !== currentWalletSession();
   return fetchWallet()
     .then((wallet) => {
       if (isStale()) return;
@@ -601,6 +608,10 @@ function openRealtimeSocket(normalizedToken: string) {
     // 无 AppState 变化的场景就靠这条兜住）。
     if (shouldForceRecovery) {
       useMomentsFeedSignalStore.getState().bump();
+      // 断线空窗里结算的奖励/充值,那一帧是彻底丢掉的 —— badge 和朋友圈都在
+      // 这里补,钱包不补的话,一个全程挂着的钱包页会一直显示断线前的余额。
+      // 走同一个单飞入口,与并发的事件驱动刷新自然合并。
+      void refreshWalletBalanceBestEffort();
     }
   };
 
@@ -658,9 +669,6 @@ export function connectRealtime(token: string) {
     return;
   }
 
-  // 换号可能不经过 disconnect(直接用新 token 再连一次),这里也要断代,
-  // 否则上一个账号的在途余额请求会写进新账号的钱包。
-  if (normalizedToken !== currentToken) invalidateWalletRefresh();
   manualDisconnect = false;
   reconnectAttempt = 0;
   reportedCurrentConnectionOutage = false;
