@@ -483,3 +483,51 @@ test("握手成功但认证被拒时不会发出补拉请求", async () => {
   harness.authenticate(harness.sockets[harness.sockets.length - 1]);
   assert.equal(harness.walletCalls.length, before + 1);
 });
+
+// token 轮换走的是 SessionBootstrap effect 的 cleanup：先 disconnectRealtime 再用
+// 新 token 重连。断线标记要是在 disconnect 里被清掉，这条路径就把断线期间错过的
+// 补拉一起丢了（回到前台那条路已经在上一条用例里覆盖）。
+test("断线之后赶上 token 轮换，重连认证后仍然补一次对账", async () => {
+  const harness = loadHarness();
+  harness.connectRealtime("token-a");
+  harness.openAndAuthenticateLatest();
+  const before = harness.walletCalls.length;
+
+  const first = harness.sockets[harness.sockets.length - 1];
+  first.readyState = 3;
+  first.onclose?.({ code: 1006 });
+
+  // 退避定时器还挂着，此时令牌轮换：cleanup → disconnect，再用新 token 连。
+  harness.disconnectRealtime();
+  harness.connectRealtime("token-a2");
+  harness.openAndAuthenticateLatest();
+
+  assert.equal(
+    harness.walletCalls.length,
+    before + 1,
+    "轮换不该把断线补拉一起丢掉",
+  );
+
+  // 而且只补一次：后面再来一条帧不会重复补。
+  harness.authenticate(harness.sockets[harness.sockets.length - 1]);
+  assert.equal(harness.walletCalls.length, before + 1);
+});
+
+// 换号则相反：上一个账号断线期间错过的东西，不该由新账号来补。
+test("换号之后不补上一个账号的断线对账", async () => {
+  const harness = loadHarness();
+  harness.connectRealtime("token-a");
+  harness.openAndAuthenticateLatest();
+  const before = harness.walletCalls.length;
+
+  const first = harness.sockets[harness.sockets.length - 1];
+  first.readyState = 3;
+  first.onclose?.({ code: 1006 });
+
+  harness.disconnectRealtime();
+  harness.switchAccount();
+  harness.connectRealtime("token-b");
+  harness.openAndAuthenticateLatest();
+
+  assert.equal(harness.walletCalls.length, before, "不给新账号补拉");
+});
