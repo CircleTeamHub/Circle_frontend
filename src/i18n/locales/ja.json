@@ -1718,7 +1718,7 @@
     "memberCenter": "会員",
     "viewMember": "見る",
     "wallet": {
-      "purchaseUnavailable": "ポイント購入はまだご利用いただけません。現在、このページには残高のみが表示されます。",
+      "purchaseUnavailable": "ポイントの購入はまだご利用いただけません。",
       "title": "マイウォレット",
       "confirmRecharge": "チャージを確認",
       "balance": "クレジット残高",
@@ -1732,7 +1732,20 @@
       "agreementAnd": "および",
       "recharging": "チャージ中...",
       "buyNow": "{{points}} クレジットを今すぐ購入",
-      "menuLabel": "ウォレット"
+      "menuLabel": "ウォレット",
+      "historyTitle": "ポイント履歴",
+      "historyLoadError": "ポイント履歴を読み込めませんでした",
+      "historyEmpty": "ポイント履歴はありません",
+      "types": {
+        "referralReward": "友だち招待特典",
+        "referralBonus": "招待登録ボーナス",
+        "giftSent": "ポイント送付",
+        "giftReceived": "ポイント受取",
+        "purchase": "ポイント利用",
+        "recharge": "ポイント入金",
+        "refund": "ポイント返還",
+        "adjustment": "ポイント調整"
+      }
     },
     "mall": {
       "title": "コンシェルジュストア",
@@ -2565,6 +2578,7 @@
     "errors": {
       "invalidAmount": "クレジットの数量が無効です",
       "walletDataInvalid": "ウォレットデータの形式エラー",
+      "transactionDataInvalid": "ポイント履歴データの形式エラー",
       "rechargeDataInvalid": "チャージレスポンスの形式エラー"
     }
   },
@@ -2574,6 +2588,27 @@
       "fileUnreadable": "アップロードするファイルが見つかりません",
       "fileTooLarge": "ファイルが {{maxMb}}MB の上限を超えています"
     }
+  },
+  "referral": {
+    "title": "友だち招待特典",
+    "heroSubtitle": "友だちが条件達成であなたに{{inviter}}ポイント、相手に{{invitee}}ポイント",
+    "heroSubtitlePending": "招待特典の内容を読み込み中…",
+    "paused": "招待特典は一時停止中です。新しい招待にポイントは付きません",
+    "copy": "招待コードをコピー",
+    "share": "招待を共有",
+    "shareMessage": "WindNoteに参加しませんか。登録時に招待コード {{code}} を入力してください：{{url}}",
+    "rulesTitle": "特典ルール",
+    "ruleReward": "有効な招待1件につき、あなたに{{inviter}}、友だちに{{invitee}}ポイント",
+    "ruleQualification": "友だちは画像設定、登録{{days}}日経過、別の友だち追加が必要です",
+    "ruleCap": "毎月最初の{{count}}件の有効な招待が対象です",
+    "recordsTitle": "招待履歴",
+    "empty": "招待履歴はありません。コードを共有して始めましょう。",
+    "loadMore": "さらに読み込む",
+    "loadingMore": "読み込み中…",
+    "stats": { "invited": "招待数", "rewarded": "達成数", "points": "獲得ポイント" },
+    "status": { "pending": "条件待ち", "rewarded": "付与済み", "capped": "上限到達", "rejected": "対象外", "expired": "期限切れ" },
+    "item": { "rewarded": "{{points}}ポイント獲得", "pending": "プロフィール、{{days}}日経過、友だち追加後に付与", "noReward": "ポイントは付与されません" },
+    "errors": { "loadFailed": "招待データを読み込めませんでした", "loadMoreFailed": "招待履歴をさらに読み込めませんでした", "invalidData": "招待データの形式が正しくありません", "staleData": "最新でない可能性があります。引っ張って再読み込みしてください。", "shareFailed": "共有に失敗しました。「招待コードをコピー」してお送りください。" }
   },
   "serverErrors": {
     "TEMP_CHAT_JOIN_FAILED": "参加に失敗しました。もう一度お試しください",

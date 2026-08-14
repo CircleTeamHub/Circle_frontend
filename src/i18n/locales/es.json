@@ -1721,7 +1721,7 @@
     "memberCenter": "Membresía",
     "viewMember": "Ver",
     "wallet": {
-      "purchaseUnavailable": "La compra de puntos aún no está disponible. Por ahora, esta página solo muestra tu saldo.",
+      "purchaseUnavailable": "La compra de puntos aún no está disponible.",
       "title": "Mi cartera",
       "confirmRecharge": "Confirmar recarga",
       "balance": "Saldo de créditos",
@@ -1735,7 +1735,20 @@
       "agreementAnd": "y",
       "recharging": "Recargando...",
       "buyNow": "Comprar {{points}} créditos ahora",
-      "menuLabel": "Cartera"
+      "menuLabel": "Cartera",
+      "historyTitle": "Historial de puntos",
+      "historyLoadError": "No se pudo cargar el historial de puntos",
+      "historyEmpty": "Aún no hay movimientos",
+      "types": {
+        "referralReward": "Recompensa por invitación",
+        "referralBonus": "Bono de registro invitado",
+        "giftSent": "Puntos enviados",
+        "giftReceived": "Puntos recibidos",
+        "purchase": "Compra con puntos",
+        "recharge": "Puntos acreditados",
+        "refund": "Puntos reembolsados",
+        "adjustment": "Ajuste de puntos"
+      }
     },
     "mall": {
       "title": "Tienda del conserje",
@@ -2568,6 +2581,7 @@
     "errors": {
       "invalidAmount": "Cantidad de créditos no válida",
       "walletDataInvalid": "Error en el formato de los datos de la cartera",
+      "transactionDataInvalid": "Formato de datos del historial de puntos no válido",
       "rechargeDataInvalid": "Error en el formato de la respuesta de recarga"
     }
   },
@@ -2577,6 +2591,27 @@
       "fileUnreadable": "No se encontró el archivo que se va a subir.",
       "fileTooLarge": "El archivo supera el límite de {{maxMb}}MB."
     }
+  },
+  "referral": {
+    "title": "Invita y gana",
+    "heroSubtitle": "Gana {{inviter}} puntos cuando tu amigo cumpla los requisitos; recibirá {{invitee}}",
+    "heroSubtitlePending": "Cargando los detalles de la recompensa…",
+    "paused": "Las recompensas están pausadas; las nuevas invitaciones no darán puntos",
+    "copy": "Copiar código",
+    "share": "Compartir invitación",
+    "shareMessage": "Únete a WindNote. Usa el código {{code}} al registrarte: {{url}}",
+    "rulesTitle": "Reglas de recompensa",
+    "ruleReward": "Por cada invitación válida recibes {{inviter}} puntos y tu amigo {{invitee}}",
+    "ruleQualification": "Tu amigo necesita avatar, {{days}} días de antigüedad y otro amigo",
+    "ruleCap": "Las primeras {{count}} invitaciones válidas del mes reciben recompensa",
+    "recordsTitle": "Historial de invitaciones",
+    "empty": "Aún no hay invitaciones. Comparte tu código para empezar.",
+    "loadMore": "Cargar más",
+    "loadingMore": "Cargando…",
+    "stats": { "invited": "Invitados", "rewarded": "Válidos", "points": "Puntos ganados" },
+    "status": { "pending": "Pendiente", "rewarded": "Recompensado", "capped": "Límite alcanzado", "rejected": "No válido", "expired": "Caducado" },
+    "item": { "rewarded": "Has ganado {{points}} puntos", "pending": "Se premia tras completar el perfil, {{days}} días y añadir un amigo", "noReward": "No se otorgaron puntos" },
+    "errors": { "loadFailed": "No se pudieron cargar las invitaciones", "loadMoreFailed": "No se pudieron cargar más invitaciones", "invalidData": "Los datos de invitación no son válidos", "staleData": "Puede que no esté actualizado. Desliza para recargar.", "shareFailed": "No se pudo compartir. Copia el código de invitación y envíalo." }
   },
   "serverErrors": {
     "TEMP_CHAT_JOIN_FAILED": "No se pudo unir, inténtalo de nuevo",

@@ -9,7 +9,8 @@ test('registration screen renders and submits an optional invite code', () => {
     'utf8',
   );
 
-  assert.match(source, /const \[inviteCode, setInviteCode\] = useState\(''\)/);
+  assert.match(source, /const \[inviteCode, setInviteCode\] = useState\(\(\) =>/);
+  assert.match(source, /inviteCodeParam\.trim\(\)\.toLowerCase\(\)/);
   assert.match(source, /auth\.inviteCode/);
   assert.match(source, /auth\.inviteCodePlaceholder/);
   assert.match(source, /onChangeText=\{setInviteCode\}/);

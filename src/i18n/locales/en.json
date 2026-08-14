@@ -1246,7 +1246,7 @@
     "memberCenter": "Membership",
     "viewMember": "View",
     "wallet": {
-      "purchaseUnavailable": "Points purchases are not available yet. This page currently shows your balance only.",
+      "purchaseUnavailable": "Points purchases are not available yet.",
       "title": "My Wallet",
       "confirmRecharge": "Confirm Recharge",
       "balance": "Points Balance",
@@ -1260,7 +1260,20 @@
       "agreementAnd": "and",
       "recharging": "Recharging...",
       "buyNow": "Buy {{points}} points now",
-      "menuLabel": "Wallet"
+      "menuLabel": "Wallet",
+      "historyTitle": "Points history",
+      "historyLoadError": "Failed to load points history",
+      "historyEmpty": "No points activity yet",
+      "types": {
+        "referralReward": "Referral reward",
+        "referralBonus": "Invite signup bonus",
+        "giftSent": "Points sent",
+        "giftReceived": "Points received",
+        "purchase": "Points purchase",
+        "recharge": "Points credited",
+        "refund": "Points refunded",
+        "adjustment": "Points adjustment"
+      }
     },
     "mall": {
       "title": "Steward Mall",
@@ -2567,6 +2580,7 @@
   "coin": {
     "errors": {
       "walletDataInvalid": "Invalid wallet data.",
+      "transactionDataInvalid": "Invalid points transaction data.",
       "invalidAmount": "Invalid credit amount.",
       "rechargeDataInvalid": "Invalid recharge response."
     }
@@ -2577,6 +2591,27 @@
       "fileUnreadable": "The file to upload could not be found.",
       "fileTooLarge": "File exceeds the {{maxMb}}MB limit."
     }
+  },
+  "referral": {
+    "title": "Invite & Earn",
+    "heroSubtitle": "Earn {{inviter}} points when your friend qualifies; they earn {{invitee}}",
+    "heroSubtitlePending": "Loading invite reward details…",
+    "paused": "Referral rewards are paused; new invites will not earn points",
+    "copy": "Copy code",
+    "share": "Share invite",
+    "shareMessage": "Join me on WindNote. Use invite code {{code}} when registering: {{url}}",
+    "rulesTitle": "Reward rules",
+    "ruleReward": "Each valid referral earns you {{inviter}} points and your friend {{invitee}}",
+    "ruleQualification": "Your friend needs an avatar, a {{days}}-day-old account, and another friend",
+    "ruleCap": "The first {{count}} valid referrals each month earn rewards",
+    "recordsTitle": "Referral history",
+    "empty": "No referrals yet. Share your code to get started.",
+    "loadMore": "Load more",
+    "loadingMore": "Loading…",
+    "stats": { "invited": "Invited", "rewarded": "Qualified", "points": "Points earned" },
+    "status": { "pending": "Pending", "rewarded": "Rewarded", "capped": "Limit reached", "rejected": "Ineligible", "expired": "Expired" },
+    "item": { "rewarded": "Earned {{points}} points", "pending": "Rewarded after profile, {{days}} days, and a friend", "noReward": "No points awarded" },
+    "errors": { "loadFailed": "Failed to load referral data", "loadMoreFailed": "Failed to load more referrals", "invalidData": "Invalid referral data received", "staleData": "This may be out of date. Pull down to reload.", "shareFailed": "Sharing failed. Copy the invite code and send it instead." }
   },
   "serverErrors": {
     "TEMP_CHAT_JOIN_FAILED": "Failed to join, please try again",

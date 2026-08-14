@@ -188,3 +188,57 @@ test('redirect keeps the navigator mounted (no infinite-redirect loop)', () => {
     'children (the navigator) must render before/with <Redirect> so it stays mounted',
   );
 });
+
+// /invite?code=... 与 /invite/<code>:邀请链接的收件人多半没登录。这条路由不在
+// (auth) 分组里,根守卫若把它当受保护路由,就会在页面自己「带邀请码去注册页」的
+// 重定向之外再发一个去 login 的重定向,邀请码丢掉 = 拉新链路断在入口。
+test('signed-out users reach the invite route instead of being sent to login', () => {
+  const { getAuthRouteDecision } = loadPolicy();
+
+  assert.deepEqual(
+    plain(getAuthRouteDecision({
+      firstSegment: 'invite',
+      isAuthenticated: false,
+      isLoading: false,
+      onboardingRequired: false,
+    })),
+    { type: 'allow' },
+  );
+
+  // 会话还在恢复时也别把它挡在 loading 上:页面自己有 hasHydrated 的等待态。
+  assert.deepEqual(
+    plain(getAuthRouteDecision({
+      firstSegment: 'invite',
+      isAuthenticated: false,
+      isLoading: true,
+      onboardingRequired: false,
+    })),
+    { type: 'allow' },
+  );
+});
+
+test('signed-in users are not bounced off the invite route', () => {
+  const { getAuthRouteDecision } = loadPolicy();
+
+  // 放行给页面自己处理(它会 Redirect 去邀请中心)——不能像 (auth) 那样弹回消息页。
+  assert.deepEqual(
+    plain(getAuthRouteDecision({
+      firstSegment: 'invite',
+      isAuthenticated: true,
+      isLoading: false,
+      onboardingRequired: false,
+    })),
+    { type: 'allow' },
+  );
+
+  // 但还没完成引导的人照旧先去引导页。
+  assert.deepEqual(
+    plain(getAuthRouteDecision({
+      firstSegment: 'invite',
+      isAuthenticated: true,
+      isLoading: false,
+      onboardingRequired: true,
+    })),
+    { type: 'redirect', href: '/(onboarding)/profile' },
+  );
+});
