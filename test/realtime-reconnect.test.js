@@ -81,6 +81,8 @@ function loadRealtimeHarness() {
           return { fetchUnreadFriendActivityCount: async () => 0 };
         case '@/services/api/auth':
           return { fetchCurrentUser: async () => ({ id: 'user-1' }) };
+        case '@/services/api/coin':
+          return { fetchWallet: async () => ({ balance: 0 }) };
         case '@/services/api/notifications':
           return {
             fetchNotifications: async () => [],

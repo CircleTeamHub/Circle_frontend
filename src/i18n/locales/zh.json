@@ -1250,7 +1250,7 @@
     "memberCenter": "会员中心",
     "viewMember": "查看会员",
     "wallet": {
-      "purchaseUnavailable": "积分购买暂未开放。当前页面仅显示余额。",
+      "purchaseUnavailable": "积分购买暂未开放。",
       "title": "我的钱包",
       "confirmRecharge": "确认充值",
       "balance": "积分余额",
@@ -1264,7 +1264,20 @@
       "agreementAnd": "和",
       "recharging": "充值中...",
       "buyNow": "立即购买 {{points}} 积分",
-      "menuLabel": "我的钱包"
+      "menuLabel": "我的钱包",
+      "historyTitle": "积分明细",
+      "historyLoadError": "积分流水加载失败",
+      "historyEmpty": "暂无积分明细",
+      "types": {
+        "referralReward": "邀请好友奖励",
+        "referralBonus": "受邀注册奖励",
+        "giftSent": "赠送积分",
+        "giftReceived": "收到积分",
+        "purchase": "积分消费",
+        "recharge": "积分到账",
+        "refund": "积分退回",
+        "adjustment": "积分调整"
+      }
     },
     "mall": {
       "title": "商城",
@@ -2571,6 +2584,7 @@
   "coin": {
     "errors": {
       "walletDataInvalid": "钱包数据格式异常",
+      "transactionDataInvalid": "积分流水数据格式异常",
       "invalidAmount": "积分数量无效",
       "rechargeDataInvalid": "充值返回数据格式异常"
     }
@@ -2581,6 +2595,27 @@
       "fileUnreadable": "找不到要上传的文件",
       "fileTooLarge": "文件超过 {{maxMb}}MB 上限"
     }
+  },
+  "referral": {
+    "title": "邀请有礼",
+    "heroSubtitle": "好友达标后，你得 {{inviter}} 积分，对方得 {{invitee}} 积分",
+    "heroSubtitlePending": "邀请奖励规则加载中…",
+    "paused": "邀请奖励活动暂时关闭，新邀请不会产生积分",
+    "copy": "复制邀请码",
+    "share": "分享邀请",
+    "shareMessage": "我在风信等你，注册时填写邀请码 {{code}}。打开：{{url}}",
+    "rulesTitle": "奖励规则",
+    "ruleReward": "每位有效好友：你得 {{inviter}}，好友得 {{invitee}} 积分",
+    "ruleQualification": "好友需完成头像，注册满 {{days}} 天，并添加一位其他好友",
+    "ruleCap": "每月前 {{count}} 位有效邀请可获得奖励",
+    "recordsTitle": "邀请记录",
+    "empty": "还没有邀请记录，分享邀请码开始邀请吧",
+    "loadMore": "加载更多",
+    "loadingMore": "加载中…",
+    "stats": { "invited": "已邀请", "rewarded": "已达标", "points": "累计积分" },
+    "status": { "pending": "待达标", "rewarded": "已奖励", "capped": "已达上限", "rejected": "不符合", "expired": "已过期" },
+    "item": { "rewarded": "已获得 {{points}} 积分", "pending": "完成资料、满 {{days}} 天并添加好友后发放", "noReward": "本次未发放积分" },
+    "errors": { "loadFailed": "邀请数据加载失败，请稍后重试", "loadMoreFailed": "更多邀请记录加载失败", "invalidData": "邀请数据格式异常，请稍后重试", "staleData": "内容可能不是最新的，下拉可重新加载", "shareFailed": "分享失败，可改用「复制邀请码」发给好友" }
   },
   "serverErrors": {
     "TEMP_CHAT_JOIN_FAILED": "加入失败，请重试",
