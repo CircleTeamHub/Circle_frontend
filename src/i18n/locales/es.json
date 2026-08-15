@@ -251,6 +251,8 @@
       "videoTooLarge": "Elige un video de menos de 100MB",
       "videoTooLong": "Elige un video de menos de 10 minutos",
       "videoUnsupported": "Solo se admiten videos MP4, MOV y M4V",
+      "videoUnavailable": "Vídeo no disponible",
+      "playVideo": "Reproducir vídeo",
       "noteSendFailed": "No se pudo enviar la nota, inténtalo de nuevo",
       "cardSendFailed": "No se pudo enviar la tarjeta de perfil, inténtalo de nuevo",
       "favoriteSendFailed": "No se pudo enviar el favorito, inténtalo de nuevo",

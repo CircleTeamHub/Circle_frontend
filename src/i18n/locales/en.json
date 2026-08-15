@@ -289,6 +289,8 @@
       "videoTooLarge": "Choose a video under 100MB",
       "videoTooLong": "Choose a video under 10 minutes",
       "videoUnsupported": "Only MP4, MOV, and M4V videos are supported",
+      "videoUnavailable": "Video unavailable",
+      "playVideo": "Play video",
       "noteSendFailed": "Failed to send note, please try again",
       "cardSendFailed": "Failed to send contact card, please try again",
       "favoriteSendFailed": "Failed to send favorite, please try again",

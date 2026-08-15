@@ -251,6 +251,8 @@
       "videoTooLarge": "100MB以内の動画を選択してください",
       "videoTooLong": "10分以内の動画を選択してください",
       "videoUnsupported": "MP4、MOV、M4V動画のみ対応しています",
+      "videoUnavailable": "動画を再生できません",
+      "playVideo": "動画を再生",
       "noteSendFailed": "ノートを送信できませんでした。もう一度お試しください",
       "cardSendFailed": "プロフィールカードを送信できませんでした。もう一度お試しください",
       "favoriteSendFailed": "お気に入りを送信できませんでした。もう一度お試しください",

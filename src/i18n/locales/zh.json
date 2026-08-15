@@ -289,6 +289,8 @@
       "videoTooLarge": "请选择 100MB 以内的视频",
       "videoTooLong": "请选择 10 分钟以内的视频",
       "videoUnsupported": "仅支持 MP4、MOV、M4V 视频",
+      "videoUnavailable": "视频不可用",
+      "playVideo": "播放视频",
       "noteSendFailed": "笔记发送失败，请重试",
       "cardSendFailed": "名片发送失败，请重试",
       "favoriteSendFailed": "收藏内容发送失败，请重试",
