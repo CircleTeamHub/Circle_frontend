@@ -184,6 +184,7 @@ export function mapChatConversationToUI(dto: ChatConversationDto): Conversation 
     // 群语义(成员目录、@提及、群设置)只属于圈子群与临时房这种多人会话;
     // SUPPORT 走单聊 UI。
     conversationType: isCircleGroup || dto.type === 'TEMP' ? 'group' : 'private',
+    isTempChat: dto.type === 'TEMP',
     pinned: dto.pinned,
     muted: dto.muted,
   };

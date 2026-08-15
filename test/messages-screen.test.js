@@ -38,6 +38,18 @@ test('messages screen darkens pinned conversation surfaces in light mode', () =>
   assert.match(source, /resolvedMode === "light" \? colors\.surfaceBorder : colors\.surface/);
 });
 
+test('messages screen distinguishes temporary chats with only an avatar clock badge', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/messages/screens/MessagesScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(source, /item\.isTempChat/);
+  assert.match(source, /name="time-outline"/);
+  assert.doesNotMatch(source, /tempChats\.listBadge/);
+  assert.doesNotMatch(source, /tempChatExpiresAt/);
+});
+
 
 test('messages screen reloads conversations on focus without resetting the active filter', () => {
   const filePath = path.join(

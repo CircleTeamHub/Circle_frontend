@@ -281,6 +281,7 @@ test('TEMP conversation keeps its room title when the latest sender is self', ()
   assert.equal(ui.avatarUrl, undefined);
   assert.equal(ui.sourceID, 'conv-temp');
   assert.equal(ui.conversationType, 'group');
+  assert.equal(ui.isTempChat, true);
 });
 
 test('TEMP conversation never falls back to the latest sender on an old backend', () => {

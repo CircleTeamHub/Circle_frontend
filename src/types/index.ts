@@ -13,6 +13,7 @@ export interface Conversation {
   avatarUrl?: string;
   unreadCount: number;
   conversationType: ConversationType;
+  isTempChat?: boolean;
   pinned: boolean;
   muted: boolean;
 }

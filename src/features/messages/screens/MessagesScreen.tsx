@@ -184,6 +184,20 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
     borderRadius: Radius.md,
   },
+  avatarWrap: {
+    position: "relative",
+  },
+  tempAvatarBadge: {
+    position: "absolute",
+    right: -4,
+    bottom: -4,
+    width: 17,
+    height: 17,
+    borderRadius: 9,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   // 置顶会话内层背景：连续置顶时按组收紧间距和圆角
   pinnedSurface: {
     marginHorizontal: Spacing.xs,
@@ -448,7 +462,19 @@ function ConversationRowImpl({
               <Avatar size={40} name={item.name} uri={item.avatarUrl} />
             </Pressable>
           ) : (
-            <Avatar size={40} name={item.name} uri={item.avatarUrl} />
+            <View style={s.avatarWrap}>
+              <Avatar size={40} name={item.name} uri={item.avatarUrl} />
+              {item.isTempChat ? (
+                <View
+                  style={[
+                    s.tempAvatarBadge,
+                    { backgroundColor: colors.primary, borderColor: rowBackgroundColor },
+                  ]}
+                >
+                  <Ionicons name="time-outline" size={10} color={colors.white} />
+                </View>
+              ) : null}
+            </View>
           )}
           <Pressable style={s.rowContent} onPress={() => onOpenConversation(item)}>
             <View style={s.rowTop}>
