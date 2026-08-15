@@ -11,6 +11,8 @@ test('TempChatAvatar uses a scalable branded group illustration and clock badge'
   assert.match(component, /export function TempChatAvatar/);
   assert.match(component, /LinearGradient/);
   assert.match(component, /name="time-outline"/);
+  assert.match(component, /backgroundColor: '#FFC857'/);
+  assert.match(component, /color="#5A3600"/);
   assert.match(component, /accessibilityRole="image"/);
   assert.match(component, /accessibilityLabel=\{name \|\| undefined\}/);
   assert.doesNotMatch(component, /require\(/);

@@ -105,7 +105,7 @@ export function TempChatAvatar({
         <Ionicons
           name="time-outline"
           size={Math.round(badgeSize * 0.58)}
-          color="#FFFFFF"
+          color="#5A3600"
         />
       </View>
     </View>
@@ -123,6 +123,6 @@ const s = StyleSheet.create({
     bottom: -3,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#4C3FD6',
+    backgroundColor: '#FFC857',
   },
 });
