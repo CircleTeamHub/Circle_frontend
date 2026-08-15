@@ -86,6 +86,10 @@ function mediaMessage(content) {
   };
 }
 
+function videoMessage(content) {
+  return { ...mediaMessage(content), type: 'video' };
+}
+
 test('untrusted thumbnail origins never reach the media grid', () => {
   const { getChatMediaThumbnailUris } = loadChatHistory();
   for (const content of [
@@ -121,16 +125,35 @@ test('trusted origins and device-local schemes still render', () => {
   assert.deepEqual(hostArray(getChatMediaThumbnailUris(mediaMessage({}))), []);
 });
 
-test('media history never asks the server for a message type it rejects', () => {
+test('video files are never loaded as image thumbnails', () => {
+  const { getChatMediaThumbnailUris } = loadChatHistory();
+  assert.deepEqual(
+    hostArray(
+      getChatMediaThumbnailUris(
+        videoMessage({
+          url: 'https://cdn.trusted/movie.mp4',
+          localUri: 'file:///tmp/movie.mov',
+        }),
+      ),
+    ),
+    [],
+  );
+  assert.deepEqual(
+    hostArray(
+      getChatMediaThumbnailUris(
+        videoMessage({ thumbUrl: 'https://cdn.trusted/movie-poster.jpg' }),
+      ),
+    ),
+    ['https://cdn.trusted/movie-poster.jpg'],
+  );
+});
+
+test('media history requests the backend-supported image and video types', () => {
   const screen = fs.readFileSync(
     path.join(process.cwd(), 'src/features/chat/screens/ChatHistoryMediaScreen.tsx'),
     'utf8',
   );
-  // 自研栈没有视频消息类型:circle_be 的 CLIENT_MESSAGE_TYPES 不含 'video',
-  // history-query.dto 上又是 @IsIn(..., { each: true }) —— 把它混进 types
-  // 会让整个请求 400,媒体页变成永远加载失败。
-  assert.doesNotMatch(screen, /types:\s*\[[^\]]*'video'/);
-  assert.match(screen, /const MEDIA_HISTORY_TYPES = \['image'\]/);
+  assert.match(screen, /const MEDIA_HISTORY_TYPES = \['image', 'video'\]/);
   // 首屏 / 重试 / 翻页三条路径都用同一份常量,不再各写一份字面量。
   assert.equal(
     (screen.match(/types: MEDIA_HISTORY_TYPES/g) ?? []).length,

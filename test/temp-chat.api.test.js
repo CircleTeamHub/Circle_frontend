@@ -161,6 +161,35 @@ test("isTempChatOpenable re-checks live expiry before entering a room", () => {
   );
 });
 
+test("media preflight rejects stale temp conversations before upload", async () => {
+  const { api } = loadTempChatApi([
+    {
+      id: "active",
+      groupId: "tmp-active",
+      conversationId: "conv-active",
+      status: "ACTIVE",
+      expiresAt: "2999-06-06T00:00:00.000Z",
+    },
+    {
+      id: "expired",
+      groupId: "tmp-expired",
+      conversationId: "conv-expired",
+      status: "EXPIRED",
+      expiresAt: "2999-06-06T00:00:00.000Z",
+    },
+  ]);
+
+  await api.assertMyTempChatConversationOpen("conv-active");
+  await assert.rejects(
+    () => api.assertMyTempChatConversationOpen("conv-expired"),
+    (error) => error.name === "TempChatUnavailableError",
+  );
+  await assert.rejects(
+    () => api.assertMyTempChatConversationOpen("conv-missing"),
+    (error) => error.name === "TempChatUnavailableError",
+  );
+});
+
 test("createTempChat posts default creation payload and maps the created room", async () => {
   const { api, calls } = loadTempChatApi({
     id: "tc-created",

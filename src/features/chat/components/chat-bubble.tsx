@@ -5,6 +5,7 @@ export { ReceivedBubble } from './bubbles/received-bubble';
 export { SentBubble } from './bubbles/sent-bubble';
 export { LocationCard } from './bubbles/location-card';
 export { ImageBubble } from './bubbles/image-bubble';
+export { VideoBubble } from './bubbles/video-bubble';
 export { VoiceBubble } from './bubbles/voice-bubble';
 export { NoteCardBubble } from './bubbles/note-card-bubble';
 export { FriendCardBubble } from './bubbles/friend-card-bubble';

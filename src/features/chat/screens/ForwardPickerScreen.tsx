@@ -15,12 +15,14 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import i18n from '@/i18n';
 import { Avatar } from '@/components/ui/avatar';
+import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { NavHeader } from '@/components/ui/nav-header';
 import { useMessageForwardStore } from '@/features/chat/store/use-message-forward-store';
 import { loadChatConversations } from '@/chat-core/api';
 import {
   sendCardMessage,
   sendImageMessage,
+  sendVideoMessage,
   sendLocationMessage,
   sendTextMessage,
   sendVoiceMessage,
@@ -162,6 +164,19 @@ async function sendForwardedMessage(pending: PendingForward, conversationId: str
           thumbKey: str(content['thumbKey']),
           width: num(content['width']),
           height: num(content['height']),
+        });
+      }
+    }
+    if (dto.type === 'video') {
+      const key = str(content['key']);
+      if (key) {
+        return sendVideoMessage({
+          conversationId,
+          key,
+          width: num(content['width']),
+          height: num(content['height']),
+          duration: num(content['duration']),
+          size: num(content['size']),
         });
       }
     }
@@ -344,18 +359,28 @@ export default function ForwardPickerScreen() {
                 void handleForward(item);
               }}
             >
-              <Avatar
-                size={42}
-                shape="square"
-                name={name}
-                uri={conversationAvatarUrl(item)}
-              />
+              {item.type === 'GROUP' || item.type === 'TEMP' ? (
+                <GroupChatAvatar
+                  size={42}
+                  name={name}
+                  uri={conversationAvatarUrl(item)}
+                  temporary={item.type === 'TEMP'}
+                  badgeBorderColor={colors.surface}
+                />
+              ) : (
+                <Avatar
+                  size={42}
+                  shape="square"
+                  name={name}
+                  uri={conversationAvatarUrl(item)}
+                />
+              )}
               <View style={s.rowText}>
                 <Text style={d.title} numberOfLines={1}>
                   {name}
                 </Text>
                 <Text style={d.subtitle} numberOfLines={1}>
-                  {item.type === 'GROUP'
+                  {item.type === 'GROUP' || item.type === 'TEMP'
                     ? t('chat.forward.group')
                     : t('chat.forward.single')}
                 </Text>

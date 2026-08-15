@@ -104,6 +104,11 @@ beforeEach(() => {
     uploadUrl: 'https://upload/comment',
     fileUrl: 'https://cdn/comment.jpg',
     key: 'posts/comment.jpg',
+    requiredHeaders: {
+      'Content-Type': 'image/jpeg',
+      'Content-Length': '12345',
+      'If-None-Match': '*',
+    },
   });
   mockUpload.mockResolvedValue({
     status: 200,
@@ -203,6 +208,11 @@ test('two synchronous image submits start one upload', async () => {
       uploadUrl: 'https://upload/comment',
       fileUrl: 'https://cdn/comment.jpg',
       key: 'posts/comment.jpg',
+      requiredHeaders: {
+        'Content-Type': 'image/jpeg',
+        'Content-Length': '12345',
+        'If-None-Match': '*',
+      },
     });
   });
   await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));

@@ -309,6 +309,7 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
             presign.uploadUrl,
             contentType,
             imageUri,
+            presign.requiredHeaders,
           );
           images = [presign.fileUrl];
         } catch (error) {

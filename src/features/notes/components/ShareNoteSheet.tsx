@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Avatar } from '@/components/ui/avatar';
+import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { loadChatConversations } from '@/chat-core/api';
 import { sendCardMessage } from '@/chat-core/client';
@@ -159,12 +160,17 @@ export function ShareNoteSheet({ payload, onClose }: ShareNoteSheetProps) {
         accessibilityRole="button"
         accessibilityLabel={item.name}
       >
-        <Avatar
-          size={44}
-          name={item.name}
-          uri={item.avatarUrl}
-          shape={item.conversationType === 'group' ? 'square' : 'circle'}
-        />
+        {item.conversationType === 'group' ? (
+          <GroupChatAvatar
+            size={44}
+            name={item.name}
+            uri={item.avatarUrl}
+            temporary={item.isTempChat}
+            badgeBorderColor={colors.background}
+          />
+        ) : (
+          <Avatar size={44} name={item.name} uri={item.avatarUrl} shape="circle" />
+        )}
         <View style={s.rowText}>
           <Text style={[s.name, d.name]} numberOfLines={1}>
             {item.name}
@@ -179,7 +185,7 @@ export function ShareNoteSheet({ payload, onClose }: ShareNoteSheetProps) {
         </View>
       </Pressable>
     ),
-    [d.hint, d.name, send, sendingId, t],
+    [colors.background, d.hint, d.name, send, sendingId, t],
   );
 
   return (

@@ -19,6 +19,7 @@ function loadUploadApi() {
   let rnfsUploadCalled = false;
   let stoppedUploadJobId = null;
   let rnfsShouldHang = false;
+  let platformOS = 'android';
   // 默认 localhost:另有用例专门断言「手机端拒绝 localhost 预签名地址」。
   let presignHost = 'http://localhost:9000';
 
@@ -35,6 +36,11 @@ function loadUploadApi() {
             uploadUrl: `${presignHost}/circle/avatars/test.jpeg?signature=123`,
             fileUrl: `${presignHost}/circle/avatars/test.jpeg`,
             key: 'avatars/test.jpeg',
+            requiredHeaders: {
+              'Content-Type': 'image/jpeg',
+              'Content-Length': '12345',
+              'If-None-Match': '*',
+            },
             mocked: true,
             args,
           }),
@@ -64,7 +70,9 @@ function loadUploadApi() {
       if (request === 'react-native') {
         return {
           Platform: {
-            OS: 'android',
+            get OS() {
+              return platformOS;
+            },
           },
         };
       }
@@ -133,6 +141,9 @@ function loadUploadApi() {
   context.module.exports.__getStoppedUploadJobId = () => stoppedUploadJobId;
   context.module.exports.__setPresignHost = (host) => {
     presignHost = host;
+  };
+  context.module.exports.__setPlatformOS = (value) => {
+    platformOS = value;
   };
   return context.module.exports;
 }
@@ -203,6 +214,11 @@ test('presign 必须带 sizeBytes(后端 PresignDto 必填),且 fileUri 不进�
     // 来自 getInfoAsync,不是调用方自己算的 —— 签名要的是真实字节数。
     sizeBytes: 12345,
   });
+  assert.deepEqual(JSON.parse(JSON.stringify(response.requiredHeaders)), {
+    'Content-Type': 'image/jpeg',
+    'Content-Length': '12345',
+    'If-None-Match': '*',
+  });
 });
 
 test('拿不到文件尺寸时给可读的错,而不是送一个坏 sizeBytes 上去', async () => {
@@ -242,6 +258,11 @@ test('android local file upload preserves the presigned host and delegates to ca
     'http://10.0.0.195:9000/circle/avatars/test.jpeg?signature=123',
     'image/jpeg',
     'file:///data/user/0/com.yiboding.circleim/cache/ImagePicker/test.jpeg',
+    {
+      'Content-Type': 'image/jpeg',
+      'Content-Length': '12345',
+      'If-None-Match': '*',
+    },
   );
 
   assert.deepEqual(
@@ -259,11 +280,37 @@ test('android local file upload preserves the presigned host and delegates to ca
       ],
       headers: {
         'Content-Type': 'image/jpeg',
+        'Content-Length': '12345',
+        'If-None-Match': '*',
       },
       method: 'PUT',
     },
   );
   assert.equal(__getRnfsUploadCalled(), true);
+});
+
+test('ios local file upload forwards every header required by the presign response', async () => {
+  const { uploadLocalFileToPresignedUrl, __setPlatformOS } = loadUploadApi();
+  __setPlatformOS('ios');
+  const requiredHeaders = {
+    'Content-Type': 'image/jpeg',
+    'Content-Length': '12345',
+    'If-None-Match': '*',
+  };
+
+  const response = await uploadLocalFileToPresignedUrl(
+    'http://10.0.0.195:9000/circle/chat/test.jpeg?signature=123',
+    'image/jpeg',
+    'file:///tmp/ImagePicker/test.jpeg',
+    requiredHeaders,
+  );
+
+  const options = response.mockedUploadArgs[2];
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(options.headers)),
+    requiredHeaders,
+  );
+  assert.equal(options.uploadType, 0);
 });
 
 test('android local file upload stops the native RNFS job when the timeout wins', async () => {
@@ -281,6 +328,11 @@ test('android local file upload stops the native RNFS job when the timeout wins'
         'http://10.0.0.195:9000/circle/avatars/test.jpeg?signature=123',
         'image/jpeg',
         'file:///data/user/0/com.yiboding.circleim/cache/ImagePicker/test.jpeg',
+        {
+          'Content-Type': 'image/jpeg',
+          'Content-Length': '12345',
+          'If-None-Match': '*',
+        },
         1,
       ),
     /上传超时/,
@@ -298,6 +350,11 @@ test('local file upload rejects localhost presigned urls before native upload', 
         'http://localhost:9000/circle/avatars/test.jpeg?signature=123',
         'image/jpeg',
         'file:///data/user/0/com.yiboding.circleim/cache/ImagePicker/test.jpeg',
+        {
+          'Content-Type': 'image/jpeg',
+          'Content-Length': '12345',
+          'If-None-Match': '*',
+        },
       ),
     /localhost.*403/,
   );

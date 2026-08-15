@@ -30,14 +30,10 @@ const MEDIA_GRID_COLUMNS = 3;
 /**
  * 首屏/重试/翻页共用一份类型过滤,免得三处再各自漂移。
  *
- * 这里刻意**不带** 'video':自研栈根本没有视频消息类型 —— circle_be 的
- * CLIENT_MESSAGE_TYPES(text/quote/image/voice/file/location/*-card)不含它,
- * 而 history-query.dto 上是 @IsIn(CLIENT_MESSAGE_TYPES, { each: true }),
- * 混进去会让整个请求 400,媒体页直接变成永远加载失败。
- * 下面 item.type === 'video' 那条渲染分支是 OpenIM 时代的遗留,留着无害:
- * 真加了视频类型时,两边一起放开即可。
+ * 图片和视频共用媒体历史页。类型必须与后端 CLIENT_MESSAGE_TYPES 同步，
+ * 否则 HistoryQueryDto 会把整个请求判为 400。
  */
-const MEDIA_HISTORY_TYPES = ['image'];
+const MEDIA_HISTORY_TYPES = ['image', 'video'];
 
 type MediaRow = ChatMessageDto[];
 type MediaMonthSection = {

@@ -72,6 +72,30 @@ export async function fetchMyTempChats(): Promise<TempChatListItem[]> {
   return rows.map(normalizeTempChat);
 }
 
+export class TempChatUnavailableError extends Error {
+  constructor() {
+    super('Temp chat is no longer active');
+    this.name = 'TempChatUnavailableError';
+  }
+}
+
+/**
+ * 媒体上传前的临时房活性闸。
+ *
+ * socket 最终仍会在落库时校验房间状态，但若等上传完才发现房间已结束，原图与
+ * 缩略图会变成无人引用的孤儿对象。这里只用于昂贵的媒体路径，文本/位置仍以
+ * socket 的原子校验为准。
+ */
+export async function assertMyTempChatConversationOpen(
+  conversationId: string,
+): Promise<void> {
+  const rooms = await fetchMyTempChats();
+  const room = rooms.find((candidate) => candidate.conversationId === conversationId);
+  if (!room || !isTempChatOpenable(room)) {
+    throw new TempChatUnavailableError();
+  }
+}
+
 export async function createTempChat(
   input: CreateTempChatInput = {},
 ): Promise<CreateTempChatResult> {

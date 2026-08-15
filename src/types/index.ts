@@ -13,6 +13,7 @@ export interface Conversation {
   avatarUrl?: string;
   unreadCount: number;
   conversationType: ConversationType;
+  isTempChat?: boolean;
   pinned: boolean;
   muted: boolean;
 }
@@ -121,6 +122,7 @@ export interface ChatMessage {
     | 'system-notice'
     | 'location'
     | 'image'
+    | 'video'
     | 'voice'
     | 'note-card'
     | 'friend-card'
@@ -158,6 +160,12 @@ export interface ChatMessage {
   imageThumbUrl?: string;
   imageWidth?: number;
   imageHeight?: number;
+  // For video messages: local/remote source plus intrinsic metadata.
+  videoUrl?: string;
+  videoWidth?: number;
+  videoHeight?: number;
+  videoDuration?: number;
+  videoSize?: number;
   // For voice messages: local cache path or remote source URL plus duration in seconds.
   voiceUrl?: string;
   voicePath?: string;

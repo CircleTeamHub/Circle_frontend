@@ -314,6 +314,33 @@ export function sendImageMessage(options: {
   });
 }
 
+export function sendVideoMessage(options: {
+  conversationId: string;
+  key: string;
+  localUri?: string;
+  width?: number;
+  height?: number;
+  duration?: number;
+  size?: number;
+  deliveryId?: string;
+  onCreate?: (message: ChatMessageDto) => void;
+}): Promise<ChatMessageDto> {
+  return sendWithOptimism({
+    conversationId: options.conversationId,
+    deliveryId: options.deliveryId,
+    type: 'video',
+    content: {
+      key: options.key,
+      ...(options.width ? { width: options.width } : {}),
+      ...(options.height ? { height: options.height } : {}),
+      ...(options.duration ? { duration: options.duration } : {}),
+      ...(options.size ? { size: options.size } : {}),
+    },
+    localContent: options.localUri ? { localUri: options.localUri } : undefined,
+    onCreate: options.onCreate,
+  });
+}
+
 export function sendVoiceMessage(options: {
   conversationId: string;
   key: string;
@@ -398,7 +425,7 @@ export function sendCardMessage(options: {
 
 
 /**
- * 媒体消息(语音/图片)的「先上屏、后上传」。
+ * 媒体消息(语音/图片/视频)的「先上屏、后上传」。
  *
  * 原来的顺序是 presign → 上传 → 才建乐观气泡:上传那段时间里屏幕上什么都没有,
  * 输入栏还被 inFlightRef 锁着(最长 60s 上传超时)—— 用户看到的是「录完就消失、
@@ -416,7 +443,7 @@ const mediaRetries = new Map<string, () => Promise<void>>();
 
 export function startMediaSend(options: {
   conversationId: string;
-  type: 'image' | 'voice';
+  type: 'image' | 'video' | 'voice';
   /** 上屏用的本地内容:localUri / duration / width / height,不上行。 */
   localContent: Record<string, unknown>;
   /** 重跑整条上传+发送(拿到同一个 d,失败气泡才会被替换而不是又多一条)。 */

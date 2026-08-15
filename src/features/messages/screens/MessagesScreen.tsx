@@ -1,4 +1,5 @@
 import { Avatar } from "@/components/ui/avatar";
+import { GroupChatAvatar } from "@/components/ui/group-chat-avatar";
 import { MemberName } from "@/components/ui/member-name";
 import { Badge } from "@/components/ui/badge";
 import { Divider } from "@/components/ui/divider";
@@ -448,7 +449,13 @@ function ConversationRowImpl({
               <Avatar size={40} name={item.name} uri={item.avatarUrl} />
             </Pressable>
           ) : (
-            <Avatar size={40} name={item.name} uri={item.avatarUrl} />
+            <GroupChatAvatar
+              size={40}
+              name={item.name}
+              uri={item.avatarUrl}
+              temporary={item.isTempChat}
+              badgeBorderColor={rowBackgroundColor}
+            />
           )}
           <Pressable style={s.rowContent} onPress={() => onOpenConversation(item)}>
             <View style={s.rowTop}>
@@ -762,6 +769,7 @@ export default function MessagesScreen() {
           sourceID: conversation.sourceID,
           title: conversation.name,
           conversationType: conversation.conversationType,
+          conversationKind: dto?.type.toLowerCase(),
           avatarUrl: conversation.avatarUrl,
         },
       });

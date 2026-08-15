@@ -370,6 +370,11 @@ export interface ChatCircleInfo {
   avatarUrl: string | null;
 }
 
+export interface ChatTempChatInfo {
+  id: string;
+  title: string;
+}
+
 export interface ChatConversationDto {
   id: string;
   type: ChatConversationType;
@@ -377,6 +382,8 @@ export interface ChatConversationDto {
   circleId: string | null;
   /** GROUP 会话的圈子展示信息(群名/群头像);其余类型为 null。 */
   circle: ChatCircleInfo | null;
+  /** TEMP 会话的房间名。可选用于兼容尚未升级的后端。 */
+  tempChat?: ChatTempChatInfo | null;
   lastMessage: ChatMessageDto | null;
   unreadCount: number;
   pinned: boolean;

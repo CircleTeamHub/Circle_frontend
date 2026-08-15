@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
-import { Avatar } from '@/components/ui/avatar';
+import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { Divider } from '@/components/ui/divider';
 import type { TempChatListItem } from '@/services/api/temp-chat';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -111,7 +111,12 @@ export default function TempChatRow({
   return (
     <View>
       <Pressable style={s.row} disabled={disabled} onPress={() => onOpen(room)}>
-        <Avatar size={42} name={room.title} />
+        <GroupChatAvatar
+          size={42}
+          name={room.title}
+          temporary
+          badgeBorderColor={colors.background}
+        />
         <View style={s.rowBody}>
           <View style={s.rowTop}>
             <Text style={d.title} numberOfLines={1}>

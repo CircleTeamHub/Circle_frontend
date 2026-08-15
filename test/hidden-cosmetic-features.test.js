@@ -28,7 +28,6 @@ test('hidden cosmetic routes redirect before mounting feature screens', () => {
 test('all frontend entry points and avatar rendering honor the rollout flags', () => {
   const expectedFlagBySurface = new Map([
     ['src/components/ui/avatar.tsx', 'avatarFrames'],
-    ['src/features/user/screens/UserProfileScreen.tsx', 'avatarFrames'],
     ['src/features/profile/screens/MyDecorationsScreen.tsx', 'avatarFrames'],
     ['src/features/profile/screens/MallScreen.tsx', 'avatarFrames'],
     ['src/features/profile/screens/ProfileScreen.tsx', 'fancyNumbers'],

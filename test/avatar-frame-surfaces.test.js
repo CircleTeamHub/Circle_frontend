@@ -36,18 +36,11 @@ test('个人页顶部头像使用当前装备外观,管理员框与移除状态�
   assert.doesNotMatch(profile, /getMembershipFrameAsset/);
 });
 
-test('聊天页气泡:头像统一走 shared 的 MessageAvatar,接收方批量外观、发送方认证用户外观', () => {
-  // 头像框原来只挂在 sent/received 两个文字气泡上,其余 10 种(图片/语音/位置/
-  // 通话记录 + 六种卡片)各自 `<Avatar shape="square" />` 不带框 —— 同一个人
-  // 发文字是圆形带框、发卡片就变方形无框。现在收敛成 shared 里唯一一个
-  // MessageAvatar,这条用例守住「没人再自己画发送者头像」。
+test('聊天页气泡统一走无圆框的方形 MessageAvatar', () => {
   const shared = read('src/features/chat/components/bubbles/shared.tsx');
 
-  assert.match(shared, /useUserAppearance\(/);
-  assert.match(shared, /useAuthStore\(\(state\) => state\.user\?\.avatarFrameAppearance\)/);
-  assert.match(shared, /frameSource=\{getAvatarFrameSource\(frame\) \?\? undefined\}/);
-  assert.match(shared, /compactFrame/);
-  assert.doesNotMatch(shared, /useUserVipLevel|getMembershipFrameAsset|vipLevel/);
+  assert.doesNotMatch(shared, /useUserAppearance|useAuthStore|getAvatarFrameSource/);
+  assert.doesNotMatch(shared, /frameSource=|compactFrame/);
   assert.doesNotMatch(shared, /shape="square"/);
 
   // 每个气泡都用共用组件,并且不再自己 import Avatar 画发送者头像。
@@ -80,36 +73,24 @@ test('聊天页气泡:头像统一走 shared 的 MessageAvatar,接收方批量�
   assert.match(friendCard, /size=\{48\}/);
 });
 
-test('圈子动态页:内联作者资料直接决定头像框,支持管理员远程框、会员内置框与显式无框', () => {
+test('圈子动态页头像保持方形且不绘制圆形会员框', () => {
   for (const rel of [
     'src/features/discover/components/moment-card.tsx',
     'src/features/discover/components/plaza-post-card.tsx',
     'src/features/discover/screens/MomentDetailScreen.tsx',
   ]) {
     const src = read(rel);
-    assert.match(
-      src,
-      /frameSource=\{getAvatarFrameSource\(post\.author\.avatarFrameAppearance\) \?\? undefined\}/,
-      `${rel} 应直接解析后端内联的有效头像框`,
-    );
-    assert.match(src, /compactFrame/, `${rel} 头像框应用紧凑模式`);
-    assert.doesNotMatch(
-      src,
-      /getMembershipFrameAsset/,
-      `${rel} 不得从 vipLevel 派生头像框`,
-    );
+    assert.doesNotMatch(src, /frameSource=|compactFrame|getAvatarFrameSource/);
   }
 });
 
-test('他人资料页使用公开资料的有效头像框并保留原头像框占位布局', () => {
+test('他人资料页使用方形头像，不再套圆形会员框', () => {
   const profile = read('src/features/user/screens/UserProfileScreen.tsx');
-  assert.match(
+  assert.match(profile, /<Avatar[\s\S]*?size=\{AVATAR_SIZE\}/);
+  assert.doesNotMatch(
     profile,
-    /const membershipFrame = getAvatarFrameSource\(profile\.avatarFrameAppearance\);/,
+    /membershipFrameOverlay|avatarRingFramed|getAvatarFrameSource/,
   );
-  assert.match(profile, /membershipFrameOverlay/);
-  assert.match(profile, /avatarRingFramed/);
-  assert.doesNotMatch(profile, /getMembershipFrameAsset/);
 });
 
 test('所有实际头像框表面都不再调用旧 VIP resolver', () => {

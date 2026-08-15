@@ -18,6 +18,18 @@ test('seat management entry points route to the temp chat list screen', () => {
   assert.match(contactsSource, /id === 'seats'[\s\S]{0,120}router\.push\('\/\(tabs\)\/contacts\/seats'\)/);
 });
 
+test('the app presents the former seat feature as temporary group chats', () => {
+  const zh = JSON.parse(
+    fs.readFileSync(path.join(process.cwd(), 'src/i18n/locales/zh.json'), 'utf8'),
+  );
+
+  assert.equal(zh.messages.seatManagement, '临时群聊');
+  assert.equal(zh.contacts.seats, '临时群聊');
+  assert.equal(zh.tempChats.title, '临时群聊');
+  assert.equal(zh.tempChats.refresh, '刷新临时群聊列表');
+  assert.doesNotMatch(JSON.stringify(zh), /坐席/);
+});
+
 test('temp chat list routes exist and share the same screen implementation', () => {
   const messagesRoute = path.join(
     process.cwd(),

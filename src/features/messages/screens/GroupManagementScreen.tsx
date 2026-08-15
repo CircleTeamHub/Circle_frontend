@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
+import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -493,11 +494,21 @@ export default function GroupManagementScreen() {
                       style={s.conversationRow}
                       onPress={() => handleToggleMember(activeGroup.id, conversation)}
                     >
-                      <Avatar
-                        size={36}
-                        name={conversation.name}
-                        uri={conversation.avatarUrl}
-                      />
+                      {conversation.conversationType === 'group' ? (
+                        <GroupChatAvatar
+                          size={36}
+                          name={conversation.name}
+                          uri={conversation.avatarUrl}
+                          temporary={conversation.isTempChat}
+                          badgeBorderColor={colors.background}
+                        />
+                      ) : (
+                        <Avatar
+                          size={36}
+                          name={conversation.name}
+                          uri={conversation.avatarUrl}
+                        />
+                      )}
                       <View style={s.conversationMeta}>
                         <Text style={d.conversationName} numberOfLines={1}>
                           {conversation.name}

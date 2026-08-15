@@ -171,16 +171,19 @@ test('user profile screen renders unified display icons from backend data', () =
   assert.match(source, /UserIconRow/);
 });
 
-test('user profile screen reserves layout space for membership avatar frames', () => {
+test('user profile screen uses a compact rounded-square avatar stage', () => {
   const filePath = path.join(
     process.cwd(),
     'src/features/user/screens/UserProfileScreen.tsx',
   );
   const source = fs.readFileSync(filePath, 'utf8');
 
-  assert.match(source, /const AVATAR_FRAME_SIZE = AVATAR_SIZE \* AVATAR_FRAME_SCALE;/);
-  assert.match(source, /avatarStage:\s*\{[\s\S]*width: AVATAR_FRAME_SIZE,[\s\S]*height: AVATAR_FRAME_SIZE,/);
-  assert.match(source, /membershipFrameOverlay:\s*\{[\s\S]*width: AVATAR_FRAME_SIZE,[\s\S]*height: AVATAR_FRAME_SIZE,[\s\S]*top: 0,[\s\S]*left: 0,/);
+  assert.match(source, /avatarStage:\s*\{[\s\S]*width: AVATAR_RING_SIZE,[\s\S]*height: AVATAR_RING_SIZE,/);
+  assert.match(source, /avatarRing:\s*\{[\s\S]*borderRadius: Radius\.md/);
+  assert.doesNotMatch(
+    source,
+    /AVATAR_FRAME_SIZE|membershipFrameOverlay|avatarRingFramed/,
+  );
 });
 
 test('user profile screen shows received like count in the header', () => {

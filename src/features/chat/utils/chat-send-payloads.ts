@@ -61,6 +61,8 @@ export function buildQuotePreviewText(message: ChatMessage, t: TFunction) {
   switch (message.type) {
     case 'image':
       return t('im.preview.image', { defaultValue: '[图片]' });
+    case 'video':
+      return t('im.preview.video', { defaultValue: '[视频]' });
     case 'voice':
       return t('im.preview.voice', { defaultValue: '[语音]' });
     case 'location':

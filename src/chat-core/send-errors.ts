@@ -68,6 +68,18 @@ export function getChatSendErrorMessage(
     return getCreditPolicyMessage(error);
   }
 
+  if (error instanceof Error && error.name === 'TempChatUnavailableError') {
+    return i18n.t('tempChats.expiredNow', {
+      defaultValue: '该临时聊天已过期。',
+    });
+  }
+
+  // 只透出上传模块自己构造、且已经去掉签名 URL / 对象 key / request id 的
+  // 安全文案。普通 Error 与服务端原始 message 仍然一律使用 fallback。
+  if (error instanceof Error && error.name === 'StorageUploadError') {
+    return error.message;
+  }
+
   if (error instanceof ChatSendError) {
     // 敏感词有自己的既有词条(比 serverErrors 那条更贴聊天场景)。
     if (isChatSendBlockedBySensitiveWord(error)) {
@@ -81,6 +93,11 @@ export function getChatSendErrorMessage(
     ) {
       // 未知 code 一律不展示服务端 message —— 那可能是内部错误文本。
       return i18n.t(`serverErrors.${error.code}`, { defaultValue: fallback });
+    }
+    // 未知 ack code 在 release 里不能把服务端 message 原样上屏；开发包则保留
+    // 结构化 code，便于在真机/模拟器上区分 payload、连接与权限问题。
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      return `${fallback} (${error.code})`;
     }
   }
 

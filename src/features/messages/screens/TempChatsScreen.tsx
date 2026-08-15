@@ -3,7 +3,6 @@ import {
   Alert,
   FlatList,
   ListRenderItemInfo,
-  Share,
   StyleSheet,
   View,
 } from 'react-native';
@@ -117,27 +116,6 @@ export default function TempChatsScreen() {
     setCreateVisible(true);
   }, []);
 
-  const shareRoomLink = useCallback(
-    async (title: string, shareUrl: string | null) => {
-      if (!shareUrl) return;
-      try {
-        await Share.share({
-          message: t('tempChats.shareMessage', { title, url: shareUrl }),
-        });
-      } catch {
-        // 用户主动取消不会抛错；走到这里说明系统分享面板不可用，退回复制链接。
-        try {
-          const Clipboard = await import('expo-clipboard');
-          await Clipboard.setStringAsync(shareUrl);
-          Alert.alert(t('tempChats.linkCopied'));
-        } catch {
-          setError(t('tempChats.shareFailed'));
-        }
-      }
-    },
-    [t],
-  );
-
   const handleSubmitCreate = useCallback(
     async (payload: CreateTempChatPayload) => {
       if (creatingRoomRef.current) return;
@@ -148,7 +126,7 @@ export default function TempChatsScreen() {
         const created = await createTempChat(payload);
         setCreateVisible(false);
         await loadRooms({ refresh: true });
-        // 刚建好就弹出二维码/复制面板，对齐"创建即分享"的使用习惯。
+        // 刚建好就展示链接，方便房主直接复制给参与者。
         setShareTarget({ title: created.title, shareUrl: created.shareUrl });
       } catch (caughtError) {
         setError(getApiErrorMessage(caughtError, t('tempChats.createFailed')));
@@ -208,7 +186,7 @@ export default function TempChatsScreen() {
     (room: TempChatListItem) => {
       Alert.alert(room.title, undefined, [
         {
-          text: t('tempChats.actionShare'),
+          text: t('tempChats.copyLink'),
           onPress: () =>
             setShareTarget({ title: room.title, shareUrl: room.shareUrl }),
         },
@@ -249,6 +227,7 @@ export default function TempChatsScreen() {
             sourceID: room.groupId,
             title: room.title,
             conversationType: 'group',
+            conversationKind: 'temp',
           },
         });
       } finally {
@@ -318,7 +297,6 @@ export default function TempChatsScreen() {
         title={shareTarget?.title ?? ''}
         shareUrl={shareTarget?.shareUrl ?? null}
         onClose={() => setShareTarget(null)}
-        onShareSystem={shareRoomLink}
       />
     </View>
   );

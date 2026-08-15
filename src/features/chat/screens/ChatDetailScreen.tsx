@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import {
   Alert,
+  InteractionManager,
   Keyboard,
   KeyboardAvoidingView,
   LayoutAnimation,
@@ -18,6 +19,8 @@ import {
   useWindowDimensions,
   type FlatList as FlatListType,
   type GestureResponderEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams, useNavigation, useSegments } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
@@ -25,6 +28,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import { Avatar } from '@/components/ui/avatar';
+import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { MemberName } from '@/components/ui/member-name';
 import { Divider } from '@/components/ui/divider';
 import { useElapsedSeconds } from '@/hooks/use-elapsed-seconds';
@@ -35,6 +39,7 @@ import {
   SentBubble,
   LocationCard,
   ImageBubble,
+  VideoBubble,
   VoiceBubble,
   NoteCardBubble,
   FriendCardBubble,
@@ -85,6 +90,7 @@ import {
   startMediaSend,
   sendCardMessage,
   sendImageMessage,
+  sendVideoMessage,
   sendLocationMessage,
   sendQuoteMessage,
   sendTextMessage,
@@ -159,8 +165,13 @@ import {
   type MentionTarget,
 } from '@/features/chat/utils/chat-send-payloads';
 import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
-import { isChatImageTooLarge } from '@/features/chat/utils/chat-media-policy';
+import {
+  isChatImageTooLarge,
+  isChatVideoTooLarge,
+  isChatVideoTooLong,
+} from '@/features/chat/utils/chat-media-policy';
 import { uploadChatImageThumbnail } from '@/features/chat/utils/image-thumbnail';
+import { assertMyTempChatConversationOpen } from '@/services/api/temp-chat';
 
 // Dev-only structured log for a failed send. Never logs the message body —
 // only the error and conversation kind — to avoid leaking content into logs.
@@ -210,6 +221,10 @@ const MENTION_CANDIDATE_LIMIT = 200;
 // scrollToIndex 定位失败后最多重试几次（每次间隔 250ms）。够覆盖「再渲染一两批就能
 // 测到目标行」的正常情况，又不至于在测不到时无限跳动。
 const MAX_SCROLL_TO_INDEX_RETRIES = 4;
+// inverted 列表中 contentOffset.y=0 就是最新消息。用户仍在这个范围内时，
+// 收到新消息可以自然跟随；超出后视为正在翻历史，不抢走阅读位置。
+const LATEST_MESSAGE_SCROLL_THRESHOLD = 80;
+const VIDEO_UPLOAD_TIMEOUT_MS = 5 * 60_000;
 const ATTACHMENT_PAGES: (typeof ATTACHMENT_ITEMS)[number][][] = Array.from(
   { length: Math.ceil(ATTACHMENT_ITEMS.length / ATTACHMENT_PAGE_SIZE) },
   (_, page) =>
@@ -429,6 +444,7 @@ export default function ChatDetailScreen() {
     sourceID?: string;
     title?: string;
     conversationType?: 'private' | 'group';
+    conversationKind?: 'direct' | 'group' | 'temp' | 'support';
     avatarUrl?: string;
     searchedMsgID?: string;
   }>();
@@ -442,6 +458,14 @@ export default function ChatDetailScreen() {
   );
   const authUser = useAuthStore((state) => state.user);
   const flatListRef = useRef<FlatListType<ChatMessage>>(null);
+  const isNearLatestMessageRef = useRef(true);
+  const latestMessageIdentityRef = useRef<{
+    conversationID: string;
+    messageID: string;
+  } | null>(null);
+  const latestMessageScrollTaskRef = useRef<ReturnType<
+    typeof InteractionManager.runAfterInteractions
+  > | null>(null);
   const scrolledToSearchRef = useRef(false);
   // 为定位搜索目标而翻页时的在途标记:effect 会随 messages 变化重跑,
   // 不挡住的话每一页返回都会再打一次请求。
@@ -515,6 +539,9 @@ export default function ChatDetailScreen() {
   const [callStarting, setCallStarting] = useState(false);
   const callStartingRef = useRef(false);
   const mountedRef = useRef(true);
+  // 视频可能接近 100MB。上传成功但 socket ack 失败时，重发只应复用已上传的 key，
+  // 不能再传一遍并制造孤儿对象；成功发送或卸载后释放这份内存索引。
+  const uploadedVideoKeysRef = useRef(new Map<string, string>());
   // 录音状态的纯 JS 快照：卸载 cleanup 里不能调 recorder 的 native getStatus()，
   // 此时 expo-audio 可能已释放其 native shared object（会抛 NativeSharedObjectNotFoundException）。
   const isRecordingRef = useRef(false);
@@ -523,8 +550,12 @@ export default function ChatDetailScreen() {
     isRecordingRef.current = voiceRecordingStartedAt != null;
   }, [voiceRecordingStartedAt]);
   useEffect(() => {
+    const uploadedVideoKeys = uploadedVideoKeysRef.current;
     return () => {
       mountedRef.current = false;
+      uploadedVideoKeys.clear();
+      latestMessageScrollTaskRef.current?.cancel();
+      latestMessageScrollTaskRef.current = null;
       if (scrollRetryTimerRef.current) {
         clearTimeout(scrollRetryTimerRef.current);
         scrollRetryTimerRef.current = null;
@@ -555,6 +586,11 @@ export default function ChatDetailScreen() {
   const [resolvedConversationID, setResolvedConversationID] =
     useState(paramConversationID);
   const conversationID = paramConversationID || resolvedConversationID;
+  const storedConversationType = useChatStore((state) =>
+    state.conversations.find((candidate) => candidate.id === conversationID)?.type,
+  );
+  const isTempChat =
+    params.conversationKind === 'temp' || storedConversationType === 'TEMP';
   const selfDestructEnabled = useChatStore((state) => {
     const conversation = state.conversations.find(
       (candidate) => candidate.id === conversationID,
@@ -593,12 +629,21 @@ export default function ChatDetailScreen() {
     params.conversationType === 'group' ? 'group' : 'single';
   const isGroupChat = conversationType === 'group';
 
-  const { canViewMembers: canViewGroupMemberProfiles, revalidate: revalidateMemberViewAccess } =
-    useGroupMemberViewAccess({
-      enabled: isGroupChat,
+  const {
+    canViewMembers: canViewCircleMembers,
+    revalidate: revalidateCircleMemberAccess,
+  } = useGroupMemberViewAccess({
+      enabled: isGroupChat && !isTempChat,
       groupID: sourceID,
       currentUserID,
     });
+  // TEMP 不是圈子，不得拿 tmp... groupId 请求 /circle/:uuid。临时房成员目录本身
+  // 由 /chat/conversations/:id/members 的座位校验保护，房内成员可直接使用。
+  const canViewGroupMemberProfiles = isTempChat || canViewCircleMembers;
+  const revalidateMemberViewAccess = useCallback(
+    () => (isTempChat ? Promise.resolve(true) : revalidateCircleMemberAccess()),
+    [isTempChat, revalidateCircleMemberAccess],
+  );
 
   // review R2：失去目录权限的瞬间清空已选 @ 目标与候选缓存——否则降权后
   // handleSend 仍会把滞留的 mention（含 @所有人）当作有效目标发出去。
@@ -635,7 +680,7 @@ export default function ChatDetailScreen() {
 
   // 入口只给了 sourceID 时，就地把会话解析出来（单聊按对端 userID、群聊按圈子 id）。
   useEffect(() => {
-    if (paramConversationID || !sourceID) return;
+    if (paramConversationID || !sourceID || isTempChat) return;
     let cancelled = false;
     (async () => {
       try {
@@ -653,7 +698,7 @@ export default function ChatDetailScreen() {
     return () => {
       cancelled = true;
     };
-  }, [paramConversationID, sourceID, isGroupChat]);
+  }, [paramConversationID, sourceID, isGroupChat, isTempChat]);
 
   // 跟踪键盘显隐：iOS 用 Will* 事件与 KeyboardAvoidingView 动画同步，避免空白闪一下。
   useEffect(() => {
@@ -699,10 +744,11 @@ export default function ChatDetailScreen() {
         sourceID,
         title: conversationTitle,
         conversationType: 'group',
+        ...(isTempChat ? { conversationKind: 'temp' } : {}),
         originScope: scope,
       }),
     );
-  }, [scope, conversationID, sourceID, conversationTitle]);
+  }, [scope, conversationID, sourceID, conversationTitle, isTempChat]);
 
   const handleOpenMessageSender = useCallback(
     async (msg: ChatMessage) => {
@@ -930,6 +976,44 @@ export default function ChatDetailScreen() {
   // 异步分页回来时闭包里的 messages 已经过期,滚动要按最新那份算 index。
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
+
+  const handleMessageListScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      isNearLatestMessageRef.current =
+        event.nativeEvent.contentOffset.y <= LATEST_MESSAGE_SCROLL_THRESHOLD;
+    },
+    [],
+  );
+
+  // FlatList 不会保证插入 index 0 后仍回到 offset 0，尤其是从笔记选择页返回时，
+  // 新卡片常在导航 pop 动画中到达。自己发送的消息始终带回最新位置；收到消息
+  // 只在用户原本就在底部附近时跟随，避免翻看历史时被强制拉回。
+  useEffect(() => {
+    const latestMessage = messages[0];
+    if (!latestMessage || !conversationID || !isFocused) return;
+
+    const previous = latestMessageIdentityRef.current;
+    latestMessageIdentityRef.current = {
+      conversationID,
+      messageID: latestMessage.id,
+    };
+    if (
+      !previous ||
+      previous.conversationID !== conversationID ||
+      previous.messageID === latestMessage.id
+    ) {
+      return;
+    }
+    if (!latestMessage.outgoing && !isNearLatestMessageRef.current) return;
+
+    latestMessageScrollTaskRef.current?.cancel();
+    latestMessageScrollTaskRef.current = InteractionManager.runAfterInteractions(() => {
+      latestMessageScrollTaskRef.current = null;
+      if (!mountedRef.current) return;
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+      isNearLatestMessageRef.current = true;
+    });
+  }, [conversationID, isFocused, messages]);
 
   // 搜索定位：在 inverted 列表里 scrollToIndex 仍然按 index 计数，找到就跳。
   useEffect(() => {
@@ -1804,6 +1888,20 @@ export default function ChatDetailScreen() {
             selfDestructCacheKey={selfDestructCacheKey}
           />
         ));
+      case 'video':
+        return withMessageActions(item, (
+          <VideoBubble
+            message={item}
+            outgoing={Boolean(item.outgoing)}
+            senderName={receivedDisplayName(item)}
+            senderAvatarUri={receivedAvatarUri(item)}
+            selfName={selfName}
+            selfAvatarUri={selfAvatarUri}
+            onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
+            hideStatus={isGroupChat}
+          />
+        ));
       case 'voice':
         return withMessageActions(item, (
           <VoiceBubble
@@ -2323,6 +2421,9 @@ export default function ChatDetailScreen() {
   const uploadAndSendVoice = useCallback(
     async (soundPath: string, duration: number, deliveryId: string) => {
       try {
+        if (isTempChat) {
+          await assertMyTempChatConversationOpen(conversationID);
+        }
         // 自研栈:录音文件先经 presign 上传,消息体只带 object key(读时签 URL)。
         const voiceFilename = soundPath.split('/').pop() || 'voice.m4a';
         const voiceContentType =
@@ -2337,6 +2438,7 @@ export default function ChatDetailScreen() {
           presign.uploadUrl,
           voiceContentType,
           soundPath,
+          presign.requiredHeaders,
         );
         await sendVoiceMessage({
           conversationId: conversationID,
@@ -2369,7 +2471,7 @@ export default function ChatDetailScreen() {
         }
       }
     },
-    [conversationID, t],
+    [conversationID, isTempChat, t],
   );
 
   const finishHoldRecording = useCallback(
@@ -2634,6 +2736,9 @@ export default function ChatDetailScreen() {
       deliveryId: string,
     ) => {
       try {
+        if (isTempChat) {
+          await assertMyTempChatConversationOpen(conversationID);
+        }
         // 不日志 presign 返回的 fileUrl / uploadUrl —— 这是带签名的临时写凭证，
         // 任何能捕获 console 输出的渠道（adb logcat、屏幕录制、第三方 SDK 的
         // breadcrumb）拿到 uploadUrl 就能在过期前向同一对象写入任意内容。
@@ -2643,7 +2748,12 @@ export default function ChatDetailScreen() {
           folder: 'chat',
           fileUri: asset.uri,
         });
-        await uploadLocalFileToPresignedUrl(presign.uploadUrl, contentType, asset.uri);
+        await uploadLocalFileToPresignedUrl(
+          presign.uploadUrl,
+          contentType,
+          asset.uri,
+          presign.requiredHeaders,
+        );
 
         // 生成并上传一张缩略图供列表气泡显示；失败 / 原图已够小时退化为原图（thumb* 留空）。
         const thumbnail = await uploadChatImageThumbnail(
@@ -2685,7 +2795,7 @@ export default function ChatDetailScreen() {
         }
       }
     },
-    [conversationID, t],
+    [conversationID, isTempChat, t],
   );
   // 相册选择与拍照共用同一套「上传→发送」流程，只有获取 asset 的来源不同。
   const uploadAndSendImageAsset = useCallback(
@@ -2743,6 +2853,153 @@ export default function ChatDetailScreen() {
     [conversationID, t, uploadAndSendImage],
   );
 
+  const uploadAndSendVideo = useCallback(
+    async (
+      asset: ImagePicker.ImagePickerAsset,
+      filename: string,
+      contentType: string,
+      deliveryId: string,
+    ) => {
+      try {
+        if (isTempChat) {
+          await assertMyTempChatConversationOpen(conversationID);
+        }
+        let key = uploadedVideoKeysRef.current.get(deliveryId);
+        if (!key) {
+          const presign = await requestUploadPresign({
+            filename: sanitizeUploadFilename(filename),
+            contentType,
+            folder: 'chat',
+            fileUri: asset.uri,
+          });
+          await uploadLocalFileToPresignedUrl(
+            presign.uploadUrl,
+            contentType,
+            asset.uri,
+            presign.requiredHeaders,
+            VIDEO_UPLOAD_TIMEOUT_MS,
+          );
+          key = presign.key;
+          uploadedVideoKeysRef.current.set(deliveryId, key);
+        }
+        await sendVideoMessage({
+          conversationId: conversationID,
+          key,
+          localUri: asset.uri,
+          width: asset.width ?? undefined,
+          height: asset.height ?? undefined,
+          duration:
+            typeof asset.duration === 'number'
+              ? Math.max(1, Math.ceil(asset.duration / 1000))
+              : undefined,
+          size: asset.fileSize ?? undefined,
+          deliveryId,
+        });
+        uploadedVideoKeysRef.current.delete(deliveryId);
+        finishMediaSend(deliveryId);
+      } catch (error) {
+        if (__DEV__) {
+          console.warn(
+            '[chat] video send failed',
+            error instanceof Error
+              ? { name: error.name, message: error.message }
+              : String(error),
+          );
+        }
+        failMediaSend(conversationID, deliveryId);
+        if (mountedRef.current) {
+          setSendError(
+            getChatSendErrorMessage(
+              error,
+              t('chat.detail.videoSendFailed', {
+                defaultValue: '视频发送失败，请重试',
+              }),
+            ),
+          );
+        }
+      }
+    },
+    [conversationID, isTempChat, t],
+  );
+
+  const uploadAndSendVideoAsset = useCallback(
+    async (asset: ImagePicker.ImagePickerAsset) => {
+      if (isChatVideoTooLarge(asset.fileSize)) {
+        Alert.alert(
+          t('chat.detail.videoRejectedTitle', { defaultValue: '视频无法发送' }),
+          t('chat.detail.videoTooLarge', { defaultValue: '请选择 100MB 以内的视频' }),
+        );
+        return;
+      }
+      if (isChatVideoTooLong(asset.duration)) {
+        Alert.alert(
+          t('chat.detail.videoRejectedTitle', { defaultValue: '视频无法发送' }),
+          t('chat.detail.videoTooLong', { defaultValue: '请选择 10 分钟以内的视频' }),
+        );
+        return;
+      }
+
+      const filename = asset.fileName || asset.uri.split('/').pop() || 'video.mp4';
+      const contentType = resolveUploadContentType({
+        mimeType: asset.mimeType,
+        fileName: filename,
+      });
+      if (!contentType?.startsWith('video/')) {
+        Alert.alert(
+          t('chat.detail.videoRejectedTitle', { defaultValue: '视频无法发送' }),
+          t('chat.detail.videoUnsupported', {
+            defaultValue: '仅支持 MP4、MOV、M4V 视频',
+          }),
+        );
+        return;
+      }
+
+      try {
+        assertLocalCanSendMessage();
+      } catch (error) {
+        if (mountedRef.current) {
+          setSendError(
+            getChatSendErrorMessage(
+              error,
+              t('chat.detail.videoSendFailed', {
+                defaultValue: '视频发送失败，请重试',
+              }),
+            ),
+          );
+        }
+        return;
+      }
+
+      const deliveryId = startMediaSend({
+        conversationId: conversationID,
+        type: 'video',
+        localContent: {
+          localUri: asset.uri,
+          ...(asset.width ? { width: asset.width } : {}),
+          ...(asset.height ? { height: asset.height } : {}),
+          ...(typeof asset.duration === 'number'
+            ? { duration: Math.max(1, Math.ceil(asset.duration / 1000)) }
+            : {}),
+          ...(asset.fileSize ? { size: asset.fileSize } : {}),
+        },
+        retry: (id) => uploadAndSendVideo(asset, filename, contentType, id),
+      });
+      void uploadAndSendVideo(asset, filename, contentType, deliveryId);
+    },
+    [conversationID, t, uploadAndSendVideo],
+  );
+
+  const uploadAndSendPickedAsset = useCallback(
+    async (asset: ImagePicker.ImagePickerAsset) => {
+      if (asset.type === 'video' || asset.mimeType?.startsWith('video/')) {
+        await uploadAndSendVideoAsset(asset);
+        return;
+      }
+      await uploadAndSendImageAsset(asset);
+    },
+    [uploadAndSendImageAsset, uploadAndSendVideoAsset],
+  );
+
   const handlePickMedia = useCallback(async () => {
     if (!sourceID || isPreviewMode) return;
     if (inFlightRef.current) return;
@@ -2752,15 +3009,15 @@ export default function ChatDetailScreen() {
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+      mediaTypes: ['images', 'videos'],
       preferredAssetRepresentationMode:
         ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
       quality: 0.85,
       allowsMultipleSelection: false,
     });
     if (result.canceled || result.assets.length === 0) return;
-    await uploadAndSendImageAsset(result.assets[0]);
-  }, [isPreviewMode, sourceID, t, uploadAndSendImageAsset]);
+    await uploadAndSendPickedAsset(result.assets[0]);
+  }, [isPreviewMode, sourceID, t, uploadAndSendPickedAsset]);
 
   const handleTakePhoto = useCallback(async () => {
     if (!sourceID || isPreviewMode) return;
@@ -3182,7 +3439,17 @@ export default function ChatDetailScreen() {
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
         <Pressable onPress={handleOpenHeaderTarget}>
-          <Avatar size={36} name={conversationTitle} uri={avatarUrl} />
+          {isGroupChat ? (
+            <GroupChatAvatar
+              size={36}
+              name={conversationTitle}
+              uri={avatarUrl}
+              temporary={isTempChat}
+              badgeBorderColor={colors.background}
+            />
+          ) : (
+            <Avatar size={36} name={conversationTitle} uri={avatarUrl} />
+          )}
         </Pressable>
         <View style={s.headerInfo}>
           <View style={s.headerMeta}>
@@ -3265,6 +3532,8 @@ export default function ChatDetailScreen() {
           // 下拉/滚动消息列表即收起底部面板与键盘（微信式）。on-drag 让键盘跟手滑落。
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
+          onScroll={handleMessageListScroll}
+          scrollEventThrottle={32}
           onScrollBeginDrag={closeInputPanels}
           // scrollToIndex 在 inverted + 没设 getItemLayout 时，目标 index 超出已渲染窗口
           // 就会抛 "scrollToIndex out of range"。fallback：先滚到能测到的最远 index，
