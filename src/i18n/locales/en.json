@@ -2161,6 +2161,7 @@
     "actionEnd": "End chat",
     "linkCopied": "Link copied",
     "copyFailed": "Failed to copy link, please retry",
+    "inviteLink": "Invite link",
     "copyLink": "Copy link",
     "endConfirmTitle": "End this temporary chat?",
     "endConfirmMessage": "Guests will be removed and can no longer join once it ends.",

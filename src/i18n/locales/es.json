@@ -931,6 +931,7 @@
     "actionEnd": "Terminar chat",
     "linkCopied": "Enlace copiado",
     "copyFailed": "No se pudo copiar el enlace, inténtalo de nuevo",
+    "inviteLink": "Enlace de invitación",
     "copyLink": "Copiar enlace",
     "endConfirmTitle": "¿Terminar este chat temporal?",
     "endConfirmMessage": "Los invitados serán expulsados y no podrán volver a unirse una vez que termine.",

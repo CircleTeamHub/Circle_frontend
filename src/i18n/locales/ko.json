@@ -930,6 +930,7 @@
     "actionEnd": "채팅 종료",
     "linkCopied": "링크 복사됨",
     "copyFailed": "링크를 복사하지 못했습니다. 다시 시도해 주세요",
+    "inviteLink": "초대 링크",
     "copyLink": "링크 복사",
     "endConfirmTitle": "이 임시 채팅을 종료할까요?",
     "endConfirmMessage": "종료하면 게스트는 내보내지며 다시 참여할 수 없습니다.",

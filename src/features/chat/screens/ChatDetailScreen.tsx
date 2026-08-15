@@ -743,10 +743,11 @@ export default function ChatDetailScreen() {
         sourceID,
         title: conversationTitle,
         conversationType: 'group',
+        ...(isTempChat ? { conversationKind: 'temp' } : {}),
         originScope: scope,
       }),
     );
-  }, [scope, conversationID, sourceID, conversationTitle]);
+  }, [scope, conversationID, sourceID, conversationTitle, isTempChat]);
 
   const handleOpenMessageSender = useCallback(
     async (msg: ChatMessage) => {

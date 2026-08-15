@@ -107,6 +107,27 @@ test('chat info screen renders a dedicated group info layout for group conversat
   assert.match(source, /getGroupMemberSearchHref/);
 });
 
+test('temporary chat info copies its invite link without treating the room as a circle', () => {
+  const infoPath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
+  const detailPath = path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx');
+  const infoSource = fs.readFileSync(infoPath, 'utf8');
+  const detailSource = fs.readFileSync(detailPath, 'utf8');
+
+  assert.match(detailSource, /isTempChat \? \{ conversationKind: 'temp' \} : \{\}/);
+  assert.match(
+    infoSource,
+    /params\.conversationKind === 'temp' \|\| conversation\?\.type === 'TEMP'/,
+  );
+  assert.match(
+    infoSource,
+    /const groupID = isGroupConversation && !isTempConversation/,
+  );
+  assert.match(infoSource, /fetchMyTempChats\(\)/);
+  assert.match(infoSource, /Clipboard\.setStringAsync\(room\.shareUrl\)/);
+  assert.match(infoSource, /label=\{t\('tempChats\.inviteLink'\)\}/);
+  assert.match(infoSource, /value=\{t\('tempChats\.copyLink'\)\}/);
+});
+
 // 契约随自研栈迁移更新(意图不变):成员昵称/头像以 fetchChatMembers 返回为准
 // (后端即事实源),不再需要 OpenIM 时代的逐成员 profile 二次刷新。
 test('chat info screen serves the member directory straight from chat-core members', () => {

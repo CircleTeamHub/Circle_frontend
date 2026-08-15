@@ -47,6 +47,7 @@ import {
 } from '@/services/api/friends';
 import { fetchCircleDetail, updateCircle } from '@/services/api/circles';
 import { leaveGroup, removeGroupMember, updateGroupMemberRole } from '@/services/api/groups';
+import { fetchMyTempChats } from '@/services/api/temp-chat';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { DisplayIcon } from '@/types';
@@ -251,6 +252,7 @@ export default function ChatInfoScreen() {
     conversationID?: string;
     fallbackName?: string;
     conversationType?: 'private' | 'group';
+    conversationKind?: 'direct' | 'group' | 'temp' | 'support';
     originScope?: string;
   }>();
   const [blacklist, setBlacklist] = useState(false);
@@ -268,6 +270,7 @@ export default function ChatInfoScreen() {
   // 用 ref 做 fast double-tap 单飞行守，跟其他屏的 Pattern D 二道闸保持一致。
   const blacklistInFlightRef = useRef(false);
   const deleteInFlightRef = useRef(false);
+  const inviteLinkCopyInFlightRef = useRef(false);
   const [actionPending, setActionPending] = useState(initialActionPending);
   const actionPendingRef = useRef(initialActionPending);
   const actionRequestTokenRef = useRef({
@@ -304,13 +307,24 @@ export default function ChatInfoScreen() {
       null,
     [conversationID, conversations, routeSourceID],
   );
+  const isTempConversation =
+    params.conversationKind === 'temp' || conversation?.type === 'TEMP';
   const isGroupConversation =
+    isTempConversation ||
     params.conversationType === 'group' ||
     conversation?.type === 'GROUP' ||
     Boolean(conversation?.circleId);
   // 自研栈下「群聊=圈子」:群会话的 circleId 即圈子 id,路由 sourceID 也是圈子 id。
-  const groupID = isGroupConversation ? conversation?.circleId || routeSourceID : '';
-  const groupTitle = groupInfo?.name || conversation?.circle?.name || friendName || t('chat.groupChat');
+  // TEMP 也是多人会话,但不是圈子；绝不能把 tmp... sourceID 当 UUID 请求 /circle/:id。
+  const groupID = isGroupConversation && !isTempConversation
+    ? conversation?.circleId || routeSourceID
+    : '';
+  const groupTitle =
+    groupInfo?.name ||
+    conversation?.circle?.name ||
+    conversation?.tempChat?.title ||
+    friendName ||
+    t('chat.groupChat');
   const groupNotice = groupInfo?.notice?.trim() ?? '';
   const memberCount = groupInfo?.memberCount ?? groupMembers.length;
   const currentUserID = useChatStore((state) => state.currentUserId);
@@ -657,6 +671,34 @@ export default function ChatInfoScreen() {
       router.push(getChatHistorySearchHubHref(nextConversationID, routeSourceID, friendName));
     })();
   }, [friendName, resolveConversationIDForNavigation, routeSourceID]);
+
+  const handleCopyTempChatInviteLink = useCallback(async () => {
+    if (!isTempConversation || !resolvedConversationID || inviteLinkCopyInFlightRef.current) {
+      return;
+    }
+
+    inviteLinkCopyInFlightRef.current = true;
+    try {
+      const rooms = await fetchMyTempChats();
+      const tempChatID = conversation?.tempChat?.id;
+      const room = rooms.find(
+        (candidate) =>
+          (tempChatID ? candidate.id === tempChatID : false) ||
+          candidate.conversationId === resolvedConversationID,
+      );
+      if (!room?.isActive || !room.shareUrl) {
+        throw new Error('Temp chat invite link unavailable');
+      }
+
+      const Clipboard = await import('expo-clipboard');
+      await Clipboard.setStringAsync(room.shareUrl);
+      Alert.alert(t('tempChats.linkCopied'));
+    } catch {
+      Alert.alert(t('tempChats.copyFailed'));
+    } finally {
+      inviteLinkCopyInFlightRef.current = false;
+    }
+  }, [conversation?.tempChat?.id, isTempConversation, resolvedConversationID, t]);
 
   const handleOpenSearchGroupMembers = useCallback(() => {
     if (!groupID || !canViewMemberDirectory) {
@@ -1212,6 +1254,17 @@ export default function ChatInfoScreen() {
               onPress={canManageGroup ? handleEditGroupNotice : undefined}
               showArrow={canManageGroup}
             />
+            {isTempConversation ? (
+              <>
+                <Divider />
+                <GroupInfoRow
+                  label={t('tempChats.inviteLink')}
+                  value={t('tempChats.copyLink')}
+                  onPress={() => void handleCopyTempChatInviteLink()}
+                  showArrow={false}
+                />
+              </>
+            ) : null}
             <Divider />
             <GroupInfoRow label={t('chat.searchHistory')} onPress={handleOpenSearchHistory} />
           </View>

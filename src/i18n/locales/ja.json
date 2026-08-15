@@ -930,6 +930,7 @@
     "actionEnd": "チャットを終了",
     "linkCopied": "リンクをコピーしました",
     "copyFailed": "リンクをコピーできませんでした。もう一度お試しください",
+    "inviteLink": "招待リンク",
     "copyLink": "リンクをコピー",
     "endConfirmTitle": "この一時チャットを終了しますか？",
     "endConfirmMessage": "終了するとゲストは退出され、再参加できなくなります。",
