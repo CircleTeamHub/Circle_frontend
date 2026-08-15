@@ -644,13 +644,13 @@ test('chat history search screens exist with dedicated titles and empty states',
   assert.match(textSource, /searchChatMessages\(conversationID, \{\s*keyword/);
   assert.match(textSource, /t\('chat\.history\.noMatches'\)/);
 
-  // 三条请求路径共用 MEDIA_HISTORY_TYPES(= ['image']);见该常量上方注释:
-  // 自研栈没有 'video' 类型,混进去会被 DTO 的 @IsIn 判 400。
+  // 三条请求路径共用同一份图片/视频类型过滤。
   assert.match(
     mediaSource,
     /searchChatMessages\(conversationID, \{ types: MEDIA_HISTORY_TYPES/,
   );
   assert.match(mediaSource, /t\('chat\.history\.noMedia'\)/);
+  assert.match(mediaSource, /const MEDIA_HISTORY_TYPES = \['image', 'video'\]/);
 
   assert.match(filesSource, /searchChatMessages\(conversationID, \{ types: \['file'\]/);
   assert.match(filesSource, /暂无文件记录/);

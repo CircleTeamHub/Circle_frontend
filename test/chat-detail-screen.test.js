@@ -15,6 +15,10 @@ test('chat detail screen uses the aligned header and composer structure', () => 
   assert.match(source, /messageListContent/);
   assert.match(source, /composerShell/);
   assert.match(source, /composerInput/);
+  assert.match(source, /sendVideoMessage/);
+  assert.match(source, /mediaTypes: \['images', 'videos'\]/);
+  assert.match(source, /VIDEO_UPLOAD_TIMEOUT_MS/);
+  assert.match(source, /type: 'video'/);
 });
 
 test('chat detail screen exposes refined message insets and composer action hierarchy', () => {
@@ -27,6 +31,27 @@ test('chat detail screen exposes refined message insets and composer action hier
   assert.match(source, /messageListInset/);
   assert.match(source, /composerActionBtn/);
   assert.match(source, /contentContainerStyle=\{\[s\.messageList, s\.messageListContent, s\.messageListInset\]\}/);
+});
+
+test('new messages follow the latest position without hijacking history reading', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+
+  // 自己从笔记选择页返回后发出的卡片必须滚到底；对端消息只在用户本来就在
+  // 底部附近时跟随，不能把正在翻历史的人强拉回最新消息。
+  assert.match(source, /latestMessageIdentityRef/);
+  assert.match(
+    source,
+    /if \(!latestMessage\.outgoing && !isNearLatestMessageRef\.current\) return;/,
+  );
+  assert.match(source, /InteractionManager\.runAfterInteractions/);
+  assert.match(
+    source,
+    /flatListRef\.current\?\.scrollToOffset\(\{ offset: 0, animated: true \}\)/,
+  );
+  assert.match(source, /onScroll=\{handleMessageListScroll\}/);
 });
 
 test('chat detail screen supports preview mode without an IM conversation', () => {
@@ -489,6 +514,7 @@ test('message forward picker route re-sends pending messages via chat-core', () 
   assert.match(screen, /sendTextMessage/);
   assert.match(screen, /sendVoiceMessage/);
   assert.match(screen, /sendImageMessage/);
+  assert.match(screen, /sendVideoMessage/);
   assert.match(screen, /sendCardMessage/);
   assert.match(screen, /FORWARDABLE_CARD_TYPES/);
 });

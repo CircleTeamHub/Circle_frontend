@@ -423,7 +423,7 @@ export default function AvatarFrameDetailScreen() {
                 size={112}
                 name={user?.nickname || user?.accountId}
                 uri={user?.avatarUrl ?? undefined}
-                bgColor={colors.primaryLight}
+                shape="circle"
                 frameSource={frameSource ?? undefined}
               />
             </View>

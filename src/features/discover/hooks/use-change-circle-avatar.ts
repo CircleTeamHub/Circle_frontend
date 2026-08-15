@@ -84,13 +84,18 @@ export function useChangeCircleAvatar(
       setChanging(true);
       try {
         const filename = sanitizeUploadFilename(asset.fileName ?? 'avatar.jpg');
-        const { uploadUrl, fileUrl } = await requestUploadPresign({
+        const { uploadUrl, fileUrl, requiredHeaders } = await requestUploadPresign({
           filename,
           contentType,
           folder: 'avatars',
           fileUri: asset.uri,
         });
-        await uploadLocalFileToPresignedUrl(uploadUrl, contentType, asset.uri);
+        await uploadLocalFileToPresignedUrl(
+          uploadUrl,
+          contentType,
+          asset.uri,
+          requiredHeaders,
+        );
         await setCircleAvatar(circleId, fileUrl);
         onChanged(fileUrl);
       } catch (error) {

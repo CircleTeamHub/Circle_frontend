@@ -21,6 +21,7 @@ import { loadChatConversations } from '@/chat-core/api';
 import {
   sendCardMessage,
   sendImageMessage,
+  sendVideoMessage,
   sendLocationMessage,
   sendTextMessage,
   sendVoiceMessage,
@@ -162,6 +163,19 @@ async function sendForwardedMessage(pending: PendingForward, conversationId: str
           thumbKey: str(content['thumbKey']),
           width: num(content['width']),
           height: num(content['height']),
+        });
+      }
+    }
+    if (dto.type === 'video') {
+      const key = str(content['key']);
+      if (key) {
+        return sendVideoMessage({
+          conversationId,
+          key,
+          width: num(content['width']),
+          height: num(content['height']),
+          duration: num(content['duration']),
+          size: num(content['size']),
         });
       }
     }

@@ -28,7 +28,6 @@ import {
   type MomentCommentRow,
 } from '@/features/discover/utils/moment-comments';
 import { getUserProfileHref } from '@/features/user/utils/routes';
-import { getAvatarFrameSource } from '@/features/profile/membership-frames';
 import {
   toggleMomentLike,
   addMomentComment,
@@ -608,8 +607,6 @@ export default function MomentDetailScreen() {
             size={44}
             name={post.author.nickname}
             uri={post.author.avatarUrl ?? undefined}
-            frameSource={getAvatarFrameSource(post.author.avatarFrameAppearance) ?? undefined}
-            compactFrame
           />
           <Text style={[s.authorName, d.authorName]}>{post.author.nickname}</Text>
         </Pressable>

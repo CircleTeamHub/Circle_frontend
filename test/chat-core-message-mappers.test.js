@@ -108,6 +108,31 @@ test('text messages split sent/received by sender identity', () => {
   assert.equal(sent.sendStatus, 2);
 });
 
+test('video messages preserve their signed source and playback metadata', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const video = mapChatMessageDtoToUI(
+    dto({
+      type: 'video',
+      content: {
+        key: 'chat/u2/clip.mp4',
+        url: 'https://cdn.trusted/clip.mp4',
+        width: 1920,
+        height: 1080,
+        duration: 12,
+        size: 2048,
+      },
+    }),
+    'u1',
+    0,
+  );
+  assert.equal(video.type, 'video');
+  assert.equal(video.videoUrl, 'https://cdn.trusted/clip.mp4');
+  assert.equal(video.videoWidth, 1920);
+  assert.equal(video.videoHeight, 1080);
+  assert.equal(video.videoDuration, 12);
+  assert.equal(video.videoSize, 2048);
+});
+
 test('location messages preserve separate place details and valid coordinates', () => {
   const { mapChatMessageDtoToUI } = loadMappers();
   const location = mapChatMessageDtoToUI(

@@ -155,6 +155,7 @@ export default function EditCircleScreen() {
             presign.uploadUrl,
             contentType,
             form.pickedAvatarUri,
+            presign.requiredHeaders,
           );
           uploadedAvatarUrl = presign.fileUrl;
         } catch (error) {

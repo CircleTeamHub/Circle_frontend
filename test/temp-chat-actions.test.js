@@ -28,35 +28,45 @@ test('temp chat list screen opens the create modal and submits a payload', () =>
   assert.match(src, /creatingRoomRef/);
 });
 
-test('temp chat list screen exposes share + end via an inline more button', () => {
+test('temp chat list screen exposes copy link + end via an inline more button', () => {
   const src = read('src/features/messages/screens/TempChatsScreen.tsx');
   // 行视图（含更多按钮）已抽到 TempChatRow，屏幕只负责编排动作。
   const row = read('src/features/messages/components/TempChatRow.tsx');
 
   assert.match(src, /endTempChat/);
-  assert.match(src, /Share/);
   assert.match(src, /shareUrl/);
+  assert.match(src, /t\('tempChats\.copyLink'\)/);
+  assert.doesNotMatch(src, /Share\.share|\bShare,|tempChats\.shareMessage/);
   assert.match(row, /ellipsis-horizontal/);
   // 结束是破坏性操作，必须经过确认
   assert.match(src, /Alert\.alert/);
   assert.match(src, /destructive/);
 });
 
-test('share temp chat modal renders a QR code with copy + system share', () => {
+test('temp chat link modal only displays and copies the link', () => {
   const src = read('src/features/messages/components/ShareTempChatModal.tsx');
 
-  assert.match(src, /react-native-qrcode-svg/);
-  assert.match(src, /QRCode/);
   assert.match(src, /shareUrl/);
-  // 一键复制走系统剪贴板
   assert.match(src, /expo-clipboard/);
-  // 系统分享入口由外部注入
-  assert.match(src, /onShareSystem/);
+  assert.match(src, /selectable/);
+  assert.doesNotMatch(src, /react-native-qrcode-svg|QRCode|onShareSystem|share-outline/);
 });
 
-test('temp chat list screen opens the QR share modal after create and from the row menu', () => {
+test('temp chat list screen opens the copy-link modal after create and from the row menu', () => {
   const src = read('src/features/messages/screens/TempChatsScreen.tsx');
 
   assert.match(src, /ShareTempChatModal/);
   assert.match(src, /shareTarget/);
+});
+
+test('temp chat routes preserve TEMP identity and preflight media before upload', () => {
+  const tempChats = read('src/features/messages/screens/TempChatsScreen.tsx');
+  const messages = read('src/features/messages/screens/MessagesScreen.tsx');
+  const chatDetail = read('src/features/chat/screens/ChatDetailScreen.tsx');
+
+  assert.match(tempChats, /conversationKind: 'temp'/);
+  assert.match(messages, /conversationKind: dto\?\.type\.toLowerCase\(\)/);
+  assert.match(chatDetail, /storedConversationType === 'TEMP'/);
+  assert.match(chatDetail, /enabled: isGroupChat && !isTempChat/);
+  assert.match(chatDetail, /assertMyTempChatConversationOpen\(conversationID\)/);
 });

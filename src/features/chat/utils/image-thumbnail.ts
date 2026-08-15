@@ -55,6 +55,7 @@ export async function uploadChatImageThumbnail(
       presign.uploadUrl,
       'image/jpeg',
       thumbnail.uri,
+      presign.requiredHeaders,
     );
     return {
       url: presign.fileUrl,

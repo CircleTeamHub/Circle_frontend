@@ -8,6 +8,7 @@ const ts = require('typescript');
 function loadUpload({
   ok = false,
   status = 500,
+  responseBody = '',
   onReport = () => {},
   fetchError,
 } = {}) {
@@ -29,7 +30,7 @@ function loadUpload({
     clearTimeout,
     fetch: async () => {
       if (fetchError) throw fetchError;
-      return { ok, status };
+      return { ok, status, text: async () => responseBody };
     },
     console: { log: () => {} },
     require: (request) => {
@@ -84,6 +85,11 @@ test('uploadFileToPresignedUrl reports a failed upload without leaking the signe
       'https://store/obj?X-Amz-Signature=secret',
       'image/png',
       {},
+      {
+        'Content-Type': 'image/png',
+        'Content-Length': '1',
+        'If-None-Match': '*',
+      },
     ),
   );
 
@@ -104,7 +110,11 @@ test('uploadFileToPresignedUrl reports 4xx upload failures too (unlike the API p
   });
 
   await assert.rejects(() =>
-    uploadFileToPresignedUrl('https://store/x', 'image/png', {}),
+    uploadFileToPresignedUrl('https://store/x', 'image/png', {}, {
+      'Content-Type': 'image/png',
+      'Content-Length': '1',
+      'If-None-Match': '*',
+    }),
   );
 
   assert.equal(reports.length, 1);
@@ -118,7 +128,11 @@ test('uploadFileToPresignedUrl does not report a successful upload', async () =>
     onReport: (_err, ctx) => reports.push(ctx),
   });
 
-  await uploadFileToPresignedUrl('https://store/x', 'image/png', {});
+  await uploadFileToPresignedUrl('https://store/x', 'image/png', {}, {
+    'Content-Type': 'image/png',
+    'Content-Length': '1',
+    'If-None-Match': '*',
+  });
 
   assert.equal(reports.length, 0);
 });
@@ -135,10 +149,40 @@ test('uploadFileToPresignedUrl reports a sanitized error when native errors incl
       'https://store/obj?X-Amz-Signature=secret',
       'image/png',
       {},
+      {
+        'Content-Type': 'image/png',
+        'Content-Length': '1',
+        'If-None-Match': '*',
+      },
     ),
   );
 
   assert.equal(reports.length, 1);
   assert.match(reports[0][0].message, /\[REDACTED_URL\]/);
   assert.doesNotMatch(JSON.stringify(reports), /X-Amz-Signature|store\/obj/);
+});
+
+test('uploadFileToPresignedUrl exposes only the safe storage error code', async () => {
+  const { StorageUploadError, uploadFileToPresignedUrl } = loadUpload({
+    ok: false,
+    status: 400,
+    responseBody:
+      '<Error><Code>MissingContentLength</Code><Key>private/user/photo.jpg</Key></Error>',
+  });
+
+  await assert.rejects(
+    () =>
+      uploadFileToPresignedUrl('https://store/x', 'image/png', {}, {
+        'Content-Type': 'image/png',
+        'Content-Length': '1',
+        'If-None-Match': '*',
+      }),
+    (error) => {
+      assert.ok(error instanceof StorageUploadError);
+      assert.equal(error.name, 'StorageUploadError');
+      assert.match(error.message, /400: MissingContentLength/);
+      assert.doesNotMatch(error.message, /private|photo\.jpg/);
+      return true;
+    },
+  );
 });

@@ -120,6 +120,7 @@ export default function CreateCircleScreen() {
             presign.uploadUrl,
             contentType,
             form.pickedAvatarUri,
+            presign.requiredHeaders,
           );
           uploadedAvatarUrl = presign.fileUrl;
         } catch (error) {

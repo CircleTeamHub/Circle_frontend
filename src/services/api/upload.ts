@@ -28,6 +28,29 @@ function sanitizeUploadErrorForReport(error: unknown): Error {
   return safe;
 }
 
+/** 只提取对象存储 XML 的短错误码，不把对象 key、request id 或签名 URL带进日志。 */
+function storageErrorCode(body: unknown): string | null {
+  if (typeof body !== 'string') return null;
+  return body.match(/<Code>([A-Za-z0-9._-]{1,64})<\/Code>/)?.[1] ?? null;
+}
+
+export class StorageUploadError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'StorageUploadError';
+  }
+}
+
+function uploadStatusError(status: number, body?: unknown): Error {
+  const code = storageErrorCode(body);
+  return new StorageUploadError(
+    i18n.t('common.errors.uploadFailedWithStatus', {
+      status: code ? `${status}: ${code}` : status,
+      defaultValue: '上传失败 ({{status}})',
+    }),
+  );
+}
+
 /**
  * Runs a storage upload (raw PUT, not via apiClient so the API chokepoint never
  * sees it) and reports any failure to Sentry before re-throwing it unchanged.
@@ -87,7 +110,24 @@ export type UploadPresignResponse = {
   uploadUrl: string;
   fileUrl: string;
   key: string;
+  requiredHeaders: UploadRequiredHeaders;
 };
+
+export type UploadRequiredHeaders = {
+  'Content-Type': string;
+  'Content-Length': string;
+  'If-None-Match': string;
+};
+
+function isUploadRequiredHeaders(value: unknown): value is UploadRequiredHeaders {
+  if (!isPlainObject(value)) return false;
+  return (
+    isNonEmptyString(value['Content-Type']) &&
+    typeof value['Content-Length'] === 'string' &&
+    /^\d+$/.test(value['Content-Length']) &&
+    value['If-None-Match'] === '*'
+  );
+}
 
 // presign 返回的两个 URL 即将被当作信任凭证使用（PUT 上传时直接拼到 fetch）。
 // 字段缺失或类型漂移会让 `new URL(...)` 抛 / fetch 直接挂；运行时守一道。
@@ -96,7 +136,8 @@ function isUploadPresignShape(value: unknown): value is UploadPresignResponse {
   return (
     isNonEmptyString(value.uploadUrl) &&
     isNonEmptyString(value.fileUrl) &&
-    isNonEmptyString(value.key)
+    isNonEmptyString(value.key) &&
+    isUploadRequiredHeaders(value.requiredHeaders)
   );
 }
 
@@ -286,6 +327,7 @@ export async function uploadFileToPresignedUrl(
   uploadUrl: string,
   contentType: string,
   body: Blob,
+  requiredHeaders: UploadRequiredHeaders,
 ) {
   return runStorageUpload({ kind: 'presigned-put', contentType }, async () => {
     assertPresignedUploadUrlReachableOnCurrentPlatform(uploadUrl);
@@ -296,9 +338,7 @@ export async function uploadFileToPresignedUrl(
     try {
       response = await fetch(uploadUrl, {
         method: 'PUT',
-        headers: {
-          'Content-Type': contentType,
-        },
+        headers: requiredHeaders,
         body,
         signal: controller.signal,
       });
@@ -317,12 +357,8 @@ export async function uploadFileToPresignedUrl(
 
     if (!response.ok) {
       // 这个函数也被聊天图片 / 笔记附件 / 动态图等用，"头像上传失败" 误导用户。
-      throw new Error(
-        i18n.t('common.errors.uploadFailedWithStatus', {
-          status: response.status,
-          defaultValue: '上传失败 ({{status}})',
-        }),
-      );
+      const body = await response.text().catch(() => '');
+      throw uploadStatusError(response.status, body);
     }
   });
 }
@@ -370,6 +406,7 @@ export async function uploadLocalFileToPresignedUrl(
   uploadUrl: string,
   contentType: string,
   fileUri: string,
+  requiredHeaders: UploadRequiredHeaders,
   timeoutMs: number = UPLOAD_TIMEOUT_MS,
 ) {
   return runStorageUpload({ kind: 'local-file', contentType }, async () => {
@@ -389,21 +426,14 @@ export async function uploadLocalFileToPresignedUrl(
               filetype: contentType,
             },
           ],
-          headers: {
-            'Content-Type': contentType,
-          },
+          headers: requiredHeaders,
           method: 'PUT',
         });
         return { promise: handle.promise, jobId: handle.jobId };
       }, timeoutMs);
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw new Error(
-          i18n.t('common.errors.uploadFailedWithStatus', {
-            status: response.statusCode,
-            defaultValue: '上传失败 ({{status}})',
-          }),
-        );
+        throw uploadStatusError(response.statusCode, response.body);
       }
 
       return response;
@@ -412,9 +442,7 @@ export async function uploadLocalFileToPresignedUrl(
     const response = await withUploadTimeout(
       () => ({
         promise: FileSystem.uploadAsync(uploadUrl, fileUri, {
-          headers: {
-            'Content-Type': contentType,
-          },
+          headers: requiredHeaders,
           httpMethod: 'PUT',
           uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
         }),
@@ -423,12 +451,7 @@ export async function uploadLocalFileToPresignedUrl(
     );
 
     if (response.status < 200 || response.status >= 300) {
-      throw new Error(
-        i18n.t('common.errors.uploadFailedWithStatus', {
-          status: response.status,
-          defaultValue: '上传失败 ({{status}})',
-        }),
-      );
+      throw uploadStatusError(response.status, response.body);
     }
 
     return response;

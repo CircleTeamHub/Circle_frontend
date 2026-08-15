@@ -266,7 +266,7 @@ export default function OnboardingProfileScreen() {
         const filename = sanitizeUploadFilename(
           selectedAvatarFileName ?? 'avatar.jpg',
         );
-        const { uploadUrl, fileUrl } = await requestUploadPresign({
+        const { uploadUrl, fileUrl, requiredHeaders } = await requestUploadPresign({
           filename,
           contentType: selectedAvatarMimeType,
           folder: 'avatars',
@@ -277,6 +277,7 @@ export default function OnboardingProfileScreen() {
           uploadUrl,
           selectedAvatarMimeType,
           selectedAvatarUri,
+          requiredHeaders,
         );
         payload.avatarUrl = fileUrl;
       }
@@ -335,7 +336,6 @@ export default function OnboardingProfileScreen() {
             size={112}
             name={nickname || user.accountId || 'C'}
             uri={avatarPreviewUri ?? undefined}
-            bgColor={colors.surface}
           />
           <Pressable
             style={[s.avatarButton, d.avatarButton]}

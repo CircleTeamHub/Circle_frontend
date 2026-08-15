@@ -245,3 +245,32 @@ test('without an echo the ack still confirms the optimistic message', async () =
   assert.equal(timeline[0].height, 4);
   assert.equal(result.id, 'srv-2');
 });
+
+test('video send keeps local preview off the wire while retaining playback metadata', async () => {
+  let sentPayload;
+  const { client } = loadSendStack({
+    onSend: async (payload) => {
+      sentPayload = payload;
+      return { messageId: 'srv-video', height: 6 };
+    },
+  });
+  const result = await client.sendVideoMessage({
+    conversationId: 'c1',
+    key: 'chat/me/clip.mp4',
+    localUri: 'file:///tmp/clip.mp4',
+    width: 1280,
+    height: 720,
+    duration: 8,
+    size: 4096,
+  });
+  assert.equal(sentPayload.type, 'video');
+  assert.equal(JSON.stringify(sentPayload.content), JSON.stringify({
+    key: 'chat/me/clip.mp4',
+    width: 1280,
+    height: 720,
+    duration: 8,
+    size: 4096,
+  }));
+  assert.equal(sentPayload.content.localUri, undefined);
+  assert.equal(result.content.localUri, 'file:///tmp/clip.mp4');
+});

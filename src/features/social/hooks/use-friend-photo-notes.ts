@@ -96,13 +96,18 @@ export function useFriendPhotoNotes(): UseFriendPhotoNotesResult {
       setUploading(true);
       try {
         const filename = sanitizeUploadFilename(asset.fileName ?? 'photo.jpg');
-        const { uploadUrl, fileUrl } = await requestUploadPresign({
+        const { uploadUrl, fileUrl, requiredHeaders } = await requestUploadPresign({
           filename,
           contentType,
           folder: 'friends',
           fileUri: asset.uri,
         });
-        await uploadLocalFileToPresignedUrl(uploadUrl, contentType, asset.uri);
+        await uploadLocalFileToPresignedUrl(
+          uploadUrl,
+          contentType,
+          asset.uri,
+          requiredHeaders,
+        );
         setPhotos((current) =>
           current.includes(fileUrl) ? current : [...current, fileUrl],
         );

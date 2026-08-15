@@ -762,6 +762,7 @@ export default function MessagesScreen() {
           sourceID: conversation.sourceID,
           title: conversation.name,
           conversationType: conversation.conversationType,
+          conversationKind: dto?.type.toLowerCase(),
           avatarUrl: conversation.avatarUrl,
         },
       });

@@ -92,6 +92,13 @@ function nonEmptyString(value: unknown): string | null {
  */
 export function getChatMediaThumbnailUris(message: ChatMessageDto): string[] {
   const content = message.content ?? {};
+  // 视频的 url/localUri 指向媒体文件本身，不能交给 <Image> 当缩略图加载。
+  // 服务端目前没有生成视频封面，所以仅在协议明确提供 thumbUrl 时展示，
+  // 否则媒体宫格使用带播放标记的占位卡片。
+  if (message.type === 'video') {
+    const thumbnail = allowPeerMediaUrl(nonEmptyString(content['thumbUrl']));
+    return thumbnail ? [thumbnail] : [];
+  }
   const candidates = [
     allowPeerMediaUrl(nonEmptyString(content['thumbUrl'])),
     allowPeerMediaUrl(nonEmptyString(content['url'])),

@@ -94,6 +94,8 @@ export function getChatMessagePreview(message: ChatMessageDto | null): string {
     }
     case 'image':
       return tPreview('image', '[图片]');
+    case 'video':
+      return tPreview('video', '[视频]');
     case 'voice':
       return tPreview('voice', '[语音]');
     case 'location':
@@ -161,10 +163,13 @@ export function mapChatConversationToUI(dto: ChatConversationDto): Conversation 
     avatarRaw = dto.peer?.avatarUrl ?? null;
     sourceID = dto.peer?.id ?? '';
   } else {
-    // TEMP:临时房没有圈子也没有固定对端,名字回落到末条消息的发送者,
-    // sourceID 用 conversation id —— 它本来就只在自己这条会话里有意义。
-    name = dto.lastMessage?.sender?.nickname ?? '';
-    avatarRaw = dto.lastMessage?.sender?.avatarUrl ?? null;
+    // TEMP 没有固定对端，但有自己的稳定房间名。绝不能拿末条发送者当标题：
+    // 房主发完消息后列表会看起来像「和自己聊天」，访客发言又会让房名反复变化。
+    // 通用标题兜底兼容 App 先于后端发布的短暂窗口。
+    name =
+      dto.tempChat?.title.trim() ||
+      i18n.t('tempChats.title', { defaultValue: '临时群聊' });
+    avatarRaw = null;
     sourceID = dto.id;
   }
 

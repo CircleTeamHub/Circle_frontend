@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
 import { MemberName } from '@/components/ui/member-name';
-import { getAvatarFrameSource } from '@/features/profile/membership-frames';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { getUserProfileHref } from '@/features/user/utils/routes';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
@@ -164,8 +163,6 @@ export const MomentCard: React.FC<MomentCardProps> = ({
           size={40}
           name={post.author.nickname}
           uri={post.author.avatarUrl ?? undefined}
-          frameSource={getAvatarFrameSource(post.author.avatarFrameAppearance) ?? undefined}
-          compactFrame
         />
       </Pressable>
 

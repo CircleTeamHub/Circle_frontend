@@ -339,6 +339,7 @@ export default function CreatePostScreen() {
             presign.uploadUrl,
             contentType,
             uri,
+            presign.requiredHeaders,
           );
           uploadedUrls.push(presign.fileUrl);
         } catch (uploadError) {

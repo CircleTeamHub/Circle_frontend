@@ -6,12 +6,9 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { NavHeader } from '@/components/ui/nav-header';
+import { Avatar } from '@/components/ui/avatar';
 import { MemberName } from '@/components/ui/member-name';
 import { FEATURE_FLAGS } from '@/constants/feature-flags';
-import {
-  AVATAR_FRAME_SCALE,
-  getAvatarFrameSource,
-} from '@/features/profile/membership-frames';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { ensureDirectConversation } from '@/chat-core/client';
 import { getApiErrorMessage } from '@/services/api/errors';
@@ -105,7 +102,6 @@ const ROW_COLOR: Record<InfoRowId, keyof ThemeColors> = {
 
 const AVATAR_SIZE = 68;
 const AVATAR_RING_SIZE = AVATAR_SIZE + 10;
-const AVATAR_FRAME_SIZE = AVATAR_SIZE * AVATAR_FRAME_SCALE;
 const CARD_GAP = 12; // 分组卡片之间的垂直留白
 const RECOGNITION_COUNT_ICON_SOURCE = require('../../../../assets/images/like-outline.png');
 
@@ -119,42 +115,19 @@ const s = StyleSheet.create({
   },
   avatarStage: {
     position: 'relative',
-    width: AVATAR_FRAME_SIZE,
-    height: AVATAR_FRAME_SIZE,
+    width: AVATAR_RING_SIZE,
+    height: AVATAR_RING_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarRing: {
     width: AVATAR_RING_SIZE,
     height: AVATAR_RING_SIZE,
-    borderRadius: AVATAR_RING_SIZE / 2,
+    borderRadius: Radius.md,
+    borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-  },
-  avatarFrame: {
-    width: AVATAR_SIZE,
-    height: AVATAR_SIZE,
-    borderRadius: AVATAR_SIZE / 2,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // 有会员框时隐藏默认描边,由框素材接管外圈。
-  avatarRingFramed: {
-    borderColor: 'transparent',
-  },
-  membershipFrameOverlay: {
-    position: 'absolute',
-    width: AVATAR_FRAME_SIZE,
-    height: AVATAR_FRAME_SIZE,
-    top: 0,
-    left: 0,
-    pointerEvents: 'none',
-  },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
   },
   identity: {
     alignItems: 'center',
@@ -475,10 +448,6 @@ export default function UserProfileScreen() {
       : rawProfile;
   const profileMetaItems = getProfileMetaItems(profile);
   const profileVipLevel = profile.vipLevel ?? 0;
-  const membershipFrame = getAvatarFrameSource(profile.avatarFrameAppearance);
-  const visibleMembershipFrame = FEATURE_FLAGS.avatarFrames
-    ? membershipFrame
-    : null;
   const displayName =
     remarkOverride === undefined
       ? friendSettings?.remark?.trim() || profile.remarkHint || profile.name
@@ -739,14 +708,6 @@ export default function UserProfileScreen() {
         backgroundColor: colors.surface,
         borderColor: colors.primaryLight,
       },
-      avatarFrame: {
-        backgroundColor: colors.surface,
-      },
-      avatarFallback: {
-        color: colors.white,
-        fontSize: 32,
-        fontWeight: '700' as const,
-      },
       name: {
         color: colors.text,
         ...Typography.h1,
@@ -851,27 +812,14 @@ export default function UserProfileScreen() {
         <View style={s.hero}>
           <View style={s.avatarStage}>
             <View
-              style={[
-                s.avatarRing,
-                d.avatarRing,
-                visibleMembershipFrame ? s.avatarRingFramed : null,
-              ]}
+              style={[s.avatarRing, d.avatarRing]}
             >
-              <View style={[s.avatarFrame, d.avatarFrame]}>
-                {profile.avatarUrl ? (
-                  <Image source={{ uri: profile.avatarUrl }} style={s.avatarImage} />
-                ) : (
-                  <Text style={d.avatarFallback}>{profile.name.charAt(0)}</Text>
-                )}
-              </View>
-            </View>
-            {visibleMembershipFrame ? (
-              <Image
-                source={visibleMembershipFrame}
-                style={s.membershipFrameOverlay}
-                contentFit="contain"
+              <Avatar
+                size={AVATAR_SIZE}
+                name={profile.name}
+                uri={profile.avatarUrl}
               />
-            ) : null}
+            </View>
           </View>
 
           <View style={s.identity}>

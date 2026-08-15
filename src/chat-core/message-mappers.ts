@@ -18,6 +18,7 @@ import type { StoredChatMessage } from './store';
  * chat-core 消息 DTO → UI ChatMessage(替代 src/im/mappers 的消息侧)。
  * content 形状是 FE 定义、BE 透传的契约:
  *   text/quote {text, quotedText?} · image {key,url?,thumbUrl?,width?,height?,localUri?}
+ *   video {key,url?,width?,height?,duration?,size?,localUri?}
  *   voice {key,url?,duration,localUri?} · location {latitude,longitude,title?,address?,description}
  *   各卡片类型的 content = 卡片 payload 本体。
  * 乐观消息(height=0):sendStatus=1;failed=true → 3;已确认 → 2。
@@ -357,6 +358,16 @@ export function mapChatMessageDtoToUI(
           : undefined,
         imageWidth: num(content['width']),
         imageHeight: num(content['height']),
+      };
+    case 'video':
+      return {
+        ...base,
+        type: 'video',
+        videoUrl: mediaUrl(content, 'url'),
+        videoWidth: num(content['width']),
+        videoHeight: num(content['height']),
+        videoDuration: num(content['duration']),
+        videoSize: num(content['size']),
       };
     case 'voice':
       return {
