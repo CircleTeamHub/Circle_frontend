@@ -102,8 +102,11 @@ test('chat info screen renders a dedicated group info layout for group conversat
   assert.match(source, /t\('chat\.groupNotice'\)/);
   assert.match(source, /t\('chat\.searchHistory'\)/);
   assert.match(source, /t\('chat\.moreGroupMembers'/);
-  assert.match(source, /rightIcon=\{canViewMemberDirectory \? 'search-outline' : undefined\}/);
-  assert.match(source, /onRightPress=\{canViewMemberDirectory \? handleOpenSearchGroupMembers : undefined\}/);
+  assert.match(source, /canViewMemberDirectory && groupID \? 'search-outline' : undefined/);
+  assert.match(
+    source,
+    /canViewMemberDirectory && groupID\s*\? handleOpenSearchGroupMembers\s*: undefined/,
+  );
   assert.match(source, /getGroupMemberSearchHref/);
 });
 
@@ -126,6 +129,29 @@ test('temporary chat info copies its invite link without treating the room as a 
   assert.match(infoSource, /Clipboard\.setStringAsync\(room\.shareUrl\)/);
   assert.match(infoSource, /label=\{t\('tempChats\.inviteLink'\)\}/);
   assert.match(infoSource, /value=\{t\('tempChats\.copyLink'\)\}/);
+});
+
+// 临时房走群布局但不是圈子:groupID 被清空,圈子那条成员目录路径整条不跑。
+// 不单独给它接会话成员端点的话,本页就是「群信息(0)」+ 空白 —— 而同一个 PR
+// 的 ChatDetailScreen 已经放开了临时房的成员资料查看。
+test('temporary chat info loads its member directory from the conversation endpoint', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(
+    source,
+    /const canViewMemberDirectory =\s*isTempConversation \|\| canViewCircleMemberDirectory;/,
+  );
+  assert.match(source, /if \(isTempConversation\) \{[\s\S]{0,700}fetchChatMembers\(tempConversationID\)/);
+  // 临时房没有圈子,这两条圈子专属请求绝不能落到 tmp... id 上。
+  assert.doesNotMatch(
+    source,
+    /if \(isTempConversation\) \{[\s\S]{0,700}(fetchCircleDetail|createCircleChatConversation)/,
+  );
+  // 成员搜索页按圈子 id 检索,临时房没有 —— 不要渲染一个点了没反应的图标。
+  assert.match(source, /canViewMemberDirectory && groupID \? 'search-outline'/);
 });
 
 // 契约随自研栈迁移更新(意图不变):成员昵称/头像以 fetchChatMembers 返回为准
@@ -152,7 +178,7 @@ test('chat info screen keeps member access live while mounted', () => {
   // 自己的角色来自订阅驱动的 selfMember——群主撤权时 canManageGroup /
   // canViewMemberDirectory 立即翻转，不等重新聚焦。
   assert.match(source, /selfMember: currentGroupMember,/);
-  assert.match(source, /canViewMembers: canViewMemberDirectory,/);
+  assert.match(source, /canViewMembers: canViewCircleMemberDirectory,/);
   assert.match(source, /revalidate: revalidateMemberAccess,/);
   assert.doesNotMatch(source, /setCurrentGroupMember/);
   // 打开成员资料前 fail-closed 现场重查。
@@ -302,7 +328,10 @@ test('chat info screen right search opens group member search instead of chat hi
 
   assert.match(infoSource, /const handleOpenSearchGroupMembers = useCallback/);
   assert.match(infoSource, /router\.push\(\s*getGroupMemberSearchHref\(scope,/);
-  assert.match(infoSource, /onRightPress=\{canViewMemberDirectory \? handleOpenSearchGroupMembers : undefined\}/);
+  assert.match(
+    infoSource,
+    /canViewMemberDirectory && groupID\s*\? handleOpenSearchGroupMembers\s*: undefined/,
+  );
   assert.doesNotMatch(infoSource, /onRightPress=\{handleOpenSearchHistory\}/);
   assert.match(routeSource, /function getGroupMemberSearchHref/);
   assert.match(routeSource, /search-group-members/);

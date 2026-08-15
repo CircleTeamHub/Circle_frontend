@@ -332,13 +332,18 @@ export default function ChatInfoScreen() {
   // 时，订阅推送立即收紧目录/搜索/管理入口，不再等重新聚焦。
   const {
     selfMember: currentGroupMember,
-    canViewMembers: canViewMemberDirectory,
+    canViewMembers: canViewCircleMemberDirectory,
     revalidate: revalidateMemberAccess,
   } = useGroupMemberViewAccess({
     enabled: Boolean(isGroupConversation && groupID && currentUserID),
     groupID,
     currentUserID,
   });
+  // 临时房不是圈子,没有圈子角色可判——目录权限由后端的座位校验兜底
+  // (GET /chat/conversations/:id/members),与 ChatDetailScreen 同口径。
+  // 不放开的话本页会渲染群布局却永远 0 成员、没有成员目录。
+  const canViewMemberDirectory =
+    isTempConversation || canViewCircleMemberDirectory;
   const currentRole = currentGroupMember?.roleLevel ?? null;
   const isOwner = currentGroupMember?.role === 'OWNER';
   const isAdmin = currentGroupMember?.role === 'ADMIN';
@@ -431,6 +436,32 @@ export default function ChatInfoScreen() {
     useCallback(() => {
       let cancelled = false;
 
+      // 临时房走会话自己的成员端点:没有圈子详情可查(没有 name/description/
+      // memberCount),会话 id 也已经在手上,不需要 get-or-create。
+      if (isTempConversation) {
+        setGroupInfo(null);
+        setGroupConversation(null);
+        // store 还没灌进会话时(从临时聊天列表直接进来)只有路由参数,
+        // 与本页其它读路径同口径回落。
+        const tempConversationID = resolvedConversationID || conversationID;
+        if (!tempConversationID) {
+          setGroupMembers([]);
+          return () => {
+            cancelled = true;
+          };
+        }
+        fetchChatMembers(tempConversationID)
+          .then((members) => {
+            if (!cancelled) setGroupMembers(members);
+          })
+          .catch(() => {
+            if (!cancelled) setGroupMembers([]);
+          });
+        return () => {
+          cancelled = true;
+        };
+      }
+
       if (!isGroupConversation || !groupID) {
         setGroupInfo(null);
         setGroupMembers([]);
@@ -488,7 +519,14 @@ export default function ChatInfoScreen() {
       return () => {
         cancelled = true;
       };
-    }, [canViewMemberDirectory, groupID, isGroupConversation]),
+    }, [
+      canViewMemberDirectory,
+      conversationID,
+      groupID,
+      isGroupConversation,
+      isTempConversation,
+      resolvedConversationID,
+    ]),
   );
 
   useEffect(() => {
@@ -1174,8 +1212,14 @@ export default function ChatInfoScreen() {
         <NavHeader
           title={t('chat.groupInfoWithCount', { count: memberCount })}
           fallbackHref={backHref}
-          rightIcon={canViewMemberDirectory ? 'search-outline' : undefined}
-          onRightPress={canViewMemberDirectory ? handleOpenSearchGroupMembers : undefined}
+          rightIcon={
+            canViewMemberDirectory && groupID ? 'search-outline' : undefined
+          }
+          onRightPress={
+            canViewMemberDirectory && groupID
+              ? handleOpenSearchGroupMembers
+              : undefined
+          }
         />
         <ScrollView
           style={s.scroll}
