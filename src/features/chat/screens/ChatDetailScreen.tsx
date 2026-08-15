@@ -28,6 +28,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import { Avatar } from '@/components/ui/avatar';
+import { TempChatAvatar } from '@/components/ui/temp-chat-avatar';
 import { MemberName } from '@/components/ui/member-name';
 import { Divider } from '@/components/ui/divider';
 import { useElapsedSeconds } from '@/hooks/use-elapsed-seconds';
@@ -3438,7 +3439,15 @@ export default function ChatDetailScreen() {
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
         <Pressable onPress={handleOpenHeaderTarget}>
-          <Avatar size={36} name={conversationTitle} uri={avatarUrl} />
+          {isTempChat ? (
+            <TempChatAvatar
+              size={36}
+              name={conversationTitle}
+              badgeBorderColor={colors.background}
+            />
+          ) : (
+            <Avatar size={36} name={conversationTitle} uri={avatarUrl} />
+          )}
         </Pressable>
         <View style={s.headerInfo}>
           <View style={s.headerMeta}>

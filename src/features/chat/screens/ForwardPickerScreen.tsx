@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import i18n from '@/i18n';
 import { Avatar } from '@/components/ui/avatar';
+import { TempChatAvatar } from '@/components/ui/temp-chat-avatar';
 import { NavHeader } from '@/components/ui/nav-header';
 import { useMessageForwardStore } from '@/features/chat/store/use-message-forward-store';
 import { loadChatConversations } from '@/chat-core/api';
@@ -358,18 +359,26 @@ export default function ForwardPickerScreen() {
                 void handleForward(item);
               }}
             >
-              <Avatar
-                size={42}
-                shape="square"
-                name={name}
-                uri={conversationAvatarUrl(item)}
-              />
+              {item.type === 'TEMP' ? (
+                <TempChatAvatar
+                  size={42}
+                  name={name}
+                  badgeBorderColor={colors.surface}
+                />
+              ) : (
+                <Avatar
+                  size={42}
+                  shape="square"
+                  name={name}
+                  uri={conversationAvatarUrl(item)}
+                />
+              )}
               <View style={s.rowText}>
                 <Text style={d.title} numberOfLines={1}>
                   {name}
                 </Text>
                 <Text style={d.subtitle} numberOfLines={1}>
-                  {item.type === 'GROUP'
+                  {item.type === 'GROUP' || item.type === 'TEMP'
                     ? t('chat.forward.group')
                     : t('chat.forward.single')}
                 </Text>
