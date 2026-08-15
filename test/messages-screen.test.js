@@ -45,7 +45,7 @@ test('messages screen distinguishes temporary chats with only an avatar clock ba
   );
 
   assert.match(source, /item\.isTempChat/);
-  assert.match(source, /<TempChatAvatar/);
+  assert.match(source, /<GroupChatAvatar/);
   assert.doesNotMatch(source, /tempChats\.listBadge/);
   assert.doesNotMatch(source, /tempChatExpiresAt/);
 });

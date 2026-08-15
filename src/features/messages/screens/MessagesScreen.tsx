@@ -1,5 +1,5 @@
 import { Avatar } from "@/components/ui/avatar";
-import { TempChatAvatar } from "@/components/ui/temp-chat-avatar";
+import { GroupChatAvatar } from "@/components/ui/group-chat-avatar";
 import { MemberName } from "@/components/ui/member-name";
 import { Badge } from "@/components/ui/badge";
 import { Divider } from "@/components/ui/divider";
@@ -449,15 +449,13 @@ function ConversationRowImpl({
               <Avatar size={40} name={item.name} uri={item.avatarUrl} />
             </Pressable>
           ) : (
-            item.isTempChat ? (
-              <TempChatAvatar
-                size={40}
-                name={item.name}
-                badgeBorderColor={rowBackgroundColor}
-              />
-            ) : (
-              <Avatar size={40} name={item.name} uri={item.avatarUrl} />
-            )
+            <GroupChatAvatar
+              size={40}
+              name={item.name}
+              uri={item.avatarUrl}
+              temporary={item.isTempChat}
+              badgeBorderColor={rowBackgroundColor}
+            />
           )}
           <Pressable style={s.rowContent} onPress={() => onOpenConversation(item)}>
             <View style={s.rowTop}>
