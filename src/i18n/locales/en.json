@@ -212,14 +212,19 @@
   },
   "notifications": {
     "title": "Notifications",
+    "momentsTitle": "Moments notifications",
+    "circleTitle": "Circle notifications",
     "tabInteractive": "Interactions",
-    "tabCircle": "Signups",
+    "tabCircleNotifications": "Circle activity",
+    "tabSignups": "Signups",
     "filterAll": "All",
     "filterUnread": "Unread",
     "markAllRead": "Mark all read",
     "system": "System",
     "emptyTitle": "No notifications",
     "emptySubtitle": "New interactions and signups show up here",
+    "emptySubtitleMoments": "New likes and comments show up here",
+    "emptySubtitleCircle": "New circle activity and signups show up here",
     "loadFailedTitle": "Could not load",
     "loadFailed": "Some notifications could not load. Pull to retry",
     "summary": {
@@ -2645,10 +2650,30 @@
     "empty": "No referrals yet. Share your code to get started.",
     "loadMore": "Load more",
     "loadingMore": "Loading…",
-    "stats": { "invited": "Invited", "rewarded": "Qualified", "points": "Points earned" },
-    "status": { "pending": "Pending", "rewarded": "Rewarded", "capped": "Limit reached", "rejected": "Ineligible", "expired": "Expired" },
-    "item": { "rewarded": "Earned {{points}} points", "pending": "Rewarded after profile, {{days}} days, and a friend", "noReward": "No points awarded" },
-    "errors": { "loadFailed": "Failed to load referral data", "loadMoreFailed": "Failed to load more referrals", "invalidData": "Invalid referral data received", "staleData": "This may be out of date. Pull down to reload.", "shareFailed": "Sharing failed. Copy the invite code and send it instead." }
+    "stats": {
+      "invited": "Invited",
+      "rewarded": "Qualified",
+      "points": "Points earned"
+    },
+    "status": {
+      "pending": "Pending",
+      "rewarded": "Rewarded",
+      "capped": "Limit reached",
+      "rejected": "Ineligible",
+      "expired": "Expired"
+    },
+    "item": {
+      "rewarded": "Earned {{points}} points",
+      "pending": "Rewarded after profile, {{days}} days, and a friend",
+      "noReward": "No points awarded"
+    },
+    "errors": {
+      "loadFailed": "Failed to load referral data",
+      "loadMoreFailed": "Failed to load more referrals",
+      "invalidData": "Invalid referral data received",
+      "staleData": "This may be out of date. Pull down to reload.",
+      "shareFailed": "Sharing failed. Copy the invite code and send it instead."
+    }
   },
   "serverErrors": {
     "TEMP_CHAT_JOIN_FAILED": "Failed to join, please try again",

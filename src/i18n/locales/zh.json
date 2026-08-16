@@ -212,14 +212,19 @@
   },
   "notifications": {
     "title": "消息通知",
+    "momentsTitle": "朋友圈通知",
+    "circleTitle": "圈子通知",
     "tabInteractive": "互动消息",
-    "tabCircle": "报名管理",
+    "tabCircleNotifications": "圈子动态",
+    "tabSignups": "报名管理",
     "filterAll": "全部",
     "filterUnread": "未读",
     "markAllRead": "全部已读",
     "system": "系统通知",
     "emptyTitle": "暂无通知",
     "emptySubtitle": "新的互动和报名会出现在这里",
+    "emptySubtitleMoments": "新的点赞和评论会出现在这里",
+    "emptySubtitleCircle": "新的圈子动态和报名会出现在这里",
     "loadFailedTitle": "加载失败",
     "loadFailed": "部分消息加载失败，请下拉重试",
     "summary": {
@@ -2642,10 +2647,30 @@
     "empty": "还没有邀请记录，分享邀请码开始邀请吧",
     "loadMore": "加载更多",
     "loadingMore": "加载中…",
-    "stats": { "invited": "已邀请", "rewarded": "已达标", "points": "累计积分" },
-    "status": { "pending": "待达标", "rewarded": "已奖励", "capped": "已达上限", "rejected": "不符合", "expired": "已过期" },
-    "item": { "rewarded": "已获得 {{points}} 积分", "pending": "完成资料、满 {{days}} 天并添加好友后发放", "noReward": "本次未发放积分" },
-    "errors": { "loadFailed": "邀请数据加载失败，请稍后重试", "loadMoreFailed": "更多邀请记录加载失败", "invalidData": "邀请数据格式异常，请稍后重试", "staleData": "内容可能不是最新的，下拉可重新加载", "shareFailed": "分享失败，可改用「复制邀请码」发给好友" }
+    "stats": {
+      "invited": "已邀请",
+      "rewarded": "已达标",
+      "points": "累计积分"
+    },
+    "status": {
+      "pending": "待达标",
+      "rewarded": "已奖励",
+      "capped": "已达上限",
+      "rejected": "不符合",
+      "expired": "已过期"
+    },
+    "item": {
+      "rewarded": "已获得 {{points}} 积分",
+      "pending": "完成资料、满 {{days}} 天并添加好友后发放",
+      "noReward": "本次未发放积分"
+    },
+    "errors": {
+      "loadFailed": "邀请数据加载失败，请稍后重试",
+      "loadMoreFailed": "更多邀请记录加载失败",
+      "invalidData": "邀请数据格式异常，请稍后重试",
+      "staleData": "内容可能不是最新的，下拉可重新加载",
+      "shareFailed": "分享失败，可改用「复制邀请码」发给好友"
+    }
   },
   "serverErrors": {
     "TEMP_CHAT_JOIN_FAILED": "加入失败，请重试",

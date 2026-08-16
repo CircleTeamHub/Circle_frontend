@@ -1453,14 +1453,19 @@
   },
   "notifications": {
     "title": "通知",
+    "momentsTitle": "モーメンツの通知",
+    "circleTitle": "サークルの通知",
     "tabInteractive": "やりとり",
-    "tabCircle": "応募管理",
+    "tabCircleNotifications": "サークルの動き",
+    "tabSignups": "応募管理",
     "filterAll": "すべて",
     "filterUnread": "未読",
     "markAllRead": "すべて既読",
     "system": "システム",
     "emptyTitle": "通知はありません",
     "emptySubtitle": "新しいやりとりや応募がここに表示されます",
+    "emptySubtitleMoments": "新しいいいねやコメントがここに表示されます",
+    "emptySubtitleCircle": "新しいサークルの動きや応募がここに表示されます",
     "loadFailedTitle": "読み込めませんでした",
     "loadFailed": "一部の通知を読み込めませんでした。引っ張って再試行してください",
     "summary": {
@@ -2642,10 +2647,30 @@
     "empty": "招待履歴はありません。コードを共有して始めましょう。",
     "loadMore": "さらに読み込む",
     "loadingMore": "読み込み中…",
-    "stats": { "invited": "招待数", "rewarded": "達成数", "points": "獲得ポイント" },
-    "status": { "pending": "条件待ち", "rewarded": "付与済み", "capped": "上限到達", "rejected": "対象外", "expired": "期限切れ" },
-    "item": { "rewarded": "{{points}}ポイント獲得", "pending": "プロフィール、{{days}}日経過、友だち追加後に付与", "noReward": "ポイントは付与されません" },
-    "errors": { "loadFailed": "招待データを読み込めませんでした", "loadMoreFailed": "招待履歴をさらに読み込めませんでした", "invalidData": "招待データの形式が正しくありません", "staleData": "最新でない可能性があります。引っ張って再読み込みしてください。", "shareFailed": "共有に失敗しました。「招待コードをコピー」してお送りください。" }
+    "stats": {
+      "invited": "招待数",
+      "rewarded": "達成数",
+      "points": "獲得ポイント"
+    },
+    "status": {
+      "pending": "条件待ち",
+      "rewarded": "付与済み",
+      "capped": "上限到達",
+      "rejected": "対象外",
+      "expired": "期限切れ"
+    },
+    "item": {
+      "rewarded": "{{points}}ポイント獲得",
+      "pending": "プロフィール、{{days}}日経過、友だち追加後に付与",
+      "noReward": "ポイントは付与されません"
+    },
+    "errors": {
+      "loadFailed": "招待データを読み込めませんでした",
+      "loadMoreFailed": "招待履歴をさらに読み込めませんでした",
+      "invalidData": "招待データの形式が正しくありません",
+      "staleData": "最新でない可能性があります。引っ張って再読み込みしてください。",
+      "shareFailed": "共有に失敗しました。「招待コードをコピー」してお送りください。"
+    }
   },
   "serverErrors": {
     "TEMP_CHAT_JOIN_FAILED": "参加に失敗しました。もう一度お試しください",

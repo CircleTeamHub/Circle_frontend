@@ -1456,14 +1456,19 @@
   },
   "notifications": {
     "title": "Notificaciones",
+    "momentsTitle": "Notificaciones de momentos",
+    "circleTitle": "Notificaciones del círculo",
     "tabInteractive": "Interacciones",
-    "tabCircle": "Inscripciones",
+    "tabCircleNotifications": "Actividad del círculo",
+    "tabSignups": "Inscripciones",
     "filterAll": "Todas",
     "filterUnread": "No leídas",
     "markAllRead": "Marcar todo leído",
     "system": "Sistema",
     "emptyTitle": "Sin notificaciones",
     "emptySubtitle": "Las nuevas interacciones e inscripciones aparecen aquí",
+    "emptySubtitleMoments": "Los nuevos me gusta y comentarios aparecen aquí",
+    "emptySubtitleCircle": "La nueva actividad del círculo y las inscripciones aparecen aquí",
     "loadFailedTitle": "No se pudo cargar",
     "loadFailed": "Algunas notificaciones no se cargaron. Desliza para reintentar",
     "summary": {
@@ -2645,10 +2650,30 @@
     "empty": "Aún no hay invitaciones. Comparte tu código para empezar.",
     "loadMore": "Cargar más",
     "loadingMore": "Cargando…",
-    "stats": { "invited": "Invitados", "rewarded": "Válidos", "points": "Puntos ganados" },
-    "status": { "pending": "Pendiente", "rewarded": "Recompensado", "capped": "Límite alcanzado", "rejected": "No válido", "expired": "Caducado" },
-    "item": { "rewarded": "Has ganado {{points}} puntos", "pending": "Se premia tras completar el perfil, {{days}} días y añadir un amigo", "noReward": "No se otorgaron puntos" },
-    "errors": { "loadFailed": "No se pudieron cargar las invitaciones", "loadMoreFailed": "No se pudieron cargar más invitaciones", "invalidData": "Los datos de invitación no son válidos", "staleData": "Puede que no esté actualizado. Desliza para recargar.", "shareFailed": "No se pudo compartir. Copia el código de invitación y envíalo." }
+    "stats": {
+      "invited": "Invitados",
+      "rewarded": "Válidos",
+      "points": "Puntos ganados"
+    },
+    "status": {
+      "pending": "Pendiente",
+      "rewarded": "Recompensado",
+      "capped": "Límite alcanzado",
+      "rejected": "No válido",
+      "expired": "Caducado"
+    },
+    "item": {
+      "rewarded": "Has ganado {{points}} puntos",
+      "pending": "Se premia tras completar el perfil, {{days}} días y añadir un amigo",
+      "noReward": "No se otorgaron puntos"
+    },
+    "errors": {
+      "loadFailed": "No se pudieron cargar las invitaciones",
+      "loadMoreFailed": "No se pudieron cargar más invitaciones",
+      "invalidData": "Los datos de invitación no son válidos",
+      "staleData": "Puede que no esté actualizado. Desliza para recargar.",
+      "shareFailed": "No se pudo compartir. Copia el código de invitación y envíalo."
+    }
   },
   "serverErrors": {
     "TEMP_CHAT_JOIN_FAILED": "No se pudo unir, inténtalo de nuevo",

@@ -34,8 +34,11 @@ export default function DiscoverScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const momentsUnread = useTabBadgeStore((state) => state.discoverUnread);
-  const plazaUnread = useTabBadgeStore((state) => state.signupUnread);
+  // 两行的红点各自对应进去之后那个铃铛的未读，点进去就能清掉。
+  const momentsUnread = useTabBadgeStore((state) => state.momentsUnread);
+  const circleUnread = useTabBadgeStore((state) => state.circleUnread);
+  const signupUnread = useTabBadgeStore((state) => state.signupUnread);
+  const plazaUnread = circleUnread + signupUnread;
 
   const d = useMemo(
     () => ({

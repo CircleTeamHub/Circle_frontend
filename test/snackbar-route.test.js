@@ -18,7 +18,13 @@ function load(rel) {
   const context = {
     module: { exports: {} },
     exports: {},
-    require: (s) => (s.startsWith("@/") ? {} : require(s)),
+    require: (request) => {
+      if (!request.startsWith("@/")) return require(request);
+      const target = path.join("src", request.slice(2) + ".ts");
+      return fs.existsSync(path.join(process.cwd(), target))
+        ? load(target)
+        : {};
+    },
   };
   context.exports = context.module.exports;
   vm.runInNewContext(transpiled, context, { filename: filePath });
@@ -288,6 +294,26 @@ test("getSnackbarRoute defaults to the notification center", () => {
 });
 
 test("getSnackbarRoute defaults to the discover notification center for discover scope", () => {
-  const route = getSnackbarRoute(notification(), DISCOVER_OPTS);
+  // 不属于任何铃铛的类型（SYSTEM 等）落在不限域的通知中心。
+  const route = getSnackbarRoute(
+    notification({ type: "SYSTEM" }),
+    DISCOVER_OPTS,
+  );
   assert.equal(route, "/(tabs)/discover/notification-center");
+});
+
+test("getSnackbarRoute's discover fallback lands in the bell that owns the type", () => {
+  const circle = getSnackbarRoute(
+    notification({ type: "CIRCLE_POST_PUBLISHED" }),
+    DISCOVER_OPTS,
+  );
+  assert.equal(circle.pathname, "/(tabs)/discover/notification-center");
+  assert.equal(circle.params.domain, "circle");
+
+  const moments = getSnackbarRoute(
+    notification({ type: "TRACE_LIKE" }),
+    DISCOVER_OPTS,
+  );
+  assert.equal(moments.pathname, "/(tabs)/discover/notification-center");
+  assert.equal(moments.params.domain, "moments");
 });

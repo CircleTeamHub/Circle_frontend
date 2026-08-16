@@ -1453,14 +1453,19 @@
   },
   "notifications": {
     "title": "알림",
+    "momentsTitle": "모먼트 알림",
+    "circleTitle": "서클 알림",
     "tabInteractive": "상호작용",
-    "tabCircle": "신청 관리",
+    "tabCircleNotifications": "서클 소식",
+    "tabSignups": "신청 관리",
     "filterAll": "전체",
     "filterUnread": "읽지 않음",
     "markAllRead": "모두 읽음",
     "system": "시스템",
     "emptyTitle": "알림 없음",
     "emptySubtitle": "새로운 상호작용과 신청이 여기에 표시돼요",
+    "emptySubtitleMoments": "새로운 좋아요와 댓글이 여기에 표시돼요",
+    "emptySubtitleCircle": "새로운 서클 소식과 신청이 여기에 표시돼요",
     "loadFailedTitle": "불러올 수 없어요",
     "loadFailed": "일부 알림을 불러오지 못했어요. 당겨서 다시 시도하세요",
     "summary": {
@@ -2642,10 +2647,30 @@
     "empty": "아직 초대 내역이 없습니다. 코드를 공유해 보세요.",
     "loadMore": "더 보기",
     "loadingMore": "불러오는 중…",
-    "stats": { "invited": "초대", "rewarded": "달성", "points": "누적 포인트" },
-    "status": { "pending": "달성 대기", "rewarded": "지급 완료", "capped": "한도 도달", "rejected": "대상 아님", "expired": "기간 만료" },
-    "item": { "rewarded": "{{points}}포인트 획득", "pending": "프로필, {{days}}일 경과, 친구 추가 후 지급", "noReward": "포인트가 지급되지 않았습니다" },
-    "errors": { "loadFailed": "초대 데이터를 불러오지 못했습니다", "loadMoreFailed": "초대 내역을 더 불러오지 못했습니다", "invalidData": "초대 데이터 형식이 올바르지 않습니다", "staleData": "최신 정보가 아닐 수 있습니다. 당겨서 다시 불러오세요.", "shareFailed": "공유에 실패했습니다. 초대 코드를 복사해 보내주세요." }
+    "stats": {
+      "invited": "초대",
+      "rewarded": "달성",
+      "points": "누적 포인트"
+    },
+    "status": {
+      "pending": "달성 대기",
+      "rewarded": "지급 완료",
+      "capped": "한도 도달",
+      "rejected": "대상 아님",
+      "expired": "기간 만료"
+    },
+    "item": {
+      "rewarded": "{{points}}포인트 획득",
+      "pending": "프로필, {{days}}일 경과, 친구 추가 후 지급",
+      "noReward": "포인트가 지급되지 않았습니다"
+    },
+    "errors": {
+      "loadFailed": "초대 데이터를 불러오지 못했습니다",
+      "loadMoreFailed": "초대 내역을 더 불러오지 못했습니다",
+      "invalidData": "초대 데이터 형식이 올바르지 않습니다",
+      "staleData": "최신 정보가 아닐 수 있습니다. 당겨서 다시 불러오세요.",
+      "shareFailed": "공유에 실패했습니다. 초대 코드를 복사해 보내주세요."
+    }
   },
   "serverErrors": {
     "TEMP_CHAT_JOIN_FAILED": "참여하지 못했습니다. 다시 시도해 주세요",

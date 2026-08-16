@@ -17,6 +17,7 @@ import { mapNotificationToRow } from '@/features/notifications/utils/notificatio
 import { getSnackbarRoute } from '@/features/notifications/utils/snackbar-route';
 import { useNotificationFeedback } from '@/features/notifications/hooks/use-notification-feedback';
 import { useNotificationCenterStore } from '@/features/notifications/store/use-notification-center-store';
+import { notificationDomain } from '@/features/notifications/utils/notification-domain';
 import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
@@ -175,10 +176,17 @@ export function NotificationSnackbarHost() {
       // the tap immediately, regardless of the network call's outcome.
       useNotificationCenterStore.getState().markInteractiveReadLocal(shown.id);
       if (!shown.read) {
+        // 总数和所属域的计数一起减；只减总数会让对应铃铛的红点一直挂着。
         const badgeStore = useTabBadgeStore.getState();
         badgeStore.setDiscoverUnread(
           Math.max(0, badgeStore.discoverUnread - 1),
         );
+        const domain = notificationDomain(shown.type);
+        if (domain === 'moments') {
+          badgeStore.setMomentsUnread(Math.max(0, badgeStore.momentsUnread - 1));
+        } else if (domain === 'circle') {
+          badgeStore.setCircleUnread(Math.max(0, badgeStore.circleUnread - 1));
+        }
       }
       void markNotificationRead(shown.id).catch((error) => {
         if (isDev) {

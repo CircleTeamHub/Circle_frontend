@@ -56,11 +56,12 @@ test('circle plaza header opens signup notifications inside the discover stack',
   const src = read(CIRCLE_PLAZA);
   const route = read('app/(tabs)/discover/notification-center.tsx');
   assert.match(src, /useTabBadgeStore/);
+  assert.match(src, /const circleUnread = useTabBadgeStore\(\(state\) => state\.circleUnread\)/);
   assert.match(src, /const signupUnread = useTabBadgeStore\(\(state\) => state\.signupUnread\)/);
   assert.match(src, /handleOpenNotifications/);
   assert.match(src, /["'`]\/\(tabs\)\/discover\/notification-center["'`]/);
   assert.doesNotMatch(src, /["'`]\/\(tabs\)\/messages\/notifications["'`]/);
   assert.match(route, /NotificationCenterScreen/);
   assert.match(src, /name="notifications-outline"/);
-  assert.match(src, /<Badge count=\{signupUnread\} \/>/);
+  assert.match(src, /<Badge count=\{circleBellUnread\} \/>/);
 });
