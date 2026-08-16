@@ -2283,15 +2283,13 @@
     "empty": "Aún no hay contenido",
     "favoriteLegacyVoiceUnsupported": "Favorito de voz antiguo: no se puede reenviar",
     "noteBatch": {
-      "confirm": "Enviar",
       "limitHint": "Selecciona hasta {{count}} notas",
       "next": "Enviar ({{count}})",
-      "optionAll": "Enviar todo",
-      "optionCard": "Enviar nota",
-      "optionLocation": "Enviar ubicación",
-      "optionMedia": "Enviar imágenes y videos de la nota",
-      "optionShowcase": "Enviar exhibición",
-      "optionsTitle": "Enviar {{count}} notas"
+      "optionAll": "Todo",
+      "optionCard": "Nota",
+      "optionLocation": "Ubicación",
+      "optionMedia": "Multimedia",
+      "optionShowcase": "Exhibición"
     }
   },
   "accountSwitcher": {

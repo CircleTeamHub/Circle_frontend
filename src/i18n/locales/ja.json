@@ -2280,15 +2280,13 @@
     "empty": "コンテンツはまだありません",
     "favoriteLegacyVoiceUnsupported": "旧バージョンの音声お気に入り — 再送信できません",
     "noteBatch": {
-      "confirm": "送信",
       "limitHint": "ノートは最大 {{count}} 件まで選択できます",
       "next": "送信 ({{count}})",
-      "optionAll": "すべて送信",
-      "optionCard": "ノートを送信",
-      "optionLocation": "住所を送信",
-      "optionMedia": "ノートの画像・動画を送信",
-      "optionShowcase": "ショーケースを送信",
-      "optionsTitle": "{{count}} 件のノートを送信"
+      "optionAll": "すべて",
+      "optionCard": "ノート",
+      "optionLocation": "位置",
+      "optionMedia": "写真・動画",
+      "optionShowcase": "ショーケース"
     }
   },
   "accountSwitcher": {

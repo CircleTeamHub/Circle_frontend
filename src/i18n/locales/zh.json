@@ -2456,15 +2456,13 @@
     "empty": "暂无内容",
     "favoriteLegacyVoiceUnsupported": "旧版语音收藏，无法重新发送",
     "noteBatch": {
-      "confirm": "发送",
       "limitHint": "最多选择 {{count}} 条笔记",
       "next": "发送 ({{count}})",
-      "optionAll": "全部发送",
-      "optionCard": "发送笔记",
-      "optionLocation": "发送地址",
-      "optionMedia": "发送笔记的图片+视频",
-      "optionShowcase": "发送展示",
-      "optionsTitle": "发送 {{count}} 条笔记"
+      "optionAll": "全部",
+      "optionCard": "笔记",
+      "optionLocation": "地址",
+      "optionMedia": "图片视频",
+      "optionShowcase": "展示"
     }
   },
   "profileDisplay": {

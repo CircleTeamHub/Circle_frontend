@@ -2459,15 +2459,13 @@
     "empty": "No content yet",
     "favoriteLegacyVoiceUnsupported": "Legacy voice favorite — cannot be resent",
     "noteBatch": {
-      "confirm": "Send",
       "limitHint": "Select up to {{count}} notes",
       "next": "Send ({{count}})",
-      "optionAll": "Send everything",
-      "optionCard": "Send note",
-      "optionLocation": "Send location",
-      "optionMedia": "Send note photos & videos",
-      "optionShowcase": "Send showcase",
-      "optionsTitle": "Send {{count}} notes"
+      "optionAll": "All",
+      "optionCard": "Note",
+      "optionLocation": "Location",
+      "optionMedia": "Media",
+      "optionShowcase": "Showcase"
     }
   },
   "profileDisplay": {

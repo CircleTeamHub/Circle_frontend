@@ -85,20 +85,24 @@ test('share note picker renders full note cards with stable search input', () =>
   assert.match(src, /searchInput:\s*{[\s\S]*minHeight:\s*24/);
 });
 
-test('share note picker batches selection through the send-options sheet', () => {
+test('share note picker sends through the inline always-visible options row', () => {
   const src = read('src/features/chat/screens/SharePickerScreen.tsx');
 
   // 选择上限来自纯 util(与批量消息量约束联动),不许在屏幕里写死数字。
   assert.match(src, /MAX_NOTE_BATCH_SELECTION/);
   assert.doesNotMatch(src, /prev\.length >= 9\b/);
-  // sheet 五选项:四个分区勾选 + 「全部发送」派生开关。
+  // 五个选项常驻底栏(发送键上方一行横排 icon+短标签),不再点发送后弹确认 sheet。
   for (const key of ['optionCard', 'optionMedia', 'optionShowcase', 'optionLocation', 'optionAll']) {
     assert.match(src, new RegExp(`share\\.noteBatch\\.${key}`));
   }
+  assert.match(src, /NOTE_OPTION_CHIPS/);
+  assert.doesNotMatch(src, /BottomSheetModal/);
+  assert.doesNotMatch(src, /optionsOpen/);
   assert.match(src, /withAllNoteSendOptions/);
   assert.match(src, /isAllNoteSendOptions/);
-  // 至少勾一项才能发送;确认后以 note-batch 形态交给聊天页消费。
+  // 至少勾一项才能发送;发送键直接按当前勾选以 note-batch 形态交给聊天页消费。
   assert.match(src, /hasAnyNoteSendOption/);
+  assert.match(src, /onPress=\{handleConfirmSend\}/);
   assert.match(src, /kind: 'note-batch'/);
   assert.match(src, /notes: selectedNotes/);
   assert.match(src, /options: sendOptions/);

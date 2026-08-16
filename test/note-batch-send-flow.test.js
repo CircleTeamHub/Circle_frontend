@@ -6,7 +6,7 @@ const path = require('node:path');
 const read = (rel) =>
   fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 
-// 批量发笔记(多选 + 五选项 sheet)的跨文件接线守护。
+// 批量发笔记(多选 + 底栏常驻五选项行)的跨文件接线守护。
 // 纯逻辑(任务展开/去重/节奏)由 src/features/chat/utils/note-batch-send.test.mts
 // 直接单测;这里只看屏幕层有没有把这些纯函数接对。
 
