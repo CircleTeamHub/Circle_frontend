@@ -27,11 +27,13 @@ test('every tab stack anchors index as initialRouteName (cross-tab push safety)'
 });
 
 test('messages "新建群聊" stays in the messages stack', () => {
-  // 建群=建圈子(自研栈一圈一群)，但压进 discover 栈会让「动态」tab 卡在
-  // 创建圈子页上——用户切过去看到的就是它，而不是动态首页。
+  // 独立群聊回归:建群=好友多选建独立群(new-group),不再借道创建圈子页。
+  // 无论目标是什么,都必须走本 tab 的路由 —— 压进 discover 栈会让「动态」tab
+  // 卡在被压入的页面上。
   const screen = read('src/features/messages/screens/MessagesScreen.tsx');
-  assert.match(screen, /router\.push\("\/\(tabs\)\/messages\/create-circle"\)/);
+  assert.match(screen, /router\.push\("\/\(tabs\)\/messages\/new-group"\)/);
   assert.doesNotMatch(screen, /\/\(tabs\)\/discover\/create-circle/);
+  assert.doesNotMatch(screen, /\/\(tabs\)\/discover\/new-group/);
 });
 
 test('screens mirrored into both stacks route their sub-pages by scope', () => {

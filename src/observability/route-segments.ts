@@ -72,6 +72,8 @@ export const STATIC_ROUTE_SEGMENTS: ReadonlySet<string> = new Set([
   'moments',
   'new-friends',
   'notes',
+  'invite-group-members',
+  'new-group',
   'notification-center',
   'notifications',
   'plaza',

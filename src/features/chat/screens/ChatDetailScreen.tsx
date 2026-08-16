@@ -591,6 +591,15 @@ export default function ChatDetailScreen() {
   );
   const isTempChat =
     params.conversationKind === 'temp' || storedConversationType === 'TEMP';
+  // 独立群聊(微信群):GROUP 会话但不挂圈子。circleId 从会话缓存读 ——
+  // 从消息列表进来时缓存必有;推送冷启动短暂未知时按圈子群处理,
+  // 缓存到位后本判定即时翻转。
+  const storedCircleId = useChatStore((state) =>
+    state.conversations.find((candidate) => candidate.id === conversationID)
+      ?.circleId,
+  );
+  const isStandaloneGroup =
+    storedConversationType === 'GROUP' && storedCircleId === null;
   const selfDestructEnabled = useChatStore((state) => {
     const conversation = state.conversations.find(
       (candidate) => candidate.id === conversationID,
@@ -633,16 +642,22 @@ export default function ChatDetailScreen() {
     canViewMembers: canViewCircleMembers,
     revalidate: revalidateCircleMemberAccess,
   } = useGroupMemberViewAccess({
-      enabled: isGroupChat && !isTempChat,
+      // 独立群聊的 sourceID 是会话 id 而非圈子 id,绝不能拿去请求 /circle/:id。
+      enabled: isGroupChat && !isTempChat && !isStandaloneGroup,
       groupID: sourceID,
       currentUserID,
     });
   // TEMP 不是圈子，不得拿 tmp... groupId 请求 /circle/:uuid。临时房成员目录本身
   // 由 /chat/conversations/:id/members 的座位校验保护，房内成员可直接使用。
-  const canViewGroupMemberProfiles = isTempChat || canViewCircleMembers;
+  // 独立群聊同理:目录全员可见,座位校验在服务端。
+  const canViewGroupMemberProfiles =
+    isTempChat || isStandaloneGroup || canViewCircleMembers;
   const revalidateMemberViewAccess = useCallback(
-    () => (isTempChat ? Promise.resolve(true) : revalidateCircleMemberAccess()),
-    [isTempChat, revalidateCircleMemberAccess],
+    () =>
+      isTempChat || isStandaloneGroup
+        ? Promise.resolve(true)
+        : revalidateCircleMemberAccess(),
+    [isTempChat, isStandaloneGroup, revalidateCircleMemberAccess],
   );
 
   // review R2：失去目录权限的瞬间清空已选 @ 目标与候选缓存——否则降权后
@@ -679,8 +694,11 @@ export default function ChatDetailScreen() {
   );
 
   // 入口只给了 sourceID 时，就地把会话解析出来（单聊按对端 userID、群聊按圈子 id）。
+  // 独立群聊的 sourceID 就是会话 id,没有「按圈子 get-or-create」一说 —— 它的
+  // 入口(消息列表/推送)都带 conversationID,走不到这里。
   useEffect(() => {
-    if (paramConversationID || !sourceID || isTempChat) return;
+    if (paramConversationID || !sourceID || isTempChat || isStandaloneGroup)
+      return;
     let cancelled = false;
     (async () => {
       try {
@@ -698,7 +716,7 @@ export default function ChatDetailScreen() {
     return () => {
       cancelled = true;
     };
-  }, [paramConversationID, sourceID, isGroupChat, isTempChat]);
+  }, [paramConversationID, sourceID, isGroupChat, isTempChat, isStandaloneGroup]);
 
   // 跟踪键盘显隐：iOS 用 Will* 事件与 KeyboardAvoidingView 动画同步，避免空白闪一下。
   useEffect(() => {

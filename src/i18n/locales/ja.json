@@ -2559,6 +2559,7 @@
       "memberQuit": "メンバーがグループを退出しました",
       "memberKicked": "メンバーが削除されました",
       "groupNameUpdated": "グループ名を更新しました",
+      "groupRenamed": "グループ名が「{{name}}」に変更されました",
       "groupDismissed": "グループが解散しました",
       "messageRevoked": "メッセージが取り消されました",
       "friendAdded": "友だちになりました。挨拶してみましょう",
@@ -2927,6 +2928,9 @@
     "CHAT_REVOKE_WINDOW_EXPIRED": "取り消せる時間を過ぎました",
     "CHAT_REVOKE_FORBIDDEN": "このメッセージを取り消す権限がありません",
     "CHAT_EDIT_WINDOW_EXPIRED": "編集できる時間を過ぎました",
-    "CHAT_EDIT_FORBIDDEN": "このメッセージは編集できません"
+    "CHAT_EDIT_FORBIDDEN": "このメッセージは編集できません",
+    "CHAT_GROUP_FRIENDS_ONLY": "友達のみグループに招待できます",
+    "CHAT_GROUP_MIN_MEMBERS": "友達を2人以上選択してください",
+    "CHAT_GROUP_CIRCLE_MANAGED": "このグループはサークルが管理しています"
   }
 }

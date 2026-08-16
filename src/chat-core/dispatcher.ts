@@ -508,14 +508,17 @@ function enqueueForegroundBanner(
   if (conversation.muted) return 'suppressed';
 
   const isGroup = conversation.type === 'GROUP';
+  // 独立群聊(无 circleId):标题用群名(空名兜底「群聊」),sourceID = 会话 id。
   const title = isGroup
-    ? (conversation.circle?.name ?? '')
+    ? (conversation.circle?.name ??
+      (conversation.name?.trim() ||
+        i18n.t('messages.newGroupDefaultName', { defaultValue: '群聊' })))
     : (conversation.peer?.nickname ?? message.sender?.nickname ?? '');
   const avatarRaw = isGroup
     ? (conversation.circle?.avatarUrl ?? null)
     : (conversation.peer?.avatarUrl ?? null);
   const sourceID = isGroup
-    ? (conversation.circleId ?? '')
+    ? (conversation.circleId ?? conversation.id)
     : (conversation.peer?.id ?? '');
 
   if (!title || !sourceID) return 'suppressed';

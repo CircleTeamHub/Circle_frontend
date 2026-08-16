@@ -581,6 +581,12 @@ function systemNoticeText(content: Record<string, unknown>): string {
       return i18n.t('im.notification.memberQuit');
     case 'group-created':
       return i18n.t('im.notification.groupCreated');
+    case 'group-renamed': {
+      const name = typeof content['name'] === 'string' ? content['name'] : '';
+      return name
+        ? i18n.t('im.notification.groupRenamed', { name })
+        : '';
+    }
     case 'burn-changed': {
       // S-01 留痕:开关变化双方可见,防「对方偷偷开了焚毁」。
       const seconds =

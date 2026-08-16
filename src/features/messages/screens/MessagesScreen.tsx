@@ -869,9 +869,8 @@ export default function MessagesScreen() {
   const handleMenuAction = useCallback(
     (id: MenuActionId) => {
       setMenuVisible(false);
-      // 自研栈无临时建群:建群=建圈子(一圈一群)。走本 tab 的镜像路由 ——
-      // 压进 discover 栈会让「动态」tab 卡在创建圈子页上(跨 tab 压栈)。
-      if (id === "newGroup") router.push("/(tabs)/messages/create-circle");
+      // 独立群聊(微信群):好友多选建群,不必先建圈子。圈子群仍由建圈自动派生。
+      if (id === "newGroup") router.push("/(tabs)/messages/new-group");
       else if (id === "addFriend") router.push("/(tabs)/messages/add-friend");
       else if (id === "seatManagement") router.push("/(tabs)/messages/temp-chats");
       else if (id === "scan") router.push("/(tabs)/messages/scan" as Href);
