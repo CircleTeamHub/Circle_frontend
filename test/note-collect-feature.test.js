@@ -68,7 +68,9 @@ test('NoteCard shows the collect source on list rows', () => {
   const src = read('src/features/notes/components/NoteCard.tsx');
 
   assert.match(src, /note\.collectedFrom/);
-  assert.match(src, /notes\.list\.fromSource/);
+  // 来源从纯文本升级成可点名片:私聊跳人、群聊跳群,各带无障碍标签。
+  assert.match(src, /notes\.list\.openSenderChat/);
+  assert.match(src, /notes\.list\.openGroupChat/);
 });
 
 test('note source i18n keys exist across all five locales', () => {

@@ -12,8 +12,16 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
+import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { useSharePickerStore } from '@/features/chat/store/use-share-picker-store';
 import { canResendCollection } from '@/features/chat/utils/message-collection';
+import {
+  MAX_NOTE_BATCH_SELECTION,
+  hasAnyNoteSendOption,
+  isAllNoteSendOptions,
+  withAllNoteSendOptions,
+  type NoteSendOptions,
+} from '@/features/chat/utils/note-batch-send';
 import { NoteCard } from '@/features/notes/components/NoteCard';
 import type { NoteSummary } from '@/features/notes/types';
 import { fetchCollections, type UserCollection } from '@/services/api/collections';
@@ -69,6 +77,15 @@ export default function SharePickerScreen() {
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [favorites, setFavorites] = useState<UserCollection[]>([]);
   const [reloadVersion, setReloadVersion] = useState(0);
+  // 笔记走多选:先勾笔记,再在底部 sheet 里勾「发什么」(默认只发卡片)。
+  const [selectedNotes, setSelectedNotes] = useState<NoteSummary[]>([]);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [sendOptions, setSendOptions] = useState<NoteSendOptions>({
+    card: true,
+    media: false,
+    showcase: false,
+    location: false,
+  });
   const headerTitle = shareTitle(shareType);
   // Memoized：i18n.t 已可缓存，但本地包一层让消费方在 useMemo deps 里能稳定引用。
   const quickReplyPhrases = useMemo(() => getQuickReplyPhrases(), []);
@@ -154,10 +171,8 @@ export default function SharePickerScreen() {
   }, [quickReplyPhrases, trimmed]);
 
   const handleSelect = useCallback(
-    (item: NoteSummary | FriendProfile | UserCollection | string) => {
-      if (shareType === 'note') {
-        setPending({ kind: 'note', data: item as NoteSummary });
-      } else if (shareType === 'friend') {
+    (item: FriendProfile | UserCollection | string) => {
+      if (shareType === 'friend') {
         setPending({ kind: 'friend', data: item as FriendProfile });
       } else if (shareType === 'favorite') {
         setPending({ kind: 'favorite', data: item as UserCollection });
@@ -169,13 +184,55 @@ export default function SharePickerScreen() {
     [router, setPending, shareType],
   );
 
-  const renderNote = ({ item }: { item: NoteSummary }) => (
-    <NoteCard
-      note={item}
-      onPress={() => handleSelect(item)}
-      showActions={false}
-    />
-  );
+  const toggleNote = useCallback((note: NoteSummary) => {
+    setSelectedNotes((prev) => {
+      if (prev.some((n) => n.id === note.id)) {
+        return prev.filter((n) => n.id !== note.id);
+      }
+      if (prev.length >= MAX_NOTE_BATCH_SELECTION) return prev;
+      return [...prev, note];
+    });
+  }, []);
+
+  const atSelectionLimit = selectedNotes.length >= MAX_NOTE_BATCH_SELECTION;
+
+  const handleConfirmSend = useCallback(() => {
+    if (selectedNotes.length === 0 || !hasAnyNoteSendOption(sendOptions)) {
+      return;
+    }
+    setPending({
+      kind: 'note-batch',
+      notes: selectedNotes,
+      options: sendOptions,
+    });
+    setOptionsOpen(false);
+    router.back();
+  }, [router, selectedNotes, sendOptions, setPending]);
+
+  const renderNote = ({ item }: { item: NoteSummary }) => {
+    const selected = selectedNotes.some((n) => n.id === item.id);
+    return (
+      <View style={s.noteRow}>
+        <Pressable
+          style={s.noteCheck}
+          hitSlop={8}
+          onPress={() => toggleNote(item)}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: selected }}
+          accessibilityLabel={item.title}
+        >
+          <Ionicons
+            name={selected ? 'checkmark-circle' : 'ellipse-outline'}
+            size={24}
+            color={selected ? colors.primary : colors.textSecondary}
+          />
+        </Pressable>
+        <View style={s.noteCardWrap}>
+          <NoteCard note={item} onPress={toggleNote} showActions={false} />
+        </View>
+      </View>
+    );
+  };
 
   const renderFriend = ({ item }: { item: FriendProfile }) => (
     <Pressable
@@ -333,10 +390,14 @@ export default function SharePickerScreen() {
           data={filteredNotes}
           keyExtractor={(it) => it.id}
           renderItem={renderNote}
+          extraData={selectedNotes}
           ItemSeparatorComponent={() => (
             <View style={[s.divider, { backgroundColor: colors.surface }]} />
           )}
-          contentContainerStyle={s.noteListContent}
+          contentContainerStyle={[
+            s.noteListContent,
+            selectedNotes.length > 0 ? s.noteListContentWithBar : null,
+          ]}
         {...keyboardDismissOnDragProps}
           showsVerticalScrollIndicator={false}
         />
@@ -368,6 +429,137 @@ export default function SharePickerScreen() {
         {...keyboardDismissOnDragProps}
         />
       )}
+
+      {shareType === 'note' && selectedNotes.length > 0 ? (
+        <View
+          style={[
+            s.noteBar,
+            {
+              backgroundColor: colors.surface,
+              borderTopColor: colors.surfaceBorder,
+              paddingBottom: insets.bottom + Spacing.sm,
+            },
+          ]}
+        >
+          {atSelectionLimit ? (
+            <Text style={[s.noteBarHint, { color: colors.textSecondary }]}>
+              {i18n.t('share.noteBatch.limitHint', {
+                defaultValue: '最多选择 {{count}} 条笔记',
+                count: MAX_NOTE_BATCH_SELECTION,
+              })}
+            </Text>
+          ) : null}
+          <Pressable
+            style={[s.noteSendButton, { backgroundColor: colors.primary }]}
+            onPress={() => setOptionsOpen(true)}
+            accessibilityRole="button"
+          >
+            <Text style={[s.noteSendButtonText, { color: colors.white }]}>
+              {i18n.t('share.noteBatch.next', {
+                defaultValue: '发送 ({{count}})',
+                count: selectedNotes.length,
+              })}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      <BottomSheetModal
+        visible={optionsOpen}
+        onClose={() => setOptionsOpen(false)}
+        backdropStyle={{ backgroundColor: colors.overlay }}
+        sheetStyle={[
+          s.sheet,
+          {
+            backgroundColor: colors.surface,
+            paddingBottom: insets.bottom + Spacing.lg,
+          },
+        ]}
+      >
+        <View style={[s.sheetHandle, { backgroundColor: colors.surfaceBorder }]} />
+        <Text style={[s.sheetTitle, { color: colors.textSecondary }]}>
+          {i18n.t('share.noteBatch.optionsTitle', {
+            defaultValue: '发送 {{count}} 条笔记',
+            count: selectedNotes.length,
+          })}
+        </Text>
+
+        {(
+          [
+            { key: 'card' as const, labelKey: 'share.noteBatch.optionCard', defaultLabel: '发送笔记' },
+            { key: 'media' as const, labelKey: 'share.noteBatch.optionMedia', defaultLabel: '发送笔记的图片+视频' },
+            { key: 'showcase' as const, labelKey: 'share.noteBatch.optionShowcase', defaultLabel: '发送展示' },
+            { key: 'location' as const, labelKey: 'share.noteBatch.optionLocation', defaultLabel: '发送地址' },
+          ]
+        ).map((row) => {
+          const checked = sendOptions[row.key];
+          return (
+            <Pressable
+              key={row.key}
+              style={s.optionRow}
+              onPress={() =>
+                setSendOptions((prev) => ({ ...prev, [row.key]: !prev[row.key] }))
+              }
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked }}
+            >
+              <Text style={[s.optionLabel, { color: colors.text }]}>
+                {i18n.t(row.labelKey, { defaultValue: row.defaultLabel })}
+              </Text>
+              <Ionicons
+                name={checked ? 'checkbox' : 'square-outline'}
+                size={22}
+                color={checked ? colors.primary : colors.textSecondary}
+              />
+            </Pressable>
+          );
+        })}
+
+        <View style={[s.optionDivider, { backgroundColor: colors.divider }]} />
+
+        <Pressable
+          style={s.optionRow}
+          onPress={() =>
+            setSendOptions((prev) =>
+              withAllNoteSendOptions(prev, !isAllNoteSendOptions(prev)),
+            )
+          }
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: isAllNoteSendOptions(sendOptions) }}
+        >
+          <Text style={[s.optionLabel, s.optionLabelStrong, { color: colors.text }]}>
+            {i18n.t('share.noteBatch.optionAll', { defaultValue: '全部发送' })}
+          </Text>
+          <Ionicons
+            name={isAllNoteSendOptions(sendOptions) ? 'checkbox' : 'square-outline'}
+            size={22}
+            color={
+              isAllNoteSendOptions(sendOptions)
+                ? colors.primary
+                : colors.textSecondary
+            }
+          />
+        </Pressable>
+
+        <Pressable
+          style={[
+            s.noteSendButton,
+            s.sheetConfirm,
+            {
+              backgroundColor: hasAnyNoteSendOption(sendOptions)
+                ? colors.primary
+                : colors.surfaceBorder,
+            },
+          ]}
+          disabled={!hasAnyNoteSendOption(sendOptions)}
+          onPress={handleConfirmSend}
+          accessibilityRole="button"
+        >
+          <Text style={[s.noteSendButtonText, { color: colors.white }]}>
+            {i18n.t('share.noteBatch.confirm', { defaultValue: '发送' })}
+          </Text>
+        </Pressable>
+      </BottomSheetModal>
     </View>
   );
 }
@@ -406,6 +598,83 @@ const s = StyleSheet.create({
   },
   noteListContent: {
     paddingBottom: Spacing.xl,
+  },
+  noteListContentWithBar: {
+    paddingBottom: 112,
+  },
+  noteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  noteCheck: {
+    paddingLeft: Spacing.lg,
+    paddingRight: Spacing.xs,
+    paddingVertical: Spacing.md,
+  },
+  noteCardWrap: {
+    flex: 1,
+  },
+  noteBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingTop: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: Spacing.xs,
+  },
+  noteBarHint: {
+    ...Typography.small,
+    textAlign: 'center',
+  },
+  noteSendButton: {
+    minHeight: 48,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noteSendButtonText: {
+    ...Typography.body,
+    fontWeight: '600',
+  },
+  sheet: {
+    borderTopLeftRadius: Radius.lg,
+    borderTopRightRadius: Radius.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: Radius.full,
+    marginBottom: Spacing.sm,
+  },
+  sheetTitle: {
+    ...Typography.small,
+    textAlign: 'center',
+    marginBottom: Spacing.xs,
+  },
+  optionRow: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.md,
+  },
+  optionLabel: {
+    ...Typography.body,
+  },
+  optionLabelStrong: {
+    fontWeight: '600',
+  },
+  optionDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: Spacing.xs,
+  },
+  sheetConfirm: {
+    marginTop: Spacing.md,
   },
   listContent: {
     paddingHorizontal: Spacing.lg,

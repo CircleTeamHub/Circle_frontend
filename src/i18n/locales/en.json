@@ -291,7 +291,7 @@
       "videoUnsupported": "Only MP4, MOV, and M4V videos are supported",
       "videoUnavailable": "Video unavailable",
       "playVideo": "Play video",
-      "noteSendFailed": "Failed to send note, please try again",
+      "noteBatchPartialFailed": "{{count}} items failed to send",
       "cardSendFailed": "Failed to send contact card, please try again",
       "favoriteSendFailed": "Failed to send favorite, please try again",
       "favoriteLegacyVoiceUnsupported": "This legacy voice favorite can no longer be sent"
@@ -2192,7 +2192,12 @@
       "unlist": "Unlist",
       "relist": "Relist",
       "more": "More",
-      "restore": "Restore"
+      "restore": "Restore",
+      "multiSelect": "Select multiple",
+      "remark": "Remark",
+      "editNote": "Edit note",
+      "editGroups": "Edit groups",
+      "delete": "Delete"
     },
     "alerts": {
       "deleteFailedTitle": "Failed to delete",
@@ -2213,9 +2218,18 @@
       "relistFailedTitle": "Failed to relist",
       "unlistFailedTitle": "Failed to unlist",
       "unlistTitle": "Unlist note",
-      "unlistConfirm": "You can view it in Unlisted. Unlisted notes are automatically deleted after one month.",
+      "unlistConfirm": "You can view it in Unlisted and relist it anytime.",
       "refreshFailedTitle": "Refresh failed",
-      "restoreFailedTitle": "Restore failed"
+      "restoreFailedTitle": "Restore failed",
+      "remarkFailedTitle": "Failed to save remark",
+      "deleteTitle": "Delete note",
+      "deleteConfirm": "Deleted notes can be recovered from the recycle bin and are purged after 30 days.",
+      "batchFailedTitle": "Some actions failed",
+      "batchPartialFailed": "{{count}} notes failed and remain selected. Please try again.",
+      "batchUnlistTitle": "Unlist notes",
+      "batchUnlistConfirm": "Unlist the {{count}} selected notes? You can relist them anytime.",
+      "batchDeleteTitle": "Delete notes",
+      "batchDeleteConfirm": "Delete the {{count}} selected notes? They can be recovered from the recycle bin."
     },
     "detail": {
       "loadFailed": "Failed to load note, please try again",
@@ -2330,7 +2344,7 @@
     "title": "My notes",
     "unlisted": "Unlisted",
     "unlistedTitle": "Unlisted notes",
-    "unlistedAutoDeleteHint": "Unlisted notes are automatically deleted after one month.",
+    "unlistedAutoDeleteHint": "Unlisted notes are never deleted automatically. You can relist them anytime.",
     "format": {
       "fullDate": "{{year}}-{{month}}-{{day}} · {{weekday}}",
       "groupOverflow": "{{first}}, {{second}} +{{extra}}",
@@ -2368,7 +2382,31 @@
       "selectedLabel": "Selected location"
     },
     "list": {
-      "fromSource": "From {{name}}"
+      "fromSource": "From {{name}}",
+      "remark": "Remark: {{text}}",
+      "openSenderChat": "Chat with {{name}}",
+      "openGroupChat": "Open group chat {{name}}"
+    },
+    "groupPicker": {
+      "title": "Edit groups",
+      "batchHint": "Saving will replace the groups of the {{count}} selected notes.",
+      "empty": "No groups yet. Create one in Manage groups first.",
+      "saving": "Saving...",
+      "save": "Save"
+    },
+    "remarkSheet": {
+      "title": "Remark",
+      "placeholder": "Enter a remark; save empty to clear",
+      "saving": "Saving...",
+      "save": "Save"
+    },
+    "selection": {
+      "selectedCount": "{{count}} selected",
+      "selectAll": "Select all",
+      "clearAll": "Deselect all",
+      "group": "Groups",
+      "unlist": "Unlist",
+      "delete": "Delete"
     },
     "loadFailed": "Couldn't load notes. Check your connection and try again",
     "shareToChat": {
@@ -2386,7 +2424,7 @@
       "friendHint": "Friend"
     },
     "recycleBin": "Recycle bin",
-    "recycleBinHint": "Deleted notes can be restored here.",
+    "recycleBinHint": "Deleted notes can be restored here and are automatically removed after 30 days.",
     "recycleBinTitle": "Recycle bin"
   },
   "search": {
@@ -2419,7 +2457,18 @@
     "loadFailed": "Failed to load",
     "noMatch": "No matches",
     "empty": "No content yet",
-    "favoriteLegacyVoiceUnsupported": "Legacy voice favorite — cannot be resent"
+    "favoriteLegacyVoiceUnsupported": "Legacy voice favorite — cannot be resent",
+    "noteBatch": {
+      "confirm": "Send",
+      "limitHint": "Select up to {{count}} notes",
+      "next": "Send ({{count}})",
+      "optionAll": "Send everything",
+      "optionCard": "Send note",
+      "optionLocation": "Send location",
+      "optionMedia": "Send note photos & videos",
+      "optionShowcase": "Send showcase",
+      "optionsTitle": "Send {{count}} notes"
+    }
   },
   "profileDisplay": {
     "emptySignature": "Your bio will appear here once you complete your profile."
@@ -2645,10 +2694,30 @@
     "empty": "No referrals yet. Share your code to get started.",
     "loadMore": "Load more",
     "loadingMore": "Loading…",
-    "stats": { "invited": "Invited", "rewarded": "Qualified", "points": "Points earned" },
-    "status": { "pending": "Pending", "rewarded": "Rewarded", "capped": "Limit reached", "rejected": "Ineligible", "expired": "Expired" },
-    "item": { "rewarded": "Earned {{points}} points", "pending": "Rewarded after profile, {{days}} days, and a friend", "noReward": "No points awarded" },
-    "errors": { "loadFailed": "Failed to load referral data", "loadMoreFailed": "Failed to load more referrals", "invalidData": "Invalid referral data received", "staleData": "This may be out of date. Pull down to reload.", "shareFailed": "Sharing failed. Copy the invite code and send it instead." }
+    "stats": {
+      "invited": "Invited",
+      "rewarded": "Qualified",
+      "points": "Points earned"
+    },
+    "status": {
+      "pending": "Pending",
+      "rewarded": "Rewarded",
+      "capped": "Limit reached",
+      "rejected": "Ineligible",
+      "expired": "Expired"
+    },
+    "item": {
+      "rewarded": "Earned {{points}} points",
+      "pending": "Rewarded after profile, {{days}} days, and a friend",
+      "noReward": "No points awarded"
+    },
+    "errors": {
+      "loadFailed": "Failed to load referral data",
+      "loadMoreFailed": "Failed to load more referrals",
+      "invalidData": "Invalid referral data received",
+      "staleData": "This may be out of date. Pull down to reload.",
+      "shareFailed": "Sharing failed. Copy the invite code and send it instead."
+    }
   },
   "serverErrors": {
     "TEMP_CHAT_JOIN_FAILED": "Failed to join, please try again",

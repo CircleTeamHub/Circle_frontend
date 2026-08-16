@@ -12,8 +12,16 @@ interface NoteActionsSheetProps {
   note: NoteSummary | null;
   onClose: () => void;
   onPin: (note: NoteSummary) => void;
+  /** 进入多选模式（并选中当前笔记） */
+  onMultiSelect?: (note: NoteSummary) => void;
+  /** 打开备注编辑弹层 */
+  onRemark?: (note: NoteSummary) => void;
   onEdit: (note: NoteSummary) => void;
+  /** 打开分组勾选弹层（替换该笔记的分组归属） */
+  onEditGroups?: (note: NoteSummary) => void;
   onShare: (note: NoteSummary) => void;
+  /** 软删除进回收站（30 天内可恢复） */
+  onDelete?: (note: NoteSummary) => void;
   onUnlist: (note: NoteSummary) => void;
 }
 
@@ -29,8 +37,12 @@ export function NoteActionsSheet({
   note,
   onClose,
   onPin,
+  onMultiSelect,
+  onRemark,
   onEdit,
+  onEditGroups,
   onShare,
+  onDelete,
   onUnlist,
 }: NoteActionsSheetProps) {
   const { colors } = useTheme();
@@ -60,18 +72,61 @@ export function NoteActionsSheet({
             : t('notes.actions.pin', { defaultValue: '置顶' }),
           run: () => onPin(note),
         },
+        ...(onMultiSelect
+          ? [
+              {
+                key: 'multi-select',
+                icon: 'checkmark-done-outline' as const,
+                label: t('notes.actions.multiSelect', { defaultValue: '多选' }),
+                run: () => onMultiSelect(note),
+              },
+            ]
+          : []),
+        ...(onRemark
+          ? [
+              {
+                key: 'remark',
+                icon: 'pricetag-outline' as const,
+                label: t('notes.actions.remark', { defaultValue: '备注' }),
+                run: () => onRemark(note),
+              },
+            ]
+          : []),
         {
           key: 'edit',
           icon: 'create-outline',
-          label: t('notes.actions.edit', { defaultValue: '编辑' }),
+          label: t('notes.actions.editNote', { defaultValue: '编辑笔记' }),
           run: () => onEdit(note),
         },
+        ...(onEditGroups
+          ? [
+              {
+                key: 'edit-groups',
+                icon: 'albums-outline' as const,
+                label: t('notes.actions.editGroups', {
+                  defaultValue: '编辑分组',
+                }),
+                run: () => onEditGroups(note),
+              },
+            ]
+          : []),
         {
           key: 'share',
           icon: 'share-outline',
           label: t('notes.actions.share', { defaultValue: '分享' }),
           run: () => onShare(note),
         },
+        ...(onDelete
+          ? [
+              {
+                key: 'delete',
+                icon: 'trash-outline' as const,
+                label: t('notes.actions.delete', { defaultValue: '删除' }),
+                destructive: true,
+                run: () => onDelete(note),
+              },
+            ]
+          : []),
         ...(note.status === 'UNLISTED'
           ? []
           : [

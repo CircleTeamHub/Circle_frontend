@@ -30,7 +30,8 @@ test('NotesScreen has 已下架 entry button', () => {
 test('NotesScreen opens a standalone unlisted notes page instead of filtering inline', () => {
   const src = read('src/features/notes/screens/NotesScreen.tsx');
 
-  assert.doesNotMatch(src, /trash-outline/);
+  // trash-outline 曾被禁止:那会儿删除只活在回收站流程里。现在列表有正当的
+  // 删除入口(动作菜单软删 + 多选批量删,都进回收站),不再断言它不存在。
   assert.doesNotMatch(src, /deletedNotes/);
   assert.doesNotMatch(src, /showUnlisted/);
   assert.doesNotMatch(src, /status: showUnlisted \? 'UNLISTED' : 'ACTIVE'/);
@@ -51,7 +52,9 @@ test('UnlistedNotesScreen lists only unlisted notes and can relist them', () => 
   assert.match(screen, /cloud-upload-outline/);
   assert.match(screen, /notes\.unlistedAutoDeleteHint/);
   assert.match(screen, /notes\.empty\.noUnlisted/);
-  assert.match(zh, /已下架笔记会在一个月后自动删除。/);
+  // 语义拍板（2026-08-16）：下架是长期仓库不再自动删除；到期清理只发生在回收站。
+  assert.match(zh, /已下架笔记不会自动删除，可随时重新上架。/);
+  assert.doesNotMatch(zh, /已下架笔记会在一个月后自动删除/);
   assert.match(zh, /上架/);
 });
 
@@ -113,8 +116,10 @@ test('NotesScreen passes the current user as owner when opening note details', (
   assert.match(src, /currentUserId/);
   assert.match(src, /pathname: '\/\(tabs\)\/profile\/notes\/\[id\]'/);
   // NoteCard 已 memo，跳转回调改为稳定 useCallback（携带 note 参数）。
+  // 多选模式加入后卡片 onPress 先走 handleCardPress 分流：选择态勾选、常态进详情。
   assert.match(src, /params: \{ id: note\.id, ownerId: currentUserId \?\? '' \}/);
-  assert.match(src, /onPress=\{openNote\}/);
+  assert.match(src, /onPress=\{handleCardPress\}/);
+  assert.match(src, /openNote\(note\);/);
 });
 
 test('NotesScreen refreshes notes and groups when returning from note edits', () => {
@@ -453,7 +458,8 @@ test('NoteCard exposes a single more-actions button (not per-action buttons)', (
   assert.doesNotMatch(card, /onPinPress/);
   assert.doesNotMatch(card, /onEditPress/);
 
-  // 菜单承载置顶/编辑/分享/下架四个动作；不再暴露删除。
+  // 菜单承载置顶/多选/备注/编辑/分组/分享/删除/下架；删除是软删进回收站
+  // (30 天可恢复),用 notes.actions.delete 专属文案,不复用 common.delete。
   assert.match(screen, /<NoteActionsSheet/);
   assert.match(screen, /onMorePress=\{openMenu\}/);
   assert.match(screen, /unlistNote/);
@@ -463,9 +469,10 @@ test('NoteCard exposes a single more-actions button (not per-action buttons)', (
   assert.match(sheet, /notes\.actions\.share/);
   assert.match(sheet, /notes\.actions\.unlist/);
   assert.match(sheet, /archive-outline/);
+  assert.match(sheet, /notes\.actions\.delete/);
+  assert.match(sheet, /trash-outline/);
+  assert.match(sheet, /onDelete/);
   assert.doesNotMatch(sheet, /common\.delete/);
-  assert.doesNotMatch(sheet, /trash-outline/);
-  assert.doesNotMatch(sheet, /onDelete/);
 });
 
 test('ProfileScreen navigates to notes on menu item press', () => {

@@ -253,7 +253,7 @@
       "videoUnsupported": "MP4, MOV, M4V 동영상만 지원됩니다",
       "videoUnavailable": "동영상을 사용할 수 없습니다",
       "playVideo": "동영상 재생",
-      "noteSendFailed": "노트를 보내지 못했습니다. 다시 시도해 주세요",
+      "noteBatchPartialFailed": "{{count}}개 항목을 보내지 못했습니다",
       "cardSendFailed": "프로필 카드를 보내지 못했습니다. 다시 시도해 주세요",
       "favoriteSendFailed": "즐겨찾기를 보내지 못했습니다. 다시 시도해 주세요",
       "favoriteLegacyVoiceUnsupported": "이 이전 버전 음성 즐겨찾기는 다시 보낼 수 없습니다"
@@ -705,7 +705,12 @@
       "unlist": "내리기",
       "relist": "올리기",
       "more": "더보기",
-      "restore": "복원"
+      "restore": "복원",
+      "multiSelect": "다중 선택",
+      "remark": "메모",
+      "editNote": "노트 편집",
+      "editGroups": "그룹 편집",
+      "delete": "삭제"
     },
     "alerts": {
       "deleteFailedTitle": "삭제 실패",
@@ -726,9 +731,18 @@
       "relistFailedTitle": "올리기 실패",
       "unlistFailedTitle": "내리기 실패",
       "unlistTitle": "노트 내리기",
-      "unlistConfirm": "내린 노트는 내림 목록에서 볼 수 있으며 한 달 후 자동 삭제됩니다.",
+      "unlistConfirm": "내린 노트는 내림 목록에서 볼 수 있으며 언제든지 다시 올릴 수 있습니다.",
       "refreshFailedTitle": "새로고침 실패",
-      "restoreFailedTitle": "복원 실패"
+      "restoreFailedTitle": "복원 실패",
+      "remarkFailedTitle": "메모 저장 실패",
+      "deleteTitle": "노트 삭제",
+      "deleteConfirm": "삭제한 노트는 휴지통에서 복원할 수 있으며 30일 후 자동으로 지워집니다.",
+      "batchFailedTitle": "일부 작업 실패",
+      "batchPartialFailed": "노트 {{count}}개의 작업이 실패했습니다. 선택이 유지되니 다시 시도해 주세요.",
+      "batchUnlistTitle": "일괄 내리기",
+      "batchUnlistConfirm": "선택한 노트 {{count}}개를 내릴까요? 언제든지 다시 올릴 수 있습니다.",
+      "batchDeleteTitle": "일괄 삭제",
+      "batchDeleteConfirm": "선택한 노트 {{count}}개를 삭제할까요? 휴지통에서 복원할 수 있습니다."
     },
     "detail": {
       "loadFailed": "노트를 불러오지 못했습니다. 다시 시도해 주세요",
@@ -843,7 +857,7 @@
     "title": "내 노트",
     "unlisted": "내림",
     "unlistedTitle": "내린 노트",
-    "unlistedAutoDeleteHint": "내린 노트는 한 달 후 자동 삭제됩니다.",
+    "unlistedAutoDeleteHint": "내린 노트는 자동 삭제되지 않으며 언제든지 다시 올릴 수 있습니다.",
     "format": {
       "fullDate": "{{year}}년 {{month}}월 {{day}}일 · {{weekday}}",
       "groupOverflow": "{{first}}, {{second}} 외 {{extra}}",
@@ -881,7 +895,31 @@
       "selectedLabel": "선택한 위치"
     },
     "list": {
-      "fromSource": "{{name}}에서"
+      "fromSource": "{{name}}에서",
+      "remark": "메모: {{text}}",
+      "openSenderChat": "{{name}}님과 채팅",
+      "openGroupChat": "그룹 채팅 {{name}} 열기"
+    },
+    "groupPicker": {
+      "title": "그룹 편집",
+      "batchHint": "저장하면 선택한 노트 {{count}}개의 그룹이 교체됩니다.",
+      "empty": "그룹이 없습니다. 먼저 '그룹 관리'에서 만들어 주세요.",
+      "saving": "저장 중...",
+      "save": "저장"
+    },
+    "remarkSheet": {
+      "title": "메모",
+      "placeholder": "메모를 입력하세요. 비워서 저장하면 삭제됩니다.",
+      "saving": "저장 중...",
+      "save": "저장"
+    },
+    "selection": {
+      "selectedCount": "{{count}}개 선택됨",
+      "selectAll": "전체 선택",
+      "clearAll": "선택 해제",
+      "group": "그룹",
+      "unlist": "내리기",
+      "delete": "삭제"
     },
     "loadFailed": "노트를 불러오지 못했어요. 네트워크 확인 후 다시 시도해 주세요",
     "shareToChat": {
@@ -899,7 +937,7 @@
       "friendHint": "친구"
     },
     "recycleBin": "휴지통",
-    "recycleBinHint": "삭제한 노트를 여기에서 복원할 수 있습니다.",
+    "recycleBinHint": "삭제한 노트를 여기에서 복원할 수 있으며 30일 후 자동으로 지워집니다.",
     "recycleBinTitle": "휴지통"
   },
   "tempChats": {
@@ -2240,7 +2278,18 @@
     "loadFailed": "불러오기 실패",
     "noMatch": "일치하는 항목 없음",
     "empty": "아직 콘텐츠가 없습니다",
-    "favoriteLegacyVoiceUnsupported": "이전 버전 음성 즐겨찾기 — 다시 보낼 수 없음"
+    "favoriteLegacyVoiceUnsupported": "이전 버전 음성 즐겨찾기 — 다시 보낼 수 없음",
+    "noteBatch": {
+      "confirm": "보내기",
+      "limitHint": "노트는 최대 {{count}}개까지 선택할 수 있습니다",
+      "next": "보내기 ({{count}})",
+      "optionAll": "전부 보내기",
+      "optionCard": "노트 보내기",
+      "optionLocation": "주소 보내기",
+      "optionMedia": "노트의 사진·동영상 보내기",
+      "optionShowcase": "쇼케이스 보내기",
+      "optionsTitle": "노트 {{count}}개 보내기"
+    }
   },
   "accountSwitcher": {
     "title": "계정 전환",
@@ -2642,10 +2691,30 @@
     "empty": "아직 초대 내역이 없습니다. 코드를 공유해 보세요.",
     "loadMore": "더 보기",
     "loadingMore": "불러오는 중…",
-    "stats": { "invited": "초대", "rewarded": "달성", "points": "누적 포인트" },
-    "status": { "pending": "달성 대기", "rewarded": "지급 완료", "capped": "한도 도달", "rejected": "대상 아님", "expired": "기간 만료" },
-    "item": { "rewarded": "{{points}}포인트 획득", "pending": "프로필, {{days}}일 경과, 친구 추가 후 지급", "noReward": "포인트가 지급되지 않았습니다" },
-    "errors": { "loadFailed": "초대 데이터를 불러오지 못했습니다", "loadMoreFailed": "초대 내역을 더 불러오지 못했습니다", "invalidData": "초대 데이터 형식이 올바르지 않습니다", "staleData": "최신 정보가 아닐 수 있습니다. 당겨서 다시 불러오세요.", "shareFailed": "공유에 실패했습니다. 초대 코드를 복사해 보내주세요." }
+    "stats": {
+      "invited": "초대",
+      "rewarded": "달성",
+      "points": "누적 포인트"
+    },
+    "status": {
+      "pending": "달성 대기",
+      "rewarded": "지급 완료",
+      "capped": "한도 도달",
+      "rejected": "대상 아님",
+      "expired": "기간 만료"
+    },
+    "item": {
+      "rewarded": "{{points}}포인트 획득",
+      "pending": "프로필, {{days}}일 경과, 친구 추가 후 지급",
+      "noReward": "포인트가 지급되지 않았습니다"
+    },
+    "errors": {
+      "loadFailed": "초대 데이터를 불러오지 못했습니다",
+      "loadMoreFailed": "초대 내역을 더 불러오지 못했습니다",
+      "invalidData": "초대 데이터 형식이 올바르지 않습니다",
+      "staleData": "최신 정보가 아닐 수 있습니다. 당겨서 다시 불러오세요.",
+      "shareFailed": "공유에 실패했습니다. 초대 코드를 복사해 보내주세요."
+    }
   },
   "serverErrors": {
     "TEMP_CHAT_JOIN_FAILED": "참여하지 못했습니다. 다시 시도해 주세요",

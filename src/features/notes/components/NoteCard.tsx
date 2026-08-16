@@ -3,17 +3,28 @@ import { Image } from 'expo-image';
 import { memo, useCallback, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { Avatar } from '@/components/ui/avatar';
 import type { NoteSummary } from '@/features/notes/types';
 import { buildNoteMeta } from '@/features/notes/utils/note-format';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 
+/** 来源 chip 的点击目标：发送者 → 私聊，来源群 → 群聊 */
+export type NoteSourceTarget = 'sender' | 'group';
+
 interface Props {
   note: NoteSummary;
   /** 回调统一携带 note，父层可用稳定的 useCallback，让 memo 生效 */
   onPress: (note: NoteSummary) => void;
-  /** 点「⋯」打开动作菜单（置顶/编辑/分享/下架）——由父层承载菜单 */
+  /** 点「⋯」打开动作菜单（置顶/多选/备注/编辑/分组/分享/删除/下架）——由父层承载菜单 */
   onMorePress?: (note: NoteSummary) => void;
+  /** 长按进入多选（父层切 selectionMode） */
+  onLongPress?: (note: NoteSummary) => void;
+  /** 点来源 chip（发送者/群）→ 父层负责跳转进对应聊天 */
+  onSourcePress?: (note: NoteSummary, target: NoteSourceTarget) => void;
+  /** 多选模式：右侧 ⋯ 槽位换成选择圈，整卡点击由父层当作勾选处理 */
+  selectionMode?: boolean;
+  selected?: boolean;
   showActions?: boolean;
   accessibilityLabel?: string;
   accessibilityRole?: 'button';
@@ -23,6 +34,10 @@ function NoteCardInner({
   note,
   onPress,
   onMorePress,
+  onLongPress,
+  onSourcePress,
+  selectionMode = false,
+  selected = false,
   showActions = true,
   accessibilityLabel,
   accessibilityRole = 'button',
@@ -39,6 +54,7 @@ function NoteCardInner({
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
       },
+      sourceChip: { backgroundColor: colors.surface },
     }),
     [colors],
   );
@@ -53,14 +69,22 @@ function NoteCardInner({
     t,
   );
 
-  // 收藏来的笔记在列表上标出来源（群/用户名），点进详情可跳回原消息。
-  const sourceName = note.collectedFrom
-    ? note.collectedFrom.conversationType === 'group'
-      ? note.collectedFrom.group?.name
-      : note.collectedFrom.sender?.name
-    : null;
+  // 收藏来的笔记在列表上亮出来源：发送者 chip（→私聊）+ 群 chip（→群聊）。
+  // 快照缺关键字段（历史坏数据）时对应 chip 不渲染，避免点了跳不动。
+  const sender = note.collectedFrom?.sender;
+  const senderChip = sender?.id && sender.name ? sender : null;
+  const group =
+    note.collectedFrom?.conversationType === 'group'
+      ? note.collectedFrom.group
+      : null;
+  const groupChip = group?.id && group.name ? group : null;
 
   const handlePress = useCallback(() => onPress(note), [note, onPress]);
+
+  const handleLongPress = useCallback(
+    () => onLongPress?.(note),
+    [note, onLongPress],
+  );
 
   const handleMore = useCallback(
     (e: { stopPropagation: () => void }) => {
@@ -70,14 +94,34 @@ function NoteCardInner({
     [note, onMorePress],
   );
 
-  const canShowActions = showActions && Boolean(onMorePress);
+  const handleSenderPress = useCallback(
+    (e: { stopPropagation: () => void }) => {
+      e.stopPropagation();
+      onSourcePress?.(note, 'sender');
+    },
+    [note, onSourcePress],
+  );
+
+  const handleGroupPress = useCallback(
+    (e: { stopPropagation: () => void }) => {
+      e.stopPropagation();
+      onSourcePress?.(note, 'group');
+    },
+    [note, onSourcePress],
+  );
+
+  // 多选模式下 chip 不再跳聊天，避免和「点卡片=勾选」抢手势。
+  const chipsEnabled = Boolean(onSourcePress) && !selectionMode;
+  const canShowActions = showActions && Boolean(onMorePress) && !selectionMode;
 
   return (
     <Pressable
       style={s.container}
       onPress={handlePress}
+      onLongPress={onLongPress ? handleLongPress : undefined}
       accessibilityRole={accessibilityRole}
       accessibilityLabel={accessibilityLabel}
+      accessibilityState={selectionMode ? { selected } : undefined}
     >
       {note.cover ? (
         <Image
@@ -110,6 +154,17 @@ function NoteCardInner({
             {note.title}
           </Text>
         </View>
+        {note.remark ? (
+          <Text
+            style={[s.remark, { color: colors.primary }]}
+            numberOfLines={1}
+          >
+            {t('notes.list.remark', {
+              defaultValue: '备注：{{text}}',
+              text: note.remark,
+            })}
+          </Text>
+        ) : null}
         {note.contentPreview ? (
           <Text style={[s.preview, d.preview]} numberOfLines={2}>
             {note.contentPreview}
@@ -118,28 +173,68 @@ function NoteCardInner({
         <Text style={[s.meta, d.meta]} numberOfLines={1}>
           {meta}
         </Text>
-        {sourceName ? (
+        {senderChip || groupChip ? (
           <View style={s.sourceRow}>
-            <Ionicons
-              name={
-                note.collectedFrom?.conversationType === 'group'
-                  ? 'chatbubbles-outline'
-                  : 'chatbubble-outline'
-              }
-              size={11}
-              color={colors.primary}
-            />
-            <Text style={[s.sourceText, { color: colors.primary }]} numberOfLines={1}>
-              {t('notes.list.fromSource', {
-                defaultValue: '来自 {{name}}',
-                name: sourceName,
-              })}
-            </Text>
+            {senderChip ? (
+              <Pressable
+                style={[s.sourceChip, d.sourceChip]}
+                onPress={chipsEnabled ? handleSenderPress : undefined}
+                disabled={!chipsEnabled}
+                hitSlop={4}
+                accessibilityRole="button"
+                accessibilityLabel={t('notes.list.openSenderChat', {
+                  defaultValue: '和 {{name}} 私聊',
+                  name: senderChip.name,
+                })}
+              >
+                <Avatar size={18} uri={senderChip.faceURL ?? undefined} name={senderChip.name} />
+                <Text
+                  style={[s.sourceText, { color: colors.text }]}
+                  numberOfLines={1}
+                >
+                  {senderChip.name}
+                </Text>
+              </Pressable>
+            ) : null}
+            {groupChip ? (
+              <Pressable
+                style={[s.sourceChip, d.sourceChip]}
+                onPress={chipsEnabled ? handleGroupPress : undefined}
+                disabled={!chipsEnabled}
+                hitSlop={4}
+                accessibilityRole="button"
+                accessibilityLabel={t('notes.list.openGroupChat', {
+                  defaultValue: '进入群聊 {{name}}',
+                  name: groupChip.name,
+                })}
+              >
+                <Ionicons
+                  name="chatbubbles-outline"
+                  size={12}
+                  color={colors.primary}
+                />
+                <Avatar size={18} uri={groupChip.faceURL ?? undefined} name={groupChip.name} />
+                <Text
+                  style={[s.sourceText, { color: colors.text }]}
+                  numberOfLines={1}
+                >
+                  {groupChip.name}
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
         ) : null}
       </View>
 
-      {canShowActions ? (
+      {selectionMode ? (
+        <View style={s.moreBtn}>
+          <Ionicons
+            name={selected ? 'checkmark-circle' : 'ellipse-outline'}
+            size={22}
+            color={selected ? colors.primary : colors.textSecondary}
+          />
+        </View>
+      ) : canShowActions ? (
         <Pressable
           onPress={handleMore}
           hitSlop={10}
@@ -195,17 +290,33 @@ const s = StyleSheet.create({
     fontWeight: '400',
     lineHeight: 18,
   },
+  remark: {
+    ...Typography.small,
+    fontWeight: '500',
+  },
   meta: {
     ...Typography.small,
   },
   sourceRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    marginTop: 2,
+  },
+  sourceChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.xs,
+    borderRadius: Radius.pill,
+    paddingHorizontal: Spacing.sm,
+    height: 28,
+    maxWidth: 200,
   },
   sourceText: {
     ...Typography.small,
     fontWeight: '500',
+    flexShrink: 1,
   },
   moreBtn: {
     width: 32,

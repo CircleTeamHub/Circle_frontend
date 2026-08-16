@@ -291,7 +291,7 @@
       "videoUnsupported": "仅支持 MP4、MOV、M4V 视频",
       "videoUnavailable": "视频不可用",
       "playVideo": "播放视频",
-      "noteSendFailed": "笔记发送失败，请重试",
+      "noteBatchPartialFailed": "{{count}} 条内容发送失败",
       "cardSendFailed": "名片发送失败，请重试",
       "favoriteSendFailed": "收藏内容发送失败，请重试",
       "favoriteLegacyVoiceUnsupported": "这条旧版语音收藏无法重新发送"
@@ -2189,7 +2189,12 @@
       "unlist": "下架",
       "relist": "上架",
       "more": "更多",
-      "restore": "恢复"
+      "restore": "恢复",
+      "multiSelect": "多选",
+      "remark": "备注",
+      "editNote": "编辑笔记",
+      "editGroups": "编辑分组",
+      "delete": "删除"
     },
     "alerts": {
       "deleteFailedTitle": "删除失败",
@@ -2210,9 +2215,18 @@
       "relistFailedTitle": "上架失败",
       "unlistFailedTitle": "下架失败",
       "unlistTitle": "下架笔记",
-      "unlistConfirm": "下架后可在已下架列表查看，已下架笔记会在一个月后自动删除。",
+      "unlistConfirm": "下架后可在已下架列表查看，并可随时重新上架。",
       "refreshFailedTitle": "刷新失败",
-      "restoreFailedTitle": "恢复失败"
+      "restoreFailedTitle": "恢复失败",
+      "remarkFailedTitle": "备注保存失败",
+      "deleteTitle": "删除笔记",
+      "deleteConfirm": "删除后可在回收站找回，30 天后自动清除。",
+      "batchFailedTitle": "部分操作失败",
+      "batchPartialFailed": "有 {{count}} 条笔记操作失败，已保留选中，请重试。",
+      "batchUnlistTitle": "批量下架",
+      "batchUnlistConfirm": "确定下架所选 {{count}} 条笔记吗？下架后可随时重新上架。",
+      "batchDeleteTitle": "批量删除",
+      "batchDeleteConfirm": "确定删除所选 {{count}} 条笔记吗？删除后可在回收站找回。"
     },
     "detail": {
       "loadFailed": "笔记加载失败，请稍后重试",
@@ -2327,7 +2341,7 @@
     "title": "我的笔记",
     "unlisted": "已下架",
     "unlistedTitle": "已下架笔记",
-    "unlistedAutoDeleteHint": "已下架笔记会在一个月后自动删除。",
+    "unlistedAutoDeleteHint": "已下架笔记不会自动删除，可随时重新上架。",
     "format": {
       "fullDate": "{{year}}年{{month}}月{{day}}日 · {{weekday}}",
       "groupOverflow": "{{first}}、{{second}} +{{extra}}",
@@ -2365,7 +2379,31 @@
       "selectedLabel": "已选择位置"
     },
     "list": {
-      "fromSource": "来自 {{name}}"
+      "fromSource": "来自 {{name}}",
+      "remark": "备注：{{text}}",
+      "openSenderChat": "和 {{name}} 私聊",
+      "openGroupChat": "进入群聊 {{name}}"
+    },
+    "groupPicker": {
+      "title": "编辑分组",
+      "batchHint": "保存后将替换所选 {{count}} 条笔记的分组。",
+      "empty": "暂无分组，请先在「管理分组」中创建。",
+      "saving": "保存中...",
+      "save": "保存"
+    },
+    "remarkSheet": {
+      "title": "备注",
+      "placeholder": "输入备注，留空保存即清除",
+      "saving": "保存中...",
+      "save": "保存"
+    },
+    "selection": {
+      "selectedCount": "已选 {{count}} 项",
+      "selectAll": "全选",
+      "clearAll": "取消全选",
+      "group": "分组",
+      "unlist": "下架",
+      "delete": "删除"
     },
     "loadFailed": "笔记加载失败，请检查网络后重试",
     "shareToChat": {
@@ -2383,7 +2421,7 @@
       "friendHint": "好友"
     },
     "recycleBin": "回收站",
-    "recycleBinHint": "已删除的笔记可在这里恢复。",
+    "recycleBinHint": "已删除的笔记可在这里恢复，30 天后自动清除。",
     "recycleBinTitle": "回收站"
   },
   "search": {
@@ -2416,7 +2454,18 @@
     "loadFailed": "加载失败",
     "noMatch": "没有匹配项",
     "empty": "暂无内容",
-    "favoriteLegacyVoiceUnsupported": "旧版语音收藏，无法重新发送"
+    "favoriteLegacyVoiceUnsupported": "旧版语音收藏，无法重新发送",
+    "noteBatch": {
+      "confirm": "发送",
+      "limitHint": "最多选择 {{count}} 条笔记",
+      "next": "发送 ({{count}})",
+      "optionAll": "全部发送",
+      "optionCard": "发送笔记",
+      "optionLocation": "发送地址",
+      "optionMedia": "发送笔记的图片+视频",
+      "optionShowcase": "发送展示",
+      "optionsTitle": "发送 {{count}} 条笔记"
+    }
   },
   "profileDisplay": {
     "emptySignature": "完善资料后会在这里展示你的介绍。"
@@ -2642,10 +2691,30 @@
     "empty": "还没有邀请记录，分享邀请码开始邀请吧",
     "loadMore": "加载更多",
     "loadingMore": "加载中…",
-    "stats": { "invited": "已邀请", "rewarded": "已达标", "points": "累计积分" },
-    "status": { "pending": "待达标", "rewarded": "已奖励", "capped": "已达上限", "rejected": "不符合", "expired": "已过期" },
-    "item": { "rewarded": "已获得 {{points}} 积分", "pending": "完成资料、满 {{days}} 天并添加好友后发放", "noReward": "本次未发放积分" },
-    "errors": { "loadFailed": "邀请数据加载失败，请稍后重试", "loadMoreFailed": "更多邀请记录加载失败", "invalidData": "邀请数据格式异常，请稍后重试", "staleData": "内容可能不是最新的，下拉可重新加载", "shareFailed": "分享失败，可改用「复制邀请码」发给好友" }
+    "stats": {
+      "invited": "已邀请",
+      "rewarded": "已达标",
+      "points": "累计积分"
+    },
+    "status": {
+      "pending": "待达标",
+      "rewarded": "已奖励",
+      "capped": "已达上限",
+      "rejected": "不符合",
+      "expired": "已过期"
+    },
+    "item": {
+      "rewarded": "已获得 {{points}} 积分",
+      "pending": "完成资料、满 {{days}} 天并添加好友后发放",
+      "noReward": "本次未发放积分"
+    },
+    "errors": {
+      "loadFailed": "邀请数据加载失败，请稍后重试",
+      "loadMoreFailed": "更多邀请记录加载失败",
+      "invalidData": "邀请数据格式异常，请稍后重试",
+      "staleData": "内容可能不是最新的，下拉可重新加载",
+      "shareFailed": "分享失败，可改用「复制邀请码」发给好友"
+    }
   },
   "serverErrors": {
     "TEMP_CHAT_JOIN_FAILED": "加入失败，请重试",

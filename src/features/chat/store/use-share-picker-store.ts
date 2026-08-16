@@ -1,5 +1,6 @@
 import type { FriendProfile } from '@/services/api/friends';
 import type { NoteSummary } from '@/features/notes/types';
+import type { NoteSendOptions } from '@/features/chat/utils/note-batch-send';
 import type { UserCollection } from '@/services/api/collections';
 import { create } from 'zustand';
 
@@ -10,7 +11,7 @@ import { create } from 'zustand';
  * 不持久化 —— 跨屏一次性传值，关 app 就丢，没问题。
  */
 export type SharePickedItem =
-  | { kind: 'note'; data: NoteSummary }
+  | { kind: 'note-batch'; notes: NoteSummary[]; options: NoteSendOptions }
   | { kind: 'friend'; data: FriendProfile }
   | { kind: 'favorite'; data: UserCollection }
   | { kind: 'quick-reply'; data: string };

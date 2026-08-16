@@ -117,7 +117,20 @@ import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-s
 import { useAuthStore } from '@/stores/authStore';
 import { type FriendProfile } from '@/services/api/friends';
 import type { NoteSummary } from '@/features/notes/types';
-import { collectNote } from '@/services/api/notes';
+import {
+  collectNote,
+  fetchNoteDetail,
+  importNoteChatMedia,
+} from '@/services/api/notes';
+import {
+  buildNoteSendTasks,
+  notePacingDelayMs,
+  resolveSendableNoteLocation,
+  sectionsToImport,
+  type ImportedNoteChatMedia,
+  type NoteSendOptions,
+  type NoteSendTask,
+} from '@/features/chat/utils/note-batch-send';
 import { createCollection, type UserCollection } from '@/services/api/collections';
 import {
   buildCollectionInputFromMessage,
@@ -3106,34 +3119,112 @@ export default function ChatDetailScreen() {
     ],
   );
 
-  const handlePickNote = useCallback(
-    async (note: NoteSummary) => {
-      if (!sourceID || isPreviewMode) return;
-      if (inFlightRef.current) return;
-      inFlightRef.current = true;
-      try {
-        const noteCardPayload = {
-          ...buildNoteCardPayloadFromSummary(note, authUser?.id ?? null),
-          ownerId: authUser?.id ?? null,
-        };
-        await sendCardMessage({
-          conversationId: conversationID,
-          type: 'note-card',
-          payload: noteCardPayload,
-        });
-      } catch (error) {
-        if (mountedRef.current) {
-          setSendError(
-            getChatSendErrorMessage(
-              error,
-              t('chat.detail.noteSendFailed', {
-                defaultValue: '笔记发送失败，请重试',
-              }),
-            ),
-          );
+  /**
+   * 批量发笔记(SharePicker 多选 + 发送选项 sheet 的执行端)。
+   *
+   * 每条笔记按 卡片 → 图片·视频/展示 → 地址 的顺序展开;媒体必须先经
+   * POST /note/:id/chat-media 由服务端拷进自己的 chat/ 命名空间(发送校验
+   * 只认发送者自己的 key)。地址只在笔记详情里,摘要拿不到坐标时按需拉详情。
+   *
+   * 不整批持有 inFlightRef:大批次能发几分钟,不该锁死输入栏;重复消费由
+   * share-picker store 的 consume() 一次性语义兜底。单条失败不中断整批,
+   * 发完汇总一次错误提示。计划超过安全突发量时匀速发送,压在服务端限流之下。
+   */
+  const handlePickNoteBatch = useCallback(
+    async (notes: NoteSummary[], options: NoteSendOptions) => {
+      if (!sourceID || isPreviewMode || notes.length === 0) return;
+      const sections = sectionsToImport(options);
+      let failures = 0;
+
+      const perNote: NoteSendTask[][] = [];
+      for (const note of notes) {
+        let imported: ImportedNoteChatMedia[] = [];
+        if (sections.length > 0) {
+          try {
+            imported = (await importNoteChatMedia(note.id, sections)).items;
+          } catch (error) {
+            failures += 1;
+            if (__DEV__) {
+              console.warn('[ChatDetail] import note media failed', error);
+            }
+          }
         }
-      } finally {
-        inFlightRef.current = false;
+        let location = note.sections?.location ?? null;
+        if (options.location && !resolveSendableNoteLocation(location)) {
+          try {
+            location = (await fetchNoteDetail(note.id)).sections?.location ?? null;
+          } catch {
+            location = null;
+          }
+        }
+        perNote.push(buildNoteSendTasks(note, options, imported, location));
+      }
+
+      const tasks = perNote.flat();
+      const delay = notePacingDelayMs(tasks.length);
+      for (let i = 0; i < tasks.length; i += 1) {
+        const task = tasks[i];
+        try {
+          switch (task.kind) {
+            case 'note-card':
+              await sendCardMessage({
+                conversationId: conversationID,
+                type: 'note-card',
+                payload: {
+                  ...buildNoteCardPayloadFromSummary(
+                    task.note,
+                    authUser?.id ?? null,
+                  ),
+                  ownerId: authUser?.id ?? null,
+                },
+              });
+              break;
+            case 'image':
+              await sendImageMessage({
+                conversationId: conversationID,
+                key: task.key,
+                width: task.width,
+                height: task.height,
+              });
+              break;
+            case 'video':
+              await sendVideoMessage({
+                conversationId: conversationID,
+                key: task.key,
+                width: task.width,
+                height: task.height,
+                duration: task.duration,
+                size: task.size,
+              });
+              break;
+            case 'location':
+              await sendLocationMessage({
+                conversationId: conversationID,
+                latitude: task.latitude,
+                longitude: task.longitude,
+                title: task.title,
+                address: task.address,
+              });
+              break;
+          }
+        } catch (error) {
+          failures += 1;
+          if (__DEV__) {
+            console.warn('[ChatDetail] note batch send failed', error);
+          }
+        }
+        if (delay > 0 && i < tasks.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+
+      if (failures > 0 && mountedRef.current) {
+        setSendError(
+          t('chat.detail.noteBatchPartialFailed', {
+            defaultValue: '{{count}} 条内容发送失败',
+            count: failures,
+          }),
+        );
       }
     },
     [authUser?.id, conversationID, isPreviewMode, sourceID, t],
@@ -3283,8 +3374,8 @@ export default function ChatDetailScreen() {
       const item = consumePendingShare();
       if (!item) return;
       switch (item.kind) {
-        case 'note':
-          void handlePickNote(item.data);
+        case 'note-batch':
+          void handlePickNoteBatch(item.notes, item.options);
           return;
         case 'friend':
           void handlePickFriend(item.data);
@@ -3302,7 +3393,7 @@ export default function ChatDetailScreen() {
       sourceID,
       handlePickFavorite,
       handlePickFriend,
-      handlePickNote,
+      handlePickNoteBatch,
       handlePickQuickReply,
     ]),
   );

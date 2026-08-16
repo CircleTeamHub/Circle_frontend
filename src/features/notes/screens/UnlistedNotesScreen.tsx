@@ -140,7 +140,7 @@ export default function UnlistedNotesScreen() {
       </Text>
       <Text style={[s.hint, d.hint]}>
         {t('notes.unlistedAutoDeleteHint', {
-          defaultValue: '已下架笔记会在一个月后自动删除。',
+          defaultValue: '已下架笔记不会自动删除，可随时重新上架。',
         })}
       </Text>
 

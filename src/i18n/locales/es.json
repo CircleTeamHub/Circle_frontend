@@ -253,7 +253,7 @@
       "videoUnsupported": "Solo se admiten videos MP4, MOV y M4V",
       "videoUnavailable": "Vídeo no disponible",
       "playVideo": "Reproducir vídeo",
-      "noteSendFailed": "No se pudo enviar la nota, inténtalo de nuevo",
+      "noteBatchPartialFailed": "No se pudieron enviar {{count}} elementos",
       "cardSendFailed": "No se pudo enviar la tarjeta de perfil, inténtalo de nuevo",
       "favoriteSendFailed": "No se pudo enviar el favorito, inténtalo de nuevo",
       "favoriteLegacyVoiceUnsupported": "Este favorito de voz antiguo ya no se puede enviar"
@@ -706,7 +706,12 @@
       "unlist": "Retirar",
       "relist": "Volver a publicar",
       "more": "Más",
-      "restore": "Restaurar"
+      "restore": "Restaurar",
+      "multiSelect": "Selección múltiple",
+      "remark": "Comentario",
+      "editNote": "Editar nota",
+      "editGroups": "Editar grupos",
+      "delete": "Eliminar"
     },
     "alerts": {
       "deleteFailedTitle": "Error al eliminar",
@@ -727,9 +732,18 @@
       "relistFailedTitle": "No se pudo volver a publicar",
       "unlistFailedTitle": "No se pudo retirar",
       "unlistTitle": "Retirar nota",
-      "unlistConfirm": "Podrás verla en Retiradas. Las notas retiradas se eliminan automáticamente después de un mes.",
+      "unlistConfirm": "Podrás verla en Retiradas y volver a publicarla cuando quieras.",
       "refreshFailedTitle": "Error al actualizar",
-      "restoreFailedTitle": "No se pudo restaurar"
+      "restoreFailedTitle": "No se pudo restaurar",
+      "remarkFailedTitle": "No se pudo guardar el comentario",
+      "deleteTitle": "Eliminar nota",
+      "deleteConfirm": "Las notas eliminadas se pueden recuperar desde la papelera y se borran definitivamente a los 30 días.",
+      "batchFailedTitle": "Algunas acciones fallaron",
+      "batchPartialFailed": "Falló la operación en {{count}} notas; siguen seleccionadas, inténtalo de nuevo.",
+      "batchUnlistTitle": "Retirar notas",
+      "batchUnlistConfirm": "¿Retirar las {{count}} notas seleccionadas? Podrás volver a publicarlas cuando quieras.",
+      "batchDeleteTitle": "Eliminar notas",
+      "batchDeleteConfirm": "¿Eliminar las {{count}} notas seleccionadas? Podrás recuperarlas desde la papelera."
     },
     "detail": {
       "loadFailed": "No se pudo cargar la nota, inténtalo de nuevo",
@@ -844,7 +858,7 @@
     "title": "Mis notas",
     "unlisted": "Retirada",
     "unlistedTitle": "Notas retiradas",
-    "unlistedAutoDeleteHint": "Las notas retiradas se eliminan automáticamente después de un mes.",
+    "unlistedAutoDeleteHint": "Las notas retiradas no se eliminan automáticamente. Puedes volver a publicarlas cuando quieras.",
     "format": {
       "fullDate": "{{day}}/{{month}}/{{year}} · {{weekday}}",
       "groupOverflow": "{{first}}, {{second}} +{{extra}}",
@@ -882,7 +896,10 @@
       "selectedLabel": "Ubicación seleccionada"
     },
     "list": {
-      "fromSource": "De {{name}}"
+      "fromSource": "De {{name}}",
+      "remark": "Comentario: {{text}}",
+      "openSenderChat": "Chatear con {{name}}",
+      "openGroupChat": "Abrir el chat del grupo {{name}}"
     },
     "loadFailed": "No se pudieron cargar las notas. Revisa tu conexión e inténtalo de nuevo",
     "shareToChat": {
@@ -900,8 +917,29 @@
       "friendHint": "Amigo"
     },
     "recycleBin": "Papelera",
-    "recycleBinHint": "Las notas eliminadas se pueden restaurar aquí.",
-    "recycleBinTitle": "Papelera"
+    "recycleBinHint": "Las notas eliminadas se pueden restaurar aquí y se borran automáticamente a los 30 días.",
+    "recycleBinTitle": "Papelera",
+    "selection": {
+      "selectedCount": "{{count}} seleccionadas",
+      "selectAll": "Seleccionar todo",
+      "clearAll": "Anular selección",
+      "group": "Grupos",
+      "unlist": "Retirar",
+      "delete": "Eliminar"
+    },
+    "remarkSheet": {
+      "title": "Comentario",
+      "placeholder": "Escribe un comentario; guarda vacío para borrarlo",
+      "save": "Guardar",
+      "saving": "Guardando..."
+    },
+    "groupPicker": {
+      "title": "Editar grupos",
+      "batchHint": "Al guardar se reemplazarán los grupos de las {{count}} notas seleccionadas.",
+      "empty": "Aún no hay grupos. Créalos primero en «Gestionar grupos».",
+      "save": "Guardar",
+      "saving": "Guardando..."
+    }
   },
   "tempChats": {
     "title": "Chats grupales temporales",
@@ -2243,7 +2281,18 @@
     "loadFailed": "Error al cargar",
     "noMatch": "Sin coincidencias",
     "empty": "Aún no hay contenido",
-    "favoriteLegacyVoiceUnsupported": "Favorito de voz antiguo: no se puede reenviar"
+    "favoriteLegacyVoiceUnsupported": "Favorito de voz antiguo: no se puede reenviar",
+    "noteBatch": {
+      "confirm": "Enviar",
+      "limitHint": "Selecciona hasta {{count}} notas",
+      "next": "Enviar ({{count}})",
+      "optionAll": "Enviar todo",
+      "optionCard": "Enviar nota",
+      "optionLocation": "Enviar ubicación",
+      "optionMedia": "Enviar imágenes y videos de la nota",
+      "optionShowcase": "Enviar exhibición",
+      "optionsTitle": "Enviar {{count}} notas"
+    }
   },
   "accountSwitcher": {
     "title": "Cambiar de cuenta",
@@ -2645,10 +2694,30 @@
     "empty": "Aún no hay invitaciones. Comparte tu código para empezar.",
     "loadMore": "Cargar más",
     "loadingMore": "Cargando…",
-    "stats": { "invited": "Invitados", "rewarded": "Válidos", "points": "Puntos ganados" },
-    "status": { "pending": "Pendiente", "rewarded": "Recompensado", "capped": "Límite alcanzado", "rejected": "No válido", "expired": "Caducado" },
-    "item": { "rewarded": "Has ganado {{points}} puntos", "pending": "Se premia tras completar el perfil, {{days}} días y añadir un amigo", "noReward": "No se otorgaron puntos" },
-    "errors": { "loadFailed": "No se pudieron cargar las invitaciones", "loadMoreFailed": "No se pudieron cargar más invitaciones", "invalidData": "Los datos de invitación no son válidos", "staleData": "Puede que no esté actualizado. Desliza para recargar.", "shareFailed": "No se pudo compartir. Copia el código de invitación y envíalo." }
+    "stats": {
+      "invited": "Invitados",
+      "rewarded": "Válidos",
+      "points": "Puntos ganados"
+    },
+    "status": {
+      "pending": "Pendiente",
+      "rewarded": "Recompensado",
+      "capped": "Límite alcanzado",
+      "rejected": "No válido",
+      "expired": "Caducado"
+    },
+    "item": {
+      "rewarded": "Has ganado {{points}} puntos",
+      "pending": "Se premia tras completar el perfil, {{days}} días y añadir un amigo",
+      "noReward": "No se otorgaron puntos"
+    },
+    "errors": {
+      "loadFailed": "No se pudieron cargar las invitaciones",
+      "loadMoreFailed": "No se pudieron cargar más invitaciones",
+      "invalidData": "Los datos de invitación no son válidos",
+      "staleData": "Puede que no esté actualizado. Desliza para recargar.",
+      "shareFailed": "No se pudo compartir. Copia el código de invitación y envíalo."
+    }
   },
   "serverErrors": {
     "TEMP_CHAT_JOIN_FAILED": "No se pudo unir, inténtalo de nuevo",

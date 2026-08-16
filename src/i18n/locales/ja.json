@@ -253,7 +253,7 @@
       "videoUnsupported": "MP4、MOV、M4V動画のみ対応しています",
       "videoUnavailable": "動画を再生できません",
       "playVideo": "動画を再生",
-      "noteSendFailed": "ノートを送信できませんでした。もう一度お試しください",
+      "noteBatchPartialFailed": "{{count}} 件の送信に失敗しました",
       "cardSendFailed": "プロフィールカードを送信できませんでした。もう一度お試しください",
       "favoriteSendFailed": "お気に入りを送信できませんでした。もう一度お試しください",
       "favoriteLegacyVoiceUnsupported": "この旧バージョンの音声お気に入りは再送信できません"
@@ -705,7 +705,12 @@
       "unlist": "非公開にする",
       "relist": "公開に戻す",
       "more": "その他",
-      "restore": "復元"
+      "restore": "復元",
+      "multiSelect": "複数選択",
+      "remark": "メモ",
+      "editNote": "ノートを編集",
+      "editGroups": "グループを編集",
+      "delete": "削除"
     },
     "alerts": {
       "deleteFailedTitle": "削除に失敗しました",
@@ -726,9 +731,18 @@
       "relistFailedTitle": "公開に戻せませんでした",
       "unlistFailedTitle": "非公開にできませんでした",
       "unlistTitle": "ノートを非公開にする",
-      "unlistConfirm": "非公開にしたノートは非公開リストで確認できます。1か月後に自動削除されます。",
+      "unlistConfirm": "非公開にしたノートは非公開リストで確認でき、いつでも公開に戻せます。",
       "refreshFailedTitle": "更新に失敗しました",
-      "restoreFailedTitle": "復元に失敗しました"
+      "restoreFailedTitle": "復元に失敗しました",
+      "remarkFailedTitle": "メモを保存できませんでした",
+      "deleteTitle": "ノートを削除",
+      "deleteConfirm": "削除したノートはごみ箱から復元でき、30日後に自動的に消去されます。",
+      "batchFailedTitle": "一部の操作に失敗しました",
+      "batchPartialFailed": "{{count}}件のノートの操作に失敗しました。選択は保持されています。もう一度お試しください。",
+      "batchUnlistTitle": "まとめて非公開",
+      "batchUnlistConfirm": "選択中の{{count}}件のノートを非公開にしますか？いつでも公開に戻せます。",
+      "batchDeleteTitle": "まとめて削除",
+      "batchDeleteConfirm": "選択中の{{count}}件のノートを削除しますか？ごみ箱から復元できます。"
     },
     "detail": {
       "loadFailed": "ノートを読み込めませんでした。もう一度お試しください",
@@ -843,7 +857,7 @@
     "title": "マイノート",
     "unlisted": "非公開",
     "unlistedTitle": "非公開のノート",
-    "unlistedAutoDeleteHint": "非公開にしたノートは1か月後に自動削除されます。",
+    "unlistedAutoDeleteHint": "非公開のノートが自動削除されることはありません。いつでも公開に戻せます。",
     "format": {
       "fullDate": "{{year}}年{{month}}月{{day}}日 · {{weekday}}",
       "groupOverflow": "{{first}}、{{second}} +{{extra}}",
@@ -881,7 +895,31 @@
       "selectedLabel": "選択した位置"
     },
     "list": {
-      "fromSource": "{{name}}から"
+      "fromSource": "{{name}}から",
+      "remark": "メモ：{{text}}",
+      "openSenderChat": "{{name}}とチャット",
+      "openGroupChat": "グループチャット{{name}}を開く"
+    },
+    "groupPicker": {
+      "title": "グループを編集",
+      "batchHint": "保存すると選択中の{{count}}件のノートのグループが置き換えられます。",
+      "empty": "グループがありません。先に「グループを管理」で作成してください。",
+      "saving": "保存中...",
+      "save": "保存"
+    },
+    "remarkSheet": {
+      "title": "メモ",
+      "placeholder": "メモを入力（空のまま保存で削除）",
+      "saving": "保存中...",
+      "save": "保存"
+    },
+    "selection": {
+      "selectedCount": "{{count}}件選択中",
+      "selectAll": "すべて選択",
+      "clearAll": "選択を解除",
+      "group": "グループ",
+      "unlist": "非公開",
+      "delete": "削除"
     },
     "loadFailed": "ノートを読み込めませんでした。ネットワークを確認して再試行してください",
     "shareToChat": {
@@ -899,7 +937,7 @@
       "friendHint": "友だち"
     },
     "recycleBin": "ごみ箱",
-    "recycleBinHint": "削除したノートはここから復元できます。",
+    "recycleBinHint": "削除したノートはここから復元できます。30日後に自動的に消去されます。",
     "recycleBinTitle": "ごみ箱"
   },
   "tempChats": {
@@ -2240,7 +2278,18 @@
     "loadFailed": "読み込みに失敗しました",
     "noMatch": "一致する項目がありません",
     "empty": "コンテンツはまだありません",
-    "favoriteLegacyVoiceUnsupported": "旧バージョンの音声お気に入り — 再送信できません"
+    "favoriteLegacyVoiceUnsupported": "旧バージョンの音声お気に入り — 再送信できません",
+    "noteBatch": {
+      "confirm": "送信",
+      "limitHint": "ノートは最大 {{count}} 件まで選択できます",
+      "next": "送信 ({{count}})",
+      "optionAll": "すべて送信",
+      "optionCard": "ノートを送信",
+      "optionLocation": "住所を送信",
+      "optionMedia": "ノートの画像・動画を送信",
+      "optionShowcase": "ショーケースを送信",
+      "optionsTitle": "{{count}} 件のノートを送信"
+    }
   },
   "accountSwitcher": {
     "title": "アカウントを切り替え",
@@ -2642,10 +2691,30 @@
     "empty": "招待履歴はありません。コードを共有して始めましょう。",
     "loadMore": "さらに読み込む",
     "loadingMore": "読み込み中…",
-    "stats": { "invited": "招待数", "rewarded": "達成数", "points": "獲得ポイント" },
-    "status": { "pending": "条件待ち", "rewarded": "付与済み", "capped": "上限到達", "rejected": "対象外", "expired": "期限切れ" },
-    "item": { "rewarded": "{{points}}ポイント獲得", "pending": "プロフィール、{{days}}日経過、友だち追加後に付与", "noReward": "ポイントは付与されません" },
-    "errors": { "loadFailed": "招待データを読み込めませんでした", "loadMoreFailed": "招待履歴をさらに読み込めませんでした", "invalidData": "招待データの形式が正しくありません", "staleData": "最新でない可能性があります。引っ張って再読み込みしてください。", "shareFailed": "共有に失敗しました。「招待コードをコピー」してお送りください。" }
+    "stats": {
+      "invited": "招待数",
+      "rewarded": "達成数",
+      "points": "獲得ポイント"
+    },
+    "status": {
+      "pending": "条件待ち",
+      "rewarded": "付与済み",
+      "capped": "上限到達",
+      "rejected": "対象外",
+      "expired": "期限切れ"
+    },
+    "item": {
+      "rewarded": "{{points}}ポイント獲得",
+      "pending": "プロフィール、{{days}}日経過、友だち追加後に付与",
+      "noReward": "ポイントは付与されません"
+    },
+    "errors": {
+      "loadFailed": "招待データを読み込めませんでした",
+      "loadMoreFailed": "招待履歴をさらに読み込めませんでした",
+      "invalidData": "招待データの形式が正しくありません",
+      "staleData": "最新でない可能性があります。引っ張って再読み込みしてください。",
+      "shareFailed": "共有に失敗しました。「招待コードをコピー」してお送りください。"
+    }
   },
   "serverErrors": {
     "TEMP_CHAT_JOIN_FAILED": "参加に失敗しました。もう一度お試しください",

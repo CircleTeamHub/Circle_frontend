@@ -94,6 +94,8 @@ export interface NoteSummary {
   status: NoteStatus;
   available: boolean;
   pinned: boolean;
+  /** 仅笔记主人可见的私人备注；他人视角后端恒回 null */
+  remark?: string | null;
   groups: { id: string; name: string }[];
   cover: NoteMediaSummary | null;
   imageCount: number;
@@ -164,6 +166,29 @@ export interface NoteShareLink {
   expiresAt: string | null;
   revokedAt: string | null;
   createdAt: string;
+}
+
+/** 批量发笔记进聊天时,需要服务端拷贝媒体的两个分区。 */
+export type NoteChatMediaSection = 'media' | 'showcase';
+
+/**
+ * POST /note/:id/chat-media 返回的单条:对象已由服务端复制进请求者的
+ * chat/{userId}/ 命名空间(聊天媒体消息只认发送者自己的 key)。
+ */
+export interface NoteChatMediaImportItem {
+  id: string;
+  section: NoteChatMediaSection;
+  type: NoteMediaType;
+  key: string;
+  width?: number | null;
+  height?: number | null;
+  durationMs?: number | null;
+  size?: number | null;
+  mimeType?: string | null;
+}
+
+export interface NoteChatMediaImportResult {
+  items: NoteChatMediaImportItem[];
 }
 
 export type NoteExportFormat = 'IMAGE' | 'PDF' | 'IMAGES' | 'VIDEOS';
