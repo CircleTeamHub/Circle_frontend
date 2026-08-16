@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -39,12 +39,16 @@ export function NoteRemarkSheet({
 
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
+  // saving 状态要下一帧才重渲染;键盘 Done 和保存按钮同帧各触发一次 handleSave
+  // 时都会读到旧的 saving=false。ref 同步生效,双击/双路只放行一次提交。
+  const savingRef = useRef(false);
 
   // 针对哪条笔记打开就用哪条的现有备注起稿；关闭（note→null）时不动草稿。
   useEffect(() => {
     if (note) {
       setDraft(note.remark ?? '');
       setSaving(false);
+      savingRef.current = false;
     }
   }, [note]);
 
@@ -67,13 +71,15 @@ export function NoteRemarkSheet({
   );
 
   const handleSave = async () => {
-    if (!note || saving) return;
+    if (!note || savingRef.current) return;
+    savingRef.current = true;
     const trimmed = draft.trim();
     const next = trimmed.length > 0 ? trimmed : null;
     setSaving(true);
     try {
       await setNoteRemark(note.id, next);
     } catch {
+      savingRef.current = false;
       setSaving(false);
       Alert.alert(
         t('notes.alerts.remarkFailedTitle', { defaultValue: '备注保存失败' }),

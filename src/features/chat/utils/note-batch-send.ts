@@ -64,11 +64,12 @@ export type NoteSendTask =
 export const MAX_NOTE_BATCH_SELECTION = 9;
 
 /**
- * 服务端 send 限流 20 条/10s。计划消息数超过安全突发量后,每条之间
- * 停 600ms(≈1.6 条/s),把长批次压在限流之下 —— 触发限流的消息会被
- * 直接拒收,比慢一点糟得多。
+ * 服务端 send 限流 20 条/10s(按用户,与手动打字发送共用同一个桶)。
+ * 计划消息数超过安全突发量后,每条之间停 600ms(≈1.6 条/s),把长批次压在
+ * 限流之下 —— 触发限流的消息会被直接拒收,比慢一点糟得多。突发量取 12
+ * 而不是贴着 20:同一个 10s 窗口里用户自己还可能在打字,给手动消息留余量。
  */
-const NOTE_BATCH_SAFE_BURST = 15;
+const NOTE_BATCH_SAFE_BURST = 12;
 const NOTE_BATCH_PACED_DELAY_MS = 600;
 
 export function hasAnyNoteSendOption(options: NoteSendOptions): boolean {

@@ -209,30 +209,17 @@ export default function SharePickerScreen() {
     router.back();
   }, [router, selectedNotes, sendOptions, setPending]);
 
-  const renderNote = ({ item }: { item: NoteSummary }) => {
-    const selected = selectedNotes.some((n) => n.id === item.id);
-    return (
-      <View style={s.noteRow}>
-        <Pressable
-          style={s.noteCheck}
-          hitSlop={8}
-          onPress={() => toggleNote(item)}
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: selected }}
-          accessibilityLabel={item.title}
-        >
-          <Ionicons
-            name={selected ? 'checkmark-circle' : 'ellipse-outline'}
-            size={24}
-            color={selected ? colors.primary : colors.textSecondary}
-          />
-        </Pressable>
-        <View style={s.noteCardWrap}>
-          <NoteCard note={item} onPress={toggleNote} showActions={false} />
-        </View>
-      </View>
-    );
-  };
+  // 多选态复用 NoteCard 自带的 selectionMode(勾选指示/无障碍状态都在卡片里),
+  // 不再另裹一层手搓 checkbox —— 与笔记列表的多选视觉保持同一来源。
+  const renderNote = ({ item }: { item: NoteSummary }) => (
+    <NoteCard
+      note={item}
+      onPress={toggleNote}
+      showActions={false}
+      selectionMode
+      selected={selectedNotes.some((n) => n.id === item.id)}
+    />
+  );
 
   const renderFriend = ({ item }: { item: FriendProfile }) => (
     <Pressable
@@ -599,20 +586,9 @@ const s = StyleSheet.create({
   noteListContent: {
     paddingBottom: Spacing.xl,
   },
+  // 底栏最高态(上限提示行 + 34pt 刘海 inset)约 117pt,再留出大字号无障碍余量。
   noteListContentWithBar: {
-    paddingBottom: 112,
-  },
-  noteRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  noteCheck: {
-    paddingLeft: Spacing.lg,
-    paddingRight: Spacing.xs,
-    paddingVertical: Spacing.md,
-  },
-  noteCardWrap: {
-    flex: 1,
+    paddingBottom: 136,
   },
   noteBar: {
     position: 'absolute',

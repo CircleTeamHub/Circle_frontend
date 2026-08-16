@@ -198,8 +198,8 @@ test('buildNoteSendTasks skips location when unchecked or invalid', () => {
 
 test('notePacingDelayMs kicks in above the safe burst size', () => {
   assert.equal(notePacingDelayMs(1), 0);
-  assert.equal(notePacingDelayMs(15), 0);
-  assert.equal(notePacingDelayMs(16), 600);
+  assert.equal(notePacingDelayMs(12), 0);
+  assert.equal(notePacingDelayMs(13), 600);
   assert.equal(notePacingDelayMs(80), 600);
 });
 

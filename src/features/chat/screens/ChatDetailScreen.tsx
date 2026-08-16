@@ -97,7 +97,10 @@ import {
   sendVoiceMessage,
 } from '@/chat-core/client';
 import { waitForSendSlot } from '@/features/chat/utils/send-slot';
-import { getChatSendErrorMessage } from '@/chat-core/send-errors';
+import {
+  getChatSendErrorMessage,
+  reportChatSendFailure,
+} from '@/chat-core/send-errors';
 import { OptionPickerSheet } from '@/components/ui/option-picker-sheet';
 import {
   createChatMessageMapCache,
@@ -495,6 +498,9 @@ export default function ChatDetailScreen() {
   // inFlightRef 在 hook 入口处再判断一次，保证同一时刻只有一条消息在飞。文本 / 图片 /
   // 位置 / 笔记 / 名片 / 转账 6 条发送路径共享同一道闸。
   const inFlightRef = useRef(false);
+  // 批量发笔记的串行队列:第二批在上一批发完之前不开跑,避免两次突发叠进
+  // 服务端同一个 20 条/10s 的用户级 send 桶(消息触限会被直接拒收)。
+  const noteBatchQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [draft, setDraft] = useState('');
   const [mentionPickerVisible, setMentionPickerVisible] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -3127,34 +3133,52 @@ export default function ChatDetailScreen() {
    * 只认发送者自己的 key)。地址只在笔记详情里,摘要拿不到坐标时按需拉详情。
    *
    * 不整批持有 inFlightRef:大批次能发几分钟,不该锁死输入栏;重复消费由
-   * share-picker store 的 consume() 一次性语义兜底。单条失败不中断整批,
-   * 发完汇总一次错误提示。计划超过安全突发量时匀速发送,压在服务端限流之下。
+   * share-picker store 的 consume() 一次性语义兜底,批与批之间由
+   * noteBatchQueueRef 串行(两次突发不能叠进同一个服务端限流桶)。
+   * 离开会话(卸载)即停发剩余任务 —— 发错聊天时用户退出就是止损。
+   * 单条失败不中断整批,发完汇总一次错误提示;首个错误保留语义映射
+   * (敏感词/被拉黑等确定性拒绝要说清原因,不能伪装成可重试的网络问题)。
    */
-  const handlePickNoteBatch = useCallback(
+  const runNoteBatchSend = useCallback(
     async (notes: NoteSummary[], options: NoteSendOptions) => {
-      if (!sourceID || isPreviewMode || notes.length === 0) return;
       const sections = sectionsToImport(options);
       let failures = 0;
+      let firstError: unknown = null;
 
       const perNote: NoteSendTask[][] = [];
       for (const note of notes) {
+        if (!mountedRef.current) return;
         let imported: ImportedNoteChatMedia[] = [];
-        if (sections.length > 0) {
+        // mediaCount=0 的笔记没有任何可拷对象,别浪费服务端 20 次/分钟的拷贝配额。
+        if (sections.length > 0 && note.mediaCount > 0) {
           try {
             imported = (await importNoteChatMedia(note.id, sections)).items;
           } catch (error) {
             failures += 1;
+            firstError ??= error;
             if (__DEV__) {
               console.warn('[ChatDetail] import note media failed', error);
             }
           }
         }
         let location = note.sections?.location ?? null;
-        if (options.location && !resolveSendableNoteLocation(location)) {
+        if (
+          options.location &&
+          !resolveSendableNoteLocation(location) &&
+          // 摘要只带 hasLocation 布尔;明确没有地址的笔记不值得为它拉详情。
+          note.hasLocation !== false
+        ) {
           try {
             location = (await fetchNoteDetail(note.id)).sections?.location ?? null;
-          } catch {
+          } catch (error) {
+            // 拉不到详情=这条的地址发不出去。必须计入失败,否则「只勾了地址,
+            // 网络一抖」会变成什么都没发还零提示的静默丢失。
+            failures += 1;
+            firstError ??= error;
             location = null;
+            if (__DEV__) {
+              console.warn('[ChatDetail] fetch note location failed', error);
+            }
           }
         }
         perNote.push(buildNoteSendTasks(note, options, imported, location));
@@ -3163,6 +3187,7 @@ export default function ChatDetailScreen() {
       const tasks = perNote.flat();
       const delay = notePacingDelayMs(tasks.length);
       for (let i = 0; i < tasks.length; i += 1) {
+        if (!mountedRef.current) return;
         const task = tasks[i];
         try {
           switch (task.kind) {
@@ -3209,6 +3234,8 @@ export default function ChatDetailScreen() {
           }
         } catch (error) {
           failures += 1;
+          firstError ??= error;
+          reportChatSendFailure(task.kind, error);
           if (__DEV__) {
             console.warn('[ChatDetail] note batch send failed', error);
           }
@@ -3219,15 +3246,36 @@ export default function ChatDetailScreen() {
       }
 
       if (failures > 0 && mountedRef.current) {
+        const countMessage = t('chat.detail.noteBatchPartialFailed', {
+          defaultValue: '{{count}} 条内容发送失败',
+          count: failures,
+        });
+        // 首个错误若映射得出确切原因(敏感词/被拉黑/限流),优先展示它 ——
+        // 这些是重试一万次也不会成功的确定性拒绝,笼统计数只会诱导人狂点重试。
         setSendError(
-          t('chat.detail.noteBatchPartialFailed', {
-            defaultValue: '{{count}} 条内容发送失败',
-            count: failures,
-          }),
+          firstError
+            ? getChatSendErrorMessage(firstError, countMessage)
+            : countMessage,
         );
       }
     },
-    [authUser?.id, conversationID, isPreviewMode, sourceID, t],
+    [authUser?.id, conversationID, t],
+  );
+
+  const handlePickNoteBatch = useCallback(
+    (notes: NoteSummary[], options: NoteSendOptions) => {
+      if (!sourceID || isPreviewMode || notes.length === 0) {
+        return Promise.resolve();
+      }
+      const previous = noteBatchQueueRef.current;
+      const run = previous
+        .catch(() => undefined)
+        .then(() => runNoteBatchSend(notes, options));
+      // 队列尾永不 reject,后续批次才接得上。
+      noteBatchQueueRef.current = run.catch(() => undefined);
+      return run;
+    },
+    [isPreviewMode, runNoteBatchSend, sourceID],
   );
 
   const handlePickFriend = useCallback(
