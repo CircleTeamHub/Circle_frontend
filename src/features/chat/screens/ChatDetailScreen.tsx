@@ -51,6 +51,11 @@ import {
 } from '@/features/chat/components/chat-bubble';
 import { EmojiPicker } from '@/features/chat/components/emoji-picker';
 import { VoiceRecordingOverlay } from '@/features/chat/components/voice-recording-overlay';
+import { PhotoEditorModal } from '@/features/chat/components/photo-editor-modal';
+import {
+  MediaSourceSheet,
+  type MediaSourceAction,
+} from '@/features/chat/components/media-source-sheet';
 import {
   MessageActionMenu,
   type MessageAction,
@@ -189,7 +194,6 @@ function logChatSendFailure(
 
 type AttachmentId =
   | 'media'
-  | 'camera'
   | 'voice-call'
   | 'location'
   | 'notes'
@@ -204,8 +208,7 @@ const ATTACHMENT_ITEMS: readonly {
   labelKey: string;
   label: string;
 }[] = [
-  { id: 'media', icon: 'image-outline', labelKey: 'chat.attachments.photos', label: '照片' },
-  { id: 'camera', icon: 'camera-outline', labelKey: 'chat.attachments.camera', label: '拍照' },
+  { id: 'media', icon: 'images-outline', labelKey: 'chat.attachments.mediaHub', label: '自媒体' },
   { id: 'voice-call', icon: 'call-outline', labelKey: 'chat.attachments.voiceCall', label: '语/视频通话' },
   { id: 'location', icon: 'location-outline', labelKey: 'chat.attachments.location', label: '位置' },
   { id: 'notes', icon: 'create-outline', labelKey: 'chat.attachments.notes', label: '笔记' },
@@ -499,6 +502,9 @@ export default function ChatDetailScreen() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [mediaSourceSheetVisible, setMediaSourceSheetVisible] = useState(false);
+  const [photoEditorAsset, setPhotoEditorAsset] =
+    useState<ImagePicker.ImagePickerAsset | null>(null);
   const [attachmentPage, setAttachmentPage] = useState(0);
   const [attachmentPagerWidth, setAttachmentPagerWidth] = useState(0);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -2823,7 +2829,7 @@ export default function ChatDetailScreen() {
       // 圈子封面 / 好友照片一致（10MB），此前只有聊天发图这条路径漏了 gate。
       if (isChatImageTooLarge(asset.fileSize)) {
         Alert.alert(t('validation.imageTooLarge'), t('validation.imageSizeLimit'));
-        return;
+        return false;
       }
 
       // 用 || 而非 ??：URI 以 '/' 结尾时 pop() 返回空字符串，?? 不会触发 fallback。
@@ -2842,16 +2848,21 @@ export default function ChatDetailScreen() {
         assertLocalCanSendMessage();
       } catch (error) {
         if (mountedRef.current) {
-          setSendError(
-            getChatSendErrorMessage(
-              error,
-              t('chat.detail.imageSendFailed', {
-                defaultValue: '图片发送失败，请重试',
-              }),
-            ),
+          const message = getChatSendErrorMessage(
+            error,
+            t('chat.detail.imageSendFailed', {
+              defaultValue: '图片发送失败，请重试',
+            }),
+          );
+          setSendError(message);
+          // 照片编辑器是全屏 Modal，输入栏上的 sendError 此时不可见；同步弹出
+          // 可操作的错误提示，同时保留编辑器，用户可以继续调整或取消。
+          Alert.alert(
+            t('common.errorOccurred', { defaultValue: '操作失败' }),
+            message,
           );
         }
-        return;
+        return false;
       }
 
       // 先上屏、后台上传:和语音同一套 —— 上传期间气泡是「发送中」,
@@ -2867,6 +2878,7 @@ export default function ChatDetailScreen() {
         retry: (id) => uploadAndSendImage(asset, filename, contentType, id),
       });
       void uploadAndSendImage(asset, filename, contentType, deliveryId);
+      return true;
     },
     [conversationID, t, uploadAndSendImage],
   );
@@ -3007,35 +3019,32 @@ export default function ChatDetailScreen() {
     [conversationID, t, uploadAndSendVideo],
   );
 
-  const uploadAndSendPickedAsset = useCallback(
-    async (asset: ImagePicker.ImagePickerAsset) => {
-      if (asset.type === 'video' || asset.mimeType?.startsWith('video/')) {
-        await uploadAndSendVideoAsset(asset);
+  const handlePickLibraryMedia = useCallback(
+    async (kind: 'photo' | 'video') => {
+      if (!sourceID || isPreviewMode) return;
+      if (inFlightRef.current) return;
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(t('permissions.insufficientTitle'), t('permissions.photoLibrary'));
         return;
       }
-      await uploadAndSendImageAsset(asset);
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: kind === 'photo' ? ['images'] : ['videos'],
+        preferredAssetRepresentationMode:
+          ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+        quality: 0.85,
+        allowsMultipleSelection: false,
+      });
+      if (result.canceled || result.assets.length === 0) return;
+      const pickedAsset = result.assets[0];
+      if (kind === 'photo') {
+        setPhotoEditorAsset(pickedAsset);
+        return;
+      }
+      await uploadAndSendVideoAsset(pickedAsset);
     },
-    [uploadAndSendImageAsset, uploadAndSendVideoAsset],
+    [isPreviewMode, sourceID, t, uploadAndSendVideoAsset],
   );
-
-  const handlePickMedia = useCallback(async () => {
-    if (!sourceID || isPreviewMode) return;
-    if (inFlightRef.current) return;
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert(t('permissions.insufficientTitle'), t('permissions.photoLibrary'));
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images', 'videos'],
-      preferredAssetRepresentationMode:
-        ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
-      quality: 0.85,
-      allowsMultipleSelection: false,
-    });
-    if (result.canceled || result.assets.length === 0) return;
-    await uploadAndSendPickedAsset(result.assets[0]);
-  }, [isPreviewMode, sourceID, t, uploadAndSendPickedAsset]);
 
   const handleTakePhoto = useCallback(async () => {
     if (!sourceID || isPreviewMode) return;
@@ -3050,8 +3059,36 @@ export default function ChatDetailScreen() {
       quality: 0.85,
     });
     if (result.canceled || result.assets.length === 0) return;
-    await uploadAndSendImageAsset(result.assets[0]);
-  }, [isPreviewMode, sourceID, t, uploadAndSendImageAsset]);
+    setPhotoEditorAsset(result.assets[0]);
+  }, [isPreviewMode, sourceID, t]);
+
+  const handleSendEditedPhoto = useCallback(
+    async (asset: ImagePicker.ImagePickerAsset) => {
+      const accepted = await uploadAndSendImageAsset(asset);
+      if (accepted && mountedRef.current) {
+        setPhotoEditorAsset(null);
+      }
+      return accepted;
+    },
+    [uploadAndSendImageAsset],
+  );
+
+  const handleMediaSourceSelect = useCallback(
+    (action: MediaSourceAction) => {
+      setMediaSourceSheetVisible(false);
+      requestAnimationFrame(() => {
+        if (!mountedRef.current) return;
+        if (action === 'photo') {
+          void handlePickLibraryMedia('photo');
+        } else if (action === 'video') {
+          void handlePickLibraryMedia('video');
+        } else {
+          void handleTakePhoto();
+        }
+      });
+    },
+    [handlePickLibraryMedia, handleTakePhoto],
+  );
 
   const openSharePicker = useCallback(
     (type: 'note' | 'friend' | 'favorite' | 'quick-reply') => {
@@ -3070,10 +3107,7 @@ export default function ChatDetailScreen() {
       setAttachmentOpen(false);
       switch (id) {
         case 'media':
-          void handlePickMedia();
-          return;
-        case 'camera':
-          void handleTakePhoto();
+          setMediaSourceSheetVisible(true);
           return;
         case 'notes':
           openSharePicker('note');
@@ -3114,8 +3148,6 @@ export default function ChatDetailScreen() {
       avatarUrl,
       conversationTitle,
       conversationType,
-      handlePickMedia,
-      handleTakePhoto,
       handleOpenLocationPicker,
       handleStartCall,
       openSharePicker,
@@ -3917,6 +3949,12 @@ export default function ChatDetailScreen() {
         onDismiss={() => setActionMenu(null)}
       />
 
+      <MediaSourceSheet
+        visible={mediaSourceSheetVisible}
+        onSelect={handleMediaSourceSelect}
+        onClose={() => setMediaSourceSheetVisible(false)}
+      />
+
       <OptionPickerSheet
         visible={reactionTarget !== null}
         title={t('chat.messageActions.react', { defaultValue: '回应' })}
@@ -3924,6 +3962,12 @@ export default function ChatDetailScreen() {
         selectedValue=""
         onSelect={handlePickReaction}
         onClose={() => setReactionTarget(null)}
+      />
+
+      <PhotoEditorModal
+        asset={photoEditorAsset}
+        onCancel={() => setPhotoEditorAsset(null)}
+        onSend={handleSendEditedPhoto}
       />
 
       {/* 微信式全屏录音浮层：录音时盖在最上层，纯展示（pointerEvents none）。 */}

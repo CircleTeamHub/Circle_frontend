@@ -522,6 +522,9 @@
     },
     "attachments": {
       "photos": "照片/视频",
+      "mediaHub": "自媒体",
+      "mediaPhoto": "照片",
+      "mediaVideo": "视频",
       "camera": "拍照",
       "voiceCall": "语/视频通话",
       "location": "位置",
@@ -530,6 +533,30 @@
       "favorites": "我的收藏",
       "quickReply": "快捷语",
       "transfer": "转账"
+    },
+    "photoEditor": {
+      "title": "编辑照片",
+      "preview": "待发送照片预览",
+      "cropSquare": "1:1 裁剪",
+      "cropFourThree": "4:3 裁剪",
+      "freeCrop": "自由裁剪",
+      "freeCropTitle": "自由裁剪",
+      "cropFrame": "自由裁剪框",
+      "cropHint": "拖动四角调整范围，拖动框内移动位置",
+      "cropDone": "完成",
+      "mosaic": "马赛克",
+      "mosaicTitle": "马赛克",
+      "mosaicHint": "手指滑动涂抹需要隐藏的区域",
+      "draw": "涂鸦",
+      "drawTitle": "涂鸦",
+      "drawColor": "画笔颜色",
+      "markupCanvas": "照片编辑画布",
+      "undo": "撤销",
+      "rotate": "旋转",
+      "flip": "镜像",
+      "reset": "还原",
+      "editFailedTitle": "编辑失败",
+      "editFailedMessage": "照片处理失败，请重试"
     },
     "location": {
       "showPreview": "轻点显示地图"

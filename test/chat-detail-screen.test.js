@@ -16,7 +16,7 @@ test('chat detail screen uses the aligned header and composer structure', () => 
   assert.match(source, /composerShell/);
   assert.match(source, /composerInput/);
   assert.match(source, /sendVideoMessage/);
-  assert.match(source, /mediaTypes: \['images', 'videos'\]/);
+  assert.match(source, /mediaTypes: kind === 'photo' \? \['images'\] : \['videos'\]/);
   assert.match(source, /VIDEO_UPLOAD_TIMEOUT_MS/);
   assert.match(source, /type: 'video'/);
 });

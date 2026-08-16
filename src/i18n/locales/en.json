@@ -523,6 +523,9 @@
     },
     "attachments": {
       "photos": "Photos/Videos",
+      "mediaHub": "Media",
+      "mediaPhoto": "Photos",
+      "mediaVideo": "Videos",
       "camera": "Camera",
       "voiceCall": "Audio/Video Call",
       "location": "Location",
@@ -531,6 +534,30 @@
       "favorites": "Favorites",
       "quickReply": "Quick Reply",
       "transfer": "Transfer"
+    },
+    "photoEditor": {
+      "title": "Edit Photo",
+      "preview": "Photo preview before sending",
+      "cropSquare": "Crop 1:1",
+      "cropFourThree": "Crop 4:3",
+      "freeCrop": "Free Crop",
+      "freeCropTitle": "Free Crop",
+      "cropFrame": "Free crop frame",
+      "cropHint": "Drag a corner to resize, or drag inside the frame to move it",
+      "cropDone": "Done",
+      "mosaic": "Mosaic",
+      "mosaicTitle": "Mosaic",
+      "mosaicHint": "Drag your finger over the area you want to obscure",
+      "draw": "Draw",
+      "drawTitle": "Draw",
+      "drawColor": "Brush color",
+      "markupCanvas": "Photo editing canvas",
+      "undo": "Undo",
+      "rotate": "Rotate",
+      "flip": "Flip",
+      "reset": "Reset",
+      "editFailedTitle": "Editing Failed",
+      "editFailedMessage": "Unable to process the photo. Please try again."
     },
     "location": {
       "showPreview": "Tap to show map"

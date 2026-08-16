@@ -479,6 +479,9 @@
     },
     "attachments": {
       "photos": "写真/動画",
+      "mediaHub": "メディア",
+      "mediaPhoto": "写真",
+      "mediaVideo": "動画",
       "camera": "カメラ",
       "voiceCall": "音声/ビデオ通話",
       "location": "位置情報",
@@ -487,6 +490,30 @@
       "favorites": "お気に入り",
       "quickReply": "定型文",
       "transfer": "送金"
+    },
+    "photoEditor": {
+      "title": "写真を編集",
+      "preview": "送信前の写真プレビュー",
+      "cropSquare": "1:1 トリミング",
+      "cropFourThree": "4:3 トリミング",
+      "freeCrop": "自由トリミング",
+      "freeCropTitle": "自由トリミング",
+      "cropFrame": "自由トリミング枠",
+      "cropHint": "四隅をドラッグして範囲を調整し、枠内をドラッグして移動します",
+      "cropDone": "完了",
+      "mosaic": "モザイク",
+      "mosaicTitle": "モザイク",
+      "mosaicHint": "隠したい部分を指でなぞります",
+      "draw": "落書き",
+      "drawTitle": "落書き",
+      "drawColor": "ペンの色",
+      "markupCanvas": "写真編集キャンバス",
+      "undo": "元に戻す",
+      "rotate": "回転",
+      "flip": "反転",
+      "reset": "元に戻す",
+      "editFailedTitle": "編集に失敗しました",
+      "editFailedMessage": "写真を処理できませんでした。もう一度お試しください。"
     },
     "location": {
       "showPreview": "タップして地図を表示"

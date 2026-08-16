@@ -480,6 +480,9 @@
     },
     "attachments": {
       "photos": "Fotos/Videos",
+      "mediaHub": "Multimedia",
+      "mediaPhoto": "Fotos",
+      "mediaVideo": "Videos",
       "camera": "Cámara",
       "voiceCall": "Llamada de audio/video",
       "location": "Ubicación",
@@ -488,6 +491,30 @@
       "favorites": "Favoritos",
       "quickReply": "Respuesta rápida",
       "transfer": "Transferencia"
+    },
+    "photoEditor": {
+      "title": "Editar foto",
+      "preview": "Vista previa de la foto antes de enviar",
+      "cropSquare": "Recortar 1:1",
+      "cropFourThree": "Recortar 4:3",
+      "freeCrop": "Recorte libre",
+      "freeCropTitle": "Recorte libre",
+      "cropFrame": "Marco de recorte libre",
+      "cropHint": "Arrastra una esquina para ajustar o el interior para mover",
+      "cropDone": "Listo",
+      "mosaic": "Mosaico",
+      "mosaicTitle": "Mosaico",
+      "mosaicHint": "Desliza el dedo sobre el área que quieras ocultar",
+      "draw": "Dibujar",
+      "drawTitle": "Dibujar",
+      "drawColor": "Color del pincel",
+      "markupCanvas": "Lienzo de edición de fotos",
+      "undo": "Deshacer",
+      "rotate": "Girar",
+      "flip": "Voltear",
+      "reset": "Restablecer",
+      "editFailedTitle": "Error de edición",
+      "editFailedMessage": "No se pudo procesar la foto. Inténtalo de nuevo."
     },
     "location": {
       "showPreview": "Toca para ver el mapa"
