@@ -821,7 +821,9 @@
     },
     "manageGroups": {
       "cancelEdit": "Cancelar edición",
-      "copy": "\"Todas\" y \"Sin grupo\" son grupos fijos y no se pueden editar.",
+      "copy": "\"Todas\" y \"Sin grupo\" también se pueden reordenar, pero no renombrar ni eliminar.",
+      "fixedAll": "Todas",
+      "fixedUngrouped": "Sin grupo",
       "createNew": "Añadir grupo",
       "limitHint": "{{count}}/{{max}} grupos creados",
       "namePlaceholder": "Escribe un nombre para añadir un grupo nuevo",

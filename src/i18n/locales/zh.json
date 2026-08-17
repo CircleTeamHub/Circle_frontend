@@ -2304,7 +2304,9 @@
     },
     "manageGroups": {
       "cancelEdit": "取消编辑",
-      "copy": "全部和未分组为固定分组无法修改。",
+      "copy": "全部和未分组也可拖动排序，但不能改名或删除。",
+      "fixedAll": "全部",
+      "fixedUngrouped": "未分组",
       "createNew": "新增分组",
       "limitHint": "已创建 {{count}}/{{max}} 个分组",
       "namePlaceholder": "输入分组名添加新的分组",

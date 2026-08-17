@@ -2307,7 +2307,9 @@
     },
     "manageGroups": {
       "cancelEdit": "Cancel editing",
-      "copy": "All and Ungrouped are fixed groups and cannot be edited.",
+      "copy": "All and Ungrouped can be reordered too, but not renamed or deleted.",
+      "fixedAll": "All",
+      "fixedUngrouped": "Ungrouped",
       "createNew": "Add group",
       "limitHint": "{{count}}/{{max}} groups created",
       "namePlaceholder": "Enter a group name to add a new group",

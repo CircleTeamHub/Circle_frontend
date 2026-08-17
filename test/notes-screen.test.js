@@ -217,31 +217,35 @@ test('NotesScreen keeps group management action fixed beside the scrollable tabs
   assert.ok(manageButton > scrollEnd);
 });
 
-test('GroupManagerSheet keeps group management sheet interactions inside a non-pressable card', () => {
+test('GroupManagerSheet is a full-screen page without backdrop chrome', () => {
   const src = read('src/features/notes/components/GroupManagerSheet.tsx');
-  assert.match(src, /<View style=\{\[s\.modalCard, d\.modalCard\]\}>/);
-  assert.doesNotMatch(src, /<Pressable style=\{\[s\.modalCard, d\.modalCard\]\}/);
+
+  // 已从底部弹层升级为全屏页：无遮罩/backdrop，安全区内自带标题栏与关闭按钮。
+  assert.match(src, /animationType="slide"/);
+  assert.doesNotMatch(src, /transparent/);
+  assert.doesNotMatch(src, /modalBackdrop/);
+  assert.doesNotMatch(src, /modalOverlay/);
+  assert.match(src, /screen:\s*{[\s\S]*?flex:\s*1/);
+  assert.match(src, /insets\.top/);
+  assert.match(src, /name="close"/);
 });
 
-test('GroupManagerSheet keeps the group manager backdrop behind the editor controls', () => {
+test('GroupManagerSheet lets fixed tabs (all/ungrouped) join drag reordering', () => {
   const src = read('src/features/notes/components/GroupManagerSheet.tsx');
-  assert.match(src, /<View style=\{\[s\.modalOverlay, d\.modalOverlay\]\} pointerEvents="box-none">/);
-  assert.match(src, /modalBackdrop:\s*{[\s\S]*zIndex:\s*0/);
-  assert.match(src, /modalCard:\s*{[\s\S]*zIndex:\s*1/);
-  assert.match(src, /modalCard:\s*{[\s\S]*elevation:\s*1/);
-});
-
-test('GroupManagerSheet presents group management as a bottom sheet with updated copy', () => {
-  const src = read('src/features/notes/components/GroupManagerSheet.tsx');
+  const screen = read('src/features/notes/screens/NotesScreen.tsx');
   const zh = read('src/i18n/locales/zh.json');
 
-  assert.match(src, /animationType="slide"/);
-  assert.match(src, /modalOverlay:\s*{[\s\S]*justifyContent:\s*'flex-end'[\s\S]*paddingHorizontal:\s*0/);
-  assert.match(src, /modalCard:\s*{[\s\S]*borderTopLeftRadius:\s*Radius\.xl[\s\S]*borderTopRightRadius:\s*Radius\.xl/);
-  assert.match(src, /modalCard:\s*{[\s\S]*borderBottomLeftRadius:\s*0[\s\S]*borderBottomRightRadius:\s*0/);
-  assert.match(src, /全部和未分组为固定分组无法修改。/);
-  assert.match(src, /输入分组名添加新的分组/);
-  assert.match(zh, /全部和未分组为固定分组无法修改。/);
+  // 固定 tab 与分组同列表拖动：整条顺序本地持久化，分组相对顺序才写服务端。
+  assert.match(src, /mergeTabOrder/);
+  assert.match(src, /NOTES_TAB_ALL/);
+  assert.match(src, /setTabOrderIds\(finalRows\.map\(\(row\) => row\.id\)\)/);
+  assert.match(src, /groupOrderChanged/);
+  // 固定 tab 行不渲染 成员/改名/删除 动作（group 为空时整块隐藏）。
+  assert.match(src, /\{group \? \(\s*<View style=\{s\.groupRowActions\}>/);
+  // NotesScreen 的 tab 顺序同样经 mergeTabOrder 还原。
+  assert.match(screen, /mergeTabOrder/);
+  assert.match(screen, /useNotesTabOrderStore/);
+  assert.match(zh, /全部和未分组也可拖动排序，但不能改名或删除。/);
   assert.match(zh, /输入分组名添加新的分组/);
 });
 
@@ -278,19 +282,18 @@ test('GroupManagerSheet limits custom note groups to ten', () => {
   assert.ok(saveBlock.indexOf('isCreatingGroupAtLimit') < saveBlock.indexOf('createNoteGroup'));
 });
 
-test('GroupManagerSheet uses stable drag responders directly on each custom group handle', () => {
+test('GroupManagerSheet uses stable drag responders directly on each row handle', () => {
   const src = read('src/features/notes/components/GroupManagerSheet.tsx');
   assert.match(src, /dragRespondersRef/);
   assert.match(src, /getDragResponder/);
-  assert.match(src, /groupsRef\.current\.findIndex/);
-  assert.match(src, /getDragResponder\(group\.id\)\.panHandlers/);
+  assert.match(src, /currentRows\.findIndex/);
+  assert.match(src, /getDragResponder\(row\.id\)\.panHandlers/);
   assert.doesNotMatch(src, /pendingDragRef/);
-  assert.doesNotMatch(src, /createDragResponder\(group\.id, index\)\.panHandlers/);
 });
 
-test('GroupManagerSheet prevents ScrollView from stealing group drag gestures', () => {
+test('GroupManagerSheet prevents ScrollView from stealing row drag gestures', () => {
   const src = read('src/features/notes/components/GroupManagerSheet.tsx');
-  assert.match(src, /scrollEnabled=\{!draggingGroupId\}/);
+  assert.match(src, /scrollEnabled=\{!draggingRowId\}/);
   assert.match(src, /onMoveShouldSetPanResponderCapture:\s*\(\) => true/);
   assert.match(src, /onShouldBlockNativeResponder:\s*\(\) => true/);
 });
@@ -543,9 +546,9 @@ test('NoteDetailScreen header adds a share button left of download', () => {
 test('GroupManagerSheet name input is a visible shadowed pill', () => {
   const src = read('src/features/notes/components/GroupManagerSheet.tsx');
 
-  // 之前边框用 surface（隐形）；现在可见边框 + background 凹槽底 + 阴影 + 胶囊圆角。
+  // 可见边框 + 阴影 + 胶囊圆角；全屏页底是 background，输入底翻成 surface 立出来。
   assert.match(src, /modalInput:\s*\{[\s\S]*?borderColor:\s*colors\.surfaceBorder/);
-  assert.match(src, /modalInput:\s*\{[\s\S]*?backgroundColor:\s*colors\.background/);
+  assert.match(src, /modalInput:\s*\{[\s\S]*?backgroundColor:\s*colors\.surface/);
   assert.match(src, /modalInput:\s*\{[\s\S]*?borderRadius:\s*Radius\.full[\s\S]*?shadowOpacity/);
 });
 

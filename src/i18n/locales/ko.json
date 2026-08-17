@@ -820,7 +820,9 @@
     },
     "manageGroups": {
       "cancelEdit": "편집 취소",
-      "copy": "\"전체\"와 \"미분류\"는 고정 그룹이라 수정할 수 없습니다.",
+      "copy": "\"전체\"와 \"미분류\"도 드래그로 순서를 바꿀 수 있습니다(이름 변경·삭제는 불가).",
+      "fixedAll": "전체",
+      "fixedUngrouped": "미분류",
       "createNew": "그룹 추가",
       "limitHint": "{{count}}/{{max}}개 그룹 생성됨",
       "namePlaceholder": "새 그룹을 추가할 그룹 이름 입력",

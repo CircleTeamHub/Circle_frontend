@@ -820,7 +820,9 @@
     },
     "manageGroups": {
       "cancelEdit": "編集をキャンセル",
-      "copy": "「すべて」と「未分類」は固定グループのため変更できません。",
+      "copy": "「すべて」と「未分類」も並べ替えできます（名前変更・削除は不可）。",
+      "fixedAll": "すべて",
+      "fixedUngrouped": "未分類",
       "createNew": "グループを追加",
       "limitHint": "{{count}}/{{max}} 個のグループを作成済み",
       "namePlaceholder": "新しいグループを追加する名前を入力",

@@ -31,6 +31,12 @@ import {
   toggleId,
   toggleSelectAll,
 } from '@/features/notes/utils/note-selection';
+import {
+  NOTES_TAB_ALL,
+  NOTES_TAB_UNGROUPED,
+  mergeTabOrder,
+} from '@/features/notes/utils/tab-order';
+import { useNotesTabOrderStore } from '@/features/notes/store/use-notes-tab-order-store';
 import { getChatDetailHref } from '@/features/user/utils/routes';
 import {
   deleteNote,
@@ -81,6 +87,7 @@ export default function NotesScreen() {
   const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
   const [managerVisible, setManagerVisible] = useState(false);
+  const tabOrderIds = useNotesTabOrderStore((state) => state.orderIds);
   // 多选模式：selectedIds 为唯一事实，Set 只做派生查询
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -199,28 +206,41 @@ export default function NotesScreen() {
     setSelectedIds((prev) => toggleSelectAll(prev, visibleIds));
   }, [visibleIds]);
 
+  // tab 顺序（含「全部/未分组」的位置）由管理分组页拖动决定，本地持久化。
   const tabs = useMemo(() => {
-    const list: { id: TabId; label: string }[] = [
-      {
-        id: 'all',
-        label: t('notes.tabs.all', {
-          count: notes.length,
-          defaultValue: `全部 ${notes.length}`,
-        }),
-      },
-    ];
-    list.push({
-      id: 'ungrouped',
-      label: t('notes.tabs.ungrouped', {
-        count: ungroupedCount,
-        defaultValue: `未分组 ${ungroupedCount}`,
-      }),
+    const byId = new Map(groups.map((group) => [group.id, group]));
+    return mergeTabOrder(
+      tabOrderIds,
+      groups.map((group) => group.id),
+    ).flatMap<{ id: TabId; label: string }>((id) => {
+      if (id === NOTES_TAB_ALL) {
+        return [
+          {
+            id: 'all',
+            label: t('notes.tabs.all', {
+              count: notes.length,
+              defaultValue: `全部 ${notes.length}`,
+            }),
+          },
+        ];
+      }
+      if (id === NOTES_TAB_UNGROUPED) {
+        return [
+          {
+            id: 'ungrouped',
+            label: t('notes.tabs.ungrouped', {
+              count: ungroupedCount,
+              defaultValue: `未分组 ${ungroupedCount}`,
+            }),
+          },
+        ];
+      }
+      const group = byId.get(id);
+      return group
+        ? [{ id: group.id, label: `${group.name} ${group.noteCount}` }]
+        : [];
     });
-    groups.forEach((group) => {
-      list.push({ id: group.id, label: `${group.name} ${group.noteCount}` });
-    });
-    return list;
-  }, [groups, notes.length, t, ungroupedCount]);
+  }, [groups, notes.length, t, tabOrderIds, ungroupedCount]);
 
   const closeManager = useCallback(() => setManagerVisible(false), []);
 
