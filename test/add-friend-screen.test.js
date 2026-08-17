@@ -33,5 +33,8 @@ test('add friend screen is a minimal account-id search flow', () => {
   assert.doesNotMatch(source, /支持按完整/);
   assert.doesNotMatch(source, /输入 .* 后开始搜索/);
   assert.doesNotMatch(source, /雷达加友/);
-  assert.doesNotMatch(source, /扫一扫/);
+  // 「扫一扫」曾是死入口被清理;二维码功能落地后它是活路由,现在必须存在:
+  // 出示名片码 + 扫码双入口(微信「添加朋友」页同款),由 qr-feature.test.js 细验。
+  assert.match(source, /qr\.myQrEntry/);
+  assert.match(source, /messages\.scan/);
 });

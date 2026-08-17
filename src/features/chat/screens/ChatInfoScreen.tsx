@@ -725,6 +725,25 @@ export default function ChatInfoScreen() {
     }
   }, [friendId, openActionError, resolvedConversationID]);
 
+  // 群二维码:独立群发 GROUP 码(会话 id);圈子群发 CIRCLE 码(圈子 id)——
+  // 圈子群的准入由圈子管理,签发权限与加入语义都在服务端按圈子策略把关。
+  const handleOpenGroupQr = useCallback(() => {
+    if (isStandaloneGroup) {
+      const id = resolvedConversationID || conversationID;
+      if (!id) return;
+      router.push({
+        pathname: '/qr-code',
+        params: { type: 'group', id, name: groupTitle },
+      });
+      return;
+    }
+    if (!groupID) return;
+    router.push({
+      pathname: '/qr-code',
+      params: { type: 'circle', id: groupID, name: groupTitle },
+    });
+  }, [conversationID, groupID, groupTitle, isStandaloneGroup, resolvedConversationID]);
+
   const handleOpenSearchHistory = useCallback(() => {
     void (async () => {
       const nextConversationID = await resolveConversationIDForNavigation();
@@ -1196,35 +1215,52 @@ export default function ChatInfoScreen() {
     [resolvedConversationID, t],
   );
 
-  // G-14 清空聊天记录:服务端写本人水位,本地时间线/预览/未读一并清。
+  // G-14 清空聊天记录:私聊推进双方水位,群聊只推进本人水位。
   const handleClearHistory = useCallback(() => {
     if (!resolvedConversationID) return;
-    Alert.alert(t('chat.clearHistory'), t('chat.clearHistoryConfirm'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('chat.clearHistory'),
-        style: 'destructive',
-        onPress: () => {
-          void clearChatConversationHistory(resolvedConversationID)
-            .then(() => {
-              // 「标记为未读」的本地覆盖也要清掉:只清 chat-core 的未读数,
-              // 那条覆盖还在,消息页和 tab 上这个会话继续顶着红点 —— 而里面
-              // 已经是空的。
-              useLocalUnreadStore
-                .getState()
-                .clearUnread(resolvedConversationID);
-              Alert.alert(t('chat.clearHistoryDone'));
+    Alert.alert(
+      t('chat.clearHistory'),
+      isGroupConversation
+        ? t('chat.clearHistoryConfirm')
+        : t('chat.clearHistoryConfirmDirect', {
+            defaultValue:
+              '确定清空聊天记录吗？对方的记录也会同时删除，此操作无法撤销。',
+          }),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('chat.clearHistory'),
+          style: 'destructive',
+          onPress: () => {
+            void clearChatConversationHistory(resolvedConversationID, {
+              forEveryone: !isGroupConversation,
             })
-            .catch((error: unknown) => {
-              Alert.alert(
-                t('chat.clearHistory'),
-                getApiErrorMessage(error, t('common.networkError')),
-              );
-            });
+              .then(() => {
+                // 「标记为未读」的本地覆盖也要清掉:只清 chat-core 的未读数,
+                // 那条覆盖还在,消息页和 tab 上这个会话继续顶着红点 —— 而里面
+                // 已经是空的。
+                useLocalUnreadStore
+                  .getState()
+                  .clearUnread(resolvedConversationID);
+                Alert.alert(
+                  isGroupConversation
+                    ? t('chat.clearHistoryDone')
+                    : t('chat.clearHistoryDoneDirect', {
+                        defaultValue: '双方聊天记录已删除',
+                      }),
+                );
+              })
+              .catch((error: unknown) => {
+                Alert.alert(
+                  t('chat.clearHistory'),
+                  getApiErrorMessage(error, t('common.networkError')),
+                );
+              });
+          },
         },
-      },
-    ]);
-  }, [resolvedConversationID, t]);
+      ],
+    );
+  }, [isGroupConversation, resolvedConversationID, t]);
 
   const d = useMemo(
     () => ({
@@ -1374,7 +1410,12 @@ export default function ChatInfoScreen() {
                   showArrow={false}
                 />
               </>
-            ) : null}
+            ) : (
+              <>
+                <Divider />
+                <GroupInfoRow label={t('qr.groupEntry')} onPress={handleOpenGroupQr} />
+              </>
+            )}
             <Divider />
             <GroupInfoRow label={t('chat.searchHistory')} onPress={handleOpenSearchHistory} />
           </View>

@@ -247,6 +247,107 @@ test('setPinnedToTabs() rolls back on server error and keeps prior value', async
   assert.equal(useMessageGroupsStore.getState().groups[0].pinnedToTabs, true);
 });
 
+test('reorder() persists contiguous sortOrder values and updates local group order', async () => {
+  const patches = [];
+  const initialGroups = [
+    makeGroup({ id: 'g-1', sortOrder: 0 }),
+    makeGroup({ id: 'g-2', name: '工作', sortOrder: 1 }),
+  ];
+  const apiMocks = {
+    fetchConversationGroups: async () => initialGroups,
+    updateConversationGroup: async (id, patch) => {
+      patches.push({ id, patch });
+      return { ...initialGroups.find((group) => group.id === id), ...patch };
+    },
+    createConversationGroup: async () => makeGroup(),
+    deleteConversationGroup: async () => undefined,
+    setConversationGroupMembers: async () => makeGroup(),
+  };
+  const { useMessageGroupsStore } = loadStore(apiMocks);
+  await useMessageGroupsStore.getState().load();
+
+  await useMessageGroupsStore.getState().reorder(['g-2', 'g-1']);
+
+  assert.deepEqual(
+    JSON.parse(
+      JSON.stringify(
+        useMessageGroupsStore.getState().groups.map((group) => ({
+          id: group.id,
+          sortOrder: group.sortOrder,
+        })),
+      ),
+    ),
+    [
+      { id: 'g-2', sortOrder: 0 },
+      { id: 'g-1', sortOrder: 1 },
+    ],
+  );
+  assert.deepEqual(JSON.parse(JSON.stringify(patches)), [
+    { id: 'g-2', patch: { sortOrder: 0 } },
+    { id: 'g-1', patch: { sortOrder: 1 } },
+  ]);
+});
+
+test('reorder() reconciles with the server when saving a sortOrder fails', async () => {
+  let fetchCount = 0;
+  let slowUpdateSettled = false;
+  const initialGroups = [
+    makeGroup({ id: 'g-1', sortOrder: 0 }),
+    makeGroup({ id: 'g-2', name: '工作', sortOrder: 1 }),
+  ];
+  const apiMocks = {
+    fetchConversationGroups: async () => {
+      fetchCount += 1;
+      if (fetchCount > 1) assert.equal(slowUpdateSettled, true);
+      return initialGroups;
+    },
+    updateConversationGroup: async (id, patch) => {
+      if (id === 'g-2') throw new Error('reorder rejected');
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      slowUpdateSettled = true;
+      return { ...initialGroups.find((group) => group.id === id), ...patch };
+    },
+    createConversationGroup: async () => makeGroup(),
+    deleteConversationGroup: async () => undefined,
+    setConversationGroupMembers: async () => makeGroup(),
+  };
+  const { useMessageGroupsStore } = loadStore(apiMocks);
+  await useMessageGroupsStore.getState().load();
+
+  await assert.rejects(() =>
+    useMessageGroupsStore.getState().reorder(['g-2', 'g-1']),
+  );
+
+  assert.deepEqual(
+    JSON.parse(
+      JSON.stringify(
+        useMessageGroupsStore.getState().groups.map((group) => group.id),
+      ),
+    ),
+    ['g-1', 'g-2'],
+  );
+});
+
+test('setFilterOrder() persists a deduped order for built-in and custom filters', () => {
+  const apiMocks = {
+    fetchConversationGroups: async () => [],
+    createConversationGroup: async () => makeGroup(),
+    updateConversationGroup: async () => makeGroup(),
+    deleteConversationGroup: async () => undefined,
+    setConversationGroupMembers: async () => makeGroup(),
+  };
+  const { useMessageGroupsStore } = loadStore(apiMocks);
+
+  useMessageGroupsStore
+    .getState()
+    .setFilterOrder(['private', 'custom:g-1', 'all', 'private']);
+
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(useMessageGroupsStore.getState().filterOrder)),
+    ['private', 'custom:g-1', 'all'],
+  );
+});
+
 test('reset() clears in-memory state and MMKV cache', async () => {
   const apiMocks = {
     fetchConversationGroups: async () => [makeGroup()],
@@ -266,6 +367,10 @@ test('reset() clears in-memory state and MMKV cache', async () => {
     [],
   );
   assert.equal(useMessageGroupsStore.getState().lastSyncedAt, null);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(useMessageGroupsStore.getState().filterOrder)),
+    [],
+  );
 
   // give the async cache-clear a tick to run
   await new Promise((r) => setTimeout(r, 10));

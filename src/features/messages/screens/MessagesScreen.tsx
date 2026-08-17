@@ -14,6 +14,7 @@ import { markConversationRead } from "@/chat-core/socket-manager";
 import { selectTotalUnread, type StoredChatMessage, useChatStore } from "@/chat-core/store";
 import { hasFailedLatestMessage } from "@/features/messages/utils/failed-preview";
 import { useMessageGroupsStore } from "@/features/messages/store/use-message-groups-store";
+import { orderMessageFilters } from "@/features/messages/utils/message-filter-order";
 import { useLocalUnreadStore } from "@/features/messages/store/use-local-unread-store";
 import {
   applyLocalUnreadOverrides,
@@ -130,6 +131,24 @@ const s = StyleSheet.create({
     position: "relative",
     justifyContent: "center",
     alignItems: "center",
+  },
+  filterRow: {
+    position: "relative",
+  },
+  addGroupButton: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    zIndex: 1,
+    width: 32,
+    height: 32,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  addGroupIcon: {
+    fontSize: 22,
+    lineHeight: 24,
+    transform: [{ translateY: -2 }],
   },
   // 单条会话行外层：保留普通列表分隔线和行间距
   row: {
@@ -266,8 +285,10 @@ const s = StyleSheet.create({
 });
 
 type ConversationRowLabels = {
-  markUnread: string;
-  hide: string;
+  pin: string;
+  unpin: string;
+  mute: string;
+  unmute: string;
   delete: string;
 };
 
@@ -282,8 +303,8 @@ type ConversationRowProps = {
   pinnedSurfaceStyle: object;
   onOpenConversation: (conversation: Conversation) => void;
   onOpenUserProfile: (conversation: Conversation) => void;
-  onMarkUnread: (conversation: Conversation) => void;
-  onHide: (conversation: Conversation) => void;
+  onTogglePinned: (conversation: Conversation) => void;
+  onToggleMuted: (conversation: Conversation) => void;
   onDelete: (conversation: Conversation) => void;
 };
 
@@ -298,8 +319,8 @@ function ConversationRowImpl({
   pinnedSurfaceStyle,
   onOpenConversation,
   onOpenUserProfile,
-  onMarkUnread,
-  onHide,
+  onTogglePinned,
+  onToggleMuted,
   onDelete,
 }: ConversationRowProps) {
   const { colors } = useTheme();
@@ -394,20 +415,24 @@ function ConversationRowImpl({
     <View style={s.swipeActions}>
       <Pressable
         style={[s.swipeAction, { backgroundColor: colors.primary }]}
-        onPress={() => handleSwipeAction(onMarkUnread)}
+        onPress={() => handleSwipeAction(onTogglePinned)}
       >
-        <Ionicons name="ellipse-outline" size={20} color={colors.white} />
+        <Ionicons name="pin-outline" size={20} color={colors.white} />
         <Text style={[s.swipeActionLabel, { color: colors.white }]}>
-          {labels.markUnread}
+          {item.pinned ? labels.unpin : labels.pin}
         </Text>
       </Pressable>
       <Pressable
         style={[s.swipeAction, { backgroundColor: colors.warning }]}
-        onPress={() => handleSwipeAction(onHide)}
+        onPress={() => handleSwipeAction(onToggleMuted)}
       >
-        <Ionicons name="archive-outline" size={20} color={colors.white} />
+        <Ionicons
+          name={item.muted ? "notifications-outline" : "notifications-off-outline"}
+          size={20}
+          color={colors.white}
+        />
         <Text style={[s.swipeActionLabel, { color: colors.white }]}>
-          {labels.hide}
+          {item.muted ? labels.unmute : labels.mute}
         </Text>
       </Pressable>
       <Pressable
@@ -526,8 +551,10 @@ export default function MessagesScreen() {
   );
   const swipeLabels = useMemo(
     () => ({
-      markUnread: t("messages.swipeMarkUnread", { defaultValue: "标记未读" }),
-      hide: t("messages.swipeHide"),
+      pin: t("messages.swipePin", { defaultValue: "置顶" }),
+      unpin: t("messages.swipeUnpin", { defaultValue: "取消置顶" }),
+      mute: t("messages.swipeMute", { defaultValue: "静音" }),
+      unmute: t("messages.swipeUnmute", { defaultValue: "取消静音" }),
       delete: t("messages.swipeDelete"),
     }),
     [t],
@@ -538,8 +565,8 @@ export default function MessagesScreen() {
   const imConnected = useChatStore((state) => state.connected);
   const imConnecting = useChatStore((state) => state.connecting);
   const conversationGroups = useMessageGroupsStore((state) => state.groups);
+  const filterOrder = useMessageGroupsStore((state) => state.filterOrder);
   const localUnreadOverrides = useLocalUnreadStore((state) => state.overrides);
-  const markLocalUnread = useLocalUnreadStore((state) => state.markUnread);
   const clearLocalUnread = useLocalUnreadStore((state) => state.clearUnread);
   const clearManyLocalUnread = useLocalUnreadStore((state) => state.clearMany);
   const [activeFilterId, setActiveFilterId] = useState("all"); // 当前激活的筛选标签 id
@@ -547,6 +574,7 @@ export default function MessagesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
+  const preferenceWriteInFlightRef = useRef(new Set<string>());
 
   useEffect(
     () => () => {
@@ -703,14 +731,15 @@ export default function MessagesScreen() {
     );
   }, [localUnreadOverrides, rawMappedConversations, setMessagesUnread, totalUnread]);
 
-  // Filter 列表 = 基础 4 项 + 用户设置了 pinnedToTabs 的自定义分组。
+  // Filter 列表 = 基础 4 项 + 用户设置了 pinnedToTabs 的自定义分组，
+  // 再应用用户保存的统一顺序（固定项和自定义项可以互相穿插）。
   // 自定义分组的 id 形如 "custom:<uuid>"，避免和 base id 冲突；filter 逻辑里特判前缀。
   const filterItems = useMemo(() => {
     const customTabs = conversationGroups
       .filter((g) => g.pinnedToTabs)
       .map((g) => ({ id: `custom:${g.id}`, label: g.name }));
-    return [...BASE_FILTERS, ...customTabs];
-  }, [BASE_FILTERS, conversationGroups]);
+    return orderMessageFilters([...BASE_FILTERS, ...customTabs], filterOrder);
+  }, [BASE_FILTERS, conversationGroups, filterOrder]);
 
   // 当前激活标签在 filterItems 中的下标，供 FilterTabs 高亮使用
   const activeTab = useMemo(
@@ -786,29 +815,61 @@ export default function MessagesScreen() {
     [router],
   );
 
-  const handleMarkConversationUnread = useCallback((conversation: Conversation) => {
-    markLocalUnread(conversation.id);
-  }, [markLocalUnread]);
-  // Compatibility name for older source-level tests; the swipe action now marks
-  // a local unread override instead of mutating OpenIM's read state.
-  const handleMarkConversationRead = handleMarkConversationUnread;
-
-  const handleHideConversation = useCallback((conversation: Conversation) => {
-    clearLocalUnread(conversation.id);
-    void updateChatConversationPreferences(conversation.id, { hidden: true }).catch(
-      (err) => {
+  const updateConversationPreference = useCallback(
+    async (
+      conversation: Conversation,
+      preference: { pinned: boolean } | { muted: boolean },
+    ) => {
+      if (preferenceWriteInFlightRef.current.has(conversation.id)) return;
+      preferenceWriteInFlightRef.current.add(conversation.id);
+      try {
+        await updateChatConversationPreferences(conversation.id, preference);
+      } catch (err) {
         if (isDev) {
-          console.warn("[messages] swipe hide conversation failed", err);
+          console.warn("[messages] swipe preference update failed", err);
         }
-      },
-    );
-  }, [clearLocalUnread]);
+        Alert.alert(
+          t("messages.swipeActionFailed", { defaultValue: "操作失败" }),
+          getApiErrorMessage(err, t("common.networkError")),
+        );
+      } finally {
+        preferenceWriteInFlightRef.current.delete(conversation.id);
+      }
+    },
+    [t],
+  );
+
+  const handleToggleConversationPinned = useCallback(
+    (conversation: Conversation) => {
+      void updateConversationPreference(conversation, {
+        pinned: !conversation.pinned,
+      });
+    },
+    [updateConversationPreference],
+  );
+
+  const handleToggleConversationMuted = useCallback(
+    (conversation: Conversation) => {
+      void updateConversationPreference(conversation, {
+        muted: !conversation.muted,
+      });
+    },
+    [updateConversationPreference],
+  );
 
   const handleConfirmDeleteConversation = useCallback(
     (conversation: Conversation) => {
       Alert.alert(
         t("messages.deleteChat"),
-        t("messages.deleteChatConfirm", { name: conversation.name }),
+        conversation.conversationType === "private"
+          ? t("messages.deleteChatConfirmDirect", {
+              name: conversation.name,
+              // Fast Refresh 不一定重建已初始化的 i18next resource bundle；
+              // 新增词条还没进当前内存时也不能把裸 key 展示给用户。
+              defaultValue:
+                "删除「{{name}}」的聊天记录？对方的记录也会同时删除，此操作无法撤销。",
+            })
+          : t("messages.deleteChatConfirm", { name: conversation.name }),
         [
           { text: t("common.cancel"), style: "cancel" },
           {
@@ -816,9 +877,8 @@ export default function MessagesScreen() {
             style: "destructive",
             onPress: () => {
               clearLocalUnread(conversation.id);
-              // G-14:删除会话 = 隐藏 + 清空本人历史水位(对齐旧栈
-              // deleteConversationAndDeleteAllMsg 的本人侧语义)。对端与
-              // 服务端数据不动;新消息到达时会话重新浮出,但旧历史不再可见。
+              // G-14:删除会话 = 清空历史水位 + 隐藏。私聊由服务端同步推进双方
+              // 水位；群聊只清本人。新消息到达时会话会重新浮出，但旧历史不再可见。
               //
               // 两个请求必须串行且失败要出声。原来是并发 + 只在 __DEV__ 里
               // console.warn:清空失败时会话照样消失,而旧历史会随下一条新消息
@@ -826,7 +886,9 @@ export default function MessagesScreen() {
               // 先清后隐:清失败就不隐,列表保持原样,用户能看出没成功。
               void (async () => {
                 try {
-                  await clearChatConversationHistory(conversation.id);
+                  await clearChatConversationHistory(conversation.id, {
+                    forEveryone: conversation.conversationType === "private",
+                  });
                   await updateChatConversationPreferences(conversation.id, {
                     hidden: true,
                   });
@@ -851,6 +913,19 @@ export default function MessagesScreen() {
   // 点击搜索图标 → 跳转搜索页
   const handleOpenFind = useCallback(() => {
     router.push("/(tabs)/messages/find");
+  }, [router]);
+
+  const handleFilterPress = useCallback(
+    (index: number) => {
+      const filter = filterItems[index];
+      if (!filter) return;
+      setActiveFilterId(filter.id);
+    },
+    [filterItems],
+  );
+
+  const handleOpenGroups = useCallback(() => {
+    router.push("/(tabs)/messages/groups");
   }, [router]);
 
   // 点击已读图标 → 将当前筛选标签下所有会话标记为已读
@@ -892,8 +967,8 @@ export default function MessagesScreen() {
         pinnedSurfaceStyle={d.pinnedSurface}
         onOpenConversation={handleConversationPress}
         onOpenUserProfile={handleOpenUserProfile}
-        onMarkUnread={handleMarkConversationRead}
-        onHide={handleHideConversation}
+        onTogglePinned={handleToggleConversationPinned}
+        onToggleMuted={handleToggleConversationMuted}
         onDelete={handleConfirmDeleteConversation}
       />
     ),
@@ -902,8 +977,8 @@ export default function MessagesScreen() {
       d,
       handleConfirmDeleteConversation,
       handleConversationPress,
-      handleHideConversation,
-      handleMarkConversationRead,
+      handleToggleConversationMuted,
+      handleToggleConversationPinned,
       handleOpenUserProfile,
       swipeLabels,
       visibleConversations,
@@ -955,12 +1030,24 @@ export default function MessagesScreen() {
           </Pressable>
         </View>
       </View>
-      <FilterTabs
-        tabs={filterItems.map((item) => item.label)}
-        activeIndex={activeTab}
-        onTabPress={(index) => setActiveFilterId(filterItems[index]?.id ?? "all")}
-        scrollable
-      />
+      <View style={s.filterRow}>
+        <FilterTabs
+          tabs={filterItems.map((item) => item.label)}
+          activeIndex={activeTab}
+          onTabPress={handleFilterPress}
+          scrollable
+          compact
+        />
+        <Pressable
+          style={[s.addGroupButton, { backgroundColor: colors.background }]}
+          onPress={handleOpenGroups}
+          accessibilityRole="button"
+          accessibilityLabel={t('messages.groups.title', { defaultValue: '自定义分组' })}
+          hitSlop={6}
+        >
+          <Text style={[s.addGroupIcon, { color: colors.textSecondary }]}>＋</Text>
+        </Pressable>
+      </View>
       {/* IM 未连接横幅：WS 没连上就显示（缓存的会话列表能看、但发消息会失败），
           一眼区分"没连上"和"消息丢了"。connecting 时给出"连接中"过渡文案。 */}
       {!imConnected ? (
@@ -978,7 +1065,7 @@ export default function MessagesScreen() {
         </View>
       ) : null}
     </View>
-  ), [activeTab, colors, d, filterItems, handleClearUnread, handleOpenFind, imConnected, imConnecting, t]);
+  ), [activeTab, colors, d, filterItems, handleClearUnread, handleFilterPress, handleOpenFind, handleOpenGroups, imConnected, imConnecting, t]);
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>

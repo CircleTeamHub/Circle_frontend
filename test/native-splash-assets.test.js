@@ -50,6 +50,40 @@ function getLogoCoverage(rel) {
   };
 }
 
+function getNonWhiteRowBands(rel) {
+  const image = PNG.sync.read(read(rel));
+  const occupiedRows = [];
+
+  for (let y = 0; y < image.height; y += 1) {
+    let occupied = false;
+    for (let x = 0; x < image.width; x += 1) {
+      const i = (y * image.width + x) * 4;
+      const isWhite =
+        image.data[i] > 245 && image.data[i + 1] > 245 && image.data[i + 2] > 245;
+      if (image.data[i + 3] > 10 && !isWhite) {
+        occupied = true;
+        break;
+      }
+    }
+    if (occupied) occupiedRows.push(y);
+  }
+
+  const bands = [];
+  for (const row of occupiedRows) {
+    const current = bands.at(-1);
+    if (!current || row > current.end + 1) {
+      bands.push({ start: row, end: row });
+    } else {
+      current.end = row;
+    }
+  }
+
+  return bands.map(({ start, end }) => ({
+    start: start / image.height,
+    end: (end + 1) / image.height,
+  }));
+}
+
 function assertSolidWhitePng(rel) {
   const image = PNG.sync.read(read(rel));
   for (let y = 0; y < image.height; y += 1) {
@@ -66,11 +100,11 @@ function assertSolidWhitePng(rel) {
   }
 }
 
-test('expo splash config uses a white background and centered app icon assets', () => {
+test('expo splash config uses a white background and the app icon with its tagline', () => {
   const app = readJson('app.json').expo;
 
   assert.equal(app.splash.backgroundColor, '#FFFFFF');
-  assert.equal(app.splash.image, './assets/images/splash-icon.png');
+  assert.equal(app.splash.image, './assets/images/splash-tagline.png');
   assert.equal(app.android.adaptiveIcon.backgroundColor, '#FFFFFF');
   assert.equal(
     app.android.adaptiveIcon.foregroundImage,
@@ -87,9 +121,10 @@ test('expo splash config uses a white background and centered app icon assets', 
 
   const assets = [
     {
-      rel: 'assets/images/splash-icon.png',
+      rel: 'assets/images/splash-tagline.png',
       minCoverage: 0.25,
       maxCoverage: 0.6,
+      maxCenterOffsetY: 0.06,
     },
     {
       // iOS home-screen icon is full-bleed: iOS applies its own rounded mask and
@@ -116,7 +151,13 @@ test('expo splash config uses a white background and centered app icon assets', 
     },
   ];
 
-  for (const { rel, minCoverage, maxCoverage, maxCentroidOffsetX } of assets) {
+  for (const {
+    rel,
+    minCoverage,
+    maxCoverage,
+    maxCentroidOffsetX,
+    maxCenterOffsetY = 0.05,
+  } of assets) {
     const coverage = getLogoCoverage(rel);
     assert.ok(
       coverage.coverageX > minCoverage && coverage.coverageX < maxCoverage,
@@ -131,7 +172,7 @@ test('expo splash config uses a white background and centered app icon assets', 
       `${rel} should be horizontally centered, got center ${coverage.centerX}`,
     );
     assert.ok(
-      Math.abs(coverage.centerY - 0.5) < 0.05,
+      Math.abs(coverage.centerY - 0.5) < maxCenterOffsetY,
       `${rel} should be vertically centered, got center ${coverage.centerY}`,
     );
     if (typeof maxCentroidOffsetX === 'number') {
@@ -141,6 +182,10 @@ test('expo splash config uses a white background and centered app icon assets', 
       );
     }
   }
+
+  const splashBands = getNonWhiteRowBands('assets/images/splash-tagline.png');
+  assert.equal(splashBands.length, 2, 'splash image should contain separate icon and tagline rows');
+  assert.ok(splashBands[1].start > 0.7, 'tagline should sit below the app icon');
 
   assertSolidWhitePng('assets/images/android-icon-background.png');
 });

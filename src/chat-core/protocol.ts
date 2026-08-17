@@ -27,6 +27,8 @@ export const CHAT_EVENTS = {
   reaction: 'chat:reaction',
   /** 双向：消息编辑（客户端带 ack；服务端广播到会话房） */
   edit: 'chat:edit',
+  /** 服务端 → 客户端：私聊任一方清空后，双方设备同步清空到该水位 */
+  historyCleared: 'chat:history_cleared',
 } as const;
 
 /** 表情回应白名单（与服务端镜像；越界服务端直接拒）。 */
@@ -279,6 +281,13 @@ export interface ChatReadBroadcast {
   conversationId: string;
   userId: string;
   height: number;
+}
+
+/** 私聊双方清空广播；群聊的个人清空不会发送该事件。 */
+export interface ChatHistoryClearedBroadcast {
+  conversationId: string;
+  clearedBeforeHeight: number;
+  clearedBy: string;
 }
 
 /**
