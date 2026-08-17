@@ -201,6 +201,8 @@
       "builtInGroup": "固定",
       "customGroup": "自定义",
       "reorderA11y": "调整「{{name}}」的位置",
+      "reorderFailedTitle": "排序失败",
+      "reorderFailedMessage": "分组顺序保存失败，请稍后再试。",
       "moveUp": "上移",
       "moveDown": "下移",
       "namePlaceholder": "例如：家人 / 工作",

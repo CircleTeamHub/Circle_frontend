@@ -201,6 +201,8 @@
       "builtInGroup": "Built-in",
       "customGroup": "Custom",
       "reorderA11y": "Adjust the position of {{name}}",
+      "reorderFailedTitle": "Failed to reorder",
+      "reorderFailedMessage": "Failed to save group order, please try again.",
       "moveUp": "Move up",
       "moveDown": "Move down",
       "namePlaceholder": "e.g. Family / Work",

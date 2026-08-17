@@ -714,6 +714,8 @@
       "builtInGroup": "고정",
       "customGroup": "사용자 지정",
       "reorderA11y": "{{name}} 위치 조정",
+      "reorderFailedTitle": "순서 변경 실패",
+      "reorderFailedMessage": "그룹 순서를 저장하지 못했습니다. 다시 시도해 주세요.",
       "moveUp": "위로",
       "moveDown": "아래로",
       "namePlaceholder": "예: 가족 / 직장",

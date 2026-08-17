@@ -80,6 +80,8 @@ export const STATIC_ROUTE_SEGMENTS: ReadonlySet<string> = new Set([
   'plaza-post-detail',
   'post-signups',
   'profile',
+  'qr',
+  'qr-code',
   'recommend-friend',
   'recycle-bin',
   'register',

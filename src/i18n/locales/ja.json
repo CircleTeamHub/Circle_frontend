@@ -714,6 +714,8 @@
       "builtInGroup": "固定",
       "customGroup": "カスタム",
       "reorderA11y": "{{name}}の位置を調整",
+      "reorderFailedTitle": "並べ替えに失敗しました",
+      "reorderFailedMessage": "グループの並び順を保存できませんでした。もう一度お試しください。",
       "moveUp": "上へ",
       "moveDown": "下へ",
       "namePlaceholder": "例：家族 / 仕事",

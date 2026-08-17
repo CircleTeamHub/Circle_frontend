@@ -715,6 +715,8 @@
       "builtInGroup": "Fijo",
       "customGroup": "Personalizado",
       "reorderA11y": "Ajustar la posición de {{name}}",
+      "reorderFailedTitle": "Error al reordenar",
+      "reorderFailedMessage": "No se pudo guardar el orden de los grupos, inténtalo de nuevo.",
       "moveUp": "Subir",
       "moveDown": "Bajar",
       "namePlaceholder": "Ej.: Familia / Trabajo",
