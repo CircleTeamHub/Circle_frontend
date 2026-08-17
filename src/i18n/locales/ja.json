@@ -824,6 +824,7 @@
       "fixedAll": "すべて",
       "fixedUngrouped": "未分類",
       "createNew": "グループを追加",
+      "renameTitle": "名前を編集",
       "limitHint": "{{count}}/{{max}} 個のグループを作成済み",
       "namePlaceholder": "新しいグループを追加する名前を入力",
       "saveEdit": "変更を保存",

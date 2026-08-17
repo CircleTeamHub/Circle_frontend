@@ -2311,6 +2311,7 @@
       "fixedAll": "All",
       "fixedUngrouped": "Ungrouped",
       "createNew": "Add group",
+      "renameTitle": "Rename group",
       "limitHint": "{{count}}/{{max}} groups created",
       "namePlaceholder": "Enter a group name to add a new group",
       "saveEdit": "Save changes",

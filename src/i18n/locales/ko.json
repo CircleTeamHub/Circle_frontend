@@ -824,6 +824,7 @@
       "fixedAll": "전체",
       "fixedUngrouped": "미분류",
       "createNew": "그룹 추가",
+      "renameTitle": "이름 편집",
       "limitHint": "{{count}}/{{max}}개 그룹 생성됨",
       "namePlaceholder": "새 그룹을 추가할 그룹 이름 입력",
       "saveEdit": "변경 사항 저장",

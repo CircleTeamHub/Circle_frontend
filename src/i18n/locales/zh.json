@@ -2308,6 +2308,7 @@
       "fixedAll": "全部",
       "fixedUngrouped": "未分组",
       "createNew": "新增分组",
+      "renameTitle": "编辑名称",
       "limitHint": "已创建 {{count}}/{{max}} 个分组",
       "namePlaceholder": "输入分组名添加新的分组",
       "saveEdit": "保存修改",

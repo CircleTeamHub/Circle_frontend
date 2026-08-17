@@ -26,6 +26,7 @@ import {
 } from '@/services/api/notes';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { NoteCard } from '@/features/notes/components/NoteCard';
 import type { NoteGroup, NoteSummary } from '@/features/notes/types';
 import { useNotesTabOrderStore } from '@/features/notes/store/use-notes-tab-order-store';
@@ -84,6 +85,8 @@ export function GroupManagerSheet({
 
   const [draftGroupName, setDraftGroupName] = useState('');
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  // 新增/改名共用的弹出编辑 sheet（常驻输入框已移除）。
+  const [groupEditorOpen, setGroupEditorOpen] = useState(false);
   const [savingGroup, setSavingGroup] = useState(false);
   const [editingMembershipGroup, setEditingMembershipGroup] =
     useState<NoteGroup | null>(null);
@@ -95,8 +98,6 @@ export function GroupManagerSheet({
     null,
   );
   const dragY = useRef(new Animated.Value(0)).current;
-  // 底部编辑区的「弹出」动效：进入编辑（含切换目标分组）时从下方弹起。
-  const editorPop = useRef(new Animated.Value(1)).current;
   const rowsRef = useRef<ManagerRow[]>([]);
   const dragPreviewRowsRef = useRef<ManagerRow[] | null>(null);
   const groupNameInputRef = useRef<TextInput>(null);
@@ -137,21 +138,6 @@ export function GroupManagerSheet({
     dragPreviewRowsRef.current = dragPreviewRows;
   }, [dragPreviewRows]);
 
-  // 点「编辑名称」时底部编辑区弹起 + 呼出键盘，让状态切换一眼可见。
-  useEffect(() => {
-    if (!editingGroupId) return;
-    editorPop.setValue(0);
-    Animated.spring(editorPop, {
-      toValue: 1,
-      friction: 7,
-      tension: 80,
-      useNativeDriver: true,
-    }).start();
-    const focusTimer = setTimeout(() => {
-      groupNameInputRef.current?.focus();
-    }, 0);
-    return () => clearTimeout(focusTimer);
-  }, [editingGroupId, editorPop]);
 
   const displayRows = dragPreviewRows ?? rows;
   const isCreatingGroupAtLimit =
@@ -182,6 +168,7 @@ export function GroupManagerSheet({
   const handleClose = useCallback(() => {
     resetDragState();
     resetGroupDraft();
+    setGroupEditorOpen(false);
     resetGroupMembershipEditor();
     onClose();
   }, [onClose, resetDragState, resetGroupDraft, resetGroupMembershipEditor]);
@@ -201,6 +188,7 @@ export function GroupManagerSheet({
         setGroups((prev) => [...prev, created]);
       }
       resetGroupDraft();
+      setGroupEditorOpen(false);
     } catch (error) {
       setSavingGroup(false);
       Alert.alert(
@@ -225,6 +213,33 @@ export function GroupManagerSheet({
     setGroups,
     t,
   ]);
+
+  // 「+ 新增分组」：达到上限直接拦，否则清草稿弹出编辑 sheet。
+  const openCreateGroupEditor = useCallback(() => {
+    if (isCreatingGroupAtLimit) {
+      Alert.alert(
+        t('notes.alerts.groupLimitTitle', { defaultValue: '分组已达上限' }),
+        t('notes.alerts.groupLimitMessage', {
+          max: MAX_NOTE_GROUPS,
+          defaultValue: `最多只能创建 ${MAX_NOTE_GROUPS} 个分组。`,
+        }),
+      );
+      return;
+    }
+    resetGroupDraft();
+    setGroupEditorOpen(true);
+  }, [isCreatingGroupAtLimit, resetGroupDraft, t]);
+
+  const openRenameGroupEditor = useCallback((group: NoteGroup) => {
+    setEditingGroupId(group.id);
+    setDraftGroupName(group.name);
+    setGroupEditorOpen(true);
+  }, []);
+
+  const closeGroupEditor = useCallback(() => {
+    setGroupEditorOpen(false);
+    resetGroupDraft();
+  }, [resetGroupDraft]);
 
   const handleSubmitGroupPress = useCallback(() => {
     if (!draftGroupName.trim()) {
@@ -759,10 +774,7 @@ export function GroupManagerSheet({
                           </Pressable>
                           <Pressable
                             hitSlop={8}
-                            onPress={() => {
-                              setEditingGroupId(group.id);
-                              setDraftGroupName(group.name);
-                            }}
+                            onPress={() => openRenameGroupEditor(group)}
                           >
                             <Ionicons
                               name="create-outline"
@@ -786,80 +798,100 @@ export function GroupManagerSheet({
                   );
                 })}
               </ScrollView>
-              <Animated.View
-                style={[
-                  s.modalEditor,
-                  {
-                    opacity: editorPop,
-                    transform: [
-                      {
-                        translateY: editorPop.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [64, 0],
-                        }),
-                      },
-                    ],
-                  },
-                ]}
+              <Pressable
+                style={[s.addGroupBtn, d.saveBtn]}
+                onPress={openCreateGroupEditor}
+                accessibilityRole="button"
               >
-                <TextInput
-                  ref={groupNameInputRef}
-                  style={[
-                    s.modalInput,
-                    d.modalInput,
-                    // 编辑态高亮边框：与「新增」态一眼区分。
-                    editingGroupId ? { borderColor: colors.primary } : null,
-                  ]}
-                  placeholder={t('notes.manageGroups.namePlaceholder', {
-                    defaultValue: '输入分组名添加新的分组',
+                <Ionicons name="add" size={20} color={colors.white} />
+                <Text style={[s.saveBtnText, d.saveBtnText]}>
+                  {t('notes.manageGroups.createNew', {
+                    defaultValue: '新增分组',
                   })}
-                  placeholderTextColor={colors.textSecondary}
-                  value={draftGroupName}
-                  onChangeText={setDraftGroupName}
-                  returnKeyType="done"
-                  onSubmitEditing={handleSubmitGroupPress}
-                />
-                <View style={s.modalButtons}>
-                  {editingGroupId ? (
-                    <Pressable onPress={resetGroupDraft}>
-                      <Text style={[s.modalActionText, d.modalActionText]}>
-                        {t('notes.manageGroups.cancelEdit', {
-                          defaultValue: '取消编辑',
-                        })}
-                      </Text>
-                    </Pressable>
-                  ) : (
-                    <View />
-                  )}
-                  <Pressable
-                    style={[
-                      s.saveBtn,
-                      d.saveBtn,
-                      savingGroup ? s.saveBtnDisabled : null,
-                    ]}
-                    onPress={handleSubmitGroupPress}
-                    disabled={savingGroup}
-                  >
-                    <Text style={[s.saveBtnText, d.saveBtnText]}>
-                      {savingGroup
-                        ? t('notes.manageGroups.saving', {
-                            defaultValue: '保存中...',
-                          })
-                        : editingGroupId
-                          ? t('notes.manageGroups.saveEdit', {
-                              defaultValue: '保存修改',
-                            })
-                          : t('notes.manageGroups.createNew', {
-                              defaultValue: '新增分组',
-                            })}
-                    </Text>
-                  </Pressable>
-                </View>
-              </Animated.View>
+                </Text>
+              </Pressable>
             </>
           )}
         </KeyboardAvoidingView>
       </View>
+
+      {/* 新增/改名共用的弹出编辑 sheet：常驻输入框已移除，弹起即聚焦。 */}
+      <BottomSheetModal
+        visible={groupEditorOpen}
+        onClose={closeGroupEditor}
+        backdropStyle={{ backgroundColor: colors.overlay }}
+        sheetStyle={s.editorSheetWrap}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View
+            style={[
+              s.editorSheet,
+              {
+                backgroundColor: colors.surface,
+                paddingBottom: insets.bottom || Spacing.lg,
+              },
+            ]}
+          >
+            <View
+              style={[s.editorHandle, { backgroundColor: colors.surfaceBorder }]}
+            />
+            <Text style={[s.modalTitle, d.modalTitle]}>
+              {editingGroupId
+                ? t('notes.manageGroups.renameTitle', {
+                    defaultValue: '编辑名称',
+                  })
+                : t('notes.manageGroups.createNew', {
+                    defaultValue: '新增分组',
+                  })}
+            </Text>
+            <TextInput
+              ref={groupNameInputRef}
+              style={[s.modalInput, d.modalInput]}
+              placeholder={t('notes.manageGroups.namePlaceholder', {
+                defaultValue: '输入分组名添加新的分组',
+              })}
+              placeholderTextColor={colors.textSecondary}
+              value={draftGroupName}
+              onChangeText={setDraftGroupName}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={handleSubmitGroupPress}
+            />
+            <View style={s.modalButtons}>
+              <Pressable onPress={closeGroupEditor} hitSlop={8}>
+                <Text style={[s.modalActionText, d.modalActionText]}>
+                  {t('common.cancel', { defaultValue: '取消' })}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  s.saveBtn,
+                  d.saveBtn,
+                  savingGroup ? s.saveBtnDisabled : null,
+                ]}
+                onPress={handleSubmitGroupPress}
+                disabled={savingGroup}
+              >
+                <Text style={[s.saveBtnText, d.saveBtnText]}>
+                  {savingGroup
+                    ? t('notes.manageGroups.saving', {
+                        defaultValue: '保存中...',
+                      })
+                    : editingGroupId
+                      ? t('notes.manageGroups.saveEdit', {
+                          defaultValue: '保存修改',
+                        })
+                      : t('notes.manageGroups.createNew', {
+                          defaultValue: '新增分组',
+                        })}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </BottomSheetModal>
     </Modal>
   );
 }
@@ -940,7 +972,30 @@ const s = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 4,
   },
-  modalEditor: { gap: Spacing.md },
+  addGroupBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    height: 48,
+    borderRadius: Radius.pill,
+    marginTop: Spacing.sm,
+  },
+  editorSheetWrap: { width: '100%' },
+  editorSheet: {
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+    gap: Spacing.md,
+  },
+  editorHandle: {
+    alignSelf: 'center',
+    width: 36,
+    height: 4,
+    borderRadius: Radius.full,
+    marginBottom: Spacing.xs,
+  },
   // 明显的胶囊输入：可见边框 + 凹槽底 + 轻阴影，一眼看出是可输入区域。
   modalInput: {
     borderWidth: 1,
