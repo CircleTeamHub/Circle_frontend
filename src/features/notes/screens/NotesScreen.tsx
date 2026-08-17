@@ -771,7 +771,6 @@ export default function NotesScreen() {
             disabled={selectedIds.length === 0}
             accessibilityRole="button"
           >
-            <Ionicons name="arrow-forward" size={18} color={colors.white} />
             <Text style={[s.bottomBtnText, d.newBtnText]}>
               {t('notes.selection.next', { defaultValue: '下一步' })}
             </Text>
