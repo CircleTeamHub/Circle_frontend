@@ -1127,6 +1127,8 @@ export default function ChatDetailScreen() {
 
         try {
           const result = await collectNote(message.noteCard.noteId, source);
+          // 复制出来的是「我的」那条笔记（id 与原笔记不同），「查看」跳它。
+          const copiedNoteId = result.note?.id;
           Alert.alert(
             result.alreadyCollected
               ? t('chat.messageActions.noteAlreadyCollected', {
@@ -1138,6 +1140,21 @@ export default function ChatDetailScreen() {
             t('chat.messageActions.noteCollectedHint', {
               defaultValue: '可在「我的笔记」中查看',
             }),
+            copiedNoteId
+              ? [
+                  {
+                    text: t('common.view', { defaultValue: '查看' }),
+                    // 跳「我的笔记」列表并定位到刚添加的这条（不是直接开详情）：
+                    // 用户要看的是它在自己列表里的位置。
+                    onPress: () =>
+                      router.push({
+                        pathname: '/(tabs)/profile/notes',
+                        params: { highlightNoteId: copiedNoteId },
+                      } as never),
+                  },
+                  { text: t('common.confirm', { defaultValue: '确认' }) },
+                ]
+              : undefined,
           );
         } catch (error) {
           if (__DEV__) {

@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -88,6 +88,11 @@ export default function NotesScreen() {
   const refreshInFlightRef = useRef(false);
   const [managerVisible, setManagerVisible] = useState(false);
   const tabOrderIds = useNotesTabOrderStore((state) => state.orderIds);
+  // 从别处「查看」跳进来时要定位的笔记：滚到它并短暂高亮。
+  const { highlightNoteId } = useLocalSearchParams<{ highlightNoteId?: string }>();
+  const listRef = useRef<FlatList<NoteSummary>>(null);
+  const [highlightedNoteId, setHighlightedNoteId] = useState<string | null>(null);
+  const handledHighlightRef = useRef<string | null>(null);
   // 多选模式：selectedIds 为唯一事实，Set 只做派生查询
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -172,6 +177,64 @@ export default function NotesScreen() {
   const ungroupedCount = useMemo(
     () => notes.filter((note) => note.groups.length === 0).length,
     [notes],
+  );
+
+  /**
+   * 「查看」跳进来的定位：滚到那条笔记并短暂高亮。
+   *
+   * 目标笔记可能不在当前 tab / 被搜索词滤掉（比如刚从聊天添加进来的那条），
+   * 先把视图复位到「全部」且清空搜索，再等这一帧的 filteredNotes 重算出来
+   * 才拿得到正确下标。handledHighlightRef 保证同一个 id 只定位一次 ——
+   * 否则每次 focus 回来都会重播一遍滚动。
+   */
+  useEffect(() => {
+    if (!highlightNoteId) return;
+    if (handledHighlightRef.current === highlightNoteId) return;
+    if (!notes.some((note) => note.id === highlightNoteId)) return;
+
+    handledHighlightRef.current = highlightNoteId;
+    setActiveTab('all');
+    setSearch('');
+    setHighlightedNoteId(highlightNoteId);
+  }, [highlightNoteId, notes]);
+
+  useEffect(() => {
+    if (!highlightedNoteId) return;
+    const index = filteredNotes.findIndex(
+      (note) => note.id === highlightedNoteId,
+    );
+    if (index < 0) return;
+    // 等列表把新数据渲染上去再滚，否则 scrollToIndex 拿到的是旧行数。
+    const scrollTimer = setTimeout(() => {
+      listRef.current?.scrollToIndex({
+        index,
+        animated: true,
+        viewPosition: 0.3,
+      });
+    }, 120);
+    const clearTimer = setTimeout(() => setHighlightedNoteId(null), 2400);
+    return () => {
+      clearTimeout(scrollTimer);
+      clearTimeout(clearTimer);
+    };
+  }, [filteredNotes, highlightedNoteId]);
+
+  const handleScrollToIndexFailed = useCallback(
+    (info: { index: number; averageItemLength: number }) => {
+      // 目标行还没测量到：先按估算高度滚过去，下一帧再精确对齐。
+      listRef.current?.scrollToOffset({
+        offset: info.averageItemLength * info.index,
+        animated: false,
+      });
+      setTimeout(() => {
+        listRef.current?.scrollToIndex({
+          index: info.index,
+          animated: true,
+          viewPosition: 0.3,
+        });
+      }, 80);
+    },
+    [],
   );
 
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
@@ -618,12 +681,14 @@ export default function NotesScreen() {
         onSourcePress={handleSourcePress}
         selectionMode={selectionMode}
         selected={selectedSet.has(item.id)}
+        highlighted={highlightedNoteId === item.id}
       />
     ),
     [
       handleCardLongPress,
       handleCardPress,
       handleSourcePress,
+      highlightedNoteId,
       openMenu,
       selectedSet,
       selectionMode,
@@ -746,10 +811,14 @@ export default function NotesScreen() {
       </View>
 
       <FlatList
+        ref={listRef}
         data={filteredNotes}
         keyExtractor={keyExtractor}
         renderItem={renderNote}
         ItemSeparatorComponent={ItemSeparator}
+        // 卡片高度不定（有无封面/备注/来源按钮），定位滚动用 onScrollToIndexFailed
+        // 兜底重试，而不是硬算 getItemLayout。
+        onScrollToIndexFailed={handleScrollToIndexFailed}
         contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
         showsVerticalScrollIndicator={false}
         initialNumToRender={12}

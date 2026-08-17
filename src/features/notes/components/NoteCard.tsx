@@ -25,6 +25,8 @@ interface Props {
   /** 多选模式：右侧 ⋯ 槽位换成选择圈，整卡点击由父层当作勾选处理 */
   selectionMode?: boolean;
   selected?: boolean;
+  /** 定位跳转后的短暂高亮（「查看」从聊天跳进列表时用） */
+  highlighted?: boolean;
   showActions?: boolean;
   accessibilityLabel?: string;
   accessibilityRole?: 'button';
@@ -38,6 +40,7 @@ function NoteCardInner({
   onSourcePress,
   selectionMode = false,
   selected = false,
+  highlighted = false,
   showActions = true,
   accessibilityLabel,
   accessibilityRole = 'button',
@@ -119,7 +122,10 @@ function NoteCardInner({
 
   return (
     <Pressable
-      style={s.container}
+      style={[
+        s.container,
+        highlighted ? { backgroundColor: colors.primaryLight } : null,
+      ]}
       onPress={handlePress}
       onLongPress={onLongPress ? handleLongPress : undefined}
       accessibilityRole={accessibilityRole}

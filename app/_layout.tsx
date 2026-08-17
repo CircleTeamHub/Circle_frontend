@@ -17,6 +17,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { ActivityIndicator, NativeModules, View } from 'react-native';
 import { rehydrateLanguageFromStorage } from '@/i18n';
+import { installLocalizedAlertDefaults } from '@/utils/localized-alert';
 import { initEncryptedStorage, migrateFromAsyncStorage } from '@/storage';
 import { excludeMmkvDirFromIOSBackup } from '@/storage/ios-backup-exclusion';
 import { silenceDomBridgeRejection } from '@/utils/silence-dom-bridge-rejection';
@@ -137,6 +138,8 @@ function ensureStartupBootstrap(): Promise<void> {
       rehydratePersistedStore('circle notification', useCircleNotificationStore),
     ]);
     rehydrateLanguageFromStorage();
+    // 语言就位后再装：RN 的 Alert 默认按钮不跟随 App 语言（见该模块注释）。
+    installLocalizedAlertDefaults();
     // 尽力而为，不 await：MMKV 目录的 iOS 备份排除（#88），失败不影响启动。
     void excludeMmkvDirFromIOSBackup();
   })();
