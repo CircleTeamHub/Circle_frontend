@@ -28,11 +28,14 @@ import {
   isCallParticipantPayload,
   isCallStatePayload,
 } from '@/features/call/realtime-guards';
+import { BELL_NOTIFICATION_TYPES } from '@/features/notifications/utils/notification-domain';
 
 type BadgeSnapshotPayload = {
   messagesUnread?: number;
   contactsUnread?: number;
   discoverUnread?: number;
+  momentsUnread?: number;
+  circleUnread?: number;
   signupUnread?: number;
   profileUnread?: number;
 };
@@ -52,7 +55,13 @@ type RealtimeEvent =
     }
   | {
       type: 'interaction.unread.changed';
-      payload?: { count?: number };
+      // count = 互动域总数；momentsUnread/circleUnread 是后加的 per-bell 计数，
+      // 老后端不带（见 handleRealtimeEvent 里的存留处理）。
+      payload?: {
+        count?: number;
+        momentsUnread?: number;
+        circleUnread?: number;
+      };
     }
   | {
       type: 'circle.signup.unread.changed';
@@ -365,6 +374,8 @@ function applyBadgeSnapshot(snapshot: BadgeSnapshotPayload) {
     messagesUnread: badgeStore.messagesUnread,
     contactsUnread: snapshot.contactsUnread,
     discoverUnread: snapshot.discoverUnread,
+    momentsUnread: snapshot.momentsUnread,
+    circleUnread: snapshot.circleUnread,
     signupUnread: snapshot.signupUnread,
     profileUnread: snapshot.profileUnread,
   });
@@ -394,25 +405,6 @@ function isNotificationItem(value: unknown): value is NotificationItem {
     typeof item.createdAt === 'string'
   );
 }
-
-// 铃铛「互动」列表收录的类型 —— 镜像后端 DISCOVER_NOTIFICATION_TYPES
-// (notification.constants.ts)。好友申请类有专属「新的朋友」收件箱
-// (contactsUnread)，横幅照弹，但不得混进铃铛列表。
-const BELL_NOTIFICATION_TYPES: ReadonlySet<string> = new Set([
-  'TRACE_LIKE',
-  'TRACE_COMMENT',
-  'COMMENT_REPLY',
-  'TRACE_MENTION',
-  'CIRCLE_VERIFICATION_REQUESTED',
-  'CIRCLE_INVITATION_APPROVED',
-  'CIRCLE_INVITATION_REJECTED',
-  'CIRCLE_ADMIN_OVERRIDE_APPROVED',
-  'CIRCLE_POST_PUBLISHED',
-  'CIRCLE_POST_SIGNUP_CREATED',
-  'CIRCLE_POST_AUTO_ENDED',
-  'CIRCLE_POST_COLLABORATION_RECOGNIZED',
-  'PROFILE_LIKE',
-]);
 
 function handleNotificationCreated(payload: NotificationItem) {
   // SYSTEM notifications are not part of the interactive list and have no
@@ -473,6 +465,14 @@ function handleRealtimeEvent(message: RealtimeEvent) {
       return;
     case 'interaction.unread.changed':
       badgeStore.setDiscoverUnread(message.payload?.count ?? 0);
+      // 两个铃铛各读一个 per-domain 计数。老后端不带这两个字段：留住既有值，
+      // 而不是清零 —— 否则每来一条互动通知，另一个铃铛的红点就被抹掉。
+      if (typeof message.payload?.momentsUnread === 'number') {
+        badgeStore.setMomentsUnread(message.payload.momentsUnread);
+      }
+      if (typeof message.payload?.circleUnread === 'number') {
+        badgeStore.setCircleUnread(message.payload.circleUnread);
+      }
       return;
     case 'circle.signup.unread.changed':
       badgeStore.setSignupUnread(message.payload?.count ?? 0);
@@ -600,6 +600,8 @@ export async function recoverTabBadgeSnapshot(options?: { force?: boolean }) {
     applyBadgeSnapshot({
       contactsUnread,
       discoverUnread: notificationSummary.discoverUnread,
+      momentsUnread: notificationSummary.momentsUnread,
+      circleUnread: notificationSummary.circleUnread,
       signupUnread,
       profileUnread: notificationSummary.profileUnread,
     });

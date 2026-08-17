@@ -5,6 +5,7 @@
  */
 import type { Href } from 'expo-router';
 import type { NotificationSnackbarItem } from '@/features/notifications/store/use-notification-snackbar-store';
+import { notificationDomain } from '@/features/notifications/utils/notification-domain';
 
 export type SnackbarRouteOptions = {
   /** Fallback title for an untitled circle post. */
@@ -18,9 +19,21 @@ const DISCOVER_NOTIFICATION_CENTER_ROUTE =
 const MESSAGES_NOTIFICATION_CENTER_ROUTE =
   '/(tabs)/messages/notifications' satisfies Href;
 
-function getNotificationCenterFallback(scope: SnackbarRouteOptions['scope']): Href {
+function getNotificationCenterFallback(
+  scope: SnackbarRouteOptions['scope'],
+  type: string,
+): Href {
   // 拆成两条 return 收敛推断,避免三元合并出巨型 Href 联合触发 TS2590。
   if (scope === 'discover') {
+    // 兜底也认域:圈子的通知落在圈子铃铛,朋友圈的落在朋友圈铃铛,
+    // 否则点进去看到的是另一个入口的列表。
+    const domain = notificationDomain(type);
+    if (domain) {
+      return {
+        pathname: DISCOVER_NOTIFICATION_CENTER_ROUTE,
+        params: { domain },
+      };
+    }
     return DISCOVER_NOTIFICATION_CENTER_ROUTE;
   }
   return MESSAGES_NOTIFICATION_CENTER_ROUTE;
@@ -147,5 +160,5 @@ export function getSnackbarRoute(
     };
   }
 
-  return getNotificationCenterFallback(options.scope);
+  return getNotificationCenterFallback(options.scope, item.type);
 }

@@ -76,8 +76,11 @@ test("notification snackbar host skips SYSTEM toasts via the realtime handler", 
 });
 
 test("realtime bell notification allow-list includes trace mentions", () => {
+  // 白名单已收敛到 notification-domain（两个铃铛的类型并集），client 只消费它。
+  const domain = read("src/features/notifications/utils/notification-domain.ts");
+  assert.match(domain, /'TRACE_MENTION'/);
   const client = read("src/realtime/client.ts");
-  assert.match(client, /'TRACE_MENTION'/);
+  assert.match(client, /BELL_NOTIFICATION_TYPES\.has\(payload\.type\)/);
 });
 
 test("notification snackbar host supports swipe-up-to-dismiss", () => {

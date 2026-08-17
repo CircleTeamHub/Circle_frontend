@@ -479,6 +479,9 @@
     },
     "attachments": {
       "photos": "写真/動画",
+      "mediaHub": "メディア",
+      "mediaPhoto": "写真",
+      "mediaVideo": "動画",
       "camera": "カメラ",
       "voiceCall": "音声/ビデオ通話",
       "location": "位置情報",
@@ -487,6 +490,30 @@
       "favorites": "お気に入り",
       "quickReply": "定型文",
       "transfer": "送金"
+    },
+    "photoEditor": {
+      "title": "写真を編集",
+      "preview": "送信前の写真プレビュー",
+      "cropSquare": "1:1 トリミング",
+      "cropFourThree": "4:3 トリミング",
+      "freeCrop": "自由トリミング",
+      "freeCropTitle": "自由トリミング",
+      "cropFrame": "自由トリミング枠",
+      "cropHint": "四隅をドラッグして範囲を調整し、枠内をドラッグして移動します",
+      "cropDone": "完了",
+      "mosaic": "モザイク",
+      "mosaicTitle": "モザイク",
+      "mosaicHint": "隠したい部分を指でなぞります",
+      "draw": "落書き",
+      "drawTitle": "落書き",
+      "drawColor": "ペンの色",
+      "markupCanvas": "写真編集キャンバス",
+      "undo": "元に戻す",
+      "rotate": "回転",
+      "flip": "反転",
+      "reset": "元に戻す",
+      "editFailedTitle": "編集に失敗しました",
+      "editFailedMessage": "写真を処理できませんでした。もう一度お試しください。"
     },
     "location": {
       "showPreview": "タップして地図を表示"
@@ -1498,14 +1525,19 @@
   },
   "notifications": {
     "title": "通知",
+    "momentsTitle": "モーメンツの通知",
+    "circleTitle": "サークルの通知",
     "tabInteractive": "やりとり",
-    "tabCircle": "応募管理",
+    "tabCircleNotifications": "サークルの動き",
+    "tabSignups": "応募管理",
     "filterAll": "すべて",
     "filterUnread": "未読",
     "markAllRead": "すべて既読",
     "system": "システム",
     "emptyTitle": "通知はありません",
     "emptySubtitle": "新しいやりとりや応募がここに表示されます",
+    "emptySubtitleMoments": "新しいいいねやコメントがここに表示されます",
+    "emptySubtitleCircle": "新しいサークルの動きや応募がここに表示されます",
     "loadFailedTitle": "読み込めませんでした",
     "loadFailed": "一部の通知を読み込めませんでした。引っ張って再試行してください",
     "summary": {
@@ -2608,6 +2640,7 @@
       "memberQuit": "メンバーがグループを退出しました",
       "memberKicked": "メンバーが削除されました",
       "groupNameUpdated": "グループ名を更新しました",
+      "groupRenamed": "グループ名が「{{name}}」に変更されました",
       "groupDismissed": "グループが解散しました",
       "messageRevoked": "メッセージが取り消されました",
       "friendAdded": "友だちになりました。挨拶してみましょう",
@@ -2976,6 +3009,9 @@
     "CHAT_REVOKE_WINDOW_EXPIRED": "取り消せる時間を過ぎました",
     "CHAT_REVOKE_FORBIDDEN": "このメッセージを取り消す権限がありません",
     "CHAT_EDIT_WINDOW_EXPIRED": "編集できる時間を過ぎました",
-    "CHAT_EDIT_FORBIDDEN": "このメッセージは編集できません"
+    "CHAT_EDIT_FORBIDDEN": "このメッセージは編集できません",
+    "CHAT_GROUP_FRIENDS_ONLY": "友達のみグループに招待できます",
+    "CHAT_GROUP_MIN_MEMBERS": "友達を2人以上選択してください",
+    "CHAT_GROUP_CIRCLE_MANAGED": "このグループはサークルが管理しています"
   }
 }

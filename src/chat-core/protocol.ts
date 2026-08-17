@@ -382,6 +382,10 @@ export interface ChatConversationDto {
   circleId: string | null;
   /** GROUP 会话的圈子展示信息(群名/群头像);其余类型为 null。 */
   circle: ChatCircleInfo | null;
+  /** 独立群聊(GROUP 且 circleId=null)的群名;可选兼容老后端。 */
+  name?: string | null;
+  /** 独立群聊的群主 userId;可选兼容老后端。 */
+  ownerId?: string | null;
   /** TEMP 会话的房间名。可选用于兼容尚未升级的后端。 */
   tempChat?: ChatTempChatInfo | null;
   lastMessage: ChatMessageDto | null;

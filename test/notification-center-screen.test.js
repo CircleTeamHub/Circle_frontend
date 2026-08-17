@@ -52,14 +52,18 @@ test('notification center keeps circle signup navigation in the current tab stac
   assert.doesNotMatch(source, /pathname: '\/\(tabs\)\/messages\/post-signups'/);
 });
 
-test('notification center keeps the bell badge in sync when interactive items are read', () => {
+test('notification center keeps the bell badges in sync when interactive items are read', () => {
   const source = readScreen();
 
-  assert.match(source, /const previousDiscoverUnread = useTabBadgeStore\.getState\(\)\.discoverUnread/);
-  assert.match(source, /setDiscoverUnread\(0\)/);
-  assert.match(source, /setDiscoverUnread\(previousDiscoverUnread\)/);
-  assert.match(source, /if \(!raw\.read\)/);
+  // 读一条通知要同时扣总数和它所属域的计数，否则对应铃铛的红点清不掉。
   assert.match(source, /Math\.max\(0, badgeStore\.discoverUnread - 1\)/);
+  assert.match(source, /Math\.max\(0, badgeStore\.momentsUnread - 1\)/);
+  assert.match(source, /Math\.max\(0, badgeStore\.circleUnread - 1\)/);
+  assert.match(source, /if \(!raw\.read\) decrementUnreadBadges\(raw\.type\)/);
+  // 失败要能整组回滚。
+  assert.match(source, /rollback\.setDiscoverUnread\(previousBadges\.discoverUnread\)/);
+  assert.match(source, /rollback\.setMomentsUnread\(previousBadges\.momentsUnread\)/);
+  assert.match(source, /rollback\.setCircleUnread\(previousBadges\.circleUnread\)/);
   // systemUnread 已整体删除（#103）——这里不允许再出现对它的读写。
   assert.doesNotMatch(source, /systemUnread/i);
 });

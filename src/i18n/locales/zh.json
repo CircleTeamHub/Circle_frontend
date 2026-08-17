@@ -212,14 +212,19 @@
   },
   "notifications": {
     "title": "消息通知",
+    "momentsTitle": "朋友圈通知",
+    "circleTitle": "圈子通知",
     "tabInteractive": "互动消息",
-    "tabCircle": "报名管理",
+    "tabCircleNotifications": "圈子动态",
+    "tabSignups": "报名管理",
     "filterAll": "全部",
     "filterUnread": "未读",
     "markAllRead": "全部已读",
     "system": "系统通知",
     "emptyTitle": "暂无通知",
     "emptySubtitle": "新的互动和报名会出现在这里",
+    "emptySubtitleMoments": "新的点赞和评论会出现在这里",
+    "emptySubtitleCircle": "新的圈子动态和报名会出现在这里",
     "loadFailedTitle": "加载失败",
     "loadFailed": "部分消息加载失败，请下拉重试",
     "summary": {
@@ -517,6 +522,9 @@
     },
     "attachments": {
       "photos": "照片/视频",
+      "mediaHub": "自媒体",
+      "mediaPhoto": "照片",
+      "mediaVideo": "视频",
       "camera": "拍照",
       "voiceCall": "语/视频通话",
       "location": "位置",
@@ -525,6 +533,30 @@
       "favorites": "我的收藏",
       "quickReply": "快捷语",
       "transfer": "转账"
+    },
+    "photoEditor": {
+      "title": "编辑照片",
+      "preview": "待发送照片预览",
+      "cropSquare": "1:1 裁剪",
+      "cropFourThree": "4:3 裁剪",
+      "freeCrop": "自由裁剪",
+      "freeCropTitle": "自由裁剪",
+      "cropFrame": "自由裁剪框",
+      "cropHint": "拖动四角调整范围，拖动框内移动位置",
+      "cropDone": "完成",
+      "mosaic": "马赛克",
+      "mosaicTitle": "马赛克",
+      "mosaicHint": "手指滑动涂抹需要隐藏的区域",
+      "draw": "涂鸦",
+      "drawTitle": "涂鸦",
+      "drawColor": "画笔颜色",
+      "markupCanvas": "照片编辑画布",
+      "undo": "撤销",
+      "rotate": "旋转",
+      "flip": "镜像",
+      "reset": "还原",
+      "editFailedTitle": "编辑失败",
+      "editFailedMessage": "照片处理失败，请重试"
     },
     "location": {
       "showPreview": "轻点显示地图"
@@ -2573,6 +2605,7 @@
       "memberQuit": "有成员退出群聊",
       "memberKicked": "有成员被移出群聊",
       "groupNameUpdated": "群名称已更新",
+      "groupRenamed": "群名已改为「{{name}}」",
       "groupDismissed": "群已解散",
       "messageRevoked": "一条消息被撤回",
       "friendAdded": "你们已经是好友了，开始聊天吧",
@@ -2976,6 +3009,9 @@
     "CHAT_REVOKE_WINDOW_EXPIRED": "超过可撤回时间",
     "CHAT_REVOKE_FORBIDDEN": "无权撤回该消息",
     "CHAT_EDIT_WINDOW_EXPIRED": "超出可编辑时间",
-    "CHAT_EDIT_FORBIDDEN": "无法编辑该消息"
+    "CHAT_EDIT_FORBIDDEN": "无法编辑该消息",
+    "CHAT_GROUP_FRIENDS_ONLY": "只能邀请好友进群",
+    "CHAT_GROUP_MIN_MEMBERS": "请至少选择 2 位好友",
+    "CHAT_GROUP_CIRCLE_MANAGED": "该群由圈子管理，无法在此操作"
   }
 }

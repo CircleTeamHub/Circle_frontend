@@ -66,6 +66,51 @@ export function createCircleChatConversation(
   });
 }
 
+/** 创建独立群聊(好友多选;不挂圈子)。 */
+export function createGroupChatConversation(input: {
+  name?: string | null;
+  memberIds: string[];
+}): Promise<ChatConversationDto> {
+  return apiClient<ChatConversationDto>('/chat/conversations/group', {
+    method: 'POST',
+    body: {
+      ...(input.name?.trim() ? { name: input.name.trim() } : {}),
+      memberIds: input.memberIds,
+    },
+  });
+}
+
+/** 独立群聊:拉自己的好友进群。 */
+export function inviteGroupChatMembers(
+  conversationId: string,
+  memberIds: string[],
+): Promise<ChatConversationDto> {
+  return apiClient<ChatConversationDto>(
+    `/chat/conversations/${conversationId}/members`,
+    { method: 'POST', body: { memberIds } },
+  );
+}
+
+/** 独立群聊:退出群聊(群主退群服务端自动转移)。 */
+export function leaveGroupChatConversation(
+  conversationId: string,
+): Promise<void> {
+  return apiClient<void>(`/chat/conversations/${conversationId}/leave`, {
+    method: 'POST',
+  });
+}
+
+/** 独立群聊:改群名(任一在座成员)。 */
+export function renameGroupChatConversation(
+  conversationId: string,
+  name: string,
+): Promise<ChatConversationDto> {
+  return apiClient<ChatConversationDto>(
+    `/chat/conversations/${conversationId}/name`,
+    { method: 'PATCH', body: { name } },
+  );
+}
+
 /**
  * 历史翻页:height 键集向前翻,页内升序;顺手灌进 store。
  *
