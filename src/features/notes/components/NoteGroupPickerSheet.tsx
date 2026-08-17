@@ -13,7 +13,12 @@ import { useTranslation } from 'react-i18next';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import type { NoteGroup, NoteSummary } from '@/features/notes/types';
 import { runNoteBatch } from '@/features/notes/utils/batch-run';
-import { commonGroupIds, toggleId } from '@/features/notes/utils/note-selection';
+import {
+  applyGroupMembershipChanges,
+  groupMembershipStates,
+  type GroupMembershipChange,
+  type GroupMembershipState,
+} from '@/features/notes/utils/note-selection';
 import { updateNoteGroupIds } from '@/services/api/notes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
@@ -27,8 +32,9 @@ interface NoteGroupPickerSheetProps {
 }
 
 /**
- * 分组勾选弹层：保存 = 把每条目标笔记的分组**替换**为勾选集合。
- * 初始勾选取所有目标共同所属的分组；批量场景会明示替换语义。
+ * 分组勾选弹层：把所选笔记**加入/移出**分组，不做整套替换。
+ * 三态底图：✓=所选全部在该分组，−=部分在，○=都不在；
+ * 勾选=全部加入、取消=全部移出，没动过的分组保持每条笔记原样。
  */
 export function NoteGroupPickerSheet({
   notes,
@@ -40,17 +46,50 @@ export function NoteGroupPickerSheet({
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
 
-  const [chosenIds, setChosenIds] = useState<string[]>([]);
+  // 只记录用户显式改动过的分组（加入/移出），保存时按笔记逐条套用。
+  const [changes, setChanges] = useState<
+    Record<string, GroupMembershipChange>
+  >({});
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (notes && notes.length > 0) {
-      setChosenIds(commonGroupIds(notes));
+      setChanges({});
       setSaving(false);
     }
   }, [notes]);
 
-  const chosenSet = useMemo(() => new Set(chosenIds), [chosenIds]);
+  const baseStates = useMemo(
+    () => groupMembershipStates(notes ?? [], groups),
+    [groups, notes],
+  );
+
+  const effectiveState = (groupId: string): GroupMembershipState => {
+    const change = changes[groupId];
+    if (change === 'add') return 'all';
+    if (change === 'remove') return 'none';
+    return baseStates.get(groupId) ?? 'none';
+  };
+
+  const toggleGroup = (groupId: string) => {
+    setChanges((prev) => {
+      const base = baseStates.get(groupId) ?? 'none';
+      const change = prev[groupId];
+      const effective =
+        change === 'add' ? 'all' : change === 'remove' ? 'none' : base;
+      const nextOp: GroupMembershipChange =
+        effective === 'all' ? 'remove' : 'add';
+      // 转一圈回到底图状态时清掉改动记录，避免发无意义的写请求。
+      if (
+        (nextOp === 'add' && base === 'all') ||
+        (nextOp === 'remove' && base === 'none')
+      ) {
+        const { [groupId]: _dropped, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [groupId]: nextOp };
+    });
+  };
 
   const d = useMemo(
     () => ({
@@ -70,10 +109,17 @@ export function NoteGroupPickerSheet({
 
   const handleSave = async () => {
     if (!notes || notes.length === 0 || saving) return;
+    // 只给净变化非零的笔记发请求：没动任何分组 = 直接关掉，零网络开销。
+    const ops = applyGroupMembershipChanges(notes, changes);
+    if (ops.length === 0) {
+      onClose();
+      return;
+    }
     setSaving(true);
+    const nextGroupIds = new Map(ops.map((op) => [op.id, op.groupIds]));
     const { failed } = await runNoteBatch(
-      notes.map((note) => note.id),
-      (id) => updateNoteGroupIds(id, chosenIds).then(() => undefined),
+      ops.map((op) => op.id),
+      (id) => updateNoteGroupIds(id, nextGroupIds.get(id) ?? []).then(() => undefined),
     );
     if (failed.length > 0) {
       Alert.alert(
@@ -112,7 +158,7 @@ export function NoteGroupPickerSheet({
         <Text style={[s.caption, d.caption]}>
           {t('notes.groupPicker.batchHint', {
             count: notes.length,
-            defaultValue: `保存后将替换所选 ${notes.length} 条笔记的分组。`,
+            defaultValue: `勾选把所选 ${notes.length} 条笔记加入分组，取消勾选则移出；没动过的分组保持各自原样。`,
           })}
         </Text>
       ) : null}
@@ -125,14 +171,16 @@ export function NoteGroupPickerSheet({
       ) : (
         <ScrollView style={s.list} contentContainerStyle={s.listContent}>
           {groups.map((group) => {
-            const chosen = chosenSet.has(group.id);
+            const state = effectiveState(group.id);
             return (
               <Pressable
                 key={group.id}
                 style={[s.row, d.row]}
-                onPress={() => setChosenIds((prev) => toggleId(prev, group.id))}
-                accessibilityRole="button"
-                accessibilityState={{ selected: chosen }}
+                onPress={() => toggleGroup(group.id)}
+                accessibilityRole="checkbox"
+                accessibilityState={{
+                  checked: state === 'all' ? true : state === 'some' ? 'mixed' : false,
+                }}
               >
                 <View style={s.rowText}>
                   <Text style={[s.rowName, d.rowName]} numberOfLines={1}>
@@ -146,9 +194,15 @@ export function NoteGroupPickerSheet({
                   </Text>
                 </View>
                 <Ionicons
-                  name={chosen ? 'checkmark-circle' : 'ellipse-outline'}
+                  name={
+                    state === 'all'
+                      ? 'checkmark-circle'
+                      : state === 'some'
+                        ? 'remove-circle'
+                        : 'ellipse-outline'
+                  }
                   size={22}
-                  color={chosen ? colors.primary : colors.textSecondary}
+                  color={state === 'none' ? colors.textSecondary : colors.primary}
                 />
               </Pressable>
             );

@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  commonGroupIds,
+  applyGroupMembershipChanges,
+  groupMembershipStates,
   pruneSelection,
   toggleId,
   toggleSelectAll,
@@ -41,19 +42,45 @@ test('pruneSelection drops ids that no longer exist after a reload', () => {
   assert.deepEqual(pruneSelection(['x'], []), []);
 });
 
-test('commonGroupIds returns the intersection in first-note order', () => {
+test('groupMembershipStates classifies each group as all/some/none', () => {
   const notes = [
-    { groups: [{ id: 'g1' }, { id: 'g2' }, { id: 'g3' }] },
-    { groups: [{ id: 'g3' }, { id: 'g1' }] },
-    { groups: [{ id: 'g1' }, { id: 'g3' }, { id: 'g9' }] },
+    { groups: [{ id: 'g1' }, { id: 'g2' }] },
+    { groups: [{ id: 'g1' }] },
   ];
-  assert.deepEqual(commonGroupIds(notes), ['g1', 'g3']);
+  const groups = [{ id: 'g1' }, { id: 'g2' }, { id: 'g3' }];
+  const states = groupMembershipStates(notes, groups);
+  assert.equal(states.get('g1'), 'all');
+  assert.equal(states.get('g2'), 'some');
+  assert.equal(states.get('g3'), 'none');
 });
 
-test('commonGroupIds handles empty inputs and disjoint groups', () => {
-  assert.deepEqual(commonGroupIds([]), []);
-  assert.deepEqual(
-    commonGroupIds([{ groups: [{ id: 'g1' }] }, { groups: [] }]),
-    [],
-  );
+test('groupMembershipStates marks everything none when there are no notes', () => {
+  const states = groupMembershipStates([], [{ id: 'g1' }]);
+  assert.equal(states.get('g1'), 'none');
+});
+
+test('applyGroupMembershipChanges touches only the changed groups per note', () => {
+  const notes = [
+    { id: 'n1', groups: [{ id: 'g1' }, { id: 'g2' }] },
+    { id: 'n2', groups: [{ id: 'g2' }] },
+    { id: 'n3', groups: [{ id: 'g3' }] },
+  ];
+  const ops = applyGroupMembershipChanges(notes, { g3: 'add', g2: 'remove' });
+  // n3 本来就在 g3、也不在 g2：净变化为零，跳过不发请求。
+  assert.deepEqual(ops, [
+    { id: 'n1', groupIds: ['g1', 'g3'] },
+    { id: 'n2', groupIds: ['g3'] },
+  ]);
+});
+
+test('applyGroupMembershipChanges returns empty when nothing effectively changes', () => {
+  const notes = [{ id: 'n1', groups: [{ id: 'g1' }] }];
+  assert.deepEqual(applyGroupMembershipChanges(notes, { g1: 'add' }), []);
+  assert.deepEqual(applyGroupMembershipChanges(notes, {}), []);
+});
+
+test('applyGroupMembershipChanges keeps untouched order and appends additions', () => {
+  const notes = [{ id: 'n1', groups: [{ id: 'g2' }, { id: 'g1' }] }];
+  const ops = applyGroupMembershipChanges(notes, { g9: 'add' });
+  assert.deepEqual(ops, [{ id: 'n1', groupIds: ['g2', 'g1', 'g9'] }]);
 });

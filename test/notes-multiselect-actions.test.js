@@ -152,12 +152,19 @@ test('ShareNoteSheet sends every selected note card to the chosen conversation',
   assert.match(screen, /buildNoteCardPayloadFromSummary/);
 });
 
-test('group picker replaces memberships for single and batch targets', () => {
+test('group picker adds/removes membership per note instead of replacing wholesale', () => {
   const picker = read('src/features/notes/components/NoteGroupPickerSheet.tsx');
   const screen = read('src/features/notes/screens/NotesScreen.tsx');
 
+  // 三态底图（全部/部分/都不在）+ 只写回被显式改动的分组；未动的保持各自原样。
+  assert.match(picker, /groupMembershipStates/);
+  assert.match(picker, /applyGroupMembershipChanges/);
+  assert.doesNotMatch(picker, /commonGroupIds/);
+  assert.match(picker, /'mixed'/);
+  assert.match(picker, /remove-circle/);
+  // 零净变化不发请求，直接关闭。
+  assert.match(picker, /ops\.length === 0/);
   assert.match(picker, /updateNoteGroupIds/);
-  assert.match(picker, /commonGroupIds/);
   assert.match(picker, /runNoteBatch/);
   assert.match(picker, /notes\.groupPicker\.batchHint/);
   assert.match(picker, /notes\.alerts\.saveMembershipsPartialFailed/);

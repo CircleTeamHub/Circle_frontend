@@ -936,7 +936,7 @@
     },
     "groupPicker": {
       "title": "Editar grupos",
-      "batchHint": "Al guardar se reemplazarán los grupos de las {{count}} notas seleccionadas.",
+      "batchHint": "Marcar añade las {{count}} notas seleccionadas al grupo; desmarcar las quita. Los grupos sin tocar se mantienen igual.",
       "empty": "Aún no hay grupos. Créalos primero en «Gestionar grupos».",
       "save": "Guardar",
       "saving": "Guardando..."

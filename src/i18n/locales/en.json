@@ -2389,7 +2389,7 @@
     },
     "groupPicker": {
       "title": "Edit groups",
-      "batchHint": "Saving will replace the groups of the {{count}} selected notes.",
+      "batchHint": "Checking adds the {{count}} selected notes to a group; unchecking removes them. Untouched groups stay as they are.",
       "empty": "No groups yet. Create one in Manage groups first.",
       "saving": "Saving...",
       "save": "Save"
