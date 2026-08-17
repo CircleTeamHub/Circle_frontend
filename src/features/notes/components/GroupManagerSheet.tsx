@@ -4,8 +4,10 @@ import {
   Alert,
   Animated,
   FlatList,
+  KeyboardAvoidingView,
   Modal,
   PanResponder,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -24,6 +26,7 @@ import {
 } from '@/services/api/notes';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { NoteCard } from '@/features/notes/components/NoteCard';
 import type { NoteGroup, NoteSummary } from '@/features/notes/types';
 import { useNotesTabOrderStore } from '@/features/notes/store/use-notes-tab-order-store';
 import { NOTES_TAB_ALL, mergeTabOrder } from '@/features/notes/utils/tab-order';
@@ -92,6 +95,8 @@ export function GroupManagerSheet({
     null,
   );
   const dragY = useRef(new Animated.Value(0)).current;
+  // 底部编辑区的「弹出」动效：进入编辑（含切换目标分组）时从下方弹起。
+  const editorPop = useRef(new Animated.Value(1)).current;
   const rowsRef = useRef<ManagerRow[]>([]);
   const dragPreviewRowsRef = useRef<ManagerRow[] | null>(null);
   const groupNameInputRef = useRef<TextInput>(null);
@@ -131,6 +136,22 @@ export function GroupManagerSheet({
   useEffect(() => {
     dragPreviewRowsRef.current = dragPreviewRows;
   }, [dragPreviewRows]);
+
+  // 点「编辑名称」时底部编辑区弹起 + 呼出键盘，让状态切换一眼可见。
+  useEffect(() => {
+    if (!editingGroupId) return;
+    editorPop.setValue(0);
+    Animated.spring(editorPop, {
+      toValue: 1,
+      friction: 7,
+      tension: 80,
+      useNativeDriver: true,
+    }).start();
+    const focusTimer = setTimeout(() => {
+      groupNameInputRef.current?.focus();
+    }, 0);
+    return () => clearTimeout(focusTimer);
+  }, [editingGroupId, editorPop]);
 
   const displayRows = dragPreviewRows ?? rows;
   const isCreatingGroupAtLimit =
@@ -504,7 +525,6 @@ export function GroupManagerSheet({
       modalActionText: { color: colors.textSecondary },
       saveBtn: { backgroundColor: colors.primary },
       saveBtnText: { color: colors.white },
-      membershipRowSelected: { borderColor: colors.primary },
       searchWrap: { backgroundColor: colors.surface },
       searchInput: { color: colors.text },
       searchPlaceholder: colors.textSecondary,
@@ -513,46 +533,23 @@ export function GroupManagerSheet({
     [colors],
   );
 
+  const toggleMembershipNoteCard = useCallback(
+    (note: NoteSummary) => toggleMembershipNote(note.id),
+    [toggleMembershipNote],
+  );
+
+  // 完整笔记卡片（与列表页同款：封面/元信息/备注/来源），勾选态复用 NoteCard 多选模式。
   const renderMembershipNote = useCallback(
-    ({ item }: { item: NoteSummary }) => {
-      const selected = selectedMembershipNoteIds.has(item.id);
-      return (
-        <Pressable
-          style={[
-            s.membershipRow,
-            d.groupRow,
-            selected ? [s.membershipRowSelected, d.membershipRowSelected] : null,
-          ]}
-          onPress={() => toggleMembershipNote(item.id)}
-        >
-          <View style={s.membershipText}>
-            <Text style={[s.groupName, d.groupName]} numberOfLines={1}>
-              {item.title}
-            </Text>
-            {item.contentPreview ? (
-              <Text style={[s.groupCount, d.groupCount]} numberOfLines={1}>
-                {item.contentPreview}
-              </Text>
-            ) : null}
-          </View>
-          <Ionicons
-            name={selected ? 'checkmark-circle' : 'ellipse-outline'}
-            size={22}
-            color={selected ? colors.primary : colors.textSecondary}
-          />
-        </Pressable>
-      );
-    },
-    [
-      colors.primary,
-      colors.textSecondary,
-      d.groupCount,
-      d.groupName,
-      d.groupRow,
-      d.membershipRowSelected,
-      selectedMembershipNoteIds,
-      toggleMembershipNote,
-    ],
+    ({ item }: { item: NoteSummary }) => (
+      <NoteCard
+        note={item}
+        onPress={toggleMembershipNoteCard}
+        showActions={false}
+        selectionMode
+        selected={selectedMembershipNoteIds.has(item.id)}
+      />
+    ),
+    [selectedMembershipNoteIds, toggleMembershipNoteCard],
   );
 
   return (
@@ -567,6 +564,10 @@ export function GroupManagerSheet({
           },
         ]}
       >
+        <KeyboardAvoidingView
+          style={s.flexFill}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
           {editingMembershipGroup ? (
             <>
               <View style={s.membershipHeader}>
@@ -607,7 +608,12 @@ export function GroupManagerSheet({
                 keyExtractor={(item) => item.id}
                 renderItem={renderMembershipNote}
                 ItemSeparatorComponent={() => (
-                  <View style={s.membershipSeparator} />
+                  <View
+                    style={[
+                      s.membershipSeparator,
+                      { backgroundColor: colors.divider },
+                    ]}
+                  />
                 )}
         {...keyboardDismissOnDragProps}
                 showsVerticalScrollIndicator={false}
@@ -780,10 +786,30 @@ export function GroupManagerSheet({
                   );
                 })}
               </ScrollView>
-              <View style={s.modalEditor}>
+              <Animated.View
+                style={[
+                  s.modalEditor,
+                  {
+                    opacity: editorPop,
+                    transform: [
+                      {
+                        translateY: editorPop.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [64, 0],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              >
                 <TextInput
                   ref={groupNameInputRef}
-                  style={[s.modalInput, d.modalInput]}
+                  style={[
+                    s.modalInput,
+                    d.modalInput,
+                    // 编辑态高亮边框：与「新增」态一眼区分。
+                    editingGroupId ? { borderColor: colors.primary } : null,
+                  ]}
                   placeholder={t('notes.manageGroups.namePlaceholder', {
                     defaultValue: '输入分组名添加新的分组',
                   })}
@@ -829,9 +855,10 @@ export function GroupManagerSheet({
                     </Text>
                   </Pressable>
                 </View>
-              </View>
+              </Animated.View>
             </>
           )}
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -842,6 +869,9 @@ const s = StyleSheet.create({
   screen: {
     flex: 1,
     paddingHorizontal: Spacing.lg,
+  },
+  flexFill: {
+    flex: 1,
     gap: Spacing.md,
   },
   screenHeader: {
@@ -855,7 +885,8 @@ const s = StyleSheet.create({
   limitText: { ...Typography.small, marginTop: -Spacing.xs },
   modalList: { flex: 1 },
   modalListContent: { gap: Spacing.sm, paddingBottom: Spacing.md },
-  membershipList: { flex: 1 },
+  // NoteCard 自带左右 Spacing.lg 内边距：负 margin 抵掉全屏页的水平留白，卡片全宽。
+  membershipList: { flex: 1, marginHorizontal: -Spacing.lg },
   membershipHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -870,21 +901,10 @@ const s = StyleSheet.create({
     gap: Spacing.xs,
   },
   searchInput: { flex: 1, ...Typography.bodyRegular },
-  membershipRow: {
-    minHeight: 56,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.sm,
+  membershipSeparator: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: Spacing.lg,
   },
-  membershipRowSelected: {
-    borderWidth: 1,
-  },
-  membershipSeparator: { height: Spacing.sm },
-  membershipText: { flex: 1 },
   groupRow: {
     height: GROUP_ROW_HEIGHT,
     borderRadius: Radius.md,
