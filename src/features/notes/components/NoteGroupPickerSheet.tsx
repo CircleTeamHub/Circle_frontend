@@ -2,15 +2,22 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import {
+  GROUP_NAME_MAX_LENGTH,
+  MAX_NOTE_GROUPS,
+} from '@/features/notes/components/GroupManagerSheet';
 import type { NoteGroup, NoteSummary } from '@/features/notes/types';
 import { runNoteBatch } from '@/features/notes/utils/batch-run';
 import {
@@ -19,7 +26,8 @@ import {
   type GroupMembershipChange,
   type GroupMembershipState,
 } from '@/features/notes/utils/note-selection';
-import { updateNoteGroupIds } from '@/services/api/notes';
+import { createNoteGroup, updateNoteGroupIds } from '@/services/api/notes';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 interface NoteGroupPickerSheetProps {
@@ -29,6 +37,8 @@ interface NoteGroupPickerSheetProps {
   onClose: () => void;
   /** 保存结束回调（部分失败也回调）：父层刷新列表、退出多选 */
   onSaved: (result: { failedCount: number }) => void;
+  /** 弹层内就地新建分组成功：父层把它并进 groups 状态 */
+  onGroupCreated: (group: NoteGroup) => void;
 }
 
 /**
@@ -41,6 +51,7 @@ export function NoteGroupPickerSheet({
   groups,
   onClose,
   onSaved,
+  onGroupCreated,
 }: NoteGroupPickerSheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -51,13 +62,63 @@ export function NoteGroupPickerSheet({
     Record<string, GroupMembershipChange>
   >({});
   const [saving, setSaving] = useState(false);
+  // 就地新建分组的内联输入行。
+  const [creatingOpen, setCreatingOpen] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [creatingGroup, setCreatingGroup] = useState(false);
 
   useEffect(() => {
     if (notes && notes.length > 0) {
       setChanges({});
       setSaving(false);
+      setCreatingOpen(false);
+      setNewGroupName('');
+      setCreatingGroup(false);
     }
   }, [notes]);
+
+  const handleOpenCreate = () => {
+    if (groups.length >= MAX_NOTE_GROUPS) {
+      Alert.alert(
+        t('notes.alerts.groupLimitTitle', { defaultValue: '分组已达上限' }),
+        t('notes.alerts.groupLimitMessage', {
+          max: MAX_NOTE_GROUPS,
+          defaultValue: `最多只能创建 ${MAX_NOTE_GROUPS} 个分组。`,
+        }),
+      );
+      return;
+    }
+    setCreatingOpen(true);
+  };
+
+  const handleCreateGroup = async () => {
+    const name = newGroupName.trim();
+    if (!name || creatingGroup) return;
+    setCreatingGroup(true);
+    try {
+      const created = await createNoteGroup(name);
+      onGroupCreated(created);
+      // 在这里新建分组的意图就是把所选笔记放进去：默认标记为「加入」。
+      setChanges((prev) => ({ ...prev, [created.id]: 'add' }));
+      setNewGroupName('');
+      setCreatingOpen(false);
+    } catch (error) {
+      Alert.alert(
+        t('notes.alerts.saveFailedTitle', { defaultValue: '保存失败' }),
+        getApiErrorMessage(
+          error,
+          t('notes.alerts.saveGroupFailed', {
+            defaultValue: '分组保存失败，请稍后再试。',
+          }),
+        ),
+      );
+      if (__DEV__) {
+        console.warn('[NoteGroupPickerSheet] createNoteGroup failed', error);
+      }
+    } finally {
+      setCreatingGroup(false);
+    }
+  };
 
   const baseStates = useMemo(
     () => groupMembershipStates(notes ?? [], groups),
@@ -139,13 +200,20 @@ export function NoteGroupPickerSheet({
       visible={notes != null}
       onClose={onClose}
       backdropStyle={d.backdrop}
-      sheetStyle={[
-        s.sheet,
-        d.sheet,
-        { paddingBottom: insets.bottom || Spacing.lg },
-      ]}
+      sheetStyle={s.sheetWrap}
     >
-      <View style={[s.handle, d.handle]} />
+      {/* 就地新建分组会呼出键盘：整个面板随键盘上移 */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <View
+          style={[
+            s.sheet,
+            d.sheet,
+            { paddingBottom: insets.bottom || Spacing.lg },
+          ]}
+        >
+          <View style={[s.handle, d.handle]} />
       <Text style={[s.title, d.title]}>
         {t('notes.groupPicker.title', { defaultValue: '编辑分组' })}
       </Text>
@@ -209,6 +277,57 @@ export function NoteGroupPickerSheet({
           })}
         </ScrollView>
       )}
+      {creatingOpen ? (
+        <View style={s.createRow}>
+          <TextInput
+            style={[
+              s.createInput,
+              {
+                color: colors.text,
+                borderColor: colors.surfaceBorder,
+                backgroundColor: colors.background,
+              },
+            ]}
+            placeholder={t('notes.manageGroups.namePlaceholder', {
+              defaultValue: '输入分组名添加新的分组',
+            })}
+            placeholderTextColor={colors.textSecondary}
+            value={newGroupName}
+            onChangeText={setNewGroupName}
+            maxLength={GROUP_NAME_MAX_LENGTH}
+            autoFocus
+            returnKeyType="done"
+            onSubmitEditing={() => void handleCreateGroup()}
+          />
+          <Pressable
+            style={[
+              s.createConfirmBtn,
+              d.saveBtn,
+              creatingGroup ? s.saveBtnDisabled : null,
+            ]}
+            onPress={() => void handleCreateGroup()}
+            disabled={creatingGroup}
+            accessibilityRole="button"
+          >
+            <Text style={[s.saveBtnText, d.saveBtnText]}>
+              {creatingGroup
+                ? t('notes.groupPicker.saving', { defaultValue: '保存中...' })
+                : t('common.confirm', { defaultValue: '确认' })}
+            </Text>
+          </Pressable>
+        </View>
+      ) : (
+        <Pressable
+          style={[s.createBtn, { borderColor: colors.surfaceBorder }]}
+          onPress={handleOpenCreate}
+          accessibilityRole="button"
+        >
+          <Ionicons name="add" size={18} color={colors.primary} />
+          <Text style={[s.createBtnText, { color: colors.primary }]}>
+            {t('notes.manageGroups.createNew', { defaultValue: '新增分组' })}
+          </Text>
+        </Pressable>
+      )}
       {groups.length > 0 ? (
         <Pressable
           style={[s.saveBtn, d.saveBtn, saving ? s.saveBtnDisabled : null]}
@@ -223,11 +342,14 @@ export function NoteGroupPickerSheet({
           </Text>
         </Pressable>
       ) : null}
+        </View>
+      </KeyboardAvoidingView>
     </BottomSheetModal>
   );
 }
 
 const s = StyleSheet.create({
+  sheetWrap: { width: '100%' },
   sheet: {
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
@@ -235,6 +357,37 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     gap: Spacing.sm,
   },
+  createRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  createInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm + 2,
+    ...Typography.bodyRegular,
+  },
+  createConfirmBtn: {
+    height: 44,
+    paddingHorizontal: Spacing.md,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  createBtn: {
+    minHeight: 48,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+  },
+  createBtnText: { ...Typography.bodyRegular, fontWeight: '600' },
   handle: {
     alignSelf: 'center',
     width: 36,

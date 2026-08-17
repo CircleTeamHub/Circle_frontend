@@ -393,10 +393,16 @@ export default function NotesScreen() {
   const closeGroupPicker = useCallback(() => setGroupPickerNotes(null), []);
 
   const handleGroupPickerSaved = useCallback(() => {
-    // 分组是替换写：不论全成还是部分失败都重拉真状态；批量场景顺手退出多选。
+    // 不论全成还是部分失败都重拉真状态；批量场景顺手退出多选。
     void load().catch(() => {});
     exitSelection();
   }, [exitSelection, load]);
+
+  // 分组弹层里就地新建的分组：并进列表，tab 栏与管理页立即可见。
+  const handleGroupCreatedInPicker = useCallback(
+    (group: NoteGroup) => setGroups((prev) => [...prev, group]),
+    [],
+  );
 
   // 分享：打开会话选择器，把笔记以卡片消息发给好友/群聊（批量=逐条发卡）。
   const handleShareNote = useCallback(
@@ -846,6 +852,7 @@ export default function NotesScreen() {
         groups={groups}
         onClose={closeGroupPicker}
         onSaved={handleGroupPickerSaved}
+        onGroupCreated={handleGroupCreatedInPicker}
       />
       <ShareNoteSheet payloads={shareNotePayloads} onClose={closeShareNote} />
     </View>

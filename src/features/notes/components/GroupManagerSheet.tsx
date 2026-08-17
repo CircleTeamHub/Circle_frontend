@@ -48,9 +48,9 @@ interface Props {
 }
 
 const GROUP_ROW_HEIGHT = 64;
-const MAX_NOTE_GROUPS = 10;
+export const MAX_NOTE_GROUPS = 10;
 /** 与后端 CreateNoteGroupDto 的 @MaxLength(30) 对齐 */
-const GROUP_NAME_MAX_LENGTH = 30;
+export const GROUP_NAME_MAX_LENGTH = 30;
 const MEMBERSHIP_SAVE_CONCURRENCY = 5;
 
 /** 排序列表里的一行：固定 tab（全部/未分组，group=null）或用户分组。 */

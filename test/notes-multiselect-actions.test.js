@@ -168,6 +168,12 @@ test('group picker adds/removes membership per note instead of replacing wholesa
   assert.match(picker, /runNoteBatch/);
   assert.match(picker, /notes\.groupPicker\.batchHint/);
   assert.match(picker, /notes\.alerts\.saveMembershipsPartialFailed/);
+  // 弹层内可就地新建分组：上限拦截、成功并进父层 groups、新分组默认标记「加入」。
+  assert.match(picker, /createNoteGroup/);
+  assert.match(picker, /groups\.length >= MAX_NOTE_GROUPS/);
+  assert.match(picker, /onGroupCreated\(created\)/);
+  assert.match(picker, /\[created\.id\]: 'add'/);
+  assert.match(screen, /onGroupCreated=\{handleGroupCreatedInPicker\}/);
 
   // 单条（sheet 的「编辑分组」）与批量（批量 sheet 的「编辑分组」）共用同一个弹层。
   assert.match(screen, /setGroupPickerNotes\(\[note\]\)/);
