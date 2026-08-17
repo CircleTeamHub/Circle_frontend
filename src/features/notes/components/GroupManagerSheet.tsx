@@ -861,8 +861,7 @@ export function GroupManagerSheet({
                       defaultValue: `正在重命名「${editingGroupName}」`,
                     })
                   : t('notes.manageGroups.createHint', {
-                      max: MAX_NOTE_GROUPS,
-                      defaultValue: `分组帮你归类笔记，最多可创建 ${MAX_NOTE_GROUPS} 个。`,
+                      defaultValue: '分组帮你归类笔记。',
                     })}
               </Text>
             </View>

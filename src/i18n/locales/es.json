@@ -827,7 +827,7 @@
       "createNew": "Añadir grupo",
       "renameTitle": "Editar nombre",
       "renameHint": "Renombrando «{{name}}»",
-      "createHint": "Los grupos organizan tus notas; hasta {{max}}.",
+      "createHint": "Los grupos organizan tus notas.",
       "nameLabel": "Nombre del grupo",
       "limitHint": "{{count}}/{{max}} grupos creados",
       "namePlaceholder": "Escribe un nombre para añadir un grupo nuevo",

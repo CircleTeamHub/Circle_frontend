@@ -2313,7 +2313,7 @@
       "createNew": "Add group",
       "renameTitle": "Rename group",
       "renameHint": "Renaming “{{name}}”",
-      "createHint": "Groups keep your notes organized — up to {{max}}.",
+      "createHint": "Groups keep your notes organized.",
       "nameLabel": "Group name",
       "limitHint": "{{count}}/{{max}} groups created",
       "namePlaceholder": "Enter a group name to add a new group",

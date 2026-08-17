@@ -826,7 +826,7 @@
       "createNew": "グループを追加",
       "renameTitle": "名前を編集",
       "renameHint": "「{{name}}」の名前を変更中",
-      "createHint": "グループでノートを整理できます（最大 {{max}} 個）。",
+      "createHint": "グループでノートを整理できます。",
       "nameLabel": "グループ名",
       "limitHint": "{{count}}/{{max}} 個のグループを作成済み",
       "namePlaceholder": "新しいグループを追加する名前を入力",

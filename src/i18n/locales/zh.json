@@ -2310,7 +2310,7 @@
       "createNew": "新增分组",
       "renameTitle": "编辑名称",
       "renameHint": "正在重命名「{{name}}」",
-      "createHint": "分组帮你归类笔记，最多可创建 {{max}} 个。",
+      "createHint": "分组帮你归类笔记。",
       "nameLabel": "分组名称",
       "limitHint": "已创建 {{count}}/{{max}} 个分组",
       "namePlaceholder": "输入分组名添加新的分组",
