@@ -823,6 +823,7 @@ export function GroupManagerSheet({
         sheetStyle={s.editorSheetWrap}
       >
         <KeyboardAvoidingView
+          style={s.editorKav}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <View
@@ -981,8 +982,11 @@ const s = StyleSheet.create({
     borderRadius: Radius.pill,
     marginTop: Spacing.sm,
   },
-  editorSheetWrap: { width: '100%' },
+  // 编辑 sheet 占约半屏，弹出感更足；内容自顶向下排布。
+  editorSheetWrap: { width: '100%', minHeight: '50%' },
+  editorKav: { flex: 1 },
   editorSheet: {
+    flex: 1,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     paddingHorizontal: Spacing.lg,
