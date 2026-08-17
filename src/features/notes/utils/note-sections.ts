@@ -150,25 +150,27 @@ export function getNoteSectionAvailability(sections: NoteSections) {
   };
 }
 
+/**
+ * 打开详情页时要定位到哪个区块。
+ *
+ * 只认**显式请求**（从「查看定位」等入口带 section 参数进来）；没请求就返回
+ * null，让页面停在顶部——普通点开一条笔记，第一眼该看到标题，而不是被自动
+ * 滚过标题落到正文。回落到「第一个有内容的区块」曾让每次点开都跳一下。
+ */
 export function getInitialNoteSection(
   requested: string | null | undefined,
   sections: NoteSections,
-): NoteSectionKind {
-  const availability = getNoteSectionAvailability(sections);
-  const order: NoteSectionKind[] = ['text', 'media', 'showcase', 'location'];
+): NoteSectionKind | null {
   if (
-    requested === 'text' ||
-    requested === 'media' ||
-    requested === 'showcase' ||
-    requested === 'location'
+    requested !== 'text' &&
+    requested !== 'media' &&
+    requested !== 'showcase' &&
+    requested !== 'location'
   ) {
-    const key = `has${requested[0].toUpperCase()}${requested.slice(1)}` as keyof typeof availability;
-    if (availability[key]) return requested;
+    return null;
   }
-  return (
-    order.find((section) => {
-      const key = `has${section[0].toUpperCase()}${section.slice(1)}` as keyof typeof availability;
-      return availability[key];
-    }) ?? 'text'
-  );
+  const availability = getNoteSectionAvailability(sections);
+  const key = `has${requested[0].toUpperCase()}${requested.slice(1)}` as keyof typeof availability;
+  // 请求的区块没内容（笔记被编辑过）：不滚，停顶部比滚到空处强。
+  return availability[key] ? requested : null;
 }
