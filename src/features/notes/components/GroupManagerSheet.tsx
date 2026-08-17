@@ -26,11 +26,7 @@ import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { NoteGroup, NoteSummary } from '@/features/notes/types';
 import { useNotesTabOrderStore } from '@/features/notes/store/use-notes-tab-order-store';
-import {
-  NOTES_TAB_ALL,
-  NOTES_TAB_UNGROUPED,
-  mergeTabOrder,
-} from '@/features/notes/utils/tab-order';
+import { NOTES_TAB_ALL, mergeTabOrder } from '@/features/notes/utils/tab-order';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 // 抽自 NotesScreen 的"管理分组"Modal —— 把 group CRUD、拖拽排序、成员选择器一并搬过来。
