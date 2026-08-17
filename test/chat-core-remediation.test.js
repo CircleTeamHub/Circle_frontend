@@ -157,9 +157,12 @@ test('burn toggle leaves a localized system trail and the info rows exist', () =
   assert.match(info, /handleClearHistory/);
 });
 
-test('swipe delete clears the personal history watermark, not just hides', () => {
+test('swipe delete clears history before hiding and warns for direct chats', () => {
   const screen = read('src/features/messages/screens/MessagesScreen.tsx');
   assert.match(screen, /clearChatConversationHistory/);
+  assert.match(screen, /deleteChatConfirmDirect/);
+  assert.match(screen, /deleteChatConfirmDirect[\s\S]{0,250}defaultValue/);
+  assert.match(screen, /forEveryone:\s*conversation\.conversationType === ["']private["']/);
 });
 
 test('the settings clear-all path writes server watermarks before wiping cache', () => {
@@ -176,6 +179,9 @@ test('burn words exist in every locale', () => {
     assert.ok(dict?.im?.burn?.h1, `${locale} im.burn.h1`);
     assert.ok(dict?.chat?.burnAfterReading, `${locale} chat.burnAfterReading`);
     assert.ok(dict?.chat?.clearHistory, `${locale} chat.clearHistory`);
+    assert.ok(dict?.chat?.clearHistoryConfirmDirect, `${locale} chat.clearHistoryConfirmDirect`);
+    assert.ok(dict?.chat?.clearHistoryDoneDirect, `${locale} chat.clearHistoryDoneDirect`);
+    assert.ok(dict?.messages?.deleteChatConfirmDirect, `${locale} messages.deleteChatConfirmDirect`);
   }
 });
 
@@ -443,6 +449,7 @@ test('clear-all-chats loads the authoritative conversation list first', () => {
   const actions = read('src/features/profile/hooks/use-storage-actions.ts');
   assert.match(actions, /loadChatConversations\(\)/);
   assert.match(actions, /resetForLogout/);
+  assert.doesNotMatch(actions, /forEveryone:\s*true/);
 });
 
 test('swipe delete sequences hide-after-clear and surfaces failures', () => {

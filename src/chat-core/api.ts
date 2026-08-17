@@ -465,16 +465,17 @@ export async function setChatBurnDuration(
 }
 
 /**
- * G-14 清空聊天记录:服务端写 per-viewer 水位(对端不受影响),
+ * G-14 清空聊天记录:私聊由服务端推进双方水位，群聊只推进本人水位；
  * 本地时间线/预览/未读同步清空 —— 不再是「清内存转头又拉回来」的假清空。
  */
 export async function clearChatConversationHistory(
   conversationId: string,
+  options: { forEveryone?: boolean } = {},
 ): Promise<void> {
   const sameSession = sessionGate();
   const result = await apiClient<{ clearedBeforeHeight?: number }>(
     `/chat/conversations/${conversationId}/clear`,
-    { method: 'POST' },
+    { method: 'POST', body: { forEveryone: options.forEveryone ?? false } },
   );
   if (sameSession()) {
     // 带上服务端的权威水位:在途的历史请求/延迟的 chat:msg 会在清空之后

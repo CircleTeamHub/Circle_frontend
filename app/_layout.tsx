@@ -7,14 +7,10 @@ import {
 import { useFonts } from 'expo-font';        // 加载自定义字体
 import { Redirect, Stack, useSegments } from 'expo-router';          // Expo Router 的 Stack 导航（页面栈）
 import * as SplashScreen from 'expo-splash-screen'; // 控制启动屏（闪屏）的显示与隐藏
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { StatusBar } from 'expo-status-bar'; // 控制顶部状态栏样式（文字颜色等）
-// 必须在入口文件最早引入，启用动画引擎（具名导入同样会执行其原生初始化副作用）
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from 'react-native-reanimated';
+// 必须在入口文件最早引入，启用动画引擎。
+import 'react-native-reanimated';
 import { ActivityIndicator, NativeModules, View } from 'react-native';
 import { rehydrateLanguageFromStorage } from '@/i18n';
 import { initEncryptedStorage, migrateFromAsyncStorage } from '@/storage';
@@ -29,7 +25,6 @@ import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-f
 
 // 项目自定义主题系统：ThemeProvider 提供主题上下文，useTheme 读取当前主题
 import { getAuthRouteDecision } from '@/components/app/auth-route-policy';
-import { LaunchReveal } from '@/components/app/launch-reveal';
 import { LoginSecurityCodeGate } from '@/components/app/login-security-code-gate';
 import { SessionBootstrap } from '@/components/app/session-bootstrap';
 import { MemberNameAnimationProvider } from '@/components/ui/member-name-animation';
@@ -251,8 +246,6 @@ function RootLayout() {
    * 主题在迁移完成后才挂载 ThemeProvider，初始 useState 即可读到迁移过的值。
    */
   const [migrated, setMigrated] = useState(false);
-  const [nativeSplashHidden, setNativeSplashHidden] = useState(false);
-  const [launchRevealDone, setLaunchRevealDone] = useState(false);
   useEffect(() => {
     setSentryUserId(sentryUserId);
   }, [sentryUserId]);
@@ -279,43 +272,16 @@ function RootLayout() {
     if (error) throw error;
   }, [error]);
 
-  // 字体和迁移都就绪后隐藏系统启动屏，再播放 React Native 层的入场动画。
+  // 字体和迁移都就绪后隐藏系统启动屏，直接显示 App。
   useEffect(() => {
-    if (!loaded || !migrated || nativeSplashHidden) {
+    if (!loaded || !migrated) {
       return;
     }
 
-    let cancelled = false;
-    SplashScreen.hideAsync()
-      .catch(() => {
-        // 已经被隐藏；忽略即可。
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setNativeSplashHidden(true);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [loaded, migrated, nativeSplashHidden]);
-
-  // App「从中心弹性展开」：开场序列冲镜揭幕时，把整个 UI 从略缩放 spring 弹到 1。
-  // 幕布覆盖期间 UI 一直是 0.92（藏在遮罩后不可见），揭幕瞬间带回弹地放大 = 弹性展开。
-  const appScale = useSharedValue(0.92);
-  const appScaleStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: appScale.value }],
-  }));
-  const springAppOpen = useCallback(() => {
-    appScale.value = withSpring(1, { damping: 11, stiffness: 150, mass: 0.7 });
-  }, [appScale]);
-
-  const handleLaunchRevealFinish = useCallback(() => {
-    // 兜底：即使 onReveal 未触发，序列结束也确保 UI 回到 1（避免卡在 0.92）。
-    springAppOpen();
-    setLaunchRevealDone(true);
-  }, [springAppOpen]);
+    SplashScreen.hideAsync().catch(() => {
+      // 已经被隐藏；忽略即可。
+    });
+  }, [loaded, migrated]);
 
   // 字体或迁移未就绪前不渲染任何内容（启动屏仍显示）
   if (!loaded || !migrated) return null;
@@ -326,9 +292,9 @@ function RootLayout() {
       <MemberNameAnimationProvider>
         <SessionBootstrap />
         <AuthRouteGuard>
-          <Animated.View style={[{ flex: 1 }, appScaleStyle]}>
+          <View style={{ flex: 1 }}>
             <RootStack />
-          </Animated.View>
+          </View>
           <NotificationSnackbarHost />
           <PushNotificationRouteHandler />
           <PushNotificationTokenRegistrar />
@@ -336,13 +302,6 @@ function RootLayout() {
           <AccountSwitcherSheet />
           <LoginSecurityCodeGate />
         </AuthRouteGuard>
-        {!launchRevealDone ? (
-          <LaunchReveal
-            play={nativeSplashHidden}
-            onReveal={springAppOpen}
-            onFinish={handleLaunchRevealFinish}
-          />
-        ) : null}
       </MemberNameAnimationProvider>
     </ThemeProvider>
   );

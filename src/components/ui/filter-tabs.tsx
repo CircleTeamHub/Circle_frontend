@@ -7,12 +7,16 @@ interface FilterTabsProps {
   activeIndex: number;
   onTabPress: (index: number) => void;
   scrollable?: boolean;
+  compact?: boolean;
 }
 
 const s = StyleSheet.create({
   row: {
     flexDirection: 'row',
     gap: Spacing.sm,
+  },
+  rowCompact: {
+    gap: 0,
   },
   scrollContent: {
     paddingRight: Spacing.lg,
@@ -24,6 +28,9 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  tabCompact: {
+    marginRight: -Spacing.xs,
+  },
 });
 
 export const FilterTabs: React.FC<FilterTabsProps> = ({
@@ -31,6 +38,7 @@ export const FilterTabs: React.FC<FilterTabsProps> = ({
   activeIndex,
   onTabPress,
   scrollable = false,
+  compact = false,
 }) => {
   const { colors } = useTheme();
 
@@ -57,7 +65,11 @@ export const FilterTabs: React.FC<FilterTabsProps> = ({
         <Pressable
           key={tab}
           onPress={() => onTabPress(index)}
-          style={[s.tab, active && d.tabActive]}
+          style={[
+            s.tab,
+            compact && index < tabs.length - 1 && s.tabCompact,
+            active && d.tabActive,
+          ]}
           accessibilityRole="tab"
           accessibilityLabel={tab}
           accessibilityState={{ selected: active }}
@@ -68,7 +80,7 @@ export const FilterTabs: React.FC<FilterTabsProps> = ({
         </Pressable>
       );
     },
-    [activeIndex, onTabPress, d],
+    [activeIndex, compact, onTabPress, tabs.length, d],
   );
 
   if (scrollable) {
@@ -76,7 +88,7 @@ export const FilterTabs: React.FC<FilterTabsProps> = ({
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={[s.row, s.scrollContent]}
+        contentContainerStyle={[s.row, compact && s.rowCompact, s.scrollContent]}
         accessibilityRole="tablist"
       >
         {tabs.map(renderTab)}
@@ -85,7 +97,7 @@ export const FilterTabs: React.FC<FilterTabsProps> = ({
   }
 
   return (
-    <View style={s.row} accessibilityRole="tablist">
+    <View style={[s.row, compact && s.rowCompact]} accessibilityRole="tablist">
       {tabs.map(renderTab)}
     </View>
   );

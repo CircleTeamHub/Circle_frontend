@@ -89,6 +89,7 @@ function loadDispatcher(storeOverrides = {}) {
     // 和「移除之前就在途、之后才落地的旧快照」。
     conversationsSnapshotSeq: 0,
     cleared: [],
+    clearedUnread: [],
     burnDurations: [],
     sentryReports: [],
     ...storeOverrides,
@@ -142,8 +143,8 @@ function loadDispatcher(storeOverrides = {}) {
     setActiveConversationId: (id) => {
       state.activeConversationId = id;
     },
-    clearConversationLocal: (conversationId) => {
-      state.cleared.push(conversationId);
+    clearConversationLocal: (conversationId, height) => {
+      state.cleared.push({ conversationId, height });
     },
     applyBurnDuration: (conversationId, seconds) => {
       state.burnDurations.push({ conversationId, seconds });
@@ -246,6 +247,15 @@ function loadDispatcher(storeOverrides = {}) {
         },
       };
     }
+    if (request === '@/features/messages/store/use-local-unread-store') {
+      return {
+        useLocalUnreadStore: {
+          getState: () => ({
+            clearUnread: (conversationId) => state.clearedUnread.push(conversationId),
+          }),
+        },
+      };
+    }
     if (request === './socket-manager') {
       return { reportChatDelivered: (cid, h) => state.deliveredReports.push({ cid, h }) };
     }
@@ -291,6 +301,28 @@ test('a well-formed chat:msg reaches the store', () => {
   const { socket, state } = loadDispatcher();
   socket.emit('chat:msg', dto());
   assert.equal(state.ingested.length, 1);
+});
+
+test('chat:history_cleared removes the direct timeline and local unread override', () => {
+  const { socket, state } = loadDispatcher();
+  socket.emit('chat:history_cleared', {
+    conversationId: 'c1',
+    clearedBeforeHeight: 42,
+    clearedBy: 'peer',
+  });
+  assert.deepEqual(state.cleared, [{ conversationId: 'c1', height: 42 }]);
+  assert.deepEqual(state.clearedUnread, ['c1']);
+});
+
+test('malformed chat:history_cleared payloads cannot clear local data', () => {
+  const { socket, state } = loadDispatcher();
+  socket.emit('chat:history_cleared', {
+    conversationId: 'c1',
+    clearedBeforeHeight: Number.POSITIVE_INFINITY,
+    clearedBy: 'peer',
+  });
+  assert.equal(state.cleared.length, 0);
+  assert.equal(state.clearedUnread.length, 0);
 });
 
 test('malformed payloads never reach the store', () => {
@@ -695,7 +727,9 @@ test('chat:conversation removed collapses the conversation and alerts only when 
   assert.deepEqual(state.alerts, ['im.conversation.removedFromGroup']);
   // 正开着的会话要连时间线一起收走:只摘列表行的话,被移出的人还能继续
   // 翻聊天记录、继续按发送。
-  assert.deepEqual(state.cleared, ['c1']);
+  assert.deepEqual(state.cleared, [
+    { conversationId: 'c1', height: null },
+  ]);
   assert.equal(state.activeConversationId, null);
 
   // 防复活:被移除会话的迟到广播既不入库也不触发补拉。

@@ -78,6 +78,19 @@ const s = StyleSheet.create({
     minHeight: 80,
     justifyContent: 'center',
   },
+  quickActions: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+  },
+  quickAction: {
+    flex: 1,
+    height: 48,
+    borderRadius: Radius.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+  },
 });
 
 function getDisplayName(user: PublicUser) {
@@ -125,6 +138,16 @@ export default function AddFriendScreen() {
         color: colors.textSecondary,
         ...Typography.bodyRegular,
       },
+      quickAction: {
+        backgroundColor: colors.surface,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: colors.surfaceBorder,
+      },
+      quickActionText: {
+        color: colors.text,
+        ...Typography.bodyRegular,
+        fontWeight: '600' as const,
+      },
       resultName: {
         color: colors.text,
         ...Typography.body,
@@ -171,6 +194,15 @@ export default function AddFriendScreen() {
     );
   }, [result, router, scope]);
 
+  // 微信「添加朋友」页同款双入口:出示我的名片码 / 扫对方的码。
+  const handleOpenMyQr = useCallback(() => {
+    router.push({ pathname: '/qr-code', params: { type: 'user' } });
+  }, [router]);
+
+  const handleOpenScan = useCallback(() => {
+    router.push('/(tabs)/messages/scan');
+  }, [router]);
+
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader
@@ -215,6 +247,29 @@ export default function AddFriendScreen() {
                 {t('common.search', { defaultValue: '搜索' })}
               </Text>
             )}
+          </Pressable>
+        </View>
+
+        <View style={s.quickActions}>
+          <Pressable
+            style={[s.quickAction, d.quickAction]}
+            onPress={handleOpenMyQr}
+            accessibilityRole="button"
+          >
+            <Ionicons name="qr-code-outline" size={20} color={colors.primary} />
+            <Text style={d.quickActionText}>
+              {t('qr.myQrEntry', { defaultValue: '我的二维码' })}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[s.quickAction, d.quickAction]}
+            onPress={handleOpenScan}
+            accessibilityRole="button"
+          >
+            <Ionicons name="scan-outline" size={20} color={colors.primary} />
+            <Text style={d.quickActionText}>
+              {t('messages.scan', { defaultValue: '扫一扫' })}
+            </Text>
           </Pressable>
         </View>
 

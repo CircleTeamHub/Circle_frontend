@@ -64,12 +64,18 @@ function text(value: unknown) {
 
 function routeParam(route: Href, key: string) {
   if (typeof route === 'string') return '';
-  const value = route.params?.[key];
+  // 先坍成普通 Record 再索引:直接在 Href 巨型联合的 params 上做索引表达式,
+  // 路由每多几条就可能再次触发 TS2590(联合过大),与 scan-result.ts 同款规避。
+  const params = route.params as Record<string, unknown> | undefined;
+  const value = params?.[key];
   return typeof value === 'string' ? value : '';
 }
 
 export function isAlreadyOnPushTarget(pathname: string, route: Href) {
-  const target = typeof route === 'string' ? route : route.pathname;
+  const target =
+    typeof route === 'string'
+      ? route
+      : (route as { pathname: string }).pathname;
   if (target === '/(tabs)/messages') return pathname === '/messages';
   if (target === '/(tabs)/contacts/new-friends') {
     return pathname === '/contacts/new-friends';
