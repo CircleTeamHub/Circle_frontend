@@ -502,9 +502,9 @@ test('NoteDetailScreen follows the divider + icon-chip section design', () => {
   assert.match(detail, /renderSectionHeader\(\s*'text-outline'/);
   assert.doesNotMatch(detail, /sectionCard:/);
 
-  // 来源名片：主色浅底的纯标识条（不再是按钮）。跳转动作全部移到右下角悬浮列，
-  // 所以原来那颗 primaryDeep 的"查看原消息"胶囊已删除。
-  assert.match(detail, /sourceCard: \{ backgroundColor: colors\.primaryLight \}/);
+  // 来源卡片整块从正文移除：来源与下载都收进右下角悬浮列，
+  // 原来的浅底卡片与 primaryDeep CTA 胶囊一并删除。
+  assert.doesNotMatch(detail, /sourceCard/);
   assert.doesNotMatch(detail, /sourceBtn:/);
   // 悬浮钮用不透明 surface 底 + 细边，压在图片上也不透字。
   assert.match(detail, /floatingBtn: \{\s*backgroundColor: colors\.surface/);

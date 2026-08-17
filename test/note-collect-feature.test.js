@@ -37,26 +37,24 @@ test('chat collect action routes note cards to collectNote instead of collection
 
 // ── 详情页来源名片：群名片 / 用户名片 + 跳回聊天定位 ─────────────────────────
 
-test('NoteDetailScreen renders a source card and jumps back to the sharing message', () => {
+test('NoteDetailScreen 的来源入口只剩悬浮列，正文不再有来源卡片', () => {
   const src = read('src/features/notes/screens/NoteDetailScreen.tsx');
 
-  // 群聊 → 群名片（附分享人）；私聊 → 对方名片。
   assert.match(src, /collectedFrom/);
   assert.match(src, /conversationType === 'group'/);
-  assert.match(src, /isGroup \? from\.group : from\.sender/);
-  assert.match(src, /sourceGroupLabel/);
-  assert.match(src, /sourcePrivateLabel/);
-  assert.match(src, /sourceSharedBy/);
   // 会话入**当前所在** tab 栈（笔记多挂 profile 下），返回时回到这张笔记而不是
   // IM 首页；写死 'messages' 会把聊天页推进消息栈，返回就串栈了。
   assert.match(src, /getChatDetailHref\(\s*scope/);
   assert.doesNotMatch(src, /getChatDetailHref\(\s*'messages'/);
   assert.match(src, /getUserProfileScopeFromSegments\(segments\)/);
   assert.match(src, /from\.clientMsgID/);
-  // 来源卡片只作标识，不再是按钮；跳转全部移到右下角悬浮列。
+  // 来源卡片整块删除（连同 CTA 胶囊与它的文案/样式），来源只在悬浮列露出。
   assert.doesNotMatch(src, /sourceLocate/);
-  // 快照缺关键字段时整卡不渲染，避免点了跳不动。
+  assert.doesNotMatch(src, /sourceCard/);
+  assert.doesNotMatch(src, /sourceGroupLabel|sourcePrivateLabel|sourceSharedBy/);
+  // 快照缺关键字段、或 sender/group 都取不到时整组不渲染，避免点了跳不动。
   assert.match(src, /if \(!from\?\.conversationID \|\| !from\.clientMsgID\) return null/);
+  assert.match(src, /if \(!sender && !group\) return null/);
 });
 
 test('the source card is private to the note owner and never rides along on shares', () => {
@@ -81,12 +79,15 @@ test('NoteCard shows the collect source on list rows', () => {
 test('note source i18n keys exist across all five locales', () => {
   for (const lng of ['zh', 'en', 'ja', 'ko', 'es']) {
     const json = JSON.parse(read(`src/i18n/locales/${lng}.json`));
-    assert.equal(typeof json.notes.detail.sourceGroupLabel, 'string', `${lng} sourceGroupLabel`);
-    assert.equal(typeof json.notes.detail.sourcePrivateLabel, 'string', `${lng} sourcePrivateLabel`);
-    assert.equal(typeof json.notes.detail.sourceSharedBy, 'string', `${lng} sourceSharedBy`);
-    // sourceLocate（「查看原消息」）随卡片按钮一起删除 —— 跳转移到悬浮列后
-    // 这个 key 已无引用，留着就是死翻译。
-    assert.equal(json.notes.detail.sourceLocate, undefined, `${lng} 残留 sourceLocate`);
+    // 来源卡片删除后，卡片专用的四个 key 全部无引用 —— 留着就是死翻译。
+    for (const dead of [
+      'sourceLocate',
+      'sourceGroupLabel',
+      'sourcePrivateLabel',
+      'sourceSharedBy',
+    ]) {
+      assert.equal(json.notes.detail[dead], undefined, `${lng} 残留 ${dead}`);
+    }
     assert.equal(typeof json.notes.list.fromSource, 'string', `${lng} fromSource`);
     assert.equal(
       typeof json.chat.messageActions.noteCollected,
@@ -158,14 +159,21 @@ test('来源按钮进聊天走当前 tab 栈，群按钮不再带气泡图标', 
   assert.doesNotMatch(card, /chatbubbles-outline/);
 });
 
-test('笔记详情右下角悬浮列：私聊分享者 / 回群定位 / 存 PDF', () => {
+test('笔记详情右下角悬浮列：私聊分享者 / 回群定位 / 下载', () => {
   const src = read('src/features/notes/screens/NoteDetailScreen.tsx');
 
   assert.match(src, /floatingDock/);
   // 三个动作各自独立，不再共用一个「查看原消息」跳转。
   assert.match(src, /const handleChatWithSender = useCallback/);
   assert.match(src, /const handleOpenGroupSource = useCallback/);
-  assert.match(src, /onPress=\{\(\) => void handleExport\('PDF'\)\}/);
+  // 下载入口整颗从顶栏移到悬浮列：仍是打开下载菜单，四种导出原样复用，
+  // 顶栏不再留第二个下载按钮。
+  assert.match(src, /onPress=\{\(\) => setDownloadMenuVisible\(true\)\}/);
+  assert.match(src, /notes\.actions\.download/);
+  assert.doesNotMatch(
+    src,
+    /headerIconBtn[\s\S]{0,200}?setDownloadMenuVisible\(true\)/,
+  );
 
   // 私聊按钮永远跳私聊；群来源时原消息在群里，私聊不带定位参数。
   assert.match(src, /isGroup \? undefined : from\.conversationID/);

@@ -763,7 +763,8 @@
       "remark": "メモ",
       "editNote": "ノートを編集",
       "editGroups": "グループを編集",
-      "delete": "削除"
+      "delete": "削除",
+      "download": "ダウンロード"
     },
     "alerts": {
       "deleteFailedTitle": "削除に失敗しました",
@@ -807,9 +808,6 @@
       "downloadVideos": "動画をダウンロード",
       "downloadLongImage": "長い画像を生成",
       "downloadPdf": "PDFをダウンロード",
-      "sourceGroupLabel": "グループチャットから",
-      "sourcePrivateLabel": "個人チャットから",
-      "sourceSharedBy": "{{name}}さんがシェア",
       "chatWithSender": "{{name}} とチャット",
       "openGroupSource": "グループ「{{name}}」で元のメッセージを見る"
     },

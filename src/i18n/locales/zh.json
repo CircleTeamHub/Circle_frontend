@@ -2253,7 +2253,8 @@
       "remark": "备注",
       "editNote": "编辑笔记",
       "editGroups": "编辑分组",
-      "delete": "删除"
+      "delete": "删除",
+      "download": "下载"
     },
     "alerts": {
       "deleteFailedTitle": "删除失败",
@@ -2297,9 +2298,6 @@
       "downloadVideos": "下载视频",
       "downloadLongImage": "生成长图",
       "downloadPdf": "下载PDF",
-      "sourceGroupLabel": "来自群聊",
-      "sourcePrivateLabel": "来自私聊",
-      "sourceSharedBy": "{{name}} 分享",
       "chatWithSender": "和 {{name}} 私聊",
       "openGroupSource": "在群聊「{{name}}」中查看原消息"
     },

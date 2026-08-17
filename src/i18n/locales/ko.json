@@ -763,7 +763,8 @@
       "remark": "메모",
       "editNote": "노트 편집",
       "editGroups": "그룹 편집",
-      "delete": "삭제"
+      "delete": "삭제",
+      "download": "다운로드"
     },
     "alerts": {
       "deleteFailedTitle": "삭제 실패",
@@ -807,9 +808,6 @@
       "downloadVideos": "동영상 다운로드",
       "downloadLongImage": "롱 이미지 생성",
       "downloadPdf": "PDF 다운로드",
-      "sourceGroupLabel": "그룹 채팅에서",
-      "sourcePrivateLabel": "개인 채팅에서",
-      "sourceSharedBy": "{{name}}님이 공유",
       "chatWithSender": "{{name}}님과 대화",
       "openGroupSource": "그룹 \"{{name}}\"에서 원본 메시지 보기"
     },

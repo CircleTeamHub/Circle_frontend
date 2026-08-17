@@ -210,36 +210,22 @@ export default function NoteDetailScreen() {
     return Boolean(resolvedOwnerId && currentUserId === resolvedOwnerId);
   }, [currentUserId, note, ownerId]);
 
-  // 收藏来的笔记 → 来源名片：群聊展示群名片（附分享人），私聊展示对方名片。
-  // 名片是收藏者的私人定位标记：转发出去的笔记不带它，别人打开也不渲染
-  // （后端只对笔记主人返回 collectedFrom，这里再按归属兜一层）。
-  // 后端快照缺关键字段（历史坏数据）时整卡不渲染，避免点了跳不动。
+  // 收藏来的笔记 → 来源入口（右下角悬浮列的头像钮）。来源是收藏者的私人定位
+  // 标记：转发出去的笔记不带它，别人打开也不渲染（后端只对笔记主人返回
+  // collectedFrom，这里再按归属兜一层）。
+  // 后端快照缺关键字段（历史坏数据）时整组不渲染，避免点了跳不动。
   const collectedSource = useMemo(() => {
     if (!canEditNote) return null;
     const from = note?.collectedFrom;
     if (!from?.conversationID || !from.clientMsgID) return null;
     const isGroup = from.conversationType === 'group';
-    const peer = isGroup ? from.group : from.sender;
-    if (!peer?.id || !peer.name) return null;
-    const subtitle = isGroup
-      ? [
-          t('notes.detail.sourceGroupLabel', { defaultValue: '来自群聊' }),
-          from.sender?.name
-            ? t('notes.detail.sourceSharedBy', {
-                defaultValue: '{{name}} 分享',
-                name: from.sender.name,
-              })
-            : null,
-        ]
-          .filter(Boolean)
-          .join(' · ')
-      : t('notes.detail.sourcePrivateLabel', { defaultValue: '来自私聊' });
     // sender / group 分开暴露：悬浮按钮组要「私聊分享者」和「回群定位」两个
-    // 独立动作。sender 可能缺（历史快照只记了群），各按钮自行判空。
+    // 独立动作。任一方可能缺（历史快照只记了群），各按钮自行判空。
     const sender = from.sender?.id && from.sender.name ? from.sender : null;
     const group = isGroup && from.group?.id && from.group.name ? from.group : null;
-    return { isGroup, peer, sender, group, subtitle, from };
-  }, [canEditNote, note?.collectedFrom, t]);
+    if (!sender && !group) return null;
+    return { isGroup, sender, group, from };
+  }, [canEditNote, note?.collectedFrom]);
 
   // 聊天页一律入**当前所在** tab 栈（笔记多挂在 profile 下），返回时回到这张
   // 笔记而不是 IM 首页。
@@ -293,7 +279,6 @@ export default function NoteDetailScreen() {
         borderColor: colors.surfaceBorder,
       },
       // 来源名片：主色浅底的"提示条"，CTA 用深一档的实心靛蓝更压得住
-      sourceCard: { backgroundColor: colors.primaryLight },
       // 悬浮钮用不透明的 surface 底，压在正文/图片上也不透字。
       floatingBtn: {
         backgroundColor: colors.surface,
@@ -379,13 +364,6 @@ export default function NoteDetailScreen() {
           >
             <Ionicons name="share-outline" size={18} color={colors.text} />
           </Pressable>
-          <Pressable
-            style={[s.headerIconBtn, d.iconBtn]}
-            onPress={() => setDownloadMenuVisible(true)}
-            hitSlop={4}
-          >
-            <Ionicons name="download-outline" size={18} color={colors.text} />
-          </Pressable>
           {canEditNote ? (
             <Pressable style={[s.headerIconBtn, d.iconBtn]} onPress={handleEdit} hitSlop={4}>
               <Ionicons name="pencil-outline" size={17} color={colors.text} />
@@ -417,37 +395,7 @@ export default function NoteDetailScreen() {
           ))}
         </View>
 
-        {/* 收藏来源名片：主色浅底提示条，点击/CTA 跳回聊天定位到分享消息 */}
-        {collectedSource ? (
-          <View style={[s.sourceCard, d.sourceCard]}>
-            {collectedSource.peer.faceURL ? (
-              <Image
-                source={{ uri: collectedSource.peer.faceURL }}
-                style={s.sourceAvatar}
-                contentFit="cover"
-              />
-            ) : (
-              <View style={[s.sourceAvatar, { backgroundColor: colors.primary }]}>
-                <Ionicons
-                  name={collectedSource.isGroup ? 'people' : 'person'}
-                  size={20}
-                  color={colors.white}
-                />
-              </View>
-            )}
-            <View style={s.sourceCardText}>
-              <Text
-                style={[s.sourceCardName, { color: colors.text }]}
-                numberOfLines={1}
-              >
-                {collectedSource.peer.name}
-              </Text>
-              <Text style={[s.sourceSubtitle, d.meta]} numberOfLines={1}>
-                {`↳ ${collectedSource.subtitle}`}
-              </Text>
-            </View>
-          </View>
-        ) : null}
+        {/* 来源不再占正文：分享者/群都收进右下角悬浮列，点头像即跳。 */}
 
         {sections ? (
           <>
@@ -599,19 +547,20 @@ export default function NoteDetailScreen() {
             </Pressable>
           ) : null}
 
+          {/* 下载入口从顶栏移到这里：菜单内四种导出（图片/视频/长图/PDF）原样复用。 */}
           <Pressable
-            style={[s.floatingBtn, d.floatingBtn, exporting === 'PDF' && s.floatingBtnBusy]}
-            onPress={() => void handleExport('PDF')}
+            style={[s.floatingBtn, d.floatingBtn, exporting !== null && s.floatingBtnBusy]}
+            onPress={() => setDownloadMenuVisible(true)}
             disabled={exporting !== null}
             accessibilityRole="button"
-            accessibilityLabel={t('notes.detail.downloadPdf', {
-              defaultValue: '下载PDF',
+            accessibilityLabel={t('notes.actions.download', {
+              defaultValue: '下载',
             })}
           >
-            {exporting === 'PDF' ? (
+            {exporting !== null ? (
               <ActivityIndicator size="small" color={colors.primary} />
             ) : (
-              <Ionicons name="document-text-outline" size={20} color={colors.text} />
+              <Ionicons name="download-outline" size={20} color={colors.text} />
             )}
           </Pressable>
         </View>
@@ -724,26 +673,6 @@ const s = StyleSheet.create({
   groupTagText: { ...Typography.small, fontWeight: '600' },
   bodyText: { ...Typography.bodyRegular, fontSize: 15, lineHeight: 26 },
   emptyHint: { ...Typography.caption, fontWeight: '400' },
-  // 来源名片（设计稿）：主色浅底 + 方圆角头像 + 实心主色 CTA 胶囊
-  sourceCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm + 4,
-    borderRadius: Radius.lg,
-    padding: Spacing.sm + 4,
-    marginBottom: Spacing.lg,
-  },
-  sourceAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  sourceCardText: { flex: 1, gap: 2 },
-  sourceCardName: { ...Typography.body, fontWeight: '600' },
-  sourceSubtitle: { ...Typography.small },
   // 右下角悬浮列：竖排圆钮，绝对定位不占正文流。
   floatingDock: {
     position: 'absolute',

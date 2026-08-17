@@ -764,7 +764,8 @@
       "remark": "Comentario",
       "editNote": "Editar nota",
       "editGroups": "Editar grupos",
-      "delete": "Eliminar"
+      "delete": "Eliminar",
+      "download": "Descargar"
     },
     "alerts": {
       "deleteFailedTitle": "Error al eliminar",
@@ -808,9 +809,6 @@
       "downloadVideos": "Descargar videos",
       "downloadLongImage": "Generar imagen larga",
       "downloadPdf": "Descargar PDF",
-      "sourceGroupLabel": "De un chat de grupo",
-      "sourcePrivateLabel": "De un chat privado",
-      "sourceSharedBy": "Compartida por {{name}}",
       "chatWithSender": "Chatear con {{name}}",
       "openGroupSource": "Ver el mensaje original en \"{{name}}\""
     },

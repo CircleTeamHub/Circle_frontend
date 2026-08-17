@@ -2256,7 +2256,8 @@
       "remark": "Remark",
       "editNote": "Edit note",
       "editGroups": "Edit groups",
-      "delete": "Delete"
+      "delete": "Delete",
+      "download": "Download"
     },
     "alerts": {
       "deleteFailedTitle": "Failed to delete",
@@ -2300,9 +2301,6 @@
       "downloadVideos": "Download videos",
       "downloadLongImage": "Generate long image",
       "downloadPdf": "Download PDF",
-      "sourceGroupLabel": "From group chat",
-      "sourcePrivateLabel": "From private chat",
-      "sourceSharedBy": "Shared by {{name}}",
       "chatWithSender": "Chat with {{name}}",
       "openGroupSource": "View the original message in \"{{name}}\""
     },
