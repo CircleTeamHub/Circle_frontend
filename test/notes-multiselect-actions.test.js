@@ -252,3 +252,29 @@ test('lifecycle copy: unlisted never auto-deletes, recycle bin purges after 30 d
   assert.match(unlistedScreen, /relistNote/);
   assert.match(recycleScreen, /restoreNote/);
 });
+
+test('collecting a note offers 查看 that locates it in the notes list', () => {
+  const chat = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = read('src/features/notes/screens/NotesScreen.tsx');
+  const card = read('src/features/notes/components/NoteCard.tsx');
+
+  // 添加成功的提示给两个按钮：查看(定位) + 确认。
+  assert.match(chat, /common\.view/);
+  assert.match(chat, /common\.confirm/);
+  // 「查看」跳的是我的笔记**列表**并带定位参数，不是直接开详情页。
+  assert.match(chat, /pathname: '\/\(tabs\)\/profile\/notes'/);
+  assert.match(chat, /params: \{ highlightNoteId: copiedNoteId \}/);
+
+  // 列表侧：复位到「全部」+ 清搜索（目标可能被 tab/搜索滤掉），滚动定位并高亮。
+  assert.match(screen, /useLocalSearchParams<\{ highlightNoteId\?: string \}>/);
+  assert.match(screen, /setActiveTab\('all'\)/);
+  assert.match(screen, /scrollToIndex\(/);
+  assert.match(screen, /onScrollToIndexFailed=\{handleScrollToIndexFailed\}/);
+  // 同一个 id 只定位一次；且消费后把参数从路由摘掉，
+  // 否则从详情页返回列表会被上一次的 id 再拽一遍。
+  assert.match(screen, /handledHighlightRef/);
+  assert.match(screen, /router\.setParams\(\{ highlightNoteId: undefined \}\)/);
+  // 高亮是临时态，会自动消退。
+  assert.match(screen, /setHighlightedNoteId\(null\)/);
+  assert.match(card, /highlighted \? \{ backgroundColor: colors\.primaryLight \}/);
+});

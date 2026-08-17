@@ -196,7 +196,11 @@ export default function NotesScreen() {
     setActiveTab('all');
     setSearch('');
     setHighlightedNoteId(highlightNoteId);
-  }, [highlightNoteId, notes]);
+    // 消费完就把参数从路由上摘掉：留着的话，从详情页返回本列表时这个
+    // effect 会拿着旧 id 再跑一次（handledHighlightRef 只挡得住同一个 id，
+    // 挡不住「跳过 A 之后再跳 B、返回时又被 A 拽回去」）。
+    router.setParams({ highlightNoteId: undefined });
+  }, [highlightNoteId, notes, router]);
 
   useEffect(() => {
     if (!highlightedNoteId) return;
