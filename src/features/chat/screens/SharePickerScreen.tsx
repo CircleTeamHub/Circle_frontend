@@ -98,6 +98,64 @@ function getQuickReplyPhrases(): readonly string[] {
   );
 }
 
+interface NoteOptionChipProps {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  /** 该项的品牌色（取自色板 token）：选中态的底/边/字/对号都用它 */
+  accent: string;
+  checked: boolean;
+  onToggle: () => void;
+}
+
+/** 底栏「发什么」单个开关：图标 + 标签 + 对号。四个分区与「全部」共用。 */
+function NoteOptionChip({
+  icon,
+  label,
+  accent,
+  checked,
+  onToggle,
+}: NoteOptionChipProps) {
+  const { colors } = useTheme();
+
+  return (
+    <Pressable
+      style={[
+        s.optionChip,
+        {
+          borderColor: checked ? accent : colors.surfaceBorder,
+          backgroundColor: checked ? withAlpha(accent, 0.12) : colors.background,
+        },
+      ]}
+      onPress={onToggle}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked }}
+    >
+      <Ionicons
+        name={icon}
+        size={20}
+        color={checked ? accent : colors.textSecondary}
+      />
+      <Text
+        style={[
+          s.optionChipLabel,
+          checked ? s.optionChipLabelOn : null,
+          { color: checked ? accent : colors.textSecondary },
+        ]}
+        numberOfLines={1}
+      >
+        {label}
+      </Text>
+      {/* 对号常驻占位：选中实心、未选空心，两态等高，切换时行高不跳。
+          只靠配色区分选中对色觉障碍用户不友好，这里补一个形状信号。 */}
+      <Ionicons
+        name={checked ? 'checkmark-circle' : 'ellipse-outline'}
+        size={15}
+        color={checked ? accent : colors.surfaceBorder}
+      />
+    </Pressable>
+  );
+}
+
 export default function SharePickerScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -473,88 +531,32 @@ export default function SharePickerScreen() {
             </Text>
           ) : null}
           <View style={s.optionChipsRow}>
-            {NOTE_OPTION_CHIPS.map((chip) => {
-              const checked = sendOptions[chip.key];
-              const accent = colors[chip.accent];
-              return (
-                <Pressable
-                  key={chip.key}
-                  style={[
-                    s.optionChip,
-                    {
-                      borderColor: checked ? accent : colors.surfaceBorder,
-                      backgroundColor: checked
-                        ? withAlpha(accent, 0.12)
-                        : colors.background,
-                    },
-                  ]}
-                  onPress={() =>
-                    setSendOptions((prev) => ({
-                      ...prev,
-                      [chip.key]: !prev[chip.key],
-                    }))
-                  }
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked }}
-                >
-                  <Ionicons
-                    name={chip.icon}
-                    size={20}
-                    color={checked ? accent : colors.textSecondary}
-                  />
-                  <Text
-                    style={[
-                      s.optionChipLabel,
-                      checked ? s.optionChipLabelOn : null,
-                      { color: checked ? accent : colors.textSecondary },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {i18n.t(chip.labelKey, { defaultValue: chip.defaultLabel })}
-                  </Text>
-                </Pressable>
-              );
-            })}
-            {(() => {
-              const allOn = isAllNoteSendOptions(sendOptions);
-              const accent = colors[NOTE_OPTION_ALL_ACCENT];
-              return (
-                <Pressable
-                  style={[
-                    s.optionChip,
-                    {
-                      borderColor: allOn ? accent : colors.surfaceBorder,
-                      backgroundColor: allOn
-                        ? withAlpha(accent, 0.12)
-                        : colors.background,
-                    },
-                  ]}
-                  onPress={() =>
-                    setSendOptions((prev) =>
-                      withAllNoteSendOptions(prev, !isAllNoteSendOptions(prev)),
-                    )
-                  }
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: allOn }}
-                >
-                  <Ionicons
-                    name="checkmark-done-outline"
-                    size={20}
-                    color={allOn ? accent : colors.textSecondary}
-                  />
-                  <Text
-                    style={[
-                      s.optionChipLabel,
-                      allOn ? s.optionChipLabelOn : null,
-                      { color: allOn ? accent : colors.textSecondary },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {i18n.t('share.noteBatch.optionAll', { defaultValue: '全部' })}
-                  </Text>
-                </Pressable>
-              );
-            })()}
+            {NOTE_OPTION_CHIPS.map((chip) => (
+              <NoteOptionChip
+                key={chip.key}
+                icon={chip.icon}
+                label={i18n.t(chip.labelKey, { defaultValue: chip.defaultLabel })}
+                accent={colors[chip.accent]}
+                checked={sendOptions[chip.key]}
+                onToggle={() =>
+                  setSendOptions((prev) => ({
+                    ...prev,
+                    [chip.key]: !prev[chip.key],
+                  }))
+                }
+              />
+            ))}
+            <NoteOptionChip
+              icon="checkmark-done-outline"
+              label={i18n.t('share.noteBatch.optionAll', { defaultValue: '全部' })}
+              accent={colors[NOTE_OPTION_ALL_ACCENT]}
+              checked={isAllNoteSendOptions(sendOptions)}
+              onToggle={() =>
+                setSendOptions((prev) =>
+                  withAllNoteSendOptions(prev, !isAllNoteSendOptions(prev)),
+                )
+              }
+            />
           </View>
           <Pressable
             style={[
@@ -641,7 +643,7 @@ const s = StyleSheet.create({
   // 底栏最高态(上限提示行 + 常驻选项行 + 发送键 + 34pt 刘海 inset)约 175pt,
   // 再留出大字号无障碍余量。
   noteListContentWithBar: {
-    paddingBottom: 208,
+    paddingBottom: 226,
   },
   noteBar: {
     position: 'absolute',

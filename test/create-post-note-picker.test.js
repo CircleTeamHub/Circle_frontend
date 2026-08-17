@@ -96,6 +96,9 @@ test('share note picker sends through the inline always-visible options row', ()
     assert.match(src, new RegExp(`share\\.noteBatch\\.${key}`));
   }
   assert.match(src, /NOTE_OPTION_CHIPS/);
+  // 五个开关共用一个 chip 组件（含常驻对号：选中实心/未选空心），不许再复制粘贴。
+  assert.match(src, /function NoteOptionChip/);
+  assert.match(src, /checked \? 'checkmark-circle' : 'ellipse-outline'/);
   assert.doesNotMatch(src, /BottomSheetModal/);
   assert.doesNotMatch(src, /optionsOpen/);
   assert.match(src, /withAllNoteSendOptions/);
