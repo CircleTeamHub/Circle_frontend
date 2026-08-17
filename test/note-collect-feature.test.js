@@ -223,3 +223,26 @@ test('分享 sheet 支持就地搜索会话', () => {
     assert.equal(typeof json.notes.shareToChat.noMatch, 'string', `${lng} noMatch`);
   }
 });
+
+test('群来源收藏必须带上分享人头像', () => {
+  const src = read('src/features/chat/utils/message-collection.ts');
+
+  // 漏传第三个参数 faceURL 会让群来源的分享人永远存成无头像快照，
+  // 而私聊来源有头像 —— 同一个人在笔记列表里两种样子（曾静默很久）。
+  assert.match(
+    src,
+    /buildPeer\(\s*message\.senderID,\s*message\.senderName,\s*message\.senderAvatarUrl,?\s*\)/,
+  );
+  // 私聊侧一直是带头像的，别回退。
+  assert.match(
+    src,
+    /buildPeer\(\s*context\.sourceID,\s*context\.conversationTitle,\s*context\.conversationAvatarUrl,?\s*\)/,
+  );
+});
+
+test('笔记卡片的群来源用群头像组件', () => {
+  const src = read('src/features/notes/components/NoteCard.tsx');
+
+  // 群没头像时该回落成群组渐变图，不是通用 Avatar 的灰色人形（「人」的语义）。
+  assert.match(src, /<GroupChatAvatar[\s\S]{0,120}?uri=\{groupChip\.faceURL \?\? null\}/);
+});

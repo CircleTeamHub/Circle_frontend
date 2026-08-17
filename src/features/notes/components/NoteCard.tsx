@@ -4,6 +4,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Avatar } from '@/components/ui/avatar';
+import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import type { NoteSummary } from '@/features/notes/types';
 import { buildNoteMeta } from '@/features/notes/utils/note-format';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -249,9 +250,11 @@ function NoteCardInner({
                 name: groupChip.name,
               })}
             >
-              <Avatar
+              {/* 群用群头像组件：无头像时回落成品牌渐变群组图，而不是
+                  通用 Avatar 的灰色人形（那是「人」的语义）。 */}
+              <GroupChatAvatar
                 size={20}
-                uri={groupChip.faceURL ?? undefined}
+                uri={groupChip.faceURL ?? null}
                 name={groupChip.name}
               />
               <Text
