@@ -2393,6 +2393,7 @@
     },
     "remarkSheet": {
       "title": "备注",
+      "batchTitle": "批量备注（{{count}} 条）",
       "placeholder": "输入备注，留空保存即清除",
       "saving": "保存中...",
       "save": "保存"
@@ -2401,15 +2402,15 @@
       "selectedCount": "已选 {{count}} 项",
       "selectAll": "全选",
       "clearAll": "取消全选",
-      "group": "分组",
-      "unlist": "下架",
-      "delete": "删除"
+      "next": "下一步"
     },
     "loadFailed": "笔记加载失败，请检查网络后重试",
     "shareToChat": {
       "title": "分享给好友或群聊",
       "confirmTitle": "发送笔记",
       "confirmMessage": "把「{{title}}」发送给 {{name}}？",
+      "confirmBatchMessage": "把 {{count}} 条笔记发送给 {{name}}？",
+      "partialFailed": "有 {{count}} 条笔记发送失败，请重试。",
       "sentTitle": "已发送",
       "sentMessage": "笔记已发送到聊天。",
       "failedTitle": "发送失败",

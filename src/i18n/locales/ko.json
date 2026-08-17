@@ -909,6 +909,7 @@
     },
     "remarkSheet": {
       "title": "메모",
+      "batchTitle": "일괄 메모({{count}}개)",
       "placeholder": "메모를 입력하세요. 비워서 저장하면 삭제됩니다.",
       "saving": "저장 중...",
       "save": "저장"
@@ -917,15 +918,15 @@
       "selectedCount": "{{count}}개 선택됨",
       "selectAll": "전체 선택",
       "clearAll": "선택 해제",
-      "group": "그룹",
-      "unlist": "내리기",
-      "delete": "삭제"
+      "next": "다음"
     },
     "loadFailed": "노트를 불러오지 못했어요. 네트워크 확인 후 다시 시도해 주세요",
     "shareToChat": {
       "title": "친구나 그룹에 공유",
       "confirmTitle": "노트 보내기",
       "confirmMessage": "“{{title}}”을(를) {{name}}에게 보낼까요？",
+      "confirmBatchMessage": "노트 {{count}}개를 {{name}}에게 보낼까요?",
+      "partialFailed": "노트 {{count}}개를 보내지 못했습니다. 다시 시도해 주세요.",
       "sentTitle": "보냈어요",
       "sentMessage": "노트를 채팅으로 보냈어요.",
       "failedTitle": "전송 실패",

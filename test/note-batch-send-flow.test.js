@@ -62,7 +62,8 @@ test('note remark editor saves through the remark API with the shared cap', () =
   assert.match(sheet, /REMARK_MAX_LENGTH = 200/);
   assert.match(sheet, /maxLength=\{REMARK_MAX_LENGTH\}/);
   assert.match(sheet, /trimmed\.length > 0 \? trimmed : null/);
-  assert.match(sheet, /setNoteRemark\(note\.id, next\)/);
+  // 单条与批量同路径：runNoteBatch 逐条 PATCH。
+  assert.match(sheet, /setNoteRemark\(id, next\)/);
   assert.match(api, /\/note\/\$\{id\}\/remark/);
 
   // 备注是主人私有标注:卡片上仅在有值时渲染。

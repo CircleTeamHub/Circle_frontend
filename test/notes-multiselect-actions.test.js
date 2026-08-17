@@ -29,18 +29,28 @@ test('NotesScreen wires multi-select: long-press/menu entry, select-all, prune o
   assert.match(src, /selected=\{selectedSet\.has\(item\.id\)\}/);
 });
 
-test('NotesScreen batch bar runs group/unlist/delete over the selection with confirm + settle', () => {
+test('NotesScreen selection bar is a single 下一步 that opens the batch actions sheet', () => {
   const src = read('src/features/notes/screens/NotesScreen.tsx');
 
-  assert.match(src, /handleBatchEditGroups/);
-  assert.match(src, /handleBatchUnlist/);
-  assert.match(src, /handleBatchDelete/);
-  assert.match(src, /notes\.selection\.group/);
-  assert.match(src, /notes\.selection\.unlist/);
-  assert.match(src, /notes\.selection\.delete/);
+  // 多选底栏收敛成一个「下一步」；动作全部收进与单选同款的 NoteActionsSheet 批量态。
+  assert.match(src, /notes\.selection\.next/);
+  assert.match(src, /setBatchSheetNotes\(selectedNotes\)/);
+  assert.match(src, /batchNotes=\{batchSheetNotes\}/);
+  assert.doesNotMatch(src, /notes\.selection\.group/);
+  assert.doesNotMatch(src, /notes\.selection\.unlist/);
+  assert.doesNotMatch(src, /notes\.selection\.delete/);
+
+  // 批量动作与单选一一对应：置顶/备注/编辑分组/分享/下架/删除。
+  assert.match(src, /onBatchPin=\{handleBatchPin\}/);
+  assert.match(src, /onBatchRemark=\{handleBatchRemark\}/);
+  assert.match(src, /onBatchEditGroups=\{handleBatchEditGroups\}/);
+  assert.match(src, /onBatchShare=\{handleBatchShare\}/);
+  assert.match(src, /onBatchUnlist=\{handleBatchUnlist\}/);
+  assert.match(src, /onBatchDelete=\{handleBatchDelete\}/);
 
   // 批量执行：并发限流 settle，部分失败保留选中并提示，全部成功退出多选。
   assert.match(src, /runNoteBatch\(/);
+  assert.match(src, /togglePinNote\(id, pinned\)/);
   assert.match(src, /notes\.alerts\.batchUnlistConfirm/);
   assert.match(src, /notes\.alerts\.batchDeleteConfirm/);
   assert.match(src, /notes\.alerts\.batchPartialFailed/);
@@ -50,6 +60,20 @@ test('NotesScreen batch bar runs group/unlist/delete over the selection with con
   assert.match(src, /handleDeleteNote/);
   assert.match(src, /deleteNote\(note\.id\)/);
   assert.match(src, /notes\.alerts\.deleteConfirm/);
+});
+
+test('NoteActionsSheet batch mode mirrors the single-note action set', () => {
+  const sheet = read('src/features/notes/components/NoteActionsSheet.tsx');
+
+  // 非空 batchNotes 即批量态；标题复用「已选 N 项」。
+  assert.match(sheet, /batchNotes/);
+  assert.match(sheet, /notes\.selection\.selectedCount/);
+  // 置顶按「是否全部已置顶」决定置顶/取消置顶；多选项在批量态没有意义。
+  assert.match(sheet, /every\(\(item\) => item\.pinned\)/);
+  assert.match(sheet, /onBatchPin/);
+  assert.doesNotMatch(sheet, /batch[\s\S]{0,400}onMultiSelect\(/);
+  // 编辑笔记只在恰好选中 1 条时出现（编辑器天然单条）。
+  assert.match(sheet, /batch\.length === 1/);
 });
 
 test('NoteCard renders selection state, owner remark, and tappable source chips', () => {
@@ -103,10 +127,29 @@ test('remark is wired end to end: PATCH api, sheet editor, in-place list update'
   assert.match(sheet, /maxLength=\{REMARK_MAX_LENGTH\}/);
   // 留空保存即清除（trim 后空串归一为 null）。
   assert.match(sheet, /trimmed\.length > 0 \? trimmed : null/);
+  // 单条与批量共用同一个弹层：notes[] 为目标集合，批量保存走并发限流 settle。
+  assert.match(sheet, /notes: NoteSummary\[\] \| null/);
+  assert.match(sheet, /runNoteBatch\(/);
+  assert.match(sheet, /setNoteRemark\(id, next\)/);
+  assert.match(sheet, /notes\.remarkSheet\.batchTitle/);
 
   assert.match(screen, /<NoteRemarkSheet/);
   assert.match(screen, /handleRemarkSaved/);
   assert.match(types, /remark\?: string \| null/);
+});
+
+test('ShareNoteSheet sends every selected note card to the chosen conversation', () => {
+  const sheet = read('src/features/notes/components/ShareNoteSheet.tsx');
+  const screen = read('src/features/notes/screens/NotesScreen.tsx');
+
+  // 单条与批量共用：payloads[] 逐条发卡，部分失败给计数提示。
+  assert.match(sheet, /payloads: NoteCardData\[\] \| null/);
+  assert.match(sheet, /for \(const payload of targets\)/);
+  assert.match(sheet, /notes\.shareToChat\.confirmBatchMessage/);
+  assert.match(sheet, /notes\.shareToChat\.partialFailed/);
+
+  assert.match(screen, /handleBatchShare/);
+  assert.match(screen, /buildNoteCardPayloadFromSummary/);
 });
 
 test('group picker replaces memberships for single and batch targets', () => {
@@ -119,9 +162,9 @@ test('group picker replaces memberships for single and batch targets', () => {
   assert.match(picker, /notes\.groupPicker\.batchHint/);
   assert.match(picker, /notes\.alerts\.saveMembershipsPartialFailed/);
 
-  // 单条（sheet 的「编辑分组」）与批量（底栏「分组」）共用同一个弹层。
+  // 单条（sheet 的「编辑分组」）与批量（批量 sheet 的「编辑分组」）共用同一个弹层。
   assert.match(screen, /setGroupPickerNotes\(\[note\]\)/);
-  assert.match(screen, /setGroupPickerNotes\(selectedNotes\)/);
+  assert.match(screen, /setGroupPickerNotes\(notes\)/);
   assert.match(screen, /<NoteGroupPickerSheet/);
 });
 
@@ -138,10 +181,11 @@ test('all five locales carry the new multi-select/remark/group-picker keys', () 
     ['notes', 'selection', 'selectedCount'],
     ['notes', 'selection', 'selectAll'],
     ['notes', 'selection', 'clearAll'],
-    ['notes', 'selection', 'group'],
-    ['notes', 'selection', 'unlist'],
-    ['notes', 'selection', 'delete'],
+    ['notes', 'selection', 'next'],
     ['notes', 'remarkSheet', 'title'],
+    ['notes', 'remarkSheet', 'batchTitle'],
+    ['notes', 'shareToChat', 'confirmBatchMessage'],
+    ['notes', 'shareToChat', 'partialFailed'],
     ['notes', 'remarkSheet', 'placeholder'],
     ['notes', 'remarkSheet', 'save'],
     ['notes', 'remarkSheet', 'saving'],

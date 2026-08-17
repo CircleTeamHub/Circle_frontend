@@ -2396,6 +2396,7 @@
     },
     "remarkSheet": {
       "title": "Remark",
+      "batchTitle": "Remark {{count}} notes",
       "placeholder": "Enter a remark; save empty to clear",
       "saving": "Saving...",
       "save": "Save"
@@ -2404,15 +2405,15 @@
       "selectedCount": "{{count}} selected",
       "selectAll": "Select all",
       "clearAll": "Deselect all",
-      "group": "Groups",
-      "unlist": "Unlist",
-      "delete": "Delete"
+      "next": "Next"
     },
     "loadFailed": "Couldn't load notes. Check your connection and try again",
     "shareToChat": {
       "title": "Share to a friend or group",
       "confirmTitle": "Send note",
       "confirmMessage": "Send “{{title}}” to {{name}}?",
+      "confirmBatchMessage": "Send {{count}} notes to {{name}}?",
+      "partialFailed": "{{count}} notes failed to send — please retry.",
       "sentTitle": "Sent",
       "sentMessage": "Note sent to the chat.",
       "failedTitle": "Send failed",

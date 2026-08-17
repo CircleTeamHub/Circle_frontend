@@ -906,6 +906,8 @@
       "title": "Compartir con un amigo o grupo",
       "confirmTitle": "Enviar nota",
       "confirmMessage": "¿Enviar «{{title}}» a {{name}}?",
+      "confirmBatchMessage": "¿Enviar {{count}} notas a {{name}}?",
+      "partialFailed": "No se pudieron enviar {{count}} notas; inténtalo de nuevo.",
       "sentTitle": "Enviada",
       "sentMessage": "Nota enviada al chat.",
       "failedTitle": "Error al enviar",
@@ -923,12 +925,11 @@
       "selectedCount": "{{count}} seleccionadas",
       "selectAll": "Seleccionar todo",
       "clearAll": "Anular selección",
-      "group": "Grupos",
-      "unlist": "Retirar",
-      "delete": "Eliminar"
+      "next": "Siguiente"
     },
     "remarkSheet": {
       "title": "Comentario",
+      "batchTitle": "Comentario en lote ({{count}} notas)",
       "placeholder": "Escribe un comentario; guarda vacío para borrarlo",
       "save": "Guardar",
       "saving": "Guardando..."

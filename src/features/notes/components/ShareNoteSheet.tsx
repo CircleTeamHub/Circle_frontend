@@ -21,8 +21,8 @@ import type { Conversation, NoteCardData } from '@/types';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 interface ShareNoteSheetProps {
-  /** 非空即打开；要分享的笔记卡片数据 */
-  payload: NoteCardData | null;
+  /** 非空数组即打开；要分享的笔记卡片数据（单条 = [payload]，多选分享传全部） */
+  payloads: NoteCardData[] | null;
   onClose: () => void;
 }
 
@@ -36,11 +36,12 @@ function getShareNoteSendErrorMessage(t: ReturnType<typeof useTranslation>['t'])
  * 分享笔记到聊天：选一个会话（好友或群聊），把笔记以卡片消息发过去，
  * 对方点卡片即可打开这条笔记。取代旧的系统分享面板 / 网页分享链接。
  */
-export function ShareNoteSheet({ payload, onClose }: ShareNoteSheetProps) {
+export function ShareNoteSheet({ payloads, onClose }: ShareNoteSheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
-  const visible = payload != null;
+  const targets = payloads && payloads.length > 0 ? payloads : null;
+  const visible = targets != null;
 
   const rawConversations = useChatStore((state) => state.conversations);
   const [loading, setLoading] = useState(false);
@@ -100,14 +101,22 @@ export function ShareNoteSheet({ payload, onClose }: ShareNoteSheetProps) {
 
   const send = useCallback(
     (conversation: Conversation) => {
-      if (!payload || inFlightRef.current) return;
+      if (!targets || inFlightRef.current) return;
+      const confirmMessage =
+        targets.length === 1
+          ? t('notes.shareToChat.confirmMessage', {
+              title: targets[0].title,
+              name: conversation.name,
+              defaultValue: `把「${targets[0].title}」发送给 ${conversation.name}？`,
+            })
+          : t('notes.shareToChat.confirmBatchMessage', {
+              count: targets.length,
+              name: conversation.name,
+              defaultValue: `把 ${targets.length} 条笔记发送给 ${conversation.name}？`,
+            });
       Alert.alert(
         t('notes.shareToChat.confirmTitle', { defaultValue: '发送笔记' }),
-        t('notes.shareToChat.confirmMessage', {
-          title: payload.title,
-          name: conversation.name,
-          defaultValue: `把「${payload.title}」发送给 ${conversation.name}？`,
-        }),
+        confirmMessage,
         [
           { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
           {
@@ -116,13 +125,23 @@ export function ShareNoteSheet({ payload, onClose }: ShareNoteSheetProps) {
               if (inFlightRef.current) return;
               inFlightRef.current = true;
               setSendingId(conversation.id);
-              void sendCardMessage({
-                conversationId: conversation.id,
-                type: 'note-card',
-                payload,
-              })
-                .then(() => {
-                  if (!mountedRef.current) return;
+              void (async () => {
+                // 逐条顺序发卡：保持选择顺序，也天然压在服务端 send 限流之下
+                // （批量上限 9 条卡片，远低于 20 条/10s）。单条失败不中断后续。
+                let failures = 0;
+                for (const payload of targets) {
+                  try {
+                    await sendCardMessage({
+                      conversationId: conversation.id,
+                      type: 'note-card',
+                      payload,
+                    });
+                  } catch {
+                    failures += 1;
+                  }
+                }
+                if (!mountedRef.current) return;
+                if (failures === 0) {
                   onClose();
                   Alert.alert(
                     t('notes.shareToChat.sentTitle', { defaultValue: '已发送' }),
@@ -130,25 +149,32 @@ export function ShareNoteSheet({ payload, onClose }: ShareNoteSheetProps) {
                       defaultValue: '笔记已发送到聊天。',
                     }),
                   );
-                })
-                .catch(() => {
-                  if (!mountedRef.current) return;
+                } else if (failures === targets.length) {
                   Alert.alert(
                     t('notes.shareToChat.failedTitle', { defaultValue: '发送失败' }),
                     getShareNoteSendErrorMessage(t),
                   );
-                })
-                .finally(() => {
-                  inFlightRef.current = false;
-                  if (mountedRef.current) setSendingId('');
-                });
+                } else {
+                  onClose();
+                  Alert.alert(
+                    t('notes.shareToChat.failedTitle', { defaultValue: '发送失败' }),
+                    t('notes.shareToChat.partialFailed', {
+                      count: failures,
+                      defaultValue: `有 ${failures} 条笔记发送失败，请重试。`,
+                    }),
+                  );
+                }
+              })().finally(() => {
+                inFlightRef.current = false;
+                if (mountedRef.current) setSendingId('');
+              });
             },
           },
         ],
         { cancelable: true },
       );
     },
-    [onClose, payload, t],
+    [onClose, targets, t],
   );
 
   const renderItem = useCallback(

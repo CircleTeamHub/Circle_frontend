@@ -69,10 +69,14 @@ export default function NotesScreen() {
   const [loadError, setLoadError] = useState(false);
   // 「⋯」动作菜单针对的笔记（null = 关闭）
   const [menuNote, setMenuNote] = useState<NoteSummary | null>(null);
-  // 分享会话选择器：非空即打开，携带要发送的笔记卡片
-  const [shareNotePayload, setShareNotePayload] = useState<NoteCardData | null>(
+  // 多选「下一步」打开的批量动作菜单（与 ⋯ 菜单同一个 sheet 组件的批量态）
+  const [batchSheetNotes, setBatchSheetNotes] = useState<NoteSummary[] | null>(
     null,
   );
+  // 分享会话选择器：非空即打开，携带要发送的笔记卡片（单条=[payload]，批量=全部）
+  const [shareNotePayloads, setShareNotePayloads] = useState<
+    NoteCardData[] | null
+  >(null);
   const [refreshing, setRefreshing] = useState(false);
   const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
@@ -80,8 +84,8 @@ export default function NotesScreen() {
   // 多选模式：selectedIds 为唯一事实，Set 只做派生查询
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  // 备注弹层针对的笔记（null = 关闭）
-  const [remarkNote, setRemarkNote] = useState<NoteSummary | null>(null);
+  // 备注弹层的目标（单条=[note]，批量=选中集；null = 关闭）
+  const [remarkNotes, setRemarkNotes] = useState<NoteSummary[] | null>(null);
   // 分组勾选弹层的目标（单条=[note]，批量=选中集；null = 关闭）
   const [groupPickerNotes, setGroupPickerNotes] = useState<
     NoteSummary[] | null
@@ -265,7 +269,11 @@ export default function NotesScreen() {
   );
 
   const openMenu = useCallback((note: NoteSummary) => setMenuNote(note), []);
-  const closeMenu = useCallback(() => setMenuNote(null), []);
+  // 单选 ⋯ 菜单与批量「下一步」共用同一个 sheet：关闭时两种目标一起清。
+  const closeMenu = useCallback(() => {
+    setMenuNote(null);
+    setBatchSheetNotes(null);
+  }, []);
 
   // 多选模式下点卡片 = 勾选/取消勾选；正常模式进详情。
   const handleCardPress = useCallback(
@@ -331,28 +339,37 @@ export default function NotesScreen() {
   );
 
   const handleRemark = useCallback(
-    (note: NoteSummary) => setRemarkNote(note),
+    (note: NoteSummary) => setRemarkNotes([note]),
     [],
   );
-  const closeRemark = useCallback(() => setRemarkNote(null), []);
+  const handleBatchRemark = useCallback(
+    (notes: NoteSummary[]) => setRemarkNotes(notes),
+    [],
+  );
+  const closeRemark = useCallback(() => setRemarkNotes(null), []);
 
   const handleRemarkSaved = useCallback(
-    (noteId: string, remark: string | null) => {
+    (noteIds: string[], remark: string | null) => {
+      const savedSet = new Set(noteIds);
       setNotes((prev) =>
-        prev.map((item) => (item.id === noteId ? { ...item, remark } : item)),
+        prev.map((item) =>
+          savedSet.has(item.id) ? { ...item, remark } : item,
+        ),
       );
+      // 批量备注保存后退出多选（部分失败已由弹层提示过）；单条场景本就不在多选态。
+      exitSelection();
     },
-    [],
+    [exitSelection],
   );
 
   const handleEditGroups = useCallback(
     (note: NoteSummary) => setGroupPickerNotes([note]),
     [],
   );
-  const handleBatchEditGroups = useCallback(() => {
-    if (selectedNotes.length === 0) return;
-    setGroupPickerNotes(selectedNotes);
-  }, [selectedNotes]);
+  const handleBatchEditGroups = useCallback((notes: NoteSummary[]) => {
+    if (notes.length === 0) return;
+    setGroupPickerNotes(notes);
+  }, []);
   const closeGroupPicker = useCallback(() => setGroupPickerNotes(null), []);
 
   const handleGroupPickerSaved = useCallback(() => {
@@ -361,16 +378,26 @@ export default function NotesScreen() {
     exitSelection();
   }, [exitSelection, load]);
 
-  // 单条笔记分享：打开会话选择器，把笔记以卡片消息发给好友/群聊。
+  // 分享：打开会话选择器，把笔记以卡片消息发给好友/群聊（批量=逐条发卡）。
   const handleShareNote = useCallback(
     (note: NoteSummary) => {
-      setShareNotePayload(
+      setShareNotePayloads([
         buildNoteCardPayloadFromSummary(note, note.ownerId ?? currentUserId),
+      ]);
+    },
+    [currentUserId],
+  );
+  const handleBatchShare = useCallback(
+    (notes: NoteSummary[]) => {
+      setShareNotePayloads(
+        notes.map((note) =>
+          buildNoteCardPayloadFromSummary(note, note.ownerId ?? currentUserId),
+        ),
       );
     },
     [currentUserId],
   );
-  const closeShareNote = useCallback(() => setShareNotePayload(null), []);
+  const closeShareNote = useCallback(() => setShareNotePayloads(null), []);
 
   const handleUnlistNote = useCallback(
     (note: NoteSummary) => {
@@ -461,45 +488,69 @@ export default function NotesScreen() {
     [exitSelection, load, t],
   );
 
-  const handleBatchUnlist = useCallback(() => {
-    if (selectedIds.length === 0) return;
-    Alert.alert(
-      t('notes.alerts.batchUnlistTitle', { defaultValue: '批量下架' }),
-      t('notes.alerts.batchUnlistConfirm', {
-        count: selectedIds.length,
-        defaultValue: `确定下架所选 ${selectedIds.length} 条笔记吗？下架后可随时重新上架。`,
-      }),
-      [
-        { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
-        {
-          text: t('notes.actions.unlist', { defaultValue: '下架' }),
-          style: 'destructive',
-          onPress: () =>
-            void runBatchAction(selectedIds, (id) => unlistNote(id)),
-        },
-      ],
-    );
-  }, [runBatchAction, selectedIds, t]);
+  const handleBatchUnlist = useCallback(
+    (notes: NoteSummary[]) => {
+      if (notes.length === 0) return;
+      const ids = notes.map((item) => item.id);
+      Alert.alert(
+        t('notes.alerts.batchUnlistTitle', { defaultValue: '批量下架' }),
+        t('notes.alerts.batchUnlistConfirm', {
+          count: ids.length,
+          defaultValue: `确定下架所选 ${ids.length} 条笔记吗？下架后可随时重新上架。`,
+        }),
+        [
+          { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+          {
+            text: t('notes.actions.unlist', { defaultValue: '下架' }),
+            style: 'destructive',
+            onPress: () => void runBatchAction(ids, (id) => unlistNote(id)),
+          },
+        ],
+      );
+    },
+    [runBatchAction, t],
+  );
 
-  const handleBatchDelete = useCallback(() => {
-    if (selectedIds.length === 0) return;
-    Alert.alert(
-      t('notes.alerts.batchDeleteTitle', { defaultValue: '批量删除' }),
-      t('notes.alerts.batchDeleteConfirm', {
-        count: selectedIds.length,
-        defaultValue: `确定删除所选 ${selectedIds.length} 条笔记吗？删除后可在回收站找回。`,
-      }),
-      [
-        { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
-        {
-          text: t('notes.actions.delete', { defaultValue: '删除' }),
-          style: 'destructive',
-          onPress: () =>
-            void runBatchAction(selectedIds, (id) => deleteNote(id)),
-        },
-      ],
-    );
-  }, [runBatchAction, selectedIds, t]);
+  const handleBatchDelete = useCallback(
+    (notes: NoteSummary[]) => {
+      if (notes.length === 0) return;
+      const ids = notes.map((item) => item.id);
+      Alert.alert(
+        t('notes.alerts.batchDeleteTitle', { defaultValue: '批量删除' }),
+        t('notes.alerts.batchDeleteConfirm', {
+          count: ids.length,
+          defaultValue: `确定删除所选 ${ids.length} 条笔记吗？删除后可在回收站找回。`,
+        }),
+        [
+          { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+          {
+            text: t('notes.actions.delete', { defaultValue: '删除' }),
+            style: 'destructive',
+            onPress: () => void runBatchAction(ids, (id) => deleteNote(id)),
+          },
+        ],
+      );
+    },
+    [runBatchAction, t],
+  );
+
+  // 批量置顶/取消置顶：目标状态由「是否全部已置顶」推导，可逆操作不弹确认。
+  const handleBatchPin = useCallback(
+    (notes: NoteSummary[], pinned: boolean) => {
+      if (notes.length === 0) return;
+      void runBatchAction(
+        notes.map((item) => item.id),
+        (id) => togglePinNote(id, pinned),
+      );
+    },
+    [runBatchAction],
+  );
+
+  // 多选「下一步」：把当前选中集交给与 ⋯ 菜单同款的动作 sheet（批量态）。
+  const openBatchSheet = useCallback(() => {
+    if (selectedNotes.length === 0) return;
+    setBatchSheetNotes(selectedNotes);
+  }, [selectedNotes]);
 
   const d = useMemo(
     () => ({
@@ -526,10 +577,6 @@ export default function NotesScreen() {
       },
       newBtn: { backgroundColor: colors.primary },
       newBtnText: { color: colors.white },
-      batchBtn: { backgroundColor: colors.surface },
-      batchBtnText: { color: colors.text },
-      batchDangerText: { color: colors.error },
-      batchDeleteBtn: { backgroundColor: colors.error },
     }),
     [colors],
   );
@@ -714,53 +761,21 @@ export default function NotesScreen() {
 
       <View style={[s.bottomBar, d.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
         {selectionMode ? (
-          <>
-            <Pressable
-              style={[
-                s.bottomBtn,
-                d.batchBtn,
-                selectedIds.length === 0 ? s.btnDisabled : null,
-              ]}
-              onPress={handleBatchEditGroups}
-              disabled={selectedIds.length === 0}
-              accessibilityRole="button"
-            >
-              <Ionicons name="albums-outline" size={18} color={colors.text} />
-              <Text style={[s.bottomBtnText, d.batchBtnText]}>
-                {t('notes.selection.group', { defaultValue: '分组' })}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[
-                s.bottomBtn,
-                d.batchBtn,
-                selectedIds.length === 0 ? s.btnDisabled : null,
-              ]}
-              onPress={handleBatchUnlist}
-              disabled={selectedIds.length === 0}
-              accessibilityRole="button"
-            >
-              <Ionicons name="archive-outline" size={18} color={colors.error} />
-              <Text style={[s.bottomBtnText, d.batchDangerText]}>
-                {t('notes.selection.unlist', { defaultValue: '下架' })}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[
-                s.bottomBtn,
-                d.batchDeleteBtn,
-                selectedIds.length === 0 ? s.btnDisabled : null,
-              ]}
-              onPress={handleBatchDelete}
-              disabled={selectedIds.length === 0}
-              accessibilityRole="button"
-            >
-              <Ionicons name="trash-outline" size={18} color={colors.white} />
-              <Text style={[s.bottomBtnText, d.newBtnText]}>
-                {t('notes.selection.delete', { defaultValue: '删除' })}
-              </Text>
-            </Pressable>
-          </>
+          <Pressable
+            style={[
+              s.bottomBtn,
+              d.newBtn,
+              selectedIds.length === 0 ? s.btnDisabled : null,
+            ]}
+            onPress={openBatchSheet}
+            disabled={selectedIds.length === 0}
+            accessibilityRole="button"
+          >
+            <Ionicons name="arrow-forward" size={18} color={colors.white} />
+            <Text style={[s.bottomBtnText, d.newBtnText]}>
+              {t('notes.selection.next', { defaultValue: '下一步' })}
+            </Text>
+          </Pressable>
         ) : (
           <Pressable
             style={[s.bottomBtn, d.newBtn]}
@@ -785,6 +800,7 @@ export default function NotesScreen() {
       />
       <NoteActionsSheet
         note={menuNote}
+        batchNotes={batchSheetNotes}
         onClose={closeMenu}
         onPin={handlePin}
         onMultiSelect={handleMultiSelectFromMenu}
@@ -794,9 +810,15 @@ export default function NotesScreen() {
         onShare={handleShareNote}
         onDelete={handleDeleteNote}
         onUnlist={handleUnlistNote}
+        onBatchPin={handleBatchPin}
+        onBatchRemark={handleBatchRemark}
+        onBatchEditGroups={handleBatchEditGroups}
+        onBatchShare={handleBatchShare}
+        onBatchUnlist={handleBatchUnlist}
+        onBatchDelete={handleBatchDelete}
       />
       <NoteRemarkSheet
-        note={remarkNote}
+        notes={remarkNotes}
         onClose={closeRemark}
         onSaved={handleRemarkSaved}
       />
@@ -806,7 +828,7 @@ export default function NotesScreen() {
         onClose={closeGroupPicker}
         onSaved={handleGroupPickerSaved}
       />
-      <ShareNoteSheet payload={shareNotePayload} onClose={closeShareNote} />
+      <ShareNoteSheet payloads={shareNotePayloads} onClose={closeShareNote} />
     </View>
   );
 }

@@ -909,6 +909,7 @@
     },
     "remarkSheet": {
       "title": "メモ",
+      "batchTitle": "一括メモ（{{count}} 件）",
       "placeholder": "メモを入力（空のまま保存で削除）",
       "saving": "保存中...",
       "save": "保存"
@@ -917,15 +918,15 @@
       "selectedCount": "{{count}}件選択中",
       "selectAll": "すべて選択",
       "clearAll": "選択を解除",
-      "group": "グループ",
-      "unlist": "非公開",
-      "delete": "削除"
+      "next": "次へ"
     },
     "loadFailed": "ノートを読み込めませんでした。ネットワークを確認して再試行してください",
     "shareToChat": {
       "title": "友だちやグループに共有",
       "confirmTitle": "ノートを送信",
       "confirmMessage": "「{{title}}」を {{name}} に送信しますか？",
+      "confirmBatchMessage": "{{count}} 件のノートを {{name}} に送信しますか？",
+      "partialFailed": "{{count}} 件のノートを送信できませんでした。もう一度お試しください。",
       "sentTitle": "送信しました",
       "sentMessage": "ノートをチャットに送信しました。",
       "failedTitle": "送信に失敗しました",

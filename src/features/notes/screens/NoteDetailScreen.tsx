@@ -184,10 +184,10 @@ export default function NoteDetailScreen() {
   // 分享单条笔记：打开会话选择器，把笔记以卡片消息发给好友/群聊。
   const [shareOpen, setShareOpen] = useState(false);
   const handleShareNote = useCallback(() => setShareOpen(true), []);
-  const sharePayload = useMemo(
+  const sharePayloads = useMemo(
     () =>
       shareOpen && note
-        ? buildNoteCardPayloadFromSummary(note, note.ownerId ?? ownerId)
+        ? [buildNoteCardPayloadFromSummary(note, note.ownerId ?? ownerId)]
         : null,
     [note, ownerId, shareOpen],
   );
@@ -572,7 +572,7 @@ export default function NoteDetailScreen() {
       </Modal>
 
       <ShareNoteSheet
-        payload={sharePayload}
+        payloads={sharePayloads}
         onClose={() => setShareOpen(false)}
       />
     </View>
