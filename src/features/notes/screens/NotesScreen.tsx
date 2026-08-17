@@ -1,5 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import {
+  useFocusEffect,
+  useLocalSearchParams,
+  useRouter,
+  useSegments,
+} from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -37,7 +42,10 @@ import {
   mergeTabOrder,
 } from '@/features/notes/utils/tab-order';
 import { useNotesTabOrderStore } from '@/features/notes/store/use-notes-tab-order-store';
-import { getChatDetailHref } from '@/features/user/utils/routes';
+import {
+  getChatDetailHref,
+  getUserProfileScopeFromSegments,
+} from '@/features/user/utils/routes';
 import {
   deleteNote,
   fetchNoteGroups,
@@ -62,6 +70,9 @@ const ItemSeparator = memo(function ItemSeparator() {
 
 export default function NotesScreen() {
   const router = useRouter();
+  // 笔记页在哪个 tab 栈打开（profile/messages/...），决定子页面往哪个栈推。
+  const segments = useSegments();
+  const scope = getUserProfileScopeFromSegments(segments);
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -387,12 +398,14 @@ export default function NotesScreen() {
     (note: NoteSummary, target: NoteSourceTarget) => {
       const from = note.collectedFrom;
       if (!from) return;
+      // 聊天页入**当前所在** tab 栈（笔记多挂在 profile 下），不写死 messages ——
+      // 写死会把聊天页推进消息栈，返回时落到 IM 首页而不是来时的笔记页。
       if (target === 'group') {
         const group = from.group;
         if (!group?.id || !group.name) return;
         router.push(
           getChatDetailHref(
-            'messages',
+            scope,
             group.id,
             group.name,
             group.faceURL ?? undefined,
@@ -408,7 +421,7 @@ export default function NotesScreen() {
       if (!sender?.id || !sender.name) return;
       router.push(
         getChatDetailHref(
-          'messages',
+          scope,
           sender.id,
           sender.name,
           sender.faceURL ?? undefined,
@@ -418,7 +431,7 @@ export default function NotesScreen() {
         ),
       );
     },
-    [router],
+    [router, scope],
   );
 
   const handleMultiSelectFromMenu = useCallback(

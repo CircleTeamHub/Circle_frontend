@@ -47,8 +47,11 @@ test('NoteDetailScreen renders a source card and jumps back to the sharing messa
   assert.match(src, /sourceGroupLabel/);
   assert.match(src, /sourcePrivateLabel/);
   assert.match(src, /sourceSharedBy/);
-  // 点击名片 → messages 栈打开会话，searchedMsgID 触发历史定位滚动。
-  assert.match(src, /getChatDetailHref\(\s*'messages'/);
+  // 点击名片 → 会话入**当前所在** tab 栈（笔记多挂 profile 下），返回时回到这张
+  // 笔记而不是 IM 首页；写死 'messages' 会把聊天页推进消息栈，返回就串栈了。
+  assert.match(src, /getChatDetailHref\(\s*scope/);
+  assert.doesNotMatch(src, /getChatDetailHref\(\s*'messages'/);
+  assert.match(src, /getUserProfileScopeFromSegments\(segments\)/);
   assert.match(src, /from\.clientMsgID/);
   // 快照缺关键字段时整卡不渲染，避免点了跳不动。
   assert.match(src, /if \(!from\?\.conversationID \|\| !from\.clientMsgID\) return null/);
@@ -132,4 +135,21 @@ test('NoteCard is memoized and NotesScreen feeds it stable callbacks', () => {
   assert.match(screen, /ItemSeparatorComponent=\{ItemSeparator\}/);
   // 内联箭头组件每次渲染都是新类型，FlatList 无法复用 —— 不允许回退。
   assert.doesNotMatch(screen, /ItemSeparatorComponent=\{\(\) =>/);
+});
+
+test('来源按钮进聊天走当前 tab 栈，群按钮不再带气泡图标', () => {
+  const list = read('src/features/notes/screens/NotesScreen.tsx');
+  const detail = read('src/features/notes/screens/NoteDetailScreen.tsx');
+  const card = read('src/features/notes/components/NoteCard.tsx');
+
+  // 列表页与详情页都必须按当前所在栈推 scope。写死 'messages' 会把聊天页推进
+  // 消息栈，返回时落到 IM 首页而不是来时的笔记页（两处都犯过这个错）。
+  for (const [name, src] of [['NotesScreen', list], ['NoteDetailScreen', detail]]) {
+    assert.match(src, /getUserProfileScopeFromSegments\(segments\)/, `${name} 缺 scope 推断`);
+    assert.match(src, /getChatDetailHref\(\s*scope/, `${name} 未按 scope 入栈`);
+    assert.doesNotMatch(src, /getChatDetailHref\(\s*'messages'/, `${name} 仍写死 messages 栈`);
+  }
+
+  // 群来源按钮已有群头像 + 群名，气泡图标是冗余装饰。
+  assert.doesNotMatch(card, /chatbubbles-outline/);
 });

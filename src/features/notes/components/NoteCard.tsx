@@ -249,11 +249,6 @@ function NoteCardInner({
                 name: groupChip.name,
               })}
             >
-              <Ionicons
-                name="chatbubbles-outline"
-                size={14}
-                color={colors.primary}
-              />
               <Avatar
                 size={20}
                 uri={groupChip.faceURL ?? undefined}

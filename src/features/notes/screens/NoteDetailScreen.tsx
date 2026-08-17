@@ -1,5 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import {
+  useFocusEffect,
+  useLocalSearchParams,
+  useRouter,
+  useSegments,
+} from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -21,7 +26,10 @@ import { ShareNoteSheet } from '@/features/notes/components/ShareNoteSheet';
 import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
 import type { NoteDetail, NoteExportFormat } from '@/features/notes/types';
 import { formatNoteFullDate } from '@/features/notes/utils/note-format';
-import { getChatDetailHref } from '@/features/user/utils/routes';
+import {
+  getChatDetailHref,
+  getUserProfileScopeFromSegments,
+} from '@/features/user/utils/routes';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import {
   buildNoteSections,
@@ -37,6 +45,9 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 export default function NoteDetailScreen() {
   const router = useRouter();
+  // 本页在哪个 tab 栈打开（profile/messages/...），决定聊天页往哪个栈推。
+  const segments = useSegments();
+  const scope = getUserProfileScopeFromSegments(segments);
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -229,10 +240,11 @@ export default function NoteDetailScreen() {
   const handleOpenSource = useCallback(() => {
     if (!collectedSource) return;
     const { isGroup, peer, from } = collectedSource;
-    // 聊天页固定挂在 messages 栈下打开，searchedMsgID 触发历史定位滚动。
+    // 聊天页入**当前所在** tab 栈（笔记多挂在 profile 下），返回时回到这张笔记
+    // 而不是 IM 首页；searchedMsgID 触发历史定位滚动。
     router.push(
       getChatDetailHref(
-        'messages',
+        scope,
         peer.id,
         peer.name,
         peer.faceURL ?? undefined,
@@ -241,7 +253,7 @@ export default function NoteDetailScreen() {
         isGroup ? 'group' : 'private',
       ),
     );
-  }, [collectedSource, router]);
+  }, [collectedSource, router, scope]);
 
   const d = useMemo(
     () => ({
