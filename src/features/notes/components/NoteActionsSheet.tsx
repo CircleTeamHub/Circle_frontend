@@ -111,17 +111,6 @@ export function NoteActionsSheet({
               },
             ]
           : []),
-        // 编辑器天然单条：恰好选中 1 条时保留入口，多条时不出现。
-        ...(batch.length === 1
-          ? [
-              {
-                key: 'edit',
-                icon: 'create-outline' as const,
-                label: t('notes.actions.editNote', { defaultValue: '编辑笔记' }),
-                run: () => onEdit(batch[0]),
-              },
-            ]
-          : []),
         ...(onBatchEditGroups
           ? [
               {

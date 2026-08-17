@@ -72,8 +72,8 @@ test('NoteActionsSheet batch mode mirrors the single-note action set', () => {
   assert.match(sheet, /every\(\(item\) => item\.pinned\)/);
   assert.match(sheet, /onBatchPin/);
   assert.doesNotMatch(sheet, /batch[\s\S]{0,400}onMultiSelect\(/);
-  // 编辑笔记只在恰好选中 1 条时出现（编辑器天然单条）。
-  assert.match(sheet, /batch\.length === 1/);
+  // 批量态不提供「编辑笔记」（编辑器天然单条，选 1 条也不显示——拍板 2026-08-16）。
+  assert.doesNotMatch(sheet, /onEdit\(batch\[0\]\)/);
 });
 
 test('NoteCard renders selection state, owner remark, and tappable source chips', () => {
