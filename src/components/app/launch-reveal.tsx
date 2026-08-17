@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Image, StyleSheet, UIManager, View, useWindowDimensions } from 'react-native';
 import Animated, {
   Easing,
   Extrapolation,
@@ -15,6 +15,37 @@ import LottieView from 'lottie-react-native';
 // 主题紫的纸飞机 Lottie（描边/纸身已改为品牌色，见 assets/lottie/README.md）。
 // 换素材只需替换该 json（无需再次原生重建）。
 const foldSource = require('../../../assets/lottie/plane-fold.json');
+// 原生 Lottie 缺席时的静态兜底（与原生启动图同一张紫飞机，视觉不断层）。
+const staticPlaneSource = require('../../../assets/images/splash-icon.png');
+
+/** Fabric 运行时注入的组件注册表探针（RN 的 unstable_hasComponent 内部用的就是它）。 */
+type ComponentRegistryGlobal = {
+  __nativeComponentRegistry__hasComponent?: (name: string) => boolean;
+};
+
+let nativeLottieCache: boolean | null = null;
+
+/**
+ * 原生二进制里到底有没有 Lottie 组件。
+ *
+ * 装着旧二进制的 dev-client 跑新 JS 时（或任何漏装原生模块的构建），Fabric 会把
+ * 未注册组件渲染成整块粉红「Unimplemented component: <LottieAnimationView>」——
+ * 正好糊在开屏正中。宁可退回静态图，也不能把这块红斑丢给用户。
+ *
+ * 懒探测并缓存：探针是运行时注入的全局，模块求值时不保证已就绪。
+ */
+function hasNativeLottie(): boolean {
+  if (nativeLottieCache != null) return nativeLottieCache;
+  const registry = globalThis as ComponentRegistryGlobal;
+  const probe = registry.__nativeComponentRegistry__hasComponent;
+  // 新架构走组件注册表；老架构没有该全局，退回 view manager 查询。
+  // 两者都问不到就当它在，维持原行为（正常构建里 Lottie 一直装着）。
+  nativeLottieCache =
+    typeof probe === 'function'
+      ? probe('LottieAnimationView')
+      : UIManager.getViewManagerConfig?.('LottieAnimationView') != null;
+  return nativeLottieCache;
+}
 
 type LottieTimeline = {
   fr?: number;
@@ -40,6 +71,8 @@ const LOTTIE_DURATION_MS = Math.max(
   ),
 );
 const REVEAL_BUFFER_MS = 300;
+// 兜底态没有动画可播，只做一次短暂的品牌亮相就揭幕，别让用户干等 2.4 秒。
+const FALLBACK_DURATION_MS = 900;
 
 // 开场：白底播放「信封开→折成飞机→飞走」的一次性 Lottie → 飞机飞走瞬间揭幕
 // （遮罩淡出 + App 从中心弹性展开）。Lottie 本身 2.4s，总时长留一点揭幕缓冲。
@@ -65,25 +98,31 @@ export function LaunchReveal({ play, onFinish, onReveal }: LaunchRevealProps) {
   // 当前 Lottie 是大画布，容器取屏幕短边的 0.78 让纸飞机主体足够醒目。
   const size = Math.min(360, Math.max(240, minDim * 0.78));
   const lottieRef = useRef<LottieView>(null);
+  const lottieReady = hasNativeLottie();
 
   useEffect(() => {
     if (!play) {
       return;
     }
-    // 完整播放整段动画（信封开→折成飞机→转向飞走→poof），一帧不删。
-    lottieRef.current?.reset();
-    lottieRef.current?.play();
+    if (lottieReady) {
+      // 完整播放整段动画（信封开→折成飞机→转向飞走→poof），一帧不删。
+      lottieRef.current?.reset();
+      lottieRef.current?.play();
+    }
     progress.value = 0;
     progress.value = withTiming(
       1,
-      { duration: DURATION_MS, easing: Easing.linear },
+      {
+        duration: lottieReady ? DURATION_MS : FALLBACK_DURATION_MS,
+        easing: Easing.linear,
+      },
       (finished) => {
         if (finished) {
           scheduleOnRN(onFinish);
         }
       },
     );
-  }, [onFinish, play, progress]);
+  }, [lottieReady, onFinish, play, progress]);
 
   // 越过揭幕起点时回调一次 onReveal（供 _layout 启动 App 弹性展开），与遮罩淡出同步。
   useAnimatedReaction(
@@ -117,7 +156,15 @@ export function LaunchReveal({ play, onFinish, onReveal }: LaunchRevealProps) {
 
   return (
     <View pointerEvents="none" style={styles.root}>
-      <Animated.View style={[styles.overlay, overlayStyle]} />
+      <Animated.View
+        style={[
+          styles.overlay,
+          // 兜底态铺纯白：静态图自带白底，遮罩同色才不会露出一圈方块边，
+          // 也与原生启动图（app.json splash.backgroundColor = #FFFFFF）无缝衔接。
+          lottieReady ? null : styles.overlayFallback,
+          overlayStyle,
+        ]}
+      />
       <Animated.View
         style={[
           styles.plane,
@@ -130,14 +177,22 @@ export function LaunchReveal({ play, onFinish, onReveal }: LaunchRevealProps) {
           planeStyle,
         ]}
       >
-        <LottieView
-          ref={lottieRef}
-          source={foldSource}
-          loop={false}
-          speed={LOTTIE_SPEED}
-          resizeMode="contain"
-          style={styles.lottie}
-        />
+        {lottieReady ? (
+          <LottieView
+            ref={lottieRef}
+            source={foldSource}
+            loop={false}
+            speed={LOTTIE_SPEED}
+            resizeMode="contain"
+            style={styles.lottie}
+          />
+        ) : (
+          <Image
+            source={staticPlaneSource}
+            resizeMode="contain"
+            style={styles.lottie}
+          />
+        )}
       </Animated.View>
     </View>
   );
@@ -155,6 +210,9 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     // 极浅灰白背景（Duolingo/Arc 风）。
     backgroundColor: '#FAFAFC',
+  },
+  overlayFallback: {
+    backgroundColor: '#FFFFFF',
   },
   plane: {
     left: '50%',
