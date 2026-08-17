@@ -993,7 +993,9 @@
       "loadFailed": "채팅을 불러오지 못했어요. 다시 시도해 주세요",
       "empty": "보낼 수 있는 채팅이 없어요",
       "groupHint": "그룹",
-      "friendHint": "친구"
+      "friendHint": "친구",
+      "searchPlaceholder": "친구 또는 그룹 검색",
+      "noMatch": "일치하는 친구나 그룹이 없습니다"
     },
     "recycleBin": "휴지통",
     "recycleBinHint": "삭제한 노트를 여기에서 복원할 수 있으며 30일 후 자동으로 지워집니다.",

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
   Alert,
@@ -6,6 +7,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -48,6 +50,7 @@ export function ShareNoteSheet({ payloads, onClose }: ShareNoteSheetProps) {
   const [failed, setFailed] = useState(false);
   const [sendingId, setSendingId] = useState('');
   const [attempt, setAttempt] = useState(0);
+  const [query, setQuery] = useState('');
   const mountedRef = useRef(true);
   const inFlightRef = useRef(false);
 
@@ -57,6 +60,11 @@ export function ShareNoteSheet({ payloads, onClose }: ShareNoteSheetProps) {
     },
     [],
   );
+
+  // 关掉就清搜索词：否则下次打开还停在上次的过滤结果上，看着像「会话丢了」。
+  useEffect(() => {
+    if (!visible) setQuery('');
+  }, [visible]);
 
   // 打开时若没有缓存会话，拉一次列表。
   useEffect(() => {
@@ -86,6 +94,15 @@ export function ShareNoteSheet({ payloads, onClose }: ShareNoteSheetProps) {
     [rawConversations],
   );
 
+  // 会话多了以后靠滚动找人太慢：按名字就地过滤（大小写不敏感）。
+  const trimmedQuery = query.trim().toLowerCase();
+  const visibleConversations = useMemo(() => {
+    if (!trimmedQuery) return conversations;
+    return conversations.filter((item) =>
+      item.name.toLowerCase().includes(trimmedQuery),
+    );
+  }, [conversations, trimmedQuery]);
+
   const d = useMemo(
     () => ({
       backdrop: { backgroundColor: colors.overlay },
@@ -95,6 +112,9 @@ export function ShareNoteSheet({ payloads, onClose }: ShareNoteSheetProps) {
       name: { color: colors.text },
       hint: { color: colors.textSecondary },
       separator: { backgroundColor: colors.divider },
+      // sheet 底已经是 surface，搜索框再用 surface 就糊在一起了 —— 用 background
+      // 拉出一档对比（深色下更暗、浅色下更浅，两个主题都成立）。
+      searchWrap: { backgroundColor: colors.background },
     }),
     [colors],
   );
@@ -252,14 +272,54 @@ export function ShareNoteSheet({ payloads, onClose }: ShareNoteSheetProps) {
           </Text>
         </View>
       ) : (
-        <FlatList
-          data={conversations}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          ItemSeparatorComponent={() => <View style={[s.separator, d.separator]} />}
-          style={s.list}
-          showsVerticalScrollIndicator={false}
-        />
+        <>
+          <View style={[s.searchWrap, d.searchWrap]}>
+            <Ionicons name="search-outline" size={16} color={colors.textSecondary} />
+            <TextInput
+              style={[s.searchInput, d.name]}
+              placeholder={t('notes.shareToChat.searchPlaceholder', {
+                defaultValue: '搜索好友或群聊',
+              })}
+              placeholderTextColor={colors.textSecondary}
+              value={query}
+              onChangeText={setQuery}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+            {query ? (
+              <Pressable
+                hitSlop={8}
+                onPress={() => setQuery('')}
+                accessibilityRole="button"
+                accessibilityLabel={t('common.clear', { defaultValue: '清除' })}
+              >
+                <Ionicons name="close-circle" size={16} color={colors.textSecondary} />
+              </Pressable>
+            ) : null}
+          </View>
+
+          {visibleConversations.length === 0 ? (
+            // 搜不到 ≠ 没有会话：文案要分开，否则用户以为聊天列表空了。
+            <View style={s.center}>
+              <Text style={[s.hint, d.hint]}>
+                {t('notes.shareToChat.noMatch', {
+                  defaultValue: '没有匹配的好友或群聊',
+                })}
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={visibleConversations}
+              keyExtractor={(item) => item.id}
+              renderItem={renderItem}
+              ItemSeparatorComponent={() => <View style={[s.separator, d.separator]} />}
+              style={s.list}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            />
+          )}
+        </>
       )}
     </BottomSheetModal>
   );
@@ -283,6 +343,17 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.sm,
   },
+  searchWrap: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    height: 40,
+    borderRadius: Radius.xxl,
+  },
+  searchInput: { flex: 1, ...Typography.bodyRegular, padding: 0 },
   list: { maxHeight: 420 },
   row: {
     flexDirection: 'row',

@@ -2483,7 +2483,9 @@
       "loadFailed": "无法加载聊天对象，请稍后重试",
       "empty": "暂无可发送的聊天对象",
       "groupHint": "群聊",
-      "friendHint": "好友"
+      "friendHint": "好友",
+      "searchPlaceholder": "搜索好友或群聊",
+      "noMatch": "没有匹配的好友或群聊"
     },
     "recycleBin": "回收站",
     "recycleBinHint": "已删除的笔记可在这里恢复，30 天后自动清除。",

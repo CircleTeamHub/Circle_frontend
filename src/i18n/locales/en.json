@@ -2486,7 +2486,9 @@
       "loadFailed": "Couldn’t load chats. Please try again",
       "empty": "No chats to send to yet",
       "groupHint": "Group",
-      "friendHint": "Friend"
+      "friendHint": "Friend",
+      "searchPlaceholder": "Search friends or groups",
+      "noMatch": "No matching friends or groups"
     },
     "recycleBin": "Recycle bin",
     "recycleBinHint": "Deleted notes can be restored here and are automatically removed after 30 days.",

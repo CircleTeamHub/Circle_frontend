@@ -993,7 +993,9 @@
       "loadFailed": "チャットを読み込めませんでした。もう一度お試しください",
       "empty": "送信できるチャットがありません",
       "groupHint": "グループ",
-      "friendHint": "友だち"
+      "friendHint": "友だち",
+      "searchPlaceholder": "友達やグループを検索",
+      "noMatch": "一致する友達やグループがありません"
     },
     "recycleBin": "ごみ箱",
     "recycleBinHint": "削除したノートはここから復元できます。30日後に自動的に消去されます。",

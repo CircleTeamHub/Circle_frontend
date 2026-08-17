@@ -198,3 +198,28 @@ test('悬浮列无障碍文案五语言齐备', () => {
     assert.equal(typeof json.notes.detail.downloadPdf, 'string', `${lng} downloadPdf`);
   }
 });
+
+test('分享 sheet 支持就地搜索会话', () => {
+  const src = read('src/features/notes/components/ShareNoteSheet.tsx');
+
+  assert.match(src, /const \[query, setQuery\] = useState\(''\)/);
+  assert.match(src, /item\.name\.toLowerCase\(\)\.includes\(trimmedQuery\)/);
+  assert.match(src, /data=\{visibleConversations\}/);
+  // 关闭时清搜索词，否则下次打开停在旧过滤结果上，看着像会话丢了。
+  assert.match(src, /if \(!visible\) setQuery\(''\)/);
+  // 搜不到 ≠ 一个会话都没有，两种空态文案分开。
+  assert.match(src, /notes\.shareToChat\.noMatch/);
+  assert.match(src, /notes\.shareToChat\.empty/);
+  // 点列表项不该被键盘吞掉第一次触摸。
+  assert.match(src, /keyboardShouldPersistTaps="handled"/);
+
+  for (const lng of ['zh', 'en', 'ja', 'ko', 'es']) {
+    const json = JSON.parse(read(`src/i18n/locales/${lng}.json`));
+    assert.equal(
+      typeof json.notes.shareToChat.searchPlaceholder,
+      'string',
+      `${lng} searchPlaceholder`,
+    );
+    assert.equal(typeof json.notes.shareToChat.noMatch, 'string', `${lng} noMatch`);
+  }
+});
