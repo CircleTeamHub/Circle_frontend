@@ -1556,12 +1556,25 @@ export default function ChatDetailScreen() {
         onPress: () => handleForwardMessage(message),
       });
     }
-    actions.push({
-      key: 'collect',
-      icon: 'star-outline',
-      label: t('chat.messageActions.collect'),
-      onPress: () => void handleCollectMessage(message),
-    });
+    // 笔记卡片走的是 collectNote（快照复制进「我的笔记」），不是进收藏列表 ——
+    // 标签跟着实际行为叫「添加」，别让同一个「收藏」在两种消息上意思不同。
+    actions.push(
+      message.type === 'note-card'
+        ? {
+            key: 'collect',
+            icon: 'add-circle-outline',
+            label: t('chat.messageActions.addToNotes', {
+              defaultValue: '添加',
+            }),
+            onPress: () => void handleCollectMessage(message),
+          }
+        : {
+            key: 'collect',
+            icon: 'star-outline',
+            label: t('chat.messageActions.collect'),
+            onPress: () => void handleCollectMessage(message),
+          },
+    );
     actions.push({
       key: 'delete',
       icon: 'trash-outline',

@@ -304,6 +304,7 @@
     "messageActions": {
       "title": "消息操作",
       "collect": "收藏",
+      "addToNotes": "添加",
       "forward": "转发",
       "collected": "已收藏",
       "collectedHint": "可在我的收藏中查看",

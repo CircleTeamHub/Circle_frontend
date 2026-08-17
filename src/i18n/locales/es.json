@@ -261,6 +261,7 @@
     "messageActions": {
       "title": "Acciones del mensaje",
       "collect": "Guardar",
+      "addToNotes": "Añadir",
       "forward": "Reenviar",
       "collected": "Guardado",
       "collectedHint": "Míralo en Mis guardados",

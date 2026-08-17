@@ -261,6 +261,7 @@
     "messageActions": {
       "title": "메시지 작업",
       "collect": "저장",
+      "addToNotes": "추가",
       "forward": "전달",
       "collected": "저장됨",
       "collectedHint": "내 보관함에서 확인하세요",

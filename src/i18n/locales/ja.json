@@ -261,6 +261,7 @@
     "messageActions": {
       "title": "メッセージ操作",
       "collect": "保存",
+      "addToNotes": "追加",
       "forward": "転送",
       "collected": "保存しました",
       "collectedHint": "コレクションで確認できます",

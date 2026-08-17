@@ -304,6 +304,7 @@
     "messageActions": {
       "title": "Message actions",
       "collect": "Save",
+      "addToNotes": "Add",
       "forward": "Forward",
       "collected": "Saved",
       "collectedHint": "View it in My Collections",
