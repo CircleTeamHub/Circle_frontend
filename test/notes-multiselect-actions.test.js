@@ -105,6 +105,8 @@ test('source chips open the right chat: sender -> private, group -> group conver
   assert.match(screen, /getChatDetailHref\(/);
   assert.match(screen, /'group',\s*\)/);
   assert.match(screen, /'private',\s*\)/);
+  // 群 chip 带收藏时的消息 id：进群直接定位到笔记原消息。
+  assert.match(screen, /from\.clientMsgID,\s*'group',/);
   // 私聊只在快照本来就是私聊会话时带 conversationID，群聊直接用来源会话。
   assert.match(
     screen,

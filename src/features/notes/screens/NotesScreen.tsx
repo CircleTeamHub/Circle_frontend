@@ -330,7 +330,8 @@ export default function NotesScreen() {
             group.name,
             group.faceURL ?? undefined,
             from.conversationID,
-            undefined,
+            // 带上收藏时的消息 id：进群直接定位到这条笔记的原消息。
+            from.clientMsgID,
             'group',
           ),
         );

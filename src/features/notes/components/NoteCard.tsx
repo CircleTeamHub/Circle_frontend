@@ -54,7 +54,10 @@ function NoteCardInner({
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
       },
-      sourceChip: { backgroundColor: colors.surface },
+      sourceChip: {
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
+      },
     }),
     [colors],
   );
@@ -123,6 +126,7 @@ function NoteCardInner({
       accessibilityLabel={accessibilityLabel}
       accessibilityState={selectionMode ? { selected } : undefined}
     >
+      <View style={s.topRow}>
       {note.cover ? (
         <Image
           source={{ uri: note.cover.url }}
@@ -173,57 +177,6 @@ function NoteCardInner({
         <Text style={[s.meta, d.meta]} numberOfLines={1}>
           {meta}
         </Text>
-        {senderChip || groupChip ? (
-          <View style={s.sourceRow}>
-            {senderChip ? (
-              <Pressable
-                style={[s.sourceChip, d.sourceChip]}
-                onPress={chipsEnabled ? handleSenderPress : undefined}
-                disabled={!chipsEnabled}
-                hitSlop={4}
-                accessibilityRole="button"
-                accessibilityLabel={t('notes.list.openSenderChat', {
-                  defaultValue: '和 {{name}} 私聊',
-                  name: senderChip.name,
-                })}
-              >
-                <Avatar size={18} uri={senderChip.faceURL ?? undefined} name={senderChip.name} />
-                <Text
-                  style={[s.sourceText, { color: colors.text }]}
-                  numberOfLines={1}
-                >
-                  {senderChip.name}
-                </Text>
-              </Pressable>
-            ) : null}
-            {groupChip ? (
-              <Pressable
-                style={[s.sourceChip, d.sourceChip]}
-                onPress={chipsEnabled ? handleGroupPress : undefined}
-                disabled={!chipsEnabled}
-                hitSlop={4}
-                accessibilityRole="button"
-                accessibilityLabel={t('notes.list.openGroupChat', {
-                  defaultValue: '进入群聊 {{name}}',
-                  name: groupChip.name,
-                })}
-              >
-                <Ionicons
-                  name="chatbubbles-outline"
-                  size={12}
-                  color={colors.primary}
-                />
-                <Avatar size={18} uri={groupChip.faceURL ?? undefined} name={groupChip.name} />
-                <Text
-                  style={[s.sourceText, { color: colors.text }]}
-                  numberOfLines={1}
-                >
-                  {groupChip.name}
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
-        ) : null}
       </View>
 
       {selectionMode ? (
@@ -245,6 +198,76 @@ function NoteCardInner({
           <Ionicons name="ellipsis-horizontal" size={20} color={colors.textSecondary} />
         </Pressable>
       ) : null}
+      </View>
+
+      {/* 来源双按钮通栏铺在卡片底部：左=分享人(→私聊)，右=来源群(→群聊定位原消息)。 */}
+      {senderChip || groupChip ? (
+        <View style={s.sourceRow}>
+          {senderChip ? (
+            <Pressable
+              style={[s.sourceChip, d.sourceChip]}
+              onPress={chipsEnabled ? handleSenderPress : undefined}
+              disabled={!chipsEnabled}
+              accessibilityRole="button"
+              accessibilityLabel={t('notes.list.openSenderChat', {
+                defaultValue: '和 {{name}} 私聊',
+                name: senderChip.name,
+              })}
+            >
+              <Avatar
+                size={20}
+                uri={senderChip.faceURL ?? undefined}
+                name={senderChip.name}
+              />
+              <Text
+                style={[s.sourceText, { color: colors.text }]}
+                numberOfLines={1}
+              >
+                {senderChip.name}
+              </Text>
+              <Ionicons
+                name="chevron-forward"
+                size={13}
+                color={colors.textSecondary}
+              />
+            </Pressable>
+          ) : null}
+          {groupChip ? (
+            <Pressable
+              style={[s.sourceChip, d.sourceChip]}
+              onPress={chipsEnabled ? handleGroupPress : undefined}
+              disabled={!chipsEnabled}
+              accessibilityRole="button"
+              accessibilityLabel={t('notes.list.openGroupChat', {
+                defaultValue: '进入群聊 {{name}}',
+                name: groupChip.name,
+              })}
+            >
+              <Ionicons
+                name="chatbubbles-outline"
+                size={14}
+                color={colors.primary}
+              />
+              <Avatar
+                size={20}
+                uri={groupChip.faceURL ?? undefined}
+                name={groupChip.name}
+              />
+              <Text
+                style={[s.sourceText, { color: colors.text }]}
+                numberOfLines={1}
+              >
+                {groupChip.name}
+              </Text>
+              <Ionicons
+                name="chevron-forward"
+                size={13}
+                color={colors.textSecondary}
+              />
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -254,10 +277,13 @@ export const NoteCard = memo(NoteCardInner);
 
 const s = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
+    gap: Spacing.sm,
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: Spacing.md,
   },
   thumbnail: {
@@ -297,26 +323,26 @@ const s = StyleSheet.create({
   meta: {
     ...Typography.small,
   },
+  // 来源双按钮：通栏等分，名字占满剩余宽度，尾部 chevron 提示可点。
   sourceRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
     gap: Spacing.sm,
-    marginTop: 2,
   },
   sourceChip: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
-    borderRadius: Radius.pill,
-    paddingHorizontal: Spacing.sm,
-    height: 28,
-    maxWidth: 200,
+    gap: Spacing.xs + 4,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: Spacing.sm + 4,
+    height: 36,
   },
   sourceText: {
+    flex: 1,
     ...Typography.small,
     fontWeight: '500',
-    flexShrink: 1,
   },
   moreBtn: {
     width: 32,
