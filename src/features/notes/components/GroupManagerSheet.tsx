@@ -49,6 +49,8 @@ interface Props {
 
 const GROUP_ROW_HEIGHT = 64;
 const MAX_NOTE_GROUPS = 10;
+/** 与后端 CreateNoteGroupDto 的 @MaxLength(30) 对齐 */
+const GROUP_NAME_MAX_LENGTH = 30;
 const MEMBERSHIP_SAVE_CONCURRENCY = 5;
 
 /** 排序列表里的一行：固定 tab（全部/未分组，group=null）或用户分组。 */
@@ -240,6 +242,10 @@ export function GroupManagerSheet({
     setGroupEditorOpen(false);
     resetGroupDraft();
   }, [resetGroupDraft]);
+
+  const editingGroupName = editingGroupId
+    ? (groups.find((group) => group.id === editingGroupId)?.name ?? '')
+    : '';
 
   const handleSubmitGroupPress = useCallback(() => {
     if (!draftGroupName.trim()) {
@@ -838,58 +844,85 @@ export function GroupManagerSheet({
             <View
               style={[s.editorHandle, { backgroundColor: colors.surfaceBorder }]}
             />
-            <Text style={[s.modalTitle, d.modalTitle]}>
-              {editingGroupId
-                ? t('notes.manageGroups.renameTitle', {
-                    defaultValue: '编辑名称',
-                  })
-                : t('notes.manageGroups.createNew', {
-                    defaultValue: '新增分组',
-                  })}
-            </Text>
-            <TextInput
-              ref={groupNameInputRef}
-              style={[s.modalInput, d.modalInput]}
-              placeholder={t('notes.manageGroups.namePlaceholder', {
-                defaultValue: '输入分组名添加新的分组',
-              })}
-              placeholderTextColor={colors.textSecondary}
-              value={draftGroupName}
-              onChangeText={setDraftGroupName}
-              autoFocus
-              returnKeyType="done"
-              onSubmitEditing={handleSubmitGroupPress}
-            />
-            <View style={s.modalButtons}>
-              <Pressable onPress={closeGroupEditor} hitSlop={8}>
-                <Text style={[s.modalActionText, d.modalActionText]}>
-                  {t('common.cancel', { defaultValue: '取消' })}
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[
-                  s.saveBtn,
-                  d.saveBtn,
-                  savingGroup ? s.saveBtnDisabled : null,
-                ]}
-                onPress={handleSubmitGroupPress}
-                disabled={savingGroup}
-              >
-                <Text style={[s.saveBtnText, d.saveBtnText]}>
-                  {savingGroup
-                    ? t('notes.manageGroups.saving', {
-                        defaultValue: '保存中...',
-                      })
-                    : editingGroupId
-                      ? t('notes.manageGroups.saveEdit', {
-                          defaultValue: '保存修改',
-                        })
-                      : t('notes.manageGroups.createNew', {
-                          defaultValue: '新增分组',
-                        })}
-                </Text>
-              </Pressable>
+            <View style={s.editorTitleBlock}>
+              <Text style={[s.modalTitle, d.modalTitle]}>
+                {editingGroupId
+                  ? t('notes.manageGroups.renameTitle', {
+                      defaultValue: '编辑名称',
+                    })
+                  : t('notes.manageGroups.createNew', {
+                      defaultValue: '新增分组',
+                    })}
+              </Text>
+              <Text style={[s.editorHint, d.modalCopy]}>
+                {editingGroupId
+                  ? t('notes.manageGroups.renameHint', {
+                      name: editingGroupName,
+                      defaultValue: `正在重命名「${editingGroupName}」`,
+                    })
+                  : t('notes.manageGroups.createHint', {
+                      max: MAX_NOTE_GROUPS,
+                      defaultValue: `分组帮你归类笔记，最多可创建 ${MAX_NOTE_GROUPS} 个。`,
+                    })}
+              </Text>
             </View>
+            <View style={s.editorField}>
+              <Text style={[s.editorFieldLabel, d.modalCopy]}>
+                {t('notes.manageGroups.nameLabel', { defaultValue: '分组名称' })}
+              </Text>
+              <TextInput
+                ref={groupNameInputRef}
+                style={[s.modalInput, d.modalInput]}
+                placeholder={t('notes.manageGroups.namePlaceholder', {
+                  defaultValue: '输入分组名添加新的分组',
+                })}
+                placeholderTextColor={colors.textSecondary}
+                value={draftGroupName}
+                onChangeText={setDraftGroupName}
+                maxLength={GROUP_NAME_MAX_LENGTH}
+                autoFocus
+                returnKeyType="done"
+                onSubmitEditing={handleSubmitGroupPress}
+              />
+              <Text style={[s.editorCharCount, d.modalCopy]}>
+                {draftGroupName.length}/{GROUP_NAME_MAX_LENGTH}
+              </Text>
+            </View>
+            <View style={s.editorSpacer} />
+            <Pressable
+              style={[
+                s.editorPrimaryBtn,
+                d.saveBtn,
+                savingGroup ? s.saveBtnDisabled : null,
+              ]}
+              onPress={handleSubmitGroupPress}
+              disabled={savingGroup}
+              accessibilityRole="button"
+            >
+              <Text style={[s.saveBtnText, d.saveBtnText]}>
+                {savingGroup
+                  ? t('notes.manageGroups.saving', {
+                      defaultValue: '保存中...',
+                    })
+                  : editingGroupId
+                    ? t('notes.manageGroups.saveEdit', {
+                        defaultValue: '保存修改',
+                      })
+                    : t('notes.manageGroups.createNew', {
+                        defaultValue: '新增分组',
+                      })}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={s.editorCancelBtn}
+              onPress={closeGroupEditor}
+              hitSlop={8}
+              accessibilityRole="button"
+            >
+              <Text style={[s.modalActionText, d.modalActionText]}>
+                {t('common.cancel', { defaultValue: '取消' })}
+              </Text>
+            </Pressable>
           </View>
         </KeyboardAvoidingView>
       </BottomSheetModal>
@@ -999,6 +1032,22 @@ const s = StyleSheet.create({
     height: 4,
     borderRadius: Radius.full,
     marginBottom: Spacing.xs,
+  },
+  editorTitleBlock: { gap: Spacing.xs, marginTop: Spacing.xs },
+  editorHint: { ...Typography.small },
+  editorField: { gap: Spacing.xs, marginTop: Spacing.sm },
+  editorFieldLabel: { ...Typography.small, fontWeight: '600' },
+  editorCharCount: { ...Typography.small, alignSelf: 'flex-end' },
+  editorSpacer: { flex: 1 },
+  editorPrimaryBtn: {
+    height: 48,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editorCancelBtn: {
+    alignSelf: 'center',
+    paddingVertical: Spacing.sm,
   },
   // 明显的胶囊输入：可见边框 + 凹槽底 + 轻阴影，一眼看出是可输入区域。
   modalInput: {
