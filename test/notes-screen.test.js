@@ -502,9 +502,12 @@ test('NoteDetailScreen follows the divider + icon-chip section design', () => {
   assert.match(detail, /renderSectionHeader\(\s*'text-outline'/);
   assert.doesNotMatch(detail, /sectionCard:/);
 
-  // 来源名片：主色浅底 + 深一档实心靛蓝"查看原消息"胶囊（primaryDeep token）。
+  // 来源名片：主色浅底的纯标识条（不再是按钮）。跳转动作全部移到右下角悬浮列，
+  // 所以原来那颗 primaryDeep 的"查看原消息"胶囊已删除。
   assert.match(detail, /sourceCard: \{ backgroundColor: colors\.primaryLight \}/);
-  assert.match(detail, /sourceBtn: \{ backgroundColor: colors\.primaryDeep \}/);
+  assert.doesNotMatch(detail, /sourceBtn:/);
+  // 悬浮钮用不透明 surface 底 + 细边，压在图片上也不透字。
+  assert.match(detail, /floatingBtn: \{\s*backgroundColor: colors\.surface/);
 
   // 分组标签：方形品牌紫实心块 + 白字（brandPurple = 会员卡渐变核心 #7C5CF0）。
   assert.match(detail, /groupTag: \{ backgroundColor: colors\.brandPurple \}/);

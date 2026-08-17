@@ -2303,7 +2303,8 @@
       "sourceGroupLabel": "From group chat",
       "sourcePrivateLabel": "From private chat",
       "sourceSharedBy": "Shared by {{name}}",
-      "sourceLocate": "View original message"
+      "chatWithSender": "Chat with {{name}}",
+      "openGroupSource": "View the original message in \"{{name}}\""
     },
     "edit": {
       "addImage": "Add image",

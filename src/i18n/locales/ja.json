@@ -810,7 +810,8 @@
       "sourceGroupLabel": "グループチャットから",
       "sourcePrivateLabel": "個人チャットから",
       "sourceSharedBy": "{{name}}さんがシェア",
-      "sourceLocate": "元のメッセージを見る"
+      "chatWithSender": "{{name}} とチャット",
+      "openGroupSource": "グループ「{{name}}」で元のメッセージを見る"
     },
     "edit": {
       "addImage": "画像を追加",

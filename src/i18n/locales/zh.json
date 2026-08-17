@@ -2300,7 +2300,8 @@
       "sourceGroupLabel": "来自群聊",
       "sourcePrivateLabel": "来自私聊",
       "sourceSharedBy": "{{name}} 分享",
-      "sourceLocate": "查看原消息"
+      "chatWithSender": "和 {{name}} 私聊",
+      "openGroupSource": "在群聊「{{name}}」中查看原消息"
     },
     "edit": {
       "addImage": "添加图片",

@@ -810,7 +810,8 @@
       "sourceGroupLabel": "그룹 채팅에서",
       "sourcePrivateLabel": "개인 채팅에서",
       "sourceSharedBy": "{{name}}님이 공유",
-      "sourceLocate": "원본 메시지 보기"
+      "chatWithSender": "{{name}}님과 대화",
+      "openGroupSource": "그룹 \"{{name}}\"에서 원본 메시지 보기"
     },
     "edit": {
       "addImage": "이미지 추가",

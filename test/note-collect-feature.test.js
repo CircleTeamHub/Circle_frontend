@@ -47,12 +47,14 @@ test('NoteDetailScreen renders a source card and jumps back to the sharing messa
   assert.match(src, /sourceGroupLabel/);
   assert.match(src, /sourcePrivateLabel/);
   assert.match(src, /sourceSharedBy/);
-  // 点击名片 → 会话入**当前所在** tab 栈（笔记多挂 profile 下），返回时回到这张
-  // 笔记而不是 IM 首页；写死 'messages' 会把聊天页推进消息栈，返回就串栈了。
+  // 会话入**当前所在** tab 栈（笔记多挂 profile 下），返回时回到这张笔记而不是
+  // IM 首页；写死 'messages' 会把聊天页推进消息栈，返回就串栈了。
   assert.match(src, /getChatDetailHref\(\s*scope/);
   assert.doesNotMatch(src, /getChatDetailHref\(\s*'messages'/);
   assert.match(src, /getUserProfileScopeFromSegments\(segments\)/);
   assert.match(src, /from\.clientMsgID/);
+  // 来源卡片只作标识，不再是按钮；跳转全部移到右下角悬浮列。
+  assert.doesNotMatch(src, /sourceLocate/);
   // 快照缺关键字段时整卡不渲染，避免点了跳不动。
   assert.match(src, /if \(!from\?\.conversationID \|\| !from\.clientMsgID\) return null/);
 });
@@ -82,7 +84,9 @@ test('note source i18n keys exist across all five locales', () => {
     assert.equal(typeof json.notes.detail.sourceGroupLabel, 'string', `${lng} sourceGroupLabel`);
     assert.equal(typeof json.notes.detail.sourcePrivateLabel, 'string', `${lng} sourcePrivateLabel`);
     assert.equal(typeof json.notes.detail.sourceSharedBy, 'string', `${lng} sourceSharedBy`);
-    assert.equal(typeof json.notes.detail.sourceLocate, 'string', `${lng} sourceLocate`);
+    // sourceLocate（「查看原消息」）随卡片按钮一起删除 —— 跳转移到悬浮列后
+    // 这个 key 已无引用，留着就是死翻译。
+    assert.equal(json.notes.detail.sourceLocate, undefined, `${lng} 残留 sourceLocate`);
     assert.equal(typeof json.notes.list.fromSource, 'string', `${lng} fromSource`);
     assert.equal(
       typeof json.chat.messageActions.noteCollected,
@@ -152,4 +156,37 @@ test('来源按钮进聊天走当前 tab 栈，群按钮不再带气泡图标', 
 
   // 群来源按钮已有群头像 + 群名，气泡图标是冗余装饰。
   assert.doesNotMatch(card, /chatbubbles-outline/);
+});
+
+test('笔记详情右下角悬浮列：私聊分享者 / 回群定位 / 存 PDF', () => {
+  const src = read('src/features/notes/screens/NoteDetailScreen.tsx');
+
+  assert.match(src, /floatingDock/);
+  // 三个动作各自独立，不再共用一个「查看原消息」跳转。
+  assert.match(src, /const handleChatWithSender = useCallback/);
+  assert.match(src, /const handleOpenGroupSource = useCallback/);
+  assert.match(src, /onPress=\{\(\) => void handleExport\('PDF'\)\}/);
+
+  // 私聊按钮永远跳私聊；群来源时原消息在群里，私聊不带定位参数。
+  assert.match(src, /isGroup \? undefined : from\.conversationID/);
+  assert.match(src, /isGroup \? undefined : from\.clientMsgID/);
+  // 群按钮带 clientMsgID 定位到分享该笔记的原消息。
+  assert.match(src, /'group',\s*\)/);
+
+  // sender / group 分开暴露，各按钮自行判空（历史快照可能缺 sender）。
+  assert.match(src, /const sender = from\.sender\?\.id/);
+  assert.match(src, /collectedSource\?\.sender \? \(/);
+  assert.match(src, /collectedSource\?\.group \? \(/);
+
+  // 导出进行中禁用，避免重复触发后端导出。
+  assert.match(src, /disabled=\{exporting !== null\}/);
+});
+
+test('悬浮列无障碍文案五语言齐备', () => {
+  for (const lng of ['zh', 'en', 'ja', 'ko', 'es']) {
+    const json = JSON.parse(read(`src/i18n/locales/${lng}.json`));
+    assert.equal(typeof json.notes.detail.chatWithSender, 'string', `${lng} chatWithSender`);
+    assert.equal(typeof json.notes.detail.openGroupSource, 'string', `${lng} openGroupSource`);
+    assert.equal(typeof json.notes.detail.downloadPdf, 'string', `${lng} downloadPdf`);
+  }
 });

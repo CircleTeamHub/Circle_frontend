@@ -811,7 +811,8 @@
       "sourceGroupLabel": "De un chat de grupo",
       "sourcePrivateLabel": "De un chat privado",
       "sourceSharedBy": "Compartida por {{name}}",
-      "sourceLocate": "Ver mensaje original"
+      "chatWithSender": "Chatear con {{name}}",
+      "openGroupSource": "Ver el mensaje original en \"{{name}}\""
     },
     "edit": {
       "addImage": "Añadir imagen",
