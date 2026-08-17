@@ -27,7 +27,7 @@ import { fetchCollections, type UserCollection } from '@/services/api/collection
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { fetchNotes } from '@/services/api/notes';
 import i18n from '@/i18n';
-import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { Radius, Spacing, Typography, useTheme, withAlpha } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 type ShareType = 'note' | 'friend' | 'favorite' | 'quick-reply';
@@ -47,32 +47,41 @@ function shareTitle(type: ShareType): string {
 }
 
 // 底栏常驻的「发什么」开关(横排 icon+短标签)。「全部」是四项的派生开关,单独渲染。
+// accent 取自色板 token:每项一个色相,选中时同色淡底+同色描边+同色图标文字,
+// 未选中保持中性灰 —— 让"选了什么"一眼可辨,而不是五个一样的灰框。
 const NOTE_OPTION_CHIPS = [
   {
     key: 'card',
     icon: 'document-text-outline',
+    accent: 'primary',
     labelKey: 'share.noteBatch.optionCard',
     defaultLabel: '笔记',
   },
   {
     key: 'media',
     icon: 'images-outline',
+    accent: 'blue',
     labelKey: 'share.noteBatch.optionMedia',
     defaultLabel: '图片视频',
   },
   {
     key: 'showcase',
     icon: 'sparkles-outline',
+    accent: 'orange',
     labelKey: 'share.noteBatch.optionShowcase',
     defaultLabel: '展示',
   },
   {
     key: 'location',
     icon: 'location-outline',
+    accent: 'success',
     labelKey: 'share.noteBatch.optionLocation',
     defaultLabel: '地址',
   },
 ] as const;
+
+/** 「全部」是四项的派生开关，用品牌紫与单项色相区隔。 */
+const NOTE_OPTION_ALL_ACCENT = 'brandPurple' as const;
 
 const QUICK_REPLY_DEFAULTS: readonly string[] = [
   '在的，你说',
@@ -449,13 +458,14 @@ export default function SharePickerScreen() {
             s.noteBar,
             {
               backgroundColor: colors.surface,
-              borderTopColor: colors.surfaceBorder,
+              borderTopColor: colors.divider,
+              shadowColor: colors.black,
               paddingBottom: insets.bottom + Spacing.sm,
             },
           ]}
         >
           {atSelectionLimit ? (
-            <Text style={[s.noteBarHint, { color: colors.textSecondary }]}>
+            <Text style={[s.noteBarHint, { color: colors.warning }]}>
               {i18n.t('share.noteBatch.limitHint', {
                 defaultValue: '最多选择 {{count}} 条笔记',
                 count: MAX_NOTE_BATCH_SELECTION,
@@ -465,18 +475,17 @@ export default function SharePickerScreen() {
           <View style={s.optionChipsRow}>
             {NOTE_OPTION_CHIPS.map((chip) => {
               const checked = sendOptions[chip.key];
+              const accent = colors[chip.accent];
               return (
                 <Pressable
                   key={chip.key}
                   style={[
                     s.optionChip,
                     {
-                      borderColor: checked
-                        ? colors.primary
-                        : colors.surfaceBorder,
+                      borderColor: checked ? accent : colors.surfaceBorder,
                       backgroundColor: checked
-                        ? colors.background
-                        : 'transparent',
+                        ? withAlpha(accent, 0.12)
+                        : colors.background,
                     },
                   ]}
                   onPress={() =>
@@ -490,13 +499,14 @@ export default function SharePickerScreen() {
                 >
                   <Ionicons
                     name={chip.icon}
-                    size={18}
-                    color={checked ? colors.primary : colors.textSecondary}
+                    size={20}
+                    color={checked ? accent : colors.textSecondary}
                   />
                   <Text
                     style={[
                       s.optionChipLabel,
-                      { color: checked ? colors.primary : colors.textSecondary },
+                      checked ? s.optionChipLabelOn : null,
+                      { color: checked ? accent : colors.textSecondary },
                     ]}
                     numberOfLines={1}
                   >
@@ -505,53 +515,53 @@ export default function SharePickerScreen() {
                 </Pressable>
               );
             })}
-            <Pressable
-              style={[
-                s.optionChip,
-                {
-                  borderColor: isAllNoteSendOptions(sendOptions)
-                    ? colors.primary
-                    : colors.surfaceBorder,
-                  backgroundColor: isAllNoteSendOptions(sendOptions)
-                    ? colors.background
-                    : 'transparent',
-                },
-              ]}
-              onPress={() =>
-                setSendOptions((prev) =>
-                  withAllNoteSendOptions(prev, !isAllNoteSendOptions(prev)),
-                )
-              }
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: isAllNoteSendOptions(sendOptions) }}
-            >
-              <Ionicons
-                name="checkmark-done-outline"
-                size={18}
-                color={
-                  isAllNoteSendOptions(sendOptions)
-                    ? colors.primary
-                    : colors.textSecondary
-                }
-              />
-              <Text
-                style={[
-                  s.optionChipLabel,
-                  {
-                    color: isAllNoteSendOptions(sendOptions)
-                      ? colors.primary
-                      : colors.textSecondary,
-                  },
-                ]}
-                numberOfLines={1}
-              >
-                {i18n.t('share.noteBatch.optionAll', { defaultValue: '全部' })}
-              </Text>
-            </Pressable>
+            {(() => {
+              const allOn = isAllNoteSendOptions(sendOptions);
+              const accent = colors[NOTE_OPTION_ALL_ACCENT];
+              return (
+                <Pressable
+                  style={[
+                    s.optionChip,
+                    {
+                      borderColor: allOn ? accent : colors.surfaceBorder,
+                      backgroundColor: allOn
+                        ? withAlpha(accent, 0.12)
+                        : colors.background,
+                    },
+                  ]}
+                  onPress={() =>
+                    setSendOptions((prev) =>
+                      withAllNoteSendOptions(prev, !isAllNoteSendOptions(prev)),
+                    )
+                  }
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: allOn }}
+                >
+                  <Ionicons
+                    name="checkmark-done-outline"
+                    size={20}
+                    color={allOn ? accent : colors.textSecondary}
+                  />
+                  <Text
+                    style={[
+                      s.optionChipLabel,
+                      allOn ? s.optionChipLabelOn : null,
+                      { color: allOn ? accent : colors.textSecondary },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {i18n.t('share.noteBatch.optionAll', { defaultValue: '全部' })}
+                  </Text>
+                </Pressable>
+              );
+            })()}
           </View>
           <Pressable
             style={[
               s.noteSendButton,
+              hasAnyNoteSendOption(sendOptions)
+                ? [s.noteSendButtonOn, { shadowColor: colors.primary }]
+                : null,
               {
                 backgroundColor: hasAnyNoteSendOption(sendOptions)
                   ? colors.primary
@@ -562,7 +572,25 @@ export default function SharePickerScreen() {
             onPress={handleConfirmSend}
             accessibilityRole="button"
           >
-            <Text style={[s.noteSendButtonText, { color: colors.white }]}>
+            <Ionicons
+              name="paper-plane"
+              size={17}
+              color={
+                hasAnyNoteSendOption(sendOptions)
+                  ? colors.white
+                  : colors.textSecondary
+              }
+            />
+            <Text
+              style={[
+                s.noteSendButtonText,
+                {
+                  color: hasAnyNoteSendOption(sendOptions)
+                    ? colors.white
+                    : colors.textSecondary,
+                },
+              ]}
+            >
               {i18n.t('share.noteBatch.next', {
                 defaultValue: '发送 ({{count}})',
                 count: selectedNotes.length,
@@ -613,49 +641,68 @@ const s = StyleSheet.create({
   // 底栏最高态(上限提示行 + 常驻选项行 + 发送键 + 34pt 刘海 inset)约 175pt,
   // 再留出大字号无障碍余量。
   noteListContentWithBar: {
-    paddingBottom: 192,
+    paddingBottom: 208,
   },
   noteBar: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    paddingTop: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    paddingHorizontal: Spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    gap: Spacing.xs,
+    gap: Spacing.sm,
+    // 底栏浮在列表之上：上缘投影替代硬分割线的重量感。
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 12,
   },
   noteBarHint: {
     ...Typography.small,
+    fontWeight: '500',
     textAlign: 'center',
   },
   noteSendButton: {
-    minHeight: 48,
-    borderRadius: Radius.md,
+    flexDirection: 'row',
+    minHeight: 50,
+    borderRadius: Radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: Spacing.xs + 2,
+  },
+  // 可发送时给主按钮一层同色辉光，和置灰态拉开层次。
+  noteSendButtonOn: {
+    shadowOpacity: 0.32,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
   noteSendButtonText: {
     ...Typography.body,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   optionChipsRow: {
     flexDirection: 'row',
-    gap: Spacing.xs,
+    gap: Spacing.sm - 2,
   },
   optionChip: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
-    paddingVertical: Spacing.xs + 2,
+    gap: Spacing.xs,
+    paddingVertical: Spacing.sm + 2,
     paddingHorizontal: 2,
-    borderRadius: Radius.md,
-    borderWidth: 1,
+    borderRadius: Radius.lg,
+    borderWidth: 1.5,
   },
   optionChipLabel: {
-    ...Typography.small,
+    ...Typography.tinyRegular,
     fontWeight: '500',
+  },
+  optionChipLabelOn: {
+    fontWeight: '700',
   },
   listContent: {
     paddingHorizontal: Spacing.lg,

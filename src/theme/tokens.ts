@@ -38,3 +38,18 @@ export const Gradients = {
   // 会员卡渐变（左下深紫 → 中紫 → 右上亮紫），用于个人页「我的图标」卡片底。
   memberCard: ['#5B4BE6', '#7C5CF0', '#A86BF0'] as const,
 } as const;
+
+/**
+ * 把 token 里的 #RRGGBB 派生成半透明版本（用于选中态淡底等）。
+ * 只做透明度派生 —— 色相仍旧来自色板 token，不在组件里手写新颜色。
+ * 非 #RRGGBB 输入（已是 rgba/命名色）原样返回，调用方不必分支。
+ */
+export function withAlpha(color: string, alpha: number): string {
+  const hex = /^#([0-9a-f]{6})$/i.exec(color);
+  if (!hex) return color;
+  const value = parseInt(hex[1], 16);
+  const r = (value >> 16) & 255;
+  const g = (value >> 8) & 255;
+  const b = value & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
