@@ -27,9 +27,23 @@ test('chat exposes a full-screen OpenStreetMap picker route', () => {
   assert.match(screen, /MapLocationPickerScreen/);
   assert.match(sharedMap, /tile\.openstreetmap\.org/);
   assert.match(sharedMap, /nominatim\.openstreetmap\.org\/search/);
-  assert.match(sharedMap, /location-selected/);
+  assert.match(sharedMap, /location-changed/);
+  assert.doesNotMatch(sharedMap, /location-selected/);
+  assert.doesNotMatch(sharedMap, /unpkg\.com|<script src=|<link rel="stylesheet" href="https:/);
+  assert.match(sharedMap, /LEAFLET_1_9_4_JS/);
+  assert.match(sharedMap, /Content-Security-Policy/);
+  assert.match(sharedMap, /onShouldStartLoadWithRequest/);
+  assert.match(sharedMap, /setCandidateLocation/);
+  assert.match(sharedMap, /onPress=\{handleConfirm\}/);
   assert.match(sharedMap, /serializeForInlineScript/);
   assert.match(sharedMap, /replaceAll\('<', '\\\\u003c'\)/);
+
+  const leaflet = read(
+    'src/features/location/components/leaflet-1.9.4.ts',
+  );
+  assert.match(leaflet, /Leaflet 1\.9\.4/);
+  assert.match(leaflet, /export const LEAFLET_1_9_4_JS/);
+  assert.match(leaflet, /export const LEAFLET_1_9_4_CSS/);
 });
 
 test('location bubbles show a real map tile and open the system map', () => {
