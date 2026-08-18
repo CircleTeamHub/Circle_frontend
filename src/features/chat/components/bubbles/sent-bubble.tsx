@@ -167,8 +167,11 @@ const sReactions = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    backgroundColor: 'rgba(127,127,127,0.15)',
+    // 自己发的气泡是实心主题紫，pill 直接叠白色半透明层（与 quoteBox 同语言）。
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
-  pillMine: { borderWidth: 1, borderColor: 'rgba(127,127,127,0.6)' },
-  pillText: { fontSize: 12 },
+  pillMine: { borderColor: '#FFFFFF' },
+  pillText: { fontSize: 12, color: '#FFFFFF' },
 });

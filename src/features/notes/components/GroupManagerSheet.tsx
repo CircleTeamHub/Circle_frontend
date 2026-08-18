@@ -4,8 +4,10 @@ import {
   Alert,
   Animated,
   FlatList,
+  KeyboardAvoidingView,
   Modal,
   PanResponder,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,6 +16,7 @@ import {
   View,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   createNoteGroup,
   deleteNoteGroup,
@@ -23,7 +26,11 @@ import {
 } from '@/services/api/notes';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { NoteCard } from '@/features/notes/components/NoteCard';
 import type { NoteGroup, NoteSummary } from '@/features/notes/types';
+import { useNotesTabOrderStore } from '@/features/notes/store/use-notes-tab-order-store';
+import { NOTES_TAB_ALL, mergeTabOrder } from '@/features/notes/utils/tab-order';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 // 抽自 NotesScreen 的"管理分组"Modal —— 把 group CRUD、拖拽排序、成员选择器一并搬过来。
@@ -41,8 +48,16 @@ interface Props {
 }
 
 const GROUP_ROW_HEIGHT = 64;
-const MAX_NOTE_GROUPS = 10;
+export const MAX_NOTE_GROUPS = 10;
+/** 与后端 CreateNoteGroupDto 的 @MaxLength(30) 对齐 */
+export const GROUP_NAME_MAX_LENGTH = 30;
 const MEMBERSHIP_SAVE_CONCURRENCY = 5;
+
+/** 排序列表里的一行：固定 tab（全部/未分组，group=null）或用户分组。 */
+interface ManagerRow {
+  id: string;
+  group: NoteGroup | null;
+}
 
 async function runWithConcurrencyLimit<T>(
   items: T[],
@@ -66,44 +81,67 @@ export function GroupManagerSheet({
 }: Props) {
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  const tabOrderIds = useNotesTabOrderStore((state) => state.orderIds);
+  const setTabOrderIds = useNotesTabOrderStore((state) => state.setOrderIds);
 
   const [draftGroupName, setDraftGroupName] = useState('');
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  // 新增/改名共用的弹出编辑 sheet（常驻输入框已移除）。
+  const [groupEditorOpen, setGroupEditorOpen] = useState(false);
   const [savingGroup, setSavingGroup] = useState(false);
   const [editingMembershipGroup, setEditingMembershipGroup] =
     useState<NoteGroup | null>(null);
   const [membershipNoteIds, setMembershipNoteIds] = useState<string[]>([]);
   const [membershipSearch, setMembershipSearch] = useState('');
   const [savingMemberships, setSavingMemberships] = useState(false);
-  const [draggingGroupId, setDraggingGroupId] = useState<string | null>(null);
-  const [dragPreviewGroups, setDragPreviewGroups] = useState<NoteGroup[] | null>(null);
+  const [draggingRowId, setDraggingRowId] = useState<string | null>(null);
+  const [dragPreviewRows, setDragPreviewRows] = useState<ManagerRow[] | null>(
+    null,
+  );
   const dragY = useRef(new Animated.Value(0)).current;
-  const groupsRef = useRef<NoteGroup[]>([]);
-  const dragPreviewGroupsRef = useRef<NoteGroup[] | null>(null);
+  const rowsRef = useRef<ManagerRow[]>([]);
+  const dragPreviewRowsRef = useRef<ManagerRow[] | null>(null);
   const groupNameInputRef = useRef<TextInput>(null);
   const dragRespondersRef = useRef(
     new Map<string, ReturnType<typeof PanResponder.create>>(),
   );
   const dragMetaRef = useRef<{
-    groupId: string;
+    rowId: string;
     startIndex: number;
     activeIndex: number;
   } | null>(null);
 
+  // 固定 tab（全部/未分组）与用户分组同列表排序：整条顺序走本地持久化，
+  // 分组之间的相对顺序仍写回服务端 sortOrder。
+  const rows = useMemo<ManagerRow[]>(() => {
+    const byId = new Map(groups.map((group) => [group.id, group]));
+    return mergeTabOrder(
+      tabOrderIds,
+      groups.map((group) => group.id),
+    ).map((id) => ({ id, group: byId.get(id) ?? null }));
+  }, [groups, tabOrderIds]);
+
+  const ungroupedCount = useMemo(
+    () => notes.filter((note) => note.groups.length === 0).length,
+    [notes],
+  );
+
   useEffect(() => {
-    groupsRef.current = groups;
-    dragRespondersRef.current.forEach((_, groupId) => {
-      if (!groups.some((group) => group.id === groupId)) {
-        dragRespondersRef.current.delete(groupId);
+    rowsRef.current = rows;
+    dragRespondersRef.current.forEach((_, rowId) => {
+      if (!rows.some((row) => row.id === rowId)) {
+        dragRespondersRef.current.delete(rowId);
       }
     });
-  }, [groups]);
+  }, [rows]);
 
   useEffect(() => {
-    dragPreviewGroupsRef.current = dragPreviewGroups;
-  }, [dragPreviewGroups]);
+    dragPreviewRowsRef.current = dragPreviewRows;
+  }, [dragPreviewRows]);
 
-  const displayGroups = dragPreviewGroups ?? groups;
+
+  const displayRows = dragPreviewRows ?? rows;
   const isCreatingGroupAtLimit =
     !editingGroupId && groups.length >= MAX_NOTE_GROUPS;
 
@@ -122,16 +160,17 @@ export function GroupManagerSheet({
 
   const resetDragState = useCallback(() => {
     dragMetaRef.current = null;
-    dragPreviewGroupsRef.current = null;
+    dragPreviewRowsRef.current = null;
     dragY.stopAnimation();
     dragY.setValue(0);
-    setDraggingGroupId(null);
-    setDragPreviewGroups(null);
+    setDraggingRowId(null);
+    setDragPreviewRows(null);
   }, [dragY]);
 
   const handleClose = useCallback(() => {
     resetDragState();
     resetGroupDraft();
+    setGroupEditorOpen(false);
     resetGroupMembershipEditor();
     onClose();
   }, [onClose, resetDragState, resetGroupDraft, resetGroupMembershipEditor]);
@@ -151,6 +190,7 @@ export function GroupManagerSheet({
         setGroups((prev) => [...prev, created]);
       }
       resetGroupDraft();
+      setGroupEditorOpen(false);
     } catch (error) {
       setSavingGroup(false);
       Alert.alert(
@@ -175,6 +215,37 @@ export function GroupManagerSheet({
     setGroups,
     t,
   ]);
+
+  // 「+ 新增分组」：达到上限直接拦，否则清草稿弹出编辑 sheet。
+  const openCreateGroupEditor = useCallback(() => {
+    if (isCreatingGroupAtLimit) {
+      Alert.alert(
+        t('notes.alerts.groupLimitTitle', { defaultValue: '分组已达上限' }),
+        t('notes.alerts.groupLimitMessage', {
+          max: MAX_NOTE_GROUPS,
+          defaultValue: `最多只能创建 ${MAX_NOTE_GROUPS} 个分组。`,
+        }),
+      );
+      return;
+    }
+    resetGroupDraft();
+    setGroupEditorOpen(true);
+  }, [isCreatingGroupAtLimit, resetGroupDraft, t]);
+
+  const openRenameGroupEditor = useCallback((group: NoteGroup) => {
+    setEditingGroupId(group.id);
+    setDraftGroupName(group.name);
+    setGroupEditorOpen(true);
+  }, []);
+
+  const closeGroupEditor = useCallback(() => {
+    setGroupEditorOpen(false);
+    resetGroupDraft();
+  }, [resetGroupDraft]);
+
+  const editingGroupName = editingGroupId
+    ? (groups.find((group) => group.id === editingGroupId)?.name ?? '')
+    : '';
 
   const handleSubmitGroupPress = useCallback(() => {
     if (!draftGroupName.trim()) {
@@ -342,8 +413,7 @@ export function GroupManagerSheet({
   );
 
   const handleReorderGroups = useCallback(
-    async (nextGroups: NoteGroup[]) => {
-      const previousGroups = groupsRef.current;
+    async (nextGroups: NoteGroup[], previousGroups: NoteGroup[]) => {
       setGroups(nextGroups);
       try {
         const orderedGroups = await reorderNoteGroups(
@@ -368,21 +438,32 @@ export function GroupManagerSheet({
 
   const finishDrag = useCallback(() => {
     const meta = dragMetaRef.current;
-    const finalGroups = dragPreviewGroupsRef.current ?? groupsRef.current;
-    const changed = finalGroups.some(
-      (group, index) => group.id !== groupsRef.current[index]?.id,
+    const finalRows = dragPreviewRowsRef.current ?? rowsRef.current;
+    const previousRows = rowsRef.current;
+    const changed = finalRows.some(
+      (row, index) => row.id !== previousRows[index]?.id,
     );
 
     resetDragState();
 
-    if (meta && changed) {
-      void handleReorderGroups(finalGroups);
+    if (!meta || !changed) return;
+    // 整条顺序（含「全部/未分组」的位置）落本地；分组间相对顺序变了才写服务端。
+    setTabOrderIds(finalRows.map((row) => row.id));
+    const nextGroups = finalRows.flatMap((row) => (row.group ? [row.group] : []));
+    const previousGroups = previousRows.flatMap((row) =>
+      row.group ? [row.group] : [],
+    );
+    const groupOrderChanged = nextGroups.some(
+      (group, index) => group.id !== previousGroups[index]?.id,
+    );
+    if (groupOrderChanged) {
+      void handleReorderGroups(nextGroups, previousGroups);
     }
-  }, [handleReorderGroups, resetDragState]);
+  }, [handleReorderGroups, resetDragState, setTabOrderIds]);
 
   const getDragResponder = useCallback(
-    (groupId: string) => {
-      const cached = dragRespondersRef.current.get(groupId);
+    (rowId: string) => {
+      const cached = dragRespondersRef.current.get(rowId);
       if (cached) return cached;
 
       const responder = PanResponder.create({
@@ -390,26 +471,24 @@ export function GroupManagerSheet({
         onMoveShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponderCapture: () => true,
         onPanResponderGrant: () => {
-          const currentGroups = groupsRef.current;
-          const startIndex = groupsRef.current.findIndex(
-            (group) => group.id === groupId,
-          );
+          const currentRows = rowsRef.current;
+          const startIndex = currentRows.findIndex((row) => row.id === rowId);
           if (startIndex < 0) return;
           dragMetaRef.current = {
-            groupId,
+            rowId,
             startIndex,
             activeIndex: startIndex,
           };
-          setDraggingGroupId(groupId);
-          const nextPreviewGroups = [...currentGroups];
-          setDragPreviewGroups(nextPreviewGroups);
-          dragPreviewGroupsRef.current = nextPreviewGroups;
+          setDraggingRowId(rowId);
+          const nextPreviewRows = [...currentRows];
+          setDragPreviewRows(nextPreviewRows);
+          dragPreviewRowsRef.current = nextPreviewRows;
           dragY.setValue(0);
         },
         onPanResponderMove: (_, gestureState) => {
           const meta = dragMetaRef.current;
           if (!meta) return;
-          const source = dragPreviewGroupsRef.current ?? groupsRef.current;
+          const source = dragPreviewRowsRef.current ?? rowsRef.current;
           const nextIndex = Math.max(
             0,
             Math.min(
@@ -422,12 +501,12 @@ export function GroupManagerSheet({
           );
 
           if (nextIndex !== meta.activeIndex) {
-            const nextGroups = [...source];
-            const [moved] = nextGroups.splice(meta.activeIndex, 1);
-            nextGroups.splice(nextIndex, 0, moved);
+            const nextRows = [...source];
+            const [moved] = nextRows.splice(meta.activeIndex, 1);
+            nextRows.splice(nextIndex, 0, moved);
             meta.activeIndex = nextIndex;
-            dragPreviewGroupsRef.current = nextGroups;
-            setDragPreviewGroups(nextGroups);
+            dragPreviewRowsRef.current = nextRows;
+            setDragPreviewRows(nextRows);
           }
 
           dragY.setValue(
@@ -441,7 +520,7 @@ export function GroupManagerSheet({
         onShouldBlockNativeResponder: () => true,
       });
 
-      dragRespondersRef.current.set(groupId, responder);
+      dragRespondersRef.current.set(rowId, responder);
       return responder;
     },
     [dragY, finishDrag],
@@ -449,12 +528,12 @@ export function GroupManagerSheet({
 
   const d = useMemo(
     () => ({
-      modalOverlay: { backgroundColor: 'rgba(0, 0, 0, 0.45)' as const },
-      modalCard: { backgroundColor: colors.surface },
+      screen: { backgroundColor: colors.background },
       modalTitle: { color: colors.text },
       modalCopy: { color: colors.textSecondary },
       limitText: { color: colors.textSecondary },
-      groupRow: { backgroundColor: colors.background },
+      // 全屏页底是 background，行卡片翻成 surface 才立得出来。
+      groupRow: { backgroundColor: colors.surface },
       groupName: { color: colors.text },
       groupCount: { color: colors.textSecondary },
       // 之前 borderColor 用了 surface（与面板同色 = 隐形）。改成可见边框 +
@@ -462,12 +541,11 @@ export function GroupManagerSheet({
       modalInput: {
         color: colors.text,
         borderColor: colors.surfaceBorder,
-        backgroundColor: colors.background,
+        backgroundColor: colors.surface,
       },
       modalActionText: { color: colors.textSecondary },
       saveBtn: { backgroundColor: colors.primary },
       saveBtnText: { color: colors.white },
-      membershipRowSelected: { borderColor: colors.primary },
       searchWrap: { backgroundColor: colors.surface },
       searchInput: { color: colors.text },
       searchPlaceholder: colors.textSecondary,
@@ -476,58 +554,41 @@ export function GroupManagerSheet({
     [colors],
   );
 
+  const toggleMembershipNoteCard = useCallback(
+    (note: NoteSummary) => toggleMembershipNote(note.id),
+    [toggleMembershipNote],
+  );
+
+  // 完整笔记卡片（与列表页同款：封面/元信息/备注/来源），勾选态复用 NoteCard 多选模式。
   const renderMembershipNote = useCallback(
-    ({ item }: { item: NoteSummary }) => {
-      const selected = selectedMembershipNoteIds.has(item.id);
-      return (
-        <Pressable
-          style={[
-            s.membershipRow,
-            d.groupRow,
-            selected ? [s.membershipRowSelected, d.membershipRowSelected] : null,
-          ]}
-          onPress={() => toggleMembershipNote(item.id)}
-        >
-          <View style={s.membershipText}>
-            <Text style={[s.groupName, d.groupName]} numberOfLines={1}>
-              {item.title}
-            </Text>
-            {item.contentPreview ? (
-              <Text style={[s.groupCount, d.groupCount]} numberOfLines={1}>
-                {item.contentPreview}
-              </Text>
-            ) : null}
-          </View>
-          <Ionicons
-            name={selected ? 'checkmark-circle' : 'ellipse-outline'}
-            size={22}
-            color={selected ? colors.primary : colors.textSecondary}
-          />
-        </Pressable>
-      );
-    },
-    [
-      colors.primary,
-      colors.textSecondary,
-      d.groupCount,
-      d.groupName,
-      d.groupRow,
-      d.membershipRowSelected,
-      selectedMembershipNoteIds,
-      toggleMembershipNote,
-    ],
+    ({ item }: { item: NoteSummary }) => (
+      <NoteCard
+        note={item}
+        onPress={toggleMembershipNoteCard}
+        showActions={false}
+        selectionMode
+        selected={selectedMembershipNoteIds.has(item.id)}
+      />
+    ),
+    [selectedMembershipNoteIds, toggleMembershipNoteCard],
   );
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={handleClose}
-    >
-      <View style={[s.modalOverlay, d.modalOverlay]} pointerEvents="box-none">
-        <Pressable style={s.modalBackdrop} onPress={handleClose} />
-        <View style={[s.modalCard, d.modalCard]}>
+    <Modal visible={visible} animationType="slide" onRequestClose={handleClose}>
+      <View
+        style={[
+          s.screen,
+          d.screen,
+          {
+            paddingTop: insets.top + Spacing.sm,
+            paddingBottom: insets.bottom + Spacing.sm,
+          },
+        ]}
+      >
+        <KeyboardAvoidingView
+          style={s.flexFill}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
           {editingMembershipGroup ? (
             <>
               <View style={s.membershipHeader}>
@@ -568,7 +629,12 @@ export function GroupManagerSheet({
                 keyExtractor={(item) => item.id}
                 renderItem={renderMembershipNote}
                 ItemSeparatorComponent={() => (
-                  <View style={s.membershipSeparator} />
+                  <View
+                    style={[
+                      s.membershipSeparator,
+                      { backgroundColor: colors.divider },
+                    ]}
+                  />
                 )}
         {...keyboardDismissOnDragProps}
                 showsVerticalScrollIndicator={false}
@@ -613,12 +679,23 @@ export function GroupManagerSheet({
             </>
           ) : (
             <>
-              <Text style={[s.modalTitle, d.modalTitle]}>
-                {t('notes.manageGroups.title', { defaultValue: '管理分组' })}
-              </Text>
+              <View style={s.screenHeader}>
+                <Text style={[s.modalTitle, d.modalTitle]}>
+                  {t('notes.manageGroups.title', { defaultValue: '管理分组' })}
+                </Text>
+                <Pressable
+                  onPress={handleClose}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('common.close', { defaultValue: '关闭' })}
+                >
+                  <Ionicons name="close" size={24} color={colors.text} />
+                </Pressable>
+              </View>
               <Text style={[s.modalCopy, d.modalCopy]}>
                 {t('notes.manageGroups.copy', {
-                  defaultValue: '全部和未分组为固定分组无法修改。',
+                  defaultValue:
+                    '全部和未分组也可拖动排序，但不能改名或删除。',
                 })}
               </Text>
               <Text style={[s.limitText, d.limitText]}>
@@ -631,14 +708,27 @@ export function GroupManagerSheet({
               <ScrollView
                 style={s.modalList}
                 contentContainerStyle={s.modalListContent}
-                scrollEnabled={!draggingGroupId}
+                scrollEnabled={!draggingRowId}
                 {...keyboardDismissOnDragProps}
               >
-                {displayGroups.map((group) => {
-                  const isDragging = draggingGroupId === group.id;
+                {displayRows.map((row) => {
+                  const isDragging = draggingRowId === row.id;
+                  const group = row.group;
+                  const name = group
+                    ? group.name
+                    : row.id === NOTES_TAB_ALL
+                      ? t('notes.manageGroups.fixedAll', { defaultValue: '全部' })
+                      : t('notes.manageGroups.fixedUngrouped', {
+                          defaultValue: '未分组',
+                        });
+                  const count = group
+                    ? group.noteCount
+                    : row.id === NOTES_TAB_ALL
+                      ? notes.length
+                      : ungroupedCount;
                   return (
                     <Animated.View
-                      key={group.id}
+                      key={row.id}
                       style={[
                         s.groupRow,
                         d.groupRow,
@@ -648,14 +738,14 @@ export function GroupManagerSheet({
                               zIndex: 2,
                               opacity: 0.98,
                             }
-                          : draggingGroupId
+                          : draggingRowId
                             ? s.groupRowDimmed
                             : null,
                       ]}
                     >
                       <View style={s.groupRowLeft}>
                         <View
-                          {...getDragResponder(group.id).panHandlers}
+                          {...getDragResponder(row.id).panHandlers}
                           style={s.dragHandleWrap}
                         >
                           <View style={s.dragHandle}>
@@ -667,145 +757,201 @@ export function GroupManagerSheet({
                           </View>
                         </View>
                         <View style={s.groupRowText}>
-                          <Text style={[s.groupName, d.groupName]}>
-                            {group.name}
-                          </Text>
+                          <Text style={[s.groupName, d.groupName]}>{name}</Text>
                           <Text style={[s.groupCount, d.groupCount]}>
                             {t('notes.manageGroups.noteCount', {
-                              count: group.noteCount,
-                              defaultValue: `${group.noteCount} 条笔记`,
+                              count,
+                              defaultValue: `${count} 条笔记`,
                             })}
                           </Text>
                         </View>
                       </View>
-                      <View style={s.groupRowActions}>
-                        <Pressable
-                          hitSlop={8}
-                          onPress={() => openGroupMembershipEditor(group)}
-                        >
-                          <Ionicons
-                            name="list-outline"
-                            size={18}
-                            color={colors.textSecondary}
-                          />
-                        </Pressable>
-                        <Pressable
-                          hitSlop={8}
-                          onPress={() => {
-                            setEditingGroupId(group.id);
-                            setDraftGroupName(group.name);
-                          }}
-                        >
-                          <Ionicons
-                            name="create-outline"
-                            size={18}
-                            color={colors.textSecondary}
-                          />
-                        </Pressable>
-                        <Pressable
-                          hitSlop={8}
-                          onPress={() => handleDeleteGroup(group)}
-                        >
-                          <Ionicons
-                            name="trash-outline"
-                            size={18}
-                            color={colors.textSecondary}
-                          />
-                        </Pressable>
-                      </View>
+                      {group ? (
+                        <View style={s.groupRowActions}>
+                          <Pressable
+                            hitSlop={8}
+                            onPress={() => openGroupMembershipEditor(group)}
+                          >
+                            <Ionicons
+                              name="list-outline"
+                              size={18}
+                              color={colors.textSecondary}
+                            />
+                          </Pressable>
+                          <Pressable
+                            hitSlop={8}
+                            onPress={() => openRenameGroupEditor(group)}
+                          >
+                            <Ionicons
+                              name="create-outline"
+                              size={18}
+                              color={colors.textSecondary}
+                            />
+                          </Pressable>
+                          <Pressable
+                            hitSlop={8}
+                            onPress={() => handleDeleteGroup(group)}
+                          >
+                            <Ionicons
+                              name="trash-outline"
+                              size={18}
+                              color={colors.textSecondary}
+                            />
+                          </Pressable>
+                        </View>
+                      ) : null}
                     </Animated.View>
                   );
                 })}
               </ScrollView>
-              <View style={s.modalEditor}>
-                <TextInput
-                  ref={groupNameInputRef}
-                  style={[s.modalInput, d.modalInput]}
-                  placeholder={t('notes.manageGroups.namePlaceholder', {
-                    defaultValue: '输入分组名添加新的分组',
+              <Pressable
+                style={[s.addGroupBtn, d.saveBtn]}
+                onPress={openCreateGroupEditor}
+                accessibilityRole="button"
+              >
+                <Ionicons name="add" size={20} color={colors.white} />
+                <Text style={[s.saveBtnText, d.saveBtnText]}>
+                  {t('notes.manageGroups.createNew', {
+                    defaultValue: '新增分组',
                   })}
-                  placeholderTextColor={colors.textSecondary}
-                  value={draftGroupName}
-                  onChangeText={setDraftGroupName}
-                  returnKeyType="done"
-                  onSubmitEditing={handleSubmitGroupPress}
-                />
-                <View style={s.modalButtons}>
-                  {editingGroupId ? (
-                    <Pressable onPress={resetGroupDraft}>
-                      <Text style={[s.modalActionText, d.modalActionText]}>
-                        {t('notes.manageGroups.cancelEdit', {
-                          defaultValue: '取消编辑',
-                        })}
-                      </Text>
-                    </Pressable>
-                  ) : (
-                    <View />
-                  )}
-                  <Pressable
-                    style={[
-                      s.saveBtn,
-                      d.saveBtn,
-                      savingGroup ? s.saveBtnDisabled : null,
-                    ]}
-                    onPress={handleSubmitGroupPress}
-                    disabled={savingGroup}
-                  >
-                    <Text style={[s.saveBtnText, d.saveBtnText]}>
-                      {savingGroup
-                        ? t('notes.manageGroups.saving', {
-                            defaultValue: '保存中...',
-                          })
-                        : editingGroupId
-                          ? t('notes.manageGroups.saveEdit', {
-                              defaultValue: '保存修改',
-                            })
-                          : t('notes.manageGroups.createNew', {
-                              defaultValue: '新增分组',
-                            })}
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
+                </Text>
+              </Pressable>
             </>
           )}
-        </View>
+        </KeyboardAvoidingView>
       </View>
+
+      {/* 新增/改名共用的弹出编辑 sheet：常驻输入框已移除，弹起即聚焦。 */}
+      <BottomSheetModal
+        visible={groupEditorOpen}
+        onClose={closeGroupEditor}
+        backdropStyle={{ backgroundColor: colors.overlay }}
+        sheetStyle={s.editorSheetWrap}
+      >
+        <KeyboardAvoidingView
+          style={s.editorKav}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View
+            style={[
+              s.editorSheet,
+              {
+                backgroundColor: colors.surface,
+                paddingBottom: insets.bottom || Spacing.lg,
+              },
+            ]}
+          >
+            <View
+              style={[s.editorHandle, { backgroundColor: colors.surfaceBorder }]}
+            />
+            <View style={s.editorTitleBlock}>
+              <Text style={[s.modalTitle, d.modalTitle]}>
+                {editingGroupId
+                  ? t('notes.manageGroups.renameTitle', {
+                      defaultValue: '编辑名称',
+                    })
+                  : t('notes.manageGroups.createNew', {
+                      defaultValue: '新增分组',
+                    })}
+              </Text>
+              <Text style={[s.editorHint, d.modalCopy]}>
+                {editingGroupId
+                  ? t('notes.manageGroups.renameHint', {
+                      name: editingGroupName,
+                      defaultValue: `正在重命名「${editingGroupName}」`,
+                    })
+                  : t('notes.manageGroups.createHint', {
+                      defaultValue: '分组帮你归类笔记。',
+                    })}
+              </Text>
+            </View>
+            <View style={s.editorField}>
+              <Text style={[s.editorFieldLabel, d.modalCopy]}>
+                {t('notes.manageGroups.nameLabel', { defaultValue: '分组名称' })}
+              </Text>
+              <TextInput
+                ref={groupNameInputRef}
+                style={[s.modalInput, d.modalInput]}
+                placeholder={t('notes.manageGroups.namePlaceholder', {
+                  defaultValue: '输入分组名添加新的分组',
+                })}
+                placeholderTextColor={colors.textSecondary}
+                value={draftGroupName}
+                onChangeText={setDraftGroupName}
+                maxLength={GROUP_NAME_MAX_LENGTH}
+                autoFocus
+                returnKeyType="done"
+                onSubmitEditing={handleSubmitGroupPress}
+              />
+              <Text style={[s.editorCharCount, d.modalCopy]}>
+                {draftGroupName.length}/{GROUP_NAME_MAX_LENGTH}
+              </Text>
+            </View>
+            <View style={s.editorSpacer} />
+            <Pressable
+              style={[
+                s.editorPrimaryBtn,
+                d.saveBtn,
+                savingGroup ? s.saveBtnDisabled : null,
+              ]}
+              onPress={handleSubmitGroupPress}
+              disabled={savingGroup}
+              accessibilityRole="button"
+            >
+              <Text style={[s.saveBtnText, d.saveBtnText]}>
+                {savingGroup
+                  ? t('notes.manageGroups.saving', {
+                      defaultValue: '保存中...',
+                    })
+                  : editingGroupId
+                    ? t('notes.manageGroups.saveEdit', {
+                        defaultValue: '保存修改',
+                      })
+                    : t('notes.manageGroups.createNew', {
+                        defaultValue: '新增分组',
+                      })}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={s.editorCancelBtn}
+              onPress={closeGroupEditor}
+              hitSlop={8}
+              accessibilityRole="button"
+            >
+              <Text style={[s.modalActionText, d.modalActionText]}>
+                {t('common.cancel', { defaultValue: '取消' })}
+              </Text>
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
+      </BottomSheetModal>
     </Modal>
   );
 }
 
 const s = StyleSheet.create({
-  modalOverlay: {
+  // 全屏页：不再是底部弹层。
+  screen: {
     flex: 1,
-    justifyContent: 'flex-end',
-    paddingHorizontal: 0,
-    paddingTop: Spacing.xl,
-  },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 0,
-  },
-  modalCard: {
-    width: '100%',
-    maxHeight: '88%',
-    borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.xl,
+  },
+  flexFill: {
+    flex: 1,
     gap: Spacing.md,
-    zIndex: 1,
-    elevation: 1,
+  },
+  screenHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.sm,
   },
   modalTitle: { ...Typography.h3, fontWeight: '700' },
   modalCopy: { ...Typography.small },
   limitText: { ...Typography.small, marginTop: -Spacing.xs },
-  modalList: { maxHeight: 320 },
-  modalListContent: { gap: Spacing.sm },
-  membershipList: { maxHeight: 320 },
+  modalList: { flex: 1 },
+  modalListContent: { gap: Spacing.sm, paddingBottom: Spacing.md },
+  // NoteCard 自带左右 Spacing.lg 内边距：负 margin 抵掉全屏页的水平留白，卡片全宽。
+  membershipList: { flex: 1, marginHorizontal: -Spacing.lg },
   membershipHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -820,21 +966,10 @@ const s = StyleSheet.create({
     gap: Spacing.xs,
   },
   searchInput: { flex: 1, ...Typography.bodyRegular },
-  membershipRow: {
-    minHeight: 56,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.sm,
+  membershipSeparator: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: Spacing.lg,
   },
-  membershipRowSelected: {
-    borderWidth: 1,
-  },
-  membershipSeparator: { height: Spacing.sm },
-  membershipText: { flex: 1 },
   groupRow: {
     height: GROUP_ROW_HEIGHT,
     borderRadius: Radius.md,
@@ -870,7 +1005,49 @@ const s = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 4,
   },
-  modalEditor: { gap: Spacing.md },
+  addGroupBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    height: 48,
+    borderRadius: Radius.pill,
+    marginTop: Spacing.sm,
+  },
+  // 编辑 sheet 占约半屏，弹出感更足；内容自顶向下排布。
+  editorSheetWrap: { width: '100%', minHeight: '50%' },
+  editorKav: { flex: 1 },
+  editorSheet: {
+    flex: 1,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+    gap: Spacing.md,
+  },
+  editorHandle: {
+    alignSelf: 'center',
+    width: 36,
+    height: 4,
+    borderRadius: Radius.full,
+    marginBottom: Spacing.xs,
+  },
+  editorTitleBlock: { gap: Spacing.xs, marginTop: Spacing.xs },
+  editorHint: { ...Typography.small },
+  editorField: { gap: Spacing.xs, marginTop: Spacing.sm },
+  editorFieldLabel: { ...Typography.small, fontWeight: '600' },
+  editorCharCount: { ...Typography.small, alignSelf: 'flex-end' },
+  editorSpacer: { flex: 1 },
+  editorPrimaryBtn: {
+    height: 48,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editorCancelBtn: {
+    alignSelf: 'center',
+    paddingVertical: Spacing.sm,
+  },
   // 明显的胶囊输入：可见边框 + 凹槽底 + 轻阴影，一眼看出是可输入区域。
   modalInput: {
     borderWidth: 1,

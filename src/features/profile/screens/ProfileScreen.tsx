@@ -88,6 +88,11 @@ const s = StyleSheet.create({
     gap: Spacing.md - 4,
   },
   profileInfo: { gap: Spacing.xs },
+  accountRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+  },
   profileRight: {
     flexDirection: "row",
     gap: Spacing.md,
@@ -314,6 +319,11 @@ export default function ProfileScreen() {
     router.push("/(tabs)/profile/share");
   }, [router]);
 
+  // 我的二维码(名片):微信同款,账号行右侧的小码图标进入。
+  const handleOpenMyQr = useCallback(() => {
+    router.push({ pathname: "/qr-code", params: { type: "user" } });
+  }, [router]);
+
   const handleOpenSettings = useCallback(() => {
     router.push("/(tabs)/profile/app-settings");
   }, [router]);
@@ -386,7 +396,15 @@ export default function ProfileScreen() {
               vipLevel={vipLevel}
               style={d.profileName}
             />
-            <Text style={d.profileAccount}>{t('contacts.accountId', { id: displayAccount })}</Text>
+            <Pressable
+              style={s.accountRow}
+              onPress={handleOpenMyQr}
+              accessibilityRole="button"
+              accessibilityLabel={t('qr.userTitle')}
+            >
+              <Text style={d.profileAccount}>{t('contacts.accountId', { id: displayAccount })}</Text>
+              <Ionicons name="qr-code-outline" size={14} color={colors.textSecondary} />
+            </Pressable>
           </View>
         </View>
         <View style={s.profileRight}>

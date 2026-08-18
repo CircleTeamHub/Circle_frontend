@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/authStore';
 import {
   createCircleChatConversation,
   createDirectChatConversation,
+  createGroupChatConversation,
   loadChatHistory,
 } from './api';
 import { reportChatSendFailure } from './send-errors';
@@ -44,6 +45,19 @@ export async function ensureCircleConversation(
 ): Promise<EnsuredConversation> {
   const epoch = useAuthStore.getState().sessionEpoch;
   const dto = await createCircleChatConversation(circleId);
+  if (useAuthStore.getState().sessionEpoch === epoch) {
+    useChatStore.getState().upsertConversation(dto);
+  }
+  return { conversationID: dto.id };
+}
+
+/** 创建独立群聊并写入会话缓存(建群页提交入口)。 */
+export async function createGroupConversation(input: {
+  name?: string | null;
+  memberIds: string[];
+}): Promise<EnsuredConversation> {
+  const epoch = useAuthStore.getState().sessionEpoch;
+  const dto = await createGroupChatConversation(input);
   if (useAuthStore.getState().sessionEpoch === epoch) {
     useChatStore.getState().upsertConversation(dto);
   }
@@ -405,7 +419,8 @@ export type ChatCardType =
   | 'note-card'
   | 'friend-card'
   | 'circle-card'
-  | 'plaza-post-card';
+  | 'plaza-post-card'
+  | 'qr-card';
 
 /** 各类卡片:content 即卡片 payload 本体(渲染侧同一形状,零转换)。 */
 export function sendCardMessage(options: {

@@ -93,9 +93,19 @@ test('getNoteSectionAvailability reports addressable sections', () => {
   });
 });
 
-test('getInitialNoteSection falls back when requested section is unavailable', () => {
+test('getInitialNoteSection 只认显式请求，其余一律不定位', () => {
   const sections = buildNoteSections(legacyNote);
 
-  assert.equal(getInitialNoteSection('location', sections), 'text');
+  // 显式请求且该区块有内容 → 定位过去。
   assert.equal(getInitialNoteSection('media', sections), 'media');
+
+  // 请求的区块没内容（笔记被编辑过）→ 不定位，停顶部比滚到空处强。
+  assert.equal(getInitialNoteSection('location', sections), null);
+
+  // 没请求 → 不定位。曾经回落到「第一个有内容的区块」，导致普通点开一条笔记
+  // 也被自动滚过标题落到正文，第一眼看不到标题。
+  assert.equal(getInitialNoteSection(undefined, sections), null);
+  assert.equal(getInitialNoteSection(null, sections), null);
+  assert.equal(getInitialNoteSection('', sections), null);
+  assert.equal(getInitialNoteSection('bogus', sections), null);
 });

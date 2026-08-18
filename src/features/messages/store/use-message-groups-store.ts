@@ -27,6 +27,7 @@ const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 
 interface ConversationGroupsState {
   groups: CustomConversationGroup[];
+  filterOrder: string[];
   loading: boolean;
   lastSyncedAt: number | null;
   error: string | null;
@@ -40,15 +41,18 @@ interface ConversationGroupsState {
   setPinnedToTabs: (id: string, pinnedToTabs: boolean) => Promise<void>;
   remove: (id: string) => Promise<void>;
   setMembers: (id: string, conversationIDs: string[]) => Promise<void>;
+  reorder: (groupIds: string[]) => Promise<void>;
+  setFilterOrder: (filterOrder: string[]) => void;
   /** Logout teardown — 清空内存 + 持久化缓存，让下个用户从干净状态起步。 */
   reset: () => void;
 }
 
 const initialState: Pick<
   ConversationGroupsState,
-  'groups' | 'loading' | 'lastSyncedAt' | 'error'
+  'groups' | 'filterOrder' | 'loading' | 'lastSyncedAt' | 'error'
 > = {
   groups: [],
+  filterOrder: [],
   loading: false,
   lastSyncedAt: null,
   error: null,
@@ -162,13 +166,19 @@ export const useMessageGroupsStore = create<ConversationGroupsState>()(
 
       remove: async (id) => {
         const previous = get().groups;
-        set({ groups: previous.filter((g) => g.id !== id) });
+        const previousFilterOrder = get().filterOrder;
+        set({
+          groups: previous.filter((g) => g.id !== id),
+          filterOrder: previousFilterOrder.filter(
+            (filterId) => filterId !== `custom:${id}`,
+          ),
+        });
         try {
           await deleteConversationGroup(id);
           set({ lastSyncedAt: Date.now() });
         } catch (err) {
           devWarn('[conversation-groups] remove failed', err);
-          set({ groups: previous });
+          set({ groups: previous, filterOrder: previousFilterOrder });
           throw err;
         }
       },
@@ -193,6 +203,73 @@ export const useMessageGroupsStore = create<ConversationGroupsState>()(
         }
       },
 
+      reorder: async (groupIds) => {
+        const previous = get().groups;
+        const byId = new Map(previous.map((group) => [group.id, group]));
+        const seen = new Set<string>();
+        const ordered = groupIds
+          .map((id) => byId.get(id))
+          .filter((group): group is CustomConversationGroup => {
+            if (!group || seen.has(group.id)) return false;
+            seen.add(group.id);
+            return true;
+          });
+        for (const group of previous) {
+          if (!seen.has(group.id)) ordered.push(group);
+        }
+
+        const next = ordered.map((group, sortOrder) => ({ ...group, sortOrder }));
+        const changed = next.filter((group) => {
+          const current = byId.get(group.id);
+          return current?.sortOrder !== group.sortOrder;
+        });
+        if (changed.length === 0) return;
+
+        set({ groups: next });
+        try {
+          const results = await Promise.allSettled(
+            changed.map((group) =>
+              updateConversationGroup(group.id, { sortOrder: group.sortOrder }),
+            ),
+          );
+          const failed = results.find(
+            (result): result is PromiseRejectedResult =>
+              result.status === 'rejected',
+          );
+          if (failed) throw failed.reason;
+          const updated = results.flatMap((result) =>
+            result.status === 'fulfilled' ? [result.value] : [],
+          );
+          const sortOrderById = new Map(
+            updated.map((group) => [group.id, group.sortOrder]),
+          );
+          set((state) => ({
+            groups: sortGroups(
+              state.groups.map((group) =>
+                sortOrderById.has(group.id)
+                  ? { ...group, sortOrder: sortOrderById.get(group.id)! }
+                  : group,
+              ),
+            ),
+            lastSyncedAt: Date.now(),
+          }));
+        } catch (err) {
+          devWarn('[conversation-groups] reorder failed', err);
+          try {
+            const serverGroups = await fetchConversationGroups();
+            set({ groups: sortGroups(serverGroups) });
+          } catch (reconcileError) {
+            devWarn('[conversation-groups] reorder reconcile failed', reconcileError);
+            set({ groups: previous });
+          }
+          throw err;
+        }
+      },
+
+      setFilterOrder: (filterOrder) => {
+        set({ filterOrder: [...new Set(filterOrder)] });
+      },
+
       reset: () => {
         set(initialState);
         // 同时把持久化清理掉（除了内存），避免下一个用户启动时看到上一个用户的分组。
@@ -209,9 +286,10 @@ export const useMessageGroupsStore = create<ConversationGroupsState>()(
       name: 'circle-im-conversation-groups',
       storage: createJSONStorage(() => mmkvJsonStorage),
       version: 1,
-      // 只持久化 groups + lastSyncedAt；loading / error 是运行时状态。
+      // 只持久化分组、顶部标签顺序和同步时间；loading / error 是运行时状态。
       partialize: (state) => ({
         groups: state.groups,
+        filterOrder: state.filterOrder,
         lastSyncedAt: state.lastSyncedAt,
       }),
     },

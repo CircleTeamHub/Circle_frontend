@@ -10,6 +10,7 @@ export { VoiceBubble } from './bubbles/voice-bubble';
 export { NoteCardBubble } from './bubbles/note-card-bubble';
 export { FriendCardBubble } from './bubbles/friend-card-bubble';
 export { CircleCardBubble } from './bubbles/circle-card-bubble';
+export { QrCardBubble } from './bubbles/qr-card-bubble';
 export { PlazaPostCardBubble } from './bubbles/plaza-post-card-bubble';
 export { VerificationCardBubble } from './bubbles/verification-card-bubble';
 export { TransferCardBubble } from './bubbles/transfer-card-bubble';

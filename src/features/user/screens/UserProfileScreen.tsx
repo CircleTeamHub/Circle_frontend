@@ -28,6 +28,7 @@ import {
   canOpenSendFriendRequest,
   getProfileMetaItems,
   isCurrentUserProfile,
+  resolveCanonicalProfileUserId,
 } from '@/features/user/profile-view';
 import {
   getChatInfoHref,
@@ -448,6 +449,10 @@ export default function UserProfileScreen() {
       : rawProfile;
   const profileMetaItems = getProfileMetaItems(profile);
   const profileVipLevel = profile.vipLevel ?? 0;
+  const canonicalProfileUserId = resolveCanonicalProfileUserId(
+    profileId,
+    remoteProfile,
+  );
   const displayName =
     remarkOverride === undefined
       ? friendSettings?.remark?.trim() || profile.remarkHint || profile.name
@@ -514,18 +519,20 @@ export default function UserProfileScreen() {
   }, [profile.name, profileId, router, scope]);
 
   const handleOpenChat = useCallback(async () => {
-    if (profileId === 'unknown' || openingChat) {
+    if (!canonicalProfileUserId || openingChat) {
       return;
     }
 
     try {
       setOpeningChat(true);
-      const conversation = await ensureDirectConversation(profileId);
+      const conversation = await ensureDirectConversation(
+        canonicalProfileUserId,
+      );
       if (!mountedRef.current) return;
       router.push(
         getChatDetailHref(
           scope,
-          profileId,
+          canonicalProfileUserId,
           displayName,
           profile.avatarUrl,
           conversation.conversationID,
@@ -535,12 +542,20 @@ export default function UserProfileScreen() {
       if (!mountedRef.current) return;
       Alert.alert(
         t('userProfile.openChatFailedTitle'),
-        error instanceof Error ? error.message : t('common.networkError'),
+        getApiErrorMessage(error, t('common.networkError')),
       );
     } finally {
       if (mountedRef.current) setOpeningChat(false);
     }
-  }, [displayName, openingChat, profile.avatarUrl, profileId, router, scope, t]);
+  }, [
+    canonicalProfileUserId,
+    displayName,
+    openingChat,
+    profile.avatarUrl,
+    router,
+    scope,
+    t,
+  ]);
 
   const [startingCall, setStartingCall] = useState(false);
   // review 修复：state 版守卫要等 React 提交才生效，快速双击都会以
@@ -553,14 +568,14 @@ export default function UserProfileScreen() {
       callStartingRef.current ||
       startingCall ||
       isCurrentUser ||
-      profileId === 'unknown'
+      !canonicalProfileUserId
     )
       return;
     callStartingRef.current = true;
     setStartingCall(true);
     try {
       const response = await createDirectCall({
-        calleeID: profileId,
+        calleeID: canonicalProfileUserId,
         callType,
       });
       // round 2 review：呼叫已在服务端创建、对端已在响铃 —— 即使本页面已
@@ -579,7 +594,14 @@ export default function UserProfileScreen() {
       callStartingRef.current = false;
       if (mountedRef.current) setStartingCall(false);
     }
-  }, [isCurrentUser, profileId, router, setActiveCall, startingCall, t]);
+  }, [
+    canonicalProfileUserId,
+    isCurrentUser,
+    router,
+    setActiveCall,
+    startingCall,
+    t,
+  ]);
 
   // #119：按钮文案本就是「音视频通话」—— 点击先选语音还是视频。
   // review P2：与聊天页同款 —— 弹出前置 ref 门防连点叠开选择器。
@@ -620,16 +642,34 @@ export default function UserProfileScreen() {
   const handleOpenChatInfo = useCallback(() => {
     if (
       isCurrentUser ||
-      profileId === 'unknown' ||
+      !canonicalProfileUserId ||
       friendStatus !== 'ACCEPTED'
     ) {
       return;
     }
 
-    router.push(getChatInfoHref(scope, profileId, displayName, undefined, profile.name));
-  }, [displayName, friendStatus, isCurrentUser, profile.name, profileId, router, scope]);
+    router.push(
+      getChatInfoHref(
+        scope,
+        canonicalProfileUserId,
+        displayName,
+        undefined,
+        profile.name,
+      ),
+    );
+  }, [
+    canonicalProfileUserId,
+    displayName,
+    friendStatus,
+    isCurrentUser,
+    profile.name,
+    router,
+    scope,
+  ]);
   const canOpenChatInfo =
-    !isCurrentUser && profileId !== 'unknown' && friendStatus === 'ACCEPTED';
+    !isCurrentUser &&
+    canonicalProfileUserId !== null &&
+    friendStatus === 'ACCEPTED';
 
   const infoRowItems = useMemo<InfoRowItem[]>(
     () =>
@@ -920,7 +960,7 @@ export default function UserProfileScreen() {
               onPress={() => {
                 void handleOpenChat();
               }}
-              disabled={openingChat}
+              disabled={openingChat || canonicalProfileUserId === null}
             >
               <Text style={d.actionText}>
                 {openingChat ? t('userProfile.openingChat') : t('userProfile.startChat')}
@@ -937,7 +977,7 @@ export default function UserProfileScreen() {
               onPress={() => {
                 void handleStartVoiceCall();
               }}
-              disabled={startingCall}
+              disabled={startingCall || canonicalProfileUserId === null}
             >
               <Text style={d.actionText}>
                 {startingCall ? t('userProfile.callStarting') : t('userProfile.avCall')}

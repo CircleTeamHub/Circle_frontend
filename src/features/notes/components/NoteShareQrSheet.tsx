@@ -55,7 +55,9 @@ export function NoteShareQrSheet({
         textAlign: 'center' as const,
       },
       qrCard: { backgroundColor: colors.white },
-      qrPlaceholder: { color: colors.textSecondary, ...Typography.body },
+      // 这行字画在白色二维码卡上（qrCard 恒为 colors.white），必须用深色墨，
+      // 不能跟着 textSecondary 走 —— 暗色模式下 textSecondary 是浅色，会看不见。
+      qrPlaceholder: { color: '#4B5563', ...Typography.body },
       errorText: {
         color: colors.error,
         ...Typography.caption,

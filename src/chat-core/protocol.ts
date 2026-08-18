@@ -27,6 +27,8 @@ export const CHAT_EVENTS = {
   reaction: 'chat:reaction',
   /** 双向：消息编辑（客户端带 ack；服务端广播到会话房） */
   edit: 'chat:edit',
+  /** 服务端 → 客户端：私聊任一方清空后，双方设备同步清空到该水位 */
+  historyCleared: 'chat:history_cleared',
 } as const;
 
 /** 表情回应白名单（与服务端镜像；越界服务端直接拒）。 */
@@ -281,6 +283,13 @@ export interface ChatReadBroadcast {
   height: number;
 }
 
+/** 私聊双方清空广播；群聊的个人清空不会发送该事件。 */
+export interface ChatHistoryClearedBroadcast {
+  conversationId: string;
+  clearedBeforeHeight: number;
+  clearedBy: string;
+}
+
 /**
  * chat:conversation 的变化种类（镜像 circle_be chat.types.ts）:
  * joined=入座 / left=本人主动退出 / removed=被移出·解散·停用 / updated=预留。
@@ -382,6 +391,10 @@ export interface ChatConversationDto {
   circleId: string | null;
   /** GROUP 会话的圈子展示信息(群名/群头像);其余类型为 null。 */
   circle: ChatCircleInfo | null;
+  /** 独立群聊(GROUP 且 circleId=null)的群名;可选兼容老后端。 */
+  name?: string | null;
+  /** 独立群聊的群主 userId;可选兼容老后端。 */
+  ownerId?: string | null;
   /** TEMP 会话的房间名。可选用于兼容尚未升级的后端。 */
   tempChat?: ChatTempChatInfo | null;
   lastMessage: ChatMessageDto | null;

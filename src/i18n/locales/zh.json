@@ -21,6 +21,7 @@
     "submit": "提交",
     "add": "添加",
     "ok": "知道了",
+    "view": "查看",
     "search": "搜索",
     "searching": "搜索中",
     "loading": "加载中…",
@@ -153,6 +154,11 @@
     "scanCopyFailedTitle": "复制失败",
     "scanCopyFailedMessage": "已识别二维码，但复制内容失败。",
     "scanAgain": "继续扫描",
+    "scanFromAlbum": "从相册选取",
+    "scanAlbumNoCodeTitle": "没有识别到二维码",
+    "scanAlbumNoCodeMessage": "这张图片里没有可识别的二维码，换一张试试。",
+    "scanAlbumFailedTitle": "识别失败",
+    "scanAlbumFailedMessage": "请稍后重试。",
     "seatManagement": "临时群聊",
     "groupManagement": "群组管理",
     "loadFailed": "会话加载失败：{{error}}",
@@ -162,9 +168,15 @@
     "swipeMarkRead": "标记已读",
     "swipeMarkUnread": "标记未读",
     "swipeHide": "隐藏聊天",
+    "swipePin": "置顶",
+    "swipeUnpin": "取消置顶",
+    "swipeMute": "静音",
+    "swipeUnmute": "取消静音",
+    "swipeActionFailed": "操作失败",
     "swipeDelete": "删除",
     "deleteChat": "删除聊天",
     "deleteChatConfirm": "删除「{{name}}」的聊天和本地消息？",
+    "deleteChatConfirmDirect": "删除「{{name}}」的聊天记录？对方的记录也会同时删除，此操作无法撤销。",
     "newGroupTitle": "发起群聊",
     "newGroupNamePlaceholder": "群聊名称（可选）",
     "newGroupSelectMembers": "选择联系人",
@@ -187,15 +199,32 @@
     "inviteGroupMembersNoInvitableFriends": "没有可邀请的好友",
     "inviteGroupMembersLoadFailed": "好友列表加载失败，请重试",
     "groups": {
-      "title": "自定义分组",
+      "title": "分组管理",
       "createSection": "创建分组",
+      "orderSection": "分组排序",
+      "orderHint": "按住右侧拖动，消息页会按这个顺序显示",
+      "builtInGroup": "固定",
+      "customGroup": "自定义",
+      "reorderA11y": "调整「{{name}}」的位置",
+      "reorderFailedTitle": "排序失败",
+      "reorderFailedMessage": "分组顺序保存失败，请稍后再试。",
+      "moveUp": "上移",
+      "moveDown": "下移",
       "namePlaceholder": "例如：家人 / 工作",
       "nameRequired": "请输入分组名称",
       "myGroups": "我的分组",
       "empty": "还没有自定义分组。建一个吧。",
       "conversationCount": "{{count}} 个会话",
-      "memberHint": "「{{name}}」的会话（长按分组名可改名）",
+      "memberHint": "选择要加入「{{name}}」的群聊或私聊（可多选）",
       "noConversations": "暂无会话可加入",
+      "filterAll": "全部",
+      "filterSelected": "已选",
+      "searchPlaceholder": "搜索群聊或私聊",
+      "selectedCount": "已选 {{selected}} / {{total}}",
+      "resultCount": "{{count}} 个结果",
+      "selectResults": "选择全部结果",
+      "deselectResults": "取消当前结果",
+      "noMatchingConversations": "没有匹配的会话",
       "groupChat": "群聊",
       "directChat": "私聊",
       "renameTitle": "重命名分组",
@@ -212,14 +241,19 @@
   },
   "notifications": {
     "title": "消息通知",
+    "momentsTitle": "朋友圈通知",
+    "circleTitle": "圈子通知",
     "tabInteractive": "互动消息",
-    "tabCircle": "报名管理",
+    "tabCircleNotifications": "圈子动态",
+    "tabSignups": "报名管理",
     "filterAll": "全部",
     "filterUnread": "未读",
     "markAllRead": "全部已读",
     "system": "系统通知",
     "emptyTitle": "暂无通知",
     "emptySubtitle": "新的互动和报名会出现在这里",
+    "emptySubtitleMoments": "新的点赞和评论会出现在这里",
+    "emptySubtitleCircle": "新的圈子动态和报名会出现在这里",
     "loadFailedTitle": "加载失败",
     "loadFailed": "部分消息加载失败，请下拉重试",
     "summary": {
@@ -291,7 +325,7 @@
       "videoUnsupported": "仅支持 MP4、MOV、M4V 视频",
       "videoUnavailable": "视频不可用",
       "playVideo": "播放视频",
-      "noteSendFailed": "笔记发送失败，请重试",
+      "noteBatchPartialFailed": "{{count}} 条内容发送失败",
       "cardSendFailed": "名片发送失败，请重试",
       "favoriteSendFailed": "收藏内容发送失败，请重试",
       "favoriteLegacyVoiceUnsupported": "这条旧版语音收藏无法重新发送"
@@ -299,6 +333,7 @@
     "messageActions": {
       "title": "消息操作",
       "collect": "收藏",
+      "addToNotes": "添加",
       "forward": "转发",
       "collected": "已收藏",
       "collectedHint": "可在我的收藏中查看",
@@ -517,6 +552,9 @@
     },
     "attachments": {
       "photos": "照片/视频",
+      "mediaHub": "自媒体",
+      "mediaPhoto": "照片",
+      "mediaVideo": "视频",
       "camera": "拍照",
       "voiceCall": "语/视频通话",
       "location": "位置",
@@ -525,6 +563,30 @@
       "favorites": "我的收藏",
       "quickReply": "快捷语",
       "transfer": "转账"
+    },
+    "photoEditor": {
+      "title": "编辑照片",
+      "preview": "待发送照片预览",
+      "cropSquare": "1:1 裁剪",
+      "cropFourThree": "4:3 裁剪",
+      "freeCrop": "自由裁剪",
+      "freeCropTitle": "自由裁剪",
+      "cropFrame": "自由裁剪框",
+      "cropHint": "拖动四角调整范围，拖动框内移动位置",
+      "cropDone": "完成",
+      "mosaic": "马赛克",
+      "mosaicTitle": "马赛克",
+      "mosaicHint": "手指滑动涂抹需要隐藏的区域",
+      "draw": "涂鸦",
+      "drawTitle": "涂鸦",
+      "drawColor": "画笔颜色",
+      "markupCanvas": "照片编辑画布",
+      "undo": "撤销",
+      "rotate": "旋转",
+      "flip": "镜像",
+      "reset": "还原",
+      "editFailedTitle": "编辑失败",
+      "editFailedMessage": "照片处理失败，请重试"
     },
     "location": {
       "showPreview": "轻点显示地图"
@@ -652,7 +714,9 @@
     "lowCreditScore": "信誉值低于 {{minScore}}，暂时无法发送消息",
     "burnAfterReading": "阅后即焚",
     "clearHistoryConfirm": "清空后仅自己看不到这些消息，对方不受影响。确定清空？",
-    "clearHistoryDone": "已清空"
+    "clearHistoryConfirmDirect": "确定清空聊天记录吗？对方的记录也会同时删除，此操作无法撤销。",
+    "clearHistoryDone": "已清空",
+    "clearHistoryDoneDirect": "双方聊天记录已删除"
   },
   "contacts": {
     "title": "联系人",
@@ -2189,7 +2253,13 @@
       "unlist": "下架",
       "relist": "上架",
       "more": "更多",
-      "restore": "恢复"
+      "restore": "恢复",
+      "multiSelect": "多选",
+      "remark": "备注",
+      "editNote": "编辑笔记",
+      "editGroups": "编辑分组",
+      "delete": "删除",
+      "download": "下载"
     },
     "alerts": {
       "deleteFailedTitle": "删除失败",
@@ -2210,9 +2280,18 @@
       "relistFailedTitle": "上架失败",
       "unlistFailedTitle": "下架失败",
       "unlistTitle": "下架笔记",
-      "unlistConfirm": "下架后可在已下架列表查看，已下架笔记会在一个月后自动删除。",
+      "unlistConfirm": "下架后可在已下架列表查看，并可随时重新上架。",
       "refreshFailedTitle": "刷新失败",
-      "restoreFailedTitle": "恢复失败"
+      "restoreFailedTitle": "恢复失败",
+      "remarkFailedTitle": "备注保存失败",
+      "deleteTitle": "删除笔记",
+      "deleteConfirm": "删除后可在回收站找回，30 天后自动清除。",
+      "batchFailedTitle": "部分操作失败",
+      "batchPartialFailed": "有 {{count}} 条笔记操作失败，已保留选中，请重试。",
+      "batchUnlistTitle": "批量下架",
+      "batchUnlistConfirm": "确定下架所选 {{count}} 条笔记吗？下架后可随时重新上架。",
+      "batchDeleteTitle": "批量删除",
+      "batchDeleteConfirm": "确定删除所选 {{count}} 条笔记吗？删除后可在回收站找回。"
     },
     "detail": {
       "loadFailed": "笔记加载失败，请稍后重试",
@@ -2224,10 +2303,8 @@
       "downloadVideos": "下载视频",
       "downloadLongImage": "生成长图",
       "downloadPdf": "下载PDF",
-      "sourceGroupLabel": "来自群聊",
-      "sourcePrivateLabel": "来自私聊",
-      "sourceSharedBy": "{{name}} 分享",
-      "sourceLocate": "查看原消息"
+      "chatWithSender": "和 {{name}} 私聊",
+      "openGroupSource": "在群聊「{{name}}」中查看原消息"
     },
     "edit": {
       "addImage": "添加图片",
@@ -2290,8 +2367,14 @@
     },
     "manageGroups": {
       "cancelEdit": "取消编辑",
-      "copy": "全部和未分组为固定分组无法修改。",
+      "copy": "全部和未分组也可拖动排序，但不能改名或删除。",
+      "fixedAll": "全部",
+      "fixedUngrouped": "未分组",
       "createNew": "新增分组",
+      "renameTitle": "编辑名称",
+      "renameHint": "正在重命名「{{name}}」",
+      "createHint": "分组帮你归类笔记。",
+      "nameLabel": "分组名称",
       "limitHint": "已创建 {{count}}/{{max}} 个分组",
       "namePlaceholder": "输入分组名添加新的分组",
       "saveEdit": "保存修改",
@@ -2327,7 +2410,7 @@
     "title": "我的笔记",
     "unlisted": "已下架",
     "unlistedTitle": "已下架笔记",
-    "unlistedAutoDeleteHint": "已下架笔记会在一个月后自动删除。",
+    "unlistedAutoDeleteHint": "已下架笔记不会自动删除，可随时重新上架。",
     "format": {
       "fullDate": "{{year}}年{{month}}月{{day}}日 · {{weekday}}",
       "groupOverflow": "{{first}}、{{second}} +{{extra}}",
@@ -2365,13 +2448,38 @@
       "selectedLabel": "已选择位置"
     },
     "list": {
-      "fromSource": "来自 {{name}}"
+      "fromSource": "来自 {{name}}",
+      "remark": "备注：{{text}}",
+      "openSenderChat": "和 {{name}} 私聊",
+      "openGroupChat": "进入群聊 {{name}}"
+    },
+    "groupPicker": {
+      "title": "编辑分组",
+      "batchHint": "勾选把所选 {{count}} 条笔记加入分组，取消勾选则移出；没动过的分组保持各自原样。",
+      "empty": "暂无分组，请先在「管理分组」中创建。",
+      "saving": "保存中...",
+      "save": "保存"
+    },
+    "remarkSheet": {
+      "title": "备注",
+      "batchTitle": "批量备注（{{count}} 条）",
+      "placeholder": "输入备注，留空保存即清除",
+      "saving": "保存中...",
+      "save": "保存"
+    },
+    "selection": {
+      "selectedCount": "已选 {{count}} 项",
+      "selectAll": "全选",
+      "clearAll": "取消全选",
+      "next": "下一步"
     },
     "loadFailed": "笔记加载失败，请检查网络后重试",
     "shareToChat": {
       "title": "分享给好友或群聊",
       "confirmTitle": "发送笔记",
       "confirmMessage": "把「{{title}}」发送给 {{name}}？",
+      "confirmBatchMessage": "把 {{count}} 条笔记发送给 {{name}}？",
+      "partialFailed": "有 {{count}} 条笔记发送失败，请重试。",
       "sentTitle": "已发送",
       "sentMessage": "笔记已发送到聊天。",
       "failedTitle": "发送失败",
@@ -2380,10 +2488,12 @@
       "loadFailed": "无法加载聊天对象，请稍后重试",
       "empty": "暂无可发送的聊天对象",
       "groupHint": "群聊",
-      "friendHint": "好友"
+      "friendHint": "好友",
+      "searchPlaceholder": "搜索好友或群聊",
+      "noMatch": "没有匹配的好友或群聊"
     },
     "recycleBin": "回收站",
-    "recycleBinHint": "已删除的笔记可在这里恢复。",
+    "recycleBinHint": "已删除的笔记可在这里恢复，30 天后自动清除。",
     "recycleBinTitle": "回收站"
   },
   "search": {
@@ -2416,7 +2526,16 @@
     "loadFailed": "加载失败",
     "noMatch": "没有匹配项",
     "empty": "暂无内容",
-    "favoriteLegacyVoiceUnsupported": "旧版语音收藏，无法重新发送"
+    "favoriteLegacyVoiceUnsupported": "旧版语音收藏，无法重新发送",
+    "noteBatch": {
+      "limitHint": "最多选择 {{count}} 条笔记",
+      "next": "发送 ({{count}})",
+      "optionAll": "全部",
+      "optionCard": "笔记",
+      "optionLocation": "地址",
+      "optionMedia": "图片视频",
+      "optionShowcase": "展示"
+    }
   },
   "profileDisplay": {
     "emptySignature": "完善资料后会在这里展示你的介绍。"
@@ -2519,6 +2638,7 @@
       "memberQuit": "有成员退出群聊",
       "memberKicked": "有成员被移出群聊",
       "groupNameUpdated": "群名称已更新",
+      "groupRenamed": "群名已改为「{{name}}」",
       "groupDismissed": "群已解散",
       "messageRevoked": "一条消息被撤回",
       "friendAdded": "你们已经是好友了，开始聊天吧",
@@ -2534,6 +2654,7 @@
       "location": "[位置]",
       "typing": "[正在输入]",
       "card": "[名片] {{name}}",
+      "qr": "[二维码] {{name}}",
       "transferWithAmount": "[转账] {{amount}} 积分",
       "transfer": "[转账]",
       "note": "[笔记] {{title}}",
@@ -2642,10 +2763,30 @@
     "empty": "还没有邀请记录，分享邀请码开始邀请吧",
     "loadMore": "加载更多",
     "loadingMore": "加载中…",
-    "stats": { "invited": "已邀请", "rewarded": "已达标", "points": "累计积分" },
-    "status": { "pending": "待达标", "rewarded": "已奖励", "capped": "已达上限", "rejected": "不符合", "expired": "已过期" },
-    "item": { "rewarded": "已获得 {{points}} 积分", "pending": "完成资料、满 {{days}} 天并添加好友后发放", "noReward": "本次未发放积分" },
-    "errors": { "loadFailed": "邀请数据加载失败，请稍后重试", "loadMoreFailed": "更多邀请记录加载失败", "invalidData": "邀请数据格式异常，请稍后重试", "staleData": "内容可能不是最新的，下拉可重新加载", "shareFailed": "分享失败，可改用「复制邀请码」发给好友" }
+    "stats": {
+      "invited": "已邀请",
+      "rewarded": "已达标",
+      "points": "累计积分"
+    },
+    "status": {
+      "pending": "待达标",
+      "rewarded": "已奖励",
+      "capped": "已达上限",
+      "rejected": "不符合",
+      "expired": "已过期"
+    },
+    "item": {
+      "rewarded": "已获得 {{points}} 积分",
+      "pending": "完成资料、满 {{days}} 天并添加好友后发放",
+      "noReward": "本次未发放积分"
+    },
+    "errors": {
+      "loadFailed": "邀请数据加载失败，请稍后重试",
+      "loadMoreFailed": "更多邀请记录加载失败",
+      "invalidData": "邀请数据格式异常，请稍后重试",
+      "staleData": "内容可能不是最新的，下拉可重新加载",
+      "shareFailed": "分享失败，可改用「复制邀请码」发给好友"
+    }
   },
   "serverErrors": {
     "TEMP_CHAT_JOIN_FAILED": "加入失败，请重试",
@@ -2902,6 +3043,88 @@
     "CHAT_REVOKE_WINDOW_EXPIRED": "超过可撤回时间",
     "CHAT_REVOKE_FORBIDDEN": "无权撤回该消息",
     "CHAT_EDIT_WINDOW_EXPIRED": "超出可编辑时间",
-    "CHAT_EDIT_FORBIDDEN": "无法编辑该消息"
+    "CHAT_EDIT_FORBIDDEN": "无法编辑该消息",
+    "CHAT_GROUP_FRIENDS_ONLY": "只能邀请好友进群",
+    "CHAT_GROUP_MIN_MEMBERS": "请至少选择 2 位好友",
+    "CHAT_GROUP_CIRCLE_MANAGED": "该群由圈子管理，无法在此操作",
+    "QR_INVALID": "二维码无效或已失效",
+    "QR_EXPIRED": "二维码已过期，请对方重新出示",
+    "QR_TYPE_UNSUPPORTED": "该二维码不支持此操作",
+    "QR_ISSUE_FORBIDDEN": "没有签发该二维码的权限",
+    "CHAT_GROUP_FULL": "群聊人数已达上限"
+  },
+  "qr": {
+    "userTitle": "我的二维码",
+    "groupTitle": "群二维码",
+    "circleTitle": "圈子二维码",
+    "userHint": "扫一扫上面的二维码图案，加我为好友",
+    "groupHint": "扫一扫上面的二维码图案，加入群聊",
+    "circleHint": "扫一扫上面的二维码图案，加入圈子",
+    "userValidity": "长期有效；可在「隐私设置」中关闭通过二维码加我",
+    "expiresBefore": "该二维码7天内（{{date}}前）有效，重新进入将更新",
+    "unnamed": "未命名",
+    "saveImage": "保存图片",
+    "shareQr": "分享二维码",
+    "reset": "重置二维码",
+    "resetConfirmTitle": "重置个人二维码？",
+    "resetConfirmMessage": "重置后，之前分享的个人二维码会立即失效。",
+    "resetSuccessTitle": "已重置",
+    "resetSuccessMessage": "旧二维码已失效，请使用新的二维码。",
+    "resetFailedTitle": "重置失败",
+    "resetFailedMessage": "无法重置二维码，请稍后重试。",
+    "shareFailedTitle": "分享失败",
+    "shareFailedMessage": "二维码还没准备好，请稍后重试。",
+    "savedTitle": "已保存",
+    "savedMessage": "二维码已保存到相册。",
+    "saveDeniedTitle": "无法保存",
+    "saveDeniedMessage": "请在系统设置中允许风信保存照片到相册。",
+    "saveFailedTitle": "保存失败",
+    "saveFailedMessage": "请稍后重试。",
+    "issueFailed": "二维码生成失败，请稍后重试",
+    "landingTitle": "扫码结果",
+    "invalid": "二维码无效或已失效",
+    "thisIsYou": "这是你的名片",
+    "viewProfile": "查看名片",
+    "addFriend": "加为好友",
+    "joinGroup": "加入群聊",
+    "enterGroup": "进入群聊",
+    "joinCircle": "加入圈子",
+    "alreadyInCircle": "已在圈子中",
+    "circleJoinedTitle": "已加入",
+    "circleJoinedMessage": "你已加入「{{name}}」。",
+    "circlePendingTitle": "申请已提交",
+    "circlePendingMessage": "入圈申请已发起，等待圈子成员担保通过。",
+    "joinFailedTitle": "加入失败",
+    "joinFailed": "请稍后重试",
+    "userSubtitle": "个人名片",
+    "groupSubtitle": "群聊 · {{count}} 人",
+    "circleSubtitle": "圈子 · {{count}} 人",
+    "sharedBy": "来自 {{name}}",
+    "groupEntry": "群二维码",
+    "myQrEntry": "我的二维码",
+    "shareToChat": {
+      "title": "分享给好友或群聊",
+      "searchPlaceholder": "搜索好友或群聊",
+      "friendHint": "好友",
+      "groupHint": "群聊",
+      "sending": "发送中...",
+      "confirmTitle": "发送二维码",
+      "confirmMessage": "把「{{subject}}」的二维码发送给 {{name}}？",
+      "sentTitle": "已发送",
+      "sentMessage": "二维码已发送到聊天。",
+      "failedTitle": "发送失败",
+      "failedMessage": "二维码没能发出去，请稍后重试。",
+      "loadFailed": "无法加载聊天对象，请稍后重试",
+      "empty": "暂无可发送的聊天对象",
+      "noMatch": "没有匹配的好友或群聊"
+    },
+    "card": {
+      "userType": "个人名片二维码",
+      "groupType": "群聊二维码",
+      "circleType": "圈子二维码",
+      "userFooter": "扫一扫或点击加好友",
+      "groupFooter": "扫一扫或点击加入群聊",
+      "circleFooter": "扫一扫或点击加入圈子"
+    }
   }
 }

@@ -3,15 +3,16 @@ import type { ThemeColors } from './types';
 export const darkColors: ThemeColors = {
   background: '#1A1B23',
   surface: '#252630',
-  surfaceBorder: '#3A3B45',
-  divider: '#2E2F38',
+  surfaceBorder: '#565A6B',
+  divider: '#3C3E4B',
   primary: '#6366F1',
   primaryLight: 'rgba(99, 102, 241, 0.25)',
   primaryDeep: '#4F46E5',
   // 会员卡渐变 ['#5B4BE6','#7C5CF0','#A86BF0'] 的核心色，app 的品牌紫
   brandPurple: '#7C5CF0',
-  text: '#FAFAF9',
-  textSecondary: '#6B7280',
+  text: '#FFFFFF',
+  // 暗色下次要文字一律纯白 —— 任何灰阶在 #1A1B23 上都糊。层级靠字号/字重区分,不靠明度。
+  textSecondary: '#FFFFFF',
   white: '#FFFFFF',
   black: '#000000',
   online: '#22C55E',

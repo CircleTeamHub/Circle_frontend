@@ -26,8 +26,11 @@ test('discover home is a grouped list that routes to three dedicated screens', (
 test('discover home shows separate unread dots for moments and circle plaza', () => {
   const source = read(DISCOVER);
 
-  assert.match(source, /useTabBadgeStore\(\(state\) => state\.discoverUnread\)/);
+  // 两行各自对应一个铃铛的域，不再共用 discoverUnread 这个混合计数。
+  assert.match(source, /useTabBadgeStore\(\(state\) => state\.momentsUnread\)/);
+  assert.match(source, /useTabBadgeStore\(\(state\) => state\.circleUnread\)/);
   assert.match(source, /useTabBadgeStore\(\(state\) => state\.signupUnread\)/);
+  assert.doesNotMatch(source, /state\.discoverUnread/);
   assert.match(source, /showIndicatorDot=\{momentsUnread > 0\}/);
   assert.match(source, /showIndicatorDot=\{plazaUnread > 0\}/);
   assert.doesNotMatch(source, /name="notifications-outline"/);
@@ -71,23 +74,36 @@ test('circle plaza screen owns discovery filter and create actions', () => {
   assert.match(source, /name="options-outline"/);
 });
 
-test('circle plaza owns the signup notification bell and opens signup management', () => {
+test('circle plaza owns the circle notification bell and opens the circle domain', () => {
   const source = read('src/features/discover/screens/CirclePlazaScreen.tsx');
 
   assert.match(source, /useTabBadgeStore\(\(state\) => state\.signupUnread\)/);
   assert.match(source, /name="notifications-outline"/);
-  assert.match(source, /<Badge count=\{signupUnread\} \/>/);
+  assert.match(source, /<Badge count=\{circleBellUnread\} \/>/);
   assert.match(source, /pathname: '\/\(tabs\)\/discover\/notification-center'/);
-  assert.match(source, /params: \{ initialTab: 'circle' \}/);
+  assert.match(source, /params: \{ domain: 'circle' \}/);
 });
 
-test('notification center honors the requested initial tab', () => {
+test('moments bell opens the moments domain of the notification center', () => {
+  const source = read('src/features/discover/screens/MomentsScreen.tsx');
+
+  assert.match(source, /pathname: '\/\(tabs\)\/discover\/notification-center'/);
+  assert.match(source, /params: \{ domain: 'moments' \}/);
+});
+
+test('notification center scopes its list to the requested bell domain', () => {
   const source = read(
     'src/features/notifications/screens/NotificationCenterScreen.tsx',
   );
 
   assert.match(source, /useLocalSearchParams/);
-  assert.match(source, /initialTab === 'circle' \? 'circle' : 'interactive'/);
+  assert.match(source, /parseNotificationDomain\(domainParam\)/);
+  // 列表、拉取、全部已读三处都必须带域，少一处就会串台。
+  assert.match(source, /notificationDomain\(n\.type\) === domain/);
+  assert.match(source, /fetchNotifications\(1, domain\)/);
+  assert.match(source, /markAllNotificationsRead\(domain\)/);
+  // 报名管理是圈子域独有的 tab，朋友圈铃铛不显示也不为它请求数据。
+  assert.match(source, /domain !== 'moments'/);
 });
 
 test('discover tab badge combines moments and signup unread state', () => {

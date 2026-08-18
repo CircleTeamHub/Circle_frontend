@@ -2,13 +2,21 @@ import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme';
 
-export type NotificationTabKey = 'interactive' | 'circle';
+/**
+ * `notifications` = 当前域的通知列表（互动 / 朋友圈 / 圈子，取决于入口）；
+ * `signups` = 报名管理（我发的圈子帖收到的报名），只在圈子铃铛和无域兜底页出现。
+ */
+export type NotificationTabKey = 'notifications' | 'signups';
+
+export interface NotificationTabItem {
+  key: NotificationTabKey;
+  label: string;
+  unread: boolean;
+}
 
 interface Props {
   active: NotificationTabKey;
-  interactiveUnread: boolean;
-  circleUnread: boolean;
-  labels: { interactive: string; circle: string };
+  tabs: NotificationTabItem[];
   onSelect: (key: NotificationTabKey) => void;
 }
 
@@ -22,24 +30,24 @@ const s = StyleSheet.create({
 
 export const NotificationTabBar = memo(function NotificationTabBar(p: Props) {
   const { colors } = useTheme();
-  const tab = (key: NotificationTabKey, label: string, unread: boolean) => {
-    const selected = p.active === key;
-    return (
-      <Pressable style={s.tab} onPress={() => p.onSelect(key)}>
-        <View style={s.labelRow}>
-          <Text style={{ fontSize: 15, fontWeight: '600', color: selected ? colors.primary : colors.text }}>
-            {label}
-          </Text>
-          {unread ? <View style={s.dot} /> : null}
-        </View>
-        {selected ? <View style={[s.underline, { backgroundColor: colors.primary }]} /> : null}
-      </Pressable>
-    );
-  };
+  // 单 tab 时（朋友圈铃铛）没有可切换的东西，整条 bar 不渲染。
+  if (p.tabs.length < 2) return null;
   return (
     <View style={[s.bar, { backgroundColor: colors.surface, borderBottomColor: colors.surfaceBorder }]}>
-      {tab('interactive', p.labels.interactive, p.interactiveUnread)}
-      {tab('circle', p.labels.circle, p.circleUnread)}
+      {p.tabs.map((item) => {
+        const selected = p.active === item.key;
+        return (
+          <Pressable key={item.key} style={s.tab} onPress={() => p.onSelect(item.key)}>
+            <View style={s.labelRow}>
+              <Text style={{ fontSize: 15, fontWeight: '600', color: selected ? colors.primary : colors.text }}>
+                {item.label}
+              </Text>
+              {item.unread ? <View style={s.dot} /> : null}
+            </View>
+            {selected ? <View style={[s.underline, { backgroundColor: colors.primary }]} /> : null}
+          </Pressable>
+        );
+      })}
     </View>
   );
 });

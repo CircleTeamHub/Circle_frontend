@@ -57,17 +57,20 @@ test('a picked location survives an in-flight send instead of vanishing', () => 
   assert.match(screen, /if \(!slotFree\) \{[\s\S]{0,240}locationSendFailed/);
 });
 
-// discoverUnread = 铃铛中心「互动」列表的未读数。发现页把它画成朋友圈那一行的
-// 红点，那这条路必须能走到真正能看到并清掉它的地方（互动是铃铛中心的默认 tab）。
-test('the moments screen reaches the interaction notifications its badge counts', () => {
+// momentsUnread = 朋友圈铃铛的未读数。发现页把它画成朋友圈那一行的红点，那这条路
+// 必须能走到真正能看到并清掉它的地方（铃铛中心的 moments 域）。
+test('the moments screen reaches the moment notifications its badge counts', () => {
   const moments = read('src/features/discover/screens/MomentsScreen.tsx');
   const discover = read('src/features/discover/screens/DiscoverScreen.tsx');
 
-  assert.match(moments, /discoverUnread/);
+  assert.match(moments, /momentsUnread/);
   assert.match(moments, /\(tabs\)\/discover\/notification-center/);
-  assert.match(moments, /<Badge count=\{interactionUnread\}/);
+  assert.match(moments, /params: \{ domain: 'moments' \}/);
+  assert.match(moments, /<Badge count=\{momentsUnread\}/);
   // 发现页那一行的红点仍然读同一个计数，两边不能漂移。
-  assert.match(discover, /momentsUnread = useTabBadgeStore\(\(state\) => state\.discoverUnread\)/);
+  assert.match(discover, /momentsUnread = useTabBadgeStore\(\(state\) => state\.momentsUnread\)/);
+  // 圈子的未读不许混进朋友圈铃铛。
+  assert.doesNotMatch(moments, /circleUnread|discoverUnread|signupUnread/);
 });
 
 // 筛选条件在广场页设置、全局生效。「我的圈子」面板挂在圈子管理 / 我的圈子下，

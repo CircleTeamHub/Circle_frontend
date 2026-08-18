@@ -14,13 +14,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
 import { useSharePickerStore } from '@/features/chat/store/use-share-picker-store';
 import { canResendCollection } from '@/features/chat/utils/message-collection';
+import {
+  MAX_NOTE_BATCH_SELECTION,
+  hasAnyNoteSendOption,
+  isAllNoteSendOptions,
+  withAllNoteSendOptions,
+  type NoteSendOptions,
+} from '@/features/chat/utils/note-batch-send';
 import { NoteCard } from '@/features/notes/components/NoteCard';
 import type { NoteSummary } from '@/features/notes/types';
 import { fetchCollections, type UserCollection } from '@/services/api/collections';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { fetchNotes } from '@/services/api/notes';
 import i18n from '@/i18n';
-import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { Radius, Spacing, Typography, useTheme, withAlpha } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 type ShareType = 'note' | 'friend' | 'favorite' | 'quick-reply';
@@ -39,6 +46,43 @@ function shareTitle(type: ShareType): string {
   }
 }
 
+// 底栏常驻的「发什么」开关(横排 icon+短标签)。「全部」是四项的派生开关,单独渲染。
+// accent 取自色板 token:每项一个色相,选中时同色淡底+同色描边+同色图标文字,
+// 未选中保持中性灰 —— 让"选了什么"一眼可辨,而不是五个一样的灰框。
+const NOTE_OPTION_CHIPS = [
+  {
+    key: 'card',
+    icon: 'document-text-outline',
+    accent: 'primary',
+    labelKey: 'share.noteBatch.optionCard',
+    defaultLabel: '笔记',
+  },
+  {
+    key: 'media',
+    icon: 'images-outline',
+    accent: 'blue',
+    labelKey: 'share.noteBatch.optionMedia',
+    defaultLabel: '图片视频',
+  },
+  {
+    key: 'showcase',
+    icon: 'sparkles-outline',
+    accent: 'orange',
+    labelKey: 'share.noteBatch.optionShowcase',
+    defaultLabel: '展示',
+  },
+  {
+    key: 'location',
+    icon: 'location-outline',
+    accent: 'success',
+    labelKey: 'share.noteBatch.optionLocation',
+    defaultLabel: '地址',
+  },
+] as const;
+
+/** 「全部」是四项的派生开关，用品牌紫与单项色相区隔。 */
+const NOTE_OPTION_ALL_ACCENT = 'brandPurple' as const;
+
 const QUICK_REPLY_DEFAULTS: readonly string[] = [
   '在的，你说',
   '好的，没问题',
@@ -51,6 +95,64 @@ const QUICK_REPLY_DEFAULTS: readonly string[] = [
 function getQuickReplyPhrases(): readonly string[] {
   return QUICK_REPLY_DEFAULTS.map((phrase, index) =>
     i18n.t(`share.quickReply.${index}`, { defaultValue: phrase }),
+  );
+}
+
+interface NoteOptionChipProps {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  /** 该项的品牌色（取自色板 token）：选中态的底/边/字/对号都用它 */
+  accent: string;
+  checked: boolean;
+  onToggle: () => void;
+}
+
+/** 底栏「发什么」单个开关：图标 + 标签 + 对号。四个分区与「全部」共用。 */
+function NoteOptionChip({
+  icon,
+  label,
+  accent,
+  checked,
+  onToggle,
+}: NoteOptionChipProps) {
+  const { colors } = useTheme();
+
+  return (
+    <Pressable
+      style={[
+        s.optionChip,
+        {
+          borderColor: checked ? accent : colors.surfaceBorder,
+          backgroundColor: checked ? withAlpha(accent, 0.12) : colors.background,
+        },
+      ]}
+      onPress={onToggle}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked }}
+    >
+      <Ionicons
+        name={icon}
+        size={20}
+        color={checked ? accent : colors.textSecondary}
+      />
+      <Text
+        style={[
+          s.optionChipLabel,
+          checked ? s.optionChipLabelOn : null,
+          { color: checked ? accent : colors.textSecondary },
+        ]}
+        numberOfLines={1}
+      >
+        {label}
+      </Text>
+      {/* 对号常驻占位：选中实心、未选空心，两态等高，切换时行高不跳。
+          只靠配色区分选中对色觉障碍用户不友好，这里补一个形状信号。 */}
+      <Ionicons
+        name={checked ? 'checkmark-circle' : 'ellipse-outline'}
+        size={15}
+        color={checked ? accent : colors.surfaceBorder}
+      />
+    </Pressable>
   );
 }
 
@@ -69,6 +171,15 @@ export default function SharePickerScreen() {
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [favorites, setFavorites] = useState<UserCollection[]>([]);
   const [reloadVersion, setReloadVersion] = useState(0);
+  // 笔记走多选:「发什么」是底栏常驻的一行横排开关(默认只发卡片),
+  // 点「发送」直接按当前勾选发 —— 不再经过确认 sheet。
+  const [selectedNotes, setSelectedNotes] = useState<NoteSummary[]>([]);
+  const [sendOptions, setSendOptions] = useState<NoteSendOptions>({
+    card: true,
+    media: false,
+    showcase: false,
+    location: false,
+  });
   const headerTitle = shareTitle(shareType);
   // Memoized：i18n.t 已可缓存，但本地包一层让消费方在 useMemo deps 里能稳定引用。
   const quickReplyPhrases = useMemo(() => getQuickReplyPhrases(), []);
@@ -154,10 +265,8 @@ export default function SharePickerScreen() {
   }, [quickReplyPhrases, trimmed]);
 
   const handleSelect = useCallback(
-    (item: NoteSummary | FriendProfile | UserCollection | string) => {
-      if (shareType === 'note') {
-        setPending({ kind: 'note', data: item as NoteSummary });
-      } else if (shareType === 'friend') {
+    (item: FriendProfile | UserCollection | string) => {
+      if (shareType === 'friend') {
         setPending({ kind: 'friend', data: item as FriendProfile });
       } else if (shareType === 'favorite') {
         setPending({ kind: 'favorite', data: item as UserCollection });
@@ -169,11 +278,39 @@ export default function SharePickerScreen() {
     [router, setPending, shareType],
   );
 
+  const toggleNote = useCallback((note: NoteSummary) => {
+    setSelectedNotes((prev) => {
+      if (prev.some((n) => n.id === note.id)) {
+        return prev.filter((n) => n.id !== note.id);
+      }
+      if (prev.length >= MAX_NOTE_BATCH_SELECTION) return prev;
+      return [...prev, note];
+    });
+  }, []);
+
+  const atSelectionLimit = selectedNotes.length >= MAX_NOTE_BATCH_SELECTION;
+
+  const handleConfirmSend = useCallback(() => {
+    if (selectedNotes.length === 0 || !hasAnyNoteSendOption(sendOptions)) {
+      return;
+    }
+    setPending({
+      kind: 'note-batch',
+      notes: selectedNotes,
+      options: sendOptions,
+    });
+    router.back();
+  }, [router, selectedNotes, sendOptions, setPending]);
+
+  // 多选态复用 NoteCard 自带的 selectionMode(勾选指示/无障碍状态都在卡片里),
+  // 不再另裹一层手搓 checkbox —— 与笔记列表的多选视觉保持同一来源。
   const renderNote = ({ item }: { item: NoteSummary }) => (
     <NoteCard
       note={item}
-      onPress={() => handleSelect(item)}
+      onPress={toggleNote}
       showActions={false}
+      selectionMode
+      selected={selectedNotes.some((n) => n.id === item.id)}
     />
   );
 
@@ -333,10 +470,14 @@ export default function SharePickerScreen() {
           data={filteredNotes}
           keyExtractor={(it) => it.id}
           renderItem={renderNote}
+          extraData={selectedNotes}
           ItemSeparatorComponent={() => (
             <View style={[s.divider, { backgroundColor: colors.surface }]} />
           )}
-          contentContainerStyle={s.noteListContent}
+          contentContainerStyle={[
+            s.noteListContent,
+            selectedNotes.length > 0 ? s.noteListContentWithBar : null,
+          ]}
         {...keyboardDismissOnDragProps}
           showsVerticalScrollIndicator={false}
         />
@@ -368,6 +509,98 @@ export default function SharePickerScreen() {
         {...keyboardDismissOnDragProps}
         />
       )}
+
+      {shareType === 'note' && selectedNotes.length > 0 ? (
+        <View
+          style={[
+            s.noteBar,
+            {
+              backgroundColor: colors.surface,
+              borderTopColor: colors.divider,
+              shadowColor: colors.black,
+              paddingBottom: insets.bottom + Spacing.sm,
+            },
+          ]}
+        >
+          {atSelectionLimit ? (
+            <Text style={[s.noteBarHint, { color: colors.warning }]}>
+              {i18n.t('share.noteBatch.limitHint', {
+                defaultValue: '最多选择 {{count}} 条笔记',
+                count: MAX_NOTE_BATCH_SELECTION,
+              })}
+            </Text>
+          ) : null}
+          <View style={s.optionChipsRow}>
+            {NOTE_OPTION_CHIPS.map((chip) => (
+              <NoteOptionChip
+                key={chip.key}
+                icon={chip.icon}
+                label={i18n.t(chip.labelKey, { defaultValue: chip.defaultLabel })}
+                accent={colors[chip.accent]}
+                checked={sendOptions[chip.key]}
+                onToggle={() =>
+                  setSendOptions((prev) => ({
+                    ...prev,
+                    [chip.key]: !prev[chip.key],
+                  }))
+                }
+              />
+            ))}
+            <NoteOptionChip
+              icon="checkmark-done-outline"
+              label={i18n.t('share.noteBatch.optionAll', { defaultValue: '全部' })}
+              accent={colors[NOTE_OPTION_ALL_ACCENT]}
+              checked={isAllNoteSendOptions(sendOptions)}
+              onToggle={() =>
+                setSendOptions((prev) =>
+                  withAllNoteSendOptions(prev, !isAllNoteSendOptions(prev)),
+                )
+              }
+            />
+          </View>
+          <Pressable
+            style={[
+              s.noteSendButton,
+              hasAnyNoteSendOption(sendOptions)
+                ? [s.noteSendButtonOn, { shadowColor: colors.primary }]
+                : null,
+              {
+                backgroundColor: hasAnyNoteSendOption(sendOptions)
+                  ? colors.primary
+                  : colors.surfaceBorder,
+              },
+            ]}
+            disabled={!hasAnyNoteSendOption(sendOptions)}
+            onPress={handleConfirmSend}
+            accessibilityRole="button"
+          >
+            <Ionicons
+              name="paper-plane"
+              size={17}
+              color={
+                hasAnyNoteSendOption(sendOptions)
+                  ? colors.white
+                  : colors.textSecondary
+              }
+            />
+            <Text
+              style={[
+                s.noteSendButtonText,
+                {
+                  color: hasAnyNoteSendOption(sendOptions)
+                    ? colors.white
+                    : colors.textSecondary,
+                },
+              ]}
+            >
+              {i18n.t('share.noteBatch.next', {
+                defaultValue: '发送 ({{count}})',
+                count: selectedNotes.length,
+              })}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -406,6 +639,72 @@ const s = StyleSheet.create({
   },
   noteListContent: {
     paddingBottom: Spacing.xl,
+  },
+  // 底栏最高态(上限提示行 + 常驻选项行 + 发送键 + 34pt 刘海 inset)约 175pt,
+  // 再留出大字号无障碍余量。
+  noteListContentWithBar: {
+    paddingBottom: 226,
+  },
+  noteBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingTop: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: Spacing.sm,
+    // 底栏浮在列表之上：上缘投影替代硬分割线的重量感。
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 12,
+  },
+  noteBarHint: {
+    ...Typography.small,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  noteSendButton: {
+    flexDirection: 'row',
+    minHeight: 50,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs + 2,
+  },
+  // 可发送时给主按钮一层同色辉光，和置灰态拉开层次。
+  noteSendButtonOn: {
+    shadowOpacity: 0.32,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  noteSendButtonText: {
+    ...Typography.body,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  optionChipsRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm - 2,
+  },
+  optionChip: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    paddingVertical: Spacing.sm + 2,
+    paddingHorizontal: 2,
+    borderRadius: Radius.lg,
+    borderWidth: 1.5,
+  },
+  optionChipLabel: {
+    ...Typography.tinyRegular,
+    fontWeight: '500',
+  },
+  optionChipLabelOn: {
+    fontWeight: '700',
   },
   listContent: {
     paddingHorizontal: Spacing.lg,

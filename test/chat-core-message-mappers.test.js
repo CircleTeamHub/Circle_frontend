@@ -40,6 +40,19 @@ function transpile(rel) {
   }).outputText;
 }
 
+// qr-payload 运行时零依赖(常量全内联),所以这里加载**真实实现**而不是桩 ——
+// 二维码卡片的令牌净化是一条安全边界,用假的就等于没测。
+let __qrPayload = null;
+function loadQrPayload() {
+  if (!__qrPayload) {
+    const ctx = { module: { exports: {} }, exports: {} };
+    ctx.exports = ctx.module.exports;
+    vm.runInNewContext(transpile('src/features/qr/qr-payload.ts'), ctx);
+    __qrPayload = ctx.module.exports;
+  }
+  return __qrPayload;
+}
+
 function loadMappers(options = {}) {
   // 白名单替身:只放行「本站自己的媒体来源」,其余(含对端塞的任意主机)一律拒。
   const TRUSTED = ['https://cdn.trusted/', 'https://signed/'];
@@ -69,6 +82,7 @@ function loadMappers(options = {}) {
       if (request === './store') return {};
       if (request === '@/types') return {};
       if (request === './local-db') return __localDbStub;
+      if (request === '@/features/qr/qr-payload') return loadQrPayload();
     throw new Error(`unexpected require: ${request}`);
     },
   };
