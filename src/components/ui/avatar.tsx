@@ -1,7 +1,7 @@
-import { useMemo } from 'react';
+import { useId, useMemo } from 'react';
 import { View, StyleSheet, type ImageSourcePropType } from 'react-native';
 import { Image } from 'expo-image';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import { useTheme, Radius } from '@/theme';
 import {
@@ -41,25 +41,37 @@ const s = StyleSheet.create({
   },
 });
 
-const DEFAULT_AVATAR_BACKGROUND = '#D8D8D8';
-const DEFAULT_AVATAR_FOREGROUND = '#F5F5F5';
+// 默认头像:与群头像(group-chat-avatar)同一套品牌紫渐变 + 白色人形。
+// 旧版是浅灰底 + 近白人形,在暗色模式下就是一块发灰的方块,既不明显也和周围的
+// 紫色群头像割裂 —— 这里统一到品牌色,深浅两个主题下都清晰。
+const DEFAULT_AVATAR_GLYPH = '#FFFFFF';
+const DEFAULT_AVATAR_GLYPH_SOFT = '#E5E1FF';
 
-function DefaultAvatar({ size }: { size: number }) {
-  const glyphSize = size * 0.72;
-
+function DefaultAvatar({ size, gradientId }: { size: number; gradientId: string }) {
   return (
     <Svg
-      width={glyphSize}
-      height={glyphSize}
+      width={size}
+      height={size}
       viewBox="0 0 64 64"
       pointerEvents="none"
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
     >
-      <Circle cx="32" cy="20" r="11" fill={DEFAULT_AVATAR_FOREGROUND} />
+      <Defs>
+        <LinearGradient id={gradientId} x1="6" y1="58" x2="58" y2="6">
+          <Stop offset="0" stopColor="#5548D9" />
+          <Stop offset="0.52" stopColor="#7467F5" />
+          <Stop offset="1" stopColor="#A58BFF" />
+        </LinearGradient>
+      </Defs>
+      <Rect width="64" height="64" fill={`url(#${gradientId})`} />
+      <Circle cx="10" cy="9" r="21" fill={DEFAULT_AVATAR_GLYPH} opacity="0.09" />
+      <Circle cx="57" cy="57" r="24" fill="#3427A8" opacity="0.16" />
+      <Circle cx="32" cy="24" r="10.5" fill={DEFAULT_AVATAR_GLYPH} opacity="0.98" />
       <Path
-        d="M11 58c0-13 9.4-23 21-23s21 10 21 23H11Z"
-        fill={DEFAULT_AVATAR_FOREGROUND}
+        d="M13 58c0-11.6 8.5-20.5 19-20.5S51 46.4 51 58H13Z"
+        fill={DEFAULT_AVATAR_GLYPH_SOFT}
+        opacity="0.95"
       />
     </Svg>
   );
@@ -74,6 +86,7 @@ export const Avatar: React.FC<AvatarProps> = ({
   compactFrame = false,
 }) => {
   const { colors } = useTheme();
+  const defaultAvatarGradientId = `default-avatar-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const hasFrame =
     FEATURE_FLAGS.avatarFrames && Boolean(frameSource) && shape === 'circle';
   // frameSize = 整体占位(框铺满它);photoSize = 里面的照片(填内孔)。紧凑模式框=size×1.2、照片=size×0.75;
@@ -118,12 +131,11 @@ export const Avatar: React.FC<AvatarProps> = ({
             height: photoSize,
             borderRadius,
             borderCurve: 'continuous',
-            backgroundColor: DEFAULT_AVATAR_BACKGROUND,
             overflow: 'hidden',
           },
         ]}
       >
-        <DefaultAvatar size={photoSize} />
+        <DefaultAvatar size={photoSize} gradientId={defaultAvatarGradientId} />
       </View>
     );
 

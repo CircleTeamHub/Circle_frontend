@@ -80,6 +80,10 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
         color: colors.textSecondary,
         ...Typography.tinyRegular,
       },
+      // G-07 回应 pill：走主题色淡底，不再用中性灰（暗色下灰底/灰边几乎看不见）。
+      pill: { backgroundColor: colors.primaryLight },
+      pillMine: { borderColor: colors.primary },
+      pillText: { color: colors.text },
     }),
     [colors],
   );
@@ -131,7 +135,8 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
                   key={reaction.emoji}
                   style={[
                     sReactions.pill,
-                    reaction.mine ? sReactions.pillMine : null,
+                    d.pill,
+                    reaction.mine ? d.pillMine : null,
                   ]}
                   onPress={
                     onReactionPress
@@ -139,7 +144,7 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
                       : undefined
                   }
                 >
-                  <Text style={sReactions.pillText}>
+                  <Text style={[sReactions.pillText, d.pillText]}>
                     {reaction.emoji} {reaction.count}
                   </Text>
                 </Pressable>
@@ -164,8 +169,8 @@ const sReactions = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    backgroundColor: 'rgba(127,127,127,0.15)',
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
-  pillMine: { borderWidth: 1, borderColor: 'rgba(127,127,127,0.6)' },
   pillText: { fontSize: 12 },
 });

@@ -6,11 +6,15 @@ const path = require('node:path');
 const root = path.join(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
-test('Avatar uses one gray WeChat-style silhouette when no image is configured', () => {
+test('Avatar uses one brand-purple silhouette when no image is configured', () => {
   const avatar = read('src/components/ui/avatar.tsx');
 
-  assert.match(avatar, /DEFAULT_AVATAR_BACKGROUND = '#D8D8D8'/);
-  assert.match(avatar, /DEFAULT_AVATAR_FOREGROUND = '#F5F5F5'/);
+  // 默认头像用品牌紫渐变（与 group-chat-avatar 同一套 stop），不再是浅灰底 —— 灰底在
+  // 暗色模式下就是一块看不清的方块。回归守卫：别再退回中性灰。
+  assert.match(avatar, /stopColor="#5548D9"/);
+  assert.match(avatar, /stopColor="#7467F5"/);
+  assert.match(avatar, /stopColor="#A58BFF"/);
+  assert.doesNotMatch(avatar, /#D8D8D8|#F5F5F5/);
   assert.match(avatar, /function DefaultAvatar/);
   assert.match(avatar, /<Circle[\s\S]*?<Path/);
   assert.doesNotMatch(avatar, /\(name && name\[0\]\)|>\?\s*</);

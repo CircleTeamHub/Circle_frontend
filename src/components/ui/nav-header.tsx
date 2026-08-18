@@ -3,7 +3,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { type Href, useNavigation, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { useTheme, Spacing, Typography } from '@/theme';
+import { useTheme, Spacing, Typography, withAlpha } from '@/theme';
 
 type NavHeaderAction = {
   icon: keyof typeof Ionicons.glyphMap;
@@ -122,7 +122,9 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
                 name={action.icon}
                 size={22}
                 color={
-                  action.disabled ? colors.textSecondary : colors.textSecondary
+                  action.disabled
+                    ? withAlpha(colors.textSecondary, 0.4)
+                    : colors.textSecondary
                 }
               />
             </Pressable>
