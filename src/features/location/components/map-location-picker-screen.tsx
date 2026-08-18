@@ -107,14 +107,17 @@ function normalizeCandidate(
     return null;
   }
 
-  const title = candidate.title?.trim() ?? '';
-  const address = candidate.address?.trim() ?? '';
-  if (
-    title.length > MAX_LOCATION_TITLE_LENGTH ||
-    address.length > MAX_LOCATION_ADDRESS_LENGTH
-  ) {
-    return null;
-  }
+  // 超长截断,不整条判非法。updatePicked 现在每次改动都上报,把「地址太长」当成
+  // 非法会在拖拽/反查途中弹一次告警,而且候选点停在上一处 —— 原生确认按钮提交的
+  // 位置就和地图上的标记对不上了。长度上限本就只是防膨胀,截断已经够。
+  const title = (candidate.title?.trim() ?? '').slice(
+    0,
+    MAX_LOCATION_TITLE_LENGTH,
+  );
+  const address = (candidate.address?.trim() ?? '').slice(
+    0,
+    MAX_LOCATION_ADDRESS_LENGTH,
+  );
 
   return {
     title: title || selectedLabel,
