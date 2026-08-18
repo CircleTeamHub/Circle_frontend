@@ -68,6 +68,25 @@ test('QrCodeScreen issues a server token and renders it as a deep link QR', () =
   assert.match(source, /qr\.userValidity/);
 });
 
+test('personal QR can be rotated after confirmation without exposing the action elsewhere', () => {
+  const api = read('src/services/api/qr.ts');
+  const screen = read('src/features/qr/screens/QrCodeScreen.tsx');
+
+  assert.match(api, /export function rotateUserQrToken/);
+  assert.match(api, /'\/qr\/tokens\/rotate'/);
+  assert.match(api, /method: 'POST'/);
+  assert.match(api, /body: \{ type: 'USER' \}/);
+
+  assert.match(screen, /rotateUserQrToken\(\)/);
+  assert.match(screen, /routeType === 'user'/);
+  assert.match(screen, /qr\.resetConfirmTitle/);
+  assert.match(screen, /qr\.resetConfirmMessage/);
+  assert.match(screen, /setQrToken\(result\.token\)/);
+  assert.match(screen, /setQrValue\(buildQrUrl\(result\.token\)\)/);
+  assert.match(screen, /qr\.resetSuccessTitle/);
+  assert.match(screen, /qr\.resetFailedTitle/);
+});
+
 test('QrLandingScreen previews before joining and never auto-joins', () => {
   const source = read('src/features/qr/screens/QrLandingScreen.tsx');
   assert.match(source, /resolveQrToken\(token\)/);
@@ -151,6 +170,17 @@ test('new server error codes are registered and localized in all five locales', 
       assert.ok(data.serverErrors?.[code], `${lang} missing serverErrors.${code}`);
     }
     assert.ok(data.qr, `${lang} missing qr namespace`);
+    for (const key of [
+      'reset',
+      'resetConfirmTitle',
+      'resetConfirmMessage',
+      'resetSuccessTitle',
+      'resetSuccessMessage',
+      'resetFailedTitle',
+      'resetFailedMessage',
+    ]) {
+      assert.equal(typeof data.qr[key], 'string', `${lang} missing qr.${key}`);
+    }
     qrKeySets.push(Object.keys(data.qr).sort().join(','));
   }
   // 五语言 qr 命名空间键集合完全一致。

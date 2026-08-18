@@ -19,7 +19,11 @@ import { ShareQrSheet } from '@/features/qr/components/ShareQrSheet';
 import { buildQrUrl } from '@/features/qr/qr-payload';
 import { saveQrPngToLibrary } from '@/features/qr/save-qr-image';
 import { getApiErrorMessage } from '@/services/api/errors';
-import { issueQrToken, type QrTokenType } from '@/services/api/qr';
+import {
+  issueQrToken,
+  rotateUserQrToken,
+  type QrTokenType,
+} from '@/services/api/qr';
 import type { QrCardData } from '@/types';
 import { useAuthStore } from '@/stores/authStore';
 import { getLocalizedDateTimeLocale } from '@/utils/locale';
@@ -65,6 +69,7 @@ export default function QrCodeScreen() {
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [rotating, setRotating] = useState(false);
   // 分享用的卡片载荷:令牌没签发下来之前按钮就是禁用态,不存在「开着面板但没内容」。
   const [shareCard, setShareCard] = useState<QrCardData | null>(null);
   // 令牌原文(qrValue 是它拼出来的深链);卡片只带令牌,不带整条 URL。
@@ -136,6 +141,38 @@ export default function QrCodeScreen() {
     });
   }, [avatarUrl, displayName, qrToken, routeType, t]);
 
+  const rotateToken = useCallback(async () => {
+    if (rotating) return;
+    setRotating(true);
+    try {
+      const result = await rotateUserQrToken();
+      setQrToken(result.token);
+      setQrValue(buildQrUrl(result.token));
+      setExpiresAt(result.expiresAt);
+      setErrorText(null);
+      Alert.alert(t('qr.resetSuccessTitle'), t('qr.resetSuccessMessage'));
+    } catch (error) {
+      Alert.alert(
+        t('qr.resetFailedTitle'),
+        getApiErrorMessage(error, t('qr.resetFailedMessage')),
+      );
+    } finally {
+      setRotating(false);
+    }
+  }, [rotating, t]);
+
+  const handleRotate = useCallback(() => {
+    if (routeType !== 'user' || rotating) return;
+    Alert.alert(t('qr.resetConfirmTitle'), t('qr.resetConfirmMessage'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('qr.reset'),
+        style: 'destructive',
+        onPress: () => void rotateToken(),
+      },
+    ]);
+  }, [rotateToken, rotating, routeType, t]);
+
   const title =
     routeType === 'group'
       ? t('qr.groupTitle')
@@ -177,6 +214,7 @@ export default function QrCodeScreen() {
         borderColor: colors.surfaceBorder,
       },
       secondaryText: { color: colors.text },
+      resetText: { color: colors.primary },
     }),
     [colors],
   );
@@ -225,9 +263,13 @@ export default function QrCodeScreen() {
 
         <View style={s.actions}>
           <Pressable
-            style={[s.actionButton, d.primaryButton, !qrValue && s.actionDisabled]}
+            style={[
+              s.actionButton,
+              d.primaryButton,
+              (!qrValue || rotating) && s.actionDisabled,
+            ]}
             onPress={() => void handleSave()}
-            disabled={!qrValue || saving}
+            disabled={!qrValue || saving || rotating}
             accessibilityRole="button"
           >
             {saving ? (
@@ -237,14 +279,32 @@ export default function QrCodeScreen() {
             )}
           </Pressable>
           <Pressable
-            style={[s.actionButton, d.secondaryButton, !qrToken && s.actionDisabled]}
+            style={[
+              s.actionButton,
+              d.secondaryButton,
+              (!qrToken || rotating) && s.actionDisabled,
+            ]}
             onPress={handleShare}
-            disabled={!qrToken}
+            disabled={!qrToken || rotating}
             accessibilityRole="button"
           >
             <Text style={[s.actionText, d.secondaryText]}>{t('qr.shareQr')}</Text>
           </Pressable>
         </View>
+        {routeType === 'user' ? (
+          <Pressable
+            style={[s.resetButton, rotating && s.actionDisabled]}
+            onPress={handleRotate}
+            disabled={rotating}
+            accessibilityRole="button"
+          >
+            {rotating ? (
+              <ActivityIndicator color={colors.primary} />
+            ) : (
+              <Text style={[s.resetText, d.resetText]}>{t('qr.reset')}</Text>
+            )}
+          </Pressable>
+        ) : null}
       </View>
 
       <ShareQrSheet card={shareCard} onClose={() => setShareCard(null)} />
@@ -317,6 +377,16 @@ const s = StyleSheet.create({
     opacity: 0.5,
   },
   actionText: {
+    ...Typography.body,
+    fontWeight: '600',
+  },
+  resetButton: {
+    minHeight: 44,
+    paddingHorizontal: Spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resetText: {
     ...Typography.body,
     fontWeight: '600',
   },

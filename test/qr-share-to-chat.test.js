@@ -67,7 +67,7 @@ test('分享卡片带的是令牌本身，不是拼好的整条 URL', () => {
   // 换 type / target 时先清空,免得短暂拿到上一个码的令牌发出去。
   assert.match(screen, /setQrToken\(null\)/);
   // 令牌没下来之前按钮是禁用态。
-  assert.match(screen, /disabled=\{!qrToken\}/);
+  assert.match(screen, /disabled=\{!qrToken \|\| rotating\}/);
 });
 
 // ─── 发送链路:卡片消息，不再上传图片 ─────────────────────────────────────────
