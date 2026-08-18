@@ -57,6 +57,16 @@ test('chat info screen separates standalone-group and circle-group flows', () =>
   );
   assert.match(screen, /members\.some\(\(item\) => item\.userId === member\.userId\)/);
   assert.match(screen, /else if \(!\(await revalidateMemberAccess\(\)\)\)/);
+
+  // Android 没有 Alert.prompt；独立群改名必须走所有平台都可用的受控弹窗。
+  assert.match(screen, /\bModal\b/);
+  assert.match(screen, /\bTextInput\b/);
+  assert.match(
+    screen,
+    /if \(isStandaloneGroup\) \{[\s\S]{0,240}setRenameDraft\(groupTitle\)[\s\S]{0,160}setRenameDialogVisible\(true\)/,
+  );
+  assert.match(screen, /<Modal[\s\S]{0,1800}<TextInput/);
+  assert.match(screen, /await renameGroupChatConversation\(conversationID, trimmed\)/);
 });
 
 test('new group screen submits selected friends through chat-core', () => {
