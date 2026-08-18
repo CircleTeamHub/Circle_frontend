@@ -49,6 +49,14 @@ test('chat info screen separates standalone-group and circle-group flows', () =>
     screen,
     /if \(isStandaloneGroup && conversationID\) \{[\s\S]{0,400}fetchChatMembers\(conversationID\)/,
   );
+  // 点成员资料时，非圈子会话按当前 conversation 现场重拉成员并 fail-closed；
+  // 不能调用 disabled 的 circle-only revalidate() 后固定返回 false。
+  assert.match(
+    screen,
+    /if \(isStandaloneGroup \|\| isTempConversation\) \{[\s\S]{0,500}fetchChatMembers\(memberConversationID\)/,
+  );
+  assert.match(screen, /members\.some\(\(item\) => item\.userId === member\.userId\)/);
+  assert.match(screen, /else if \(!\(await revalidateMemberAccess\(\)\)\)/);
 });
 
 test('new group screen submits selected friends through chat-core', () => {

@@ -894,15 +894,28 @@ export default function ChatInfoScreen() {
         return;
       }
 
-      // review R2 P1：打开成员资料前 fail-closed 现场重查，网格还没来得及
-      // 收起时也拦得住降权后的点击。
-      if (!(await revalidateMemberAccess())) {
+      // 打开成员资料前 fail-closed 现场重查，网格还没来得及收起时也拦得住
+      // 降权或已离群后的点击。独立群/TEMP 没有 circle membership，改查当前会话成员。
+      if (isStandaloneGroup || isTempConversation) {
+        const memberConversationID = resolvedConversationID || conversationID;
+        if (!memberConversationID) {
+          return;
+        }
+        try {
+          const members = await fetchChatMembers(memberConversationID);
+          if (!members.some((item) => item.userId === member.userId)) {
+            return;
+          }
+        } catch {
+          return;
+        }
+      } else if (!(await revalidateMemberAccess())) {
         return;
       }
 
       router.push(getUserProfileHref(scope, member.userId, member.nickname || undefined));
     },
-    [revalidateMemberAccess, scope],
+    [conversationID, isStandaloneGroup, isTempConversation, resolvedConversationID, revalidateMemberAccess, scope],
   );
 
   const handleChangeMemberRole = useCallback(
