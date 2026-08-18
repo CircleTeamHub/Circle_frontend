@@ -3251,7 +3251,9 @@ export default function ChatDetailScreen() {
         // mediaCount=0 的笔记没有任何可拷对象,别浪费服务端 20 次/分钟的拷贝配额。
         if (sections.length > 0 && note.mediaCount > 0) {
           try {
-            imported = (await importNoteChatMedia(note.id, sections)).items;
+            const importedResult = await importNoteChatMedia(note.id, sections);
+            failures += importedResult.failedCount;
+            imported = importedResult.items;
           } catch (error) {
             failures += 1;
             firstError ??= error;

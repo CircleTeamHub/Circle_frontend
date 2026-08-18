@@ -189,6 +189,7 @@ export interface NoteChatMediaImportItem {
 
 export interface NoteChatMediaImportResult {
   items: NoteChatMediaImportItem[];
+  failedCount: number;
 }
 
 export type NoteExportFormat = 'IMAGE' | 'PDF' | 'IMAGES' | 'VIDEOS';

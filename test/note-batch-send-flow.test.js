@@ -49,9 +49,15 @@ test('chat detail consumes note batches through the pure task planner', () => {
 
 test('note chat-media import API posts the section list', () => {
   const src = read('src/services/api/notes.ts');
+  const types = read('src/features/notes/types.ts');
+  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
 
   assert.match(src, /\/note\/\$\{noteId\}\/chat-media/);
   assert.match(src, /body: \{ sections \}/);
+  assert.match(types, /interface NoteChatMediaImportResult \{[\s\S]{0,120}failedCount: number/);
+  assert.match(screen, /const importedResult = await importNoteChatMedia\(note\.id, sections\)/);
+  assert.match(screen, /failures \+= importedResult\.failedCount/);
+  assert.match(screen, /imported = importedResult\.items/);
 });
 
 test('note remark editor saves through the remark API with the shared cap', () => {
