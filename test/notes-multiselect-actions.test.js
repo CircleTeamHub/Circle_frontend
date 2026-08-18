@@ -152,6 +152,11 @@ test('ShareNoteSheet sends every selected note card to the chosen conversation',
 
   assert.match(screen, /handleBatchShare/);
   assert.match(screen, /buildNoteCardPayloadFromSummary/);
+
+  // 两个入口都使用聊天批量笔记的同一 9 条上限，ShareNoteSheet 也做防御性截断。
+  assert.match(screen, /MAX_NOTE_BATCH_SELECTION/);
+  assert.match(sheet, /MAX_NOTE_BATCH_SELECTION/);
+  assert.match(sheet, /payloads\.slice\(0, MAX_NOTE_BATCH_SELECTION\)/);
 });
 
 test('group picker adds/removes membership per note instead of replacing wholesale', () => {

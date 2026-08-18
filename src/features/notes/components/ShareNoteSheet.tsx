@@ -17,6 +17,7 @@ import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { loadChatConversations } from '@/chat-core/api';
 import { sendCardMessage } from '@/chat-core/client';
+import { MAX_NOTE_BATCH_SELECTION } from '@/features/chat/utils/note-batch-send';
 import { mapChatConversationToUI } from '@/chat-core/mappers';
 import { useChatStore } from '@/chat-core/store';
 import type { Conversation, NoteCardData } from '@/types';
@@ -42,7 +43,10 @@ export function ShareNoteSheet({ payloads, onClose }: ShareNoteSheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
-  const targets = payloads && payloads.length > 0 ? payloads : null;
+  const targets =
+    payloads && payloads.length > 0
+      ? payloads.slice(0, MAX_NOTE_BATCH_SELECTION)
+      : null;
   const visible = targets != null;
 
   const rawConversations = useChatStore((state) => state.conversations);

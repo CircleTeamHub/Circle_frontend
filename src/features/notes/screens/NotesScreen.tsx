@@ -29,6 +29,7 @@ import { NoteGroupPickerSheet } from '@/features/notes/components/NoteGroupPicke
 import { ShareNoteSheet } from '@/features/notes/components/ShareNoteSheet';
 import { GroupManagerSheet } from '@/features/notes/components/GroupManagerSheet';
 import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
+import { MAX_NOTE_BATCH_SELECTION } from '@/features/chat/utils/note-batch-send';
 import type { NoteGroup, NoteSummary } from '@/features/notes/types';
 import { runNoteBatch } from '@/features/notes/utils/batch-run';
 import {
@@ -277,11 +278,15 @@ export default function NotesScreen() {
   }, []);
 
   const toggleNoteSelection = useCallback((note: NoteSummary) => {
-    setSelectedIds((prev) => toggleId(prev, note.id));
+    setSelectedIds((prev) =>
+      toggleId(prev, note.id, MAX_NOTE_BATCH_SELECTION),
+    );
   }, []);
 
   const handleToggleSelectAll = useCallback(() => {
-    setSelectedIds((prev) => toggleSelectAll(prev, visibleIds));
+    setSelectedIds((prev) =>
+      toggleSelectAll(prev, visibleIds, MAX_NOTE_BATCH_SELECTION),
+    );
   }, [visibleIds]);
 
   // tab 顺序（含「全部/未分组」的位置）由管理分组页拖动决定，本地持久化。
