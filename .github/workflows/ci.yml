@@ -89,14 +89,30 @@ jobs:
         with:
           path: Circle_frontend
 
-      # 对 main 校验：契约的另一端是「已合入的后端」。配套后端改动的前端 PR
-      # 会在这里红，直到后端先合 —— 那正是这类成对改动应有的合并顺序。
-      # 公开仓库，默认 GITHUB_TOKEN 即可，无需额外凭据。
+      # 对于成对 PR，两个仓库使用相同的 feature 分支名。若后端存在同名分支，
+      # 用它验证尚未合入的跨仓契约；普通前端 PR 或后端分支不存在时回退到 main。
+      # 这样不会把 qr-card 等尚未合入 main 的配套契约误判为前端回归，
+      # 也不会让普通 PR 因后端没有同名分支而无法运行。
+      - name: Resolve backend contract ref
+        id: backend-ref
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          ref=main
+          if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$HEAD_REF" ] \
+            && git ls-remote --exit-code --heads \
+              https://github.com/CircleTeamHub/circle_be.git "$HEAD_REF" >/dev/null 2>&1; then
+            ref="$HEAD_REF"
+          fi
+          printf 'ref=%s\n' "$ref" >> "$GITHUB_OUTPUT"
+
       - name: Checkout backend (cross-repo contracts)
         uses: actions/checkout@v7
         with:
           repository: CircleTeamHub/circle_be
-          ref: main
+          ref: ${{ steps.backend-ref.outputs.ref }}
           path: circle_be
 
       # 跨仓测试「找不到后端就跳过」的设计对本地开发是对的，对 CI 是危险的：
