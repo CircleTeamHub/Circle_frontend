@@ -189,7 +189,8 @@ export interface NoteChatMediaImportItem {
 
 export interface NoteChatMediaImportResult {
   items: NoteChatMediaImportItem[];
-  failedCount: number;
+  /** 旧后端在滚动升级期间可能尚未返回该字段。 */
+  failedCount?: number;
 }
 
 export type NoteExportFormat = 'IMAGE' | 'PDF' | 'IMAGES' | 'VIDEOS';

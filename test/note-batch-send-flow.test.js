@@ -60,9 +60,9 @@ test('note chat-media import API posts the section list', () => {
 
   assert.match(src, /\/note\/\$\{noteId\}\/chat-media/);
   assert.match(src, /body: \{ sections \}/);
-  assert.match(types, /interface NoteChatMediaImportResult \{[\s\S]{0,120}failedCount: number/);
+  assert.match(types, /interface NoteChatMediaImportResult \{[\s\S]{0,180}failedCount\?: number/);
   assert.match(screen, /const importedResult = await importNoteChatMedia\(note\.id, sections\)/);
-  assert.match(screen, /failures \+= importedResult\.failedCount/);
+  assert.match(screen, /failures \+= importedResult\.failedCount \?\? 0/);
   assert.match(screen, /imported = importedResult\.items/);
 });
 

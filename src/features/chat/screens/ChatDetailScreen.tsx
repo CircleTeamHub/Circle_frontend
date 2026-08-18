@@ -3255,7 +3255,7 @@ export default function ChatDetailScreen() {
         if (sections.length > 0 && note.mediaCount > 0) {
           try {
             const importedResult = await importNoteChatMedia(note.id, sections);
-            failures += importedResult.failedCount;
+            failures += importedResult.failedCount ?? 0;
             imported = importedResult.items;
           } catch (error) {
             failures += 1;
