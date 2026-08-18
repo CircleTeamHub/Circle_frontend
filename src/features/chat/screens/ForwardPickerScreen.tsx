@@ -97,8 +97,9 @@ function num(value: unknown): number | undefined {
 
 function conversationDisplayName(conversation: ChatConversationDto): string {
   return (
-    conversation.circle?.name ??
-    conversation.peer?.nickname ??
+    conversation.tempChat?.title.trim() ||
+    conversation.circle?.name ||
+    conversation.peer?.nickname ||
     i18n.t('chat.forward.single', { defaultValue: '单聊' })
   );
 }
