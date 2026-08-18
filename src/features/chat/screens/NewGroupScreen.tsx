@@ -97,6 +97,7 @@ export default function NewGroupScreen() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Record<string, true>>({});
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -148,10 +149,12 @@ export default function NewGroupScreen() {
   }, []);
 
   const handleSubmit = useCallback(async () => {
+    if (submittingRef.current) return;
     if (selectedCount < MIN_MEMBERS) {
       Alert.alert(t('messages.newGroupMinMembers'));
       return;
     }
+    submittingRef.current = true;
     setSubmitting(true);
     try {
       const { conversationID } = await createGroupConversation({
@@ -184,6 +187,7 @@ export default function NewGroupScreen() {
         );
       }
     } finally {
+      submittingRef.current = false;
       if (mountedRef.current) setSubmitting(false);
     }
   }, [name, router, segments, selected, selectedCount, t]);

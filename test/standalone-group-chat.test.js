@@ -55,6 +55,10 @@ test('new group screen submits selected friends through chat-core', () => {
   const screen = read('src/features/chat/screens/NewGroupScreen.tsx');
   assert.match(screen, /createGroupConversation\(\{/);
   assert.match(screen, /memberIds: Object\.keys\(selected\)/);
+  assert.match(screen, /submittingRef = useRef\(false\)/);
+  assert.match(screen, /if \(submittingRef\.current\) return/);
+  assert.match(screen, /submittingRef\.current = true/);
+  assert.match(screen, /submittingRef\.current = false/);
   // 服务端 ArrayMinSize(2) 的同款下限,提交前先在端上拦。
   assert.match(screen, /MIN_MEMBERS = 2/);
   // 建完 replace 进聊天页,返回不落回选人页。
