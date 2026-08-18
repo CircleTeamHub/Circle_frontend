@@ -990,6 +990,7 @@
       "confirmMessage": "「{{title}}」を {{name}} に送信しますか？",
       "confirmBatchMessage": "{{count}} 件のノートを {{name}} に送信しますか？",
       "partialFailed": "{{count}} 件のノートを送信できませんでした。もう一度お試しください。",
+      "limitExceeded": "一度に共有できるノートは {{count}} 件までです。他の一括操作には影響しません。",
       "sentTitle": "送信しました",
       "sentMessage": "ノートをチャットに送信しました。",
       "failedTitle": "送信に失敗しました",

@@ -2480,6 +2480,7 @@
       "confirmMessage": "把「{{title}}」发送给 {{name}}？",
       "confirmBatchMessage": "把 {{count}} 条笔记发送给 {{name}}？",
       "partialFailed": "有 {{count}} 条笔记发送失败，请重试。",
+      "limitExceeded": "一次最多分享 {{count}} 条笔记。其他批量操作不受此限制。",
       "sentTitle": "已发送",
       "sentMessage": "笔记已发送到聊天。",
       "failedTitle": "发送失败",

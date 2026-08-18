@@ -21,6 +21,8 @@ test('NotesScreen wires multi-select: long-press/menu entry, select-all, prune o
   assert.match(src, /toggleId\(/);
   assert.match(src, /toggleSelectAll\(/);
   assert.match(src, /pruneSelection\(/);
+  assert.doesNotMatch(src, /toggleId\(prev, note\.id, MAX_NOTE_BATCH_SELECTION\)/);
+  assert.doesNotMatch(src, /toggleSelectAll\(prev, visibleIds, MAX_NOTE_BATCH_SELECTION\)/);
 
   // 选择态 UI：全选/取消全选开关、已选计数、卡片选中标记。
   assert.match(src, /notes\.selection\.selectAll/);
@@ -162,10 +164,13 @@ test('ShareNoteSheet sends every selected note card to the chosen conversation',
   assert.match(screen, /handleBatchShare/);
   assert.match(screen, /buildNoteCardPayloadFromSummary/);
 
-  // 两个入口都使用聊天批量笔记的同一 9 条上限，ShareNoteSheet 也做防御性截断。
+  // 只有分享入口使用聊天批量笔记的 9 条上限；其他批量动作仍可全选。
   assert.match(screen, /MAX_NOTE_BATCH_SELECTION/);
-  assert.match(sheet, /MAX_NOTE_BATCH_SELECTION/);
-  assert.match(sheet, /payloads\.slice\(0, MAX_NOTE_BATCH_SELECTION\)/);
+  assert.match(
+    screen,
+    /if \(notes\.length > MAX_NOTE_BATCH_SELECTION\) \{[\s\S]{0,240}Alert\.alert/,
+  );
+  assert.doesNotMatch(sheet, /payloads\.slice\(0, MAX_NOTE_BATCH_SELECTION\)/);
 });
 
 test('group picker adds/removes membership per note instead of replacing wholesale', () => {
@@ -215,6 +220,7 @@ test('all five locales carry the new multi-select/remark/group-picker keys', () 
     ['notes', 'remarkSheet', 'batchTitle'],
     ['notes', 'shareToChat', 'confirmBatchMessage'],
     ['notes', 'shareToChat', 'partialFailed'],
+    ['notes', 'shareToChat', 'limitExceeded'],
     ['notes', 'remarkSheet', 'placeholder'],
     ['notes', 'remarkSheet', 'save'],
     ['notes', 'remarkSheet', 'saving'],

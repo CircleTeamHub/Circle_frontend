@@ -278,15 +278,11 @@ export default function NotesScreen() {
   }, []);
 
   const toggleNoteSelection = useCallback((note: NoteSummary) => {
-    setSelectedIds((prev) =>
-      toggleId(prev, note.id, MAX_NOTE_BATCH_SELECTION),
-    );
+    setSelectedIds((prev) => toggleId(prev, note.id));
   }, []);
 
   const handleToggleSelectAll = useCallback(() => {
-    setSelectedIds((prev) =>
-      toggleSelectAll(prev, visibleIds, MAX_NOTE_BATCH_SELECTION),
-    );
+    setSelectedIds((prev) => toggleSelectAll(prev, visibleIds));
   }, [visibleIds]);
 
   // tab 顺序（含「全部/未分组」的位置）由管理分组页拖动决定，本地持久化。
@@ -509,13 +505,22 @@ export default function NotesScreen() {
   );
   const handleBatchShare = useCallback(
     (notes: NoteSummary[]) => {
+      if (notes.length > MAX_NOTE_BATCH_SELECTION) {
+        Alert.alert(
+          t('notes.shareToChat.failedTitle'),
+          t('notes.shareToChat.limitExceeded', {
+            count: MAX_NOTE_BATCH_SELECTION,
+          }),
+        );
+        return;
+      }
       setShareNotePayloads(
         notes.map((note) =>
           buildNoteCardPayloadFromSummary(note, note.ownerId ?? currentUserId),
         ),
       );
     },
-    [currentUserId],
+    [currentUserId, t],
   );
   const closeShareNote = useCallback(() => setShareNotePayloads(null), []);
 
