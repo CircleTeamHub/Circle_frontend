@@ -138,6 +138,15 @@ test('remark is wired end to end: PATCH api, sheet editor, in-place list update'
   assert.match(screen, /<NoteRemarkSheet/);
   assert.match(screen, /handleRemarkSaved/);
   assert.match(types, /remark\?: string \| null/);
+
+  // 部分失败必须把失败 id 交还父层并继续保持多选；只有全成功才退出。
+  assert.match(sheet, /onSaved: \(result: \{[\s\S]{0,160}failedIds: string\[\]/);
+  assert.match(sheet, /onSaved\(\{[\s\S]{0,160}failedIds: failed/);
+  assert.match(screen, /\(\{ succeededIds, failedIds, remark \}(?::[\s\S]{0,120})?\) =>/);
+  assert.match(
+    screen,
+    /if \(failedIds\.length > 0\) \{[\s\S]{0,180}setSelectedIds\(failedIds\)[\s\S]{0,180}setSelectionMode\(true\)[\s\S]{0,120}\} else \{[\s\S]{0,120}exitSelection\(\)/,
+  );
 });
 
 test('ShareNoteSheet sends every selected note card to the chosen conversation', () => {
