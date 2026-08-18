@@ -4,7 +4,6 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
-  Share,
   StyleSheet,
   Text,
   View,
@@ -16,10 +15,12 @@ import { Avatar } from '@/components/ui/avatar';
 import { CircleAvatar } from '@/components/ui/circle-avatar';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { NavHeader } from '@/components/ui/nav-header';
+import { ShareQrSheet } from '@/features/qr/components/ShareQrSheet';
 import { buildQrUrl } from '@/features/qr/qr-payload';
 import { saveQrPngToLibrary } from '@/features/qr/save-qr-image';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { issueQrToken, type QrTokenType } from '@/services/api/qr';
+import type { QrCardData } from '@/types';
 import { useAuthStore } from '@/stores/authStore';
 import { getLocalizedDateTimeLocale } from '@/utils/locale';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -64,16 +65,22 @@ export default function QrCodeScreen() {
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // 分享用的卡片载荷:令牌没签发下来之前按钮就是禁用态,不存在「开着面板但没内容」。
+  const [shareCard, setShareCard] = useState<QrCardData | null>(null);
+  // 令牌原文(qrValue 是它拼出来的深链);卡片只带令牌,不带整条 URL。
+  const [qrToken, setQrToken] = useState<string | null>(null);
   // react-native-qrcode-svg 的 getRef 回调给出 svg 实例,toDataURL 导出 PNG base64。
   const qrSvgRef = useRef<{ toDataURL: (cb: (data: string) => void) => void } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setQrValue(null);
+    setQrToken(null);
     setErrorText(null);
     issueQrToken({ type: TYPE_MAP[routeType], targetId })
       .then((result) => {
         if (cancelled) return;
+        setQrToken(result.token);
         setQrValue(buildQrUrl(result.token));
         setExpiresAt(result.expiresAt);
       })
@@ -111,14 +118,23 @@ export default function QrCodeScreen() {
     }
   }, [captureQrPng, qrValue, saving, t]);
 
-  const handleShare = useCallback(async () => {
-    if (!qrValue) return;
-    try {
-      await Share.share({ message: qrValue });
-    } catch {
-      // 用户取消分享面板不算错误。
+  /**
+   * 「分享二维码」——发的是二维码卡片进某个私聊 / 群聊,不是把裸链接甩进系统面板。
+   * 链接分享等于把入群 / 加好友的令牌明文交给任意 App;卡片留在站内,
+   * 收方看到头像 + 名字 + 码本身,点一下就走落地页。
+   */
+  const handleShare = useCallback(() => {
+    if (!qrToken) {
+      Alert.alert(t('qr.shareFailedTitle'), t('qr.shareFailedMessage'));
+      return;
     }
-  }, [qrValue]);
+    setShareCard({
+      token: qrToken,
+      qrType: routeType,
+      name: displayName || t('qr.unnamed'),
+      avatarUrl: avatarUrl ?? null,
+    });
+  }, [avatarUrl, displayName, qrToken, routeType, t]);
 
   const title =
     routeType === 'group'
@@ -221,15 +237,17 @@ export default function QrCodeScreen() {
             )}
           </Pressable>
           <Pressable
-            style={[s.actionButton, d.secondaryButton, !qrValue && s.actionDisabled]}
-            onPress={() => void handleShare()}
-            disabled={!qrValue}
+            style={[s.actionButton, d.secondaryButton, !qrToken && s.actionDisabled]}
+            onPress={handleShare}
+            disabled={!qrToken}
             accessibilityRole="button"
           >
-            <Text style={[s.actionText, d.secondaryText]}>{t('qr.shareLink')}</Text>
+            <Text style={[s.actionText, d.secondaryText]}>{t('qr.shareQr')}</Text>
           </Pressable>
         </View>
       </View>
+
+      <ShareQrSheet card={shareCard} onClose={() => setShareCard(null)} />
     </View>
   );
 }

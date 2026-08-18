@@ -46,6 +46,9 @@ function loadChatHistory() {
     if (request === './mappers') return { formatChatTimestamp: () => '12:00' };
     if (request === './store') return {};
     if (request === '@/types') return {};
+    // qr-payload 运行时零依赖,直接跑真实实现。
+    if (request === '@/features/qr/qr-payload')
+      return runModule('src/features/qr/qr-payload.ts', () => ({}));
     throw new Error(`unexpected require: ${request}`);
   });
 

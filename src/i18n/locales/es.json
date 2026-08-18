@@ -668,6 +668,11 @@
     "scanCopyFailedTitle": "No se pudo copiar",
     "scanCopyFailedMessage": "Se escaneó el código QR, pero no se pudo copiar el contenido.",
     "scanAgain": "Escanear de nuevo",
+    "scanFromAlbum": "Elegir del álbum",
+    "scanAlbumNoCodeTitle": "No se encontró ningún código QR",
+    "scanAlbumNoCodeMessage": "Esta imagen no contiene un código QR legible. Prueba con otra.",
+    "scanAlbumFailedTitle": "Error al escanear",
+    "scanAlbumFailedMessage": "Inténtalo de nuevo.",
     "seatManagement": "Chats grupales temporales",
     "groupManagement": "Gestión de grupos",
     "loadFailed": "No se pudieron cargar las conversaciones: {{error}}",
@@ -2687,6 +2692,7 @@
       "location": "[Ubicación]",
       "typing": "[Escribiendo]",
       "card": "[Tarjeta] {{name}}",
+      "qr": "[Código QR] {{name}}",
       "transferWithAmount": "[Transferencia] {{amount}} créditos",
       "transfer": "[Transferencia]",
       "note": "[Nota] {{title}}",
@@ -3061,7 +3067,9 @@
     "expiresBefore": "Este código QR es válido por 7 días (hasta el {{date}}) y se renueva al volver a abrir",
     "unnamed": "Sin nombre",
     "saveImage": "Guardar imagen",
-    "shareLink": "Compartir enlace",
+    "shareQr": "Compartir código QR",
+    "shareFailedTitle": "No se pudo compartir",
+    "shareFailedMessage": "El código QR aún no está listo. Inténtalo de nuevo.",
     "savedTitle": "Guardado",
     "savedMessage": "Código QR guardado en tu galería.",
     "saveDeniedTitle": "No se puede guardar",
@@ -3089,6 +3097,30 @@
     "circleSubtitle": "Círculo · {{count}} miembros",
     "sharedBy": "Compartido por {{name}}",
     "groupEntry": "Código QR del grupo",
-    "myQrEntry": "Mi código QR"
+    "myQrEntry": "Mi código QR",
+    "shareToChat": {
+      "title": "Compartir con un amigo o grupo",
+      "searchPlaceholder": "Buscar amigos o grupos",
+      "friendHint": "Amigo",
+      "groupHint": "Grupo",
+      "sending": "Enviando...",
+      "confirmTitle": "Enviar código QR",
+      "confirmMessage": "¿Enviar el código QR de «{{subject}}» a {{name}}?",
+      "sentTitle": "Enviado",
+      "sentMessage": "El código QR se envió al chat.",
+      "failedTitle": "Error al enviar",
+      "failedMessage": "No se pudo enviar el código QR. Inténtalo de nuevo.",
+      "loadFailed": "No se pueden cargar los chats. Inténtalo de nuevo.",
+      "empty": "No hay chats disponibles",
+      "noMatch": "No hay amigos ni grupos coincidentes"
+    },
+    "card": {
+      "userType": "Código QR de contacto",
+      "groupType": "Código QR del grupo",
+      "circleType": "Código QR del círculo",
+      "userFooter": "Escanea o toca para agregar como amigo",
+      "groupFooter": "Escanea o toca para unirte al grupo",
+      "circleFooter": "Escanea o toca para unirte al círculo"
+    }
   }
 }

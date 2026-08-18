@@ -1,4 +1,5 @@
 import i18n from '@/i18n';
+import { normalizeQrToken } from '@/features/qr/qr-payload';
 import { allowPeerMediaUrl } from '@/services/api/utils';
 import type {
   CallRecordData,
@@ -8,6 +9,8 @@ import type {
   FriendCardData,
   NoteCardData,
   PlazaPostCardData,
+  QrCardData,
+  QrCardType,
   TransferCardData,
   VerificationCardData,
 } from '@/types';
@@ -227,6 +230,22 @@ function sanitizeCircleCard(content: Record<string, unknown>): CircleCardData {
   };
 }
 
+const QR_CARD_TYPES: readonly QrCardType[] = ['user', 'group', 'circle'];
+
+function sanitizeQrCard(content: Record<string, unknown>): QrCardData {
+  const rawType = str(content['qrType']);
+  return {
+    // 对端可能塞整条 URL、甚至别人家的链接 —— 一律过 normalizeQrToken:
+    // 出来的要么是形状合法的令牌,要么是空串(空串的卡片气泡直接不渲染)。
+    token: normalizeQrToken(textField(content, 'token', 512)) ?? '',
+    qrType: QR_CARD_TYPES.includes(rawType as QrCardType)
+      ? (rawType as QrCardType)
+      : 'user',
+    name: textField(content, 'name', 60),
+    avatarUrl: mediaField(content, 'avatarUrl'),
+  };
+}
+
 function sanitizePlazaPostCard(
   content: Record<string, unknown>,
 ): PlazaPostCardData {
@@ -426,6 +445,12 @@ export function mapChatMessageDtoToUI(
         ...base,
         type: 'verification-card',
         verificationCard: sanitizeVerificationCard(content),
+      };
+    case 'qr-card':
+      return {
+        ...base,
+        type: 'qr-card',
+        qrCard: sanitizeQrCard(content),
       };
     case 'plaza-post-card':
       return {

@@ -1,8 +1,14 @@
 import { resolveMessageScanResult } from '@/features/messages/utils/scan-result';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
+import {
+  CameraView,
+  scanFromURLAsync,
+  useCameraPermissions,
+  type BarcodeScanningResult,
+} from 'expo-camera';
 import * as Clipboard from 'expo-clipboard';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -45,9 +51,6 @@ const s = StyleSheet.create({
   title: {
     ...Typography.h3,
     color: '#FFFFFF',
-  },
-  topSpacer: {
-    width: 44,
   },
   frameWrap: {
     ...StyleSheet.absoluteFillObject,
@@ -118,6 +121,7 @@ export default function ScanScreen() {
   const { t } = useTranslation();
   const [permission, requestPermission] = useCameraPermissions();
   const [isHandlingResult, setIsHandlingResult] = useState(false);
+  const [pickingFromAlbum, setPickingFromAlbum] = useState(false);
 
   useEffect(() => {
     if (!permission) {
@@ -207,6 +211,48 @@ export default function ScanScreen() {
     [handleCopyFallback, isHandlingResult, router],
   );
 
+  /**
+   * 从相册选一张图识别二维码 —— 「分享二维码到聊天」发的是图片消息,收方不可能
+   * 用另一台手机去扫屏幕,只能存图后从相册认。没有这个入口,分享出去的码就是死的。
+   */
+  const handleScanFromAlbum = useCallback(async () => {
+    if (isHandlingResult || pickingFromAlbum) return;
+    setPickingFromAlbum(true);
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(t('permissions.insufficientTitle'), t('permissions.photoLibrary'));
+        return;
+      }
+      const picked = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: false,
+        quality: 1,
+      });
+      if (picked.canceled || picked.assets.length === 0) return;
+
+      const [found] = await scanFromURLAsync(picked.assets[0].uri, ['qr']);
+      if (!found) {
+        Alert.alert(
+          t('messages.scanAlbumNoCodeTitle'),
+          t('messages.scanAlbumNoCodeMessage'),
+        );
+        return;
+      }
+      handleBarcodeScanned(found);
+    } catch (error) {
+      if (__DEV__) {
+        console.warn('[ScanScreen] scan from album failed', error);
+      }
+      Alert.alert(
+        t('messages.scanAlbumFailedTitle'),
+        t('messages.scanAlbumFailedMessage'),
+      );
+    } finally {
+      setPickingFromAlbum(false);
+    }
+  }, [handleBarcodeScanned, isHandlingResult, pickingFromAlbum, t]);
+
   if (!permission) {
     return (
       <View style={[s.statusPane, d.statusPane, { paddingTop: insets.top }]}>
@@ -277,7 +323,20 @@ export default function ScanScreen() {
           <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
         </Pressable>
         <Text style={s.title}>{t('messages.scan')}</Text>
-        <View style={s.topSpacer} />
+        <Pressable
+          style={s.iconButton}
+          onPress={() => void handleScanFromAlbum()}
+          disabled={pickingFromAlbum || isHandlingResult}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t('messages.scanFromAlbum')}
+        >
+          {pickingFromAlbum ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Ionicons name="images-outline" size={22} color="#FFFFFF" />
+          )}
+        </Pressable>
       </View>
       <View pointerEvents="none" style={s.frameWrap}>
         <View style={s.frame} />

@@ -154,6 +154,11 @@
     "scanCopyFailedTitle": "复制失败",
     "scanCopyFailedMessage": "已识别二维码，但复制内容失败。",
     "scanAgain": "继续扫描",
+    "scanFromAlbum": "从相册选取",
+    "scanAlbumNoCodeTitle": "没有识别到二维码",
+    "scanAlbumNoCodeMessage": "这张图片里没有可识别的二维码，换一张试试。",
+    "scanAlbumFailedTitle": "识别失败",
+    "scanAlbumFailedMessage": "请稍后重试。",
     "seatManagement": "临时群聊",
     "groupManagement": "群组管理",
     "loadFailed": "会话加载失败：{{error}}",
@@ -2649,6 +2654,7 @@
       "location": "[位置]",
       "typing": "[正在输入]",
       "card": "[名片] {{name}}",
+      "qr": "[二维码] {{name}}",
       "transferWithAmount": "[转账] {{amount}} 积分",
       "transfer": "[转账]",
       "note": "[笔记] {{title}}",
@@ -3058,7 +3064,9 @@
     "expiresBefore": "该二维码7天内（{{date}}前）有效，重新进入将更新",
     "unnamed": "未命名",
     "saveImage": "保存图片",
-    "shareLink": "分享链接",
+    "shareQr": "分享二维码",
+    "shareFailedTitle": "分享失败",
+    "shareFailedMessage": "二维码还没准备好，请稍后重试。",
     "savedTitle": "已保存",
     "savedMessage": "二维码已保存到相册。",
     "saveDeniedTitle": "无法保存",
@@ -3086,6 +3094,30 @@
     "circleSubtitle": "圈子 · {{count}} 人",
     "sharedBy": "来自 {{name}}",
     "groupEntry": "群二维码",
-    "myQrEntry": "我的二维码"
+    "myQrEntry": "我的二维码",
+    "shareToChat": {
+      "title": "分享给好友或群聊",
+      "searchPlaceholder": "搜索好友或群聊",
+      "friendHint": "好友",
+      "groupHint": "群聊",
+      "sending": "发送中...",
+      "confirmTitle": "发送二维码",
+      "confirmMessage": "把「{{subject}}」的二维码发送给 {{name}}？",
+      "sentTitle": "已发送",
+      "sentMessage": "二维码已发送到聊天。",
+      "failedTitle": "发送失败",
+      "failedMessage": "二维码没能发出去，请稍后重试。",
+      "loadFailed": "无法加载聊天对象，请稍后重试",
+      "empty": "暂无可发送的聊天对象",
+      "noMatch": "没有匹配的好友或群聊"
+    },
+    "card": {
+      "userType": "个人名片二维码",
+      "groupType": "群聊二维码",
+      "circleType": "圈子二维码",
+      "userFooter": "扫一扫或点击加好友",
+      "groupFooter": "扫一扫或点击加入群聊",
+      "circleFooter": "扫一扫或点击加入圈子"
+    }
   }
 }

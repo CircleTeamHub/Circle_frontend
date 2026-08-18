@@ -74,6 +74,23 @@ export interface CircleCardData {
   avatarUrl: string | null;
 }
 
+/** 二维码卡片：名片 / 群 / 圈子三种码共用同一条载荷。 */
+export interface QrCardData {
+  /**
+   * 服务端签发的二维码令牌。**只存令牌、不存整条 URL** —— 卡片是对端投喂的内容,
+   * 存 URL 就等于让发送方决定「点这张卡会打开什么」(填个 https://evil.com,
+   * 卡片长得跟真的一样)。存令牌则无论对端写什么,本端都只能拼出自家的 /qr 深链。
+   */
+  token: string;
+  /** 这是谁的码 —— 只影响卡片措辞;真实类型由 /qr 预览端点按令牌判定。 */
+  qrType: QrCardType;
+  /** 名片主人昵称 / 群名 / 圈子名。 */
+  name: string;
+  avatarUrl: string | null;
+}
+
+export type QrCardType = 'user' | 'group' | 'circle';
+
 export interface VerificationCardData {
   invitationId: string;
   circleName: string;
@@ -130,6 +147,7 @@ export interface ChatMessage {
     | 'transfer-card'
     | 'verification-card'
     | 'plaza-post-card'
+    | 'qr-card'
     | 'call-record';
   text?: string;
   quotedText?: string;
@@ -187,6 +205,8 @@ export interface ChatMessage {
   verificationCard?: VerificationCardData;
   // For plaza-post-card messages: parsed circle-post share payload
   plazaPostCard?: PlazaPostCardData;
+  // For qr-card messages: parsed QR share payload (名片 / 群 / 圈子)
+  qrCard?: QrCardData;
   // For call-record messages (#115): parsed call summary payload
   callRecord?: CallRecordData;
   // OpenIM 发送状态：1=发送中, 2=已送达, 3=失败。仅自己发出的消息有意义。

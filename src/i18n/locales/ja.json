@@ -667,6 +667,11 @@
     "scanCopyFailedTitle": "コピーできませんでした",
     "scanCopyFailedMessage": "QRコードをスキャンしましたが、内容のコピーに失敗しました。",
     "scanAgain": "もう一度スキャン",
+    "scanFromAlbum": "アルバムから選ぶ",
+    "scanAlbumNoCodeTitle": "QRコードが見つかりません",
+    "scanAlbumNoCodeMessage": "この画像には読み取れるQRコードがありません。別の画像でお試しください。",
+    "scanAlbumFailedTitle": "読み取れません",
+    "scanAlbumFailedMessage": "しばらくしてからもう一度お試しください。",
     "seatManagement": "一時グループチャット",
     "groupManagement": "グループ管理",
     "loadFailed": "会話の読み込みに失敗しました：{{error}}",
@@ -2684,6 +2689,7 @@
       "location": "[位置情報]",
       "typing": "[入力中]",
       "card": "[カード] {{name}}",
+      "qr": "[QRコード] {{name}}",
       "transferWithAmount": "[送金] {{amount}} クレジット",
       "transfer": "[送金]",
       "note": "[ノート] {{title}}",
@@ -3058,7 +3064,9 @@
     "expiresBefore": "このQRコードは7日間（{{date}}まで）有効。再度開くと更新されます",
     "unnamed": "名称未設定",
     "saveImage": "画像を保存",
-    "shareLink": "リンクを共有",
+    "shareQr": "QRコードを送る",
+    "shareFailedTitle": "共有できません",
+    "shareFailedMessage": "QRコードの準備ができていません。しばらくしてからもう一度お試しください。",
     "savedTitle": "保存しました",
     "savedMessage": "QRコードをアルバムに保存しました。",
     "saveDeniedTitle": "保存できません",
@@ -3086,6 +3094,30 @@
     "circleSubtitle": "サークル · {{count}}人",
     "sharedBy": "{{name}}さんから",
     "groupEntry": "グループQRコード",
-    "myQrEntry": "マイQRコード"
+    "myQrEntry": "マイQRコード",
+    "shareToChat": {
+      "title": "友だちやグループに送る",
+      "searchPlaceholder": "友だち・グループを検索",
+      "friendHint": "友だち",
+      "groupHint": "グループ",
+      "sending": "送信中...",
+      "confirmTitle": "QRコードを送信",
+      "confirmMessage": "「{{subject}}」のQRコードを{{name}}に送信しますか？",
+      "sentTitle": "送信しました",
+      "sentMessage": "QRコードをチャットに送信しました。",
+      "failedTitle": "送信できません",
+      "failedMessage": "QRコードを送信できませんでした。しばらくしてからもう一度お試しください。",
+      "loadFailed": "チャットを読み込めません。しばらくしてからもう一度お試しください",
+      "empty": "送信できるチャットがありません",
+      "noMatch": "一致する友だち・グループがありません"
+    },
+    "card": {
+      "userType": "名刺QRコード",
+      "groupType": "グループQRコード",
+      "circleType": "サークルQRコード",
+      "userFooter": "スキャンまたはタップで友だち追加",
+      "groupFooter": "スキャンまたはタップでグループに参加",
+      "circleFooter": "スキャンまたはタップでサークルに参加"
+    }
   }
 }

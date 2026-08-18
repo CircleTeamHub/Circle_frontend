@@ -89,6 +89,11 @@ export function buildQuotePreviewText(message: ChatMessage, t: TFunction) {
         name: message.circleCard?.name ?? '',
         defaultValue: '[圈子] {{name}}',
       }).trim();
+    case 'qr-card':
+      return t('im.preview.qr', {
+        name: message.qrCard?.name ?? '',
+        defaultValue: '[二维码] {{name}}',
+      }).trim();
     default:
       return t('im.preview.default', { defaultValue: '[消息]' });
   }

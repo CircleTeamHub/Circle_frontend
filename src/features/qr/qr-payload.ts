@@ -22,6 +22,21 @@ const TOKEN_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
 
 const SCHEME_PREFIXES = APP_DEEP_LINK_SCHEMES.map((scheme) => `${scheme}://`);
 
+/**
+ * 归一化「对端投喂的令牌字段」:接受裸令牌,也接受整条本站二维码深链
+ * (发送端实现换了形态时不至于炸);其余一律 null。
+ *
+ * 二维码卡片的载荷来自聊天对端,不能直接信。这里收口成「要么是一个形状合法的
+ * 令牌,要么什么都不是」—— 本端后续只会拿它去拼自家的 /qr 深链,
+ * 对端因此没有任何机会决定「点这张卡会打开什么」。
+ */
+export function normalizeQrToken(raw: string): string | null {
+  const value = raw.trim();
+  if (!value) return null;
+  if (TOKEN_PATTERN.test(value)) return value;
+  return parseQrToken(value);
+}
+
 export function buildQrUrl(token: string): string {
   return `${SCHEME_PREFIXES[0]}qr?t=${encodeURIComponent(token)}`;
 }

@@ -419,7 +419,8 @@ export type ChatCardType =
   | 'note-card'
   | 'friend-card'
   | 'circle-card'
-  | 'plaza-post-card';
+  | 'plaza-post-card'
+  | 'qr-card';
 
 /** 各类卡片:content 即卡片 payload 本体(渲染侧同一形状,零转换)。 */
 export function sendCardMessage(options: {

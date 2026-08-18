@@ -134,6 +134,8 @@ export function getChatMessagePreview(message: ChatMessageDto | null): string {
       return tCardPreview('card', '[卡片]', 'name', message.content['nickname']);
     case 'circle-card':
       return tCardPreview('card', '[卡片]', 'name', message.content['name']);
+    case 'qr-card':
+      return tCardPreview('qr', '[二维码]', 'name', message.content['name']);
     default:
       return tPreview('default', '[消息]');
   }

@@ -44,6 +44,7 @@ import {
   NoteCardBubble,
   FriendCardBubble,
   CircleCardBubble,
+  QrCardBubble,
   PlazaPostCardBubble,
   VerificationCardBubble,
   TransferCardBubble,
@@ -2043,6 +2044,24 @@ export default function ChatDetailScreen() {
                   card.circleId,
                 ),
               )
+            }
+            hideStatus={isGroupChat}
+          />
+        ));
+      case 'qr-card':
+        return withMessageActions(item, (
+          <QrCardBubble
+            message={item}
+            outgoing={Boolean(item.outgoing)}
+            senderName={receivedDisplayName(item)}
+            senderAvatarUri={receivedAvatarUri(item)}
+            selfName={selfName}
+            selfAvatarUri={selfAvatarUri}
+            onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
+            // 点卡片 = 扫这张码:走扫码同一条落地页,由 /qr 按令牌自己判类型与有效性。
+            onPress={(card) =>
+              router.push({ pathname: '/qr', params: { t: card.token } })
             }
             hideStatus={isGroupChat}
           />

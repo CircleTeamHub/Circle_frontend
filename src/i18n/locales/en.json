@@ -154,6 +154,11 @@
     "scanCopyFailedTitle": "Could not copy",
     "scanCopyFailedMessage": "The QR code was scanned, but copying the content failed.",
     "scanAgain": "Scan Again",
+    "scanFromAlbum": "Choose from Album",
+    "scanAlbumNoCodeTitle": "No QR Code Found",
+    "scanAlbumNoCodeMessage": "This image doesn't contain a readable QR code. Try another one.",
+    "scanAlbumFailedTitle": "Scan Failed",
+    "scanAlbumFailedMessage": "Please try again.",
     "seatManagement": "Temporary Group Chats",
     "groupManagement": "Group Management",
     "loadFailed": "Failed to load conversations: {{error}}",
@@ -2652,6 +2657,7 @@
       "location": "[Location]",
       "typing": "[Typing]",
       "card": "[Card] {{name}}",
+      "qr": "[QR Code] {{name}}",
       "transferWithAmount": "[Transfer] {{amount}} credits",
       "transfer": "[Transfer]",
       "note": "[Note] {{title}}",
@@ -3061,7 +3067,9 @@
     "expiresBefore": "This QR code is valid for 7 days (until {{date}}) and refreshes when you reopen this page",
     "unnamed": "Unnamed",
     "saveImage": "Save Image",
-    "shareLink": "Share Link",
+    "shareQr": "Share QR Code",
+    "shareFailedTitle": "Share Failed",
+    "shareFailedMessage": "The QR code isn't ready yet. Please try again.",
     "savedTitle": "Saved",
     "savedMessage": "QR code saved to your photo library.",
     "saveDeniedTitle": "Cannot Save",
@@ -3089,6 +3097,30 @@
     "circleSubtitle": "Circle · {{count}} members",
     "sharedBy": "Shared by {{name}}",
     "groupEntry": "Group QR Code",
-    "myQrEntry": "My QR Code"
+    "myQrEntry": "My QR Code",
+    "shareToChat": {
+      "title": "Share with a Friend or Group",
+      "searchPlaceholder": "Search friends or groups",
+      "friendHint": "Friend",
+      "groupHint": "Group",
+      "sending": "Sending...",
+      "confirmTitle": "Send QR Code",
+      "confirmMessage": "Send the QR code for \"{{subject}}\" to {{name}}?",
+      "sentTitle": "Sent",
+      "sentMessage": "The QR code was sent to the chat.",
+      "failedTitle": "Send Failed",
+      "failedMessage": "The QR code couldn't be sent. Please try again.",
+      "loadFailed": "Unable to load chats. Please try again.",
+      "empty": "No chats available to send to",
+      "noMatch": "No matching friends or groups"
+    },
+    "card": {
+      "userType": "Contact QR Code",
+      "groupType": "Group QR Code",
+      "circleType": "Circle QR Code",
+      "userFooter": "Scan or tap to add as friend",
+      "groupFooter": "Scan or tap to join the group",
+      "circleFooter": "Scan or tap to join the circle"
+    }
   }
 }
