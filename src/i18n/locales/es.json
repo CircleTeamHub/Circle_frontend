@@ -2905,6 +2905,7 @@
     "CHAT_REVOKE_WINDOW_EXPIRED": "Ya no se puede retirar el mensaje",
     "CHAT_REVOKE_FORBIDDEN": "No puedes retirar este mensaje",
     "CHAT_EDIT_WINDOW_EXPIRED": "Ya no se puede editar",
-    "CHAT_EDIT_FORBIDDEN": "No se puede editar este mensaje"
+    "CHAT_EDIT_FORBIDDEN": "No se puede editar este mensaje",
+    "CHAT_FORWARD_FORBIDDEN": "Los mensajes efímeros no se pueden reenviar"
   }
 }

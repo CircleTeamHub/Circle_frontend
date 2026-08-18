@@ -2905,6 +2905,7 @@
     "CHAT_REVOKE_WINDOW_EXPIRED": "The revoke window has expired",
     "CHAT_REVOKE_FORBIDDEN": "You cannot revoke this message",
     "CHAT_EDIT_WINDOW_EXPIRED": "The edit window has expired",
-    "CHAT_EDIT_FORBIDDEN": "This message cannot be edited"
+    "CHAT_EDIT_FORBIDDEN": "This message cannot be edited",
+    "CHAT_FORWARD_FORBIDDEN": "Messages in a disappearing chat cannot be forwarded"
   }
 }

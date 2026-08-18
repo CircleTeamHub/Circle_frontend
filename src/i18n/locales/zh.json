@@ -2902,6 +2902,7 @@
     "CHAT_REVOKE_WINDOW_EXPIRED": "超过可撤回时间",
     "CHAT_REVOKE_FORBIDDEN": "无权撤回该消息",
     "CHAT_EDIT_WINDOW_EXPIRED": "超出可编辑时间",
-    "CHAT_EDIT_FORBIDDEN": "无法编辑该消息"
+    "CHAT_EDIT_FORBIDDEN": "无法编辑该消息",
+    "CHAT_FORWARD_FORBIDDEN": "阅后即焚会话中的消息不可转发"
   }
 }

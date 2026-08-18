@@ -2902,6 +2902,7 @@
     "CHAT_REVOKE_WINDOW_EXPIRED": "회수 가능 시간이 지났습니다",
     "CHAT_REVOKE_FORBIDDEN": "이 메시지를 회수할 권한이 없습니다",
     "CHAT_EDIT_WINDOW_EXPIRED": "수정 가능 시간이 지났습니다",
-    "CHAT_EDIT_FORBIDDEN": "이 메시지는 수정할 수 없습니다"
+    "CHAT_EDIT_FORBIDDEN": "이 메시지는 수정할 수 없습니다",
+    "CHAT_FORWARD_FORBIDDEN": "사라지는 메시지는 전달할 수 없습니다"
   }
 }
