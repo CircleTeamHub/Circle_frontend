@@ -21,11 +21,9 @@ import { useMessageForwardStore } from '@/features/chat/store/use-message-forwar
 import { loadChatConversations } from '@/chat-core/api';
 import {
   sendCardMessage,
-  sendImageMessage,
-  sendVideoMessage,
+  sendForwardedMediaMessage,
   sendLocationMessage,
   sendTextMessage,
-  sendVoiceMessage,
   type ChatCardType,
 } from '@/chat-core/client';
 import { useChatStore } from '@/chat-core/store';
@@ -148,50 +146,21 @@ function getForwardFallbackText(message: ChatMessage) {
 }
 
 /**
- * 转发 = 以源消息的 content 重发一条新消息(自研栈无「原生转发」原语)。
- * 媒体只搬 object key,不重新上传;拿不到 DTO 时退化成文本转发。
+ * 媒体转发只提交源消息 ID，由服务端校验源会话可见性并复制对象；其他可转发
+ * 类型继续按已有载荷重发。拿不到 DTO 时退化成文本转发。
  */
 async function sendForwardedMessage(pending: PendingForward, conversationId: string) {
   const { dto, message } = pending;
   const content = dto?.content ?? {};
 
   if (dto) {
-    if (dto.type === 'image') {
-      const key = str(content['key']);
-      if (key) {
-        return sendImageMessage({
-          conversationId,
-          key,
-          thumbKey: str(content['thumbKey']),
-          width: num(content['width']),
-          height: num(content['height']),
-        });
-      }
-    }
-    if (dto.type === 'video') {
-      const key = str(content['key']);
-      if (key) {
-        return sendVideoMessage({
-          conversationId,
-          key,
-          width: num(content['width']),
-          height: num(content['height']),
-          duration: num(content['duration']),
-          size: num(content['size']),
-        });
-      }
-    }
-    if (dto.type === 'voice') {
-      const key = str(content['key']);
-      const duration = num(content['duration']);
-      if (key && duration) {
-        return sendVoiceMessage({
-          conversationId,
-          key,
-          duration,
-          size: num(content['size']),
-        });
-      }
+    if (dto.type === 'image' || dto.type === 'video' || dto.type === 'voice') {
+      return sendForwardedMediaMessage({
+        conversationId,
+        sourceMessageId: dto.id,
+        type: dto.type,
+        previewContent: content,
+      });
     }
     if (dto.type === 'location') {
       const latitude = num(content['latitude']);

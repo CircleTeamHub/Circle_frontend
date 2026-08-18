@@ -138,6 +138,8 @@ interface SendOptions {
    */
   localContent?: Record<string, unknown>;
   replyToId?: string;
+  /** 服务端鉴权复制媒体所需的源消息 ID。 */
+  forwardFromMessageId?: string;
   /** 乐观消息上屏回调(旧 sendTextMessage onCreate 对应物)。 */
   onCreate?: (message: ChatMessageDto) => void;
 }
@@ -205,6 +207,9 @@ export async function sendWithOptimism(
       content: options.content,
       d,
       ...(options.replyToId ? { replyToId: options.replyToId } : {}),
+      ...(options.forwardFromMessageId
+        ? { forwardFromMessageId: options.forwardFromMessageId }
+        : {}),
     },
     createdAt: optimistic.createdAt,
   }).catch(() => undefined);
@@ -215,6 +220,7 @@ export async function sendWithOptimism(
       content: options.content,
       d,
       replyToId: options.replyToId,
+      forwardFromMessageId: options.forwardFromMessageId,
     });
     void outboxDelete(d);
     const next = useChatStore.getState();
@@ -362,6 +368,21 @@ export function sendVoiceMessage(options: {
     },
     localContent: options.localUri ? { localUri: options.localUri } : undefined,
     onCreate: options.onCreate,
+  });
+}
+
+export function sendForwardedMediaMessage(options: {
+  conversationId: string;
+  sourceMessageId: string;
+  type: 'image' | 'video' | 'voice';
+  previewContent: Record<string, unknown>;
+}): Promise<ChatMessageDto> {
+  return sendWithOptimism({
+    conversationId: options.conversationId,
+    type: options.type,
+    content: {},
+    localContent: options.previewContent,
+    forwardFromMessageId: options.sourceMessageId,
   });
 }
 

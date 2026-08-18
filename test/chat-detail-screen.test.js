@@ -492,7 +492,7 @@ test('root layout registers LiveKit only after the native WebRTC module exists',
   assert.match(source, /NativeModules\.WebRTCModule/);
 });
 
-test('message forward picker route re-sends pending messages via chat-core', () => {
+test('message forward picker routes media through authenticated server-side copying', () => {
   const route = fs.readFileSync(
     path.join(process.cwd(), 'app/(tabs)/messages/forward-picker.tsx'),
     'utf8',
@@ -507,16 +507,22 @@ test('message forward picker route re-sends pending messages via chat-core', () 
   );
 
   assert.match(route, /ForwardPickerScreen/);
-  // 契约随自研栈迁移更新(意图不变):转发 = 以源消息 DTO 的 content 重发,
-  // 媒体只搬 object key 不重新上传;卡片按类型白名单原样重发。
   assert.match(store, /pending/);
   assert.match(store, /dto\?: ChatMessageDto/);
   assert.match(screen, /sendTextMessage/);
-  assert.match(screen, /sendVoiceMessage/);
-  assert.match(screen, /sendImageMessage/);
-  assert.match(screen, /sendVideoMessage/);
+  assert.match(screen, /sendForwardedMediaMessage/);
+  assert.match(screen, /sourceMessageId:\s*dto\.id/);
+  assert.doesNotMatch(screen, /sendImageMessage\(\{[\s\S]{0,200}key/);
+  assert.doesNotMatch(screen, /sendVideoMessage\(\{[\s\S]{0,200}key/);
+  assert.doesNotMatch(screen, /sendVoiceMessage\(\{[\s\S]{0,200}key/);
   assert.match(screen, /sendCardMessage/);
   assert.match(screen, /FORWARDABLE_CARD_TYPES/);
+
+  const client = fs.readFileSync(
+    path.join(process.cwd(), 'src/chat-core/client.ts'),
+    'utf8',
+  );
+  assert.match(client, /forwardFromMessageId:\s*options\.sourceMessageId/);
 });
 
 test('note detail routes exist in every tab stack so back returns to the source tab', () => {
