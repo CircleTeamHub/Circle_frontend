@@ -43,8 +43,14 @@ test('chat detail consumes note batches through the pure task planner', () => {
   assert.match(src, /sendImageMessage\(\{\s*conversationId: conversationID,\s*key: task\.key/);
   assert.match(src, /sendVideoMessage\(\{\s*conversationId: conversationID,\s*key: task\.key/);
   assert.match(src, /sendLocationMessage\(\{\s*conversationId: conversationID,\s*latitude: task\.latitude/);
-  // 大批次匀速发送,压在服务端 send 限流之下。
-  assert.match(src, /notePacingDelayMs\(tasks\.length\)/);
+  // 所有批次共享真实滚动 10 秒窗口；每次发送前等槽位并记录尝试。
+  assert.match(src, /noteSendTimestampsRef/);
+  assert.match(src, /noteSendWindowDelayMs\(noteSendTimestampsRef\.current, now\)/);
+  assert.match(
+    src,
+    /recordNoteSendAttempt\(\s*noteSendTimestampsRef\.current,\s*now,?\s*\)/,
+  );
+  assert.doesNotMatch(src, /notePacingDelayMs\(tasks\.length\)/);
 });
 
 test('note chat-media import API posts the section list', () => {
