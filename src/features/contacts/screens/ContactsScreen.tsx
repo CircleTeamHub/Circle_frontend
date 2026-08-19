@@ -305,7 +305,10 @@ export default function ContactsScreen() {
     <View style={s.headerSection}>
       <View style={s.titleRow}>
         <Text style={d.title}>{t('contacts.title')}</Text>
-        <Pressable onPress={handleAddFriend}>
+        <Pressable
+          testID={E2E_TEST_IDS.contactsAddFriend}
+          onPress={handleAddFriend}
+        >
           <Ionicons name="person-add-outline" size={24} color={colors.text} />
         </Pressable>
       </View>

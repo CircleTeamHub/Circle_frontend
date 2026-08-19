@@ -1,0 +1,32 @@
+appId: ${APP_ID}
+name: WindNote chat message persistence
+tags:
+  - chat
+  - mutation
+---
+- runFlow:
+    file: ../subflows/launch.yaml
+- runFlow:
+    file: ../subflows/ensure-signed-in.yaml
+- runFlow:
+    file: ../subflows/open-seeded-conversation.yaml
+- tapOn:
+    id: windnote.chat.composer.input
+- inputText: WINDNOTE-E2E-CHAT-${E2E_RUN_ID}
+- tapOn:
+    id: windnote.chat.composer.send
+- extendedWaitUntil:
+    visible: WINDNOTE-E2E-CHAT-${E2E_RUN_ID}
+    timeout: 45000
+- tapOn:
+    id: windnote.chat.back
+- extendedWaitUntil:
+    visible:
+      id: windnote.messages.conversation-list
+    timeout: 30000
+- tapOn:
+    id: windnote.messages.conversation.${E2E_CONVERSATION_ID}
+- extendedWaitUntil:
+    visible: WINDNOTE-E2E-CHAT-${E2E_RUN_ID}
+    timeout: 60000
+- takeScreenshot: windnote-chat-message-${E2E_RUN_ID}

@@ -1,0 +1,11 @@
+appId: ${APP_ID}
+---
+- runFlow:
+    file: sign-in.yaml
+    when:
+      visible:
+        id: windnote.auth.login.screen
+- extendedWaitUntil:
+    visible:
+      id: windnote.tabs.messages
+    timeout: 60000

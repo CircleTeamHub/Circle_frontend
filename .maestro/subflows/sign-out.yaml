@@ -1,0 +1,25 @@
+appId: ${APP_ID}
+---
+- tapOn:
+    id: windnote.tabs.profile
+- extendedWaitUntil:
+    visible:
+      id: windnote.profile.screen
+    timeout: 30000
+- tapOn:
+    id: windnote.profile.settings
+- extendedWaitUntil:
+    visible:
+      id: windnote.settings.screen
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: windnote.settings.logout
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    id: windnote.settings.logout
+- extendedWaitUntil:
+    visible:
+      id: windnote.auth.login.screen
+    timeout: 60000

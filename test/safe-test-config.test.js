@@ -131,7 +131,11 @@ test('social flow requires exact friend and circle fixture ids', async () => {
   assert.throws(
     () =>
       parseE2EConfig(
-        baseE2EEnv({ ...auth, E2E_FRIEND_ID: 'friend-1' }),
+        baseE2EEnv({
+          ...auth,
+          E2E_FRIEND_ID: 'friend-1',
+          E2E_FRIEND_ACCOUNT: 'friend@example.test',
+        }),
         'social-circle',
       ),
     /E2E_CIRCLE_ID/,

@@ -27,6 +27,7 @@ export const E2E_TEST_IDS = Object.freeze({
   chatInput: 'windnote.chat.composer.input',
   chatSend: 'windnote.chat.composer.send',
   contactsScreen: 'windnote.contacts.screen',
+  contactsAddFriend: 'windnote.contacts.add-friend',
   discoverScreen: 'windnote.discover.screen',
   discoverFilterTab: (index: string) =>
     dynamicTestId('windnote.discover.filter-tab', index),

@@ -1,0 +1,40 @@
+appId: ${APP_ID}
+name: WindNote moment lifecycle
+tags:
+  - moment
+  - mutation
+---
+- runFlow:
+    file: ../subflows/launch.yaml
+- runFlow:
+    file: ../subflows/ensure-signed-in.yaml
+- tapOn:
+    id: windnote.tabs.discover
+- tapOn:
+    id: windnote.discover.filter-tab.2
+- tapOn:
+    id: windnote.discover.fab
+- extendedWaitUntil:
+    visible:
+      id: windnote.moment.create.screen
+    timeout: 30000
+- tapOn:
+    id: windnote.moment.create.content-input
+- inputText: WINDNOTE-E2E-MOMENT-${E2E_RUN_ID}
+- hideKeyboard
+- tapOn:
+    id: windnote.moment.create.publish
+- extendedWaitUntil:
+    visible: WINDNOTE-E2E-MOMENT-${E2E_RUN_ID}
+    timeout: 60000
+- tapOn: WINDNOTE-E2E-MOMENT-${E2E_RUN_ID}
+- extendedWaitUntil:
+    visible:
+      id: windnote.moment.detail.screen
+    timeout: 30000
+- tapOn:
+    id: windnote.moment.detail.delete
+- tapOn: ${E2E_DELETE_LABEL}
+- extendedWaitUntil:
+    notVisible: WINDNOTE-E2E-MOMENT-${E2E_RUN_ID}
+    timeout: 60000

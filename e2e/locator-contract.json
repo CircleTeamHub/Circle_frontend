@@ -21,6 +21,7 @@
     { "key": "chatInput", "id": "windnote.chat.composer.input", "source": "src/features/chat/screens/ChatDetailScreen.tsx" },
     { "key": "chatSend", "id": "windnote.chat.composer.send", "source": "src/features/chat/screens/ChatDetailScreen.tsx" },
     { "key": "contactsScreen", "id": "windnote.contacts.screen", "source": "src/features/contacts/screens/ContactsScreen.tsx" },
+    { "key": "contactsAddFriend", "id": "windnote.contacts.add-friend", "source": "src/features/contacts/screens/ContactsScreen.tsx" },
     { "key": "discoverScreen", "id": "windnote.discover.screen", "source": "src/features/discover/screens/DiscoverScreen.tsx" },
     { "key": "discoverFilterTab", "id": "windnote.discover.filter-tab", "source": "src/features/discover/screens/DiscoverScreen.tsx" },
     { "key": "discoverCirclesAction", "id": "windnote.discover.circles-action", "source": "src/features/discover/screens/DiscoverScreen.tsx" },

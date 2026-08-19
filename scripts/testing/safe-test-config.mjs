@@ -19,6 +19,7 @@ const E2E_SUITES = Object.freeze({
     flow: '.maestro/flows/moment-lifecycle.yaml',
     auth: true,
     mutates: true,
+    fixtures: ['E2E_DELETE_LABEL'],
   },
   'profile-settings': {
     flow: '.maestro/flows/profile-settings.yaml',
@@ -30,7 +31,12 @@ const E2E_SUITES = Object.freeze({
     flow: '.maestro/flows/social-circle.yaml',
     auth: true,
     mutates: false,
-    fixtures: ['E2E_FRIEND_ID', 'E2E_CIRCLE_ID'],
+    fixtures: [
+      'E2E_FRIEND_ID',
+      'E2E_FRIEND_ACCOUNT',
+      'E2E_CIRCLE_ID',
+      'E2E_CIRCLE_NAME',
+    ],
   },
   'conversation-list-scroll': {
     flow: '.maestro/performance/conversation-list-scroll.yaml',
@@ -177,7 +183,10 @@ export function parseE2EConfig(env, suiteName) {
       'E2E_CONVERSATION_NAME',
       'E2E_ORIGINAL_NICKNAME',
       'E2E_FRIEND_ID',
+      'E2E_FRIEND_ACCOUNT',
       'E2E_CIRCLE_ID',
+      'E2E_CIRCLE_NAME',
+      'E2E_DELETE_LABEL',
       'E2E_PERF_CONVERSATION_ID',
       'E2E_PERF_SECOND_CONVERSATION_ID',
     ]),
