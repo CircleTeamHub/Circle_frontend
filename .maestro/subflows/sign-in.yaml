@@ -4,7 +4,7 @@ appId: ${APP_ID}
     id: windnote.auth.login.screen
 - tapOn:
     id: windnote.auth.login.email-input
-- eraseText: 120
+- eraseText: 100
 - inputText: ${E2E_EMAIL}
 - runFlow:
     when:

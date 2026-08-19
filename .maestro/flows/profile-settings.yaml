@@ -20,7 +20,7 @@ tags:
     timeout: 30000
 - tapOn:
     id: windnote.profile.edit.input
-- eraseText: 120
+- eraseText: 100
 - inputText: WINDNOTE-${E2E_RUN_ID}
 - hideKeyboard
 - tapOn:
@@ -34,7 +34,7 @@ tags:
     id: windnote.settings.row.profile-nickname
 - tapOn:
     id: windnote.profile.edit.input
-- eraseText: 120
+- eraseText: 100
 - inputText: ${E2E_ORIGINAL_NICKNAME}
 - hideKeyboard
 - tapOn:

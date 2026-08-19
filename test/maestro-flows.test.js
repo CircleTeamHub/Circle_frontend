@@ -70,3 +70,15 @@ test('shared sign-in chooses one explicit authentication mode', () => {
   assert.match(source, /windnote\.auth\.login\.password-input/);
   assert.match(source, /windnote\.auth\.login\.code-input/);
 });
+
+test('Maestro eraseText counts stay within the documented CLI limit', () => {
+  const yamlFiles = fs
+    .readdirSync(path.join(root, '.maestro'), { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.yaml'));
+  for (const entry of yamlFiles) {
+    const source = fs.readFileSync(path.join(entry.parentPath, entry.name), 'utf8');
+    for (const match of source.matchAll(/eraseText:\s*(\d+)/g)) {
+      assert.ok(Number(match[1]) <= 100, `${entry.name} eraseText exceeds 100`);
+    }
+  }
+});
