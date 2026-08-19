@@ -24,6 +24,7 @@ function baseLoadEnv(overrides = {}) {
     LOAD_SOCKET_URL: safeOrigin,
     LOAD_ALLOWED_ORIGINS: safeOrigin,
     LOAD_ACCOUNTS_FILE: 'load-tests/data/accounts.local.json',
+    LOAD_RUN_ID: 'run-20260818',
     ...overrides,
   };
 }

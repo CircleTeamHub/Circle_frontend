@@ -27,6 +27,9 @@ function allowedHosts(env) {
 }
 
 export function parseRuntimeConfig(env) {
+  if (env.LOAD_EXECUTE !== 'true' || env.LOAD_ALLOW_MUTATION !== 'true') {
+    throw new Error('LOAD_EXECUTE=true and LOAD_ALLOW_MUTATION=true are required.');
+  }
   const api = readUrl(env, 'LOAD_API_URL', ['https:']);
   const socket = readUrl(env, 'LOAD_SOCKET_URL', ['https:', 'wss:']);
   const allowlist = allowedHosts(env);
@@ -41,9 +44,26 @@ export function parseRuntimeConfig(env) {
   if (!RUN_ID.test(runId)) throw new Error('LOAD_RUN_ID must be a safe 6-64 character id.');
   const apiPath = api.pathname.replace(/\/+$/, '');
   const socketProtocol = socket.protocol === 'https:' ? 'wss:' : socket.protocol;
+  const readInteger = (key, fallback, min, max) => {
+    const raw = String(env[key] ?? fallback);
+    if (!/^\d+$/.test(raw)) throw new Error(`${key} must be an integer.`);
+    const value = Number(raw);
+    if (value < min || value > max) throw new Error(`${key} is outside its safe bounds.`);
+    return value;
+  };
   return Object.freeze({
     runId,
     apiBaseUrl: `${api.origin}${apiPath || '/api/v1'}`,
     socketUrl: `${socketProtocol}//${socket.host}/chat-ws/?EIO=4&transport=websocket`,
+    vus: readInteger('LOAD_VUS', 1, 1, 10000),
+    durationSeconds: readInteger('LOAD_DURATION_SECONDS', 30, 1, 3600),
+    conversations: readInteger('LOAD_CONVERSATIONS', 100, 1, 1000),
+    messagesPerConversation: readInteger(
+      'LOAD_MESSAGES_PER_CONVERSATION',
+      20,
+      1,
+      200,
+    ),
+    targetAlias: String(env.LOAD_TARGET_ALIAS ?? '').trim(),
   });
 }

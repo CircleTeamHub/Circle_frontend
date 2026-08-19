@@ -24,7 +24,11 @@ export function runLoadScenario(scenarioName, env = process.env) {
     cwd: root,
     stdio: 'inherit',
     shell: false,
-    env: { ...env, ...config.k6Env },
+    env: {
+      ...env,
+      ...config.k6Env,
+      LOAD_ACCOUNTS_FILE: accountsPath,
+    },
   });
   if (result.error) {
     throw new Error(`Unable to start k6. Set K6_BIN to its executable: ${result.error.message}`);

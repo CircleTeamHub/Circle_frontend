@@ -91,6 +91,8 @@ test('threshold builder covers latency, failure, delivery, and HTTP errors', asy
 test('runtime config requires an explicitly safe target', async () => {
   const { parseRuntimeConfig } = await load('config.js');
   const env = {
+    LOAD_EXECUTE: 'true',
+    LOAD_ALLOW_MUTATION: 'true',
     LOAD_API_URL: 'https://e2e-api.windnote.test',
     LOAD_SOCKET_URL: 'wss://e2e-api.windnote.test',
     LOAD_ALLOWED_ORIGINS: 'https://e2e-api.windnote.test',

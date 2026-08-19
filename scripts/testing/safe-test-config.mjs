@@ -220,6 +220,10 @@ export function parseLoadConfig(env, scenarioName) {
   requireExactTrue(env, 'LOAD_ALLOW_MUTATION');
   const origins = validateOrigins(env, 'LOAD');
   const accountsFile = requireValue(env, 'LOAD_ACCOUNTS_FILE');
+  const runId = requireValue(env, 'LOAD_RUN_ID');
+  if (!RUN_ID_PATTERN.test(runId)) {
+    throw new Error('LOAD_RUN_ID must use 6-64 letters, digits, dots, underscores, or hyphens.');
+  }
   const vus = parseBoundedInteger(env, 'LOAD_VUS', 1, 1, 10000);
   const durationSeconds = parseBoundedInteger(env, 'LOAD_DURATION_SECONDS', 30, 1, 3600);
   const conversations = parseBoundedInteger(env, 'LOAD_CONVERSATIONS', 100, 1, 1000);
@@ -250,7 +254,9 @@ export function parseLoadConfig(env, scenarioName) {
       LOAD_DURATION_SECONDS: String(durationSeconds),
       LOAD_CONVERSATIONS: String(conversations),
       LOAD_MESSAGES_PER_CONVERSATION: String(messagesPerConversation),
-      ...copyDefined(env, ['LOAD_RUN_ID', 'LOAD_TARGET_ALIAS']),
+      LOAD_RUN_ID: runId,
+      LOAD_CIRCLE_CLEANUP: 'true',
+      ...copyDefined(env, ['LOAD_TARGET_ALIAS', 'LOAD_PERFORMANCE_FIXTURE']),
     },
   });
 }
