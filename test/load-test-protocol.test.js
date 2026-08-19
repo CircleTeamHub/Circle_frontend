@@ -86,6 +86,13 @@ test('threshold builder covers latency, failure, delivery, and HTTP errors', asy
   assert.deepEqual(thresholds.chat_send_failed, ['rate<0.02']);
   assert.deepEqual(thresholds.http_req_failed, ['rate<0.02']);
   assert.throws(() => buildThresholds({ ackP95Ms: 0 }), /ackP95Ms/);
+
+  // 发送方自己的回声不再计入 chat_delivery_ms，所以没有独立接收方的场景根本
+  // 收不到样本。那时还留着这条阈值，只会得到一条永远"通过"的空门禁。
+  const withoutDelivery = buildThresholds({ measuresDelivery: false });
+  assert.equal(withoutDelivery.chat_delivery_ms, undefined);
+  assert.deepEqual(withoutDelivery.chat_ack_ms, ['p(95)<1500']);
+  assert.deepEqual(withoutDelivery.chat_send_failed, ['rate<0.02']);
 });
 
 test('runtime config requires an explicitly safe target', async () => {

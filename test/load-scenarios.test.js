@@ -38,6 +38,57 @@ test('chat scenarios measure ack failures and end-to-end delivery', () => {
   assert.match(sharedSession, /reason:\s*'unsent'/);
 });
 
+test('chat sessions exclude their own echo from delivery accounting', () => {
+  const source = fs.readFileSync(
+    path.join(root, 'load-tests', 'lib', 'socket-session.js'),
+    'utf8',
+  );
+
+  // chat:msg 会广播回发送者自己。把回声也算成一次投递，会让带阈值门禁的
+  // chat_delivery_ms 去测环回：chat-send 全是回声、chat-fan-in 被发送方主导。
+  assert.match(source, /sentTexts\.add\(text\)/);
+  assert.match(source, /sentTexts\.has\(text\)/);
+
+  // 单账号场景测不到扇出，就不该断言它。
+  const chatSend = fs.readFileSync(
+    path.join(root, 'load-tests', 'scenarios', 'chat-send.js'),
+    'utf8',
+  );
+  assert.match(chatSend, /measuresDelivery:\s*false/);
+});
+
+test('chat sessions surface refused connections instead of reporting unsent', () => {
+  const source = fs.readFileSync(
+    path.join(root, 'load-tests', 'lib', 'socket-session.js'),
+    'utf8',
+  );
+
+  // 过期 token 时 WS 升级仍返回 101，升级检查照样过；若不处理 44/41，唯一带着
+  // 真实原因的包会被丢掉，结果只剩一堆 'unsent'，把凭据问题伪装成节流问题。
+  assert.match(source, /packet\.kind === 'connect-error'/);
+  assert.match(source, /packet\.kind === 'disconnected'/);
+  assert.match(source, /reason:\s*'server-disconnect'/);
+  assert.match(source, /rejected \|\| !connected/);
+});
+
+test('the drain window is at least the ack budget it is judged against', () => {
+  const source = fs.readFileSync(
+    path.join(root, 'load-tests', 'lib', 'socket-session.js'),
+    'utf8',
+  );
+  const thresholds = fs.readFileSync(
+    path.join(root, 'load-tests', 'lib', 'thresholds.js'),
+    'utf8',
+  );
+
+  // 发送循环跑满 durationSeconds。收尾宽限期若短于 ack 预算，最后一批必然被
+  // 记成 timeout —— 失败率就掺进了 harness 自己的关闭时机。
+  assert.match(thresholds, /export const DEFAULT_ACK_P95_MS = 1500/);
+  assert.match(source, /DEFAULT_DRAIN_MS = DEFAULT_ACK_P95_MS \* 2/);
+  assert.doesNotMatch(source, /keepOpenMs = 1000/);
+  assert.doesNotMatch(source, /keepOpenMs:\s*1000/);
+});
+
 test('circle join is REST-based, bounded, and cleans up test memberships', () => {
   const source = fs.readFileSync(
     path.join(root, 'load-tests', 'scenarios', 'circle-join.js'),

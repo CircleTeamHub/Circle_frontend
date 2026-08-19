@@ -17,7 +17,9 @@ export const options = {
       maxDuration: `${config.durationSeconds + 20}s`,
     },
   },
-  thresholds: buildThresholds(),
+  // 单账号发送场景没有独立接收方，回声又不再计入交付指标，所以这里不断言
+  // chat_delivery_ms —— 扇出延迟由 chat-fan-in 的接收方负责测。
+  thresholds: buildThresholds({ measuresDelivery: false }),
 };
 
 export default function () {
