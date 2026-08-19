@@ -1,11 +1,8 @@
+import { resolveProductionHosts } from '../../load-tests/lib/production-hosts.js';
+
 const APP_ID = 'com.yiboding.circleim';
 const RUN_ID_PATTERN = /^[A-Za-z0-9._-]{6,64}$/;
 const SENSITIVE_KEY_PATTERN = /(token|password|code|secret|credential)/i;
-const PRODUCTION_HOSTS = new Set([
-  'api.windnote.ai',
-  'windnote.ai',
-  'www.windnote.ai',
-]);
 
 const E2E_SUITES = Object.freeze({
   smoke: { flow: '.maestro/flows/smoke.yaml', auth: false, mutates: false },
@@ -119,7 +116,11 @@ function validateOrigins(env, prefix) {
   );
   const apiHostname = new URL(apiOrigin).hostname.toLowerCase();
   const socketHostname = new URL(socketOrigin).hostname.toLowerCase();
-  if (PRODUCTION_HOSTS.has(apiHostname) || PRODUCTION_HOSTS.has(socketHostname)) {
+  // 硬编码清单只是下限；真正的来源是 app 自己的构建变量（见 production-hosts.js）。
+  // 这道闸是操作者把生产误填进自己 allowlist 时唯一还拦得住的东西，不能靠一张
+  // 没有任何机制保证其新鲜度的名单。
+  const productionHosts = resolveProductionHosts(env, prefix);
+  if (productionHosts.has(apiHostname) || productionHosts.has(socketHostname)) {
     throw new Error(`${prefix} production hosts are never valid test targets.`);
   }
   if (!allowed.has(apiOrigin)) throw new Error(`${prefix}_API_URL is not allowlisted.`);

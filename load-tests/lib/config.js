@@ -1,5 +1,6 @@
+import { resolveProductionHosts } from './production-hosts.js';
+
 const RUN_ID = /^[A-Za-z0-9._-]{6,64}$/;
-const PRODUCTION_HOSTS = new Set(['api.windnote.ai', 'windnote.ai', 'www.windnote.ai']);
 
 function readUrl(env, key, protocols) {
   let value;
@@ -37,7 +38,14 @@ export function parseRuntimeConfig(env) {
     throw new Error('LOAD_API_URL and LOAD_SOCKET_URL must be allowlisted.');
   }
   if (api.host !== socket.host) throw new Error('Load API and socket hosts must match.');
-  if (PRODUCTION_HOSTS.has(api.hostname.toLowerCase())) {
+  // 生产域名不是写死的清单，而是从环境里解析出来的：app 自己的构建变量指向
+  // 哪儿哪儿就是生产（见 production-hosts.js）。socket 也要查 —— 上面虽然强制
+  // 两者同 host，但那道检查在这之后，不能靠它兜底。
+  const productionHosts = resolveProductionHosts(env, 'LOAD');
+  if (
+    productionHosts.has(api.hostname.toLowerCase()) ||
+    productionHosts.has(socket.hostname.toLowerCase())
+  ) {
     throw new Error('Production WindNote hosts are never valid load-test targets.');
   }
   const runId = String(env.LOAD_RUN_ID ?? '').trim();

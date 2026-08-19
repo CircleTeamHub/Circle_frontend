@@ -58,6 +58,65 @@ test('mutating E2E rejects production before starting Maestro', async () => {
   );
 });
 
+// 这个仓库里没有生产域名 —— app 的端点是构建期由 vars.EXPO_PUBLIC_API_URL 注入的
+// （见 .github/workflows/android-release.yml）。所以一张手写的域名清单没有任何机制
+// 保证它跟真实部署同步，而它恰恰是操作者把生产误填进自己 allowlist 之后唯一还拦得
+// 住的那道闸。下面三条钉的是：只要环境里存在权威来源，这道闸就跟着它走。
+test('an unlisted production host is blocked when the app build variable names it', async () => {
+  const { parseLoadConfig } = await loadConfig();
+  const regional = 'https://api.windnote-regional.example';
+
+  assert.throws(
+    () =>
+      parseLoadConfig(
+        baseLoadEnv({
+          LOAD_ALLOW_MUTATION: 'true',
+          LOAD_API_URL: regional,
+          LOAD_SOCKET_URL: regional,
+          LOAD_ALLOWED_ORIGINS: regional,
+          // 构建期真实端点在环境里 —— 零配置自动挡住
+          EXPO_PUBLIC_API_URL: `${regional}/api/v1`,
+        }),
+        'chat-send',
+      ),
+    /production/i,
+  );
+});
+
+test('an unlisted production host is blocked when CI declares it explicitly', async () => {
+  const { parseLoadConfig } = await loadConfig();
+  const regional = 'https://api.windnote-regional.example';
+
+  assert.throws(
+    () =>
+      parseLoadConfig(
+        baseLoadEnv({
+          LOAD_ALLOW_MUTATION: 'true',
+          LOAD_API_URL: regional,
+          LOAD_SOCKET_URL: regional,
+          LOAD_ALLOWED_ORIGINS: regional,
+          LOAD_PRODUCTION_HOSTS: 'api.windnote-regional.example',
+        }),
+        'chat-send',
+      ),
+    /production/i,
+  );
+});
+
+test('a real staging target still runs while the build variable points at production', async () => {
+  const { parseLoadConfig } = await loadConfig();
+
+  const config = parseLoadConfig(
+    baseLoadEnv({
+      LOAD_ALLOW_MUTATION: 'true',
+      EXPO_PUBLIC_API_URL: 'https://api.windnote.ai/api/v1',
+    }),
+    'chat-send',
+  );
+
+  assert.equal(config.origins.apiOrigin, safeOrigin);
+});
+
 test('production hosts stay blocked even when someone mistakenly allowlists them', async () => {
   const { parseE2EConfig, parseLoadConfig } = await loadConfig();
   const production = 'https://api.windnote.ai';
