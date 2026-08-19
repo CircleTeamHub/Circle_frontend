@@ -3044,6 +3044,7 @@
     "CHAT_REVOKE_FORBIDDEN": "无权撤回该消息",
     "CHAT_EDIT_WINDOW_EXPIRED": "超出可编辑时间",
     "CHAT_EDIT_FORBIDDEN": "无法编辑该消息",
+    "CHAT_FORWARD_FORBIDDEN": "阅后即焚会话中的消息不可转发",
     "CHAT_GROUP_FRIENDS_ONLY": "只能邀请好友进群",
     "CHAT_GROUP_MIN_MEMBERS": "请至少选择 2 位好友",
     "CHAT_GROUP_CIRCLE_MANAGED": "该群由圈子管理，无法在此操作",

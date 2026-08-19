@@ -3044,6 +3044,7 @@
     "CHAT_REVOKE_FORBIDDEN": "このメッセージを取り消す権限がありません",
     "CHAT_EDIT_WINDOW_EXPIRED": "編集できる時間を過ぎました",
     "CHAT_EDIT_FORBIDDEN": "このメッセージは編集できません",
+    "CHAT_FORWARD_FORBIDDEN": "消えるメッセージは転送できません",
     "CHAT_GROUP_FRIENDS_ONLY": "友達のみグループに招待できます",
     "CHAT_GROUP_MIN_MEMBERS": "友達を2人以上選択してください",
     "CHAT_GROUP_CIRCLE_MANAGED": "このグループはサークルが管理しています",
