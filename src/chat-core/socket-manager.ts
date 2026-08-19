@@ -31,6 +31,7 @@ import {
   type ChatReadAck,
   type ChatSendAck,
   type ChatSendAckOk,
+  type ChatSendPayload,
 } from './protocol';
 import {
   sanitizeExpiredConversationPreviews,
@@ -557,13 +558,7 @@ export function isChatConnected(): boolean {
  * 发消息：ack 返回即已持久化。超时/失败时调用方保留同一 d 重试，
  * 服务端 (conversationId, sender, d) 唯一约束保证不重复入库。
  */
-export function sendChatMessage(input: {
-  conversationId: string;
-  type: string;
-  content: Record<string, unknown>;
-  d: string;
-  replyToId?: string;
-}): Promise<ChatSendAckOk> {
+export function sendChatMessage(input: ChatSendPayload): Promise<ChatSendAckOk> {
   const current = socket;
   if (!current?.connected) {
     return Promise.reject(new ChatSendError('CHAT_NOT_CONNECTED', 'socket 未连接'));

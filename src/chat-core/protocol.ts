@@ -48,6 +48,8 @@ export interface ChatSendPayload {
   /** 客户端生成的幂等键（deliveryId）：断线重发同一 d，服务端撞库去重。 */
   d: string;
   replyToId?: string;
+  /** 媒体转发源消息；服务端重新校验可见性并复制对象。 */
+  forwardFromMessageId?: string;
 }
 
 export interface ChatReadPayload {

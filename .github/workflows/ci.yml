@@ -196,11 +196,25 @@ jobs:
             exit 1
           fi
 
-          # 例外：reanimated 会把 worklet 源码序列化成字符串塞进 bundle
+          # 例外一：reanimated 会把 worklet 源码序列化成字符串塞进 bundle
           # （_worklet_..._init_data.code）。那里面的 console.warn 是字符串字面量、
           # 不是调用表达式，babel 插件按设计就碰不到，且是 vendor 代码——不是我们的
-          # 泄漏面。除它以外，任何一条都算 app 代码泄漏。
-          leaks="$(grep -rhoE '.{0,60}console\.(log|warn|info|debug)\(' "$bundle_dir" --include='*.js' | grep -v 'ReanimatedLogLevel' || true)"
+          # 泄漏面。
+          #
+          # 例外二（同一类）：地图选点把 Leaflet 1.9.4 的 dist 内联成字符串常量交给
+          # WebView 执行（src/features/location/components/leaflet-1.9.4.ts）。它自带
+          # 的 6 条弃用/参数告警同样是字面量文本，transform-remove-console 同样删不掉，
+          # 而且它们在 WebView 的 JS 上下文里跑，本就不是 RN bundle 的 console 泄漏面。
+          #
+          # 这里按 Leaflet 的具体文案放行，而不是按「参数以转义引号开头」这类结构特征：
+          # 文案白名单在 Leaflet 升版本、文案改动时会重新变红，正好强制再审一次。代价是
+          # app 代码若恰好打印一模一样的文案也会被放过——真发生的可能性可以忽略。
+          #
+          # 除这两类以外，任何一条都算 app 代码泄漏。
+          leaks="$(grep -rhoE '.{0,60}console\.(log|warn|info|debug)\(.{0,60}' "$bundle_dir" --include='*.js' \
+            | grep -v 'ReanimatedLogLevel' \
+            | grep -vE 'console\.(log|warn|info|debug)\(.{0,3}(Deprecated include of L\.Mixin\.Events|Deprecated use of _flat|latlngs are not flat|wrong event specified|wrong listener type|string\\" type argument expected)' \
+            || true)"
           if [ -n "$leaks" ]; then
             echo "::error::console.* survived the production bundle — transform-remove-console did not run"
             printf '%s\n' "$leaks"
