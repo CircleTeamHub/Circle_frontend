@@ -134,6 +134,8 @@ export function getChatMessagePreview(message: ChatMessageDto | null): string {
       return tCardPreview('card', '[卡片]', 'name', message.content['nickname']);
     case 'circle-card':
       return tCardPreview('card', '[卡片]', 'name', message.content['name']);
+    case 'qr-card':
+      return tCardPreview('qr', '[二维码]', 'name', message.content['name']);
     default:
       return tPreview('default', '[消息]');
   }
@@ -153,9 +155,15 @@ export function mapChatConversationToUI(dto: ChatConversationDto): Conversation 
   let avatarRaw: string | null;
   let sourceID: string;
   if (isCircleGroup) {
-    name = dto.circle?.name ?? '';
+    // 圈子群名走 Circle;独立群聊(无 circleId)用会话自己的 name,
+    // 空群名兜底通用「群聊」标题(微信语义,建群可以不起名)。
+    name =
+      dto.circle?.name ??
+      (dto.name?.trim() ||
+        i18n.t('messages.newGroupDefaultName', { defaultValue: '群聊' }));
     avatarRaw = dto.circle?.avatarUrl ?? null;
-    // 圈子群的 sourceID = 圈子 id(圈子详情/成员目录都按它取)。
+    // 圈子群的 sourceID = 圈子 id(圈子详情/成员目录都按它取);
+    // 独立群聊没有圈子,sourceID = 会话 id。
     sourceID = dto.circleId ?? dto.id;
   } else if (isDirectLike) {
     // SUPPORT 也是一对一:对端就是客服账号,展示与跳转都按单聊走。

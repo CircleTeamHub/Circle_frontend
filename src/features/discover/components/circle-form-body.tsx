@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useRouter } from 'expo-router';
+import { useRouter, useSegments } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Divider } from '@/components/ui/divider';
@@ -175,6 +175,7 @@ export const CircleFormBody: React.FC<CircleFormBodyProps> = ({ form }) => {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const router = useRouter();
+  const segments = useSegments();
 
   const selectedCities = useCreateCircleFormStore((st) => st.selectedCities);
   const setSelectedCities = useCreateCircleFormStore(
@@ -250,6 +251,8 @@ export const CircleFormBody: React.FC<CircleFormBodyProps> = ({ form }) => {
     [t],
   );
 
+  const inDiscoverStack = (segments as readonly string[]).includes('discover');
+
   const vipLabel =
     VIP_OPTIONS.find((option) => option.value === form.joinVipRestriction)
       ?.label ?? t('common.noRestriction');
@@ -257,12 +260,16 @@ export const CircleFormBody: React.FC<CircleFormBodyProps> = ({ form }) => {
     CREDIT_OPTIONS.find((option) => option.value === form.joinCreditRestriction)
       ?.label ?? t('common.noRestriction');
 
+  // 建圈/编辑圈子两个页面在 discover 和 messages 两个栈里都有镜像，选城市页要跟着
+  // 当前栈走 —— 写死 discover 会把用户连人带栈甩到「动态」tab 去（跨 tab 压栈）。
   const handleSelectCities = useCallback(() => {
     router.push({
-      pathname: '/(tabs)/discover/select-city',
+      pathname: inDiscoverStack
+        ? '/(tabs)/discover/select-city'
+        : '/(tabs)/messages/select-city',
       params: { multiSelect: 'true' },
     });
-  }, [router]);
+  }, [router, inDiscoverStack]);
 
   const handleRemoveCity = useCallback(
     (city: string) => {

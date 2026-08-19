@@ -70,6 +70,7 @@ test('profile view formats self check, gender, and city for the detail header', 
     formatGenderLabel,
     getProfileMetaItems,
     isCurrentUserProfile,
+    resolveCanonicalProfileUserId,
   } = loadProfileView();
 
   assert.equal(formatGenderLabel('male'), '男');
@@ -100,6 +101,24 @@ test('profile view formats self check, gender, and city for the detail header', 
   assert.equal(
     isCurrentUserProfile('other-user', { id: 'user-1', accountId: 'jimmy' }),
     false,
+  );
+
+  const canonicalId = '550e8400-e29b-41d4-a716-446655440000';
+  assert.equal(
+    resolveCanonicalProfileUserId('carol03', {
+      id: canonicalId,
+      accountId: 'Carol03',
+    }),
+    canonicalId,
+  );
+  assert.equal(resolveCanonicalProfileUserId(canonicalId, null), canonicalId);
+  assert.equal(resolveCanonicalProfileUserId('carol03', null), null);
+  assert.equal(
+    resolveCanonicalProfileUserId('carol03', {
+      id: '550e8400-e29b-41d4-a716-446655440001',
+      accountId: 'someone-else',
+    }),
+    null,
   );
 
   assert.equal(getFriendActionLabel('NONE'), '添加好友');
@@ -447,10 +466,12 @@ test('user profile screen uses account label, meta chips, badge row, and conditi
   assert.match(source, /showProfileActions \? \(/);
   assert.match(source, /t\('userProfile\.addFriendRequest'\)/);
   assert.match(source, /const handleOpenChat = useCallback/);
-  assert.match(source, /const conversation = await ensureDirectConversation\(profileId\)/);
+  assert.match(source, /const conversation = await ensureDirectConversation\(\s*canonicalProfileUserId/);
   assert.match(source, /const mountedRef = useRef\(true\)/);
   assert.match(source, /mountedRef\.current = false/);
-  assert.match(source, /const conversation = await ensureDirectConversation\(profileId\);[\s\S]*if \(!mountedRef\.current\) return;[\s\S]*router\.push/);
+  assert.match(source, /const conversation = await ensureDirectConversation\(\s*canonicalProfileUserId,[\s\S]*if \(!mountedRef\.current\) return;[\s\S]*router\.push/);
+  assert.match(source, /calleeID: canonicalProfileUserId/);
+  assert.match(source, /getApiErrorMessage\(error, t\('common\.networkError'\)\)/);
   assert.match(source, /if \(mountedRef\.current\) setOpeningChat\(false\)/);
   assert.match(source, /useSegments/);
   assert.match(source, /getChatDetailHref/);
@@ -476,7 +497,7 @@ test('user profile screen wires the more-info row into chat info for accepted fr
   assert.match(source, /const handleOpenChatInfo = useCallback/);
   assert.match(source, /friendStatus !== 'ACCEPTED'/);
   assert.match(source, /getChatInfoHref/);
-  assert.match(source, /router\.push\(getChatInfoHref\(scope, profileId, displayName, undefined, profile\.name\)\)/);
+  assert.match(source, /getChatInfoHref\([\s\S]*canonicalProfileUserId/);
 });
 
 test('scope-specific chat info route files exist for contacts and profile stacks', () => {

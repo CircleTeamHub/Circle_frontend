@@ -175,6 +175,7 @@ export const sCircleCard = StyleSheet.create({
   nickname: { ...Typography.body, fontWeight: '600' },
   persona: { ...Typography.small, lineHeight: 17 },
   divider: { height: StyleSheet.hairlineWidth, marginTop: 2 },
+  media: { alignItems: 'center' },
   footer: { ...Typography.tinyRegular, paddingTop: 1 },
   leadingIcon: {
     width: 48,
@@ -268,6 +269,9 @@ export interface CompactCardBubbleProps {
   title: string;
   subtitle: string;
   footer: string;
+  // 可选主视觉(目前只有二维码卡在用):夹在标题行与 footer 之间,
+  // 让「这是什么卡」不必全靠文字表达。
+  media?: React.ReactNode;
   // The small sender/self avatar shown beside the bubble (AVATAR_SIZE).
   avatarNode: React.ReactNode;
   onPress?: () => void;
@@ -286,6 +290,7 @@ export const CompactCardBubble: React.FC<CompactCardBubbleProps> = ({
   title,
   subtitle,
   footer,
+  media,
   avatarNode,
   onPress,
   onAvatarPress,
@@ -334,6 +339,7 @@ export const CompactCardBubble: React.FC<CompactCardBubbleProps> = ({
           </View>
         </View>
         <View style={[sCircleCard.divider, { backgroundColor: dividerColor }]} />
+        {media ? <View style={sCircleCard.media}>{media}</View> : null}
         <Text style={[sCircleCard.footer, { color: onCardSecondary }]}>
           {footer}
         </Text>

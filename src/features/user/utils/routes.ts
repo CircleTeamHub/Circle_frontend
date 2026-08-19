@@ -51,8 +51,16 @@ export function getSendFriendRequestHref(
   scope: UserProfileScope,
   id: string,
   name?: string,
+  opts?: {
+    /** 扫名片码进来的加好友:透传给申请页,提交时带给服务端换 addMeByQrCode 放行。 */
+    qrToken?: string;
+  },
 ): Href {
-  const params = name ? { id, name } : { id };
+  const params = {
+    id,
+    ...(name ? { name } : {}),
+    ...(opts?.qrToken ? { qrToken: opts.qrToken } : {}),
+  };
 
   switch (scope) {
     case 'contacts':

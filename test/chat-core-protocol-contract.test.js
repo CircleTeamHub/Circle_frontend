@@ -30,6 +30,7 @@ const FE_EVENTS = {
   delivered: 'chat:delivered',
   reaction: 'chat:reaction',
   edit: 'chat:edit',
+  historyCleared: 'chat:history_cleared',
 };
 
 test('frontend protocol declares the canonical event names and path', () => {

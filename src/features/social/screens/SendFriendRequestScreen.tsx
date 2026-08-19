@@ -162,7 +162,7 @@ export default function SendFriendRequestScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const params = useLocalSearchParams<{ id?: string; name?: string }>();
+  const params = useLocalSearchParams<{ id?: string; name?: string; qrToken?: string }>();
   const currentUser = useAuthStore((state) => state.user);
   const profileId = typeof params.id === 'string' ? params.id : '';
   const targetName =
@@ -345,6 +345,8 @@ export default function SendFriendRequestScreen() {
           description,
           photos,
           permission,
+          // 扫名片码进来的申请:带上服务端签发的令牌,对方 addMeByQrCode 开着即放行。
+          qrToken: typeof params.qrToken === 'string' ? params.qrToken : undefined,
         });
         Alert.alert(t('contacts.request.sentTitle'), t('contacts.request.sentMessage', { name: targetName }), [
           { text: t('common.ok'), onPress: () => router.back() },

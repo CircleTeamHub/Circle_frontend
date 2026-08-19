@@ -5,6 +5,8 @@ import type {
   CreateNoteExportInput,
   CreateNoteShareLinkInput,
   ListNotesParams,
+  NoteChatMediaImportResult,
+  NoteChatMediaSection,
   NoteDetail,
   NoteExportResult,
   NoteGroup,
@@ -23,6 +25,20 @@ export async function fetchNotes(params?: ListNotesParams): Promise<NoteSummary[
 
 export async function fetchNoteDetail(id: string): Promise<NoteDetail> {
   return apiClient<NoteDetail>(`/note/${id}`);
+}
+
+/**
+ * 把笔记指定分区的媒体复制进自己的 chat/{userId}/ 命名空间。
+ * 聊天媒体消息只认发送者自己的 object key,转发笔记媒体必须先经这一步。
+ */
+export async function importNoteChatMedia(
+  noteId: string,
+  sections: NoteChatMediaSection[],
+): Promise<NoteChatMediaImportResult> {
+  return apiClient<NoteChatMediaImportResult>(`/note/${noteId}/chat-media`, {
+    method: 'POST',
+    body: { sections },
+  });
 }
 
 export async function createNote(input: CreateNoteInput): Promise<NoteDetail> {
@@ -60,6 +76,17 @@ export async function collectNote(
   return apiClient<CollectNoteResult>('/note/collect', {
     method: 'POST',
     body: { noteId, source },
+  });
+}
+
+/** 备注是笔记主人的私人标注；传 null / 空白串即清除。 */
+export async function setNoteRemark(
+  id: string,
+  remark: string | null,
+): Promise<void> {
+  await apiClient<{ id: string; remark: string | null }>(`/note/${id}/remark`, {
+    method: 'PATCH',
+    body: { remark },
   });
 }
 

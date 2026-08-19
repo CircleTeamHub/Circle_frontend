@@ -48,7 +48,11 @@ export default function CirclePlazaScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { t } = useTranslation();
+  // 圈子铃铛 = 圈子通知（担保验证/入圈审批/圈子帖动态）+ 报名管理，两者相加。
+  // 朋友圈的互动不进这里。
+  const circleUnread = useTabBadgeStore((state) => state.circleUnread);
   const signupUnread = useTabBadgeStore((state) => state.signupUnread);
+  const circleBellUnread = circleUnread + signupUnread;
 
   const d = useMemo(
     () => ({
@@ -79,7 +83,7 @@ export default function CirclePlazaScreen() {
   const handleOpenNotifications = useCallback(() => {
     router.push({
       pathname: '/(tabs)/discover/notification-center',
-      params: { initialTab: 'circle' },
+      params: { domain: 'circle' },
     });
   }, [router]);
 
@@ -127,7 +131,7 @@ export default function CirclePlazaScreen() {
                 color={colors.textSecondary}
               />
               <View style={s.notificationBadge}>
-                <Badge count={signupUnread} />
+                <Badge count={circleBellUnread} />
               </View>
             </Pressable>
           </View>

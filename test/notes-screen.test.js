@@ -30,7 +30,8 @@ test('NotesScreen has 已下架 entry button', () => {
 test('NotesScreen opens a standalone unlisted notes page instead of filtering inline', () => {
   const src = read('src/features/notes/screens/NotesScreen.tsx');
 
-  assert.doesNotMatch(src, /trash-outline/);
+  // trash-outline 曾被禁止:那会儿删除只活在回收站流程里。现在列表有正当的
+  // 删除入口(动作菜单软删 + 多选批量删,都进回收站),不再断言它不存在。
   assert.doesNotMatch(src, /deletedNotes/);
   assert.doesNotMatch(src, /showUnlisted/);
   assert.doesNotMatch(src, /status: showUnlisted \? 'UNLISTED' : 'ACTIVE'/);
@@ -51,7 +52,9 @@ test('UnlistedNotesScreen lists only unlisted notes and can relist them', () => 
   assert.match(screen, /cloud-upload-outline/);
   assert.match(screen, /notes\.unlistedAutoDeleteHint/);
   assert.match(screen, /notes\.empty\.noUnlisted/);
-  assert.match(zh, /已下架笔记会在一个月后自动删除。/);
+  // 语义拍板（2026-08-16）：下架是长期仓库不再自动删除；到期清理只发生在回收站。
+  assert.match(zh, /已下架笔记不会自动删除，可随时重新上架。/);
+  assert.doesNotMatch(zh, /已下架笔记会在一个月后自动删除/);
   assert.match(zh, /上架/);
 });
 
@@ -113,8 +116,10 @@ test('NotesScreen passes the current user as owner when opening note details', (
   assert.match(src, /currentUserId/);
   assert.match(src, /pathname: '\/\(tabs\)\/profile\/notes\/\[id\]'/);
   // NoteCard 已 memo，跳转回调改为稳定 useCallback（携带 note 参数）。
+  // 多选模式加入后卡片 onPress 先走 handleCardPress 分流：选择态勾选、常态进详情。
   assert.match(src, /params: \{ id: note\.id, ownerId: currentUserId \?\? '' \}/);
-  assert.match(src, /onPress=\{openNote\}/);
+  assert.match(src, /onPress=\{handleCardPress\}/);
+  assert.match(src, /openNote\(note\);/);
 });
 
 test('NotesScreen refreshes notes and groups when returning from note edits', () => {
@@ -212,31 +217,35 @@ test('NotesScreen keeps group management action fixed beside the scrollable tabs
   assert.ok(manageButton > scrollEnd);
 });
 
-test('GroupManagerSheet keeps group management sheet interactions inside a non-pressable card', () => {
+test('GroupManagerSheet is a full-screen page without backdrop chrome', () => {
   const src = read('src/features/notes/components/GroupManagerSheet.tsx');
-  assert.match(src, /<View style=\{\[s\.modalCard, d\.modalCard\]\}>/);
-  assert.doesNotMatch(src, /<Pressable style=\{\[s\.modalCard, d\.modalCard\]\}/);
+
+  // 已从底部弹层升级为全屏页：无遮罩/backdrop，安全区内自带标题栏与关闭按钮。
+  assert.match(src, /animationType="slide"/);
+  assert.doesNotMatch(src, /transparent/);
+  assert.doesNotMatch(src, /modalBackdrop/);
+  assert.doesNotMatch(src, /modalOverlay/);
+  assert.match(src, /screen:\s*{[\s\S]*?flex:\s*1/);
+  assert.match(src, /insets\.top/);
+  assert.match(src, /name="close"/);
 });
 
-test('GroupManagerSheet keeps the group manager backdrop behind the editor controls', () => {
+test('GroupManagerSheet lets fixed tabs (all/ungrouped) join drag reordering', () => {
   const src = read('src/features/notes/components/GroupManagerSheet.tsx');
-  assert.match(src, /<View style=\{\[s\.modalOverlay, d\.modalOverlay\]\} pointerEvents="box-none">/);
-  assert.match(src, /modalBackdrop:\s*{[\s\S]*zIndex:\s*0/);
-  assert.match(src, /modalCard:\s*{[\s\S]*zIndex:\s*1/);
-  assert.match(src, /modalCard:\s*{[\s\S]*elevation:\s*1/);
-});
-
-test('GroupManagerSheet presents group management as a bottom sheet with updated copy', () => {
-  const src = read('src/features/notes/components/GroupManagerSheet.tsx');
+  const screen = read('src/features/notes/screens/NotesScreen.tsx');
   const zh = read('src/i18n/locales/zh.json');
 
-  assert.match(src, /animationType="slide"/);
-  assert.match(src, /modalOverlay:\s*{[\s\S]*justifyContent:\s*'flex-end'[\s\S]*paddingHorizontal:\s*0/);
-  assert.match(src, /modalCard:\s*{[\s\S]*borderTopLeftRadius:\s*Radius\.xl[\s\S]*borderTopRightRadius:\s*Radius\.xl/);
-  assert.match(src, /modalCard:\s*{[\s\S]*borderBottomLeftRadius:\s*0[\s\S]*borderBottomRightRadius:\s*0/);
-  assert.match(src, /全部和未分组为固定分组无法修改。/);
-  assert.match(src, /输入分组名添加新的分组/);
-  assert.match(zh, /全部和未分组为固定分组无法修改。/);
+  // 固定 tab 与分组同列表拖动：整条顺序本地持久化，分组相对顺序才写服务端。
+  assert.match(src, /mergeTabOrder/);
+  assert.match(src, /NOTES_TAB_ALL/);
+  assert.match(src, /setTabOrderIds\(finalRows\.map\(\(row\) => row\.id\)\)/);
+  assert.match(src, /groupOrderChanged/);
+  // 固定 tab 行不渲染 成员/改名/删除 动作（group 为空时整块隐藏）。
+  assert.match(src, /\{group \? \(\s*<View style=\{s\.groupRowActions\}>/);
+  // NotesScreen 的 tab 顺序同样经 mergeTabOrder 还原。
+  assert.match(screen, /mergeTabOrder/);
+  assert.match(screen, /useNotesTabOrderStore/);
+  assert.match(zh, /全部和未分组也可拖动排序，但不能改名或删除。/);
   assert.match(zh, /输入分组名添加新的分组/);
 });
 
@@ -273,19 +282,18 @@ test('GroupManagerSheet limits custom note groups to ten', () => {
   assert.ok(saveBlock.indexOf('isCreatingGroupAtLimit') < saveBlock.indexOf('createNoteGroup'));
 });
 
-test('GroupManagerSheet uses stable drag responders directly on each custom group handle', () => {
+test('GroupManagerSheet uses stable drag responders directly on each row handle', () => {
   const src = read('src/features/notes/components/GroupManagerSheet.tsx');
   assert.match(src, /dragRespondersRef/);
   assert.match(src, /getDragResponder/);
-  assert.match(src, /groupsRef\.current\.findIndex/);
-  assert.match(src, /getDragResponder\(group\.id\)\.panHandlers/);
+  assert.match(src, /currentRows\.findIndex/);
+  assert.match(src, /getDragResponder\(row\.id\)\.panHandlers/);
   assert.doesNotMatch(src, /pendingDragRef/);
-  assert.doesNotMatch(src, /createDragResponder\(group\.id, index\)\.panHandlers/);
 });
 
-test('GroupManagerSheet prevents ScrollView from stealing group drag gestures', () => {
+test('GroupManagerSheet prevents ScrollView from stealing row drag gestures', () => {
   const src = read('src/features/notes/components/GroupManagerSheet.tsx');
-  assert.match(src, /scrollEnabled=\{!draggingGroupId\}/);
+  assert.match(src, /scrollEnabled=\{!draggingRowId\}/);
   assert.match(src, /onMoveShouldSetPanResponderCapture:\s*\(\) => true/);
   assert.match(src, /onShouldBlockNativeResponder:\s*\(\) => true/);
 });
@@ -453,7 +461,8 @@ test('NoteCard exposes a single more-actions button (not per-action buttons)', (
   assert.doesNotMatch(card, /onPinPress/);
   assert.doesNotMatch(card, /onEditPress/);
 
-  // 菜单承载置顶/编辑/分享/下架四个动作；不再暴露删除。
+  // 菜单承载置顶/多选/备注/编辑/分组/分享/删除/下架；删除是软删进回收站
+  // (30 天可恢复),用 notes.actions.delete 专属文案,不复用 common.delete。
   assert.match(screen, /<NoteActionsSheet/);
   assert.match(screen, /onMorePress=\{openMenu\}/);
   assert.match(screen, /unlistNote/);
@@ -463,9 +472,10 @@ test('NoteCard exposes a single more-actions button (not per-action buttons)', (
   assert.match(sheet, /notes\.actions\.share/);
   assert.match(sheet, /notes\.actions\.unlist/);
   assert.match(sheet, /archive-outline/);
+  assert.match(sheet, /notes\.actions\.delete/);
+  assert.match(sheet, /trash-outline/);
+  assert.match(sheet, /onDelete/);
   assert.doesNotMatch(sheet, /common\.delete/);
-  assert.doesNotMatch(sheet, /trash-outline/);
-  assert.doesNotMatch(sheet, /onDelete/);
 });
 
 test('ProfileScreen navigates to notes on menu item press', () => {
@@ -492,9 +502,12 @@ test('NoteDetailScreen follows the divider + icon-chip section design', () => {
   assert.match(detail, /renderSectionHeader\(\s*'text-outline'/);
   assert.doesNotMatch(detail, /sectionCard:/);
 
-  // 来源名片：主色浅底 + 深一档实心靛蓝"查看原消息"胶囊（primaryDeep token）。
-  assert.match(detail, /sourceCard: \{ backgroundColor: colors\.primaryLight \}/);
-  assert.match(detail, /sourceBtn: \{ backgroundColor: colors\.primaryDeep \}/);
+  // 来源卡片整块从正文移除：来源与下载都收进右下角悬浮列，
+  // 原来的浅底卡片与 primaryDeep CTA 胶囊一并删除。
+  assert.doesNotMatch(detail, /sourceCard/);
+  assert.doesNotMatch(detail, /sourceBtn:/);
+  // 悬浮钮用不透明 surface 底 + 细边，压在图片上也不透字。
+  assert.match(detail, /floatingBtn: \{\s*backgroundColor: colors\.surface/);
 
   // 分组标签：方形品牌紫实心块 + 白字（brandPurple = 会员卡渐变核心 #7C5CF0）。
   assert.match(detail, /groupTag: \{ backgroundColor: colors\.brandPurple \}/);
@@ -536,9 +549,9 @@ test('NoteDetailScreen header adds a share button left of download', () => {
 test('GroupManagerSheet name input is a visible shadowed pill', () => {
   const src = read('src/features/notes/components/GroupManagerSheet.tsx');
 
-  // 之前边框用 surface（隐形）；现在可见边框 + background 凹槽底 + 阴影 + 胶囊圆角。
+  // 可见边框 + 阴影 + 胶囊圆角；全屏页底是 background，输入底翻成 surface 立出来。
   assert.match(src, /modalInput:\s*\{[\s\S]*?borderColor:\s*colors\.surfaceBorder/);
-  assert.match(src, /modalInput:\s*\{[\s\S]*?backgroundColor:\s*colors\.background/);
+  assert.match(src, /modalInput:\s*\{[\s\S]*?backgroundColor:\s*colors\.surface/);
   assert.match(src, /modalInput:\s*\{[\s\S]*?borderRadius:\s*Radius\.full[\s\S]*?shadowOpacity/);
 });
 

@@ -16,7 +16,7 @@ test('chat detail screen uses the aligned header and composer structure', () => 
   assert.match(source, /composerShell/);
   assert.match(source, /composerInput/);
   assert.match(source, /sendVideoMessage/);
-  assert.match(source, /mediaTypes: \['images', 'videos'\]/);
+  assert.match(source, /mediaTypes: kind === 'photo' \? \['images'\] : \['videos'\]/);
   assert.match(source, /VIDEO_UPLOAD_TIMEOUT_MS/);
   assert.match(source, /type: 'video'/);
 });
@@ -259,7 +259,8 @@ test('chat detail guards async send UI state after unmount', () => {
     '语音发送失败，请重试',
     '位置发送失败，请重试',
     '图片发送失败，请重试',
-    '笔记发送失败，请重试',
+    // 笔记改批量发送:失败态聚合成一条计数提示(仍要求 mounted 守卫)。
+    '{{count}} 条内容发送失败',
     '名片发送失败，请重试',
     '收藏内容发送失败，请重试',
     // 转账卡片没有发送失败态了 —— 卡片由服务端结算后签发，这个屏幕不发它。

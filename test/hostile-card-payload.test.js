@@ -8,6 +8,26 @@ const ts = require('typescript');
 // 名片 payload 完全由对端构造 —— 服务端只管 content 的总字节数,不认识里面的形状。
 // 拆栈前这层加固在 src/im/mappers.ts,自研栈把它挪到了 chat-core 的映射层;
 // 这份用例跟着搬过来,保证「一条恶意消息不能把会话页永久搞坏」的保证不随迁移丢掉。
+// qr-payload 运行时零依赖 —— 加载真实实现,二维码令牌净化才是真的被测到。
+let __qrPayload = null;
+function loadQrPayload() {
+  if (!__qrPayload) {
+    const filePath = path.join(process.cwd(), 'src/features/qr/qr-payload.ts');
+    const transpiled = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2020,
+      },
+      fileName: filePath,
+    }).outputText;
+    const ctx = { module: { exports: {} }, exports: {} };
+    ctx.exports = ctx.module.exports;
+    vm.runInNewContext(transpiled, ctx);
+    __qrPayload = ctx.module.exports;
+  }
+  return __qrPayload;
+}
+
 function loadMappers() {
   const filePath = path.join(process.cwd(), 'src/chat-core/message-mappers.ts');
   const transpiled = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
@@ -36,6 +56,7 @@ function loadMappers() {
       if (request === './mappers') return { formatChatTimestamp: () => '12:00' };
       if (request === './store') return {};
       if (request === '@/types') return {};
+      if (request === '@/features/qr/qr-payload') return loadQrPayload();
       throw new Error(`unexpected require: ${request}`);
     },
   };

@@ -75,9 +75,40 @@ test('share note picker renders full note cards with stable search input', () =>
   assert.match(src, /NoteCard/);
   assert.match(src, /showActions=\{false\}/);
   assert.match(src, /filteredNotes/);
-  assert.match(src, /const renderNote = \(\{ item \}: \{ item: NoteSummary \}\) => \(\s*<NoteCard/);
+  // 多选模式:整卡点按即切换选中;勾选指示复用 NoteCard 自带的 selectionMode,
+  // 不许在选择器里再手搓一套 checkbox(视觉/无障碍来源必须唯一)。
+  assert.match(src, /onPress=\{toggleNote\}/);
+  assert.match(src, /selectionMode\s/);
+  assert.match(src, /selected=\{selectedNotes\.some/);
+  assert.doesNotMatch(src, /noteCheck/);
   assert.match(src, /searchInput:\s*{[\s\S]*lineHeight:\s*20/);
   assert.match(src, /searchInput:\s*{[\s\S]*minHeight:\s*24/);
+});
+
+test('share note picker sends through the inline always-visible options row', () => {
+  const src = read('src/features/chat/screens/SharePickerScreen.tsx');
+
+  // 选择上限来自纯 util(与批量消息量约束联动),不许在屏幕里写死数字。
+  assert.match(src, /MAX_NOTE_BATCH_SELECTION/);
+  assert.doesNotMatch(src, /prev\.length >= 9\b/);
+  // 五个选项常驻底栏(发送键上方一行横排 icon+短标签),不再点发送后弹确认 sheet。
+  for (const key of ['optionCard', 'optionMedia', 'optionShowcase', 'optionLocation', 'optionAll']) {
+    assert.match(src, new RegExp(`share\\.noteBatch\\.${key}`));
+  }
+  assert.match(src, /NOTE_OPTION_CHIPS/);
+  // 五个开关共用一个 chip 组件（含常驻对号：选中实心/未选空心），不许再复制粘贴。
+  assert.match(src, /function NoteOptionChip/);
+  assert.match(src, /checked \? 'checkmark-circle' : 'ellipse-outline'/);
+  assert.doesNotMatch(src, /BottomSheetModal/);
+  assert.doesNotMatch(src, /optionsOpen/);
+  assert.match(src, /withAllNoteSendOptions/);
+  assert.match(src, /isAllNoteSendOptions/);
+  // 至少勾一项才能发送;发送键直接按当前勾选以 note-batch 形态交给聊天页消费。
+  assert.match(src, /hasAnyNoteSendOption/);
+  assert.match(src, /onPress=\{handleConfirmSend\}/);
+  assert.match(src, /kind: 'note-batch'/);
+  assert.match(src, /notes: selectedNotes/);
+  assert.match(src, /options: sendOptions/);
 });
 
 test('discover post flow exports a select-note route', () => {

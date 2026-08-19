@@ -43,10 +43,9 @@ export default function MomentsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { t } = useTranslation();
-  // 发现页「朋友圈」那一行的红点读的就是它 —— 互动通知未读。红点必须能点到真正
-  // 能看到、能清掉它的地方:铃铛中心的「互动」tab(默认 tab)。圈子通知的入口在
-  // 广场页的铃铛(initialTab=circle)。
-  const interactionUnread = useTabBadgeStore((state) => state.discoverUnread);
+  // 朋友圈铃铛只算朋友圈的未读（动态点赞/评论/回复/@ + 资料点赞）。圈子的通知
+  // 归广场页那个铃铛(domain=circle)，两边不互相报红点。
+  const momentsUnread = useTabBadgeStore((state) => state.momentsUnread);
 
   const d = useMemo(
     () => ({
@@ -67,7 +66,10 @@ export default function MomentsScreen() {
   }, [router]);
 
   const handleOpenNotifications = useCallback(() => {
-    router.push('/(tabs)/discover/notification-center');
+    router.push({
+      pathname: '/(tabs)/discover/notification-center',
+      params: { domain: 'moments' },
+    });
   }, [router]);
 
   return (
@@ -89,7 +91,7 @@ export default function MomentsScreen() {
               color={colors.textSecondary}
             />
             <View style={s.notificationBadge}>
-              <Badge count={interactionUnread} />
+              <Badge count={momentsUnread} />
             </View>
           </Pressable>
         }
