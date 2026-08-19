@@ -5,6 +5,16 @@ const fs = require('node:fs');
 
 const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
+test('动态 tab 使用社交动态语义的光圈图标', () => {
+  const layout = read('app/(tabs)/_layout.tsx');
+
+  assert.match(
+    layout,
+    /name: 'discover', icon: 'aperture-outline', key: 'tabs\.discover'/,
+  );
+  assert.doesNotMatch(layout, /play-circle-outline/);
+});
+
 // 回归：从无 tab bar 的深层页返回 tab 根页时，bar 会“闪一下才展示”。
 // 根因是浮动 bar 用 display:none↔flex 瞬间切换，返回时在 JS 状态提交那刻
 // 立即翻成 flex，浮动 bar 满不透明度直接出现在仍在退场的详情页之上。

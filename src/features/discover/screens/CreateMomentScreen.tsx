@@ -173,7 +173,12 @@ export default function CreateMomentScreen() {
             folder: 'posts',
             fileUri: uri,
           });
-          await uploadLocalFileToPresignedUrl(presign.uploadUrl, contentType, uri);
+          await uploadLocalFileToPresignedUrl(
+            presign.uploadUrl,
+            contentType,
+            uri,
+            presign.requiredHeaders,
+          );
           return presign.fileUrl;
         } catch (error) {
           if (__DEV__) {

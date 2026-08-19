@@ -61,6 +61,8 @@ export function buildQuotePreviewText(message: ChatMessage, t: TFunction) {
   switch (message.type) {
     case 'image':
       return t('im.preview.image', { defaultValue: '[图片]' });
+    case 'video':
+      return t('im.preview.video', { defaultValue: '[视频]' });
     case 'voice':
       return t('im.preview.voice', { defaultValue: '[语音]' });
     case 'location':
@@ -86,6 +88,11 @@ export function buildQuotePreviewText(message: ChatMessage, t: TFunction) {
       return t('chat.preview.circle', {
         name: message.circleCard?.name ?? '',
         defaultValue: '[圈子] {{name}}',
+      }).trim();
+    case 'qr-card':
+      return t('im.preview.qr', {
+        name: message.qrCard?.name ?? '',
+        defaultValue: '[二维码] {{name}}',
       }).trim();
     default:
       return t('im.preview.default', { defaultValue: '[消息]' });

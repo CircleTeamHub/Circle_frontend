@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, render } from '@testing-library/react-native';
+import { render } from '@testing-library/react-native';
 import { ReceivedBubble } from './received-bubble';
 import { SentBubble } from './sent-bubble';
 import { NoteCardBubble } from './note-card-bubble';
@@ -9,10 +9,6 @@ import { TransferCardBubble } from './transfer-card-bubble';
 import { ImageBubble } from './image-bubble';
 import { VoiceBubble } from './voice-bubble';
 import ProfileScreen from '@/features/profile/screens/ProfileScreen';
-import {
-  invalidateUserAppearances,
-  reconcileUserAppearance,
-} from '@/stores/userAppearanceStore';
 import type { AuthUser } from '@/stores/authStore';
 import type { AvatarFrameAppearance, ChatMessage } from '@/types';
 
@@ -221,15 +217,10 @@ function makeUser(
 
 beforeEach(() => {
   jest.clearAllMocks();
-  invalidateUserAppearances();
   mockAuthState = { user: makeUser(null), setUser: jest.fn() };
 });
 
-afterEach(() => {
-  invalidateUserAppearances();
-});
-
-test('received bubble rerenders when the async appearance hook gains and removes a frame', () => {
+test('received bubble uses the shared square avatar without a circular frame', () => {
   render(
     <ReceivedBubble
       message={receivedMessage}
@@ -237,53 +228,21 @@ test('received bubble rerenders when the async appearance hook gains and removes
     />,
   );
 
-  expect(mockAvatar).toHaveBeenLastCalledWith(
-    expect.objectContaining({ frameSource: undefined }),
-  );
-
-  act(() => {
-    reconcileUserAppearance('alice', {
-      vipLevel: 2,
-      avatarFrame: customFrame,
-    });
-  });
-
-  expect(mockAvatar).toHaveBeenLastCalledWith(
-    expect.objectContaining({
-      frameSource: { uri: customFrame.imageUrl },
-    }),
-  );
-
-  act(() => {
-    reconcileUserAppearance('alice', {
-      vipLevel: 2,
-      avatarFrame: null,
-    });
-  });
-
-  expect(mockAvatar).toHaveBeenLastCalledWith(
-    expect.objectContaining({ frameSource: undefined }),
-  );
+  const props = mockAvatar.mock.calls.at(-1)?.[0];
+  expect(props).toEqual(expect.objectContaining({ size: 36 }));
+  expect(props).not.toHaveProperty('frameSource');
+  expect(props).not.toHaveProperty('compactFrame');
 });
 
-test.each([
-  ['custom', customFrame, { uri: customFrame.imageUrl }],
-  ['null', null, undefined],
-] as const)(
-  'sent bubble renders the auth-backed %s frame source',
-  (_label, avatarFrameAppearance, expectedFrameSource) => {
-    mockAuthState = {
-      user: makeUser(avatarFrameAppearance),
-      setUser: jest.fn(),
-    };
+test('sent bubble does not render the auth-backed circular frame', () => {
+  mockAuthState = { user: makeUser(customFrame), setUser: jest.fn() };
 
-    render(<SentBubble message={sentMessage} selfName="Self" />);
+  render(<SentBubble message={sentMessage} selfName="Self" />);
 
-    expect(mockAvatar).toHaveBeenLastCalledWith(
-      expect.objectContaining({ frameSource: expectedFrameSource }),
-    );
-  },
-);
+  const props = mockAvatar.mock.calls.at(-1)?.[0];
+  expect(props).not.toHaveProperty('frameSource');
+  expect(props).not.toHaveProperty('compactFrame');
+});
 
 test.each([
   ['custom', customFrame, { uri: customFrame.imageUrl }],
@@ -302,16 +261,14 @@ test.each([
       expect.objectContaining({
         compactFrame: true,
         frameSource: expectedFrameSource,
+        shape: 'circle',
         size: 56,
       }),
     );
   },
 );
 
-// 头像框是会员付费权益,不能只在文字气泡上生效:同一个人发文字是「圆形+框」、
-// 发卡片/图片/语音就变成「方形无框」,看起来像两个人(用户实测提的)。
-// 每种气泡都必须走 shared 里的同一个 MessageAvatar。
-describe('每种气泡的发送者头像都带头像框', () => {
+describe('每种气泡的发送者头像都保持方形且不带圆框', () => {
   const cases: [string, ChatMessage][] = [
     ['note-card', { id: 'n1', type: 'note-card', noteCard: { id: 'note-1', title: 'T' } }],
     ['friend-card', { id: 'f1', type: 'friend-card', friendCard: { userID: 'u2', nickname: 'N' } }],
@@ -321,21 +278,18 @@ describe('每种气泡的发送者头像都带头像框', () => {
     ['voice', { id: 'v1', type: 'voice', voiceDuration: 3 }],
   ] as unknown as [string, ChatMessage][];
 
-  test.each(cases)('%s 气泡把自己的头像框透给 Avatar', (_label, message) => {
+  test.each(cases)('%s 气泡不把圆形头像框透给 Avatar', (_label, message) => {
     mockAuthState = { user: makeUser(customFrame), setUser: jest.fn() };
     const Bubble = bubbleFor(message.type);
 
     render(<Bubble message={message} outgoing selfName="Self" />);
 
-    // 名片卡里还有一颗 48pt 的「被推荐好友」头像,那颗不该套发送者的框 ——
-    // 所以用 toHaveBeenCalledWith 匹配任意一次调用,而不是最后一次。
-    expect(mockAvatar).toHaveBeenCalledWith(
-      expect.objectContaining({
-        size: 36,
-        compactFrame: true,
-        frameSource: { uri: customFrame.imageUrl },
-      }),
-    );
+    const props = mockAvatar.mock.calls
+      .map(([avatarProps]) => avatarProps)
+      .find((avatarProps) => avatarProps.size === 36);
+    expect(props).toBeDefined();
+    expect(props).not.toHaveProperty('frameSource');
+    expect(props).not.toHaveProperty('compactFrame');
   });
 });
 

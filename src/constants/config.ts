@@ -199,16 +199,9 @@ export const CHAT_WS_URL = assertSecureTransport(
 
 export const APP_NAME = APP_DISPLAY_NAME;
 
-/**
- * 客服账号：点「客服中心」某个客服类型时，发起单聊的目标 userID(标准 UUID)。
- *
- * 必须在 EAS Build / .env.production 里把 EXPO_PUBLIC_SUPPORT_ACCOUNT_ID 指向一个
- * 真实客服账号,由真人登录接待。历史默认值 `imAdmin` 是 OpenIM 时代的系统账号,
- * 自研栈里不存在 —— 未配置时发起会话会被后端以「用户不存在」拒绝(可控失败,
- * 保留默认值只为让入口在配置前不至于崩溃)。
- */
-export const SUPPORT_ACCOUNT_ID =
-  process.env.EXPO_PUBLIC_SUPPORT_ACCOUNT_ID?.trim() || 'imAdmin';
+// 客服账号曾经是这里的编译期常量(EXPO_PUBLIC_SUPPORT_ACCOUNT_ID,默认回退 imAdmin)。
+// 已改为后端下发:GET /support/config → supportConfigStore,管理台维护。
+// 换客服不再需要重新出包发版,也不会再有「渲染成功、一点就失败」的假账号回退。
 
 export const LIMITS = {
   POST_MAX_LENGTH: 5000,

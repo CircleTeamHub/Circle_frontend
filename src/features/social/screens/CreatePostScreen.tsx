@@ -37,6 +37,7 @@ import {
 } from '@/features/discover/utils/post-form-circle-selection';
 import { useTranslation } from 'react-i18next';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import { FEATURE_FLAGS } from '@/constants/feature-flags';
 
 // VIP 档位对齐 app 实际会员体系（VIP1–VIP5，见 MemberCenterScreen）。
 // 仅存 value，label 在组件内按当前语言生成（见 useMemo）。
@@ -338,6 +339,7 @@ export default function CreatePostScreen() {
             presign.uploadUrl,
             contentType,
             uri,
+            presign.requiredHeaders,
           );
           uploadedUrls.push(presign.fileUrl);
         } catch (uploadError) {
@@ -610,16 +612,19 @@ export default function CreatePostScreen() {
           rightText={signupCreditLabel}
           onPress={() => setActivePicker('signupCredit')}
         />
-        <Divider />
-
-        {/* Signup fancy number toggle */}
-        <MenuRow
-          icon="sparkles-outline"
-          label={t('plaza.create.fancyRestriction', { defaultValue: '靓号限制' })}
-          hasToggle
-          toggleValue={signupFancyEnabled}
-          onToggle={setSignupFancyEnabled}
-        />
+        {FEATURE_FLAGS.fancyNumbers ? (
+          <>
+            <Divider />
+            {/* Signup fancy number toggle */}
+            <MenuRow
+              icon="sparkles-outline"
+              label={t('plaza.create.fancyRestriction', { defaultValue: '靓号限制' })}
+              hasToggle
+              toggleValue={signupFancyEnabled}
+              onToggle={setSignupFancyEnabled}
+            />
+          </>
+        ) : null}
       </ScrollView>
 
       <OptionPickerSheet

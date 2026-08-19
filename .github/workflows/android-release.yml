@@ -51,15 +51,6 @@ jobs:
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
           EXPO_PUBLIC_CHAT_WS_URL: ${{ vars.EXPO_PUBLIC_CHAT_WS_URL }}
           EXPO_PUBLIC_MEDIA_ORIGINS: ${{ vars.EXPO_PUBLIC_MEDIA_ORIGINS }}
-          EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: ${{ vars.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID }}
-          # 客服账号兜底变量必须和 build 步一致地转发进来 —— GitHub repository variables 不会自动
-          # 进 process.env,不转发的话 validateSupportAccounts 会看到五个全空、每次打 tag 都在
-          # 测试/构建之前就 fail,即便仓库其实配好了。
-          EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_ACCOUNT_ID }}
-          EXPO_PUBLIC_SUPPORT_RECHARGE_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_RECHARGE_ID }}
-          EXPO_PUBLIC_SUPPORT_ISSUE_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_ISSUE_ID }}
-          EXPO_PUBLIC_SUPPORT_DISPUTE_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_DISPUTE_ID }}
-          EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID }}
           EXPO_PUBLIC_SENTRY_DSN: ${{ vars.EXPO_PUBLIC_SENTRY_DSN }}
         run: |
           set -euo pipefail
@@ -181,14 +172,8 @@ jobs:
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
           EXPO_PUBLIC_CHAT_WS_URL: ${{ vars.EXPO_PUBLIC_CHAT_WS_URL }}
           EXPO_PUBLIC_MEDIA_ORIGINS: ${{ vars.EXPO_PUBLIC_MEDIA_ORIGINS }}
-          EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID: ${{ vars.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID }}
           # 客服中心各入口的专属账号：不注入则 support-categories.ts 编译期回落到 imAdmin，
           # 生产用户点「充值/纠纷/账号客服」会被导去系统管理员会话而非对应真人客服。
-          EXPO_PUBLIC_SUPPORT_ACCOUNT_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_ACCOUNT_ID }}
-          EXPO_PUBLIC_SUPPORT_RECHARGE_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_RECHARGE_ID }}
-          EXPO_PUBLIC_SUPPORT_ISSUE_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_ISSUE_ID }}
-          EXPO_PUBLIC_SUPPORT_DISPUTE_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_DISPUTE_ID }}
-          EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID: ${{ vars.EXPO_PUBLIC_SUPPORT_ACCOUNT_AGENT_ID }}
           # DSN 被编译进包用于运行时上报；token/org/project 仅供构建期上传 source map。
           # release/dist 已在前置步骤校验并写入 GITHUB_ENV，二者必须与运行时事件一致。
           EXPO_PUBLIC_SENTRY_DSN: ${{ vars.EXPO_PUBLIC_SENTRY_DSN }}

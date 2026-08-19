@@ -2,6 +2,7 @@ import { io, type Socket } from 'socket.io-client';
 import { CHAT_WS_URL } from '@/constants/config';
 import { storage } from '@/storage';
 import { reportError } from '@/observability/sentry';
+import { fetchPrivacySettings } from '@/services/api/privacy';
 import {
   backfillConversationSince,
   fetchChatMutationsSince,
@@ -18,6 +19,7 @@ import {
   pendingReadsList,
   readLocalConversations,
   readRecentLocalMessages,
+  upsertLocalConversation,
 } from './local-db';
 import { initChatAppBadgeSync } from './app-badge';
 import { bindChatEvents, cancelConversationBackfill } from './dispatcher';
@@ -25,11 +27,16 @@ import {
   CHAT_EVENTS,
   CHAT_WS_PATH,
   SERVER_COMPENSATED_TYPES,
+  type ChatConversationDto,
   type ChatReadAck,
   type ChatSendAck,
   type ChatSendAckOk,
 } from './protocol';
-import { useChatStore } from './store';
+import {
+  sanitizeExpiredConversationPreviews,
+  useChatStore,
+  viewerSelfDestructDaysStorageKey,
+} from './store';
 
 /**
  * 自研聊天 socket 管理器（squady SocketManager 的 TS 移植，按本仓
@@ -47,6 +54,65 @@ const TYPING_THROTTLE_MS = 2_000;
 /** 一次追平最多翻几页离线变更;翻不完留给下一次连接(游标已持久化)。 */
 const MUTATION_CATCH_UP_PAGES_MAX = 20;
 const CONNECT_ERROR_REPORT_THRESHOLD = 3;
+
+function readViewerSelfDestructDays(userId: string): number {
+  try {
+    const value = Number(
+      storage.getString(viewerSelfDestructDaysStorageKey(userId)) ?? '0',
+    );
+    return Number.isFinite(value) ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+let viewerPolicyRefreshGeneration = 0;
+
+async function refreshViewerSelfDestructDays(userId: string): Promise<void> {
+  const request = ++viewerPolicyRefreshGeneration;
+  const revision = useChatStore.getState().viewerSelfDestructPolicyRevision;
+  try {
+    const settings = await fetchPrivacySettings();
+    const store = useChatStore.getState();
+    if (
+      request !== viewerPolicyRefreshGeneration ||
+      store.currentUserId !== userId ||
+      store.viewerSelfDestructPolicyRevision !== revision
+    ) {
+      return;
+    }
+    store.setViewerSelfDestructDays(settings.messageSelfDestructDays, {
+      remoteRefresh: true,
+    });
+  } catch {
+    // 离线时沿用按账号缓存的最后已知策略，不能让策略刷新阻断聊天连接。
+  }
+}
+
+async function hydrateWithResolvedViewerPolicy(
+  userId: string,
+  generation: number,
+): Promise<void> {
+  // 先摘掉上一账号的句柄并开始开新库；隐私策略只阻塞快照发布，不能让旧库在
+  // 慢 REST 请求期间继续服务新账号的 local-first 读写。
+  const localDbReady = initChatLocalDb(userId);
+  await refreshViewerSelfDestructDays(userId);
+  if (
+    generation !== sessionGen ||
+    useChatStore.getState().currentUserId !== userId
+  ) {
+    return;
+  }
+  const opened = await localDbReady;
+  if (
+    !opened ||
+    generation !== sessionGen ||
+    useChatStore.getState().currentUserId !== userId
+  ) {
+    return;
+  }
+  await hydrateFromLocalDb(userId, generation, true);
+}
 
 let socket: Socket | null = null;
 let sessionGen = 0;
@@ -116,26 +182,32 @@ export function connectChat(token: string, userId: string): void {
   // 用它连上之后 /auth/me 才把权威用户写回来。只看 connected 的话那条错身份
   // 的连接会一直留着 —— 收发方向按错的 currentUserId 判,自己发的消息被算成
   // 收到的,未读也跟着错,直到真的断线重连或重启才恢复。
-  if (socket?.connected && store.currentUserId === userId) return;
+  if (socket?.connected && store.currentUserId === userId) {
+    void store.purgeExpiredBurnMessages();
+    return;
+  }
   // 换账号才清 store。放在这里而不是调用方,是为了让「挂起 → 重连」这条
   // 路径天然安全:同一账号轮换 token 时列表/消息/pending 已读原样保留,
   // 而切到另一个账号时上一个账号的数据一定先被清掉(跨账号不串数据)。
   if (store.currentUserId !== null && store.currentUserId !== userId) {
     store.reset();
+    pendingReads.clear();
+    flushingReads = false;
+    readFlushRequested = false;
     hadConnectedForUser = null;
     lastMutationSyncAt = null;
   }
   teardownSocket();
   sessionGen += 1;
-  initChatAppBadgeSync();
-  // G-01 冷启动水合:开(或切到)本账号的本地库,把快照灌回内存 —— 不等网络。
-  void hydrateFromLocalDb(userId);
-
   const gen = sessionGen;
   consecutiveConnectErrors = 0;
   reportedCurrentConnectOutage = false;
   store.setConnecting(true);
   store.setCurrentUserId(userId);
+  store.setViewerSelfDestructDays(readViewerSelfDestructDays(userId));
+  initChatAppBadgeSync();
+  // 在线时先解析服务器策略，失败才使用上面的账户缓存，避免冷启动展示已到期内容。
+  void hydrateWithResolvedViewerPolicy(userId, gen);
 
   // token 走握手 auth 帧，绝不进 URL query（与 realtime 网关同一条安全线）。
   const next = io(CHAT_WS_URL, {
@@ -159,6 +231,7 @@ export function connectChat(token: string, userId: string): void {
     state.setConnecting(false);
     state.setConnected(true);
     state.setError(null);
+    if (isReconnect) void refreshViewerSelfDestructDays(userId);
     void flushPendingReads();
     if (isReconnect) {
       resyncAfterReconnect(userId);
@@ -251,29 +324,94 @@ function teardownSocket(): void {
  * 不覆盖已到手的服务端数据);outbox 里的失败消息还原成失败态乐观气泡;
  * 未上报的已读水位种回 pending 队列。全程尽力而为。
  */
-async function hydrateFromLocalDb(userId: string): Promise<void> {
+function effectiveSelfDestructSeconds(
+  conversation: ChatConversationDto | undefined,
+  viewerSelfDestructDays: number,
+): number | null {
+  const viewerSeconds =
+    viewerSelfDestructDays > 0
+      ? viewerSelfDestructDays * 24 * 60 * 60
+      : null;
+  const conversationSeconds =
+    conversation?.burnDurationSec && conversation.burnDurationSec > 0
+      ? conversation.burnDurationSec
+      : null;
+  return conversationSeconds && viewerSeconds
+    ? Math.min(conversationSeconds, viewerSeconds)
+    : (conversationSeconds ?? viewerSeconds);
+}
+
+async function hydrateFromLocalDb(
+  userId: string,
+  generation: number,
+  databaseReady = false,
+): Promise<void> {
+  const isCurrentSession = (): boolean =>
+    generation === sessionGen &&
+    useChatStore.getState().currentUserId === userId;
   try {
-    const opened = await initChatLocalDb(userId);
-    if (!opened) return;
-    const store = useChatStore.getState();
-    if (store.currentUserId !== userId) return;
-    const conversations = await readLocalConversations();
+    const opened = databaseReady || (await initChatLocalDb(userId));
+    if (!opened || !isCurrentSession()) return;
+    const persistedConversations = await readLocalConversations();
+    if (!isCurrentSession()) return;
+    const conversations = sanitizeExpiredConversationPreviews(
+      persistedConversations,
+      useChatStore.getState().viewerSelfDestructDays,
+    );
+    for (let index = 0; index < conversations.length; index += 1) {
+      if (conversations[index] !== persistedConversations[index]) {
+        void upsertLocalConversation(conversations[index]);
+      }
+    }
     // 会话列表先出。逐会话串行读时间线是几百次原生查询,放在 hydrate 之前的话
     // 离线用户得盯着空列表等它跑完 —— 而列表本身早就在手上了。
+    if (!isCurrentSession()) return;
     useChatStore.getState().hydrateLocalSnapshot(conversations, {});
     const timelines: Record<string, import('./protocol').ChatMessageDto[]> = {};
     for (const conversation of conversations) {
-      if (useChatStore.getState().currentUserId !== userId) return;
+      if (!isCurrentSession()) return;
       timelines[conversation.id] = await readRecentLocalMessages(
         conversation.id,
         50,
       );
+      if (!isCurrentSession()) return;
     }
-    if (useChatStore.getState().currentUserId !== userId) return;
+    if (!isCurrentSession()) return;
     useChatStore.getState().hydrateLocalSnapshot(conversations, timelines);
+    // 等待 SQLite/FTS/outbox 的到期删除真正落盘，不能让后面的 outbox 水合把
+    // 已过期的失败发送重新插回时间线。
+    await useChatStore.getState().purgeExpiredBurnMessages();
+    if (!isCurrentSession()) return;
     // outbox:上次没发出去的消息还原成「发送失败」气泡,可长按重发。
     const pending = await outboxList();
+    if (!isCurrentSession()) return;
+    // purge 或 outbox 读取期间服务端快照/设置页都可能收紧策略；兜底必须使用
+    // 异步读取完成后的当前策略，不能回退到刚从 SQLite 读出的旧会话策略。
+    const policyState = useChatStore.getState();
+    const conversationsById = new Map(
+      policyState.conversations.map((conversation) => [
+        conversation.id,
+        conversation,
+      ]),
+    );
+    const viewerSelfDestructDays = policyState.viewerSelfDestructDays;
+    const outboxCutoffNow = Date.now();
     for (const entry of pending) {
+      const selfDestructSeconds = effectiveSelfDestructSeconds(
+        conversationsById.get(entry.conversationId),
+        viewerSelfDestructDays,
+      );
+      const createdAt = Date.parse(entry.createdAt);
+      // SQLite 删除失败会被本地缓存层降级吞掉；水合入口仍须执行同一策略，不能把
+      // 尚未删掉的私密正文重新插回时间线。删除会在后续周期 sweep 中继续重试。
+      if (
+        selfDestructSeconds &&
+        Number.isFinite(createdAt) &&
+        createdAt < outboxCutoffNow - selfDestructSeconds * 1000
+      ) {
+        void outboxDelete(entry.d);
+        continue;
+      }
       // 先认账:本地时间线里已经有同 d 的**已确认**消息(height>0),说明这条
       // 其实发出去了,只是当初出队那一下没落盘。不拦住的话 mergeMessages 按 d
       // 去重会把那条已确认的删掉、换上下面这个 height=0 的占位,再被
@@ -312,7 +450,9 @@ async function hydrateFromLocalDb(userId: string): Promise<void> {
     }
     // 已读水位:App 被杀前没 ack 的上报补回队列,连上即 flush。
     let restored = false;
-    for (const { conversationId, height } of await pendingReadsList()) {
+    const persistedReads = await pendingReadsList();
+    if (!isCurrentSession()) return;
+    for (const { conversationId, height } of persistedReads) {
       const prior = pendingReads.get(conversationId) ?? 0;
       if (height > prior) {
         pendingReads.set(conversationId, height);
@@ -481,6 +621,7 @@ async function flushPendingReads(): Promise<void> {
       if (latest === undefined || latest !== height) continue;
       try {
         await emitReadWithAck(current, conversationId, height);
+        if (gen !== sessionGen) return;
         const afterAck = pendingReads.get(conversationId);
         if (afterAck !== undefined && afterAck <= height) {
           pendingReads.delete(conversationId);

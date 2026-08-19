@@ -1,11 +1,8 @@
-import { useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  type ImageSourcePropType,
-} from 'react-native';
+import { useId, useMemo } from 'react';
+import { View, StyleSheet, type ImageSourcePropType } from 'react-native';
 import { Image } from 'expo-image';
+import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import { useTheme, Radius } from '@/theme';
 import {
   AVATAR_FRAME_SCALE,
@@ -16,7 +13,6 @@ interface AvatarProps {
   size?: number;
   name?: string;
   uri?: string;
-  bgColor?: string;
   shape?: 'circle' | 'square';
   /**
    * 头像框(如会员框):透明 PNG,内孔占画布 1/AVATAR_FRAME_SCALE。仅圆形头像生效
@@ -45,18 +41,54 @@ const s = StyleSheet.create({
   },
 });
 
+// 默认头像:与群头像(group-chat-avatar)同一套品牌紫渐变 + 白色人形。
+// 旧版是浅灰底 + 近白人形,在暗色模式下就是一块发灰的方块,既不明显也和周围的
+// 紫色群头像割裂 —— 这里统一到品牌色,深浅两个主题下都清晰。
+const DEFAULT_AVATAR_GLYPH = '#FFFFFF';
+const DEFAULT_AVATAR_GLYPH_SOFT = '#E5E1FF';
+
+function DefaultAvatar({ size, gradientId }: { size: number; gradientId: string }) {
+  return (
+    <Svg
+      width={size}
+      height={size}
+      viewBox="0 0 64 64"
+      pointerEvents="none"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      <Defs>
+        <LinearGradient id={gradientId} x1="6" y1="58" x2="58" y2="6">
+          <Stop offset="0" stopColor="#5548D9" />
+          <Stop offset="0.52" stopColor="#7467F5" />
+          <Stop offset="1" stopColor="#A58BFF" />
+        </LinearGradient>
+      </Defs>
+      <Rect width="64" height="64" fill={`url(#${gradientId})`} />
+      <Circle cx="10" cy="9" r="21" fill={DEFAULT_AVATAR_GLYPH} opacity="0.09" />
+      <Circle cx="57" cy="57" r="24" fill="#3427A8" opacity="0.16" />
+      <Circle cx="32" cy="24" r="10.5" fill={DEFAULT_AVATAR_GLYPH} opacity="0.98" />
+      <Path
+        d="M13 58c0-11.6 8.5-20.5 19-20.5S51 46.4 51 58H13Z"
+        fill={DEFAULT_AVATAR_GLYPH_SOFT}
+        opacity="0.95"
+      />
+    </Svg>
+  );
+}
+
 export const Avatar: React.FC<AvatarProps> = ({
   size = 40,
   name,
   uri,
-  bgColor,
-  shape = 'circle',
+  shape = 'square',
   frameSource,
   compactFrame = false,
 }) => {
   const { colors } = useTheme();
-  const resolvedBgColor = bgColor ?? colors.primary;
-  const hasFrame = Boolean(frameSource) && shape === 'circle';
+  const defaultAvatarGradientId = `default-avatar-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
+  const hasFrame =
+    FEATURE_FLAGS.avatarFrames && Boolean(frameSource) && shape === 'circle';
   // frameSize = 整体占位(框铺满它);photoSize = 里面的照片(填内孔)。紧凑模式框=size×1.2、照片=size×0.75;
   // 默认外扩框=size×1.6、照片=size。非会员无框时 photoSize=size。
   const frameSize =
@@ -70,10 +102,6 @@ export const Avatar: React.FC<AvatarProps> = ({
       image: {
         backgroundColor: colors.surface,
       },
-      initial: {
-        color: colors.white,
-        fontWeight: '600' as const,
-      },
     }),
     [colors],
   );
@@ -84,23 +112,34 @@ export const Avatar: React.FC<AvatarProps> = ({
       <Image
         source={{ uri }}
         recyclingKey={uri}
-        style={[d.image, { width: photoSize, height: photoSize, borderRadius }]}
+        style={[
+          d.image,
+          {
+            width: photoSize,
+            height: photoSize,
+            borderRadius,
+          },
+        ]}
       />
     ) : (
       <View
+        accessibilityLabel={name || undefined}
         style={[
           s.fallback,
-          { width: photoSize, height: photoSize, borderRadius, backgroundColor: resolvedBgColor },
+          {
+            width: photoSize,
+            height: photoSize,
+            borderRadius,
+            borderCurve: 'continuous',
+            overflow: 'hidden',
+          },
         ]}
       >
-        {/* `name && name[0]` 在空字符串时为 '',用 `||` 兜底成 '?',避免渲染空 initial。 */}
-        <Text style={[d.initial, { fontSize: photoSize * 0.4 }]}>
-          {(name && name[0]) || '?'}
-        </Text>
+        <DefaultAvatar size={photoSize} gradientId={defaultAvatarGradientId} />
       </View>
     );
 
-  if (!frameSource || shape !== 'circle') {
+  if (!hasFrame) {
     return core;
   }
 

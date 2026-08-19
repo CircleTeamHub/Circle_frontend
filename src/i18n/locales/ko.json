@@ -90,7 +90,7 @@
       "mergeAvatar": "연속 메시지 프로필 사진 합치기",
       "mergeAvatarHint": "같은 사람이 연속으로 보내면 첫 메시지에만 프로필 사진 표시",
       "showGroupTags": "그룹 태그 표시",
-      "showGroupTagsHint": "[그룹][상담석][전용석]",
+      "showGroupTagsHint": "[그룹][임시 그룹][전용석]",
       "showOriginalGroupName": "그룹 원래 이름 표시",
       "showOriginalGroupNameHint": "켜면 표시: 메모 이름(원래 그룹 이름)",
       "pinnedFoldCount": "고정 채팅 표시 개수",
@@ -246,15 +246,22 @@
       "voiceSendFailed": "음성 메시지를 보내지 못했습니다. 다시 시도해 주세요",
       "locationSendFailed": "위치를 보내지 못했습니다. 다시 시도해 주세요",
       "imageSendFailed": "이미지를 보내지 못했습니다. 다시 시도해 주세요",
-      "noteSendFailed": "노트를 보내지 못했습니다. 다시 시도해 주세요",
+      "videoSendFailed": "동영상을 보내지 못했습니다. 다시 시도해 주세요",
+      "videoRejectedTitle": "동영상을 보낼 수 없습니다",
+      "videoTooLarge": "100MB 이하의 동영상을 선택하세요",
+      "videoTooLong": "10분 이하의 동영상을 선택하세요",
+      "videoUnsupported": "MP4, MOV, M4V 동영상만 지원됩니다",
+      "videoUnavailable": "동영상을 사용할 수 없습니다",
+      "playVideo": "동영상 재생",
+      "noteBatchPartialFailed": "{{count}}개 항목을 보내지 못했습니다",
       "cardSendFailed": "프로필 카드를 보내지 못했습니다. 다시 시도해 주세요",
       "favoriteSendFailed": "즐겨찾기를 보내지 못했습니다. 다시 시도해 주세요",
-      "transferCardSendFailed": "이체가 완료되었습니다. 카드는 곧 도착합니다",
       "favoriteLegacyVoiceUnsupported": "이 이전 버전 음성 즐겨찾기는 다시 보낼 수 없습니다"
     },
     "messageActions": {
       "title": "메시지 작업",
       "collect": "저장",
+      "addToNotes": "추가",
       "forward": "전달",
       "collected": "저장됨",
       "collectedHint": "내 보관함에서 확인하세요",
@@ -472,15 +479,55 @@
       "failedBody": "이미지 배경 설정에 실패했습니다. 다시 시도해 주세요."
     },
     "attachments": {
-      "photos": "사진",
+      "photos": "사진/동영상",
+      "mediaHub": "미디어",
+      "mediaPhoto": "사진",
+      "mediaVideo": "동영상",
       "camera": "카메라",
-      "voiceCall": "음성 통화",
+      "voiceCall": "음성/영상 통화",
       "location": "위치",
       "notes": "노트",
       "friendCard": "연락처 카드",
       "favorites": "즐겨찾기",
       "quickReply": "빠른 답장",
       "transfer": "송금"
+    },
+    "photoEditor": {
+      "title": "사진 편집",
+      "preview": "전송 전 사진 미리보기",
+      "cropSquare": "1:1 자르기",
+      "cropFourThree": "4:3 자르기",
+      "freeCrop": "자유 자르기",
+      "freeCropTitle": "자유 자르기",
+      "cropFrame": "자유 자르기 영역",
+      "cropHint": "모서리를 드래그해 크기를 조절하고 안쪽을 드래그해 이동하세요",
+      "cropDone": "완료",
+      "mosaic": "모자이크",
+      "mosaicTitle": "모자이크",
+      "mosaicHint": "가리고 싶은 영역을 손가락으로 문질러 주세요",
+      "draw": "그리기",
+      "drawTitle": "그리기",
+      "drawColor": "펜 색상",
+      "markupCanvas": "사진 편집 캔버스",
+      "undo": "실행 취소",
+      "rotate": "회전",
+      "flip": "좌우 반전",
+      "reset": "초기화",
+      "editFailedTitle": "편집 실패",
+      "editFailedMessage": "사진을 처리하지 못했습니다. 다시 시도해 주세요."
+    },
+    "location": {
+      "showPreview": "탭하여 지도 보기"
+    },
+    "locationPicker": {
+      "title": "위치 선택",
+      "searchPlaceholder": "장소 검색",
+      "send": "위치 보내기",
+      "selectedLabel": "선택한 위치",
+      "invalidTitle": "잘못된 위치",
+      "invalidMessage": "위치를 다시 선택해 주세요",
+      "currentLocation": "내 위치",
+      "loadFailed": "현재 위치를 가져올 수 없습니다. 다시 시도해 주세요."
     },
     "call": {
       "title": "음성 통화",
@@ -595,7 +642,9 @@
     "lowCreditScore": "신용 점수가 {{minScore}} 미만이어서 지금은 메시지를 보낼 수 없습니다",
     "burnAfterReading": "사라지는 메시지",
     "clearHistoryConfirm": "내 쪽 기록만 지워집니다. 지울까요?",
-    "clearHistoryDone": "지웠습니다"
+    "clearHistoryConfirmDirect": "채팅 기록을 삭제할까요? 상대방의 기록도 함께 삭제되며 되돌릴 수 없습니다.",
+    "clearHistoryDone": "지웠습니다",
+    "clearHistoryDoneDirect": "양쪽 채팅 기록을 삭제했습니다"
   },
   "messages": {
     "title": "메시지",
@@ -618,7 +667,12 @@
     "scanCopyFailedTitle": "복사할 수 없음",
     "scanCopyFailedMessage": "QR 코드를 스캔했지만 내용 복사에 실패했습니다.",
     "scanAgain": "다시 스캔",
-    "seatManagement": "좌석 관리",
+    "scanFromAlbum": "앨범에서 선택",
+    "scanAlbumNoCodeTitle": "QR 코드를 찾을 수 없습니다",
+    "scanAlbumNoCodeMessage": "이 이미지에는 인식할 수 있는 QR 코드가 없습니다. 다른 이미지를 사용해 보세요.",
+    "scanAlbumFailedTitle": "인식 실패",
+    "scanAlbumFailedMessage": "잠시 후 다시 시도해 주세요.",
+    "seatManagement": "임시 그룹 채팅",
     "groupManagement": "그룹 관리",
     "loadFailed": "대화를 불러오지 못했습니다: {{error}}",
     "noConversations": "대화가 없습니다",
@@ -627,9 +681,15 @@
     "swipeMarkRead": "읽음 표시",
     "swipeMarkUnread": "안 읽음 표시",
     "swipeHide": "채팅 숨기기",
+    "swipePin": "고정",
+    "swipeUnpin": "고정 해제",
+    "swipeMute": "알림 끄기",
+    "swipeUnmute": "알림 켜기",
+    "swipeActionFailed": "작업에 실패했습니다",
     "swipeDelete": "삭제",
     "deleteChat": "채팅 삭제",
     "deleteChatConfirm": "'{{name}}'의 채팅과 로컬 메시지를 삭제할까요?",
+    "deleteChatConfirmDirect": "'{{name}}'님과의 채팅 기록을 삭제할까요? 상대방의 기록도 함께 삭제되며 되돌릴 수 없습니다.",
     "newGroupTitle": "그룹 채팅 시작",
     "newGroupNamePlaceholder": "그룹 이름 (선택)",
     "newGroupSelectMembers": "연락처 선택",
@@ -652,15 +712,32 @@
     "inviteGroupMembersNoInvitableFriends": "초대할 수 있는 친구가 없습니다",
     "inviteGroupMembersLoadFailed": "친구 목록을 불러오지 못했습니다. 다시 시도해 주세요.",
     "groups": {
-      "title": "사용자 지정 그룹",
+      "title": "그룹 관리",
       "createSection": "그룹 만들기",
+      "orderSection": "그룹 순서",
+      "orderHint": "오른쪽을 길게 눌러 드래그하면 메시지 탭 순서를 바꿀 수 있습니다",
+      "builtInGroup": "고정",
+      "customGroup": "사용자 지정",
+      "reorderA11y": "{{name}} 위치 조정",
+      "reorderFailedTitle": "순서 변경 실패",
+      "reorderFailedMessage": "그룹 순서를 저장하지 못했습니다. 다시 시도해 주세요.",
+      "moveUp": "위로",
+      "moveDown": "아래로",
       "namePlaceholder": "예: 가족 / 직장",
       "nameRequired": "그룹 이름을 입력하세요",
       "myGroups": "내 그룹",
       "empty": "아직 사용자 지정 그룹이 없습니다. 하나 만들어 보세요.",
       "conversationCount": "대화 {{count}}개",
-      "memberHint": "'{{name}}'의 대화 (그룹 이름을 길게 눌러 이름 변경)",
+      "memberHint": "'{{name}}'에 추가할 그룹 또는 개인 채팅을 선택하세요(복수 선택 가능)",
       "noConversations": "추가할 수 있는 대화가 없습니다",
+      "filterAll": "전체",
+      "filterSelected": "선택됨",
+      "searchPlaceholder": "그룹 또는 1:1 채팅 검색",
+      "selectedCount": "{{selected}} / {{total}} 선택",
+      "resultCount": "결과 {{count}}개",
+      "selectResults": "모든 결과 선택",
+      "deselectResults": "현재 결과 선택 해제",
+      "noMatchingConversations": "일치하는 대화가 없습니다",
       "groupChat": "그룹 채팅",
       "directChat": "1:1 채팅",
       "renameTitle": "그룹 이름 변경",
@@ -686,7 +763,13 @@
       "unlist": "내리기",
       "relist": "올리기",
       "more": "더보기",
-      "restore": "복원"
+      "restore": "복원",
+      "multiSelect": "다중 선택",
+      "remark": "메모",
+      "editNote": "노트 편집",
+      "editGroups": "그룹 편집",
+      "delete": "삭제",
+      "download": "다운로드"
     },
     "alerts": {
       "deleteFailedTitle": "삭제 실패",
@@ -707,9 +790,18 @@
       "relistFailedTitle": "올리기 실패",
       "unlistFailedTitle": "내리기 실패",
       "unlistTitle": "노트 내리기",
-      "unlistConfirm": "내린 노트는 내림 목록에서 볼 수 있으며 한 달 후 자동 삭제됩니다.",
+      "unlistConfirm": "내린 노트는 내림 목록에서 볼 수 있으며 언제든지 다시 올릴 수 있습니다.",
       "refreshFailedTitle": "새로고침 실패",
-      "restoreFailedTitle": "복원 실패"
+      "restoreFailedTitle": "복원 실패",
+      "remarkFailedTitle": "메모 저장 실패",
+      "deleteTitle": "노트 삭제",
+      "deleteConfirm": "삭제한 노트는 휴지통에서 복원할 수 있으며 30일 후 자동으로 지워집니다.",
+      "batchFailedTitle": "일부 작업 실패",
+      "batchPartialFailed": "노트 {{count}}개의 작업이 실패했습니다. 선택이 유지되니 다시 시도해 주세요.",
+      "batchUnlistTitle": "일괄 내리기",
+      "batchUnlistConfirm": "선택한 노트 {{count}}개를 내릴까요? 언제든지 다시 올릴 수 있습니다.",
+      "batchDeleteTitle": "일괄 삭제",
+      "batchDeleteConfirm": "선택한 노트 {{count}}개를 삭제할까요? 휴지통에서 복원할 수 있습니다."
     },
     "detail": {
       "loadFailed": "노트를 불러오지 못했습니다. 다시 시도해 주세요",
@@ -721,10 +813,8 @@
       "downloadVideos": "동영상 다운로드",
       "downloadLongImage": "롱 이미지 생성",
       "downloadPdf": "PDF 다운로드",
-      "sourceGroupLabel": "그룹 채팅에서",
-      "sourcePrivateLabel": "개인 채팅에서",
-      "sourceSharedBy": "{{name}}님이 공유",
-      "sourceLocate": "원본 메시지 보기"
+      "chatWithSender": "{{name}}님과 대화",
+      "openGroupSource": "그룹 \"{{name}}\"에서 원본 메시지 보기"
     },
     "edit": {
       "addImage": "이미지 추가",
@@ -787,8 +877,14 @@
     },
     "manageGroups": {
       "cancelEdit": "편집 취소",
-      "copy": "\"전체\"와 \"미분류\"는 고정 그룹이라 수정할 수 없습니다.",
+      "copy": "\"전체\"와 \"미분류\"도 드래그로 순서를 바꿀 수 있습니다(이름 변경·삭제는 불가).",
+      "fixedAll": "전체",
+      "fixedUngrouped": "미분류",
       "createNew": "그룹 추가",
+      "renameTitle": "이름 편집",
+      "renameHint": "\"{{name}}\" 이름 변경 중",
+      "createHint": "그룹으로 노트를 정리할 수 있습니다.",
+      "nameLabel": "그룹 이름",
       "limitHint": "{{count}}/{{max}}개 그룹 생성됨",
       "namePlaceholder": "새 그룹을 추가할 그룹 이름 입력",
       "saveEdit": "변경 사항 저장",
@@ -824,7 +920,7 @@
     "title": "내 노트",
     "unlisted": "내림",
     "unlistedTitle": "내린 노트",
-    "unlistedAutoDeleteHint": "내린 노트는 한 달 후 자동 삭제됩니다.",
+    "unlistedAutoDeleteHint": "내린 노트는 자동 삭제되지 않으며 언제든지 다시 올릴 수 있습니다.",
     "format": {
       "fullDate": "{{year}}년 {{month}}월 {{day}}일 · {{weekday}}",
       "groupOverflow": "{{first}}, {{second}} 외 {{extra}}",
@@ -862,13 +958,38 @@
       "selectedLabel": "선택한 위치"
     },
     "list": {
-      "fromSource": "{{name}}에서"
+      "fromSource": "{{name}}에서",
+      "remark": "메모: {{text}}",
+      "openSenderChat": "{{name}}님과 채팅",
+      "openGroupChat": "그룹 채팅 {{name}} 열기"
+    },
+    "groupPicker": {
+      "title": "그룹 편집",
+      "batchHint": "체크하면 선택한 노트 {{count}}개를 그룹에 추가하고, 해제하면 뺍니다. 건드리지 않은 그룹은 그대로 유지됩니다.",
+      "empty": "그룹이 없습니다. 먼저 '그룹 관리'에서 만들어 주세요.",
+      "saving": "저장 중...",
+      "save": "저장"
+    },
+    "remarkSheet": {
+      "title": "메모",
+      "batchTitle": "일괄 메모({{count}}개)",
+      "placeholder": "메모를 입력하세요. 비워서 저장하면 삭제됩니다.",
+      "saving": "저장 중...",
+      "save": "저장"
+    },
+    "selection": {
+      "selectedCount": "{{count}}개 선택됨",
+      "selectAll": "전체 선택",
+      "clearAll": "선택 해제",
+      "next": "다음"
     },
     "loadFailed": "노트를 불러오지 못했어요. 네트워크 확인 후 다시 시도해 주세요",
     "shareToChat": {
       "title": "친구나 그룹에 공유",
       "confirmTitle": "노트 보내기",
       "confirmMessage": "“{{title}}”을(를) {{name}}에게 보낼까요？",
+      "confirmBatchMessage": "노트 {{count}}개를 {{name}}에게 보낼까요?",
+      "partialFailed": "노트 {{count}}개를 보내지 못했습니다. 다시 시도해 주세요.",
       "sentTitle": "보냈어요",
       "sentMessage": "노트를 채팅으로 보냈어요.",
       "failedTitle": "전송 실패",
@@ -877,16 +998,18 @@
       "loadFailed": "채팅을 불러오지 못했어요. 다시 시도해 주세요",
       "empty": "보낼 수 있는 채팅이 없어요",
       "groupHint": "그룹",
-      "friendHint": "친구"
+      "friendHint": "친구",
+      "searchPlaceholder": "친구 또는 그룹 검색",
+      "noMatch": "일치하는 친구나 그룹이 없습니다"
     },
     "recycleBin": "휴지통",
-    "recycleBinHint": "삭제한 노트를 여기에서 복원할 수 있습니다.",
+    "recycleBinHint": "삭제한 노트를 여기에서 복원할 수 있으며 30일 후 자동으로 지워집니다.",
     "recycleBinTitle": "휴지통"
   },
   "tempChats": {
-    "title": "좌석 관리",
+    "title": "임시 그룹 채팅",
     "create": "임시 채팅 만들기",
-    "refresh": "좌석 목록 새로고침",
+    "refresh": "임시 그룹 채팅 목록 새로고침",
     "loading": "임시 채팅 불러오는 중",
     "createFailed": "임시 채팅을 만들지 못했습니다",
     "loadFailed": "임시 채팅을 불러오지 못했습니다",
@@ -910,14 +1033,11 @@
       "7d": "7일"
     },
     "more": "더보기",
-    "actionShare": "링크 공유",
     "actionEnd": "채팅 종료",
-    "shareMessage": "{{title}} — 링크를 눌러 임시 채팅에 참여하세요: {{url}}",
-    "shareFailed": "공유에 실패했습니다. 다시 시도해 주세요",
     "linkCopied": "링크 복사됨",
-    "scanHint": "QR 코드를 스캔하여 참여",
+    "copyFailed": "링크를 복사하지 못했습니다. 다시 시도해 주세요",
+    "inviteLink": "초대 링크",
     "copyLink": "링크 복사",
-    "shareSystem": "공유",
     "endConfirmTitle": "이 임시 채팅을 종료할까요?",
     "endConfirmMessage": "종료하면 게스트는 내보내지며 다시 참여할 수 없습니다.",
     "endConfirm": "종료",
@@ -1003,6 +1123,8 @@
       "alreadyMembers": "선택한 친구는 이미 이 서클에 있습니다.",
       "noneSent": "초대된 친구가 없습니다. 조건을 확인하고 다시 시도하세요.",
       "sentAll": "친구 {{count}}명을 초대했습니다. 인증을 기다리는 중입니다.",
+      "joinedAll": "{{count}}명을 서클에 추가했습니다",
+      "joinedAndPending": "{{joined}}명 참여, {{pending}}명 승인 대기",
       "sentPartial": "{{succeeded}}명 초대, {{failed}}명 실패(이미 멤버이거나 조건 미충족일 수 있음).",
       "fromContacts": "연락처에서 초대",
       "noFriends": "초대할 친구 없음",
@@ -1051,6 +1173,10 @@
       "restrictionsSection": "제한",
       "fancyLabel": "특별 번호 필요",
       "memberPostLabel": "멤버 게시 가능",
+      "verificationGateLabel": "가입 검증",
+      "verificationGateOffHint": "꺼짐: 허용된 초대는 검증 없이 바로 참여합니다",
+      "verificationGateOnHint": "새 멤버는 서클 친구 {{count}}명의 인증을 받아야 가입할 수 있습니다",
+      "verifierCountLabel": "인증 인원",
       "vipAtLeast": "VIP {{level}} 이상",
       "nameRequired": "서클 이름을 입력하세요 (최소 2자)",
       "descRequired": "소개를 입력하세요 (최소 10자)",
@@ -1180,6 +1306,7 @@
     "progress": "승인 {{approved}}/{{total}}",
     "addSlot": "추가",
     "emptySlot": "빈자리",
+    "rejectedCount": "{{count}}명이 거절해 자리가 다시 열렸습니다",
     "inviteFriends": "친구에게 인증 요청",
     "verified": "인증 완료, 서클에 가입했습니다",
     "selectVerifier": "인증자 선택",
@@ -1187,7 +1314,6 @@
     "invitedMessage": "{{name}}에게 인증을 요청했습니다",
     "addFailed": "추가 실패",
     "select": "선택",
-    "noFriends": "친구 없음",
     "verificationRequest": "서클 인증 요청",
     "requestNotExist": "인증 요청을 찾을 수 없습니다",
     "wantsToJoin": "【{{circle}}】에 가입하고 싶어합니다",
@@ -1216,7 +1342,8 @@
     "settledApproved": "승인됨 — 서클에 가입했습니다",
     "youApproved": "이 사람을 인증했습니다",
     "youRejected": "이 신청을 거절했습니다",
-    "loadFriendsFailed": "친구 목록을 불러오지 못했습니다, 다시 시도하세요"
+    "noEligibleVerifiers": "선택할 수 있는 사람이 없습니다: 인증인은 내 친구이면서 이 서클의 활성 멤버여야 합니다",
+    "loadVerifiersFailed": "후보를 불러오지 못했습니다, 다시 시도하세요"
   },
   "discover": {
     "title": "모먼트",
@@ -1272,6 +1399,7 @@
       "selectCircles": "서클 선택",
       "selectRegions": "지역 선택",
       "clear": "지우기",
+      "activeInMyCircles": "필터가 적용 중입니다 — 일부 서클이 숨겨졌습니다",
       "save": "저장",
       "saved": "필터를 저장했어요",
       "savedCirclesCount": "{{count}}개 서클",
@@ -1403,6 +1531,8 @@
     "signUp": "신청",
     "signedUp": "신청함",
     "signupBlockedTitle": "지금은 신청할 수 없어요",
+    "profileBlockedGeneric": "아직 상대방 프로필을 볼 수 있는 조건을 충족하지 않았습니다",
+    "signupBlockedGeneric": "아직 이 게시물의 참가 조건을 충족하지 않았습니다",
     "signupRestrictionMessage": "신청 조건: {{requirements}}",
     "circlePicker": {
       "selectedCount": "{{count}}개 서클 선택됨"
@@ -1427,14 +1557,19 @@
   },
   "notifications": {
     "title": "알림",
+    "momentsTitle": "모먼트 알림",
+    "circleTitle": "서클 알림",
     "tabInteractive": "상호작용",
-    "tabCircle": "신청 관리",
+    "tabCircleNotifications": "서클 소식",
+    "tabSignups": "신청 관리",
     "filterAll": "전체",
     "filterUnread": "읽지 않음",
     "markAllRead": "모두 읽음",
     "system": "시스템",
     "emptyTitle": "알림 없음",
     "emptySubtitle": "새로운 상호작용과 신청이 여기에 표시돼요",
+    "emptySubtitleMoments": "새로운 좋아요와 댓글이 여기에 표시돼요",
+    "emptySubtitleCircle": "새로운 서클 소식과 신청이 여기에 표시돼요",
     "loadFailedTitle": "불러올 수 없어요",
     "loadFailed": "일부 알림을 불러오지 못했어요. 당겨서 다시 시도하세요",
     "summary": {
@@ -1493,7 +1628,7 @@
     "title": "연락처",
     "searchPlaceholder": "연락처 검색...",
     "newFriends": "새로운 친구",
-    "seats": "상담원",
+    "seats": "임시 그룹 채팅",
     "groups": "그룹",
     "circles": "서클",
     "tags": "태그",
@@ -1719,7 +1854,7 @@
     "memberCenter": "멤버십",
     "viewMember": "보기",
     "wallet": {
-      "purchaseUnavailable": "포인트 구매는 아직 지원되지 않습니다. 현재 이 페이지에는 잔액만 표시됩니다.",
+      "purchaseUnavailable": "포인트 구매는 아직 제공되지 않습니다.",
       "title": "내 지갑",
       "confirmRecharge": "충전 확인",
       "balance": "크레딧 잔액",
@@ -1733,7 +1868,20 @@
       "agreementAnd": "및",
       "recharging": "충전 중...",
       "buyNow": "{{points}} 크레딧 지금 구매",
-      "menuLabel": "지갑"
+      "menuLabel": "지갑",
+      "historyTitle": "포인트 내역",
+      "historyLoadError": "포인트 내역을 불러오지 못했습니다",
+      "historyEmpty": "포인트 내역이 없습니다",
+      "types": {
+        "referralReward": "친구 초대 보상",
+        "referralBonus": "초대 가입 보너스",
+        "giftSent": "포인트 보냄",
+        "giftReceived": "포인트 받음",
+        "purchase": "포인트 사용",
+        "recharge": "포인트 적립",
+        "refund": "포인트 환불",
+        "adjustment": "포인트 조정"
+      }
     },
     "mall": {
       "title": "집사 상점",
@@ -1981,6 +2129,7 @@
       "title": "고객센터",
       "subtitle": "문의할 상담 유형을 선택하세요",
       "openFailed": "고객센터 대화를 열지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      "loadFailed": "고객센터 정보를 불러오지 못했습니다",
       "agentsSubtitle": "상담원 아이콘을 눌러 상담을 시작하세요",
       "agentTapHint": "눌러서 상담 시작",
       "agentFallbackName": "상담원",
@@ -2026,23 +2175,27 @@
       "supportUnavailableMessage": "회원 가입 또는 업그레이드는 플랫폼 공식 고객센터에 문의해 주세요.",
       "planAccessibilityLabel": "{{plan}}, {{duration}}, CNY {{price}}",
       "duration": {
+        "days": "{{count}}일",
         "months": "{{count}}개월",
         "lifetime": "평생"
       },
       "exchangeSuccess": "회원 등급이 {{level}}(으)로 업데이트되었습니다",
       "exchangeError": "회원 등급을 업데이트하지 못했습니다. 나중에 다시 시도해 주세요.",
       "tiers": {
+        "daily": {
+          "name": "일일 회원"
+        },
         "silver": {
-          "name": "실버 회원"
+          "name": "월간 회원"
         },
         "gold": {
-          "name": "골드 회원"
+          "name": "반년 회원"
         },
         "diamond": {
-          "name": "다이아몬드 회원"
+          "name": "연간 회원"
         },
         "super": {
-          "name": "슈퍼 회원"
+          "name": "평생 회원"
         }
       },
       "benefits": {
@@ -2073,7 +2226,7 @@
       },
       "currentTierBadge": "현재",
       "marketing": {
-        "goldAccess": "현재 모든 사용자가 골드 등급 한도를 무료로 이용할 수 있습니다",
+        "goldAccess": "현재 모든 사용자가 반년 회원 한도를 무료로 이용할 수 있습니다",
         "title": "멤버십 기능은 아직 오픈되지 않았습니다",
         "groupQuota": "그룹당 400명 · 최대 300개 그룹 가입 가능",
         "noteQuota": "노트 500개 · 도시 필터 10개"
@@ -2085,7 +2238,7 @@
       "heading": "회원 규칙",
       "description": "고객센터가 회원 자격을 수동으로 확인하고 부여합니다. 이 화면은 혜택 목록을 표시하며 실제 권한은 백엔드를 기준으로 합니다.",
       "rules": {
-        "catalog": "실버 회원 CNY 298 / 1개월, 골드 회원 CNY 1,288 / 6개월, 다이아몬드 회원 CNY 1,998 / 1년, 슈퍼 회원 CNY 3,998 / 평생.",
+        "catalog": "일일 회원 CNY 19.9 / 1일, 월간 회원 CNY 298 / 1개월, 반년 회원 CNY 1,288 / 6개월, 연간 회원 CNY 1,998 / 1년, 평생 회원 CNY 3,998 / 평생.",
         "supportActivation": "회원 자격은 앱에서 포인트로 교환하거나 직접 구매할 수 없습니다. 문의 후 고객센터가 수동으로 확인하고 부여합니다.",
         "upgrade": "기존 회원은 고객센터에 문의해 차액을 지불하고 업그레이드할 수 있습니다. 즉시 적용되며 남은 회원 가치는 고객센터가 반영합니다.",
         "expiry": "회원 기간이 만료되면 회원 혜택만 중지됩니다. 계정, 채팅, 노트 및 기타 사용자 콘텐츠는 삭제되지 않습니다.",
@@ -2196,7 +2349,16 @@
     "loadFailed": "불러오기 실패",
     "noMatch": "일치하는 항목 없음",
     "empty": "아직 콘텐츠가 없습니다",
-    "favoriteLegacyVoiceUnsupported": "이전 버전 음성 즐겨찾기 — 다시 보낼 수 없음"
+    "favoriteLegacyVoiceUnsupported": "이전 버전 음성 즐겨찾기 — 다시 보낼 수 없음",
+    "noteBatch": {
+      "limitHint": "노트는 최대 {{count}}개까지 선택할 수 있습니다",
+      "next": "보내기 ({{count}})",
+      "optionAll": "전체",
+      "optionCard": "노트",
+      "optionLocation": "위치",
+      "optionMedia": "사진·영상",
+      "optionShowcase": "쇼케이스"
+    }
   },
   "accountSwitcher": {
     "title": "계정 전환",
@@ -2293,6 +2455,7 @@
     "submit": "제출",
     "add": "추가",
     "ok": "확인",
+    "view": "보기",
     "search": "검색",
     "searching": "검색 중",
     "loading": "로딩 중…",
@@ -2419,8 +2582,11 @@
   },
   "systemAnnouncements": {
     "title": "시스템 공지",
+    "detailTitle": "공지 상세",
+    "openAnnouncement": "{{title}} 상세 보기",
+    "unavailable": "이 공지는 존재하지 않거나 게시가 종료되었습니다",
     "subtitle": "windnote.ai 앱의 최신 정보, 버전 업데이트, 패치 안내가 여기에 표시됩니다.",
-    "systemNotifications": "시스템 알림",
+    "systemNotifications": "계정 알림",
     "empty": "시스템 알림이 없습니다",
     "loadFailed": "시스템 알림을 불러오지 못했습니다. 아래로 당겨 다시 시도하세요",
     "latestAppInfo": {
@@ -2507,6 +2673,7 @@
       "memberQuit": "멤버가 그룹을 나갔습니다",
       "memberKicked": "멤버가 내보내졌습니다",
       "groupNameUpdated": "그룹 이름이 변경되었습니다",
+      "groupRenamed": "그룹 이름이 \"{{name}}\"(으)로 변경되었어요",
       "groupDismissed": "그룹이 해산되었습니다",
       "messageRevoked": "메시지가 회수되었습니다",
       "friendAdded": "이제 친구가 되었어요. 인사해 보세요",
@@ -2522,6 +2689,7 @@
       "location": "[위치]",
       "typing": "[입력 중]",
       "card": "[카드] {{name}}",
+      "qr": "[QR 코드] {{name}}",
       "transferWithAmount": "[송금] {{amount}} 크레딧",
       "transfer": "[송금]",
       "note": "[노트] {{title}}",
@@ -2546,6 +2714,9 @@
       "d7": "7일"
     }
   },
+  "location": {
+    "mapUnavailable": "지도를 불러오지 못했습니다. 네트워크를 확인한 뒤 다시 시도해 주세요."
+  },
   "permissions": {
     "insufficientTitle": "권한이 필요합니다",
     "microphone": "설정에서 마이크 접근을 허용해 주세요",
@@ -2565,6 +2736,7 @@
     "errors": {
       "invalidAmount": "크레딧 수량이 잘못되었습니다",
       "walletDataInvalid": "지갑 데이터 형식 오류",
+      "transactionDataInvalid": "포인트 내역 데이터 형식 오류",
       "rechargeDataInvalid": "충전 응답 형식 오류"
     }
   },
@@ -2573,6 +2745,47 @@
       "presignDataInvalid": "사전 서명된 업로드 데이터 형식 오류",
       "fileUnreadable": "업로드할 파일을 찾을 수 없습니다",
       "fileTooLarge": "파일이 {{maxMb}}MB 제한을 초과했습니다"
+    }
+  },
+  "referral": {
+    "title": "친구 초대 혜택",
+    "heroSubtitle": "친구가 조건을 달성하면 나에게 {{inviter}}, 친구에게 {{invitee}}포인트",
+    "heroSubtitlePending": "초대 보상 정보를 불러오는 중…",
+    "paused": "초대 보상이 일시 중지되어 새 초대에는 포인트가 지급되지 않습니다",
+    "copy": "초대 코드 복사",
+    "share": "초대 공유",
+    "shareMessage": "WindNote에서 만나요. 가입할 때 초대 코드 {{code}}를 입력하세요: {{url}}",
+    "rulesTitle": "보상 규칙",
+    "ruleReward": "유효한 초대 1명당 나에게 {{inviter}}, 친구에게 {{invitee}}포인트",
+    "ruleQualification": "친구가 프로필 사진을 등록하고 {{days}}일이 지난 뒤 다른 친구를 추가해야 합니다",
+    "ruleCap": "매월 처음 {{count}}명의 유효 초대에 보상이 지급됩니다",
+    "recordsTitle": "초대 내역",
+    "empty": "아직 초대 내역이 없습니다. 코드를 공유해 보세요.",
+    "loadMore": "더 보기",
+    "loadingMore": "불러오는 중…",
+    "stats": {
+      "invited": "초대",
+      "rewarded": "달성",
+      "points": "누적 포인트"
+    },
+    "status": {
+      "pending": "달성 대기",
+      "rewarded": "지급 완료",
+      "capped": "한도 도달",
+      "rejected": "대상 아님",
+      "expired": "기간 만료"
+    },
+    "item": {
+      "rewarded": "{{points}}포인트 획득",
+      "pending": "프로필, {{days}}일 경과, 친구 추가 후 지급",
+      "noReward": "포인트가 지급되지 않았습니다"
+    },
+    "errors": {
+      "loadFailed": "초대 데이터를 불러오지 못했습니다",
+      "loadMoreFailed": "초대 내역을 더 불러오지 못했습니다",
+      "invalidData": "초대 데이터 형식이 올바르지 않습니다",
+      "staleData": "최신 정보가 아닐 수 있습니다. 당겨서 다시 불러오세요.",
+      "shareFailed": "공유에 실패했습니다. 초대 코드를 복사해 보내주세요."
     }
   },
   "serverErrors": {
@@ -2675,6 +2888,7 @@
     "MEMBERSHIP_USER_NOT_FOUND": "사용자를 찾을 수 없습니다",
     "CIRCLE_VIP_REQUIRED": "VIP 사용자만 서클을 만들 수 있습니다",
     "CIRCLE_NOT_FOUND": "서클을 찾을 수 없습니다",
+    "CIRCLE_EDIT_FORBIDDEN": "서클 설정은 서클장과 관리자만 수정할 수 있습니다",
     "CIRCLE_NOT_MEMBER": "이 서클의 멤버가 아닙니다",
     "CIRCLE_USER_NOT_FOUND": "사용자를 찾을 수 없습니다",
     "CIRCLE_ICON_ASSET_NOT_FOUND": "서클 아이콘을 찾을 수 없습니다",
@@ -2699,6 +2913,8 @@
     "INVITATION_APPLICANT_ONLY": "신청자만 인증인을 추가할 수 있습니다",
     "INVITATION_NOT_PENDING": "이 초대는 더 이상 대기 중이 아닙니다",
     "INVITATION_VERIFIER_NOT_MEMBER": "인증인은 이 서클의 활성 멤버여야 합니다",
+    "INVITATION_VERIFIER_NOT_FRIEND": "인증인은 회원님의 친구여야 합니다",
+    "INVITATION_MEMBER_INVITE_DISABLED": "이 서클은 멤버 초대가 꺼져 있습니다. 서클장과 관리자만 초대할 수 있습니다",
     "INVITATION_ALREADY_VERIFIER": "이 사용자는 이미 인증인입니다",
     "INVITATION_SLOTS_FILLED": "인증인 슬롯이 모두 찼습니다",
     "INVITATION_NO_PENDING_VERIFICATION": "대기 중인 인증 요청이 없습니다",
@@ -2816,6 +3032,10 @@
     "PRIVACY_MOMENTS_VISIBILITY_INVALID": "지원되지 않는 모먼트 공개 범위입니다",
     "PRIVACY_CALL_PERMISSION_INVALID": "지원되지 않는 통화 권한입니다",
     "PRIVACY_INVITE_PERMISSION_INVALID": "지원되지 않는 초대 권한입니다",
+    "SUPPORT_AGENT_USER_NOT_FOUND": "고객센터 계정을 찾을 수 없습니다",
+    "SUPPORT_AGENT_USER_INACTIVE": "고객센터 계정이 정지되었거나 삭제되었습니다",
+    "SUPPORT_AGENT_DUPLICATE": "같은 분류에 동일한 계정이 중복 설정되었습니다",
+    "SUPPORT_AGENTS_CONFLICT": "고객센터 설정이 다른 관리자에 의해 변경되었습니다. 새로고침 후 다시 시도하세요",
     "USER_UPDATE_OWN_ONLY": "본인의 프로필만 수정할 수 있습니다",
     "USER_DELETE_OWN_ONLY": "본인의 계정만 삭제할 수 있습니다",
     "USER_INVALID_BIRTHDAY": "생일이 올바르지 않습니다",
@@ -2823,6 +3043,88 @@
     "CHAT_REVOKE_WINDOW_EXPIRED": "회수 가능 시간이 지났습니다",
     "CHAT_REVOKE_FORBIDDEN": "이 메시지를 회수할 권한이 없습니다",
     "CHAT_EDIT_WINDOW_EXPIRED": "수정 가능 시간이 지났습니다",
-    "CHAT_EDIT_FORBIDDEN": "이 메시지는 수정할 수 없습니다"
+    "CHAT_EDIT_FORBIDDEN": "이 메시지는 수정할 수 없습니다",
+    "CHAT_GROUP_FRIENDS_ONLY": "친구만 그룹에 초대할 수 있어요",
+    "CHAT_GROUP_MIN_MEMBERS": "친구를 2명 이상 선택해 주세요",
+    "CHAT_GROUP_CIRCLE_MANAGED": "이 그룹은 서클에서 관리해요",
+    "QR_INVALID": "유효하지 않거나 만료된 QR 코드입니다",
+    "QR_EXPIRED": "QR 코드가 만료되었습니다. 새 코드를 요청해 주세요",
+    "QR_TYPE_UNSUPPORTED": "이 QR 코드는 해당 작업을 지원하지 않습니다",
+    "QR_ISSUE_FORBIDDEN": "이 QR 코드를 발급할 권한이 없습니다",
+    "CHAT_GROUP_FULL": "그룹 채팅 인원이 가득 찼습니다"
+  },
+  "qr": {
+    "userTitle": "내 QR 코드",
+    "groupTitle": "그룹 QR 코드",
+    "circleTitle": "서클 QR 코드",
+    "userHint": "위의 QR 코드를 스캔하여 친구로 추가하세요",
+    "groupHint": "위의 QR 코드를 스캔하여 그룹 채팅에 참여하세요",
+    "circleHint": "위의 QR 코드를 스캔하여 서클에 가입하세요",
+    "userValidity": "무기한 유효. 「개인정보 설정」에서 QR 코드로 추가를 끌 수 있습니다",
+    "expiresBefore": "이 QR 코드는 7일간({{date}}까지) 유효하며, 다시 열면 갱신됩니다",
+    "unnamed": "이름 없음",
+    "saveImage": "이미지 저장",
+    "shareQr": "QR 코드 공유",
+    "reset": "QR 코드 재설정",
+    "resetConfirmTitle": "개인 QR 코드를 재설정할까요?",
+    "resetConfirmMessage": "이전에 공유한 개인 QR 코드는 즉시 사용할 수 없게 됩니다.",
+    "resetSuccessTitle": "재설정 완료",
+    "resetSuccessMessage": "이전 QR 코드는 더 이상 유효하지 않습니다. 새 코드를 사용해 주세요.",
+    "resetFailedTitle": "재설정 실패",
+    "resetFailedMessage": "QR 코드를 재설정할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+    "shareFailedTitle": "공유 실패",
+    "shareFailedMessage": "QR 코드가 아직 준비되지 않았습니다. 잠시 후 다시 시도해 주세요.",
+    "savedTitle": "저장됨",
+    "savedMessage": "QR 코드가 앨범에 저장되었습니다.",
+    "saveDeniedTitle": "저장할 수 없음",
+    "saveDeniedMessage": "시스템 설정에서 사진 추가를 허용해 주세요.",
+    "saveFailedTitle": "저장 실패",
+    "saveFailedMessage": "잠시 후 다시 시도해 주세요.",
+    "issueFailed": "QR 코드 생성에 실패했습니다. 잠시 후 다시 시도해 주세요",
+    "landingTitle": "스캔 결과",
+    "invalid": "유효하지 않거나 만료된 QR 코드입니다",
+    "thisIsYou": "내 명함입니다",
+    "viewProfile": "프로필 보기",
+    "addFriend": "친구 추가",
+    "joinGroup": "그룹 참여",
+    "enterGroup": "그룹 입장",
+    "joinCircle": "서클 가입",
+    "alreadyInCircle": "이미 가입한 서클입니다",
+    "circleJoinedTitle": "가입 완료",
+    "circleJoinedMessage": "\"{{name}}\"에 가입했습니다.",
+    "circlePendingTitle": "신청 완료",
+    "circlePendingMessage": "가입 신청이 접수되었으며, 멤버의 보증을 기다리고 있습니다.",
+    "joinFailedTitle": "가입 실패",
+    "joinFailed": "잠시 후 다시 시도해 주세요",
+    "userSubtitle": "개인 명함",
+    "groupSubtitle": "그룹 채팅 · {{count}}명",
+    "circleSubtitle": "서클 · {{count}}명",
+    "sharedBy": "{{name}}님이 공유",
+    "groupEntry": "그룹 QR 코드",
+    "myQrEntry": "내 QR 코드",
+    "shareToChat": {
+      "title": "친구나 그룹에게 공유",
+      "searchPlaceholder": "친구 또는 그룹 검색",
+      "friendHint": "친구",
+      "groupHint": "그룹",
+      "sending": "보내는 중...",
+      "confirmTitle": "QR 코드 보내기",
+      "confirmMessage": "'{{subject}}'의 QR 코드를 {{name}}에게 보낼까요?",
+      "sentTitle": "전송 완료",
+      "sentMessage": "QR 코드를 채팅으로 보냈습니다.",
+      "failedTitle": "전송 실패",
+      "failedMessage": "QR 코드를 보내지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      "loadFailed": "채팅을 불러올 수 없습니다. 잠시 후 다시 시도해 주세요",
+      "empty": "보낼 수 있는 채팅이 없습니다",
+      "noMatch": "일치하는 친구나 그룹이 없습니다"
+    },
+    "card": {
+      "userType": "명함 QR 코드",
+      "groupType": "그룹 QR 코드",
+      "circleType": "서클 QR 코드",
+      "userFooter": "스캔하거나 탭해서 친구 추가",
+      "groupFooter": "스캔하거나 탭해서 그룹 참여",
+      "circleFooter": "스캔하거나 탭해서 서클 참여"
+    }
   }
 }

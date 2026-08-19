@@ -516,20 +516,48 @@ export async function clearLocalConversationMessages(
  * FTS 影子表跟着一起清)。判据用消息自己的 createdAt,与服务端 sweeper
  * 和读路径过滤同一把尺子。
  */
+export interface ExpiredLocalMessagePurge {
+  conversationId: string;
+  cutoff: Date;
+}
+
 export async function purgeExpiredLocalMessages(
-  conversationId: string,
-  cutoff: Date,
+  entries: readonly ExpiredLocalMessagePurge[],
+  viewerCutoff?: Date,
 ): Promise<void> {
   const current = requireDb();
-  if (!current) return;
+  if (!current || (entries.length === 0 && !viewerCutoff)) return;
   try {
-    await writeStatement(() =>
-      current.db.runAsync(
-        'DELETE FROM messages WHERE conversation_id = ? AND created_at < ?;',
-        conversationId,
-        cutoff.toISOString(),
-      ),
-    );
+    await writeTransaction(current.db, async () => {
+      if (viewerCutoff) {
+        const cutoffIso = viewerCutoff.toISOString();
+        // 全局查看者策略必须覆盖没有会话行的残留 rows，避免 FTS 继续检索正文。
+        await current.db.runAsync(
+          'DELETE FROM messages WHERE created_at < ?;',
+          cutoffIso,
+        );
+        await current.db.runAsync(
+          'DELETE FROM outbox WHERE created_at < ?;',
+          cutoffIso,
+        );
+      }
+      for (const { conversationId, cutoff } of entries) {
+        if (viewerCutoff && cutoff <= viewerCutoff) continue;
+        const cutoffIso = cutoff.toISOString();
+        // 删除 messages 会触发 messages_fts_ad，FTS 影子表随同事务更新。
+        await current.db.runAsync(
+          'DELETE FROM messages WHERE conversation_id = ? AND created_at < ?;',
+          conversationId,
+          cutoffIso,
+        );
+        // 失败发送的正文同样是本地聊天内容；不删会在下次水合时重新出现。
+        await current.db.runAsync(
+          'DELETE FROM outbox WHERE conversation_id = ? AND created_at < ?;',
+          conversationId,
+          cutoffIso,
+        );
+      }
+    });
   } catch (error) {
     warn('msg-burn', '[chat-db] purge expired messages failed', error);
   }

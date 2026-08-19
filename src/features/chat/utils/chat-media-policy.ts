@@ -6,6 +6,8 @@
  * 整份传上去才被用户察觉，白烧流量与等待。
  */
 export const MAX_CHAT_IMAGE_BYTES = 10 * 1024 * 1024;
+export const MAX_CHAT_VIDEO_BYTES = 100 * 1024 * 1024;
+export const MAX_CHAT_VIDEO_DURATION_MS = 10 * 60 * 1000;
 
 /**
  * fileSize 缺失时放行：部分相册资产不报体积，不能因为元数据缺失就拦掉正常发图。
@@ -13,4 +15,12 @@ export const MAX_CHAT_IMAGE_BYTES = 10 * 1024 * 1024;
  */
 export function isChatImageTooLarge(fileSize?: number | null): boolean {
   return typeof fileSize === 'number' && fileSize > MAX_CHAT_IMAGE_BYTES;
+}
+
+export function isChatVideoTooLarge(fileSize?: number | null): boolean {
+  return typeof fileSize === 'number' && fileSize > MAX_CHAT_VIDEO_BYTES;
+}
+
+export function isChatVideoTooLong(durationMs?: number | null): boolean {
+  return typeof durationMs === 'number' && durationMs > MAX_CHAT_VIDEO_DURATION_MS;
 }

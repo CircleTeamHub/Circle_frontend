@@ -31,7 +31,13 @@ tags:
 - tapOn:
     id: windnote.tabs.discover
 - tapOn:
-    id: windnote.discover.circles-action
+    id: windnote.discover.plaza-entry
+- extendedWaitUntil:
+    visible:
+      id: windnote.circle-plaza.screen
+    timeout: 30000
+- tapOn:
+    id: windnote.circle-plaza.discover-circles
 - extendedWaitUntil:
     visible:
       id: windnote.circle-search.screen

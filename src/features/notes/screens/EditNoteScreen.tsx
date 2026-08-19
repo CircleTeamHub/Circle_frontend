@@ -330,6 +330,7 @@ export default function EditNoteScreen() {
           presign.uploadUrl,
           contentType,
           asset.uri,
+          presign.requiredHeaders,
           kind === 'video' ? VIDEO_UPLOAD_TIMEOUT_MS : undefined,
         );
 

@@ -1,4 +1,5 @@
 import i18n from '@/i18n';
+import { normalizeQrToken } from '@/features/qr/qr-payload';
 import { allowPeerMediaUrl } from '@/services/api/utils';
 import type {
   CallRecordData,
@@ -8,6 +9,8 @@ import type {
   FriendCardData,
   NoteCardData,
   PlazaPostCardData,
+  QrCardData,
+  QrCardType,
   TransferCardData,
   VerificationCardData,
 } from '@/types';
@@ -18,7 +21,8 @@ import type { StoredChatMessage } from './store';
  * chat-core 消息 DTO → UI ChatMessage(替代 src/im/mappers 的消息侧)。
  * content 形状是 FE 定义、BE 透传的契约:
  *   text/quote {text, quotedText?} · image {key,url?,thumbUrl?,width?,height?,localUri?}
- *   voice {key,url?,duration,localUri?} · location {latitude,longitude,description}
+ *   video {key,url?,width?,height?,duration?,size?,localUri?}
+ *   voice {key,url?,duration,localUri?} · location {latitude,longitude,title?,address?,description}
  *   各卡片类型的 content = 卡片 payload 本体。
  * 乐观消息(height=0):sendStatus=1;failed=true → 3;已确认 → 2。
  */
@@ -226,6 +230,22 @@ function sanitizeCircleCard(content: Record<string, unknown>): CircleCardData {
   };
 }
 
+const QR_CARD_TYPES: readonly QrCardType[] = ['user', 'group', 'circle'];
+
+function sanitizeQrCard(content: Record<string, unknown>): QrCardData {
+  const rawType = str(content['qrType']);
+  return {
+    // 对端可能塞整条 URL、甚至别人家的链接 —— 一律过 normalizeQrToken:
+    // 出来的要么是形状合法的令牌,要么是空串(空串的卡片气泡直接不渲染)。
+    token: normalizeQrToken(textField(content, 'token', 512)) ?? '',
+    qrType: QR_CARD_TYPES.includes(rawType as QrCardType)
+      ? (rawType as QrCardType)
+      : 'user',
+    name: textField(content, 'name', 60),
+    avatarUrl: mediaField(content, 'avatarUrl'),
+  };
+}
+
 function sanitizePlazaPostCard(
   content: Record<string, unknown>,
 ): PlazaPostCardData {
@@ -358,6 +378,16 @@ export function mapChatMessageDtoToUI(
         imageWidth: num(content['width']),
         imageHeight: num(content['height']),
       };
+    case 'video':
+      return {
+        ...base,
+        type: 'video',
+        videoUrl: mediaUrl(content, 'url'),
+        videoWidth: num(content['width']),
+        videoHeight: num(content['height']),
+        videoDuration: num(content['duration']),
+        videoSize: num(content['size']),
+      };
     case 'voice':
       return {
         ...base,
@@ -367,11 +397,24 @@ export function mapChatMessageDtoToUI(
         voiceSize: num(content['size']),
       };
     case 'location':
+      const latitude = num(content['latitude']);
+      const longitude = num(content['longitude']);
+      const hasValidCoordinates =
+        latitude !== undefined &&
+        longitude !== undefined &&
+        latitude >= -90 &&
+        latitude <= 90 &&
+        longitude >= -180 &&
+        longitude <= 180;
       return {
         ...base,
         type: 'location',
-        locationTitle: str(content['description']) ?? '位置消息',
-        locationAddress: str(content['description']) ?? '未知位置',
+        locationTitle:
+          str(content['title']) ?? str(content['description']) ?? '位置消息',
+        locationAddress:
+          str(content['address']) ?? str(content['description']) ?? '未知位置',
+        locationLatitude: hasValidCoordinates ? latitude : undefined,
+        locationLongitude: hasValidCoordinates ? longitude : undefined,
       };
     case 'note-card':
       return {
@@ -402,6 +445,12 @@ export function mapChatMessageDtoToUI(
         ...base,
         type: 'verification-card',
         verificationCard: sanitizeVerificationCard(content),
+      };
+    case 'qr-card':
+      return {
+        ...base,
+        type: 'qr-card',
+        qrCard: sanitizeQrCard(content),
       };
     case 'plaza-post-card':
       return {
@@ -557,6 +606,12 @@ function systemNoticeText(content: Record<string, unknown>): string {
       return i18n.t('im.notification.memberQuit');
     case 'group-created':
       return i18n.t('im.notification.groupCreated');
+    case 'group-renamed': {
+      const name = typeof content['name'] === 'string' ? content['name'] : '';
+      return name
+        ? i18n.t('im.notification.groupRenamed', { name })
+        : '';
+    }
     case 'burn-changed': {
       // S-01 留痕:开关变化双方可见,防「对方偷偷开了焚毁」。
       const seconds =

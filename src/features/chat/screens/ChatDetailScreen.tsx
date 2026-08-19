@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import {
   Alert,
+  InteractionManager,
   Keyboard,
   KeyboardAvoidingView,
   LayoutAnimation,
@@ -18,6 +19,8 @@ import {
   useWindowDimensions,
   type FlatList as FlatListType,
   type GestureResponderEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams, useNavigation, useSegments } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
@@ -26,6 +29,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { Avatar } from '@/components/ui/avatar';
+import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { MemberName } from '@/components/ui/member-name';
 import { Divider } from '@/components/ui/divider';
 import { useElapsedSeconds } from '@/hooks/use-elapsed-seconds';
@@ -36,10 +40,12 @@ import {
   SentBubble,
   LocationCard,
   ImageBubble,
+  VideoBubble,
   VoiceBubble,
   NoteCardBubble,
   FriendCardBubble,
   CircleCardBubble,
+  QrCardBubble,
   PlazaPostCardBubble,
   VerificationCardBubble,
   TransferCardBubble,
@@ -47,6 +53,11 @@ import {
 } from '@/features/chat/components/chat-bubble';
 import { EmojiPicker } from '@/features/chat/components/emoji-picker';
 import { VoiceRecordingOverlay } from '@/features/chat/components/voice-recording-overlay';
+import { PhotoEditorModal } from '@/features/chat/components/photo-editor-modal';
+import {
+  MediaSourceSheet,
+  type MediaSourceAction,
+} from '@/features/chat/components/media-source-sheet';
 import {
   MessageActionMenu,
   type MessageAction,
@@ -86,12 +97,17 @@ import {
   startMediaSend,
   sendCardMessage,
   sendImageMessage,
+  sendVideoMessage,
   sendLocationMessage,
   sendQuoteMessage,
   sendTextMessage,
   sendVoiceMessage,
 } from '@/chat-core/client';
-import { getChatSendErrorMessage } from '@/chat-core/send-errors';
+import { waitForSendSlot } from '@/features/chat/utils/send-slot';
+import {
+  getChatSendErrorMessage,
+  reportChatSendFailure,
+} from '@/chat-core/send-errors';
 import { OptionPickerSheet } from '@/components/ui/option-picker-sheet';
 import {
   createChatMessageMapCache,
@@ -111,7 +127,20 @@ import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-s
 import { useAuthStore } from '@/stores/authStore';
 import { type FriendProfile } from '@/services/api/friends';
 import type { NoteSummary } from '@/features/notes/types';
-import { collectNote } from '@/services/api/notes';
+import {
+  collectNote,
+  fetchNoteDetail,
+  importNoteChatMedia,
+} from '@/services/api/notes';
+import {
+  buildNoteSendTasks,
+  notePacingDelayMs,
+  resolveSendableNoteLocation,
+  sectionsToImport,
+  type ImportedNoteChatMedia,
+  type NoteSendOptions,
+  type NoteSendTask,
+} from '@/features/chat/utils/note-batch-send';
 import { createCollection, type UserCollection } from '@/services/api/collections';
 import {
   buildCollectionInputFromMessage,
@@ -127,8 +156,8 @@ import {
 import { useSharePickerStore } from '@/features/chat/store/use-share-picker-store';
 import { usePendingChatCardStore } from '@/features/chat/store/use-pending-chat-card-store';
 import { useMessageForwardStore } from '@/features/chat/store/use-message-forward-store';
+import { useChatLocationPickerStore } from '@/features/chat/store/use-chat-location-picker-store';
 import { canForwardMessage } from '@/features/chat/screens/ForwardPickerScreen';
-import { useTransferComposerStore } from '@/features/chat/store/use-transfer-composer-store';
 import { useCallStore } from '@/features/call/store/use-call-store';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { AVATAR_SIZE } from '@/features/chat/components/bubbles/shared';
@@ -138,10 +167,6 @@ import {
   useChatPreferencesStore,
 } from '@/features/chat/store/use-chat-preferences-store';
 import { createDirectCall, createGroupCall } from '@/services/api/calls';
-import {
-  enqueueGiftCardAck,
-  flushPendingGiftCardAcks,
-} from '@/features/chat/utils/gift-card-ack';
 import { resolveDirectCalleeID } from '@/features/call/resolve-direct-callee';
 import { resolveChatDetailIdentity } from '@/features/chat/chat-detail-identity';
 import type { CallType } from '@/features/call/types';
@@ -163,8 +188,13 @@ import {
   type MentionTarget,
 } from '@/features/chat/utils/chat-send-payloads';
 import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
-import { isChatImageTooLarge } from '@/features/chat/utils/chat-media-policy';
+import {
+  isChatImageTooLarge,
+  isChatVideoTooLarge,
+  isChatVideoTooLong,
+} from '@/features/chat/utils/chat-media-policy';
 import { uploadChatImageThumbnail } from '@/features/chat/utils/image-thumbnail';
+import { assertMyTempChatConversationOpen } from '@/services/api/temp-chat';
 
 // Dev-only structured log for a failed send. Never logs the message body —
 // only the error and conversation kind — to avoid leaking content into logs.
@@ -182,7 +212,6 @@ function logChatSendFailure(
 
 type AttachmentId =
   | 'media'
-  | 'camera'
   | 'voice-call'
   | 'location'
   | 'notes'
@@ -197,15 +226,14 @@ const ATTACHMENT_ITEMS: readonly {
   labelKey: string;
   label: string;
 }[] = [
-  { id: 'media', icon: 'image-outline', labelKey: 'chat.attachments.photos', label: '照片' },
-  { id: 'camera', icon: 'camera-outline', labelKey: 'chat.attachments.camera', label: '拍照' },
-  { id: 'voice-call', icon: 'call-outline', labelKey: 'chat.attachments.voiceCall', label: '语音通话' },
+  { id: 'media', icon: 'images-outline', labelKey: 'chat.attachments.mediaHub', label: '自媒体' },
+  { id: 'voice-call', icon: 'call-outline', labelKey: 'chat.attachments.voiceCall', label: '语/视频通话' },
   { id: 'location', icon: 'location-outline', labelKey: 'chat.attachments.location', label: '位置' },
   { id: 'notes', icon: 'create-outline', labelKey: 'chat.attachments.notes', label: '笔记' },
   { id: 'friend-card', icon: 'person-outline', labelKey: 'chat.attachments.friendCard', label: '好友名片' },
   { id: 'favorites', icon: 'star-outline', labelKey: 'chat.attachments.favorites', label: '我的收藏' },
-  { id: 'quick-reply', icon: 'rocket-outline', labelKey: 'chat.attachments.quickReply', label: '快捷语' },
   { id: 'transfer', icon: 'card-outline', labelKey: 'chat.attachments.transfer', label: '转账' },
+  { id: 'quick-reply', icon: 'rocket-outline', labelKey: 'chat.attachments.quickReply', label: '快捷语' },
 ];
 
 // 工具面板每页最多 8 个（4 列 × 2 行），超出的横向翻页
@@ -214,6 +242,10 @@ const MENTION_CANDIDATE_LIMIT = 200;
 // scrollToIndex 定位失败后最多重试几次（每次间隔 250ms）。够覆盖「再渲染一两批就能
 // 测到目标行」的正常情况，又不至于在测不到时无限跳动。
 const MAX_SCROLL_TO_INDEX_RETRIES = 4;
+// inverted 列表中 contentOffset.y=0 就是最新消息。用户仍在这个范围内时，
+// 收到新消息可以自然跟随；超出后视为正在翻历史，不抢走阅读位置。
+const LATEST_MESSAGE_SCROLL_THRESHOLD = 80;
+const VIDEO_UPLOAD_TIMEOUT_MS = 5 * 60_000;
 const ATTACHMENT_PAGES: (typeof ATTACHMENT_ITEMS)[number][][] = Array.from(
   { length: Math.ceil(ATTACHMENT_ITEMS.length / ATTACHMENT_PAGE_SIZE) },
   (_, page) =>
@@ -433,6 +465,7 @@ export default function ChatDetailScreen() {
     sourceID?: string;
     title?: string;
     conversationType?: 'private' | 'group';
+    conversationKind?: 'direct' | 'group' | 'temp' | 'support';
     avatarUrl?: string;
     searchedMsgID?: string;
   }>();
@@ -446,6 +479,14 @@ export default function ChatDetailScreen() {
   );
   const authUser = useAuthStore((state) => state.user);
   const flatListRef = useRef<FlatListType<ChatMessage>>(null);
+  const isNearLatestMessageRef = useRef(true);
+  const latestMessageIdentityRef = useRef<{
+    conversationID: string;
+    messageID: string;
+  } | null>(null);
+  const latestMessageScrollTaskRef = useRef<ReturnType<
+    typeof InteractionManager.runAfterInteractions
+  > | null>(null);
   const scrolledToSearchRef = useRef(false);
   // 为定位搜索目标而翻页时的在途标记:effect 会随 messages 变化重跑,
   // 不挡住的话每一页返回都会再打一次请求。
@@ -462,6 +503,9 @@ export default function ChatDetailScreen() {
   // inFlightRef 在 hook 入口处再判断一次，保证同一时刻只有一条消息在飞。文本 / 图片 /
   // 位置 / 笔记 / 名片 / 转账 6 条发送路径共享同一道闸。
   const inFlightRef = useRef(false);
+  // 批量发笔记的串行队列:第二批在上一批发完之前不开跑,避免两次突发叠进
+  // 服务端同一个 20 条/10s 的用户级 send 桶(消息触限会被直接拒收)。
+  const noteBatchQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [draft, setDraft] = useState('');
   const [mentionPickerVisible, setMentionPickerVisible] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -479,6 +523,9 @@ export default function ChatDetailScreen() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [mediaSourceSheetVisible, setMediaSourceSheetVisible] = useState(false);
+  const [photoEditorAsset, setPhotoEditorAsset] =
+    useState<ImagePicker.ImagePickerAsset | null>(null);
   const [attachmentPage, setAttachmentPage] = useState(0);
   const [attachmentPagerWidth, setAttachmentPagerWidth] = useState(0);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -493,8 +540,13 @@ export default function ChatDetailScreen() {
   >(undefined);
   const consumePendingShare = useSharePickerStore((s) => s.consume);
   const setPendingForward = useMessageForwardStore((s) => s.setPending);
-  const consumePendingTransfer = useTransferComposerStore((s) => s.consume);
   const consumePendingChatCard = usePendingChatCardStore((s) => s.consumeFor);
+  const consumePickedLocation = useChatLocationPickerStore(
+    (state) => state.consumePickedLocation,
+  );
+  const clearPickedLocation = useChatLocationPickerStore(
+    (state) => state.clearPickedLocation,
+  );
   // 待发送的圈子帖子卡片（报名→聊天自动挂上，贴在输入框上方，可撤掉）。
   const [pendingCard, setPendingCard] = useState<PlazaPostCardData | null>(null);
   const setActiveCall = useCallStore((state) => state.setActiveCall);
@@ -514,6 +566,9 @@ export default function ChatDetailScreen() {
   const [callStarting, setCallStarting] = useState(false);
   const callStartingRef = useRef(false);
   const mountedRef = useRef(true);
+  // 视频可能接近 100MB。上传成功但 socket ack 失败时，重发只应复用已上传的 key，
+  // 不能再传一遍并制造孤儿对象；成功发送或卸载后释放这份内存索引。
+  const uploadedVideoKeysRef = useRef(new Map<string, string>());
   // 录音状态的纯 JS 快照：卸载 cleanup 里不能调 recorder 的 native getStatus()，
   // 此时 expo-audio 可能已释放其 native shared object（会抛 NativeSharedObjectNotFoundException）。
   const isRecordingRef = useRef(false);
@@ -522,12 +577,12 @@ export default function ChatDetailScreen() {
     isRecordingRef.current = voiceRecordingStartedAt != null;
   }, [voiceRecordingStartedAt]);
   useEffect(() => {
-    // 冲销上次可能丢失的卡片回执挂账（幂等，无账时零成本）
-    void flushPendingGiftCardAcks();
-  }, []);
-  useEffect(() => {
+    const uploadedVideoKeys = uploadedVideoKeysRef.current;
     return () => {
       mountedRef.current = false;
+      uploadedVideoKeys.clear();
+      latestMessageScrollTaskRef.current?.cancel();
+      latestMessageScrollTaskRef.current = null;
       if (scrollRetryTimerRef.current) {
         clearTimeout(scrollRetryTimerRef.current);
         scrollRetryTimerRef.current = null;
@@ -558,6 +613,32 @@ export default function ChatDetailScreen() {
   const [resolvedConversationID, setResolvedConversationID] =
     useState(paramConversationID);
   const conversationID = paramConversationID || resolvedConversationID;
+  const storedConversationType = useChatStore((state) =>
+    state.conversations.find((candidate) => candidate.id === conversationID)?.type,
+  );
+  const isTempChat =
+    params.conversationKind === 'temp' || storedConversationType === 'TEMP';
+  // 独立群聊(微信群):GROUP 会话但不挂圈子。circleId 从会话缓存读 ——
+  // 从消息列表进来时缓存必有;推送冷启动短暂未知时按圈子群处理,
+  // 缓存到位后本判定即时翻转。
+  const storedCircleId = useChatStore((state) =>
+    state.conversations.find((candidate) => candidate.id === conversationID)
+      ?.circleId,
+  );
+  const isStandaloneGroup =
+    storedConversationType === 'GROUP' && storedCircleId === null;
+  const selfDestructEnabled = useChatStore((state) => {
+    const conversation = state.conversations.find(
+      (candidate) => candidate.id === conversationID,
+    );
+    return (
+      state.viewerSelfDestructDays > 0 ||
+      (conversation?.burnDurationSec ?? 0) > 0
+    );
+  });
+  const selfDestructCacheKey = useChatStore(
+    (state) => `${state.currentUserId ?? ''}:${state.selfDestructPolicyEpoch}`,
+  );
   // 只订阅当前会话的消息切片，而非整个 messagesByConversation map。
   // 其他会话来消息时 ingestMessages 会新建顶层对象，但本会话的数组引用不变，
   // zustand 的 Object.is 相等判断因此不会触发本页重渲染——这是聊天页最大的流畅提升。
@@ -584,12 +665,27 @@ export default function ChatDetailScreen() {
     params.conversationType === 'group' ? 'group' : 'single';
   const isGroupChat = conversationType === 'group';
 
-  const { canViewMembers: canViewGroupMemberProfiles, revalidate: revalidateMemberViewAccess } =
-    useGroupMemberViewAccess({
-      enabled: isGroupChat,
+  const {
+    canViewMembers: canViewCircleMembers,
+    revalidate: revalidateCircleMemberAccess,
+  } = useGroupMemberViewAccess({
+      // 独立群聊的 sourceID 是会话 id 而非圈子 id,绝不能拿去请求 /circle/:id。
+      enabled: isGroupChat && !isTempChat && !isStandaloneGroup,
       groupID: sourceID,
       currentUserID,
     });
+  // TEMP 不是圈子，不得拿 tmp... groupId 请求 /circle/:uuid。临时房成员目录本身
+  // 由 /chat/conversations/:id/members 的座位校验保护，房内成员可直接使用。
+  // 独立群聊同理:目录全员可见,座位校验在服务端。
+  const canViewGroupMemberProfiles =
+    isTempChat || isStandaloneGroup || canViewCircleMembers;
+  const revalidateMemberViewAccess = useCallback(
+    () =>
+      isTempChat || isStandaloneGroup
+        ? Promise.resolve(true)
+        : revalidateCircleMemberAccess(),
+    [isTempChat, isStandaloneGroup, revalidateCircleMemberAccess],
+  );
 
   // review R2：失去目录权限的瞬间清空已选 @ 目标与候选缓存——否则降权后
   // handleSend 仍会把滞留的 mention（含 @所有人）当作有效目标发出去。
@@ -625,8 +721,11 @@ export default function ChatDetailScreen() {
   );
 
   // 入口只给了 sourceID 时，就地把会话解析出来（单聊按对端 userID、群聊按圈子 id）。
+  // 独立群聊的 sourceID 就是会话 id,没有「按圈子 get-or-create」一说 —— 它的
+  // 入口(消息列表/推送)都带 conversationID,走不到这里。
   useEffect(() => {
-    if (paramConversationID || !sourceID) return;
+    if (paramConversationID || !sourceID || isTempChat || isStandaloneGroup)
+      return;
     let cancelled = false;
     (async () => {
       try {
@@ -644,7 +743,7 @@ export default function ChatDetailScreen() {
     return () => {
       cancelled = true;
     };
-  }, [paramConversationID, sourceID, isGroupChat]);
+  }, [paramConversationID, sourceID, isGroupChat, isTempChat, isStandaloneGroup]);
 
   // 跟踪键盘显隐：iOS 用 Will* 事件与 KeyboardAvoidingView 动画同步，避免空白闪一下。
   useEffect(() => {
@@ -690,10 +789,11 @@ export default function ChatDetailScreen() {
         sourceID,
         title: conversationTitle,
         conversationType: 'group',
+        ...(isTempChat ? { conversationKind: 'temp' } : {}),
         originScope: scope,
       }),
     );
-  }, [scope, conversationID, sourceID, conversationTitle]);
+  }, [scope, conversationID, sourceID, conversationTitle, isTempChat]);
 
   const handleOpenMessageSender = useCallback(
     async (msg: ChatMessage) => {
@@ -922,6 +1022,44 @@ export default function ChatDetailScreen() {
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
 
+  const handleMessageListScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      isNearLatestMessageRef.current =
+        event.nativeEvent.contentOffset.y <= LATEST_MESSAGE_SCROLL_THRESHOLD;
+    },
+    [],
+  );
+
+  // FlatList 不会保证插入 index 0 后仍回到 offset 0，尤其是从笔记选择页返回时，
+  // 新卡片常在导航 pop 动画中到达。自己发送的消息始终带回最新位置；收到消息
+  // 只在用户原本就在底部附近时跟随，避免翻看历史时被强制拉回。
+  useEffect(() => {
+    const latestMessage = messages[0];
+    if (!latestMessage || !conversationID || !isFocused) return;
+
+    const previous = latestMessageIdentityRef.current;
+    latestMessageIdentityRef.current = {
+      conversationID,
+      messageID: latestMessage.id,
+    };
+    if (
+      !previous ||
+      previous.conversationID !== conversationID ||
+      previous.messageID === latestMessage.id
+    ) {
+      return;
+    }
+    if (!latestMessage.outgoing && !isNearLatestMessageRef.current) return;
+
+    latestMessageScrollTaskRef.current?.cancel();
+    latestMessageScrollTaskRef.current = InteractionManager.runAfterInteractions(() => {
+      latestMessageScrollTaskRef.current = null;
+      if (!mountedRef.current) return;
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+      isNearLatestMessageRef.current = true;
+    });
+  }, [conversationID, isFocused, messages]);
+
   // 搜索定位：在 inverted 列表里 scrollToIndex 仍然按 index 计数，找到就跳。
   useEffect(() => {
     if (messages.length === 0 || !searchedMsgID || scrolledToSearchRef.current) {
@@ -991,6 +1129,8 @@ export default function ChatDetailScreen() {
 
         try {
           const result = await collectNote(message.noteCard.noteId, source);
+          // 复制出来的是「我的」那条笔记（id 与原笔记不同），「查看」跳它。
+          const copiedNoteId = result.note?.id;
           Alert.alert(
             result.alreadyCollected
               ? t('chat.messageActions.noteAlreadyCollected', {
@@ -1002,6 +1142,21 @@ export default function ChatDetailScreen() {
             t('chat.messageActions.noteCollectedHint', {
               defaultValue: '可在「我的笔记」中查看',
             }),
+            copiedNoteId
+              ? [
+                  {
+                    text: t('common.view', { defaultValue: '查看' }),
+                    // 跳「我的笔记」列表并定位到刚添加的这条（不是直接开详情）：
+                    // 用户要看的是它在自己列表里的位置。
+                    onPress: () =>
+                      router.push({
+                        pathname: '/(tabs)/profile/notes',
+                        params: { highlightNoteId: copiedNoteId },
+                      } as never),
+                  },
+                  { text: t('common.confirm', { defaultValue: '确认' }) },
+                ]
+              : undefined,
           );
         } catch (error) {
           if (__DEV__) {
@@ -1420,12 +1575,25 @@ export default function ChatDetailScreen() {
         onPress: () => handleForwardMessage(message),
       });
     }
-    actions.push({
-      key: 'collect',
-      icon: 'star-outline',
-      label: t('chat.messageActions.collect'),
-      onPress: () => void handleCollectMessage(message),
-    });
+    // 笔记卡片走的是 collectNote（快照复制进「我的笔记」），不是进收藏列表 ——
+    // 标签跟着实际行为叫「添加」，别让同一个「收藏」在两种消息上意思不同。
+    actions.push(
+      message.type === 'note-card'
+        ? {
+            key: 'collect',
+            icon: 'add-circle-outline',
+            label: t('chat.messageActions.addToNotes', {
+              defaultValue: '添加',
+            }),
+            onPress: () => void handleCollectMessage(message),
+          }
+        : {
+            key: 'collect',
+            icon: 'star-outline',
+            label: t('chat.messageActions.collect'),
+            onPress: () => void handleCollectMessage(message),
+          },
+    );
     actions.push({
       key: 'delete',
       icon: 'trash-outline',
@@ -1791,6 +1959,22 @@ export default function ChatDetailScreen() {
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
             onLongPress={getMessageLongPressHandler(item)}
             hideStatus={isGroupChat}
+            selfDestructEnabled={selfDestructEnabled}
+            selfDestructCacheKey={selfDestructCacheKey}
+          />
+        ));
+      case 'video':
+        return withMessageActions(item, (
+          <VideoBubble
+            message={item}
+            outgoing={Boolean(item.outgoing)}
+            senderName={receivedDisplayName(item)}
+            senderAvatarUri={receivedAvatarUri(item)}
+            selfName={selfName}
+            selfAvatarUri={selfAvatarUri}
+            onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
+            hideStatus={isGroupChat}
           />
         ));
       case 'voice':
@@ -1861,6 +2045,24 @@ export default function ChatDetailScreen() {
                   card.circleId,
                 ),
               )
+            }
+            hideStatus={isGroupChat}
+          />
+        ));
+      case 'qr-card':
+        return withMessageActions(item, (
+          <QrCardBubble
+            message={item}
+            outgoing={Boolean(item.outgoing)}
+            senderName={receivedDisplayName(item)}
+            senderAvatarUri={receivedAvatarUri(item)}
+            selfName={selfName}
+            selfAvatarUri={selfAvatarUri}
+            onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
+            onLongPress={getMessageLongPressHandler(item)}
+            // 点卡片 = 扫这张码:走扫码同一条落地页,由 /qr 按令牌自己判类型与有效性。
+            onPress={(card) =>
+              router.push({ pathname: '/qr', params: { t: card.token } })
             }
             hideStatus={isGroupChat}
           />
@@ -1949,6 +2151,8 @@ export default function ChatDetailScreen() {
     handleQuotePress,
     handleToggleReaction,
     isGroupChat,
+    selfDestructCacheKey,
+    selfDestructEnabled,
     selfAvatarUri,
     selfName,
     scope,
@@ -2310,6 +2514,9 @@ export default function ChatDetailScreen() {
   const uploadAndSendVoice = useCallback(
     async (soundPath: string, duration: number, deliveryId: string) => {
       try {
+        if (isTempChat) {
+          await assertMyTempChatConversationOpen(conversationID);
+        }
         // 自研栈:录音文件先经 presign 上传,消息体只带 object key(读时签 URL)。
         const voiceFilename = soundPath.split('/').pop() || 'voice.m4a';
         const voiceContentType =
@@ -2324,6 +2531,7 @@ export default function ChatDetailScreen() {
           presign.uploadUrl,
           voiceContentType,
           soundPath,
+          presign.requiredHeaders,
         );
         await sendVoiceMessage({
           conversationId: conversationID,
@@ -2356,7 +2564,7 @@ export default function ChatDetailScreen() {
         }
       }
     },
-    [conversationID, t],
+    [conversationID, isTempChat, t],
   );
 
   const finishHoldRecording = useCallback(
@@ -2484,52 +2692,42 @@ export default function ChatDetailScreen() {
     [restoreRecordingAudioMode, voiceRecorder],
   );
 
-  const handleSendCurrentLocation = useCallback(async () => {
-    if (!sourceID || isPreviewMode) return;
+  const handleSendPickedLocation = useCallback(async (
+    picked: {
+      title: string;
+      address: string;
+      latitude: number;
+      longitude: number;
+    },
+  ) => {
+    if (!sourceID || !conversationID || isPreviewMode) return;
+    // 位置已经从 store 里消费掉了：这里直接 return 等于把用户选的点悄悄丢掉，
+    // 既不发也不报错。等当前这一发结束再补上；真等不到就明确报错。
+    if (inFlightRef.current) {
+      const slotFree = await waitForSendSlot({
+        isBusy: () => inFlightRef.current,
+        isMounted: () => mountedRef.current,
+      });
+      if (!slotFree) {
+        if (mountedRef.current) {
+          setSendError(
+            t('chat.detail.locationSendFailed', {
+              defaultValue: '位置发送失败，请重试',
+            }),
+          );
+        }
+        return;
+      }
+    }
     if (inFlightRef.current) return;
-    // 信用分门禁提到取位置之前。sendLocationMessage 里那道是共享路径的兜底,
-    // 但它要等到「已经申请过定位权限、读完当前坐标、还做了一次反地理编码」
-    // 之后才拒 —— 一次注定失败的发送,不该先把用户的精确位置读出来。
-    const creditDenied = getLocalLowCreditDecision();
-    if (creditDenied) {
-      setSendError(getCreditPolicyMessage(creditDenied));
-      return;
-    }
-    const permission = await Location.requestForegroundPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert(t('permissions.insufficientTitle'), t('permissions.location'));
-      return;
-    }
     inFlightRef.current = true;
     try {
-      const position = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      // 反向解析成可读地址；解析失败就用经纬度兜底，不阻塞主流程
-      let description = `${position.coords.latitude.toFixed(5)}, ${position.coords.longitude.toFixed(5)}`;
-      try {
-        const places = await Location.reverseGeocodeAsync({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        });
-        const place = places[0];
-        if (place) {
-          const parts = [
-            place.city ?? place.region,
-            place.district ?? place.subregion,
-            place.street,
-            place.name,
-          ].filter((s): s is string => Boolean(s));
-          if (parts.length) description = parts.join(' ');
-        }
-      } catch {
-        // ignore — fallback to coords
-      }
       await sendLocationMessage({
         conversationId: conversationID,
-        longitude: position.coords.longitude,
-        latitude: position.coords.latitude,
-        description,
+        longitude: picked.longitude,
+        latitude: picked.latitude,
+        title: picked.title,
+        address: picked.address,
       });
     } catch (error) {
       if (mountedRef.current) {
@@ -2547,6 +2745,78 @@ export default function ChatDetailScreen() {
     }
   }, [conversationID, isPreviewMode, sourceID, t]);
 
+  const handleOpenLocationPicker = useCallback(async () => {
+    if (!sourceID || !conversationID || isPreviewMode) return;
+    // 在申请精确定位权限前先走本地发送门禁；注定不能发时不读取隐私数据。
+    const creditDenied = getLocalLowCreditDecision();
+    if (creditDenied) {
+      setSendError(getCreditPolicyMessage(creditDenied));
+      return;
+    }
+    // 选点页自己支持搜索和手动拖动，定位权限只是用来把地图中心预置到「我的
+    // 位置」。拒权就直接开图（用页面自带的默认中心），不能因此把分享公共地点
+    // 这件事整个堵死。
+    const openPickerAt = (params?: Record<string, string>) => {
+      clearPickedLocation();
+      router.push({
+        pathname: '/(chat)/location-picker',
+        // conversationID 一路带过去：确认的结果只有回到这个会话才会被消费。
+        params: { ...params, conversationID },
+      } as never);
+    };
+    const permission = await Location.requestForegroundPermissionsAsync();
+    if (!permission.granted) {
+      openPickerAt();
+      return;
+    }
+    try {
+      const position = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      const latitude = position.coords.latitude;
+      const longitude = position.coords.longitude;
+      const coordinateText = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+      let title = t('chat.locationPicker.currentLocation', {
+        defaultValue: '我的位置',
+      });
+      let address = coordinateText;
+      try {
+        const places = await Location.reverseGeocodeAsync({ latitude, longitude });
+        const place = places[0];
+        if (place) {
+          title = place.name || place.street || title;
+          const parts = [
+            place.city ?? place.region,
+            place.district ?? place.subregion,
+            place.street,
+            place.name,
+          ].filter((part): part is string => Boolean(part));
+          if (parts.length) address = parts.join(' ');
+        }
+      } catch {
+        // 地址解析失败不阻塞选点，地图仍以真实坐标为中心。
+      }
+      openPickerAt({
+        latitude: String(latitude),
+        longitude: String(longitude),
+        title,
+        address,
+      });
+    } catch {
+      // 取当前位置失败同样只影响初始中心：照常开图，让用户自己搜或拖。
+      openPickerAt();
+    }
+  }, [clearPickedLocation, conversationID, isPreviewMode, sourceID, t]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!conversationID) return;
+      const picked = consumePickedLocation(conversationID);
+      if (!picked) return;
+      void handleSendPickedLocation(picked);
+    }, [consumePickedLocation, conversationID, handleSendPickedLocation]),
+  );
+
   /**
    * 图片的「上传 + 发送」。首发与长按重发共用 —— 重发必须带同一个 deliveryId,
    * 否则时间线里会多出一条,而不是把那个红气泡换掉。
@@ -2559,6 +2829,9 @@ export default function ChatDetailScreen() {
       deliveryId: string,
     ) => {
       try {
+        if (isTempChat) {
+          await assertMyTempChatConversationOpen(conversationID);
+        }
         // 不日志 presign 返回的 fileUrl / uploadUrl —— 这是带签名的临时写凭证，
         // 任何能捕获 console 输出的渠道（adb logcat、屏幕录制、第三方 SDK 的
         // breadcrumb）拿到 uploadUrl 就能在过期前向同一对象写入任意内容。
@@ -2568,7 +2841,12 @@ export default function ChatDetailScreen() {
           folder: 'chat',
           fileUri: asset.uri,
         });
-        await uploadLocalFileToPresignedUrl(presign.uploadUrl, contentType, asset.uri);
+        await uploadLocalFileToPresignedUrl(
+          presign.uploadUrl,
+          contentType,
+          asset.uri,
+          presign.requiredHeaders,
+        );
 
         // 生成并上传一张缩略图供列表气泡显示；失败 / 原图已够小时退化为原图（thumb* 留空）。
         const thumbnail = await uploadChatImageThumbnail(
@@ -2610,7 +2888,7 @@ export default function ChatDetailScreen() {
         }
       }
     },
-    [conversationID, t],
+    [conversationID, isTempChat, t],
   );
   // 相册选择与拍照共用同一套「上传→发送」流程，只有获取 asset 的来源不同。
   const uploadAndSendImageAsset = useCallback(
@@ -2620,7 +2898,7 @@ export default function ChatDetailScreen() {
       // 圈子封面 / 好友照片一致（10MB），此前只有聊天发图这条路径漏了 gate。
       if (isChatImageTooLarge(asset.fileSize)) {
         Alert.alert(t('validation.imageTooLarge'), t('validation.imageSizeLimit'));
-        return;
+        return false;
       }
 
       // 用 || 而非 ??：URI 以 '/' 结尾时 pop() 返回空字符串，?? 不会触发 fallback。
@@ -2639,16 +2917,21 @@ export default function ChatDetailScreen() {
         assertLocalCanSendMessage();
       } catch (error) {
         if (mountedRef.current) {
-          setSendError(
-            getChatSendErrorMessage(
-              error,
-              t('chat.detail.imageSendFailed', {
-                defaultValue: '图片发送失败，请重试',
-              }),
-            ),
+          const message = getChatSendErrorMessage(
+            error,
+            t('chat.detail.imageSendFailed', {
+              defaultValue: '图片发送失败，请重试',
+            }),
+          );
+          setSendError(message);
+          // 照片编辑器是全屏 Modal，输入栏上的 sendError 此时不可见；同步弹出
+          // 可操作的错误提示，同时保留编辑器，用户可以继续调整或取消。
+          Alert.alert(
+            t('common.errorOccurred', { defaultValue: '操作失败' }),
+            message,
           );
         }
-        return;
+        return false;
       }
 
       // 先上屏、后台上传:和语音同一套 —— 上传期间气泡是「发送中」,
@@ -2664,28 +2947,173 @@ export default function ChatDetailScreen() {
         retry: (id) => uploadAndSendImage(asset, filename, contentType, id),
       });
       void uploadAndSendImage(asset, filename, contentType, deliveryId);
+      return true;
     },
     [conversationID, t, uploadAndSendImage],
   );
 
-  const handlePickMedia = useCallback(async () => {
-    if (!sourceID || isPreviewMode) return;
-    if (inFlightRef.current) return;
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert(t('permissions.insufficientTitle'), t('permissions.photoLibrary'));
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      preferredAssetRepresentationMode:
-        ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
-      quality: 0.85,
-      allowsMultipleSelection: false,
-    });
-    if (result.canceled || result.assets.length === 0) return;
-    await uploadAndSendImageAsset(result.assets[0]);
-  }, [isPreviewMode, sourceID, t, uploadAndSendImageAsset]);
+  const uploadAndSendVideo = useCallback(
+    async (
+      asset: ImagePicker.ImagePickerAsset,
+      filename: string,
+      contentType: string,
+      deliveryId: string,
+    ) => {
+      try {
+        if (isTempChat) {
+          await assertMyTempChatConversationOpen(conversationID);
+        }
+        let key = uploadedVideoKeysRef.current.get(deliveryId);
+        if (!key) {
+          const presign = await requestUploadPresign({
+            filename: sanitizeUploadFilename(filename),
+            contentType,
+            folder: 'chat',
+            fileUri: asset.uri,
+          });
+          await uploadLocalFileToPresignedUrl(
+            presign.uploadUrl,
+            contentType,
+            asset.uri,
+            presign.requiredHeaders,
+            VIDEO_UPLOAD_TIMEOUT_MS,
+          );
+          key = presign.key;
+          uploadedVideoKeysRef.current.set(deliveryId, key);
+        }
+        await sendVideoMessage({
+          conversationId: conversationID,
+          key,
+          localUri: asset.uri,
+          width: asset.width ?? undefined,
+          height: asset.height ?? undefined,
+          duration:
+            typeof asset.duration === 'number'
+              ? Math.max(1, Math.ceil(asset.duration / 1000))
+              : undefined,
+          size: asset.fileSize ?? undefined,
+          deliveryId,
+        });
+        uploadedVideoKeysRef.current.delete(deliveryId);
+        finishMediaSend(deliveryId);
+      } catch (error) {
+        if (__DEV__) {
+          console.warn(
+            '[chat] video send failed',
+            error instanceof Error
+              ? { name: error.name, message: error.message }
+              : String(error),
+          );
+        }
+        failMediaSend(conversationID, deliveryId);
+        if (mountedRef.current) {
+          setSendError(
+            getChatSendErrorMessage(
+              error,
+              t('chat.detail.videoSendFailed', {
+                defaultValue: '视频发送失败，请重试',
+              }),
+            ),
+          );
+        }
+      }
+    },
+    [conversationID, isTempChat, t],
+  );
+
+  const uploadAndSendVideoAsset = useCallback(
+    async (asset: ImagePicker.ImagePickerAsset) => {
+      if (isChatVideoTooLarge(asset.fileSize)) {
+        Alert.alert(
+          t('chat.detail.videoRejectedTitle', { defaultValue: '视频无法发送' }),
+          t('chat.detail.videoTooLarge', { defaultValue: '请选择 100MB 以内的视频' }),
+        );
+        return;
+      }
+      if (isChatVideoTooLong(asset.duration)) {
+        Alert.alert(
+          t('chat.detail.videoRejectedTitle', { defaultValue: '视频无法发送' }),
+          t('chat.detail.videoTooLong', { defaultValue: '请选择 10 分钟以内的视频' }),
+        );
+        return;
+      }
+
+      const filename = asset.fileName || asset.uri.split('/').pop() || 'video.mp4';
+      const contentType = resolveUploadContentType({
+        mimeType: asset.mimeType,
+        fileName: filename,
+      });
+      if (!contentType?.startsWith('video/')) {
+        Alert.alert(
+          t('chat.detail.videoRejectedTitle', { defaultValue: '视频无法发送' }),
+          t('chat.detail.videoUnsupported', {
+            defaultValue: '仅支持 MP4、MOV、M4V 视频',
+          }),
+        );
+        return;
+      }
+
+      try {
+        assertLocalCanSendMessage();
+      } catch (error) {
+        if (mountedRef.current) {
+          setSendError(
+            getChatSendErrorMessage(
+              error,
+              t('chat.detail.videoSendFailed', {
+                defaultValue: '视频发送失败，请重试',
+              }),
+            ),
+          );
+        }
+        return;
+      }
+
+      const deliveryId = startMediaSend({
+        conversationId: conversationID,
+        type: 'video',
+        localContent: {
+          localUri: asset.uri,
+          ...(asset.width ? { width: asset.width } : {}),
+          ...(asset.height ? { height: asset.height } : {}),
+          ...(typeof asset.duration === 'number'
+            ? { duration: Math.max(1, Math.ceil(asset.duration / 1000)) }
+            : {}),
+          ...(asset.fileSize ? { size: asset.fileSize } : {}),
+        },
+        retry: (id) => uploadAndSendVideo(asset, filename, contentType, id),
+      });
+      void uploadAndSendVideo(asset, filename, contentType, deliveryId);
+    },
+    [conversationID, t, uploadAndSendVideo],
+  );
+
+  const handlePickLibraryMedia = useCallback(
+    async (kind: 'photo' | 'video') => {
+      if (!sourceID || isPreviewMode) return;
+      if (inFlightRef.current) return;
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(t('permissions.insufficientTitle'), t('permissions.photoLibrary'));
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: kind === 'photo' ? ['images'] : ['videos'],
+        preferredAssetRepresentationMode:
+          ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+        quality: 0.85,
+        allowsMultipleSelection: false,
+      });
+      if (result.canceled || result.assets.length === 0) return;
+      const pickedAsset = result.assets[0];
+      if (kind === 'photo') {
+        setPhotoEditorAsset(pickedAsset);
+        return;
+      }
+      await uploadAndSendVideoAsset(pickedAsset);
+    },
+    [isPreviewMode, sourceID, t, uploadAndSendVideoAsset],
+  );
 
   const handleTakePhoto = useCallback(async () => {
     if (!sourceID || isPreviewMode) return;
@@ -2700,8 +3128,36 @@ export default function ChatDetailScreen() {
       quality: 0.85,
     });
     if (result.canceled || result.assets.length === 0) return;
-    await uploadAndSendImageAsset(result.assets[0]);
-  }, [isPreviewMode, sourceID, t, uploadAndSendImageAsset]);
+    setPhotoEditorAsset(result.assets[0]);
+  }, [isPreviewMode, sourceID, t]);
+
+  const handleSendEditedPhoto = useCallback(
+    async (asset: ImagePicker.ImagePickerAsset) => {
+      const accepted = await uploadAndSendImageAsset(asset);
+      if (accepted && mountedRef.current) {
+        setPhotoEditorAsset(null);
+      }
+      return accepted;
+    },
+    [uploadAndSendImageAsset],
+  );
+
+  const handleMediaSourceSelect = useCallback(
+    (action: MediaSourceAction) => {
+      setMediaSourceSheetVisible(false);
+      requestAnimationFrame(() => {
+        if (!mountedRef.current) return;
+        if (action === 'photo') {
+          void handlePickLibraryMedia('photo');
+        } else if (action === 'video') {
+          void handlePickLibraryMedia('video');
+        } else {
+          void handleTakePhoto();
+        }
+      });
+    },
+    [handlePickLibraryMedia, handleTakePhoto],
+  );
 
   const openSharePicker = useCallback(
     (type: 'note' | 'friend' | 'favorite' | 'quick-reply') => {
@@ -2720,10 +3176,7 @@ export default function ChatDetailScreen() {
       setAttachmentOpen(false);
       switch (id) {
         case 'media':
-          void handlePickMedia();
-          return;
-        case 'camera':
-          void handleTakePhoto();
+          setMediaSourceSheetVisible(true);
           return;
         case 'notes':
           openSharePicker('note');
@@ -2738,7 +3191,7 @@ export default function ChatDetailScreen() {
           openSharePicker('quick-reply');
           return;
         case 'location':
-          void handleSendCurrentLocation();
+          void handleOpenLocationPicker();
           return;
         case 'voice-call':
           void handleStartCall();
@@ -2764,9 +3217,7 @@ export default function ChatDetailScreen() {
       avatarUrl,
       conversationTitle,
       conversationType,
-      handlePickMedia,
-      handleTakePhoto,
-      handleSendCurrentLocation,
+      handleOpenLocationPicker,
       handleStartCall,
       openSharePicker,
       sourceID,
@@ -2774,37 +3225,157 @@ export default function ChatDetailScreen() {
     ],
   );
 
-  const handlePickNote = useCallback(
-    async (note: NoteSummary) => {
-      if (!sourceID || isPreviewMode) return;
-      if (inFlightRef.current) return;
-      inFlightRef.current = true;
-      try {
-        const noteCardPayload = {
-          ...buildNoteCardPayloadFromSummary(note, authUser?.id ?? null),
-          ownerId: authUser?.id ?? null,
-        };
-        await sendCardMessage({
-          conversationId: conversationID,
-          type: 'note-card',
-          payload: noteCardPayload,
-        });
-      } catch (error) {
-        if (mountedRef.current) {
-          setSendError(
-            getChatSendErrorMessage(
-              error,
-              t('chat.detail.noteSendFailed', {
-                defaultValue: '笔记发送失败，请重试',
-              }),
-            ),
-          );
+  /**
+   * 批量发笔记(SharePicker 多选 + 发送选项 sheet 的执行端)。
+   *
+   * 每条笔记按 卡片 → 图片·视频/展示 → 地址 的顺序展开;媒体必须先经
+   * POST /note/:id/chat-media 由服务端拷进自己的 chat/ 命名空间(发送校验
+   * 只认发送者自己的 key)。地址只在笔记详情里,摘要拿不到坐标时按需拉详情。
+   *
+   * 不整批持有 inFlightRef:大批次能发几分钟,不该锁死输入栏;重复消费由
+   * share-picker store 的 consume() 一次性语义兜底,批与批之间由
+   * noteBatchQueueRef 串行(两次突发不能叠进同一个服务端限流桶)。
+   * 离开会话(卸载)即停发剩余任务 —— 发错聊天时用户退出就是止损。
+   * 单条失败不中断整批,发完汇总一次错误提示;首个错误保留语义映射
+   * (敏感词/被拉黑等确定性拒绝要说清原因,不能伪装成可重试的网络问题)。
+   */
+  const runNoteBatchSend = useCallback(
+    async (notes: NoteSummary[], options: NoteSendOptions) => {
+      const sections = sectionsToImport(options);
+      let failures = 0;
+      let firstError: unknown = null;
+
+      const perNote: NoteSendTask[][] = [];
+      for (const note of notes) {
+        if (!mountedRef.current) return;
+        let imported: ImportedNoteChatMedia[] = [];
+        // mediaCount=0 的笔记没有任何可拷对象,别浪费服务端 20 次/分钟的拷贝配额。
+        if (sections.length > 0 && note.mediaCount > 0) {
+          try {
+            imported = (await importNoteChatMedia(note.id, sections)).items;
+          } catch (error) {
+            failures += 1;
+            firstError ??= error;
+            if (__DEV__) {
+              console.warn('[ChatDetail] import note media failed', error);
+            }
+          }
         }
-      } finally {
-        inFlightRef.current = false;
+        let location = note.sections?.location ?? null;
+        if (
+          options.location &&
+          !resolveSendableNoteLocation(location) &&
+          // 摘要只带 hasLocation 布尔;明确没有地址的笔记不值得为它拉详情。
+          note.hasLocation !== false
+        ) {
+          try {
+            location = (await fetchNoteDetail(note.id)).sections?.location ?? null;
+          } catch (error) {
+            // 拉不到详情=这条的地址发不出去。必须计入失败,否则「只勾了地址,
+            // 网络一抖」会变成什么都没发还零提示的静默丢失。
+            failures += 1;
+            firstError ??= error;
+            location = null;
+            if (__DEV__) {
+              console.warn('[ChatDetail] fetch note location failed', error);
+            }
+          }
+        }
+        perNote.push(buildNoteSendTasks(note, options, imported, location));
+      }
+
+      const tasks = perNote.flat();
+      const delay = notePacingDelayMs(tasks.length);
+      for (let i = 0; i < tasks.length; i += 1) {
+        if (!mountedRef.current) return;
+        const task = tasks[i];
+        try {
+          switch (task.kind) {
+            case 'note-card':
+              await sendCardMessage({
+                conversationId: conversationID,
+                type: 'note-card',
+                payload: {
+                  ...buildNoteCardPayloadFromSummary(
+                    task.note,
+                    authUser?.id ?? null,
+                  ),
+                  ownerId: authUser?.id ?? null,
+                },
+              });
+              break;
+            case 'image':
+              await sendImageMessage({
+                conversationId: conversationID,
+                key: task.key,
+                width: task.width,
+                height: task.height,
+              });
+              break;
+            case 'video':
+              await sendVideoMessage({
+                conversationId: conversationID,
+                key: task.key,
+                width: task.width,
+                height: task.height,
+                duration: task.duration,
+                size: task.size,
+              });
+              break;
+            case 'location':
+              await sendLocationMessage({
+                conversationId: conversationID,
+                latitude: task.latitude,
+                longitude: task.longitude,
+                title: task.title,
+                address: task.address,
+              });
+              break;
+          }
+        } catch (error) {
+          failures += 1;
+          firstError ??= error;
+          reportChatSendFailure(task.kind, error);
+          if (__DEV__) {
+            console.warn('[ChatDetail] note batch send failed', error);
+          }
+        }
+        if (delay > 0 && i < tasks.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+
+      if (failures > 0 && mountedRef.current) {
+        const countMessage = t('chat.detail.noteBatchPartialFailed', {
+          defaultValue: '{{count}} 条内容发送失败',
+          count: failures,
+        });
+        // 首个错误若映射得出确切原因(敏感词/被拉黑/限流),优先展示它 ——
+        // 这些是重试一万次也不会成功的确定性拒绝,笼统计数只会诱导人狂点重试。
+        setSendError(
+          firstError
+            ? getChatSendErrorMessage(firstError, countMessage)
+            : countMessage,
+        );
       }
     },
-    [authUser?.id, conversationID, isPreviewMode, sourceID, t],
+    [authUser?.id, conversationID, t],
+  );
+
+  const handlePickNoteBatch = useCallback(
+    (notes: NoteSummary[], options: NoteSendOptions) => {
+      if (!sourceID || isPreviewMode || notes.length === 0) {
+        return Promise.resolve();
+      }
+      const previous = noteBatchQueueRef.current;
+      const run = previous
+        .catch(() => undefined)
+        .then(() => runNoteBatchSend(notes, options));
+      // 队列尾永不 reject,后续批次才接得上。
+      noteBatchQueueRef.current = run.catch(() => undefined);
+      return run;
+    },
+    [isPreviewMode, runNoteBatchSend, sourceID],
   );
 
   const handlePickFriend = useCallback(
@@ -2931,64 +3502,17 @@ export default function ChatDetailScreen() {
     [sendDraftAsText],
   );
 
-  const handleSendTransferCard = useCallback(
-    async (payload: {
-      amount: number;
-      message: string | null;
-      idempotencyKey?: string | null;
-    }) => {
-      if (!sourceID || isPreviewMode) return;
-      if (inFlightRef.current) return;
-      inFlightRef.current = true;
-      try {
-        await sendCardMessage({
-          conversationId: conversationID,
-          type: 'transfer-card',
-          payload: { amount: payload.amount, message: payload.message },
-          // 积分早在 TransferComposerScreen 里就真扣真到账了,这张卡只是回执。
-          // 让信用分门禁拦在这里阻止不了任何事,只会让付款方看不到卡片、
-          // 以为没发出去 —— 从转账页重试会生成新的幂等键,那是第二次真实扣款。
-          // 门禁在扣款之前已经过了一道(handleSubmit)。
-          bypassCreditGate: true,
-        });
-        // #100：告知后端卡片已由客户端送达，补偿 cron 不再重发。
-        // round 2 review：回执是防重发的唯一信号，不能 fire-and-forget ——
-        // 先持久化挂账再冲销：回执丢失（超时/退后台）时下次进聊天页续冲，
-        // app 被杀也不丢账；后端按 key 幂等，重复回执无害。
-        if (payload.idempotencyKey) {
-          enqueueGiftCardAck(payload.idempotencyKey);
-          void flushPendingGiftCardAcks();
-        }
-      } catch (error) {
-        // 钱是强一致落库的,这张卡只是回执:客户端发失败不代表转账没成 ——
-        // 后端 GiftCardOutboxProcessor 宽限 2 分钟后逐分钟补发(幂等键
-        // gift_card_<id>,最多 60 次)。所以文案不能说「积分已扣减」把人吓到
-        // 去重转 —— 重转会生成新幂等键,那是第二次真实扣款。
-        if (mountedRef.current) {
-          setSendError(
-            getChatSendErrorMessage(
-              error,
-              t('chat.detail.transferCardSendFailed', {
-                defaultValue: '转账已完成，卡片稍后自动补上',
-              }),
-            ),
-          );
-        }
-      } finally {
-        inFlightRef.current = false;
-      }
-    },
-    [conversationID, isPreviewMode, sourceID, t],
-  );
+  // 转账卡片不在这里发。它断言的是「钱已经划走」这个服务端事实,客户端能发
+  // 就等于能凭空捏造它 —— 后端已把该类型收进 SERVER_MESSAGE_TYPES,
+  // 由 CoinService.sendGift 在结算提交后就地签发,走 chat:msg 广播下来。
+  //
+  // 这里曾经有一个对应的发送 handler,而它 100% 被 validateSendPayload 拒。
+  // #156 已经把症状压住(SERVER_COMPENSATED_TYPES:不入 outbox、失败不留气泡),
+  // 这次是拆掉病根 —— 发送本身没了,连带那条永远走不到的回执挂账。
 
-  // 从 SharePickerScreen / TransferComposerScreen 返回时消费 pending 项
-  // 并触发对应发送动作。
+  // 从 SharePickerScreen 返回时消费 pending 项并触发对应发送动作。
   useFocusEffect(
     useCallback(() => {
-      const transfer = consumePendingTransfer();
-      if (transfer) {
-        void handleSendTransferCard(transfer);
-      }
       // 报名→聊天：把预挂的帖子卡片显示为待发送引用，并预填开场白（不覆盖非空草稿）。
       const cardPending = sourceID ? consumePendingChatCard(sourceID) : null;
       if (cardPending) {
@@ -2998,8 +3522,8 @@ export default function ChatDetailScreen() {
       const item = consumePendingShare();
       if (!item) return;
       switch (item.kind) {
-        case 'note':
-          void handlePickNote(item.data);
+        case 'note-batch':
+          void handlePickNoteBatch(item.notes, item.options);
           return;
         case 'friend':
           void handlePickFriend(item.data);
@@ -3013,14 +3537,12 @@ export default function ChatDetailScreen() {
       }
     }, [
       consumePendingShare,
-      consumePendingTransfer,
       consumePendingChatCard,
       sourceID,
       handlePickFavorite,
       handlePickFriend,
-      handlePickNote,
+      handlePickNoteBatch,
       handlePickQuickReply,
-      handleSendTransferCard,
     ]),
   );
 
@@ -3161,7 +3683,17 @@ export default function ChatDetailScreen() {
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
         <Pressable onPress={handleOpenHeaderTarget}>
-          <Avatar size={36} name={conversationTitle} uri={avatarUrl} />
+          {isGroupChat ? (
+            <GroupChatAvatar
+              size={36}
+              name={conversationTitle}
+              uri={avatarUrl}
+              temporary={isTempChat}
+              badgeBorderColor={colors.background}
+            />
+          ) : (
+            <Avatar size={36} name={conversationTitle} uri={avatarUrl} />
+          )}
         </Pressable>
         <View style={s.headerInfo}>
           <View style={s.headerMeta}>
@@ -3245,6 +3777,8 @@ export default function ChatDetailScreen() {
           // 下拉/滚动消息列表即收起底部面板与键盘（微信式）。on-drag 让键盘跟手滑落。
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
+          onScroll={handleMessageListScroll}
+          scrollEventThrottle={32}
           onScrollBeginDrag={closeInputPanels}
           // scrollToIndex 在 inverted + 没设 getItemLayout 时，目标 index 超出已渲染窗口
           // 就会抛 "scrollToIndex out of range"。fallback：先滚到能测到的最远 index，
@@ -3612,6 +4146,12 @@ export default function ChatDetailScreen() {
         onDismiss={() => setActionMenu(null)}
       />
 
+      <MediaSourceSheet
+        visible={mediaSourceSheetVisible}
+        onSelect={handleMediaSourceSelect}
+        onClose={() => setMediaSourceSheetVisible(false)}
+      />
+
       <OptionPickerSheet
         visible={reactionTarget !== null}
         title={t('chat.messageActions.react', { defaultValue: '回应' })}
@@ -3619,6 +4159,12 @@ export default function ChatDetailScreen() {
         selectedValue=""
         onSelect={handlePickReaction}
         onClose={() => setReactionTarget(null)}
+      />
+
+      <PhotoEditorModal
+        asset={photoEditorAsset}
+        onCancel={() => setPhotoEditorAsset(null)}
+        onSend={handleSendEditedPhoto}
       />
 
       {/* 微信式全屏录音浮层：录音时盖在最上层，纯展示（pointerEvents none）。 */}

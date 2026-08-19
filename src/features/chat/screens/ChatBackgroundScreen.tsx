@@ -113,6 +113,7 @@ export default function ChatBackgroundScreen() {
         presign.uploadUrl,
         contentType,
         asset.uri,
+        presign.requiredHeaders,
       );
       if (!mountedRef.current) return;
       setUploadingImage(false);

@@ -90,7 +90,7 @@
       "mergeAvatar": "Unir avatares consecutivos",
       "mergeAvatarHint": "Solo el primer mensaje del mismo emisor muestra avatar",
       "showGroupTags": "Mostrar etiquetas de grupo",
-      "showGroupTagsHint": "[Grupo][Agente][Dedicado]",
+      "showGroupTagsHint": "[Grupo][Grupo temporal][Dedicado]",
       "showOriginalGroupName": "Mostrar nombre original del grupo",
       "showOriginalGroupNameHint": "Al activarlo: alias (apodo original del grupo)",
       "pinnedFoldCount": "Chats fijados visibles",
@@ -246,15 +246,22 @@
       "voiceSendFailed": "No se pudo enviar el mensaje de voz, inténtalo de nuevo",
       "locationSendFailed": "No se pudo enviar la ubicación, inténtalo de nuevo",
       "imageSendFailed": "No se pudo enviar la imagen, inténtalo de nuevo",
-      "noteSendFailed": "No se pudo enviar la nota, inténtalo de nuevo",
+      "videoSendFailed": "No se pudo enviar el video, inténtalo de nuevo",
+      "videoRejectedTitle": "No se puede enviar el video",
+      "videoTooLarge": "Elige un video de menos de 100MB",
+      "videoTooLong": "Elige un video de menos de 10 minutos",
+      "videoUnsupported": "Solo se admiten videos MP4, MOV y M4V",
+      "videoUnavailable": "Vídeo no disponible",
+      "playVideo": "Reproducir vídeo",
+      "noteBatchPartialFailed": "No se pudieron enviar {{count}} elementos",
       "cardSendFailed": "No se pudo enviar la tarjeta de perfil, inténtalo de nuevo",
       "favoriteSendFailed": "No se pudo enviar el favorito, inténtalo de nuevo",
-      "transferCardSendFailed": "Transferencia completada. La tarjeta llegará en breve.",
       "favoriteLegacyVoiceUnsupported": "Este favorito de voz antiguo ya no se puede enviar"
     },
     "messageActions": {
       "title": "Acciones del mensaje",
       "collect": "Guardar",
+      "addToNotes": "Añadir",
       "forward": "Reenviar",
       "collected": "Guardado",
       "collectedHint": "Míralo en Mis guardados",
@@ -473,15 +480,55 @@
       "failedBody": "No se pudo definir el fondo con la imagen. Inténtalo de nuevo."
     },
     "attachments": {
-      "photos": "Fotos",
+      "photos": "Fotos/Videos",
+      "mediaHub": "Multimedia",
+      "mediaPhoto": "Fotos",
+      "mediaVideo": "Videos",
       "camera": "Cámara",
-      "voiceCall": "Llamada",
+      "voiceCall": "Llamada de audio/video",
       "location": "Ubicación",
       "notes": "Notas",
       "friendCard": "Tarjeta de contacto",
       "favorites": "Favoritos",
       "quickReply": "Respuesta rápida",
       "transfer": "Transferencia"
+    },
+    "photoEditor": {
+      "title": "Editar foto",
+      "preview": "Vista previa de la foto antes de enviar",
+      "cropSquare": "Recortar 1:1",
+      "cropFourThree": "Recortar 4:3",
+      "freeCrop": "Recorte libre",
+      "freeCropTitle": "Recorte libre",
+      "cropFrame": "Marco de recorte libre",
+      "cropHint": "Arrastra una esquina para ajustar o el interior para mover",
+      "cropDone": "Listo",
+      "mosaic": "Mosaico",
+      "mosaicTitle": "Mosaico",
+      "mosaicHint": "Desliza el dedo sobre el área que quieras ocultar",
+      "draw": "Dibujar",
+      "drawTitle": "Dibujar",
+      "drawColor": "Color del pincel",
+      "markupCanvas": "Lienzo de edición de fotos",
+      "undo": "Deshacer",
+      "rotate": "Girar",
+      "flip": "Voltear",
+      "reset": "Restablecer",
+      "editFailedTitle": "Error de edición",
+      "editFailedMessage": "No se pudo procesar la foto. Inténtalo de nuevo."
+    },
+    "location": {
+      "showPreview": "Toca para ver el mapa"
+    },
+    "locationPicker": {
+      "title": "Seleccionar ubicación",
+      "searchPlaceholder": "Buscar un lugar",
+      "send": "Enviar ubicación",
+      "selectedLabel": "Ubicación seleccionada",
+      "invalidTitle": "Ubicación no válida",
+      "invalidMessage": "Selecciona la ubicación de nuevo",
+      "currentLocation": "Mi ubicación",
+      "loadFailed": "No se pudo obtener tu ubicación actual. Inténtalo de nuevo."
     },
     "call": {
       "title": "Llamada de voz",
@@ -596,7 +643,9 @@
     "lowCreditScore": "Tu puntuación de crédito es inferior a {{minScore}}, por lo que no puedes enviar mensajes ahora",
     "burnAfterReading": "Mensajes temporales",
     "clearHistoryConfirm": "Solo se borra tu copia del historial. ¿Vaciar?",
-    "clearHistoryDone": "Vaciado"
+    "clearHistoryConfirmDirect": "¿Vaciar el historial? También se eliminará para la otra persona y no se podrá deshacer.",
+    "clearHistoryDone": "Vaciado",
+    "clearHistoryDoneDirect": "Historial eliminado para ambas personas"
   },
   "messages": {
     "title": "Mensajes",
@@ -619,7 +668,12 @@
     "scanCopyFailedTitle": "No se pudo copiar",
     "scanCopyFailedMessage": "Se escaneó el código QR, pero no se pudo copiar el contenido.",
     "scanAgain": "Escanear de nuevo",
-    "seatManagement": "Gestión de asientos",
+    "scanFromAlbum": "Elegir del álbum",
+    "scanAlbumNoCodeTitle": "No se encontró ningún código QR",
+    "scanAlbumNoCodeMessage": "Esta imagen no contiene un código QR legible. Prueba con otra.",
+    "scanAlbumFailedTitle": "Error al escanear",
+    "scanAlbumFailedMessage": "Inténtalo de nuevo.",
+    "seatManagement": "Chats grupales temporales",
     "groupManagement": "Gestión de grupos",
     "loadFailed": "No se pudieron cargar las conversaciones: {{error}}",
     "noConversations": "No hay conversaciones",
@@ -628,9 +682,15 @@
     "swipeMarkRead": "Marcar leído",
     "swipeMarkUnread": "Marcar no leído",
     "swipeHide": "Ocultar chat",
+    "swipePin": "Fijar",
+    "swipeUnpin": "Dejar de fijar",
+    "swipeMute": "Silenciar",
+    "swipeUnmute": "Activar sonido",
+    "swipeActionFailed": "No se pudo completar la acción",
     "swipeDelete": "Eliminar",
     "deleteChat": "Eliminar chat",
     "deleteChatConfirm": "¿Eliminar el chat y los mensajes locales de «{{name}}»?",
+    "deleteChatConfirmDirect": "¿Eliminar el historial con «{{name}}»? También se eliminará para la otra persona y no se podrá deshacer.",
     "newGroupTitle": "Iniciar chat de grupo",
     "newGroupNamePlaceholder": "Nombre del grupo (opcional)",
     "newGroupSelectMembers": "Selecciona contactos",
@@ -653,15 +713,32 @@
     "inviteGroupMembersNoInvitableFriends": "No hay amigos disponibles para invitar",
     "inviteGroupMembersLoadFailed": "No se pudieron cargar los amigos. Inténtalo de nuevo.",
     "groups": {
-      "title": "Grupos personalizados",
+      "title": "Gestionar grupos",
       "createSection": "Crear grupo",
+      "orderSection": "Orden de grupos",
+      "orderHint": "Mantén pulsado y arrastra para ordenar las pestañas de Mensajes",
+      "builtInGroup": "Fijo",
+      "customGroup": "Personalizado",
+      "reorderA11y": "Ajustar la posición de {{name}}",
+      "reorderFailedTitle": "Error al reordenar",
+      "reorderFailedMessage": "No se pudo guardar el orden de los grupos, inténtalo de nuevo.",
+      "moveUp": "Subir",
+      "moveDown": "Bajar",
       "namePlaceholder": "Ej.: Familia / Trabajo",
       "nameRequired": "Introduce un nombre de grupo",
       "myGroups": "Mis grupos",
       "empty": "Aún no hay grupos personalizados. Crea uno.",
       "conversationCount": "{{count}} conversaciones",
-      "memberHint": "Conversaciones en «{{name}}» (mantén pulsado el nombre del grupo para cambiarlo)",
+      "memberHint": "Selecciona chats grupales o privados para añadirlos a «{{name}}» (selección múltiple)",
       "noConversations": "No hay conversaciones disponibles para añadir",
+      "filterAll": "Todo",
+      "filterSelected": "Seleccionados",
+      "searchPlaceholder": "Buscar chats grupales o directos",
+      "selectedCount": "{{selected}} / {{total}} seleccionados",
+      "resultCount": "{{count}} resultados",
+      "selectResults": "Seleccionar todos los resultados",
+      "deselectResults": "Deseleccionar los resultados actuales",
+      "noMatchingConversations": "No hay conversaciones coincidentes",
       "groupChat": "Chat de grupo",
       "directChat": "Chat directo",
       "renameTitle": "Renombrar grupo",
@@ -687,7 +764,13 @@
       "unlist": "Retirar",
       "relist": "Volver a publicar",
       "more": "Más",
-      "restore": "Restaurar"
+      "restore": "Restaurar",
+      "multiSelect": "Selección múltiple",
+      "remark": "Comentario",
+      "editNote": "Editar nota",
+      "editGroups": "Editar grupos",
+      "delete": "Eliminar",
+      "download": "Descargar"
     },
     "alerts": {
       "deleteFailedTitle": "Error al eliminar",
@@ -708,9 +791,18 @@
       "relistFailedTitle": "No se pudo volver a publicar",
       "unlistFailedTitle": "No se pudo retirar",
       "unlistTitle": "Retirar nota",
-      "unlistConfirm": "Podrás verla en Retiradas. Las notas retiradas se eliminan automáticamente después de un mes.",
+      "unlistConfirm": "Podrás verla en Retiradas y volver a publicarla cuando quieras.",
       "refreshFailedTitle": "Error al actualizar",
-      "restoreFailedTitle": "No se pudo restaurar"
+      "restoreFailedTitle": "No se pudo restaurar",
+      "remarkFailedTitle": "No se pudo guardar el comentario",
+      "deleteTitle": "Eliminar nota",
+      "deleteConfirm": "Las notas eliminadas se pueden recuperar desde la papelera y se borran definitivamente a los 30 días.",
+      "batchFailedTitle": "Algunas acciones fallaron",
+      "batchPartialFailed": "Falló la operación en {{count}} notas; siguen seleccionadas, inténtalo de nuevo.",
+      "batchUnlistTitle": "Retirar notas",
+      "batchUnlistConfirm": "¿Retirar las {{count}} notas seleccionadas? Podrás volver a publicarlas cuando quieras.",
+      "batchDeleteTitle": "Eliminar notas",
+      "batchDeleteConfirm": "¿Eliminar las {{count}} notas seleccionadas? Podrás recuperarlas desde la papelera."
     },
     "detail": {
       "loadFailed": "No se pudo cargar la nota, inténtalo de nuevo",
@@ -722,10 +814,8 @@
       "downloadVideos": "Descargar videos",
       "downloadLongImage": "Generar imagen larga",
       "downloadPdf": "Descargar PDF",
-      "sourceGroupLabel": "De un chat de grupo",
-      "sourcePrivateLabel": "De un chat privado",
-      "sourceSharedBy": "Compartida por {{name}}",
-      "sourceLocate": "Ver mensaje original"
+      "chatWithSender": "Chatear con {{name}}",
+      "openGroupSource": "Ver el mensaje original en \"{{name}}\""
     },
     "edit": {
       "addImage": "Añadir imagen",
@@ -788,8 +878,14 @@
     },
     "manageGroups": {
       "cancelEdit": "Cancelar edición",
-      "copy": "\"Todas\" y \"Sin grupo\" son grupos fijos y no se pueden editar.",
+      "copy": "\"Todas\" y \"Sin grupo\" también se pueden reordenar, pero no renombrar ni eliminar.",
+      "fixedAll": "Todas",
+      "fixedUngrouped": "Sin grupo",
       "createNew": "Añadir grupo",
+      "renameTitle": "Editar nombre",
+      "renameHint": "Renombrando «{{name}}»",
+      "createHint": "Los grupos organizan tus notas.",
+      "nameLabel": "Nombre del grupo",
       "limitHint": "{{count}}/{{max}} grupos creados",
       "namePlaceholder": "Escribe un nombre para añadir un grupo nuevo",
       "saveEdit": "Guardar cambios",
@@ -825,7 +921,7 @@
     "title": "Mis notas",
     "unlisted": "Retirada",
     "unlistedTitle": "Notas retiradas",
-    "unlistedAutoDeleteHint": "Las notas retiradas se eliminan automáticamente después de un mes.",
+    "unlistedAutoDeleteHint": "Las notas retiradas no se eliminan automáticamente. Puedes volver a publicarlas cuando quieras.",
     "format": {
       "fullDate": "{{day}}/{{month}}/{{year}} · {{weekday}}",
       "groupOverflow": "{{first}}, {{second}} +{{extra}}",
@@ -863,13 +959,18 @@
       "selectedLabel": "Ubicación seleccionada"
     },
     "list": {
-      "fromSource": "De {{name}}"
+      "fromSource": "De {{name}}",
+      "remark": "Comentario: {{text}}",
+      "openSenderChat": "Chatear con {{name}}",
+      "openGroupChat": "Abrir el chat del grupo {{name}}"
     },
     "loadFailed": "No se pudieron cargar las notas. Revisa tu conexión e inténtalo de nuevo",
     "shareToChat": {
       "title": "Compartir con un amigo o grupo",
       "confirmTitle": "Enviar nota",
       "confirmMessage": "¿Enviar «{{title}}» a {{name}}?",
+      "confirmBatchMessage": "¿Enviar {{count}} notas a {{name}}?",
+      "partialFailed": "No se pudieron enviar {{count}} notas; inténtalo de nuevo.",
       "sentTitle": "Enviada",
       "sentMessage": "Nota enviada al chat.",
       "failedTitle": "Error al enviar",
@@ -878,16 +979,38 @@
       "loadFailed": "No se pudieron cargar los chats. Inténtalo de nuevo",
       "empty": "No hay chats para enviar",
       "groupHint": "Grupo",
-      "friendHint": "Amigo"
+      "friendHint": "Amigo",
+      "searchPlaceholder": "Buscar amigos o grupos",
+      "noMatch": "No hay amigos ni grupos que coincidan"
     },
     "recycleBin": "Papelera",
-    "recycleBinHint": "Las notas eliminadas se pueden restaurar aquí.",
-    "recycleBinTitle": "Papelera"
+    "recycleBinHint": "Las notas eliminadas se pueden restaurar aquí y se borran automáticamente a los 30 días.",
+    "recycleBinTitle": "Papelera",
+    "selection": {
+      "selectedCount": "{{count}} seleccionadas",
+      "selectAll": "Seleccionar todo",
+      "clearAll": "Anular selección",
+      "next": "Siguiente"
+    },
+    "remarkSheet": {
+      "title": "Comentario",
+      "batchTitle": "Comentario en lote ({{count}} notas)",
+      "placeholder": "Escribe un comentario; guarda vacío para borrarlo",
+      "save": "Guardar",
+      "saving": "Guardando..."
+    },
+    "groupPicker": {
+      "title": "Editar grupos",
+      "batchHint": "Marcar añade las {{count}} notas seleccionadas al grupo; desmarcar las quita. Los grupos sin tocar se mantienen igual.",
+      "empty": "Aún no hay grupos. Créalos primero en «Gestionar grupos».",
+      "save": "Guardar",
+      "saving": "Guardando..."
+    }
   },
   "tempChats": {
-    "title": "Gestión de plazas",
+    "title": "Chats grupales temporales",
     "create": "Crear chat temporal",
-    "refresh": "Actualizar lista de plazas",
+    "refresh": "Actualizar chats grupales temporales",
     "loading": "Cargando chats temporales",
     "createFailed": "No se pudo crear el chat temporal",
     "loadFailed": "No se pudieron cargar los chats temporales",
@@ -911,14 +1034,11 @@
       "7d": "7 días"
     },
     "more": "Más acciones",
-    "actionShare": "Compartir enlace",
     "actionEnd": "Terminar chat",
-    "shareMessage": "{{title}} — toca el enlace para unirte al chat temporal: {{url}}",
-    "shareFailed": "No se pudo compartir, reinténtalo",
     "linkCopied": "Enlace copiado",
-    "scanHint": "Escanea el código QR para unirte",
+    "copyFailed": "No se pudo copiar el enlace, inténtalo de nuevo",
+    "inviteLink": "Enlace de invitación",
     "copyLink": "Copiar enlace",
-    "shareSystem": "Compartir",
     "endConfirmTitle": "¿Terminar este chat temporal?",
     "endConfirmMessage": "Los invitados serán expulsados y no podrán volver a unirse una vez que termine.",
     "endConfirm": "Terminar",
@@ -1006,6 +1126,8 @@
       "alreadyMembers": "Los amigos seleccionados ya están en este círculo.",
       "noneSent": "No se pudo invitar a ninguno. Revisa los requisitos e inténtalo de nuevo.",
       "sentAll": "Invitaste a {{count}} amigos. Esperando verificación.",
+      "joinedAll": "Añadiste {{count}} amigos al círculo",
+      "joinedAndPending": "{{joined}} se unieron, {{pending}} en verificación",
       "sentPartial": "Invitaste a {{succeeded}}; {{failed}} fallaron porque ya son miembros o no cumplen los requisitos.",
       "fromContacts": "Invitar desde contactos",
       "noFriends": "Sin amigos para invitar",
@@ -1054,6 +1176,10 @@
       "restrictionsSection": "Restricciones",
       "fancyLabel": "Requiere número especial",
       "memberPostLabel": "Miembros pueden publicar",
+      "verificationGateLabel": "Verificación de ingreso",
+      "verificationGateOffHint": "Desactivado: las invitaciones permitidas entran al instante",
+      "verificationGateOnHint": "Los nuevos miembros necesitan la aprobación de {{count}} amigos del círculo para unirse",
+      "verifierCountLabel": "Verificadores requeridos",
       "vipAtLeast": "VIP {{level}} o superior",
       "nameRequired": "Nombre requerido (mín. 2 caracteres)",
       "descRequired": "Descripción requerida (mín. 10 caracteres)",
@@ -1183,6 +1309,7 @@
     "progress": "Aprobados {{approved}}/{{total}}",
     "addSlot": "Añadir",
     "emptySlot": "Vacío",
+    "rejectedCount": "{{count}} verificadores rechazaron; sus plazas quedaron libres",
     "inviteFriends": "Invita a amigos a verificar",
     "verified": "¡Verificado! Te uniste al círculo",
     "selectVerifier": "Elegir verificador",
@@ -1190,7 +1317,6 @@
     "invitedMessage": "Invitaste a {{name}} a verificar",
     "addFailed": "Error al añadir",
     "select": "Elegir",
-    "noFriends": "Sin amigos",
     "verificationRequest": "Solicitud de verificación",
     "requestNotExist": "Solicitud no encontrada",
     "wantsToJoin": "Quiere unirse a 【{{circle}}】",
@@ -1219,7 +1345,8 @@
     "settledApproved": "Aprobada — se unió al círculo",
     "youApproved": "Verificaste por ellos",
     "youRejected": "Rechazaste esta solicitud",
-    "loadFriendsFailed": "Error al cargar amigos, inténtalo de nuevo"
+    "noEligibleVerifiers": "No hay nadie para elegir: el verificador debe ser tu amigo y ya un miembro activo de este círculo",
+    "loadVerifiersFailed": "Error al cargar candidatos, inténtalo de nuevo"
   },
   "discover": {
     "title": "Momentos",
@@ -1275,6 +1402,7 @@
       "selectCircles": "Elegir círculos",
       "selectRegions": "Elegir regiones",
       "clear": "Borrar",
+      "activeInMyCircles": "Hay un filtro activo: algunos círculos están ocultos",
       "save": "Guardar",
       "saved": "Filtros guardados",
       "savedCirclesCount": "{{count}} círculos",
@@ -1406,6 +1534,8 @@
     "signUp": "Inscribirse",
     "signedUp": "Inscrito",
     "signupBlockedTitle": "Inscripción no disponible",
+    "profileBlockedGeneric": "Aún no cumples los requisitos para ver este perfil",
+    "signupBlockedGeneric": "Aún no cumples los requisitos de inscripción de esta publicación",
     "signupRestrictionMessage": "Para inscribirte: {{requirements}}",
     "circlePicker": {
       "selectedCount": "{{count}} círculo(s) seleccionado(s)"
@@ -1430,14 +1560,19 @@
   },
   "notifications": {
     "title": "Notificaciones",
+    "momentsTitle": "Notificaciones de momentos",
+    "circleTitle": "Notificaciones del círculo",
     "tabInteractive": "Interacciones",
-    "tabCircle": "Inscripciones",
+    "tabCircleNotifications": "Actividad del círculo",
+    "tabSignups": "Inscripciones",
     "filterAll": "Todas",
     "filterUnread": "No leídas",
     "markAllRead": "Marcar todo leído",
     "system": "Sistema",
     "emptyTitle": "Sin notificaciones",
     "emptySubtitle": "Las nuevas interacciones e inscripciones aparecen aquí",
+    "emptySubtitleMoments": "Los nuevos me gusta y comentarios aparecen aquí",
+    "emptySubtitleCircle": "La nueva actividad del círculo y las inscripciones aparecen aquí",
     "loadFailedTitle": "No se pudo cargar",
     "loadFailed": "Algunas notificaciones no se cargaron. Desliza para reintentar",
     "summary": {
@@ -1496,7 +1631,7 @@
     "title": "Contactos",
     "searchPlaceholder": "Buscar contactos...",
     "newFriends": "Nuevos amigos",
-    "seats": "Agentes",
+    "seats": "Chats grupales temporales",
     "groups": "Grupos",
     "circles": "Círculos",
     "tags": "Etiquetas",
@@ -1722,7 +1857,7 @@
     "memberCenter": "Membresía",
     "viewMember": "Ver",
     "wallet": {
-      "purchaseUnavailable": "La compra de puntos aún no está disponible. Por ahora, esta página solo muestra tu saldo.",
+      "purchaseUnavailable": "La compra de puntos aún no está disponible.",
       "title": "Mi cartera",
       "confirmRecharge": "Confirmar recarga",
       "balance": "Saldo de créditos",
@@ -1736,7 +1871,20 @@
       "agreementAnd": "y",
       "recharging": "Recargando...",
       "buyNow": "Comprar {{points}} créditos ahora",
-      "menuLabel": "Cartera"
+      "menuLabel": "Cartera",
+      "historyTitle": "Historial de puntos",
+      "historyLoadError": "No se pudo cargar el historial de puntos",
+      "historyEmpty": "Aún no hay movimientos",
+      "types": {
+        "referralReward": "Recompensa por invitación",
+        "referralBonus": "Bono de registro invitado",
+        "giftSent": "Puntos enviados",
+        "giftReceived": "Puntos recibidos",
+        "purchase": "Compra con puntos",
+        "recharge": "Puntos acreditados",
+        "refund": "Puntos reembolsados",
+        "adjustment": "Ajuste de puntos"
+      }
     },
     "mall": {
       "title": "Tienda del conserje",
@@ -1984,6 +2132,7 @@
       "title": "Centro de ayuda",
       "subtitle": "Elige el tipo de soporte que necesitas",
       "openFailed": "No se pudo abrir el chat de soporte. Inténtalo de nuevo.",
+      "loadFailed": "No se pudieron cargar las cuentas de soporte",
       "agentsSubtitle": "Toca un agente de soporte para empezar a chatear",
       "agentTapHint": "Toca para empezar a chatear",
       "agentFallbackName": "Agente de soporte",
@@ -2029,23 +2178,27 @@
       "supportUnavailableMessage": "Contacta con la atención al cliente oficial de la plataforma para activar o mejorar la membresía.",
       "planAccessibilityLabel": "{{plan}}, {{duration}}, CNY {{price}}",
       "duration": {
+        "days": "{{count}} día",
         "months": "{{count}} meses",
         "lifetime": "De por vida"
       },
       "exchangeSuccess": "Nivel de membresía actualizado a {{level}}",
       "exchangeError": "No se pudo actualizar la membresía. Inténtalo de nuevo más tarde.",
       "tiers": {
+        "daily": {
+          "name": "Membresía diaria"
+        },
         "silver": {
-          "name": "Membresía Plata"
+          "name": "Membresía mensual"
         },
         "gold": {
-          "name": "Membresía Oro"
+          "name": "Membresía semestral"
         },
         "diamond": {
-          "name": "Membresía Diamante"
+          "name": "Membresía anual"
         },
         "super": {
-          "name": "Membresía Súper"
+          "name": "Membresía de por vida"
         }
       },
       "benefits": {
@@ -2076,7 +2229,7 @@
       },
       "currentTierBadge": "Actual",
       "marketing": {
-        "goldAccess": "Todos los usuarios disfrutan actualmente de los límites de nivel Oro de forma gratuita",
+        "goldAccess": "Todos los usuarios disfrutan actualmente de los límites de la membresía semestral de forma gratuita",
         "title": "Las funciones de membresía aún no están disponibles",
         "groupQuota": "Hasta 400 miembros por grupo · únete a un máximo de 300 grupos",
         "noteQuota": "500 notas · 10 filtros de ciudad"
@@ -2088,7 +2241,7 @@
       "heading": "Reglas de membresía",
       "description": "Atención al cliente verifica y concede manualmente la membresía. Esta pantalla muestra el catálogo de beneficios; los permisos del backend son la fuente de autoridad.",
       "rules": {
-        "catalog": "Membresía Plata: CNY 298 / 1 mes; Oro: CNY 1.288 / 6 meses; Diamante: CNY 1.998 / 1 año; Súper: CNY 3.998 / de por vida.",
+        "catalog": "Membresía diaria: CNY 19.9 / 1 día; Membresía mensual: CNY 298 / 1 mes; Membresía semestral: CNY 1.288 / 6 meses; Membresía anual: CNY 1.998 / 1 año; Membresía de por vida: CNY 3.998 / de por vida.",
         "supportActivation": "La membresía no se puede canjear con puntos ni comprar en la aplicación. Tras el contacto, atención al cliente la verifica y concede manualmente.",
         "upgrade": "Los miembros actuales pueden contactar con atención al cliente para pagar la diferencia de una mejora. Se activa de inmediato y se aplica el valor restante de la membresía.",
         "expiry": "Cuando vence la membresía, solo se detienen sus beneficios. No se eliminan cuentas, chats, notas ni otro contenido del usuario.",
@@ -2199,7 +2352,16 @@
     "loadFailed": "Error al cargar",
     "noMatch": "Sin coincidencias",
     "empty": "Aún no hay contenido",
-    "favoriteLegacyVoiceUnsupported": "Favorito de voz antiguo: no se puede reenviar"
+    "favoriteLegacyVoiceUnsupported": "Favorito de voz antiguo: no se puede reenviar",
+    "noteBatch": {
+      "limitHint": "Selecciona hasta {{count}} notas",
+      "next": "Enviar ({{count}})",
+      "optionAll": "Todo",
+      "optionCard": "Nota",
+      "optionLocation": "Ubicación",
+      "optionMedia": "Multimedia",
+      "optionShowcase": "Exhibición"
+    }
   },
   "accountSwitcher": {
     "title": "Cambiar de cuenta",
@@ -2295,7 +2457,8 @@
     "sending": "Enviando…",
     "submit": "Enviar",
     "add": "Añadir",
-    "ok": "OK",
+    "ok": "Aceptar",
+    "view": "Ver",
     "search": "Buscar",
     "searching": "Buscando",
     "loading": "Cargando…",
@@ -2422,8 +2585,11 @@
   },
   "systemAnnouncements": {
     "title": "Anuncios del sistema",
+    "detailTitle": "Detalles del anuncio",
+    "openAnnouncement": "Ver detalles de {{title}}",
+    "unavailable": "Este anuncio no está disponible o se ha retirado",
     "subtitle": "Aquí aparecerán la información más reciente de la app windnote.ai, las novedades de versiones y las notas de los parches.",
-    "systemNotifications": "Notificaciones del sistema",
+    "systemNotifications": "Notificaciones de la cuenta",
     "empty": "No hay notificaciones del sistema",
     "loadFailed": "No se pudieron cargar las notificaciones del sistema. Desliza para reintentar",
     "latestAppInfo": {
@@ -2510,6 +2676,7 @@
       "memberQuit": "Un miembro salió del grupo",
       "memberKicked": "Se eliminó a un miembro",
       "groupNameUpdated": "Nombre del grupo actualizado",
+      "groupRenamed": "El nombre del grupo cambió a «{{name}}»",
       "groupDismissed": "Grupo disuelto",
       "messageRevoked": "Se retiró un mensaje",
       "friendAdded": "Ahora son amigos, ¡salúdense!",
@@ -2525,6 +2692,7 @@
       "location": "[Ubicación]",
       "typing": "[Escribiendo]",
       "card": "[Tarjeta] {{name}}",
+      "qr": "[Código QR] {{name}}",
       "transferWithAmount": "[Transferencia] {{amount}} créditos",
       "transfer": "[Transferencia]",
       "note": "[Nota] {{title}}",
@@ -2549,6 +2717,9 @@
       "d7": "7 días"
     }
   },
+  "location": {
+    "mapUnavailable": "No se pudo cargar el mapa. Revisa tu conexión e inténtalo de nuevo."
+  },
   "permissions": {
     "insufficientTitle": "Permiso necesario",
     "microphone": "Activa el acceso al micrófono en Ajustes",
@@ -2568,6 +2739,7 @@
     "errors": {
       "invalidAmount": "Cantidad de créditos no válida",
       "walletDataInvalid": "Error en el formato de los datos de la cartera",
+      "transactionDataInvalid": "Formato de datos del historial de puntos no válido",
       "rechargeDataInvalid": "Error en el formato de la respuesta de recarga"
     }
   },
@@ -2576,6 +2748,47 @@
       "presignDataInvalid": "Error en el formato de los datos de subida prefirmados",
       "fileUnreadable": "No se encontró el archivo que se va a subir.",
       "fileTooLarge": "El archivo supera el límite de {{maxMb}}MB."
+    }
+  },
+  "referral": {
+    "title": "Invita y gana",
+    "heroSubtitle": "Gana {{inviter}} puntos cuando tu amigo cumpla los requisitos; recibirá {{invitee}}",
+    "heroSubtitlePending": "Cargando los detalles de la recompensa…",
+    "paused": "Las recompensas están pausadas; las nuevas invitaciones no darán puntos",
+    "copy": "Copiar código",
+    "share": "Compartir invitación",
+    "shareMessage": "Únete a WindNote. Usa el código {{code}} al registrarte: {{url}}",
+    "rulesTitle": "Reglas de recompensa",
+    "ruleReward": "Por cada invitación válida recibes {{inviter}} puntos y tu amigo {{invitee}}",
+    "ruleQualification": "Tu amigo necesita avatar, {{days}} días de antigüedad y otro amigo",
+    "ruleCap": "Las primeras {{count}} invitaciones válidas del mes reciben recompensa",
+    "recordsTitle": "Historial de invitaciones",
+    "empty": "Aún no hay invitaciones. Comparte tu código para empezar.",
+    "loadMore": "Cargar más",
+    "loadingMore": "Cargando…",
+    "stats": {
+      "invited": "Invitados",
+      "rewarded": "Válidos",
+      "points": "Puntos ganados"
+    },
+    "status": {
+      "pending": "Pendiente",
+      "rewarded": "Recompensado",
+      "capped": "Límite alcanzado",
+      "rejected": "No válido",
+      "expired": "Caducado"
+    },
+    "item": {
+      "rewarded": "Has ganado {{points}} puntos",
+      "pending": "Se premia tras completar el perfil, {{days}} días y añadir un amigo",
+      "noReward": "No se otorgaron puntos"
+    },
+    "errors": {
+      "loadFailed": "No se pudieron cargar las invitaciones",
+      "loadMoreFailed": "No se pudieron cargar más invitaciones",
+      "invalidData": "Los datos de invitación no son válidos",
+      "staleData": "Puede que no esté actualizado. Desliza para recargar.",
+      "shareFailed": "No se pudo compartir. Copia el código de invitación y envíalo."
     }
   },
   "serverErrors": {
@@ -2678,6 +2891,7 @@
     "MEMBERSHIP_USER_NOT_FOUND": "Usuario no encontrado",
     "CIRCLE_VIP_REQUIRED": "Solo los usuarios VIP pueden crear círculos",
     "CIRCLE_NOT_FOUND": "Círculo no encontrado",
+    "CIRCLE_EDIT_FORBIDDEN": "Solo el dueño del círculo y los administradores pueden editar la configuración",
     "CIRCLE_NOT_MEMBER": "No eres miembro de este círculo",
     "CIRCLE_USER_NOT_FOUND": "Usuario no encontrado",
     "CIRCLE_ICON_ASSET_NOT_FOUND": "Icono del círculo no encontrado",
@@ -2702,6 +2916,8 @@
     "INVITATION_APPLICANT_ONLY": "Solo el solicitante puede añadir verificadores",
     "INVITATION_NOT_PENDING": "Esta invitación ya no está pendiente",
     "INVITATION_VERIFIER_NOT_MEMBER": "El verificador debe ser un miembro activo de este círculo",
+    "INVITATION_VERIFIER_NOT_FRIEND": "El verificador debe ser tu amigo",
+    "INVITATION_MEMBER_INVITE_DISABLED": "Las invitaciones de miembros están desactivadas en este círculo; solo el dueño y los administradores pueden invitar",
     "INVITATION_ALREADY_VERIFIER": "Este usuario ya es un verificador",
     "INVITATION_SLOTS_FILLED": "Todos los espacios de verificación están llenos",
     "INVITATION_NO_PENDING_VERIFICATION": "No tienes ninguna solicitud de verificación pendiente",
@@ -2819,6 +3035,10 @@
     "PRIVACY_MOMENTS_VISIBILITY_INVALID": "Visibilidad de momentos no admitida",
     "PRIVACY_CALL_PERMISSION_INVALID": "Permiso de llamada no admitido",
     "PRIVACY_INVITE_PERMISSION_INVALID": "Permiso de invitación no admitido",
+    "SUPPORT_AGENT_USER_NOT_FOUND": "No se encontró la cuenta de soporte",
+    "SUPPORT_AGENT_USER_INACTIVE": "La cuenta de soporte está desactivada o eliminada",
+    "SUPPORT_AGENT_DUPLICATE": "La misma cuenta está configurada dos veces en una categoría",
+    "SUPPORT_AGENTS_CONFLICT": "Otro administrador cambió la configuración de soporte; recarga e inténtalo de nuevo",
     "USER_UPDATE_OWN_ONLY": "Solo puedes actualizar tu propio perfil",
     "USER_DELETE_OWN_ONLY": "Solo puedes eliminar tu propia cuenta",
     "USER_INVALID_BIRTHDAY": "Fecha de nacimiento no válida",
@@ -2826,6 +3046,88 @@
     "CHAT_REVOKE_WINDOW_EXPIRED": "Ya no se puede retirar el mensaje",
     "CHAT_REVOKE_FORBIDDEN": "No puedes retirar este mensaje",
     "CHAT_EDIT_WINDOW_EXPIRED": "Ya no se puede editar",
-    "CHAT_EDIT_FORBIDDEN": "No se puede editar este mensaje"
+    "CHAT_EDIT_FORBIDDEN": "No se puede editar este mensaje",
+    "CHAT_GROUP_FRIENDS_ONLY": "Solo puedes invitar amigos al grupo",
+    "CHAT_GROUP_MIN_MEMBERS": "Selecciona al menos 2 amigos",
+    "CHAT_GROUP_CIRCLE_MANAGED": "Este grupo lo gestiona su círculo",
+    "QR_INVALID": "Este código QR no es válido o ya no está activo",
+    "QR_EXPIRED": "Este código QR ha caducado, pide uno nuevo",
+    "QR_TYPE_UNSUPPORTED": "Este código QR no admite esta acción",
+    "QR_ISSUE_FORBIDDEN": "No tienes permiso para emitir este código QR",
+    "CHAT_GROUP_FULL": "Este grupo está lleno"
+  },
+  "qr": {
+    "userTitle": "Mi código QR",
+    "groupTitle": "Código QR del grupo",
+    "circleTitle": "Código QR del círculo",
+    "userHint": "Escanea el código QR de arriba para agregarme como amigo",
+    "groupHint": "Escanea el código QR de arriba para unirte al grupo",
+    "circleHint": "Escanea el código QR de arriba para unirte al círculo",
+    "userValidity": "Válido indefinidamente; puedes desactivar \"Agregarme por código QR\" en Privacidad",
+    "expiresBefore": "Este código QR es válido por 7 días (hasta el {{date}}) y se renueva al volver a abrir",
+    "unnamed": "Sin nombre",
+    "saveImage": "Guardar imagen",
+    "shareQr": "Compartir código QR",
+    "reset": "Restablecer código QR",
+    "resetConfirmTitle": "¿Restablecer tu código QR?",
+    "resetConfirmMessage": "Los códigos QR personales compartidos anteriormente dejarán de funcionar de inmediato.",
+    "resetSuccessTitle": "Código QR restablecido",
+    "resetSuccessMessage": "El código QR anterior ya no es válido. Usa el nuevo.",
+    "resetFailedTitle": "Error al restablecer",
+    "resetFailedMessage": "No se pudo restablecer el código QR. Inténtalo de nuevo más tarde.",
+    "shareFailedTitle": "No se pudo compartir",
+    "shareFailedMessage": "El código QR aún no está listo. Inténtalo de nuevo.",
+    "savedTitle": "Guardado",
+    "savedMessage": "Código QR guardado en tu galería.",
+    "saveDeniedTitle": "No se puede guardar",
+    "saveDeniedMessage": "Permite que WindNote agregue fotos a tu galería en la configuración del sistema.",
+    "saveFailedTitle": "Error al guardar",
+    "saveFailedMessage": "Inténtalo de nuevo más tarde.",
+    "issueFailed": "No se pudo generar el código QR, inténtalo más tarde",
+    "landingTitle": "Resultado del escaneo",
+    "invalid": "Este código QR no es válido o ya no está activo",
+    "thisIsYou": "Esta es tu tarjeta",
+    "viewProfile": "Ver perfil",
+    "addFriend": "Agregar amigo",
+    "joinGroup": "Unirse al grupo",
+    "enterGroup": "Entrar al grupo",
+    "joinCircle": "Unirse al círculo",
+    "alreadyInCircle": "Ya estás en este círculo",
+    "circleJoinedTitle": "Te has unido",
+    "circleJoinedMessage": "Te has unido a \"{{name}}\".",
+    "circlePendingTitle": "Solicitud enviada",
+    "circlePendingMessage": "Tu solicitud de ingreso fue creada y espera el aval de los miembros.",
+    "joinFailedTitle": "No se pudo unir",
+    "joinFailed": "Inténtalo de nuevo más tarde",
+    "userSubtitle": "Tarjeta personal",
+    "groupSubtitle": "Grupo · {{count}} miembros",
+    "circleSubtitle": "Círculo · {{count}} miembros",
+    "sharedBy": "Compartido por {{name}}",
+    "groupEntry": "Código QR del grupo",
+    "myQrEntry": "Mi código QR",
+    "shareToChat": {
+      "title": "Compartir con un amigo o grupo",
+      "searchPlaceholder": "Buscar amigos o grupos",
+      "friendHint": "Amigo",
+      "groupHint": "Grupo",
+      "sending": "Enviando...",
+      "confirmTitle": "Enviar código QR",
+      "confirmMessage": "¿Enviar el código QR de «{{subject}}» a {{name}}?",
+      "sentTitle": "Enviado",
+      "sentMessage": "El código QR se envió al chat.",
+      "failedTitle": "Error al enviar",
+      "failedMessage": "No se pudo enviar el código QR. Inténtalo de nuevo.",
+      "loadFailed": "No se pueden cargar los chats. Inténtalo de nuevo.",
+      "empty": "No hay chats disponibles",
+      "noMatch": "No hay amigos ni grupos coincidentes"
+    },
+    "card": {
+      "userType": "Código QR de contacto",
+      "groupType": "Código QR del grupo",
+      "circleType": "Código QR del círculo",
+      "userFooter": "Escanea o toca para agregar como amigo",
+      "groupFooter": "Escanea o toca para unirte al grupo",
+      "circleFooter": "Escanea o toca para unirte al círculo"
+    }
   }
 }

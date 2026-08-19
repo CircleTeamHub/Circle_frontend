@@ -11,9 +11,13 @@ tags:
 - tapOn:
     id: windnote.tabs.discover
 - tapOn:
-    id: windnote.discover.filter-tab.2
+    id: windnote.discover.moments-entry
+- extendedWaitUntil:
+    visible:
+      id: windnote.moments.screen
+    timeout: 30000
 - tapOn:
-    id: windnote.discover.fab
+    id: windnote.moments.create
 - extendedWaitUntil:
     visible:
       id: windnote.moment.create.screen

@@ -38,6 +38,21 @@ export type CoinTransaction = {
   createdAt: string;
 };
 
+function isCoinTransaction(value: unknown): value is CoinTransaction {
+  return (
+    isPlainObject(value) &&
+    isNonEmptyString(value.id) &&
+    isNonEmptyString(value.type) &&
+    typeof value.amount === 'number' &&
+    Number.isInteger(value.amount) &&
+    isFiniteNonNegativeNumber(value.balance) &&
+    (value.note === null || typeof value.note === 'string') &&
+    (value.relatedID === null || typeof value.relatedID === 'string') &&
+    isNonEmptyString(value.createdAt) &&
+    Number.isFinite(Date.parse(value.createdAt))
+  );
+}
+
 export async function fetchWallet() {
   const raw = await apiClient<Wallet>('/coin/wallet');
   return expectShape(
@@ -48,7 +63,15 @@ export async function fetchWallet() {
 }
 
 export async function fetchCoinTransactions() {
-  return apiClient<CoinTransaction[]>('/coin/transactions');
+  const raw = await apiClient<unknown>('/coin/transactions');
+  return expectShape(
+    raw,
+    (value): value is CoinTransaction[] =>
+      Array.isArray(value) && value.every(isCoinTransaction),
+    i18n.t('coin.errors.transactionDataInvalid', {
+      defaultValue: '积分流水数据格式异常',
+    }),
+  );
 }
 
 // 防御：积分必须为正整数。客户端 UI 已经在转账输入框约束 number-pad / replace(/[^0-9]/g)；
@@ -66,16 +89,12 @@ function assertValidCoinAmount(amount: number): void {
 }
 
 /**
- * #100：IM 转账卡片送达回执。凭 sendCoinGift 用过的同一枚 Idempotency-Key
- * 定位礼物；后端置位后补偿 cron 不再服务端补发卡片。
+ * 转账。这里只负责把钱转掉 —— 转账卡片由后端在结算事务提交后就地签发并广播,
+ * 客户端既不发卡、也不需要回执。
+ *
+ * (历史:曾有一个「卡片已送达」的回执端点与配套的 MMKV 挂账重试队列,前提是
+ *  卡片由客户端发。而那条发送 100% 被服务端拒收,整套回执从未被执行过,已删。)
  */
-export async function markGiftCardSent(idempotencyKey: string) {
-  return apiClient<void>('/coin/gift/card-sent', {
-    method: 'POST',
-    headers: { 'Idempotency-Key': idempotencyKey },
-  });
-}
-
 export async function sendCoinGift(
   payload: {
     recipientId: string;

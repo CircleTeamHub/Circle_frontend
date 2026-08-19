@@ -7,11 +7,9 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { NavHeader } from '@/components/ui/nav-header';
+import { Avatar } from '@/components/ui/avatar';
 import { MemberName } from '@/components/ui/member-name';
-import {
-  AVATAR_FRAME_SCALE,
-  getAvatarFrameSource,
-} from '@/features/profile/membership-frames';
+import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { ensureDirectConversation } from '@/chat-core/client';
 import { getApiErrorMessage } from '@/services/api/errors';
@@ -31,6 +29,7 @@ import {
   canOpenSendFriendRequest,
   getProfileMetaItems,
   isCurrentUserProfile,
+  resolveCanonicalProfileUserId,
 } from '@/features/user/profile-view';
 import {
   getChatInfoHref,
@@ -105,7 +104,6 @@ const ROW_COLOR: Record<InfoRowId, keyof ThemeColors> = {
 
 const AVATAR_SIZE = 68;
 const AVATAR_RING_SIZE = AVATAR_SIZE + 10;
-const AVATAR_FRAME_SIZE = AVATAR_SIZE * AVATAR_FRAME_SCALE;
 const CARD_GAP = 12; // 分组卡片之间的垂直留白
 const RECOGNITION_COUNT_ICON_SOURCE = require('../../../../assets/images/like-outline.png');
 
@@ -119,42 +117,19 @@ const s = StyleSheet.create({
   },
   avatarStage: {
     position: 'relative',
-    width: AVATAR_FRAME_SIZE,
-    height: AVATAR_FRAME_SIZE,
+    width: AVATAR_RING_SIZE,
+    height: AVATAR_RING_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarRing: {
     width: AVATAR_RING_SIZE,
     height: AVATAR_RING_SIZE,
-    borderRadius: AVATAR_RING_SIZE / 2,
+    borderRadius: Radius.md,
+    borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-  },
-  avatarFrame: {
-    width: AVATAR_SIZE,
-    height: AVATAR_SIZE,
-    borderRadius: AVATAR_SIZE / 2,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // 有会员框时隐藏默认描边,由框素材接管外圈。
-  avatarRingFramed: {
-    borderColor: 'transparent',
-  },
-  membershipFrameOverlay: {
-    position: 'absolute',
-    width: AVATAR_FRAME_SIZE,
-    height: AVATAR_FRAME_SIZE,
-    top: 0,
-    left: 0,
-    pointerEvents: 'none',
-  },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
   },
   identity: {
     alignItems: 'center',
@@ -325,7 +300,7 @@ export default function UserProfileScreen() {
           id: currentUser.id,
           name:
             currentUser.nickname ||
-            (currentUser.fancyNumber
+            (FEATURE_FLAGS.fancyNumbers && currentUser.fancyNumber
               ? currentUser.accountId.toUpperCase()
               : currentUser.accountId),
           accountId: currentUser.accountId,
@@ -361,7 +336,7 @@ export default function UserProfileScreen() {
             id: profile.id,
             name:
               profile.nickname ||
-              (profile.fancyNumber
+              (FEATURE_FLAGS.fancyNumbers && profile.fancyNumber
                 ? profile.accountId.toUpperCase()
                 : profile.accountId),
             accountId: profile.accountId,
@@ -470,12 +445,15 @@ export default function UserProfileScreen() {
 
   const rawProfile = remoteProfile ?? fallbackProfile;
   const profile =
-    rawProfile.fancyNumber && rawProfile.accountId
+    FEATURE_FLAGS.fancyNumbers && rawProfile.fancyNumber && rawProfile.accountId
       ? { ...rawProfile, accountId: rawProfile.accountId.toUpperCase() }
       : rawProfile;
   const profileMetaItems = getProfileMetaItems(profile);
   const profileVipLevel = profile.vipLevel ?? 0;
-  const membershipFrame = getAvatarFrameSource(profile.avatarFrameAppearance);
+  const canonicalProfileUserId = resolveCanonicalProfileUserId(
+    profileId,
+    remoteProfile,
+  );
   const displayName =
     remarkOverride === undefined
       ? friendSettings?.remark?.trim() || profile.remarkHint || profile.name
@@ -542,18 +520,20 @@ export default function UserProfileScreen() {
   }, [profile.name, profileId, router, scope]);
 
   const handleOpenChat = useCallback(async () => {
-    if (profileId === 'unknown' || openingChat) {
+    if (!canonicalProfileUserId || openingChat) {
       return;
     }
 
     try {
       setOpeningChat(true);
-      const conversation = await ensureDirectConversation(profileId);
+      const conversation = await ensureDirectConversation(
+        canonicalProfileUserId,
+      );
       if (!mountedRef.current) return;
       router.push(
         getChatDetailHref(
           scope,
-          profileId,
+          canonicalProfileUserId,
           displayName,
           profile.avatarUrl,
           conversation.conversationID,
@@ -563,12 +543,20 @@ export default function UserProfileScreen() {
       if (!mountedRef.current) return;
       Alert.alert(
         t('userProfile.openChatFailedTitle'),
-        error instanceof Error ? error.message : t('common.networkError'),
+        getApiErrorMessage(error, t('common.networkError')),
       );
     } finally {
       if (mountedRef.current) setOpeningChat(false);
     }
-  }, [displayName, openingChat, profile.avatarUrl, profileId, router, scope, t]);
+  }, [
+    canonicalProfileUserId,
+    displayName,
+    openingChat,
+    profile.avatarUrl,
+    router,
+    scope,
+    t,
+  ]);
 
   const [startingCall, setStartingCall] = useState(false);
   // review 修复：state 版守卫要等 React 提交才生效，快速双击都会以
@@ -581,14 +569,14 @@ export default function UserProfileScreen() {
       callStartingRef.current ||
       startingCall ||
       isCurrentUser ||
-      profileId === 'unknown'
+      !canonicalProfileUserId
     )
       return;
     callStartingRef.current = true;
     setStartingCall(true);
     try {
       const response = await createDirectCall({
-        calleeID: profileId,
+        calleeID: canonicalProfileUserId,
         callType,
       });
       // round 2 review：呼叫已在服务端创建、对端已在响铃 —— 即使本页面已
@@ -607,7 +595,14 @@ export default function UserProfileScreen() {
       callStartingRef.current = false;
       if (mountedRef.current) setStartingCall(false);
     }
-  }, [isCurrentUser, profileId, router, setActiveCall, startingCall, t]);
+  }, [
+    canonicalProfileUserId,
+    isCurrentUser,
+    router,
+    setActiveCall,
+    startingCall,
+    t,
+  ]);
 
   // #119：按钮文案本就是「音视频通话」—— 点击先选语音还是视频。
   // review P2：与聊天页同款 —— 弹出前置 ref 门防连点叠开选择器。
@@ -648,16 +643,34 @@ export default function UserProfileScreen() {
   const handleOpenChatInfo = useCallback(() => {
     if (
       isCurrentUser ||
-      profileId === 'unknown' ||
+      !canonicalProfileUserId ||
       friendStatus !== 'ACCEPTED'
     ) {
       return;
     }
 
-    router.push(getChatInfoHref(scope, profileId, displayName, undefined, profile.name));
-  }, [displayName, friendStatus, isCurrentUser, profile.name, profileId, router, scope]);
+    router.push(
+      getChatInfoHref(
+        scope,
+        canonicalProfileUserId,
+        displayName,
+        undefined,
+        profile.name,
+      ),
+    );
+  }, [
+    canonicalProfileUserId,
+    displayName,
+    friendStatus,
+    isCurrentUser,
+    profile.name,
+    router,
+    scope,
+  ]);
   const canOpenChatInfo =
-    !isCurrentUser && profileId !== 'unknown' && friendStatus === 'ACCEPTED';
+    !isCurrentUser &&
+    canonicalProfileUserId !== null &&
+    friendStatus === 'ACCEPTED';
 
   const infoRowItems = useMemo<InfoRowItem[]>(
     () =>
@@ -735,14 +748,6 @@ export default function UserProfileScreen() {
       avatarRing: {
         backgroundColor: colors.surface,
         borderColor: colors.primaryLight,
-      },
-      avatarFrame: {
-        backgroundColor: colors.surface,
-      },
-      avatarFallback: {
-        color: colors.white,
-        fontSize: 32,
-        fontWeight: '700' as const,
       },
       name: {
         color: colors.text,
@@ -851,27 +856,14 @@ export default function UserProfileScreen() {
         <View style={s.hero}>
           <View style={s.avatarStage}>
             <View
-              style={[
-                s.avatarRing,
-                d.avatarRing,
-                membershipFrame ? s.avatarRingFramed : null,
-              ]}
+              style={[s.avatarRing, d.avatarRing]}
             >
-              <View style={[s.avatarFrame, d.avatarFrame]}>
-                {profile.avatarUrl ? (
-                  <Image source={{ uri: profile.avatarUrl }} style={s.avatarImage} />
-                ) : (
-                  <Text style={d.avatarFallback}>{profile.name.charAt(0)}</Text>
-                )}
-              </View>
-            </View>
-            {membershipFrame ? (
-              <Image
-                source={membershipFrame}
-                style={s.membershipFrameOverlay}
-                contentFit="contain"
+              <Avatar
+                size={AVATAR_SIZE}
+                name={profile.name}
+                uri={profile.avatarUrl}
               />
-            ) : null}
+            </View>
           </View>
 
           <View style={s.identity}>
@@ -972,7 +964,7 @@ export default function UserProfileScreen() {
               onPress={() => {
                 void handleOpenChat();
               }}
-              disabled={openingChat}
+              disabled={openingChat || canonicalProfileUserId === null}
             >
               <Text style={d.actionText}>
                 {openingChat ? t('userProfile.openingChat') : t('userProfile.startChat')}
@@ -989,7 +981,7 @@ export default function UserProfileScreen() {
               onPress={() => {
                 void handleStartVoiceCall();
               }}
-              disabled={startingCall}
+              disabled={startingCall || canonicalProfileUserId === null}
             >
               <Text style={d.actionText}>
                 {startingCall ? t('userProfile.callStarting') : t('userProfile.avCall')}

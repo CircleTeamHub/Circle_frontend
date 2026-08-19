@@ -13,6 +13,7 @@ export interface Conversation {
   avatarUrl?: string;
   unreadCount: number;
   conversationType: ConversationType;
+  isTempChat?: boolean;
   pinned: boolean;
   muted: boolean;
 }
@@ -73,6 +74,23 @@ export interface CircleCardData {
   avatarUrl: string | null;
 }
 
+/** 二维码卡片：名片 / 群 / 圈子三种码共用同一条载荷。 */
+export interface QrCardData {
+  /**
+   * 服务端签发的二维码令牌。**只存令牌、不存整条 URL** —— 卡片是对端投喂的内容,
+   * 存 URL 就等于让发送方决定「点这张卡会打开什么」(填个 https://evil.com,
+   * 卡片长得跟真的一样)。存令牌则无论对端写什么,本端都只能拼出自家的 /qr 深链。
+   */
+  token: string;
+  /** 这是谁的码 —— 只影响卡片措辞;真实类型由 /qr 预览端点按令牌判定。 */
+  qrType: QrCardType;
+  /** 名片主人昵称 / 群名 / 圈子名。 */
+  name: string;
+  avatarUrl: string | null;
+}
+
+export type QrCardType = 'user' | 'group' | 'circle';
+
 export interface VerificationCardData {
   invitationId: string;
   circleName: string;
@@ -121,6 +139,7 @@ export interface ChatMessage {
     | 'system-notice'
     | 'location'
     | 'image'
+    | 'video'
     | 'voice'
     | 'note-card'
     | 'friend-card'
@@ -128,6 +147,7 @@ export interface ChatMessage {
     | 'transfer-card'
     | 'verification-card'
     | 'plaza-post-card'
+    | 'qr-card'
     | 'call-record';
   text?: string;
   quotedText?: string;
@@ -150,12 +170,20 @@ export interface ChatMessage {
   senderAvatarUrl?: string;
   locationTitle?: string;
   locationAddress?: string;
+  locationLatitude?: number;
+  locationLongitude?: number;
   // For image messages: source URL + optional intrinsic dimensions for layout
   imageUrl?: string;
   // 列表气泡优先用缩略图渲染，避免直接拉原图；点开原图查看时才用 imageUrl。
   imageThumbUrl?: string;
   imageWidth?: number;
   imageHeight?: number;
+  // For video messages: local/remote source plus intrinsic metadata.
+  videoUrl?: string;
+  videoWidth?: number;
+  videoHeight?: number;
+  videoDuration?: number;
+  videoSize?: number;
   // For voice messages: local cache path or remote source URL plus duration in seconds.
   voiceUrl?: string;
   voicePath?: string;
@@ -177,6 +205,8 @@ export interface ChatMessage {
   verificationCard?: VerificationCardData;
   // For plaza-post-card messages: parsed circle-post share payload
   plazaPostCard?: PlazaPostCardData;
+  // For qr-card messages: parsed QR share payload (名片 / 群 / 圈子)
+  qrCard?: QrCardData;
   // For call-record messages (#115): parsed call summary payload
   callRecord?: CallRecordData;
   // OpenIM 发送状态：1=发送中, 2=已送达, 3=失败。仅自己发出的消息有意义。
@@ -305,6 +335,10 @@ export interface Circle {
   joinFancyRestriction: boolean;
   maxMembers: number;
   memberCanPost: boolean;
+  /** 担保票数策略:建担保单时快照为 invitation.requiredCount(宣传期 1,严格期 10)。 */
+  requiredVerifierCount: number;
+  /** false = 只有圈主/管理员能邀请新成员。 */
+  memberCanInvite: boolean;
   groupID: string | null;
   memberCount: number;
   postCount: number;
@@ -437,18 +471,28 @@ export interface CreateCircleInput {
   joinFancyRestriction?: boolean;
   maxMembers?: number;
   memberCanPost?: boolean;
+  requiredVerifierCount?: number;
+  memberCanInvite?: boolean;
 }
 
 // ---------------------------------------------------------------------------
 // Circle Invitation / Verification Types
 // ---------------------------------------------------------------------------
 
+/** 邀请相关接口里反复出现的用户投影（申请人 / 邀请人 / 验证人 / 候选验证人）。 */
+export interface CircleInvitationUser {
+  id: string;
+  nickname: string;
+  avatarUrl: string | null;
+  accountId: string;
+}
+
 export interface CircleInvitation {
   id: string;
   circleId: string;
   circleName: string;
-  applicant: { id: string; nickname: string; avatarUrl: string | null; accountId: string };
-  inviter: { id: string; nickname: string; avatarUrl: string | null; accountId: string };
+  applicant: CircleInvitationUser;
+  inviter: CircleInvitationUser;
   requiredCount: number;
   approvedCount: number;
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'ADMIN_APPROVED';
@@ -458,7 +502,7 @@ export interface CircleInvitation {
 
 export interface CircleInvitationVerifier {
   id: string;
-  verifier: { id: string; nickname: string; avatarUrl: string | null; accountId: string };
+  verifier: CircleInvitationUser;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   respondedAt: string | null;
 }

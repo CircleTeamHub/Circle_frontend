@@ -9,6 +9,37 @@ type ProfileMetaSource = {
   city?: string | null;
 };
 
+type LoadedProfileIdentity = {
+  id: string;
+  accountId: string;
+};
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * 资料页路由兼容 UUID、账号和靓号，但聊天/通话接口只接受数据库 UUID。
+ * 只信与当前路由匹配的已加载资料，避免快速切换资料页时误用上一人的响应。
+ */
+export function resolveCanonicalProfileUserId(
+  routeProfileId: string,
+  loadedProfile?: LoadedProfileIdentity | null,
+): string | null {
+  const routeId = routeProfileId.trim();
+  const loadedId = loadedProfile?.id.trim() ?? '';
+  const loadedAccountId = loadedProfile?.accountId.trim() ?? '';
+
+  if (
+    loadedId &&
+    (loadedId === routeId ||
+      loadedAccountId.toLowerCase() === routeId.toLowerCase())
+  ) {
+    return loadedId;
+  }
+
+  return UUID_PATTERN.test(routeId) ? routeId : null;
+}
+
 export function isCurrentUserProfile(
   profileId: string,
   currentUser: CurrentUserIdentity,

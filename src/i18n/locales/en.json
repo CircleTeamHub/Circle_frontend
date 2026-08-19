@@ -21,6 +21,7 @@
     "submit": "Submit",
     "add": "Add",
     "ok": "OK",
+    "view": "View",
     "search": "Search",
     "searching": "Searching",
     "loading": "Loading…",
@@ -153,7 +154,12 @@
     "scanCopyFailedTitle": "Could not copy",
     "scanCopyFailedMessage": "The QR code was scanned, but copying the content failed.",
     "scanAgain": "Scan Again",
-    "seatManagement": "Seat Management",
+    "scanFromAlbum": "Choose from Album",
+    "scanAlbumNoCodeTitle": "No QR Code Found",
+    "scanAlbumNoCodeMessage": "This image doesn't contain a readable QR code. Try another one.",
+    "scanAlbumFailedTitle": "Scan Failed",
+    "scanAlbumFailedMessage": "Please try again.",
+    "seatManagement": "Temporary Group Chats",
     "groupManagement": "Group Management",
     "loadFailed": "Failed to load conversations: {{error}}",
     "noConversations": "No conversations",
@@ -162,9 +168,15 @@
     "swipeMarkRead": "Mark Read",
     "swipeMarkUnread": "Mark Unread",
     "swipeHide": "Hide Chat",
+    "swipePin": "Pin",
+    "swipeUnpin": "Unpin",
+    "swipeMute": "Mute",
+    "swipeUnmute": "Unmute",
+    "swipeActionFailed": "Action failed",
     "swipeDelete": "Delete",
     "deleteChat": "Delete Chat",
     "deleteChatConfirm": "Delete the chat and local messages for \"{{name}}\"?",
+    "deleteChatConfirmDirect": "Delete the chat history with \"{{name}}\"? It will also be deleted for the other person and cannot be undone.",
     "newGroupTitle": "Start Group Chat",
     "newGroupNamePlaceholder": "Group name (optional)",
     "newGroupSelectMembers": "Select contacts",
@@ -187,15 +199,32 @@
     "inviteGroupMembersNoInvitableFriends": "No friends available to invite",
     "inviteGroupMembersLoadFailed": "Failed to load friends. Please retry.",
     "groups": {
-      "title": "Custom Groups",
+      "title": "Group Management",
       "createSection": "Create Group",
+      "orderSection": "Group Order",
+      "orderHint": "Hold and drag the handle to reorder the tabs on Messages",
+      "builtInGroup": "Built-in",
+      "customGroup": "Custom",
+      "reorderA11y": "Adjust the position of {{name}}",
+      "reorderFailedTitle": "Failed to reorder",
+      "reorderFailedMessage": "Failed to save group order, please try again.",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
       "namePlaceholder": "e.g. Family / Work",
       "nameRequired": "Please enter a group name",
       "myGroups": "My Groups",
       "empty": "No custom groups yet. Create one.",
       "conversationCount": "{{count}} conversations",
-      "memberHint": "Conversations in 「{{name}}」 (long-press the group name to rename)",
+      "memberHint": "Select group or direct chats to add to \"{{name}}\" (multiple allowed)",
       "noConversations": "No conversations available to add",
+      "filterAll": "All",
+      "filterSelected": "Selected",
+      "searchPlaceholder": "Search group or direct chats",
+      "selectedCount": "{{selected}} / {{total}} selected",
+      "resultCount": "{{count}} results",
+      "selectResults": "Select all results",
+      "deselectResults": "Deselect current results",
+      "noMatchingConversations": "No matching conversations",
       "groupChat": "Group chat",
       "directChat": "Direct chat",
       "renameTitle": "Rename Group",
@@ -212,14 +241,19 @@
   },
   "notifications": {
     "title": "Notifications",
+    "momentsTitle": "Moments notifications",
+    "circleTitle": "Circle notifications",
     "tabInteractive": "Interactions",
-    "tabCircle": "Signups",
+    "tabCircleNotifications": "Circle activity",
+    "tabSignups": "Signups",
     "filterAll": "All",
     "filterUnread": "Unread",
     "markAllRead": "Mark all read",
     "system": "System",
     "emptyTitle": "No notifications",
     "emptySubtitle": "New interactions and signups show up here",
+    "emptySubtitleMoments": "New likes and comments show up here",
+    "emptySubtitleCircle": "New circle activity and signups show up here",
     "loadFailedTitle": "Could not load",
     "loadFailed": "Some notifications could not load. Pull to retry",
     "summary": {
@@ -284,15 +318,22 @@
       "voiceSendFailed": "Failed to send voice message, please try again",
       "locationSendFailed": "Failed to send location, please try again",
       "imageSendFailed": "Failed to send image, please try again",
-      "noteSendFailed": "Failed to send note, please try again",
+      "videoSendFailed": "Failed to send video, please try again",
+      "videoRejectedTitle": "Video can't be sent",
+      "videoTooLarge": "Choose a video under 100MB",
+      "videoTooLong": "Choose a video under 10 minutes",
+      "videoUnsupported": "Only MP4, MOV, and M4V videos are supported",
+      "videoUnavailable": "Video unavailable",
+      "playVideo": "Play video",
+      "noteBatchPartialFailed": "{{count}} items failed to send",
       "cardSendFailed": "Failed to send contact card, please try again",
       "favoriteSendFailed": "Failed to send favorite, please try again",
-      "transferCardSendFailed": "Transfer completed. The card will arrive shortly.",
       "favoriteLegacyVoiceUnsupported": "This legacy voice favorite can no longer be sent"
     },
     "messageActions": {
       "title": "Message actions",
       "collect": "Save",
+      "addToNotes": "Add",
       "forward": "Forward",
       "collected": "Saved",
       "collectedHint": "View it in My Collections",
@@ -511,15 +552,55 @@
       "failedBody": "Failed to set image background. Please try again."
     },
     "attachments": {
-      "photos": "Photos",
+      "photos": "Photos/Videos",
+      "mediaHub": "Media",
+      "mediaPhoto": "Photos",
+      "mediaVideo": "Videos",
       "camera": "Camera",
-      "voiceCall": "Voice Call",
+      "voiceCall": "Audio/Video Call",
       "location": "Location",
       "notes": "Notes",
       "friendCard": "Contact Card",
       "favorites": "Favorites",
       "quickReply": "Quick Reply",
       "transfer": "Transfer"
+    },
+    "photoEditor": {
+      "title": "Edit Photo",
+      "preview": "Photo preview before sending",
+      "cropSquare": "Crop 1:1",
+      "cropFourThree": "Crop 4:3",
+      "freeCrop": "Free Crop",
+      "freeCropTitle": "Free Crop",
+      "cropFrame": "Free crop frame",
+      "cropHint": "Drag a corner to resize, or drag inside the frame to move it",
+      "cropDone": "Done",
+      "mosaic": "Mosaic",
+      "mosaicTitle": "Mosaic",
+      "mosaicHint": "Drag your finger over the area you want to obscure",
+      "draw": "Draw",
+      "drawTitle": "Draw",
+      "drawColor": "Brush color",
+      "markupCanvas": "Photo editing canvas",
+      "undo": "Undo",
+      "rotate": "Rotate",
+      "flip": "Flip",
+      "reset": "Reset",
+      "editFailedTitle": "Editing Failed",
+      "editFailedMessage": "Unable to process the photo. Please try again."
+    },
+    "location": {
+      "showPreview": "Tap to show map"
+    },
+    "locationPicker": {
+      "title": "Select Location",
+      "searchPlaceholder": "Search for a place",
+      "send": "Send Location",
+      "selectedLabel": "Selected location",
+      "invalidTitle": "Invalid Location",
+      "invalidMessage": "Please select a location again",
+      "currentLocation": "My Location",
+      "loadFailed": "Unable to get your current location. Please try again."
     },
     "call": {
       "title": "Voice Call",
@@ -634,13 +715,15 @@
     "lowCreditScore": "Your credit score is below {{minScore}}, so you cannot send messages right now",
     "burnAfterReading": "Disappearing messages",
     "clearHistoryConfirm": "This only clears the history on your side. Clear it?",
-    "clearHistoryDone": "Cleared"
+    "clearHistoryConfirmDirect": "Clear this chat history? It will also be deleted for the other person and cannot be undone.",
+    "clearHistoryDone": "Cleared",
+    "clearHistoryDoneDirect": "Chat history deleted for both people"
   },
   "contacts": {
     "title": "Contacts",
     "searchPlaceholder": "Search contacts...",
     "newFriends": "New Friends",
-    "seats": "Seats",
+    "seats": "Temporary Group Chats",
     "groups": "Groups",
     "circles": "Circles",
     "tags": "Tags",
@@ -816,6 +899,7 @@
       "selectCircles": "Select Circles",
       "selectRegions": "Select Regions",
       "clear": "Clear",
+      "activeInMyCircles": "A filter is active — some circles are hidden",
       "save": "Save",
       "saved": "Filters saved",
       "savedCirclesCount": "{{count}} circles",
@@ -887,6 +971,8 @@
       "alreadyMembers": "The selected friends are already in this circle.",
       "noneSent": "None of the selected friends could be invited. Please check the requirements and try again.",
       "sentAll": "Invited {{count}} friends. Waiting for verification.",
+      "joinedAll": "Added {{count}} friends to the circle",
+      "joinedAndPending": "{{joined}} joined, {{pending}} awaiting verification",
       "sentPartial": "Invited {{succeeded}}; {{failed}} failed because they may already be members or may not meet the requirements.",
       "fromContacts": "Invite from contacts",
       "noFriends": "No friends to invite",
@@ -935,6 +1021,10 @@
       "restrictionsSection": "Restrictions",
       "fancyLabel": "Fancy Number Required",
       "memberPostLabel": "Members Can Post",
+      "verificationGateLabel": "Join verification",
+      "verificationGateOffHint": "Off: permitted invitations join instantly, no verification",
+      "verificationGateOnHint": "New members need approval from {{count}} circle friends to join",
+      "verifierCountLabel": "Verifiers required",
       "vipAtLeast": "VIP {{level}} or above",
       "nameRequired": "Circle name required (min 2 chars)",
       "descRequired": "Description required (min 10 chars)",
@@ -1067,6 +1157,8 @@
     "signUp": "Sign up",
     "signedUp": "Signed up",
     "signupBlockedTitle": "Sign-up unavailable",
+    "profileBlockedGeneric": "You do not meet the requirements to view this profile yet",
+    "signupBlockedGeneric": "You do not meet the signup requirements for this post yet",
     "signupRestrictionMessage": "To sign up: {{requirements}}",
     "circlePicker": {
       "selectedCount": "{{count}} circle(s) selected"
@@ -1139,6 +1231,7 @@
     "progress": "Approved {{approved}}/{{total}}",
     "addSlot": "Add",
     "emptySlot": "Empty",
+    "rejectedCount": "{{count}} verifiers declined; their slots were freed",
     "inviteFriends": "Invite friends to verify",
     "verified": "Verified! You've joined the circle",
     "selectVerifier": "Select Verifier",
@@ -1146,7 +1239,6 @@
     "invitedMessage": "Invited {{name}} to verify",
     "addFailed": "Failed to Add",
     "select": "Select",
-    "noFriends": "No friends",
     "verificationRequest": "Verification Request",
     "requestNotExist": "Request not found",
     "wantsToJoin": "Wants to join 【{{circle}}】",
@@ -1175,7 +1267,8 @@
     "settledApproved": "Approved — joined the circle",
     "youApproved": "You verified for them",
     "youRejected": "You rejected this request",
-    "loadFriendsFailed": "Failed to load friends, please try again"
+    "noEligibleVerifiers": "No one to pick: a verifier must be your friend and already an active member of this circle",
+    "loadVerifiersFailed": "Failed to load candidates, please try again"
   },
   "city": {
     "title": "Select City",
@@ -1247,7 +1340,7 @@
     "memberCenter": "Membership",
     "viewMember": "View",
     "wallet": {
-      "purchaseUnavailable": "Points purchases are not available yet. This page currently shows your balance only.",
+      "purchaseUnavailable": "Points purchases are not available yet.",
       "title": "My Wallet",
       "confirmRecharge": "Confirm Recharge",
       "balance": "Points Balance",
@@ -1261,7 +1354,20 @@
       "agreementAnd": "and",
       "recharging": "Recharging...",
       "buyNow": "Buy {{points}} points now",
-      "menuLabel": "Wallet"
+      "menuLabel": "Wallet",
+      "historyTitle": "Points history",
+      "historyLoadError": "Failed to load points history",
+      "historyEmpty": "No points activity yet",
+      "types": {
+        "referralReward": "Referral reward",
+        "referralBonus": "Invite signup bonus",
+        "giftSent": "Points sent",
+        "giftReceived": "Points received",
+        "purchase": "Points purchase",
+        "recharge": "Points credited",
+        "refund": "Points refunded",
+        "adjustment": "Points adjustment"
+      }
     },
     "mall": {
       "title": "Steward Mall",
@@ -1509,6 +1615,7 @@
       "title": "Support Center",
       "subtitle": "Choose the type of support you need",
       "openFailed": "Couldn't open the support chat. Please try again.",
+      "loadFailed": "Couldn't load support accounts",
       "agentsSubtitle": "Tap a support agent to start chatting",
       "agentTapHint": "Tap to start chatting",
       "agentFallbackName": "Support agent",
@@ -1554,23 +1661,27 @@
       "supportUnavailableMessage": "Please contact the platform's official customer service about membership activation or upgrades.",
       "planAccessibilityLabel": "{{plan}}, {{duration}}, CNY {{price}}",
       "duration": {
+        "days": "{{count}} day",
         "months": "{{count}} months",
         "lifetime": "Lifetime"
       },
       "exchangeSuccess": "Membership level updated to {{level}}",
       "exchangeError": "Unable to update membership. Please try again later.",
       "tiers": {
+        "daily": {
+          "name": "Daily membership"
+        },
         "silver": {
-          "name": "Silver membership"
+          "name": "Monthly membership"
         },
         "gold": {
-          "name": "Gold membership"
+          "name": "Six-month membership"
         },
         "diamond": {
-          "name": "Diamond membership"
+          "name": "Annual membership"
         },
         "super": {
-          "name": "Super membership"
+          "name": "Lifetime membership"
         }
       },
       "benefits": {
@@ -1601,7 +1712,7 @@
       },
       "currentTierBadge": "Current",
       "marketing": {
-        "goldAccess": "All users currently enjoy Gold-tier limits for free",
+        "goldAccess": "All users currently enjoy six-month membership limits for free",
         "title": "Membership features are not open yet",
         "groupQuota": "Up to 400 members per group · join up to 300 groups",
         "noteQuota": "500 notes · 10 city filters"
@@ -1613,7 +1724,7 @@
       "heading": "Membership Rules",
       "description": "Customer service manually verifies and grants membership. This page shows the benefit catalog; backend permissions remain authoritative.",
       "rules": {
-        "catalog": "Silver membership: CNY 298 / 1 month; Gold: CNY 1,288 / 6 months; Diamond: CNY 1,998 / 1 year; Super: CNY 3,998 / lifetime.",
+        "catalog": "Daily membership: CNY 19.9 / 1 day; Monthly membership: CNY 298 / 1 month; Six-month membership: CNY 1,288 / 6 months; Annual membership: CNY 1,998 / 1 year; Lifetime membership: CNY 3,998 / lifetime.",
         "supportActivation": "Membership cannot be redeemed with points or purchased in the app. After contact, customer service manually verifies and grants membership.",
         "upgrade": "Current members may contact customer service to pay the difference for an upgrade. It takes effect immediately, with remaining membership value applied by customer service.",
         "expiry": "When membership expires, only membership benefits stop. Accounts, chats, notes, and other user content are not deleted.",
@@ -1804,8 +1915,11 @@
   },
   "systemAnnouncements": {
     "title": "System Announcements",
+    "detailTitle": "Announcement Details",
+    "openAnnouncement": "View {{title}} details",
+    "unavailable": "This announcement is unavailable or has been removed",
     "subtitle": "Latest windnote.ai app information, release updates, and patch notes will appear here.",
-    "systemNotifications": "System Notifications",
+    "systemNotifications": "Account Notifications",
     "empty": "No system notifications",
     "loadFailed": "System notifications failed to load. Pull to retry",
     "latestAppInfo": {
@@ -1915,7 +2029,7 @@
       "mergeAvatar": "Merge Consecutive Avatars",
       "mergeAvatarHint": "Only the first message from the same sender shows an avatar",
       "showGroupTags": "Show Group Tags",
-      "showGroupTagsHint": "[Group][Seat][Dedicated]",
+      "showGroupTagsHint": "[Group][Temporary Group][Dedicated]",
       "showOriginalGroupName": "Show Original Group Name",
       "showOriginalGroupNameHint": "When enabled: remark name (original group nickname)",
       "pinnedFoldCount": "Pinned Fold Count",
@@ -2084,9 +2198,9 @@
     "above90": "Credit 90+"
   },
   "tempChats": {
-    "title": "Seat Management",
+    "title": "Temporary Group Chats",
     "create": "Create Temporary Chat",
-    "refresh": "Refresh seat list",
+    "refresh": "Refresh temporary group chats",
     "loading": "Loading temporary chats",
     "createFailed": "Failed to create temporary chat",
     "loadFailed": "Failed to load temporary chats",
@@ -2110,14 +2224,11 @@
       "7d": "7 days"
     },
     "more": "More actions",
-    "actionShare": "Share link",
     "actionEnd": "End chat",
-    "shareMessage": "{{title}} — tap the link to join the temporary chat: {{url}}",
-    "shareFailed": "Failed to share, please retry",
     "linkCopied": "Link copied",
-    "scanHint": "Scan the QR code to join",
+    "copyFailed": "Failed to copy link, please retry",
+    "inviteLink": "Invite link",
     "copyLink": "Copy link",
-    "shareSystem": "Share",
     "endConfirmTitle": "End this temporary chat?",
     "endConfirmMessage": "Guests will be removed and can no longer join once it ends.",
     "endConfirm": "End",
@@ -2145,7 +2256,13 @@
       "unlist": "Unlist",
       "relist": "Relist",
       "more": "More",
-      "restore": "Restore"
+      "restore": "Restore",
+      "multiSelect": "Select multiple",
+      "remark": "Remark",
+      "editNote": "Edit note",
+      "editGroups": "Edit groups",
+      "delete": "Delete",
+      "download": "Download"
     },
     "alerts": {
       "deleteFailedTitle": "Failed to delete",
@@ -2166,9 +2283,18 @@
       "relistFailedTitle": "Failed to relist",
       "unlistFailedTitle": "Failed to unlist",
       "unlistTitle": "Unlist note",
-      "unlistConfirm": "You can view it in Unlisted. Unlisted notes are automatically deleted after one month.",
+      "unlistConfirm": "You can view it in Unlisted and relist it anytime.",
       "refreshFailedTitle": "Refresh failed",
-      "restoreFailedTitle": "Restore failed"
+      "restoreFailedTitle": "Restore failed",
+      "remarkFailedTitle": "Failed to save remark",
+      "deleteTitle": "Delete note",
+      "deleteConfirm": "Deleted notes can be recovered from the recycle bin and are purged after 30 days.",
+      "batchFailedTitle": "Some actions failed",
+      "batchPartialFailed": "{{count}} notes failed and remain selected. Please try again.",
+      "batchUnlistTitle": "Unlist notes",
+      "batchUnlistConfirm": "Unlist the {{count}} selected notes? You can relist them anytime.",
+      "batchDeleteTitle": "Delete notes",
+      "batchDeleteConfirm": "Delete the {{count}} selected notes? They can be recovered from the recycle bin."
     },
     "detail": {
       "loadFailed": "Failed to load note, please try again",
@@ -2180,10 +2306,8 @@
       "downloadVideos": "Download videos",
       "downloadLongImage": "Generate long image",
       "downloadPdf": "Download PDF",
-      "sourceGroupLabel": "From group chat",
-      "sourcePrivateLabel": "From private chat",
-      "sourceSharedBy": "Shared by {{name}}",
-      "sourceLocate": "View original message"
+      "chatWithSender": "Chat with {{name}}",
+      "openGroupSource": "View the original message in \"{{name}}\""
     },
     "edit": {
       "addImage": "Add image",
@@ -2246,8 +2370,14 @@
     },
     "manageGroups": {
       "cancelEdit": "Cancel editing",
-      "copy": "All and Ungrouped are fixed groups and cannot be edited.",
+      "copy": "All and Ungrouped can be reordered too, but not renamed or deleted.",
+      "fixedAll": "All",
+      "fixedUngrouped": "Ungrouped",
       "createNew": "Add group",
+      "renameTitle": "Rename group",
+      "renameHint": "Renaming “{{name}}”",
+      "createHint": "Groups keep your notes organized.",
+      "nameLabel": "Group name",
       "limitHint": "{{count}}/{{max}} groups created",
       "namePlaceholder": "Enter a group name to add a new group",
       "saveEdit": "Save changes",
@@ -2283,7 +2413,7 @@
     "title": "My notes",
     "unlisted": "Unlisted",
     "unlistedTitle": "Unlisted notes",
-    "unlistedAutoDeleteHint": "Unlisted notes are automatically deleted after one month.",
+    "unlistedAutoDeleteHint": "Unlisted notes are never deleted automatically. You can relist them anytime.",
     "format": {
       "fullDate": "{{year}}-{{month}}-{{day}} · {{weekday}}",
       "groupOverflow": "{{first}}, {{second}} +{{extra}}",
@@ -2321,13 +2451,38 @@
       "selectedLabel": "Selected location"
     },
     "list": {
-      "fromSource": "From {{name}}"
+      "fromSource": "From {{name}}",
+      "remark": "Remark: {{text}}",
+      "openSenderChat": "Chat with {{name}}",
+      "openGroupChat": "Open group chat {{name}}"
+    },
+    "groupPicker": {
+      "title": "Edit groups",
+      "batchHint": "Checking adds the {{count}} selected notes to a group; unchecking removes them. Untouched groups stay as they are.",
+      "empty": "No groups yet. Create one in Manage groups first.",
+      "saving": "Saving...",
+      "save": "Save"
+    },
+    "remarkSheet": {
+      "title": "Remark",
+      "batchTitle": "Remark {{count}} notes",
+      "placeholder": "Enter a remark; save empty to clear",
+      "saving": "Saving...",
+      "save": "Save"
+    },
+    "selection": {
+      "selectedCount": "{{count}} selected",
+      "selectAll": "Select all",
+      "clearAll": "Deselect all",
+      "next": "Next"
     },
     "loadFailed": "Couldn't load notes. Check your connection and try again",
     "shareToChat": {
       "title": "Share to a friend or group",
       "confirmTitle": "Send note",
       "confirmMessage": "Send “{{title}}” to {{name}}?",
+      "confirmBatchMessage": "Send {{count}} notes to {{name}}?",
+      "partialFailed": "{{count}} notes failed to send — please retry.",
       "sentTitle": "Sent",
       "sentMessage": "Note sent to the chat.",
       "failedTitle": "Send failed",
@@ -2336,10 +2491,12 @@
       "loadFailed": "Couldn’t load chats. Please try again",
       "empty": "No chats to send to yet",
       "groupHint": "Group",
-      "friendHint": "Friend"
+      "friendHint": "Friend",
+      "searchPlaceholder": "Search friends or groups",
+      "noMatch": "No matching friends or groups"
     },
     "recycleBin": "Recycle bin",
-    "recycleBinHint": "Deleted notes can be restored here.",
+    "recycleBinHint": "Deleted notes can be restored here and are automatically removed after 30 days.",
     "recycleBinTitle": "Recycle bin"
   },
   "search": {
@@ -2372,7 +2529,16 @@
     "loadFailed": "Failed to load",
     "noMatch": "No matches",
     "empty": "No content yet",
-    "favoriteLegacyVoiceUnsupported": "Legacy voice favorite — cannot be resent"
+    "favoriteLegacyVoiceUnsupported": "Legacy voice favorite — cannot be resent",
+    "noteBatch": {
+      "limitHint": "Select up to {{count}} notes",
+      "next": "Send ({{count}})",
+      "optionAll": "All",
+      "optionCard": "Note",
+      "optionLocation": "Location",
+      "optionMedia": "Media",
+      "optionShowcase": "Showcase"
+    }
   },
   "profileDisplay": {
     "emptySignature": "Your bio will appear here once you complete your profile."
@@ -2475,6 +2641,7 @@
       "memberQuit": "A member left the group",
       "memberKicked": "A member was removed",
       "groupNameUpdated": "Group name updated",
+      "groupRenamed": "Group renamed to \"{{name}}\"",
       "groupDismissed": "Group disbanded",
       "messageRevoked": "A message was recalled",
       "friendAdded": "You're now friends — say hello!",
@@ -2490,6 +2657,7 @@
       "location": "[Location]",
       "typing": "[Typing]",
       "card": "[Card] {{name}}",
+      "qr": "[QR Code] {{name}}",
       "transferWithAmount": "[Transfer] {{amount}} credits",
       "transfer": "[Transfer]",
       "note": "[Note] {{title}}",
@@ -2513,6 +2681,9 @@
       "d1": "1 day",
       "d7": "7 days"
     }
+  },
+  "location": {
+    "mapUnavailable": "The map failed to load. Check your connection and try again."
   },
   "permissions": {
     "insufficientTitle": "Permission needed",
@@ -2567,6 +2738,7 @@
   "coin": {
     "errors": {
       "walletDataInvalid": "Invalid wallet data.",
+      "transactionDataInvalid": "Invalid points transaction data.",
       "invalidAmount": "Invalid credit amount.",
       "rechargeDataInvalid": "Invalid recharge response."
     }
@@ -2576,6 +2748,47 @@
       "presignDataInvalid": "Invalid presigned upload data.",
       "fileUnreadable": "The file to upload could not be found.",
       "fileTooLarge": "File exceeds the {{maxMb}}MB limit."
+    }
+  },
+  "referral": {
+    "title": "Invite & Earn",
+    "heroSubtitle": "Earn {{inviter}} points when your friend qualifies; they earn {{invitee}}",
+    "heroSubtitlePending": "Loading invite reward details…",
+    "paused": "Referral rewards are paused; new invites will not earn points",
+    "copy": "Copy code",
+    "share": "Share invite",
+    "shareMessage": "Join me on WindNote. Use invite code {{code}} when registering: {{url}}",
+    "rulesTitle": "Reward rules",
+    "ruleReward": "Each valid referral earns you {{inviter}} points and your friend {{invitee}}",
+    "ruleQualification": "Your friend needs an avatar, a {{days}}-day-old account, and another friend",
+    "ruleCap": "The first {{count}} valid referrals each month earn rewards",
+    "recordsTitle": "Referral history",
+    "empty": "No referrals yet. Share your code to get started.",
+    "loadMore": "Load more",
+    "loadingMore": "Loading…",
+    "stats": {
+      "invited": "Invited",
+      "rewarded": "Qualified",
+      "points": "Points earned"
+    },
+    "status": {
+      "pending": "Pending",
+      "rewarded": "Rewarded",
+      "capped": "Limit reached",
+      "rejected": "Ineligible",
+      "expired": "Expired"
+    },
+    "item": {
+      "rewarded": "Earned {{points}} points",
+      "pending": "Rewarded after profile, {{days}} days, and a friend",
+      "noReward": "No points awarded"
+    },
+    "errors": {
+      "loadFailed": "Failed to load referral data",
+      "loadMoreFailed": "Failed to load more referrals",
+      "invalidData": "Invalid referral data received",
+      "staleData": "This may be out of date. Pull down to reload.",
+      "shareFailed": "Sharing failed. Copy the invite code and send it instead."
     }
   },
   "serverErrors": {
@@ -2678,6 +2891,7 @@
     "MEMBERSHIP_USER_NOT_FOUND": "User not found",
     "CIRCLE_VIP_REQUIRED": "Only VIP users can create circles",
     "CIRCLE_NOT_FOUND": "Circle not found",
+    "CIRCLE_EDIT_FORBIDDEN": "Only the circle owner and admins can edit circle settings",
     "CIRCLE_NOT_MEMBER": "You're not a member of this circle",
     "CIRCLE_USER_NOT_FOUND": "User not found",
     "CIRCLE_ICON_ASSET_NOT_FOUND": "Circle icon not found",
@@ -2702,6 +2916,8 @@
     "INVITATION_APPLICANT_ONLY": "Only the applicant can add verifiers",
     "INVITATION_NOT_PENDING": "This invitation is no longer pending",
     "INVITATION_VERIFIER_NOT_MEMBER": "The verifier must be an active member of this circle",
+    "INVITATION_VERIFIER_NOT_FRIEND": "The verifier must be your friend",
+    "INVITATION_MEMBER_INVITE_DISABLED": "Member invites are turned off in this circle; only the owner and admins can invite",
     "INVITATION_ALREADY_VERIFIER": "This user is already a verifier",
     "INVITATION_SLOTS_FILLED": "All verifier slots are filled",
     "INVITATION_NO_PENDING_VERIFICATION": "You have no pending verification request",
@@ -2819,6 +3035,10 @@
     "PRIVACY_MOMENTS_VISIBILITY_INVALID": "Unsupported moments visibility",
     "PRIVACY_CALL_PERMISSION_INVALID": "Unsupported call permission",
     "PRIVACY_INVITE_PERMISSION_INVALID": "Unsupported invite permission",
+    "SUPPORT_AGENT_USER_NOT_FOUND": "Support account not found",
+    "SUPPORT_AGENT_USER_INACTIVE": "Support account is disabled or deleted",
+    "SUPPORT_AGENT_DUPLICATE": "The same account is configured twice in one support category",
+    "SUPPORT_AGENTS_CONFLICT": "The support configuration was changed by another admin — reload and try again",
     "USER_UPDATE_OWN_ONLY": "You can only update your own profile",
     "USER_DELETE_OWN_ONLY": "You can only delete your own account",
     "USER_INVALID_BIRTHDAY": "Invalid birthday",
@@ -2826,6 +3046,88 @@
     "CHAT_REVOKE_WINDOW_EXPIRED": "The revoke window has expired",
     "CHAT_REVOKE_FORBIDDEN": "You cannot revoke this message",
     "CHAT_EDIT_WINDOW_EXPIRED": "The edit window has expired",
-    "CHAT_EDIT_FORBIDDEN": "This message cannot be edited"
+    "CHAT_EDIT_FORBIDDEN": "This message cannot be edited",
+    "CHAT_GROUP_FRIENDS_ONLY": "Only friends can be added to the group",
+    "CHAT_GROUP_MIN_MEMBERS": "Select at least 2 friends",
+    "CHAT_GROUP_CIRCLE_MANAGED": "This group is managed by its circle",
+    "QR_INVALID": "This QR code is invalid or no longer active",
+    "QR_EXPIRED": "This QR code has expired, please ask for a new one",
+    "QR_TYPE_UNSUPPORTED": "This QR code does not support this action",
+    "QR_ISSUE_FORBIDDEN": "You are not allowed to issue this QR code",
+    "CHAT_GROUP_FULL": "This group chat is full"
+  },
+  "qr": {
+    "userTitle": "My QR Code",
+    "groupTitle": "Group QR Code",
+    "circleTitle": "Circle QR Code",
+    "userHint": "Scan the QR code above to add me as a friend",
+    "groupHint": "Scan the QR code above to join the group chat",
+    "circleHint": "Scan the QR code above to join the circle",
+    "userValidity": "Valid indefinitely; you can turn off \"Add me via QR code\" in Privacy Settings",
+    "expiresBefore": "This QR code is valid for 7 days (until {{date}}) and refreshes when you reopen this page",
+    "unnamed": "Unnamed",
+    "saveImage": "Save Image",
+    "shareQr": "Share QR Code",
+    "reset": "Reset QR Code",
+    "resetConfirmTitle": "Reset your QR code?",
+    "resetConfirmMessage": "Previously shared personal QR codes will stop working immediately.",
+    "resetSuccessTitle": "QR Code Reset",
+    "resetSuccessMessage": "The old QR code is no longer valid. Use the new one instead.",
+    "resetFailedTitle": "Reset Failed",
+    "resetFailedMessage": "Unable to reset the QR code. Please try again later.",
+    "shareFailedTitle": "Share Failed",
+    "shareFailedMessage": "The QR code isn't ready yet. Please try again.",
+    "savedTitle": "Saved",
+    "savedMessage": "QR code saved to your photo library.",
+    "saveDeniedTitle": "Cannot Save",
+    "saveDeniedMessage": "Please allow WindNote to add photos to your library in system settings.",
+    "saveFailedTitle": "Save Failed",
+    "saveFailedMessage": "Please try again later.",
+    "issueFailed": "Failed to generate QR code, please try again later",
+    "landingTitle": "Scan Result",
+    "invalid": "This QR code is invalid or no longer active",
+    "thisIsYou": "This is your card",
+    "viewProfile": "View Profile",
+    "addFriend": "Add Friend",
+    "joinGroup": "Join Group",
+    "enterGroup": "Enter Group",
+    "joinCircle": "Join Circle",
+    "alreadyInCircle": "Already in this circle",
+    "circleJoinedTitle": "Joined",
+    "circleJoinedMessage": "You have joined \"{{name}}\".",
+    "circlePendingTitle": "Request Submitted",
+    "circlePendingMessage": "Your join request has been created and is awaiting member endorsements.",
+    "joinFailedTitle": "Failed to Join",
+    "joinFailed": "Please try again later",
+    "userSubtitle": "Personal card",
+    "groupSubtitle": "Group chat · {{count}} members",
+    "circleSubtitle": "Circle · {{count}} members",
+    "sharedBy": "Shared by {{name}}",
+    "groupEntry": "Group QR Code",
+    "myQrEntry": "My QR Code",
+    "shareToChat": {
+      "title": "Share with a Friend or Group",
+      "searchPlaceholder": "Search friends or groups",
+      "friendHint": "Friend",
+      "groupHint": "Group",
+      "sending": "Sending...",
+      "confirmTitle": "Send QR Code",
+      "confirmMessage": "Send the QR code for \"{{subject}}\" to {{name}}?",
+      "sentTitle": "Sent",
+      "sentMessage": "The QR code was sent to the chat.",
+      "failedTitle": "Send Failed",
+      "failedMessage": "The QR code couldn't be sent. Please try again.",
+      "loadFailed": "Unable to load chats. Please try again.",
+      "empty": "No chats available to send to",
+      "noMatch": "No matching friends or groups"
+    },
+    "card": {
+      "userType": "Contact QR Code",
+      "groupType": "Group QR Code",
+      "circleType": "Circle QR Code",
+      "userFooter": "Scan or tap to add as friend",
+      "groupFooter": "Scan or tap to join the group",
+      "circleFooter": "Scan or tap to join the circle"
+    }
   }
 }

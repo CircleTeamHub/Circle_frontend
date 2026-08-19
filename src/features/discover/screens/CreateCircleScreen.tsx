@@ -120,6 +120,7 @@ export default function CreateCircleScreen() {
             presign.uploadUrl,
             contentType,
             form.pickedAvatarUri,
+            presign.requiredHeaders,
           );
           uploadedAvatarUrl = presign.fileUrl;
         } catch (error) {
@@ -144,6 +145,7 @@ export default function CreateCircleScreen() {
         joinCreditRestriction: form.joinCreditRestriction,
         joinFancyRestriction: form.joinFancyRestriction || undefined,
         memberCanPost: form.memberCanPost,
+        requiredVerifierCount: form.requiredVerifierCount,
       });
       // review 修复：force 绕过在飞合并 —— 否则可能 await 到建圈前出发的
       // 快照，返回列表页看不到刚建的圈子。

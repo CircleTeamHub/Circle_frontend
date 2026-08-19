@@ -4,6 +4,7 @@ import {
   CHAT_EVENTS,
   isChatMessageDto,
   type ChatConversationBroadcast,
+  type ChatHistoryClearedBroadcast,
   type ChatMessageDto,
   type ChatPresenceBroadcast,
   type ChatReadBroadcast,
@@ -22,6 +23,7 @@ import { isMessageDeletedLocally } from './deleted-messages';
 import { reportChatDelivered } from './socket-manager';
 import { getChatMessagePreview } from './mappers';
 import { useChatStore } from './store';
+import { useLocalUnreadStore } from '@/features/messages/store/use-local-unread-store';
 
 /**
  * 服务端事件 → store 的分发层（squady RealtimeEventDispatcher 的移植）。
@@ -295,6 +297,37 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
     }
   });
 
+  socket.on(
+    CHAT_EVENTS.historyCleared,
+    (payload: ChatHistoryClearedBroadcast) => {
+      if (!isLive()) return;
+      try {
+        if (
+          !payload ||
+          typeof payload.conversationId !== 'string' ||
+          payload.conversationId.length === 0 ||
+          typeof payload.clearedBy !== 'string' ||
+          payload.clearedBy.length === 0 ||
+          !Number.isSafeInteger(payload.clearedBeforeHeight) ||
+          payload.clearedBeforeHeight < 0
+        ) {
+          reportChatEventFailureOnce('historyCleared', 'malformedPayload');
+          return;
+        }
+        useChatStore
+          .getState()
+          .clearConversationLocal(
+            payload.conversationId,
+            payload.clearedBeforeHeight,
+          );
+        useLocalUnreadStore.getState().clearUnread(payload.conversationId);
+      } catch (err) {
+        console.warn('[chat] history-cleared handler failed', err);
+        reportChatEventFailureOnce('historyCleared', 'handlerFailure');
+      }
+    },
+  );
+
   socket.on(CHAT_EVENTS.presence, (payload: ChatPresenceBroadcast) => {
     if (!isLive()) return;
     try {
@@ -508,14 +541,17 @@ function enqueueForegroundBanner(
   if (conversation.muted) return 'suppressed';
 
   const isGroup = conversation.type === 'GROUP';
+  // 独立群聊(无 circleId):标题用群名(空名兜底「群聊」),sourceID = 会话 id。
   const title = isGroup
-    ? (conversation.circle?.name ?? '')
+    ? (conversation.circle?.name ??
+      (conversation.name?.trim() ||
+        i18n.t('messages.newGroupDefaultName', { defaultValue: '群聊' })))
     : (conversation.peer?.nickname ?? message.sender?.nickname ?? '');
   const avatarRaw = isGroup
     ? (conversation.circle?.avatarUrl ?? null)
     : (conversation.peer?.avatarUrl ?? null);
   const sourceID = isGroup
-    ? (conversation.circleId ?? '')
+    ? (conversation.circleId ?? conversation.id)
     : (conversation.peer?.id ?? '');
 
   if (!title || !sourceID) return 'suppressed';

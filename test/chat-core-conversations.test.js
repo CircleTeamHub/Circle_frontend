@@ -11,6 +11,7 @@ const __localDbStub = {
   removeLocalConversation: async () => {},
   persistLocalMessages: async () => {},
   deleteLocalMessage: async () => {},
+  purgeExpiredLocalMessages: async () => {},
   clearLocalConversationMessages: async () => {},
   deleteLocalMessagesBelow: async () => {},
   readRecentLocalMessages: async () => [],
@@ -71,6 +72,7 @@ function loadStore() {
         removeLocalConversation: async () => {},
         persistLocalMessages: async () => {},
         deleteLocalMessage: async () => {},
+        purgeExpiredLocalMessages: async () => {},
         clearLocalConversationMessages: async () => {},
         deleteLocalMessagesBelow: async () => {},
         readRecentLocalMessages: async () => [],
@@ -86,11 +88,14 @@ function loadStore() {
         wipeChatLocalDb: async () => {},
       };
     }
-    if (request === './deleted-messages') {
+      if (request === './deleted-messages') {
         return {
           isMessageDeletedLocally: () => false,
           markMessageDeletedLocally: () => {},
         };
+      }
+      if (request === '@/storage') {
+        return { storage: { set: () => {}, getString: () => undefined } };
       }
       if (request === './local-db') return __localDbStub;
     throw new Error(`unexpected require: ${request}`);
@@ -101,6 +106,35 @@ function loadStore() {
   return context.module.exports;
 }
 
+function loadMappers() {
+  const context = {
+    module: { exports: {} },
+    exports: {},
+    Date,
+    require: (request) => {
+      if (request === '@/i18n') {
+        return {
+          default: {
+            language: 'zh',
+            t: (key) => (key === 'tempChats.title' ? '临时群聊' : key),
+          },
+        };
+      }
+      if (request === '@/services/api/utils') {
+        return { normalizeMediaUrl: (value) => value };
+      }
+      if (request === '@/utils/locale') {
+        return { getLocalizedDateTimeLocale: () => 'zh-CN' };
+      }
+      if (request === '@/types' || request === './protocol') return {};
+      throw new Error(`unexpected require: ${request}`);
+    },
+  };
+  context.exports = context.module.exports;
+  vm.runInNewContext(transpile('src/chat-core/mappers.ts'), context);
+  return context.module.exports;
+}
+
 function conv(overrides = {}) {
   return {
     id: overrides.id ?? 'conv-1',
@@ -108,6 +142,7 @@ function conv(overrides = {}) {
     peer: { id: 'u2', nickname: '对方', avatarUrl: null },
     circleId: null,
     circle: null,
+    tempChat: null,
     lastMessage: null,
     unreadCount: 0,
     pinned: false,
@@ -225,4 +260,40 @@ test('conversation mapper renders group identity from circle info', () => {
   assert.match(source, /im\.preview\./);
   // DIRECT 的 sourceID 必须是对端 userID(个人资料跳转依赖)。
   assert.match(source, /dto\.peer\?\.id/);
+});
+
+test('TEMP conversation keeps its room title when the latest sender is self', () => {
+  const { mapChatConversationToUI } = loadMappers();
+  const ui = mapChatConversationToUI(
+    conv({
+      id: 'conv-temp',
+      type: 'TEMP',
+      peer: null,
+      tempChat: { id: 'tc-1', title: 'Kk' },
+      lastMessage: msg({
+        conversationId: 'conv-temp',
+        sender: { id: 'me', nickname: '我自己', avatarUrl: 'https://me/avatar.png' },
+      }),
+    }),
+  );
+
+  assert.equal(ui.name, 'Kk');
+  assert.equal(ui.avatarUrl, undefined);
+  assert.equal(ui.sourceID, 'conv-temp');
+  assert.equal(ui.conversationType, 'group');
+  assert.equal(ui.isTempChat, true);
+});
+
+test('TEMP conversation never falls back to the latest sender on an old backend', () => {
+  const { mapChatConversationToUI } = loadMappers();
+  const ui = mapChatConversationToUI(
+    conv({
+      type: 'TEMP',
+      peer: null,
+      tempChat: undefined,
+      lastMessage: msg({ sender: { id: 'me', nickname: '我自己', avatarUrl: null } }),
+    }),
+  );
+
+  assert.equal(ui.name, '临时群聊');
 });

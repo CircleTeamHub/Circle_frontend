@@ -43,8 +43,9 @@ test('realtime client authenticates with a message frame, never via the URL', ()
 test('realtime notification.created only prepends bell types but banners everything non-system', () => {
   const client = read('src/realtime/client.ts');
 
-  // 铃铛列表类型白名单镜像后端 DISCOVER_NOTIFICATION_TYPES，须含全部互动类型。
+  // 白名单本体在 notification-domain（= 两个铃铛类型的并集），client 只引用它。
   assert.match(client, /BELL_NOTIFICATION_TYPES/);
+  const domain = read('src/features/notifications/utils/notification-domain.ts');
   for (const type of [
     'TRACE_LIKE',
     'TRACE_COMMENT',
@@ -57,10 +58,10 @@ test('realtime notification.created only prepends bell types but banners everyth
     'CIRCLE_POST_AUTO_ENDED',
     'PROFILE_LIKE',
   ]) {
-    assert.match(client, new RegExp(`'${type}'`));
+    assert.match(domain, new RegExp(`'${type}'`));
   }
   // 好友申请不进铃铛列表（专属「新的朋友」收件箱），横幅不受影响。
-  assert.doesNotMatch(client, /'FRIEND_REQUEST_RECEIVED'/);
+  assert.doesNotMatch(domain, /'FRIEND_REQUEST_RECEIVED'/);
   // prepend 受白名单门控；横幅入队在铃铛门外执行（圈子类另受「圈子通知设置」门控，见下）。
   assert.match(
     client,
@@ -123,13 +124,17 @@ test('app settings search omits the removed circle offline preference', () => {
   assert.equal(appSettings.includes("'offlineReminder'"), false);
 });
 
-test('discover bell badge reads the interactive unread count, not systemUnread', () => {
-  const screen = read('src/features/discover/screens/DiscoverScreen.tsx');
+test('circle plaza bell badge counts circle + signup unread, never the moments count', () => {
+  const screen = read('src/features/discover/screens/CirclePlazaScreen.tsx');
 
-  // 铃铛红点必须由 interaction.unread.changed 驱动的 discoverUnread 供数。
-  assert.match(screen, /useTabBadgeStore\(\(state\) => state\.discoverUnread\)/);
+  assert.match(screen, /useTabBadgeStore\(\(state\) => state\.circleUnread\)/);
+  assert.match(screen, /useTabBadgeStore\(\(state\) => state\.signupUnread\)/);
+  assert.match(screen, /circleBellUnread = circleUnread \+ signupUnread/);
+  assert.match(screen, /Badge count=\{circleBellUnread\}/);
+  // 朋友圈的互动未读绝不能出现在圈子铃铛上。
+  assert.doesNotMatch(screen, /state\.momentsUnread/);
+  assert.doesNotMatch(screen, /useTabBadgeStore\(\(state\) => state\.discoverUnread\)/);
   assert.doesNotMatch(screen, /useTabBadgeStore\(\(state\) => state\.systemUnread\)/);
-  assert.match(screen, /Badge count=\{bellUnread\}/);
 });
 
 test('session bootstrap and logout wire realtime connection lifecycle to auth state', () => {
@@ -177,7 +182,7 @@ test('chat connection rebinds when the authoritative user arrives', () => {
   const socketManager = read('src/chat-core/socket-manager.ts');
   assert.match(
     socketManager,
-    /if \(socket\?\.connected && store\.currentUserId === userId\) return;/,
+    /if \(socket\?\.connected && store\.currentUserId === userId\) \{\s+void store\.purgeExpiredBurnMessages\(\);\s+return;\s+\}/,
   );
 });
 

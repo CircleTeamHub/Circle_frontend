@@ -14,6 +14,8 @@ import {
   clearChatConversationHistory,
   createCircleChatConversation,
   fetchChatMembers,
+  leaveGroupChatConversation,
+  renameGroupChatConversation,
   setChatBurnDuration,
   updateChatConversationPreferences,
 } from '@/chat-core/api';
@@ -47,6 +49,7 @@ import {
 } from '@/services/api/friends';
 import { fetchCircleDetail, updateCircle } from '@/services/api/circles';
 import { leaveGroup, removeGroupMember, updateGroupMemberRole } from '@/services/api/groups';
+import { fetchMyTempChats } from '@/services/api/temp-chat';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { DisplayIcon } from '@/types';
@@ -251,6 +254,7 @@ export default function ChatInfoScreen() {
     conversationID?: string;
     fallbackName?: string;
     conversationType?: 'private' | 'group';
+    conversationKind?: 'direct' | 'group' | 'temp' | 'support';
     originScope?: string;
   }>();
   const [blacklist, setBlacklist] = useState(false);
@@ -268,6 +272,7 @@ export default function ChatInfoScreen() {
   // 用 ref 做 fast double-tap 单飞行守，跟其他屏的 Pattern D 二道闸保持一致。
   const blacklistInFlightRef = useRef(false);
   const deleteInFlightRef = useRef(false);
+  const inviteLinkCopyInFlightRef = useRef(false);
   const [actionPending, setActionPending] = useState(initialActionPending);
   const actionPendingRef = useRef(initialActionPending);
   const actionRequestTokenRef = useRef({
@@ -304,13 +309,32 @@ export default function ChatInfoScreen() {
       null,
     [conversationID, conversations, routeSourceID],
   );
+  const isTempConversation =
+    params.conversationKind === 'temp' || conversation?.type === 'TEMP';
+  // 独立群聊(微信群):GROUP 会话但不挂圈子。它没有圈子详情/角色/公告,
+  // 成员与改名/退群走 /chat/conversations/:id/* 专属端点。
+  const isStandaloneGroup =
+    !isTempConversation &&
+    conversation?.type === 'GROUP' &&
+    conversation.circleId == null;
   const isGroupConversation =
+    isTempConversation ||
     params.conversationType === 'group' ||
     conversation?.type === 'GROUP' ||
     Boolean(conversation?.circleId);
-  // 自研栈下「群聊=圈子」:群会话的 circleId 即圈子 id,路由 sourceID 也是圈子 id。
-  const groupID = isGroupConversation ? conversation?.circleId || routeSourceID : '';
-  const groupTitle = groupInfo?.name || conversation?.circle?.name || friendName || t('chat.groupChat');
+  // 自研栈下「圈子群=圈子」:群会话的 circleId 即圈子 id,路由 sourceID 也是圈子 id。
+  // TEMP 也是多人会话,但不是圈子；绝不能把 tmp... sourceID 当 UUID 请求 /circle/:id。
+  // 独立群聊同理:它的 sourceID 是会话 id,也绝不能当圈子 id 用。
+  const groupID = isGroupConversation && !isTempConversation && !isStandaloneGroup
+    ? conversation?.circleId || routeSourceID
+    : '';
+  const groupTitle =
+    groupInfo?.name ||
+    conversation?.circle?.name ||
+    conversation?.name?.trim() ||
+    conversation?.tempChat?.title ||
+    friendName ||
+    t('chat.groupChat');
   const groupNotice = groupInfo?.notice?.trim() ?? '';
   const memberCount = groupInfo?.memberCount ?? groupMembers.length;
   const currentUserID = useChatStore((state) => state.currentUserId);
@@ -318,13 +342,18 @@ export default function ChatInfoScreen() {
   // 时，订阅推送立即收紧目录/搜索/管理入口，不再等重新聚焦。
   const {
     selfMember: currentGroupMember,
-    canViewMembers: canViewMemberDirectory,
+    canViewMembers: canViewCircleMemberDirectory,
     revalidate: revalidateMemberAccess,
   } = useGroupMemberViewAccess({
     enabled: Boolean(isGroupConversation && groupID && currentUserID),
     groupID,
     currentUserID,
   });
+  // 临时房不是圈子,没有圈子角色可判——目录权限由后端的座位校验兜底
+  // (GET /chat/conversations/:id/members),与 ChatDetailScreen 同口径。
+  // 不放开的话本页会渲染群布局却永远 0 成员、没有成员目录。
+  const canViewMemberDirectory =
+    isTempConversation || isStandaloneGroup || canViewCircleMemberDirectory;
   const currentRole = currentGroupMember?.roleLevel ?? null;
   const isOwner = currentGroupMember?.role === 'OWNER';
   const isAdmin = currentGroupMember?.role === 'ADMIN';
@@ -417,6 +446,48 @@ export default function ChatInfoScreen() {
     useCallback(() => {
       let cancelled = false;
 
+      // 临时房走会话自己的成员端点:没有圈子详情可查(没有 name/description/
+      // memberCount),会话 id 也已经在手上,不需要 get-or-create。
+      if (isTempConversation) {
+        setGroupInfo(null);
+        setGroupConversation(null);
+        // store 还没灌进会话时(从临时聊天列表直接进来)只有路由参数,
+        // 与本页其它读路径同口径回落。
+        const tempConversationID = resolvedConversationID || conversationID;
+        if (!tempConversationID) {
+          setGroupMembers([]);
+          return () => {
+            cancelled = true;
+          };
+        }
+        fetchChatMembers(tempConversationID)
+          .then((members) => {
+            if (!cancelled) setGroupMembers(members);
+          })
+          .catch(() => {
+            if (!cancelled) setGroupMembers([]);
+          });
+        return () => {
+          cancelled = true;
+        };
+      }
+
+      if (isStandaloneGroup && conversationID) {
+        // 独立群聊:没有圈子详情可拉,群名在会话 DTO 上;成员目录直接按会话 id 取
+        // (服务端座位校验,全员可见)。
+        setGroupInfo(null);
+        fetchChatMembers(conversationID)
+          .then((members) => {
+            if (!cancelled) setGroupMembers(members);
+          })
+          .catch(() => {
+            if (!cancelled) setGroupMembers([]);
+          });
+        return () => {
+          cancelled = true;
+        };
+      }
+
       if (!isGroupConversation || !groupID) {
         setGroupInfo(null);
         setGroupMembers([]);
@@ -474,7 +545,15 @@ export default function ChatInfoScreen() {
       return () => {
         cancelled = true;
       };
-    }, [canViewMemberDirectory, groupID, isGroupConversation]),
+    }, [
+      canViewMemberDirectory,
+      conversationID,
+      groupID,
+      isGroupConversation,
+      isStandaloneGroup,
+      isTempConversation,
+      resolvedConversationID,
+    ]),
   );
 
   useEffect(() => {
@@ -646,6 +725,25 @@ export default function ChatInfoScreen() {
     }
   }, [friendId, openActionError, resolvedConversationID]);
 
+  // 群二维码:独立群发 GROUP 码(会话 id);圈子群发 CIRCLE 码(圈子 id)——
+  // 圈子群的准入由圈子管理,签发权限与加入语义都在服务端按圈子策略把关。
+  const handleOpenGroupQr = useCallback(() => {
+    if (isStandaloneGroup) {
+      const id = resolvedConversationID || conversationID;
+      if (!id) return;
+      router.push({
+        pathname: '/qr-code',
+        params: { type: 'group', id, name: groupTitle },
+      });
+      return;
+    }
+    if (!groupID) return;
+    router.push({
+      pathname: '/qr-code',
+      params: { type: 'circle', id: groupID, name: groupTitle },
+    });
+  }, [conversationID, groupID, groupTitle, isStandaloneGroup, resolvedConversationID]);
+
   const handleOpenSearchHistory = useCallback(() => {
     void (async () => {
       const nextConversationID = await resolveConversationIDForNavigation();
@@ -657,6 +755,34 @@ export default function ChatInfoScreen() {
       router.push(getChatHistorySearchHubHref(nextConversationID, routeSourceID, friendName));
     })();
   }, [friendName, resolveConversationIDForNavigation, routeSourceID]);
+
+  const handleCopyTempChatInviteLink = useCallback(async () => {
+    if (!isTempConversation || !resolvedConversationID || inviteLinkCopyInFlightRef.current) {
+      return;
+    }
+
+    inviteLinkCopyInFlightRef.current = true;
+    try {
+      const rooms = await fetchMyTempChats();
+      const tempChatID = conversation?.tempChat?.id;
+      const room = rooms.find(
+        (candidate) =>
+          (tempChatID ? candidate.id === tempChatID : false) ||
+          candidate.conversationId === resolvedConversationID,
+      );
+      if (!room?.isActive || !room.shareUrl) {
+        throw new Error('Temp chat invite link unavailable');
+      }
+
+      const Clipboard = await import('expo-clipboard');
+      await Clipboard.setStringAsync(room.shareUrl);
+      Alert.alert(t('tempChats.linkCopied'));
+    } catch {
+      Alert.alert(t('tempChats.copyFailed'));
+    } finally {
+      inviteLinkCopyInFlightRef.current = false;
+    }
+  }, [conversation?.tempChat?.id, isTempConversation, resolvedConversationID, t]);
 
   const handleOpenSearchGroupMembers = useCallback(() => {
     if (!groupID || !canViewMemberDirectory) {
@@ -696,7 +822,7 @@ export default function ChatInfoScreen() {
   );
 
   const handleEditGroupName = useCallback(() => {
-    if (!groupID) {
+    if (!groupID && !isStandaloneGroup) {
       return;
     }
 
@@ -706,14 +832,24 @@ export default function ChatInfoScreen() {
         return;
       }
 
-      // 群名即圈子名:改群名 = 改圈子 name。
+      if (isStandaloneGroup) {
+        // 独立群聊:任一在座成员可改名(微信语义);响应回填会话缓存。
+        renameGroupChatConversation(conversationID, trimmed)
+          .then((dto) => {
+            useChatStore.getState().upsertConversation(dto);
+          })
+          .catch(openActionError);
+        return;
+      }
+
+      // 圈子群:群名即圈子名,改群名 = 改圈子 name。
       updateCircle(groupID, { name: trimmed })
         .then(() => {
           setGroupInfo((current) => (current ? { ...current, name: trimmed } : current));
         })
         .catch(openActionError);
     });
-  }, [groupID, groupTitle, openActionError, promptForText, t]);
+  }, [conversationID, groupID, groupTitle, isStandaloneGroup, openActionError, promptForText, t]);
 
   const handleEditGroupNotice = useCallback(() => {
     if (!groupID) {
@@ -730,16 +866,27 @@ export default function ChatInfoScreen() {
   }, [groupID, groupNotice, groupTitle, scope]);
 
   const handleOpenInviteGroupMembers = useCallback(() => {
+    if (isStandaloneGroup) {
+      // 独立群聊:好友多选直接进群(无担保流程)。
+      router.push({
+        pathname:
+          scope === 'discover'
+            ? '/(tabs)/discover/invite-group-members'
+            : '/(tabs)/messages/invite-group-members',
+        params: { conversationID, title: groupTitle },
+      });
+      return;
+    }
     if (!groupID) {
       return;
     }
 
-    // 自研栈下「加群成员」=邀请好友进圈(担保邀请流程);邀请页只挂在
+    // 圈子群:「加群成员」=邀请好友进圈(担保邀请流程);邀请页只挂在
     // messages/discover 两个栈,其余 scope 统一走 messages 栈。
     router.push(
       getCircleInviteFriendsHref(scope === 'discover' ? 'discover' : 'messages', groupID, groupTitle),
     );
-  }, [groupID, groupTitle, scope]);
+  }, [conversationID, groupID, groupTitle, isStandaloneGroup, scope]);
 
   const handleOpenMemberProfile = useCallback(
     async (member: ChatMemberDto) => {
@@ -884,7 +1031,7 @@ export default function ChatInfoScreen() {
   }, [groupID, groupTitle]);
 
   const handleLeaveGroup = useCallback(() => {
-    if (!groupID) {
+    if (!groupID && !isStandaloneGroup) {
       return;
     }
 
@@ -894,14 +1041,24 @@ export default function ChatInfoScreen() {
         text: t('chat.leave'),
         style: 'destructive',
         onPress: () => {
-          // 退群=退圈:后端座位同步会把群会话一并出清。
+          if (isStandaloneGroup) {
+            // 独立群聊:退会话本身;群主退群服务端自动转移。
+            leaveGroupChatConversation(conversationID)
+              .then(() => {
+                useChatStore.getState().removeConversation(conversationID);
+                router.replace('/(tabs)/messages');
+              })
+              .catch(openActionError);
+            return;
+          }
+          // 圈子群:退群=退圈,后端座位同步会把群会话一并出清。
           leaveGroup(groupID)
             .then(() => router.replace('/(tabs)/messages'))
             .catch(openActionError);
         },
       },
     ]);
-  }, [groupID, openActionError, t]);
+  }, [conversationID, groupID, isStandaloneGroup, openActionError, t]);
 
   const handleToggleBlacklist = useCallback(
     (nextValue: boolean) => {
@@ -1058,35 +1215,52 @@ export default function ChatInfoScreen() {
     [resolvedConversationID, t],
   );
 
-  // G-14 清空聊天记录:服务端写本人水位,本地时间线/预览/未读一并清。
+  // G-14 清空聊天记录:私聊推进双方水位,群聊只推进本人水位。
   const handleClearHistory = useCallback(() => {
     if (!resolvedConversationID) return;
-    Alert.alert(t('chat.clearHistory'), t('chat.clearHistoryConfirm'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('chat.clearHistory'),
-        style: 'destructive',
-        onPress: () => {
-          void clearChatConversationHistory(resolvedConversationID)
-            .then(() => {
-              // 「标记为未读」的本地覆盖也要清掉:只清 chat-core 的未读数,
-              // 那条覆盖还在,消息页和 tab 上这个会话继续顶着红点 —— 而里面
-              // 已经是空的。
-              useLocalUnreadStore
-                .getState()
-                .clearUnread(resolvedConversationID);
-              Alert.alert(t('chat.clearHistoryDone'));
+    Alert.alert(
+      t('chat.clearHistory'),
+      isGroupConversation
+        ? t('chat.clearHistoryConfirm')
+        : t('chat.clearHistoryConfirmDirect', {
+            defaultValue:
+              '确定清空聊天记录吗？对方的记录也会同时删除，此操作无法撤销。',
+          }),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('chat.clearHistory'),
+          style: 'destructive',
+          onPress: () => {
+            void clearChatConversationHistory(resolvedConversationID, {
+              forEveryone: !isGroupConversation,
             })
-            .catch((error: unknown) => {
-              Alert.alert(
-                t('chat.clearHistory'),
-                getApiErrorMessage(error, t('common.networkError')),
-              );
-            });
+              .then(() => {
+                // 「标记为未读」的本地覆盖也要清掉:只清 chat-core 的未读数,
+                // 那条覆盖还在,消息页和 tab 上这个会话继续顶着红点 —— 而里面
+                // 已经是空的。
+                useLocalUnreadStore
+                  .getState()
+                  .clearUnread(resolvedConversationID);
+                Alert.alert(
+                  isGroupConversation
+                    ? t('chat.clearHistoryDone')
+                    : t('chat.clearHistoryDoneDirect', {
+                        defaultValue: '双方聊天记录已删除',
+                      }),
+                );
+              })
+              .catch((error: unknown) => {
+                Alert.alert(
+                  t('chat.clearHistory'),
+                  getApiErrorMessage(error, t('common.networkError')),
+                );
+              });
+          },
         },
-      },
-    ]);
-  }, [resolvedConversationID, t]);
+      ],
+    );
+  }, [isGroupConversation, resolvedConversationID, t]);
 
   const d = useMemo(
     () => ({
@@ -1132,8 +1306,14 @@ export default function ChatInfoScreen() {
         <NavHeader
           title={t('chat.groupInfoWithCount', { count: memberCount })}
           fallbackHref={backHref}
-          rightIcon={canViewMemberDirectory ? 'search-outline' : undefined}
-          onRightPress={canViewMemberDirectory ? handleOpenSearchGroupMembers : undefined}
+          rightIcon={
+            canViewMemberDirectory && groupID ? 'search-outline' : undefined
+          }
+          onRightPress={
+            canViewMemberDirectory && groupID
+              ? handleOpenSearchGroupMembers
+              : undefined
+          }
         />
         <ScrollView
           style={s.scroll}
@@ -1177,7 +1357,7 @@ export default function ChatInfoScreen() {
                   </Pressable>
                 );
               })}
-              {canManageGroup ? (
+              {canManageGroup || isStandaloneGroup ? (
                 <Pressable style={s.groupMemberCell} onPress={handleOpenInviteGroupMembers}>
                   <View style={[s.addMemberBox, d.addMemberBox, { width: 56, height: 56 }]}>
                     <Ionicons name="add" size={30} color={colors.textSecondary} />
@@ -1202,16 +1382,40 @@ export default function ChatInfoScreen() {
             <GroupInfoRow
               label={t('chat.groupName')}
               value={groupTitle}
-              onPress={canManageGroup ? handleEditGroupName : undefined}
-              showArrow={canManageGroup}
+              onPress={
+                canManageGroup || isStandaloneGroup
+                  ? handleEditGroupName
+                  : undefined
+              }
+              showArrow={canManageGroup || isStandaloneGroup}
             />
-            <Divider />
-            <GroupInfoRow
-              label={t('chat.groupNotice')}
-              subtitle={groupNotice || t('chat.noGroupNotice')}
-              onPress={canManageGroup ? handleEditGroupNotice : undefined}
-              showArrow={canManageGroup}
-            />
+            {isStandaloneGroup ? null : (
+              <>
+                <Divider />
+                <GroupInfoRow
+                  label={t('chat.groupNotice')}
+                  subtitle={groupNotice || t('chat.noGroupNotice')}
+                  onPress={canManageGroup ? handleEditGroupNotice : undefined}
+                  showArrow={canManageGroup}
+                />
+              </>
+            )}
+            {isTempConversation ? (
+              <>
+                <Divider />
+                <GroupInfoRow
+                  label={t('tempChats.inviteLink')}
+                  value={t('tempChats.copyLink')}
+                  onPress={() => void handleCopyTempChatInviteLink()}
+                  showArrow={false}
+                />
+              </>
+            ) : (
+              <>
+                <Divider />
+                <GroupInfoRow label={t('qr.groupEntry')} onPress={handleOpenGroupQr} />
+              </>
+            )}
             <Divider />
             <GroupInfoRow label={t('chat.searchHistory')} onPress={handleOpenSearchHistory} />
           </View>

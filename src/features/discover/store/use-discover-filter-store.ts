@@ -22,6 +22,9 @@ interface DiscoverFilterState {
   removeDraftCity: (city: string) => void;
   clearDraft: () => void;
   saveFilter: () => void;
+  // 已生效的筛选是全局的（广场 + 我的圈子列表都读它）。列表页要能就地清掉它，
+  // 否则筛选只在广场可见、却在别处静默隐藏条目。
+  clearAppliedFilter: () => void;
   // 登出 teardown 用（#97）：appliedCircleIds 引用账号的圈子，不得跨号残留。
   resetForLogout: () => void;
 }
@@ -78,6 +81,16 @@ export const useDiscoverFilterStore = create<DiscoverFilterState>()(
           appliedNationwide: draftNationwide,
         });
       },
+
+      clearAppliedFilter: () =>
+        set({
+          appliedCircleIds: [],
+          appliedCities: [],
+          appliedNationwide: false,
+          draftCircleIds: [],
+          draftCities: [],
+          draftNationwide: false,
+        }),
 
       resetForLogout: () =>
         set({

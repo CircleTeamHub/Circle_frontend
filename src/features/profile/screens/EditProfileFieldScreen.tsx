@@ -386,7 +386,7 @@ export default function EditProfileFieldScreen() {
         const filename = sanitizeUploadFilename(
           selectedAvatarFileName ?? 'avatar.jpg',
         );
-        const { uploadUrl, fileUrl } = await requestUploadPresign({
+        const { uploadUrl, fileUrl, requiredHeaders } = await requestUploadPresign({
           filename,
           contentType: selectedAvatarMimeType,
           folder: 'avatars',
@@ -397,6 +397,7 @@ export default function EditProfileFieldScreen() {
           uploadUrl,
           selectedAvatarMimeType,
           selectedAvatarUri,
+          requiredHeaders,
         );
 
         const nextUser = await updateUserProfile(user.id, {
@@ -499,7 +500,6 @@ export default function EditProfileFieldScreen() {
                 size={112}
                 name={user?.nickname ?? user?.accountId ?? 'C'}
                 uri={avatarPreviewUri ?? undefined}
-                bgColor={colors.surface}
               />
               <Pressable
                 style={[s.avatarButton, d.avatarButton]}

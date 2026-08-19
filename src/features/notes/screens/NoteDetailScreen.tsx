@@ -1,5 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import {
+  useFocusEffect,
+  useLocalSearchParams,
+  useRouter,
+  useSegments,
+} from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -21,7 +26,10 @@ import { ShareNoteSheet } from '@/features/notes/components/ShareNoteSheet';
 import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
 import type { NoteDetail, NoteExportFormat } from '@/features/notes/types';
 import { formatNoteFullDate } from '@/features/notes/utils/note-format';
-import { getChatDetailHref } from '@/features/user/utils/routes';
+import {
+  getChatDetailHref,
+  getUserProfileScopeFromSegments,
+} from '@/features/user/utils/routes';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import {
   buildNoteSections,
@@ -37,6 +45,9 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 export default function NoteDetailScreen() {
   const router = useRouter();
+  // 本页在哪个 tab 栈打开（profile/messages/...），决定聊天页往哪个栈推。
+  const segments = useSegments();
+  const scope = getUserProfileScopeFromSegments(segments);
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -184,10 +195,10 @@ export default function NoteDetailScreen() {
   // 分享单条笔记：打开会话选择器，把笔记以卡片消息发给好友/群聊。
   const [shareOpen, setShareOpen] = useState(false);
   const handleShareNote = useCallback(() => setShareOpen(true), []);
-  const sharePayload = useMemo(
+  const sharePayloads = useMemo(
     () =>
       shareOpen && note
-        ? buildNoteCardPayloadFromSummary(note, note.ownerId ?? ownerId)
+        ? [buildNoteCardPayloadFromSummary(note, note.ownerId ?? ownerId)]
         : null,
     [note, ownerId, shareOpen],
   );
@@ -199,49 +210,60 @@ export default function NoteDetailScreen() {
     return Boolean(resolvedOwnerId && currentUserId === resolvedOwnerId);
   }, [currentUserId, note, ownerId]);
 
-  // 收藏来的笔记 → 来源名片：群聊展示群名片（附分享人），私聊展示对方名片。
-  // 名片是收藏者的私人定位标记：转发出去的笔记不带它，别人打开也不渲染
-  // （后端只对笔记主人返回 collectedFrom，这里再按归属兜一层）。
-  // 后端快照缺关键字段（历史坏数据）时整卡不渲染，避免点了跳不动。
+  // 收藏来的笔记 → 来源入口（右下角悬浮列的头像钮）。来源是收藏者的私人定位
+  // 标记：转发出去的笔记不带它，别人打开也不渲染（后端只对笔记主人返回
+  // collectedFrom，这里再按归属兜一层）。
+  // 后端快照缺关键字段（历史坏数据）时整组不渲染，避免点了跳不动。
   const collectedSource = useMemo(() => {
     if (!canEditNote) return null;
     const from = note?.collectedFrom;
     if (!from?.conversationID || !from.clientMsgID) return null;
     const isGroup = from.conversationType === 'group';
-    const peer = isGroup ? from.group : from.sender;
-    if (!peer?.id || !peer.name) return null;
-    const subtitle = isGroup
-      ? [
-          t('notes.detail.sourceGroupLabel', { defaultValue: '来自群聊' }),
-          from.sender?.name
-            ? t('notes.detail.sourceSharedBy', {
-                defaultValue: '{{name}} 分享',
-                name: from.sender.name,
-              })
-            : null,
-        ]
-          .filter(Boolean)
-          .join(' · ')
-      : t('notes.detail.sourcePrivateLabel', { defaultValue: '来自私聊' });
-    return { isGroup, peer, subtitle, from };
-  }, [canEditNote, note?.collectedFrom, t]);
+    // sender / group 分开暴露：悬浮按钮组要「私聊分享者」和「回群定位」两个
+    // 独立动作。任一方可能缺（历史快照只记了群），各按钮自行判空。
+    const sender = from.sender?.id && from.sender.name ? from.sender : null;
+    const group = isGroup && from.group?.id && from.group.name ? from.group : null;
+    if (!sender && !group) return null;
+    return { isGroup, sender, group, from };
+  }, [canEditNote, note?.collectedFrom]);
 
-  const handleOpenSource = useCallback(() => {
-    if (!collectedSource) return;
-    const { isGroup, peer, from } = collectedSource;
-    // 聊天页固定挂在 messages 栈下打开，searchedMsgID 触发历史定位滚动。
+  // 聊天页一律入**当前所在** tab 栈（笔记多挂在 profile 下），返回时回到这张
+  // 笔记而不是 IM 首页。
+
+  /** 悬浮按钮①：和分享者私聊。私聊来源带 searchedMsgID 定位到原消息；
+   *  群聊来源是「新开一段私聊」，原消息在群里，不带定位参数。 */
+  const handleChatWithSender = useCallback(() => {
+    if (!collectedSource?.sender) return;
+    const { sender, from, isGroup } = collectedSource;
     router.push(
       getChatDetailHref(
-        'messages',
-        peer.id,
-        peer.name,
-        peer.faceURL ?? undefined,
-        from.conversationID,
-        from.clientMsgID,
-        isGroup ? 'group' : 'private',
+        scope,
+        sender.id,
+        sender.name,
+        sender.faceURL ?? undefined,
+        isGroup ? undefined : from.conversationID,
+        isGroup ? undefined : from.clientMsgID,
+        'private',
       ),
     );
-  }, [collectedSource, router]);
+  }, [collectedSource, router, scope]);
+
+  /** 悬浮按钮②：进群聊并定位到分享这条笔记的原消息。 */
+  const handleOpenGroupSource = useCallback(() => {
+    if (!collectedSource?.group) return;
+    const { group, from } = collectedSource;
+    router.push(
+      getChatDetailHref(
+        scope,
+        group.id,
+        group.name,
+        group.faceURL ?? undefined,
+        from.conversationID,
+        from.clientMsgID,
+        'group',
+      ),
+    );
+  }, [collectedSource, router, scope]);
 
   const d = useMemo(
     () => ({
@@ -257,8 +279,12 @@ export default function NoteDetailScreen() {
         borderColor: colors.surfaceBorder,
       },
       // 来源名片：主色浅底的"提示条"，CTA 用深一档的实心靛蓝更压得住
-      sourceCard: { backgroundColor: colors.primaryLight },
-      sourceBtn: { backgroundColor: colors.primaryDeep },
+      // 悬浮钮用不透明的 surface 底，压在正文/图片上也不透字。
+      floatingBtn: {
+        backgroundColor: colors.surface,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: colors.surfaceBorder,
+      },
       sectionIconChip: { backgroundColor: colors.primaryLight },
       sectionHeading: { color: colors.text },
       divider: { backgroundColor: colors.surfaceBorder },
@@ -338,13 +364,6 @@ export default function NoteDetailScreen() {
           >
             <Ionicons name="share-outline" size={18} color={colors.text} />
           </Pressable>
-          <Pressable
-            style={[s.headerIconBtn, d.iconBtn]}
-            onPress={() => setDownloadMenuVisible(true)}
-            hitSlop={4}
-          >
-            <Ionicons name="download-outline" size={18} color={colors.text} />
-          </Pressable>
           {canEditNote ? (
             <Pressable style={[s.headerIconBtn, d.iconBtn]} onPress={handleEdit} hitSlop={4}>
               <Ionicons name="pencil-outline" size={17} color={colors.text} />
@@ -376,50 +395,7 @@ export default function NoteDetailScreen() {
           ))}
         </View>
 
-        {/* 收藏来源名片：主色浅底提示条，点击/CTA 跳回聊天定位到分享消息 */}
-        {collectedSource ? (
-          <Pressable
-            style={[s.sourceCard, d.sourceCard]}
-            onPress={handleOpenSource}
-            accessibilityRole="button"
-            accessibilityLabel={t('notes.detail.sourceLocate', {
-              defaultValue: '查看原消息',
-            })}
-          >
-            {collectedSource.peer.faceURL ? (
-              <Image
-                source={{ uri: collectedSource.peer.faceURL }}
-                style={s.sourceAvatar}
-                contentFit="cover"
-              />
-            ) : (
-              <View style={[s.sourceAvatar, { backgroundColor: colors.primary }]}>
-                <Ionicons
-                  name={collectedSource.isGroup ? 'people' : 'person'}
-                  size={20}
-                  color={colors.white}
-                />
-              </View>
-            )}
-            <View style={s.sourceCardText}>
-              <Text
-                style={[s.sourceCardName, { color: colors.text }]}
-                numberOfLines={1}
-              >
-                {collectedSource.peer.name}
-              </Text>
-              <Text style={[s.sourceSubtitle, d.meta]} numberOfLines={1}>
-                {`↳ ${collectedSource.subtitle}`}
-              </Text>
-            </View>
-            <View style={[s.sourceBtn, d.sourceBtn]}>
-              <Text style={[s.sourceBtnText, { color: colors.white }]}>
-                {t('notes.detail.sourceLocate', { defaultValue: '查看原消息' })}
-              </Text>
-              <Ionicons name="chevron-forward" size={12} color={colors.white} />
-            </View>
-          </Pressable>
-        ) : null}
+        {/* 来源不再占正文：分享者/群都收进右下角悬浮列，点头像即跳。 */}
 
         {sections ? (
           <>
@@ -519,6 +495,77 @@ export default function NoteDetailScreen() {
         ) : null}
       </ScrollView>
 
+      {/* 右下角悬浮列：分享者私聊 / 回群定位 / 存 PDF。都是「这条笔记从哪来、
+          怎么带走」的动作，收在拇指区，不跟正文抢位置。 */}
+      {collectedSource || note ? (
+        <View style={[s.floatingDock, { bottom: insets.bottom + Spacing.xl }]}>
+          {collectedSource?.sender ? (
+            <Pressable
+              style={[s.floatingBtn, d.floatingBtn]}
+              onPress={handleChatWithSender}
+              accessibilityRole="button"
+              accessibilityLabel={t('notes.detail.chatWithSender', {
+                defaultValue: '和 {{name}} 私聊',
+                name: collectedSource.sender.name,
+              })}
+            >
+              {collectedSource.sender.faceURL ? (
+                <Image
+                  source={{ uri: collectedSource.sender.faceURL }}
+                  style={s.floatingAvatar}
+                  contentFit="cover"
+                />
+              ) : (
+                <View style={[s.floatingAvatar, { backgroundColor: colors.primary }]}>
+                  <Ionicons name="person" size={18} color={colors.white} />
+                </View>
+              )}
+            </Pressable>
+          ) : null}
+
+          {collectedSource?.group ? (
+            <Pressable
+              style={[s.floatingBtn, d.floatingBtn]}
+              onPress={handleOpenGroupSource}
+              accessibilityRole="button"
+              accessibilityLabel={t('notes.detail.openGroupSource', {
+                defaultValue: '在群聊「{{name}}」中查看原消息',
+                name: collectedSource.group.name,
+              })}
+            >
+              {collectedSource.group.faceURL ? (
+                <Image
+                  source={{ uri: collectedSource.group.faceURL }}
+                  style={s.floatingAvatar}
+                  contentFit="cover"
+                />
+              ) : (
+                <View style={[s.floatingAvatar, { backgroundColor: colors.primary }]}>
+                  <Ionicons name="people" size={18} color={colors.white} />
+                </View>
+              )}
+            </Pressable>
+          ) : null}
+
+          {/* 下载入口从顶栏移到这里：菜单内四种导出（图片/视频/长图/PDF）原样复用。 */}
+          <Pressable
+            style={[s.floatingBtn, d.floatingBtn, exporting !== null && s.floatingBtnBusy]}
+            onPress={() => setDownloadMenuVisible(true)}
+            disabled={exporting !== null}
+            accessibilityRole="button"
+            accessibilityLabel={t('notes.actions.download', {
+              defaultValue: '下载',
+            })}
+          >
+            {exporting !== null ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <Ionicons name="download-outline" size={20} color={colors.text} />
+            )}
+          </Pressable>
+        </View>
+      ) : null}
+
       <Modal
         visible={downloadMenuVisible}
         transparent
@@ -572,7 +619,7 @@ export default function NoteDetailScreen() {
       </Modal>
 
       <ShareNoteSheet
-        payload={sharePayload}
+        payloads={sharePayloads}
         onClose={() => setShareOpen(false)}
       />
     </View>
@@ -626,35 +673,34 @@ const s = StyleSheet.create({
   groupTagText: { ...Typography.small, fontWeight: '600' },
   bodyText: { ...Typography.bodyRegular, fontSize: 15, lineHeight: 26 },
   emptyHint: { ...Typography.caption, fontWeight: '400' },
-  // 来源名片（设计稿）：主色浅底 + 方圆角头像 + 实心主色 CTA 胶囊
-  sourceCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  // 右下角悬浮列：竖排圆钮，绝对定位不占正文流。
+  floatingDock: {
+    position: 'absolute',
+    right: Spacing.lg,
     gap: Spacing.sm + 4,
-    borderRadius: Radius.lg,
-    padding: Spacing.sm + 4,
-    marginBottom: Spacing.lg,
+    alignItems: 'center',
   },
-  sourceAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.md,
+  floatingBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
+    // 悬浮在正文之上，投影把它和滚动内容分开。
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
   },
-  sourceCardText: { flex: 1, gap: 2 },
-  sourceCardName: { ...Typography.body, fontWeight: '600' },
-  sourceSubtitle: { ...Typography.small },
-  sourceBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    height: 32,
-    paddingHorizontal: Spacing.sm + 4,
+  floatingBtnBusy: { opacity: 0.6 },
+  floatingAvatar: {
+    width: 36,
+    height: 36,
     borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  sourceBtnText: { ...Typography.small, fontWeight: '600' },
   // 小节之间用分隔线 + 图标章头分段，正文不设头直接展开（设计稿）。
   // 1pt 实线：发丝线在真机上太淡，分段感立不住。
   section: { gap: Spacing.md - 4, marginBottom: Spacing.lg },

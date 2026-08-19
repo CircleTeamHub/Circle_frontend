@@ -66,6 +66,51 @@ export function createCircleChatConversation(
   });
 }
 
+/** 创建独立群聊(好友多选;不挂圈子)。 */
+export function createGroupChatConversation(input: {
+  name?: string | null;
+  memberIds: string[];
+}): Promise<ChatConversationDto> {
+  return apiClient<ChatConversationDto>('/chat/conversations/group', {
+    method: 'POST',
+    body: {
+      ...(input.name?.trim() ? { name: input.name.trim() } : {}),
+      memberIds: input.memberIds,
+    },
+  });
+}
+
+/** 独立群聊:拉自己的好友进群。 */
+export function inviteGroupChatMembers(
+  conversationId: string,
+  memberIds: string[],
+): Promise<ChatConversationDto> {
+  return apiClient<ChatConversationDto>(
+    `/chat/conversations/${conversationId}/members`,
+    { method: 'POST', body: { memberIds } },
+  );
+}
+
+/** 独立群聊:退出群聊(群主退群服务端自动转移)。 */
+export function leaveGroupChatConversation(
+  conversationId: string,
+): Promise<void> {
+  return apiClient<void>(`/chat/conversations/${conversationId}/leave`, {
+    method: 'POST',
+  });
+}
+
+/** 独立群聊:改群名(任一在座成员)。 */
+export function renameGroupChatConversation(
+  conversationId: string,
+  name: string,
+): Promise<ChatConversationDto> {
+  return apiClient<ChatConversationDto>(
+    `/chat/conversations/${conversationId}/name`,
+    { method: 'PATCH', body: { name } },
+  );
+}
+
 /**
  * 历史翻页:height 键集向前翻,页内升序;顺手灌进 store。
  *
@@ -420,16 +465,17 @@ export async function setChatBurnDuration(
 }
 
 /**
- * G-14 清空聊天记录:服务端写 per-viewer 水位(对端不受影响),
+ * G-14 清空聊天记录:私聊由服务端推进双方水位，群聊只推进本人水位；
  * 本地时间线/预览/未读同步清空 —— 不再是「清内存转头又拉回来」的假清空。
  */
 export async function clearChatConversationHistory(
   conversationId: string,
+  options: { forEveryone?: boolean } = {},
 ): Promise<void> {
   const sameSession = sessionGate();
   const result = await apiClient<{ clearedBeforeHeight?: number }>(
     `/chat/conversations/${conversationId}/clear`,
-    { method: 'POST' },
+    { method: 'POST', body: { forEveryone: options.forEveryone ?? false } },
   );
   if (sameSession()) {
     // 带上服务端的权威水位:在途的历史请求/延迟的 chat:msg 会在清空之后

@@ -12,18 +12,20 @@ test('profile notes stack exposes a real map location picker route', () => {
 });
 
 test('NoteLocationPickerScreen renders a WebView-backed map picker', () => {
-  const src = read('src/features/notes/screens/NoteLocationPickerScreen.tsx');
+  const screen = read('src/features/notes/screens/NoteLocationPickerScreen.tsx');
+  const src = read('src/features/location/components/map-location-picker-screen.tsx');
 
   assert.match(src, /react-native-webview/);
   assert.match(src, /openstreetmap\.org/);
   assert.match(src, /nominatim\.openstreetmap\.org/);
   assert.match(src, /onMessage=\{handleMapMessage\}/);
-  assert.match(src, /setPickedLocation/);
-  assert.match(src, /router\.back\(\)/);
+  assert.match(screen, /MapLocationPickerScreen/);
+  assert.match(screen, /setPickedLocation/);
+  assert.match(screen, /router\.back\(\)/);
 });
 
 test('NoteLocationPickerScreen keeps the real map full screen with a bottom sheet', () => {
-  const src = read('src/features/notes/screens/NoteLocationPickerScreen.tsx');
+  const src = read('src/features/location/components/map-location-picker-screen.tsx');
 
   assert.match(src, /\.bottomSheet/);
   assert.match(src, /safe-area-inset-bottom/);
@@ -35,9 +37,11 @@ test('NoteLocationPickerScreen keeps the real map full screen with a bottom shee
 
 test('note location picker store carries selected coordinates back to edit screen', () => {
   const src = read('src/features/notes/store/use-note-location-picker-store.ts');
+  const locationType = read('src/features/location/types.ts');
 
-  assert.match(src, /latitude: number/);
-  assert.match(src, /longitude: number/);
+  assert.match(locationType, /latitude: number/);
+  assert.match(locationType, /longitude: number/);
+  assert.match(src, /PickedLocation/);
   assert.match(src, /setPickedLocation/);
   assert.match(src, /consumePickedLocation/);
 });

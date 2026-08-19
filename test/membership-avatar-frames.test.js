@@ -28,7 +28,8 @@ test('Avatar reserves the scaled frame footprint so it does not overlap adjacent
   const src = read('src/components/ui/avatar.tsx');
   assert.match(src, /frameSource\?: ImageSourcePropType/);
   // 方形头像(聊天列表)不套圆形框。
-  assert.match(src, /shape !== 'circle'/);
+  assert.match(src, /shape === 'circle'/);
+  assert.match(src, /FEATURE_FLAGS\.avatarFrames/);
   assert.match(src, /AVATAR_FRAME_SCALE/);
   assert.match(src, /pointerEvents="none"/);
   // 容器按框尺寸预留占位(钻石/超级框比头像大 1.6×),头像居中,框铺满——
@@ -37,7 +38,7 @@ test('Avatar reserves the scaled frame footprint so it does not overlap adjacent
   assert.doesNotMatch(src, /frameOffset/);
 });
 
-test('ProfileScreen and UserProfileScreen wear the backend effective frame', () => {
+test('only My profile wears the backend effective frame', () => {
   const own = read('src/features/profile/screens/ProfileScreen.tsx');
   assert.match(
     own,
@@ -46,13 +47,9 @@ test('ProfileScreen and UserProfileScreen wear the backend effective frame', () 
   assert.doesNotMatch(own, /getMembershipFrameAsset/);
 
   const other = read('src/features/user/screens/UserProfileScreen.tsx');
-  // 他人资料页直接使用公开 profile.avatarFrameAppearance,不从 VIP 派生。
   assert.doesNotMatch(other, /useUserVipLevel\(/);
-  assert.match(
+  assert.doesNotMatch(
     other,
-    /getAvatarFrameSource\(profile\.avatarFrameAppearance\)/,
+    /getAvatarFrameSource|membershipFrameOverlay|avatarRingFramed|getMembershipFrameAsset/,
   );
-  assert.doesNotMatch(other, /getMembershipFrameAsset/);
-  assert.match(other, /membershipFrameOverlay/);
-  assert.match(other, /avatarRingFramed/);
 });

@@ -40,6 +40,19 @@ function transpile(rel) {
   }).outputText;
 }
 
+// qr-payload 运行时零依赖(常量全内联),所以这里加载**真实实现**而不是桩 ——
+// 二维码卡片的令牌净化是一条安全边界,用假的就等于没测。
+let __qrPayload = null;
+function loadQrPayload() {
+  if (!__qrPayload) {
+    const ctx = { module: { exports: {} }, exports: {} };
+    ctx.exports = ctx.module.exports;
+    vm.runInNewContext(transpile('src/features/qr/qr-payload.ts'), ctx);
+    __qrPayload = ctx.module.exports;
+  }
+  return __qrPayload;
+}
+
 function loadMappers(options = {}) {
   // 白名单替身:只放行「本站自己的媒体来源」,其余(含对端塞的任意主机)一律拒。
   const TRUSTED = ['https://cdn.trusted/', 'https://signed/'];
@@ -69,6 +82,7 @@ function loadMappers(options = {}) {
       if (request === './store') return {};
       if (request === '@/types') return {};
       if (request === './local-db') return __localDbStub;
+      if (request === '@/features/qr/qr-payload') return loadQrPayload();
     throw new Error(`unexpected require: ${request}`);
     },
   };
@@ -106,6 +120,71 @@ test('text messages split sent/received by sender identity', () => {
   assert.equal(sent.type, 'sent');
   assert.equal(sent.senderName, undefined);
   assert.equal(sent.sendStatus, 2);
+});
+
+test('video messages preserve their signed source and playback metadata', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const video = mapChatMessageDtoToUI(
+    dto({
+      type: 'video',
+      content: {
+        key: 'chat/u2/clip.mp4',
+        url: 'https://cdn.trusted/clip.mp4',
+        width: 1920,
+        height: 1080,
+        duration: 12,
+        size: 2048,
+      },
+    }),
+    'u1',
+    0,
+  );
+  assert.equal(video.type, 'video');
+  assert.equal(video.videoUrl, 'https://cdn.trusted/clip.mp4');
+  assert.equal(video.videoWidth, 1920);
+  assert.equal(video.videoHeight, 1080);
+  assert.equal(video.videoDuration, 12);
+  assert.equal(video.videoSize, 2048);
+});
+
+test('location messages preserve separate place details and valid coordinates', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const location = mapChatMessageDtoToUI(
+    dto({
+      type: 'location',
+      content: {
+        title: '深圳湾公园',
+        address: '广东省深圳市南山区滨海大道',
+        description: '旧客户端兜底文案',
+        latitude: 22.4806,
+        longitude: 113.9464,
+      },
+    }),
+    'u1',
+    0,
+  );
+
+  assert.equal(location.locationTitle, '深圳湾公园');
+  assert.equal(location.locationAddress, '广东省深圳市南山区滨海大道');
+  assert.equal(location.locationLatitude, 22.4806);
+  assert.equal(location.locationLongitude, 113.9464);
+});
+
+test('legacy location messages keep their description without inventing coordinates', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const location = mapChatMessageDtoToUI(
+    dto({
+      type: 'location',
+      content: { description: '深圳市南山区' },
+    }),
+    'u1',
+    0,
+  );
+
+  assert.equal(location.locationTitle, '深圳市南山区');
+  assert.equal(location.locationAddress, '深圳市南山区');
+  assert.equal(location.locationLatitude, undefined);
+  assert.equal(location.locationLongitude, undefined);
 });
 
 test('optimistic lifecycle: sending → failed → confirmed statuses', () => {

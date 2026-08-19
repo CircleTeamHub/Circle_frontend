@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
@@ -17,29 +17,35 @@ import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
 import { GradientCover } from '@/components/ui/gradient-cover';
+import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import {
   MEMBERSHIP_BENEFITS,
   MEMBERSHIP_PLANS,
   getMembershipTierForVipLevel,
   type MembershipBenefitId,
   type MembershipBenefitValue,
+  type MembershipPlanId,
   type MembershipTier,
 } from '@/features/profile/membership-plans';
 import { getUserProfileHref } from '@/features/user/utils/routes';
 import { fetchCurrentUser } from '@/services/api/auth';
 import { useAuthStore } from '@/stores/authStore';
 import { useMembershipProgramStore } from '@/stores/membershipProgramStore';
+import { useSupportConfigStore } from '@/stores/supportConfigStore';
+import { selectSupportAgents } from '@/stores/support-config-selectors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
-function getMembershipSupportUserId(): string | undefined {
-  return process.env.EXPO_PUBLIC_MEMBERSHIP_SUPPORT_USER_ID?.trim() || undefined;
-}
 
 const DEFAULT_TIER_NAMES: Record<MembershipTier, string> = {
-  silver: '白银会员',
-  gold: '黄金会员',
-  diamond: '钻石会员',
-  super: '超级会员',
+  silver: '包月会员',
+  gold: '半年会员',
+  diamond: '年费会员',
+  super: '永久会员',
+};
+
+const DEFAULT_PLAN_NAMES: Record<MembershipPlanId, string> = {
+  daily: '每日会员',
+  ...DEFAULT_TIER_NAMES,
 };
 
 const DEFAULT_BENEFIT_LABELS: Record<MembershipBenefitId, string> = {
@@ -183,7 +189,7 @@ const s = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Spacing.md,
   },
-  // ── 档位纵向列表（四档全展示）──
+  // ── 购买方案纵向列表（每日方案 + 四档会员）──
   tierStack: {
     gap: Spacing.sm,
   },
@@ -279,19 +285,27 @@ export default function MemberCenterScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const visibleBenefits = MEMBERSHIP_BENEFITS.filter(
+    (benefit) =>
+      FEATURE_FLAGS.fancyNumbers || benefit.id !== 'fancy-number',
+  );
   const vipLevel = useAuthStore((state) => state.user?.vipLevel ?? 0);
   const currentTier = getMembershipTierForVipLevel(vipLevel);
   const currentPlan = currentTier
-    ? MEMBERSHIP_PLANS.find((plan) => plan.tier === currentTier)
+    ? MEMBERSHIP_PLANS.find((plan) => plan.id === currentTier)
     : undefined;
   const currentPlanLevel = currentPlan?.level ?? 0;
-  const [selectedTier, setSelectedTier] = useState<MembershipTier>(
+  const [selectedPlanId, setSelectedPlanId] = useState<MembershipPlanId>(
     currentTier ?? 'diamond',
   );
   const programStatus = useMembershipProgramStore((state) => state.status);
   const programError = useMembershipProgramStore((state) => state.error);
   const fetchProgramStatus = useMembershipProgramStore(
     (state) => state.fetchStatus,
+  );
+  const supportConfig = useSupportConfigStore((state) => state.config);
+  const fetchSupportConfigState = useSupportConfigStore(
+    (state) => state.fetchConfig,
   );
   const programEnabled =
     programStatus?.enabled ?? (programError ? false : null);
@@ -302,7 +316,7 @@ export default function MemberCenterScreen() {
     __DEV__ && !process.env.JEST_WORKER_ID ? true : programEnabled;
 
   useEffect(() => {
-    setSelectedTier(currentTier ?? 'diamond');
+    setSelectedPlanId(currentTier ?? 'diamond');
   }, [currentTier]);
 
   useFocusEffect(
@@ -314,6 +328,10 @@ export default function MemberCenterScreen() {
       const ownerSessionEpoch = owner.sessionEpoch;
 
       void fetchProgramStatus({ force: true });
+      // 必须 force:这套配置存在的意义就是「管理台换了人立刻生效」。命中缓存的话,
+      // 首次拉取(哪怕拉到的是空列表)会被整个进程生命周期沿用,用户要么一直看到
+      // 旧客服、要么一直看到「暂未配置」,直到重启 App。
+      void fetchSupportConfigState({ force: true });
 
       if (ownerUserId && ownerAccountId) {
         void fetchCurrentUser()
@@ -345,14 +363,14 @@ export default function MemberCenterScreen() {
       return () => {
         active = false;
       };
-    }, [fetchProgramStatus]),
+    }, [fetchProgramStatus, fetchSupportConfigState]),
   );
 
   const selectedPlan =
-    MEMBERSHIP_PLANS.find((plan) => plan.tier === selectedTier) ??
-    MEMBERSHIP_PLANS[2];
+    MEMBERSHIP_PLANS.find((plan) => plan.id === selectedPlanId) ??
+    MEMBERSHIP_PLANS.find((plan) => plan.id === 'diamond')!;
   const selectedPlanName = t(selectedPlan.nameKey, {
-    defaultValue: DEFAULT_TIER_NAMES[selectedPlan.tier],
+    defaultValue: DEFAULT_PLAN_NAMES[selectedPlan.id],
   });
   const currentMembershipName = currentTier
     ? t(`profile.membership.tiers.${currentTier}.name`, {
@@ -360,7 +378,7 @@ export default function MemberCenterScreen() {
       })
     : t('profile.membership.regularUser', { defaultValue: '普通用户' });
   const isUpgrade = currentPlanLevel > 0 && selectedPlan.level > currentPlanLevel;
-  const isCurrent = currentPlanLevel > 0 && selectedPlan.level === currentPlanLevel;
+  const isCurrent = currentPlanLevel > 0 && selectedPlan.id === currentTier;
   const isLowerTier = currentPlanLevel > selectedPlan.level;
 
   const contactLabel = !currentTier
@@ -384,28 +402,58 @@ export default function MemberCenterScreen() {
             })
           : t('profile.membership.contactSupport', { defaultValue: '联系客服咨询' });
 
-  const handleContactSupport = useCallback(() => {
-    const membershipSupportUserId = getMembershipSupportUserId();
-    if (membershipSupportUserId) {
-      router.push(
-        getUserProfileHref(
-          'profile',
-          membershipSupportUserId,
-          t('profile.membership.supportName', { defaultValue: '官方客服' }),
-        ),
-      );
-      return;
-    }
+  // 首屏 config 还没到时这次点击要等网络,期间用户完全可以再点一次。store 的
+  // inFlight 去重只合并请求、不合并 await 之后的续跑:两次点击都会各自 push 一次,
+  // 用户回退时要连按两下才退得出去。ref 是同步的,setState 的异步性挡不住连点。
+  const contactingRef = useRef(false);
 
-    Alert.alert(
-      t('profile.membership.supportUnavailableTitle', {
-        defaultValue: '客服账号暂未配置',
-      }),
-      t('profile.membership.supportUnavailableMessage', {
-        defaultValue: '请联系平台官方客服咨询会员开通或升级。',
-      }),
-    );
-  }, [router, t]);
+  // 会员客服 = 后端 membership 类的首个客服(管理台维护、按 sortOrder 排序)。
+  // 没配就仍然弹原来那条 Alert —— 优雅降级,不回退到任何默认账号。
+  const handleContactSupport = useCallback(async () => {
+    if (contactingRef.current) return;
+    contactingRef.current = true;
+    try {
+      // 首屏 config 还是 null 时直接判空,会把一次正常的网络往返误报成「客服暂未配置」。
+      // store 的 inFlight 去重保证这里是并入同一个请求,而不是再发一次。
+      const config =
+        supportConfig ?? (await fetchSupportConfigState({ force: true }));
+      const [agent] = selectSupportAgents(config, 'membership');
+      if (agent) {
+        router.push(
+          getUserProfileHref(
+            'profile',
+            agent.userID,
+            agent.nickname ||
+              t('profile.membership.supportName', { defaultValue: '官方客服' }),
+          ),
+        );
+        return;
+      }
+
+      // config === null 只可能是这次没拉到(成功时哪怕五类全空也是对象)。
+      // 把网络故障说成「客服暂未配置」会让用户以为平台没客服而放弃咨询。
+      if (!config) {
+        Alert.alert(
+          t('profile.customerService.loadFailed', {
+            defaultValue: '客服信息加载失败',
+          }),
+          t('common.networkError'),
+        );
+        return;
+      }
+
+      Alert.alert(
+        t('profile.membership.supportUnavailableTitle', {
+          defaultValue: '客服账号暂未配置',
+        }),
+        t('profile.membership.supportUnavailableMessage', {
+          defaultValue: '请联系平台官方客服咨询会员开通或升级。',
+        }),
+      );
+    } finally {
+      contactingRef.current = false;
+    }
+  }, [fetchSupportConfigState, router, supportConfig, t]);
 
   const d = useMemo(
     () => ({
@@ -550,7 +598,7 @@ export default function MemberCenterScreen() {
             </Text>
             <Text style={d.marketingText}>
               {t('profile.membership.marketing.goldAccess', {
-                defaultValue: '当前所有用户免费享有黄金额度',
+                defaultValue: '当前所有用户免费享有半年会员额度',
               })}
             </Text>
             <Text style={d.marketingText}>
@@ -635,26 +683,34 @@ export default function MemberCenterScreen() {
           </Pressable>
         </View>
 
-        {/* 四档纵向全展示；每档一枚随材质换渐变的奖章 + 强调色 */}
+        {/* 五个购买方案纵向展示；每日会员复用白银权益与视觉，不新增后端等级。 */}
         <View style={s.tierStack}>
           {MEMBERSHIP_PLANS.map((plan) => {
-            const selected = plan.tier === selectedPlan.tier;
+            const selected = plan.id === selectedPlan.id;
+            // 按「等级」而不是「方案 id」判：后端只暴露 vipLevel，每日会员和月度
+            // 白银是同一档 silver/level 1，用 id 比的话客服开通一天会员后会把
+            // 月度卡片标成「当前」、每日卡片反而没标。徽章本身就是 currentTierBadge。
             const isCurrentTier = plan.tier === currentTier;
             const visual = TIER_VISUALS[plan.tier];
             const planName = t(plan.nameKey, {
-              defaultValue: DEFAULT_TIER_NAMES[plan.tier],
+              defaultValue: DEFAULT_PLAN_NAMES[plan.id],
             });
             const duration =
               plan.duration.type === 'lifetime'
                 ? t('profile.membership.duration.lifetime', { defaultValue: '永久' })
-                : t('profile.membership.duration.months', {
-                    defaultValue: '{{count}} 个月',
-                    count: plan.duration.months,
-                  });
+                : plan.duration.type === 'days'
+                  ? t('profile.membership.duration.days', {
+                      defaultValue: '{{count}} 天',
+                      count: plan.duration.days,
+                    })
+                  : t('profile.membership.duration.months', {
+                      defaultValue: '{{count}} 个月',
+                      count: plan.duration.months,
+                    });
 
             return (
               <Pressable
-                key={plan.tier}
+                key={plan.id}
                 accessibilityRole="button"
                 accessibilityLabel={t('profile.membership.planAccessibilityLabel', {
                   defaultValue: '{{plan}}，{{duration}}，¥{{price}}',
@@ -668,7 +724,7 @@ export default function MemberCenterScreen() {
                   d.tierCard,
                   selected && { borderColor: visual.accent, borderWidth: 2 },
                 ]}
-                onPress={() => setSelectedTier(plan.tier)}
+                onPress={() => setSelectedPlanId(plan.id)}
               >
                 <View style={s.tierMedallion}>
                   <GradientCover colors={visual.gradient} />
@@ -742,7 +798,7 @@ export default function MemberCenterScreen() {
           {t('profile.membership.benefitsTitle', { defaultValue: '会员权益' })}
         </Text>
         <View style={[s.benefitsPanel, d.benefitsPanel]}>
-          {MEMBERSHIP_BENEFITS.map((benefit, index) => {
+          {visibleBenefits.map((benefit, index) => {
             const value = benefit.values[selectedPlan.tier];
             const defaultValue =
               typeof value === 'number'
@@ -761,7 +817,7 @@ export default function MemberCenterScreen() {
                 key={benefit.id}
                 style={[
                   s.benefitRow,
-                  index < MEMBERSHIP_BENEFITS.length - 1 && d.benefitDivider,
+                  index < visibleBenefits.length - 1 && d.benefitDivider,
                 ]}
               >
                 <Ionicons
@@ -794,7 +850,9 @@ export default function MemberCenterScreen() {
             accessibilityRole="button"
             accessibilityLabel={contactLabel}
             style={[s.cta, d.cta]}
-            onPress={handleContactSupport}
+            onPress={() => {
+              void handleContactSupport();
+            }}
           >
             <Text style={d.ctaText}>{contactLabel}</Text>
           </Pressable>

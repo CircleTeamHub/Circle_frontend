@@ -81,14 +81,36 @@ function loadRealtimeHarness() {
           return { fetchUnreadFriendActivityCount: async () => 0 };
         case '@/services/api/auth':
           return { fetchCurrentUser: async () => ({ id: 'user-1' }) };
+        case '@/services/api/coin':
+          return { fetchWallet: async () => ({ balance: 0 }) };
         case '@/services/api/notifications':
           return {
             fetchNotifications: async () => [],
             fetchNotificationUnreadSummary: async () => ({
               discoverUnread: 0,
+              momentsUnread: 0,
+              circleUnread: 0,
               profileUnread: 0,
               totalUnread: 0,
             }),
+          };
+        case '@/features/notifications/utils/notification-domain':
+          return {
+            BELL_NOTIFICATION_TYPES: new Set([
+              'TRACE_LIKE',
+              'TRACE_COMMENT',
+              'COMMENT_REPLY',
+              'TRACE_MENTION',
+              'PROFILE_LIKE',
+              'CIRCLE_VERIFICATION_REQUESTED',
+              'CIRCLE_INVITATION_APPROVED',
+              'CIRCLE_INVITATION_REJECTED',
+              'CIRCLE_ADMIN_OVERRIDE_APPROVED',
+              'CIRCLE_POST_PUBLISHED',
+              'CIRCLE_POST_SIGNUP_CREATED',
+              'CIRCLE_POST_AUTO_ENDED',
+              'CIRCLE_POST_COLLABORATION_RECOGNIZED',
+            ]),
           };
         case '@/features/notifications/store/use-notification-center-store':
           return {

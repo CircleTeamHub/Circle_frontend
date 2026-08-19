@@ -157,9 +157,12 @@ test('burn toggle leaves a localized system trail and the info rows exist', () =
   assert.match(info, /handleClearHistory/);
 });
 
-test('swipe delete clears the personal history watermark, not just hides', () => {
+test('swipe delete clears history before hiding and warns for direct chats', () => {
   const screen = read('src/features/messages/screens/MessagesScreen.tsx');
   assert.match(screen, /clearChatConversationHistory/);
+  assert.match(screen, /deleteChatConfirmDirect/);
+  assert.match(screen, /deleteChatConfirmDirect[\s\S]{0,250}defaultValue/);
+  assert.match(screen, /forEveryone:\s*conversation\.conversationType === ["']private["']/);
 });
 
 test('the settings clear-all path writes server watermarks before wiping cache', () => {
@@ -176,6 +179,9 @@ test('burn words exist in every locale', () => {
     assert.ok(dict?.im?.burn?.h1, `${locale} im.burn.h1`);
     assert.ok(dict?.chat?.burnAfterReading, `${locale} chat.burnAfterReading`);
     assert.ok(dict?.chat?.clearHistory, `${locale} chat.clearHistory`);
+    assert.ok(dict?.chat?.clearHistoryConfirmDirect, `${locale} chat.clearHistoryConfirmDirect`);
+    assert.ok(dict?.chat?.clearHistoryDoneDirect, `${locale} chat.clearHistoryDoneDirect`);
+    assert.ok(dict?.messages?.deleteChatConfirmDirect, `${locale} messages.deleteChatConfirmDirect`);
   }
 });
 
@@ -443,6 +449,7 @@ test('clear-all-chats loads the authoritative conversation list first', () => {
   const actions = read('src/features/profile/hooks/use-storage-actions.ts');
   assert.match(actions, /loadChatConversations\(\)/);
   assert.match(actions, /resetForLogout/);
+  assert.doesNotMatch(actions, /forEveryone:\s*true/);
 });
 
 test('swipe delete sequences hide-after-clear and surfaces failures', () => {
@@ -564,6 +571,15 @@ test('burn-expired messages are purged from the local cache', () => {
   // 三个触发点:拿到会话快照、档位变更、冷启动水合。
   const calls = store.match(/get\(\)\.purgeExpiredBurnMessages\(\)/g) ?? [];
   assert.ok(calls.length >= 3, `expected >=3 purge triggers, got ${calls.length}`);
+});
+
+test('burn expiry is scheduled and self-destruct images avoid disk caching', () => {
+  const store = read('src/chat-core/store.ts');
+  assert.match(store, /scheduleNextBurnPurge/);
+  assert.match(store, /BURN_PURGE_SWEEP_MS/);
+  const image = read('src/features/chat/components/bubbles/image-bubble.tsx');
+  assert.match(image, /cachePolicy=\{selfDestructEnabled \? 'memory' : 'memory-disk'\}/);
+  assert.match(image, /selfDestructCacheKey/);
 });
 
 test('clear-all reports partial failure instead of claiming success', () => {

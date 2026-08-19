@@ -1,11 +1,7 @@
 import { create } from 'zustand';
+import type { PickedLocation } from '@/features/location/types';
 
-export type PickedNoteLocation = {
-  title: string;
-  address: string;
-  latitude: number;
-  longitude: number;
-};
+export type PickedNoteLocation = PickedLocation;
 
 type NoteLocationPickerState = {
   pickedLocation: PickedNoteLocation | null;

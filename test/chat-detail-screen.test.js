@@ -15,6 +15,10 @@ test('chat detail screen uses the aligned header and composer structure', () => 
   assert.match(source, /messageListContent/);
   assert.match(source, /composerShell/);
   assert.match(source, /composerInput/);
+  assert.match(source, /sendVideoMessage/);
+  assert.match(source, /mediaTypes: kind === 'photo' \? \['images'\] : \['videos'\]/);
+  assert.match(source, /VIDEO_UPLOAD_TIMEOUT_MS/);
+  assert.match(source, /type: 'video'/);
 });
 
 test('chat detail screen exposes refined message insets and composer action hierarchy', () => {
@@ -27,6 +31,27 @@ test('chat detail screen exposes refined message insets and composer action hier
   assert.match(source, /messageListInset/);
   assert.match(source, /composerActionBtn/);
   assert.match(source, /contentContainerStyle=\{\[s\.messageList, s\.messageListContent, s\.messageListInset\]\}/);
+});
+
+test('new messages follow the latest position without hijacking history reading', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+
+  // 自己从笔记选择页返回后发出的卡片必须滚到底；对端消息只在用户本来就在
+  // 底部附近时跟随，不能把正在翻历史的人强拉回最新消息。
+  assert.match(source, /latestMessageIdentityRef/);
+  assert.match(
+    source,
+    /if \(!latestMessage\.outgoing && !isNearLatestMessageRef\.current\) return;/,
+  );
+  assert.match(source, /InteractionManager\.runAfterInteractions/);
+  assert.match(
+    source,
+    /flatListRef\.current\?\.scrollToOffset\(\{ offset: 0, animated: true \}\)/,
+  );
+  assert.match(source, /onScroll=\{handleMessageListScroll\}/);
 });
 
 test('chat detail screen supports preview mode without an IM conversation', () => {
@@ -234,12 +259,11 @@ test('chat detail guards async send UI state after unmount', () => {
     '语音发送失败，请重试',
     '位置发送失败，请重试',
     '图片发送失败，请重试',
-    '笔记发送失败，请重试',
+    // 笔记改批量发送:失败态聚合成一条计数提示(仍要求 mounted 守卫)。
+    '{{count}} 条内容发送失败',
     '名片发送失败，请重试',
     '收藏内容发送失败，请重试',
-    // 钱是强一致落库的,卡片由后端 GiftCardOutboxProcessor 补发 ——
-    // 文案不能再让用户以为积分蒸发了(会去重转 = 第二次真实扣款)。
-    '转账已完成，卡片稍后自动补上',
+    // 转账卡片没有发送失败态了 —— 卡片由服务端结算后签发，这个屏幕不发它。
   ]) {
     // These error strings are now i18n'd: setSendError(t('chat.detail.x', { defaultValue: '中文' })).
     // The message survives verbatim in the defaultValue, so anchor on that (or the older
@@ -491,6 +515,7 @@ test('message forward picker route re-sends pending messages via chat-core', () 
   assert.match(screen, /sendTextMessage/);
   assert.match(screen, /sendVoiceMessage/);
   assert.match(screen, /sendImageMessage/);
+  assert.match(screen, /sendVideoMessage/);
   assert.match(screen, /sendCardMessage/);
   assert.match(screen, /FORWARDABLE_CARD_TYPES/);
 });

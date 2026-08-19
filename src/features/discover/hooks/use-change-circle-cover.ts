@@ -86,13 +86,18 @@ export function useChangeCircleCover(
       setChanging(true);
       try {
         const filename = sanitizeUploadFilename(asset.fileName ?? 'cover.jpg');
-        const { uploadUrl, fileUrl } = await requestUploadPresign({
+        const { uploadUrl, fileUrl, requiredHeaders } = await requestUploadPresign({
           filename,
           contentType,
           folder: 'covers',
           fileUri: asset.uri,
         });
-        await uploadLocalFileToPresignedUrl(uploadUrl, contentType, asset.uri);
+        await uploadLocalFileToPresignedUrl(
+          uploadUrl,
+          contentType,
+          asset.uri,
+          requiredHeaders,
+        );
         await setCircleCover(circleId, fileUrl);
         onChanged(fileUrl);
       } catch (error) {

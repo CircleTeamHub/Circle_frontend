@@ -10,9 +10,19 @@ import {
   resolveMembershipEntitlementLevel,
 } from './membership-plans.ts';
 
-test('catalog defines the four exact membership plans', () => {
+test('catalog defines the daily offer and four exact membership tiers', () => {
   assert.deepEqual(MEMBERSHIP_PLANS, [
     {
+      id: 'daily',
+      tier: 'silver',
+      level: 1,
+      nameKey: 'profile.membership.tiers.daily.name',
+      duration: { type: 'days', days: 1 },
+      price: { currency: 'CNY', amount: 19.9 },
+      recommended: false,
+    },
+    {
+      id: 'silver',
       tier: 'silver',
       level: 1,
       nameKey: 'profile.membership.tiers.silver.name',
@@ -21,6 +31,7 @@ test('catalog defines the four exact membership plans', () => {
       recommended: false,
     },
     {
+      id: 'gold',
       tier: 'gold',
       level: 2,
       nameKey: 'profile.membership.tiers.gold.name',
@@ -29,6 +40,7 @@ test('catalog defines the four exact membership plans', () => {
       recommended: false,
     },
     {
+      id: 'diamond',
       tier: 'diamond',
       level: 3,
       nameKey: 'profile.membership.tiers.diamond.name',
@@ -37,6 +49,7 @@ test('catalog defines the four exact membership plans', () => {
       recommended: true,
     },
     {
+      id: 'super',
       tier: 'super',
       level: 4,
       nameKey: 'profile.membership.tiers.super.name',

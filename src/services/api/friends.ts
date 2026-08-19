@@ -97,6 +97,8 @@ export type CreateFriendRequestInput = {
   description?: string;
   photos?: string[];
   permission?: FriendPermission;
+  /** 扫名片码进来的申请带上:服务端验真后按对方 addMeByQrCode 开关放行。 */
+  qrToken?: string;
 };
 
 type CreateFriendRequestBody = {
@@ -107,6 +109,7 @@ type CreateFriendRequestBody = {
   description?: string;
   photos?: string[];
   permission?: FriendPermission;
+  qrToken?: string;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -223,6 +226,7 @@ function buildCreateFriendRequestBody(
     ...(description ? { description } : {}),
     ...(photos && photos.length > 0 ? { photos } : {}),
     ...(permission ? { permission } : {}),
+    ...(input.qrToken ? { qrToken: input.qrToken } : {}),
   };
 }
 

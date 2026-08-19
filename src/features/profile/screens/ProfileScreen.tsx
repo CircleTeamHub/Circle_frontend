@@ -4,6 +4,7 @@ import { GradientCover } from "@/components/ui/gradient-cover";
 import { MemberName } from "@/components/ui/member-name";
 import { MenuRow } from "@/components/ui/menu-row";
 import { UserIconRow } from "@/components/ui/user-icon-row";
+import { FEATURE_FLAGS } from "@/constants/feature-flags";
 import {
   getCreditStatBackground,
   getCreditStatTextColor,
@@ -38,16 +39,15 @@ const MENU_ID = {
   COLLECTIONS: "collections",
   NOTES: "notes",
   CUSTOMER_SERVICE: "customer-service",
-  APP_SETTINGS: "app-settings",
 } as const;
 
 type MenuId = (typeof MENU_ID)[keyof typeof MENU_ID];
 
 const DEFAULT_MEMBERSHIP_NAMES: Record<MembershipTier, string> = {
-  silver: "白银会员",
-  gold: "黄金会员",
-  diamond: "钻石会员",
-  super: "超级会员",
+  silver: "包月会员",
+  gold: "半年会员",
+  diamond: "年费会员",
+  super: "永久会员",
 };
 
 const MENU_ROUTE: Record<MenuId, string> = {
@@ -58,23 +58,20 @@ const MENU_ROUTE: Record<MenuId, string> = {
   [MENU_ID.COLLECTIONS]: "/(tabs)/profile/collections",
   [MENU_ID.NOTES]: "/(tabs)/profile/notes",
   [MENU_ID.CUSTOMER_SERVICE]: "/(tabs)/profile/customer-service",
-  [MENU_ID.APP_SETTINGS]: "/(tabs)/profile/app-settings",
 };
 
 const MENU_ITEM_KEYS: {
   id: MenuId;
   icon: string;
   labelKey: string;
-  rightTextKey?: string;
 }[] = [
-  { id: MENU_ID.SYSTEM_ANNOUNCEMENTS, icon: "megaphone-outline", labelKey: "profile.systemAnnouncements", rightTextKey: "profile.viewAnnouncements" },
-  { id: MENU_ID.MEMBER_CENTER, icon: "gift-outline", labelKey: "profile.memberCenter", rightTextKey: "profile.viewMember" },
+  { id: MENU_ID.SYSTEM_ANNOUNCEMENTS, icon: "megaphone-outline", labelKey: "profile.systemAnnouncements" },
+  { id: MENU_ID.MEMBER_CENTER, icon: "gift-outline", labelKey: "profile.memberCenter" },
   { id: MENU_ID.WALLET, icon: "wallet-outline", labelKey: "profile.wallet.menuLabel" },
-  { id: MENU_ID.MALL, icon: "hand-left-outline", labelKey: "profile.mall.menuLabel", rightTextKey: "profile.viewProducts" },
-  { id: MENU_ID.COLLECTIONS, icon: "bookmark-outline", labelKey: "profile.collections.menuLabel", rightTextKey: "profile.viewCollections" },
-  { id: MENU_ID.NOTES, icon: "document-text-outline", labelKey: "profile.notes", rightTextKey: "profile.viewNotes" },
-  { id: MENU_ID.CUSTOMER_SERVICE, icon: "headset-outline", labelKey: "profile.customerService.menuLabel", rightTextKey: "profile.customerService.menuHint" },
-  { id: MENU_ID.APP_SETTINGS, icon: "settings-outline", labelKey: "profile.settings" },
+  { id: MENU_ID.MALL, icon: "hand-left-outline", labelKey: "profile.mall.menuLabel" },
+  { id: MENU_ID.COLLECTIONS, icon: "bookmark-outline", labelKey: "profile.collections.menuLabel" },
+  { id: MENU_ID.NOTES, icon: "document-text-outline", labelKey: "profile.notes" },
+  { id: MENU_ID.CUSTOMER_SERVICE, icon: "headset-outline", labelKey: "profile.customerService.menuLabel" },
 ];
 
 const s = StyleSheet.create({
@@ -92,6 +89,11 @@ const s = StyleSheet.create({
     gap: Spacing.md - 4,
   },
   profileInfo: { gap: Spacing.xs },
+  accountRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+  },
   profileRight: {
     flexDirection: "row",
     gap: Spacing.md,
@@ -174,7 +176,6 @@ export default function ProfileScreen() {
     id: m.id,
     icon: m.icon,
     label: t(m.labelKey),
-    rightText: m.rightTextKey ? t(m.rightTextKey) : undefined,
   }));
 
   const d = useMemo(
@@ -225,7 +226,7 @@ export default function ProfileScreen() {
 
   const isDark = resolvedMode === "dark";
   const displayAccountId =
-    user?.fancyNumber && user.accountId
+    FEATURE_FLAGS.fancyNumbers && user?.fancyNumber && user.accountId
       ? user.accountId.toUpperCase()
       : user?.accountId;
   const displayName =
@@ -319,6 +320,11 @@ export default function ProfileScreen() {
     router.push("/(tabs)/profile/share");
   }, [router]);
 
+  // 我的二维码(名片):微信同款,账号行右侧的小码图标进入。
+  const handleOpenMyQr = useCallback(() => {
+    router.push({ pathname: "/qr-code", params: { type: "user" } });
+  }, [router]);
+
   const handleOpenSettings = useCallback(() => {
     router.push("/(tabs)/profile/app-settings");
   }, [router]);
@@ -351,7 +357,6 @@ export default function ProfileScreen() {
         <MenuRow
           icon={item.icon as keyof typeof Ionicons.glyphMap}
           label={item.label}
-          rightText={item.rightText}
           showIndicatorDot={
             item.id === MENU_ID.SYSTEM_ANNOUNCEMENTS && profileUnread > 0
           }
@@ -381,7 +386,7 @@ export default function ProfileScreen() {
               size={56}
               name={displayName}
               uri={user?.avatarUrl ?? undefined}
-              bgColor={colors.surface}
+              shape="circle"
               compactFrame
               frameSource={getAvatarFrameSource(user?.avatarFrameAppearance) ?? undefined}
             />
@@ -392,7 +397,15 @@ export default function ProfileScreen() {
               vipLevel={vipLevel}
               style={d.profileName}
             />
-            <Text style={d.profileAccount}>{t('contacts.accountId', { id: displayAccount })}</Text>
+            <Pressable
+              style={s.accountRow}
+              onPress={handleOpenMyQr}
+              accessibilityRole="button"
+              accessibilityLabel={t('qr.userTitle')}
+            >
+              <Text style={d.profileAccount}>{t('contacts.accountId', { id: displayAccount })}</Text>
+              <Ionicons name="qr-code-outline" size={14} color={colors.textSecondary} />
+            </Pressable>
           </View>
         </View>
         <View style={s.profileRight}>

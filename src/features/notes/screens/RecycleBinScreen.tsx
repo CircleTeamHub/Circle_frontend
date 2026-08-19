@@ -162,7 +162,7 @@ export default function RecycleBinScreen() {
       </Text>
       <Text style={[s.hint, d.hint]}>
         {t('notes.recycleBinHint', {
-          defaultValue: '已删除的笔记可在这里恢复。',
+          defaultValue: '已删除的笔记可在这里恢复，30 天后自动清除。',
         })}
       </Text>
 

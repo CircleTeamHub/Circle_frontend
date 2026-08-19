@@ -15,12 +15,14 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import i18n from '@/i18n';
 import { Avatar } from '@/components/ui/avatar';
+import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { NavHeader } from '@/components/ui/nav-header';
 import { useMessageForwardStore } from '@/features/chat/store/use-message-forward-store';
 import { loadChatConversations } from '@/chat-core/api';
 import {
   sendCardMessage,
   sendImageMessage,
+  sendVideoMessage,
   sendLocationMessage,
   sendTextMessage,
   sendVoiceMessage,
@@ -73,14 +75,16 @@ const s = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.sm },
 });
 
-// 可直接按原 payload 重发的卡片类型。transfer-card 故意排除:转账卡是
-// 服务端结算回执,原样转发等于伪造一笔转账,只允许其文本降级形态。
+// 可直接按原 payload 重发的卡片类型 —— 即客户端本来就能发的那几种(ChatCardType)。
+// 回执类一律排除:transfer-card / verification-card 都是服务端签发的凭证,
+// 原样转发等于伪造一笔转账、或伪造一份验证邀请;它们在后端也只认服务端写入,
+// 客户端重发必被拒。转账卡保留文本降级形态,验证卡连长按菜单都不提供
+// (见 ChatDetailScreen 的 'verification-card' 分支:没有 withMessageActions)。
 // 广场报名卡同样排除:它只由报名列表定向创建,不提供二次扩散入口。
 const FORWARDABLE_CARD_TYPES: ChatCardType[] = [
   'note-card',
   'friend-card',
   'circle-card',
-  'verification-card',
 ];
 
 function str(value: unknown): string | undefined {
@@ -163,6 +167,19 @@ async function sendForwardedMessage(pending: PendingForward, conversationId: str
         });
       }
     }
+    if (dto.type === 'video') {
+      const key = str(content['key']);
+      if (key) {
+        return sendVideoMessage({
+          conversationId,
+          key,
+          width: num(content['width']),
+          height: num(content['height']),
+          duration: num(content['duration']),
+          size: num(content['size']),
+        });
+      }
+    }
     if (dto.type === 'voice') {
       const key = str(content['key']);
       const duration = num(content['duration']);
@@ -183,6 +200,8 @@ async function sendForwardedMessage(pending: PendingForward, conversationId: str
           conversationId,
           latitude,
           longitude,
+          title: str(content['title']),
+          address: str(content['address']),
           description: str(content['description']) ?? '',
         });
       }
@@ -340,18 +359,28 @@ export default function ForwardPickerScreen() {
                 void handleForward(item);
               }}
             >
-              <Avatar
-                size={42}
-                shape="square"
-                name={name}
-                uri={conversationAvatarUrl(item)}
-              />
+              {item.type === 'GROUP' || item.type === 'TEMP' ? (
+                <GroupChatAvatar
+                  size={42}
+                  name={name}
+                  uri={conversationAvatarUrl(item)}
+                  temporary={item.type === 'TEMP'}
+                  badgeBorderColor={colors.surface}
+                />
+              ) : (
+                <Avatar
+                  size={42}
+                  shape="square"
+                  name={name}
+                  uri={conversationAvatarUrl(item)}
+                />
+              )}
               <View style={s.rowText}>
                 <Text style={d.title} numberOfLines={1}>
                   {name}
                 </Text>
                 <Text style={d.subtitle} numberOfLines={1}>
-                  {item.type === 'GROUP'
+                  {item.type === 'GROUP' || item.type === 'TEMP'
                     ? t('chat.forward.group')
                     : t('chat.forward.single')}
                 </Text>

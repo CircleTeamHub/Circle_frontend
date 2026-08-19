@@ -38,6 +38,18 @@ test('messages screen darkens pinned conversation surfaces in light mode', () =>
   assert.match(source, /resolvedMode === "light" \? colors\.surfaceBorder : colors\.surface/);
 });
 
+test('messages screen distinguishes temporary chats with only an avatar clock badge', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/messages/screens/MessagesScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(source, /item\.isTempChat/);
+  assert.match(source, /<GroupChatAvatar/);
+  assert.doesNotMatch(source, /tempChats\.listBadge/);
+  assert.doesNotMatch(source, /tempChatExpiresAt/);
+});
+
 
 test('messages screen reloads conversations on focus without resetting the active filter', () => {
   const filePath = path.join(
@@ -56,7 +68,7 @@ test('messages screen reloads conversations on focus without resetting the activ
   assert.doesNotMatch(source, /setActiveFilterId\("all"\)/);
 
   // 筛选仍由 Tab 栏驱动——只是去掉了 on-focus 的强制重置。
-  assert.match(source, /setActiveFilterId\(filterItems\[index\]/);
+  assert.match(source, /setActiveFilterId\(filter\.id\)/);
 });
 
 test('messages screen supports pull-to-refresh for the conversation list', () => {
@@ -79,7 +91,7 @@ test('messages screen supports pull-to-refresh for the conversation list', () =>
   assert.match(source, /onRefresh=\{handleRefreshConversations\}/);
 });
 
-test('messages screen exposes left-swipe conversation actions for read, hide, and delete', () => {
+test('messages screen exposes left-swipe conversation actions for pin, mute, and delete', () => {
   const filePath = path.join(
     process.cwd(),
     'src/features/messages/screens/MessagesScreen.tsx',
@@ -91,15 +103,21 @@ test('messages screen exposes left-swipe conversation actions for read, hide, an
   assert.match(source, /PanResponder/);
   assert.match(source, /Animated\.View/);
   assert.match(source, /renderSwipeActions/);
-  assert.match(source, /handleMarkConversationRead/);
-  assert.match(source, /handleHideConversation/);
+  assert.match(source, /handleToggleConversationPinned/);
+  assert.match(source, /handleToggleConversationMuted/);
   assert.match(source, /handleConfirmDeleteConversation/);
-  // 自研栈:hide 与 delete 都走 preferences hidden(带本地清除的完整删除随详情页批次)。
-  assert.match(source, /updateChatConversationPreferences\(conversation\.id, \{ hidden: true \}\)/);
+  assert.match(source, /pinned: !conversation\.pinned/);
+  assert.match(source, /muted: !conversation\.muted/);
+  assert.match(source, /await updateChatConversationPreferences\(conversation\.id, preference\)/);
+  assert.match(source, /item\.pinned \? labels\.unpin : labels\.pin/);
+  assert.match(source, /item\.muted \? labels\.unmute : labels\.mute/);
+  // 删除仍保留原语义：清除本人历史后隐藏会话。
   assert.match(source, /hidden: true,/);
   assert.match(source, /Alert\.alert\(\s*t\("messages\.deleteChat"/);
-  assert.equal(zh.messages.swipeMarkRead, '标记已读');
-  assert.equal(zh.messages.swipeHide, '隐藏聊天');
+  assert.equal(zh.messages.swipePin, '置顶');
+  assert.equal(zh.messages.swipeUnpin, '取消置顶');
+  assert.equal(zh.messages.swipeMute, '静音');
+  assert.equal(zh.messages.swipeUnmute, '取消静音');
   assert.equal(zh.messages.swipeDelete, '删除');
 });
 
@@ -144,5 +162,106 @@ test('messages screen plus menu no longer exposes group management', () => {
 
   assert.doesNotMatch(source, /"groupManagement"/);
   assert.doesNotMatch(source, /messages\.groupManagement/);
-  assert.doesNotMatch(source, /router\.push\("\/\(tabs\)\/messages\/groups"\)/);
+});
+
+test('messages screen compacts only the tab gap and pins a standalone plus to the right', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/messages/screens/MessagesScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(
+    source,
+    /return orderMessageFilters\(\[\.\.\.BASE_FILTERS, \.\.\.customTabs\], filterOrder\);/,
+  );
+  assert.doesNotMatch(source, /filter\.id === "addGroup"/);
+  assert.match(source, /filterRow: \{\s*position: "relative"/);
+  assert.doesNotMatch(source, /filterTabs: \{/);
+  assert.doesNotMatch(source, /filterTabsContent:/);
+  assert.match(
+    source,
+    /addGroupButton: \{\s*position: "absolute",\s*top: 0,\s*right: 0,\s*zIndex: 1,\s*width: 32,/,
+  );
+  assert.match(source, /style=\{\[s\.addGroupButton, \{ backgroundColor: colors\.background \}\]\}/);
+  assert.match(source, /addGroupIcon: \{\s*fontSize: 22,\s*lineHeight: 24,/);
+  assert.match(source, /transform: \[\{ translateY: -2 \}\]/);
+  assert.match(source, />＋<\/Text>/);
+  assert.match(source, /router\.push\("\/\(tabs\)\/messages\/groups"\)/);
+  assert.match(source, /onTabPress=\{handleFilterPress\}/);
+  assert.match(source, /onTabPress=\{handleFilterPress\}\s*scrollable\s*compact/);
+
+  const filterTabsSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/components/ui/filter-tabs.tsx'),
+    'utf8',
+  );
+  assert.match(filterTabsSource, /rowCompact: \{\s*gap: 0/);
+  assert.match(filterTabsSource, /paddingHorizontal: Spacing\.md/);
+  assert.match(filterTabsSource, /tabCompact: \{\s*marginRight: -Spacing\.xs/);
+  assert.match(filterTabsSource, /\.\.\.Typography\.caption/);
+});
+
+test('group management reorders built-in and custom message filters together', () => {
+  const source = fs.readFileSync(
+    path.join(
+      process.cwd(),
+      'src/features/messages/screens/GroupManagementScreen.tsx',
+    ),
+    'utf8',
+  );
+
+  assert.match(source, /id: 'all'.*builtIn: true/);
+  assert.match(source, /id: 'private'.*builtIn: true/);
+  assert.match(source, /id: `custom:\$\{group\.id\}`/);
+  assert.match(source, /PanResponder\.create/);
+  assert.match(source, /reorderMessageFilter/);
+  assert.match(source, /setFilterOrder\(finalOrder\)/);
+  assert.match(
+    source,
+    /scrollEnabled=\{!draggingFilterId && !draggingGroupId\}/,
+  );
+  assert.match(source, /displayGroups\.map\(\(group, index\)/);
+  assert.match(source, /getGroupDragResponder\(group\.id\)/);
+  assert.match(source, /reorderGroups\(groupIds\)/);
+  assert.match(source, /transform: \[\{ translateY: groupDragY \}\]/);
+});
+
+test('new custom groups are pinned to the messages filters by default', () => {
+  const source = fs.readFileSync(
+    path.join(
+      process.cwd(),
+      'src/features/messages/screens/GroupManagementScreen.tsx',
+    ),
+    'utf8',
+  );
+
+  assert.match(source, /createGroup\(\{ name: trimmed, pinnedToTabs: true \}\)/);
+
+});
+
+test('group management lets users add group and direct chats to a custom group', () => {
+  const source = fs.readFileSync(
+    path.join(
+      process.cwd(),
+      'src/features/messages/screens/GroupManagementScreen.tsx',
+    ),
+    'utf8',
+  );
+
+  assert.match(source, /handleToggleMember\(activeGroup\.id, conversation\)/);
+  assert.match(source, /await setMembers\(groupId, nextIDs\)/);
+  assert.match(source, /messages\.groups\.groupChat/);
+  assert.match(source, /messages\.groups\.directChat/);
+  assert.match(source, /name=\{checked \? 'checkbox' : 'square-outline'\}/);
+  assert.match(source, /<FlatList/);
+  assert.match(source, /filterConversationMembers/);
+  assert.match(source, /messages\.groups\.searchPlaceholder/);
+  assert.match(source, /messages\.groups\.filterSelected/);
+  assert.match(source, /handleToggleVisibleMembers/);
+  assert.match(source, /initialNumToRender=\{12\}/);
+  assert.doesNotMatch(source, /conversations\.map\(/);
+  assert.match(source, /selected \? d\.groupRowSelected : null/);
+  assert.match(source, /selected \? d\.rowLabelSelected : null/);
+  assert.match(source, /accessibilityState=\{\{ selected \}\}/);
+  assert.match(source, /backgroundColor: colors\.primaryLight/);
 });

@@ -1,15 +1,18 @@
 export type MembershipTier = 'silver' | 'gold' | 'diamond' | 'super';
+export type MembershipPlanId = 'daily' | MembershipTier;
 export type MembershipLevel = 0 | 1 | 2 | 3 | 4;
 export type MembershipEntitlementFloorLevel = 0 | 2;
 
 export type MembershipDuration =
+  | { type: 'days'; days: 1 }
   | { type: 'months'; months: 1 | 6 | 12 }
   | { type: 'lifetime' };
 
 export type MembershipPlan = {
+  id: MembershipPlanId;
   tier: MembershipTier;
   level: 1 | 2 | 3 | 4;
-  nameKey: `profile.membership.tiers.${MembershipTier}.name`;
+  nameKey: `profile.membership.tiers.${MembershipPlanId}.name`;
   duration: MembershipDuration;
   price: {
     currency: 'CNY';
@@ -20,6 +23,17 @@ export type MembershipPlan = {
 
 export const MEMBERSHIP_PLANS = [
   {
+    id: 'daily',
+    // 每日会员是白银权益的短期购买方案，不引入新的后端 VIP 等级。
+    tier: 'silver',
+    level: 1,
+    nameKey: 'profile.membership.tiers.daily.name',
+    duration: { type: 'days', days: 1 },
+    price: { currency: 'CNY', amount: 19.9 },
+    recommended: false,
+  },
+  {
+    id: 'silver',
     tier: 'silver',
     level: 1,
     nameKey: 'profile.membership.tiers.silver.name',
@@ -28,6 +42,7 @@ export const MEMBERSHIP_PLANS = [
     recommended: false,
   },
   {
+    id: 'gold',
     tier: 'gold',
     level: 2,
     nameKey: 'profile.membership.tiers.gold.name',
@@ -36,6 +51,7 @@ export const MEMBERSHIP_PLANS = [
     recommended: false,
   },
   {
+    id: 'diamond',
     tier: 'diamond',
     level: 3,
     nameKey: 'profile.membership.tiers.diamond.name',
@@ -44,6 +60,7 @@ export const MEMBERSHIP_PLANS = [
     recommended: true,
   },
   {
+    id: 'super',
     tier: 'super',
     level: 4,
     nameKey: 'profile.membership.tiers.super.name',
@@ -145,7 +162,13 @@ export function getMembershipTierForVipLevel(
     return 'super';
   }
 
-  return MEMBERSHIP_PLANS[vipLevel - 1]?.tier ?? null;
+  return vipLevel === 1
+    ? 'silver'
+    : vipLevel === 2
+      ? 'gold'
+      : vipLevel === 3
+        ? 'diamond'
+        : null;
 }
 
 export function resolveMembershipEntitlementLevel(

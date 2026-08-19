@@ -1169,15 +1169,44 @@ test("system announcements screen exposes latest app information and patches", (
     ),
     "utf8",
   );
+  const catalog = fs.readFileSync(
+    path.join(
+      process.cwd(),
+      "src/features/profile/system-announcements.ts",
+    ),
+    "utf8",
+  );
+  const detail = fs.readFileSync(
+    path.join(
+      process.cwd(),
+      "src/features/profile/screens/SystemAnnouncementDetailScreen.tsx",
+    ),
+    "utf8",
+  );
+  const detailRoute = fs.readFileSync(
+    path.join(
+      process.cwd(),
+      "app/(tabs)/profile/system-announcements/[id].tsx",
+    ),
+    "utf8",
+  );
 
   assert.match(source, /NavHeader title=\{t\('systemAnnouncements\.title'\)\}/);
-  assert.match(source, /systemAnnouncements\.latestAppInfo/);
-  assert.match(source, /systemAnnouncements\.updates/);
-  assert.match(source, /systemAnnouncements\.patches/);
+  assert.match(catalog, /systemAnnouncements\.latestAppInfo/);
+  assert.match(catalog, /systemAnnouncements\.updates/);
+  assert.match(catalog, /systemAnnouncements\.patches/);
   assert.match(source, /fetchProfileNotifications/);
   assert.match(source, /markProfileNotificationsRead/);
   assert.match(source, /FlatList/);
-  assert.match(source, /systemAnnouncements\.empty/);
+  assert.match(source, /SYSTEM_ANNOUNCEMENTS\.map/);
+  assert.match(source, /accessibilityRole="button"/);
+  assert.match(source, /profile\/system-announcements\/\[id\]/);
+  assert.match(source, /items\.length > 0 \|\| loadError/);
+  assert.match(source, /ListEmptyComponent=\{null\}/);
+  assert.match(detail, /getSystemAnnouncement\(announcementId\)/);
+  assert.match(detail, /systemAnnouncements\.detailTitle/);
+  assert.match(detail, /systemAnnouncements\.unavailable/);
+  assert.match(detailRoute, /SystemAnnouncementDetailScreen/);
 });
 
 test("language picker and settings rows allow long translated labels", () => {
@@ -1253,5 +1282,21 @@ test("add-me summary counts only the methods whose switches are rendered", () =>
     switched.sort(),
     counted.sort(),
     "every rendered add-me switch must be counted, and vice versa",
+  );
+});
+
+test("privacy self-destruct updates the chat cache policy immediately", () => {
+  const source = fs.readFileSync(
+    path.join(
+      process.cwd(),
+      "src/features/profile/screens/PrivacySettingsScreen.tsx",
+    ),
+    "utf8",
+  );
+
+  assert.match(source, /useChatStore/);
+  assert.match(
+    source,
+    /setViewerSelfDestructDays\(updated\.messageSelfDestructDays\)/,
   );
 });

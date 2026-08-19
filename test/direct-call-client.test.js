@@ -106,7 +106,7 @@ test('1:1 聊天页与用户主页都接上了 direct call（FE#90 不再「即�
   assert.doesNotMatch(chat, /chat\.call\.groupOnly/);
 
   const profile = read('src/features/user/screens/UserProfileScreen.tsx');
-  assert.match(profile, /createDirectCall\(\{\s*calleeID: profileId,/);
+  assert.match(profile, /createDirectCall\(\{\s*calleeID: canonicalProfileUserId,/);
   assert.doesNotMatch(profile, /avCallComingSoon/);
 });
 

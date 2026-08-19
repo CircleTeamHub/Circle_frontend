@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Switch, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +15,7 @@ import {
   type UpdatePrivacySettingsPayload,
 } from '@/services/api/privacy';
 import { getApiErrorMessage } from '@/services/api/errors';
+import { useChatStore } from '@/chat-core/store';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 type ActiveSheet =
@@ -101,6 +102,7 @@ export default function PrivacySettingsScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const privacyRequestSequence = useRef(0);
 
   const currentSettings = settings ?? DEFAULT_PRIVACY_SETTINGS;
 
@@ -116,10 +118,22 @@ export default function PrivacySettingsScreen() {
   );
 
   const loadSettings = useCallback(async () => {
+    const request = ++privacyRequestSequence.current;
+    const chatUserId = useChatStore.getState().currentUserId;
     setLoading(true);
     setError(null);
     try {
-      setSettings(await fetchPrivacySettings());
+      const loaded = await fetchPrivacySettings();
+      if (
+        request !== privacyRequestSequence.current ||
+        useChatStore.getState().currentUserId !== chatUserId
+      ) {
+        return;
+      }
+      setSettings(loaded);
+      useChatStore
+        .getState()
+        .setViewerSelfDestructDays(loaded.messageSelfDestructDays);
     } catch (requestError) {
       setError(
         getApiErrorMessage(
@@ -128,7 +142,7 @@ export default function PrivacySettingsScreen() {
         ),
       );
     } finally {
-      setLoading(false);
+      if (request === privacyRequestSequence.current) setLoading(false);
     }
   }, [t]);
 
@@ -137,14 +151,32 @@ export default function PrivacySettingsScreen() {
   }, [loadSettings]);
 
   async function patchSettings(payload: UpdatePrivacySettingsPayload) {
+    const request = ++privacyRequestSequence.current;
+    const chatUserId = useChatStore.getState().currentUserId;
     const previous = currentSettings;
     const next = { ...previous, ...payload };
     setSettings(next);
     setSaving(true);
     setError(null);
     try {
-      setSettings(await updatePrivacySettings(payload));
+      const updated = await updatePrivacySettings(payload);
+      if (
+        request !== privacyRequestSequence.current ||
+        useChatStore.getState().currentUserId !== chatUserId
+      ) {
+        return;
+      }
+      setSettings(updated);
+      useChatStore
+        .getState()
+        .setViewerSelfDestructDays(updated.messageSelfDestructDays);
     } catch (requestError) {
+      if (
+        request !== privacyRequestSequence.current ||
+        useChatStore.getState().currentUserId !== chatUserId
+      ) {
+        return;
+      }
       setSettings(previous);
       setError(
         getApiErrorMessage(
@@ -153,7 +185,7 @@ export default function PrivacySettingsScreen() {
         ),
       );
     } finally {
-      setSaving(false);
+      if (request === privacyRequestSequence.current) setSaving(false);
     }
   }
 

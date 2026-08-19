@@ -78,11 +78,16 @@ test('verification card: bubble renders and taps through to the verify screen', 
   assert.match(chat, /getVerificationDetailHref\([\s\S]*card\.invitationId/);
 });
 
-test('adding a verifier also sends a verification card to that friend', () => {
+test('adding a verifier does not send the card from the client', () => {
+  // verification-card 断言的是「这个人被邀请当验证人」这个服务端事实,客户端能发
+  // 就等于能凭空捏造它 —— 后端把它收进 SERVER_MESSAGE_TYPES,这次发送 100% 被
+  // validateSendPayload 拒,还被 best-effort 的 catch 吞掉:卡片从来没送达过。
+  // 现在由 CircleInvitationService.addVerifier 提交后服务端签发。
   const screen = read('src/features/discover/screens/SelectVerifierScreen.tsx');
-  assert.match(screen, /addVerifierToInvitation\(invitationId, friend\.id\)/);
-  assert.match(screen, /sendVerificationCardMessage/);
-  assert.match(screen, /applicantName: myNickname/);
+  assert.match(screen, /addVerifierToInvitation\(invitationId, candidate\.id\)/);
+  assert.doesNotMatch(screen, /sendCardMessage/);
+  assert.doesNotMatch(screen, /ensureDirectConversation/);
+  assert.doesNotMatch(screen, /applicantName/);
 
   // The invitation detail forwards circleName so the card can display it.
   const detail = read(

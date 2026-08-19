@@ -8,7 +8,7 @@ const ts = require('typescript');
 // 除了敏感词,所有 ack 拒绝都落到同一句「发送失败,请重试」—— 而被禁言、被拉黑、
 // 对方不收陌生人消息这些状态,不改权限/关系/时机的话重试多少次都不会成功。
 // 同时:拆栈后这条最关键的链路在 release 包里完全没有 Sentry 信号。
-function loadSendErrors() {
+function loadSendErrors({ dev = false } = {}) {
   const filePath = path.join(process.cwd(), 'src/chat-core/send-errors.ts');
   const transpiled = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
     compilerOptions: {
@@ -38,6 +38,7 @@ function loadSendErrors() {
   }
 
   const context = {
+    __DEV__: dev,
     Error,
     Set,
     module: { exports: {} },
@@ -116,6 +117,41 @@ test('transient and unknown failures keep the generic retry copy', () => {
     );
   }
   assert.equal(api.getChatSendErrorMessage(new Error('boom'), 'RETRY'), 'RETRY');
+});
+
+test('development builds append the structured socket ack code only', () => {
+  const { api, ChatSendError } = loadSendErrors({ dev: true });
+  assert.equal(
+    api.getChatSendErrorMessage(
+      new ChatSendError('CHAT_INVALID_PAYLOAD', 'internal detail'),
+      'RETRY',
+    ),
+    'RETRY (CHAT_INVALID_PAYLOAD)',
+  );
+});
+
+test('sanitized storage upload failures remain actionable to the user', () => {
+  const { api } = loadSendErrors();
+  const error = new Error('上传失败 (400: InvalidRequest)');
+  error.name = 'StorageUploadError';
+
+  assert.equal(
+    api.getChatSendErrorMessage(error, 'RETRY'),
+    '上传失败 (400: InvalidRequest)',
+  );
+  // Arbitrary errors cannot opt into displaying backend/internal text.
+  assert.equal(api.getChatSendErrorMessage(new Error('private detail'), 'RETRY'), 'RETRY');
+});
+
+test('expired temp chat failures use the localized non-retry explanation', () => {
+  const { api } = loadSendErrors();
+  const error = new Error('internal temp chat state');
+  error.name = 'TempChatUnavailableError';
+
+  assert.equal(
+    api.getChatSendErrorMessage(error, 'RETRY'),
+    '该临时聊天已过期。',
+  );
 });
 
 test('the credit-gate rejection is localized, not the hard-coded Chinese', () => {

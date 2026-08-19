@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
+import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { Divider } from '@/components/ui/divider';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { NavHeader } from '@/components/ui/nav-header';
@@ -377,7 +378,17 @@ export default function SearchScreen() {
           style={s.resultRow}
           onPress={() => handlePressChat(conversation, item.targetMsgID)}
         >
-          <Avatar size={40} name={conversation.name} uri={conversation.avatarUrl} />
+          {conversation.conversationType === 'group' ? (
+            <GroupChatAvatar
+              size={40}
+              name={conversation.name}
+              uri={conversation.avatarUrl}
+              temporary={conversation.isTempChat}
+              badgeBorderColor={colors.background}
+            />
+          ) : (
+            <Avatar size={40} name={conversation.name} uri={conversation.avatarUrl} />
+          )}
           <View style={s.resultBody}>
             <View style={s.resultTopRow}>
               <Text style={d.resultTitle} numberOfLines={1}>

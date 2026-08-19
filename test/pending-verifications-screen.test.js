@@ -8,6 +8,7 @@ const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 const SCREEN = 'src/features/discover/screens/PendingVerificationsScreen.tsx';
 const ROUTE = 'app/(tabs)/discover/verifications.tsx';
 const DISCOVER = 'src/features/discover/screens/DiscoverScreen.tsx';
+const CIRCLE_PLAZA = 'src/features/discover/screens/CirclePlazaScreen.tsx';
 
 test('PendingVerificationsScreen lists the current user pending verifications', () => {
   const src = read(SCREEN);
@@ -51,15 +52,16 @@ test('Discover header does not expose a pending-verifications entry', () => {
   assert.doesNotMatch(src, /name="shield-checkmark-outline"/);
 });
 
-test('Discover header opens notification center inside the discover stack', () => {
-  const src = read(DISCOVER);
+test('circle plaza header opens signup notifications inside the discover stack', () => {
+  const src = read(CIRCLE_PLAZA);
   const route = read('app/(tabs)/discover/notification-center.tsx');
   assert.match(src, /useTabBadgeStore/);
-  assert.match(src, /const bellUnread = useTabBadgeStore\(\(state\) => state\.discoverUnread\)/);
+  assert.match(src, /const circleUnread = useTabBadgeStore\(\(state\) => state\.circleUnread\)/);
+  assert.match(src, /const signupUnread = useTabBadgeStore\(\(state\) => state\.signupUnread\)/);
   assert.match(src, /handleOpenNotifications/);
   assert.match(src, /["'`]\/\(tabs\)\/discover\/notification-center["'`]/);
   assert.doesNotMatch(src, /["'`]\/\(tabs\)\/messages\/notifications["'`]/);
   assert.match(route, /NotificationCenterScreen/);
   assert.match(src, /name="notifications-outline"/);
-  assert.match(src, /<Badge count=\{bellUnread\} \/>/);
+  assert.match(src, /<Badge count=\{circleBellUnread\} \/>/);
 });

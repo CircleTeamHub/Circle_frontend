@@ -27,6 +27,8 @@ export const CHAT_EVENTS = {
   reaction: 'chat:reaction',
   /** 双向：消息编辑（客户端带 ack；服务端广播到会话房） */
   edit: 'chat:edit',
+  /** 服务端 → 客户端：私聊任一方清空后，双方设备同步清空到该水位 */
+  historyCleared: 'chat:history_cleared',
 } as const;
 
 /** 表情回应白名单（与服务端镜像；越界服务端直接拒）。 */
@@ -281,6 +283,13 @@ export interface ChatReadBroadcast {
   height: number;
 }
 
+/** 私聊双方清空广播；群聊的个人清空不会发送该事件。 */
+export interface ChatHistoryClearedBroadcast {
+  conversationId: string;
+  clearedBeforeHeight: number;
+  clearedBy: string;
+}
+
 /**
  * chat:conversation 的变化种类（镜像 circle_be chat.types.ts）:
  * joined=入座 / left=本人主动退出 / removed=被移出·解散·停用 / updated=预留。
@@ -370,6 +379,11 @@ export interface ChatCircleInfo {
   avatarUrl: string | null;
 }
 
+export interface ChatTempChatInfo {
+  id: string;
+  title: string;
+}
+
 export interface ChatConversationDto {
   id: string;
   type: ChatConversationType;
@@ -377,6 +391,12 @@ export interface ChatConversationDto {
   circleId: string | null;
   /** GROUP 会话的圈子展示信息(群名/群头像);其余类型为 null。 */
   circle: ChatCircleInfo | null;
+  /** 独立群聊(GROUP 且 circleId=null)的群名;可选兼容老后端。 */
+  name?: string | null;
+  /** 独立群聊的群主 userId;可选兼容老后端。 */
+  ownerId?: string | null;
+  /** TEMP 会话的房间名。可选用于兼容尚未升级的后端。 */
+  tempChat?: ChatTempChatInfo | null;
   lastMessage: ChatMessageDto | null;
   unreadCount: number;
   pinned: boolean;
@@ -387,16 +407,23 @@ export interface ChatConversationDto {
 }
 
 /**
- * 服务端负责补发的消息类型 —— 这些**不进客户端 outbox**。
+ * 服务端签发的回执类消息 —— 客户端**不发**这些类型。
  *
- * 转账卡片:钱在 sendCoinGift 里已强一致落库,卡片只是回执,后端
- * GiftCardOutboxProcessor 会在 2 分钟宽限后逐分钟补发(幂等键
- * `gift_card_<giftId>`,最多 60 次)。留在 outbox 里有两个坏处:
+ * 它们断言的是已经发生过的服务端事实(钱已划走、某人被邀请当验证人),
+ * 后端把它们收在 SERVER_MESSAGE_TYPES 里,客户端发一律被拒。转账卡由
+ * CoinService 结算提交后签发,验证卡由 CircleInvitationService 加验证人后签发。
  *
- * 1. 长按「重发」用的是客户端的 d,和后端的 `gift_card_<id>` 不是同一个键 ——
- *    幂等合并不了,收款方会看到**两张**回执。
- * 2. 后端补发的那张卡 d 也不同,冷启动时「同 d 已确认」的自愈判据匹配不上,
- *    于是这条失败气泡永远赖在时间线最底下(height=0 排最后),新消息都排在
- *    它上面,会话列表还一直挂着「发送失败」前缀。
+ * 这份清单现在**只剩一个用途**:清理旧版本客户端留在本地 outbox 里的脏条目。
+ * 那些版本会把这两类卡当普通消息发,发送必失败、条目就永远留在队列里 ——
+ * 而 outbox 回放的自愈判据是「同 d 已确认」,后端那张卡用的却是
+ * `gift_card_<id>` / `verification_card_<...>`,两个键永远对不上。结果是每次
+ * 冷启动都还原出一张发不出去的幽灵卡,赖在时间线最底下(height=0 排最后),
+ * 会话列表还一直挂着「发送失败」前缀。见 socket-manager 的 outbox 回放。
+ *
+ * 发送路径上已经没有它的位置了(没有任何类型能命中),所以别再往回加排除分支;
+ * 装机量里没有旧版本之后,这份清单连同那处清理一起删掉即可。
  */
-export const SERVER_COMPENSATED_TYPES = new Set<string>(['transfer-card']);
+export const SERVER_COMPENSATED_TYPES = new Set<string>([
+  'transfer-card',
+  'verification-card',
+]);

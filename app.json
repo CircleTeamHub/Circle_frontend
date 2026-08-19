@@ -11,7 +11,7 @@
     ],
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/splash-tagline.png",
       "resizeMode": "contain",
       "backgroundColor": "#FFFFFF"
     },
@@ -23,7 +23,8 @@
           "NSAllowsArbitraryLoads": false,
           "NSAllowsLocalNetworking": true
         },
-        "NSPhotoLibraryUsageDescription": "允许风信访问你的照片，用于选择并上传头像。",
+        "NSPhotoLibraryUsageDescription": "允许风信访问你的照片和视频，用于在聊天中发送媒体以及设置头像。",
+        "NSPhotoLibraryAddUsageDescription": "允许风信保存二维码等图片到你的相册。",
         "NSLocationWhenInUseUsageDescription": "允许风信在使用期间获取位置，用于在聊天中分享当前位置。",
         "NSCameraUsageDescription": "允许风信使用相机进行视频通话、拍照发送和扫描二维码。",
         "NSMicrophoneUsageDescription": "允许风信使用麦克风录制语音消息并进行音视频通话。",
