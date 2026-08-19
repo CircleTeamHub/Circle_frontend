@@ -1,6 +1,11 @@
 const APP_ID = 'com.yiboding.circleim';
 const RUN_ID_PATTERN = /^[A-Za-z0-9._-]{6,64}$/;
 const SENSITIVE_KEY_PATTERN = /(token|password|code|secret|credential)/i;
+const PRODUCTION_HOSTS = new Set([
+  'api.windnote.ai',
+  'windnote.ai',
+  'www.windnote.ai',
+]);
 
 const E2E_SUITES = Object.freeze({
   smoke: { flow: '.maestro/flows/smoke.yaml', auth: false, mutates: false },
@@ -112,6 +117,11 @@ function validateOrigins(env, prefix) {
     requireValue(env, `${prefix}_SOCKET_URL`),
     `${prefix}_SOCKET_URL`,
   );
+  const apiHostname = new URL(apiOrigin).hostname.toLowerCase();
+  const socketHostname = new URL(socketOrigin).hostname.toLowerCase();
+  if (PRODUCTION_HOSTS.has(apiHostname) || PRODUCTION_HOSTS.has(socketHostname)) {
+    throw new Error(`${prefix} production hosts are never valid test targets.`);
+  }
   if (!allowed.has(apiOrigin)) throw new Error(`${prefix}_API_URL is not allowlisted.`);
   if (!allowed.has(socketOrigin)) throw new Error(`${prefix}_SOCKET_URL is not allowlisted.`);
   const apiHost = new URL(apiOrigin).host;

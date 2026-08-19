@@ -54,7 +54,37 @@ test('mutating E2E rejects production before starting Maestro', async () => {
         }),
         'chat-message',
       ),
-    /not allowlisted/,
+    /production|not allowlisted/i,
+  );
+});
+
+test('production hosts stay blocked even when someone mistakenly allowlists them', async () => {
+  const { parseE2EConfig, parseLoadConfig } = await loadConfig();
+  const production = 'https://api.windnote.ai';
+  assert.throws(
+    () =>
+      parseE2EConfig(
+        baseE2EEnv({
+          E2E_API_URL: production,
+          E2E_SOCKET_URL: production,
+          E2E_ALLOWED_ORIGINS: production,
+        }),
+        'smoke',
+      ),
+    /production/i,
+  );
+  assert.throws(
+    () =>
+      parseLoadConfig(
+        baseLoadEnv({
+          LOAD_ALLOW_MUTATION: 'true',
+          LOAD_API_URL: production,
+          LOAD_SOCKET_URL: production,
+          LOAD_ALLOWED_ORIGINS: production,
+        }),
+        'chat-send',
+      ),
+    /production/i,
   );
 });
 
