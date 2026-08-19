@@ -13,7 +13,7 @@
     "expo:config": "expo config --type public",
     "test": "node --test \"test/*.js\" \"src/**/*.test.mts\"",
     "test:behavior": "jest",
-    "test:testing-tools": "node --test test/safe-test-config.test.js test/e2e-locator-contract.test.js test/maestro-flows.test.js",
+    "test:testing-tools": "node --test test/safe-test-config.test.js test/e2e-locator-contract.test.js test/maestro-flows.test.js test/load-test-protocol.test.js",
     "e2e": "node scripts/run-e2e.mjs",
     "e2e:smoke": "node scripts/run-e2e.mjs smoke",
     "load:test": "node scripts/run-load.mjs",
