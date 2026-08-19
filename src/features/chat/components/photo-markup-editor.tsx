@@ -66,6 +66,18 @@ const DRAW_WIDTH_RATIO = 0.014;
 const MOSAIC_WIDTH_RATIO = 0.085;
 const MOSAIC_BLUR_RATIO = 0.035;
 
+export const PHOTO_MARKUP_EXPORT_MAX_EDGE = 4096;
+
+export function boundedPhotoExportSize(width: number, height: number) {
+  const longestEdge = Math.max(width, height);
+  if (longestEdge <= PHOTO_MARKUP_EXPORT_MAX_EDGE) return { width, height };
+  const scale = PHOTO_MARKUP_EXPORT_MAX_EDGE / longestEdge;
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
+}
+
 const s = StyleSheet.create({
   root: {
     flex: 1,
@@ -291,14 +303,15 @@ export const PhotoMarkupEditor = forwardRef<
     if (!image || current.length === 0 || asset.width <= 0 || asset.height <= 0) {
       return null;
     }
+    const exportSize = boundedPhotoExportSize(asset.width, asset.height);
     const rendered = await drawAsImage(
       <MarkupScene
         image={image}
-        width={asset.width}
-        height={asset.height}
+        width={exportSize.width}
+        height={exportSize.height}
         strokes={current}
       />,
-      { width: asset.width, height: asset.height },
+      exportSize,
     );
     const preservePng =
       asset.mimeType === 'image/png' || asset.fileName?.toLowerCase().endsWith('.png');
@@ -315,8 +328,8 @@ export const PhotoMarkupEditor = forwardRef<
       file.write(bytes);
       return {
         uri: file.uri,
-        width: asset.width,
-        height: asset.height,
+        width: exportSize.width,
+        height: exportSize.height,
         fileSize: bytes.byteLength,
         mimeType,
       } satisfies ExportedMarkupPhoto;
