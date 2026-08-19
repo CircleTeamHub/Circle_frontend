@@ -47,7 +47,7 @@ const E2E_SUITES = Object.freeze({
   'chat-history-scroll': {
     flow: '.maestro/performance/chat-history-scroll.yaml',
     auth: true,
-    mutates: true,
+    mutates: false,
     fixtures: ['E2E_PERF_CONVERSATION_ID'],
   },
   'conversation-switch-storm': {

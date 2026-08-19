@@ -21,13 +21,17 @@ export function buildMaestroArgs(config) {
     '-e',
     `${name}=${value}`,
   ]);
-  return ['test', ...envArgs, config.flow];
+  const deviceArgs = config.deviceId ? ['--device', config.deviceId] : [];
+  return [...deviceArgs, 'test', ...envArgs, config.flow];
 }
 
 export function runE2ESuite(suiteName, env = process.env) {
   const config = parseE2EConfig(env, suiteName);
   const executable = env.MAESTRO_BIN?.trim() || 'maestro';
-  const result = spawnSync(executable, buildMaestroArgs(config), {
+  const result = spawnSync(executable, buildMaestroArgs({
+    ...config,
+    deviceId: env.MAESTRO_DEVICE_ID?.trim() || undefined,
+  }), {
     cwd: path.resolve(fileURLToPath(new URL('..', import.meta.url))),
     stdio: 'inherit',
     shell: false,

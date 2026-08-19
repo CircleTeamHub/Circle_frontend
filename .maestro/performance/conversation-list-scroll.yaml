@@ -1,0 +1,36 @@
+appId: ${APP_ID}
+name: WindNote large conversation list scroll
+tags:
+  - performance
+---
+- runFlow:
+    file: ../subflows/launch.yaml
+- runFlow:
+    file: ../subflows/ensure-signed-in.yaml
+- tapOn:
+    id: windnote.tabs.messages
+- extendedWaitUntil:
+    visible:
+      id: windnote.messages.conversation-list
+    timeout: 30000
+- repeat:
+    times: 20
+    commands:
+      - swipe:
+          start: 50%, 80%
+          end: 50%, 20%
+          duration: 350
+      - swipe:
+          start: 50%, 20%
+          end: 50%, 80%
+          duration: 350
+- scrollUntilVisible:
+    element:
+      id: windnote.messages.conversation.${E2E_PERF_CONVERSATION_ID}
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    id: windnote.messages.conversation.${E2E_PERF_CONVERSATION_ID}
+- assertVisible:
+    id: windnote.chat.composer.input
+- takeScreenshot: windnote-perf-conversation-list

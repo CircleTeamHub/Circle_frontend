@@ -208,4 +208,19 @@ test('runners build argv arrays without logging or shell interpolation', async (
     buildK6Args({ script: 'load-tests/scenarios/chat-send.js' }),
     ['run', 'load-tests/scenarios/chat-send.js'],
   );
+  assert.deepEqual(
+    buildMaestroArgs({
+      flow: '.maestro/performance/chat-history-scroll.yaml',
+      maestroEnv: { APP_ID: 'com.yiboding.circleim' },
+      deviceId: 'emulator-5554',
+    }),
+    [
+      '--device',
+      'emulator-5554',
+      'test',
+      '-e',
+      'APP_ID=com.yiboding.circleim',
+      '.maestro/performance/chat-history-scroll.yaml',
+    ],
+  );
 });
