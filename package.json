@@ -13,6 +13,10 @@
     "expo:config": "expo config --type public",
     "test": "node --test \"test/*.js\" \"src/**/*.test.mts\"",
     "test:behavior": "jest",
+    "test:testing-tools": "node --test test/safe-test-config.test.js",
+    "e2e": "node scripts/run-e2e.mjs",
+    "e2e:smoke": "node scripts/run-e2e.mjs smoke",
+    "load:test": "node scripts/run-load.mjs",
     "ci": "npm run typecheck && npm run expo:config && npm run lint && npm test && npm run test:behavior"
   },
   "dependencies": {
