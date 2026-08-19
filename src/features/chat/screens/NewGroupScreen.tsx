@@ -179,16 +179,18 @@ export default function NewGroupScreen() {
         },
       });
     } catch (error) {
+      // 只有失败才解锁。成功路径已经 router.replace 走了，但屏幕要到下一帧之后
+      // 才真正卸载；把解锁放在 finally 里等于在这段转场窗口里又把按钮放开，而
+      // 建群在服务端没有幂等 —— 慢设备上再点一下就会建出第二个成员完全相同的群。
+      submittingRef.current = false;
       if (mountedRef.current) {
+        setSubmitting(false);
         Alert.alert(
           t('messages.newGroupCreateFailed', {
             error: getApiErrorMessage(error, t('common.networkError')),
           }),
         );
       }
-    } finally {
-      submittingRef.current = false;
-      if (mountedRef.current) setSubmitting(false);
     }
   }, [name, router, segments, selected, selectedCount, t]);
 
