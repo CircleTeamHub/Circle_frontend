@@ -34,6 +34,8 @@ test('chat scenarios measure ack failures and end-to-end delivery', () => {
     assert.match(source, /chatDeliveryMs/, name);
     assert.match(source + sharedSession, /WINDNOTE-LOAD-\$\{config\.runId\}/, name);
   }
+  assert.match(sharedSession, /batchSize/);
+  assert.match(sharedSession, /reason:\s*'unsent'/);
 });
 
 test('circle join is REST-based, bounded, and cleans up test memberships', () => {

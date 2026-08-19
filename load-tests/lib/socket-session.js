@@ -21,13 +21,12 @@ function deliveryTimestamp(message, prefix) {
 }
 
 export function buildTextMessage(config, conversationId, sequence) {
-  const sentAt = Date.now();
   const prefix = `WINDNOTE-LOAD-${config.runId}`;
-  const deliveryId = `load-${config.runId}-${__VU}-${__ITER}-${sequence}-${sentAt}`;
+  const deliveryId = `load-${config.runId}-${__VU}-${__ITER}-${sequence}-${Date.now()}`;
   return {
     conversationId,
     type: 'text',
-    content: { text: `${prefix}-${sentAt}-${__VU}-${sequence}` },
+    content: { text: `${prefix}-pending-${__VU}-${sequence}` },
     d: deliveryId,
   };
 }
@@ -42,6 +41,11 @@ export function runChatSession({ config, account, messages, keepOpenMs = 1000 })
     25,
     Math.floor((config.durationSeconds * 1000) / Math.max(messages.length, 1)),
   );
+  const availableTicks = Math.max(
+    1,
+    Math.floor((config.durationSeconds * 1000) / intervalMs),
+  );
+  const batchSize = Math.max(1, Math.ceil(messages.length / availableTicks));
 
   const response = ws.connect(config.socketUrl, { tags: { account: account.alias } }, (socket) => {
     socket.on('message', (raw) => {
@@ -86,14 +90,30 @@ export function runChatSession({ config, account, messages, keepOpenMs = 1000 })
     socket.on('error', () => chatSendFailed.add(true, { reason: 'socket' }));
     socket.setInterval(() => {
       if (!connected || nextMessage >= messages.length) return;
-      const ackId = nextAckId++;
-      const payload = messages[nextMessage++];
-      pending.set(ackId, Date.now());
-      chatSent.add(1);
-      socket.send(encodeEvent(CHAT_SEND, payload, ackId));
+      for (let sentInBatch = 0; sentInBatch < batchSize; sentInBatch += 1) {
+        if (nextMessage >= messages.length) break;
+        const ackId = nextAckId++;
+        const messageIndex = nextMessage;
+        const source = messages[nextMessage++];
+        const sentAt = Date.now();
+        const payload = {
+          ...source,
+          content: {
+            ...source.content,
+            text: `${prefix}-${sentAt}-${__VU}-${messageIndex}`,
+          },
+        };
+        pending.set(ackId, sentAt);
+        chatSent.add(1);
+        socket.send(encodeEvent(CHAT_SEND, payload, ackId));
+      }
     }, intervalMs);
     socket.setTimeout(() => {
       for (const _ of pending.values()) chatSendFailed.add(true, { reason: 'timeout' });
+      while (nextMessage < messages.length) {
+        chatSendFailed.add(true, { reason: 'unsent' });
+        nextMessage += 1;
+      }
       socket.close();
     }, config.durationSeconds * 1000 + keepOpenMs);
   });
