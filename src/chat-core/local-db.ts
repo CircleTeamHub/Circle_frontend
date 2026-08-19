@@ -712,6 +712,7 @@ export interface OutboxEntry {
     content: Record<string, unknown>;
     d: string;
     replyToId?: string;
+    forwardFromMessageId?: string;
   };
   createdAt: string;
 }

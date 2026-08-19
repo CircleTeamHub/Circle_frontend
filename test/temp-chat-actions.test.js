@@ -70,3 +70,11 @@ test('temp chat routes preserve TEMP identity and preflight media before upload'
   assert.match(chatDetail, /enabled: isGroupChat && !isTempChat/);
   assert.match(chatDetail, /assertMyTempChatConversationOpen\(conversationID\)/);
 });
+
+test('forward picker names TEMP targets with their stable room title', () => {
+  const forwardPicker = read(
+    'src/features/chat/screens/ForwardPickerScreen.tsx',
+  );
+
+  assert.match(forwardPicker, /conversation\.tempChat\?\.title/);
+});

@@ -72,6 +72,19 @@ test('push notification data resolves to app routes with anchors', () => {
   assert.equal(chatRoute.params.conversationType, 'group');
   assert.equal(chatRoute.params.searchedMsgID, 'client-msg-1');
 
+  const tempChatRoute = resolvePushNotificationRoute({
+    type: 'chat',
+    conversationId: 'conv-temp',
+    sourceID: 'conv-temp',
+    conversationType: 'group',
+    conversationKind: 'temp',
+    title: '周末临时群',
+  });
+  assert.equal(tempChatRoute.pathname, '/(tabs)/messages/chat-detail');
+  assert.equal(tempChatRoute.params.conversationID, 'conv-temp');
+  assert.equal(tempChatRoute.params.conversationType, 'group');
+  assert.equal(tempChatRoute.params.conversationKind, 'temp');
+
   const mentionRoute = resolvePushNotificationRoute({
     type: 'MEMBER_MENTION',
     groupID: 'group-2',

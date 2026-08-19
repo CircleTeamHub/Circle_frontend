@@ -158,6 +158,7 @@ export function resolvePushNotificationRoute(data: PushData): Href | null {
       type === 'MEMBER_MENTION'
         ? 'group'
         : 'private');
+    const conversationKind = firstText(data, ['conversationKind']);
     const searchedMsgID = firstText(data, [
       'searchedMsgID',
       'clientMsgID',
@@ -172,6 +173,7 @@ export function resolvePushNotificationRoute(data: PushData): Href | null {
         ...(conversationID ? { conversationID } : {}),
         sourceID: resolvedSourceID,
         conversationType,
+        ...(conversationKind ? { conversationKind } : {}),
         ...(firstText(data, ['title', 'name']) ? { title: firstText(data, ['title', 'name']) } : {}),
         ...(searchedMsgID ? { searchedMsgID } : {}),
       },

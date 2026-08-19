@@ -3048,6 +3048,7 @@
     "CHAT_REVOKE_FORBIDDEN": "No puedes retirar este mensaje",
     "CHAT_EDIT_WINDOW_EXPIRED": "Ya no se puede editar",
     "CHAT_EDIT_FORBIDDEN": "No se puede editar este mensaje",
+    "CHAT_FORWARD_FORBIDDEN": "Los mensajes efímeros no se pueden reenviar",
     "CHAT_GROUP_FRIENDS_ONLY": "Solo puedes invitar amigos al grupo",
     "CHAT_GROUP_MIN_MEMBERS": "Selecciona al menos 2 amigos",
     "CHAT_GROUP_CIRCLE_MANAGED": "Este grupo lo gestiona su círculo",
