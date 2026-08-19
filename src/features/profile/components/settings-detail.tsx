@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 
 export interface SettingsDetailRow {
   id: string;
@@ -46,6 +47,7 @@ interface SettingsDetailScreenProps {
   titleKey: string;
   sections: SettingsDetailSection[];
   footer?: React.ReactNode;
+  testIDPrefix?: string;
 }
 
 const s = StyleSheet.create({
@@ -124,6 +126,7 @@ export function SettingsDetailScreen({
   titleKey,
   sections,
   footer,
+  testIDPrefix,
 }: SettingsDetailScreenProps) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -198,6 +201,11 @@ export function SettingsDetailScreen({
     return (
       <View key={row.id}>
         <Pressable
+          testID={
+            testIDPrefix
+              ? E2E_TEST_IDS.settingsDetailRow(`${testIDPrefix}.${row.id}`)
+              : undefined
+          }
           style={[s.row, row.disabled ? s.rowDisabled : null]}
           disabled={row.type === 'info' || row.disabled}
           onPress={() =>
@@ -271,7 +279,14 @@ export function SettingsDetailScreen({
   };
 
   return (
-    <View style={[d.container, { paddingTop: insets.top }]}>
+    <View
+      testID={
+        testIDPrefix
+          ? E2E_TEST_IDS.settingsDetailScreen(testIDPrefix)
+          : undefined
+      }
+      style={[d.container, { paddingTop: insets.top }]}
+    >
       <NavHeader title={t(titleKey)} />
       <ScrollView
         contentContainerStyle={d.content}

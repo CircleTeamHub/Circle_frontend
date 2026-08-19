@@ -11,6 +11,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { E2E_TEST_IDS } from "@/testing/e2e-test-ids";
 
 const DISCOVER_NOTIFICATION_CENTER_ROUTE =
   "/(tabs)/discover/notification-center";
@@ -137,13 +138,14 @@ export default function DiscoverScreen() {
   }, [router]);
 
   return (
-    <View style={d.container}>
+    <View testID={E2E_TEST_IDS.discoverScreen} style={d.container}>
       {/* Fixed header */}
       <View style={[s.header, { paddingTop: insets.top + Spacing.md - 4, borderBottomColor: colors.divider }]}>
         <View style={s.headerRow}>
           <Text style={d.title}>{t('discover.title')}</Text>
           <View style={s.headerIcons}>
             <Pressable
+              testID={E2E_TEST_IDS.discoverCirclesAction}
               onPress={handleDiscoverCirclesPress}
               hitSlop={8}
               accessibilityRole="button"
@@ -194,6 +196,9 @@ export default function DiscoverScreen() {
           tabs={FILTER_TABS}
           activeIndex={activeTab}
           onTabPress={setActiveTab}
+          testIDForIndex={(index) =>
+            E2E_TEST_IDS.discoverFilterTab(String(index))
+          }
         />
       </View>
 
@@ -215,6 +220,7 @@ export default function DiscoverScreen() {
       {/* FAB — 圈子广场 and 朋友圈 */}
       {activeTab === 0 || activeTab === 2 ? (
         <Pressable
+          testID={E2E_TEST_IDS.discoverFab}
           style={[s.fab, d.fab]}
           onPress={handleFabPress}
         >

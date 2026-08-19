@@ -24,6 +24,7 @@ import { getApiErrorMessage } from "@/services/api/errors";
 import { useTabBadgeStore } from "@/stores/tabBadgeStore";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
 import type { Conversation } from "@/types";
+import { E2E_TEST_IDS } from "@/testing/e2e-test-ids";
 import { Ionicons } from "@expo/vector-icons";
 import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -272,6 +273,7 @@ type ConversationRowLabels = {
 
 type ConversationRowProps = {
   item: ConversationWithLocalUnread;
+  testID: string;
   pinnedGroupPosition: PinnedGroupPosition;
   labels: ConversationRowLabels;
   rowBackgroundColor: string;
@@ -288,6 +290,7 @@ type ConversationRowProps = {
 
 function ConversationRowImpl({
   item,
+  testID,
   pinnedGroupPosition,
   labels,
   rowBackgroundColor,
@@ -450,7 +453,11 @@ function ConversationRowImpl({
           ) : (
             <Avatar size={40} name={item.name} uri={item.avatarUrl} />
           )}
-          <Pressable style={s.rowContent} onPress={() => onOpenConversation(item)}>
+          <Pressable
+            testID={testID}
+            style={s.rowContent}
+            onPress={() => onOpenConversation(item)}
+          >
             <View style={s.rowTop}>
               <View style={s.nameRow}>
                 <MemberName
@@ -875,6 +882,7 @@ export default function MessagesScreen() {
     ({ item, index }: ListRenderItemInfo<ConversationWithLocalUnread>) => (
       <ConversationRow
         item={item}
+        testID={E2E_TEST_IDS.messagesConversation(item.id)}
         pinnedGroupPosition={getPinnedGroupPosition(visibleConversations, index)}
         labels={swipeLabels}
         rowBackgroundColor={colors.background}
@@ -973,8 +981,12 @@ export default function MessagesScreen() {
   ), [activeTab, colors, d, filterItems, handleClearUnread, handleOpenFind, imConnected, imConnecting, t]);
 
   return (
-    <View style={[d.container, { paddingTop: insets.top }]}>
+    <View
+      testID={E2E_TEST_IDS.messagesScreen}
+      style={[d.container, { paddingTop: insets.top }]}
+    >
       <FlatList
+        testID={E2E_TEST_IDS.messagesList}
         data={visibleConversations}
         keyExtractor={keyExtractor}
         renderItem={renderItem}

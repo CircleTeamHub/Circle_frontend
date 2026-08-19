@@ -20,6 +20,7 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import type { Circle } from '@/types';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 
 const s = StyleSheet.create({
   searchWrap: {
@@ -178,7 +179,11 @@ export default function DiscoverCirclesScreen() {
   const renderItem = useCallback(
     ({ item }: { item: Circle }) => (
       <View>
-        <Pressable style={s.row} onPress={() => handleOpen(item)}>
+        <Pressable
+          testID={E2E_TEST_IDS.circleSearchResult(item.id)}
+          style={s.row}
+          onPress={() => handleOpen(item)}
+        >
           <CircleAvatar
             uri={item.avatarUrl}
             size={48}
@@ -224,13 +229,17 @@ export default function DiscoverCirclesScreen() {
   );
 
   return (
-    <View style={[d.container, { paddingTop: insets.top }]}>
+    <View
+      testID={E2E_TEST_IDS.circleSearchScreen}
+      style={[d.container, { paddingTop: insets.top }]}
+    >
       <NavHeader title={t('discover.discoverCircles', { defaultValue: '发现圈子' })} />
 
       <View style={s.searchWrap}>
         <View style={[s.searchBar, d.searchBar]}>
           <Ionicons name="search" size={18} color={colors.textSecondary} />
           <TextInput
+            testID={E2E_TEST_IDS.circleSearchInput}
             style={[s.searchInput, d.searchInput]}
             value={query}
             onChangeText={setQuery}

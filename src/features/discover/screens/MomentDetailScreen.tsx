@@ -37,6 +37,7 @@ import {
   deleteMomentComment,
 } from '@/services/api/moments';
 import { useMomentsStore } from '@/features/discover/store/use-moments-store';
+import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { useAuthStore } from '@/stores/authStore';
 import { ApiError } from '@/services/api/client';
 import { getApiErrorMessage } from '@/services/api/errors';
@@ -676,7 +677,10 @@ export default function MomentDetailScreen() {
   );
 
   return (
-    <View style={[d.container, { paddingTop: insets.top }]}>
+    <View
+      testID={E2E_TEST_IDS.momentDetailScreen}
+      style={[d.container, { paddingTop: insets.top }]}
+    >
       <NavHeader
         title={t('moment.detail')}
         rightActions={
@@ -684,6 +688,7 @@ export default function MomentDetailScreen() {
             ? [
                 {
                   icon: 'trash-outline',
+                  testID: E2E_TEST_IDS.momentDelete,
                   onPress: handleDeleteMoment,
                   accessibilityLabel: t('common.delete', {
                     defaultValue: '删除',

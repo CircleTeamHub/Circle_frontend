@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, Alert } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -814,7 +815,10 @@ export default function UserProfileScreen() {
   );
 
   return (
-    <View style={[d.container, { paddingTop: insets.top }]}>
+    <View
+      testID={E2E_TEST_IDS.userProfileScreen}
+      style={[d.container, { paddingTop: insets.top }]}
+    >
       <NavHeader
         title={t('userProfile.title')}
         rightSlot={

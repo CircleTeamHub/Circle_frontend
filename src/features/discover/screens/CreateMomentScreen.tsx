@@ -27,6 +27,7 @@ import {
 import { useMomentsStore } from '@/features/discover/store/use-moments-store';
 import { mapWithConcurrency } from '@/utils/concurrency';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 
 const s = StyleSheet.create({
   scroll: { flex: 1, paddingHorizontal: Spacing.lg },
@@ -215,7 +216,10 @@ export default function CreateMomentScreen() {
   }, [canSubmit, submitting, content, images, visibility, prependMoment, router, t]);
 
   return (
-    <View style={[d.container, { paddingTop: insets.top }]}>
+    <View
+      testID={E2E_TEST_IDS.momentCreateScreen}
+      style={[d.container, { paddingTop: insets.top }]}
+    >
       <NavHeader title={t('moment.createTitle')} />
       <ScrollView
         style={s.scroll}
@@ -224,6 +228,7 @@ export default function CreateMomentScreen() {
       >
         <View style={[s.inputBox, d.inputBox]}>
           <TextInput
+            testID={E2E_TEST_IDS.momentContentInput}
             placeholder={t('moment.contentPlaceholder')}
             placeholderTextColor={colors.textSecondary}
             multiline
@@ -291,6 +296,7 @@ export default function CreateMomentScreen() {
 
       <View style={[s.submitWrap, { paddingBottom: insets.bottom || 34 }]}>
         <Pressable
+          testID={E2E_TEST_IDS.momentPublish}
           style={[s.submitBtn, canSubmit && !submitting ? d.submitBtn : d.submitBtnDisabled]}
           onPress={handleSubmit}
           disabled={!canSubmit || submitting}

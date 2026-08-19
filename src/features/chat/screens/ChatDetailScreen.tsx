@@ -24,6 +24,7 @@ import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
+import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { Avatar } from '@/components/ui/avatar';
 import { MemberName } from '@/components/ui/member-name';
 import { Divider } from '@/components/ui/divider';
@@ -3144,6 +3145,7 @@ export default function ChatDetailScreen() {
 
   return (
     <KeyboardAvoidingView
+      testID={E2E_TEST_IDS.chatScreen}
       style={[d.container, { paddingTop: insets.top }]}
       // iOS：键盘弹起时给容器底部加 padding，把输入框顶到键盘上方。
       // Android 走系统 adjustResize，无需 JS 介入（behavior=undefined）。
@@ -3151,7 +3153,11 @@ export default function ChatDetailScreen() {
       keyboardVerticalOffset={0}
     >
       <View style={s.header}>
-        <Pressable onPress={handleBack} hitSlop={8}>
+        <Pressable
+          testID={E2E_TEST_IDS.chatBack}
+          onPress={handleBack}
+          hitSlop={8}
+        >
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
         <Pressable onPress={handleOpenHeaderTarget}>
@@ -3217,6 +3223,7 @@ export default function ChatDetailScreen() {
           </View>
         ) : null}
         <FlatList
+          testID={E2E_TEST_IDS.chatMessageList}
           ref={flatListRef}
           style={s.messageListSurface}
           data={messages}
@@ -3455,6 +3462,7 @@ export default function ChatDetailScreen() {
         ) : (
           <View key="text-shell" style={[s.composerShell, d.composerShell]}>
             <TextInput
+              testID={E2E_TEST_IDS.chatInput}
               style={[s.composerInput, d.composerInput]}
               placeholder={
                 isPreviewMode
@@ -3492,6 +3500,7 @@ export default function ChatDetailScreen() {
         {/* 右侧：发送/附件。录音中由全屏浮层接管，禁用。 */}
         <Pressable
           key="voice-right"
+          testID={E2E_TEST_IDS.chatSend}
           style={[s.circleBtn, s.composerActionBtn, d.circleBtn, d.composerActionBtn]}
           onPress={draft.trim() || pendingCard ? handleSend : handleAttachmentToggle}
           disabled={sending || isPreviewMode || isVoiceRecording}

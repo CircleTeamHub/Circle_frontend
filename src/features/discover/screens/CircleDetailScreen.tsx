@@ -53,6 +53,7 @@ import {
 import { ensureCircleConversation } from '@/chat-core/client';
 import type { CircleDetail, CircleInvitation } from '@/types';
 import { reduceCircleLoadFailure } from '@/features/discover/utils/circle-detail-load-state';
+import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 
 const s = StyleSheet.create({
   scroll: { flex: 1 },
@@ -608,7 +609,10 @@ export default function CircleDetailScreen() {
   }
 
   return (
-    <View style={[d.container, { paddingTop: insets.top }]}>
+    <View
+      testID={E2E_TEST_IDS.circleDetailScreen}
+      style={[d.container, { paddingTop: insets.top }]}
+    >
       <NavHeader
         title={t('circle.detail')}
         rightIcon={isOwnerOrAdmin ? 'create-outline' : undefined}
@@ -897,6 +901,7 @@ export default function CircleDetailScreen() {
           {/* 进入群聊 */}
           {isActiveMember && circle.groupID ? (
             <Pressable
+              testID={E2E_TEST_IDS.circleChatEntry}
               style={[s.actionBtn, d.chatBtn]}
               onPress={handleEnterGroupChat}
               disabled={enteringGroupChat}
