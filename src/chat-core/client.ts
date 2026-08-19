@@ -151,6 +151,8 @@ interface SendOptions {
    * 会把它当成可渲染地址 —— 对端就能借此投放一个静默追踪信标。
    */
   localContent?: Record<string, unknown>;
+  /** 允许冷启动从 outbox 恢复的无 object-key 本地预览。 */
+  outboxPreviewContent?: Record<string, unknown>;
   replyToId?: string;
   /** 服务端鉴权复制媒体所需的源消息 ID。 */
   forwardFromMessageId?: string;
@@ -223,6 +225,9 @@ export async function sendWithOptimism(
       ...(options.replyToId ? { replyToId: options.replyToId } : {}),
       ...(options.forwardFromMessageId
         ? { forwardFromMessageId: options.forwardFromMessageId }
+        : {}),
+      ...(options.outboxPreviewContent
+        ? { localPreviewContent: options.outboxPreviewContent }
         : {}),
     },
     createdAt: optimistic.createdAt,
@@ -403,6 +408,7 @@ export function sendForwardedMediaMessage(options: {
     type: options.type,
     content: {},
     localContent: preview,
+    outboxPreviewContent: preview,
     forwardFromMessageId: options.sourceMessageId,
   });
 }
@@ -572,7 +578,9 @@ async function runRetry(conversationId: string, d: string): Promise<void> {
     (item) => item.d === d && item.conversationId === conversationId,
   );
   if (!entry) throw new ChatSendError('CHAT_INVALID_PAYLOAD', '找不到待重发的消息');
-  const ack = await sendChatMessage(entry.payload);
+  const { localPreviewContent: _localPreviewContent, ...wirePayload } =
+    entry.payload;
+  const ack = await sendChatMessage(wirePayload);
   void outboxDelete(d);
   // 原来只出队就完事了。可首次发送其实**已经在服务端落库**、只是 ack 和回声
   // 都丢了的情况下,重发命中幂等分支:服务端返回成功但刻意不再广播 chat:msg。

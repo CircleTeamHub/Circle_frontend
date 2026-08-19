@@ -1052,6 +1052,44 @@ test('冷启动水合:真没发出去的那条照旧还原成失败气泡', asyn
   assert.deepEqual(deleted, []);
 });
 
+test('冷启动水合:媒体转发从 outbox 恢复本地预览而不恢复源 object key', async () => {
+  const { manager, store } = loadManager({
+    initChatLocalDb: async () => true,
+    readLocalConversations: async () => [{ id: 'c1' }],
+    readRecentLocalMessages: async () => [],
+    outboxList: async () => [
+      {
+        d: 'd-forward',
+        conversationId: 'c1',
+        payload: {
+          conversationId: 'c1',
+          type: 'image',
+          content: {},
+          d: 'd-forward',
+          forwardFromMessageId: 'source-1',
+          localPreviewContent: {
+            url: 'https://signed.example/source.jpg',
+            width: 640,
+            height: 480,
+          },
+        },
+        createdAt: new Date(Date.now() - 60_000).toISOString(),
+      },
+    ],
+  });
+
+  manager.connectChat('jwt', 'u1');
+  await flush();
+
+  const restored = store.messagesByConversation.c1[0];
+  assert.deepEqual(JSON.parse(JSON.stringify(restored.content)), {
+    url: 'https://signed.example/source.jpg',
+    width: 640,
+    height: 480,
+  });
+  assert.equal('key' in restored.content, false);
+});
+
 test('冷启动水合:转账卡片的 outbox 脏数据直接清掉,不还原成失败气泡', async () => {
   // 后端 GiftCardOutboxProcessor 补发的那张卡用的是 gift_card_<id>,
   // 和客户端的 d 不是一个键 —— 「同 d 已确认」的判据永远匹配不上。

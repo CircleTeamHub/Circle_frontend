@@ -30,7 +30,7 @@ const __localDbStub = {
 // 信用分门禁必须挂在 chat-core 的共享发送路径上。拆栈前它在 reportSend 包装器里,
 // 迁移后只剩发图路径单独调了一次 —— 低于阈值的用户仍能发文本/引用/语音/位置/卡片。
 // 后端刻意不做这道校验(策略在端上),所以端上漏了就是真的漏了。
-function loadClient({ blocked, sendFails = false }) {
+function loadClient({ blocked, sendFails = false, retryOutbox = [] }) {
   const filePath = path.join(process.cwd(), 'src/chat-core/client.ts');
   const transpiled = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
     compilerOptions: {
@@ -47,6 +47,7 @@ function loadClient({ blocked, sendFails = false }) {
     gate: 0,
     reported: [],
     outboxUpserts: [],
+    outboxEntries: [],
     sentPayloads: [],
     failedMarks: [],
     retryMarks: [],
@@ -155,7 +156,9 @@ function loadClient({ blocked, sendFails = false }) {
           ...__localDbStub,
           outboxUpsert: async (entry) => {
             calls.outboxUpserts.push(entry.payload.type);
+            calls.outboxEntries.push(entry);
           },
+          outboxList: async () => retryOutbox,
         };
       }
     throw new Error(`unexpected require: ${request}`);
@@ -206,6 +209,55 @@ test('a normal user still sends through the same path', async () => {
   assert.equal(calls.gate, 1);
   assert.equal(calls.sent, 1);
   assert.ok(calls.ingest > 0);
+});
+
+test('forwarded media persists a key-free local preview without sending it', async () => {
+  const { api, calls } = loadClient({ blocked: false });
+
+  await api.sendForwardedMediaMessage({
+    conversationId: 'c1',
+    sourceMessageId: 'source-1',
+    type: 'image',
+    previewContent: {
+      key: 'chat/other/source.jpg',
+      thumbKey: 'chat/other/source-thumb.jpg',
+      url: 'https://signed.example/source.jpg',
+      width: 640,
+      height: 480,
+    },
+  });
+
+  const stored = JSON.parse(JSON.stringify(calls.outboxEntries[0]));
+  assert.deepEqual(stored.payload.localPreviewContent, {
+    url: 'https://signed.example/source.jpg',
+    width: 640,
+    height: 480,
+  });
+  assert.equal('localPreviewContent' in calls.sentPayloads[0], false);
+});
+
+test('forwarded media retry strips the local preview from the wire payload', async () => {
+  const entry = {
+    d: 'd-forward',
+    conversationId: 'c1',
+    payload: {
+      conversationId: 'c1',
+      type: 'image',
+      content: {},
+      d: 'd-forward',
+      forwardFromMessageId: 'source-1',
+      localPreviewContent: {
+        url: 'https://signed.example/source.jpg',
+        width: 640,
+      },
+    },
+    createdAt: new Date().toISOString(),
+  };
+  const { api, calls } = loadClient({ blocked: false, retryOutbox: [entry] });
+
+  await api.retryFailedChatMessage('c1', 'd-forward');
+
+  assert.equal('localPreviewContent' in calls.sentPayloads[0], false);
 });
 
 test('location sends keep the selected place title, address, and coordinates', async () => {

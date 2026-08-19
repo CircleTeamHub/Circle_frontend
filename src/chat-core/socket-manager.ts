@@ -438,7 +438,12 @@ async function hydrateFromLocalDb(
         conversationId: entry.conversationId,
         height: 0,
         type: entry.payload.type,
-        content: entry.payload.content,
+        content: entry.payload.localPreviewContent
+          ? {
+              ...entry.payload.content,
+              ...entry.payload.localPreviewContent,
+            }
+          : entry.payload.content,
         // sender 必须是本人。留 null 的话 mapChatMessageDtoToUI 判成「收到的」,
         // 气泡渲染到左边、也拿不到失败态 —— 长按重发那条依赖 sendStatus=3 的
         // 菜单项因此不出现,这条消息就再也发不出去了。
