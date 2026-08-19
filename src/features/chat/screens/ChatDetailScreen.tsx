@@ -1533,6 +1533,11 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   const messageActions = useMemo<MessageAction[]>(() => {
     const message = actionMenu?.message;
     if (!message) return [];
+    const dto = useChatStore
+      .getState()
+      .messagesByConversation[conversationID]?.find(
+        (item) => item.id === message.id,
+      );
     const actions: MessageAction[] = [];
     if (message.sendStatus === 3 && message.deliveryId) {
       actions.push({
@@ -1608,7 +1613,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     });
     // 只在真能转发时给入口:通话记录走到转发页只会抛「不支持」,
     // 而 catch 提示的是「请重试」—— 一个永远不会成功的重试。
-    if (canForwardMessage(message)) {
+    if (canForwardMessage(message, dto)) {
       actions.push({
         key: 'forward',
         icon: 'arrow-redo-outline',
