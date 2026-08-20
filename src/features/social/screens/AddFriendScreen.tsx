@@ -25,6 +25,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 
 type SearchState = 'idle' | 'loading' | 'result' | 'not-found' | 'error';
 
@@ -204,7 +205,10 @@ export default function AddFriendScreen() {
   }, [router]);
 
   return (
-    <View style={[d.container, { paddingTop: insets.top }]}>
+    <View
+      testID={E2E_TEST_IDS.addFriendScreen}
+      style={[d.container, { paddingTop: insets.top }]}
+    >
       <NavHeader
         title={t('addFriend.title', { defaultValue: '添加好友' })}
       />
@@ -218,6 +222,7 @@ export default function AddFriendScreen() {
           <View style={[s.searchInput, d.searchInput]}>
             <Ionicons name="search" size={18} color={colors.textSecondary} />
             <TextInput
+              testID={E2E_TEST_IDS.addFriendInput}
               value={keyword}
               onChangeText={setKeyword}
               onSubmitEditing={handleSearch}
@@ -289,7 +294,11 @@ export default function AddFriendScreen() {
           ) : null}
 
           {searchState === 'result' && result ? (
-            <Pressable style={s.resultRow} onPress={openUserProfile}>
+            <Pressable
+              testID={E2E_TEST_IDS.addFriendResult(result.id)}
+              style={s.resultRow}
+              onPress={openUserProfile}
+            >
               <Avatar
                 size={52}
                 name={getDisplayName(result)}

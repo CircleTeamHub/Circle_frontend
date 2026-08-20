@@ -7,6 +7,7 @@ import { Divider } from '@/components/ui/divider';
 import { MenuRow } from '@/components/ui/menu-row';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 
 const s = StyleSheet.create({
   header: {
@@ -78,7 +79,7 @@ export default function DiscoverScreen() {
   }, [router]);
 
   return (
-    <View style={d.container}>
+    <View testID={E2E_TEST_IDS.discoverScreen} style={d.container}>
       <View
         style={[
           s.header,
@@ -103,6 +104,7 @@ export default function DiscoverScreen() {
           <Text style={d.sectionTitle}>{t('discover.moments')}</Text>
           <View style={[s.sectionCard, d.sectionCard]}>
             <MenuRow
+              testID={E2E_TEST_IDS.discoverMomentsEntry}
               icon="people-outline"
               iconBgColor={colors.orange}
               label={t('discover.moments')}
@@ -116,6 +118,7 @@ export default function DiscoverScreen() {
           <Text style={d.sectionTitle}>{t('contacts.circles')}</Text>
           <View style={[s.sectionCard, d.sectionCard]}>
             <MenuRow
+              testID={E2E_TEST_IDS.discoverPlazaEntry}
               icon="planet-outline"
               iconBgColor={colors.primary}
               label={t('discover.plaza')}

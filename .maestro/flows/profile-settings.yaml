@@ -1,0 +1,63 @@
+appId: ${APP_ID}
+name: WindNote profile and settings restoration
+tags:
+  - profile
+  - mutation
+---
+- runFlow:
+    file: ../subflows/launch.yaml
+- runFlow:
+    file: ../subflows/ensure-signed-in.yaml
+- tapOn:
+    id: windnote.tabs.profile
+- tapOn:
+    id: windnote.profile.settings
+- tapOn:
+    id: windnote.settings.row.profile-nickname
+- extendedWaitUntil:
+    visible:
+      id: windnote.profile.edit.screen
+    timeout: 30000
+- tapOn:
+    id: windnote.profile.edit.input
+- eraseText: 100
+- inputText: WINDNOTE-${E2E_RUN_ID}
+- hideKeyboard
+- tapOn:
+    id: windnote.profile.edit.save
+- tapOn:
+    id: windnote.tabs.profile
+- assertVisible: WINDNOTE-${E2E_RUN_ID}
+- tapOn:
+    id: windnote.profile.settings
+- tapOn:
+    id: windnote.settings.row.profile-nickname
+- tapOn:
+    id: windnote.profile.edit.input
+- eraseText: 100
+- inputText: ${E2E_ORIGINAL_NICKNAME}
+- hideKeyboard
+- tapOn:
+    id: windnote.profile.edit.save
+- tapOn:
+    id: windnote.settings.row.notifications
+- extendedWaitUntil:
+    visible:
+      id: windnote.settings-detail.screen.notifications
+    timeout: 30000
+- tapOn:
+    id: windnote.settings-detail.row.notifications.push
+- tapOn:
+    id: windnote.settings-detail.row.notifications.push
+- back
+- tapOn:
+    id: windnote.settings.row.privacy
+- extendedWaitUntil:
+    visible:
+      id: windnote.settings-detail.screen.privacy
+    timeout: 30000
+- tapOn:
+    id: windnote.settings-detail.row.privacy.stranger-message
+- tapOn:
+    id: windnote.settings-detail.row.privacy.stranger-message
+- takeScreenshot: windnote-profile-settings-${E2E_RUN_ID}

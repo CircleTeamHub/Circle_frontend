@@ -20,6 +20,7 @@ interface MomentAlbumRowProps {
   post: MomentPost;
   showDate: boolean;
   onPress: (postId: string) => void;
+  testID?: string;
 }
 
 const s = StyleSheet.create({
@@ -75,6 +76,7 @@ export const MomentAlbumRow: React.FC<MomentAlbumRowProps> = ({
   post,
   showDate,
   onPress,
+  testID,
 }) => {
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
@@ -115,7 +117,7 @@ export const MomentAlbumRow: React.FC<MomentAlbumRowProps> = ({
   const likedFriends = post.likedFriends ?? [];
 
   return (
-    <View style={s.row}>
+    <View testID={testID} style={s.row}>
       <View style={s.dateCol}>
         {showDate ? (
           <>

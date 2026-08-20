@@ -6,5 +6,6 @@ module.exports = {
   testMatch: ['**/*.spec.tsx'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
+    '^@sentry/react-native$': '<rootDir>/test/jest/sentry-react-native.mock.js',
   },
 };

@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react-native';
+import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { useGroupMemberViewAccess } from './use-group-member-view-access';
 import { fetchCircleDetail } from '@/services/api/circles';
 
@@ -74,10 +74,14 @@ describe('useGroupMemberViewAccess', () => {
 
     // 现场撤权:revalidate 立即按最新角色拒绝,不吃挂载期的旧快照。
     mockFetchCircleDetail.mockResolvedValue(circleWithRole('MEMBER'));
-    await expect(result.current.revalidate()).resolves.toBe(false);
+    await act(async () => {
+      await expect(result.current.revalidate()).resolves.toBe(false);
+    });
 
     mockFetchCircleDetail.mockRejectedValue(new Error('offline'));
-    await expect(result.current.revalidate()).resolves.toBe(false);
+    await act(async () => {
+      await expect(result.current.revalidate()).resolves.toBe(false);
+    });
   });
 
   it('resolves immediately without querying when disabled', async () => {

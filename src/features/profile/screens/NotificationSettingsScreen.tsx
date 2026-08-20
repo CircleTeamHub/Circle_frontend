@@ -23,6 +23,7 @@ export default function NotificationSettingsScreen() {
 
   return (
     <SettingsDetailScreen
+      testIDPrefix="notifications"
       titleKey="settingsDetails.notifications.title"
       sections={[
         {

@@ -1,0 +1,14 @@
+[
+  {
+    "alias": "sender-01",
+    "accessToken": "replace-with-a-dedicated-non-production-token",
+    "conversationIds": ["replace-with-a-seeded-conversation-id"],
+    "circleIds": ["replace-with-a-safe-circle-id"]
+  },
+  {
+    "alias": "receiver",
+    "accessToken": "replace-with-a-second-dedicated-token",
+    "conversationIds": ["replace-with-the-shared-conversation-id"],
+    "circleIds": []
+  }
+]

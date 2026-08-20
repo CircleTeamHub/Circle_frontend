@@ -1,0 +1,40 @@
+appId: ${APP_ID}
+name: WindNote deep chat history scroll
+tags:
+  - performance
+---
+- runFlow:
+    file: ../subflows/launch.yaml
+- runFlow:
+    file: ../subflows/ensure-signed-in.yaml
+- tapOn:
+    id: windnote.tabs.messages
+- scrollUntilVisible:
+    element:
+      id: windnote.messages.conversation.${E2E_PERF_CONVERSATION_ID}
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    id: windnote.messages.conversation.${E2E_PERF_CONVERSATION_ID}
+- extendedWaitUntil:
+    visible:
+      id: windnote.chat.message-list
+    timeout: 30000
+- repeat:
+    times: 20
+    commands:
+      - swipe:
+          start: 50%, 25%
+          end: 50%, 85%
+          duration: 300
+      - swipe:
+          start: 50%, 85%
+          end: 50%, 25%
+          duration: 300
+- tapOn:
+    id: windnote.chat.composer.input
+- inputText: performance-responsive
+- eraseText: 22
+- assertVisible:
+    id: windnote.chat.composer.input
+- takeScreenshot: windnote-perf-chat-history

@@ -1,0 +1,37 @@
+appId: ${APP_ID}
+name: WindNote conversation switch storm
+tags:
+  - performance
+---
+- runFlow:
+    file: ../subflows/launch.yaml
+- runFlow:
+    file: ../subflows/ensure-signed-in.yaml
+- tapOn:
+    id: windnote.tabs.messages
+- repeat:
+    times: 10
+    commands:
+      - scrollUntilVisible:
+          element:
+            id: windnote.messages.conversation.${E2E_PERF_CONVERSATION_ID}
+          direction: DOWN
+          timeout: 15000
+      - tapOn:
+          id: windnote.messages.conversation.${E2E_PERF_CONVERSATION_ID}
+      - assertVisible:
+          id: windnote.chat.composer.input
+      - tapOn:
+          id: windnote.chat.back
+      - scrollUntilVisible:
+          element:
+            id: windnote.messages.conversation.${E2E_PERF_SECOND_CONVERSATION_ID}
+          direction: DOWN
+          timeout: 15000
+      - tapOn:
+          id: windnote.messages.conversation.${E2E_PERF_SECOND_CONVERSATION_ID}
+      - assertVisible:
+          id: windnote.chat.composer.input
+      - tapOn:
+          id: windnote.chat.back
+- takeScreenshot: windnote-perf-conversation-switch

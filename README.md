@@ -1,5 +1,7 @@
 # 风信 windnote.ai 项目 PRD
 
+> 测试入口：跨平台 Maestro E2E 与 Android/iOS 性能采集见 `e2e/README.md`，k6 并发/容量测试见 `load-tests/README.md`，尚待补齐与真机验收项见 `docs/testing-gap-audit.md`。快速本地门禁运行 `npm run test:testing-tools`。
+
 更新时间：2026-06-24  
 文档状态：草案  
 覆盖范围：`circle-im` 前端应用仓库，包含当前已实现能力、生产化缺口和后续路线图。  

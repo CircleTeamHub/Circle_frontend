@@ -40,6 +40,7 @@ import {
   getAvatarPickerPermissionDeniedMessage,
 } from '@/features/profile/avatar-picker-feedback';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 
 const s = StyleSheet.create({
   content: {
@@ -480,6 +481,7 @@ export default function EditProfileFieldScreen() {
 
   return (
     <KeyboardAvoidingView
+      testID={E2E_TEST_IDS.profileEditScreen}
       style={[d.container, { paddingTop: insets.top }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
@@ -552,6 +554,7 @@ export default function EditProfileFieldScreen() {
             </Pressable>
           ) : (
             <TextInput
+              testID={E2E_TEST_IDS.profileEditInput}
               value={value}
               onChangeText={setValue}
               placeholder={field.placeholder}
@@ -570,6 +573,7 @@ export default function EditProfileFieldScreen() {
 
         <View style={s.footer}>
           <Pressable
+            testID={E2E_TEST_IDS.profileEditSave}
             style={[s.button, d.button, isSaving ? { opacity: 0.6 } : null]}
             onPress={handleSave}
             disabled={isSaving}

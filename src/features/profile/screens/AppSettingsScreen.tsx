@@ -17,6 +17,7 @@ import { formatCacheSize, getAppCacheSize } from '@/services/cache/clear-app-cac
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { useAuth } from '@/hooks/use-auth';
+import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 
 type AppSettingsRoute =
   | string
@@ -519,7 +520,11 @@ export default function AppSettingsScreen() {
 
       return (
         <View key={row.id}>
-          <Pressable style={s.row} onPress={() => handleRowPress(row)}>
+          <Pressable
+            testID={E2E_TEST_IDS.settingsRow(row.id)}
+            style={s.row}
+            onPress={() => handleRowPress(row)}
+          >
             <Text style={d.rowLabel}>{t(row.labelKey)}</Text>
             <View style={s.rowRight}>
               {valueText ? <Text style={d.rowValue}>{valueText}</Text> : null}
@@ -550,7 +555,10 @@ export default function AppSettingsScreen() {
   };
 
   return (
-    <View style={[d.container, { paddingTop: insets.top }]}>
+    <View
+      testID={E2E_TEST_IDS.settingsScreen}
+      style={[d.container, { paddingTop: insets.top }]}
+    >
       <NavHeader title={t('appSettings.title')} />
       <ScrollView
         contentContainerStyle={d.content}
@@ -586,6 +594,7 @@ export default function AppSettingsScreen() {
 
         <View style={s.footer}>
           <Pressable
+            testID={E2E_TEST_IDS.settingsLogout}
             style={[
               s.secondaryButton,
               d.secondaryButton,

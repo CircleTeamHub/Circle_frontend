@@ -61,3 +61,12 @@ design.pen
 
 # 本地测试账号（含明文凭证，仅本机 dev 用，勿入库）
 docs/LOCAL_TEST_ACCOUNTS.md
+
+# E2E/load credentials and generated performance artifacts
+e2e/.env*
+!e2e/env.example
+load-tests/data/*.json
+!load-tests/data/accounts.example.json
+test-results/
+*.perfetto-trace
+*.trace/

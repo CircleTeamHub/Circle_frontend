@@ -5,6 +5,7 @@ import { useTheme, Spacing, Typography } from '@/theme';
 import { IconCircle } from './icon-circle';
 
 interface MenuRowProps {
+  testID?: string;
   icon: keyof typeof Ionicons.glyphMap;
   iconBgColor?: string;
   label: string;
@@ -52,6 +53,7 @@ const s = StyleSheet.create({
 });
 
 export const MenuRow: React.FC<MenuRowProps> = ({
+  testID,
   icon,
   iconBgColor,
   label,
@@ -97,6 +99,7 @@ export const MenuRow: React.FC<MenuRowProps> = ({
 
   return (
     <Pressable
+      testID={testID}
       style={s.row}
       onPress={onPress}
       accessibilityRole={hasToggle ? 'switch' : 'button'}

@@ -1,0 +1,37 @@
+appId: ${APP_ID}
+name: WindNote authentication and main navigation
+tags:
+  - auth
+  - navigation
+---
+- runFlow:
+    file: ../subflows/launch.yaml
+- runFlow:
+    file: ../subflows/ensure-signed-in.yaml
+- tapOn:
+    id: windnote.tabs.messages
+- assertVisible:
+    id: windnote.messages.screen
+- tapOn:
+    id: windnote.tabs.contacts
+- assertVisible:
+    id: windnote.contacts.screen
+- tapOn:
+    id: windnote.tabs.discover
+- assertVisible:
+    id: windnote.discover.screen
+- tapOn:
+    id: windnote.tabs.profile
+- assertVisible:
+    id: windnote.profile.screen
+- stopApp
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible:
+      id: windnote.tabs.profile
+    timeout: 60000
+- assertVisible:
+    id: windnote.profile.screen
+- runFlow:
+    file: ../subflows/sign-out.yaml

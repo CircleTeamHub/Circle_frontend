@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme, Spacing, Radius, Typography } from '@/theme';
 
 interface AuthInputProps {
+  testID?: string;
   label?: string;
   placeholder: string;
   value: string;
@@ -52,6 +53,7 @@ const s = StyleSheet.create({
 });
 
 export const AuthInput: React.FC<AuthInputProps> = ({
+  testID,
   label,
   placeholder,
   value,
@@ -105,6 +107,7 @@ export const AuthInput: React.FC<AuthInputProps> = ({
           </>
         ) : null}
         <TextInput
+          testID={testID}
           style={[s.input, d.input]}
           placeholder={placeholder}
           placeholderTextColor={colors.textSecondary + '80'}
