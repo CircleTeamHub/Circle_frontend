@@ -135,6 +135,31 @@ export function useAuth() {
     [onAuthSuccess, safeSetError, safeSetSubmitting],
   );
 
+  /**
+   * 扫码登录收尾（桌面网页版）：轮询侧拿到后端换发的 token 后走与
+   * 密码/验证码登录完全相同的收尾链（拉用户、落 session、记账号、跳转）。
+   */
+  const completeQrLogin = useCallback(
+    async (tokens: AuthTokens) => {
+      if (inFlightRef.current) return;
+      safeSetError(null);
+      inFlightRef.current = true;
+      safeSetSubmitting(true);
+      try {
+        await onAuthSuccess(tokens);
+      } catch (requestError) {
+        await clearLocalSession();
+        safeSetError(
+          getApiErrorMessage(requestError, i18n.t('auth.errors.loginFailed')),
+        );
+      } finally {
+        inFlightRef.current = false;
+        safeSetSubmitting(false);
+      }
+    },
+    [onAuthSuccess, safeSetError, safeSetSubmitting],
+  );
+
   const loginWithCode = useCallback(
     async (email: string, code: string) => {
       if (inFlightRef.current) return;
@@ -350,6 +375,7 @@ export function useAuth() {
   return {
     login,
     loginWithCode,
+    completeQrLogin,
     register,
     logout,
     switchAccount,

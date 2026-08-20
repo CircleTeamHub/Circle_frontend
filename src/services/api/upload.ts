@@ -98,6 +98,40 @@ const CONTENT_TYPE_BY_EXTENSION = {
   m4v: 'video/x-m4v',
 } as const;
 
+/**
+ * contentType → 兜底扩展名。Web 端 picker/编辑器给的是 blob:/data: URI，
+ * `uri.split('/').pop()` 只是一串 uuid，没有扩展名 —— 后端推不出类型时对象
+ * 键会落 `.bin`。presign 入口统一按 contentType 补上。
+ */
+const EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'image/heic': 'heic',
+  'image/heif': 'heif',
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
+  'video/x-m4v': 'm4v',
+  'audio/mp4': 'm4a',
+};
+
+/** 文件名已带认识的扩展名则原样通过，否则按 contentType 补一个。 */
+export function ensureFilenameExtension(
+  filename: string,
+  contentType: string,
+): string {
+  const trimmed = filename.trim();
+  const extension = trimmed.includes('.')
+    ? (trimmed.split('.').pop() ?? '').toLowerCase()
+    : '';
+  if (extension && extension in CONTENT_TYPE_BY_EXTENSION) {
+    return trimmed;
+  }
+  const mapped = EXTENSION_BY_CONTENT_TYPE[contentType];
+  return mapped ? `${trimmed || 'upload'}.${mapped}` : trimmed;
+}
+
 export type UploadFolder =
   | 'avatars'
   | 'covers'
@@ -316,7 +350,7 @@ export async function requestUploadPresign(
     method: 'POST',
     // 逐字段拼:fileUri 只是本地取值用的,绝不能进请求体(后端 DTO 不认)。
     body: {
-      filename: payload.filename,
+      filename: ensureFilenameExtension(payload.filename, payload.contentType),
       contentType: payload.contentType,
       folder: payload.folder,
       sizeBytes,

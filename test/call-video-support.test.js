@@ -26,8 +26,16 @@ test('GroupCallScreen reports native module and room connection failures without
 
   assert.match(source, /import \{ reportError \} from '@\/observability\/sentry'/);
   assert.match(source, /operation: 'livekit'/);
-  assert.match(source, /kind: 'moduleLoad'/);
   assert.match(source, /kind: 'roomConnection'/);
+  // moduleLoad 上报随装载逻辑迁去 livekit-module 平台档（两档都要有）。
+  for (const modulePath of [
+    'src/features/call/livekit-module.ts',
+    'src/features/call/livekit-module.web.ts',
+  ]) {
+    const moduleSource = read(modulePath);
+    assert.match(moduleSource, /operation: 'livekit'/);
+    assert.match(moduleSource, /kind: 'moduleLoad'/);
+  }
   assert.doesNotMatch(source, /reportError\([^\n]*activeCall\.id/);
   assert.doesNotMatch(source, /reportError\([^\n]*livekit\.token/);
 });

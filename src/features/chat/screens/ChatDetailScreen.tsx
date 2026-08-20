@@ -4094,6 +4094,14 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           style={[s.circleBtn, s.composerActionBtn, d.circleBtn, d.composerActionBtn]}
           onPress={draft.trim() || pendingCard ? handleSend : handleAttachmentToggle}
           disabled={sending || isPreviewMode || isVoiceRecording}
+          accessibilityRole="button"
+          accessibilityLabel={
+            draft.trim() || pendingCard
+              ? t('common.send')
+              : t('chat.detail.attachmentPanelLabel', {
+                  defaultValue: '打开附件面板',
+                })
+          }
         >
           <Ionicons
             name={draft.trim() || pendingCard ? 'send' : 'add'}
