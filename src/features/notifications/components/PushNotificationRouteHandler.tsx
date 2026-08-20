@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { Platform } from 'react-native';
 import {
   usePathname,
   useRootNavigationState,
@@ -140,6 +141,9 @@ export function PushNotificationRouteHandler() {
   }, [controller, navReady, authenticatedUserId]);
 
   useEffect(() => {
+    // Web 没有"点系统推送打开 App"这条链路（expo-notifications 的
+    // getLastNotificationResponse 在 web 直接抛），整个监听不装。
+    if (Platform.OS === 'web') return;
     let mounted = true;
     let subscription: { remove: () => void } | null = null;
     controller.activate();

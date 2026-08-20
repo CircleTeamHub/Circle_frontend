@@ -54,8 +54,10 @@ function DefaultAvatar({ size, gradientId }: { size: number; gradientId: string 
       height={size}
       viewBox="0 0 64 64"
       pointerEvents="none"
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
+      // RN 0.71+ 的跨平台别名：原生映射成 accessibilityElementsHidden /
+      // importantForAccessibility，web 上落成真正的 aria-hidden——那对 RN
+      // 专属 prop 会被 react-native-svg 原样转发给 DOM 而触发 React 警告。
+      aria-hidden
     >
       <Defs>
         <LinearGradient id={gradientId} x1="6" y1="58" x2="58" y2="6">

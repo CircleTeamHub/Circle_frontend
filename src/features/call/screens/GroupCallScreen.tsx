@@ -1,14 +1,11 @@
-import type { ComponentType, PropsWithChildren } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  NativeModules,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import type { StyleProp, ViewStyle } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -16,94 +13,14 @@ import { requestJoinToken } from '@/services/api/calls';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useCallStore } from '@/features/call/store/use-call-store';
 import { leaveActiveCall } from '@/features/call/call-session-teardown';
-import { ensureLiveKitGlobals } from '@/utils/livekit-globals';
+import {
+  getInitialLiveKitModule,
+  loadLiveKitModule,
+  type LiveKitModule,
+  type LiveKitTrackReference,
+} from '@/features/call/livekit-module';
 import { reportError } from '@/observability/sentry';
 
-// useTracks 返回的相机轨引用（只声明用到的字段）。直接透传给同模块的
-// VideoTrack，运行时是 @livekit/components-react 的真实 TrackReference。
-type LiveKitTrackReference = {
-  participant: { identity: string };
-  publication?: { isMuted?: boolean };
-};
-
-type LiveKitModule = {
-  LiveKitRoom: ComponentType<
-    PropsWithChildren<{
-      serverUrl: string;
-      token: string;
-      connect?: boolean;
-      audio?: boolean;
-      video?: boolean;
-      // livekit-client RoomOptions 的子集（只声明用到的字段）
-      options?: { adaptiveStream?: boolean; dynacast?: boolean };
-      onError?: (error: Error) => void;
-    }>
-  >;
-  VideoTrack: ComponentType<{
-    trackRef: LiveKitTrackReference | undefined;
-    style?: StyleProp<ViewStyle>;
-    objectFit?: 'cover' | 'contain';
-    mirror?: boolean;
-  }>;
-  useConnectionState: () => string;
-  useLocalParticipant: () => {
-    localParticipant: {
-      identity: string;
-      setMicrophoneEnabled: (enabled: boolean) => Promise<void>;
-      setCameraEnabled: (enabled: boolean) => Promise<void>;
-    };
-    isMicrophoneEnabled: boolean;
-    isCameraEnabled: boolean;
-  };
-  // sources 传 Track.Source 的字符串值（'camera'），避免为拿枚举而静态
-  // import livekit-client（本文件靠动态 import 保持 LiveKit 可缺席）。
-  useTracks: (sources: string[]) => LiveKitTrackReference[];
-  useParticipants: () => {
-    identity: string;
-    name?: string;
-  }[];
-  useRoomContext: () => {
-    disconnect: () => Promise<void>;
-  };
-  registerGlobals?: () => void;
-};
-
-let cachedLiveKitModule: LiveKitModule | null | undefined;
-let liveKitModulePromise: Promise<LiveKitModule | null> | null = null;
-
-function loadLiveKitModule() {
-  if (!NativeModules.WebRTCModule) {
-    return Promise.resolve(null);
-  }
-  if (cachedLiveKitModule !== undefined) {
-    return Promise.resolve(cachedLiveKitModule);
-  }
-  if (liveKitModulePromise) {
-    return liveKitModulePromise;
-  }
-
-  liveKitModulePromise = import('@livekit/react-native')
-    .then((module) => {
-      cachedLiveKitModule = module as LiveKitModule;
-      if (cachedLiveKitModule.registerGlobals) {
-        ensureLiveKitGlobals(cachedLiveKitModule.registerGlobals);
-      }
-      return cachedLiveKitModule;
-    })
-    .catch((error) => {
-      cachedLiveKitModule = null;
-      reportError(new Error('LiveKit native module failed to load'), {
-        operation: 'livekit',
-        kind: 'moduleLoad',
-      });
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[call] LiveKit native module unavailable', error);
-      }
-      return cachedLiveKitModule;
-    });
-
-  return liveKitModulePromise;
-}
 
 const s = StyleSheet.create({
   container: {
@@ -515,7 +432,7 @@ export default function GroupCallScreen() {
   const reportedRoomErrorRef = useRef(false);
   const [liveKitModule, setLiveKitModule] = useState<
     LiveKitModule | null | undefined
-  >(() => (NativeModules.WebRTCModule ? cachedLiveKitModule : null));
+  >(() => getInitialLiveKitModule());
 
   useEffect(() => {
     return () => {
