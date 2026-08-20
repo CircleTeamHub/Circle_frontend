@@ -1,5 +1,9 @@
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import i18n from '@/i18n';
+import {
+  presentWebAlert,
+  type WebAlertButton,
+} from '@/components/app/web-alert-host';
 
 /**
  * 给 `Alert.alert` 补一个本地化的默认按钮。
@@ -14,6 +18,13 @@ import i18n from '@/i18n';
  * 给了 buttons 的调用完全不受影响。i18n 已初始化后再装，保证取到的是当前语言。
  */
 export function installLocalizedAlertDefaults(): void {
+  // Web：react-native-web 的 Alert.alert 是**空函数**（class Alert {
+  // static alert() {} }），全部对话框会静默失效 —— 整个改指到 WebAlertHost
+  // 的命令式桥（主题化模态，见 components/app/web-alert-host.tsx）。
+  if (Platform.OS === 'web') {
+    installWebAlert();
+    return;
+  }
   const original = Alert.alert.bind(Alert);
   type AlertArgs = Parameters<typeof Alert.alert>;
 
@@ -33,5 +44,41 @@ export function installLocalizedAlertDefaults(): void {
       [{ text: i18n.t('common.confirm', { defaultValue: '确认' }) }],
       options,
     );
+  };
+}
+
+function installWebAlert(): void {
+  type AlertArgs = Parameters<typeof Alert.alert>;
+
+  Alert.alert = (
+    title: AlertArgs[0],
+    message?: AlertArgs[1],
+    buttons?: AlertArgs[2],
+    options?: AlertArgs[3],
+  ): void => {
+    const fallbackText = i18n.t('common.confirm', { defaultValue: '确认' });
+    const normalized: WebAlertButton[] =
+      buttons && buttons.length > 0
+        ? buttons.map((button) => ({
+            text: button.text ?? fallbackText,
+            style: button.style,
+            onPress: button.onPress
+              ? () => {
+                  button.onPress?.();
+                }
+              : undefined,
+          }))
+        : [{ text: fallbackText }];
+
+    presentWebAlert({
+      title: typeof title === 'string' ? title : String(title ?? ''),
+      message: message ?? undefined,
+      buttons: normalized,
+      // 原生 Android 默认蒙层不可关，但 web 上"点外面关掉"是桌面惯例；
+      // 只有调用方显式 cancelable:false 才锁死。关闭走 onDismiss，
+      // 与原生语义一致（不触发任何按钮）。
+      cancelable: options?.cancelable !== false,
+      onDismiss: options?.onDismiss,
+    });
   };
 }

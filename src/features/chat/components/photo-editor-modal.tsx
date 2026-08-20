@@ -262,7 +262,12 @@ export function PhotoEditorModal({
           compress: preservePng ? 1 : 0.92,
           format,
         });
-        const info = await FileSystem.getInfoAsync(result.uri);
+        // Web 没有文件系统可 stat（getInfoAsync 直接抛），fileSize 留空 ——
+        // 上传前 presign 侧会从 blob 现取字节数，这里只是元数据。
+        const info =
+          Platform.OS === 'web'
+            ? null
+            : await FileSystem.getInfoAsync(result.uri);
         setWorkingAsset({
           ...workingAsset,
           uri: result.uri,
@@ -270,7 +275,7 @@ export function PhotoEditorModal({
           height: result.height,
           type: 'image',
           fileName: buildEditedFilename(asset.fileName, format),
-          fileSize: info.exists ? info.size : undefined,
+          fileSize: info?.exists ? info.size : undefined,
           mimeType: preservePng ? 'image/png' : 'image/jpeg',
           assetId: null,
           base64: null,
@@ -364,8 +369,8 @@ export function PhotoEditorModal({
   }, [asset, busy, submitting, t, vibrate, workingAsset]);
 
   const isDirty = Boolean(asset && workingAsset && asset.uri !== workingAsset.uri);
-  const tools = useMemo<EditTool[]>(
-    () => [
+  const tools = useMemo<EditTool[]>(() => {
+    const allTools: EditTool[] = [
       {
         id: 'crop',
         icon: 'crop-outline',
@@ -411,13 +416,14 @@ export function PhotoEditorModal({
           setWorkingAsset(asset);
         },
       },
-    ]
-      // Web：涂鸦/马赛克依赖 Skia 画布，web 档是占位桩（见
-      // photo-markup-editor.web.tsx），入口直接不放出；裁剪/旋转/镜像
-      // 走 expo-image-manipulator，web 可用，保留。
-      .filter((tool) =>
-        Platform.OS === 'web' ? tool.id !== 'mosaic' && tool.id !== 'draw' : true,
-      ),
+    ];
+    // Web：涂鸦/马赛克依赖 Skia 画布，web 档是占位桩（见
+    // photo-markup-editor.web.tsx），入口直接不放出；裁剪/旋转/镜像
+    // 走 expo-image-manipulator，web 可用，保留。
+    return Platform.OS === 'web'
+      ? allTools.filter((tool) => tool.id !== 'mosaic' && tool.id !== 'draw')
+      : allTools;
+  },
     [applyEdit, asset, enterMarkupMode, isDirty, t, vibrate],
   );
 

@@ -3987,20 +3987,24 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           },
         ]}
       >
-        {/* 左侧：语音模式→切回键盘；文本模式→话筒。录音中由全屏浮层接管，禁用。 */}
-        <Pressable
-          key="voice-left"
-          style={[s.circleBtn, d.circleBtn]}
-          onPress={toggleVoiceInputMode}
-          disabled={isPreviewMode || isVoiceRecording}
-          hitSlop={8}
-        >
-          <Ionicons
-            name={voiceInputMode ? 'create-outline' : 'mic'}
-            size={22}
-            color={colors.textSecondary}
-          />
-        </Pressable>
+        {/* 左侧：语音模式→切回键盘；文本模式→话筒。录音中由全屏浮层接管，禁用。
+            Web 直接不放录音入口：MediaRecorder 只出 webm/opus，原生端播不了，
+            跨端语音格式没对齐前先砍（微信桌面版同款取舍）；语音**播放**不受影响。 */}
+        {Platform.OS === 'web' ? null : (
+          <Pressable
+            key="voice-left"
+            style={[s.circleBtn, d.circleBtn]}
+            onPress={toggleVoiceInputMode}
+            disabled={isPreviewMode || isVoiceRecording}
+            hitSlop={8}
+          >
+            <Ionicons
+              name={voiceInputMode ? 'create-outline' : 'mic'}
+              size={22}
+              color={colors.textSecondary}
+            />
+          </Pressable>
+        )}
 
         {/* 中间：文本模式=输入框；语音模式=按住说话（gesture 元素全程保持挂载）。 */}
         {voiceInputMode ? (

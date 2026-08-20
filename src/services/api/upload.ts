@@ -238,6 +238,9 @@ const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
  * 两者一旦不同步,拿到的签名就对不上真正上传的内容)。
  */
 export async function resolveLocalFileSize(fileUri: string): Promise<number> {
+  if (Platform.OS === 'web') {
+    return (await readLocalBlobOnWeb(fileUri)).size;
+  }
   const info = await FileSystem.getInfoAsync(fileUri);
   if (!info.exists || info.isDirectory) {
     throw new Error(
@@ -247,6 +250,27 @@ export async function resolveLocalFileSize(fileUri: string): Promise<number> {
     );
   }
   return info.size;
+}
+
+/**
+ * Web：picker/manipulator 给的本地地址是 blob:/data: URI，没有文件系统可 stat，
+ * fetch 成 Blob 后 size 与内容天然同源（blob: 是内存引用，代价可忽略）。
+ */
+async function readLocalBlobOnWeb(fileUri: string): Promise<Blob> {
+  let response: Response;
+  try {
+    response = await fetch(fileUri);
+  } catch {
+    response = null as never;
+  }
+  if (!response || !response.ok) {
+    throw new Error(
+      i18n.t('upload.errors.fileUnreadable', {
+        defaultValue: '找不到要上传的文件',
+      }),
+    );
+  }
+  return response.blob();
 }
 
 function assertUploadSize(sizeBytes: number): number {
@@ -409,6 +433,13 @@ export async function uploadLocalFileToPresignedUrl(
   requiredHeaders: UploadRequiredHeaders,
   timeoutMs: number = UPLOAD_TIMEOUT_MS,
 ) {
+  if (Platform.OS === 'web') {
+    // Web 没有 RNFS/uploadAsync：blob:/data: URI 取成 Blob 后走通用 fetch PUT
+    // 通道（同一套超时与错误语义；requiredHeaders 原样转发，见 presign 契约）。
+    const blob = await readLocalBlobOnWeb(fileUri);
+    await uploadFileToPresignedUrl(uploadUrl, contentType, blob, requiredHeaders);
+    return;
+  }
   return runStorageUpload({ kind: 'local-file', contentType }, async () => {
     assertPresignedUploadUrlReachableOnCurrentPlatform(uploadUrl);
 

@@ -137,8 +137,8 @@ export const MenuRow: React.FC<MenuRowProps> = ({
             value={toggleValue}
             onValueChange={onToggle}
             // a11y label/role 在父 Pressable 上已声明；Switch 自身屏蔽 a11y 避免双读。
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
+            // aria-hidden：跨平台别名（原生等价原来的两个 prop，web 不泄进 DOM）。
+            aria-hidden
             trackColor={{ false: colors.surfaceBorder, true: colors.primary }}
             thumbColor={colors.white}
           />
