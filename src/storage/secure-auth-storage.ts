@@ -1,20 +1,16 @@
 import type * as SecureStoreModule from 'expo-secure-store';
 import type { StateStorage } from 'zustand/middleware';
 import { mmkvJsonStorage } from '@/storage';
+import { getSecureKv, type SecureKvApi } from '@/storage/secure-kv';
 import { sanitizeUserForPersist } from '@/stores/persisted-user';
 
-type SecureStoreApi = typeof SecureStoreModule;
+type SecureStoreApi = SecureKvApi;
 type SecureStoreOptions = SecureStoreModule.SecureStoreOptions;
 
-let secureStoreModule: SecureStoreApi | null = null;
-let secureStoreModulePromise: Promise<SecureStoreApi> | null = null;
-
-async function getSecureStore(): Promise<SecureStoreApi> {
-  if (secureStoreModule) return secureStoreModule;
-  secureStoreModulePromise ??= import('expo-secure-store');
-  secureStoreModule = await secureStoreModulePromise;
-  return secureStoreModule;
-}
+// 平台间接层（secure-kv）：原生仍是懒加载的 expo-secure-store，Web 换成
+// localStorage 档 —— 本文件其余逻辑（降级读、互斥队列、多账号 token）
+// 两端共用，不随平台分叉。
+const getSecureStore = getSecureKv;
 
 function secureStoreOptions(secureStore: SecureStoreApi): SecureStoreOptions {
   return {

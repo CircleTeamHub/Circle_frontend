@@ -10,6 +10,10 @@ import {
 import { Tabs, useSegments } from 'expo-router';
 import { CommonActions, StackActions } from '@react-navigation/native';
 import { type BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import {
+  SPLIT_LIST_PANE_WIDTH,
+  useDesktopSplitLayout,
+} from '@/hooks/use-desktop-split-layout';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -246,6 +250,9 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const segments = useSegments();
   const hideTabBar = segments.length > 2;
+  // 桌面网页版分栏：浮动条钉进左栏（会话列表）宽度内，变成列表的底部导航，
+  // 不再横贯整窗、压住右栏聊天输入框。
+  const isSplitLayout = useDesktopSplitLayout();
 
   const {
     messagesUnread,
@@ -270,6 +277,7 @@ export default function TabLayout() {
       left: 0,
       right: 0,
       bottom: 0,
+      ...(isSplitLayout ? { right: undefined, width: SPLIT_LIST_PANE_WIDTH } : null),
     },
     tabBar: {
       flexDirection: 'row',
@@ -331,7 +339,7 @@ export default function TabLayout() {
       fontWeight: '500',
       letterSpacing: 0.2,
     },
-  }), [colors, insets.bottom]);
+  }), [colors, insets.bottom, isSplitLayout]);
 
   const badgeMap: Record<string, boolean> = useMemo(() => ({
     messages: messagesUnread > 0,

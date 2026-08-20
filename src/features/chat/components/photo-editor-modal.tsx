@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -410,7 +411,13 @@ export function PhotoEditorModal({
           setWorkingAsset(asset);
         },
       },
-    ],
+    ]
+      // Web：涂鸦/马赛克依赖 Skia 画布，web 档是占位桩（见
+      // photo-markup-editor.web.tsx），入口直接不放出；裁剪/旋转/镜像
+      // 走 expo-image-manipulator，web 可用，保留。
+      .filter((tool) =>
+        Platform.OS === 'web' ? tool.id !== 'mosaic' && tool.id !== 'draw' : true,
+      ),
     [applyEdit, asset, enterMarkupMode, isDirty, t, vibrate],
   );
 

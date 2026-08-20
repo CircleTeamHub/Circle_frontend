@@ -9,7 +9,15 @@
 module.exports = function (api) {
   const isProduction = api.env('production');
   return {
-    presets: ['babel-preset-expo'],
+    presets: [
+      // unstable_transformImportMeta：web 端 Metro 会按 package exports 的
+      // "import" 条件选中 zustand v5 的 ESM 档，里面带裸 `import.meta.env`
+      // （middleware/devtools 分支，仅被解析、不会执行）。dev bundle 是经典
+      // script，裸 import.meta 属解析期 SyntaxError —— 整包拒绝执行、直接
+      // 白屏。此选项让 babel 把 import.meta 编译成 expo winter 运行时的
+      // shim；原生与 jest 同受其益（jest 遇裸 import.meta 一样抛）。
+      ['babel-preset-expo', { unstable_transformImportMeta: true }],
+    ],
     plugins: isProduction
       ? [['transform-remove-console', { exclude: ['error'] }]]
       : [],

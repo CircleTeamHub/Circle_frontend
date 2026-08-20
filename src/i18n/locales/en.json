@@ -163,6 +163,7 @@
     "groupManagement": "Group Management",
     "loadFailed": "Failed to load conversations: {{error}}",
     "noConversations": "No conversations",
+    "desktopEmptyDetail": "Select a conversation to start chatting",
     "imNotConnected": "IM isn't connected. Please sign in again.",
     "imConnecting": "Connecting to IM…",
     "swipeMarkRead": "Mark Read",

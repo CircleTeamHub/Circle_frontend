@@ -677,6 +677,7 @@
     "groupManagement": "Gestión de grupos",
     "loadFailed": "No se pudieron cargar las conversaciones: {{error}}",
     "noConversations": "No hay conversaciones",
+    "desktopEmptyDetail": "Selecciona una conversación para empezar a chatear",
     "imNotConnected": "IM no está conectado. Vuelve a iniciar sesión.",
     "imConnecting": "Conectando con IM…",
     "swipeMarkRead": "Marcar leído",
