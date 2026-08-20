@@ -64,13 +64,11 @@ export type NoteSendTask =
 export const MAX_NOTE_BATCH_SELECTION = 9;
 
 /**
- * 服务端 send 限流 20 条/10s(按用户,与手动打字发送共用同一个桶)。
- * 计划消息数超过安全突发量后,每条之间停 600ms(≈1.6 条/s),把长批次压在
- * 限流之下 —— 触发限流的消息会被直接拒收,比慢一点糟得多。突发量取 12
- * 而不是贴着 20:同一个 10s 窗口里用户自己还可能在打字,给手动消息留余量。
+ * 服务端 send 桶是 20 条/10s（按用户，手动消息与批量共用）。批量最多占 17
+ * 个槽位，始终给用户自己发送保留 3 个；时间戳由屏幕级 ref 跨批保存。
  */
-const NOTE_BATCH_SAFE_BURST = 12;
-const NOTE_BATCH_PACED_DELAY_MS = 600;
+export const NOTE_BATCH_SEND_WINDOW_LIMIT = 17;
+export const NOTE_BATCH_SEND_WINDOW_MS = 10_000;
 
 export function hasAnyNoteSendOption(options: NoteSendOptions): boolean {
   return options.card || options.media || options.showcase || options.location;
@@ -181,7 +179,31 @@ export function buildNoteSendTasks(
   return tasks;
 }
 
-/** 计划总量决定发送节奏：小批次全速，大批次匀速压在服务端限流之下。 */
-export function notePacingDelayMs(totalTasks: number): number {
-  return totalTasks > NOTE_BATCH_SAFE_BURST ? NOTE_BATCH_PACED_DELAY_MS : 0;
+function recentNoteSendAttempts(
+  attempts: readonly number[],
+  now: number,
+): number[] {
+  const cutoff = now - NOTE_BATCH_SEND_WINDOW_MS;
+  return attempts
+    .filter((timestamp) => Number.isFinite(timestamp) && timestamp > cutoff)
+    .sort((left, right) => left - right);
+}
+
+/** 当前滚动窗口没有批量发送槽位时，还需等待多少毫秒。 */
+export function noteSendWindowDelayMs(
+  attempts: readonly number[],
+  now: number,
+): number {
+  const recent = recentNoteSendAttempts(attempts, now);
+  if (recent.length < NOTE_BATCH_SEND_WINDOW_LIMIT) return 0;
+  const blockingAttempt = recent[recent.length - NOTE_BATCH_SEND_WINDOW_LIMIT];
+  return Math.max(0, Math.ceil(blockingAttempt + NOTE_BATCH_SEND_WINDOW_MS - now));
+}
+
+/** 在拿到槽位后记录本次尝试，同时丢弃窗口外的旧时间戳。 */
+export function recordNoteSendAttempt(
+  attempts: readonly number[],
+  now: number,
+): number[] {
+  return [...recentNoteSendAttempts(attempts, now), now];
 }

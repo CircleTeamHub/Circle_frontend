@@ -10,7 +10,7 @@ import {
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -122,12 +122,6 @@ export default function ScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [isHandlingResult, setIsHandlingResult] = useState(false);
   const [pickingFromAlbum, setPickingFromAlbum] = useState(false);
-
-  useEffect(() => {
-    if (!permission) {
-      void requestPermission();
-    }
-  }, [permission, requestPermission]);
 
   const d = useMemo(
     () => ({
@@ -253,19 +247,8 @@ export default function ScanScreen() {
     }
   }, [handleBarcodeScanned, isHandlingResult, pickingFromAlbum, t]);
 
-  if (!permission) {
-    return (
-      <View style={[s.statusPane, d.statusPane, { paddingTop: insets.top }]}>
-        <ActivityIndicator color={colors.primary} />
-        <Text style={[s.statusText, d.statusText]}>
-          {t('messages.scanPermissionChecking')}
-        </Text>
-      </View>
-    );
-  }
-
-  if (!permission.granted) {
-    const canAskAgain = permission.canAskAgain !== false;
+  if (!permission?.granted) {
+    const canAskAgain = permission?.canAskAgain !== false;
 
     return (
       <View style={[s.statusPane, d.statusPane, { paddingTop: insets.top }]}>
@@ -288,6 +271,16 @@ export default function ScanScreen() {
           >
             <Text style={[s.buttonText, d.secondaryButtonText]}>
               {t('common.cancel')}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[s.button, d.secondaryButton]}
+            onPress={() => void handleScanFromAlbum()}
+            disabled={pickingFromAlbum || isHandlingResult}
+            accessibilityRole="button"
+          >
+            <Text style={[s.buttonText, d.secondaryButtonText]}>
+              {t('messages.scanFromAlbum')}
             </Text>
           </Pressable>
           <Pressable

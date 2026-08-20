@@ -971,6 +971,7 @@
       "confirmMessage": "¿Enviar «{{title}}» a {{name}}?",
       "confirmBatchMessage": "¿Enviar {{count}} notas a {{name}}?",
       "partialFailed": "No se pudieron enviar {{count}} notas; inténtalo de nuevo.",
+      "limitExceeded": "Puedes compartir hasta {{count}} notas a la vez. Las demás acciones por lotes no están limitadas.",
       "sentTitle": "Enviada",
       "sentMessage": "Nota enviada al chat.",
       "failedTitle": "Error al enviar",

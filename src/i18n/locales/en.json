@@ -2483,6 +2483,7 @@
       "confirmMessage": "Send “{{title}}” to {{name}}?",
       "confirmBatchMessage": "Send {{count}} notes to {{name}}?",
       "partialFailed": "{{count}} notes failed to send — please retry.",
+      "limitExceeded": "You can share up to {{count}} notes at once. Other bulk actions are unaffected.",
       "sentTitle": "Sent",
       "sentMessage": "Note sent to the chat.",
       "failedTitle": "Send failed",

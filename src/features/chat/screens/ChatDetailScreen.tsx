@@ -133,7 +133,8 @@ import {
 } from '@/services/api/notes';
 import {
   buildNoteSendTasks,
-  notePacingDelayMs,
+  noteSendWindowDelayMs,
+  recordNoteSendAttempt,
   resolveSendableNoteLocation,
   sectionsToImport,
   type ImportedNoteChatMedia,
@@ -505,6 +506,8 @@ export default function ChatDetailScreen() {
   // 批量发笔记的串行队列:第二批在上一批发完之前不开跑,避免两次突发叠进
   // 服务端同一个 20 条/10s 的用户级 send 桶(消息触限会被直接拒收)。
   const noteBatchQueueRef = useRef<Promise<void>>(Promise.resolve());
+  // 真实滚动窗口跨批保留；批量最多用 17/20 个槽位，余下 3 个留给手动发送。
+  const noteSendTimestampsRef = useRef<number[]>([]);
   const [draft, setDraft] = useState('');
   const [mentionPickerVisible, setMentionPickerVisible] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -3251,7 +3254,9 @@ export default function ChatDetailScreen() {
         // mediaCount=0 的笔记没有任何可拷对象,别浪费服务端 20 次/分钟的拷贝配额。
         if (sections.length > 0 && note.mediaCount > 0) {
           try {
-            imported = (await importNoteChatMedia(note.id, sections)).items;
+            const importedResult = await importNoteChatMedia(note.id, sections);
+            failures += importedResult.failedCount ?? 0;
+            imported = importedResult.items;
           } catch (error) {
             failures += 1;
             firstError ??= error;
@@ -3284,8 +3289,20 @@ export default function ChatDetailScreen() {
       }
 
       const tasks = perNote.flat();
-      const delay = notePacingDelayMs(tasks.length);
       for (let i = 0; i < tasks.length; i += 1) {
+        if (!mountedRef.current) return;
+        while (mountedRef.current) {
+          const now = Date.now();
+          const delay = noteSendWindowDelayMs(noteSendTimestampsRef.current, now);
+          if (delay <= 0) {
+            noteSendTimestampsRef.current = recordNoteSendAttempt(
+              noteSendTimestampsRef.current,
+              now,
+            );
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
         if (!mountedRef.current) return;
         const task = tasks[i];
         try {
@@ -3338,9 +3355,6 @@ export default function ChatDetailScreen() {
           if (__DEV__) {
             console.warn('[ChatDetail] note batch send failed', error);
           }
-        }
-        if (delay > 0 && i < tasks.length - 1) {
-          await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
 

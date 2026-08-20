@@ -3,10 +3,13 @@ import assert from 'node:assert/strict';
 import type { NoteSummary } from '../../notes/types.ts';
 import {
   MAX_NOTE_BATCH_SELECTION,
+  NOTE_BATCH_SEND_WINDOW_LIMIT,
+  NOTE_BATCH_SEND_WINDOW_MS,
   buildNoteSendTasks,
   hasAnyNoteSendOption,
   isAllNoteSendOptions,
-  notePacingDelayMs,
+  noteSendWindowDelayMs,
+  recordNoteSendAttempt,
   resolveSendableNoteLocation,
   sectionsToImport,
   withAllNoteSendOptions,
@@ -196,11 +199,33 @@ test('buildNoteSendTasks skips location when unchecked or invalid', () => {
   );
 });
 
-test('notePacingDelayMs kicks in above the safe burst size', () => {
-  assert.equal(notePacingDelayMs(1), 0);
-  assert.equal(notePacingDelayMs(12), 0);
-  assert.equal(notePacingDelayMs(13), 600);
-  assert.equal(notePacingDelayMs(80), 600);
+test('rolling note-send window caps batch traffic at 17 attempts per 10 seconds', () => {
+  assert.equal(NOTE_BATCH_SEND_WINDOW_LIMIT, 17);
+  assert.equal(NOTE_BATCH_SEND_WINDOW_MS, 10_000);
+
+  let attempts: number[] = [];
+  for (let index = 0; index < NOTE_BATCH_SEND_WINDOW_LIMIT; index += 1) {
+    attempts = recordNoteSendAttempt(attempts, 0);
+  }
+  assert.equal(noteSendWindowDelayMs(attempts, 1), 9_999);
+  assert.equal(noteSendWindowDelayMs(attempts, 9_999), 1);
+  assert.equal(noteSendWindowDelayMs(attempts, 10_000), 0);
+});
+
+test('rolling note-send timestamps carry capacity across queued batches', () => {
+  let attempts: number[] = [];
+  // 第一批 9 条，第二批紧接着 8 条；第三批不能把计数从零开始。
+  for (let index = 0; index < 9; index += 1) {
+    attempts = recordNoteSendAttempt(attempts, 0);
+  }
+  for (let index = 0; index < 8; index += 1) {
+    attempts = recordNoteSendAttempt(attempts, 100);
+  }
+  assert.equal(attempts.length, 17);
+  assert.equal(noteSendWindowDelayMs(attempts, 200), 9_800);
+
+  attempts = recordNoteSendAttempt(attempts, 10_000);
+  assert.equal(attempts.length, 9);
 });
 
 test('selection cap stays at nine notes', () => {

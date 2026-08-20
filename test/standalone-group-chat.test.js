@@ -49,12 +49,34 @@ test('chat info screen separates standalone-group and circle-group flows', () =>
     screen,
     /if \(isStandaloneGroup && conversationID\) \{[\s\S]{0,400}fetchChatMembers\(conversationID\)/,
   );
+  // 点成员资料时，非圈子会话按当前 conversation 现场重拉成员并 fail-closed；
+  // 不能调用 disabled 的 circle-only revalidate() 后固定返回 false。
+  assert.match(
+    screen,
+    /if \(isStandaloneGroup \|\| isTempConversation\) \{[\s\S]{0,500}fetchChatMembers\(memberConversationID\)/,
+  );
+  assert.match(screen, /members\.some\(\(item\) => item\.userId === member\.userId\)/);
+  assert.match(screen, /else if \(!\(await revalidateMemberAccess\(\)\)\)/);
+
+  // Android 没有 Alert.prompt；独立群改名必须走所有平台都可用的受控弹窗。
+  assert.match(screen, /\bModal\b/);
+  assert.match(screen, /\bTextInput\b/);
+  assert.match(
+    screen,
+    /if \(isStandaloneGroup\) \{[\s\S]{0,240}setRenameDraft\(groupTitle\)[\s\S]{0,160}setRenameDialogVisible\(true\)/,
+  );
+  assert.match(screen, /<Modal[\s\S]{0,1800}<TextInput/);
+  assert.match(screen, /await renameGroupChatConversation\(conversationID, trimmed\)/);
 });
 
 test('new group screen submits selected friends through chat-core', () => {
   const screen = read('src/features/chat/screens/NewGroupScreen.tsx');
   assert.match(screen, /createGroupConversation\(\{/);
   assert.match(screen, /memberIds: Object\.keys\(selected\)/);
+  assert.match(screen, /submittingRef = useRef\(false\)/);
+  assert.match(screen, /if \(submittingRef\.current\) return/);
+  assert.match(screen, /submittingRef\.current = true/);
+  assert.match(screen, /submittingRef\.current = false/);
   // 服务端 ArrayMinSize(2) 的同款下限,提交前先在端上拦。
   assert.match(screen, /MIN_MEMBERS = 2/);
   // 建完 replace 进聊天页,返回不落回选人页。
