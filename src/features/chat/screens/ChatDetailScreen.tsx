@@ -21,6 +21,7 @@ import {
   type GestureResponderEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  type TextInputKeyPressEventData,
 } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams, useNavigation, useSegments } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
@@ -455,11 +456,32 @@ const s = StyleSheet.create({
 /** 引用跳转最多往回翻几页(一页 50 条);翻不到就放弃,不能无界翻。 */
 const QUOTE_PAGING_MAX = 10;
 
-export default function ChatDetailScreen() {
+// type 而非 interface：路由跳转处要把它原样塞给 router.push 的 params，
+// 只有 type 字面量带隐式索引签名、能赋给 expo-router 的 UnknownInputParams。
+export type EmbeddedChatParams = {
+  conversationID: string;
+  sourceID?: string;
+  title?: string;
+  conversationType?: 'private' | 'group';
+  conversationKind?: 'direct' | 'group' | 'temp' | 'support';
+  avatarUrl?: string;
+  searchedMsgID?: string;
+};
+
+interface ChatDetailScreenProps {
+  /**
+   * 桌面网页版分栏模式：MessagesScreen 把本屏当组件内嵌进右栏并直接喂参数，
+   * 不经过路由。置此项时隐藏返回键（左栏列表本身就是"返回"）；切换会话由
+   * 父级用 key={conversationID} 整树重挂，保证各会话内部状态互不串扰。
+   */
+  embedded?: EmbeddedChatParams;
+}
+
+export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {}) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const params = useLocalSearchParams<{
+  const routeParams = useLocalSearchParams<{
     conversationID?: string;
     sourceID?: string;
     title?: string;
@@ -468,6 +490,7 @@ export default function ChatDetailScreen() {
     avatarUrl?: string;
     searchedMsgID?: string;
   }>();
+  const params = embedded ?? routeParams;
   const navigation = useNavigation();
   // 聊天页在哪个 tab 栈打开（messages/discover/...），决定返回兜底与子页面跳转的 scope。
   const segments = useSegments();
@@ -3673,9 +3696,11 @@ export default function ChatDetailScreen() {
       keyboardVerticalOffset={0}
     >
       <View style={s.header}>
-        <Pressable onPress={handleBack} hitSlop={8}>
-          <Ionicons name="chevron-back" size={24} color={colors.text} />
-        </Pressable>
+        {embedded ? null : (
+          <Pressable onPress={handleBack} hitSlop={8}>
+            <Ionicons name="chevron-back" size={24} color={colors.text} />
+          </Pressable>
+        )}
         <Pressable onPress={handleOpenHeaderTarget}>
           {isGroupChat ? (
             <GroupChatAvatar
@@ -4005,6 +4030,19 @@ export default function ChatDetailScreen() {
               selection={selection}
               onSelectionChange={handleSelectionChange}
               onSubmitEditing={handleSend}
+              // Web：RNW 不把单行输入的 Enter 映射成 submit（onSubmitEditing
+              // 不触发），显式补上；原生端保持 undefined、行为不变。
+              onKeyPress={
+                Platform.OS === 'web'
+                  ? (
+                      event: NativeSyntheticEvent<TextInputKeyPressEventData>,
+                    ) => {
+                      if (event.nativeEvent.key !== 'Enter') return;
+                      event.preventDefault();
+                      void handleSend();
+                    }
+                  : undefined
+              }
               onFocus={() => {
                 LayoutAnimation.configureNext(PANEL_LAYOUT_ANIM);
                 setAttachmentOpen(false);

@@ -12,6 +12,9 @@ import {
 import { mapChatConversationToUI } from "@/chat-core/mappers";
 import { markConversationRead } from "@/chat-core/socket-manager";
 import { selectTotalUnread, type StoredChatMessage, useChatStore } from "@/chat-core/store";
+import ChatDetailScreen, {
+  type EmbeddedChatParams,
+} from "@/features/chat/screens/ChatDetailScreen";
 import { hasFailedLatestMessage } from "@/features/messages/utils/failed-preview";
 import { useMessageGroupsStore } from "@/features/messages/store/use-message-groups-store";
 import { orderMessageFilters } from "@/features/messages/utils/message-filter-order";
@@ -22,6 +25,10 @@ import {
   type ConversationWithLocalUnread,
 } from "@/features/messages/utils/local-unread";
 import { getUserProfileHref } from "@/features/user/utils/routes";
+import {
+  SPLIT_LIST_PANE_WIDTH,
+  useDesktopSplitLayout,
+} from "@/hooks/use-desktop-split-layout";
 import { getApiErrorMessage } from "@/services/api/errors";
 import { useTabBadgeStore } from "@/stores/tabBadgeStore";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
@@ -92,6 +99,27 @@ function getPinnedGroupPosition(
 
 // 静态样式（不依赖主题色，提取到组件外避免每次渲染重建）
 const s = StyleSheet.create({
+  // —— 桌面网页版分栏（useDesktopSplitLayout 命中时启用）——
+  splitRoot: {
+    flex: 1,
+    flexDirection: "row",
+  },
+  splitListPane: {
+    width: SPLIT_LIST_PANE_WIDTH,
+    borderRightWidth: StyleSheet.hairlineWidth,
+  },
+  splitDetailPane: {
+    flex: 1,
+  },
+  splitEmptyPane: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.md,
+  },
+  splitEmptyText: {
+    ...Typography.body,
+  },
   listContent: {
     paddingHorizontal: Spacing.lg,
     paddingBottom: 100,
@@ -306,6 +334,8 @@ type ConversationRowProps = {
   onTogglePinned: (conversation: Conversation) => void;
   onToggleMuted: (conversation: Conversation) => void;
   onDelete: (conversation: Conversation) => void;
+  /** 桌面分栏下禁用：鼠标点击/框选的横向抖动会误触滑动，把操作条卡在半开。 */
+  swipeEnabled: boolean;
 };
 
 function ConversationRowImpl({
@@ -322,6 +352,7 @@ function ConversationRowImpl({
   onTogglePinned,
   onToggleMuted,
   onDelete,
+  swipeEnabled,
 }: ConversationRowProps) {
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -449,9 +480,11 @@ function ConversationRowImpl({
 
   return (
     <View style={[s.row, getPinnedRowStyle(pinnedGroupPosition)]}>
-      {renderSwipeActions()}
+      {/* 桌面分栏：选中高亮是半透明色，垫在下面的操作层会透出来；
+          手势也已禁用，这层不渲染。 */}
+      {swipeEnabled ? renderSwipeActions() : null}
       <Animated.View
-        {...panResponder.panHandlers}
+        {...(swipeEnabled ? panResponder.panHandlers : null)}
         style={[
           s.swipeForeground,
           { backgroundColor: rowBackgroundColor, transform: [{ translateX }] },
@@ -780,6 +813,12 @@ export default function MessagesScreen() {
     return conversations;
   }, [activeFilterId, conversationGroups, conversations]);
 
+  // 桌面网页版（宽视口）分栏状态：右栏当前内嵌的会话。窄窗/原生恒为 null。
+  const isSplitLayout = useDesktopSplitLayout();
+  const [embeddedChat, setEmbeddedChat] = useState<EmbeddedChatParams | null>(
+    null,
+  );
+
   // 点击会话行 → 进入聊天详情页（立即跳转，不等服务端 mark-read / refresh）
   const handleConversationPress = useCallback(
     (conversation: Conversation) => {
@@ -791,19 +830,28 @@ export default function MessagesScreen() {
         .conversations.find((c) => c.id === conversation.id);
       markConversationRead(conversation.id, dto?.lastMessage?.height ?? 0);
 
+      const detailParams: EmbeddedChatParams = {
+        conversationID: conversation.id,
+        sourceID: conversation.sourceID,
+        title: conversation.name,
+        conversationType: conversation.conversationType,
+        conversationKind: dto?.type.toLowerCase() as
+          | EmbeddedChatParams["conversationKind"],
+        avatarUrl: conversation.avatarUrl,
+      };
+
+      // 分栏模式：右栏内嵌详情，不做路由跳转（窄窗仍走原页栈，行为不变）。
+      if (isSplitLayout) {
+        setEmbeddedChat(detailParams);
+        return;
+      }
+
       router.push({
         pathname: "/(tabs)/messages/chat-detail",
-        params: {
-          conversationID: conversation.id,
-          sourceID: conversation.sourceID,
-          title: conversation.name,
-          conversationType: conversation.conversationType,
-          conversationKind: dto?.type.toLowerCase(),
-          avatarUrl: conversation.avatarUrl,
-        },
+        params: detailParams,
       });
     },
-    [clearLocalUnread, router],
+    [clearLocalUnread, isSplitLayout, router],
   );
 
   const handleOpenUserProfile = useCallback(
@@ -960,7 +1008,11 @@ export default function MessagesScreen() {
         item={item}
         pinnedGroupPosition={getPinnedGroupPosition(visibleConversations, index)}
         labels={swipeLabels}
-        rowBackgroundColor={colors.background}
+        rowBackgroundColor={
+          isSplitLayout && embeddedChat?.conversationID === item.id
+            ? colors.primaryLight
+            : colors.background
+        }
         nameStyle={d.name}
         timeStyle={d.time}
         previewStyle={d.preview}
@@ -970,16 +1022,20 @@ export default function MessagesScreen() {
         onTogglePinned={handleToggleConversationPinned}
         onToggleMuted={handleToggleConversationMuted}
         onDelete={handleConfirmDeleteConversation}
+        swipeEnabled={!isSplitLayout}
       />
     ),
     [
       colors.background,
+      colors.primaryLight,
       d,
+      embeddedChat?.conversationID,
       handleConfirmDeleteConversation,
       handleConversationPress,
       handleToggleConversationMuted,
       handleToggleConversationPinned,
       handleOpenUserProfile,
+      isSplitLayout,
       swipeLabels,
       visibleConversations,
     ],
@@ -1067,7 +1123,7 @@ export default function MessagesScreen() {
     </View>
   ), [activeTab, colors, d, filterItems, handleClearUnread, handleFilterPress, handleOpenFind, handleOpenGroups, imConnected, imConnecting, t]);
 
-  return (
+  const listPane = (
     <View style={[d.container, { paddingTop: insets.top }]}>
       <FlatList
         data={visibleConversations}
@@ -1116,6 +1172,41 @@ export default function MessagesScreen() {
           </View>
         </Pressable>
       </Modal>
+    </View>
+  );
+
+  if (!isSplitLayout) {
+    return listPane;
+  }
+
+  // 桌面网页版分栏：左栏固定宽度放会话列表，右栏内嵌聊天详情。
+  // key 用会话 ID：切换会话时详情整树重挂，各会话内部状态互不串扰。
+  return (
+    <View style={s.splitRoot}>
+      <View style={[s.splitListPane, { borderRightColor: colors.divider }]}>
+        {listPane}
+      </View>
+      <View style={s.splitDetailPane}>
+        {embeddedChat ? (
+          <ChatDetailScreen
+            key={embeddedChat.conversationID}
+            embedded={embeddedChat}
+          />
+        ) : (
+          <View style={s.splitEmptyPane}>
+            <Ionicons
+              name="chatbubbles-outline"
+              size={44}
+              color={colors.textSecondary}
+            />
+            <Text style={[s.splitEmptyText, { color: colors.textSecondary }]}>
+              {t("messages.desktopEmptyDetail", {
+                defaultValue: "选择一个会话开始聊天",
+              })}
+            </Text>
+          </View>
+        )}
+      </View>
     </View>
   );
 }
