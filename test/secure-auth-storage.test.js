@@ -102,6 +102,20 @@ function loadSecureAuthStorage({
         }
         return secureStore;
       }
+      // M2 起 secure-auth-storage 经 secure-kv 平台间接层拿实现（web 换档）。
+      // 语义与直接懒 import expo-secure-store 一致：原生模块缺失 → reject。
+      if (request === '@/storage/secure-kv') {
+        return {
+          getSecureKv: () => {
+            if (failSecureStoreImport) {
+              return Promise.reject(
+                new Error("Cannot find native module 'ExpoSecureStore'"),
+              );
+            }
+            return Promise.resolve(secureStore);
+          },
+        };
+      }
       if (request === '@/storage') return { mmkvJsonStorage };
       if (request === '@/stores/persisted-user') {
         return {

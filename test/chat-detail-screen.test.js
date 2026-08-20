@@ -476,10 +476,34 @@ test('group call screen defers LiveKit imports until native modules are availabl
     'utf8',
   );
 
+  // M2 起装载逻辑抽到 livekit-module 平台文件对；屏幕只认统一接口。
   assert.doesNotMatch(source, /from ['"]@livekit\/react-native['"]/);
   assert.match(source, /loadLiveKitModule/);
-  assert.match(source, /NativeModules\.WebRTCModule/);
+  assert.match(source, /getInitialLiveKitModule/);
   assert.match(source, /LiveKit 通话组件不可用/);
+
+  const nativeModule = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/call/livekit-module.ts'),
+    'utf8',
+  );
+  assert.match(nativeModule, /NativeModules\.WebRTCModule/);
+  assert.match(nativeModule, /import\('@livekit\/react-native'\)/);
+  // 原生档绝不引 web SDK —— Metro 会把动态 import 也打进包。
+  // （只匹配 import 形态，注释里提到包名不算数。）
+  assert.doesNotMatch(
+    nativeModule,
+    /import[^\n]*['"]@livekit\/components-react['"]/,
+  );
+
+  const webModule = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/call/livekit-module.web.ts'),
+    'utf8',
+  );
+  assert.match(webModule, /import\('@livekit\/components-react'\)/);
+  assert.doesNotMatch(
+    webModule,
+    /import[^\n]*['"]@livekit\/react-native['"]/,
+  );
 });
 
 test('root layout registers LiveKit only after the native WebRTC module exists', () => {

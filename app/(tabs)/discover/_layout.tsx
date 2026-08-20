@@ -1,4 +1,5 @@
 import { Stack } from 'expo-router';
+import { DesktopCenteredColumn } from '@/components/app/desktop-centered-column';
 import { useTheme } from '@/theme';
 
 // 跨 tab 压栈（如聊天里点圈子名片 push 到本栈的 circle/[id]）时，给栈底垫上
@@ -11,15 +12,17 @@ export default function DiscoverLayout() {
   const { colors } = useTheme();
 
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        animation: 'slide_from_right',
-        gestureEnabled: true,
-        fullScreenGestureEnabled: true,
-        gestureDirection: 'horizontal',
-        contentStyle: { backgroundColor: colors.background },
-      }}
-    />
+    <DesktopCenteredColumn>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: 'slide_from_right',
+          gestureEnabled: true,
+          fullScreenGestureEnabled: true,
+          gestureDirection: 'horizontal',
+          contentStyle: { backgroundColor: colors.background },
+        }}
+      />
+    </DesktopCenteredColumn>
   );
 }
