@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { memo, useCallback, useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Avatar } from '@/components/ui/avatar';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
@@ -129,7 +129,10 @@ function NoteCardInner({
       ]}
       onPress={handlePress}
       onLongPress={onLongPress ? handleLongPress : undefined}
-      accessibilityRole={accessibilityRole}
+      // Web:卡片内部还有 chip/更多等真按钮,外层再当 <button> 就是
+      // button 套 button(非法 HTML,React DOM 告警+点击路由混乱)。
+      // 桌面网页版外层降级为可点 div;原生保持按钮语义不变。
+      accessibilityRole={Platform.OS === 'web' ? undefined : accessibilityRole}
       accessibilityLabel={accessibilityLabel}
       accessibilityState={selectionMode ? { selected } : undefined}
     >
