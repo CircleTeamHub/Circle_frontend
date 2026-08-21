@@ -135,9 +135,7 @@ export const MomentAlbumRow: React.FC<MomentAlbumRowProps> = ({
         ) : null}
 
         {post.images.length > 0 ? (
-          <Pressable onPress={() => onPress(post.id)}>
-            <ImageGrid images={post.images} containerWidth={contentWidth} />
-          </Pressable>
+          <ImageGrid images={post.images} containerWidth={contentWidth} />
         ) : null}
 
         <View style={s.footerRow}>

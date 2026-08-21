@@ -13,6 +13,8 @@
     "retryLater": "Please try again later",
     "cancel": "Cancel",
     "close": "Close",
+    "previous": "Previous",
+    "next": "Next",
     "confirm": "Confirm",
     "delete": "Delete",
     "retry": "Retry",
