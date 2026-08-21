@@ -2175,6 +2175,7 @@
       "upgradeDifferenceNote": "開通済みの会員は、カスタマーサービスに連絡して差額を支払うことでアップグレードできます。すぐに有効になり、残存価値はカスタマーサービスが算定して充当します。",
       "supportName": "公式カスタマーサービス",
       "supportUnavailableTitle": "カスタマーサービスアカウントが未設定です",
+      "supportUnavailableGo": "サポートセンターへ",
       "supportUnavailableMessage": "会員の開通またはアップグレードについて、プラットフォームの公式カスタマーサービスにお問い合わせください。",
       "planAccessibilityLabel": "{{plan}}、{{duration}}、CNY {{price}}",
       "duration": {

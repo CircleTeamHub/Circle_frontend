@@ -2178,6 +2178,7 @@
       "upgradeDifferenceNote": "Los miembros actuales pueden contactar con atención al cliente para pagar la diferencia de una mejora. Se activa de inmediato y atención al cliente aplica el valor restante de la membresía.",
       "supportName": "Atención al cliente oficial",
       "supportUnavailableTitle": "Cuenta de atención al cliente no disponible",
+      "supportUnavailableGo": "Ir al centro de soporte",
       "supportUnavailableMessage": "Contacta con la atención al cliente oficial de la plataforma para activar o mejorar la membresía.",
       "planAccessibilityLabel": "{{plan}}, {{duration}}, CNY {{price}}",
       "duration": {

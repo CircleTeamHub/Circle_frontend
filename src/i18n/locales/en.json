@@ -1665,6 +1665,7 @@
       "upgradeDifferenceNote": "Current members can contact customer service to pay the difference for an upgrade. The upgrade takes effect immediately, and customer service applies the remaining membership value.",
       "supportName": "Official customer service",
       "supportUnavailableTitle": "Customer service account unavailable",
+      "supportUnavailableGo": "Go to Support Center",
       "supportUnavailableMessage": "Please contact the platform's official customer service about membership activation or upgrades.",
       "planAccessibilityLabel": "{{plan}}, {{duration}}, CNY {{price}}",
       "duration": {
