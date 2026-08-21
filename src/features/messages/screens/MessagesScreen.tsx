@@ -25,10 +25,9 @@ import {
   type ConversationWithLocalUnread,
 } from "@/features/messages/utils/local-unread";
 import { getUserProfileHref } from "@/features/user/utils/routes";
-import {
-  SPLIT_LIST_PANE_WIDTH,
-  useDesktopSplitLayout,
-} from "@/hooks/use-desktop-split-layout";
+import { SplitPaneResizer } from "@/components/app/split-pane-resizer";
+import { useDesktopSplitLayout } from "@/hooks/use-desktop-split-layout";
+import { useSplitPaneStore } from "@/stores/splitPaneStore";
 import { getApiErrorMessage } from "@/services/api/errors";
 import { useTabBadgeStore } from "@/stores/tabBadgeStore";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
@@ -107,8 +106,8 @@ const s = StyleSheet.create({
     flexDirection: "row",
   },
   splitListPane: {
-    width: SPLIT_LIST_PANE_WIDTH,
-    borderRightWidth: StyleSheet.hairlineWidth,
+    // 宽度是用户可拖的（splitPaneStore），右侧描边交给 SplitPaneResizer，
+    // 这里不再画边框，否则拖拽时会出现双线。
   },
   splitDetailPane: {
     flex: 1,
@@ -863,6 +862,7 @@ export default function MessagesScreen() {
 
   // 桌面网页版（宽视口）分栏状态：右栏当前内嵌的会话。窄窗/原生恒为 null。
   const isSplitLayout = useDesktopSplitLayout();
+  const listPaneWidth = useSplitPaneStore((state) => state.listPaneWidth);
   const [embeddedChat, setEmbeddedChat] = useState<EmbeddedChatParams | null>(
     null,
   );
@@ -1232,13 +1232,12 @@ export default function MessagesScreen() {
     return listPane;
   }
 
-  // 桌面网页版分栏：左栏固定宽度放会话列表，右栏内嵌聊天详情。
+  // 桌面网页版分栏：左栏放会话列表（宽度用户可拖），右栏内嵌聊天详情。
   // key 用会话 ID：切换会话时详情整树重挂，各会话内部状态互不串扰。
   return (
     <View style={s.splitRoot}>
-      <View style={[s.splitListPane, { borderRightColor: colors.divider }]}>
-        {listPane}
-      </View>
+      <View style={[s.splitListPane, { width: listPaneWidth }]}>{listPane}</View>
+      <SplitPaneResizer paneWidth={listPaneWidth} />
       <View style={s.splitDetailPane}>
         {embeddedChat ? (
           <ChatDetailScreen
