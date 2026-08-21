@@ -25,6 +25,9 @@ const s = StyleSheet.create({
   balanceCard: {
     borderRadius: Radius.xl,
     aspectRatio: 1.586,
+    width: '100%',
+    maxWidth: 400,
+    alignSelf: 'center',
     padding: Spacing.xl,
     justifyContent: 'space-between',
     overflow: 'hidden',
@@ -69,36 +72,10 @@ const s = StyleSheet.create({
     letterSpacing: 0.5,
     color: 'rgba(255,255,255,0.85)',
   },
-  cardChip: {
-    width: 48,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: '#E7C566',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,0,0,0.25)',
-    overflow: 'hidden',
-  },
-  cardChipLineH: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 17,
-    height: 1.5,
-    backgroundColor: 'rgba(0,0,0,0.22)',
-  },
-  cardChipLineV: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 23,
-    width: 1.5,
-    backgroundColor: 'rgba(0,0,0,0.22)',
-  },
   cardBalance: {
     color: '#FFFFFF',
     fontSize: 44,
     fontWeight: '700',
-    marginTop: Spacing.md,
     fontVariant: ['tabular-nums'],
   },
   cardBottomRow: {
@@ -291,13 +268,7 @@ export default function WalletScreen() {
             </Text>
             <Text style={s.cardBrand}>WindNote</Text>
           </View>
-          <View>
-            <View style={s.cardChip}>
-              <View style={s.cardChipLineH} />
-              <View style={s.cardChipLineV} />
-            </View>
-            <Text style={s.cardBalance}>{loadingWallet ? '...' : balance}</Text>
-          </View>
+          <Text style={s.cardBalance}>{loadingWallet ? '...' : balance}</Text>
           {walletError ? (
             <Text style={[Typography.caption, { color: colors.error }]}>
               {walletError}
