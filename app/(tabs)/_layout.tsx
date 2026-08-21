@@ -11,10 +11,8 @@ import {
 import { Tabs, useSegments } from 'expo-router';
 import { CommonActions, StackActions } from '@react-navigation/native';
 import { type BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import {
-  SPLIT_LIST_PANE_WIDTH,
-  useDesktopSplitLayout,
-} from '@/hooks/use-desktop-split-layout';
+import { useDesktopSplitLayout } from '@/hooks/use-desktop-split-layout';
+import { useSplitPaneStore } from '@/stores/splitPaneStore';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -246,6 +244,8 @@ export default function TabLayout() {
   // 底部导航）；其余 tab 的内容在 640 居中窄栏里，浮动条也居中同轴。
   const pinTabBarLeft =
     isSplitLayout && (segments[1] ?? 'messages') === 'messages';
+  // 左栏宽度用户可拖：浮动条与列表读同一个值，拖动时同帧一起变。
+  const listPaneWidth = useSplitPaneStore((state) => state.listPaneWidth);
 
   const {
     messagesUnread,
@@ -281,7 +281,7 @@ export default function TabLayout() {
       bottom: 0,
       ...(isSplitLayout
         ? pinTabBarLeft
-          ? { right: undefined, width: SPLIT_LIST_PANE_WIDTH }
+          ? { right: undefined, width: listPaneWidth }
           : { alignItems: 'center' }
         : null),
     },
@@ -291,7 +291,7 @@ export default function TabLayout() {
       // 居中模式下 wrapper 不再限宽，药丸给固定宽（与左栏模式同宽，只
       // 平移不变形）。
       ...(isSplitLayout && !pinTabBarLeft
-        ? { width: SPLIT_LIST_PANE_WIDTH - TAB_BAR_MARGIN_H * 2 }
+        ? { width: listPaneWidth - TAB_BAR_MARGIN_H * 2 }
         : null),
       height: TAB_BAR_HEIGHT,
       borderRadius: TAB_BAR_RADIUS,
@@ -350,7 +350,7 @@ export default function TabLayout() {
       fontWeight: '500',
       letterSpacing: 0.2,
     },
-  }), [colors, insets.bottom, isSplitLayout, pinTabBarLeft]);
+  }), [colors, insets.bottom, isSplitLayout, listPaneWidth, pinTabBarLeft]);
 
   // 动态 tab 只统计它自己辖下的三样：朋友圈铃铛 + 圈子铃铛 + 报名管理。
   // 曾经读的 discoverUnread 是「好友申请 + 朋友圈 + 圈子」的并集（互动消息
