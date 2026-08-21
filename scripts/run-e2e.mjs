@@ -25,16 +25,35 @@ export function buildMaestroArgs(config) {
   return [...deviceArgs, 'test', ...envArgs, config.flow];
 }
 
+export function buildMaestroInvocation(config, parentEnv = process.env) {
+  const childEnv = { ...parentEnv };
+  for (const name of [
+    'E2E_PASSWORD',
+    'E2E_VERIFICATION_CODE',
+    'MAESTRO_E2E_PASSWORD',
+    'MAESTRO_E2E_VERIFICATION_CODE',
+  ]) {
+    delete childEnv[name];
+  }
+  Object.assign(childEnv, config.maestroSecretEnv);
+  return {
+    args: buildMaestroArgs(config),
+    env: childEnv,
+  };
+}
+
 export function runE2ESuite(suiteName, env = process.env) {
   const config = parseE2EConfig(env, suiteName);
   const executable = env.MAESTRO_BIN?.trim() || 'maestro';
-  const result = spawnSync(executable, buildMaestroArgs({
+  const invocation = buildMaestroInvocation({
     ...config,
     deviceId: env.MAESTRO_DEVICE_ID?.trim() || undefined,
-  }), {
+  }, env);
+  const result = spawnSync(executable, invocation.args, {
     cwd: path.resolve(fileURLToPath(new URL('..', import.meta.url))),
     stdio: 'inherit',
     shell: false,
+    env: invocation.env,
   });
   if (result.error) {
     throw new Error(`Unable to start Maestro. Set MAESTRO_BIN to its executable: ${result.error.message}`);

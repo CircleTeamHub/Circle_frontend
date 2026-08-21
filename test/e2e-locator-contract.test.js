@@ -41,3 +41,9 @@ test('dynamic locator builders reject empty identifiers', async () => {
   assert.match(source, /identifier\.trim\(\)/);
   assert.match(source, /throw new Error/);
 });
+
+test('the app root mounts the runtime API target marker', () => {
+  const layout = fs.readFileSync(path.join(root, 'app', '_layout.tsx'), 'utf8');
+  assert.match(layout, /testID=\{RUNTIME_API_TARGET_ID\}/);
+  assert.match(layout, /pointerEvents="none"/);
+});

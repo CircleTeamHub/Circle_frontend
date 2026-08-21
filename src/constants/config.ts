@@ -11,6 +11,7 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { APP_DISPLAY_NAME } from './branding';
 import { evaluateTransportGuard } from './transport-security';
+import { buildRuntimeApiTargetId } from '@/testing/runtime-api-target';
 
 // 传输安全守卫：release 构建（!__DEV__）禁止明文 http/ws 打到公网 host，避免误配把
 // Bearer token / 金额报文走明文。dev 一律放行（本地开发不受影响）；私网 / 本机 host
@@ -142,6 +143,8 @@ export const API_URL = assertSecureTransport(
   ),
   'API_URL',
 );
+
+export const RUNTIME_API_TARGET_ID = buildRuntimeApiTargetId(API_URL);
 
 /**
  * 从 API_URL 推导 realtime WebSocket URL：复用相同 host:port，把 protocol

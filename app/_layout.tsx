@@ -23,6 +23,7 @@ import { useKnownAccountsStore } from '@/stores/knownAccountsStore';
 import { useChatPreferencesStore } from '@/features/chat/store/use-chat-preferences-store';
 import { useCircleNotificationStore } from '@/features/discover/store/use-circle-notification-store';
 import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-filter-store';
+import { RUNTIME_API_TARGET_ID } from '@/constants/config';
 
 // 项目自定义主题系统：ThemeProvider 提供主题上下文，useTheme 读取当前主题
 import { getAuthRouteDecision } from '@/components/app/auth-route-policy';
@@ -301,6 +302,19 @@ function RootLayout() {
         <AuthRouteGuard>
           <View style={{ flex: 1 }}>
             <RootStack />
+            <View
+              accessible
+              testID={RUNTIME_API_TARGET_ID}
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                width: 1,
+                height: 1,
+                opacity: 0.01,
+              }}
+            />
           </View>
           <NotificationSnackbarHost />
           <PushNotificationRouteHandler />

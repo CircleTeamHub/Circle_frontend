@@ -161,6 +161,14 @@ function copyDefined(env, names) {
   );
 }
 
+export function buildRuntimeApiTargetId(apiUrl) {
+  const origin = new URL(apiUrl).origin;
+  const encoded = Array.from(origin, (character) =>
+    character.charCodeAt(0).toString(16).padStart(4, '0'),
+  ).join('');
+  return `windnote_runtime_api_origin_${encoded}`;
+}
+
 export function parseE2EConfig(env, suiteName) {
   const suite = E2E_SUITES[suiteName];
   if (!suite) {
@@ -184,11 +192,10 @@ export function parseE2EConfig(env, suiteName) {
     APP_ID,
     E2E_API_URL: origins.apiOrigin,
     E2E_SOCKET_URL: origins.socketOrigin,
+    E2E_API_TARGET_ID: buildRuntimeApiTargetId(origins.apiOrigin),
     ...copyDefined(env, [
       'E2E_AUTH_MODE',
       'E2E_EMAIL',
-      'E2E_PASSWORD',
-      'E2E_VERIFICATION_CODE',
       'E2E_RUN_ID',
       'E2E_CONVERSATION_ID',
       'E2E_CONVERSATION_NAME',
@@ -202,6 +209,14 @@ export function parseE2EConfig(env, suiteName) {
       'E2E_PERF_SECOND_CONVERSATION_ID',
     ]),
   };
+  const maestroSecretEnv = {
+    ...(env.E2E_AUTH_MODE === 'password'
+      ? { MAESTRO_E2E_PASSWORD: env.E2E_PASSWORD.trim() }
+      : {}),
+    ...(env.E2E_AUTH_MODE === 'verification-code'
+      ? { MAESTRO_E2E_VERIFICATION_CODE: env.E2E_VERIFICATION_CODE.trim() }
+      : {}),
+  };
 
   return Object.freeze({
     suite: suiteName,
@@ -211,6 +226,7 @@ export function parseE2EConfig(env, suiteName) {
     appId: APP_ID,
     origins,
     maestroEnv,
+    maestroSecretEnv,
   });
 }
 

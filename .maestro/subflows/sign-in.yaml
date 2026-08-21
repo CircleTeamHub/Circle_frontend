@@ -14,7 +14,7 @@ appId: ${APP_ID}
           id: windnote.auth.login.mode.password
       - tapOn:
           id: windnote.auth.login.password-input
-      - inputText: ${E2E_PASSWORD}
+      - inputText: ${MAESTRO_E2E_PASSWORD}
 - runFlow:
     when:
       true: ${E2E_AUTH_MODE == 'verification-code'}
@@ -29,7 +29,7 @@ appId: ${APP_ID}
           timeout: 30000
       - tapOn:
           id: windnote.auth.login.code-input
-      - inputText: ${E2E_VERIFICATION_CODE}
+      - inputText: ${MAESTRO_E2E_VERIFICATION_CODE}
 - hideKeyboard
 - tapOn:
     id: windnote.auth.login.submit
