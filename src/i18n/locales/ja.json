@@ -2448,6 +2448,8 @@
     }
   },
   "common": {
+    "previous": "前へ",
+    "next": "次へ",
     "save": "保存",
     "saving": "保存中...",
     "clear": "クリア",
