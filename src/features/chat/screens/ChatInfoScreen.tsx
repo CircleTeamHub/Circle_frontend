@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { ThemedSwitch } from '@/components/ui/themed-switch';
 import { Divider } from '@/components/ui/divider';
 import { MenuRow } from '@/components/ui/menu-row';
 import { NavHeader } from '@/components/ui/nav-header';
@@ -228,11 +229,9 @@ function GroupInfoRow({
           </Text>
         ) : null}
         {hasToggle ? (
-          <Switch
+          <ThemedSwitch
             value={toggleValue}
             onValueChange={onToggle}
-            trackColor={{ false: colors.surfaceBorder, true: colors.primary }}
-            thumbColor={colors.white}
           />
         ) : showArrow ? (
           <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />

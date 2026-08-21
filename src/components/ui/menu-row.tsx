@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
-import { View, Text, Pressable, Switch, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { ThemedSwitch } from '@/components/ui/themed-switch';
 import { useTheme, Spacing, Typography } from '@/theme';
 import { IconCircle } from './icon-circle';
 
@@ -130,14 +131,12 @@ export const MenuRow: React.FC<MenuRowProps> = ({
         ) : null}
         {rightText ? <Text style={d.rightText}>{rightText}</Text> : null}
         {hasToggle ? (
-          <Switch
+          <ThemedSwitch
             value={toggleValue}
             onValueChange={onToggle}
             // a11y label/role 在父 Pressable 上已声明；Switch 自身屏蔽 a11y 避免双读。
             // aria-hidden：跨平台别名（原生等价原来的两个 prop，web 不泄进 DOM）。
             aria-hidden
-            trackColor={{ false: colors.surfaceBorder, true: colors.primary }}
-            thumbColor={colors.white}
           />
         ) : showArrow ? (
           <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />

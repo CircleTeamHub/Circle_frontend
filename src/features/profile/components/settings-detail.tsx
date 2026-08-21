@@ -4,13 +4,13 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   View,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ThemedSwitch } from '@/components/ui/themed-switch';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -110,12 +110,11 @@ function SettingsSwitch({
   const isControlled = onValueChange !== undefined;
 
   return (
-    <Switch
+    <ThemedSwitch
+      tint={colors.blue}
       value={isControlled ? value ?? false : localValue}
       onValueChange={isControlled ? onValueChange : setLocalValue}
       disabled={disabled}
-      trackColor={{ false: colors.surfaceBorder, true: colors.blue }}
-      thumbColor={colors.white}
     />
   );
 }

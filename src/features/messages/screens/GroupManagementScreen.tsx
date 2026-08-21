@@ -8,13 +8,13 @@ import {
   PanResponder,
   Pressable,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { ThemedSwitch } from '@/components/ui/themed-switch';
 import { Avatar } from '@/components/ui/avatar';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { Divider } from '@/components/ui/divider';
@@ -1190,15 +1190,11 @@ export default function GroupManagementScreen() {
                           })}
                         </Text>
                         {/* pinnedToTabs 开关：决定该分组是否在 MessagesScreen 顶部 tab 显示 */}
-                        <Switch
+                        <ThemedSwitch
                           value={group.pinnedToTabs}
                           onValueChange={(next) =>
                             handleTogglePinned(group.id, next)
                           }
-                          trackColor={{
-                            false: colors.surfaceBorder,
-                            true: colors.primary,
-                          }}
                         />
                         <Ionicons
                           name={selected ? 'chevron-up' : 'chevron-down'}
