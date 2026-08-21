@@ -253,6 +253,10 @@ export default function TabLayout() {
   // 桌面网页版分栏：浮动条钉进左栏（会话列表）宽度内，变成列表的底部导航，
   // 不再横贯整窗、压住右栏聊天输入框。
   const isSplitLayout = useDesktopSplitLayout();
+  // 分栏时浮动条的落点跟着当前 tab 走：消息 tab 钉进左栏（它就是列表栏的
+  // 底部导航）；其余 tab 的内容在 640 居中窄栏里，浮动条也居中同轴。
+  const pinTabBarLeft =
+    isSplitLayout && (segments[1] ?? 'messages') === 'messages';
 
   const {
     messagesUnread,
@@ -277,11 +281,20 @@ export default function TabLayout() {
       left: 0,
       right: 0,
       bottom: 0,
-      ...(isSplitLayout ? { right: undefined, width: SPLIT_LIST_PANE_WIDTH } : null),
+      ...(isSplitLayout
+        ? pinTabBarLeft
+          ? { right: undefined, width: SPLIT_LIST_PANE_WIDTH }
+          : { alignItems: 'center' }
+        : null),
     },
     tabBar: {
       flexDirection: 'row',
       alignItems: 'center',
+      // 居中模式下 wrapper 不再限宽，药丸给固定宽（与左栏模式同宽，只
+      // 平移不变形）。
+      ...(isSplitLayout && !pinTabBarLeft
+        ? { width: SPLIT_LIST_PANE_WIDTH - TAB_BAR_MARGIN_H * 2 }
+        : null),
       height: TAB_BAR_HEIGHT,
       borderRadius: TAB_BAR_RADIUS,
       backgroundColor: colors.surface,
@@ -339,7 +352,7 @@ export default function TabLayout() {
       fontWeight: '500',
       letterSpacing: 0.2,
     },
-  }), [colors, insets.bottom, isSplitLayout]);
+  }), [colors, insets.bottom, isSplitLayout, pinTabBarLeft]);
 
   const badgeMap: Record<string, boolean> = useMemo(() => ({
     messages: messagesUnread > 0,
