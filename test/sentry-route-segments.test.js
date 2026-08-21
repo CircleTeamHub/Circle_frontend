@@ -31,7 +31,8 @@ function segmentsFromRoutes() {
     for (const segment of rel.split(path.sep)) {
       // _layout 不是 URL 段；index 代表父路径本身；[param] 由 sanitize 单独处理。
       if (segment === "_layout" || segment === "index") continue;
-      if (segment.startsWith("[")) continue;
+      // + 前缀是 expo-router 特殊文件(+html/+not-found),不是 URL 段。
+      if (segment.startsWith("[") || segment.startsWith("+")) continue;
       segments.add(segment);
     }
   }
