@@ -442,6 +442,7 @@ export default function MemberCenterScreen() {
         return;
       }
 
+      // 不留死胡同:未配置专属客服时,一键去客服中心(通用支持通道)。
       Alert.alert(
         t('profile.membership.supportUnavailableTitle', {
           defaultValue: '客服账号暂未配置',
@@ -449,6 +450,15 @@ export default function MemberCenterScreen() {
         t('profile.membership.supportUnavailableMessage', {
           defaultValue: '请联系平台官方客服咨询会员开通或升级。',
         }),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('profile.membership.supportUnavailableGo', {
+              defaultValue: '去客服中心',
+            }),
+            onPress: () => router.push('/(tabs)/profile/customer-service'),
+          },
+        ],
       );
     } finally {
       contactingRef.current = false;
