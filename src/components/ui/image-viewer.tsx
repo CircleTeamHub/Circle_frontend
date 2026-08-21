@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   FlatList,
   Modal,
   Platform,
@@ -11,10 +12,11 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
-import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import { ZoomableImage } from '@/components/ui/zoomable-image';
+import { saveImageToLibrary } from '@/utils/save-image';
 import { Spacing, Typography } from '@/theme';
 
 /**
@@ -24,8 +26,8 @@ import { Spacing, Typography } from '@/theme';
  * 可用）。ESC / 返回键经 Modal 的 onRequestClose 关闭，点图片本身也关闭
  * （与微信一致）。
  *
- * 不做双指缩放：本仓没有 gesture-handler，自绘缩放的收益远小于复杂度；
- * 需要看细节时长按保存/在浏览器里打开原图即可。
+ * 缩放与长按保存由 ZoomableImage / save-image 承担（均为零新增依赖的
+ * 自绘方案，见各自文件头）。
  */
 interface ImageViewerProps {
   images: string[];
@@ -45,10 +47,16 @@ export function ImageViewer({
   const { width, height } = useWindowDimensions();
   const listRef = useRef<FlatList<string>>(null);
   const [index, setIndex] = useState(initialIndex);
+  // 放大态下禁掉列表横滑，否则平移会被翻页抢走。
+  const [zoomed, setZoomed] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   // 每次打开都从被点的那张开始（组件常驻挂载，不靠 remount 复位）。
   useEffect(() => {
-    if (visible) setIndex(initialIndex);
+    if (visible) {
+      setIndex(initialIndex);
+      setZoomed(false);
+    }
   }, [visible, initialIndex]);
 
   const goTo = useCallback(
@@ -71,6 +79,31 @@ export function ImageViewer({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [goTo, index, onClose, visible]);
+
+  const handleSave = useCallback(async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const outcome = await saveImageToLibrary(images[index]);
+      if (outcome === 'denied') {
+        Alert.alert(t('media.saveDeniedTitle'), t('media.saveDeniedMessage'));
+      } else if (outcome === 'failed') {
+        Alert.alert(t('media.saveFailedTitle'), t('media.saveFailedMessage'));
+      } else if (Platform.OS !== 'web') {
+        // web 由浏览器自己的下载提示反馈，不再叠一层弹窗。
+        Alert.alert(t('media.savedTitle'), t('media.savedMessage'));
+      }
+    } finally {
+      setSaving(false);
+    }
+  }, [images, index, saving, t]);
+
+  const handleLongPress = useCallback(() => {
+    Alert.alert('', '', [
+      { text: t('media.saveImage'), onPress: () => void handleSave() },
+      { text: t('common.cancel'), style: 'cancel' },
+    ]);
+  }, [handleSave, t]);
 
   const handleMomentumEnd = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -100,6 +133,7 @@ export function ImageViewer({
           horizontal
           pagingEnabled
           showsHorizontalScrollIndicator={false}
+          scrollEnabled={!zoomed}
           initialScrollIndex={initialIndex}
           getItemLayout={(_, i) => ({
             length: width,
@@ -107,16 +141,17 @@ export function ImageViewer({
             index: i,
           })}
           onMomentumScrollEnd={handleMomentumEnd}
-          renderItem={({ item }) => (
-            // 点图关闭：全屏查看器里最顺手的退出方式。
-            <Pressable style={{ width, height }} onPress={onClose}>
-              <Image
-                source={{ uri: item }}
-                style={s.image}
-                contentFit="contain"
-                transition={150}
-              />
-            </Pressable>
+          renderItem={({ item, index: itemIndex }) => (
+            <ZoomableImage
+              uri={item}
+              width={width}
+              height={height}
+              active={itemIndex === index}
+              onZoomedChange={setZoomed}
+              // 单击关闭：全屏查看器里最顺手的退出方式（双击留给放大）。
+              onTap={onClose}
+              onLongPress={handleLongPress}
+            />
           )}
         />
 
@@ -171,10 +206,6 @@ const s = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: '#000000',
-  },
-  image: {
-    width: '100%',
-    height: '100%',
   },
   closeButton: {
     position: 'absolute',

@@ -66,8 +66,14 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     marginTop: Spacing.sm,
   },
+  cardHeaderless: {
+    paddingTop: 0,
+  },
   buttonColumn: {
     marginTop: Spacing.lg,
+  },
+  buttonColumnHeaderless: {
+    marginTop: 0,
   },
   button: {
     minHeight: 48,
@@ -112,6 +118,9 @@ export function WebAlertHost() {
     active.onDismiss?.();
   };
 
+  // 菜单式调用(长按图片等)没有标题与正文:去掉为标题预留的上留白。
+  const hasHeader = Boolean(active.title || active.message);
+
   const handleButtonPress = (button: WebAlertButton) => {
     close();
     button.onPress?.();
@@ -125,16 +134,23 @@ export function WebAlertHost() {
       >
         {/* 卡片本体拦下点击，不让它冒泡到蒙层触发 dismiss。 */}
         <Pressable
-          style={[s.card, { backgroundColor: colors.surface }]}
+          style={[
+            s.card,
+            !hasHeader && s.cardHeaderless,
+            { backgroundColor: colors.surface },
+          ]}
           onPress={(event) => event.stopPropagation()}
         >
-          <Text style={[s.title, { color: colors.text }]}>{active.title}</Text>
+          {/* 菜单式调用（如长按图片）标题为空：不渲染，避免留一条空行。 */}
+          {active.title ? (
+            <Text style={[s.title, { color: colors.text }]}>{active.title}</Text>
+          ) : null}
           {active.message ? (
             <Text style={[s.message, { color: colors.textSecondary }]}>
               {active.message}
             </Text>
           ) : null}
-          <View style={s.buttonColumn}>
+          <View style={[s.buttonColumn, !hasHeader && s.buttonColumnHeaderless]}>
             {active.buttons.map((button, index) => (
               <Pressable
                 key={`${button.text}-${index}`}
