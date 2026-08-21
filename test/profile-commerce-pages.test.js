@@ -12,12 +12,14 @@ test('ProfileScreen removes the credit score row and links profile commerce page
   assert.match(src, /profile\.systemAnnouncements/);
   assert.match(src, /profile\.memberCenter/);
   assert.match(src, /profile\.wallet/);
-  assert.match(src, /profile\.mall/);
+  // 2026-08-20:商城入口从「我的」页移除(路由与 MallScreen 保留,
+  // 装扮等处的直链不受影响),菜单不得再出现 mall。
+  assert.doesNotMatch(src, /profile\.mall/);
   assert.match(src, /profile\.collections/);
   assert.match(src, /profile\/member-center/);
   assert.match(src, /profile\/system-announcements/);
   assert.match(src, /profile\/wallet/);
-  assert.match(src, /profile\/mall/);
+  assert.doesNotMatch(src, /profile\/mall/);
   assert.match(src, /profile\/collections/);
   assert.doesNotMatch(src, /rightTextKey/);
   assert.doesNotMatch(src, /rightText=\{item\.rightText\}/);
@@ -38,7 +40,6 @@ test('ProfileScreen places system announcements first and customer service last'
     'SYSTEM_ANNOUNCEMENTS',
     'MEMBER_CENTER',
     'WALLET',
-    'MALL',
     'COLLECTIONS',
     'NOTES',
     'CUSTOMER_SERVICE',
