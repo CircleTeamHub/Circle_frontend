@@ -2,6 +2,7 @@ import React, { memo, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
+  Platform,
   Pressable,
   StyleSheet,
   type ViewStyle,
@@ -279,7 +280,14 @@ export default function TabLayout() {
     // 底部锚定的全宽容器：absolute → 内容全幅延伸到浮动条之下；
     // CustomTabBar 对它做 translateY/opacity 动画。
     tabBarWrapper: {
-      position: 'absolute',
+      // Web 用 fixed:隐藏时的 translateY(140) 会把 absolute 元素撑进祖先的
+      // 滚动区(body.scrollHeight 变成 视口+140),浏览器聚焦输入框时的程序化
+      // 滚动就把整页带下去 140px —— 顶部导航被吃掉、且因为 overflow:hidden
+      // 用户还滚不回来。fixed 元素不参与祖先滚动区计算,从源头掐断。
+      // 原生不认 'fixed',保持 absolute。
+      ...(Platform.OS === 'web'
+        ? ({ position: 'fixed' } as unknown as ViewStyle)
+        : ({ position: 'absolute' } as const)),
       left: 0,
       right: 0,
       bottom: 0,
