@@ -33,6 +33,21 @@ const lockViewportCss = `
 html, body, #root {
   height: 100%;
 }
+/* 输入框去掉浏览器默认的 focus outline：RNW 的 TextInput 渲染成
+   <input>/<textarea>，聚焦时浏览器会在我们自绘的圆角边框里再套一圈亮环，
+   深色模式下尤其扎眼。只摘表单元素这一层 —— 按钮/链接的焦点环保留，
+   键盘导航仍然看得见落点；输入框自己有光标指示焦点。 */
+input:focus,
+input:focus-visible,
+textarea:focus,
+textarea:focus-visible,
+select:focus,
+select:focus-visible,
+[contenteditable]:focus,
+[contenteditable]:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
 html {
   overflow: hidden;
   overscroll-behavior: none;
