@@ -310,9 +310,20 @@ test('configured support opens its in-app profile and missing support shows Aler
     expect(Alert.alert).toHaveBeenCalledWith(
       '客服账号暂未配置',
       '请联系平台官方客服咨询会员开通或升级。',
+      expect.any(Array),
     ),
   );
+  // 弹窗本身不跳转;但不留死胡同 —— 第二个按钮直达客服中心。
   expect(mockRouter.push).not.toHaveBeenCalled();
+  const buttons = (Alert.alert as jest.Mock).mock.calls[0][2] as {
+    text: string;
+    onPress?: () => void;
+  }[];
+  expect(buttons).toHaveLength(2);
+  buttons[1].onPress?.();
+  expect(mockRouter.push).toHaveBeenCalledWith(
+    '/(tabs)/profile/customer-service',
+  );
 });
 
 // 拉不到配置时 store 返回 null。把它当成「平台没有客服」会让用户直接放弃咨询,

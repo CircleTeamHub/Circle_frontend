@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ThemedSwitch } from '@/components/ui/themed-switch';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { useCircleNotificationStore } from '@/features/discover/store/use-circle-notification-store';
@@ -87,12 +88,10 @@ const NotificationItem: React.FC<NotificationItemProps> = ({
           {offHint}
         </Text>
       </View>
-      <Switch
+      <ThemedSwitch
         value={value}
         onValueChange={onToggle}
         disabled={disabled}
-        trackColor={{ false: colors.surfaceBorder, true: colors.primary }}
-        thumbColor={colors.white}
       />
     </View>
   );

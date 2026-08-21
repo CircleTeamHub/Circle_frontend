@@ -5,7 +5,6 @@ import {
   TextInput,
   Pressable,
   ScrollView,
-  Switch,
   StyleSheet,
   Alert,
   ActivityIndicator,
@@ -15,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import { ThemedSwitch } from '@/components/ui/themed-switch';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Divider } from '@/components/ui/divider';
@@ -477,11 +477,9 @@ export default function CreatePostScreen() {
           <Text style={[s.rowLabel, d.rowLabel]}>
             {t('plaza.create.hornLabel', { defaultValue: '喇叭动态' })}
           </Text>
-          <Switch
+          <ThemedSwitch
             value={hornEnabled}
             onValueChange={setHornEnabled}
-            trackColor={{ false: colors.surfaceBorder, true: colors.primary }}
-            thumbColor={colors.white}
           />
         </View>
         <Divider />
