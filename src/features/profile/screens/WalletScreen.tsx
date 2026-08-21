@@ -138,9 +138,10 @@ export default function WalletScreen() {
   const [transactions, setTransactions] = useState<CoinTransaction[]>([]);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const realtimeBalance = useWalletRealtimeStore((state) => state.balance);
-  // 信用卡下沿的"卡号尾号/持卡人":尾号取账号 ID 后四位,纯装饰性掩码。
+  // 信用卡下沿:左侧直接展示账号 ID(与个人页「ID: xxxxxx」同一口径),
+  // 右侧持卡人昵称。
   const authUser = useAuthStore((state) => state.user);
-  const cardTail = (authUser?.accountId ?? '').slice(-4).padStart(4, '0');
+  const cardNumber = authUser?.accountId ?? '';
   const cardHolder = authUser?.nickname ?? '';
   const walletVersion = useWalletRealtimeStore((state) => state.version);
   // 首屏之后由 walletVersion 触发的那几次只是对账:实时通道已经把权威余额写
@@ -275,7 +276,7 @@ export default function WalletScreen() {
             </Text>
           ) : null}
           <View style={s.cardBottomRow}>
-            <Text style={s.cardNumber}>{`••••  ••••  ••••  ${cardTail}`}</Text>
+            <Text style={s.cardNumber}>{cardNumber}</Text>
             <Text style={s.cardHolder} numberOfLines={1}>
               {cardHolder}
             </Text>
