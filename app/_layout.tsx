@@ -35,6 +35,7 @@ import { PushNotificationRouteHandler } from '@/features/notifications/component
 import { PushNotificationTokenRegistrar } from '@/features/notifications/components/PushNotificationTokenRegistrar';
 import { CallInviteHost } from '@/features/call/components/CallInviteHost';
 import { WebAlertHost } from '@/components/app/web-alert-host';
+import { WebDocumentTitle } from '@/components/app/web-document-title';
 import { ThemeProvider, useTheme } from '@/theme';
 import {
   initSentry,
@@ -308,6 +309,8 @@ function RootLayout() {
           {/* Web 专属：Alert.alert 的渲染宿主（RNW 的 Alert 是空操作）。
               原生平台不挂 —— localized-alert 只在 web 把调用指过来。 */}
           {Platform.OS === 'web' ? <WebAlertHost /> : null}
+          {/* Web 专属：标签页标题 + 未读数前缀（经 expo-router/head）。 */}
+          {Platform.OS === 'web' ? <WebDocumentTitle /> : null}
         </AuthRouteGuard>
       </MemberNameAnimationProvider>
     </ThemeProvider>
