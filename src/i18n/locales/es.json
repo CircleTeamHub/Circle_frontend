@@ -2451,6 +2451,15 @@
       "successTitle": "Contraseña restablecida"
     }
   },
+  "media": {
+    "saveImage": "Guardar imagen",
+    "savedTitle": "Guardada",
+    "savedMessage": "La imagen se guardó en tu fototeca.",
+    "saveDeniedTitle": "No se puede guardar",
+    "saveDeniedMessage": "Permite que WindNote agregue fotos a tu fototeca en los ajustes.",
+    "saveFailedTitle": "Error al guardar",
+    "saveFailedMessage": "Inténtalo de nuevo más tarde."
+  },
   "common": {
     "previous": "Anterior",
     "next": "Siguiente",

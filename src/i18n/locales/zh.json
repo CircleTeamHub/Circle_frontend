@@ -5,6 +5,15 @@
     "addAccount": "添加账号",
     "empty": "暂无其他账号"
   },
+  "media": {
+    "saveImage": "保存图片",
+    "savedTitle": "已保存",
+    "savedMessage": "图片已保存到相册。",
+    "saveDeniedTitle": "无法保存",
+    "saveDeniedMessage": "请在系统设置中允许风信保存照片到相册。",
+    "saveFailedTitle": "保存失败",
+    "saveFailedMessage": "请稍后重试。"
+  },
   "common": {
     "save": "保存",
     "saving": "保存中...",

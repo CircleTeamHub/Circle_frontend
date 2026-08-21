@@ -2448,6 +2448,15 @@
       "successTitle": "비밀번호가 재설정되었습니다"
     }
   },
+  "media": {
+    "saveImage": "이미지 저장",
+    "savedTitle": "저장됨",
+    "savedMessage": "이미지를 사진 보관함에 저장했습니다.",
+    "saveDeniedTitle": "저장할 수 없음",
+    "saveDeniedMessage": "시스템 설정에서 사진 추가를 허용해 주세요.",
+    "saveFailedTitle": "저장 실패",
+    "saveFailedMessage": "나중에 다시 시도해 주세요."
+  },
   "common": {
     "previous": "이전",
     "next": "다음",

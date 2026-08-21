@@ -5,6 +5,15 @@
     "addAccount": "Add Account",
     "empty": "No other accounts"
   },
+  "media": {
+    "saveImage": "Save image",
+    "savedTitle": "Saved",
+    "savedMessage": "The image was saved to your photo library.",
+    "saveDeniedTitle": "Cannot save",
+    "saveDeniedMessage": "Allow WindNote to add photos to your library in system settings.",
+    "saveFailedTitle": "Save failed",
+    "saveFailedMessage": "Please try again later."
+  },
   "common": {
     "save": "Save",
     "saving": "Saving...",

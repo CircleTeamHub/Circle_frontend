@@ -2448,6 +2448,15 @@
       "successTitle": "パスワードを再設定しました"
     }
   },
+  "media": {
+    "saveImage": "画像を保存",
+    "savedTitle": "保存しました",
+    "savedMessage": "画像を写真ライブラリに保存しました。",
+    "saveDeniedTitle": "保存できません",
+    "saveDeniedMessage": "システム設定で写真の追加を許可してください。",
+    "saveFailedTitle": "保存に失敗しました",
+    "saveFailedMessage": "しばらくしてからもう一度お試しください。"
+  },
   "common": {
     "previous": "前へ",
     "next": "次へ",
