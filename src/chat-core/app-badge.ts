@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useLocalUnreadStore } from '@/features/messages/store/use-local-unread-store';
@@ -24,6 +25,12 @@ export function syncAppBadge(total: number): void {
   } catch {
     // tab store 未就绪不阻塞图标角标。
   }
+  // Web:expo-notifications 的角标实现走 badgin,它 defineProperty 劫持
+  // document.title;<title> 没有文本子节点时(Expo web 默认就是空标题),
+  // expo-router 后续一设标题就在 badgin.changeTitle 里抛
+  // 「Cannot set properties of undefined ('nodeValue')」打崩整页。
+  // 网页版不做系统级角标 —— tab 内红点已由 tabBadgeStore 覆盖。
+  if (Platform.OS === 'web') return;
   void Notifications.setBadgeCountAsync(total)
     .then((applied) => {
       // 未授权/桌面不支持角标时,这个 API **resolve(false)** 而不是 reject。
