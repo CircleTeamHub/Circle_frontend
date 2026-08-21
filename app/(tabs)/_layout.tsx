@@ -261,14 +261,16 @@ export default function TabLayout() {
   const {
     messagesUnread,
     contactsUnread,
-    discoverUnread,
+    momentsUnread,
+    circleUnread,
     signupUnread,
     profileUnread,
   } =
     useTabBadgeStore(useShallow((state) => ({
       messagesUnread: state.messagesUnread,
       contactsUnread: state.contactsUnread,
-      discoverUnread: state.discoverUnread,
+      momentsUnread: state.momentsUnread,
+      circleUnread: state.circleUnread,
       signupUnread: state.signupUnread,
       profileUnread: state.profileUnread,
     })));
@@ -354,12 +356,23 @@ export default function TabLayout() {
     },
   }), [colors, insets.bottom, isSplitLayout, pinTabBarLeft]);
 
+  // 动态 tab 只统计它自己辖下的三样：朋友圈铃铛 + 圈子铃铛 + 报名管理。
+  // 曾经读的 discoverUnread 是「好友申请 + 朋友圈 + 圈子」的并集（互动消息
+  // 列表页的全集口径），于是一条未读好友申请会同时点亮联系人和动态两个
+  // tab —— 而好友申请的规范 UI 是「新的朋友」，归联系人。
   const badgeMap: Record<string, boolean> = useMemo(() => ({
     messages: messagesUnread > 0,
     contacts: contactsUnread > 0,
-    discover: discoverUnread > 0 || signupUnread > 0,
+    discover: momentsUnread > 0 || circleUnread > 0 || signupUnread > 0,
     profile: profileUnread > 0,
-  }), [messagesUnread, contactsUnread, discoverUnread, signupUnread, profileUnread]);
+  }), [
+    messagesUnread,
+    contactsUnread,
+    momentsUnread,
+    circleUnread,
+    signupUnread,
+    profileUnread,
+  ]);
 
   return (
     <Tabs
