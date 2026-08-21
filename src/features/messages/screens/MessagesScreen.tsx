@@ -45,6 +45,7 @@ import {
   ListRenderItemInfo,
   Modal,
   PanResponder,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -202,6 +203,9 @@ const s = StyleSheet.create({
   },
   swipeForeground: {
     zIndex: 1,
+    // 桌面分栏的选中高亮铺在这一层:给圆角,方角块在窄栏里太生硬。
+    // 手机端这层是透明的(底色由 rowSurface 给),圆角无副作用。
+    borderRadius: Radius.lg,
   },
   swipeActions: {
     position: "absolute",
@@ -445,6 +449,41 @@ function ConversationRowImpl({
     [closeSwipe, item],
   );
 
+  // 桌面网页版没有滑动手势(鼠标拖拽会误触),用右键 / 长按唤出同样的三个动作。
+  // 菜单走 Alert(web 上由 WebAlertHost 渲染),与全 app 其他菜单同一套。
+  const showRowActionMenu = useCallback(() => {
+    Alert.alert('', '', [
+      {
+        text: item.pinned ? labels.unpin : labels.pin,
+        onPress: () => onTogglePinned(item),
+      },
+      {
+        text: item.muted ? labels.unmute : labels.mute,
+        onPress: () => onToggleMuted(item),
+      },
+      {
+        text: labels.delete,
+        style: 'destructive',
+        onPress: () => onDelete(item),
+      },
+      { text: t('common.cancel'), style: 'cancel' },
+    ]);
+  }, [item, labels, onDelete, onToggleMuted, onTogglePinned, t]);
+
+  // Web 的右键:RN 没有这个手势,直接给宿主节点挂 DOM 监听。
+  const rowRef = useRef<View>(null);
+  useEffect(() => {
+    if (Platform.OS !== 'web' || swipeEnabled) return;
+    const node = rowRef.current as unknown as HTMLElement | null;
+    if (!node?.addEventListener) return;
+    const onContextMenu = (event: Event) => {
+      event.preventDefault();
+      showRowActionMenu();
+    };
+    node.addEventListener('contextmenu', onContextMenu);
+    return () => node.removeEventListener('contextmenu', onContextMenu);
+  }, [showRowActionMenu, swipeEnabled]);
+
   const renderSwipeActions = () => (
     <View style={s.swipeActions}>
       <Pressable
@@ -482,7 +521,7 @@ function ConversationRowImpl({
   );
 
   return (
-    <View style={[s.row, getPinnedRowStyle(pinnedGroupPosition)]}>
+    <View ref={rowRef} style={[s.row, getPinnedRowStyle(pinnedGroupPosition)]}>
       {/* 桌面分栏：选中高亮是半透明色，垫在下面的操作层会透出来；
           手势也已禁用，这层不渲染。 */}
       {swipeEnabled ? renderSwipeActions() : null}
@@ -522,6 +561,8 @@ function ConversationRowImpl({
             testID={testID}
             style={s.rowContent}
             onPress={() => onOpenConversation(item)}
+            // 桌面没有滑动手势:长按(鼠标按住)与右键都能唤出置顶/静音/删除。
+            onLongPress={swipeEnabled ? undefined : showRowActionMenu}
           >
             <View style={s.rowTop}>
               <View style={s.nameRow}>
