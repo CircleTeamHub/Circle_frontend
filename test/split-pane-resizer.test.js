@@ -67,4 +67,18 @@ test('the resizer keeps its pan handlers intact', () => {
     'panHandlers 之后不得再声明 onStartShouldSetResponder，会覆盖掉手势授予',
   );
   assert.match(source, /cursor: 'col-resize'/);
+
+  // 拖不动的第二个真因：把 paneWidth 写进 responder 的 useMemo 依赖。
+  // 拖动第一帧宽度就变 → responder 整个重建 → 进行中的手势失去响应者，
+  // 表现为"按住只能拖一下就断"。responder 只许读 ref。
+  const memoDeps = /PanResponder\.create\([\s\S]*?\),\s*\/\/[^\n]*\n\s*\[([^\]]*)\]/.exec(source);
+  assert.ok(memoDeps, '找不到 responder 的 useMemo 依赖数组');
+  assert.doesNotMatch(
+    memoDeps[1],
+    /paneWidth/,
+    'responder 的依赖里出现 paneWidth：拖动第一帧就会重建 responder，手势会断',
+  );
+  assert.match(source, /paneWidthRef\.current/);
+  // 拖出热区后不许被祖先抢走手势。
+  assert.match(source, /onPanResponderTerminationRequest: \(\) => false/);
 });

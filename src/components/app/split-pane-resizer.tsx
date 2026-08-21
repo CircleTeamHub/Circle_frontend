@@ -29,17 +29,23 @@ export function SplitPaneResizer({ paneWidth }: SplitPaneResizerProps) {
   );
   const [active, setActive] = useState(false);
   const [hovered, setHovered] = useState(false);
-  // 拖拽起点宽度：用 ref 保存，避免 responder 闭包捕获旧值。
+  // 当前宽度的镜像。responder 只能读 ref，**绝不能**把 paneWidth 写进下面的
+  // useMemo 依赖：拖动第一帧宽度就会变，依赖一变 PanResponder 整个重建，
+  // 进行中的手势当场失去响应者 —— 表现就是"按住能拖一下就断，像拖不动"。
+  const paneWidthRef = useRef(paneWidth);
+  paneWidthRef.current = paneWidth;
+  /** 本次拖拽起点的宽度：move 用 起点 + dx 计算，避免误差累积。 */
   const startWidthRef = useRef(paneWidth);
-  startWidthRef.current = active ? startWidthRef.current : paneWidth;
 
   const panResponder = useMemo(
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
+        // 拖出热区后仍要持有手势，别让祖先把它抢走。
+        onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: () => {
-          startWidthRef.current = paneWidth;
+          startWidthRef.current = paneWidthRef.current;
           setActive(true);
         },
         onPanResponderMove: (_event, gestureState) => {
@@ -48,7 +54,8 @@ export function SplitPaneResizer({ paneWidth }: SplitPaneResizerProps) {
         onPanResponderRelease: () => setActive(false),
         onPanResponderTerminate: () => setActive(false),
       }),
-    [paneWidth, setListPaneWidth],
+    // setListPaneWidth 来自 zustand，引用恒定 → responder 建一次用到底。
+    [setListPaneWidth],
   );
 
   const highlighted = active || hovered;
