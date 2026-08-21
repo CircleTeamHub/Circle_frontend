@@ -458,6 +458,9 @@ const s = StyleSheet.create({
 /** 引用跳转最多往回翻几页(一页 50 条);翻不到就放弃,不能无界翻。 */
 const QUOTE_PAGING_MAX = 10;
 
+/** 定位高亮的停留时长:够看清"跳到了哪条",又不会赖着不走。 */
+const HIGHLIGHT_VISIBLE_MS = 3000;
+
 // type 而非 interface：路由跳转处要把它原样塞给 router.push 的 params，
 // 只有 type 字面量带隐式索引签名、能赋给 expo-router 的 UnknownInputParams。
 export type EmbeddedChatParams = {
@@ -1108,7 +1111,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         if (mountedRef.current) {
           setHighlightedMessageID(null);
         }
-      }, 2200);
+      }, HIGHLIGHT_VISIBLE_MS);
       return () => clearTimeout(timer);
     }
 
@@ -1268,6 +1271,18 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [highlightedMessageID, setHighlightedMessageID] = useState<string | null>(
     null,
+  );
+  // 引用跳转的高亮定时器(搜索跳转那条路径自带 effect 清理,这条是命令式的)。
+  const highlightClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  useEffect(
+    () => () => {
+      if (highlightClearTimerRef.current) {
+        clearTimeout(highlightClearTimerRef.current);
+      }
+    },
+    [],
   );
 
   const handleCopyMessage = useCallback(async (message: ChatMessage) => {
@@ -1882,6 +1897,15 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
             // 命中之后交给 searchedMsgID 那条既有的滚动路径:它已经处理好了
             // 「列表还没重新布局完」的重试与高亮。
             setHighlightedMessageID(targetId);
+            // 高亮是「我带你跳到了这里」的一次性提示,不是选中态 —— 到点自动
+            // 褪去(与 searchedMsgID / 朋友圈评论定位同一节奏)。漏了这一笔的话
+            // 高亮会一直挂在那条消息上。
+            if (highlightClearTimerRef.current) {
+              clearTimeout(highlightClearTimerRef.current);
+            }
+            highlightClearTimerRef.current = setTimeout(() => {
+              if (mountedRef.current) setHighlightedMessageID(null);
+            }, HIGHLIGHT_VISIBLE_MS);
             const index = messagesRef.current.findIndex(
               (m) => m.id === targetId,
             );

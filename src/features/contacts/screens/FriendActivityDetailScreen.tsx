@@ -1,4 +1,8 @@
 import { Avatar } from '@/components/ui/avatar';
+import {
+  getUserProfileHref,
+  getUserProfileScopeFromSegments,
+} from '@/features/user/utils/routes';
 import { MemberName } from '@/components/ui/member-name';
 import { NavHeader } from '@/components/ui/nav-header';
 import {
@@ -21,7 +25,7 @@ import { getApiErrorMessage } from '@/services/api/errors';
 import { useAuthStore } from '@/stores/authStore';
 import { getLocalizedDateTimeLocale } from '@/utils/locale';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useSegments } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -142,6 +146,10 @@ export default function FriendActivityDetailScreen() {
   const { colors } = useTheme();
   const { t, i18n } = useTranslation();
   const params = useLocalSearchParams<{ id?: string }>();
+  // 用当前栈推导 scope:主页在**本栈内**打开,返回自然回到这一页
+  // (写死 scope 会跳去别的 tab 栈,返回就跑偏了)。
+  const segments = useSegments();
+  const profileScope = getUserProfileScopeFromSegments(segments);
   const [activity, setActivity] = useState<FriendActivity | null>(null);
   const [loading, setLoading] = useState(true);
   const [handling, setHandling] = useState(false);
@@ -487,11 +495,26 @@ export default function FriendActivityDetailScreen() {
   const listHeader = activity ? (
     <View style={[s.card, d.card]}>
       <View style={s.profileRow}>
-        <Avatar
-          size={52}
-          name={getFriendActivityDisplayName(activity)}
-          uri={activity.counterparty.avatarUrl ?? undefined}
-        />
+        <Pressable
+          onPress={() =>
+            router.push(
+              getUserProfileHref(
+                profileScope,
+                activity.counterparty.id,
+                getFriendActivityDisplayName(activity),
+              ),
+            )
+          }
+          accessibilityRole="button"
+          accessibilityLabel={getFriendActivityDisplayName(activity)}
+          hitSlop={6}
+        >
+          <Avatar
+            size={52}
+            name={getFriendActivityDisplayName(activity)}
+            uri={activity.counterparty.avatarUrl ?? undefined}
+          />
+        </Pressable>
         <View style={s.profileMeta}>
           <MemberName
             name={getFriendActivityDisplayName(activity)}
