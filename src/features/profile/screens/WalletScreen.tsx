@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { getLocalizedDateTimeLocale } from '@/utils/locale';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Path } from 'react-native-svg';
 import { GradientCover } from '@/components/ui/gradient-cover';
 import { NavHeader } from '@/components/ui/nav-header';
 import { useNetworkStatus } from '@/hooks/use-network-status';
@@ -28,6 +29,9 @@ const s = StyleSheet.create({
     width: '100%',
     maxWidth: 400,
     alignSelf: 'center',
+    // 贵金属感三件套之一:细金描边卡缘(其余是烫金 ID 数字与金弧线)。
+    borderWidth: 1,
+    borderColor: 'rgba(231,197,102,0.5)',
     padding: Spacing.xl,
     justifyContent: 'space-between',
     overflow: 'hidden',
@@ -70,7 +74,27 @@ const s = StyleSheet.create({
     fontWeight: '700',
     fontStyle: 'italic',
     letterSpacing: 0.5,
-    color: 'rgba(255,255,255,0.85)',
+    color: '#F0D48A',
+  },
+  cardLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  goldCoin: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#E7C566',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  goldCoinInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: 'rgba(146,110,38,0.7)',
   },
   cardBalance: {
     color: '#FFFFFF',
@@ -84,10 +108,12 @@ const s = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Spacing.md,
   },
+  // 压印数字质感:真实银行卡的卡号就是烫金/烫银压印。
   cardNumber: {
-    fontSize: 16,
-    letterSpacing: 2,
-    color: 'rgba(255,255,255,0.9)',
+    fontSize: 18,
+    fontWeight: '600',
+    letterSpacing: 3,
+    color: '#F0D48A',
     fontVariant: ['tabular-nums'],
   },
   cardHolder: {
@@ -263,10 +289,37 @@ export default function WalletScreen() {
           <GradientCover colors={Gradients.memberCard} />
           <View style={[s.balanceOrb, s.balanceOrbTop]} />
           <View style={[s.balanceOrb, s.balanceOrbBottom]} />
+          {/* 两道极细金弧线扫过卡面(viewBox 随卡面拉伸,分辨率无关)。 */}
+          <Svg
+            style={StyleSheet.absoluteFill}
+            viewBox="0 0 400 252"
+            preserveAspectRatio="none"
+            pointerEvents="none"
+          >
+            <Path
+              d="M-10 214 Q 208 150 410 34"
+              stroke="#F0D48A"
+              strokeWidth={1.5}
+              strokeOpacity={0.4}
+              fill="none"
+            />
+            <Path
+              d="M-10 236 Q 228 178 410 66"
+              stroke="#F0D48A"
+              strokeWidth={1}
+              strokeOpacity={0.22}
+              fill="none"
+            />
+          </Svg>
           <View style={s.cardTopRow}>
-            <Text style={s.cardLabel}>
-              {t('profile.wallet.balance', { defaultValue: '积分余额' })}
-            </Text>
+            <View style={s.cardLabelRow}>
+              <View style={s.goldCoin}>
+                <View style={s.goldCoinInner} />
+              </View>
+              <Text style={s.cardLabel}>
+                {t('profile.wallet.balance', { defaultValue: '积分余额' })}
+              </Text>
+            </View>
             <Text style={s.cardBrand}>WindNote</Text>
           </View>
           <Text style={s.cardBalance}>{loadingWallet ? '...' : balance}</Text>
