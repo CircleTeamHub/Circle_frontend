@@ -71,8 +71,20 @@ export function QrLoginPane({ onTokens }: QrLoginPaneProps) {
   useEffect(() => {
     if (status !== 'active' || !session) return;
     const generation = generationRef.current;
+    const expiresAtMs = Date.parse(session.expiresAt);
     let inFlight = false;
     const timer = setInterval(async () => {
+      // 客户端自己也盯着有效期。断网时每一发轮询都被 catch 吞掉,服务端那句
+      // EXPIRED 永远送不到 —— 面板会挂着一张早就失效的码一直等下去,用户扫了
+      // 也没反应,还看不出为什么。
+      //
+      // 这一步放在 inFlight 之前:离线时上一发请求可能一直挂着不回来,
+      // 放在后面就永远轮不到执行。
+      if (Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now()) {
+        clearInterval(timer);
+        setStatus('expired');
+        return;
+      }
       if (inFlight) return;
       inFlight = true;
       try {

@@ -199,3 +199,73 @@ test('the QR polling key is redacted from dev logs', () => {
   assert.ok(list);
   assert.doesNotMatch(list[0], /'pollKey'/);
 });
+
+test('the web upload path honors the caller-supplied timeout', () => {
+  const source = read('src/services/api/upload.ts');
+
+  // 视频那几个调用点传的是分钟级预算；web 分支丢掉它就退回 60 秒默认值 ——
+  // 网页端发稍大的视频必然超时，而原生端同一个文件是好的，很难联想到是
+  // 平台分支吃掉了参数。
+  assert.match(
+    source,
+    /export async function uploadFileToPresignedUrl\([\s\S]{0,240}timeoutMs: number = UPLOAD_TIMEOUT_MS,/,
+  );
+  assert.match(
+    source,
+    /setTimeout\(\(\) => controller\.abort\(\), timeoutMs\)/,
+    'presigned PUT 仍在用写死的 UPLOAD_TIMEOUT_MS',
+  );
+  const webBranch = /const blob = await readLocalBlobOnWeb\(fileUri\);[\s\S]*?\n    return;/.exec(
+    source,
+  );
+  assert.ok(webBranch, '找不到 web 上传分支');
+  assert.match(webBranch[0], /timeoutMs,/, 'web 分支没把 timeoutMs 透传下去');
+});
+
+test('deleting the open conversation collapses the split detail pane', () => {
+  const source = read('src/features/messages/screens/MessagesScreen.tsx');
+
+  // 不收回的话：左边的行没了，右边还挂着一段已被清空的聊天，
+  // 往里发消息等于把会话原地复活。
+  assert.match(
+    source,
+    /setEmbeddedChat\(\(current\) =>\s*\n?\s*current\?\.conversationID === conversation\.id \? null : current,/,
+  );
+  // 必须落在两个请求都成功之后 —— 删失败还收栏就是骗用户。
+  const deleteFlow = /await updateChatConversationPreferences\(conversation\.id, \{[\s\S]*?\} catch \(err\)/.exec(
+    source,
+  );
+  assert.ok(deleteFlow);
+  assert.match(deleteFlow[0], /setEmbeddedChat/);
+});
+
+test('the QR pane expires on its own clock, not only on the server reply', () => {
+  const source = read('src/features/auth/components/QrLoginPane.tsx');
+
+  // 断网时每一发轮询都被 catch 吞掉，服务端那句 EXPIRED 永远送不到。
+  assert.match(source, /const expiresAtMs = Date\.parse\(session\.expiresAt\)/);
+  assert.match(
+    source,
+    /if \(Number\.isFinite\(expiresAtMs\) && expiresAtMs <= Date\.now\(\)\) \{[\s\S]{0,120}setStatus\('expired'\)/,
+  );
+  // 检查必须早于 inFlight 短路：离线时上一发请求可能一直挂着不回来。
+  const tick = /const timer = setInterval\(async \(\) => \{[\s\S]*?inFlight = true;/.exec(
+    source,
+  );
+  assert.ok(tick);
+  assert.ok(
+    tick[0].indexOf('expiresAtMs <= Date.now()') < tick[0].indexOf('if (inFlight) return;'),
+    '有效期检查被挡在 inFlight 短路后面，离线时永远轮不到执行',
+  );
+});
+
+test('the document language follows the selected locale on web', () => {
+  const source = read('src/i18n/index.ts');
+
+  // +html.tsx 是静态模板，SSG 出来的是同一份写死 lang="zh" 的 HTML。
+  assert.match(source, /document\.documentElement\.lang = lng/);
+  // 挂在 i18n 上而不是组件里：语言能从设置页/系统语言/存储回灌多处改。
+  assert.match(source, /i18n\.on\('languageChanged', syncDocumentLang\)/);
+  // 初值也要同步一次，否则首屏仍是模板里那个写死的值。
+  assert.match(source, /syncDocumentLang\(i18n\.language\)/);
+});
