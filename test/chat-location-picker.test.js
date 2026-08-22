@@ -25,14 +25,17 @@ test('chat exposes a full-screen OpenStreetMap picker route', () => {
 
   assert.match(route, /ChatLocationPickerScreen/);
   assert.match(screen, /MapLocationPickerScreen/);
-  assert.match(sharedMap, /tile\.openstreetmap\.org/);
+  // 底图渲染换成了 CARTO（同一份 OSM 数据的底图向样式），反查仍走 nominatim。
+  assert.match(sharedMap, /getBasemapUrlTemplate/);
   assert.match(sharedMap, /nominatim\.openstreetmap\.org\/search/);
   assert.match(sharedMap, /location-changed/);
   assert.doesNotMatch(sharedMap, /location-selected/);
   assert.doesNotMatch(sharedMap, /unpkg\.com|<script src=|<link rel="stylesheet" href="https:/);
   assert.match(sharedMap, /LEAFLET_1_9_4_JS/);
   assert.match(sharedMap, /Content-Security-Policy/);
-  assert.match(sharedMap, /onShouldStartLoadWithRequest/);
+  // 导航锁随载体抽取搬进了 map-surface（原生实现），选点页本身不再直接持有 WebView。
+  const nativeSurface = read('src/features/location/components/map-surface.tsx');
+  assert.match(nativeSurface, /onShouldStartLoadWithRequest/);
   assert.match(sharedMap, /setCandidateLocation/);
   assert.match(sharedMap, /onPress=\{handleConfirm\}/);
   assert.match(sharedMap, /serializeForInlineScript/);
