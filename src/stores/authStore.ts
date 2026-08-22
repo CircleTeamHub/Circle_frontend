@@ -73,7 +73,7 @@ interface AuthState {
   setTokens: (tokens: { accessToken: string; refreshToken: string }) => void;
   setUser: (user: AuthUser) => void;
   setOnboardingRequired: (required: boolean) => void;
-  clearSession: () => void;
+  clearSession: (options?: { preserveLoading?: boolean }) => void;
   setLoading: (loading: boolean) => void;
   setHydrated: (hydrated: boolean) => void;
 }
@@ -135,14 +135,14 @@ export const useAuthStore = create<AuthState>()(
       setOnboardingRequired: (required) =>
         set({ onboardingRequired: required }),
 
-      clearSession: () =>
+      clearSession: (options) =>
         set((state) => ({
           accessToken: null,
           refreshToken: null,
           user: null,
           isAuthenticated: false,
           onboardingRequired: false,
-          isLoading: false,
+          isLoading: options?.preserveLoading ? state.isLoading : false,
           sessionEpoch: state.sessionEpoch + 1,
         })),
 
@@ -225,7 +225,9 @@ export const useAuthStore = create<AuthState>()(
           typeof nextState.refreshToken === 'string' &&
           nextState.refreshToken.length > 0;
         if (!hasValidTokens) {
-          nextState.clearSession();
+          // 认证凭证缺失时仍可能残留上个账号的 MMKV 缓存。保持启动门禁，
+          // 交给 SessionBootstrap 走完整 clearLocalSession 后再开放登录页。
+          nextState.clearSession({ preserveLoading: true });
         }
       },
     }

@@ -152,7 +152,14 @@ export function registerLogoutHandler(handler: LogoutHandler): () => void {
   };
 }
 
-async function performClearLocalSession(sessionEpoch: number) {
+interface ClearLocalSessionOptions {
+  preserveLoading?: boolean;
+}
+
+async function performClearLocalSession(
+  sessionEpoch: number,
+  options: ClearLocalSessionOptions = {},
+) {
   // teardown 失败不影响后续状态清理；失败汇总到末尾一次性 warn。
   const handlerFailures: unknown[] = [];
   const context: LogoutContext = {
@@ -185,7 +192,9 @@ async function performClearLocalSession(sessionEpoch: number) {
     return;
   }
 
-  useAuthStore.getState().clearSession();
+  useAuthStore.getState().clearSession({
+    preserveLoading: options.preserveLoading,
+  });
   const clearedSessionEpoch = useAuthStore.getState().sessionEpoch;
   useMessageGroupsStore.getState().reset();
   useCirclesStore.getState().reset();
@@ -243,7 +252,10 @@ async function performClearLocalSession(sessionEpoch: number) {
   }
 }
 
-export function clearLocalSession(expectedSessionEpoch?: number): Promise<void> {
+export function clearLocalSession(
+  expectedSessionEpoch?: number,
+  options: ClearLocalSessionOptions = {},
+): Promise<void> {
   const sessionEpoch =
     expectedSessionEpoch ?? useAuthStore.getState().sessionEpoch;
 
@@ -257,10 +269,10 @@ export function clearLocalSession(expectedSessionEpoch?: number): Promise<void> 
     }
     return activeClearPromise
       .catch(() => undefined)
-      .then(() => clearLocalSession(sessionEpoch));
+      .then(() => clearLocalSession(sessionEpoch, options));
   }
 
-  const operation = performClearLocalSession(sessionEpoch);
+  const operation = performClearLocalSession(sessionEpoch, options);
   let trackedOperation: Promise<void>;
   trackedOperation = operation.finally(() => {
     if (activeClearPromise === trackedOperation) {

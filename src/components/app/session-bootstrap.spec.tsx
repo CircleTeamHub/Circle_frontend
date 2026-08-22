@@ -147,6 +147,37 @@ test('a forbidden account on cold start still clears the session', async () => {
   await waitFor(() => expect(mockClearLocalSession).toHaveBeenCalledTimes(1));
 });
 
+test('an authless hydration clears account-scoped state before unlocking login', async () => {
+  let releaseCleanup: (() => void) | undefined;
+  mockAuth.state = {
+    ...mockAuth.state,
+    accessToken: null,
+    refreshToken: null,
+    user: null,
+    isAuthenticated: false,
+  };
+  mockClearLocalSession.mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        releaseCleanup = resolve;
+      }),
+  );
+
+  render(<SessionBootstrap />);
+
+  await waitFor(() =>
+    expect(mockClearLocalSession).toHaveBeenCalledWith(undefined, {
+      preserveLoading: true,
+    }),
+  );
+  expect(mockAuth.state.setLoading).not.toHaveBeenCalledWith(false);
+
+  releaseCleanup?.();
+  await waitFor(() =>
+    expect(mockAuth.state.setLoading).toHaveBeenCalledWith(false),
+  );
+});
+
 test('a successful cold start restores the user', async () => {
   mockFetchCurrentUser.mockResolvedValue(storedUser);
 

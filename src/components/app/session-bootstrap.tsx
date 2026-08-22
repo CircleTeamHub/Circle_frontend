@@ -134,8 +134,11 @@ export function SessionBootstrap() {
     let cancelled = false;
 
     const bootstrapSession = async () => {
-      // 没有 token，直接结束 loading
+      // 没有 token，清完账号级本地数据后结束 loading。
       if (!accessToken || !refreshToken) {
+        // Web 凭证只驻内存，刷新后 token 会消失，但账号级 MMKV 缓存仍在
+        // localStorage。先走完整登出清理，避免下一账号水合出前一账号的数据。
+        await clearLocalSession(undefined, { preserveLoading: true });
         if (!cancelled) {
           setLoading(false);
         }
