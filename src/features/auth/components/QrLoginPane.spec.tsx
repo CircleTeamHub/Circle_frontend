@@ -159,3 +159,28 @@ test('does not overlap polling requests and resumes after the pending one settle
   });
   expect(pollQrLoginStatus).toHaveBeenCalledTimes(2);
 });
+
+test('expires locally even when an in-flight poll never settles', async () => {
+  jest.mocked(createQrLoginSession).mockResolvedValue({
+    ...session,
+    expiresAt: new Date(Date.now() + 5_000).toISOString(),
+  });
+  jest.mocked(pollQrLoginStatus).mockImplementation(() => new Promise(() => {}));
+
+  render(<QrLoginPane onTokens={jest.fn()} />);
+  await waitFor(() => expect(screen.getByTestId('qr-code')).toBeTruthy());
+
+  await act(async () => {
+    jest.advanceTimersByTime(4_000);
+    await Promise.resolve();
+  });
+  expect(pollQrLoginStatus).toHaveBeenCalledTimes(1);
+
+  await act(async () => {
+    jest.advanceTimersByTime(4_000);
+    await Promise.resolve();
+  });
+  expect(screen.getByText('auth.qrLoginExpired')).toBeTruthy();
+  expect(screen.getByText('auth.qrLoginRefresh')).toBeTruthy();
+  expect(screen.queryByTestId('qr-code')).toBeNull();
+});

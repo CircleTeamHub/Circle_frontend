@@ -4,6 +4,9 @@ import {
   getInitialLiveKitModule,
   loadLiveKitModule,
 } from './livekit-module.web';
+import { reportError } from '@/observability/sentry';
+
+jest.mock('@/observability/sentry', () => ({ reportError: jest.fn() }));
 
 const mockLiveKitComponents = () => {
   const ReactModule = jest.requireActual<typeof import('react')>('react');
@@ -30,6 +33,37 @@ const mockLiveKitComponents = () => {
     useRoomContext: () => ({ disconnect: jest.fn() }),
   };
 };
+
+test('web LiveKit adapter reports a rejected chunk load and retries later', async () => {
+  const priorWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const priorNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: {} });
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: { mediaDevices: { getUserMedia: jest.fn() } },
+  });
+
+  try {
+    const rejectedLoader = jest.fn().mockRejectedValue(new Error('chunk failed'));
+    await expect(loadLiveKitModule(rejectedLoader)).resolves.toBeNull();
+    expect(reportError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'LiveKit web module failed to load' }),
+      { operation: 'livekit', kind: 'moduleLoad' },
+    );
+
+    const retryLoader = jest.fn(async () => mockLiveKitComponents() as never);
+    await expect(loadLiveKitModule(retryLoader)).resolves.not.toBeNull();
+    expect(retryLoader).toHaveBeenCalledTimes(1);
+  } finally {
+    if (priorWindow) Object.defineProperty(globalThis, 'window', priorWindow);
+    else Reflect.deleteProperty(globalThis, 'window');
+    if (priorNavigator) {
+      Object.defineProperty(globalThis, 'navigator', priorNavigator);
+    } else {
+      Reflect.deleteProperty(globalThis, 'navigator');
+    }
+  }
+});
 
 test('web LiveKit adapter loads once and preserves the native-facing contract', async () => {
   const priorWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');

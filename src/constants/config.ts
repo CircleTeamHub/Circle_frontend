@@ -18,15 +18,9 @@ import { evaluateTransportGuard } from './transport-security';
 // EXPO_PUBLIC_ALLOW_INSECURE_TRANSPORT=1 显式放行。
 const IS_DEV_BUILD = typeof __DEV__ !== 'undefined' && __DEV__;
 
-// Expo web 静态渲染（SSG）会在 Node 里、以 production 模式执行本模块，但此刻没有运行时
-// EXPO_PUBLIC_* 注入。它是构建期产物、不是最终运行时——若在这里 throw 会直接打断
-// `expo export --platform web`（CI 的 Web Export 步骤）。因此把 SSG 视作放行上下文：
-// 真正的 web 客户端运行时（浏览器，window 存在）与原生运行时仍照常强校验。
-const IS_WEB_STATIC_RENDER =
-  Platform.OS === 'web' && typeof window === 'undefined';
-
-// dev 或 web-SSG：放宽「缺少必需配置」与「明文传输」两道启动期校验。
-const RELAX_TRANSPORT_CHECKS = IS_DEV_BUILD || IS_WEB_STATIC_RENDER;
+// Expo 会在 web 导出时把 EXPO_PUBLIC_* 编译进浏览器 bundle。release 导出也必须提供
+// 生产级传输配置；否则放行 Node/SSG 会把 localhost 开发回退值永久烘焙进静态产物。
+const RELAX_TRANSPORT_CHECKS = IS_DEV_BUILD;
 
 const ALLOW_INSECURE_TRANSPORT =
   process.env.EXPO_PUBLIC_ALLOW_INSECURE_TRANSPORT === '1' ||

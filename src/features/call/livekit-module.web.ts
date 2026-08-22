@@ -150,7 +150,6 @@ export function loadLiveKitModule(
       return cachedLiveKitModule;
     })
     .catch((error) => {
-      cachedLiveKitModule = null;
       reportError(new Error('LiveKit web module failed to load'), {
         operation: 'livekit',
         kind: 'moduleLoad',
@@ -158,7 +157,12 @@ export function loadLiveKitModule(
       if (typeof __DEV__ !== 'undefined' && __DEV__) {
         console.warn('[call] LiveKit web module unavailable', error);
       }
-      return cachedLiveKitModule;
+      // Chunk/CDN 瞬时失败不能把 null 固化到整个页面会话；本次降级，
+      // 下次进入通话允许重新 import。
+      return null;
+    })
+    .finally(() => {
+      liveKitModulePromise = null;
     });
 
   return liveKitModulePromise;

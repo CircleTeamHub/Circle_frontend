@@ -11,6 +11,8 @@ export type MapSurfaceProps = {
   onLoadEnd: () => void;
   /** 地图页 postMessage 过来的原始字符串，解析交给调用方。 */
   onMessage: (data: string) => void;
+  /** web 父页代 opaque-origin iframe 发起地理编码请求；原生 WebView 不使用。 */
+  geocoderBaseUrl?: string | null;
 };
 
 /**

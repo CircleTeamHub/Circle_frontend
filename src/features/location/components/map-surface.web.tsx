@@ -32,6 +32,7 @@ export function MapSurface({
   title,
   onLoadEnd,
   onMessage,
+  geocoderBaseUrl,
 }: MapSurfaceProps) {
   const frameRef = useRef<HTMLIFrameElement | null>(null);
 
@@ -39,15 +40,80 @@ export function MapSurface({
     const handleMessage = (event: MessageEvent) => {
       // sandbox 后 iframe 是 opaque origin（event.origin 恒为 'null'），
       // 认不了域名，只能比对 contentWindow —— 否则页面上任何窗口都能伪造选点结果。
-      if (!frameRef.current || event.source !== frameRef.current.contentWindow) {
+      const requestSource = frameRef.current?.contentWindow;
+      if (!requestSource || event.source !== requestSource) {
         return;
       }
       if (typeof event.data !== 'string') return;
+      let request: unknown;
+      try {
+        request = JSON.parse(event.data) as unknown;
+      } catch {
+        onMessage(event.data);
+        return;
+      }
+      if (
+        request &&
+        typeof request === 'object' &&
+        (request as { type?: unknown }).type === 'geocoder-request'
+      ) {
+        const payload = request as {
+          requestId?: unknown;
+          path?: unknown;
+          params?: unknown;
+        };
+        const respond = (ok: boolean, data: unknown = null) => {
+          // 回复必须发回发起请求的那个 frame。reloadKey 可能在 fetch
+          // 期间换成新 frame，而新旧 frame 的 requestId 都会从 1 开始。
+          requestSource.postMessage(
+            JSON.stringify({
+              type: 'geocoder-response',
+              requestId: payload.requestId,
+              ok,
+              data,
+            }),
+            '*',
+          );
+        };
+        if (
+          !geocoderBaseUrl ||
+          typeof payload.requestId !== 'number' ||
+          !Number.isSafeInteger(payload.requestId) ||
+          (payload.path !== '/search' && payload.path !== '/reverse') ||
+          !payload.params ||
+          typeof payload.params !== 'object' ||
+          Array.isArray(payload.params)
+        ) {
+          respond(false);
+          return;
+        }
+        void (async () => {
+          try {
+            const url = new URL(geocoderBaseUrl + payload.path);
+            for (const [key, value] of Object.entries(
+              payload.params as Record<string, unknown>,
+            )) {
+              if (typeof value !== 'string' && typeof value !== 'number') {
+                throw new Error('invalid geocoder parameter');
+              }
+              url.searchParams.set(key, String(value));
+            }
+            const response = await fetch(url, {
+              headers: { Accept: 'application/json' },
+            });
+            if (!response.ok) throw new Error('geocoder request failed');
+            respond(true, await response.json());
+          } catch {
+            respond(false);
+          }
+        })();
+        return;
+      }
       onMessage(event.data);
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [onMessage]);
+  }, [geocoderBaseUrl, onMessage]);
 
   return (
     <iframe

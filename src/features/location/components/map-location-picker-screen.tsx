@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -167,6 +168,7 @@ function buildMapHtml(
   const scriptGeocoderBaseUrl = geocoderBaseUrl
     ? serializeForInlineScript(geocoderBaseUrl)
     : 'null';
+  const useParentGeocoderBridge = Platform.OS === 'web';
   const geocoderConnectSource = geocoderBaseUrl
     ? `; connect-src ${escapeHtml(new URL(geocoderBaseUrl).origin)}`
     : '';
@@ -250,10 +252,37 @@ function buildMapHtml(
   <script nonce="circle-map">
     const SELECTED_LABEL = ${scriptSelectedLabel};
     const GEOCODER_BASE_URL = ${scriptGeocoderBaseUrl};
+    const USE_PARENT_GEOCODER_BRIDGE = ${useParentGeocoderBridge};
     const bridge = window.ReactNativeWebView || {
       postMessage: (data) => window.parent.postMessage(data, '*')
     };
     const post = (payload) => bridge.postMessage(JSON.stringify(payload));
+    const pendingGeocoderRequests = new Map();
+    let nextGeocoderRequestId = 1;
+    window.addEventListener('message', (event) => {
+      if (!USE_PARENT_GEOCODER_BRIDGE || event.source !== window.parent || typeof event.data !== 'string') return;
+      let payload;
+      try { payload = JSON.parse(event.data); } catch { return; }
+      if (payload?.type !== 'geocoder-response' || !Number.isSafeInteger(payload.requestId)) return;
+      const pending = pendingGeocoderRequests.get(payload.requestId);
+      if (!pending) return;
+      pendingGeocoderRequests.delete(payload.requestId);
+      clearTimeout(pending.timer);
+      if (payload.ok) pending.resolve(payload.data);
+      else pending.reject(new Error('geocoder request failed'));
+    });
+
+    function requestParentGeocoder(path, params) {
+      return new Promise((resolve, reject) => {
+        const requestId = nextGeocoderRequestId++;
+        const timer = setTimeout(() => {
+          pendingGeocoderRequests.delete(requestId);
+          reject(new Error('geocoder request timed out'));
+        }, 10000);
+        pendingGeocoderRequests.set(requestId, { resolve, reject, timer });
+        post({ type: 'geocoder-request', requestId, path, params });
+      });
+    }
 
     try {
       if (typeof L === 'undefined') throw new Error('leaflet unavailable');
@@ -301,6 +330,9 @@ function buildMapHtml(
           const delay = Math.max(0, 1000 - (Date.now() - lastGeocoderStart));
           if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
           lastGeocoderStart = Date.now();
+          if (USE_PARENT_GEOCODER_BRIDGE) {
+            return requestParentGeocoder(path, params);
+          }
           const url = new URL(GEOCODER_BASE_URL + path);
           Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, String(value)));
           const response = await fetch(url.toString(), { headers: { Accept: 'application/json' } });
@@ -511,6 +543,7 @@ export function MapLocationPickerScreen({
           reloadKey={surfaceKey}
           title={labels.title}
           html={mapHtml}
+          geocoderBaseUrl={readGeocoderBaseUrl()}
           onLoadEnd={() => setLoading(false)}
           onMessage={handleMapMessage}
         />

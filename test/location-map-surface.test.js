@@ -39,9 +39,24 @@ test('web map surface only trusts messages coming from its own frame', () => {
 
   // srcDoc + sandbox 是 opaque origin（event.origin === 'null'），认不了来源域名，
   // 只能比对 contentWindow；否则任意窗口都能伪造一个选点结果。
-  assert.match(web, /event\.source !== frameRef\.current\.contentWindow/);
+  assert.match(web, /event\.source !== requestSource/);
   assert.match(web, /sandbox="allow-scripts"/);
   assert.match(web, /typeof event\.data !== 'string'/);
+});
+
+test('web geocoder runs in the trusted parent origin instead of the opaque iframe', () => {
+  const web = read('src/features/location/components/map-surface.web.tsx');
+  const screen = read('src/features/location/components/map-location-picker-screen.tsx');
+
+  assert.match(web, /type === 'geocoder-request'/);
+  assert.match(web, /const requestSource = frameRef\.current\?\.contentWindow/);
+  assert.match(web, /requestSource\.postMessage/);
+  assert.match(web, /payload\.path !== '\/search'/);
+  assert.match(web, /fetch\(url/);
+  assert.match(screen, /USE_PARENT_GEOCODER_BRIDGE/);
+  assert.match(web, /type: 'geocoder-response'/);
+  assert.match(screen, /requestParentGeocoder\(path, params\)/);
+  assert.match(screen, /geocoderBaseUrl=\{readGeocoderBaseUrl\(\)\}/);
 });
 
 test('native map surface keeps the WebView bridge', () => {
