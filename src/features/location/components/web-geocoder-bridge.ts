@@ -38,6 +38,11 @@ export function handleWebGeocoderBridgeRequest(options: {
     params?: unknown;
   };
   const respond = (ok: boolean, data: unknown = null) => {
+    // The srcDoc frame intentionally omits allow-same-origin, so its opaque
+    // origin cannot be expressed as a targetOrigin. requestSource is the exact
+    // WindowProxy captured from the already-validated event source, and this
+    // bridge returns only public geocoder data.
+    // nosemgrep: javascript.browser.security.wildcard-postmessage-configuration.wildcard-postmessage-configuration
     options.requestSource.postMessage(
       JSON.stringify({
         type: 'geocoder-response',
