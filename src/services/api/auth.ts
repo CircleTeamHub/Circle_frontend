@@ -12,6 +12,7 @@ import { Platform } from "react-native";
 import { apiClient } from "@/services/api/client";
 import { normalizeUser } from "@/services/api/utils";
 import type { AvatarFrameAppearance, DisplayIcon } from "@/types";
+import { UserFacingError } from "@/utils/user-facing-error";
 
 // 客户端平台码(沿用旧 IM 的数字契约:1=iOS, 2=Android, 5=Web)。后端把它记进
 // 登录会话(单设备登录/会话管理用),数值不能改。
@@ -39,7 +40,7 @@ function isAuthTokens(value: unknown): value is AuthTokens {
 function ensureAuthTokens(value: unknown): AuthTokens {
   if (!isAuthTokens(value)) {
     // 字段缺失 / 类型异常 — 视作认证响应损坏，直接抛错而不是带着残缺数据写入 store。
-    throw new Error("认证返回数据格式异常，请重试");
+    throw new UserFacingError("认证返回数据格式异常，请重试");
   }
   return {
     accessToken: value.accessToken,

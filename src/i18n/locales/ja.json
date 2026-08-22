@@ -675,7 +675,7 @@
     "scanAlbumFailedMessage": "しばらくしてからもう一度お試しください。",
     "seatManagement": "一時グループチャット",
     "groupManagement": "グループ管理",
-    "loadFailed": "会話の読み込みに失敗しました：{{error}}",
+    "loadFailed": "会話を読み込めませんでした。ネットワークを確認して再試行してください",
     "noConversations": "会話がありません",
     "desktopEmptyDetail": "会話を選択してチャットを始めましょう",
     "imNotConnected": "IM に接続されていません。再度ログインしてください。",

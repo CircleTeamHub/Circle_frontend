@@ -177,7 +177,7 @@
     "scanAlbumFailedMessage": "Please try again.",
     "seatManagement": "Temporary Group Chats",
     "groupManagement": "Group Management",
-    "loadFailed": "Failed to load conversations: {{error}}",
+    "loadFailed": "Couldn't load conversations. Check your connection and try again",
     "noConversations": "No conversations",
     "desktopEmptyDetail": "Select a conversation to start chatting",
     "imNotConnected": "IM isn't connected. Please sign in again.",

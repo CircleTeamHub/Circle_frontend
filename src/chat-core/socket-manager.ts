@@ -263,7 +263,10 @@ export function connectChat(token: string, userId: string): void {
     }
     const state = useChatStore.getState();
     state.setConnecting(false);
-    state.setError(err?.message ?? 'connect_error');
+    // 只放规范化标记进 store —— err.message 是 socket.io 的底层文本
+    // ("websocket error"/"timeout"),会被 UI 原样展示给用户。原始原因
+    // 上面的 console.warn 和 reportError 已经留档。
+    state.setError('connect_error');
   });
 
   bindChatEvents(next, () => gen === sessionGen);

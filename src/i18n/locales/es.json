@@ -676,7 +676,7 @@
     "scanAlbumFailedMessage": "Inténtalo de nuevo.",
     "seatManagement": "Chats grupales temporales",
     "groupManagement": "Gestión de grupos",
-    "loadFailed": "No se pudieron cargar las conversaciones: {{error}}",
+    "loadFailed": "No se pudieron cargar las conversaciones. Revisa tu conexión e inténtalo de nuevo",
     "noConversations": "No hay conversaciones",
     "desktopEmptyDetail": "Selecciona una conversación para empezar a chatear",
     "imNotConnected": "IM no está conectado. Vuelve a iniciar sesión.",

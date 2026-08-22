@@ -17,6 +17,7 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import { NavHeader } from '@/components/ui/nav-header';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { createMoment } from '@/services/api/moments';
 import {
   requestUploadPresign,
@@ -212,7 +213,7 @@ export default function CreateMomentScreen() {
       prependMoment(moment);
       router.back();
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : t('moment.publishFailed');
+      const message = getApiErrorMessage(error, t('moment.publishFailed'));
       Alert.alert(t('moment.publishFailed'), message);
     } finally {
       setSubmitting(false);

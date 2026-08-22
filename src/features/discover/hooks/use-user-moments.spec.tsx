@@ -4,6 +4,11 @@ import { fetchUserMoments } from '@/services/api/moments';
 import type { MomentPost, PaginatedResponse } from '@/types';
 
 jest.mock('@/services/api/moments', () => ({ fetchUserMoments: jest.fn() }));
+// errors.ts 会经由 api/client 拖进 authStore/AsyncStorage 原生模块；spec 只关心
+// 「失败时展示的是包装后的文案」，与 AvatarFrameScreens.spec 同款打桩。
+jest.mock('@/services/api/errors', () => ({
+  getApiErrorMessage: (_error: unknown, fallback: string) => fallback,
+}));
 jest.mock('react-i18next', () => {
   // Stable t reference, like the real hook — a fresh function each render would
   // bust the useCallback memo and re-fire the load effect endlessly.
