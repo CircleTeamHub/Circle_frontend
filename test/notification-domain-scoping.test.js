@@ -82,15 +82,16 @@ test("moments and circle bells claim disjoint notification types", () => {
     "CIRCLE_INVITATION_REJECTED",
     "CIRCLE_ADMIN_OVERRIDE_APPROVED",
     "CIRCLE_POST_PUBLISHED",
-    "CIRCLE_POST_SIGNUP_CREATED",
     "CIRCLE_POST_AUTO_ENDED",
     "CIRCLE_POST_COLLABORATION_RECOGNIZED",
   ]) {
     assert.equal(notificationDomain(type), "circle", type);
   }
 
-  // 好友申请有专属「新的朋友」收件箱，系统公告在「我」页，两个铃铛都不收。
+  // 好友申请有专属「新的朋友」收件箱，系统公告在「我」页，报名通知走「报名管理」的
+  // signupUnread（后端 CIRCLE_NOTIFICATION_TYPES 也不收它），三者都不进铃铛。
   for (const type of [
+    "CIRCLE_POST_SIGNUP_CREATED",
     "FRIEND_REQUEST_RECEIVED",
     "FRIEND_REQUEST_ACCEPTED",
     "FRIEND_REQUEST_REJECTED",
