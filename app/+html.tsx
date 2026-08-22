@@ -33,20 +33,28 @@ const lockViewportCss = `
 html, body, #root {
   height: 100%;
 }
-/* 输入框去掉浏览器默认的 focus outline：RNW 的 TextInput 渲染成
+/* 文字输入去掉浏览器默认的 focus outline：RNW 的 TextInput 渲染成
    <input>/<textarea>，聚焦时浏览器会在我们自绘的圆角边框里再套一圈亮环，
-   深色模式下尤其扎眼。只摘表单元素这一层 —— 按钮/链接的焦点环保留，
-   键盘导航仍然看得见落点；输入框自己有光标指示焦点。 */
+   深色模式下尤其扎眼。按钮/链接的焦点环保留，键盘导航看得见落点；
+   这几类元素自己有光标（caret）指示焦点所在。
+
+   为什么不留 :focus-visible —— 规范规定「接受键盘文本输入的元素」始终匹配
+   :focus-visible，鼠标点击也算，所以那条路等于把亮环原样放回来。 */
 input:focus,
 input:focus-visible,
 textarea:focus,
 textarea:focus-visible,
-select:focus,
-select:focus-visible,
 [contenteditable]:focus,
 [contenteditable]:focus-visible {
   outline: none;
   box-shadow: none;
+}
+/* select 是例外，必须留焦点指示：它没有光标，摘掉之后键盘用户 tab 进来
+   完全看不出焦点落在哪一个下拉上。默认亮环换成跟随主题文本色的描边 ——
+   既不是那圈扎眼的白框，也不会让人丢失落点。 */
+select:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
 }
 html {
   overflow: hidden;

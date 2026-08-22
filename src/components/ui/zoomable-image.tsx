@@ -72,6 +72,8 @@ export function ZoomableImage({
   });
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<View>(null);
+  /** 图片固有尺寸（onLoad 后才知道），用来推算 contain 后的渲染框。 */
+  const natural = useRef<{ w: number; h: number } | null>(null);
 
   const clearLongPress = useCallback(() => {
     if (longPressTimer.current) {
@@ -91,6 +93,20 @@ export function ZoomableImage({
     return Math.max(-limit, Math.min(limit, value));
   }, []);
 
+  /**
+   * contain 之后照片真正占据的区域。平移边界必须按它算，不能按容器算：
+   * 竖图放进横屏容器时两侧本来就是空白，拿容器宽当基准得出的 limit
+   * 允许把照片一路拖到几乎完全离屏，屏幕上只剩黑边。
+   *
+   * onLoad 之前不知道固有尺寸，退回容器尺寸（等于旧行为）。
+   */
+  const renderedExtent = useCallback(() => {
+    const n = natural.current;
+    if (!n || n.w <= 0 || n.h <= 0) return { w: width, h: height };
+    const ratio = Math.min(width / n.w, height / n.h);
+    return { w: n.w * ratio, h: n.h * ratio };
+  }, [width, height]);
+
   const setScale = useCallback(
     (next: number, animated = false) => {
       const wasZoomed = view.current.scale > 1.01;
@@ -100,8 +116,9 @@ export function ZoomableImage({
         view.current.tx = 0;
         view.current.ty = 0;
       } else {
-        view.current.tx = clampTranslate(view.current.tx, width);
-        view.current.ty = clampTranslate(view.current.ty, height);
+        const extent = renderedExtent();
+        view.current.tx = clampTranslate(view.current.tx, extent.w);
+        view.current.ty = clampTranslate(view.current.ty, extent.h);
       }
 
       if (animated) {
@@ -132,12 +149,11 @@ export function ZoomableImage({
     [
       apply,
       clampTranslate,
-      height,
       onZoomedChange,
+      renderedExtent,
       scale,
       translateX,
       translateY,
-      width,
     ],
   );
 
@@ -223,13 +239,14 @@ export function ZoomableImage({
           }
 
           if (view.current.scale > 1.01) {
+            const extent = renderedExtent();
             view.current.tx = clampTranslate(
               gesture.current.panStartTx + gestureState.dx,
-              width,
+              extent.w,
             );
             view.current.ty = clampTranslate(
               gesture.current.panStartTy + gestureState.dy,
-              height,
+              extent.h,
             );
             apply();
           }
@@ -251,10 +268,9 @@ export function ZoomableImage({
       clampTranslate,
       clearLongPress,
       handleTap,
-      height,
       onLongPress,
+      renderedExtent,
       setScale,
-      width,
     ],
   );
 
@@ -288,6 +304,11 @@ export function ZoomableImage({
           style={s.fill}
           contentFit="contain"
           transition={150}
+          onLoad={(event) => {
+            // 固有尺寸决定 contain 后的渲染框，平移边界据此收紧。
+            const { width: w, height: h } = event.source ?? {};
+            if (w && h) natural.current = { w, h };
+          }}
         />
       </Animated.View>
     </View>

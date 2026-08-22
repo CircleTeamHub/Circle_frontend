@@ -6,6 +6,11 @@
  * CORS 就拿不到字节，此时退回新标签打开原图（用户右键另存），仍然可用。
  *
  * 浏览器自己有下载提示，所以调用方在 web 上成功时不再弹「已保存」。
+ *
+ * 已知残留：走到回退分支时前面的 await fetch 已经消耗掉这次点击的
+ * transient activation，个别浏览器会连带拦掉这次 window.open。要根治得在
+ * 点击同帧先开一个占位窗口再回填 —— 那要把长按菜单的交互链整个改掉，
+ * 收益不抵改动面，留档。
  */
 export type SaveImageResult = 'saved' | 'denied' | 'failed';
 
@@ -36,8 +41,18 @@ export async function saveImageToLibrary(
     return 'saved';
   } catch {
     try {
-      const opened = window.open(url, '_blank', 'noopener,noreferrer');
-      return opened ? 'saved' : 'failed';
+      // 不能带 noopener/noreferrer：规范规定这两个特性中任一存在时
+      // window.open 一律返回 null —— 于是"新标签明明打开了"也会被判成失败，
+      // 用户看到一条假的保存失败提示。改成拿句柄后手动切断 opener，
+      // 反向 tabnabbing 的防护等价。
+      const opened = window.open(url, '_blank');
+      if (!opened) return 'failed';
+      try {
+        opened.opener = null;
+      } catch {
+        // 跨源窗口不允许写 opener，忽略（新标签已经打开，这才是重点）。
+      }
+      return 'saved';
     } catch {
       return 'failed';
     }

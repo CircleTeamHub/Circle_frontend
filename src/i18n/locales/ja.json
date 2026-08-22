@@ -1062,6 +1062,7 @@
     "partialUploadFailed": "{{count}} 枚の画像のアップロードに失敗しました",
     "publishFailed": "投稿に失敗しました",
     "detail": "モーメント",
+    "openDetail": "モーメントの詳細を見る",
     "notExist": "モーメントが見つからないか削除されています",
     "loadFailed": "読み込みに失敗しました。もう一度お試しください",
     "detailRefreshFailed": "最新のコメントを更新できませんでした。",

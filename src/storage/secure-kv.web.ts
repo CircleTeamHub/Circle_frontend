@@ -34,16 +34,22 @@ function getLocalStorage(): Storage | null {
 }
 
 function read(key: string): string | null {
+  // 内存覆盖优先。它只在"持久化失败"时存在，代表比 localStorage 里那份**更新**
+  // 的值 —— 反过来先读 localStorage，会在配额满之后把上一个账号的 token 复活：
+  // 写入报告成功、读回来却是旧凭证，表现为切号后仍以旧身份登录或直接鉴权失败。
+  const override = memoryFallback.get(key);
+  if (override !== undefined) return override;
+
   const ls = getLocalStorage();
   if (ls) {
     try {
       const value = ls.getItem(PREFIX + key);
       if (value !== null) return value;
     } catch {
-      // 落到内存回退。
+      // 读失败：没有覆盖可用，只能当作空。
     }
   }
-  return memoryFallback.get(key) ?? null;
+  return null;
 }
 
 function write(key: string, value: string): void {
@@ -51,6 +57,8 @@ function write(key: string, value: string): void {
   if (ls) {
     try {
       ls.setItem(PREFIX + key, value);
+      // 落盘成功就撤掉内存覆盖，否则那份旧覆盖会一直遮住持久值。
+      memoryFallback.delete(key);
       return;
     } catch {
       // 配额满/隐私模式：退内存，本次会话内保持登录。

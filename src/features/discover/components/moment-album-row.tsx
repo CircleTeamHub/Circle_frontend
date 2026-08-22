@@ -1,13 +1,8 @@
 import { useMemo } from 'react';
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { useContentColumnWidth } from '@/components/app/desktop-centered-column';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
 import { getAlbumDateParts } from '@/features/discover/utils/album-date';
@@ -80,7 +75,7 @@ export const MomentAlbumRow: React.FC<MomentAlbumRowProps> = ({
 }) => {
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
-  const { width: screenWidth } = useWindowDimensions();
+  const availableWidth = useContentColumnWidth();
 
   const dateParts = useMemo(
     () => getAlbumDateParts(post.createdAt, i18n.language),
@@ -109,9 +104,10 @@ export const MomentAlbumRow: React.FC<MomentAlbumRowProps> = ({
     [colors],
   );
 
-  // 内容列宽 = 屏宽 - 左右页边距 - 日期列 - 行内 gap
+  // 内容列宽 = 可用宽 - 左右页边距 - 日期列 - 行内 gap
+  // （桌面网页版里"可用宽"是居中栏宽，不是视口宽，否则整行溢出栏外。）
   const contentWidth =
-    screenWidth - Spacing.lg * 2 - DATE_COL_WIDTH - Spacing.md;
+    availableWidth - Spacing.lg * 2 - DATE_COL_WIDTH - Spacing.md;
 
   const comments = post.comments ?? [];
   const likedFriends = post.likedFriends ?? [];
@@ -138,9 +134,19 @@ export const MomentAlbumRow: React.FC<MomentAlbumRowProps> = ({
           <ImageGrid images={post.images} containerWidth={contentWidth} />
         ) : null}
 
-        <View style={s.footerRow}>
+        {/* 时间戳兼作详情入口。纯图片、没有评论的帖子（相册里很常见）此前
+            没有任何可点的地方进详情：正文链接不渲染，图片被大图查看器接管，
+            点赞/评论块整块不显示 —— 那条动态在相册里就成了死胡同。 */}
+        <Pressable
+          style={s.footerRow}
+          onPress={() => onPress(post.id)}
+          accessibilityRole="button"
+          accessibilityLabel={t('moment.openDetail', {
+            defaultValue: '查看动态详情',
+          })}
+        >
           <Text style={d.timeText}>{timeLabel}</Text>
-        </View>
+        </Pressable>
 
         {likedFriends.length > 0 || comments.length > 0 ? (
           <View style={[s.socialBlock, d.socialBlock]}>

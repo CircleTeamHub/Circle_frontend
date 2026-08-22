@@ -1062,6 +1062,7 @@
     "partialUploadFailed": "이미지 {{count}}장을 업로드하지 못했습니다",
     "publishFailed": "게시 실패",
     "detail": "모먼트",
+    "openDetail": "모먼트 상세 보기",
     "notExist": "모먼트를 찾을 수 없거나 삭제되었습니다",
     "loadFailed": "불러오지 못했습니다. 다시 시도해 주세요",
     "detailRefreshFailed": "최신 댓글을 새로고침하지 못했습니다.",
