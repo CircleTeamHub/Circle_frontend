@@ -3,7 +3,7 @@ import {
   APP_LINK_PROTOCOLS,
   APP_UNIVERSAL_LINK_HOSTS,
 } from '../../../constants/branding';
-import { parseQrToken } from '../../qr/qr-payload';
+import { parseQrLoginToken, parseQrToken } from '../../qr/qr-payload';
 
 type MessageScanAction =
   | { type: 'route'; href: Href }
@@ -56,6 +56,14 @@ function normalizeMessagePath(rawValue: string): string | null {
 
 export function resolveMessageScanResult(data: string): MessageScanAction {
   const value = data.trim();
+
+  const loginToken = parseQrLoginToken(value);
+  if (loginToken) {
+    return {
+      type: 'route',
+      href: { pathname: '/qr-login', params: { t: loginToken } },
+    };
+  }
 
   // 二维码令牌(名片/群/圈子)优先:扫到本应用的 qr 载荷直接进落地页,
   // 由落地页 resolve 预览 + 用户确认后再执行加入。

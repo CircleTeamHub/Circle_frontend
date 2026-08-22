@@ -68,8 +68,9 @@ export function GroupChatAvatar({
             height="100%"
             viewBox="0 0 48 48"
             pointerEvents="none"
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
+            // 同 avatar.tsx：aria-hidden 是跨平台别名，web 上不会把 RN 专属
+            // a11y prop 泄进 DOM。
+            aria-hidden
           >
             <Defs>
               <LinearGradient id={gradientId} x1="5" y1="43" x2="43" y2="5">

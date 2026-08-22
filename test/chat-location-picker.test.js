@@ -22,17 +22,24 @@ test('chat exposes a full-screen OpenStreetMap picker route', () => {
   const route = read('app/(chat)/location-picker.tsx');
   const screen = read('src/features/chat/screens/ChatLocationPickerScreen.tsx');
   const sharedMap = read('src/features/location/components/map-location-picker-screen.tsx');
+  const nativeSurface = read(
+    'src/features/location/components/map-surface.tsx',
+  );
 
   assert.match(route, /ChatLocationPickerScreen/);
   assert.match(screen, /MapLocationPickerScreen/);
-  assert.match(sharedMap, /tile\.openstreetmap\.org/);
-  assert.match(sharedMap, /nominatim\.openstreetmap\.org\/search/);
+  // 底图用 CARTO；地理编码仅走显式配置的自建/商用兼容服务。
+  assert.match(sharedMap, /getBasemapUrlTemplate/);
+  assert.match(sharedMap, /EXPO_PUBLIC_GEOCODER_BASE_URL/);
+  assert.match(sharedMap, /requestGeocoder\('\/search'/);
+  assert.doesNotMatch(sharedMap, /https:\/\/nominatim\.openstreetmap\.org/);
   assert.match(sharedMap, /location-changed/);
   assert.doesNotMatch(sharedMap, /location-selected/);
   assert.doesNotMatch(sharedMap, /unpkg\.com|<script src=|<link rel="stylesheet" href="https:/);
   assert.match(sharedMap, /LEAFLET_1_9_4_JS/);
   assert.match(sharedMap, /Content-Security-Policy/);
-  assert.match(sharedMap, /onShouldStartLoadWithRequest/);
+  assert.match(sharedMap, /MapSurface/);
+  assert.match(nativeSurface, /onShouldStartLoadWithRequest/);
   assert.match(sharedMap, /setCandidateLocation/);
   assert.match(sharedMap, /onPress=\{handleConfirm\}/);
   assert.match(sharedMap, /serializeForInlineScript/);

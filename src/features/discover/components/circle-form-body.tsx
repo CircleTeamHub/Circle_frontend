@@ -2,7 +2,6 @@ import { useCallback, useMemo, useState } from 'react';
 import {
   Pressable,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
@@ -11,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { useRouter, useSegments } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { ThemedSwitch } from '@/components/ui/themed-switch';
 import { Divider } from '@/components/ui/divider';
 import { MenuRow } from '@/components/ui/menu-row';
 import { OptionPickerSheet } from '@/components/ui/option-picker-sheet';
@@ -508,11 +508,9 @@ export const CircleFormBody: React.FC<CircleFormBodyProps> = ({ form }) => {
           <Text style={[s.rowLabel, d.rowLabel]}>
             {t('circle.create.fancyLabel')}
           </Text>
-          <Switch
+          <ThemedSwitch
             value={form.joinFancyRestriction}
             onValueChange={form.setJoinFancyRestriction}
-            trackColor={{ false: colors.surfaceBorder, true: colors.primary }}
-            thumbColor={colors.white}
           />
         </View>
         <Divider />
@@ -520,11 +518,9 @@ export const CircleFormBody: React.FC<CircleFormBodyProps> = ({ form }) => {
           <Text style={[s.rowLabel, d.rowLabel]}>
             {t('circle.create.memberPostLabel')}
           </Text>
-          <Switch
+          <ThemedSwitch
             value={form.memberCanPost}
             onValueChange={form.setMemberCanPost}
-            trackColor={{ false: colors.surfaceBorder, true: colors.primary }}
-            thumbColor={colors.white}
           />
         </View>
         <Divider />
@@ -533,13 +529,11 @@ export const CircleFormBody: React.FC<CircleFormBodyProps> = ({ form }) => {
           <Text style={[s.rowLabel, d.rowLabel]}>
             {t('circle.create.verificationGateLabel')}
           </Text>
-          <Switch
+          <ThemedSwitch
             value={verificationGateOn}
             onValueChange={(value) =>
               form.setRequiredVerifierCount(value ? 10 : 1)
             }
-            trackColor={{ false: colors.surfaceBorder, true: colors.primary }}
-            thumbColor={colors.white}
           />
         </View>
         {verificationGateOn ? (

@@ -1,5 +1,6 @@
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
+import { Platform } from 'react-native';
 import { getLocales } from 'expo-localization';
 import { storage } from '@/storage';
 
@@ -123,6 +124,25 @@ export function rehydrateLanguageFromStorage() {
 
   const saved = getSavedLanguagePreference();
   void i18n.changeLanguage(saved === 'system' ? getDeviceLanguage() : saved);
+}
+
+/**
+ * 网页端把 <html lang> 跟着当前语言走。
+ *
+ * +html.tsx 是静态模板，SSG 出来的是同一份 HTML（写死 lang="zh"），
+ * 切到英/日/韩/西语后文档仍自称中文：读屏会按中文发音规则念英文，
+ * 浏览器的翻译提示和断词规则也跟着错。只能在运行时同步。
+ *
+ * 挂在 i18n 上而不是某个组件里：语言可以从设置页、系统语言变化、
+ * 存储迁移回灌等多处改，组件里同步必然漏掉其中一条路径。
+ */
+if (Platform.OS === 'web') {
+  const syncDocumentLang = (lng: string) => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.lang = lng;
+  };
+  syncDocumentLang(i18n.language);
+  i18n.on('languageChanged', syncDocumentLang);
 }
 
 export default i18n;

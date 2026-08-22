@@ -19,7 +19,11 @@ import { sendCardMessage } from '@/chat-core/client';
 import { mapChatConversationToUI } from '@/chat-core/mappers';
 import { useChatStore } from '@/chat-core/store';
 import { getShareCircleCardListState } from '@/features/discover/utils/share-circle-card';
-import { logClientDiagnostic } from '@/utils/client-diagnostics';
+import { getChatSendErrorMessage } from '@/chat-core/send-errors';
+import {
+  diagnosticErrorMessage,
+  logClientDiagnostic,
+} from '@/utils/client-diagnostics';
 import type { Conversation } from '@/types';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
@@ -132,7 +136,7 @@ export default function ShareCircleCardScreen() {
         if (!cancelled) {
           setLoadFailed(true);
           logClientDiagnostic('share_circle_conversations_load_failed', {
-            message: error instanceof Error ? error.message : String(error),
+            message: diagnosticErrorMessage(error),
           });
         }
       })
@@ -223,17 +227,17 @@ export default function ShareCircleCardScreen() {
                   logClientDiagnostic('share_circle_send_failed', {
                     circleId,
                     conversationID: conversation.id,
-                    message:
-                      error instanceof Error ? error.message : String(error),
+                    message: diagnosticErrorMessage(error),
                   });
                   if (!mountedRef.current) return;
                   Alert.alert(
                     t('circle.shareCard.failedTitle', {
                       defaultValue: '发送失败',
                     }),
-                    error instanceof Error
-                      ? error.message
-                      : t('common.retryLater', { defaultValue: '请稍后重试' }),
+                    getChatSendErrorMessage(
+                      error,
+                      t('common.retryLater', { defaultValue: '请稍后重试' }),
+                    ),
                   );
                 })
                 .finally(clearSendingState);

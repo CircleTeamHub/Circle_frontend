@@ -173,7 +173,26 @@ jobs:
         run: npm test
 
       - name: Web Export
+        env:
+          # CI 只做可部署性 smoke；真实发布必须把这里替换为生产 HTTPS API origin。
+          # 使用保留的 .invalid TLD，避免测试 bundle 意外请求任何真实服务。
+          EXPO_PUBLIC_API_URL: https://api.web-export.invalid
         run: npx expo export --platform web
+
+      - name: Assert release API URL baked into web bundle
+        run: |
+          set -euo pipefail
+          if ! grep -R -F -q 'api.web-export.invalid' dist/_expo/static/js; then
+            echo "::error::configured release API URL was not baked into the web bundle"
+            exit 1
+          fi
+          if grep -R -F -q 'localhost:3000' dist/_expo/static/js; then
+            echo "::error::development API fallback leaked into the release web bundle"
+            exit 1
+          fi
+
+      - name: Browser smoke exported web routes
+        run: node .github/scripts/smoke-web-export.js
 
       # babel.config.js 只在 production 构建挂 transform-remove-console，而
       # api.env('production') 没解析到是「静默失效」——strip 哪天不生效，没有人会知道。

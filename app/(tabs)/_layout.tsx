@@ -2,6 +2,7 @@ import React, { memo, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
+  Platform,
   Pressable,
   StyleSheet,
   type ViewStyle,
@@ -10,6 +11,8 @@ import {
 import { Tabs, useSegments } from 'expo-router';
 import { CommonActions, StackActions } from '@react-navigation/native';
 import { type BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { useDesktopSplitLayout } from '@/hooks/use-desktop-split-layout';
+import { useSplitPaneStore } from '@/stores/splitPaneStore';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -246,18 +249,29 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const segments = useSegments();
   const hideTabBar = segments.length > 2;
+  // 桌面网页版分栏：浮动条钉进左栏（会话列表）宽度内，变成列表的底部导航，
+  // 不再横贯整窗、压住右栏聊天输入框。
+  const isSplitLayout = useDesktopSplitLayout();
+  // 分栏时浮动条的落点跟着当前 tab 走：消息 tab 钉进左栏（它就是列表栏的
+  // 底部导航）；其余 tab 的内容在 640 居中窄栏里，浮动条也居中同轴。
+  const pinTabBarLeft =
+    isSplitLayout && (segments[1] ?? 'messages') === 'messages';
+  // 左栏宽度用户可拖：浮动条与列表读同一个值，拖动时同帧一起变。
+  const listPaneWidth = useSplitPaneStore((state) => state.listPaneWidth);
 
   const {
     messagesUnread,
     contactsUnread,
-    discoverUnread,
+    momentsUnread,
+    circleUnread,
     signupUnread,
     profileUnread,
   } =
     useTabBadgeStore(useShallow((state) => ({
       messagesUnread: state.messagesUnread,
       contactsUnread: state.contactsUnread,
-      discoverUnread: state.discoverUnread,
+      momentsUnread: state.momentsUnread,
+      circleUnread: state.circleUnread,
       signupUnread: state.signupUnread,
       profileUnread: state.profileUnread,
     })));
@@ -266,14 +280,31 @@ export default function TabLayout() {
     // 底部锚定的全宽容器：absolute → 内容全幅延伸到浮动条之下；
     // CustomTabBar 对它做 translateY/opacity 动画。
     tabBarWrapper: {
-      position: 'absolute',
+      // Web 用 fixed:隐藏时的 translateY(140) 会把 absolute 元素撑进祖先的
+      // 滚动区(body.scrollHeight 变成 视口+140),浏览器聚焦输入框时的程序化
+      // 滚动就把整页带下去 140px —— 顶部导航被吃掉、且因为 overflow:hidden
+      // 用户还滚不回来。fixed 元素不参与祖先滚动区计算,从源头掐断。
+      // 原生不认 'fixed',保持 absolute。
+      ...(Platform.OS === 'web'
+        ? ({ position: 'fixed' } as unknown as ViewStyle)
+        : ({ position: 'absolute' } as const)),
       left: 0,
       right: 0,
       bottom: 0,
+      ...(isSplitLayout
+        ? pinTabBarLeft
+          ? { right: undefined, width: listPaneWidth }
+          : { alignItems: 'center' }
+        : null),
     },
     tabBar: {
       flexDirection: 'row',
       alignItems: 'center',
+      // 居中模式下 wrapper 不再限宽，药丸给固定宽（与左栏模式同宽，只
+      // 平移不变形）。
+      ...(isSplitLayout && !pinTabBarLeft
+        ? { width: listPaneWidth - TAB_BAR_MARGIN_H * 2 }
+        : null),
       height: TAB_BAR_HEIGHT,
       borderRadius: TAB_BAR_RADIUS,
       backgroundColor: colors.surface,
@@ -331,14 +362,25 @@ export default function TabLayout() {
       fontWeight: '500',
       letterSpacing: 0.2,
     },
-  }), [colors, insets.bottom]);
+  }), [colors, insets.bottom, isSplitLayout, listPaneWidth, pinTabBarLeft]);
 
+  // 动态 tab 只统计它自己辖下的三样：朋友圈铃铛 + 圈子铃铛 + 报名管理。
+  // 曾经读的 discoverUnread 是「好友申请 + 朋友圈 + 圈子」的并集（互动消息
+  // 列表页的全集口径），于是一条未读好友申请会同时点亮联系人和动态两个
+  // tab —— 而好友申请的规范 UI 是「新的朋友」，归联系人。
   const badgeMap: Record<string, boolean> = useMemo(() => ({
     messages: messagesUnread > 0,
     contacts: contactsUnread > 0,
-    discover: discoverUnread > 0 || signupUnread > 0,
+    discover: momentsUnread > 0 || circleUnread > 0 || signupUnread > 0,
     profile: profileUnread > 0,
-  }), [messagesUnread, contactsUnread, discoverUnread, signupUnread, profileUnread]);
+  }), [
+    messagesUnread,
+    contactsUnread,
+    momentsUnread,
+    circleUnread,
+    signupUnread,
+    profileUnread,
+  ]);
 
   return (
     <Tabs

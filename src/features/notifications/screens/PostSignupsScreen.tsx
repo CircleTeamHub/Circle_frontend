@@ -263,9 +263,10 @@ export default function PostSignupsScreen() {
         );
       } catch (error) {        Alert.alert(
           t('userProfile.openChatFailedTitle', { defaultValue: '打开聊天失败' }),
-          error instanceof Error
-            ? error.message
-            : t('common.networkError', { defaultValue: '网络错误，请重试' }),
+          getApiErrorMessage(
+            error,
+            t('common.networkError', { defaultValue: '网络错误，请重试' }),
+          ),
         );
       } finally {
         openingChatRef.current = false;

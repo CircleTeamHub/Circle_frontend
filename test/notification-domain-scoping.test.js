@@ -82,7 +82,6 @@ test("moments and circle bells claim disjoint notification types", () => {
     "CIRCLE_INVITATION_REJECTED",
     "CIRCLE_ADMIN_OVERRIDE_APPROVED",
     "CIRCLE_POST_PUBLISHED",
-    "CIRCLE_POST_SIGNUP_CREATED",
     "CIRCLE_POST_AUTO_ENDED",
     "CIRCLE_POST_COLLABORATION_RECOGNIZED",
   ]) {
@@ -94,6 +93,8 @@ test("moments and circle bells claim disjoint notification types", () => {
     "FRIEND_REQUEST_RECEIVED",
     "FRIEND_REQUEST_ACCEPTED",
     "FRIEND_REQUEST_REJECTED",
+    // 报名走 signupUnread / seenByAuthor 与报名管理 tab，不计入互动铃铛。
+    "CIRCLE_POST_SIGNUP_CREATED",
     "SYSTEM",
     "MESSAGE_RECEIVED",
   ]) {
@@ -180,9 +181,9 @@ test("an unscoped mark-all-read still clears everything (push fallback screen)",
 // 并按 domain 过滤列表。任一侧漏一个类型 = 服务端算进红点、客户端列表里看不到，
 // 红点永远清不掉。双仓并排检出时逐项对齐，仅前端 CI 时跳过。
 const BACKEND_CONSTANTS_PATH = path.join(
-  process.cwd(),
-  "..",
-  "circle_be",
+  path.resolve(
+    process.env.CIRCLE_BE_DIR || path.join(process.cwd(), "..", "circle_be"),
+  ),
   "src/notification/notification.constants.ts",
 );
 const hasBackend = fs.existsSync(BACKEND_CONSTANTS_PATH);

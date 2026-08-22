@@ -79,12 +79,15 @@ test('release config requires explicit backend transport environment variables',
   );
 });
 
-test('web static render (release, no window) relaxes the required-env guard', () => {
-  // Expo web SSG executes config in Node in production mode with no runtime env;
-  // it must fall back rather than throw, or `expo export --platform web` breaks.
-  assert.doesNotThrow(() =>
-    loadConfigWithEnv({}, { dev: false, platform: 'web' }),
+test('web static render requires the release API URL before baking the bundle', () => {
+  assert.throws(
+    () => loadConfigWithEnv({}, { dev: false, platform: 'web' }),
+    /EXPO_PUBLIC_API_URL/,
   );
-  const { API_URL } = loadConfigWithEnv({}, { dev: false, platform: 'web' });
-  assert.match(API_URL, /\/api\/v1$/);
+
+  const { API_URL } = loadConfigWithEnv(
+    { EXPO_PUBLIC_API_URL: 'https://api.example.test' },
+    { dev: false, platform: 'web' },
+  );
+  assert.equal(API_URL, 'https://api.example.test/api/v1');
 });

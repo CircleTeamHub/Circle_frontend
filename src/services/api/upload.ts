@@ -98,6 +98,40 @@ const CONTENT_TYPE_BY_EXTENSION = {
   m4v: 'video/x-m4v',
 } as const;
 
+/**
+ * contentType → 兜底扩展名。Web 端 picker/编辑器给的是 blob:/data: URI，
+ * `uri.split('/').pop()` 只是一串 uuid，没有扩展名 —— 后端推不出类型时对象
+ * 键会落 `.bin`。presign 入口统一按 contentType 补上。
+ */
+const EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'image/heic': 'heic',
+  'image/heif': 'heif',
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
+  'video/x-m4v': 'm4v',
+  'audio/mp4': 'm4a',
+};
+
+/** 文件名已带认识的扩展名则原样通过，否则按 contentType 补一个。 */
+export function ensureFilenameExtension(
+  filename: string,
+  contentType: string,
+): string {
+  const trimmed = filename.trim();
+  const extension = trimmed.includes('.')
+    ? (trimmed.split('.').pop() ?? '').toLowerCase()
+    : '';
+  if (extension && extension in CONTENT_TYPE_BY_EXTENSION) {
+    return trimmed;
+  }
+  const mapped = EXTENSION_BY_CONTENT_TYPE[contentType];
+  return mapped ? `${trimmed || 'upload'}.${mapped}` : trimmed;
+}
+
 export type UploadFolder =
   | 'avatars'
   | 'covers'
@@ -238,6 +272,9 @@ const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
  * 两者一旦不同步,拿到的签名就对不上真正上传的内容)。
  */
 export async function resolveLocalFileSize(fileUri: string): Promise<number> {
+  if (Platform.OS === 'web') {
+    return (await readLocalBlobOnWeb(fileUri)).size;
+  }
   const info = await FileSystem.getInfoAsync(fileUri);
   if (!info.exists || info.isDirectory) {
     throw new Error(
@@ -247,6 +284,27 @@ export async function resolveLocalFileSize(fileUri: string): Promise<number> {
     );
   }
   return info.size;
+}
+
+/**
+ * Web：picker/manipulator 给的本地地址是 blob:/data: URI，没有文件系统可 stat，
+ * fetch 成 Blob 后 size 与内容天然同源（blob: 是内存引用，代价可忽略）。
+ */
+async function readLocalBlobOnWeb(fileUri: string): Promise<Blob> {
+  let response: Response;
+  try {
+    response = await fetch(fileUri);
+  } catch {
+    response = null as never;
+  }
+  if (!response || !response.ok) {
+    throw new Error(
+      i18n.t('upload.errors.fileUnreadable', {
+        defaultValue: '找不到要上传的文件',
+      }),
+    );
+  }
+  return response.blob();
 }
 
 function assertUploadSize(sizeBytes: number): number {
@@ -292,7 +350,7 @@ export async function requestUploadPresign(
     method: 'POST',
     // 逐字段拼:fileUri 只是本地取值用的,绝不能进请求体(后端 DTO 不认)。
     body: {
-      filename: payload.filename,
+      filename: ensureFilenameExtension(payload.filename, payload.contentType),
       contentType: payload.contentType,
       folder: payload.folder,
       sizeBytes,
@@ -328,11 +386,12 @@ export async function uploadFileToPresignedUrl(
   contentType: string,
   body: Blob,
   requiredHeaders: UploadRequiredHeaders,
+  timeoutMs: number = UPLOAD_TIMEOUT_MS,
 ) {
   return runStorageUpload({ kind: 'presigned-put', contentType }, async () => {
     assertPresignedUploadUrlReachableOnCurrentPlatform(uploadUrl);
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     let response: Response;
     try {
@@ -409,6 +468,22 @@ export async function uploadLocalFileToPresignedUrl(
   requiredHeaders: UploadRequiredHeaders,
   timeoutMs: number = UPLOAD_TIMEOUT_MS,
 ) {
+  if (Platform.OS === 'web') {
+    // Web 没有 RNFS/uploadAsync：blob:/data: URI 取成 Blob 后走通用 fetch PUT
+    // 通道（同一套超时与错误语义；requiredHeaders 原样转发，见 presign 契约）。
+    const blob = await readLocalBlobOnWeb(fileUri);
+    // timeoutMs 必须透传：视频那几个调用点传的是 VIDEO_UPLOAD_TIMEOUT_MS（分钟级），
+    // 丢掉就退回 60 秒默认值 —— 网页端发稍大一点的视频必然超时失败，
+    // 而原生端同样的文件是好的，很难联想到是平台分支吃掉了参数。
+    await uploadFileToPresignedUrl(
+      uploadUrl,
+      contentType,
+      blob,
+      requiredHeaders,
+      timeoutMs,
+    );
+    return;
+  }
   return runStorageUpload({ kind: 'local-file', contentType }, async () => {
     assertPresignedUploadUrlReachableOnCurrentPlatform(uploadUrl);
 

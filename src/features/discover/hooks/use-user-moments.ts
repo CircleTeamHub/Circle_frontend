@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { fetchUserMoments } from '@/services/api/moments';
 import type { MomentPost } from '@/types';
 
@@ -67,7 +68,7 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
         setCursor(result.nextCursor ?? null);
       } catch (err) {
         if (!mountedRef.current || requestSeq !== requestSeqRef.current) return;
-        setError(err instanceof Error ? err.message : t('common.networkError'));
+        setError(getApiErrorMessage(err, t('common.networkError')));
       }
     },
     [userId, t],

@@ -1,10 +1,13 @@
-import { useMemo } from 'react';
-import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
+import { useContentColumnWidth } from '@/components/app/desktop-centered-column';
+import { ImageViewer } from '@/components/ui/image-viewer';
 import { Radius, Spacing } from '@/theme';
 
 interface ImageGridProps {
   images: string[];
+  /** 覆盖点图行为；不传时用内置的全屏大图查看器（默认且期望的行为）。 */
   onPress?: (index: number) => void;
   /** 外部容器可用宽度（相册行的内容列宽度）。缺省时按 discover 卡片布局计算。 */
   containerWidth?: number;
@@ -17,9 +20,11 @@ export const ImageGrid: React.FC<ImageGridProps> = ({
   onPress,
   containerWidth: containerWidthProp,
 }) => {
-  const { width: screenWidth } = useWindowDimensions();
+  // 桌面网页版里这是居中栏宽（640），不是 1440 的视口宽。
+  const availableWidth = useContentColumnWidth();
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const containerWidth =
-    containerWidthProp ?? screenWidth - Spacing.lg * 2 - Spacing.md * 2;
+    containerWidthProp ?? availableWidth - Spacing.lg * 2 - Spacing.md * 2;
 
   const layout = useMemo(() => {
     const count = images.length;
@@ -30,6 +35,17 @@ export const ImageGrid: React.FC<ImageGridProps> = ({
     return { cols: 3, rows: Math.ceil(count / 3), itemSize: (containerWidth - GAP * 2) / 3 };
   }, [images.length, containerWidth]);
 
+  const handlePress = useCallback(
+    (index: number) => {
+      if (onPress) {
+        onPress(index);
+        return;
+      }
+      setViewerIndex(index);
+    },
+    [onPress],
+  );
+
   if (images.length === 0) return null;
 
   return (
@@ -37,7 +53,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({
       {images.map((uri, i) => (
         <Pressable
           key={`${uri}-${i}`}
-          onPress={() => onPress?.(i)}
+          onPress={() => handlePress(i)}
           style={[
             s.imageWrap,
             {
@@ -57,6 +73,12 @@ export const ImageGrid: React.FC<ImageGridProps> = ({
           />
         </Pressable>
       ))}
+      <ImageViewer
+        images={images}
+        visible={viewerIndex !== null}
+        initialIndex={viewerIndex ?? 0}
+        onClose={() => setViewerIndex(null)}
+      />
     </View>
   );
 };

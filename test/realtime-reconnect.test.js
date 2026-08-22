@@ -107,7 +107,6 @@ function loadRealtimeHarness() {
               'CIRCLE_INVITATION_REJECTED',
               'CIRCLE_ADMIN_OVERRIDE_APPROVED',
               'CIRCLE_POST_PUBLISHED',
-              'CIRCLE_POST_SIGNUP_CREATED',
               'CIRCLE_POST_AUTO_ENDED',
               'CIRCLE_POST_COLLABORATION_RECOGNIZED',
             ]),

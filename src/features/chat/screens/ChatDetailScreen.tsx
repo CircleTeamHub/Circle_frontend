@@ -21,6 +21,7 @@ import {
   type GestureResponderEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  type TextInputKeyPressEventData,
 } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams, useNavigation, useSegments } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
@@ -457,11 +458,35 @@ const s = StyleSheet.create({
 /** 引用跳转最多往回翻几页(一页 50 条);翻不到就放弃,不能无界翻。 */
 const QUOTE_PAGING_MAX = 10;
 
-export default function ChatDetailScreen() {
+/** 定位高亮的停留时长:够看清"跳到了哪条",又不会赖着不走。 */
+const HIGHLIGHT_VISIBLE_MS = 3000;
+
+// type 而非 interface：路由跳转处要把它原样塞给 router.push 的 params，
+// 只有 type 字面量带隐式索引签名、能赋给 expo-router 的 UnknownInputParams。
+export type EmbeddedChatParams = {
+  conversationID: string;
+  sourceID?: string;
+  title?: string;
+  conversationType?: 'private' | 'group';
+  conversationKind?: 'direct' | 'group' | 'temp' | 'support';
+  avatarUrl?: string;
+  searchedMsgID?: string;
+};
+
+interface ChatDetailScreenProps {
+  /**
+   * 桌面网页版分栏模式：MessagesScreen 把本屏当组件内嵌进右栏并直接喂参数，
+   * 不经过路由。置此项时隐藏返回键（左栏列表本身就是"返回"）；切换会话由
+   * 父级用 key={conversationID} 整树重挂，保证各会话内部状态互不串扰。
+   */
+  embedded?: EmbeddedChatParams;
+}
+
+export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {}) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const params = useLocalSearchParams<{
+  const routeParams = useLocalSearchParams<{
     conversationID?: string;
     sourceID?: string;
     title?: string;
@@ -470,6 +495,7 @@ export default function ChatDetailScreen() {
     avatarUrl?: string;
     searchedMsgID?: string;
   }>();
+  const params = embedded ?? routeParams;
   const navigation = useNavigation();
   // 聊天页在哪个 tab 栈打开（messages/discover/...），决定返回兜底与子页面跳转的 scope。
   const segments = useSegments();
@@ -1085,7 +1111,7 @@ export default function ChatDetailScreen() {
         if (mountedRef.current) {
           setHighlightedMessageID(null);
         }
-      }, 2200);
+      }, HIGHLIGHT_VISIBLE_MS);
       return () => clearTimeout(timer);
     }
 
@@ -1245,6 +1271,18 @@ export default function ChatDetailScreen() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [highlightedMessageID, setHighlightedMessageID] = useState<string | null>(
     null,
+  );
+  // 引用跳转的高亮定时器(搜索跳转那条路径自带 effect 清理,这条是命令式的)。
+  const highlightClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  useEffect(
+    () => () => {
+      if (highlightClearTimerRef.current) {
+        clearTimeout(highlightClearTimerRef.current);
+      }
+    },
+    [],
   );
 
   const handleCopyMessage = useCallback(async (message: ChatMessage) => {
@@ -1859,6 +1897,15 @@ export default function ChatDetailScreen() {
             // 命中之后交给 searchedMsgID 那条既有的滚动路径:它已经处理好了
             // 「列表还没重新布局完」的重试与高亮。
             setHighlightedMessageID(targetId);
+            // 高亮是「我带你跳到了这里」的一次性提示,不是选中态 —— 到点自动
+            // 褪去(与 searchedMsgID / 朋友圈评论定位同一节奏)。漏了这一笔的话
+            // 高亮会一直挂在那条消息上。
+            if (highlightClearTimerRef.current) {
+              clearTimeout(highlightClearTimerRef.current);
+            }
+            highlightClearTimerRef.current = setTimeout(() => {
+              if (mountedRef.current) setHighlightedMessageID(null);
+            }, HIGHLIGHT_VISIBLE_MS);
             const index = messagesRef.current.findIndex(
               (m) => m.id === targetId,
             );
@@ -3689,13 +3736,15 @@ export default function ChatDetailScreen() {
       keyboardVerticalOffset={0}
     >
       <View style={s.header}>
-        <Pressable
-          testID={E2E_TEST_IDS.chatBack}
-          onPress={handleBack}
-          hitSlop={8}
-        >
-          <Ionicons name="chevron-back" size={24} color={colors.text} />
-        </Pressable>
+        {embedded ? null : (
+          <Pressable
+            testID={E2E_TEST_IDS.chatBack}
+            onPress={handleBack}
+            hitSlop={8}
+          >
+            <Ionicons name="chevron-back" size={24} color={colors.text} />
+          </Pressable>
+        )}
         <Pressable onPress={handleOpenHeaderTarget}>
           {isGroupChat ? (
             <GroupChatAvatar
@@ -3962,20 +4011,24 @@ export default function ChatDetailScreen() {
           },
         ]}
       >
-        {/* 左侧：语音模式→切回键盘；文本模式→话筒。录音中由全屏浮层接管，禁用。 */}
-        <Pressable
-          key="voice-left"
-          style={[s.circleBtn, d.circleBtn]}
-          onPress={toggleVoiceInputMode}
-          disabled={isPreviewMode || isVoiceRecording}
-          hitSlop={8}
-        >
-          <Ionicons
-            name={voiceInputMode ? 'create-outline' : 'mic'}
-            size={22}
-            color={colors.textSecondary}
-          />
-        </Pressable>
+        {/* 左侧：语音模式→切回键盘；文本模式→话筒。录音中由全屏浮层接管，禁用。
+            Web 直接不放录音入口：MediaRecorder 只出 webm/opus，原生端播不了，
+            跨端语音格式没对齐前先砍（微信桌面版同款取舍）；语音**播放**不受影响。 */}
+        {Platform.OS === 'web' ? null : (
+          <Pressable
+            key="voice-left"
+            style={[s.circleBtn, d.circleBtn]}
+            onPress={toggleVoiceInputMode}
+            disabled={isPreviewMode || isVoiceRecording}
+            hitSlop={8}
+          >
+            <Ionicons
+              name={voiceInputMode ? 'create-outline' : 'mic'}
+              size={22}
+              color={colors.textSecondary}
+            />
+          </Pressable>
+        )}
 
         {/* 中间：文本模式=输入框；语音模式=按住说话（gesture 元素全程保持挂载）。 */}
         {voiceInputMode ? (
@@ -4027,6 +4080,31 @@ export default function ChatDetailScreen() {
               selection={selection}
               onSelectionChange={handleSelectionChange}
               onSubmitEditing={handleSend}
+              // Web：Enter 发送。onKeyPress 在 RNW 内部先于它自己的 submit 分支
+              // 执行，我们 preventDefault 之后那条分支就不会再走（它带
+              // !isDefaultPrevented 判断），因此不会重复发送。
+              // 原生端保持 undefined、行为不变。
+              onKeyPress={
+                Platform.OS === 'web'
+                  ? (
+                      event: NativeSyntheticEvent<TextInputKeyPressEventData>,
+                    ) => {
+                      // DOM 的 KeyboardEvent 带这两个字段，RN 的类型里没有。
+                      const native = event.nativeEvent as
+                        & TextInputKeyPressEventData
+                        & { isComposing?: boolean; keyCode?: number };
+                      if (native.key !== 'Enter') return;
+                      // 中日韩输入法「回车确认候选词」也会发一个 Enter —— 不挡住的话
+                      // 每选一次词就把半截草稿发出去，中文用户几乎每句话都中招。
+                      // 判据与 RNW 内部的 isEventComposing 一致（见 TextInput：
+                      // isComposing || keyCode === 229），它自己的 submit 分支
+                      // 也是这么挡的，我们别把它绕过去。
+                      if (native.isComposing || native.keyCode === 229) return;
+                      event.preventDefault();
+                      void handleSend();
+                    }
+                  : undefined
+              }
               onFocus={() => {
                 LayoutAnimation.configureNext(PANEL_LAYOUT_ANIM);
                 setAttachmentOpen(false);
@@ -4052,6 +4130,14 @@ export default function ChatDetailScreen() {
           style={[s.circleBtn, s.composerActionBtn, d.circleBtn, d.composerActionBtn]}
           onPress={draft.trim() || pendingCard ? handleSend : handleAttachmentToggle}
           disabled={sending || isPreviewMode || isVoiceRecording}
+          accessibilityRole="button"
+          accessibilityLabel={
+            draft.trim() || pendingCard
+              ? t('common.send')
+              : t('chat.detail.attachmentPanelLabel', {
+                  defaultValue: '打开附件面板',
+                })
+          }
         >
           <Ionicons
             name={draft.trim() || pendingCard ? 'send' : 'add'}

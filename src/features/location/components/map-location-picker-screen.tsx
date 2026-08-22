@@ -4,17 +4,20 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MapSurface } from '@/features/location/components/map-surface';
 import {
-  WebView,
-  type WebViewMessageEvent,
-  type WebViewNavigation,
-} from 'react-native-webview';
+  BASEMAP_ATTRIBUTION,
+  BASEMAP_MAX_ZOOM,
+  getBasemapUrlTemplate,
+  type BasemapScheme,
+} from '@/features/location/utils/location-map';
 import type { PickedLocation } from '@/features/location/types';
 import { Spacing, Typography, useTheme } from '@/theme';
 import {
@@ -45,9 +48,27 @@ type MapLocationPickerScreenProps = {
   onConfirm: (location: PickedLocation) => void;
 };
 
-const MAP_ORIGIN = 'https://appassets.invalid';
 const MAX_LOCATION_TITLE_LENGTH = 120;
 const MAX_LOCATION_ADDRESS_LENGTH = 500;
+
+function readGeocoderBaseUrl(): string | null {
+  const raw = process.env.EXPO_PUBLIC_GEOCODER_BASE_URL?.trim();
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    const isLocalHttp =
+      url.protocol === 'http:' &&
+      (url.hostname === 'localhost' || url.hostname === '127.0.0.1');
+    if (url.protocol !== 'https:' && !isLocalHttp) return null;
+    url.username = '';
+    url.password = '';
+    url.search = '';
+    url.hash = '';
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return null;
+  }
+}
 
 function readCoordinate(
   value: string | string[] | undefined,
@@ -133,6 +154,7 @@ function buildMapHtml(
     MapLocationPickerLabels,
     'searchPlaceholder' | 'searchButton' | 'selectedLabel'
   >,
+  scheme: BasemapScheme,
 ) {
   const safeTitle = escapeHtml(title);
   const safeAddress = escapeHtml(address);
@@ -142,14 +164,28 @@ function buildMapHtml(
   const scriptSelectedLabel = serializeForInlineScript(labels.selectedLabel);
   const scriptTitle = serializeForInlineScript(title || '');
   const scriptAddress = serializeForInlineScript(address || '');
+  const geocoderBaseUrl = readGeocoderBaseUrl();
+  const scriptGeocoderBaseUrl = geocoderBaseUrl
+    ? serializeForInlineScript(geocoderBaseUrl)
+    : 'null';
+  const useParentGeocoderBridge = Platform.OS === 'web';
+  const geocoderConnectSource = geocoderBaseUrl
+    ? `; connect-src ${escapeHtml(new URL(geocoderBaseUrl).origin)}`
+    : '';
+  const searchControls = geocoderBaseUrl
+    ? `<div class="search">
+      <input id="query" maxlength="120" placeholder="${safeSearchPlaceholder}" value="${safeTitle || safeAddress}">
+      <button id="search">${safeSearchButton}</button>
+    </div>`
+    : '';
   return `<!doctype html>
 <html>
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-circle-map'; style-src 'nonce-circle-map' 'unsafe-inline'; img-src https://tile.openstreetmap.org data: blob:; connect-src https://nominatim.openstreetmap.org">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-circle-map'; style-src 'nonce-circle-map' 'unsafe-inline'; img-src https://basemaps.cartocdn.com data: blob:${geocoderConnectSource}">
   <style nonce="circle-map">${LEAFLET_1_9_4_CSS}</style>
   <style nonce="circle-map">
-    html, body, #map { height: 100%; width: 100%; margin: 0; background: #111827; }
+    html, body, #map { height: 100%; width: 100%; margin: 0; background: ${scheme === 'dark' ? '#0b0f19' : '#e8e5df'}; }
     .bottomSheet {
       position: fixed;
       left: 0;
@@ -206,10 +242,7 @@ function buildMapHtml(
 <body>
   <div id="map"></div>
   <div class="bottomSheet">
-    <div class="search">
-      <input id="query" maxlength="120" placeholder="${safeSearchPlaceholder}" value="${safeTitle || safeAddress}">
-      <button id="search">${safeSearchButton}</button>
-    </div>
+    ${searchControls}
     <div class="picked">
       <div id="picked-title">${safeTitle || safeSelectedLabel}</div>
       <small id="picked-address">${safeAddress}</small>
@@ -218,15 +251,47 @@ function buildMapHtml(
   <script nonce="circle-map">${LEAFLET_1_9_4_JS}</script>
   <script nonce="circle-map">
     const SELECTED_LABEL = ${scriptSelectedLabel};
-    const post = (payload) => window.ReactNativeWebView.postMessage(JSON.stringify(payload));
+    const GEOCODER_BASE_URL = ${scriptGeocoderBaseUrl};
+    const USE_PARENT_GEOCODER_BRIDGE = ${useParentGeocoderBridge};
+    const bridge = window.ReactNativeWebView || {
+      postMessage: (data) => window.parent.postMessage(data, '*')
+    };
+    const post = (payload) => bridge.postMessage(JSON.stringify(payload));
+    const pendingGeocoderRequests = new Map();
+    let nextGeocoderRequestId = 1;
+    window.addEventListener('message', (event) => {
+      if (!USE_PARENT_GEOCODER_BRIDGE || event.source !== window.parent || typeof event.data !== 'string') return;
+      let payload;
+      try { payload = JSON.parse(event.data); } catch { return; }
+      if (payload?.type !== 'geocoder-response' || !Number.isSafeInteger(payload.requestId)) return;
+      const pending = pendingGeocoderRequests.get(payload.requestId);
+      if (!pending) return;
+      pendingGeocoderRequests.delete(payload.requestId);
+      clearTimeout(pending.timer);
+      if (payload.ok) pending.resolve(payload.data);
+      else pending.reject(new Error('geocoder request failed'));
+    });
+
+    function requestParentGeocoder(path, params) {
+      return new Promise((resolve, reject) => {
+        const requestId = nextGeocoderRequestId++;
+        const timer = setTimeout(() => {
+          pendingGeocoderRequests.delete(requestId);
+          reject(new Error('geocoder request timed out'));
+        }, 10000);
+        pendingGeocoderRequests.set(requestId, { resolve, reject, timer });
+        post({ type: 'geocoder-request', requestId, path, params });
+      });
+    }
 
     try {
       if (typeof L === 'undefined') throw new Error('leaflet unavailable');
 
       const map = L.map('map', { zoomControl: false }).setView([${latitude}, ${longitude}], 15);
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap'
+      const retinaSuffix = window.devicePixelRatio > 1 ? '@2x' : '';
+      L.tileLayer('${getBasemapUrlTemplate(scheme)}'.replace('{r}', retinaSuffix), {
+        maxZoom: ${BASEMAP_MAX_ZOOM},
+        attribution: '${escapeHtml(BASEMAP_ATTRIBUTION)}'
       }).addTo(map);
       L.control.zoom({ position: 'bottomright' }).addTo(map);
 
@@ -256,6 +321,32 @@ function buildMapHtml(
       }
 
       let pickGeneration = 0;
+      let geocoderTail = Promise.resolve();
+      let lastGeocoderStart = 0;
+
+      function requestGeocoder(path, params) {
+        if (!GEOCODER_BASE_URL) return Promise.resolve(null);
+        const run = async () => {
+          const delay = Math.max(0, 1000 - (Date.now() - lastGeocoderStart));
+          if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+          lastGeocoderStart = Date.now();
+          if (USE_PARENT_GEOCODER_BRIDGE) {
+            return requestParentGeocoder(path, params);
+          }
+          const url = new URL(GEOCODER_BASE_URL + path);
+          Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, String(value)));
+          const response = await fetch(url.toString(), { headers: { Accept: 'application/json' } });
+          if (!response.ok) throw new Error('geocoder request failed');
+          return response.json();
+        };
+        const request = geocoderTail.then(run, run);
+        geocoderTail = request.catch(() => undefined);
+        return request;
+      }
+
+      function fetchReversePlace(lat, lon) {
+        return requestGeocoder('/reverse', { format: 'jsonv2', lat, lon });
+      }
 
       async function reverseGeocode(lat, lon) {
         pickGeneration += 1;
@@ -266,11 +357,9 @@ function buildMapHtml(
           title: SELECTED_LABEL,
           address: lat.toFixed(5) + ', ' + lon.toFixed(5)
         });
+        if (!GEOCODER_BASE_URL) return;
         try {
-          const url = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=' + encodeURIComponent(lat) + '&lon=' + encodeURIComponent(lon);
-          const response = await fetch(url, { headers: { Accept: 'application/json' } });
-          if (!response.ok) throw new Error('reverse request failed');
-          const data = await response.json();
+          const data = await fetchReversePlace(lat, lon);
           if (generation !== pickGeneration) return;
           updatePicked({
             title: data.name || data.display_name?.split(',')[0] || SELECTED_LABEL,
@@ -281,17 +370,33 @@ function buildMapHtml(
         }
       }
 
+      async function refineInitialAddress() {
+        if (!GEOCODER_BASE_URL) return;
+        const coordsOnly = /^\\s*-?\\d{1,3}(\\.\\d+)?\\s*,\\s*-?\\d{1,3}(\\.\\d+)?\\s*$/;
+        if (picked.address && !coordsOnly.test(picked.address)) return;
+        const generation = pickGeneration;
+        try {
+          const data = await fetchReversePlace(picked.latitude, picked.longitude);
+          if (generation !== pickGeneration) return;
+          updatePicked({
+            title: picked.title || data.name || SELECTED_LABEL,
+            address: data.display_name || picked.address
+          });
+        } catch {
+          // Keep the coordinate fallback when reverse geocoding is unavailable.
+        }
+      }
+
       async function searchPlace() {
+        if (!GEOCODER_BASE_URL) return;
         const query = document.getElementById('query').value.trim();
         if (!query) return;
         pickGeneration += 1;
         const generation = pickGeneration;
         try {
-          const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=' + encodeURIComponent(query);
-          const response = await fetch(url, { headers: { Accept: 'application/json' } });
-          if (!response.ok) throw new Error('search request failed');
-          const rows = await response.json();
-          if (generation !== pickGeneration || !rows.length) return;
+          const rows = await requestGeocoder('/search', { format: 'jsonv2', limit: 1, q: query });
+          if (generation !== pickGeneration) return;
+          if (!rows.length) return;
           const row = rows[0];
           const lat = Number(row.lat);
           const lon = Number(row.lon);
@@ -313,10 +418,15 @@ function buildMapHtml(
         const pos = marker.getLatLng();
         reverseGeocode(pos.lat, pos.lng);
       });
-      document.getElementById('search').addEventListener('click', searchPlace);
-      document.getElementById('query').addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') searchPlace();
-      });
+      const searchButton = document.getElementById('search');
+      const searchInput = document.getElementById('query');
+      if (searchButton && searchInput) {
+        searchButton.addEventListener('click', searchPlace);
+        searchInput.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter') searchPlace();
+        });
+      }
+      refineInitialAddress();
     } catch {
       post({ type: 'map-runtime-unavailable' });
     }
@@ -331,7 +441,7 @@ export function MapLocationPickerScreen({
   onConfirm,
 }: MapLocationPickerScreenProps) {
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
+  const { colors, resolvedMode } = useTheme();
   const params = useLocalSearchParams<{
     latitude?: string;
     longitude?: string;
@@ -340,7 +450,7 @@ export function MapLocationPickerScreen({
   }>();
   const [loading, setLoading] = useState(true);
   const [mapUnavailable, setMapUnavailable] = useState(false);
-  const [webViewKey, setWebViewKey] = useState(0);
+  const [surfaceKey, setSurfaceKey] = useState(0);
 
   const initialLocation = useMemo<PickedLocation>(
     () => ({
@@ -362,21 +472,21 @@ export function MapLocationPickerScreen({
   useEffect(() => setCandidateLocation(initialLocation), [initialLocation]);
 
   const mapHtml = useMemo(
-    () => buildMapHtml(initialLocation, labels),
-    [initialLocation, labels],
+    () => buildMapHtml(initialLocation, labels, resolvedMode),
+    [initialLocation, labels, resolvedMode],
   );
 
   const handleRetry = useCallback(() => {
     setMapUnavailable(false);
     setLoading(true);
-    setWebViewKey((key) => key + 1);
+    setSurfaceKey((key) => key + 1);
   }, []);
 
   const handleMapMessage = useCallback(
-    (event: WebViewMessageEvent) => {
+    (data: string) => {
       let payload: unknown;
       try {
-        payload = JSON.parse(event.nativeEvent.data) as unknown;
+        payload = JSON.parse(data) as unknown;
       } catch {
         return;
       }
@@ -402,12 +512,6 @@ export function MapLocationPickerScreen({
   const handleConfirm = useCallback(() => {
     onConfirm(candidateLocation);
   }, [candidateLocation, onConfirm]);
-
-  const handleNavigation = useCallback((request: WebViewNavigation) => {
-    return (
-      request.url === 'about:blank' || request.url.startsWith(`${MAP_ORIGIN}/`)
-    );
-  }, []);
 
   return (
     <View
@@ -435,17 +539,13 @@ export function MapLocationPickerScreen({
             <ActivityIndicator color={colors.primary} />
           </View>
         ) : null}
-        <WebView
-          key={webViewKey}
-          originWhitelist={[`${MAP_ORIGIN}/*`]}
-          source={{ html: mapHtml, baseUrl: `${MAP_ORIGIN}/` }}
-          javaScriptEnabled
-          domStorageEnabled={false}
-          setSupportMultipleWindows={false}
-          onShouldStartLoadWithRequest={handleNavigation}
+        <MapSurface
+          reloadKey={surfaceKey}
+          title={labels.title}
+          html={mapHtml}
+          geocoderBaseUrl={readGeocoderBaseUrl()}
           onLoadEnd={() => setLoading(false)}
           onMessage={handleMapMessage}
-          style={s.webView}
         />
         <View
           style={[
@@ -539,7 +639,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  webView: { flex: 1 },
   nativeConfirm: {
     position: 'absolute',
     left: 0,

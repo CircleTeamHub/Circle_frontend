@@ -26,6 +26,7 @@ import {
   getAvatarPickerPermissionDeniedMessage,
 } from '@/features/profile/avatar-picker-feedback';
 import { loadImagePickerModule } from '@/features/profile/image-picker';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { updateUserProfile, type UpdateProfilePayload } from '@/services/api/profile';
 import {
   requestUploadPresign,
@@ -298,8 +299,7 @@ export default function OnboardingProfileScreen() {
       router.replace('/(tabs)/messages');
       startAppServicesAfterOnboarding();
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : t('validation.saveFailed');
+      const message = getApiErrorMessage(error, t('validation.saveFailed'));
       Alert.alert(t('validation.saveFailed'), message);
     } finally {
       setIsSaving(false);

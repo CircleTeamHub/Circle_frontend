@@ -1,7 +1,7 @@
 import { apiClient } from './client';
 
 /** 与后端 src/qr/qr.types.ts 对齐。 */
-export type QrTokenType = 'USER' | 'GROUP' | 'CIRCLE';
+export type QrTokenType = 'USER' | 'GROUP' | 'CIRCLE' | 'LOGIN';
 
 export type QrTokenResult = {
   token: string;
@@ -21,6 +21,9 @@ export type QrResolveResult = {
   issuerNickname: string;
   expiresAt: string | null;
   viewerState: QrViewerState;
+  /** LOGIN 预览专用：帮助手机端核对发起登录的浏览器。 */
+  requestDevice?: string;
+  verificationCode?: string;
 };
 
 export type QrJoinResult = {
@@ -31,7 +34,8 @@ export type QrJoinResult = {
 };
 
 export function issueQrToken(input: {
-  type: QrTokenType;
+  // LOGIN 令牌由 /auth/qr-login 独立签发，不走本面。
+  type: Exclude<QrTokenType, 'LOGIN'>;
   targetId?: string;
 }): Promise<QrTokenResult> {
   return apiClient<QrTokenResult>('/qr/tokens', {
