@@ -19,7 +19,9 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
  * 落到失败态 —— 二维码亮着却不再轮询是最糟的状态。过期给刷新按钮，
  * 不自动无限续（避免后台标签页里静默轰炸接口）。
  */
-const POLL_INTERVAL_MS = 1_500;
+// 4s keeps confirmation responsive while allowing several users behind one
+// office/carrier NAT to share the backend's aggregate IP abuse ceiling.
+const POLL_INTERVAL_MS = 4_000;
 const QR_SIZE = 200;
 
 type PaneStatus = 'loading' | 'active' | 'expired' | 'failed';
@@ -52,6 +54,12 @@ export function QrLoginPane({ onTokens }: QrLoginPaneProps) {
     try {
       const created = await createQrLoginSession();
       if (generationRef.current !== generation) return;
+      if (
+        !created.requestDevice?.trim() ||
+        !/^\d{6}$/.test(created.verificationCode)
+      ) {
+        throw new Error('QR login confirmation context is missing');
+      }
       setSession(created);
       setStatus('active');
     } catch {
@@ -140,6 +148,21 @@ export function QrLoginPane({ onTokens }: QrLoginPaneProps) {
           </View>
         )}
       </View>
+      {status === 'active' && session ? (
+        <View style={s.verificationBox}>
+          <Text style={[s.verificationLabel, { color: colors.textSecondary }]}>
+            {t('auth.qrLoginVerificationLabel', {
+              defaultValue: '手机确认码',
+            })}
+          </Text>
+          <Text style={[s.verificationCode, { color: colors.text }]}>
+            {session.verificationCode}
+          </Text>
+          <Text style={[s.deviceText, { color: colors.textSecondary }]}>
+            {session.requestDevice}
+          </Text>
+        </View>
+      ) : null}
       <Text style={[s.hint, { color: colors.textSecondary }]}>
         {t('auth.qrLoginHint', {
           defaultValue: '打开手机 App 扫一扫，确认后自动登录',
@@ -184,6 +207,22 @@ const s = StyleSheet.create({
   },
   hint: {
     ...Typography.bodyRegular,
+    textAlign: 'center',
+  },
+  verificationBox: {
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  verificationLabel: {
+    ...Typography.small,
+  },
+  verificationCode: {
+    ...Typography.h2,
+    letterSpacing: 6,
+    fontVariant: ['tabular-nums'],
+  },
+  deviceText: {
+    ...Typography.small,
     textAlign: 'center',
   },
 });

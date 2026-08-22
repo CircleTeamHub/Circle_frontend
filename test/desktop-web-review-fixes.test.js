@@ -67,13 +67,7 @@ test('zoom panning is bounded by the rendered image, not the container', () => {
 });
 
 test('a failed persistent write is not shadowed by the stale stored value', () => {
-  // 两个 web 存储档是同一套逻辑的两份实现,改一处漏一处就是「一半修好了」。
-  for (const relative of [
-    'src/storage/secure-kv.web.ts',
-    'src/storage/encrypted-init.web.ts',
-  ]) {
-    assertOverrideWins(relative);
-  }
+  assertOverrideWins('src/storage/encrypted-init.web.ts');
 });
 
 function assertOverrideWins(relative) {
@@ -96,6 +90,15 @@ function assertOverrideWins(relative) {
     `${relative}: 落盘成功后没撤掉内存覆盖`,
   );
 }
+
+test('web auth credentials never persist in browser storage', () => {
+  const source = read('src/storage/secure-kv.web.ts');
+
+  assert.doesNotMatch(source, /\.setItem\(/);
+  assert.match(source, /memoryStore\.set\(key, value\)/);
+  assert.match(source, /ls\.removeItem\(PREFIX \+ key\)/);
+  assert.match(source, /key\?\.startsWith\(PREFIX\)/);
+});
 
 test('a failed QR finalization leaves the pane recoverable', () => {
   const pane = read('src/features/auth/components/QrLoginPane.tsx');
@@ -143,6 +146,7 @@ test('the QR polling key is redacted from dev logs', () => {
   const redact = read('src/utils/redact.ts');
   // 把 pollKey 从 URL 挪进 body 只挡住了访问日志那一路；dev 下 apiClient
   // 连请求体一起打印，不进脱敏名单等于换个地方继续泄漏同一把钥匙。
+  assert.match(redact, /'qrtoken'/);
   assert.match(redact, /'pollkey'/);
 
   // 名单是小写比对的，写成驼峰会静默失效。

@@ -30,6 +30,18 @@ test('非 qr 路径 / 缺 token / 非法字符集一律返回 null', () => {
   assert.equal(parseQrToken('random text'), null);
 });
 
+test('畸形 percent encoding 不抛异常并返回 null', () => {
+  for (const value of [
+    'circleim://qr?t=%',
+    'circleim://qr?t=%2',
+    'circleim://qr?t=%ZZ',
+    'circleim://qr/%E0%A4%A',
+  ]) {
+    assert.doesNotThrow(() => parseQrToken(value));
+    assert.equal(parseQrToken(value), null);
+  }
+});
+
 test('前后空白与尾随 fragment 不影响解析', () => {
   assert.equal(parseQrToken(`  circleim://qr?t=${TOKEN}  `), TOKEN);
   assert.equal(parseQrToken(`https://windnote.ai/qr?t=${TOKEN}#x`), TOKEN);

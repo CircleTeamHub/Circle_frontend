@@ -3,14 +3,12 @@ import type * as SecureStoreModule from 'expo-secure-store';
 /**
  * SecureStore 平台间接层的 Web 档（导出面与 secure-kv.ts 保持一致）。
  *
- * 浏览器没有系统钥匙串。登录 token 落带前缀的 localStorage —— 这是桌面
- * 网页版评估时明确接受的取舍（测试期）：XSS 防线靠同源部署与后端 CSP，
- * 后续要收紧再引入 cookie 通道。expo-secure-store 在 web 上没有实现，
- * 若不换档，所有凭证写入都会静默失败、刷新即掉登录。
+ * 浏览器没有系统钥匙串，任何写进 localStorage / IndexedDB 的登录凭证都能被
+ * 同源脚本读取。这个平台档因此只保存在当前 JS 会话的内存里；刷新页面会要求
+ * 重新登录，但不会把 access / refresh / IM token 留给后续 XSS 或受损依赖。
  *
  * SSG（expo export 静态渲染）在 Node 里求值：无 window 时读写落进程内
- * Map，导出产物不含任何 token。隐私模式/配额满的单次操作失败同样退内存，
- * 本次会话内自洽。
+ * Map，导出产物不含任何 token。读取时顺手清理旧版本曾落进 localStorage 的值。
  */
 export type SecureKvApi = Pick<
   typeof SecureStoreModule,
@@ -22,7 +20,8 @@ export type SecureKvApi = Pick<
 
 const PREFIX = 'circle-im.sec.';
 
-const memoryFallback = new Map<string, string>();
+const memoryStore = new Map<string, string>();
+let legacyCleanupDone = false;
 
 function getLocalStorage(): Storage | null {
   try {
@@ -33,50 +32,48 @@ function getLocalStorage(): Storage | null {
   }
 }
 
-function read(key: string): string | null {
-  // 内存覆盖优先。它只在"持久化失败"时存在，代表比 localStorage 里那份**更新**
-  // 的值 —— 反过来先读 localStorage，会在配额满之后把上一个账号的 token 复活：
-  // 写入报告成功、读回来却是旧凭证，表现为切号后仍以旧身份登录或直接鉴权失败。
-  const override = memoryFallback.get(key);
-  if (override !== undefined) return override;
-
+function clearLegacyPersistentValues(): void {
+  if (legacyCleanupDone) return;
   const ls = getLocalStorage();
-  if (ls) {
-    try {
-      const value = ls.getItem(PREFIX + key);
-      if (value !== null) return value;
-    } catch {
-      // 读失败：没有覆盖可用，只能当作空。
+  if (!ls) return;
+  try {
+    for (let index = ls.length - 1; index >= 0; index -= 1) {
+      const key = ls.key(index);
+      if (key?.startsWith(PREFIX)) ls.removeItem(key);
     }
+    legacyCleanupDone = true;
+  } catch {
+    // 下次访问再重试；当前会话仍只使用内存里的值。
   }
-  return null;
+}
+
+function read(key: string): string | null {
+  clearLegacyPersistentValues();
+  removeLegacyPersistentValue(key);
+  return memoryStore.get(key) ?? null;
 }
 
 function write(key: string, value: string): void {
-  const ls = getLocalStorage();
-  if (ls) {
-    try {
-      ls.setItem(PREFIX + key, value);
-      // 落盘成功就撤掉内存覆盖，否则那份旧覆盖会一直遮住持久值。
-      memoryFallback.delete(key);
-      return;
-    } catch {
-      // 配额满/隐私模式：退内存，本次会话内保持登录。
-    }
-  }
-  memoryFallback.set(key, value);
+  clearLegacyPersistentValues();
+  removeLegacyPersistentValue(key);
+  memoryStore.set(key, value);
 }
 
-function remove(key: string): void {
+function removeLegacyPersistentValue(key: string): void {
   const ls = getLocalStorage();
   if (ls) {
     try {
       ls.removeItem(PREFIX + key);
     } catch {
-      // 删除失败最多让下次启动多读到一条旧凭证，随后会被覆盖。
+      // 存储不可用时仍保持内存会话；这里不能为清理失败重新暴露旧值。
     }
   }
-  memoryFallback.delete(key);
+}
+
+function remove(key: string): void {
+  clearLegacyPersistentValues();
+  removeLegacyPersistentValue(key);
+  memoryStore.delete(key);
 }
 
 const webSecureKv: SecureKvApi = {
@@ -95,5 +92,6 @@ const webSecureKv: SecureKvApi = {
 };
 
 export function getSecureKv(): Promise<SecureKvApi> {
+  clearLegacyPersistentValues();
   return Promise.resolve(webSecureKv);
 }

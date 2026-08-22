@@ -10,6 +10,8 @@ export type QrLoginSession = {
   qrToken: string;
   pollKey: string;
   expiresAt: string;
+  requestDevice: string;
+  verificationCode: string;
 };
 
 export type QrLoginPollResult =

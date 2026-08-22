@@ -191,7 +191,11 @@ export default function QrLandingScreen() {
   }, [preview, t]);
 
   const primaryDisabled =
-    !preview || joining || (preview.type === 'USER' && preview.viewerState === 'SELF');
+    !preview ||
+    joining ||
+    (preview.type === 'USER' && preview.viewerState === 'SELF') ||
+    (preview.type === 'LOGIN' &&
+      (!preview.requestDevice || !/^\d{6}$/.test(preview.verificationCode ?? '')));
 
   const d = useMemo(
     () => ({
@@ -228,6 +232,19 @@ export default function QrLandingScreen() {
             </Text>
             {subtitle ? (
               <Text style={[s.subtitle, d.subtitle]}>{subtitle}</Text>
+            ) : null}
+            {preview.type === 'LOGIN' ? (
+              <View style={s.loginContext}>
+                <Text style={[s.loginDevice, d.name]}>
+                  {preview.requestDevice || t('qr.loginUnknownDevice')}
+                </Text>
+                <Text style={[s.loginCode, d.name]}>
+                  {preview.verificationCode || '----'}
+                </Text>
+                <Text style={[s.loginWarning, d.subtitle]}>
+                  {t('qr.loginWarning')}
+                </Text>
+              </View>
             ) : null}
             <Pressable
               style={[s.primaryButton, d.primaryButton, primaryDisabled && s.disabled]}
@@ -278,6 +295,25 @@ const s = StyleSheet.create({
   },
   subtitle: {
     ...Typography.bodyRegular,
+    textAlign: 'center',
+  },
+  loginContext: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    paddingVertical: Spacing.sm,
+  },
+  loginDevice: {
+    ...Typography.body,
+    textAlign: 'center',
+  },
+  loginCode: {
+    ...Typography.h2,
+    letterSpacing: 6,
+    fontVariant: ['tabular-nums'],
+  },
+  loginWarning: {
+    ...Typography.small,
     textAlign: 'center',
   },
   errorText: {

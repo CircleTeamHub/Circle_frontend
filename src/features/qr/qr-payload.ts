@@ -41,6 +41,14 @@ export function buildQrUrl(token: string): string {
   return `${SCHEME_PREFIXES[0]}qr?t=${encodeURIComponent(token)}`;
 }
 
+function safeDecodeURIComponent(value: string): string | null {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
+}
+
 function extractToken(rest: string): string | null {
   // rest 形如 `qr?t=<token>`、`qr/<token>` 或(https 下)`qr?t=..#..`。
   if (!rest.startsWith('qr')) return null;
@@ -51,12 +59,12 @@ function extractToken(rest: string): string | null {
     for (const pair of after.slice(1).split('#')[0].split('&')) {
       const eq = pair.indexOf('=');
       if (eq > 0 && pair.slice(0, eq) === 't') {
-        candidate = decodeURIComponent(pair.slice(eq + 1));
+        candidate = safeDecodeURIComponent(pair.slice(eq + 1));
         break;
       }
     }
   } else if (after.startsWith('/')) {
-    candidate = decodeURIComponent(after.slice(1).split(/[?#]/)[0]);
+    candidate = safeDecodeURIComponent(after.slice(1).split(/[?#]/)[0]);
   }
 
   return candidate && TOKEN_PATTERN.test(candidate) ? candidate : null;

@@ -21,6 +21,9 @@ export type QrResolveResult = {
   issuerNickname: string;
   expiresAt: string | null;
   viewerState: QrViewerState;
+  /** LOGIN 预览专用：帮助手机端核对发起登录的浏览器。 */
+  requestDevice?: string;
+  verificationCode?: string;
 };
 
 export type QrJoinResult = {

@@ -41,12 +41,31 @@ test('every qr-login call that can carry tokens is a POST', () => {
   assert.match(pollBody(source), /method: 'POST'/);
 });
 
+test('browser and phone show the same anti-phishing context', () => {
+  const api = read(CLIENT);
+  const browser = read('src/features/auth/components/QrLoginPane.tsx');
+  const phone = read('src/features/qr/screens/QrLandingScreen.tsx');
+
+  assert.match(api, /requestDevice: string/);
+  assert.match(api, /verificationCode: string/);
+  assert.match(browser, /session\.verificationCode/);
+  assert.match(browser, /session\.requestDevice/);
+  assert.match(browser, /QR login confirmation context is missing/);
+  assert.match(phone, /preview\.verificationCode/);
+  assert.match(phone, /preview\.requestDevice/);
+  assert.match(phone, /qr\.loginWarning/);
+  assert.match(phone, /preview\.type === 'LOGIN'[\s\S]{0,160}preview\.requestDevice/);
+});
+
+test('poll cadence leaves room for users sharing one NAT address', () => {
+  const pane = read('src/features/auth/components/QrLoginPane.tsx');
+  assert.match(pane, /const POLL_INTERVAL_MS = 4_000/);
+});
+
 // 前后端靠三条路径字符串对齐，改一边另一边不会报警（改词的教训见
 // realtime close code 那次）。后端并排检出时把它们真比一遍。
 const BACKEND_CONTROLLER = path.join(
-  process.cwd(),
-  '..',
-  'circle_be',
+  process.env.CIRCLE_BE_DIR || path.join(process.cwd(), '..', 'circle_be'),
   'src/auth/auth.controller.ts',
 );
 const hasBackend = fs.existsSync(BACKEND_CONTROLLER);
