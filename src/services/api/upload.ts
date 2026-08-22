@@ -386,11 +386,12 @@ export async function uploadFileToPresignedUrl(
   contentType: string,
   body: Blob,
   requiredHeaders: UploadRequiredHeaders,
+  timeoutMs: number = UPLOAD_TIMEOUT_MS,
 ) {
   return runStorageUpload({ kind: 'presigned-put', contentType }, async () => {
     assertPresignedUploadUrlReachableOnCurrentPlatform(uploadUrl);
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     let response: Response;
     try {
@@ -471,7 +472,16 @@ export async function uploadLocalFileToPresignedUrl(
     // Web 没有 RNFS/uploadAsync：blob:/data: URI 取成 Blob 后走通用 fetch PUT
     // 通道（同一套超时与错误语义；requiredHeaders 原样转发，见 presign 契约）。
     const blob = await readLocalBlobOnWeb(fileUri);
-    await uploadFileToPresignedUrl(uploadUrl, contentType, blob, requiredHeaders);
+    // timeoutMs 必须透传：视频那几个调用点传的是 VIDEO_UPLOAD_TIMEOUT_MS（分钟级），
+    // 丢掉就退回 60 秒默认值 —— 网页端发稍大一点的视频必然超时失败，
+    // 而原生端同样的文件是好的，很难联想到是平台分支吃掉了参数。
+    await uploadFileToPresignedUrl(
+      uploadUrl,
+      contentType,
+      blob,
+      requiredHeaders,
+      timeoutMs,
+    );
     return;
   }
   return runStorageUpload({ kind: 'local-file', contentType }, async () => {

@@ -984,6 +984,14 @@ export default function MessagesScreen() {
                   await updateChatConversationPreferences(conversation.id, {
                     hidden: true,
                   });
+                  // 分栏模式:删掉的正好是右栏正在显示的那个会话时,把右栏收回
+                  // 空态。不收的话左边的行没了、右边还挂着一段已经被清空的
+                  // 聊天,往里发消息等于把会话原地复活。
+                  // 用函数式更新读当前值,免得把 embeddedChat 塞进依赖 ——
+                  // 那会让这个回调随每次切会话重建。
+                  setEmbeddedChat((current) =>
+                    current?.conversationID === conversation.id ? null : current,
+                  );
                 } catch (err) {
                   if (isDev) {
                     console.warn("[messages] swipe delete failed", err);
