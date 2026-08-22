@@ -22,15 +22,33 @@ test('chat exposes a full-screen OpenStreetMap picker route', () => {
   const route = read('app/(chat)/location-picker.tsx');
   const screen = read('src/features/chat/screens/ChatLocationPickerScreen.tsx');
   const sharedMap = read('src/features/location/components/map-location-picker-screen.tsx');
+  const nativeSurface = read(
+    'src/features/location/components/map-surface.tsx',
+  );
 
   assert.match(route, /ChatLocationPickerScreen/);
   assert.match(screen, /MapLocationPickerScreen/);
   // 底图渲染换成了 CARTO（同一份 OSM 数据的底图向样式），反查仍走 nominatim。
   assert.match(sharedMap, /getBasemapUrlTemplate/);
   assert.match(sharedMap, /nominatim\.openstreetmap\.org\/search/);
-  assert.match(sharedMap, /location-selected/);
+  assert.match(sharedMap, /location-changed/);
+  assert.doesNotMatch(sharedMap, /location-selected/);
+  assert.doesNotMatch(sharedMap, /unpkg\.com|<script src=|<link rel="stylesheet" href="https:/);
+  assert.match(sharedMap, /LEAFLET_1_9_4_JS/);
+  assert.match(sharedMap, /Content-Security-Policy/);
+  assert.match(sharedMap, /MapSurface/);
+  assert.match(nativeSurface, /onShouldStartLoadWithRequest/);
+  assert.match(sharedMap, /setCandidateLocation/);
+  assert.match(sharedMap, /onPress=\{handleConfirm\}/);
   assert.match(sharedMap, /serializeForInlineScript/);
   assert.match(sharedMap, /replaceAll\('<', '\\\\u003c'\)/);
+
+  const leaflet = read(
+    'src/features/location/components/leaflet-1.9.4.ts',
+  );
+  assert.match(leaflet, /Leaflet 1\.9\.4/);
+  assert.match(leaflet, /export const LEAFLET_1_9_4_JS/);
+  assert.match(leaflet, /export const LEAFLET_1_9_4_CSS/);
 });
 
 test('location bubbles show a real map tile and open the system map', () => {

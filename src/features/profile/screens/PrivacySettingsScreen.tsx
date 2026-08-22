@@ -227,6 +227,7 @@ export default function PrivacySettingsScreen() {
   return (
     <>
       <SettingsDetailScreen
+        testIDPrefix="privacy"
         titleKey="settingsDetails.privacy.title"
         sections={[
           {

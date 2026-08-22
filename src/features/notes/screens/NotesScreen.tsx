@@ -29,6 +29,7 @@ import { NoteGroupPickerSheet } from '@/features/notes/components/NoteGroupPicke
 import { ShareNoteSheet } from '@/features/notes/components/ShareNoteSheet';
 import { GroupManagerSheet } from '@/features/notes/components/GroupManagerSheet';
 import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
+import { MAX_NOTE_BATCH_SELECTION } from '@/features/chat/utils/note-batch-send';
 import type { NoteGroup, NoteSummary } from '@/features/notes/types';
 import { runNoteBatch } from '@/features/notes/utils/batch-run';
 import {
@@ -450,15 +451,23 @@ export default function NotesScreen() {
   const closeRemark = useCallback(() => setRemarkNotes(null), []);
 
   const handleRemarkSaved = useCallback(
-    (noteIds: string[], remark: string | null) => {
-      const savedSet = new Set(noteIds);
+    ({ succeededIds, failedIds, remark }: {
+      succeededIds: string[];
+      failedIds: string[];
+      remark: string | null;
+    }) => {
+      const savedSet = new Set(succeededIds);
       setNotes((prev) =>
         prev.map((item) =>
           savedSet.has(item.id) ? { ...item, remark } : item,
         ),
       );
-      // 批量备注保存后退出多选（部分失败已由弹层提示过）；单条场景本就不在多选态。
-      exitSelection();
+      if (failedIds.length > 0) {
+        setSelectedIds(failedIds);
+        setSelectionMode(true);
+      } else {
+        exitSelection();
+      }
     },
     [exitSelection],
   );
@@ -496,13 +505,22 @@ export default function NotesScreen() {
   );
   const handleBatchShare = useCallback(
     (notes: NoteSummary[]) => {
+      if (notes.length > MAX_NOTE_BATCH_SELECTION) {
+        Alert.alert(
+          t('notes.shareToChat.failedTitle'),
+          t('notes.shareToChat.limitExceeded', {
+            count: MAX_NOTE_BATCH_SELECTION,
+          }),
+        );
+        return;
+      }
       setShareNotePayloads(
         notes.map((note) =>
           buildNoteCardPayloadFromSummary(note, note.ownerId ?? currentUserId),
         ),
       );
     },
-    [currentUserId],
+    [currentUserId, t],
   );
   const closeShareNote = useCallback(() => setShareNotePayloads(null), []);
 

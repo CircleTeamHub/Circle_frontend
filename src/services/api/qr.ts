@@ -44,6 +44,13 @@ export function issueQrToken(input: {
   });
 }
 
+export function rotateUserQrToken(): Promise<QrTokenResult> {
+  return apiClient<QrTokenResult>('/qr/tokens/rotate', {
+    method: 'POST',
+    body: { type: 'USER' },
+  });
+}
+
 export function resolveQrToken(token: string): Promise<QrResolveResult> {
   return apiClient<QrResolveResult>(`/qr/tokens/${encodeURIComponent(token)}`);
 }

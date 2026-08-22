@@ -49,7 +49,9 @@ test('native map surface keeps the WebView bridge', () => {
 
   assert.match(native, /react-native-webview/);
   assert.match(native, /event\.nativeEvent\.data/);
-  assert.match(native, /baseUrl: 'https:\/\/www\.openstreetmap\.org'/);
+  assert.match(native, /baseUrl: 'https:\/\/appassets\.invalid\/'/);
+  assert.match(native, /onShouldStartLoadWithRequest/);
+  assert.doesNotMatch(native, /originWhitelist=\{\['\*'\]\}/);
 });
 
 test('map html posts through a bridge that works in both WebView and iframe', () => {

@@ -34,6 +34,16 @@ test('toggleSelectAll clears when every visible id is already selected', () => {
   assert.deepEqual(toggleSelectAll([], []), []);
 });
 
+test('note selection never grows beyond the supplied batch limit', () => {
+  const nine = Array.from({ length: 9 }, (_, index) => `n${index}`);
+
+  assert.deepEqual(toggleId(nine, 'overflow', 9), nine);
+  assert.deepEqual(
+    toggleSelectAll([], [...nine, 'overflow'], 9),
+    nine,
+  );
+});
+
 test('pruneSelection drops ids that no longer exist after a reload', () => {
   assert.deepEqual(pruneSelection(['a', 'gone', 'b'], ['a', 'b', 'c']), [
     'a',

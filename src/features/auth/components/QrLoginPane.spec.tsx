@@ -9,7 +9,9 @@ import {
 jest.mock('react-native-qrcode-svg', () => {
   const { View } =
     jest.requireActual<typeof import('react-native')>('react-native');
-  return () => <View testID="qr-code" />;
+  return function MockQrCode() {
+    return <View testID="qr-code" />;
+  };
 });
 
 jest.mock('react-i18next', () => ({

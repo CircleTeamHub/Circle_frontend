@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useSendEmailCode } from "@/hooks/use-send-email-code";
 import { useNetworkStatus } from "@/hooks/use-network-status";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
+import { E2E_TEST_IDS } from "@/testing/e2e-test-ids";
 import { Link, router, useLocalSearchParams } from "expo-router";
 import { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
@@ -120,6 +121,7 @@ export default function LoginScreen() {
 
   return (
     <ScrollView
+      testID={E2E_TEST_IDS.authLoginScreen}
       style={[s.scroll, d.scroll]}
       contentContainerStyle={[
         s.container,
@@ -149,6 +151,11 @@ export default function LoginScreen() {
         ).map((m) => (
           <Pressable
             key={m}
+            testID={
+              m === "password"
+                ? E2E_TEST_IDS.authPasswordMode
+                : E2E_TEST_IDS.authCodeMode
+            }
             style={[s.segmentItem, mode === m && d.segmentActive]}
             onPress={() => setMode(m)}
           >
@@ -176,6 +183,7 @@ export default function LoginScreen() {
       ) : (
       <View style={s.form}>
         <AuthInput
+          testID={E2E_TEST_IDS.authEmailInput}
           placeholder={t("auth.emailPlaceholder")}
           value={email}
           onChangeText={setEmail}
@@ -187,6 +195,7 @@ export default function LoginScreen() {
         {mode === "password" ? (
           <>
             <AuthInput
+              testID={E2E_TEST_IDS.authPasswordInput}
               placeholder={t("auth.passwordPlaceholder")}
               value={password}
               onChangeText={setPassword}
@@ -204,6 +213,7 @@ export default function LoginScreen() {
           </>
         ) : (
           <AuthInput
+            testID={E2E_TEST_IDS.authCodeInput}
             placeholder={t("auth.codePlaceholder")}
             value={code}
             onChangeText={setCode}
@@ -212,6 +222,7 @@ export default function LoginScreen() {
             autoComplete="one-time-code"
             rightElement={
               <Pressable
+                testID={E2E_TEST_IDS.authSendCode}
                 style={s.sendBtn}
                 onPress={onSendCode}
                 disabled={sendCode.running || sendCode.sending}
@@ -253,6 +264,7 @@ export default function LoginScreen() {
       {/* Login button(qr 档没有提交动作,轮询自动完成) */}
       {mode === "qr" ? null : (
         <Pressable
+          testID={E2E_TEST_IDS.authSubmit}
           style={[s.loginBtn, d.loginBtn, submitting && s.btnDisabled]}
           onPress={onSubmit}
           disabled={submitting}

@@ -27,8 +27,12 @@ interface NoteRemarkSheetProps {
    */
   notes: NoteSummary[] | null;
   onClose: () => void;
-  /** 保存成功（含清除）后回调；批量部分失败时只带成功的那部分 id */
-  onSaved: (noteIds: string[], remark: string | null) => void;
+  /** 保存成功（含清除）后回调；部分失败时同时交还成功与失败 id。 */
+  onSaved: (result: {
+    succeededIds: string[];
+    failedIds: string[];
+    remark: string | null;
+  }) => void;
 }
 
 /** 备注编辑弹层：输入保存，留空保存即清除。API 调用收在组件内，父层只收结果。 */
@@ -87,7 +91,7 @@ export function NoteRemarkSheet({
     const next = trimmed.length > 0 ? trimmed : null;
     setSaving(true);
     // 单条与批量同一条路径：并发限流 settle，失败的逐条重试语义与其他批量操作一致。
-    const { failed } = await runNoteBatch(
+    const { succeeded, failed } = await runNoteBatch(
       targets.map((item) => item.id),
       (id) => setNoteRemark(id, next),
     );
@@ -101,11 +105,7 @@ export function NoteRemarkSheet({
       );
       return;
     }
-    const failedSet = new Set(failed);
-    onSaved(
-      targets.map((item) => item.id).filter((id) => !failedSet.has(id)),
-      next,
-    );
+    onSaved({ succeededIds: succeeded, failedIds: failed, remark: next });
     if (failed.length > 0) {
       Alert.alert(
         t('notes.alerts.batchFailedTitle', { defaultValue: '部分操作失败' }),

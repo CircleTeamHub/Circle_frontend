@@ -1,0 +1,10 @@
+appId: ${APP_ID}
+---
+- launchApp:
+    clearState: false
+    permissions:
+      notifications: allow
+- extendedWaitUntil:
+    visible:
+      id: "windnote\\.(auth\\.login\\.screen|tabs\\.messages)"
+    timeout: 60000

@@ -103,9 +103,7 @@ export function QrLoginPane({ onTokens }: QrLoginPaneProps) {
           // 必须等收尾结果。不等的话，一旦 /auth/me 或落 session 失败，
           // 轮询已停、二维码还亮着 —— 用户对着一张永远不会生效的码干等，
           // 再扫一次也没用（服务端那次消费已经发生）。
-          const ok = await onTokensRef
-            .current(result.tokens)
-            .catch(() => false);
+          const ok = await onTokensRef.current(result.tokens).catch(() => false);
           if (generationRef.current !== generation) return;
           if (!ok) setStatus('failed');
         } else if (result.status === 'EXPIRED') {

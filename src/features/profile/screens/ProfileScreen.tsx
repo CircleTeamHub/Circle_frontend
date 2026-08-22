@@ -29,6 +29,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FlatList, Pressable, StyleSheet, Text, type TextStyle, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { E2E_TEST_IDS } from "@/testing/e2e-test-ids";
 
 const MENU_ID = {
   SYSTEM_ANNOUNCEMENTS: "system-announcements",
@@ -423,7 +424,11 @@ export default function ProfileScreen() {
               {isDark ? t('profile.lightMode') : t('profile.darkMode')}
             </Text>
           </Pressable>
-          <Pressable style={s.profileAction} onPress={handleOpenSettings}>
+          <Pressable
+            testID={E2E_TEST_IDS.profileSettings}
+            style={s.profileAction}
+            onPress={handleOpenSettings}
+          >
             <Ionicons
               name="settings-outline"
               size={20}
@@ -510,7 +515,7 @@ export default function ProfileScreen() {
   );
 
   return (
-    <View style={d.container}>
+    <View testID={E2E_TEST_IDS.profileScreen} style={d.container}>
       <FlatList
         data={MENU_ITEMS}
         renderItem={renderMenuItem}

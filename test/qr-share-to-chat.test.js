@@ -67,7 +67,7 @@ test('分享卡片带的是令牌本身，不是拼好的整条 URL', () => {
   // 换 type / target 时先清空,免得短暂拿到上一个码的令牌发出去。
   assert.match(screen, /setQrToken\(null\)/);
   // 令牌没下来之前按钮是禁用态。
-  assert.match(screen, /disabled=\{!qrToken\}/);
+  assert.match(screen, /disabled=\{!qrToken \|\| rotating\}/);
 });
 
 // ─── 发送链路:卡片消息，不再上传图片 ─────────────────────────────────────────
@@ -288,4 +288,16 @@ test('扫码页保留相册识别入口 —— 对面转发出去的码截图也
   assert.match(screen, /messages\.scanAlbumNoCodeMessage/);
   assert.match(screen, /messages\.scanAlbumFailedMessage/);
   assert.match(screen, /handleBarcodeScanned\(found\)/);
+});
+
+test('相册扫码不依赖摄像头授权，进入扫码页也不会自动索取摄像头权限', () => {
+  const screen = read('src/features/messages/screens/ScanScreen.tsx');
+
+  assert.doesNotMatch(screen, /useEffect\(/);
+  const permissionGate = screen.indexOf('if (!permission?.granted)');
+  assert.ok(permissionGate >= 0, '摄像头未授权态应统一保留相册入口');
+  const deniedPane = screen.slice(permissionGate, screen.indexOf('<CameraView'));
+  assert.match(deniedPane, /handleScanFromAlbum/);
+  assert.match(deniedPane, /messages\.scanFromAlbum/);
+  assert.match(deniedPane, /onPress=\{canAskAgain \? requestPermission : Linking\.openSettings\}/);
 });

@@ -9,6 +9,7 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { PlazaFeed } from '@/features/discover/components/plaza-feed';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { Radius, Spacing, useTheme } from '@/theme';
+import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 
 const s = StyleSheet.create({
   content: {
@@ -88,13 +89,14 @@ export default function CirclePlazaScreen() {
   }, [router]);
 
   return (
-    <View style={d.container}>
+    <View testID={E2E_TEST_IDS.circlePlazaScreen} style={d.container}>
       <NavHeader
         title={t('discover.plaza')}
         fallbackHref="/(tabs)/discover"
         rightSlot={
           <View style={s.headerActions}>
             <Pressable
+              testID={E2E_TEST_IDS.circlePlazaDiscoverCircles}
               onPress={handleDiscoverCircles}
               hitSlop={8}
               accessibilityRole="button"

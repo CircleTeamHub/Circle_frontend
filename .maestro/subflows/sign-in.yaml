@@ -1,0 +1,39 @@
+appId: ${APP_ID}
+---
+- assertVisible:
+    id: windnote.auth.login.screen
+- tapOn:
+    id: windnote.auth.login.email-input
+- eraseText: 100
+- inputText: ${E2E_EMAIL}
+- runFlow:
+    when:
+      true: ${E2E_AUTH_MODE == 'password'}
+    commands:
+      - tapOn:
+          id: windnote.auth.login.mode.password
+      - tapOn:
+          id: windnote.auth.login.password-input
+      - inputText: ${E2E_PASSWORD}
+- runFlow:
+    when:
+      true: ${E2E_AUTH_MODE == 'verification-code'}
+    commands:
+      - tapOn:
+          id: windnote.auth.login.mode.code
+      - tapOn:
+          id: windnote.auth.login.send-code
+      - extendedWaitUntil:
+          visible:
+            id: windnote.auth.login.code-input
+          timeout: 30000
+      - tapOn:
+          id: windnote.auth.login.code-input
+      - inputText: ${E2E_VERIFICATION_CODE}
+- hideKeyboard
+- tapOn:
+    id: windnote.auth.login.submit
+- extendedWaitUntil:
+    visible:
+      id: windnote.tabs.messages
+    timeout: 60000

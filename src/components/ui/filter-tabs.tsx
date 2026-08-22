@@ -7,6 +7,7 @@ interface FilterTabsProps {
   activeIndex: number;
   onTabPress: (index: number) => void;
   scrollable?: boolean;
+  testIDForIndex?: (index: number) => string;
   compact?: boolean;
 }
 
@@ -38,6 +39,7 @@ export const FilterTabs: React.FC<FilterTabsProps> = ({
   activeIndex,
   onTabPress,
   scrollable = false,
+  testIDForIndex,
   compact = false,
 }) => {
   const { colors } = useTheme();
@@ -64,6 +66,7 @@ export const FilterTabs: React.FC<FilterTabsProps> = ({
       return (
         <Pressable
           key={tab}
+          testID={testIDForIndex?.(index)}
           onPress={() => onTabPress(index)}
           style={[
             s.tab,
@@ -80,7 +83,7 @@ export const FilterTabs: React.FC<FilterTabsProps> = ({
         </Pressable>
       );
     },
-    [activeIndex, compact, onTabPress, tabs.length, d],
+    [activeIndex, compact, onTabPress, tabs.length, d, testIDForIndex],
   );
 
   if (scrollable) {

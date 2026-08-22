@@ -26,6 +26,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useTheme } from '@/theme';
 import type { ThemeColors } from '@/theme/types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 
 type TabKey = {
   name: string;
@@ -43,6 +44,13 @@ const TAB_KEYS: TabKey[] = [
 const TAB_BY_NAME: Record<string, TabKey> = Object.fromEntries(
   TAB_KEYS.map((tab) => [tab.name, tab]),
 );
+
+const TAB_TEST_IDS: Record<string, string> = {
+  messages: E2E_TEST_IDS.tabsMessages,
+  contacts: E2E_TEST_IDS.tabsContacts,
+  discover: E2E_TEST_IDS.tabsDiscover,
+  profile: E2E_TEST_IDS.tabsProfile,
+};
 
 // —— bar 几何（全部自绘，不再受 React Navigation BottomTabItem 内层 padding 影响）——
 // 隐藏时把整条 bar 向下滑出屏幕：bar 高 + 底距 + 阴影余量。
@@ -82,6 +90,7 @@ interface TabSlotProps {
   styles: TabBarStyles;
   onPress: () => void;
   accessibilityLabel: string;
+  testID?: string;
 }
 
 const TabSlot = memo(function TabSlot({
@@ -93,11 +102,13 @@ const TabSlot = memo(function TabSlot({
   styles,
   onPress,
   accessibilityLabel,
+  testID,
 }: TabSlotProps) {
   const tint = focused ? colors.white : colors.textSecondary;
 
   return (
     <Pressable
+      testID={testID}
       onPress={onPress}
       style={styles.tabItem}
       accessibilityRole="button"
@@ -223,6 +234,7 @@ function CustomTabBar({
               accessibilityLabel={
                 options.tabBarAccessibilityLabel ?? label
               }
+              testID={TAB_TEST_IDS[route.name]}
             />
           );
         })}

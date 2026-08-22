@@ -28,6 +28,7 @@ import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
+import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { Avatar } from '@/components/ui/avatar';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { MemberName } from '@/components/ui/member-name';
@@ -134,7 +135,8 @@ import {
 } from '@/services/api/notes';
 import {
   buildNoteSendTasks,
-  notePacingDelayMs,
+  noteSendWindowDelayMs,
+  recordNoteSendAttempt,
   resolveSendableNoteLocation,
   sectionsToImport,
   type ImportedNoteChatMedia,
@@ -531,6 +533,8 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   // 批量发笔记的串行队列:第二批在上一批发完之前不开跑,避免两次突发叠进
   // 服务端同一个 20 条/10s 的用户级 send 桶(消息触限会被直接拒收)。
   const noteBatchQueueRef = useRef<Promise<void>>(Promise.resolve());
+  // 真实滚动窗口跨批保留；批量最多用 17/20 个槽位，余下 3 个留给手动发送。
+  const noteSendTimestampsRef = useRef<number[]>([]);
   const [draft, setDraft] = useState('');
   const [mentionPickerVisible, setMentionPickerVisible] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -3298,7 +3302,9 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         // mediaCount=0 的笔记没有任何可拷对象,别浪费服务端 20 次/分钟的拷贝配额。
         if (sections.length > 0 && note.mediaCount > 0) {
           try {
-            imported = (await importNoteChatMedia(note.id, sections)).items;
+            const importedResult = await importNoteChatMedia(note.id, sections);
+            failures += importedResult.failedCount ?? 0;
+            imported = importedResult.items;
           } catch (error) {
             failures += 1;
             firstError ??= error;
@@ -3331,8 +3337,20 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
       }
 
       const tasks = perNote.flat();
-      const delay = notePacingDelayMs(tasks.length);
       for (let i = 0; i < tasks.length; i += 1) {
+        if (!mountedRef.current) return;
+        while (mountedRef.current) {
+          const now = Date.now();
+          const delay = noteSendWindowDelayMs(noteSendTimestampsRef.current, now);
+          if (delay <= 0) {
+            noteSendTimestampsRef.current = recordNoteSendAttempt(
+              noteSendTimestampsRef.current,
+              now,
+            );
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
         if (!mountedRef.current) return;
         const task = tasks[i];
         try {
@@ -3385,9 +3403,6 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           if (__DEV__) {
             console.warn('[ChatDetail] note batch send failed', error);
           }
-        }
-        if (delay > 0 && i < tasks.length - 1) {
-          await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
 
@@ -3713,6 +3728,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
 
   return (
     <KeyboardAvoidingView
+      testID={E2E_TEST_IDS.chatScreen}
       style={[d.container, { paddingTop: insets.top }]}
       // iOS：键盘弹起时给容器底部加 padding，把输入框顶到键盘上方。
       // Android 走系统 adjustResize，无需 JS 介入（behavior=undefined）。
@@ -3721,7 +3737,11 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     >
       <View style={s.header}>
         {embedded ? null : (
-          <Pressable onPress={handleBack} hitSlop={8}>
+          <Pressable
+            testID={E2E_TEST_IDS.chatBack}
+            onPress={handleBack}
+            hitSlop={8}
+          >
             <Ionicons name="chevron-back" size={24} color={colors.text} />
           </Pressable>
         )}
@@ -3798,6 +3818,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           </View>
         ) : null}
         <FlatList
+          testID={E2E_TEST_IDS.chatMessageList}
           ref={flatListRef}
           style={s.messageListSurface}
           data={messages}
@@ -4042,6 +4063,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         ) : (
           <View key="text-shell" style={[s.composerShell, d.composerShell]}>
             <TextInput
+              testID={E2E_TEST_IDS.chatInput}
               style={[s.composerInput, d.composerInput]}
               placeholder={
                 isPreviewMode
@@ -4104,6 +4126,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         {/* 右侧：发送/附件。录音中由全屏浮层接管，禁用。 */}
         <Pressable
           key="voice-right"
+          testID={E2E_TEST_IDS.chatSend}
           style={[s.circleBtn, s.composerActionBtn, d.circleBtn, d.composerActionBtn]}
           onPress={draft.trim() || pendingCard ? handleSend : handleAttachmentToggle}
           disabled={sending || isPreviewMode || isVoiceRecording}

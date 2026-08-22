@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -141,6 +150,45 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  renameBackdrop: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.xl,
+  },
+  renameDialog: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: Radius.xl,
+    padding: Spacing.lg,
+    gap: Spacing.md,
+  },
+  renameTitle: {
+    ...Typography.h3,
+  },
+  renameInput: {
+    minHeight: 44,
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    ...Typography.bodyRegular,
+  },
+  renameActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: Spacing.sm,
+  },
+  renameButton: {
+    minHeight: 44,
+    minWidth: 84,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Radius.pill,
+    paddingHorizontal: Spacing.md,
+  },
+  renameButtonDisabled: {
+    opacity: 0.6,
+  },
 });
 
 const initialActionPending = {
@@ -267,6 +315,10 @@ export default function ChatInfoScreen() {
   const [groupMembersExpanded, setGroupMembersExpanded] = useState(false);
   const [kickPendingUserID, setKickPendingUserID] = useState<string | null>(null);
   const [rolePendingUserID, setRolePendingUserID] = useState<string | null>(null);
+  const [renameDialogVisible, setRenameDialogVisible] = useState(false);
+  const [renameDraft, setRenameDraft] = useState('');
+  const [renameSubmitting, setRenameSubmitting] = useState(false);
+  const renameSubmittingRef = useRef(false);
   // friend-scoped 动作（拉黑 / 删除）不走 runConversationAction（那个绑会话）；
   // 用 ref 做 fast double-tap 单飞行守，跟其他屏的 Pattern D 二道闸保持一致。
   const blacklistInFlightRef = useRef(false);
@@ -825,19 +877,15 @@ export default function ChatInfoScreen() {
       return;
     }
 
+    if (isStandaloneGroup) {
+      setRenameDraft(groupTitle);
+      setRenameDialogVisible(true);
+      return;
+    }
+
     promptForText(t('chat.groupName'), groupTitle, (value) => {
       const trimmed = value.trim();
       if (!trimmed || trimmed === groupTitle) {
-        return;
-      }
-
-      if (isStandaloneGroup) {
-        // 独立群聊:任一在座成员可改名(微信语义);响应回填会话缓存。
-        renameGroupChatConversation(conversationID, trimmed)
-          .then((dto) => {
-            useChatStore.getState().upsertConversation(dto);
-          })
-          .catch(openActionError);
         return;
       }
 
@@ -848,7 +896,29 @@ export default function ChatInfoScreen() {
         })
         .catch(openActionError);
     });
-  }, [conversationID, groupID, groupTitle, isStandaloneGroup, openActionError, promptForText, t]);
+  }, [groupID, groupTitle, isStandaloneGroup, openActionError, promptForText, t]);
+
+  const handleSubmitStandaloneGroupRename = useCallback(async () => {
+    if (renameSubmittingRef.current || !conversationID) return;
+    const trimmed = renameDraft.trim();
+    if (!trimmed || trimmed === groupTitle) {
+      setRenameDialogVisible(false);
+      return;
+    }
+
+    renameSubmittingRef.current = true;
+    setRenameSubmitting(true);
+    try {
+      const dto = await renameGroupChatConversation(conversationID, trimmed);
+      useChatStore.getState().upsertConversation(dto);
+      setRenameDialogVisible(false);
+    } catch (error) {
+      openActionError(error);
+    } finally {
+      renameSubmittingRef.current = false;
+      setRenameSubmitting(false);
+    }
+  }, [conversationID, groupTitle, openActionError, renameDraft]);
 
   const handleEditGroupNotice = useCallback(() => {
     if (!groupID) {
@@ -893,15 +963,28 @@ export default function ChatInfoScreen() {
         return;
       }
 
-      // review R2 P1：打开成员资料前 fail-closed 现场重查，网格还没来得及
-      // 收起时也拦得住降权后的点击。
-      if (!(await revalidateMemberAccess())) {
+      // 打开成员资料前 fail-closed 现场重查，网格还没来得及收起时也拦得住
+      // 降权或已离群后的点击。独立群/TEMP 没有 circle membership，改查当前会话成员。
+      if (isStandaloneGroup || isTempConversation) {
+        const memberConversationID = resolvedConversationID || conversationID;
+        if (!memberConversationID) {
+          return;
+        }
+        try {
+          const members = await fetchChatMembers(memberConversationID);
+          if (!members.some((item) => item.userId === member.userId)) {
+            return;
+          }
+        } catch {
+          return;
+        }
+      } else if (!(await revalidateMemberAccess())) {
         return;
       }
 
       router.push(getUserProfileHref(scope, member.userId, member.nickname || undefined));
     },
-    [revalidateMemberAccess, scope],
+    [conversationID, isStandaloneGroup, isTempConversation, resolvedConversationID, revalidateMemberAccess, scope],
   );
 
   const handleChangeMemberRole = useCallback(
@@ -1295,6 +1378,32 @@ export default function ChatInfoScreen() {
         color: colors.error,
         ...Typography.body,
       },
+      renameBackdrop: {
+        backgroundColor: colors.overlay,
+      },
+      renameDialog: {
+        backgroundColor: colors.surface,
+      },
+      renameTitle: {
+        color: colors.text,
+      },
+      renameInput: {
+        color: colors.text,
+        borderColor: colors.surfaceBorder,
+        backgroundColor: colors.background,
+      },
+      renameCancelButton: {
+        backgroundColor: colors.background,
+      },
+      renameSaveButton: {
+        backgroundColor: colors.primary,
+      },
+      renameCancelText: {
+        color: colors.text,
+      },
+      renameSaveText: {
+        color: colors.white,
+      },
     }),
     [colors],
   );
@@ -1479,6 +1588,52 @@ export default function ChatInfoScreen() {
           onSelect={handleSelectBurnDuration}
           onClose={() => setBurnPickerVisible(false)}
         />
+        <Modal
+          transparent
+          animationType="fade"
+          visible={renameDialogVisible}
+          onRequestClose={() => {
+            if (!renameSubmittingRef.current) setRenameDialogVisible(false);
+          }}
+        >
+          <View style={[s.renameBackdrop, d.renameBackdrop]}>
+            <View style={[s.renameDialog, d.renameDialog]}>
+              <Text style={[s.renameTitle, d.renameTitle]}>{t('chat.groupName')}</Text>
+              <TextInput
+                style={[s.renameInput, d.renameInput]}
+                value={renameDraft}
+                onChangeText={setRenameDraft}
+                maxLength={64}
+                autoFocus
+                returnKeyType="done"
+                editable={!renameSubmitting}
+                onSubmitEditing={() => void handleSubmitStandaloneGroupRename()}
+              />
+              <View style={s.renameActions}>
+                <Pressable
+                  style={[s.renameButton, d.renameCancelButton]}
+                  disabled={renameSubmitting}
+                  onPress={() => setRenameDialogVisible(false)}
+                  accessibilityRole="button"
+                >
+                  <Text style={d.renameCancelText}>{t('common.cancel')}</Text>
+                </Pressable>
+                <Pressable
+                  style={[
+                    s.renameButton,
+                    d.renameSaveButton,
+                    renameSubmitting ? s.renameButtonDisabled : null,
+                  ]}
+                  disabled={renameSubmitting}
+                  onPress={() => void handleSubmitStandaloneGroupRename()}
+                  accessibilityRole="button"
+                >
+                  <Text style={d.renameSaveText}>{t('common.save')}</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
     );
   }

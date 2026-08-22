@@ -137,13 +137,15 @@ test('the map picker discards superseded geocoding responses', () => {
   );
 });
 
-// CDN 拿不到 leaflet 时 L 是 undefined，初始化第一行就抛，确认按钮的监听根本没
-// 注册上，而 onLoadEnd 已经把转圈收掉了 —— 用户看到一个「能点但没反应」的界面。
+// leaflet 缺失时 L 是 undefined，初始化第一行就抛，地图上的监听根本没注册上，
+// 而 onLoadEnd 已经把转圈收掉了 —— 用户看到一个「能点但没反应」的界面。运行时
+// 现在整段包在 try 里：L 缺失和首帧任何一步抛都收敛成同一条上报。
 test('the map picker reports a missing map runtime instead of going inert', () => {
   const picker = read('src/features/location/components/map-location-picker-screen.tsx');
 
-  assert.match(picker, /if \(typeof L === 'undefined'\) \{\s*\n\s*post\(\{ type: 'map-runtime-unavailable' \}\);/);
-  assert.match(picker, /payload\.type === 'map-runtime-unavailable'/);
+  assert.match(picker, /if \(typeof L === 'undefined'\) throw new Error\('leaflet unavailable'\);/);
+  assert.match(picker, /\} catch \{\s*\n\s*post\(\{ type: 'map-runtime-unavailable' \}\);/);
+  assert.match(picker, /\.type === 'map-runtime-unavailable'/);
   assert.match(picker, /setMapUnavailable\(true\)/);
   assert.match(picker, /setSurfaceKey\(\(key\) => key \+ 1\)/);
   assert.match(picker, /labels\.retryButton/);

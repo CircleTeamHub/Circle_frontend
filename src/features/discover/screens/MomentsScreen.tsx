@@ -9,6 +9,7 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { MomentsFeed } from '@/features/discover/components/moments-feed';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { Radius, Spacing, useTheme } from '@/theme';
+import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 
 const s = StyleSheet.create({
   notificationButton: {
@@ -73,7 +74,7 @@ export default function MomentsScreen() {
   }, [router]);
 
   return (
-    <View style={d.container}>
+    <View testID={E2E_TEST_IDS.momentsScreen} style={d.container}>
       <NavHeader
         title={t('discover.moments')}
         fallbackHref="/(tabs)/discover"
@@ -100,6 +101,7 @@ export default function MomentsScreen() {
         <MomentsFeed />
       </View>
       <Pressable
+        testID={E2E_TEST_IDS.momentsCreate}
         style={[s.fab, d.fab]}
         onPress={handleCreateMoment}
         accessibilityRole="button"

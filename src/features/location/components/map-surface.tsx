@@ -28,10 +28,15 @@ export function MapSurface({
   return (
     <WebView
       key={reloadKey}
-      originWhitelist={['https://*']}
-      source={{ html, baseUrl: 'https://www.openstreetmap.org' }}
+      originWhitelist={['https://appassets.invalid/*']}
+      source={{ html, baseUrl: 'https://appassets.invalid/' }}
       javaScriptEnabled
-      domStorageEnabled
+      domStorageEnabled={false}
+      setSupportMultipleWindows={false}
+      onShouldStartLoadWithRequest={(request) =>
+        request.url === 'about:blank' ||
+        request.url.startsWith('https://appassets.invalid/')
+      }
       onLoadEnd={onLoadEnd}
       onMessage={(event) => onMessage(event.nativeEvent.data)}
       style={s.webView}

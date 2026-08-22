@@ -1,0 +1,22 @@
+appId: ${APP_ID}
+name: WindNote startup smoke
+tags:
+  - smoke
+---
+- runFlow:
+    file: ../subflows/launch.yaml
+- runFlow:
+    when:
+      visible:
+        id: windnote.auth.login.screen
+    commands:
+      - assertVisible:
+          id: windnote.auth.login.screen
+- runFlow:
+    when:
+      visible:
+        id: windnote.tabs.messages
+    commands:
+      - assertVisible:
+          id: windnote.tabs.messages
+- takeScreenshot: windnote-startup-smoke

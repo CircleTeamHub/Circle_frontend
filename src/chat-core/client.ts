@@ -152,6 +152,8 @@ interface SendOptions {
    */
   localContent?: Record<string, unknown>;
   replyToId?: string;
+  /** 服务端鉴权复制媒体所需的源消息 ID。 */
+  forwardFromMessageId?: string;
   /** 乐观消息上屏回调(旧 sendTextMessage onCreate 对应物)。 */
   onCreate?: (message: ChatMessageDto) => void;
 }
@@ -219,6 +221,9 @@ export async function sendWithOptimism(
       content: options.content,
       d,
       ...(options.replyToId ? { replyToId: options.replyToId } : {}),
+      ...(options.forwardFromMessageId
+        ? { forwardFromMessageId: options.forwardFromMessageId }
+        : {}),
     },
     createdAt: optimistic.createdAt,
   }).catch(() => undefined);
@@ -229,6 +234,7 @@ export async function sendWithOptimism(
       content: options.content,
       d,
       replyToId: options.replyToId,
+      forwardFromMessageId: options.forwardFromMessageId,
     });
     void outboxDelete(d);
     const next = useChatStore.getState();
@@ -376,6 +382,28 @@ export function sendVoiceMessage(options: {
     },
     localContent: options.localUri ? { localUri: options.localUri } : undefined,
     onCreate: options.onCreate,
+  });
+}
+
+export function sendForwardedMediaMessage(options: {
+  conversationId: string;
+  sourceMessageId: string;
+  type: 'image' | 'video' | 'voice';
+  previewContent: Record<string, unknown>;
+}): Promise<ChatMessageDto> {
+  // 乐观气泡只借源消息的**展示**字段(已签好的 url/尺寸/时长)。object key 必须
+  // 剥掉:服务端复制出来的是转发者命名空间下的新 key,而 ack 跑在 chat:msg 回声
+  // 前面时,合成的那条 confirmed 会带着这份 content 落进本地库 —— 留着源 key,
+  // 本地缓存里这条消息就指着别人的对象,源消息一删本地就是坏图。
+  const preview = { ...options.previewContent };
+  delete preview.key;
+  delete preview.thumbKey;
+  return sendWithOptimism({
+    conversationId: options.conversationId,
+    type: options.type,
+    content: {},
+    localContent: preview,
+    forwardFromMessageId: options.sourceMessageId,
   });
 }
 

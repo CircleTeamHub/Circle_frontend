@@ -28,6 +28,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 
 const QUICK_ACTION_KEYS: {
   id: string;
@@ -304,7 +305,10 @@ export default function ContactsScreen() {
     <View style={s.headerSection}>
       <View style={s.titleRow}>
         <Text style={d.title}>{t('contacts.title')}</Text>
-        <Pressable onPress={handleAddFriend}>
+        <Pressable
+          testID={E2E_TEST_IDS.contactsAddFriend}
+          onPress={handleAddFriend}
+        >
           <Ionicons name="person-add-outline" size={24} color={colors.text} />
         </Pressable>
       </View>
@@ -347,7 +351,10 @@ export default function ContactsScreen() {
   ) : null;
 
   return (
-    <View style={[d.container, { paddingTop: insets.top }]}>
+    <View
+      testID={E2E_TEST_IDS.contactsScreen}
+      style={[d.container, { paddingTop: insets.top }]}
+    >
       <SectionList
         sections={sections}
         keyExtractor={keyExtractor}

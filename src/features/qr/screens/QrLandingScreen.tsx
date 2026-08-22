@@ -85,7 +85,6 @@ export default function QrLandingScreen() {
   const handlePrimary = useCallback(async () => {
     if (!preview || joining) return;
 
-    // 网页扫码登录:确认后网页端轮询会自动完成登录,这里只负责 approve。
     if (preview.type === 'LOGIN') {
       setJoining(true);
       try {
@@ -178,7 +177,9 @@ export default function QrLandingScreen() {
   const subtitle = useMemo(() => {
     if (!preview) return null;
     if (preview.type === 'LOGIN') {
-      return t('qr.loginSubtitle', { defaultValue: '确认后将在网页端登录你的账号' });
+      return t('qr.loginSubtitle', {
+        defaultValue: '确认后将在网页端登录你的账号',
+      });
     }
     if (preview.type === 'USER') return t('qr.userSubtitle');
     const base =
@@ -195,7 +196,8 @@ export default function QrLandingScreen() {
     joining ||
     (preview.type === 'USER' && preview.viewerState === 'SELF') ||
     (preview.type === 'LOGIN' &&
-      (!preview.requestDevice || !/^\d{6}$/.test(preview.verificationCode ?? '')));
+      (!preview.requestDevice ||
+        !/^\d{6}$/.test(preview.verificationCode ?? '')));
 
   const d = useMemo(
     () => ({

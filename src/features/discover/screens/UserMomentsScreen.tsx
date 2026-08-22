@@ -24,6 +24,7 @@ import { useChangeCover } from '@/features/discover/hooks/use-change-cover';
 import { isSameCalendarDay } from '@/features/discover/utils/album-date';
 import { MomentAlbumHeader } from '@/features/discover/components/moment-album-header';
 import { MomentAlbumRow } from '@/features/discover/components/moment-album-row';
+import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { getProfileSignature } from '@/features/profile/profile-display';
 import type { MomentPost } from '@/types';
 
@@ -139,7 +140,12 @@ export default function UserMomentsScreen() {
         index === 0 ||
         !isSameCalendarDay(moments[index - 1].createdAt, item.createdAt);
       return (
-        <MomentAlbumRow post={item} showDate={showDate} onPress={handlePress} />
+        <MomentAlbumRow
+          post={item}
+          showDate={showDate}
+          onPress={handlePress}
+          testID={E2E_TEST_IDS.momentOwnRow(item.id)}
+        />
       );
     },
     [moments, handlePress],

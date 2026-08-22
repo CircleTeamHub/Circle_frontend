@@ -1,0 +1,60 @@
+appId: ${APP_ID}
+name: WindNote friend and circle navigation
+tags:
+  - social
+  - readonly
+---
+- runFlow:
+    file: ../subflows/launch.yaml
+- runFlow:
+    file: ../subflows/ensure-signed-in.yaml
+- tapOn:
+    id: windnote.tabs.contacts
+- tapOn:
+    id: windnote.contacts.add-friend
+- extendedWaitUntil:
+    visible:
+      id: windnote.friend-search.screen
+    timeout: 30000
+- tapOn:
+    id: windnote.friend-search.input
+- inputText: ${E2E_FRIEND_ACCOUNT}
+- pressKey: Enter
+- extendedWaitUntil:
+    visible:
+      id: windnote.friend-search.result.${E2E_FRIEND_ID}
+    timeout: 30000
+- tapOn:
+    id: windnote.friend-search.result.${E2E_FRIEND_ID}
+- assertVisible:
+    id: windnote.user-profile.screen
+- tapOn:
+    id: windnote.tabs.discover
+- tapOn:
+    id: windnote.discover.plaza-entry
+- extendedWaitUntil:
+    visible:
+      id: windnote.circle-plaza.screen
+    timeout: 30000
+- tapOn:
+    id: windnote.circle-plaza.discover-circles
+- extendedWaitUntil:
+    visible:
+      id: windnote.circle-search.screen
+    timeout: 30000
+- tapOn:
+    id: windnote.circle-search.input
+- inputText: ${E2E_CIRCLE_NAME}
+- extendedWaitUntil:
+    visible:
+      id: windnote.circle-search.result.${E2E_CIRCLE_ID}
+    timeout: 30000
+- tapOn:
+    id: windnote.circle-search.result.${E2E_CIRCLE_ID}
+- assertVisible:
+    id: windnote.circle-detail.screen
+- tapOn:
+    id: windnote.circle-detail.chat-entry
+- assertVisible:
+    id: windnote.chat.screen
+- takeScreenshot: windnote-social-circle

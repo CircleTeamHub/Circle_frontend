@@ -7,6 +7,7 @@ import { useTheme, Spacing, Typography, withAlpha } from '@/theme';
 
 type NavHeaderAction = {
   icon: keyof typeof Ionicons.glyphMap;
+  testID?: string;
   onPress?: () => void;
   accessibilityLabel?: string;
   disabled?: boolean;
@@ -112,6 +113,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
           {actions.map((action) => (
             <Pressable
               key={action.icon}
+              testID={action.testID}
               onPress={action.onPress}
               disabled={action.disabled}
               hitSlop={8}

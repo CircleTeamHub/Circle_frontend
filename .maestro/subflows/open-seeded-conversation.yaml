@@ -1,0 +1,19 @@
+appId: ${APP_ID}
+---
+- tapOn:
+    id: windnote.tabs.messages
+- extendedWaitUntil:
+    visible:
+      id: windnote.messages.conversation-list
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: windnote.messages.conversation.${E2E_CONVERSATION_ID}
+    direction: DOWN
+    timeout: 60000
+- tapOn:
+    id: windnote.messages.conversation.${E2E_CONVERSATION_ID}
+- extendedWaitUntil:
+    visible:
+      id: windnote.chat.screen
+    timeout: 60000

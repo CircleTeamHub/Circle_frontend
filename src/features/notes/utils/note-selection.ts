@@ -6,10 +6,12 @@
 export function toggleId(
   selected: readonly string[],
   id: string,
+  limit = Number.POSITIVE_INFINITY,
 ): string[] {
-  return selected.includes(id)
-    ? selected.filter((item) => item !== id)
-    : [...selected, id];
+  if (selected.includes(id)) {
+    return selected.filter((item) => item !== id);
+  }
+  return selected.length >= limit ? [...selected] : [...selected, id];
 }
 
 /**
@@ -20,11 +22,12 @@ export function toggleId(
 export function toggleSelectAll(
   selected: readonly string[],
   visibleIds: readonly string[],
+  limit = Number.POSITIVE_INFINITY,
 ): string[] {
   const selectedSet = new Set(selected);
   const allSelected =
     visibleIds.length > 0 && visibleIds.every((id) => selectedSet.has(id));
-  return allSelected ? [] : [...visibleIds];
+  return allSelected ? [] : visibleIds.slice(0, limit);
 }
 
 /** 列表刷新后清掉已不存在的选中项（被删/被下架的笔记不再计入批量操作）。 */
