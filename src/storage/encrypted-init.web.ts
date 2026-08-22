@@ -30,16 +30,22 @@ function getLocalStorage(): Storage | null {
 }
 
 function readRaw(key: string): string | null {
+  // 内存覆盖优先。它只在"持久化失败"时存在，代表比 localStorage 里那份**更新**
+  // 的值 —— 反过来先读 localStorage，配额满之后会把旧值复活：写入报告成功、
+  // 读回来却是上一版。与 secure-kv.web.ts 的 read() 同一套判断，两处要一起改。
+  const override = memoryFallback.get(key);
+  if (override !== undefined) return override;
+
   const ls = getLocalStorage();
   if (ls) {
     try {
       const value = ls.getItem(PREFIX + key);
       if (value !== null) return value;
     } catch {
-      // 落到内存回退。
+      // 读失败：没有覆盖可用，只能当作空。
     }
   }
-  return memoryFallback.get(key) ?? null;
+  return null;
 }
 
 function writeRaw(key: string, value: string): void {
@@ -47,6 +53,8 @@ function writeRaw(key: string, value: string): void {
   if (ls) {
     try {
       ls.setItem(PREFIX + key, value);
+      // 落盘成功就撤掉内存覆盖，否则那份旧覆盖会一直遮住持久值。
+      memoryFallback.delete(key);
       return;
     } catch {
       // 配额满/隐私模式：退内存，本次会话内保持一致。

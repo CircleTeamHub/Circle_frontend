@@ -67,24 +67,35 @@ test('zoom panning is bounded by the rendered image, not the container', () => {
 });
 
 test('a failed persistent write is not shadowed by the stale stored value', () => {
-  const source = read('src/storage/secure-kv.web.ts');
+  // 两个 web 存储档是同一套逻辑的两份实现,改一处漏一处就是「一半修好了」。
+  for (const relative of [
+    'src/storage/secure-kv.web.ts',
+    'src/storage/encrypted-init.web.ts',
+  ]) {
+    assertOverrideWins(relative);
+  }
+});
+
+function assertOverrideWins(relative) {
+  const source = read(relative);
   // localStorage 满时新 token 退到内存，但 read 先读 localStorage 的话
   // 返回的是上一个账号的旧 token —— 写入报告成功、读回来却是旧凭证。
-  const readFn = /function read\(key: string\): string \| null \{[\s\S]*?\n\}/.exec(source);
-  assert.ok(readFn, '找不到 read()');
+  const readFn = /function read(?:Raw)?\(key: string\): string \| null \{[\s\S]*?\n\}/.exec(source);
+  assert.ok(readFn, `${relative} 找不到 read()`);
   const overrideAt = readFn[0].indexOf('memoryFallback.get(key)');
   const storageAt = readFn[0].indexOf('ls.getItem');
   assert.ok(overrideAt > -1 && storageAt > -1);
   assert.ok(
     overrideAt < storageAt,
-    'read 必须先看内存覆盖，否则持久化失败后会复活旧凭证',
+    `${relative}: read 必须先看内存覆盖，否则持久化失败后会复活旧值`,
   );
   // 落盘成功要撤掉覆盖，否则旧覆盖会一直遮住新的持久值。
   assert.match(
     source,
-    /ls\.setItem\(PREFIX \+ key, value\);[\s\S]{0,120}memoryFallback\.delete\(key\);/,
+    /ls\.setItem\(PREFIX \+ key, value\);[\s\S]{0,160}memoryFallback\.delete\(key\);/,
+    `${relative}: 落盘成功后没撤掉内存覆盖`,
   );
-});
+}
 
 test('a failed QR finalization leaves the pane recoverable', () => {
   const pane = read('src/features/auth/components/QrLoginPane.tsx');
@@ -154,4 +165,37 @@ test('the web alert runs a button handler inside the click, not after it', () =>
   assert.ok(handler, '找不到 handleButtonPress');
   assert.doesNotMatch(handler[0], /setTimeout|requestAnimationFrame|await|then\(/);
   assert.match(handler[0], /button\.onPress\?\.\(\)/);
+});
+
+test('Enter-to-send does not fire while an IME candidate is being confirmed', () => {
+  const source = read('src/features/chat/screens/ChatDetailScreen.tsx');
+
+  // 中日韩输入法用回车确认候选词，浏览器同样发一个 key='Enter' 的 keydown。
+  // 不挡住的话，中文用户每选一次词就把半截草稿发出去 —— 这是这个 app 的
+  // 主力输入方式，等于每句话都中招。
+  const handler = /onKeyPress=\{[\s\S]*?: undefined\s*\n\s*\}/.exec(source);
+  assert.ok(handler, '找不到 onKeyPress 处理器');
+  assert.match(
+    handler[0],
+    /if \(native\.isComposing \|\| native\.keyCode === 229\) return;/,
+    '缺少输入法合成态守卫',
+  );
+  // 守卫必须在 preventDefault 之前 —— 先 preventDefault 就把 RNW 自己那条
+  // （同样带 !isComposing 判断的）submit 分支也一起绕过去了。
+  const guardAt = handler[0].indexOf('native.keyCode === 229');
+  const preventAt = handler[0].indexOf('event.preventDefault()');
+  assert.ok(guardAt > -1 && preventAt > -1);
+  assert.ok(guardAt < preventAt, '合成态守卫必须早于 preventDefault');
+});
+
+test('the QR polling key is redacted from dev logs', () => {
+  const redact = read('src/utils/redact.ts');
+  // 把 pollKey 从 URL 挪进 body 只挡住了访问日志那一路；dev 下 apiClient
+  // 连请求体一起打印，不进脱敏名单等于换个地方继续泄漏同一把钥匙。
+  assert.match(redact, /'pollkey'/);
+
+  // 名单是小写比对的，写成驼峰会静默失效。
+  const list = /const SENSITIVE_KEYS = new Set\(\[[\s\S]*?\]\)/.exec(redact);
+  assert.ok(list);
+  assert.doesNotMatch(list[0], /'pollKey'/);
 });

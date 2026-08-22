@@ -4080,14 +4080,26 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
               selection={selection}
               onSelectionChange={handleSelectionChange}
               onSubmitEditing={handleSend}
-              // Web：RNW 不把单行输入的 Enter 映射成 submit（onSubmitEditing
-              // 不触发），显式补上；原生端保持 undefined、行为不变。
+              // Web：Enter 发送。onKeyPress 在 RNW 内部先于它自己的 submit 分支
+              // 执行，我们 preventDefault 之后那条分支就不会再走（它带
+              // !isDefaultPrevented 判断），因此不会重复发送。
+              // 原生端保持 undefined、行为不变。
               onKeyPress={
                 Platform.OS === 'web'
                   ? (
                       event: NativeSyntheticEvent<TextInputKeyPressEventData>,
                     ) => {
-                      if (event.nativeEvent.key !== 'Enter') return;
+                      // DOM 的 KeyboardEvent 带这两个字段，RN 的类型里没有。
+                      const native = event.nativeEvent as
+                        & TextInputKeyPressEventData
+                        & { isComposing?: boolean; keyCode?: number };
+                      if (native.key !== 'Enter') return;
+                      // 中日韩输入法「回车确认候选词」也会发一个 Enter —— 不挡住的话
+                      // 每选一次词就把半截草稿发出去，中文用户几乎每句话都中招。
+                      // 判据与 RNW 内部的 isEventComposing 一致（见 TextInput：
+                      // isComposing || keyCode === 229），它自己的 submit 分支
+                      // 也是这么挡的，我们别把它绕过去。
+                      if (native.isComposing || native.keyCode === 229) return;
                       event.preventDefault();
                       void handleSend();
                     }
